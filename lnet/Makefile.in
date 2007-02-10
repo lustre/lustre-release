@@ -1,9 +1,8 @@
 subdir-m += libcfs
 
-cray-subdirs += portals
-cray-subdirs += knals
-cray-subdirs += router
-cray-subdirs += tests
-@CRAY_PORTALS_FALSE@subdir-m += $(cray-subdirs)
+lnet-subdirs += lnet
+lnet-subdirs += klnds
+lnet-subdirs += tests
+subdir-m += $(lnet-subdirs)
 
 @INCLUDE_RULES@

@@ -4,12 +4,10 @@
 # See the file COPYING in this distribution
 
 if MODULES
-if !CRAY_PORTALS
-if BUILD_VIBNAL
-modulenet_DATA = kvibnal$(KMODEXT)
-endif
+if BUILD_VIBLND
+modulenet_DATA = kviblnd$(KMODEXT)
 endif
 endif
 
-MOSTLYCLEANFILES := @MOSTLYCLEANFILES@ 
-DIST_SOURCES = $(kvibnal-objs:%.o=%.c) vibnal.h vibnal_wire.h
+MOSTLYCLEANFILES = @MOSTLYCLEANFILES@
+DIST_SOURCES = $(kviblnd-objs:%.o=%.c) viblnd.h viblnd_wire.h

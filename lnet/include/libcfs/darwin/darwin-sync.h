@@ -1,7 +1,8 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- * Lustre Light Super operations
+ * Implementation of standard libcfs synchronization primitives for XNU
+ * kernel.
  *
  *  Copyright (c) 2004 Cluster File Systems, Inc.
  *
@@ -33,7 +34,7 @@
 #error Do not #include this file directly. #include <libcfs/libcfs.h> instead
 #endif
 
-#define XNU_SYNC_DEBUG (0)
+#define XNU_SYNC_DEBUG (1)
 
 #if XNU_SYNC_DEBUG
 #define ON_SYNC_DEBUG(e) e
@@ -48,6 +49,7 @@ enum {
 	KCOND_MAGIC = 0xb01dface,
 	KRW_MAGIC   = 0xdabb1edd,
 	KSPIN_MAGIC = 0xca11ab1e,
+        KRW_SPIN_MAGIC    = 0xbabeface,
 	KSLEEP_CHAN_MAGIC = 0x0debac1e,
 	KSLEEP_LINK_MAGIC = 0xacc01ade,
 	KTIMER_MAGIC      = 0xbefadd1e
@@ -60,24 +62,62 @@ enum {
  */
 #define SMP (1)
 
+#include <libcfs/list.h>
+
+#ifdef __DARWIN8__
+
+#include <sys/param.h>
+#include <sys/systm.h>
+#include <sys/kernel.h>
+#include <kern/locks.h>
+
+/*
+ * hw_lock is not available in Darwin8 (hw_lock_* are not exported at all), 
+ * so use lck_spin_t. we can hack out lck_spin_t easily, it's the only 
+ * hacking in Darwin8.x. We did so because it'll take a lot of time to 
+ * add lock_done for all locks, maybe it should be done in the future.
+ * If lock_done for all locks were added, we can:
+ *
+ * typedef lck_spin_t      *xnu_spin_t;
+ */
+#if defined (__ppc__)
+typedef struct {
+        unsigned int    opaque[3];
+} xnu_spin_t;
+#elif defined (__i386__)
+typedef struct {
+        unsigned int    opaque[10];
+} xnu_spin_t;
+#endif
+
+/* 
+ * wait_queue is not available in Darwin8 (wait_queue_* are not exported), 
+ * use assert_wait/wakeup/wake_one (wait_queue in kernel hash).
+ */
+typedef void * xnu_wait_queue_t;
+
+/* DARWIN8 */
+#else
+
+#include <mach/mach_types.h>
+#include <sys/types.h>
 #include <kern/simple_lock.h>
 
-#include <libcfs/list.h>
+typedef hw_lock_data_t          xnu_spin_t;
+typedef struct wait_queue       xnu_wait_queue_t;
+
+/* DARWIN8 */
+#endif
 
 struct kspin {
 #if SMP
-	hw_lock_data_t lock;
+	xnu_spin_t      lock;
 #endif
 #if XNU_SYNC_DEBUG
-	unsigned magic;
-	thread_t owner;
+	unsigned        magic;
+	thread_t        owner;
 #endif
 };
-
-/*
- * XXX nikita: we cannot use simple_* functions, because bsd/sys/lock.h
- * redefines them to nothing. Use low-level hw_lock_* instead.
- */
 
 void kspin_init(struct kspin *spin);
 void kspin_done(struct kspin *spin);
@@ -98,11 +138,27 @@ int kspin_isnotlocked(struct kspin *spin);
 #define kspin_isnotlocked(s) (1)
 #endif
 
+/* ------------------------- rw spinlock ----------------------- */
+struct krw_spin {
+        struct kspin      guard;
+        int               count;
+#if XNU_SYNC_DEBUG
+        unsigned          magic;
+#endif
+};
+
+void krw_spin_init(struct krw_spin *sem);
+void krw_spin_done(struct krw_spin *sem);
+void krw_spin_down_r(struct krw_spin *sem);
+void krw_spin_down_w(struct krw_spin *sem);
+void krw_spin_up_r(struct krw_spin *sem);
+void krw_spin_up_w(struct krw_spin *sem);
+
 /* ------------------------- semaphore ------------------------- */
 
 struct ksem {
         struct kspin      guard;
-        struct wait_queue q;
+        xnu_wait_queue_t  q;
         int               value;
 #if XNU_SYNC_DEBUG
         unsigned          magic;
@@ -225,20 +281,20 @@ void ksleep_link_done(struct ksleep_link *link);
 void ksleep_add(struct ksleep_chan *chan, struct ksleep_link *link);
 void ksleep_del(struct ksleep_chan *chan, struct ksleep_link *link);
 
-void ksleep_wait(struct ksleep_chan *chan);
-int64_t  ksleep_timedwait(struct ksleep_chan *chan, uint64_t timeout);
+void ksleep_wait(struct ksleep_chan *chan, int state);
+int64_t  ksleep_timedwait(struct ksleep_chan *chan, int state, uint64_t timeout);
 
 void ksleep_wake(struct ksleep_chan *chan);
 void ksleep_wake_all(struct ksleep_chan *chan);
 void ksleep_wake_nr(struct ksleep_chan *chan, int nr);
 
-#define KSLEEP_LINK_DECLARE(name)			\
-{							\
-	.flags   = 0,					\
-	.event   = 0,					\
-	.hits    = 0,					\
-	.linkage = PTL_LIST_HEAD_INIT(name.linkage),	\
-	.magic   = KSLEEP_LINK_MAGIC			\
+#define KSLEEP_LINK_DECLARE(name)               \
+{                                               \
+	.flags   = 0,                           \
+	.event   = 0,                           \
+	.hits    = 0,                           \
+	.linkage = CFS_LIST_HEAD(name.linkage),	\
+	.magic   = KSLEEP_LINK_MAGIC            \
 }
 
 /* ------------------------- timer ------------------------- */

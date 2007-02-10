@@ -9,10 +9,6 @@
 #include <mach/sync_policy.h>
 #include <mach/task.h>
 #include <mach/semaphore.h>
-#include <mach/mach_traps.h>
-
-/* spin lock types and operations */
-#include <kern/simple_lock.h>
 #include <kern/assert.h>
 #include <kern/thread.h>
 
@@ -56,12 +52,18 @@ static inline int spin_trylock(spinlock_t *lock)
 	return kspin_trylock(&lock->spin);
 }
 
+static inline void spin_lock_done(spinlock_t *lock)
+{
+	kspin_done(&lock->spin);
+}
+
+#error "does this lock out timer callbacks?"
 #define spin_lock_bh(x)		spin_lock(x)
 #define spin_unlock_bh(x)	spin_unlock(x)
 #define spin_lock_bh_init(x)	spin_lock_init(x)
 
 extern boolean_t ml_set_interrupts_enabled(boolean_t enable);
-#define __disable_irq()         (spl_t) ml_set_interrupts_enabled(FALSE)
+#define __disable_irq()         ml_set_interrupts_enabled(FALSE)
 #define __enable_irq(x)         (void) ml_set_interrupts_enabled(x)
 
 #define spin_lock_irqsave(s, f)		do{			\
@@ -165,6 +167,11 @@ static inline void init_rwsem(struct rw_semaphore *s)
 	krw_sem_init(&s->s);
 }
 
+static inline void fini_rwsem(struct rw_semaphore *s)
+{
+	krw_sem_done(&s->s);
+}
+
 static inline void down_read(struct rw_semaphore *s)
 {
 	krw_sem_down_r(&s->s);
@@ -173,7 +180,7 @@ static inline void down_read(struct rw_semaphore *s)
 static inline int down_read_trylock(struct rw_semaphore *s)
 {
 	int ret = krw_sem_down_r_try(&s->s);
-	return ret == 0? 1: 0;
+	return ret == 0;
 }
 
 static inline void down_write(struct rw_semaphore *s)
@@ -184,7 +191,7 @@ static inline void down_write(struct rw_semaphore *s)
 static inline int down_write_trylock(struct rw_semaphore *s)
 {
 	int ret = krw_sem_down_w_try(&s->s);
-	return ret == 0? 1: 0;
+	return ret == 0;
 }
 
 static inline void up_read(struct rw_semaphore *s)
@@ -199,7 +206,6 @@ static inline void up_write(struct rw_semaphore *s)
 
 /* 
  * read-write lock : Need to be investigated more!!
- * XXX nikita: for now, let rwlock_t to be identical to rw_semaphore
  *
  * - DECLARE_RWLOCK(l)
  * - rwlock_init(x)
@@ -208,14 +214,14 @@ static inline void up_write(struct rw_semaphore *s)
  * - write_lock(x)
  * - write_unlock(x)
  */
-typedef struct rw_semaphore rwlock_t;
+typedef struct krw_spin rwlock_t;
 
-#define rwlock_init(pl)		init_rwsem(pl)
+#define rwlock_init(pl)			krw_spin_init(pl)
 
-#define read_lock(l)		down_read(l)
-#define read_unlock(l)		up_read(l)
-#define write_lock(l)		down_write(l)
-#define write_unlock(l)		up_write(l)
+#define read_lock(l)			krw_spin_down_r(l)
+#define read_unlock(l)			krw_spin_up_r(l)
+#define write_lock(l)			krw_spin_down_w(l)
+#define write_unlock(l)			krw_spin_up_w(l)
 
 #define write_lock_irqsave(l, f)	do{			\
 					f = __disable_irq();	\
@@ -232,12 +238,23 @@ typedef struct rw_semaphore rwlock_t;
 #define read_unlock_irqrestore(l, f)	do{			\
 					read_unlock(l);		\
 					__enable_irq(f);}while(0)
-
 /*
  * Funnel: 
  *
  * Safe funnel in/out
  */
+#ifdef __DARWIN8__
+
+#define CFS_DECL_FUNNEL_DATA
+#define CFS_DECL_CONE_DATA              DECLARE_FUNNEL_DATA
+#define CFS_DECL_NET_DATA               DECLARE_FUNNEL_DATA
+#define CFS_CONE_IN                     do {} while(0)
+#define CFS_CONE_EX                     do {} while(0)
+
+#define CFS_NET_IN                      do {} while(0)
+#define CFS_NET_EX                      do {} while(0)
+
+#else
 
 #define CFS_DECL_FUNNEL_DATA			\
         boolean_t    __funnel_state = FALSE;	\
@@ -257,8 +274,11 @@ void lustre_net_ex(boolean_t state, funnel_t *cone);
 #define CFS_NET_IN  lustre_net_in(&__funnel_state, &__funnel)
 #define CFS_NET_EX  lustre_net_ex(__funnel_state, __funnel)
 
-/* __KERNEL__ */
 #endif
+
+#else
+#include <libcfs/user-lock.h>
+#endif /* __KERNEL__ */
 
 /* __XNU_CFS_LOCK_H */
 #endif

@@ -41,15 +41,17 @@
 typedef struct page                     cfs_page_t;
 #define CFS_PAGE_SIZE                   PAGE_CACHE_SIZE
 #define CFS_PAGE_SHIFT                  PAGE_CACHE_SHIFT
-#define CFS_PAGE_MASK                   PAGE_CACHE_MASK
+#define CFS_PAGE_MASK                   (~((__u64)CFS_PAGE_SIZE-1))
 
-cfs_page_t *cfs_alloc_pages(unsigned int flags, unsigned int order);
-#define cfs_alloc_page(f)		cfs_alloc_pages(f, 0)
-#define cfs_free_pages(p, o)		__free_pages(p, o)
+cfs_page_t *cfs_alloc_page(unsigned int flags);
 #define cfs_free_page(p)		__free_pages(p, 0)
 
 static inline void *cfs_page_address(cfs_page_t *page)
 {
+        /*
+         * XXX nikita: do NOT call portals_debug_msg() (CDEBUG/ENTRY/EXIT)
+         * from here: this will lead to infinite recursion.
+         */
         return page_address(page);
 }
 
@@ -73,13 +75,11 @@ static inline int cfs_page_count(cfs_page_t *page)
         return page_count(page);
 }
 
-static inline void cfs_set_page_count(cfs_page_t *page, int v)
-{
-        set_page_count(page, v);
-}
+#define cfs_page_index(p)       ((p)->index)
 
 /*
  * Memory allocator
+ * XXX Liang: move these declare to public file
  */
 extern void *cfs_alloc(size_t nr_bytes, u_int32_t flags);
 extern void  cfs_free(void *addr);
@@ -88,12 +88,17 @@ extern void *cfs_alloc_large(size_t nr_bytes);
 extern void  cfs_free_large(void *addr);
 
 /*
+ * In Linux there is no way to determine whether current execution context is
+ * blockable.
+ */
+#define CFS_ALLOC_ATOMIC_TRY   CFS_ALLOC_ATOMIC
+
+/*
  * SLAB allocator
+ * XXX Liang: move these declare to public file
  */
 typedef kmem_cache_t    cfs_mem_cache_t;
-extern cfs_mem_cache_t * cfs_mem_cache_create (const char *, size_t, size_t, unsigned long,
-                                               void (*)(void *, cfs_mem_cache_t *, unsigned long),
-                                               void (*)(void *, cfs_mem_cache_t *, unsigned long));
+extern cfs_mem_cache_t * cfs_mem_cache_create (const char *, size_t, size_t, unsigned long);
 extern int cfs_mem_cache_destroy ( cfs_mem_cache_t * );
 extern void *cfs_mem_cache_alloc ( cfs_mem_cache_t *, int);
 extern void cfs_mem_cache_free ( cfs_mem_cache_t *, void *);
@@ -104,6 +109,12 @@ extern void cfs_mem_cache_free ( cfs_mem_cache_t *, void *);
 #define CFS_MMSPACE_OPEN                do { __oldfs = get_fs(); set_fs(get_ds());} while(0)
 #define CFS_MMSPACE_CLOSE               set_fs(__oldfs)
 
+#else   /* !__KERNEL__ */
+#ifdef HAVE_ASM_PAGE_H
+#include <asm/page.h>           /* needed for PAGE_SIZE - rread */
+#endif
+
+#include <libcfs/user-prim.h>
 /* __KERNEL__ */
 #endif
 

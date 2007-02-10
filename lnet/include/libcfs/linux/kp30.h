@@ -9,7 +9,9 @@
 #endif
 
 #ifdef __KERNEL__
+#ifdef HAVE_KERNEL_CONFIG_H
 # include <linux/config.h>
+#endif
 # include <linux/kernel.h>
 # include <linux/mm.h>
 # include <linux/string.h>
@@ -30,7 +32,7 @@
 # include <linux/highmem.h>
 # include <linux/module.h>
 # include <linux/version.h>
-# include <portals/p30.h>
+# include <lnet/lnet.h>
 # include <linux/smp_lock.h>
 # include <asm/atomic.h>
 # include <asm/uaccess.h>
@@ -39,11 +41,13 @@
 # include <linux/file.h>
 # include <linux/smp.h>
 # include <linux/ctype.h>
+# include <linux/compiler.h>
 # ifdef HAVE_MM_INLINE
 #  include <linux/mm_inline.h>
 # endif
 # if (LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))
 #  include <linux/kallsyms.h>
+#  include <linux/moduleparam.h>
 # endif
 
 #include <libcfs/linux/portals_compat25.h>
@@ -88,28 +92,9 @@ static inline void our_cond_resched(void)
 #else
 #define LASSERT_SPIN_LOCKED(lock) do {} while(0)
 #endif
+#define LASSERT_SEM_LOCKED(sem) LASSERT(down_trylock(sem) != 0)
 
-#ifdef __arch_um__
-#define LBUG_WITH_LOC(file, func, line)                                 \
-do {                                                                    \
-        CEMERG("LBUG - trying to dump log to /tmp/lustre-log\n");       \
-        portals_catastrophe = 1;                                        \
-        portals_debug_dumplog();                                        \
-        portals_run_lbug_upcall(file, func, line);                      \
-        panic("LBUG");                                                  \
-} while (0)
-#else
-#define LBUG_WITH_LOC(file, func, line)                                 \
-do {                                                                    \
-        CEMERG("LBUG\n");                                               \
-        portals_catastrophe = 1;                                        \
-        portals_debug_dumpstack(NULL);                                  \
-        portals_debug_dumplog();                                        \
-        portals_run_lbug_upcall(file, func, line);                      \
-        set_task_state(current, TASK_UNINTERRUPTIBLE);                  \
-        schedule();                                                     \
-} while (0)
-#endif /* __arch_um__ */
+#define LIBCFS_PANIC(msg)            panic(msg)
 
 /* ------------------------------------------------------------------- */
 
@@ -137,6 +122,24 @@ do {                                                                    \
 #endif
 
 /******************************************************************************/
+/* Module parameter support */
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
+# define CFS_MODULE_PARM(name, t, type, perm, desc) \
+        MODULE_PARM(name, t);\
+        MODULE_PARM_DESC(name, desc)
+
+#else
+# define CFS_MODULE_PARM(name, t, type, perm, desc) \
+        module_param(name, type, perm);\
+        MODULE_PARM_DESC(name, desc)
+#endif
+
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,6,9))
+# define CFS_SYSFS_MODULE_PARM  0 /* no sysfs module parameters */
+#else
+# define CFS_SYSFS_MODULE_PARM  1 /* module parameters accessible via sysfs */
+#endif
+/******************************************************************************/
 
 #if (__GNUC__)
 /* Use the special GNU C __attribute__ hack to have the compiler check the
@@ -157,14 +160,22 @@ do {                                                                    \
 #else  /* !__KERNEL__ */
 # include <stdio.h>
 # include <stdlib.h>
-#ifndef __CYGWIN__
-# include <stdint.h>
-#else
+#ifdef CRAY_XT3
+# include <ioctl.h>
+#elif defined(__CYGWIN__)
 # include <cygwin-ioctl.h>
+#else
+# include <stdint.h>
 #endif
 # include <unistd.h>
 # include <time.h>
 # include <limits.h>
+# include <errno.h>
+# include <sys/ioctl.h>                         /* for _IOWR */
+
+# define CFS_MODULE_PARM(name, t, type, perm, desc)
+#define PORTAL_SYMBOL_GET(x) inter_module_get(#x)
+#define PORTAL_SYMBOL_PUT(x) inter_module_put(#x)
 
 #endif /* End of !__KERNEL__ */
 
@@ -175,7 +186,7 @@ do {                                                                    \
 
 #define LWT_MEMORY   (16<<20)
 
-#if !KLWT_SUPPORT
+#ifndef KLWT_SUPPORT
 # if defined(__KERNEL__)
 #  if !defined(BITS_PER_LONG)
 #   error "BITS_PER_LONG not defined"
@@ -225,7 +236,7 @@ extern lwt_cpu_t lwt_cpus[];
 
 #define LWTSTR(n)       #n
 #define LWTWHERE(f,l)   f ":" LWTSTR(l)
-#define LWT_EVENTS_PER_PAGE (PAGE_SIZE / sizeof (lwt_event_t))
+#define LWT_EVENTS_PER_PAGE (CFS_PAGE_SIZE / sizeof (lwt_event_t))
 
 #define LWT_EVENT(p1, p2, p3, p4)                                       \
 do {                                                                    \
@@ -276,7 +287,7 @@ extern int  lwt_snapshot (cycles_t *now, int *ncpu, int *total_size,
 
 /* ------------------------------------------------------------------ */
 
-#define IOCTL_PORTAL_TYPE long
+#define IOCTL_LIBCFS_TYPE long
 
 #ifdef __CYGWIN__
 # ifndef BITS_PER_LONG
@@ -298,23 +309,26 @@ extern int  lwt_snapshot (cycles_t *now, int *ncpu, int *total_size,
 # define LP_POISON ((void *)(long)0x5a5a5a5a)
 #endif
 
-#if defined(__x86_64__) && defined(__KERNEL__)
+#if (defined(__x86_64__) && defined(__KERNEL__))
 /* x86_64 defines __u64 as "long" in userspace, but "long long" in the kernel */
 # define LPU64 "%Lu"
 # define LPD64 "%Ld"
 # define LPX64 "%#Lx"
+# define LPF64 "L"
 # define LPSZ  "%lu"
 # define LPSSZ "%ld"
 #elif (BITS_PER_LONG == 32 || __WORDSIZE == 32)
 # define LPU64 "%Lu"
 # define LPD64 "%Ld"
 # define LPX64 "%#Lx"
+# define LPF64 "L"
 # define LPSZ  "%u"
 # define LPSSZ "%d"
 #elif (BITS_PER_LONG == 64 || __WORDSIZE == 64)
 # define LPU64 "%lu"
 # define LPD64 "%ld"
 # define LPX64 "%#lx"
+# define LPF64 "l"
 # define LPSZ  "%lu"
 # define LPSSZ "%ld"
 #endif

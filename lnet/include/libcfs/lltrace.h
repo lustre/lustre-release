@@ -11,6 +11,8 @@
 #include <libcfs/linux/lltrace.h>
 #elif defined(__APPLE__)
 #include <libcfs/darwin/lltrace.h>
+#elif defined(__WINNT__)
+#include <libcfs/winnt/lltrace.h>
 #else
 #error Unsupported Operating System
 #endif
@@ -83,8 +85,9 @@ static inline int ltrace_start()
 {
         int rc = 0;
         dbg_initialize(0, NULL);
-#ifdef PORTALS_DEV_ID
-        rc = register_ioc_dev(PORTALS_DEV_ID, PORTALS_DEV_PATH);
+#ifdef LNET_DEV_ID
+        rc = register_ioc_dev(LNET_DEV_ID, LNET_DEV_PATH,
+                              LNET_DEV_MAJOR, LNET_DEV_MINOR);
 #endif
         ltrace_filter("class");
         ltrace_filter("nal");
@@ -105,8 +108,8 @@ static inline int ltrace_start()
 
 static inline void ltrace_stop()
 {
-#ifdef PORTALS_DEV_ID
-        unregister_ioc_dev(PORTALS_DEV_ID);
+#ifdef LNET_DEV_ID
+        unregister_ioc_dev(LNET_DEV_ID);
 #endif
 }
 
@@ -117,14 +120,14 @@ static inline int not_uml()
    *   1 when run on host
    *  <0 when lookup failed
    */
-	struct stat buf;
-	int rc = stat("/dev/ubd", &buf);
-	rc = ((rc<0) && (errno == ENOENT)) ? 1 : rc;
-	if (rc<0) {
-	  fprintf(stderr, "Cannot stat /dev/ubd: %s\n", strerror(errno));
-	  rc = 1; /* Assume host */
-	}
-	return rc;
+        struct stat buf;
+        int rc = stat("/dev/ubd", &buf);
+        rc = ((rc<0) && (errno == ENOENT)) ? 1 : rc;
+        if (rc<0) {
+          fprintf(stderr, "Cannot stat /dev/ubd: %s\n", strerror(errno));
+          rc = 1; /* Assume host */
+        }
+        return rc;
 }
 
 #define LTRACE_MAX_NOB   256

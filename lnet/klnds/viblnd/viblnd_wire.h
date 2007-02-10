@@ -12,7 +12,7 @@ typedef struct kib_connparams
 
 typedef struct
 {
-        ptl_hdr_t         ibim_hdr;             /* portals header */
+        lnet_hdr_t        ibim_hdr;             /* portals header */
         char              ibim_payload[0];      /* piggy-backed payload */
 } WIRE_ATTR kib_immediate_msg_t;
 
@@ -48,7 +48,7 @@ typedef struct
 
 typedef struct
 {
-        ptl_hdr_t         ibprm_hdr;            /* portals header */
+        lnet_hdr_t        ibprm_hdr;            /* portals header */
         __u64             ibprm_cookie;         /* opaque completion cookie */
 } WIRE_ATTR kib_putreq_msg_t;
 
@@ -61,7 +61,7 @@ typedef struct
 
 typedef struct
 {
-        ptl_hdr_t         ibgm_hdr;             /* portals header */
+        lnet_hdr_t        ibgm_hdr;             /* portals header */
         __u64             ibgm_cookie;          /* opaque completion cookie */
         kib_rdma_desc_t   ibgm_rd;              /* rdma descriptor */
 } WIRE_ATTR kib_get_msg_t;
@@ -98,13 +98,11 @@ typedef struct
         } WIRE_ATTR ibm_u;
 } WIRE_ATTR kib_msg_t;
 
-#define IBNAL_MSG_MAGIC       0x0be91b91        /* unique magic */
+#define IBNAL_MSG_MAGIC LNET_PROTO_VIB_MAGIC	/* unique magic */
 
-#if IBNAL_USE_FMA				/* ensure version changes on FMA */
-#define IBNAL_MSG_VERSION           0x11
-#else
-#define IBNAL_MSG_VERSION           0x10
-#endif
+#define IBNAL_MSG_VERSION_RDMAREPLYNOTRSRVD 0x10 /* previous version */
+
+#define IBNAL_MSG_VERSION           0x11	/* current version */
 
 #define IBNAL_MSG_CONNREQ           0xc0        /* connection request */
 #define IBNAL_MSG_CONNACK           0xc1        /* connection acknowledge */
@@ -116,3 +114,8 @@ typedef struct
 #define IBNAL_MSG_PUT_DONE          0xd5        /* completion (src->sink) */
 #define IBNAL_MSG_GET_REQ           0xd6        /* getreq (sink->src) */
 #define IBNAL_MSG_GET_DONE          0xd7        /* completion (src->sink: all OK) */
+
+/* connection rejection reasons */
+#define IBNAL_REJECT_CONN_RACE       0          /* You lost connection race */
+#define IBNAL_REJECT_NO_RESOURCES    1          /* Out of memory/conns etc */
+#define IBNAL_REJECT_FATAL           2          /* Anything else */

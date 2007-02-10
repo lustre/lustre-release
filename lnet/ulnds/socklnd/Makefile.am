@@ -1,10 +1,13 @@
 if LIBLUSTRE
-if !CRAY_PORTALS
-noinst_LIBRARIES = libtcpnal.a
+if BUILD_USOCKLND
+noinst_LIBRARIES = libsocklnd.a
 endif
 endif
 
-noinst_HEADERS =  pqtimer.h dispatch.h table.h timer.h connection.h ipmap.h bridge.h procbridge.h
-libtcpnal_a_SOURCES = debug.c pqtimer.c select.c table.c pqtimer.h dispatch.h table.h timer.h address.c procapi.c proclib.c connection.c tcpnal.c connection.h
-libtcpnal_a_CPPFLAGS = $(LLCPPFLAGS)
-libtcpnal_a_CFLAGS = $(LLCFLAGS)
+noinst_HEADERS =  pqtimer.h dispatch.h table.h timer.h \
+	          connection.h bridge.h procbridge.h
+libsocklnd_a_SOURCES = pqtimer.c select.c table.c pqtimer.h \
+		      dispatch.h table.h timer.h procapi.c proclib.c \
+		      connection.c tcplnd.c connection.h
+libsocklnd_a_CPPFLAGS = $(LLCPPFLAGS)
+libsocklnd_a_CFLAGS = $(LLCFLAGS)

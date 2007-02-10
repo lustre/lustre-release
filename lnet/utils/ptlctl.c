@@ -22,14 +22,17 @@
 
 #include <stdio.h>
 #include <stdlib.h>
-#include <portals/api-support.h>
-#include <portals/ptlctl.h>
+#include <lnet/api-support.h>
+#include <lnet/lnetctl.h>
 
 #include "parser.h"
 
 
 command_t list[] = {
-        {"network", jt_ptl_network, 0,"setup the NAL (args: nal name)"},
+        {"network", jt_ptl_network, 0,"select/configure network (args: up|down|LND name)"},
+        {"net", jt_ptl_network, 0,"select/configure network (args: up|down|LND name)"},
+        {"list_nids", jt_ptl_list_nids, 0,"list local NIDs"},
+        {"which_nid", jt_ptl_which_nid, 0,"select the closest NID"},
         {"print_interfaces", jt_ptl_print_interfaces, 0, "print interface entries (no args)"},
         {"add_interface", jt_ptl_add_interface, 0, "add interface entry (args: ip [netmask])"},
         {"del_interface", jt_ptl_del_interface, 0, "delete interface entries (args: [ip])"},
@@ -37,12 +40,11 @@ command_t list[] = {
         {"add_peer", jt_ptl_add_peer, 0, "add peer entry (args: nid host port)"},
         {"del_peer", jt_ptl_del_peer, 0, "delete peer entry (args: [nid] [host])"},
         {"print_conns", jt_ptl_print_connections, 0, "print connections (no args)"},
-        {"connect", jt_ptl_connect, 0, "connect to a remote nid (args: host port [iIOC])"},
         {"disconnect", jt_ptl_disconnect, 0, "disconnect from a remote nid (args: [nid] [host]"},
         {"push", jt_ptl_push_connection, 0, "flush connection to a remote nid (args: [nid]"},
         {"active_tx", jt_ptl_print_active_txs, 0, "print active transmits (no args)"},
-        {"ping", jt_ptl_ping, 0, "do a ping test (args: nid [count] [size] [timeout])"},
-        {"shownid", jt_ptl_shownid, 0, "print the local NID"},
+        {"testping", jt_ptl_ping_test, 0, "do a ping test (args: nid [count] [size] [timeout])"},
+        {"ping", jt_ptl_ping, 0, "ping (args: nid [timeout] [pid])"},
         {"mynid", jt_ptl_mynid, 0, "inform the socknal of the local NID (args: [hostname])"},
         {"add_route", jt_ptl_add_route, 0, 
          "add an entry to the routing table (args: gatewayNID targetNID [targetNID])"},
@@ -53,7 +55,7 @@ command_t list[] = {
         {"print_routes", jt_ptl_print_routes, 0, "print the routing table (args: none)"},
         {"dump", jt_ioc_dump, 0, "usage: dump file, save ioctl buffer to file"},
         {"fail", jt_ptl_fail_nid, 0, "usage: fail nid|_all_ [count]"},
-        {"loopback", jt_ptl_loopback, 0, "usage: loopback [on|off]"},
+        {"testprotocompat", jt_ptl_testprotocompat, 0, "usage: testprotocompat count"},
         {"help", Parser_help, 0, "help"},
         {"exit", Parser_quit, 0, "quit"},
         {"quit", Parser_quit, 0, "quit"},

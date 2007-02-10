@@ -9,25 +9,29 @@
 #include <sys/types.h>
 #include <sys/systm.h>
 
-#ifndef __APPLE_API_PRIVATE
-#define __APPLE_API_PRIVATE
-#include <sys/user.h>
-#undef __APPLE_API_PRIVATE
-#else
-#include <sys/user.h>
-#endif
+#ifndef __DARWIN8__
+# ifndef __APPLE_API_PRIVATE
+#  define __APPLE_API_PRIVATE
+#  include <sys/user.h>
+#  undef __APPLE_API_PRIVATE
+# else
+#  include <sys/user.h>
+# endif
+# include <mach/mach_traps.h>
+# include <mach/thread_switch.h>
+# include <machine/cpu_number.h>
+#endif /* !__DARWIN8__ */
 
 #include <sys/kernel.h>
 
 #include <mach/thread_act.h>
 #include <mach/mach_types.h>
-#include <mach/mach_traps.h>
-#include <mach/thread_switch.h>
 #include <mach/time_value.h>
 #include <kern/sched_prim.h>
 #include <vm/pmap.h>
 #include <vm/vm_kern.h>
 #include <mach/machine/vm_param.h>
+#include <machine/machine_routines.h>
 #include <kern/clock.h>
 #include <kern/thread_call.h>
 #include <sys/param.h>
@@ -63,17 +67,19 @@ extern kern_return_t            cfs_symbol_put(const char *);
  * User can register/unregister a list of sysctl_oids
  * sysctl_oid is data struct of osx's sysctl-entry
  */
+#define 	CONFIG_SYSCTL	1
+
 typedef struct sysctl_oid *     cfs_sysctl_table_t;
 typedef cfs_sysctl_table_t      cfs_sysctl_table_header_t;
-cfs_sysctl_table_header_t	*register_cfs_sysctl_table (cfs_sysctl_table_t *table, int arg);
-void unregister_cfs_sysctl_table (cfs_sysctl_table_header_t *table);
+cfs_sysctl_table_header_t	*cfs_register_sysctl_table (cfs_sysctl_table_t *table, int arg);
+void cfs_unregister_sysctl_table (cfs_sysctl_table_header_t *table);
 
 /*
  * Proc file system APIs, no /proc fs support in OSX
  */
-typedef struct cfs_proc_dir_entry{
+typedef struct cfs_proc_dir_entry {
 	void		*data;
-}cfs_proc_dir_entry_t;
+} cfs_proc_dir_entry_t;
 
 cfs_proc_dir_entry_t * cfs_create_proc_entry(char *name, int mod,
 					  cfs_proc_dir_entry_t *parent);
@@ -111,12 +117,23 @@ extern kern_return_t            cfs_psdev_deregister(cfs_psdev_t *);
 extern boolean_t        assert_wait_possible(void);
 extern void             *get_bsdtask_info(task_t);
 
+#ifdef __DARWIN8__
+
+typedef struct {}		cfs_task_t;
+#define cfs_current()		((cfs_task_t *)current_thread())
+#else	/* !__DARWIN8__ */
+
 typedef struct uthread		cfs_task_t;
+
 #define current_uthread()       ((struct uthread *)get_bsdthread_info(current_act()))
 #define cfs_current()		current_uthread()
 
+#endif /* !__DARWIN8__ */
+
+#define cfs_task_lock(t)	do {;} while (0)
+#define cfs_task_unlock(t)	do {;} while (0)
+
 #define set_current_state(s)	do {;} while (0)
-#define reparent_to_init()	do {;} while (0)
 
 #define CFS_DECL_JOURNAL_DATA	
 #define CFS_PUSH_JOURNAL	do {;} while(0)
@@ -128,108 +145,11 @@ typedef struct uthread		cfs_task_t;
  *
  * OSX kernel thread can not be created with args,
  * so we have to implement new APIs to create thread with args
- *
- * All requests to create kernel thread will create a new
- * thread instance of cfs_thread_agent, one by one.
- * cfs_thread_agent will call the caller's thread function
- * with argument supplied by caller.
  */
 
 typedef int (*cfs_thread_t)(void *);
 
 extern task_t	kernel_task;
-
-struct kernel_thread_arg
-{
-	spinlock_t	lock;
-	atomic_t	inuse;
-	cfs_thread_t	func;
-	void		*arg;
-};
-
-extern struct kernel_thread_arg cfs_thread_arg;
-extern void cfs_thread_agent(void);
-
-#define THREAD_ARG_FREE			0
-#define THREAD_ARG_HOLD			1
-#define THREAD_ARG_RECV			2
-
-#define set_targ_stat(a, v)		atomic_set(&(a)->inuse, v)
-#define get_targ_stat(a)		atomic_read(&(a)->inuse)
-
-/*
- * Hold the thread argument and set the status of thread_status
- * to THREAD_ARG_HOLD, if the thread argument is held by other
- * threads (It's THREAD_ARG_HOLD already), current-thread has to wait.
- */
-#define thread_arg_hold(pta, _func, _arg)			\
-	do {							\
-		spin_lock(&(pta)->lock);			\
-		if (get_targ_stat(pta) == THREAD_ARG_FREE) {	\
-			set_targ_stat((pta), THREAD_ARG_HOLD);	\
-			(pta)->arg = (void *)_arg;		\
-			(pta)->func = _func;			\
-			spin_unlock(&(pta)->lock);		\
-			break;					\
-		}						\
-		spin_unlock(&(pta)->lock);			\
-		schedule();					\
-	} while(1);						\
-
-/*
- * Release the thread argument if the thread argument has been
- * received by the child-thread (Status of thread_args is
- * THREAD_ARG_RECV), otherwise current-thread has to wait.
- * After release, the thread_args' status will be set to
- * THREAD_ARG_FREE, and others can re-use the thread_args to
- * create new kernel_thread.
- */
-#define thread_arg_release(pta)					\
-	do {							\
-		spin_lock(&(pta)->lock);			\
-		if (get_targ_stat(pta) == THREAD_ARG_RECV) {	\
-			(pta)->arg = NULL;			\
-			(pta)->func = NULL;			\
-			set_targ_stat(pta, THREAD_ARG_FREE);	\
-			spin_unlock(&(pta)->lock);		\
-			break;					\
-		}						\
-		spin_unlock(&(pta)->lock);			\
-		schedule();					\
-	} while(1)
-
-/*
- * Receive thread argument (Used in child thread), set the status
- * of thread_args to THREAD_ARG_RECV.
- */
-#define __thread_arg_recv_fin(pta, _func, _arg, fin)		\
-	do {							\
-		spin_lock(&(pta)->lock);			\
-		if (get_targ_stat(pta) == THREAD_ARG_HOLD) {	\
-			if (fin)				\
-			    set_targ_stat(pta, THREAD_ARG_RECV);\
-			_arg = (pta)->arg;			\
-			_func = (pta)->func;			\
-			spin_unlock(&(pta)->lock);		\
-			break;					\
-		}						\
-		spin_unlock(&(pta)->lock);			\
-		schedule();					\
-	} while (1);						\
-
-/*
- * Just set the thread_args' status to THREAD_ARG_RECV
- */
-#define thread_arg_fin(pta)					\
-	do {							\
-		spin_lock(&(pta)->lock);			\
-		assert( get_targ_stat(pta) == THREAD_ARG_HOLD);	\
-		set_targ_stat(pta, THREAD_ARG_RECV);		\
-		spin_unlock(&(pta)->lock);			\
-	} while(0)
-
-#define thread_arg_recv(pta, f, a)	__thread_arg_recv_fin(pta, f, a, 1)
-#define thread_arg_keep(pta, f, a)	__thread_arg_recv_fin(pta, f, a, 0)
 
 /*
  * cloning flags, no use in OSX, just copy them from Linux
@@ -265,11 +185,16 @@ typedef struct cfs_waitlink {
 	struct ksleep_link  wl_ksleep_link;
 } cfs_waitlink_t;
 
+typedef int cfs_task_state_t;
+
+#define CFS_TASK_INTERRUPTIBLE	THREAD_ABORTSAFE
+#define CFS_TASK_UNINT		THREAD_UNINT
+
 void cfs_waitq_init(struct cfs_waitq *waitq);
 void cfs_waitlink_init(struct cfs_waitlink *link);
 
 void cfs_waitq_add(struct cfs_waitq *waitq, struct cfs_waitlink *link);
-void cfs_waitq_add_exclusive(struct cfs_waitq *waitq, 
+void cfs_waitq_add_exclusive(struct cfs_waitq *waitq,
 			     struct cfs_waitlink *link);
 void cfs_waitq_forward(struct cfs_waitlink *link, struct cfs_waitq *waitq);
 void cfs_waitq_del(struct cfs_waitq *waitq, struct cfs_waitlink *link);
@@ -279,29 +204,37 @@ void cfs_waitq_signal(struct cfs_waitq *waitq);
 void cfs_waitq_signal_nr(struct cfs_waitq *waitq, int nr);
 void cfs_waitq_broadcast(struct cfs_waitq *waitq);
 
-void cfs_waitq_wait(struct cfs_waitlink *link);
-cfs_duration_t cfs_waitq_timedwait(struct cfs_waitlink *link, 
+void cfs_waitq_wait(struct cfs_waitlink *link, cfs_task_state_t state);
+cfs_duration_t cfs_waitq_timedwait(struct cfs_waitlink *link,
+				   cfs_task_state_t state, 
 				   cfs_duration_t timeout);
 
 /*
  * Thread schedule APIs.
  */
 #define MAX_SCHEDULE_TIMEOUT    ((long)(~0UL>>12))
+extern void thread_set_timer_deadline(uint64_t	deadline);
+extern void thread_cancel_timer(void);
 
-static inline int schedule_timeout(int64_t timeout)
+static inline int cfs_schedule_timeout(int state, int64_t timeout)
 {
 	int          result;
 	
-	AbsoluteTime clock_current;
-	AbsoluteTime clock_delay;
-	result = assert_wait((event_t)current_uthread(), THREAD_UNINT);
-	clock_get_uptime(&clock_current);
-	nanoseconds_to_absolutetime(timeout, &clock_delay);
-	ADD_ABSOLUTETIME(&clock_current, &clock_delay);
-	thread_set_timer_deadline(clock_current);
+#ifdef __DARWIN8__
+	result = assert_wait((event_t)current_thread(), state);
+#else
+	result = assert_wait((event_t)current_uthread(), state);
+#endif
+	if (timeout > 0) {
+		uint64_t expire;
+		nanoseconds_to_absolutetime(timeout, &expire);
+		clock_absolutetime_interval_to_deadline(expire, &expire);
+		thread_set_timer_deadline(expire);
+	}
 	if (result == THREAD_WAITING)
 		result = thread_block(THREAD_CONTINUE_NULL);
-	thread_cancel_timer();
+	if (timeout > 0)
+		thread_cancel_timer();
 	if (result == THREAD_TIMED_OUT)
 		result = 0;
 	else
@@ -309,47 +242,80 @@ static inline int schedule_timeout(int64_t timeout)
 	return result;
 }
 
-#define schedule()                              \
-	do {                                    \
-		if (assert_wait_possible())     \
-			schedule_timeout(1);    \
-		else                            \
-			schedule_timeout(0);    \
-	} while (0)
+#define cfs_schedule()	cfs_schedule_timeout(CFS_TASK_UNINT, CFS_TICK)
+#define cfs_pause(tick)	cfs_schedule_timeout(CFS_TASK_UNINT, tick)
 
-#define __wait_event(wq, condition)		\
-do {						\
-	struct cfs_waitlink __wait;		\
-						\
-	cfs_waitlink_init(&__wait);		\
-	for (;;) {				\
-		cfs_waitq_add(&wq, &__wait);	\
-		if (condition)			\
-			break;			\
-		cfs_waitq_wait(&__wait);	\
-		cfs_waitq_del(&wq, &__wait);	\
-	}					\
-	cfs_waitq_del(&wq, &__wait);		\
+#define __wait_event(wq, condition)				\
+do {								\
+	struct cfs_waitlink __wait;				\
+								\
+	cfs_waitlink_init(&__wait);				\
+	for (;;) {						\
+		cfs_waitq_add(&wq, &__wait);			\
+		if (condition)					\
+			break;					\
+		cfs_waitq_wait(&__wait, CFS_TASK_UNINT);	\
+		cfs_waitq_del(&wq, &__wait);			\
+	}							\
+	cfs_waitq_del(&wq, &__wait);				\
 } while (0)
 
-#define wait_event(wq, condition) 					\
-do {									\
-	if (condition)	 						\
-		break;							\
-	__wait_event(wq, condition);					\
+#define wait_event(wq, condition) 				\
+do {								\
+	if (condition)	 					\
+		break;						\
+	__wait_event(wq, condition);				\
 } while (0)
 
-#define wait_event_interruptible(wq, condition)	\
-({						\
-	wait_event(wq, condition);		\
-	0;					\
+#define __wait_event_interruptible(wq, condition, ex, ret)	\
+do {								\
+	struct cfs_waitlink __wait;				\
+								\
+	cfs_waitlink_init(&__wait);				\
+	for (;;) {						\
+		if (ex == 0)					\
+			cfs_waitq_add(&wq, &__wait);		\
+		else						\
+			cfs_waitq_add_exclusive(&wq, &__wait);	\
+		if (condition)					\
+			break;					\
+		if (!cfs_signal_pending()) {			\
+			cfs_waitq_wait(&__wait, 		\
+				       CFS_TASK_INTERRUPTIBLE);	\
+			cfs_waitq_del(&wq, &__wait);		\
+			continue;				\
+		}						\
+		ret = -ERESTARTSYS;				\
+		break;						\
+	}							\
+	cfs_waitq_del(&wq, &__wait);				\
+} while (0)
+
+#define wait_event_interruptible(wq, condition)			\
+({								\
+ 	int __ret = 0;						\
+ 	if (!condition)						\
+		__wait_event_interruptible(wq, condition,	\
+					   0, __ret);		\
+	__ret;							\
 })
 
+#define wait_event_interruptible_exclusive(wq, condition)	\
+({								\
+ 	int __ret = 0;						\
+ 	if (!condition)						\
+		__wait_event_interruptible(wq, condition,	\
+					   1, __ret);		\
+	__ret;							\
+})
+
+#ifndef __DARWIN8__
 extern void	wakeup_one __P((void * chan));
+#endif
 /* only used in tests */
-#define wake_up_process(p)			\
-	do {					\
-		wakeup_one(p);			\
+#define wake_up_process(p)					\
+	do {							\
+		wakeup_one((caddr_t)p);				\
 	} while (0)
 	
 /* used in couple of places */
@@ -359,48 +325,19 @@ static inline void sleep_on(cfs_waitq_t *waitq)
 	
 	cfs_waitlink_init(&link);
 	cfs_waitq_add(waitq, &link);
-	cfs_waitq_wait(&link);
+	cfs_waitq_wait(&link, CFS_TASK_UNINT);
 	cfs_waitq_del(waitq, &link);
 }
 
 /*
- * XXX
  * Signal
  */
-#define cfs_sigmask_lock(t, f)		do { f = 0; } while(0)
-#define cfs_sigmask_unlock(t, f)	do { f = 0; } while(0)
-#define cfs_signal_pending(t)		(0)
-
-#define cfs_siginitset(pmask, sigs)				\
-	do {							\
-		sigset_t __sigs = sigs & (~sigcantmask);	\
-		*(pmask) = __sigs;				\
-	} while(0)
-
-#define cfs_siginitsetinv(pmask, sigs)                          \
-	do {                                                    \
-		sigset_t __sigs = ~(sigs | sigcantmask);        \
-		*(pmask) = __sigs;				\
-	} while(0)
-
-#define cfs_recalc_sigpending(ut)				\
-        do {							\
-		(ut)->uu_siglist = (ut)->uu_siglist & ~(ut)->uu_sigmask;\
-	} while (0)
-#define cfs_sigfillset(s)					\
-	do {							\
-		memset((s), -1, sizeof(sigset_t));		\
-	} while(0)
-
-#define cfs_set_sig_blocked(ut, b)		do {(ut)->uu_sigmask = b;} while(0)
-#define cfs_get_sig_blocked(ut)			(&(ut)->uu_sigmask)
+typedef sigset_t	cfs_sigset_t;
 
 #define SIGNAL_MASK_ASSERT()
-
 /*
  * Timer
  */
-
 typedef struct cfs_timer {
 	struct ktimer t;
 } cfs_timer_t;
@@ -434,20 +371,27 @@ cfs_time_t cfs_timer_deadline(struct cfs_timer *t);
 /*
  * CPU
  */
-#include <machine/cpu_number.h>
 /* Run in PowerG5 who is PPC64 */
 #define SMP_CACHE_BYTES                         128
 #define __cacheline_aligned                     __attribute__((__aligned__(SMP_CACHE_BYTES)))
-/* XXX How to get the value of NCPUS from xnu ? */
 #define NR_CPUS					2
-#define smp_processor_id()			cpu_number()
-#define smp_num_cpus				NR_CPUS
+
+/* 
+ * XXX Liang: patch xnu and export current_processor()?
+ *
+ * #define smp_processor_id()			current_processor()
+ */
+#define smp_processor_id()			0
 /* XXX smp_call_function is not supported in xnu */
 #define smp_call_function(f, a, n, w)		do {} while(0)
+int cfs_online_cpus(void);
+#define smp_num_cpus				cfs_online_cpus()
 
 /*
  * Misc
  */
+extern int is_suser(void);
+
 #ifndef likely
 #define likely(exp) (exp)
 #endif
@@ -458,11 +402,9 @@ cfs_time_t cfs_timer_deadline(struct cfs_timer *t);
 #define lock_kernel()				do {} while(0)
 #define unlock_kernel()				do {} while(0)
 
-#define exit_mm(t)				do {} while(0)
-#define exit_files(t)				do {} while(0)
-
-#define CAP_SYS_ADMIN                           0
-#define capable(a)		suser(current_proc()->p_ucred, &(current_proc()->p_acflag))
+#define CAP_SYS_BOOT				0
+#define CAP_SYS_ADMIN                           1
+#define capable(a)				((a) == CAP_SYS_BOOT ? is_suser(): is_suser1())
 
 #define USERMODEHELPER(path, argv, envp)	(0)
 
@@ -499,6 +441,11 @@ struct __dummy_ ## name ## _struct {}
 #define inter_module_get(n)			cfs_symbol_get(n)
 #define inter_module_put(n)			cfs_symbol_put(n)
 
+static inline int request_module(char *name)
+{
+	return (-EINVAL);
+}
+
 #ifndef __exit
 #define __exit
 #endif
@@ -517,7 +464,7 @@ struct __dummy_ ## name ## _struct {}
 #define LINUX_VERSION_CODE KERNEL_VERSION(2,5,0)
 
 #define NR_IRQS				512
-#define in_interrupt()			(0)
+#define in_interrupt()			ml_at_interrupt_context()
 
 #define KERN_EMERG      "<0>"   /* system is unusable                   */
 #define KERN_ALERT      "<1>"   /* action must be taken immediately     */
@@ -534,21 +481,47 @@ static inline long PTR_ERR(const void *ptr)
 }
 
 #define ERR_PTR(err)	((void *)err)
+#define IS_ERR(p)	((unsigned long)(p) + 1000 < 1000)
 
-/* XXX */
-#define IS_ERR(p)	(0)
+#else	/* !__KERNEL__ */
 
+typedef struct cfs_proc_dir_entry {
+	void		*data;
+} cfs_proc_dir_entry_t;
+
+#include <libcfs/user-prim.h>
+#define __WORDSIZE	32
+
+#endif	/* END __KERNEL__ */
 /*
  * Error number
  */
+#ifndef EPROTO
+#define EPROTO          EPROTOTYPE
+#endif
+#ifndef EBADR
 #define EBADR		EBADRPC
-#define ERESTARTSYS	ERESTART
+#endif
+#ifndef ERESTARTSYS
+#define ERESTARTSYS	512
+#endif
+#ifndef EDEADLOCK
 #define EDEADLOCK	EDEADLK
+#endif
+#ifndef ECOMM
 #define ECOMM		EINVAL
+#endif
+#ifndef ENODATA
 #define ENODATA		EINVAL
+#endif
+#ifndef ENOTSUPP
+#define ENOTSUPP	EINVAL
+#endif
 
+#if BYTE_ORDER == BIG_ENDIAN
+# define __BIG_ENDIAN
 #else
-#define __WORDSIZE	32
-#endif	/* __KERNEL__ */
+# define __LITTLE_ENDIAN
+#endif
 
-#endif	/* __LINUX__ */
+#endif	/* __LIBCFS_DARWIN_CFS_PRIM_H__ */

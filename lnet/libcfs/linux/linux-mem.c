@@ -18,7 +18,7 @@
  *   along with Lustre; if not, write to the Free Software
  *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
-#define DEBUG_SUBSYSTEM S_PORTALS
+#define DEBUG_SUBSYSTEM S_LNET
 
 #include <linux/mm.h>
 #include <linux/vmalloc.h>
@@ -26,36 +26,40 @@
 #include <linux/highmem.h>
 #include <libcfs/libcfs.h>
 
-void *
-cfs_alloc(size_t nr_bytes, u_int32_t flags)
+static unsigned int cfs_alloc_flags_to_gfp(u_int32_t flags)
 {
-	void *ptr = NULL;
 	unsigned int mflags = 0;
 
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
-	if (flags & CFS_ALLOC_ATOMIC)
-		mflags |= __GFP_HIGH;
+        if (flags & CFS_ALLOC_ATOMIC)
+                mflags |= __GFP_HIGH;
         else if (flags & CFS_ALLOC_WAIT)
                 mflags |= __GFP_WAIT;
-	else
-		mflags |= (__GFP_HIGH | __GFP_WAIT);
-
-	if (flags & CFS_ALLOC_FS)
-		mflags |= __GFP_FS;
-	if (flags & CFS_ALLOC_IO)
-		mflags |= __GFP_IO | __GFP_HIGHIO;
+        else
+                mflags |= (__GFP_HIGH | __GFP_WAIT);
+        if (flags & CFS_ALLOC_IO)
+                mflags |= __GFP_IO | __GFP_HIGHIO;
 #else
         if (flags & CFS_ALLOC_ATOMIC)
                 mflags |= __GFP_HIGH;
         else
                 mflags |= __GFP_WAIT;
-        if (flags & CFS_ALLOC_FS)
-                mflags |= __GFP_FS;
+        if (flags & CFS_ALLOC_NOWARN)
+                mflags |= __GFP_NOWARN;
         if (flags & CFS_ALLOC_IO)
                 mflags |= __GFP_IO;
 #endif
+        if (flags & CFS_ALLOC_FS)
+                mflags |= __GFP_FS;
+        return mflags;
+}
 
-	ptr = kmalloc(nr_bytes, mflags);
+void *
+cfs_alloc(size_t nr_bytes, u_int32_t flags)
+{
+	void *ptr = NULL;
+
+	ptr = kmalloc(nr_bytes, cfs_alloc_flags_to_gfp(flags));
 	if (ptr != NULL && (flags & CFS_ALLOC_ZERO))
 		memset(ptr, 0, nr_bytes);
 	return ptr;
@@ -79,83 +83,37 @@ cfs_free_large(void *addr)
 	vfree(addr);
 }
 
-cfs_page_t *
-cfs_alloc_pages(unsigned int flags, unsigned int order)
+cfs_page_t *cfs_alloc_page(unsigned int flags)
 {
-        unsigned int mflags = 0;
-
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
-	if (flags & CFS_ALLOC_ATOMIC)
-		mflags |= __GFP_HIGH;
-        else if (flags & CFS_ALLOC_WAIT)
-                mflags |= __GFP_WAIT;
-	else
-		mflags |= (__GFP_HIGH | __GFP_WAIT);
-
-	if (flags & CFS_ALLOC_FS)
-		mflags |= __GFP_FS;
-	if (flags & CFS_ALLOC_IO)
-		mflags |= __GFP_IO | __GFP_HIGHIO;
-        if (flags & CFS_ALLOC_HIGH)
-                mflags |=  __GFP_HIGHMEM;
-#else
-        if (flags & CFS_ALLOC_ATOMIC)
-                mflags |= __GFP_HIGH;
-        else
-                mflags |= __GFP_WAIT;
-        if (flags & CFS_ALLOC_FS)
-                mflags |= __GFP_FS;
-        if (flags & CFS_ALLOC_IO)
-                mflags |= __GFP_IO;
-        if (flags & CFS_ALLOC_HIGH)
-                mflags |=  __GFP_HIGHMEM;
-#endif
-
-        return alloc_pages(mflags, order);
+        /*
+         * XXX nikita: do NOT call portals_debug_msg() (CDEBUG/ENTRY/EXIT)
+         * from here: this will lead to infinite recursion.
+         */
+        return alloc_pages(cfs_alloc_flags_to_gfp(flags), 0);
 }
 
 cfs_mem_cache_t *
 cfs_mem_cache_create (const char *name, size_t size, size_t offset,
-                      unsigned long flags, void (*ctor)(void*, kmem_cache_t *, unsigned long),
-                      void (*dtor)(void*, cfs_mem_cache_t *, unsigned long))
+                      unsigned long flags)
 {
-        return kmem_cache_create(name, size, offset, flags, ctor, dtor);
+        return kmem_cache_create(name, size, offset, flags, NULL, NULL);
 }
 
 int
 cfs_mem_cache_destroy (cfs_mem_cache_t * cachep)
 {
+#ifdef HAVE_KMEM_CACHE_DESTROY_INT
         return kmem_cache_destroy(cachep);
+#else
+        kmem_cache_destroy(cachep);
+        return 0;
+#endif
 }
 
 void *
 cfs_mem_cache_alloc(cfs_mem_cache_t *cachep, int flags)
 {
-        unsigned int mflags = 0;
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
-	if (flags & CFS_SLAB_ATOMIC)
-		mflags |= __GFP_HIGH;
-        else if (flags & CFS_ALLOC_WAIT)
-                mflags |= __GFP_WAIT;
-	else
-		mflags |= (__GFP_HIGH | __GFP_WAIT);
-
-	if (flags & CFS_SLAB_FS)
-		mflags |= __GFP_FS;
-	if (flags & CFS_SLAB_IO)
-		mflags |= __GFP_IO | __GFP_HIGHIO;
-#else
-        if (flags & CFS_SLAB_ATOMIC)
-                mflags |= __GFP_HIGH;
-        else
-                mflags |= __GFP_WAIT;
-        if (flags & CFS_SLAB_FS)
-                mflags |= __GFP_FS;
-        if (flags & CFS_SLAB_IO)
-                mflags |= __GFP_IO;
-#endif
-
-        return kmem_cache_alloc(cachep, mflags);
+        return kmem_cache_alloc(cachep, cfs_alloc_flags_to_gfp(flags));
 }
 
 void
@@ -168,7 +126,7 @@ EXPORT_SYMBOL(cfs_alloc);
 EXPORT_SYMBOL(cfs_free);
 EXPORT_SYMBOL(cfs_alloc_large);
 EXPORT_SYMBOL(cfs_free_large);
-EXPORT_SYMBOL(cfs_alloc_pages);
+EXPORT_SYMBOL(cfs_alloc_page);
 EXPORT_SYMBOL(cfs_mem_cache_create);
 EXPORT_SYMBOL(cfs_mem_cache_destroy);
 EXPORT_SYMBOL(cfs_mem_cache_alloc);

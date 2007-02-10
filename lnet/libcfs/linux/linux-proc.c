@@ -26,7 +26,9 @@
 # define EXPORT_SYMTAB
 #endif
 
+#ifdef HAVE_KERNEL_CONFIG_H
 #include <linux/config.h>
+#endif
 #include <linux/module.h>
 #include <linux/kernel.h>
 #include <linux/mm.h>
@@ -51,231 +53,138 @@
 #include <linux/proc_fs.h>
 #include <linux/sysctl.h>
 
-# define DEBUG_SUBSYSTEM S_PORTALS
+# define DEBUG_SUBSYSTEM S_LNET
 
 #include <libcfs/kp30.h>
 #include <asm/div64.h>
 #include "tracefile.h"
 
-static struct ctl_table_header *portals_table_header = NULL;
-extern char debug_file_path[1024];
-extern char portals_upcall[1024];
+static struct ctl_table_header *lnet_table_header = NULL;
+extern char lnet_upcall[1024];
 
-#define PSDEV_PORTALS  (0x100)
+#define PSDEV_LNET  (0x100)
 enum {
         PSDEV_DEBUG = 1,          /* control debugging */
         PSDEV_SUBSYSTEM_DEBUG,    /* control debugging */
-        PSDEV_PRINTK,             /* force all errors to console */
-        PSDEV_CONSOLE,            /* allow _any_ messages to console */
+        PSDEV_PRINTK,             /* force all messages to console */
+        PSDEV_CONSOLE_RATELIMIT,  /* ratelimit console messages */
         PSDEV_DEBUG_PATH,         /* crashdump log location */
         PSDEV_DEBUG_DUMP_PATH,    /* crashdump tracelog location */
-        PSDEV_PORTALS_UPCALL,     /* User mode upcall script  */
-        PSDEV_PORTALS_MEMUSED,    /* bytes currently PORTAL_ALLOCated */
-        PSDEV_PORTALS_CATASTROPHE,/* if we have LBUGged or panic'd */
+        PSDEV_LNET_UPCALL,        /* User mode upcall script  */
+        PSDEV_LNET_MEMUSED,       /* bytes currently PORTAL_ALLOCated */
+        PSDEV_LNET_CATASTROPHE,   /* if we have LBUGged or panic'd */
 };
 
-static struct ctl_table portals_table[] = {
-        {PSDEV_DEBUG, "debug", &portal_debug, sizeof(int), 0644, NULL,
-         &proc_dointvec},
-        {PSDEV_SUBSYSTEM_DEBUG, "subsystem_debug", &portal_subsystem_debug,
+int LL_PROC_PROTO(proc_dobitmasks);
+
+static struct ctl_table lnet_table[] = {
+        {PSDEV_DEBUG, "debug", &libcfs_debug, sizeof(int), 0644, NULL,
+         &proc_dobitmasks},
+        {PSDEV_SUBSYSTEM_DEBUG, "subsystem_debug", &libcfs_subsystem_debug,
+         sizeof(int), 0644, NULL, &proc_dobitmasks},
+        {PSDEV_PRINTK, "printk", &libcfs_printk, sizeof(int), 0644, NULL,
+         &proc_dobitmasks},
+        {PSDEV_CONSOLE_RATELIMIT, "console_ratelimit",&libcfs_console_ratelimit,
          sizeof(int), 0644, NULL, &proc_dointvec},
-        {PSDEV_PRINTK, "printk", &portal_printk, sizeof(int), 0644, NULL,
-         &proc_dointvec},
         {PSDEV_DEBUG_PATH, "debug_path", debug_file_path,
          sizeof(debug_file_path), 0644, NULL, &proc_dostring, &sysctl_string},
-        {PSDEV_PORTALS_UPCALL, "upcall", portals_upcall,
-         sizeof(portals_upcall), 0644, NULL, &proc_dostring,
+        {PSDEV_LNET_UPCALL, "upcall", lnet_upcall,
+         sizeof(lnet_upcall), 0644, NULL, &proc_dostring,
          &sysctl_string},
-        {PSDEV_PORTALS_MEMUSED, "memused", (int *)&portal_kmemory.counter,
+        {PSDEV_LNET_MEMUSED, "memused", (int *)&libcfs_kmemory.counter,
          sizeof(int), 0444, NULL, &proc_dointvec},
-        {PSDEV_PORTALS_CATASTROPHE, "catastrophe", &portals_catastrophe,
+        {PSDEV_LNET_CATASTROPHE, "catastrophe", &libcfs_catastrophe,
          sizeof(int), 0444, NULL, &proc_dointvec},
         {0}
 };
 
 static struct ctl_table top_table[2] = {
-        {PSDEV_PORTALS, "portals", NULL, 0, 0555, portals_table},
+        {PSDEV_LNET, "lnet", NULL, 0, 0555, lnet_table},
         {0}
 };
 
-
-#ifdef PORTALS_PROFILING
-/*
- * profiling stuff.  we do this statically for now 'cause its simple,
- * but we could do some tricks with elf sections to have this array
- * automatically built.
- */
-#define def_prof(FOO) [PROF__##FOO] = {#FOO, 0, }
-
-struct prof_ent prof_ents[] = {
-        def_prof(our_recvmsg),
-        def_prof(our_sendmsg),
-        def_prof(socknal_recv),
-        def_prof(lib_parse),
-        def_prof(conn_list_walk),
-        def_prof(memcpy),
-        def_prof(lib_finalize),
-        def_prof(pingcli_time),
-        def_prof(gmnal_send),
-        def_prof(gmnal_recv),
-};
-
-EXPORT_SYMBOL(prof_ents);
-
-/*
- * this function is as crazy as the proc filling api
- * requires.
- *
- * buffer: page allocated for us to scribble in.  the
- *  data returned to the user will be taken from here.
- * *start: address of the pointer that will tell the 
- *  caller where in buffer the data the user wants is.
- * ppos: offset in the entire /proc file that the user
- *  currently wants.
- * wanted: the amount of data the user wants.
- *
- * while going, 'curpos' is the offset in the entire
- * file where we currently are.  We only actually
- * start filling buffer when we get to a place in
- * the file that the user cares about.
- *
- * we take care to only sprintf when the user cares because
- * we're holding a lock while we do this.
- *
- * we're smart and know that we generate fixed size lines.
- * we only start writing to the buffer when the user cares.
- * This is unpredictable because we don't snapshot the
- * list between calls that are filling in a file from
- * the list.  The list could change mid read and the
- * output will look very weird indeed.  oh well.
- */
-
-static int prof_read_proc(char *buffer, char **start, off_t ppos, int wanted,
-                          int *eof, void *data)
+int LL_PROC_PROTO(proc_dobitmasks)
 {
-        int len = 0, i;
-        int curpos;
-        char *header = "Interval        Cycles_per (Starts Finishes Total)\n";
-        int header_len = strlen(header);
-        char *format = "%-15s %.12Ld (%.12d %.12d %.12Ld)";
-        int line_len = (15 + 1 + 12 + 2 + 12 + 1 + 12 + 1 + 12 + 1);
+        const int     tmpstrlen = 512;
+        char         *str;
+        int           rc = 0;
+        /* the proc filling api stumps me always, coax proc_dointvec
+         * and proc_dostring into doing the drudgery by cheating
+         * with a dummy ctl_table
+         */
+        struct ctl_table dummy = *table;
+        unsigned int *mask = (unsigned int *)table->data;
+        int           is_subsys = (mask == &libcfs_subsystem_debug) ? 1 : 0;
 
-        *start = buffer;
+	str = kmalloc(tmpstrlen, GFP_USER);
+        if (str == NULL)
+                return -ENOMEM;
 
-        if (ppos < header_len) {
-                int diff = MIN(header_len, wanted);
-                memcpy(buffer, header + ppos, diff);
-                len += diff;
-                ppos += diff;
-        }
+        if (write) {
+                size_t oldlen = *lenp;
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,8)
+                loff_t oldpos = *ppos;
+#endif
 
-        if (len >= wanted)
-                goto out;
+                dummy.proc_handler = &proc_dointvec;
 
-        curpos = header_len;
-
-        for ( i = 0; i < MAX_PROFS ; i++) {
-                int copied;
-                struct prof_ent *pe = &prof_ents[i];
-                long long cycles_per;
-                /*
-                 * find the part of the array that the buffer wants
+                /* old proc interface allows user to specify just an int
+                 * value; be compatible and don't break userland.
                  */
-                if (ppos >= (curpos + line_len))  {
-                        curpos += line_len;
-                        continue;
-                }
-                /* the clever caller split a line */
-                if (ppos > curpos) {
-                        *start = buffer + (ppos - curpos);
-                }
+                rc = ll_proc_dointvec(&dummy, write, filp, buffer, lenp, ppos);
 
-                if (pe->finishes == 0)
-                        cycles_per = 0;
-                else
-                {
-                        cycles_per = pe->total_cycles;
-                        do_div (cycles_per, pe->finishes);
-                }
+                if (rc != -EINVAL)
+                        goto out;
 
-                copied = sprintf(buffer + len, format, pe->str, cycles_per,
-                                 pe->starts, pe->finishes, pe->total_cycles);
+                /* using new interface */
+                dummy.data = str;
+                dummy.maxlen = tmpstrlen;
+                dummy.proc_handler = &proc_dostring;
 
-                len += copied;
+                /* proc_dointvec might have changed these */
+                *lenp = oldlen;
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,8)
+                *ppos = oldpos;
+#endif
 
-                /* pad to line len, -1 for \n */
-                if ((copied < line_len-1)) {
-                        int diff = (line_len-1) - copied;
-                        memset(buffer + len, ' ', diff);
-                        len += diff;
-                        copied += diff;
-                }
+                rc = ll_proc_dostring(&dummy, write, filp, buffer, lenp, ppos);
 
-                buffer[len++]= '\n';
+                if (rc != 0)
+                        goto out;
 
-                /* bail if we have enough */
-                if (((buffer + len) - *start) >= wanted)
-                        break;
+                rc = libcfs_debug_str2mask(mask, dummy.data, is_subsys);
+        } else {
+                dummy.data = str;
+                dummy.maxlen = tmpstrlen;
+                dummy.proc_handler = &proc_dostring;
 
-                curpos += line_len;
+                libcfs_debug_mask2str(dummy.data, dummy.maxlen,*mask,is_subsys);
+
+                rc = ll_proc_dostring(&dummy, write, filp, buffer, lenp, ppos);
         }
 
-        /* lameness */
-        if (i == MAX_PROFS)
-                *eof = 1;
- out:
-
-        return MIN(((buffer + len) - *start), wanted);
+out:
+        kfree(str);
+        return rc;
 }
-
-/*
- * all kids love /proc :/
- */
-static unsigned char basedir[]="net/portals";
-#endif /* PORTALS_PROFILING */
 
 int insert_proc(void)
 {
         struct proc_dir_entry *ent;
-#if PORTALS_PROFILING
-        unsigned char dir[128];
-
-        if (ARRAY_SIZE(prof_ents) != MAX_PROFS) {
-                CERROR("profiling enum and array are out of sync.\n");
-                return -1;
-        }
-
-        /*
-         * This is pretty lame.  assuming that failure just
-         * means that they already existed.
-         */
-        strcat(dir, basedir);
-        create_proc_entry(dir, S_IFDIR, 0);
-
-        strcat(dir, "/cycles");
-        ent = create_proc_entry(dir, 0, 0);
-        if (!ent) {
-                CERROR("couldn't register %s?\n", dir);
-                return -1;
-        }
-
-        ent->data = NULL;
-        ent->read_proc = prof_read_proc;
-#endif /* PORTALS_PROFILING */
 
 #ifdef CONFIG_SYSCTL
-        if (!portals_table_header)
-                portals_table_header = register_sysctl_table(top_table, 0);
+        if (!lnet_table_header)
+                lnet_table_header = register_sysctl_table(top_table, 0);
 #endif
 
-        ent = create_proc_entry("sys/portals/dump_kernel", 0, NULL);
+        ent = create_proc_entry("sys/lnet/dump_kernel", 0, NULL);
         if (ent == NULL) {
                 CERROR("couldn't register dump_kernel\n");
                 return -1;
         }
         ent->write_proc = trace_dk;
 
-        ent = create_proc_entry("sys/portals/daemon_file", 0, NULL);
+        ent = create_proc_entry("sys/lnet/daemon_file", 0, NULL);
         if (ent == NULL) {
                 CERROR("couldn't register daemon_file\n");
                 return -1;
@@ -283,7 +192,7 @@ int insert_proc(void)
         ent->write_proc = trace_write_daemon_file;
         ent->read_proc = trace_read_daemon_file;
 
-        ent = create_proc_entry("sys/portals/debug_mb", 0, NULL);
+        ent = create_proc_entry("sys/lnet/debug_mb", 0, NULL);
         if (ent == NULL) {
                 CERROR("couldn't register debug_mb\n");
                 return -1;
@@ -296,29 +205,13 @@ int insert_proc(void)
 
 void remove_proc(void)
 {
-#if PORTALS_PROFILING
-        unsigned char dir[128];
-        int end;
-
-        dir[0]='\0';
-        strcat(dir, basedir);
-
-        end = strlen(dir);
-
-        strcat(dir, "/cycles");
-        remove_proc_entry(dir, 0);
-
-        dir[end] = '\0';
-        remove_proc_entry(dir, 0);
-#endif /* PORTALS_PROFILING */
-
-        remove_proc_entry("sys/portals/dump_kernel", NULL);
-        remove_proc_entry("sys/portals/daemon_file", NULL);
-        remove_proc_entry("sys/portals/debug_mb", NULL);
+        remove_proc_entry("sys/lnet/dump_kernel", NULL);
+        remove_proc_entry("sys/lnet/daemon_file", NULL);
+        remove_proc_entry("sys/lnet/debug_mb", NULL);
 
 #ifdef CONFIG_SYSCTL
-        if (portals_table_header)
-                unregister_sysctl_table(portals_table_header);
-        portals_table_header = NULL;
+        if (lnet_table_header)
+                unregister_sysctl_table(lnet_table_header);
+        lnet_table_header = NULL;
 #endif
 }

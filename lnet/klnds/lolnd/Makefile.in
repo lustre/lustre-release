@@ -1,4 +1,0 @@
-MODULES := klonal
-klonal-objs := lonal.o lonal_cb.o
-
-@INCLUDE_RULES@

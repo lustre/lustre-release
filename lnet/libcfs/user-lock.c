@@ -27,14 +27,21 @@
 
 /*
  * liblustre is single-threaded, so most "synchronization" APIs are trivial.
+ *
+ * XXX Liang: There are several branches share lnet with b_hd_newconfig,
+ * if we define lock APIs at here, there will be conflict with liblustre
+ * in other branches.
  */
 
 #ifndef __KERNEL__
 
+#include <stdlib.h>
+#include <libcfs/libcfs.h>
 /*
  * Optional debugging (magic stamping and checking ownership) can be added.
  */
 
+#if 0
 /*
  * spin_lock
  *
@@ -88,19 +95,6 @@ void spin_unlock_bh(spinlock_t *lock)
         LASSERT(lock != NULL);
         (void)lock;
 }
-
-void spin_lock_irqsave(spinlock_t *lock, unsigned long flags)
-{
-        LASSERT(lock != NULL);
-        (void)lock;
-}
-
-void spin_unlock_irqrestore(spinlock_t *lock, unsigned long flags)
-{
-        LASSERT(lock != NULL);
-        (void)lock;
-}
-
 
 /*
  * Semaphore
@@ -227,6 +221,7 @@ void up_write(struct rw_semaphore *s)
         LASSERT(s != NULL);
         (void)s;
 }
+#endif
 
 /* !__KERNEL__ */
 #endif

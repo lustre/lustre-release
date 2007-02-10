@@ -4,156 +4,188 @@
 #include <sys/conf.h>
 #include <miscfs/devfs/devfs.h>
 
-#define DEBUG_SUBSYSTEM S_PORTALS
+#define DEBUG_SUBSYSTEM S_LNET
 #include <libcfs/libcfs.h>
 #include <libcfs/kp30.h>
 
-int portal_ioctl_getdata(char *buf, char *end, void *arg)
+int libcfs_ioctl_getdata(char *buf, char *end, void *arg)
 {
-        struct portal_ioctl_hdr *hdr;
-        struct portal_ioctl_data *data;
+        struct libcfs_ioctl_hdr *hdr;
+        struct libcfs_ioctl_data *data;
         int err = 0;
         ENTRY;
 
-        hdr = (struct portal_ioctl_hdr *)buf; 
-        data = (struct portal_ioctl_data *)buf;
-	/* portals_ioctl_data has been copied in by ioctl of osx */
-	memcpy(buf, arg, sizeof(struct portal_ioctl_data));
+        hdr = (struct libcfs_ioctl_hdr *)buf;
+        data = (struct libcfs_ioctl_data *)buf;
+	/* libcfs_ioctl_data has been copied in by ioctl of osx */
+	memcpy(buf, arg, sizeof(struct libcfs_ioctl_data));
 
-        if (hdr->ioc_version != PORTAL_IOCTL_VERSION) {
-                CERROR("PORTALS: version mismatch kernel vs application\n");
+        if (hdr->ioc_version != LIBCFS_IOCTL_VERSION) {
+                CERROR("LIBCFS: version mismatch kernel vs application\n");
                 RETURN(-EINVAL);
         }
 
         if (hdr->ioc_len + buf >= end) {
-                CERROR("PORTALS: user buffer exceeds kernel buffer\n");
+                CERROR("LIBCFS: user buffer exceeds kernel buffer\n");
                 RETURN(-EINVAL);
         }
 
-        if (hdr->ioc_len < sizeof(struct portal_ioctl_data)) {
-                CERROR("PORTALS: user buffer too small for ioctl\n");
+        if (hdr->ioc_len < sizeof(struct libcfs_ioctl_data)) {
+                CERROR("LIBCFS: user buffer too small for ioctl\n");
                 RETURN(-EINVAL);
         }
 	buf += size_round(sizeof(*data));
 
-        if (data->ioc_inllen1) { 
-                err = copy_from_user(buf, data->ioc_inlbuf1, size_round(data->ioc_inllen1)); 
+        if (data->ioc_inllen1) {
+                err = copy_from_user(buf, data->ioc_inlbuf1, size_round(data->ioc_inllen1));
 		if (err)
 			RETURN(err);
-                data->ioc_inlbuf1 = buf; 
-                buf += size_round(data->ioc_inllen1); 
-        } 
-        
-        if (data->ioc_inllen2) { 
-                copy_from_user(buf, data->ioc_inlbuf2, size_round(data->ioc_inllen2)); 
+                data->ioc_inlbuf1 = buf;
+                buf += size_round(data->ioc_inllen1);
+        }
+
+        if (data->ioc_inllen2) {
+                copy_from_user(buf, data->ioc_inlbuf2, size_round(data->ioc_inllen2));
 		if (err)
 			RETURN(err);
-                data->ioc_inlbuf2 = buf; 
-        } 
+                data->ioc_inlbuf2 = buf;
+        }
 
         RETURN(err);
 }
 
+int libcfs_ioctl_popdata(void *arg, void *data, int size)
+{
+	/* 
+	 * system call will copy out ioctl arg to user space
+	 */
+	memcpy(arg, data, size);
+	return 0;
+}
+
 extern struct cfs_psdev_ops		libcfs_psdev_ops;
-struct portals_device_userstate		*mdev_state[16];
+struct libcfs_device_userstate		*mdev_state[16];
 
-static int 
+static int
 libcfs_psdev_open(dev_t dev, int flags, int devtype, struct proc *p)
-{ 
-	struct	portals_device_userstate *mstat = NULL;
+{
+	struct	libcfs_device_userstate *mstat = NULL;
 	int	rc = 0;
-	int	devid; 
-	devid = minor(dev);    
+	int	devid;
+	devid = minor(dev);
 
-	if (devid > 16) return (-ENXIO);
+	if (devid > 16) return (ENXIO);
 
 	if (libcfs_psdev_ops.p_open != NULL)
-		rc = libcfs_psdev_ops.p_open(0, &mstat);
+		rc = -libcfs_psdev_ops.p_open(0, &mstat);
 	else
-		rc = -EPERM;
-	if (!rc)
-		return rc;
-	mdev_state[devid] = mstat;
+		rc = EPERM;
+	if (rc == 0)
+		mdev_state[devid] = mstat;
 	return rc;
 }
 
-static int 
+static int
 libcfs_psdev_close(dev_t dev, int flags, int mode, struct proc *p)
 {
-	int	devid; 
-	devid = minor(dev);    
+	int	devid;
+	devid = minor(dev);
 	int	rc = 0;
 
-	if (devid > 16) return (-ENXIO);
+	if (devid > 16) return (ENXIO);
 
 	if (libcfs_psdev_ops.p_close != NULL)
-		rc = libcfs_psdev_ops.p_close(0, mdev_state[devid]);
+		rc = -libcfs_psdev_ops.p_close(0, mdev_state[devid]);
 	else
-		rc = -EPERM;
-	if (rc)
-		return rc;
-	mdev_state[devid] = NULL;
+		rc = EPERM;
+	if (rc == 0)
+		mdev_state[devid] = NULL;
 	return rc;
 }
 
-static int 
+static int
 libcfs_ioctl (dev_t dev, u_long cmd, caddr_t arg, int flag, struct proc *p)
-{ 
-	int rc = 0; 
-        struct cfs_psdev_file    pfile; 
-	int     devid; 
-	devid = minor(dev); 
+{
+	int rc = 0;
+        struct cfs_psdev_file    pfile;
+	int     devid;
+	devid = minor(dev);
 	
-	if (devid > 16) return (-ENXIO);
+	if (devid > 16) return (ENXIO);
 
-	if (suser(p->p_ucred, &p->p_acflag)) 
-		return (-EPERM); 
+	if (!is_suser())
+		return (EPERM);
 	
 	pfile.off = 0;
 	pfile.private_data = mdev_state[devid];
 
-	if (libcfs_psdev_ops.p_ioctl != NULL) 
-		rc = libcfs_psdev_ops.p_ioctl(&pfile, cmd, (void *)arg);
-	else 
-		rc = -EPERM;
+	if (libcfs_psdev_ops.p_ioctl != NULL)
+		rc = -libcfs_psdev_ops.p_ioctl(&pfile, cmd, (void *)arg);
+	else
+		rc = EPERM;
 	return rc;
 }
 
 static struct cdevsw libcfs_devsw =
-{ 
-	libcfs_psdev_open,            /* open */ 
-	libcfs_psdev_close,           /* close */ 
-	NULL,			/* read */ 
-	NULL,			/* write */ 
-	libcfs_ioctl,		/* ioctl */ 
-	NULL,			/* stop */ 
-	NULL,			/* reset */ 
-	NULL,			/* tty's */ 
-	NULL,			/* select */ 
-	NULL,			/* mmap */ 
-	NULL,			/* strategy */ 
-	NULL,			/* getc */ 
-	NULL,			/* putc */ 
-	0			/* type */ 
+{
+	.d_open     = libcfs_psdev_open,
+	.d_close    = libcfs_psdev_close,
+	.d_read     = eno_rdwrt,
+	.d_write    = eno_rdwrt,
+	.d_ioctl    = libcfs_ioctl,
+	.d_stop     = eno_stop,
+	.d_reset    = eno_reset,
+	.d_ttys     = NULL,
+	.d_select   = eno_select,
+	.d_mmap     = eno_mmap,
+	.d_strategy = eno_strat,
+	.d_getc     = eno_getc,
+	.d_putc     = eno_putc,
+	.d_type     = 0
 };
 
-cfs_psdev_t libcfs_dev = { 
-	-1, 
-	NULL, 
-	"portals", 
-	&libcfs_devsw, 
+cfs_psdev_t libcfs_dev = {
+	-1,
+	NULL,
+	"lnet",
+	&libcfs_devsw,
 	NULL
 };
 
-void
-kportal_daemonize (char *str)
+extern spinlock_t trace_cpu_serializer;
+extern void cfs_sync_init(void);
+extern void cfs_sync_fini(void);
+extern int cfs_sysctl_init(void);
+extern void cfs_sysctl_fini(void);
+extern int cfs_mem_init(void);
+extern int cfs_mem_fini(void);
+extern void raw_page_death_row_clean(void);
+extern void cfs_thread_agent_init(void);
+extern void cfs_thread_agent_fini(void);
+extern void cfs_symbol_init(void);
+extern void cfs_symbol_fini(void);
+
+int libcfs_arch_init(void)
 {
-	printf("Daemonize request: %s.\n", str);
-	return;
+	cfs_sync_init();
+	cfs_sysctl_init();
+	cfs_mem_init();
+	cfs_thread_agent_init();
+	cfs_symbol_init();
+
+	spin_lock_init(&trace_cpu_serializer);
+
+	return 0;
 }
 
-void 
-kportal_blockallsigs(void)
+void libcfs_arch_cleanup(void)
 {
-	return;
+	spin_lock_done(&trace_cpu_serializer);
+
+	cfs_symbol_fini();
+	cfs_thread_agent_fini();
+	cfs_mem_fini();
+	cfs_sysctl_fini();
+	cfs_sync_fini();
 }
+

@@ -18,19 +18,23 @@
  * Software Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
 
-#define DEBUG_SUBSYSTEM S_PORTALS
+#define DEBUG_SUBSYSTEM S_LNET
 
 #include <libcfs/libcfs.h>
 #include <libcfs/kp30.h>
 
 /*
- * Implementation of cfs_curproc API (see portals/include/libcfs/curproc.h)
+ * Implementation of cfs_curproc API (see lnet/include/libcfs/curproc.h)
  * for XNU kernel.
  */
 
 static inline struct ucred *curproc_ucred(void)
 {
+#ifdef __DARWIN8__
+        return proc_ucred(current_proc());
+#else
         return current_proc()->p_cred->pc_ucred;
+#endif
 }
 
 uid_t  cfs_curproc_uid(void)
@@ -46,17 +50,30 @@ gid_t  cfs_curproc_gid(void)
 
 uid_t  cfs_curproc_fsuid(void)
 {
+#ifdef __DARWIN8__
+        return curproc_ucred()->cr_ruid;
+#else
         return current_proc()->p_cred->p_ruid;
+#endif
 }
 
 gid_t  cfs_curproc_fsgid(void)
 {
+#ifdef __DARWIN8__
+        return curproc_ucred()->cr_rgid;
+#else
         return current_proc()->p_cred->p_rgid;
+#endif
 }
 
 pid_t  cfs_curproc_pid(void)
 {
+#ifdef __DARWIN8__
+        /* no pid for each thread, return address of thread struct */
+        return (pid_t)current_thread();
+#else
         return current_proc()->p_pid;
+#endif
 }
 
 int    cfs_curproc_groups_nr(void)
@@ -94,17 +111,40 @@ void   cfs_curproc_groups_dump(gid_t *array, int size)
 
 mode_t cfs_curproc_umask(void)
 {
+#ifdef __DARWIN8__
+        /*
+         * XXX Liang:
+         *
+         * fd_cmask is not available in kexts, so we just assume 
+         * verything is permited.
+         */
+        return -1;
+#else
         return current_proc()->p_fd->fd_cmask;
+#endif
 }
 
 char  *cfs_curproc_comm(void)
 {
+#ifdef __DARWIN8__
+        /*
+         * Writing to proc->p_comm is not permited in Darwin8,
+         * because proc_selfname() only return a copy of proc->p_comm,
+         * so this function is not really working while user try to 
+         * change comm of current process.
+         */
+        static char     pcomm[MAXCOMLEN+1];
+
+        proc_selfname(pcomm, MAXCOMLEN+1);
+        return pcomm;
+#else
         return current_proc()->p_comm;
+#endif
 }
 
 cfs_kernel_cap_t cfs_curproc_cap_get(void)
 {
-        return 0;
+        return -1;
 }
 
 void cfs_curproc_cap_set(cfs_kernel_cap_t cap)

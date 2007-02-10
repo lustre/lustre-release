@@ -3,4 +3,4 @@
 # This code is issued under the GNU General Public License.
 # See the file COPYING in this distribution
 
-SUBDIRS = lonal socknal qswnal gmnal openibnal iibnal vibnal ranal
+SUBDIRS = socklnd qswlnd gmlnd mxlnd openiblnd iiblnd viblnd ralnd ptllnd ciblnd o2iblnd

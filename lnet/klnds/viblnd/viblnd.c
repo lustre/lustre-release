@@ -22,30 +22,19 @@
  *
  */
 
-#include "vibnal.h"
+#include "viblnd.h"
 
-nal_t                   kibnal_api;
-ptl_handle_ni_t         kibnal_ni;
+lnd_t the_kiblnd = {
+        .lnd_type       = VIBLND,
+        .lnd_startup    = kibnal_startup,
+        .lnd_shutdown   = kibnal_shutdown,
+        .lnd_ctl        = kibnal_ctl,
+        .lnd_send       = kibnal_send,
+        .lnd_recv       = kibnal_recv,
+        .lnd_eager_recv = kibnal_eager_recv,
+};
+
 kib_data_t              kibnal_data;
-kib_tunables_t          kibnal_tunables;
-
-#ifdef CONFIG_SYSCTL
-#define IBNAL_SYSCTL             202
-
-#define IBNAL_SYSCTL_TIMEOUT     1
-
-static ctl_table kibnal_ctl_table[] = {
-        {IBNAL_SYSCTL_TIMEOUT, "timeout", 
-         &kibnal_tunables.kib_io_timeout, sizeof (int),
-         0644, NULL, &proc_dointvec},
-        { 0 }
-};
-
-static ctl_table kibnal_top_ctl_table[] = {
-        {IBNAL_SYSCTL, "vibnal", NULL, 0, 0555, kibnal_ctl_table},
-        { 0 }
-};
-#endif
 
 void vibnal_assert_wire_constants (void)
 {
@@ -56,7 +45,7 @@ void vibnal_assert_wire_constants (void)
 
         /* Constants... */
         CLASSERT (IBNAL_MSG_MAGIC == 0x0be91b91);
-        CLASSERT (IBNAL_MSG_VERSION == 0x10);
+        CLASSERT (IBNAL_MSG_VERSION == 0x11);
         CLASSERT (IBNAL_MSG_CONNREQ == 0xc0);
         CLASSERT (IBNAL_MSG_CONNACK == 0xc1);
         CLASSERT (IBNAL_MSG_NOOP == 0xd0);
@@ -164,13 +153,6 @@ void vibnal_assert_wire_constants (void)
         CLASSERT ((int)sizeof(((kib_msg_t *)0)->ibm_u.completion) == 12);
 }
 
-void
-kibnal_pause(int ticks)
-{
-        set_current_state(TASK_UNINTERRUPTIBLE);
-        schedule_timeout(ticks);
-}
-
 __u32 
 kibnal_cksum (void *ptr, int nob)
 {
@@ -192,33 +174,36 @@ kibnal_init_msg(kib_msg_t *msg, int type, int body_nob)
 }
 
 void
-kibnal_pack_msg(kib_msg_t *msg, int credits, ptl_nid_t dstnid, 
-                __u64 dststamp, __u64 seq)
+kibnal_pack_msg(kib_msg_t *msg, __u32 version, int credits, 
+                lnet_nid_t dstnid, __u64 dststamp, __u64 seq)
 {
         /* CAVEAT EMPTOR! all message fields not set here should have been
          * initialised previously. */
         msg->ibm_magic    = IBNAL_MSG_MAGIC;
-        msg->ibm_version  = IBNAL_MSG_VERSION;
+        msg->ibm_version  = version;
         /*   ibm_type */
         msg->ibm_credits  = credits;
         /*   ibm_nob */
         msg->ibm_cksum    = 0;
-        msg->ibm_srcnid   = kibnal_lib.libnal_ni.ni_pid.nid;
+        msg->ibm_srcnid   = lnet_ptlcompat_srcnid(kibnal_data.kib_ni->ni_nid,
+                                                  dstnid);
         msg->ibm_srcstamp = kibnal_data.kib_incarnation;
         msg->ibm_dstnid   = dstnid;
         msg->ibm_dststamp = dststamp;
         msg->ibm_seq      = seq;
-#if IBNAL_CKSUM
-        /* NB ibm_cksum zero while computing cksum */
-        msg->ibm_cksum    = kibnal_cksum(msg, msg->ibm_nob);
-#endif
+
+        if (*kibnal_tunables.kib_cksum) {
+                /* NB ibm_cksum zero while computing cksum */
+                msg->ibm_cksum = kibnal_cksum(msg, msg->ibm_nob);
+        }
 }
 
 int
-kibnal_unpack_msg(kib_msg_t *msg, int nob)
+kibnal_unpack_msg(kib_msg_t *msg, __u32 expected_version, int nob)
 {
         const int hdr_size = offsetof(kib_msg_t, ibm_u);
         __u32     msg_cksum;
+        __u32     msg_version;
         int       flip;
         int       msg_nob;
 #if !IBNAL_USE_FMR
@@ -231,18 +216,35 @@ kibnal_unpack_msg(kib_msg_t *msg, int nob)
                 return -EPROTO;
         }
 
+        /* Future protocol version compatibility support!
+         * If the viblnd-specific protocol changes, or when LNET unifies
+         * protocols over all LNDs, the initial connection will negotiate a
+         * protocol version.  If I find this, I avoid any console errors.  If
+         * my is doing connection establishment, the reject will tell the peer
+         * which version I'm running. */
+
         if (msg->ibm_magic == IBNAL_MSG_MAGIC) {
                 flip = 0;
         } else if (msg->ibm_magic == __swab32(IBNAL_MSG_MAGIC)) {
                 flip = 1;
         } else {
+                if (msg->ibm_magic == LNET_PROTO_MAGIC ||
+                    msg->ibm_magic == __swab32(LNET_PROTO_MAGIC))
+                        return -EPROTO;
+
+                /* Completely out to lunch */
                 CERROR("Bad magic: %08x\n", msg->ibm_magic);
                 return -EPROTO;
         }
 
-        if (msg->ibm_version != 
-            (flip ? __swab16(IBNAL_MSG_VERSION) : IBNAL_MSG_VERSION)) {
-                CERROR("Bad version: %d\n", msg->ibm_version);
+        msg_version = flip ? __swab16(msg->ibm_version) : msg->ibm_version;
+        if (expected_version == 0) {
+                if (msg_version != IBNAL_MSG_VERSION_RDMAREPLYNOTRSRVD &&
+                    msg_version != IBNAL_MSG_VERSION)
+                        return -EPROTO;
+        } else if (msg_version != expected_version) {
+                CERROR("Bad version: %x(%x expected)\n", 
+                       msg_version, expected_version);
                 return -EPROTO;
         }
 
@@ -270,7 +272,7 @@ kibnal_unpack_msg(kib_msg_t *msg, int nob)
         
         if (flip) {
                 /* leave magic unflipped as a clue to peer endianness */
-                __swab16s(&msg->ibm_version);
+                msg->ibm_version = msg_version;
                 CLASSERT (sizeof(msg->ibm_type) == 1);
                 CLASSERT (sizeof(msg->ibm_credits) == 1);
                 msg->ibm_nob = msg_nob;
@@ -281,8 +283,8 @@ kibnal_unpack_msg(kib_msg_t *msg, int nob)
                 __swab64s(&msg->ibm_seq);
         }
         
-        if (msg->ibm_srcnid == PTL_NID_ANY) {
-                CERROR("Bad src nid: "LPX64"\n", msg->ibm_srcnid);
+        if (msg->ibm_srcnid == LNET_NID_ANY) {
+                CERROR("Bad src nid: %s\n", libcfs_nid2str(msg->ibm_srcnid));
                 return -EPROTO;
         }
 
@@ -311,13 +313,12 @@ kibnal_unpack_msg(kib_msg_t *msg, int nob)
                 break;
 
         case IBNAL_MSG_PUT_ACK:
-#if IBNAL_USE_FMR
                 if (msg_nob < hdr_size + sizeof(msg->ibm_u.putack)) {
                         CERROR("Short PUT_ACK: %d(%d)\n", msg_nob,
                                (int)(hdr_size + sizeof(msg->ibm_u.putack)));
                         return -EPROTO;
                 }
-
+#if IBNAL_USE_FMR
                 if (flip) {
                         __swab64s(&msg->ibm_u.putack.ibpam_rd.rd_addr);
                         __swab32s(&msg->ibm_u.putack.ibpam_rd.rd_nob);
@@ -422,103 +423,75 @@ kibnal_unpack_msg(kib_msg_t *msg, int nob)
 }
 
 int
-kibnal_set_mynid(ptl_nid_t nid)
+kibnal_start_listener (lnet_ni_t *ni)
 {
-        static cm_listen_data_t info;           /* protected by kib_nid_mutex */
+        static cm_listen_data_t info;
 
-        lib_ni_t        *ni = &kibnal_lib.libnal_ni;
-        int              rc;
         cm_return_t      cmrc;
 
-        CDEBUG(D_IOCTL, "setting mynid to "LPX64" (old nid="LPX64")\n",
-               nid, ni->ni_pid.nid);
+        LASSERT (kibnal_data.kib_listen_handle == NULL);
 
-        down (&kibnal_data.kib_nid_mutex);
-
-        if (nid == ni->ni_pid.nid) {
-                /* no change of NID */
-                up (&kibnal_data.kib_nid_mutex);
-                return (0);
+        kibnal_data.kib_listen_handle = 
+                cm_create_cep(cm_cep_transp_rc);
+        if (kibnal_data.kib_listen_handle == NULL) {
+                CERROR ("Can't create listen CEP\n");
+                return -ENOMEM;
         }
 
-        CDEBUG(D_NET, "NID "LPX64"("LPX64")\n", ni->ni_pid.nid, nid);
+        CDEBUG(D_NET, "Created CEP %p for listening\n", 
+               kibnal_data.kib_listen_handle);
 
-        if (kibnal_data.kib_listen_handle != NULL) {
-                cmrc = cm_cancel(kibnal_data.kib_listen_handle);
-                if (cmrc != cm_stat_success)
-                        CERROR ("Error %d stopping listener\n", cmrc);
+        memset(&info, 0, sizeof(info));
+        info.listen_addr.end_pt.sid = 
+                (__u64)(*kibnal_tunables.kib_service_number);
 
-                kibnal_pause(HZ/10);            /* ensure no more callbacks */
+        cmrc = cm_listen(kibnal_data.kib_listen_handle, &info,
+                         kibnal_listen_callback, NULL);
+        if (cmrc == cm_stat_success)
+                return 0;
         
-                cmrc = cm_destroy_cep(kibnal_data.kib_listen_handle);
-                if (cmrc != vv_return_ok)
-                        CERROR ("Error %d destroying CEP\n", cmrc);
+        CERROR ("cm_listen error: %d\n", cmrc);
 
-                kibnal_data.kib_listen_handle = NULL;
-        }
-
-        /* Change NID.  NB queued passive connection requests (if any) will be
-         * rejected with an incorrect destination NID */
-        ni->ni_pid.nid = nid;
-        kibnal_data.kib_incarnation++;
-        mb();
-
-        /* Delete all existing peers and their connections after new
-         * NID/incarnation set to ensure no old connections in our brave
-         * new world. */
-        kibnal_del_peer (PTL_NID_ANY, 0);
-
-        if (ni->ni_pid.nid != PTL_NID_ANY) {    /* got a new NID to install */
-                kibnal_data.kib_listen_handle = 
-                        cm_create_cep(cm_cep_transp_rc);
-                if (kibnal_data.kib_listen_handle == NULL) {
-                        CERROR ("Can't create listen CEP\n");
-                        rc = -ENOMEM;
-                        goto failed_0;
-                }
-
-                CDEBUG(D_NET, "Created CEP %p for listening\n", 
-                       kibnal_data.kib_listen_handle);
-
-                memset(&info, 0, sizeof(info));
-                info.listen_addr.end_pt.sid = kibnal_data.kib_svc_id;
-
-                cmrc = cm_listen(kibnal_data.kib_listen_handle, &info,
-                                 kibnal_listen_callback, NULL);
-                if (cmrc != 0) {
-                        CERROR ("cm_listen error: %d\n", cmrc);
-                        rc = -EINVAL;
-                        goto failed_1;
-                }
-        }
-
-        up (&kibnal_data.kib_nid_mutex);
-        return (0);
-
- failed_1:
         cmrc = cm_destroy_cep(kibnal_data.kib_listen_handle);
         LASSERT (cmrc == cm_stat_success);
+
         kibnal_data.kib_listen_handle = NULL;
- failed_0:
-        ni->ni_pid.nid = PTL_NID_ANY;
-        kibnal_data.kib_incarnation++;
-        mb();
-        kibnal_del_peer (PTL_NID_ANY, 0);
-        up (&kibnal_data.kib_nid_mutex);
-        return rc;
+        return -EINVAL;
 }
 
-kib_peer_t *
-kibnal_create_peer (ptl_nid_t nid)
+void
+kibnal_stop_listener(lnet_ni_t *ni)
 {
-        kib_peer_t *peer;
+        cm_return_t      cmrc;
 
-        LASSERT (nid != PTL_NID_ANY);
+        LASSERT (kibnal_data.kib_listen_handle != NULL);
+        
+        cmrc = cm_cancel(kibnal_data.kib_listen_handle);
+        if (cmrc != cm_stat_success)
+                CERROR ("Error %d stopping listener\n", cmrc);
 
-        PORTAL_ALLOC(peer, sizeof (*peer));
+        cfs_pause(cfs_time_seconds(1)/10);   /* ensure no more callbacks */
+        
+        cmrc = cm_destroy_cep(kibnal_data.kib_listen_handle);
+        if (cmrc != vv_return_ok)
+                CERROR ("Error %d destroying CEP\n", cmrc);
+
+        kibnal_data.kib_listen_handle = NULL;
+}
+
+int
+kibnal_create_peer (kib_peer_t **peerp, lnet_nid_t nid)
+{
+        kib_peer_t     *peer;
+        unsigned long   flags;
+        int             rc;
+
+        LASSERT (nid != LNET_NID_ANY);
+
+        LIBCFS_ALLOC(peer, sizeof (*peer));
         if (peer == NULL) {
-                CERROR("Canot allocate perr\n");
-                return (NULL);
+                CERROR("Cannot allocate peer\n");
+                return -ENOMEM;
         }
 
         memset(peer, 0, sizeof(*peer));         /* zero flags etc */
@@ -530,43 +503,62 @@ kibnal_create_peer (ptl_nid_t nid)
         INIT_LIST_HEAD (&peer->ibp_conns);
         INIT_LIST_HEAD (&peer->ibp_tx_queue);
 
-        peer->ibp_reconnect_time = jiffies;
-        peer->ibp_reconnect_interval = IBNAL_MIN_RECONNECT_INTERVAL;
+        peer->ibp_error = 0;
+        peer->ibp_last_alive = cfs_time_current();
+        peer->ibp_reconnect_interval = 0;       /* OK to connect at any time */
 
-        atomic_inc (&kibnal_data.kib_npeers);
-        if (atomic_read(&kibnal_data.kib_npeers) <= IBNAL_CONCURRENT_PEERS)
-                return peer;
+        write_lock_irqsave(&kibnal_data.kib_global_lock, flags);
+
+        if (atomic_read(&kibnal_data.kib_npeers) >=
+            *kibnal_tunables.kib_concurrent_peers) {
+                rc = -EOVERFLOW;        /* !! but at least it distinguishes */
+        } else if (kibnal_data.kib_listen_handle == NULL) {
+                rc = -ESHUTDOWN;        /* shutdown has started */
+        } else {
+                rc = 0;
+                /* npeers only grows with the global lock held */
+                atomic_inc(&kibnal_data.kib_npeers);
+        }
         
-        CERROR("Too many peers: CQ will overflow\n");
-        kibnal_peer_decref(peer);
-        return NULL;
+        write_unlock_irqrestore(&kibnal_data.kib_global_lock, flags);
+
+        if (rc != 0) {
+                CERROR("Can't create peer: %s\n", 
+                       (rc == -ESHUTDOWN) ? "shutting down" : 
+                       "too many peers");
+                LIBCFS_FREE(peer, sizeof(*peer));
+        } else {
+                *peerp = peer;
+        }
+        
+        return rc;
 }
 
 void
 kibnal_destroy_peer (kib_peer_t *peer)
 {
-
         LASSERT (atomic_read (&peer->ibp_refcount) == 0);
         LASSERT (peer->ibp_persistence == 0);
         LASSERT (!kibnal_peer_active(peer));
         LASSERT (peer->ibp_connecting == 0);
+        LASSERT (peer->ibp_accepting == 0);
         LASSERT (list_empty (&peer->ibp_conns));
         LASSERT (list_empty (&peer->ibp_tx_queue));
         
-        PORTAL_FREE (peer, sizeof (*peer));
+        LIBCFS_FREE (peer, sizeof (*peer));
 
         /* NB a peer's connections keep a reference on their peer until
          * they are destroyed, so we can be assured that _all_ state to do
          * with this peer has been cleaned up when its refcount drops to
          * zero. */
-        atomic_dec (&kibnal_data.kib_npeers);
+        atomic_dec(&kibnal_data.kib_npeers);
 }
 
-/* the caller is responsible for accounting for the additional reference
- * that this creates */
 kib_peer_t *
-kibnal_find_peer_locked (ptl_nid_t nid)
+kibnal_find_peer_locked (lnet_nid_t nid)
 {
+        /* the caller is responsible for accounting the additional reference
+         * that this creates */
         struct list_head *peer_list = kibnal_nid2peerlist (nid);
         struct list_head *tmp;
         kib_peer_t       *peer;
@@ -577,13 +569,15 @@ kibnal_find_peer_locked (ptl_nid_t nid)
 
                 LASSERT (peer->ibp_persistence != 0 || /* persistent peer */
                          peer->ibp_connecting != 0 || /* creating conns */
+                         peer->ibp_accepting != 0 ||
                          !list_empty (&peer->ibp_conns));  /* active conn */
 
                 if (peer->ibp_nid != nid)
                         continue;
 
-                CDEBUG(D_NET, "got peer [%p] -> "LPX64" (%d)\n",
-                       peer, nid, atomic_read (&peer->ibp_refcount));
+                CDEBUG(D_NET, "got peer [%p] -> %s (%d)\n",
+                       peer, libcfs_nid2str(nid),
+                       atomic_read (&peer->ibp_refcount));
                 return (peer);
         }
         return (NULL);
@@ -602,7 +596,7 @@ kibnal_unlink_peer_locked (kib_peer_t *peer)
 }
 
 int
-kibnal_get_peer_info (int index, ptl_nid_t *nidp, __u32 *ipp,
+kibnal_get_peer_info (int index, lnet_nid_t *nidp, __u32 *ipp,
                       int *persistencep)
 {
         kib_peer_t        *peer;
@@ -619,6 +613,7 @@ kibnal_get_peer_info (int index, ptl_nid_t *nidp, __u32 *ipp,
                         peer = list_entry (ptmp, kib_peer_t, ibp_list);
                         LASSERT (peer->ibp_persistence != 0 ||
                                  peer->ibp_connecting != 0 ||
+                                 peer->ibp_accepting != 0 ||
                                  !list_empty (&peer->ibp_conns));
 
                         if (index-- > 0)
@@ -639,20 +634,22 @@ kibnal_get_peer_info (int index, ptl_nid_t *nidp, __u32 *ipp,
 }
 
 int
-kibnal_add_persistent_peer (ptl_nid_t nid, __u32 ip)
+kibnal_add_persistent_peer (lnet_nid_t nid, __u32 ip)
 {
         kib_peer_t        *peer;
         kib_peer_t        *peer2;
         unsigned long      flags;
+        int                rc;
 
-        CDEBUG(D_NET, LPX64"@%08x\n", nid, ip);
+        CDEBUG(D_NET, "%s at %u.%u.%u.%u\n",
+               libcfs_nid2str(nid), HIPQUAD(ip));
         
-        if (nid == PTL_NID_ANY)
+        if (nid == LNET_NID_ANY)
                 return (-EINVAL);
 
-        peer = kibnal_create_peer (nid);
-        if (peer == NULL)
-                return (-ENOMEM);
+        rc = kibnal_create_peer(&peer, nid);
+        if (rc != 0)
+                return rc;
 
         write_lock_irqsave(&kibnal_data.kib_global_lock, flags);
 
@@ -674,19 +671,13 @@ kibnal_add_persistent_peer (ptl_nid_t nid, __u32 ip)
 }
 
 void
-kibnal_del_peer_locked (kib_peer_t *peer, int single_share)
+kibnal_del_peer_locked (kib_peer_t *peer)
 {
         struct list_head *ctmp;
         struct list_head *cnxt;
         kib_conn_t       *conn;
 
-        if (!single_share)
-                peer->ibp_persistence = 0;
-        else if (peer->ibp_persistence > 0)
-                peer->ibp_persistence--;
-
-        if (peer->ibp_persistence != 0)
-                return;
+        peer->ibp_persistence = 0;
 
         if (list_empty(&peer->ibp_conns)) {
                 kibnal_unlink_peer_locked(peer);
@@ -704,8 +695,9 @@ kibnal_del_peer_locked (kib_peer_t *peer, int single_share)
 }
 
 int
-kibnal_del_peer (ptl_nid_t nid, int single_share)
+kibnal_del_peer (lnet_nid_t nid)
 {
+        CFS_LIST_HEAD     (zombies);
         struct list_head  *ptmp;
         struct list_head  *pnxt;
         kib_peer_t        *peer;
@@ -717,7 +709,7 @@ kibnal_del_peer (ptl_nid_t nid, int single_share)
 
         write_lock_irqsave(&kibnal_data.kib_global_lock, flags);
 
-        if (nid != PTL_NID_ANY)
+        if (nid != LNET_NID_ANY)
                 lo = hi = kibnal_nid2peerlist(nid) - kibnal_data.kib_peers;
         else {
                 lo = 0;
@@ -729,20 +721,27 @@ kibnal_del_peer (ptl_nid_t nid, int single_share)
                         peer = list_entry (ptmp, kib_peer_t, ibp_list);
                         LASSERT (peer->ibp_persistence != 0 ||
                                  peer->ibp_connecting != 0 ||
+                                 peer->ibp_accepting != 0 ||
                                  !list_empty (&peer->ibp_conns));
 
-                        if (!(nid == PTL_NID_ANY || peer->ibp_nid == nid))
+                        if (!(nid == LNET_NID_ANY || peer->ibp_nid == nid))
                                 continue;
 
-                        kibnal_del_peer_locked (peer, single_share);
-                        rc = 0;         /* matched something */
+                        if (!list_empty(&peer->ibp_tx_queue)) {
+                                LASSERT (list_empty(&peer->ibp_conns));
 
-                        if (single_share)
-                                goto out;
+                                list_splice_init(&peer->ibp_tx_queue, &zombies);
+                        }
+
+                        kibnal_del_peer_locked (peer);
+                        rc = 0;         /* matched something */
                 }
         }
- out:
+
         write_unlock_irqrestore(&kibnal_data.kib_global_lock, flags);
+
+        kibnal_txlist_done(&zombies, -EIO);
+
         return (rc);
 }
 
@@ -764,6 +763,7 @@ kibnal_get_conn_by_idx (int index)
                         peer = list_entry (ptmp, kib_peer_t, ibp_list);
                         LASSERT (peer->ibp_persistence > 0 ||
                                  peer->ibp_connecting != 0 ||
+                                 peer->ibp_accepting != 0 ||
                                  !list_empty (&peer->ibp_conns));
 
                         list_for_each (ctmp, &peer->ibp_conns) {
@@ -781,6 +781,74 @@ kibnal_get_conn_by_idx (int index)
 
         read_unlock_irqrestore(&kibnal_data.kib_global_lock, flags);
         return (NULL);
+}
+
+void
+kibnal_debug_rx (kib_rx_t *rx)
+{
+        CDEBUG(D_CONSOLE, "      %p nob %d msg_type %x "
+               "cred %d seq "LPD64"\n",
+               rx, rx->rx_nob, rx->rx_msg->ibm_type,
+               rx->rx_msg->ibm_credits, rx->rx_msg->ibm_seq);
+}
+
+void
+kibnal_debug_tx (kib_tx_t *tx)
+{
+        CDEBUG(D_CONSOLE, "      %p snd %d q %d w %d rc %d dl %lx "
+               "cookie "LPX64" msg %s%s type %x cred %d seq "LPD64"\n",
+               tx, tx->tx_sending, tx->tx_queued, tx->tx_waiting,
+               tx->tx_status, tx->tx_deadline, tx->tx_cookie,
+               tx->tx_lntmsg[0] == NULL ? "-" : "!",
+               tx->tx_lntmsg[1] == NULL ? "-" : "!",
+               tx->tx_msg->ibm_type, tx->tx_msg->ibm_credits,
+               tx->tx_msg->ibm_seq);
+}
+
+void
+kibnal_debug_conn (kib_conn_t *conn)
+{
+        struct list_head *tmp;
+        int               i;
+        
+        spin_lock(&conn->ibc_lock);
+        
+        CDEBUG(D_CONSOLE, "conn[%d] %p -> %s: \n", 
+               atomic_read(&conn->ibc_refcount), conn, 
+               libcfs_nid2str(conn->ibc_peer->ibp_nid));
+        CDEBUG(D_CONSOLE, "   txseq "LPD64" rxseq "LPD64" state %d \n",
+               conn->ibc_txseq, conn->ibc_rxseq, conn->ibc_state);
+        CDEBUG(D_CONSOLE, "   nposted %d cred %d o_cred %d r_cred %d\n",
+               conn->ibc_nsends_posted, conn->ibc_credits, 
+               conn->ibc_outstanding_credits, conn->ibc_reserved_credits);
+        CDEBUG(D_CONSOLE, "   disc %d comms_err %d\n",
+               conn->ibc_disconnect, conn->ibc_comms_error);
+
+        CDEBUG(D_CONSOLE, "   early_rxs:\n");
+        list_for_each(tmp, &conn->ibc_early_rxs)
+                kibnal_debug_rx(list_entry(tmp, kib_rx_t, rx_list));
+        
+        CDEBUG(D_CONSOLE, "   tx_queue_nocred:\n");
+        list_for_each(tmp, &conn->ibc_tx_queue_nocred)
+                kibnal_debug_tx(list_entry(tmp, kib_tx_t, tx_list));
+
+        CDEBUG(D_CONSOLE, "   tx_queue_rsrvd:\n");
+        list_for_each(tmp, &conn->ibc_tx_queue_rsrvd)
+                kibnal_debug_tx(list_entry(tmp, kib_tx_t, tx_list));
+
+        CDEBUG(D_CONSOLE, "   tx_queue:\n");
+        list_for_each(tmp, &conn->ibc_tx_queue)
+                kibnal_debug_tx(list_entry(tmp, kib_tx_t, tx_list));
+        
+        CDEBUG(D_CONSOLE, "   active_txs:\n");
+        list_for_each(tmp, &conn->ibc_active_txs)
+                kibnal_debug_tx(list_entry(tmp, kib_tx_t, tx_list));
+        
+        CDEBUG(D_CONSOLE, "   rxs:\n");
+        for (i = 0; i < IBNAL_RX_MSGS; i++)
+                kibnal_debug_rx(&conn->ibc_rxs[i]);
+
+        spin_unlock(&conn->ibc_lock);
 }
 
 int
@@ -835,7 +903,7 @@ kibnal_set_qp_state (kib_conn_t *conn, vv_qp_state_t new_state)
                 rtr->destanation_qp            = cv->cv_remote_qpn;
                 rtr->receive_psn               = cv->cv_rxpsn;
                 rtr->responder_rdma_r_atom_num = IBNAL_OUS_DST_RD;
-                rtr->opt_min_rnr_nak_timer     = IBNAL_RNR_NAK_TIMER;
+                rtr->opt_min_rnr_nak_timer     = *kibnal_tunables.kib_rnr_nak_timer;
 
 
                 // XXX sdp sets VV_QP_AT_OP_F but no actual optional options
@@ -851,9 +919,9 @@ kibnal_set_qp_state (kib_conn_t *conn, vv_qp_state_t new_state)
                 struct vv_qp_modify_rts_st *rts = &attr.modify.params.rts;
 
                 rts->send_psn                 = cv->cv_txpsn;
-                rts->local_ack_timeout        = IBNAL_LOCAL_ACK_TIMEOUT;
-                rts->retry_num                = IBNAL_RETRY_CNT;
-                rts->rnr_num                  = IBNAL_RNR_CNT;
+                rts->local_ack_timeout        = *kibnal_tunables.kib_local_ack_timeout;
+                rts->retry_num                = *kibnal_tunables.kib_retry_cnt;
+                rts->rnr_num                  = *kibnal_tunables.kib_rnr_cnt;
                 rts->dest_out_rdma_r_atom_num = IBNAL_OUS_DST_RD;
                 
                 attr.modify.vv_qp_attr_mask = VV_QP_AT_S_PSN |
@@ -874,8 +942,9 @@ kibnal_set_qp_state (kib_conn_t *conn, vv_qp_state_t new_state)
         
         vvrc = vv_qp_modify(kibnal_data.kib_hca, conn->ibc_qp, &attr, NULL);
         if (vvrc != vv_return_ok) {
-                CERROR("Can't modify qp -> "LPX64" state to %d: %d\n", 
-                       conn->ibc_peer->ibp_nid, new_state, vvrc);
+                CERROR("Can't modify qp -> %s state to %d: %d\n", 
+                       libcfs_nid2str(conn->ibc_peer->ibp_nid),
+                       new_state, vvrc);
                 return -EIO;
         }
         
@@ -899,7 +968,7 @@ kibnal_create_conn (cm_cep_handle_t cep)
         LASSERT(!in_interrupt());
         LASSERT(current == kibnal_data.kib_connd);
         
-        PORTAL_ALLOC(conn, sizeof (*conn));
+        LIBCFS_ALLOC(conn, sizeof (*conn));
         if (conn == NULL) {
                 CERROR ("Can't allocate connection\n");
                 return (NULL);
@@ -908,8 +977,12 @@ kibnal_create_conn (cm_cep_handle_t cep)
         /* zero flags, NULL pointers etc... */
         memset (conn, 0, sizeof (*conn));
 
+        conn->ibc_version = IBNAL_MSG_VERSION;  /* Use latest version at first */
+
         INIT_LIST_HEAD (&conn->ibc_early_rxs);
+        INIT_LIST_HEAD (&conn->ibc_tx_queue_nocred);
         INIT_LIST_HEAD (&conn->ibc_tx_queue);
+        INIT_LIST_HEAD (&conn->ibc_tx_queue_rsrvd);
         INIT_LIST_HEAD (&conn->ibc_active_txs);
         spin_lock_init (&conn->ibc_lock);
         
@@ -918,7 +991,7 @@ kibnal_create_conn (cm_cep_handle_t cep)
 
         conn->ibc_cep = cep;
 
-        PORTAL_ALLOC(conn->ibc_connvars, sizeof(*conn->ibc_connvars));
+        LIBCFS_ALLOC(conn->ibc_connvars, sizeof(*conn->ibc_connvars));
         if (conn->ibc_connvars == NULL) {
                 CERROR("Can't allocate in-progress connection state\n");
                 goto failed;
@@ -928,7 +1001,7 @@ kibnal_create_conn (cm_cep_handle_t cep)
         get_random_bytes(&conn->ibc_connvars->cv_rxpsn,
                          sizeof(conn->ibc_connvars->cv_rxpsn));
 
-        PORTAL_ALLOC(conn->ibc_rxs, IBNAL_RX_MSGS * sizeof (kib_rx_t));
+        LIBCFS_ALLOC(conn->ibc_rxs, IBNAL_RX_MSGS * sizeof (kib_rx_t));
         if (conn->ibc_rxs == NULL) {
                 CERROR("Cannot allocate RX buffers\n");
                 goto failed;
@@ -976,7 +1049,7 @@ kibnal_create_conn (cm_cep_handle_t cep)
         reqattr.create.cq_send_h                  = kibnal_data.kib_cq;
         reqattr.create.cq_receive_h               = kibnal_data.kib_cq;
         reqattr.create.send_max_outstand_wr       = (1 + IBNAL_MAX_RDMA_FRAGS) * 
-                                                    IBNAL_MSG_QUEUE_SIZE;
+                                                    (*kibnal_tunables.kib_concurrent_sends);
         reqattr.create.receive_max_outstand_wr    = IBNAL_RX_MSGS;
         reqattr.create.max_scatgat_per_send_wr    = 1;
         reqattr.create.max_scatgat_per_receive_wr = 1;
@@ -996,12 +1069,13 @@ kibnal_create_conn (cm_cep_handle_t cep)
         conn->ibc_connvars->cv_local_qpn = rspattr.create_return.qp_num;
 
         if (rspattr.create_return.receive_max_outstand_wr < 
-            IBNAL_MSG_QUEUE_SIZE ||
+            IBNAL_RX_MSGS ||
             rspattr.create_return.send_max_outstand_wr < 
-            (1 + IBNAL_MAX_RDMA_FRAGS) * IBNAL_MSG_QUEUE_SIZE) {
+            (1 + IBNAL_MAX_RDMA_FRAGS) * (*kibnal_tunables.kib_concurrent_sends)) {
                 CERROR("Insufficient rx/tx work items: wanted %d/%d got %d/%d\n",
-                       IBNAL_MSG_QUEUE_SIZE, 
-                       (1 + IBNAL_MAX_RDMA_FRAGS) * IBNAL_MSG_QUEUE_SIZE,
+                       IBNAL_RX_MSGS, 
+                       (1 + IBNAL_MAX_RDMA_FRAGS) * 
+                       (*kibnal_tunables.kib_concurrent_sends),
                        rspattr.create_return.receive_max_outstand_wr,
                        rspattr.create_return.send_max_outstand_wr);
                 goto failed;
@@ -1033,6 +1107,8 @@ kibnal_destroy_conn (kib_conn_t *conn)
         LASSERT (atomic_read (&conn->ibc_refcount) == 0);
         LASSERT (list_empty(&conn->ibc_early_rxs));
         LASSERT (list_empty(&conn->ibc_tx_queue));
+        LASSERT (list_empty(&conn->ibc_tx_queue_rsrvd));
+        LASSERT (list_empty(&conn->ibc_tx_queue_nocred));
         LASSERT (list_empty(&conn->ibc_active_txs));
         LASSERT (conn->ibc_nsends_posted == 0);
 
@@ -1066,16 +1142,16 @@ kibnal_destroy_conn (kib_conn_t *conn)
                 kibnal_free_pages(conn->ibc_rx_pages);
 
         if (conn->ibc_rxs != NULL)
-                PORTAL_FREE(conn->ibc_rxs, 
+                LIBCFS_FREE(conn->ibc_rxs, 
                             IBNAL_RX_MSGS * sizeof(kib_rx_t));
 
         if (conn->ibc_connvars != NULL)
-                PORTAL_FREE(conn->ibc_connvars, sizeof(*conn->ibc_connvars));
+                LIBCFS_FREE(conn->ibc_connvars, sizeof(*conn->ibc_connvars));
 
         if (conn->ibc_peer != NULL)
                 kibnal_peer_decref(conn->ibc_peer);
 
-        PORTAL_FREE(conn, sizeof (*conn));
+        LIBCFS_FREE(conn, sizeof (*conn));
 
         atomic_dec(&kibnal_data.kib_nconns);
 }
@@ -1112,8 +1188,9 @@ kibnal_close_stale_conns_locked (kib_peer_t *peer, __u64 incarnation)
                 if (conn->ibc_incarnation == incarnation)
                         continue;
 
-                CDEBUG(D_NET, "Closing stale conn nid:"LPX64" incarnation:"LPX64"("LPX64")\n",
-                       peer->ibp_nid, conn->ibc_incarnation, incarnation);
+                CDEBUG(D_NET, "Closing stale conn -> %s incarnation:"LPX64"("LPX64")\n",
+                       libcfs_nid2str(peer->ibp_nid),
+                       conn->ibc_incarnation, incarnation);
                 
                 count++;
                 kibnal_close_conn_locked (conn, -ESTALE);
@@ -1123,7 +1200,7 @@ kibnal_close_stale_conns_locked (kib_peer_t *peer, __u64 incarnation)
 }
 
 int
-kibnal_close_matching_conns (ptl_nid_t nid)
+kibnal_close_matching_conns (lnet_nid_t nid)
 {
         kib_peer_t         *peer;
         struct list_head   *ptmp;
@@ -1136,7 +1213,7 @@ kibnal_close_matching_conns (ptl_nid_t nid)
 
         write_lock_irqsave(&kibnal_data.kib_global_lock, flags);
 
-        if (nid != PTL_NID_ANY)
+        if (nid != LNET_NID_ANY)
                 lo = hi = kibnal_nid2peerlist(nid) - kibnal_data.kib_peers;
         else {
                 lo = 0;
@@ -1149,9 +1226,10 @@ kibnal_close_matching_conns (ptl_nid_t nid)
                         peer = list_entry (ptmp, kib_peer_t, ibp_list);
                         LASSERT (peer->ibp_persistence != 0 ||
                                  peer->ibp_connecting != 0 ||
+                                 peer->ibp_accepting != 0 ||
                                  !list_empty (&peer->ibp_conns));
 
-                        if (!(nid == PTL_NID_ANY || nid == peer->ibp_nid))
+                        if (!(nid == LNET_NID_ANY || nid == peer->ibp_nid))
                                 continue;
 
                         count += kibnal_close_peer_conns_locked (peer, 0);
@@ -1161,70 +1239,69 @@ kibnal_close_matching_conns (ptl_nid_t nid)
         write_unlock_irqrestore(&kibnal_data.kib_global_lock, flags);
 
         /* wildcards always succeed */
-        if (nid == PTL_NID_ANY)
+        if (nid == LNET_NID_ANY)
                 return (0);
         
         return (count == 0 ? -ENOENT : 0);
 }
 
 int
-kibnal_cmd(struct portals_cfg *pcfg, void * private)
+kibnal_ctl(lnet_ni_t *ni, unsigned int cmd, void *arg)
 {
-        int rc = -EINVAL;
+        struct libcfs_ioctl_data *data = arg;
+        int                       rc = -EINVAL;
 
-        LASSERT (pcfg != NULL);
+        LASSERT (ni == kibnal_data.kib_ni);
 
-        switch(pcfg->pcfg_command) {
-        case NAL_CMD_GET_PEER: {
-                ptl_nid_t   nid = 0;
-                __u32       ip = 0;
-                int         share_count = 0;
+        switch(cmd) {
+        case IOC_LIBCFS_GET_PEER: {
+                lnet_nid_t   nid = 0;
+                __u32        ip = 0;
+                int          share_count = 0;
 
-                rc = kibnal_get_peer_info(pcfg->pcfg_count,
+                rc = kibnal_get_peer_info(data->ioc_count,
                                           &nid, &ip, &share_count);
-                pcfg->pcfg_nid   = nid;
-                pcfg->pcfg_size  = 0;
-                pcfg->pcfg_id    = ip;
-                pcfg->pcfg_misc  = IBNAL_SERVICE_NUMBER; /* port */
-                pcfg->pcfg_count = 0;
-                pcfg->pcfg_wait  = share_count;
+                data->ioc_nid    = nid;
+                data->ioc_count  = share_count;
+                data->ioc_u32[0] = ip;
+                data->ioc_u32[1] = *kibnal_tunables.kib_service_number; /* port */
                 break;
         }
-        case NAL_CMD_ADD_PEER: {
-                rc = kibnal_add_persistent_peer (pcfg->pcfg_nid,
-                                                 pcfg->pcfg_id); /* IP */
+        case IOC_LIBCFS_ADD_PEER: {
+                rc = kibnal_add_persistent_peer (data->ioc_nid,
+                                                 data->ioc_u32[0]); /* IP */
                 break;
         }
-        case NAL_CMD_DEL_PEER: {
-                rc = kibnal_del_peer (pcfg->pcfg_nid, 
-                                       /* flags == single_share */
-                                       pcfg->pcfg_flags != 0);
+        case IOC_LIBCFS_DEL_PEER: {
+                rc = kibnal_del_peer (data->ioc_nid);
                 break;
         }
-        case NAL_CMD_GET_CONN: {
-                kib_conn_t *conn = kibnal_get_conn_by_idx (pcfg->pcfg_count);
+        case IOC_LIBCFS_GET_CONN: {
+                kib_conn_t *conn = kibnal_get_conn_by_idx (data->ioc_count);
 
                 if (conn == NULL)
                         rc = -ENOENT;
                 else {
+                        // kibnal_debug_conn(conn);
                         rc = 0;
-                        pcfg->pcfg_nid   = conn->ibc_peer->ibp_nid;
-                        pcfg->pcfg_id    = 0;
-                        pcfg->pcfg_misc  = 0;
-                        pcfg->pcfg_flags = 0;
+                        data->ioc_nid = conn->ibc_peer->ibp_nid;
                         kibnal_conn_decref(conn);
                 }
                 break;
         }
-        case NAL_CMD_CLOSE_CONNECTION: {
-                rc = kibnal_close_matching_conns (pcfg->pcfg_nid);
+        case IOC_LIBCFS_CLOSE_CONNECTION: {
+                rc = kibnal_close_matching_conns (data->ioc_nid);
                 break;
         }
-        case NAL_CMD_REGISTER_MYNID: {
-                if (pcfg->pcfg_nid == PTL_NID_ANY)
+        case IOC_LIBCFS_REGISTER_MYNID: {
+                if (ni->ni_nid == data->ioc_nid) {
+                        rc = 0;
+                } else {
+                        CERROR("obsolete IOC_LIBCFS_REGISTER_MYNID: %s(%s)\n",
+                               libcfs_nid2str(data->ioc_nid),
+                               libcfs_nid2str(ni->ni_nid));
                         rc = -EINVAL;
-                else
-                        rc = kibnal_set_mynid (pcfg->pcfg_nid);
+                }
                 break;
         }
         }
@@ -1242,7 +1319,7 @@ kibnal_free_pages (kib_pages_t *p)
                 if (p->ibp_pages[i] != NULL)
                         __free_page(p->ibp_pages[i]);
         
-        PORTAL_FREE (p, offsetof(kib_pages_t, ibp_pages[npages]));
+        LIBCFS_FREE (p, offsetof(kib_pages_t, ibp_pages[npages]));
 }
 
 int
@@ -1251,7 +1328,7 @@ kibnal_alloc_pages (kib_pages_t **pp, int npages, int allow_write)
         kib_pages_t   *p;
         int            i;
 
-        PORTAL_ALLOC(p, offsetof(kib_pages_t, ibp_pages[npages]));
+        LIBCFS_ALLOC(p, offsetof(kib_pages_t, ibp_pages[npages]));
         if (p == NULL) {
                 CERROR ("Can't allocate buffer %d\n", npages);
                 return (-ENOMEM);
@@ -1278,36 +1355,36 @@ kibnal_alloc_tx_descs (void)
 {
         int    i;
         
-        PORTAL_ALLOC (kibnal_data.kib_tx_descs,
-                      IBNAL_TX_MSGS * sizeof(kib_tx_t));
+        LIBCFS_ALLOC (kibnal_data.kib_tx_descs,
+                      IBNAL_TX_MSGS() * sizeof(kib_tx_t));
         if (kibnal_data.kib_tx_descs == NULL)
                 return -ENOMEM;
         
         memset(kibnal_data.kib_tx_descs, 0,
-               IBNAL_TX_MSGS * sizeof(kib_tx_t));
+               IBNAL_TX_MSGS() * sizeof(kib_tx_t));
 
-        for (i = 0; i < IBNAL_TX_MSGS; i++) {
+        for (i = 0; i < IBNAL_TX_MSGS(); i++) {
                 kib_tx_t *tx = &kibnal_data.kib_tx_descs[i];
 
 #if IBNAL_USE_FMR
-                PORTAL_ALLOC(tx->tx_pages, PTL_MD_MAX_IOV *
+                LIBCFS_ALLOC(tx->tx_pages, LNET_MAX_IOV *
                              sizeof(*tx->tx_pages));
                 if (tx->tx_pages == NULL)
                         return -ENOMEM;
 #else
-                PORTAL_ALLOC(tx->tx_wrq, 
+                LIBCFS_ALLOC(tx->tx_wrq, 
                              (1 + IBNAL_MAX_RDMA_FRAGS) * 
                              sizeof(*tx->tx_wrq));
                 if (tx->tx_wrq == NULL)
                         return -ENOMEM;
                 
-                PORTAL_ALLOC(tx->tx_gl, 
+                LIBCFS_ALLOC(tx->tx_gl, 
                              (1 + IBNAL_MAX_RDMA_FRAGS) * 
                              sizeof(*tx->tx_gl));
                 if (tx->tx_gl == NULL)
                         return -ENOMEM;
                 
-                PORTAL_ALLOC(tx->tx_rd, 
+                LIBCFS_ALLOC(tx->tx_rd, 
                              offsetof(kib_rdma_desc_t, 
                                       rd_frags[IBNAL_MAX_RDMA_FRAGS]));
                 if (tx->tx_rd == NULL)
@@ -1326,33 +1403,33 @@ kibnal_free_tx_descs (void)
         if (kibnal_data.kib_tx_descs == NULL)
                 return;
 
-        for (i = 0; i < IBNAL_TX_MSGS; i++) {
+        for (i = 0; i < IBNAL_TX_MSGS(); i++) {
                 kib_tx_t *tx = &kibnal_data.kib_tx_descs[i];
 
 #if IBNAL_USE_FMR
                 if (tx->tx_pages != NULL)
-                        PORTAL_FREE(tx->tx_pages, PTL_MD_MAX_IOV *
+                        LIBCFS_FREE(tx->tx_pages, LNET_MAX_IOV *
                                     sizeof(*tx->tx_pages));
 #else
                 if (tx->tx_wrq != NULL)
-                        PORTAL_FREE(tx->tx_wrq, 
+                        LIBCFS_FREE(tx->tx_wrq, 
                                     (1 + IBNAL_MAX_RDMA_FRAGS) * 
                                     sizeof(*tx->tx_wrq));
 
                 if (tx->tx_gl != NULL)
-                        PORTAL_FREE(tx->tx_gl, 
+                        LIBCFS_FREE(tx->tx_gl, 
                                     (1 + IBNAL_MAX_RDMA_FRAGS) * 
                                     sizeof(*tx->tx_gl));
 
                 if (tx->tx_rd != NULL)
-                        PORTAL_FREE(tx->tx_rd, 
+                        LIBCFS_FREE(tx->tx_rd, 
                                     offsetof(kib_rdma_desc_t, 
                                              rd_frags[IBNAL_MAX_RDMA_FRAGS]));
 #endif
         }
 
-        PORTAL_FREE(kibnal_data.kib_tx_descs,
-                    IBNAL_TX_MSGS * sizeof(kib_tx_t));
+        LIBCFS_FREE(kibnal_data.kib_tx_descs,
+                    IBNAL_TX_MSGS() * sizeof(kib_tx_t));
 }
 
 #if IBNAL_USE_FMR
@@ -1396,24 +1473,23 @@ kibnal_setup_tx_descs (void)
         /* No fancy arithmetic when we do the buffer calculations */
         CLASSERT (PAGE_SIZE % IBNAL_MSG_SIZE == 0);
 
-        rc = kibnal_alloc_pages(&kibnal_data.kib_tx_pages, IBNAL_TX_MSG_PAGES, 
-                                0);
+        rc = kibnal_alloc_pages(&kibnal_data.kib_tx_pages, 
+                                IBNAL_TX_MSG_PAGES(), 0);
         if (rc != 0)
                 return (rc);
 
-        for (i = 0; i < IBNAL_TX_MSGS; i++) {
+        for (i = 0; i < IBNAL_TX_MSGS(); i++) {
                 page = kibnal_data.kib_tx_pages->ibp_pages[ipage];
                 tx = &kibnal_data.kib_tx_descs[i];
 
 #if IBNAL_USE_FMR
                 memset(&fmr_props, 0, sizeof(fmr_props));
                 fmr_props.pd_hndl              = kibnal_data.kib_pd;
-                fmr_props.acl                  = (vv_acc_r_mem_read |
-                                                  vv_acc_r_mem_write |
+                fmr_props.acl                  = (vv_acc_r_mem_write |
                                                   vv_acc_l_mem_write);
-                fmr_props.max_pages            = PTL_MD_MAX_IOV;
+                fmr_props.max_pages            = LNET_MAX_IOV;
                 fmr_props.log2_page_sz         = PAGE_SHIFT;
-                fmr_props.max_outstanding_maps = IBNAL_FMR_NMAPS;
+                fmr_props.max_outstanding_maps = *kibnal_tunables.kib_fmr_remaps;
                 
                 vvrc = vv_alloc_fmr(kibnal_data.kib_hca,
                                     &fmr_props,
@@ -1426,7 +1502,7 @@ kibnal_setup_tx_descs (void)
                         return -ENOMEM;
                 }
 
-                tx->tx_md.md_fmrcount = IBNAL_FMR_NMAPS;
+                tx->tx_md.md_fmrcount = *kibnal_tunables.kib_fmr_remaps;
                 tx->tx_md.md_active   = 0;
 #endif
                 tx->tx_msg = (kib_msg_t *)(((char *)page_address(page)) + 
@@ -1440,17 +1516,10 @@ kibnal_setup_tx_descs (void)
                                             &rkey);
                 LASSERT (vvrc == vv_return_ok);
 
-                tx->tx_isnblk = (i >= IBNAL_NTX);
-
                 CDEBUG(D_NET, "Tx[%d] %p->%p[%x]\n", i, tx, 
                        tx->tx_msg, tx->tx_lkey);
 
-                if (tx->tx_isnblk)
-                        list_add (&tx->tx_list, 
-                                  &kibnal_data.kib_idle_nblk_txs);
-                else
-                        list_add (&tx->tx_list, 
-                                  &kibnal_data.kib_idle_txs);
+                list_add (&tx->tx_list, &kibnal_data.kib_idle_txs);
 
                 page_offset += IBNAL_MSG_SIZE;
                 LASSERT (page_offset <= PAGE_SIZE);
@@ -1458,7 +1527,7 @@ kibnal_setup_tx_descs (void)
                 if (page_offset == PAGE_SIZE) {
                         page_offset = 0;
                         ipage++;
-                        LASSERT (ipage <= IBNAL_TX_MSG_PAGES);
+                        LASSERT (ipage <= IBNAL_TX_MSG_PAGES());
                 }
         }
         
@@ -1466,42 +1535,34 @@ kibnal_setup_tx_descs (void)
 }
 
 void
-kibnal_api_shutdown (nal_t *nal)
+kibnal_shutdown (lnet_ni_t *ni)
 {
-        int         i;
-        vv_return_t vvrc;
+        int           i;
+        vv_return_t   vvrc;
 
-        if (nal->nal_refct != 0) {
-                /* This module got the first ref */
-                PORTAL_MODULE_UNUSE;
-                return;
-        }
-
+        LASSERT (ni == kibnal_data.kib_ni);
+        LASSERT (ni->ni_data == &kibnal_data);
+        
         CDEBUG(D_MALLOC, "before NAL cleanup: kmem %d\n",
-               atomic_read (&portal_kmemory));
-
-        LASSERT(nal == &kibnal_api);
+               atomic_read (&libcfs_kmemory));
 
         switch (kibnal_data.kib_init) {
 
         case IBNAL_INIT_ALL:
-                /* stop calls to nal_cmd */
-                libcfs_nal_cmd_unregister(VIBNAL);
-                /* No new peers */
+                /* stop accepting connections and prevent new peers */
+                kibnal_stop_listener(ni);
 
-                /* resetting my NID removes my listener and nukes all current
-                 * peers and their connections */
-                kibnal_set_mynid (PTL_NID_ANY);
+                /* nuke all existing peers */
+                kibnal_del_peer(LNET_NID_ANY);
 
                 /* Wait for all peer state to clean up */
                 i = 2;
-                while (atomic_read (&kibnal_data.kib_npeers) != 0) {
+                while (atomic_read(&kibnal_data.kib_npeers) != 0) {
                         i++;
-                        CDEBUG(((i & (-i)) == i) ? D_WARNING : D_NET, /* power of 2? */
+                        CDEBUG(((i & (-i)) == i) ? D_WARNING : D_NET, /* 2**n? */
                                "waiting for %d peers to disconnect\n",
-                               atomic_read (&kibnal_data.kib_npeers));
-                        set_current_state (TASK_UNINTERRUPTIBLE);
-                        schedule_timeout (HZ);
+                               atomic_read(&kibnal_data.kib_npeers));
+                        cfs_pause(cfs_time_seconds(1));
                 }
                 /* fall through */
 
@@ -1514,7 +1575,7 @@ kibnal_api_shutdown (nal_t *nal)
         case IBNAL_INIT_TXD:
                 kibnal_free_pages (kibnal_data.kib_tx_pages);
 #if IBNAL_USE_FMR
-                kibnal_free_fmrs(IBNAL_TX_MSGS);
+                kibnal_free_fmrs(IBNAL_TX_MSGS());
 #endif
                 /* fall through */
 
@@ -1542,19 +1603,13 @@ kibnal_api_shutdown (nal_t *nal)
                         CERROR ("Close HCA  error: %d\n", vvrc);
                 /* fall through */
 
-        case IBNAL_INIT_LIB:
-                lib_fini(&kibnal_lib);
-                /* fall through */
-
         case IBNAL_INIT_DATA:
-                LASSERT (atomic_read (&kibnal_data.kib_npeers) == 0);
+                LASSERT (atomic_read(&kibnal_data.kib_npeers) == 0);
                 LASSERT (kibnal_data.kib_peers != NULL);
                 for (i = 0; i < kibnal_data.kib_peer_hash_size; i++) {
                         LASSERT (list_empty (&kibnal_data.kib_peers[i]));
                 }
                 LASSERT (atomic_read (&kibnal_data.kib_nconns) == 0);
-                LASSERT (list_empty (&kibnal_data.kib_sched_rxq));
-                LASSERT (list_empty (&kibnal_data.kib_sched_txq));
                 LASSERT (list_empty (&kibnal_data.kib_connd_zombies));
                 LASSERT (list_empty (&kibnal_data.kib_connd_conns));
                 LASSERT (list_empty (&kibnal_data.kib_connd_pcreqs));
@@ -1571,8 +1626,7 @@ kibnal_api_shutdown (nal_t *nal)
                         CDEBUG(((i & (-i)) == i) ? D_WARNING : D_NET, /* power of 2? */
                                "Waiting for %d threads to terminate\n",
                                atomic_read (&kibnal_data.kib_nthreads));
-                        set_current_state (TASK_INTERRUPTIBLE);
-                        schedule_timeout (HZ);
+                        cfs_pause(cfs_time_seconds(1));
                 }
                 /* fall through */
                 
@@ -1583,54 +1637,119 @@ kibnal_api_shutdown (nal_t *nal)
         kibnal_free_tx_descs();
 
         if (kibnal_data.kib_peers != NULL)
-                PORTAL_FREE (kibnal_data.kib_peers,
+                LIBCFS_FREE (kibnal_data.kib_peers,
                              sizeof (struct list_head) * 
                              kibnal_data.kib_peer_hash_size);
 
         CDEBUG(D_MALLOC, "after NAL cleanup: kmem %d\n",
-               atomic_read (&portal_kmemory));
-        printk(KERN_INFO "Lustre: Voltaire IB NAL unloaded (final mem %d)\n",
-               atomic_read(&portal_kmemory));
+               atomic_read (&libcfs_kmemory));
 
         kibnal_data.kib_init = IBNAL_INIT_NOTHING;
+        PORTAL_MODULE_UNUSE;
 }
 
 int
-kibnal_api_startup (nal_t *nal, ptl_pid_t requested_pid,
-                     ptl_ni_limits_t *requested_limits,
-                     ptl_ni_limits_t *actual_limits)
+kibnal_startup (lnet_ni_t *ni)
 {
+        char                      scratch[32];
+        char                      ipif_name[32];
+        char                     *hca_name;
+        __u32                     ip;
+        __u32                     netmask;
+        int                       up;
+        int                       nob;
+        int                       devno;
         struct timeval            tv;
-        ptl_process_id_t          process_id;
-        int                       pkmem = atomic_read(&portal_kmemory);
         int                       rc;
         int                       i;
         vv_request_event_record_t req_er;
         vv_return_t               vvrc;
 
-        LASSERT (nal == &kibnal_api);
+        LASSERT (ni->ni_lnd == &the_kiblnd);
 
-        if (nal->nal_refct != 0) {
-                if (actual_limits != NULL)
-                        *actual_limits = kibnal_lib.libnal_ni.ni_actual_limits;
-                /* This module got the first ref */
-                PORTAL_MODULE_USE;
-                return (PTL_OK);
+        /* Only 1 instance supported */
+        if (kibnal_data.kib_init != IBNAL_INIT_NOTHING) {
+                CERROR ("Only 1 instance supported\n");
+                return -EPERM;
         }
 
-        LASSERT (kibnal_data.kib_init == IBNAL_INIT_NOTHING);
+        if (*kibnal_tunables.kib_credits > *kibnal_tunables.kib_ntx) {
+                CERROR ("Can't set credits(%d) > ntx(%d)\n",
+                        *kibnal_tunables.kib_credits,
+                        *kibnal_tunables.kib_ntx);
+                return -EINVAL;
+        }
+
+        ni->ni_maxtxcredits = *kibnal_tunables.kib_credits;
+        ni->ni_peertxcredits = *kibnal_tunables.kib_peercredits;
+
+        CLASSERT (LNET_MAX_INTERFACES > 1);
+        
+        if (ni->ni_interfaces[0] != NULL) {
+                /* Use the HCA specified in 'networks=' */
+
+                if (ni->ni_interfaces[1] != NULL) {
+                        CERROR("Multiple interfaces not supported\n");
+                        return -EPERM;
+                }
+
+                /* Parse <hca base name><number> */
+                hca_name = ni->ni_interfaces[0];
+                nob = strlen(*kibnal_tunables.kib_hca_basename);
+                
+                if (strncmp(hca_name, *kibnal_tunables.kib_hca_basename, nob) ||
+                    sscanf(hca_name + nob, "%d%n", &devno, &nob) < 1) {
+                        CERROR("Unrecognised HCA %s\n", hca_name);
+                        return -EINVAL;
+                }
+
+        } else {
+                /* Use <hca base name>0 */
+                devno = 0;
+
+                hca_name = scratch;
+                snprintf(hca_name, sizeof(scratch), "%s%d",
+                         *kibnal_tunables.kib_hca_basename, devno);
+                if (strlen(hca_name) == sizeof(scratch) - 1) {
+                        CERROR("HCA name %s truncated\n", hca_name);
+                        return -EINVAL;
+                }
+        }
+
+        /* Find IP address from <ipif base name><hca number> */
+        snprintf(ipif_name, sizeof(ipif_name), "%s%d",
+                 *kibnal_tunables.kib_ipif_basename, devno);
+        if (strlen(ipif_name) == sizeof(ipif_name - 1)) {
+                CERROR("IPoIB interface name %s truncated\n", ipif_name);
+                return -EINVAL;
+        }
+        
+        rc = libcfs_ipif_query(ipif_name, &up, &ip, &netmask);
+        if (rc != 0) {
+                CERROR("Can't query IPoIB interface %s: %d\n", ipif_name, rc);
+                return -ENETDOWN;
+        }
+        
+        if (!up) {
+                CERROR("Can't query IPoIB interface %s: it's down\n", ipif_name);
+                return -ENETDOWN;
+        }
+        
+        ni->ni_nid = LNET_MKNID(LNET_NIDNET(ni->ni_nid), ip);
+        
+        PORTAL_MODULE_USE;
         memset (&kibnal_data, 0, sizeof (kibnal_data)); /* zero pointers, flags etc */
+
+        kibnal_data.kib_ni = ni;
+        ni->ni_data = &kibnal_data;
         
         do_gettimeofday(&tv);
         kibnal_data.kib_incarnation = (((__u64)tv.tv_sec) * 1000000) + tv.tv_usec;
-        kibnal_data.kib_svc_id = IBNAL_SERVICE_NUMBER;
-
-        init_MUTEX (&kibnal_data.kib_nid_mutex);
 
         rwlock_init(&kibnal_data.kib_global_lock);
 
         kibnal_data.kib_peer_hash_size = IBNAL_PEER_HASH_SIZE;
-        PORTAL_ALLOC (kibnal_data.kib_peers,
+        LIBCFS_ALLOC (kibnal_data.kib_peers,
                       sizeof (struct list_head) * kibnal_data.kib_peer_hash_size);
         if (kibnal_data.kib_peers == NULL) {
                 goto failed;
@@ -1646,14 +1765,10 @@ kibnal_api_startup (nal_t *nal, ptl_pid_t requested_pid,
         init_waitqueue_head (&kibnal_data.kib_connd_waitq);
 
         spin_lock_init (&kibnal_data.kib_sched_lock);
-        INIT_LIST_HEAD (&kibnal_data.kib_sched_txq);
-        INIT_LIST_HEAD (&kibnal_data.kib_sched_rxq);
         init_waitqueue_head (&kibnal_data.kib_sched_waitq);
 
         spin_lock_init (&kibnal_data.kib_tx_lock);
         INIT_LIST_HEAD (&kibnal_data.kib_idle_txs);
-        INIT_LIST_HEAD (&kibnal_data.kib_idle_nblk_txs);
-        init_waitqueue_head(&kibnal_data.kib_idle_tx_waitq);
 
         rc = kibnal_alloc_tx_descs();
         if (rc != 0) {
@@ -1663,20 +1778,6 @@ kibnal_api_startup (nal_t *nal, ptl_pid_t requested_pid,
         
         /* lists/ptrs/locks initialised */
         kibnal_data.kib_init = IBNAL_INIT_DATA;
-        /*****************************************************/
-
-        process_id.pid = requested_pid;
-        process_id.nid = PTL_NID_ANY;
-        
-        rc = lib_init(&kibnal_lib, nal, process_id,
-                      requested_limits, actual_limits);
-        if (rc != PTL_OK) {
-                CERROR("lib_init failed: error %d\n", rc);
-                goto failed;
-        }
-
-        /* lib interface initialised */
-        kibnal_data.kib_init = IBNAL_INIT_LIB;
         /*****************************************************/
 
         for (i = 0; i < IBNAL_N_SCHED; i++) {
@@ -1694,10 +1795,9 @@ kibnal_api_startup (nal_t *nal, ptl_pid_t requested_pid,
                 goto failed;
         }
 
-        /* TODO: apparently only one adapter is supported */
-        vvrc = vv_hca_open("InfiniHost0", NULL, &kibnal_data.kib_hca);
+        vvrc = vv_hca_open(hca_name, NULL, &kibnal_data.kib_hca);
         if (vvrc != vv_return_ok) {
-                CERROR ("Can't open CA: %d\n", vvrc);
+                CERROR ("Can't open HCA %s: %d\n", hca_name, vvrc);
                 goto failed;
         }
 
@@ -1709,7 +1809,7 @@ kibnal_api_startup (nal_t *nal, ptl_pid_t requested_pid,
         vvrc = vv_set_async_event_cb (kibnal_data.kib_hca, req_er,
                                      kibnal_async_callback);
         if (vvrc != vv_return_ok) {
-                CERROR ("Can't open CA: %d\n", vvrc);
+                CERROR ("Can't set HCA %s callback: %d\n", hca_name, vvrc);
                 goto failed; 
         }
 
@@ -1719,7 +1819,7 @@ kibnal_api_startup (nal_t *nal, ptl_pid_t requested_pid,
 
         vvrc = vv_hca_query(kibnal_data.kib_hca, &kibnal_data.kib_hca_attrs);
         if (vvrc != vv_return_ok) {
-                CERROR ("Can't size port attrs: %d\n", vvrc);
+                CERROR ("Can't size port attrs for %s: %d\n", hca_name, vvrc);
                 goto failed;
         }
 
@@ -1733,8 +1833,8 @@ kibnal_api_startup (nal_t *nal, ptl_pid_t requested_pid,
 
                 vvrc = vv_port_query(kibnal_data.kib_hca, port_num, pattr);
                 if (vvrc != vv_return_ok) {
-                        CERROR("vv_port_query failed for port %d: %d\n",
-                               port_num, vvrc);
+                        CERROR("vv_port_query failed for %s port %d: %d\n",
+                               hca_name, port_num, vvrc);
                         continue;
                 }
 
@@ -1752,45 +1852,47 @@ kibnal_api_startup (nal_t *nal, ptl_pid_t requested_pid,
                         CDEBUG(D_NET, "port[%d] Active\n", port_num);
 
                         /* Found a suitable port. Get its GUID and PKEY. */
-                        kibnal_data.kib_port = port_num;
-                        
                         tbl_count = 1;
                         vvrc = vv_get_port_gid_tbl(kibnal_data.kib_hca, 
                                                    port_num, &tbl_count,
                                                    &kibnal_data.kib_port_gid);
                         if (vvrc != vv_return_ok) {
                                 CERROR("vv_get_port_gid_tbl failed "
-                                       "for port %d: %d\n", port_num, vvrc);
+                                       "for %s port %d: %d\n", 
+                                       hca_name, port_num, vvrc);
                                 continue;
                         }
 
                         tbl_count = 1;
                         vvrc = vv_get_port_partition_tbl(kibnal_data.kib_hca, 
-                                                        port_num, &tbl_count,
-                                                        &kibnal_data.kib_port_pkey);
+                                                         port_num, &tbl_count,
+                                                         &kibnal_data.kib_port_pkey);
                         if (vvrc != vv_return_ok) {
                                 CERROR("vv_get_port_partition_tbl failed "
-                                       "for port %d: %d\n", port_num, vvrc);
+                                       "for %s port %d: %d\n",
+                                       hca_name, port_num, vvrc);
                                 continue;
                         }
+
+                        kibnal_data.kib_port = port_num;
 
                         break;
                 case vv_state_linkActDefer: /* TODO: correct? */
                 case vv_state_linkNoChange:
-                        CERROR("Unexpected port[%d] state %d\n",
-                               i, pattr->port_state);
+                        CERROR("Unexpected %s port[%d] state %d\n",
+                               hca_name, i, pattr->port_state);
                         continue;
                 }
                 break;
         }
 
         if (kibnal_data.kib_port == -1) {
-                CERROR ("Can't find an active port\n");
+                CERROR ("Can't find an active port on %s\n", hca_name);
                 goto failed;
         }
 
-        CDEBUG(D_NET, "Using port %d - GID="LPX64":"LPX64"\n",
-               kibnal_data.kib_port, 
+        CDEBUG(D_NET, "Using %s port %d - GID="LPX64":"LPX64"\n",
+               hca_name, kibnal_data.kib_port, 
                kibnal_data.kib_port_gid.scope.g.subnet, 
                kibnal_data.kib_port_gid.scope.g.eui64);
         
@@ -1820,10 +1922,11 @@ kibnal_api_startup (nal_t *nal, ptl_pid_t requested_pid,
         /* flag TX descs initialised */
         kibnal_data.kib_init = IBNAL_INIT_TXD;
         /*****************************************************/
+
         {
                 uint32_t nentries;
 
-                vvrc = vv_cq_create(kibnal_data.kib_hca, IBNAL_CQ_ENTRIES,
+                vvrc = vv_cq_create(kibnal_data.kib_hca, IBNAL_CQ_ENTRIES(),
                                     kibnal_cq_callback, 
                                     NULL, /* context */
                                     &kibnal_data.kib_cq, &nentries);
@@ -1835,9 +1938,9 @@ kibnal_api_startup (nal_t *nal, ptl_pid_t requested_pid,
                 /* flag CQ initialised */
                 kibnal_data.kib_init = IBNAL_INIT_CQ;
 
-                if (nentries < IBNAL_CQ_ENTRIES) {
+                if (nentries < IBNAL_CQ_ENTRIES()) {
                         CERROR ("CQ only has %d entries, need %d\n", 
-                                nentries, IBNAL_CQ_ENTRIES);
+                                nentries, IBNAL_CQ_ENTRIES());
                         goto failed;
                 }
 
@@ -1849,40 +1952,30 @@ kibnal_api_startup (nal_t *nal, ptl_pid_t requested_pid,
                         goto failed;
                 }
         }
-        
-        /*****************************************************/
 
-        rc = libcfs_nal_cmd_register(VIBNAL, &kibnal_cmd, NULL);
+        rc = kibnal_start_listener(ni);
         if (rc != 0) {
-                CERROR ("Can't initialise command interface (rc = %d)\n", rc);
+                CERROR("Can't start listener: %d\n", rc);
                 goto failed;
         }
-
+        
         /* flag everything initialised */
         kibnal_data.kib_init = IBNAL_INIT_ALL;
         /*****************************************************/
 
-        printk(KERN_INFO "Lustre: Voltaire IB NAL loaded "
-               "(initial mem %d)\n", pkmem);
-
-        return (PTL_OK);
+        return (0);
 
  failed:
-        CDEBUG(D_NET, "kibnal_api_startup failed\n");
-        kibnal_api_shutdown (&kibnal_api);    
-        return (PTL_FAIL);
+        CDEBUG(D_NET, "kibnal_startup failed\n");
+        kibnal_shutdown (ni);    
+        return (-ENETDOWN);
 }
 
 void __exit
 kibnal_module_fini (void)
 {
-#ifdef CONFIG_SYSCTL
-        if (kibnal_tunables.kib_sysctl != NULL)
-                unregister_sysctl_table (kibnal_tunables.kib_sysctl);
-#endif
-        PtlNIFini(kibnal_ni);
-
-        ptl_unregister_nal(VIBNAL);
+        lnet_unregister_lnd(&the_kiblnd);
+        kibnal_tunables_fini();
 }
 
 int __init
@@ -1903,38 +1996,17 @@ kibnal_module_init (void)
         CLASSERT (offsetof(kib_msg_t, ibm_u.putack.ibpam_rd.rd_frags[IBNAL_MAX_RDMA_FRAGS])
                   <= IBNAL_MSG_SIZE);
 #endif
-        /* the following must be sizeof(int) for proc_dointvec() */
-        CLASSERT (sizeof (kibnal_tunables.kib_io_timeout) == sizeof (int));
+        rc = kibnal_tunables_init();
+        if (rc != 0)
+                return rc;
 
-        kibnal_api.nal_ni_init = kibnal_api_startup;
-        kibnal_api.nal_ni_fini = kibnal_api_shutdown;
+        lnet_register_lnd(&the_kiblnd);
 
-        /* Initialise dynamic tunables to defaults once only */
-        kibnal_tunables.kib_io_timeout = IBNAL_IO_TIMEOUT;
-
-        rc = ptl_register_nal(VIBNAL, &kibnal_api);
-        if (rc != PTL_OK) {
-                CERROR("Can't register IBNAL: %d\n", rc);
-                return (-ENOMEM);               /* or something... */
-        }
-
-        /* Pure gateways want the NAL started up at module load time... */
-        rc = PtlNIInit(VIBNAL, LUSTRE_SRV_PTL_PID, NULL, NULL, &kibnal_ni);
-        if (rc != PTL_OK && rc != PTL_IFACE_DUP) {
-                ptl_unregister_nal(VIBNAL);
-                return (-ENODEV);
-        }
-        
-#ifdef CONFIG_SYSCTL
-        /* Press on regardless even if registering sysctl doesn't work */
-        kibnal_tunables.kib_sysctl = 
-                register_sysctl_table (kibnal_top_ctl_table, 0);
-#endif
-        return (0);
+        return 0;
 }
 
 MODULE_AUTHOR("Cluster File Systems, Inc. <info@clusterfs.com>");
-MODULE_DESCRIPTION("Kernel Voltaire IB NAL v0.01");
+MODULE_DESCRIPTION("Kernel Voltaire IB LND v1.00");
 MODULE_LICENSE("GPL");
 
 module_init(kibnal_module_init);

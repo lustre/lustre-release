@@ -2,7 +2,8 @@
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
  * Copyright (C) 2002 Cluster File Systems, Inc.
- * Author: Phil Schwan <phil@clusterfs.com>
+ * Author: Liang Zhen <liangzhen@clusterfs.com>
+ *         Nikita Danilov <nikita@clusterfs.com>
  *
  * This file is part of Lustre, http://www.lustre.org.
  *
@@ -22,78 +23,45 @@
  * Darwin porting library
  * Make things easy to port
  */
-#define DEBUG_SUBSYSTEM S_PORTALS
+#define DEBUG_SUBSYSTEM S_LNET
 
 #include <mach/mach_types.h>
 #include <string.h>
-#include <netinet/in.h>
-#include <netinet/tcp.h>
-#include <sys/file.h>
-#include <sys/conf.h>
-#include <sys/vnode.h>
-#include <sys/uio.h>
-#include <sys/filedesc.h>
-#include <sys/namei.h>
-#include <miscfs/devfs/devfs.h>
-#include <kern/kalloc.h>
-#include <kern/zalloc.h>
-#include <kern/thread.h>
+#include <sys/malloc.h>
 
 #include <libcfs/libcfs.h>
 #include <libcfs/kp30.h>
+#include "darwin-internal.h"
 
-/*
- * Definition of struct zone, copied from osfmk/kern/zalloc.h.
- */
-struct zone_hack {
-	int		count;		/* Number of elements used now */
-	vm_offset_t	free_elements;
-	vm_size_t	cur_size;	/* current memory utilization */
-	vm_size_t	max_size;	/* how large can this zone grow */
-	vm_size_t	elem_size;	/* size of an element */
-	vm_size_t	alloc_size;	/* size used for more memory */
-	char		*zone_name;	/* a name for the zone */
-	unsigned int
-	/* boolean_t */ exhaustible :1,	/* (F) merely return if empty? */
-	/* boolean_t */	collectable :1,	/* (F) garbage collect empty pages */
-	/* boolean_t */	expandable :1,	/* (T) expand zone (with message)? */
-	/* boolean_t */ allows_foreign :1,/* (F) allow non-zalloc space */
-	/* boolean_t */	doing_alloc :1,	/* is zone expanding now? */
-	/* boolean_t */	waiting :1,	/* is thread waiting for expansion? */
-	/* boolean_t */	async_pending :1;	/* asynchronous allocation pending? */
-	struct zone_hack *	next_zone;	/* Link for all-zones list */
-	/*
-	 * more fields follow, but we don't need them. We only need
-	 * offset from the beginning of struct zone to ->next_zone
-	 * field: it allows us to scan the list of all zones.
-	 */
+#if CFS_INDIVIDUAL_ZONE
+extern zone_t zinit( vm_size_t, vm_size_t, vm_size_t, const char *);
+extern void * zalloc(zone_t zone);
+extern void *zalloc_noblock(zone_t zone);
+extern void zfree(zone_t zone, void *addr);
+
+struct cfs_zone_nob {
+        struct list_head       *z_nob;  /* Pointer to z_link */
+        struct list_head        z_link; /* Do NOT access it directly */       
 };
 
-decl_simple_lock_data(extern, all_zones_lock)
+static struct cfs_zone_nob      cfs_zone_nob;
+static spinlock_t               cfs_zone_guard;
 
-/*
- * returns true iff zone with name @name already exists.
- *
- * XXX nikita: this function is defined in this file only because there is no
- * better place to put it in.
- */
-zone_t cfs_find_zone(const char *name)
+cfs_mem_cache_t *mem_cache_find(const char *name, size_t objsize)
 {
-	struct zone_hack *scan;
+        cfs_mem_cache_t         *walker = NULL;
 
-	/* from osfmk/kern/zalloc.c */
-	extern zone_t first_zone;
+        LASSERT(cfs_zone_nob.z_nob != NULL);
 
-	LASSERT(name != NULL);
+        spin_lock(&cfs_zone_guard);
+        list_for_each_entry(walker, cfs_zone_nob.z_nob, mc_link) {
+                if (!strcmp(walker->mc_name, name) && \
+                    walker->mc_size == objsize)
+                        break;
+        }
+        spin_unlock(&cfs_zone_guard);
 
-	simple_lock(&all_zones_lock);
-	for (scan = (struct zone_hack *)first_zone;
-	     scan != NULL; scan = scan->next_zone) {
-		if (!strcmp(scan->zone_name, name))
-			break;
-	}
-	simple_unlock(&all_zones_lock);
-	return((zone_t)scan);
+        return walker;
 }
 
 /*
@@ -103,59 +71,120 @@ zone_t cfs_find_zone(const char *name)
  * survives kext unloading, so that @name cannot be just static string
  * embedded into kext image.
  */
-zone_t cfs_zinit(vm_size_t size, vm_size_t max, int alloc, const char *name)
+cfs_mem_cache_t *mem_cache_create(vm_size_t objsize, const char *name)
 {
+	cfs_mem_cache_t	*mc = NULL;
         char *cname;
 
-        cname = _MALLOC(strlen(name) + 1, M_TEMP, M_WAITOK);
-        LASSERT(cname != NULL);
-        return zinit(size, max, alloc, strcpy(cname, name));
-}
-
-cfs_mem_cache_t *
-cfs_mem_cache_create (const char *name, size_t objsize, size_t off, unsigned long arg1,
-		void (*arg2)(void *, cfs_mem_cache_t *, unsigned long),
-		void (*arg3)(void *, cfs_mem_cache_t *, unsigned long))
-{
-	cfs_mem_cache_t	*new = NULL;
-
-	MALLOC(new, cfs_mem_cache_t *, objsize, M_TEMP, M_WAITOK|M_ZERO);
-	if (new == NULL){
+	MALLOC(mc, cfs_mem_cache_t *, sizeof(cfs_mem_cache_t), M_TEMP, M_WAITOK|M_ZERO);
+	if (mc == NULL){
 		CERROR("cfs_mem_cache created fail!\n");
 		return NULL;
 	}
-	new->size = objsize;
-        CFS_INIT_LIST_HEAD(&new->link);
-        strncpy(new->name, name, 1 + strlen(name));
-        new->zone = cfs_find_zone(name);
-        if (new->zone == NULL) {
-                new->zone = cfs_zinit (objsize, KMEM_MAX_ZONE * objsize, 0, name);
-                if (new->zone == NULL) {
-                        CERROR("zone create fault!\n");
-                        FREE (new, M_TEMP);
-                        return NULL;
-                }
+
+        cname = _MALLOC(strlen(name) + 1, M_TEMP, M_WAITOK);
+        LASSERT(cname != NULL);
+        mc->mc_cache = zinit(objsize, (KMEM_MAX_ZONE * objsize), 0, strcpy(cname, name));
+        mc->mc_size = objsize;
+        CFS_INIT_LIST_HEAD(&mc->mc_link);
+        strncpy(mc->mc_name, name, 1 + strlen(name));
+        return mc;
+}
+
+void mem_cache_destroy(cfs_mem_cache_t *mc)
+{
+        /*
+         * zone can NOT be destroyed after creating, 
+         * so just keep it in list.
+         *
+         * We will not lost a zone after we unload
+         * libcfs, it can be found by from libcfs.zone
+         */
+        return;
+}
+
+#define mem_cache_alloc(mc)     zalloc((mc)->mc_cache)
+#ifdef __DARWIN8__
+# define mem_cache_alloc_nb(mc) zalloc((mc)->mc_cache)
+#else
+/* XXX Liang: Tiger doesn't export zalloc_noblock() */
+# define mem_cache_alloc_nb(mc) zalloc_noblock((mc)->mc_cache)
+#endif
+#define mem_cache_free(mc, p)   zfree((mc)->mc_cache, p)
+
+#else  /* !CFS_INDIVIDUAL_ZONE */
+
+cfs_mem_cache_t *
+mem_cache_find(const char *name, size_t objsize)
+{
+        return NULL;
+}
+
+cfs_mem_cache_t *mem_cache_create(vm_size_t size, const char *name)
+{
+        cfs_mem_cache_t *mc = NULL;
+
+	MALLOC(mc, cfs_mem_cache_t *, sizeof(cfs_mem_cache_t), M_TEMP, M_WAITOK|M_ZERO);
+	if (mc == NULL){
+		CERROR("cfs_mem_cache created fail!\n");
+		return NULL;
+	}
+        mc->mc_cache = OSMalloc_Tagalloc(name, OSMT_DEFAULT);
+        mc->mc_size = size;
+        return mc;
+}
+
+void mem_cache_destroy(cfs_mem_cache_t *mc)
+{
+        OSMalloc_Tagfree(mc->mc_cache);
+        FREE(mc, M_TEMP);
+}
+
+#define mem_cache_alloc(mc)     OSMalloc((mc)->mc_size, (mc)->mc_cache)
+#define mem_cache_alloc_nb(mc)  OSMalloc_noblock((mc)->mc_size, (mc)->mc_cache)
+#define mem_cache_free(mc, p)   OSFree(p, (mc)->mc_size, (mc)->mc_cache)
+
+#endif /* !CFS_INDIVIDUAL_ZONE */
+
+cfs_mem_cache_t *
+cfs_mem_cache_create (const char *name,
+                      size_t objsize, size_t off, unsigned long arg1)
+{
+        cfs_mem_cache_t *mc;
+
+        mc = mem_cache_find(name, objsize);
+        if (mc)
+                return mc;
+        mc = mem_cache_create(objsize, name);
+	return mc;
+}
+
+int cfs_mem_cache_destroy (cfs_mem_cache_t *cachep)
+{
+        mem_cache_destroy(cachep);
+        return 0;
+}
+
+void *cfs_mem_cache_alloc (cfs_mem_cache_t *cachep, int flags)
+{
+        void *result;
+
+        /* zalloc_canblock() is not exported... Emulate it. */
+        if (flags & CFS_ALLOC_ATOMIC) {
+                result = (void *)mem_cache_alloc_nb(cachep);
+        } else {
+                LASSERT(get_preemption_level() == 0);
+                result = (void *)mem_cache_alloc(cachep);
         }
-	return new;
+        if (result != NULL && (flags & CFS_ALLOC_ZERO))
+                memset(result, 0, cachep->mc_size);
+
+        return result;
 }
 
-int
-cfs_mem_cache_destroy (cfs_mem_cache_t *cachep)
+void cfs_mem_cache_free (cfs_mem_cache_t *cachep, void *objp)
 {
-        FREE (cachep, M_TEMP);
-	return 0;
-}
-
-void *
-cfs_mem_cache_alloc (cfs_mem_cache_t *cachep, int flags)
-{
-        return (void *)zalloc(cachep->zone);
-}
-
-void
-cfs_mem_cache_free (cfs_mem_cache_t *cachep, void *objp)
-{
-        zfree (cachep->zone, (vm_address_t)objp);
+        mem_cache_free(cachep, objp);
 }
 
 /* ---------------------------------------------------------------------------
@@ -167,38 +196,15 @@ cfs_mem_cache_free (cfs_mem_cache_t *cachep, void *objp)
  * "Raw" pages
  */
 
-extern vm_map_t zone_map;
-static inline vm_map_t page_map(struct xnu_raw_page *pg)
-{
-        LASSERT(pg != NULL);
-
-        return pg->order == 0 ? zone_map : kernel_map;
-}
-
-static int raw_page_init(struct xnu_raw_page *pg)
-{
-	vm_size_t size = (1UL << pg->order) * PAGE_SIZE;
-	int upl_flags = UPL_SET_INTERNAL |
-                UPL_SET_LITE | UPL_SET_IO_WIRE | UPL_COPYOUT_FROM;
-        int     kr = 0;
-
-        /* XXX is it necessary? */
-	kr = vm_map_get_upl(page_map(pg),
-                            pg->virtual, &size, &pg->upl, 0, 0, &upl_flags, 0);
-        return kr;
-}
-
-static void raw_page_done(struct xnu_raw_page *pg)
-{
-	ubc_upl_abort(pg->upl, UPL_ABORT_FREE_ON_EMPTY);
-        return;
-}
+static unsigned int raw_pages = 0;
+static cfs_mem_cache_t  *raw_page_cache = NULL;
 
 static struct xnu_page_ops raw_page_ops;
 static struct xnu_page_ops *page_ops[XNU_PAGE_NTYPES] = {
         [XNU_PAGE_RAW] = &raw_page_ops
 };
 
+#if defined(LIBCFS_DEBUG)
 static int page_type_is_valid(cfs_page_t *page)
 {
         LASSERT(page != NULL);
@@ -209,6 +215,7 @@ static int page_is_raw(cfs_page_t *page)
 {
         return page->type == XNU_PAGE_RAW;
 }
+#endif
 
 static struct xnu_raw_page *as_raw(cfs_page_t *page)
 {
@@ -236,120 +243,83 @@ static struct xnu_page_ops raw_page_ops = {
         .page_address   = raw_page_address
 };
 
+extern int get_preemption_level(void);
 
-extern vm_size_t kalloc_max;
-extern vm_size_t kalloc_max_prerounded;
-extern int first_k_zone;
-extern struct zone *k_zone[16];
-extern vm_offset_t zalloc_canblock( register zone_t, boolean_t );
-extern vm_map_t zone_map;
+struct list_head page_death_row;
+spinlock_t page_death_row_phylax;
 
-static inline vm_address_t
-page_zone_alloc(int flags, int order)
+static void raw_page_finish(struct xnu_raw_page *pg)
 {
-	register int zindex;
-	register vm_size_t allocsize;
-	vm_size_t size = (1UL << order) * PAGE_SIZE;
-	vm_address_t	addr;
-	kern_return_t	kr;
-
-	assert(order >= 0);
-	if (size > PAGE_SIZE){
-		/* XXX Liang:
-		 * zalloc_canblock() call kernel_memory_allocate to allocate
-		 * pages, kernel_memory_allocate cannot guarantee contig pages!
-		 * So any request bigger then PAGE_SIZE should not call zalloc()
-		 *
-		 * NB. kmem_alloc_contig could be very slow!!!! Anyway, I dont
-		 * know what will happen if order >= 1 :-(
-		 * */
-		CDEBUG(D_MALLOC, "Allocate contig pages!\n");
-		kr = kmem_alloc_contig(kernel_map, &addr, size, 0, 0);
-		if (kr)
-			return 0;
-		return addr;
-	}
-	allocsize = KALLOC_MINSIZE;
-	zindex = first_k_zone;
-	while (allocsize < size) {
-		allocsize <<= 1;
-		zindex++;
-	}
-	assert(allocsize < kalloc_max);
-	if (flags & M_NOWAIT != 0)
-		addr = zalloc_canblock(k_zone[zindex], FALSE);
-	else
-		addr = zalloc_canblock(k_zone[zindex], TRUE);
-	return addr;
+        -- raw_pages;
+        if (pg->virtual != NULL)
+                cfs_mem_cache_free(raw_page_cache, pg->virtual);
+        cfs_free(pg);
 }
 
-/* Allocate a "page", actually upl of darwin */
-struct xnu_raw_page *alloc_raw_pages(u_int32_t flags, u_int32_t order)
+void raw_page_death_row_clean(void)
 {
-	kern_return_t	kr;
-	vm_size_t size = (1UL << order) * PAGE_SIZE;
-        u_int32_t mflags = 0;
-	struct xnu_raw_page *pg;
+        struct xnu_raw_page *pg;
 
-        if (flags & CFS_ALLOC_ATOMIC != 0)
-                mflags |= M_NOWAIT;
-        else
-                mflags |= M_WAITOK;
-        if (flags & CFS_ALLOC_ZERO != 0)
-                mflags |= M_ZERO;
-
-	MALLOC (pg, struct xnu_raw_page *, sizeof *pg, M_TEMP, mflags);
-	if (pg == NULL)
-		return NULL;
-        pg->header.type = XNU_PAGE_RAW;
-        pg->order = order;
-	cfs_set_page_count(&pg->header, 1);
-	pg->virtual = page_zone_alloc(flags, order);
-	if (!pg->virtual)
-                /*
-                 * XXX nikita: Liang, shouldn't pg be freed here?
-                 */
-		return NULL;
-
-        kr = raw_page_init(pg);
-	if (kr != 0) {
-		size = (1UL << order) * PAGE_SIZE;
-                kmem_free(page_map(pg), pg->virtual, size);
-		return NULL;
-	}
-	return pg;
+        spin_lock(&page_death_row_phylax);
+        while (!list_empty(&page_death_row)) {
+                pg = container_of(page_death_row.next,
+                                  struct xnu_raw_page, link);
+                list_del(&pg->link);
+                spin_unlock(&page_death_row_phylax);
+                raw_page_finish(pg);
+                spin_lock(&page_death_row_phylax);
+        }
+        spin_unlock(&page_death_row_phylax);
 }
 
 /* Free a "page" */
-void free_raw_pages(struct xnu_raw_page *pg, u_int32_t order)
+void free_raw_page(struct xnu_raw_page *pg)
 {
-	vm_size_t size = (1UL << order) * PAGE_SIZE;
-
 	if (!atomic_dec_and_test(&pg->count))
 		return;
-        raw_page_done(pg);
-        kmem_free(page_map(pg), pg->virtual, size);
-	FREE(pg, M_TEMP);
-}
-
-cfs_page_t *cfs_alloc_pages(u_int32_t flags, u_int32_t order)
-{
-        return &alloc_raw_pages(flags, order)->header;
+        /*
+         * kmem_free()->vm_map_remove()->vm_map_delete()->lock_write() may
+         * block. (raw_page_done()->upl_abort() can block too) On the other
+         * hand, cfs_free_page() may be called in non-blockable context. To
+         * work around this, park pages on global list when cannot block.
+         */
+        if (get_preemption_level() > 0) {
+                spin_lock(&page_death_row_phylax);
+                list_add(&pg->link, &page_death_row);
+                spin_unlock(&page_death_row_phylax);
+        } else {
+                raw_page_finish(pg);
+                raw_page_death_row_clean();
+        }
 }
 
 cfs_page_t *cfs_alloc_page(u_int32_t flags)
 {
-        return cfs_alloc_pages(flags, 0);
+        struct xnu_raw_page *page;
+
+        /*
+         * XXX nikita: do NOT call libcfs_debug_msg() (CDEBUG/ENTRY/EXIT)
+         * from here: this will lead to infinite recursion.
+         */
+
+        page = cfs_alloc(sizeof *page, flags);
+        if (page != NULL) {
+                page->virtual = cfs_mem_cache_alloc(raw_page_cache, flags);
+                if (page->virtual != NULL) {
+                        ++ raw_pages;
+                        page->header.type = XNU_PAGE_RAW;
+                        atomic_set(&page->count, 1);
+                } else {
+                        cfs_free(page);
+                        page = NULL;
+                }
+        }
+        return page != NULL ? &page->header : NULL;
 }
 
-void cfs_free_pages(cfs_page_t *pages, int order)
+void cfs_free_page(cfs_page_t *pages)
 {
-        free_raw_pages(as_raw(pages), order);
-}
-
-void cfs_free_page(cfs_page_t *page)
-{
-        cfs_free_pages(page, 0);
+        free_raw_page(as_raw(pages));
 }
 
 void cfs_get_page(cfs_page_t *p)
@@ -367,17 +337,16 @@ int cfs_page_count(cfs_page_t *p)
         return atomic_read(&as_raw(p)->count);
 }
 
-void cfs_set_page_count(cfs_page_t *p, int v)
-{
-        atomic_set(&as_raw(p)->count, v);
-}
-
 /*
  * Generic page operations
  */
 
 void *cfs_page_address(cfs_page_t *pg)
 {
+        /*
+         * XXX nikita: do NOT call libcfs_debug_msg() (CDEBUG/ENTRY/EXIT)
+         * from here: this will lead to infinite recursion.
+         */
         LASSERT(page_type_is_valid(pg));
         return page_ops[pg->type]->page_address(pg);
 }
@@ -425,14 +394,14 @@ void *cfs_alloc(size_t nr_bytes, u_int32_t flags)
         int mflags;
 
         mflags = 0;
-        if (flags & CFS_ALLOC_ATOMIC != 0) {
-                mflags |= 0 /* M_NOWAIT */;
+        if (flags & CFS_ALLOC_ATOMIC) {
+                mflags |= M_NOWAIT;
         } else {
                 LASSERT(get_preemption_level() == 0);
                 mflags |= M_WAITOK;
         }
 
-        if (flags & CFS_ALLOC_ZERO != 0)
+        if (flags & CFS_ALLOC_ZERO)
                 mflags |= M_ZERO;
 
         return _MALLOC(nr_bytes, M_TEMP, mflags);
@@ -451,5 +420,61 @@ void *cfs_alloc_large(size_t nr_bytes)
 
 void  cfs_free_large(void *addr)
 {
+        LASSERT(get_preemption_level() == 0);
         return _FREE(addr, M_TEMP);
+}
+
+/*
+ * Lookup cfs_zone_nob by sysctl.zone, if it cannot be 
+ * found (first load of * libcfs since boot), allocate 
+ * sysctl libcfs.zone.
+ */
+int cfs_mem_init(void)
+{
+#if     CFS_INDIVIDUAL_ZONE
+        int     rc;
+        size_t  len;
+
+        len = sizeof(struct cfs_zone_nob);
+        rc = sysctlbyname("libcfs.zone",
+                          (void *)&cfs_zone_nob, &len, NULL, 0);
+        if (rc == ENOENT) {
+                /* zone_nob is not register in libcfs_sysctl */
+                struct cfs_zone_nob  *nob;
+                struct sysctl_oid       *oid;
+
+                assert(cfs_sysctl_isvalid());
+
+                nob = _MALLOC(sizeof(struct cfs_zone_nob), 
+                              M_TEMP, M_WAITOK | M_ZERO);
+                CFS_INIT_LIST_HEAD(&nob->z_link);
+                nob->z_nob = &nob->z_link;
+                oid = cfs_alloc_sysctl_struct(NULL, OID_AUTO, CTLFLAG_RD | CTLFLAG_KERN, 
+                                              "zone", nob, sizeof(struct cfs_zone_nob));
+                if (oid == NULL) {
+                        _FREE(nob, M_TEMP);
+                        return -ENOMEM;
+                }
+                sysctl_register_oid(oid);
+
+                cfs_zone_nob.z_nob = nob->z_nob;
+        }
+        spin_lock_init(&cfs_zone_guard);
+#endif
+        CFS_INIT_LIST_HEAD(&page_death_row);
+        spin_lock_init(&page_death_row_phylax);
+        raw_page_cache = cfs_mem_cache_create("raw-page", CFS_PAGE_SIZE, 0, 0);
+        return 0;
+}
+
+void cfs_mem_fini(void)
+{
+        raw_page_death_row_clean();
+        spin_lock_done(&page_death_row_phylax);
+        cfs_mem_cache_destroy(raw_page_cache);
+
+#if     CFS_INDIVIDUAL_ZONE
+        cfs_zone_nob.z_nob = NULL;
+        spin_lock_done(&cfs_zone_guard);
+#endif
 }

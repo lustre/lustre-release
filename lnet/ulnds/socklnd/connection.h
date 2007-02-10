@@ -10,26 +10,26 @@
 #include <procbridge.h>
 
 typedef struct manager {
-    table connections;
+    table           connections;
     pthread_mutex_t conn_lock; /* protect connections table */
-    int bound;
-    io_handler bound_handler;
-    int (*handler)(void *, void *);
-    void *handler_arg;
-    unsigned short port;
+#if 0                          /* we don't accept connections */
+    int             bound;
+    io_handler      bound_handler;
+#endif
+    int           (*handler)(void *, void *);
+    void           *handler_arg;
+    int             port;
 } *manager;
 
 
 typedef struct connection {
-    unsigned int ip;
-    unsigned short port;
-    int fd;
-    manager m;
+        lnet_nid_t      peer_nid;
+        int            fd;
+        manager        m;
 } *connection;
 
-connection force_tcp_connection(manager m, unsigned int ip, unsigned int short,
-                                procbridge pb);
-manager init_connections(unsigned short, int (*f)(void *, void *), void *);
+connection force_tcp_connection(manager m, lnet_nid_t nid, procbridge pb);
+manager init_connections(int (*f)(void *, void *), void *);
 void remove_connection(void *arg);
 void shutdown_connections(manager m);
 int read_connection(connection c, unsigned char *dest, int len);

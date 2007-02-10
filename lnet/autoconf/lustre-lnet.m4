@@ -1,9 +1,31 @@
 #
-# LP_CHECK_GCC_VERSION
+# LN_CONFIG_MAX_PAYLOAD
+#
+# configure maximum payload
+#
+AC_DEFUN([LN_CONFIG_MAX_PAYLOAD],
+[AC_MSG_CHECKING([for non-default maximum LNET payload])
+AC_ARG_WITH([max-payload-mb],
+  	AC_HELP_STRING([--with-max-payload-mb=MBytes],
+                       [set maximum lnet payload in MBytes]),
+        [
+		AC_MSG_RESULT([$with_max_payload_mb])
+	        LNET_MAX_PAYLOAD_MB=$with_max_payload_mb
+		LNET_MAX_PAYLOAD="(($with_max_payload_mb)<<20)"
+	], [
+		AC_MSG_RESULT([no])
+		LNET_MAX_PAYLOAD="LNET_MTU"
+	])
+        AC_DEFINE_UNQUOTED(LNET_MAX_PAYLOAD, $LNET_MAX_PAYLOAD,
+			   [Max LNET payload])
+])
+
+#
+# LN_CHECK_GCC_VERSION
 #
 # Check compiler version
 #
-AC_DEFUN([LP_CHECK_GCC_VERSION],
+AC_DEFUN([LN_CHECK_GCC_VERSION],
 [AC_MSG_CHECKING([compiler version])
 PTL_CC_VERSION=`$CC --version | awk '/^gcc/{print $ 3}'`
 PTL_MIN_CC_VERSION="3.2.2"
@@ -20,35 +42,58 @@ fi
 ])
 
 #
-# LP_CONFIG_ZEROCOPY
+# LN_CONFIG_ZEROCOPY
 #
 # check if zerocopy is available/wanted
 #
-AC_DEFUN([LP_CONFIG_ZEROCOPY],
-[AC_MSG_CHECKING([for zero-copy TCP support])
-AC_ARG_ENABLE([zerocopy],
+AC_DEFUN([LN_CONFIG_ZEROCOPY],
+[AC_ARG_ENABLE([zerocopy],
 	AC_HELP_STRING([--disable-zerocopy],
-		       [disable socknal zerocopy]),
+		       [disable socklnd zerocopy]),
 	[],[enable_zerocopy='yes'])
+AC_MSG_CHECKING([for zero-copy TCP support])
 if test x$enable_zerocopy = xno ; then
 	AC_MSG_RESULT([no (by request)])
 else
 	ZCCD="`grep -c zccd $LINUX/include/linux/skbuff.h`"
-	if test "$ZCCD" != 0 ; then
-		AC_DEFINE(SOCKNAL_ZC, 1, [use zero-copy TCP])
-		AC_MSG_RESULT(yes)
-	else
+	if test "$ZCCD" = 0 ; then
 		AC_MSG_RESULT([no (no kernel support)])
+	else
+		AC_MSG_RESULT([yes])
+	        AC_MSG_CHECKING([for up-to-date tcp zero-copy patch])
+		LB_LINUX_TRY_COMPILE([
+			#include <linux/config.h>
+			#include <linux/kernel.h>
+			#include <linux/sched.h>
+			#include <linux/types.h>
+			#include <linux/in.h>
+			#include <linux/string.h>
+			#include <linux/init.h>
+			#include <linux/errno.h>
+			#include <linux/interrupt.h>
+			#include <linux/netdevice.h>
+			#include <linux/skbuff.h>
+	        ],[
+			struct zccd zc = {0};
+
+	                return atomic_read(&zc.zccd_refcount);
+	        ],[
+			AC_MSG_RESULT([yes])
+			AC_DEFINE(SOCKNAL_ZC, 1, [enable zero-copy support])
+	        ],[
+			AC_MSG_RESULT([no])
+			AC_MSG_ERROR([old TCP zero-copy in kernel (bug 10889) - use --disable-zerocopy to continue ])
+        	])
 	fi
 fi
 ])
 
 #
-# LP_CONFIG_AFFINITY
+# LN_CONFIG_AFFINITY
 #
 # check if cpu affinity is available/wanted
 #
-AC_DEFUN([LP_CONFIG_AFFINITY],
+AC_DEFUN([LN_CONFIG_AFFINITY],
 [AC_ARG_ENABLE([affinity],
 	AC_HELP_STRING([--disable-affinity],
 		       [disable process/irq affinity]),
@@ -62,11 +107,11 @@ else
 		#include <linux/sched.h>
 	],[
 		struct task_struct t;
-		#ifdef CPU_ARRAY_SIZE
-		cpumask_t m;
-		#else
-		unsigned long m;
-		#endif
+		#if HAVE_CPUMASK_T
+		cpumask_t     m;
+	        #else
+	        unsigned long m;
+	 	#endif
 		set_cpus_allowed(&t, m);
 	],[
 		AC_DEFINE(CPU_AFFINITY, 1, [kernel has cpu affinity support])
@@ -78,11 +123,162 @@ fi
 ])
 
 #
-# LP_CONFIG_QUADRICS
+# LN_CONFIG_PORTALS
+#
+# configure support for Portals
+#
+AC_DEFUN([LN_CONFIG_PORTALS],
+[AC_MSG_CHECKING([for portals])
+AC_ARG_WITH([portals],
+  	AC_HELP_STRING([--with-portals=path],
+                       [set path to portals]),
+        [
+		case $with_portals in
+			no)     ENABLEPORTALS=0
+				;;
+			*)	PORTALS="${with_portals}"
+				ENABLEPORTALS=1
+				;;
+		esac
+		
+	], [
+		ENABLEPORTALS=0
+	])
+PTLLNDCPPFLAGS=""
+if test $ENABLEPORTALS -eq 0; then
+	AC_MSG_RESULT([no])
+elif test ! \( -f ${PORTALS}/include/portals/p30.h \); then
+        AC_MSG_RESULT([no])
+	AC_MSG_ERROR([bad --with-portals path])
+else
+        AC_MSG_RESULT([$PORTALS])
+        PTLLNDCPPFLAGS="-I${PORTALS}/include"
+fi
+AC_SUBST(PTLLNDCPPFLAGS)
+])
+
+#
+# LN_CONFIG_BACKOFF
+#
+# check if tunable tcp backoff is available/wanted
+#
+AC_DEFUN([LN_CONFIG_BACKOFF],
+[AC_MSG_CHECKING([for tunable backoff TCP support])
+AC_ARG_ENABLE([backoff],
+       AC_HELP_STRING([--disable-backoff],
+                      [disable socknal tunable backoff]),
+       [],[enable_backoff='yes'])
+if test x$enable_backoff = xno ; then
+       AC_MSG_RESULT([no (by request)])
+else
+       BOCD="`grep -c TCP_BACKOFF $LINUX/include/linux/tcp.h`"
+       if test "$BOCD" != 0 ; then
+               AC_DEFINE(SOCKNAL_BACKOFF, 1, [use tunable backoff TCP])
+               AC_MSG_RESULT(yes)
+       else
+               AC_MSG_RESULT([no (no kernel support)])
+       fi
+fi
+])
+
+#
+# LN_CONFIG_PANIC_DUMPLOG
+#
+# check if tunable panic_dumplog is wanted
+#
+AC_DEFUN([LN_CONFIG_PANIC_DUMPLOG],
+[AC_MSG_CHECKING([for tunable panic_dumplog support])
+AC_ARG_ENABLE([panic_dumplog],
+       AC_HELP_STRING([--enable-panic_dumplog],
+                      [enable panic_dumplog]),
+       [],[enable_panic_dumplog='no'])
+if test x$enable_panic_dumplog = xyes ; then
+       AC_DEFINE(LNET_DUMP_ON_PANIC, 1, [use dumplog on panic])
+       AC_MSG_RESULT([yes (by request)])
+else
+       AC_MSG_RESULT([no])
+fi
+])
+
+#
+# LN_CONFIG_PTLLND
+#
+# configure support for Portals LND
+#
+AC_DEFUN([LN_CONFIG_PTLLND],
+[
+if test -z "$ENABLEPORTALS"; then
+	LN_CONFIG_PORTALS
+fi
+
+AC_MSG_CHECKING([whether to build the kernel portals LND])
+
+PTLLND=""
+if test $ENABLEPORTALS -ne 0; then
+	AC_MSG_RESULT([yes])
+	PTLLND="ptllnd"
+else
+	AC_MSG_RESULT([no])
+fi
+AC_SUBST(PTLLND)
+])
+
+#
+# LN_CONFIG_UPTLLND
+#
+# configure support for Portals LND
+#
+AC_DEFUN([LN_CONFIG_UPTLLND],
+[
+if test -z "$ENABLEPORTALS"; then
+	LN_CONFIG_PORTALS
+fi
+
+AC_MSG_CHECKING([whether to build the userspace portals LND])
+
+UPTLLND=""
+if test $ENABLEPORTALS -ne 0; then
+	AC_MSG_RESULT([yes])
+	UPTLLND="ptllnd"
+else
+	AC_MSG_RESULT([no])
+fi
+AC_SUBST(UPTLLND)
+])
+
+#
+# LN_CONFIG_USOCKLND
+#
+# configure support for userspace TCP/IP LND
+#
+AC_DEFUN([LN_CONFIG_USOCKLND],
+[AC_MSG_CHECKING([whether to build usocklnd])
+AC_ARG_ENABLE([usocklnd],
+       	AC_HELP_STRING([--disable-usocklnd],
+                      	[disable usocklnd]),
+       	[],[enable_usocklnd='yes'])
+
+if test x$enable_usocklnd = xyes ; then
+	if test "$ENABLE_LIBPTHREAD" = "yes" ; then
+		AC_MSG_RESULT([yes])
+      		USOCKLND="usocklnd"
+	else
+		AC_MSG_RESULT([no (libpthread not present or disabled)])
+		USOCKLND=""
+	fi
+else
+	AC_MSG_RESULT([no (disabled explicitly)])
+     	USOCKLND=""
+fi
+AC_SUBST(USOCKLND)
+])
+
+#
+# LN_CONFIG_QUADRICS
 #
 # check if quadrics support is in this kernel
 #
-AC_DEFUN([LP_CONFIG_QUADRICS],
+AC_DEFUN([LN_CONFIG_QUADRICS],
 [AC_MSG_CHECKING([for QsNet sources])
 AC_ARG_WITH([qsnet],
 	AC_HELP_STRING([--with-qsnet=path],
@@ -94,78 +290,304 @@ AC_MSG_RESULT([$QSNET])
 AC_MSG_CHECKING([if quadrics kernel headers are present])
 if test -d $QSNET/drivers/net/qsnet ; then
 	AC_MSG_RESULT([yes])
-	QSWNAL="qswnal"
+	QSWLND="qswlnd"
 	AC_MSG_CHECKING([for multirail EKC])
 	if test -f $QSNET/include/elan/epcomms.h; then
 		AC_MSG_RESULT([supported])
 		QSWCPPFLAGS="-I$QSNET/include -DMULTIRAIL_EKC=1"
 	else
 		AC_MSG_RESULT([not supported])
-		if test -d $QSNET/drivers/net/qsnet/include; then
-			QSWCPPFLAGS="-I$QSNET/drivers/net/qsnet/include"
-		else
-			QSWCPPFLAGS="-I$QSNET/include/linux"
-		fi
+		AC_MSG_ERROR([Need multirail EKC])
 	fi
 
 	if test x$QSNET = x$LINUX ; then
 		LB_LINUX_CONFIG([QSNET],[],[
 			LB_LINUX_CONFIG([QSNET_MODULE],[],[
-				AC_MSG_WARN([QSNET is not enabled in this kernel; not building qswnal.])
-				QSWNAL=""
+				AC_MSG_WARN([QSNET is not enabled in this kernel; not building qswlnd.])
+				QSWLND=""
 				QSWCPPFLAGS=""
 			])
 		])
 	fi
 else
 	AC_MSG_RESULT([no])
-	QSWNAL=""
+	QSWLND=""
 	QSWCPPFLAGS=""
 fi
 AC_SUBST(QSWCPPFLAGS)
-AC_SUBST(QSWNAL)
+AC_SUBST(QSWLND)
 ])
 
 #
-# LP_CONFIG_GM
+# LN_CONFIG_GM
 #
 # check if GM support is available
 #
-AC_DEFUN([LP_CONFIG_GM],
-[LB_ARG_LIBS_INCLUDES([Myrinet],[gm])
-if test x$gm_includes != x ; then
-	GMCPPFLAGS="-I$gm_includes"
-	if test -d "$gm/drivers" ; then
-		GMCPPFLAGS="$GMCPPFLAGS -I$gm/drivers -I$gm/drivers/linux/gm"
-	fi
+AC_DEFUN([LN_CONFIG_GM],[
+AC_MSG_CHECKING([whether to enable GM support])
+AC_ARG_WITH([gm],
+        AC_HELP_STRING([--with-gm=path-to-gm-source-tree],
+	               [build gmlnd against path]),
+	[
+	        case $with_gm in
+                no)    ENABLE_GM=0
+	               ;;
+                *)     ENABLE_GM=1
+                       GM_SRC="$with_gm"
+		       ;;
+                esac
+        ],[
+                ENABLE_GM=0
+        ])
+AC_ARG_WITH([gm-install],
+        AC_HELP_STRING([--with-gm-install=path-to-gm-install-tree],
+	               [say where GM has been installed]),
+	[
+	        GM_INSTALL=$with_gm_install
+        ],[
+                GM_INSTALL="/opt/gm"
+        ])
+if test $ENABLE_GM -eq 0; then
+        AC_MSG_RESULT([no])
+else
+        AC_MSG_RESULT([yes])
+
+	GMLND="gmlnd"
+        GMCPPFLAGS="-I$GM_SRC/include -I$GM_SRC/drivers -I$GM_SRC/drivers/linux/gm"
+
+	if test -f $GM_INSTALL/lib/libgm.a -o \
+                -f $GM_INSTALL/lib64/libgm.a; then
+	        GMLIBS="-L$GM_INSTALL/lib -L$GM_INSTALL/lib64"
+        else
+	        AC_MSG_ERROR([Cant find GM libraries under $GM_INSTALL])
+        fi
+
+	EXTRA_KCFLAGS_save="$EXTRA_KCFLAGS"
+	EXTRA_KCFLAGS="$GMCPPFLAGS -DGM_KERNEL $EXTRA_KCFLAGS"
+
+        AC_MSG_CHECKING([that code using GM compiles with given path])
+	LB_LINUX_TRY_COMPILE([
+		#define GM_STRONG_TYPES 1
+		#ifdef VERSION
+		#undef VERSION
+		#endif
+	        #include "gm.h"
+		#include "gm_internal.h"
+        ],[
+	        struct gm_port *port = NULL;
+		gm_recv_event_t *rxevent = gm_blocking_receive_no_spin(port);
+                return 0;
+        ],[
+		AC_MSG_RESULT([yes])
+        ],[
+		AC_MSG_RESULT([no])
+		AC_MSG_ERROR([Bad --with-gm path])
+        ])
+
+	AC_MSG_CHECKING([that GM has gm_register_memory_ex_phys()])
+	LB_LINUX_TRY_COMPILE([
+		#define GM_STRONG_TYPES 1
+		#ifdef VERSION
+		#undef VERSION
+		#endif
+	        #include "gm.h"
+		#include "gm_internal.h"
+	],[
+		gm_status_t     gmrc;
+		struct gm_port *port = NULL;
+		gm_u64_t        phys = 0;
+		gm_up_t         pvma = 0;
+
+		gmrc = gm_register_memory_ex_phys(port, phys, 100, pvma);
+		return 0;
+	],[
+		AC_MSG_RESULT([yes])
+	],[
+		AC_MSG_RESULT([no.
+Please patch the GM sources as follows...
+    cd $GM_SRC
+    patch -p0 < $PWD/lnet/klnds/gmlnd/gm-reg-phys.patch
+...then rebuild and re-install them])
+                AC_MSG_ERROR([Can't build GM without gm_register_memory_ex_phys()])
+        ])
+
+	EXTRA_KCFLAGS="$EXTRA_KCFLAGS_save"
 fi
 AC_SUBST(GMCPPFLAGS)
-
-if test x$gm_libs != x ; then
-	GMLIBS="-L$gm_libs"
-fi
 AC_SUBST(GMLIBS)
+AC_SUBST(GMLND)
+])
 
-ENABLE_GM=0
-if test x$gm != x ; then
-	GMNAL="gmnal"
-	ENABLE_GM=1
+
+#
+# LN_CONFIG_MX
+#
+AC_DEFUN([LN_CONFIG_MX],
+[AC_MSG_CHECKING([whether to enable Myrinet MX support])
+# set default
+MXPATH="/opt/mx"
+AC_ARG_WITH([mx],
+       AC_HELP_STRING([--with-mx=path],
+                      [build mxlnd against path]),
+       [
+               case $with_mx in
+               yes)    ENABLEMX=2
+                       ;;
+               no)     ENABLEMX=0
+                       ;;
+               *)      MXPATH=$with_mx
+                       ENABLEMX=3
+                       ;;
+               esac
+       ],[
+               ENABLEMX=1
+       ])
+if test $ENABLEMX -eq 0; then
+       AC_MSG_RESULT([disabled])
+elif test ! \( -f ${MXPATH}/include/myriexpress.h -a \
+              -f ${MXPATH}/include/mx_kernel_api.h -a \
+              -f ${MXPATH}/include/mx_pin.h \); then
+       AC_MSG_RESULT([no])
+       case $ENABLEMX in
+       1) ;;
+       2) AC_MSG_ERROR([Myrinet MX kernel headers not present]);;
+       3) AC_MSG_ERROR([bad --with-mx path]);;
+       *) AC_MSG_ERROR([internal error]);;
+       esac
+else
+       MXCPPFLAGS="-I$MXPATH/include"
+       EXTRA_KCFLAGS_save="$EXTRA_KCFLAGS"
+       EXTRA_KCFLAGS="$EXTRA_KCFLAGS $MXCPPFLAGS"
+       MXLIBS="-L$MXPATH/lib"
+       LB_LINUX_TRY_COMPILE([
+               #define MX_KERNEL 1
+               #include <mx_extensions.h>
+               #include <myriexpress.h>
+       ],[
+               mx_endpoint_t   end;
+               mx_status_t     status;
+               mx_request_t    request;
+               int             result;
+
+               mx_init();
+               mx_open_endpoint(MX_ANY_NIC, MX_ANY_ENDPOINT, 0, NULL, 0, &end);
+	       mx_register_unexp_handler(end, (mx_unexp_handler_t) NULL, NULL);
+               mx_wait_any(end, MX_INFINITE, 0LL, 0LL, &status, &result);
+               mx_iconnect(end, 0LL, 0, 0, 0, NULL, &request);
+               return 0;
+       ],[
+               AC_MSG_RESULT([yes])
+               MXLND="mxlnd"
+       ],[
+               AC_MSG_RESULT([no])
+               case $ENABLEMX in
+               1) ;;
+               2) AC_MSG_ERROR([can't compile with Myrinet MX kernel headers]);;
+               3) AC_MSG_ERROR([can't compile with Myrinet MX headers under $MXPATH]);;
+               *) AC_MSG_ERROR([internal error]);;
+               esac
+               MXLND=""
+               MXCPPFLAGS=""
+       ])
+       EXTRA_KCFLAGS="$EXTRA_KCFLAGS_save"
 fi
-AC_SUBST(GMNAL)
-AC_SUBST(ENABLE_GM)
+AC_SUBST(MXCPPFLAGS)
+AC_SUBST(MXLIBS)
+AC_SUBST(MXLND)
+])
+
+
+
+#
+# LN_CONFIG_O2IB
+#
+AC_DEFUN([LN_CONFIG_O2IB],[
+AC_MSG_CHECKING([whether to enable OpenIB gen2 support])
+# set default
+O2IBPATH="$LINUX/drivers/infiniband"
+AC_ARG_WITH([o2ib],
+	AC_HELP_STRING([--with-o2ib=path],
+	               [build o2iblnd against path]),
+	[
+		case $with_o2ib in
+		yes)    ENABLEO2IB=2
+			;;
+		no)     ENABLEO2IB=0
+			;;
+		*)      O2IBPATH=$with_o2ib
+			ENABLEO2IB=3
+			;;
+		esac
+	],[
+		ENABLEO2IB=1
+	])
+if test $ENABLEO2IB -eq 0; then
+	AC_MSG_RESULT([disabled])
+elif test ! \( -f ${O2IBPATH}/include/rdma/rdma_cm.h -a \
+               -f ${O2IBPATH}/include/rdma/ib_cm.h -a\
+               -f ${O2IBPATH}/include/rdma/ib_verbs.h -a\
+	       -f ${O2IBPATH}/include/rdma/ib_fmr_pool.h \); then
+	AC_MSG_RESULT([no])
+	case $ENABLEO2IB in
+	1) ;;
+	2) AC_MSG_ERROR([kernel OpenIB gen2 headers not present]);;
+	3) AC_MSG_ERROR([bad --with-o2ib path]);;
+	*) AC_MSG_ERROR([internal error]);;
+	esac
+else
+	O2IBCPPFLAGS="-I$O2IBPATH/include"
+	EXTRA_KCFLAGS_save="$EXTRA_KCFLAGS"
+	EXTRA_KCFLAGS="$EXTRA_KCFLAGS $O2IBCPPFLAGS"
+	LB_LINUX_TRY_COMPILE([
+	        #include <linux/version.h>
+	        #if !HAVE_GFP_T
+		typedef int gfp_t;
+		#endif
+		#include <rdma/rdma_cm.h>
+		#include <rdma/ib_cm.h>
+		#include <rdma/ib_verbs.h>
+	        #include <rdma/ib_fmr_pool.h>
+	],[
+       	        struct rdma_cm_id          *cm_id;
+	        struct rdma_conn_param      conn_param;
+	        struct ib_device_attr       device_attr;
+	        struct ib_qp_attr           qp_attr;
+		struct ib_pool_fmr          pool_fmr;	        
+		enum   ib_cm_rej_reason     rej_reason;
+
+		cm_id = rdma_create_id(NULL, NULL, RDMA_PS_TCP);
+		return PTR_ERR(cm_id);
+	],[
+		AC_MSG_RESULT([yes])
+		O2IBLND="o2iblnd"
+	],[
+		AC_MSG_RESULT([no])
+		case $ENABLEO2IB in
+		1) ;;
+		2) AC_MSG_ERROR([can't compile with kernel OpenIB gen2 headers]);;
+		3) AC_MSG_ERROR([can't compile with OpenIB gen2 headers under $O2IBPATH]);;
+		*) AC_MSG_ERROR([internal error]);;
+		esac
+		O2IBLND=""
+		O2IBCPPFLAGS=""
+	])
+	EXTRA_KCFLAGS="$EXTRA_KCFLAGS_save"
+fi
+AC_SUBST(O2IBCPPFLAGS)
+AC_SUBST(O2IBLND)
 ])
 
 #
-# LP_CONFIG_OPENIB
+# LN_CONFIG_OPENIB
 #
 # check for OpenIB in the kernel
-AC_DEFUN([LP_CONFIG_OPENIB],[
+AC_DEFUN([LN_CONFIG_OPENIB],[
 AC_MSG_CHECKING([whether to enable OpenIB support])
 # set default
 OPENIBPATH="$LINUX/drivers/infiniband"
 AC_ARG_WITH([openib],
 	AC_HELP_STRING([--with-openib=path],
-	               [build openibnal against path]),
+	               [build openiblnd against path]),
 	[
 		case $with_openib in
 		yes)    ENABLEOPENIB=2
@@ -198,6 +620,7 @@ else
 	*)   AC_MSG_RESULT([no])
 	     AC_MSG_ERROR([internal error]);;
 	esac
+	OPENIBCPPFLAGS="$OPENIBCPPFLAGS -DIB_NTXRXPARAMS=4"
 	EXTRA_KCFLAGS_save="$EXTRA_KCFLAGS"
 	EXTRA_KCFLAGS="$EXTRA_KCFLAGS $OPENIBCPPFLAGS"
 	LB_LINUX_TRY_COMPILE([
@@ -215,7 +638,7 @@ else
 		return 0;
 	],[
 		AC_MSG_RESULT([yes])
-		OPENIBNAL="openibnal"
+		OPENIBLND="openiblnd"
 	],[
 		AC_MSG_RESULT([no])
 		case $ENABLEOPENIB in
@@ -224,32 +647,82 @@ else
 		3) AC_MSG_ERROR([can't compile with OpenIB headers under $OPENIBPATH]);;
 		*) AC_MSG_ERROR([internal error]);;
 		esac
-		OPENIBNAL=""
+		OPENIBLND=""
 		OPENIBCPPFLAGS=""
 	])
 	EXTRA_KCFLAGS="$EXTRA_KCFLAGS_save"
 fi
 AC_SUBST(OPENIBCPPFLAGS)
-AC_SUBST(OPENIBNAL)
+AC_SUBST(OPENIBLND)
 ])
 
 #
-# LP_CONFIG_IIB
+# LN_CONFIG_CIBLND
+#
+AC_DEFUN([LN_CONFIG_CIB],[
+AC_MSG_CHECKING([whether to enable Cisco/TopSpin IB support])
+# set default
+CIBPATH=""
+CIBLND=""
+AC_ARG_WITH([cib],
+	AC_HELP_STRING([--with-cib=path],
+	               [build ciblnd against path]),
+	[
+		case $with_cib in
+		no)     AC_MSG_RESULT([no]);;
+		*)      CIBPATH="$with_cib"
+	                if test -d "$CIBPATH"; then
+	                 	AC_MSG_RESULT([yes])
+                        else
+				AC_MSG_RESULT([no])
+				AC_MSG_ERROR([No directory $CIBPATH])
+			fi;;
+		esac
+	],[
+		AC_MSG_RESULT([no])
+	])
+if test -n "$CIBPATH"; then
+	CIBCPPFLAGS="-I${CIBPATH}/ib/ts_api_ng/include -I${CIBPATH}/all/kernel_services/include -DUSING_TSAPI"
+	CIBCPPFLAGS="$CIBCPPFLAGS -DIB_NTXRXPARAMS=3"
+	EXTRA_KCFLAGS_save="$EXTRA_KCFLAGS"
+	EXTRA_KCFLAGS="$EXTRA_KCFLAGS $CIBCPPFLAGS"
+	LB_LINUX_TRY_COMPILE([
+		#include <ts_ib_core.h>
+		#include <ts_ib_cm.h>
+	        #include <ts_ib_sa_client.h>
+	],[
+       	        struct ib_device_properties dev_props;
+	        struct ib_cm_active_param   cm_active_params;
+	        tTS_IB_CLIENT_QUERY_TID     tid;
+	        int                         enum1 = TS_IB_QP_ATTRIBUTE_STATE;
+		int                         enum2 = TS_IB_ACCESS_LOCAL_WRITE;
+		int                         enum3 = TS_IB_CQ_CALLBACK_INTERRUPT;
+		int                         enum4 = TS_IB_CQ_PROVIDER_REARM;
+		return 0;
+	],[
+		CIBLND="ciblnd"
+	],[
+		AC_MSG_ERROR([can't compile ciblnd with given path])
+	        CIBCPPFLAGS=""
+	])
+	EXTRA_KCFLAGS="$EXTRA_KCFLAGS_save"
+fi
+AC_SUBST(CIBCPPFLAGS)
+AC_SUBST(CIBLND)
+])
+
+#
+# LN_CONFIG_IIB
 #
 # check for infinicon infiniband support
 #
-#
-# LP_CONFIG_IIB
-#
-# check for infinicon infiniband support
-#
-AC_DEFUN([LP_CONFIG_IIB],[
+AC_DEFUN([LN_CONFIG_IIB],[
 AC_MSG_CHECKING([whether to enable Infinicon support])
 # set default
 IIBPATH="/usr/include"
 AC_ARG_WITH([iib],
 	AC_HELP_STRING([--with-iib=path],
-	               [build iibnal against path]),
+	               [build iiblnd against path]),
 	[
 		case $with_iib in
 		yes)    ENABLEIIB=2
@@ -293,7 +766,7 @@ else
 		return rc == FSUCCESS ? 0 : 1;
 	],[
 		AC_MSG_RESULT([yes])
-		IIBNAL="iibnal"
+		IIBLND="iiblnd"
 	],[
 		AC_MSG_RESULT([no])
 		case $ENABLEIIB in
@@ -302,26 +775,26 @@ else
 		3) AC_MSG_ERROR([can't compile with Infinicon headers under $IIBPATH]);;
 		*) AC_MSG_ERROR([internal error]);;
 		esac
-		IIBNAL=""
+		IIBLND=""
 		IIBCPPFLAGS=""
 	])
 	EXTRA_KCFLAGS="$EXTRA_KCFLAGS_save"
 fi
 AC_SUBST(IIBCPPFLAGS)
-AC_SUBST(IIBNAL)
+AC_SUBST(IIBLND)
 ])
 
 #
-# LP_CONFIG_VIB
+# LN_CONFIG_VIB
 #
 # check for Voltaire infiniband support
 #
-AC_DEFUN([LP_CONFIG_VIB],
+AC_DEFUN([LN_CONFIG_VIB],
 [AC_MSG_CHECKING([whether to enable Voltaire IB support])
 VIBPATH=""
 AC_ARG_WITH([vib],
 	AC_HELP_STRING([--with-vib=path],
-		       [build vibnal against path]),
+		       [build viblnd against path]),
 	[
 		case $with_vib in
 		no)     AC_MSG_RESULT([no]);;
@@ -337,7 +810,7 @@ AC_ARG_WITH([vib],
 		AC_MSG_RESULT([no])
 	])
 if test -z "$VIBPATH"; then
-	VIBNAL=""
+	VIBLND=""
 else
 	VIBCPPFLAGS="-I${VIBPATH}/include -I${VIBPATH}/cm"
 	EXTRA_KCFLAGS_save="$EXTRA_KCFLAGS"
@@ -371,13 +844,13 @@ else
                                           NULL, 0);
 		return 0;
 	],[
-		VIBNAL="vibnal"
+		VIBLND="viblnd"
 	],[
-	        AC_MSG_ERROR([can't compile vibnal with given path])
+	        AC_MSG_ERROR([can't compile viblnd with given path])
 	])
 	EXTRA_KCFLAGS="$EXTRA_KCFLAGS_save"
 fi
-if test -n "$VIBNAL"; then
+if test -n "$VIBLND"; then
 	EXTRA_KCFLAGS_save="$EXTRA_KCFLAGS"
 	EXTRA_KCFLAGS="$EXTRA_KCFLAGS $VIBCPPFLAGS"
 	AC_MSG_CHECKING([if Voltaire still uses void * sg addresses])
@@ -405,39 +878,18 @@ if test -n "$VIBNAL"; then
 	],[
 	        AC_MSG_RESULT([no])
 	])
-	AC_MSG_CHECKING([if page_to_phys() must avoid sign extension])
-	LB_LINUX_TRY_COMPILE([
-		#include <linux/kernel.h>
-		#include <linux/mm.h>
-		#include <linux/unistd.h>
-		#include <asm/system.h>
-		#include <asm/io.h>
-	],[
-	        struct page p;
-
-		switch (42) {
-		case 0:
-		case (sizeof(typeof(page_to_phys(&p))) < 8):
-			break;
-		}
-	],[
-		AC_MSG_RESULT([yes])
-		VIBCPPFLAGS="$VIBCPPFLAGS -DIBNAL_32BIT_PAGE2PHYS=1"
-	],[
-		AC_MSG_RESULT([no])
-	])
 	EXTRA_KCFLAGS="$EXTRA_KCFLAGS_save"
 fi
 AC_SUBST(VIBCPPFLAGS)
-AC_SUBST(VIBNAL)
+AC_SUBST(VIBLND)
 ])
 
 #
-# LP_CONFIG_RANAL
+# LN_CONFIG_RALND
 #
-# check whether to use the RapidArray nal
+# check whether to use the RapidArray lnd
 #
-AC_DEFUN([LP_CONFIG_RANAL],
+AC_DEFUN([LN_CONFIG_RALND],
 [#### Rapid Array
 AC_MSG_CHECKING([if RapidArray kernel headers are present])
 # placeholder
@@ -456,23 +908,23 @@ LB_LINUX_TRY_COMPILE([
 	return rc == RAP_SUCCESS ? 0 : 1;
 ],[
 	AC_MSG_RESULT([yes])
-	RANAL="ranal"
+	RALND="ralnd"
 ],[
 	AC_MSG_RESULT([no])
-	RANAL=""
+	RALND=""
 	RACPPFLAGS=""
 ])
 EXTRA_KCFLAGS="$EXTRA_KCFLAGS_save"
 AC_SUBST(RACPPFLAGS)
-AC_SUBST(RANAL)
+AC_SUBST(RALND)
 ])
 
 #
-# LP_STRUCT_PAGE_LIST
+# LN_STRUCT_PAGE_LIST
 #
 # 2.6.4 no longer has page->list
 #
-AC_DEFUN([LP_STRUCT_PAGE_LIST],
+AC_DEFUN([LN_STRUCT_PAGE_LIST],
 [AC_MSG_CHECKING([if struct page has a list field])
 LB_LINUX_TRY_COMPILE([
 	#include <linux/mm.h>
@@ -488,11 +940,11 @@ LB_LINUX_TRY_COMPILE([
 ])
 
 #
-# LP_STRUCT_SIGHAND
+# LN_STRUCT_SIGHAND
 #
 # red hat 2.4 adds sighand to struct task_struct
 #
-AC_DEFUN([LP_STRUCT_SIGHAND],
+AC_DEFUN([LN_STRUCT_SIGHAND],
 [AC_MSG_CHECKING([if task_struct has a sighand field])
 LB_LINUX_TRY_COMPILE([
 	#include <linux/sched.h>
@@ -508,11 +960,11 @@ LB_LINUX_TRY_COMPILE([
 ])
 
 #
-# LP_FUNC_CPU_ONLINE
+# LN_FUNC_CPU_ONLINE
 #
 # cpu_online is different in rh 2.4, vanilla 2.4, and 2.6
 #
-AC_DEFUN([LP_FUNC_CPU_ONLINE],
+AC_DEFUN([LN_FUNC_CPU_ONLINE],
 [AC_MSG_CHECKING([if kernel defines cpu_online()])
 LB_LINUX_TRY_COMPILE([
 	#include <linux/sched.h>
@@ -527,11 +979,30 @@ LB_LINUX_TRY_COMPILE([
 ])
 
 #
-# LP_TYPE_CPUMASK_T
+# LN_TYPE_GFP_T
+#
+# check if gfp_t is typedef-ed
+#
+AC_DEFUN([LN_TYPE_GFP_T],
+[AC_MSG_CHECKING([if kernel defines gfp_t])
+LB_LINUX_TRY_COMPILE([
+        #include <linux/gfp.h>
+],[
+	return sizeof(gfp_t);
+],[
+	AC_MSG_RESULT([yes])
+	AC_DEFINE(HAVE_GFP_T, 1, [gfp_t found])
+],[
+	AC_MSG_RESULT([no])
+])
+])
+
+#
+# LN_TYPE_CPUMASK_T
 #
 # same goes for cpumask_t
 #
-AC_DEFUN([LP_TYPE_CPUMASK_T],
+AC_DEFUN([LN_TYPE_CPUMASK_T],
 [AC_MSG_CHECKING([if kernel defines cpumask_t])
 LB_LINUX_TRY_COMPILE([
 	#include <linux/sched.h>
@@ -546,11 +1017,11 @@ LB_LINUX_TRY_COMPILE([
 ])
 
 #
-# LP_FUNC_SHOW_TASK
+# LN_FUNC_SHOW_TASK
 #
 # we export show_task(), but not all kernels have it (yet)
 #
-AC_DEFUN([LP_FUNC_SHOW_TASK],
+AC_DEFUN([LN_FUNC_SHOW_TASK],
 [AC_MSG_CHECKING([if kernel exports show_task])
 have_show_task=0
 for file in ksyms sched ; do
@@ -568,57 +1039,120 @@ else
 fi
 ])
 
-#
-# LP_PROG_LINUX
-#
-# Portals linux kernel checks
-#
-AC_DEFUN([LP_PROG_LINUX],
-[LP_CONFIG_ZEROCOPY
-LP_CONFIG_AFFINITY
-LP_CONFIG_QUADRICS
-LP_CONFIG_GM
-LP_CONFIG_OPENIB
-LP_CONFIG_VIB
-LP_CONFIG_IIB
-LP_CONFIG_RANAL
+# LN_TASKLIST_LOCK
+# 2.6.18 remove tasklist_lock export
+AC_DEFUN([LN_TASKLIST_LOCK],
+[AC_MSG_CHECKING([kernel export tasklist_lock])
+        if grep -q "EXPORT_SYMBOL(tasklist_lock)" \
+                 "$LINUX/kernel/fork.c" 2>/dev/null ; then
+                AC_DEFINE(HAVE_TASKLIST_LOCK, 1,
+                          [tasklist_lock exported])
+                AC_MSG_RESULT([yes])
+        else
+                AC_MSG_RESULT([no])
+        fi
+])
 
-LP_STRUCT_PAGE_LIST
-LP_STRUCT_SIGHAND
-LP_FUNC_CPU_ONLINE
-LP_TYPE_CPUMASK_T
-LP_FUNC_SHOW_TASK
+# 2.6.19 API changes
+# kmem_cache_destroy(cachep) return void instead of 
+# int
+AC_DEFUN([LN_KMEM_CACHE_DESTROY_INT],
+[AC_MSG_CHECKING([kmem_cache_destroy(cachep) return int])
+LB_LINUX_TRY_COMPILE([
+        #include <linux/slab.h>
+],[
+	int i = kmem_cache_destroy(NULL);
+],[
+        AC_MSG_RESULT(yes)
+        AC_DEFINE(HAVE_KMEM_CACHE_DESTROY_INT, 1,
+                [kmem_cache_destroy(cachep) return int])
+],[
+        AC_MSG_RESULT(NO)
+])
+])
+
+#2.6.19 API change
+#panic_notifier_list use atomic_notifier operations
+#
+AC_DEFUN([LN_ATOMIC_PANIC_NOTIFIER],
+[AC_MSG_CHECKING([panic_notifier_list is atomic])
+LB_LINUX_TRY_COMPILE([
+	#include <linux/notifier.h>
+	#include <linux/kernel.h>	
+],[
+	struct atomic_notifier_head panic_notifier_list;
+],[
+        AC_MSG_RESULT(yes)
+	AC_DEFINE(HAVE_ATOMIC_PANIC_NOTIFIER, 1,
+		[panic_notifier_list is atomic_notifier_head])
+],[
+        AC_MSG_RESULT(NO)
+])
 ])
 
 #
-# LP_PROG_DARWIN
+# LN_PROG_LINUX
+#
+# LNet linux kernel checks
+#
+AC_DEFUN([LN_PROG_LINUX],
+[LN_CONFIG_ZEROCOPY
+LN_FUNC_CPU_ONLINE
+LN_TYPE_GFP_T
+LN_TYPE_CPUMASK_T
+LN_CONFIG_AFFINITY
+LN_CONFIG_BACKOFF
+LN_CONFIG_PANIC_DUMPLOG
+LN_CONFIG_QUADRICS
+LN_CONFIG_GM
+LN_CONFIG_OPENIB
+LN_CONFIG_CIB
+LN_CONFIG_VIB
+LN_CONFIG_IIB
+LN_CONFIG_O2IB
+LN_CONFIG_RALND
+LN_CONFIG_PTLLND
+LN_CONFIG_MX
+
+LN_STRUCT_PAGE_LIST
+LN_STRUCT_SIGHAND
+LN_FUNC_SHOW_TASK
+# 2.6.18
+LN_TASKLIST_LOCK
+# 2.6.19
+LN_KMEM_CACHE_DESTROY_INT
+LN_ATOMIC_PANIC_NOTIFIER
+])
+
+#
+# LN_PROG_DARWIN
 #
 # Darwin checks
 #
-AC_DEFUN([LP_PROG_DARWIN],
+AC_DEFUN([LN_PROG_DARWIN],
 [LB_DARWIN_CHECK_FUNCS([get_preemption_level])
 ])
 
 #
-# LP_PATH_DEFAULTS
+# LN_PATH_DEFAULTS
 #
 # default paths for installed files
 #
-AC_DEFUN([LP_PATH_DEFAULTS],
+AC_DEFUN([LN_PATH_DEFAULTS],
 [
 ])
 
 #
-# LP_CONFIGURE
+# LN_CONFIGURE
 #
 # other configure checks
 #
-AC_DEFUN([LP_CONFIGURE],
-[# portals/utils/portals.c
+AC_DEFUN([LN_CONFIGURE],
+[# lnet/utils/portals.c
 AC_CHECK_HEADERS([netdb.h netinet/tcp.h asm/types.h endian.h sys/ioctl.h])
 AC_CHECK_FUNCS([gethostbyname socket connect])
 
-# portals/utils/debug.c
+# lnet/utils/debug.c
 AC_CHECK_HEADERS([linux/version.h])
 
 AC_CHECK_TYPE([spinlock_t],
@@ -626,20 +1160,37 @@ AC_CHECK_TYPE([spinlock_t],
 	[],
 	[#include <linux/spinlock.h>])
 
-# portals/utils/wirecheck.c
+# lnet/utils/wirecheck.c
 AC_CHECK_FUNCS([strnlen])
 
 # --------  Check for required packages  --------------
 
-LIBS_save="$LIBS"
-LIBS="-lncurses $LIBS"
-AC_CHECK_LIB([readline],[readline],[
+#
+# LC_CONFIG_READLINE
+#
+# Build with readline
+#
+AC_MSG_CHECKING([whether to enable readline support])
+AC_ARG_ENABLE(readline,
+        AC_HELP_STRING([--disable-readline],
+                        [disable readline support]),
+        [],[enable_readline='yes'])
+AC_MSG_RESULT([$enable_readline])
+
+# -------- check for readline if enabled ----
+if test x$enable_readline = xyes ; then
+	LIBS_save="$LIBS"
+	LIBS="-lncurses $LIBS"
+	AC_CHECK_LIB([readline],[readline],[
 	LIBREADLINE="-lreadline -lncurses"
 	AC_DEFINE(HAVE_LIBREADLINE, 1, [readline library is available])
-],[
+	],[
 	LIBREADLINE=""
-])
-LIBS="$LIBS_save"
+	])
+	LIBS="$LIBS_save"
+else
+	LIBREADLINE=""
+fi
 AC_SUBST(LIBREADLINE)
 
 AC_MSG_CHECKING([if efence debugging support is requested])
@@ -651,7 +1202,7 @@ AC_MSG_RESULT([$enable_efence])
 if test "$enable_efence" = "yes" ; then
 	LIBEFENCE="-lefence"
 	AC_DEFINE(HAVE_LIBEFENCE, 1, [libefence support is requested])
-else 
+else
 	LIBEFENCE=""
 fi
 AC_SUBST(LIBEFENCE)
@@ -673,6 +1224,31 @@ else
 	LIBWRAP=""
 fi
 AC_SUBST(LIBWRAP)
+
+# -------- check for -lpthread support ----
+AC_MSG_CHECKING([whether to use libpthread for lnet library])
+AC_ARG_ENABLE([libpthread],
+       	AC_HELP_STRING([--disable-libpthread],
+               	[disable libpthread]),
+       	[],[enable_libpthread=yes])
+if test "$enable_libpthread" = "yes" ; then
+	AC_CHECK_LIB([pthread], [pthread_create],
+		[ENABLE_LIBPTHREAD="yes"],
+		[ENABLE_LIBPTHREAD="no"])
+	if test "$ENABLE_LIBPTHREAD" = "yes" ; then
+		AC_MSG_RESULT([$ENABLE_LIBPTHREAD])
+		PTHREAD_LIBS="-lpthread"
+		AC_DEFINE([HAVE_LIBPTHREAD], 1, [use libpthread])
+	else
+		PTHREAD_LIBS=""
+		AC_MSG_RESULT([no libpthread is found])
+	fi
+	AC_SUBST(PTHREAD_LIBS)
+else
+	AC_MSG_RESULT([no (disabled explicitly)])
+	ENABLE_LIBPTHREAD="no"
+fi
+AC_SUBST(ENABLE_LIBPTHREAD)
 
 # ----------------------------------------
 # some tests for catamount-like systems
@@ -697,92 +1273,105 @@ if test x$enable_urandom != xno ; then
 	AC_DEFINE([LIBLUSTRE_USE_URANDOM], 1, [use /dev/urandom for random data])
 fi
 
-# -------- check for -lcap and -lpthread ----
+# -------- check for -lcap support ----
 if test x$enable_liblustre = xyes ; then
 	AC_CHECK_LIB([cap], [cap_get_proc],
 		[
 			CAP_LIBS="-lcap"
 			AC_DEFINE([HAVE_LIBCAP], 1, [use libcap])
 		],
-		[CAP_LIBS=""])
-	AC_SUBST(CAP_LIBS)
-	AC_CHECK_LIB([pthread], [pthread_create],
 		[
-			PTHREAD_LIBS="-lpthread"
-			AC_DEFINE([HAVE_LIBPTHREAD], 1, [use libpthread])
-		],
-		[PTHREAD_LIBS=""])
-	AC_SUBST(PTHREAD_LIBS)
+			CAP_LIBS=""
+		])
+	AC_SUBST(CAP_LIBS)
+
 fi
+
+LN_CONFIG_MAX_PAYLOAD
+LN_CONFIG_UPTLLND
+LN_CONFIG_USOCKLND
 ])
 
 #
-# LP_CONDITIONALS
+# LN_CONDITIONALS
 #
-# AM_CONDITOINAL defines for portals
+# AM_CONDITOINAL defines for lnet
 #
-AC_DEFUN([LP_CONDITIONALS],
-[AM_CONDITIONAL(BUILD_QSWNAL, test x$QSWNAL = "xqswnal")
-AM_CONDITIONAL(BUILD_GMNAL, test x$GMNAL = "xgmnal")
-AM_CONDITIONAL(BUILD_OPENIBNAL, test x$OPENIBNAL = "xopenibnal")
-AM_CONDITIONAL(BUILD_IIBNAL, test x$IIBNAL = "xiibnal")
-AM_CONDITIONAL(BUILD_VIBNAL, test x$VIBNAL = "xvibnal")
-AM_CONDITIONAL(BUILD_RANAL, test x$RANAL = "xranal")
+AC_DEFUN([LN_CONDITIONALS],
+[AM_CONDITIONAL(BUILD_QSWLND, test x$QSWLND = "xqswlnd")
+AM_CONDITIONAL(BUILD_GMLND, test x$GMLND = "xgmlnd")
+AM_CONDITIONAL(BUILD_MXLND, test x$MXLND = "xmxlnd")
+AM_CONDITIONAL(BUILD_O2IBLND, test x$O2IBLND = "xo2iblnd")
+AM_CONDITIONAL(BUILD_OPENIBLND, test x$OPENIBLND = "xopeniblnd")
+AM_CONDITIONAL(BUILD_CIBLND, test x$CIBLND = "xciblnd")
+AM_CONDITIONAL(BUILD_IIBLND, test x$IIBLND = "xiiblnd")
+AM_CONDITIONAL(BUILD_VIBLND, test x$VIBLND = "xviblnd")
+AM_CONDITIONAL(BUILD_RALND, test x$RALND = "xralnd")
+AM_CONDITIONAL(BUILD_PTLLND, test x$PTLLND = "xptllnd")
+AM_CONDITIONAL(BUILD_UPTLLND, test x$UPTLLND = "xptllnd")
+AM_CONDITIONAL(BUILD_USOCKLND, test x$USOCKLND = "xusocklnd")
 ])
 
 #
-# LP_CONFIG_FILES
+# LN_CONFIG_FILES
 #
 # files that should be generated with AC_OUTPUT
 #
-AC_DEFUN([LP_CONFIG_FILES],
+AC_DEFUN([LN_CONFIG_FILES],
 [AC_CONFIG_FILES([
-portals/Kernelenv
-portals/Makefile
-portals/autoMakefile
-portals/autoconf/Makefile
-portals/doc/Makefile
-portals/include/Makefile
-portals/include/libcfs/Makefile
-portals/include/libcfs/linux/Makefile
-portals/include/portals/Makefile
-portals/include/portals/linux/Makefile
-portals/knals/Makefile
-portals/knals/autoMakefile
-portals/knals/gmnal/Makefile
-portals/knals/gmnal/autoMakefile
-portals/knals/openibnal/Makefile
-portals/knals/openibnal/autoMakefile
-portals/knals/iibnal/Makefile
-portals/knals/iibnal/autoMakefile
-portals/knals/vibnal/Makefile
-portals/knals/vibnal/autoMakefile
-portals/knals/lonal/Makefile
-portals/knals/lonal/autoMakefile
-portals/knals/qswnal/Makefile
-portals/knals/qswnal/autoMakefile
-portals/knals/ranal/Makefile
-portals/knals/ranal/autoMakefile
-portals/knals/socknal/Makefile
-portals/knals/socknal/autoMakefile
-portals/libcfs/Makefile
-portals/libcfs/autoMakefile
-portals/libcfs/linux/Makefile
-portals/portals/Makefile
-portals/portals/autoMakefile
-portals/router/Makefile
-portals/router/autoMakefile
-portals/tests/Makefile
-portals/tests/autoMakefile
-portals/unals/Makefile
-portals/utils/Makefile
+lnet/Kernelenv
+lnet/Makefile
+lnet/autoMakefile
+lnet/autoconf/Makefile
+lnet/doc/Makefile
+lnet/include/Makefile
+lnet/include/libcfs/Makefile
+lnet/include/libcfs/linux/Makefile
+lnet/include/lnet/Makefile
+lnet/include/lnet/linux/Makefile
+lnet/klnds/Makefile
+lnet/klnds/autoMakefile
+lnet/klnds/gmlnd/Makefile
+lnet/klnds/mxlnd/autoMakefile
+lnet/klnds/mxlnd/Makefile
+lnet/klnds/gmlnd/autoMakefile
+lnet/klnds/openiblnd/Makefile
+lnet/klnds/openiblnd/autoMakefile
+lnet/klnds/o2iblnd/Makefile
+lnet/klnds/o2iblnd/autoMakefile
+lnet/klnds/ciblnd/Makefile
+lnet/klnds/ciblnd/autoMakefile
+lnet/klnds/iiblnd/Makefile
+lnet/klnds/iiblnd/autoMakefile
+lnet/klnds/viblnd/Makefile
+lnet/klnds/viblnd/autoMakefile
+lnet/klnds/qswlnd/Makefile
+lnet/klnds/qswlnd/autoMakefile
+lnet/klnds/ralnd/Makefile
+lnet/klnds/ralnd/autoMakefile
+lnet/klnds/socklnd/Makefile
+lnet/klnds/socklnd/autoMakefile
+lnet/klnds/ptllnd/Makefile
+lnet/klnds/ptllnd/autoMakefile
+lnet/libcfs/Makefile
+lnet/libcfs/autoMakefile
+lnet/libcfs/linux/Makefile
+lnet/lnet/Makefile
+lnet/lnet/autoMakefile
+lnet/tests/Makefile
+lnet/tests/autoMakefile
+lnet/ulnds/Makefile
+lnet/ulnds/autoMakefile
+lnet/ulnds/socklnd/Makefile
+lnet/ulnds/ptllnd/Makefile
+lnet/utils/Makefile
 ])
 case $lb_target_os in
 	darwin)
 		AC_CONFIG_FILES([
-portals/include/libcfs/darwin/Makefile
-portals/include/portals/darwin/Makefile
-portals/libcfs/darwin/Makefile
+lnet/include/libcfs/darwin/Makefile
+lnet/include/lnet/darwin/Makefile
+lnet/libcfs/darwin/Makefile
 ])
 		;;
 esac

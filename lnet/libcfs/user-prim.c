@@ -34,17 +34,24 @@
 #include <sys/mman.h>
 #ifndef  __CYGWIN__
 #include <stdint.h>
+#ifdef HAVE_ASM_PAGE_H
 #include <asm/page.h>
+#endif
+#ifdef HAVE_SYS_USER_H
+#include <sys/user.h>
+#endif
 #else
 #include <sys/types.h>
 #endif
 #include <stdlib.h>
 #include <string.h>
+#include <signal.h>
 #include <errno.h>
 #include <sys/stat.h>
 #include <sys/vfs.h>
 
 #include <libcfs/libcfs.h>
+#include <libcfs/kp30.h>
 
 /*
  * Sleep channel. No-op implementation.
@@ -98,6 +105,7 @@ int cfs_waitq_active(struct cfs_waitq *waitq)
 {
         LASSERT(waitq != NULL);
         (void)waitq;
+        return 0;
 }
 
 void cfs_waitq_signal(struct cfs_waitq *waitq)
@@ -112,7 +120,7 @@ void cfs_waitq_signal_nr(struct cfs_waitq *waitq, int nr)
         (void)waitq;
 }
 
-void cfs_waitq_broadcast(struct cfs_waitq *waitq)
+void cfs_waitq_broadcast(struct cfs_waitq *waitq, int state)
 {
         LASSERT(waitq != NULL);
         (void)waitq;
@@ -124,27 +132,24 @@ void cfs_waitq_wait(struct cfs_waitlink *link)
         (void)link;
 }
 
-int64_t cfs_waitq_timedwait(struct cfs_waitlink *link, int64_t timeout)
+int64_t cfs_waitq_timedwait(struct cfs_waitlink *link, int state, int64_t timeout)
 {
         LASSERT(link != NULL);
         (void)link;
+        return 0;
 }
 
 /*
  * Allocator
  */
 
-cfs_page_t *cfs_alloc_pages(unsigned int flags, unsigned int order)
+cfs_page_t *cfs_alloc_page(unsigned int flags)
 {
         cfs_page_t *pg = malloc(sizeof(*pg));
 
         if (!pg)
                 return NULL;
-#if 0 //#ifdef MAP_ANONYMOUS
-        pg->addr = mmap(0, PAGE_SIZE << order, PROT_WRITE, MAP_PRIVATE|MAP_ANONYMOUS, 0, 0);
-#else
-        pg->addr = malloc(PAGE_SIZE << order);
-#endif
+        pg->addr = malloc(CFS_PAGE_SIZE);
 
         if (!pg->addr) {
                 free(pg);
@@ -153,24 +158,10 @@ cfs_page_t *cfs_alloc_pages(unsigned int flags, unsigned int order)
         return pg;
 }
 
-void cfs_free_pages(struct page *pg, int what)
+void cfs_free_page(cfs_page_t *pg)
 {
-#if 0 //#ifdef MAP_ANONYMOUS
-        munmap(pg->addr, PAGE_SIZE);
-#else
         free(pg->addr);
-#endif
         free(pg);
-}
-
-cfs_page_t *cfs_alloc_page(unsigned int flags)
-{
-        return cfs_alloc_pages(flags, 0);
-}
-
-void cfs_free_page(cfs_page_t *pg, int what)
-{
-        cfs_free_page(pg, what);
 }
 
 void *cfs_page_address(cfs_page_t *pg)
@@ -188,40 +179,11 @@ void cfs_kunmap(cfs_page_t *pg)
 }
 
 /*
- * Memory allocator
- */
-void *cfs_alloc(size_t nr_bytes, u_int32_t flags)
-{
-        void *result;
-
-        result = malloc(nr_bytes);
-        if (result != NULL && (flags & CFS_ALLOC_ZERO))
-		memset(result, 0, nr_bytes);
-}
-
-void cfs_free(void *addr)
-{
-        free(addr);
-}
-
-void *cfs_alloc_large(size_t nr_bytes)
-{
-        return cfs_alloc(nr_bytes, 0);
-}
-
-void  cfs_free_large(void *addr)
-{
-        return cfs_free(addr);
-}
-
-/*
  * SLAB allocator
  */
 
 cfs_mem_cache_t *
-cfs_mem_cache_create(const char *, size_t, size_t, unsigned long,
-                     void (*)(void *, cfs_mem_cache_t *, unsigned long),
-                     void (*)(void *, cfs_mem_cache_t *, unsigned long))
+cfs_mem_cache_create(const char *name, size_t objsize, size_t off, unsigned long flags)
 {
         cfs_mem_cache_t *c;
 
@@ -243,12 +205,144 @@ int cfs_mem_cache_destroy(cfs_mem_cache_t *c)
 
 void *cfs_mem_cache_alloc(cfs_mem_cache_t *c, int gfp)
 {
-        return cfs_alloc(c, gfp);
+        return cfs_alloc(c->size, gfp);
 }
 
 void cfs_mem_cache_free(cfs_mem_cache_t *c, void *addr)
 {
         cfs_free(addr);
+}
+
+/*
+ * This uses user-visible declarations from <linux/kdev_t.h>
+ */
+#ifdef __LINUX__
+#include <linux/kdev_t.h>
+#endif
+
+#ifndef MKDEV
+
+#define MAJOR(dev)      ((dev)>>8)
+#define MINOR(dev)      ((dev) & 0xff)
+#define MKDEV(ma,mi)    ((ma)<<8 | (mi))
+
+#endif
+
+cfs_rdev_t cfs_rdev_build(cfs_major_nr_t major, cfs_minor_nr_t minor)
+{
+        return MKDEV(major, minor);
+}
+
+cfs_major_nr_t cfs_rdev_major(cfs_rdev_t rdev)
+{
+        return MAJOR(rdev);
+}
+
+cfs_minor_nr_t cfs_rdev_minor(cfs_rdev_t rdev)
+{
+        return MINOR(rdev);
+}
+
+void cfs_enter_debugger(void)
+{
+        /*
+         * nothing for now.
+         */
+}
+
+void cfs_daemonize(char *str)
+{
+        return;
+}
+
+cfs_sigset_t cfs_block_allsigs(void)
+{
+        cfs_sigset_t   all;
+        cfs_sigset_t   old;
+        int            rc;
+
+        sigfillset(&all);
+        rc = sigprocmask(SIG_SETMASK, &all, &old);
+        LASSERT(rc == 0);
+
+        return old;
+}
+
+cfs_sigset_t cfs_block_sigs(cfs_sigset_t blocks)
+{
+        cfs_sigset_t   old;
+        int   rc;
+        
+        rc = sigprocmask(SIG_SETMASK, &blocks, &old);
+        LASSERT (rc == 0);
+
+        return old;
+}
+
+void cfs_restore_sigs(cfs_sigset_t old)
+{
+        int   rc = sigprocmask(SIG_SETMASK, &old, NULL);
+
+        LASSERT (rc == 0);
+}
+
+int cfs_signal_pending(void)
+{
+        cfs_sigset_t    empty;
+        cfs_sigset_t    set;
+        int  rc;
+
+        rc = sigpending(&set);
+        LASSERT (rc == 0);
+
+        sigemptyset(&empty);
+
+        return !memcmp(&empty, &set, sizeof(set));
+}
+
+void cfs_clear_sigpending(void)
+{
+        return;
+}
+
+#ifdef __LINUX__
+
+/*
+ * In glibc (NOT in Linux, so check above is not right), implement
+ * stack-back-tracing through backtrace() function.
+ */
+#include <execinfo.h>
+
+void cfs_stack_trace_fill(struct cfs_stack_trace *trace)
+{
+        backtrace(trace->frame, sizeof_array(trace->frame));
+}
+
+void *cfs_stack_trace_frame(struct cfs_stack_trace *trace, int frame_no)
+{
+        if (0 <= frame_no && frame_no < sizeof_array(trace->frame))
+                return trace->frame[frame_no];
+        else
+                return NULL;
+}
+
+#else
+
+void cfs_stack_trace_fill(struct cfs_stack_trace *trace)
+{}
+void *cfs_stack_trace_frame(struct cfs_stack_trace *trace, int frame_no)
+{
+        return NULL;
+}
+
+/* __LINUX__ */
+#endif
+
+void lbug_with_loc(char *file, const char *func, const int line)
+{
+        /* No libcfs_catastrophe in userspace! */
+        libcfs_debug_msg(NULL, 0, D_EMERG, file, func, line, "LBUG\n");
+        abort();
 }
 
 

@@ -24,7 +24,9 @@
 # define EXPORT_SYMTAB
 #endif
 
+#ifdef HAVE_KERNEL_CONFIG_H
 #include <linux/config.h>
+#endif
 #include <linux/module.h>
 #include <linux/kmod.h>
 #include <linux/notifier.h>
@@ -47,7 +49,7 @@
 #include <linux/miscdevice.h>
 #include <linux/version.h>
 
-# define DEBUG_SUBSYSTEM S_PORTALS
+# define DEBUG_SUBSYSTEM S_LNET
 
 #include <libcfs/kp30.h>
 #include <libcfs/linux/portals_compat25.h>
@@ -59,9 +61,9 @@
 #include <linux/kallsyms.h>
 #endif
 
-char portals_upcall[1024] = "/usr/lib/lustre/portals_upcall";
+char lnet_upcall[1024] = "/usr/lib/lustre/lnet_upcall";
 
-void portals_run_upcall(char **argv)
+void libcfs_run_upcall(char **argv)
 {
         int   rc;
         int   argc;
@@ -71,7 +73,7 @@ void portals_run_upcall(char **argv)
                 NULL};
         ENTRY;
 
-        argv[0] = portals_upcall;
+        argv[0] = lnet_upcall;
         argc = 1;
         while (argv[argc] != NULL)
                 argc++;
@@ -80,15 +82,15 @@ void portals_run_upcall(char **argv)
 
         rc = USERMODEHELPER(argv[0], argv, envp);
         if (rc < 0) {
-                CERROR("Error %d invoking portals upcall %s %s%s%s%s%s%s%s%s; "
-                       "check /proc/sys/portals/upcall\n",
+                CERROR("Error %d invoking LNET upcall %s %s%s%s%s%s%s%s%s; "
+                       "check /proc/sys/lnet/upcall\n",
                        rc, argv[0], argv[1],
                        argc < 3 ? "" : ",", argc < 3 ? "" : argv[2],
                        argc < 4 ? "" : ",", argc < 4 ? "" : argv[3],
                        argc < 5 ? "" : ",", argc < 5 ? "" : argv[4],
                        argc < 6 ? "" : ",...");
         } else {
-                CWARN("Invoked portals upcall %s %s%s%s%s%s%s%s%s\n",
+                CWARN("Invoked LNET upcall %s %s%s%s%s%s%s%s%s\n",
                        argv[0], argv[1],
                        argc < 3 ? "" : ",", argc < 3 ? "" : argv[2],
                        argc < 4 ? "" : ",", argc < 4 ? "" : argv[3],
@@ -97,7 +99,7 @@ void portals_run_upcall(char **argv)
         }
 }
 
-void portals_run_lbug_upcall(char *file, const char *fn, const int line)
+void libcfs_run_lbug_upcall(char *file, const char *fn, const int line)
 {
         char *argv[6];
         char buf[32];
@@ -111,18 +113,50 @@ void portals_run_lbug_upcall(char *file, const char *fn, const int line)
         argv[4] = buf;
         argv[5] = NULL;
 
-        portals_run_upcall (argv);
+        libcfs_run_upcall (argv);
 }
+
+#ifdef __arch_um__
+void lbug_with_loc(char *file, const char *func, const int line)
+{
+        libcfs_catastrophe = 1;
+        libcfs_debug_msg(NULL, 0, D_EMERG, file, func, line,
+                         "LBUG - trying to dump log to /tmp/lustre-log\n");
+        libcfs_debug_dumplog();
+        libcfs_run_lbug_upcall(file, func, line);
+        asm("int $3");
+        panic("LBUG");
+}
+#else
+/* coverity[+kill] */
+void lbug_with_loc(char *file, const char *func, const int line)
+{
+        libcfs_catastrophe = 1;
+        libcfs_debug_msg(NULL, 0, D_EMERG, file, func, line, "LBUG\n");
+
+        if (in_interrupt()) {
+                panic("LBUG in interrupt.\n");
+                /* not reached */
+        }
+
+        libcfs_debug_dumpstack(NULL);
+        libcfs_debug_dumplog();
+        libcfs_run_lbug_upcall(file, func, line);
+        set_task_state(current, TASK_UNINTERRUPTIBLE);
+        while (1)
+                schedule();
+}
+#endif /* __arch_um__ */
 
 #ifdef __KERNEL__
 
-void portals_debug_dumpstack(struct task_struct *tsk)
+void libcfs_debug_dumpstack(struct task_struct *tsk)
 {
 #if defined(__arch_um__)
         if (tsk != NULL)
                 CWARN("stack dump for pid %d (%d) requested; wake up gdb.\n",
                       tsk->pid, UML_PID(tsk));
-        asm("int $3");
+        //asm("int $3");
 #elif defined(HAVE_SHOW_TASK)
         /* this is exported by lustre kernel version 42 */
         extern void show_task(struct task_struct *);
@@ -133,18 +167,71 @@ void portals_debug_dumpstack(struct task_struct *tsk)
         show_task(tsk);
 #else
         CWARN("can't show stack: kernel doesn't export show_task\n");
+        if ((tsk == NULL) || (tsk == current))
+                dump_stack();
 #endif
 }
 
-cfs_task_t *portals_current(void)
+cfs_task_t *libcfs_current(void)
 {
         CWARN("current task struct is %p\n", current);
         return current;
 }
-EXPORT_SYMBOL(portals_debug_dumpstack);
-EXPORT_SYMBOL(portals_current);
+
+static int panic_notifier(struct notifier_block *self, unsigned long unused1,
+                         void *unused2)
+{
+        if (libcfs_panic_in_progress)
+                return 0;
+
+        libcfs_panic_in_progress = 1;
+        mb();
+
+#ifdef LNET_DUMP_ON_PANIC
+        /* This is currently disabled because it spews far too much to the
+         * console on the rare cases it is ever triggered. */
+
+        if (in_interrupt()) {
+                trace_debug_print();
+        } else {
+                while (current->lock_depth >= 0)
+                        unlock_kernel();
+
+                libcfs_debug_dumplog_internal((void *)(long)cfs_curproc_pid());
+        }
+#endif
+        return 0;
+}
+
+static struct notifier_block libcfs_panic_notifier = {
+        notifier_call :     panic_notifier,
+        next :              NULL,
+        priority :          10000
+};
+
+void libcfs_register_panic_notifier(void)
+{
+#ifdef HAVE_ATOMIC_PANIC_NOTIFIER
+        atomic_notifier_chain_register(&panic_notifier_list, &libcfs_panic_notifier);
+#else
+        notifier_chain_register(&panic_notifier_list, &libcfs_panic_notifier);
+#endif
+}
+
+void libcfs_unregister_panic_notifier(void)
+{
+#ifdef HAVE_ATOMIC_PANIC_NOTIFIER
+        atomic_notifier_chain_unregister(&panic_notifier_list, &libcfs_panic_notifier);
+#else
+        notifier_chain_unregister(&panic_notifier_list, &libcfs_panic_notifier);
+#endif
+}
+
+EXPORT_SYMBOL(libcfs_debug_dumpstack);
+EXPORT_SYMBOL(libcfs_current);
 
 #endif /* __KERNEL__ */
 
-EXPORT_SYMBOL(portals_run_upcall);
-EXPORT_SYMBOL(portals_run_lbug_upcall);
+EXPORT_SYMBOL(libcfs_run_upcall);
+EXPORT_SYMBOL(libcfs_run_lbug_upcall);
+EXPORT_SYMBOL(lbug_with_loc);

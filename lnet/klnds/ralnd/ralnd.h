@@ -51,55 +51,44 @@
 #include <net/sock.h>
 #include <linux/in.h>
 
-#define DEBUG_SUBSYSTEM S_NAL
+#define DEBUG_SUBSYSTEM S_LND
 
 #include <libcfs/kp30.h>
-#include <portals/p30.h>
-#include <portals/lib-p30.h>
-#include <portals/nal.h>
+#include <lnet/lnet.h>
+#include <lnet/lib-lnet.h>
 
 #include <rapl.h>
 
-#define RANAL_MAXDEVS       2                   /* max # devices RapidArray supports */
+/* tunables determined at compile time */
+#define RANAL_RESCHED             100           /* # scheduler loops before reschedule */
 
-#define RANAL_N_CONND       4                   /* # connection daemons */
+#define RANAL_PEER_HASH_SIZE      101           /* # peer lists */
+#define RANAL_CONN_HASH_SIZE      101           /* # conn lists */
 
-#define RANAL_MIN_RECONNECT_INTERVAL 1          /* first failed connection retry (seconds)... */
-#define RANAL_MAX_RECONNECT_INTERVAL 60         /* ...exponentially increasing to this */
-
-#define RANAL_FMA_MAX_PREFIX      232           /* max size of FMA "Prefix" */
-#define RANAL_FMA_MAX_DATA        ((7<<10)-256) /* Max FMA MSG is 7K including prefix */
-
-#define RANAL_PEER_HASH_SIZE  101               /* # peer lists */
-#define RANAL_CONN_HASH_SIZE  101               /* # conn lists */
-
-#define RANAL_NTX             64                /* # tx descs */
-#define RANAL_NTX_NBLK        256               /* # reserved tx descs */
-
-#define RANAL_FMA_CQ_SIZE     8192              /* # entries in receive CQ
-                                                 * (overflow is a performance hit) */
-
-#define RANAL_RESCHED         100               /* # scheduler loops before reschedule */
-
-#define RANAL_MIN_TIMEOUT     5                 /* minimum timeout interval (seconds) */
+#define RANAL_MIN_TIMEOUT         5             /* minimum timeout interval (seconds) */
 #define RANAL_TIMEOUT2KEEPALIVE(t) (((t)+1)/2)  /* timeout -> keepalive interval */
 
-/* default vals for runtime tunables */
-#define RANAL_TIMEOUT           30              /* comms timeout (seconds) */
-#define RANAL_LISTENER_TIMEOUT   5              /* listener timeout (seconds) */
-#define RANAL_BACKLOG          127              /* listener's backlog */
-#define RANAL_PORT             988              /* listener's port */
-#define RANAL_MAX_IMMEDIATE    (2<<10)          /* immediate payload breakpoint */
+/* fixed constants */
+#define RANAL_MAXDEVS             2             /* max # devices RapidArray supports */
+#define RANAL_FMA_MAX_PREFIX      232           /* max bytes in FMA "Prefix" we can use */
+#define RANAL_FMA_MAX_DATA        ((7<<10)-256) /* Max FMA MSG is 7K including prefix */
+
 
 typedef struct
 {
-        int               kra_timeout;          /* comms timeout (seconds) */
-        int               kra_listener_timeout; /* max time the listener can block */
-        int               kra_backlog;          /* listener's backlog */
-        int               kra_port;             /* listener's TCP/IP port */
-        int               kra_max_immediate;    /* immediate payload breakpoint */
+        int              *kra_n_connd;          /* # connection daemons */
+        int              *kra_min_reconnect_interval; /* first failed connection retry... */
+        int              *kra_max_reconnect_interval; /* ...exponentially increasing to this */
+        int              *kra_ntx;              /* # tx descs */
+        int              *kra_credits;          /* # concurrent sends */
+        int              *kra_peercredits;      /* # concurrent sends to 1 peer */
+        int              *kra_fma_cq_size;      /* # entries in receive CQ */
+        int              *kra_timeout;          /* comms timeout (seconds) */
+        int              *kra_max_immediate;    /* immediate payload breakpoint */
 
+#if CONFIG_SYSCTL && !CFS_SYSFS_MODULE_PARM
         struct ctl_table_header *kra_sysctl;    /* sysctl interface */
+#endif
 } kra_tunables_t;
 
 typedef struct
@@ -126,12 +115,8 @@ typedef struct
         int               kra_init;             /* initialisation state */
         int               kra_shutdown;         /* shut down? */
         atomic_t          kra_nthreads;         /* # live threads */
-
-        struct semaphore  kra_nid_mutex;        /* serialise NID/listener ops */
-        struct semaphore  kra_listener_signal;  /* block for listener startup/shutdown */
-        struct socket    *kra_listener_sock;    /* listener's socket */
-        int               kra_listener_shutdown; /* ask listener to close */
-
+        lnet_ni_t        *kra_ni;               /* _the_ nal instance */
+        
         kra_device_t      kra_devices[RANAL_MAXDEVS]; /* device/ptag/cq etc */
         int               kra_ndevs;            /* # devices */
 
@@ -140,6 +125,7 @@ typedef struct
         struct list_head *kra_peers;            /* hash table of all my known peers */
         int               kra_peer_hash_size;   /* size of kra_peers */
         atomic_t          kra_npeers;           /* # peers extant */
+        int               kra_nonewpeers;       /* prevent new peers */
 
         struct list_head *kra_conns;            /* conns hashed by cqid */
         int               kra_conn_hash_size;   /* size of kra_conns */
@@ -158,16 +144,13 @@ typedef struct
         spinlock_t        kra_connd_lock;       /* serialise */
 
         struct list_head  kra_idle_txs;         /* idle tx descriptors */
-        struct list_head  kra_idle_nblk_txs;    /* idle reserved tx descriptors */
         __u64             kra_next_tx_cookie;   /* RDMA completion cookie */
-        wait_queue_head_t kra_idle_tx_waitq;    /* block here for tx descriptor */
         spinlock_t        kra_tx_lock;          /* serialise */
 } kra_data_t;
 
 #define RANAL_INIT_NOTHING         0
 #define RANAL_INIT_DATA            1
-#define RANAL_INIT_LIB             2
-#define RANAL_INIT_ALL             3
+#define RANAL_INIT_ALL             2
 
 typedef struct kra_acceptsock                   /* accepted socket queued for connd */
 {
@@ -202,13 +185,13 @@ typedef struct
 
 typedef struct
 {
-        ptl_hdr_t         raim_hdr;             /* portals header */
+        lnet_hdr_t        raim_hdr;             /* portals header */
         /* Portals payload is in FMA "Message Data" */
 } kra_immediate_msg_t;
 
 typedef struct
 {
-        ptl_hdr_t         raprm_hdr;            /* portals header */
+        lnet_hdr_t        raprm_hdr;            /* portals header */
         __u64             raprm_cookie;         /* opaque completion cookie */
 } kra_putreq_msg_t;
 
@@ -221,7 +204,7 @@ typedef struct
 
 typedef struct
 {
-        ptl_hdr_t         ragm_hdr;             /* portals header */
+        lnet_hdr_t        ragm_hdr;             /* portals header */
         __u64             ragm_cookie;          /* opaque completion cookie */
         kra_rdma_desc_t   ragm_desc;            /* sender's sink buffer */
 } kra_get_msg_t;
@@ -248,7 +231,7 @@ typedef struct                                  /* NB must fit in FMA "Prefix" *
         __u32             ram_seq;              /* incrementing sequence number */
 } kra_msg_t;
 
-#define RANAL_MSG_MAGIC       0x0be91b92        /* unique magic */
+#define RANAL_MSG_MAGIC     LNET_PROTO_RA_MAGIC /* unique magic */
 #define RANAL_MSG_VERSION              1        /* current protocol version */
 
 #define RANAL_MSG_FENCE             0x80        /* fence RDMA */
@@ -271,9 +254,8 @@ typedef struct kra_tx                           /* message descriptor */
 {
         struct list_head          tx_list;      /* queue on idle_txs/rac_sendq/rac_waitq */
         struct kra_conn          *tx_conn;      /* owning conn */
-        lib_msg_t                *tx_libmsg[2]; /* lib msgs to finalize on completion */
+        lnet_msg_t               *tx_lntmsg[2]; /* ptl msgs to finalize on completion */
         unsigned long             tx_qtime;     /* when tx started to wait for something (jiffies) */
-        int                       tx_isnblk;    /* I'm reserved for non-blocking sends */
         int                       tx_nob;       /* # bytes of payload */
         int                       tx_buftype;   /* payload buffer type */
         void                     *tx_buffer;    /* source/sink buffer */
@@ -334,7 +316,7 @@ typedef struct kra_peer
         struct list_head    rap_connd_list;     /* schedule on kra_connd_peers */
         struct list_head    rap_conns;          /* all active connections */
         struct list_head    rap_tx_queue;       /* msgs waiting for a conn */
-        ptl_nid_t           rap_nid;            /* who's on the other end(s) */
+        lnet_nid_t           rap_nid;            /* who's on the other end(s) */
         __u32               rap_ip;             /* IP address of peer */
         int                 rap_port;           /* port on which peer listens */
         atomic_t            rap_refcount;       /* # users */
@@ -344,20 +326,6 @@ typedef struct kra_peer
         unsigned long       rap_reconnect_interval; /* exponential backoff */
 } kra_peer_t;
 
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,6,0))
-# define sk_allocation  allocation
-# define sk_data_ready  data_ready
-# define sk_write_space write_space
-# define sk_user_data   user_data
-# define sk_prot        prot
-# define sk_sndbuf      sndbuf
-# define sk_socket      socket
-# define sk_wmem_queued wmem_queued
-# define sk_err         err
-# define sk_sleep       sleep
-#endif
-
-extern lib_nal_t       kranal_lib;
 extern kra_data_t      kranal_data;
 extern kra_tunables_t  kranal_tunables;
 
@@ -367,7 +335,7 @@ extern void kranal_destroy_conn(kra_conn_t *conn);
 static inline void
 kranal_peer_addref(kra_peer_t *peer)
 {
-        CDEBUG(D_NET, "%p->"LPX64"\n", peer, peer->rap_nid);
+        CDEBUG(D_NET, "%p->%s\n", peer, libcfs_nid2str(peer->rap_nid));
         LASSERT(atomic_read(&peer->rap_refcount) > 0);
         atomic_inc(&peer->rap_refcount);
 }
@@ -375,14 +343,14 @@ kranal_peer_addref(kra_peer_t *peer)
 static inline void
 kranal_peer_decref(kra_peer_t *peer)
 {
-        CDEBUG(D_NET, "%p->"LPX64"\n", peer, peer->rap_nid);
+        CDEBUG(D_NET, "%p->%s\n", peer, libcfs_nid2str(peer->rap_nid));
         LASSERT(atomic_read(&peer->rap_refcount) > 0);
         if (atomic_dec_and_test(&peer->rap_refcount))
                 kranal_destroy_peer(peer);
 }
 
 static inline struct list_head *
-kranal_nid2peerlist (ptl_nid_t nid)
+kranal_nid2peerlist (lnet_nid_t nid)
 {
         unsigned int hash = ((unsigned int)nid) % kranal_data.kra_peer_hash_size;
 
@@ -399,7 +367,8 @@ kranal_peer_active(kra_peer_t *peer)
 static inline void
 kranal_conn_addref(kra_conn_t *conn)
 {
-        CDEBUG(D_NET, "%p->"LPX64"\n", conn, conn->rac_peer->rap_nid);
+        CDEBUG(D_NET, "%p->%s\n", conn, 
+               libcfs_nid2str(conn->rac_peer->rap_nid));
         LASSERT(atomic_read(&conn->rac_refcount) > 0);
         atomic_inc(&conn->rac_refcount);
 }
@@ -407,7 +376,8 @@ kranal_conn_addref(kra_conn_t *conn)
 static inline void
 kranal_conn_decref(kra_conn_t *conn)
 {
-        CDEBUG(D_NET, "%p->"LPX64"\n", conn, conn->rac_peer->rap_nid);
+        CDEBUG(D_NET, "%p->%s\n", conn,
+               libcfs_nid2str(conn->rac_peer->rap_nid));
         LASSERT(atomic_read(&conn->rac_refcount) > 0);
         if (atomic_dec_and_test(&conn->rac_refcount))
                 kranal_destroy_conn(conn);
@@ -445,11 +415,17 @@ kranal_tx_mapped (kra_tx_t *tx)
                 tx->tx_buftype == RANAL_BUF_PHYS_MAPPED);
 }
 
-static inline __u64
-kranal_page2phys (struct page *p)
-{
-        return page_to_phys(p);
-}
+int kranal_startup (lnet_ni_t *ni);
+void kranal_shutdown (lnet_ni_t *ni);
+int kranal_ctl(lnet_ni_t *ni, unsigned int cmd, void *arg);
+int kranal_send (lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg);
+int kranal_eager_recv(lnet_ni_t *ni, void *private, 
+                        lnet_msg_t *lntmsg, void **new_private);
+int kranal_recv(lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg, 
+                int delayed, unsigned int niov, 
+                struct iovec *iov, lnet_kiov_t *kiov,
+                unsigned int offset, unsigned int mlen, unsigned int rlen);
+int kranal_accept(lnet_ni_t *ni, struct socket *sock);
 
 extern void kranal_free_acceptsock (kra_acceptsock_t *ras);
 extern int kranal_listener_procint (ctl_table *table,
@@ -459,17 +435,21 @@ extern void kranal_update_reaper_timeout (long timeout);
 extern void kranal_tx_done (kra_tx_t *tx, int completion);
 extern void kranal_unlink_peer_locked (kra_peer_t *peer);
 extern void kranal_schedule_conn (kra_conn_t *conn);
-extern kra_peer_t *kranal_create_peer (ptl_nid_t nid);
-extern kra_peer_t *kranal_find_peer_locked (ptl_nid_t nid);
+extern int kranal_create_peer (kra_peer_t **peerp, lnet_nid_t nid);
+extern int kranal_add_persistent_peer (lnet_nid_t nid, __u32 ip, int port);
+extern kra_peer_t *kranal_find_peer_locked (lnet_nid_t nid);
 extern void kranal_post_fma (kra_conn_t *conn, kra_tx_t *tx);
-extern int kranal_del_peer (ptl_nid_t nid, int single_share);
+extern int kranal_del_peer (lnet_nid_t nid);
 extern void kranal_device_callback (RAP_INT32 devid, RAP_PVOID arg);
 extern int kranal_thread_start (int(*fn)(void *arg), void *arg);
 extern int kranal_connd (void *arg);
 extern int kranal_reaper (void *arg);
 extern int kranal_scheduler (void *arg);
 extern void kranal_close_conn_locked (kra_conn_t *conn, int error);
+extern void kranal_close_conn (kra_conn_t *conn, int error);
 extern void kranal_terminate_conn_locked (kra_conn_t *conn);
 extern void kranal_connect (kra_peer_t *peer);
 extern int kranal_conn_handshake (struct socket *sock, kra_peer_t *peer);
-extern void kranal_pause(int ticks);
+extern int kranal_tunables_init(void);
+extern void kranal_tunables_fini(void);
+extern void kranal_init_msg(kra_msg_t *msg, int type);

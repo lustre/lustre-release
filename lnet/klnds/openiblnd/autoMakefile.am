@@ -4,12 +4,10 @@
 # See the file COPYING in this distribution
 
 if MODULES
-if !CRAY_PORTALS
-if BUILD_OPENIBNAL
-modulenet_DATA = kopenibnal$(KMODEXT)
-endif
+if BUILD_OPENIBLND
+modulenet_DATA = kopeniblnd$(KMODEXT)
 endif
 endif
 
-MOSTLYCLEANFILES := @MOSTLYCLEANFILES@ 
-DIST_SOURCES = $(kopenibnal-objs:%.o=%.c) openibnal.h
+MOSTLYCLEANFILES = @MOSTLYCLEANFILES@
+DIST_SOURCES = $(kopeniblnd-objs:%.o=%.c) openiblnd.h

@@ -1,5 +1,5 @@
-MODULES := kranal
-kranal-objs := ranal.o ranal_cb.o
+MODULES := kralnd
+kralnd-objs := ralnd.o ralnd_cb.o ralnd_modparams.o
 
 EXTRA_POST_CFLAGS := @RACPPFLAGS@
 

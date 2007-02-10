@@ -1,3 +1,0 @@
-/*
- * stringtab.h
- */

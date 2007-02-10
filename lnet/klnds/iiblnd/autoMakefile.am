@@ -4,12 +4,10 @@
 # See the file COPYING in this distribution
 
 if MODULES
-if !CRAY_PORTALS
-if BUILD_IIBNAL
-modulenet_DATA = kiibnal$(KMODEXT)
-endif
+if BUILD_IIBLND
+modulenet_DATA = kiiblnd$(KMODEXT)
 endif
 endif
 
-MOSTLYCLEANFILES := @MOSTLYCLEANFILES@ 
-DIST_SOURCES = $(kiibnal-objs:%.o=%.c) iibnal.h
+MOSTLYCLEANFILES = @MOSTLYCLEANFILES@
+DIST_SOURCES = $(kiiblnd-objs:%.o=%.c) iiblnd.h

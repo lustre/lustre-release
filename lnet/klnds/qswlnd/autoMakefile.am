@@ -4,12 +4,10 @@
 # See the file COPYING in this distribution
 
 if MODULES
-if !CRAY_PORTALS
-if BUILD_QSWNAL
-modulenet_DATA = kqswnal$(KMODEXT)
-endif
+if BUILD_QSWLND
+modulenet_DATA = kqswlnd$(KMODEXT)
 endif
 endif
 
-MOSTLYCLEANFILES := @MOSTLYCLEANFILES@ 
-DIST_SOURCES = $(kqswnal-objs:%.o=%.c) qswnal.h
+MOSTLYCLEANFILES = @MOSTLYCLEANFILES@
+DIST_SOURCES = $(kqswlnd-objs:%.o=%.c) qswlnd.h

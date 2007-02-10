@@ -64,19 +64,18 @@
  *  int            cfs_fs_time_before (cfs_fs_time_t *, cfs_fs_time_t *);
  *  int            cfs_fs_time_beforeq(cfs_fs_time_t *, cfs_fs_time_t *);
  *
- *  cfs_duration_t cfs_time_minimal_timeout(void)
- *
  *  CFS_TIME_FORMAT
  *  CFS_DURATION_FORMAT
  *
  */
 
 #define ONE_BILLION ((u_int64_t)1000000000)
-#define ONE_MILLION ((u_int64_t)   1000000)
+#define ONE_MILLION 1000000
 
 #ifdef __KERNEL__
-
+#ifdef HAVE_KERNEL_CONFIG_H
 #include <linux/config.h>
+#endif
 #include <linux/module.h>
 #include <linux/kernel.h>
 #include <linux/version.h>
@@ -106,15 +105,15 @@ static inline void cfs_fs_time_nsec(cfs_fs_time_t *t, struct timespec *s)
 /*
  * internal helper function used by cfs_fs_time_before*()
  */
-static inline unsigned long __cfs_fs_time_flat(cfs_fs_time_t *t)
+static inline unsigned long long __cfs_fs_time_flat(cfs_fs_time_t *t)
 {
-        return ((unsigned long)t->tv_sec) * ONE_MILLION + t->tv_usec * 1000;
+        return (unsigned long long)t->tv_sec * ONE_MILLION + t->tv_usec;
 }
 
 #define CURRENT_KERN_TIME        xtime
 
-/* (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0)) */
 #else
+/* (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0)) */
 
 /*
  * post 2.5 kernels.
@@ -138,9 +137,9 @@ static inline void cfs_fs_time_nsec(cfs_fs_time_t *t, struct timespec *s)
 /*
  * internal helper function used by cfs_fs_time_before*()
  */
-static inline unsigned long __cfs_fs_time_flat(cfs_fs_time_t *t)
+static inline unsigned long long __cfs_fs_time_flat(cfs_fs_time_t *t)
 {
-        return ((unsigned long)t->tv_sec) * ONE_BILLION + t->tv_nsec;
+        return (unsigned long long)t->tv_sec * ONE_BILLION + t->tv_nsec;
 }
 
 #define CURRENT_KERN_TIME        CURRENT_TIME
@@ -198,12 +197,12 @@ static inline time_t cfs_fs_time_sec(cfs_fs_time_t *t)
 
 static inline int cfs_fs_time_before(cfs_fs_time_t *t1, cfs_fs_time_t *t2)
 {
-        return time_before(__cfs_fs_time_flat(t1), __cfs_fs_time_flat(t2));
+        return __cfs_fs_time_flat(t1) <  __cfs_fs_time_flat(t2);
 }
 
 static inline int cfs_fs_time_beforeq(cfs_fs_time_t *t1, cfs_fs_time_t *t2)
 {
-        return time_before_eq(__cfs_fs_time_flat(t1), __cfs_fs_time_flat(t2));
+        return __cfs_fs_time_flat(t1) <= __cfs_fs_time_flat(t2);
 }
 
 #if 0
@@ -224,12 +223,7 @@ static inline cfs_duration_t cfs_duration_build(int64_t nano)
 
 static inline cfs_duration_t cfs_time_seconds(int seconds)
 {
-        return seconds * HZ;
-}
-
-static inline cfs_time_t cfs_time_shift(int seconds)
-{
-        return jiffies + seconds * HZ;
+        return ((cfs_duration_t)seconds) * HZ;
 }
 
 static inline time_t cfs_duration_sec(cfs_duration_t d)
@@ -239,34 +233,64 @@ static inline time_t cfs_duration_sec(cfs_duration_t d)
 
 static inline void cfs_duration_usec(cfs_duration_t d, struct timeval *s)
 {
-#if (BITS_PER_LONG == 32)
-        uint64_t t = (d - s->tv_sec * HZ) * ONE_MILLION;
+#if (BITS_PER_LONG == 32) && (HZ > 4096)
+        uint64_t t;
+
+        s->tv_sec = d / HZ;
+        t = (d - (cfs_duration_t)s->tv_sec * HZ) * ONE_MILLION;
         s->tv_usec = do_div (t, HZ);
 #else
-        s->tv_usec = (d - s->tv_sec * HZ) * ONE_MILLION / HZ;
-#endif
         s->tv_sec = d / HZ;
+        s->tv_usec = ((d - (cfs_duration_t)s->tv_sec * HZ) * ONE_MILLION) / HZ;
+#endif
 }
 
 static inline void cfs_duration_nsec(cfs_duration_t d, struct timespec *s)
 {
 #if (BITS_PER_LONG == 32)
-        uint64_t t = (d - s->tv_sec * HZ) * ONE_BILLION;
+        uint64_t t;
+
+        s->tv_sec = d / HZ;
+        t = (d - s->tv_sec * HZ) * ONE_BILLION;
         s->tv_nsec = do_div (t, HZ);
 #else
-        s->tv_nsec = (d - s->tv_sec * HZ) * ONE_BILLION / HZ;
-#endif
         s->tv_sec = d / HZ;
+        s->tv_nsec = ((d - s->tv_sec * HZ) * ONE_BILLION) / HZ;
+#endif
 }
 
-static inline cfs_duration_t cfs_time_minimal_timeout(void)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0)
+
+#define cfs_time_current_64 get_jiffies_64
+
+static inline __u64 cfs_time_add_64(__u64 t, __u64 d)
 {
-        return 1;
+        return t + d;
 }
 
-/* inline function cfs_time_minimal_timeout() can not be used
- * to initiallize static variable */
-#define CFS_MIN_DELAY           (1)
+static inline __u64 cfs_time_shift_64(int seconds)
+{
+        return cfs_time_add_64(cfs_time_current_64(),
+                               cfs_time_seconds(seconds));
+}
+
+static inline int cfs_time_before_64(__u64 t1, __u64 t2)
+{
+        return (__s64)t2 - (__s64)t1 > 0;
+}
+
+#else
+#define cfs_time_current_64 cfs_time_current
+#define cfs_time_add_64     cfs_time_add
+#define cfs_time_shift_64   cfs_time_shift
+#define cfs_time_before_64  cfs_time_before
+
+#endif
+
+/*
+ * One jiffy
+ */
+#define CFS_TICK                (1)
 
 #define CFS_TIME_T              "%lu"
 #define CFS_DURATION_T          "%ld"

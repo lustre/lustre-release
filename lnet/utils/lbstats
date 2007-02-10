@@ -1,0 +1,11 @@
+#!/bin/bash
+
+echo "=== Router Buffers ======="
+test -e /proc/sys/lnet/buffers && cat /proc/sys/lnet/buffers
+echo
+echo "=== NIs ============================================"
+test -e /proc/sys/lnet/nis && cat /proc/sys/lnet/nis
+echo
+echo "=== Peers ============================================================="
+test -e /proc/sys/lnet/peers && cat /proc/sys/lnet/peers
+echo

@@ -9,6 +9,13 @@ SUBDIRS += darwin
 endif
 DIST_SUBDIRS := $(SUBDIRS)
 
+if LIBLUSTRE
+noinst_LIBRARIES= libcfs.a
+libcfs_a_SOURCES= debug.c user-prim.c user-lock.c
+libcfs_a_CPPFLAGS = $(LLCPPFLAGS)
+libcfs_a_CFLAGS = $(LLCFLAGS)
+endif
+
 if MODULES
 
 if LINUX
@@ -18,12 +25,12 @@ endif
 if DARWIN
 macos_PROGRAMS := libcfs
 
-nodist_libcfs_SOURCES := debug.c module.c tracefile.c		     \
-	darwin/darwin-debug.c darwin/darwin-fs.c darwin/darwin-mem.c \
-	darwin/darwin-module.c darwin/darwin-prim.c		     \
-	darwin/darwin-proc.c darwin/darwin-tracefile.c		     \
-	darwin/darwin-utils.c darwin/darwin-sync.c		     \
-	darwin/darwin-curproc.c user-prim.c user-lock.c
+nodist_libcfs_SOURCES := darwin/darwin-sync.c darwin/darwin-mem.c	\
+	darwin/darwin-prim.c darwin/darwin-fs.c darwin/darwin-curproc.c	\
+	darwin/darwin-tcpip.c darwin/darwin-utils.c 			\
+	darwin/darwin-debug.c darwin/darwin-proc.c 			\
+	darwin/darwin-tracefile.c darwin/darwin-module.c 		\
+	debug.c module.c tracefile.c nidstrings.c watchdog.c
 
 libcfs_CFLAGS := $(EXTRA_KCFLAGS)
 libcfs_LDFLAGS := $(EXTRA_KLDFLAGS)
@@ -41,6 +48,5 @@ install-data-hook: $(install_data_hook)
 
 EXTRA_DIST := Info.plist
 
-MOSTLYCLEANFILES := @MOSTLYCLEANFILES@  linux-*.c 
-MOSTLYCLEANFILES += linux/*.o darwin/*.o libcfs
-DIST_SOURCES := $(libcfs-all-objs:%.o=%.c) tracefile.h
+MOSTLYCLEANFILES := @MOSTLYCLEANFILES@ linux-*.c linux/*.o darwin/*.o libcfs
+DIST_SOURCES := $(libcfs-all-objs:%.o=%.c) tracefile.h user-prim.c user-lock.c

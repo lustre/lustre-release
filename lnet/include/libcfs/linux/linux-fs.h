@@ -33,7 +33,16 @@
 #include <linux/fs.h>
 #include <linux/stat.h>
 #include <linux/mount.h>
-#endif
+#else /* !__KERNEL__ */
+#include <stdlib.h>
+#include <stdio.h>
+#include <unistd.h>
+#include <fcntl.h>
+#include <errno.h>
+#include <string.h>
+#include <sys/mount.h>
+#include <mntent.h>
+#endif  /* __KERNEL__ */
 
 typedef struct file cfs_file_t;
 typedef struct dentry cfs_dentry_t;
@@ -55,15 +64,23 @@ cfs_file_t *cfs_filp_open (const char *name, int flags, int mode, int *err);
 #define cfs_put_file(f)                     fput(f)
 #define cfs_file_count(f)                   file_count(f)
 
-typedef struct file_lock cfs_flock_t; 
-#define CFS_FLOCK_TYPE(fl)                  ((fl)->fl_type)
-#define CFS_FLOCK_SET_TYPE(fl, type)        do { (fl)->fl_type = (type); } while(0)
-#define CFS_FLOCK_PID(fl)                   ((fl)->fl_pid)
-#define CFS_FLOCK_SET_PID(fl, pid)          do { (fl)->fl_pid = (pid); } while(0)
-#define CFS_FLOCK_START(fl)                 ((fl)->fl_start)
-#define CFS_FLOCK_SET_START(fl, start)      do { (fl)->fl_start = (start); } while(0)
-#define CFS_FLOCK_END(fl)                   ((fl)->fl_end)
-#define CFS_FLOCK_SET_END(fl, end)          do { (fl)->fl_end = (end); } while(0)
+typedef struct file_lock cfs_flock_t;
+#define cfs_flock_type(fl)                  ((fl)->fl_type)
+#define cfs_flock_set_type(fl, type)        do { (fl)->fl_type = (type); } while(0)
+#define cfs_flock_pid(fl)                   ((fl)->fl_pid)
+#define cfs_flock_set_pid(fl, pid)          do { (fl)->fl_pid = (pid); } while(0)
+#define cfs_flock_start(fl)                 ((fl)->fl_start)
+#define cfs_flock_set_start(fl, start)      do { (fl)->fl_start = (start); } while(0)
+#define cfs_flock_end(fl)                   ((fl)->fl_end)
+#define cfs_flock_set_end(fl, end)          do { (fl)->fl_end = (end); } while(0)
+
+ssize_t cfs_user_write (cfs_file_t *filp, const char *buf, size_t count, loff_t *offset);
+
+/*
+ * portable UNIX device file identification.
+ */
+
+typedef dev_t cfs_rdev_t;
 
 #endif
 

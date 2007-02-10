@@ -33,23 +33,26 @@
 #include <errno.h>
 #include <unistd.h>
 
-#include <portals/api-support.h>
-#include <portals/ptlctl.h>
+#include <lnet/api-support.h>
+#include <lnet/lnetctl.h>
 #include <libcfs/portals_utils.h>
+
 
 static ioc_handler_t  do_ioctl;                 /* forward ref */
 static ioc_handler_t *current_ioc_handler = &do_ioctl;
 
 struct ioc_dev {
-	const char * dev_name;
-	int dev_fd;
+        const char * dev_name;
+        int dev_fd;
+        int dev_major;
+        int dev_minor;
 };
 
 static struct ioc_dev ioc_dev_list[10];
 
 struct dump_hdr {
-	int magic;
-	int dev_id;
+        int magic;
+        int dev_id;
         unsigned int opc;
 };
 
@@ -64,60 +67,78 @@ set_ioc_handler (ioc_handler_t *handler)
                 current_ioc_handler = handler;
 }
 
+/* Catamount has no <linux/kdev_t.h>, so just define it here */
+#ifndef MKDEV
+# define MKDEV(a,b) (((a) << 8) | (b))
+#endif
+
 static int
 open_ioc_dev(int dev_id) 
 {
-	const char * dev_name;
+        const char * dev_name;
 
-	if (dev_id < 0 || dev_id >= sizeof(ioc_dev_list))
-		return -EINVAL;
+        if (dev_id < 0 || 
+            dev_id >= sizeof(ioc_dev_list) / sizeof(ioc_dev_list[0]))
+                return -EINVAL;
 
-	dev_name = ioc_dev_list[dev_id].dev_name;
-	if (dev_name == NULL) {
+        dev_name = ioc_dev_list[dev_id].dev_name;
+        if (dev_name == NULL) {
                 fprintf(stderr, "unknown device id: %d\n", dev_id);
-		return -EINVAL;
-	}
+                return -EINVAL;
+        }
 
-	if (ioc_dev_list[dev_id].dev_fd < 0) {
-		int fd = open(dev_name, O_RDWR);
-		
-		if (fd < 0) {
-			fprintf(stderr, "opening %s failed: %s\n"
-				"hint: the kernel modules may not be loaded\n",
-				dev_name, strerror(errno));
-			return fd;
-		}
-		ioc_dev_list[dev_id].dev_fd = fd;
-	}
+        if (ioc_dev_list[dev_id].dev_fd < 0) {
+                int fd = open(dev_name, O_RDWR);
 
-	return ioc_dev_list[dev_id].dev_fd;
+                /* Make the /dev/ node if we need to */
+                if (fd < 0 && errno == ENOENT) {
+                        if (mknod(dev_name, 
+                                  S_IFCHR|S_IWUSR|S_IRUSR,
+                                  MKDEV(ioc_dev_list[dev_id].dev_major,
+                                        ioc_dev_list[dev_id].dev_minor)) == 0)
+                                fd = open(dev_name, O_RDWR);
+                        else
+                                fprintf(stderr, "mknod %s failed: %s\n",
+                                        dev_name, strerror(errno));
+                }
+
+                if (fd < 0) {
+                        fprintf(stderr, "opening %s failed: %s\n"
+                                "hint: the kernel modules may not be loaded\n",
+                                dev_name, strerror(errno));
+                        return fd;
+                }
+                ioc_dev_list[dev_id].dev_fd = fd;
+        }
+
+        return ioc_dev_list[dev_id].dev_fd;
 }
 
 
 static int 
 do_ioctl(int dev_id, unsigned int opc, void *buf)
 {
-	int fd, rc;
-	
-	fd = open_ioc_dev(dev_id);
-	if (fd < 0) 
-		return fd;
+        int fd, rc;
+        
+        fd = open_ioc_dev(dev_id);
+        if (fd < 0) 
+                return fd;
 
-	rc = ioctl(fd, opc, buf);
-	return rc;
-	
+        rc = ioctl(fd, opc, buf);
+        return rc;
+        
 }
 
 static FILE *
 get_dump_file() 
 {
-	FILE *fp = NULL;
-	
-	if (!dump_filename) {
-		fprintf(stderr, "no dump filename\n");
-	} else 
-		fp = fopen(dump_filename, "a");
-	return fp;
+        FILE *fp = NULL;
+        
+        if (!dump_filename) {
+                fprintf(stderr, "no dump filename\n");
+        } else 
+                fp = fopen(dump_filename, "a");
+        return fp;
 }
 
 /*
@@ -127,25 +148,25 @@ get_dump_file()
 int 
 dump(int dev_id, unsigned int opc, void *buf)
 {
-	FILE *fp;
-	struct dump_hdr dump_hdr;
-        struct portal_ioctl_hdr * ioc_hdr = (struct  portal_ioctl_hdr *) buf;
-	int rc;
-	
-	printf("dumping opc %x to %s\n", opc, dump_filename);
-	
+        FILE *fp;
+        struct dump_hdr dump_hdr;
+        struct libcfs_ioctl_hdr * ioc_hdr = (struct  libcfs_ioctl_hdr *) buf;
+        int rc;
+        
+        printf("dumping opc %x to %s\n", opc, dump_filename);
+        
 
-	dump_hdr.magic = 0xdeadbeef;
-	dump_hdr.dev_id = dev_id;
-	dump_hdr.opc = opc;
+        dump_hdr.magic = 0xdeadbeef;
+        dump_hdr.dev_id = dev_id;
+        dump_hdr.opc = opc;
 
-	fp = get_dump_file();
-	if (fp == NULL) {
-		fprintf(stderr, "%s: %s\n", dump_filename, 
-			strerror(errno));
-		return -EINVAL;
-	}
-	
+        fp = get_dump_file();
+        if (fp == NULL) {
+                fprintf(stderr, "%s: %s\n", dump_filename, 
+                        strerror(errno));
+                return -EINVAL;
+        }
+        
         rc = fwrite(&dump_hdr, sizeof(dump_hdr), 1, fp);
         if (rc == 1)
                 rc = fwrite(buf, ioc_hdr->ioc_len, 1, fp);
@@ -161,32 +182,36 @@ dump(int dev_id, unsigned int opc, void *buf)
 
 /* register a device to send ioctls to.  */
 int 
-register_ioc_dev(int dev_id, const char * dev_name) 
+register_ioc_dev(int dev_id, const char * dev_name, int major, int minor) 
 {
 
-	if (dev_id < 0 || dev_id >= sizeof(ioc_dev_list))
-		return -EINVAL;
+        if (dev_id < 0 || 
+            dev_id >= sizeof(ioc_dev_list) / sizeof(ioc_dev_list[0]))
+                return -EINVAL;
 
-	unregister_ioc_dev(dev_id);
+        unregister_ioc_dev(dev_id);
 
-	ioc_dev_list[dev_id].dev_name = dev_name;
-	ioc_dev_list[dev_id].dev_fd = -1;
-
-	return dev_id;
+        ioc_dev_list[dev_id].dev_name = dev_name;
+        ioc_dev_list[dev_id].dev_fd = -1;
+        ioc_dev_list[dev_id].dev_major = major;
+        ioc_dev_list[dev_id].dev_minor = minor;
+ 
+        return dev_id;
 }
 
 void
 unregister_ioc_dev(int dev_id) 
 {
 
-	if (dev_id < 0 || dev_id >= sizeof(ioc_dev_list))
-		return;
-	if (ioc_dev_list[dev_id].dev_name != NULL &&
-	    ioc_dev_list[dev_id].dev_fd >= 0) 
-		close(ioc_dev_list[dev_id].dev_fd);
+        if (dev_id < 0 || 
+            dev_id >= sizeof(ioc_dev_list) / sizeof(ioc_dev_list[0]))
+                return;
+        if (ioc_dev_list[dev_id].dev_name != NULL &&
+            ioc_dev_list[dev_id].dev_fd >= 0) 
+                close(ioc_dev_list[dev_id].dev_fd);
 
-	ioc_dev_list[dev_id].dev_name = NULL;
-	ioc_dev_list[dev_id].dev_fd = -1;
+        ioc_dev_list[dev_id].dev_name = NULL;
+        ioc_dev_list[dev_id].dev_fd = -1;
 }
 
 /* If this file is set, then all ioctl buffers will be 
@@ -194,15 +219,15 @@ unregister_ioc_dev(int dev_id)
 int
 set_ioctl_dump(char * file)
 {
-	if (dump_filename)
-		free(dump_filename);
-	
-	dump_filename = strdup(file);
+        if (dump_filename)
+                free(dump_filename);
+        
+        dump_filename = strdup(file);
         if (dump_filename == NULL)
                 abort();
 
         set_ioc_handler(&dump);
-	return 0;
+        return 0;
 }
 
 int
@@ -222,69 +247,69 @@ l_ioctl(int dev_id, unsigned int opc, void *buf)
 int 
 parse_dump(char * dump_file, ioc_handler_t ioc_func)
 {
-	int line =0;
-	struct stat st;
-	char *start, *buf, *end;
+        int line =0;
+        struct stat st;
+        char *start, *buf, *end;
 #ifndef __CYGWIN__
         int fd;
 #else
         HANDLE fd, hmap;
         DWORD size;
 #endif
-	
+        
 #ifndef __CYGWIN__
-	fd = syscall(SYS_open, dump_file, O_RDONLY);
+        fd = syscall(SYS_open, dump_file, O_RDONLY);
         if (fd < 0) {
                 fprintf(stderr, "couldn't open %s: %s\n", dump_file, 
                         strerror(errno));
                 exit(1);
         }
 
-	if (fstat(fd, &st)) { 
-		perror("stat fails");
-		exit(1);
-	}
+        if (fstat(fd, &st)) { 
+                perror("stat fails");
+                exit(1);
+        }
 
-	if (st.st_size < 1) {
-		fprintf(stderr, "KML is empty\n");
-		exit(1);
-	}
+        if (st.st_size < 1) {
+                fprintf(stderr, "KML is empty\n");
+                exit(1);
+        }
 
-	start = buf = mmap(NULL, st.st_size, PROT_READ, MAP_PRIVATE , fd, 0);
-	end = start + st.st_size;
-	close(fd);
+        start = buf = mmap(NULL, st.st_size, PROT_READ, MAP_PRIVATE , fd, 0);
+        end = start + st.st_size;
+        close(fd);
         if (start == MAP_FAILED) {
-		fprintf(stderr, "can't create file mapping\n");
-		exit(1);
+                fprintf(stderr, "can't create file mapping\n");
+                exit(1);
         }
 #else
         fd = CreateFile(dump_file, GENERIC_READ, FILE_SHARE_READ, NULL,
                         OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
         size = GetFileSize(fd, NULL);
         if (size < 1) {
-		fprintf(stderr, "KML is empty\n");
-		exit(1);
-	}
+                fprintf(stderr, "KML is empty\n");
+                exit(1);
+        }
 
         hmap = CreateFileMapping(fd, NULL, PAGE_READONLY, 0,0, NULL);
         start = buf = MapViewOfFile(hmap, FILE_MAP_READ, 0, 0, 0);
         end = buf + size;
         CloseHandle(fd);
         if (start == NULL) {
-		fprintf(stderr, "can't create file mapping\n");
-		exit(1);
+                fprintf(stderr, "can't create file mapping\n");
+                exit(1);
         }
 #endif /* __CYGWIN__ */
 
-	while (buf < end) {
+        while (buf < end) {
                 struct dump_hdr *dump_hdr = (struct dump_hdr *) buf;
-                struct portal_ioctl_hdr * data;
+                struct libcfs_ioctl_hdr * data;
                 char tmp[8096];
                 int rc;
 
                 line++;
 
-                data = (struct portal_ioctl_hdr *) (buf + sizeof(*dump_hdr));
+                data = (struct libcfs_ioctl_hdr *) (buf + sizeof(*dump_hdr));
                 if (buf + data->ioc_len > end ) {
                         fprintf(stderr, "dump file overflow, %p + %d > %p\n", buf,
                                 data->ioc_len, end);
@@ -307,7 +332,7 @@ parse_dump(char * dump_file, ioc_handler_t ioc_func)
                 }
 
                 buf += data->ioc_len + sizeof(*dump_hdr);
-	}
+        }
 
 #ifndef __CYGWIN__
         munmap(start, end - start);
@@ -316,7 +341,7 @@ parse_dump(char * dump_file, ioc_handler_t ioc_func)
         CloseHandle(hmap);
 #endif
 
-	return 0;
+        return 0;
 }
 
 int 
@@ -326,8 +351,8 @@ jt_ioc_dump(int argc, char **argv)
                 fprintf(stderr, "usage: %s [hostname]\n", argv[0]);
                 return 0;
         }
-	printf("setting dumpfile to: %s\n", argv[1]);
-	
-	set_ioctl_dump(argv[1]);
-	return 0;
+        printf("setting dumpfile to: %s\n", argv[1]);
+        
+        set_ioctl_dump(argv[1]);
+        return 0;
 }

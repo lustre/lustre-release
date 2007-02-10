@@ -20,27 +20,23 @@
  *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
 
-#define DEBUG_SUBSYSTEM S_PORTALS
+#define DEBUG_SUBSYSTEM S_LNET
 
 #include <libcfs/kp30.h>
 #include <libcfs/libcfs.h>
-#include <libcfs/linux/portals_compat25.h>
-
-
+#include "tracefile.h"
 
 struct lc_watchdog {
-        struct timer_list lcw_timer; /* kernel timer */
+        cfs_timer_t       lcw_timer; /* kernel timer */
         struct list_head  lcw_list;
         struct timeval    lcw_last_touched;
-        struct task_struct *lcw_task;
+        cfs_task_t       *lcw_task;
 
-        void (*lcw_callback)(struct lc_watchdog *,
-			     struct task_struct *,
-			     void *data);
-        void *lcw_data;
+        void            (*lcw_callback)(pid_t, void *);
+        void             *lcw_data;
 
-        int lcw_pid;
-        int lcw_time; /* time until watchdog fires, in ms */
+        pid_t             lcw_pid;
+        int               lcw_time; /* time until watchdog fires, in ms */
 
         enum {
                 LC_WATCHDOG_DISABLED,
@@ -49,6 +45,7 @@ struct lc_watchdog {
         } lcw_state;
 };
 
+#ifdef WITH_WATCHDOG
 /*
  * The dispatcher will complete lcw_start_completion when it starts,
  * and lcw_stop_completion when it exits.
@@ -78,36 +75,44 @@ static DECLARE_MUTEX(lcw_refcount_sem);
  * List of timers that have fired that need their callbacks run by the
  * dispatcher.
  */
-static spinlock_t       lcw_pending_timers_lock = SPIN_LOCK_UNLOCKED;
+static spinlock_t lcw_pending_timers_lock = SPIN_LOCK_UNLOCKED; /* BH lock! */
 static struct list_head lcw_pending_timers = \
         LIST_HEAD_INIT(lcw_pending_timers);
 
-static struct task_struct *lcw_lookup_task(struct lc_watchdog *lcw)
+#ifdef HAVE_TASKLIST_LOCK
+static void
+lcw_dump(struct lc_watchdog *lcw)
 {
-        struct task_struct *tsk;
-        unsigned long flags;
+        cfs_task_t *tsk;
         ENTRY;
 
-        read_lock_irqsave(&tasklist_lock, flags);
+        read_lock(&tasklist_lock);
         tsk = find_task_by_pid(lcw->lcw_pid);
-        read_unlock_irqrestore(&tasklist_lock, flags);
-        if (!tsk) {
-                CWARN("Process %d was not found in the task list; "
-                      "watchdog callback may be incomplete\n", lcw->lcw_pid);
-        } else if (tsk != lcw->lcw_task) {
-                tsk = NULL;
-                CWARN("The current process %d did not set the watchdog; "
-                      "watchdog callback may be incomplete\n", lcw->lcw_pid);
-        }
 
-        RETURN(tsk);
+        if (tsk == NULL) {
+                CWARN("Process %d was not found in the task list; "
+                      "watchdog callback may be incomplete\n", (int)lcw->lcw_pid);
+        } else if (tsk != lcw->lcw_task) {
+                CWARN("The current process %d did not set the watchdog; "
+                      "watchdog callback may be incomplete\n", (int)lcw->lcw_pid);
+        } else {
+                libcfs_debug_dumpstack(tsk);
+        }
+        
+        read_unlock(&tasklist_lock);
+        EXIT;
 }
+#else
+static void
+lcw_dump(struct lc_watchdog *lcw)
+{
+        CERROR("unable to dump stack because of missing export\n");
+}
+#endif
 
 static void lcw_cb(unsigned long data)
 {
         struct lc_watchdog *lcw = (struct lc_watchdog *)data;
-        struct task_struct *tsk;
-        unsigned long flags;
 
         ENTRY;
 
@@ -118,47 +123,47 @@ static void lcw_cb(unsigned long data)
 
         lcw->lcw_state = LC_WATCHDOG_EXPIRED;
 
-        CWARN("Watchdog triggered for pid %d: it was inactive for %dms\n",
-              lcw->lcw_pid, (lcw->lcw_time * 1000) / HZ);
+        /* NB this warning should appear on the console, but may not get into
+         * the logs since we're running in a softirq handler */
 
-        tsk = lcw_lookup_task(lcw);
-        if (tsk != NULL)
-                portals_debug_dumpstack(tsk);
+        CWARN("Watchdog triggered for pid %d: it was inactive for %ldms\n",
+              (int)lcw->lcw_pid, cfs_duration_sec(lcw->lcw_time) * 1000);
+        lcw_dump(lcw);
 
-        spin_lock_irqsave(&lcw_pending_timers_lock, flags);
+        spin_lock_bh(&lcw_pending_timers_lock);
+
         if (list_empty(&lcw->lcw_list)) {
                 list_add(&lcw->lcw_list, &lcw_pending_timers);
                 wake_up(&lcw_event_waitq);
         }
-        spin_unlock_irqrestore(&lcw_pending_timers_lock, flags);
+
+        spin_unlock_bh(&lcw_pending_timers_lock);
 
         EXIT;
 }
 
 static int is_watchdog_fired(void)
 {
-        unsigned long flags;
         int rc;
 
         if (test_bit(LCW_FLAG_STOP, &lcw_flags))
                 return 1;
 
-        spin_lock_irqsave(&lcw_pending_timers_lock, flags);
+        spin_lock_bh(&lcw_pending_timers_lock);
         rc = !list_empty(&lcw_pending_timers);
-        spin_unlock_irqrestore(&lcw_pending_timers_lock, flags);
+        spin_unlock_bh(&lcw_pending_timers_lock);
         return rc;
 }
 
 static int lcw_dispatch_main(void *data)
 {
-        int rc = 0;
-        unsigned long flags;
+        int                 rc = 0;
+        unsigned long       flags;
         struct lc_watchdog *lcw;
-        struct task_struct *tsk;
 
         ENTRY;
 
-        kportal_daemonize("lc_watchdogd");
+        cfs_daemonize("lc_watchdogd");
 
         SIGNAL_MASK_LOCK(current, flags);
         sigfillset(&current->blocked);
@@ -173,9 +178,9 @@ static int lcw_dispatch_main(void *data)
                 if (test_bit(LCW_FLAG_STOP, &lcw_flags)) {
                         CDEBUG(D_INFO, "LCW_FLAG_STOP was set, shutting down...\n");
 
-                        spin_lock_irqsave(&lcw_pending_timers_lock, flags);
+                        spin_lock_bh(&lcw_pending_timers_lock);
                         rc = !list_empty(&lcw_pending_timers);
-                        spin_unlock_irqrestore(&lcw_pending_timers_lock, flags);
+                        spin_unlock_bh(&lcw_pending_timers_lock);
                         if (rc) {
                                 CERROR("pending timers list was not empty at "
                                        "time of watchdog dispatch shutdown\n");
@@ -183,29 +188,24 @@ static int lcw_dispatch_main(void *data)
                         break;
                 }
 
-                spin_lock_irqsave(&lcw_pending_timers_lock, flags);
+                spin_lock_bh(&lcw_pending_timers_lock);
                 while (!list_empty(&lcw_pending_timers)) {
 
                         lcw = list_entry(lcw_pending_timers.next,
                                          struct lc_watchdog,
                                          lcw_list);
                         list_del_init(&lcw->lcw_list);
-                        spin_unlock_irqrestore(&lcw_pending_timers_lock, flags);
+                        spin_unlock_bh(&lcw_pending_timers_lock);
 
-                        CDEBUG(D_INFO, "found lcw for pid %d\n", lcw->lcw_pid);
+                        CDEBUG(D_INFO, "found lcw for pid %d: inactive for %ldms\n", 
+                               (int)lcw->lcw_pid, cfs_duration_sec(lcw->lcw_time) * 1000);
 
-                        if (lcw->lcw_state != LC_WATCHDOG_DISABLED) {
-                                /*
-                                 * sanity check the task against our
-                                 * watchdog
-                                 */
-                                tsk = lcw_lookup_task(lcw);
-                                lcw->lcw_callback(lcw, tsk, lcw->lcw_data);
-                        }
+                        if (lcw->lcw_state != LC_WATCHDOG_DISABLED)
+                                lcw->lcw_callback(lcw->lcw_pid, lcw->lcw_data);
 
-                        spin_lock_irqsave(&lcw_pending_timers_lock, flags);
+                        spin_lock_bh(&lcw_pending_timers_lock);
                 }
-                spin_unlock_irqrestore(&lcw_pending_timers_lock, flags);
+                spin_unlock_bh(&lcw_pending_timers_lock);
         }
 
         complete(&lcw_stop_completion);
@@ -255,26 +255,24 @@ static void lcw_dispatch_stop(void)
 }
 
 struct lc_watchdog *lc_watchdog_add(int timeout_ms,
-                                    void (*callback)(struct lc_watchdog *,
-                                                     struct task_struct *,
-                                                     void *),
+                                    void (*callback)(pid_t, void *),
                                     void *data)
 {
         struct lc_watchdog *lcw = NULL;
         ENTRY;
 
-        PORTAL_ALLOC(lcw, sizeof(*lcw));
-        if (!lcw) {
+        LIBCFS_ALLOC(lcw, sizeof(*lcw));
+        if (lcw == NULL) {
                 CDEBUG(D_INFO, "Could not allocate new lc_watchdog\n");
                 RETURN(ERR_PTR(-ENOMEM));
         }
 
-        lcw->lcw_task = cfs_current();
-        lcw->lcw_pid = cfs_curproc_pid();
-        lcw->lcw_time = (timeout_ms * HZ) / 1000;
-        lcw->lcw_callback = callback ? callback : lc_watchdog_dumplog;
-        lcw->lcw_data = data;
-        lcw->lcw_state = LC_WATCHDOG_DISABLED;
+        lcw->lcw_task     = cfs_current();
+        lcw->lcw_pid      = cfs_curproc_pid();
+        lcw->lcw_time     = cfs_time_seconds(timeout_ms) / 1000;
+        lcw->lcw_callback = (callback != NULL) ? callback : lc_watchdog_dumplog;
+        lcw->lcw_data     = data;
+        lcw->lcw_state    = LC_WATCHDOG_DISABLED;
 
         INIT_LIST_HEAD(&lcw->lcw_list);
 
@@ -298,40 +296,31 @@ struct lc_watchdog *lc_watchdog_add(int timeout_ms,
 }
 EXPORT_SYMBOL(lc_watchdog_add);
 
-static long
-timeval_sub(struct timeval *large, struct timeval *small)
-{
-        return (large->tv_sec - small->tv_sec) * 1000000 +
-                (large->tv_usec - small->tv_usec);
-}
-
 static void lcw_update_time(struct lc_watchdog *lcw, const char *message)
 {
         struct timeval newtime;
-        unsigned long timediff;
+        struct timeval timediff;
 
         do_gettimeofday(&newtime);
         if (lcw->lcw_state == LC_WATCHDOG_EXPIRED) {
-                timediff = timeval_sub(&newtime, &lcw->lcw_last_touched);
+                cfs_timeval_sub(&newtime, &lcw->lcw_last_touched, &timediff);
                 CWARN("Expired watchdog for pid %d %s after %lu.%.4lus\n",
                       lcw->lcw_pid,
                       message,
-                      timediff / 1000000,
-                      (timediff % 1000000) / 100);
+                      timediff.tv_sec,
+                      timediff.tv_usec / 100);
         }
         lcw->lcw_last_touched = newtime;
 }
 
 void lc_watchdog_touch(struct lc_watchdog *lcw)
 {
-        unsigned long flags;
         ENTRY;
         LASSERT(lcw != NULL);
 
-        spin_lock_irqsave(&lcw_pending_timers_lock, flags);
-        if (!list_empty(&lcw->lcw_list))
-                list_del_init(&lcw->lcw_list);
-        spin_unlock_irqrestore(&lcw_pending_timers_lock, flags);
+        spin_lock_bh(&lcw_pending_timers_lock);
+        list_del_init(&lcw->lcw_list);
+        spin_unlock_bh(&lcw_pending_timers_lock);
 
         lcw_update_time(lcw, "touched");
         lcw->lcw_state = LC_WATCHDOG_ENABLED;
@@ -344,14 +333,13 @@ EXPORT_SYMBOL(lc_watchdog_touch);
 
 void lc_watchdog_disable(struct lc_watchdog *lcw)
 {
-        unsigned long flags;
         ENTRY;
         LASSERT(lcw != NULL);
 
-        spin_lock_irqsave(&lcw_pending_timers_lock, flags);
+        spin_lock_bh(&lcw_pending_timers_lock);
         if (!list_empty(&lcw->lcw_list))
                 list_del_init(&lcw->lcw_list);
-        spin_unlock_irqrestore(&lcw_pending_timers_lock, flags);
+        spin_unlock_bh(&lcw_pending_timers_lock);
 
         lcw_update_time(lcw, "disabled");
         lcw->lcw_state = LC_WATCHDOG_DISABLED;
@@ -362,7 +350,6 @@ EXPORT_SYMBOL(lc_watchdog_disable);
 
 void lc_watchdog_delete(struct lc_watchdog *lcw)
 {
-        unsigned long flags;
         ENTRY;
         LASSERT(lcw != NULL);
 
@@ -370,17 +357,17 @@ void lc_watchdog_delete(struct lc_watchdog *lcw)
 
         lcw_update_time(lcw, "deleted");
 
-        spin_lock_irqsave(&lcw_pending_timers_lock, flags);
+        spin_lock_bh(&lcw_pending_timers_lock);
         if (!list_empty(&lcw->lcw_list))
                 list_del_init(&lcw->lcw_list);
-        spin_unlock_irqrestore(&lcw_pending_timers_lock, flags);
+        spin_unlock_bh(&lcw_pending_timers_lock);
 
         down(&lcw_refcount_sem);
         if (--lcw_refcount == 0)
                 lcw_dispatch_stop();
         up(&lcw_refcount_sem);
 
-        PORTAL_FREE(lcw, sizeof(*lcw));
+        LIBCFS_FREE(lcw, sizeof(*lcw));
 
         EXIT;
 }
@@ -390,13 +377,37 @@ EXPORT_SYMBOL(lc_watchdog_delete);
  * Provided watchdog handlers
  */
 
-extern void portals_debug_dumplog_internal(void *arg);
-
-void lc_watchdog_dumplog(struct lc_watchdog *lcw,
-                         struct task_struct *tsk,
-                         void               *data)
+void lc_watchdog_dumplog(pid_t pid, void *data)
 {
-        tsk = tsk ? tsk : current;
-        portals_debug_dumplog_internal((void *)(long)tsk->pid);
+        libcfs_debug_dumplog_internal((void *)((unsigned long)pid));
 }
 EXPORT_SYMBOL(lc_watchdog_dumplog);
+
+#else   /* !defined(WITH_WATCHDOG) */
+
+struct lc_watchdog *lc_watchdog_add(int timeout_ms,
+                                    void (*callback)(pid_t pid, void *),
+                                    void *data)
+{
+        static struct lc_watchdog      watchdog;
+        return &watchdog;
+}
+EXPORT_SYMBOL(lc_watchdog_add);
+
+void lc_watchdog_touch(struct lc_watchdog *lcw)
+{
+}
+EXPORT_SYMBOL(lc_watchdog_touch);
+
+void lc_watchdog_disable(struct lc_watchdog *lcw)
+{
+}
+EXPORT_SYMBOL(lc_watchdog_disable);
+
+void lc_watchdog_delete(struct lc_watchdog *lcw)
+{
+}
+EXPORT_SYMBOL(lc_watchdog_delete);
+
+#endif
+

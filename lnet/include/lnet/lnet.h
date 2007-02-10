@@ -1,25 +1,25 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  */
-#ifndef __PORTALS_P30_H__
-#define __PORTALS_P30_H__
-
-#include "build_check.h"
+#ifndef __LNET_H__
+#define __LNET_H__
 
 /*
- * p30.h
+ * lnet.h
  *
  * User application interface file
  */
 #if defined(__linux__)
-#include <portals/linux/p30.h>
+#include <lnet/linux/lnet.h>
 #elif defined(__APPLE__)
-#include <portals/darwin/p30.h>
+#include <lnet/darwin/lnet.h>
+#elif defined(__WINNT__)
+#include <lnet/winnt/lnet.h>
 #else
 #error Unsupported Operating System
 #endif
 
-#include <portals/types.h>
-#include <portals/api.h>
+#include <lnet/types.h>
+#include <lnet/api.h>
 
 #endif

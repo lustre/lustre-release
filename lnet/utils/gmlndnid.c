@@ -32,12 +32,11 @@
 #include <syslog.h>
 #include <errno.h>
 
-#include <portals/api-support.h>
-#include <portals/lib-types.h>
+#include <lnet/api-support.h>
+#include <lnet/lib-types.h>
 
 #include <gm.h>
 
-#define GMNAL_IOC_GET_GNID 1
 /*
  *      portals always uses unit 0
  *      Can this be configurable?
@@ -47,27 +46,34 @@
 void
 usage(char *prg, int h)
 {
-        fprintf(stderr, "usage %s -n hostname | -l | -h\n", prg);
-        if (h) {
-                printf("\nGet Myrinet Global network ids for specified host\n"
-                       "-l gets network id for local host\n");
-        }
+        fprintf(stderr,
+                "usage %s -h\n"
+                "      %s [-l] [-n hostname] [-L] [hostnames]\n", prg);
+
+        if (h)
+                printf("Print Myrinet Global network ids for specified hosts\n"
+                       "-l                    print local host's ID\n"
+                       "-n hostname           print given host's ID\n"
+                       "-L                    print Myringet local net ID too\n"
+                       "[hostnames]           print ids of given hosts (local if none)\n");
 }
 
-unsigned
-u_getgmnid(char *name, int get_local_id)
+gm_status_t
+print_gmid(char *name, int name_fieldlen, int show_local_id)
 {
         struct gm_port *gm_port;
-        int             gm_port_id = 2;
-        gm_status_t     gm_status = GM_SUCCESS;
-        unsigned        global_nid = 0, local_nid = 0; /* gm ids never 0 */
+        int             gm_port_id;
+        gm_status_t     gm_status;
+        unsigned int    local_id;
+        unsigned int    global_id;
 
         gm_status = gm_init();
         if (gm_status != GM_SUCCESS) {
                 fprintf(stderr, "gm_init: %s\n", gm_strerror(gm_status));
-                return(0);
+                return gm_status;
         }
 
+        gm_port_id = 2;
         gm_status = gm_open(&gm_port, GM_UNIT, gm_port_id, "gmnalnid",
                             GM_API_VERSION);
         if (gm_status != GM_SUCCESS) {
@@ -83,77 +89,96 @@ u_getgmnid(char *name, int get_local_id)
 
                 if (gm_status != GM_SUCCESS) {
                         fprintf(stderr, "gm_open: %s\n",gm_strerror(gm_status));
-                        gm_finalize();
-                        return(0);
+                        goto out_0;
                 }
         }
 
-        if (get_local_id) {
-                local_nid = 1;
+        if (name == NULL) {
+                local_id = 1;
+                name = "<local>";
         } else {
                 gm_status = gm_host_name_to_node_id_ex(gm_port, 1000000, name,
-                                                       &local_nid);
+                                                       &local_id);
                 if (gm_status != GM_SUCCESS) {
-                        fprintf(stderr, "gm_host_name_to_node_id_ex: %s\n",
-                                gm_strerror(gm_status));
-                        gm_close(gm_port);
-                        gm_finalize();
-                        return(0);
+                        fprintf(stderr, "gm_host_name_to_node_id_ex(%s): %s\n",
+                                name, gm_strerror(gm_status));
+                        goto out_1;
                 }
         }
 
-        gm_status = gm_node_id_to_global_id(gm_port, local_nid, &global_nid) ;
+        gm_status = gm_node_id_to_global_id(gm_port, local_id, &global_id) ;
         if (gm_status != GM_SUCCESS) {
-                fprintf(stderr, "gm_node_id_to_global_id: %s\n",
-                        gm_strerror(gm_status));
-                gm_close(gm_port);
-                gm_finalize();
-                return(0);
+                fprintf(stderr, "gm_node_id_to_global_id(%s:%d): %s\n",
+                        name, local_id, gm_strerror(gm_status));
+                goto out_1;
         }
+
+        if (name_fieldlen > 0)
+                printf ("%*s ", name_fieldlen, name);
+
+        if (!show_local_id)
+                printf("0x%x\n", global_id);
+        else
+                printf("local 0x%x global 0x%x\n", local_id, global_id);
+
+ out_1:
         gm_close(gm_port);
+ out_0:
         gm_finalize();
-        return(global_nid);
+
+        return gm_status;
 }
 
-int main(int argc, char **argv)
+int
+main (int argc, char **argv)
 {
-        unsigned int        nid = 0;
-        char               *name = NULL;
         int                 c;
-        int                 get_local_id = 0;
+        gm_status_t         gmrc;
+        int                 rc;
+        int                 max_namelen = 0;
+        int                 show_local_id = 0;
 
-        while ((c = getopt(argc, argv, "n:lh")) != -1) {
+        while ((c = getopt(argc, argv, "n:lLh")) != -1)
                 switch(c) {
-                case('n'):
-                        if (get_local_id) {
-                                usage(argv[0], 0);
-                                exit(-1);
-                        }
-                        name = optarg;
-                        break;
-                case('h'):
+                case 'h':
                         usage(argv[0], 1);
-                        exit(-1);
+                        return 0;
+
+                case 'L':
+                        show_local_id = 1;
                         break;
-                case('l'):
-                        if (name) {
-                                usage(argv[0], 0);
-                                exit(-1);
-                        }
-                        get_local_id = 1;
-                        break;
+
+                case 'n':
+                        gmrc = print_gmid(optarg, 0, show_local_id);
+                        return (gmrc == GM_SUCCESS) ? 0 : 1;
+
+                case 'l':
+                        gmrc = print_gmid(NULL, 0, show_local_id);
+                        return (gmrc == GM_SUCCESS) ? 0 : 1;
+
                 default:
                         usage(argv[0], 0);
-                        exit(-1);
+                        return 2;
                 }
+
+        if (optind == argc) {
+                gmrc = print_gmid(NULL, 0, show_local_id);
+                return (gmrc == GM_SUCCESS) ? 0 : 1;
         }
 
-        if (!name && !get_local_id) {
-                usage(argv[0], 0);
-                exit(-1);
+        if (optind != argc - 1)
+                for (c = optind; c < argc; c++)
+                        if (strlen(argv[c]) > max_namelen)
+                                max_namelen = strlen(argv[c]);
+
+        rc = 0;
+
+        for (c = optind; c < argc; c++) {
+                gmrc = print_gmid(argv[c], max_namelen, show_local_id);
+
+                if (gmrc != GM_SUCCESS)
+                        rc = 1;
         }
 
-        nid = u_getgmnid(name, get_local_id);
-        printf("%u\n", nid);
-        exit(0);
+        return rc;
 }

@@ -27,13 +27,12 @@
 #include <sys/file.h>
 #include <sys/malloc.h>
 #include <sys/conf.h>
-#include <sys/vnode.h>
 #include <sys/mount.h>
 #include <sys/uio.h>
 #include <sys/filedesc.h>
 #include <sys/namei.h>
 
-#define DEBUG_SUBSYSTEM S_PORTALS
+#define DEBUG_SUBSYSTEM S_LNET
 
 #include <libcfs/libcfs.h>
 #include <libcfs/kp30.h>
@@ -43,8 +42,144 @@
  *
  * Public functions
  */
+
+#ifdef __DARWIN8__
+#include <sys/vnode.h>
+
+extern int vn_rdwr(enum uio_rw, vnode_t, caddr_t, int, off_t, enum uio_seg, int, kauth_cred_t, int *, proc_t);
+
+/* vnode_size() is not exported */
+static errno_t
+vnode_size(vnode_t vp, off_t *sizep, vfs_context_t ctx)
+{
+        struct vnode_attr       va;
+        int                     error; 
+        
+        VATTR_INIT(&va);
+        VATTR_WANTED(&va, va_data_size);
+        error = vnode_getattr(vp, &va, ctx);
+        if (!error)
+                *sizep = va.va_data_size;
+        return(error);
+}
+
+/*
+ * XXX Liang:
+ *
+ * kern_file_*() are not safe for multi-threads now,
+ * however, we need them only for tracefiled, so it's
+ * not so important to implement for MT.
+ */
 int
-filp_node_size(struct file *fp, off_t *size)
+kern_file_size(struct cfs_kern_file *fp, off_t *psize) 
+{
+        int     error;
+        off_t   size;
+
+        error = vnode_size(fp->f_vp, &size, fp->f_ctxt);
+        if (error) 
+                return error;
+
+        if (psize)
+                *psize = size;
+        return 0;
+}
+
+struct cfs_kern_file *
+kern_file_open(const char * filename, int uflags, int mode, int *err)
+{
+        struct cfs_kern_file    *fp;
+        vnode_t         vp;
+        int             error;
+
+        fp = (struct cfs_kern_file *)_MALLOC(sizeof(struct cfs_kern_file), M_TEMP, M_WAITOK);
+        if (fp == NULL) {
+                if (err != NULL)
+                        *err = -ENOMEM;
+                return NULL;
+        }
+        fp->f_flags = FFLAGS(uflags);
+        fp->f_ctxt = vfs_context_create(NULL);
+
+        if ((error = vnode_open(filename, fp->f_flags, 
+                                mode, 0, &vp, fp->f_ctxt))){
+                if (err != NULL)
+                        *err = -error;
+                _FREE(fp, M_TEMP);
+        } else {
+                if (err != NULL)
+                        *err = 0;
+                fp->f_vp = vp;
+        }
+
+        return fp;
+}
+
+int
+kern_file_close(struct cfs_kern_file *fp)
+{
+        vnode_close(fp->f_vp, fp->f_flags, fp->f_ctxt);
+        vfs_context_rele(fp->f_ctxt);
+        _FREE(fp, M_TEMP);
+
+        return 0;
+}
+
+int
+kern_file_read(struct cfs_kern_file *fp, void *buf, size_t nbytes, loff_t *pos)
+{
+        struct proc *p = current_proc();
+        int     resid;
+        int     error;
+
+        assert(buf != NULL);
+        assert(fp != NULL && fp->f_vp != NULL);
+
+        error = vn_rdwr(UIO_READ, fp->f_vp, buf, nbytes, *pos, 
+                        UIO_SYSSPACE32, 0, vfs_context_ucred(fp->f_ctxt), &resid, p);
+        if ((error) || (nbytes == resid)) {
+                if (!error)
+                        error = -EINVAL;
+                return error;
+        }
+        *pos += nbytes - resid;
+
+        return (int)(nbytes - resid);
+}
+
+int
+kern_file_write(struct cfs_kern_file *fp, void *buf, size_t nbytes, loff_t *pos)
+{
+        struct proc *p = current_proc();
+        int     resid;
+        int     error;
+
+        assert(buf != NULL);
+        assert(fp != NULL && fp->f_vp != NULL);
+
+        error = vn_rdwr(UIO_WRITE, fp->f_vp, buf, nbytes, *pos, 
+                        UIO_SYSSPACE32, 0, vfs_context_ucred(fp->f_ctxt), &resid, p);
+        if ((error) || (nbytes == resid)) {
+                if (!error)
+                        error = -EINVAL;
+                return error;
+        }
+        *pos += nbytes - resid;
+
+        return (int)(nbytes - resid);
+
+}
+
+int
+kern_file_sync (struct cfs_kern_file *fp)
+{
+        return VNOP_FSYNC(fp->f_vp, MNT_WAIT, fp->f_ctxt);
+}
+
+#else  /* !__DARWIN8__ */
+
+int
+kern_file_size(struct file *fp, off_t *size)
 {
         struct vnode *vp = (struct vnode *)fp->f_data;
         struct stat sb;
@@ -60,12 +195,11 @@ filp_node_size(struct file *fp, off_t *size)
 }
 
 cfs_file_t *
-filp_open(const char * filename, int flags, int mode, int *err)
+kern_file_open(const char * filename, int flags, int mode, int *err)
 {
 	struct nameidata nd;
-	register cfs_file_t	*fp;
+	cfs_file_t	*fp;
 	register struct vnode	*vp;
-	cfs_file_t		*nfp;
 	int			rc;
 	extern struct fileops	vnops;
 	extern int nfiles;
@@ -73,16 +207,16 @@ filp_open(const char * filename, int flags, int mode, int *err)
 
         CFS_CONE_IN;
 	nfiles++;
-	MALLOC_ZONE(nfp, cfs_file_t *, sizeof(cfs_file_t), M_FILE, M_WAITOK|M_ZERO);
-	bzero(nfp, sizeof(cfs_file_t));
-	nfp->f_count = 1;
-	fp = nfp;
+	MALLOC_ZONE(fp, cfs_file_t *, sizeof(cfs_file_t), M_FILE, M_WAITOK|M_ZERO);
+	bzero(fp, sizeof(cfs_file_t));
+	fp->f_count = 1;
+        LIST_CIRCLE(fp, f_list);
 	NDINIT(&nd, LOOKUP, FOLLOW, UIO_SYSSPACE, (char *)filename, current_proc());
 	if ((rc = vn_open(&nd, flags, mode)) != 0){
                 printf("filp_open failed at (%d)\n", rc);
                 if (err != NULL)
                         *err = rc;
-		ffree(fp);
+                FREE_ZONE(fp, sizeof *fp, M_FILE);
                 CFS_CONE_EX;
 		return NULL;
 	}
@@ -117,7 +251,7 @@ frele_internal(cfs_file_t *fp)
 }
 
 int
-filp_close (cfs_file_t *fp)
+kern_file_close (cfs_file_t *fp)
 {
 	struct vnode	*vp;
         CFS_DECL_CONE_DATA;
@@ -159,21 +293,28 @@ extern void bwillwrite(void);
  * Write buffer to filp inside kernel
  */
 int
-filp_write (cfs_file_t *fp, void *buf, size_t nbyte, off_t *pos)
+kern_file_write (cfs_file_t *fp, void *buf, size_t nbyte, loff_t *pos)
 {
 	struct uio auio;
 	struct iovec aiov;
 	struct proc *p = current_proc();
 	long cnt, error = 0;
+        int flags = 0;
         CFS_DECL_CONE_DATA;
 
 	aiov.iov_base = (void *)(uintptr_t)buf;
 	aiov.iov_len = nbyte;
 	auio.uio_iov = &aiov;
 	auio.uio_iovcnt = 1;
-        if (pos != NULL)
+        if (pos != NULL) {
 	        auio.uio_offset = *pos;
-        else
+                /* 
+                 * Liang: If don't set FOF_OFFSET, vn_write()
+                 * will use fp->f_offset as the the real offset.
+                 * Same in vn_read()
+                 */
+                flags |= FOF_OFFSET;
+        } else
                 auio.uio_offset = (off_t)-1;
 	if (nbyte > INT_MAX)
 		return (EINVAL);
@@ -186,7 +327,7 @@ filp_write (cfs_file_t *fp, void *buf, size_t nbyte, off_t *pos)
         CFS_CONE_IN;
 	if (fp->f_type == DTYPE_VNODE)
 		bwillwrite();	/* empty stuff now */
-	if ((error = fo_write(fp, &auio, fp->f_cred, 0, p))) {
+	if ((error = fo_write(fp, &auio, fp->f_cred, flags, p))) {
 		if (auio.uio_resid != cnt && (error == ERESTART ||\
 		    error == EINTR || error == EWOULDBLOCK))
 			error = 0;
@@ -200,7 +341,7 @@ filp_write (cfs_file_t *fp, void *buf, size_t nbyte, off_t *pos)
 	else
 		cnt -= auio.uio_resid;
         if (pos != NULL)
-                *pos = auio.uio_offset;
+                *pos += cnt;
 	return cnt;
 }
 
@@ -208,21 +349,23 @@ filp_write (cfs_file_t *fp, void *buf, size_t nbyte, off_t *pos)
  * Read from filp inside kernel
  */
 int
-filp_read (cfs_file_t *fp, void *buf, size_t nbyte, off_t *pos)
+kern_file_read (cfs_file_t *fp, void *buf, size_t nbyte, loff_t *pos)
 {
 	struct uio auio;
 	struct iovec aiov;
 	struct proc *p = current_proc();
 	long cnt, error = 0;
+        int  flags = 0;
         CFS_DECL_CONE_DATA;
 
 	aiov.iov_base = (caddr_t)buf;
 	aiov.iov_len = nbyte;
 	auio.uio_iov = &aiov;
 	auio.uio_iovcnt = 1;
-        if (pos != NULL)
+        if (pos != NULL) {
 	        auio.uio_offset = *pos;
-        else
+                flags |= FOF_OFFSET;
+        } else
                 auio.uio_offset = (off_t)-1;
 	if (nbyte > INT_MAX)
 		return (EINVAL);
@@ -233,7 +376,7 @@ filp_read (cfs_file_t *fp, void *buf, size_t nbyte, off_t *pos)
 
 	cnt = nbyte;
         CFS_CONE_IN;
-	if ((error = fo_read(fp, &auio, fp->f_cred, 0, p)) != 0) {
+	if ((error = fo_read(fp, &auio, fp->f_cred, flags, p)) != 0) {
 		if (auio.uio_resid != cnt && (error == ERESTART ||
 		    error == EINTR || error == EWOULDBLOCK))
 			error = 0;
@@ -244,13 +387,13 @@ filp_read (cfs_file_t *fp, void *buf, size_t nbyte, off_t *pos)
 	else
 		cnt -= auio.uio_resid;
         if (pos != NULL)
-                *pos = auio.uio_offset;
+                *pos += cnt;
 
 	return cnt;
 }
 
 int
-filp_fsync (cfs_file_t *fp)
+kern_file_sync (cfs_file_t *fp)
 {
 	struct vnode *vp = (struct vnode *)fp->f_data;
 	struct proc *p = current_proc();
@@ -271,60 +414,53 @@ filp_fsync (cfs_file_t *fp)
 	return error;
 }
 
-int
-ref_file(cfs_file_t *fp)
-{
-        CFS_DECL_CONE_DATA;
+#endif /* !__DARWIN8__ */
 
-        CFS_CONE_IN;
-        fref(fp);
-        CFS_CONE_EX;
-        return 0;
+cfs_rdev_t cfs_rdev_build(cfs_major_nr_t major, cfs_minor_nr_t minor)
+{
+        return makedev(major, minor);
 }
 
-int 
-rele_file(cfs_file_t *fp)
+cfs_major_nr_t cfs_rdev_major(cfs_rdev_t rdev)
 {
-        CFS_DECL_CONE_DATA;
+        return major(rdev);
+}
 
-        CFS_CONE_IN;
-        frele(fp);
-        CFS_CONE_EX;
-        return 0;
+cfs_minor_nr_t cfs_rdev_minor(cfs_rdev_t rdev)
+{
+        return minor(rdev);
+}
+
+struct posix_acl *posix_acl_alloc(int count, int flags)
+{
+        static struct posix_acl acl;
+        return &acl;
 }
 
 /*
- * Private functions
+ * XXX Liang: I've not converted all of them, 
+ * more is needed? 
  */
-void vrele_safe(struct vnode *nd)
-{ 
-        CFS_DECL_CONE_DATA; 
-        
-        CFS_CONE_IN; 
-        vrele(nd); 
-        CFS_CONE_EX;
-}
-
-int
-path_lookup(const char *path, unsigned int flags, struct nameidata *nd)
+int cfs_oflags2univ(int flags) 
 {
-	int ret = 0;
-        CFS_DECL_CONE_DATA;
+        int f;
 
-        CFS_CONE_IN;
-	NDINIT(nd, LOOKUP, FOLLOW, UIO_SYSSPACE, (char *)path, current_proc());
-	if ((ret = namei(nd)) != 0){
-		CERROR("path_lookup fail!\n");
-	}
-        CFS_CONE_EX;
-
-	return ret;
+        f = flags & O_ACCMODE;
+        f |= (flags & O_CREAT) ? CFS_O_CREAT: 0;
+        f |= (flags & O_TRUNC) ? CFS_O_TRUNC: 0;
+        f |= (flags & O_EXCL) ? CFS_O_EXCL: 0;
+        f |= (flags & O_NONBLOCK) ? CFS_O_NONBLOCK: 0;
+        f |= (flags & O_APPEND) ? CFS_O_APPEND: 0;
+        f |= (flags & O_NOFOLLOW) ? CFS_O_NOFOLLOW: 0;
+        f |= (flags & O_SYNC)? CFS_O_SYNC: 0;
+        return f;
 }
 
-int 
-file_count(struct file *fp)
+/*
+ * XXX Liang: we don't need it in OSX.
+ * But it should be implemented anyway.
+ */
+int cfs_univ2oflags(int flags)
 {
-        return fcount(fp);
+        return flags;
 }
-
-

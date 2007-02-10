@@ -23,7 +23,7 @@
  *
  * Created by nikita on Sun Jul 18 2004.
  *
- * Prototypes of XNU synchronization primitives.
+ * XNU synchronization primitives.
  */
 
 /*
@@ -45,11 +45,15 @@
  * A lot can be optimized here.
  */
 
-#include <mach/mach_types.h>
-#include <sys/types.h>
-#include <kern/simple_lock.h>
+#define DEBUG_SUBSYSTEM S_LNET
 
-#define DEBUG_SUBSYSTEM S_PORTALS
+#ifdef __DARWIN8__
+# include <kern/locks.h>
+#else
+# include <mach/mach_types.h>
+# include <sys/types.h>
+# include <kern/simple_lock.h>
+#endif
 
 #include <libcfs/libcfs.h>
 #include <libcfs/kp30.h>
@@ -62,14 +66,35 @@ extern int get_preemption_level(void);
 #define get_preemption_level() (0)
 #endif
 
-/*
- * Warning: low level portals debugging code (portals_debug_msg(), for
- * example), uses spin-locks, so debugging output here may lead to nasty
- * surprises.
- */
-
 #if SMP
+#ifdef __DARWIN8__
 
+static lck_grp_t       *cfs_lock_grp = NULL;
+#warning "Verify definition of lck_spin_t hasn't been changed while building!"
+
+/* hw_lock_* are not exported by Darwin8 */
+static inline void xnu_spin_init(xnu_spin_t *s)
+{
+        SLASSERT(cfs_lock_grp != NULL);
+        //*s = lck_spin_alloc_init(cfs_lock_grp, LCK_ATTR_NULL);
+        lck_spin_init((lck_spin_t *)s, cfs_lock_grp, LCK_ATTR_NULL);
+}
+
+static inline void xnu_spin_done(xnu_spin_t *s)
+{
+        SLASSERT(cfs_lock_grp != NULL);
+        //lck_spin_free(*s, cfs_lock_grp);
+        //*s = NULL;
+        lck_spin_destroy((lck_spin_t *)s, cfs_lock_grp);
+}
+
+#define xnu_spin_lock(s)        lck_spin_lock((lck_spin_t *)(s))
+#define xnu_spin_unlock(s)      lck_spin_unlock((lck_spin_t *)(s))
+
+#warning "Darwin8 does not export lck_spin_try_lock"
+#define xnu_spin_try(s)         (1)
+
+#else /* DARWIN8 */
 extern void			hw_lock_init(hw_lock_t);
 extern void			hw_lock_lock(hw_lock_t);
 extern void			hw_lock_unlock(hw_lock_t);
@@ -77,10 +102,33 @@ extern unsigned int		hw_lock_to(hw_lock_t, unsigned int);
 extern unsigned int		hw_lock_try(hw_lock_t);
 extern unsigned int		hw_lock_held(hw_lock_t);
 
+#define xnu_spin_init(s)        hw_lock_init(s)
+#define xnu_spin_done(s)        do {} while (0)
+#define xnu_spin_lock(s)        hw_lock_lock(s)
+#define xnu_spin_unlock(s)      hw_lock_unlock(s)
+#define xnu_spin_try(s)         hw_lock_try(s)
+#endif /* DARWIN8 */
+
+#else /* SMP */
+#define xnu_spin_init(s)        do {} while (0)
+#define xnu_spin_done(s)        do {} while (0)
+#define xnu_spin_lock(s)        do {} while (0)
+#define xnu_spin_unlock(s)      do {} while (0)
+#define xnu_spin_try(s)         (1)
+#endif /* SMP */
+
+/*
+ * Warning: low level libcfs debugging code (libcfs_debug_msg(), for
+ * example), uses spin-locks, so debugging output here may lead to nasty
+ * surprises.
+ *
+ * In uniprocessor version of spin-lock. Only checks.
+ */
+
 void kspin_init(struct kspin *spin)
 {
 	SLASSERT(spin != NULL);
-	hw_lock_init(&spin->lock);
+	xnu_spin_init(&spin->lock);
 	ON_SYNC_DEBUG(spin->magic = KSPIN_MAGIC);
 	ON_SYNC_DEBUG(spin->owner = NULL);
 }
@@ -90,26 +138,37 @@ void kspin_done(struct kspin *spin)
 	SLASSERT(spin != NULL);
 	SLASSERT(spin->magic == KSPIN_MAGIC);
 	SLASSERT(spin->owner == NULL);
+        xnu_spin_done(&spin->lock);
 }
 
 void kspin_lock(struct kspin *spin)
 {
 	SLASSERT(spin != NULL);
 	SLASSERT(spin->magic == KSPIN_MAGIC);
-	SLASSERT(spin->owner != current_thread);
+	SLASSERT(spin->owner != current_thread());
 
-	hw_lock_lock(&spin->lock);
+	/*
+	 * XXX nikita: do NOT call libcfs_debug_msg() (CDEBUG/ENTRY/EXIT)
+	 * from here: this will lead to infinite recursion.
+	 */
+
+	xnu_spin_lock(&spin->lock);
 	SLASSERT(spin->owner == NULL);
-	ON_SYNC_DEBUG(spin->owner = current_thread);
+	ON_SYNC_DEBUG(spin->owner = current_thread());
 }
 
 void kspin_unlock(struct kspin *spin)
 {
+	/*
+	 * XXX nikita: do NOT call libcfs_debug_msg() (CDEBUG/ENTRY/EXIT)
+	 * from here: this will lead to infinite recursion.
+	 */
+
 	SLASSERT(spin != NULL);
 	SLASSERT(spin->magic == KSPIN_MAGIC);
-	SLASSERT(spin->owner == current_thread);
+	SLASSERT(spin->owner == current_thread());
 	ON_SYNC_DEBUG(spin->owner = NULL);
-	hw_lock_unlock(&spin->lock);
+	xnu_spin_unlock(&spin->lock);
 }
 
 int  kspin_trylock(struct kspin *spin)
@@ -117,84 +176,133 @@ int  kspin_trylock(struct kspin *spin)
 	SLASSERT(spin != NULL);
 	SLASSERT(spin->magic == KSPIN_MAGIC);
 
-	if (hw_lock_try(&spin->lock)) {
+	if (xnu_spin_try(&spin->lock)) {
 		SLASSERT(spin->owner == NULL);
-		ON_SYNC_DEBUG(spin->owner = current_thread);
+		ON_SYNC_DEBUG(spin->owner = current_thread());
 		return 1;
 	} else
 		return 0;
 }
-
-/* SMP */
-#else
-
-/*
- * uniprocessor version of spin-lock. Only checks.
- */
-
-void kspin_init(struct kspin *spin)
-{
-	SLASSERT(spin != NULL);
-	ON_SYNC_DEBUG(spin->magic = KSPIN_MAGIC);
-	ON_SYNC_DEBUG(spin->owner = NULL);
-}
-
-void kspin_done(struct kspin *spin)
-{
-	SLASSERT(spin != NULL);
-	SLASSERT(spin->magic == KSPIN_MAGIC);
-	SLASSERT(spin->owner == NULL);
-}
-
-void kspin_lock(struct kspin *spin)
-{
-	SLASSERT(spin != NULL);
-	SLASSERT(spin->magic == KSPIN_MAGIC);
-	SLASSERT(spin->owner == NULL);
-	ON_SYNC_DEBUG(spin->owner = current_thread);
-}
-
-void kspin_unlock(struct kspin *spin)
-{
-	SLASSERT(spin != NULL);
-	SLASSERT(spin->magic == KSPIN_MAGIC);
-	SLASSERT(spin->owner == current_thread);
-	ON_SYNC_DEBUG(spin->owner = NULL);
-}
-
-int kspin_trylock(struct kspin *spin)
-{
-	SLASSERT(spin != NULL);
-	SLASSERT(spin->magic == KSPIN_MAGIC);
-	SLASSERT(spin->owner == NULL);
-	ON_SYNC_DEBUG(spin->owner = current_thread);
-	return 1;
-}
-
-/* SMP */
-#endif
 
 #if XNU_SYNC_DEBUG
 int kspin_islocked(struct kspin *spin)
 {
 	SLASSERT(spin != NULL);
 	SLASSERT(spin->magic == KSPIN_MAGIC);
-	return spin->owner == current_thread;
+	return spin->owner == current_thread();
 }
 
 int kspin_isnotlocked(struct kspin *spin)
 {
 	SLASSERT(spin != NULL);
 	SLASSERT(spin->magic == KSPIN_MAGIC);
-	return spin->owner != current_thread;
+	return spin->owner != current_thread();
 }
 #endif
 
+/*
+ * read/write spin-lock
+ */
+void krw_spin_init(struct krw_spin *rwspin)
+{
+	SLASSERT(rwspin != NULL);
+
+	kspin_init(&rwspin->guard);
+	rwspin->count = 0;
+	ON_SYNC_DEBUG(rwspin->magic = KRW_SPIN_MAGIC);
+}
+
+void krw_spin_done(struct krw_spin *rwspin)
+{
+	SLASSERT(rwspin != NULL);
+	SLASSERT(rwspin->magic == KRW_SPIN_MAGIC);
+	SLASSERT(rwspin->count == 0);
+	kspin_done(&rwspin->guard);
+}
+
+void krw_spin_down_r(struct krw_spin *rwspin)
+{
+        int i;
+	SLASSERT(rwspin != NULL);
+	SLASSERT(rwspin->magic == KRW_SPIN_MAGIC);
+
+	kspin_lock(&rwspin->guard);
+        while(rwspin->count < 0) {
+                i = -1;
+	        kspin_unlock(&rwspin->guard);
+                while (--i != 0 && rwspin->count < 0)
+                        continue;
+                kspin_lock(&rwspin->guard);
+        }
+	++ rwspin->count;
+	kspin_unlock(&rwspin->guard);
+}
+
+void krw_spin_down_w(struct krw_spin *rwspin)
+{
+        int i;
+	SLASSERT(rwspin != NULL);
+	SLASSERT(rwspin->magic == KRW_SPIN_MAGIC);
+
+	kspin_lock(&rwspin->guard);
+        while (rwspin->count != 0) {
+                i = -1;
+	        kspin_unlock(&rwspin->guard);
+                while (--i != 0 && rwspin->count != 0)
+                        continue;
+	        kspin_lock(&rwspin->guard);
+        }
+	rwspin->count = -1;
+	kspin_unlock(&rwspin->guard);
+}
+
+void krw_spin_up_r(struct krw_spin *rwspin)
+{
+	SLASSERT(rwspin != NULL);
+	SLASSERT(rwspin->magic == KRW_SPIN_MAGIC);
+	SLASSERT(rwspin->count > 0);
+
+	kspin_lock(&rwspin->guard);
+	-- rwspin->count;
+	kspin_unlock(&rwspin->guard);
+}
+
+void krw_spin_up_w(struct krw_spin *rwspin)
+{
+	SLASSERT(rwspin != NULL);
+	SLASSERT(rwspin->magic == KRW_SPIN_MAGIC);
+	SLASSERT(rwspin->count == -1);
+
+	kspin_lock(&rwspin->guard);
+	rwspin->count = 0;
+	kspin_unlock(&rwspin->guard);
+}
+
+/*
+ * semaphore 
+ */
+#ifdef __DARWIN8__
+
+#define xnu_waitq_init(q, a)            do {} while (0)
+#define xnu_waitq_done(q)               do {} while (0)
+#define xnu_waitq_wakeup_one(q, e, s)   ({wakeup_one((void *)(e)); KERN_SUCCESS;})
+#define xnu_waitq_wakeup_all(q, e, s)   ({wakeup((void *)(e)); KERN_SUCCESS;})
+#define xnu_waitq_assert_wait(q, e, s)  assert_wait((e), s)
+
+#else /* DARWIN8 */
+
+#define xnu_waitq_init(q, a)            wait_queue_init((q), a)
+#define xnu_waitq_done(q)               do {} while (0)
+#define xnu_waitq_wakeup_one(q, e, s)   wait_queue_wakeup_one((q), (event_t)(e), s)
+#define xnu_waitq_wakeup_all(q, e, s)   wait_queue_wakeup_all((q), (event_t)(e), s)
+#define xnu_waitq_assert_wait(q, e, s)  wait_queue_assert_wait((q), (event_t)(e), s)
+
+#endif /* DARWIN8 */
 void ksem_init(struct ksem *sem, int value)
 {
 	SLASSERT(sem != NULL);
 	kspin_init(&sem->guard);
-	wait_queue_init(&sem->q, SYNC_POLICY_FIFO);
+	xnu_waitq_init(&sem->q, SYNC_POLICY_FIFO);
 	sem->value = value;
 	ON_SYNC_DEBUG(sem->magic = KSEM_MAGIC);
 }
@@ -221,11 +329,11 @@ int ksem_up(struct ksem *sem, int value)
 	kspin_lock(&sem->guard);
 	sem->value += value;
 	if (sem->value == 0)
-		result = wait_queue_wakeup_one(&sem->q, (event_t)sem,
-					       THREAD_AWAKENED);
+		result = xnu_waitq_wakeup_one(&sem->q, sem,
+					      THREAD_AWAKENED);
 	else
-		result = wait_queue_wakeup_all(&sem->q, (event_t)sem,
-					       THREAD_AWAKENED);
+		result = xnu_waitq_wakeup_all(&sem->q, sem,
+					      THREAD_AWAKENED);
 	kspin_unlock(&sem->guard);
 	SLASSERT(result == KERN_SUCCESS || result == KERN_NOT_WAITING);
 	return (result == KERN_SUCCESS) ? 0 : 1;
@@ -242,8 +350,8 @@ void ksem_down(struct ksem *sem, int value)
 
 	kspin_lock(&sem->guard);
 	while (sem->value < value) {
-		result = wait_queue_assert_wait(&sem->q, (event_t)sem,
-						THREAD_UNINT);
+		result = xnu_waitq_assert_wait(&sem->q, sem,
+					       THREAD_UNINT);
 		SLASSERT(result == THREAD_AWAKENED || result == THREAD_WAITING);
 		kspin_unlock(&sem->guard);
 		if (result == THREAD_WAITING)
@@ -292,18 +400,18 @@ void kmut_lock(struct kmut *mut)
 {
 	SLASSERT(mut != NULL);
 	SLASSERT(mut->magic == KMUT_MAGIC);
-	SLASSERT(mut->owner != current_thread);
+	SLASSERT(mut->owner != current_thread());
 	SLASSERT(get_preemption_level() == 0);
 
 	ksem_down(&mut->s, 1);
-	ON_SYNC_DEBUG(mut->owner = current_thread);
+	ON_SYNC_DEBUG(mut->owner = current_thread());
 }
 
 void kmut_unlock(struct kmut *mut)
 {
 	SLASSERT(mut != NULL);
 	SLASSERT(mut->magic == KMUT_MAGIC);
-	SLASSERT(mut->owner == current_thread);
+	SLASSERT(mut->owner == current_thread());
 
 	ON_SYNC_DEBUG(mut->owner = NULL);
 	ksem_up(&mut->s, 1);
@@ -321,14 +429,14 @@ int kmut_islocked(struct kmut *mut)
 {
 	SLASSERT(mut != NULL);
 	SLASSERT(mut->magic == KMUT_MAGIC);
-	return mut->owner == current_thread;
+	return mut->owner == current_thread();
 }
 
 int kmut_isnotlocked(struct kmut *mut)
 {
 	SLASSERT(mut != NULL);
 	SLASSERT(mut->magic == KMUT_MAGIC);
-	return mut->owner != current_thread;
+	return mut->owner != current_thread();
 }
 #endif
 
@@ -560,7 +668,7 @@ void ksleep_link_init(struct ksleep_link *link)
 
 	CFS_INIT_LIST_HEAD(&link->linkage);
 	link->flags = 0;
-	link->event = current_thread;
+	link->event = current_thread();
 	link->hits  = 0;
 	link->forward = NULL;
 	ON_SYNC_DEBUG(link->magic = KSLEEP_LINK_MAGIC);
@@ -620,6 +728,11 @@ static void add_hit(struct ksleep_chan *chan, event_t event)
 {
 	struct ksleep_link *scan;
 
+	/*
+	 * XXX nikita: do NOT call libcfs_debug_msg() (CDEBUG/ENTRY/EXIT)
+	 * from here: this will lead to infinite recursion.
+	 */
+
 	SLASSERT(kspin_islocked(&chan->guard));
 	list_for_each_entry(scan, &chan->waiters, linkage) {
 		if (scan->event == event) {
@@ -629,7 +742,7 @@ static void add_hit(struct ksleep_chan *chan, event_t event)
 	}
 }
 
-void ksleep_wait(struct ksleep_chan *chan)
+void ksleep_wait(struct ksleep_chan *chan, cfs_task_state_t state)
 {
 	event_t event;
 	int     result;
@@ -640,10 +753,10 @@ void ksleep_wait(struct ksleep_chan *chan)
 	SLASSERT(chan->magic == KSLEEP_CHAN_MAGIC);
 	SLASSERT(get_preemption_level() == 0);
 
-	event = current_thread;
+	event = current_thread();
 	kspin_lock(&chan->guard);
 	if (!has_hits(chan, event)) {
-		result = assert_wait(event, THREAD_UNINT);
+		result = assert_wait(event, state);
 		kspin_unlock(&chan->guard);
 		SLASSERT(result == THREAD_AWAKENED || result == THREAD_WAITING);
 		if (result == THREAD_WAITING)
@@ -653,12 +766,16 @@ void ksleep_wait(struct ksleep_chan *chan)
 	EXIT;
 }
 
-int64_t ksleep_timedwait(struct ksleep_chan *chan, uint64_t timeout)
+/*
+ * Sleep on @chan for no longer than @timeout nano-seconds. Return remaining
+ * sleep time (non-zero only if thread was waken by a signal (not currently
+ * implemented), or waitq was already in the "signalled" state).
+ */
+int64_t ksleep_timedwait(struct ksleep_chan *chan, 
+                         cfs_task_state_t state,
+                         uint64_t timeout)
 {
 	event_t event;
-	int64_t     result; 
-        AbsoluteTime clock_current; 
-        AbsoluteTime clock_delay;
 
 	ENTRY;
 
@@ -666,22 +783,20 @@ int64_t ksleep_timedwait(struct ksleep_chan *chan, uint64_t timeout)
 	SLASSERT(chan->magic == KSLEEP_CHAN_MAGIC);
 	SLASSERT(get_preemption_level() == 0);
 
-	CDEBUG(D_TRACE, "timeout: %llu\n", (long long unsigned)timeout);
-
-	event = current_thread;
-	result = 0;
+	event = current_thread();
 	kspin_lock(&chan->guard);
 	if (!has_hits(chan, event)) {
-		result = assert_wait(event, THREAD_UNINT);
+                int      result;
+                uint64_t expire;
+		result = assert_wait(event, state);
 		if (timeout > 0) {
 			/*
 			 * arm a timer. thread_set_timer()'s first argument is
 			 * uint32_t, so we have to cook deadline ourselves.
 			 */
-			clock_get_uptime(&clock_current);
-			nanoseconds_to_absolutetime(timeout, &clock_delay);
-			ADD_ABSOLUTETIME(&clock_current, &clock_delay);
-			thread_set_timer_deadline(clock_current);
+			nanoseconds_to_absolutetime(timeout, &expire);
+                        clock_absolutetime_interval_to_deadline(expire, &expire);
+			thread_set_timer_deadline(expire);
 		}
 		kspin_unlock(&chan->guard);
 		SLASSERT(result == THREAD_AWAKENED || result == THREAD_WAITING);
@@ -689,19 +804,22 @@ int64_t ksleep_timedwait(struct ksleep_chan *chan, uint64_t timeout)
 			result = thread_block(THREAD_CONTINUE_NULL);
 		thread_cancel_timer();
 
-                clock_get_uptime(&clock_delay);
-                SUB_ABSOLUTETIME(&clock_delay, &clock_current);
-                if (result == THREAD_TIMED_OUT)
-                        result = 0;
-                else {
-                        absolutetime_to_nanoseconds(clock_delay, &result);
-                        if (result < 0)
-                                result = 0;
-                }
-	} else
+		if (result == THREAD_TIMED_OUT)
+                        timeout = 0;
+		else {
+                        uint64_t now;
+                        clock_get_uptime(&now);
+                        if (expire > now)
+			        absolutetime_to_nanoseconds(expire - now, &timeout);
+                        else
+                                timeout = 0;
+		}
+	} else  {
+                /* just return timeout, because I've got event and don't need to wait */
 		kspin_unlock(&chan->guard);
+        }
 
-        RETURN(result);
+        RETURN(timeout);
 }
 
 /*
@@ -710,9 +828,11 @@ int64_t ksleep_timedwait(struct ksleep_chan *chan, uint64_t timeout)
  */
 void ksleep_wake(struct ksleep_chan *chan)
 {
-	ENTRY;
+	/*
+	 * XXX nikita: do NOT call libcfs_debug_msg() (CDEBUG/ENTRY/EXIT)
+	 * from here: this will lead to infinite recursion.
+	 */
 	ksleep_wake_nr(chan, 1);
-	EXIT;
 }
 
 /*
@@ -734,7 +854,10 @@ void ksleep_wake_nr(struct ksleep_chan *chan, int nr)
 	struct ksleep_link *scan;
 	int result;
 
-	ENTRY;
+	/*
+	 * XXX nikita: do NOT call libcfs_debug_msg() (CDEBUG/ENTRY/EXIT)
+	 * from here: this will lead to infinite recursion.
+	 */
 
 	SLASSERT(chan != NULL);
 	SLASSERT(chan->magic == KSLEEP_CHAN_MAGIC);
@@ -747,8 +870,6 @@ void ksleep_wake_nr(struct ksleep_chan *chan, int nr)
 		if (forward != NULL)
 			kspin_lock(&forward->guard);
 		result = thread_wakeup(scan->event);
-		CDEBUG(D_INFO, "waking 0x%x: %d\n",
-		       (unsigned int)scan->event, result);
 		SLASSERT(result == KERN_SUCCESS || result == KERN_NOT_WAITING);
 		if (result == KERN_NOT_WAITING) {
 			++ scan->hits;
@@ -761,7 +882,6 @@ void ksleep_wake_nr(struct ksleep_chan *chan, int nr)
 			break;
 	}
 	kspin_unlock(&chan->guard);
-	EXIT;
 }
 
 void ktimer_init(struct ktimer *t, void (*func)(void *), void *arg)
@@ -807,6 +927,9 @@ static void ktimer_actor(void *arg0, void *arg1)
 		t->func(t->arg);
 }
 
+extern boolean_t thread_call_func_cancel(thread_call_func_t, thread_call_param_t, boolean_t);
+extern void thread_call_func_delayed(thread_call_func_t, thread_call_param_t, uint64_t);
+
 static void ktimer_disarm_locked(struct ktimer *t)
 {
 	SLASSERT(t != NULL);
@@ -815,15 +938,29 @@ static void ktimer_disarm_locked(struct ktimer *t)
 	thread_call_func_cancel(ktimer_actor, t, FALSE);
 }
 
+/*
+ * Received deadline is nanoseconds, but time checked by 
+ * thread_call is absolute time (The abstime unit is equal to 
+ * the length of one bus cycle, so the duration is dependent 
+ * on the bus speed of the computer), so we need to convert
+ * nanotime to abstime by nanoseconds_to_absolutetime().
+ *
+ * Refer to _delayed_call_timer(...)
+ *
+ * if thread_call_func_delayed is not exported in the future,
+ * we can use timeout() or bsd_timeout() to replace it.
+ */
 void ktimer_arm(struct ktimer *t, u_int64_t deadline)
 {
+        cfs_time_t    abstime;
 	SLASSERT(t != NULL);
 	SLASSERT(t->magic == KTIMER_MAGIC);
 
 	kspin_lock(&t->guard);
 	ktimer_disarm_locked(t);
 	t->armed = 1;
-	thread_call_func_delayed(ktimer_actor, t, *(AbsoluteTime *)&deadline);
+        nanoseconds_to_absolutetime(deadline, &abstime);
+	thread_call_func_delayed(ktimer_actor, t, deadline);
 	kspin_unlock(&t->guard);
 }
 
@@ -857,6 +994,26 @@ u_int64_t ktimer_deadline(struct ktimer *t)
 	return t->deadline;
 }
 
+void cfs_sync_init(void) 
+{
+#ifdef __DARWIN8__
+        /* Initialize lock group */
+        cfs_lock_grp = lck_grp_alloc_init("libcfs sync", LCK_GRP_ATTR_NULL);
+#endif
+}
+
+void cfs_sync_fini(void)
+{
+#ifdef __DARWIN8__
+        /* 
+         * XXX Liang: destroy lock group. As we haven't called lock_done
+         * for all locks, cfs_lock_grp may not be freed by kernel(reference 
+         * count > 1).
+         */
+        lck_grp_free(cfs_lock_grp);
+        cfs_lock_grp = NULL;
+#endif
+}
 /*
  * Local variables:
  * c-indentation-style: "K&R"

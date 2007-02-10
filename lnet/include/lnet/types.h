@@ -1,127 +1,126 @@
-#ifndef _P30_TYPES_H_
-#define _P30_TYPES_H_
-
-#include "build_check.h"
+#ifndef __LNET_TYPES_H__
+#define __LNET_TYPES_H__
 
 #include <libcfs/libcfs.h>
-#include <portals/errno.h>
 
-/* This implementation uses the same type for API function return codes and
- * the completion status in an event  */
-#define PTL_NI_OK  PTL_OK
-typedef ptl_err_t ptl_ni_fail_t;
+#define LNET_RESERVED_PORTAL      0		/* portals reserved for lnet's own use */
 
-typedef __u32 ptl_uid_t;
-typedef __u32 ptl_jid_t;
-typedef __u64 ptl_nid_t;
-typedef __u32 ptl_netid_t;
-typedef __u32 ptl_pid_t;
-typedef __u32 ptl_pt_index_t;
-typedef __u32 ptl_ac_index_t;
-typedef __u64 ptl_match_bits_t;
-typedef __u64 ptl_hdr_data_t;
-typedef __u32 ptl_size_t;
+typedef __u64 lnet_nid_t;
+typedef __u32 lnet_pid_t;
 
-#define PTL_TIME_FOREVER    (-1)
+#define LNET_NID_ANY      ((lnet_nid_t) -1)
+#define LNET_PID_ANY      ((lnet_pid_t) -1)
+
+#ifdef CRAY_XT3
+typedef __u32 lnet_uid_t;
+#define LNET_UID_ANY      ((lnet_uid_t) -1)
+#endif
+
+#define LNET_PID_RESERVED 0xf0000000 /* reserved bits in PID */
+#define LNET_PID_USERFLAG 0x80000000 /* set in userspace peers */
+
+#define LNET_TIME_FOREVER    (-1)
 
 typedef struct {
-        unsigned long nal_idx;			/* which network interface */
-        __u64         cookie;			/* which thing on that interface */
-} ptl_handle_any_t;
+        __u64         cookie;
+} lnet_handle_any_t;
 
-typedef ptl_handle_any_t ptl_handle_ni_t;
-typedef ptl_handle_any_t ptl_handle_eq_t;
-typedef ptl_handle_any_t ptl_handle_md_t;
-typedef ptl_handle_any_t ptl_handle_me_t;
+typedef lnet_handle_any_t lnet_handle_eq_t;
+typedef lnet_handle_any_t lnet_handle_md_t;
+typedef lnet_handle_any_t lnet_handle_me_t;
 
-#define PTL_INVALID_HANDLE \
-    ((const ptl_handle_any_t){.nal_idx = -1, .cookie = -1})
-#define PTL_EQ_NONE PTL_INVALID_HANDLE
+#define LNET_INVALID_HANDLE \
+    ((const lnet_handle_any_t){.cookie = -1})
+#define LNET_EQ_NONE LNET_INVALID_HANDLE
 
-static inline int PtlHandleIsEqual (ptl_handle_any_t h1, ptl_handle_any_t h2)
+static inline int LNetHandleIsEqual (lnet_handle_any_t h1, lnet_handle_any_t h2)
 {
-	return (h1.nal_idx == h2.nal_idx && h1.cookie == h2.cookie);
+	return (h1.cookie == h2.cookie);
 }
 
-#define PTL_UID_ANY      ((ptl_uid_t) -1)
-#define PTL_JID_ANY      ((ptl_jid_t) -1)
-#define PTL_NID_ANY      ((ptl_nid_t) -1)
-#define PTL_PID_ANY      ((ptl_pid_t) -1)
-
 typedef struct {
-        ptl_nid_t nid;
-        ptl_pid_t pid;   /* node id / process id */
-} ptl_process_id_t;
+        lnet_nid_t nid;
+        lnet_pid_t pid;   /* node id / process id */
+} lnet_process_id_t;
 
 typedef enum {
-        PTL_RETAIN = 0,
-        PTL_UNLINK
-} ptl_unlink_t;
+        LNET_RETAIN = 0,
+        LNET_UNLINK
+} lnet_unlink_t;
 
 typedef enum {
-        PTL_INS_BEFORE,
-        PTL_INS_AFTER
-} ptl_ins_pos_t;
+        LNET_INS_BEFORE,
+        LNET_INS_AFTER
+} lnet_ins_pos_t;
 
 typedef struct {
         void            *start;
-        ptl_size_t       length;
+        unsigned int     length;
         int              threshold;
         int              max_size;
         unsigned int     options;
         void            *user_ptr;
-        ptl_handle_eq_t  eq_handle;
-} ptl_md_t;
+        lnet_handle_eq_t eq_handle;
+} lnet_md_t;
+
+/* Max Transfer Unit (minimum supported everywhere) */
+#define LNET_MTU_BITS   20
+#define LNET_MTU        (1<<LNET_MTU_BITS)
+
+/* limit on the number of entries in discontiguous MDs */
+#define LNET_MAX_IOV    256
+
+/* Max payload size */
+#ifndef LNET_MAX_PAYLOAD
+# error "LNET_MAX_PAYLOAD must be defined in config.h"
+#else
+# if (LNET_MAX_PAYLOAD < LNET_MTU)
+#  error "LNET_MAX_PAYLOAD too small - error in configure --with-max-payload-mb"
+# elif defined(__KERNEL__)
+#  if (LNET_MAX_PAYLOAD > (PAGE_SIZE * LNET_MAX_IOV))
+/*  PAGE_SIZE is a constant: check with cpp! */
+#   error "LNET_MAX_PAYLOAD too large - error in configure --with-max-payload-mb"
+#  endif
+# endif
+#endif
 
 /* Options for the MD structure */
-#define PTL_MD_OP_PUT               (1 << 0)
-#define PTL_MD_OP_GET               (1 << 1)
-#define PTL_MD_MANAGE_REMOTE        (1 << 2)
-/* unused                           (1 << 3) */
-#define PTL_MD_TRUNCATE             (1 << 4)
-#define PTL_MD_ACK_DISABLE          (1 << 5)
-#define PTL_MD_IOVEC		    (1 << 6)
-#define PTL_MD_MAX_SIZE		    (1 << 7)
-#define PTL_MD_KIOV                 (1 << 8)
-#define PTL_MD_EVENT_START_DISABLE  (1 << 9)
-#define PTL_MD_EVENT_END_DISABLE    (1 << 10)
+#define LNET_MD_OP_PUT               (1 << 0)
+#define LNET_MD_OP_GET               (1 << 1)
+#define LNET_MD_MANAGE_REMOTE        (1 << 2)
+/* unused                            (1 << 3) */
+#define LNET_MD_TRUNCATE             (1 << 4)
+#define LNET_MD_ACK_DISABLE          (1 << 5)
+#define LNET_MD_IOVEC                (1 << 6)
+#define LNET_MD_MAX_SIZE	     (1 << 7)
+#define LNET_MD_KIOV                 (1 << 8)
 
 /* For compatibility with Cray Portals */
-#define PTL_MD_LUSTRE_COMPLETION_SEMANTICS  0
-#define PTL_MD_PHYS                         0
+#define LNET_MD_PHYS                         0
 
-#define PTL_MD_THRESH_INF       (-1)
+#define LNET_MD_THRESH_INF       (-1)
 
 /* NB lustre portals uses struct iovec internally! */
-typedef struct iovec ptl_md_iovec_t;
+typedef struct iovec lnet_md_iovec_t;
 
 typedef struct {
 	cfs_page_t      *kiov_page;
 	unsigned int     kiov_len;
 	unsigned int     kiov_offset;
-} ptl_kiov_t;
+} lnet_kiov_t;
 
 typedef enum {
-        PTL_EVENT_GET_START,
-        PTL_EVENT_GET_END,
+        LNET_EVENT_GET,
+        LNET_EVENT_PUT,
+        LNET_EVENT_REPLY,
+        LNET_EVENT_ACK,
+	LNET_EVENT_SEND,
+	LNET_EVENT_UNLINK,
+} lnet_event_kind_t;
 
-        PTL_EVENT_PUT_START,
-        PTL_EVENT_PUT_END,
-
-        PTL_EVENT_REPLY_START,
-        PTL_EVENT_REPLY_END,
-
-        PTL_EVENT_ACK,
-
-        PTL_EVENT_SEND_START,
-	PTL_EVENT_SEND_END,
-
-	PTL_EVENT_UNLINK,
-} ptl_event_kind_t;
-
-#define PTL_SEQ_BASETYPE	long
-typedef unsigned PTL_SEQ_BASETYPE ptl_seq_t;
-#define PTL_SEQ_GT(a,b)	(((signed PTL_SEQ_BASETYPE)((a) - (b))) > 0)
+#define LNET_SEQ_BASETYPE	long
+typedef unsigned LNET_SEQ_BASETYPE lnet_seq_t;
+#define LNET_SEQ_GT(a,b)	(((signed LNET_SEQ_BASETYPE)((a) - (b))) > 0)
 
 /* XXX
  * cygwin need the pragma line, not clear if it's needed in other places.
@@ -131,64 +130,35 @@ typedef unsigned PTL_SEQ_BASETYPE ptl_seq_t;
 #pragma pack(push, 4)
 #endif
 typedef struct {
-        ptl_event_kind_t   type;
-        ptl_process_id_t   initiator;
-        ptl_uid_t          uid;
-        ptl_jid_t          jid;
-        ptl_pt_index_t     pt_index;
-        ptl_match_bits_t   match_bits;
-        ptl_size_t         rlength;
-        ptl_size_t         mlength;
-        ptl_size_t         offset;
-        ptl_handle_md_t    md_handle;
-        ptl_md_t           md;
-        ptl_hdr_data_t     hdr_data;
-        ptl_seq_t          link;
-        ptl_ni_fail_t      ni_fail_type;
+        lnet_event_kind_t   type;
+	lnet_process_id_t   target;
+        lnet_process_id_t   initiator;
+#ifdef CRAY_XT3
+	lnet_uid_t          uid;
+#endif
+        unsigned int        pt_index;
+        __u64               match_bits;
+        unsigned int        rlength;
+        unsigned int        mlength;
+        unsigned int        offset;
+        lnet_handle_md_t    md_handle;
+        lnet_md_t           md;
+        __u64               hdr_data;
+        int                 status;
+        int                 unlinked;
 
-        int                unlinked;
-
-        volatile ptl_seq_t sequence;
-} ptl_event_t;
+        volatile lnet_seq_t sequence;
+} lnet_event_t;
 #ifdef __CYGWIN__
 #pragma pop
 #endif
 
 typedef enum {
-        PTL_ACK_REQ,
-        PTL_NOACK_REQ
-} ptl_ack_req_t;
+        LNET_ACK_REQ,
+        LNET_NOACK_REQ
+} lnet_ack_req_t;
 
-typedef void (*ptl_eq_handler_t)(ptl_event_t *event);
-#define PTL_EQ_HANDLER_NONE NULL
-
-typedef struct {
-	int max_mes;
-	int max_mds;
-	int max_eqs;
-	int max_ac_index;
-	int max_pt_index;
-	int max_md_iovecs;
-	int max_me_list;
-	int max_getput_md;
-} ptl_ni_limits_t;
-
-/*
- * Status registers
- */
-typedef enum {
-        PTL_SR_DROP_COUNT,
-        PTL_SR_DROP_LENGTH,
-        PTL_SR_RECV_COUNT,
-        PTL_SR_RECV_LENGTH,
-        PTL_SR_SEND_COUNT,
-        PTL_SR_SEND_LENGTH,
-        PTL_SR_MSGS_MAX,
-} ptl_sr_index_t;
-
-typedef int ptl_sr_value_t;
-
-typedef int ptl_interface_t;
-#define PTL_IFACE_DEFAULT    (-1)
+typedef void (*lnet_eq_handler_t)(lnet_event_t *event);
+#define LNET_EQ_HANDLER_NONE NULL
 
 #endif

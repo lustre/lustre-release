@@ -21,25 +21,27 @@
 #ifndef _PTLCTL_H_
 #define _PTLCTL_H_
 
-#include <portals/types.h>
+#include <lnet/types.h>
 #include <libcfs/kp30.h>
 #include <libcfs/libcfs.h>
 
-#define PORTALS_DEV_ID 0
-#define PORTALS_DEV_PATH "/dev/portals"
+#define LNET_DEV_ID 0
+#define LNET_DEV_PATH "/dev/lnet"
+#define LNET_DEV_MAJOR 10
+#define LNET_DEV_MINOR 240
 #define OBD_DEV_ID 1
 #define OBD_DEV_PATH "/dev/obd"
+#define OBD_DEV_MAJOR 10
+#define OBD_DEV_MINOR 241
 #define SMFS_DEV_ID  2
 #define SMFS_DEV_PATH "/dev/snapdev"
-
-int ptl_name2nal(char *str);
-int ptl_parse_ipaddr (__u32 *ipaddrp, char *str);
-int ptl_parse_anynid (ptl_nid_t *nidp, char *str);
-int ptl_parse_nid (ptl_nid_t *nidp, char *str);
-char * ptl_nid2str (char *buffer, ptl_nid_t nid);
+#define SMFS_DEV_MAJOR 10
+#define SMFS_DEV_MINOR 242
 
 int ptl_initialize(int argc, char **argv);
 int jt_ptl_network(int argc, char **argv);
+int jt_ptl_list_nids(int argc, char **argv);
+int jt_ptl_which_nid(int argc, char **argv);
 int jt_ptl_print_interfaces(int argc, char **argv);
 int jt_ptl_add_interface(int argc, char **argv);
 int jt_ptl_del_interface(int argc, char **argv);
@@ -47,12 +49,11 @@ int jt_ptl_print_peers (int argc, char **argv);
 int jt_ptl_add_peer (int argc, char **argv);
 int jt_ptl_del_peer (int argc, char **argv);
 int jt_ptl_print_connections (int argc, char **argv);
-int jt_ptl_connect(int argc, char **argv);
 int jt_ptl_disconnect(int argc, char **argv);
 int jt_ptl_push_connection(int argc, char **argv);
 int jt_ptl_print_active_txs(int argc, char **argv);
 int jt_ptl_ping(int argc, char **argv);
-int jt_ptl_shownid(int argc, char **argv);
+int jt_ptl_ping_test(int argc, char **argv);
 int jt_ptl_mynid(int argc, char **argv);
 int jt_ptl_add_uuid(int argc, char **argv);
 int jt_ptl_add_uuid_old(int argc, char **argv); /* backwards compatibility  */
@@ -63,8 +64,8 @@ int jt_ptl_del_route (int argc, char **argv);
 int jt_ptl_notify_router (int argc, char **argv);
 int jt_ptl_print_routes (int argc, char **argv);
 int jt_ptl_fail_nid (int argc, char **argv);
-int jt_ptl_loopback (int argc, char **argv);
 int jt_ptl_lwt(int argc, char **argv);
+int jt_ptl_testprotocompat(int argc, char **argv);
 int jt_ptl_memhog(int argc, char **argv);
 
 int dbg_initialize(int argc, char **argv);
@@ -79,12 +80,10 @@ int jt_dbg_mark_debug_buf(int argc, char **argv);
 int jt_dbg_modules(int argc, char **argv);
 int jt_dbg_panic(int argc, char **argv);
 
-int ptl_set_cfg_record_cb(cfg_record_cb_t cb);
-
 /* l_ioctl.c */
 typedef int (ioc_handler_t)(int dev_id, unsigned int opc, void *buf);
 void set_ioc_handler(ioc_handler_t *handler);
-int register_ioc_dev(int dev_id, const char * dev_name);
+int register_ioc_dev(int dev_id, const char * dev_name, int major, int minor);
 void unregister_ioc_dev(int dev_id);
 int set_ioctl_dump(char * file);
 int l_ioctl(int dev_id, unsigned int opc, void *buf);

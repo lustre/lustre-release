@@ -1,5 +1,5 @@
-#ifndef __LIBCFS_DARWIN_XNU_UTILS_H__
-#define __LIBCFS_DARWIN_XNU_UTILS_H__
+#ifndef __LIBCFS_DARWIN_UTILS_H__
+#define __LIBCFS_DARWIN_UTILS_H__
 
 #ifndef __LIBCFS_LIBCFS_H__
 #error Do not #include this file directly. #include <libcfs/libcfs.h> instead
@@ -56,5 +56,12 @@ char * ul2dstr(unsigned long address, char *buf, int len);
 	((unsigned char *)&addr)[3]
 
 #define HIPQUAD NIPQUAD
+
+#ifndef LIST_CIRCLE
+#define LIST_CIRCLE(elm, field)                                 \
+	do {                                                    \
+		(elm)->field.le_prev = &(elm)->field.le_next;   \
+	} while (0)
+#endif
 
 #endif /* __XNU_UTILS_H__ */

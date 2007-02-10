@@ -12,7 +12,6 @@
 
 #include <pthread.h>
 #include <bridge.h>
-#include <ipmap.h>
 
 
 #define NAL_FLAG_RUNNING        1
@@ -33,24 +32,27 @@ typedef struct procbridge {
 } *procbridge;
 
 typedef struct nal_init_args {
-    ptl_pid_t        nia_requested_pid;
-    ptl_ni_limits_t *nia_requested_limits;
-    ptl_ni_limits_t *nia_actual_limits;
-    int              nia_nal_type;
+    lnet_pid_t        nia_requested_pid;
     bridge           nia_bridge;
-    nal_t           *nia_apinal;
 } nal_init_args_t;
 
 extern void *nal_thread(void *);
 
-
-#define PTL_INIT        (LIB_MAX_DISPATCH+1)
-#define PTL_FINI        (LIB_MAX_DISPATCH+2)
-
-#define MAX_ACLS        1
-#define MAX_PTLS        128
-
-extern void set_address(bridge t,ptl_pid_t pidrequest);
 extern void procbridge_wakeup_nal(procbridge p);
+
+extern int procbridge_startup (lnet_ni_t *);
+extern void procbridge_shutdown (lnet_ni_t *);
+
+extern void tcpnal_notify(lnet_ni_t *ni, lnet_nid_t nid, int alive);
+
+extern int tcpnal_send(lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg);
+int tcpnal_recv(lnet_ni_t *ni, void *private, lnet_msg_t *cookie,
+                int delayed, unsigned int niov,
+                struct iovec *iov, lnet_kiov_t *kiov,
+                unsigned int offset, unsigned int mlen, unsigned int rlen);
+extern int tcpnal_set_global_params();
+
+
+
 
 #endif

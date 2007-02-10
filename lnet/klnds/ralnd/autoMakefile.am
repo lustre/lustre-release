@@ -4,12 +4,10 @@
 # See the file COPYING in this distribution
 
 if MODULES
-if !CRAY_PORTALS
-if BUILD_RANAL
-modulenet_DATA = kranal$(KMODEXT)
-endif
+if BUILD_RALND
+modulenet_DATA = kralnd$(KMODEXT)
 endif
 endif
 
-MOSTLYCLEANFILES := @MOSTLYCLEANFILES@ 
-DIST_SOURCES = $(kranal-objs:%.o=%.c) ranal.h
+MOSTLYCLEANFILES = @MOSTLYCLEANFILES@
+DIST_SOURCES = $(kralnd-objs:%.o=%.c) ralnd.h

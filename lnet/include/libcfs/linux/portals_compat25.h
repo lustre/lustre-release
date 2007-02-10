@@ -5,7 +5,7 @@
 #define __LIBCFS_LINUX_PORTALS_COMPAT_H__
 
 // XXX BUG 1511 -- remove this stanza and all callers when bug 1511 is resolved
-#if SPINLOCK_DEBUG
+#if defined(SPINLOCK_DEBUG) && SPINLOCK_DEBUG
 # if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0)) || defined(CONFIG_RH_2_4_20)
 #  define SIGNAL_MASK_ASSERT() \
    LASSERT(current->sighand->siglock.magic == SPINLOCK_MAGIC)
@@ -44,6 +44,8 @@
 # define RECALC_SIGPENDING         recalc_sigpending()
 # define CLEAR_SIGPENDING          (current->sigpending = 0)
 # define CURRENT_SECONDS           CURRENT_TIME
+# define wait_event_interruptible_exclusive(wq, condition)              \
+        wait_event_interruptible(wq, condition)
 
 #else /* 2.4.x */
 
@@ -56,6 +58,8 @@
 # define RECALC_SIGPENDING         recalc_sigpending(current)
 # define CLEAR_SIGPENDING          (current->sigpending = 0)
 # define CURRENT_SECONDS           CURRENT_TIME
+# define wait_event_interruptible_exclusive(wq, condition)              \
+        wait_event_interruptible(wq, condition)
 
 #endif
 
@@ -86,11 +90,34 @@
 #endif
 
 #ifndef HAVE_CPU_ONLINE
-#define cpu_online(cpu) test_bit(cpu, &(cpu_online_map))
+#define cpu_online(cpu) ((1<<cpu) & (cpu_online_map))
 #endif
 #ifndef HAVE_CPUMASK_T
-#define cpu_set(cpu, map) set_bit(cpu, &(map))
 typedef unsigned long cpumask_t;
+#define cpu_set(cpu, map) set_bit(cpu, &(map))
+#define cpus_clear(map) memset(&(map), 0, sizeof(cpumask_t))
+#endif
+
+#ifndef __user
+#define __user
+#endif
+
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,8)
+#define ll_proc_dointvec(table, write, filp, buffer, lenp, ppos)        \
+        proc_dointvec(table, write, filp, buffer, lenp)
+#define ll_proc_dostring(table, write, filp, buffer, lenp, ppos)        \
+        proc_dostring(table, write, filp, buffer, lenp)
+#define LL_PROC_PROTO(name)                                             \
+        name(ctl_table *table, int write, struct file *filp,            \
+             void __user *buffer, size_t *lenp)
+#else
+#define ll_proc_dointvec(table, write, filp, buffer, lenp, ppos)        \
+        proc_dointvec(table, write, filp, buffer, lenp, ppos);
+#define ll_proc_dostring(table, write, filp, buffer, lenp, ppos)        \
+        proc_dostring(table, write, filp, buffer, lenp, ppos);
+#define LL_PROC_PROTO(name)                                             \
+        name(ctl_table *table, int write, struct file *filp,            \
+             void __user *buffer, size_t *lenp, loff_t *ppos)
 #endif
 
 #endif /* _PORTALS_COMPAT_H */

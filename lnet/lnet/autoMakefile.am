@@ -1,32 +1,34 @@
-my_sources =    api-errno.c api-ni.c api-wrap.c \
-		lib-init.c lib-me.c lib-msg.c lib-eq.c \
-		lib-md.c lib-move.c lib-ni.c lib-pid.c
+my_sources =    api-errno.c api-ni.c config.c \
+		lib-me.c lib-msg.c lib-eq.c \
+		lib-md.c lib-move.c lo.c \
+	        router.c router_proc.c \
+		acceptor.c peer.c
 
-if !CRAY_PORTALS
 
 if LIBLUSTRE
-noinst_LIBRARIES= libportals.a
-libportals_a_SOURCES= $(my_sources)
-libportals_a_CPPFLAGS = $(LLCPPFLAGS)
-libportals_a_CFLAGS = $(LLCFLAGS)
+noinst_LIBRARIES= liblnet.a
+liblnet_a_SOURCES= $(my_sources)
+liblnet_a_CPPFLAGS = $(LLCPPFLAGS)
+liblnet_a_CFLAGS = $(LLCFLAGS)
 endif
 
 if MODULES
 
 if LINUX
-modulenet_DATA = portals$(KMODEXT)
+modulenet_DATA = lnet$(KMODEXT)
 endif # LINUX
 
 if DARWIN
-macos_PROGRAMS := portals
+macos_PROGRAMS := lnet
 
-portals_SOURCES := api-errno.c api-ni.c api-wrap.c
-portals_SOURCES += lib-init.c lib-me.c lib-msg.c lib-eq.c lib-md.c
-portals_SOURCES += lib-move.c lib-ni.c lib-pid.c module.c
+lnet_SOURCES := api-errno.c api-ni.c config.c
+lnet_SOURCES += lib-me.c lib-msg.c lib-eq.c lib-md.c
+lnet_SOURCES += lib-move.c module.c lo.c router.c router_proc.c
+lnet_SOURCES += acceptor.c peer.c
 
-portals_CFLAGS := $(EXTRA_KCFLAGS)
-portals_LDFLAGS := $(EXTRA_KLDFLAGS)
-portals_LDADD := $(EXTRA_KLIBS)
+lnet_CFLAGS := $(EXTRA_KCFLAGS)
+lnet_LDFLAGS := $(EXTRA_KLDFLAGS)
+lnet_LDADD := $(EXTRA_KLIBS)
 
 plist_DATA := Info.plist
 
@@ -36,11 +38,9 @@ endif # DARWIN
 
 endif # MODULES
 
-endif # CRAY_PORTALS
-
 install-data-hook: $(install_data_hook)
 
 EXTRA_DIST := Info.plist
 
-MOSTLYCLEANFILES := @MOSTLYCLEANFILES@  portals
-DIST_SOURCES = $(portals-objs:%.o=%.c)
+MOSTLYCLEANFILES = @MOSTLYCLEANFILES@ lnet
+DIST_SOURCES = $(lnet-objs:%.o=%.c)

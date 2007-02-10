@@ -25,7 +25,7 @@
  *  io events through the select system call.
  */
 
-#define DEBUG_SUBSYSTEM S_NAL
+#define DEBUG_SUBSYSTEM S_LND
 
 #ifdef sun
 #include <sys/filio.h>
@@ -320,7 +320,7 @@ again:
     }
 
     /* XXX only compile for linux */
-#if __WORDSIZE == 64
+#if (__WORDSIZE == 64) && !defined(__mips64__)
     nready = syscall(SYS_select, max, &fds[0], &fds[1], &fds[2],
                      select_timeout);
 #else

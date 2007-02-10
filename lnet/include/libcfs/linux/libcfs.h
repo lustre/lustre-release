@@ -8,28 +8,18 @@
 #error Do not #include this file directly. #include <libcfs/libcfs.h> instead
 #endif
 
+#include <stdarg.h>
 #include <libcfs/linux/linux-mem.h>
 #include <libcfs/linux/linux-time.h>
 #include <libcfs/linux/linux-prim.h>
 #include <libcfs/linux/linux-lock.h>
 #include <libcfs/linux/linux-fs.h>
+#include <libcfs/linux/linux-tcpip.h>
 
 #ifdef HAVE_ASM_TYPES_H
 #include <asm/types.h>
 #else
-/* this is actually coming from within lustre, a layering violation.
- * we may not even need it, as libuptlctl (the dependency for which it
- * is needed in liblustre building on catamount, bug 6923) shows no
- * apparent need to be included in liblustre AFAICS.  The change of
- * include to lustre/types.h only makes this explicit instead of implicit.
- * To be resolved.  For now, make it CRAY_PORTALS only, to avoid breaking
- * non-b1_4 branches that don't have this file.
- */
-# if CRAY_PORTALS
-#  include <lustre/types.h>
-# else
-#  include "types.h"
-# endif
+#include <libcfs/types.h>
 #endif
 
 
@@ -99,49 +89,40 @@ struct ptldebug_header {
 
 #define LUSTRE_TRACE_SIZE (THREAD_SIZE >> 5)
 
-#ifdef __KERNEL__
+#if defined(__KERNEL__) && !defined(__x86_64__)
 # ifdef  __ia64__
-#  define CDEBUG_STACK (THREAD_SIZE -                                      \
-                        ((unsigned long)__builtin_dwarf_cfa() &            \
-                         (THREAD_SIZE - 1)))
+#  define CDEBUG_STACK() (THREAD_SIZE -                                 \
+                          ((unsigned long)__builtin_dwarf_cfa() &       \
+                           (THREAD_SIZE - 1)))
 # else
-#  define CDEBUG_STACK (THREAD_SIZE -                                      \
-                        ((unsigned long)__builtin_frame_address(0) &       \
-                         (THREAD_SIZE - 1)))
+#  define CDEBUG_STACK() (THREAD_SIZE -                                 \
+                          ((unsigned long)__builtin_frame_address(0) &  \
+                           (THREAD_SIZE - 1)))
 # endif /* __ia64__ */
 
-#define CHECK_STACK(stack)                                                    \
-        do {                                                                  \
-                if ((stack) > 3*THREAD_SIZE/4 && (stack) > portal_stack) {    \
-                        portals_debug_msg(DEBUG_SUBSYSTEM, D_WARNING,         \
-                                          __FILE__, __FUNCTION__, __LINE__,   \
-                                          (stack),"maximum lustre stack %u\n",\
-                                          portal_stack = (stack));            \
-                      /*panic("LBUG");*/                                      \
-                }                                                             \
-        } while (0)
+#define __CHECK_STACK(file, func, line)                                 \
+do {                                                                    \
+        unsigned long _stack = CDEBUG_STACK();                          \
+                                                                        \
+        if (_stack > 3*THREAD_SIZE/4 && _stack > libcfs_stack) {        \
+                libcfs_stack = _stack;                                  \
+                libcfs_debug_msg(NULL, DEBUG_SUBSYSTEM, D_WARNING,      \
+                                 file, func, line,                      \
+                                 "maximum lustre stack %lu\n", _stack); \
+              /*panic("LBUG");*/                                        \
+        }                                                               \
+} while (0)
+#define CHECK_STACK()     __CHECK_STACK(__FILE__, __func__, __LINE__)
 #else /* !__KERNEL__ */
-#define CHECK_STACK(stack) do { } while(0)
-#define CDEBUG_STACK (0L)
+#define __CHECK_STACK(X, Y, Z) do { } while(0)
+#define CHECK_STACK() do { } while(0)
+#define CDEBUG_STACK() (0L)
 #endif /* __KERNEL__ */
 
 /* initial pid  */
-# if CRAY_PORTALS
-/*
- * 1) ptl_pid_t in cray portals is only 16 bits, not 32 bits, therefore this
- *    is too big.
- *
- * 2) the implementation of ernal in cray portals further restricts the pid
- *    space that may be used to 0 <= pid <= 255 (an 8 bit value).  Returns
- *    an error at nal init time for any pid outside this range.  Other nals
- *    in cray portals don't have this restriction.
- * */
-#define LUSTRE_PTL_PID          9
-# else
-#define LUSTRE_PTL_PID          12345
-# endif
+#define LUSTRE_LNET_PID          12345
 
-#define ENTRY_NESTING_SUPPORT (0)
+#define ENTRY_NESTING_SUPPORT (1)
 #define ENTRY_NESTING   do {;} while (0)
 #define EXIT_NESTING   do {;} while (0)
 #define __current_nesting_level() (0)
@@ -158,6 +139,19 @@ struct ptldebug_header {
 typedef kernel_cap_t cfs_kernel_cap_t;
 #else
 typedef __u32 cfs_kernel_cap_t;
+#endif
+
+#if defined(__KERNEL__)
+/*
+ * No stack-back-tracing in Linux for now.
+ */
+struct cfs_stack_trace {
+};
+
+#ifndef WITH_WATCHDOG
+#define WITH_WATCHDOG
+#endif
+
 #endif
 
 #endif /* _LINUX_LIBCFS_H */

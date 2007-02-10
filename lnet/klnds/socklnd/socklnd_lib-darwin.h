@@ -25,25 +25,14 @@
 #include <mach/mach_types.h>
 #include <netinet/in.h>
 #include <netinet/tcp.h>
-#include <netat/sysglue.h>
 #include <stdarg.h>
 
 #include <libcfs/libcfs.h>
 
-#define SOCKNAL_ARCH_EAGER_ACK		1
-
-#define KSN_SOCK2FILE(so)		((struct file *)(so)->reserved4)
-#define KSN_CONN2FILE(conn)		((struct file *)(conn)->ksnc_sock->reserved4)
-
-#define SOCK_WMEM_QUEUED(so)		((so)->so_snd.sb_cc)
-#define SOCK_ERROR(so)			((so)->so_error)
-
-#define SOCK_TEST_NOSPACE(so)		(sbspace(&(so)->so_snd) < (so)->so_snd.sb_lowat)
-extern struct socket * sockfd_lookup(int fd, void *foo);
-
 static inline
 int ksocknal_nsched(void)
 { 
+	/* XXX Liang: fix it */
 	return 1;
 }
 

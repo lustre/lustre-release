@@ -20,201 +20,26 @@
  *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  *
  */
-#include "ranal.h"
+#include "ralnd.h"
 
-static int        kranal_devids[] = {RAPK_MAIN_DEVICE_ID,
-                                     RAPK_EXPANSION_DEVICE_ID};
+static int        kranal_devids[RANAL_MAXDEVS] = {RAPK_MAIN_DEVICE_ID,
+                                                  RAPK_EXPANSION_DEVICE_ID};
 
-nal_t                   kranal_api;
-ptl_handle_ni_t         kranal_ni;
+lnd_t the_kralnd = {
+        .lnd_type       = RALND,
+        .lnd_startup    = kranal_startup,
+        .lnd_shutdown   = kranal_shutdown,
+        .lnd_ctl        = kranal_ctl,
+        .lnd_send       = kranal_send,
+        .lnd_recv       = kranal_recv,
+        .lnd_eager_recv = kranal_eager_recv,
+        .lnd_accept     = kranal_accept,
+};
+
 kra_data_t              kranal_data;
-kra_tunables_t          kranal_tunables;
-
-#define RANAL_SYSCTL_TIMEOUT           1
-#define RANAL_SYSCTL_LISTENER_TIMEOUT  2
-#define RANAL_SYSCTL_BACKLOG           3
-#define RANAL_SYSCTL_PORT              4
-#define RANAL_SYSCTL_MAX_IMMEDIATE     5
-
-#define RANAL_SYSCTL                   202
-
-static ctl_table kranal_ctl_table[] = {
-        {RANAL_SYSCTL_TIMEOUT, "timeout",
-         &kranal_tunables.kra_timeout, sizeof(int),
-         0644, NULL, &proc_dointvec},
-        {RANAL_SYSCTL_LISTENER_TIMEOUT, "listener_timeout",
-         &kranal_tunables.kra_listener_timeout, sizeof(int),
-         0644, NULL, &proc_dointvec},
-        {RANAL_SYSCTL_BACKLOG, "backlog",
-         &kranal_tunables.kra_backlog, sizeof(int),
-         0644, NULL, kranal_listener_procint},
-        {RANAL_SYSCTL_PORT, "port",
-         &kranal_tunables.kra_port, sizeof(int),
-         0644, NULL, kranal_listener_procint},
-        {RANAL_SYSCTL_MAX_IMMEDIATE, "max_immediate",
-         &kranal_tunables.kra_max_immediate, sizeof(int),
-         0644, NULL, &proc_dointvec},
-        { 0 }
-};
-
-static ctl_table kranal_top_ctl_table[] = {
-        {RANAL_SYSCTL, "ranal", NULL, 0, 0555, kranal_ctl_table},
-        { 0 }
-};
-
-int
-kranal_sock_write (struct socket *sock, void *buffer, int nob)
-{
-        int           rc;
-        mm_segment_t  oldmm = get_fs();
-        struct iovec  iov = {
-                .iov_base = buffer,
-                .iov_len  = nob
-        };
-        struct msghdr msg = {
-                .msg_name       = NULL,
-                .msg_namelen    = 0,
-                .msg_iov        = &iov,
-                .msg_iovlen     = 1,
-                .msg_control    = NULL,
-                .msg_controllen = 0,
-                .msg_flags      = MSG_DONTWAIT
-        };
-
-        /* We've set up the socket's send buffer to be large enough for
-         * everything we send, so a single non-blocking send should
-         * complete without error. */
-
-        set_fs(KERNEL_DS);
-        rc = sock_sendmsg(sock, &msg, iov.iov_len);
-        set_fs(oldmm);
-
-        if (rc == nob)
-                return 0;
-
-        if (rc >= 0)
-                return -EAGAIN;
-
-        return rc;
-}
-
-int
-kranal_sock_read (struct socket *sock, void *buffer, int nob, int timeout)
-{
-        int            rc;
-        mm_segment_t   oldmm = get_fs();
-        long           ticks = timeout * HZ;
-        unsigned long  then;
-        struct timeval tv;
-
-        LASSERT (nob > 0);
-        LASSERT (ticks > 0);
-
-        for (;;) {
-                struct iovec  iov = {
-                        .iov_base = buffer,
-                        .iov_len  = nob
-                };
-                struct msghdr msg = {
-                        .msg_name       = NULL,
-                        .msg_namelen    = 0,
-                        .msg_iov        = &iov,
-                        .msg_iovlen     = 1,
-                        .msg_control    = NULL,
-                        .msg_controllen = 0,
-                        .msg_flags      = 0
-                };
-
-                /* Set receive timeout to remaining time */
-                tv = (struct timeval) {
-                        .tv_sec = ticks / HZ,
-                        .tv_usec = ((ticks % HZ) * 1000000) / HZ
-                };
-                set_fs(KERNEL_DS);
-                rc = sock_setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO,
-                                     (char *)&tv, sizeof(tv));
-                set_fs(oldmm);
-                if (rc != 0) {
-                        CERROR("Can't set socket recv timeout %d: %d\n",
-                               timeout, rc);
-                        return rc;
-                }
-
-                set_fs(KERNEL_DS);
-                then = jiffies;
-                rc = sock_recvmsg(sock, &msg, iov.iov_len, 0);
-                ticks -= jiffies - then;
-                set_fs(oldmm);
-
-                if (rc < 0)
-                        return rc;
-
-                if (rc == 0)
-                        return -ECONNABORTED;
-
-                buffer = ((char *)buffer) + rc;
-                nob -= rc;
-
-                if (nob == 0)
-                        return 0;
-
-                if (ticks <= 0)
-                        return -ETIMEDOUT;
-        }
-}
-
-int
-kranal_create_sock(struct socket **sockp)
-{
-        struct socket       *sock;
-        int                  rc;
-        int                  option;
-        mm_segment_t         oldmm = get_fs();
-
-        rc = sock_create(PF_INET, SOCK_STREAM, 0, &sock);
-        if (rc != 0) {
-                CERROR("Can't create socket: %d\n", rc);
-                return rc;
-        }
-
-        /* Ensure sending connection info doesn't block */
-        option = 2 * sizeof(kra_connreq_t);
-        set_fs(KERNEL_DS);
-        rc = sock_setsockopt(sock, SOL_SOCKET, SO_SNDBUF,
-                             (char *)&option, sizeof(option));
-        set_fs(oldmm);
-        if (rc != 0) {
-                CERROR("Can't set send buffer %d: %d\n", option, rc);
-                goto failed;
-        }
-
-        option = 1;
-        set_fs(KERNEL_DS);
-        rc = sock_setsockopt(sock, SOL_SOCKET, SO_REUSEADDR,
-                             (char *)&option, sizeof(option));
-        set_fs(oldmm);
-        if (rc != 0) {
-                CERROR("Can't set SO_REUSEADDR: %d\n", rc);
-                goto failed;
-        }
-
-        *sockp = sock;
-        return 0;
-
- failed:
-        sock_release(sock);
-        return rc;
-}
 
 void
-kranal_pause(int ticks)
-{
-        set_current_state(TASK_UNINTERRUPTIBLE);
-        schedule_timeout(ticks);
-}
-
-void
-kranal_pack_connreq(kra_connreq_t *connreq, kra_conn_t *conn, ptl_nid_t dstnid)
+kranal_pack_connreq(kra_connreq_t *connreq, kra_conn_t *conn, lnet_nid_t dstnid)
 {
         RAP_RETURN   rrc;
 
@@ -222,8 +47,13 @@ kranal_pack_connreq(kra_connreq_t *connreq, kra_conn_t *conn, ptl_nid_t dstnid)
 
         connreq->racr_magic     = RANAL_MSG_MAGIC;
         connreq->racr_version   = RANAL_MSG_VERSION;
+
+        if (conn == NULL)                       /* prepping a "stub" reply */
+                return;
+
         connreq->racr_devid     = conn->rac_device->rad_id;
-        connreq->racr_srcnid    = kranal_lib.libnal_ni.ni_pid.nid;
+        connreq->racr_srcnid    = lnet_ptlcompat_srcnid(kranal_data.kra_ni->ni_nid,
+                                                        dstnid);
         connreq->racr_dstnid    = dstnid;
         connreq->racr_peerstamp = kranal_data.kra_peerstamp;
         connreq->racr_connstamp = conn->rac_my_connstamp;
@@ -234,22 +64,101 @@ kranal_pack_connreq(kra_connreq_t *connreq, kra_conn_t *conn, ptl_nid_t dstnid)
 }
 
 int
-kranal_recv_connreq(struct socket *sock, kra_connreq_t *connreq, int timeout)
+kranal_recv_connreq(struct socket *sock, kra_connreq_t *connreq, int active)
 {
+        int         timeout = active ? *kranal_tunables.kra_timeout :
+                                        lnet_acceptor_timeout();
+        int         swab;
         int         rc;
 
-        rc = kranal_sock_read(sock, connreq, sizeof(*connreq), timeout);
+        /* return 0 on success, -ve on error, +ve to tell the peer I'm "old" */
+
+        rc = libcfs_sock_read(sock, &connreq->racr_magic, 
+                              sizeof(connreq->racr_magic), timeout);
         if (rc != 0) {
-                CERROR("Read failed: %d\n", rc);
-                return rc;
+                CERROR("Read(magic) failed(1): %d\n", rc);
+                return -EIO;
         }
 
-        if (connreq->racr_magic != RANAL_MSG_MAGIC) {
-                if (__swab32(connreq->racr_magic) != RANAL_MSG_MAGIC) {
-                        CERROR("Unexpected magic %08x\n", connreq->racr_magic);
+        if (connreq->racr_magic != RANAL_MSG_MAGIC &&
+            connreq->racr_magic != __swab32(RANAL_MSG_MAGIC)) {
+                /* Unexpected magic! */
+                if (!active &&
+                    the_lnet.ln_ptlcompat == 0 &&
+                    (connreq->racr_magic == LNET_PROTO_MAGIC ||
+                     connreq->racr_magic == __swab32(LNET_PROTO_MAGIC))) {
+                        /* future protocol version compatibility!
+                         * When LNET unifies protocols over all LNDs, the first
+                         * thing sent will be a version query.  +ve rc means I
+                         * reply with my current magic/version */
+                        return EPROTO;
+                }
+
+                if (active ||
+                    the_lnet.ln_ptlcompat == 0) {
+                        CERROR("Unexpected magic %08x (1)\n",
+                               connreq->racr_magic);
                         return -EPROTO;
                 }
 
+                /* When portals compatibility is set, I may be passed a new
+                 * connection "blindly" by the acceptor, and I have to
+                 * determine if my peer has sent an acceptor connection request
+                 * or not.  This isn't a connreq, so I'll get the acceptor to
+                 * look at it... */
+                rc = lnet_accept(kranal_data.kra_ni, sock, connreq->racr_magic);
+                if (rc != 0)
+                        return -EPROTO;
+
+                /* ...and if it's OK I'm back to looking for a connreq... */
+                rc = libcfs_sock_read(sock, &connreq->racr_magic,
+                                      sizeof(connreq->racr_magic), timeout);
+                if (rc != 0) {
+                        CERROR("Read(magic) failed(2): %d\n", rc);
+                        return -EIO;
+                }
+
+                if (connreq->racr_magic != RANAL_MSG_MAGIC &&
+                    connreq->racr_magic != __swab32(RANAL_MSG_MAGIC)) {
+                        CERROR("Unexpected magic %08x(2)\n",
+                               connreq->racr_magic);
+                        return -EPROTO;
+                }
+        }
+
+        swab = (connreq->racr_magic == __swab32(RANAL_MSG_MAGIC));
+
+        rc = libcfs_sock_read(sock, &connreq->racr_version,
+                              sizeof(connreq->racr_version), timeout);
+        if (rc != 0) {
+                CERROR("Read(version) failed: %d\n", rc);
+                return -EIO;
+        }
+
+        if (swab)
+                __swab16s(&connreq->racr_version);
+        
+        if (connreq->racr_version != RANAL_MSG_VERSION) {
+                if (active) {
+                        CERROR("Unexpected version %d\n", connreq->racr_version);
+                        return -EPROTO;
+                }
+                /* If this is a future version of the ralnd protocol, and I'm
+                 * passive (accepted the connection), tell my peer I'm "old"
+                 * (+ve rc) */
+                return EPROTO;
+        }
+
+        rc = libcfs_sock_read(sock, &connreq->racr_devid,
+                              sizeof(connreq->racr_version) -
+                              offsetof(kra_connreq_t, racr_devid),
+                              timeout);
+        if (rc != 0) {
+                CERROR("Read(body) failed: %d\n", rc);
+                return -EIO;
+        }
+
+        if (swab) {
                 __swab32s(&connreq->racr_magic);
                 __swab16s(&connreq->racr_version);
                 __swab16s(&connreq->racr_devid);
@@ -265,14 +174,9 @@ kranal_recv_connreq(struct socket *sock, kra_connreq_t *connreq, int timeout)
                 __swab32s(&connreq->racr_riparams.CompletionCookie);
         }
 
-        if (connreq->racr_version != RANAL_MSG_VERSION) {
-                CERROR("Unexpected version %d\n", connreq->racr_version);
-                return -EPROTO;
-        }
-
-        if (connreq->racr_srcnid == PTL_NID_ANY ||
-            connreq->racr_dstnid == PTL_NID_ANY) {
-                CERROR("Received PTL_NID_ANY\n");
+        if (connreq->racr_srcnid == LNET_NID_ANY ||
+            connreq->racr_dstnid == LNET_NID_ANY) {
+                CERROR("Received LNET_NID_ANY\n");
                 return -EPROTO;
         }
 
@@ -294,7 +198,7 @@ kranal_close_stale_conns_locked (kra_peer_t *peer, kra_conn_t *newconn)
         int                 loopback;
         int                 count = 0;
 
-        loopback = peer->rap_nid == kranal_lib.libnal_ni.ni_pid.nid;
+        loopback = peer->rap_nid == kranal_data.kra_ni->ni_nid;
 
         list_for_each_safe (ctmp, cnxt, &peer->rap_conns) {
                 conn = list_entry(ctmp, kra_conn_t, rac_list);
@@ -303,8 +207,9 @@ kranal_close_stale_conns_locked (kra_peer_t *peer, kra_conn_t *newconn)
                         continue;
 
                 if (conn->rac_peerstamp != newconn->rac_peerstamp) {
-                        CDEBUG(D_NET, "Closing stale conn nid:"LPX64
-                               " peerstamp:"LPX64"("LPX64")\n", peer->rap_nid,
+                        CDEBUG(D_NET, "Closing stale conn nid: %s "
+                               " peerstamp:"LPX64"("LPX64")\n", 
+                               libcfs_nid2str(peer->rap_nid),
                                conn->rac_peerstamp, newconn->rac_peerstamp);
                         LASSERT (conn->rac_peerstamp < newconn->rac_peerstamp);
                         count++;
@@ -322,8 +227,9 @@ kranal_close_stale_conns_locked (kra_peer_t *peer, kra_conn_t *newconn)
 
                 LASSERT (conn->rac_peer_connstamp < newconn->rac_peer_connstamp);
 
-                CDEBUG(D_NET, "Closing stale conn nid:"LPX64
-                       " connstamp:"LPX64"("LPX64")\n", peer->rap_nid,
+                CDEBUG(D_NET, "Closing stale conn nid: %s"
+                       " connstamp:"LPX64"("LPX64")\n", 
+                       libcfs_nid2str(peer->rap_nid),
                        conn->rac_peer_connstamp, newconn->rac_peer_connstamp);
 
                 count++;
@@ -340,7 +246,7 @@ kranal_conn_isdup_locked(kra_peer_t *peer, kra_conn_t *newconn)
         struct list_head *tmp;
         int               loopback;
 
-        loopback = peer->rap_nid == kranal_lib.libnal_ni.ni_pid.nid;
+        loopback = peer->rap_nid == kranal_data.kra_ni->ni_nid;
 
         list_for_each(tmp, &peer->rap_conns) {
                 conn = list_entry(tmp, kra_conn_t, rac_list);
@@ -404,7 +310,7 @@ kranal_create_conn(kra_conn_t **connp, kra_device_t *dev)
         RAP_RETURN     rrc;
 
         LASSERT (!in_interrupt());
-        PORTAL_ALLOC(conn, sizeof(*conn));
+        LIBCFS_ALLOC(conn, sizeof(*conn));
 
         if (conn == NULL)
                 return -ENOMEM;
@@ -422,14 +328,14 @@ kranal_create_conn(kra_conn_t **connp, kra_device_t *dev)
         kranal_set_conn_uniqueness(conn);
 
         conn->rac_device = dev;
-        conn->rac_timeout = MAX(kranal_tunables.kra_timeout, RANAL_MIN_TIMEOUT);
+        conn->rac_timeout = MAX(*kranal_tunables.kra_timeout, RANAL_MIN_TIMEOUT);
         kranal_update_reaper_timeout(conn->rac_timeout);
 
         rrc = RapkCreateRi(dev->rad_handle, conn->rac_cqid,
                            &conn->rac_rihandle);
         if (rrc != RAP_SUCCESS) {
                 CERROR("RapkCreateRi failed: %d\n", rrc);
-                PORTAL_FREE(conn, sizeof(*conn));
+                LIBCFS_FREE(conn, sizeof(*conn));
                 return -ENETDOWN;
         }
 
@@ -460,7 +366,7 @@ kranal_destroy_conn(kra_conn_t *conn)
         if (conn->rac_peer != NULL)
                 kranal_peer_decref(conn->rac_peer);
 
-        PORTAL_FREE(conn, sizeof(*conn));
+        LIBCFS_FREE(conn, sizeof(*conn));
         atomic_dec(&kranal_data.kra_nconns);
 }
 
@@ -488,8 +394,9 @@ kranal_close_conn_locked (kra_conn_t *conn, int error)
 {
         kra_peer_t        *peer = conn->rac_peer;
 
-        CDEBUG(error == 0 ? D_NET : D_ERROR,
-               "closing conn to "LPX64": error %d\n", peer->rap_nid, error);
+        CDEBUG(error == 0 ? D_NET : D_NETERROR,
+               "closing conn to %s: error %d\n", 
+               libcfs_nid2str(peer->rap_nid), error);
 
         LASSERT (!in_interrupt());
         LASSERT (conn->rac_state == RANAL_CONN_ESTABLISHED);
@@ -576,10 +483,9 @@ kranal_set_conn_params(kra_conn_t *conn, kra_connreq_t *connreq,
 }
 
 int
-kranal_passive_conn_handshake (struct socket *sock, ptl_nid_t *src_nidp,
-                               ptl_nid_t *dst_nidp, kra_conn_t **connp)
+kranal_passive_conn_handshake (struct socket *sock, lnet_nid_t *src_nidp,
+                               lnet_nid_t *dst_nidp, kra_conn_t **connp)
 {
-        struct sockaddr_in   addr;
         __u32                peer_ip;
         unsigned int         peer_port;
         kra_connreq_t        rx_connreq;
@@ -587,31 +493,34 @@ kranal_passive_conn_handshake (struct socket *sock, ptl_nid_t *src_nidp,
         kra_conn_t          *conn;
         kra_device_t        *dev;
         int                  rc;
-        int                  len;
         int                  i;
 
-        len = sizeof(addr);
-        rc = sock->ops->getname(sock, (struct sockaddr *)&addr, &len, 2);
+        rc = libcfs_sock_getaddr(sock, 1, &peer_ip, &peer_port);
         if (rc != 0) {
                 CERROR("Can't get peer's IP: %d\n", rc);
                 return rc;
         }
 
-        peer_ip = ntohl(addr.sin_addr.s_addr);
-        peer_port = ntohs(addr.sin_port);
+        rc = kranal_recv_connreq(sock, &rx_connreq, 0);
 
-        if (peer_port >= 1024) {
-                CERROR("Refusing unprivileged connection from %u.%u.%u.%u/%d\n",
-                       HIPQUAD(peer_ip), peer_port);
-                return -ECONNREFUSED;
-        }
-
-        rc = kranal_recv_connreq(sock, &rx_connreq,
-                                 kranal_tunables.kra_listener_timeout);
-        if (rc != 0) {
+        if (rc < 0) {
                 CERROR("Can't rx connreq from %u.%u.%u.%u/%d: %d\n",
                        HIPQUAD(peer_ip), peer_port, rc);
                 return rc;
+        }
+
+        if (rc > 0) {
+                /* Request from "new" peer: send reply with my MAGIC/VERSION to
+                 * tell her I'm old... */
+                kranal_pack_connreq(&tx_connreq, NULL, LNET_NID_ANY);
+
+                rc = libcfs_sock_write(sock, &tx_connreq, sizeof(tx_connreq),
+                                       lnet_acceptor_timeout());
+                if (rc != 0)
+                        CERROR("Can't tx stub connreq to %u.%u.%u.%u/%d: %d\n",
+                               HIPQUAD(peer_ip), peer_port, rc);
+
+                return -EPROTO;
         }
 
         for (i = 0;;i++) {
@@ -631,7 +540,8 @@ kranal_passive_conn_handshake (struct socket *sock, ptl_nid_t *src_nidp,
 
         kranal_pack_connreq(&tx_connreq, conn, rx_connreq.racr_srcnid);
 
-        rc = kranal_sock_write(sock, &tx_connreq, sizeof(tx_connreq));
+        rc = libcfs_sock_write(sock, &tx_connreq, sizeof(tx_connreq),
+                               lnet_acceptor_timeout());
         if (rc != 0) {
                 CERROR("Can't tx connreq to %u.%u.%u.%u/%d: %d\n",
                        HIPQUAD(peer_ip), peer_port, rc);
@@ -652,72 +562,8 @@ kranal_passive_conn_handshake (struct socket *sock, ptl_nid_t *src_nidp,
 }
 
 int
-ranal_connect_sock(kra_peer_t *peer, struct socket **sockp)
-{
-        struct sockaddr_in  locaddr;
-        struct sockaddr_in  srvaddr;
-        struct socket      *sock;
-        unsigned int        port;
-        int                 rc;
-
-        for (port = 1023; port >= 512; port--) {
-
-                memset(&locaddr, 0, sizeof(locaddr));
-                locaddr.sin_family      = AF_INET;
-                locaddr.sin_port        = htons(port);
-                locaddr.sin_addr.s_addr = htonl(INADDR_ANY);
-
-                memset (&srvaddr, 0, sizeof (srvaddr));
-                srvaddr.sin_family      = AF_INET;
-                srvaddr.sin_port        = htons (peer->rap_port);
-                srvaddr.sin_addr.s_addr = htonl (peer->rap_ip);
-
-                rc = kranal_create_sock(&sock);
-                if (rc != 0)
-                        return rc;
-
-                rc = sock->ops->bind(sock,
-                                     (struct sockaddr *)&locaddr, sizeof(locaddr));
-                if (rc != 0) {
-                        sock_release(sock);
-
-                        if (rc == -EADDRINUSE) {
-                                CDEBUG(D_NET, "Port %d already in use\n", port);
-                                continue;
-                        }
-
-                        CERROR("Can't bind to reserved port %d: %d\n", port, rc);
-                        return rc;
-                }
-
-                rc = sock->ops->connect(sock,
-                                        (struct sockaddr *)&srvaddr, sizeof(srvaddr),
-                                        0);
-                if (rc == 0) {
-                        *sockp = sock;
-                        return 0;
-                }
-
-                sock_release(sock);
-
-                if (rc != -EADDRNOTAVAIL) {
-                        CERROR("Can't connect port %d to %u.%u.%u.%u/%d: %d\n",
-                               port, HIPQUAD(peer->rap_ip), peer->rap_port, rc);
-                        return rc;
-                }
-
-                CDEBUG(D_NET, "Port %d not available for %u.%u.%u.%u/%d\n",
-                       port, HIPQUAD(peer->rap_ip), peer->rap_port);
-        }
-
-        /* all ports busy */
-        return -EHOSTUNREACH;
-}
-
-
-int
 kranal_active_conn_handshake(kra_peer_t *peer,
-                             ptl_nid_t *dst_nidp, kra_conn_t **connp)
+                             lnet_nid_t *dst_nidp, kra_conn_t **connp)
 {
         kra_connreq_t       connreq;
         kra_conn_t         *conn;
@@ -728,7 +574,7 @@ kranal_active_conn_handshake(kra_peer_t *peer,
 
         /* spread connections over all devices using both peer NIDs to ensure
          * all nids use all devices */
-        idx = peer->rap_nid + kranal_lib.libnal_ni.ni_pid.nid;
+        idx = peer->rap_nid + kranal_data.kra_ni->ni_nid;
         dev = &kranal_data.kra_devices[idx % kranal_data.kra_ndevs];
 
         rc = kranal_create_conn(&conn, dev);
@@ -737,7 +583,22 @@ kranal_active_conn_handshake(kra_peer_t *peer,
 
         kranal_pack_connreq(&connreq, conn, peer->rap_nid);
 
-        rc = ranal_connect_sock(peer, &sock);
+        if (the_lnet.ln_testprotocompat != 0) {
+                /* single-shot proto test */
+                LNET_LOCK();
+                if ((the_lnet.ln_testprotocompat & 1) != 0) {
+                        connreq.racr_version++;
+                        the_lnet.ln_testprotocompat &= ~1;
+                }
+                if ((the_lnet.ln_testprotocompat & 2) != 0) {
+                        connreq.racr_magic = LNET_PROTO_MAGIC;
+                        the_lnet.ln_testprotocompat &= ~2;
+                }
+                LNET_UNLOCK();
+        }
+
+        rc = lnet_connect(&sock, peer->rap_nid,
+                         0, peer->rap_ip, peer->rap_port);
         if (rc != 0)
                 goto failed_0;
 
@@ -745,29 +606,31 @@ kranal_active_conn_handshake(kra_peer_t *peer,
          * immediately after accepting a connection, so we connect and then
          * send immediately. */
 
-        rc = kranal_sock_write(sock, &connreq, sizeof(connreq));
+        rc = libcfs_sock_write(sock, &connreq, sizeof(connreq),
+                               lnet_acceptor_timeout());
         if (rc != 0) {
                 CERROR("Can't tx connreq to %u.%u.%u.%u/%d: %d\n",
                        HIPQUAD(peer->rap_ip), peer->rap_port, rc);
-                goto failed_1;
+                goto failed_2;
         }
 
-        rc = kranal_recv_connreq(sock, &connreq, kranal_tunables.kra_timeout);
+        rc = kranal_recv_connreq(sock, &connreq, 1);
         if (rc != 0) {
                 CERROR("Can't rx connreq from %u.%u.%u.%u/%d: %d\n",
                        HIPQUAD(peer->rap_ip), peer->rap_port, rc);
-                goto failed_1;
+                goto failed_2;
         }
 
-        sock_release(sock);
+        libcfs_sock_release(sock);
         rc = -EPROTO;
 
         if (connreq.racr_srcnid != peer->rap_nid) {
                 CERROR("Unexpected srcnid from %u.%u.%u.%u/%d: "
-                       "received "LPX64" expected "LPX64"\n",
+                       "received %s expected %s\n",
                        HIPQUAD(peer->rap_ip), peer->rap_port,
-                       connreq.racr_srcnid, peer->rap_nid);
-                goto failed_0;
+                       libcfs_nid2str(connreq.racr_srcnid), 
+                       libcfs_nid2str(peer->rap_nid));
+                goto failed_1;
         }
 
         if (connreq.racr_devid != dev->rad_id) {
@@ -775,20 +638,23 @@ kranal_active_conn_handshake(kra_peer_t *peer,
                        "received %d expected %d\n",
                        HIPQUAD(peer->rap_ip), peer->rap_port,
                        connreq.racr_devid, dev->rad_id);
-                goto failed_0;
+                goto failed_1;
         }
 
         rc = kranal_set_conn_params(conn, &connreq,
                                     peer->rap_ip, peer->rap_port);
         if (rc != 0)
-                goto failed_0;
+                goto failed_1;
 
         *connp = conn;
         *dst_nidp = connreq.racr_dstnid;
         return 0;
 
+ failed_2:
+        libcfs_sock_release(sock);
  failed_1:
-        sock_release(sock);
+        lnet_connect_console_error(rc, peer->rap_nid,
+                                  peer->rap_ip, peer->rap_port);
  failed_0:
         kranal_conn_decref(conn);
         return rc;
@@ -799,8 +665,8 @@ kranal_conn_handshake (struct socket *sock, kra_peer_t *peer)
 {
         kra_peer_t        *peer2;
         kra_tx_t          *tx;
-        ptl_nid_t          peer_nid;
-        ptl_nid_t          dst_nid;
+        lnet_nid_t          peer_nid;
+        lnet_nid_t          dst_nid;
         unsigned long      flags;
         kra_conn_t        *conn;
         int                rc;
@@ -837,9 +703,10 @@ kranal_conn_handshake (struct socket *sock, kra_peer_t *peer)
                         return rc;
 
                 /* assume this is a new peer */
-                peer = kranal_create_peer(peer_nid);
-                if (peer == NULL) {
-                        CERROR("Can't allocate peer for "LPX64"\n", peer_nid);
+                rc = kranal_create_peer(&peer, peer_nid);
+                if (rc != 0) {
+                        CERROR("Can't create conn for %s\n", 
+                               libcfs_nid2str(peer_nid));
                         kranal_conn_decref(conn);
                         return -ENOMEM;
                 }
@@ -861,12 +728,12 @@ kranal_conn_handshake (struct socket *sock, kra_peer_t *peer)
         /* Refuse connection if peer thinks we are a different NID.  We check
          * this while holding the global lock, to synch with connection
          * destruction on NID change. */
-        if (dst_nid != kranal_lib.libnal_ni.ni_pid.nid) {
+        if (!lnet_ptlcompat_matchnid(kranal_data.kra_ni->ni_nid, dst_nid)) {
                 write_unlock_irqrestore(&kranal_data.kra_global_lock, flags);
 
-                CERROR("Stale/bad connection with "LPX64
-                       ": dst_nid "LPX64", expected "LPX64"\n",
-                       peer_nid, dst_nid, kranal_lib.libnal_ni.ni_pid.nid);
+                CERROR("Stale/bad connection with %s: dst_nid %s, expected %s\n",
+                       libcfs_nid2str(peer_nid), libcfs_nid2str(dst_nid), 
+                       libcfs_nid2str(kranal_data.kra_ni->ni_nid));
                 rc = -ESTALE;
                 goto failed;
         }
@@ -879,8 +746,8 @@ kranal_conn_handshake (struct socket *sock, kra_peer_t *peer)
                 LASSERT (!list_empty(&peer->rap_conns));
                 LASSERT (list_empty(&peer->rap_tx_queue));
                 write_unlock_irqrestore(&kranal_data.kra_global_lock, flags);
-                CWARN("Not creating duplicate connection to "LPX64": %d\n",
-                      peer_nid, rc);
+                CWARN("Not creating duplicate connection to %s: %d\n",
+                      libcfs_nid2str(peer_nid), rc);
                 rc = 0;
                 goto failed;
         }
@@ -918,10 +785,12 @@ kranal_conn_handshake (struct socket *sock, kra_peer_t *peer)
         /* CAVEAT EMPTOR: passive peer can disappear NOW */
 
         if (nstale != 0)
-                CWARN("Closed %d stale conns to "LPX64"\n", nstale, peer_nid);
+                CWARN("Closed %d stale conns to %s\n", nstale, 
+                      libcfs_nid2str(peer_nid));
 
-        CWARN("New connection to "LPX64" on devid[%d] = %d\n",
-               peer_nid, conn->rac_device->rad_idx, conn->rac_device->rad_id);
+        CWARN("New connection to %s on devid[%d] = %d\n",
+               libcfs_nid2str(peer_nid), 
+               conn->rac_device->rad_idx, conn->rac_device->rad_id);
 
         /* Ensure conn gets checked.  Transmits may have been queued and an
          * FMA event may have happened before it got in the cq hash table */
@@ -945,11 +814,13 @@ kranal_connect (kra_peer_t *peer)
 
         LASSERT (peer->rap_connecting);
 
-        CDEBUG(D_NET, "About to handshake "LPX64"\n", peer->rap_nid);
+        CDEBUG(D_NET, "About to handshake %s\n", 
+               libcfs_nid2str(peer->rap_nid));
 
         rc = kranal_conn_handshake(NULL, peer);
 
-        CDEBUG(D_NET, "Done handshake "LPX64":%d \n", peer->rap_nid, rc);
+        CDEBUG(D_NET, "Done handshake %s:%d \n", 
+               libcfs_nid2str(peer->rap_nid), rc);
 
         write_lock_irqsave(&kranal_data.kra_global_lock, flags);
 
@@ -961,18 +832,21 @@ kranal_connect (kra_peer_t *peer)
                  * success to avoid messages jumping the queue */
                 LASSERT (list_empty(&peer->rap_tx_queue));
 
-                /* reset reconnection timeouts */
-                peer->rap_reconnect_interval = RANAL_MIN_RECONNECT_INTERVAL;
-                peer->rap_reconnect_time = CURRENT_SECONDS;
+                peer->rap_reconnect_interval = 0; /* OK to reconnect at any time */
 
                 write_unlock_irqrestore(&kranal_data.kra_global_lock, flags);
                 return;
         }
 
-        LASSERT (peer->rap_reconnect_interval != 0);
-        peer->rap_reconnect_time = CURRENT_SECONDS + peer->rap_reconnect_interval;
-        peer->rap_reconnect_interval = MAX(RANAL_MAX_RECONNECT_INTERVAL,
-                                           1 * peer->rap_reconnect_interval);
+        peer->rap_reconnect_interval *= 2;
+        peer->rap_reconnect_interval =
+                MAX(peer->rap_reconnect_interval,
+                    *kranal_tunables.kra_min_reconnect_interval);
+        peer->rap_reconnect_interval =
+                MIN(peer->rap_reconnect_interval,
+                    *kranal_tunables.kra_max_reconnect_interval);
+
+        peer->rap_reconnect_time = jiffies + peer->rap_reconnect_interval * HZ;
 
         /* Grab all blocked packets while we have the global lock */
         list_add(&zombies, &peer->rap_tx_queue);
@@ -983,8 +857,8 @@ kranal_connect (kra_peer_t *peer)
         if (list_empty(&zombies))
                 return;
 
-        CWARN("Dropping packets for "LPX64": connection failed\n",
-              peer->rap_nid);
+        CDEBUG(D_NETERROR, "Dropping packets for %s: connection failed\n",
+               libcfs_nid2str(peer->rap_nid));
 
         do {
                 tx = list_entry(zombies.next, kra_tx_t, tx_list);
@@ -998,309 +872,51 @@ kranal_connect (kra_peer_t *peer)
 void
 kranal_free_acceptsock (kra_acceptsock_t *ras)
 {
-        sock_release(ras->ras_sock);
-        PORTAL_FREE(ras, sizeof(*ras));
+        libcfs_sock_release(ras->ras_sock);
+        LIBCFS_FREE(ras, sizeof(*ras));
 }
 
 int
-kranal_listener (void *arg)
+kranal_accept (lnet_ni_t *ni, struct socket *sock)
 {
-        struct sockaddr_in addr;
-        wait_queue_t       wait;
-        struct socket     *sock;
         kra_acceptsock_t  *ras;
-        int                port;
-        char               name[16];
         int                rc;
+        __u32              peer_ip;
+        int                peer_port;
         unsigned long      flags;
 
-        /* Parent thread holds kra_nid_mutex, and is, or is about to
-         * block on kra_listener_signal */
+        rc = libcfs_sock_getaddr(sock, 1, &peer_ip, &peer_port);
+        LASSERT (rc == 0);                      /* we succeeded before */
 
-        port = kranal_tunables.kra_port;
-        snprintf(name, sizeof(name), "kranal_lstn%03d", port);
-        kportal_daemonize(name);
-        kportal_blockallsigs();
-
-        init_waitqueue_entry(&wait, current);
-
-        rc = kranal_create_sock(&sock);
-        if (rc != 0)
-                goto out_0;
-
-        memset(&addr, 0, sizeof(addr));
-        addr.sin_family      = AF_INET;
-        addr.sin_port        = htons(port);
-        addr.sin_addr.s_addr = INADDR_ANY;
-
-        rc = sock->ops->bind(sock, (struct sockaddr *)&addr, sizeof(addr));
-        if (rc != 0) {
-                CERROR("Can't bind to port %d\n", port);
-                goto out_1;
+        LIBCFS_ALLOC(ras, sizeof(*ras));
+        if (ras == NULL) {
+                CERROR("ENOMEM allocating connection request from "
+                       "%u.%u.%u.%u\n", HIPQUAD(peer_ip));
+                return -ENOMEM;
         }
 
-        rc = sock->ops->listen(sock, kranal_tunables.kra_backlog);
-        if (rc != 0) {
-                CERROR("Can't set listen backlog %d: %d\n",
-                       kranal_tunables.kra_backlog, rc);
-                goto out_1;
-        }
+        ras->ras_sock = sock;
 
-        LASSERT (kranal_data.kra_listener_sock == NULL);
-        kranal_data.kra_listener_sock = sock;
+        spin_lock_irqsave(&kranal_data.kra_connd_lock, flags);
 
-        /* unblock waiting parent */
-        LASSERT (kranal_data.kra_listener_shutdown == 0);
-        up(&kranal_data.kra_listener_signal);
+        list_add_tail(&ras->ras_list, &kranal_data.kra_connd_acceptq);
+        wake_up(&kranal_data.kra_connd_waitq);
 
-        /* Wake me any time something happens on my socket */
-        add_wait_queue(sock->sk->sk_sleep, &wait);
-        ras = NULL;
-
-        while (kranal_data.kra_listener_shutdown == 0) {
-
-                if (ras == NULL) {
-                        PORTAL_ALLOC(ras, sizeof(*ras));
-                        if (ras == NULL) {
-                                CERROR("Out of Memory: pausing...\n");
-                                kranal_pause(HZ);
-                                continue;
-                        }
-                        ras->ras_sock = NULL;
-                }
-
-                if (ras->ras_sock == NULL) {
-                        ras->ras_sock = sock_alloc();
-                        if (ras->ras_sock == NULL) {
-                                CERROR("Can't allocate socket: pausing...\n");
-                                kranal_pause(HZ);
-                                continue;
-                        }
-                        /* XXX this should add a ref to sock->ops->owner, if
-                         * TCP could be a module */
-                        ras->ras_sock->type = sock->type;
-                        ras->ras_sock->ops = sock->ops;
-                }
-
-                set_current_state(TASK_INTERRUPTIBLE);
-
-                rc = sock->ops->accept(sock, ras->ras_sock, O_NONBLOCK);
-
-                /* Sleep for socket activity? */
-                if (rc == -EAGAIN &&
-                    kranal_data.kra_listener_shutdown == 0)
-                        schedule();
-
-                set_current_state(TASK_RUNNING);
-
-                if (rc == 0) {
-                        spin_lock_irqsave(&kranal_data.kra_connd_lock, flags);
-
-                        list_add_tail(&ras->ras_list,
-                                      &kranal_data.kra_connd_acceptq);
-
-                        spin_unlock_irqrestore(&kranal_data.kra_connd_lock, flags);
-                        wake_up(&kranal_data.kra_connd_waitq);
-
-                        ras = NULL;
-                        continue;
-                }
-
-                if (rc != -EAGAIN) {
-                        CERROR("Accept failed: %d, pausing...\n", rc);
-                        kranal_pause(HZ);
-                }
-        }
-
-        if (ras != NULL) {
-                if (ras->ras_sock != NULL)
-                        sock_release(ras->ras_sock);
-                PORTAL_FREE(ras, sizeof(*ras));
-        }
-
-        rc = 0;
-        remove_wait_queue(sock->sk->sk_sleep, &wait);
- out_1:
-        sock_release(sock);
-        kranal_data.kra_listener_sock = NULL;
- out_0:
-        /* set completion status and unblock thread waiting for me
-         * (parent on startup failure, executioner on normal shutdown) */
-        kranal_data.kra_listener_shutdown = rc;
-        up(&kranal_data.kra_listener_signal);
-
+        spin_unlock_irqrestore(&kranal_data.kra_connd_lock, flags);
         return 0;
 }
 
 int
-kranal_start_listener (void)
+kranal_create_peer (kra_peer_t **peerp, lnet_nid_t nid)
 {
-        long           pid;
-        int            rc;
+        kra_peer_t    *peer;
+        unsigned long  flags;
 
-        CDEBUG(D_NET, "Starting listener\n");
+        LASSERT (nid != LNET_NID_ANY);
 
-        /* Called holding kra_nid_mutex: listener stopped */
-        LASSERT (kranal_data.kra_listener_sock == NULL);
-
-        kranal_data.kra_listener_shutdown = 0;
-        pid = kernel_thread(kranal_listener, NULL, 0);
-        if (pid < 0) {
-                CERROR("Can't spawn listener: %ld\n", pid);
-                return (int)pid;
-        }
-
-        /* Block until listener has started up. */
-        down(&kranal_data.kra_listener_signal);
-
-        rc = kranal_data.kra_listener_shutdown;
-        LASSERT ((rc != 0) == (kranal_data.kra_listener_sock == NULL));
-
-        CDEBUG(D_NET, "Listener %ld started OK\n", pid);
-        return rc;
-}
-
-void
-kranal_stop_listener(int clear_acceptq)
-{
-        struct list_head  zombie_accepts;
-        unsigned long     flags;
-        kra_acceptsock_t *ras;
-
-        CDEBUG(D_NET, "Stopping listener\n");
-
-        /* Called holding kra_nid_mutex: listener running */
-        LASSERT (kranal_data.kra_listener_sock != NULL);
-
-        kranal_data.kra_listener_shutdown = 1;
-        wake_up_all(kranal_data.kra_listener_sock->sk->sk_sleep);
-
-        /* Block until listener has torn down. */
-        down(&kranal_data.kra_listener_signal);
-
-        LASSERT (kranal_data.kra_listener_sock == NULL);
-        CDEBUG(D_NET, "Listener stopped\n");
-
-        if (!clear_acceptq)
-                return;
-
-        /* Close any unhandled accepts */
-        spin_lock_irqsave(&kranal_data.kra_connd_lock, flags);
-
-        list_add(&zombie_accepts, &kranal_data.kra_connd_acceptq);
-        list_del_init(&kranal_data.kra_connd_acceptq);
-
-        spin_unlock_irqrestore(&kranal_data.kra_connd_lock, flags);
-
-        while (!list_empty(&zombie_accepts)) {
-                ras = list_entry(zombie_accepts.next,
-                                 kra_acceptsock_t, ras_list);
-                list_del(&ras->ras_list);
-                kranal_free_acceptsock(ras);
-        }
-}
-
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,8)
-int
-kranal_listener_procint(ctl_table *table, int write, struct file *filp,
-                        void *buffer, size_t *lenp)
-#else
-int
-kranal_listener_procint(ctl_table *table, int write, struct file *filp,
-                        void *buffer, size_t *lenp, loff_t *ppos)
-#endif
-{
-        int   *tunable = (int *)table->data;
-        int    old_val;
-        int    rc;
-
-        /* No race with nal initialisation since the nal is setup all the time
-         * it's loaded.  When that changes, change this! */
-        LASSERT (kranal_data.kra_init == RANAL_INIT_ALL);
-
-        down(&kranal_data.kra_nid_mutex);
-
-        LASSERT (tunable == &kranal_tunables.kra_port ||
-                 tunable == &kranal_tunables.kra_backlog);
-        old_val = *tunable;
-
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,8)
-        rc = proc_dointvec(table, write, filp, buffer, lenp);
-#else
-        rc = proc_dointvec(table, write, filp, buffer, lenp, ppos);
-#endif
-
-        if (write &&
-            (*tunable != old_val ||
-             kranal_data.kra_listener_sock == NULL)) {
-
-                if (kranal_data.kra_listener_sock != NULL)
-                        kranal_stop_listener(0);
-
-                rc = kranal_start_listener();
-
-                if (rc != 0) {
-                        CWARN("Unable to start listener with new tunable:"
-                              " reverting to old value\n");
-                        *tunable = old_val;
-                        kranal_start_listener();
-                }
-        }
-
-        up(&kranal_data.kra_nid_mutex);
-
-        LASSERT (kranal_data.kra_init == RANAL_INIT_ALL);
-        return rc;
-}
-
-int
-kranal_set_mynid(ptl_nid_t nid)
-{
-        unsigned long    flags;
-        lib_ni_t        *ni = &kranal_lib.libnal_ni;
-        int              rc = 0;
-
-        CDEBUG(D_NET, "setting mynid to "LPX64" (old nid="LPX64")\n",
-               nid, ni->ni_pid.nid);
-
-        down(&kranal_data.kra_nid_mutex);
-
-        if (nid == ni->ni_pid.nid) {
-                /* no change of NID */
-                up(&kranal_data.kra_nid_mutex);
-                return 0;
-        }
-
-        if (kranal_data.kra_listener_sock != NULL)
-                kranal_stop_listener(1);
-
-        write_lock_irqsave(&kranal_data.kra_global_lock, flags);
-        kranal_data.kra_peerstamp++;
-        ni->ni_pid.nid = nid;
-        write_unlock_irqrestore(&kranal_data.kra_global_lock, flags);
-
-        /* Delete all existing peers and their connections after new
-         * NID/connstamp set to ensure no old connections in our brave
-         * new world. */
-        kranal_del_peer(PTL_NID_ANY, 0);
-
-        if (nid != PTL_NID_ANY)
-                rc = kranal_start_listener();
-
-        up(&kranal_data.kra_nid_mutex);
-        return rc;
-}
-
-kra_peer_t *
-kranal_create_peer (ptl_nid_t nid)
-{
-        kra_peer_t *peer;
-
-        LASSERT (nid != PTL_NID_ANY);
-
-        PORTAL_ALLOC(peer, sizeof(*peer));
+        LIBCFS_ALLOC(peer, sizeof(*peer));
         if (peer == NULL)
-                return NULL;
+                return -ENOMEM;
 
         memset(peer, 0, sizeof(*peer));         /* zero flags etc */
 
@@ -1312,17 +928,32 @@ kranal_create_peer (ptl_nid_t nid)
         INIT_LIST_HEAD(&peer->rap_conns);
         INIT_LIST_HEAD(&peer->rap_tx_queue);
 
-        peer->rap_reconnect_time = CURRENT_SECONDS;
-        peer->rap_reconnect_interval = RANAL_MIN_RECONNECT_INTERVAL;
+        peer->rap_reconnect_interval = 0;       /* OK to connect at any time */
+
+        write_lock_irqsave(&kranal_data.kra_global_lock, flags);
+
+        if (kranal_data.kra_nonewpeers) {
+                /* shutdown has started already */
+                write_unlock_irqrestore(&kranal_data.kra_global_lock, flags);
+                
+                LIBCFS_FREE(peer, sizeof(*peer));
+                CERROR("Can't create peer: network shutdown\n");
+                return -ESHUTDOWN;
+        }
 
         atomic_inc(&kranal_data.kra_npeers);
-        return peer;
+
+        write_unlock_irqrestore(&kranal_data.kra_global_lock, flags);
+
+        *peerp = peer;
+        return 0;
 }
 
 void
 kranal_destroy_peer (kra_peer_t *peer)
 {
-        CDEBUG(D_NET, "peer "LPX64" %p deleted\n", peer->rap_nid, peer);
+        CDEBUG(D_NET, "peer %s %p deleted\n", 
+               libcfs_nid2str(peer->rap_nid), peer);
 
         LASSERT (atomic_read(&peer->rap_refcount) == 0);
         LASSERT (peer->rap_persistence == 0);
@@ -1332,7 +963,7 @@ kranal_destroy_peer (kra_peer_t *peer)
         LASSERT (list_empty(&peer->rap_tx_queue));
         LASSERT (list_empty(&peer->rap_connd_list));
 
-        PORTAL_FREE(peer, sizeof(*peer));
+        LIBCFS_FREE(peer, sizeof(*peer));
 
         /* NB a peer's connections keep a reference on their peer until
          * they are destroyed, so we can be assured that _all_ state to do
@@ -1342,7 +973,7 @@ kranal_destroy_peer (kra_peer_t *peer)
 }
 
 kra_peer_t *
-kranal_find_peer_locked (ptl_nid_t nid)
+kranal_find_peer_locked (lnet_nid_t nid)
 {
         struct list_head *peer_list = kranal_nid2peerlist(nid);
         struct list_head *tmp;
@@ -1358,15 +989,16 @@ kranal_find_peer_locked (ptl_nid_t nid)
                 if (peer->rap_nid != nid)
                         continue;
 
-                CDEBUG(D_NET, "got peer [%p] -> "LPX64" (%d)\n",
-                       peer, nid, atomic_read(&peer->rap_refcount));
+                CDEBUG(D_NET, "got peer [%p] -> %s (%d)\n",
+                       peer, libcfs_nid2str(nid), 
+                       atomic_read(&peer->rap_refcount));
                 return peer;
         }
         return NULL;
 }
 
 kra_peer_t *
-kranal_find_peer (ptl_nid_t nid)
+kranal_find_peer (lnet_nid_t nid)
 {
         kra_peer_t     *peer;
 
@@ -1393,7 +1025,7 @@ kranal_unlink_peer_locked (kra_peer_t *peer)
 }
 
 int
-kranal_get_peer_info (int index, ptl_nid_t *nidp, __u32 *ipp, int *portp,
+kranal_get_peer_info (int index, lnet_nid_t *nidp, __u32 *ipp, int *portp,
                       int *persistencep)
 {
         kra_peer_t        *peer;
@@ -1428,18 +1060,19 @@ kranal_get_peer_info (int index, ptl_nid_t *nidp, __u32 *ipp, int *portp,
 }
 
 int
-kranal_add_persistent_peer (ptl_nid_t nid, __u32 ip, int port)
+kranal_add_persistent_peer (lnet_nid_t nid, __u32 ip, int port)
 {
         unsigned long      flags;
         kra_peer_t        *peer;
         kra_peer_t        *peer2;
+        int                rc;
 
-        if (nid == PTL_NID_ANY)
+        if (nid == LNET_NID_ANY)
                 return -EINVAL;
 
-        peer = kranal_create_peer(nid);
-        if (peer == NULL)
-                return -ENOMEM;
+        rc = kranal_create_peer(&peer, nid);
+        if (rc != 0)
+                return rc;
 
         write_lock_irqsave(&kranal_data.kra_global_lock, flags);
 
@@ -1462,19 +1095,13 @@ kranal_add_persistent_peer (ptl_nid_t nid, __u32 ip, int port)
 }
 
 void
-kranal_del_peer_locked (kra_peer_t *peer, int single_share)
+kranal_del_peer_locked (kra_peer_t *peer)
 {
         struct list_head *ctmp;
         struct list_head *cnxt;
         kra_conn_t       *conn;
 
-        if (!single_share)
-                peer->rap_persistence = 0;
-        else if (peer->rap_persistence > 0)
-                peer->rap_persistence--;
-
-        if (peer->rap_persistence != 0)
-                return;
+        peer->rap_persistence = 0;
 
         if (list_empty(&peer->rap_conns)) {
                 kranal_unlink_peer_locked(peer);
@@ -1489,7 +1116,7 @@ kranal_del_peer_locked (kra_peer_t *peer, int single_share)
 }
 
 int
-kranal_del_peer (ptl_nid_t nid, int single_share)
+kranal_del_peer (lnet_nid_t nid)
 {
         unsigned long      flags;
         struct list_head  *ptmp;
@@ -1502,7 +1129,7 @@ kranal_del_peer (ptl_nid_t nid, int single_share)
 
         write_lock_irqsave(&kranal_data.kra_global_lock, flags);
 
-        if (nid != PTL_NID_ANY)
+        if (nid != LNET_NID_ANY)
                 lo = hi = kranal_nid2peerlist(nid) - kranal_data.kra_peers;
         else {
                 lo = 0;
@@ -1515,17 +1142,14 @@ kranal_del_peer (ptl_nid_t nid, int single_share)
                         LASSERT (peer->rap_persistence > 0 ||
                                  !list_empty(&peer->rap_conns));
 
-                        if (!(nid == PTL_NID_ANY || peer->rap_nid == nid))
+                        if (!(nid == LNET_NID_ANY || peer->rap_nid == nid))
                                 continue;
 
-                        kranal_del_peer_locked(peer, single_share);
+                        kranal_del_peer_locked(peer);
                         rc = 0;         /* matched something */
-
-                        if (single_share)
-                                goto out;
                 }
         }
- out:
+
         write_unlock_irqrestore(&kranal_data.kra_global_lock, flags);
 
         return rc;
@@ -1554,8 +1178,8 @@ kranal_get_conn_by_idx (int index)
                                         continue;
 
                                 conn = list_entry(ctmp, kra_conn_t, rac_list);
-                                CDEBUG(D_NET, "++conn[%p] -> "LPX64" (%d)\n",
-                                       conn, conn->rac_peer->rap_nid,
+                                CDEBUG(D_NET, "++conn[%p] -> %s (%d)\n", conn, 
+                                       libcfs_nid2str(conn->rac_peer->rap_nid),
                                        atomic_read(&conn->rac_refcount));
                                 atomic_inc(&conn->rac_refcount);
                                 read_unlock(&kranal_data.kra_global_lock);
@@ -1587,7 +1211,7 @@ kranal_close_peer_conns_locked (kra_peer_t *peer, int why)
 }
 
 int
-kranal_close_matching_conns (ptl_nid_t nid)
+kranal_close_matching_conns (lnet_nid_t nid)
 {
         unsigned long       flags;
         kra_peer_t         *peer;
@@ -1600,7 +1224,7 @@ kranal_close_matching_conns (ptl_nid_t nid)
 
         write_lock_irqsave(&kranal_data.kra_global_lock, flags);
 
-        if (nid != PTL_NID_ANY)
+        if (nid != LNET_NID_ANY)
                 lo = hi = kranal_nid2peerlist(nid) - kranal_data.kra_peers;
         else {
                 lo = 0;
@@ -1614,7 +1238,7 @@ kranal_close_matching_conns (ptl_nid_t nid)
                         LASSERT (peer->rap_persistence > 0 ||
                                  !list_empty(&peer->rap_conns));
 
-                        if (!(nid == PTL_NID_ANY || nid == peer->rap_nid))
+                        if (!(nid == LNET_NID_ANY || nid == peer->rap_nid))
                                 continue;
 
                         count += kranal_close_peer_conns_locked(peer, 0);
@@ -1624,72 +1248,72 @@ kranal_close_matching_conns (ptl_nid_t nid)
         write_unlock_irqrestore(&kranal_data.kra_global_lock, flags);
 
         /* wildcards always succeed */
-        if (nid == PTL_NID_ANY)
+        if (nid == LNET_NID_ANY)
                 return 0;
 
         return (count == 0) ? -ENOENT : 0;
 }
 
 int
-kranal_cmd(struct portals_cfg *pcfg, void * private)
+kranal_ctl(lnet_ni_t *ni, unsigned int cmd, void *arg)
 {
-        int rc = -EINVAL;
+        struct libcfs_ioctl_data *data = arg;
+        int                       rc = -EINVAL;
 
-        LASSERT (pcfg != NULL);
+        LASSERT (ni == kranal_data.kra_ni);
 
-        switch(pcfg->pcfg_command) {
-        case NAL_CMD_GET_PEER: {
-                ptl_nid_t   nid = 0;
+        switch(cmd) {
+        case IOC_LIBCFS_GET_PEER: {
+                lnet_nid_t   nid = 0;
                 __u32       ip = 0;
                 int         port = 0;
                 int         share_count = 0;
 
-                rc = kranal_get_peer_info(pcfg->pcfg_count,
+                rc = kranal_get_peer_info(data->ioc_count,
                                           &nid, &ip, &port, &share_count);
-                pcfg->pcfg_nid   = nid;
-                pcfg->pcfg_size  = 0;
-                pcfg->pcfg_id    = ip;
-                pcfg->pcfg_misc  = port;
-                pcfg->pcfg_count = 0;
-                pcfg->pcfg_wait  = share_count;
+                data->ioc_nid    = nid;
+                data->ioc_count  = share_count;
+                data->ioc_u32[0] = ip;
+                data->ioc_u32[1] = port;
                 break;
         }
-        case NAL_CMD_ADD_PEER: {
-                rc = kranal_add_persistent_peer(pcfg->pcfg_nid,
-                                                pcfg->pcfg_id, /* IP */
-                                                pcfg->pcfg_misc); /* port */
+        case IOC_LIBCFS_ADD_PEER: {
+                rc = kranal_add_persistent_peer(data->ioc_nid,
+                                                data->ioc_u32[0], /* IP */
+                                                data->ioc_u32[1]); /* port */
                 break;
         }
-        case NAL_CMD_DEL_PEER: {
-                rc = kranal_del_peer(pcfg->pcfg_nid,
-                                     /* flags == single_share */
-                                     pcfg->pcfg_flags != 0);
+        case IOC_LIBCFS_DEL_PEER: {
+                rc = kranal_del_peer(data->ioc_nid);
                 break;
         }
-        case NAL_CMD_GET_CONN: {
-                kra_conn_t *conn = kranal_get_conn_by_idx(pcfg->pcfg_count);
+        case IOC_LIBCFS_GET_CONN: {
+                kra_conn_t *conn = kranal_get_conn_by_idx(data->ioc_count);
 
                 if (conn == NULL)
                         rc = -ENOENT;
                 else {
                         rc = 0;
-                        pcfg->pcfg_nid   = conn->rac_peer->rap_nid;
-                        pcfg->pcfg_id    = conn->rac_device->rad_id;
-                        pcfg->pcfg_misc  = 0;
-                        pcfg->pcfg_flags = 0;
+                        data->ioc_nid    = conn->rac_peer->rap_nid;
+                        data->ioc_u32[0] = conn->rac_device->rad_id;
                         kranal_conn_decref(conn);
                 }
                 break;
         }
-        case NAL_CMD_CLOSE_CONNECTION: {
-                rc = kranal_close_matching_conns(pcfg->pcfg_nid);
+        case IOC_LIBCFS_CLOSE_CONNECTION: {
+                rc = kranal_close_matching_conns(data->ioc_nid);
                 break;
         }
-        case NAL_CMD_REGISTER_MYNID: {
-                if (pcfg->pcfg_nid == PTL_NID_ANY)
+        case IOC_LIBCFS_REGISTER_MYNID: {
+                /* Ignore if this is a noop */
+                if (data->ioc_nid == ni->ni_nid) {
+                        rc = 0;
+                } else {
+                        CERROR("obsolete IOC_LIBCFS_REGISTER_MYNID: %s(%s)\n",
+                               libcfs_nid2str(data->ioc_nid),
+                               libcfs_nid2str(ni->ni_nid));
                         rc = -EINVAL;
-                else
-                        rc = kranal_set_mynid(pcfg->pcfg_nid);
+                }
                 break;
         }
         }
@@ -1706,44 +1330,39 @@ kranal_free_txdescs(struct list_head *freelist)
                 tx = list_entry(freelist->next, kra_tx_t, tx_list);
 
                 list_del(&tx->tx_list);
-                PORTAL_FREE(tx->tx_phys, PTL_MD_MAX_IOV * sizeof(*tx->tx_phys));
-                PORTAL_FREE(tx, sizeof(*tx));
+                LIBCFS_FREE(tx->tx_phys, LNET_MAX_IOV * sizeof(*tx->tx_phys));
+                LIBCFS_FREE(tx, sizeof(*tx));
         }
 }
 
 int
 kranal_alloc_txdescs(struct list_head *freelist, int n)
 {
-        int            isnblk = (freelist == &kranal_data.kra_idle_nblk_txs);
         int            i;
         kra_tx_t      *tx;
 
-        LASSERT (freelist == &kranal_data.kra_idle_txs ||
-                 freelist == &kranal_data.kra_idle_nblk_txs);
+        LASSERT (freelist == &kranal_data.kra_idle_txs);
         LASSERT (list_empty(freelist));
 
         for (i = 0; i < n; i++) {
 
-                PORTAL_ALLOC(tx, sizeof(*tx));
+                LIBCFS_ALLOC(tx, sizeof(*tx));
                 if (tx == NULL) {
-                        CERROR("Can't allocate %stx[%d]\n",
-                               isnblk ? "nblk " : "", i);
+                        CERROR("Can't allocate tx[%d]\n", i);
                         kranal_free_txdescs(freelist);
                         return -ENOMEM;
                 }
 
-                PORTAL_ALLOC(tx->tx_phys,
-                             PTL_MD_MAX_IOV * sizeof(*tx->tx_phys));
+                LIBCFS_ALLOC(tx->tx_phys,
+                             LNET_MAX_IOV * sizeof(*tx->tx_phys));
                 if (tx->tx_phys == NULL) {
-                        CERROR("Can't allocate %stx[%d]->tx_phys\n",
-                               isnblk ? "nblk " : "", i);
+                        CERROR("Can't allocate tx[%d]->tx_phys\n", i);
 
-                        PORTAL_FREE(tx, sizeof(*tx));
+                        LIBCFS_FREE(tx, sizeof(*tx));
                         kranal_free_txdescs(freelist);
                         return -ENOMEM;
                 }
 
-                tx->tx_isnblk = isnblk;
                 tx->tx_buftype = RANAL_BUF_NONE;
                 tx->tx_msg.ram_type = RANAL_MSG_NONE;
 
@@ -1756,7 +1375,7 @@ kranal_alloc_txdescs(struct list_head *freelist, int n)
 int
 kranal_device_init(int id, kra_device_t *dev)
 {
-        const int         total_ntx = RANAL_NTX + RANAL_NTX_NBLK;
+        int               total_ntx = *kranal_tunables.kra_ntx;
         RAP_RETURN        rrc;
 
         dev->rad_id = id;
@@ -1777,16 +1396,17 @@ kranal_device_init(int id, kra_device_t *dev)
         rrc = RapkCreateCQ(dev->rad_handle, total_ntx, RAP_CQTYPE_SEND,
                            &dev->rad_rdma_cqh);
         if (rrc != RAP_SUCCESS) {
-                CERROR("Can't create rdma cq size %d"
-                       " for device %d: %d\n", total_ntx, id, rrc);
+                CERROR("Can't create rdma cq size %d for device %d: %d\n",
+                       total_ntx, id, rrc);
                 goto failed_1;
         }
 
-        rrc = RapkCreateCQ(dev->rad_handle, RANAL_FMA_CQ_SIZE, RAP_CQTYPE_RECV,
-                           &dev->rad_fma_cqh);
+        rrc = RapkCreateCQ(dev->rad_handle, 
+                           *kranal_tunables.kra_fma_cq_size, 
+                           RAP_CQTYPE_RECV, &dev->rad_fma_cqh);
         if (rrc != RAP_SUCCESS) {
-                CERROR("Can't create fma cq size %d"
-                       " for device %d: %d\n", RANAL_FMA_CQ_SIZE, id, rrc);
+                CERROR("Can't create fma cq size %d for device %d: %d\n", 
+                       *kranal_tunables.kra_fma_cq_size, id, rrc);
                 goto failed_2;
         }
 
@@ -1803,6 +1423,13 @@ kranal_device_init(int id, kra_device_t *dev)
 void
 kranal_device_fini(kra_device_t *dev)
 {
+        LASSERT (list_empty(&dev->rad_ready_conns));
+        LASSERT (list_empty(&dev->rad_new_conns));
+        LASSERT (dev->rad_nphysmap == 0);
+        LASSERT (dev->rad_nppphysmap == 0);
+        LASSERT (dev->rad_nvirtmap == 0);
+        LASSERT (dev->rad_nobvirtmap == 0);
+                
         LASSERT(dev->rad_scheduler == NULL);
         RapkDestroyCQ(dev->rad_handle, dev->rad_fma_cqh);
         RapkDestroyCQ(dev->rad_handle, dev->rad_rdma_cqh);
@@ -1810,21 +1437,16 @@ kranal_device_fini(kra_device_t *dev)
 }
 
 void
-kranal_api_shutdown (nal_t *nal)
+kranal_shutdown (lnet_ni_t *ni)
 {
         int           i;
         unsigned long flags;
 
-        if (nal->nal_refct != 0) {
-                /* This module got the first ref */
-                PORTAL_MODULE_UNUSE;
-                return;
-        }
-
         CDEBUG(D_MALLOC, "before NAL cleanup: kmem %d\n",
-               atomic_read(&portal_kmemory));
+               atomic_read(&libcfs_kmemory));
 
-        LASSERT (nal == &kranal_api);
+        LASSERT (ni == kranal_data.kra_ni);
+        LASSERT (ni->ni_data == &kranal_data);
 
         switch (kranal_data.kra_init) {
         default:
@@ -1832,54 +1454,57 @@ kranal_api_shutdown (nal_t *nal)
                 LBUG();
 
         case RANAL_INIT_ALL:
-                /* stop calls to nal_cmd */
-                libcfs_nal_cmd_unregister(RANAL);
-                /* No new persistent peers */
+                /* Prevent new peers from being created */
+                write_lock_irqsave(&kranal_data.kra_global_lock, flags);
+                kranal_data.kra_nonewpeers = 1;
+                write_unlock_irqrestore(&kranal_data.kra_global_lock, flags);
+                
+                /* Remove all existing peers from the peer table */
+                kranal_del_peer(LNET_NID_ANY);
 
-                /* resetting my NID to unadvertises me, removes my
-                 * listener and nukes all current peers */
-                kranal_set_mynid(PTL_NID_ANY);
-                /* no new peers or conns */
-
-                /* Wait for all peer/conn state to clean up */
+                /* Wait for pending conn reqs to be handled */
                 i = 2;
-                while (atomic_read(&kranal_data.kra_nconns) != 0 ||
-                       atomic_read(&kranal_data.kra_npeers) != 0) {
+                spin_lock_irqsave(&kranal_data.kra_connd_lock, flags);
+                while (!list_empty(&kranal_data.kra_connd_acceptq)) {
+                        spin_unlock_irqrestore(&kranal_data.kra_connd_lock, 
+                                               flags);
                         i++;
-                        CDEBUG(((i & (-i)) == i) ? D_WARNING : D_NET, /* power of 2? */
-                               "waiting for %d peers and %d conns to close down\n",
-                               atomic_read(&kranal_data.kra_npeers),
-                               atomic_read(&kranal_data.kra_nconns));
-                        kranal_pause(HZ);
-                }
-                /* fall through */
+                        CDEBUG(((i & (-i)) == i) ? D_WARNING : D_NET, /* 2**n */
+                               "waiting for conn reqs to clean up\n");
+                        cfs_pause(cfs_time_seconds(1));
 
-        case RANAL_INIT_LIB:
-                lib_fini(&kranal_lib);
+                        spin_lock_irqsave(&kranal_data.kra_connd_lock, flags);
+                }
+                spin_unlock_irqrestore(&kranal_data.kra_connd_lock, flags);
+
+                /* Wait for all peers to be freed */
+                i = 2;
+                while (atomic_read(&kranal_data.kra_npeers) != 0) {
+                        i++;
+                        CDEBUG(((i & (-i)) == i) ? D_WARNING : D_NET, /* 2**n */
+                               "waiting for %d peers to close down\n",
+                               atomic_read(&kranal_data.kra_npeers));
+                        cfs_pause(cfs_time_seconds(1));
+                }
                 /* fall through */
 
         case RANAL_INIT_DATA:
                 break;
         }
 
-        /* Conn/Peer state all cleaned up BEFORE setting shutdown, so threads
-         * don't have to worry about shutdown races */
-        LASSERT (atomic_read(&kranal_data.kra_nconns) == 0);
+        /* Peer state all cleaned up BEFORE setting shutdown, so threads don't
+         * have to worry about shutdown races.  NB connections may be created
+         * while there are still active connds, but these will be temporary
+         * since peer creation always fails after the listener has started to
+         * shut down. */
         LASSERT (atomic_read(&kranal_data.kra_npeers) == 0);
         
-        /* flag threads to terminate; wake and wait for them to die */
+        /* Flag threads to terminate */
         kranal_data.kra_shutdown = 1;
 
         for (i = 0; i < kranal_data.kra_ndevs; i++) {
                 kra_device_t *dev = &kranal_data.kra_devices[i];
 
-                LASSERT (list_empty(&dev->rad_ready_conns));
-                LASSERT (list_empty(&dev->rad_new_conns));
-                LASSERT (dev->rad_nphysmap == 0);
-                LASSERT (dev->rad_nppphysmap == 0);
-                LASSERT (dev->rad_nvirtmap == 0);
-                LASSERT (dev->rad_nobvirtmap == 0);
-                
                 spin_lock_irqsave(&dev->rad_lock, flags);
                 wake_up(&dev->rad_waitq);
                 spin_unlock_irqrestore(&dev->rad_lock, flags);
@@ -1894,13 +1519,14 @@ kranal_api_shutdown (nal_t *nal)
         wake_up_all(&kranal_data.kra_connd_waitq);
         spin_unlock_irqrestore(&kranal_data.kra_connd_lock, flags);
 
+        /* Wait for threads to exit */
         i = 2;
         while (atomic_read(&kranal_data.kra_nthreads) != 0) {
                 i++;
                 CDEBUG(((i & (-i)) == i) ? D_WARNING : D_NET, /* power of 2? */
                        "Waiting for %d threads to terminate\n",
                        atomic_read(&kranal_data.kra_nthreads));
-                kranal_pause(HZ);
+                cfs_pause(cfs_time_seconds(1));
         }
 
         LASSERT (atomic_read(&kranal_data.kra_npeers) == 0);
@@ -1908,7 +1534,7 @@ kranal_api_shutdown (nal_t *nal)
                 for (i = 0; i < kranal_data.kra_peer_hash_size; i++)
                         LASSERT (list_empty(&kranal_data.kra_peers[i]));
 
-                PORTAL_FREE(kranal_data.kra_peers,
+                LIBCFS_FREE(kranal_data.kra_peers,
                             sizeof (struct list_head) *
                             kranal_data.kra_peer_hash_size);
         }
@@ -1918,7 +1544,7 @@ kranal_api_shutdown (nal_t *nal)
                 for (i = 0; i < kranal_data.kra_conn_hash_size; i++)
                         LASSERT (list_empty(&kranal_data.kra_conns[i]));
 
-                PORTAL_FREE(kranal_data.kra_conns,
+                LIBCFS_FREE(kranal_data.kra_conns,
                             sizeof (struct list_head) *
                             kranal_data.kra_conn_hash_size);
         }
@@ -1927,41 +1553,50 @@ kranal_api_shutdown (nal_t *nal)
                 kranal_device_fini(&kranal_data.kra_devices[i]);
 
         kranal_free_txdescs(&kranal_data.kra_idle_txs);
-        kranal_free_txdescs(&kranal_data.kra_idle_nblk_txs);
 
         CDEBUG(D_MALLOC, "after NAL cleanup: kmem %d\n",
-               atomic_read(&portal_kmemory));
-        printk(KERN_INFO "Lustre: RapidArray NAL unloaded (final mem %d)\n",
-               atomic_read(&portal_kmemory));
+               atomic_read(&libcfs_kmemory));
 
         kranal_data.kra_init = RANAL_INIT_NOTHING;
+        PORTAL_MODULE_UNUSE;
 }
 
 int
-kranal_api_startup (nal_t *nal, ptl_pid_t requested_pid,
-                    ptl_ni_limits_t *requested_limits,
-                    ptl_ni_limits_t *actual_limits)
+kranal_startup (lnet_ni_t *ni)
 {
         struct timeval    tv;
-        ptl_process_id_t  process_id;
-        int               pkmem = atomic_read(&portal_kmemory);
+        int               pkmem = atomic_read(&libcfs_kmemory);
         int               rc;
         int               i;
         kra_device_t     *dev;
 
-        LASSERT (nal == &kranal_api);
+        LASSERT (ni->ni_lnd == &the_kralnd);
 
-        if (nal->nal_refct != 0) {
-                if (actual_limits != NULL)
-                        *actual_limits = kranal_lib.libnal_ni.ni_actual_limits;
-                /* This module got the first ref */
-                PORTAL_MODULE_USE;
-                return PTL_OK;
+        /* Only 1 instance supported */
+        if (kranal_data.kra_init != RANAL_INIT_NOTHING) {
+                CERROR ("Only 1 instance supported\n");
+                return -EPERM;
         }
 
-        LASSERT (kranal_data.kra_init == RANAL_INIT_NOTHING);
+        if (lnet_set_ip_niaddr(ni) != 0) {
+                CERROR ("Can't determine my NID\n");
+                return -EPERM;
+        }
 
+        if (*kranal_tunables.kra_credits > *kranal_tunables.kra_ntx) {
+                CERROR ("Can't set credits(%d) > ntx(%d)\n",
+                        *kranal_tunables.kra_credits,
+                        *kranal_tunables.kra_ntx);
+                return -EINVAL;
+        }
+        
         memset(&kranal_data, 0, sizeof(kranal_data)); /* zero pointers, flags etc */
+
+        ni->ni_maxtxcredits = *kranal_tunables.kra_credits;
+        ni->ni_peertxcredits = *kranal_tunables.kra_peercredits;
+
+        ni->ni_data = &kranal_data;
+        kranal_data.kra_ni = ni;
 
         /* CAVEAT EMPTOR: Every 'Fma' message includes the sender's NID and
          * a unique (for all time) connstamp so we can uniquely identify
@@ -1972,9 +1607,6 @@ kranal_api_startup (nal_t *nal, ptl_pid_t requested_pid,
         do_gettimeofday(&tv);
         kranal_data.kra_connstamp =
         kranal_data.kra_peerstamp = (((__u64)tv.tv_sec) * 1000000) + tv.tv_usec;
-
-        init_MUTEX(&kranal_data.kra_nid_mutex);
-        init_MUTEX_LOCKED(&kranal_data.kra_listener_signal);
 
         rwlock_init(&kranal_data.kra_global_lock);
 
@@ -1998,15 +1630,14 @@ kranal_api_startup (nal_t *nal, ptl_pid_t requested_pid,
         spin_lock_init(&kranal_data.kra_connd_lock);
 
         INIT_LIST_HEAD(&kranal_data.kra_idle_txs);
-        INIT_LIST_HEAD(&kranal_data.kra_idle_nblk_txs);
-        init_waitqueue_head(&kranal_data.kra_idle_tx_waitq);
         spin_lock_init(&kranal_data.kra_tx_lock);
 
         /* OK to call kranal_api_shutdown() to cleanup now */
         kranal_data.kra_init = RANAL_INIT_DATA;
+        PORTAL_MODULE_USE;
 
         kranal_data.kra_peer_hash_size = RANAL_PEER_HASH_SIZE;
-        PORTAL_ALLOC(kranal_data.kra_peers,
+        LIBCFS_ALLOC(kranal_data.kra_peers,
                      sizeof(struct list_head) * kranal_data.kra_peer_hash_size);
         if (kranal_data.kra_peers == NULL)
                 goto failed;
@@ -2015,7 +1646,7 @@ kranal_api_startup (nal_t *nal, ptl_pid_t requested_pid,
                 INIT_LIST_HEAD(&kranal_data.kra_peers[i]);
 
         kranal_data.kra_conn_hash_size = RANAL_PEER_HASH_SIZE;
-        PORTAL_ALLOC(kranal_data.kra_conns,
+        LIBCFS_ALLOC(kranal_data.kra_conns,
                      sizeof(struct list_head) * kranal_data.kra_conn_hash_size);
         if (kranal_data.kra_conns == NULL)
                 goto failed;
@@ -2023,27 +1654,10 @@ kranal_api_startup (nal_t *nal, ptl_pid_t requested_pid,
         for (i = 0; i < kranal_data.kra_conn_hash_size; i++)
                 INIT_LIST_HEAD(&kranal_data.kra_conns[i]);
 
-        rc = kranal_alloc_txdescs(&kranal_data.kra_idle_txs, RANAL_NTX);
+        rc = kranal_alloc_txdescs(&kranal_data.kra_idle_txs, 
+                                  *kranal_tunables.kra_ntx);
         if (rc != 0)
                 goto failed;
-
-        rc = kranal_alloc_txdescs(&kranal_data.kra_idle_nblk_txs,RANAL_NTX_NBLK);
-        if (rc != 0)
-                goto failed;
-
-        process_id.pid = requested_pid;
-        process_id.nid = PTL_NID_ANY;           /* don't know my NID yet */
-
-        rc = lib_init(&kranal_lib, nal, process_id,
-                      requested_limits, actual_limits);
-        if (rc != PTL_OK) {
-                CERROR("lib_init failed: error %d\n", rc);
-                goto failed;
-        }
-
-        /* lib interface initialised */
-        kranal_data.kra_init = RANAL_INIT_LIB;
-        /*****************************************************/
 
         rc = kranal_thread_start(kranal_reaper, NULL);
         if (rc != 0) {
@@ -2051,7 +1665,7 @@ kranal_api_startup (nal_t *nal, ptl_pid_t requested_pid,
                 goto failed;
         }
 
-        for (i = 0; i < RANAL_N_CONND; i++) {
+        for (i = 0; i < *kranal_tunables.kra_n_connd; i++) {
                 rc = kranal_thread_start(kranal_connd, (void *)(unsigned long)i);
                 if (rc != 0) {
                         CERROR("Can't spawn ranal connd[%d]: %d\n",
@@ -2062,16 +1676,15 @@ kranal_api_startup (nal_t *nal, ptl_pid_t requested_pid,
 
         LASSERT (kranal_data.kra_ndevs == 0);
 
-        for (i = 0; i < sizeof(kranal_devids)/sizeof(kranal_devids[0]); i++) {
-                LASSERT (i < RANAL_MAXDEVS);
-
+        /* Use all available RapidArray devices */
+        for (i = 0; i < RANAL_MAXDEVS; i++) {
                 dev = &kranal_data.kra_devices[kranal_data.kra_ndevs];
 
                 rc = kranal_device_init(kranal_devids[i], dev);
                 if (rc == 0)
                         kranal_data.kra_ndevs++;
         }
-        
+
         if (kranal_data.kra_ndevs == 0) {
                 CERROR("Can't initialise any RapidArray devices\n");
                 goto failed;
@@ -2087,36 +1700,23 @@ kranal_api_startup (nal_t *nal, ptl_pid_t requested_pid,
                 }
         }
 
-        rc = libcfs_nal_cmd_register(RANAL, &kranal_cmd, NULL);
-        if (rc != 0) {
-                CERROR("Can't initialise command interface (rc = %d)\n", rc);
-                goto failed;
-        }
-
         /* flag everything initialised */
         kranal_data.kra_init = RANAL_INIT_ALL;
         /*****************************************************/
 
-        CDEBUG(D_MALLOC, "initial kmem %d\n", atomic_read(&portal_kmemory));
-        printk(KERN_INFO "Lustre: RapidArray NAL loaded "
-               "(initial mem %d)\n", pkmem);
-
-        return PTL_OK;
+        CDEBUG(D_MALLOC, "initial kmem %d\n", pkmem);
+        return 0;
 
  failed:
-        kranal_api_shutdown(&kranal_api);
-        return PTL_FAIL;
+        kranal_shutdown(ni);
+        return -ENETDOWN;
 }
 
 void __exit
 kranal_module_fini (void)
 {
-        if (kranal_tunables.kra_sysctl != NULL)
-                unregister_sysctl_table(kranal_tunables.kra_sysctl);
-
-        PtlNIFini(kranal_ni);
-
-        ptl_unregister_nal(RANAL);
+        lnet_unregister_lnd(&the_kralnd);
+        kranal_tunables_fini();
 }
 
 int __init
@@ -2124,51 +1724,17 @@ kranal_module_init (void)
 {
         int    rc;
 
-        /* the following must be sizeof(int) for
-         * proc_dointvec/kranal_listener_procint() */
-        LASSERT (sizeof(kranal_tunables.kra_timeout) == sizeof(int));
-        LASSERT (sizeof(kranal_tunables.kra_listener_timeout) == sizeof(int));
-        LASSERT (sizeof(kranal_tunables.kra_backlog) == sizeof(int));
-        LASSERT (sizeof(kranal_tunables.kra_port) == sizeof(int));
-        LASSERT (sizeof(kranal_tunables.kra_max_immediate) == sizeof(int));
+        rc = kranal_tunables_init();
+        if (rc != 0)
+                return rc;
 
-        kranal_api.nal_ni_init = kranal_api_startup;
-        kranal_api.nal_ni_fini = kranal_api_shutdown;
-
-        /* Initialise dynamic tunables to defaults once only */
-        kranal_tunables.kra_timeout = RANAL_TIMEOUT;
-        kranal_tunables.kra_listener_timeout = RANAL_LISTENER_TIMEOUT;
-        kranal_tunables.kra_backlog = RANAL_BACKLOG;
-        kranal_tunables.kra_port = RANAL_PORT;
-        kranal_tunables.kra_max_immediate = RANAL_MAX_IMMEDIATE;
-
-        rc = ptl_register_nal(RANAL, &kranal_api);
-        if (rc != PTL_OK) {
-                CERROR("Can't register RANAL: %d\n", rc);
-                return -ENOMEM;               /* or something... */
-        }
-
-        /* Pure gateways want the NAL started up at module load time... */
-        rc = PtlNIInit(RANAL, LUSTRE_SRV_PTL_PID, NULL, NULL, &kranal_ni);
-        if (rc != PTL_OK && rc != PTL_IFACE_DUP) {
-                ptl_unregister_nal(RANAL);
-                return -ENODEV;
-        }
-
-        kranal_tunables.kra_sysctl =
-                register_sysctl_table(kranal_top_ctl_table, 0);
-        if (kranal_tunables.kra_sysctl == NULL) {
-                CERROR("Can't register sysctl table\n");
-                PtlNIFini(kranal_ni);
-                ptl_unregister_nal(RANAL);
-                return -ENOMEM;
-        }
+        lnet_register_lnd(&the_kralnd);
 
         return 0;
 }
 
 MODULE_AUTHOR("Cluster File Systems, Inc. <info@clusterfs.com>");
-MODULE_DESCRIPTION("Kernel RapidArray NAL v0.01");
+MODULE_DESCRIPTION("Kernel RapidArray LND v0.01");
 MODULE_LICENSE("GPL");
 
 module_init(kranal_module_init);

@@ -1,15 +1,13 @@
-MODULES := pingsrv pingcli spingsrv spingcli
+MODULES := pingsrv pingcli
+#utcli utsrv
 pingsrv-objs := ping_srv.o
 
 ifeq ($(PATCHLEVEL),6)
 pingcli-objs := ping_cli.o
-spingsrv-objs := sping_srv.o
-spingcli-objs := sping_cli.o
+#utcli-objs := ut_cli.o
+#utsrv-objs := ut_srv.o
 else
 ping%.c: ping_%.c
-	ln -sf $< $@
-
-sping%.c: sping_%.c
 	ln -sf $< $@
 endif
 

@@ -22,19 +22,21 @@
  * Darwin porting library
  * Make things easy to port
  */
-#define DEBUG_SUBSYSTEM S_PORTALS
+#define DEBUG_SUBSYSTEM S_LNET
 
 #include <mach/mach_types.h>
 #include <string.h>
 #include <sys/errno.h>
 #include <sys/types.h>
 #include <sys/fcntl.h>
-#include <portals/types.h>
+#include <lnet/types.h>
+
+#include <libcfs/kp30.h>
 
 #ifndef isspace
 inline int
 isspace(char c)
-{ 
+{
         return (c == ' ' || c == '\t' || c == '\n' || c == '\12');
 }
 #endif
@@ -98,12 +100,12 @@ strstr(const char *in, const char *str)
 
 char *
 strrchr(const char *p, int ch)
-{ 
-        const char *end = p + strlen(p); 
-        do { 
-                if (*end == (char)ch) 
-                        return (char *)end; 
-        } while (--end >= p); 
+{
+        const char *end = p + strlen(p);
+        do {
+                if (*end == (char)ch)
+                        return (char *)end;
+        } while (--end >= p);
         return NULL;
 }
 
@@ -273,7 +275,7 @@ int convert_server_error(__u64 ecode)
 	int sign;
 	int code;
 
-        static int errno_xlate[] = {
+	static int errno_xlate[] = {
 		/* success is always success */
 		[0]                     = 0,
 		[LINUX_EPERM]		= EPERM,
@@ -358,7 +360,8 @@ int convert_server_error(__u64 ecode)
 		[LINUX_ELIBMAX]		= EINVAL /* ELIBMAX */,
 		[LINUX_ELIBEXEC]	= EINVAL /* ELIBEXEC */,
 		[LINUX_EILSEQ]		= EILSEQ,
-		[LINUX_ERESTART]	= ERESTART,
+		[LINUX_ERESTART]	= EINVAL /* because ERESTART is
+                                                  * negative in XNU */,
 		[LINUX_ESTRPIPE]	= EINVAL /* ESTRPIPE */,
 		[LINUX_EUSERS]		= EUSERS,
 		[LINUX_ENOTSOCK]	= ENOTSOCK,
@@ -398,22 +401,19 @@ int convert_server_error(__u64 ecode)
 		[LINUX_EDQUOT]		= EDQUOT,
 		[LINUX_ENOMEDIUM]	= EINVAL /* ENOMEDIUM */,
 		[LINUX_EMEDIUMTYPE]	= EINVAL /* EMEDIUMTYPE */,
-        };
+	};
 	code = (int)ecode;
-        if (code >= 0) {
+	if (code >= 0) {
 		sign = +1;
 	} else {
 		sign = -1;
 		code = -code;
 	}
-	if (code < (sizeof errno_xlate) / (sizeof errno_xlate[0]))
+	if (code < (sizeof errno_xlate) / (sizeof errno_xlate[0])) {
 		code = errno_xlate[code];
-	else
-		/*
-		 * Unknown error. Reserved for the future.
-		 */
-		code = EINVAL;
-        return sign * code;
+		LASSERT(code >= 0);
+        }
+	return sign * code;
 }
 
 enum {
@@ -448,7 +448,7 @@ static inline void obit_convert(int *cflag, int *sflag,
  */
 int convert_client_oflag(int cflag, int *result)
 {
-	int sflag;
+	int sflag = 0;
 
 	cflag = 0;
 	obit_convert(&cflag, &sflag, O_RDONLY,   LINUX_O_RDONLY);
@@ -480,3 +480,99 @@ int convert_client_oflag(int cflag, int *result)
 	} else
 		return -EINVAL;
 }
+
+#ifdef __DARWIN8__
+#else /* !__DARWIN8__ */
+extern int unix_syscall();
+extern int unix_syscall_return();
+
+extern int ktrsysret();
+extern int ktrace();
+
+extern int ast_taken();
+extern int ast_check();
+
+extern int trap();
+extern int syscall_trace();
+
+static int is_addr_in_range(void *addr, void *start, void *end)
+{
+	return start <= addr && addr <= end;
+}
+
+extern void cfs_thread_agent (void);
+
+static int is_last_frame(void *addr)
+{
+	if (addr == NULL)
+		return 1;
+	else if (is_addr_in_range(addr, unix_syscall, unix_syscall_return))
+		return 1;
+	else if (is_addr_in_range(addr, ktrsysret, ktrace))
+		return 1;
+	else if (is_addr_in_range(addr, ast_taken, ast_check))
+		return 1;
+	else if (is_addr_in_range(addr, trap, syscall_trace))
+		return 1;
+	else if (is_addr_in_range(addr, cfs_thread_agent, cfs_kernel_thread))
+		return 1;
+	else
+		return 0;
+}
+
+static void *get_frame(int i)
+{
+	void *result;
+
+#define CASE(i) case (i): result = __builtin_return_address(i); break
+	switch (i + 1) {
+		CASE(1);
+		CASE(2);
+		CASE(3);
+		CASE(4);
+		CASE(5);
+		CASE(6);
+		CASE(7);
+		CASE(8);
+		CASE(9);
+		CASE(10);
+		CASE(11);
+		CASE(12);
+		CASE(13);
+		CASE(14);
+		CASE(15);
+		CASE(16);
+		CASE(17);
+		CASE(18);
+		CASE(19);
+		CASE(20);
+	default:
+		panic("impossible frame number: %d\n", i);
+		result = NULL;
+	}
+	return result;
+}
+
+void cfs_stack_trace_fill(struct cfs_stack_trace *trace)
+{
+	int i;
+
+	memset(trace, 0, sizeof *trace);
+	for (i = 0; i < sizeof_array(trace->frame); ++ i) {
+		void *addr;
+
+		addr = get_frame(i);
+		trace->frame[i] = addr;
+		if (is_last_frame(addr))
+			break;
+	}
+}
+
+void *cfs_stack_trace_frame(struct cfs_stack_trace *trace, int frame_no)
+{
+        if (0 <= frame_no && frame_no < sizeof_array(trace->frame))
+                return trace->frame[frame_no];
+        else
+                return NULL;
+}
+#endif /* !__DARWIN8__ */

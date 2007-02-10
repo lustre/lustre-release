@@ -9,6 +9,7 @@
 #endif
 
 #include <mach/mach_types.h>
+#include <sys/errno.h>
 #include <string.h>
 #include <libcfs/darwin/darwin-types.h>
 #include <libcfs/darwin/darwin-time.h>
@@ -16,6 +17,7 @@
 #include <libcfs/darwin/darwin-mem.h>
 #include <libcfs/darwin/darwin-lock.h>
 #include <libcfs/darwin/darwin-fs.h>
+#include <libcfs/darwin/darwin-tcpip.h>
 
 #ifdef __KERNEL__
 # include <sys/types.h>
@@ -75,8 +77,8 @@ struct ptldebug_header {
 #endif
 #define LUSTRE_TRACE_SIZE (THREAD_SIZE >> 5)
 
-#define CHECK_STACK(stack) do { } while(0)
-#define CDEBUG_STACK (0L)
+#define CHECK_STACK() do { } while(0)
+#define CDEBUG_STACK() (0L)
 
 /* Darwin has defined RETURN, so we have to undef it in lustre */
 #ifdef RETURN
@@ -155,7 +157,7 @@ __entry_nesting(&__cdd);
 /* ENTRY_NESTING_SUPPORT */
 #endif
 
-#define LUSTRE_PTL_PID          12345
+#define LUSTRE_LNET_PID          12345
 
 #define _XNU_LIBCFS_H
 
@@ -164,10 +166,28 @@ __entry_nesting(&__cdd);
  *
  * Implementation is in darwin-curproc.c
  */
-#define CFS_CURPROC_COMM_MAX (sizeof ((struct proc *)0)->p_comm)
+#define CFS_CURPROC_COMM_MAX    MAXCOMLEN
 /*
  * XNU has no capabilities
  */
 typedef int cfs_kernel_cap_t;
+
+#ifdef __KERNEL__
+enum {
+        /* if you change this, update darwin-util.c:cfs_stack_trace_fill() */
+        CFS_STACK_TRACE_DEPTH = 16
+};
+
+struct cfs_stack_trace {
+        void *frame[CFS_STACK_TRACE_DEPTH];
+};
+
+#define printk(format, args...)                 printf(format, ## args)
+
+#ifdef WITH_WATCHDOG
+#undef WITH_WATCHDOG
+#endif
+
+#endif /* __KERNEL__ */
 
 #endif /* _XNU_LIBCFS_H */

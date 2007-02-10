@@ -30,7 +30,9 @@
 #endif
 
 #ifdef __KERNEL__
+#ifdef HAVE_KERNEL_CONFIG_H
 #include <linux/config.h>
+#endif
 #include <linux/module.h>
 #include <linux/kernel.h>
 #include <linux/version.h>
@@ -57,8 +59,27 @@ typedef struct miscdevice		cfs_psdev_t;
 typedef struct ctl_table		cfs_sysctl_table_t;
 typedef struct ctl_table_header		cfs_sysctl_table_header_t;
 
-#define register_cfs_sysctl_table(t, a)	register_sysctl_table(t, a)
-#define unregister_cfs_sysctl_table(t)	unregister_sysctl_table(t, a)
+#define cfs_register_sysctl_table(t, a)	register_sysctl_table(t, a)
+#define cfs_unregister_sysctl_table(t)	unregister_sysctl_table(t, a)
+
+/*
+ * Symbol register
+ */
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
+#define cfs_symbol_register(s, p)       inter_module_register(s, THIS_MODULE, p)
+#define cfs_symbol_unregister(s)        inter_module_unregister(s)
+#define cfs_symbol_get(s)               inter_module_get(s)
+#define cfs_symbol_put(s)               inter_module_put(s)
+#define cfs_module_get()                MOD_INC_USE_COUNT
+#define cfs_module_put()                MOD_DEC_USE_COUNT
+#else
+#define cfs_symbol_register(s, p)       do {} while(0)
+#define cfs_symbol_unregister(s)        do {} while(0)
+#define cfs_symbol_get(s)               symbol_get(s)
+#define cfs_symbol_put(s)               symbol_put(s)
+#define cfs_module_get()                try_module_get(THIS_MODULE)
+#define cfs_module_put()                module_put(THIS_MODULE)
+#endif
 
 /*
  * Proc file system APIs
@@ -73,21 +94,28 @@ typedef struct proc_dir_entry           cfs_proc_dir_entry_t;
 /*
  * Wait Queue
  */
+#define CFS_TASK_INTERRUPTIBLE          TASK_INTERRUPTIBLE
+#define CFS_TASK_UNINT                  TASK_UNINTERRUPTIBLE
+
 typedef wait_queue_t			cfs_waitlink_t;
 typedef wait_queue_head_t		cfs_waitq_t;
 
-#define cfs_waitq_init(w)		init_waitqueue_head(w)
-#define cfs_waitlink_init(l)		init_waitqueue_entry(l, current)
-#define cfs_waitq_add(w, l)	        add_wait_queue(w, l)
-#define cfs_waitq_add_exclusive(w, l)	add_wait_queue_exclusive(w, l)
+typedef long                            cfs_task_state_t;
+
+#define cfs_waitq_init(w)               init_waitqueue_head(w)
+#define cfs_waitlink_init(l)            init_waitqueue_entry(l, current)
+#define cfs_waitq_add(w, l)             add_wait_queue(w, l)
+#define cfs_waitq_add_exclusive(w, l)   add_wait_queue_exclusive(w, l)
 #define cfs_waitq_forward(l, w)         do {} while(0)
-#define cfs_waitq_del(w, l)	        remove_wait_queue(w, l)
-#define cfs_waitq_active(w)	        waitqueue_active(w)
-#define cfs_waitq_signal(w)	        wake_up(w)
-#define cfs_waitq_signal_nr(w,n)	wake_up_nr(w, n)
-#define cfs_waitq_broadcast(w)	        wake_up_all(w)
-#define cfs_waitq_wait(l)		schedule()
-#define cfs_waitq_timedwait(l, t)	schedule_timeout(t)
+#define cfs_waitq_del(w, l)             remove_wait_queue(w, l)
+#define cfs_waitq_active(w)             waitqueue_active(w)
+#define cfs_waitq_signal(w)             wake_up(w)
+#define cfs_waitq_signal_nr(w,n)        wake_up_nr(w, n)
+#define cfs_waitq_broadcast(w)          wake_up_all(w)
+#define cfs_waitq_wait(l, s)            schedule()
+#define cfs_waitq_timedwait(l, s, t)    schedule_timeout(t)
+#define cfs_schedule_timeout(s, t)      schedule_timeout(t)
+#define cfs_schedule()                  schedule()
 
 /* Kernel thread */
 typedef int (*cfs_thread_t)(void *);
@@ -98,6 +126,8 @@ typedef int (*cfs_thread_t)(void *);
  */
 typedef struct task_struct              cfs_task_t;
 #define cfs_current()                   current
+#define cfs_task_lock(t)                task_lock(t)
+#define cfs_task_unlock(t)              task_unlock(t)
 #define CFS_DECL_JOURNAL_DATA           void *journal_info
 #define CFS_PUSH_JOURNAL                do {    \
         journal_info = current->journal_info;   \
@@ -115,14 +145,7 @@ module_exit(fini)
 /*
  * Signal
  */
-#define cfs_sigmask_lock(t, f)          SIGNAL_MASK_LOCK(t, f)
-#define cfs_sigmask_unlock(t, f)        SIGNAL_MASK_UNLOCK(t, f)
-#define cfs_recalc_sigpending(t)        RECALC_SIGPENDING
-#define cfs_signal_pending(t)           signal_pending(t)
-#define cfs_sigfillset(s)               sigfillset(s)
-
-#define cfs_set_sig_blocked(t, b)       do { (t)->blocked = b; } while(0)
-#define cfs_get_sig_blocked(t)          (&(t)->blocked)
+typedef sigset_t                        cfs_sigset_t;
 
 /*
  * Timer
@@ -164,8 +187,17 @@ static inline cfs_time_t cfs_timer_deadline(cfs_timer_t *t)
         return t->expires;
 }
 
+
+/* deschedule for a bit... */
+static inline void cfs_pause(cfs_duration_t ticks)
+{
+        set_current_state(TASK_UNINTERRUPTIBLE);
+        schedule_timeout(ticks);
+}
+
 #else   /* !__KERNEL__ */
 
+typedef struct proc_dir_entry           cfs_proc_dir_entry_t;
 #include "../user-prim.h"
 
 #endif /* __KERNEL__ */

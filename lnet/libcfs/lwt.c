@@ -24,7 +24,9 @@
 # define EXPORT_SYMTAB
 #endif
 
+#ifdef HAVE_KERNEL_CONFIG_H
 #include <linux/config.h>
+#endif
 #include <linux/module.h>
 #include <linux/kmod.h>
 #include <linux/kernel.h>
@@ -39,7 +41,7 @@
 #include <asm/system.h>
 #include <asm/uaccess.h>
 
-#define DEBUG_SUBSYSTEM S_PORTALS
+#define DEBUG_SUBSYSTEM S_LNET
 
 #include <libcfs/kp30.h>
 
@@ -118,7 +120,7 @@ lwt_control (int enable, int clear)
                         continue;
 
                 for (j = 0; j < lwt_pages_per_cpu; j++) {
-                        memset (p->lwtp_events, 0, PAGE_SIZE);
+                        memset (p->lwtp_events, 0, CFS_PAGE_SIZE);
 
                         p = list_entry (p->lwtp_list.next,
                                         lwt_page_t, lwtp_list);
@@ -138,7 +140,7 @@ int
 lwt_snapshot (cycles_t *now, int *ncpu, int *total_size, 
               void *user_ptr, int user_size)
 {
-        const int    events_per_page = PAGE_SIZE / sizeof(lwt_event_t);
+        const int    events_per_page = CFS_PAGE_SIZE / sizeof(lwt_event_t);
         const int    bytes_per_page = events_per_page * sizeof(lwt_event_t);
         lwt_page_t  *p;
         int          i;
@@ -189,7 +191,7 @@ lwt_init ()
 
 	/* NULL pointers, zero scalars */
 	memset (lwt_cpus, 0, sizeof (lwt_cpus));
-        lwt_pages_per_cpu = LWT_MEMORY / (num_online_cpus() * PAGE_SIZE);
+        lwt_pages_per_cpu = LWT_MEMORY / (num_online_cpus() * CFS_PAGE_SIZE);
 
 	for (i = 0; i < num_online_cpus(); i++)
 		for (j = 0; j < lwt_pages_per_cpu; j++) {
@@ -202,7 +204,7 @@ lwt_init ()
 				return (-ENOMEM);
 			}
 
-                        PORTAL_ALLOC(lwtp, sizeof (*lwtp));
+                        LIBCFS_ALLOC(lwtp, sizeof (*lwtp));
 			if (lwtp == NULL) {
 				CERROR ("Can't allocate lwtp\n");
                                 __free_page(page);
@@ -212,7 +214,7 @@ lwt_init ()
 
                         lwtp->lwtp_page = page;
                         lwtp->lwtp_events = page_address(page);
-			memset (lwtp->lwtp_events, 0, PAGE_SIZE);
+			memset (lwtp->lwtp_events, 0, CFS_PAGE_SIZE);
 
 			if (j == 0) {
 				INIT_LIST_HEAD (&lwtp->lwtp_list);
@@ -253,7 +255,7 @@ lwt_fini ()
                         }
                         
                         __free_page (lwtp->lwtp_page);
-                        PORTAL_FREE (lwtp, sizeof (*lwtp));
+                        LIBCFS_FREE (lwtp, sizeof (*lwtp));
                 }
 }
 

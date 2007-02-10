@@ -1,9 +1,5 @@
-MODULES := ksocknal
+MODULES := ksocklnd
 
-ksocknal-objs := socknal.o socknal_cb.o socknal_lib-linux.o
-
-# If you don't build with -O2, your modules won't insert, becahse htonl is
-# just special that way.
-EXTRA_POST_CFLAGS := -O2
+ksocklnd-objs := socklnd.o socklnd_cb.o socklnd_modparams.o socklnd_lib-linux.o
 
 @INCLUDE_RULES@

@@ -1,5 +1,5 @@
-MODULES := kiibnal
-kiibnal-objs := iibnal.o iibnal_cb.o
+MODULES := kiiblnd
+kiiblnd-objs := iiblnd.o iiblnd_cb.o iiblnd_modparams.o
 
 EXTRA_POST_CFLAGS := @IIBCPPFLAGS@
 

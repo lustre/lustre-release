@@ -22,196 +22,162 @@
 #ifndef EXPORT_SYMTAB
 # define EXPORT_SYMTAB
 #endif
-#define DEBUG_SUBSYSTEM S_PORTALS
+#define DEBUG_SUBSYSTEM S_LNET
+#include <lnet/lib-lnet.h>
 
-#include <portals/lib-p30.h>
-#include <portals/p30.h>
-#include <portals/nal.h>
-#include <libcfs/kp30.h>
-#include <portals/kpr.h>
+static int config_on_load = 0;
+CFS_MODULE_PARM(config_on_load, "i", int, 0444,
+                "configure network at module load");
 
-extern void (kping_client)(struct portal_ioctl_data *);
+static struct semaphore lnet_config_mutex;
 
-static int kportal_ioctl(struct portal_ioctl_data *data,
-                         unsigned int cmd, unsigned long arg)
+int
+lnet_configure (void *arg)
 {
-        int err;
-        char str[PTL_NALFMT_SIZE];
-        ENTRY;
+        /* 'arg' only there so I can be passed to cfs_kernel_thread() */
+        int    rc = 0;
 
-        switch (cmd) {
-        case IOC_PORTAL_PING: {
-                void (*ping)(struct portal_ioctl_data *);
+        LNET_MUTEX_DOWN(&lnet_config_mutex);
 
-                CDEBUG(D_IOCTL, "doing %d pings to nid "LPX64" (%s)\n",
-                       data->ioc_count, data->ioc_nid,
-                       portals_nid2str(data->ioc_nal, data->ioc_nid, str));
-                ping = PORTAL_SYMBOL_GET(kping_client);
-                if (!ping)
-                        CERROR("PORTAL_SYMBOL_GET failed\n");
-                else {
-                        ping(data);
-                        PORTAL_SYMBOL_PUT(kping_client);
+        if (!the_lnet.ln_niinit_self) {
+                rc = LNetNIInit(LUSTRE_SRV_LNET_PID);
+                if (rc >= 0) {
+                        the_lnet.ln_niinit_self = 1;
+                        rc = 0;
                 }
-                RETURN(0);
         }
 
-        case IOC_PORTAL_GET_NID: {
-                ptl_handle_ni_t    nih;
-                ptl_process_id_t   pid;
-
-                CDEBUG (D_IOCTL, "Getting nid for nal [%x]\n", data->ioc_nal);
-
-                err = PtlNIInit(data->ioc_nal, LUSTRE_SRV_PTL_PID, NULL,
-                                NULL, &nih);
-                if (!(err == PTL_OK || err == PTL_IFACE_DUP))
-                        RETURN (-EINVAL);
-
-                err = PtlGetId (nih, &pid);
-                LASSERT (err == PTL_OK);
-
-                PtlNIFini(nih);
-
-                data->ioc_nid = pid.nid;
-                if (copy_to_user ((char *)arg, data, sizeof (*data)))
-                        RETURN (-EFAULT);
-                RETURN(0);
-        }
-
-        case IOC_PORTAL_FAIL_NID: {
-                ptl_handle_ni_t    nih;
-
-                CDEBUG (D_IOCTL, "fail nid: [%d] "LPU64" count %d\n",
-                        data->ioc_nal, data->ioc_nid, data->ioc_count);
-
-                err = PtlNIInit(data->ioc_nal, LUSTRE_SRV_PTL_PID, NULL,
-                                NULL, &nih);
-                if (!(err == PTL_OK || err == PTL_IFACE_DUP))
-                        return (-EINVAL);
-
-                if (err == PTL_OK) {
-                        /* There's no point in failing an interface that
-                         * came into existance just for this */
-                        err = -EINVAL;
-                } else {
-                        err = PtlFailNid (nih, data->ioc_nid, data->ioc_count);
-                        if (err != PTL_OK)
-                                err = -EINVAL;
-                }
-
-                PtlNIFini(nih);
-                RETURN (err);
-        }
-
-        case IOC_PORTAL_LOOPBACK: {
-                ptl_handle_ni_t  nih;
-                int              enabled = data->ioc_flags;
-                int              set = data->ioc_misc;
-
-                CDEBUG (D_IOCTL, "loopback: [%d] %d %d\n",
-                        data->ioc_nal, enabled, set);
-
-                err = PtlNIInit(data->ioc_nal, LUSTRE_SRV_PTL_PID, NULL,
-                                NULL, &nih);
-                if (!(err == PTL_OK || err == PTL_IFACE_DUP))
-                        return (-EINVAL);
-
-                if (err == PTL_OK) {
-                        /* There's no point in failing an interface that
-                         * came into existance just for this */
-                        err = -EINVAL;
-                } else {
-                        err = PtlLoopback (nih, set, &enabled);
-                        if (err != PTL_OK) {
-                                err = -EINVAL;
-                        } else {
-                                data->ioc_flags = enabled;
-                                if (copy_to_user ((char *)arg, data, 
-                                                  sizeof (*data)))
-                                        err = -EFAULT;
-                                else
-                                        err = 0;
-                        }
-                }
-
-                PtlNIFini(nih);
-                RETURN (err);
-        }
-        default:
-                RETURN(-EINVAL);
-        }
-        /* Not Reached */
+        LNET_MUTEX_UP(&lnet_config_mutex);
+        return rc;
 }
 
-DECLARE_IOCTL_HANDLER(kportal_ioctl_handler, kportal_ioctl);
-extern struct semaphore ptl_mutex;
-
-static int init_kportals_module(void)
+int
+lnet_unconfigure (void)
 {
-        int rc;
+        int   refcount;
+        
+        LNET_MUTEX_DOWN(&lnet_config_mutex);
+
+        if (the_lnet.ln_niinit_self) {
+                the_lnet.ln_niinit_self = 0;
+                LNetNIFini();
+        }
+
+        LNET_MUTEX_DOWN(&the_lnet.ln_api_mutex);
+        refcount = the_lnet.ln_refcount;
+        LNET_MUTEX_UP(&the_lnet.ln_api_mutex);
+
+        LNET_MUTEX_UP(&lnet_config_mutex);
+        return (refcount == 0) ? 0 : -EBUSY;
+}
+
+int
+lnet_ioctl(unsigned int cmd, struct libcfs_ioctl_data *data)
+{
+        int   rc;
+
+        switch (cmd) {
+        case IOC_LIBCFS_CONFIGURE:
+                return lnet_configure(NULL);
+
+        case IOC_LIBCFS_UNCONFIGURE:
+                return lnet_unconfigure();
+                
+        default:
+                /* Passing LNET_PID_ANY only gives me a ref if the net is up
+                 * already; I'll need it to ensure the net can't go down while
+                 * I'm called into it */
+                rc = LNetNIInit(LNET_PID_ANY);
+                if (rc >= 0) {
+                        rc = LNetCtl(cmd, data);
+                        LNetNIFini();
+                }
+                return rc;
+        }
+}
+
+DECLARE_IOCTL_HANDLER(lnet_ioctl_handler, lnet_ioctl);
+
+int
+init_lnet(void)
+{
+        int                  rc;
         ENTRY;
 
-        init_mutex(&ptl_mutex);
-        rc = PtlInit(NULL);
-        if (rc) {
-                CERROR("PtlInit: error %d\n", rc);
+        init_mutex(&lnet_config_mutex);
+
+        rc = LNetInit();
+        if (rc != 0) {
+                CERROR("LNetInit: error %d\n", rc);
                 RETURN(rc);
         }
 
-        rc = libcfs_register_ioctl(&kportal_ioctl_handler);
+        rc = libcfs_register_ioctl(&lnet_ioctl_handler);
         LASSERT (rc == 0);
 
-        RETURN(rc);
+        if (config_on_load) {
+                /* Have to schedule a separate thread to avoid deadlocking
+                 * in modload */
+                (void) cfs_kernel_thread(lnet_configure, NULL, 0);
+        }
+
+        RETURN(0);
 }
 
-static void exit_kportals_module(void)
+void
+fini_lnet(void)
 {
         int rc;
 
-        rc = libcfs_deregister_ioctl(&kportal_ioctl_handler);
+        rc = libcfs_deregister_ioctl(&lnet_ioctl_handler);
         LASSERT (rc == 0);
 
-        PtlFini();
+        LNetFini();
 }
 
-EXPORT_SYMBOL(ptl_register_nal);
-EXPORT_SYMBOL(ptl_unregister_nal);
+EXPORT_SYMBOL(lnet_register_lnd);
+EXPORT_SYMBOL(lnet_unregister_lnd);
 
-EXPORT_SYMBOL(ptl_err_str);
-EXPORT_SYMBOL(PtlMEAttach);
-EXPORT_SYMBOL(PtlMEInsert);
-EXPORT_SYMBOL(PtlMEUnlink);
-EXPORT_SYMBOL(PtlEQAlloc);
-EXPORT_SYMBOL(PtlMDAttach);
-EXPORT_SYMBOL(PtlMDUnlink);
-EXPORT_SYMBOL(PtlNIInit);
-EXPORT_SYMBOL(PtlNIFini);
-EXPORT_SYMBOL(PtlInit);
-EXPORT_SYMBOL(PtlFini);
-EXPORT_SYMBOL(PtlSnprintHandle);
-EXPORT_SYMBOL(PtlPut);
-EXPORT_SYMBOL(PtlGet);
-EXPORT_SYMBOL(PtlEQWait);
-EXPORT_SYMBOL(PtlEQFree);
-EXPORT_SYMBOL(PtlEQGet);
-EXPORT_SYMBOL(PtlGetId);
-EXPORT_SYMBOL(PtlMDBind);
-EXPORT_SYMBOL(lib_iov_nob);
-EXPORT_SYMBOL(lib_copy_iov2buf);
-EXPORT_SYMBOL(lib_copy_buf2iov);
-EXPORT_SYMBOL(lib_extract_iov);
-EXPORT_SYMBOL(lib_kiov_nob);
-EXPORT_SYMBOL(lib_copy_kiov2buf);
-EXPORT_SYMBOL(lib_copy_buf2kiov);
-EXPORT_SYMBOL(lib_extract_kiov);
-EXPORT_SYMBOL(lib_finalize);
-EXPORT_SYMBOL(lib_parse);
-EXPORT_SYMBOL(lib_create_reply_msg);
-EXPORT_SYMBOL(lib_init);
-EXPORT_SYMBOL(lib_fini);
+EXPORT_SYMBOL(LNetMEAttach);
+EXPORT_SYMBOL(LNetMEInsert);
+EXPORT_SYMBOL(LNetMEUnlink);
+EXPORT_SYMBOL(LNetEQAlloc);
+EXPORT_SYMBOL(LNetMDAttach);
+EXPORT_SYMBOL(LNetMDUnlink);
+EXPORT_SYMBOL(LNetNIInit);
+EXPORT_SYMBOL(LNetNIFini);
+EXPORT_SYMBOL(LNetInit);
+EXPORT_SYMBOL(LNetFini);
+EXPORT_SYMBOL(LNetSnprintHandle);
+EXPORT_SYMBOL(LNetPut);
+EXPORT_SYMBOL(LNetGet);
+EXPORT_SYMBOL(LNetEQWait);
+EXPORT_SYMBOL(LNetEQFree);
+EXPORT_SYMBOL(LNetEQGet);
+EXPORT_SYMBOL(LNetGetId);
+EXPORT_SYMBOL(LNetMDBind);
+EXPORT_SYMBOL(LNetDist);
+EXPORT_SYMBOL(LNetCtl);
+EXPORT_SYMBOL(LNetSetLazyPortal);
+EXPORT_SYMBOL(LNetClearLazyPortal);
+EXPORT_SYMBOL(the_lnet);
+EXPORT_SYMBOL(lnet_iov_nob);
+EXPORT_SYMBOL(lnet_extract_iov);
+EXPORT_SYMBOL(lnet_kiov_nob);
+EXPORT_SYMBOL(lnet_extract_kiov);
+EXPORT_SYMBOL(lnet_copy_iov2iov);
+EXPORT_SYMBOL(lnet_copy_iov2kiov);
+EXPORT_SYMBOL(lnet_copy_kiov2iov);
+EXPORT_SYMBOL(lnet_copy_kiov2kiov);
+EXPORT_SYMBOL(lnet_finalize);
+EXPORT_SYMBOL(lnet_parse);
+EXPORT_SYMBOL(lnet_create_reply_msg);
+EXPORT_SYMBOL(lnet_set_reply_msg_len);
+EXPORT_SYMBOL(lnet_msgtyp2str);
+EXPORT_SYMBOL(lnet_net2ni_locked);
 
 MODULE_AUTHOR("Peter J. Braam <braam@clusterfs.com>");
 MODULE_DESCRIPTION("Portals v3.1");
 MODULE_LICENSE("GPL");
 
-cfs_module(portals, "1.0.0", init_kportals_module, exit_kportals_module);
+cfs_module(lnet, "1.0.0", init_lnet, fini_lnet);

@@ -14,7 +14,7 @@
 #include <linux/smp_lock.h>
 #include <linux/poll.h>
 #include <linux/random.h>
-                                                                                                                                                                      
+
 #include <asm/unistd.h>
 #include <asm/semaphore.h>
 
@@ -29,16 +29,16 @@
 
 #include <endian.h>
 #include <libcfs/list.h>
-                                                                                                                                                                      
+
 #ifdef HAVE_LINUX_VERSION_H
 # include <linux/version.h>
-                                                                                                                                                                      
+
 # if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
 #  define BUG()                            /* workaround for module.h includes */
 #  include <linux/module.h>
 # endif
 #endif /* !HAVE_LINUX_VERSION_H */
-                                                                                                                                                                      
+
 #ifndef __CYGWIN__
 # include <syscall.h>
 #else /* __CYGWIN__ */
@@ -47,5 +47,5 @@
 # include <netinet/in.h>
 #endif /* __CYGWIN__ */
 
-#endif	/* !__KERNEL__ */
+#endif /* !__KERNEL__ */
 #endif

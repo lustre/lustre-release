@@ -19,11 +19,71 @@
  *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
 
-#include "gmnal.h"
+#include "gmlnd.h"
 
 
-int num_txds = 5;
-int gm_port_id = 4;
+static int port = 4;
+CFS_MODULE_PARM(port, "i", int, 0444,
+                "GM port to use for communications");
+
+static int ntx = 256;
+CFS_MODULE_PARM(ntx, "i", int, 0444,
+                "# tx descriptors");
+
+static int credits = 128;
+CFS_MODULE_PARM(credits, "i", int, 0444,
+                "# concurrent sends");
+
+static int peer_credits = 8;
+CFS_MODULE_PARM(peer_credits, "i", int, 0444,
+                "# concurrent sends per peer");
+
+static int nlarge_tx_bufs = 32;
+CFS_MODULE_PARM(nlarge_tx_bufs, "i", int, 0444,
+                "# large tx message buffers");
+
+static int nrx_small = 128;
+CFS_MODULE_PARM(nrx_small, "i", int, 0444,
+                "# small rx message buffers");
+
+static int nrx_large = 64;
+CFS_MODULE_PARM(nrx_large, "i", int, 0444,
+                "# large rx message buffers");
+
+gmnal_tunables_t gmnal_tunables = {
+        .gm_port            = &port,
+        .gm_ntx             = &ntx,
+        .gm_credits         = &credits,
+        .gm_peer_credits    = &peer_credits,
+        .gm_nlarge_tx_bufs  = &nlarge_tx_bufs,
+        .gm_nrx_small       = &nrx_small,
+        .gm_nrx_large       = &nrx_large,
+};
+
+#if CONFIG_SYSCTL && !CFS_SYSFS_MODULE_PARM
+static ctl_table gmnal_ctl_table[] = {
+	{1, "port", &port,
+	 sizeof (int), 0444, NULL, &proc_dointvec},
+	{2, "ntx", &ntx, 
+	 sizeof (int), 0444, NULL, &proc_dointvec},
+	{3, "credits", &credits,
+	 sizeof (int), 0444, NULL, &proc_dointvec},
+	{4, "peer_credits", &peer_credits,
+	 sizeof (int), 0444, NULL, &proc_dointvec},
+	{5, "nlarge_tx_bufs", &nlarge_tx_bufs,
+	 sizeof (int), 0444, NULL, &proc_dointvec},
+	{6, "nrx_small", &nrx_small,
+	 sizeof (int), 0444, NULL, &proc_dointvec},
+	{7, "nrx_large", &nrx_large,
+	 sizeof (int), 0444, NULL, &proc_dointvec},
+	{0}
+};
+
+static ctl_table gmnal_top_ctl_table[] = {
+	{207, "gmnal", NULL, 0, 0555, gmnal_ctl_table},
+	{0}
+};
+#endif
 
 static int __init
 gmnal_load(void)
@@ -31,10 +91,16 @@ gmnal_load(void)
 	int	status;
 	CDEBUG(D_TRACE, "This is the gmnal module initialisation routine\n");
 
-
+#if CONFIG_SYSCTL && !CFS_SYSFS_MODULE_PARM
+        gmnal_tunables.gm_sysctl =
+                register_sysctl_table(gmnal_top_ctl_table, 0);
+        
+        if (gmnal_tunables.gm_sysctl == NULL)
+                CWARN("Can't setup /proc tunables\n");
+#endif
 	CDEBUG(D_NET, "Calling gmnal_init\n");
         status = gmnal_init();
-	if (status == PTL_OK) {
+	if (status == 0) {
 		CDEBUG(D_NET, "Portals GMNAL initialised ok\n");
 	} else {
 		CDEBUG(D_NET, "Portals GMNAL Failed to initialise\n");
@@ -46,24 +112,19 @@ gmnal_load(void)
 	return(0);
 }
 
-
 static void __exit
 gmnal_unload(void)
 {
 	gmnal_fini();
-	return;
+#if CONFIG_SYSCTL && !CFS_SYSFS_MODULE_PARM
+        if (gmnal_tunables.gm_sysctl != NULL)
+                unregister_sysctl_table(gmnal_tunables.gm_sysctl);
+#endif
 }
-
 
 module_init(gmnal_load);
 module_exit(gmnal_unload);
 
-MODULE_PARM(num_rx_threads, "i");
-MODULE_PARM(num_txds, "i");
-MODULE_PARM(gm_port_id, "i");
-
-MODULE_AUTHOR("Morgan Doyle");
-
-MODULE_DESCRIPTION("A Portals kernel NAL for Myrinet GM.");
-
+MODULE_AUTHOR("Cluster File Systems, Inc. <info@clusterfs.com>");
+MODULE_DESCRIPTION("Kernel GM LND v1.01");
 MODULE_LICENSE("GPL");

@@ -8,4 +8,5 @@ EXTRA_DIST := \
 	darwin-fs.c \
 	darwin-prim.c \
 	darwin-tracefile.c \
-	darwin-curproc.c
+	darwin-curproc.c \
+	darwin-tcpip.c

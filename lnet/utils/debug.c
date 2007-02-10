@@ -3,19 +3,19 @@
  *
  * Copyright (C) 2001, 2002 Cluster File Systems, Inc.
  *
- *   This file is part of Portals, http://www.sf.net/projects/lustre/
+ *   This file is part of Lustre Networking, http://www.lustre.org.
  *
- *   Portals is free software; you can redistribute it and/or
+ *   LNET is free software; you can redistribute it and/or
  *   modify it under the terms of version 2 of the GNU General Public
  *   License as published by the Free Software Foundation.
  *
- *   Portals is distributed in the hope that it will be useful,
+ *   LNET is distributed in the hope that it will be useful,
  *   but WITHOUT ANY WARRANTY; without even the implied warranty of
  *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  *   GNU General Public License for more details.
  *
  *   You should have received a copy of the GNU General Public License
- *   along with Portals; if not, write to the Free Software
+ *   along with LNET; if not, write to the Free Software
  *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  *
  * Some day I'll split all of this functionality into a cfs_debug module
@@ -41,6 +41,7 @@
 #include <fcntl.h>
 #include <errno.h>
 #include <unistd.h>
+#include <assert.h>
 
 #include <sys/types.h>
 #include <sys/socket.h>
@@ -49,8 +50,8 @@
 #include <sys/mman.h>
 #include <sys/utsname.h>
 
-#include <portals/api-support.h>
-#include <portals/ptlctl.h>
+#include <lnet/api-support.h>
+#include <lnet/lnetctl.h>
 #include <libcfs/portals_utils.h>
 #include "parser.h"
 
@@ -63,22 +64,23 @@ static int max = 8192;
 static int subsystem_mask = ~0;
 static int debug_mask = ~0;
 
-#define MAX_MARK_SIZE 100
+#define MAX_MARK_SIZE 256
 
-static const char *portal_debug_subsystems[] =
-        {"undefined", "mdc", "mds", "osc", 
+static const char *libcfs_debug_subsystems[] =
+        {"undefined", "mdc", "mds", "osc",
          "ost", "class", "log", "llite",
-         "rpc", "mgmt", "portals", "nal", 
-         "pinger", "filter", "ptlbd", "echo", 
-         "ldlm", "lov", "router", "cobd", 
-         "sm", "asobd", "confobd", "lmv", 
-         "cmobd", "sec", NULL};
-static const char *portal_debug_masks[] =
-        {"trace", "inode", "super", "ext2", 
+         "rpc", "", "lnet", "lnd",
+         "pinger", "filter", "", "echo",
+         "ldlm", "lov", "", "",
+         "", "", "", "lmv",
+         "", "sec", "gss", "", "mgc", "mgs",
+         "fid", "fld", NULL};
+static const char *libcfs_debug_masks[] =
+        {"trace", "inode", "super", "ext2",
          "malloc", "cache", "info", "ioctl",
-         "blocks", "net", "warning", "buffs", 
-         "other", "dentry", "portals", "page", 
-         "dlmtrace", "error", "emerg", "ha", 
+         "blocks", "net", "warning", "buffs",
+         "other", "dentry", "lnet", "page",
+         "dlmtrace", "error", "emerg", "ha",
          "rpctrace", "vfstrace", "reada", "mmap",
          "config", "console", "quota", "sec", NULL};
 
@@ -87,22 +89,101 @@ struct debug_daemon_cmd {
         unsigned int cmdv;
 };
 
-static const struct debug_daemon_cmd portal_debug_daemon_cmd[] = {
+static const struct debug_daemon_cmd libcfs_debug_daemon_cmd[] = {
         {"start", DEBUG_DAEMON_START},
         {"stop", DEBUG_DAEMON_STOP},
         {0, 0}
 };
 
+#ifdef __linux__
+
+#define DAEMON_CTL_NAME         "/proc/sys/lnet/daemon_file"
+#define SUBSYS_DEBUG_CTL_NAME   "/proc/sys/lnet/subsystem_debug"
+#define DEBUG_CTL_NAME          "/proc/sys/lnet/debug"
+#define DUMP_KERNEL_CTL_NAME    "/proc/sys/lnet/dump_kernel"
+
+static int
+dbg_open_ctlhandle(const char *str)
+{
+        int fd;
+        fd = open(str, O_WRONLY);
+        if (fd < 0) {
+                fprintf(stderr, "open %s failed: %s\n", str,
+                        strerror(errno));
+                return -1;
+        }
+        return fd;
+}
+
+static void
+dbg_close_ctlhandle(int fd)
+{
+        close(fd);
+}
+
+static int
+dbg_write_cmd(int fd, char *str, int len)
+{
+        int    rc  = write(fd, str, len);
+
+        return (rc == len ? 0 : 1);
+}
+
+#elif defined(__DARWIN__)
+
+#define DAEMON_CTL_NAME         "lnet.trace_daemon"
+#define SUBSYS_DEBUG_CTL_NAME   "lnet.subsystem_debug"
+#define DEBUG_CTL_NAME          "lnet.debug"
+#define DUMP_KERNEL_CTL_NAME    "lnet.trace_dumpkernel"
+
+static char     sysctl_name[128];
+static int
+dbg_open_ctlhandle(const char *str)
+{
+
+        if (strlen(str)+1 > 128) {
+                fprintf(stderr, "sysctl name is too long: %s.\n", str);
+                return -1;
+        }
+        strcpy(sysctl_name, str);
+
+        return 0;
+}
+
+static void
+dbg_close_ctlhandle(int fd)
+{
+        sysctl_name[0] = '\0';
+        return;
+}
+
+static int
+dbg_write_cmd(int fd, char *str, int len)
+{
+        int     rc;
+
+        rc = sysctlbyname(sysctl_name, NULL, NULL, str, len+1);
+        if (rc != 0) {
+                fprintf(stderr, "sysctl %s with cmd (%s) error: %d\n",
+                        sysctl_name, str, errno);
+        }
+        return (rc == 0 ? 0: 1);
+}
+
+#else
+#error - Unknown sysctl convention.
+#endif
+
 static int do_debug_mask(char *name, int enable)
 {
         int found = 0, i;
 
-        for (i = 0; portal_debug_subsystems[i] != NULL; i++) {
-                if (strcasecmp(name, portal_debug_subsystems[i]) == 0 ||
+        for (i = 0; libcfs_debug_subsystems[i] != NULL; i++) {
+                if (strcasecmp(name, libcfs_debug_subsystems[i]) == 0 ||
                     strcasecmp(name, "all_subs") == 0) {
                         printf("%s output from subsystem \"%s\"\n",
                                 enable ? "Enabling" : "Disabling",
-                                portal_debug_subsystems[i]);
+                                libcfs_debug_subsystems[i]);
                         if (enable)
                                 subsystem_mask |= (1 << i);
                         else
@@ -110,12 +191,12 @@ static int do_debug_mask(char *name, int enable)
                         found = 1;
                 }
         }
-        for (i = 0; portal_debug_masks[i] != NULL; i++) {
-                if (strcasecmp(name, portal_debug_masks[i]) == 0 ||
+        for (i = 0; libcfs_debug_masks[i] != NULL; i++) {
+                if (strcasecmp(name, libcfs_debug_masks[i]) == 0 ||
                     strcasecmp(name, "all_types") == 0) {
                         printf("%s output of type \"%s\"\n",
                                 enable ? "Enabling" : "Disabling",
-                                portal_debug_masks[i]);
+                                libcfs_debug_masks[i]);
                         if (enable)
                                 debug_mask |= (1 << i);
                         else
@@ -173,38 +254,38 @@ static int applymask(char* procpath, int value)
         char buf[64];
         int len = snprintf(buf, 64, "%d", value);
 
-        int fd = open(procpath, O_WRONLY);
+        int fd = dbg_open_ctlhandle(procpath);
         if (fd == -1) {
                 fprintf(stderr, "Unable to open %s: %s\n",
                         procpath, strerror(errno));
                 return fd;
         }
-        rc = write(fd, buf, len+1);
-        if (rc<0) {
+        rc = dbg_write_cmd(fd, buf, len+1);
+        if (rc != 0) {
                 fprintf(stderr, "Write to %s failed: %s\n",
                         procpath, strerror(errno));
                 return rc;
         }
-        close(fd);
+        dbg_close_ctlhandle(fd);
         return 0;
 }
 
 static void applymask_all(unsigned int subs_mask, unsigned int debug_mask)
 {
         if (!dump_filename) {
-                applymask("/proc/sys/portals/subsystem_debug", subs_mask);
-                applymask("/proc/sys/portals/debug", debug_mask);
+                applymask(SUBSYS_DEBUG_CTL_NAME, subs_mask);
+                applymask(DEBUG_CTL_NAME, debug_mask);
         } else {
-                struct portals_debug_ioctl_data data;
+                struct libcfs_debug_ioctl_data data;
 
                 data.hdr.ioc_len = sizeof(data);
                 data.hdr.ioc_version = 0;
                 data.subs = subs_mask;
                 data.debug = debug_mask;
 
-                dump(OBD_DEV_ID, PTL_IOC_DEBUG_MASK, &data);
+                dump(OBD_DEV_ID, LIBCFS_IOC_DEBUG_MASK, &data);
         }
-        printf("Applied subsystem_debug=%d, debug=%d to /proc/sys/portals\n",
+        printf("Applied subsystem_debug=%d, debug=%d to /proc/sys/lnet\n",
                subs_mask, debug_mask);
 }
 
@@ -219,13 +300,14 @@ int jt_dbg_list(int argc, char **argv)
 
         if (strcasecmp(argv[1], "subs") == 0) {
                 printf("Subsystems: all_subs");
-                for (i = 0; portal_debug_subsystems[i] != NULL; i++)
-                        printf(", %s", portal_debug_subsystems[i]);
+                for (i = 0; libcfs_debug_subsystems[i] != NULL; i++)
+                        if (libcfs_debug_subsystems[i][0])
+                                printf(", %s", libcfs_debug_subsystems[i]);
                 printf("\n");
         } else if (strcasecmp(argv[1], "types") == 0) {
                 printf("Types: all_types");
-                for (i = 0; portal_debug_masks[i] != NULL; i++)
-                        printf(", %s", portal_debug_masks[i]);
+                for (i = 0; libcfs_debug_masks[i] != NULL; i++)
+                        printf(", %s", libcfs_debug_masks[i]);
                 printf("\n");
         } else if (strcasecmp(argv[1], "applymasks") == 0) {
                 applymask_all(subsystem_mask, debug_mask);
@@ -275,7 +357,7 @@ static void print_saved_records(struct list_head *list, FILE *out)
                 list_del(&line->chain);
 
                 hdr = line->hdr;
-                fprintf(out, "%07x:%06x:%u:%u.%06Lu:%u:%u:%u:(%s:%u:%s()) %s",
+                fprintf(out, "%08x:%08x:%u:%u.%06llu:%u:%u:%u:(%s:%u:%s()) %s",
                         hdr->ph_subsys, hdr->ph_mask, hdr->ph_cpu_id,
                         hdr->ph_sec, (unsigned long long)hdr->ph_usec,
                         hdr->ph_stack, hdr->ph_pid, hdr->ph_extern_pid,
@@ -297,7 +379,7 @@ static int parse_buffer(FILE *in, FILE *out)
         CFS_INIT_LIST_HEAD(&chunk_list);
 
         while (1) {
-                rc = fread(buf, sizeof(hdr->ph_len), 1, in);
+                rc = fread(buf, sizeof(hdr->ph_len) + sizeof(hdr->ph_flags), 1, in);
                 if (rc <= 0)
                         break;
 
@@ -316,8 +398,8 @@ static int parse_buffer(FILE *in, FILE *out)
                         assert(list_empty(&chunk_list));
                 }
 
-                rc = fread(buf + sizeof(hdr->ph_len), 1,
-                           hdr->ph_len - sizeof(hdr->ph_len), in);
+                rc = fread(buf + sizeof(hdr->ph_len) + sizeof(hdr->ph_flags), 1,
+                           hdr->ph_len - sizeof(hdr->ph_len) - sizeof(hdr->ph_flags), in);
                 if (rc <= 0)
                         break;
 
@@ -337,6 +419,7 @@ static int parse_buffer(FILE *in, FILE *out)
 
                 line->hdr = malloc(hdr->ph_len + 1);
                 if (line->hdr == NULL) {
+                        free(line);
                         fprintf(stderr, "malloc failed; printing accumulated "
                                 "records and exiting.\n");
                         break;
@@ -394,21 +477,21 @@ int jt_dbg_debug_kernel(int argc, char **argv)
         if (stat(filename, &st) == 0 && S_ISREG(st.st_mode))
                 unlink(filename);
 
-        fd = open("/proc/sys/portals/dump_kernel", O_WRONLY);
+        fd = dbg_open_ctlhandle(DUMP_KERNEL_CTL_NAME);
         if (fd < 0) {
                 fprintf(stderr, "open(dump_kernel) failed: %s\n",
                         strerror(errno));
                 return 1;
         }
 
-        rc = write(fd, filename, strlen(filename));
-        if (rc != strlen(filename)) {
+        rc = dbg_write_cmd(fd, filename, strlen(filename));
+        if (rc != 0) {
                 fprintf(stderr, "write(%s) failed: %s\n", filename,
                         strerror(errno));
                 close(fd);
                 return 1;
         }
-        close(fd);
+        dbg_close_ctlhandle(fd);
 
         if (raw)
                 return 0;
@@ -476,8 +559,8 @@ int jt_dbg_debug_file(int argc, char **argv)
                 return 1;
         }
         if (argc > 2) {
-                fdout = open(argv[2], 
-                             O_CREAT | O_TRUNC | O_WRONLY | O_LARGEFILE, 
+                fdout = open(argv[2],
+                             O_CREAT | O_TRUNC | O_WRONLY | O_LARGEFILE,
                              0600);
                 if (fdout == -1) {
                         fprintf(stderr, "open(%s) failed: %s\n", argv[2],
@@ -504,17 +587,8 @@ int jt_dbg_debug_file(int argc, char **argv)
         return rc;
 }
 
-static int
-dbg_write_cmd(int fd, char *str)
-{
-        int    len = strlen(str);
-        int    rc  = write(fd, str, len);
-        
-        return (rc == len ? 0 : 1);
-}
-
 const char debug_daemon_usage[] = "usage: %s {start file [MB]|stop}\n";
-#define DAEMON_FILE "/proc/sys/portals/daemon_file"
+
 int jt_dbg_debug_daemon(int argc, char **argv)
 {
         int  rc;
@@ -525,13 +599,10 @@ int jt_dbg_debug_daemon(int argc, char **argv)
                 return 1;
         }
 
-        fd = open(DAEMON_FILE, O_WRONLY);
-        if (fd < 0) {
-                fprintf(stderr, "open %s failed: %s\n", DAEMON_FILE,
-                        strerror(errno));
+        fd = dbg_open_ctlhandle(DAEMON_CTL_NAME);
+        if (fd < 0)
                 return -1;
-        }
-        
+
         rc = -1;
         if (strcasecmp(argv[1], "start") == 0) {
              if (argc < 3 || argc > 4 ||
@@ -556,7 +627,7 @@ int jt_dbg_debug_daemon(int argc, char **argv)
                                 goto out;
                         }
                         snprintf(buf, sizeof(buf), "size=%ld", size);
-                        rc = dbg_write_cmd(fd, buf);
+                        rc = dbg_write_cmd(fd, buf, strlen(buf));
 
                         if (rc != 0) {
                                 fprintf(stderr, "set %s failed: %s\n",
@@ -565,7 +636,7 @@ int jt_dbg_debug_daemon(int argc, char **argv)
                         }
                 }
 
-                rc = dbg_write_cmd(fd, argv[2]);
+                rc = dbg_write_cmd(fd, argv[2], strlen(argv[2]));
                 if (rc != 0) {
                         fprintf(stderr, "start debug_daemon on %s failed: %s\n",
                                 argv[2], strerror(errno));
@@ -575,7 +646,7 @@ int jt_dbg_debug_daemon(int argc, char **argv)
                 goto out;
         }
         if (strcasecmp(argv[1], "stop") == 0) {
-                rc = dbg_write_cmd(fd, "stop");
+                rc = dbg_write_cmd(fd, "stop", 4);
                 if (rc != 0) {
                         fprintf(stderr, "stopping debug_daemon failed: %s\n",
                                 strerror(errno));
@@ -589,14 +660,14 @@ int jt_dbg_debug_daemon(int argc, char **argv)
         fprintf(stderr, debug_daemon_usage, argv[0]);
         rc = -1;
 out:
-        close(fd);
+        dbg_close_ctlhandle(fd);
         return rc;
 }
 
 int jt_dbg_clear_debug_buf(int argc, char **argv)
 {
         int rc;
-        struct portal_ioctl_data data;
+        struct libcfs_ioctl_data data;
 
         if (argc != 1) {
                 fprintf(stderr, "usage: %s\n", argv[0]);
@@ -604,14 +675,14 @@ int jt_dbg_clear_debug_buf(int argc, char **argv)
         }
 
         memset(&data, 0, sizeof(data));
-        if (portal_ioctl_pack(&data, &buf, max) != 0) {
-                fprintf(stderr, "portal_ioctl_pack failed.\n");
+        if (libcfs_ioctl_pack(&data, &buf, max) != 0) {
+                fprintf(stderr, "libcfs_ioctl_pack failed.\n");
                 return -1;
         }
 
-        rc = l_ioctl(PORTALS_DEV_ID, IOC_PORTAL_CLEAR_DEBUG, buf);
+        rc = l_ioctl(LNET_DEV_ID, IOC_LIBCFS_CLEAR_DEBUG, buf);
         if (rc) {
-                fprintf(stderr, "IOC_PORTAL_CLEAR_DEBUG failed: %s\n",
+                fprintf(stderr, "IOC_LIBCFS_CLEAR_DEBUG failed: %s\n",
                         strerror(errno));
                 return -1;
         }
@@ -620,41 +691,37 @@ int jt_dbg_clear_debug_buf(int argc, char **argv)
 
 int jt_dbg_mark_debug_buf(int argc, char **argv)
 {
+        static char scratch[MAX_MARK_SIZE] = { '\0' };
         int rc, max_size = MAX_MARK_SIZE-1;
-        struct portal_ioctl_data data;
+        struct libcfs_ioctl_data data = { 0 };
         char *text;
         time_t now = time(NULL);
 
         if (argc > 1) {
-                int counter;
-                text = malloc(MAX_MARK_SIZE);
+                int count;
+                text = scratch;
                 strncpy(text, argv[1], max_size);
                 max_size-=strlen(argv[1]);
-                for(counter = 2; (counter < argc) && (max_size > 0) ; counter++){
-                        strncat(text, " ", 1);
-                        max_size-=1;
-                        strncat(text, argv[counter], max_size);
-                        max_size-=strlen(argv[counter]);
+                for (count = 2; (count < argc) && (max_size > 0); count++){
+                        strncat(text, " ", max_size);
+                        max_size -= 1;
+                        strncat(text, argv[count], max_size);
+                        max_size -= strlen(argv[count]);
                 }
         } else {
                 text = ctime(&now);
-                text[strlen(text) - 1] = '\0'; /* stupid \n */
-        }
-        if (!max_size) {
-                text[MAX_MARK_SIZE - 1] = '\0';
         }
 
-        memset(&data, 0, sizeof(data));
         data.ioc_inllen1 = strlen(text) + 1;
         data.ioc_inlbuf1 = text;
-        if (portal_ioctl_pack(&data, &buf, max) != 0) {
-                fprintf(stderr, "portal_ioctl_pack failed.\n");
+        if (libcfs_ioctl_pack(&data, &buf, max) != 0) {
+                fprintf(stderr, "libcfs_ioctl_pack failed.\n");
                 return -1;
         }
 
-        rc = l_ioctl(PORTALS_DEV_ID, IOC_PORTAL_MARK_DEBUG, buf);
+        rc = l_ioctl(LNET_DEV_ID, IOC_LIBCFS_MARK_DEBUG, buf);
         if (rc) {
-                fprintf(stderr, "IOC_PORTAL_MARK_DEBUG failed: %s\n",
+                fprintf(stderr, "IOC_LIBCFS_MARK_DEBUG failed: %s\n",
                         strerror(errno));
                 return -1;
         }
@@ -664,46 +731,56 @@ int jt_dbg_mark_debug_buf(int argc, char **argv)
 static struct mod_paths {
         char *name, *path;
 } mod_paths[] = {
-        {"libcfs", "portals/libcfs"},
-        {"portals", "portals/portals"},
-        {"ksocknal", "portals/knals/socknal"},
-        {"kptlrouter", "portals/router"},
+        {"libcfs", "lnet/libcfs"},
+        {"lnet", "lnet/lnet"},
+        {"kciblnd", "lnet/klnds/ciblnd"},
+        {"kgmlnd", "lnet/klnds/gmlnd"},
+        {"kmxlnd", "lnet/klnds/mxlnd"},
+        {"kiiblnd", "lnet/klnds/iiblnd"},
+        {"ko2iblnd", "lnet/klnds/o2iblnd"},
+        {"kopeniblnd", "lnet/klnds/openiblnd"},
+        {"kptllnd", "lnet/klnds/ptllnd"},
+        {"kqswlnd", "lnet/klnds/qswlnd"},
+        {"kralnd", "lnet/klnds/ralnd"},
+        {"ksocklnd", "lnet/klnds/socklnd"},
+        {"ktdilnd", "lnet/klnds/tdilnd"},
+        {"kviblnd", "lnet/klnds/viblnd"},
         {"lvfs", "lustre/lvfs"},
         {"obdclass", "lustre/obdclass"},
         {"llog_test", "lustre/obdclass"},
-        {"ptlrpcs", "lustre/sec"},
-        {"ptlrpcs_gss", "lustre/sec/gss"},
+        {"ptlrpc_gss", "lustre/ptlrpc/gss"},
+        {"ptlrpc", "lustre/ptlrpc"},
         {"gks", "lustre/sec/gks"},
         {"gkc", "lustre/sec/gks"},
-        {"ptlrpc", "lustre/ptlrpc"},
-        {"obdext2", "lustre/obdext2"},
         {"ost", "lustre/ost"},
         {"osc", "lustre/osc"},
         {"mds", "lustre/mds"},
         {"mdc", "lustre/mdc"},
         {"llite", "lustre/llite"},
+        {"lustre", "lustre/llite"},
         {"ldiskfs", "lustre/ldiskfs"},
         {"smfs", "lustre/smfs"},
         {"obdecho", "lustre/obdecho"},
         {"ldlm", "lustre/ldlm"},
         {"obdfilter", "lustre/obdfilter"},
-        {"extN", "lustre/extN"},
         {"lov", "lustre/lov"},
         {"lmv", "lustre/lmv"},
         {"fsfilt_ext3", "lustre/lvfs"},
-        {"fsfilt_extN", "lustre/lvfs"},
         {"fsfilt_reiserfs", "lustre/lvfs"},
         {"fsfilt_smfs", "lustre/lvfs"},
         {"fsfilt_ldiskfs", "lustre/lvfs"},
-        {"mds_ext2", "lustre/mds"},
         {"mds_ext3", "lustre/mds"},
-        {"mds_extN", "lustre/mds"},
-        {"ptlbd", "lustre/ptlbd"},
-        {"mgmt_svc", "lustre/mgmt"},
-        {"mgmt_cli", "lustre/mgmt"},
         {"cobd", "lustre/cobd"},
         {"cmobd", "lustre/cmobd"},
-        {"confobd", "lustre/obdclass"},
+        {"lquota", "lustre/quota"},
+        {"mgs", "lustre/mgs"},
+        {"mgc", "lustre/mgc"},
+        {"mdt", "lustre/mdt"},
+        {"mdd", "lustre/mdd"},
+        {"osd", "lustre/osd"},
+        {"cmm", "lustre/cmm"},
+        {"fid", "lustre/fid"},
+        {"fld", "lustre/fld"},
         {NULL, NULL}
 };
 
@@ -724,7 +801,6 @@ static int jt_dbg_modules_2_4(int argc, char **argv)
                 return 0;
         }
 
-        printf("dir\n");
         for (mp = mod_paths; mp->name != NULL; mp++) {
                 struct module_info info;
                 int rc;
@@ -742,8 +818,6 @@ static int jt_dbg_modules_2_4(int argc, char **argv)
                         printf("add-symbol-file %s%s%s/%s.o 0x%0lx\n", path,
                                path[0] ? "/" : "", mp->path, mp->name,
                                info.addr + sizeof(struct module));
-                        printf("dir %s%s%s\n", path,
-                               path[0] ? "/" : "", mp->path);
                 }
         }
 
@@ -759,7 +833,7 @@ static int jt_dbg_modules_2_5(int argc, char **argv)
         char *path = "";
         char *kernel = "linux";
         const char *proc = "/proc/modules";
-        char modname[128], others[128];
+        char modname[128], others[4096];
         long modaddr;
         int rc;
         FILE *file;
@@ -779,7 +853,6 @@ static int jt_dbg_modules_2_5(int argc, char **argv)
                 return 0;
         }
 
-        printf("dir\n");
         while ((rc = fscanf(file, "%s %s %s %s %s %lx\n",
                 modname, others, others, others, others, &modaddr)) == 6) {
                 for (mp = mod_paths; mp->name != NULL; mp++) {
@@ -789,11 +862,10 @@ static int jt_dbg_modules_2_5(int argc, char **argv)
                 if (mp->name) {
                         printf("add-symbol-file %s%s%s/%s.o 0x%0lx\n", path,
                                path[0] ? "/" : "", mp->path, mp->name, modaddr);
-                        printf("dir %s%s%s\n", path,
-                               path[0] ? "/" : "", mp->path);
                 }
         }
 
+        fclose(file);
         return 0;
 }
 
@@ -820,7 +892,7 @@ int jt_dbg_modules(int argc, char **argv)
 int jt_dbg_panic(int argc, char **argv)
 {
         int rc;
-        struct portal_ioctl_data data;
+        struct libcfs_ioctl_data data;
 
         if (argc != 1) {
                 fprintf(stderr, "usage: %s\n", argv[0]);
@@ -828,14 +900,14 @@ int jt_dbg_panic(int argc, char **argv)
         }
 
         memset(&data, 0, sizeof(data));
-        if (portal_ioctl_pack(&data, &buf, max) != 0) {
-                fprintf(stderr, "portal_ioctl_pack failed.\n");
+        if (libcfs_ioctl_pack(&data, &buf, max) != 0) {
+                fprintf(stderr, "libcfs_ioctl_pack failed.\n");
                 return -1;
         }
 
-        rc = l_ioctl(PORTALS_DEV_ID, IOC_PORTAL_PANIC, buf);
+        rc = l_ioctl(LNET_DEV_ID, IOC_LIBCFS_PANIC, buf);
         if (rc) {
-                fprintf(stderr, "IOC_PORTAL_PANIC failed: %s\n",
+                fprintf(stderr, "IOC_LIBCFS_PANIC failed: %s\n",
                         strerror(errno));
                 return -1;
         }

@@ -74,7 +74,7 @@
  */
 
 /*
- * mutex_t:
+ * mutex:
  *
  * - init_mutex(x)
  * - init_mutex_locked(x)
@@ -94,24 +94,10 @@
  * - wait_for_completion(c)
  */
 
-/*
- * OSX funnels:
- *
- * No funnels needed in Linux
- */
-#define CFS_DECL_FUNNEL_DATA
-#define CFS_DECL_CONE_DATA	        DECLARE_FUNNEL_DATA
-#define CFS_DECL_NET_DATA               DECLARE_FUNNEL_DATA
-#define CFS_CONE_IN		        do {} while(0)
-#define CFS_CONE_EX		        do {} while(0)
-
-#define CFS_NET_IN                      do {} while(0)
-#define CFS_NET_EX                      do {} while(0)
-
 /* __KERNEL__ */
 #else
 
-//#include "../user-lock.h"
+#include "../user-lock.h"
 
 /* __KERNEL__ */
 #endif
