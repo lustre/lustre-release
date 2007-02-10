@@ -4,34 +4,34 @@
  * Copyright (C) 2002 Cluster File Systems, Inc.
  *   Author: Phil Schwan <phil@clusterfs.com>
  *
- *   This file is part of Lustre, http://www.lustre.org/
+ *   This file is part of the Lustre file system, http://www.lustre.org
+ *   Lustre is a trademark of Cluster File Systems, Inc.
  *
- *   Lustre is free software; you can redistribute it and/or
- *   modify it under the terms of version 2 of the GNU General Public
- *   License as published by the Free Software Foundation.
+ *   You may have signed or agreed to another license before downloading
+ *   this software.  If so, you are bound by the terms and conditions
+ *   of that agreement, and the following does not apply to you.  See the
+ *   LICENSE file included with this distribution for more information.
  *
- *   Lustre is distributed in the hope that it will be useful,
- *   but WITHOUT ANY WARRANTY; without even the implied warranty of
- *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *   GNU General Public License for more details.
+ *   If you did not agree to a different license, then this copy of Lustre
+ *   is open source software; you can redistribute it and/or modify it
+ *   under the terms of version 2 of the GNU General Public License as
+ *   published by the Free Software Foundation.
  *
- *   You should have received a copy of the GNU General Public License
- *   along with Lustre; if not, write to the Free Software
- *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ *   In either case, Lustre is distributed in the hope that it will be
+ *   useful, but WITHOUT ANY WARRANTY; without even the implied warranty
+ *   of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *   license text for more details.
  */
 
 #define DEBUG_SUBSYSTEM S_CLASS
-#ifdef __KERNEL__
-# include <linux/types.h>
-# include <linux/random.h>
-#else 
+#ifndef __KERNEL__
 # include <liblustre.h>
-#endif 
+#endif
 
-#include <linux/obd_support.h>
-#include <linux/lustre_handles.h>
+#include <obd_support.h>
+#include <lustre_handles.h>
 
-static spinlock_t handle_lock = SPIN_LOCK_UNLOCKED;
+spinlock_t handle_lock;
 static __u64 handle_base;
 #define HANDLE_INCR 7
 static struct list_head *handle_hash = NULL;
@@ -40,6 +40,10 @@ static int handle_count = 0;
 #define HANDLE_HASH_SIZE (1 << 14)
 #define HANDLE_HASH_MASK (HANDLE_HASH_SIZE - 1)
 
+/*
+ * Generate a unique 64bit cookie (hash) for a handle and insert it into
+ * global (per-node) hash-table.
+ */
 void class_handle_hash(struct portals_handle *h, portals_handle_addref_cb cb)
 {
         struct list_head *bucket;
@@ -49,19 +53,33 @@ void class_handle_hash(struct portals_handle *h, portals_handle_addref_cb cb)
         LASSERT(list_empty(&h->h_link));
 
         spin_lock(&handle_lock);
+
+        /*
+         * This is fast, but simplistic cookie generation algorithm, it will
+         * need a re-do at some point in the future for security.
+         */
         h->h_cookie = handle_base;
         handle_base += HANDLE_INCR;
+
+        bucket = handle_hash + (h->h_cookie & HANDLE_HASH_MASK);
+        list_add(&h->h_link, bucket);
+        handle_count++;
+
+        if (unlikely(handle_base == 0)) {
+                /*
+                 * Cookie of zero is "dangerous", because in many places it's
+                 * assumed that 0 means "unassigned" handle, not bound to any
+                 * object.
+                 */
+                CWARN("The universe has been exhausted: cookie wrap-around.\n");
+                handle_base += HANDLE_INCR;
+        }
+
         spin_unlock(&handle_lock);
 
         h->h_addref = cb;
-        bucket = handle_hash + (h->h_cookie & HANDLE_HASH_MASK);
-        CDEBUG(D_INFO, "adding object %p with handle "LPX64" to hash\n",
+        CDEBUG(D_INFO, "added object %p with handle "LPX64" to hash\n",
                h, h->h_cookie);
-
-        spin_lock(&handle_lock);
-        list_add(&h->h_link, bucket);
-        handle_count++;
-        spin_unlock(&handle_lock);
         EXIT;
 }
 
@@ -125,7 +143,7 @@ int class_handle_init(void)
 
         for (bucket = handle_hash + HANDLE_HASH_SIZE - 1; bucket >= handle_hash;
              bucket--)
-                INIT_LIST_HEAD(bucket);
+                CFS_INIT_LIST_HEAD(bucket);
 
         get_random_bytes(&handle_base, sizeof(handle_base));
         LASSERT(handle_base != 0ULL);

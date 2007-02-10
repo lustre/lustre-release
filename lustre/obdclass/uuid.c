@@ -12,155 +12,150 @@
  */
 #define DEBUG_SUBSYSTEM S_CLASS
 
-#ifdef __KERNEL__
-# include <linux/ctype.h>
-# include <linux/kernel.h>
-# include <linux/sched.h>
-# include <linux/smp_lock.h>
-#else
+#ifndef __KERNEL__
 # include <liblustre.h>
 #endif
 
-#include <linux/obd_support.h>
-#include <linux/obd_class.h>
-#include <linux/obd_ost.h> /* for LUSTRE_OST_NAME */
-#include <linux/lustre_mds.h> /* for LUSTRE_MDC_NAME */
+#include <obd_support.h>
+#include <obd_class.h>
 
 struct uuid {
-	__u32	time_low;
-	__u16	time_mid;
-	__u16	time_hi_and_version;
-	__u16	clock_seq;
-	__u8	node[6];
+        __u32   time_low;
+        __u16   time_mid;
+        __u16   time_hi_and_version;
+        __u16   clock_seq;
+        __u8    node[6];
 };
 
 static void uuid_unpack(class_uuid_t in, struct uuid *uu)
 {
-	__u8	*ptr = in;
-	__u32	tmp;
+        __u8    *ptr = in;
+        __u32   tmp;
 
-	tmp = *ptr++;
-	tmp = (tmp << 8) | *ptr++;
-	tmp = (tmp << 8) | *ptr++;
-	tmp = (tmp << 8) | *ptr++;
-	uu->time_low = tmp;
+        tmp = *ptr++;
+        tmp = (tmp << 8) | *ptr++;
+        tmp = (tmp << 8) | *ptr++;
+        tmp = (tmp << 8) | *ptr++;
+        uu->time_low = tmp;
 
-	tmp = *ptr++;
-	tmp = (tmp << 8) | *ptr++;
-	uu->time_mid = tmp;
+        tmp = *ptr++;
+        tmp = (tmp << 8) | *ptr++;
+        uu->time_mid = tmp;
 
-	tmp = *ptr++;
-	tmp = (tmp << 8) | *ptr++;
-	uu->time_hi_and_version = tmp;
+        tmp = *ptr++;
+        tmp = (tmp << 8) | *ptr++;
+        uu->time_hi_and_version = tmp;
 
-	tmp = *ptr++;
-	tmp = (tmp << 8) | *ptr++;
-	uu->clock_seq = tmp;
+        tmp = *ptr++;
+        tmp = (tmp << 8) | *ptr++;
+        uu->clock_seq = tmp;
 
-	memcpy(uu->node, ptr, 6);
+        memcpy(uu->node, ptr, 6);
 }
 
 #if 0
 static void uuid_pack(struct uuid *uu, class_uuid_t ptr)
 {
-	__u32	tmp;
-	unsigned char	*out = ptr;
+        __u32   tmp;
+        unsigned char   *out = ptr;
 
-	tmp = uu->time_low;
-	out[3] = (unsigned char) tmp;
-	tmp >>= 8;
-	out[2] = (unsigned char) tmp;
-	tmp >>= 8;
-	out[1] = (unsigned char) tmp;
-	tmp >>= 8;
-	out[0] = (unsigned char) tmp;
+        tmp = uu->time_low;
+        out[3] = (unsigned char) tmp;
+        tmp >>= 8;
+        out[2] = (unsigned char) tmp;
+        tmp >>= 8;
+        out[1] = (unsigned char) tmp;
+        tmp >>= 8;
+        out[0] = (unsigned char) tmp;
 
-	tmp = uu->time_mid;
-	out[5] = (unsigned char) tmp;
-	tmp >>= 8;
-	out[4] = (unsigned char) tmp;
+        tmp = uu->time_mid;
+        out[5] = (unsigned char) tmp;
+        tmp >>= 8;
+        out[4] = (unsigned char) tmp;
 
-	tmp = uu->time_hi_and_version;
-	out[7] = (unsigned char) tmp;
-	tmp >>= 8;
-	out[6] = (unsigned char) tmp;
+        tmp = uu->time_hi_and_version;
+        out[7] = (unsigned char) tmp;
+        tmp >>= 8;
+        out[6] = (unsigned char) tmp;
 
-	tmp = uu->clock_seq;
-	out[9] = (unsigned char) tmp;
-	tmp >>= 8;
-	out[8] = (unsigned char) tmp;
+        tmp = uu->clock_seq;
+        out[9] = (unsigned char) tmp;
+        tmp >>= 8;
+        out[8] = (unsigned char) tmp;
 
-	memcpy(out+10, uu->node, 6);
+        memcpy(out+10, uu->node, 6);
 }
 
 int class_uuid_parse(struct obd_uuid in, class_uuid_t uu)
 {
-	struct uuid uuid;
-	int i;
-	char *cp, buf[3];
+        struct uuid uuid;
+        int i;
+        char *cp, buf[3];
 
-	if (strlen(in) != 36)
-		return -1;
-	for (i=0, cp = in; i <= 36; i++,cp++) {
-		if ((i == 8) || (i == 13) || (i == 18) ||
-		    (i == 23))
-			if (*cp == '-')
-				continue;
-		if (i== 36)
-			if (*cp == 0)
-				continue;
-		if (!isxdigit(*cp))
-			return -1;
-	}
-	uuid.time_low = simple_strtoul(in, NULL, 16);
-	uuid.time_mid = simple_strtoul(in+9, NULL, 16);
-	uuid.time_hi_and_version = simple_strtoul(in+14, NULL, 16);
-	uuid.clock_seq = simple_strtoul(in+19, NULL, 16);
-	cp = in+24;
-	buf[2] = 0;
-	for (i=0; i < 6; i++) {
-		buf[0] = *cp++;
-		buf[1] = *cp++;
-		uuid.node[i] = simple_strtoul(buf, NULL, 16);
-	}
+        if (strlen(in) != 36)
+                return -1;
+        for (i=0, cp = in; i <= 36; i++,cp++) {
+                if ((i == 8) || (i == 13) || (i == 18) ||
+                    (i == 23))
+                        if (*cp == '-')
+                                continue;
+                if (i== 36)
+                        if (*cp == 0)
+                                continue;
+                if (!isxdigit(*cp))
+                        return -1;
+        }
+        uuid.time_low = simple_strtoul(in, NULL, 16);
+        uuid.time_mid = simple_strtoul(in+9, NULL, 16);
+        uuid.time_hi_and_version = simple_strtoul(in+14, NULL, 16);
+        uuid.clock_seq = simple_strtoul(in+19, NULL, 16);
+        cp = in+24;
+        buf[2] = 0;
+        for (i=0; i < 6; i++) {
+                buf[0] = *cp++;
+                buf[1] = *cp++;
+                uuid.node[i] = simple_strtoul(buf, NULL, 16);
+        }
 
-	uuid_pack(&uuid, uu);
-	return 0;
+        uuid_pack(&uuid, uu);
+        return 0;
 }
 #endif
 
-void class_uuid_unparse(class_uuid_t uu, struct obd_uuid *out)
-{
-	struct uuid uuid;
 
-	uuid_unpack(uu, &uuid);
-	sprintf((char *)out->uuid,
-		"%08x-%04x-%04x-%02x%02x-%02x%02x%02x%02x%02x%02x",
-		uuid.time_low, uuid.time_mid, uuid.time_hi_and_version,
-		uuid.clock_seq >> 8, uuid.clock_seq & 0xFF,
-		uuid.node[0], uuid.node[1], uuid.node[2],
-		uuid.node[3], uuid.node[4], uuid.node[5]);
+void generate_random_uuid(unsigned char uuid_out[16]);
+
+/* We need to have some extra twiddling here because some systems have
+ * no random state when they start up. */
+void class_generate_random_uuid(class_uuid_t uuid)
+{
+        struct timeval t;
+        int *i, j, k;
+
+        LASSERT(sizeof(class_uuid_t) % sizeof(*i) == 0);
+
+        j = jiffies;
+        do_gettimeofday(&t);
+        k = t.tv_usec;
+
+        generate_random_uuid(uuid);
+
+        for (i = (int *)uuid; (char *)i < (char *)uuid + sizeof(class_uuid_t); i++) {
+                *i ^= j ^ k;
+                j = ((j << 8) & 0xffffff00) | ((j >> 24) & 0x000000ff);
+                k = ((k >> 8) & 0x00ffffff) | ((k << 24) & 0xff000000);
+        }
 }
 
-struct obd_device *client_tgtuuid2obd(struct obd_uuid *tgtuuid)
+void class_uuid_unparse(class_uuid_t uu, struct obd_uuid *out)
 {
-        int i;
+        struct uuid uuid;
 
-        for (i = 0; i < MAX_OBD_DEVICES; i++) {
-                struct obd_device *obd = &obd_dev[i];
-                if (obd->obd_type == NULL)
-                        continue;
-                if ((strncmp(obd->obd_type->typ_name, OBD_OSC_DEVICENAME,
-                             sizeof(OBD_OSC_DEVICENAME)) == 0) ||
-                    (strncmp(obd->obd_type->typ_name, OBD_MDC_DEVICENAME,
-                             sizeof(OBD_MDC_DEVICENAME)) == 0)) {
-                        struct client_obd *cli = &obd->u.cli;
-                        struct obd_import *imp = cli->cl_import;
-                        if (strncmp((char *)tgtuuid->uuid, (char *)imp->imp_target_uuid.uuid,
-                                    sizeof(imp->imp_target_uuid)) == 0)
-                                return obd;
-                }
-        }
-
-        return NULL;
+        uuid_unpack(uu, &uuid);
+        sprintf(out->uuid,
+                "%08x-%04x-%04x-%02x%02x-%02x%02x%02x%02x%02x%02x",
+                uuid.time_low, uuid.time_mid, uuid.time_hi_and_version,
+                uuid.clock_seq >> 8, uuid.clock_seq & 0xFF,
+                uuid.node[0], uuid.node[1], uuid.node[2],
+                uuid.node[3], uuid.node[4], uuid.node[5]);
 }

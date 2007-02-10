@@ -4,20 +4,23 @@
  *  Copyright (C) 2001-2003 Cluster File Systems, Inc.
  *   Author: Andreas Dilger <adilger@clusterfs.com>
  *
- *   This file is part of Lustre, http://www.lustre.org.
+ *   This file is part of the Lustre file system, http://www.lustre.org
+ *   Lustre is a trademark of Cluster File Systems, Inc.
  *
- *   Lustre is free software; you can redistribute it and/or
- *   modify it under the terms of version 2 of the GNU General Public
- *   License as published by the Free Software Foundation.
+ *   You may have signed or agreed to another license before downloading
+ *   this software.  If so, you are bound by the terms and conditions
+ *   of that agreement, and the following does not apply to you.  See the
+ *   LICENSE file included with this distribution for more information.
  *
- *   Lustre is distributed in the hope that it will be useful,
- *   but WITHOUT ANY WARRANTY; without even the implied warranty of
- *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *   GNU General Public License for more details.
+ *   If you did not agree to a different license, then this copy of Lustre
+ *   is open source software; you can redistribute it and/or modify it
+ *   under the terms of version 2 of the GNU General Public License as
+ *   published by the Free Software Foundation.
  *
- *   You should have received a copy of the GNU General Public License
- *   along with Lustre; if not, write to the Free Software
- *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ *   In either case, Lustre is distributed in the hope that it will be
+ *   useful, but WITHOUT ANY WARRANTY; without even the implied warranty
+ *   of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *   license text for more details.
  *
  * OST<->MDS recovery logging infrastructure.
  *
@@ -33,15 +36,15 @@
 #endif
 
 #ifdef __KERNEL__
-#include <linux/fs.h>
+#include <libcfs/libcfs.h>
 #else
 #include <liblustre.h>
 #endif
 
-#include <linux/obd_class.h>
-#include <linux/lustre_log.h>
+#include <obd_class.h>
+#include <lustre_log.h>
 #include <libcfs/list.h>
-#include <linux/lvfs.h>
+#include <lvfs.h>
 
 #ifdef __KERNEL__
 int llog_origin_connect(struct llog_ctxt *ctxt, int count,
@@ -52,7 +55,8 @@ int llog_origin_connect(struct llog_ctxt *ctxt, int count,
         struct obd_import *imp;
         struct ptlrpc_request *request;
         struct llogd_conn_body *req_body;
-        int size = sizeof(struct llogd_conn_body);
+        int size[2] = { sizeof(struct ptlrpc_body),
+                        sizeof(struct llogd_conn_body) };
         int rc;
         ENTRY;
 
@@ -71,7 +75,7 @@ int llog_origin_connect(struct llog_ctxt *ctxt, int count,
         lgr->lgr_hdr.lrh_len = lgr->lgr_tail.lrt_len = sizeof(*lgr);
         lgr->lgr_hdr.lrh_type = LLOG_GEN_REC;
         lgr->lgr_gen = ctxt->loc_gen;
-        rc = llog_add(ctxt, &lgr->lgr_hdr, NULL, NULL, 1, NULL, NULL, NULL);
+        rc = llog_add(ctxt, &lgr->lgr_hdr, NULL, NULL, 1);
         OBD_FREE(lgr, sizeof(*lgr));
         if (rc != 1)
                 RETURN(rc);
@@ -79,16 +83,18 @@ int llog_origin_connect(struct llog_ctxt *ctxt, int count,
         LASSERT(ctxt->loc_imp);
         imp = ctxt->loc_imp;
 
-        request = ptlrpc_prep_req(imp, LUSTRE_LOG_VERSION, LLOG_ORIGIN_CONNECT,
-                                  1, &size, NULL);
+        request = ptlrpc_prep_req(imp, LUSTRE_LOG_VERSION,
+                                  LLOG_ORIGIN_CONNECT, 2, size, NULL);
         if (!request)
                 RETURN(-ENOMEM);
 
-        req_body = lustre_msg_buf(request->rq_reqmsg, 0, sizeof(*req_body));
+        req_body = lustre_msg_buf(request->rq_reqmsg, REQ_REC_OFF,
+                                  sizeof(*req_body));
+
         req_body->lgdc_gen = ctxt->loc_gen;
         req_body->lgdc_logid = ctxt->loc_handle->lgh_id;
         req_body->lgdc_ctxt_idx = ctxt->loc_idx + 1;
-        request->rq_replen = lustre_msg_size(0, NULL);
+        ptlrpc_req_set_repsize(request, 1, NULL);
 
         rc = ptlrpc_queue_wait(request);
         ptlrpc_req_finished(request);
@@ -105,9 +111,10 @@ int llog_handle_connect(struct ptlrpc_request *req)
         int rc;
         ENTRY;
 
-        req_body = lustre_msg_buf(req->rq_reqmsg, 0, sizeof(*req_body));
+        req_body = lustre_msg_buf(req->rq_reqmsg, REQ_REC_OFF,
+                                  sizeof(*req_body));
 
-        ctxt = llog_get_context(&obd->obd_llogs, req_body->lgdc_ctxt_idx);
+        ctxt = llog_get_context(obd, req_body->lgdc_ctxt_idx);
         rc = llog_connect(ctxt, 1, &req_body->lgdc_logid,
                           &req_body->lgdc_gen, NULL);
         if (rc != 0)

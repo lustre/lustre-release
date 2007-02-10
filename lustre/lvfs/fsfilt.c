@@ -9,7 +9,7 @@
 #include <linux/kmod.h>
 #include <linux/slab.h>
 #include <libcfs/kp30.h>
-#include <linux/lustre_fsfilt.h>
+#include <lustre_fsfilt.h>
 
 LIST_HEAD(fsfilt_types);
 
@@ -35,16 +35,16 @@ int fsfilt_register_ops(struct fsfilt_operations *fs_ops)
         if ((found = fsfilt_search_type(fs_ops->fs_type))) {
                 if (found != fs_ops) {
                         CERROR("different operations for type %s\n",
-			       fs_ops->fs_type);
+                               fs_ops->fs_type);
                         /* unlock fsfilt_types list */
                         RETURN(-EEXIST);
                 }
         } else {
                 PORTAL_MODULE_USE;
-		list_add(&fs_ops->fs_list, &fsfilt_types);
-	}
+                list_add(&fs_ops->fs_list, &fsfilt_types);
+        }
 
-	/* unlock fsfilt_types list */
+        /* unlock fsfilt_types list */
         return 0;
 }
 
@@ -54,7 +54,7 @@ void fsfilt_unregister_ops(struct fsfilt_operations *fs_ops)
 
         /* lock fsfilt_types list */
         list_for_each(p, &fsfilt_types) {
-		struct fsfilt_operations *found;
+                struct fsfilt_operations *found;
 
                 found = list_entry(p, typeof(*found), fs_list);
                 if (found == fs_ops) {
@@ -86,9 +86,9 @@ struct fsfilt_operations *fsfilt_get_ops(const char *type)
                 }
 
                 if (rc) {
-                        CERROR("Can't find fsfilt_%s interface\n", name);
-                        RETURN(ERR_PTR(rc));
-			/* unlock fsfilt_types list */
+                        CERROR("Can't find %s interface\n", name);
+                        RETURN(ERR_PTR(rc < 0 ? rc : -rc));
+                        /* unlock fsfilt_types list */
                 }
         }
         try_module_get(fs_ops->fs_owner);

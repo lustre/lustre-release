@@ -2,29 +2,26 @@
 PATH=`dirname $0`:`dirname $0`/../utils:$PATH
 TMP=${TMP:-/tmp}
 
-MDS=`find /proc/fs/lustre/mds/* -type d | head -n1 | sed 's/.*\///'`
+MDS=`ls $LPROC/mds | grep -v num_refs | head -n 1`
 [ -z "$MDS" ] && echo "no MDS available, skipping llog test" && exit 0
 
-test "x$(uname -r | grep -o "2.6")" = "x2.6" && MODEXT=ko || MODEXT=o
-
-insmod ../obdclass/llog_test.$MODEXT || exit 1
+case `uname -r` in
+2.4.*) insmod ../obdclass/llog_test.o || exit 1 ;;
+2.6.*) insmod ../obdclass/llog_test.ko || exit 1 ;;
+*) echo "unknown kernel version `uname -r`" && exit 99 ;;
+esac
 lctl modules > $TMP/ogdb-`hostname`
-
-# take care of UML developers
-[ -f /r/$TMP/ogdb-`hostname` ] && 
-    cp -f $TMP/ogdb-`hostname` /r/$TMP/ogdb-`hostname`
 echo "NOW reload debugging syms.."
 
 RC=0
 lctl <<EOT || RC=2
-newdev
 attach llog_test llt_name llt_uuid
 setup $MDS
 EOT
 
 # Using ignore_errors will allow lctl to cleanup even if the test fails.
 lctl <<EOC
-cfg_device llt_name
+device llt_name
 ignore_errors
 cleanup
 detach

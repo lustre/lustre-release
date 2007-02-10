@@ -12,7 +12,7 @@ if [ "$LUSTRE" ]; then
   lustre_opt="--lustre=$LUSTRE"
 fi
 
-sh -x $mkconfig $config || exit 1
+[ -f $config ] || sh -x $mkconfig $config || exit 1
 
 $LCONF $lustre_opt --reformat $@ $OPTS $config || exit 4
 

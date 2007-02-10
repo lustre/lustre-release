@@ -11,5 +11,7 @@ autoMakefile
 *.ko
 *.mod.c
 .*.flags
+.*.d
+.*.ver
 .tmp_versions
 .depend

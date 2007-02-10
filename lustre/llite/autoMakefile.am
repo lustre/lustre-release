@@ -4,10 +4,8 @@
 # See the file COPYING in this distribution
 
 if MODULES
-if CLIENT
-modulefs_DATA = llite$(KMODEXT)
-endif
+modulefs_DATA = lustre$(KMODEXT)
 endif
 
-DIST_SOURCES := $(llite-objs:.o=.c) llite_internal.h rw24.c super.c rw26.c super25.c
+DIST_SOURCES := $(lustre-objs:.o=.c) llite_internal.h rw24.c super.c rw26.c super25.c
 MOSTLYCLEANFILES := @MOSTLYCLEANFILES@ 

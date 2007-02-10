@@ -36,7 +36,9 @@ FLAG_MAPPING flag_table[] = {
        {"O_NONBLOCK", O_NONBLOCK},
        {"O_NDELAY", O_NDELAY},
        {"O_SYNC", O_SYNC},
+#ifdef O_DIRECT
        {"O_DIRECT", O_DIRECT},
+#endif
        {"O_LARGEFILE", O_LARGEFILE},
        {"O_DIRECTORY", O_DIRECTORY},
        {"O_NOFOLLOW", O_NOFOLLOW},
@@ -60,7 +62,8 @@ int main(int argc, char** argv)
         int    mode_set=0;
         int    flag_set=0;
         int    file_set=0;
-        char   c;
+        int    c;
+        int    save_errno;
         char*  cloned_flags = NULL;
 
         if (argc == 1)
@@ -138,6 +141,8 @@ int main(int argc, char** argv)
         else
                 fd = open(fname, flags);
 
+        save_errno = errno;
+
         if (fd != -1) {
                 printf("Succeed in opening file \"%s\"(flags=%s",
                        fname, cloned_flags);
@@ -153,7 +158,7 @@ int main(int argc, char** argv)
                 fname, cloned_flags);
         if (mode_set)
                 fprintf(stderr, ", mode=%o", mode);
-        fprintf(stderr, ") %d: %s\n", errno, strerror(errno));
+        fprintf(stderr, ") %d: %s\n", save_errno, strerror(save_errno));
 
-        return errno;
+        return save_errno;
 }

@@ -43,8 +43,8 @@ obdio_test_fixed_extent (struct obdio_conn *conn,
         int                  j;
         int                  rc = 0;
 
-        buffer = obdio_alloc_aligned_buffer (&space, size);
-        if (buffer == NULL) {
+        space = obdio_alloc_aligned_buffer (&buffer, size);
+        if (space == NULL) {
                 fprintf (stderr, "Can't allocate buffer size %d\n", size);
                 return (-1);
         }

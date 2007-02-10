@@ -6,5 +6,6 @@ autoMakefile
 *.ko
 *.mod.c
 .*.flags
+.*.o.d
 .tmp_versions
 .depend

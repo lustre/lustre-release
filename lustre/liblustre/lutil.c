@@ -25,108 +25,60 @@
 #include <signal.h>
 #include <sys/types.h>
 
-#ifndef REDSTORM
 #include <fcntl.h>
+#ifdef HAVE_NETDB_H
 #include <netdb.h>
-#include <syscall.h>
-#include <sys/utsname.h>
-#include <netinet/in.h>
-#include <sys/socket.h>
-#include <arpa/inet.h>
+#endif
+#ifdef _AIX
+#include "syscall_AIX.h"
 #else
+#include <syscall.h>
+#endif
+#include <sys/utsname.h>
+#ifdef HAVE_NETINET_IN_H
+#include <netinet/in.h>
+#endif
 #include <sys/socket.h>
+#ifdef HAVE_ARPA_INET_H
+#include <arpa/inet.h>
+#endif
+#ifdef HAVE_CATAMOUNT_DATA_H
 #include <catamount/data.h>
 #endif
 
 #include "lutil.h"
 
-#ifdef CRAY_PORTALS
-void portals_debug_dumplog(void){};
-#endif
 
-unsigned int portal_subsystem_debug = ~0 - S_NAL;
-unsigned int portal_debug = 0;
+unsigned int libcfs_subsystem_debug = ~0 - (S_LNET | S_LND);
+unsigned int libcfs_debug = 0;
 
 struct task_struct     *current;
-ptl_handle_ni_t         tcpnal_ni;
-ptl_nid_t               tcpnal_mynid;
 
 void *inter_module_get(char *arg)
 {
-        if (!strcmp(arg, "tcpnal_ni"))
-                return &tcpnal_ni;
-        else if (!strcmp(arg, "ldlm_cli_cancel_unused"))
+        if (!strcmp(arg, "ldlm_cli_cancel_unused"))
                 return ldlm_cli_cancel_unused;
         else if (!strcmp(arg, "ldlm_namespace_cleanup"))
                 return ldlm_namespace_cleanup;
         else if (!strcmp(arg, "ldlm_replay_locks"))
                 return ldlm_replay_locks;
+#ifdef HAVE_QUOTA_SUPPORT
+        else if (!strcmp(arg, "osc_quota_interface"))
+                return &osc_quota_interface;
+        else if (!strcmp(arg, "mdc_quota_interface"))
+                return &mdc_quota_interface;
+        else if (!strcmp(arg, "lov_quota_interface"))
+                return &lov_quota_interface;
+#endif
         else
                 return NULL;
 }
 
-char *portals_nid2str(int nal, ptl_nid_t nid, char *str)
-{
-        if (nid == PTL_NID_ANY) {
-                snprintf(str, PTL_NALFMT_SIZE - 1, "%s",
-                         "PTL_NID_ANY");
-                return str;
-        }
-
-        switch(nal){
-#ifndef CRAY_PORTALS
-        case TCPNAL:
-                /* userspace NAL */
-        case OPENIBNAL:
-        case SOCKNAL:
-                snprintf(str, PTL_NALFMT_SIZE - 1, "%u:%u.%u.%u.%u",
-                         (__u32)(nid >> 32), HIPQUAD(nid));
-                break;
-        case QSWNAL:
-        case GMNAL:
-                snprintf(str, PTL_NALFMT_SIZE - 1, "%u:%u",
-                         (__u32)(nid >> 32), (__u32)nid);
-                break;
-#endif
-        default:
-                snprintf(str, PTL_NALFMT_SIZE - 1, "?%d? %llx",
-                         nal, (long long)nid);
-                break;
-        }
-        return str;
-}
-
-char *portals_id2str(int nal, ptl_process_id_t id, char *str)
-{
-        switch(nal){
-#ifndef CRAY_PORTALS
-        case TCPNAL:
-                /* userspace NAL */
-        case OPENIBNAL:
-        case SOCKNAL:
-                snprintf(str, PTL_NALFMT_SIZE - 1, "%u:%u.%u.%u.%u,%u",
-                         (__u32)(id.nid >> 32), HIPQUAD((id.nid)) , id.pid);
-                break;
-        case QSWNAL:
-        case GMNAL:
-                snprintf(str, PTL_NALFMT_SIZE - 1, "%u:%u,%u",
-                         (__u32)(id.nid >> 32), (__u32)id.nid, id.pid);
-                break;
-#endif
-        default:
-                snprintf(str, PTL_NALFMT_SIZE - 1, "?%d? %llx,%lx",
-                         nal, (long long)id.nid, (long)id.pid );
-                break;
-        }
-        return str;
-}
-
-#ifndef REDSTORM
 /*
  * random number generator stuff
  */
-static int _rand_dev_fd = -1;
 
+#ifdef HAVE_GETHOSTBYNAME
 static int get_ipv4_addr()
 {
         struct utsname myname;
@@ -140,7 +92,7 @@ static int get_ipv4_addr()
         if (hptr == NULL ||
             hptr->h_addrtype != AF_INET ||
             *hptr->h_addr_list == NULL) {
-                printf("LibLustre: Warning: fail to get local IPv4 address\n");
+                CWARN("Warning: fail to get local IPv4 address\n");
                 return 0;
         }
 
@@ -148,45 +100,64 @@ static int get_ipv4_addr()
 
         return ip;
 }
+#endif
 
 void liblustre_init_random()
 {
-        int seed;
+        int _rand_dev_fd;
+        int seed[2];
         struct timeval tv;
 
+#ifdef LIBLUSTRE_USE_URANDOM
         _rand_dev_fd = syscall(SYS_open, "/dev/urandom", O_RDONLY);
         if (_rand_dev_fd >= 0) {
-                if (syscall(SYS_read, _rand_dev_fd, &seed, sizeof(int)) ==
-                    sizeof(int)) {
-                        srand(seed);
+                if (syscall(SYS_read, _rand_dev_fd,
+                            &seed, sizeof(seed)) == sizeof(seed)) {
+                        ll_srand(seed[0], seed[1]);
                         return;
                 }
                 syscall(SYS_close, _rand_dev_fd);
-                _rand_dev_fd = -1;
         }
+#endif /* LIBLUSTRE_USE_URANDOM */
 
+#ifdef HAVE_GETHOSTBYNAME
+        seed[0] = get_ipv4_addr();
+#else
+        seed[0] = _my_pnid;
+#endif
         gettimeofday(&tv, NULL);
-        srand(tv.tv_sec + tv.tv_usec + getpid() + __swab32(get_ipv4_addr()));
+        ll_srand(tv.tv_sec ^ __swab32(seed[0]), tv.tv_usec ^__swab32(getpid()));
 }
 
 void get_random_bytes(void *buf, int size)
 {
-        char *p = buf;
+        int *p = buf;
+        int rem;
         LASSERT(size >= 0);
 
-        if (_rand_dev_fd >= 0) {
-                if (syscall(SYS_read, _rand_dev_fd, buf, size) == size)
-                        return;
-                syscall(SYS_close, _rand_dev_fd);
-                _rand_dev_fd = -1;
+        rem = min((unsigned long)buf & (sizeof(int) - 1), size);
+        if (rem) {
+                int val = ll_rand();
+                memcpy(buf, &val, rem);
+                p = buf + rem;
+                size -= rem;
         }
 
-        while (size--) 
-                *p++ = rand();
+        while (size >= sizeof(int)) {
+                *p = ll_rand();
+                size -= sizeof(int);
+                p++;
+        }
+        buf = p;
+        if (size) {
+                int val = ll_rand();
+                memcpy(buf, &val, size);
+        }
 }
-
+ 
 static void init_capability(int *res)
 {
+#ifdef HAVE_LIBCAP
         cap_t syscap;
         cap_flag_value_t capval;
         int i;
@@ -195,8 +166,8 @@ static void init_capability(int *res)
 
         syscap = cap_get_proc();
         if (!syscap) {
-                printf("Liblustre: Warning: failed to get system capability, "
-                       "set to minimal\n");
+                CWARN("Warning: failed to get system capability, "
+                      "set to minimal\n");
                 return;
         }
 
@@ -207,68 +178,19 @@ static void init_capability(int *res)
                         }
                 }
         }
+#else
+	/*
+	 * set fake cap flags to ship to linux server
+	 * from client platforms that have none (eg. catamount)
+	 *  full capability for root
+	 *  no capability for anybody else
+	 */
+#define FAKE_ROOT_CAP 0x1ffffeff
+#define FAKE_USER_CAP 0
+
+	*res = (current->fsuid == 0) ? FAKE_ROOT_CAP: FAKE_USER_CAP;
+#endif
 }
-
-void liblustre_set_nal_nid()
-{
-        pid_t pid;
-        uint32_t ip;
-        struct in_addr in;
-
-        /* need to setup mynid before tcpnal initialization */
-        /* a meaningful nid could help debugging */
-        ip = get_ipv4_addr();
-        if (ip == 0)
-                get_random_bytes(&ip, sizeof(ip));
-        pid = getpid() & 0xffffffff;
-        tcpnal_mynid = ((uint64_t)ip << 32) | pid;
-
-        in.s_addr = htonl(ip);
-        printf("LibLustre: TCPNAL NID: %016llx (%s:%u)\n", 
-               tcpnal_mynid, inet_ntoa(in), pid);
-}
-
-#else /* REDSTORM */
-
-void liblustre_init_random()
-{
-        struct timeval tv;
-        UINT32 nodeid;
-
-        gettimeofday(&tv, NULL);
-        nodeid = _my_pnid;
-        srand(tv.tv_sec + tv.tv_usec + getpid() + __swab32(nodeid));
-}
-
-void get_random_bytes(void *buf, int size)
-{
-        char *p = buf;
-        LASSERT(size >= 0);
-
-        while (size--) 
-                *p++ = rand();
-}
-
-static void init_capability(int *res)
-{
-        *res = 0;
-}
-
-void liblustre_set_nal_nid()
-{
-        pid_t pid;
-        uint32_t ip;
-
-        ip = _my_pnid;
-        if (ip & 0xFF)
-                ip <<= 8;
-        pid = getpid() & 0xFF;
-        tcpnal_mynid = ip | pid;
-        printf("LibLustre: NAL NID: %08x (%u)\n", 
-               tcpnal_mynid, pid);
-}
-
-#endif /* REDSOTRM */
 
 int in_group_p(gid_t gid)
 {
@@ -292,9 +214,6 @@ int liblustre_init_current(char *comm)
                 CERROR("Not enough memory\n");
                 return -ENOMEM;
         }
-        current->fs = &current->__fs;
-        current->fs->umask = umask(0777);
-        umask(current->fs->umask);
 
         strncpy(current->comm, comm, sizeof(current->comm));
         current->pid = getpid();
@@ -326,13 +245,18 @@ void generate_random_uuid(unsigned char uuid_out[16])
 
 int init_lib_portals()
 {
-        int max_interfaces;
         int rc;
         ENTRY;
 
-        rc = PtlInit(&max_interfaces);
-        if (rc != PTL_OK) {
-                CERROR("PtlInit failed: %d\n", rc);
+        rc = libcfs_debug_init(5 * 1024 * 1024);
+        if (rc != 0) {
+                CERROR("libcfs_debug_init() failed: %d\n", rc);
+                RETURN (-ENXIO);
+        }
+
+        rc = LNetInit();
+        if (rc != 0) {
+                CERROR("LNetInit() failed: %d\n", rc);
                 RETURN (-ENXIO);
         }
         RETURN(0);
@@ -341,12 +265,6 @@ int init_lib_portals()
 extern void ptlrpc_exit_portals(void);
 void cleanup_lib_portals()
 {
+        libcfs_debug_cleanup();
         ptlrpc_exit_portals();
-}
-
-int
-libcfs_nal_cmd(struct portals_cfg *pcfg)
-{
-        /* handle portals command if we want */
-        return 0;
 }

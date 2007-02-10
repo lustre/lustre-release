@@ -3,28 +3,31 @@
  *
  *  Copyright (C) 2002 Cluster File Systems, Inc.
  *
- *   This file is part of Lustre, http://www.lustre.org.
+ *   This file is part of the Lustre file system, http://www.lustre.org
+ *   Lustre is a trademark of Cluster File Systems, Inc.
  *
- *   Lustre is free software; you can redistribute it and/or
- *   modify it under the terms of version 2 of the GNU General Public
- *   License as published by the Free Software Foundation.
+ *   You may have signed or agreed to another license before downloading
+ *   this software.  If so, you are bound by the terms and conditions
+ *   of that agreement, and the following does not apply to you.  See the
+ *   LICENSE file included with this distribution for more information.
  *
- *   Lustre is distributed in the hope that it will be useful,
- *   but WITHOUT ANY WARRANTY; without even the implied warranty of
- *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *   GNU General Public License for more details.
+ *   If you did not agree to a different license, then this copy of Lustre
+ *   is open source software; you can redistribute it and/or modify it
+ *   under the terms of version 2 of the GNU General Public License as
+ *   published by the Free Software Foundation.
  *
- *   You should have received a copy of the GNU General Public License
- *   along with Lustre; if not, write to the Free Software
- *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ *   In either case, Lustre is distributed in the hope that it will be
+ *   useful, but WITHOUT ANY WARRANTY; without even the implied warranty
+ *   of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *   license text for more details.
  *
  */
 
 #define DEBUG_SUBSYSTEM S_RPC
 #ifdef __KERNEL__
-#include <linux/obd_support.h>
-#include <linux/obd_class.h>
-#include <linux/lustre_net.h>
+#include <obd_support.h>
+#include <obd_class.h>
+#include <lustre_net.h>
 #else
 #include <liblustre.h>
 #endif
@@ -37,79 +40,95 @@ static struct list_head conn_unused_list;
 
 void ptlrpc_dump_connections(void)
 {
-        char str[PTL_NALFMT_SIZE];
         struct list_head *tmp;
         struct ptlrpc_connection *c;
         ENTRY;
 
         list_for_each(tmp, &conn_list) {
                 c = list_entry(tmp, struct ptlrpc_connection, c_link);
-                CERROR("Connection %p/%s has refcount %d (nid=%s on %s)\n",
+                CERROR("Connection %p/%s has refcount %d (nid=%s->%s)\n",
                        c, c->c_remote_uuid.uuid, atomic_read(&c->c_refcount),
-                       ptlrpc_peernid2str(&c->c_peer, str),
-                       c->c_peer.peer_ni->pni_name);
+                       libcfs_nid2str(c->c_self), 
+                       libcfs_nid2str(c->c_peer.nid));
         }
         EXIT;
 }
 
-struct ptlrpc_connection *ptlrpc_get_connection(struct ptlrpc_peer *peer,
-                                                struct obd_uuid *uuid)
+struct ptlrpc_connection*
+ptlrpc_lookup_conn_locked (lnet_process_id_t peer)
 {
-        char str[PTL_NALFMT_SIZE];
-        struct list_head *tmp, *pos;
         struct ptlrpc_connection *c;
-        ENTRY;
+        struct list_head         *tmp;
 
-
-        CDEBUG(D_INFO, "peer is %s on %s\n",
-               ptlrpc_id2str(peer, str), peer->peer_ni->pni_name);
-
-        spin_lock(&conn_lock);
         list_for_each(tmp, &conn_list) {
                 c = list_entry(tmp, struct ptlrpc_connection, c_link);
-                if (memcmp(peer, &c->c_peer, sizeof(*peer)) == 0 &&
-                    peer->peer_ni == c->c_peer.peer_ni) {
-                        ptlrpc_connection_addref(c);
-                        GOTO(out, c);
-                }
+
+                if (peer.nid == c->c_peer.nid &&
+                    peer.pid == c->c_peer.pid)
+                        return ptlrpc_connection_addref(c);
         }
 
-        list_for_each_safe(tmp, pos, &conn_unused_list) {
+        list_for_each(tmp, &conn_unused_list) {
                 c = list_entry(tmp, struct ptlrpc_connection, c_link);
-                if (memcmp(peer, &c->c_peer, sizeof(*peer)) == 0 &&
-                    peer->peer_ni == c->c_peer.peer_ni) {
-                        ptlrpc_connection_addref(c);
+
+                if (peer.nid == c->c_peer.nid &&
+                    peer.pid == c->c_peer.pid) {
                         list_del(&c->c_link);
                         list_add(&c->c_link, &conn_list);
-                        GOTO(out, c);
+                        return ptlrpc_connection_addref(c);
                 }
         }
 
-        /* FIXME: this should be a slab once we can validate slab addresses
-         * without OOPSing */
-        OBD_ALLOC_GFP(c, sizeof(*c), GFP_ATOMIC);
-	
-        if (c == NULL)
-                GOTO(out, c);
+        return NULL;
+}
 
-        if (uuid && uuid->uuid)                         /* XXX ???? */
-                obd_str2uuid(&c->c_remote_uuid, (char *)uuid->uuid);
-        atomic_set(&c->c_refcount, 0);
-        memcpy(&c->c_peer, peer, sizeof(c->c_peer));
 
-        ptlrpc_connection_addref(c);
+struct ptlrpc_connection *ptlrpc_get_connection(lnet_process_id_t peer,
+                                                lnet_nid_t self, struct obd_uuid *uuid)
+{
+        struct ptlrpc_connection *c;
+        struct ptlrpc_connection *c2;
+        ENTRY;
 
-        list_add(&c->c_link, &conn_list);
+        CDEBUG(D_INFO, "self %s peer %s\n", 
+               libcfs_nid2str(self), libcfs_id2str(peer));
 
-        EXIT;
- out:
+        spin_lock(&conn_lock);
+
+        c = ptlrpc_lookup_conn_locked(peer);
+        
         spin_unlock(&conn_lock);
-        return c;
+
+        if (c != NULL)
+                RETURN (c);
+        
+        OBD_ALLOC(c, sizeof(*c));
+        if (c == NULL)
+                RETURN (NULL);
+
+        atomic_set(&c->c_refcount, 1);
+        c->c_peer = peer;
+        c->c_self = self;
+        if (uuid != NULL)
+                obd_str2uuid(&c->c_remote_uuid, uuid->uuid);
+
+        spin_lock(&conn_lock);
+
+        c2 = ptlrpc_lookup_conn_locked(peer);
+        if (c2 == NULL)
+                list_add(&c->c_link, &conn_list);
+        
+        spin_unlock(&conn_lock);
+
+        if (c2 == NULL)
+                RETURN (c);
+        
+        OBD_FREE(c, sizeof(*c));
+        RETURN (c2);
 }
 
 int ptlrpc_put_connection(struct ptlrpc_connection *c)
 {
-        char str[PTL_NALFMT_SIZE];
         int rc = 0;
         ENTRY;
 
@@ -118,10 +137,9 @@ int ptlrpc_put_connection(struct ptlrpc_connection *c)
                 RETURN(0);
         }
 
-        CDEBUG (D_INFO, "connection=%p refcount %d to %s on %s\n",
+        CDEBUG (D_INFO, "connection=%p refcount %d to %s\n",
                 c, atomic_read(&c->c_refcount) - 1, 
-                ptlrpc_peernid2str(&c->c_peer, str),
-                c->c_peer.peer_ni->pni_name);
+                libcfs_nid2str(c->c_peer.nid));
 
         if (atomic_dec_and_test(&c->c_refcount)) {
                 spin_lock(&conn_lock);
@@ -139,26 +157,23 @@ int ptlrpc_put_connection(struct ptlrpc_connection *c)
 
 struct ptlrpc_connection *ptlrpc_connection_addref(struct ptlrpc_connection *c)
 {
-        char str[PTL_NALFMT_SIZE];
         ENTRY;
         atomic_inc(&c->c_refcount);
-        CDEBUG (D_INFO, "connection=%p refcount %d to %s on %s\n",
+        CDEBUG (D_INFO, "connection=%p refcount %d to %s\n",
                 c, atomic_read(&c->c_refcount),
-                ptlrpc_peernid2str(&c->c_peer, str),
-                c->c_peer.peer_ni->pni_name);
+                libcfs_nid2str(c->c_peer.nid));
         RETURN(c);
 }
 
 void ptlrpc_init_connection(void)
 {
-        INIT_LIST_HEAD(&conn_list);
-        INIT_LIST_HEAD(&conn_unused_list);
-        conn_lock = SPIN_LOCK_UNLOCKED;
+        CFS_INIT_LIST_HEAD(&conn_list);
+        CFS_INIT_LIST_HEAD(&conn_unused_list);
+        spin_lock_init(&conn_lock);
 }
 
 void ptlrpc_cleanup_connection(void)
 {
-        char str[PTL_NALFMT_SIZE];
         struct list_head *tmp, *pos;
         struct ptlrpc_connection *c;
 
@@ -170,10 +185,9 @@ void ptlrpc_cleanup_connection(void)
         }
         list_for_each_safe(tmp, pos, &conn_list) {
                 c = list_entry(tmp, struct ptlrpc_connection, c_link);
-                CERROR("Connection %p/%s has refcount %d (nid=%s on %s)\n",
+                CERROR("Connection %p/%s has refcount %d (nid=%s)\n",
                        c, c->c_remote_uuid.uuid, atomic_read(&c->c_refcount),
-                       ptlrpc_peernid2str(&c->c_peer, str),
-                       c->c_peer.peer_ni->pni_name);
+                       libcfs_nid2str(c->c_peer.nid));
                 list_del(&c->c_link);
                 OBD_FREE(c, sizeof(*c));
         }

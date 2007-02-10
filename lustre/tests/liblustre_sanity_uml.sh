@@ -8,6 +8,7 @@ LLIP=127.0.0.1
 
 LTREE_KERNEL=${LTREE_KERNEL:-../../lustre}
 LTREE_USER=${LTREE_USER:-../../lustre-lib}
+HOSTNAME=`hostname`
 
 # checking
 if [ ! -e $LTREE_KERNEL ]; then
@@ -31,7 +32,7 @@ cleanup()
 {
 	curdir=`pwd`
 	cd $LTREE_KERNEL/tests
-	$LCONF --node localhost --cleanup --force $LTREE_USER/tests/$configfile 2>&1 > /dev/null
+	$LCONF --node $HOSTNAME --cleanup --force $LTREE_USER/tests/$configfile 2>&1 > /dev/null
 	cd $curdir
 }
 
@@ -39,7 +40,7 @@ configfile=liblustre_sanity_uml.xml
 
 # generate config file
 rm -f $configfile
-MDSNODE=localhost OSTNODES=localhost CLIENTS=$LLIP sh uml.sh $configfile
+MDSNODE=$HOSTNAME OSTNODES=$HOSTNAME CLIENTS=$LLIP sh uml.sh $configfile
 if [ ! -e $configfile ]; then
 	echo "fail to generate config file $configfile"
 	exit 1
@@ -55,7 +56,7 @@ fi
 
 #setup lustre server
 cd $LTREE_KERNEL/tests
-$LCONF --node localhost --reformat $LTREE_USER/tests/$configfile
+$LCONF --node $HOSTNAME --reformat $LTREE_USER/tests/$configfile
 rc=$?
 if [ $rc -ne 0 ]; then
 	echo "setup lustre server: error $rc"

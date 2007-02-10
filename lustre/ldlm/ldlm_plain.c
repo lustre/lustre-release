@@ -5,28 +5,31 @@
  *   Author: Peter Braam <braam@clusterfs.com>
  *   Author: Phil Schwan <phil@clusterfs.com>
  *
- *   This file is part of Lustre, http://www.lustre.org.
+ *   This file is part of the Lustre file system, http://www.lustre.org
+ *   Lustre is a trademark of Cluster File Systems, Inc.
  *
- *   Lustre is free software; you can redistribute it and/or
- *   modify it under the terms of version 2 of the GNU General Public
- *   License as published by the Free Software Foundation.
+ *   You may have signed or agreed to another license before downloading
+ *   this software.  If so, you are bound by the terms and conditions
+ *   of that agreement, and the following does not apply to you.  See the
+ *   LICENSE file included with this distribution for more information.
  *
- *   Lustre is distributed in the hope that it will be useful,
- *   but WITHOUT ANY WARRANTY; without even the implied warranty of
- *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *   GNU General Public License for more details.
+ *   If you did not agree to a different license, then this copy of Lustre
+ *   is open source software; you can redistribute it and/or modify it
+ *   under the terms of version 2 of the GNU General Public License as
+ *   published by the Free Software Foundation.
  *
- *   You should have received a copy of the GNU General Public License
- *   along with Lustre; if not, write to the Free Software
- *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ *   In either case, Lustre is distributed in the hope that it will be
+ *   useful, but WITHOUT ANY WARRANTY; without even the implied warranty
+ *   of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *   license text for more details.
  */
 
 #define DEBUG_SUBSYSTEM S_LDLM
 
 #ifdef __KERNEL__
-#include <linux/lustre_dlm.h>
-#include <linux/obd_support.h>
-#include <linux/lustre_lib.h>
+#include <lustre_dlm.h>
+#include <obd_support.h>
+#include <lustre_lib.h>
 #else
 #include <liblustre.h>
 #endif
@@ -51,8 +54,14 @@ ldlm_plain_compat_queue(struct list_head *queue, struct ldlm_lock *req,
                 if (req == lock)
                         RETURN(compat);
 
-                if (lockmode_compat(lock->l_req_mode, req_mode))
+                if (lockmode_compat(lock->l_req_mode, req_mode)) {
+                        /* jump to next mode group */
+                        if (LDLM_SL_HEAD(&lock->l_sl_mode))
+                                tmp = &list_entry(lock->l_sl_mode.next, 
+                                                  struct ldlm_lock,
+                                                  l_sl_mode)->l_res_link;
                         continue;
+                }
 
                 if (!work_list)
                         RETURN(0);
@@ -60,6 +69,17 @@ ldlm_plain_compat_queue(struct list_head *queue, struct ldlm_lock *req,
                 compat = 0;
                 if (lock->l_blocking_ast)
                         ldlm_add_ast_work_item(lock, req, work_list);
+                if (LDLM_SL_HEAD(&lock->l_sl_mode)) {
+                        /* add all members of the mode group */
+                        do {
+                                tmp = lock->l_res_link.next;
+                                lock = list_entry(tmp, struct ldlm_lock, 
+                                                  l_res_link);
+                                if (lock->l_blocking_ast)
+                                        ldlm_add_ast_work_item(
+                                                        lock, req, work_list);
+                        } while (!LDLM_SL_TAIL(&lock->l_sl_mode));
+                }
         }
 
         RETURN(compat);
@@ -68,20 +88,21 @@ ldlm_plain_compat_queue(struct list_head *queue, struct ldlm_lock *req,
 /* If first_enq is 0 (ie, called from ldlm_reprocess_queue):
  *   - blocking ASTs have already been sent
  *   - the caller has already initialized req->lr_tmp
- *   - must call this function with the ns lock held
+ *   - must call this function with the resource lock held
  *
  * If first_enq is 1 (ie, called from ldlm_lock_enqueue):
  *   - blocking ASTs have not been sent
  *   - the caller has NOT initialized req->lr_tmp, so we must
- *   - must call this function with the ns lock held once */
+ *   - must call this function with the resource lock held */
 int ldlm_process_plain_lock(struct ldlm_lock *lock, int *flags, int first_enq,
                             ldlm_error_t *err, struct list_head *work_list)
 {
         struct ldlm_resource *res = lock->l_resource;
-        struct list_head rpc_list = LIST_HEAD_INIT(rpc_list);
+        struct list_head rpc_list = CFS_LIST_HEAD_INIT(rpc_list);
         int rc;
         ENTRY;
 
+        check_res_locked(res);
         LASSERT(list_empty(&res->lr_converting));
 
         if (!first_enq) {

@@ -26,16 +26,15 @@
 #include <linux/version.h>
 #define DEBUG_SUBSYSTEM S_LLITE
 
-#include <linux/lustre_lite.h>
+#include <lustre_lite.h>
 #include "llite_internal.h"
 
 static int ll_readlink_internal(struct inode *inode,
-                                struct ptlrpc_request **request,
-                                char **symname)
+                                struct ptlrpc_request **request, char **symname)
 {
         struct ll_inode_info *lli = ll_i2info(inode);
         struct ll_sb_info *sbi = ll_i2sbi(inode);
-        struct lustre_id id;
+        struct ll_fid fid;
         struct mds_body *body;
         int rc, symlen = inode->i_size + 1;
         ENTRY;
@@ -48,51 +47,56 @@ static int ll_readlink_internal(struct inode *inode,
                 RETURN(0);
         }
 
-        ll_inode2id(&id, inode);
-        rc = md_getattr(sbi->ll_md_exp, &id, OBD_MD_LINKNAME, NULL, NULL, 0,
-                        symlen, NULL, request);
-
+        ll_inode2fid(&fid, inode);
+        rc = mdc_getattr(sbi->ll_mdc_exp, &fid,
+                         OBD_MD_LINKNAME, symlen, request);
         if (rc) {
                 if (rc != -ENOENT)
                         CERROR("inode %lu: rc = %d\n", inode->i_ino, rc);
-                GOTO(failed, rc);
+                GOTO (failed, rc);
         }
 
-        body = lustre_msg_buf ((*request)->rq_repmsg, 0, sizeof (*body));
-        LASSERT (body != NULL);
-        LASSERT_REPSWABBED (*request, 0);
+        body = lustre_msg_buf((*request)->rq_repmsg, REPLY_REC_OFF,
+                              sizeof(*body));
+        LASSERT(body != NULL);
+        LASSERT_REPSWABBED(*request, REPLY_REC_OFF);
 
         if ((body->valid & OBD_MD_LINKNAME) == 0) {
-                CERROR ("OBD_MD_LINKNAME not set on reply\n");
-                GOTO (failed, rc = -EPROTO);
+                CERROR("OBD_MD_LINKNAME not set on reply\n");
+                GOTO(failed, rc = -EPROTO);
         }
         
-        LASSERT (symlen != 0);
+        LASSERT(symlen != 0);
         if (body->eadatasize != symlen) {
-                CERROR ("inode %lu: symlink length %d not expected %d\n",
+                CERROR("inode %lu: symlink length %d not expected %d\n",
                         inode->i_ino, body->eadatasize - 1, symlen - 1);
-                GOTO (failed, rc = -EPROTO);
+                GOTO(failed, rc = -EPROTO);
         }
 
-        *symname = lustre_msg_buf ((*request)->rq_repmsg, 1, symlen);
+        *symname = lustre_msg_buf((*request)->rq_repmsg, REPLY_REC_OFF + 1,
+                                  symlen);
         if (*symname == NULL ||
             strnlen (*symname, symlen) != symlen - 1) {
                 /* not full/NULL terminated */
-                CERROR ("inode %lu: symlink not NULL terminated string"
+                CERROR("inode %lu: symlink not NULL terminated string"
                         "of length %d\n", inode->i_ino, symlen - 1);
-                GOTO (failed, rc = -EPROTO);
+                GOTO(failed, rc = -EPROTO);
         }
 
         OBD_ALLOC(lli->lli_symlink_name, symlen);
         /* do not return an error if we cannot cache the symlink locally */
-        if (lli->lli_symlink_name)
+        if (lli->lli_symlink_name) {
                 memcpy(lli->lli_symlink_name, *symname, symlen);
+                ptlrpc_req_finished (*request);
+                *request = NULL;
+                *symname = lli->lli_symlink_name;
+        }
 
         RETURN(0);
 
  failed:
         ptlrpc_req_finished (*request);
-        RETURN(rc);
+        RETURN (rc);
 }
 
 static int ll_readlink(struct dentry *dentry, char *buffer, int buflen)
@@ -118,16 +122,25 @@ static int ll_readlink(struct dentry *dentry, char *buffer, int buflen)
         RETURN(rc);
 }
 
-static int ll_follow_link(struct dentry *dentry, struct nameidata *nd)
+#ifdef HAVE_COOKIE_FOLLOW_LINK
+# define LL_FOLLOW_LINK_RETURN_TYPE void *
+#else
+# define LL_FOLLOW_LINK_RETURN_TYPE int
+#endif
+
+static LL_FOLLOW_LINK_RETURN_TYPE ll_follow_link(struct dentry *dentry, struct nameidata *nd)
 {
         struct inode *inode = dentry->d_inode;
         struct ll_inode_info *lli = ll_i2info(inode);
+#ifdef LUSTRE_KERNEL_VERSION
         struct lookup_intent *it = ll_nd2it(nd);
+#endif
         struct ptlrpc_request *request;
         int rc;
         char *symname;
         ENTRY;
 
+#ifdef LUSTRE_KERNEL_VERSION
         if (it != NULL) {
                 int op = it->it_op;
                 int mode = it->it_create_mode;
@@ -136,6 +149,7 @@ static int ll_follow_link(struct dentry *dentry, struct nameidata *nd)
                 it->it_op = op;
                 it->it_create_mode = mode;
         }
+#endif
 
         CDEBUG(D_VFSTRACE, "VFS Op\n");
         down(&lli->lli_open_sem);
@@ -147,23 +161,59 @@ static int ll_follow_link(struct dentry *dentry, struct nameidata *nd)
                 GOTO(out, rc);
         }
 
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,6,8))
         rc = vfs_follow_link(nd, symname);
+#else
+# ifdef HAVE_COOKIE_FOLLOW_LINK
+        nd_set_link(nd, symname);
+        /* @symname may contain a pointer to the request message buffer,
+           we delay request releasing until ll_put_link then. */
+        RETURN(request);
+# else
+        if (request != NULL) {
+                /* falling back to recursive follow link if the request
+                 * needs to be cleaned up still. */
+                rc = vfs_follow_link(nd, symname);
+                GOTO(out, rc);
+        }
+        nd_set_link(nd, symname);
+        RETURN(0);
+# endif
+#endif
+out:
         ptlrpc_req_finished(request);
- out:
+#ifdef HAVE_COOKIE_FOLLOW_LINK
+        RETURN(ERR_PTR(rc));
+#else
         RETURN(rc);
+#endif
 }
+
+#ifdef HAVE_COOKIE_FOLLOW_LINK
+static void ll_put_link(struct dentry *dentry, struct nameidata *nd, void *cookie)
+{
+        ptlrpc_req_finished(cookie);
+}
+#endif
 
 struct inode_operations ll_fast_symlink_inode_operations = {
         .readlink       = ll_readlink,
         .setattr        = ll_setattr,
+#ifdef LUSTRE_KERNEL_VERSION
+        .setattr_raw    = ll_setattr_raw,
+#endif
         .follow_link    = ll_follow_link,
+#ifdef HAVE_COOKIE_FOLLOW_LINK
+        .put_link       = ll_put_link,
+#endif
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
+        .revalidate_it  = ll_inode_revalidate_it,
+#else 
+        .getattr        = ll_getattr,
+#endif
+        .permission     = ll_inode_permission,
         .setxattr       = ll_setxattr,
         .getxattr       = ll_getxattr,
         .listxattr      = ll_listxattr,
         .removexattr    = ll_removexattr,
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
-        .revalidate_it  = ll_inode_revalidate_it
-#else 
-        .getattr        = ll_getattr
-#endif
 };

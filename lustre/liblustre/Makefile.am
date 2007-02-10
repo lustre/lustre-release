@@ -1,32 +1,38 @@
 ## Liblustre excecutables & libraries Makefile
-
-# FIXME: we disable building any executables for this moment.
-#SUBDIRS = . tests
+SUBDIRS = . tests
 
 AM_CPPFLAGS = $(HAVE_EFENCE) -I$(SYSIO)/include -D_LARGEFILE64_SOURCE=1 \
-              $(LLCPPFLAGS) -I$(top_srcdir)/portals/unals
+              $(LLCPPFLAGS) -I$(top_srcdir)/lnet/ulnds
 AM_CFLAGS = $(LLCFLAGS)
 
 AM_LIBS = $(LIBEFENCE)
+
+
 
 LUSTRE_LIBS = libllite.a \
               $(top_builddir)/lustre/lov/liblov.a \
               $(top_builddir)/lustre/obdecho/libobdecho.a \
               $(top_builddir)/lustre/osc/libosc.a \
               $(top_builddir)/lustre/mdc/libmdc.a \
+              $(top_builddir)/lustre/mgc/libmgc.a \
               $(top_builddir)/lustre/ptlrpc/libptlrpc.a \
-              $(top_builddir)/lustre/sec/libptlrpcs.a \
               $(top_builddir)/lustre/obdclass/liblustreclass.a \
               $(top_builddir)/lustre/lvfs/liblvfs.a
 
-if !CRAY_PORTALS
-PTL_LIBS =    $(top_builddir)/portals/utils/libuptlctl.a \
-              $(top_builddir)/portals/unals/libtcpnal.a \
-              $(top_builddir)/portals/portals/libportals.a
-else
-PTL_LIBS =    $(top_builddir)/portals/utils/libuptlctl.a \
-              $(CRAY_PORTALS_LIBS)/libportals.a
+if QUOTA
+QUOTA_LIBS = $(top_builddir)/lustre/quota/libquota.a
 endif
+
+LND_LIBS =
+if BUILD_USOCKLND
+LND_LIBS +=    $(top_builddir)/lnet/ulnds/socklnd/libsocklnd.a
+endif
+if BUILD_UPTLLND
+LND_LIBS +=   $(top_builddir)/lnet/ulnds/ptllnd/libptllnd.a
+endif
+
+LNET_LIBS =   $(top_builddir)/lnet/utils/libuptlctl.a \
+              $(top_builddir)/lnet/lnet/liblnet.a
 
 SYSIO_LIBS =  $(SYSIO)/lib/libsysio.a
 
@@ -52,10 +58,11 @@ libllite_a_SOURCES = llite_lib.c super.c namei.c rw.c file.c dir.c \
 		     lutil.c lutil.h llite_lib.h
 
 # for make rpms -- need cleanup
-liblustre_a_SOURCES = llite_lib.c super.c namei.c rw.c file.c dir.c
+liblustre_a_SOURCES = llite_lib.c super.c namei.c rw.c file.c dir.c \
+		     llite_lib.h
 
-liblustre.a : $(LUSTRE_LIBS) $(PTL_LIBS) $(SYSIO_LIBS)
-	sh $(srcdir)/genlib.sh "$(SYSIO)" "$(CRAY_PORTALS_LIBS)" "$(LIBS)"
+liblustre.a : $(LUSTRE_LIBS) $(LND_LIBS) $(LNET_LIBS) $(SYSIO_LIBS) $(QUOTA_LIBS)
+	sh $(srcdir)/genlib.sh "$(SYSIO)" "$(LIBS)" "$(LND_LIBS)" "$(PTHREAD_LIBS)" "$(QUOTA_LIBS)" "$(CAP_LIBS)"
 
 EXTRA_DIST = genlib.sh
 

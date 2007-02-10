@@ -26,7 +26,7 @@ test_fail() {
 set -vx
 
 LCTL=../utils/lctl
-OSC=OSC_localhost_UUID
+OSC=OSC_`hostname`_UUID
 MDC=MDC_client1_UUID
 TIMEOUT=5 # complete in finite time
 

@@ -18,11 +18,11 @@ SUCCESS=1
 
 rm -f $OOS $OOS2 $LOG $LOG2
 
-sleep 1	# to ensure we get up-to-date statfs info
+sync; sleep 1; sync	# to ensure we get up-to-date statfs info
 
 STRIPECOUNT=`cat /proc/fs/lustre/lov/*/activeobd | head -n 1`
 ORIGFREE=`cat /proc/fs/lustre/llite/*/kbytesavail | head -n 1`
-MAXFREE=${MAXFREE:-$((200000 * $STRIPECOUNT))}
+MAXFREE=${MAXFREE:-$((400000 * $STRIPECOUNT))}
 if [ $ORIGFREE -gt $MAXFREE ]; then
 	echo "skipping out-of-space test on $OSC"
 	echo "reports ${ORIGFREE}kB free, more tham MAXFREE ${MAXFREE}kB"
@@ -54,14 +54,14 @@ fi
 # flush cache to OST(s) so avail numbers are correct
 sync; sleep 1 ; sync
 
-for OSC in /proc/fs/lustre/osc/OSC*MNT*; do
+for OSC in /proc/fs/lustre/osc/*-osc-*; do
 	AVAIL=`cat $OSC/kbytesavail`
 	GRANT=`cat $OSC/cur_grant_bytes`
 	[ $(($AVAIL - $GRANT / 1024)) -lt 400 ] && OSCFULL=full
 done
 if [ -z "$OSCFULL" ]; then
 	echo "no OSTs are close to full"
-	grep [0-9] /proc/fs/lustre/osc/OSC*MNT*/{kbytesavail,cur*} |tee -a $LOG
+	grep "[0-9]" /proc/fs/lustre/osc/*-osc-*/{kbytesavail,cur*}|tee -a $LOG
 	SUCCESS=0
 fi
 
@@ -69,7 +69,7 @@ RECORDSOUT=$((`grep "records out" $LOG | cut -d+ -f 1` + \
               `grep "records out" $LOG2 | cut -d+ -f 1`))
 
 FILESIZE=$((`ls -l $OOS | awk '{print $5}'` + `ls -l $OOS2 | awk '{print $5}'`))
-if [ $RECORDSOUT -ne $(($FILESIZE / 1024)) ]; then
+if [ "$RECORDSOUT" -ne $(($FILESIZE / 1024)) ]; then
         echo "ERROR: blocks written by dd not equal to the size of file"
         SUCCESS=0
 fi
@@ -78,6 +78,7 @@ rm -f $OOS $OOS2
 
 if [ $SUCCESS -eq 1 ]; then
 	echo "Success!"
+	rm -f $LOG $LOG2
 else
 	exit 1
 fi

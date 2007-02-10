@@ -1,9 +1,25 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- *   You should have received a copy of the GNU General Public License
- *   along with Lustre; if not, write to the Free Software
- *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ *  Copyright (C) 2005 Cluster File Systems, Inc.
+ *
+ *   This file is part of the Lustre file system, http://www.lustre.org
+ *   Lustre is a trademark of Cluster File Systems, Inc.
+ *
+ *   You may have signed or agreed to another license before downloading
+ *   this software.  If so, you are bound by the terms and conditions
+ *   of that agreement, and the following does not apply to you.  See the
+ *   LICENSE file included with this distribution for more information.
+ *
+ *   If you did not agree to a different license, then this copy of Lustre
+ *   is open source software; you can redistribute it and/or modify it
+ *   under the terms of version 2 of the GNU General Public License as
+ *   published by the Free Software Foundation.
+ *
+ *   In either case, Lustre is distributed in the hope that it will be
+ *   useful, but WITHOUT ANY WARRANTY; without even the implied warranty
+ *   of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *   license text for more details.
  */
 
 #define DEBUG_SUBSYSTEM S_LOG
@@ -12,15 +28,16 @@
 #define EXPORT_SYMTAB
 #endif
 
-#include <linux/fs.h>
-#include <linux/obd_class.h>
-#include <linux/lustre_log.h>
+#include <obd_class.h>
+#include <lustre_log.h>
 #include <libcfs/list.h>
+#include "llog_internal.h"
 
 static int str2logid(struct llog_logid *logid, char *str, int len)
 {
         char *start, *end, *endp;
 
+        ENTRY;
         start = str;
         if (*start != '#')
                 RETURN(-EINVAL);
@@ -68,6 +85,7 @@ static int llog_check_cb(struct llog_handle *handle, struct llog_rec_hdr *rec,
         char *endp;
         int cur_index, rc = 0;
 
+        ENTRY;
         cur_index = rec->lrh_index;
 
         if (ioc_data && (ioc_data->ioc_inllen1)) {
@@ -101,7 +119,14 @@ static int llog_check_cb(struct llog_handle *handle, struct llog_rec_hdr *rec,
                 }
                 if (handle->lgh_ctxt == NULL)
                         RETURN(-EOPNOTSUPP);
-                llog_cat_id2handle(handle, &log_handle, &lir->lid_id);
+                rc = llog_cat_id2handle(handle, &log_handle, &lir->lid_id);
+                if (rc) {
+                        CDEBUG(D_IOCTL,
+                               "cannot find log #"LPX64"#"LPX64"#%08x\n",
+                               lir->lid_id.lgl_oid, lir->lid_id.lgl_ogr,
+                               lir->lid_id.lgl_ogen);
+                        RETURN(rc);
+                }
                 rc = llog_process(log_handle, llog_check_cb, NULL, NULL);
                 llog_close(log_handle);
         } else {
@@ -109,8 +134,8 @@ static int llog_check_cb(struct llog_handle *handle, struct llog_rec_hdr *rec,
                 case OST_SZ_REC:
                 case OST_RAID1_REC:
                 case MDS_UNLINK_REC:
+                case MDS_SETATTR_REC:
                 case OBD_CFG_REC:
-                case PTL_CFG_REC:
                 case LLOG_HDR_MAGIC: {
                          l = snprintf(out, remains, "[index]: %05d  [type]: "
                                       "%02x  [len]: %04d ok\n",
@@ -151,6 +176,7 @@ static int llog_print_cb(struct llog_handle *handle, struct llog_rec_hdr *rec,
         char *endp;
         int cur_index;
 
+        ENTRY;
         if (ioc_data->ioc_inllen1) {
                 l = 0;
                 remains = ioc_data->ioc_inllen4 +
@@ -204,6 +230,7 @@ static int llog_remove_log(struct llog_handle *cat, struct llog_logid *logid)
         struct llog_handle *log;
         int rc, index = 0;
 
+        ENTRY;
         down_write(&cat->lgh_lock);
         rc = llog_cat_id2handle(cat, &log, logid);
         if (rc) {
@@ -234,8 +261,9 @@ static int llog_delete_cb(struct llog_handle *handle, struct llog_rec_hdr *rec,
         struct  llog_logid_rec *lir = (struct llog_logid_rec*)rec;
         int     rc;
 
+        ENTRY;
         if (rec->lrh_type != LLOG_LOGID_MAGIC)
-              return (-EINVAL);
+              RETURN (-EINVAL);
         rc = llog_remove_log(handle, &lir->lid_id);
 
         RETURN(rc);
@@ -248,16 +276,17 @@ int llog_ioctl(struct llog_ctxt *ctxt, int cmd, struct obd_ioctl_data *data)
         int err = 0;
         struct llog_handle *handle = NULL;
 
+        ENTRY;
         if (*data->ioc_inlbuf1 == '#') {
                 err = str2logid(&logid, data->ioc_inlbuf1, data->ioc_inllen1);
                 if (err)
                         GOTO(out, err);
-                err = llog_open(ctxt, &handle, &logid, NULL, 0);
+                err = llog_create(ctxt, &handle, &logid, NULL);
                 if (err)
                         GOTO(out, err);
         } else if (*data->ioc_inlbuf1 == '$') {
                 char *name = data->ioc_inlbuf1 + 1;
-                err = llog_open(ctxt, &handle, NULL, name, 0);
+                err = llog_create(ctxt, &handle, NULL, name);
                 if (err)
                         GOTO(out, err);
         } else {
@@ -388,6 +417,7 @@ int llog_catalog_list(struct obd_device *obd, int count,
         char *out;
         int l, remains, rc = 0;
 
+        ENTRY;
         size = sizeof(*idarray) * count;
 
         OBD_ALLOC(idarray, size);
@@ -395,8 +425,7 @@ int llog_catalog_list(struct obd_device *obd, int count,
                 RETURN(-ENOMEM);
         memset(idarray, 0, size);
 
-        rc = llog_get_cat_list(&obd->obd_lvfs_ctxt, obd->obd_fsops,
-                               name, count, idarray);
+        rc = llog_get_cat_list(obd, obd, name, count, idarray);
         if (rc) {
                 OBD_FREE(idarray, size);
                 RETURN(rc);

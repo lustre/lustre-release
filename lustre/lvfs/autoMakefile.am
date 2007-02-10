@@ -5,7 +5,7 @@
 
 if LIBLUSTRE
 noinst_LIBRARIES = liblvfs.a
-liblvfs_a_SOURCES = lvfs_userfs.c llog_lvfs.c llog_cat.c llog.c
+liblvfs_a_SOURCES = lvfs_userfs.c
 liblvfs_a_CFLAGS = $(LLCFLAGS)
 liblvfs_a_CPPFLAGS = $(LLCPPFLAGS)
 
@@ -16,12 +16,13 @@ endif
 
 if MODULES
 
+if LINUX
+
 modulefs_DATA := lvfs$(KMODEXT)
 
 if SERVER
-modulefs_DATA += fsfilt_$(BACKINGFS)$(KMODEXT) fsfilt_smfs$(KMODEXT)
-
-sources: fsfilt_$(BACKINGFS).c fsfilt_smfs.c fsfilt_snap_$(BACKINGFS).c
+modulefs_DATA += fsfilt_$(BACKINGFS)$(KMODEXT)
+sources: fsfilt_$(BACKINGFS).c
 	touch sources
 else
 sources:
@@ -30,9 +31,6 @@ endif
 
 fsfilt_extN.c: fsfilt_ext3.c
 	sed -e "s/EXT3/EXTN/g" -e "s/ext3/extN/g" $< > $@
-
-fsfilt_smfs.c:
-	$< > $@
 
 ldiskfs_sed_flags = \
 	-e "s/dx_hash_info/ext3_dx_hash_info/g" \
@@ -44,15 +42,39 @@ ldiskfs_sed_flags = \
 
 fsfilt_ldiskfs.c: fsfilt_ext3.c
 	sed $(strip $(ldiskfs_sed_flags)) $< > $@
-
-fsfilt_snap_ldiskfs.c: fsfilt_snap_ext3.c
+fsfilt_ldiskfs_quota.h: fsfilt_ext3_quota.h
 	sed $(strip $(ldiskfs_sed_flags)) $< > $@
+
+endif # LINUX
+
+if DARWIN
+
+macos_PROGRAMS := lvfs
+
+lvfs_SOURCES := lvfs_darwin.c
+
+lvfs_CFLAGS := $(EXTRA_KCFLAGS)
+lvfs_LDFLAGS := $(EXTRA_KLDFLAGS)
+lvfs_LDADD := $(EXTRA_KLIBS)
+
+plist_DATA := Info.plist
+
+install_data_hook := fix-kext-ownership
+
+endif # DARWIN
+
+else # MODULES
+
+sources:
 
 endif # MODULES
 
-DIST_SOURCES = fsfilt.c fsfilt_ext3.c fsfilt_smfs.c fsfilt_reiserfs.c \
-	lvfs_common.c lvfs_internal.h lvfs_linux.c llog.c llog_cat.c \
-	llog_lvfs.c lvfs_userfs.c fsfilt_snap_ext3.c
+install-data-hook: $(install_data_hook)
+
+DIST_SOURCES = fsfilt.c fsfilt_ext3.c fsfilt_reiserfs.c lvfs_common.c \
+	lvfs_internal.h lvfs_linux.c lvfs_userfs.c \
+	upcall_cache.c \
+        # quotacheck_test.c quotactl_test.c fsfilt_ext3_quota.h
 
 MOSTLYCLEANFILES := @MOSTLYCLEANFILES@ 
 CLEANFILES = fsfilt-*.c fsfilt_ldiskfs.c fsfilt_extN.c sources

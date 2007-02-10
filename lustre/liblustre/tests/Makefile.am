@@ -1,20 +1,16 @@
 ## Liblustre excecutables & libraries Makefile
 
-AM_CPPFLAGS = -I$(SYSIO)/include -I/opt/lam/include $(LLCPPFLAGS) -I$(top_srcdir)/portals/unals
+AM_CPPFLAGS = -I$(SYSIO)/include -I/opt/lam/include $(LLCPPFLAGS) -I$(top_srcdir)/lnet/ulnds
 AM_CFLAGS = $(LLCFLAGS)
 AM_LIBS = $(LIBEFENCE) $(LIBREADLINE)
 
-LLIB_EXEC= $(top_builddir)/lustre/liblustre/liblustre.a -lcap -lpthread
+LLIB_EXEC = $(top_builddir)/lustre/utils/liblustreapi.a $(top_builddir)/lustre/liblustre/liblustre.a $(CAP_LIBS) $(PTHREAD_LIBS)
 
 if LIBLUSTRE
 noinst_LIBRARIES = libtestcommon.a
 
 if LIBLUSTRE_TESTS
-noinst_PROGRAMS = sanity recovery_small replay_single replay_ost_single
-
-if TESTS
-noinst_PROGRAMS += echo_test
-endif # TESTS
+noinst_PROGRAMS = sanity recovery_small replay_single replay_ost_single echo_test
 
 if MPITESTS
 noinst_PROGRAMS += test_lock_cancel
@@ -25,12 +21,9 @@ endif # LIBLUSTRE
 
 libtestcommon_a_SOURCES = test_common.c test_common.h
 
-echo_test_SOURCES = echo_test.c $(top_srcdir)/lustre/utils/parser.c	\
-	$(top_srcdir)/lustre/utils/obd.c				\
-	$(top_srcdir)/lustre/utils/lustre_cfg.c
-
+echo_test_SOURCES = echo_test.c  $(top_srcdir)/lustre/utils/parser.c $(top_srcdir)/lustre/utils/obd.c $(top_srcdir)/lustre/utils/lustre_cfg.c
 echo_test_CFLAGS = $(LL_CFLAGS)
-echo_test_LDADD = $(top_builddir)/lustre/liblustre/liblsupport.a $(LIBREADLINE) -lcap -lpthread 
+echo_test_LDADD = $(top_builddir)/lustre/liblustre/liblsupport.a $(LIBREADLINE) $(CAP_LIBS) $(PTHREAD_LIBS) 
 echo_test_DEPENDENCIES=$(top_builddir)/lustre/liblustre/liblsupport.a
 
 sanity_SOURCES = sanity.c

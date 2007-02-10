@@ -65,6 +65,13 @@ ll_dirstripe_verify
 openfilleddirunlink
 copy_attr
 rename_many
-mmap_sanity
 memhog
+mmap_sanity
 rmdirmany
+flock_test
+flocks_test
+writemany
+random-reads
+chownmany
+llverdev
+llverfs

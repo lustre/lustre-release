@@ -34,8 +34,11 @@
 #include <linux/quotaops.h>
 #include <linux/ext3_fs.h>
 #include <linux/ext3_jbd.h>
-#include <linux/ext3_extents.h>
 #include <linux/version.h>
+#include <linux/bitops.h>
+#include <linux/quota.h>
+#include <linux/quotaio_v1.h>
+#include <linux/quotaio_v2.h>
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
 #include <linux/ext3_xattr.h>
 #else
@@ -43,36 +46,84 @@
 #endif
 
 #include <libcfs/kp30.h>
-#include <linux/lustre_fsfilt.h>
-#include <linux/obd.h>
-#include <linux/obd_class.h>
+#include <lustre_fsfilt.h>
+#include <obd.h>
+#include <obd_class.h>
+#include <lustre_quota.h>
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
-#include <linux/module.h>
 #include <linux/iobuf.h>
 #endif
+#include <linux/lustre_compat25.h>
+#include <linux/lprocfs_status.h>
 
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,6,7))
-# define lock_24kernel() lock_kernel()
-# define unlock_24kernel() unlock_kernel()
+#ifdef EXT3_MULTIBLOCK_ALLOCATOR
+#include <linux/ext3_extents.h>
+#endif
+
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,15)
+#define FSFILT_DATA_TRANS_BLOCKS(sb)      EXT3_DATA_TRANS_BLOCKS
+#define FSFILT_DELETE_TRANS_BLOCKS(sb)    EXT3_DELETE_TRANS_BLOCKS
 #else
-# define lock_24kernel() do {} while (0)
-# define unlock_24kernel() do {} while (0)
+#define FSFILT_DATA_TRANS_BLOCKS(sb)      EXT3_DATA_TRANS_BLOCKS(sb)
+#define FSFILT_DELETE_TRANS_BLOCKS(sb)    EXT3_DELETE_TRANS_BLOCKS(sb)
 #endif
 
 static kmem_cache_t *fcb_cache;
-static atomic_t fcb_cache_count = ATOMIC_INIT(0);
 
 struct fsfilt_cb_data {
         struct journal_callback cb_jcb; /* jbd private data - MUST BE FIRST */
         fsfilt_cb_t cb_func;            /* MDS/OBD completion function */
         struct obd_device *cb_obd;      /* MDS/OBD completion device */
-        __u64 cb_last_num;              /* MDS/OST last committed operation */
+        __u64 cb_last_rcvd;             /* MDS/OST last committed operation */
         void *cb_data;                  /* MDS/OST completion function data */
 };
 
 #ifndef EXT3_XATTR_INDEX_TRUSTED        /* temporary until we hit l28 kernel */
 #define EXT3_XATTR_INDEX_TRUSTED        4
 #endif
+
+static char *fsfilt_ext3_get_label(struct super_block *sb)
+{
+        return EXT3_SB(sb)->s_es->s_volume_name;
+}
+
+static int fsfilt_ext3_set_label(struct super_block *sb, char *label)
+{
+        /* see e.g. fsfilt_ext3_write_record() */
+        journal_t *journal;
+        handle_t *handle;
+        int err;
+
+        journal = EXT3_SB(sb)->s_journal;
+        lock_24kernel();
+        handle = journal_start(journal, 1);
+        unlock_24kernel();
+        if (IS_ERR(handle)) {
+                CERROR("can't start transaction\n");
+                return(PTR_ERR(handle));
+        }
+
+        err = ext3_journal_get_write_access(handle, EXT3_SB(sb)->s_sbh);
+        if (err)
+                goto out;
+
+        memcpy(EXT3_SB(sb)->s_es->s_volume_name, label,
+               sizeof(EXT3_SB(sb)->s_es->s_volume_name));
+
+        err = ext3_journal_dirty_metadata(handle, EXT3_SB(sb)->s_sbh);
+
+out:
+        lock_24kernel();
+        journal_stop(handle);
+        unlock_24kernel();
+
+        return(err);
+}
+
+static char *fsfilt_ext3_uuid(struct super_block *sb)
+{
+        return EXT3_SB(sb)->s_es->s_uuid;
+}
 
 /*
  * We don't currently need any additional blocks for rmdir and
@@ -83,7 +134,7 @@ struct fsfilt_cb_data {
 static void *fsfilt_ext3_start(struct inode *inode, int op, void *desc_private,
                                int logs)
 {
-        /* For updates to the last recieved file */
+        /* For updates to the last received file */
         int nblocks = EXT3_SINGLEDATA_TRANS_BLOCKS;
         journal_t *journal;
         void *handle;
@@ -94,17 +145,13 @@ static void *fsfilt_ext3_start(struct inode *inode, int op, void *desc_private,
                 goto journal_start;
         }
 
-	if (logs)
-		nblocks += (EXT3_INDEX_EXTRA_TRANS_BLOCKS +
-                            EXT3_SINGLEDATA_TRANS_BLOCKS) * logs;
-                
         switch(op) {
         case FSFILT_OP_RMDIR:
         case FSFILT_OP_UNLINK:
                 /* delete one file + create/update logs for each stripe */
-                nblocks += EXT3_DELETE_TRANS_BLOCKS;
-                /*nblocks += (EXT3_INDEX_EXTRA_TRANS_BLOCKS +
-                            EXT3_SINGLEDATA_TRANS_BLOCKS) * logs;*/
+                nblocks += FSFILT_DELETE_TRANS_BLOCKS(inode->i_sb);
+                nblocks += (EXT3_INDEX_EXTRA_TRANS_BLOCKS +
+                            EXT3_SINGLEDATA_TRANS_BLOCKS) * logs;
                 break;
         case FSFILT_OP_RENAME:
                 /* modify additional directory */
@@ -114,11 +161,23 @@ static void *fsfilt_ext3_start(struct inode *inode, int op, void *desc_private,
                 /* additional block + block bitmap + GDT for long symlink */
                 nblocks += 3;
                 /* no break */
-        case FSFILT_OP_CREATE:
-                /* create/update logs for each stripe */
-                /*nblocks += (EXT3_INDEX_EXTRA_TRANS_BLOCKS +
-                            EXT3_SINGLEDATA_TRANS_BLOCKS) * logs;*/
+        case FSFILT_OP_CREATE: {
+#if defined(EXT3_EXTENTS_FL) && defined(EXT3_INDEX_FL)
+                static int warned;
+                if (!warned) {
+                        if (!test_opt(inode->i_sb, EXTENTS)) {
+                                warned = 1;
+                        } else if (((EXT3_I(inode)->i_flags &
+                              cpu_to_le32(EXT3_EXTENTS_FL | EXT3_INDEX_FL)) ==
+                              cpu_to_le32(EXT3_EXTENTS_FL | EXT3_INDEX_FL))) {
+                                CWARN("extent-mapped directory found - contact "
+                                      "CFS: support@clusterfs.com\n");
+                                warned = 1;
+                        }
+                }
+#endif
                 /* no break */
+        }
         case FSFILT_OP_MKDIR:
         case FSFILT_OP_MKNOD:
                 /* modify one inode + block bitmap + GDT */
@@ -127,20 +186,38 @@ static void *fsfilt_ext3_start(struct inode *inode, int op, void *desc_private,
         case FSFILT_OP_LINK:
                 /* modify parent directory */
                 nblocks += EXT3_INDEX_EXTRA_TRANS_BLOCKS +
-                        EXT3_DATA_TRANS_BLOCKS;
+                         FSFILT_DATA_TRANS_BLOCKS(inode->i_sb);
+                /* create/update logs for each stripe */
+                nblocks += (EXT3_INDEX_EXTRA_TRANS_BLOCKS +
+                            EXT3_SINGLEDATA_TRANS_BLOCKS) * logs;
                 break;
         case FSFILT_OP_SETATTR:
                 /* Setattr on inode */
                 nblocks += 1;
+                nblocks += EXT3_INDEX_EXTRA_TRANS_BLOCKS +
+                         FSFILT_DATA_TRANS_BLOCKS(inode->i_sb);
+                /* quota chown log for each stripe */
+                nblocks += (EXT3_INDEX_EXTRA_TRANS_BLOCKS +
+                            EXT3_SINGLEDATA_TRANS_BLOCKS) * logs;
                 break;
         case FSFILT_OP_CANCEL_UNLINK:
                 /* blocks for log header bitmap update OR
                  * blocks for catalog header bitmap update + unlink of logs */
                 nblocks = (LLOG_CHUNK_SIZE >> inode->i_blkbits) +
-                        EXT3_DELETE_TRANS_BLOCKS * logs;
+                        FSFILT_DELETE_TRANS_BLOCKS(inode->i_sb) * logs;
                 break;
-        case FSFILT_OP_NOOP:
-                nblocks += EXT3_INDEX_EXTRA_TRANS_BLOCKS+EXT3_DATA_TRANS_BLOCKS;
+        case FSFILT_OP_JOIN:
+                /* delete 2 file(file + array id) + create 1 file (array id) 
+                 * create/update logs for each stripe */
+                nblocks += 2 * FSFILT_DELETE_TRANS_BLOCKS(inode->i_sb);
+               
+                /*create array log for head file*/ 
+                nblocks += 3;
+                nblocks += (EXT3_INDEX_EXTRA_TRANS_BLOCKS +
+                            EXT3_SINGLEDATA_TRANS_BLOCKS);
+                /*update head file array */
+                nblocks += EXT3_INDEX_EXTRA_TRANS_BLOCKS +
+                         FSFILT_DATA_TRANS_BLOCKS(inode->i_sb);
                 break;
         default: CERROR("unknown transaction start op %d\n", op);
                 LBUG();
@@ -149,8 +226,8 @@ static void *fsfilt_ext3_start(struct inode *inode, int op, void *desc_private,
         LASSERT(current->journal_info == desc_private);
         journal = EXT3_SB(inode->i_sb)->s_journal;
         if (nblocks > journal->j_max_transaction_buffers) {
-                CERROR("too many credits %d for op %ux%u using %d instead\n",
-                       nblocks, op, logs, journal->j_max_transaction_buffers);
+                CWARN("too many credits %d for op %ux%u using %d instead\n",
+                      nblocks, op, logs, journal->j_max_transaction_buffers);
                 nblocks = journal->j_max_transaction_buffers;
         }
 
@@ -197,7 +274,7 @@ static int fsfilt_ext3_credits_needed(int objcount, struct fsfilt_objinfo *fso,
 {
         struct super_block *sb = fso->fso_dentry->d_inode->i_sb;
         __u64 next_indir;
-        const int blockpp = 1 << (PAGE_CACHE_SHIFT - sb->s_blocksize_bits);
+        const int blockpp = 1 << (CFS_PAGE_SHIFT - sb->s_blocksize_bits);
         int nbitmaps = 0, ngdblocks;
         int needed = objcount + 1; /* inodes + superblock */
         int i, j;
@@ -238,9 +315,9 @@ static int fsfilt_ext3_credits_needed(int objcount, struct fsfilt_objinfo *fso,
         needed += nbitmaps + ngdblocks;
 
         /* last_rcvd update */
-        needed += EXT3_DATA_TRANS_BLOCKS;
+        needed += FSFILT_DATA_TRANS_BLOCKS(sb);
 
-#if defined(CONFIG_QUOTA) && !defined(__x86_64__) /* XXX */
+#if defined(CONFIG_QUOTA)
         /* We assume that there will be 1 bit set in s_dquot.flags for each
          * quota file that is active.  This is at least true for now.
          */
@@ -309,8 +386,26 @@ static void *fsfilt_ext3_brw_start(int objcount, struct fsfilt_objinfo *fso,
         RETURN(handle);
 }
 
-static int fsfilt_ext3_commit(struct super_block *sb, struct inode *inode, 
-                              void *h, int force_sync)
+static int fsfilt_ext3_extend(struct inode *inode, unsigned int nblocks,void *h)
+{
+       handle_t *handle = h;
+
+       /* fsfilt_extend called with nblocks = 0 for testing in special cases */
+       if (nblocks == 0) {
+               handle->h_buffer_credits = 0;
+               CWARN("setting credits of handle %p to zero by request\n", h);
+       }
+
+       if (handle->h_buffer_credits > nblocks)
+                return 0;
+       if (journal_extend(handle, nblocks) == 0)
+                return 0;
+
+       ext3_mark_inode_dirty(handle, inode);
+       return journal_restart(handle, nblocks);
+}
+
+static int fsfilt_ext3_commit(struct inode *inode, void *h, int force_sync)
 {
         int rc;
         handle_t *handle = h;
@@ -349,7 +444,7 @@ static int fsfilt_ext3_commit_async(struct inode *inode, void *h,
         rc = journal_stop(handle);
         if (rc) {
                 CERROR("error while stopping transaction: %d\n", rc);
-                unlock_kernel();
+                unlock_24kernel();
                 return rc;
         }
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0)
@@ -387,30 +482,45 @@ static int fsfilt_ext3_setattr(struct dentry *dentry, void *handle,
                                struct iattr *iattr, int do_trunc)
 {
         struct inode *inode = dentry->d_inode;
-        int rc;
+        int rc = 0;
 
-        lock_24kernel();
+        lock_kernel();
 
-        /* A _really_ horrible hack to avoid removing the data stored
-         * in the block pointers; this is really the "small" stripe MD data.
-         * We can avoid further hackery by virtue of the MDS file size being
-         * zero all the time (which doesn't invoke block truncate at unlink
-         * time), so we assert we never change the MDS file size from zero. */
+        /* Avoid marking the inode dirty on the superblock list unnecessarily.
+         * We are already writing the inode to disk as part of this
+         * transaction and want to avoid a lot of extra inode writeout
+         * later on. b=9828 */
         if (iattr->ia_valid & ATTR_SIZE && !do_trunc) {
                 /* ATTR_SIZE would invoke truncate: clear it */
                 iattr->ia_valid &= ~ATTR_SIZE;
                 EXT3_I(inode)->i_disksize = inode->i_size = iattr->ia_size;
 
-                /* make sure _something_ gets set - so new inode
-                 * goes to disk (probably won't work over XFS */
-                if (!(iattr->ia_valid & (ATTR_MODE | ATTR_MTIME | ATTR_CTIME))){
-                        iattr->ia_valid |= ATTR_MODE;
-                        iattr->ia_mode = inode->i_mode;
+                if (iattr->ia_valid & ATTR_UID)
+                        inode->i_uid = iattr->ia_uid;
+                if (iattr->ia_valid & ATTR_GID)
+                        inode->i_gid = iattr->ia_gid;
+                if (iattr->ia_valid & ATTR_ATIME)
+                        inode->i_atime = iattr->ia_atime;
+                if (iattr->ia_valid & ATTR_MTIME)
+                        inode->i_mtime = iattr->ia_mtime;
+                if (iattr->ia_valid & ATTR_CTIME)
+                        inode->i_ctime = iattr->ia_ctime;
+                if (iattr->ia_valid & ATTR_MODE) {
+                        inode->i_mode = iattr->ia_mode;
+
+                        if (!in_group_p(inode->i_gid) && !capable(CAP_FSETID))
+                                inode->i_mode &= ~S_ISGID;
                 }
+
+                inode->i_sb->s_op->dirty_inode(inode);
+
+                goto out;
         }
 
         /* Don't allow setattr to change file type */
-        iattr->ia_mode = (inode->i_mode & S_IFMT)|(iattr->ia_mode & ~S_IFMT);
+        if (iattr->ia_valid & ATTR_MODE)
+                iattr->ia_mode = (inode->i_mode & S_IFMT) |
+                                 (iattr->ia_mode & ~S_IFMT);
 
         /* We set these flags on the client, but have already checked perms
          * so don't confuse inode_change_ok. */
@@ -424,9 +534,9 @@ static int fsfilt_ext3_setattr(struct dentry *dentry, void *handle,
                         rc = inode_setattr(inode, iattr);
         }
 
-        unlock_24kernel();
-
-        return rc;
+ out:
+        unlock_kernel();
+        RETURN(rc);
 }
 
 static int fsfilt_ext3_iocontrol(struct inode * inode, struct file *file,
@@ -434,6 +544,12 @@ static int fsfilt_ext3_iocontrol(struct inode * inode, struct file *file,
 {
         int rc = 0;
         ENTRY;
+
+        /* FIXME: Can't do this because of nested transaction deadlock */
+        if (cmd == EXT3_IOC_SETFLAGS && (*(int *)arg) & EXT3_JOURNAL_DATA_FL) {
+                CERROR("can't set data journal flag on file\n");
+                RETURN(-EPERM);
+        }
 
         if (inode->i_fop->ioctl)
                 rc = inode->i_fop->ioctl(inode, file, cmd, arg);
@@ -443,167 +559,90 @@ static int fsfilt_ext3_iocontrol(struct inode * inode, struct file *file,
         RETURN(rc);
 }
 
-static int fsfilt_ext3_set_xattr(struct inode * inode, void *handle, char *name,
-                                 void *buffer, int buffer_size)
+static int fsfilt_ext3_set_md(struct inode *inode, void *handle,
+                              void *lmm, int lmm_size, const char *name)
 {
-        int rc = 0;
+        int rc;
+
+        LASSERT(TRYLOCK_INODE_MUTEX(inode) == 0);
 
         lock_24kernel();
-
         rc = ext3_xattr_set_handle(handle, inode, EXT3_XATTR_INDEX_TRUSTED,
-                                   name, buffer, buffer_size, 0);
+                                   name, lmm, lmm_size, 0);
+
         unlock_24kernel();
+
         if (rc)
-                CERROR("set xattr %s from inode %lu: rc %d\n",
-                       name,  inode->i_ino, rc);
+                CERROR("error adding MD data to inode %lu: rc = %d\n",
+                       inode->i_ino, rc);
         return rc;
 }
 
-static int fsfilt_ext3_get_xattr(struct inode *inode, char *name,
-                                 void *buffer, int buffer_size)
+/* Must be called with i_mutex held */
+static int fsfilt_ext3_get_md(struct inode *inode, void *lmm, int lmm_size,
+                              const char *name)
 {
-        int rc = 0;
-       
+        int rc;
+
+        LASSERT(TRYLOCK_INODE_MUTEX(inode) == 0);
         lock_24kernel();
 
         rc = ext3_xattr_get(inode, EXT3_XATTR_INDEX_TRUSTED,
-                            name, buffer, buffer_size);
+                            name, lmm, lmm_size);
         unlock_24kernel();
 
-        if (buffer == NULL)
+        /* This gives us the MD size */
+        if (lmm == NULL)
                 return (rc == -ENODATA) ? 0 : rc;
+
         if (rc < 0) {
-                CDEBUG(D_INFO, "error getting EA %s from inode %lu: rc %d\n",
-                       name,  inode->i_ino, rc);
-                memset(buffer, 0, buffer_size);
+                CDEBUG(D_INFO, "error getting EA %d/%s from inode %lu: rc %d\n",
+                       EXT3_XATTR_INDEX_TRUSTED, name,
+                       inode->i_ino, rc);
+                memset(lmm, 0, lmm_size);
                 return (rc == -ENODATA) ? 0 : rc;
         }
 
         return rc;
 }
 
-static int fsfilt_ext3_set_md(struct inode *inode, void *handle,
-                              void *lmm, int lmm_size,
-                              enum ea_type type)
-{
-        int rc;
-        
-        switch(type) {
-        case EA_LOV:
-                rc = fsfilt_ext3_set_xattr(inode, handle,
-                                           XATTR_LUSTRE_MDS_LOV_EA,
-                                           lmm, lmm_size);
-                break;
-        case EA_MEA:
-                rc = fsfilt_ext3_set_xattr(inode, handle,
-                                           XATTR_LUSTRE_MDS_MEA_EA,
-                                           lmm, lmm_size);
-                break;
-        case EA_SID:
-                rc = fsfilt_ext3_set_xattr(inode, handle,
-                                           XATTR_LUSTRE_MDS_SID_EA,
-                                           lmm, lmm_size);
-                break;
-        case EA_PID:
-                 rc = fsfilt_ext3_set_xattr(inode, handle,
-                                            XATTR_LUSTRE_MDS_PID_EA,
-                                            lmm, lmm_size);
-                break;
-        case EA_KEY:
-                rc = fsfilt_ext3_set_xattr(inode, handle,
-                                           XATTR_LUSTRE_MDS_KEY_EA,
-                                           lmm, lmm_size);
-                break;
-        default:
-                return -EINVAL;
-        }
-
-        return rc;
-}
-
-static int fsfilt_ext3_get_md(struct inode *inode, void *lmm,
-                              int lmm_size, enum ea_type type)
-{
-        int rc;
-        
-        switch (type) {
-        case EA_LOV:
-                rc = fsfilt_ext3_get_xattr(inode,
-                                           XATTR_LUSTRE_MDS_LOV_EA,
-                                           lmm, lmm_size);
-                break;
-        case EA_MEA:
-                rc = fsfilt_ext3_get_xattr(inode,
-                                           XATTR_LUSTRE_MDS_MEA_EA,
-                                           lmm, lmm_size);
-                break;
-        case EA_SID:
-                rc = fsfilt_ext3_get_xattr(inode,
-                                           XATTR_LUSTRE_MDS_SID_EA,
-                                           lmm, lmm_size);
-                break;
-        case EA_PID:
-                rc = fsfilt_ext3_get_xattr(inode,
-                                           XATTR_LUSTRE_MDS_PID_EA,
-                                           lmm, lmm_size);
-                break;
-        case EA_KEY:
-                rc = fsfilt_ext3_get_xattr(inode, 
-                                           XATTR_LUSTRE_MDS_KEY_EA,
-                                           lmm, lmm_size);
-                break;
-        default:
-                return -EINVAL;
-        }
-        
-        return rc;
-}
-
-static int fsfilt_ext3_send_bio(int rw, struct inode *inode, void *bio)
-{
-	int rc = 0;
 #if (LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))
-        submit_bio(rw, (struct bio *)bio);
+static int fsfilt_ext3_send_bio(int rw, struct inode *inode, struct bio *bio)
+{
+        submit_bio(rw, bio);
+        return 0;
+}
 #else
-	struct bio *b = (struct kiobuf *)bio;
-        int blocks_per_page;
-	
-        rc = brw_kiovec(rw, 1, &b, inode->i_dev,
-                        b->blocks, 1 << inode->i_blkbits);
+static int fsfilt_ext3_send_bio(int rw, struct inode *inode, struct kiobuf *bio)
+{
+        int rc, blk_per_page;
 
-        blocks_per_page = PAGE_SIZE >> inode->i_blkbits;
+        rc = brw_kiovec(rw, 1, &bio, inode->i_dev,
+                        KIOBUF_GET_BLOCKS(bio), 1 << inode->i_blkbits);
+        /*
+         * brw_kiovec() returns number of bytes actually written. If error
+         * occurred after something was written, error code is returned though
+         * kiobuf->errno. (See bug 6854.)
+         */
 
-        if (rc != (1 << inode->i_blkbits) * b->nr_pages * blocks_per_page) {
-                CERROR("short write?  expected %d, wrote %d\n",
-                       (1 << inode->i_blkbits) * b->nr_pages *
-                       blocks_per_page, rc);
+        blk_per_page = CFS_PAGE_SIZE >> inode->i_blkbits;
+
+        if (rc != (1 << inode->i_blkbits) * bio->nr_pages * blk_per_page) {
+                CERROR("short write?  expected %d, wrote %d (%d)\n",
+                       (1 << inode->i_blkbits) * bio->nr_pages * blk_per_page,
+                       rc, bio->errno);
         }
-#endif
+        if (bio->errno != 0) {
+                CERROR("IO error. Wrote %d of %d (%d)\n",
+                       rc,
+                       (1 << inode->i_blkbits) * bio->nr_pages * blk_per_page,
+                       bio->errno);
+                rc = bio->errno;
+        }
+
         return rc;
 }
-
-static struct page *fsfilt_ext3_getpage(struct inode *inode, long int index)
-{
-        int rc;
-        struct page *page;
-
-        page = grab_cache_page(inode->i_mapping, index);
-        if (page == NULL)
-                return ERR_PTR(-ENOMEM);
-
-        if (PageUptodate(page)) {
-                unlock_page(page);
-                return page;
-        }
-
-        rc = inode->i_mapping->a_ops->readpage(NULL, page);
-        if (rc < 0) {
-                page_cache_release(page);
-                return ERR_PTR(rc);
-        }
-
-        return page;
-}
+#endif
 
 static ssize_t fsfilt_ext3_readpage(struct file *file, char *buf, size_t count,
                                     loff_t *off)
@@ -649,7 +688,7 @@ static ssize_t fsfilt_ext3_readpage(struct file *file, char *buf, size_t count,
 
                                 CDEBUG(D_EXT2, "fake %u@%llu\n", blksize, *off);
                                 memset(fake, 0, sizeof(*fake));
-                                fake->rec_len = cpu_to_le32(blksize);
+                                fake->rec_len = cpu_to_le16(blksize);
                         }
                         count -= blksize;
                         buf += blksize;
@@ -665,16 +704,13 @@ static void fsfilt_ext3_cb_func(struct journal_callback *jcb, int error)
 {
         struct fsfilt_cb_data *fcb = (struct fsfilt_cb_data *)jcb;
 
-        fcb->cb_func(fcb->cb_obd, fcb->cb_last_num, fcb->cb_data, error);
+        fcb->cb_func(fcb->cb_obd, fcb->cb_last_rcvd, fcb->cb_data, error);
 
         OBD_SLAB_FREE(fcb, fcb_cache, sizeof *fcb);
-        atomic_dec(&fcb_cache_count);
 }
 
-static int fsfilt_ext3_add_journal_cb(struct obd_device *obd,
-                                      struct super_block *sb,
-                                      __u64 last_num, void *handle,
-                                      fsfilt_cb_t cb_func,
+static int fsfilt_ext3_add_journal_cb(struct obd_device *obd, __u64 last_rcvd,
+                                      void *handle, fsfilt_cb_t cb_func,
                                       void *cb_data)
 {
         struct fsfilt_cb_data *fcb;
@@ -683,17 +719,17 @@ static int fsfilt_ext3_add_journal_cb(struct obd_device *obd,
         if (fcb == NULL)
                 RETURN(-ENOMEM);
 
-        atomic_inc(&fcb_cache_count);
         fcb->cb_func = cb_func;
         fcb->cb_obd = obd;
-        fcb->cb_last_num = last_num;
+        fcb->cb_last_rcvd = last_rcvd;
         fcb->cb_data = cb_data;
 
-        CDEBUG(D_EXT2, "set callback for last_num: "LPD64"\n", last_num);
+        CDEBUG(D_EXT2, "set callback for last_rcvd: "LPD64"\n", last_rcvd);
         lock_24kernel();
         journal_callback_set(handle, fsfilt_ext3_cb_func,
                              (struct journal_callback *)fcb);
         unlock_24kernel();
+
         return 0;
 }
 
@@ -710,8 +746,7 @@ static int fsfilt_ext3_statfs(struct super_block *sb, struct obd_statfs *osfs)
         int rc;
 
         memset(&sfs, 0, sizeof(sfs));
-
-        rc = sb->s_op->statfs(sb, &sfs);
+        rc = ll_do_statfs(sb,&sfs);
 
         if (!rc && sfs.f_bfree < sfs.f_ffree) {
                 sfs.f_files = (sfs.f_files - sfs.f_ffree) + sfs.f_bfree;
@@ -732,16 +767,19 @@ static int fsfilt_ext3_sync(struct super_block *sb)
 #undef EXT3_MULTIBLOCK_ALLOCATOR
 #endif
 #ifndef EXT3_EXTENTS_FL
-#define EXT3_EXTENTS_FL			0x00080000 /* Inode uses extents */
+#define EXT3_EXTENTS_FL                 0x00080000 /* Inode uses extents */
 #endif
 
 #ifdef EXT3_MULTIBLOCK_ALLOCATOR
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
 #define ext3_up_truncate_sem(inode)  up_write(&EXT3_I(inode)->truncate_sem);
 #define ext3_down_truncate_sem(inode)  down_write(&EXT3_I(inode)->truncate_sem);
-#else
+#elif (LINUX_VERSION_CODE < KERNEL_VERSION(2,6,17))
 #define ext3_up_truncate_sem(inode)  up(&EXT3_I(inode)->truncate_sem);
 #define ext3_down_truncate_sem(inode)  down(&EXT3_I(inode)->truncate_sem);
+#else
+#define ext3_up_truncate_sem(inode)  mutex_unlock(&EXT3_I(inode)->truncate_mutex);
+#define ext3_down_truncate_sem(inode)  mutex_lock(&EXT3_I(inode)->truncate_mutex);
 #endif
 
 #include <linux/lustre_version.h>
@@ -804,6 +842,26 @@ static int ext3_ext_find_goal(struct inode *inode, struct ext3_ext_path *path,
         return bg_start + colour + block;
 }
 
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
+#include <linux/locks.h>
+static void ll_unmap_underlying_metadata(struct super_block *sb,
+                                         unsigned long blocknr)
+{
+        struct buffer_head *old_bh;
+
+        old_bh = get_hash_table(sb->s_dev, blocknr, sb->s_blocksize);
+        if (old_bh) {
+                mark_buffer_clean(old_bh);
+                wait_on_buffer(old_bh);
+                clear_bit(BH_Req, &old_bh->b_state);
+                __brelse(old_bh);
+        }
+}
+#else
+#define ll_unmap_underlying_metadata(sb, blocknr) \
+        unmap_underlying_metadata((sb)->s_bdev, blocknr)
+#endif
+
 static int ext3_ext_new_extent_cb(struct ext3_extents_tree *tree,
                                   struct ext3_ext_path *path,
                                   struct ext3_ext_cache *cex)
@@ -813,7 +871,7 @@ static int ext3_ext_new_extent_cb(struct ext3_extents_tree *tree,
         struct ext3_extent nex;
         int count, err, goal;
         unsigned long pblock;
-        loff_t new_i_size;
+        unsigned long tgen;
         handle_t *handle;
         int i, aflags = 0;
 
@@ -821,7 +879,7 @@ static int ext3_ext_new_extent_cb(struct ext3_extents_tree *tree,
         EXT_ASSERT(i == path->p_depth);
         EXT_ASSERT(path[i].p_hdr);
 
-       	if (cex->ec_type == EXT3_EXT_CACHE_EXTENT) {
+        if (cex->ec_type == EXT3_EXT_CACHE_EXTENT) {
                 err = EXT_CONTINUE;
                 goto map;
         }
@@ -845,13 +903,26 @@ static int ext3_ext_new_extent_cb(struct ext3_extents_tree *tree,
                 return EXT_CONTINUE;
         }
 
+        tgen = EXT_GENERATION(tree);
         count = ext3_ext_calc_credits_for_insert(tree, path);
+        ext3_up_truncate_sem(inode);
 
         lock_24kernel();
         handle = journal_start(EXT3_JOURNAL(inode), count+EXT3_ALLOC_NEEDED+1);
         unlock_24kernel();
-        if (IS_ERR(handle))
+        if (IS_ERR(handle)) {
+                ext3_down_truncate_sem(inode);
                 return PTR_ERR(handle);
+        }
+
+        ext3_down_truncate_sem(inode);
+        if (tgen != EXT_GENERATION(tree)) {
+                /* the tree has changed. so path can be invalid at moment */
+                lock_24kernel();
+                journal_stop(handle);
+                unlock_24kernel();
+                return EXT_REPEAT;
+        }
 
         count = cex->ec_len;
         goal = ext3_ext_find_goal(inode, path, cex->ec_block, &aflags);
@@ -862,8 +933,6 @@ static int ext3_ext_new_extent_cb(struct ext3_extents_tree *tree,
         if (!pblock)
                 goto out;
         EXT_ASSERT(count <= cex->ec_len);
-        //if (count < cex->ec_len)
-        //        CDEBUG(D_ERROR, "%d < %lu\n", count, cex->ec_len);
 
         /* insert new extent */
         nex.ee_block = cex->ec_block;
@@ -883,24 +952,12 @@ static int ext3_ext_new_extent_cb(struct ext3_extents_tree *tree,
         BUG_ON(nex.ee_len == 0);
         BUG_ON(nex.ee_block != cex->ec_block);
 
-        /* correct on-disk inode size */
-        if (nex.ee_len > 0) {
-                new_i_size = (loff_t) nex.ee_block + nex.ee_len;
-                new_i_size = new_i_size << inode->i_blkbits;
-                if (new_i_size > EXT3_I(inode)->i_disksize) {
-                        EXT3_I(inode)->i_disksize = new_i_size;
-                        err = ext3_mark_inode_dirty(handle, inode);
-                }
-        }
-
 out:
         lock_24kernel();
         journal_stop(handle);
         unlock_24kernel();
 map:
         if (err >= 0) {
-                struct block_device *bdev = inode->i_sb->s_bdev;
-
                 /* map blocks */
                 if (bp->num == 0) {
                         CERROR("hmm. why do we find this extent?\n");
@@ -923,10 +980,9 @@ map:
                         } else {
                                 *(bp->created) = 1;
                                 /* unmap any possible underlying metadata from
-                                 * the block device mapping.  bug 6998.
-                                 * This only compiles on 2.6, but there are
-                                 * no users of mballoc on 2.4. */
-                                unmap_underlying_metadata(bdev, *(bp->blocks));
+                                 * the block device mapping.  bug 6998. */
+                                ll_unmap_underlying_metadata(inode->i_sb,
+                                                             *(bp->blocks));
                         }
                         bp->created++;
                         bp->blocks++;
@@ -946,7 +1002,7 @@ int fsfilt_map_nblocks(struct inode *inode, unsigned long block,
         int err;
 
         CDEBUG(D_OTHER, "blocks %lu-%lu requested for inode %u\n",
-                block, block + num, (unsigned) inode->i_ino);
+               block, block + num - 1, (unsigned) inode->i_ino);
 
         ext3_init_tree_desc(&tree, inode);
         tree.private = &bp;
@@ -956,8 +1012,10 @@ int fsfilt_map_nblocks(struct inode *inode, unsigned long block,
         bp.init_num = bp.num = num;
         bp.create = create;
 
+        ext3_down_truncate_sem(inode);
         err = ext3_ext_walk_space(&tree, block, num, ext3_ext_new_extent_cb);
         ext3_ext_invalidate_cache(&tree);
+        ext3_up_truncate_sem(inode);
 
         return err;
 }
@@ -966,7 +1024,7 @@ int fsfilt_ext3_map_ext_inode_pages(struct inode *inode, struct page **page,
                                     int pages, unsigned long *blocks,
                                     int *created, int create)
 {
-        int blocks_per_page = PAGE_SIZE >> inode->i_blkbits;
+        int blocks_per_page = CFS_PAGE_SIZE >> inode->i_blkbits;
         int rc = 0, i = 0;
         struct page *fp = NULL;
         int clen = 0;
@@ -1011,7 +1069,7 @@ int fsfilt_ext3_map_ext_inode_pages(struct inode *inode, struct page **page,
 cleanup:
         return rc;
 }
-#endif
+#endif /* EXT3_MULTIBLOCK_ALLOCATOR */
 
 extern int ext3_map_inode_page(struct inode *inode, struct page *page,
                                unsigned long *blocks, int *created, int create);
@@ -1019,7 +1077,7 @@ int fsfilt_ext3_map_bm_inode_pages(struct inode *inode, struct page **page,
                                    int pages, unsigned long *blocks,
                                    int *created, int create)
 {
-        int blocks_per_page = PAGE_SIZE >> inode->i_blkbits;
+        int blocks_per_page = CFS_PAGE_SIZE >> inode->i_blkbits;
         unsigned long *b;
         int rc = 0, i, *cr;
 
@@ -1042,17 +1100,18 @@ int fsfilt_ext3_map_inode_pages(struct inode *inode, struct page **page,
                                 int *created, int create,
                                 struct semaphore *optional_sem)
 {
-        int rc = 0;
-        if (optional_sem != NULL)
-                down(optional_sem);
+        int rc;
 #ifdef EXT3_MULTIBLOCK_ALLOCATOR
-        if (EXT3_I(inode)->i_flags & EXT3_EXTENTS_FL)
+        if (EXT3_I(inode)->i_flags & EXT3_EXTENTS_FL) {
                 rc = fsfilt_ext3_map_ext_inode_pages(inode, page, pages,
                                                      blocks, created, create);
-        else
+                return rc;
+        }
 #endif
-                rc = fsfilt_ext3_map_bm_inode_pages(inode, page, pages, blocks,
-                                                    created, create);
+        if (optional_sem != NULL)
+                down(optional_sem);
+        rc = fsfilt_ext3_map_bm_inode_pages(inode, page, pages, blocks,
+                                            created, create);
         if (optional_sem != NULL)
                 up(optional_sem);
 
@@ -1133,10 +1192,11 @@ static int fsfilt_ext3_write_record(struct file *file, void *buf, int bufsize,
         journal = EXT3_SB(inode->i_sb)->s_journal;
         lock_24kernel();
         handle = journal_start(journal,
-                               block_count * EXT3_DATA_TRANS_BLOCKS + 2);
+                               block_count * FSFILT_DATA_TRANS_BLOCKS(inode->i_sb) + 2);
         unlock_24kernel();
         if (IS_ERR(handle)) {
-                CERROR("can't start transaction\n");
+                CERROR("can't start transaction for %d blocks (%d bytes)\n",
+                       block_count * FSFILT_DATA_TRANS_BLOCKS(inode->i_sb) + 2, bufsize);
                 return PTR_ERR(handle);
         }
 
@@ -1201,11 +1261,8 @@ out:
         return err;
 }
 
-static int fsfilt_ext3_setup(struct obd_device *obd, struct super_block *sb)
+static int fsfilt_ext3_setup(struct super_block *sb)
 {
-#ifdef EXT3_FEATURE_INCOMPAT_MDSNUM
-        struct mds_obd *mds = &obd->u.mds;
-#endif
 #if 0
         EXT3_SB(sb)->dx_lock = fsfilt_ext3_dx_lock;
         EXT3_SB(sb)->dx_unlock = fsfilt_ext3_dx_unlock;
@@ -1215,186 +1272,9 @@ static int fsfilt_ext3_setup(struct obd_device *obd, struct super_block *sb)
         set_opt(EXT3_SB(sb)->s_mount_opt, PDIROPS);
         sb->s_flags |= S_PDIROPS;
 #endif
-        /* setup mdsnum in underlying fs */
-#ifdef EXT3_FEATURE_INCOMPAT_MDSNUM
-        if (mds->mds_md_obd) {
-                struct ext3_sb_info *sbi = EXT3_SB(sb);
-                struct ext3_super_block *es = sbi->s_es;
-                handle_t *handle;
-                int err;
-                
-                if (!EXT3_HAS_INCOMPAT_FEATURE(sb, EXT3_FEATURE_INCOMPAT_MDSNUM)) {
-                        CWARN("%s: set mdsnum %d in ext3\n",
-                              obd->obd_name, mds->mds_num);
-                        lock_24kernel();
-                        handle = journal_start(sbi->s_journal, 1);
-                        unlock_24kernel();
-                        LASSERT(!IS_ERR(handle));
-                        err = ext3_journal_get_write_access(handle, sbi->s_sbh);
-                        LASSERT(err == 0);
-                        EXT3_SET_INCOMPAT_FEATURE(sb,
-                                                EXT3_FEATURE_INCOMPAT_MDSNUM);
-                        es->s_mdsnum = mds->mds_num;
-                        err = ext3_journal_dirty_metadata(handle, sbi->s_sbh);
-                        LASSERT(err == 0);
-                        lock_24kernel();
-                        journal_stop(handle);
-                        unlock_24kernel();
-                } else {
-                        CWARN("%s: mdsnum initialized to %u in ext3fs\n",
-                                obd->obd_name, es->s_mdsnum);
-                }
-                sbi->s_mdsnum = es->s_mdsnum;
-        }
-#endif
-        if (!strncmp(obd->obd_type->typ_name, "obdfilter", 9)) {
-#if (LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))
-                request_queue_t *q = bdev_get_queue(sb->s_bdev);
-                if (q->max_phys_segments * PAGE_SIZE < (1 << 20))
-#else
-                if (MAX_SEGMENTS * PAGE_SIZE < (1 << 20))
-#endif
-                        CDEBUG(D_WARNING, "Lustre loves 1MB requests, "
-                               "but current max_phys_segments=%d\n",
-                               q->max_phys_segments);
-        }
+        if (!EXT3_HAS_COMPAT_FEATURE(sb, EXT3_FEATURE_COMPAT_DIR_INDEX))
+                CWARN("filesystem doesn't have dir_index feature enabled\n");
         return 0;
-}
-
-static inline int ext3_match (int len, const char * const name,
-			      struct ext3_dir_entry_2 * de)
-{
-	if (len != de->name_len)
-		return 0;
-	if (!de->inode)
-		return 0;
-	return !memcmp(name, de->name, len);
-}
-static int fsfilt_ext3_scan_for_entry(struct dentry *dentry)
-{
-        struct inode *dir = dentry->d_parent->d_inode;
-        int blksize = dir->i_sb->s_blocksize;
-        int blk = 0, err, num = 0, de_len;
-	struct ext3_dir_entry_2 * de;
-        int count = dir->i_size;
-        struct qstr *name;
-        char *dlimit;
-
-        name = &dentry->d_name;
-        while (count > 0) {
-                struct buffer_head *bh;
-
-                bh = ext3_bread(NULL, dir, blk++, 0, &err);
-                if (bh == NULL) {
-                        CERROR("error read dir %lu+%d: %d\n",
-                               dir->i_ino, blk, err);
-                        break;
-                }
-
-                dlimit = bh->b_data + blksize;
-                de = (struct ext3_dir_entry_2 *) bh->b_data;
-                while ((char *) de < dlimit) {
-                        if ((char *) de + name->len <= dlimit &&
-                                        ext3_match(name->len, name->name, de))
-                                num++;
-                        de_len = le16_to_cpu(de->rec_len);
-                        de = (struct ext3_dir_entry_2 *) ((char *) de + de_len);
-                }
-
-                count -= blksize;
-                brelse(bh);
-        }
-
-        return num;
-}
-
-extern int ext3_add_dir_entry(struct dentry *dentry);
-extern int ext3_del_dir_entry(struct dentry *dentry);
-
-static int fsfilt_ext3_add_dir_entry(struct obd_device *obd,
-                                     struct dentry *parent,
-                                     char *name, int namelen,
-                                     unsigned long ino,
-                                     unsigned long generation,
-                                     unsigned long mds, 
-                                     unsigned long fid)
-{
-#ifdef EXT3_FEATURE_INCOMPAT_MDSNUM
-        struct mds_obd *mdsobd = &obd->u.mds;
-        struct dentry *dentry;
-        int err;
-        LASSERT(ino != 0);
-        LASSERT(namelen != 0);
-        dentry = ll_lookup_one_len(name, parent, namelen);
-        if (IS_ERR(dentry)) {
-                CERROR("can't lookup %*s in %lu/%lu: %d\n", dentry->d_name.len,
-                       dentry->d_name.name, dentry->d_inode->i_ino,
-                       (unsigned long) dentry->d_inode->i_generation,
-                       (int) PTR_ERR(dentry));
-                RETURN(PTR_ERR(dentry));
-        }
-        if (dentry->d_inode != NULL || dentry->d_flags & DCACHE_CROSS_REF) {
-                CERROR("dentry %*s(0x%p) found\n", dentry->d_name.len,
-                       dentry->d_name.name, dentry);
-                l_dput(dentry);
-                RETURN(-EEXIST);
-        }
-
-        /* mds_reint_rename() may use this method to add dir entry 
-         * that points onto local inode. and we don't want to find
-         * it cross-ref by subsequent lookups */
-        d_drop(dentry);
-
-        if (parent->d_inode->i_ino == id_ino(&mdsobd->mds_rootid)) {
-                err = fsfilt_ext3_scan_for_entry(dentry);
-                if (err != 0)
-                        CDEBUG(D_ERROR, "existing %d entry %*s in %lu/%u\n",
-                               err, dentry->d_name.len, dentry->d_name.name,
-                               parent->d_inode->i_ino, parent->d_inode->i_generation);
-        }
-
-        dentry->d_flags |= DCACHE_CROSS_REF;
-        dentry->d_inum = ino;
-        dentry->d_mdsnum = mds;
-        dentry->d_generation = generation;
-        dentry->d_fid = fid;
-        lock_24kernel();
-        err = ext3_add_dir_entry(dentry);
-        unlock_24kernel();
-        
-        l_dput(dentry);
-
-        RETURN(err);
-#else
-#error "rebuild kernel and lustre with ext3-mds-num patch!"
-        LASSERT(0);
-#endif
-}
-
-static int fsfilt_ext3_del_dir_entry(struct obd_device *obd,
-                                 struct dentry *dentry)
-{
-#ifdef EXT3_FEATURE_INCOMPAT_MDSNUM
-        struct inode *dir = dentry->d_parent->d_inode;
-        struct mds_obd *mdsobd = &obd->u.mds;
-        int err;
-        lock_24kernel();
-        err = ext3_del_dir_entry(dentry);
-        unlock_24kernel();
-        if (!err && dir->i_ino == id_ino(&mdsobd->mds_rootid)) {
-                int num = fsfilt_ext3_scan_for_entry(dentry);
-                if (num != 0)
-                        CDEBUG(D_ERROR, "existing %d entry %*s in %lu/%u\n",
-                               err, dentry->d_name.len, dentry->d_name.name,
-                               dir->i_ino, dir->i_generation);
-        }
-        if (err == 0)
-                d_drop(dentry);
-        return err;
-#else
-#error "rebuild kernel and lustre with ext3-mds-num patch!"
-        LASSERT(0);
-#endif
 }
 
 /* If fso is NULL, op is FSFILT operation, otherwise op is number of fso
@@ -1413,7 +1293,7 @@ static int fsfilt_ext3_get_op_len(int op, struct fsfilt_objinfo *fso, int logs)
                 int i;
                 int needed = 0;
                 struct super_block *sb = fso->fso_dentry->d_inode->i_sb;
-                int blockpp = 1 << (PAGE_CACHE_SHIFT - sb->s_blocksize_bits);
+                int blockpp = 1 << (CFS_PAGE_SHIFT - sb->s_blocksize_bits);
                 int addrpp = EXT3_ADDR_PER_BLOCK(sb) * blockpp;
                 for (i = 0; i < op; i++, fso++) {
                         int nblocks = fso->fso_bufcnt * blockpp;
@@ -1428,104 +1308,720 @@ static int fsfilt_ext3_get_op_len(int op, struct fsfilt_objinfo *fso, int logs)
         return 0;
 }
 
+static const char *op_quotafile[] = { "lquota.user", "lquota.group" };
 
-#if 0
-#define EXTENTS_EA "write_extents"
-#define EXTENTS_EA_SIZE 64
+#define DQINFO_COPY(out, in)                    \
+do {                                            \
+        Q_COPY(out, in, dqi_bgrace);            \
+        Q_COPY(out, in, dqi_igrace);            \
+        Q_COPY(out, in, dqi_flags);             \
+        Q_COPY(out, in, dqi_valid);             \
+} while (0)
 
-int ext3_ext_in_ea_alloc_space(struct inode *, int, const char *, unsigned long, unsigned long);
-int ext3_ext_in_ea_remove_space(struct inode *, int, const char *, unsigned long, unsigned long);
-int ext3_ext_in_ea_get_extents(struct inode *, int, const char *, char **, int *);
-int ext3_ext_in_ea_get_extents_num(struct inode *, int, const char *, int *);
+#define DQBLK_COPY(out, in)                     \
+do {                                            \
+        Q_COPY(out, in, dqb_bhardlimit);        \
+        Q_COPY(out, in, dqb_bsoftlimit);        \
+        Q_COPY(out, in, dqb_curspace);          \
+        Q_COPY(out, in, dqb_ihardlimit);        \
+        Q_COPY(out, in, dqb_isoftlimit);        \
+        Q_COPY(out, in, dqb_curinodes);         \
+        Q_COPY(out, in, dqb_btime);             \
+        Q_COPY(out, in, dqb_itime);             \
+        Q_COPY(out, in, dqb_valid);             \
+} while (0)
 
-static int fsfilt_ext3_insert_extents_ea(struct inode *inode, 
-                                      unsigned long from, 
-                                      unsigned long num) 
+      
+
+static int fsfilt_ext3_quotactl(struct super_block *sb,
+                                struct obd_quotactl *oqc)
 {
-        int rc = 0;
+        int i, rc = 0, error = 0;
+        struct quotactl_ops *qcop;
+        struct if_dqinfo *info;
+        struct if_dqblk *dqblk;
+        ENTRY;
 
-        rc = ext3_ext_in_ea_alloc_space(inode, EXT3_XATTR_INDEX_TRUSTED,
-                                        EXTENTS_EA, from, num);  
+        if (!sb->s_qcop)
+                RETURN(-ENOSYS);
+
+        OBD_ALLOC_PTR(info);
+        if (!info)
+                RETURN(-ENOMEM);
+        OBD_ALLOC_PTR(dqblk);
+        if (!dqblk) {
+                OBD_FREE_PTR(info);
+                RETURN(-ENOMEM);
+        }
+
+        DQINFO_COPY(info, &oqc->qc_dqinfo);
+        DQBLK_COPY(dqblk, &oqc->qc_dqblk);
+
+        qcop = sb->s_qcop;
+        if (oqc->qc_cmd == Q_QUOTAON || oqc->qc_cmd == Q_QUOTAOFF) {
+                for (i = 0; i < MAXQUOTAS; i++) {
+                        if (!Q_TYPESET(oqc, i))
+                                continue;
+
+                        if (oqc->qc_cmd == Q_QUOTAON) {
+                                if (!qcop->quota_on)
+                                        GOTO(out, rc = -ENOSYS);
+                                rc = qcop->quota_on(sb, i, oqc->qc_id,
+                                                    (char *)op_quotafile[i]);
+                        } else if (oqc->qc_cmd == Q_QUOTAOFF) {
+                                if (!qcop->quota_off)
+                                        GOTO(out, rc = -ENOSYS);
+                                rc = qcop->quota_off(sb, i);
+                        }
+
+                        if (rc == -EBUSY)
+                                error = rc;
+                        else if (rc)
+                                GOTO(out, rc);
+                }
+                GOTO(out, rc ?: error);
+        }
+
+        switch (oqc->qc_cmd) {
+        case Q_GETOINFO:
+        case Q_GETINFO:
+                if (!qcop->get_info)
+                        GOTO(out, rc = -ENOSYS);
+                rc = qcop->get_info(sb, oqc->qc_type, info);
+                break;
+        case Q_SETQUOTA:
+        case Q_INITQUOTA:
+                if (!qcop->set_dqblk)
+                        GOTO(out, rc = -ENOSYS);
+                rc = qcop->set_dqblk(sb, oqc->qc_type, oqc->qc_id, dqblk);
+                break;
+        case Q_GETOQUOTA:
+        case Q_GETQUOTA:
+                if (!qcop->get_dqblk)
+                        GOTO(out, rc = -ENOSYS);
+                rc = qcop->get_dqblk(sb, oqc->qc_type, oqc->qc_id, dqblk);
+                break;
+        case Q_SYNC:
+                if (!sb->s_qcop->quota_sync)
+                        GOTO(out, rc = -ENOSYS);
+                qcop->quota_sync(sb, oqc->qc_type);
+                break;
+        default:
+                CERROR("unsupported quotactl command: %d", oqc->qc_cmd);
+                LBUG();
+        }
+out:
+        DQINFO_COPY(&oqc->qc_dqinfo, info);
+        DQBLK_COPY(&oqc->qc_dqblk, dqblk);
+
+        OBD_FREE_PTR(info);
+        OBD_FREE_PTR(dqblk);
+
+        if (rc)
+                CDEBUG(D_QUOTA, "quotactl command %#x, id %u, type %d "
+                                "failed: %d\n",
+                       oqc->qc_cmd, oqc->qc_id, oqc->qc_type, rc);
+        RETURN(rc);
+}
+
+struct chk_dqblk{
+        struct hlist_node       dqb_hash;        /* quotacheck hash */
+        struct list_head        dqb_list;        /* in list also */
+        qid_t                   dqb_id;          /* uid/gid */
+        short                   dqb_type;        /* USRQUOTA/GRPQUOTA */
+        __u32                   dqb_bhardlimit;  /* block hard limit */
+        __u32                   dqb_bsoftlimit;  /* block soft limit */
+        qsize_t                 dqb_curspace;    /* current space */
+        __u32                   dqb_ihardlimit;  /* inode hard limit */
+        __u32                   dqb_isoftlimit;  /* inode soft limit */
+        __u32                   dqb_curinodes;   /* current inodes */
+        __u64                   dqb_btime;       /* block grace time */
+        __u64                   dqb_itime;       /* inode grace time */
+        __u32                   dqb_valid;       /* flag for above fields */
+};
+
+static inline unsigned int chkquot_hash(qid_t id, int type)
+                                        __attribute__((__const__));
+
+static inline unsigned int chkquot_hash(qid_t id, int type)
+{
+        return (id * (MAXQUOTAS - type)) % NR_DQHASH;
+}
+
+static inline struct chk_dqblk *
+find_chkquot(struct hlist_head *head, qid_t id, int type)
+{
+        struct hlist_node *node;
+        struct chk_dqblk *cdqb;
+
+        hlist_for_each(node, head) {
+                cdqb = hlist_entry(node, struct chk_dqblk, dqb_hash);
+                if (cdqb->dqb_id == id && cdqb->dqb_type == type)
+                        return cdqb;
+        }
+
+        return NULL;
+}
+
+static struct chk_dqblk *alloc_chkquot(qid_t id, int type)
+{
+        struct chk_dqblk *cdqb;
+
+        OBD_ALLOC_PTR(cdqb);
+        if (cdqb) {
+                INIT_HLIST_NODE(&cdqb->dqb_hash);
+                INIT_LIST_HEAD(&cdqb->dqb_list);
+                cdqb->dqb_id = id;
+                cdqb->dqb_type = type;
+        }
+
+        return cdqb;
+}
+
+static struct chk_dqblk *
+cqget(struct super_block *sb, struct hlist_head *hash, struct list_head *list,
+      qid_t id, int type, int first_check)
+{
+        struct hlist_head *head = hash + chkquot_hash(id, type);
+        struct if_dqblk dqb;
+        struct chk_dqblk *cdqb;
+        int rc;
+
+        cdqb = find_chkquot(head, id, type);
+        if (cdqb)
+                return cdqb;
+
+        cdqb = alloc_chkquot(id, type);
+        if (!cdqb)
+                return NULL;
+
+        if (!first_check) {
+                rc = sb->s_qcop->get_dqblk(sb, type, id, &dqb);
+                if (rc) {
+                        CERROR("get_dqblk of id %u, type %d failed: %d\n",
+                               id, type, rc);
+                } else {
+                        DQBLK_COPY(cdqb, &dqb);
+                        cdqb->dqb_curspace = 0;
+                        cdqb->dqb_curinodes = 0;
+                }
+        }
+
+        hlist_add_head(&cdqb->dqb_hash, head);
+        list_add_tail(&cdqb->dqb_list, list);
+
+        return cdqb;
+}
+
+static inline int quota_onoff(struct super_block *sb, int cmd, int type)
+{
+        struct obd_quotactl *oqctl;
+        int rc;
+
+        OBD_ALLOC_PTR(oqctl);
+        if (!oqctl)
+                RETURN(-ENOMEM);
+
+        oqctl->qc_cmd = cmd;
+        oqctl->qc_id = QFMT_LDISKFS;
+        oqctl->qc_type = type;
+        rc = fsfilt_ext3_quotactl(sb, oqctl);
+
+        OBD_FREE_PTR(oqctl);
         return rc;
 }
 
-static int fsfilt_ext3_remove_extents_ea(struct inode *inode, 
-                                         unsigned long from, 
-                                         unsigned long num) 
+static inline int read_old_dqinfo(struct super_block *sb, int type,
+                                  struct if_dqinfo *dqinfo)
 {
-        int rc = 0;
+        struct obd_quotactl *oqctl;
+        int rc;
+        ENTRY;
 
-        rc = ext3_ext_in_ea_remove_space(inode, EXT3_XATTR_INDEX_TRUSTED,
-                                         EXTENTS_EA, from, num);  
+        OBD_ALLOC_PTR(oqctl);
+        if (!oqctl)
+                RETURN(-ENOMEM);
+
+        oqctl->qc_cmd = Q_GETINFO;
+        oqctl->qc_type = type;
+        rc = fsfilt_ext3_quotactl(sb, oqctl);
+        if (!rc)
+                ((struct obd_dqinfo *)dqinfo)[type] = oqctl->qc_dqinfo;
+
+        OBD_FREE_PTR(oqctl);
+        RETURN(rc);
+}
+
+static inline struct ext3_group_desc *
+get_group_desc(struct super_block *sb, int group)
+{
+        unsigned long desc_block, desc;
+        struct ext3_group_desc *gdp;
+
+        desc_block = group / EXT3_DESC_PER_BLOCK(sb);
+        desc = group % EXT3_DESC_PER_BLOCK(sb);
+        gdp = (struct ext3_group_desc *)
+              EXT3_SB(sb)->s_group_desc[desc_block]->b_data;
+
+        return gdp + desc;
+}
+
+static inline struct buffer_head *
+read_inode_bitmap(struct super_block *sb, unsigned long group)
+{
+        struct ext3_group_desc *desc;
+        struct buffer_head *bh;
+
+        desc = get_group_desc(sb, group);
+        bh = sb_bread(sb, le32_to_cpu(desc->bg_inode_bitmap));
+
+        return bh;
+}
+
+static inline struct inode *ext3_iget_inuse(struct super_block *sb,
+                                     struct buffer_head *bitmap_bh,
+                                     int index, unsigned long ino)
+{
+        struct inode *inode = NULL;
+
+        if (ext3_test_bit(index, bitmap_bh->b_data))
+                inode = iget(sb, ino);
+
+        return inode;
+}
+
+struct qchk_ctxt {
+        struct hlist_head       qckt_hash[NR_DQHASH];        /* quotacheck hash */
+        struct list_head        qckt_list;                   /* quotacheck list */
+        int                     qckt_first_check[MAXQUOTAS]; /* 1 if no old quotafile */
+        struct if_dqinfo        qckt_dqinfo[MAXQUOTAS];      /* old dqinfo */
+};
+
+static int add_inode_quota(struct inode *inode, struct qchk_ctxt *qctxt,
+                           struct obd_quotactl *oqc)
+{
+        struct chk_dqblk *cdqb[MAXQUOTAS] = { NULL, };
+        loff_t size = 0;
+        qid_t qid[MAXQUOTAS];
+        int cnt, i, rc = 0;
+
+        if (!inode)
+                return 0;
+
+        qid[USRQUOTA] = inode->i_uid;
+        qid[GRPQUOTA] = inode->i_gid;
+
+        if (S_ISDIR(inode->i_mode) ||
+            S_ISREG(inode->i_mode) ||
+            S_ISLNK(inode->i_mode))
+                size = inode_get_bytes(inode);
+
+        for (cnt = 0; cnt < MAXQUOTAS; cnt++) {
+                if (!Q_TYPESET(oqc, cnt))
+                        continue;
+
+                cdqb[cnt] = cqget(inode->i_sb, qctxt->qckt_hash,
+                                &qctxt->qckt_list, qid[cnt], cnt,
+                                qctxt->qckt_first_check[cnt]);
+                if (!cdqb[cnt]) {
+                        rc = -ENOMEM;
+                        break;
+                }
+
+                cdqb[cnt]->dqb_curspace += size;
+                cdqb[cnt]->dqb_curinodes++;
+        }
+
+        if (rc) {
+                for (i = 0; i < cnt; i++) {
+                        if (!Q_TYPESET(oqc, i))
+                                continue;
+                        LASSERT(cdqb[i]);
+                        cdqb[i]->dqb_curspace -= size;
+                        cdqb[i]->dqb_curinodes--;
+                }
+        }
+
         return rc;
 }
 
-extern int ext3_init_tree_in_ea(struct inode *inode, int name_index,
-				const char *eaname, int size);
-                                
-static int fsfilt_ext3_init_extents_ea(struct inode *inode)
+static int v2_write_dqheader(struct file *f, int type)
 {
-        int rc = 0;
+        static const __u32 quota_magics[] = V2_INITQMAGICS;
+        static const __u32 quota_versions[] = V2_INITQVERSIONS;
+        struct v2_disk_dqheader dqhead;
+        loff_t offset = 0;
 
-        rc = ext3_init_tree_in_ea(inode, EXT3_XATTR_INDEX_TRUSTED,
-                                  EXTENTS_EA, 64);  
-        return rc;
+        CLASSERT(ARRAY_SIZE(quota_magics) == ARRAY_SIZE(quota_versions));
+        LASSERT(0 <= type && type < ARRAY_SIZE(quota_magics));
+
+        dqhead.dqh_magic = cpu_to_le32(quota_magics[type]);
+        dqhead.dqh_version = cpu_to_le32(quota_versions[type]);
+
+        return cfs_user_write(f, (char *)&dqhead, sizeof(dqhead), &offset);
 }
 
-static int fsfilt_ext3_get_inode_write_extents(struct inode *inode, 
-                                         char **pbuf, int *size)
+/* write dqinfo struct in a new quota file */
+static int v2_write_dqinfo(struct file *f, int type, struct if_dqinfo *info)
 {
-        int rc = 0;
-        
-        rc = ext3_ext_in_ea_get_extents(inode, EXT3_XATTR_INDEX_TRUSTED,
-                                        EXTENTS_EA,  pbuf, size);
-        return rc; 
-} 
+        struct v2_disk_dqinfo dqinfo;
+        __u32 blocks = V2_DQTREEOFF + 1;
+        loff_t offset = V2_DQINFOOFF;
 
-static int fsfilt_ext3_get_write_extents_num(struct inode *inode, int *size)
+        if (info) {
+                dqinfo.dqi_bgrace = cpu_to_le32(info->dqi_bgrace);
+                dqinfo.dqi_igrace = cpu_to_le32(info->dqi_igrace);
+                dqinfo.dqi_flags = cpu_to_le32(info->dqi_flags & DQF_MASK &
+                                               ~DQF_INFO_DIRTY);
+        } else {
+                dqinfo.dqi_bgrace = cpu_to_le32(MAX_DQ_TIME);
+                dqinfo.dqi_igrace = cpu_to_le32(MAX_IQ_TIME);
+                dqinfo.dqi_flags = 0;
+        }
+
+        dqinfo.dqi_blocks = cpu_to_le32(blocks);
+        dqinfo.dqi_free_blk = 0;
+        dqinfo.dqi_free_entry = 0;
+
+        return cfs_user_write(f, (char *)&dqinfo, sizeof(dqinfo), &offset);
+}
+
+static int create_new_quota_files(struct qchk_ctxt *qctxt,
+                                  struct obd_quotactl *oqc)
+{
+        int i, rc = 0;
+        ENTRY;
+
+        for (i = 0; i < MAXQUOTAS; i++) {
+                struct if_dqinfo *info = qctxt->qckt_first_check[i]?
+                                         NULL : &qctxt->qckt_dqinfo[i];
+                struct file *file;
+
+                if (!Q_TYPESET(oqc, i))
+                        continue;
+
+                file = filp_open(op_quotafile[i], O_RDWR | O_CREAT | O_TRUNC,
+                                 0644);
+                if (IS_ERR(file)) {
+                        rc = PTR_ERR(file);
+                        CERROR("can't create %s file: rc = %d\n",
+                               op_quotafile[i], rc);
+                        GOTO(out, rc);
+                }
+
+                if (!S_ISREG(file->f_dentry->d_inode->i_mode)) {
+                        CERROR("file %s is not regular", op_quotafile[i]);
+                        filp_close(file, 0);
+                        GOTO(out, rc = -EINVAL);
+                }
+
+                rc = v2_write_dqheader(file, i);
+                if (rc) {
+                        filp_close(file, 0);
+                        GOTO(out, rc);
+                }
+
+                rc = v2_write_dqinfo(file, i, info);
+                filp_close(file, 0);
+                if (rc)
+                        GOTO(out, rc);
+        }
+
+out:
+        RETURN(rc);
+}
+
+
+static int commit_chkquot(struct super_block *sb, struct qchk_ctxt *qctxt,
+                          struct chk_dqblk *cdqb)
+{
+        struct obd_quotactl *oqc;
+        long now;
+        int rc;
+        ENTRY;
+
+        OBD_ALLOC_PTR(oqc);
+        if (!oqc)
+                RETURN(-ENOMEM);
+
+        now = CURRENT_SECONDS;
+
+        if (cdqb->dqb_bsoftlimit &&
+            toqb(cdqb->dqb_curspace) >= cdqb->dqb_bsoftlimit &&
+            !cdqb->dqb_btime)
+                cdqb->dqb_btime =
+                        now + qctxt->qckt_dqinfo[cdqb->dqb_type].dqi_bgrace;
+
+        if (cdqb->dqb_isoftlimit &&
+            cdqb->dqb_curinodes >= cdqb->dqb_isoftlimit &&
+            !cdqb->dqb_itime)
+                cdqb->dqb_itime =
+                        now + qctxt->qckt_dqinfo[cdqb->dqb_type].dqi_igrace;
+
+        cdqb->dqb_valid = QIF_ALL;
+
+        oqc->qc_cmd = Q_SETQUOTA;
+        oqc->qc_type = cdqb->dqb_type;
+        oqc->qc_id = cdqb->dqb_id;
+        DQBLK_COPY(&oqc->qc_dqblk, cdqb);
+
+        rc = fsfilt_ext3_quotactl(sb, oqc);
+        OBD_FREE_PTR(oqc);
+        RETURN(rc);
+}
+
+static int prune_chkquots(struct super_block *sb,
+                          struct qchk_ctxt *qctxt, int error)
+{
+        struct chk_dqblk *cdqb, *tmp;
+        int rc;
+
+        list_for_each_entry_safe(cdqb, tmp, &qctxt->qckt_list, dqb_list) {
+                if (!error) {
+                        rc = commit_chkquot(sb, qctxt, cdqb);
+                        if (rc)
+                                error = rc;
+                }
+                hlist_del_init(&cdqb->dqb_hash);
+                list_del(&cdqb->dqb_list);
+                OBD_FREE_PTR(cdqb);
+        }
+
+        return error;
+}
+
+static int fsfilt_ext3_quotacheck(struct super_block *sb,
+                                  struct obd_quotactl *oqc)
+{
+        struct ext3_sb_info *sbi = EXT3_SB(sb);
+        int i, group;
+        struct qchk_ctxt *qctxt;
+        struct buffer_head *bitmap_bh = NULL;
+        unsigned long ino;
+        struct inode *inode;
+        int rc = 0;
+        ENTRY;
+
+        /* turn on quota and read dqinfo if existed */
+        OBD_ALLOC_PTR(qctxt);
+        if (!qctxt) {
+                oqc->qc_stat = -ENOMEM;
+                RETURN(-ENOMEM);
+        }
+
+        for (i = 0; i < NR_DQHASH; i++)
+                INIT_HLIST_HEAD(&qctxt->qckt_hash[i]);
+        INIT_LIST_HEAD(&qctxt->qckt_list);
+
+        for (i = 0; i < MAXQUOTAS; i++) {
+                if (!Q_TYPESET(oqc, i))
+                        continue;
+
+                rc = quota_onoff(sb, Q_QUOTAON, i);
+                if (!rc || rc == -EBUSY) {
+                        rc = read_old_dqinfo(sb, i, qctxt->qckt_dqinfo);
+                        if (rc)
+                                GOTO(out, rc);
+                } else if (rc == -ENOENT) {
+                        qctxt->qckt_first_check[i] = 1;
+                } else if (rc) {
+                        GOTO(out, rc);
+                }
+        }
+
+        /* check quota and update in hash */
+        for (group = 0; group < sbi->s_groups_count; group++) {
+                ino = group * sbi->s_inodes_per_group + 1;
+                bitmap_bh = read_inode_bitmap(sb, group);
+                if (!bitmap_bh) {
+                        CERROR("read_inode_bitmap group %d failed", group);
+                        GOTO(out, -EIO);
+                }
+
+                for (i = 0; i < sbi->s_inodes_per_group; i++, ino++) {
+                        if (ino < sbi->s_first_ino)
+                                continue;
+
+                        inode = ext3_iget_inuse(sb, bitmap_bh, i, ino);
+                        rc = add_inode_quota(inode, qctxt, oqc);
+                        iput(inode);
+                        if (rc) {
+                                brelse(bitmap_bh);
+                                GOTO(out, rc);
+                        }
+                }
+
+                brelse(bitmap_bh);
+        }
+
+        /* read old quota limits from old quota file. (only for the user
+         * has limits but hasn't file) */
+#ifdef HAVE_QUOTA_SUPPORT
+        for (i = 0; i < MAXQUOTAS; i++) {
+                struct list_head id_list;
+                struct dquot_id *dqid, *tmp;
+
+                if (!Q_TYPESET(oqc, i))
+                        continue;
+
+                if (qctxt->qckt_first_check[i])
+                        continue;
+
+
+                LASSERT(sb_dqopt(sb)->files[i] != NULL);
+                INIT_LIST_HEAD(&id_list);
+#ifndef KERNEL_SUPPORTS_QUOTA_READ 
+                rc = lustre_get_qids(sb_dqopt(sb)->files[i], NULL, i, &id_list);
+#else
+                rc = lustre_get_qids(NULL, sb_dqopt(sb)->files[i], i, &id_list);
+#endif
+                if (rc)
+                        CERROR("read old limits failed. (rc:%d)\n", rc);
+
+                list_for_each_entry_safe(dqid, tmp, &id_list, di_link) {
+                        list_del_init(&dqid->di_link);
+
+                        if (!rc)
+                                cqget(sb, qctxt->qckt_hash, &qctxt->qckt_list,
+                                      dqid->di_id, i,
+                                      qctxt->qckt_first_check[i]);
+                        kfree(dqid);
+                }
+        }
+#endif
+        /* turn off quota cause we are to dump chk_dqblk to files */
+        quota_onoff(sb, Q_QUOTAOFF, oqc->qc_type);
+
+        rc = create_new_quota_files(qctxt, oqc);
+        if (rc)
+                GOTO(out, rc);
+
+        /* we use vfs functions to set dqblk, so turn quota on */
+        rc = quota_onoff(sb, Q_QUOTAON, oqc->qc_type);
+out:
+        /* dump and free chk_dqblk */
+        rc = prune_chkquots(sb, qctxt, rc);
+        OBD_FREE_PTR(qctxt);
+
+        /* turn off quota, `lfs quotacheck` will turn on when all
+         * nodes quotacheck finish. */
+        quota_onoff(sb, Q_QUOTAOFF, oqc->qc_type);
+
+        oqc->qc_stat = rc;
+        if (rc)
+                CERROR("quotacheck failed: rc = %d\n", rc);
+
+        RETURN(rc);
+}
+
+#ifdef HAVE_QUOTA_SUPPORT
+static int fsfilt_ext3_quotainfo(struct lustre_quota_info *lqi, int type, 
+                                 int cmd)
 {
         int rc = 0;
-        
-        rc = ext3_ext_in_ea_get_extents_num(inode, EXT3_XATTR_INDEX_TRUSTED, 
-                                            EXTENTS_EA, size);
-        return rc; 
-} 
+        ENTRY;
+
+        if (lqi->qi_files[type] == NULL) {
+                CERROR("operate qinfo before it's enabled!\n");
+                RETURN(-EIO);
+        }
+
+        switch (cmd) {
+        case QFILE_CHK:
+                rc = lustre_check_quota_file(lqi, type);
+                break;
+        case QFILE_RD_INFO:
+                rc = lustre_read_quota_info(lqi, type);
+                break;
+        case QFILE_WR_INFO:
+                rc = lustre_write_quota_info(lqi, type);
+                break;
+        case QFILE_INIT_INFO:
+                rc = lustre_init_quota_info(lqi, type);
+                break;
+        default:
+                CERROR("Unsupported admin quota file cmd %d\n", cmd);
+                LBUG();
+                break;
+        }
+        RETURN(rc);
+}
+
+static int fsfilt_ext3_qids(struct file *file, struct inode *inode, int type,
+                            struct list_head *list)
+{
+        return lustre_get_qids(file, inode, type, list);
+}
+
+static int fsfilt_ext3_dquot(struct lustre_dquot *dquot, int cmd)
+{
+        int rc = 0;
+        ENTRY;
+
+        if (dquot->dq_info->qi_files[dquot->dq_type] == NULL) {
+                CERROR("operate dquot before it's enabled!\n");
+                RETURN(-EIO);
+        }
+
+        switch (cmd) {
+        case QFILE_RD_DQUOT:
+                rc = lustre_read_dquot(dquot);
+                break;
+        case QFILE_WR_DQUOT:
+                if (dquot->dq_dqb.dqb_ihardlimit ||
+                    dquot->dq_dqb.dqb_isoftlimit ||
+                    dquot->dq_dqb.dqb_bhardlimit ||
+                    dquot->dq_dqb.dqb_bsoftlimit)
+                        clear_bit(DQ_FAKE_B, &dquot->dq_flags);
+                else
+                        set_bit(DQ_FAKE_B, &dquot->dq_flags);
+
+                rc = lustre_commit_dquot(dquot);
+                if (rc >= 0)
+                        rc = 0;
+                break;
+        default:
+                CERROR("Unsupported admin quota file cmd %d\n", cmd);
+                LBUG();
+                break;
+        }
+        RETURN(rc);
+}
 #endif
 
 static struct fsfilt_operations fsfilt_ext3_ops = {
-        .fs_type                    = "ext3",
-        .fs_owner                   = THIS_MODULE,
-        .fs_start                   = fsfilt_ext3_start,
-        .fs_brw_start               = fsfilt_ext3_brw_start,
-        .fs_commit                  = fsfilt_ext3_commit,
-        .fs_commit_async            = fsfilt_ext3_commit_async,
-        .fs_commit_wait             = fsfilt_ext3_commit_wait,
-        .fs_setattr                 = fsfilt_ext3_setattr,
-        .fs_iocontrol               = fsfilt_ext3_iocontrol,
-        .fs_set_md                  = fsfilt_ext3_set_md,
-        .fs_get_md                  = fsfilt_ext3_get_md,
-        .fs_readpage                = fsfilt_ext3_readpage,
-        .fs_add_journal_cb          = fsfilt_ext3_add_journal_cb,
-        .fs_statfs                  = fsfilt_ext3_statfs,
-        .fs_sync                    = fsfilt_ext3_sync,
-        .fs_map_inode_pages         = fsfilt_ext3_map_inode_pages,
-        .fs_prep_san_write          = fsfilt_ext3_prep_san_write,
-        .fs_write_record            = fsfilt_ext3_write_record,
-        .fs_read_record             = fsfilt_ext3_read_record,
-        .fs_setup                   = fsfilt_ext3_setup,
-        .fs_getpage                 = fsfilt_ext3_getpage,
-        .fs_send_bio                = fsfilt_ext3_send_bio,
-        .fs_set_xattr               = fsfilt_ext3_set_xattr,
-        .fs_get_xattr               = fsfilt_ext3_get_xattr,
-        .fs_get_op_len              = fsfilt_ext3_get_op_len,
-        .fs_add_dir_entry           = fsfilt_ext3_add_dir_entry,
-        .fs_del_dir_entry           = fsfilt_ext3_del_dir_entry,
-#if 0
-        .fs_init_extents_ea         = fsfilt_ext3_init_extents_ea,
-        .fs_insert_extents_ea       = fsfilt_ext3_insert_extents_ea,
-        .fs_remove_extents_ea       = fsfilt_ext3_remove_extents_ea,
-        .fs_get_inode_write_extents = fsfilt_ext3_get_inode_write_extents,
-        .fs_get_write_extents_num   = fsfilt_ext3_get_write_extents_num,
+        .fs_type                = "ext3",
+        .fs_owner               = THIS_MODULE,
+        .fs_getlabel            = fsfilt_ext3_get_label,
+        .fs_setlabel            = fsfilt_ext3_set_label,
+        .fs_uuid                = fsfilt_ext3_uuid,
+        .fs_start               = fsfilt_ext3_start,
+        .fs_brw_start           = fsfilt_ext3_brw_start,
+        .fs_extend              = fsfilt_ext3_extend,
+        .fs_commit              = fsfilt_ext3_commit,
+        .fs_commit_async        = fsfilt_ext3_commit_async,
+        .fs_commit_wait         = fsfilt_ext3_commit_wait,
+        .fs_setattr             = fsfilt_ext3_setattr,
+        .fs_iocontrol           = fsfilt_ext3_iocontrol,
+        .fs_set_md              = fsfilt_ext3_set_md,
+        .fs_get_md              = fsfilt_ext3_get_md,
+        .fs_readpage            = fsfilt_ext3_readpage,
+        .fs_add_journal_cb      = fsfilt_ext3_add_journal_cb,
+        .fs_statfs              = fsfilt_ext3_statfs,
+        .fs_sync                = fsfilt_ext3_sync,
+        .fs_map_inode_pages     = fsfilt_ext3_map_inode_pages,
+        .fs_prep_san_write      = fsfilt_ext3_prep_san_write,
+        .fs_write_record        = fsfilt_ext3_write_record,
+        .fs_read_record         = fsfilt_ext3_read_record,
+        .fs_setup               = fsfilt_ext3_setup,
+        .fs_send_bio            = fsfilt_ext3_send_bio,
+        .fs_get_op_len          = fsfilt_ext3_get_op_len,
+        .fs_quotactl            = fsfilt_ext3_quotactl,
+        .fs_quotacheck          = fsfilt_ext3_quotacheck,
+#ifdef HAVE_QUOTA_SUPPORT
+        .fs_quotainfo           = fsfilt_ext3_quotainfo,
+        .fs_qids                = fsfilt_ext3_qids,
+        .fs_dquot               = fsfilt_ext3_dquot,
 #endif
 };
 
@@ -1543,18 +2039,21 @@ static int __init fsfilt_ext3_init(void)
 
         rc = fsfilt_register_ops(&fsfilt_ext3_ops);
 
-        if (rc)
-                kmem_cache_destroy(fcb_cache);
+        if (rc) {
+                int err = kmem_cache_destroy(fcb_cache);
+                LASSERTF(err == 0, "error destroying new cache: rc %d\n", err);
+        }
 out:
         return rc;
 }
 
 static void __exit fsfilt_ext3_exit(void)
 {
+        int rc;
+
         fsfilt_unregister_ops(&fsfilt_ext3_ops);
-        LASSERTF(kmem_cache_destroy(fcb_cache) == 0,
-                 "can't free fsfilt callback cache: count %d\n",
-                 atomic_read(&fcb_cache_count));
+        rc = kmem_cache_destroy(fcb_cache);
+        LASSERTF(rc == 0, "couldn't destroy fcb_cache slab\n");
 }
 
 module_init(fsfilt_ext3_init);

@@ -1,9 +1,0 @@
-#MODULES := ptlrpcs_gss ptlrpcs_gss_krb5
-MODULES := ptlrpcs_gss
-ptlrpcs_gss-objs := sec_gss.o svcsec_gss.o rawobj.o gss_mech_switch.o \
-                    gss_generic_token.o gss_krb5_crypto.o gss_krb5_seal.o \
-                    gss_krb5_unseal.o gss_krb5_seqnum.o gss_krb5_mech.o \
-                    gss_krb5_wrap.o
-#ptlrpcs_gss_krb5-objs := gss_krb5_mech.o
-
-@INCLUDE_RULES@

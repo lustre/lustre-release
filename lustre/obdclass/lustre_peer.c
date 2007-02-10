@@ -3,45 +3,44 @@
  *
  *  Copyright (c) 2002, 2003 Cluster File Systems, Inc.
  *
- *   This file is part of Lustre, http://www.lustre.org.
+ *   This file is part of the Lustre file system, http://www.lustre.org
+ *   Lustre is a trademark of Cluster File Systems, Inc.
  *
- *   Lustre is free software; you can redistribute it and/or
- *   modify it under the terms of version 2 of the GNU General Public
- *   License as published by the Free Software Foundation.
+ *   You may have signed or agreed to another license before downloading
+ *   this software.  If so, you are bound by the terms and conditions
+ *   of that agreement, and the following does not apply to you.  See the
+ *   LICENSE file included with this distribution for more information.
  *
- *   Lustre is distributed in the hope that it will be useful,
- *   but WITHOUT ANY WARRANTY; without even the implied warranty of
- *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *   GNU General Public License for more details.
+ *   If you did not agree to a different license, then this copy of Lustre
+ *   is open source software; you can redistribute it and/or modify it
+ *   under the terms of version 2 of the GNU General Public License as
+ *   published by the Free Software Foundation.
  *
- *   You should have received a copy of the GNU General Public License
- *   along with Lustre; if not, write to the Free Software
- *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ *   In either case, Lustre is distributed in the hope that it will be
+ *   useful, but WITHOUT ANY WARRANTY; without even the implied warranty
+ *   of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *   license text for more details.
  *
  */
 
 #define DEBUG_SUBSYSTEM S_RPC
 
-#ifdef __KERNEL__
-# include <linux/module.h>
-# include <linux/init.h>
-# include <linux/list.h>
-#else
+#ifndef __KERNEL__
 # include <liblustre.h>
 #endif
-#include <linux/obd.h>
-#include <linux/obd_support.h>
-#include <linux/obd_class.h>
-#include <linux/lustre_lib.h>
-#include <linux/lustre_ha.h>
-#include <linux/lustre_net.h>
-#include <linux/lprocfs_status.h>
+#include <obd.h>
+#include <obd_support.h>
+#include <obd_class.h>
+#include <lustre_lib.h>
+#include <lustre_ha.h>
+#include <lustre_net.h>
+#include <lprocfs_status.h>
 
 struct uuid_nid_data {
-        struct list_head head;
-        ptl_nid_t nid;
-        char *uuid;
-        __u32 nal;
+        struct list_head un_list;
+        lnet_nid_t       un_nid;
+        char            *un_uuid;
+        int              un_count;  /* nid/uuid pair refcount */
 };
 
 /* FIXME: This should probably become more elegant than a global linked list */
@@ -50,7 +49,7 @@ static spinlock_t       g_uuid_lock;
 
 void class_init_uuidlist(void)
 {
-        INIT_LIST_HEAD(&g_uuid_list);
+        CFS_INIT_LIST_HEAD(&g_uuid_list);
         spin_lock_init(&g_uuid_lock);
 }
 
@@ -60,7 +59,7 @@ void class_exit_uuidlist(void)
         class_del_uuid(NULL);
 }
 
-int lustre_uuid_to_peer(char *uuid, __u32 *peer_nal, ptl_nid_t *peer_nid)
+int lustre_uuid_to_peer(char *uuid, lnet_nid_t *peer_nid, int index)
 {
         struct list_head *tmp;
 
@@ -68,11 +67,11 @@ int lustre_uuid_to_peer(char *uuid, __u32 *peer_nal, ptl_nid_t *peer_nid)
 
         list_for_each(tmp, &g_uuid_list) {
                 struct uuid_nid_data *data =
-                        list_entry(tmp, struct uuid_nid_data, head);
+                        list_entry(tmp, struct uuid_nid_data, un_list);
 
-                if (strcmp(data->uuid, uuid) == 0) {
-                        *peer_nid = data->nid;
-                        *peer_nal = data->nal;
+                if (!strcmp(data->un_uuid, uuid) &&
+                    index-- == 0) {
+                        *peer_nid = data->un_nid;
 
                         spin_unlock (&g_uuid_lock);
                         return 0;
@@ -80,80 +79,98 @@ int lustre_uuid_to_peer(char *uuid, __u32 *peer_nal, ptl_nid_t *peer_nid)
         }
 
         spin_unlock (&g_uuid_lock);
-        return -1;
+        return -ENOENT;
 }
 
-int class_add_uuid(char *uuid, __u64 nid, __u32 nal)
+/* Add a nid to a niduuid.  Multiple nids can be added to a single uuid; 
+   LNET will choose the best one. */
+int class_add_uuid(char *uuid, __u64 nid)
 {
-        struct uuid_nid_data *data;
-        int rc;
-        int nob = strnlen (uuid, PAGE_SIZE) + 1;
+        struct uuid_nid_data *data, *entry;
+        int nob = strnlen (uuid, CFS_PAGE_SIZE) + 1;
+        int found = 0;
 
-        if (nob > PAGE_SIZE)
+        LASSERT(nid != 0);  /* valid newconfig NID is never zero */
+
+        if (nob > CFS_PAGE_SIZE)
                 return -EINVAL;
 
-        rc = -ENOMEM;
         OBD_ALLOC(data, sizeof(*data));
         if (data == NULL)
                 return -ENOMEM;
 
-        OBD_ALLOC(data->uuid, nob);
+        OBD_ALLOC(data->un_uuid, nob);
         if (data == NULL) {
                 OBD_FREE(data, sizeof(*data));
                 return -ENOMEM;
         }
 
-        CDEBUG(D_INFO, "add uuid %s "LPX64" %x\n", uuid, nid, nal);
-        memcpy(data->uuid, uuid, nob);
-        data->nid = nid;
-        data->nal = nal;
+        memcpy(data->un_uuid, uuid, nob);
+        data->un_nid = nid;
+        data->un_count = 1;
 
         spin_lock (&g_uuid_lock);
-
-        list_add(&data->head, &g_uuid_list);
-
+        list_for_each_entry(entry, &g_uuid_list, un_list) {
+                if (entry->un_nid == nid && 
+                    (strcmp(entry->un_uuid, uuid) == 0)) {
+                        found++;
+                        entry->un_count++;
+                        break;
+                }
+        }
+        if (!found) 
+                list_add(&data->un_list, &g_uuid_list);
         spin_unlock (&g_uuid_lock);
 
+        if (found) {
+                CDEBUG(D_INFO, "found uuid %s %s cnt=%d\n", uuid, 
+                       libcfs_nid2str(nid), entry->un_count);
+                OBD_FREE(data->un_uuid, nob);
+                OBD_FREE(data, sizeof(*data));
+        } else {
+                CDEBUG(D_INFO, "add uuid %s %s\n", uuid, libcfs_nid2str(nid));
+        }
         return 0;
 }
 
-/* delete only one entry if uuid is specified, otherwise delete all */
+/* Delete the nids for one uuid if specified, otherwise delete all */
 int class_del_uuid (char *uuid)
 {
         struct list_head  deathrow;
-        struct list_head *tmp;
-        struct list_head *n;
-        struct uuid_nid_data *data;
+        struct uuid_nid_data *data, *n;
 
-        INIT_LIST_HEAD (&deathrow);
+        CFS_INIT_LIST_HEAD (&deathrow);
 
         spin_lock (&g_uuid_lock);
-
-        list_for_each_safe(tmp, n, &g_uuid_list) {
-                data = list_entry(tmp, struct uuid_nid_data, head);
-
-                if (uuid == NULL || strcmp(data->uuid, uuid) == 0) {
-                        list_del (&data->head);
-                        list_add (&data->head, &deathrow);
-                        if (uuid)
-                                break;
+        list_for_each_entry_safe(data, n, &g_uuid_list, un_list) {
+                if (uuid == NULL) {
+                        list_del (&data->un_list);
+                        list_add (&data->un_list, &deathrow);
+                } else if (strcmp(data->un_uuid, uuid) == 0) {
+                        --data->un_count;
+                        if (data->un_count <= 0) {
+                                list_del (&data->un_list);
+                                list_add (&data->un_list, &deathrow);
+                        }
+                        break;
                 }
         }
-
         spin_unlock (&g_uuid_lock);
 
         if (list_empty (&deathrow)) {
                 if (uuid)
-                        CERROR("del non-existed uuid %s\n", uuid);
+                        CERROR("delete non-existent uuid %s\n", uuid);
                 return -EINVAL;
         }
 
         do {
-                data = list_entry(deathrow.next, struct uuid_nid_data, head);
+                data = list_entry(deathrow.next, struct uuid_nid_data, un_list);
 
-                list_del (&data->head);
+                list_del (&data->un_list);
+                CDEBUG(D_INFO, "del uuid %s %s\n", data->un_uuid,
+                       libcfs_nid2str(data->un_nid));
 
-                OBD_FREE(data->uuid, strlen(data->uuid) + 1);
+                OBD_FREE(data->un_uuid, strlen(data->un_uuid) + 1);
                 OBD_FREE(data, sizeof(*data));
         } while (!list_empty (&deathrow));
 

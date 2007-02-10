@@ -24,6 +24,16 @@
 #ifndef LIBLUSTRE_H__
 #define LIBLUSTRE_H__
 
+#ifdef __KERNEL__
+#error Kernel files should not #include <liblustre.h>
+#else
+/*
+ * The userspace implementations of linux/spinlock.h vary; we just
+ * include our own for all of them
+ */
+#define __LINUX_SPINLOCK_H
+#endif
+
 #include <sys/mman.h>
 #ifdef HAVE_STDINT_H
 # include <stdint.h>
@@ -34,8 +44,12 @@
 #ifdef HAVE_SYS_USER_H
 # include <sys/user.h>
 #endif
-
-#include "ioctl.h"
+#ifdef HAVE_SYS_IOCTL_H
+# include <sys/ioctl.h>
+#endif
+#ifndef _IOWR
+# include "ioctl.h"
+#endif
 
 #include <stdio.h>
 #include <sys/ioctl.h>
@@ -43,23 +57,31 @@
 #include <string.h>
 #include <errno.h>
 #include <sys/stat.h>
-#include <sys/vfs.h>
+#ifdef HAVE_SYS_VFS_H
+# include <sys/vfs.h>
+#endif
+#include <unistd.h>
+#include <fcntl.h>
 
 #include <libcfs/list.h>
-#include <portals/p30.h>
+#include <lnet/lnet.h>
 #include <libcfs/kp30.h>
 
 /* definitions for liblustre */
 
 #ifdef __CYGWIN__
 
-#define PAGE_SHIFT 12
-#define PAGE_SIZE (1UL << PAGE_SHIFT)
-#define PAGE_MASK (~(PAGE_SIZE-1))
+#define CFS_PAGE_SHIFT  12
+#define CFS_PAGE_SIZE   (1UL << CFS_PAGE_SHIFT)
+#define CFS_PAGE_MASK   (~((__u64)CFS_PAGE_SIZE-1))
 #define loff_t long long
 #define ERESTART 2001
 typedef unsigned short umode_t;
 
+#endif
+
+#ifndef CURRENT_SECONDS
+# define CURRENT_SECONDS time(0)
 #endif
 
 /* This is because lprocfs_status.h gets included here indirectly.  It would
@@ -69,73 +91,24 @@ typedef unsigned short umode_t;
 #ifndef smp_processor_id
 #define smp_processor_id() 0
 #endif
-
-#ifndef smp_mb
-#define smp_mb() do {} while (0)
+#ifndef smp_num_cpus
+#define smp_num_cpus 1
 #endif
-
-#ifndef might_sleep_if
-#define might_sleep_if(cond) do {} while (0)
-#endif
-
-#ifndef might_sleep
-#define might_sleep() do {} while (0)
-#endif
-
-#ifndef signal_pending
-#define signal_pending(proc) 0
-#endif
-
-#ifndef MAY_EXEC
-#define MAY_EXEC 1
-#endif
-
-#ifndef MAY_WRITE
-#define MAY_WRITE 2
-#endif
-
-#ifndef MAY_READ
-#define MAY_READ 4
-#endif
-
-#ifndef MAY_APPEND
-#define MAY_APPEND 8
-#endif
-
-#ifndef FMODE_READ
-#define FMODE_READ 1
-#endif
-
-#ifndef FMODE_WRITE
-#define FMODE_WRITE 2
-#endif
-
-#ifndef FMODE_EXEC
-#define FMODE_EXEC 4
-#endif
-
-#define S_IRWXUGO (S_IRWXU|S_IRWXG|S_IRWXO)
-#define S_IALLUGO (S_ISUID|S_ISGID|S_ISVTX|S_IRWXUGO)
-#define S_IRUGO   (S_IRUSR|S_IRGRP|S_IROTH)
-#define S_IWUGO   (S_IWUSR|S_IWGRP|S_IWOTH)
-#define S_IXUGO   (S_IXUSR|S_IXGRP|S_IXOTH)
-
-#define LBUG()                                                          \
-        do {                                                            \
-                printf("!!!LBUG at %s:%d\n", __FILE__, __LINE__);       \
-                sleep(1000000);                                         \
-        } while (0)
 
 /* always adopt 2.5 definitions */
 #define KERNEL_VERSION(a,b,c) ((a)*100+(b)*10+c)
-#define LINUX_VERSION_CODE (2*200+5*10+0)
+#define LINUX_VERSION_CODE KERNEL_VERSION(2,5,0)
+
+#ifndef page_private
+#define page_private(page) ((page)->private)
+#define set_page_private(page, v) ((page)->private = (v))
+#endif
+
 
 static inline void inter_module_put(void *a)
 {
         return;
 }
-
-extern ptl_handle_ni_t         tcpnal_ni;
 
 void *inter_module_get(char *arg);
 
@@ -172,13 +145,13 @@ static inline void *kmalloc(int size, int prot)
 #define GFP_HIGHUSER 1
 #define GFP_ATOMIC 1
 #define GFP_NOFS 1
-#define IS_ERR(a) (((a) && abs((long)(a)) < 500) ? 1 : 0)
+#define IS_ERR(a) ((unsigned long)(a) < 1000)
 #define PTR_ERR(a) ((long)(a))
 #define ERR_PTR(a) ((void*)((long)(a)))
 
 typedef struct {
         void *cwd;
-} mm_segment_t;
+}mm_segment_t;
 
 typedef int (read_proc_t)(char *page, char **start, off_t off,
                           int count, int *eof, void *data);
@@ -206,45 +179,38 @@ typedef int (write_proc_t)(struct file *file, const char *buffer,
 #endif /* __LITTLE_ENDIAN */
 
 /* bits ops */
-static __inline__ int set_bit(int nr,long * addr)
-{
-	int	mask, retval;
 
-	addr += nr >> 5;
-	mask = 1 << (nr & 0x1f);
-	retval = (mask & *addr) != 0;
-	*addr |= mask;
-	return retval;
+/* a long can be more than 32 bits, so use BITS_PER_LONG
+ * to allow the compiler to adjust the bit shifting accordingly
+ */
+
+/* test if bit nr is set in bitmap addr; returns previous value of bit nr */
+static __inline__ int set_bit(int nr, long * addr)
+{
+        long    mask;
+
+        addr += nr / BITS_PER_LONG;
+        mask = 1UL << (nr & (BITS_PER_LONG - 1));
+        nr = (mask & *addr) != 0;
+        *addr |= mask;
+        return nr;
 }
 
+/* clear bit nr in bitmap addr; returns previous value of bit nr*/
 static __inline__ int clear_bit(int nr, long * addr)
 {
-	int	mask, retval;
+        long    mask;
 
-	addr += nr >> 5;
-	mask = 1 << (nr & 0x1f);
-	retval = (mask & *addr) != 0;
-	*addr &= ~mask;
-	return retval;
+        addr += nr / BITS_PER_LONG;
+        mask = 1UL << (nr & (BITS_PER_LONG - 1));
+        nr = (mask & *addr) != 0;
+        *addr &= ~mask;
+        return nr;
 }
 
 static __inline__ int test_bit(int nr, long * addr)
 {
-	int	mask;
-
-	addr += nr >> 5;
-	mask = 1 << (nr & 0x1f);
-	return ((mask & *addr) != 0);
-}
-
-static __inline__ int test_and_set_bit(int nr, long * addr)
-{
-	int	res;
-
-        res = test_bit(nr, addr);
-        set_bit(nr, addr);
-        
-        return res;
+        return ((1UL << (nr & (BITS_PER_LONG - 1))) & ((addr)[nr / BITS_PER_LONG])) != 0;
 }
 
 static __inline__ int ext2_set_bit(int nr, void *addr)
@@ -268,17 +234,16 @@ struct module {
         int count;
 };
 
-#define MODULE_AUTHOR(name)
-#define MODULE_DESCRIPTION(name)
-#define MODULE_LICENSE(name)
-
-#define module_init(init)
-#define module_exit(exit)
+static inline void MODULE_AUTHOR(char *name)
+{
+        printf("%s\n", name);
+}
+#define MODULE_DESCRIPTION(name) MODULE_AUTHOR(name)
+#define MODULE_LICENSE(name) MODULE_AUTHOR(name)
 
 #define THIS_MODULE NULL
 #define __init
 #define __exit
-#define __user
 
 /* devices */
 
@@ -321,6 +286,7 @@ extern int ldlm_init(void);
 extern int osc_init(void);
 extern int lov_init(void);
 extern int mdc_init(void);
+extern int mgc_init(void);
 extern int echo_client_init(void);
 
 
@@ -334,6 +300,7 @@ typedef __u64 kdev_t;
 
 #define SPIN_LOCK_UNLOCKED (spinlock_t) { }
 #define LASSERT_SPIN_LOCKED(lock) do {} while(0)
+#define LASSERT_SEM_LOCKED(sem) do {} while(0)
 
 static inline void spin_lock(spinlock_t *l) {return;}
 static inline void spin_unlock(spinlock_t *l) {return;}
@@ -347,33 +314,24 @@ static inline void spin_unlock_bh(spinlock_t *l) {}
 static inline void spin_lock_irqsave(spinlock_t *a, unsigned long b) {}
 static inline void spin_unlock_irqrestore(spinlock_t *a, unsigned long b) {}
 
-typedef struct { } rwlock_t;
-#define rwlock_init(x) do {} while(0)
-#define RW_LOCK_UNLOCKED (rwlock_t) {}
-#define read_lock(l)
-#define read_unlock(l)
-#define write_lock(l)
-#define write_unlock(l)
-
 #define min(x,y) ((x)<(y) ? (x) : (y))
 #define max(x,y) ((x)>(y) ? (x) : (y))
 
 #ifndef min_t
 #define min_t(type,x,y) \
-	({ type __x = (x); type __y = (y); __x < __y ? __x: __y; })
+        ({ type __x = (x); type __y = (y); __x < __y ? __x: __y; })
 #endif
 #ifndef max_t
 #define max_t(type,x,y) \
-	({ type __x = (x); type __y = (y); __x > __y ? __x: __y; })
+        ({ type __x = (x); type __y = (y); __x > __y ? __x: __y; })
 #endif
 
-#define container_of(ptr, type, member) ({                      \
-        const typeof( ((type *)0)->member ) *__mptr = (ptr);    \
-        (type *)( (char *)__mptr - offsetof(type,member) );})
+#define simple_strtol strtol
 
 /* registering symbols */
-
+#ifndef ERESTARTSYS
 #define ERESTARTSYS ERESTART
+#endif
 #define HZ 1
 
 /* random */
@@ -382,8 +340,8 @@ void get_random_bytes(void *ptr, int size);
 
 /* memory */
 
-/* FIXME */
-#define num_physpages (16 * 1024)
+/* memory size: used for some client tunables */
+#define num_physpages (256 * 1024) /* 1GB */
 
 static inline int copy_from_user(void *a,void *b, int c)
 {
@@ -397,12 +355,6 @@ static inline int copy_to_user(void *a,void *b, int c)
         return 0;
 }
 
-static inline long strncpy_from_user(char *dest, const char *src, long n)
-{
-        char *s;
-        s = strncpy(dest, src, n);
-        return strnlen(s, n);
-}
 
 /* slabs */
 typedef struct {
@@ -431,12 +383,6 @@ static inline int kmem_cache_destroy(kmem_cache_t *a)
         free(a);
         return 0;
 }
-#define kmem_cache_alloc(cache, prio) malloc(cache->size)
-#define kmem_cache_free(cache, obj) free(obj)
-
-#define PAGE_CACHE_SIZE  PAGE_SIZE
-#define PAGE_CACHE_SHIFT PAGE_SHIFT
-#define PAGE_CACHE_MASK  PAGE_MASK
 
 /* struct page decl moved out from here into portals/include/libcfs/user-prim.h */
 
@@ -444,20 +390,19 @@ static inline int kmem_cache_destroy(kmem_cache_t *a)
 #define PAGE_LIST_ENTRY list
 #define PAGE_LIST(page) ((page)->list)
 
-#define page_address(page) ((page)->addr)
 #define kmap(page) (page)->addr
 #define kunmap(a) do {} while (0)
 
-static inline struct page *alloc_pages(int mask, unsigned long order)
+static inline cfs_page_t *alloc_pages(int mask, unsigned long order)
 {
-        struct page *pg = malloc(sizeof(*pg));
+        cfs_page_t *pg = malloc(sizeof(*pg));
 
         if (!pg)
                 return NULL;
 #if 0 //#ifdef MAP_ANONYMOUS
         pg->addr = mmap(0, PAGE_SIZE << order, PROT_WRITE, MAP_PRIVATE|MAP_ANONYMOUS, 0, 0);
 #else
-        pg->addr = malloc(PAGE_SIZE << order);
+        pg->addr = malloc(CFS_PAGE_SIZE << order);
 #endif
 
         if (!pg->addr) {
@@ -469,7 +414,7 @@ static inline struct page *alloc_pages(int mask, unsigned long order)
 
 #define alloc_page(mask) alloc_pages((mask), 0)
 
-static inline void __free_pages(struct page *pg, int what)
+static inline void __free_pages(cfs_page_t *pg, int what)
 {
 #if 0 //#ifdef MAP_ANONYMOUS
         munmap(pg->addr, PAGE_SIZE);
@@ -482,9 +427,9 @@ static inline void __free_pages(struct page *pg, int what)
 #define __free_page(page) __free_pages((page), 0)
 #define free_page(page) __free_page(page)
 
-static inline struct page* __grab_cache_page(unsigned long index)
+static inline cfs_page_t* __grab_cache_page(unsigned long index)
 {
-        struct page *pg = alloc_pages(0, 0);
+        cfs_page_t *pg = alloc_pages(0, 0);
 
         if (pg)
                 pg->index = index;
@@ -517,7 +462,7 @@ static inline struct page* __grab_cache_page(unsigned long index)
 #define ATTR_ATTR_FLAG  0x0400
 #define ATTR_RAW        0x0800  /* file system, not vfs will massage attrs */
 #define ATTR_FROM_OPEN  0x1000  /* called from open path, ie O_TRUNC */
-/* ATTR_CTIME_SET has been defined in lustre_idl.h */
+#define ATTR_CTIME_SET  0x2000
 
 struct iattr {
         unsigned int    ia_valid;
@@ -530,6 +475,7 @@ struct iattr {
         time_t          ia_ctime;
         unsigned int    ia_attr_flags;
 };
+#define ll_iattr_struct iattr
 
 #define IT_OPEN     0x0001
 #define IT_CREAT    0x0002
@@ -540,36 +486,30 @@ struct iattr {
 #define IT_GETXATTR 0x0040
 #define IT_EXEC     0x0080
 #define IT_PIN      0x0100
-#define IT_CHDIR    0x0200
 
 #define IT_FL_LOCKED   0x0001
 #define IT_FL_FOLLOWED 0x0002 /* set by vfs_follow_link */
 
 #define INTENT_MAGIC 0x19620323
 
+struct lustre_intent_data {
+        int       it_disposition;
+        int       it_status;
+        __u64     it_lock_handle;
+        void     *it_data;
+        int       it_lock_mode;
+        int it_int_flags;
+};
 struct lookup_intent {
         int     it_magic;
         void    (*it_op_release)(struct lookup_intent *);
         int     it_op;
         int     it_flags;
         int     it_create_mode;
-	union {
-		void *fs_data; /* FS-specific intent data */
-	} d;
+        union {
+                struct lustre_intent_data lustre;
+        } d;
 };
-
-struct lustre_intent_data {
-        int     it_disposition;
-        int     it_status;
-        __u64   it_lock_handle;
-        void    *it_data;
-        int     it_lock_mode;
-        int     it_int_flags;
-        void    *it_key;
-        int     it_key_size;
-};
-
-#define LUSTRE_IT(it) ((struct lustre_intent_data *)((it)->d.fs_data))
 
 static inline void intent_init(struct lookup_intent *it, int op, int flags)
 {
@@ -598,106 +538,32 @@ struct semaphore {
         int count;
 };
 
-struct crypto_tfm;
-
-struct scatterlist {
-    struct page		*page;
-    unsigned int	offset;
-    __u32		dma_address;
-    unsigned int	length;
-};
-
-struct cipher_tfm {
-        void *cit_iv;
-        unsigned int cit_ivsize;
-        __u32 cit_mode;
-        int (*cit_setkey)(struct crypto_tfm *tfm,
-                          const __u8 *key, unsigned int keylen);
-        int (*cit_encrypt)(struct crypto_tfm *tfm,
-                           struct scatterlist *dst,
-                           struct scatterlist *src,
-                           unsigned int nbytes);
-        int (*cit_encrypt_iv)(struct crypto_tfm *tfm,
-                              struct scatterlist *dst,
-                              struct scatterlist *src,
-                              unsigned int nbytes, __u8 *iv);
-        int (*cit_decrypt)(struct crypto_tfm *tfm,
-                           struct scatterlist *dst,
-                           struct scatterlist *src,
-                           unsigned int nbytes);
-        int (*cit_decrypt_iv)(struct crypto_tfm *tfm,
-                           struct scatterlist *dst,
-                           struct scatterlist *src,
-                           unsigned int nbytes, __u8 *iv);
-        void (*cit_xor_block)(__u8 *dst, const __u8 *src);
-};
-
-struct digest_tfm {
-        void (*dit_init)(struct crypto_tfm *tfm);
-        void (*dit_update)(struct crypto_tfm *tfm,
-                           struct scatterlist *sg, unsigned int nsg);
-        void (*dit_update_kernel)(struct crypto_tfm *tfm,
-                                  const void *data, size_t count);
-        void (*dit_final)(struct crypto_tfm *tfm, __u8 *out);
-        void (*dit_digest)(struct crypto_tfm *tfm, struct scatterlist *sg,
-                           unsigned int nsg, __u8 *out);
-        int (*dit_setkey)(struct crypto_tfm *tfm,
-                          const __u8 *key, unsigned int keylen);
-#ifdef CONFIG_CRYPTO_HMAC
-        void *dit_hmac_block;
-#endif
-};
-
-struct compress_tfm {
-        int (*cot_compress)(struct crypto_tfm *tfm,
-                            const __u8 *src, unsigned int slen,
-                            __u8 *dst, unsigned int *dlen);
-        int (*cot_decompress)(struct crypto_tfm *tfm,
-                              const __u8 *src, unsigned int slen,
-                              __u8 *dst, unsigned int *dlen);
-};
-
-struct crypto_tfm {
-
-        __u32 crt_flags;
-
-        union {
-                struct cipher_tfm cipher;
-                struct digest_tfm digest;
-                struct compress_tfm compress;
-        } crt_u;
-
-        struct crypto_alg *__crt_alg;
-};
-
 /* use the macro's argument to avoid unused warnings */
 #define down(a) do { (void)a; } while (0)
+#define mutex_down(a)   down(a)
 #define up(a) do { (void)a; } while (0)
+#define mutex_up(a)     up(a)
 #define down_read(a) do { (void)a; } while (0)
 #define up_read(a) do { (void)a; } while (0)
 #define down_write(a) do { (void)a; } while (0)
 #define up_write(a) do { (void)a; } while (0)
 #define sema_init(a,b) do { (void)a; } while (0)
 #define init_rwsem(a) do { (void)a; } while (0)
-
 #define DECLARE_MUTEX(name)     \
         struct semaphore name = { 1 }
-
 static inline void init_MUTEX (struct semaphore *sem)
 {
         sema_init(sem, 1);
 }
+static inline void init_MUTEX_LOCKED (struct semaphore *sem)
+{
+        sema_init(sem, 0);
+}
 
-struct rpc_pipe_msg {
-        struct list_head list;
-        void *data;
-        size_t len;
-        size_t copied;
-        int error;
-};
+#define init_mutex(s)   init_MUTEX(s)
 
 typedef struct  {
-        struct list_head task_list;
+        struct list_head sleepers;
 } wait_queue_head_t;
 
 typedef struct  {
@@ -709,28 +575,23 @@ struct signal {
         int signal;
 };
 
-struct fs_struct {
-        int umask;
-};
-
 struct task_struct {
-        struct fs_struct *fs;
         int state;
         struct signal pending;
         char comm[32];
         int pid;
-        uid_t uid;
-        gid_t gid;
         int fsuid;
         int fsgid;
         int max_groups;
         int ngroups;
         gid_t *groups;
         __u32 cap_effective;
-        __u32 pag;
-
-        struct fs_struct __fs;
 };
+
+typedef struct task_struct cfs_task_t;
+#define cfs_current()           current
+#define cfs_curproc_pid()       (current->pid)
+#define cfs_curproc_comm()      (current->comm)
 
 extern struct task_struct *current;
 int in_group_p(gid_t gid);
@@ -745,15 +606,15 @@ static inline int capable(int cap)
 #define set_current_state(foo) do { current->state = foo; } while (0)
 
 #define init_waitqueue_entry(q,p) do { (q)->process = p; } while (0)
-#define add_wait_queue(q,p) do {  list_add(&(q)->task_list, &(p)->sleeping); } while (0)
+#define add_wait_queue(q,p) do {  list_add(&(q)->sleepers, &(p)->sleeping); } while (0)
 #define del_wait_queue(p) do { list_del(&(p)->sleeping); } while (0)
 #define remove_wait_queue(q,p) do { list_del(&(p)->sleeping); } while (0)
 
 #define DECLARE_WAIT_QUEUE_HEAD(HEAD)                           \
         wait_queue_head_t HEAD = {                              \
-                .task_list = LIST_HEAD_INIT(HEAD.task_list)       \
+                .sleepers = LIST_HEAD_INIT(HEAD.sleepers)       \
         }
-#define init_waitqueue_head(l) INIT_LIST_HEAD(&(l)->task_list)
+#define init_waitqueue_head(l) INIT_LIST_HEAD(&(l)->sleepers)
 #define wake_up(l) do { int a; a++; } while (0)
 #define TASK_INTERRUPTIBLE 0
 #define TASK_UNINTERRUPTIBLE 1
@@ -802,16 +663,10 @@ static inline int schedule_timeout(signed long t)
                 _ret = tv.tv_sec;               \
         _ret;                                   \
 })
+#define get_jiffies_64()  (__u64)jiffies
 #define time_after(a, b) ((long)(b) - (long)(a) < 0)
 #define time_before(a, b) time_after(b,a)
-
-static inline unsigned long get_seconds(void)
-{
-        struct timeval tv;
-
-        gettimeofday(&tv, NULL);
-        return (tv.tv_sec + tv.tv_usec / 1000000);
-}
+#define time_after_eq(a,b)      ((long)(a) - (long)(b) >= 0)
 
 struct timer_list {
         struct list_head tl_list;
@@ -822,7 +677,7 @@ struct timer_list {
 
 static inline int timer_pending(struct timer_list *l)
 {
-        if (l->expires > jiffies)
+        if (time_after(l->expires, jiffies))
                 return 1;
         else
                 return 0;
@@ -846,11 +701,10 @@ static inline void del_timer(struct timer_list *l)
 
 typedef struct { volatile int counter; } atomic_t;
 
-#define ATOMIC_INIT(i) { (i) }
 #define atomic_read(a) ((a)->counter)
 #define atomic_set(a,b) do {(a)->counter = b; } while (0)
 #define atomic_dec_and_test(a) ((--((a)->counter)) == 0)
-#define atomic_dec_and_lock(a, l) atomic_dec_and_test(a)
+#define atomic_dec_and_lock(a,b) ((--((a)->counter)) == 0)
 #define atomic_inc(a)  (((a)->counter)++)
 #define atomic_dec(a)  do { (a)->counter--; } while (0)
 #define atomic_add(b,a)  do {(a)->counter += b;} while (0)
@@ -890,18 +744,16 @@ typedef enum {
 cap_t   cap_get_proc(void);
 int     cap_get_flag(cap_t, cap_value_t, cap_flag_t, cap_flag_value_t *);
 
-
-
 /* log related */
 static inline int llog_init_commit_master(void) { return 0; }
 static inline int llog_cleanup_commit_master(int force) { return 0; }
-static inline void portals_run_lbug_upcall(char *file, const char *fn,
+static inline void libcfs_run_lbug_upcall(char *file, const char *fn,
                                            const int l){}
 
 /* completion */
 struct completion {
         unsigned int done;
-        wait_queue_head_t wait;
+        cfs_waitq_t wait;
 };
 
 #define COMPLETION_INITIALIZER(work) \
@@ -928,11 +780,115 @@ void *liblustre_register_wait_callback(int (*fn)(void *arg), void *arg);
 void liblustre_deregister_wait_callback(void *notifier);
 int liblustre_wait_event(int timeout);
 
-#include <linux/obd_support.h>
-#include <linux/lustre_idl.h>
-#include <linux/lustre_lib.h>
-#include <linux/lustre_import.h>
-#include <linux/lustre_export.h>
-#include <linux/lustre_net.h>
+/* flock related */
+struct nfs_lock_info {
+        __u32             state;
+        __u32             flags;
+        void            *host;
+};
+
+typedef struct file_lock {
+        struct file_lock *fl_next;      /* singly linked list for this inode  */
+        struct list_head fl_link;       /* doubly linked list of all locks */
+        struct list_head fl_block;      /* circular list of blocked processes */
+        void *fl_owner;
+        unsigned int fl_pid;
+        cfs_waitq_t fl_wait;
+        struct file *fl_file;
+        unsigned char fl_flags;
+        unsigned char fl_type;
+        loff_t fl_start;
+        loff_t fl_end;
+
+        void (*fl_notify)(struct file_lock *);  /* unblock callback */
+        void (*fl_insert)(struct file_lock *);  /* lock insertion callback */
+        void (*fl_remove)(struct file_lock *);  /* lock removal callback */
+
+        void *fl_fasync; /* for lease break notifications */
+        unsigned long fl_break_time;    /* for nonblocking lease breaks */
+
+        union {
+                struct nfs_lock_info    nfs_fl;       
+        } fl_u;
+} cfs_flock_t;
+
+#define cfs_flock_type(fl)                  ((fl)->fl_type)
+#define cfs_flock_set_type(fl, type)        do { (fl)->fl_type = (type); } while(0)
+#define cfs_flock_pid(fl)                   ((fl)->fl_pid)
+#define cfs_flock_set_pid(fl, pid)          do { (fl)->fl_pid = (pid); } while(0)
+#define cfs_flock_start(fl)                 ((fl)->fl_start)
+#define cfs_flock_set_start(fl, start)      do { (fl)->fl_start = (start); } while(0)
+#define cfs_flock_end(fl)                   ((fl)->fl_end)
+#define cfs_flock_set_end(fl, end)          do { (fl)->fl_end = (end); } while(0)
+
+#ifndef OFFSET_MAX
+#define INT_LIMIT(x)    (~((x)1 << (sizeof(x)*8 - 1)))
+#define OFFSET_MAX      INT_LIMIT(loff_t)
+#endif
+
+/* XXX: defined in kernel */
+#define FL_POSIX        1
+#define FL_SLEEP        128
+
+/* quota */
+#define QUOTA_OK 0
+#define NO_QUOTA 1
+
+/* ACL */
+struct posix_acl_entry {
+        short                   e_tag;
+        unsigned short          e_perm;
+        unsigned int            e_id;
+};
+
+struct posix_acl {
+        atomic_t                a_refcount;
+        unsigned int            a_count;
+        struct posix_acl_entry  a_entries[0];
+};
+
+typedef struct {
+        __u16           e_tag;
+        __u16           e_perm;
+        __u32           e_id;
+} xattr_acl_entry;
+
+typedef struct {
+        __u32           a_version;
+        xattr_acl_entry a_entries[0];
+} xattr_acl_header;
+
+static inline size_t xattr_acl_size(int count)
+{
+        return sizeof(xattr_acl_header) + count * sizeof(xattr_acl_entry);
+}
+
+static inline
+struct posix_acl * posix_acl_from_xattr(const void *value, size_t size)
+{
+        return NULL;
+}
+
+static inline
+int posix_acl_valid(const struct posix_acl *acl)
+{
+        return 0;
+}
+
+static inline
+void posix_acl_release(struct posix_acl *acl)
+{
+}
+
+#ifndef ENOTSUPP
+#define ENOTSUPP ENOTSUP
+#endif
+
+#include <obd_support.h>
+#include <lustre/lustre_idl.h>
+#include <lustre_lib.h>
+#include <lustre_import.h>
+#include <lustre_export.h>
+#include <lustre_net.h>
 
 #endif

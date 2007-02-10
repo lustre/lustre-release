@@ -13,149 +13,25 @@
 #include <sys/socket.h>
 #include <netdb.h>
 #include <string.h>
+#include <sys/wait.h>
 
-char *dir = NULL, *node = NULL, *dir2 = NULL;
+char *dir = NULL, *dir2 = NULL;
 long page_size;
 char mmap_sanity[256];
 
 
 static void usage(void)
 {
-        printf("Usage: mmap_sanity -d dir [-n node | -m dir2]\n");
+        printf("Usage: mmap_sanity -d dir [-m dir2]\n");
         printf("       dir      lustre mount point\n");
-        printf("       node     another client\n");
         printf("       dir2     another mount point\n");
         exit(127);
 }
 
-#define MMAP_NOTIFY_PORT        7676
-static int mmap_notify(char *target, char *str, int delay)
-{
-	unsigned short port = MMAP_NOTIFY_PORT;
-	int socket_type = SOCK_DGRAM;
-	struct sockaddr_in server;
-	struct hostent *hp;
-	int len, sockfd, rc = 0;
-
-        if (target == NULL)
-                return 0;
-
-	sockfd = socket(AF_INET, socket_type, 0);
-	if (sockfd < 0) {
-                perror("socket()");
-		return errno;
-	}
-
-        if ((hp = gethostbyname(target)) == NULL) {
-                perror(target);
-                rc = errno;
-                goto out_close;
-	}
-
-	memset(&server,0,sizeof(server));
-	memcpy(&(server.sin_addr), hp->h_addr, hp->h_length);
-	server.sin_family = AF_INET;
-	server.sin_port = htons(port);
-        
-        len = sizeof(server);
-        if (delay)
-                sleep(delay);
-        
-        rc = sendto(sockfd, str, strlen(str), 0, 
-                    (struct sockaddr *)&server, len);
-        if (rc < 0) {
-                perror("sendto()");
-                rc = errno;
-        } else
-                rc = 0;
-
-out_close:
-        close(sockfd);
-        return rc;
-}
-
-static int mmap_wait(char *str, int timeout)
-{
-	unsigned short port = MMAP_NOTIFY_PORT;
-	int socket_type = SOCK_DGRAM;
-	struct sockaddr_in local, from;
-	char host[256];
-	struct hostent *hp;
-        fd_set rfds;
-        struct timeval tv;
-        int sockfd, rc = 0;
-
-        if (dir2 != NULL)
-                return 0;
-        
-	memset(host, 0, sizeof(host));
-	if (gethostname(host, sizeof(host))) {
-                perror("gethostname()");
-                return errno;
-	}
-        
-	if ((hp = gethostbyname(host)) == NULL) {
-                perror(host);
-                return errno;
-	}
-
-	local.sin_family = AF_INET;
-	memcpy(&(local.sin_addr), hp->h_addr, hp->h_length);
-	local.sin_port = htons(port);
-	
-	sockfd = socket(AF_INET, socket_type, 0);
-	if (sockfd < 0) {
-                perror("socket()");
-		return errno;
-	}
-
-	rc = bind(sockfd, (struct sockaddr *)&local, sizeof(local));
-        if (rc < 0) {
-                perror("bind()");
-                rc = errno;
-                goto out_close;
-	}
-
-        FD_ZERO(&rfds);
-        FD_SET(sockfd, &rfds);
-        tv.tv_sec = timeout ? timeout : 5;
-        tv.tv_usec = 0;
-
-        rc = select(sockfd + 1, &rfds, NULL, NULL, &tv);
-        if (rc) {       /* got data */
-                char buffer[1024];
-                int fromlen =sizeof(from);
-                
-		memset(buffer, 0, sizeof(buffer));
-		rc = recvfrom(sockfd, buffer, sizeof(buffer),
-                              0, (struct sockaddr *)&from,
-                              (socklen_t *)&fromlen);
-                if (rc <= 0) {
-                        perror("recvfrom()");
-                        rc = errno;
-                        goto out_close;
-                }
-                rc = 0;
-
-                if (strncmp(str, buffer, strlen(str)) != 0) {
-                        fprintf(stderr, "expected string mismatch!\n");
-                        rc = EINVAL;
-                }
-        } else {        /* timeout */
-                fprintf(stderr, "timeout!\n");
-                rc = ETIME;
-        }
-
-out_close:
-        close(sockfd);
-        return rc;
-}
-
 static int remote_tst(int tc, char *mnt);
-static int mmap_run(char *host, int tc)
+static int mmap_run(int tc)
 {
         pid_t child;
-        char nodearg[256], command[256];
         int rc = 0;
 
         child = fork();
@@ -167,17 +43,13 @@ static int mmap_run(char *host, int tc)
         if (dir2 != NULL) {
                 rc = remote_tst(tc, dir2);
         } else {
-                sprintf(nodearg, "-w %s", node);
-                sprintf(command, "%s -d %s -n %s -c %d", 
-                        mmap_sanity, dir, host, tc);
-                rc = execlp("pdsh", "pdsh", "-S", nodearg, command, NULL);
-                if (rc)
-                        perror("execlp()");
+                rc = EINVAL;
+                fprintf(stderr, "invalid argument!\n");
         }
         _exit(rc);
 }
 
-static int mmap_initialize(char *myself, int tc)
+static int mmap_initialize(char *myself)
 {
         char buf[1024], *file;
         int fdr, fdw, count, rc = 0;
@@ -187,8 +59,6 @@ static int mmap_initialize(char *myself, int tc)
                 perror("sysconf(_SC_PAGESIZE)");
                 return errno;
         }
-        if (tc)
-                return 0;
 
         /* copy myself to lustre for another client */
         fdr = open(myself, O_RDONLY);
@@ -231,10 +101,8 @@ static int mmap_initialize(char *myself, int tc)
         return rc;
 }
 
-static void mmap_finalize(int tc)
+static void mmap_finalize()
 {
-        if (tc)
-                return;
         unlink(mmap_sanity);
 }
 
@@ -242,7 +110,7 @@ static void mmap_finalize(int tc)
 static int mmap_tst1(char *mnt)
 {
         char *ptr, mmap_file[256];
-        int i, j, region, fd, rc = 0;
+        int region, fd, rc = 0;
 
         region = page_size * 10;
         sprintf(mmap_file, "%s/%s", mnt, "mmap_file1");
@@ -266,13 +134,6 @@ static int mmap_tst1(char *mnt)
                 goto out_close;
         }
         memset(ptr, 'a', region);
-
-        /* mem write then sync */
-        for (i = 0; i < 5; i++) {
-                for (j = 0; j < region; j += page_size)
-                        ptr[j] = i;
-                sync();
-        }
 
         munmap(ptr, region);
 out_close:
@@ -337,10 +198,10 @@ out_close:
         return rc;
 }
 
-/* cocurrent mmap operations on two nodes */
+/* concurrent mmap operations on two nodes */
 static int mmap_tst3(char *mnt)
 {
-        char *ptr, mmap_file[256], host[256];
+        char *ptr, mmap_file[256];
         int region, fd, rc = 0;
 
         region = page_size * 100;
@@ -365,19 +226,11 @@ static int mmap_tst3(char *mnt)
                 goto out_close;
         }
 
-        if (gethostname(host, sizeof(host))) {
-                perror("gethostname()");
-                rc = errno;
-                goto out_unmap;
-	}
-        
-        rc = mmap_run(host, 3);
+        rc = mmap_run(3);
         if (rc)
                 goto out_unmap;
         
-        rc = mmap_wait("mmap done", 10);
         memset(ptr, 'a', region);
-
         sleep(2);       /* wait for remote test finish */
 out_unmap:
         munmap(ptr, region);
@@ -408,14 +261,8 @@ static int remote_tst3(char *mnt)
                 goto out_close;
         }
         memset(ptr, 'b', region);
-
-        rc = mmap_notify(node, "mmap done", 1);
-        if (rc)
-                goto out_unmap;
-        
         memset(ptr, 'c', region);
         
-out_unmap:
         munmap(ptr, region);
 out_close:
         close(fd);
@@ -426,7 +273,7 @@ out_close:
  * client2 write to file_4b from mmap()ed file_4a. */
 static int mmap_tst4(char *mnt)
 {
-        char *ptr, filea[256], fileb[256], host[256];
+        char *ptr, filea[256], fileb[256];
         int region, fdr, fdw, rc = 0;
 
         region = page_size * 100;
@@ -464,17 +311,7 @@ static int mmap_tst4(char *mnt)
                 goto out_close;
         }
 
-        if (gethostname(host, sizeof(host))) {
-                perror("gethostname()");
-                rc = errno;
-                goto out_unmap;
-	}
-        
-        rc = mmap_run(host, 4);
-        if (rc)
-                goto out_unmap;
-        
-        rc = mmap_wait("mmap done", 10);
+        rc = mmap_run(4);
         if (rc)
                 goto out_unmap;
         
@@ -529,10 +366,6 @@ static int remote_tst4(char *mnt)
                 goto out_close;
         }
 
-        rc = mmap_notify(node, "mmap done", 1);
-        if (rc)
-                goto out_unmap;
-
         memset(ptr, '2', region);
 
         rc = write(fdw, ptr, region);
@@ -542,13 +375,194 @@ static int remote_tst4(char *mnt)
         } else
                 rc = 0;
      
-out_unmap:
         munmap(ptr, region);
 out_close:
         if (fdr >= 0)
                 close(fdr);
         if (fdw >= 0)
                 close(fdw);
+        return rc;
+}
+
+static int cancel_lru_locks(char *prefix)
+{
+        char cmd[256], line[1024];
+        FILE *file;
+        pid_t child;
+        int len = 1024, rc = 0;
+
+        child = fork();
+        if (child < 0)
+                return errno;
+        else if (child) {
+                int status;
+                rc = waitpid(child, &status, WNOHANG);
+                if (rc == child)
+                        rc = 0;
+                return rc;
+        }
+
+        if (prefix)
+                sprintf(cmd, "ls /proc/fs/lustre/ldlm/namespaces/*/lru_size | grep -i %s", prefix);
+        else
+                sprintf(cmd, "ls /proc/fs/lustre/ldlm/namespaces/*/lru_size");
+
+        file = popen(cmd, "r");
+        if (file == NULL) {
+                perror("popen()");
+                return errno;
+        }
+
+        while (fgets(line, len, file)) {
+                FILE *f;
+
+                if (!strlen(line))
+                        continue;
+                /* trim newline character */
+                *(line + strlen(line) - 1) = '\0';
+                f = fopen(line, "w");
+                if (f == NULL) {
+                        perror("fopen()");
+                        rc = errno;
+                        break;
+                }
+                rc = fwrite("clear", strlen("clear") + 1, 1, f);
+                if (rc < 1) {
+                        perror("fwrite()");
+                        rc = errno;
+                        fclose(f);
+                        break;
+                }
+                fclose(f);
+        }
+
+        pclose(file);
+        _exit(rc);
+}
+
+/* don't dead lock while read/write file to/from the buffer which
+ * mmaped to just this file */
+static int mmap_tst5(char *mnt)
+{
+        char *ptr, mmap_file[256];
+        int region, fd, off, rc = 0;
+
+        region = page_size * 40;
+        off = page_size * 10;
+        sprintf(mmap_file, "%s/%s", mnt, "mmap_file5");
+
+        if (unlink(mmap_file) && errno != ENOENT) {
+                perror("unlink()");
+                return errno;
+        }
+
+        fd = open(mmap_file, O_CREAT|O_RDWR, 0600);
+        if (fd < 0) {
+                perror(mmap_file);
+                return errno;
+        }
+        ftruncate(fd, region);
+
+        ptr = mmap(NULL, region, PROT_READ|PROT_WRITE, MAP_SHARED, fd, 0);
+        if (ptr == MAP_FAILED) {
+                perror("mmap()");
+                rc = errno;
+                goto out_close;
+        }
+        memset(ptr, 'a', region);
+
+        /* cancel unused locks */
+        rc = cancel_lru_locks("osc");
+        if (rc)
+                goto out_unmap;
+
+        /* read/write region of file and buffer should be overlap */
+        rc = read(fd, ptr + off, off * 2);
+        if (rc != off * 2) {
+                perror("read()");
+                rc = errno;
+                goto out_unmap;
+        }
+        rc = write(fd, ptr + off, off * 2);
+        if (rc != off * 2) {
+                perror("write()");
+                rc = errno;
+        }
+        rc = 0;
+out_unmap:
+        munmap(ptr, region);
+out_close:
+        close(fd);
+        unlink(mmap_file);
+        return rc;
+}
+
+/* mmap write to a file form client1 then mmap read from client2 */
+static int mmap_tst6(char *mnt)
+{
+        char mmap_file[256], mmap_file2[256];
+        char *ptr = NULL, *ptr2 = NULL;
+        int fd = 0, fd2 = 0, rc = 0;
+
+        sprintf(mmap_file, "%s/%s", mnt, "mmap_file6");
+        sprintf(mmap_file2, "%s/%s", dir2, "mmap_file6");
+        if (unlink(mmap_file) && errno != ENOENT) {
+                perror("unlink()");
+                return errno;
+        }
+
+        fd = open(mmap_file, O_CREAT|O_RDWR, 0600);
+        if (fd < 0) {
+                perror(mmap_file);
+                return errno;
+        }
+        ftruncate(fd, page_size);
+
+        fd2 = open(mmap_file2, O_RDWR, 0600);
+        if (fd2 < 0) {
+                perror(mmap_file2);
+                goto out;
+        }
+
+        ptr = mmap(NULL, page_size, PROT_READ|PROT_WRITE, MAP_SHARED, fd, 0);
+        if (ptr == MAP_FAILED) {
+                perror("mmap()");
+                rc = errno;
+                goto out;
+        }
+        
+        ptr2 = mmap(NULL, page_size, PROT_READ|PROT_WRITE, MAP_SHARED, fd2, 0);
+        if (ptr2 == MAP_FAILED) {
+                perror("mmap()");
+                rc = errno;
+                goto out;
+        }
+
+        rc = cancel_lru_locks("osc");
+        if (rc)
+                goto out;
+
+        memcpy(ptr, "blah", strlen("blah"));
+        if (strncmp(ptr, ptr2, strlen("blah"))) {
+                fprintf(stderr, "client2 mmap mismatch!\n");
+                rc = EFAULT;
+                goto out;
+        }
+        memcpy(ptr2, "foo", strlen("foo"));
+        if (strncmp(ptr, ptr2, strlen("foo"))) {
+                fprintf(stderr, "client1 mmap mismatch!\n");
+                rc = EFAULT;
+        }
+out:
+        if (ptr2)
+                munmap(ptr2, page_size);
+        if (ptr)
+                munmap(ptr, page_size);
+        if (fd2 > 0)
+                close(fd2);
+        if (fd > 0)
+                close(fd);
+        unlink(mmap_file);
         return rc;
 }
 
@@ -562,8 +576,6 @@ static int remote_tst(int tc, char *mnt)
         case 4:
                 rc = remote_tst4(mnt);
                 break;
-        case 1:
-        case 2:
         default:
                 fprintf(stderr, "wrong test case number %d\n", tc);
                 rc = EINVAL;
@@ -582,9 +594,13 @@ struct test_case {
 struct test_case tests[] = {
         { 1, "mmap test1: basic mmap operation", mmap_tst1, 1 },
         { 2, "mmap test2: MAP_PRIVATE not write back", mmap_tst2, 1 },
-        { 3, "mmap test3: cocurrent mmap ops on two nodes", mmap_tst3, 2 },
-        { 4, "mmap test4: c1 write to f1 from mmaped f2, " 
-             "c2 write to f1 from mmaped f1", mmap_tst4, 2 },
+        { 3, "mmap test3: concurrent mmap ops on two nodes", mmap_tst3, 2 },
+        { 4, "mmap test4: c1 write to f1 from mmapped f2, " 
+             "c2 write to f1 from mmapped f1", mmap_tst4, 2 },
+        { 5, "mmap test5: read/write file to/from the buffer "
+             "which mmapped to just this file", mmap_tst5, 1 },
+        { 6, "mmap test6: check mmap write/read content on two nodes", 
+                mmap_tst6, 2 },
         { 0, NULL, 0, 0 }
 };
 
@@ -592,22 +608,16 @@ int main(int argc, char **argv)
 {
         extern char *optarg;
         struct test_case *test;
-        int c, rc = 0, tc = 0;
+        int c, rc = 0;
 
         for(;;) {
-                c = getopt(argc, argv, "d:n:c:m:");
+                c = getopt(argc, argv, "d:m:");
                 if ( c == -1 )
                         break;
 
                 switch(c) {
                         case 'd':
                                 dir = optarg;
-                                break;
-                        case 'n':
-                                node = optarg;
-                                break;
-                        case 'c':
-                                tc = atoi(optarg);
                                 break;
                         case 'm':
                                 dir2 = optarg;
@@ -621,23 +631,16 @@ int main(int argc, char **argv)
 
         if (dir == NULL)
                 usage();
-        if (dir2 != NULL && node != NULL)
-                usage();
 
-        if (mmap_initialize(argv[0], tc) != 0) {
+        if (mmap_initialize(argv[0]) != 0) {
                 fprintf(stderr, "mmap_initialize failed!\n");
                 return EINVAL;
         }
 
-        if (tc) {
-                rc = remote_tst(tc, dir);
-                goto out;
-        }
-        
         for (test = tests; test->tc; test++) {
                 char *rs = "skip";
                 rc = 0;
-                if (test->node_cnt == 1 || node != NULL || dir2 != NULL) {
+                if (test->node_cnt == 1 || dir2 != NULL) {
                         rc = test->test_fn(dir);
                         rs = rc ? "fail" : "pass";
                 }
@@ -645,7 +648,7 @@ int main(int argc, char **argv)
                 if (rc)
                         break;
         }
-out:
-        mmap_finalize(tc);
+
+        mmap_finalize();
         return rc;
 }

@@ -3,7 +3,7 @@ Index: linux-stage/include/linux/ext3_fs.h
 --- linux-stage.orig/include/linux/ext3_fs.h	2004-04-02 16:43:37.000000000 -0500
 +++ linux-stage/include/linux/ext3_fs.h	2004-04-02 16:43:37.000000000 -0500
 @@ -331,12 +331,13 @@
- #define EXT3_MOUNT_IOPEN_NOPRIV	       0x20000  /* Make iopen world-readable */
+ #define EXT3_MOUNT_IOPEN_NOPRIV		0x100000/* Make iopen world-readable */
  
  /* Compatibility, for having both ext2_fs.h and ext3_fs.h included at once */
 -#ifndef _LINUX_EXT2_FS_H

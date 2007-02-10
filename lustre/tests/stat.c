@@ -85,6 +85,7 @@ void print_human_fstype(struct statfs *statfsbuf)
 	  break;
 	case S_MAGIC_MINIX:
 	  type = strdup("minix");
+          break;
 	case S_MAGIC_MINIX_30:
 	  type = strdup("minix (30 char.)");
 	  break;

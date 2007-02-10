@@ -267,53 +267,6 @@ host>]\SpecialChar ~
 [ks] Remove a peer entry.
 \layout Description
 
-autoconn_list Print autoconnect entries.
-\layout Description
-
-add_autoconn\SpecialChar ~
-
-\series bold 
-nid
-\series default 
-\SpecialChar ~
-
-\series bold 
-ipaddr
-\series default 
-\SpecialChar ~
-
-\series bold 
-port
-\series default 
-\SpecialChar ~
-
-\series bold 
-[ise]
-\series default 
- Add an autoconnect entry.
-\layout Description
-
-del_autoconn\SpecialChar ~
-
-\series bold 
-[<nid>]
-\series default 
-\SpecialChar ~
-
-\series bold 
-[<host>]
-\series default 
-\SpecialChar ~
-
-\series bold 
-[ks]
-\series default 
- Remove an autoconnect entry.
-\layout Description
-
-conn_list Print all the connected remote nid.
-\layout Description
-
 connect\SpecialChar ~
 <hostname>\SpecialChar ~
 <port>\SpecialChar ~
@@ -782,7 +735,7 @@ file\SpecialChar ~
 
 debug_kernel\SpecialChar ~
 [file]\SpecialChar ~
-[raw] Get debug buffer and dump to a 
+[raw] Get Lustre debug buffer from kernel and dump to a
 \emph on 
 file
 \emph default 
@@ -795,7 +748,7 @@ dk The same as debug_kernel.
 debug_file\SpecialChar ~
 <input>\SpecialChar ~
 [output]\SpecialChar ~
-[raw] Read debug buffer from input and dump to
+Convert kernel-dumped debug log from binary to plain text format.
  
 \emph on 
 output
@@ -957,7 +910,7 @@ setup
 
 
 \size small 
-lctl > setup /dev/loop0 extN
+lctl > setup /dev/loop0 ldiskfs
 \newline 
 lctl > quit
 \size default 

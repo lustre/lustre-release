@@ -22,53 +22,45 @@
  */
 
 #include <liblustre.h>
-#include <linux/obd.h>
-#include <linux/obd_class.h>
+#include <obd.h>
+#include <obd_class.h>
+#include <obd_ost.h>
 
 #define LIBLUSTRE_TEST 1
 #include "../utils/lctl.c"
 
 #include "../lutil.h"
 
-extern int class_handle_ioctl(unsigned int cmd, unsigned long arg);
 
-struct pingcli_args {
-        ptl_nid_t mynid;
-        ptl_nid_t nid;
-	ptl_pid_t port;
-        int count;
-        int size;
-};
-
-/*      bug #4615       */
-#if 0
-char *portals_id2str(int nal, ptl_process_id_t id, char *str)
+#ifdef CRAY_XT3
+int _sysio_lustre_init(void)
 {
-        switch(nal){
-        case TCPNAL:
-                /* userspace NAL */
-        case IIBNAL:
-        case VIBNAL:
-        case OPENIBNAL:
-        case RANAL:
-        case SOCKNAL:
-                snprintf(str, PTL_NALFMT_SIZE - 1, "%u:%u.%u.%u.%u,%u",
-                         (__u32)(id.nid >> 32), HIPQUAD((id.nid)) , id.pid);
-                break;
-        case QSWNAL:
-        case GMNAL:
-        case LONAL:
-                snprintf(str, PTL_NALFMT_SIZE - 1, "%u:%u,%u",
-                         (__u32)(id.nid >> 32), (__u32)id.nid, id.pid);
-                break;
-        default:
-                snprintf(str, PTL_NALFMT_SIZE - 1, "?%d? %llx,%lx",
-                         nal, (long long)id.nid, (long)id.pid );
-                break;
-        }
-        return str;
+        /*
+         * This is an aweful HACK.  Basically the problem is on
+         * Catamount, the build system links in liblustre.a to
+         * all the test executables, and at this point its not
+         * clear how to modify the build system to prevent this
+         * from happening.  So providing our own call to 
+         * _sysio_lustre_init() that does nothing, prevents
+         * liblustre.a from initializing.
+         *
+         * Why is liblustre.a initializing a problem anyway.  Well
+         * this main() in this module calls init_obdclass(), as 
+         * well as the llite_lib.c's _sysio_lustre_init().  Two
+         * calls to init_obdclass() cause an assertion.  Secondly
+         * it doesn't even logically make sense, this is module
+         * does not need lustre file system functionality, it's 
+         * just the echo_tester.
+         * 
+         */
+        /*lprintf("--> THIS OVERRIDES liblustre.a INITIALIZATION <--\n");*/
+        return 0;
 }
 #endif
+
+
+
+extern int class_handle_ioctl(unsigned int cmd, unsigned long arg);
 
 static int liblustre_ioctl(int dev_id, unsigned int opc, void *ptr)
 {
@@ -95,13 +87,13 @@ static char *echo_dev_name = "ECHO_CLIENT_DEV_NAME";
 
 static int connect_echo_client(void)
 {
-        struct lustre_cfg *lcfg;
+	struct lustre_cfg *lcfg;
         struct lustre_cfg_bufs bufs;
-	ptl_nid_t nid;
+        lnet_nid_t nid;
 	char *peer = "ECHO_PEER_NID";
 	class_uuid_t osc_uuid, echo_uuid;
 	struct obd_uuid osc_uuid_str, echo_uuid_str;
-	int nal, err;
+	int err;
 	ENTRY;
 
         generate_random_uuid(osc_uuid);
@@ -109,38 +101,37 @@ static int connect_echo_client(void)
         generate_random_uuid(echo_uuid);
         class_uuid_unparse(echo_uuid, &echo_uuid_str);
 
-        if (ptl_parse_nid(&nid, echo_server_nid)) {
+        nid = libcfs_str2nid(echo_server_nid);
+        if (nid == LNET_NID_ANY) {
                 CERROR("Can't parse NID %s\n", echo_server_nid);
                 RETURN(-EINVAL);
         }
-        nal = ptl_name2nal("tcp");
-        if (nal <= 0) {
-                CERROR("Can't parse NAL tcp\n");
-                RETURN(-EINVAL);
-        }
+
         /* add uuid */
         lustre_cfg_bufs_reset(&bufs, NULL);
         lustre_cfg_bufs_set_string(&bufs, 1, peer);
         lcfg = lustre_cfg_new(LCFG_ADD_UUID, &bufs);
         lcfg->lcfg_nid = nid;
-        lcfg->lcfg_nal = nal;
         err = class_process_config(lcfg);
         lustre_cfg_free(lcfg);
         if (err < 0) {
-                CERROR("failed add_uuid\n");
+		CERROR("failed add_uuid\n");
                 RETURN(-EINVAL);
-        }
-        lustre_cfg_bufs_reset(&bufs, LUSTRE_OSC_NAME);
+	}
+
+        /* attach osc */
+        lustre_cfg_bufs_reset(&bufs, osc_dev_name);
+        lustre_cfg_bufs_set_string(&bufs, 1, LUSTRE_OSC_NAME);
         lustre_cfg_bufs_set_string(&bufs, 2, osc_uuid_str.uuid);
         lcfg = lustre_cfg_new(LCFG_ATTACH, &bufs);
         err = class_process_config(lcfg);
         lustre_cfg_free(lcfg);
         if (err < 0) {
-                CERROR("failed attach osc\n");
+		CERROR("failed attach osc\n");
                 RETURN(-EINVAL);
-        }
+	}
 
-        /* setup osc */
+	/* setup osc */
         lustre_cfg_bufs_reset(&bufs, osc_dev_name);
         lustre_cfg_bufs_set_string(&bufs, 1, echo_server_ostname);
         lustre_cfg_bufs_set_string(&bufs, 2, peer);
@@ -148,11 +139,11 @@ static int connect_echo_client(void)
         err = class_process_config(lcfg);
         lustre_cfg_free(lcfg);
         if (err < 0) {
-                CERROR("failed setup osc\n");
+		CERROR("failed setup osc\n");
                 RETURN(-EINVAL);
-        }
+	}
 
-        /* attach echo_client */
+	/* attach echo_client */
         lustre_cfg_bufs_reset(&bufs, echo_dev_name);
         lustre_cfg_bufs_set_string(&bufs, 1, "echo_client");
         lustre_cfg_bufs_set_string(&bufs, 2, echo_uuid_str.uuid);
@@ -160,11 +151,11 @@ static int connect_echo_client(void)
         err = class_process_config(lcfg);
         lustre_cfg_free(lcfg);
         if (err < 0) {
-                CERROR("failed attach echo_client\n");
+		CERROR("failed attach echo_client\n");
                 RETURN(-EINVAL);
-        }
+	}
 
-        /* setup echo_client */
+	/* setup echo_client */
         lustre_cfg_bufs_reset(&bufs, echo_dev_name);
         lustre_cfg_bufs_set_string(&bufs, 1, osc_dev_name);
         lustre_cfg_bufs_set_string(&bufs, 2, NULL);
@@ -172,65 +163,68 @@ static int connect_echo_client(void)
         err = class_process_config(lcfg);
         lustre_cfg_free(lcfg);
         if (err < 0) {
-                CERROR("failed setup echo_client\n");
+		CERROR("failed setup echo_client\n");
                 RETURN(-EINVAL);
-        }
+	}
 
-        RETURN(0);
+	RETURN(0);
 }
 
 static int disconnect_echo_client(void)
 {
-	struct lustre_cfg lcfg;
+	struct lustre_cfg_bufs bufs;
+        struct lustre_cfg *lcfg = NULL;
 	int err;
 	ENTRY;
 
-        /* cleanup echo_client */
+	/* cleanup echo_client */
         lustre_cfg_bufs_reset(&bufs, echo_dev_name);
         lcfg = lustre_cfg_new(LCFG_CLEANUP, &bufs);
         err = class_process_config(lcfg);
         if (err < 0) {
                 lustre_cfg_free(lcfg);
-                CERROR("failed cleanup echo_client\n");
+		CERROR("failed cleanup echo_client\n");
                 RETURN(-EINVAL);
-        }
+	}
 
-        /* detach echo_client */
+	/* detach echo_client */
         lcfg->lcfg_command = LCFG_DETACH;
         err = class_process_config(lcfg);
         lustre_cfg_free(lcfg);
         if (err < 0) {
-                CERROR("failed detach echo_client\n");
+		CERROR("failed detach echo_client\n");
                 RETURN(-EINVAL);
-        }
+	}
 
-        /* cleanup osc */
+	/* cleanup osc */
         lustre_cfg_bufs_reset(&bufs, osc_dev_name);
         lcfg = lustre_cfg_new(LCFG_CLEANUP, &bufs);
         err = class_process_config(lcfg);
         if (err < 0) {
                 lustre_cfg_free(lcfg);
-                CERROR("failed cleanup osc device\n");
+		CERROR("failed cleanup osc device\n");
                 RETURN(-EINVAL);
-        }
+	}
 
-        /* detach osc */
+	/* detach osc */
         lcfg->lcfg_command = LCFG_DETACH;
         err = class_process_config(lcfg);
         lustre_cfg_free(lcfg);
         if (err < 0) {
-                CERROR("failed detach osc device\n");
+		CERROR("failed detach osc device\n");
                 RETURN(-EINVAL);
-        }
+	}
 
-        RETURN(0);
+	RETURN(0);
 }
 
 static void usage(const char *s)
 {
-	printf("Usage: %s -s ost_host_name [-n ost_name]\n", s);
+	printf("Usage: %s -s ost_host_name [-n ost_name] [-x lctl_options ...]\n", s);
 	printf("    ost_host_name: the host name of echo server\n");
 	printf("    ost_name: ost name, default is \"obd1\"\n");
+        printf("    lctl_options: options to pass to lctl.\n");
+        printf("            (e.g. -x --device 1 test_getattr 10000 -5)\n");
 }
 
 extern int time_ptlwait1;
@@ -240,8 +234,13 @@ extern int time_ptlselect;
 int main(int argc, char **argv) 
 {
 	int c, rc;
+	int xindex  = -1;  /* index of -x option */
 
-	while ((c = getopt(argc, argv, "s:n:")) != -1) {
+        /* loop until all options are consumed or we hit
+         * a -x option 
+         */
+	while ((c = getopt(argc, argv, "s:n:x:")) != -1 && 
+               xindex == -1) {
 		switch (c) {
 		case 's':
 			echo_server_nid = optarg;
@@ -249,13 +248,20 @@ int main(int argc, char **argv)
 		case 'n':
 			echo_server_ostname = optarg;
 			break;
+		case 'x':
+			xindex = optind-1;
+			break;
 		default:
 			usage(argv[0]);
 			return 1;
 		}
 	}
 
-        if (optind != argc)
+        /*
+         * Only warn with usage() if the -x option isn't specificed
+         * because when using -x this check is not valid.
+         */
+        if (optind != argc && xindex == -1)
                 usage(argv[0]);
 
 	if (!echo_server_nid) {
@@ -263,13 +269,12 @@ int main(int argc, char **argv)
 		return 1;
 	}
 
-	portal_debug = 0;
-	portal_subsystem_debug = 0;
+        libcfs_debug = 0;
+        libcfs_subsystem_debug = 0;
 
         liblustre_init_random();
-        liblustre_set_nal_nid();
 
-        if (liblustre_init_current(argv[0]) ||
+	if (liblustre_init_current(argv[0]) ||
 	    init_obdclass() || init_lib_portals() ||
 	    ptlrpc_init() ||
 	    mdc_init() ||
@@ -286,7 +291,21 @@ int main(int argc, char **argv)
 
 	set_ioc_handler(liblustre_ioctl);
 
-	rc = lctl_main(1, &argv[0]);
+
+        /*
+         * If the -x option is not specified pass no args to lctl
+         * otherwise pass all the options after the "-x" to lctl
+         *
+         * HACK: in the case when the -x option is specified
+         * lctl sees argv[0] == "-x" and not the real argv[0] seen
+         * in this function.  If that is a problem, a mapping will
+         * have to be done to fix that.  However for normal functioning
+         * it seems to be irrelavant
+         */
+	if( xindex == -1 )
+		rc = lctl_main(1, &argv[0]);
+	else
+		rc = lctl_main(argc-xindex+1, &argv[xindex-1]);
 
 	rc |= disconnect_echo_client();
 

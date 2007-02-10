@@ -1,22 +1,15 @@
-@LDISKFS_TRUE@subdir-m  += ldiskfs
+@LDISKFS_TRUE@subdir-m += ldiskfs
 
 subdir-m += lvfs
 subdir-m += obdclass
-subdir-m += sec
 subdir-m += lov
-subdir-m += lmv
 subdir-m += ptlrpc
-subdir-m += obdecho
 subdir-m += osc
-subdir-m += cobd
-subdir-m += cmobd 
+subdir-m += obdecho
+subdir-m += mgc
 
-@SERVER_TRUE@subdir-m += smfs mds obdfilter ost
-@CLIENT_TRUE@subdir-m += mdc llite
-
-ifeq ($(PATCHLEVEL),4)
-subdir-m += ptlbd
-endif # PATCHLEVEL = 4
-
+@SERVER_TRUE@subdir-m += mds obdfilter ost mgs
+@CLIENT_TRUE@subdir-m += mdc llite 
+@QUOTA_TRUE@subdir-m += quota
 
 @INCLUDE_RULES@

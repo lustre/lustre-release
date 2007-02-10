@@ -76,7 +76,7 @@ for CMD in test_getattr test_brw_write test_brw_read; do
 	runthreads 1 $CMD 1 1 $PG
 	runthreads 1 $CMD 100 1 $PG
 
-	echo 0 > /proc/sys/portals/debug
+	echo 0 > /proc/sys/lnet/debug
 	runthreads 1 $CMD $COUNT_100 -10 $PG
 	[ "$PGV" ] && runthreads 1 $CMD $COUNT_1000 -10 $PGV
 

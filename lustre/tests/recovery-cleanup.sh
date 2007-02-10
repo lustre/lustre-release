@@ -59,8 +59,8 @@ make_config() {
         --stripe_cnt 0 --stripe_pattern 0 || exit 6
     lmc -m $CONFIG --add ost --nspath /mnt/ost_ns --node $OSTNODE \
         --lov lov1 --dev $OSTDEV --size $OSTSIZE --fstype $FSTYPE || exit 7
-    lmc -m $CONFIG --add mtpt --node $CLIENT --path $MOUNTPT --clientoptions async --mds mds1 \
-        --lov lov1 || exit 8
+    lmc -m $CONFIG --add mtpt --node $CLIENT --path $MOUNTPT \
+        --mds mds1 --lov lov1 || exit 8
 }
 
 start_mds() {
@@ -109,7 +109,7 @@ wait_for_timeout() {
 
 try_to_cleanup() {
     kill -INT $!
-    unmount_client --force --dump /tmp/client-cleanup-`date +%s`.log
+    unmount_client --force --dump $TMP/recovery-cleanup-`hostname`.log
     mount_client --timeout=${TIMEOUT:-5} --lustre_upcall=/bin/true
 }
 
@@ -129,11 +129,11 @@ try_to_cleanup
 drop_request "statone /mnt/lustre/2" & wait_for_timeout
 try_to_cleanup
 
-do_client "cp /etc/resolv.conf /mnt/lustre/resolv.conf"
-drop_request "cat /mnt/lustre/resolv.conf > /dev/null" & wait_for_timeout
+do_client "cp /etc/inittab /mnt/lustre/inittab"
+drop_request "cat /mnt/lustre/inittab > /dev/null" & wait_for_timeout
 try_to_cleanup
 
-drop_request "mv /mnt/lustre/resolv.conf /mnt/lustre/renamed" & wait_for_timeout
+drop_request "mv /mnt/lustre/inittab /mnt/lustre/renamed" & wait_for_timeout
 try_to_cleanup
 
 drop_request "mlink /mnt/lustre/renamed-again /mnt/lustre/link1" & wait_for_timeout
@@ -142,4 +142,4 @@ try_to_cleanup
 drop_request "munlink /mnt/lustre/link1" & wait_for_timeout
 try_to_cleanup
 
-$CLEANUP '--dump /tmp/`hostname`-cleanup.log'
+FORCE=--force $CLEANUP '--dump $TMP/recovery-cleanup-`hostname`.log'

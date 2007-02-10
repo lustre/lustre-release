@@ -1,0 +1,4 @@
+MODULES := mgc
+mgc-objs := mgc_request.o
+
+@INCLUDE_RULES@

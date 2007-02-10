@@ -5,97 +5,85 @@
  *   Author: Peter Braam <braam@clusterfs.com>
  *   Author: Andreas Dilger <adilger@clusterfs.com>
  *
- *   This file is part of Lustre, http://www.lustre.org.
+ *   This file is part of the Lustre file system, http://www.lustre.org
+ *   Lustre is a trademark of Cluster File Systems, Inc.
  *
- *   Lustre is free software; you can redistribute it and/or
- *   modify it under the terms of version 2 of the GNU General Public
- *   License as published by the Free Software Foundation.
+ *   You may have signed or agreed to another license before downloading
+ *   this software.  If so, you are bound by the terms and conditions
+ *   of that agreement, and the following does not apply to you.  See the
+ *   LICENSE file included with this distribution for more information.
  *
- *   Lustre is distributed in the hope that it will be useful,
- *   but WITHOUT ANY WARRANTY; without even the implied warranty of
- *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *   GNU General Public License for more details.
+ *   If you did not agree to a different license, then this copy of Lustre
+ *   is open source software; you can redistribute it and/or modify it
+ *   under the terms of version 2 of the GNU General Public License as
+ *   published by the Free Software Foundation.
  *
- *   You should have received a copy of the GNU General Public License
- *   along with Lustre; if not, write to the Free Software
- *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ *   In either case, Lustre is distributed in the hope that it will be
+ *   useful, but WITHOUT ANY WARRANTY; without even the implied warranty
+ *   of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *   license text for more details.
  */
 
 #ifndef EXPORT_SYMTAB
 # define EXPORT_SYMTAB
 #endif
 
-#include <linux/version.h>
-#include <linux/module.h>
-#include <linux/mm.h>
-#include <linux/highmem.h>
-#include <linux/fs.h>
-#include <linux/stat.h>
-#include <linux/sched.h>
-#include <linux/smp_lock.h>
-#include <linux/proc_fs.h>
-#include <linux/init.h>
-#include <asm/unistd.h>
-
 #define DEBUG_SUBSYSTEM S_ECHO
 
-#include <linux/obd_support.h>
-#include <linux/obd_class.h>
-#include <linux/obd_echo.h>
-#include <linux/lustre_debug.h>
-#include <linux/lustre_dlm.h>
-#include <linux/lprocfs_status.h>
+#include <obd_support.h>
+#include <obd_class.h>
+#include <obd_echo.h>
+#include <lustre_debug.h>
+#include <lustre_dlm.h>
+#include <lprocfs_status.h>
 
 #define ECHO_INIT_OBJID      0x1000000000000000ULL
 #define ECHO_HANDLE_MAGIC    0xabcd0123fedc9876ULL
 
-#define ECHO_PERSISTENT_PAGES (ECHO_PERSISTENT_SIZE/PAGE_SIZE)
-static struct page *echo_persistent_pages[ECHO_PERSISTENT_PAGES];
+#define ECHO_PERSISTENT_PAGES (ECHO_PERSISTENT_SIZE >> CFS_PAGE_SHIFT)
+static cfs_page_t *echo_persistent_pages[ECHO_PERSISTENT_PAGES];
 
 enum {
         LPROC_ECHO_READ_BYTES = 1,
         LPROC_ECHO_WRITE_BYTES = 2,
-        LPROC_ECHO_LAST
+        LPROC_ECHO_LAST = LPROC_ECHO_WRITE_BYTES +1
 };
 
 static int echo_connect(struct lustre_handle *conn, struct obd_device *obd,
-                        struct obd_uuid *cluuid, struct obd_connect_data *data,
-                        unsigned long connect_flags)
+                        struct obd_uuid *cluuid, struct obd_connect_data *data)
 {
+        data->ocd_connect_flags &= ECHO_CONNECT_SUPPORTED;
         return class_connect(conn, obd, cluuid);
 }
 
-static int echo_disconnect(struct obd_export *exp, unsigned long flags)
+static int echo_disconnect(struct obd_export *exp)
 {
-        unsigned long irqflags;
-
         LASSERT (exp != NULL);
 
         ldlm_cancel_locks_for_export(exp);
 
-        spin_lock_irqsave(&exp->exp_lock, irqflags);
-        exp->exp_flags = flags;
         /* complete all outstanding replies */
+        spin_lock(&exp->exp_lock);
         while (!list_empty(&exp->exp_outstanding_replies)) {
                 struct ptlrpc_reply_state *rs =
                         list_entry(exp->exp_outstanding_replies.next,
                                    struct ptlrpc_reply_state, rs_exp_list);
-                struct ptlrpc_service *svc = rs->rs_srv_ni->sni_service;
+                struct ptlrpc_service *svc = rs->rs_service;
 
                 spin_lock(&svc->srv_lock);
                 list_del_init(&rs->rs_exp_list);
                 ptlrpc_schedule_difficult_reply(rs);
                 spin_unlock(&svc->srv_lock);
         }
-        spin_unlock_irqrestore(&exp->exp_lock, irqflags);
+        spin_unlock(&exp->exp_lock);
 
-        return class_disconnect(exp, flags);
+        return class_disconnect(exp);
 }
 
 static int echo_destroy_export(struct obd_export *exp)
 {
         ENTRY;
-        
+
         target_destroy_export(exp);
 
         RETURN(0);
@@ -113,13 +101,12 @@ static int echo_destroy_export(struct obd_export *exp)
 }
 
 int echo_create(struct obd_export *exp, struct obdo *oa,
-                void *acl, int acl_size,
                 struct lov_stripe_md **ea, struct obd_trans_info *oti)
 {
         struct obd_device *obd = class_exp2obd(exp);
 
         if (!obd) {
-                CERROR("invalid client cookie "LPX64"\n", 
+                CERROR("invalid client cookie "LPX64"\n",
                        exp->exp_handle.h_cookie);
                 return -EINVAL;
         }
@@ -141,12 +128,14 @@ int echo_create(struct obd_export *exp, struct obdo *oa,
 }
 
 int echo_destroy(struct obd_export *exp, struct obdo *oa,
-                 struct lov_stripe_md *ea, struct obd_trans_info *oti)
+                 struct lov_stripe_md *ea, struct obd_trans_info *oti, 
+                 struct obd_export *md_exp)
 {
         struct obd_device *obd = class_exp2obd(exp);
 
+        ENTRY;
         if (!obd) {
-                CERROR("invalid client cookie "LPX64"\n", 
+                CERROR("invalid client cookie "LPX64"\n",
                        exp->exp_handle.h_cookie);
                 RETURN(-EINVAL);
         }
@@ -161,67 +150,69 @@ int echo_destroy(struct obd_export *exp, struct obdo *oa,
                 RETURN(-EINVAL);
         }
 
-
-        return 0;
+        RETURN(0);
 }
 
-static int echo_getattr(struct obd_export *exp, struct obdo *oa,
-                        struct lov_stripe_md *md)
+static int echo_getattr(struct obd_export *exp, struct obd_info *oinfo)
 {
         struct obd_device *obd = class_exp2obd(exp);
-        obd_id id = oa->o_id;
+        obd_id id = oinfo->oi_oa->o_id;
 
+        ENTRY;
         if (!obd) {
-                CERROR("invalid client cookie "LPX64"\n", 
+                CERROR("invalid client cookie "LPX64"\n",
                        exp->exp_handle.h_cookie);
                 RETURN(-EINVAL);
         }
 
-        if (!(oa->o_valid & OBD_MD_FLID)) {
-                CERROR("obdo missing FLID valid flag: "LPX64"\n", oa->o_valid);
+        if (!(oinfo->oi_oa->o_valid & OBD_MD_FLID)) {
+                CERROR("obdo missing FLID valid flag: "LPX64"\n", 
+                       oinfo->oi_oa->o_valid);
                 RETURN(-EINVAL);
         }
 
-        obdo_cpy_md(oa, &obd->u.echo.eo_oa, oa->o_valid);
-        oa->o_id = id;
+        obdo_cpy_md(oinfo->oi_oa, &obd->u.echo.eo_oa, oinfo->oi_oa->o_valid);
+        oinfo->oi_oa->o_id = id;
 
-        return 0;
+        RETURN(0);
 }
 
-static int echo_setattr(struct obd_export *exp, struct obdo *oa,
-                        struct lov_stripe_md *md, struct obd_trans_info *oti,
-                        struct lustre_capa *capa)
+static int echo_setattr(struct obd_export *exp, struct obd_info *oinfo,
+                        struct obd_trans_info *oti)
 {
         struct obd_device *obd = class_exp2obd(exp);
 
+        ENTRY;
         if (!obd) {
-                CERROR("invalid client cookie "LPX64"\n", 
+                CERROR("invalid client cookie "LPX64"\n",
                        exp->exp_handle.h_cookie);
                 RETURN(-EINVAL);
         }
 
-        if (!(oa->o_valid & OBD_MD_FLID)) {
-                CERROR("obdo missing FLID valid flag: "LPX64"\n", oa->o_valid);
+        if (!(oinfo->oi_oa->o_valid & OBD_MD_FLID)) {
+                CERROR("obdo missing FLID valid flag: "LPX64"\n", 
+                       oinfo->oi_oa->o_valid);
                 RETURN(-EINVAL);
         }
 
-        memcpy(&obd->u.echo.eo_oa, oa, sizeof(*oa));
+        memcpy(&obd->u.echo.eo_oa, oinfo->oi_oa, sizeof(*oinfo->oi_oa));
 
-        if (oa->o_id & 4) {
+        if (oinfo->oi_oa->o_id & 4) {
                 /* Save lock to force ACKed reply */
                 ldlm_lock_addref (&obd->u.echo.eo_nl_lock, LCK_NL);
                 oti->oti_ack_locks[0].mode = LCK_NL;
                 oti->oti_ack_locks[0].lock = obd->u.echo.eo_nl_lock;
         }
-        return 0;
+
+        RETURN(0);
 }
 
 static void
-echo_page_debug_setup(struct page *page, int rw, obd_id id,
+echo_page_debug_setup(cfs_page_t *page, int rw, obd_id id,
                       __u64 offset, int len)
 {
-        int   page_offset = offset & (PAGE_SIZE - 1);
-        char *addr        = ((char *)kmap(page)) + page_offset;
+        int   page_offset = offset & ~CFS_PAGE_MASK;
+        char *addr        = ((char *)cfs_kmap(page)) + page_offset;
 
         if (len % OBD_ECHO_BLOCK_SIZE != 0)
                 CERROR("Unexpected block size %d\n", len);
@@ -234,21 +225,21 @@ echo_page_debug_setup(struct page *page, int rw, obd_id id,
                         block_debug_setup(addr, OBD_ECHO_BLOCK_SIZE,
                                           0xecc0ecc0ecc0ecc0ULL,
                                           0xecc0ecc0ecc0ecc0ULL);
-                
+
                 addr   += OBD_ECHO_BLOCK_SIZE;
                 offset += OBD_ECHO_BLOCK_SIZE;
                 len    -= OBD_ECHO_BLOCK_SIZE;
         }
 
-        kunmap(page);
+        cfs_kunmap(page);
 }
 
 static int
-echo_page_debug_check(struct page *page, obd_id id,
+echo_page_debug_check(cfs_page_t *page, obd_id id,
                       __u64 offset, int len)
 {
-        int   page_offset = offset & (PAGE_SIZE - 1);
-        char *addr        = ((char *)kmap(page)) + page_offset;
+        int   page_offset = offset & ~CFS_PAGE_MASK;
+        char *addr        = ((char *)cfs_kmap(page)) + page_offset;
         int   rc          = 0;
         int   rc2;
 
@@ -261,13 +252,13 @@ echo_page_debug_check(struct page *page, obd_id id,
 
                 if (rc2 != 0 && rc == 0)
                         rc = rc2;
-                
+
                 addr   += OBD_ECHO_BLOCK_SIZE;
                 offset += OBD_ECHO_BLOCK_SIZE;
                 len    -= OBD_ECHO_BLOCK_SIZE;
         }
 
-        kunmap(page);
+        cfs_kunmap(page);
 
         return (rc);
 }
@@ -278,7 +269,7 @@ echo_page_debug_check(struct page *page, obd_id id,
 int echo_preprw(int cmd, struct obd_export *export, struct obdo *oa,
                 int objcount, struct obd_ioobj *obj, int niocount,
                 struct niobuf_remote *nb, struct niobuf_local *res,
-                struct obd_trans_info *oti, struct lustre_capa *capa)
+                struct obd_trans_info *oti)
 {
         struct obd_device *obd;
         struct niobuf_local *r = res;
@@ -303,7 +294,7 @@ int echo_preprw(int cmd, struct obd_export *export, struct obdo *oa,
                 oti->oti_handle = (void *)DESC_PRIV;
 
         for (i = 0; i < objcount; i++, obj++) {
-                int gfp_mask = (obj->ioo_id & 1) ? GFP_HIGHUSER : GFP_KERNEL;
+                int gfp_mask = (obj->ioo_id & 1) ? CFS_ALLOC_HIGHUSER : CFS_ALLOC_STD;
                 int ispersistent = obj->ioo_id == ECHO_PERSISTENT_OBJID;
                 int debug_setup = (!ispersistent &&
                                    (oa->o_valid & OBD_MD_FLFLAGS) != 0 &&
@@ -313,13 +304,13 @@ int echo_preprw(int cmd, struct obd_export *export, struct obdo *oa,
                 for (j = 0 ; j < obj->ioo_bufcnt ; j++, nb++, r++) {
 
                         if (ispersistent &&
-                            (nb->offset >> PAGE_SHIFT) < ECHO_PERSISTENT_PAGES) {
+                            (nb->offset >> CFS_PAGE_SHIFT) < ECHO_PERSISTENT_PAGES) {
                                 r->page = echo_persistent_pages[nb->offset >>
-                                                                PAGE_SHIFT];
+                                                                CFS_PAGE_SHIFT];
                                 /* Take extra ref so __free_pages() can be called OK */
-                                get_page (r->page);
+                                cfs_get_page (r->page);
                         } else {
-                                r->page = alloc_pages(gfp_mask, 0);
+                                r->page = cfs_alloc_page(gfp_mask);
                                 if (r->page == NULL) {
                                         CERROR("can't get page %u/%u for id "
                                                LPU64"\n",
@@ -334,7 +325,7 @@ int echo_preprw(int cmd, struct obd_export *export, struct obdo *oa,
 
                         r->offset = nb->offset;
                         r->len = nb->len;
-                        LASSERT((r->offset & ~PAGE_MASK) + r->len <= PAGE_SIZE);
+                        LASSERT((r->offset & ~CFS_PAGE_MASK) + r->len <= CFS_PAGE_SIZE);
 
                         CDEBUG(D_PAGE, "$$$$ get page %p @ "LPU64" for %d\n",
                                r->page, r->offset, r->len);
@@ -367,10 +358,10 @@ preprw_cleanup:
          */
         CERROR("cleaning up %ld pages (%d obdos)\n", (long)(r - res), objcount);
         while (r-- > res) {
-                kunmap(r->page);
+                cfs_kunmap(r->page);
                 /* NB if this is a persistent page, __free_pages will just
                  * lose the extra ref gained above */
-                __free_pages(r->page, 0);
+                cfs_free_page(r->page);
                 atomic_dec(&obd->u.echo.eo_prep);
         }
         memset(res, 0, sizeof(*res) * niocount);
@@ -414,11 +405,10 @@ int echo_commitrw(int cmd, struct obd_export *export, struct obdo *oa,
                               obj->ioo_id != ECHO_PERSISTENT_OBJID &&
                               (oa->o_valid & OBD_MD_FLFLAGS) != 0 &&
                               (oa->o_flags & OBD_FL_DEBUG_CHECK) != 0);
- 
                 int j;
 
                 for (j = 0 ; j < obj->ioo_bufcnt ; j++, r++) {
-                        struct page *page = r->page;
+                        cfs_page_t *page = r->page;
                         void *addr;
 
                         if (page == NULL) {
@@ -427,22 +417,22 @@ int echo_commitrw(int cmd, struct obd_export *export, struct obdo *oa,
                                 GOTO(commitrw_cleanup, rc = -EFAULT);
                         }
 
-                        addr = kmap(page);
+                        addr = cfs_kmap(page);
 
                         CDEBUG(D_PAGE, "$$$$ use page %p, addr %p@"LPU64"\n",
                                r->page, addr, r->offset);
 
                         if (verify) {
-                                vrc = echo_page_debug_check(page, obj->ioo_id, 
+                                vrc = echo_page_debug_check(page, obj->ioo_id,
                                                             r->offset, r->len);
                                 /* check all the pages always */
                                 if (vrc != 0 && rc == 0)
                                         rc = vrc;
                         }
 
-                        kunmap(page);
+                        cfs_kunmap(page);
                         /* NB see comment above regarding persistent pages */
-                        __free_pages(page, 0);
+                        cfs_free_page(page);
                         atomic_dec(&obd->u.echo.eo_prep);
                 }
         }
@@ -454,10 +444,10 @@ commitrw_cleanup:
         CERROR("cleaning up %ld pages (%d obdos)\n",
                niocount - (long)(r - res) - 1, objcount);
         while (++r < res + niocount) {
-                struct page *page = r->page;
+                cfs_page_t *page = r->page;
 
                 /* NB see comment above regarding persistent pages */
-                __free_pages(page, 0);
+                cfs_free_page(page);
                 atomic_dec(&obd->u.echo.eo_prep);
         }
         return rc;
@@ -465,10 +455,10 @@ commitrw_cleanup:
 
 static int echo_setup(struct obd_device *obd, obd_count len, void *buf)
 {
+        struct lprocfs_static_vars lvars;
         int                        rc;
         int                        lock_flags = 0;
         struct ldlm_res_id         res_id = {.name = {1}};
-
         ENTRY;
 
         spin_lock_init(&obd->u.echo.eo_lock);
@@ -480,32 +470,45 @@ static int echo_setup(struct obd_device *obd, obd_count len, void *buf)
                 LBUG();
                 RETURN(-ENOMEM);
         }
-        rc = ldlm_cli_enqueue(NULL, NULL, obd->obd_namespace, res_id,
-                              LDLM_PLAIN, NULL, LCK_NL, &lock_flags,
-                              NULL, ldlm_completion_ast, NULL, NULL,
-                              NULL, 0, NULL, &obd->u.echo.eo_nl_lock);
+
+        rc = ldlm_cli_enqueue_local(obd->obd_namespace, res_id, LDLM_PLAIN, 
+                                    NULL, LCK_NL, &lock_flags, NULL, 
+                                    ldlm_completion_ast, NULL, NULL, 
+                                    0, NULL, &obd->u.echo.eo_nl_lock);
         LASSERT (rc == ELDLM_OK);
 
-
+        lprocfs_init_vars(echo, &lvars);
+        if (lprocfs_obd_setup(obd, lvars.obd_vars) == 0 &&
+            lprocfs_alloc_obd_stats(obd, LPROC_ECHO_LAST) == 0) {
+                lprocfs_counter_init(obd->obd_stats, LPROC_ECHO_READ_BYTES,
+                                     LPROCFS_CNTR_AVGMINMAX,
+                                     "read_bytes", "bytes");
+                lprocfs_counter_init(obd->obd_stats, LPROC_ECHO_WRITE_BYTES,
+                                     LPROCFS_CNTR_AVGMINMAX,
+                                     "write_bytes", "bytes");
+        }
 
         ptlrpc_init_client (LDLM_CB_REQUEST_PORTAL, LDLM_CB_REPLY_PORTAL,
                             "echo_ldlm_cb_client", &obd->obd_ldlm_client);
         RETURN(0);
 }
 
-static int echo_cleanup(struct obd_device *obd, int flags)
+static int echo_cleanup(struct obd_device *obd)
 {
         int leaked;
         ENTRY;
+
+        lprocfs_obd_cleanup(obd);
+        lprocfs_free_obd_stats(obd);
 
         ldlm_lock_decref (&obd->u.echo.eo_nl_lock, LCK_NL);
 
         /* XXX Bug 3413; wait for a bit to ensure the BL callback has
          * happened before calling ldlm_namespace_free() */
         set_current_state (TASK_UNINTERRUPTIBLE);
-        schedule_timeout (HZ);
+        cfs_schedule_timeout (CFS_TASK_UNINT, cfs_time_seconds(1));
 
-        ldlm_namespace_free(obd->obd_namespace, flags & OBD_OPT_FORCE);
+        ldlm_namespace_free(obd->obd_namespace, obd->obd_force);
 
         leaked = atomic_read(&obd->u.echo.eo_prep);
         if (leaked != 0)
@@ -514,36 +517,8 @@ static int echo_cleanup(struct obd_device *obd, int flags)
         RETURN(0);
 }
 
-int echo_attach(struct obd_device *obd, obd_count len, void *data)
-{
-        struct lprocfs_static_vars lvars;
-        int rc;
-
-        lprocfs_init_vars(echo, &lvars);
-        rc = lprocfs_obd_attach(obd, lvars.obd_vars);
-        if (rc != 0)
-                return rc;
-        rc = lprocfs_alloc_obd_stats(obd, LPROC_ECHO_LAST);
-        if (rc != 0)
-                return rc;
-
-        lprocfs_counter_init(obd->obd_stats, LPROC_ECHO_READ_BYTES,
-                             LPROCFS_CNTR_AVGMINMAX, "read_bytes", "bytes");
-        lprocfs_counter_init(obd->obd_stats, LPROC_ECHO_WRITE_BYTES,
-                             LPROCFS_CNTR_AVGMINMAX, "write_bytes", "bytes");
-        return rc;
-}
-
-int echo_detach(struct obd_device *dev)
-{
-        lprocfs_free_obd_stats(dev);
-        return lprocfs_obd_detach(dev);
-}
-
 static struct obd_ops echo_obd_ops = {
         .o_owner           = THIS_MODULE,
-        .o_attach          = echo_attach,
-        .o_detach          = echo_detach,
         .o_connect         = echo_connect,
         .o_disconnect      = echo_disconnect,
         .o_destroy_export  = echo_destroy_export,
@@ -567,7 +542,7 @@ echo_persistent_pages_fini (void)
 
         for (i = 0; i < ECHO_PERSISTENT_PAGES; i++)
                 if (echo_persistent_pages[i] != NULL) {
-                        __free_pages (echo_persistent_pages[i], 0);
+                        cfs_free_page (echo_persistent_pages[i]);
                         echo_persistent_pages[i] = NULL;
                 }
 }
@@ -575,21 +550,21 @@ echo_persistent_pages_fini (void)
 static int
 echo_persistent_pages_init (void)
 {
-        struct page *pg;
+        cfs_page_t *pg;
         int          i;
 
         for (i = 0; i < ECHO_PERSISTENT_PAGES; i++) {
                 int gfp_mask = (i < ECHO_PERSISTENT_PAGES/2) ?
-                        GFP_KERNEL : GFP_HIGHUSER;
+                        CFS_ALLOC_STD : CFS_ALLOC_HIGHUSER;
 
-                pg = alloc_pages (gfp_mask, 0);
+                pg = cfs_alloc_page (gfp_mask);
                 if (pg == NULL) {
                         echo_persistent_pages_fini ();
                         return (-ENOMEM);
                 }
 
-                memset (kmap (pg), 0, PAGE_SIZE);
-                kunmap (pg);
+                memset (cfs_kmap (pg), 0, CFS_PAGE_SIZE);
+                cfs_kunmap (pg);
 
                 echo_persistent_pages[i] = pg;
         }
@@ -602,9 +577,10 @@ static int __init obdecho_init(void)
         struct lprocfs_static_vars lvars;
         int rc;
 
+        ENTRY;
         printk(KERN_INFO "Lustre: Echo OBD driver; info@clusterfs.com\n");
 
-        LASSERT(PAGE_SIZE % OBD_ECHO_BLOCK_SIZE == 0);
+        LASSERT(CFS_PAGE_SIZE % OBD_ECHO_BLOCK_SIZE == 0);
 
         lprocfs_init_vars(echo, &lvars);
 
@@ -612,8 +588,8 @@ static int __init obdecho_init(void)
         if (rc != 0)
                 goto failed_0;
 
-        rc = class_register_type(&echo_obd_ops, NULL, lvars.module_vars,
-                                 OBD_ECHO_DEVICENAME);
+        rc = class_register_type(&echo_obd_ops, lvars.module_vars,
+                                 LUSTRE_ECHO_NAME);
         if (rc != 0)
                 goto failed_1;
 
@@ -621,7 +597,7 @@ static int __init obdecho_init(void)
         if (rc == 0)
                 RETURN (0);
 
-        class_unregister_type(OBD_ECHO_DEVICENAME);
+        class_unregister_type(LUSTRE_ECHO_NAME);
  failed_1:
         echo_persistent_pages_fini ();
  failed_0:
@@ -631,7 +607,7 @@ static int __init obdecho_init(void)
 static void /*__exit*/ obdecho_exit(void)
 {
         echo_client_exit();
-        class_unregister_type(OBD_ECHO_DEVICENAME);
+        class_unregister_type(LUSTRE_ECHO_NAME);
         echo_persistent_pages_fini ();
 }
 
@@ -639,5 +615,4 @@ MODULE_AUTHOR("Cluster File Systems, Inc. <info@clusterfs.com>");
 MODULE_DESCRIPTION("Lustre Testing Echo OBD driver");
 MODULE_LICENSE("GPL");
 
-module_init(obdecho_init);
-module_exit(obdecho_exit);
+cfs_module(obdecho, "1.0.0", obdecho_init, obdecho_exit);

@@ -13,11 +13,20 @@ config=${config:-$(basename $0 .sh).xml}
 LMC=${LMC:-../utils/lmc -m $config}
 TMP=${TMP:-/tmp}
 
-SERVER=${SERVER:-localhost}
-CLIENT=${CLIENT:-localhost}
+HOSTNAME=`hostname`
+SERVER=${SERVER:-$HOSTNAME}
+CLIENT=${CLIENT:-$HOSTNAME}
 NET=${NET:-tcp}
+[ "$ACCEPTOR_PORT" ] && PORT_OPT="--port $ACCEPTOR_PORT"
 
 h2tcp () {
+	case $1 in
+	client) echo '\*' ;;
+	*) echo $1 ;;
+	esac
+}
+
+h2mx () {
 	case $1 in
 	client) echo '\*' ;;
 	*) echo $1 ;;
@@ -29,7 +38,7 @@ h2gm () {
 }
 
 h2elan () {
-    echo $1 | sed 's/[^0-9]*//g'
+	echo $1 | sed 's/[^0-9]*//g'
 }
 
 h2iib () {
@@ -37,6 +46,15 @@ h2iib () {
         client) echo '\*' ;;
         *) echo $1 | sed "s/[^0-9]*//" ;;
         esac
+}
+
+#
+# PJK: I believe this is correct
+# PTL NID's are of the form
+# num@ptl
+#
+h2ptl () { 
+        echo $1 | sed 's/[^0-9]*//g' 
 }
         
 # FIXME: make LMC not require MDS for obdecho LOV
@@ -50,7 +68,7 @@ STRIPES_PER_OBJ=2	# 0 means stripe over all OSTs
 rm -f $config
 # create nodes
 $LMC --add node --node $SERVER  || exit 1
-$LMC --add net --node $SERVER --nid `h2$NET $SERVER` --nettype $NET || exit 2
+$LMC --add net --node $SERVER --nid `h2$NET $SERVER` --nettype $NET $PORT_OPT|| exit 2
 
 if (($LOV)); then
     $LMC --add mds --node $SERVER --mds mds1 --fstype $FSTYPE --dev $MDSDEV --size $MDSSIZE || exit 10
@@ -65,7 +83,7 @@ fi
 
 if [ "$SERVER" != "$CLIENT" ]; then
    $LMC --add node --node $CLIENT  || exit 1
-   $LMC --add net --node $CLIENT --nid `h2$NET $CLIENT` --nettype $NET || exit 2
+   $LMC --add net --node $CLIENT --nid `h2$NET $CLIENT` --nettype $NET $PORT_OPT || exit 2
 fi
 
 $LMC --add echo_client --node $CLIENT --ost ${OBD_NAME} || exit 3

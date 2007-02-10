@@ -3,20 +3,23 @@
  *
  *  Copyright (C) 2003 Cluster File Systems, Inc.
  *
- *   This file is part of Lustre, http://www.lustre.org.
+ *   This file is part of the Lustre file system, http://www.lustre.org
+ *   Lustre is a trademark of Cluster File Systems, Inc.
  *
- *   Lustre is free software; you can redistribute it and/or
- *   modify it under the terms of version 2 of the GNU General Public
- *   License as published by the Free Software Foundation.
+ *   You may have signed or agreed to another license before downloading
+ *   this software.  If so, you are bound by the terms and conditions
+ *   of that agreement, and the following does not apply to you.  See the
+ *   LICENSE file included with this distribution for more information.
  *
- *   Lustre is distributed in the hope that it will be useful,
- *   but WITHOUT ANY WARRANTY; without even the implied warranty of
- *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *   GNU General Public License for more details.
+ *   If you did not agree to a different license, then this copy of Lustre
+ *   is open source software; you can redistribute it and/or modify it
+ *   under the terms of version 2 of the GNU General Public License as
+ *   published by the Free Software Foundation.
  *
- *   You should have received a copy of the GNU General Public License
- *   along with Lustre; if not, write to the Free Software
- *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ *   In either case, Lustre is distributed in the hope that it will be
+ *   useful, but WITHOUT ANY WARRANTY; without even the implied warranty
+ *   of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *   license text for more details.
  *
  */
 
@@ -31,17 +34,21 @@ struct ldlm_namespace;
 struct obd_import;
 struct ldlm_res_id;
 struct ptlrpc_request_set;
+extern int test_req_buffer_pressure;
 
 void ptlrpc_request_handle_notconn(struct ptlrpc_request *);
 void lustre_assert_wire_constants(void);
 int ptlrpc_import_in_recovery(struct obd_import *imp);
-int ptlrpc_set_import_discon(struct obd_import *imp);
+int ptlrpc_set_import_discon(struct obd_import *imp, __u32 conn_cnt);
 void ptlrpc_handle_failed_import(struct obd_import *imp);
 int ptlrpc_replay_next(struct obd_import *imp, int *inflight);
 void ptlrpc_initiate_recovery(struct obd_import *imp);
 
+int lustre_unpack_req_ptlrpc_body(struct ptlrpc_request *req, int offset);
+int lustre_unpack_rep_ptlrpc_body(struct ptlrpc_request *req, int offset);
 
-#ifdef __KERNEL__
+
+#ifdef LPROCFS
 void ptlrpc_lprocfs_register_service(struct proc_dir_entry *proc_entry,
                                      struct ptlrpc_service *svc);
 void ptlrpc_lprocfs_unregister_service(struct ptlrpc_service *svc);
@@ -53,7 +60,7 @@ void ptlrpc_lprocfs_do_request_stat (struct ptlrpc_request *req,
 #define ptlrpc_lprocfs_unregister_service(params...) do{}while(0)
 #define ptlrpc_lprocfs_rpc_sent(params...) do{}while(0)
 #define ptlrpc_lprocfs_do_request_stat(params...) do{}while(0)
-#endif /* __KERNEL__ */
+#endif /* LPROCFS */
 
 /* recovd_thread.c */
 int llog_init_commit_master(void);
@@ -72,39 +79,22 @@ static inline int opcode_offset(__u32 opc) {
                 return (opc - LDLM_FIRST_OPC +
                         (MDS_LAST_OPC - MDS_FIRST_OPC) +
                         (OST_LAST_OPC - OST_FIRST_OPC));
-        } else if (opc < PTLBD_LAST_OPC) {
-                /* Portals Block Device */
-                return (opc - PTLBD_FIRST_OPC +
-                        (LDLM_LAST_OPC - LDLM_FIRST_OPC) +
-                        (MDS_LAST_OPC - MDS_FIRST_OPC) +
-                        (OST_LAST_OPC - OST_FIRST_OPC));
         } else if (opc < OBD_LAST_OPC) {
                 /* OBD Ping */
                 return (opc - OBD_FIRST_OPC +
-                        (PTLBD_LAST_OPC - PTLBD_FIRST_OPC) +
                         (LDLM_LAST_OPC - LDLM_FIRST_OPC) +
                         (MDS_LAST_OPC - MDS_FIRST_OPC) +
                         (OST_LAST_OPC - OST_FIRST_OPC));
-        } else if (opc < SEC_LAST_OPC) {
-                /* Security negotiate */
-                return (opc - SEC_FIRST_OPC +
-                        (PTLBD_LAST_OPC - PTLBD_FIRST_OPC) +
-                        (LDLM_LAST_OPC - LDLM_FIRST_OPC) +
-                        (MDS_LAST_OPC - MDS_FIRST_OPC) +
-                        (OST_LAST_OPC - OST_FIRST_OPC) +
-                        (OBD_LAST_OPC - OBD_FIRST_OPC));
         } else {
                 /* Unknown Opcode */
                 return -1;
         }
 }
 
-#define LUSTRE_MAX_OPCODES ((PTLBD_LAST_OPC - PTLBD_FIRST_OPC) + \
-                            (LDLM_LAST_OPC - LDLM_FIRST_OPC)   + \
+#define LUSTRE_MAX_OPCODES ((LDLM_LAST_OPC - LDLM_FIRST_OPC)   + \
                             (MDS_LAST_OPC - MDS_FIRST_OPC)     + \
                             (OST_LAST_OPC - OST_FIRST_OPC)     + \
-                            (OBD_LAST_OPC - OBD_FIRST_OPC)     + \
-                            (SEC_LAST_OPC - SEC_FIRST_OPC))
+                            (OBD_LAST_OPC - OBD_FIRST_OPC))
 
 enum {
         PTLRPC_REQWAIT_CNTR = 0,
@@ -117,14 +107,21 @@ enum {
 int ptlrpc_expire_one_request(struct ptlrpc_request *req);
 
 /* pers.c */
-void ptlrpc_fill_bulk_md(ptl_md_t *md, struct ptlrpc_bulk_desc *desc);
-void ptlrpc_add_bulk_page(struct ptlrpc_bulk_desc *desc, struct page *page, 
+void ptlrpc_fill_bulk_md(lnet_md_t *md, struct ptlrpc_bulk_desc *desc);
+void ptlrpc_add_bulk_page(struct ptlrpc_bulk_desc *desc, cfs_page_t *page, 
                           int pageoffset, int len);
+void ptl_rpc_wipe_bulk_pages(struct ptlrpc_bulk_desc *desc);
 
 /* pinger.c */
 int ptlrpc_start_pinger(void);
 int ptlrpc_stop_pinger(void);
 void ptlrpc_pinger_sending_on_import(struct obd_import *imp);
 void ptlrpc_pinger_wake_up(void);
+void ptlrpc_ping_import_soon(struct obd_import *imp);
+#ifdef __KERNEL__
+int ping_evictor_wake(struct obd_export *exp);
+#else
+#define ping_evictor_wake(exp)     1
+#endif
 
 #endif /* PTLRPC_INTERNAL_H */

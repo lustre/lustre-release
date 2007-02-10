@@ -5,12 +5,12 @@
 #include <fcntl.h>
 
 #include <liblustre.h>
-#include <linux/lustre_lib.h>
-#include <linux/obd.h>
+#include <lustre_lib.h>
+#include <obd.h>
 
 int main(int argc, char **argv)
 {
-    struct obd_ioctl_data data;
+    struct obd_ioctl_data data = { 0 };
     char rawbuf[8192], parent[4096], *buf = rawbuf, *base, *t;
     int max = sizeof(rawbuf), fd, offset, rc;
 
@@ -35,7 +35,6 @@ int main(int argc, char **argv)
         exit(errno);
     }
 
-    memset(&data, 0, sizeof(data));
     data.ioc_version = OBD_IOCTL_VERSION;
     data.ioc_len = sizeof(data);
     if (offset >= 0)

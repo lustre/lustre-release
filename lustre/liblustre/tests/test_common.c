@@ -1,3 +1,7 @@
+/* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
+ * vim:expandtab:shiftwidth=8:tabstop=8:
+ */
+
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <unistd.h>
@@ -7,6 +11,8 @@
 #include <string.h>
 #include <errno.h>
 #include <dirent.h>
+#include <utime.h>
+#include <stdarg.h>
 
 #include "test_common.h"
 
@@ -89,7 +95,7 @@ void t_mkdir(const char *path)
 {
         int rc;
 
-        rc = mkdir(path, 00644);
+        rc = mkdir(path, 00755);
         if (rc < 0) {
                 printf("mkdir(%s) error: %s\n", path, strerror(errno));
                 EXIT(1);
@@ -173,12 +179,33 @@ int t_open(const char *path)
 {
         int fd;
 
-        fd = open(path, O_RDWR);
+        fd = open(path, O_RDWR | O_LARGEFILE);
         if (fd < 0) {
                 printf("open(%s) error: %s\n", path, strerror(errno));
                 EXIT_RET(fd);
         }
         return fd;
+}
+
+int t_chdir(const char *path)
+{
+        int rc = chdir(path);
+        if (rc < 0) {
+                printf("chdir(%s) error: %s\n", path, strerror(errno));
+                EXIT_RET(rc);
+        }
+        return rc;
+}
+
+int t_utime(const char *path, const struct utimbuf *buf)
+{
+        int rc = utime(path, buf);
+        if (rc < 0) {
+                printf("utime(%s, %p) error: %s\n", path, buf,
+                       strerror(errno));
+                EXIT_RET(rc);
+        }
+        return rc;
 }
 
 int t_opendir(const char *path)
@@ -209,6 +236,8 @@ int t_check_stat(const char *name, struct stat *buf)
 	struct stat stat;
         int rc;
 
+        memset(&stat, 0, sizeof(stat));
+
 	rc = lstat(name, &stat);
         if (rc) {
 		printf("error %d stat %s\n", rc, name);
@@ -216,6 +245,10 @@ int t_check_stat(const char *name, struct stat *buf)
 	}
         if (buf)
                 memcpy(buf, &stat, sizeof(*buf));
+        if (stat.st_blksize == 0) {
+                printf("error: blksize is 0\n");
+                EXIT_RET(-EINVAL);
+        }
 
 	return 0;
 }
@@ -312,6 +345,79 @@ void t_ls(int fd, char *buf, int size)
 		printf("getdents error %d\n", rc);
 		EXIT(-1);
 	}
+}
+
+int t_fcntl(int fd, int cmd, ...)
+{
+	va_list ap;
+	long arg;
+	struct flock *lock;
+	int rc = -1;
+
+	va_start(ap, cmd);
+	switch (cmd) {
+	case F_GETFL:
+		va_end(ap);
+		rc = fcntl(fd, cmd);
+		if (rc == -1) {
+			printf("fcntl GETFL failed: %s\n",
+				 strerror(errno));
+			EXIT(1);
+		}
+		break;
+	case F_SETFL:
+		arg = va_arg(ap, long);
+		va_end(ap);
+		rc = fcntl(fd, cmd, arg);
+		if (rc == -1) {
+			printf("fcntl SETFL %ld failed: %s\n",
+				 arg, strerror(errno));
+			EXIT(1);
+		}
+		break;
+	case F_GETLK:
+#ifdef F_GETLK64
+#if F_GETLK64 != F_GETLK
+        case F_GETLK64:
+#endif
+#endif
+	case F_SETLK:
+#ifdef F_SETLK64
+#if F_SETLK64 != F_SETLK
+        case F_SETLK64:
+#endif
+#endif
+	case F_SETLKW:
+#ifdef F_SETLKW64
+#if F_SETLKW64 != F_SETLKW
+        case F_SETLKW64:
+#endif
+#endif
+		lock = va_arg(ap, struct flock *);
+		va_end(ap);
+		rc = fcntl(fd, cmd, lock);
+		if (rc == -1) {
+			printf("fcntl cmd %d failed: %s\n",
+				 cmd, strerror(errno));
+			EXIT(1);
+		}
+		break;
+	case F_DUPFD:
+		arg = va_arg(ap, long);
+		va_end(ap);
+		rc = fcntl(fd, cmd, arg);
+		if (rc == -1) {
+			printf("fcntl F_DUPFD %d failed: %s\n",
+				 (int)arg, strerror(errno));
+			EXIT(1);
+		}
+		break;
+	default:
+		va_end(ap);
+		printf("fcntl cmd %d not supported\n", cmd);
+		EXIT(1);
+	}
+	return rc;
 }
 
 char *safe_strncpy(char *dst, char *src, int max_size)

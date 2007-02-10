@@ -7,13 +7,14 @@ GetOptions("pid=i" => \$pid,
            "trace!" => \$trace, 
            "silent!" => \$silent, 
            "rpctrace!" => \$rpctrace, 
-           "lmvtrace!" => \$lmvtrace, 
            "nodlm!" => \$nodlm,
            "dlm_ns=s" => \$dlm_ns,
            "noclass!" => \$noclass,
            "nonet!" => \$nonet,
            "extract_start=s" => \$extract_start,
            "extract_end=s" => \$extract_end);
+
+
 
 $subsys->{UNDEFINED} = 1 << 0;
 $subsys->{MDC} = 1 << 1;
@@ -38,10 +39,6 @@ $subsys->{GMNAL} = 1 << 19;
 $subsys->{PTLROUTER} = 1 << 20;
 $subsys->{COBD} = 1 << 21;
 $subsys->{OPENIBNAL} = 1 << 22;
-$subsys->{SM} = 1 << 23;
-$subsys->{ASOBD} = 1 << 24;
-$subsys->{LMV} = 1 << 25;
-$subsys->{CMOBD} = 1 << 26;
 
 
 $masks->{TRACE} = 1 << 0; # /* ENTRY/EXIT markers */
@@ -64,13 +61,13 @@ $masks->{DLMTRACE} = 1 << 16; #
 $masks->{ERROR} = 1 << 17; # /* CERROR} = ...) == CDEBUG} = D_ERROR, ...) */
 $masks->{EMERG} = 1 << 18; # /* CEMERG} = ...) == CDEBUG} = D_EMERG, ...) */
 $masks->{HA} = 1 << 19; # /* recovery and failover */
-$masks->{RPCTRACE} = 1 << 20; # /* recovery and failover */
+$masks->{RPCTRACE} = 1 << 19; # /* recovery and failover */
 
 sub extractpid
 {
     $line = shift;
 #    print "$_\n";
-    if ($line =~ m/(\d+):(\d+):(\d+):(\d+\.\d+):(\d+):(\d+):.*$/) {
+    if ($line =~ m/\d+:\d+:\d+:\d+\.\d+:\d+:\d+:*$/) {
 	return $6;
     }
 }
@@ -79,25 +76,8 @@ sub extracthostpid
 {
     $line = shift;
 #    print "$_\n";
-    if ($line =~ m/(\d+):(\d+):(\d+):(\d+\.\d+):(\d+):(\d+):(\d+):.*$/) {
+    if ($line =~ m/\d+:\d+:\d+:\d+\.\d+:\d+:\d+:\d+:*$/) {
 	return $7;
-    }
-}
-sub extractsubsys
-{
-    $line = shift;
-#    print "$_\n";
-    if ($line =~ m/(\d+):(\d+):(\d+):(\d+\.\d+):(\d+):(\d+):(\d+):.*$/) {
-	return hex($1);
-    }
-}
-
-sub extractmask
-{
-    $line = shift;
-#    print "$_\n";
-    if ($line =~ m/(\d+):(\d+):(\d+):(\d+\.\d+):(\d+):(\d+):(\d+):.*$/) {
-	return hex($2);
     }
 }
 
@@ -286,7 +266,7 @@ if ($ARGV[1]) {
    $width = $ARGV[1];
 }
 
-print "nodlm $nodlm, nonet $nonet, trace $trace lmvtrace $lmvtrace\n";
+print "nodlm $nodlm, nonet $nonet, trace $trace\n";
 print "pid: $pid, dlm_ns: $dlm_ns\n";
 print "extract_start: $extract_start\n";
 print "extract_end:   $extract_end\n";
@@ -304,10 +284,11 @@ while (<LOG>) {
     }
 
     $linepid = extractpid($_);
-
     $linehpid = extracthostpid($_);
-    $linesubsys = extractsubsys($_);
-    $linemask = extractmask($_);
+    $linemask = getmask($_);
+    $linesubsys = getsubsys($_);
+
+#    printf "---> mask %x subsys %x\n", $linemask, $linesubsys;
 
     if (leaving($_)) {
         chop $prefix->{$linepid};
@@ -326,8 +307,6 @@ while (<LOG>) {
         next if ($trace && $linemask != $masks->{TRACE});
         next if ($nodlm && 
                  (  $linesubsys == $subsys->{LDLM}));
-        next if ($lmvtrace && 
-                 (  $linesubsys != $subsys->{LMV}));
         next if ($dlm_ns &&
                  (  $linesubsys != $subsys->{LDLM}));
         next if (($found_dlm_ns = index( $_, $dlm_ns, 0)) == -1);
@@ -339,7 +318,7 @@ while (<LOG>) {
                     $linesubsys == $subsys->{PORTALS} ||
                     $linesubsys == $subsys->{SOCKNAL} ||
                     $linesubsys == $subsys->{QSWNAL} ||
-		    $linesubsys == $subsys->{OPENIBNAL} ||
+                    $linesubsys == $subsys->{OPENIBNAL} ||
                     $linesubsys == $subsys->{GMNAL}));
 	if(!$entering_rpc) {entering_rpc($_);}
 	if(!$leaving_rpc) {leaving_rpc($_);}

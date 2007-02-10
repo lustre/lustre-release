@@ -6,143 +6,53 @@
  *  Copyright (c) 2002, 2003 Cluster File Systems, Inc.
  *   Author: Mike Shaver <shaver@clusterfs.com>
  *
- *   This file is part of Lustre, http://www.lustre.org.
+ *   This file is part of the Lustre file system, http://www.lustre.org
+ *   Lustre is a trademark of Cluster File Systems, Inc.
  *
- *   Lustre is free software; you can redistribute it and/or
- *   modify it under the terms of version 2 of the GNU General Public
- *   License as published by the Free Software Foundation.
+ *   You may have signed or agreed to another license before downloading
+ *   this software.  If so, you are bound by the terms and conditions
+ *   of that agreement, and the following does not apply to you.  See the
+ *   LICENSE file included with this distribution for more information.
  *
- *   Lustre is distributed in the hope that it will be useful,
- *   but WITHOUT ANY WARRANTY; without even the implied warranty of
- *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *   GNU General Public License for more details.
+ *   If you did not agree to a different license, then this copy of Lustre
+ *   is open source software; you can redistribute it and/or modify it
+ *   under the terms of version 2 of the GNU General Public License as
+ *   published by the Free Software Foundation.
  *
- *   You should have received a copy of the GNU General Public License
- *   along with Lustre; if not, write to the Free Software
- *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ *   In either case, Lustre is distributed in the hope that it will be
+ *   useful, but WITHOUT ANY WARRANTY; without even the implied warranty
+ *   of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *   license text for more details.
  */
 
 #define DEBUG_SUBSYSTEM S_RPC
 #ifdef __KERNEL__
-# include <linux/config.h>
-# include <linux/module.h>
-# include <linux/kmod.h>
+# include <libcfs/libcfs.h>
 #else
 # include <liblustre.h>
 #endif
 
-#include <linux/obd_support.h>
-#include <linux/lustre_ha.h>
-#include <linux/lustre_net.h>
-#include <linux/lustre_import.h>
-#include <linux/lustre_export.h>
-#include <linux/obd.h>
-#include <linux/obd_ost.h>
-#include <linux/obd_class.h>
-#include <linux/obd_lov.h> /* for IOC_LOV_SET_OSC_ACTIVE */
+#include <obd_support.h>
+#include <lustre_ha.h>
+#include <lustre_net.h>
+#include <lustre_import.h>
+#include <lustre_export.h>
+#include <obd.h>
+#include <obd_ost.h>
+#include <obd_class.h>
+#include <obd_lov.h> /* for IOC_LOV_SET_OSC_ACTIVE */
+#include <libcfs/list.h>
 
 #include "ptlrpc_internal.h"
 
 static int ptlrpc_recover_import_no_retry(struct obd_import *, char *);
 
-void ptlrpc_run_recovery_over_upcall(struct obd_device *obd)
-{
-        char *argv[4];
-        char *envp[3];
-        int rc;
-        ENTRY;
-
-        argv[0] = obd_lustre_upcall;
-        argv[1] = "RECOVERY_OVER";
-        argv[2] = (char *)obd->obd_uuid.uuid;
-        argv[3] = NULL;
-        
-        envp[0] = "HOME=/";
-        envp[1] = "PATH=/sbin:/bin:/usr/sbin:/usr/bin";
-        envp[2] = NULL;
-
-        rc = USERMODEHELPER(argv[0], argv, envp);
-        if (rc < 0) {
-                CERROR("Error invoking recovery upcall %s %s %s: %d; check "
-                       "/proc/sys/lustre/upcall\n",
-                       argv[0], argv[1], argv[2], rc);
-
-        } else {
-                CWARN("Invoked upcall %s %s %s\n",
-                      argv[0], argv[1], argv[2]);
-        }
-}
-
-void ptlrpc_run_failed_import_upcall(struct obd_import* imp)
-{
-#ifdef __KERNEL__
-        unsigned long flags;
-        char *argv[7];
-        char *envp[3];
-        int rc;
-        ENTRY;
-
-        spin_lock_irqsave(&imp->imp_lock, flags);
-        if (imp->imp_state == LUSTRE_IMP_CLOSED) {
-                spin_unlock_irqrestore(&imp->imp_lock, flags);
-                EXIT;
-                return;
-        }
-        spin_unlock_irqrestore(&imp->imp_lock, flags);
-        
-        argv[0] = obd_lustre_upcall;
-        argv[1] = "FAILED_IMPORT";
-        argv[2] = (char *)imp->imp_target_uuid.uuid;
-        argv[3] = imp->imp_obd->obd_name;
-        argv[4] = (char *)imp->imp_connection->c_remote_uuid.uuid;
-        argv[5] = (char *)imp->imp_obd->obd_uuid.uuid;
-        argv[6] = NULL;
-
-        envp[0] = "HOME=/";
-        envp[1] = "PATH=/sbin:/bin:/usr/sbin:/usr/bin";
-        envp[2] = NULL;
-
-        rc = USERMODEHELPER(argv[0], argv, envp);
-        if (rc < 0) {
-                CERROR("Error invoking recovery upcall %s %s %s %s %s: %d; "
-                       "check /proc/sys/lustre/upcall\n",
-                       argv[0], argv[1], argv[2], argv[3], argv[4],rc);
-
-        } else {
-                CWARN("Invoked upcall %s %s %s %s %s\n",
-                      argv[0], argv[1], argv[2], argv[3], argv[4]);
-        }
-#else
-        if (imp->imp_state == LUSTRE_IMP_CLOSED) {
-                EXIT;
-                return;
-        }
-        ptlrpc_recover_import(imp, NULL);
-#endif
-}
-
-/* This might block waiting for the upcall to start, so it should
- * not be called from a thread that shouldn't block. (Like ptlrpcd) */
 void ptlrpc_initiate_recovery(struct obd_import *imp)
 {
         ENTRY;
 
-        LASSERT (obd_lustre_upcall != NULL);
-        
-        if (strcmp(obd_lustre_upcall, "DEFAULT") == 0) {
-                CDEBUG(D_HA, "%s: starting recovery without upcall\n",
-                        imp->imp_target_uuid.uuid);
-                ptlrpc_connect_import(imp, NULL);
-        } 
-        else if (strcmp(obd_lustre_upcall, "NONE") == 0) {
-                CDEBUG(D_HA, "%s: recovery disabled\n",
-                        imp->imp_target_uuid.uuid);
-        } 
-        else {
-                CDEBUG(D_HA, "%s: calling upcall to start recovery\n",
-                        imp->imp_target_uuid.uuid);
-                ptlrpc_run_failed_import_upcall(imp);
-        }
+        CDEBUG(D_HA, "%s: starting recovery\n", obd2cli_tgt(imp->imp_obd));
+        ptlrpc_connect_import(imp, NULL);
 
         EXIT;
 }
@@ -152,7 +62,6 @@ int ptlrpc_replay_next(struct obd_import *imp, int *inflight)
         int rc = 0;
         struct list_head *tmp, *pos;
         struct ptlrpc_request *req = NULL;
-        unsigned long flags;
         __u64 last_transno;
         ENTRY;
 
@@ -161,14 +70,15 @@ int ptlrpc_replay_next(struct obd_import *imp, int *inflight)
         /* It might have committed some after we last spoke, so make sure we
          * get rid of them now.
          */
-        spin_lock_irqsave(&imp->imp_lock, flags);
+        spin_lock(&imp->imp_lock);
+        imp->imp_last_transno_checked = 0;
         ptlrpc_free_committed(imp);
         last_transno = imp->imp_last_replay_transno;
-        spin_unlock_irqrestore(&imp->imp_lock, flags);
+        spin_unlock(&imp->imp_lock);
 
         CDEBUG(D_HA, "import %p from %s committed "LPU64" last "LPU64"\n",
-               imp, imp->imp_target_uuid.uuid, imp->imp_peer_committed_transno,
-               last_transno);
+               imp, obd2cli_tgt(imp->imp_obd),
+               imp->imp_peer_committed_transno, last_transno);
 
         /* Do I need to hold a lock across this iteration?  We shouldn't be
          * racing with any additions to the list, because we're in recovery
@@ -188,9 +98,11 @@ int ptlrpc_replay_next(struct obd_import *imp, int *inflight)
         list_for_each_safe(tmp, pos, &imp->imp_replay_list) {
                 req = list_entry(tmp, struct ptlrpc_request, rq_replay_list);
 
-                /* If need to resend, stop on the matching one first. It's 
-                   possible though it's already been committed, so in that case 
-                   we'll just continue with replay */
+                /* If need to resend the last sent transno (because a
+                   reconnect has occurred), then stop on the matching
+                   req and send it again. If, however, the last sent
+                   transno has been committed then we continue replay
+                   from the next request. */
                 if (imp->imp_resend_replay && 
                     req->rq_transno == last_transno) {
                         lustre_msg_add_flags(req->rq_reqmsg, MSG_RESENT);
@@ -214,7 +126,6 @@ int ptlrpc_replay_next(struct obd_import *imp, int *inflight)
                                LPD64"\n", rc, req->rq_xid);
                         RETURN(rc);
                 }
-                imp->imp_reqs_replayed++;
                 *inflight = 1;
         }
         RETURN(rc);
@@ -222,9 +133,7 @@ int ptlrpc_replay_next(struct obd_import *imp, int *inflight)
 
 int ptlrpc_resend(struct obd_import *imp)
 {
-        struct list_head *tmp, *pos;
-        struct ptlrpc_request *req;
-        unsigned long flags;
+        struct ptlrpc_request *req, *next;
 
         ENTRY;
 
@@ -234,15 +143,17 @@ int ptlrpc_resend(struct obd_import *imp)
          */
         /* Well... what if lctl recover is called twice at the same time?
          */
-        spin_lock_irqsave(&imp->imp_lock, flags);
+        spin_lock(&imp->imp_lock);
         if (imp->imp_state != LUSTRE_IMP_RECOVER) {
-                spin_unlock_irqrestore(&imp->imp_lock, flags);
+                spin_unlock(&imp->imp_lock);
                 RETURN(-1);
         }
-        spin_unlock_irqrestore(&imp->imp_lock, flags);
+        spin_unlock(&imp->imp_lock);
 
-        list_for_each_safe(tmp, pos, &imp->imp_sending_list) {
-                req = list_entry(tmp, struct ptlrpc_request, rq_list);
+        list_for_each_entry_safe(req, next, &imp->imp_sending_list, rq_list) {
+                LASSERTF((long)req > CFS_PAGE_SIZE && req != LP_POISON,
+                         "req %p bad\n", req);
+                LASSERTF(req->rq_type != LI_POISON, "req %p freed\n", req);
                 ptlrpc_resend_req(req);
         }
 
@@ -251,71 +162,74 @@ int ptlrpc_resend(struct obd_import *imp)
 
 void ptlrpc_wake_delayed(struct obd_import *imp)
 {
-        unsigned long flags;
         struct list_head *tmp, *pos;
         struct ptlrpc_request *req;
 
-        spin_lock_irqsave(&imp->imp_lock, flags);
+        spin_lock(&imp->imp_lock);
         list_for_each_safe(tmp, pos, &imp->imp_delayed_list) {
                 req = list_entry(tmp, struct ptlrpc_request, rq_list);
 
                 DEBUG_REQ(D_HA, req, "waking (set %p):", req->rq_set);
                 ptlrpc_wake_client_req(req);
         }
-        spin_unlock_irqrestore(&imp->imp_lock, flags);
+        spin_unlock(&imp->imp_lock);
 }
 
 void ptlrpc_request_handle_notconn(struct ptlrpc_request *failed_req)
 {
-        int rc;
-        struct obd_import *imp= failed_req->rq_import;
-        unsigned long flags;
+        struct obd_import *imp = failed_req->rq_import;
         ENTRY;
 
         CDEBUG(D_HA, "import %s of %s@%s abruptly disconnected: reconnecting\n",
-               imp->imp_obd->obd_name,
-               imp->imp_target_uuid.uuid,
+               imp->imp_obd->obd_name, obd2cli_tgt(imp->imp_obd),
                imp->imp_connection->c_remote_uuid.uuid);
-        
-        if (ptlrpc_set_import_discon(imp)) {
+
+        if (ptlrpc_set_import_discon(imp,
+                              lustre_msg_get_conn_cnt(failed_req->rq_reqmsg))) {
                 if (!imp->imp_replayable) {
                         CDEBUG(D_HA, "import %s@%s for %s not replayable, "
                                "auto-deactivating\n",
-                               imp->imp_target_uuid.uuid,
+                               obd2cli_tgt(imp->imp_obd),
                                imp->imp_connection->c_remote_uuid.uuid,
                                imp->imp_obd->obd_name);
                         ptlrpc_deactivate_import(imp);
                 }
-
                 /* to control recovery via lctl {disable|enable}_recovery */
                 if (imp->imp_deactive == 0)
-                        rc = ptlrpc_connect_import(imp, NULL);
+                        ptlrpc_connect_import(imp, NULL);
         }
 
         /* Wait for recovery to complete and resend. If evicted, then
            this request will be errored out later.*/
-        spin_lock_irqsave(&failed_req->rq_lock, flags);
-        failed_req->rq_resend = 1;
-        spin_unlock_irqrestore(&failed_req->rq_lock, flags);
+        spin_lock(&failed_req->rq_lock);
+        if (!failed_req->rq_no_resend)
+                failed_req->rq_resend = 1;
+        spin_unlock(&failed_req->rq_lock);
 
         EXIT;
 }
 
 /*
+ * Administratively active/deactive a client. 
  * This should only be called by the ioctl interface, currently
- * with the lctl deactivate and activate commands.
+ *  - the lctl deactivate and activate commands
+ *  - echo 0/1 >> /proc/osc/XXX/active
+ *  - client umount -f (ll_umount_begin)
  */
 int ptlrpc_set_import_active(struct obd_import *imp, int active)
 {
         struct obd_device *obd = imp->imp_obd;
         int rc = 0;
 
+        ENTRY;
         LASSERT(obd);
 
         /* When deactivating, mark import invalid, and abort in-flight
          * requests. */
         if (!active) {
-                ptlrpc_invalidate_import(imp, 0);
+                LCONSOLE_WARN("setting import %s INACTIVE by administrator "
+                              "request\n", obd2cli_tgt(imp->imp_obd));
+                ptlrpc_invalidate_import(imp);
                 imp->imp_deactive = 1;
         }
 
@@ -323,21 +237,23 @@ int ptlrpc_set_import_active(struct obd_import *imp, int active)
         if (active) {
                 imp->imp_deactive = 0;
                 CDEBUG(D_HA, "setting import %s VALID\n",
-                       imp->imp_target_uuid.uuid);
+                       obd2cli_tgt(imp->imp_obd));
                 rc = ptlrpc_recover_import(imp, NULL);
         }
 
         RETURN(rc);
 }
 
+/* Attempt to reconnect an import */
 int ptlrpc_recover_import(struct obd_import *imp, char *new_uuid)
 {
         int rc;
         ENTRY;
 
         /* force import to be disconnected. */
-        ptlrpc_set_import_discon(imp);
+        ptlrpc_set_import_discon(imp, 0);
 
+        imp->imp_deactive = 0;
         rc = ptlrpc_recover_import_no_retry(imp, new_uuid);
 
         RETURN(rc);
@@ -345,49 +261,30 @@ int ptlrpc_recover_import(struct obd_import *imp, char *new_uuid)
 
 int ptlrpc_import_in_recovery(struct obd_import *imp)
 {
-        unsigned long flags;
         int in_recovery = 1;
-        spin_lock_irqsave(&imp->imp_lock, flags);
+        spin_lock(&imp->imp_lock);
         if (imp->imp_state == LUSTRE_IMP_FULL ||
             imp->imp_state == LUSTRE_IMP_CLOSED ||
             imp->imp_state == LUSTRE_IMP_DISCON)
                 in_recovery = 0;
-        spin_unlock_irqrestore(&imp->imp_lock, flags);
+        spin_unlock(&imp->imp_lock);
         return in_recovery;
-}
-
-int ptlrpc_import_control_recovery(struct obd_import *imp, int disable)
-{
-        unsigned long flags;
-
-        /* with imp_deactivate == 1 pinger won't initiate re-connect */
-        spin_lock_irqsave(&imp->imp_lock, flags);
-        if (disable)
-                imp->imp_deactive = 1;
-        else
-                imp->imp_deactive = 0;
-        if (imp->imp_state == LUSTRE_IMP_DISCON) {
-                imp->imp_force_verify = 1;
-                ptlrpc_pinger_wake_up();
-        }
-        spin_unlock_irqrestore(&imp->imp_lock, flags);
-        RETURN(0);
 }
 
 static int ptlrpc_recover_import_no_retry(struct obd_import *imp,
                                           char *new_uuid)
 {
         int rc;
-        unsigned long flags;
         int in_recovery = 0;
         struct l_wait_info lwi;
         ENTRY;
 
-        spin_lock_irqsave(&imp->imp_lock, flags);
+        /* Check if reconnect is already in progress */
+        spin_lock(&imp->imp_lock);
         if (imp->imp_state != LUSTRE_IMP_DISCON) {
                 in_recovery = 1;
         }
-        spin_unlock_irqrestore(&imp->imp_lock, flags);
+        spin_unlock(&imp->imp_lock);
 
         if (in_recovery == 1)
                 RETURN(-EALREADY);
@@ -397,44 +294,14 @@ static int ptlrpc_recover_import_no_retry(struct obd_import *imp,
                 RETURN(rc);
 
         CDEBUG(D_HA, "%s: recovery started, waiting\n",
-               imp->imp_target_uuid.uuid);
+               obd2cli_tgt(imp->imp_obd));
 
-        lwi = LWI_TIMEOUT(MAX(obd_timeout * HZ, 1), NULL, NULL);
+        lwi = LWI_TIMEOUT(cfs_timeout_cap(cfs_time_seconds(obd_timeout)), 
+                          NULL, NULL);
         rc = l_wait_event(imp->imp_recovery_waitq,
                           !ptlrpc_import_in_recovery(imp), &lwi);
         CDEBUG(D_HA, "%s: recovery finished\n",
-               imp->imp_target_uuid.uuid);
+               obd2cli_tgt(imp->imp_obd));
 
         RETURN(rc);
-}
-
-void ptlrpc_fail_export(struct obd_export *exp)
-{
-        int rc, already_failed;
-        unsigned long flags;
-
-        spin_lock_irqsave(&exp->exp_lock, flags);
-        already_failed = exp->exp_failed;
-        exp->exp_failed = 1;
-        spin_unlock_irqrestore(&exp->exp_lock, flags);
-
-        if (already_failed) {
-                CDEBUG(D_HA, "disconnecting dead export %p/%s; skipping\n",
-                       exp, exp->exp_client_uuid.uuid);
-                return;
-        }
-
-        CDEBUG(D_HA, "disconnecting export %p/%s\n",
-               exp, exp->exp_client_uuid.uuid);
-
-        if (obd_dump_on_timeout)
-                portals_debug_dumplog();
-
-        /* Most callers into obd_disconnect are removing their own reference
-         * (request, for example) in addition to the one from the hash table.
-         * We don't have such a reference here, so make one. */
-        class_export_get(exp);
-        rc = obd_disconnect(exp, 0);
-        if (rc)
-                CERROR("disconnecting export %p failed: %d\n", exp, rc);
 }

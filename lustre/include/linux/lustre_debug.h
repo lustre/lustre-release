@@ -20,38 +20,22 @@
  *
  */
 
+#ifndef _LINUX_LUSTRE_DEBUG_H
+#define _LINUX_LUSTRE_DEBUG_H
+
 #ifndef _LUSTRE_DEBUG_H
-#define _LUSTRE_DEBUG_H
+#error Do not #include this file directly. #include <lprocfs_status.h> instead
+#endif
 
-#include <linux/lustre_net.h>
+#ifdef __KERNEL__
+#define LL_CDEBUG_PAGE(mask, page, fmt, arg...)                               \
+        CDEBUG(mask, "page %p map %p index %lu flags %lx count %u priv %0lx: "\
+               fmt, page, page->mapping, page->index, (long)page->flags,      \
+               page_count(page), page_private(page), ## arg)
+#else
+#define LL_CDEBUG_PAGE(mask, page, fmt, arg...)                               \
+        CDEBUG(mask, "page %p index %lu priv %0lx: "\
+               fmt, page, page->index, page_private(page), ## arg)
+#endif
 
-#define ASSERT_MAX_SIZE_MB 60000ULL
-#define ASSERT_PAGE_INDEX(index, OP)                                    \
-do { if (index > ASSERT_MAX_SIZE_MB << (20 - PAGE_SHIFT)) {             \
-        CERROR("bad page index %lu > %Lu\n", index,                     \
-               ASSERT_MAX_SIZE_MB << (20 - PAGE_SHIFT));                \
-        portal_debug = ~0UL;                                            \
-        OP;                                                             \
-}} while(0)
-
-#define ASSERT_FILE_OFFSET(offset, OP)                                  \
-do { if (offset > ASSERT_MAX_SIZE_MB << 20) {                           \
-        CERROR("bad file offset %Lu > %Lu\n", offset,                   \
-               ASSERT_MAX_SIZE_MB << 20);                               \
-        portal_debug = ~0UL;                                            \
-        OP;                                                             \
-}} while(0)
-
-#define LL_CDEBUG_PAGE(mask, page, fmt, arg...)                         \
-        CDEBUG(mask, "page %p map %p ind %lu priv %0lx: " fmt,          \
-               page, page->mapping, page->index, page->private, ## arg)
-
-/* lib/debug.c */
-int dump_lniobuf(struct niobuf_local *lnb);
-int dump_rniobuf(struct niobuf_remote *rnb);
-int dump_ioo(struct obd_ioobj *nb);
-int dump_req(struct ptlrpc_request *req);
-int dump_obdo(struct obdo *oa);
-int block_debug_setup(void *addr, int len, __u64 off, __u64 id);
-int block_debug_check(char *who, void *addr, int len, __u64 off, __u64 id);
 #endif

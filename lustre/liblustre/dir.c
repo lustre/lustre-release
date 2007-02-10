@@ -30,7 +30,7 @@
 #include <time.h>
 #include <sys/types.h>
 #include <sys/stat.h>
-#include <sys/fcntl.h>
+#include <fcntl.h>
 #include <sys/queue.h>
 
 #ifdef HAVE_XTIO_H
@@ -46,8 +46,8 @@
 
 #undef LIST_HEAD
 
-#ifdef HAVE_LINUX_TYPES_H
-#include <linux/types.h>
+#ifdef HAVE_ASM_TYPES_H
+#include <asm/types.h>
 #elif defined(HAVE_SYS_TYPES_H)
 #include <sys/types.h>
 #endif
@@ -65,8 +65,9 @@
 static int llu_dir_do_readpage(struct inode *inode, struct page *page)
 {
         struct llu_inode_info *lli = llu_i2info(inode);
+        struct intnl_stat *st = llu_i2stat(inode);
         struct llu_sb_info *sbi = llu_i2sbi(inode);
-        struct lustre_id id;
+        struct ll_fid mdc_fid;
         __u64 offset;
         int rc = 0;
         struct ptlrpc_request *request;
@@ -74,22 +75,22 @@ static int llu_dir_do_readpage(struct inode *inode, struct page *page)
         struct mds_body *body;
         struct lookup_intent it = { .it_op = IT_READDIR };
         struct mdc_op_data data;
-        struct obd_device *obddev = class_exp2obd(sbi->ll_md_exp);
+        struct obd_device *obddev = class_exp2obd(sbi->ll_mdc_exp);
         struct ldlm_res_id res_id =
-                { .name = {id_fid(&lli->lli_id), id_group(&lli->lli_id)} };
+                { .name = {st->st_ino, (__u64)lli->lli_st_generation} };
         ldlm_policy_data_t policy = { .l_inodebits = { MDS_INODELOCK_UPDATE } };
         ENTRY;
 
         rc = ldlm_lock_match(obddev->obd_namespace, LDLM_FL_BLOCK_GRANTED,
-                             &res_id, LDLM_IBITS, &policy, LCK_PR, &lockh);
+                             &res_id, LDLM_IBITS, &policy, LCK_CR, &lockh);
         if (!rc) {
-                llu_prepare_mdc_data(&data, inode, NULL, NULL, 0, 0);
+                llu_prepare_mdc_op_data(&data, inode, NULL, NULL, 0, 0);
 
-                rc = mdc_enqueue(sbi->ll_md_exp, LDLM_IBITS, &it, LCK_PR,
+                rc = mdc_enqueue(sbi->ll_mdc_exp, LDLM_IBITS, &it, LCK_CR,
                                  &data, &lockh, NULL, 0,
                                  ldlm_completion_ast, llu_mdc_blocking_ast,
-                                 inode);
-                request = (struct ptlrpc_request *)LUSTRE_IT(&it)->it_data;
+                                 inode, LDLM_FL_CANCEL_ON_BLOCK);
+                request = (struct ptlrpc_request *)it.d.lustre.it_data;
                 if (request)
                         ptlrpc_req_finished(request);
                 if (rc < 0) {
@@ -99,29 +100,30 @@ static int llu_dir_do_readpage(struct inode *inode, struct page *page)
         }
         ldlm_lock_dump_handle(D_OTHER, &lockh);
 
-        /* FIXME-UMKA: should be here some mds num and mds id? */
-        mdc_pack_id(&id, lli->lli_st_ino, lli->lli_st_generation, 
-                    S_IFDIR, 0, 0);
+        mdc_pack_fid(&mdc_fid, st->st_ino, lli->lli_st_generation, S_IFDIR);
 
-        offset = page->index << PAGE_SHIFT;
-        rc = mdc_readpage(sbi->ll_md_exp, &id, offset, page, &request);
+        offset = (__u64)page->index << CFS_PAGE_SHIFT;
+        rc = mdc_readpage(sbi->ll_mdc_exp, &mdc_fid,
+                          offset, page, &request);
         if (!rc) {
-                body = lustre_msg_buf(request->rq_repmsg, 0, sizeof (*body));
-                LASSERT (body != NULL);         /* checked by mdc_readpage() */
-                LASSERT_REPSWABBED (request, 0); /* swabbed by mdc_readpage() */
+                body = lustre_msg_buf(request->rq_repmsg, REPLY_REC_OFF,
+                                      sizeof(*body));
+                LASSERT(body != NULL);         /* checked by mdc_readpage() */
+                /* swabbed by mdc_readpage() */
+                LASSERT_REPSWABBED(request, REPLY_REC_OFF);
 
-                lli->lli_st_size = body->size;
+                st->st_size = body->size;
         } else {
                 CERROR("read_dir_page(%ld) error %d\n", page->index, rc);
         }
         ptlrpc_req_finished(request);
         EXIT;
 
-        ldlm_lock_decref(&lockh, LCK_PR);
+        ldlm_lock_decref(&lockh, LCK_CR);
         return rc;
 }
 
-static struct page *llu_dir_read_page(struct inode *ino, int pgidx)
+static struct page *llu_dir_read_page(struct inode *ino, unsigned long pgidx)
 {
         struct page *page;
         int rc;
@@ -181,9 +183,11 @@ static int filldir(char *buf, int buflen,
                 return 1;
 
         dirent->d_ino = ino;
-        dirent->d_off = offset,
+        dirent->d_off = offset;
         dirent->d_reclen = reclen;
+#ifndef _AIX
         dirent->d_type = (unsigned short) d_type;
+#endif
         memcpy(dirent->d_name, name, namelen);
         dirent->d_name[namelen] = 0;
 
@@ -192,27 +196,29 @@ static int filldir(char *buf, int buflen,
         return 0;
 }
 
-ssize_t llu_iop_getdirentries(struct inode *ino, char *buf, size_t nbytes,
-                              _SYSIO_OFF_T *basep)
+ssize_t llu_iop_filldirentries(struct inode *ino, _SYSIO_OFF_T *basep, 
+			       char *buf, size_t nbytes)
 {
         struct llu_inode_info *lli = llu_i2info(ino);
+        struct intnl_stat *st = llu_i2stat(ino);
         loff_t pos = *basep, offset;
-        int maxpages, pgidx, filled = 0;
+        int filled = 0;
+        unsigned long pgidx, maxpages;
         ENTRY;
 
-        if (lli->lli_st_size == 0) {
+        liblustre_wait_event(0);
+
+        if (st->st_size == 0) {
                 CWARN("dir size is 0?\n");
                 RETURN(0);
         }
 
-        liblustre_wait_event(0);
-
         if (pos == -1)
                 pos = lli->lli_dir_pos;
 
-        maxpages = (lli->lli_st_size + PAGE_SIZE - 1) >> PAGE_SHIFT;
-        pgidx = pos >> PAGE_SHIFT;
-        offset = pos & ~PAGE_MASK;
+        maxpages = (st->st_size + CFS_PAGE_SIZE - 1) >> CFS_PAGE_SHIFT;
+        pgidx = pos >> CFS_PAGE_SHIFT;
+        offset = pos & ~CFS_PAGE_MASK;
 
         for ( ; pgidx < maxpages ; pgidx++, offset = 0) {
                 struct page *page;
@@ -224,11 +230,11 @@ ssize_t llu_iop_getdirentries(struct inode *ino, char *buf, size_t nbytes,
                         continue;
 
                 /* size might have been updated by mdc_readpage */
-                maxpages = (lli->lli_st_size + PAGE_SIZE - 1) >> PAGE_SHIFT;
+                maxpages = (st->st_size + CFS_PAGE_SIZE - 1) >> CFS_PAGE_SHIFT;
 
                 /* fill in buffer */
                 addr = page->addr;
-                limit = addr + PAGE_SIZE - EXT2_DIR_REC_LEN(1);
+                limit = addr + CFS_PAGE_SIZE - EXT2_DIR_REC_LEN(1);
                 de = (struct ext2_dirent *) (addr + offset);
 
                 for ( ; (char*) de <= limit; de = ext2_next_entry(de)) {
@@ -241,7 +247,8 @@ ssize_t llu_iop_getdirentries(struct inode *ino, char *buf, size_t nbytes,
 
                                 offset = (char*) de - addr;
                                 over =  filldir(buf, nbytes, de->name, de->name_len,
-                                                (pgidx << PAGE_SHIFT) | offset,
+                                                (((__u64)pgidx << CFS_PAGE_SHIFT) | offset)
+                                                + le16_to_cpu(de->rec_len),
                                                 le32_to_cpu(de->inode), d_type, &filled);
                                 if (over) {
                                         free_page(page);
@@ -253,7 +260,8 @@ ssize_t llu_iop_getdirentries(struct inode *ino, char *buf, size_t nbytes,
                 free_page(page);
         }
 done:
-        lli->lli_dir_pos = pgidx << PAGE_SHIFT | offset;
+        lli->lli_dir_pos = (__u64)pgidx << CFS_PAGE_SHIFT | offset;
         *basep = lli->lli_dir_pos;
+        liblustre_wait_event(0);
         RETURN(filled);
 }

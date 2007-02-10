@@ -170,6 +170,11 @@ The arguments required are:
  scripts used by the client for recovery
 \layout Description
 
+--group_upcall\SpecialChar ~
+<path> Specify the location of the group upcall scripts used by the MDS
+ for determiningsupplementary group membership
+\layout Description
+
 --ptldebug\SpecialChar ~
 <debug_level> Set the portals debug level.
 \layout Description
@@ -202,7 +207,7 @@ The arguments required are:
 --nettype\SpecialChar ~
 <type> Specify the network type.This can be 
 \series bold 
-tcp, elan, gm, ibnal.
+tcp, elan, gm.
 \layout Description
 
 --nid\SpecialChar ~
@@ -298,10 +303,6 @@ name> Name of the node on which the MDS resides
  If the is a file, then a loop device is created and used as the block device.
 \layout Description
 
---backdev\SpecialChar ~
-<pathname> Path of the device for backing storage on local system.
-\layout Description
-
 --size\SpecialChar ~
 <size> Optional argument indicating the size (in KB) of the device
  to be created (used typically for loop devices).
@@ -317,21 +318,22 @@ name> Name of the node on which the MDS resides
 \layout Description
 
 --fstype\SpecialChar ~
-extN|ext3 Optional argument used to specify the file system type.
- Default is ext3.
-\layout Description
-
---backfstype\SpecialChar ~
-ext3|tmpfs Optional argument to specify the backing filesystem
- type.
-\layout Description
-
---nspath Local mount point of server namespace.
+ldiskfs|ext3 Optional argument used to specify the file system type.
+ Default is ext3.  For 2.6 kernels the ldiskfs filesystem must be used.
 \layout Description
 
 --inode_size\SpecialChar ~
-<size> Specify new inode size for underlying ext3 file system.
+<size> Specify new inode size for underlying ext3 file system.  Must be a
+ power of 2 between 128 and 4096.  The default inode size is selected based
+ on the default number of stripes specified for the filesystem.
 \layout Description
+
+--group_upcall\SpecialChar ~
+<pathname> The group upcall program to call for resolving a user's secondary
+ groups.  The default value is NONE, which means that the MDS will use whatever
+ supplementary group is passed from the client.  The supplied upcall is
+ /usr/sbin/l_getgroups, which gets groups from the MDS's /etc/group file
+ based on the client-supplied UID.
 
 --mkfsoptions\SpecialChar ~
 <options> Optional argument to mkfs.
@@ -363,14 +365,14 @@ asyncdel
 
 --journal_size\SpecialChar ~
 <size> Optional arguement to specify the journal size for
- the ext2/ext3 file system.
+ the ext3 file system.
  The size should be in the units expected by 
 \series bold 
 mkfs
 \series default 
 , so for ext3 it should be in MB.
- If this is option is not used, the ext2/ext3 filesystem will be configured
- with the default journal size.
+ If this is option is not used, the ext3 filesystem will be configured
+ with a journal size dependent upon how large the filesystem is.
 \end_deeper 
 \layout Description
 
@@ -393,13 +395,13 @@ mds_name
 \layout Description
 
 --stripe_sz\SpecialChar ~
-<size> Specify the stripe size in bytes.
+<size> Specify the stripe size in bytes.  This much data is written to each
+ stripe before starting to write in the next stripe.  Default is 1048576.
 \layout Description
 
 --stripe_cnt\SpecialChar ~
-<count> A value of 0 for this means to stripe on all available
- OSTs.
- Default is 0.
+<count> A value of 0 for this means to use the currently optimal number
+ of stripes.  Default is 1 stripe per file.
 \layout Description
 
 --stripe_pattern\SpecialChar ~
@@ -431,10 +433,6 @@ ost Creates an OBD, OST, and OSC.
  device.
 \layout Description
 
---backdev\SpecialChar ~
-<pathname> Path of the device for backing storage on local system.
-\layout Description
-
 --size\SpecialChar ~
 [size] Optional argument indicating the size (in KB) of the device
  to be created (used typically for loop devices).
@@ -456,20 +454,12 @@ UUID Specify the UUID of the OST device.
 \layout Description
 
 --fstype\SpecialChar ~
-extN|ext3 Optional arguement used to specify the file system type.
+ldiskfs|ext3 Optional arguement used to specify the file system type.
  Default is ext3.
-\layout Description
-
---backfstype\SpecialChar ~
-ext3|tmpfs Optional argument to specify the backing filesystem
- type.
 \layout Description
 
 --inode_size\SpecialChar ~
 <size> Specify new inode size for underlying ext3 file system.
-\layout Description
-
---nspath Local mount point of server namespace.
 \layout Description
 
 --mkfsoptions\SpecialChar ~
@@ -502,20 +492,19 @@ asyncdel
 
 --journal_size\SpecialChar ~
 <size> Optional arguement to specify the journal size for
- the ext2/ext3 file system.
+ the ext3 file system.
  The size should be in the units expected by 
 \series bold 
 mkfs
 \series default 
 , so for ext3 it should be in MB.
- If this is option is not used, the ext2/ext3 filesystem will be configured
- with the default journal size.
+ If this is option is not used, the ext3 filesystem will be configured
+ with a journal size dependent upon how large the filesystem is.
 \end_deeper 
 \layout Description
 
 --add\SpecialChar ~
-mtpt Creates a mount-point on the specified node.
- Either an LOV or OSC name can be used.
+mtpt Creates a mount-point on the specified node for the given LOV.
 \begin_deeper 
 \layout Description
 
@@ -614,52 +603,6 @@ Node on which the echo-client resides.
 \end_deeper 
 \layout Description
 
---add\SpecialChar ~
-mgmt Management/monitoring service.
-\begin_deeper 
-\layout Description
-
---node\SpecialChar ~
-nodename
-\emph on 
- 
-\emph default 
-Node on which the mgmt service resides.
-\layout Description
-
---mgmt\SpecialChar ~
-<mgmt_service_name> Specify management/monitoring service name.
-\end_deeper 
-\layout List
-\labelwidthstring 00.00.0000
-
-
-\series bold 
---add\SpecialChar ~
-cobd 
-\series default 
-Create the cobd on the specified node.
-\begin_deeper 
-\layout Description
-\noindent \align left 
---node\SpecialChar ~
-nodename
-\emph on 
- 
-\emph default 
-Node on which the cobd resides.
-\layout Description
-
---cache_obd\SpecialChar ~
-obd_name Specify the cache device for the cache obd system.
-\layout Description
-
---real_obd\SpecialChar ~
-obd_name
-\emph on 
- 
-\emph default 
-Specify the real device for the cache obd system.
 \end_deeper 
 \layout List
 \labelwidthstring 00.00.0000
@@ -694,9 +637,51 @@ Add the new element to an existing file.
 \layout Subsection
 
 EXAMPLES
+\layout Subsubsection
+
+--add net
 \layout Standard
 
-Real life examples are given in the Lustre-conf manual page.
+
+\series bold 
+lmc --node adev3 --add net --nid adev3 --cluster_id 0x1000 --nettype tcp
+ --hostaddr adev3-eth0 --port 988
+\layout Standard
+
+
+\series bold 
+lmc --node adev3 --add net --nid adev3 --cluster_id 0x2000 --nettype tcp
+ --hostaddr adev3-eth1 --port 989
+\series default 
+\emph on 
+ 
+\layout Standard
+
+Used to add a Lustre node to a specified Lustre cluster through a network
+ interface.
+ In this example, Lustre node adev3 has been added to 2 Lustre clusters
+ whose cluster_id are 0x1000 and 0x2000 separately through 2 network interface
+ cards: adev3-eth0 and adev3-eth1.
+ adev3 would listen in some specified port(s) to prepare for possible connection
+ requests from nodes in these two clusters.
+\layout Subsubsection
+
+--add route
+\layout Standard
+
+
+\series bold 
+lmc --node adev3 --add route --nettype tcp --gw 5 --gateway_cluster_id 0x1000
+ --target_cluster_id 0x1000 --lo 4 --hi 7
+\layout Standard
+
+Used to add a route entry for a Lustre node.
+ Here Lustre node adev3 is told it has a new route entry that now it could
+ send packets to Lustre nodes whose nids is from 4 to 7 with the help of
+ Lustre gateway node whose nid is 5.
+ Besides, Lustre gateway node is in cluster whose id is 0x1000 and target
+ of the route belongs to cluster whose id is also 0x1000.
+ The network in this route path is a tcp network.
 \layout Subsection
 
 BUGS

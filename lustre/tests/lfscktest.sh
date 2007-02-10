@@ -1,122 +1,224 @@
 #!/bin/bash
-set -vx
-#set -e
+#set -vx
+set -e
 
-. ./lfscktest_config.sh
-
-sh llmount.sh || exit 1
-
-#Create mount points on target OST and MDS
-#Create test directory 
-mkdir -p $OST_MOUNTPT
-mkdir -p $MDS_MOUNTPT
-mkdir -p $TEST_DIR
+TESTNAME="lfscktest"
+TMP=${TMP:-/tmp}
+MDSDB=${MDSDB:-$TMP/mdsdb}
+OSTDB=${OSTDB:-$TMP/ostdb}
+LOG=${LOG:-"$TMP/lfscktest.log"}
+L2FSCK_PATH=${L2FSCK_PATH:-""}
+NUMFILES=${NUMFILES:-10}
+NUMDIRS=${NUMDIRS:-4}
+LFIND=${LFIND:-"lfs find"}
+GETFATTR=${GETFATTR:-getfattr}
+SETFATTR=${SETFATTR:-setfattr}
+MAX_ERR=1
 
 export PATH=$LFSCK_PATH:`dirname $0`:`dirname $0`/../utils:$PATH
 
-# Create some files on the filesystem
-for i in `seq 0 3`; do
-	mkdir -p ${MOUNT}/d$i
-	for j in `seq 0 5`; do
-		mkdir -p  ${MOUNT}/d$i/d$j
-		for k in `seq 1 5`; do
-			FILE="${MOUNT}/d$i/d$j/test$k"
-			echo "creating $FILE"
-			dd if=/dev/zero bs=4k count=1 of=$FILE
+[ -z "`which $GETFATTR`" ] && echo "$0: $GETFATTR not found" && exit 5
+[ -z "`which $SETFATTR`" ] && echo "$0: $SETFATTR not found" && exit 6
+
+LUSTRE=${LUSTRE:-`dirname $0`/..}
+. $LUSTRE/tests/test-framework.sh
+init_test_env $@
+. ${CONFIG:=$LUSTRE/tests/cfg/$NAME.sh}
+
+WAS_MOUNTED=`mount | grep $MOUNT`
+[ "$WAS_MOUNTED" ] || $FORMAT && $SETUP
+
+DIR=${DIR:-$MOUNT/$TESTNAME}
+[ -z "`echo $DIR | grep $MOUNT`" ] && echo "$DIR not in $MOUNT" && exit 3
+
+if [ "$WAS_MOUNTED" ]; then
+	LFSCK_SETUP=no
+	MAX_ERR=4		# max expected error from e2fsck
+fi
+
+get_mnt_devs() {
+	DEVS=`cat /proc/fs/lustre/$1/*/mntdev`
+	for DEV in $DEVS; do
+		case $DEV in
+		*loop*) losetup $DEV | sed -e "s/.*(//" -e "s/).*//" ;;
+		*) echo $DEV ;;
+		esac
+	done
+}
+
+if [ "$LFSCK_SETUP" != "no" ]; then
+	#Create test directory 
+	rm -rf $DIR
+	mkdir -p $DIR
+	OSTCOUNT=`$LFIND $MOUNT | grep -c "^[0-9]*: "`
+
+	# Create some files on the filesystem
+	for d in `seq -f d%g $NUMDIRS`; do
+		echo "creating files in $DIR/$d"
+		for e in `seq -f d%g $NUMDIRS`; do
+			mkdir -p  $DIR/$d/$e
+			for f in `seq -f test%g $NUMDIRS`; do
+				cp /etc/fstab $DIR/$d/$e/$f ||exit 5
+			done
 		done
 	done
-done
 
-# Create Files to be modified
-file_name=${TESTNAME}
-for FILE in `seq -f ${TEST_DIR}/${file_name}.%g 0 40`; do
-	dd if=/dev/zero count=1 bs=64K of=$FILE || exit 1
-done
+	# Create Files to be modified
+	for f in `seq -f $DIR/testfile.%g $((NUMFILES * 3))`; do
+		echo "creating $f"
+		cp /etc/termcap $f || exit 10
+	done
 
-#Create some more files
-for i in `seq 21 23`; do
-	mkdir -p ${MOUNT}/d$i
-	for j in `seq 0 5`; do
-		mkdir -p  ${MOUNT}/d$i/d$j
-		for k in `seq 0 5`; do
-			FILE="${MOUNT}/d$i/d$j/test$k"
-			echo "creating $FILE"
-			dd if=/dev/zero bs=4k count=1 of=$FILE
+	#Create some more files
+	for d in `seq -f d%g $((NUMDIRS * 2 + 1)) $((NUMDIRS * 2 + 3))`; do
+		echo "creating files in $DIR/$d"
+		for e in `seq -f d%g $NUMDIRS`; do
+			mkdir -p  $DIR/$d/$e
+			for f in `seq -f test%g $NUMDIRS`; do
+				cp /etc/hosts $DIR/$d/$e/$f ||exit 15
+			done
 		done
 	done
-done
 
-# Get objids for a file on the OST
-OST_TEST_FILE_OBJIDS=""
-for i in `seq 0 19`; do
-	OST_TEST_FILE=${TEST_DIR}/${file_name}.$i
-	##Get the file OBJID
-	OST_TEST_FILE_OBJID=`$LFIND -v -o $OST_UUID $OST_TEST_FILE|grep '\*$' | awk '{ print $2 }'` || exit 1
-	if [ "$OST_TEST_FILE_OBJID" ]; then
-		echo "REMOVING OBJID $OST_TEST_FILE_OBJID on $OST_UUID from $OST_TEST_FILE"
-	fi
-	OST_TEST_FILE_OBJIDS="$OST_TEST_FILE_OBJIDS $OST_TEST_FILE_OBJID"
-done
+	# these should NOT be taken as duplicates
+	for f in `seq -f $DIR/$d/linkfile.%g $NUMFILES`; do
+		echo "linking files in $DIR/$d"
+		cp /etc/hosts $f
+		ln $f $f.link
+	done
 
-MDS_FILES=""
-for i in `seq 20 39`; do
-	TEST_FILE=${TEST_DIR}/${file_name}.$i
-	echo "REMOVING MDS FILE $TEST_FILE which has info:"
-	$LFIND -v $TEST_FILE  || exit 1
-	MDS_FILES="$MDS_FILES ${TESTNAME}/${file_name}.$i"
-done
+	# Get objids for a file on the OST
+	OST_FILES=`seq -f $DIR/testfile.%g $NUMFILES`
+	OST_REMOVE=`$LFIND $OST_FILES | awk '$1 == 0 { print $2 }' | head -n $NUMFILES`
 
-sh llmountcleanup.sh || exit 1
-# Remove objects associated with files
-echo "removing objects: $OST_TEST_FILE_OBJIDS"
-for i in $OST_TEST_FILE_OBJIDS; do
-	z=`expr $i % 32`
-	debugfs -w -R "rm O/0/d$z/$i" "$OSTDEV" || exit 1
-done
+	export MDS_DUPE=""
+	for f in `seq -f testfile.%g $((NUMFILES + 1)) $((NUMFILES * 2))`; do
+		TEST_FILE=$DIR/$f
+		echo "DUPLICATING MDS file $TEST_FILE"
+		$LFIND -v $TEST_FILE >> $LOG || exit 20
+		MDS_DUPE="$MDS_DUPE $TEST_FILE"
+	done
+	MDS_DUPE=`echo $MDS_DUPE | sed "s#$MOUNT/##g"`
 
-mount "-o" loop $MDSDEV $MDS_MOUNTPT
+	export MDS_REMOVE=""
+	for f in `seq -f testfile.%g $((NUMFILES * 2 + 1)) $((NUMFILES * 3))`; do
+		TEST_FILE=$DIR/$f
+		echo "REMOVING MDS file $TEST_FILE which has info:"
+		$LFIND -v $TEST_FILE >> $LOG || exit 30
+		MDS_REMOVE="$MDS_REMOVE $TEST_FILE"
+	done
+	MDS_REMOVE=`echo $MDS_REMOVE | sed "s#$MOUNT/##g"`
 
-#Remove files from mds
-for i in $MDS_FILES; do
-	rm $MDS_MOUNTPT/ROOT/$i || (umount $MDS_MOUNTPT && exit 1)
-done
+	MDTDEVS=`get_mnt_devs mds`
+	OSTDEVS=`get_mnt_devs obdfilter`
+	OSTCOUNT=`echo $OSTDEVS | wc -w`
+	sh llmountcleanup.sh || exit 40
 
-#Create EAs on files so objects are referenced twice from different mds files
-for i in `seq 0 19`; do
-	touch $MDS_MOUNTPT/ROOT/${TESTNAME}/${TESTNAME}.bad.$i
-	copy_attr $MDS_MOUNTPT/ROOT/${TESTNAME}/${TESTNAME}.$i $MDS_MOUNTPT/ROOT/${TESTNAME}/${TESTNAME}.bad.$i || (umount $MDS_MOUNTPT && exit 1)
-        i=`expr $i + 1`
-done
-umount $MDS_MOUNTPT 
-rmdir $MDS_MOUNTPT
-rmdir $OST_MOUNTPT
+	# Remove objects associated with files
+	echo "removing objects: `echo $OST_REMOVE`"
+	DEBUGTMP=`mktemp $TMP/debugfs.XXXXXXXXXX`
+	for i in $OST_REMOVE; do
+		echo "rm O/0/d$((i % 32))/$i" >> $DEBUGTMP
+	done
+	debugfs -w -f $DEBUGTMP `echo $OSTDEVS | cut -d' ' -f 1`
+	RET=$?
+	rm $DEBUGTMP
+	[ $RET -ne 0 ] && exit 50
+
+	SAVE_PWD=$PWD
+	mount -t $FSTYPE -o loop $MDSDEV $MOUNT || exit 60
+	do_umount() {
+		trap 0
+		cd $SAVE_PWD
+		umount -f $MOUNT
+	}
+	trap do_umount EXIT
+
+	#Remove files from mds
+	for f in $MDS_REMOVE; do
+		rm $MOUNT/ROOT/$f || exit 70
+	done
+
+	#Create EAs on files so objects are referenced from different files
+	ATTRTMP=`mktemp $TMP/setfattr.XXXXXXXXXX`
+	cd $MOUNT/ROOT || exit 78
+	for f in $MDS_DUPE; do
+		touch $f.bad || exit 74
+		getfattr -n trusted.lov $f | sed "s#$f#&.bad#" > $ATTRTMP
+		setfattr --restore $ATTRTMP || exit 80
+	done
+	cd $SAVE_PWD
+	rm $ATTRTMP
+
+	do_umount
+else
+	MDTDEVS=`get_mnt_devs mds`
+	OSTDEVS=`get_mnt_devs obdfilter`
+	OSTCOUNT=`echo $OSTDEVS | wc -w`
+fi # LFSCK_SETUP
 
 # Run e2fsck to get mds and ost info
 # a return status of 1 indicates e2fsck successfuly fixed problems found
+set +e
 
-e2fsck -d -f -y --mdsdb $GPATH/mdsdb $MDSDEV
+echo "e2fsck -d -v -fn --mdsdb $MDSDB $MDSDEV"
+e2fsck -d -v -fn --mdsdb $MDSDB $MDSDEV
 RET=$?
-[ $RET -ne 0 -a $RET -ne 1 ] && exit 1
+[ $RET -gt $MAX_ERR ] && echo "e2fsck returned $RET" && exit 90 || true
+
+export OSTDB_LIST=""
 i=0
-OSTDB_LIST=""
-while [ $i -lt $NUM_OSTS ]; do
-	e2fsck -d -f -y --mdsdb $GPATH/mdsdb --ostdb $GPATH/ostdb-$i $TMP/ost`expr $i + 1`-`hostname`
+for OSTDEV in $OSTDEVS; do
+	e2fsck -d -v -fn --mdsdb $MDSDB --ostdb $OSTDB-$i $OSTDEV
 	RET=$?
-	[ $RET -ne 0 -a $RET -ne 1 ] && exit 1
-	if [ -z "${OSTDB_LIST}" ]; then
-		OSTDB_LIST=${GPATH}/ostdb-$i
-	else
-		OSTDB_LIST=${GPATH}/ostdb-$i,${OSTDB_LIST}
-	fi
-	i=`expr $i + 1`
+	[ $RET -gt $MAX_ERR ] && echo "e2fsck returned $RET" && exit 100
+	OSTDB_LIST="$OSTDB_LIST $OSTDB-$i"
+	i=$((i + 1))
 done
 
 #Remount filesystem
-sh llrmount.sh  || exit 1
+[ "`mount | grep $MOUNT`" ] || $SETUP
 
-lfsck -l --mdsdb $GPATH/mdsdb --ostdb ${OSTDB_LIST} ${MOUNT} || exit 1  
+# need to turn off shell error detection to get proper error return
+# lfsck will return 1 if the filesystem had errors fixed
+echo "LFSCK TEST 1"
+echo "lfsck -c -l --mdsdb $MDSDB --ostdb $OSTDB_LIST $MOUNT"
+lfsck -c -l --mdsdb $MDSDB --ostdb $OSTDB_LIST $MOUNT
+RET=$?
+[ $RET -eq 0 ] && echo "clean after first check" && exit 0
+echo "LFSCK TEST 1 - finished with rc=$RET"
+[ $RET -gt $MAX_ERR ] && exit 110 || true
+
+# make sure everything gets to the backing store
+sync; sleep 2; sync
+
+echo "LFSCK TEST 2"
+echo "e2fsck -d -v -fn --mdsdb $MDSDB $MDSDEV"
+e2fsck -d -v -fn --mdsdb $MDSDB $MDSDEV
+RET=$?
+[ $RET -gt $MAX_ERR ] && echo "e2fsck returned $RET" && exit 123 || true
+
+i=0
+export OSTDB_LIST=""
+for OSTDEV in $OSTDEVS; do
+	e2fsck -d -v -fn --mdsdb $MDSDB --ostdb $OSTDB-$i $OSTDEV
+	RET=$?
+	[ $RET -gt $MAX_ERR ] && echo "e2fsck returned $RET" && exit 124
+	OSTDB_LIST="$OSTDB_LIST $OSTDB-$i"
+	i=$((i + 1))
+done
+
+echo "LFSCK TEST 2"
+echo "lfsck -c -l --mdsdb $MDSDB --ostdb $OSTDB_LIST $MOUNT"
+lfsck -c -l --mdsdb $MDSDB --ostdb $OSTDB_LIST $MOUNT
+RET=$?
+echo "LFSCK TEST 2 - finished with rc=$RET"
+[ $RET -ne 0 ] && exit 125 || true
+if [ -z "$WAS_MOUNTED" ]; then
+	sh llmountcleanup.sh || exit 120
+fi
 
 #Cleanup 
-rm $GPATH/mdsdb
-rm $GPATH/ostdb-*
-sh llmountcleanup.sh || exit 1
+rm -f $MDSDB $OSTDB-* || true
+
+echo "$0: completed"

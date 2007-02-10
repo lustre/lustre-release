@@ -1,8 +1,8 @@
-Index: linux-2.6.10/kernel/sched.c
+Index: linux-2.6.5-SLES9_SP1_BRANCH_2004102113353091/kernel/sched.c
 ===================================================================
---- linux-2.6.10.orig/kernel/sched.c	2005-05-31 23:40:49.000000000 +0400
-+++ linux-2.6.10/kernel/sched.c	2005-06-20 16:50:04.000000000 +0400
-@@ -3546,7 +3546,7 @@
+--- linux-2.6.5-SLES9_SP1_BRANCH_2004102113353091.orig/kernel/sched.c	2004-10-22 15:25:05.000000000 -0400
++++ linux-2.6.5-SLES9_SP1_BRANCH_2004102113353091/kernel/sched.c	2004-10-22 15:39:18.000000000 -0400
+@@ -3147,7 +3147,7 @@
  	return list_entry(p->sibling.next,struct task_struct,sibling);
  }
  
@@ -11,7 +11,7 @@ Index: linux-2.6.10/kernel/sched.c
  {
  	task_t *relative;
  	unsigned state;
-@@ -3596,9 +3596,10 @@
+@@ -3200,9 +3200,10 @@
  	else
  		printk(" (NOTLB)\n");
  

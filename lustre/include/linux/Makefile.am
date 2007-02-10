@@ -6,15 +6,12 @@
 linuxdir = $(includedir)/linux
 
 if UTILS
-linux_HEADERS = lustre_idl.h
+linux_HEADERS = lustre_types.h lustre_user.h
 endif
 
-EXTRA_DIST = lprocfs_status.h lustre_debug.h lustre_ha.h lustre_lib.h \
-  lustre_mgmt.h obd_cache.h obd_lov.h lustre_dlm.h lustre_handles.h \
-  lustre_net.h obd_class.h obd_ost.h obd_support.h lustre_commit_confd.h \
-  lustre_export.h lustre_log.h obd_echo.h obd_ptlbd.h obd_trace.h \
-  lustre_compat25.h lustre_fsfilt.h lustre_import.h lustre_mds.h obd.h \
-  lvfs.h lvfs_linux.h lustre_cfg.h lustre_lite.h  lustre_idl.h lustre_smfs.h \
-  lustre_cmobd.h obd_lmv.h lustre_snap.h lustre_sec.h lustre_ucache.h \
-  lustre_acl.h lustre_audit.h lustre_gs.h
+EXTRA_DIST = lprocfs_status.h lustre_debug.h lustre_lib.h \
+  lustre_dlm.h lustre_handles.h lustre_net.h obd_class.h obd_support.h  \
+  lustre_log.h lustre_compat25.h lustre_fsfilt.h lustre_mds.h obd.h \
+  lvfs.h lvfs_linux.h lustre_lite.h  lustre_quota.h \
+  lustre_user.h lustre_types.h lustre_patchless_compat.h lustre_intent.h
 

@@ -12,6 +12,7 @@
 #	discard first vmstat line
 #
 
+HOSTNAME=`hostname`
 # a temp dir that is setup and torn down for each script run
 tmpdir=""
 # so we can kill background processes as the test cleans up
@@ -422,13 +423,13 @@ echo_filter_config() {
 
 	if [ $index = 0 ]; then
 		if ! lmc -m $config --add net \
-			--node localhost --nid localhost --nettype tcp; then
-			echo "error adding localhost net node"
+			--node $HOSTNAME --nid $HOSTNAME --nettype tcp; then
+			echo "error adding $HOSTNAME net node"
 			return 1
 		fi
 	fi
 
-	if ! lmc -m $config --add ost --ost ost_$index --node localhost \
+	if ! lmc -m $config --add ost --ost ost_$index --node $HOSTNAME \
 			--fstype ext3 --dev $bdev --journal_size 400; then
 		echo "error adding $bdev to config with lmc"
 		return 1
@@ -451,8 +452,8 @@ echo_filter_prepare() {
 		fi
 		running_config="$config"
 
-		echo 0 > /proc/sys/portals/debug
-		echo 0 > /proc/sys/portals/subsystem_debug
+		echo 0 > /proc/sys/lnet/debug
+		echo 0 > /proc/sys/lnet/subsystem_debug
 
 		if ! grep -q '^obdecho\>' /proc/modules; then
 			local m

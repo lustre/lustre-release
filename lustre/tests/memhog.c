@@ -50,30 +50,36 @@ int main(int argc, char *argv[])
 	mem = calloc(numchunk, sizeof(*mem));
 	if (mem == NULL) {
 		fprintf(stderr, "error allocating initial chunk array\n");
-		exit(1);
+		exit(-1);
 	}
 
 	alloc = CHUNK;
 	printf("[%d] allocating %lld kbytes in %u kbyte chunks\n",
 	       getpid(), kbtotal, alloc);
-	for (i = kballoc = 0; i < numchunk; i++, kballoc += alloc) {
+	for (i = kballoc = 0; i < numchunk && alloc > 0; i++, kballoc += alloc){
 		if (kbtotal - kballoc < alloc)
 			alloc = kbtotal - kballoc;
 
-		tmp = mem[i] = malloc(alloc * 1024);
-		if (tmp == NULL) {
+		while (alloc > 0 && (mem[i] = malloc(alloc * 1024)) == NULL) {
 			fprintf(stderr, "malloc(%u) failed (%lld/%lld)\n",
 				alloc * 1024, kballoc, kbtotal);
-		} else {
-			printf("touching %p (%lld/%lld)\n",
-			       tmp, kballoc, kbtotal);
-			for (j = 0; j < alloc; j += 4) {
-				for (k = 0, sum = 0; k < 4095; k++, tmp++)
-					sum += *tmp;
-				*tmp = sum;
-			}
+			alloc /= 2;
+		}
+		if (alloc == 0)
+			break;
+
+		printf("touching %p ([%lld-%lld]/%lld)\n", mem[i], kballoc,
+		       kballoc + alloc - 1, kbtotal);
+		for (j = 0, tmp = mem[i]; j < alloc; j += 4) {
+			for (k = 0, sum = 0; k < 4095; k++, tmp++)
+				sum += *tmp;
+			*tmp = sum;
 		}
 	}
+	if (kballoc == 0)
+		exit(-2);
+
+	kbtotal = kballoc;
 	printf("touched %lld kbytes\n", kballoc);
 
 	alloc = CHUNK;
@@ -92,7 +98,7 @@ int main(int argc, char *argv[])
 				if (*tmp != sum) {
 					fprintf(stderr, "sum %x != %x at %p\n",
 						*tmp, sum, tmp - 4092);
-					rc = 1;
+					rc++;
 				}
 			}
 		}

@@ -4,50 +4,43 @@
  *  Copyright (C) 2001-2003 Cluster File Systems, Inc.
  *   Author Peter Braam <braam@clusterfs.com>
  *
- *   This file is part of Lustre, http://www.lustre.org.
+ *   This file is part of the Lustre file system, http://www.lustre.org
+ *   Lustre is a trademark of Cluster File Systems, Inc.
  *
- *   Lustre is free software; you can redistribute it and/or
- *   modify it under the terms of version 2 of the GNU General Public
- *   License as published by the Free Software Foundation.
+ *   You may have signed or agreed to another license before downloading
+ *   this software.  If so, you are bound by the terms and conditions
+ *   of that agreement, and the following does not apply to you.  See the
+ *   LICENSE file included with this distribution for more information.
  *
- *   Lustre is distributed in the hope that it will be useful,
- *   but WITHOUT ANY WARRANTY; without even the implied warranty of
- *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *   GNU General Public License for more details.
+ *   If you did not agree to a different license, then this copy of Lustre
+ *   is open source software; you can redistribute it and/or modify it
+ *   under the terms of version 2 of the GNU General Public License as
+ *   published by the Free Software Foundation.
  *
- *   You should have received a copy of the GNU General Public License
- *   along with Lustre; if not, write to the Free Software
- *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ *   In either case, Lustre is distributed in the hope that it will be
+ *   useful, but WITHOUT ANY WARRANTY; without even the implied warranty
+ *   of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *   license text for more details.
  *
  */
 
 #define DEBUG_SUBSYSTEM S_RPC
 
 #ifdef __KERNEL__
-# include <linux/version.h>
-# include <linux/module.h>
-# include <linux/mm.h>
-# include <linux/highmem.h>
-# include <linux/lustre_dlm.h>
-# if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0))
-#  include <linux/workqueue.h>
-#  include <linux/smp_lock.h>
-# else
-#  include <linux/locks.h>
-# endif
-# include <linux/ctype.h>
-# include <linux/init.h>
+# include <libcfs/libcfs.h>
 #else /* __KERNEL__ */
 # include <liblustre.h>
 # include <ctype.h>
 #endif
 
 #include <libcfs/kp30.h>
-#include <linux/lustre_net.h>
+#include <lustre_net.h>
+# include <lustre_lib.h>
 
-#include <linux/lustre_ha.h>
-#include <linux/obd_support.h> /* for OBD_FAIL_CHECK */
-#include <linux/lprocfs_status.h>
+#include <lustre_ha.h>
+#include <obd_class.h>   /* for obd_zombie */
+#include <obd_support.h> /* for OBD_FAIL_CHECK */
+#include <lprocfs_status.h>
 
 #define LIOD_STOP 0
 struct ptlrpcd_ctl {
@@ -56,7 +49,7 @@ struct ptlrpcd_ctl {
         struct completion         pc_starting;
         struct completion         pc_finishing;
         struct list_head          pc_req_list;
-        wait_queue_head_t         pc_waitq;
+        cfs_waitq_t               pc_waitq;
         struct ptlrpc_request_set *pc_set;
         char                      pc_name[16];
 #ifndef __KERNEL__
@@ -68,7 +61,7 @@ struct ptlrpcd_ctl {
 static struct ptlrpcd_ctl ptlrpcd_pc;
 static struct ptlrpcd_ctl ptlrpcd_recovery_pc;
 
-static DECLARE_MUTEX(ptlrpcd_sem);
+struct semaphore ptlrpcd_sem;
 static int ptlrpcd_users = 0;
 
 void ptlrpcd_wake(struct ptlrpc_request *req)
@@ -77,22 +70,22 @@ void ptlrpcd_wake(struct ptlrpc_request *req)
 
         LASSERT(pc != NULL);
 
-        wake_up(&pc->pc_waitq);
+        cfs_waitq_signal(&pc->pc_waitq);
 }
 
+/* requests that are added to the ptlrpcd queue are sent via
+ * ptlrpcd_check->ptlrpc_check_set() */
 void ptlrpcd_add_req(struct ptlrpc_request *req)
 {
         struct ptlrpcd_ctl *pc;
 
         if (req->rq_send_state == LUSTRE_IMP_FULL)
                 pc = &ptlrpcd_pc;
-        else 
+        else
                 pc = &ptlrpcd_recovery_pc;
 
-        do_gettimeofday(&req->rq_rpcd_start);
         req->rq_ptlrpcd_data = pc;
         ptlrpc_set_add_new_req(pc->pc_set, req);
-                
         wake_up(&pc->pc_waitq);
 }
 
@@ -100,21 +93,22 @@ static int ptlrpcd_check(struct ptlrpcd_ctl *pc)
 {
         struct list_head *tmp, *pos;
         struct ptlrpc_request *req;
-        unsigned long flags;
         int rc = 0;
         ENTRY;
 
         if (test_bit(LIOD_STOP, &pc->pc_flags))
                 RETURN(1);
 
-        spin_lock_irqsave(&pc->pc_set->set_new_req_lock, flags);
+        obd_zombie_impexp_cull();
+
+        spin_lock(&pc->pc_set->set_new_req_lock);
         list_for_each_safe(pos, tmp, &pc->pc_set->set_new_requests) {
                 req = list_entry(pos, struct ptlrpc_request, rq_set_chain);
                 list_del_init(&req->rq_set_chain);
                 ptlrpc_set_add_req(pc->pc_set, req);
                 rc = 1; /* need to calculate its timeout */
         }
-        spin_unlock_irqrestore(&pc->pc_set->set_new_req_lock, flags);
+        spin_unlock(&pc->pc_set->set_new_req_lock);
 
         if (pc->pc_set->set_remaining) {
                 rc = rc | ptlrpc_check_set(pc->pc_set);
@@ -132,12 +126,14 @@ static int ptlrpcd_check(struct ptlrpcd_ctl *pc)
                         ptlrpc_req_finished (req);
                 }
         }
+
         if (rc == 0) {
                 /* If new requests have been added, make sure to wake up */
-                spin_lock_irqsave(&pc->pc_set->set_new_req_lock, flags);
+                spin_lock(&pc->pc_set->set_new_req_lock);
                 rc = !list_empty(&pc->pc_set->set_new_requests);
-                spin_unlock_irqrestore(&pc->pc_set->set_new_req_lock, flags);
+                spin_unlock(&pc->pc_set->set_new_req_lock);
         }
+
         RETURN(rc);
 }
 
@@ -148,15 +144,13 @@ static int ptlrpcd_check(struct ptlrpcd_ctl *pc)
 static int ptlrpcd(void *arg)
 {
         struct ptlrpcd_ctl *pc = arg;
-        unsigned long flags;
+        int rc;
         ENTRY;
 
-        kportal_daemonize(pc->pc_name);
-
-        SIGNAL_MASK_LOCK(current, flags);
-        sigfillset(&current->blocked);
-        RECALC_SIGPENDING;
-        SIGNAL_MASK_UNLOCK(current, flags);
+        if ((rc = cfs_daemonize_ctxt(pc->pc_name))) {
+                complete(&pc->pc_starting);
+                return rc;
+        }
 
         complete(&pc->pc_starting);
 
@@ -166,18 +160,19 @@ static int ptlrpcd(void *arg)
          * on the set's new_req_list and ptlrpcd_check moves them into
          * the set. */
         while (1) {
-                wait_queue_t set_wait;
+                cfs_waitlink_t set_wait;
                 struct l_wait_info lwi;
-                int timeout;
+                cfs_duration_t timeout;
 
-                timeout = ptlrpc_set_next_timeout(pc->pc_set) * HZ;
+                timeout = cfs_time_seconds(ptlrpc_set_next_timeout(pc->pc_set));
                 lwi = LWI_TIMEOUT(timeout, ptlrpc_expired_set, pc->pc_set);
 
                 /* ala the pinger, wait on pc's waitqueue and the set's */
-                init_waitqueue_entry(&set_wait, current);
-                add_wait_queue(&pc->pc_set->set_waitq, &set_wait);
+                cfs_waitlink_init(&set_wait);
+                cfs_waitq_add(&pc->pc_set->set_waitq, &set_wait);
+                cfs_waitq_forward(&set_wait, &pc->pc_waitq);
                 l_wait_event(pc->pc_waitq, ptlrpcd_check(pc), &lwi);
-                remove_wait_queue(&pc->pc_set->set_waitq, &set_wait);
+                cfs_waitq_del(&pc->pc_set->set_waitq, &set_wait);
 
                 if (test_bit(LIOD_STOP, &pc->pc_flags))
                         break;
@@ -187,6 +182,11 @@ static int ptlrpcd(void *arg)
                 ptlrpc_set_wait(pc->pc_set);
         complete(&pc->pc_finishing);
         return 0;
+}
+
+static void ptlrpcd_zombie_impexp_notify(void)
+{
+        cfs_waitq_signal(&ptlrpcd_pc.pc_waitq);
 }
 #else
 
@@ -202,6 +202,9 @@ int ptlrpcd_check_async_rpcs(void *arg)
                 rc = ptlrpcd_check(pc);
                 if (!rc)
                         ptlrpc_expired_set(pc->pc_set);
+                /*XXX send replay requests */
+                if (pc == &ptlrpcd_recovery_pc)
+                        rc = ptlrpcd_check(pc);
         }
 
         pc->pc_recurred--;
@@ -211,41 +214,47 @@ int ptlrpcd_check_async_rpcs(void *arg)
 
 static int ptlrpcd_start(char *name, struct ptlrpcd_ctl *pc)
 {
-        int rc = 0;
+        int rc;
 
+        ENTRY;
         memset(pc, 0, sizeof(*pc));
         init_completion(&pc->pc_starting);
         init_completion(&pc->pc_finishing);
-        init_waitqueue_head(&pc->pc_waitq);
+        cfs_waitq_init(&pc->pc_waitq);
         pc->pc_flags = 0;
         spin_lock_init(&pc->pc_lock);
-        INIT_LIST_HEAD(&pc->pc_req_list);
+        CFS_INIT_LIST_HEAD(&pc->pc_req_list);
         snprintf (pc->pc_name, sizeof (pc->pc_name), name);
 
         pc->pc_set = ptlrpc_prep_set();
         if (pc->pc_set == NULL)
-                GOTO(out, rc = -ENOMEM);
+                RETURN(-ENOMEM);
 
 #ifdef __KERNEL__
-        if (kernel_thread(ptlrpcd, pc, 0) < 0)  {
+        /* wake ptlrpcd when zombie imports or exports exist */
+        obd_zombie_impexp_notify = ptlrpcd_zombie_impexp_notify;
+        
+        rc = cfs_kernel_thread(ptlrpcd, pc, 0);
+        if (rc < 0)  {
                 ptlrpc_set_destroy(pc->pc_set);
-                GOTO(out, rc = -ECHILD);
+                RETURN(rc);
         }
 
         wait_for_completion(&pc->pc_starting);
 #else
         pc->pc_callback =
                 liblustre_register_wait_callback(&ptlrpcd_check_async_rpcs, pc);
+        (void)rc;
 #endif
-out:
-        RETURN(rc);
+        RETURN(0);
 }
 
 static void ptlrpcd_stop(struct ptlrpcd_ctl *pc)
 {
         set_bit(LIOD_STOP, &pc->pc_flags);
-        wake_up(&pc->pc_waitq);
+        cfs_waitq_signal(&pc->pc_waitq);
 #ifdef __KERNEL__
+        obd_zombie_impexp_notify = NULL;
         wait_for_completion(&pc->pc_finishing);
 #else
         liblustre_deregister_wait_callback(pc->pc_callback);
@@ -258,7 +267,7 @@ int ptlrpcd_addref(void)
         int rc = 0;
         ENTRY;
 
-        down(&ptlrpcd_sem);
+        mutex_down(&ptlrpcd_sem);
         if (++ptlrpcd_users != 1)
                 GOTO(out, rc);
 
@@ -275,16 +284,16 @@ int ptlrpcd_addref(void)
                 GOTO(out, rc);
         }
 out:
-        up(&ptlrpcd_sem);
+        mutex_up(&ptlrpcd_sem);
         RETURN(rc);
 }
 
 void ptlrpcd_decref(void)
 {
-        down(&ptlrpcd_sem);
+        mutex_down(&ptlrpcd_sem);
         if (--ptlrpcd_users == 0) {
                 ptlrpcd_stop(&ptlrpcd_pc);
                 ptlrpcd_stop(&ptlrpcd_recovery_pc);
         }
-        up(&ptlrpcd_sem);
+        mutex_up(&ptlrpcd_sem);
 }

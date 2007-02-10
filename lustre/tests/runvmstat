@@ -1,17 +1,23 @@
 #!/bin/sh
+DELAY=1
 null() {
 	:
 }
 
-if [ "$1" == "-q" ]; then
-	echo "echo off"
+case "$1" in
+-q)	echo "echo off"
 	ECHO="null"
-	shift
-else
+	shift ;;
+[1-9]*)
+	DELAY=$1
+	ECHO=echo
+	shift ;;
+*)
 	echo "echo on"
 	ECHO=echo
-fi
-vmstat 1 | while read LINE ; do
+esac
+
+vmstat $DELAY | while read LINE ; do
 	LINE="`date +%s`: $LINE"
 	$ECHO "$LINE"
 	[ "$1" ] && echo "$LINE" >> $1

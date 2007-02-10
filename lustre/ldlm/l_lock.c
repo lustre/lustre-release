@@ -3,50 +3,35 @@
  *
  * Copyright (C) 2001, 2002 Cluster File Systems, Inc.
  *
- *   This file is part of Lustre, http://www.sf.net/projects/lustre/
+ *   This file is part of the Lustre file system, http://www.lustre.org
+ *   Lustre is a trademark of Cluster File Systems, Inc.
  *
- *   Lustre is free software; you can redistribute it and/or
- *   modify it under the terms of version 2 of the GNU General Public
- *   License as published by the Free Software Foundation.
+ *   You may have signed or agreed to another license before downloading
+ *   this software.  If so, you are bound by the terms and conditions
+ *   of that agreement, and the following does not apply to you.  See the
+ *   LICENSE file included with this distribution for more information.
  *
- *   Lustre is distributed in the hope that it will be useful,
- *   but WITHOUT ANY WARRANTY; without even the implied warranty of
- *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *   GNU General Public License for more details.
+ *   If you did not agree to a different license, then this copy of Lustre
+ *   is open source software; you can redistribute it and/or modify it
+ *   under the terms of version 2 of the GNU General Public License as
+ *   published by the Free Software Foundation.
  *
- *   You should have received a copy of the GNU General Public License
- *   along with Lustre; if not, write to the Free Software
- *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ *   In either case, Lustre is distributed in the hope that it will be
+ *   useful, but WITHOUT ANY WARRANTY; without even the implied warranty
+ *   of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *   license text for more details.
  *
  */
 
 #define DEBUG_SUBSYSTEM S_LDLM
 #ifdef __KERNEL__
-#include <linux/config.h>
-#include <linux/kernel.h>
-#include <linux/mm.h>
-#include <linux/string.h>
-#include <linux/stat.h>
-#include <linux/errno.h>
-#include <linux/unistd.h>
-#include <linux/version.h>
-
-#include <asm/system.h>
-#include <asm/uaccess.h>
-
-#include <linux/fs.h>
-#include <linux/stat.h>
-#include <asm/uaccess.h>
-#include <asm/segment.h>
-#include <linux/mm.h>
-#include <linux/pagemap.h>
-#include <linux/smp_lock.h>
+#include <libcfs/libcfs.h>
 #else 
 #include <liblustre.h>
 #endif
 
-#include <linux/lustre_dlm.h>
-#include <linux/lustre_lib.h>
+#include <lustre_dlm.h>
+#include <lustre_lib.h>
 
 /*
  * ldlm locking uses resource to serialize access to locks

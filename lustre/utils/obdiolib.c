@@ -51,9 +51,9 @@ obdio_ioctl (struct obdio_conn *conn, int cmd)
 
         rc = obd_ioctl_pack (&conn->oc_data, &buf, sizeof (conn->oc_buffer));
         if (rc != 0) {
-                fprintf (stderr, "obdio_ioctl: obd_ioctl_pack: %d (%s)\n",
-                         rc, strerror (errno));
-                abort ();
+                fprintf(stderr, "%s: obd_ioctl_pack: %d (%s)\n",
+                        __FUNCTION__, rc, strerror(errno));
+                abort();
         }
 
         rc = ioctl (conn->oc_fd, cmd, buf);
@@ -62,8 +62,8 @@ obdio_ioctl (struct obdio_conn *conn, int cmd)
 
         rc2 = obd_ioctl_unpack (&conn->oc_data, buf, sizeof (conn->oc_buffer));
         if (rc2 != 0) {
-                fprintf (stderr, "obdio_ioctl: obd_ioctl_unpack: %d (%s)\n",
-                         rc2, strerror (errno));
+                fprintf(stderr, "%s: obd_ioctl_unpack: %d (%s)\n",
+                        __FUNCTION__, rc2, strerror(errno));
                 abort ();
         }
 
@@ -77,15 +77,15 @@ obdio_connect (int device)
 
         conn = malloc (sizeof (*conn));
         if (conn == NULL) {
-                fprintf (stderr, "obdio_connect: no memory\n");
+                fprintf (stderr, "%s: no memory\n", __FUNCTION__);
                 return (NULL);
         }
         memset (conn, 0, sizeof (*conn));
 
         conn->oc_fd = open ("/dev/obd", O_RDWR);
         if (conn->oc_fd < 0) {
-                fprintf (stderr, "obdio_connect: Can't open /dev/obd: %s\n",
-                         strerror (errno));
+                fprintf(stderr, "%s: Can't open /dev/obd: %s\n",
+                        __FUNCTION__, strerror(errno));
                 goto failed;
         }
 
@@ -107,16 +107,14 @@ obdio_disconnect (struct obdio_conn *conn, int flags)
 
 int
 obdio_pread (struct obdio_conn *conn, uint64_t oid,
-             char *buffer, uint32_t count, uint64_t offset)
+             void *buffer, uint32_t count, uint64_t offset)
 {
         obdio_iocinit (conn);
 
         conn->oc_data.ioc_obdo1.o_id = oid;
         conn->oc_data.ioc_obdo1.o_mode = S_IFREG;
-        conn->oc_data.ioc_obdo1.o_valid = OBD_MD_FLID | OBD_MD_FLTYPE | OBD_MD_FLMODE;
-
-        conn->oc_data.ioc_pbuf1 = (void *)1;
-        conn->oc_data.ioc_plen1 = 1;
+        conn->oc_data.ioc_obdo1.o_valid =
+                OBD_MD_FLID | OBD_MD_FLTYPE | OBD_MD_FLMODE;
 
         conn->oc_data.ioc_pbuf2 = buffer;
         conn->oc_data.ioc_plen2 = count;
@@ -128,16 +126,14 @@ obdio_pread (struct obdio_conn *conn, uint64_t oid,
 
 int
 obdio_pwrite (struct obdio_conn *conn, uint64_t oid,
-              char *buffer, uint32_t count, uint64_t offset)
+              void *buffer, uint32_t count, uint64_t offset)
 {
         obdio_iocinit (conn);
 
         conn->oc_data.ioc_obdo1.o_id = oid;
         conn->oc_data.ioc_obdo1.o_mode = S_IFREG;
-        conn->oc_data.ioc_obdo1.o_valid = OBD_MD_FLID | OBD_MD_FLTYPE | OBD_MD_FLMODE;
-
-        conn->oc_data.ioc_pbuf1 = (void *)1;
-        conn->oc_data.ioc_plen1 = 1;
+        conn->oc_data.ioc_obdo1.o_valid =
+                OBD_MD_FLID | OBD_MD_FLTYPE | OBD_MD_FLMODE;
 
         conn->oc_data.ioc_pbuf2 = buffer;
         conn->oc_data.ioc_plen2 = count;
@@ -186,14 +182,14 @@ obdio_cancel (struct obdio_conn *conn, struct lustre_handle *lh)
 void *
 obdio_alloc_aligned_buffer (void **spacep, int size)
 {
-        int   pagesize = getpagesize();
-        void *space = malloc (size + pagesize - 1);
+        int   pagemask = getpagesize() - 1;
+        void *space = malloc(size + pagemask);
 
-        *spacep = space;
         if (space == NULL)
                 return (NULL);
 
-        return ((void *)(((unsigned long)space + pagesize - 1) & ~(pagesize - 1)));
+        *spacep = (void *)(((unsigned long)space + pagemask) & ~pagemask);
+        return space;
 }
 
 struct obdio_barrier *
@@ -201,10 +197,11 @@ obdio_new_barrier (uint64_t oid, uint64_t id, int npeers)
 {
         struct obdio_barrier *b;
 
-        b = (struct obdio_barrier *)malloc (sizeof (*b));
+        b = malloc(sizeof(*b));
         if (b == NULL) {
-                fprintf (stderr, "obdio_new_barrier "LPX64": Can't allocate\n", oid);
-                return (NULL);
+                fprintf(stderr, "%s "LPX64": Can't allocate\n",
+                        __FUNCTION__, oid);
+                return(NULL);
         }
 
         b->ob_id = id;
@@ -221,41 +218,42 @@ obdio_setup_barrier (struct obdio_conn *conn, struct obdio_barrier *b)
         struct lustre_handle    lh;
         int                     rc;
         int                     rc2;
-        void                   *space;
+        void                   *space, *fileptr;
         struct obdio_barrier   *fileb;
 
         if (b->ob_ordinal != 0 ||
             b->ob_count != 0) {
-                fprintf (stderr, "obdio_setup_barrier: invalid parameter\n");
+                fprintf(stderr, "%s: invalid parameter\n", __FUNCTION__);
                 abort ();
         }
 
-        fileb = (struct obdio_barrier *) obdio_alloc_aligned_buffer (&space, getpagesize ());
-        if (fileb == NULL) {
-                fprintf (stderr, "obdio_setup_barrier "LPX64": Can't allocate page buffer\n",
-                         b->ob_oid);
+        space = obdio_alloc_aligned_buffer(&fileptr, getpagesize());
+        if (space == NULL) {
+                fprintf(stderr, "%s "LPX64": Can't allocate page buffer\n",
+                        __FUNCTION__, b->ob_oid);
                 return (-1);
         }
 
-        memset (fileb, 0, getpagesize ());
+        fileb = fileptr;
+        memset(fileb, 0, getpagesize());
         *fileb = *b;
 
-        rc = obdio_enqueue (conn, b->ob_oid, LCK_PW, 0, getpagesize (), &lh);
+        rc = obdio_enqueue(conn, b->ob_oid, LCK_PW, 0, getpagesize(), &lh);
         if (rc != 0) {
-                fprintf (stderr, "obdio_setup_barrier "LPX64": Error on enqueue: %s\n",
-                         b->ob_oid, strerror (errno));
+                fprintf(stderr, "%s "LPX64": Error on enqueue: %s\n",
+                        __FUNCTION__, b->ob_oid, strerror(errno));
                 goto out;
         }
 
-        rc = obdio_pwrite (conn, b->ob_oid, (void *)fileb, getpagesize (), 0);
+        rc = obdio_pwrite(conn, b->ob_oid, fileb, getpagesize(), 0);
         if (rc != 0)
-                fprintf (stderr, "obdio_setup_barrier "LPX64": Error on write: %s\n",
-                         b->ob_oid, strerror (errno));
+                fprintf(stderr, "%s "LPX64": Error on write: %s\n",
+                        __FUNCTION__, b->ob_oid, strerror(errno));
 
         rc2 = obdio_cancel (conn, &lh);
         if (rc == 0 && rc2 != 0) {
-                fprintf (stderr, "obdio_setup_barrier "LPX64": Error on cancel: %s\n",
-                         b->ob_oid, strerror (errno));
+                fprintf(stderr, "%s "LPX64": Error on cancel: %s\n",
+                        __FUNCTION__, b->ob_oid, strerror(errno));
                 rc = rc2;
         }
  out:
@@ -269,29 +267,30 @@ obdio_barrier (struct obdio_conn *conn, struct obdio_barrier *b)
         struct lustre_handle   lh;
         int                    rc;
         int                    rc2;
-        void                  *space;
+        void                  *space, *fileptr;
         struct obdio_barrier  *fileb;
         char                  *mode;
 
-        fileb = (struct obdio_barrier *) obdio_alloc_aligned_buffer (&space, getpagesize ());
-        if (fileb == NULL) {
-                fprintf (stderr, "obdio_barrier "LPX64": Can't allocate page buffer\n",
-                         b->ob_oid);
+        space = obdio_alloc_aligned_buffer(&fileptr, getpagesize());
+        if (space == NULL) {
+                fprintf(stderr, "%s "LPX64": Can't allocate page buffer\n",
+                        __FUNCTION__, b->ob_oid);
                 return (-1);
         }
 
-        rc = obdio_enqueue (conn, b->ob_oid, LCK_PW, 0, getpagesize (), &lh);
+        rc = obdio_enqueue(conn, b->ob_oid, LCK_PW, 0, getpagesize(), &lh);
         if (rc != 0) {
-                fprintf (stderr, "obdio_barrier "LPX64": Error on PW enqueue: %s\n",
-                         b->ob_oid, strerror (errno));
+                fprintf(stderr, "%s "LPX64": Error on PW enqueue: %s\n",
+                        __FUNCTION__, b->ob_oid, strerror(errno));
                 goto out_1;
         }
 
-        memset (fileb, 0xeb, getpagesize ());
-        rc = obdio_pread (conn, b->ob_oid, (void *)fileb, getpagesize (), 0);
+        fileb = fileptr;
+        memset(fileb, 0xeb, getpagesize());
+        rc = obdio_pread(conn, b->ob_oid, fileb, getpagesize(), 0);
         if (rc != 0) {
-                fprintf (stderr, "obdio_barrier "LPX64": Error on initial read: %s\n",
-                         b->ob_oid, strerror (errno));
+                fprintf(stderr, "%s "LPX64": Error on initial read: %s\n",
+                        __FUNCTION__, b->ob_oid, strerror(errno));
                 goto out_2;
         }
 
@@ -300,13 +299,16 @@ obdio_barrier (struct obdio_conn *conn, struct obdio_barrier *b)
             fileb->ob_npeers != b->ob_npeers ||
             fileb->ob_count >= b->ob_npeers ||
             fileb->ob_ordinal != b->ob_ordinal) {
-                fprintf (stderr, "obdio_barrier "LPX64": corrupt on initial read\n", b->ob_id);
-                fprintf (stderr, "  got ["LPX64","LPX64","LPX64","LPX64","LPX64"]\n",
-                         fileb->ob_id, fileb->ob_oid, fileb->ob_npeers,
-                         fileb->ob_ordinal, fileb->ob_count);
-                fprintf (stderr, "  expected ["LPX64","LPX64","LPX64","LPX64","LPX64"]\n",
-                         b->ob_id, b->ob_oid, b->ob_npeers,
-                         b->ob_ordinal, b->ob_count);
+                fprintf(stderr, "%s "LPX64": corrupt on initial read\n",
+                        __FUNCTION__, b->ob_id);
+                fprintf(stderr,
+                        "  got ["LPX64","LPX64","LPX64","LPX64","LPX64"]\n",
+                        fileb->ob_id, fileb->ob_oid, fileb->ob_npeers,
+                        fileb->ob_ordinal, fileb->ob_count);
+                fprintf(stderr,
+                       "  expected ["LPX64","LPX64","LPX64","LPX64","LPX64"]\n",
+                        b->ob_id, b->ob_oid, b->ob_npeers,
+                        b->ob_ordinal, b->ob_count);
                 rc = -1;
                 goto out_2;
         }
@@ -317,37 +319,36 @@ obdio_barrier (struct obdio_conn *conn, struct obdio_barrier *b)
                 fileb->ob_ordinal++;                 /* signal all joined */
         }
 
-        rc = obdio_pwrite (conn, b->ob_oid, (void *)fileb, getpagesize (), 0);
+        rc = obdio_pwrite(conn, b->ob_oid, fileb, getpagesize(), 0);
         if (rc != 0) {
-                fprintf (stderr, "obdio_barrier "LPX64": Error on initial write: %s\n",
-                         b->ob_oid, strerror (errno));
+                fprintf (stderr, "%s "LPX64": Error on initial write: %s\n",
+                         __FUNCTION__, b->ob_oid, strerror(errno));
                 goto out_2;
         }
 
         mode = "PW";
         b->ob_ordinal++;           /* now I wait... */
         while (fileb->ob_ordinal != b->ob_ordinal) {
-
                 rc = obdio_cancel (conn, &lh);
                 if (rc != 0) {
-                        fprintf (stderr, "obdio_barrier "LPX64": Error on %s cancel: %s\n",
-                                 b->ob_oid, mode, strerror (errno));
+                        fprintf(stderr, "%s "LPX64": Error on %s cancel: %s\n",
+                                __FUNCTION__, b->ob_oid, mode, strerror(errno));
                         goto out_1;
                 }
 
                 mode = "PR";
-                rc = obdio_enqueue (conn, b->ob_oid, LCK_PR, 0, getpagesize (), &lh);
+                rc = obdio_enqueue(conn, b->ob_oid, LCK_PR,0,getpagesize(),&lh);
                 if (rc != 0) {
-                        fprintf (stderr, "obdio_barrier "LPX64": Error on PR enqueue: %s\n",
-                                 b->ob_oid, strerror (errno));
+                        fprintf(stderr, "%s "LPX64": Error on PR enqueue: %s\n",
+                                __FUNCTION__, b->ob_oid, strerror(errno));
                         goto out_1;
                 }
 
-                memset (fileb, 0xeb, getpagesize ());
-                rc = obdio_pread (conn, b->ob_oid, (void *)fileb, getpagesize (), 0);
+                memset (fileb, 0xeb, getpagesize());
+                rc = obdio_pread(conn, b->ob_oid, fileb, getpagesize(), 0);
                 if (rc != 0) {
-                        fprintf (stderr, "obdio_barrier "LPX64": Error on read: %s\n",
-                                 b->ob_oid, strerror (errno));
+                        fprintf(stderr, "%s "LPX64": Error on read: %s\n",
+                                __FUNCTION__, b->ob_oid, strerror(errno));
                         goto out_2;
                 }
 
@@ -357,13 +358,16 @@ obdio_barrier (struct obdio_conn *conn, struct obdio_barrier *b)
                     fileb->ob_count >= b->ob_npeers ||
                     (fileb->ob_ordinal != b->ob_ordinal - 1 &&
                      fileb->ob_ordinal != b->ob_ordinal)) {
-                        fprintf (stderr, "obdio_barrier "LPX64": corrupt\n", b->ob_id);
-                        fprintf (stderr, "  got ["LPX64","LPX64","LPX64","LPX64","LPX64"]\n",
-                                 fileb->ob_id, fileb->ob_oid, fileb->ob_npeers,
-                                 fileb->ob_ordinal, fileb->ob_count);
-                        fprintf (stderr, "  expected ["LPX64","LPX64","LPX64","LPX64","LPX64"]\n",
-                                 b->ob_id, b->ob_oid, b->ob_npeers,
-                                 b->ob_ordinal, b->ob_count);
+                        fprintf(stderr, "%s "LPX64": corrupt\n",
+                                __FUNCTION__, b->ob_id);
+                        fprintf(stderr, "  got ["LPX64","LPX64","LPX64","
+                                LPX64","LPX64"]\n",
+                                fileb->ob_id, fileb->ob_oid, fileb->ob_npeers,
+                                fileb->ob_ordinal, fileb->ob_count);
+                        fprintf(stderr, "  expected ["LPX64","LPX64","LPX64
+                                ","LPX64","LPX64"]\n",
+                                b->ob_id, b->ob_oid, b->ob_npeers,
+                                b->ob_ordinal, b->ob_count);
                         rc = -1;
                         goto out_2;
                 }
@@ -372,13 +376,11 @@ obdio_barrier (struct obdio_conn *conn, struct obdio_barrier *b)
  out_2:
         rc2 = obdio_cancel (conn, &lh);
         if (rc == 0 && rc2 != 0) {
-                fprintf (stderr, "obdio_barrier "LPX64": Error on cancel: %s\n",
-                         b->ob_oid, strerror (errno));
+                fprintf(stderr, "%s "LPX64": Error on cancel: %s\n",
+                        __FUNCTION__, b->ob_oid, strerror(errno));
                 rc = rc2;
         }
  out_1:
         free (space);
         return (rc);
 }
-
-

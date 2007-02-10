@@ -14,7 +14,7 @@
 
 void usage(char *prog)
 {
-	fprintf(stderr, "usage: %s <filename>\n", prog);
+	fprintf(stderr, "usage: %s <filename> [-s <filename>]\n", prog);
 	exit(1);
 }
 
@@ -22,16 +22,26 @@ int main(int argc, char *argv[])
 {
 	long before_mknod, after_mknod;
 	const char *prog = argv[0];
-	const char *filename = argv[1];
+        const char *filename = argv[1];
+        char *secname = NULL;
         struct utimbuf utb;
-	struct stat st;
+	struct stat st, st2;
 	int rc;
+        int c;
 
-        utb.actime = 0x47114711;
-        utb.modtime = 0x11471147;
-                
+	utb.actime = 200000;
+	utb.modtime = 100000;
 
-	if (argc != 2)
+        while ((c = getopt(argc, argv, "s:")) != -1) {
+                switch(c) {
+                case 's':
+                        secname = optarg;
+                        break;
+                default:
+		        usage(argv[0]);
+                }
+        }
+	if (optind + 1 > argc)
 		usage(argv[0]);
 
 	/* Adjust the before time back one second, because the kernel's
@@ -63,10 +73,33 @@ int main(int argc, char *argv[])
 			return 4;
 		}
 
-		printf("%s: good mknod times %lu%s <= %lu <= %lu\n",
+		printf("%s: good mknod times %lu%s <= %lu <= %lu for %s\n",
 		       prog, before_mknod, before_mknod == st.st_mtime ? "*":"",
-		       st.st_mtime, after_mknod);
+		       st.st_mtime, after_mknod, filename);
 
+                if (secname) {
+                        sleep(1);
+                        rc = stat(secname, &st2);
+                        if (rc) {
+                                fprintf(stderr, "%s: stat(%s) failed: rc %d: "
+                                        "%s\n", prog, secname, errno,
+                                        strerror(errno));
+                                return 5;
+                        }
+
+                        if (st2.st_mtime < before_mknod || 
+                            st2.st_mtime > after_mknod) {
+                                fprintf(stderr, "%s: bad mknod times %lu <= %lu"
+                                        " <= %lu false\n", prog, before_mknod,
+                                        st2.st_mtime, after_mknod);
+                                return 6;
+                        }
+
+                        printf("%s: good mknod times %lu%s <= %lu <= %lu "
+                               "for %s\n", prog, before_mknod, 
+                               before_mknod == st.st_mtime ? "*":"", 
+                               st2.st_mtime, after_mknod, secname);
+                }
 	}
 
 	/* See above */
@@ -74,30 +107,55 @@ int main(int argc, char *argv[])
 	if (rc) {
 		fprintf(stderr, "%s: utime(%s) failed: rc %d: %s\n",
 			prog, filename, errno, strerror(errno));
-		return 5;
+		return 7;
 	}
-
+        
 	rc = stat(filename, &st);
 	if (rc) {
 		fprintf(stderr, "%s: second stat(%s) failed: rc %d: %s\n",
 			prog, filename, errno, strerror(errno));
-		return 6;
+		return 8;
 	}
 
 	if (st.st_mtime != utb.modtime ) {
 		fprintf(stderr, "%s: bad utime mtime %lu should be  %lu\n",
 			prog, st.st_mtime, utb.modtime);
-		return 7;
+		return 9;
 	}
 
 	if (st.st_atime != utb.actime ) {
-		fprintf(stderr, "%s: bad utime mtime %lu should be  %lu\n",
+		fprintf(stderr, "%s: bad utime atime %lu should be  %lu\n",
 			prog, st.st_atime, utb.actime);
-		return 7;
+		return 10;
 	}
 
 	printf("%s: good utime mtimes %lu, atime %lu\n",
 	       prog, utb.modtime, utb.actime);
 
+        if (secname == NULL)
+                return 0;
+        
+        /* Checking that times in past get updated on another client. */
+	rc = stat(secname, &st2);
+        if (rc) {
+		fprintf(stderr, "%s: second stat(%s) failed: rc %d: %s\n",
+			prog, secname, errno, strerror(errno));
+		return 12;
+	}
+
+	if (st2.st_mtime != st.st_mtime) {
+		fprintf(stderr, "%s: not synced mtime between clients: %lu "
+                        "should be  %lu\n", prog, st2.st_mtime, st.st_mtime);
+		return 13;
+	}
+
+	if (st2.st_ctime != st.st_ctime) {
+		fprintf(stderr, "%s: not synced ctime between clients: %lu "
+                        " should be  %lu\n", prog, st2.st_ctime, st.st_ctime);
+		return 14;
+	}
+	
+        printf("%s: updated times for %s\n", prog, secname);
+        
 	return 0;
 }

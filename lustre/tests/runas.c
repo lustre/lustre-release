@@ -8,6 +8,7 @@
 #include <errno.h>
 #include <ctype.h>
 #include <sys/types.h>
+#include <pwd.h>
 #include <grp.h>
 #include <sys/wait.h>
 
@@ -37,21 +38,43 @@ int main(int argc, char **argv)
         uid_t user_id = 0;
         gid_t grp_id = 0, supp_groups[NGROUPS_MAX] = { 0 };
 
-        if (argc == 1)
+        if (argc == 1) {
+                fprintf(stderr, "No parameter count\n");
                 Usage_and_abort(name);
+        }
 
         // get UID and GID
         while ((c = getopt(argc, argv, "+u:g:hG::")) != -1) {
                 switch (c) {
                 case 'u':
-                        user_id = (uid_t)atoi(optarg);
+                        if (!isdigit(optarg[0])) {
+                                struct passwd *pw = getpwnam(optarg);
+                                if (pw == NULL) {
+                                        fprintf(stderr, "parameter '%s' bad\n",
+                                                optarg);
+                                        Usage_and_abort(name);
+                                }
+                                user_id = pw->pw_uid;
+                        } else {
+                                user_id = (uid_t)atoi(optarg);
+                        }
                         uid_is_set = 1;
                         if (!gid_is_set)
                                 grp_id = user_id;
                         break;
 
                 case 'g':
-                        grp_id = (gid_t)atoi(optarg);
+                        if (!isdigit(optarg[0])) {
+                                struct group *gr = getgrnam(optarg);
+                                if (gr == NULL) {
+                                        fprintf(stderr, "getgrname %s failed\n",
+                                                optarg);
+                                        Usage_and_abort(name);
+                                }
+                                grp_id = gr->gr_gid;
+                        } else {
+                                grp_id = (gid_t)atoi(optarg);
+                        }
                         gid_is_set = 1;
                         break;
 
@@ -74,11 +97,13 @@ int main(int argc, char **argv)
                 }
         }
 
-        if (!uid_is_set)
+        if (!uid_is_set) {
+                fprintf(stderr, "Must specify uid to run.\n");
                 Usage_and_abort(name);
+        }
 
         if (optind == argc) {
-                fputs("Must specify command to run.\n", stderr);
+                fprintf(stderr, "Must specify command to run.\n");
                 Usage_and_abort(name);
         }
 
@@ -137,7 +162,8 @@ int main(int argc, char **argv)
 
         // The command to be run
         execvp(my_argv[0], my_argv);
-        fprintf(stderr, "execvp fails running %s\n", my_argv[0]);
+        fprintf(stderr, "execvp fails running %s (%d): %s\n", my_argv[0],
+                errno, strerror(errno));
         exit(-1);
 }
 

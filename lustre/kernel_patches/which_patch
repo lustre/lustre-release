@@ -1,16 +1,21 @@
-SERIES                 MNEMONIC                 COMMENT                     ARCH
+SERIES             VERSION                  COMMENT
 
 SUPPORTED KERNELS:
-rhel-2.4.21            linux-2.4.21-20.3EL      same as chaos-2.4.21        all
-2.6-suse               linux-2.6                SLES9 SP1 kernel            all
+rhel-2.4.21        RHEL3: 2.4.21-47.0.1.EL
+2.6-suse           SLES9 before SP1         already in SLES9 SP1 kernel
+2.6-suse-newer     SLES9: 2.6.5-7.282       extra patches for SLES9 after SP1
+2.6-rhel4          RHEL4: 2.6.9-42.0.3.EL
+2.6.12-vanilla     kernel.org: 2.6.12.6
+
+NB - The patches in the 2.6-suse series should already be in the SLES9 SP1
+     kernel.  The patches in the 2.6-suse-newer series are patches that
+     have been created since the SP1 kernel was released and should be
+     applied to the already-patched SP1 kernel.
+
+NB - The patches in the ldiskfs series should not be applied to the kernel.
+     They are instead applied by the lustre build process to create the
+     ldiskfs kernel module instead of modifying the core ext3 code.
 
 UNSUPPORTED KERNELS; BEING PHASED OUT; MAY BE MISSING CRITICAL BUG FIXES:
-hp-pnnl-2.4.20         linux-2.4.20-hp4_pnnl1   same as vanilla but no uml  ia64
-vanilla-2.4.20         linux-2.4.20             patch with uml-2.4.20-6     um
-chaos-2.4.20           linux-chaos-2.4.20       same as rh-2.4.20-8         i386
-kgdb-2.5.73            linux-2.5.73             vanilla 2.5.73 with kgdb    i386
-bproc-2.4.20-hp-pnnl   linux-2.4.20-hp4_pnnl9   hp-pnnl + bproc             i386
-suse-2.4.19                                     SUSE ES 8
-vanilla-2.4.24         linux-2.4.24             patch with uml-2.4.24-6     um
-chaos-2.4.21           linux-chaos-2.4.21       same as rh-2.4.21-20.EL     i386
-suse-2.4.21-jvn        linux-2.4.21-241         sles8 2.4 kernel            i386
+hp-pnnl-2.4.20     linux-2.4.20-hp4_pnnl1   same as vanilla but no uml  ia64
+vanilla-2.4.24     linux-2.4.24             patch with uml-2.4.24-6     um

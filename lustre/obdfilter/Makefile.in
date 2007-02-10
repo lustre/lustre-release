@@ -1,6 +1,7 @@
 MODULES := obdfilter
-obdfilter-objs := filter.o filter_io.o filter_log.o filter_san.o
-obdfilter-objs += lproc_obdfilter.o filter_lvb.o filter_capa.o
+
+obdfilter-objs := filter.o filter_io.o filter_log.o
+obdfilter-objs += lproc_obdfilter.o filter_lvb.o
 
 ifeq ($(PATCHLEVEL),4)
 obdfilter-objs += filter_io_24.o

@@ -17,12 +17,11 @@ void usage(char *prog)
 	exit(1);
 }
 
-/* 
- * this stuff inlined here instead of using appropriate header 
- * to avoid linking to symbols which is not present in newer libc.
- * Currently this is the case, as UML image contains RedHat 9 and 
- * developers use something newer (Fedora, etc.) --umka
- */
+/* UMKA: This stuff inlined here instead of using appropriate header 
+   to avoid linking to symbols which is not present in newer libc.
+   
+   Currently this is the case, as UML image contains RedHat 9 and 
+   developers use something newer (Fedora, etc.). */
 inline unsigned int
 __gnu_dev_major (unsigned long long int __dev)
 {
@@ -51,35 +50,33 @@ int main( int argc, char **argv)
 {
 	char *prog = argv[0];
 	char *filename = argv[1];
-
-	struct stat st;
-	int rq_rdev;
 	int rc;
+	struct stat st;
+	dev_t device = __makedev(TEST_MAJOR, TEST_MINOR);
 
 	if (argc != 2) 
 		usage(prog);
 
 	unlink(filename);
 	
-	/* first try block devices */
-	rq_rdev = __makedev(TEST_MAJOR, TEST_MINOR);
-	rc = mknod(filename, 0700 | S_IFBLK, rq_rdev);
-	if (rc < 0) {
+	/* First try block devices */
+	rc = mknod(filename, 0700 | S_IFBLK, device);
+	if ( rc < 0 ) {
 		fprintf(stderr, "%s: mknod(%s) failed: rc %d: %s\n",
 			prog, filename, errno, strerror(errno));
 		return 2;
 	}
 
 	rc = stat(filename, &st);
-	if (rc < 0) {
+	if ( rc < 0 ) {
 		fprintf(stderr, "%s: stat(%s) failed: rc %d: %s\n",
 			prog, filename, errno, strerror(errno));
 		return 3;
 	}
-
-	if (st.st_rdev != rq_rdev) {
+	
+	if ( st.st_rdev != device) {
 		fprintf(stderr, "%s: created device other than requested: (%u,%u) instead of (%u,%u)\n", 
-			prog, __major(st.st_rdev),__minor(st.st_rdev),__major(rq_rdev),__minor(rq_rdev));
+			prog, __major(st.st_rdev),__minor(st.st_rdev),__major(device),__minor(device));
 		return 4;
 	}
 	if (!S_ISBLK(st.st_mode)) {
@@ -95,7 +92,7 @@ int main( int argc, char **argv)
 	}
 
 	/* Second try char devices */
-	rc = mknod(filename, 0700 | S_IFCHR, rq_rdev);
+	rc = mknod(filename, 0700 | S_IFCHR, device);
 	if ( rc < 0 ) {
 		fprintf(stderr, "%s: mknod(%s) failed: rc %d: %s\n",
 			prog, filename, errno, strerror(errno));
@@ -108,9 +105,9 @@ int main( int argc, char **argv)
 			prog, filename, errno, strerror(errno));
 		return 8;
 	}
-	if (st.st_rdev != rq_rdev) {
+	if ( st.st_rdev != device) {
 		fprintf(stderr, "%s: created device other than requested: (%u,%u) instead of (%u,%u)\n", 
-			prog, __major(st.st_rdev),__minor(st.st_rdev),__major(rq_rdev),__minor(rq_rdev));
+			prog, __major(st.st_rdev),__minor(st.st_rdev),__major(device),__minor(device));
 		return 9;
 	}
 	if (!S_ISCHR(st.st_mode)) {

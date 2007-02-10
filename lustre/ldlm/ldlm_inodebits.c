@@ -26,9 +26,9 @@
 # include <liblustre.h>
 #endif
 
-#include <linux/lustre_dlm.h>
-#include <linux/obd_support.h>
-#include <linux/lustre_lib.h>
+#include <lustre_dlm.h>
+#include <obd_support.h>
+#include <lustre_lib.h>
 
 #include "ldlm_internal.h"
 
@@ -37,14 +37,14 @@ static int
 ldlm_inodebits_compat_queue(struct list_head *queue, struct ldlm_lock *req,
                             struct list_head *work_list)
 {
-        struct list_head *tmp;
+        struct list_head *tmp, *tmp_tail;
         struct ldlm_lock *lock;
         ldlm_mode_t req_mode = req->l_req_mode;
         __u64 req_bits = req->l_policy_data.l_inodebits.bits;
         int compat = 1;
         ENTRY;
 
-        LASSERT(req_bits); /* There is no sence in lock with no bits set,
+        LASSERT(req_bits); /* There is no sense in lock with no bits set,
                               I think. Also such a lock would be compatible
                                with any other bit lock */
         list_for_each(tmp, queue) {
@@ -54,20 +54,58 @@ ldlm_inodebits_compat_queue(struct list_head *queue, struct ldlm_lock *req,
                         RETURN(compat);
 
                 /* locks are compatible, bits don't matter */
-                if (lockmode_compat(lock->l_req_mode, req_mode))
+                if (lockmode_compat(lock->l_req_mode, req_mode)) {
+                        /* jump to next mode group */
+                        if (LDLM_SL_HEAD(&lock->l_sl_mode))
+                                tmp = &list_entry(lock->l_sl_mode.next, 
+                                                  struct ldlm_lock,
+                                                  l_sl_mode)->l_res_link;
                         continue;
+                }
 
-                /* if bits don't overlap skip it */
-                if (!(lock->l_policy_data.l_inodebits.bits & req_bits))
-                        continue;
-
-                if (!work_list)
-                        RETURN(0);
-
-                compat = 0;
-                if (lock->l_blocking_ast)
-                        ldlm_add_ast_work_item(lock, req, work_list);
-        }
+                tmp_tail = tmp;
+                if (LDLM_SL_HEAD(&lock->l_sl_mode))
+                        tmp_tail = &list_entry(lock->l_sl_mode.next,
+                                               struct ldlm_lock,
+                                               l_sl_mode)->l_res_link;
+                for (;;) {
+                        /* locks with bits overlapped are conflicting locks */
+                        if (lock->l_policy_data.l_inodebits.bits & req_bits) {
+                                /* conflicting policy */
+                                if (!work_list)
+                                        RETURN(0);
+                               
+                                compat = 0;
+                                if (lock->l_blocking_ast)
+                                        ldlm_add_ast_work_item(lock, req, 
+                                                               work_list);
+                                /* add all members of the policy group */
+                                if (LDLM_SL_HEAD(&lock->l_sl_policy)) {
+                                        do {
+                                                tmp = lock->l_res_link.next;
+                                                lock = list_entry(tmp,
+                                                            struct ldlm_lock,
+                                                            l_res_link);
+                                                if (lock->l_blocking_ast)
+                                                        ldlm_add_ast_work_item(
+                                                                     lock,
+                                                                     req,
+                                                                     work_list);
+                                        } while (!LDLM_SL_TAIL(&lock->l_sl_policy));
+                                }
+                        } else if (LDLM_SL_HEAD(&lock->l_sl_policy)) {
+                                /* jump to next policy group */
+                                tmp = &list_entry(lock->l_sl_policy.next,
+                                                  struct ldlm_lock,
+                                                  l_sl_policy)->l_res_link;
+                        }
+                        if (tmp == tmp_tail)
+                                break;
+                        else
+                                tmp = tmp->next;
+                        lock = list_entry(tmp, struct ldlm_lock, l_res_link);
+                }       /* for locks in a mode group */
+        }       /* for each lock in the queue */
 
         RETURN(compat);
 }
@@ -86,7 +124,7 @@ int ldlm_process_inodebits_lock(struct ldlm_lock *lock, int *flags,
                                 struct list_head *work_list)
 {
         struct ldlm_resource *res = lock->l_resource;
-        struct list_head rpc_list = LIST_HEAD_INIT(rpc_list);
+        struct list_head rpc_list = CFS_LIST_HEAD_INIT(rpc_list);
         int rc;
         ENTRY;
 

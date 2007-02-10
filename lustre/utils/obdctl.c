@@ -72,7 +72,6 @@ command_t cmdlist[] = {
         {"test_getattr", jt_obd_test_getattr, 0, "test_getattr <count> [verbose [[t]objid]]"},
         {"test_setattr", jt_obd_test_setattr, 0, "test_setattr <count> [verbose [[t]objid]]"},
         {"test_brw", jt_obd_test_brw, 0, "test_brw [t]<count> [write [verbose [pages [[t]objid]]]]"},
-        {"test_ldlm", jt_obd_test_ldlm, 0, "test lock manager (no args)"},
         {"dump_ldlm", jt_obd_dump_ldlm, 0, "dump all lock manager state (no args)"},
 
         /* User interface commands */

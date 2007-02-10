@@ -22,7 +22,7 @@
  */
 
 #define DEBUG_SUBSYSTEM S_LLITE
-#include <linux/lustre_lite.h>
+#include <lustre_lite.h>
 #include "llite_internal.h"
 
 __u32 get_uuid2int(const char *name, int len)
@@ -38,20 +38,19 @@ __u32 get_uuid2int(const char *name, int len)
 }
 
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
-static int ll_nfs_test_inode(struct inode *inode, unsigned long ino, 
-			     void *opaque)
+static int ll_nfs_test_inode(struct inode *inode, unsigned long ino, void *opaque)
 #else
 static int ll_nfs_test_inode(struct inode *inode, void *opaque)
 #endif
 {
-        struct lustre_id *iid = opaque;
+        struct ll_fid *iid = opaque;
 
-        if (inode->i_ino == id_ino(iid) && 
-	    inode->i_generation == id_gen(iid))
+        if (inode->i_ino == iid->id && inode->i_generation == iid->generation)
                 return 1;
 
         return 0;
 }
+
 static struct inode * search_inode_for_lustre(struct super_block *sb,
                                               unsigned long ino,
                                               unsigned long generation,
@@ -59,35 +58,33 @@ static struct inode * search_inode_for_lustre(struct super_block *sb,
 {
         struct ptlrpc_request *req = NULL;
         struct ll_sb_info *sbi = ll_s2sbi(sb);
-        struct lustre_id id;
-        __u64 valid = 0;
+        struct ll_fid fid;
+        unsigned long valid = 0;
         int eadatalen = 0, rc;
         struct inode *inode = NULL;
-        struct lustre_id iid;
-	
-	id_ino(&iid) = (__u64)ino;
-	id_gen(&iid) = generation;
+        struct ll_fid iid = { .id = ino, .generation = generation };
+
         inode = ILOOKUP(sb, ino, ll_nfs_test_inode, &iid);
 
         if (inode)
                 return inode;
         if (S_ISREG(mode)) {
-                eadatalen = obd_size_diskmd(sbi->ll_dt_exp, NULL);
+                rc = ll_get_max_mdsize(sbi, &eadatalen);
+                if (rc) 
+                        return ERR_PTR(rc); 
                 valid |= OBD_MD_FLEASIZE;
         }
-        id_type(&id) = mode;
-        id_ino(&id) = (__u64)ino;
-        id_gen(&id) = generation;
+        fid.id = (__u64)ino;
+        fid.generation = generation;
+        fid.f_type = mode;
 
-        rc = md_getattr(sbi->ll_md_exp, &id, valid, NULL, NULL, 0, 
-                        eadatalen, NULL, &req);
+        rc = mdc_getattr(sbi->ll_mdc_exp, &fid, valid, eadatalen, &req);
         if (rc) {
                 CERROR("failure %d inode %lu\n", rc, ino);
                 return ERR_PTR(rc);
         }
 
-        rc = ll_prep_inode(sbi->ll_dt_exp, sbi->ll_md_exp,
-                           &inode, req, 0, sb);
+        rc = ll_prep_inode(sbi->ll_osc_exp, &inode, req, REPLY_REC_OFF, sb);
         if (rc) {
                 ptlrpc_req_finished(req);
                 return ERR_PTR(rc);
@@ -104,7 +101,9 @@ static struct dentry *ll_iget_for_nfs(struct super_block *sb, unsigned long ino,
 {
         struct inode *inode;
         struct dentry *result;
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
         struct list_head *lp;
+#endif
 
         if (ino == 0)
                 return ERR_PTR(-ESTALE);
@@ -116,7 +115,7 @@ static struct dentry *ll_iget_for_nfs(struct super_block *sb, unsigned long ino,
         if (is_bad_inode(inode) ||
             (generation && inode->i_generation != generation)){
                 /* we didn't find the right inode.. */
-                CERROR(" Inode %lu, Bad count: %lu %d or version  %u %u\n",
+                CERROR("Inode %lu, Bad count: %lu %d or version  %u %u\n",
                        inode->i_ino, (unsigned long)inode->i_nlink,
                        atomic_read(&inode->i_count), inode->i_generation,
                        generation);
@@ -124,19 +123,29 @@ static struct dentry *ll_iget_for_nfs(struct super_block *sb, unsigned long ino,
                 return ERR_PTR(-ESTALE);
         }
 
+#if (LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))
+        result = d_alloc_anon(inode);
+        if (!result) {
+                iput(inode);
+                return ERR_PTR(-ENOMEM);
+        }
+#else
         /* now to find a dentry.
          * If possible, get a well-connected one
          */
         spin_lock(&dcache_lock);
         for (lp = inode->i_dentry.next; lp != &inode->i_dentry ; lp=lp->next) {
                 result = list_entry(lp,struct dentry, d_alias);
+                lock_dentry(result);
                 if (!(result->d_flags & DCACHE_DISCONNECTED)) {
                         dget_locked(result);
                         ll_set_dflags(result, DCACHE_REFERENCED);
+                        unlock_dentry(result);
                         spin_unlock(&dcache_lock);
                         iput(inode);
                         return result;
                 }
+                unlock_dentry(result);
         }
         spin_unlock(&dcache_lock);
         result = d_alloc_root(inode);
@@ -145,7 +154,8 @@ static struct dentry *ll_iget_for_nfs(struct super_block *sb, unsigned long ino,
                 return ERR_PTR(-ENOMEM);
         }
         result->d_flags |= DCACHE_DISCONNECTED;
-        
+
+#endif
         ll_set_dd(result);
         result->d_op = &ll_d_ops;
         return result;
@@ -184,13 +194,67 @@ int ll_dentry_to_fh(struct dentry *dentry, __u32 *datap, int *lenp,
                 *lenp = 3;
                 return 1;
         }
-        if (dentry->d_parent) { 
+        if (dentry->d_parent) {
                 *datap++ = dentry->d_parent->d_inode->i_ino;
                 *datap++ = (__u32)(S_IFMT & dentry->d_parent->d_inode->i_mode);
-         
+
                 *lenp = 5;
                 return 2;
         }
         *lenp = 3;
         return 1;
 }
+
+#if (LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))
+struct dentry *ll_get_dentry(struct super_block *sb, void *data)
+{
+        __u32 *inump = (__u32*)data;
+        return ll_iget_for_nfs(sb, inump[0], inump[1], S_IFREG);
+}
+
+struct dentry *ll_get_parent(struct dentry *dchild)
+{
+        struct ptlrpc_request *req = NULL;
+        struct inode *dir = dchild->d_inode;
+        struct ll_sb_info *sbi;
+        struct dentry *result = NULL;
+        struct ll_fid fid;
+        struct mds_body *body;
+        char dotdot[] = "..";
+        int  rc = 0;
+        ENTRY;
+        
+        LASSERT(dir && S_ISDIR(dir->i_mode));
+        
+        sbi = ll_s2sbi(dir->i_sb);       
+ 
+        fid.id = (__u64)dir->i_ino;
+        fid.generation = dir->i_generation;
+        fid.f_type = S_IFDIR;
+
+        rc = mdc_getattr_name(sbi->ll_mdc_exp, &fid, dotdot, strlen(dotdot) + 1,
+                              0, 0, &req);
+        if (rc) {
+                CERROR("failure %d inode %lu get parent\n", rc, dir->i_ino);
+                return ERR_PTR(rc);
+        }
+        body = lustre_msg_buf(req->rq_repmsg, REPLY_REC_OFF, sizeof (*body)); 
+       
+        LASSERT((body->valid & OBD_MD_FLGENER) && (body->valid & OBD_MD_FLID));
+        
+        result = ll_iget_for_nfs(dir->i_sb, body->ino, body->generation, S_IFDIR);
+
+        if (IS_ERR(result))
+                rc = PTR_ERR(result);
+
+        ptlrpc_req_finished(req);
+        if (rc)
+                return ERR_PTR(rc);
+        RETURN(result);
+} 
+
+struct export_operations lustre_export_operations = {
+       .get_parent = ll_get_parent,
+       .get_dentry = ll_get_dentry, 
+};
+#endif

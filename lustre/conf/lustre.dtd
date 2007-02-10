@@ -33,10 +33,11 @@
 
 <!ELEMENT profile (ldlm_ref | ptlrpc_ref | network_ref | routetbl_ref |
                    osd_ref | mdsdev_ref | lovconfig_ref|
-                   echoclient_ref | mountpoint_ref | mgmt_ref)*>
+                   echoclient_ref | mountpoint_ref)*>
 <!ATTLIST profile %object.attr;>
 
 <!ELEMENT mountpoint path #REQUIRED
+                     clientoptions #REQUIRED >
                      filesystem_ref #REQUIRED >
 <!ATTLIST mountpoint %object.attr;>
 
@@ -46,14 +47,11 @@
 <!ELEMENT ldlm EMPTY>
 <!ATTLIST ldlm %object.attr;>
 
-<!ELEMENT mgmt (active_ref)*>
-<!ATTLIST mgmt %object.attr;>
-
 <!ELEMENT ptlrpc EMPTY>
 <!ATTLIST ptlrpc %object.attr;>
 
 <!ELEMENT osd (fstype | devpath | devsize | autoformat | 
-               target_ref | node_ref | journalsize | mkfsoptions)*>
+               target_ref | node_ref | journalsize | mkfsoptions | mountfsoptions)*>
 <!ATTLIST osd %object.attr; 
               osdtype (obdfilter | obdecho) 'obdfilter'>
 
@@ -62,8 +60,7 @@
               failover ( 1 | 0 ) #IMPLIED>
 
 <!ELEMENT filesystem mds_ref #REQUIRED
-                     obd_ref #REQUIRED
-                     (mgmt_ref)* >
+                     obd_ref #REQUIRED>
 <!ATTLIST filesystem %object.attr;>
 
 <!ELEMENT mds (active_ref | lovconfig_ref | group)*>
@@ -71,7 +68,7 @@
               failover ( 1 | 0 ) #IMPLIED>
 
 <!ELEMENT mdsdev (fstype | devpath | devsize | autoformat | 
-                  target_ref | node_ref | journalsize | mkfsoptions)*>
+                  target_ref | node_ref | journalsize | mkfsoptions | mountfsoptions)*>
 <!ATTLIST mdsdev %object.attr;>
 
 <!ELEMENT lov (mds_ref |(obd_ref)+)*>
@@ -91,6 +88,8 @@
 <!ELEMENT subsystem     %object.content;>
 <!ELEMENT journalsize   %object.content;>
 <!ELEMENT mkfsoptions   %object.content;>
+<!ELEMENT mountfsoptions %object.content;>
+<!ELEMENT clientoptions %object.content;>
 <!ELEMENT fstype        %object.content;>
 <!ELEMENT nid           %object.content;>
 <!ELEMENT port          %object.content;>
@@ -130,8 +129,6 @@
 <!ATTLIST lov_ref         %objref.attr;>
 <!ELEMENT lovconfig_ref   %objref.content;>
 <!ATTLIST lovconfig_ref   %objref.attr;>
-<!ELEMENT mgmt_ref        %objref.content;>
-<!ATTLIST mgmt_ref        %objref.attr;>
 <!ELEMENT mountpoint_ref  %objref.content;>
 <!ATTLIST mountpoint_ref  %objref.attr;>
 <!ELEMENT filesystem_ref  %objref.content;>

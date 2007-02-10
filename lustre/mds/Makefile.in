@@ -1,6 +1,5 @@
 MODULES := mds
 mds-objs := mds_log.o mds_unlink_open.o mds_lov.o handler.o mds_reint.o
-mds-objs += mds_fs.o lproc_mds.o mds_open.o mds_lib.o mds_lmv.o mds_lsd.o
-mds-objs += mds_audit_path.o mds_audit.o mds_acl.o mds_capa.o
+mds-objs += mds_fs.o lproc_mds.o mds_open.o mds_lib.o mds_xattr.o mds_join.o
 
 @INCLUDE_RULES@

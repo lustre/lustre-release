@@ -309,8 +309,8 @@ void t10()
         t_unlink(path2);
 }
 
-extern int portal_debug;
-extern int portal_subsystem_debug;
+extern int libcfs_debug;
+extern int libcfs_subsystem_debug;
 
 extern void __liblustre_setup_(void);
 extern void __liblustre_cleanup_(void);
@@ -345,7 +345,7 @@ int main(int argc, char * const argv[])
                 {0, 0, 0, 0}
         };
 
-        if (argc < 4)
+        if (argc < 4 - (getenv(ENV_LUSTRE_MNTTGT)||getenv(ENV_LUSTRE_DUMPFILE)))
                 usage(argv[0]);
 
         while ((c = getopt_long(argc, argv, "s:b:f:", long_opts, &opt_index)) != -1) {

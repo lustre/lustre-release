@@ -26,12 +26,12 @@ display_elapsed_time() {
 
 debug_client_on()
 {
-	echo -1 > /proc/sys/portals/debug
+	echo -1 > /proc/sys/lnet/debug
 }
 
 debug_client_off()
 {
-	echo 0x3f0400 > /proc/sys/portals/debug
+	echo 0x3f0400 > /proc/sys/lnet/debug
 }
 
 MNT=${MNT:-/mnt/lustre}

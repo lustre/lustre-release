@@ -4,7 +4,18 @@
 # Probably a good idea to run this before doing any checkins.
 # In the future this can become more fancy, but it's OK for now.
 
+LUSTRE=${LUSTRE:-`dirname $0`/..}
 SRCDIR="`dirname $0`"
+export PATH=/sbin:/usr/sbin:$SRCDIR:$SRCDIR/../utils:$PATH
+
+. $LUSTRE/tests/test-framework.sh
+init_test_env $@
+. ${CONFIG:=$LUSTRE/tests/cfg/local.sh}
+
+SETUP=${SETUP:-setupall}
+FORMAT=${FORMAT:-formatall}
+CLEANUP=${CLEANUP:-stopall}
+
 fail() { 
 	echo "ERROR: $1" 1>&2
 	[ $2 ] && RC=$2 || RC=1
@@ -16,17 +27,14 @@ log() {
 	lctl mark "$*"
 }
 
-export PATH=/sbin:/usr/sbin:$SRCDIR:$SRCDIR/../utils:$PATH
 
 ERROR=
 SRC=/etc
 [ "$COUNT" ] || COUNT=1000
 
-[ "$LCONF" ] || LCONF=lconf
-
 [ "$MCREATE" ] || MCREATE=mcreate
 
-[ "$MKDIRMANY" ] || MKDIRMANY=$SRCDIR/../tests/mkdirmany
+[ "$MKDIRMANY" ] || MKDIRMANY="createmany -d"
 
 while [ "$1" ]; do
 	case $1 in
@@ -36,22 +44,26 @@ while [ "$1" ]; do
 	shift
 done
 
-MOUNT="`mount | awk '/ lustre_lite / { print $3 }' | tail -n 1`"
-if [ -z "$MOUNT" ]; then
-	sh llmount.sh $OPTS
-	MOUNT="`mount | awk '/ lustre_lite / { print $3 }' | tail -n 1`"
-	[ -z "$MOUNT" ] && fail "no lustre filesystem mounted" 1
+EXISTING_MOUNT=`awk '($3 ~ "lustre" && $1 ~ ":") { print $2 }' /proc/mounts`
+if [ -z "$EXISTING_MOUNT" ]; then
+        $FORMAT
+        $SETUP
+	EXISTING_MOUNT=`awk '($3 ~ "lustre" && $1 ~ ":") { print $2 }' /proc/mounts`
+	[ -z "$EXISTING_MOUNT" ] && fail "no lustre filesystem mounted" 1
 	I_MOUNTED="yes"
 fi
+MOUNT=$EXISTING_MOUNT
 
 OSCTMP=`echo $MOUNT | tr "/" "."`
 USED=`df | awk "/$OSCTMP/ { print \\$3 }" | tail -n 1`
 USED=`expr $USED + 16`	# Some space for the status file
 
 # let's start slowly here...
-log "touching $MOUNT"
+START=`date +%s`
+log "touching $MOUNT at `date`"
 touch $MOUNT || fail "can't touch $MOUNT" 2
 HOSTS=$MOUNT/hosts.$$
+TRUNCSIZE=123
 
 if [ $COUNT -gt 10 -o $COUNT -eq 0 ]; then
 	# this will cause the following cp to trigger bug #620096
@@ -69,6 +81,9 @@ if [ $COUNT -gt 10 -o $COUNT -eq 0 ]; then
 	> $HOSTS || fail "can't truncate $HOSTS" 8
 	log "removing $HOSTS"
 	rm $HOSTS || fail "can't remove $HOSTS" 9
+	cp /etc/hosts $HOSTS.2 || fail "can't cp /etc/hosts to $HOSTS.2" 7
+	log "truncating $HOSTS.2 to $TRUNCSIZE bytes"
+	truncate $HOSTS.2 $TRUNCSIZE
 fi
 
 DST=$MOUNT/runtest.$$
@@ -79,19 +94,20 @@ mkdir $DST || fail "can't mkdir $DST" 10
 # ok, that hopefully worked, so let's do a little more, with files that
 # haven't changed in the last day (hopefully they don't change during test)
 FILES=`find $SRC -type f -mtime +1 -ctime +1 | head -n $COUNT`
-log "copying files from $SRC to $DST$SRC"
-tar cf - $FILES | tar xvf - -C $DST || fail "copying $SRC" 11
+log "copying files from $SRC to $DST$SRC at `date`"
+tar cf - $FILES | tar xvf - -C $DST > /dev/null || fail "copying $SRC" 11
 
-log "comparing newly copied files"
+log "comparing newly copied files at `date`"
 for f in $FILES; do
 	[ $V ] && log "verifying $DST/$f"
 	diff -q $f $DST/$f || ERROR=11
 done
 
 [ "$ERROR" ] && fail "old and new files are different" $ERROR
+log "finished at `date` ($(($(date +%s) - START)))"
 
-sh llmountcleanup.sh || exit 19
-sh llrmount.sh $OPTS || exit 20
+$CLEANUP || exit 19
+$SETUP || exit 20
 
 log "comparing previously copied files"
 for f in $FILES; do
@@ -101,8 +117,8 @@ done
 
 [ "$ERROR" ] && fail "old and new files are different on second diff" $ERROR
 
-sh llmountcleanup.sh || exit 19
-sh llrmount.sh || exit 20
+$CLEANUP || exit 19
+$SETUP || exit 20
 
 log "removing $DST"
 rm -r $V $DST || fail "can't remove $DST" 37
@@ -114,6 +130,10 @@ if [ $COUNT -gt 10 -o $COUNT -eq 0 ]; then
 	> $HOSTS || fail "can't truncate $HOSTS" 34
 	log "removing $HOSTS"
 	rm $HOSTS || fail "can't remove $HOSTS again" 36
+	log "verifying $HOSTS.2 is $TRUNCSIZE bytes"
+	checkstat -s $TRUNCSIZE $HOSTS.2 || \
+		fail "$HOSTS.2 isn't $TRUNCSIZE bytes" 37
+	rm $HOSTS.2 || fail "can't remove $HOSTS.2" 38
 fi
 
 # mkdirmany test (bug 589)
@@ -130,5 +150,6 @@ if [ `expr $NOWUSED - $USED` -gt 1024 ]; then
 fi
 
 if [ "$I_MOUNTED" = "yes" ]; then
-	sh llmountcleanup.sh || exit 29
+	sync && sleep 2 && sync     # wait for delete thread
+	$CLEANUP
 fi

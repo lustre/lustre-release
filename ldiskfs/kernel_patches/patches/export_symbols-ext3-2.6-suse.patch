@@ -1,7 +1,7 @@
-Index: linux-2.6.0/include/linux/ext3_fs_sb.h
+Index: linux-2.6.5-sles9/include/linux/ext3_fs_sb.h
 ===================================================================
---- linux-2.6.0.orig/include/linux/ext3_fs_sb.h	2003-06-24 18:05:26.000000000 +0400
-+++ linux-2.6.0/include/linux/ext3_fs_sb.h	2003-12-31 01:09:26.000000000 +0300
+--- linux-2.6.5-sles9.orig/include/linux/ext3_fs_sb.h	2004-11-03 08:36:51.000000000 +0300
++++ linux-2.6.5-sles9/include/linux/ext3_fs_sb.h	2004-11-09 02:20:51.598024096 +0300
 @@ -19,9 +19,12 @@
  #ifdef __KERNEL__
  #include <linux/timer.h>
@@ -12,6 +12,6 @@ Index: linux-2.6.0/include/linux/ext3_fs_sb.h
  #include <linux/percpu_counter.h>
  #endif
 +#endif
+ #include <linux/rbtree.h>
  
  /*
-  * third extended-fs super-block data in memory

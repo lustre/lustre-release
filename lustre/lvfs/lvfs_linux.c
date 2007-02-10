@@ -37,18 +37,18 @@
 #include <linux/quotaops.h>
 #include <linux/version.h>
 #include <libcfs/kp30.h>
-#include <linux/lustre_fsfilt.h>
-#include <linux/obd.h>
-#include <linux/obd_class.h>
+#include <lustre_fsfilt.h>
+#include <obd.h>
+#include <obd_class.h>
 #include <linux/module.h>
 #include <linux/init.h>
 #include <linux/lustre_compat25.h>
-#include <linux/lvfs.h>
+#include <lvfs.h>
 #include "lvfs_internal.h"
 
-#include <linux/obd.h>
-#include <linux/lustre_lib.h>
-#include <linux/lustre_mds.h>   /* for mds_grp_hash_entry */
+#include <obd.h>
+#include <lustre_lib.h>
+#include <lustre_quota.h>
 
 atomic_t obd_memory;
 int obd_memmax;
@@ -59,7 +59,6 @@ int obd_memmax;
 # define ASSERT_NOT_KERNEL_CTXT(msg) LASSERTF(!segment_eq(get_fs(), get_ds()),\
                                               msg)
 # define ASSERT_KERNEL_CTXT(msg) LASSERTF(segment_eq(get_fs(), get_ds()), msg)
-
 #else
 # define ASSERT_CTXT_MAGIC(magic) do {} while(0)
 # define ASSERT_NOT_KERNEL_CTXT(msg) do {} while(0)
@@ -67,8 +66,10 @@ int obd_memmax;
 #endif
 
 static void push_group_info(struct lvfs_run_ctxt *save,
-                            struct group_info *ginfo)
+                            struct upcall_cache_entry *uce)
 {
+        struct group_info *ginfo = uce ? uce->ue_group_info : NULL;
+
         if (!ginfo) {
                 save->ngroups = current_ngroups;
                 current_ngroups = 0;
@@ -80,23 +81,26 @@ static void push_group_info(struct lvfs_run_ctxt *save,
                 task_unlock(current);
 #else
                 LASSERT(ginfo->ngroups <= NGROUPS);
+                LASSERT(current->ngroups <= NGROUPS_SMALL);
                 /* save old */
                 save->group_info.ngroups = current->ngroups;
                 if (current->ngroups)
                         memcpy(save->group_info.small_block, current->groups,
-                               current->ngroups);
+                               current->ngroups * sizeof(gid_t));
                 /* push new */
                 current->ngroups = ginfo->ngroups;
                 if (ginfo->ngroups)
                         memcpy(current->groups, ginfo->small_block,
-                               current->ngroups);
+                               current->ngroups * sizeof(gid_t));
 #endif
         }
 }
 
 static void pop_group_info(struct lvfs_run_ctxt *save,
-                           struct group_info *ginfo)
+                           struct upcall_cache_entry *uce)
 {
+        struct group_info *ginfo = uce ? uce->ue_group_info : NULL;
+
         if (!ginfo) {
                 current_ngroups = save->ngroups;
         } else {
@@ -105,10 +109,10 @@ static void pop_group_info(struct lvfs_run_ctxt *save,
                 current->group_info = save->group_info;
                 task_unlock(current);
 #else
-                current->ngroups = ginfo->ngroups;
+                current->ngroups = save->group_info.ngroups;
                 if (current->ngroups)
                         memcpy(current->groups, save->group_info.small_block,
-                               current->ngroups);
+                               current->ngroups * sizeof(gid_t));
 #endif
         }
 }
@@ -119,9 +123,7 @@ void push_ctxt(struct lvfs_run_ctxt *save, struct lvfs_run_ctxt *new_ctx,
 {
         //ASSERT_NOT_KERNEL_CTXT("already in kernel context!\n");
         ASSERT_CTXT_MAGIC(new_ctx->magic);
-        LASSERT(save->magic != OBD_RUN_CTXT_MAGIC || save->pid != current->pid);
         OBD_SET_CTXT_MAGIC(save);
-        save->pid = current->pid;
 
         /*
         CDEBUG(D_INFO,
@@ -139,7 +141,6 @@ void push_ctxt(struct lvfs_run_ctxt *save, struct lvfs_run_ctxt *new_ctx,
         LASSERT(atomic_read(&new_ctx->pwd->d_count));
         save->pwd = dget(current->fs->pwd);
         save->pwdmnt = mntget(current->fs->pwdmnt);
-        save->ngroups = current_ngroups;
         save->luc.luc_umask = current->fs->umask;
 
         LASSERT(save->pwd);
@@ -148,25 +149,18 @@ void push_ctxt(struct lvfs_run_ctxt *save, struct lvfs_run_ctxt *new_ctx,
         LASSERT(new_ctx->pwdmnt);
 
         if (uc) {
-                save->luc.luc_uid = current->uid;
-                save->luc.luc_gid = current->gid;
                 save->luc.luc_fsuid = current->fsuid;
                 save->luc.luc_fsgid = current->fsgid;
                 save->luc.luc_cap = current->cap_effective;
-                save->luc.luc_nid = current->user->nid;
-                
-                current->uid = uc->luc_uid;
-                current->gid = uc->luc_gid;
+
                 current->fsuid = uc->luc_fsuid;
                 current->fsgid = uc->luc_fsgid;
                 current->cap_effective = uc->luc_cap;
-                current->user->nid = uc->luc_nid;
-
-                push_group_info(save, uc->luc_ginfo);
+                push_group_info(save, uc->luc_uce);
         }
         current->fs->umask = 0; /* umask already applied on client */
         set_fs(new_ctx->fs);
-        set_fs_pwd(current->fs, new_ctx->pwdmnt, new_ctx->pwd);
+        ll_set_fs_pwd(current->fs, new_ctx->pwdmnt, new_ctx->pwd);
 
         /*
         CDEBUG(D_INFO,
@@ -186,9 +180,6 @@ void pop_ctxt(struct lvfs_run_ctxt *saved, struct lvfs_run_ctxt *new_ctx,
 {
         //printk("pc0");
         ASSERT_CTXT_MAGIC(saved->magic);
-        LASSERT(saved->pid == current->pid);
-        saved->magic = 0;
-        saved->pid = 0;
         //printk("pc1");
         ASSERT_KERNEL_CTXT("popping non-kernel context!\n");
 
@@ -203,23 +194,22 @@ void pop_ctxt(struct lvfs_run_ctxt *saved, struct lvfs_run_ctxt *new_ctx,
                atomic_read(&current->fs->pwdmnt->mnt_count));
         */
 
-        LASSERT(current->fs->pwd == new_ctx->pwd);
-        LASSERT(current->fs->pwdmnt == new_ctx->pwdmnt);
+        LASSERTF(current->fs->pwd == new_ctx->pwd, "%p != %p\n",
+                 current->fs->pwd, new_ctx->pwd);
+        LASSERTF(current->fs->pwdmnt == new_ctx->pwdmnt, "%p != %p\n",
+                 current->fs->pwdmnt, new_ctx->pwdmnt);
 
         set_fs(saved->fs);
-        set_fs_pwd(current->fs, saved->pwdmnt, saved->pwd);
+        ll_set_fs_pwd(current->fs, saved->pwdmnt, saved->pwd);
 
         dput(saved->pwd);
         mntput(saved->pwdmnt);
         current->fs->umask = saved->luc.luc_umask;
         if (uc) {
-                current->uid = saved->luc.luc_uid;
-                current->gid = saved->luc.luc_gid;
                 current->fsuid = saved->luc.luc_fsuid;
                 current->fsgid = saved->luc.luc_fsgid;
                 current->cap_effective = saved->luc.luc_cap;
-                current->user->nid = saved->luc.luc_nid;
-                pop_group_info(saved, uc->luc_ginfo);
+                pop_group_info(saved, uc->luc_uce);
         }
 
         /*
@@ -304,8 +294,9 @@ struct dentry *simple_mkdir(struct dentry *dir, char *name, int mode, int fix)
 
                 /* Fixup directory permissions if necessary */
                 if (fix && (old_mode & S_IALLUGO) != (mode & S_IALLUGO)) {
-                        CWARN("fixing permissions on %s from %o to %o\n",
-                              name, old_mode, mode);
+                        CDEBUG(D_CONFIG, 
+                               "fixing permissions on %s from %o to %o\n",
+                               name, old_mode, mode);
                         dchild->d_inode->i_mode = (mode & S_IALLUGO) |
                                                   (old_mode & ~S_IALLUGO);
                         mark_inode_dirty(dchild->d_inode);
@@ -386,20 +377,26 @@ struct l_file *l_dentry_open(struct lvfs_run_ctxt *ctxt, struct l_dentry *de,
 }
 EXPORT_SYMBOL(l_dentry_open);
 
+#ifdef HAVE_VFS_READDIR_U64_INO
+static int l_filldir(void *__buf, const char *name, int namlen, loff_t offset,
+                     u64 ino, unsigned int d_type)
+#else
 static int l_filldir(void *__buf, const char *name, int namlen, loff_t offset,
                      ino_t ino, unsigned int d_type)
+#endif
 {
         struct l_linux_dirent *dirent;
         struct l_readdir_callback *buf = (struct l_readdir_callback *)__buf;
-        
+
         dirent = buf->lrc_dirent;
         if (dirent)
-               dirent->lld_off = offset; 
+               dirent->lld_off = offset;
 
         OBD_ALLOC(dirent, sizeof(*dirent));
+
         if (!dirent)
                 return -ENOMEM;
-        
+
         list_add_tail(&dirent->lld_list, buf->lrc_list);
 
         buf->lrc_dirent = dirent;
@@ -433,209 +430,89 @@ EXPORT_SYMBOL(l_readdir);
 EXPORT_SYMBOL(obd_memory);
 EXPORT_SYMBOL(obd_memmax);
 
-#if defined (CONFIG_DEBUG_MEMORY) && defined(__KERNEL__)
-static spinlock_t obd_memlist_lock = SPIN_LOCK_UNLOCKED;
-static struct hlist_head *obd_memtable;
-static unsigned long obd_memtable_size;
+#ifdef LUSTRE_KERNEL_VERSION
+#ifdef HAVE_OLD_DEV_SET_RDONLY
+void dev_set_rdonly(lvfs_sbdev_type dev, int no_write);
+void dev_clear_rdonly(int no_write);
+int dev_check_rdonly(lvfs_sbdev_type dev);
+#elif !defined(HAVE_CLEAR_RDONLY_ON_PUT)
+void dev_set_rdonly(lvfs_sbdev_type dev);
+void dev_clear_rdonly(lvfs_sbdev_type dev);
+int dev_check_rdonly(lvfs_sbdev_type dev);
+#endif
 
-static int lvfs_memdbg_init(int size)
+void lvfs_set_rdonly(lvfs_sbdev_type dev)
 {
-        struct hlist_head *head;
-        int i;
-
-        LASSERT(size > sizeof(sizeof(struct hlist_head)));
-        obd_memtable_size = size / sizeof(struct hlist_head);
-
-        CWARN("allocating %lu malloc entries\n",
-              (unsigned long)obd_memtable_size);
-
-        obd_memtable = kmalloc(size, GFP_KERNEL);
-        if (!obd_memtable)
-                return -ENOMEM;
-
-        i = obd_memtable_size;
-        head = obd_memtable;
-        do {
-                INIT_HLIST_HEAD(head);
-                head++;
-                i--;
-        } while(i);
-
-        return 0;
+        CDEBUG(D_IOCTL | D_HA, "set dev %lx rdonly\n", (long)dev);
+        lvfs_sbdev_sync(dev);
+#ifdef HAVE_OLD_DEV_SET_RDONLY
+        dev_set_rdonly(dev, 2);
+#else
+        dev_set_rdonly(dev);
+#endif
 }
 
-static int lvfs_memdbg_cleanup(void)
+int lvfs_check_rdonly(lvfs_sbdev_type dev)
 {
-        struct hlist_node *node = NULL, *tmp = NULL;
-        struct hlist_head *head;
-        struct mem_track *mt;
-        int i;
+        return dev_check_rdonly(dev);
+}
 
-        spin_lock(&obd_memlist_lock);
-        for (i = 0, head = obd_memtable; i < obd_memtable_size; i++, head++) {
-                hlist_for_each_safe(node, tmp, head) {
-                        mt = hlist_entry(node, struct mem_track, m_hash);
-                        hlist_del_init(&mt->m_hash);
-                        kfree(mt);
-                }
+void lvfs_clear_rdonly(lvfs_sbdev_type dev)
+{
+#ifndef HAVE_CLEAR_RDONLY_ON_PUT
+        CDEBUG(D_IOCTL | D_HA, "unset dev %lx rdonly\n", (long)dev);
+        if (lvfs_check_rdonly(dev)) {
+                lvfs_sbdev_sync(dev);
+#ifdef HAVE_OLD_DEV_SET_RDONLY
+                dev_clear_rdonly(2);
+#else
+                dev_clear_rdonly(dev);
+#endif
         }
-        spin_unlock(&obd_memlist_lock);
-        kfree(obd_memtable);
-        return 0;
+#else
+        CDEBUG(D_IOCTL | D_HA, "(will unset dev %lx rdonly on put)\n",
+               (long)dev);
+#endif
 }
+EXPORT_SYMBOL(lvfs_set_rdonly);
+EXPORT_SYMBOL(lvfs_check_rdonly);
+EXPORT_SYMBOL(lvfs_clear_rdonly);
+#endif
 
-static inline unsigned long const hashfn(void *ptr)
+int lvfs_check_io_health(struct obd_device *obd, struct file *file)
 {
-        return (unsigned long)ptr &
-                (obd_memtable_size - 1);
-}
+        char *write_page = NULL;
+        loff_t offset = 0;
+        int rc = 0;
+        ENTRY;
 
-static void __lvfs_memdbg_insert(struct mem_track *mt)
-{
-        struct hlist_head *head = obd_memtable +
-                hashfn(mt->m_ptr);
-        hlist_add_head(&mt->m_hash, head);
-}
-
-void lvfs_memdbg_insert(struct mem_track *mt)
-{
-        spin_lock(&obd_memlist_lock);
-        __lvfs_memdbg_insert(mt);
-        spin_unlock(&obd_memlist_lock);
-}
-EXPORT_SYMBOL(lvfs_memdbg_insert);
-
-static void __lvfs_memdbg_remove(struct mem_track *mt)
-{
-        hlist_del_init(&mt->m_hash);
-}
-
-void lvfs_memdbg_remove(struct mem_track *mt)
-{
-        spin_lock(&obd_memlist_lock);
-        __lvfs_memdbg_remove(mt);
-        spin_unlock(&obd_memlist_lock);
-}
-EXPORT_SYMBOL(lvfs_memdbg_remove);
-
-static struct mem_track *__lvfs_memdbg_find(void *ptr)
-{
-        struct hlist_node *node = NULL;
-        struct mem_track *mt = NULL;
-        struct hlist_head *head;
-
-        head = obd_memtable + hashfn(ptr);
-
-        hlist_for_each(node, head) {
-                mt = hlist_entry(node, struct mem_track, m_hash);
-                if ((unsigned long)mt->m_ptr == (unsigned long)ptr)
-                        break;
-                mt = NULL;
-        }
-        return mt;
-}
-
-struct mem_track *lvfs_memdbg_find(void *ptr)
-{
-        struct mem_track *mt;
-
-        spin_lock(&obd_memlist_lock);
-        mt = __lvfs_memdbg_find(ptr);
-        spin_unlock(&obd_memlist_lock);
+        OBD_ALLOC(write_page, CFS_PAGE_SIZE);
+        if (!write_page)
+                RETURN(-ENOMEM);
         
-        return mt;
+        rc = fsfilt_write_record(obd, file, write_page, CFS_PAGE_SIZE, &offset, 1);
+       
+        OBD_FREE(write_page, CFS_PAGE_SIZE);
+
+        CDEBUG(D_INFO, "write 1 page synchronously for checking io rc %d\n",rc);
+        RETURN(rc); 
 }
-EXPORT_SYMBOL(lvfs_memdbg_find);
-
-int lvfs_memdbg_check_insert(struct mem_track *mt)
-{
-        spin_lock(&obd_memlist_lock);
-        if (!__lvfs_memdbg_find(mt->m_ptr)) {
-                __lvfs_memdbg_insert(mt);
-                spin_unlock(&obd_memlist_lock);
-                return 1;
-        }
-        spin_unlock(&obd_memlist_lock);
-        return 0;
-}
-EXPORT_SYMBOL(lvfs_memdbg_check_insert);
-
-struct mem_track *
-lvfs_memdbg_check_remove(void *ptr)
-{
-        struct mem_track *mt;
-
-        spin_lock(&obd_memlist_lock);
-        mt = __lvfs_memdbg_find(ptr);
-        if (mt) {
-                __lvfs_memdbg_remove(mt);
-                spin_unlock(&obd_memlist_lock);
-                return mt;
-        }
-        spin_unlock(&obd_memlist_lock);
-        return NULL;
-}
-EXPORT_SYMBOL(lvfs_memdbg_check_remove);
-#endif
-
-void lvfs_memdbg_show(void)
-{
-#if defined (CONFIG_DEBUG_MEMORY) && defined(__KERNEL__)
-        struct hlist_node *node = NULL;
-        struct hlist_head *head;
-        struct mem_track *mt;
-#endif
-        int leaked;
-	
-#if defined (CONFIG_DEBUG_MEMORY) && defined(__KERNEL__)
-	int i;
-#endif
-
-        leaked = atomic_read(&obd_memory);
-
-        if (leaked > 0) {
-                CWARN("memory leaks detected (max %d, leaked %d)\n",
-                      obd_memmax, leaked);
-
-#if defined (CONFIG_DEBUG_MEMORY) && defined(__KERNEL__)
-                spin_lock(&obd_memlist_lock);
-                for (i = 0, head = obd_memtable; i < obd_memtable_size; i++, head++) {
-                        hlist_for_each(node, head) {
-                                mt = hlist_entry(node, struct mem_track, m_hash);
-                                CWARN("  [%s] ptr: 0x%p, size: %d, src at \"%s\"\n",
-                                      ((mt->m_flags & MT_FLAGS_WRONG_SIZE) ?
-                                       "wrong ck size" : "leaked memory"),
-                                      mt->m_ptr, mt->m_size, mt->m_loc);
-                        }
-                }
-                spin_unlock(&obd_memlist_lock);
-#endif
-                /* remove for production */
-                portals_debug_dumplog();
-        }
-}
-EXPORT_SYMBOL(lvfs_memdbg_show);
+EXPORT_SYMBOL(lvfs_check_io_health);
 
 static int __init lvfs_linux_init(void)
 {
-        ENTRY;
-#if defined (CONFIG_DEBUG_MEMORY) && defined(__KERNEL__)
-        lvfs_memdbg_init(PAGE_SIZE);
-#endif
-        lvfs_mount_list_init();
         RETURN(0);
 }
 
 static void __exit lvfs_linux_exit(void)
 {
+        int leaked;
         ENTRY;
 
-        lvfs_mount_list_cleanup();
-        lvfs_memdbg_show();
+        leaked = atomic_read(&obd_memory);
+        CDEBUG(leaked ? D_ERROR : D_INFO,
+               "obd mem max: %d leaked: %d\n", obd_memmax, leaked);
 
-#if defined (CONFIG_DEBUG_MEMORY) && defined(__KERNEL__)
-        lvfs_memdbg_cleanup();
-#endif
         EXIT;
         return;
 }

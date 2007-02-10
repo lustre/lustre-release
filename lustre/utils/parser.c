@@ -28,19 +28,7 @@
 #include <sys/param.h>
 #include <assert.h>
 
-#ifdef HAVE_LIBREADLINE
-#define READLINE_LIBRARY
-#include <readline/readline.h>
-
-/* completion_matches() is #if 0-ed out in modern glibc */
-#ifndef completion_matches
-#  define completion_matches rl_completion_matches
-#endif
-extern void using_history(void);
-extern void stifle_history(int);
-extern void add_history(char *);
-#endif
-
+#include "platform.h"
 #include "parser.h"
 
 static command_t * top_level;           /* Top level of commands, initialized by
@@ -341,16 +329,52 @@ int init_input()
 #define add_history(s)
 char * readline(char * prompt)
 {
-        char line[2048];
-        int n = 0;
+        int size = 2048;
+        char *line = malloc(size);
+        char *ptr = line;
+        int c;
+        int eof = 0;
+
+        if (line == NULL)
+                return NULL;
         if (prompt)
                 printf ("%s", prompt);
-        if (fgets(line, sizeof(line), stdin) == NULL)
-                return (NULL);
-        n = strlen(line);
-        if (n && line[n-1] == '\n')
-                line[n-1] = '\0';
-        return strdup(line);
+
+        while (1) {
+                if ((c = fgetc(stdin)) != EOF) {
+                        if (c == '\n')
+                                goto out;
+                        *ptr++ = c;
+
+                        if (ptr - line >= size - 1) {
+                                char *tmp;
+
+                                size *= 2;
+                                tmp = malloc(size);
+                                if (tmp == NULL)
+                                        goto outfree;
+                                memcpy(tmp, line, ptr - line);
+                                ptr = tmp + (ptr - line);
+                                free(line);
+                                line = tmp;
+                        }
+                } else {
+                        eof = 1;
+                        if (ferror(stdin) || feof(stdin))
+                                goto outfree;
+                        goto out;
+                }
+        }
+out:
+        *ptr = 0;
+        if (eof && (strlen(line) == 0)) {
+                free(line);
+                line = NULL;
+        }
+        return line;
+outfree:
+        free(line);
+        return NULL;
 }
 #endif
 

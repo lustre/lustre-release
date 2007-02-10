@@ -4,54 +4,68 @@ lconf \- Lustre filesystem configuration utility
 .SH SYNOPSIS
 .br
 .B lconf
-[--node <node_name>] [-d,--cleanup] [--noexec] [--gdb] [--nosetup] [--nomod] [-n,--noexec] [-v,--verbose] [-h,--help] <XML-config file>
-[options] --add <objecttype> [args]
+[OPTIONS] <XML-config file>
 .br
 .SH DESCRIPTION
 .B lconf
-, when invoked configures a node following directives in the <XML-config-file>. There will be single configuration file for all the nodes in a single cluster. This file should be distributed to all the nodes in the cluster or kept in a location accessible to all the nodes. One option is to store the cluster configuration information in LDAP format on an LDAP server that can be reached from all the cluster nodes.
+, when invoked configures a node following directives in the
+<XML-config-file>.Can be used to control recovery and startup/shutdown
+. There will be single configuration file for all the nodes in a
+single cluster. This file should be distributed to all the nodes in
+the cluster or kept in a location accessible to all the nodes. The XML file must be specified. When invoked with no options, lconf will attempt to configure the resources owned by the node it is invoked on
 .PP
 The arguments that can be used for lconf are:
 .PP
 .TP
+--abort_recovery - Used to start Lustre when you are certian that
+recovery will not succeed, as when an OST or MDS is disabled. 
+.TP
+--acl Enable Access Control List support on the MDS 
+.TP
+--allow_unprivileged_port Allows connections from unprivileged ports
+.TP
+--clientoptions <options> 
+Additional options for mounting Lustre clients. Obsolete with
+zeroconfig mounting..
+.TP
 --client_uuid <uuid> 
 The failed client (required for recovery).
 .TP
---clientoptions <options> 
-Additional options for Lustre.
+--clumanager Generate a Red Hat Clumanager configuration file for this
+node.
 .TP
 --config <arg> 
-Cluster configuration name used for LDAP query
+Cluster configuration name used for LDAP query (depreciated)
 .TP
 --conn_uuid <uuid> 
 The failed connection (required for recovery).
 .TP
---d|--cleanup 
+-d|--cleanup 
 Unconfigure a node. The same config and --node argument used for configuration needs to be used for cleanup as well. This will attempt to undo all of the configuration steps done by lconf, including unloading the kernel modules.
 .TP
 --debug_path <path> 
-Path to save debug dumps.
+Path to save debug dumps.(default is /tmp/lustre-log)
 .TP
 --dump <file> 
 Dump the kernel debug log to the specified file before portals is unloaded during cleanup.
 .TP
---dump_path <arg> 
-Path to save debug dumps. Default is /tmp/lustre_log
-.TP
 --failover 
-Used to shutdown without saving state. Default is 0. This will allow the node to give up service to another node for failover purposes. This will not be a clean shutdown.
+Used to shutdown without saving state. This will allow the node to give up service to another node for failover purposes. This will not be a clean shutdown.
 .TP
---force 
-Forced unmounting and/or obd detach during cleanup. Default is 0. 
+-f|--force 
+Forced unmounting and/or obd detach during cleanup. 
 .TP
 --gdb 
-Causes lconf to print a message and pause for 5 seconds after creating a gdb module script and before doing any Lustre configuration (the gdb module script is always created, however).
+Causes lconf to create a gdb module script and pause 5 seconds before doing any Lustre configuration (the gdb module script is always created, however).
 .TP
 --gdb_script <arg> 
 Full name of gdb debug script. Default is /tmp/ogdb.
 .TP
 --group <arg> 
 The group of devices to cleanup/configure.
+.TP
+--group_upcall <arg> 
+Pathname to the MDS upcall to resolve secondary group membership.  Defaults to NONE, meaning that the MDS will use whatever group the client supplies, but this is limited to a single supplementary group.
 .TP
 -h,--help 
 Print help.
@@ -63,19 +77,29 @@ The UUID of the service to be ignored by a client mounting Lustre. Allows the cl
 Dump all ioctls to the specified file
 .TP
 --ldapurl <arg> 
-LDAP server URL 
+LDAP server URL. Depreciated
+.TP
+--lustre=src_dir 
+Specify the base directory for Lustre sources, this parameter will cause lconf to load the lustre modules from this source tree.
 .TP
 --lustre_upcall <path> 
 Set the location of the Lustre upcall scripts used by the client for recovery
 .TP
---lustre=src_dir 
-Specify the base directory for Lustre sources, this parameter will cause lconf to load the lustre modules from this soure tree.
+--make_service_scripts Create per-service symlinks for use with clumanager HA software
 .TP
 --mds_ost_conn 
 Open connections to OSTs on MDS.
 .TP
 --maxlevel <level> 
-Perform configuration of devices and services up to level given. level can take the values net, dev, svc, fs. When used in conjunction with cleanup, services are torn down up to a certain level. Default is 100.
+Perform configuration of devices and services up to level given. When
+used in conjunction with cleanup, services are torn down up to a
+certain level.
+Levels are aproximatly like:
+10 - network
+20 - device, ldlm
+30 - osd, mdd
+40 - mds, ost
+70 - mountpoint, echo_client, osc, mdc, lov
 .TP
 --minlevel <level> 
 Specify the minimum level of services to configure/cleanup. Default is 0.
@@ -98,23 +122,35 @@ Only setup devices and services, do not load modules.
 --nosetup 
 Only load modules, do not configure devices or services.
 .TP
+--old_conf Start up service even though config logs appear outdated.
+.TP
 --portals <path> 
-Specify portals source directory. If this is a relative path, then it is assumed to be relative to lustre.
+Specify portals source directory. If this is a relative path, then it
+is assumed to be relative to lustre. (Depreciated)
 .TP
 --portals_upcall <path> 
-Specify the location of the Portals upcall scripts used by the client for recovery
+Specify the location of the Portals upcall scripts used by the client
+for recovery (Depreciated)
 .TP
 --ptldebug debug-level 
 This options can be used to set the required debug level.
 .TP
+--quota 
+Enable quota support for client filesystem
+.TP
+--rawprimary <arg>  For clumanager, device of the primary quorum
+(default=/dev/raw/raw1)
+.TP
+--rawsecondary <arg>  For clumanager, device of the secondary quorum (default=/dev/raw/raw2)
+.TP
 --record 
 Write config information on mds.
 .TP
---record_log <arg> 
-Specify the name of config record log.
-.TP
 --record_device <arg> 
 Specify MDS device name that will record the config commands.
+.TP
+--record_log <arg> 
+Specify the name of config record log.
 .TP
 --recover <arg> 
 Recover a device.
@@ -124,6 +160,14 @@ Reformat all the devices. This is essential on the first time the file system is
 .TP
 --select <arg> 
 Select a particular node for a service 
+.TP
+--service <arg>
+Shorthand for --group <arg> --select <arg>=<hostname>
+.TP
+--service_scripts <arg>  For clumanager, directory containing per-service scripts (default=/etc/lustre/services)
+.TP
+--single_socket The socknal option. Uses only one socket instead of a
+bundle.
 .TP
 --subsystem <arg> 
 Set the portals debug subsystem.
@@ -135,7 +179,10 @@ Specify the failed target (required for recovery).
 Set the recovery timeout period.
 .TP
 --upcall <path> 
-Set the location of both Lustre and Portals upcall scripts used by the client for recovery
+Set the location of both Lustre and Portals upcall scripts used by the
+client for recovery
+.TP
+--user_xattr Enable user_xattr support on MDS
 .TP
 --verbose,-v 
 Be verbose and show actions while going along.

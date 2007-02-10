@@ -1,19 +1,14 @@
-MODULES := lvfs 
-@SERVER_TRUE@MODULES += fsfilt_@BACKINGFS@ fsfilt_smfs
+MODULES := lvfs
+@SERVER_TRUE@MODULES += fsfilt_@BACKINGFS@
 
-@SNAPFS_TRUE@MODULES += fsfilt_snap_@BACKINGFS@ fsfilt_snap_smfs 
+lvfs-objs := lvfs_common.o lvfs_linux.o fsfilt.o upcall_cache.o
 
-lvfs-objs := fsfilt.o lvfs_common.o llog_lvfs.o lvfs_linux.o 
-lvfs-objs += llog.o llog_cat.o
- 
 ifeq ($(PATCHLEVEL),6)
 fsfilt_@BACKINGFS@-objs := fsfilt-@BACKINGFS@.o
 
 $(obj)/fsfilt-%.c: $(obj)/fsfilt_%.c
 	ln -s $< $@
 endif
-
-fsfilt_smfs-objs := fsfilt-smfs.o
 
 # for <ext3/xattr.h> on 2.6
 EXTRA_PRE_CFLAGS := -I@LINUX@/fs -I@LUSTRE@ -I@LUSTRE@/ldiskfs

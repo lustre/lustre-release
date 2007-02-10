@@ -8,31 +8,36 @@
  *   Author: Andreas Dilger <adilger@clusterfs.com>
  *   Author: Phil Schwan <phil@clusterfs.com>
  *
- *   This file is part of Lustre, http://www.lustre.org.
+ *   This file is part of the Lustre file system, http://www.lustre.org
+ *   Lustre is a trademark of Cluster File Systems, Inc.
  *
- *   Lustre is free software; you can redistribute it and/or
- *   modify it under the terms of version 2 of the GNU General Public
- *   License as published by the Free Software Foundation.
+ *   You may have signed or agreed to another license before downloading
+ *   this software.  If so, you are bound by the terms and conditions
+ *   of that agreement, and the following does not apply to you.  See the
+ *   LICENSE file included with this distribution for more information.
  *
- *   Lustre is distributed in the hope that it will be useful,
- *   but WITHOUT ANY WARRANTY; without even the implied warranty of
- *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *   GNU General Public License for more details.
+ *   If you did not agree to a different license, then this copy of Lustre
+ *   is open source software; you can redistribute it and/or modify it
+ *   under the terms of version 2 of the GNU General Public License as
+ *   published by the Free Software Foundation.
  *
- *   You should have received a copy of the GNU General Public License
- *   along with Lustre; if not, write to the Free Software
- *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ *   In either case, Lustre is distributed in the hope that it will be
+ *   useful, but WITHOUT ANY WARRANTY; without even the implied warranty
+ *   of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *   license text for more details.
  */
 
 #define DEBUG_SUBSYSTEM S_FILTER
 
+#ifdef HAVE_KERNEL_CONFIG_H
 #include <linux/config.h>
+#endif
 #include <linux/module.h>
 #include <linux/version.h>
 
 #include <libcfs/list.h>
-#include <linux/obd_class.h>
-#include <linux/lustre_dlm.h>
+#include <obd_class.h>
+#include <lustre_dlm.h>
 
 #include "filter_internal.h"
 
@@ -40,15 +45,13 @@
 static int filter_lvbo_init(struct ldlm_resource *res)
 {
         struct ost_lvb *lvb = NULL;
-        struct filter_obd *filter;
         struct obd_device *obd;
         struct dentry *dentry;
-        __u64 ogr, oid;
         int rc = 0;
         ENTRY;
 
         LASSERT(res);
-        LASSERT(down_trylock(&res->lr_lvb_sem) != 0);
+        LASSERT_SEM_LOCKED(&res->lr_lvb_sem);
 
         /* we only want lvb's for object resources */
         /* check for internal locks: these have name[1] != 0 */
@@ -56,48 +59,42 @@ static int filter_lvbo_init(struct ldlm_resource *res)
                 RETURN(0);
 
         if (res->lr_lvb_data)
-                GOTO(out, rc = 0);
+                RETURN(0);
 
         OBD_ALLOC(lvb, sizeof(*lvb));
         if (lvb == NULL)
-                GOTO(out, rc = -ENOMEM);
+                RETURN(-ENOMEM);
 
         res->lr_lvb_data = lvb;
         res->lr_lvb_len = sizeof(*lvb);
 
         obd = res->lr_namespace->ns_lvbp;
-        filter = &obd->u.filter;
         LASSERT(obd != NULL);
 
-        oid = res->lr_name.name[0];
-        ogr = res->lr_name.name[2];
-
-        dentry = filter_id2dentry(obd, NULL, ogr, oid);
-        if (IS_ERR(dentry))
-                GOTO(out, rc = PTR_ERR(dentry));
-
-        if (dentry->d_inode == NULL) {
-                lvb->lvb_size = 0;
-                lvb->lvb_blocks = 0;
-
-                /* making client use MDS mtime as this one is zero, bigger one
-                 * will be taken and this does not break POSIX. Thanks to
-                 * Andreas. --umka */
-                lvb->lvb_mtime = 0;
-        } else {
-                lvb->lvb_size = dentry->d_inode->i_size;
-                lvb->lvb_blocks = dentry->d_inode->i_blocks;
-                lvb->lvb_mtime = LTIME_S(dentry->d_inode->i_mtime);
+        dentry = filter_fid2dentry(obd, NULL, 0, res->lr_name.name[0]);
+        if (IS_ERR(dentry)) {
+                rc = PTR_ERR(dentry);
+                CERROR("%s: bad object "LPU64"/"LPU64": rc %d\n", obd->obd_name,
+                       res->lr_name.name[0], res->lr_name.name[1], rc);
+                RETURN(rc);
         }
 
-        CDEBUG(D_DLMTRACE, "res: "LPU64" initial lvb size: "LPU64", "
-               "mtime: "LPU64", blocks: "LPU64"\n", res->lr_name.name[0],
-               lvb->lvb_size, lvb->lvb_mtime, lvb->lvb_blocks);
+        if (dentry->d_inode == NULL)
+                /* This is always true for test_brw */
+                GOTO(out_dentry, rc = -ENOENT);
 
-        f_dput(dentry);
+        inode_init_lvb(dentry->d_inode, lvb);
+
+        CDEBUG(D_DLMTRACE, "res: "LPU64" initial lvb size: "LPU64", "
+               "mtime: "LPU64", blocks: "LPU64"\n",
+               res->lr_name.name[0], lvb->lvb_size,
+               lvb->lvb_mtime, lvb->lvb_blocks);
+
         EXIT;
-out:
-        /* don't free lvb data on lookup error */
+out_dentry:
+        f_dput(dentry);
+
+        /* Don't free lvb data on lookup error */
         return rc;
 }
 
@@ -106,16 +103,15 @@ out:
  *   m != NULL : called by the DLM itself after a glimpse callback
  *   m == NULL : called by the filter after a disk write
  *
- *   If 'increase' is true, don't allow values to move backwards.
+ *   If 'increase_only' is true, don't allow values to move backwards.
  */
 static int filter_lvbo_update(struct ldlm_resource *res, struct lustre_msg *m,
-                              int buf_idx, int increase)
+                              int buf_idx, int increase_only)
 {
-        struct ost_lvb *lvb = res->lr_lvb_data;
-        struct obd_device *obd;
-        struct obdo *oa = NULL;
-        struct dentry *dentry;
         int rc = 0;
+        struct ost_lvb *lvb;
+        struct obd_device *obd;
+        struct dentry *dentry;
         ENTRY;
 
         LASSERT(res);
@@ -126,7 +122,8 @@ static int filter_lvbo_update(struct ldlm_resource *res, struct lustre_msg *m,
                 RETURN(0);
 
         down(&res->lr_lvb_sem);
-        if (!res->lr_lvb_data) {
+        lvb = res->lr_lvb_data;
+        if (lvb == NULL) {
                 CERROR("No lvb when running lvbo_update!\n");
                 GOTO(out, rc = 0);
         }
@@ -139,93 +136,82 @@ static int filter_lvbo_update(struct ldlm_resource *res, struct lustre_msg *m,
                                       lustre_swab_ost_lvb);
                 if (new == NULL) {
                         CERROR("lustre_swab_buf failed\n");
-                        //GOTO(out, rc = -EPROTO);
-                        GOTO(out, rc = 0);
+                        goto disk_update;
                 }
-
-                lock_res(res);
-                if (new->lvb_size > lvb->lvb_size || !increase) {
+                if (new->lvb_size > lvb->lvb_size || !increase_only) {
                         CDEBUG(D_DLMTRACE, "res: "LPU64" updating lvb size: "
                                LPU64" -> "LPU64"\n", res->lr_name.name[0],
                                lvb->lvb_size, new->lvb_size);
                         lvb->lvb_size = new->lvb_size;
                 }
-                if (new->lvb_mtime > lvb->lvb_mtime || !increase) {
+                if (new->lvb_mtime > lvb->lvb_mtime || !increase_only) {
                         CDEBUG(D_DLMTRACE, "res: "LPU64" updating lvb mtime: "
                                LPU64" -> "LPU64"\n", res->lr_name.name[0],
                                lvb->lvb_mtime, new->lvb_mtime);
                         lvb->lvb_mtime = new->lvb_mtime;
                 }
-                if (new->lvb_atime > lvb->lvb_atime || !increase) {
+                if (new->lvb_atime > lvb->lvb_atime || !increase_only) {
                         CDEBUG(D_DLMTRACE, "res: "LPU64" updating lvb atime: "
                                LPU64" -> "LPU64"\n", res->lr_name.name[0],
                                lvb->lvb_atime, new->lvb_atime);
                         lvb->lvb_atime = new->lvb_atime;
                 }
-                if (new->lvb_ctime > lvb->lvb_ctime || !increase) {
+                if (new->lvb_ctime > lvb->lvb_ctime || !increase_only) {
                         CDEBUG(D_DLMTRACE, "res: "LPU64" updating lvb ctime: "
                                LPU64" -> "LPU64"\n", res->lr_name.name[0],
                                lvb->lvb_ctime, new->lvb_ctime);
                         lvb->lvb_ctime = new->lvb_ctime;
                 }
-                unlock_res(res);
         }
 
+ disk_update:
         /* Update the LVB from the disk inode */
         obd = res->lr_namespace->ns_lvbp;
         LASSERT(obd);
 
-        oa = obdo_alloc();
-        if (oa == NULL)
-                GOTO(out, rc = -ENOMEM);
-
-        oa->o_id = res->lr_name.name[0];
-        oa->o_gr = res->lr_name.name[2];
-        oa->o_valid = OBD_MD_FLID | OBD_MD_FLGROUP;
-        dentry = filter_oa2dentry(obd, oa);
+        dentry = filter_fid2dentry(obd, NULL, 0, res->lr_name.name[0]);
         if (IS_ERR(dentry))
                 GOTO(out, rc = PTR_ERR(dentry));
 
-        /* Limit the valid bits in the return data to what we actually use */
-        oa->o_valid = OBD_MD_FLID | OBD_MD_FLGROUP;
-        obdo_from_inode(oa, dentry->d_inode, FILTER_VALID_FLAGS);
+        if (dentry->d_inode == NULL)
+                GOTO(out_dentry, rc = -ENOENT);
 
-        lock_res(res);
-        if (dentry->d_inode->i_size > lvb->lvb_size || !increase) {
+        if (dentry->d_inode->i_size > lvb->lvb_size || !increase_only) {
                 CDEBUG(D_DLMTRACE, "res: "LPU64" updating lvb size from disk: "
                        LPU64" -> %llu\n", res->lr_name.name[0],
                        lvb->lvb_size, dentry->d_inode->i_size);
                 lvb->lvb_size = dentry->d_inode->i_size;
         }
 
-        if (LTIME_S(dentry->d_inode->i_mtime) > lvb->lvb_mtime || !increase) {
+        if (LTIME_S(dentry->d_inode->i_mtime) >lvb->lvb_mtime|| !increase_only){
                 CDEBUG(D_DLMTRACE, "res: "LPU64" updating lvb mtime from disk: "
                        LPU64" -> %lu\n", res->lr_name.name[0],
                        lvb->lvb_mtime, LTIME_S(dentry->d_inode->i_mtime));
                 lvb->lvb_mtime = LTIME_S(dentry->d_inode->i_mtime);
         }
-        if (LTIME_S(dentry->d_inode->i_atime) > lvb->lvb_atime || !increase) {
+        if (LTIME_S(dentry->d_inode->i_atime) >lvb->lvb_atime|| !increase_only){
                 CDEBUG(D_DLMTRACE, "res: "LPU64" updating lvb atime from disk: "
                        LPU64" -> %lu\n", res->lr_name.name[0],
                        lvb->lvb_atime, LTIME_S(dentry->d_inode->i_atime));
                 lvb->lvb_atime = LTIME_S(dentry->d_inode->i_atime);
         }
-        if (LTIME_S(dentry->d_inode->i_ctime) > lvb->lvb_ctime || !increase) {
+        if (LTIME_S(dentry->d_inode->i_ctime) >lvb->lvb_ctime|| !increase_only){
                 CDEBUG(D_DLMTRACE, "res: "LPU64" updating lvb ctime from disk: "
                        LPU64" -> %lu\n", res->lr_name.name[0],
                        lvb->lvb_ctime, LTIME_S(dentry->d_inode->i_ctime));
                 lvb->lvb_ctime = LTIME_S(dentry->d_inode->i_ctime);
         }
-        CDEBUG(D_DLMTRACE, "res: "LPU64" updating lvb blocks from disk: "
-               LPU64" -> %lu\n", res->lr_name.name[0],
-               lvb->lvb_blocks, dentry->d_inode->i_blocks);
-        lvb->lvb_blocks = dentry->d_inode->i_blocks;
-        unlock_res(res);
+        if (lvb->lvb_blocks != dentry->d_inode->i_blocks) {
+                CDEBUG(D_DLMTRACE,"res: "LPU64" updating lvb blocks from disk: "
+                       LPU64" -> %lu\n", res->lr_name.name[0],
+                       lvb->lvb_blocks, dentry->d_inode->i_blocks);
+                lvb->lvb_blocks = dentry->d_inode->i_blocks;
+        }
 
+out_dentry:
         f_dput(dentry);
+
 out:
-        if (oa)
-                obdo_free(oa);
         up(&res->lr_lvb_sem);
         return rc;
 }

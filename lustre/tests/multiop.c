@@ -15,39 +15,39 @@
 
 #define T1 "write data before unlink\n"
 #define T2 "write data after unlink\n"
-char buf[128];
+char buf[] = "yabba dabba doo, I'm coming for you, I live in a shoe, I don't know what to do.\n'Bigger, bigger,and bigger yet!' cried the Creator.  'You are not yet substantial enough for my boundless intents!'  And ever greater and greater the object became, until all was lost 'neath its momentus bulk.\n";
 
 char usage[] = 
 "Usage: %s filename command-sequence\n"
 "    command-sequence items:\n"
+"        c  close\n"
 "        d  mkdir\n"
 "        D  open(O_DIRECTORY)\n"
-"        o  open(O_RDONLY)\n"
-"        O  open(O_CREAT|O_RDWR)\n"
 "        L  link\n"
 "        l  symlink\n"
-"        u  unlink\n"
-"        U  munmap\n"
 "        m  mknod\n"
 "        M  rw mmap to EOF (must open and stat prior)\n"
 "        N  rename\n"
-"        c  close\n"
-"        _  wait for signal\n"
+"        o  open(O_RDONLY)\n"
+"        O  open(O_CREAT|O_RDWR)\n"
+"        r[num] read [optional length]\n"
 "        R  reference entire mmap-ed region\n"
-"        r  read\n"
 "        s  stat\n"
 "        S  fstat\n"
 "        t  fchmod\n"
-"        T  ftruncate to zero\n"
-"        w  write\n"
+"        T[num] ftruncate [optional position, default 0]\n"
+"        u  unlink\n"
+"        U  munmap\n"
+"        w[num] write optional length\n"
 "        W  write entire mmap-ed region\n"
 "        y  fsync\n"
 "        Y  fdatasync\n"
-"        z  seek to zero\n";
+"        z[num] seek [optional position, default 0]\n"
+"        _  wait for signal\n";
 
 static int usr1_received;
-void usr1_handler(int unused) 
-{ 
+void usr1_handler(int unused)
+{
         usr1_received = 1;
 }
 
@@ -62,6 +62,7 @@ pop_arg(int argc, char *argv[])
         return argv[cur_arg++];
 }
 #define POP_ARG() (pop_arg(argc, argv))
+#define min(a,b) ((a)>(b)?(b):(a))
 
 int main(int argc, char **argv)
 {
@@ -70,7 +71,7 @@ int main(int argc, char **argv)
         struct stat st;
         size_t mmap_len = 0, i;
         unsigned char *mmap_ptr = NULL, junk = 0;
-        int fd = -1;
+        int rc, len, fd = -1;
 
         if (argc < 3) {
                 fprintf(stderr, usage, argv[0]);
@@ -165,13 +166,19 @@ int main(int argc, char **argv)
                                 exit(1);
                         }
                         break;
-                case 'r': {
-                        char buf;
-                        if (read(fd, &buf, 1) == -1) {
-                                perror("read");
-                                exit(1);
+                case 'r': 
+                        len = atoi(commands+1);
+                        if (len <= 0)
+                                len = 1;
+                        while(len > 0) {
+                                if (read(fd, &buf,
+                                         min(len,sizeof(buf))) == -1) {
+                                        perror("read");
+                                        exit(1);
+                                }
+                                len -= sizeof(buf);
                         }
-                        }
+                        break;
                 case 'S':
                         if (fstat(fd, &st) == -1) {
                                 perror("fstat");
@@ -195,7 +202,9 @@ int main(int argc, char **argv)
                         }
                         break;
                 case 'T':
-                        if (ftruncate(fd, 0) == -1) {
+                        len = atoi(commands+1);
+                        if (ftruncate(fd, len) == -1) {
+                                printf("ftruncate (%d,%d)\n", fd, len);
                                 perror("ftruncate");
                                 exit(1);
                         }
@@ -212,14 +221,20 @@ int main(int argc, char **argv)
                                 exit(1);
                         }
                         break;
-                case 'w': {
-                        int rc;
-                        if ((rc = write(fd, "w", 1)) == -1) {
-                                perror("write");
-                                exit(1);
+                case 'w': 
+                        len = atoi(commands+1);
+                        if (len <= 0)
+                                len = 1;
+                        while(len > 0) {
+                                if ((rc = write(fd, buf, 
+                                                min(len, sizeof(buf))))
+                                    == -1) {
+                                        perror("write");
+                                        exit(1);
+                                }
+                                len -= sizeof(buf);
                         }
                         break;
-                }
                 case 'W':
                         for (i = 0; i < mmap_len && mmap_ptr; i += 4096)
                                 mmap_ptr[i] += junk++;
@@ -236,10 +251,22 @@ int main(int argc, char **argv)
                                 exit(1);
                         }
                 case 'z':
-                        if (lseek(fd, 0, SEEK_SET) == -1) {
+                        len = atoi(commands+1);
+                        if (lseek(fd, len, SEEK_SET) == -1) {
                                 perror("lseek");
                                 exit(1);
                         }
+                        break;
+                case '0':
+                case '1':
+                case '2':
+                case '3':
+                case '4':
+                case '5':
+                case '6':
+                case '7':
+                case '8':
+                case '9':
                         break;
                 default:
                         fprintf(stderr, "unknown command \"%c\"\n", *commands);

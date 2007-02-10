@@ -27,28 +27,13 @@
 #include <linux/types.h>
 #include <linux/random.h>
 #include <linux/version.h>
-#include <linux/lustre_lite.h>
-#include <linux/lustre_ha.h>
-#include <linux/lustre_dlm.h>
+#include <lustre_lite.h>
+#include <lustre_ha.h>
+#include <lustre_dlm.h>
 #include <linux/init.h>
 #include <linux/fs.h>
-#include <linux/lprocfs_status.h>
-#include <linux/obd_support.h>
+#include <lprocfs_status.h>
 #include "llite_internal.h"
-
-struct super_block * ll_get_sb(struct file_system_type *fs_type,
-                               int flags, const char *devname, void * data)
-{
-        /* calls back in fill super */
-        return get_sb_nodev(fs_type, flags, data, ll_fill_super);
-}
-
-struct super_block * lustre_get_sb(struct file_system_type *fs_type,
-                               int flags, const char *devname, void * data)
-{
-        /* calls back in fill super */
-        return get_sb_nodev(fs_type, flags, data, lustre_fill_super);
-}
 
 static kmem_cache_t *ll_inode_cachep;
 
@@ -94,15 +79,14 @@ int ll_init_inodecache(void)
 
 void ll_destroy_inodecache(void)
 {
-        LASSERTF(kmem_cache_destroy(ll_inode_cachep) == 0,
-                 "ll_inode_cache: not all structures were freed\n");
-}
-
-static void ll_umount_lustre(struct super_block *sb)
-{
-        struct ll_sb_info *sbi = ll_s2sbi(sb);
-        sbi->ll_flags |= LL_SBI_UMOUNT;
-        ll_gns_check_mounts(sbi, LL_GNS_UMOUNT);
+#ifdef HAVE_KMEM_CACHE_DESTROY_INT
+        int rc;
+ 
+        rc = kmem_cache_destroy(ll_inode_cachep);
+        LASSERTF(rc == 0, "ll_inode_cache: not all structures were freed\n");
+#else
+        kmem_cache_destroy(ll_inode_cachep);
+#endif
 }
 
 /* exported operations */
@@ -111,114 +95,90 @@ struct super_operations lustre_super_operations =
         .alloc_inode   = ll_alloc_inode,
         .destroy_inode = ll_destroy_inode,
         .clear_inode   = ll_clear_inode,
-        .put_super     = lustre_put_super,
+        .put_super     = ll_put_super,
         .statfs        = ll_statfs,
         .umount_begin  = ll_umount_begin,
-        .umount_lustre = ll_umount_lustre,
-        .show_options  = ll_show_options,
+        .remount_fs    = ll_remount_fs,
 };
 
-struct file_system_type lustre_lite_fs_type = {
-        .owner        = THIS_MODULE,
-        .name         = "lustre_lite",
-        .get_sb       = ll_get_sb,
-        .kill_sb      = kill_anon_super,
-        .fs_flags     = FS_REVAL_DOT|FS_BINARY_MOUNTDATA,
-};
 
-struct file_system_type lustre_fs_type = {
-        .owner        = THIS_MODULE,
-        .name         = "lustre",
-        .get_sb       = lustre_get_sb,
-        .kill_sb      = kill_anon_super,
-        .fs_flags     = FS_REVAL_DOT|FS_BINARY_MOUNTDATA,
-};
+void lustre_register_client_process_config(int (*cpc)(struct lustre_cfg *lcfg));
 
 static int __init init_lustre_lite(void)
 {
-        int rc, cleanup = 0;
+        int i, rc, seed[2];
+        struct timeval tv;
+        lnet_process_id_t lnet_id;
 
-        printk(KERN_INFO "Lustre: Lustre Lite Client File System; "
+        printk(KERN_INFO "Lustre: Lustre Client File System; "
                "info@clusterfs.com\n");
-
         rc = ll_init_inodecache();
         if (rc)
                 return -ENOMEM;
-
         ll_file_data_slab = kmem_cache_create("ll_file_data",
                                               sizeof(struct ll_file_data), 0,
                                               SLAB_HWCACHE_ALIGN, NULL, NULL);
         if (ll_file_data_slab == NULL) {
-                rc = -ENOMEM;
-                goto out;
-        }
-        ll_intent_slab = kmem_cache_create("lustre_intent_data",
-                                    	   sizeof(struct lustre_intent_data),
-                                           0, SLAB_HWCACHE_ALIGN, NULL,
-                                           NULL);
-        if (ll_intent_slab == NULL) {
-                kmem_cache_destroy(ll_file_data_slab);
                 ll_destroy_inodecache();
                 return -ENOMEM;
         }
 
-
         proc_lustre_fs_root = proc_lustre_root ?
                               proc_mkdir("llite", proc_lustre_root) : NULL;
 
-        rc = register_filesystem(&lustre_lite_fs_type);
-        if (rc)
-                goto out;
-        cleanup = 1;
+        ll_register_cache(&ll_cache_definition);
 
-        rc = register_filesystem(&lustre_fs_type);
-        if (rc)
-                goto out;
-        cleanup = 2;
+        lustre_register_client_fill_super(ll_fill_super);
+        lustre_register_client_process_config(ll_process_config);
 
-        rc = ll_gns_thread_start();
-        if (rc)
-                goto out;
+        get_random_bytes(seed, sizeof(seed));
 
-        ll_capa_timer.function = ll_capa_timer_callback;
-        ll_capa_timer.data = 0;
-        init_timer(&ll_capa_timer);        
-
-        rc = ll_capa_thread_start();
-        if (rc)
-                goto out;
-
-        return 0;
-out:
-        switch (cleanup) {
-        case 2:
-                unregister_filesystem(&lustre_fs_type);
-        case 1:
-                unregister_filesystem(&lustre_lite_fs_type);
-        case 0:
-               ll_destroy_inodecache();
+        /* Nodes with small feet have little entropy
+         * the NID for this node gives the most entropy in the low bits */
+        for (i=0; ; i++) {
+                if (LNetGetId(i, &lnet_id) == -ENOENT) {
+                        break;
+                }
+                if (LNET_NETTYP(LNET_NIDNET(lnet_id.nid)) != LOLND) {
+                        seed[0] ^= LNET_NIDADDR(lnet_id.nid);
+                }
         }
+
+        do_gettimeofday(&tv);
+        ll_srand(tv.tv_sec ^ seed[0], tv.tv_usec ^ seed[1]);
+
         return rc;
 }
 
 static void __exit exit_lustre_lite(void)
 {
-        unregister_filesystem(&lustre_fs_type);
-        unregister_filesystem(&lustre_lite_fs_type);
+#ifdef HAVE_KMEM_CACHE_DESTROY_INT
+        int rc;
+#endif
 
-        del_timer(&ll_capa_timer);
-        ll_capa_thread_stop();
-        ll_gns_thread_stop();
+        lustre_register_client_fill_super(NULL);
+        lustre_register_client_process_config(NULL);
+
+        ll_unregister_cache(&ll_cache_definition);
+
         ll_destroy_inodecache();
-        
-        LASSERTF(kmem_cache_destroy(ll_file_data_slab) == 0,
-                 "couldn't destroy ll_file_data slab\n");
-        LASSERTF(kmem_cache_destroy(ll_intent_slab) == 0,
-                 "couldn't destroy ll_intent_slab slab\n");
-        if (proc_lustre_fs_root) {
-                lprocfs_remove(proc_lustre_fs_root);
-                proc_lustre_fs_root = NULL;
+#ifdef HAVE_KMEM_CACHE_DESTROY_INT
+        rc = kmem_cache_destroy(ll_file_data_slab);
+        LASSERTF(rc == 0, "couldn't destroy ll_file_data slab\n");
+#else
+        kmem_cache_destroy(ll_file_data_slab);
+#endif
+        if (ll_async_page_slab) {
+#ifdef HAVE_KMEM_CACHE_DESTROY_INT
+                rc = kmem_cache_destroy(ll_async_page_slab);
+                LASSERTF(rc == 0, "couldn't destroy ll_async_page slab\n");
+#else
+                kmem_cache_destroy(ll_async_page_slab);
+#endif
         }
+
+        if (proc_lustre_fs_root) 
+                lprocfs_remove(&proc_lustre_fs_root);
 }
 
 MODULE_AUTHOR("Cluster File Systems, Inc. <info@clusterfs.com>");

@@ -26,7 +26,7 @@ Index: linux-2.6.7/fs/ext3/namei.c
  	int err;
  
 -	if (dir->i_nlink >= EXT3_LINK_MAX)
-+	if (EXT3_DIR_LINK_MAXED(dir))
++	if (EXT3_DIR_LINK_MAX(dir))
  		return -EMLINK;
  
  	handle = ext3_journal_start(dir, EXT3_DATA_TRANS_BLOCKS +
@@ -86,7 +86,7 @@ Index: linux-2.6.7/fs/ext3/namei.c
  	int err;
  
 -	if (inode->i_nlink >= EXT3_LINK_MAX)
-+	if (EXT3_DIR_LINK_MAXED(inode))
++	if (EXT3_DIR_LINK_MAX(inode))
  		return -EMLINK;
  
  	handle = ext3_journal_start(dir, EXT3_DATA_TRANS_BLOCKS +
@@ -97,7 +97,7 @@ Index: linux-2.6.7/fs/ext3/namei.c
 -		if (!new_inode && new_dir!=old_dir &&
 -				new_dir->i_nlink >= EXT3_LINK_MAX)
 +		if (!new_inode && new_dir != old_dir &&
-+		    EXT3_DIR_LINK_MAXED(new_dir))
++		    EXT3_DIR_LINK_MAX(new_dir))
  			goto end_rename;
  	}
  	if (!new_bh) {
@@ -110,7 +110,7 @@ Index: linux-2.6.7/fs/ext3/namei.c
  		new_inode->i_ctime = CURRENT_TIME;
  	}
  	old_dir->i_ctime = old_dir->i_mtime = CURRENT_TIME;
-@@ -2299,11 +2304,11 @@ static int ext3_rename (struct inode * o
+@@ -2299,11 +2304,13 @@ static int ext3_rename (struct inode * o
  		PARENT_INO(dir_bh->b_data) = le32_to_cpu(new_dir->i_ino);
  		BUFFER_TRACE(dir_bh, "call ext3_journal_dirty_metadata");
  		ext3_journal_dirty_metadata(handle, dir_bh);
@@ -118,7 +118,9 @@ Index: linux-2.6.7/fs/ext3/namei.c
 +		ext3_dec_count(handle, old_dir);
  		if (new_inode) {
 -			new_inode->i_nlink--;
-+			ext3_dec_count(handle, new_inode);
++			/* checked empty_dir above, can't have another parent,
++			 * ext3_dec_count() won't work for many-linked dirs */
++			new_inode->i_nlink = 0;
  		} else {
 -			new_dir->i_nlink++;
 +			ext3_inc_count(handle, new_dir);
@@ -129,15 +131,6 @@ Index: linux-2.6.7/include/linux/ext3_fs.h
 ===================================================================
 --- linux-2.6.7.orig/include/linux/ext3_fs.h	2004-06-15 23:19:36.000000000 -0600
 +++ linux-2.6.7/include/linux/ext3_fs.h	2004-08-20 17:41:27.000000000 -0600
-@@ -41,7 +41,7 @@ struct statfs;
- /*
-  * Always enable hashed directories
-  */
--#define CONFIG_EXT3_INDEX
-+#define CONFIG_EXT3_INDEX 1
- 
- /*
-  * Debug code
 @@ -79,7 +81,7 @@
  /*
   * Maximal count of links to a file
@@ -147,24 +140,3 @@ Index: linux-2.6.7/include/linux/ext3_fs.h
  
  /*
   * Macro-instructions used to manage several block sizes
-@@ -595,14 +595,15 @@ struct ext3_dir_entry_2 {
-  */
- 
- #ifdef CONFIG_EXT3_INDEX
--  #define is_dx(dir) (EXT3_HAS_COMPAT_FEATURE(dir->i_sb, \
--					      EXT3_FEATURE_COMPAT_DIR_INDEX) && \
-+#define is_dx(dir) (EXT3_HAS_COMPAT_FEATURE(dir->i_sb, \
-+					    EXT3_FEATURE_COMPAT_DIR_INDEX) && \
- 		      (EXT3_I(dir)->i_flags & EXT3_INDEX_FL))
--#define EXT3_DIR_LINK_MAX(dir) (!is_dx(dir) && (dir)->i_nlink >= EXT3_LINK_MAX)
--#define EXT3_DIR_LINK_EMPTY(dir) ((dir)->i_nlink == 2 || (dir)->i_nlink == 1)
-+#define EXT3_DIR_LINK_MAXED(dir) (!is_dx(dir) && (dir)->i_nlink >=EXT3_LINK_MAX)
-+#define EXT3_DIR_LINK_EMPTY(dir) ((dir)->i_nlink == 2 || \
-+				  (is_dx(dir) && (dir)->i_nlink == 1))
- #else
-   #define is_dx(dir) 0
--#define EXT3_DIR_LINK_MAX(dir) ((dir)->i_nlink >= EXT3_LINK_MAX)
-+#define EXT3_DIR_LINK_MAXED(dir) ((dir)->i_nlink >= EXT3_LINK_MAX)
- #define EXT3_DIR_LINK_EMPTY(dir) ((dir)->i_nlink == 2)
- #endif
- 

@@ -15,17 +15,7 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 
-#define CERROR(fmt, arg...) fprintf(stderr, fmt, ## arg)
-#ifndef __u64
-#define __u64 long long
-#define cpu_to_le64(v) (v)
-#define le64_to_cpu(v) (v)
-#endif
-
-#ifndef LPU64
-#define LPU64 "%Lu"
-#define LPX64 "%#Lx"
-#endif
+#include <liblustre.h>
 
 #define READ  1
 #define WRITE 2
@@ -91,9 +81,9 @@ int main(int argc, char **argv)
 {
         int fd;
         char *buf;
-        long long count, last, offset;
+        loff_t count, last, offset;
         long pg_vec, len;
-        long long objid;
+        __u64 objid;
         struct stat st;
         int flags = 0;
         int cmd = 0;
@@ -118,13 +108,26 @@ int main(int argc, char **argv)
                         flags = O_RDWR | O_CREAT;
                 }
                 if (strchr(argv[3], 'd')) {
+#ifdef O_DIRECT
                         flags |= O_DIRECT;
+#else
+                        fprintf(stderr,
+                                "%s: O_DIRECT not supported in this build\n",
+                                argv[0]);
+                        exit(1);
+#endif
                 }
                 if (!cmd)
                         usage(argv[0]);
         } else {
                 cmd = READ | WRITE;
-                flags = O_RDWR | O_CREAT | O_DIRECT;
+                flags = O_RDWR | O_CREAT;
+#ifdef O_DIRECT
+                flags |= O_DIRECT;
+#else
+                fprintf(stderr, "%s: warning: not setting O_DIRECT\n",
+                        argv[0]);
+#endif
         }
 
         if (argc >= 5) {
@@ -150,7 +153,12 @@ int main(int argc, char **argv)
         }
 
         printf("%s: %s on %s(objid "LPX64") for "LPU64"x%ld pages \n",
-               argv[0], flags & O_DIRECT ? "directio" : "i/o",
+               argv[0], 
+#ifdef O_DIRECT
+               flags & O_DIRECT ? "directio" : "i/o",
+#else
+               "i/o",
+#endif
                argv[1], objid, count, pg_vec);
 
         fd = open(argv[1], flags | O_LARGEFILE);

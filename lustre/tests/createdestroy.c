@@ -45,8 +45,7 @@ static int be_verbose(int verbose, struct timeval *next_time,
                 gettimeofday(&now, NULL);
 
         /* A positive verbosity means to print every X iterations */
-        if (verbose > 0 &&
-            (next_num == NULL || num >= *next_num || num >= num_total)) {
+        if (verbose > 0 && (num >= *next_num || num >= num_total)) {
                 *next_num += verbose;
                 if (next_time) {
                         next_time->tv_sec = now.tv_sec - verbose;
@@ -59,8 +58,7 @@ static int be_verbose(int verbose, struct timeval *next_time,
         if (verbose < 0 && next_time != NULL && difftime(&now, next_time) >= 0){
                 next_time->tv_sec = now.tv_sec - verbose;
                 next_time->tv_usec = now.tv_usec;
-                if (next_num)
-                        *next_num = num;
+                *next_num = num;
                 return 1;
         }
 

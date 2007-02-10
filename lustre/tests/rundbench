@@ -1,13 +1,14 @@
 #!/bin/sh
-MNT=${MNT:-/mnt/lustre}
-DIR=${DIR:-$MNT/`hostname`}
-#[ -e /proc/sys/portals/debug ] && echo 0 > /proc/sys/portals/debug 
+MOUNT=${MOUNT:-/mnt/lustre}
+DIR=${DIR:-$MOUNT/`hostname`}
+#[ -e /proc/sys/lnet/debug ] && echo 0 > /proc/sys/lnet/debug 
 mkdir -p $DIR
 TGT=$DIR/client.txt
 SRC=${SRC:-/usr/lib/dbench/client.txt}
-[ ! -e $TGT -a -e $SRC ] && echo "copying $SRC to $TGT" && cp $SRC $TGT
+[ ! -s $TGT -a -s $SRC ] && echo "copying $SRC to $TGT" && cp $SRC $TGT
 SRC=/usr/lib/dbench/client_plain.txt
-[ ! -e $TGT -a -e $SRC ] && echo "copying $SRC to $TGT" && cp $SRC $TGT
+[ ! -s $TGT -a -s $SRC ] && echo "copying $SRC to $TGT" && cp $SRC $TGT
+[ ! -s $TGT ] && echo "$0: $TGT doesn't exist (SRC=$SRC)" && exit 1
 cd $DIR
 echo "running 'dbench $@' on $PWD at `date`"
 dbench -c client.txt $@

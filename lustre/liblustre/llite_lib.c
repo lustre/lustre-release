@@ -26,6 +26,7 @@
 #include <assert.h>
 #include <signal.h>
 #include <sys/types.h>
+#include <sys/stat.h>
 #include <sys/queue.h>
 
 #ifdef HAVE_XTIO_H
@@ -39,171 +40,181 @@
 #include <file.h>
 #endif
 
-/* env variables */
-#define ENV_LUSTRE_MNTPNT               "LIBLUSTRE_MOUNT_POINT"
-#define ENV_LUSTRE_MNTTGT               "LIBLUSTRE_MOUNT_TARGET"
-#define ENV_LUSTRE_TIMEOUT              "LIBLUSTRE_TIMEOUT"
-#define ENV_LUSTRE_DUMPFILE             "LIBLUSTRE_DUMPFILE"
-#define ENV_LUSTRE_DEBUG_MASK           "LIBLUSTRE_DEBUG_MASK"
-#define ENV_LUSTRE_DEBUG_SUBSYS         "LIBLUSTRE_DEBUG_SUBSYS"
-#define ENV_LUSTRE_NAL_NAME             "LIBLUSTRE_NAL_NAME"
-
-#ifdef REDSTORM
-#define CSTART_INIT
-#endif
-
 /* both sys/queue.h (libsysio require it) and portals/lists.h have definition
  * of 'LIST_HEAD'. undef it to suppress warnings
  */
 #undef LIST_HEAD
-#include <portals/ptlctl.h>
+#include <lnet/lnetctl.h>     /* needed for parse_dump */
 
 #include "lutil.h"
 #include "llite_lib.h"
 
 static int lllib_init(void)
 {
-        liblustre_set_nal_nid();
-
-        if (liblustre_init_current("dummy") ||
-            init_obdclass() ||
+        if (liblustre_init_current("liblustre") ||
             init_lib_portals() ||
+            init_obdclass() ||
             ptlrpc_init() ||
+            mgc_init() ||
             mdc_init() ||
             lov_init() ||
             osc_init())
                 return -1;
 
-        return _sysio_fssw_register("llite", &llu_fssw_ops);
+        return _sysio_fssw_register("lustre", &llu_fssw_ops);
 }
- 
-#ifndef CRAY_PORTALS
-#define LIBLUSTRE_NAL_NAME "tcp"
-#elif defined REDSTORM
-#define LIBLUSTRE_NAL_NAME "cray_qk_ernal"
-#else
-#define LIBLUSTRE_NAL_NAME "cray_pb_ernal"
-#endif
 
-int liblustre_process_log(struct config_llog_instance *cfg, int allow_recov)
+int liblustre_process_log(struct config_llog_instance *cfg,
+                          char *mgsnid, char *profile,
+                          int allow_recov)
 {
         struct lustre_cfg_bufs bufs;
         struct lustre_cfg *lcfg;
-
-        char  *peer = "MDS_PEER_UUID";
+        char  *peer = "MGS_UUID";
         struct obd_device *obd;
-        struct lustre_handle mdc_conn = {0, };
+        struct lustre_handle mgc_conn = {0, };
         struct obd_export *exp;
-        char  *name = "mdc_dev";
+        char  *name = "mgc_dev";
         class_uuid_t uuid;
-        struct obd_uuid mdc_uuid;
+        struct obd_uuid mgc_uuid;
         struct llog_ctxt *ctxt;
-        ptl_nid_t nid = 0;
-        int nal, err, rc = 0;
-        char *nal_name;
+        lnet_nid_t nid = 0;
+        char *mdsnid;
+        int err, rc = 0;
+        struct obd_connect_data *ocd = NULL;
         ENTRY;
 
         generate_random_uuid(uuid);
-        class_uuid_unparse(uuid, &mdc_uuid);
+        class_uuid_unparse(uuid, &mgc_uuid);
 
-        if (ptl_parse_nid(&nid, g_zconf_mdsnid)) {
-                CERROR("Can't parse NID %s\n", g_zconf_mdsnid);
+        nid = libcfs_str2nid(mgsnid);
+        if (nid == LNET_NID_ANY) {
+                CERROR("Can't parse NID %s\n", mgsnid);
                 RETURN(-EINVAL);
         }
 
-        nal_name = getenv(ENV_LUSTRE_NAL_NAME);
-        if (!nal_name)
-                nal_name = "tcp";
-        nal = ptl_name2nal(nal_name);
-        if (nal <= 0) {
-                CERROR("Can't parse NAL %s\n", nal_name);
-                RETURN(-EINVAL);
-        }
         lustre_cfg_bufs_reset(&bufs, NULL);
         lustre_cfg_bufs_set_string(&bufs, 1, peer);
         lcfg = lustre_cfg_new(LCFG_ADD_UUID, &bufs);
         lcfg->lcfg_nid = nid;
-        lcfg->lcfg_nal = nal;
-        err = class_process_config(lcfg);
+        rc = class_process_config(lcfg);
         lustre_cfg_free(lcfg);
-        if (err < 0)
-                GOTO(out, err);
+        if (rc < 0)
+                GOTO(out, rc);
 
         lustre_cfg_bufs_reset(&bufs, name);
-        lustre_cfg_bufs_set_string(&bufs, 1, OBD_MDC_DEVICENAME);
-        lustre_cfg_bufs_set_string(&bufs, 2, mdc_uuid.uuid);
+        lustre_cfg_bufs_set_string(&bufs, 1, LUSTRE_MGC_NAME);
+        lustre_cfg_bufs_set_string(&bufs, 2, mgc_uuid.uuid);
         lcfg = lustre_cfg_new(LCFG_ATTACH, &bufs);
-        err = class_process_config(lcfg);
+        rc = class_process_config(lcfg);
         lustre_cfg_free(lcfg);
-        if (err < 0)
-                GOTO(out_del_uuid, err);
+        if (rc < 0)
+                GOTO(out_del_uuid, rc);
 
         lustre_cfg_bufs_reset(&bufs, name);
-        lustre_cfg_bufs_set_string(&bufs, 1, g_zconf_mdsname);
+        lustre_cfg_bufs_set_string(&bufs, 1, LUSTRE_MGS_OBDNAME);
         lustre_cfg_bufs_set_string(&bufs, 2, peer);
         lcfg = lustre_cfg_new(LCFG_SETUP, &bufs);
-        err = class_process_config(lcfg);
+        rc = class_process_config(lcfg);
         lustre_cfg_free(lcfg);
-        if (err < 0)
-                GOTO(out_detach, err);
+        if (rc < 0)
+                GOTO(out_detach, rc);
+
+        while ((mdsnid = strsep(&mgsnid, ","))) {
+                nid = libcfs_str2nid(mdsnid);
+                lustre_cfg_bufs_reset(&bufs, NULL);
+                lustre_cfg_bufs_set_string(&bufs, 1, libcfs_nid2str(nid));
+                lcfg = lustre_cfg_new(LCFG_ADD_UUID, &bufs);
+                lcfg->lcfg_nid = nid;
+                rc = class_process_config(lcfg);
+                lustre_cfg_free(lcfg);
+                if (rc) {
+                        CERROR("Add uuid for %s failed %d\n",
+                               libcfs_nid2str(nid), rc);
+                        continue;
+                }
+
+                lustre_cfg_bufs_reset(&bufs, name);
+                lustre_cfg_bufs_set_string(&bufs, 1, libcfs_nid2str(nid));
+                lcfg = lustre_cfg_new(LCFG_ADD_CONN, &bufs);
+                lcfg->lcfg_nid = nid;
+                rc = class_process_config(lcfg);
+                lustre_cfg_free(lcfg);
+                if (rc) {
+                        CERROR("Add conn for %s failed %d\n",
+                               libcfs_nid2str(nid), rc);
+                        continue;
+                }
+        }
 
         obd = class_name2obd(name);
         if (obd == NULL)
-                GOTO(out_cleanup, err = -EINVAL);
+                GOTO(out_cleanup, rc = -EINVAL);
 
-        /* Disable initial recovery on this import */
-        err = obd_set_info(obd->obd_self_export,
-                           strlen("initial_recov"), "initial_recov",
-                           sizeof(allow_recov), &allow_recov);
+        OBD_ALLOC(ocd, sizeof(*ocd));
+        if (ocd == NULL)
+                GOTO(out_cleanup, rc = -ENOMEM);
 
-        err = obd_connect(&mdc_conn, obd, &mdc_uuid, NULL, 0);
-        if (err) {
-                CERROR("cannot connect to %s: rc = %d\n",
-                        g_zconf_mdsname, err);
-                GOTO(out_cleanup, err);
+        ocd->ocd_connect_flags = OBD_CONNECT_VERSION;
+        ocd->ocd_version = LUSTRE_VERSION_CODE;
+
+        rc = obd_connect(&mgc_conn, obd, &mgc_uuid, ocd);
+        if (rc) {
+                CERROR("cannot connect to %s at %s: rc = %d\n",
+                       LUSTRE_MGS_OBDNAME, mgsnid, rc);
+                GOTO(out_cleanup, rc);
         }
 
-        exp = class_conn2export(&mdc_conn);
+        exp = class_conn2export(&mgc_conn);
 
         ctxt = exp->exp_obd->obd_llog_ctxt[LLOG_CONFIG_REPL_CTXT];
-        rc = class_config_process_llog(ctxt, g_zconf_profile, cfg);
-        if (rc)
-                CERROR("class_config_process_llog failed: rc = %d\n", rc);
+        cfg->cfg_flags |= CFG_F_COMPAT146;
+        rc = class_config_parse_llog(ctxt, profile, cfg);
+        if (rc) {
+                CERROR("class_config_parse_llog failed: rc = %d\n", rc);
+        }
 
-        err = obd_disconnect(exp, 0);
+        /* We don't so much care about errors in cleaning up the config llog
+         * connection, as we have already read the config by this point. */
+        err = obd_disconnect(exp);
+        if (err)
+                CERROR("obd_disconnect failed: rc = %d\n", err);
 
 out_cleanup:
+        if (ocd)
+                OBD_FREE(ocd, sizeof(*ocd));
+
         lustre_cfg_bufs_reset(&bufs, name);
         lcfg = lustre_cfg_new(LCFG_CLEANUP, &bufs);
         err = class_process_config(lcfg);
         lustre_cfg_free(lcfg);
-        if (err < 0)
-                GOTO(out, err);
+        if (err)
+                CERROR("mdc_cleanup failed: rc = %d\n", err);
 
 out_detach:
         lustre_cfg_bufs_reset(&bufs, name);
         lcfg = lustre_cfg_new(LCFG_DETACH, &bufs);
         err = class_process_config(lcfg);
         lustre_cfg_free(lcfg);
-        if (err < 0)
-                GOTO(out, err);
+        if (err)
+                CERROR("mdc_detach failed: rc = %d\n", err);
 
 out_del_uuid:
         lustre_cfg_bufs_reset(&bufs, name);
         lustre_cfg_bufs_set_string(&bufs, 1, peer);
         lcfg = lustre_cfg_new(LCFG_DEL_UUID, &bufs);
         err = class_process_config(lcfg);
+        if (err)
+                CERROR("del MDC UUID failed: rc = %d\n", err);
         lustre_cfg_free(lcfg);
 out:
-        if (rc == 0)
-                rc = err;
 
         RETURN(rc);
 }
 
-/* parse host:/mdsname/profile string */
-int ll_parse_mount_target(const char *target, char **mdsnid,
-                          char **mdsname, char **profile)
+/* parse host:/fsname string */
+int ll_parse_mount_target(const char *target, char **mgsnid,
+                          char **fsname)
 {
         static char buf[256];
         char *s;
@@ -212,17 +223,15 @@ int ll_parse_mount_target(const char *target, char **mdsnid,
         strncpy(buf, target, 255);
 
         if ((s = strchr(buf, ':'))) {
-                *mdsnid = buf;
+                *mgsnid = buf;
                 *s = '\0';
 
                 while (*++s == '/')
                         ;
-                *mdsname = s;
-                if ((s = strchr(*mdsname, '/'))) {
-                        *s = '\0';
-                        *profile = s + 1;
-                        return 0;
-                }
+                sprintf(s + strlen(s), "-client");
+                *fsname = s;
+
+                return 0;
         }
 
         return -1;
@@ -256,10 +265,9 @@ int ll_parse_mount_target(const char *target, char **mdsnid,
 int _sysio_lustre_init(void)
 {
         int err;
-
-#if 0
-        portal_debug = -1;
-        portal_subsystem_debug = -1;
+        char *timeout = NULL;
+#ifndef INIT_SYSIO
+        extern void __liblustre_cleanup_(void);
 #endif
 
         liblustre_init_random();
@@ -267,7 +275,18 @@ int _sysio_lustre_init(void)
         err = lllib_init();
         if (err) {
                 perror("init llite driver");
+                return err;
         }
+        timeout = getenv("LIBLUSTRE_TIMEOUT");
+        if (timeout) {
+                obd_timeout = (unsigned int) strtol(timeout, NULL, 0);
+                printf("LibLustre: set obd timeout as %u seconds\n",
+                        obd_timeout);
+        }
+
+#ifndef INIT_SYSIO
+        (void)atexit(__liblustre_cleanup_);
+#endif
         return err;
 }
 
@@ -276,66 +295,29 @@ extern unsigned int obd_timeout;
 
 char *lustre_path = NULL;
 
-/* global variables */
-char   *g_zconf_mdsname = NULL; /* mdsname, for zeroconf */
-char   *g_zconf_mdsnid = NULL;  /* mdsnid, for zeroconf */
-char   *g_zconf_profile = NULL; /* profile, for zeroconf */
-
-
 void __liblustre_setup_(void)
 {
         char *target = NULL;
-        char *timeout = NULL;
-        char *debug_mask = NULL;
-        char *debug_subsys = NULL;
         char *root_driver = "native";
-        char *lustre_driver = "llite";
+        char *lustre_driver = "lustre";
         char *root_path = "/";
         unsigned mntflgs = 0;
-	int err;
+        int err;
 
-	lustre_path = getenv(ENV_LUSTRE_MNTPNT);
-	if (!lustre_path) {
+        lustre_path = getenv("LIBLUSTRE_MOUNT_POINT");
+        if (!lustre_path) {
                 lustre_path = "/mnt/lustre";
-	}
+        }
 
         /* mount target */
-        target = getenv(ENV_LUSTRE_MNTTGT);
+        target = getenv("LIBLUSTRE_MOUNT_TARGET");
         if (!target) {
                 printf("LibLustre: no mount target specified\n");
                 exit(1);
         }
-        if (ll_parse_mount_target(target,
-                                  &g_zconf_mdsnid,
-                                  &g_zconf_mdsname,
-                                  &g_zconf_profile)) {
-                CERROR("mal-formed target %s \n", target);
-                exit(1);
-        }
-        if (!g_zconf_mdsnid || !g_zconf_mdsname || !g_zconf_profile) {
-                printf("Liblustre: invalid target %s\n", target);
-                exit(1);
-        }
-        printf("LibLustre: mount point %s, target %s\n",
-                lustre_path, target);
 
-        timeout = getenv(ENV_LUSTRE_TIMEOUT);
-        if (timeout) {
-                obd_timeout = (unsigned int) strtol(timeout, NULL, 0);
-                printf("LibLustre: set obd timeout as %u seconds\n",
-                        obd_timeout);
-        }
-
-        /* debug masks */
-        debug_mask = getenv(ENV_LUSTRE_DEBUG_MASK);
-        if (debug_mask)
-                portal_debug = (unsigned int) strtol(debug_mask, NULL, 0);
-
-        debug_subsys = getenv(ENV_LUSTRE_DEBUG_SUBSYS);
-        if (debug_subsys)
-                portal_subsystem_debug =
-                                (unsigned int) strtol(debug_subsys, NULL, 0);
-
+        CDEBUG(D_CONFIG, "LibLustre: mount point %s, target %s\n",
+               lustre_path, target);
 
 #ifdef INIT_SYSIO
         /* initialize libsysio & mount rootfs */
@@ -347,7 +329,7 @@ void __liblustre_setup_(void)
 
         err = _sysio_mount_root(root_path, root_driver, mntflgs, NULL);
         if (err) {
-                perror(root_driver);
+                fprintf(stderr, "sysio mount failed: %s\n", strerror(errno));
                 exit(1);
         }
 
@@ -355,16 +337,24 @@ void __liblustre_setup_(void)
                 exit(1);
 #endif /* INIT_SYSIO */
 
-        err = mount("/", lustre_path, lustre_driver, mntflgs, NULL);
+        err = mount(target, lustre_path, lustre_driver, mntflgs, NULL);
         if (err) {
-                errno = -err;
-                perror(lustre_driver);
+                fprintf(stderr, "Lustre mount failed: %s\n", strerror(errno));
                 exit(1);
         }
 }
 
 void __liblustre_cleanup_(void)
 {
+#ifndef INIT_SYSIO
+        /* guard against being called multiple times */
+        static int cleaned = 0;
+
+        if (cleaned)
+                return;
+        cleaned++;
+#endif
+
         /* user app might chdir to a lustre directory, and leave busy pnode
          * during finaly libsysio cleanup. here we chdir back to "/".
          * but it can't fix the situation that liblustre is mounted
@@ -377,18 +367,12 @@ void __liblustre_cleanup_(void)
         /* we can't call umount here, because libsysio will not cleanup
          * opening files for us. _sysio_shutdown() will cleanup fds at
          * first but which will also close the sockets we need for umount
-         * liblutre. this delima lead to another hack in
+         * liblutre. this dilema lead to another hack in
          * libsysio/src/file_hack.c FIXME
          */
 #ifdef INIT_SYSIO
         _sysio_shutdown();
         cleanup_lib_portals();
-        PtlFini();
-#else
-	/*
-	 * don't do any libsysio or low level portals cleanups
-	 * platform framework does it
-	 */
-	cleanup_lib_portals();
+        LNetFini();
 #endif
 }

@@ -20,8 +20,8 @@
  *
  */
 
-#ifndef _COMPAT25_H
-#define _COMPAT25_H
+#ifndef _LINUX_COMPAT25_H
+#define _LINUX_COMPAT25_H
 
 #ifdef __KERNEL__
 
@@ -31,13 +31,68 @@
 
 #include <libcfs/linux/portals_compat25.h>
 
-/*
- * groups_info related staff
- */
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,4)
+#include <linux/lustre_patchless_compat.h>
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,14)
+struct ll_iattr_struct {
+        struct iattr    iattr;
+        unsigned int    ia_attr_flags;
+};
+#else
+#define ll_iattr_struct iattr
+#endif /* LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,14) */
+
+#ifndef HAVE_SET_FS_PWD
+static inline void ll_set_fs_pwd(struct fs_struct *fs, struct vfsmount *mnt,
+                struct dentry *dentry)
+{
+        struct dentry *old_pwd;
+        struct vfsmount *old_pwdmnt;
+
+        write_lock(&fs->lock);
+        old_pwd = fs->pwd;
+        old_pwdmnt = fs->pwdmnt;
+        fs->pwdmnt = mntget(mnt);
+        fs->pwd = dget(dentry);
+        write_unlock(&fs->lock);
+
+        if (old_pwd) {
+                dput(old_pwd);
+                mntput(old_pwdmnt);
+        }
+}
+#else
+#define ll_set_fs_pwd set_fs_pwd
+#endif /* HAVE_SET_FS_PWD */
+
+#ifdef HAVE_INODE_I_MUTEX
+#define UNLOCK_INODE_MUTEX(inode) do {mutex_unlock(&(inode)->i_mutex); } while(0)
+#define LOCK_INODE_MUTEX(inode) do {mutex_lock(&(inode)->i_mutex); } while(0)
+#define TRYLOCK_INODE_MUTEX(inode) mutex_trylock(&(inode)->i_mutex)
+#else
+#define UNLOCK_INODE_MUTEX(inode) do {up(&(inode)->i_sem); } while(0)
+#define LOCK_INODE_MUTEX(inode) do {down(&(inode)->i_sem); } while(0)
+#define TRYLOCK_INODE_MUTEX(inode) (!down_trylock(&(inode)->i_sem))
+#endif /* HAVE_INODE_I_MUTEX */
+
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,15)
+#define d_child d_u.d_child
+#define d_rcu d_u.d_rcu
+#endif
+
+#ifdef HAVE_DQUOTOFF_MUTEX
+#define UNLOCK_DQONOFF_MUTEX(dqopt) do {mutex_unlock(&(dqopt)->dqonoff_mutex); } while(0)
+#define LOCK_DQONOFF_MUTEX(dqopt) do {mutex_lock(&(dqopt)->dqonoff_mutex); } while(0)
+#else
+#define UNLOCK_DQONOFF_MUTEX(dqopt) do {up(&(dqopt)->dqonoff_sem); } while(0)
+#define LOCK_DQONOFF_MUTEX(dqopt) do {down(&(dqopt)->dqonoff_sem); } while(0)
+#endif /* HAVE_DQUOTOFF_MUTEX */
+
+
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,4)
 #define NGROUPS_SMALL           NGROUPS
 #define NGROUPS_PER_BLOCK       ((int)(EXEC_PAGESIZE / sizeof(gid_t)))
+
 struct group_info {
         int        ngroups;
         atomic_t   usage;
@@ -46,77 +101,34 @@ struct group_info {
         gid_t     *blocks[0];
 };
 #define current_ngroups current->ngroups
-                                                                           
+#define current_groups current->groups
+
 struct group_info *groups_alloc(int gidsetsize);
 void groups_free(struct group_info *ginfo);
-int groups_search(struct group_info *ginfo, gid_t grp);
-
-#define get_group_info(group_info)                              \
-        do {                                                    \
-                atomic_inc(&(group_info)->usage);               \
-        } while (0)
-
-#define put_group_info(group_info)                              \
-        do {                                                    \
-                if (atomic_dec_and_test(&(group_info)->usage))  \
-                        groups_free(group_info);                \
-        } while (0)
-
-#define groups_sort(gi) do {} while (0)
-#define GROUP_AT(gi, i) ((gi)->small_block[(i)])
-
-static inline int cleanup_group_info(void)
-{
-        /* Get rid of unneeded supplementary groups */
-        current->ngroups = 0;
-        memset(current->groups, 0, sizeof(current->groups));
-        return 0;
-}
-
 #else /* >= 2.6.4 */
 
 #define current_ngroups current->group_info->ngroups
+#define current_groups current->group_info->small_block
 
-void groups_sort(struct group_info *ginfo);
-int groups_search(struct group_info *ginfo, gid_t grp);
+#endif /* LINUX_VERSION_CODE < KERNEL_VERSION(2,6,4) */
 
-static inline int cleanup_group_info(void)
-{
-        struct group_info *ginfo;
+#ifndef page_private
+#define page_private(page) ((page)->private)
+#define set_page_private(page, v) ((page)->private = (v))
+#endif
 
-        ginfo = groups_alloc(0);
-        if (!ginfo)
-                return -ENOMEM;
-
-        set_current_groups(ginfo);
-        put_group_info(ginfo);
-
-        return 0;
-}
-#endif /* end of groups_info stuff */
-
-/*
- * this define is from the same namespace as other lookup flags in linux, will
- * be gone when COBD medium switching will be done more correct manner.
- * Currently this is dirty hack and this flag is needed to let MDC layer know
- * that it does not have to check if requested id is the same as receviced from
- * MDS in mdc_intent_lock() --umka
- */
-#define LOOKUP_COBD 4096
+#ifndef HAVE_GFP_T
+#define gfp_t int
+#endif
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0)
 
-#define LUSTRE_FILTERDATA(inode)        ((inode)->i_pipe)
+#define lock_dentry(___dentry)          spin_lock(&(___dentry)->d_lock)
+#define unlock_dentry(___dentry)        spin_unlock(&(___dentry)->d_lock)
 
-/* New (actually old) intent naming */
-#define lookup_intent open_intent
-
-/* And internals */
-#define it_flags flags
-#define it_op op
-#define it_magic magic
-#define it_op_release op_release
-#define it_create_mode create_mode
+#define lock_24kernel()         do {} while (0)
+#define unlock_24kernel()       do {} while (0)
+#define ll_kernel_locked()      kernel_locked()
 
 /*
  * OBD need working random driver, thus all our
@@ -129,8 +141,9 @@ static inline int cleanup_group_info(void)
 #endif
 
 /* XXX our code should be using the 2.6 calls, not the other way around */
-#define TryLockPage(page)                TestSetPageLocked(page)
-#define Page_Uptodate(page)              PageUptodate(page)
+#define TryLockPage(page)               TestSetPageLocked(page)
+#define Page_Uptodate(page)             PageUptodate(page)
+#define ll_redirty_page(page)           set_page_dirty(page)
 
 #define KDEVT_INIT(val)                 (val)
 
@@ -147,8 +160,7 @@ static inline int cleanup_group_info(void)
 #define ll_truncate_complete_page(page) \
                                 truncate_complete_page(page->mapping, page)
 
-#define ll_vfs_create(a,b,c,d)              vfs_create(a,b,c,d)
-
+#define ll_vfs_create(a,b,c,d)          vfs_create(a,b,c,d)
 #define ll_dev_t                        dev_t
 #define kdev_t                          dev_t
 #define to_kdev_t(dev)                  (dev)
@@ -158,53 +170,79 @@ static inline int cleanup_group_info(void)
 
 #include <linux/writeback.h>
 
-static inline void lustre_daemonize_helper(void)
+static inline int cleanup_group_info(void)
 {
-        LASSERT(current->signal != NULL);
-        current->signal->session = 1;
-        if (current->group_leader)
-                current->group_leader->signal->pgrp = 1;
-        else
-                CERROR("we aren't group leader\n");
-        current->signal->tty = NULL;
+        struct group_info *ginfo;
+
+        ginfo = groups_alloc(0);
+        if (!ginfo)
+                return -ENOMEM;
+
+        set_current_groups(ginfo);
+        put_group_info(ginfo);
+
+        return 0;
 }
 
 #define __set_page_ll_data(page, llap) \
         do {       \
                 page_cache_get(page); \
                 SetPagePrivate(page); \
-                page->private = (unsigned long)llap; \
+                set_page_private(page, (unsigned long)llap); \
         } while (0)
 #define __clear_page_ll_data(page) \
         do {       \
                 ClearPagePrivate(page); \
+                set_page_private(page, 0); \
                 page_cache_release(page); \
-                page->private = 0; \
         } while(0)
-
-#ifndef smp_num_cpus
-#define smp_num_cpus    num_online_cpus()
-#endif
 
 #define kiobuf bio
 
 #include <linux/proc_fs.h>
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,11)
+#define __d_rehash(dentry, lock) d_rehash_cond(dentry, lock)
+#endif
+
+#ifdef HAVE_CAN_SLEEP_ARG
+#define ll_flock_lock_file_wait(file, lock, can_sleep) \
+        flock_lock_file_wait(file, lock, can_sleep)
+#else
+#define ll_flock_lock_file_wait(file, lock, can_sleep) \
+        flock_lock_file_wait(file, lock)
+#endif
+
+
 #else /* 2.4.. */
 
-#error "first, find storage for filterdata -bzzz"
+#define ll_flock_lock_file_wait(file, lock, can_sleep) \
+        do {} while(0)
+
+#define lock_dentry(___dentry)
+#define unlock_dentry(___dentry)
+
+#define lock_24kernel()         lock_kernel()
+#define unlock_24kernel()       unlock_kernel()
+#define ll_kernel_locked()      (current->lock_depth >= 0)
+
+/* 2.4 kernels have HZ=100 on i386/x86_64, this should be reasonably safe */
+#define get_jiffies_64()        (__u64)jiffies
+
+#ifdef HAVE_MM_INLINE
+#include <linux/mm_inline.h>
+#endif
+
+#ifndef pgoff_t
+#define pgoff_t unsigned long
+#endif
 
 #define ll_vfs_create(a,b,c,d)              vfs_create(a,b,c)
 #define ll_permission(inode,mask,nd)        permission(inode,mask)
 #define ILOOKUP(sb, ino, test, data)        ilookup4(sb, ino, test, data);
 #define DCACHE_DISCONNECTED                 DCACHE_NFSD_DISCONNECTED
 #define ll_dev_t                            int
-
-static inline void clear_page_dirty(struct page *page)
-{
-        if (PageDirty(page))
-                ClearPageDirty(page); 
-}
+#define old_encode_dev(dev)                 (dev)
 
 /* 2.5 uses hlists for some things, like the d_hash.  we'll treat them
  * as 2.5 and let macros drop back.. */
@@ -216,16 +254,28 @@ static inline void clear_page_dirty(struct page *page)
 #define INIT_HLIST_HEAD                 INIT_LIST_HEAD
 #define hlist_del_init                  list_del_init
 #define hlist_add_head                  list_add
+#endif
+
+#ifndef INIT_HLIST_NODE
+#define INIT_HLIST_NODE(p)              ((p)->next = NULL, (p)->prev = NULL)
+#endif
+
+#ifndef hlist_for_each
+#define hlist_for_each                  list_for_each
+#endif
+
+#ifndef hlist_for_each_safe
 #define hlist_for_each_safe             list_for_each_safe
 #endif
+
 #define KDEVT_INIT(val)                 (val)
 #define ext3_xattr_set_handle           ext3_xattr_set
-#define extN_xattr_set_handle           extN_xattr_set
 #define try_module_get                  __MOD_INC_USE_COUNT
 #define module_put                      __MOD_DEC_USE_COUNT
 #define LTIME_S(time)                   (time)
+
 #if !defined(CONFIG_RH_2_4_20) && !defined(cpu_online)
-#define cpu_online(cpu)                 (cpu_online_map & (1<<cpu))
+#define cpu_online(cpu)                 test_bit(cpu, &(cpu_online_map))
 #endif
 
 static inline int ll_path_lookup(const char *path, unsigned flags,
@@ -243,21 +293,47 @@ typedef long sector_t;
 #define ll_pgcache_unlock(mapping)      spin_unlock(&pagecache_lock)
 #define ll_call_writepage(inode, page)  \
                                (inode)->i_mapping->a_ops->writepage(page)
-#define filemap_fdatawrite(mapping)      filemap_fdatasync(mapping)
 #define ll_invalidate_inode_pages(inode) invalidate_inode_pages(inode)
 #define ll_truncate_complete_page(page) truncate_complete_page(page)
 
-static inline void __d_drop(struct dentry *dentry)
+static inline void clear_page_dirty(struct page *page)
 {
-	list_del(&dentry->d_hash);
-	INIT_LIST_HEAD(&dentry->d_hash);
+        if (PageDirty(page))
+                ClearPageDirty(page);
 }
 
-static inline void lustre_daemonize_helper(void)
+static inline int clear_page_dirty_for_io(struct page *page)
 {
-        current->session = 1;
-        current->pgrp = 1;
-        current->tty = NULL;
+        struct address_space *mapping = page->mapping;
+
+        if (page->mapping && PageDirty(page)) {
+                ClearPageDirty(page);
+                ll_pgcache_lock(mapping);
+                list_del(&page->list);
+                list_add(&page->list, &mapping->locked_pages);
+                ll_pgcache_unlock(mapping);
+                return 1;
+        }
+        return 0;
+}
+
+static inline void ll_redirty_page(struct page *page)
+{
+        SetPageDirty(page);
+        ClearPageLaunder(page);
+}
+
+static inline void __d_drop(struct dentry *dentry)
+{
+        list_del_init(&dentry->d_hash);
+}
+
+static inline int cleanup_group_info(void)
+{
+        /* Get rid of unneeded supplementary groups */
+        current->ngroups = 0;
+        memset(current->groups, 0, sizeof(current->groups));
+        return 0;
 }
 
 #ifndef HAVE_COND_RESCHED
@@ -270,6 +346,17 @@ static inline void cond_resched(void)
 }
 #endif
 
+/* to find proc_dir_entry from inode. 2.6 has native one -bzzz */
+#ifndef HAVE_PDE
+#define PDE(ii)         ((ii)->u.generic_ip)
+#endif
+
+#define __set_page_ll_data(page, llap) set_page_private(page, (unsigned long)llap)
+#define __clear_page_ll_data(page) set_page_private(page, 0)
+#define PageWriteback(page) 0
+#define set_page_writeback(page) do {} while (0)
+#define end_page_writeback(page) do {} while (0)
+
 static inline int mapping_mapped(struct address_space *mapping)
 {
         if (mapping->i_mmap_shared)
@@ -279,24 +366,36 @@ static inline int mapping_mapped(struct address_space *mapping)
         return 0;
 }
 
-/* to find proc_dir_entry from inode. 2.6 has native one -bzzz */
-#ifndef HAVE_PDE
-#define PDE(ii)         ((ii)->u.generic_ip)
-#endif
-
-#define __set_page_ll_data(page, llap) page->private = (unsigned long)llap
-#define __clear_page_ll_data(page) page->private = 0
-#define PageWriteback(page) 0
-#define set_page_writeback(page) do {} while (0)
-#define end_page_writeback(page) do {} while (0)
-  
-#define end_page_writeback(page)
-
 #ifdef ZAP_PAGE_RANGE_VMA
 #define ll_zap_page_range(vma, addr, len)  zap_page_range(vma, addr, len)
 #else
 #define ll_zap_page_range(vma, addr, len)  zap_page_range(vma->vm_mm, addr, len)
 #endif
+
+#ifndef HAVE_PAGE_MAPPED
+/* Poor man's page_mapped. substract from page count, counts from
+   buffers/pagecache and our own count (we are supposed to hold one reference).
+   What is left are user mappings and also others who work with this page now,
+   but there are supposedly none. */
+static inline int page_mapped(struct page *page)
+{
+        return page_count(page) - !!page->mapping - !!page->buffers - 1;
+}
+#endif /* !HAVE_PAGE_MAPPED */
+
+static inline void touch_atime(struct vfsmount *mnt, struct dentry *dentry)
+{
+        update_atime(dentry->d_inode);
+}
+
+static inline void file_accessed(struct file *file)
+{
+#ifdef O_NOATIME
+        if (file->f_flags & O_NOATIME)
+                return;
+#endif
+        touch_atime(file->f_vfsmnt, file->f_dentry);
+}
 
 #endif /* end of 2.4 compat macros */
 
@@ -315,26 +414,17 @@ static inline int mapping_has_pages(struct address_space *mapping)
 
         return rc;
 }
-
-static inline int clear_page_dirty_for_io(struct page *page)
-{
-        struct address_space *mapping = page->mapping;
-
-        if (page->mapping && PageDirty(page)) {
-                ClearPageDirty(page);
-                ll_pgcache_lock(mapping);
-                list_del(&page->list);
-                list_add(&page->list, &mapping->locked_pages);
-                ll_pgcache_unlock(mapping);
-                return 1;
-        }
-        return 0;
-}
 #else
 static inline int mapping_has_pages(struct address_space *mapping)
 {
         return mapping->nrpages > 0;
 }
+#endif
+
+#ifdef HAVE_KIOBUF_KIO_BLOCKS
+#define KIOBUF_GET_BLOCKS(k) ((k)->kio_blocks)
+#else
+#define KIOBUF_GET_BLOCKS(k) ((k)->blocks)
 #endif
 
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,6,7))
@@ -356,23 +446,95 @@ static inline int mapping_has_pages(struct address_space *mapping)
 #endif
 
 #ifdef HAVE_I_ALLOC_SEM
-#define UP_WRITE_I_ALLOC_SEM(i) do { up_write(&(i)->i_alloc_sem); } while (0)
+#define UP_WRITE_I_ALLOC_SEM(i)   do { up_write(&(i)->i_alloc_sem); } while (0)
 #define DOWN_WRITE_I_ALLOC_SEM(i) do { down_write(&(i)->i_alloc_sem); } while(0)
-#define LASSERT_MDS_ORPHAN_WRITE_LOCKED(i) LASSERT(down_read_trylock(&(i)->i_alloc_sem) == 0)
+#define LASSERT_I_ALLOC_SEM_WRITE_LOCKED(i) LASSERT(down_read_trylock(&(i)->i_alloc_sem) == 0)
 
-#define UP_READ_I_ALLOC_SEM(i) do { up_read(&(i)->i_alloc_sem); } while (0)
-#define DOWN_READ_I_ALLOC_SEM(i) do { down_read(&(i)->i_alloc_sem); } while (0)
-#define LASSERT_MDS_ORPHAN_READ_LOCKED(i) LASSERT(down_write_trylock(&(i)->i_alloc_sem) == 0)
-#define MDS_PACK_MD_LOCK 1
+#define UP_READ_I_ALLOC_SEM(i)    do { up_read(&(i)->i_alloc_sem); } while (0)
+#define DOWN_READ_I_ALLOC_SEM(i)  do { down_read(&(i)->i_alloc_sem); } while (0)
+#define LASSERT_I_ALLOC_SEM_READ_LOCKED(i) LASSERT(down_write_trylock(&(i)->i_alloc_sem) == 0)
 #else
-#define UP_READ_I_ALLOC_SEM(i) do { up(&(i)->i_sem); } while (0)
-#define DOWN_READ_I_ALLOC_SEM(i) do { down(&(i)->i_sem); } while (0)
-#define LASSERT_MDS_ORPHAN_READ_LOCKED(i) LASSERT(down_trylock(&(i)->i_sem) != 0)
+#define UP_READ_I_ALLOC_SEM(i)              do { } while (0)
+#define DOWN_READ_I_ALLOC_SEM(i)            do { } while (0)
+#define LASSERT_I_ALLOC_SEM_READ_LOCKED(i)  do { } while (0)
 
-#define UP_WRITE_I_ALLOC_SEM(i) do { up(&(i)->i_sem); } while (0)
-#define DOWN_WRITE_I_ALLOC_SEM(i) do { down(&(i)->i_sem); } while (0)
-#define LASSERT_MDS_ORPHAN_WRITE_LOCKED(i) LASSERT(down_trylock(&(i)->i_sem) != 0)
-#define MDS_PACK_MD_LOCK 0
+#define UP_WRITE_I_ALLOC_SEM(i)             do { } while (0)
+#define DOWN_WRITE_I_ALLOC_SEM(i)           do { } while (0)
+#define LASSERT_I_ALLOC_SEM_WRITE_LOCKED(i) do { } while (0)
+#endif
+
+#ifndef HAVE_GRAB_CACHE_PAGE_NOWAIT_GFP
+#define grab_cache_page_nowait_gfp(x, y, z) grab_cache_page_nowait((x), (y))
+#endif
+
+#ifndef HAVE_FILEMAP_FDATAWRITE
+#define filemap_fdatawrite(mapping)      filemap_fdatasync(mapping)
+#endif
+
+#ifdef HAVE_VFS_KERN_MOUNT
+static inline 
+struct vfsmount *
+ll_kern_mount(const char *fstype, int flags, const char *name, void *data)
+{
+        struct file_system_type *type = get_fs_type(fstype);
+        struct vfsmount *mnt;
+        if (!type)
+                return ERR_PTR(-ENODEV);
+        mnt = vfs_kern_mount(type, flags, name, data);
+        return mnt;
+}
+#else
+#define ll_kern_mount(fstype, flags, name, data) do_kern_mount((fstype), (flags), (name), (data))
+#endif
+
+#ifndef HAVE_GENERIC_FILE_READ
+static inline
+ssize_t
+generic_file_read(struct file *filp, char __user *buf, size_t len, loff_t *ppos)
+{
+        struct iovec iov = { .iov_base = (void __user *)buf, .iov_len = len };
+        struct kiocb kiocb;
+        ssize_t ret;
+
+        init_sync_kiocb(&kiocb, filp);
+        kiocb.ki_pos = *ppos;
+        kiocb.ki_left = len;
+
+        ret = generic_file_aio_read(&kiocb, &iov, 1, kiocb.ki_pos);
+        *ppos = kiocb.ki_pos;
+        return ret;
+}
+#endif
+
+#ifndef HAVE_GENERIC_FILE_WRITE
+static inline
+ssize_t
+generic_file_write(struct file *filp, const char __user *buf, size_t len, loff_t *ppos)
+{
+        struct iovec iov = { .iov_base = (void __user *)buf, .iov_len = len };
+        struct kiocb kiocb;
+        ssize_t ret;
+
+        init_sync_kiocb(&kiocb, filp);
+        kiocb.ki_pos = *ppos;
+        kiocb.ki_left = len;
+
+        ret = generic_file_aio_write(&kiocb, &iov, 1, kiocb.ki_pos);
+        *ppos = kiocb.ki_pos;
+
+        return ret;
+}
+#endif
+
+#ifdef HAVE_STATFS_DENTRY_PARAM
+#define ll_do_statfs(sb, sfs) (sb)->s_op->statfs((sb)->s_root, (sfs))
+#else
+#define ll_do_statfs(sb, sfs) (sb)->s_op->statfs((sb), (sfs))
+#endif
+
+/* task_struct */
+#ifndef HAVE_TASK_PPTR
+#define p_pptr parent
 #endif
 
 #endif /* __KERNEL__ */

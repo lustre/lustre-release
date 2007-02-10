@@ -20,8 +20,9 @@
  *   along with Lustre; if not, write to the Free Software
  *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
-
+#ifdef HAVE_KERNEL_CONFIG_H
 #include <linux/config.h>
+#endif
 #include <linux/kernel.h>
 #include <linux/mm.h>
 #include <linux/string.h>
@@ -44,18 +45,18 @@
 
 #define DEBUG_SUBSYSTEM S_LLITE
 
-#include <linux/lustre_mds.h>
-#include <linux/lustre_lite.h>
+#include <lustre_lite.h>
 #include "llite_internal.h"
 #include <linux/lustre_compat25.h>
 
+static int ll_direct_IO_24(int rw,
 #ifdef HAVE_DIO_FILE
-static int ll_direct_IO_24(int rw, struct file *file, struct kiobuf *iobuf,
-                           unsigned long blocknr, int blocksize)
+                           struct file *file,
 #else
-static int ll_direct_IO_24(int rw, struct inode *inode, struct kiobuf *iobuf,
-                           unsigned long blocknr, int blocksize)
+                           struct inode *inode,
 #endif
+                           struct kiobuf *iobuf, unsigned long blocknr,
+                           int blocksize)
 {
 #ifdef HAVE_DIO_FILE
         struct inode *inode = file->f_dentry->d_inode;
@@ -63,8 +64,7 @@ static int ll_direct_IO_24(int rw, struct inode *inode, struct kiobuf *iobuf,
         struct ll_inode_info *lli = ll_i2info(inode);
         struct lov_stripe_md *lsm = lli->lli_smd;
         struct brw_page *pga;
-        struct ptlrpc_request_set *set;
-        struct obdo *oa = NULL;
+        struct obdo oa;
         int length, i, flags, rc = 0;
         loff_t offset;
         ENTRY;
@@ -72,69 +72,58 @@ static int ll_direct_IO_24(int rw, struct inode *inode, struct kiobuf *iobuf,
         if (!lsm || !lsm->lsm_object_id)
                 RETURN(-EBADF);
 
-        set = ptlrpc_prep_set();
-        if (set == NULL)
-                RETURN(-ENOMEM);
+        offset = ((obd_off)blocknr << inode->i_blkbits);
+        CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu/%u(%p), size="LPSZ
+               ", offset=%lld=%llx, pages %u\n",
+               inode->i_ino, inode->i_generation, inode, iobuf->length,
+               offset, offset, iobuf->nr_pages);
+
+        /* FIXME: io smaller than CFS_PAGE_SIZE is broken on ia64 */
+        if ((iobuf->offset & (~CFS_PAGE_MASK)) ||
+            (iobuf->length & (~CFS_PAGE_MASK)))
+                RETURN(-EINVAL);
 
         OBD_ALLOC(pga, sizeof(*pga) * iobuf->nr_pages);
-        if (!pga) {
-                ptlrpc_set_destroy(set);
+        if (!pga)
                 RETURN(-ENOMEM);
-        }
 
         flags = 0 /* | OBD_BRW_DIRECTIO */;
-        offset = ((obd_off)blocknr * blocksize);
         length = iobuf->length;
-        pga[0].page_offset = iobuf->offset;
-        LASSERT(iobuf->offset < PAGE_SIZE);
+        rw = rw ? OBD_BRW_WRITE : OBD_BRW_READ;
 
         for (i = 0, length = iobuf->length; length > 0;
              length -= pga[i].count, offset += pga[i].count, i++) { /*i last!*/
                 pga[i].pg = iobuf->maplist[i];
-                pga[i].disk_offset = offset;
+                pga[i].off = offset;
                 /* To the end of the page, or the length, whatever is less */
-                pga[i].count = min_t(int, PAGE_SIZE - pga[i].page_offset,
+                pga[i].count = min_t(int, CFS_PAGE_SIZE - (offset & ~CFS_PAGE_MASK),
                                      length);
                 pga[i].flag = flags;
-                if (rw == READ)
+                if (rw == OBD_BRW_READ)
                         POISON_PAGE(iobuf->maplist[i], 0x0d);
         }
 
-        oa = obdo_alloc();
-        if (oa == NULL) {
-                ptlrpc_set_destroy(set);
-                GOTO(out_free_pga, -ENOMEM);
-        }
-        ll_inode_fill_obdo(inode, rw, oa);
+        ll_inode_fill_obdo(inode, rw, &oa);
 
-        if (rw == WRITE)
+        if (rw == OBD_BRW_WRITE)
                 lprocfs_counter_add(ll_i2sbi(inode)->ll_stats,
                                     LPROC_LL_DIRECT_WRITE, iobuf->length);
         else
                 lprocfs_counter_add(ll_i2sbi(inode)->ll_stats,
                                     LPROC_LL_DIRECT_READ, iobuf->length);
-        rc = obd_brw_async(rw == WRITE ? OBD_BRW_WRITE : OBD_BRW_READ,
-                           ll_i2dtexp(inode), oa, lsm, iobuf->nr_pages, pga,
-                           set, NULL);
-        if (rc) {
-                CDEBUG(rc == -ENOSPC ? D_INODE : D_ERROR,
-                       "error from obd_brw_async: rc = %d\n", rc);
-        } else {
-                rc = ptlrpc_set_wait(set);
-                if (rc)
-                        CERROR("error from callback: rc = %d\n", rc);
-        }
-        ptlrpc_set_destroy(set);
+        rc = obd_brw_rqset(rw, ll_i2obdexp(inode), &oa, lsm, iobuf->nr_pages,
+                           pga, NULL);
         if (rc == 0) {
                 rc = iobuf->length;
-                if (rw == WRITE)
-                        obd_adjust_kms(ll_i2dtexp(inode), lsm, offset, 0);
+                if (rw == OBD_BRW_WRITE) {
+                        lov_stripe_lock(lsm);
+                        obd_adjust_kms(ll_i2obdexp(inode), lsm, offset, 0);
+                        lov_stripe_unlock(lsm);
+                }
         }
-        obdo_free(oa);
-        EXIT;
-out_free_pga:
+
         OBD_FREE(pga, sizeof(*pga) * iobuf->nr_pages);
-        return rc;
+        RETURN(rc);
 }
 
 #ifdef KERNEL_HAS_AS_MAX_READAHEAD
@@ -157,3 +146,10 @@ struct address_space_operations ll_aops = {
         .max_readahead  = ll_max_readahead,
 #endif
 };
+
+int ll_sync_page_range(struct inode *inode, struct address_space *mapping,
+                       loff_t start, size_t count)
+{
+        return 0;
+}
+

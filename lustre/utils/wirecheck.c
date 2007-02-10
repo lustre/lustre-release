@@ -5,8 +5,9 @@
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <liblustre.h>
-#include <linux/lustre_lib.h>
-#include <linux/lustre_idl.h>
+#include <lustre_lib.h>
+#include <lustre/lustre_idl.h>
+#include <lustre_disk.h>
 
 #define BLANK_LINE()                                            \
 do {                                                            \
@@ -20,6 +21,13 @@ do {                                                            \
 
 #define STRINGIFY(a) #a
 
+
+#define CHECK_CDEFINE(a)                                        \
+        printf("        CLASSERT("#a" == "STRINGIFY(a) ");\n")
+
+#define CHECK_CVALUE(a)                                         \
+        printf("        CLASSERT("#a" == %lld);\n", (long long)a)
+
 #define CHECK_DEFINE(a)                                         \
 do {                                                            \
         printf("        LASSERTF("#a" == "STRINGIFY(a)          \
@@ -30,8 +38,15 @@ do {                                                            \
 #define CHECK_VALUE(a)                                          \
 do {                                                            \
         printf("        LASSERTF("#a                            \
-               " == %llu, \" found %%llu\\n\",\n                 "\
-               "(unsigned long long)"#a");\n",(unsigned long long)a);\
+               " == %lld, \" found %%lld\\n\",\n                 "\
+               "(long long)"#a");\n", (long long)a);            \
+} while(0)
+
+#define CHECK_VALUE_64(a)                                       \
+do {                                                            \
+        printf("        LASSERTF("#a                            \
+               " == %lldULL, \" found %%lld\\n\",\n                 "\
+               "(long long)"#a");\n", (long long)a);            \
 } while(0)
 
 #define CHECK_MEMBER_OFFSET(s,m)                                \
@@ -47,7 +62,7 @@ do {                                                            \
 #define CHECK_MEMBER(s,m)                                       \
 do {                                                            \
         CHECK_MEMBER_OFFSET(s, m);                              \
-                CHECK_MEMBER_SIZEOF(s, m);                      \
+        CHECK_MEMBER_SIZEOF(s, m);                              \
 } while(0)
 
 #define CHECK_STRUCT(s)                                         \
@@ -57,16 +72,7 @@ do {                                                            \
 } while(0)
 
 
-
-void check1(void)
-{
-#define VALUE 1234567
-
-        CHECK_VALUE(VALUE);
-        CHECK_DEFINE(VALUE);
-}
-
-void
+static void
 check_lustre_handle(void)
 {
         BLANK_LINE();
@@ -75,35 +81,116 @@ check_lustre_handle(void)
 }
 
 void
-check_lustre_msg(void)
+check_lustre_msg_v1(void)
 {
         BLANK_LINE();
-        CHECK_STRUCT(lustre_msg);
-        CHECK_MEMBER(lustre_msg, handle);
-        CHECK_MEMBER(lustre_msg, magic);
-        CHECK_MEMBER(lustre_msg, type);
-        CHECK_MEMBER(lustre_msg, version);
-        CHECK_MEMBER(lustre_msg, opc);
-        CHECK_MEMBER(lustre_msg, last_xid);
-        CHECK_MEMBER(lustre_msg, last_committed);
-        CHECK_MEMBER(lustre_msg, transno);
-        CHECK_MEMBER(lustre_msg, status);
-        CHECK_MEMBER(lustre_msg, flags);
-        CHECK_MEMBER(lustre_msg, bufcount);
-        CHECK_MEMBER(lustre_msg, buflens[7]);
+        CHECK_STRUCT(lustre_msg_v1);
+        CHECK_MEMBER(lustre_msg_v1, lm_handle);
+        CHECK_MEMBER(lustre_msg_v1, lm_magic);
+        CHECK_MEMBER(lustre_msg_v1, lm_type);
+        CHECK_MEMBER(lustre_msg_v1, lm_version);
+        CHECK_MEMBER(lustre_msg_v1, lm_opc);
+        CHECK_MEMBER(lustre_msg_v1, lm_last_xid);
+        CHECK_MEMBER(lustre_msg_v1, lm_last_committed);
+        CHECK_MEMBER(lustre_msg_v1, lm_transno);
+        CHECK_MEMBER(lustre_msg_v1, lm_status);
+        CHECK_MEMBER(lustre_msg_v1, lm_flags);
+        CHECK_MEMBER(lustre_msg_v1, lm_conn_cnt);
+        CHECK_MEMBER(lustre_msg_v1, lm_bufcount);
+        CHECK_MEMBER(lustre_msg_v1, lm_buflens[0]);
 }
 
 void
+check_lustre_msg_v2(void)
+{
+        BLANK_LINE();
+        CHECK_STRUCT(lustre_msg_v2);
+        CHECK_MEMBER(lustre_msg_v2, lm_bufcount);
+        CHECK_MEMBER(lustre_msg_v2, lm_secflvr);
+        CHECK_MEMBER(lustre_msg_v2, lm_magic);
+        CHECK_MEMBER(lustre_msg_v2, lm_repsize);
+        CHECK_MEMBER(lustre_msg_v2, lm_timeout);
+        CHECK_MEMBER(lustre_msg_v2, lm_padding_1);
+        CHECK_MEMBER(lustre_msg_v2, lm_padding_2);
+        CHECK_MEMBER(lustre_msg_v2, lm_padding_3);
+        CHECK_MEMBER(lustre_msg_v2, lm_buflens[0]);
+}
+
+void
+check_ptlrpc_body(void)
+{
+        BLANK_LINE();
+        CHECK_STRUCT(ptlrpc_body);
+        CHECK_MEMBER(ptlrpc_body, pb_handle);
+        CHECK_MEMBER(ptlrpc_body, pb_type);
+        CHECK_MEMBER(ptlrpc_body, pb_version);
+        CHECK_MEMBER(ptlrpc_body, pb_opc);
+        CHECK_MEMBER(ptlrpc_body, pb_status);
+        CHECK_MEMBER(ptlrpc_body, pb_last_xid);
+        CHECK_MEMBER(ptlrpc_body, pb_last_seen);
+        CHECK_MEMBER(ptlrpc_body, pb_last_committed);
+        CHECK_MEMBER(ptlrpc_body, pb_transno);
+        CHECK_MEMBER(ptlrpc_body, pb_flags);
+        CHECK_MEMBER(ptlrpc_body, pb_op_flags);
+        CHECK_MEMBER(ptlrpc_body, pb_conn_cnt);
+        CHECK_MEMBER(ptlrpc_body, pb_padding_1);
+        CHECK_MEMBER(ptlrpc_body, pb_padding_2);
+        CHECK_MEMBER(ptlrpc_body, pb_padding_3);
+        CHECK_MEMBER(ptlrpc_body, pb_padding_4);
+        CHECK_MEMBER(ptlrpc_body, pb_padding_5);
+}
+
+static void check_obd_connect_data(void)
+{
+        BLANK_LINE();
+        CHECK_STRUCT(obd_connect_data);
+        CHECK_MEMBER(obd_connect_data, ocd_connect_flags);
+        CHECK_MEMBER(obd_connect_data, ocd_version);
+        CHECK_MEMBER(obd_connect_data, ocd_grant);
+        CHECK_MEMBER(obd_connect_data, ocd_index);
+        CHECK_MEMBER(obd_connect_data, ocd_brw_size);
+        CHECK_MEMBER(obd_connect_data, ocd_ibits_known);
+        CHECK_MEMBER(obd_connect_data, ocd_nllu);
+        CHECK_MEMBER(obd_connect_data, ocd_nllg);
+        CHECK_MEMBER(obd_connect_data, padding1);
+        CHECK_MEMBER(obd_connect_data, padding2);
+        CHECK_MEMBER(obd_connect_data, padding3);
+        CHECK_MEMBER(obd_connect_data, padding4);
+
+        CHECK_CDEFINE(OBD_CONNECT_RDONLY);
+        CHECK_CDEFINE(OBD_CONNECT_INDEX);
+        CHECK_CDEFINE(OBD_CONNECT_GRANT);
+        CHECK_CDEFINE(OBD_CONNECT_SRVLOCK);
+        CHECK_CDEFINE(OBD_CONNECT_VERSION);
+        CHECK_CDEFINE(OBD_CONNECT_REQPORTAL);
+        CHECK_CDEFINE(OBD_CONNECT_ACL);
+        CHECK_CDEFINE(OBD_CONNECT_XATTR);
+        CHECK_CDEFINE(OBD_CONNECT_CROW);
+        CHECK_CDEFINE(OBD_CONNECT_TRUNCLOCK);
+        CHECK_CDEFINE(OBD_CONNECT_TRANSNO);
+        CHECK_CDEFINE(OBD_CONNECT_IBITS);
+        CHECK_CDEFINE(OBD_CONNECT_JOIN);
+        CHECK_CDEFINE(OBD_CONNECT_ATTRFID);
+        CHECK_CDEFINE(OBD_CONNECT_NODEVOH);
+        CHECK_CDEFINE(OBD_CONNECT_LCL_CLIENT);
+        CHECK_CDEFINE(OBD_CONNECT_RMT_CLIENT);
+        CHECK_CDEFINE(OBD_CONNECT_BRW_SIZE);
+        CHECK_CDEFINE(OBD_CONNECT_QUOTA64);
+}
+
+static void
 check_obdo(void)
 {
         BLANK_LINE();
         CHECK_STRUCT(obdo);
+        CHECK_MEMBER(obdo, o_valid);
         CHECK_MEMBER(obdo, o_id);
         CHECK_MEMBER(obdo, o_gr);
-        CHECK_MEMBER(obdo, o_atime);
-        CHECK_MEMBER(obdo, o_mtime);
-        CHECK_MEMBER(obdo, o_ctime);
+        CHECK_MEMBER(obdo, o_fid);
         CHECK_MEMBER(obdo, o_size);
+        CHECK_MEMBER(obdo, o_mtime);
+        CHECK_MEMBER(obdo, o_atime);
+        CHECK_MEMBER(obdo, o_ctime);
         CHECK_MEMBER(obdo, o_blocks);
         CHECK_MEMBER(obdo, o_grant);
         CHECK_MEMBER(obdo, o_blksize);
@@ -113,48 +200,65 @@ check_obdo(void)
         CHECK_MEMBER(obdo, o_flags);
         CHECK_MEMBER(obdo, o_nlink);
         CHECK_MEMBER(obdo, o_generation);
-        CHECK_MEMBER(obdo, o_valid);
         CHECK_MEMBER(obdo, o_misc);
         CHECK_MEMBER(obdo, o_easize);
         CHECK_MEMBER(obdo, o_mds);
-        CHECK_MEMBER(obdo, o_mds);
-        CHECK_MEMBER(obdo, o_fsuid);
+        CHECK_MEMBER(obdo, o_stripe_idx);
+        CHECK_MEMBER(obdo, o_padding_1);
         CHECK_MEMBER(obdo, o_inline);
 
-        CHECK_VALUE(OBD_MD_FLID);
-        CHECK_VALUE(OBD_MD_FLATIME);
-        CHECK_VALUE(OBD_MD_FLMTIME);
-        CHECK_VALUE(OBD_MD_FLCTIME);
-        CHECK_VALUE(OBD_MD_FLSIZE);
-        CHECK_VALUE(OBD_MD_FLBLOCKS);
-        CHECK_VALUE(OBD_MD_FLBLKSZ);
-        CHECK_VALUE(OBD_MD_FLMODE);
-        CHECK_VALUE(OBD_MD_FLTYPE);
-        CHECK_VALUE(OBD_MD_FLUID);
-        CHECK_VALUE(OBD_MD_FLGID);
-        CHECK_VALUE(OBD_MD_FLFLAGS);
-        CHECK_VALUE(OBD_MD_FLNLINK);
-        CHECK_VALUE(OBD_MD_FLGENER);
-        CHECK_VALUE(OBD_MD_FLINLINE);
-        CHECK_VALUE(OBD_MD_FLRDEV);
-        CHECK_VALUE(OBD_MD_FLEASIZE);
-        CHECK_VALUE(OBD_MD_LINKNAME);
-        CHECK_VALUE(OBD_MD_FLHANDLE);
-        CHECK_VALUE(OBD_MD_FLCKSUM);
-        CHECK_VALUE(OBD_MD_FLQOS);
-        CHECK_VALUE(OBD_MD_FLOSCOPQ);
-        CHECK_VALUE(OBD_MD_FLCOOKIE);
-        CHECK_VALUE(OBD_MD_FLGROUP);
+        CHECK_VALUE(OBD_INLINESZ);
 
-        CHECK_VALUE(OBD_FL_INLINEDATA);
-        CHECK_VALUE(OBD_FL_OBDMDEXISTS);
-        CHECK_VALUE(OBD_FL_DELORPHAN);
-        CHECK_VALUE(OBD_FL_NORPC);
-        CHECK_VALUE(OBD_FL_IDONLY);
-        CHECK_VALUE(OBD_FL_RECREATE_OBJS);
+        CHECK_CDEFINE(OBD_MD_FLID);
+        CHECK_CDEFINE(OBD_MD_FLATIME);
+        CHECK_CDEFINE(OBD_MD_FLMTIME);
+        CHECK_CDEFINE(OBD_MD_FLCTIME);
+        CHECK_CDEFINE(OBD_MD_FLSIZE);
+        CHECK_CDEFINE(OBD_MD_FLBLOCKS);
+        CHECK_CDEFINE(OBD_MD_FLBLKSZ);
+        CHECK_CDEFINE(OBD_MD_FLMODE);
+        CHECK_CDEFINE(OBD_MD_FLTYPE);
+        CHECK_CDEFINE(OBD_MD_FLUID);
+        CHECK_CDEFINE(OBD_MD_FLGID);
+        CHECK_CDEFINE(OBD_MD_FLFLAGS);
+        CHECK_CDEFINE(OBD_MD_FLNLINK);
+        CHECK_CDEFINE(OBD_MD_FLGENER);
+        CHECK_CDEFINE(OBD_MD_FLINLINE);
+        CHECK_CDEFINE(OBD_MD_FLRDEV);
+        CHECK_CDEFINE(OBD_MD_FLEASIZE);
+        CHECK_CDEFINE(OBD_MD_LINKNAME);
+        CHECK_CDEFINE(OBD_MD_FLHANDLE);
+        CHECK_CDEFINE(OBD_MD_FLCKSUM);
+        CHECK_CDEFINE(OBD_MD_FLQOS);
+        CHECK_CDEFINE(OBD_MD_FLCOOKIE);
+        CHECK_CDEFINE(OBD_MD_FLGROUP);
+        CHECK_CDEFINE(OBD_MD_FLFID);
+        CHECK_CDEFINE(OBD_MD_FLEPOCH);
+        CHECK_CDEFINE(OBD_MD_FLGRANT);
+        CHECK_CDEFINE(OBD_MD_FLDIREA);
+        CHECK_CDEFINE(OBD_MD_FLUSRQUOTA);
+        CHECK_CDEFINE(OBD_MD_FLGRPQUOTA);
+        CHECK_CDEFINE(OBD_MD_FLMODEASIZE);
+        CHECK_CDEFINE(OBD_MD_MDS);
+        CHECK_CDEFINE(OBD_MD_REINT);
+        CHECK_CDEFINE(OBD_MD_FLXATTR);
+        CHECK_CDEFINE(OBD_MD_FLXATTRLS);
+        CHECK_CDEFINE(OBD_MD_FLXATTRRM);
+        CHECK_CDEFINE(OBD_MD_FLACL);
+
+        CHECK_CDEFINE(OBD_FL_INLINEDATA);
+        CHECK_CDEFINE(OBD_FL_OBDMDEXISTS);
+        CHECK_CDEFINE(OBD_FL_DELORPHAN);
+        CHECK_CDEFINE(OBD_FL_NORPC);
+        CHECK_CDEFINE(OBD_FL_IDONLY);
+        CHECK_CDEFINE(OBD_FL_RECREATE_OBJS);
+        CHECK_CDEFINE(OBD_FL_DEBUG_CHECK);
+        CHECK_CDEFINE(OBD_FL_NO_USRQUOTA);
+        CHECK_CDEFINE(OBD_FL_NO_GRPQUOTA);
+        CHECK_CDEFINE(OBD_FL_CREATE_CROW);
 }
 
-void
+static void
 check_lov_mds_md_v1(void)
 {
         BLANK_LINE();
@@ -174,14 +278,24 @@ check_lov_mds_md_v1(void)
         CHECK_MEMBER(lov_ost_data_v1, l_ost_gen);
         CHECK_MEMBER(lov_ost_data_v1, l_ost_idx);
 
-        CHECK_VALUE(LOV_MAGIC_V0);
-        CHECK_VALUE(LOV_MAGIC_V1);
+        CHECK_CDEFINE(LOV_MAGIC_V1);
+        CHECK_CDEFINE(LOV_MAGIC_JOIN);
 
         CHECK_VALUE(LOV_PATTERN_RAID0);
         CHECK_VALUE(LOV_PATTERN_RAID1);
 }
 
-void
+static void
+check_lov_mds_md_join(void)
+{
+        BLANK_LINE();
+        CHECK_STRUCT(lov_mds_md_join);
+        CHECK_MEMBER(lov_mds_md_join, lmmj_md);
+        CHECK_MEMBER(lov_mds_md_join, lmmj_array_id);
+        CHECK_MEMBER(lov_mds_md_join, lmmj_extent_count);
+}
+
+static void
 check_obd_statfs(void)
 {
         BLANK_LINE();
@@ -194,10 +308,19 @@ check_obd_statfs(void)
         CHECK_MEMBER(obd_statfs, os_fsid);
         CHECK_MEMBER(obd_statfs, os_bsize);
         CHECK_MEMBER(obd_statfs, os_namelen);
-        CHECK_MEMBER(obd_statfs, os_spare);
+        CHECK_MEMBER(obd_statfs, os_state);
+        CHECK_MEMBER(obd_statfs, os_spare1);
+        CHECK_MEMBER(obd_statfs, os_spare2);
+        CHECK_MEMBER(obd_statfs, os_spare3);
+        CHECK_MEMBER(obd_statfs, os_spare4);
+        CHECK_MEMBER(obd_statfs, os_spare5);
+        CHECK_MEMBER(obd_statfs, os_spare6);
+        CHECK_MEMBER(obd_statfs, os_spare7);
+        CHECK_MEMBER(obd_statfs, os_spare8);
+        CHECK_MEMBER(obd_statfs, os_spare9);
 }
 
-void
+static void
 check_obd_ioobj(void)
 {
         BLANK_LINE();
@@ -208,7 +331,45 @@ check_obd_ioobj(void)
         CHECK_MEMBER(obd_ioobj, ioo_bufcnt);
 }
 
-void
+static void
+check_obd_quotactl(void)
+{
+        BLANK_LINE();
+        CHECK_STRUCT(obd_quotactl);
+        CHECK_MEMBER(obd_quotactl, qc_cmd);
+        CHECK_MEMBER(obd_quotactl, qc_type);
+        CHECK_MEMBER(obd_quotactl, qc_id);
+        CHECK_MEMBER(obd_quotactl, qc_stat);
+        CHECK_MEMBER(obd_quotactl, qc_dqinfo);
+        CHECK_MEMBER(obd_quotactl, qc_dqblk);
+
+        BLANK_LINE();
+        CHECK_STRUCT(obd_dqinfo);
+        CHECK_MEMBER(obd_dqinfo, dqi_bgrace);
+        CHECK_MEMBER(obd_dqinfo, dqi_igrace);
+        CHECK_MEMBER(obd_dqinfo, dqi_flags);
+        CHECK_MEMBER(obd_dqinfo, dqi_valid);
+
+        BLANK_LINE();
+        CHECK_STRUCT(obd_dqblk);
+        CHECK_MEMBER(obd_dqblk, dqb_bhardlimit);
+        CHECK_MEMBER(obd_dqblk, dqb_bsoftlimit);
+        CHECK_MEMBER(obd_dqblk, dqb_curspace);
+        CHECK_MEMBER(obd_dqblk, dqb_ihardlimit);
+        CHECK_MEMBER(obd_dqblk, dqb_isoftlimit);
+        CHECK_MEMBER(obd_dqblk, dqb_curinodes);
+        CHECK_MEMBER(obd_dqblk, dqb_btime);
+        CHECK_MEMBER(obd_dqblk, dqb_itime);
+        CHECK_MEMBER(obd_dqblk, dqb_valid);
+        CHECK_MEMBER(obd_dqblk, padding);
+
+        CHECK_DEFINE(Q_QUOTACHECK);
+        CHECK_DEFINE(Q_INITQUOTA);
+        CHECK_DEFINE(Q_GETOINFO);
+        CHECK_DEFINE(Q_GETOQUOTA);
+}
+
+static void
 check_niobuf_remote(void)
 {
         BLANK_LINE();
@@ -221,9 +382,10 @@ check_niobuf_remote(void)
         CHECK_VALUE(OBD_BRW_WRITE);
         CHECK_VALUE(OBD_BRW_SYNC);
         CHECK_VALUE(OBD_BRW_FROM_GRANT);
+        CHECK_VALUE(OBD_BRW_NOQUOTA);
 }
 
-void
+static void
 check_ost_body(void)
 {
         BLANK_LINE();
@@ -231,17 +393,17 @@ check_ost_body(void)
         CHECK_MEMBER(ost_body, oa);
 }
 
-void
-check_lustre_stc(void)
+static void
+check_ll_fid(void)
 {
         BLANK_LINE();
-        CHECK_STRUCT(lustre_stc);
-        CHECK_MEMBER(lustre_stc, u.e3s.l3s_ino);
-        CHECK_MEMBER(lustre_stc, u.e3s.l3s_gen);
-        CHECK_MEMBER(lustre_stc, u.e3s.l3s_type);
+        CHECK_STRUCT(ll_fid);
+        CHECK_MEMBER(ll_fid, id);
+        CHECK_MEMBER(ll_fid, generation);
+        CHECK_MEMBER(ll_fid, f_type);
 }
 
-void
+static void
 check_mds_status_req(void)
 {
         BLANK_LINE();
@@ -250,18 +412,22 @@ check_mds_status_req(void)
         CHECK_MEMBER(mds_status_req, repbuf);
 }
 
-void
+static void
 check_mds_body(void)
 {
         BLANK_LINE();
         CHECK_STRUCT(mds_body);
-        CHECK_MEMBER(mds_body, id1);
-        CHECK_MEMBER(mds_body, id2);
+        CHECK_MEMBER(mds_body, fid1);
+        CHECK_MEMBER(mds_body, fid2);
         CHECK_MEMBER(mds_body, handle);
         CHECK_MEMBER(mds_body, size);
         CHECK_MEMBER(mds_body, blocks);
         CHECK_MEMBER(mds_body, io_epoch);
+        CHECK_MEMBER(mds_body, ino);
         CHECK_MEMBER(mds_body, valid);
+        CHECK_MEMBER(mds_body, fsuid);
+        CHECK_MEMBER(mds_body, fsgid);
+        CHECK_MEMBER(mds_body, capability);
         CHECK_MEMBER(mds_body, mode);
         CHECK_MEMBER(mds_body, uid);
         CHECK_MEMBER(mds_body, gid);
@@ -271,91 +437,142 @@ check_mds_body(void)
         CHECK_MEMBER(mds_body, flags);
         CHECK_MEMBER(mds_body, rdev);
         CHECK_MEMBER(mds_body, nlink);
+        CHECK_MEMBER(mds_body, generation);
+        CHECK_MEMBER(mds_body, suppgid);
         CHECK_MEMBER(mds_body, eadatasize);
+        CHECK_MEMBER(mds_body, aclsize);
+        CHECK_MEMBER(mds_body, max_mdsize);
+        CHECK_MEMBER(mds_body, max_cookiesize);
+        CHECK_MEMBER(mds_body, padding_4);
 
         CHECK_VALUE(FMODE_READ);
         CHECK_VALUE(FMODE_WRITE);
-        CHECK_VALUE(FMODE_EXEC);
-        CHECK_VALUE(MDS_OPEN_CREAT);
-        CHECK_VALUE(MDS_OPEN_EXCL);
-        CHECK_VALUE(MDS_OPEN_TRUNC);
-        CHECK_VALUE(MDS_OPEN_APPEND);
-        CHECK_VALUE(MDS_OPEN_SYNC);
-        CHECK_VALUE(MDS_OPEN_DIRECTORY);
-        CHECK_VALUE(MDS_OPEN_DELAY_CREATE);
-        CHECK_VALUE(MDS_OPEN_HAS_EA);
+        CHECK_VALUE(MDS_FMODE_EXEC);
+
+        CHECK_CDEFINE(MDS_OPEN_CREAT);
+        CHECK_CDEFINE(MDS_OPEN_EXCL);
+        CHECK_CDEFINE(MDS_OPEN_TRUNC);
+        CHECK_CDEFINE(MDS_OPEN_APPEND);
+        CHECK_CDEFINE(MDS_OPEN_SYNC);
+        CHECK_CDEFINE(MDS_OPEN_DIRECTORY);
+        CHECK_CDEFINE(MDS_OPEN_DELAY_CREATE);
+        CHECK_CDEFINE(MDS_OPEN_OWNEROVERRIDE);
+        CHECK_CDEFINE(MDS_OPEN_JOIN_FILE);
+        CHECK_CDEFINE(MDS_OPEN_HAS_EA);
+        CHECK_CDEFINE(MDS_OPEN_HAS_OBJS);
+
+        /* these should be identical to their EXT3_*_FL counterparts, and
+         * are redefined only to avoid dragging in ext3_fs.h */
+        CHECK_CDEFINE(MDS_SYNC_FL);
+        CHECK_CDEFINE(MDS_IMMUTABLE_FL);
+        CHECK_CDEFINE(MDS_APPEND_FL);
+        CHECK_CDEFINE(MDS_NOATIME_FL);
+        CHECK_CDEFINE(MDS_DIRSYNC_FL);
+        CHECK_CDEFINE(MDS_BFLAG_EXT_FLAGS);
+
+        CHECK_CDEFINE(MDS_INODELOCK_LOOKUP);
+        CHECK_CDEFINE(MDS_INODELOCK_UPDATE);
+        CHECK_CDEFINE(MDS_INODELOCK_OPEN);
 }
 
-void
+static void
 check_mds_rec_setattr(void)
 {
         BLANK_LINE();
         CHECK_STRUCT(mds_rec_setattr);
         CHECK_MEMBER(mds_rec_setattr, sa_opcode);
-        CHECK_MEMBER(mds_rec_setattr, sa_valid);
-        CHECK_MEMBER(mds_rec_setattr, sa_id);
+        CHECK_MEMBER(mds_rec_setattr, sa_fsuid);
+        CHECK_MEMBER(mds_rec_setattr, sa_fsgid);
+        CHECK_MEMBER(mds_rec_setattr, sa_cap);
+        CHECK_MEMBER(mds_rec_setattr, sa_suppgid);
         CHECK_MEMBER(mds_rec_setattr, sa_mode);
+        CHECK_MEMBER(mds_rec_setattr, sa_fid);
+        CHECK_MEMBER(mds_rec_setattr, sa_valid);
+        CHECK_MEMBER(mds_rec_setattr, sa_size);
+        CHECK_MEMBER(mds_rec_setattr, sa_mtime);
+        CHECK_MEMBER(mds_rec_setattr, sa_atime);
+        CHECK_MEMBER(mds_rec_setattr, sa_ctime);
         CHECK_MEMBER(mds_rec_setattr, sa_uid);
         CHECK_MEMBER(mds_rec_setattr, sa_gid);
         CHECK_MEMBER(mds_rec_setattr, sa_attr_flags);
-        CHECK_MEMBER(mds_rec_setattr, sa_size);
-        CHECK_MEMBER(mds_rec_setattr, sa_atime);
-        CHECK_MEMBER(mds_rec_setattr, sa_mtime);
-        CHECK_MEMBER(mds_rec_setattr, sa_ctime);
 }
 
-void
+static void
 check_mds_rec_create(void)
 {
         BLANK_LINE();
         CHECK_STRUCT(mds_rec_create);
         CHECK_MEMBER(mds_rec_create, cr_opcode);
+        CHECK_MEMBER(mds_rec_create, cr_fsuid);
+        CHECK_MEMBER(mds_rec_create, cr_fsgid);
+        CHECK_MEMBER(mds_rec_create, cr_cap);
         CHECK_MEMBER(mds_rec_create, cr_flags);
         CHECK_MEMBER(mds_rec_create, cr_mode);
-        CHECK_MEMBER(mds_rec_create, cr_padding);
-        CHECK_MEMBER(mds_rec_create, cr_id);
-        CHECK_MEMBER(mds_rec_create, cr_replayid);
+        CHECK_MEMBER(mds_rec_create, cr_fid);
+        CHECK_MEMBER(mds_rec_create, cr_replayfid);
         CHECK_MEMBER(mds_rec_create, cr_time);
         CHECK_MEMBER(mds_rec_create, cr_rdev);
+        CHECK_MEMBER(mds_rec_create, cr_suppgid);
 }
 
-void
+static void
 check_mds_rec_link(void)
 {
         BLANK_LINE();
         CHECK_STRUCT(mds_rec_link);
         CHECK_MEMBER(mds_rec_link, lk_opcode);
-        CHECK_MEMBER(mds_rec_link, lk_padding);
-        CHECK_MEMBER(mds_rec_link, lk_id1);
-        CHECK_MEMBER(mds_rec_link, lk_id2);
+        CHECK_MEMBER(mds_rec_link, lk_fsuid);
+        CHECK_MEMBER(mds_rec_link, lk_fsgid);
+        CHECK_MEMBER(mds_rec_link, lk_cap);
+        CHECK_MEMBER(mds_rec_link, lk_suppgid1);
+        CHECK_MEMBER(mds_rec_link, lk_suppgid2);
+        CHECK_MEMBER(mds_rec_link, lk_fid1);
+        CHECK_MEMBER(mds_rec_link, lk_fid2);
         CHECK_MEMBER(mds_rec_link, lk_time);
 }
 
-void
+static void
 check_mds_rec_unlink(void)
 {
         BLANK_LINE();
         CHECK_STRUCT(mds_rec_unlink);
         CHECK_MEMBER(mds_rec_unlink, ul_opcode);
+        CHECK_MEMBER(mds_rec_unlink, ul_fsuid);
+        CHECK_MEMBER(mds_rec_unlink, ul_fsgid);
+        CHECK_MEMBER(mds_rec_unlink, ul_cap);
+        CHECK_MEMBER(mds_rec_unlink, ul_suppgid);
         CHECK_MEMBER(mds_rec_unlink, ul_mode);
-        CHECK_MEMBER(mds_rec_unlink, ul_id1);
-        CHECK_MEMBER(mds_rec_unlink, ul_id2);
+        CHECK_MEMBER(mds_rec_unlink, ul_fid1);
+        CHECK_MEMBER(mds_rec_unlink, ul_fid2);
         CHECK_MEMBER(mds_rec_unlink, ul_time);
 }
 
-void
+static void
 check_mds_rec_rename(void)
 {
         BLANK_LINE();
         CHECK_STRUCT(mds_rec_rename);
         CHECK_MEMBER(mds_rec_rename, rn_opcode);
-        CHECK_MEMBER(mds_rec_rename, rn_padding);
-        CHECK_MEMBER(mds_rec_rename, rn_id1);
-        CHECK_MEMBER(mds_rec_rename, rn_id2);
+        CHECK_MEMBER(mds_rec_rename, rn_fsuid);
+        CHECK_MEMBER(mds_rec_rename, rn_fsgid);
+        CHECK_MEMBER(mds_rec_rename, rn_cap);
+        CHECK_MEMBER(mds_rec_rename, rn_suppgid1);
+        CHECK_MEMBER(mds_rec_rename, rn_suppgid2);
+        CHECK_MEMBER(mds_rec_rename, rn_fid1);
+        CHECK_MEMBER(mds_rec_rename, rn_fid2);
         CHECK_MEMBER(mds_rec_rename, rn_time);
 }
 
-void
+static void
+check_mds_rec_join(void)
+{
+        BLANK_LINE();
+        CHECK_STRUCT(mds_rec_join);
+        CHECK_MEMBER(mds_rec_join, jr_fid);
+        CHECK_MEMBER(mds_rec_join, jr_headsize);
+}
+
+static void
 check_lov_desc(void)
 {
         BLANK_LINE();
@@ -366,10 +583,13 @@ check_lov_desc(void)
         CHECK_MEMBER(lov_desc, ld_pattern);
         CHECK_MEMBER(lov_desc, ld_default_stripe_size);
         CHECK_MEMBER(lov_desc, ld_default_stripe_offset);
+        CHECK_MEMBER(lov_desc, ld_qos_maxage);
+        CHECK_MEMBER(lov_desc, ld_padding_1);
+        CHECK_MEMBER(lov_desc, ld_padding_2);
         CHECK_MEMBER(lov_desc, ld_uuid);
 }
 
-void
+static void
 check_ldlm_res_id(void)
 {
         BLANK_LINE();
@@ -377,7 +597,7 @@ check_ldlm_res_id(void)
         CHECK_MEMBER(ldlm_res_id, name[RES_NAME_SIZE]);
 }
 
-void
+static void
 check_ldlm_extent(void)
 {
         BLANK_LINE();
@@ -387,20 +607,26 @@ check_ldlm_extent(void)
         CHECK_MEMBER(ldlm_extent, gid);
 }
 
-void
+static void
+check_ldlm_inodebits(void)
+{
+        BLANK_LINE();
+        CHECK_STRUCT(ldlm_inodebits);
+        CHECK_MEMBER(ldlm_inodebits, bits);
+}
+
+static void
 check_ldlm_flock(void)
 {
         BLANK_LINE();
         CHECK_STRUCT(ldlm_flock);
         CHECK_MEMBER(ldlm_flock, start);
         CHECK_MEMBER(ldlm_flock, end);
-        CHECK_MEMBER(ldlm_flock, pid);
-        CHECK_MEMBER(ldlm_flock, nid);
         CHECK_MEMBER(ldlm_flock, blocking_pid);
-        CHECK_MEMBER(ldlm_flock, blocking_nid);
+        CHECK_MEMBER(ldlm_flock, pid);
 }
 
-void
+static void
 check_ldlm_intent(void)
 {
         BLANK_LINE();
@@ -408,16 +634,17 @@ check_ldlm_intent(void)
         CHECK_MEMBER(ldlm_intent, opc);
 }
 
-void
+static void
 check_ldlm_resource_desc(void)
 {
         BLANK_LINE();
         CHECK_STRUCT(ldlm_resource_desc);
         CHECK_MEMBER(ldlm_resource_desc, lr_type);
+        CHECK_MEMBER(ldlm_resource_desc, lr_padding);
         CHECK_MEMBER(ldlm_resource_desc, lr_name);
 }
 
-void
+static void
 check_ldlm_lock_desc(void)
 {
         BLANK_LINE();
@@ -428,30 +655,32 @@ check_ldlm_lock_desc(void)
         CHECK_MEMBER(ldlm_lock_desc, l_policy_data);
 }
 
-void
+static void
 check_ldlm_request(void)
 {
         BLANK_LINE();
         CHECK_STRUCT(ldlm_request);
         CHECK_MEMBER(ldlm_request, lock_flags);
+        CHECK_MEMBER(ldlm_request, lock_padding);
         CHECK_MEMBER(ldlm_request, lock_desc);
         CHECK_MEMBER(ldlm_request, lock_handle1);
         CHECK_MEMBER(ldlm_request, lock_handle2);
 }
 
-void
+static void
 check_ldlm_reply(void)
 {
         BLANK_LINE();
         CHECK_STRUCT(ldlm_reply);
         CHECK_MEMBER(ldlm_reply, lock_flags);
+        CHECK_MEMBER(ldlm_request, lock_padding);
         CHECK_MEMBER(ldlm_request, lock_desc);
         CHECK_MEMBER(ldlm_reply, lock_handle);
         CHECK_MEMBER(ldlm_reply, lock_policy_res1);
         CHECK_MEMBER(ldlm_reply, lock_policy_res2);
 }
 
-void
+static void
 check_ldlm_lvb(void)
 {
         BLANK_LINE();
@@ -463,39 +692,8 @@ check_ldlm_lvb(void)
         CHECK_MEMBER(ost_lvb, lvb_blocks);
 }
 
-void
-check_ptlbd_op(void)
-{
-        BLANK_LINE();
-        CHECK_STRUCT(ptlbd_op);
-        CHECK_MEMBER(ptlbd_op, op_cmd);
-        CHECK_MEMBER(ptlbd_op, op_lun);
-        CHECK_MEMBER(ptlbd_op, op_niob_cnt);
-        CHECK_MEMBER(ptlbd_op, op__padding);
-        CHECK_MEMBER(ptlbd_op, op_block_cnt);
-}
 
-void
-check_ptlbd_niob(void)
-{
-        BLANK_LINE();
-        CHECK_STRUCT(ptlbd_niob);
-        CHECK_MEMBER(ptlbd_niob, n_xid);
-        CHECK_MEMBER(ptlbd_niob, n_block_nr);
-        CHECK_MEMBER(ptlbd_niob, n_offset);
-        CHECK_MEMBER(ptlbd_niob, n_length);
-}
-
-void
-check_ptlbd_rsp(void)
-{
-        BLANK_LINE();
-        CHECK_STRUCT(ptlbd_rsp);
-        CHECK_MEMBER(ptlbd_rsp, r_status);
-        CHECK_MEMBER(ptlbd_rsp, r_error_cnt);
-}
-
-void
+static void
 check_llog_logid(void)
 {
         BLANK_LINE();
@@ -504,25 +702,30 @@ check_llog_logid(void)
         CHECK_MEMBER(llog_logid, lgl_ogr);
         CHECK_MEMBER(llog_logid, lgl_ogen);
 
-        CHECK_VALUE(OST_SZ_REC);
-        CHECK_VALUE(OST_RAID1_REC);
-        CHECK_VALUE(MDS_UNLINK_REC);
-        CHECK_VALUE(OBD_CFG_REC);
-        CHECK_VALUE(PTL_CFG_REC);
-        CHECK_VALUE(LLOG_GEN_REC);
-        CHECK_VALUE(LLOG_HDR_MAGIC);
-        CHECK_VALUE(LLOG_LOGID_MAGIC);
+        CHECK_CVALUE(OST_SZ_REC);
+        CHECK_CVALUE(OST_RAID1_REC);
+        CHECK_CVALUE(MDS_UNLINK_REC);
+        CHECK_CVALUE(MDS_SETATTR_REC);
+        CHECK_CVALUE(OBD_CFG_REC);
+        CHECK_CVALUE(PTL_CFG_REC);
+        CHECK_CVALUE(LLOG_GEN_REC);
+        CHECK_CVALUE(LLOG_JOIN_REC);
+        CHECK_CVALUE(LLOG_HDR_MAGIC);
+        CHECK_CVALUE(LLOG_LOGID_MAGIC);
 }
 
-void
+static void
 check_llog_catid(void)
 {
         BLANK_LINE();
         CHECK_STRUCT(llog_catid);
         CHECK_MEMBER(llog_catid, lci_logid);
+        CHECK_MEMBER(llog_catid, lci_padding1);
+        CHECK_MEMBER(llog_catid, lci_padding2);
+        CHECK_MEMBER(llog_catid, lci_padding3);
 }
 
-void
+static void
 check_llog_rec_hdr(void)
 {
         BLANK_LINE();
@@ -530,9 +733,10 @@ check_llog_rec_hdr(void)
         CHECK_MEMBER(llog_rec_hdr, lrh_len);
         CHECK_MEMBER(llog_rec_hdr, lrh_index);
         CHECK_MEMBER(llog_rec_hdr, lrh_type);
+        CHECK_MEMBER(llog_rec_hdr, padding);
 }
 
-void
+static void
 check_llog_rec_tail(void)
 {
         BLANK_LINE();
@@ -541,28 +745,34 @@ check_llog_rec_tail(void)
         CHECK_MEMBER(llog_rec_tail, lrt_index);
 }
 
-void
+static void
 check_llog_logid_rec(void)
 {
         BLANK_LINE();
         CHECK_STRUCT(llog_logid_rec);
         CHECK_MEMBER(llog_logid_rec, lid_hdr);
         CHECK_MEMBER(llog_logid_rec, lid_id);
+        CHECK_MEMBER(llog_logid_rec, padding1);
+        CHECK_MEMBER(llog_logid_rec, padding2);
+        CHECK_MEMBER(llog_logid_rec, padding3);
+        CHECK_MEMBER(llog_logid_rec, padding4);
+        CHECK_MEMBER(llog_logid_rec, padding5);
         CHECK_MEMBER(llog_logid_rec, lid_tail);
 }
 
-void
+static void
 check_llog_create_rec(void)
 {
         BLANK_LINE();
         CHECK_STRUCT(llog_create_rec);
         CHECK_MEMBER(llog_create_rec, lcr_hdr);
-        CHECK_MEMBER(llog_create_rec, lcr_id);
+        CHECK_MEMBER(llog_create_rec, lcr_fid);
         CHECK_MEMBER(llog_create_rec, lcr_oid);
         CHECK_MEMBER(llog_create_rec, lcr_ogen);
+        CHECK_MEMBER(llog_create_rec, padding);
 }
 
-void
+static void
 check_llog_orphan_rec(void)
 {
         BLANK_LINE();
@@ -570,10 +780,11 @@ check_llog_orphan_rec(void)
         CHECK_MEMBER(llog_orphan_rec, lor_hdr);
         CHECK_MEMBER(llog_orphan_rec, lor_oid);
         CHECK_MEMBER(llog_orphan_rec, lor_ogen);
+        CHECK_MEMBER(llog_orphan_rec, padding);
         CHECK_MEMBER(llog_orphan_rec, lor_tail);
 }
 
-void
+static void
 check_llog_unlink_rec(void)
 {
         BLANK_LINE();
@@ -581,21 +792,37 @@ check_llog_unlink_rec(void)
         CHECK_MEMBER(llog_unlink_rec, lur_hdr);
         CHECK_MEMBER(llog_unlink_rec, lur_oid);
         CHECK_MEMBER(llog_unlink_rec, lur_ogen);
+        CHECK_MEMBER(llog_unlink_rec, padding);
         CHECK_MEMBER(llog_unlink_rec, lur_tail);
 }
 
-void
+static void
+check_llog_setattr_rec(void)
+{
+        BLANK_LINE();
+        CHECK_STRUCT(llog_setattr_rec);
+        CHECK_MEMBER(llog_setattr_rec, lsr_hdr);
+        CHECK_MEMBER(llog_setattr_rec, lsr_oid);
+        CHECK_MEMBER(llog_setattr_rec, lsr_ogen);
+        CHECK_MEMBER(llog_setattr_rec, lsr_uid);
+        CHECK_MEMBER(llog_setattr_rec, lsr_gid);
+        CHECK_MEMBER(llog_setattr_rec, padding);
+        CHECK_MEMBER(llog_setattr_rec, lsr_tail);
+}
+
+static void
 check_llog_size_change_rec(void)
 {
         BLANK_LINE();
         CHECK_STRUCT(llog_size_change_rec);
         CHECK_MEMBER(llog_size_change_rec, lsc_hdr);
-        CHECK_MEMBER(llog_size_change_rec, lsc_id);
+        CHECK_MEMBER(llog_size_change_rec, lsc_fid);
         CHECK_MEMBER(llog_size_change_rec, lsc_io_epoch);
+        CHECK_MEMBER(llog_size_change_rec, padding);
         CHECK_MEMBER(llog_size_change_rec, lsc_tail);
 }
 
-void
+static void
 check_llog_gen(void)
 {
         BLANK_LINE();
@@ -604,7 +831,7 @@ check_llog_gen(void)
         CHECK_MEMBER(llog_gen, conn_cnt);
 }
 
-void
+static void
 check_llog_gen_rec(void)
 {
         BLANK_LINE();
@@ -614,7 +841,7 @@ check_llog_gen_rec(void)
         CHECK_MEMBER(llog_gen_rec, lgr_tail);
 }
 
-void
+static void
 check_llog_log_hdr(void)
 {
         BLANK_LINE();
@@ -627,11 +854,12 @@ check_llog_log_hdr(void)
         CHECK_MEMBER(llog_log_hdr, llh_flags);
         CHECK_MEMBER(llog_log_hdr, llh_cat_idx);
         CHECK_MEMBER(llog_log_hdr, llh_tgtuuid);
+        CHECK_MEMBER(llog_log_hdr, llh_reserved);
         CHECK_MEMBER(llog_log_hdr, llh_bitmap);
         CHECK_MEMBER(llog_log_hdr, llh_tail);
 }
 
-void
+static void
 check_llog_cookie(void)
 {
         BLANK_LINE();
@@ -639,9 +867,10 @@ check_llog_cookie(void)
         CHECK_MEMBER(llog_cookie, lgc_lgl);
         CHECK_MEMBER(llog_cookie, lgc_subsys);
         CHECK_MEMBER(llog_cookie, lgc_index);
+        CHECK_MEMBER(llog_cookie, lgc_padding);
 }
 
-void
+static void
 check_llogd_body(void)
 {
         BLANK_LINE();
@@ -654,16 +883,18 @@ check_llogd_body(void)
         CHECK_MEMBER(llogd_body, lgd_len);
         CHECK_MEMBER(llogd_body, lgd_cur_offset);
 
-        CHECK_VALUE(LLOG_ORIGIN_HANDLE_OPEN);
-        CHECK_VALUE(LLOG_ORIGIN_HANDLE_NEXT_BLOCK);
-        CHECK_VALUE(LLOG_ORIGIN_HANDLE_READ_HEADER);
-        CHECK_VALUE(LLOG_ORIGIN_HANDLE_WRITE_REC);
-        CHECK_VALUE(LLOG_ORIGIN_HANDLE_CLOSE);
-        CHECK_VALUE(LLOG_ORIGIN_CONNECT);
-        CHECK_VALUE(LLOG_CATINFO);
+        CHECK_CVALUE(LLOG_ORIGIN_HANDLE_CREATE);
+        CHECK_CVALUE(LLOG_ORIGIN_HANDLE_NEXT_BLOCK);
+        CHECK_CVALUE(LLOG_ORIGIN_HANDLE_READ_HEADER);
+        CHECK_CVALUE(LLOG_ORIGIN_HANDLE_WRITE_REC);
+        CHECK_CVALUE(LLOG_ORIGIN_HANDLE_CLOSE);
+        CHECK_CVALUE(LLOG_ORIGIN_CONNECT);
+        CHECK_CVALUE(LLOG_CATINFO);
+        CHECK_CVALUE(LLOG_ORIGIN_HANDLE_PREV_BLOCK);
+        CHECK_CVALUE(LLOG_ORIGIN_HANDLE_DESTROY);
 }
 
-void
+static void
 check_llogd_conn_body(void)
 {
         BLANK_LINE();
@@ -673,35 +904,86 @@ check_llogd_conn_body(void)
         CHECK_MEMBER(llogd_conn_body, lgdc_ctxt_idx);
 }
 
-void
-check_lustre_capa(void)
+static void
+check_mds_extent_desc(void)
 {
         BLANK_LINE();
-        CHECK_STRUCT(lustre_capa);
-        CHECK_MEMBER(lustre_capa, lc_uid);
-        CHECK_MEMBER(lustre_capa, lc_ruid);
-        CHECK_MEMBER(lustre_capa, lc_op);
-        CHECK_MEMBER(lustre_capa, lc_igen);
-        CHECK_MEMBER(lustre_capa, lc_ino);
-        CHECK_MEMBER(lustre_capa, lc_mdsid);
-        CHECK_MEMBER(lustre_capa, lc_keyid);
-        CHECK_MEMBER(lustre_capa, lc_expiry);
-        CHECK_MEMBER(lustre_capa, lc_flags);
-        CHECK_MEMBER(lustre_capa, lc_hmac);
+        CHECK_STRUCT(mds_extent_desc);
+        CHECK_MEMBER(mds_extent_desc, med_start);
+        CHECK_MEMBER(mds_extent_desc, med_len);
+        CHECK_MEMBER(mds_extent_desc, med_lmm);
 }
 
-void
-check_lustre_capa_key(void)
+static void
+check_llog_array_rec(void)
 {
         BLANK_LINE();
-        CHECK_STRUCT(lustre_capa_key);
-        CHECK_MEMBER(lustre_capa_key, lk_mdsid);
-        CHECK_MEMBER(lustre_capa_key, lk_keyid);
-        CHECK_MEMBER(lustre_capa_key, lk_expiry);
-        CHECK_MEMBER(lustre_capa_key, lk_key);
+        CHECK_STRUCT(llog_array_rec);
+        CHECK_MEMBER(llog_array_rec, lmr_hdr);
+        CHECK_MEMBER(llog_array_rec, lmr_med);
+        CHECK_MEMBER(llog_array_rec, lmr_tail);
 }
 
-void
+static void
+check_qunit_data(void)
+{
+        BLANK_LINE();
+        CHECK_STRUCT(qunit_data);
+        CHECK_MEMBER(qunit_data, qd_id);
+        CHECK_MEMBER(qunit_data, qd_flags);
+        CHECK_MEMBER(qunit_data, qd_count);
+}
+
+static void
+check_qunit_data_old(void)
+{
+        BLANK_LINE();
+        CHECK_STRUCT(qunit_data_old);
+        CHECK_MEMBER(qunit_data_old, qd_id);
+        CHECK_MEMBER(qunit_data_old, qd_type);
+        CHECK_MEMBER(qunit_data_old, qd_count);
+        CHECK_MEMBER(qunit_data_old, qd_isblk);
+}
+
+static void
+check_mgs_target_info(void)
+{
+        BLANK_LINE();
+        CHECK_STRUCT(mgs_target_info);
+        CHECK_MEMBER(mgs_target_info, mti_lustre_ver);
+        CHECK_MEMBER(mgs_target_info, mti_stripe_index);
+        CHECK_MEMBER(mgs_target_info, mti_config_ver);
+        CHECK_MEMBER(mgs_target_info, mti_flags);
+        CHECK_MEMBER(mgs_target_info, mti_nid_count);
+        CHECK_MEMBER(mgs_target_info, mti_fsname);
+        CHECK_MEMBER(mgs_target_info, mti_svname);
+        CHECK_MEMBER(mgs_target_info, mti_uuid);
+        CHECK_MEMBER(mgs_target_info, mti_nids);
+        CHECK_MEMBER(mgs_target_info, mti_params);
+}
+
+static void
+check_lustre_disk_data(void)
+{
+        BLANK_LINE();
+        CHECK_STRUCT(lustre_disk_data);
+        CHECK_MEMBER(lustre_disk_data, ldd_magic);
+        CHECK_MEMBER(lustre_disk_data, ldd_feature_compat);
+        CHECK_MEMBER(lustre_disk_data, ldd_feature_rocompat);
+        CHECK_MEMBER(lustre_disk_data, ldd_feature_incompat);
+        CHECK_MEMBER(lustre_disk_data, ldd_config_ver);
+        CHECK_MEMBER(lustre_disk_data, ldd_flags);
+        CHECK_MEMBER(lustre_disk_data, ldd_svindex);
+        CHECK_MEMBER(lustre_disk_data, ldd_mount_type);
+        CHECK_MEMBER(lustre_disk_data, ldd_fsname);
+        CHECK_MEMBER(lustre_disk_data, ldd_svname);
+        CHECK_MEMBER(lustre_disk_data, ldd_uuid);
+        CHECK_MEMBER(lustre_disk_data, ldd_userdata);
+        CHECK_MEMBER(lustre_disk_data, ldd_mount_opts);
+        CHECK_MEMBER(lustre_disk_data, ldd_params);
+}
+
+static void
 system_string (char *cmdline, char *str, int len)
 {
         int   fds[2];
@@ -759,11 +1041,12 @@ main(int argc, char **argv)
         char gccinfo[80];
 
         system_string("uname -a", unameinfo, sizeof(unameinfo));
-        system_string("gcc -v 2>&1 | tail -1", gccinfo, sizeof(gccinfo));
+        system_string(CC " -v 2>&1 | tail -1", gccinfo, sizeof(gccinfo));
 
         printf ("void lustre_assert_wire_constants(void)\n"
                 "{\n"
                 "        /* Wire protocol assertions generated by 'wirecheck'\n"
+                "         * (make -C lustre/utils newwirecheck)\n"
                 "         * running on %s\n"
                 "         * with %s */\n"
                 "\n", unameinfo, gccinfo);
@@ -771,7 +1054,8 @@ main(int argc, char **argv)
         BLANK_LINE ();
 
         COMMENT("Constants...");
-        CHECK_DEFINE(PTLRPC_MSG_MAGIC);
+        CHECK_DEFINE(LUSTRE_MSG_MAGIC_V1);
+        CHECK_DEFINE(LUSTRE_MSG_MAGIC_V2);
         CHECK_DEFINE(PTLRPC_MSG_VERSION);
 
         CHECK_VALUE(PTL_RPC_MSG_REQUEST);
@@ -800,17 +1084,15 @@ main(int argc, char **argv)
         CHECK_VALUE(OST_OPEN);
         CHECK_VALUE(OST_CLOSE);
         CHECK_VALUE(OST_STATFS);
-        CHECK_VALUE(OST_SAN_READ);
-        CHECK_VALUE(OST_SAN_WRITE);
         CHECK_VALUE(OST_SYNC);
+        CHECK_VALUE(OST_QUOTACHECK);
+        CHECK_VALUE(OST_QUOTACTL);
         CHECK_VALUE(OST_LAST_OPC);
 
         CHECK_DEFINE(OBD_OBJECT_EOF);
 
-        CHECK_VALUE(OST_REQ_HAS_OA1);
-
         CHECK_VALUE(MDS_GETATTR);
-        CHECK_VALUE(MDS_GETATTR_LOCK);
+        CHECK_VALUE(MDS_GETATTR_NAME);
         CHECK_VALUE(MDS_CLOSE);
         CHECK_VALUE(MDS_REINT);
         CHECK_VALUE(MDS_READPAGE);
@@ -822,8 +1104,9 @@ main(int argc, char **argv)
         CHECK_VALUE(MDS_UNPIN);
         CHECK_VALUE(MDS_SYNC);
         CHECK_VALUE(MDS_DONE_WRITING);
-        CHECK_VALUE(MDS_ACCESS_CHECK);
-        CHECK_VALUE(MDS_PARSE_ID);
+        CHECK_VALUE(MDS_SET_INFO);
+        CHECK_VALUE(MDS_QUOTACHECK);
+        CHECK_VALUE(MDS_QUOTACTL);
         CHECK_VALUE(MDS_LAST_OPC);
 
         CHECK_VALUE(REINT_SETATTR);
@@ -833,6 +1116,12 @@ main(int argc, char **argv)
         CHECK_VALUE(REINT_RENAME);
         CHECK_VALUE(REINT_OPEN);
         CHECK_VALUE(REINT_MAX);
+
+        CHECK_VALUE(MGS_CONNECT);
+        CHECK_VALUE(MGS_DISCONNECT);
+        CHECK_VALUE(MGS_EXCEPTION);
+        CHECK_VALUE(MGS_TARGET_REG);
+        CHECK_VALUE(MGS_TARGET_DEL);
 
         CHECK_VALUE(DISP_IT_EXECD);
         CHECK_VALUE(DISP_LOOKUP_EXECD);
@@ -844,14 +1133,12 @@ main(int argc, char **argv)
         CHECK_VALUE(MDS_STATUS_CONN);
         CHECK_VALUE(MDS_STATUS_LOV);
 
-        CHECK_VALUE(MDS_OPEN_HAS_EA);
-
         CHECK_VALUE(LDLM_ENQUEUE);
         CHECK_VALUE(LDLM_CONVERT);
         CHECK_VALUE(LDLM_CANCEL);
         CHECK_VALUE(LDLM_BL_CALLBACK);
         CHECK_VALUE(LDLM_CP_CALLBACK);
-        CHECK_VALUE(LDLM_FLK_DEADLOCK_CHK);
+        CHECK_VALUE(LDLM_GL_CALLBACK);
         CHECK_VALUE(LDLM_LAST_OPC);
 
         CHECK_VALUE(LCK_EX);
@@ -860,34 +1147,47 @@ main(int argc, char **argv)
         CHECK_VALUE(LCK_CW);
         CHECK_VALUE(LCK_CR);
         CHECK_VALUE(LCK_NL);
+        CHECK_VALUE(LCK_GROUP);
+        CHECK_VALUE(LCK_MAXMODE);
 
-        CHECK_VALUE(PTLBD_QUERY);
-        CHECK_VALUE(PTLBD_READ);
-        CHECK_VALUE(PTLBD_WRITE);
-        CHECK_VALUE(PTLBD_FLUSH);
-        CHECK_VALUE(PTLBD_CONNECT);
-        CHECK_VALUE(PTLBD_DISCONNECT);
-        CHECK_VALUE(PTLBD_LAST_OPC);
-
-        CHECK_VALUE(MGMT_CONNECT);
-        CHECK_VALUE(MGMT_DISCONNECT);
-        CHECK_VALUE(MGMT_EXCEPTION);
+        CHECK_CVALUE(LDLM_PLAIN);
+        CHECK_CVALUE(LDLM_EXTENT);
+        CHECK_CVALUE(LDLM_FLOCK);
+        CHECK_CVALUE(LDLM_IBITS);
 
         CHECK_VALUE(OBD_PING);
         CHECK_VALUE(OBD_LOG_CANCEL);
+        CHECK_VALUE(OBD_QC_CALLBACK);
         CHECK_VALUE(OBD_LAST_OPC);
+
+        CHECK_VALUE(QUOTA_DQACQ);
+        CHECK_VALUE(QUOTA_DQREL);
+
+        CHECK_VALUE(MGS_CONNECT);
+        CHECK_VALUE(MGS_DISCONNECT);
+        CHECK_VALUE(MGS_EXCEPTION);   
+        CHECK_VALUE(MGS_TARGET_REG);
+        CHECK_VALUE(MGS_TARGET_DEL);
 
         COMMENT("Sizes and Offsets");
         BLANK_LINE();
+        CHECK_STRUCT(obd_uuid);
         check_lustre_handle();
-        check_lustre_msg();
+        check_lustre_msg_v1();
+        check_lustre_msg_v2();
+        printf("        LASSERT(offsetof(struct lustre_msg_v1, lm_magic) == "
+               "offsetof(struct lustre_msg_v2, lm_magic));\n");
+        check_ptlrpc_body();
+        check_obd_connect_data();
         check_obdo();
         check_lov_mds_md_v1();
+        check_lov_mds_md_join();
         check_obd_statfs();
         check_obd_ioobj();
+        check_obd_quotactl();
         check_niobuf_remote();
         check_ost_body();
-        check_lustre_stc();
+        check_ll_fid();
         check_mds_status_req();
         check_mds_body();
         check_mds_rec_setattr();
@@ -895,19 +1195,18 @@ main(int argc, char **argv)
         check_mds_rec_link();
         check_mds_rec_unlink();
         check_mds_rec_rename();
+        check_mds_rec_join();
         check_lov_desc();
         check_ldlm_res_id();
         check_ldlm_extent();
         check_ldlm_flock();
+        check_ldlm_inodebits();
         check_ldlm_intent();
         check_ldlm_resource_desc();
         check_ldlm_lock_desc();
         check_ldlm_request();
         check_ldlm_reply();
         check_ldlm_lvb();
-        check_ptlbd_op();
-        check_ptlbd_niob();
-        check_ptlbd_rsp();
         check_llog_logid();
         check_llog_catid();
         check_llog_rec_hdr();
@@ -916,6 +1215,7 @@ main(int argc, char **argv)
         check_llog_create_rec();
         check_llog_orphan_rec();
         check_llog_unlink_rec();
+        check_llog_setattr_rec();
         check_llog_size_change_rec();
         check_llog_gen();
         check_llog_gen_rec();
@@ -923,8 +1223,13 @@ main(int argc, char **argv)
         check_llog_cookie();
         check_llogd_body();
         check_llogd_conn_body();
-        check_lustre_capa();
-        check_lustre_capa_key();
+        check_llog_array_rec();
+        check_mds_extent_desc();
+        check_qunit_data();
+        check_qunit_data_old();
+        check_mgs_target_info();
+        check_lustre_disk_data();
+
 
         printf("}\n\n");
 

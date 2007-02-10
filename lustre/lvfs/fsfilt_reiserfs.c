@@ -42,9 +42,9 @@
 #include <asm/statfs.h>
 #endif
 #include <libcfs/kp30.h>
-#include <linux/lustre_fsfilt.h>
-#include <linux/obd.h>
-#include <linux/obd_class.h>
+#include <lustre_fsfilt.h>
+#include <obd.h>
+#include <obd_class.h>
 #include <linux/module.h>
 #include <linux/init.h>
 
@@ -125,7 +125,7 @@ static int fsfilt_reiserfs_setattr(struct dentry *dentry, void *handle,
 }
 
 static int fsfilt_reiserfs_set_md(struct inode *inode, void *handle,
-                                  void *lmm, int lmm_size)
+                                  void *lmm, int lmm_size, const char *name)
 {
         /* XXX write stripe data into MDS file itself */
         CERROR("not implemented yet\n");
@@ -133,7 +133,8 @@ static int fsfilt_reiserfs_set_md(struct inode *inode, void *handle,
         return -ENOSYS;
 }
 
-static int fsfilt_reiserfs_get_md(struct inode *inode, void *lmm, int lmm_size)
+static int fsfilt_reiserfs_get_md(struct inode *inode, void *lmm, int lmm_size,
+                                  const char *name)
 {
         if (lmm == NULL)
                 return inode->i_size;
@@ -171,9 +172,7 @@ static int fsfilt_reiserfs_statfs(struct super_block *sb,
         int rc;
 
         memset(&sfs, 0, sizeof(sfs));
-
-        rc = sb->s_op->statfs(sb, &sfs);
-
+        rc = ll_do_statfs(sb, &sfs);
         statfs_pack(osfs, &sfs);
         return rc;
 }
@@ -201,7 +200,7 @@ static int fsfilt_reiserfs_get_op_len(int op, struct fsfilt_objinfo *fso,
                 int i;
                 int needed = MAX_HEIGHT;
                 struct super_block *sb = fso->fso_dentry->d_inode->i_sb;
-                int blockpp = 1 << (PAGE_CACHE_SHIFT - sb->s_blocksize_bits);
+                int blockpp = 1 << (CFS_PAGE_SHIFT - sb->s_blocksize_bits);
                 for (i = 0; i < op; i++, fso++) {
                         int nblocks = fso->fso_bufcnt * blockpp;
 

@@ -3,20 +3,23 @@
  *
  * Copyright (C) 2002, 2003 Cluster File Systems, Inc.
  *
- *   This file is part of Lustre, http://www.lustre.org.
+ *   This file is part of the Lustre file system, http://www.lustre.org
+ *   Lustre is a trademark of Cluster File Systems, Inc.
  *
- *   Lustre is free software; you can redistribute it and/or
- *   modify it under the terms of version 2 of the GNU General Public
- *   License as published by the Free Software Foundation.
+ *   You may have signed or agreed to another license before downloading
+ *   this software.  If so, you are bound by the terms and conditions
+ *   of that agreement, and the following does not apply to you.  See the
+ *   LICENSE file included with this distribution for more information.
  *
- *   Lustre is distributed in the hope that it will be useful,
- *   but WITHOUT ANY WARRANTY; without even the implied warranty of
- *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *   GNU General Public License for more details.
+ *   If you did not agree to a different license, then this copy of Lustre
+ *   is open source software; you can redistribute it and/or modify it
+ *   under the terms of version 2 of the GNU General Public License as
+ *   published by the Free Software Foundation.
  *
- *   You should have received a copy of the GNU General Public License
- *   along with Lustre; if not, write to the Free Software
- *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ *   In either case, Lustre is distributed in the hope that it will be
+ *   useful, but WITHOUT ANY WARRANTY; without even the implied warranty
+ *   of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *   license text for more details.
  */
 
 #ifndef EXPORT_SYMTAB
@@ -25,13 +28,13 @@
 #define DEBUG_SUBSYSTEM S_LOV
 
 #ifdef __KERNEL__
-#include <asm/div64.h>
+#include <libcfs/libcfs.h>
 #else
 #include <liblustre.h>
 #endif
 
-#include <linux/obd_class.h>
-#include <linux/obd_lov.h>
+#include <obd_class.h>
+#include <obd_lov.h>
 
 #include "lov_internal.h"
 
@@ -40,14 +43,18 @@ obd_size lov_stripe_size(struct lov_stripe_md *lsm, obd_size ost_size,
                          int stripeno)
 {
         unsigned long ssize  = lsm->lsm_stripe_size;
-        unsigned long swidth = ssize * lsm->lsm_stripe_count;
-        unsigned long stripe_size;
+        unsigned long swidth, stripe_size;
+        int sindex = stripeno;
         obd_size lov_size;
+        int magic = lsm->lsm_magic;
         ENTRY;
 
         if (ost_size == 0)
                 RETURN(0);
 
+        LASSERT(lsm_op_find(magic) != NULL);
+        lsm_op_find(magic)->lsm_stripe_by_index(lsm, &stripeno, NULL, &swidth);
+ 
         /* do_div(a, b) returns a % b, and a = a / b */
         stripe_size = do_div(ost_size, ssize);
         if (stripe_size)
@@ -55,6 +62,7 @@ obd_size lov_stripe_size(struct lov_stripe_md *lsm, obd_size ost_size,
         else
                 lov_size = (ost_size - 1) * swidth + (stripeno + 1) * ssize;
 
+        lov_size += lsm_op_find(magic)->lsm_stripe_offset_by_index(lsm, sindex);
         RETURN(lov_size);
 }
 
@@ -110,8 +118,9 @@ int lov_stripe_offset(struct lov_stripe_md *lsm, obd_off lov_off,
                       int stripeno, obd_off *obd_off)
 {
         unsigned long ssize  = lsm->lsm_stripe_size;
-        unsigned long swidth = ssize * lsm->lsm_stripe_count;
-        unsigned long stripe_off, this_stripe;
+        unsigned long swidth, stripe_off, this_stripe;
+        uint64_t l_off, s_off;
+        int magic = lsm->lsm_magic;
         int ret = 0;
 
         if (lov_off == OBD_OBJECT_EOF) {
@@ -119,6 +128,27 @@ int lov_stripe_offset(struct lov_stripe_md *lsm, obd_off lov_off,
                 return 0;
         }
 
+        LASSERT(lsm_op_find(magic) != NULL);
+        /*It will check whether the lov_off and stripeno 
+         *are in the same extent. 
+         *1) lov_off extent < stripeno extent, ret = -1, obd_off = 0
+         *2) lov_off extent > stripeno extent, ret = 1, 
+         *   obd_off = lov_off extent offset*/
+        l_off = lsm_op_find(magic)->lsm_stripe_offset_by_index(lsm, stripeno);
+        s_off = lsm_op_find(magic)->lsm_stripe_offset_by_offset(lsm, lov_off);
+        if (s_off < l_off) {
+                ret = -1;
+                *obd_off = 0;
+                return ret;
+        } else if (s_off > l_off) {
+                ret = 1;
+                *obd_off = s_off;
+                return ret;
+        }
+        /*If they are in the same extent, original logic*/
+        lsm_op_find(magic)->lsm_stripe_by_index(lsm, &stripeno, &lov_off,
+                                                &swidth);
+       
         /* do_div(a, b) returns a % b, and a = a / b */
         stripe_off = do_div(lov_off, swidth);
 
@@ -162,11 +192,15 @@ obd_off lov_size_to_stripe(struct lov_stripe_md *lsm, obd_off file_size,
                            int stripeno)
 {
         unsigned long ssize  = lsm->lsm_stripe_size;
-        unsigned long swidth = ssize * lsm->lsm_stripe_count;
-        unsigned long stripe_off, this_stripe;
+        unsigned long swidth, stripe_off, this_stripe;
+        int magic = lsm->lsm_magic;
 
         if (file_size == OBD_OBJECT_EOF)
                 return OBD_OBJECT_EOF;
+
+        LASSERT(lsm_op_find(magic) != NULL);
+        lsm_op_find(magic)->lsm_stripe_by_index(lsm, &stripeno, &file_size,
+                                                &swidth);
 
         /* do_div(a, b) returns a % b, and a = a / b */
         stripe_off = do_div(file_size, swidth);
@@ -231,10 +265,15 @@ int lov_stripe_intersects(struct lov_stripe_md *lsm, int stripeno,
 int lov_stripe_number(struct lov_stripe_md *lsm, obd_off lov_off)
 {
         unsigned long ssize  = lsm->lsm_stripe_size;
-        unsigned long swidth = ssize * lsm->lsm_stripe_count;
-        unsigned long stripe_off;
+        unsigned long swidth, stripe_off;
+        obd_off offset = lov_off;
+        int magic = lsm->lsm_magic;
+
+        LASSERT(lsm_op_find(magic) != NULL);
+        lsm_op_find(magic)->lsm_stripe_by_offset(lsm, NULL, &lov_off, &swidth);
 
         stripe_off = do_div(lov_off, swidth);
 
-        return stripe_off / ssize;
+        return (stripe_off/ssize +
+                lsm_op_find(magic)->lsm_stripe_index_by_offset(lsm, offset));
 }

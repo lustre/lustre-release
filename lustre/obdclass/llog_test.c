@@ -4,20 +4,23 @@
  *  Copyright (C) 2003 Cluster File Systems, Inc.
  *   Author: Phil Schwan <phil@clusterfs.com>
  *
- *   This file is part of Lustre, http://www.lustre.org/
+ *   This file is part of the Lustre file system, http://www.lustre.org
+ *   Lustre is a trademark of Cluster File Systems, Inc.
  *
- *   Lustre is free software; you can redistribute it and/or
- *   modify it under the terms of version 2 of the GNU General Public
- *   License as published by the Free Software Foundation.
+ *   You may have signed or agreed to another license before downloading
+ *   this software.  If so, you are bound by the terms and conditions
+ *   of that agreement, and the following does not apply to you.  See the
+ *   LICENSE file included with this distribution for more information.
  *
- *   Lustre is distributed in the hope that it will be useful,
- *   but WITHOUT ANY WARRANTY; without even the implied warranty of
- *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *   GNU General Public License for more details.
+ *   If you did not agree to a different license, then this copy of Lustre
+ *   is open source software; you can redistribute it and/or modify it
+ *   under the terms of version 2 of the GNU General Public License as
+ *   published by the Free Software Foundation.
  *
- *   You should have received a copy of the GNU General Public License
- *   along with Lustre; if not, write to the Free Software
- *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ *   In either case, Lustre is distributed in the hope that it will be
+ *   useful, but WITHOUT ANY WARRANTY; without even the implied warranty
+ *   of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *   license text for more details.
  *
  * A kernel module which tests the llog API from the OBD setup function.
  */
@@ -30,9 +33,8 @@
 #include <linux/module.h>
 #include <linux/init.h>
 
-#include <linux/obd_class.h>
-#include <linux/lustre_log.h>
-#include <linux/lustre_mds.h> /* for LUSTRE_MDC_NAME */
+#include <obd_class.h>
+#include <lustre_log.h>
 
 static int llog_test_rand;
 static struct obd_uuid uuid = { .uuid = "test_uuid" };
@@ -81,18 +83,17 @@ static int verify_handle(char *test, struct llog_handle *llh, int num_recs)
 static int llog_test_1(struct obd_device *obd, char *name)
 {
         struct llog_handle *llh;
-        struct llog_ctxt *ctxt;
+        struct llog_ctxt *ctxt = llog_get_context(obd, LLOG_TEST_ORIG_CTXT);
         int rc;
         int rc2;
         ENTRY;
 
         CWARN("1a: create a log with name: %s\n", name);
-        ctxt = llog_get_context(&obd->obd_llogs, LLOG_TEST_ORIG_CTXT);
         LASSERT(ctxt);
 
-        rc = llog_open(ctxt, &llh, NULL, name, OBD_LLOG_FL_CREATE);
+        rc = llog_create(ctxt, &llh, NULL, name);
         if (rc) {
-                CERROR("1a: llog_open with name %s failed: %d\n", name, rc);
+                CERROR("1a: llog_create with name %s failed: %d\n", name, rc);
                 RETURN(rc);
         }
         llog_init_handle(llh, LLOG_F_IS_PLAIN, &uuid);
@@ -118,12 +119,11 @@ static int llog_test_2(struct obd_device *obd, char *name,
         struct llog_handle *loghandle;
         struct llog_logid logid;
         int rc;
-        struct llog_ctxt *ctxt;
+        struct llog_ctxt *ctxt = llog_get_context(obd, LLOG_TEST_ORIG_CTXT);
         ENTRY;
 
-        ctxt = llog_get_context(&obd->obd_llogs, LLOG_TEST_ORIG_CTXT);
         CWARN("2a: re-open a log with name: %s\n", name);
-        rc = llog_open(ctxt, llh, NULL, name, 0);
+        rc = llog_create(ctxt, llh, NULL, name);
         if (rc) {
                 CERROR("2a: re-open log with name %s failed: %d\n", name, rc);
                 RETURN(rc);
@@ -134,7 +134,7 @@ static int llog_test_2(struct obd_device *obd, char *name,
                 RETURN(rc);
 
         CWARN("2b: create a log without specified NAME & LOGID\n");
-        rc = llog_open(ctxt, &loghandle, NULL, NULL, OBD_LLOG_FL_CREATE);
+        rc = llog_create(ctxt, &loghandle, NULL, NULL);
         if (rc) {
                 CERROR("2b: create log failed\n");
                 RETURN(rc);
@@ -144,7 +144,7 @@ static int llog_test_2(struct obd_device *obd, char *name,
         llog_close(loghandle);
 
         CWARN("2b: re-open the log by LOGID\n");
-        rc = llog_open(ctxt, &loghandle, &logid, NULL, 0);
+        rc = llog_create(ctxt, &loghandle, &logid, NULL);
         if (rc) {
                 CERROR("2b: re-open log by LOGID failed\n");
                 RETURN(rc);
@@ -232,22 +232,21 @@ static int llog_test_4(struct obd_device *obd)
         int rc, i, buflen;
         struct llog_mini_rec lmr;
         struct llog_cookie cookie;
-        struct llog_ctxt *ctxt;
+        struct llog_ctxt *ctxt = llog_get_context(obd, LLOG_TEST_ORIG_CTXT);
         int num_recs = 0;
         char *buf;
         struct llog_rec_hdr rec;
+
         ENTRY;
 
-        memset(&cookie, 0, sizeof(cookie));
-        ctxt = llog_get_context(&obd->obd_llogs, LLOG_TEST_ORIG_CTXT);
         lmr.lmr_hdr.lrh_len = lmr.lmr_tail.lrt_len = LLOG_MIN_REC_SIZE;
         lmr.lmr_hdr.lrh_type = 0xf00f00;
 
         sprintf(name, "%x", llog_test_rand+1);
         CWARN("4a: create a catalog log with name: %s\n", name);
-        rc = llog_open(ctxt, &cath, NULL, name, OBD_LLOG_FL_CREATE);
+        rc = llog_create(ctxt, &cath, NULL, name);
         if (rc) {
-                CERROR("1a: llog_open with name %s failed: %d\n", name, rc);
+                CERROR("1a: llog_create with name %s failed: %d\n", name, rc);
                 GOTO(out, rc);
         }
         llog_init_handle(cath, LLOG_F_IS_CAT, &uuid);
@@ -255,7 +254,7 @@ static int llog_test_4(struct obd_device *obd)
         cat_logid = cath->lgh_id;
 
         CWARN("4b: write 1 record into the catalog\n");
-        rc = llog_cat_add_rec(cath, &lmr.lmr_hdr, &cookie, NULL, NULL, NULL);
+        rc = llog_cat_add_rec(cath, &lmr.lmr_hdr, &cookie, NULL);
         if (rc != 1) {
                 CERROR("4b: write 1 catalog record failed at: %d\n", rc);
                 GOTO(out, rc);
@@ -280,7 +279,7 @@ static int llog_test_4(struct obd_device *obd)
 
         CWARN("4d: write 40,000 more log records\n");
         for (i = 0; i < 40000; i++) {
-                rc = llog_cat_add_rec(cath, &lmr.lmr_hdr, NULL, NULL, NULL, NULL);
+                rc = llog_cat_add_rec(cath, &lmr.lmr_hdr, NULL, NULL);
                 if (rc) {
                         CERROR("4d: write 40000 records failed at #%d: %d\n",
                                i + 1, rc);
@@ -298,7 +297,7 @@ static int llog_test_4(struct obd_device *obd)
         for (i = 0; i < 5; i++) {
                 rec.lrh_len = buflen;
                 rec.lrh_type = OBD_CFG_REC;
-                rc = llog_cat_add_rec(cath, &rec, NULL, buf, NULL, NULL);
+                rc = llog_cat_add_rec(cath, &rec, NULL, buf);
                 if (rc) {
                         CERROR("4e: write 5 records failed at #%d: %d\n",
                                i + 1, rc);
@@ -374,23 +373,23 @@ static int llog_test_5(struct obd_device *obd)
         char name[10];
         int rc;
         struct llog_mini_rec lmr;
-        struct llog_ctxt *ctxt;
+        struct llog_ctxt *ctxt = llog_get_context(obd, LLOG_TEST_ORIG_CTXT);
+
         ENTRY;
 
-        ctxt = llog_get_context(&obd->obd_llogs, LLOG_TEST_ORIG_CTXT);
         lmr.lmr_hdr.lrh_len = lmr.lmr_tail.lrt_len = LLOG_MIN_REC_SIZE;
         lmr.lmr_hdr.lrh_type = 0xf00f00;
 
         CWARN("5a: re-open catalog by id\n");
-        rc = llog_open(ctxt, &llh, &cat_logid, NULL, 0);
+        rc = llog_create(ctxt, &llh, &cat_logid, NULL);
         if (rc) {
-                CERROR("5a: llog_open with logid failed: %d\n", rc);
+                CERROR("5a: llog_create with logid failed: %d\n", rc);
                 GOTO(out, rc);
         }
         llog_init_handle(llh, LLOG_F_IS_CAT, &uuid);
 
         CWARN("5b: print the catalog entries.. we expect 2\n");
-        rc = llog_process(llh, (llog_cb_t)cat_print_cb, "test 5", NULL);
+        rc = llog_process(llh, cat_print_cb, "test 5", NULL);
         if (rc) {
                 CERROR("5b: process with cat_print_cb failed: %d\n", rc);
                 GOTO(out, rc);
@@ -404,7 +403,7 @@ static int llog_test_5(struct obd_device *obd)
         }
 
         CWARN("5d: add 1 record to the log with many canceled empty pages\n");
-        rc = llog_cat_add_rec(llh, &lmr.lmr_hdr, NULL, NULL, NULL, NULL);
+        rc = llog_cat_add_rec(llh, &lmr.lmr_hdr, NULL, NULL);
         if (rc) {
                 CERROR("5d: add record to the log with many canceled empty\
                        pages failed\n");
@@ -412,7 +411,7 @@ static int llog_test_5(struct obd_device *obd)
         }
 
         CWARN("5b: print the catalog entries.. we expect 1\n");
-        rc = llog_process(llh, (llog_cb_t)cat_print_cb, "test 5", NULL);
+        rc = llog_process(llh, cat_print_cb, "test 5", NULL);
         if (rc) {
                 CERROR("5b: process with cat_print_cb failed: %d\n", rc);
                 GOTO(out, rc);
@@ -428,8 +427,7 @@ static int llog_test_5(struct obd_device *obd)
         CWARN("5f: print plain log entries reversely.. expect 6\n");
         rc = llog_cat_reverse_process(llh, plain_print_cb, "foobar");
         if (rc) {
-                CERROR("5f: reversely process with plain_print_cb failed: %d\n",
-                       rc);
+                CERROR("5f: reversely process with plain_print_cb failed: %d\n", rc);
                 GOTO(out, rc);
         }
 
@@ -446,8 +444,8 @@ static int llog_test_5(struct obd_device *obd)
 static int llog_test_6(struct obd_device *obd, char *name)
 {
         struct obd_device *mdc_obd;
-        struct llog_ctxt *ctxt;
-        struct obd_uuid *mds_uuid;
+        struct llog_ctxt *ctxt = llog_get_context(obd, LLOG_TEST_ORIG_CTXT);
+        struct obd_uuid *mds_uuid = &ctxt->loc_exp->exp_obd->obd_uuid;
         struct lustre_handle exph = {0, };
         struct obd_export *exp;
         struct obd_uuid uuid = {"LLOG_TEST6_UUID"};
@@ -455,28 +453,25 @@ static int llog_test_6(struct obd_device *obd, char *name)
         struct llog_ctxt *nctxt;
         int rc;
 
-        ctxt = llog_get_context(&obd->obd_llogs, LLOG_TEST_ORIG_CTXT);
-        mds_uuid = &ctxt->loc_exp->exp_obd->obd_uuid;
-
         CWARN("6a: re-open log %s using client API\n", name);
-        mdc_obd = class_find_client_obd(mds_uuid, OBD_MDC_DEVICENAME, NULL);
+        mdc_obd = class_find_client_obd(mds_uuid, LUSTRE_MDC_NAME, NULL);
         if (mdc_obd == NULL) {
                 CERROR("6: no MDC devices connected to %s found.\n",
                        mds_uuid->uuid);
                 RETURN(-ENOENT);
         }
 
-        rc = obd_connect(&exph, mdc_obd, &uuid, NULL, 0);
+        rc = obd_connect(&exph, mdc_obd, &uuid, NULL /* obd_connect_data */);
         if (rc) {
                 CERROR("6: failed to connect to MDC: %s\n", mdc_obd->obd_name);
                 RETURN(rc);
         }
         exp = class_conn2export(&exph);
 
-        nctxt = llog_get_context(&mdc_obd->obd_llogs, LLOG_CONFIG_REPL_CTXT);
-        rc = llog_open(nctxt, &llh, NULL, name, 0);
+        nctxt = llog_get_context(mdc_obd, LLOG_CONFIG_REPL_CTXT);
+        rc = llog_create(nctxt, &llh, NULL, name);
         if (rc) {
-                CERROR("6: llog_open failed %d\n", rc);
+                CERROR("6: llog_create failed %d\n", rc);
                 RETURN(rc);
         }
 
@@ -486,11 +481,11 @@ static int llog_test_6(struct obd_device *obd, char *name)
                 GOTO(parse_out, rc);
         }
 
-        rc = llog_process(llh, (llog_cb_t)plain_print_cb, NULL, NULL);
+        rc = llog_process(llh, plain_print_cb, NULL, NULL);
         if (rc)
                 CERROR("6: llog_process failed %d\n", rc);
 
-        rc = llog_reverse_process(llh, (llog_cb_t)plain_print_cb, NULL, NULL);
+        rc = llog_reverse_process(llh, plain_print_cb, NULL, NULL);
         if (rc)
                 CERROR("6: llog_reverse_process failed %d\n", rc);
 
@@ -500,34 +495,33 @@ parse_out:
                 CERROR("6: llog_close failed: rc = %d\n", rc);
         }
 
-        rc = obd_disconnect(exp, 0);
+        rc = obd_disconnect(exp);
 
         RETURN(rc);
 }
 
 static int llog_test_7(struct obd_device *obd)
 {
-        struct llog_ctxt *ctxt;
+        struct llog_ctxt *ctxt = llog_get_context(obd, LLOG_TEST_ORIG_CTXT);
         struct llog_handle *llh;
         struct llog_create_rec lcr;
         char name[10];
         int rc;
         ENTRY;
 
-        ctxt = llog_get_context(&obd->obd_llogs, LLOG_TEST_ORIG_CTXT);
         sprintf(name, "%x", llog_test_rand+2);
         CWARN("7: create a log with name: %s\n", name);
         LASSERT(ctxt);
 
-        rc = llog_open(ctxt, &llh, NULL, name, OBD_LLOG_FL_CREATE);
+        rc = llog_create(ctxt, &llh, NULL, name);
         if (rc) {
-                CERROR("7: llog_open with name %s failed: %d\n", name, rc);
+                CERROR("7: llog_create with name %s failed: %d\n", name, rc);
                 RETURN(rc);
         }
         llog_init_handle(llh, LLOG_F_IS_PLAIN, &uuid);
 
-        lcr.lcr_hdr.lrh_len = lcr.lcr_tail.lrt_len = cpu_to_le32(sizeof(lcr));
-        lcr.lcr_hdr.lrh_type = cpu_to_le32(OST_SZ_REC);
+        lcr.lcr_hdr.lrh_len = lcr.lcr_tail.lrt_len = sizeof(lcr);
+        lcr.lcr_hdr.lrh_type = OST_SZ_REC;
         rc = llog_write_rec(llh,  &lcr.lcr_hdr, NULL, 0, NULL, -1);
         if (rc) {
                 CERROR("7: write one log record failed: %d\n", rc);
@@ -547,14 +541,13 @@ static int llog_test_7(struct obd_device *obd)
  * ------------------------------------------------------------------------- */
 static int llog_run_tests(struct obd_device *obd)
 {
-        struct llog_ctxt *ctxt;
         struct llog_handle *llh;
         struct lvfs_run_ctxt saved;
+        struct llog_ctxt *ctxt = llog_get_context(obd, LLOG_TEST_ORIG_CTXT);
         int rc, err, cleanup_phase = 0;
         char name[10];
         ENTRY;
 
-        ctxt = llog_get_context(&obd->obd_llogs, LLOG_TEST_ORIG_CTXT);
         sprintf(name, "%x", llog_test_rand);
         push_ctxt(&saved, &ctxt->loc_exp->exp_obd->obd_lvfs_ctxt, NULL);
 
@@ -603,45 +596,51 @@ static int llog_run_tests(struct obd_device *obd)
 }
 
 
-static int llog_test_llog_init(struct obd_device *obd, struct obd_llogs *llogs,
-                               struct obd_device *tgt, int count,
-                               struct llog_catid *logid)
+static int llog_test_llog_init(struct obd_device *obd, struct obd_device *tgt,
+                               int count, struct llog_catid *logid,
+                               struct obd_uuid *uuid)
 {
         int rc;
         ENTRY;
 
-        rc = obd_llog_setup(obd, llogs, LLOG_TEST_ORIG_CTXT, tgt, 0, NULL,
-                            &llog_lvfs_ops);
+        rc = llog_setup(obd, LLOG_TEST_ORIG_CTXT, tgt, 0, NULL, &llog_lvfs_ops);
         RETURN(rc);
 }
 
-static int llog_test_llog_finish(struct obd_device *obd,
-                                 struct obd_llogs *llogs, int count)
+static int llog_test_llog_finish(struct obd_device *obd, int count)
 {
         int rc;
         ENTRY;
 
-        rc = obd_llog_cleanup(llog_get_context(llogs, LLOG_TEST_ORIG_CTXT));
+        rc = llog_cleanup(llog_get_context(obd, LLOG_TEST_ORIG_CTXT));
         RETURN(rc);
 }
 
-static int llog_test_cleanup(struct obd_device *obd, int flags)
+static int llog_test_cleanup(struct obd_device *obd)
 {
-        int rc = obd_llog_finish(obd, &obd->obd_llogs, 0);
+        int rc = obd_llog_finish(obd, 0);
         if (rc)
                 CERROR("failed to llog_test_llog_finish: %d\n", rc);
+
+        lprocfs_obd_cleanup(obd);
 
         return rc;
 }
 
 static int llog_test_setup(struct obd_device *obd, obd_count len, void *buf)
 {
+        struct lprocfs_static_vars lvars;
         struct lustre_cfg *lcfg = buf;
         struct obd_device *tgt;
         int rc;
         ENTRY;
 
-        if (LUSTRE_CFG_BUFLEN(lcfg, 1) < 1) {
+        if (lcfg->lcfg_bufcount < 2) {
+                CERROR("requires a TARGET OBD name\n");
+                RETURN(-EINVAL);
+        }
+
+        if (lcfg->lcfg_buflens[1] < 1) {
                 CERROR("requires a TARGET OBD name\n");
                 RETURN(-EINVAL);
         }
@@ -653,55 +652,42 @@ static int llog_test_setup(struct obd_device *obd, obd_count len, void *buf)
                 RETURN(-EINVAL);
         }
 
-        rc = obd_llog_init(obd, &obd->obd_llogs, tgt, 0, NULL);
+        rc = obd_llog_init(obd, tgt, 0, NULL, NULL);
         if (rc)
                 RETURN(rc);
 
-        llog_test_rand = ll_insecure_random_int();
+        llog_test_rand = ll_rand();
 
         rc = llog_run_tests(obd);
         if (rc)
-                llog_test_cleanup(obd, 0);
+                llog_test_cleanup(obd);
+
+        lprocfs_init_vars(llog_test, &lvars);
+        lprocfs_obd_setup(obd, lvars.obd_vars);
 
         RETURN(rc);
 }
 
-static int llog_test_attach(struct obd_device *dev, obd_count len, void *data)
-{
-        struct lprocfs_static_vars lvars;
-
-        lprocfs_init_vars(llog_test, &lvars);
-        return lprocfs_obd_attach(dev, lvars.obd_vars);
-}
-
-static int llog_test_detach(struct obd_device *dev)
-{
-        return lprocfs_obd_detach(dev);
-}
-
 static struct obd_ops llog_obd_ops = {
         .o_owner       = THIS_MODULE,
-        .o_attach      = llog_test_attach,
-        .o_detach      = llog_test_detach,
         .o_setup       = llog_test_setup,
-        .o_cleanup      = llog_test_cleanup,
+        .o_cleanup     = llog_test_cleanup,
         .o_llog_init   = llog_test_llog_init,
         .o_llog_finish = llog_test_llog_finish,
 };
 
+#ifdef LPROCFS
 static struct lprocfs_vars lprocfs_obd_vars[] = { {0} };
 static struct lprocfs_vars lprocfs_module_vars[] = { {0} };
 LPROCFS_INIT_VARS(llog_test, lprocfs_module_vars, lprocfs_obd_vars)
+#endif
 
 static int __init llog_test_init(void)
 {
         struct lprocfs_static_vars lvars;
 
         lprocfs_init_vars(llog_test, &lvars);
-	
-        return class_register_type(&llog_obd_ops, NULL, 
-				   lvars.module_vars,
-                                   "llog_test");
+        return class_register_type(&llog_obd_ops,lvars.module_vars,"llog_test");
 }
 
 static void __exit llog_test_exit(void)

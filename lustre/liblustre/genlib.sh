@@ -1,5 +1,6 @@
 #!/bin/bash
 #set -xv
+set -e
 
 #
 # This script is to generate lib lustre library as a whole. It will leave
@@ -17,8 +18,11 @@ RANLIB=/usr/bin/ranlib
 CWD=`pwd`
 
 SYSIO=$1
-CRAY_PORTALS_LIBS=$2
-LIBS=$3
+LIBS=$2
+LND_LIBS=$3
+PTHREAD_LIBS=$4
+QUOTA_LIBS=$5
+CAP_LIBS=$6
 
 if [ ! -f $SYSIO/lib/libsysio.a ]; then
   echo "ERROR: $SYSIO/lib/libsysio.a dosen't exist"
@@ -34,13 +38,6 @@ build_obj_list() {
   _objs=`$AR -t $1/$2`
   for _lib in $_objs; do
     ALL_OBJS=$ALL_OBJS"$1/$_lib ";
-  done;
-}
-
-prepend_obj_list() {
-  _objs=`$AR -t $1/$2`
-  for _lib in $_objs; do
-    ALL_OBJS="$1/$_lib "$ALL_OBJS;
   done;
 }
 
@@ -60,41 +57,30 @@ build_sysio_obj_list() {
   done
 }
 
-#
-# special treatment for libportals.a
-#
-cray_tmp=$CWD/cray_tmp_`date +%s`
-rm -rf $cray_tmp
-build_cray_portals_obj_list() {
-  _objs=`$AR -t $1`
-  mkdir -p $cray_tmp
-  cd $cray_tmp
-  $AR -x $1
-  cd ..
-  for _lib in $_objs; do
-    ALL_OBJS=$ALL_OBJS"$cray_tmp/$_lib ";
-  done
-}
-
 # lustre components libs
 build_obj_list . libllite.a
 build_obj_list ../lov liblov.a
 build_obj_list ../obdecho libobdecho.a
 build_obj_list ../osc libosc.a
 build_obj_list ../mdc libmdc.a
+build_obj_list ../mgc libmgc.a
 build_obj_list ../ptlrpc libptlrpc.a
-build_obj_list ../sec libptlrpcs.a
 build_obj_list ../obdclass liblustreclass.a
 build_obj_list ../lvfs liblvfs.a
 
-# portals components libs
-build_obj_list ../../portals/utils libuptlctl.a
+# lnet components libs
+build_obj_list ../../lnet/utils libuptlctl.a
+build_obj_list ../../lnet/libcfs libcfs.a
+if $(echo "$LND_LIBS" | grep "socklnd" >/dev/null) ; then
+	build_obj_list ../../lnet/ulnds/socklnd libsocklnd.a
+fi
+if $(echo "$LND_LIBS" | grep "ptllnd" >/dev/null) ; then
+	build_obj_list ../../lnet/ulnds/ptllnd libptllnd.a
+fi
+build_obj_list ../../lnet/lnet liblnet.a
 
-if [ "x$CRAY_PORTALS_PATH" = "x" ]; then
-  build_obj_list ../../portals/unals libtcpnal.a
-  build_obj_list ../../portals/portals libportals.a
-else
-  build_cray_portals_obj_list $CRAY_PORTALS_PATH/lib_TV/snos64/libportals.a
+if [ "x$QUOTA_LIBS" != "x" ]; then
+  build_obj_list ../quota libquota.a
 fi
 
 # create static lib lsupport
@@ -114,8 +100,12 @@ $RANLIB $CWD/liblustre.a
 
 # create shared lib lustre
 rm -f $CWD/liblustre.so
+OS=`uname`
+if test x$OS = xAIX; then
+gcc -shared -o $CWD/liblustre.so  $ALL_OBJS -lpthread -Xlinker -bnoipath ../../libsyscall.so
+else
 $LD -shared -o $CWD/liblustre.so -init __liblustre_setup_ -fini __liblustre_cleanup_ \
-	$ALL_OBJS -lcap -lpthread
+	$ALL_OBJS $CAP_LIBS $PTHREAD_LIBS
+fi
 
 rm -rf $sysio_tmp
-rm -rf $cray_tmp

@@ -3,20 +3,23 @@
  *
  *  Copyright (C) 2002 Cluster File Systems, Inc.
  *
- *   This file is part of Lustre, http://www.lustre.org.
+ *   This file is part of the Lustre file system, http://www.lustre.org
+ *   Lustre is a trademark of Cluster File Systems, Inc.
  *
- *   Lustre is free software; you can redistribute it and/or
- *   modify it under the terms of version 2 of the GNU General Public
- *   License as published by the Free Software Foundation.
+ *   You may have signed or agreed to another license before downloading
+ *   this software.  If so, you are bound by the terms and conditions
+ *   of that agreement, and the following does not apply to you.  See the
+ *   LICENSE file included with this distribution for more information.
  *
- *   Lustre is distributed in the hope that it will be useful,
- *   but WITHOUT ANY WARRANTY; without even the implied warranty of
- *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *   GNU General Public License for more details.
+ *   If you did not agree to a different license, then this copy of Lustre
+ *   is open source software; you can redistribute it and/or modify it
+ *   under the terms of version 2 of the GNU General Public License as
+ *   published by the Free Software Foundation.
  *
- *   You should have received a copy of the GNU General Public License
- *   along with Lustre; if not, write to the Free Software
- *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ *   In either case, Lustre is distributed in the hope that it will be
+ *   useful, but WITHOUT ANY WARRANTY; without even the implied warranty
+ *   of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *   license text for more details.
  *
  * Helper routines for dumping data structs for debugging.
  */
@@ -30,10 +33,10 @@
 # include <liblustre.h>
 #endif
 
-#include <linux/obd_ost.h>
-#include <linux/obd_support.h>
-#include <linux/lustre_debug.h>
-#include <linux/lustre_net.h>
+#include <obd_ost.h>
+#include <obd_support.h>
+#include <lustre_debug.h>
+#include <lustre_net.h>
 
 int dump_ioo(struct obd_ioobj *ioo)
 {
@@ -47,7 +50,7 @@ int dump_lniobuf(struct niobuf_local *nb)
 {
         CERROR("niobuf_local: offset="LPD64", len=%d, page=%p, rc=%d\n",
                nb->offset, nb->len, nb->page, nb->rc);
-        CERROR("nb->page: index = %ld\n", nb->page ? nb->page->index : -1);
+        CERROR("nb->page: index = %ld\n", nb->page ? cfs_page_index(nb->page) : -1);
 
         return -EINVAL;
 }
@@ -62,9 +65,9 @@ int dump_rniobuf(struct niobuf_remote *nb)
 
 int dump_obdo(struct obdo *oa)
 {
-        __u64 valid = oa->o_valid;
+        __u32 valid = oa->o_valid;
 
-        CERROR("obdo: o_valid = "LPX64"\n", valid);
+        CERROR("obdo: o_valid = %08x\n", valid);
         if (valid & OBD_MD_FLID)
                 CERROR("obdo: o_id = "LPD64"\n", oa->o_id);
         if (valid & OBD_MD_FLATIME)
@@ -88,13 +91,21 @@ int dump_obdo(struct obdo *oa)
         if (valid & OBD_MD_FLGID)
                 CERROR("obdo: o_gid = %u\n", oa->o_gid);
         if (valid & OBD_MD_FLFLAGS)
-                CERROR("obdo: o_flags = 0x%x\n", oa->o_flags);
+                CERROR("obdo: o_flags = %x\n", oa->o_flags);
         if (valid & OBD_MD_FLNLINK)
                 CERROR("obdo: o_nlink = %u\n", oa->o_nlink);
         if (valid & OBD_MD_FLGENER)
                 CERROR("obdo: o_generation = %u\n", oa->o_generation);
 
         return -EINVAL;
+}
+
+void dump_lsm(int level, struct lov_stripe_md *lsm)
+{
+        CDEBUG(level, "lsm %p, objid "LPX64", maxbytes "LPX64", magic 0x%08X, "
+               "stripe_size %u, stripe_count %u\n", lsm,
+               lsm->lsm_object_id, lsm->lsm_maxbytes, lsm->lsm_magic,
+               lsm->lsm_stripe_size, lsm->lsm_stripe_count);
 }
 
 /* XXX assumes only a single page in request */
@@ -140,24 +151,24 @@ int block_debug_check(char *who, void *addr, int end, __u64 off, __u64 id)
         ne_off = le64_to_cpu (off);
         id = le64_to_cpu (id);
         if (memcmp(addr, (char *)&ne_off, LPDS)) {
-                CERROR("%s: id "LPX64" offset "LPU64" off: "LPX64" != "
+                CDEBUG(D_ERROR, "%s: id "LPX64" offset "LPU64" off: "LPX64" != "
                        LPX64"\n", who, id, off, *(__u64 *)addr, ne_off);
                 err = -EINVAL;
         }
         if (memcmp(addr + LPDS, (char *)&id, LPDS)) {
-                CERROR("%s: id "LPX64" offset "LPU64" id: "LPX64" != "LPX64"\n",
+                CDEBUG(D_ERROR, "%s: id "LPX64" offset "LPU64" id: "LPX64" != "LPX64"\n",
                        who, id, off, *(__u64 *)(addr + LPDS), id);
                 err = -EINVAL;
         }
 
         addr += end - LPDS - LPDS;
         if (memcmp(addr, (char *)&ne_off, LPDS)) {
-                CERROR("%s: id "LPX64" offset "LPU64" end off: "LPX64" != "
+                CDEBUG(D_ERROR, "%s: id "LPX64" offset "LPU64" end off: "LPX64" != "
                        LPX64"\n", who, id, off, *(__u64 *)addr, ne_off);
                 err = -EINVAL;
         }
         if (memcmp(addr + LPDS, (char *)&id, LPDS)) {
-                CERROR("%s: id "LPX64" offset "LPU64" end id: "LPX64" != "
+                CDEBUG(D_ERROR, "%s: id "LPX64" offset "LPU64" end id: "LPX64" != "
                        LPX64"\n", who, id, off, *(__u64 *)(addr + LPDS), id);
                 err = -EINVAL;
         }
@@ -171,5 +182,6 @@ EXPORT_SYMBOL(dump_rniobuf);
 EXPORT_SYMBOL(dump_ioo);
 //EXPORT_SYMBOL(dump_req);
 EXPORT_SYMBOL(dump_obdo);
+EXPORT_SYMBOL(dump_lsm);
 EXPORT_SYMBOL(block_debug_setup);
 EXPORT_SYMBOL(block_debug_check);
