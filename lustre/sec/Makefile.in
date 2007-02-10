@@ -1,6 +1,0 @@
-MODULES := ptlrpcs
-ptlrpcs-objs := sec.o sec_null.o svcsec.o svcsec_null.o upcall_cache.o
-
-@GSS_TRUE@subdir-m += gss gks
-
-@INCLUDE_RULES@
