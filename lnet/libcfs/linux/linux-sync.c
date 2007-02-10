@@ -1,0 +1,2 @@
+# define DEBUG_SUBSYSTEM S_LNET
+
