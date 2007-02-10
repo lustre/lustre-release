@@ -1,7 +1,0 @@
-MODULES := smfs
-smfs-objs := super.o inode.o cache.o dir.o fsfilt.o ioctl.o
-smfs-objs += sysctl.o file.o symlink.o smfs_lib.o smfs_llog.o
-smfs-objs += kml.o mds_kml.o ost_kml.o cache_space.o
-smfs-objs += audit.o audit_mds.o audit_ost.o audit_transfer.o
-@SNAPFS_TRUE@smfs-objs += smfs_cow.o 
-@INCLUDE_RULES@

@@ -1,9 +1,0 @@
-MODULES := mgmt_svc mgmt_cli
-ifeq ($(PATCHLEVEL),6)
-mgmt_svc-objs := mgmt-svc.o
-mgmt_cli-objs := mgmt-cli.o
-mgmt-%.c: mgmt_%.c
-	ln -sf $< $@
-endif
-
-@INCLUDE_RULES@

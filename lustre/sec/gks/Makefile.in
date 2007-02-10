@@ -1,6 +1,0 @@
-MODULES := gks gkc
-gks-objs := lproc_gks.o gks_server.o
-gkc-objs := lproc_gks.o gks_client.o
-@INCLUDE_RULES@
-
-
