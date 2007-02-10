@@ -1,4 +1,0 @@
-MODULES := ptlbd
-ptlbd-objs  := blk.o client.o main.o rpc.o server.o
-
-@INCLUDE_RULES@
