@@ -112,7 +112,7 @@ void usage(FILE *out)
 #endif
                 "\t\t--noformat: just report what we would do; "
                 "don't write to disk\n"
-                "\t\t--verbose\n"
+                "\t\t--verbose : e.g. show mkfs progress\n"
                 "\t\t--quiet\n",
                 (int)sizeof(((struct lustre_disk_data *)0)->ldd_userdata));
         return;
@@ -168,7 +168,7 @@ int get_os_version()
 int run_command(char *cmd, int cmdsz)
 {
         char log[] = "/tmp/mkfs_logXXXXXX";
-        int fd, rc;
+        int fd = -1, rc;
         
         if ((cmdsz - strlen(cmd)) < 6) {
                 fatal();
@@ -177,19 +177,20 @@ int run_command(char *cmd, int cmdsz)
                 return ENOMEM;
         }
 
-        if (verbose > 1)
+        if (verbose > 1) {
                 printf("cmd: %s\n", cmd);
-        
-        if ((fd = mkstemp(log)) >= 0) {
-                close(fd);
-                strcat(cmd, " >");
-                strcat(cmd, log);
+        } else {
+                if ((fd = mkstemp(log)) >= 0) {
+                        close(fd);
+                        strcat(cmd, " >");
+                        strcat(cmd, log);
+                }
         }
         strcat(cmd, " 2>&1");
 
         /* Can't use popen because we need the rv of the command */
         rc = system(cmd);
-        if ((rc || (verbose > 2)) && (fd >= 0)) {
+        if (rc && (fd >= 0)) {
                 char buf[128];
                 FILE *fp;
                 fp = fopen(log, "r");
@@ -473,7 +474,7 @@ int make_lustre_backfs(struct mkfs_opts *mop)
                         }
                 }
 
-                /* Default bytes_per_inode is block size */
+                /* bytes_per_inode: disk size / num inodes */
                 if (strstr(mop->mo_mkfsopts, "-i") == NULL) {
                         long bytes_per_inode = 0;
                                         
@@ -492,7 +493,7 @@ int make_lustre_backfs(struct mkfs_opts *mop)
                         }
                 }
                 
-                /* This is an undocumented mke2fs option. Default is 128. */
+                /* Inode size (for extended attributes) */
                 if (strstr(mop->mo_mkfsopts, "-I") == NULL) {
                         long inode_size = 0;
                         if (IS_MDT(&mop->mo_ldd)) {
