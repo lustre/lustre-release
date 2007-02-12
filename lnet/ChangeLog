@@ -1,7 +1,7 @@
 TBD         Cluster File Systems, Inc. <info@clusterfs.com>
        * version 1.4.10
        * Support for networks:
-	socklnd   - kernels up to 2.6.15 (I believe this is accurate, SLES10)
+	socklnd   - kernels up to 2.6.16
 	qswlnd    - Qsnet kernel modules 5.20 and later
 	openiblnd - IbGold 1.8.2
 	o2iblnd   - OFED 1.1
@@ -47,7 +47,7 @@ Details    : added a new route flag ksnr_scheduled to distinguish from
 2007-02-09  Cluster File Systems, Inc. <info@clusterfs.com>
        * version 1.4.9
        * Support for networks:
-	socklnd   - kernels up to 2.6.15 (I believe this is accurate, SLES10)
+	socklnd   - kernels up to 2.6.16
 	qswlnd    - Qsnet kernel modules 5.20 and later
 	openiblnd - IbGold 1.8.2
 	o2iblnd   - OFED 1.1
