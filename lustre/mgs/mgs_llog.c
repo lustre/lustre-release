@@ -292,6 +292,7 @@ static struct fs_db *mgs_new_fsdb(struct obd_device *obd, char *fsname)
         }
         
         strncpy(fsdb->fsdb_name, fsname, sizeof(fsdb->fsdb_name));
+        fsdb->fsdb_name[sizeof(fsdb->fsdb_name) - 1] = 0;
         rc = name_create(&fsdb->fsdb_mdtlov, fsname, "-mdtlov");
         if (rc) 
                 GOTO(err, rc);

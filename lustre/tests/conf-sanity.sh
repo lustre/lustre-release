@@ -820,17 +820,19 @@ test_23() {
 
 test_24a() {
 	local fs2mds_HOST=$mds_HOST
-        add fs2mds $MDS_MKFS_OPTS --fsname=${FSNAME}2 --nomgs --mgsnode=$MGSNID --reformat ${MDSDEV}_2 || exit 10
+	# test 8-char fsname as well
+	local FSNAME2=test1234
+        add fs2mds $MDS_MKFS_OPTS --fsname=${FSNAME2} --nomgs --mgsnode=$MGSNID --reformat ${MDSDEV}_2 || exit 10
 
 	local fs2ost_HOST=$ost_HOST
 	local fs2ostdev=$(ostdevname 1)_2
-	add fs2ost $OST_MKFS_OPTS --fsname=${FSNAME}2 --reformat $fs2ostdev || exit 10
+	add fs2ost $OST_MKFS_OPTS --fsname=${FSNAME2} --reformat $fs2ostdev || exit 10
 
 	setup
 	start fs2mds ${MDSDEV}_2 $MDS_MOUNT_OPTS
 	start fs2ost $fs2ostdev $OST_MOUNT_OPTS
 	mkdir -p $MOUNT2
-	mount -t lustre $MGSNID:/${FSNAME}2 $MOUNT2 || return 1
+	mount -t lustre $MGSNID:/${FSNAME2} $MOUNT2 || return 1
 	# 1 still works
 	check_mount || return 2
 	# files written on 1 should not show up on 2

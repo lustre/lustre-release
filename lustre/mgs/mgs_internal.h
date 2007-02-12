@@ -29,7 +29,7 @@ int class_dentry_readdir(struct obd_device *obd, struct dentry *dir,
 #define FSDB_OLDLOG14   0x0002  /* log starts in old (1.4) style */
 
 struct fs_db {
-        char              fsdb_name[8];
+        char              fsdb_name[9];
         struct list_head  fsdb_list;           /* list of databases */
         struct semaphore  fsdb_sem;
         void             *fsdb_ost_index_map;  /* bitmap of used indicies */

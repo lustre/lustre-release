@@ -103,10 +103,10 @@ static int mgs_live_seq_show(struct seq_file *seq, void *v)
                    fsdb->fsdb_flags, fsdb->fsdb_gen);
         for (i = 0; i < INDEX_MAP_SIZE * 8; i++)
                  if (test_bit(i, fsdb->fsdb_mdt_index_map)) 
-                         seq_printf(seq, "%.8s-MDT%04x\n", fsdb->fsdb_name, i);
+                         seq_printf(seq, "%s-MDT%04x\n", fsdb->fsdb_name, i);
         for (i = 0; i < INDEX_MAP_SIZE * 8; i++)
                  if (test_bit(i, fsdb->fsdb_ost_index_map)) 
-                         seq_printf(seq, "%.8s-OST%04x\n", fsdb->fsdb_name, i);
+                         seq_printf(seq, "%s-OST%04x\n", fsdb->fsdb_name, i);
 
         up(&fsdb->fsdb_sem);
         return 0;

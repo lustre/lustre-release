@@ -1,4 +1,4 @@
-FSNAME=lustre
+FSNAME=${FSNAME:-lustre}
 
 # facet hosts
 mds_HOST=${mds_HOST:-`hostname`}
