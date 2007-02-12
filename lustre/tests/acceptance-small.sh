@@ -208,7 +208,7 @@ for NAME in $CONFIGS; do
 	$CLEANUP
 done
 
-if [ "$SANITY-QUOTA" != "no" ]; then
+if [ "$SANITY_QUOTA" != "no" ]; then
         title sanity-quota
         sh sanity-quota.sh
 fi
