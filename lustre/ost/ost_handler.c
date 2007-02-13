@@ -1586,7 +1586,7 @@ static int ost_thread_init(struct ptlrpc_thread *thread)
 
         LASSERT(thread != NULL);
         LASSERT(thread->t_data == NULL);
-        LASSERT(thread->t_id < OSS_THREADS_MAX);
+        LASSERT(thread->t_id <= OSS_THREADS_MAX);
 
         OBD_ALLOC_PTR(tls);
         if (tls != NULL) {
