@@ -285,8 +285,12 @@ static int ll_intent_file_open(struct file *file, void *lmm,
         rc = mdc_intent_lock(sbi->ll_mdc_exp, &data, lmm, lmmsize, itp,
                               0 /*unused */, &req, ll_mdc_blocking_ast, 0);
         if (rc == -ESTALE) {
+                /* reason for keep own exit path - don`t flood log
+                * with messages with -ESTALE errors.
+                */
+                if (!it_disposition(itp, DISP_OPEN_OPEN))
+                        GOTO(out, rc);
                 ll_release_openhandle(file->f_dentry, itp);
-                LASSERT(it_disposition(itp, DISP_OPEN_OPEN));
                 GOTO(out_stale, rc);
         }
 
