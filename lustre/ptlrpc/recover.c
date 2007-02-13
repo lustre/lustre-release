@@ -154,7 +154,8 @@ int ptlrpc_resend(struct obd_import *imp)
                 LASSERTF((long)req > CFS_PAGE_SIZE && req != LP_POISON,
                          "req %p bad\n", req);
                 LASSERTF(req->rq_type != LI_POISON, "req %p freed\n", req);
-                ptlrpc_resend_req(req);
+                if (!req->rq_no_resend)
+                        ptlrpc_resend_req(req);
         }
 
         RETURN(0);

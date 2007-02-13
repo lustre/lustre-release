@@ -60,7 +60,7 @@ void lustre_register_client_process_config(int (*cpc)(struct lustre_cfg *lcfg));
 
 static int __init init_lustre_lite(void)
 {
-        int i, rc, seed[2];
+        int i, seed[2];
         struct timeval tv;
         lnet_process_id_t lnet_id;
 
@@ -84,7 +84,7 @@ static int __init init_lustre_lite(void)
 
         /* Nodes with small feet have little entropy
          * the NID for this node gives the most entropy in the low bits */
-        for (i=0; ; i++) {
+        for (i = 0; ; i++) {
                 if (LNetGetId(i, &lnet_id) == -ENOENT) {
                         break;
                 }

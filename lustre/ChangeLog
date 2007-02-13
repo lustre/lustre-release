@@ -5,7 +5,7 @@ tbd         Cluster File Systems, Inc. <info@clusterfs.com>
 	 special upgrade step is needed. Please read the
 	 user documentation before upgrading any part of a live system.
        * WIRE PROTOCOL CHANGE from previous 1.6 beta versions.  This
-         version will not interoperate with 1.6 betas before beta7 (1.5.97).
+	 version will not interoperate with 1.6 betas before beta7 (1.5.97).
        * WARNING: Lustre configuration and startup changes are required with
 	 this release.  See https://mail.clusterfs.com/wikis/lustre/MountConf
 	 for details.
@@ -176,14 +176,33 @@ Details    : Check the req->rq_arrival time after the call to
 
 Severity   : major
 Frequency  : when an incorrect nid is specified during startup 
-Bugzilla   : 10743
+Bugzilla   : 10734
 Description: ptlrpc connect to non-existant node causes kernel crash
 Details    : LNET can't be re-entered from an event callback, which
 	     happened when we expire a message after the export has been
 	     cleaned up.  Instead, hand the zombie cleanup off to another
 	     thread. 
 
+Severity   : enhancement
+Bugzilla   : 10902
+Description: plain/inodebits lock performance improvement
+Details    : Grouping plain/inodebits in granted list by their request modes
+	     and bits policy, thus improving the performance of search through
+	     the granted list.
+
+------------------------------------------------------------------------------
+
+TBD         Cluster File Systems, Inc. <info@clusterfs.com>
+       * version 1.4.10
+       * Support for kernels:
+        2.6.9-42.0.3EL (RHEL 4)
+        2.6.5-7.276 (SLES 9)
+        2.4.21-47.0.1.EL (RHEL 3)
+        2.6.12.6 vanilla (kernel.org)
+       * Recommended e2fsprogs version: 1.39.cfs2-0
+
 Severity   : normal
+Frequency  : always
 Bugzilla   : 10214
 Description: make O_SYNC working on 2.6 kernels
 Details    : 2.6 kernels use different method for mark pages for write, 
@@ -197,25 +216,27 @@ Details    : Put inode details into lock acquired in ll_intent_file_open.
 	     Use mdc_intent_lock in ll_intent_open to properly
 	     detect all kind of errors unhandled by mdc_enqueue
 
-Severity   : enhancement
-Bugzilla   : 10902
-Description: plain/inodebits lock performance improvement
-Details    : Grouping plain/inodebits in granted list by their request modes
-             and bits policy, thus improving the performance of search through
-	     the granted list.
-
 Severity   : major
 Frequency  : rare
 Bugzilla   : 10866
 Description: proc file read during shutdown sometimes raced obd removal, 
 	     causing node crash
-Details    : Add lock to prevent obd access after proc file removal
+Details    : Add lock to prevent obd access after proc file removal.
 
 Severity   : normal
+Frequency  : Only for files larger than 4GB on 32-bit clients.
 Bugzilla   : 11237
 Description: improperly doing page alignment of locks
 Details    : Modify lustre core code to use CFS_PAGE_* defines instead of 
-             PAGE_*. Make CFS_PAGE_MASK 64bit long.
+	     PAGE_*. Make CFS_PAGE_MASK 64bit long.
+
+Severity   : normal
+Frequency  : rarely
+Bugzilla   : 11203
+Description: RPCs being resent when they shouldn't be
+Details    : Some RPCs that should not be resent are being resent.  This
+	     can cause inconsistencies in the RPC state machine.  Do not
+	     resend such requests.
 	
 ------------------------------------------------------------------------------
 
@@ -985,7 +1006,7 @@ Severity   : minor
 Frequency  : always
 Bugzilla   : 10611
 Description: Inability to activate failout mode
-Details    : lconf script incorrectly assumed that in pythong string's numeric
+Details    : lconf script incorrectly assumed that in python string's numeric
 	     value is used in comparisons.
 
 Severity   : minor

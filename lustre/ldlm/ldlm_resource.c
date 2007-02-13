@@ -664,10 +664,11 @@ int ldlm_resource_putref(struct ldlm_resource *res)
 
         CDEBUG(D_INFO, "putref res: %p count: %d\n", res,
                atomic_read(&res->lr_refcount) - 1);
-        LASSERT(atomic_read(&res->lr_refcount) > 0);
-        LASSERT(atomic_read(&res->lr_refcount) < LI_POISON);
+        LASSERTF(atomic_read(&res->lr_refcount) > 0, "%d",
+                 atomic_read(&res->lr_refcount));
+        LASSERTF(atomic_read(&res->lr_refcount) < LI_POISON, "%d",
+                 atomic_read(&res->lr_refcount));
 
-        LASSERT(atomic_read(&res->lr_refcount) >= 0);
         if (atomic_dec_and_lock(&res->lr_refcount, &ns->ns_hash_lock)) {
                 __ldlm_resource_putref_final(res);
                 spin_unlock(&ns->ns_hash_lock);

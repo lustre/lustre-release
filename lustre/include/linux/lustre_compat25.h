@@ -397,6 +397,19 @@ static inline void file_accessed(struct file *file)
         touch_atime(file->f_vfsmnt, file->f_dentry);
 }
 
+#ifndef typecheck
+/*
+ * Check at compile time that something is of a particular type.
+ * Always evaluates to 1 so you may use it easily in comparisons.
+ */
+#define typecheck(type,x) \
+({	type __dummy; \
+	typeof(x) __dummy2; \
+	(void)(&__dummy == &__dummy2); \
+	1; \
+})
+#endif
+
 #endif /* end of 2.4 compat macros */
 
 #ifdef HAVE_PAGE_LIST
