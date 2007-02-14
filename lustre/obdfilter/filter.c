@@ -497,7 +497,7 @@ struct filter_mod_data *filter_fmd_get(struct obd_export *exp,
         return found;
 }
 
-#if DO_FMD_DROP
+#ifdef DO_FMD_DROP
 /* drop fmd list reference so it will disappear when last reference is put.
  * This isn't so critical because it would in fact only affect the one client
  * that is doing the unlink and at worst we have an stale entry referencing
