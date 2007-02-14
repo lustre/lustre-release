@@ -237,6 +237,13 @@ Description: RPCs being resent when they shouldn't be
 Details    : Some RPCs that should not be resent are being resent.  This
 	     can cause inconsistencies in the RPC state machine.  Do not
 	     resend such requests.
+
+Severity   : normal
+Frequency  : rare, only with NFS export
+Bugzilla   : 11669
+Description: Crash on NFS re-export node
+Details    : under very unusual load conditions an assertion is hit in
+	     ll_intent_file_open()
 	
 ------------------------------------------------------------------------------
 
