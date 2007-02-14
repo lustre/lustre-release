@@ -402,18 +402,16 @@ int ll_file_open(struct inode *inode, struct file *file)
 
         if (!it || !it->d.lustre.it_disposition) {
                 /* Convert f_flags into access mode. We cannot use file->f_mode,
-                 * because everything but O_ACCMODE mask was stripped from
-                 * there */
+                 * because everything but O_ACCMODE mask was stripped from it */
                 if ((oit.it_flags + 1) & O_ACCMODE)
                         oit.it_flags++;
                 if (file->f_flags & O_TRUNC)
                         oit.it_flags |= FMODE_WRITE;
 
-                /* kernel only call f_op->open in dentry_open.
-                 * filp_open calls dentry_open after call to open_namei that checks
-                 * for permissions. only nfsd_open call dentry_open directly without
-                 * checking permissions and because of that this code below is safe.
-                 */
+                /* kernel only call f_op->open in dentry_open.  filp_open calls
+                 * dentry_open after call to open_namei that checks permissions.
+                 * Only nfsd_open call dentry_open directly without checking
+                 * permissions and because of that this code below is safe. */
                 if (oit.it_flags & FMODE_WRITE)
                         oit.it_flags |= MDS_OPEN_OWNEROVERRIDE;
 
