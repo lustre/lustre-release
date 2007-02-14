@@ -3,12 +3,19 @@ tbd         Cluster File Systems, Inc. <info@clusterfs.com>
        * CONFIGURATION CHANGE.  This version of Lustre WILL NOT
 	 INTEROPERATE with older versions automatically.  In many cases a
 	 special upgrade step is needed. Please read the
-	 user documentation before upgrading any part of a live system.
-       * WIRE PROTOCOL CHANGE from previous 1.6 beta versions.  This
-	 version will not interoperate with 1.6 betas before beta7 (1.5.97).
+	 user documentation before upgrading any part of a 1.4.x system.
        * WARNING: Lustre configuration and startup changes are required with
 	 this release.  See https://mail.clusterfs.com/wikis/lustre/MountConf
 	 for details.
+       * Support for kernels:
+        2.6.9-42.0.3EL (RHEL 4)
+        2.6.5-7.276 (SLES 9)
+        2.4.21-47.0.1.EL (RHEL 3)
+        2.6.12.6 vanilla (kernel.org)
+       * Client support for unpatched kernels:
+        (see https://mail.clusterfs.com/wikis/lustre/PatchlessClient)
+        2.6.16 - 2.6.19 vanilla (kernel.org)
+        2.6.9-42.0.3EL (RHEL 4)
        * Recommended e2fsprogs version: 1.39.cfs2-0
        * bug fixes
 
