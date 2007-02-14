@@ -1529,7 +1529,7 @@ int ksocknal_scheduler (void *arg)
         cfs_daemonize (name);
         cfs_block_allsigs ();
 
-#if (CONFIG_SMP && CPU_AFFINITY)
+#if defined(CONFIG_SMP) && defined(CPU_AFFINITY)
         id = ksocknal_sched2cpu(id);
         if (cpu_online(id)) {
                 cpumask_t m;
