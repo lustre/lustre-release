@@ -197,6 +197,16 @@ Details    : Grouping plain/inodebits in granted list by their request modes
 	     and bits policy, thus improving the performance of search through
 	     the granted list.
 
+Severity   : major	     
+Frequency  : only if OST filesystem is corrupted
+Bugzilla   : 9829
+Description: client incorrectly hits assertion in ptlrpc_replay_req()
+Details    : for a short time RPCs with bulk IO are in the replay list,
+	     but replay of bulk IOs is unimplemented.  If the OST filesystem
+	     is corrupted due to disk cache incoherency and then replay is
+	     started it is possible to trip an assertion.  Avoid putting
+	     committed RPCs into the replay list at all to avoid this issue.	     
+
 ------------------------------------------------------------------------------
 
 TBD         Cluster File Systems, Inc. <info@clusterfs.com>

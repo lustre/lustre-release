@@ -642,7 +642,12 @@ static int after_reply(struct ptlrpc_request *req)
 
         if (req->rq_import->imp_replayable) {
                 spin_lock(&imp->imp_lock);
-                if (req->rq_transno != 0)
+                /* no point in adding already-committed requests to the replay
+                 * list, we will just remove them immediately. b=9829 */
+                if (req->rq_transno != 0 && 
+                    (req->rq_transno > 
+                     lustre_msg_get_last_committed(req->rq_repmsg) ||
+                     req->rq_replay))
                         ptlrpc_retain_replayable_request(req, imp);
                 else if (req->rq_commit_cb != NULL) {
                         spin_unlock(&imp->imp_lock);
