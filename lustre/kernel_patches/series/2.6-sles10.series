@@ -15,4 +15,3 @@ remove-suid-2.6-suse.patch
 export-show_task-2.6-fc5.patch 
 sd_iostats-2.6-rhel4.patch 
 export_symbol_numa-2.6-fc5.patch 
-tcp-zero-copy-2.6-sles10.patch

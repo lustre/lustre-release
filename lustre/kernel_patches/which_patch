@@ -6,6 +6,7 @@ rhel-2.4.21        RHEL3: 2.4.21-47.0.1.EL
 2.6-suse-newer     SLES9: 2.6.5-7.282       extra patches for SLES9 after SP1
 2.6-rhel4          RHEL4: 2.6.9-42.0.8.EL
 2.6.12-vanilla     kernel.org: 2.6.12.6
+2.6-sles10         SLES10: 2.6.16.21-0.8
 
 NB - The patches in the 2.6-suse series should already be in the SLES9 SP1
      kernel.  The patches in the 2.6-suse-newer series are patches that

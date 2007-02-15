@@ -1249,6 +1249,7 @@ lustre/kernel_patches/targets/2.6-vanilla.target
 lustre/kernel_patches/targets/2.6-rhel4.target
 lustre/kernel_patches/targets/2.6-fc5.target
 lustre/kernel_patches/targets/2.6-patchless.target
+lustre/kernel_patches/targets/2.6-sles10.target
 lustre/kernel_patches/targets/hp_pnnl-2.4.target
 lustre/kernel_patches/targets/rh-2.4.target
 lustre/kernel_patches/targets/rhel-2.4.target
