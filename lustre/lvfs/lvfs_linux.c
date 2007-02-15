@@ -431,25 +431,20 @@ EXPORT_SYMBOL(obd_memory);
 EXPORT_SYMBOL(obd_memmax);
 
 #ifdef LUSTRE_KERNEL_VERSION
-#ifdef HAVE_OLD_DEV_SET_RDONLY
-void dev_set_rdonly(lvfs_sbdev_type dev, int no_write);
-void dev_clear_rdonly(int no_write);
-int dev_check_rdonly(lvfs_sbdev_type dev);
-#elif !defined(HAVE_CLEAR_RDONLY_ON_PUT)
+
+#ifndef HAVE_CLEAR_RDONLY_ON_PUT
+#error rdonly patchset must be updated
+#endif
+
 void dev_set_rdonly(lvfs_sbdev_type dev);
 void dev_clear_rdonly(lvfs_sbdev_type dev);
 int dev_check_rdonly(lvfs_sbdev_type dev);
-#endif
 
 void lvfs_set_rdonly(lvfs_sbdev_type dev)
 {
         CDEBUG(D_IOCTL | D_HA, "set dev %lx rdonly\n", (long)dev);
         lvfs_sbdev_sync(dev);
-#ifdef HAVE_OLD_DEV_SET_RDONLY
-        dev_set_rdonly(dev, 2);
-#else
         dev_set_rdonly(dev);
-#endif
 }
 
 int lvfs_check_rdonly(lvfs_sbdev_type dev)
