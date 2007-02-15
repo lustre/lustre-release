@@ -459,21 +459,10 @@ int lvfs_check_rdonly(lvfs_sbdev_type dev)
 
 void lvfs_clear_rdonly(lvfs_sbdev_type dev)
 {
-#ifndef HAVE_CLEAR_RDONLY_ON_PUT
-        CDEBUG(D_IOCTL | D_HA, "unset dev %lx rdonly\n", (long)dev);
-        if (lvfs_check_rdonly(dev)) {
-                lvfs_sbdev_sync(dev);
-#ifdef HAVE_OLD_DEV_SET_RDONLY
-                dev_clear_rdonly(2);
-#else
-                dev_clear_rdonly(dev);
-#endif
-        }
-#else
         CDEBUG(D_IOCTL | D_HA, "(will unset dev %lx rdonly on put)\n",
                (long)dev);
-#endif
 }
+
 EXPORT_SYMBOL(lvfs_set_rdonly);
 EXPORT_SYMBOL(lvfs_check_rdonly);
 EXPORT_SYMBOL(lvfs_clear_rdonly);

@@ -207,6 +207,12 @@ Details    : for a short time RPCs with bulk IO are in the replay list,
 	     started it is possible to trip an assertion.  Avoid putting
 	     committed RPCs into the replay list at all to avoid this issue.	     
 
+Severity   : minor
+Frequency  : only for kernels with patches from Lustre below 1.4.3  
+Bugzilla   : 11248
+Description: Remove old rdonly API
+Details    : Remove old rdonly API which unsed from at least lustre 1.4.3
+
 ------------------------------------------------------------------------------
 
 TBD         Cluster File Systems, Inc. <info@clusterfs.com>
@@ -261,7 +267,7 @@ Bugzilla   : 11669
 Description: Crash on NFS re-export node
 Details    : under very unusual load conditions an assertion is hit in
 	     ll_intent_file_open()
-	
+
 ------------------------------------------------------------------------------
 
 TBD         Cluster File Systems, Inc. <info@clusterfs.com>

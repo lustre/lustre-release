@@ -284,18 +284,20 @@ fi
 # and can only set a single device to discard writes at one time
 #
 AC_DEFUN([LC_FUNC_DEV_SET_RDONLY],
-[AC_MSG_CHECKING([if kernel has old single-device dev_set_rdonly])
-HAVE_OLD_DSR="`grep -c -s 'dev_set_rdonly.*no_write' $LINUX/drivers/block/ll_rw_blk.c`"
-if test x$HAVE_OLD_DSR != "x1" ; then
-	HAVE_OLD_DSR="`grep -c -s 'dev_set_rdonly.*no_write' $LINUX/drivers/block/blkpg.c`"
-fi
-if test x$HAVE_OLD_DSR = "x1" ; then
-        AC_DEFINE(HAVE_OLD_DEV_SET_RDONLY, 1,
-                [kernel has old single-device dev_set_rdonly])
-        AC_MSG_RESULT(yes)
-else
-        AC_MSG_RESULT(no)
-fi
+[AC_MSG_CHECKING([if kernel has new dev_set_rdonly])
+LB_LINUX_TRY_COMPILE([
+        #include <linux/fs.h>
+],[
+        #ifndef HAVE_CLEAR_RDONLY_ON_PUT
+        #error needs to be patched by lustre kernel patches from Lustre version 1.4.3 or above.
+        #endif
+],[
+        AC_MSG_RESULT([yes])
+        AC_DEFINE(HAVE_DEV_SET_RDONLY, 1, [kernel has new dev_set_rdonly])
+],[
+        AC_MSG_RESULT([no, Linux kernel source needs to be patches by lustre 
+kernel patches from Lustre version 1.4.3 or above.])
+])
 ])
 
 #
