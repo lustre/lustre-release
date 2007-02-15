@@ -65,7 +65,7 @@ Index: linux-stage/include/linux/ext3_fs.h
 +extern int ext3_mb_init(struct super_block *sb, int needs_recovery);
 +extern int ext3_mb_release(struct super_block *sb);
 +extern ext3_fsblk_t ext3_new_block(handle_t *handle, struct inode *inode,
-+ 				   ext3_fsblk_t goal, int *errp);
++				   ext3_fsblk_t goal, int *errp);
 +extern ext3_fsblk_t ext3_mb_new_blocks(handle_t *handle, struct inode *inode,
 +				       ext3_fsblk_t goal, int *len, int flags,
 +				       int *errp);
@@ -175,7 +175,7 @@ Index: linux-stage/fs/ext3/super.c
  			set_opt (sbi->s_mount_opt, EXTDEBUG);
  			break;
 +		case Opt_mballoc:
-+			set_opt (sbi->s_mount_opt, MBALLOC);
++			set_opt(sbi->s_mount_opt, MBALLOC);
 +			break;
 +		case Opt_nomballoc:
 +			clear_opt(sbi->s_mount_opt, MBALLOC);
@@ -394,7 +394,7 @@ Index: linux-stage/fs/ext3/mballoc.c
 ===================================================================
 --- /dev/null	1970-01-01 00:00:00.000000000 +0000
 +++ linux-stage/fs/ext3/mballoc.c	2006-07-16 02:29:49.000000000 +0800
-@@ -0,0 +1,2727 @@
+@@ -0,0 +1,2730 @@
 +/*
 + * Copyright (c) 2003-2005, Cluster File Systems, Inc, info@clusterfs.com
 + * Written by Alex Tomas <alex@clusterfs.com>
@@ -502,7 +502,7 @@ Index: linux-stage/fs/ext3/mballoc.c
 +
 +struct ext3_group_info {
 +	unsigned long	bb_state;
-+	unsigned long 	bb_tid;
++	unsigned long	bb_tid;
 +	struct ext3_free_metadata *bb_md_cur;
 +	unsigned short	bb_first_free;
 +	unsigned short	bb_free;
@@ -528,17 +528,17 @@ Index: linux-stage/fs/ext3/mballoc.c
 +
 +	/* search goals */
 +	struct ext3_free_extent ac_g_ex;
-+	
++
 +	/* the best found extent */
 +	struct ext3_free_extent ac_b_ex;
-+	
++
 +	/* number of iterations done. we have to track to limit searching */
 +	unsigned long ac_ex_scanned;
 +	__u16 ac_groups_scanned;
 +	__u16 ac_found;
 +	__u16 ac_tail;
 +	__u16 ac_buddy;
-+	__u8 ac_status;	
++	__u8 ac_status;
 +	__u8 ac_flags;		/* allocation hints */
 +	__u8 ac_criteria;
 +	__u8 ac_repeats;
@@ -700,7 +700,7 @@ Index: linux-stage/fs/ext3/mballoc.c
 +		if (mb_check_counter++ % 300 != 0)
 +			return;
 +	}
-+	
++
 +	while (order > 1) {
 +		buddy = mb_find_buddy(e3b, order, &max);
 +		J_ASSERT(buddy);
@@ -841,7 +841,7 @@ Index: linux-stage/fs/ext3/mballoc.c
 +		i = ext2_find_next_le_bit(bitmap, max, i);
 +		len = i - first;
 +		free += len;
-+		if (len > 1) 
++		if (len > 1)
 +			ext3_mb_mark_free_simple(sb, buddy, first, len, grp);
 +		else
 +			grp->bb_counters[0]++;
@@ -882,7 +882,7 @@ Index: linux-stage/fs/ext3/mballoc.c
 +	sb = inode->i_sb;
 +	blocksize = 1 << inode->i_blkbits;
 +	blocks_per_page = PAGE_CACHE_SIZE / blocksize;
-+	
++
 +	groups_per_page = blocks_per_page >> 1;
 +	if (groups_per_page == 0)
 +		groups_per_page = 1;
@@ -897,9 +897,9 @@ Index: linux-stage/fs/ext3/mballoc.c
 +		memset(bh, 0, i);
 +	} else
 +		bh = &bhs;
-+	
++
 +	first_group = page->index * blocks_per_page / 2;
-+	
++
 +	/* read all groups the page covers into the cache */
 +	for (i = 0; i < groups_per_page; i++) {
 +		struct ext3_group_desc * desc;
@@ -959,7 +959,7 @@ Index: linux-stage/fs/ext3/mballoc.c
 +			memset(data, 0xff, blocksize);
 +			EXT3_GROUP_INFO(sb, group)->bb_fragments = 0;
 +			memset(EXT3_GROUP_INFO(sb, group)->bb_counters, 0,
-+				sizeof(unsigned short)*(sb->s_blocksize_bits+2));
++			       sizeof(unsigned short)*(sb->s_blocksize_bits+2));
 +			ext3_mb_generate_buddy(sb, data, bitmap, group);
 +		} else {
 +			/* this is block of bitmap */
@@ -1442,7 +1442,7 @@ Index: linux-stage/fs/ext3/mballoc.c
 +
 +	ext3_lock_group(ac->ac_sb, group);
 +	max = mb_find_extent(e3b, 0, ex.fe_start, ex.fe_len, &ex);
-+	
++
 +	if (max > 0) {
 +		ac->ac_b_ex = ex;
 +		ext3_mb_use_best_found(ac, e3b);
@@ -1469,10 +1469,10 @@ Index: linux-stage/fs/ext3/mballoc.c
 +
 +	ext3_lock_group(ac->ac_sb, group);
 +	max = mb_find_extent(e3b, 0, ac->ac_g_ex.fe_start,
-+				ac->ac_g_ex.fe_len, &ex);
-+	
++			     ac->ac_g_ex.fe_len, &ex);
++
 +	if (max >= ac->ac_g_ex.fe_len && ac->ac_g_ex.fe_len == sbi->s_stripe) {
-+		unsigned long start;
++		ext3_fsblk_t start;
 +		start = (e3b->bd_group * EXT3_BLOCKS_PER_GROUP(ac->ac_sb) +
 +			ex.fe_start + le32_to_cpu(es->s_first_data_block));
 +		if (start % sbi->s_stripe == 0) {
@@ -1535,7 +1535,7 @@ Index: linux-stage/fs/ext3/mballoc.c
 +		ac->ac_b_ex.fe_len = 1 << i;
 +		ac->ac_b_ex.fe_start = k << i;
 +		ac->ac_b_ex.fe_group = e3b->bd_group;
-+		
++
 +		ext3_mb_use_best_found(ac, e3b);
 +		J_ASSERT(ac->ac_b_ex.fe_len == ac->ac_g_ex.fe_len);
 +
@@ -1593,16 +1593,16 @@ Index: linux-stage/fs/ext3/mballoc.c
 +	struct ext3_sb_info *sbi = EXT3_SB(sb);
 +	void *bitmap = EXT3_MB_BITMAP(e3b);
 +	struct ext3_free_extent ex;
-+	unsigned long i, max;
++	ext3_fsblk_t i, max;
 +
 +	J_ASSERT(sbi->s_stripe != 0);
 +
 +	/* find first stripe-aligned block */
-+	i = e3b->bd_group * EXT3_BLOCKS_PER_GROUP(sb)
-+		+ le32_to_cpu(sbi->s_es->s_first_data_block);
++	i = e3b->bd_group * EXT3_BLOCKS_PER_GROUP(sb) +
++		le32_to_cpu(sbi->s_es->s_first_data_block);
 +	i = ((i + sbi->s_stripe - 1) / sbi->s_stripe) * sbi->s_stripe;
-+	i = (i - le32_to_cpu(sbi->s_es->s_first_data_block))
-+			% EXT3_BLOCKS_PER_GROUP(sb);
++	i = (i - le32_to_cpu(sbi->s_es->s_first_data_block)) %
++		EXT3_BLOCKS_PER_GROUP(sb);
 +
 +	while (i < sb->s_blocksize * 8) {
 +		if (!mb_test_bit(i, bitmap)) {
@@ -1659,18 +1659,19 @@ Index: linux-stage/fs/ext3/mballoc.c
 +	return 0;
 +}
 +
-+int ext3_mb_new_blocks(handle_t *handle, struct inode *inode,
-+		       unsigned long goal, int *len, int flags, int *errp)
++ext3_fsblk_t ext3_mb_new_blocks(handle_t *handle, struct inode *inode,
++				ext3_fsblk_t goal, int *len,int flags,int *errp)
 +{
 +	struct buffer_head *bitmap_bh = NULL;
 +	struct ext3_allocation_context ac;
-+	int i, group, block, cr, err = 0;
++	int i, group, cr, err = 0;
 +	struct ext3_group_desc *gdp;
 +	struct ext3_super_block *es;
 +	struct buffer_head *gdp_bh;
 +	struct ext3_sb_info *sbi;
 +	struct super_block *sb;
 +	struct ext3_buddy e3b;
++	ext3_fsblk_t block;
 +
 +	J_ASSERT(len != NULL);
 +	J_ASSERT(*len > 0);
@@ -1792,7 +1793,7 @@ Index: linux-stage/fs/ext3/mballoc.c
 +					goto out_err;
 +				ext3_mb_release_desc(&e3b);
 +			}
-+				
++
 +			/* check is group good for our criteries */
 +			if (!ext3_mb_good_group(&ac, group, cr))
 +				continue;
@@ -1827,7 +1828,7 @@ Index: linux-stage/fs/ext3/mballoc.c
 +	}
 +
 +	if (ac.ac_b_ex.fe_len > 0 && ac.ac_status != AC_STATUS_FOUND &&
-+			!(ac.ac_flags & EXT3_MB_HINT_FIRST)) {
++	    !(ac.ac_flags & EXT3_MB_HINT_FIRST)) {
 +		/*
 +		 * We've been searching too long. Let's try to allocate
 +		 * the best chunk we've found so far
@@ -1910,7 +1911,7 @@ Index: linux-stage/fs/ext3/mballoc.c
 +		*errp = -EIO;
 +		goto out_err;
 +	}
-+	
++
 +	err = ext3_journal_get_write_access(handle, gdp_bh);
 +	if (err)
 +		goto out_err;
@@ -1925,7 +1926,7 @@ Index: linux-stage/fs/ext3/mballoc.c
 +		      EXT3_SB(sb)->s_itb_per_group))
 +		ext3_error(sb, "ext3_new_block",
 +			    "Allocating block in system zone - "
-+			    "block = %u", block);
++			    "block = "E3FSBLK, block);
 +#ifdef AGGRESSIVE_CHECK
 +	for (i = 0; i < ac.ac_b_ex.fe_len; i++)
 +		J_ASSERT(!mb_test_bit(ac.ac_b_ex.fe_start + i, bitmap_bh->b_data));
@@ -1984,7 +1985,7 @@ Index: linux-stage/fs/ext3/mballoc.c
 +		 * path only, here is single block always */
 +		ext3_mb_release_blocks(sb, 1);
 +	}
-+	
++
 +	if (unlikely(ext3_mb_stats) && ac.ac_g_ex.fe_len > 1) {
 +		atomic_inc(&sbi->s_bal_reqs);
 +		atomic_add(*len, &sbi->s_bal_allocated);
@@ -2113,7 +2114,7 @@ Index: linux-stage/fs/ext3/mballoc.c
 +	s->max = sbi->s_mb_history_max;
 +	s->start = sbi->s_mb_history_cur % s->max;
 +	spin_unlock(&sbi->s_mb_history_lock);
-+	
++
 +	rc = seq_open(file, &ext3_mb_seq_history_ops);
 +	if (rc == 0) {
 +		struct seq_file *m = (struct seq_file *)file->private_data;
@@ -2137,10 +2138,10 @@ Index: linux-stage/fs/ext3/mballoc.c
 +
 +static struct file_operations ext3_mb_seq_history_fops = {
 +	.owner		= THIS_MODULE,
-+	.open           = ext3_mb_seq_history_open,
-+	.read           = seq_read,
-+	.llseek         = seq_lseek,
-+	.release        = ext3_mb_seq_history_release,
++	.open		= ext3_mb_seq_history_open,
++	.read		= seq_read,
++	.llseek		= seq_lseek,
++	.release	= ext3_mb_seq_history_release,
 +};
 +
 +static void *ext3_mb_seq_groups_start(struct seq_file *seq, loff_t *pos)
@@ -2357,7 +2358,7 @@ Index: linux-stage/fs/ext3/mballoc.c
 +		sbi->s_group_info[i] = meta_group_info;
 +	}
 +
-+	/* 
++	/*
 +	 * calculate needed size. if change bb_counters size,
 +	 * don't forget about ext3_mb_generate_buddy()
 +	 */
@@ -2480,7 +2481,7 @@ Index: linux-stage/fs/ext3/mballoc.c
 +{
 +	struct ext3_sb_info *sbi = EXT3_SB(sb);
 +	int i, num_meta_group_infos;
-+	
++
 +	if (!test_opt(sb, MBALLOC))
 +		return 0;
 +
@@ -2679,8 +2680,8 @@ Index: linux-stage/fs/ext3/mballoc.c
 +}
 +
 +void ext3_mb_free_blocks(handle_t *handle, struct inode *inode,
-+			unsigned long block, unsigned long count,
-+			int metadata, int *freed)
++			ext3_fsblk_t block, unsigned long count,
++			int metadata, unsigned long *freed)
 +{
 +	struct buffer_head *bitmap_bh = NULL;
 +	struct ext3_group_desc *gdp;
@@ -2784,7 +2785,7 @@ Index: linux-stage/fs/ext3/mballoc.c
 +		/* blocks being freed are metadata. these blocks shouldn't
 +		 * be used until this transaction is committed */
 +		ext3_mb_free_metadata(handle, &e3b, block_group, bit, count);
-+	} else { 
++	} else {
 +		ext3_lock_group(sb, block_group);
 +		mb_free_blocks(&e3b, bit, count);
 +		ext3_unlock_group(sb, block_group);
@@ -2795,7 +2796,7 @@ Index: linux-stage/fs/ext3/mballoc.c
 +		cpu_to_le16(le16_to_cpu(gdp->bg_free_blocks_count) + count);
 +	spin_unlock(sb_bgl_lock(sbi, block_group));
 +	percpu_counter_mod(&sbi->s_freeblocks_counter, count);
-+	
++
 +	ext3_mb_release_desc(&e3b);
 +
 +	*freed = count;
@@ -2846,10 +2847,11 @@ Index: linux-stage/fs/ext3/mballoc.c
 +	spin_unlock(&sbi->s_reserve_lock);
 +}
 +
-+int ext3_new_block(handle_t *handle, struct inode *inode,
-+		unsigned long goal, int *errp)
++ext3_fsblk_t ext3_new_block(handle_t *handle, struct inode *inode,
++			    ext3_fsblk_t goal, int *errp)
 +{
-+	int ret, len;
++	ext3_fsblk_t ret;
++	int len;
 +
 +	if (!test_opt(inode->i_sb, MBALLOC)) {
 +		ret = ext3_new_block_old(handle, inode, goal, errp);
@@ -2862,23 +2864,24 @@ Index: linux-stage/fs/ext3/mballoc.c
 +}
 +
 +void ext3_free_blocks(handle_t *handle, struct inode * inode,
-+			unsigned long block, unsigned long count, int metadata)
++		      ext3_fsblk_t block, unsigned long count, int metadata)
 +{
 +	struct super_block *sb;
-+	int freed;
++	unsigned long freed;
 +
 +	sb = inode->i_sb;
 +	if (!test_opt(sb, MBALLOC) || !EXT3_SB(sb)->s_group_info)
 +		ext3_free_blocks_sb(handle, sb, block, count, &freed);
 +	else
-+		ext3_mb_free_blocks(handle, inode, block, count, metadata, &freed);
++		ext3_mb_free_blocks(handle, inode, block, count, metadata,
++				    &freed);
 +	if (freed)
 +		DQUOT_FREE_BLOCK(inode, freed);
 +	return;
 +}
 +
-+#define EXT3_ROOT                 "ext3"
-+#define EXT3_MB_STATS_NAME        "mb_stats"
++#define EXT3_ROOT		   "ext3"
++#define EXT3_MB_STATS_NAME	   "mb_stats"
 +#define EXT3_MB_MAX_TO_SCAN_NAME  "mb_max_to_scan"
 +#define EXT3_MB_MIN_TO_SCAN_NAME  "mb_min_to_scan"
 +#define EXT3_MB_ORDER2_REQ	   "mb_order2_req"
@@ -2950,7 +2953,7 @@ Index: linux-stage/fs/ext3/mballoc.c
 +	if (value <= 0)
 +		return -ERANGE;
 +
-+	ext3_mb_max_to_scan = value;	
++	ext3_mb_max_to_scan = value;
 +
 +	return count;
 +}
@@ -2989,7 +2992,7 @@ Index: linux-stage/fs/ext3/mballoc.c
 +	if (value <= 0)
 +		return -ERANGE;
 +
-+	ext3_mb_min_to_scan = value;	
++	ext3_mb_min_to_scan = value;
 +
 +	return count;
 +}
@@ -3028,7 +3031,7 @@ Index: linux-stage/fs/ext3/mballoc.c
 +	if (value <= 0)
 +		return -ERANGE;
 +
-+	ext3_mb_order2_reqs = value;	
++	ext3_mb_order2_reqs = value;
 +
 +	return count;
 +}

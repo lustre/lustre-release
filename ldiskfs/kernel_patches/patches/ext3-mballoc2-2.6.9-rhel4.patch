@@ -487,7 +487,7 @@ Index: linux-2.6.9-full/fs/ext3/mballoc.c
 +
 +struct ext3_group_info {
 +	unsigned long	bb_state;
-+	unsigned long 	bb_tid;
++	unsigned long	bb_tid;
 +	struct ext3_free_metadata *bb_md_cur;
 +	unsigned short	bb_first_free;
 +	unsigned short	bb_free;
@@ -523,7 +523,7 @@ Index: linux-2.6.9-full/fs/ext3/mballoc.c
 +	__u16 ac_found;
 +	__u16 ac_tail;
 +	__u16 ac_buddy;
-+	__u8 ac_status;	
++	__u8 ac_status;
 +	__u8 ac_flags;		/* allocation hints */
 +	__u8 ac_criteria;
 +	__u8 ac_repeats;
@@ -1584,11 +1584,11 @@ Index: linux-2.6.9-full/fs/ext3/mballoc.c
 +	J_ASSERT(sbi->s_stripe != 0);
 +
 +	/* find first stripe-aligned block */
-+	i = e3b->bd_group * EXT3_BLOCKS_PER_GROUP(sb)
-+		+ le32_to_cpu(sbi->s_es->s_first_data_block);
++	i = e3b->bd_group * EXT3_BLOCKS_PER_GROUP(sb) +
++		le32_to_cpu(sbi->s_es->s_first_data_block);
 +	i = ((i + sbi->s_stripe - 1) / sbi->s_stripe) * sbi->s_stripe;
-+	i = (i - le32_to_cpu(sbi->s_es->s_first_data_block))
-+			% EXT3_BLOCKS_PER_GROUP(sb);
++	i = (i - le32_to_cpu(sbi->s_es->s_first_data_block)) %
++		EXT3_BLOCKS_PER_GROUP(sb);
 +
 +	while (i < sb->s_blocksize * 8) {
 +		if (!mb_test_bit(i, bitmap)) {
@@ -2937,7 +2937,7 @@ Index: linux-2.6.9-full/fs/ext3/mballoc.c
 +	if (value <= 0)
 +		return -ERANGE;
 +
-+	ext3_mb_max_to_scan = value;	
++	ext3_mb_max_to_scan = value;
 +
 +	return count;
 +}
@@ -2976,7 +2976,7 @@ Index: linux-2.6.9-full/fs/ext3/mballoc.c
 +	if (value <= 0)
 +		return -ERANGE;
 +
-+	ext3_mb_min_to_scan = value;	
++	ext3_mb_min_to_scan = value;
 +
 +	return count;
 +}
@@ -3015,7 +3015,7 @@ Index: linux-2.6.9-full/fs/ext3/mballoc.c
 +	if (value <= 0)
 +		return -ERANGE;
 +
-+	ext3_mb_order2_reqs = value;	
++	ext3_mb_order2_reqs = value;
 +
 +	return count;
 +}

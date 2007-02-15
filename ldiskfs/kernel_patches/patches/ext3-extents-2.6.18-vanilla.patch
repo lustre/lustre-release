@@ -2641,12 +2641,13 @@ Index: linux-stage/include/linux/ext3_fs.h
  #define EXT3_FEATURE_RO_COMPAT_SUPP	(EXT3_FEATURE_RO_COMPAT_SPARSE_SUPER| \
  					 EXT3_FEATURE_RO_COMPAT_LARGE_FILE| \
  					 EXT3_FEATURE_RO_COMPAT_BTREE_DIR)
-@@ -787,6 +795,8 @@ extern unsigned long ext3_count_free (st
+@@ -787,6 +795,9 @@ extern unsigned long ext3_count_free (st
  
  
  /* inode.c */
 +extern int ext3_block_truncate_page(handle_t *, struct page *,
 +					struct address_space *, loff_t);
++extern int ext3_writepage_trans_blocks(struct inode *inode);
  int ext3_forget(handle_t *handle, int is_metadata, struct inode *inode,
  		struct buffer_head *bh, ext3_fsblk_t blocknr);
  struct buffer_head * ext3_getblk (handle_t *, struct inode *, long, int, int *);
