@@ -214,6 +214,7 @@ int class_unregister_type(const char *name)
 struct obd_device *class_newdev(const char *type_name, const char *name)
 {
         struct obd_device *result = NULL;
+        struct obd_device *newdev;
         struct obd_type *type = NULL;
         int i;
         int new_obd_minor = 0;
@@ -228,6 +229,13 @@ struct obd_device *class_newdev(const char *type_name, const char *name)
                 CERROR("OBD: unknown type: %s\n", type_name);
                 RETURN(ERR_PTR(-ENODEV));
         }
+
+        newdev = obd_device_alloc();
+        if (newdev == NULL) { 
+                class_put_type(type);
+                RETURN(ERR_PTR(-ENOMEM));
+        }
+        LASSERT(newdev->obd_magic == OBD_DEVICE_MAGIC);
 
         spin_lock(&obd_dev_lock);
         for (i = 0; i < class_devno_max(); i++) {
@@ -244,27 +252,17 @@ struct obd_device *class_newdev(const char *type_name, const char *name)
 
                                 obd_devs[result->obd_minor] = NULL;
                                 result->obd_name[0]='\0';
-                                obd_device_free(result);
                         }
                         result = ERR_PTR(-EEXIST);
                         break;
                 }
                 if (!result && !obd) {
-                        obd = obd_device_alloc();
-                        if (obd == NULL) { 
-                               result = ERR_PTR(-ENOMEM);
-                               break;
-                        }
-
-                        LASSERT(obd->obd_magic == OBD_DEVICE_MAGIC);
-                        obd->obd_minor = i;
+                        result = newdev;
+                        result->obd_minor = i;
                         new_obd_minor = i;
-                        obd->obd_type = type;
-                        memcpy(obd->obd_name, name, strlen(name));
-
-                        result = obd;
+                        result->obd_type = type;
+                        memcpy(result->obd_name, name, strlen(name));
                         obd_devs[i] = result;
-                        obd = NULL;
                 }
         }
         spin_unlock(&obd_dev_lock);
@@ -275,12 +273,13 @@ struct obd_device *class_newdev(const char *type_name, const char *name)
                 result = ERR_PTR(-EOVERFLOW);
         }
         
-        if (IS_ERR(result))
+        if (IS_ERR(result)) {
+                obd_device_free(newdev);
                 class_put_type(type);
-        else
+        } else {
                 CDEBUG(D_IOCTL, "Adding new device %s (%p)\n",
                        result->obd_name, result);
-
+        }
         return result;
 }
 
@@ -299,8 +298,8 @@ void class_release_dev(struct obd_device *obd)
 
         spin_lock(&obd_dev_lock);
         obd_devs[obd->obd_minor] = NULL;
-        obd_device_free(obd);
         spin_unlock(&obd_dev_lock);
+        obd_device_free(obd);
 
         class_put_type(obd_type);
 }
