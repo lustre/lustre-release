@@ -2561,6 +2561,7 @@ static int filter_unpackmd(struct obd_export *exp, struct lov_stripe_md **lsmp,
                 RETURN(lsm_size);
 
         if (*lsmp != NULL && lmm == NULL) {
+                OBD_FREE((*lsmp)->lsm_oinfo[0], sizeof(struct lov_oinfo));
                 OBD_FREE(*lsmp, lsm_size);
                 *lsmp = NULL;
                 RETURN(0);
@@ -2570,8 +2571,12 @@ static int filter_unpackmd(struct obd_export *exp, struct lov_stripe_md **lsmp,
                 OBD_ALLOC(*lsmp, lsm_size);
                 if (*lsmp == NULL)
                         RETURN(-ENOMEM);
-
-                loi_init((*lsmp)->lsm_oinfo);
+                OBD_ALLOC((*lsmp)->lsm_oinfo[0], sizeof(struct lov_oinfo));
+                if ((*lsmp)->lsm_oinfo[0] == NULL) {
+                        OBD_FREE(*lsmp, lsm_size);
+                        RETURN(-ENOMEM);
+                }
+                loi_init((*lsmp)->lsm_oinfo[0]);
         }
 
         if (lmm != NULL) {

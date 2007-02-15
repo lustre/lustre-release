@@ -59,7 +59,6 @@ static int lov_llog_origin_add(struct llog_ctxt *ctxt,
 {
         struct obd_device *obd = ctxt->loc_obd;
         struct lov_obd *lov = &obd->u.lov;
-        struct lov_oinfo *loi;
         int i, rc = 0;
         ENTRY;
 
@@ -67,7 +66,8 @@ static int lov_llog_origin_add(struct llog_ctxt *ctxt,
                  "logcookies %p, numcookies %d lsm->lsm_stripe_count %d \n",
                  logcookies, numcookies, lsm->lsm_stripe_count);
 
-        for (i = 0,loi = lsm->lsm_oinfo; i < lsm->lsm_stripe_count; i++,loi++) {
+        for (i = 0; i < lsm->lsm_stripe_count; i++) {
+                struct lov_oinfo *loi = lsm->lsm_oinfo[i];
                 struct obd_device *child = 
                         lov->lov_tgts[loi->loi_ost_idx]->ltd_exp->exp_obd; 
                 struct llog_ctxt *cctxt = llog_get_context(child, ctxt->loc_idx);
@@ -137,17 +137,16 @@ static int lov_llog_repl_cancel(struct llog_ctxt *ctxt, struct lov_stripe_md *ls
 {
         struct lov_obd *lov;
         struct obd_device *obd = ctxt->loc_obd;
-        struct lov_oinfo *loi;
         int rc = 0, i;
         ENTRY;
 
         LASSERT(lsm != NULL);
         LASSERT(count == lsm->lsm_stripe_count);
 
-        loi = lsm->lsm_oinfo;
         lov = &obd->u.lov;
         lov_getref(obd);
-        for (i = 0; i < count; i++, cookies++, loi++) {
+        for (i = 0; i < count; i++, cookies++) {
+                struct lov_oinfo *loi = lsm->lsm_oinfo[i];
                 struct obd_device *child = 
                         lov->lov_tgts[loi->loi_ost_idx]->ltd_exp->exp_obd;
                 struct llog_ctxt *cctxt = 

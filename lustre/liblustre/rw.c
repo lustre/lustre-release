@@ -156,12 +156,12 @@ static int llu_extent_lock_callback(struct ldlm_lock *lock,
                 stripe = llu_lock_to_stripe_offset(inode, lock);
                 lock_res_and_lock(lock);
                 kms = ldlm_extent_shift_kms(lock,
-                                            lsm->lsm_oinfo[stripe].loi_kms);
+                                            lsm->lsm_oinfo[stripe]->loi_kms);
                 unlock_res_and_lock(lock);
-                if (lsm->lsm_oinfo[stripe].loi_kms != kms)
+                if (lsm->lsm_oinfo[stripe]->loi_kms != kms)
                         LDLM_DEBUG(lock, "updating kms from "LPU64" to "LPU64,
-                                   lsm->lsm_oinfo[stripe].loi_kms, kms);
-                lsm->lsm_oinfo[stripe].loi_kms = kms;
+                                   lsm->lsm_oinfo[stripe]->loi_kms, kms);
+                lsm->lsm_oinfo[stripe]->loi_kms = kms;
 iput:
                 I_RELE(inode);
                 break;
@@ -202,7 +202,7 @@ static int llu_glimpse_callback(struct ldlm_lock *lock, void *reqp)
         }
 
         lvb = lustre_msg_buf(req->rq_repmsg, REPLY_REC_OFF, sizeof(*lvb));
-        lvb->lvb_size = lli->lli_smd->lsm_oinfo[stripe].loi_kms;
+        lvb->lvb_size = lli->lli_smd->lsm_oinfo[stripe]->loi_kms;
 
         LDLM_DEBUG(lock, "i_size: %llu -> stripe number %u -> kms "LPU64,
                    (long long)llu_i2stat(inode)->st_size, stripe,lvb->lvb_size);

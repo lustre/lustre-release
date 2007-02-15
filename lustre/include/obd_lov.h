@@ -7,7 +7,7 @@
 
 static inline int lov_stripe_md_size(int stripes)
 {
-        return sizeof(struct lov_stripe_md) + stripes*sizeof(struct lov_oinfo);
+        return sizeof(struct lov_stripe_md) + stripes*sizeof(struct lov_oinfo*);
 }
 
 #define lov_mds_md_size(stripes) lov_mds_md_v1_size(stripes)

@@ -418,17 +418,27 @@ void qos_shrink_lsm(struct lov_request_set *set)
 
         CWARN("using fewer stripes for object "LPX64": old %u new %u\n",
               lsm->lsm_object_id, lsm->lsm_stripe_count, set->set_count);
+        LASSERT(lsm->lsm_stripe_count >= set->set_count);
 
-        oldsize = lov_stripe_md_size(lsm->lsm_stripe_count);
         newsize = lov_stripe_md_size(set->set_count);
         OBD_ALLOC(lsm_new, newsize);
         if (lsm_new != NULL) {
-                memcpy(lsm_new, lsm, newsize);
+                int i;
+                memcpy(lsm_new, lsm, sizeof(*lsm));
+                for (i = 0; i < lsm->lsm_stripe_count; i++) {
+                        if (i < set->set_count) {
+                                lsm_new->lsm_oinfo[i] = lsm->lsm_oinfo[i];
+                                continue;
+                        }
+                        OBD_SLAB_FREE(lsm->lsm_oinfo[i], lov_oinfo_slab,
+                                      sizeof(struct lov_oinfo));
+                }
                 lsm_new->lsm_stripe_count = set->set_count;
-                OBD_FREE(lsm, oldsize);
+                OBD_FREE(lsm, sizeof(struct lov_stripe_md) +
+                         lsm->lsm_stripe_count * sizeof(struct lov_oinfo *));
                 set->set_oi->oi_md = lsm_new;
         } else {
-                CWARN("'leaking' %d bytes\n", oldsize - newsize);
+                CWARN("'leaking' few bytes\n");
         }
 }
 
@@ -449,7 +459,7 @@ int qos_remedy_create(struct lov_request_set *set, struct lov_request *req)
                 for (stripe = 0; stripe < lsm->lsm_stripe_count; stripe++) {
                         if (stripe == req->rq_stripe)
                                 continue;
-                        if (ost_idx == lsm->lsm_oinfo[stripe].loi_ost_idx)
+                        if (ost_idx == lsm->lsm_oinfo[stripe]->loi_ost_idx)
                                 break;
                 }
 
@@ -533,7 +543,7 @@ static int alloc_specific(struct lov_obd *lov, struct lov_stripe_md *lsm,
         int i, *idx_pos = idx_arr;
         ENTRY;
 
-        ost_idx = lsm->lsm_oinfo[0].loi_ost_idx;
+        ost_idx = lsm->lsm_oinfo[0]->loi_ost_idx;
         for (i = 0; i < ost_count; i++, ost_idx = (ost_idx + 1) % ost_count) {
                 if (!lov->lov_tgts[ost_idx] || 
                     !lov->lov_tgts[ost_idx]->ltd_active) {
@@ -715,7 +725,7 @@ static int alloc_idx_array(struct obd_export *exp, struct lov_stripe_md *lsm,
                 tmp_arr[i] = -1;
 
         if (newea || 
-            lsm->lsm_oinfo[0].loi_ost_idx >= lov->desc.ld_tgt_count) 
+            lsm->lsm_oinfo[0]->loi_ost_idx >= lov->desc.ld_tgt_count) 
                 rc = alloc_qos(exp, tmp_arr, &stripe_cnt);
         else
                 rc = alloc_specific(lov, lsm, tmp_arr);

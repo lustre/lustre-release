@@ -95,9 +95,13 @@ static int max = sizeof(rawbuf);
 
 static int cur_device = -1;
 
-union lsm_buffer {
-        char                 space [4096];
+
+#define MAX_STRIPES     170
+struct lov_oinfo lov_oinfos[MAX_STRIPES];
+
+struct lsm_buffer {
         struct lov_stripe_md lsm;
+        struct lov_oinfo *ptrs[MAX_STRIPES];
 } lsm_buffer;
 
 static int l2_ioctl(int dev_id, int opc, void *buf)
@@ -256,14 +260,15 @@ int parse_devname(char *func, char *name)
 }
 
 static void
-reset_lsmb (union lsm_buffer *lsmb)
+reset_lsmb (struct lsm_buffer *lsmb)
 {
-        memset (lsmb->space, 0, sizeof (lsmb->space));
+        memset (&lsmb->lsm, 0, sizeof (lsmb->lsm));
+        memset(lov_oinfos, 0, sizeof(lov_oinfos));
         lsmb->lsm.lsm_magic = LOV_MAGIC;
 }
 
 static int
-parse_lsm (union lsm_buffer *lsmb, char *string)
+parse_lsm (struct lsm_buffer *lsmb, char *string)
 {
         struct lov_stripe_md *lsm = &lsmb->lsm;
         char                 *end;
@@ -308,11 +313,11 @@ parse_lsm (union lsm_buffer *lsmb, char *string)
                 if (*string != '@')
                         return (-1);
                 string++;
-                lsm->lsm_oinfo[i].loi_ost_idx = strtoul(string, &end, 0);
+                lsm->lsm_oinfo[i]->loi_ost_idx = strtoul(string, &end, 0);
                 if (*end != ':')
                         return (-1);
                 string = end + 1;
-                lsm->lsm_oinfo[i].loi_id = strtoull(string, &end, 0);
+                lsm->lsm_oinfo[i]->loi_id = strtoull(string, &end, 0);
                 string = end;
         }
 
@@ -2035,6 +2040,11 @@ static void signal_server(int sig)
 
 int obd_initialize(int argc, char **argv)
 {
+        int i;
+
+        for (i = 0; i < MAX_STRIPES; i++)
+                lsm_buffer.lsm.lsm_oinfo[i] = lov_oinfos + i;
+
         shmem_setup();
         register_ioc_dev(OBD_DEV_ID, OBD_DEV_PATH,
                          OBD_DEV_MAJOR, OBD_DEV_MINOR);

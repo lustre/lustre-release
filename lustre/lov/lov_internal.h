@@ -71,6 +71,8 @@ struct lov_async_page {
         (LASSERT(((struct lov_async_page *)(c))->lap_magic == LOV_AP_MAGIC),   \
          (struct lov_async_page *)(c))
 
+extern kmem_cache_t *lov_oinfo_slab;
+
 static inline void lov_llh_addref(void *llhp)
 {
         struct lov_lock_handles *llh = llhp;
@@ -245,6 +247,8 @@ void lov_dump_lmm_join(int level, struct lov_mds_md_join *lmmj);
 /* lov_ea.c */
 int lov_unpackmd_join(struct lov_obd *lov, struct lov_stripe_md *lsm,
                       struct lov_mds_md *lmm);
+struct lov_stripe_md *lsm_alloc_plain(int stripe_count, int *size);
+void lsm_free_plain(struct lov_stripe_md *lsm);
 
 struct lov_extent *lovea_idx2le(struct lov_stripe_md *lsm, int stripe_no);
 struct lov_extent *lovea_off2le(struct lov_stripe_md *lsm, obd_off lov_off);

@@ -75,17 +75,23 @@ echo_find_object_locked (struct obd_device *obd, obd_id id)
 }
 
 static int
-echo_copyout_lsm (struct lov_stripe_md *lsm, void *ulsm, int ulsm_nob)
+echo_copyout_lsm (struct lov_stripe_md *lsm, void *_ulsm, int ulsm_nob)
 {
-        int nob;
+        struct lov_stripe_md *ulsm = _ulsm;
+        int nob, i;
 
         nob = offsetof (struct lov_stripe_md, lsm_oinfo[lsm->lsm_stripe_count]);
         if (nob > ulsm_nob)
                 return (-EINVAL);
 
-        if (copy_to_user (ulsm, lsm, nob))
+        if (copy_to_user (ulsm, lsm, sizeof(ulsm)))
                 return (-EFAULT);
 
+        for (i = 0; i < lsm->lsm_stripe_count; i++) {
+                if (copy_to_user (ulsm->lsm_oinfo[i], lsm->lsm_oinfo[i],
+                                  sizeof(lsm->lsm_oinfo[0])))
+                        return (-EFAULT);
+        }
         return (0);
 }
 
@@ -94,7 +100,7 @@ echo_copyin_lsm (struct obd_device *obd, struct lov_stripe_md *lsm,
                  void *ulsm, int ulsm_nob)
 {
         struct echo_client_obd *ec = &obd->u.echo_client;
-        int                     nob;
+        int                     i;
 
         if (ulsm_nob < sizeof (*lsm))
                 return (-EINVAL);
@@ -102,18 +108,18 @@ echo_copyin_lsm (struct obd_device *obd, struct lov_stripe_md *lsm,
         if (copy_from_user (lsm, ulsm, sizeof (*lsm)))
                 return (-EFAULT);
 
-        nob = lsm->lsm_stripe_count * sizeof (lsm->lsm_oinfo[0]);
-
-        if (ulsm_nob < nob ||
-            lsm->lsm_stripe_count > ec->ec_nstripes ||
+        if (lsm->lsm_stripe_count > ec->ec_nstripes ||
             lsm->lsm_magic != LOV_MAGIC ||
             (lsm->lsm_stripe_size & (~CFS_PAGE_MASK)) != 0 ||
             ((__u64)lsm->lsm_stripe_size * lsm->lsm_stripe_count > ~0UL))
                 return (-EINVAL);
 
-        if (copy_from_user(lsm->lsm_oinfo,
-                           ((struct lov_stripe_md *)ulsm)->lsm_oinfo, nob))
-                return (-EFAULT);
+        for (i = 0; i < lsm->lsm_stripe_count; i++) {
+                if (copy_from_user(lsm->lsm_oinfo[i],
+                                   ((struct lov_stripe_md *)ulsm)->lsm_oinfo[i],
+                                   sizeof(lsm->lsm_oinfo[0])))
+                        return (-EFAULT);
+        }
 
         return (0);
 }
@@ -201,10 +207,10 @@ static int echo_create_object(struct obd_device *obd, int on_target,
 
                 /* setup stripes: indices + default ids if required */
                 for (i = 0; i < lsm->lsm_stripe_count; i++) {
-                        if (lsm->lsm_oinfo[i].loi_id == 0)
-                                lsm->lsm_oinfo[i].loi_id = lsm->lsm_object_id;
+                        if (lsm->lsm_oinfo[i]->loi_id == 0)
+                                lsm->lsm_oinfo[i]->loi_id = lsm->lsm_object_id;
 
-                        lsm->lsm_oinfo[i].loi_ost_idx =
+                        lsm->lsm_oinfo[i]->loi_ost_idx =
                                 (idx + i) % ec->ec_nstripes;
                 }
         } else {
@@ -257,7 +263,7 @@ static int echo_create_object(struct obd_device *obd, int on_target,
                 eco, eco->eco_id,
                 eco->eco_lsm->lsm_stripe_size,
                 eco->eco_lsm->lsm_stripe_count,
-                eco->eco_lsm->lsm_oinfo[0].loi_ost_idx,
+                eco->eco_lsm->lsm_oinfo[0]->loi_ost_idx,
                 eco->eco_refcount, eco->eco_deleted);
         return (0);
 
@@ -300,7 +306,7 @@ echo_get_object (struct ec_object **ecop, struct obd_device *obd,
                         eco, eco->eco_id,
                         eco->eco_lsm->lsm_stripe_size,
                         eco->eco_lsm->lsm_stripe_count,
-                        eco->eco_lsm->lsm_oinfo[0].loi_ost_idx,
+                        eco->eco_lsm->lsm_oinfo[0]->loi_ost_idx,
                         eco->eco_refcount, eco->eco_deleted);
                 return (0);
         }
@@ -328,7 +334,7 @@ echo_get_object (struct ec_object **ecop, struct obd_device *obd,
                         eco, eco->eco_id,
                         eco->eco_lsm->lsm_stripe_size,
                         eco->eco_lsm->lsm_stripe_count,
-                        eco->eco_lsm->lsm_oinfo[0].loi_ost_idx,
+                        eco->eco_lsm->lsm_oinfo[0]->loi_ost_idx,
                         eco->eco_refcount, eco->eco_deleted);
                 return (0);
         }
@@ -345,7 +351,7 @@ echo_get_object (struct ec_object **ecop, struct obd_device *obd,
                         eco2, eco2->eco_id,
                         eco2->eco_lsm->lsm_stripe_size,
                         eco2->eco_lsm->lsm_stripe_count,
-                        eco2->eco_lsm->lsm_oinfo[0].loi_ost_idx,
+                        eco2->eco_lsm->lsm_oinfo[0]->loi_ost_idx,
                         eco2->eco_refcount, eco2->eco_deleted);
         }
 
@@ -374,7 +380,7 @@ echo_put_object (struct ec_object *eco)
                eco, eco->eco_id,
                eco->eco_lsm->lsm_stripe_size,
                eco->eco_lsm->lsm_stripe_count,
-               eco->eco_lsm->lsm_oinfo[0].loi_ost_idx,
+               eco->eco_lsm->lsm_oinfo[0]->loi_ost_idx,
                eco->eco_refcount, eco->eco_deleted);
 
         if (eco->eco_refcount != 0 || !eco->eco_deleted) {
@@ -425,7 +431,7 @@ echo_get_stripe_off_id (struct lov_stripe_md *lsm, obd_off *offp, obd_id *idp)
 
         stripe_index = woffset / stripe_size;
 
-        *idp = lsm->lsm_oinfo[stripe_index].loi_id;
+        *idp = lsm->lsm_oinfo[stripe_index]->loi_id;
         *offp = offset * stripe_size + woffset % stripe_size;
 }
 

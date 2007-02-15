@@ -964,8 +964,8 @@ static int lov_recreate(struct obd_export *exp, struct obdo *src_oa,
                 GOTO(out, rc = -EINVAL);
 
         for (i = 0; i < lsm->lsm_stripe_count; i++) {
-                if (lsm->lsm_oinfo[i].loi_ost_idx == ost_idx) {
-                        if (lsm->lsm_oinfo[i].loi_id != src_oa->o_id)
+                if (lsm->lsm_oinfo[i]->loi_ost_idx == ost_idx) {
+                        if (lsm->lsm_oinfo[i]->loi_id != src_oa->o_id)
                                 GOTO(out, rc = -EINVAL);
                         break;
                 }
@@ -1464,7 +1464,7 @@ static int lov_brw_check(struct lov_obd *lov, struct obd_info *lov_oinfo,
          * I/O can succeed */
         for (i = 0; i < oa_bufs; i++) {
                 int stripe = lov_stripe_number(lov_oinfo->oi_md, pga[i].off);
-                int ost = lov_oinfo->oi_md->lsm_oinfo[stripe].loi_ost_idx;
+                int ost = lov_oinfo->oi_md->lsm_oinfo[stripe]->loi_ost_idx;
                 obd_off start, end;
 
                 if (!lov_stripe_intersects(lov_oinfo->oi_md, i, pga[i].off,
@@ -1680,7 +1680,7 @@ int lov_prep_async_page(struct obd_export *exp, struct lov_stripe_md *lsm,
         /* for now only raid 0 which passes through */
         lap->lap_stripe = lov_stripe_number(lsm, offset);
         lov_stripe_offset(lsm, offset, lap->lap_stripe, &lap->lap_sub_offset);
-        loi = &lsm->lsm_oinfo[lap->lap_stripe];
+        loi = lsm->lsm_oinfo[lap->lap_stripe];
 
         /* so the callback doesn't need the lsm */
         lap->lap_loi_id = loi->loi_id;
@@ -1714,7 +1714,7 @@ static int lov_queue_async_io(struct obd_export *exp,
 
         lap = LAP_FROM_COOKIE(cookie);
 
-        loi = &lsm->lsm_oinfo[lap->lap_stripe];
+        loi = lsm->lsm_oinfo[lap->lap_stripe];
 
         rc = obd_queue_async_io(lov->lov_tgts[loi->loi_ost_idx]->ltd_exp, lsm,
                                 loi, lap->lap_sub_cookie, cmd, off, count,
@@ -1737,7 +1737,7 @@ static int lov_set_async_flags(struct obd_export *exp,
 
         lap = LAP_FROM_COOKIE(cookie);
 
-        loi = &lsm->lsm_oinfo[lap->lap_stripe];
+        loi = lsm->lsm_oinfo[lap->lap_stripe];
 
         rc = obd_set_async_flags(lov->lov_tgts[loi->loi_ost_idx]->ltd_exp,
                                  lsm, loi, lap->lap_sub_cookie, async_flags);
@@ -1761,7 +1761,7 @@ static int lov_queue_group_io(struct obd_export *exp,
 
         lap = LAP_FROM_COOKIE(cookie);
 
-        loi = &lsm->lsm_oinfo[lap->lap_stripe];
+        loi = lsm->lsm_oinfo[lap->lap_stripe];
 
         rc = obd_queue_group_io(lov->lov_tgts[loi->loi_ost_idx]->ltd_exp, lsm,
                                 loi, oig, lap->lap_sub_cookie, cmd, off, count,
@@ -1784,8 +1784,8 @@ static int lov_trigger_group_io(struct obd_export *exp,
 
         ASSERT_LSM_MAGIC(lsm);
 
-        loi = lsm->lsm_oinfo;
-        for (i = 0; i < lsm->lsm_stripe_count; i++, loi++) {
+        for (i = 0; i < lsm->lsm_stripe_count; i++) {
+                loi = lsm->lsm_oinfo[i];
                 if (!lov->lov_tgts[loi->loi_ost_idx] || 
                     !lov->lov_tgts[loi->loi_ost_idx]->ltd_active) {
                         CDEBUG(D_HA, "lov idx %d inactive\n", loi->loi_ost_idx);
@@ -1814,7 +1814,7 @@ static int lov_teardown_async_page(struct obd_export *exp,
 
         lap = LAP_FROM_COOKIE(cookie);
 
-        loi = &lsm->lsm_oinfo[lap->lap_stripe];
+        loi = lsm->lsm_oinfo[lap->lap_stripe];
 
         rc = obd_teardown_async_page(lov->lov_tgts[loi->loi_ost_idx]->ltd_exp,
                                      lsm, loi, lap->lap_sub_cookie);
@@ -1938,9 +1938,10 @@ static int lov_change_cbdata(struct obd_export *exp,
                 RETURN(-ENODEV);
 
         lov = &exp->exp_obd->u.lov;
-        for (i = 0,loi = lsm->lsm_oinfo; i < lsm->lsm_stripe_count; i++,loi++) {
+        for (i = 0; i < lsm->lsm_stripe_count; i++) {
                 struct lov_stripe_md submd;
 
+                loi = lsm->lsm_oinfo[i];
                 submd.lsm_object_id = loi->loi_id;
                 submd.lsm_stripe_count = 0;
                 rc = obd_change_cbdata(lov->lov_tgts[loi->loi_ost_idx]->ltd_exp,
@@ -2021,10 +2022,11 @@ static int lov_cancel_unused(struct obd_export *exp,
 
         ASSERT_LSM_MAGIC(lsm);
 
-        for (i = 0,loi = lsm->lsm_oinfo; i < lsm->lsm_stripe_count; i++,loi++) {
+        for (i = 0; i < lsm->lsm_stripe_count; i++) {
                 struct lov_stripe_md submd;
                 int err;
 
+                loi = lsm->lsm_oinfo[i];
                 if (!lov->lov_tgts[loi->loi_ost_idx] || 
                     !lov->lov_tgts[loi->loi_ost_idx]->ltd_active)
                         CDEBUG(D_HA, "lov idx %d inactive\n", loi->loi_ost_idx);
@@ -2057,10 +2059,11 @@ static int lov_join_lru(struct obd_export *exp,
                 RETURN(-ENODEV);
 
         lov = &exp->exp_obd->u.lov;
-        for (i = 0,loi = lsm->lsm_oinfo; i < lsm->lsm_stripe_count; i++,loi++) {
+        for (i = 0; i < lsm->lsm_stripe_count; i++) {
                 struct lov_stripe_md submd;
                 int rc = 0;
 
+                loi = lsm->lsm_oinfo[i];
                 if (!lov->lov_tgts[loi->loi_ost_idx] || 
                     !lov->lov_tgts[loi->loi_ost_idx]->ltd_active)
                         CDEBUG(D_HA, "lov idx %d inactive\n", loi->loi_ost_idx);
@@ -2312,9 +2315,8 @@ static int lov_get_info(struct obd_export *exp, __u32 keylen,
                 /* XXX - it's assumed all the locks for deleted OSTs have
                  * been cancelled. Also, the export for deleted OSTs will
                  * be NULL and won't match the lock's export. */
-                for (i = 0, loi = data->lsm->lsm_oinfo;
-                     i < data->lsm->lsm_stripe_count;
-                     i++, loi++) {
+                for (i = 0; i < data->lsm->lsm_stripe_count; i++) {
+                        loi = data->lsm->lsm_oinfo[i];
                         if (!lov->lov_tgts[loi->loi_ost_idx])
                                 continue;
                         if (lov->lov_tgts[loi->loi_ost_idx]->ltd_exp ==
@@ -2437,8 +2439,8 @@ int lov_test_and_clear_async_rc(struct lov_stripe_md *lsm)
         int i, rc = 0;
         ENTRY;
 
-        for (i = 0, loi = lsm->lsm_oinfo; i < lsm->lsm_stripe_count;
-             i++, loi++) {
+        for (i = 0; i < lsm->lsm_stripe_count; i++) {
+                loi = lsm->lsm_oinfo[i];
                 if (loi->loi_ar.ar_rc && !rc)
                         rc = loi->loi_ar.ar_rc;
                 loi->loi_ar.ar_rc = 0;
@@ -2626,12 +2628,19 @@ struct obd_ops lov_obd_ops = {
 static quota_interface_t *quota_interface;
 extern quota_interface_t lov_quota_interface;
 
+kmem_cache_t *lov_oinfo_slab;
+
 int __init lov_init(void)
 {
         struct lprocfs_static_vars lvars;
-        int rc;
+        int rc, rc2;
         ENTRY;
 
+        lov_oinfo_slab = kmem_cache_create("lov_oinfo",
+                                           sizeof(struct lov_oinfo), 0,
+                                           SLAB_HWCACHE_ALIGN, NULL, NULL);
+        if (lov_oinfo_slab == NULL)
+                return -ENOMEM;
         lprocfs_init_vars(lov, &lvars);
 
         request_module("lquota");
@@ -2640,8 +2649,12 @@ int __init lov_init(void)
 
         rc = class_register_type(&lov_obd_ops, lvars.module_vars,
                                  LUSTRE_LOV_NAME);
-        if (rc && quota_interface)
-                PORTAL_SYMBOL_PUT(lov_quota_interface);
+        if (rc) {
+                if (quota_interface)
+                        PORTAL_SYMBOL_PUT(lov_quota_interface);
+                rc2 = kmem_cache_destroy(lov_oinfo_slab);
+                LASSERT(rc2 == 0);
+        }
 
         RETURN(rc);
 }
@@ -2649,10 +2662,14 @@ int __init lov_init(void)
 #ifdef __KERNEL__
 static void /*__exit*/ lov_exit(void)
 {
+        int rc;
+
         if (quota_interface)
                 PORTAL_SYMBOL_PUT(lov_quota_interface);
 
         class_unregister_type(LUSTRE_LOV_NAME);
+        rc = kmem_cache_destroy(lov_oinfo_slab);
+        LASSERT(rc == 0);
 }
 
 MODULE_AUTHOR("Cluster File Systems, Inc. <info@clusterfs.com>");

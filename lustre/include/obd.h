@@ -114,7 +114,7 @@ struct lov_stripe_md {
         } lsm_wire;
 
         struct lov_array_info *lsm_array; /*Only for joined file array info*/
-        struct lov_oinfo lsm_oinfo[0];
+        struct lov_oinfo *lsm_oinfo[0];
 };
 
 #define lsm_object_id    lsm_wire.lw_object_id

@@ -135,7 +135,8 @@ int lov_packmd(struct obd_export *exp, struct lov_mds_md **lmmp,
         lmm->lmm_stripe_count = cpu_to_le32(stripe_count);
         lmm->lmm_pattern = cpu_to_le32(lsm->lsm_pattern);
 
-        for (i = 0, loi = lsm->lsm_oinfo; i < stripe_count; i++, loi++) {
+        for (i = 0; i < stripe_count; i++) {
+                loi = lsm->lsm_oinfo[i];
                 /* XXX LOV STACKING call down to osc_packmd() to do packing */
                 LASSERTF(loi->loi_id, "lmm_oid "LPU64" stripe %u/%u idx %u\n",
                          lmm->lmm_object_id, i, stripe_count, loi->loi_ost_idx);
@@ -185,18 +186,14 @@ static int lov_verify_lmm(void *lmm, int lmm_bytes, int *stripe_count)
 int lov_alloc_memmd(struct lov_stripe_md **lsmp, int stripe_count, 
                       int pattern, int magic)
 {
-        int lsm_size = lov_stripe_md_size(stripe_count);
-        struct lov_oinfo *loi;
-        int i;
+        int i, lsm_size;
         ENTRY;
 
-        CDEBUG(D_INFO, "alloc lsm, stripe_count %d, lsm_size %d\n", 
-               stripe_count, lsm_size);
+        CDEBUG(D_INFO, "alloc lsm, stripe_count %d\n", stripe_count);
 
-        OBD_ALLOC(*lsmp, lsm_size);
+        *lsmp = lsm_alloc_plain(stripe_count, &lsm_size);
         if (!*lsmp) {
-                CERROR("can not allocate lsmp lsm_size %d stripe_count %d\n",
-                        lsm_size, stripe_count);
+                CERROR("can't allocate lsmp, stripe_count %d\n", stripe_count);
                 RETURN(-ENOMEM);
         }
 
@@ -205,10 +202,10 @@ int lov_alloc_memmd(struct lov_stripe_md **lsmp, int stripe_count,
         (*lsmp)->lsm_stripe_count = stripe_count;
         (*lsmp)->lsm_maxbytes = LUSTRE_STRIPE_MAXBYTES * stripe_count;
         (*lsmp)->lsm_pattern = pattern;
-        (*lsmp)->lsm_oinfo[0].loi_ost_idx = ~0;
+        (*lsmp)->lsm_oinfo[0]->loi_ost_idx = ~0;
 
-        for (i = 0, loi = (*lsmp)->lsm_oinfo; i < stripe_count; i++, loi++)
-                loi_init(loi);
+        for (i = 0; i < stripe_count; i++)
+                loi_init((*lsmp)->lsm_oinfo[i]);
 
         RETURN(lsm_size);
 }
@@ -248,9 +245,11 @@ int lov_unpackmd(struct obd_export *exp,  struct lov_stripe_md **lsmp,
         }
 
         /* If we aren't passed an lsmp struct, we just want the size */
-        if (!lsmp)
+        if (!lsmp) {
                 /* XXX LOV STACKING call into osc for sizes */
+                LBUG();
                 RETURN(lov_stripe_md_size(stripe_count));
+        }
 
         /* If we are passed an allocated struct but nothing to unpack, free */
         if (*lsmp && !lmm) {
@@ -347,7 +346,7 @@ int lov_setstripe(struct obd_export *exp, struct lov_stripe_md **lsmp,
         if (rc < 0)
                 RETURN(rc);
 
-        (*lsmp)->lsm_oinfo[0].loi_ost_idx = lum.lmm_stripe_offset;
+        (*lsmp)->lsm_oinfo[0]->loi_ost_idx = lum.lmm_stripe_offset;
         (*lsmp)->lsm_stripe_size = lum.lmm_stripe_size;
 
         RETURN(0);
@@ -384,10 +383,10 @@ int lov_setea(struct obd_export *exp, struct lov_stripe_md **lsmp,
                 RETURN(rc);
 
         for (i = 0; i < lump->lmm_stripe_count; i++) {
-                (*lsmp)->lsm_oinfo[i].loi_ost_idx =
+                (*lsmp)->lsm_oinfo[i]->loi_ost_idx =
                         lump->lmm_objects[i].l_ost_idx;
-                (*lsmp)->lsm_oinfo[i].loi_id = lump->lmm_objects[i].l_object_id;
-                (*lsmp)->lsm_oinfo[i].loi_gr = lump->lmm_objects[i].l_object_gr;
+                (*lsmp)->lsm_oinfo[i]->loi_id = lump->lmm_objects[i].l_object_id;
+                (*lsmp)->lsm_oinfo[i]->loi_gr = lump->lmm_objects[i].l_object_gr;
         }
         RETURN(0);
 }

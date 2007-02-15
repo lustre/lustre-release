@@ -123,6 +123,7 @@ static int osc_unpackmd(struct obd_export *exp, struct lov_stripe_md **lsmp,
                 RETURN(lsm_size);
 
         if (*lsmp != NULL && lmm == NULL) {
+                OBD_FREE((*lsmp)->lsm_oinfo[0], sizeof(struct lov_oinfo));
                 OBD_FREE(*lsmp, lsm_size);
                 *lsmp = NULL;
                 RETURN(0);
@@ -132,7 +133,12 @@ static int osc_unpackmd(struct obd_export *exp, struct lov_stripe_md **lsmp,
                 OBD_ALLOC(*lsmp, lsm_size);
                 if (*lsmp == NULL)
                         RETURN(-ENOMEM);
-                loi_init((*lsmp)->lsm_oinfo);
+                OBD_ALLOC((*lsmp)->lsm_oinfo[0], sizeof(struct lov_oinfo));
+                if ((*lsmp)->lsm_oinfo[0] == NULL) {
+                        OBD_FREE(*lsmp, lsm_size);
+                        RETURN(-ENOMEM);
+                }
+                loi_init((*lsmp)->lsm_oinfo[0]);
         }
 
         if (lmm != NULL) {
@@ -2356,7 +2362,7 @@ static int osc_queue_async_io(struct obd_export *exp, struct lov_stripe_md *lsm,
 #endif
 
         if (loi == NULL)
-                loi = &lsm->lsm_oinfo[0];
+                loi = lsm->lsm_oinfo[0];
 
         client_obd_list_lock(&cli->cl_loi_list_lock);
 
@@ -2418,7 +2424,7 @@ static int osc_set_async_flags(struct obd_export *exp,
                 RETURN(-EIO);
 
         if (loi == NULL)
-                loi = &lsm->lsm_oinfo[0];
+                loi = lsm->lsm_oinfo[0];
 
         if (oap->oap_cmd & OBD_BRW_WRITE) {
                 lop = &loi->loi_write_lop;
@@ -2478,7 +2484,7 @@ static int osc_queue_group_io(struct obd_export *exp, struct lov_stripe_md *lsm,
                 RETURN(-EBUSY);
 
         if (loi == NULL)
-                loi = &lsm->lsm_oinfo[0];
+                loi = lsm->lsm_oinfo[0];
 
         client_obd_list_lock(&cli->cl_loi_list_lock);
 
@@ -2530,7 +2536,7 @@ static int osc_trigger_group_io(struct obd_export *exp,
         ENTRY;
 
         if (loi == NULL)
-                loi = &lsm->lsm_oinfo[0];
+                loi = lsm->lsm_oinfo[0];
 
         client_obd_list_lock(&cli->cl_loi_list_lock);
 
@@ -2558,7 +2564,7 @@ static int osc_teardown_async_page(struct obd_export *exp,
                 RETURN(PTR_ERR(oap));
 
         if (loi == NULL)
-                loi = &lsm->lsm_oinfo[0];
+                loi = lsm->lsm_oinfo[0];
 
         if (oap->oap_cmd & OBD_BRW_WRITE) {
                 lop = &loi->loi_write_lop;
@@ -2655,9 +2661,9 @@ static int osc_enqueue_fini(struct ptlrpc_request *req, struct obd_info *oinfo,
 
         if ((intent && rc == ELDLM_LOCK_ABORTED) || !rc) {
                 CDEBUG(D_INODE,"got kms "LPU64" blocks "LPU64" mtime "LPU64"\n",
-                       oinfo->oi_md->lsm_oinfo->loi_lvb.lvb_size,
-                       oinfo->oi_md->lsm_oinfo->loi_lvb.lvb_blocks,
-                       oinfo->oi_md->lsm_oinfo->loi_lvb.lvb_mtime);
+                       oinfo->oi_md->lsm_oinfo[0]->loi_lvb.lvb_size,
+                       oinfo->oi_md->lsm_oinfo[0]->loi_lvb.lvb_blocks,
+                       oinfo->oi_md->lsm_oinfo[0]->loi_lvb.lvb_mtime);
         }
 
         /* Call the update callback. */
@@ -2680,8 +2686,8 @@ static int osc_enqueue_interpret(struct ptlrpc_request *req,
         rc = ldlm_cli_enqueue_fini(aa->oa_exp, req, aa->oa_ei->ei_type, 1,
                                    aa->oa_ei->ei_mode,
                                    &aa->oa_ei->ei_flags,
-                                   &lsm->lsm_oinfo->loi_lvb,
-                                   sizeof(lsm->lsm_oinfo->loi_lvb),
+                                   &lsm->lsm_oinfo[0]->loi_lvb,
+                                   sizeof(lsm->lsm_oinfo[0]->loi_lvb),
                                    lustre_swab_ost_lvb,
                                    aa->oa_oi->oi_lockh, rc);
 
@@ -2722,7 +2728,7 @@ static int osc_enqueue(struct obd_export *exp, struct obd_info *oinfo,
                 oinfo->oi_policy.l_extent.start & ~CFS_PAGE_MASK;
         oinfo->oi_policy.l_extent.end |= ~CFS_PAGE_MASK;
 
-        if (oinfo->oi_md->lsm_oinfo->loi_kms_valid == 0)
+        if (oinfo->oi_md->lsm_oinfo[0]->loi_kms_valid == 0)
                 goto no_match;
 
         /* Next, search for already existing extent locks that will cover us */
@@ -2793,7 +2799,7 @@ static int osc_enqueue(struct obd_export *exp, struct obd_info *oinfo,
 
                 size[DLM_LOCKREPLY_OFF] = sizeof(*rep);
                 size[DLM_REPLY_REC_OFF] = 
-                        sizeof(oinfo->oi_md->lsm_oinfo->loi_lvb);
+                        sizeof(oinfo->oi_md->lsm_oinfo[0]->loi_lvb);
                 ptlrpc_req_set_repsize(req, 3, size);
         }
 
@@ -2805,8 +2811,8 @@ static int osc_enqueue(struct obd_export *exp, struct obd_info *oinfo,
                               &einfo->ei_flags, einfo->ei_cb_bl,
                               einfo->ei_cb_cp, einfo->ei_cb_gl,
                               einfo->ei_cbdata,
-                              &oinfo->oi_md->lsm_oinfo->loi_lvb,
-                              sizeof(oinfo->oi_md->lsm_oinfo->loi_lvb),
+                              &oinfo->oi_md->lsm_oinfo[0]->loi_lvb,
+                              sizeof(oinfo->oi_md->lsm_oinfo[0]->loi_lvb),
                               lustre_swab_ost_lvb, oinfo->oi_lockh,
                               einfo->ei_rqset ? 1 : 0);
         if (einfo->ei_rqset) {

@@ -603,11 +603,11 @@ static int ll_lock_to_stripe_offset(struct inode *inode, struct ldlm_lock *lock)
         LASSERT(stripe < lsm->lsm_stripe_count);
 
 check:
-        if (lsm->lsm_oinfo[stripe].loi_id != lock->l_resource->lr_name.name[0]||
-            lsm->lsm_oinfo[stripe].loi_gr != lock->l_resource->lr_name.name[1]){
+        if (lsm->lsm_oinfo[stripe]->loi_id != lock->l_resource->lr_name.name[0]||
+            lsm->lsm_oinfo[stripe]->loi_gr != lock->l_resource->lr_name.name[1]){
                 LDLM_ERROR(lock, "resource doesn't match object "LPU64"/"LPU64,
-                           lsm->lsm_oinfo[stripe].loi_id,
-                           lsm->lsm_oinfo[stripe].loi_gr);
+                           lsm->lsm_oinfo[stripe]->loi_id,
+                           lsm->lsm_oinfo[stripe]->loi_gr);
                 RETURN(-ELDLM_NO_LOCK_DATA);
         }
 
@@ -804,12 +804,12 @@ static int ll_extent_lock_callback(struct ldlm_lock *lock,
                 lov_stripe_lock(lsm);
                 lock_res_and_lock(lock);
                 kms = ldlm_extent_shift_kms(lock,
-                                            lsm->lsm_oinfo[stripe].loi_kms);
+                                            lsm->lsm_oinfo[stripe]->loi_kms);
 
-                if (lsm->lsm_oinfo[stripe].loi_kms != kms)
+                if (lsm->lsm_oinfo[stripe]->loi_kms != kms)
                         LDLM_DEBUG(lock, "updating kms from "LPU64" to "LPU64,
-                                   lsm->lsm_oinfo[stripe].loi_kms, kms);
-                lsm->lsm_oinfo[stripe].loi_kms = kms;
+                                   lsm->lsm_oinfo[stripe]->loi_kms, kms);
+                lsm->lsm_oinfo[stripe]->loi_kms = kms;
                 unlock_res_and_lock(lock);
                 lov_stripe_unlock(lsm);
                 //ll_try_done_writing(inode);
@@ -911,7 +911,7 @@ static int ll_glimpse_callback(struct ldlm_lock *lock, void *reqp)
         }
 
         lvb = lustre_msg_buf(req->rq_repmsg, REPLY_REC_OFF, sizeof(*lvb));
-        lvb->lvb_size = lli->lli_smd->lsm_oinfo[stripe].loi_kms;
+        lvb->lvb_size = lli->lli_smd->lsm_oinfo[stripe]->loi_kms;
         lvb->lvb_mtime = LTIME_S(inode->i_mtime);
         lvb->lvb_atime = LTIME_S(inode->i_atime);
         lvb->lvb_ctime = LTIME_S(inode->i_ctime);
@@ -1706,13 +1706,13 @@ int ll_lov_getstripe_ea_info(struct inode *inode, const char *filename,
                                 lmj->lmm_objects[i].l_extent_end =
                                         lex->le_start + lex->le_len;
                         lmj->lmm_objects[i].l_object_id =
-                                lsm->lsm_oinfo[i].loi_id;
+                                lsm->lsm_oinfo[i]->loi_id;
                         lmj->lmm_objects[i].l_object_gr =
-                                lsm->lsm_oinfo[i].loi_gr;
+                                lsm->lsm_oinfo[i]->loi_gr;
                         lmj->lmm_objects[i].l_ost_gen =
-                                lsm->lsm_oinfo[i].loi_ost_gen;
+                                lsm->lsm_oinfo[i]->loi_ost_gen;
                         lmj->lmm_objects[i].l_ost_idx =
-                                lsm->lsm_oinfo[i].loi_ost_idx;
+                                lsm->lsm_oinfo[i]->loi_ost_idx;
                 }
                 lmm = (struct lov_mds_md *)lmj;
                 lmmsize = lmj_size;

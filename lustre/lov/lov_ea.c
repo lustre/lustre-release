@@ -79,6 +79,49 @@ static int lsm_lmm_verify_common(struct lov_mds_md *lmm, int lmm_bytes,
         return 0;
 }
 
+struct lov_stripe_md *lsm_alloc_plain(int stripe_count, int *size)
+{
+        struct lov_stripe_md *lsm;
+        int i, oinfo_ptrs_size;
+        struct lov_oinfo *loi;
+
+        LASSERT(stripe_count > 0);
+
+        oinfo_ptrs_size = sizeof(struct lov_oinfo *) * stripe_count;
+        *size = sizeof(struct lov_stripe_md) + oinfo_ptrs_size;
+
+        OBD_ALLOC(lsm, *size);
+        if (!lsm)
+                return NULL;;
+
+        for (i = 0; i < stripe_count; i++) {
+                OBD_SLAB_ALLOC(loi, lov_oinfo_slab, SLAB_NOFS, sizeof(*loi));
+                if (loi == NULL)
+                        goto err;
+                lsm->lsm_oinfo[i] = loi;
+        }
+        lsm->lsm_stripe_count = stripe_count;
+        return lsm;
+
+err:
+        while (--i >= 0)
+                OBD_SLAB_FREE(lsm->lsm_oinfo[i], lov_oinfo_slab, sizeof(*loi));
+        OBD_FREE(lsm, *size);
+        return NULL;
+}
+
+void lsm_free_plain(struct lov_stripe_md *lsm)
+{
+        int stripe_count = lsm->lsm_stripe_count;
+        int i;
+
+        for (i = 0; i < stripe_count; i++)
+                OBD_SLAB_FREE(lsm->lsm_oinfo[i], lov_oinfo_slab,
+                              sizeof(struct lov_oinfo));
+        OBD_FREE(lsm, sizeof(struct lov_stripe_md) +
+                 stripe_count * sizeof(struct lov_oinfo *));
+}
+
 static void lsm_unpackmd_common(struct lov_stripe_md *lsm,
                                 struct lov_mds_md *lmm)
 {
@@ -125,11 +168,6 @@ lsm_stripe_index_by_offset_plain(struct lov_stripe_md *lsm,
         return 0;
 }
 
-static void lsm_free_plain(struct lov_stripe_md *lsm)
-{
-        OBD_FREE(lsm, lov_stripe_md_size(lsm->lsm_stripe_count));
-}
-
 static int lsm_revalidate_plain(struct lov_stripe_md *lsm,
                                 struct obd_device *obd)
 {
@@ -171,8 +209,9 @@ int lsm_unpackmd_plain(struct lov_obd *lov, struct lov_stripe_md *lsm,
 
         lsm_unpackmd_common(lsm, lmm);
 
-        for (i = 0, loi = lsm->lsm_oinfo; i < lsm->lsm_stripe_count; i++) {
+        for (i = 0; i < lsm->lsm_stripe_count; i++) {
                 /* XXX LOV STACKING call down to osc_unpackmd() */
+                loi = lsm->lsm_oinfo[i];
                 loi->loi_id = le64_to_cpu(lmm->lmm_objects[i].l_object_id);
                 loi->loi_gr = le64_to_cpu(lmm->lmm_objects[i].l_object_gr);
                 loi->loi_ost_idx = le32_to_cpu(lmm->lmm_objects[i].l_ost_idx);
@@ -188,7 +227,6 @@ int lsm_unpackmd_plain(struct lov_obd *lov, struct lov_stripe_md *lsm,
                         lov_dump_lmm_v1(D_WARNING, lmm);
                         return -EINVAL;
                 }
-                loi++;
         }
 
         return 0;
@@ -271,7 +309,7 @@ static void lovea_free_array_info(struct lov_stripe_md *lsm)
 static void lsm_free_join(struct lov_stripe_md *lsm)
 {
         lovea_free_array_info(lsm);
-        OBD_FREE(lsm, lov_stripe_md_size(lsm->lsm_stripe_count));
+        lsm_free_plain(lsm);
 }
 
 static void
@@ -393,18 +431,17 @@ static int lovea_unpack_array(struct llog_handle *handle,
 
         /* unpack extent's lmm to lov_oinfo array */
         loi_index = lai->lai_ext_array[cursor].le_loi_idx;
-        loi = &lsm->lsm_oinfo[loi_index];
         CDEBUG(D_INFO, "lovea upackmd cursor %d, loi_index %d extent "
                         LPU64":"LPU64"\n", cursor, loi_index, med->med_start,
                         med->med_len);
 
         for (i = 0; i < lmm->lmm_stripe_count; i ++) {
                 /* XXX LOV STACKING call down to osc_unpackmd() */
+                loi = lsm->lsm_oinfo[loi_index];
                 loi->loi_id = le64_to_cpu(lmm->lmm_objects[i].l_object_id);
                 loi->loi_gr = le64_to_cpu(lmm->lmm_objects[i].l_object_gr);
                 loi->loi_ost_idx = le32_to_cpu(lmm->lmm_objects[i].l_ost_idx);
                 loi->loi_ost_gen = le32_to_cpu(lmm->lmm_objects[i].l_ost_gen);
-                loi++;
         }
 
         RETURN(0);

@@ -63,10 +63,10 @@ int lov_merge_lvb(struct obd_export *exp, struct lov_stripe_md *lsm,
         LASSERT(lsm->lsm_lock_owner == cfs_current());
 #endif
 
-        for (i = 0, loi = lsm->lsm_oinfo; i < lsm->lsm_stripe_count;
-             i++, loi++) {
+        for (i = 0; i < lsm->lsm_stripe_count; i++) {
                 obd_size lov_size, tmpsize;
 
+                loi = lsm->lsm_oinfo[i];
                 tmpsize = loi->loi_kms;
                 if (kms_only == 0 && loi->loi_lvb.lvb_size > tmpsize)
                         tmpsize = loi->loi_lvb.lvb_size;
@@ -113,8 +113,8 @@ int lov_adjust_kms(struct obd_export *exp, struct lov_stripe_md *lsm,
 
         if (shrink) {
                 struct lov_oinfo *loi;
-                for (loi = lsm->lsm_oinfo; stripe < lsm->lsm_stripe_count;
-                     stripe++, loi++) {
+                for (; stripe < lsm->lsm_stripe_count; stripe++) {
+                        loi = lsm->lsm_oinfo[stripe];
                         kms = lov_size_to_stripe(lsm, size, stripe);
                         CDEBUG(D_INODE,
                                "stripe %d KMS %sing "LPU64"->"LPU64"\n",
@@ -129,7 +129,7 @@ int lov_adjust_kms(struct obd_export *exp, struct lov_stripe_md *lsm,
         if (size > 0)
                 stripe = lov_stripe_number(lsm, size - 1);
         kms = lov_size_to_stripe(lsm, size, stripe);
-        loi = &(lsm->lsm_oinfo[stripe]);
+        loi = lsm->lsm_oinfo[stripe];
 
         CDEBUG(D_INODE, "stripe %d KMS %sincreasing "LPU64"->"LPU64"\n",
                stripe, kms > loi->loi_kms ? "" : "not ", loi->loi_kms, kms);

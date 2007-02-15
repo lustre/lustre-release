@@ -126,7 +126,7 @@ int lov_update_enqueue_set(struct lov_request *req, __u32 mode, int rc)
         LASSERT(set->set_oi != NULL);
 
         lov_lockhp = set->set_lockh->llh_handles + req->rq_stripe;
-        loi = &set->set_oi->oi_md->lsm_oinfo[req->rq_stripe];
+        loi = set->set_oi->oi_md->lsm_oinfo[req->rq_stripe];
 
         /* XXX LOV STACKING: OSC gets a copy, created in lov_prep_enqueue_set
          * and that copy can be arbitrarily out of date.
@@ -140,7 +140,7 @@ int lov_update_enqueue_set(struct lov_request *req, __u32 mode, int rc)
 
                 LASSERT(lock != NULL);
                 lov_stripe_lock(set->set_oi->oi_md);
-                loi->loi_lvb = req->rq_oi.oi_md->lsm_oinfo->loi_lvb;
+                loi->loi_lvb = req->rq_oi.oi_md->lsm_oinfo[0]->loi_lvb;
                 tmp = loi->loi_lvb.lvb_size;
                 /* Extend KMS up to the end of this lock and no further
                  * A lock on [x,y] means a KMS of up to y + 1 bytes! */
@@ -164,7 +164,7 @@ int lov_update_enqueue_set(struct lov_request *req, __u32 mode, int rc)
                    (set->set_ei->ei_flags & LDLM_FL_HAS_INTENT)) {
                 memset(lov_lockhp, 0, sizeof(*lov_lockhp));
                 lov_stripe_lock(set->set_oi->oi_md);
-                loi->loi_lvb = req->rq_oi.oi_md->lsm_oinfo->loi_lvb;
+                loi->loi_lvb = req->rq_oi.oi_md->lsm_oinfo[0]->loi_lvb;
                 lov_stripe_unlock(set->set_oi->oi_md);
                 CDEBUG(D_INODE, "glimpsed, setting rss="LPU64"; leaving"
                        " kms="LPU64"\n", loi->loi_lvb.lvb_size, loi->loi_kms);
@@ -283,11 +283,11 @@ int lov_prep_enqueue_set(struct obd_export *exp, struct obd_info *oinfo,
                 GOTO(out_set, rc = -ENOMEM);
         oinfo->oi_lockh->cookie = set->set_lockh->llh_handle.h_cookie;
 
-        loi = oinfo->oi_md->lsm_oinfo;
-        for (i = 0; i < oinfo->oi_md->lsm_stripe_count; i++, loi++) {
+        for (i = 0; i < oinfo->oi_md->lsm_stripe_count; i++) {
                 struct lov_request *req;
                 obd_off start, end;
 
+                loi = oinfo->oi_md->lsm_oinfo[i];
                 if (!lov_stripe_intersects(oinfo->oi_md, i,
                                            oinfo->oi_policy.l_extent.start,
                                            oinfo->oi_policy.l_extent.end,
@@ -305,12 +305,17 @@ int lov_prep_enqueue_set(struct obd_export *exp, struct obd_info *oinfo,
                         GOTO(out_set, rc = -ENOMEM);
 
                 req->rq_buflen = sizeof(*req->rq_oi.oi_md) +
+                        sizeof(struct lov_oinfo *) +
                         sizeof(struct lov_oinfo);
                 OBD_ALLOC(req->rq_oi.oi_md, req->rq_buflen);
                 if (req->rq_oi.oi_md == NULL) {
                         OBD_FREE(req, sizeof(*req));
                         GOTO(out_set, rc = -ENOMEM);
                 }
+                req->rq_oi.oi_md->lsm_oinfo[0] =
+                        ((void *)req->rq_oi.oi_md) + sizeof(*req->rq_oi.oi_md) +
+                        sizeof(struct lov_oinfo *);
+
 
                 req->rq_rqset = set;
                 /* Set lov request specific parameters. */
@@ -330,10 +335,10 @@ int lov_prep_enqueue_set(struct obd_export *exp, struct obd_info *oinfo,
                 /* XXX LOV STACKING: submd should be from the subobj */
                 req->rq_oi.oi_md->lsm_object_id = loi->loi_id;
                 req->rq_oi.oi_md->lsm_stripe_count = 0;
-                req->rq_oi.oi_md->lsm_oinfo->loi_kms_valid =
+                req->rq_oi.oi_md->lsm_oinfo[0]->loi_kms_valid =
                         loi->loi_kms_valid;
-                req->rq_oi.oi_md->lsm_oinfo->loi_kms = loi->loi_kms;
-                req->rq_oi.oi_md->lsm_oinfo->loi_lvb = loi->loi_lvb;
+                req->rq_oi.oi_md->lsm_oinfo[0]->loi_kms = loi->loi_kms;
+                req->rq_oi.oi_md->lsm_oinfo[0]->loi_lvb = loi->loi_lvb;
 
                 lov_set_add_req(req, set);
         }
@@ -403,10 +408,11 @@ int lov_prep_match_set(struct obd_export *exp, struct obd_info *oinfo,
                 GOTO(out_set, rc = -ENOMEM);
         lockh->cookie = set->set_lockh->llh_handle.h_cookie;
 
-        for (i = 0,loi = lsm->lsm_oinfo; i < lsm->lsm_stripe_count; i++, loi++){
+        for (i = 0; i < lsm->lsm_stripe_count; i++){
                 struct lov_request *req;
                 obd_off start, end;
 
+                loi = lsm->lsm_oinfo[i];
                 if (!lov_stripe_intersects(lsm, i, policy->l_extent.start,
                                            policy->l_extent.end, &start, &end))
                         continue;
@@ -494,10 +500,11 @@ int lov_prep_cancel_set(struct obd_export *exp, struct obd_info *oinfo,
         }
         lockh->cookie = set->set_lockh->llh_handle.h_cookie;
 
-        for (i = 0,loi = lsm->lsm_oinfo; i < lsm->lsm_stripe_count; i++, loi++){
+        for (i = 0; i < lsm->lsm_stripe_count; i++){
                 struct lov_request *req;
                 struct lustre_handle *lov_lockhp;
 
+                loi = lsm->lsm_oinfo[i];
                 lov_lockhp = set->set_lockh->llh_handles + i;
                 if (!lustre_handle_is_used(lov_lockhp)) {
                         CDEBUG(D_HA, "lov idx %d subobj "LPX64" no lock?\n",
@@ -660,7 +667,7 @@ int lov_update_create_set(struct lov_request_set *set,
         ENTRY;
 
         req->rq_stripe = set->set_success;
-        loi = &lsm->lsm_oinfo[req->rq_stripe];
+        loi = lsm->lsm_oinfo[req->rq_stripe];
 
         if (rc && lov->lov_tgts[req->rq_idx] &&
             lov->lov_tgts[req->rq_idx]->ltd_active) {
@@ -780,7 +787,7 @@ static int brw_done(struct lov_request_set *set)
                 if (!req->rq_complete || req->rq_rc)
                         continue;
 
-                loi = &lsm->lsm_oinfo[req->rq_stripe];
+                loi = lsm->lsm_oinfo[req->rq_stripe];
 
                 if (req->rq_oi.oi_oa->o_valid & OBD_MD_FLBLOCKS)
                         loi->loi_lvb.lvb_blocks = req->rq_oi.oi_oa->o_blocks;
@@ -848,13 +855,13 @@ int lov_prep_brw_set(struct obd_export *exp, struct obd_info *oinfo,
 
         /* alloc and initialize lov request */
         shift = 0;
-        for (i = 0, loi = oinfo->oi_md->lsm_oinfo;
-             i < oinfo->oi_md->lsm_stripe_count; i++, loi++){
+        for (i = 0 ; i < oinfo->oi_md->lsm_stripe_count; i++){
                 struct lov_request *req;
 
                 if (info[i].count == 0)
                         continue;
 
+                loi = oinfo->oi_md->lsm_oinfo[i];
                 if (!lov->lov_tgts[loi->loi_ost_idx] || 
                     !lov->lov_tgts[loi->loi_ost_idx]->ltd_active) {
                         CDEBUG(D_HA, "lov idx %d inactive\n", loi->loi_ost_idx);
@@ -970,10 +977,10 @@ int lov_prep_getattr_set(struct obd_export *exp, struct obd_info *oinfo,
         set->set_exp = exp;
         set->set_oi = oinfo;
 
-        loi = oinfo->oi_md->lsm_oinfo;
-        for (i = 0; i < oinfo->oi_md->lsm_stripe_count; i++, loi++) {
+        for (i = 0; i < oinfo->oi_md->lsm_stripe_count; i++) {
                 struct lov_request *req;
 
+                loi = oinfo->oi_md->lsm_oinfo[i];
                 if (!lov->lov_tgts[loi->loi_ost_idx] ||
                     !lov->lov_tgts[loi->loi_ost_idx]->ltd_active) {
                         CDEBUG(D_HA, "lov idx %d inactive\n", loi->loi_ost_idx);
@@ -1049,10 +1056,10 @@ int lov_prep_destroy_set(struct obd_export *exp, struct obd_info *oinfo,
         if (oti != NULL && src_oa->o_valid & OBD_MD_FLCOOKIE)
                 set->set_cookies = oti->oti_logcookies;
 
-        loi = lsm->lsm_oinfo;
-        for (i = 0; i < lsm->lsm_stripe_count; i++, loi++) {
+        for (i = 0; i < lsm->lsm_stripe_count; i++) {
                 struct lov_request *req;
 
+                loi = lsm->lsm_oinfo[i];
                 if (!lov->lov_tgts[loi->loi_ost_idx] || 
                     !lov->lov_tgts[loi->loi_ost_idx]->ltd_active) {
                         CDEBUG(D_HA, "lov idx %d inactive\n", loi->loi_ost_idx);
@@ -1118,13 +1125,13 @@ int lov_update_setattr_set(struct lov_request_set *set,
 
         if (rc == 0) {
                 if (req->rq_oi.oi_oa->o_valid & OBD_MD_FLCTIME)
-                        lsm->lsm_oinfo[req->rq_stripe].loi_lvb.lvb_ctime =
+                        lsm->lsm_oinfo[req->rq_stripe]->loi_lvb.lvb_ctime =
                                 req->rq_oi.oi_oa->o_ctime;
                 if (req->rq_oi.oi_oa->o_valid & OBD_MD_FLMTIME)
-                        lsm->lsm_oinfo[req->rq_stripe].loi_lvb.lvb_mtime =
+                        lsm->lsm_oinfo[req->rq_stripe]->loi_lvb.lvb_mtime =
                                 req->rq_oi.oi_oa->o_mtime;
                 if (req->rq_oi.oi_oa->o_valid & OBD_MD_FLATIME)
-                        lsm->lsm_oinfo[req->rq_stripe].loi_lvb.lvb_atime =
+                        lsm->lsm_oinfo[req->rq_stripe]->loi_lvb.lvb_atime =
                                 req->rq_oi.oi_oa->o_atime;
         }
 
@@ -1161,10 +1168,10 @@ int lov_prep_setattr_set(struct obd_export *exp, struct obd_info *oinfo,
         if (oti != NULL && oinfo->oi_oa->o_valid & OBD_MD_FLCOOKIE)
                 set->set_cookies = oti->oti_logcookies;
 
-        loi = oinfo->oi_md->lsm_oinfo;
-        for (i = 0; i < oinfo->oi_md->lsm_stripe_count; i++, loi++) {
+        for (i = 0; i < oinfo->oi_md->lsm_stripe_count; i++) {
                 struct lov_request *req;
 
+                loi = oinfo->oi_md->lsm_oinfo[i];
                 if (!lov->lov_tgts[loi->loi_ost_idx] ||
                     !lov->lov_tgts[loi->loi_ost_idx]->ltd_active) {
                         CDEBUG(D_HA, "lov idx %d inactive\n", loi->loi_ost_idx);
@@ -1249,7 +1256,7 @@ int lov_update_punch_set(struct lov_request_set *set,
         if (rc == 0) {
                 lov_stripe_lock(lsm);
                 if (req->rq_oi.oi_oa->o_valid & OBD_MD_FLBLOCKS) {
-                        lsm->lsm_oinfo[req->rq_stripe].loi_lvb.lvb_blocks =
+                        lsm->lsm_oinfo[req->rq_stripe]->loi_lvb.lvb_blocks =
                                 req->rq_oi.oi_oa->o_blocks;
                 }
 
@@ -1288,11 +1295,11 @@ int lov_prep_punch_set(struct obd_export *exp, struct obd_info *oinfo,
         set->set_oi = oinfo;
         set->set_exp = exp;
 
-        loi = oinfo->oi_md->lsm_oinfo;
-        for (i = 0; i < oinfo->oi_md->lsm_stripe_count; i++, loi++) {
+        for (i = 0; i < oinfo->oi_md->lsm_stripe_count; i++) {
                 struct lov_request *req;
                 obd_off rs, re;
 
+                loi = oinfo->oi_md->lsm_oinfo[i];
                 if (!lov->lov_tgts[loi->loi_ost_idx] ||
                     !lov->lov_tgts[loi->loi_ost_idx]->ltd_active) {
                         CDEBUG(D_HA, "lov idx %d inactive\n", loi->loi_ost_idx);
@@ -1379,11 +1386,11 @@ int lov_prep_sync_set(struct obd_export *exp, struct obd_info *oinfo,
         set->set_oi->oi_md = lsm;
         set->set_oi->oi_oa = src_oa;
 
-        loi = lsm->lsm_oinfo;
-        for (i = 0; i < lsm->lsm_stripe_count; i++, loi++) {
+        for (i = 0; i < lsm->lsm_stripe_count; i++) {
                 struct lov_request *req;
                 obd_off rs, re;
 
+                loi = lsm->lsm_oinfo[i];
                 if (!lov->lov_tgts[loi->loi_ost_idx] ||
                     !lov->lov_tgts[loi->loi_ost_idx]->ltd_active) {
                         CDEBUG(D_HA, "lov idx %d inactive\n", loi->loi_ost_idx);
