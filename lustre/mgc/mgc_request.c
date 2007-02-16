@@ -308,7 +308,7 @@ static int mgc_requeue_add(struct config_llog_data *cld, int later)
         CDEBUG(D_INFO, "log %s: requeue (l=%d r=%d sp=%d st=%x)\n", 
                cld->cld_logname, later, atomic_read(&cld->cld_refcount),
                cld->cld_stopping, rq_state);
-
+        
         /* Hold lock for rq_state */
         spin_lock(&config_list_lock);
         cld->cld_lostlock = 1;
@@ -998,6 +998,11 @@ static int mgc_process_log(struct obd_device *mgc,
                 RETURN(-EINVAL);
         }
         if (cld->cld_stopping) 
+                RETURN(0);
+
+        if (cld->cld_cfg.cfg_flags & CFG_F_SERVER146)
+                /* If we started from an old MDT, don't bother trying to
+                   get log updates from the MGS */
                 RETURN(0);
 
         OBD_FAIL_TIMEOUT(OBD_FAIL_MGC_PROCESS_LOG, 20);

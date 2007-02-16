@@ -921,6 +921,7 @@ int ll_fill_super(struct super_block *sb)
                                 memcpy(lsi->lsi_lmd->lmd_profile, oldname,
                                        strlen(oldname) + 1); 
                                 profilenm = get_profile_name(sb);
+                                cfg.cfg_flags |= CFG_F_SERVER146;
                         }
                         OBD_FREE(oldname, oldnamelen);
                 }
