@@ -29,6 +29,7 @@
 extern atomic_t obd_memory;
 extern int obd_memmax;
 extern unsigned int obd_fail_loc;
+extern unsigned int obd_debug_peer_on_timeout;
 extern unsigned int obd_dump_on_timeout;
 extern unsigned int obd_dump_on_eviction;
 extern unsigned int obd_timeout;          /* seconds */

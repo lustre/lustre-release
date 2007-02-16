@@ -772,13 +772,20 @@ static inline void init_completion(struct completion *x)
 
 struct liblustre_wait_callback {
         struct list_head    llwc_list;
+        const char         *llwc_name;
         int               (*llwc_fn)(void *arg);
         void               *llwc_arg;
 };
 
-void *liblustre_register_wait_callback(int (*fn)(void *arg), void *arg);
+void *liblustre_register_wait_callback(const char *name,
+                                       int (*fn)(void *arg), void *arg);
 void liblustre_deregister_wait_callback(void *notifier);
 int liblustre_wait_event(int timeout);
+
+void *liblustre_register_idle_callback(const char *name, 
+                                       int (*fn)(void *arg), void *arg);
+void liblustre_deregister_idle_callback(void *notifier);
+void liblustre_wait_idle(void);
 
 /* flock related */
 struct nfs_lock_info {

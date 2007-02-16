@@ -49,6 +49,9 @@ SYSCTL_PROC(_lustre,		OID_AUTO,       lustre_kernel_version,
 SYSCTL_INT(_lustre,		OID_AUTO,	dump_on_timeout, 
 	   CTLTYPE_INT | CTLFLAG_RW,		&obd_dump_on_timeout,
 	   0,		"lustre_dump_on_timeout");
+SYSCTL_INT(_lustre,		OID_AUTO,	debug_peer_on_timeout, 
+	   CTLTYPE_INT | CTLFLAG_RW,		&obd_debug_peer_on_timeout,
+	   0,		"lustre_dump_on_timeout");
 SYSCTL_INT(_lustre,		OID_AUTO,	memused, 
 	   CTLTYPE_INT | CTLFLAG_RW,		(int *)&obd_memory.counter,
 	   0,		"lustre_memory_used");
@@ -61,6 +64,7 @@ static cfs_sysctl_table_t      parent_table[] = {
 	&sysctl__lustre_fail_loc,
 	&sysctl__lustre_timeout,
 	&sysctl__lustre_dump_on_timeout,
+	&sysctl__lustre_debug_peer_on_timeout,
 	&sysctl__lustre_upcall,
 	&sysctl__lustre_memused,
 	&sysctl__lustre_filter_sync_on_commit,

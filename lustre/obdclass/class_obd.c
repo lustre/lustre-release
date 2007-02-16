@@ -60,6 +60,7 @@ int obd_memmax;
 
 /* The following are visible and mutable through /proc/sys/lustre/. */
 unsigned int obd_fail_loc;
+unsigned int obd_debug_peer_on_timeout;
 unsigned int obd_dump_on_timeout;
 unsigned int obd_dump_on_eviction;
 unsigned int obd_timeout = 100; /* seconds */

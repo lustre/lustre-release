@@ -54,7 +54,8 @@ struct ptlrpcd_ctl {
         char                      pc_name[16];
 #ifndef __KERNEL__
         int                       pc_recurred;
-        void                     *pc_callback;
+        void                     *pc_wait_callback;
+        void                     *pc_idle_callback;
 #endif
 };
 
@@ -210,6 +211,15 @@ int ptlrpcd_check_async_rpcs(void *arg)
         pc->pc_recurred--;
         return rc;
 }
+
+int ptlrpcd_idle(void *arg)
+{
+        struct ptlrpcd_ctl *pc = arg;
+
+        return (list_empty(&pc->pc_set->set_new_requests) &&
+                pc->pc_set->set_remaining == 0);
+}
+
 #endif
 
 static int ptlrpcd_start(char *name, struct ptlrpcd_ctl *pc)
@@ -242,8 +252,12 @@ static int ptlrpcd_start(char *name, struct ptlrpcd_ctl *pc)
 
         wait_for_completion(&pc->pc_starting);
 #else
-        pc->pc_callback =
-                liblustre_register_wait_callback(&ptlrpcd_check_async_rpcs, pc);
+        pc->pc_wait_callback =
+                liblustre_register_wait_callback("ptlrpcd_check_async_rpcs",
+                                                 &ptlrpcd_check_async_rpcs, pc);
+        pc->pc_idle_callback =
+                liblustre_register_wait_callback("ptlrpcd_check_idle_rpcs",
+                                                 &ptlrpcd_idle, pc);
         (void)rc;
 #endif
         RETURN(0);
@@ -257,7 +271,8 @@ static void ptlrpcd_stop(struct ptlrpcd_ctl *pc)
         obd_zombie_impexp_notify = NULL;
         wait_for_completion(&pc->pc_finishing);
 #else
-        liblustre_deregister_wait_callback(pc->pc_callback);
+        liblustre_deregister_wait_callback(pc->pc_wait_callback);
+        liblustre_deregister_wait_callback(pc->pc_idle_callback);
 #endif
         ptlrpc_set_destroy(pc->pc_set);
 }

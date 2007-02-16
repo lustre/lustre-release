@@ -58,6 +58,7 @@ enum {
         OBD_SYNCFILTER,         /* XXX temporary, as we play with sync osts.. */
         OBD_LDLM_TIMEOUT,       /* LDLM timeout for ASTs before client eviction */
         OBD_DUMP_ON_EVICTION,   /* dump kernel debug log upon eviction */
+        OBD_DEBUG_PEER_ON_TIMEOUT, /* dump peer debug when RPC times out */
 };
 
 int LL_PROC_PROTO(proc_fail_loc)
@@ -86,6 +87,9 @@ static ctl_table obd_table[] = {
                 &proc_fail_loc},
         {OBD_TIMEOUT, "timeout", &obd_timeout, sizeof(int), 0644, NULL,
                 &proc_set_timeout},
+        {OBD_DEBUG_PEER_ON_TIMEOUT, "debug_peer_on_timeout", 
+                &obd_debug_peer_on_timeout,
+                sizeof(int), 0644, NULL, &proc_dointvec},
         {OBD_DUMP_ON_TIMEOUT, "dump_on_timeout", &obd_dump_on_timeout,
                 sizeof(int), 0644, NULL, &proc_dointvec},
         {OBD_DUMP_ON_EVICTION, "dump_on_eviction", &obd_dump_on_eviction,

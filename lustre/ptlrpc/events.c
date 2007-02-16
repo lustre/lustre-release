@@ -484,30 +484,62 @@ int ptlrpc_ni_init(void)
 
 #ifndef __KERNEL__
 CFS_LIST_HEAD(liblustre_wait_callbacks);
+CFS_LIST_HEAD(liblustre_idle_callbacks);
 void *liblustre_services_callback;
 
 void *
-liblustre_register_wait_callback (int (*fn)(void *arg), void *arg)
+liblustre_register_waitidle_callback (struct list_head *callback_list,
+                                      const char *name,
+                                      int (*fn)(void *arg), void *arg)
 {
         struct liblustre_wait_callback *llwc;
         
         OBD_ALLOC(llwc, sizeof(*llwc));
         LASSERT (llwc != NULL);
         
+        llwc->llwc_name = name;
         llwc->llwc_fn = fn;
         llwc->llwc_arg = arg;
-        list_add_tail(&llwc->llwc_list, &liblustre_wait_callbacks);
+        list_add_tail(&llwc->llwc_list, callback_list);
         
         return (llwc);
 }
 
 void
-liblustre_deregister_wait_callback (void *opaque)
+liblustre_deregister_waitidle_callback (void *opaque)
 {
         struct liblustre_wait_callback *llwc = opaque;
         
         list_del(&llwc->llwc_list);
         OBD_FREE(llwc, sizeof(*llwc));
+}
+
+void *
+liblustre_register_wait_callback (const char *name,
+                                  int (*fn)(void *arg), void *arg)
+{
+        return liblustre_register_waitidle_callback(&liblustre_wait_callbacks,
+                                                    name, fn, arg);
+}
+
+void
+liblustre_deregister_wait_callback (void *opaque)
+{
+        liblustre_deregister_waitidle_callback(opaque);
+}
+
+void *
+liblustre_register_idle_callback (const char *name,
+                                  int (*fn)(void *arg), void *arg)
+{
+        return liblustre_register_waitidle_callback(&liblustre_idle_callbacks,
+                                                    name, fn, arg);
+}
+
+void
+liblustre_deregister_idle_callback (void *opaque)
+{
+        liblustre_deregister_waitidle_callback(opaque);
 }
 
 int
@@ -575,6 +607,38 @@ liblustre_wait_event (int timeout)
         return found_something;
 }
 
+void
+liblustre_wait_idle(void)
+{
+        static int recursed = 0;
+        
+        struct list_head               *tmp;
+        struct liblustre_wait_callback *llwc;
+        int                             idle = 0;
+
+        LASSERT(!recursed);
+        recursed = 1;
+        
+        do {
+                liblustre_wait_event(0);
+
+                idle = 1;
+
+                list_for_each(tmp, &liblustre_idle_callbacks) {
+                        llwc = list_entry(tmp, struct liblustre_wait_callback,
+                                          llwc_list);
+                        
+                        if (!llwc->llwc_fn(llwc->llwc_arg)) {
+                                idle = 0;
+                                break;
+                        }
+                }
+                        
+        } while (!idle);
+
+        recursed = 0;
+}
+
 #endif /* __KERNEL__ */
 
 int ptlrpc_init_portals(void)
@@ -587,7 +651,8 @@ int ptlrpc_init_portals(void)
         }
 #ifndef __KERNEL__
         liblustre_services_callback = 
-                liblustre_register_wait_callback(&liblustre_check_services, NULL);
+                liblustre_register_wait_callback("liblustre_check_services",
+                                                 &liblustre_check_services, NULL);
 #endif
         rc = ptlrpcd_addref();
         if (rc == 0)

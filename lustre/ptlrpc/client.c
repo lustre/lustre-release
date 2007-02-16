@@ -948,12 +948,10 @@ int ptlrpc_expire_one_request(struct ptlrpc_request *req)
 
         DEBUG_REQ(D_ERROR|D_NETERROR, req, "timeout (sent at %lu, %lus ago)",
                   (long)req->rq_sent, CURRENT_SECONDS - req->rq_sent);
-#if 0
-        /* Leave this out normally: it creates too much console noise and we
-         * only need it when we're debugging networks */
-        if (imp != NULL)
+
+        if (imp != NULL && obd_debug_peer_on_timeout)
                 LNetCtl(IOC_LIBCFS_DEBUG_PEER, &imp->imp_connection->c_peer);
-#endif
+
         spin_lock(&req->rq_lock);
         req->rq_timedout = 1;
         spin_unlock(&req->rq_lock);

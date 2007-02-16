@@ -265,7 +265,7 @@ int ll_parse_mount_target(const char *target, char **mgsnid,
 int _sysio_lustre_init(void)
 {
         int err;
-        char *timeout = NULL;
+        char *envstr;
 #ifndef INIT_SYSIO
         extern void __liblustre_cleanup_(void);
 #endif
@@ -277,11 +277,21 @@ int _sysio_lustre_init(void)
                 perror("init llite driver");
                 return err;
         }
-        timeout = getenv("LIBLUSTRE_TIMEOUT");
-        if (timeout) {
-                obd_timeout = (unsigned int) strtol(timeout, NULL, 0);
-                printf("LibLustre: set obd timeout as %u seconds\n",
+
+        envstr = getenv("LIBLUSTRE_TIMEOUT");
+        if (envstr != NULL) {
+                obd_timeout = (unsigned int)strtol(envstr, NULL, 0);
+                printf("LibLustre: obd timeout=%u seconds\n",
                         obd_timeout);
+        }
+
+	/* debug peer on timeout? */
+        envstr = getenv("LIBLUSTRE_DEBUG_PEER_ON_TIMEOUT");
+        if (envstr != NULL) {
+                obd_debug_peer_on_timeout = 
+                        (unsigned int)strtol(envstr, NULL, 0);
+                printf("LibLustre: debug peer on timeout=%d\n",
+                        obd_debug_peer_on_timeout ? 0 : 1);
         }
 
 #ifndef INIT_SYSIO
@@ -291,7 +301,6 @@ int _sysio_lustre_init(void)
 }
 
 extern int _sysio_native_init();
-extern unsigned int obd_timeout;
 
 char *lustre_path = NULL;
 

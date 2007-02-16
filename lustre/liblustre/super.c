@@ -103,6 +103,7 @@ static void llu_fsop_gone(struct filesys *fs)
 
         OBD_FREE(sbi, sizeof(*sbi));
 
+        liblustre_wait_idle();
         EXIT;
 }
 
@@ -2027,7 +2028,7 @@ llu_fsswop_mount(const char *source,
         ptlrpc_req_finished(request);
 
         CDEBUG(D_SUPER, "LibLustre: %s mounted successfully!\n", source);
-        liblustre_wait_event(0);
+        liblustre_wait_idle();
 
         return 0;
 
@@ -2045,6 +2046,8 @@ out_free:
         if (mdc)
                 OBD_FREE(mdc, strlen(mdc) + 1);
         OBD_FREE(sbi, sizeof(*sbi));
+
+        liblustre_wait_idle();
         return err;
 }
 

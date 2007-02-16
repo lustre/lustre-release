@@ -594,7 +594,8 @@ int ptlrpc_start_pinger(void)
 {
 #ifdef ENABLE_PINGER
         memset(&pinger_args, 0, sizeof(pinger_args));
-        pinger_callback = liblustre_register_wait_callback(&pinger_check_rpcs,
+        pinger_callback = liblustre_register_wait_callback("pinger_check_rpcs",
+                                                           &pinger_check_rpcs,
                                                            &pinger_args);
 #endif
         return 0;
