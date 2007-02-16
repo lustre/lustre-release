@@ -3683,9 +3683,9 @@ test_116() {
 
 	free_min_max
 	DIFF=$(($MAXV - $MINV))
-	DIFF2=$(($MINV * 2 / 10))
-	echo -n "diff=$DIFF must be > 20%=$DIFF2 for QOS mode..."
-	if [ $DIFF -gt $DIFF2 ]; then
+	DIFF2=$(($DIFF * 100 / $MINV))
+	echo -n "diff=${DIFF}=${DIFF2}% must be > 20% for QOS mode..."
+	if [ $DIFF2 -gt 20 ]; then
 	    echo "ok"
 	else
 	    echo "failed - QOS mode won't be used"
@@ -3715,10 +3715,10 @@ test_116() {
 	echo "free space delta: orig $DIFF final $DIFF2"
 	[ $DIFF2 -gt $DIFF ] && echo "delta got worse!" 
 	DIFF=$(($MINV1 - ${AVAIL[$MINI1]}))
-	echo "Wrote $DIFF to OST $MINI1"
+	echo "Wrote $DIFF to smaller OST $MINI1"
 	DIFF2=$(($MAXV1 - ${AVAIL[$MAXI1]}))
-	echo "Wrote $DIFF2 to OST $MAXI1"
-	echo "Wrote $(($DIFF2 * 100 / $DIFF - 100))% more to OST $MAXI1"
+	echo "Wrote $DIFF2 to larger OST $MAXI1"
+	[ $DIFF -gt 0 ] && echo "Wrote $(($DIFF2 * 100 / $DIFF - 100))% more data to larger OST $MAXI1"
 
 	# Figure out which files were written where 
 	UUID=$(awk '/'$MINI1': / {print $2; exit}' $LPROC/lov/${FSNAME}-clilov-*/target_obd)
@@ -3728,7 +3728,7 @@ test_116() {
 	UUID=$(awk '/'$MAXI1': / {print $2; exit}' $LPROC/lov/${FSNAME}-clilov-*/target_obd)
         MAXC=$($LFS getstripe --obd $UUID $DIR/$tdir | wc -l)
 	echo "$MAXC files created on larger OST $MAXI1"
-	echo "Wrote $(($MAXC * 100 / $MINC - 100))% more files to OST $MAXI1"
+	[ $MINC -gt 0 ] && echo "Wrote $(($MAXC * 100 / $MINC - 100))% more files to larger OST $MAXI1"
 	[ $MAXC -gt $MINC ] || error "stripe QOS didn't balance free space"
 }
 run_test 116 "stripe QOS: free space balance ==================="
