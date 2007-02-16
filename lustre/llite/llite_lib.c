@@ -1710,7 +1710,7 @@ int ll_iocontrol(struct inode *inode, struct file *file,
         }
         case EXT3_IOC_SETFLAGS: {
                 struct mdc_op_data op_data;
-                struct ll_iattr_struct attr = { 0 };
+                struct ll_iattr_struct attr;
                 struct obd_info oinfo = { { { 0 } } };
                 struct lov_stripe_md *lsm = ll_i2info(inode)->lli_smd;
 
@@ -1724,6 +1724,7 @@ int ll_iocontrol(struct inode *inode, struct file *file,
 
                 ll_prepare_mdc_op_data(&op_data, inode, NULL, NULL, 0, 0);
 
+                memset(&attr, 0, sizeof(attr));
                 attr.ia_attr_flags = flags;
                 ((struct iattr *)&attr)->ia_valid |= ATTR_ATTR_FLAG;
 
