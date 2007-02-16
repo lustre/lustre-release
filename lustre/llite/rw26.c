@@ -91,7 +91,7 @@ static inline int ll_get_user_pages(int rw, unsigned long user_addr,
                                     size_t size, struct page ***pages)
 {
         int result = -ENOMEM;
-        unsigned long page_count;
+        int page_count;
 
         /* set an arbitrary limit to prevent arithmetic overflow */
         if (size > MAX_DIRECTIO_SIZE) {
@@ -99,8 +99,8 @@ static inline int ll_get_user_pages(int rw, unsigned long user_addr,
                 return -EFBIG;
         }
 
-        page_count = (user_addr + size + CFS_PAGE_SIZE - 1) >> CFS_PAGE_SHIFT;
-        page_count -= user_addr >> CFS_PAGE_SHIFT;
+        page_count = ((user_addr + size + CFS_PAGE_SIZE - 1) >> CFS_PAGE_SHIFT)-
+                      (user_addr >> CFS_PAGE_SHIFT);
 
         OBD_ALLOC_GFP(*pages, page_count * sizeof(**pages), GFP_KERNEL);
         if (*pages) {
@@ -109,6 +109,8 @@ static inline int ll_get_user_pages(int rw, unsigned long user_addr,
                                         page_count, (rw == READ), 0, *pages,
                                         NULL);
                 up_read(&current->mm->mmap_sem);
+                if (result < 0)
+                        OBD_FREE(*pages, page_count * sizeof(**pages));
         }
 
         return result;
@@ -129,13 +131,11 @@ static void ll_free_user_pages(struct page **pages, int npages, int do_dirty)
         OBD_FREE(pages, npages * sizeof(*pages));
 }
 
-static ssize_t ll_direct_IO_26_seg(int rw, struct file *file,
+static ssize_t ll_direct_IO_26_seg(int rw, struct inode *inode,
                                    struct address_space *mapping,
-                                   struct inode *inode,
                                    struct lov_stripe_md *lsm,
-                                   unsigned long user_addr, size_t size,
-                                   loff_t file_offset, struct page **pages,
-                                   int page_count)
+                                   size_t size, loff_t file_offset,
+                                   struct page **pages, int page_count)
 {
         struct brw_page *pga;
         struct obdo oa;
@@ -144,8 +144,11 @@ static ssize_t ll_direct_IO_26_seg(int rw, struct file *file,
         ENTRY;
 
         OBD_ALLOC(pga, sizeof(*pga) * page_count);
-        if (!pga)
+        if (!pga) {
+                CDEBUG(D_VFSTRACE, "sizeof(*pga) = %u page_count = %u\n",
+                      (int)sizeof(*pga), page_count);
                 RETURN(-ENOMEM);
+        }
 
         for (i = 0, length = size; length > 0;
              length -=pga[i].count, file_offset +=pga[i].count,i++) {/*i last!*/
@@ -161,12 +164,6 @@ static ssize_t ll_direct_IO_26_seg(int rw, struct file *file,
 
         ll_inode_fill_obdo(inode, rw, &oa);
 
-        if (rw == WRITE)
-                lprocfs_counter_add(ll_i2sbi(inode)->ll_stats,
-                                    LPROC_LL_DIRECT_WRITE, size);
-        else
-                lprocfs_counter_add(ll_i2sbi(inode)->ll_stats,
-                                    LPROC_LL_DIRECT_READ, size);
         rc = obd_brw_rqset(rw == WRITE ? OBD_BRW_WRITE : OBD_BRW_READ,
                            ll_i2obdexp(inode), &oa, lsm, page_count, pga, NULL);
         if (rc == 0) {
@@ -182,14 +179,22 @@ static ssize_t ll_direct_IO_26_seg(int rw, struct file *file,
         RETURN(rc);
 }
 
+/* This is the maximum size of a single O_DIRECT request, based on a 128kB
+ * kmalloc limit.  We need to fit all of the brw_page structs, each one
+ * representing PAGE_SIZE worth of user data, into a single buffer, and
+ * then truncate this to be a full-sized RPC.  This is 22MB for 4kB pages. */
+#define MAX_DIO_SIZE ((128 * 1024 / sizeof(struct brw_page) * CFS_PAGE_SIZE) & \
+                      ~(PTLRPC_MAX_BRW_SIZE - 1))
 static ssize_t ll_direct_IO_26(int rw, struct kiocb *iocb,
                                const struct iovec *iov, loff_t file_offset,
                                unsigned long nr_segs)
 {
         struct file *file = iocb->ki_filp;
+        struct inode *inode = file->f_mapping->host;
         ssize_t count = iov_length(iov, nr_segs), tot_bytes = 0;
-        struct ll_inode_info *lli = ll_i2info(file->f_mapping->host);
+        struct ll_inode_info *lli = ll_i2info(inode);
         unsigned long seg;
+        size_t size = MAX_DIO_SIZE;
         ENTRY;
 
         if (!lli->lli_smd || !lli->lli_smd->lsm_object_id)
@@ -199,49 +204,78 @@ static ssize_t ll_direct_IO_26(int rw, struct kiocb *iocb,
         if ((file_offset & (~CFS_PAGE_MASK)) || (count & ~CFS_PAGE_MASK))
                 RETURN(-EINVAL);
 
+        CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu/%u(%p), size="LPSZ" (max "LPSZ
+               "), offset=%lld=%llx, pages "LPSZ" (max "LPSZ")\n",
+               inode->i_ino, inode->i_generation, inode, count, MAX_DIO_SIZE,
+               file_offset, file_offset, count >> CFS_PAGE_SHIFT,
+               MAX_DIO_SIZE >> CFS_PAGE_SHIFT);
+
+        if (rw == WRITE)
+                lprocfs_counter_add(ll_i2sbi(inode)->ll_stats,
+                                    LPROC_LL_DIRECT_WRITE, count);
+        else
+                lprocfs_counter_add(ll_i2sbi(inode)->ll_stats,
+                                    LPROC_LL_DIRECT_READ, count);
+
         /* Check that all user buffers are aligned as well */
         for (seg = 0; seg < nr_segs; seg++) {
-                unsigned long user_addr = (unsigned long)iov[seg].iov_base;
-                size_t size = iov[seg].iov_len;
-                if ((user_addr & ~CFS_PAGE_MASK) || (size & ~CFS_PAGE_MASK))
+                if (((unsigned long)iov[seg].iov_base & ~CFS_PAGE_MASK) ||
+                    (iov[seg].iov_len & ~CFS_PAGE_MASK))
                         RETURN(-EINVAL);
         }
 
-        seg = 0;
-        while ((seg < nr_segs) && (tot_bytes >= 0)) {
-                const struct iovec *vec = &iov[seg++];
-                unsigned long user_addr = (unsigned long)vec->iov_base;
-                size_t size = vec->iov_len;
-                struct page **pages;
-                int page_count;
-                ssize_t result;
+        for (seg = 0; seg < nr_segs; seg++) {
+                size_t iov_left = iov[seg].iov_len;
+                unsigned long user_addr = (unsigned long)iov[seg].iov_base;
 
-                page_count = ll_get_user_pages(rw, user_addr, size, &pages);
-                if (page_count < 0) {
-                        ll_free_user_pages(pages, 0, 0);
-                        if (tot_bytes > 0)
-                                break;
-                        return page_count;
+                while (iov_left > 0) {
+                        struct page **pages;
+                        int page_count;
+                        ssize_t result;
+
+                        page_count = ll_get_user_pages(rw, user_addr,
+                                                       min(size, iov_left),
+                                                       &pages);
+                        LASSERT(page_count != 0);
+                        if (page_count > 0) {
+                                result = ll_direct_IO_26_seg(rw, inode,
+                                                             file->f_mapping,
+                                                             lli->lli_smd,
+                                                             min(size,iov_left),
+                                                             file_offset, pages,
+                                                             page_count);
+                                ll_free_user_pages(pages, page_count, rw==READ);
+                        } else {
+                                result = 0;
+                        }
+                        if (page_count < 0 || result <= 0) {
+                                /* If we can't allocate a large enough buffer
+                                 * for the request, shrink it to a smaller
+                                 * PAGE_SIZE multiple and try again.
+                                 * We should always be able to kmalloc for a
+                                 * page worth of page pointers = 4MB on i386. */
+                                if ((page_count == -ENOMEM||result == -ENOMEM)&&
+                                    size > (CFS_PAGE_SIZE / sizeof(*pages)) *
+                                           CFS_PAGE_SIZE) {
+                                        size = ((((size / 2) - 1) |
+                                                 ~CFS_PAGE_MASK) + 1) &
+                                                CFS_PAGE_MASK;
+                                        CDEBUG(D_VFSTRACE, "DIO size now %u\n",
+                                               (int)size);
+                                        continue;
+                                }
+                                if (tot_bytes > 0)
+                                        RETURN(tot_bytes);
+                                RETURN(page_count < 0 ? page_count : result);
+                        }
+
+                        tot_bytes += result;
+                        file_offset += result;
+                        iov_left -= result;
+                        user_addr += result;
                 }
-
-                result = ll_direct_IO_26_seg(rw, file, file->f_mapping,
-                                             file->f_mapping->host,
-                                             lli->lli_smd, user_addr, size,
-                                             file_offset, pages, page_count);
-                ll_free_user_pages(pages, page_count, rw == READ);
-
-                if (result <= 0) {
-                        if (tot_bytes > 0)
-                                break;
-                        return result;
-                }
-
-                tot_bytes += result;
-                file_offset += result;
-                if (result < size)
-                        break;
         }
-        return tot_bytes;
+        RETURN(tot_bytes);
 }
 
 struct address_space_operations ll_aops = {

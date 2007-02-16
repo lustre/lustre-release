@@ -3055,6 +3055,13 @@ run_test 77h "checksum error on OST read ======================="
 rm -f $F77_TMP
 unset F77_TMP
 
+test_78() { # bug 10901
+	MEMFREE=$(($(awk '/MemFree:/ { print $2 }' /proc/meminfo) / 1024))
+	[ $MEMFREE -gt 512 ] && MEMFREE=512
+	$DIRECTIO rdwr $DIR/$tfile 0 $MEMFREE 1048576
+}
+run_test 78 "handle large O_DIRECT writes correctly ============"
+
 # on the LLNL clusters, runas will still pick up root's $TMP settings,
 # which will not be writable for the runas user, and then you get a CVS
 # error message with a corrupt path string (CVS bug) and panic.

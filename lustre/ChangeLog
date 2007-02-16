@@ -269,6 +269,15 @@ Description: Crash on NFS re-export node
 Details    : under very unusual load conditions an assertion is hit in
 	     ll_intent_file_open()
 
+Severity   : normal
+Frequency  : always
+Bugzilla   : 10901
+Description: large O_DIRECT requests fail under memory pressure/fragmentation
+Details    : Large single O_DIRECT read and write calls can fail to allocate
+	     a sufficiently large buffer to process the request.  In case of
+	     allocation failure the allocation is retried with a smaller
+	     buffer and broken into smaller requests.
+
 ------------------------------------------------------------------------------
 
 TBD         Cluster File Systems, Inc. <info@clusterfs.com>
