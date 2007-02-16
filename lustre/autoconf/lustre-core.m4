@@ -1154,9 +1154,8 @@ LB_LINUX_TRY_COMPILE([
 AC_DEFUN([LC_COOKIE_FOLLOW_LINK],
 [AC_MSG_CHECKING([if inode_operations->follow_link returns a cookie])
 LB_LINUX_TRY_COMPILE([
-	#include <linux/namei.h>
         #include <linux/fs.h>
-
+        #include <linux/namei.h>
 ],[
         struct dentry dentry;
         struct nameidata nd;
