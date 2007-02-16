@@ -114,6 +114,7 @@ check_kernel_version() {
 	WANT_VER=$1
 	[ ! -f $VERSION_FILE ] && echo "can't find kernel version" && return 1
 	GOT_VER=$(awk '/kernel:/ {print $2}' $VERSION_FILE)
+	[ $GOT_VER == "patchless" ] && return 0
 	[ $GOT_VER -ge $WANT_VER ] && return 0
 	log "test needs at least kernel version $WANT_VER, running $GOT_VER"
 	return 1
@@ -2171,6 +2172,8 @@ test_53() {
 run_test 53 "verify that MDS and OSTs agree on pre-creation ===="
 
 test_54a() {
+        [ ! -f "$SOCKETSERVER" ] && echo "no socketserver, skipping" && return
+        [ ! -f "$SOCKETCLIENT" ] && echo "no socketclient, skipping" && return
      	$SOCKETSERVER $DIR/socket
      	$SOCKETCLIENT $DIR/socket || error
       	$MUNLINK $DIR/socket
@@ -2436,6 +2439,7 @@ run_test 59 "verify cancellation of llog records async ========="
 
 TEST60_HEAD="test_60 run $RANDOM"
 test_60() {
+        [ ! -f run-llog.sh ] && echo "missing subtest, skipping" && return
 	log "$TEST60_HEAD - from kernel mode"
 	sh run-llog.sh
 }
@@ -2520,6 +2524,7 @@ test_64a () {
 run_test 64a "verify filter grant calculations (in kernel) ====="
 
 test_64b () {
+        [ ! -f oos.sh ] && echo "missing subtest, skipping" && return
 	sh oos.sh $MOUNT
 }
 run_test 64b "check out-of-space detection on client ==========="
