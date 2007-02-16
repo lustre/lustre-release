@@ -161,6 +161,8 @@ libcfs_debug_dbg2str(int debug)
                 return "other";
         case D_DENTRY:
                 return "dentry";
+        case D_NETTRACE:
+                return "nettrace";
         case D_PAGE:
                 return "page";
         case D_DLMTRACE:

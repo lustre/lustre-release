@@ -68,7 +68,7 @@ typedef int gfp_t;
 #include <rdma/ib_fmr_pool.h>
 
 /* tunables fixed at compile time */
-#if CONFIG_SMP
+#ifdef CONFIG_SMP
 # define IBLND_N_SCHED      num_online_cpus()   /* # schedulers */
 #else
 # define IBLND_N_SCHED      1                   /* # schedulers */

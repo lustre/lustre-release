@@ -330,6 +330,11 @@ kptllnd_send(lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg)
                 tx->tx_msg->ptlm_u.rdma.kptlrm_hdr = *hdr;
                 kptllnd_init_msg (tx->tx_msg, PTLLND_MSG_TYPE_PUT,
                                   sizeof(kptl_rdma_msg_t));
+
+                CDEBUG(D_NETTRACE, "%s: passive PUT p %d %p\n",
+                       libcfs_id2str(target),
+                       le32_to_cpu(lntmsg->msg_hdr.msg.put.ptl_index), tx);
+
                 kptllnd_tx_launch(tx, target);
                 return 0;
 
@@ -374,6 +379,11 @@ kptllnd_send(lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg)
                 tx->tx_msg->ptlm_u.rdma.kptlrm_hdr = *hdr;
                 kptllnd_init_msg (tx->tx_msg, PTLLND_MSG_TYPE_GET,
                                   sizeof(kptl_rdma_msg_t));
+
+                CDEBUG(D_NETTRACE, "%s: passive GET p %d %p\n",
+                       libcfs_id2str(target),
+                       le32_to_cpu(lntmsg->msg_hdr.msg.put.ptl_index), tx);
+
                 kptllnd_tx_launch(tx, target);
                 return 0;
 
@@ -408,6 +418,16 @@ kptllnd_send(lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg)
 
         nob = offsetof(kptl_immediate_msg_t, kptlim_payload[payload_nob]);
         kptllnd_init_msg(tx->tx_msg, PTLLND_MSG_TYPE_IMMEDIATE, nob);
+
+        CDEBUG(D_NETTRACE, "%s: immediate %s p %d %p\n",
+               libcfs_id2str(target),
+               lnet_msgtyp2str(lntmsg->msg_type),
+               (le32_to_cpu(lntmsg->msg_type) == LNET_MSG_PUT) ? 
+               le32_to_cpu(lntmsg->msg_hdr.msg.put.ptl_index) :
+               (le32_to_cpu(lntmsg->msg_type) == LNET_MSG_GET) ? 
+               le32_to_cpu(lntmsg->msg_hdr.msg.get.ptl_index) : -1,
+               tx);
+
         kptllnd_tx_launch(tx, target);
         return 0;
 }

@@ -348,11 +348,11 @@ kptllnd_rx_done(kptl_rx_t *rx)
                 LASSERT (peer->peer_outstanding_credits <=
                          *kptllnd_tunables.kptl_peercredits);
 
-                spin_unlock_irqrestore(&peer->peer_lock, flags);
+                CDEBUG(D_NETTRACE, "%s[%d/%d]: rx %p done\n",
+                       libcfs_id2str(peer->peer_id),
+                       peer->peer_credits, peer->peer_outstanding_credits, rx);
 
-                CDEBUG(D_NET, "Peer=%s Credits=%d Outstanding=%d\n", 
-                       libcfs_id2str(peer->peer_id), 
-                       peer->peer_credits, peer->peer_outstanding_credits);
+                spin_unlock_irqrestore(&peer->peer_lock, flags);
 
                 /* I might have to send back credits */
                 kptllnd_peer_check_sends(peer);
@@ -514,11 +514,6 @@ kptllnd_rx_parse(kptl_rx_t *rx)
 
         LASSERT (rx->rx_peer == NULL);
 
-        CDEBUG (D_NET, "%s: nob=%d %08x %04x %02x %d %d\n",
-                kptllnd_ptlid2str(rx->rx_initiator),
-                rx->rx_nob, msg->ptlm_magic, msg->ptlm_version,
-                msg->ptlm_type, msg->ptlm_credits, msg->ptlm_nob);
-
         if ((rx->rx_nob >= 4 &&
              (msg->ptlm_magic == LNET_PROTO_MAGIC ||
               msg->ptlm_magic == __swab32(LNET_PROTO_MAGIC))) ||
@@ -545,12 +540,11 @@ kptllnd_rx_parse(kptl_rx_t *rx)
                 goto rx_done;
         }
 
-        CDEBUG(D_NET, "rx=%p type=%s(%d) nob %d cred %d\n",
-               rx, kptllnd_msgtype2str(msg->ptlm_type), msg->ptlm_type,
-               msg->ptlm_nob, msg->ptlm_credits);
-
         srcid.nid = msg->ptlm_srcnid;
         srcid.pid = msg->ptlm_srcpid;
+
+        CDEBUG(D_NETTRACE, "%s: RX %s c %d %p\n", libcfs_id2str(srcid),
+               kptllnd_msgtype2str(msg->ptlm_type), msg->ptlm_credits, rx);
 
         if (srcid.nid != kptllnd_ptl2lnetnid(rx->rx_initiator.nid)) {
                 CERROR("Bad source id %s from %s\n",

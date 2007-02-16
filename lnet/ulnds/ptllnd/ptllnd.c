@@ -33,6 +33,111 @@ lnd_t               the_ptllnd = {
 
 static int ptllnd_ni_count = 0;
 
+static struct list_head ptllnd_idle_history;
+static struct list_head ptllnd_history_list;
+
+void
+ptllnd_history_fini(void)
+{
+	ptllnd_he_t *he;
+
+	while (!list_empty(&ptllnd_idle_history)) {
+		he = list_entry(ptllnd_idle_history.next,
+				ptllnd_he_t, he_list);
+		
+		list_del(&he->he_list);
+		LIBCFS_FREE(he, sizeof(*he));
+	}
+	
+	while (!list_empty(&ptllnd_history_list)) {
+		he = list_entry(ptllnd_history_list.next,
+				ptllnd_he_t, he_list);
+		
+		list_del(&he->he_list);
+		LIBCFS_FREE(he, sizeof(*he));
+	}
+}
+
+int
+ptllnd_history_init(void)
+{
+	int          i;
+	ptllnd_he_t *he;
+	int          n;
+	int          rc;
+	
+	CFS_INIT_LIST_HEAD(&ptllnd_idle_history);
+	CFS_INIT_LIST_HEAD(&ptllnd_history_list);
+	
+	rc = ptllnd_parse_int_tunable(&n, "PTLLND_HISTORY", 0);
+	if (rc != 0)
+		return rc;
+	
+	for (i = 0; i < n; i++) {
+		LIBCFS_ALLOC(he, sizeof(*he));
+		if (he == NULL) {
+			ptllnd_history_fini();
+			return -ENOMEM;
+		}
+		
+		list_add(&he->he_list, &ptllnd_idle_history);
+	}
+
+	return 0;
+}
+
+void
+ptllnd_history(const char *fn, const char *file, const int line,
+	       const char *fmt, ...)
+{
+	static int     seq;
+	
+        va_list        ap;
+	ptllnd_he_t   *he;
+	
+	if (!list_empty(&ptllnd_idle_history)) {
+		he = list_entry(ptllnd_idle_history.next,
+				ptllnd_he_t, he_list);
+	} else if (!list_empty(&ptllnd_history_list)) {
+		he = list_entry(ptllnd_history_list.next,
+				ptllnd_he_t, he_list);
+	} else {
+		return;
+	}
+
+	list_del(&he->he_list);
+	list_add_tail(&he->he_list, &ptllnd_history_list);
+
+	he->he_seq = seq++;
+	he->he_fn = fn;
+	he->he_file = file;
+	he->he_line = line;
+	gettimeofday(&he->he_time, NULL);
+	
+	va_start(ap, fmt);
+	vsnprintf(he->he_msg, sizeof(he->he_msg), fmt, ap);
+	va_end(ap);
+}
+
+void
+ptllnd_dump_history(void)
+{
+	ptllnd_he_t    *he;
+	
+	while (!list_empty(&ptllnd_history_list)) {
+		he = list_entry(ptllnd_history_list.next,
+				ptllnd_he_t, he_list);
+
+		list_del(&he->he_list);
+		
+		CDEBUG(D_WARNING, "%d %d.%06d (%s:%d:%s()) %s\n", he->he_seq,
+		       (int)he->he_time.tv_sec, (int)he->he_time.tv_usec,
+		       he->he_file, he->he_line, he->he_fn, he->he_msg);
+
+		list_add_tail(&he->he_list, &ptllnd_idle_history);
+	}
+}
+
 void 
 ptllnd_assert_wire_constants (void)
 {
@@ -495,6 +600,12 @@ ptllnd_startup (lnet_ni_t *ni)
 
         ptllnd_ni_count++;
 
+	rc = ptllnd_history_init();
+	if (rc != 0) {
+		CERROR("Can't init history\n");
+		goto failed0;
+	}
+	
         LIBCFS_ALLOC(plni, sizeof(*plni));
         if (plni == NULL) {
                 CERROR("Can't allocate ptllnd state\n");
@@ -584,6 +695,7 @@ ptllnd_startup (lnet_ni_t *ni)
  failed1:
         LIBCFS_FREE(plni, sizeof(*plni));
  failed0:
+	ptllnd_history_fini();
         ptllnd_ni_count--;
         CDEBUG(D_NET, "<<< rc=%d\n",rc);
         return rc;

@@ -102,7 +102,7 @@ typedef void                 ib_fmr_pool_t;
 
 #endif
 
-#if CONFIG_SMP
+#ifdef CONFIG_SMP
 # define IBNAL_N_SCHED      num_online_cpus()   /* # schedulers */
 #else
 # define IBNAL_N_SCHED      1                   /* # schedulers */

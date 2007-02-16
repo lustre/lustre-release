@@ -65,7 +65,7 @@
  */
 //#define PJK_DEBUGGING
 
-#if CONFIG_SMP
+#ifdef CONFIG_SMP
 # define PTLLND_N_SCHED         num_online_cpus()   /* # schedulers */
 #else
 # define PTLLND_N_SCHED         1                   /* # schedulers */

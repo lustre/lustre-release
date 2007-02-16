@@ -13,6 +13,14 @@ TBD         Cluster File Systems, Inc. <info@clusterfs.com>
 	ptllnd    - Portals 3.3 / UNICOS/lc 1.5.x, 2.0.x
        * bug fixes
 
+Severity   : enhancement
+Bugzilla   : 11684
+Description: Added D_NETTRACE for recording network packet history
+	     (initially only for ptllnd).  Also a separate userspace
+	     ptllnd facility to gather history which should really be
+	     covered by D_NETTRACE too, if only CDEBUG recorded history in
+	     userspace.
+
 Severity   : major
 Frequency  : rare	
 Bugzilla   : 11616

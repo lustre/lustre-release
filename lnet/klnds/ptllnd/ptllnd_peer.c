@@ -572,7 +572,8 @@ kptllnd_peer_check_sends (kptl_peer_t *peer)
         spin_lock_irqsave(&peer->peer_lock, flags);
 
         if (list_empty(&peer->peer_sendq) &&
-            peer->peer_outstanding_credits >= PTLLND_CREDIT_HIGHWATER) {
+            peer->peer_outstanding_credits >= PTLLND_CREDIT_HIGHWATER &&
+            peer->peer_credits != 0) {
 
                 /* post a NOOP to return credits */
                 spin_unlock_irqrestore(&peer->peer_lock, flags);
@@ -612,8 +613,9 @@ kptllnd_peer_check_sends (kptl_peer_t *peer)
 		}
 
                 if (peer->peer_credits == 0) {
-                        CDEBUG(D_NET, "%s: no credits\n",
-                               libcfs_id2str(peer->peer_id));
+                        CDEBUG(D_NETTRACE, "%s[%d/%d]: no credits for %p\n",
+                               libcfs_id2str(peer->peer_id),
+                               peer->peer_credits, peer->peer_outstanding_credits, tx);
                         break;
                 }
 
@@ -621,8 +623,9 @@ kptllnd_peer_check_sends (kptl_peer_t *peer)
                  * return */
                 if (peer->peer_credits == 1 &&
                     peer->peer_outstanding_credits == 0) {
-                        CDEBUG(D_NET, "%s: not using last credit\n",
-                               libcfs_id2str(peer->peer_id));
+                        CDEBUG(D_NETTRACE, "%s[%d/%d]: not using last credit for %p\n",
+                               libcfs_id2str(peer->peer_id),
+                               peer->peer_credits, peer->peer_outstanding_credits, tx);
                         break;
                 }
 
@@ -646,16 +649,18 @@ kptllnd_peer_check_sends (kptl_peer_t *peer)
                         continue;
                 }
 
-                CDEBUG(D_NET, "tx=%p nob=%d to %s(%s)\n",
-                       tx, tx->tx_msg->ptlm_nob,
-                       libcfs_id2str(peer->peer_id), 
-                       kptllnd_ptlid2str(peer->peer_ptlid));
-
                 /* fill last-minute msg header fields */
                 kptllnd_msg_pack(tx->tx_msg, peer);
 
                 peer->peer_outstanding_credits = 0;
                 peer->peer_credits--;
+
+                CDEBUG(D_NETTRACE, "%s[%d/%d]: %s tx=%p nob=%d cred=%d\n",
+                       libcfs_id2str(peer->peer_id),
+                       peer->peer_credits, peer->peer_outstanding_credits,
+                       kptllnd_msgtype2str(tx->tx_msg->ptlm_type),
+                       tx, tx->tx_msg->ptlm_nob,
+                       tx->tx_msg->ptlm_credits);
 
                 list_add_tail(&tx->tx_list, &peer->peer_activeq);
 
@@ -1063,6 +1068,9 @@ kptllnd_peer_handle_hello (ptl_process_id_t  initiator,
 	/* NB someone else could get in now and post a message before I post
 	 * the HELLO, but post_tx/check_sends take care of that! */
 
+        CDEBUG(D_NETTRACE, "%s: post response hello %p\n",
+               libcfs_id2str(new_peer->peer_id), hello_tx);
+
         kptllnd_post_tx(new_peer, hello_tx);
         kptllnd_peer_check_sends(new_peer);
 
@@ -1186,6 +1194,9 @@ kptllnd_tx_launch(kptl_tx_t *tx, lnet_process_id_t target)
 
 	/* NB someone else could get in now and post a message before I post
 	 * the HELLO, but post_tx/check_sends take care of that! */
+
+        CDEBUG(D_NETTRACE, "%s: post initial hello %p\n",
+               libcfs_id2str(new_peer->peer_id), hello_tx);
 
         peer = new_peer;
         kptllnd_post_tx(peer, hello_tx);

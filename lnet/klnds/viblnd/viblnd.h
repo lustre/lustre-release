@@ -81,7 +81,7 @@
 # error Invalid GCC version. Must use GCC < 3.0.0 || GCC >= 3.2.3
 #endif
 
-#if CONFIG_SMP
+#ifdef CONFIG_SMP
 # define IBNAL_N_SCHED      num_online_cpus()   /* # schedulers */
 #else
 # define IBNAL_N_SCHED      1                   /* # schedulers */
@@ -558,6 +558,10 @@ kibnal_send_keepalive(kib_conn_t *conn)
                 time_after(jiffies, conn->ibc_last_send +
                            *kibnal_tunables.kib_keepalive*HZ);
 }
+
+#ifndef IBNAL_VOIDSTAR_SGADDR
+# define IBNAL_VOIDSTAR_SGADDR 0
+#endif
 
 #if IBNAL_VOIDSTAR_SGADDR
 # if CONFIG_HIGHMEM

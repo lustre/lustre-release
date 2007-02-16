@@ -157,6 +157,9 @@ ptllnd_find_peer(lnet_ni_t *ni, lnet_process_id_t id, int create)
         tx->tx_msg.ptlm_u.hello.kptlhm_matchbits = PTL_RESERVED_MATCHBITS;
         tx->tx_msg.ptlm_u.hello.kptlhm_max_msg_size = plni->plni_max_msg_size;
 
+        PTLLND_HISTORY("%s[%d/%d]: post hello %p", libcfs_id2str(id),
+                       tx->tx_peer->plp_credits,
+                       tx->tx_peer->plp_outstanding_credits, tx);
         ptllnd_post_tx(tx);
 
         return plp;
@@ -274,6 +277,7 @@ ptllnd_debug_peer(lnet_ni_t *ni, lnet_process_id_t id)
         }
         
         ptllnd_peer_decref(plp);
+        ptllnd_dump_history();
 }
 
 void
@@ -680,8 +684,8 @@ ptllnd_check_sends(ptllnd_peer_t *peer)
         CDEBUG(D_NET, "plp_outstanding_credits=%d\n",peer->plp_outstanding_credits);
 
         if (list_empty(&peer->plp_txq) &&
-            peer->plp_outstanding_credits >=
-            PTLLND_CREDIT_HIGHWATER(plni)) {
+            peer->plp_outstanding_credits >= PTLLND_CREDIT_HIGHWATER(plni) &&
+            peer->plp_credits != 0) {
 
                 tx = ptllnd_new_tx(peer, PTLLND_MSG_TYPE_NOOP, 0);
                 CDEBUG(D_NET, "NOOP tx=%p\n",tx);
@@ -708,13 +712,23 @@ ptllnd_check_sends(ptllnd_peer_t *peer)
                 LASSERT (peer->plp_credits >= 0);
                 LASSERT (peer->plp_credits <= peer->plp_max_credits);
 
-                if (peer->plp_credits == 0)     /* no credits */
+                if (peer->plp_credits == 0) {   /* no credits */
+                        PTLLND_HISTORY("%s[%d/%d]: no creds for %p",
+                                       libcfs_id2str(peer->plp_id),
+                                       peer->plp_credits,
+                                       peer->plp_outstanding_credits, tx);
                         break;
-
+                }
+                
                 if (peer->plp_credits == 1 &&   /* last credit reserved for */
-                    peer->plp_outstanding_credits == 0) /* returning credits */
+                    peer->plp_outstanding_credits == 0) { /* returning credits */
+                        PTLLND_HISTORY("%s[%d/%d]: too few creds for %p",
+                                       libcfs_id2str(peer->plp_id),
+                                       peer->plp_credits,
+                                       peer->plp_outstanding_credits, tx);
                         break;
-
+                }
+                
                 list_del(&tx->tx_list);
                 list_add_tail(&tx->tx_list, &peer->plp_activeq);
 
@@ -770,6 +784,11 @@ ptllnd_check_sends(ptllnd_peer_t *peer)
 
                 tx->tx_reqmdh = mdh;
                 PTLLND_DBGT_STAMP(tx->tx_req_posted);
+
+                PTLLND_HISTORY("%s[%d/%d]: %s %p c %d", libcfs_id2str(peer->plp_id),
+                               peer->plp_credits, peer->plp_outstanding_credits,
+                               ptllnd_msgtype2str(tx->tx_type), tx,
+                               tx->tx_msg.ptlm_credits);
 
                 rc = PtlPut(mdh, PTL_NOACK_REQ, peer->plp_ptlid,
                             plni->plni_portal, 0, LNET_MSG_MATCHBITS, 0, 0);
@@ -903,6 +922,15 @@ ptllnd_passive_rdma(ptllnd_peer_t *peer, int type, lnet_msg_t *msg,
         }
 
         tx->tx_lnetmsg = msg;
+        PTLLND_HISTORY("%s[%d/%d]: post passive %s p %d %p",
+                       libcfs_id2str(msg->msg_target),
+                       peer->plp_credits, peer->plp_outstanding_credits,
+                       lnet_msgtyp2str(msg->msg_type),
+                       (le32_to_cpu(msg->msg_type) == LNET_MSG_PUT) ? 
+                       le32_to_cpu(msg->msg_hdr.msg.put.ptl_index) :
+                       (le32_to_cpu(msg->msg_type) == LNET_MSG_GET) ? 
+                       le32_to_cpu(msg->msg_hdr.msg.get.ptl_index) : -1,
+                       tx);
         ptllnd_post_tx(tx);
         return 0;
 
@@ -1080,6 +1108,15 @@ ptllnd_send(lnet_ni_t *ni, void *private, lnet_msg_t *msg)
         tx->tx_msg.ptlm_u.immediate.kptlim_hdr = msg->msg_hdr;
 
         tx->tx_lnetmsg = msg;
+        PTLLND_HISTORY("%s[%d/%d]: post immediate %s p %d %p",
+                       libcfs_id2str(msg->msg_target),
+                       plp->plp_credits, plp->plp_outstanding_credits,
+                       lnet_msgtyp2str(msg->msg_type),
+                       (le32_to_cpu(msg->msg_type) == LNET_MSG_PUT) ? 
+                       le32_to_cpu(msg->msg_hdr.msg.put.ptl_index) :
+                       (le32_to_cpu(msg->msg_type) == LNET_MSG_GET) ? 
+                       le32_to_cpu(msg->msg_hdr.msg.get.ptl_index) : -1,
+                       tx);
         ptllnd_post_tx(tx);
         ptllnd_peer_decref(plp);
         return 0;
@@ -1092,9 +1129,11 @@ ptllnd_rx_done(ptllnd_rx_t *rx)
         lnet_ni_t     *ni = plp->plp_ni;
         ptllnd_ni_t   *plni = ni->ni_data;
 
-        CDEBUG(D_NET, "rx=%p\n", rx);
-
         plp->plp_outstanding_credits++;
+
+        PTLLND_HISTORY("%s[%d/%d]: rx=%p done\n", libcfs_id2str(plp->plp_id),
+                       plp->plp_credits, plp->plp_outstanding_credits, rx);
+
         ptllnd_check_sends(rx->rx_peer);
 
         LASSERT (plni->plni_nrxs > 0);
@@ -1283,7 +1322,10 @@ ptllnd_parse_request(lnet_ni_t *ni, ptl_process_id_t initiator,
                        libcfs_id2str(srcid));
                 return;
         }
-       
+
+        PTLLND_HISTORY("RX %s: %s %d %p", libcfs_id2str(srcid), 
+                       ptllnd_msgtype2str(msg->ptlm_type), msg->ptlm_credits, &rx);
+
         switch (msg->ptlm_type) {
         case PTLLND_MSG_TYPE_PUT:
         case PTLLND_MSG_TYPE_GET:
@@ -1543,6 +1585,13 @@ ptllnd_tx_event (lnet_ni_t *ni, ptl_event_t *event)
 
         LASSERT (!isreq != !isbulk);            /* always one and only 1 match */
 
+        PTLLND_HISTORY("%s[%d/%d]: TX done %p %s%s",
+                       libcfs_id2str(tx->tx_peer->plp_id), 
+                       tx->tx_peer->plp_credits,
+                       tx->tx_peer->plp_outstanding_credits,
+                       tx, isreq ? "REQ" : "BULK", unlinked ? "(unlinked)" : "");
+
+        LASSERT (!isreq != !isbulk);            /* always one and only 1 match */
         switch (tx->tx_type) {
         default:
                 LBUG();
@@ -1608,6 +1657,13 @@ ptllnd_tx_event (lnet_ni_t *ni, ptl_event_t *event)
 void
 ptllnd_wait (lnet_ni_t *ni, int milliseconds)
 {
+        static struct timeval  prevt;
+        static int             prevt_count;
+        static int             call_count;
+
+        struct timeval         t1;
+        struct timeval         t2;
+        
         ptllnd_ni_t   *plni = ni->ni_data;
         ptllnd_tx_t   *tx;
         ptl_event_t    event;
@@ -1620,6 +1676,9 @@ ptllnd_wait (lnet_ni_t *ni, int milliseconds)
         /* Handle any currently queued events, returning immediately if any.
          * Otherwise block for the timeout and handle all events queued
          * then. */
+
+        gettimeofday(&t1, NULL);
+        call_count++;
 
         for (;;) {
                 time_t  then = cfs_time_current_sec();
@@ -1647,7 +1706,8 @@ ptllnd_wait (lnet_ni_t *ni, int milliseconds)
                                 break;
 
                         blocked = 1;
-                        timeout = milliseconds;
+                        timeout = (milliseconds < 0) ?
+                                  PTL_TIME_FOREVER : milliseconds;
                         continue;
                 }
 
@@ -1680,5 +1740,15 @@ ptllnd_wait (lnet_ni_t *ni, int milliseconds)
                                 ptllnd_tx_t, tx_list);
                 CDEBUG(D_NET, "Process ZOMBIE tx=%p\n",tx);
                 ptllnd_tx_done(tx);
+        }
+
+        gettimeofday(&t2, NULL);
+                
+        if (prevt.tv_sec == 0 ||
+            prevt.tv_sec != t2.tv_sec) {
+                PTLLND_HISTORY("%d wait entered at %d.%06d - prev %d %d.%06d", 
+                               call_count, (int)t1.tv_sec, (int)t1.tv_usec,
+                               prevt_count, (int)prevt.tv_sec, (int)prevt.tv_usec);
+                prevt = t2;
         }
 }

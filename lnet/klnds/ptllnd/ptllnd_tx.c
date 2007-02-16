@@ -401,10 +401,11 @@ kptllnd_tx_callback(ptl_event_t *ev)
 #else
         unlinked = (ev->type == PTL_EVENT_UNLINK);
 #endif
-        CDEBUG(D_NET, "%s(%d) tx=%p(%s) fail=%d unlinked=%d\n",
+        CDEBUG(D_NETTRACE, "%s[%d/%d]: %s(%d) tx=%p fail=%d unlinked=%d\n",
+               libcfs_id2str(peer->peer_id),
+               peer->peer_credits, peer->peer_outstanding_credits,
                kptllnd_evtype2str(ev->type), ev->type, 
-               tx, libcfs_id2str(peer->peer_id), 
-               ev->ni_fail_type, unlinked);
+               tx, ev->ni_fail_type, unlinked);
 
         switch (tx->tx_type) {
         default:

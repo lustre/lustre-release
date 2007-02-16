@@ -94,7 +94,6 @@ extern unsigned int libcfs_catastrophe;
 #define S_LLITE       0x00000080
 #define S_RPC         0x00000100
 #define S_MGMT        0x00000200
-/* unused */
 #define S_LNET        0x00000400
 #define S_LND         0x00000800 /* ALL LNDs */
 #define S_PINGER      0x00001000
@@ -120,7 +119,7 @@ extern unsigned int libcfs_catastrophe;
 /* keep these in sync with lnet/utils/debug.c and lnet/libcfs/debug.c */
 
 /* Debugging masks (32 bits, non-overlapping) */
-/* keep these in sync with lnet/utils/debug.c */
+/* keep these in sync with lnet/utils/debug.c and lnet/libcfs/debug.c */
 #define D_TRACE       0x00000001 /* ENTRY/EXIT markers */
 #define D_INODE       0x00000002
 #define D_SUPER       0x00000004
@@ -135,7 +134,7 @@ extern unsigned int libcfs_catastrophe;
 #define D_BUFFS       0x00000800
 #define D_OTHER       0x00001000
 #define D_DENTRY      0x00002000
-/* unused: keep in sync with lnet/utils/debug.c */
+#define D_NETTRACE    0x00004000
 #define D_PAGE        0x00008000 /* bulk page handling */
 #define D_DLMTRACE    0x00010000
 #define D_ERROR       0x00020000 /* CERROR(...) == CDEBUG (D_ERROR, ...) */
@@ -149,7 +148,7 @@ extern unsigned int libcfs_catastrophe;
 #define D_CONSOLE     0x02000000
 #define D_QUOTA       0x04000000
 #define D_SEC         0x08000000
-/* keep these in sync with lnet/utils/debug.c */
+/* keep these in sync with lnet/{utils,libcfs}/debug.c */
 
 #define D_CANTMASK   (D_ERROR | D_EMERG | D_WARNING | D_CONSOLE)
 

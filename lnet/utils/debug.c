@@ -69,17 +69,17 @@ static int debug_mask = ~0;
 static const char *libcfs_debug_subsystems[] =
         {"undefined", "mdc", "mds", "osc",
          "ost", "class", "log", "llite",
-         "rpc", "", "lnet", "lnd",
+         "rpc", "mgmt", "lnet", "lnd",
          "pinger", "filter", "", "echo",
          "ldlm", "lov", "", "",
          "", "", "", "lmv",
-         "", "sec", "gss", "", "mgc", "mgs",
-         "fid", "fld", NULL};
+         "", "sec", "gss", "", 
+         "mgc", "mgs", "fid", "fld", NULL};
 static const char *libcfs_debug_masks[] =
         {"trace", "inode", "super", "ext2",
          "malloc", "cache", "info", "ioctl",
-         "blocks", "net", "warning", "buffs",
-         "other", "dentry", "lnet", "page",
+         "neterror", "net", "warning", "buffs",
+         "other", "dentry", "nettrace", "page",
          "dlmtrace", "error", "emerg", "ha",
          "rpctrace", "vfstrace", "reada", "mmap",
          "config", "console", "quota", "sec", NULL};

@@ -24,6 +24,7 @@
 
 #include <portals/p30.h>
 #include <lnet/ptllnd.h>           /* Depends on portals/p30.h */
+#include <stdarg.h>
 
 #define PTLLND_DEBUG_TIMING 0
 
@@ -39,6 +40,27 @@
 #define PTLLND_WARN_LONG_WAIT      5 /* seconds */
 #define PTLLND_ABORT_ON_NAK        1 /* abort app on protocol version mismatch */
 
+
+/* Hack to record history 
+ * This should really be done by CDEBUG(D_NETTRACE...  */
+
+typedef struct {
+        struct list_head          he_list;
+        struct timeval            he_time;
+        const char               *he_fn;
+        const char               *he_file;
+        int                       he_seq;
+        int                       he_line;
+        char                      he_msg[80];
+} ptllnd_he_t;
+
+void ptllnd_dump_history();
+void ptllnd_history(const char *fn, const char *file, const int line,
+                    const char *fmt, ...);
+#define PTLLND_HISTORY(fmt, a...) \
+        ptllnd_history(__FUNCTION__, __FILE__, __LINE__, fmt, ## a)
+
+        
 #define PTLLND_MD_OPTIONS        (PTL_MD_LUSTRE_COMPLETION_SEMANTICS |\
                                   PTL_MD_EVENT_START_DISABLE)
 typedef struct
@@ -184,6 +206,7 @@ ptllnd_eventarg2obj (void *arg)
 # define DBGT_ARGS(tv)
 #endif
 
+int ptllnd_parse_int_tunable(int *value, char *name, int dflt);
 void ptllnd_cull_tx_history(ptllnd_ni_t *plni);
 int ptllnd_startup(lnet_ni_t *ni);
 void ptllnd_shutdown(lnet_ni_t *ni);

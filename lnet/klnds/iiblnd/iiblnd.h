@@ -68,13 +68,14 @@
 #error Invalid GCC version. Must use GCC >= 3.2.3
 #endif
 
-#if CONFIG_SMP
+#ifdef CONFIG_SMP
 # define IBNAL_N_SCHED      num_online_cpus()   /* # schedulers */
 #else
 # define IBNAL_N_SCHED      1                   /* # schedulers */
 #endif
 
-#define IBNAL_FMR                    0          /* map on demand v. use whole mem mapping */
+#define IBNAL_USE_FMR                0          /* map on demand v. use whole mem mapping */
+#define KIBLND_DETAILED_DEBUG        0
 
 /* tunables fixed at compile time */
 #define IBNAL_PEER_HASH_SIZE         101        /* # peer lists */
