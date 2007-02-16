@@ -380,6 +380,7 @@ EXPORT_SYMBOL(obd_fail_loc);
 EXPORT_SYMBOL(obd_print_fail_loc);
 EXPORT_SYMBOL(obd_race_waitq);
 EXPORT_SYMBOL(obd_race_state);
+EXPORT_SYMBOL(obd_debug_peer_on_timeout);
 EXPORT_SYMBOL(obd_dump_on_timeout);
 EXPORT_SYMBOL(obd_dump_on_eviction);
 EXPORT_SYMBOL(obd_timeout);
