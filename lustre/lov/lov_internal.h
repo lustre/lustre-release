@@ -71,7 +71,7 @@ struct lov_async_page {
         (LASSERT(((struct lov_async_page *)(c))->lap_magic == LOV_AP_MAGIC),   \
          (struct lov_async_page *)(c))
 
-extern kmem_cache_t *lov_oinfo_slab;
+extern cfs_mem_cache_t *lov_oinfo_slab;
 
 static inline void lov_llh_addref(void *llhp)
 {

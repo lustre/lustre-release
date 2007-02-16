@@ -2628,7 +2628,7 @@ struct obd_ops lov_obd_ops = {
 static quota_interface_t *quota_interface;
 extern quota_interface_t lov_quota_interface;
 
-kmem_cache_t *lov_oinfo_slab;
+cfs_mem_cache_t *lov_oinfo_slab;
 
 int __init lov_init(void)
 {
@@ -2636,9 +2636,8 @@ int __init lov_init(void)
         int rc, rc2;
         ENTRY;
 
-        lov_oinfo_slab = kmem_cache_create("lov_oinfo",
-                                           sizeof(struct lov_oinfo), 0,
-                                           SLAB_HWCACHE_ALIGN, NULL, NULL);
+        lov_oinfo_slab = cfs_mem_cache_create("lov_oinfo",
+                                              sizeof(struct lov_oinfo), 0, 0);
         if (lov_oinfo_slab == NULL)
                 return -ENOMEM;
         lprocfs_init_vars(lov, &lvars);
@@ -2652,7 +2651,7 @@ int __init lov_init(void)
         if (rc) {
                 if (quota_interface)
                         PORTAL_SYMBOL_PUT(lov_quota_interface);
-                rc2 = kmem_cache_destroy(lov_oinfo_slab);
+                rc2 = cfs_mem_cache_destroy(lov_oinfo_slab);
                 LASSERT(rc2 == 0);
         }
 
@@ -2668,7 +2667,7 @@ static void /*__exit*/ lov_exit(void)
                 PORTAL_SYMBOL_PUT(lov_quota_interface);
 
         class_unregister_type(LUSTRE_LOV_NAME);
-        rc = kmem_cache_destroy(lov_oinfo_slab);
+        rc = cfs_mem_cache_destroy(lov_oinfo_slab);
         LASSERT(rc == 0);
 }
 
