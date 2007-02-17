@@ -150,7 +150,7 @@ struct command_t *trigger_cmd = NULL;
 pthread_mutex_t m_trigger = PTHREAD_MUTEX_INITIALIZER;
 pthread_cond_t cv_trigger = PTHREAD_COND_INITIALIZER;
 
-long write_bytes;
+__u64 write_bytes;
 pthread_mutex_t m_count = PTHREAD_MUTEX_INITIALIZER;
 
 static void trigger(struct command_t *cmd, int count)
@@ -626,7 +626,7 @@ static void report_perf()
         diff = difftime(&end, &trigger_start);
         if (o_verbose > 2) {
                 pthread_mutex_lock(&m_count);
-                printf("wrote %ldMB in %.3fs (%.3f MB/s)\n",
+                printf("wrote %lluMB in %.3fs (%.3f MB/s)\n",
                        write_bytes >> 20, diff,
                        (write_bytes >> 20) / diff);
                 pthread_mutex_unlock(&m_count);
