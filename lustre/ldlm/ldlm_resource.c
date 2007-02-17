@@ -184,7 +184,7 @@ void ldlm_proc_namespace(struct ldlm_namespace *ns)
 
         snprintf(lock_name, MAX_STRING_SIZE, "%s/lock_count", ns->ns_name);
         lock_vars[0].data = &ns->ns_locks;
-        lock_vars[0].read_fptr = lprocfs_rd_u64;
+        lock_vars[0].read_fptr = lprocfs_rd_atomic;
         lprocfs_add_vars(ldlm_ns_proc_dir, lock_vars, 0);
 
         if (ns->ns_client) {
