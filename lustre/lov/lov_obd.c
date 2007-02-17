@@ -2637,7 +2637,8 @@ int __init lov_init(void)
         ENTRY;
 
         lov_oinfo_slab = cfs_mem_cache_create("lov_oinfo",
-                                              sizeof(struct lov_oinfo), 0, 0);
+                                              sizeof(struct lov_oinfo), 
+                                              0, SLAB_HWCACHE_ALIGN);
         if (lov_oinfo_slab == NULL)
                 return -ENOMEM;
         lprocfs_init_vars(lov, &lvars);
