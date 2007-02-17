@@ -37,12 +37,11 @@
 #include <obd_lov.h>
 #include "lov_internal.h"
 
-               
 /* #define QOS_DEBUG 1 */
 #define D_QOS D_OTHER
 
-#define TGT_BAVAIL(i)  (lov->lov_tgts[i]->ltd_exp->exp_obd->obd_osfs.os_bavail * \
-                        lov->lov_tgts[i]->ltd_exp->exp_obd->obd_osfs.os_bsize) 
+#define TGT_BAVAIL(i)  (lov->lov_tgts[i]->ltd_exp->exp_obd->obd_osfs.os_bavail*\
+                        lov->lov_tgts[i]->ltd_exp->exp_obd->obd_osfs.os_bsize)
 #define TGT_FFREE(i)   (lov->lov_tgts[i]->ltd_exp->exp_obd->obd_osfs.os_ffree)
 
 
@@ -55,9 +54,7 @@ int qos_add_tgt(struct obd_device *obd, __u32 index)
         ENTRY;
 
         /* We only need this QOS struct on MDT, not clients - but we may not
-           have registered the lov's observer yet, so there's no way to check
-           here. */
-                            
+         * have registered the LOV's observer yet, so there's no way to know */
         if (!exp || !exp->exp_connection) {
                 CERROR("Missing connection\n");
                 RETURN(-ENOTCONN);
@@ -66,7 +63,7 @@ int qos_add_tgt(struct obd_device *obd, __u32 index)
         down_write(&lov->lov_qos.lq_rw_sem);
         mutex_down(&lov->lov_lock);
         list_for_each_entry(oss, &lov->lov_qos.lq_oss_list, lqo_oss_list) {
-                if (obd_uuid_equals(&oss->lqo_uuid, 
+                if (obd_uuid_equals(&oss->lqo_uuid,
                                     &exp->exp_connection->c_remote_uuid)) {
                         found++;
                         break;
@@ -75,7 +72,7 @@ int qos_add_tgt(struct obd_device *obd, __u32 index)
 
         if (!found) {
                 OBD_ALLOC_PTR(oss);
-                if (!oss) 
+                if (!oss)
                         GOTO(out, rc = -ENOMEM);
                 memcpy(&oss->lqo_uuid,
                        &exp->exp_connection->c_remote_uuid,
@@ -84,14 +81,14 @@ int qos_add_tgt(struct obd_device *obd, __u32 index)
                 /* Assume we have to move this one */
                 list_del(&oss->lqo_oss_list);
         }
-                        
+
         oss->lqo_ost_count++;
         lov->lov_tgts[index]->ltd_qos.ltq_oss = oss;
 
         /* Add sorted by # of OSTs.  Find the first entry that we're
            bigger than... */
         list_for_each_entry(temposs, &lov->lov_qos.lq_oss_list, lqo_oss_list) {
-                if (oss->lqo_ost_count > temposs->lqo_ost_count) 
+                if (oss->lqo_ost_count > temposs->lqo_ost_count)
                         break;
         }
         /* ...and add before it.  If we're the first or smallest, temposs
@@ -101,7 +98,7 @@ int qos_add_tgt(struct obd_device *obd, __u32 index)
         lov->lov_qos.lq_dirty = 1;
         lov->lov_qos.lq_dirty_rr = 1;
 
-        CDEBUG(D_QOS, "add tgt %s to OSS %s (%d OSTs)\n", 
+        CDEBUG(D_QOS, "add tgt %s to OSS %s (%d OSTs)\n",
                obd_uuid2str(&lov->lov_tgts[index]->ltd_uuid),
                obd_uuid2str(&oss->lqo_uuid),
                oss->lqo_ost_count);
@@ -127,12 +124,12 @@ int qos_del_tgt(struct obd_device *obd, __u32 index)
 
         oss->lqo_ost_count--;
         if (oss->lqo_ost_count == 0) {
-                CDEBUG(D_QOS, "removing OSS %s\n", 
+                CDEBUG(D_QOS, "removing OSS %s\n",
                        obd_uuid2str(&oss->lqo_uuid));
                 list_del(&oss->lqo_oss_list);
                 OBD_FREE_PTR(oss);
         }
-        
+
         lov->lov_qos.lq_dirty = 1;
         lov->lov_qos.lq_dirty_rr = 1;
 out:
@@ -140,8 +137,8 @@ out:
         RETURN(rc);
 }
 
-/* Recalculate per-object penalties for OSSs and OSTs, 
-   depends on size of each ost in an oss */  
+/* Recalculate per-object penalties for OSSs and OSTs,
+   depends on size of each ost in an oss */
 static int qos_calc_ppo(struct obd_device *obd)
 {
         struct lov_obd *lov = &obd->u.lov;
@@ -150,11 +147,11 @@ static int qos_calc_ppo(struct obd_device *obd)
         __u32 num_active;
         int rc, i, prio_wide;
         ENTRY;
-        
-        if (!lov->lov_qos.lq_dirty) 
+
+        if (!lov->lov_qos.lq_dirty)
                 GOTO(out, rc = 0);
-                
-        num_active = lov->desc.ld_active_tgt_count - 1; 
+
+        num_active = lov->desc.ld_active_tgt_count - 1;
         if (num_active < 1)
                 GOTO(out, rc = -EAGAIN);
 
@@ -181,7 +178,7 @@ static int qos_calc_ppo(struct obd_device *obd)
                         continue;
                 ba_min = min(temp, ba_min);
                 ba_max = max(temp, ba_max);
-                
+
                 /* Count the number of usable OSS's */
                 if (lov->lov_tgts[i]->ltd_qos.ltq_oss->lqo_bavail == 0)
                         lov->lov_qos.lq_active_oss_count++;
@@ -190,10 +187,10 @@ static int qos_calc_ppo(struct obd_device *obd)
                 /* per-OST penalty is prio * TGT_bavail / (num_ost - 1) / 2 */
                 temp >>= 1;
                 do_div(temp, num_active);
-                lov->lov_tgts[i]->ltd_qos.ltq_penalty_per_obj = 
+                lov->lov_tgts[i]->ltd_qos.ltq_penalty_per_obj =
                         (temp * prio_wide) >> 8;
 
-                if (lov->lov_qos.lq_reset == 0) 
+                if (lov->lov_qos.lq_reset == 0)
                         lov->lov_tgts[i]->ltd_qos.ltq_penalty = 0;
         }
 
@@ -202,29 +199,29 @@ static int qos_calc_ppo(struct obd_device *obd)
                 /* If there's only 1 OSS, we can't penalize it, so instead
                    we have to double the OST penalty */
                 num_active = 1;
-                for (i = 0; i < lov->desc.ld_tgt_count; i++) 
+                for (i = 0; i < lov->desc.ld_tgt_count; i++)
                         lov->lov_tgts[i]->ltd_qos.ltq_penalty_per_obj <<= 1;
         }
-        
+
         /* Per-OSS penalty is prio * oss_avail / oss_osts / (num_oss - 1) / 2 */
         list_for_each_entry(oss, &lov->lov_qos.lq_oss_list, lqo_oss_list) {
                 temp = oss->lqo_bavail >> 1;
                 do_div(temp, oss->lqo_ost_count * num_active);
                 oss->lqo_penalty_per_obj = (temp * prio_wide) >> 8;
-                if (lov->lov_qos.lq_reset == 0) 
+                if (lov->lov_qos.lq_reset == 0)
                         oss->lqo_penalty = 0;
         }
 
         lov->lov_qos.lq_dirty = 0;
         lov->lov_qos.lq_reset = 0;
 
-        /* If each ost has almost same free space, 
+        /* If each ost has almost same free space,
          * do rr allocation for better creation performance */
         lov->lov_qos.lq_same_space = 0;
         temp = ba_max - ba_min;
-        ba_min = (ba_min * 51) >> 8;     /* 51/256 = .20 */  
+        ba_min = (ba_min * 51) >> 8;     /* 51/256 = .20 */
         if (temp < ba_min) {
-                /* Difference is less than 20% */ 
+                /* Difference is less than 20% */
                 lov->lov_qos.lq_same_space = 1;
                 /* Reset weights for the next time we enter qos mode */
                 lov->lov_qos.lq_reset = 0;
@@ -240,12 +237,12 @@ out:
 static int qos_calc_weight(struct lov_obd *lov, int i)
 {
         __u64 temp, temp2;
-        
+
         /* Final ost weight = TGT_BAVAIL - ost_penalty - oss_penalty */
         temp = TGT_BAVAIL(i);
-        temp2 = lov->lov_tgts[i]->ltd_qos.ltq_penalty + 
+        temp2 = lov->lov_tgts[i]->ltd_qos.ltq_penalty +
                 lov->lov_tgts[i]->ltd_qos.ltq_oss->lqo_penalty;
-        if (temp < temp2) 
+        if (temp < temp2)
                 lov->lov_tgts[i]->ltd_qos.ltq_weight = 0;
         else
                 lov->lov_tgts[i]->ltd_qos.ltq_weight = temp - temp2;
@@ -263,7 +260,7 @@ static int qos_used(struct lov_obd *lov, __u32 index, __u64 *total_wt)
         lov->lov_tgts[index]->ltd_qos.ltq_usable = 0;
 
         oss = lov->lov_tgts[index]->ltd_qos.ltq_oss;
-        
+
         /* Decay old penalty by half (we're adding max penalty, and don't
            want it to run away.) */
         lov->lov_tgts[index]->ltd_qos.ltq_penalty >>= 1;
@@ -273,12 +270,12 @@ static int qos_used(struct lov_obd *lov, __u32 index, __u64 *total_wt)
         lov->lov_tgts[index]->ltd_qos.ltq_penalty +=
                 lov->lov_tgts[index]->ltd_qos.ltq_penalty_per_obj *
                 lov->desc.ld_active_tgt_count;
-        oss->lqo_penalty += oss->lqo_penalty_per_obj * 
+        oss->lqo_penalty += oss->lqo_penalty_per_obj *
                 lov->lov_qos.lq_active_oss_count;
-        
+
         /* Decrease all OSS penalties */
         list_for_each_entry(oss, &lov->lov_qos.lq_oss_list, lqo_oss_list) {
-                if (oss->lqo_penalty < oss->lqo_penalty_per_obj) 
+                if (oss->lqo_penalty < oss->lqo_penalty_per_obj)
                         oss->lqo_penalty = 0;
                 else
                         oss->lqo_penalty -= oss->lqo_penalty_per_obj;
@@ -287,7 +284,7 @@ static int qos_used(struct lov_obd *lov, __u32 index, __u64 *total_wt)
         *total_wt = 0;
         /* Decrease all OST penalties */
         for (i = 0; i < lov->desc.ld_tgt_count; i++) {
-                if (!lov->lov_tgts[i] || !lov->lov_tgts[i]->ltd_active) 
+                if (!lov->lov_tgts[i] || !lov->lov_tgts[i]->ltd_active)
                         continue;
                 if (lov->lov_tgts[i]->ltd_qos.ltq_penalty <
                     lov->lov_tgts[i]->ltd_qos.ltq_penalty_per_obj)
@@ -295,7 +292,7 @@ static int qos_used(struct lov_obd *lov, __u32 index, __u64 *total_wt)
                 else
                         lov->lov_tgts[i]->ltd_qos.ltq_penalty -=
                         lov->lov_tgts[i]->ltd_qos.ltq_penalty_per_obj;
-                
+
                 qos_calc_weight(lov, i);
 
                 /* Recalc the total weight of usable osts */
@@ -306,9 +303,9 @@ static int qos_used(struct lov_obd *lov, __u32 index, __u64 *total_wt)
                 CDEBUG(D_QOS, "recalc tgt %d avail="LPU64
                        " ostppo="LPU64" ostp="LPU64" ossppo="LPU64
                        " ossp="LPU64" wt="LPU64"\n",
-                       i, TGT_BAVAIL(i)>>10, 
-                       lov->lov_tgts[i]->ltd_qos.ltq_penalty_per_obj>>10,
-                       lov->lov_tgts[i]->ltd_qos.ltq_penalty>>10, 
+                       i, TGT_BAVAIL(i) >> 10,
+                       lov->lov_tgts[i]->ltd_qos.ltq_penalty_per_obj >> 10,
+                       lov->lov_tgts[i]->ltd_qos.ltq_penalty >> 10,
                        lov->lov_tgts[i]->ltd_qos.ltq_oss->lqo_penalty_per_obj>>10,
                        lov->lov_tgts[i]->ltd_qos.ltq_oss->lqo_penalty>>10,
                        lov->lov_tgts[i]->ltd_qos.ltq_weight>>10);
@@ -335,9 +332,9 @@ static int qos_calc_rr(struct lov_obd *lov)
         down_write(&lov->lov_qos.lq_rw_sem);
         ost_count = lov->desc.ld_tgt_count;
 
-        if (lov->lov_qos.lq_rr_size) 
+        if (lov->lov_qos.lq_rr_size)
                 OBD_FREE(lov->lov_qos.lq_rr_array, lov->lov_qos.lq_rr_size);
-        lov->lov_qos.lq_rr_size = ost_count * 
+        lov->lov_qos.lq_rr_size = ost_count *
                 sizeof(lov->lov_qos.lq_rr_array[0]);
         OBD_ALLOC(lov->lov_qos.lq_rr_array, lov->lov_qos.lq_rr_size);
         if (!lov->lov_qos.lq_rr_array) {
@@ -346,7 +343,7 @@ static int qos_calc_rr(struct lov_obd *lov)
                 RETURN(-ENOMEM);
         }
 
-        for (i = 0; i < ost_count; i++) 
+        for (i = 0; i < ost_count; i++)
                 lov->lov_qos.lq_rr_array[i] = LOV_QOS_EMPTY;
 
         /* Place all the OSTs from 1 OSS at the same time. */
@@ -416,7 +413,7 @@ void qos_shrink_lsm(struct lov_request_set *set)
                 }
         }
 
-        CWARN("using fewer stripes for object "LPX64": old %u new %u\n",
+        CWARN("using fewer stripes for object "LPU64": old %u new %u\n",
               lsm->lsm_object_id, lsm->lsm_stripe_count, set->set_count);
         LASSERT(lsm->lsm_stripe_count >= set->set_count);
 
@@ -452,8 +449,8 @@ int qos_remedy_create(struct lov_request_set *set, struct lov_request *req)
 
         ost_idx = (req->rq_idx + lsm->lsm_stripe_count) % ost_count;
         for (i = 0; i < ost_count; i++, ost_idx = (ost_idx + 1) % ost_count) {
-                if (!lov->lov_tgts[ost_idx] || 
-                    !lov->lov_tgts[ost_idx]->ltd_active) 
+                if (!lov->lov_tgts[ost_idx] ||
+                    !lov->lov_tgts[ost_idx]->ltd_active)
                         continue;
                 /* check if objects has been created on this ost */
                 for (stripe = 0; stripe < lsm->lsm_stripe_count; stripe++) {
@@ -487,7 +484,7 @@ static int alloc_rr(struct lov_obd *lov, int *idx_arr, int *stripe_cnt)
         ENTRY;
 
         i = qos_calc_rr(lov);
-        if (i) 
+        if (i)
                 RETURN(i);
 
         if (--lov->lov_start_count <= 0) {
@@ -495,7 +492,7 @@ static int alloc_rr(struct lov_obd *lov, int *idx_arr, int *stripe_cnt)
                 lov->lov_start_count =
                         (LOV_CREATE_RESEED_MIN / max(ost_active_count, 1U) +
                          LOV_CREATE_RESEED_MULT) * max(ost_active_count, 1U);
-        } else if (*stripe_cnt >= ost_active_count || 
+        } else if (*stripe_cnt >= ost_active_count ||
                    lov->lov_start_idx > ost_count) {
                 /* If we have allocated from all of the OSTs, slowly
                    precess the next start */
@@ -515,18 +512,18 @@ static int alloc_rr(struct lov_obd *lov, int *idx_arr, int *stripe_cnt)
                 ost_idx = lov->lov_qos.lq_rr_array[array_idx];
 #ifdef QOS_DEBUG
                 CDEBUG(D_QOS, "#%d strt %d act %d strp %d ary %d idx %d\n",
-                       i, lov->lov_start_idx, 
-                       lov->lov_tgts[ost_idx] ? 
+                       i, lov->lov_start_idx,
+                       lov->lov_tgts[ost_idx] ?
                        lov->lov_tgts[ost_idx]->ltd_active : 0,
                        idx_pos - idx_arr, array_idx, ost_idx);
 #endif
-                if (!lov->lov_tgts[ost_idx] || 
-                    !lov->lov_tgts[ost_idx]->ltd_active) 
+                if (!lov->lov_tgts[ost_idx] ||
+                    !lov->lov_tgts[ost_idx]->ltd_active)
                         continue;
                 *idx_pos = ost_idx;
                 idx_pos++;
                 /* We have enough stripes */
-                if (idx_pos - idx_arr == *stripe_cnt) 
+                if (idx_pos - idx_arr == *stripe_cnt)
                         break;
         }
         up_read(&lov->lov_qos.lq_rw_sem);
@@ -545,7 +542,7 @@ static int alloc_specific(struct lov_obd *lov, struct lov_stripe_md *lsm,
 
         ost_idx = lsm->lsm_oinfo[0]->loi_ost_idx;
         for (i = 0; i < ost_count; i++, ost_idx = (ost_idx + 1) % ost_count) {
-                if (!lov->lov_tgts[ost_idx] || 
+                if (!lov->lov_tgts[ost_idx] ||
                     !lov->lov_tgts[ost_idx]->ltd_active) {
                         continue;
                 }
@@ -708,7 +705,7 @@ out:
 }
 
 /* return new alloced stripe count on success */
-static int alloc_idx_array(struct obd_export *exp, struct lov_stripe_md *lsm, 
+static int alloc_idx_array(struct obd_export *exp, struct lov_stripe_md *lsm,
                            int newea, int **idx_arr, int *arr_cnt)
 {
         struct lov_obd *lov = &exp->exp_obd->u.lov;
@@ -724,7 +721,7 @@ static int alloc_idx_array(struct obd_export *exp, struct lov_stripe_md *lsm,
         for (i = 0; i < *arr_cnt; i++)
                 tmp_arr[i] = -1;
 
-        if (newea || 
+        if (newea ||
             lsm->lsm_oinfo[0]->loi_ost_idx >= lov->desc.ld_tgt_count) 
                 rc = alloc_qos(exp, tmp_arr, &stripe_cnt);
         else
@@ -773,7 +770,7 @@ int qos_prep_create(struct obd_export *exp, struct lov_request_set *set)
                         stripes = 1;
                         lov_getref(exp->exp_obd);
                         for (i = 0; i < lov->desc.ld_tgt_count; i++) {
-                                if (!lov->lov_tgts[i] || 
+                                if (!lov->lov_tgts[i] ||
                                     !lov->lov_tgts[i]->ltd_active)
                                         continue;
                                 min_bavail = min(min_bavail, TGT_BAVAIL(i));
@@ -789,7 +786,7 @@ int qos_prep_create(struct obd_export *exp, struct lov_request_set *set)
                         stripes = stripe_cnt;
                 }
 
-                rc = lov_alloc_memmd(&set->set_oi->oi_md, stripes, 
+                rc = lov_alloc_memmd(&set->set_oi->oi_md, stripes,
                                      lov->desc.ld_pattern ?
                                      lov->desc.ld_pattern : LOV_PATTERN_RAID0,
                                      LOV_MAGIC);
@@ -812,7 +809,7 @@ int qos_prep_create(struct obd_export *exp, struct lov_request_set *set)
         LASSERT(stripes <= lsm->lsm_stripe_count);
         if (stripes <= 0)
                 GOTO(out_err, rc = stripes ? stripes : -EIO);
-        
+
         for (i = 0; i < stripes; i++) {
                 struct lov_request *req;
                 int ost_idx = idx_arr[i];
@@ -842,7 +839,7 @@ int qos_prep_create(struct obd_export *exp, struct lov_request_set *set)
                  *     stripe which holds the existing file size.
                  */
                 if (src_oa->o_valid & OBD_MD_FLSIZE) {
-                        req->rq_oi.oi_oa->o_size = 
+                        req->rq_oi.oi_oa->o_size =
                                 lov_size_to_stripe(lsm, src_oa->o_size, i);
 
                         CDEBUG(D_INODE, "stripe %d has size "LPU64"/"LPU64"\n",
