@@ -150,7 +150,7 @@ struct command_t *trigger_cmd = NULL;
 pthread_mutex_t m_trigger = PTHREAD_MUTEX_INITIALIZER;
 pthread_cond_t cv_trigger = PTHREAD_COND_INITIALIZER;
 
-__u64 write_bytes;
+unsigned long long write_bytes;
 pthread_mutex_t m_count = PTHREAD_MUTEX_INITIALIZER;
 
 static void trigger(struct command_t *cmd, int count)
