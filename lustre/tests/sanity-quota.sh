@@ -775,25 +775,35 @@ test_11() {
        echo 1  > /proc/sys/vm/dirty_ratio
        echo 50 > /proc/sys/vm/dirty_writeback_centisecs
        TESTDIR="$TSTDIR/quota_tst110"
-       mkdir -p $TESTDIR && chmod 777 $TESTDIR
 
        #do the test
+       MINS=0
+       REPS=3
        i=1
-       while [ $i -le 3 ]; do
-	   echo "test: cycle($i of 5)..."
+       while [ $i -le $REPS ]; do
+	   echo "test: cycle($i of $REPS) start at $(date)"
+	   mkdir -p $TESTDIR && chmod 777 $TESTDIR
+	   echo -n "    create a file for uid "
 	   for j in `seq 1 30`; do
-	       echo "    create a file for uid $j..."
+	       echo -n "$j "
 	       runas -u $j dd if=/dev/zero of=$TESTDIR/$j  bs=$BLK_SZ > /dev/null 2>&1 &
 	   done
-	   ps -e | grep dd > /dev/null
-	   while [ $? -eq 0 ]; do 
-	     sleep 60;
-	     ps -e | grep dd > /dev/null
+	   echo ""
+	   PROCS=$(ps -e | grep dd | wc -l)
+	   while [ $PROCS -gt 0 ]; do 
+	     sleep 60
+	     MINS=$(($MINS+1))
+	     PROCS=$(ps -e | grep dd | wc -l)
+	     USED=$(du -s $TESTDIR | awk '{print $1}')
+	     PCT=$(($USED * 100 / $block_limit))
+	     echo "${i}/${REPS} ${PCT}% p${PROCS} t${MINS}  "
 	   done
 	   echo "    removing the test files..."
 	   rm -rf $TESTDIR
+	   echo "cycle $i done at $(date)"
 	   i=$[$i+1]
        done
+       echo "Test took $MINS minutes"
 
        #clean
        echo $orig_dbr > /proc/sys/vm/dirty_background_ratio
