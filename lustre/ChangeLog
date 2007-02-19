@@ -295,6 +295,16 @@ Details    : Large single O_DIRECT read and write calls can fail to allocate
 	     allocation failure the allocation is retried with a smaller
 	     buffer and broken into smaller requests.
 
+Severity   : normal
+Frequency  : always
+Bugzilla   : 3244
+Description: Addition of EXT3_FEATURE_RO_COMPAT_DIR_NLINKS flag for
+	     > 32000 subdirectories
+Details    : Add EXT3_FEATURE_RO_COMPAT_DIR_NLINK flag to 
+             EXT3_FEATURE_RO_COMPAT_SUPP. This flag will be set whenever
+             subdirectory count crosses 32000. This will aid e2fsck to
+             correctly handle more than 32000 subdirectories.
+
 ------------------------------------------------------------------------------
 
 TBD         Cluster File Systems, Inc. <info@clusterfs.com>
