@@ -200,7 +200,11 @@ test_11() {
     #sleep for while, let both clients reconnect and timeout
     sleep $((TIMEOUT * 2))
     sysctl -w lustre.fail_loc=0
-
+    while [ -z "$(ls $MOUNT1/$tfile-[1-5] 2>/dev/null)" ]; do
+	sleep 5
+	echo -n "."
+    done
+    ls $MOUNT1/$tfile-[1-5]
     rm $MOUNT1/$tfile-[1-5] || return 1
 
     return 0
