@@ -384,23 +384,6 @@ static int mgs_handle_target_reg(struct ptlrpc_request *req)
 
         /* Log writing contention is handled by the fsdb_sem */
 
-        /* COMPAT_146 */
-        if (mti->mti_flags & LDD_F_UPGRADE14) {
-                rc = mgs_upgrade_sv_14(obd, mti);
-                if (rc) {
-                        CERROR("Can't upgrade from 1.4 (%d)\n", rc);
-                        GOTO(out, rc);
-                }
-                
-                /* Turn off all other update-related flags; we're done. */
-                mti->mti_flags &= ~(LDD_F_UPGRADE14 | 
-                                    LDD_F_VIRGIN | LDD_F_UPDATE | 
-                                    LDD_F_NEED_INDEX | LDD_F_WRITECONF);
-                mti->mti_flags |= LDD_F_REWRITE_LDD;
-                goto out;
-        }
-        /* end COMPAT_146 */
-
         if (mti->mti_flags & LDD_F_WRITECONF) {
                 if (mti->mti_flags & LDD_F_SV_TYPE_MDT) {
                         rc = mgs_erase_logs(obd, mti->mti_fsname);
@@ -415,7 +398,22 @@ static int mgs_handle_target_reg(struct ptlrpc_request *req)
                                       obd->obd_name, mti->mti_svname);
                 }
                 mti->mti_flags |= LDD_F_UPDATE;
+                /* Erased logs means start from scratch. */
+                mti->mti_flags &= ~LDD_F_UPGRADE14; 
         }
+
+        /* COMPAT_146 */
+        if (mti->mti_flags & LDD_F_UPGRADE14) {
+                rc = mgs_upgrade_sv_14(obd, mti);
+                if (rc) {
+                        CERROR("Can't upgrade from 1.4 (%d)\n", rc);
+                        GOTO(out, rc);
+                }
+                
+                /* We're good to go */
+                mti->mti_flags |= LDD_F_UPDATE;
+        }
+        /* end COMPAT_146 */
 
         if (mti->mti_flags & LDD_F_UPDATE) {
                 CDEBUG(D_MGS, "updating %s, index=%d\n", mti->mti_svname, 

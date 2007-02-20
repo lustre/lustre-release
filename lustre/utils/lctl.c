@@ -117,9 +117,9 @@ command_t cmdlist[] = {
          "usage: conf_param obd_timeout=<secs>\n"},
         {"conf_param", jt_lcfg_mgsparam, 0, "set a permanent config param. "
          "This command must be run on the MGS node\n"
-         "usage: conf_param <keyword=val> ...\n"},
+         "usage: conf_param <target.keyword=val> ...\n"},
         {"local_param", jt_lcfg_param, 0, "set a temporary, local param\n"
-         "usage: local_param <keyword=val> ...\n"},
+         "usage: local_param <target.keyword=val> ...\n"},
        
         /* Debug commands */
         {"==== debugging control ===", jt_noop, 0, "debug"},

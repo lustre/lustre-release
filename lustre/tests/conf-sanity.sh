@@ -1048,6 +1048,90 @@ test_31() { # bug 10734
 }
 run_test 31 "Connect to non-existent node (shouldn't crash)"
 
+test_32a() {
+        [ -z "$TUNEFS" ] && echo "No tunefs" && return
+        [ ! -r disk1_4.zip ] && echo "Cant find disk1_4.zip, skipping" && return
+	unzip -o -j -d $TMP/$tdir disk1_4.zip || { echo "Cant unzip disk1_4, skipping" && return ; }
+	load_modules
+	sysctl lnet.debug=$PTLDEBUG
+
+	$TUNEFS $TMP/$tdir/mds || error "tunefs failed"
+	# nids are wrong, so client wont work, but server should start
+	start mds $TMP/$tdir/mds "-o loop" || return 3
+        local UUID=$(cat $LPROC/mds/lustre-MDT0000/uuid)
+	echo MDS uuid $UUID
+	[ "$UUID" == "mdsA_UUID" ] || error "UUID is wrong: $UUID" 
+
+	$TUNEFS --mgsnode=`hostname` $TMP/$tdir/ost1 || error "tunefs failed"
+	start ost1 $TMP/$tdir/ost1 "-o loop" || return 5
+        UUID=$(cat $LPROC/obdfilter/lustre-OST0000/uuid)
+	echo OST uuid $UUID
+	[ "$UUID" == "ost1_UUID" ] || error "UUID is wrong: $UUID" 
+
+	local NID=$($LCTL list_nids | head -1)
+
+	echo "OSC changes should return err:" 
+	$LCTL conf_param lustre-OST0000.osc.max_dirty_mb=15 && return 7
+	$LCTL conf_param lustre-OST0000.failover.node=$NID && return 8
+	echo "ok."
+	echo "MDC changes should succeed:" 
+	$LCTL conf_param lustre-MDT0000.mdc.max_rpcs_in_flight=9 || return 9
+	$LCTL conf_param lustre-MDT0000.failover.node=$NID || return 10
+	echo "ok."
+
+	#With a new good MDT failover nid, we should be able to mount a client
+	#(but it cant talk to OST)
+	mount_client $MOUNT
+	set_and_check "cat $LPROC/mdc/*/max_rpcs_in_flight" "lustre-MDT0000.mdc.max_rpcs_in_flight" || return 11
+
+	zconf_umount `hostname` $MOUNT -f
+	cleanup_nocli
+
+	[ -d $TMP/$tdir ] && rm -rf $TMP/$tdir
+}
+run_test 32a "Upgrade from 1.4 (not live)"
+
+test_32b() {
+        [ -z "$TUNEFS" ] && echo "No tunefs" && return
+        [ ! -r disk1_4.zip ] && echo "Cant find disk1_4.zip, skipping" && return
+	unzip -o -j -d $TMP/$tdir disk1_4.zip || { echo "Cant unzip disk1_4, skipping" && return ; }
+	load_modules
+	sysctl lnet.debug=$PTLDEBUG
+
+	# writeconf will cause servers to register with their current nids
+	$TUNEFS --writeconf $TMP/$tdir/mds || error "tunefs failed"
+	start mds $TMP/$tdir/mds "-o loop" || return 3
+        local UUID=$(cat $LPROC/mds/lustre-MDT0000/uuid)
+	echo MDS uuid $UUID
+	[ "$UUID" == "mdsA_UUID" ] || error "UUID is wrong: $UUID" 
+
+	$TUNEFS --mgsnode=`hostname` $TMP/$tdir/ost1 || error "tunefs failed"
+	start ost1 $TMP/$tdir/ost1 "-o loop" || return 5
+        UUID=$(cat $LPROC/obdfilter/lustre-OST0000/uuid)
+	echo OST uuid $UUID
+	[ "$UUID" == "ost1_UUID" ] || error "UUID is wrong: $UUID" 
+
+	echo "OSC changes should succeed:" 
+	$LCTL conf_param lustre-OST0000.osc.max_dirty_mb=15 || return 7
+	$LCTL conf_param lustre-OST0000.failover.node=$NID || return 8
+	echo "ok."
+	echo "MDC changes should succeed:" 
+	$LCTL conf_param lustre-MDT0000.mdc.max_rpcs_in_flight=9 || return 9
+	echo "ok."
+
+	# MDT and OST should have registered with new nids, so we should have
+	# a fully-functioning client
+	echo "Check client and old fs contents"
+	mount_client $MOUNT
+	set_and_check "cat $LPROC/mdc/*/max_rpcs_in_flight" "lustre-MDT0000.mdc.max_rpcs_in_flight" || return 11
+	[ "$(cksum $MOUNT/passwd | cut -d' ' -f 1,2)" == "2479747619 779" ] || return 12  
+	echo "ok."
+
+	cleanup
+	[ -d $TMP/$tdir ] && rm -rf $TMP/$tdir
+}
+run_test 32b "Upgrade from 1.4 with writeconf"
+
 umount_client $MOUNT	
 cleanup_nocli
 

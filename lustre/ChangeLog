@@ -239,6 +239,14 @@ Details    : During a commanded failover stop, we set the disk device
 	     read-only while the server shuts down. We now also set any
 	     external journal device read-only at the same time. 
 	
+Severity   : minor
+Frequency  : when upgrading from 1.4 while trying to change parameters	
+Bugzilla   : 11692
+Description: The wrong (new) MDC name was used when setting parameters for
+	     upgraded MDT's.  Also allows changing of OSC (and MDC)
+	     parameters if --writeconf is specified at tunefs upgrade time.
+
+
 ------------------------------------------------------------------------------
 
 TBD         Cluster File Systems, Inc. <info@clusterfs.com>

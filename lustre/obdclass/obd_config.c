@@ -859,7 +859,8 @@ int class_process_proc_param(char *prefix, struct lprocfs_vars *lvars,
                         j++;
                 }    
                 if (!matched) {
-                        CERROR("Unknown param %s\n", key);
+                        CERROR("%s: unknown param %s\n",
+                               lustre_cfg_buf(lcfg, 0), key);
                         rc = -EINVAL;
                         /* continue parsing other params */
                 } else {

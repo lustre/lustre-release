@@ -1025,21 +1025,6 @@ static int mgs_write_log_mdt(struct obd_device *obd, struct fs_db *fsdb,
         ENTRY;
 
         CDEBUG(D_MGS, "writing new mdt %s\n", mti->mti_svname);
-
-        /* COMPAT_146 */
-        if (mti->mti_flags & LDD_F_UPGRADE14) {
-                /* We're starting with an old uuid.  Assume old name for lov
-                   as well since the lov entry already exists in the log. */
-                CDEBUG(D_MGS, "old mds uuid %s\n", mti->mti_uuid);
-                if (strncmp(mti->mti_uuid, fsdb->fsdb_mdtlov + 4, 
-                            strlen(fsdb->fsdb_mdtlov) - 4) != 0) {
-                        CERROR("old mds uuid %s doesn't match log %s (%s)\n",
-                               mti->mti_uuid, fsdb->fsdb_mdtlov, 
-                               fsdb->fsdb_mdtlov + 4);
-                        RETURN(-EINVAL);
-                }
-        }
-        /* end COMPAT_146 */
         
         if (mti->mti_uuid[0] == '\0') {
                 /* Make up our own uuid */
@@ -1105,7 +1090,7 @@ static int mgs_write_log_mdt(struct obd_device *obd, struct fs_db *fsdb,
                 GOTO(out, rc);
         rc = record_marker(obd, llh, fsdb, CM_START, mti->mti_svname,"add mdc");
         /* COMPAT_146 */
-        if (mti->mti_flags & LDD_F_UPGRADE14) { 
+        if (fsdb->fsdb_flags & FSDB_OLDLOG14) {
                 /* Old client log already has MDC entry, but needs mount opt 
                    for new client name (lustre-client) */
                 /* FIXME Old MDT log already has an old mount opt 
@@ -1113,6 +1098,9 @@ static int mgs_write_log_mdt(struct obd_device *obd, struct fs_db *fsdb,
                    class_del_profiles()) */
                 rc = record_mount_opt(obd, llh, cliname, fsdb->fsdb_clilov,
                                       fsdb->fsdb_mdc);
+                /* Only add failnids with --writeconf 
+                rc = mgs_write_log_failnids(obd, mti, llh, fsdb->fsdb_mdc);
+                */
                 /* end COMPAT_146 */
         } else {
                 for (i = 0; i < mti->mti_nid_count; i++) {
@@ -1247,9 +1235,11 @@ static int mgs_write_log_ost(struct obd_device *obd, struct fs_db *fsdb,
         /* We also have to update the other logs where this osc is part of 
            the lov */
 
-        if (mti->mti_flags & LDD_F_UPGRADE14) {
+        if (fsdb->fsdb_flags & FSDB_OLDLOG14) {
                 /* If we're upgrading, the old mdt log already has our
                    entry. Let's do a fake one for fun. */
+                /* Note that we can't add any new failnids, since we don't
+                   know the old osc names. */
                 flags = CM_SKIP | CM_UPGRADE146;
         } else if ((mti->mti_flags & LDD_F_UPDATE) != LDD_F_UPDATE) {
                 /* If the update flag isn't set, don't really update
@@ -1289,6 +1279,12 @@ static int mgs_write_log_add_failnid(struct obd_device *obd, struct fs_db *fsdb,
         int rc;
         ENTRY;
 
+        /* FIXME how do we delete a failnid? Currently --writeconf is the
+           only way.  Maybe make --erase-params pass a flag to really 
+           erase all params from logs - except it can't erase the failnids
+           given when a target first registers, since they aren't processed
+           as params... */
+
         /* Verify that we know about this target */
         if (mgs_log_is_empty(obd, mti->mti_svname)) {
                 LCONSOLE_ERROR("The target %s has not registered yet. "
@@ -1299,8 +1295,20 @@ static int mgs_write_log_add_failnid(struct obd_device *obd, struct fs_db *fsdb,
 
         /* Create mdc/osc client name (e.g. lustre-OST0001-osc) */
         if (mti->mti_flags & LDD_F_SV_TYPE_MDT) {
-                name_create(&cliname, mti->mti_svname, "-mdc");
+                /* COMPAT_146 */ 
+                if (fsdb->fsdb_mdc)
+                        name_create(&cliname, fsdb->fsdb_mdc, "");
+                else 
+                        name_create(&cliname, mti->mti_svname, "-mdc");
         } else if (mti->mti_flags & LDD_F_SV_TYPE_OST) {
+                /* COMPAT_146 */
+                if (fsdb->fsdb_flags & FSDB_OLDLOG14) {
+                        LCONSOLE_ERROR("Failover NIDs cannot be added to old "
+                                       "clients for %s. Consider updating the "
+                                       "configuration with --writeconf.\n", 
+                                       mti->mti_svname);
+                        RETURN(-EINVAL);
+                }
                 name_create(&cliname, mti->mti_svname, "-osc");
         } else {
                 RETURN(-EINVAL);
@@ -1355,6 +1363,7 @@ static int mgs_wlp_lcfg(struct obd_device *obd, struct fs_db *fsdb,
         /* But don't try to match the value. */
         if ((tmp = strchr(comment, '=')))
             *tmp = 0;
+        /* FIXME we should skip settings that are the same as old values */
         rc = mgs_modify(obd, fsdb, mti, logname, tgtname, comment, CM_SKIP);
         LCONSOLE_INFO("%sing parameter %s.%s in log %s\n", rc ?
                       "Sett" : "Modify", tgtname, comment, logname);
@@ -1382,9 +1391,6 @@ static int mgs_write_log_params(struct obd_device *obd, struct fs_db *fsdb,
 
         if (!mti->mti_params) 
                 RETURN(0);
-
-        /* FIXME we should cancel out old settings of the same parameters,
-           and skip settings that are the same as old values */
 
         /* For various parameter settings, we have to figure out which logs
            care about them (e.g. both mdt and client for lov settings) */
@@ -1519,8 +1525,24 @@ active_err:
                         /* Add the client type to match the obdname 
                            in class_config_llog_handler */
                         } else if (mti->mti_flags & LDD_F_SV_TYPE_MDT) {
-                                name_create(&cname, mti->mti_svname, "-mdc");
+                                /* COMPAT_146 */
+                                if (fsdb->fsdb_mdc)
+                                        name_create(&cname, fsdb->fsdb_mdc, "");
+                                else
+                                        name_create(&cname, mti->mti_svname, 
+                                                    "-mdc");
                         } else if (mti->mti_flags & LDD_F_SV_TYPE_OST) {
+                                /* COMPAT_146 */
+                                if (fsdb->fsdb_flags & FSDB_OLDLOG14) {
+                                      LCONSOLE_ERROR("Old clients for %s can't "
+                                           "be modified. Consider updating the "
+                                           "configuration with --writeconf\n",
+                                           mti->mti_svname);
+                                        /* We don't know the names of all the
+                                           old oscs*/
+                                        rc = -EINVAL;
+                                        goto end_while;
+                                }
                                 name_create(&cname, mti->mti_svname, "-osc");
                         } else {       
                                 rc = -EINVAL;
@@ -1700,7 +1722,7 @@ out_up:
 }
 
 /* COMPAT_146 */
-/* upgrade pre-mountconf logs to mountconf at first connect */ 
+/* verify that we can handle the old config logs */ 
 int mgs_upgrade_sv_14(struct obd_device *obd, struct mgs_target_info *mti)
 {
         struct fs_db *fsdb;
@@ -1725,7 +1747,7 @@ int mgs_upgrade_sv_14(struct obd_device *obd, struct mgs_target_info *mti)
         rc = mgs_find_or_make_fsdb(obd, mti->mti_fsname, &fsdb);
         if (rc) 
                 RETURN(rc);
-
+        
         if (fsdb->fsdb_flags & FSDB_LOG_EMPTY) {
                 LCONSOLE_ERROR("The old client log %s-client is missing.  Was "
                                "tunefs.lustre successful?\n",
@@ -1739,15 +1761,33 @@ int mgs_upgrade_sv_14(struct obd_device *obd, struct mgs_target_info *mti)
                 CDEBUG(D_MGS, "found old, unupdated client log\n");
         }
 
-        if ((mti->mti_flags & LDD_F_SV_TYPE_MDT) && 
-            mgs_log_is_empty(obd, mti->mti_svname)) {
-                LCONSOLE_ERROR("The old MDT log %s is missing.  Was "
-                               "tunefs.lustre successful?\n",
-                               mti->mti_svname);
-                RETURN(-ENOENT);
+        if (mti->mti_flags & LDD_F_SV_TYPE_MDT) {
+                if (mgs_log_is_empty(obd, mti->mti_svname)) {
+                        LCONSOLE_ERROR("The old MDT log %s is missing.  Was "
+                                       "tunefs.lustre successful?\n",
+                                       mti->mti_svname);
+                        RETURN(-ENOENT);
+                }
+
+                /* We're starting with an old uuid.  Assume old name for lov
+                   as well since the lov entry already exists in the log. */
+                CDEBUG(D_MGS, "old mds uuid %s\n", mti->mti_uuid);
+                if (strncmp(mti->mti_uuid, fsdb->fsdb_mdtlov + 4, 
+                            strlen(fsdb->fsdb_mdtlov) - 4) != 0) {
+                        CERROR("old mds uuid %s doesn't match log %s (%s)\n",
+                               mti->mti_uuid, fsdb->fsdb_mdtlov, 
+                               fsdb->fsdb_mdtlov + 4);
+                        RETURN(-EINVAL);
+                }
         }
 
-        rc = mgs_write_log_target(obd, mti);
+        if (!(fsdb->fsdb_flags & FSDB_OLDLOG14)) {
+                LCONSOLE_ERROR("%s-client is supposedly an old log, but no old "
+                               "LOV or MDT was found. Consider updating the "
+                               "configuration with --writeconf.\n",
+                               mti->mti_fsname);
+        }
+
         RETURN(rc);
 }
 /* end COMPAT_146 */
@@ -1876,14 +1916,16 @@ int mgs_setparam(struct obd_device *obd, struct lustre_cfg *lcfg, char *fsname)
         } else {  
                 strncpy(fsname, devname, ptr - devname);
         }
-        fsname[MTI_NAME_MAXLEN] = 0;
+        fsname[MTI_NAME_MAXLEN - 1] = 0;
         CDEBUG(D_MGS, "setparam on fs %s device %s\n", fsname, devname);
 
         rc = mgs_find_or_make_fsdb(obd, fsname, &fsdb); 
         if (rc) 
                 RETURN(rc);
         if (fsdb->fsdb_flags & FSDB_LOG_EMPTY) {
-                CERROR("No filesystem targets for %s\n", fsname);
+                CERROR("No filesystem targets for %s.  cfg_device from lctl "
+                       "is '%s'\n", fsname, devname);
+                mgs_free_fsdb(obd, fsdb);
                 RETURN(-EINVAL);
         }
 

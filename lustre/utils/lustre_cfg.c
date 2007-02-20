@@ -460,7 +460,7 @@ int jt_lcfg_param(int argc, char **argv)
         if (argc >= LUSTRE_CFG_MAX_BUFCOUNT)
                 return CMD_HELP;
 
-        lustre_cfg_bufs_reset(&bufs, lcfg_devname);
+        lustre_cfg_bufs_reset(&bufs, NULL);
 
         for (i = 1; i < argc; i++) {
                 lustre_cfg_bufs_set_string(&bufs, i, argv[i]);
@@ -478,28 +478,20 @@ int jt_lcfg_param(int argc, char **argv)
 }
 
 /* Param set in config log on MGS */
-/* conf_param <cfg_device> key1=value1 [key2=value2...] */
+/* conf_param key1=value1 [key2=value2...] */
 int jt_lcfg_mgsparam(int argc, char **argv)
 {
-        int i, rc, index_offset = 0;
+        int i, rc;
         struct lustre_cfg_bufs bufs;
         struct lustre_cfg *lcfg;
 
         if ((argc >= LUSTRE_CFG_MAX_BUFCOUNT) || (argc <= 1))
                 return CMD_HELP;
 
-        if (!strchr(argv[1], '=')) {
-                /* Not key=val, assume <cfg_device> */
-                rc = jt_obd_device(2, argv);
-                if (rc) 
-                        return rc;
-                index_offset = 1;
-        }
+        lustre_cfg_bufs_reset(&bufs, NULL);
 
-        lustre_cfg_bufs_reset(&bufs, lcfg_devname);
-
-        for (i = 1; i < (argc - index_offset); i++) {
-                lustre_cfg_bufs_set_string(&bufs, i, argv[i + index_offset]);
+        for (i = 1; i < argc; i++) {
+                lustre_cfg_bufs_set_string(&bufs, i, argv[i]);
         }
 
         /* We could put other opcodes here. */
