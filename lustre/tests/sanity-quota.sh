@@ -119,13 +119,13 @@ run_test() {
  	return $?
 }
 
-[ "$SANITYLOG" ] && rm -f $SANITYLOG || true
+[ "$QUOTALOG" ] && rm -f $QUOTALOG || true
 
 error() { 
 	sysctl -w lustre.fail_loc=0
 	log "FAIL: $TESTNAME $@"
-	if [ "$SANITYLOG" ]; then
-		echo "FAIL: $TESTNAME $@" >> $SANITYLOG
+	if [ "$QUOTALOG" ]; then
+		echo "FAIL: $TESTNAME $@" >> $QUOTALOG
 	else
 		exit 1
 	fi
@@ -775,6 +775,7 @@ test_11() {
        echo 1  > /proc/sys/vm/dirty_ratio
        echo 50 > /proc/sys/vm/dirty_writeback_centisecs
        TESTDIR="$TSTDIR/quota_tst110"
+       local RV=0
 
        #do the test
        MINS=0
@@ -797,6 +798,13 @@ test_11() {
 	     USED=$(du -s $TESTDIR | awk '{print $1}')
 	     PCT=$(($USED * 100 / $block_limit))
 	     echo "${i}/${REPS} ${PCT}% p${PROCS} t${MINS}  "
+	     if [ $MINS -gt 30 ]; then
+		 error "Aborting after $MINS minutes"
+		 kill -9 $(ps -ef | grep $TESTDIR | grep -v grep | awk '{ print $2 }')
+		 i=$REPS
+		 RV=2
+		 break
+	     fi
 	   done
 	   echo "    removing the test files..."
 	   rm -rf $TESTDIR
@@ -810,6 +818,7 @@ test_11() {
        echo $orig_dec > /proc/sys/vm/dirty_expire_centisecs
        echo $orig_dr  > /proc/sys/vm/dirty_ratio
        echo $orig_dwc > /proc/sys/vm/dirty_writeback_centisecs
+       return $RV
 }
 run_test 11 "run for fixing bug10912 ==========="
 
@@ -834,5 +843,5 @@ if [ "`mount | grep ^$NAME`" ]; then
 fi
 
 echo '=========================== finished ==============================='
-[ -f "$SANITYLOG" ] && cat $SANITYLOG && exit 1 || true
+[ -f "$QUOTALOG" ] && cat $QUOTALOG && exit 1
 echo "$0: completed"
