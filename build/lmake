@@ -397,6 +397,9 @@ depend_kernel()
     echo "Making depend in $PWD..."
     $MAKE "$MAKE_CC" mrproper || fatal 1 "Error running make mrproper"
     rm -f rpm-release
+    # remove localversion-* files to avoid kernel release string 
+    # srewing up by the top-level Makefile
+    rm -f localversion-*
     cp "$CONFIG_FILE" .config
     local UPDATE_OLDCONFIG=
     for oc in oldconfig_nonint silentoldconfig oldconfig ; do                   
