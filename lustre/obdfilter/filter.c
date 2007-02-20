@@ -1740,14 +1740,7 @@ err_ops:
         fsfilt_put_ops(obd->obd_fsops);
         filter_iobuf_pool_done(filter);
 err_mntput:
-        if (lmi) {
-                server_put_mount(obd->obd_name, mnt);
-        } else {
-                /* old method */
-                unlock_kernel();
-                mntput(mnt);
-                lock_kernel();
-        }
+        server_put_mount(obd->obd_name, mnt);
         obd->u.obt.obt_sb = 0;
         return rc;
 }
@@ -1870,8 +1863,6 @@ static int filter_precleanup(struct obd_device *obd,
 static int filter_cleanup(struct obd_device *obd)
 {
         struct filter_obd *filter = &obd->u.filter;
-        lvfs_sbdev_type save_dev;
-        int must_relock = 0, must_put = 0;
         ENTRY;
 
         if (obd->obd_fail)
@@ -1896,7 +1887,6 @@ static int filter_cleanup(struct obd_device *obd)
 
         if (obd->u.obt.obt_sb == NULL)
                 RETURN(0);
-        save_dev = lvfs_sbdev(obd->u.obt.obt_sb);
 
         filter_post(obd);
 
@@ -1904,25 +1894,8 @@ static int filter_cleanup(struct obd_device *obd)
 
         LL_DQUOT_OFF(obd->u.obt.obt_sb);
 
-        must_put = server_put_mount(obd->obd_name, filter->fo_vfsmnt);
-        /* must_put is for old method (l_p_m returns non-0 on err) */
-
-        /* We can only unlock kernel if we are in the context of sys_ioctl,
-           otherwise we never called lock_kernel */
-        if (ll_kernel_locked()) {
-                unlock_kernel();
-                must_relock++;
-        }
-        
-        if (must_put) {
-                /* In case we didn't mount with lustre_get_mount -- old method*/
-                mntput(filter->fo_vfsmnt);
-                lvfs_clear_rdonly(save_dev);
-        }
+        server_put_mount(obd->obd_name, filter->fo_vfsmnt);
         obd->u.obt.obt_sb = NULL;
-
-        if (must_relock)
-                lock_kernel();
 
         fsfilt_put_ops(obd->obd_fsops);
 
@@ -3301,7 +3274,7 @@ int filter_iocontrol(unsigned int cmd, struct obd_export *exp,
                 CDEBUG(D_HA, "syncing ost %s\n", obd->obd_name);
                 rc = fsfilt_sync(obd, obd->u.obt.obt_sb);
 
-                lvfs_set_rdonly(lvfs_sbdev(obd->u.obt.obt_sb));
+                lvfs_set_rdonly(obd, obd->u.obt.obt_sb);
                 RETURN(0);
         }
 

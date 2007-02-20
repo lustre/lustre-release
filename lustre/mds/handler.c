@@ -2070,14 +2070,7 @@ err_ns:
 err_ops:
         fsfilt_put_ops(obd->obd_fsops);
 err_put:
-        if (lmi) {
-                server_put_mount(obd->obd_name, mnt);
-        } else {
-                /* old method */
-                unlock_kernel();
-                mntput(mnt);
-                lock_kernel();
-        }               
+        server_put_mount(obd->obd_name, mnt);
         obd->u.obt.obt_sb = NULL;
         return rc;
 }
@@ -2238,8 +2231,6 @@ static int mds_cleanup(struct obd_device *obd)
 {
         struct mds_obd *mds = &obd->u.mds;
         lvfs_sbdev_type save_dev;
-        int must_put = 0;
-        int must_relock = 0;
         ENTRY;
 
         if (obd->u.obt.obt_sb == NULL)
@@ -2264,21 +2255,7 @@ static int mds_cleanup(struct obd_device *obd)
         upcall_cache_cleanup(mds->mds_group_hash);
         mds->mds_group_hash = NULL;
 
-        must_put = server_put_mount(obd->obd_name, mds->mds_vfsmnt);
-        /* must_put is for old method (l_p_m returns non-0 on err) */
-
-        /* We can only unlock kernel if we are in the context of sys_ioctl,
-           otherwise we never called lock_kernel */
-        if (ll_kernel_locked()) {
-                unlock_kernel();
-                must_relock++;
-        }
-        
-        if (must_put) {
-                /* In case we didn't mount with lustre_get_mount -- old method*/
-                mntput(mds->mds_vfsmnt);
-                lvfs_clear_rdonly(save_dev);
-        }
+        server_put_mount(obd->obd_name, mds->mds_vfsmnt);
         obd->u.obt.obt_sb = NULL;
 
         ldlm_namespace_free(obd->obd_namespace, obd->obd_force);
@@ -2289,9 +2266,6 @@ static int mds_cleanup(struct obd_device *obd)
                 obd->obd_recovering = 0;
         }
         spin_unlock_bh(&obd->obd_processing_task_lock);
-
-        if (must_relock)
-                lock_kernel();
 
         fsfilt_put_ops(obd->obd_fsops);
 

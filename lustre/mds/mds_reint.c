@@ -550,7 +550,7 @@ static int mds_reint_setattr(struct mds_update_record *rec, int offset,
                 need_lock = 0;
         }
 
-        OBD_FAIL_WRITE(OBD_FAIL_MDS_REINT_SETATTR_WRITE, inode->i_sb);
+        OBD_FAIL_WRITE(obd, OBD_FAIL_MDS_REINT_SETATTR_WRITE, inode->i_sb);
 
         /* start a log jounal handle if needed */
         if (S_ISREG(inode->i_mode) &&
@@ -802,7 +802,7 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
 
         cleanup_phase = 2; /* child dentry */
 
-        OBD_FAIL_WRITE(OBD_FAIL_MDS_REINT_CREATE_WRITE, dir->i_sb);
+        OBD_FAIL_WRITE(obd, OBD_FAIL_MDS_REINT_CREATE_WRITE, dir->i_sb);
 
         if (req->rq_export->exp_connect_flags & OBD_CONNECT_RDONLY) {
                 if (dchild->d_inode)
@@ -1610,7 +1610,7 @@ static int mds_reint_unlink(struct mds_update_record *rec, int offset,
 
         cleanup_phase = 3; /* child inum lock */
 
-        OBD_FAIL_WRITE(OBD_FAIL_MDS_REINT_UNLINK_WRITE, dparent->d_inode->i_sb);
+        OBD_FAIL_WRITE(obd, OBD_FAIL_MDS_REINT_UNLINK_WRITE, dparent->d_inode->i_sb);
 
         /* ldlm_reply in buf[0] if called via intent */
         if (offset == DLM_INTENT_REC_OFF)
@@ -1860,7 +1860,7 @@ static int mds_reint_link(struct mds_update_record *rec, int offset,
         }
 
         /* Step 4: Do it. */
-        OBD_FAIL_WRITE(OBD_FAIL_MDS_REINT_LINK_WRITE, de_src->d_inode->i_sb);
+        OBD_FAIL_WRITE(obd, OBD_FAIL_MDS_REINT_LINK_WRITE, de_src->d_inode->i_sb);
 
         if (req->rq_export->exp_connect_flags & OBD_CONNECT_RDONLY)
                 GOTO(cleanup, rc = -EROFS);
@@ -2212,7 +2212,7 @@ static int mds_reint_rename(struct mds_update_record *rec, int offset,
         }
 
 no_unlink:
-        OBD_FAIL_WRITE(OBD_FAIL_MDS_REINT_RENAME_WRITE,
+        OBD_FAIL_WRITE(obd, OBD_FAIL_MDS_REINT_RENAME_WRITE,
                        de_srcdir->d_inode->i_sb);
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0)

@@ -268,7 +268,7 @@ int mds_setxattr_internal(struct ptlrpc_request *req, struct mds_body *body)
         inode = de->d_inode;
         LASSERT(inode);
 
-        OBD_FAIL_WRITE(OBD_FAIL_MDS_SETXATTR_WRITE, inode->i_sb);
+        OBD_FAIL_WRITE(obd, OBD_FAIL_MDS_SETXATTR_WRITE, inode->i_sb);
 
         /* filter_op simply use setattr one */
         handle = fsfilt_start(obd, inode, FSFILT_OP_SETATTR, NULL);

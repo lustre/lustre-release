@@ -175,8 +175,12 @@ int server_put_mount(char *name, struct vfsmount *mnt)
 {
         struct lustre_mount_info *lmi;
         struct lustre_sb_info *lsi;
+        int count = atomic_read(&mnt->mnt_count) - 1;
         ENTRY;
 
+        /* This might be the last one, can't deref after this */
+        unlock_mntput(mnt);
+        
         down(&lustre_mount_info_lock);
         lmi = server_find_mount(name);
         up(&lustre_mount_info_lock);
@@ -186,20 +190,16 @@ int server_put_mount(char *name, struct vfsmount *mnt)
         }
         lsi = s2lsi(lmi->lmi_sb);
         LASSERT(lmi->lmi_mnt == mnt);
-        unlock_mntput(lmi->lmi_mnt);
 
         CDEBUG(D_MOUNT, "put_mnt %p from %s, refs=%d, vfscount=%d\n",
-               lmi->lmi_mnt, name, atomic_read(&lsi->lsi_mounts),
-               atomic_read(&lmi->lmi_mnt->mnt_count));
+               lmi->lmi_mnt, name, atomic_read(&lsi->lsi_mounts), count);
 
         if (lustre_put_lsi(lmi->lmi_sb)) {
                 CDEBUG(D_MOUNT, "Last put of mnt %p from %s, vfscount=%d\n",
-                       lmi->lmi_mnt, name,
-                       atomic_read(&lmi->lmi_mnt->mnt_count));
+                       lmi->lmi_mnt, name, count);
                 /* last mount is the One True Mount */
-                if (atomic_read(&lmi->lmi_mnt->mnt_count) > 1)
-                        CERROR("%s: mount busy, vfscount=%d!\n", name,
-                               atomic_read(&lmi->lmi_mnt->mnt_count));
+                if (count > 1)
+                        CERROR("%s: mount busy, vfscount=%d!\n", name, count);
         }
 
         /* this obd should never need the mount again */
@@ -1311,7 +1311,6 @@ static void server_put_super(struct super_block *sb)
         struct lustre_sb_info *lsi = s2lsi(sb);
         struct obd_device     *obd;
         struct vfsmount       *mnt = lsi->lsi_srv_mnt;
-        lvfs_sbdev_type        save_dev;
         char *tmpname, *extraname = NULL;
         int tmpname_sz;
         int lddflags = lsi->lsi_ldd->ldd_flags;
@@ -1369,8 +1368,6 @@ static void server_put_super(struct super_block *sb)
                 server_stop_mgs(sb);
         }
 
-        save_dev = lvfs_sbdev(sb);
-
         /* Clean the mgc and sb */
         rc = lustre_common_put_super(sb);
         /* FIXME how can I report a failure to umount? */
@@ -1381,9 +1378,6 @@ static void server_put_super(struct super_block *sb)
 
         /* drop the One True Mount */
         unlock_mntput(mnt);
-#ifndef LUSTRE_PATCHLESS
-        lvfs_clear_rdonly(save_dev);
-#endif
 
         /* Stop the servers (MDS, OSS) if no longer needed.  We must wait
            until the target is really gone so that our type refcount check

@@ -20,23 +20,6 @@ tbd         Cluster File Systems, Inc. <info@clusterfs.com>
        * Recommended e2fsprogs version: 1.39.cfs2-0
        * bug fixes
 
-Severity   : major
-Frequency  : liblustre (e.g. catamount) on a large cluster with >= 8 OSTs
-             per OSS
-Bugzilla   : 11684
-Description: System hang on startup
-Details    : This bug allowed the liblustre (e.g. catamount) client to
-             return to the app before handling all startup RPCs.  This
-	     could leave the node unresponsive to lustre network traffic
-	     and manifested as a server ptllnd timeout.
-
-Severity   : enhancement
-Bugzilla   : 11667
-Description: Add "/proc/sys/lustre/debug_peer_on_timeout"
-             (liblustre envirable: LIBLUSTRE_DEBUG_PEER_ON_TIMEOUT)
-	     boolean to control whether to print peer debug info when a
-	     client's RPC times out.
-
 Severity   : enhancement
 Bugzilla   : 8007
 Description: MountConf
@@ -223,7 +206,24 @@ Details    : for a short time RPCs with bulk IO are in the replay list,
 	     but replay of bulk IOs is unimplemented.  If the OST filesystem
 	     is corrupted due to disk cache incoherency and then replay is
 	     started it is possible to trip an assertion.  Avoid putting
-	     committed RPCs into the replay list at all to avoid this issue.	     
+	     committed RPCs into the replay list at all to avoid this issue.
+
+Severity   : major
+Frequency  : liblustre (e.g. catamount) on a large cluster with >= 8 OSTs
+             per OSS
+Bugzilla   : 11684
+Description: System hang on startup
+Details    : This bug allowed the liblustre (e.g. catamount) client to
+             return to the app before handling all startup RPCs.  This
+	     could leave the node unresponsive to lustre network traffic
+	     and manifested as a server ptllnd timeout.
+
+Severity   : enhancement
+Bugzilla   : 11667
+Description: Add "/proc/sys/lustre/debug_peer_on_timeout"
+             (liblustre envirable: LIBLUSTRE_DEBUG_PEER_ON_TIMEOUT)
+	     boolean to control whether to print peer debug info when a
+	     client's RPC times out.
 
 Severity   : minor
 Frequency  : only for kernels with patches from Lustre below 1.4.3  
@@ -231,6 +231,14 @@ Bugzilla   : 11248
 Description: Remove old rdonly API
 Details    : Remove old rdonly API which unsed from at least lustre 1.4.3
 
+Severity   : major
+Frequency  : only for devices with external journals
+Bugzilla   : 10719
+Description: Set external device read-only also 
+Details    : During a commanded failover stop, we set the disk device
+	     read-only while the server shuts down. We now also set any
+	     external journal device read-only at the same time. 
+	
 ------------------------------------------------------------------------------
 
 TBD         Cluster File Systems, Inc. <info@clusterfs.com>

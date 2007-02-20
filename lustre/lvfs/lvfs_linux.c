@@ -431,19 +431,22 @@ EXPORT_SYMBOL(obd_memory);
 EXPORT_SYMBOL(obd_memmax);
 
 #ifdef LUSTRE_KERNEL_VERSION
-
 #ifndef HAVE_CLEAR_RDONLY_ON_PUT
-#error rdonly patchset must be updated
+#error rdonly patchset must be updated [cfs bz11248]
 #endif
 
 void dev_set_rdonly(lvfs_sbdev_type dev);
-void dev_clear_rdonly(lvfs_sbdev_type dev);
 int dev_check_rdonly(lvfs_sbdev_type dev);
 
-void lvfs_set_rdonly(lvfs_sbdev_type dev)
+void __lvfs_set_rdonly(lvfs_sbdev_type dev, lvfs_sbdev_type jdev)
 {
-        CDEBUG(D_IOCTL | D_HA, "set dev %lx rdonly\n", (long)dev);
         lvfs_sbdev_sync(dev);
+        if (jdev && (jdev != dev)) {
+                CDEBUG(D_IOCTL | D_HA, "set journal dev %lx rdonly\n",
+                       (long)jdev);
+                dev_set_rdonly(jdev);
+        }
+        CDEBUG(D_IOCTL | D_HA, "set dev %lx rdonly\n", (long)dev);
         dev_set_rdonly(dev);
 }
 
@@ -452,16 +455,9 @@ int lvfs_check_rdonly(lvfs_sbdev_type dev)
         return dev_check_rdonly(dev);
 }
 
-void lvfs_clear_rdonly(lvfs_sbdev_type dev)
-{
-        CDEBUG(D_IOCTL | D_HA, "(will unset dev %lx rdonly on put)\n",
-               (long)dev);
-}
-
-EXPORT_SYMBOL(lvfs_set_rdonly);
+EXPORT_SYMBOL(__lvfs_set_rdonly);
 EXPORT_SYMBOL(lvfs_check_rdonly);
-EXPORT_SYMBOL(lvfs_clear_rdonly);
-#endif
+#endif /* LUSTRE_KERNEL_VERSION */
 
 int lvfs_check_io_health(struct obd_device *obd, struct file *file)
 {

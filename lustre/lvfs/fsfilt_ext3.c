@@ -1989,6 +1989,15 @@ static int fsfilt_ext3_dquot(struct lustre_dquot *dquot, int cmd)
 }
 #endif
 
+static lvfs_sbdev_type fsfilt_ext3_journal_sbdev(struct super_block *sb)
+{
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0))
+        return (EXT3_SB(sb)->journal_bdev);
+#else
+        return kdev_t_to_nr(EXT3_SB(sb)->s_journal->j_dev);
+#endif
+}
+
 static struct fsfilt_operations fsfilt_ext3_ops = {
         .fs_type                = "ext3",
         .fs_owner               = THIS_MODULE,
@@ -2023,6 +2032,7 @@ static struct fsfilt_operations fsfilt_ext3_ops = {
         .fs_qids                = fsfilt_ext3_qids,
         .fs_dquot               = fsfilt_ext3_dquot,
 #endif
+        .fs_journal_sbdev       = fsfilt_ext3_journal_sbdev,
 };
 
 static int __init fsfilt_ext3_init(void)

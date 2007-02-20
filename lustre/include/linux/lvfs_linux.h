@@ -50,8 +50,11 @@ struct l_readdir_callback {
 #  define lvfs_sbdev_sync      fsync_dev
 # endif
 
-void lvfs_set_rdonly(lvfs_sbdev_type dev);
-int lvfs_check_rdonly(lvfs_sbdev_type dev);
-void lvfs_clear_rdonly(lvfs_sbdev_type dev);
+/* Instead of calling within lvfs (a layering violation) */
+#define lvfs_set_rdonly(obd, sb) \
+        __lvfs_set_rdonly(lvfs_sbdev(sb), fsfilt_journal_sbdev(obd, sb))
 
-#endif
+void __lvfs_set_rdonly(lvfs_sbdev_type dev, lvfs_sbdev_type jdev);
+int lvfs_check_rdonly(lvfs_sbdev_type dev);
+
+#endif /*  __LVFS_LINUX_H__ */

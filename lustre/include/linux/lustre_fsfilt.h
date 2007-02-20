@@ -108,6 +108,7 @@ struct fsfilt_operations {
         int     (* fs_qids)(struct file *file, struct inode *inode, int type,
                             struct list_head *list);
         int     (* fs_dquot)(struct lustre_dquot *dquot, int cmd);
+        lvfs_sbdev_type (* fs_journal_sbdev)(struct super_block *sb);
 };
 
 extern int fsfilt_register_ops(struct fsfilt_operations *fs_ops);
@@ -140,6 +141,14 @@ static inline __u8 *fsfilt_uuid(struct obd_device *obd, struct super_block *sb)
                 return NULL;
 
         return obd->obd_fsops->fs_uuid(sb);
+}
+
+static inline lvfs_sbdev_type fsfilt_journal_sbdev(struct obd_device *obd,
+                                                   struct super_block *sb)
+{
+        if (obd && obd->obd_fsops && obd->obd_fsops->fs_journal_sbdev)
+                return obd->obd_fsops->fs_journal_sbdev(sb);
+        return (lvfs_sbdev_type)0;
 }
 
 #define FSFILT_OP_UNLINK         1
