@@ -94,12 +94,8 @@
 #define LDLM_MAXREPSIZE (1024)
 
 /* Absolute limits */
-#define MDS_THREADS_MIN 2UL
-#define MDS_THREADS_MAX 512UL
-/* Dynamic thread limits */
-#define MDS_THREADS_AUTO_MIN max(MDS_THREADS_MIN, min(32UL, \
-                             smp_num_cpus * num_physpages >> (27 - CFS_PAGE_SHIFT)))
-#define MDS_THREADS_AUTO_MAX min(MDS_THREADS_MAX, MDS_THREADS_AUTO_MIN * 4)
+#define MDS_THREADS_MIN 2
+#define MDS_THREADS_MAX 512
 #define MDS_THREADS_MIN_READPAGE 2
 #define MDS_NBUFS       (64 * smp_num_cpus)
 #define MDS_BUFSIZE     (8 * 1024)
@@ -123,20 +119,16 @@
 #define MDS_MAXREQSIZE  (5 * 1024)
 #define MDS_MAXREPSIZE  max(9 * 1024, 280 + LOV_MAX_STRIPE_COUNT * 56)
 
-#define MGS_THREADS_AUTO_MAX 128UL
-#define MGS_THREADS_AUTO_MIN MDS_THREADS_AUTO_MIN
+#define MGS_THREADS_AUTO_MIN 2
+#define MGS_THREADS_AUTO_MAX 128
 #define MGS_NBUFS       (64 * smp_num_cpus)
 #define MGS_BUFSIZE     (8 * 1024)
 #define MGS_MAXREQSIZE  (8 * 1024)
 #define MGS_MAXREPSIZE  (9 * 1024)
 
 /* Absolute limits */
-#define OSS_THREADS_MIN 2UL
-#define OSS_THREADS_MAX 512UL
-/* Dynamic thread limits */
-#define OSS_THREADS_AUTO_MIN max(OSS_THREADS_MIN, \
-                             smp_num_cpus * num_physpages >> (27 - CFS_PAGE_SHIFT))
-#define OSS_THREADS_AUTO_MAX min(OSS_THREADS_MAX, OSS_THREADS_AUTO_MIN * 4)
+#define OSS_THREADS_MIN 2
+#define OSS_THREADS_MAX 512
 #define OST_NBUFS       (64 * smp_num_cpus)
 #define OST_BUFSIZE     (8 * 1024)
 /* OST_MAXREQSIZE ~= 4768 bytes =

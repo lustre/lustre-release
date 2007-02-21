@@ -1613,8 +1613,8 @@ static int ost_setup(struct obd_device *obd, obd_count len, void *buf)
 {
         struct ost_obd *ost = &obd->u.ost;
         struct lprocfs_static_vars lvars;
-        int oss_min_threads = OSS_THREADS_AUTO_MIN;
-        int oss_max_threads = OSS_THREADS_AUTO_MAX;
+        int oss_min_threads;
+        int oss_max_threads;
         int rc;
         ENTRY;
 
@@ -1638,6 +1638,16 @@ static int ost_setup(struct obd_device *obd, obd_count len, void *buf)
                 if (oss_num_threads < OSS_THREADS_MIN)
                         oss_num_threads = OSS_THREADS_MIN;
                 oss_max_threads = oss_min_threads = oss_num_threads;
+        } else {
+                /* Base min threads on memory and cpus */
+                oss_min_threads = smp_num_cpus * num_physpages >> 
+                        (27 - CFS_PAGE_SHIFT);
+                if (oss_min_threads < OSS_THREADS_MIN)
+                        oss_min_threads = OSS_THREADS_MIN;
+                /* Insure a 4x range for dynamic threads */
+                if (oss_min_threads > OSS_THREADS_MAX / 4) 
+                        oss_min_threads = OSS_THREADS_MAX / 4;
+                oss_max_threads = min(OSS_THREADS_MAX, oss_min_threads * 4);
         }
 
         ost->ost_service =

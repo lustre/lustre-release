@@ -2524,8 +2524,8 @@ static int mdt_setup(struct obd_device *obd, obd_count len, void *buf)
 {
         struct mds_obd *mds = &obd->u.mds;
         struct lprocfs_static_vars lvars;
-        int mds_min_threads = MDS_THREADS_AUTO_MIN;
-        int mds_max_threads = MDS_THREADS_AUTO_MAX;
+        int mds_min_threads;
+        int mds_max_threads;
         int rc = 0;
         ENTRY;
 
@@ -2541,6 +2541,16 @@ static int mdt_setup(struct obd_device *obd, obd_count len, void *buf)
                 if (mds_num_threads < MDS_THREADS_MIN)
                         mds_num_threads = MDS_THREADS_MIN;
                 mds_max_threads = mds_min_threads = mds_num_threads;
+        } else {
+                /* Base min threads on memory and cpus */
+                mds_min_threads = smp_num_cpus * num_physpages >> 
+                        (27 - CFS_PAGE_SHIFT);
+                if (mds_min_threads < MDS_THREADS_MIN)
+                        mds_min_threads = MDS_THREADS_MIN;
+                /* Largest auto threads start value */
+                if (mds_min_threads > 32) 
+                        mds_min_threads = 32;
+                mds_max_threads = min(MDS_THREADS_MAX, mds_min_threads * 4);
         }
 
         mds->mds_service =

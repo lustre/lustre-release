@@ -1087,8 +1087,6 @@ int ptlrpc_start_thread(struct obd_device *dev, struct ptlrpc_service *svc)
         int id, rc;
         ENTRY;
 
-        /* Not worrying about the svc_lock at this check - no big deal if
-           we start an extra thread or 2. */
         CDEBUG(D_RPCTRACE, "%s started %d min %d max %d running %d\n",
                svc->srv_name, svc->srv_threads_started, svc->srv_threads_min,
                svc->srv_threads_max, svc->srv_threads_running);
@@ -1101,6 +1099,11 @@ int ptlrpc_start_thread(struct obd_device *dev, struct ptlrpc_service *svc)
         cfs_waitq_init(&thread->t_ctl_waitq);
 
         spin_lock(&svc->srv_lock);
+        if (svc->srv_threads_started >= svc->srv_threads_max) {
+                spin_unlock(&svc->srv_lock);
+                OBD_FREE(thread, sizeof(*thread));
+                RETURN(-EMFILE);
+        }
         list_add(&thread->t_link, &svc->srv_threads);
         id = ++svc->srv_threads_started;
         spin_unlock(&svc->srv_lock);
