@@ -3061,9 +3061,11 @@ rm -f $F77_TMP
 unset F77_TMP
 
 test_78() { # bug 10901
-	MEMFREE=$(($(awk '/MemFree:/ { print $2 }' /proc/meminfo) / 1024))
-	[ $MEMFREE -gt 512 ] && MEMFREE=512
-	$DIRECTIO rdwr $DIR/$tfile 0 $MEMFREE 1048576
+	F78SIZE=$(($(awk '/MemFree:/ { print $2 }' /proc/meminfo) / 1024))
+	[ $F78SIZE -gt 512 ] && F78SIZE=512
+	[ $F78SIZE -gt $((MAXFREE / 1024)) ] && F78SIZE=$((MAXFREE / 1024))
+	$SETSTRIPE $DIR/$tfile 0 -1 -1
+	$DIRECTIO rdwr $DIR/$tfile 0 $F78SIZE 1048576
 }
 run_test 78 "handle large O_DIRECT writes correctly ============"
 
