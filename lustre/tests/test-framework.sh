@@ -42,7 +42,7 @@ init_test_env() {
     export LCTL=${LCTL:-"$LUSTRE/utils/lctl"}
     export MKFS=${MKFS:-"$LUSTRE/utils/mkfs.lustre"}
     export TUNEFS=${TUNEFS:-"$LUSTRE/utils/tunefs.lustre"}
-    [ ! -f "$TUNEFS" ] && export TUNEFS=$((which tunefs.lustre)) 
+    [ ! -f "$TUNEFS" ] && export TUNEFS=$(which tunefs.lustre) 
     export CHECKSTAT="${CHECKSTAT:-checkstat} "
     export FSYTPE=${FSTYPE:-"ext3"}
     export NAME=${NAME:-local}
