@@ -2,7 +2,6 @@ lustre_version.patch
 vfs_intent-2.6.18-vanilla.patch 
 vfs_nointent-2.6.18-vanilla.patch 
 vfs_races-2.6.18-vanilla.patch
-ext3-wantedi-misc-2.6.18-vanilla.patch 
 jbd-jcberr-2.6.18-vanilla.patch
 iopen-misc-2.6.18-vanilla.patch
 export-truncate-2.6.18-vanilla.patch 

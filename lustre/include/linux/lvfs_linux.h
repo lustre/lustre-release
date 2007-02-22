@@ -35,6 +35,15 @@ struct l_readdir_callback {
         struct list_head      *lrc_list;
 };
 
+#define LVFS_DENTRY_PARAM_MAGIC         20070216UL
+struct lvfs_dentry_params
+{
+        unsigned long    ldp_inum;
+        void            *ldp_ptr;
+        __u32            ldp_magic;
+};
+#define LVFS_DENTRY_PARAMS_INIT         { .ldp_magic = LVFS_DENTRY_PARAM_MAGIC }
+
 # if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0))
 #  define BDEVNAME_DECLARE_STORAGE(foo) char foo[BDEVNAME_SIZE]
 #  define ll_bdevname(SB, STORAGE) __bdevname(kdev_t_to_nr(SB->s_dev), STORAGE)

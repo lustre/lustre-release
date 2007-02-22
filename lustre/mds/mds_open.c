@@ -869,7 +869,7 @@ int mds_open(struct mds_update_record *rec, int offset,
         int rc = 0, cleanup_phase = 0, acc_mode, created = 0;
         int parent_mode = LCK_CR;
         void *handle = NULL;
-        struct dentry_params dp;
+        struct lvfs_dentry_params dp = LVFS_DENTRY_PARAMS_INIT;
         unsigned int qcids[MAXQUOTAS] = { current->fsuid, current->fsgid };
         unsigned int qpids[MAXQUOTAS] = { 0, 0 };
         int child_mode = LCK_CR;
@@ -1020,8 +1020,8 @@ int mds_open(struct mds_update_record *rec, int offset,
                         GOTO(cleanup, rc);
                 }
                 dchild->d_fsdata = (void *) &dp;
-                dp.p_ptr = req;
-                dp.p_inum = ino;
+                dp.ldp_ptr = req;
+                dp.ldp_inum = ino;
 
                 rc = ll_vfs_create(dparent->d_inode, dchild, rec->ur_mode,NULL);
                 if (dchild->d_fsdata == (void *)(unsigned long)ino)
@@ -1242,7 +1242,7 @@ int mds_mfd_close(struct ptlrpc_request *req, int offset,
         struct inode *pending_dir = mds->mds_pending_dir->d_inode;
         void *handle = NULL;
         struct mds_body *request_body = NULL, *reply_body = NULL;
-        struct dentry_params dp;
+        struct lvfs_dentry_params dp = LVFS_DENTRY_PARAMS_INIT;
         struct iattr iattr = { 0 };
         ENTRY;
 
@@ -1319,8 +1319,8 @@ int mds_mfd_close(struct ptlrpc_request *req, int offset,
                         *valid |= OBD_MD_FLCOOKIE;
                 }
 
-                dp.p_inum = 0;
-                dp.p_ptr = req;
+                dp.ldp_inum = 0;
+                dp.ldp_ptr = req;
                 pending_child->d_fsdata = (void *) &dp;
                 rc = vfs_unlink(pending_dir, pending_child);
                 if (rc)

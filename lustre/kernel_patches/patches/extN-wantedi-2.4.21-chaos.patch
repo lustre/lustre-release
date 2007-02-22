@@ -1,76 +1,7 @@
- fs/ext3/ialloc.c        |   40 ++++++++++++++++++++++++++++++++++++++--
- fs/ext3/inode.c         |    2 +-
- fs/ext3/ioctl.c         |   25 +++++++++++++++++++++++++
- fs/ext3/namei.c         |   21 +++++++++++++++++----
- include/linux/dcache.h  |    5 +++++
- include/linux/ext3_fs.h |    5 ++++-
- 6 files changed, 90 insertions(+), 8 deletions(-)
-
-Index: linux-2.4.21-chaos/fs/ext3/namei.c
-===================================================================
---- linux-2.4.21-chaos.orig/fs/ext3/namei.c	2003-12-12 16:18:41.000000000 +0300
-+++ linux-2.4.21-chaos/fs/ext3/namei.c	2003-12-12 16:18:53.000000000 +0300
-@@ -1534,6 +1534,19 @@
- 	return err;
- }
- 
-+static struct inode * ext3_new_inode_wantedi(handle_t *handle, struct inode *dir,
-+						int mode, struct dentry *dentry)
-+{
-+	unsigned long inum = 0;
-+
-+	if (dentry->d_fsdata != NULL) {
-+		struct dentry_params *param =
-+			(struct dentry_params *) dentry->d_fsdata;
-+		inum = param->p_inum;
-+	}
-+	return ext3_new_inode(handle, dir, mode, inum);
-+}
-+
- /*
-  * By the time this is called, we already have created
-  * the directory cache entry for the new file, but it
-@@ -1557,7 +1570,7 @@
- 	if (IS_SYNC(dir))
- 		handle->h_sync = 1;
- 
--	inode = ext3_new_inode (handle, dir, mode);
-+	inode = ext3_new_inode_wantedi (handle, dir, mode, dentry);
- 	err = PTR_ERR(inode);
- 	if (!IS_ERR(inode)) {
- 		inode->i_op = &ext3_file_inode_operations;
-@@ -1585,7 +1598,7 @@
- 	if (IS_SYNC(dir))
- 		handle->h_sync = 1;
- 
--	inode = ext3_new_inode (handle, dir, mode);
-+	inode = ext3_new_inode_wantedi (handle, dir, mode, dentry);
- 	err = PTR_ERR(inode);
- 	if (!IS_ERR(inode)) {
- 		init_special_inode(inode, inode->i_mode, rdev);
-@@ -1618,7 +1631,7 @@
- 	if (IS_SYNC(dir))
- 		handle->h_sync = 1;
- 
--	inode = ext3_new_inode (handle, dir, S_IFDIR | mode);
-+	inode = ext3_new_inode_wantedi (handle, dir, S_IFDIR | mode, dentry);
- 	err = PTR_ERR(inode);
- 	if (IS_ERR(inode))
- 		goto out_stop;
-@@ -2012,7 +2025,7 @@
- 	if (IS_SYNC(dir))
- 		handle->h_sync = 1;
- 
--	inode = ext3_new_inode (handle, dir, S_IFLNK|S_IRWXUGO);
-+	inode = ext3_new_inode_wantedi (handle, dir, S_IFLNK|S_IRWXUGO, dentry);
- 	err = PTR_ERR(inode);
- 	if (IS_ERR(inode))
- 		goto out_stop;
-Index: linux-2.4.21-chaos/fs/ext3/ialloc.c
-===================================================================
---- linux-2.4.21-chaos.orig/fs/ext3/ialloc.c	2003-12-12 16:18:52.000000000 +0300
-+++ linux-2.4.21-chaos/fs/ext3/ialloc.c	2003-12-12 16:18:53.000000000 +0300
-@@ -330,7 +330,8 @@
+diff -urp linux-2.4.21.orig/fs/ext3/ialloc.c linux-2.4.21/fs/ext3/ialloc.c
+--- linux-2.4.21.orig/fs/ext3/ialloc.c	2007-02-16 10:23:09.000000000 +0200
++++ linux-2.4.21/fs/ext3/ialloc.c	2007-02-16 10:30:28.000000000 +0200
+@@ -330,7 +330,8 @@ int ext3_itable_block_used(struct super_
   * For other inodes, search forward from the parent directory's block
   * group to find a free inode.
   */
@@ -80,7 +11,7 @@ Index: linux-2.4.21-chaos/fs/ext3/ialloc.c
  {
  	struct super_block * sb;
  	struct buffer_head * bh;
-@@ -359,7 +360,41 @@
+@@ -359,7 +360,41 @@ struct inode * ext3_new_inode (handle_t 
  	init_rwsem(&ei->truncate_sem);
  
  	lock_super (sb);
@@ -123,7 +54,7 @@ Index: linux-2.4.21-chaos/fs/ext3/ialloc.c
  repeat:
  	gdp = NULL;
  	i = 0;
-@@ -474,6 +509,7 @@
+@@ -474,6 +509,7 @@ repeat:
  		}
  		goto repeat;
  	}
@@ -131,11 +62,10 @@ Index: linux-2.4.21-chaos/fs/ext3/ialloc.c
  	j += i * EXT3_INODES_PER_GROUP(sb) + 1;
  	if (j < EXT3_FIRST_INO(sb) || j > le32_to_cpu(es->s_inodes_count)) {
  		ext3_error (sb, "ext3_new_inode",
-Index: linux-2.4.21-chaos/fs/ext3/inode.c
-===================================================================
---- linux-2.4.21-chaos.orig/fs/ext3/inode.c	2003-12-12 16:18:52.000000000 +0300
-+++ linux-2.4.21-chaos/fs/ext3/inode.c	2003-12-12 16:18:53.000000000 +0300
-@@ -2233,7 +2233,7 @@
+diff -urp linux-2.4.21.orig/fs/ext3/inode.c linux-2.4.21/fs/ext3/inode.c
+--- linux-2.4.21.orig/fs/ext3/inode.c	2007-02-16 10:23:09.000000000 +0200
++++ linux-2.4.21/fs/ext3/inode.c	2007-02-16 10:30:28.000000000 +0200
+@@ -2235,7 +2235,7 @@ void ext3_truncate_thread(struct inode *
  	if (IS_ERR(handle))
  		goto out_truncate;
  
@@ -144,11 +74,10 @@ Index: linux-2.4.21-chaos/fs/ext3/inode.c
  	if (IS_ERR(new_inode)) {
  		ext3_debug("truncate inode %lu directly (no new inodes)\n",
  			   old_inode->i_ino);
-Index: linux-2.4.21-chaos/fs/ext3/ioctl.c
-===================================================================
---- linux-2.4.21-chaos.orig/fs/ext3/ioctl.c	2003-12-12 16:18:40.000000000 +0300
-+++ linux-2.4.21-chaos/fs/ext3/ioctl.c	2003-12-12 16:18:53.000000000 +0300
-@@ -24,6 +24,31 @@
+diff -urp linux-2.4.21.orig/fs/ext3/ioctl.c linux-2.4.21/fs/ext3/ioctl.c
+--- linux-2.4.21.orig/fs/ext3/ioctl.c	2007-02-16 10:23:09.000000000 +0200
++++ linux-2.4.21/fs/ext3/ioctl.c	2007-02-16 10:30:28.000000000 +0200
+@@ -24,6 +24,31 @@ int ext3_ioctl (struct inode * inode, st
  	ext3_debug ("cmd = %u, arg = %lu\n", cmd, arg);
  
  	switch (cmd) {
@@ -180,11 +109,85 @@ Index: linux-2.4.21-chaos/fs/ext3/ioctl.c
  	case EXT3_IOC_GETFLAGS:
  		flags = ei->i_flags & EXT3_FL_USER_VISIBLE;
  		return put_user(flags, (int *) arg);
-Index: linux-2.4.21-chaos/include/linux/ext3_fs.h
-===================================================================
---- linux-2.4.21-chaos.orig/include/linux/ext3_fs.h	2003-12-12 16:18:52.000000000 +0300
-+++ linux-2.4.21-chaos/include/linux/ext3_fs.h	2003-12-12 16:18:53.000000000 +0300
-@@ -204,6 +204,7 @@
+diff -urp linux-2.4.21.orig/fs/ext3/namei.c linux-2.4.21/fs/ext3/namei.c
+--- linux-2.4.21.orig/fs/ext3/namei.c	2007-02-16 10:23:09.000000000 +0200
++++ linux-2.4.21/fs/ext3/namei.c	2007-02-16 10:32:17.000000000 +0200
+@@ -143,6 +143,14 @@ struct dx_map_entry
+ 	u32 offs;
+ };
+ 
++#define LVFS_DENTRY_PARAM_MAGIC		20070216UL
++struct lvfs_dentry_params
++{
++	unsigned long   p_inum;
++	void            *p_ptr;	
++	u32		magic;
++};
++
+ #ifdef CONFIG_EXT3_INDEX
+ static inline unsigned dx_get_block (struct dx_entry *entry);
+ static void dx_set_block (struct dx_entry *entry, unsigned value);
+@@ -1542,6 +1550,20 @@ static int ext3_add_nondir(handle_t *han
+ 	return err;
+ }
+ 
++static struct inode * ext3_new_inode_wantedi(handle_t *handle, struct inode *dir,
++						int mode, struct dentry *dentry)
++{
++	unsigned long inum = 0;
++
++	if (dentry->d_fsdata != NULL) {
++		struct lvfs_dentry_params *param =
++			dentry->d_fsdata;
++		if (param->magic == LVFS_DENTRY_PARAM_MAGIC)
++			inum = param->p_inum;
++	}
++	return ext3_new_inode(handle, dir, mode, inum);
++}
++
+ /*
+  * By the time this is called, we already have created
+  * the directory cache entry for the new file, but it
+@@ -1565,7 +1587,7 @@ static int ext3_create (struct inode * d
+ 	if (IS_SYNC(dir))
+ 		handle->h_sync = 1;
+ 
+-	inode = ext3_new_inode (handle, dir, mode);
++	inode = ext3_new_inode_wantedi (handle, dir, mode, dentry);
+ 	err = PTR_ERR(inode);
+ 	if (!IS_ERR(inode)) {
+ 		inode->i_op = &ext3_file_inode_operations;
+@@ -1593,7 +1615,7 @@ static int ext3_mknod (struct inode * di
+ 	if (IS_SYNC(dir))
+ 		handle->h_sync = 1;
+ 
+-	inode = ext3_new_inode (handle, dir, mode);
++	inode = ext3_new_inode_wantedi (handle, dir, mode, dentry);
+ 	err = PTR_ERR(inode);
+ 	if (!IS_ERR(inode)) {
+ 		init_special_inode(inode, inode->i_mode, rdev);
+@@ -1626,7 +1648,7 @@ static int ext3_mkdir(struct inode * dir
+ 	if (IS_SYNC(dir))
+ 		handle->h_sync = 1;
+ 
+-	inode = ext3_new_inode (handle, dir, S_IFDIR | mode);
++	inode = ext3_new_inode_wantedi (handle, dir, S_IFDIR | mode, dentry);
+ 	err = PTR_ERR(inode);
+ 	if (IS_ERR(inode))
+ 		goto out_stop;
+@@ -2056,7 +2078,7 @@ static int ext3_symlink (struct inode * 
+ 	if (IS_SYNC(dir))
+ 		handle->h_sync = 1;
+ 
+-	inode = ext3_new_inode (handle, dir, S_IFLNK|S_IRWXUGO);
++	inode = ext3_new_inode_wantedi (handle, dir, S_IFLNK|S_IRWXUGO, dentry);
+ 	err = PTR_ERR(inode);
+ 	if (IS_ERR(inode))
+ 		goto out_stop;
+diff -urp linux-2.4.21.orig/include/linux/ext3_fs.h linux-2.4.21/include/linux/ext3_fs.h
+--- linux-2.4.21.orig/include/linux/ext3_fs.h	2007-02-16 10:23:09.000000000 +0200
++++ linux-2.4.21/include/linux/ext3_fs.h	2007-02-16 10:30:28.000000000 +0200
+@@ -204,6 +204,7 @@ struct ext3_group_desc
  #define	EXT3_IOC_SETFLAGS		_IOW('f', 2, long)
  #define	EXT3_IOC_GETVERSION		_IOR('f', 3, long)
  #define	EXT3_IOC_SETVERSION		_IOW('f', 4, long)
@@ -192,7 +195,7 @@ Index: linux-2.4.21-chaos/include/linux/ext3_fs.h
  #define	EXT3_IOC_GETVERSION_OLD		_IOR('v', 1, long)
  #define	EXT3_IOC_SETVERSION_OLD		_IOW('v', 2, long)
  #ifdef CONFIG_JBD_DEBUG
-@@ -671,7 +672,8 @@
+@@ -671,7 +672,8 @@ extern int ext3fs_dirhash(const char *na
  			  dx_hash_info *hinfo);
  
  /* ialloc.c */
@@ -202,25 +205,9 @@ Index: linux-2.4.21-chaos/include/linux/ext3_fs.h
  extern void ext3_free_inode (handle_t *, struct inode *);
  extern struct inode * ext3_orphan_get (struct super_block *, unsigned long);
  extern unsigned long ext3_count_free_inodes (struct super_block *);
-@@ -763,4 +765,5 @@
+@@ -763,4 +765,5 @@ extern struct inode_operations ext3_fast
  
  #endif	/* __KERNEL__ */
  
 +#define EXT3_IOC_CREATE_INUM			_IOW('f', 5, long)
  #endif	/* _LINUX_EXT3_FS_H */
-Index: linux-2.4.21-chaos/include/linux/dcache.h
-===================================================================
---- linux-2.4.21-chaos.orig/include/linux/dcache.h	2003-12-12 16:18:06.000000000 +0300
-+++ linux-2.4.21-chaos/include/linux/dcache.h	2003-12-12 16:18:53.000000000 +0300
-@@ -63,6 +63,11 @@
- 
- #define IS_ROOT(x) ((x) == (x)->d_parent)
- 
-+struct dentry_params {
-+	unsigned long   p_inum;
-+	void            *p_ptr;
-+};
-+
- /*
-  * "quick string" -- eases parameter passing, but more importantly
-  * saves "metadata" about the string (ie length and the hash).

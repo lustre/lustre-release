@@ -758,7 +758,7 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
         int created = 0;
         unsigned int qcids[MAXQUOTAS] = { current->fsuid, current->fsgid };
         unsigned int qpids[MAXQUOTAS] = { 0, 0 };
-        struct dentry_params dp;
+        struct lvfs_dentry_params dp = LVFS_DENTRY_PARAMS_INIT;
         ENTRY;
 
         LASSERT(offset == REQ_REC_OFF);
@@ -814,8 +814,8 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
                 rec->ur_mode |= S_ISGID;
 
         dchild->d_fsdata = (void *)&dp;
-        dp.p_inum = (unsigned long)rec->ur_fid2->id;
-        dp.p_ptr = req;
+        dp.ldp_inum = (unsigned long)rec->ur_fid2->id;
+        dp.ldp_ptr = req;
 
         switch (type) {
         case S_IFREG:{
