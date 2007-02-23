@@ -101,7 +101,7 @@ diff -urp linux-2.6.5-7.282.orig/fs/ext3/namei.c linux-2.6.5-7.282/fs/ext3/namei
 +	unsigned long   p_inum;
 +	void            *p_ptr;	
 +	u32		magic;
-+}
++};
 +
  #ifdef CONFIG_EXT3_INDEX
  static inline unsigned dx_get_block (struct dx_entry *entry);

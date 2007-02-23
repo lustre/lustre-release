@@ -109,7 +109,7 @@ diff -urp RH_2_6_9_42_0_3.orig/fs/ext3/namei.c RH_2_6_9_42_0_3/fs/ext3/namei.c
 +	unsigned long   p_inum;
 +	void            *p_ptr;	
 +	u32		magic;
-+}
++};
 +
  #ifdef CONFIG_EXT3_INDEX
  static inline unsigned dx_get_block (struct dx_entry *entry);
@@ -126,7 +126,7 @@ diff -urp RH_2_6_9_42_0_3.orig/fs/ext3/namei.c RH_2_6_9_42_0_3/fs/ext3/namei.c
 +	if (dentry->d_fsdata != NULL) {
 +		struct lvfs_dentry_params *param = dentry->d_fsdata;
 +
-+		if (param->magc == LVFS_DENTRY_PARAM_MAGIC)
++		if (param->magic == LVFS_DENTRY_PARAM_MAGIC)
 +			inum = param->p_inum;
 +	}
 +	return ext3_new_inode(handle, dir, mode, inum);
