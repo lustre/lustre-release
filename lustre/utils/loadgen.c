@@ -51,6 +51,8 @@ char nid[64] = "";
 static int live_threads = 0;
 static int sig_received = 0;
 static int o_verbose = 4; /* 0-5 */
+static int my_oss = 0;
+static int my_ecs = 0;
 
 static int jt_quit(int argc, char **argv) {
         Parser_quit(argc, argv);
@@ -60,7 +62,7 @@ static int jt_quit(int argc, char **argv) {
 static int loadgen_usage(int argc, char **argv)
 {
         if (argc == 1) {
-                fprintf(stderr,
+                fprintf(stderr, 
         "This is a test program used to simulate large numbers of\n"
         "clients.  The echo obds are used, so the obdecho module must\n"
         "be loaded.\n"
@@ -76,6 +78,7 @@ static int loadgen_usage(int argc, char **argv)
 
 static int loadgen_verbose(int argc, char **argv);
 static int loadgen_target(int argc, char **argv);
+static int loadgen_start_echosrv(int argc, char **argv);
 static int loadgen_start_clients(int argc, char **argv);
 static int loadgen_write(int argc, char **argv);
 
@@ -85,11 +88,10 @@ command_t cmdlist[] = {
          "usage: device <name> [<nid>]"},
         {"dl", jt_obd_list, 0, "show all devices\n"
          "usage: dl"},
-        {"start", loadgen_start_clients, 0,
-         "set up echo clients\n"
+        {"echosrv", loadgen_start_echosrv, 0, "start an echo server\n"},
+        {"start", loadgen_start_clients, 0, "set up echo clients\n"
          "usage: start_clients <num>"},
-        {"verbose", loadgen_verbose, 0,
-         "set verbosity level 0-5\n"
+        {"verbose", loadgen_verbose, 0, "set verbosity level 0-5\n"
          "usage: verbose <level>"},
         {"write", loadgen_write, 0,
          "start a test_brw write test on X clients for Y iterations\n"
@@ -253,9 +255,13 @@ static int read_proc(char *proc_path, long long *value)
 
         rc = read(fd, buf, sizeof(buf));
         close(fd);
+        if (errno == EOPNOTSUPP) {
+                /* probably an echo server */
+                return rc;
+        }
         if (rc <= 0) {
                 fprintf(stderr, "read('%s') failed: %s (%d)\n",
-                        proc_path, strerror(errno), rc);
+                        proc_path, strerror(errno), errno);
                 return rc;
         }
         *value = strtoull(buf, NULL, 10);
@@ -326,7 +332,7 @@ static int cleanup(char *obdname, int quiet)
         return rc;
 }
 
-static int setup(char *oname, char *ename, int *dev)
+static int echocli_setup(char *oname, char *ename, int *dev)
 {
         char *args[5];
         char proc_path[50];
@@ -461,7 +467,7 @@ static int obj_create(struct kid_t *kid)
         }
 
         if (!(data.ioc_obdo1.o_valid & OBD_MD_FLID)) {
-                fprintf(stderr,"%d: create oid not valid "LPX64"\n",
+                fprintf(stderr, "%d: create oid not valid "LPX64"\n",
                         kid->k_id, data.ioc_obdo1.o_valid);
                 return rc;
         }
@@ -646,7 +652,7 @@ static void *run_one_child(void *threadvp)
 
         sprintf(oname, "o%.5d", thread);
         sprintf(ename, "e%.5d", thread);
-        rc = setup(oname, ename, &dev);
+        rc = echocli_setup(oname, ename, &dev);
         if (rc) {
                 fprintf(stderr, "%s: can't setup '%s/%s' (%d)\n",
                         cmdname, oname, ename, rc);
@@ -714,14 +720,14 @@ static int loadgen_start_clients(int argc, char **argv)
                 return CMD_HELP;
 
         if (!target[0]) {
-                fprintf(stderr,"%s: target OST is not defined, use 'device' "
+                fprintf(stderr, "%s: target OST is not defined, use 'device' "
                         "command\n", cmdname);
                 return -EINVAL;
         }
 
         rc = pthread_attr_init(&attr);
         if (rc) {
-                fprintf(stderr,"%s: pthread_attr_init:(%d) %s\n",
+                fprintf(stderr, "%s: pthread_attr_init:(%d) %s\n",
                         cmdname, rc, strerror(errno));
                 return -errno;
         }
@@ -845,6 +851,87 @@ static int loadgen_write(int argc, char **argv)
         return 0;
 }
 
+char ecsname[] = "echosrv";
+static int loadgen_stop_echosrv(int argc, char **argv)
+{
+        int verbose = (argc != 9);
+        if (my_oss) {
+                char name[]="OSS";
+                cleanup(name, verbose);
+                my_oss = 0;
+        }
+        if (my_ecs || (argc == 9)) {
+                cleanup(ecsname, verbose);
+                my_ecs = 0;
+        }
+        return 0;
+}
+
+static int loadgen_start_echosrv(int argc, char **argv)
+{
+        char *args[5];
+        int rc;
+
+        pthread_mutex_lock(&m_config);
+
+        args[0] = cmdname;
+
+        /* attach obdecho echosrv echosrv_UUID */
+        args[1] = "obdecho";
+        args[2] = args[3] = ecsname;
+        rc = jt_lcfg_attach(4, args);
+        if (rc) {
+                fprintf(stderr, "%s: can't attach echo server (%d)\n",
+                        cmdname, rc);
+                /* Assume we want e.g. an old one cleaned anyhow. */
+                goto clean;
+        }
+        my_ecs = 1;
+
+        /* setup */
+        rc = jt_lcfg_setup(1, args);
+        if (rc) {
+                fprintf(stderr, "%s: can't setup echo server (%d)\n",
+                        cmdname, rc);
+                goto clean;
+        }
+  
+        /* Create an OSS to handle the communications */
+        /* attach ost OSS OSS_UUID */
+        args[1] = "ost";
+        args[2] = args[3] = "OSS";
+
+        rc = jt_lcfg_attach(4, args);
+        if (rc == EEXIST) {
+                /* Already set up for somebody else, that's fine. */
+                printf("OSS already set up, no problem.\n");
+                pthread_mutex_unlock(&m_config);
+                return 0;
+        }
+        if (rc) {
+                fprintf(stderr, "%s: can't attach OSS (%d)\n",
+                        cmdname, rc);
+                goto clean;
+        }
+        my_oss = 1;
+
+        /* setup */
+        rc = jt_lcfg_setup(1, args);
+        if (rc) {
+                fprintf(stderr, "%s: can't setup OSS (%d)\n",
+                        cmdname, rc);
+                goto clean;
+        }
+
+        pthread_mutex_unlock(&m_config);
+        return rc;
+
+clean:
+        pthread_mutex_unlock(&m_config);
+        loadgen_stop_echosrv(9, argv);
+        return rc;
+}
+
 static int loadgen_init(int argc, char **argv)
 {
         char *args[3];
@@ -877,9 +964,13 @@ static int loadgen_init(int argc, char **argv)
 static int loadgen_exit()
 {
         int rc;
+        
         printf("stopping %d children\n", live_threads);
         kill_kids();
         rc = wait_for_threads();
+
+        loadgen_stop_echosrv(0, NULL);
+
         return rc;
 }
 
@@ -889,6 +980,8 @@ static int loadgen_main(int argc, char **argv)
         int rc;
 
         setlinebuf(stdout);
+        /* without this threaded errors cause segfault */
+        setlinebuf(stderr);
 
         if ((rc = ptl_initialize(argc, argv)) < 0)
                 exit(rc);
