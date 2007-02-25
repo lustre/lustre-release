@@ -419,8 +419,8 @@ static inline long cfs_timeval_sub(struct timeval *large, struct timeval *small,
                 (large->tv_sec - small->tv_sec) * ONE_MILLION +
                 (large->tv_usec - small->tv_usec));
         if (result != NULL) {
-                result->tv_usec = r / ONE_MILLION;
-                result->tv_sec = r;
+                result->tv_usec = r % ONE_MILLION;
+                result->tv_sec = r / ONE_MILLION;
         }
         return r;
 }
