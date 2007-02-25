@@ -435,7 +435,7 @@ static int lovea_unpack_array(struct llog_handle *handle,
                         LPU64":"LPU64"\n", cursor, loi_index, med->med_start,
                         med->med_len);
 
-        for (i = 0; i < lmm->lmm_stripe_count; i ++) {
+        for (i = 0; i < le32_to_cpu(lmm->lmm_stripe_count); i ++, loi_index++) {
                 /* XXX LOV STACKING call down to osc_unpackmd() */
                 loi = lsm->lsm_oinfo[loi_index];
                 loi->loi_id = le64_to_cpu(lmm->lmm_objects[i].l_object_id);
