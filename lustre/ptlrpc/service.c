@@ -556,7 +556,7 @@ ptlrpc_server_handle_request(struct ptlrpc_service *svc,
                 CERROR ("error unpacking request: ptl %d from %s"
                         " xid "LPU64"\n", svc->srv_req_portal,
                         libcfs_id2str(request->rq_peer), request->rq_xid);
-                goto out;
+                goto out_req;
         }
 
         rc = lustre_unpack_req_ptlrpc_body(request, MSG_PTLRPC_BODY_OFF);
@@ -564,7 +564,7 @@ ptlrpc_server_handle_request(struct ptlrpc_service *svc,
                 CERROR ("error unpacking ptlrpc body: ptl %d from %s"
                         " xid "LPU64"\n", svc->srv_req_portal,
                         libcfs_id2str(request->rq_peer), request->rq_xid);
-                goto out;
+                goto out_req;
         }
 
         rc = -EINVAL;
@@ -572,7 +572,7 @@ ptlrpc_server_handle_request(struct ptlrpc_service *svc,
                 CERROR("wrong packet type received (type=%u) from %s\n",
                        lustre_msg_get_type(request->rq_reqmsg),
                        libcfs_id2str(request->rq_peer));
-                goto out;
+                goto out_req;
         }
 
         CDEBUG(D_NET, "got req "LPD64"\n", request->rq_xid);
@@ -651,9 +651,8 @@ put_conn:
         if (request->rq_export != NULL)
                 class_export_put(request->rq_export);
 
-out:
-        reply = request->rq_reply_state && request->rq_repmsg;  /* bug 11169 */ 
-         
+        reply = request->rq_reply_state && request->rq_repmsg;  /* bug 11169 */
+
         do_gettimeofday(&work_end);
         timediff = cfs_timeval_sub(&work_end, &work_start, NULL);
         if (timediff / 1000000 > (long)obd_timeout)
@@ -664,7 +663,7 @@ out:
                        cfs_timeval_sub(&work_end, &request->rq_arrival_time,
                                        NULL) / 1000000,
                        reply ? lustre_msg_get_transno(request->rq_repmsg) :
-                               request->rq_transno, 
+                               request->rq_transno,
                        request->rq_status,
                        reply ? lustre_msg_get_status(request->rq_repmsg): -999);
         else
@@ -687,6 +686,7 @@ out:
                 }
         }
 
+out_req:
         ptlrpc_server_free_request(request);
 
         RETURN(1);
@@ -972,7 +972,7 @@ static int ptlrpc_main(void *arg)
                 lc_watchdog_touch(watchdog);
 
                 ptlrpc_check_rqbd_pool(svc);
-                
+
                 if ((svc->srv_threads_started < svc->srv_threads_max) &&
                     (svc->srv_n_active_reqs >= (svc->srv_threads_started - 1))){
                         /* Ignore return code - we tried... */
