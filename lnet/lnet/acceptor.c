@@ -81,11 +81,11 @@ lnet_connect_console_error (int rc, lnet_nid_t peer_nid,
                        libcfs_nid2str(peer_nid), HIPQUAD(peer_ip));
                 break;
         case -ETIMEDOUT:
-                LCONSOLE_ERROR("Connection to %s at host %u.%u.%u.%u on "
-                               "port %d took too long: that node may be hung "
-                               "or experiencing high load.\n",
-                               libcfs_nid2str(peer_nid),
-                               HIPQUAD(peer_ip), peer_port);
+                CDEBUG(D_NETERROR, "Connection to %s at host %u.%u.%u.%u on "
+                       "port %d took too long: that node may be hung "
+                       "or experiencing high load.\n",
+                       libcfs_nid2str(peer_nid),
+                       HIPQUAD(peer_ip), peer_port);
                 break;
         case -ECONNRESET:
                 LCONSOLE_ERROR("Connection to %s at host %u.%u.%u.%u on "

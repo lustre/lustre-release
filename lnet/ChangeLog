@@ -14,6 +14,10 @@ TBD         Cluster File Systems, Inc. <info@clusterfs.com>
        * bug fixes
 
 Severity   : enhancement
+Bugzilla   : 10316
+Description: Fixed console chatter in case of -ETIMEDOUT.
+
+Severity   : enhancement
 Bugzilla   : 11684
 Description: Added D_NETTRACE for recording network packet history
 	     (initially only for ptllnd).  Also a separate userspace
