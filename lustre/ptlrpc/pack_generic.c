@@ -989,7 +989,7 @@ char *lustre_msg_string(struct lustre_msg *m, int index, int max_len)
 void *lustre_swab_buf(struct lustre_msg *msg, int index, int min_size,
                       void *swabber)
 {
-        void *ptr;
+        void *ptr = NULL;
 
         switch (msg->lm_magic) {
         case LUSTRE_MSG_MAGIC_V1:
