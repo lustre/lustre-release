@@ -192,7 +192,11 @@ for NAME in $CONFIGS; do
 
 	if [ "$LIBLUSTRE" != "no" ]; then
 	        title liblustre
-		assert_env MGSNID
+		assert_env MGSNID MOUNT2
+		$CLEANUP
+		unload_modules
+		# Liblustre needs accept=all, noacl
+		LNETOPTS="accept=all" MDS_MOUNT_OPTS="${MDS_MOUNT_OPTS},noacl" $SETUP
 		export LIBLUSTRE_MOUNT_POINT=$MOUNT2
 		export LIBLUSTRE_MOUNT_TARGET=$MGSNID:/$FSNAME
 		export LIBLUSTRE_TIMEOUT=`cat /proc/sys/lustre/timeout`
@@ -207,11 +211,6 @@ for NAME in $CONFIGS; do
 
 	$CLEANUP
 done
-
-if [ "$SANITY_QUOTA" != "no" ]; then
-        title sanity-quota
-        sh sanity-quota.sh
-fi
 
 if [ "$REPLAY_SINGLE" != "no" ]; then
         title replay-single
@@ -241,6 +240,11 @@ fi
 if [ "$INSANITY" != "no" ]; then
         title insanity
         sh insanity.sh -r
+fi
+
+if [ "$SANITY_QUOTA" != "no" ]; then
+        title sanity-quota
+        sh sanity-quota.sh
 fi
 
 title FINISHED
