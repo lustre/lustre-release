@@ -382,6 +382,8 @@ static int mgs_handle_target_reg(struct ptlrpc_request *req)
                                obd->obd_name, lockrc);
         }
 
+        OBD_FAIL_TIMEOUT(OBD_FAIL_MGS_SLOW_TARGET_REG, 10);
+
         /* Log writing contention is handled by the fsdb_sem */
 
         if (mti->mti_flags & LDD_F_WRITECONF) {

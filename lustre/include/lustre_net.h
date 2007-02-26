@@ -120,7 +120,7 @@
 #define MDS_MAXREPSIZE  max(9 * 1024, 280 + LOV_MAX_STRIPE_COUNT * 56)
 
 #define MGS_THREADS_AUTO_MIN 2
-#define MGS_THREADS_AUTO_MAX 128
+#define MGS_THREADS_AUTO_MAX 32
 #define MGS_NBUFS       (64 * smp_num_cpus)
 #define MGS_BUFSIZE     (8 * 1024)
 #define MGS_MAXREQSIZE  (8 * 1024)

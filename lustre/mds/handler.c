@@ -2053,7 +2053,8 @@ static int mds_setup(struct obd_device *obd, obd_count len, void *buf)
                               obd->obd_replayable ? "enabled" : "disabled");
         }
 
-        ldlm_timeout = 6;
+        if (ldlm_timeout == LDLM_TIMEOUT_DEFAULT)
+                ldlm_timeout = 6;
 
         RETURN(0);
 

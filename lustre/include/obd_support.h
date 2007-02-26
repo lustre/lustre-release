@@ -35,6 +35,7 @@ extern unsigned int obd_dump_on_eviction;
 extern unsigned int obd_timeout;          /* seconds */
 #define PING_INTERVAL max(obd_timeout / 4, 1U)
 #define RECONNECT_INTERVAL max(obd_timeout / 10, 10U)
+#define LDLM_TIMEOUT_DEFAULT 20
 extern unsigned int ldlm_timeout;
 extern unsigned int obd_health_check_timeout;
 extern unsigned int obd_sync_filter;
@@ -188,6 +189,7 @@ extern int obd_race_state;
 #define OBD_FAIL_MGS_ALL_REPLY_NET       0x902
 #define OBD_FAIL_MGC_PROCESS_LOG         0x903
 #define OBD_FAIL_MGS_SLOW_REQUEST_NET    0x904
+#define OBD_FAIL_MGS_SLOW_TARGET_REG     0x905
 
 #define OBD_FAIL_QUOTA_QD_COUNT_32BIT    0xA00
 

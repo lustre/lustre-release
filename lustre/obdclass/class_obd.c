@@ -64,7 +64,7 @@ unsigned int obd_debug_peer_on_timeout;
 unsigned int obd_dump_on_timeout;
 unsigned int obd_dump_on_eviction;
 unsigned int obd_timeout = 100; /* seconds */
-unsigned int ldlm_timeout = 20; /* seconds */
+unsigned int ldlm_timeout = LDLM_TIMEOUT_DEFAULT; /* seconds */
 unsigned int obd_health_check_timeout = 120; /* seconds */
 unsigned int obd_max_dirty_pages = 256;
 atomic_t obd_dirty_pages;

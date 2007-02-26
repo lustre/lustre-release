@@ -36,7 +36,7 @@ struct lc_watchdog {
         void             *lcw_data;
 
         pid_t             lcw_pid;
-        int               lcw_time; /* time until watchdog fires, in ms */
+        cfs_duration_t    lcw_time; /* time until watchdog fires, jiffies */
 
         enum {
                 LC_WATCHDOG_DISABLED,
@@ -126,8 +126,8 @@ static void lcw_cb(unsigned long data)
         /* NB this warning should appear on the console, but may not get into
          * the logs since we're running in a softirq handler */
 
-        CWARN("Watchdog triggered for pid %d: it was inactive for %ldms\n",
-              (int)lcw->lcw_pid, cfs_duration_sec(lcw->lcw_time) * 1000);
+        CWARN("Watchdog triggered for pid %d: it was inactive for %lds\n",
+              (int)lcw->lcw_pid, cfs_duration_sec(lcw->lcw_time));
         lcw_dump(lcw);
 
         spin_lock_bh(&lcw_pending_timers_lock);
@@ -197,8 +197,9 @@ static int lcw_dispatch_main(void *data)
                         list_del_init(&lcw->lcw_list);
                         spin_unlock_bh(&lcw_pending_timers_lock);
 
-                        CDEBUG(D_INFO, "found lcw for pid %d: inactive for %ldms\n", 
-                               (int)lcw->lcw_pid, cfs_duration_sec(lcw->lcw_time) * 1000);
+                        CDEBUG(D_INFO, "found lcw for pid %d: inactive for "
+                               "%lds\n", (int)lcw->lcw_pid,
+                               cfs_duration_sec(lcw->lcw_time));
 
                         if (lcw->lcw_state != LC_WATCHDOG_DISABLED)
                                 lcw->lcw_callback(lcw->lcw_pid, lcw->lcw_data);
