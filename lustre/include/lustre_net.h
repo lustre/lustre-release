@@ -783,7 +783,7 @@ __u32 lustre_msg_get_opc(struct lustre_msg *msg);
 __u64 lustre_msg_get_last_xid(struct lustre_msg *msg);
 __u64 lustre_msg_get_last_committed(struct lustre_msg *msg);
 __u64 lustre_msg_get_transno(struct lustre_msg *msg);
-__u32 lustre_msg_get_status(struct lustre_msg *msg);
+int   lustre_msg_get_status(struct lustre_msg *msg);
 __u32 lustre_msg_get_conn_cnt(struct lustre_msg *msg);
 __u32 lustre_msg_get_magic(struct lustre_msg *msg);
 void lustre_msg_set_handle(struct lustre_msg *msg,struct lustre_handle *handle);
