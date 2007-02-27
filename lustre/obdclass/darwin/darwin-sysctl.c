@@ -51,7 +51,7 @@ SYSCTL_INT(_lustre,		OID_AUTO,	dump_on_timeout,
 	   0,		"lustre_dump_on_timeout");
 SYSCTL_INT(_lustre,		OID_AUTO,	debug_peer_on_timeout, 
 	   CTLTYPE_INT | CTLFLAG_RW,		&obd_debug_peer_on_timeout,
-	   0,		"lustre_dump_on_timeout");
+	   0,		"lustre_debug_peer_on_timeout");
 SYSCTL_INT(_lustre,		OID_AUTO,	memused, 
 	   CTLTYPE_INT | CTLFLAG_RW,		(int *)&obd_memory.counter,
 	   0,		"lustre_memory_used");
