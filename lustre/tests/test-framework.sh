@@ -40,7 +40,9 @@ init_test_env() {
 
     export PATH=:$PATH:$LUSTRE/utils:$LUSTRE/tests
     export LCTL=${LCTL:-"$LUSTRE/utils/lctl"}
+    [ ! -f "$LCTL" ] && export LCTL=$(which lctl) 
     export MKFS=${MKFS:-"$LUSTRE/utils/mkfs.lustre"}
+    [ ! -f "$MKFS" ] && export MKFS=$(which mkfs.lustre) 
     export TUNEFS=${TUNEFS:-"$LUSTRE/utils/tunefs.lustre"}
     [ ! -f "$TUNEFS" ] && export TUNEFS=$(which tunefs.lustre) 
     export CHECKSTAT="${CHECKSTAT:-checkstat} "
