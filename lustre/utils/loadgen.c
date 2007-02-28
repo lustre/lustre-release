@@ -80,6 +80,7 @@ static int loadgen_verbose(int argc, char **argv);
 static int loadgen_target(int argc, char **argv);
 static int loadgen_start_echosrv(int argc, char **argv);
 static int loadgen_start_clients(int argc, char **argv);
+static int loadgen_wait(int argc, char **argv);
 static int loadgen_write(int argc, char **argv);
 
 command_t cmdlist[] = {
@@ -93,6 +94,8 @@ command_t cmdlist[] = {
          "usage: start_clients <num>"},
         {"verbose", loadgen_verbose, 0, "set verbosity level 0-5\n"
          "usage: verbose <level>"},
+        {"wait", loadgen_wait, 0,
+         "wait for all threads to finish\n"},
         {"write", loadgen_write, 0,
          "start a test_brw write test on X clients for Y iterations\n"
          "usage: write <num_clients> <num_iter> [<delay>]"},
@@ -113,7 +116,7 @@ command_t cmdlist[] = {
 
 struct command_t {
         int           c_flags;
-        int           c_count;
+        int           c_rpt;
         int           c_delay;
 };
 
@@ -147,20 +150,26 @@ static struct kid_t *push_kid(int tnum)
 int trigger_count = 0;
 int waiting_count = 0;
 int timer_on = 0;
+int all_done = 1;
 struct timeval trigger_start;
-struct command_t *trigger_cmd = NULL;
+struct command_t trigger_cmd;
 pthread_mutex_t m_trigger = PTHREAD_MUTEX_INITIALIZER;
 pthread_cond_t cv_trigger = PTHREAD_COND_INITIALIZER;
 
 unsigned long long write_bytes;
 pthread_mutex_t m_count = PTHREAD_MUTEX_INITIALIZER;
 
-static void trigger(struct command_t *cmd, int count)
+static void trigger(int command, int threads, int repeat, int delay)
 {
 
         pthread_mutex_lock(&m_trigger);
-        trigger_cmd = cmd;
-        trigger_count = count;
+        trigger_cmd.c_flags = command;
+        trigger_cmd.c_rpt = repeat;
+        trigger_cmd.c_delay = delay;
+        trigger_count = threads;
+        if (o_verbose > 4)
+                printf("trigger %d cmd c=%d f=%x\n", trigger_count,
+                       trigger_cmd.c_rpt, trigger_cmd.c_flags);
         gettimeofday(&trigger_start, NULL);
         timer_on = 1;
         pthread_mutex_lock(&m_count);
@@ -178,12 +187,10 @@ static __inline__ void stop_all(int unused)
 
 static void kill_kids(void)
 {
-        struct command_t cmd;
         struct kid_t *tmp = kid_list;
 
         stop_all(SIGINT);
-        cmd.c_flags = C_STOP;
-        trigger(&cmd, 0);
+        trigger(C_STOP, 0, 0, 0);
         while(tmp) {
                 pthread_kill(tmp->k_pthread, SIGTERM);
                 tmp = tmp->k_next;
@@ -487,7 +494,7 @@ static int obj_delete(struct kid_t *kid)
         int rc;
 
         if (o_verbose > 4)
-                printf("%d: del "LPU64"\n", kid->k_id, kid->k_objid);
+                printf("%d: del "LPX64"\n", kid->k_id, kid->k_objid);
 
         memset(&data, 0, sizeof(data));
         data.ioc_dev = kid->k_dev;
@@ -497,7 +504,7 @@ static int obj_delete(struct kid_t *kid)
 
         rc = obj_ioctl(OBD_IOC_DESTROY, &data, 1);
         if (rc)
-                fprintf(stderr, "%s-%d: can't destroy obj "LPU64" (%d)\n",
+                fprintf(stderr, "%s-%d: can't destroy obj "LPX64" (%d)\n",
                         cmdname, kid->k_id, kid->k_objid, rc);
 
         kid->k_objid = 0;
@@ -586,7 +593,7 @@ static int do_work(struct kid_t *kid)
         if (!(kid->k_cmd.c_flags & C_CREATE_EVERY))
                 rc = obj_create(kid);
 
-        for (iter = 0; iter < kid->k_cmd.c_count; iter++) {
+        for (iter = 0; iter < kid->k_cmd.c_rpt; iter++) {
                 if (rc || sig_received)
                         break;
 
@@ -637,7 +644,6 @@ static void report_perf()
                        (write_bytes >> 20) / diff);
                 pthread_mutex_unlock(&m_count);
         }
-        timer_on = 0;
 }
 
 static void *run_one_child(void *threadvp)
@@ -669,11 +675,14 @@ static void *run_one_child(void *threadvp)
         while(!(rc || sig_received)) {
                 pthread_mutex_lock(&m_trigger);
                 waiting_count++;
-                if ((waiting_count == live_threads) && timer_on)
+                if ((waiting_count == live_threads) && timer_on) {
                         report_perf();
-
+                        timer_on = 0;
+                        all_done = 1;
+                }
                 pthread_cond_wait(&cv_trigger, &m_trigger);
                 waiting_count--;
+                all_done = 0;
 
                 /* First trigger_count threads will do the work, the rest
                    will block again */
@@ -681,9 +690,9 @@ static void *run_one_child(void *threadvp)
                         if (o_verbose > 4)
                                 printf("%d: trigger %d cmd %x\n",
                                        kid->k_id, trigger_count,
-                                       trigger_cmd->c_flags);
+                                       trigger_cmd.c_flags);
                         trigger_count--;
-                        kid->k_cmd = *trigger_cmd;
+                        memcpy(&kid->k_cmd, &trigger_cmd, sizeof(trigger_cmd));
                         pthread_mutex_unlock(&m_trigger);
                         rc = do_work(kid);
                 } else {
@@ -831,7 +840,6 @@ static int loadgen_verbose(int argc, char **argv)
 
 static int loadgen_write(int argc, char **argv)
 {
-        struct command_t cmd;
         int threads;
 
         if (argc < 3 || argc > 4)
@@ -843,11 +851,8 @@ static int loadgen_write(int argc, char **argv)
                         threads, live_threads);
                 return -EOVERFLOW;
         }
-        cmd.c_flags = C_WRITE;
-        cmd.c_count = atoi(argv[2]);
-        if (argc == 4)
-                cmd.c_delay = atoi(argv[3]);
-        trigger(&cmd, threads);
+        trigger(C_WRITE, threads, atoi(argv[2]), 
+                (argc == 4) ? atoi(argv[3]) : 0);
         return 0;
 }
 
@@ -930,6 +935,16 @@ clean:
         pthread_mutex_unlock(&m_config);
         loadgen_stop_echosrv(9, argv);
         return rc;
+}
+
+static int loadgen_wait(int argc, char **argv)
+{
+        /* Give scripts a chance to start some threads */   
+        sleep(1);
+        while (!all_done) {
+                sleep(1);
+        }
+        return 0;
 }
 
 static int loadgen_init(int argc, char **argv)
