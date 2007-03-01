@@ -1182,7 +1182,7 @@ static int fsfilt_ext3_write_record(struct file *file, void *buf, int bufsize,
         loff_t new_size = inode->i_size;
         journal_t *journal;
         handle_t *handle;
-        int err, block_count = 0, blocksize, size, boffs;
+        int err = 0, block_count = 0, blocksize, size, boffs;
 
         /* Determine how many transaction credits are needed */
         blocksize = 1 << inode->i_blkbits;

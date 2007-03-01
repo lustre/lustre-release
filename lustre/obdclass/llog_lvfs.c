@@ -89,9 +89,12 @@ static int llog_lvfs_write_blob(struct obd_device *obd, struct l_file *file,
         struct llog_rec_tail end;
         loff_t saved_off = file->f_pos;
         int buflen = rec->lrh_len;
-
         ENTRY;
+
         file->f_pos = off;
+
+        if (buflen == 0) 
+                CWARN("0-length record\n");
 
         if (!buf) {
                 rc = fsfilt_write_record(obd, file, rec, buflen,&file->f_pos,0);
