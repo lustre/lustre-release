@@ -256,7 +256,7 @@ static int ptlrpcd_start(char *name, struct ptlrpcd_ctl *pc)
                 liblustre_register_wait_callback("ptlrpcd_check_async_rpcs",
                                                  &ptlrpcd_check_async_rpcs, pc);
         pc->pc_idle_callback =
-                liblustre_register_wait_callback("ptlrpcd_check_idle_rpcs",
+                liblustre_register_idle_callback("ptlrpcd_check_idle_rpcs",
                                                  &ptlrpcd_idle, pc);
         (void)rc;
 #endif
@@ -272,7 +272,7 @@ static void ptlrpcd_stop(struct ptlrpcd_ctl *pc)
         wait_for_completion(&pc->pc_finishing);
 #else
         liblustre_deregister_wait_callback(pc->pc_wait_callback);
-        liblustre_deregister_wait_callback(pc->pc_idle_callback);
+        liblustre_deregister_idle_callback(pc->pc_idle_callback);
 #endif
         ptlrpc_set_destroy(pc->pc_set);
 }
