@@ -448,6 +448,23 @@ LB_LINUX_TRY_COMPILE([
 ])
 ])
 
+#
+# LC_READLINK_SSIZE_T
+#
+AC_DEFUN([LC_READLINK_SSIZE_T],
+[AC_MSG_CHECKING([if readlink returns ssize_t])
+AC_TRY_COMPILE([
+	#include <unistd.h>
+],[
+	ssize_t readlink(const char *, char *, size_t);
+],[
+	AC_MSG_RESULT([yes])
+	AC_DEFINE(HAVE_POSIX_1003_READLINK, 1, [readlink returns ssize_t])
+],[
+	AC_MSG_RESULT([no])
+])
+])
+
 AC_DEFUN([LC_FUNC_PAGE_MAPPED],
 [AC_MSG_CHECKING([if kernel offers page_mapped])
 LB_LINUX_TRY_COMPILE([
@@ -1193,6 +1210,9 @@ AC_CHECK_HEADERS([linux/types.h sys/types.h linux/unistd.h unistd.h])
 # liblustre/lutil.c
 AC_CHECK_HEADERS([netinet/in.h arpa/inet.h catamount/data.h])
 AC_CHECK_FUNCS([inet_ntoa])
+
+# libsysio/src/readlink.c
+LC_READLINK_SSIZE_T
 
 # utils/llverfs.c
 AC_CHECK_HEADERS([ext2fs/ext2fs.h])
