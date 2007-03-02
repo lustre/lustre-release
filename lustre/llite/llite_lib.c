@@ -1942,9 +1942,12 @@ int ll_obd_statfs(struct inode *inode, void *arg)
                 lov_obd = class_exp2obd(sbi->ll_osc_exp);
                 lov = &lov_obd->u.lov;
 
-                if ((index >= lov->desc.ld_tgt_count) ||
-                    !lov->lov_tgts[index])
+                if (index >= lov->desc.ld_tgt_count)
                         GOTO(out_statfs, rc = -ENODEV);
+                
+                if (!lov->lov_tgts[index])
+                        /* Try again with the next index */
+                        GOTO(out_statfs, rc = -EAGAIN);
 
                 client_obd = class_exp2obd(lov->lov_tgts[index]->ltd_exp);
                 if (!lov->lov_tgts[index]->ltd_active)

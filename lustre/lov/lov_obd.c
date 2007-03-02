@@ -92,7 +92,7 @@ static int lov_connect_obd(struct obd_device *obd, __u32 index, int activate,
                            struct obd_connect_data *data)
 {
         struct lov_obd *lov = &obd->u.lov;
-        struct obd_uuid tgt_uuid = lov->lov_tgts[index]->ltd_uuid;
+        struct obd_uuid tgt_uuid;
         struct obd_device *tgt_obd;
         struct obd_uuid lov_osc_uuid = { "LOV_OSC_UUID" };
         struct lustre_handle conn = {0, };
@@ -106,6 +106,7 @@ static int lov_connect_obd(struct obd_device *obd, __u32 index, int activate,
         if (!lov->lov_tgts[index])
                 RETURN(-EINVAL);
 
+        tgt_uuid = lov->lov_tgts[index]->ltd_uuid;
         tgt_obd = class_find_client_obd(&tgt_uuid, LUSTRE_OSC_NAME,
                                         &obd->obd_uuid);
 

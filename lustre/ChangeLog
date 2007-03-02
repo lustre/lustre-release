@@ -246,7 +246,13 @@ Description: The wrong (new) MDC name was used when setting parameters for
 	     upgraded MDT's.  Also allows changing of OSC (and MDC)
 	     parameters if --writeconf is specified at tunefs upgrade time.
 
-
+Severity   : major
+Frequency  : when setting specific ost indicies
+Bugzilla   : 11149
+Description: QOS code breaks on skipped indicies
+Details    : Add checks for missing OST indicies in the QOS code, so OSTs
+	     created with --index need not be sequential.
+	
 ------------------------------------------------------------------------------
 
 TBD         Cluster File Systems, Inc. <info@clusterfs.com>

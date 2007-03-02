@@ -116,6 +116,9 @@ int qos_del_tgt(struct obd_device *obd, __u32 index)
         int rc = 0;
         ENTRY;
 
+        if (!lov->lov_tgts[index])
+                RETURN(0);
+
         down_write(&lov->lov_qos.lq_rw_sem);
 
         oss = lov->lov_tgts[index]->ltd_qos.ltq_oss;
@@ -200,7 +203,8 @@ static int qos_calc_ppo(struct obd_device *obd)
                    we have to double the OST penalty */
                 num_active = 1;
                 for (i = 0; i < lov->desc.ld_tgt_count; i++)
-                        lov->lov_tgts[i]->ltd_qos.ltq_penalty_per_obj <<= 1;
+                        if (lov->lov_tgts[i]) 
+                            lov->lov_tgts[i]->ltd_qos.ltq_penalty_per_obj <<= 1;
         }
 
         /* Per-OSS penalty is prio * oss_avail / oss_osts / (num_oss - 1) / 2 */
@@ -320,7 +324,7 @@ static int qos_used(struct lov_obd *lov, __u32 index, __u64 *total_wt)
 static int qos_calc_rr(struct lov_obd *lov)
 {
         struct lov_qos_oss *oss;
-        unsigned ost_count, placed;
+        unsigned ost_count, placed, real_count;
         int i;
         ENTRY;
 
@@ -343,15 +347,20 @@ static int qos_calc_rr(struct lov_obd *lov)
                 RETURN(-ENOMEM);
         }
 
-        for (i = 0; i < ost_count; i++)
+        real_count = 0;
+        for (i = 0; i < ost_count; i++) {
                 lov->lov_qos.lq_rr_array[i] = LOV_QOS_EMPTY;
+                if (lov->lov_tgts[i])
+                        real_count++;
+        }
 
         /* Place all the OSTs from 1 OSS at the same time. */
         placed = 0;
         list_for_each_entry(oss, &lov->lov_qos.lq_oss_list, lqo_oss_list) {
                 int j = 0;
                 for (i = 0; i < ost_count; i++) {
-                      if (lov->lov_tgts[i]->ltd_qos.ltq_oss == oss) {
+                        if (lov->lov_tgts[i] &&
+                            (lov->lov_tgts[i]->ltd_qos.ltq_oss == oss)) {
                               /* Evenly space these OSTs across arrayspace */
                               int next = j * ost_count / oss->lqo_ost_count;
                               while (lov->lov_qos.lq_rr_array[next] !=
@@ -368,10 +377,10 @@ static int qos_calc_rr(struct lov_obd *lov)
         lov->lov_qos.lq_dirty_rr = 0;
         up_write(&lov->lov_qos.lq_rw_sem);
 
-        if (placed != ost_count) {
+        if (placed != real_count) {
                 /* This should never happen */
                 LCONSOLE_ERROR("Failed to place all OSTs in the round-robin "
-                               "list (%d of %d).\n", placed, ost_count);
+                               "list (%d of %d).\n", placed, real_count);
                 for (i = 0; i < ost_count; i++) {
                         LCONSOLE(D_WARNING, "rr #%d ost idx=%d\n", i,
                                  lov->lov_qos.lq_rr_array[i]);
@@ -379,10 +388,10 @@ static int qos_calc_rr(struct lov_obd *lov)
                 lov->lov_qos.lq_dirty_rr = 1;
                 RETURN(-EAGAIN);
         }
-        
+
 #ifdef QOS_DEBUG
         for (i = 0; i < ost_count; i++) {
-                LCONSOLE(D_QOS, "rr #%d ost idx=%d\n", i, 
+                LCONSOLE(D_QOS, "rr #%d ost idx=%d\n", i,
                          lov->lov_qos.lq_rr_array[i]);
         }
 #endif
@@ -513,11 +522,11 @@ static int alloc_rr(struct lov_obd *lov, int *idx_arr, int *stripe_cnt)
 #ifdef QOS_DEBUG
                 CDEBUG(D_QOS, "#%d strt %d act %d strp %d ary %d idx %d\n",
                        i, lov->lov_start_idx,
-                       lov->lov_tgts[ost_idx] ?
+                       ((ost_idx != LOV_QOS_EMPTY) && lov->lov_tgts[ost_idx]) ?
                        lov->lov_tgts[ost_idx]->ltd_active : 0,
                        idx_pos - idx_arr, array_idx, ost_idx);
 #endif
-                if (!lov->lov_tgts[ost_idx] ||
+                if ((ost_idx == LOV_QOS_EMPTY) || !lov->lov_tgts[ost_idx] || 
                     !lov->lov_tgts[ost_idx]->ltd_active)
                         continue;
                 *idx_pos = ost_idx;
@@ -672,7 +681,8 @@ static int alloc_qos(struct obd_export *exp, int *idx_arr, int *stripe_cnt)
                 /* On average, this will hit larger-weighted osts more often.
                    0-weight osts will always get used last (only when rand=0).*/
                 for (i = 0; i < ost_count; i++) {
-                        if (!lov->lov_tgts[i]->ltd_qos.ltq_usable)
+                        if (!lov->lov_tgts[i] ||
+                            !lov->lov_tgts[i]->ltd_qos.ltq_usable)
                                 continue;
                         cur_weight += lov->lov_tgts[i]->ltd_qos.ltq_weight;
                         if (cur_weight >= rand) {
@@ -722,7 +732,7 @@ static int alloc_idx_array(struct obd_export *exp, struct lov_stripe_md *lsm,
                 tmp_arr[i] = -1;
 
         if (newea ||
-            lsm->lsm_oinfo[0]->loi_ost_idx >= lov->desc.ld_tgt_count) 
+            lsm->lsm_oinfo[0]->loi_ost_idx >= lov->desc.ld_tgt_count)
                 rc = alloc_qos(exp, tmp_arr, &stripe_cnt);
         else
                 rc = alloc_specific(lov, lsm, tmp_arr);
@@ -806,9 +816,10 @@ int qos_prep_create(struct obd_export *exp, struct lov_request_set *set)
         }
 
         stripes = alloc_idx_array(exp, lsm, newea, &idx_arr, &idx_cnt);
-        LASSERT(stripes <= lsm->lsm_stripe_count);
         if (stripes <= 0)
                 GOTO(out_err, rc = stripes ? stripes : -EIO);
+        LASSERTF(stripes <= lsm->lsm_stripe_count,"requested %d allocated %d\n",
+                 lsm->lsm_stripe_count, stripes);
 
         for (i = 0; i < stripes; i++) {
                 struct lov_request *req;

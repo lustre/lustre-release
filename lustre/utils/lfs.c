@@ -671,6 +671,9 @@ static int mntdf(char *mntdir, int ishow, int cooked)
                 if (rc == -ENODEV)
                         break;
 
+                if (rc == -EAGAIN)
+                        continue;
+
                 if (rc == -ENOTCONN || rc == -ETIMEDOUT || rc == -EIO ||
                     rc == -ENODATA || rc == 0) {
                         showdf(mntdir, &stat_buf, uuid_buf.uuid, ishow, cooked,
@@ -694,6 +697,9 @@ static int mntdf(char *mntdir, int ishow, int cooked)
                                       &stat_buf, &uuid_buf);
                 if (rc == -ENODEV)
                         break;
+
+                if (rc == -EAGAIN)
+                        continue;
 
                 if (rc == -ENOTCONN || rc == -ETIMEDOUT || rc == -EIO ||
                     rc == -ENODATA || rc == 0) {
