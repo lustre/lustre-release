@@ -43,7 +43,7 @@ Force a particular OST or MDT index
 Set permanent mount options, equivalent to setting in /etc/fstab
 .TP
 .BI \--mgs
-add a configuration management service to this target
+Add a configuration management service to this target
 .TP
 .BI \--mgsnode= nid,...  
 Set the NID(s) of the MGS node, required for all targets other than the MGS.
@@ -52,7 +52,7 @@ Set the NID(s) of the MGS node, required for all targets other than the MGS.
 Only print what would be done; does not affect the disk
 .TP
 .BI \--nomgs
-remove a configuration management service to this target
+Remove a configuration management service to this target
 .TP
 .BI \--quiet
 Print less information.
@@ -61,22 +61,28 @@ Print less information.
 Print more information.
 .TP
 .BI \--writeconf
-Erase all config logs for the filesystem that this target is part of.  This
-is very dangerous.
+Erase all config logs for the filesystem that this MDT is part of, and
+regenerate them.  This is very dangerous.  All clients and servers should
+be stopped.
+All targets must then be restarted to regenerate the logs.  
+No clients should be started until all targets have restarted.
+In general this should be executed on the MDT only, not the OSTs.
 
 .SH EXAMPLES
 .TP
-.B tunefs.lustre --fsname=testfs --mdt --mgs /dev/sda1
-Combined MGS and MDT for filesystem 'testfs' on node e.g. cfs21
+.B tunefs.lustre --erase-param --mgsnode=<new_nid> --writeconf /dev/sda
+Change the MGS NID address. (This should be done on every target disk,
+since they should all be contacting the same MGS.)
 .TP
-.B tunefs.lustre --fsname=testfs --ost --mgsnode=cfs21@tcp0 /dev/sdb
-OST for filesystem 'testfs' on any node using the above MGS.
+.B tunefs.lustre --param="failover.node=192.168.0.13@tcp0" /dev/sda
+Add a failover NID location for this target
 .TP
-.B tunefs.lustre --mgs /dev/sda1
-Standalone MGS on e.g. node cfs22
+.B tunefs.lustre --mgs --mdt --fsname=testfs /dev/sda
+Upgrade an old 1.4.X Lustre MDT to 1.6. The new filesystem name is "testfs". 
 .TP
-.B tunefs.lustre --fsname=myfs1 --mdt --mgsnode=cfs22@tcp0 /dev/sda2
-MDT for filesystem 'myfs1' on any node, using the above MGS
+.B tunefs.lustre --writeconf --mgs --mdt --fsname=testfs /dev/sda1
+Upgrade an old 1.4.X Lustre MDT to 1.6, and start with brand-new 1.6
+configuration logs. All old servers and clients must be stopped.
 
 .SH BUGS
 Please report all bugs to ClusterFileSystems, support@clusterfs.com
