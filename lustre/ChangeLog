@@ -329,7 +329,7 @@ Details    : Add EXT3_FEATURE_RO_COMPAT_DIR_NLINK flag to
 
 ------------------------------------------------------------------------------
 
-TBD         Cluster File Systems, Inc. <info@clusterfs.com>
+2006-02-09  Cluster File Systems, Inc. <info@clusterfs.com>
        * version 1.4.9
        * Support for kernels:
         2.6.9-42.0.3EL (RHEL 4)
