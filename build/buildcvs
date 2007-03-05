@@ -109,6 +109,12 @@ case "$lustretag" in
         portalstag="b_ptlrpc_cleanup"
         ;;
 
+    b_self_test)
+        # lnet self test development branch
+	lnettag="b_self_test"
+	lustretag="HEAD"
+	;;
+
     # before 1_4_6, we didn't have lnet or snmp
     b_release_1_2_*|b_release_1_4_[0-5])
         portalstag="$lustretag"
