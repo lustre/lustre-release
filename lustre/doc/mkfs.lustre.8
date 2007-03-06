@@ -43,6 +43,9 @@ Set user comment about this disk, ignored by Lustre.
 .BI \--device-size= KB
 Set device size for loop devices
 .TP
+.BI \--dryrun
+Only print what would be done; does not affect the disk
+.TP
 .BI \--failnode= nid,...  
 Set the NID(s) of a failover partner. This option can be repeated as desired.
 .TP
@@ -60,9 +63,6 @@ Set permanent mount options, equivalent to setting in /etc/fstab
 .TP
 .BI \--mgsnode= nid,...  
 Set the NID(s) of the MGS node, required for all targets other than the MGS.
-.TP
-.BI \--noformat 
-Only print what would be done; does not affect the disk
 .TP
 .BI \--param " key=value"
 Set permanent parameter 

@@ -110,7 +110,7 @@ void usage(FILE *out)
                 "\t\t--nomgs: turn off MGS service on this MDT\n"
                 "\t\t--writeconf: erase all config logs for this fs.\n"
 #endif
-                "\t\t--noformat: just report what we would do; "
+                "\t\t--dryrun: just report what we would do; "
                 "don't write to disk\n"
                 "\t\t--verbose : e.g. show mkfs progress\n"
                 "\t\t--quiet\n",
@@ -970,6 +970,7 @@ int parse_opts(int argc, char *const argv[], struct mkfs_opts *mop,
                 {"comment", 1, 0, 'u'},
                 {"configdev", 1, 0, 'C'},
                 {"device-size", 1, 0, 'd'},
+                {"dryrun", 0, 0, 'n'},
                 {"erase-params", 0, 0, 'e'},
                 {"failnode", 1, 0, 'f'},
                 {"failover", 1, 0, 'f'},

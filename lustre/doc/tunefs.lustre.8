@@ -27,6 +27,9 @@ mounted.
 .BI \--comment= comment
 Set user comment about this disk, ignored by Lustre.
 .TP
+.BI \--dryrun
+Only print what would be done; does not affect the disk
+.TP
 .BI \--erase-params
 Remove all previous parameter info
 .TP
@@ -47,9 +50,6 @@ Add a configuration management service to this target
 .TP
 .BI \--mgsnode= nid,...  
 Set the NID(s) of the MGS node, required for all targets other than the MGS.
-.TP
-.BI \--noformat 
-Only print what would be done; does not affect the disk
 .TP
 .BI \--nomgs
 Remove a configuration management service to this target
