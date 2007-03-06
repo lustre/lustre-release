@@ -8,7 +8,7 @@ tbd         Cluster File Systems, Inc. <info@clusterfs.com>
 	 this release.  See https://mail.clusterfs.com/wikis/lustre/MountConf
 	 for details.
        * Support for kernels:
-        2.6.9-42.0.3EL (RHEL 4)
+        2.6.9-42.0.8EL (RHEL 4)
         2.6.5-7.276 (SLES 9)
         2.4.21-47.0.1.EL (RHEL 3)
         2.6.12.6 vanilla (kernel.org)
@@ -16,7 +16,7 @@ tbd         Cluster File Systems, Inc. <info@clusterfs.com>
        * Client support for unpatched kernels:
         (see https://mail.clusterfs.com/wikis/lustre/PatchlessClient)
         2.6.16 - 2.6.19 vanilla (kernel.org)
-        2.6.9-42.0.3EL (RHEL 4)
+        2.6.9-42.0.8EL (RHEL 4)
        * Recommended e2fsprogs version: 1.39.cfs2-0
        * bug fixes
 
