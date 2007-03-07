@@ -6,7 +6,8 @@ AM_LDFLAGS := -L$(top_builddir)/lnet/utils
 
 LIBPTLCTL := $(top_builddir)/lnet/utils/libptlctl.a
 
-sbin_scripts = llstat.pl llobdstat.pl lrun 
+sbin_scripts = lrun 
+bin_scripts = llstat.pl llobdstat.pl plot-llstat.pl
 
 if UTILS
 noinst_PROGRAMS = wirecheck wiretest obdio obdbarrier
@@ -18,6 +19,7 @@ if LIBPTHREAD
 sbin_PROGRAMS += loadgen
 endif
 bin_PROGRAMS = lfs
+bin_SCRIPTS = $(bin_scripts)
 sbin_SCRIPTS = $(sbin_scripts)
 endif # UTILS
 
@@ -83,7 +85,7 @@ tunefs_lustre_CPPFLAGS = -DTUNEFS $(AM_CPPFLAGS)
 tunefs_lustre_LDADD := $(mkfs_lustre_LDADD)
 tunefs_lustre_DEPENDENCIES := $(mkfs_lustre_DEPENDENCIES)
 
-EXTRA_DIST = $(sbin_scripts)
+EXTRA_DIST = $(sbin_scripts) $(bin_scripts)
 
 # NOTE: this should only be run on i386.
 newwiretest: wirehdr.c wirecheck

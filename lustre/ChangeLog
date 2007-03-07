@@ -81,9 +81,9 @@ Details    : Changes the blocksize for regular files to be 2x RPC size,
 Severity   : enhancement
 Bugzilla   : 9293
 Description: Multiple MD RPCs in flight.
-Details    : Further unserialise some read-only MDS RPCs - learn about intents.
-	     To avoid overly-overloading MDS, introduce a limit on number of
-	     MDS RPCs in flight for a single client and add /proc controls
+Details    : Further unserialise some read-only MDT RPCs - learn about intents.
+	     To avoid overly-overloading MDT, introduce a limit on number of
+	     MDT RPCs in flight for a single client and add /proc controls
 	     to adjust this limit.
 
 Severity   : enhancement
@@ -104,8 +104,8 @@ Details    : Add ldlm and operations statistics for each client in
 	
 Severity   : enhancement
 Bugzilla   : 22486
-Description: mds statistics
-Details    : Add detailed mds operations statistics in
+Description: improved MDT statistics
+Details    : Add detailed MDT operations statistics in
 	     /proc/fs/lustre/mds/*/stats
 	
 Severity   : enhancement
@@ -113,7 +113,7 @@ Bugzilla   : 10968
 Description: VFS operations stats
 Details    : Add client VFS call stats, trackable by pid, ppid, or gid
 	     /proc/fs/lustre/llite/*/vfs_ops_stats
-	     /proc/fs/lustre/llite/*/track_[pid|ppid|gid]
+	     /proc/fs/lustre/llite/*/vfs_track_[pid|ppid|gid]
 
 Severity   : minor
 Frequency  : always
