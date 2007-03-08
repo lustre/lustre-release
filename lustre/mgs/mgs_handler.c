@@ -431,7 +431,8 @@ static int mgs_handle_target_reg(struct ptlrpc_request *req)
                 }
 
                 mti->mti_flags &= ~(LDD_F_VIRGIN | LDD_F_UPDATE | 
-                                    LDD_F_NEED_INDEX | LDD_F_WRITECONF);
+                                    LDD_F_NEED_INDEX | LDD_F_WRITECONF |
+                                    LDD_F_UPGRADE14);
                 mti->mti_flags |= LDD_F_REWRITE_LDD;
         }
 
