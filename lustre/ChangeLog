@@ -153,24 +153,24 @@ Details    : The new msg_v2 system had some failures in mixed-endian
 Severity   : enhancement
 Bugzilla   : 11229
 Description: Easy OST removal
-Details	   : OSTs can be permanently deactivated with e.g. 'lctl
+Details    : OSTs can be permanently deactivated with e.g. 'lctl
 	     conf_param lustre-OST0001.osc.active=0'	
 
 Severity   : enhancement
 Bugzilla   : 11335
 Description: MGS proc entries
-Details	   : Added basic proc entries for the MGS showing what filesystems
+Details    : Added basic proc entries for the MGS showing what filesystems
 	     are served.
 
 Severity   : enhancement
 Bugzilla   : 10998
 Description: provide MGS failover
-Details	   : Added config lock reacquisition after MGS server failover. 
+Details    : Added config lock reacquisition after MGS server failover. 
 	
 Severity   : enhancement
 Bugzilla   : 11461
 Description: add Linux 2.4 support
-Details	   : Added support for RHEL 2.4.21 kernel for 1.6 servers and clients
+Details    : Added support for RHEL 2.4.21 kernel for 1.6 servers and clients
 
 Severity   : normal
 Bugzilla   : 11330
@@ -197,33 +197,6 @@ Description: plain/inodebits lock performance improvement
 Details    : Grouping plain/inodebits in granted list by their request modes
 	     and bits policy, thus improving the performance of search through
 	     the granted list.
-
-Severity   : major	     
-Frequency  : only if OST filesystem is corrupted
-Bugzilla   : 9829
-Description: client incorrectly hits assertion in ptlrpc_replay_req()
-Details    : for a short time RPCs with bulk IO are in the replay list,
-	     but replay of bulk IOs is unimplemented.  If the OST filesystem
-	     is corrupted due to disk cache incoherency and then replay is
-	     started it is possible to trip an assertion.  Avoid putting
-	     committed RPCs into the replay list at all to avoid this issue.
-
-Severity   : major
-Frequency  : liblustre (e.g. catamount) on a large cluster with >= 8 OSTs
-             per OSS
-Bugzilla   : 11684
-Description: System hang on startup
-Details    : This bug allowed the liblustre (e.g. catamount) client to
-             return to the app before handling all startup RPCs.  This
-	     could leave the node unresponsive to lustre network traffic
-	     and manifested as a server ptllnd timeout.
-
-Severity   : enhancement
-Bugzilla   : 11667
-Description: Add "/proc/sys/lustre/debug_peer_on_timeout"
-             (liblustre envirable: LIBLUSTRE_DEBUG_PEER_ON_TIMEOUT)
-	     boolean to control whether to print peer debug info when a
-	     client's RPC times out.
 
 Severity   : minor
 Frequency  : only for kernels with patches from Lustre below 1.4.3  
@@ -252,17 +225,44 @@ Bugzilla   : 11149
 Description: QOS code breaks on skipped indicies
 Details    : Add checks for missing OST indicies in the QOS code, so OSTs
 	     created with --index need not be sequential.
+
+Severity   : normal
+Frequency  : always
+Bugzilla   : 3244
+Description: Addition of EXT3_FEATURE_RO_COMPAT_DIR_NLINKS flag for
+	     > 32000 subdirectories
+Details    : Add EXT3_FEATURE_RO_COMPAT_DIR_NLINK flag to 
+	     EXT3_FEATURE_RO_COMPAT_SUPP. This flag will be set whenever
+	     subdirectory count crosses 32000. This will aid e2fsck to
+	     correctly handle more than 32000 subdirectories.
 	
 ------------------------------------------------------------------------------
 
 TBD         Cluster File Systems, Inc. <info@clusterfs.com>
        * version 1.4.10
        * Support for kernels:
-        2.6.9-42.0.3EL (RHEL 4)
+        2.6.16.21-0.8 (SLES10)
+        2.6.9-42.0.8EL (RHEL 4)
         2.6.5-7.276 (SLES 9)
         2.4.21-47.0.1.EL (RHEL 3)
         2.6.12.6 vanilla (kernel.org)
        * Recommended e2fsprogs version: 1.39.cfs2-0
+
+Severity   : major
+Frequency  : liblustre (e.g. catamount) on a large cluster with >= 8 OSTs/OSS
+Bugzilla   : 11684
+Description: System hang on startup
+Details    : This bug allowed the liblustre (e.g. catamount) client to
+	     return to the app before handling all startup RPCs.  This
+	     could leave the node unresponsive to lustre network traffic
+	     and manifested as a server ptllnd timeout.
+
+Severity   : enhancement
+Bugzilla   : 11667
+Description: Add "/proc/sys/lustre/debug_peer_on_timeout"
+	     (liblustre envirable: LIBLUSTRE_DEBUG_PEER_ON_TIMEOUT)
+	     boolean to control whether to print peer debug info when a
+	     client's RPC times out.
 
 Severity   : normal
 Frequency  : always
@@ -291,7 +291,7 @@ Frequency  : Only for files larger than 4GB on 32-bit clients.
 Bugzilla   : 11237
 Description: improperly doing page alignment of locks
 Details    : Modify lustre core code to use CFS_PAGE_* defines instead of 
-	     PAGE_*. Make CFS_PAGE_MASK 64bit long.
+	     PAGE_*. Make CFS_PAGE_MASK a 64-bit mask.
 
 Severity   : normal
 Frequency  : rarely
@@ -308,6 +308,16 @@ Description: Crash on NFS re-export node
 Details    : under very unusual load conditions an assertion is hit in
 	     ll_intent_file_open()
 
+Severity   : major	     
+Frequency  : only if OST filesystem is corrupted
+Bugzilla   : 9829
+Description: client incorrectly hits assertion in ptlrpc_replay_req()
+Details    : for a short time RPCs with bulk IO are in the replay list,
+	     but replay of bulk IOs is unimplemented.  If the OST filesystem
+	     is corrupted due to disk cache incoherency and then replay is
+	     started it is possible to trip an assertion.  Avoid putting
+	     committed RPCs into the replay list at all to avoid this issue.
+
 Severity   : normal
 Frequency  : always
 Bugzilla   : 10901
@@ -317,29 +327,30 @@ Details    : Large single O_DIRECT read and write calls can fail to allocate
 	     allocation failure the allocation is retried with a smaller
 	     buffer and broken into smaller requests.
 
-Severity   : normal
-Frequency  : always
-Bugzilla   : 3244
-Description: Addition of EXT3_FEATURE_RO_COMPAT_DIR_NLINKS flag for
-	     > 32000 subdirectories
-Details    : Add EXT3_FEATURE_RO_COMPAT_DIR_NLINK flag to 
-             EXT3_FEATURE_RO_COMPAT_SUPP. This flag will be set whenever
-             subdirectory count crosses 32000. This will aid e2fsck to
-             correctly handle more than 32000 subdirectories.
-
 ------------------------------------------------------------------------------
 
 2006-02-09  Cluster File Systems, Inc. <info@clusterfs.com>
        * version 1.4.9
        * Support for kernels:
+        2.6.16.21-0.8 (SLES10)
         2.6.9-42.0.3EL (RHEL 4)
         2.6.5-7.276 (SLES 9)
-        2.4.21-40.0.1.EL (RHEL 3)
+        2.4.21-47.0.1.EL (RHEL 3)
         2.6.12.6 vanilla (kernel.org)
        * bug fixes
 
+       * The backwards-compatible /proc/sys/portals symlink has been removed
+	 in this release.  Before upgrading, please ensure that you change
+	 any configuration scripts or /etc/sysctl.conf files that access
+	 /proc/sys/portals/* or sysctl portals.* to use the corresponding
+	 entry in /proc/sys/lnet or sysctl lnet.*.  This change can be made
+	 in advance of the upgrade on any system running Lustre 1.4.6 or
+	 newer, since /proc/sys/lnet was added in that version.
+       * Note that reiserfs quotas are temporarily disabled on SLES 10 in this
+	 kernel.
+
 Severity   : critical
-Frequency  : rare
+Frequency  : MDS failover only, very rarely
 Bugzilla   : 11125
 Description: "went back in time" messages on mds failover
 Details    : The greatest transno may be lost when the current operation
@@ -407,11 +418,10 @@ Frequency  : MDS failover only, very rarely
 Bugzilla   : 11277
 Description: clients may get ASSERTION(granted_lock != NULL)
 Details    : When request was taking a long time, and a client was resending
-	     a getattr by name lock request. The were multiple lock
-	     requests with the same client lock handle and
-	     mds_getattr_name->fixup_handle_for_resent_request found one
-	     of the lock handles but later failed with
-	     ASSERTION(granted_lock != NULL).
+	     a getattr by name lock request. The were multiple lock requests
+	     with the same client lock handle and
+	     mds_getattr_name->fixup_handle_for_resent_request found one of the
+	     lock handles but later failed with ASSERTION(granted_lock != NULL).
 
 Severity   : major
 Frequency  : rare
@@ -442,14 +452,15 @@ Frequency  : NFS re-export or patchless client
 Bugzilla   : 10796
 Description: Various nfs/patchless fixes.
 Details    : fixes reuse disconected alias for lookup process - this fixes
-	     warning "find_exported_dentry: npd != pd", fix permission
-	     error with open files at nfs.
+	     warning "find_exported_dentry: npd != pd",
+	     fix permission error with open files at nfs.
+	     fix apply umaks when do revalidate.
 
 Severity   : normal
 Frequency  : occasional
 Bugzilla   : 11191
 Description: Crash on NFS re-export node
-Details    : call clear_page on wrong pointer triggered oops in 
+Details    : calling clear_page() on the wrong pointer triggered oops in 
 	     generic_mapping_read().
 
 Severity   : normal
@@ -468,19 +479,19 @@ Details    : If only a small amount of IO is done to the RAID device before
 
 Severity   : major
 Frequency  : depends on arch, kernel and compiler version, always on sles10
-             kernel and x86_64
+	     kernel and x86_64
 Bugzilla   : 11562
 Description: recursive or deep enough symlinks cause stack overflow
 Details    : getting rid of large stack-allocated variable in
-             __vfs_follow_link
+	     __vfs_follow_link
 
 Severity   : minor
 Frequency  : depends on hardware
 Bugzilla   : 11540
 Description: lustre write performance loss in the SLES10 kernel
 Details    : the performance loss is caused by using of write barriers in the
-             ext3 code. The SLES10 kernel turns barrier support on by
-             default. The fix is to undo that change for ldiskfs.
+	     ext3 code. The SLES10 kernel turns barrier support on by
+	     default. The fix is to undo that change for ldiskfs.
 
 ------------------------------------------------------------------------------
 
@@ -508,6 +519,13 @@ Description: statfs data retrieved from /proc may be stale or zero
 Details    : When reading per-device statfs data from /proc, in the
 	     {kbytes,files}_{total,free,avail} files, it may appear
 	     as zero or be out of date.
+
+Severity   : minor
+Frequency  : systems with MD RAID1 external journal devices
+Bugzilla   : 10832
+Description: lconf's call to blkid is confused by RAID1 journal devices
+Details    : Use the "blkid -l" flag to locate the MD RAID device instead
+	     of returning all block devices that match the journal UUID.
 
 Severity   : normal
 Frequency  : always, for aggregate stripe size over 4GB
@@ -540,7 +558,6 @@ Details    : With filesystems mounted using the "extents" option (2.6 kernels)
 	     the truncated size.  No file data is lost.
 
 Severity   : enhancement
-Frequency  : liblustre only	
 Bugzilla   : 10452
 Description: Allow recovery/failover for liblustre clients.
 Details    : liblustre clients were unaware of failover configurations until
@@ -595,7 +612,7 @@ Details    : Re-validate root's dentry in ll_lookup_it to avoid having it
 	     invalid by the follow_mount time.
 
 Severity   : minor
-Frequency  : rare
+Frequency  : liblustre clients only
 Bugzilla   : 10883
 Description: Race in 'instant cancel' lock handling could lead to such locks
 	     never to be granted in case of SMP MDS
