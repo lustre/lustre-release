@@ -579,7 +579,7 @@ kiblnd_kvaddr_to_page (unsigned long vaddr)
         return page;
 }
 
-#if !IBNAL_MAP_ON_DEMAND
+#if !IBLND_MAP_ON_DEMAND
 int
 kiblnd_setup_rd_iov(lnet_ni_t *ni, kib_tx_t *tx, kib_rdma_desc_t *rd, 
                     unsigned int niov, struct iovec *iov, int offset, int nob)
