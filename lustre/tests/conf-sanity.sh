@@ -1079,13 +1079,18 @@ test_32a() {
 	$LCTL conf_param lustre-MDT0000.failover.node=$NID || return 10
 	echo "ok."
 
-	#With a new good MDT failover nid, we should be able to mount a client
-	#(but it cant talk to OST)
+	# With a new good MDT failover nid, we should be able to mount a client
+	# (but it cant talk to OST)
 	mount_client $MOUNT
 	set_and_check "cat $LPROC/mdc/*/max_rpcs_in_flight" "lustre-MDT0000.mdc.max_rpcs_in_flight" || return 11
 
 	zconf_umount `hostname` $MOUNT -f
 	cleanup_nocli
+
+        # mount a second time to make sure we didnt leave upgrade flag on
+        $TUNEFS --dryrun $TMP/$tdir/mds || error "tunefs failed"
+        start mds $TMP/$tdir/mds "-o loop" || return 12
+        cleanup_nocli
 
 	[ -d $TMP/$tdir ] && rm -rf $TMP/$tdir
 }
