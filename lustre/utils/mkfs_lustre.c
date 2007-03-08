@@ -1164,15 +1164,15 @@ int parse_opts(int argc, char *const argv[], struct mkfs_opts *mop,
                                 fatal();
                                 fprintf(stderr, "Unknown option '%c'\n", opt);
                         }
-                        usage(stderr);
-                        return 1;
+                        return EINVAL;
                 }
         }//while
-        if (optind >= argc) {
+
+        /* Last arg is device */
+        if (optind != argc - 1) {
                 fatal();
-                fprintf(stderr, "Bad arguments\n");
-                usage(stderr);
-                return 1;
+                fprintf(stderr, "Bad argument: %s\n", argv[optind]);
+                return EINVAL;
         }
 
         return 0;
