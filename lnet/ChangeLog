@@ -78,7 +78,7 @@ Details    : libcfs created a symlink from /proc/sys/portals to
 	     /proc/sys/lnet for backwards compatibility.  This is no
 	     longer required and makes the Cray portals /proc variables
 	     inaccessible.
-	     
+
 Severity   : minor
 Bugzilla   : 11312
 Description: OFED FMR API change
@@ -86,14 +86,14 @@ Details    : This changes parameter usage to reflect a change in
 	     ib_fmr_pool_map_phys() between OFED 1.0 and OFED 1.1.  Note
 	     that FMR support is only used in experimental versions of the
 	     o2iblnd - this change does not affect standard usage at all.
-	     
+
 Severity   : enhancement
 Bugzilla   : 11245
 Description: new ko2iblnd module parameter: ib_mtu
 Details    : the default IB MTU of 2048 performs badly on 23108 Tavor
 	     HCAs.  You can avoid this problem by setting the MTU to 1024
 	     using this module parameter.
-	     
+
 Severity   : enhancement
 Bugzilla   : 11118/11620
 Description: ptllnd small request message buffer alignment fix
@@ -104,7 +104,7 @@ Details    : Set the PTL_MD_LOCAL_ALIGN8 option on small message receives.
 	     running the correct protocol version which was fixed by always
 	     NAK-ing such requests and handling any misalignments they
 	     introduce.
-	     
+
 Severity   : minor
 Frequency  : rarely
 Description: When kib(nal|lnd)_del_peer() is called upon a peer whose
@@ -146,7 +146,7 @@ Details    : Set the kptllnd module parameter "ptltrace_on_timeout=1" to
 	     dump Cray portals debug traces to a file.  The kptllnd module
 	     parameter "ptltrace_basename", default "/tmp/lnet-ptltrace",
 	     is the basename of the dump file.
-	
+
 Severity   : major
 Frequency  : infrequent
 Bugzilla   : 11308
@@ -155,7 +155,7 @@ Details    : Kernel ptllnd could produce protocol errors e.g. illegal
 	     matchbits and/or violate the credit flow protocol when trying
 	     to re-establish a connection with a peer after an error or
 	     timeout. 
-	
+
 Severity   : enhancement
 Bugzilla   : 10316
 Description: Allow /proc/sys/lnet/debug to be set symbolically
@@ -169,6 +169,17 @@ Description: routes automatically marked down and recovered
 Details    : In configurations with LNET routers if a router fails routers
 	     now actively try to recover routes that are down, unless they
 	     are marked down by an administrator.
+
+------------------------------------------------------------------------------
+
+2006-12-09  Cluster File Systems, Inc. <info@clusterfs.com>
+
+Severity   : critical
+Frequency  : very rarely, in configurations with LNET routers and TCP
+Bugzilla   : 10889
+Description: incorrect data written to files on OSTs
+Details    : In certain high-load conditions incorrect data may be written
+	     to files on the OST when using TCP networks.
 
 ------------------------------------------------------------------------------
 
@@ -209,7 +220,7 @@ Details    : In configurations with LNET routers if a router fails routers
 	   between different network fabrics.  Lustre Networking Devices
 	   (LNDS) for the supported network fabrics have also been created
 	   for this new infrastructure.
-	
+
 2005-08-08  Cluster File Systems, Inc. <info@clusterfs.com>
        * version 1.4.4
        * bug fixes
