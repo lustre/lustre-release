@@ -686,7 +686,9 @@ finish:
 
                 if ((ocd->ocd_connect_flags & OBD_CONNECT_VERSION) &&
                     (ocd->ocd_version > LUSTRE_VERSION_CODE +
-                    LUSTRE_VERSION_OFFSET_WARN)) {
+                                        LUSTRE_VERSION_OFFSET_WARN ||
+                     ocd->ocd_version < LUSTRE_VERSION_CODE -
+                                        LUSTRE_VERSION_OFFSET_WARN)) {
                         /* Sigh, some compilers do not like #ifdef in the middle
                            of macro arguments */
 #ifdef __KERNEL__
@@ -695,13 +697,15 @@ finish:
                         const char *action = "recompiling this application";
 #endif
 
-                        CWARN("Server %s version (%d.%d.%d.%d) is much newer. "
+                        CWARN("Server %s version (%d.%d.%d.%d) is much %s. "
                               "Consider %s (%s).\n",
                               obd2cli_tgt(imp->imp_obd),
                               OBD_OCD_VERSION_MAJOR(ocd->ocd_version),
                               OBD_OCD_VERSION_MINOR(ocd->ocd_version),
                               OBD_OCD_VERSION_PATCH(ocd->ocd_version),
                               OBD_OCD_VERSION_FIX(ocd->ocd_version),
+                              ocd->ocd_version > LUSTRE_VERSION_CODE ?
+                              "newer" : "older",
                               action, LUSTRE_VERSION_STRING);
                 }
 
@@ -739,13 +743,15 @@ finish:
                               never see this from VFS context */
                                 CERROR("Server %s version (%d.%d.%d.%d) "
                                        "refused connection from this client "
-                                       "as too old version (%s).  Client must "
+                                       "as too %s version (%s).  Client must "
                                        "be recompiled\n",
                                       obd2cli_tgt(imp->imp_obd),
                                       OBD_OCD_VERSION_MAJOR(ocd->ocd_version),
                                       OBD_OCD_VERSION_MINOR(ocd->ocd_version),
                                       OBD_OCD_VERSION_PATCH(ocd->ocd_version),
                                       OBD_OCD_VERSION_FIX(ocd->ocd_version),
+                                      ocd->ocd_version > LUSTRE_VERSION_CODE ?
+                                      "old" : "new",
                                       LUSTRE_VERSION_STRING);
                                 ptlrpc_deactivate_import(imp);
                                 IMPORT_SET_STATE(imp, LUSTRE_IMP_CLOSED);

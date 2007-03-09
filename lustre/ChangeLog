@@ -235,7 +235,14 @@ Details    : Add EXT3_FEATURE_RO_COMPAT_DIR_NLINK flag to
 	     EXT3_FEATURE_RO_COMPAT_SUPP. This flag will be set whenever
 	     subdirectory count crosses 32000. This will aid e2fsck to
 	     correctly handle more than 32000 subdirectories.
-	
+	     
+Severity   : normal
+Frequency  : always
+Bugzilla   : 11090
+Description: versioning check is incomplete
+Details    : Checking the version difference of client vs. server, report
+             error if the gap is too big.
+
 ------------------------------------------------------------------------------
 
 TBD         Cluster File Systems, Inc. <info@clusterfs.com>

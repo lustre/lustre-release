@@ -631,9 +631,13 @@ int target_handle_connect(struct ptlrpc_request *req, svc_handler_t handler)
                                   "libclient connection attempt\n");
                         GOTO(out, rc = -EPROTO);
                 } else if (data->ocd_version < LUSTRE_VERSION_CODE -
+                                               LUSTRE_VERSION_ALLOWED_OFFSET ||
+                           data->ocd_version > LUSTRE_VERSION_CODE +
                                                LUSTRE_VERSION_ALLOWED_OFFSET) {
-                        DEBUG_REQ(D_WARNING, req, "Refusing old (%d.%d.%d.%d) "
+                        DEBUG_REQ(D_WARNING, req, "Refusing %s (%d.%d.%d.%d) "
                                   "libclient connection attempt\n",
+                                  data->ocd_version < LUSTRE_VERSION_CODE ?
+                                  "old" : "new",
                                   OBD_OCD_VERSION_MAJOR(data->ocd_version),
                                   OBD_OCD_VERSION_MINOR(data->ocd_version),
                                   OBD_OCD_VERSION_PATCH(data->ocd_version),
