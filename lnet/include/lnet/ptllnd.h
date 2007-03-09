@@ -38,9 +38,6 @@
 
 #else /* _USING_CRAY_PORTALS_ */
 
-/* Explicit NULL function pointer for EQ handler */
-#define PTL_EQ_HANDLER_NONE                     0
-
 /* NIDs are integers on Cray Portals */
 #define FMT_NID "%u"
 #define FMT_PID "%d"
