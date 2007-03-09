@@ -1011,28 +1011,44 @@ int jt_ptl_ping(int argc, char **argv)
         lnet_process_id_t        ids[16];
         int                      maxids = sizeof(ids)/sizeof(ids[0]);
         struct libcfs_ioctl_data data;
+        char                    *sep;
         int                      i;
 
         if (argc < 2) {
-                fprintf(stderr, "usage: %s nid [timeout (secs)] [pid]\n", argv[0]);
+                fprintf(stderr, "usage: %s id [timeout (secs)]\n", argv[0]);
                 return 0;
         }
 
-        id.nid = libcfs_str2nid(argv[1]);
-        if (id.nid == LNET_NID_ANY) {
-                fprintf (stderr, "Can't parse nid \"%s\"\n", argv[1]);
-                return -1;
+        sep = strchr(argv[1], '-');
+        if (sep == NULL) {
+                id.pid = LNET_PID_ANY;
+                id.nid = libcfs_str2nid(argv[1]);
+                if (id.nid == LNET_NID_ANY) {
+                        fprintf (stderr, "Can't parse nid \"%s\"\n", argv[1]);
+                        return -1;
+                }
+        } else {
+                char   *end;
+                
+                if (argv[1][0] == 'u' ||
+                    argv[1][0] == 'U')
+                        id.pid = strtoul(&argv[1][1], &end, 0) | LNET_PID_USERFLAG;
+                else
+                        id.pid = strtoul(argv[1], &end, 0);
+
+                id.nid = libcfs_str2nid(sep + 1);
+                
+                if (end != sep ||
+                    id.nid == LNET_NID_ANY) {
+                        fprintf(stderr, "Can't parse process id \"%s\"\n", argv[1]);
+                        return -1;
+                }
         }
 
         if (argc > 2)
                 timeout = 1000 * atol(argv[2]);
         else
                 timeout = 1000;                 /* default 1 second timeout */
-
-        if (argc > 3)
-                id.pid = atol(argv[3]);
-        else
-                id.pid = LNET_PID_ANY;
 
         LIBCFS_IOC_INIT (data);
         data.ioc_nid     = id.nid;
