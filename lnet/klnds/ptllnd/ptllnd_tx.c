@@ -455,11 +455,17 @@ kptllnd_tx_callback(ptl_event_t *ev)
                 break;
         }
 
-        if (!ok)
-                kptllnd_peer_close(peer, -EIO);
-        else
+        if (ok) {
                 kptllnd_peer_alive(peer);
-
+        } else {
+                CDEBUG(D_NETERROR, "%s: %s network error %d, t=%d\n",
+                       libcfs_id2str(peer->peer_id),
+                       ismsg ? "msg" : "bulk",
+                       ev->ni_fail_type, tx->tx_type);
+                tx->tx_status = -EIO;
+                kptllnd_peer_close(peer, -EIO);
+        }
+        
         if (!unlinked)
                 return;
 
