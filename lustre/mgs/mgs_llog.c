@@ -1303,9 +1303,10 @@ static int mgs_write_log_add_failnid(struct obd_device *obd, struct fs_db *fsdb,
         } else if (mti->mti_flags & LDD_F_SV_TYPE_OST) {
                 /* COMPAT_146 */
                 if (fsdb->fsdb_flags & FSDB_OLDLOG14) {
-                        LCONSOLE_ERROR("Failover NIDs cannot be added to old "
-                                       "clients for %s. Consider updating the "
-                                       "configuration with --writeconf.\n", 
+                        LCONSOLE_ERROR("Failover NIDs cannot be added to "
+                                       "upgraded client logs for %s. Consider "
+                                       "updating the configuration with "
+                                       "--writeconf.\n", 
                                        mti->mti_svname);
                         RETURN(-EINVAL);
                 }
@@ -1534,8 +1535,9 @@ active_err:
                         } else if (mti->mti_flags & LDD_F_SV_TYPE_OST) {
                                 /* COMPAT_146 */
                                 if (fsdb->fsdb_flags & FSDB_OLDLOG14) {
-                                      LCONSOLE_ERROR("Old clients for %s can't "
-                                           "be modified. Consider updating the "
+                                      LCONSOLE_ERROR("Upgraded client logs "
+                                           "for %s cannot be modified. "
+                                           "Consider updating the "
                                            "configuration with --writeconf\n",
                                            mti->mti_svname);
                                         /* We don't know the names of all the
