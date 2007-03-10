@@ -434,8 +434,8 @@ int ll_file_open(struct inode *inode, struct file *file)
                 och_usecount = &lli->lli_open_fd_read_count;
         }
 
-        LASSERTF(it->it_flags != 0, "f_it %p dist %d \n", file->f_it,
-                 file->f_it->d.lustre.it_disposition);
+        LASSERTF(it->it_flags != 0, "it %p dist %d \n", it,
+                 it->d.lustre.it_disposition);
 
         down(&lli->lli_och_sem);
         if (*och_p) { /* Open handle is present */
