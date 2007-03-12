@@ -9,7 +9,7 @@ tbd         Cluster File Systems, Inc. <info@clusterfs.com>
 	 for details.
        * Support for kernels:
         2.6.9-42.0.8EL (RHEL 4)
-        2.6.5-7.276 (SLES 9)
+        2.6.5-7.283 (SLES 9)
         2.4.21-47.0.1.EL (RHEL 3)
         2.6.12.6 vanilla (kernel.org)
         2.6.16.21-0.8 (SLES10)
