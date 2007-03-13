@@ -209,6 +209,9 @@ check_options()
         2.6-suse)
             CANONICAL_TARGET="sles-2.6"
             ;;
+        2.6-sles10)
+            CANONICAL_TARGET="sles10-2.6"
+            ;;
         hp_pnnl-2.4)
             CANONICAL_TARGET="hp-pnnl-2.4"
             ;;
