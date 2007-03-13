@@ -8,7 +8,7 @@ tbd         Cluster File Systems, Inc. <info@clusterfs.com>
 	 this release.  See https://mail.clusterfs.com/wikis/lustre/MountConf
 	 for details.
        * Support for kernels:
-        2.6.9-42.0.8EL (RHEL 4)
+        2.6.9-42.0.10.EL (RHEL 4)
         2.6.5-7.283 (SLES 9)
         2.4.21-47.0.1.EL (RHEL 3)
         2.6.12.6 vanilla (kernel.org)
