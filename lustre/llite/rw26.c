@@ -333,8 +333,13 @@ int ll_sync_page_range(struct inode *inode, struct address_space *mapping,
 
         wbc.sync_mode = WB_SYNC_ALL;
         wbc.nr_to_write = mapping->nrpages * 2;
+#ifdef HAVE_WB_RANGE_START
+        wbc.range_start = start;
+        wbc.range_end = end;
+#else
         wbc.start = start;
         wbc.end = end;
+#endif
         ret = generic_writepages(mapping, &wbc);
 
         if (ret == 0)

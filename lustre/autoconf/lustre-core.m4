@@ -1004,6 +1004,26 @@ LB_LINUX_TRY_COMPILE([
 ])
 ])
 
+# LC_WB_RANGE_START
+# 2.6.20 rename struct writeback fields
+AC_DEFUN([LC_WB_RANGE_START],
+[AC_MSG_CHECKING([kernel has range_start in struct writeback_control])
+LB_LINUX_TRY_COMPILE([
+        #include <linux/fs.h>
+        #include <linux/sched.h>
+        #include <linux/writeback.h>
+],[
+        struct writeback_control wb;
+
+        wb.range_start = 0;
+],[
+        AC_MSG_RESULT(yes)
+        AC_DEFINE(HAVE_WB_RANGE_START, 1,
+                  [writeback control has range_start field])
+],[
+        AC_MSG_RESULT(NO)
+])
+])
 
 #
 # LC_PROG_LINUX
@@ -1060,6 +1080,7 @@ LC_STATFS_DENTRY_PARAM
 LC_VFS_KERN_MOUNT
 LC_INVALIDATEPAGE_RETURN_INT
 LC_UMOUNTBEGIN_HAS_VFSMOUNT
+LC_WB_RANGE_START
 
 # 2.6.19
 LC_INODE_BLKSIZE
