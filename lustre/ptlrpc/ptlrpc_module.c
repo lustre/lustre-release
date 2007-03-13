@@ -63,7 +63,10 @@ __init int ptlrpc_init(void)
                 RETURN(rc);
         cleanup_phase = 1;
 
-        ptlrpc_init_connection();
+        rc = ptlrpc_init_connection();
+        if (rc)
+                RETURN(rc);
+
         rc = llog_init_commit_master();
         if (rc)
                 GOTO(cleanup, rc);
