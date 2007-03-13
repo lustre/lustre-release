@@ -12,7 +12,7 @@ tbd         Cluster File Systems, Inc. <info@clusterfs.com>
         2.6.5-7.283 (SLES 9)
         2.4.21-47.0.1.EL (RHEL 3)
         2.6.12.6 vanilla (kernel.org)
-        2.6.16.21-0.8 (SLES10)
+        2.6.16.27-0.9 (SLES10)
        * Client support for unpatched kernels:
         (see https://mail.clusterfs.com/wikis/lustre/PatchlessClient)
         2.6.16 - 2.6.19 vanilla (kernel.org)

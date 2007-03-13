@@ -1,5 +1,5 @@
 lnxmaj="2.6.16"
-lnxrel="21-0.8"
+lnxrel="27-0.9"
 
 KERNEL=linux-$lnxmaj.$lnxrel.tar.bz2
 SERIES=2.6-sles10.series
