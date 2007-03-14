@@ -54,18 +54,23 @@ case "$lustretag" in
 	exit 0
 	;;
 
+    # this is the branch table
+    # keep this list sorted alphabetically!
+
+    b1_4*) buildtag="b1_4" ;;
+
+    b_release_1_4_6-patchless) buildtag="b1_4" ;;
+    b_release_1_4_7-test) buildtag="b_release_1_4_7" ;;
+
+    b_release*) buildtag=$lustretag ;;
+
     # These releases did not get build tagged for them because they
     # this build system didn't exist when they were tagged
     v1_2_8|v1_4_0) 
         buildtag="b1_4"
         ;;
     
-    b1_4*) buildtag="b1_4" ;;
-
-    b_release_1_4_6-patchless) buildtag="b1_4" ;;
-    b_release_1_4_7-test) buildtag="b_release_1_4_7" ;;
-
-    v* | b_release*) buildtag=$lustretag ;;
+    v*) buildtag=$lustretag ;;
 
     # this is the branch table
     # keep this list sorted alphabetically!
@@ -73,7 +78,6 @@ case "$lustretag" in
     *)
         buildtag="HEAD"
 	;;
-
 esac
 
 error_modules=
