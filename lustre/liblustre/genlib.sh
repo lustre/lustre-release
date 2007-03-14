@@ -103,10 +103,9 @@ $RANLIB $CWD/liblustre.a
 rm -f $CWD/liblustre.so
 OS=`uname`
 if test x$OS = xAIX; then
-gcc -shared -o $CWD/liblustre.so  $ALL_OBJS -lpthread -Xlinker -bnoipath ../../libsyscall.so
+$LD -shared -o $CWD/liblustre.so $ALL_OBJS -lpthread -Xlinker -bnoipath ../../libsyscall.so
 else
-$LD -shared -o $CWD/liblustre.so -init __liblustre_setup_ -fini __liblustre_cleanup_ \
-	$ALL_OBJS $CAP_LIBS $PTHREAD_LIBS
+$LD -shared -o $CWD/liblustre.so $ALL_OBJS $CAP_LIBS $PTHREAD_LIBS
 fi
 
 rm -rf $sysio_tmp
