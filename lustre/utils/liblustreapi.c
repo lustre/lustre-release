@@ -99,25 +99,25 @@ int llapi_file_create(const char *name, unsigned long stripe_size,
                         "expected (%u).\n", page_size, LOV_MIN_STRIPE_SIZE);
         }
         if (stripe_size < 0 || (stripe_size & (LOV_MIN_STRIPE_SIZE - 1))) {
+                errno = rc = -EINVAL;
                 err_msg("error: bad stripe_size %lu, must be an even "
                         "multiple of %d bytes", stripe_size, page_size);
-                errno = rc = -EINVAL;
                 goto out;
         }
         if (stripe_offset < -1 || stripe_offset > MAX_OBD_DEVICES) {
-                err_msg("error: bad stripe offset %d", stripe_offset);
                 errno = rc = -EINVAL;
+                err_msg("error: bad stripe offset %d", stripe_offset);
                 goto out;
         }
         if (stripe_count < -1 || stripe_count > LOV_MAX_STRIPE_COUNT) {
-                err_msg("error: bad stripe count %d", stripe_count);
                 errno = rc = -EINVAL;
+                err_msg("error: bad stripe count %d", stripe_count);
                 goto out;
         }
         if (stripe_count > 0 && (__u64)stripe_size * stripe_count > 0xffffffff){
+                errno = rc = -EINVAL;
                 err_msg("error: stripe_size %lu * stripe_count %u "
                         "exceeds 4GB", stripe_size, stripe_count);
-                errno = rc = -EINVAL;
                 goto out;
         }
 
@@ -1131,12 +1131,17 @@ int llapi_catinfo(char *dir, char *keyword, char *node_name)
         return rc;
 }
 
-/* Is this a lustre client fs? */
-int llapi_is_lustre_mnttype(struct mntent *mnt)
+/* Is this a lustre fs? */
+int llapi_is_lustre_mnttype(const char *type)
 {
-        char *type = mnt->mnt_type;
-        return ((strcmp(type, "lustre") == 0 || strcmp(type,"lustre_lite") == 0)
-                && (strstr(mnt->mnt_fsname, ":/") != NULL));
+        return (strcmp(type, "lustre") == 0 || strcmp(type,"lustre_lite") == 0);
+}
+
+/* Is this a lustre client fs? */
+int llapi_is_lustre_mnt(struct mntent *mnt)
+{
+        return (llapi_is_lustre_mnttype(mnt->mnt_type) &&
+                strstr(mnt->mnt_fsname, ":/") != NULL);
 }
 
 int llapi_quotacheck(char *mnt, int check_type)
