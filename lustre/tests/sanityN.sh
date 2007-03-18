@@ -3,8 +3,8 @@
 set -e
 
 ONLY=${ONLY:-"$*"}
-# bug number for skipped test:  3192 4035 9977
-ALWAYS_EXCEPT=${ALWAYS_EXCEPT:-"14b  14c  28"}
+# bug number for skipped test:  3192 9977
+ALWAYS_EXCEPT=${ALWAYS_EXCEPT:-"14b  28"}
 # UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
 
 [ "$SLOW" = "no" ] && EXCEPT="$EXCEPT 16"
@@ -164,7 +164,7 @@ run_test() {
 [ "$SANITYLOG" ] && rm -f $SANITYLOG || true
 
 error () {
-	sysctl -w lustre.fail_loc=0
+	sysctl -w lustre.fail_loc=0 2> /dev/null || true
 	log "$0: FAIL: $TESTNAME $@"
 	if [ "$SANITYLOG" ]; then
 		echo "$0: FAIL: $TESTNAME $@" >> $SANITYLOG
@@ -466,7 +466,7 @@ test_17() { # bug 3513, 3667
 	cp /etc/termcap $DIR1/f17
 	cancel_lru_locks osc > /dev/null
 	#define OBD_FAIL_ONCE|OBD_FAIL_LDLM_CREATE_RESOURCE    0x30a
-	echo 0x8000030a > /proc/sys/lustre/fail_loc
+	sysctl -w lustre.fail_loc=0x8000030a
 	ls -ls $DIR1/f17 | awk '{ print $1,$6 }' > $DIR1/f17-1 & \
 	ls -ls $DIR2/f17 | awk '{ print $1,$6 }' > $DIR2/f17-2
 	wait
@@ -666,32 +666,39 @@ test_27() {
 run_test 27 "align non-overlapping extent locks from request ==="
 
 test_28() { # bug 9977
-    ECHO_UUID="ECHO_osc1_UUID"
-    tOST=`$LCTL dl | | awk '/-osc-|OSC.*MNT/ { print $4 }' | head -1`
+	ECHO_UUID="ECHO_osc1_UUID"
+	tOST=`$LCTL dl | | awk '/-osc-|OSC.*MNT/ { print $4 }' | head -1`
 
-    lfs setstripe $DIR1/$tfile 1048576 0 2
-    tOBJID=`lfs getstripe $DIR1/$tfile | grep "^[[:space:]]\+1" | awk '{print $2}'`
-    dd if=/dev/zero of=$DIR1/$tfile bs=1024k count=2
+	lfs setstripe $DIR1/$tfile 1048576 0 2
+	tOBJID=`lfs getstripe $DIR1/$tfile |grep "^[[:space:]]\+1" |awk '{print $2}'`
+	dd if=/dev/zero of=$DIR1/$tfile bs=1024k count=2
 
-    $LCTL <<EOF
-newdev
-attach echo_client ECHO_osc1 $ECHO_UUID
-setup $tOST
-EOF
-    tECHOID=`$LCTL dl | grep $ECHO_UUID | awk '{print $1}'`
-    $LCTL --device $tECHOID destroy "${tOBJID}:0"
+	$LCTL <<-EOF
+		newdev
+		attach echo_client ECHO_osc1 $ECHO_UUID
+		setup $tOST
+	EOF
+
+	tECHOID=`$LCTL dl | grep $ECHO_UUID | awk '{print $1}'`
+	$LCTL --device $tECHOID destroy "${tOBJID}:0"
     
-    # reading of 1st stripe should pass
-    dd if=$DIR2/$tfile of=/dev/null bs=1024k count=1 || error
-    # reading of 2nd stripe should fail (this stripe was destroyed)
-    dd if=$DIR2/$tfile of=/dev/null bs=1024k count=1 skip=1 && error
-    
-    # now, recreating test file
-    dd if=/dev/zero of=$DIR1/$tfile bs=1024k count=2 || error
-    # reading of 1st stripe should pass
-    dd if=$DIR2/$tfile of=/dev/null bs=1024k count=1 || error
-    # reading of 2nd stripe should pass
-    dd if=$DIR2/$tfile of=/dev/null bs=1024k count=1 skip=1 || error
+    	$LCTL <<-EOF
+		cfg_device ECHO_osc1
+		cleanup
+		detach
+	EOF
+
+	# reading of 1st stripe should pass
+	dd if=$DIR2/$tfile of=/dev/null bs=1024k count=1 || error
+	# reading of 2nd stripe should fail (this stripe was destroyed)
+	dd if=$DIR2/$tfile of=/dev/null bs=1024k count=1 skip=1 && error
+
+	# now, recreating test file
+	dd if=/dev/zero of=$DIR1/$tfile bs=1024k count=2 || error
+	# reading of 1st stripe should pass
+	dd if=$DIR2/$tfile of=/dev/null bs=1024k count=1 || error
+	# reading of 2nd stripe should pass
+	dd if=$DIR2/$tfile of=/dev/null bs=1024k count=1 skip=1 || error
 }
 run_test 28 "read/write/truncate file with lost stripes"
 
