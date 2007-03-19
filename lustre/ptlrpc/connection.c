@@ -135,13 +135,15 @@ out_conn:
 int ptlrpc_put_connection(struct ptlrpc_connection *c)
 {
         int rc = 0;
-        lnet_process_id_t peer = c->c_peer;
+        lnet_process_id_t peer;
         ENTRY;
 
         if (c == NULL) {
                 CERROR("NULL connection\n");
                 RETURN(0);
         }
+
+        peer = c->c_peer;
 
         CDEBUG (D_INFO, "connection=%p refcount %d to %s\n",
                 c, atomic_read(&c->c_refcount) - 1, 
