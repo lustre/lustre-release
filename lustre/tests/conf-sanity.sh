@@ -1057,7 +1057,7 @@ test_32a() {
 
 	$TUNEFS $TMP/$tdir/mds || error "tunefs failed"
 	# nids are wrong, so client wont work, but server should start
-	start mds $TMP/$tdir/mds "-o loop" || return 3
+        start mds $TMP/$tdir/mds "-o loop,exclude=lustre-OST0000" || return 3
         local UUID=$(cat $LPROC/mds/lustre-MDT0000/uuid)
 	echo MDS uuid $UUID
 	[ "$UUID" == "mdsA_UUID" ] || error "UUID is wrong: $UUID" 
@@ -1081,7 +1081,10 @@ test_32a() {
 
 	# With a new good MDT failover nid, we should be able to mount a client
 	# (but it cant talk to OST)
+        local OLDMOUNTOPT=$MOUNTOPT
+        MOUNTOPT="exclude=lustre-OST0000"
 	mount_client $MOUNT
+        MOUNTOPT=$OLDMOUNTOPT
 	set_and_check "cat $LPROC/mdc/*/max_rpcs_in_flight" "lustre-MDT0000.mdc.max_rpcs_in_flight" || return 11
 
 	zconf_umount `hostname` $MOUNT -f
@@ -1089,7 +1092,7 @@ test_32a() {
 
         # mount a second time to make sure we didnt leave upgrade flag on
         $TUNEFS --dryrun $TMP/$tdir/mds || error "tunefs failed"
-        start mds $TMP/$tdir/mds "-o loop" || return 12
+        start mds $TMP/$tdir/mds "-o loop,exclude=lustre-OST0000" || return 12
         cleanup_nocli
 
 	[ -d $TMP/$tdir ] && rm -rf $TMP/$tdir

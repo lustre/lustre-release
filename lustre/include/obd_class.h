@@ -1276,10 +1276,8 @@ static inline int obd_notify(struct obd_device *obd,
                 RETURN(-EINVAL);
         }
 
-        if (!OBP(obd, notify)) {
-                CERROR("obd %s has no notify handler\n", obd->obd_name);
+        if (!OBP(obd, notify)) 
                 RETURN(-ENOSYS);
-        }
 
         OBD_COUNTER_INCREMENT(obd, notify);
         RETURN(OBP(obd, notify)(obd, watched, ev, data));

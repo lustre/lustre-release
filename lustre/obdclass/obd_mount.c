@@ -1092,6 +1092,9 @@ out_mgc:
                         obd_iocontrol(OBD_IOC_ABORT_RECOVERY,
                                       obd->obd_self_export, 0, NULL, NULL);
                 }
+
+                /* log has been fully processed */
+                obd_notify(obd, NULL, OBD_NOTIFY_CONFIG, 0);
         }
 
         RETURN(rc);

@@ -347,6 +347,9 @@ int mds_lov_connect(struct obd_device *obd, char * lov_name)
                        lov_name, rc);
                 GOTO(err_discon, rc);
         }
+        
+        /* Deny new client connections until we are sure we have some OSTs */
+        obd->obd_no_conn = 1;
 
         rc = mds_lov_read_objids(obd);
         if (rc) {
@@ -766,6 +769,9 @@ int mds_notify(struct obd_device *obd, struct obd_device *watched,
         case OBD_NOTIFY_SYNC:
         case OBD_NOTIFY_SYNC_NONBLOCK:
                 break;
+        case OBD_NOTIFY_CONFIG:
+                /* Open for clients */
+                obd->obd_no_conn = 0;
         default:
                 RETURN(0);
         }

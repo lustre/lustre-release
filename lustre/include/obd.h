@@ -691,7 +691,9 @@ enum obd_notify_event {
         OBD_NOTIFY_OCD,
         /* Sync request */
         OBD_NOTIFY_SYNC_NONBLOCK,
-        OBD_NOTIFY_SYNC
+        OBD_NOTIFY_SYNC,
+        /* Configuration event */
+        OBD_NOTIFY_CONFIG
 };
 
 /*
@@ -728,7 +730,8 @@ struct obd_device {
                      obd_starting:1,      /* started setup */
                      obd_force:1,         /* cleanup with > 0 obd refcount */
                      obd_fail:1,          /* cleanup with failover */
-                     obd_async_recov:1;   /* allow asyncronous orphan cleanup */
+                     obd_async_recov:1,   /* allow asyncronous orphan cleanup */
+                     obd_no_conn:1;       /* deny new connections */
         atomic_t obd_refcount;
         /* uuid-export hash body */
         struct lustre_class_hash_body *obd_uuid_hash_body;

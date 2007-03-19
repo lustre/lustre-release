@@ -1877,13 +1877,13 @@ static int mds_setup(struct obd_device *obd, obd_count len, void *buf)
         struct lprocfs_static_vars lvars;
         struct lustre_cfg* lcfg = buf;
         struct mds_obd *mds = &obd->u.mds;
+        struct lustre_sb_info *lsi;
         struct lustre_mount_info *lmi;
         struct vfsmount *mnt;
         struct obd_uuid uuid;
         __u8 *uuid_ptr;
-        char *options, *str, *label;
+        char *str, *label;
         char ns_name[48];
-        unsigned long page;
         int rc = 0;
         ENTRY;
 
@@ -1893,55 +1893,24 @@ static int mds_setup(struct obd_device *obd, obd_count len, void *buf)
                  offsetof(struct obd_device, u.mds.mds_obt));
 
         if (lcfg->lcfg_bufcount < 3)
-                RETURN(rc = -EINVAL);
+                RETURN(-EINVAL);
 
         if (LUSTRE_CFG_BUFLEN(lcfg, 1) == 0 || LUSTRE_CFG_BUFLEN(lcfg, 2) == 0)
-                RETURN(rc = -EINVAL);
+                RETURN(-EINVAL);
 
         lmi = server_get_mount(obd->obd_name);
-        if (lmi) {
-                /* We already mounted in lustre_fill_super.
-                   lcfg bufs 1, 2, 4 (device, fstype, mount opts) are ignored.*/
-                struct lustre_sb_info *lsi = s2lsi(lmi->lmi_sb);
-                fsoptions_to_mds_flags(mds, lsi->lsi_ldd->ldd_mount_opts);
-                fsoptions_to_mds_flags(mds, lsi->lsi_lmd->lmd_opts);
-                mnt = lmi->lmi_mnt;
-                obd->obd_fsops = fsfilt_get_ops(MT_STR(lsi->lsi_ldd));
-        } else {
-                /* old path - used by lctl */
-                CERROR("Using old MDS mount method\n");
-                page = __get_free_page(GFP_KERNEL);
-                if (!page)
-                        RETURN(-ENOMEM);
-
-                options = (char *)page;
-                memset(options, 0, CFS_PAGE_SIZE);
-
-                /* here we use "iopen_nopriv" hardcoded, because it affects
-                 * MDS utility and the rest of options are passed by mount
-                 * options. Probably this should be moved to somewhere else
-                 * like startup scripts or lconf. */
-                strcpy(options, "iopen_nopriv");
-
-                if (LUSTRE_CFG_BUFLEN(lcfg, 4) > 0 && lustre_cfg_buf(lcfg, 4)) {
-                        sprintf(options + strlen(options), ",%s",
-                                lustre_cfg_string(lcfg, 4));
-                        fsoptions_to_mds_flags(mds, options);
-                }
-                
-                mnt = do_kern_mount(lustre_cfg_string(lcfg, 2), 0,
-                                    lustre_cfg_string(lcfg, 1), 
-                                    (void *)options);
-                free_page(page);
-                if (IS_ERR(mnt)) {
-                        rc = PTR_ERR(mnt);
-                        LCONSOLE_ERROR("Can't mount disk %s (%d)\n",
-                                       lustre_cfg_string(lcfg, 1), rc);
-                        RETURN(rc);
-                }
-
-                obd->obd_fsops = fsfilt_get_ops(lustre_cfg_string(lcfg, 2));
+        if (!lmi) {
+                CERROR("Not mounted in lustre_fill_super?\n");
+                RETURN(-EINVAL);
         }
+
+        /* We mounted in lustre_fill_super.
+           lcfg bufs 1, 2, 4 (device, fstype, mount opts) are ignored.*/
+        lsi = s2lsi(lmi->lmi_sb);
+        fsoptions_to_mds_flags(mds, lsi->lsi_ldd->ldd_mount_opts);
+        fsoptions_to_mds_flags(mds, lsi->lsi_lmd->lmd_opts);
+        mnt = lmi->lmi_mnt;
+        obd->obd_fsops = fsfilt_get_ops(MT_STR(lsi->lsi_ldd));
         if (IS_ERR(obd->obd_fsops))
                 GOTO(err_put, rc = PTR_ERR(obd->obd_fsops));
 

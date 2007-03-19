@@ -569,11 +569,19 @@ int target_handle_connect(struct ptlrpc_request *req, svc_handler_t handler)
         /* end COMPAT_146 */
 
         if (!target || target->obd_stopping || !target->obd_set_up) {
-                DEBUG_REQ(D_ERROR, req, "UUID '%s' is not available "
-                          " for connect (%s)", str,
-                          !target ? "no target" :
-                          (target->obd_stopping ? "stopping" : "not set up"));
+                LCONSOLE_ERROR("UUID '%s' is not available "
+                               " for connect (%s)", str,
+                               !target ? "no target" :
+                               (target->obd_stopping ? "stopping" :
+                                "not set up"));
                 GOTO(out, rc = -ENODEV);
+        }
+
+        if (target->obd_no_conn) {
+                LCONSOLE_WARN("%s: temporarily refusing client connection "
+                              "from %s\n", target->obd_name, 
+                              libcfs_nid2str(req->rq_peer.nid));
+                GOTO(out, rc = -EAGAIN);
         }
 
         /* Make sure the target isn't cleaned up while we're here. Yes, 
