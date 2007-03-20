@@ -19,6 +19,8 @@ tbd         Cluster File Systems, Inc. <info@clusterfs.com>
         2.6.9-42.0.8EL (RHEL 4)
        * Recommended e2fsprogs version: 1.39.cfs5
        * bug fixes
+       * Note that reiserfs quotas are temporarily disabled on SLES 10 in this
+	 kernel.
 
 Severity   : enhancement
 Bugzilla   : 8007
