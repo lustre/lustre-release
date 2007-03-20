@@ -59,6 +59,14 @@ for OSC in /proc/fs/lustre/osc/*-osc-*; do
 	GRANT=`cat $OSC/cur_grant_bytes`
 	[ $(($AVAIL - $GRANT / 1024)) -lt 400 ] && OSCFULL=full
 done
+
+# FIXME - This test reports false failures
+# The grants from multiple clients need to be added together and compared 
+# against the kbytesavail.
+#/proc/fs/lustre/osc/lustre-OST0001-osc-c3b04200/kbytesavail:16248
+#/proc/fs/lustre/osc/lustre-OST0001-osc-c3b04200/cur_grant_bytes:4313088
+#/proc/fs/lustre/osc/lustre-OST0001-osc-c3b04e00/cur_grant_bytes:12660736
+
 if [ -z "$OSCFULL" ]; then
 	echo "no OSTs are close to full"
 	grep "[0-9]" /proc/fs/lustre/osc/*-osc-*/{kbytesavail,cur*}|tee -a $LOG
