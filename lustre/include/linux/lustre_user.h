@@ -57,9 +57,6 @@ typedef struct stat64   lstat_t;
 #endif
 
 #ifndef LPU64
-#if !defined(BITS_PER_LONG) && defined(__WORDSIZE)
-#define BITS_PER_LONG __WORDSIZE
-#endif
 /* x86_64 defines __u64 as "long" in userspace, but "long long" in the kernel */
 #if defined(__x86_64__) && defined(__KERNEL__)
 # define LPU64 "%Lu"

@@ -900,12 +900,4 @@ void posix_acl_release(struct posix_acl *acl)
 #include <lustre_export.h>
 #include <lustre_net.h>
 
-#ifndef FMODE_READ
-#define FMODE_READ MDS_FMODE_READ
-#endif
-
-#ifndef FMODE_WRITE
-#define FMODE_WRITE MDS_FMODE_WRITE
-#endif
-
 #endif

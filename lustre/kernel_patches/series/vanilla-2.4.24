@@ -47,3 +47,4 @@ fsprivate-2.4.patch
 nfsd_iallocsem.patch
 linux-2.4.24-jbd-handle-EIO.patch
 ext3-sector_t-overflow-2.4.patch
+nfs_export_kernel-getattr_on_lookup-2.4.patch
