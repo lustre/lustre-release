@@ -1245,10 +1245,14 @@ static int cb_quotachown(char *path, DIR *parent, DIR *d, void *data)
         /* libc chown() will do extra check, and if the real owner is
          * the same as the ones to set, it won't fall into kernel, so
          * invoke syscall directly. */
-        rc = syscall(SYS_chown, path, st->st_uid, st->st_gid);
+        rc = syscall(SYS_chown, path, -1, -1);
         if (rc)
-                err_msg("error: chown %s (%u,%u)",
-                        path, st->st_uid, st->st_gid);
+                err_msg("error: chown %s (%u,%u)", path);
+
+        rc = chmod(path, st->st_mode);
+        if (rc)
+                err_msg("error: chmod %s (%hu)", path, st->st_mode);
+
         return rc;
 }
 
