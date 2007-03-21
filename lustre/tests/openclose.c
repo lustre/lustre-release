@@ -68,10 +68,10 @@ int main(int argc, char *argv[])
                                 continue;
 
                         if (ret < 0) {
-                                fprintf(stderr, "error: %s: wait - %s\n",
-                                        argv[0], strerror(errno));
                                 if (!rc)
                                         rc = errno;
+                                fprintf(stderr, "error: %s: wait - %s\n",
+                                        argv[0], strerror(rc));
                         } else {
                                 /*
                                  * This is a hack.  We _should_ be able to use
@@ -97,43 +97,42 @@ int main(int argc, char *argv[])
 
                 fd = open(filename, O_RDWR|O_CREAT, 0644);
                 if (fd < 0) {
+                        rc = errno;
                         fprintf(stderr, "open(%s, O_CREAT): %s\n", filename,
-                                strerror(errno));
-                        exit(errno);
+                                strerror(rc));
+                        exit(rc);
                 }
                 if (close(fd) < 0) {
-                        fprintf(stderr, "close(): %s\n", strerror(errno));
                         rc = errno;
+                        fprintf(stderr, "close(): %s\n", strerror(rc));
                         goto unlink;
                 }
 
                 for (i = 0; i < count; i++) {
                         fd = open(filename, O_RDWR|O_LARGEFILE|O_DIRECT);
                         if (fd < 0) {
-                                fprintf(stderr, "open(%s, O_RDWR): %s\n",
-                                        filename, strerror(errno));
                                 rc = errno;
+                                fprintf(stderr, "open(%s, O_RDWR): %s\n",
+                                        filename, strerror(rc));
                                 break;
                         }
                         if (ioctl(fd, LL_IOC_SETFLAGS, &ioctl_flags) < 0 &&
                             errno != ENOTTY) {
-                                fprintf(stderr, "ioctl(): %s\n",
-                                        strerror(errno));
                                 rc = errno;
+                                fprintf(stderr, "ioctl(): %s\n", strerror(rc));
                                 break;
                         }
                         if (close(fd) < 0) {
-                                fprintf(stderr, "close(): %s\n",
-                                        strerror(errno));
                                 rc = errno;
+                                fprintf(stderr, "close(): %s\n", strerror(rc));
                                 break;
                         }
                 }
         unlink:
                 if (unlink(filename) < 0) {
-                        fprintf(stderr, "unlink(%s): %s\n", filename,
-                                strerror(errno));
                         rc = errno;
+                        fprintf(stderr, "unlink(%s): %s\n", filename,
+                                strerror(rc));
                 }
                 if (threads)
                         printf("Thread %d done: rc = %d\n", thread, rc);

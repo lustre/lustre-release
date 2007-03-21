@@ -2807,12 +2807,12 @@ static int filter_precreate(struct obd_device *obd, struct obdo *oa,
                 dparent = filter_parent_lock(obd, group, next_id);
                 if (IS_ERR(dparent))
                         GOTO(cleanup, rc = PTR_ERR(dparent));
-                cleanup_phase = 1;
+                cleanup_phase = 1;	/* filter_parent_unlock(dparent) */
 
                 dchild = filter_fid2dentry(obd, dparent, group, next_id);
                 if (IS_ERR(dchild))
                         GOTO(cleanup, rc = PTR_ERR(dchild));
-                cleanup_phase = 2;
+                cleanup_phase = 2;	/* f_dput(dchild) */
 
                 if (dchild->d_inode != NULL) {
                         /* This would only happen if lastobjid was bad on disk*/
@@ -3089,8 +3089,8 @@ cleanup:
         qcids[GRPQUOTA] = oa->o_gid;
         rc2 = lquota_adjust(filter_quota_interface_ref, obd, qcids, NULL, rc,
                             FSFILT_OP_UNLINK);
-        CDEBUG(rc2 ? D_ERROR : D_QUOTA,
-               "filter adjust qunit! (rc:%d)\n", rc2);
+        if (rc2)
+                CERROR("filter adjust qunit! (rc:%d)\n", rc2);
         return rc;
 }
 

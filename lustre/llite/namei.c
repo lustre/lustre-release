@@ -811,7 +811,7 @@ static void ll_update_times(struct ptlrpc_request *request, int offset,
 }
 
 static int ll_new_node(struct inode *dir, struct qstr *name,
-                       char *tgt, int mode,
+                       const char *tgt, int mode,
                        int rdev, struct dentry *dchild)
 {
         struct ptlrpc_request *request = NULL;

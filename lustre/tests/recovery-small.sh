@@ -75,12 +75,15 @@ test_5() {
 }
 run_test 5 "rename: drop req, drop rep"
 
+[ ! -e $MOUNT/renamed-again ] && cp /etc/inittab $MOUNT/renamed-again
 test_6() {
     drop_request "mlink $MOUNT/renamed-again $MOUNT/link1" || return 1
     drop_reint_reply "mlink $MOUNT/renamed-again $MOUNT/link2"   || return 2
 }
 run_test 6 "link: drop req, drop rep"
 
+[ ! -e $MOUNT/link1 ] && mlink $MOUNT/renamed-again $MOUNT/link1
+[ ! -e $MOUNT/link2 ] && mlink $MOUNT/renamed-again $MOUNT/link2
 test_7() {
     drop_request "munlink $MOUNT/link1"   || return 1
     drop_reint_reply "munlink $MOUNT/link2"     || return 2
@@ -89,16 +92,16 @@ run_test 7 "unlink: drop req, drop rep"
 
 #bug 1423
 test_8() {
-    drop_reint_reply "touch $MOUNT/renamed"    || return 1
+    drop_reint_reply "touch $MOUNT/$tfile"    || return 1
 }
 run_test 8 "touch: drop rep (bug 1423)"
 
 #bug 1420
 test_9() {
-    pause_bulk "cp /etc/profile $MOUNT"       || return 1
-    do_facet client "cp /etc/termcap $MOUNT"  || return 2
+    pause_bulk "cp /etc/profile $MOUNT/$tfile"       || return 1
+    do_facet client "cp /etc/termcap $MOUNT/${tfile}.2"  || return 2
     do_facet client "sync"
-    do_facet client "rm $MOUNT/termcap $MOUNT/profile" || return 3
+    do_facet client "rm $MOUNT/$tfile $MOUNT/${tfile}.2" || return 3
 }
 run_test 9 "pause bulk on OST (bug 1420)"
 
@@ -750,7 +753,7 @@ run_test 52 "failover OST under load"
 # test of open reconstruct
 test_53() {
 	touch $DIR/$tfile
-	drop_ldlm_reply "./openfile -f O_RDWR:O_CREAT -m 0755 $MOUNT/$tfile" ||\
+	drop_ldlm_reply "./openfile -f O_RDWR:O_CREAT -m 0755 $DIR/$tfile" ||\
 		return 2
 }
 run_test 53 "touch: drop rep"
@@ -827,7 +830,7 @@ test_55() {
 }
 run_test 55 "ost_brw_read/write drops timed-out read/write request"
 
-test_56() {
+test_56() { # b=11277
 #define OBD_FAIL_MDS_RESEND      0x136
         touch $MOUNT/$tfile
         do_facet mds sysctl -w lustre.fail_loc=0x80000136

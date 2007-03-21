@@ -412,7 +412,8 @@ test_14b() { # bug 3192, 7040
         $DIR1/d14/multiop $TMP/test14.junk O_c &
         MULTIPID=$!
         sleep 1
-        truncate $DIR2/d14/multiop 0 && error "expected error, got success"
+        truncate $DIR2/d14/multiop 0 && kill -9 $MULTIPID && \
+		error "expected truncate error, got success"
         kill -USR1 $MULTIPID || return 2
         wait $MULTIPID || return 3
 	cmp `which multiop` $DIR1/d14/multiop || error "binary changed"
