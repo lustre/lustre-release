@@ -445,7 +445,11 @@ int ptlrpc_connect_import(struct obd_import *imp, char *new_uuid)
                 imp->imp_replayable = 1;
                 /* On an initial connect, we don't know which one of a
                    failover server pair is up.  Don't wait long. */
+#ifdef CRAY_XT3
+                request->rq_timeout = max((int)(obd_timeout / 2), 5);
+#else
                 request->rq_timeout = max((int)(obd_timeout / 20), 5);
+#endif
         }
 
         DEBUG_REQ(D_RPCTRACE, request, "(re)connect request");
@@ -980,7 +984,11 @@ int ptlrpc_disconnect_import(struct obd_import *imp, int noclose)
                  * it fails.  We can get through the above with a down server
                  * if the client doesn't know the server is gone yet. */
                 req->rq_no_resend = 1;
+#ifdef CRAY_XT3
+                req->rq_timeout = obd_timeout / 3;
+#else
                 req->rq_timeout = 5;
+#endif
                 IMPORT_SET_STATE(imp, LUSTRE_IMP_CONNECTING);
                 req->rq_send_state =  LUSTRE_IMP_CONNECTING;
                 ptlrpc_req_set_repsize(req, 1, NULL);
