@@ -318,6 +318,37 @@ out_up:
 }
 EXPORT_SYMBOL(simple_mkdir);
 
+/* utility to rename a file */
+int lustre_rename(struct dentry *dir, char *oldname, char *newname)
+{
+        struct dentry *dchild_old, *dchild_new;
+        int err = 0;
+        ENTRY;
+
+        ASSERT_KERNEL_CTXT("kernel doing rename outside kernel context\n");
+        CDEBUG(D_INODE, "renaming file %.*s to %.*s\n", 
+               (int)strlen(oldname), oldname, (int)strlen(newname), newname);
+
+        dchild_old = ll_lookup_one_len(oldname, dir, strlen(oldname));
+        if (IS_ERR(dchild_old))
+                RETURN(PTR_ERR(dchild_old));
+
+        if (!dchild_old->d_inode) 
+                GOTO(put_old, err = -ENOENT);
+
+        dchild_new = ll_lookup_one_len(newname, dir, strlen(newname));
+        if (IS_ERR(dchild_new))
+                GOTO(put_old, err = PTR_ERR(dchild_new));
+
+        err = vfs_rename(dir->d_inode, dchild_old, dir->d_inode, dchild_new);
+
+        dput(dchild_new);
+put_old:
+        dput(dchild_old);
+        RETURN(err);
+}
+EXPORT_SYMBOL(lustre_rename);
+
 /*
  * Read a file from within kernel context.  Prior to calling this
  * function we should already have done a push_ctxt().

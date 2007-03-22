@@ -914,35 +914,54 @@ static int mgc_copy_handler(struct llog_handle *llh, struct llog_rec_hdr *rec,
         int rc = 0;
         ENTRY;
 
+        /* Append all records */
+        local_rec.lrh_len -= sizeof(*rec) + sizeof(struct llog_rec_tail);
+        rc = llog_write_rec(local_llh, &local_rec, NULL, 0, 
+                            (void *)cfg_buf, -1);
+
         lcfg = (struct lustre_cfg *)cfg_buf;
-
-        /* append new records */
-        if (rec->lrh_index >= llog_get_size(local_llh)) { 
-                rc = llog_write_rec(local_llh, &local_rec, NULL, 0, 
-                                    (void *)cfg_buf, -1);
-
-                CDEBUG(D_INFO, "idx=%d, rc=%d, len=%d, cmd %x %s %s\n", 
-                       rec->lrh_index, rc, rec->lrh_len, lcfg->lcfg_command, 
-                       lustre_cfg_string(lcfg, 0), lustre_cfg_string(lcfg, 1));
-        } else {
-                CDEBUG(D_INFO, "skip idx=%d\n",  rec->lrh_index);
-        }
+        CDEBUG(D_INFO, "idx=%d, rc=%d, len=%d, cmd %x %s %s\n", 
+               rec->lrh_index, rc, rec->lrh_len, lcfg->lcfg_command, 
+               lustre_cfg_string(lcfg, 0), lustre_cfg_string(lcfg, 1));
 
         RETURN(rc);
 }
 
+/* Copy a remote log locally */
 static int mgc_copy_llog(struct obd_device *obd, struct llog_ctxt *rctxt,
                          struct llog_ctxt *lctxt, char *logname)
 {
         struct llog_handle *local_llh, *remote_llh;
         struct obd_uuid *uuid;
+        char *temp_log;
         int rc, rc2;
         ENTRY;
 
-        /* open local log */
-        rc = llog_create(lctxt, &local_llh, NULL, logname);
+        /* Write new log to a temp name, then vfs_rename over logname
+           upon successful completion. */
+
+        OBD_ALLOC(temp_log, strlen(logname) + 1);
+        if (!temp_log) 
+                RETURN(-ENOMEM);
+        sprintf(temp_log, "%sT", logname);
+
+        /* Make sure there's no old temp log */
+        rc = llog_create(lctxt, &local_llh, NULL, temp_log);
         if (rc)
-                RETURN(rc);
+                GOTO(out, rc);
+        rc = llog_init_handle(local_llh, LLOG_F_IS_PLAIN, NULL);
+        if (rc) 
+                GOTO(out, rc);
+        rc = llog_destroy(local_llh);
+        llog_free_handle(local_llh);
+        if (rc)
+                GOTO(out, rc);
+
+        /* open local log */
+        rc = llog_create(lctxt, &local_llh, NULL, temp_log);
+        if (rc)
+                GOTO(out, rc);
+
         /* set the log header uuid for fun */
         OBD_ALLOC_PTR(uuid);
         obd_str2uuid(uuid, logname);
@@ -950,9 +969,6 @@ static int mgc_copy_llog(struct obd_device *obd, struct llog_ctxt *rctxt,
         OBD_FREE_PTR(uuid);
         if (rc)
                 GOTO(out_closel, rc);
-
-        /* FIXME write new log to a temp name, then vfs_rename over logname
-           upon successful completion. */
 
         /* open remote log */
         rc = llog_create(rctxt, &remote_llh, NULL, logname);
@@ -962,6 +978,7 @@ static int mgc_copy_llog(struct obd_device *obd, struct llog_ctxt *rctxt,
         if (rc)
                 GOTO(out_closer, rc);
 
+        /* Copy remote log */
         rc = llog_process(remote_llh, mgc_copy_handler,(void *)local_llh, NULL);
 
 out_closer:
@@ -973,7 +990,19 @@ out_closel:
         if (!rc)
                 rc = rc2;
 
+        /* We've copied the remote log to the local temp log, now
+           replace the old local log with the temp log. */
+        if (!rc) {
+                struct client_obd *cli = &obd->u.cli;
+                LASSERT(cli);
+                LASSERT(cli->cl_mgc_configs_dir);
+                rc = lustre_rename(cli->cl_mgc_configs_dir, temp_log, logname);
+        }
         CDEBUG(D_MGC, "Copied remote log %s (%d)\n", logname, rc);
+out:
+        if (rc)
+                CERROR("Failed to copy remote log %s (%d)\n", logname, rc);
+        OBD_FREE(temp_log, strlen(logname) + 1);
         RETURN(rc);
 }
 

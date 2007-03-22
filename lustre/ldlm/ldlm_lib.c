@@ -551,7 +551,7 @@ int target_handle_connect(struct ptlrpc_request *req, svc_handler_t handler)
         LASSERT_REQSWAB(req, REQ_REC_OFF);
         str = lustre_msg_string(req->rq_reqmsg, REQ_REC_OFF, sizeof(tgtuuid)-1);
         if (str == NULL) {
-                DEBUG_REQ(D_ERROR, req, "bad target UUID for connect");
+                DEBUG_REQ(D_ERROR, req, "bad target UUID for connect\n");
                 GOTO(out, rc = -EINVAL);
         }
 
@@ -570,7 +570,7 @@ int target_handle_connect(struct ptlrpc_request *req, svc_handler_t handler)
 
         if (!target || target->obd_stopping || !target->obd_set_up) {
                 LCONSOLE_ERROR("UUID '%s' is not available "
-                               " for connect (%s)", str,
+                               " for connect (%s)\n", str,
                                !target ? "no target" :
                                (target->obd_stopping ? "stopping" :
                                 "not set up"));
@@ -593,7 +593,7 @@ int target_handle_connect(struct ptlrpc_request *req, svc_handler_t handler)
         str = lustre_msg_string(req->rq_reqmsg, REQ_REC_OFF + 1,
                                 sizeof(cluuid) - 1);
         if (str == NULL) {
-                DEBUG_REQ(D_ERROR, req, "bad client UUID for connect");
+                DEBUG_REQ(D_ERROR, req, "bad client UUID for connect\n");
                 GOTO(out, rc = -EINVAL);
         }
 
