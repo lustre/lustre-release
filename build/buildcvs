@@ -57,10 +57,6 @@ case "$lustretag" in
         lustretag="HEAD"
         ;;
 
-    b1_8)
-        lnettag="b_hd_newconfig"
-        ;;
-
     b_new_cmd)
 	portalstag="b_new_portals"
         # lnettag="b_lnet_tmp"
