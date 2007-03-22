@@ -13,7 +13,11 @@ lfs \- Lustre utility to create a file with specific striping pattern, find the 
 .B lfs getstripe [--obd|-O <uuid>] [--quiet|-q] [--verbose|-v] 
               \fB[--recursive|-r] <dir/file>\fR
 .br
-.B lfs setstripe <filename> <stripe-size> <start-ost> <stripe-cnt>
+.B lfs setstripe <filename|dirname> <stripe-size> <start-ost> <stripe-cnt> 
+.br
+.B lfs setstripe <filename|dirname> [--size|-s stripe-size] [--index|-i start-ost] [--count|-c stripe-cnt]
+.br
+.B lfs setstripe -d <dirname>
 .br
 .B lfs quotachown [-i] <filesystem>
 .br
@@ -27,8 +31,6 @@ lfs \- Lustre utility to create a file with specific striping pattern, find the 
              \fB<inode-softlimit> <inode-hardlimit> <filesystem>\fR
 .br
 .B lfs quota [-o obd_uuid] [-u|-g] <name> <filesystem>
-.br
-.B lfs setstripe <filename> <stripe-size> <start-ost> <stripe-cnt>
 .br
 .B lfs check <mds| osts| servers>
 .br
@@ -89,6 +91,9 @@ Quit the interactive lfs session
 .TP
 .B $ lfs setstripe /mnt/lustre/file1 131072 -1 2
 This creats a file striped on two OSTs with 128kB on each stripe.
+.TP
+.B $ lfs setstripe -d /mnt/lustre/dir
+This deletes a default stripe pattern on dir. New files will use the default striping pattern created therein.
 .TP
 .B $ lfs find /mnt/lustre/file1
 Lists the object allocation of a given file

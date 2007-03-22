@@ -75,12 +75,16 @@ command_t cmdlist[] = {
          "Create a new file with a specific striping pattern or\n"
          "set the default striping pattern on an existing directory or\n"
          "delete the default striping pattern from an existing directory\n"
-         "usage: setstripe <filename|dirname> <stripe size> <stripe start> <stripe count>\n"
+         "usage: setstripe <filename|dirname> <stripe_size> <stripe_index> <stripe_count>\n"
+         "       or \n"
+         "       setstripe <filename|dirname> [--size|-s stripe_size]\n"
+         "                                    [--index|-i stripe_index]\n"
+         "                                    [--count|-c stripe_count]\n"
          "       or \n"
          "       setstripe -d <dirname>   (to delete default striping)\n"
-         "\tstripe size:  Number of bytes on each OST (0 filesystem default)\n"
-         "\tstripe start: OST index of first stripe (-1 filesystem default)\n"
-         "\tstripe count: Number of OSTs to stripe over (0 default, -1 all)"},
+         "\tstripe_size:  Number of bytes on each OST (0 filesystem default)\n"
+         "\tstripe_index: OST index of first stripe (-1 filesystem default)\n"
+         "\tstripe_count: Number of OSTs to stripe over (0 default, -1 all)"},
         {"getstripe", lfs_getstripe, 0,
          "To list the striping info for a given filename or files in a\n"
          "directory or recursively for all files in a directory tree.\n"
@@ -148,42 +152,116 @@ static int lfs_setstripe(int argc, char **argv)
         long st_size;
         int  st_offset, st_count;
         char *end;
+        int c;
+        int delete = 0;
+        char *stripe_size_arg = NULL;
+        char *stripe_off_arg = NULL;
+        char *stripe_count_arg = NULL;
 
-        if (argc != 5 && argc != 3)
-                return CMD_HELP;
+        struct option long_opts[] = {
+                {"size",        required_argument, 0, 's'},
+                {"count",       required_argument, 0, 'c'},
+                {"index",       required_argument, 0, 'i'},
+                {"delete",      no_argument,       0, 'd'},
+                {0, 0, 0, 0}
+        };
 
+        st_size = 0;
+        st_offset = -1;
+        st_count = 0;
+        if (argc == 3 && strcmp(argv[1], "-d") == 0) {
+                /* for compatibility with the existing positional parameter
+                 * usage */
+                fname = argv[2];
+                optind = 2;
+        } else if (argc == 5  && 
+                   (argv[2][0] != '-' || isdigit(argv[2][1])) &&
+                   (argv[3][0] != '-' || isdigit(argv[3][1])) &&
+                   (argv[4][0] != '-' || isdigit(argv[4][1])) ) {
+                /* for compatibility with the existing positional parameter
+                 * usage */
+                fname = argv[1];
+                stripe_size_arg = argv[2];
+                stripe_off_arg = argv[3];
+                stripe_count_arg = argv[4];
+                optind = 4;
+        } else {
+                while ((c = getopt_long(argc, argv, "c:di:s:",
+                                                long_opts, NULL)) >= 0) 
+                {
+                        switch (c) {
+                        case 0:
+                                /* Long options. */
+                                break;
+                        case 'c':
+                                stripe_count_arg = optarg;
+                                break;
+                        case 'd':
+                                /* delete the default striping pattern */
+                                delete = 1;
+                                break;
+                        case 'i':
+                                stripe_off_arg = optarg;
+                                break;
+                        case 's':
+                                stripe_size_arg = optarg;
+                                break;
+                        case '?':
+                                return CMD_HELP;
+                        default:
+                                fprintf(stderr, "error: %s: option '%s' "
+                                                "unrecognized\n",
+                                                argv[0], argv[optind - 1]);
+                                return CMD_HELP;
+                        }
+                }
 
-        if (argc == 3) {
-                if (strcmp(argv[1], "-d") != 0)
+                if (optind < argc)
+                        fname = argv[optind];
+                else
                         return CMD_HELP;
 
-                fname = argv[2];
-                st_size = 0;
-                st_offset = -1;
-                st_count = 0;
-        } else {
-                fname = argv[1];
+                if (delete && 
+                    (stripe_size_arg != NULL || stripe_off_arg != NULL || 
+                     stripe_count_arg != NULL)) {
+                        fprintf(stderr, "error: %s: cannot specify -d with "
+                                        "-s, -c or -i options\n",
+                                        argv[0]);
+                        return CMD_HELP;
+                }
+        }
 
-                /* get the stripe size */
-                st_size = strtoul(argv[2], &end, 0);
+        if (optind != argc - 1) {
+                fprintf(stderr, "error: %s: only 1 filename|dirname can be "
+                                "specified: '%s'\n",
+                                argv[0], argv[argc-1]);
+                return CMD_HELP;
+        }
+
+        /* get the stripe size */
+        if (stripe_size_arg != NULL) {
+                st_size = strtoul(stripe_size_arg, &end, 0);
                 if (*end != '\0') {
                         fprintf(stderr, "error: %s: bad stripe size '%s'\n",
-                                argv[0], argv[2]);
+                                        argv[0], stripe_size_arg);
                         return CMD_HELP;
                 }
-
-                /* get the stripe offset */
-                st_offset = strtoul(argv[3], &end, 0);
+        }
+        /* get the stripe offset */
+        if (stripe_off_arg != NULL) {
+                st_offset = strtoul(stripe_off_arg, &end, 0);
                 if (*end != '\0') {
                         fprintf(stderr, "error: %s: bad stripe offset '%s'\n",
-                                argv[0], argv[3]);
+                                        argv[0], stripe_off_arg);
                         return CMD_HELP;
                 }
-                /* get the stripe count */
-                st_count = strtoul(argv[4], &end, 0);
+        }
+        /* get the stripe count */
+        if (stripe_count_arg != NULL) {
+                st_count = strtoul(stripe_count_arg, &end, 0);
                 if (*end != '\0') {
                         fprintf(stderr, "error: %s: bad stripe count '%s'\n",
-                                argv[0], argv[4]);
+                                        argv[0], stripe_count_arg);
                         return CMD_HELP;
                 }
         }

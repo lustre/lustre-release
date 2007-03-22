@@ -38,6 +38,7 @@ GETSTRIPE=${GETSTRIPE:-"$LFS getstripe"}
 LSTRIPE=${LSTRIPE:-"$LFS setstripe"}
 LFIND=${LFIND:-"$LFS find"}
 LVERIFY=${LVERIFY:-ll_dirstripe_verify}
+LSTRIPEINFO=${LSTRIPEINFO:-ll_getstripe_info}
 LCTL=${LCTL:-lctl}
 MCREATE=${MCREATE:-mcreate}
 OPENFILE=${OPENFILE:-openfile}
@@ -1122,6 +1123,24 @@ test_27t() { # bug 10864
         cd $WDIR
 }
 run_test 27t "check that utils parse path correctly"
+
+test_27x() { # bug 10997
+        mkdir -p $DIR/d27w || error "mkdir failed"
+        $LSTRIPE $DIR/d27w/f0 -s 65536 || error "lstripe failed"
+        size=`$LSTRIPEINFO $DIR/d27w/f0 | awk {'print $1'}`
+        [ $size -ne 65536 ] && error "stripe size $size != 65536" || true
+
+        [ "$OSTCOUNT" -lt "2" ] && echo "skipping multiple stripe count/offset test" && return
+        for i in `seq 1 $OSTCOUNT`; do
+                offset=$(($i-1))
+                $LSTRIPE $DIR/d27w/f$i -c $i -i $offset || error "lstripe -c $i -i $offset failed"
+                count=`$LSTRIPEINFO $DIR/d27w/f$i | awk {'print $2'}`
+                index=`$LSTRIPEINFO $DIR/d27w/f$i | awk {'print $3'}`
+                [ $count -ne $i ] && error "stripe count $count != $i" || true
+                [ $index -ne $offset ] && error "stripe offset $index != $offset" || true
+        done
+}
+run_test 27x "check lfs setstripe -c -s -i options ============="
 
 test_28() {
 	mkdir $DIR/d28

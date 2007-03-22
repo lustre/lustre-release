@@ -245,6 +245,11 @@ Description: versioning check is incomplete
 Details    : Checking the version difference of client vs. server, report
              error if the gap is too big.
 
+Severity   : enhancement
+Bugzilla   : 10997
+Description: lfs setstripe use optional parameters instead of postional 
+             parameters.
+
 ------------------------------------------------------------------------------
 
 TBD         Cluster File Systems, Inc. <info@clusterfs.com>
