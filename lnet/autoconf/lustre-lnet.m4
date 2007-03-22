@@ -42,53 +42,6 @@ fi
 ])
 
 #
-# LN_CONFIG_ZEROCOPY
-#
-# check if zerocopy is available/wanted
-#
-AC_DEFUN([LN_CONFIG_ZEROCOPY],
-[AC_ARG_ENABLE([zerocopy],
-	AC_HELP_STRING([--disable-zerocopy],
-		       [disable socklnd zerocopy]),
-	[],[enable_zerocopy='yes'])
-AC_MSG_CHECKING([for zero-copy TCP support])
-if test x$enable_zerocopy = xno ; then
-	AC_MSG_RESULT([no (by request)])
-else
-	ZCCD="`grep -c zccd $LINUX/include/linux/skbuff.h`"
-	if test "$ZCCD" = 0 ; then
-		AC_MSG_RESULT([no (no kernel support)])
-	else
-		AC_MSG_RESULT([yes])
-	        AC_MSG_CHECKING([for up-to-date tcp zero-copy patch])
-		LB_LINUX_TRY_COMPILE([
-			#include <linux/config.h>
-			#include <linux/kernel.h>
-			#include <linux/sched.h>
-			#include <linux/types.h>
-			#include <linux/in.h>
-			#include <linux/string.h>
-			#include <linux/init.h>
-			#include <linux/errno.h>
-			#include <linux/interrupt.h>
-			#include <linux/netdevice.h>
-			#include <linux/skbuff.h>
-	        ],[
-			struct zccd zc = {0};
-
-	                return atomic_read(&zc.zccd_refcount);
-	        ],[
-			AC_MSG_RESULT([yes])
-			AC_DEFINE(SOCKNAL_ZC, 1, [enable zero-copy support])
-	        ],[
-			AC_MSG_RESULT([no])
-			AC_MSG_ERROR([old TCP zero-copy in kernel (bug 10889) - use --disable-zerocopy to continue ])
-        	])
-	fi
-fi
-])
-
-#
 # LN_CONFIG_AFFINITY
 #
 # check if cpu affinity is available/wanted
@@ -1096,7 +1049,7 @@ LB_LINUX_TRY_COMPILE([
 # LNet linux kernel checks
 #
 AC_DEFUN([LN_PROG_LINUX],
-[LN_CONFIG_ZEROCOPY
+[
 LN_FUNC_CPU_ONLINE
 LN_TYPE_GFP_T
 LN_TYPE_CPUMASK_T
