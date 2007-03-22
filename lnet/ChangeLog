@@ -13,6 +13,14 @@ TBD         Cluster File Systems, Inc. <info@clusterfs.com>
 	ptllnd    - Portals 3.3 / UNICOS/lc 1.5.x, 2.0.x
        * bug fixes
 
+Severity   : major
+Frequency  : rare	
+Bugzilla   : 11394
+Description: kptllnd didn't propagate some network errors up to LNET 
+Details    : This bug was spotted while investigating 11394.  The fix
+             ensures network errors on sends and bulk transfers are
+	     propagated to LNET/lustre correctly.
+
 Severity   : enhancement
 Bugzilla   : 10316
 Description: Fixed console chatter in case of -ETIMEDOUT.
