@@ -198,7 +198,7 @@ kptllnd_msg_pack(kptl_msg_t *msg, kptl_peer_t *peer)
         /* msg->ptlm_nob   Filled in kptllnd_init_msg()  */
         msg->ptlm_cksum    = 0;
         msg->ptlm_srcnid   = kptllnd_data.kptl_ni->ni_nid;
-        msg->ptlm_srcstamp = kptllnd_data.kptl_incarnation;
+        msg->ptlm_srcstamp = peer->peer_myincarnation;
         msg->ptlm_dstnid   = peer->peer_id.nid;
         msg->ptlm_dststamp = peer->peer_incarnation;
         msg->ptlm_srcpid   = the_lnet.ln_pid;
@@ -527,9 +527,9 @@ kptllnd_startup (lnet_ni_t *ni)
                kptllnd_ptlid2str(kptllnd_data.kptl_portals_id),
                libcfs_nid2str(ni->ni_nid));
 
-        /*
-         * Initialized the incarnation
-         */
+        /* Initialized the incarnation - it must be for-all-time unique, even
+         * accounting for the fact that we increment it when we disconnect a
+         * peer that's using it */
         do_gettimeofday(&tv);
         kptllnd_data.kptl_incarnation = (((__u64)tv.tv_sec) * 1000000) +
                                         tv.tv_usec;

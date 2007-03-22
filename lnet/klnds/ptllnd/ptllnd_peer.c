@@ -169,10 +169,13 @@ kptllnd_peer_allocate (lnet_process_id_t lpid, ptl_process_id_t ppid)
         peer->peer_credits = 1;                 /* enough for HELLO */
         peer->peer_next_matchbits = PTL_RESERVED_MATCHBITS;
         peer->peer_outstanding_credits = *kptllnd_tunables.kptl_peercredits - 1;
+        peer->peer_active_rxs = 0;
 
         atomic_set(&peer->peer_refcount, 1);    /* 1 ref for caller */
 
         write_lock_irqsave(&kptllnd_data.kptl_peer_rw_lock, flags);
+
+        peer->peer_myincarnation = kptllnd_data.kptl_incarnation;
 
         /* Only increase # peers under lock, to guarantee we dont grow it
          * during shutdown */
@@ -198,6 +201,7 @@ kptllnd_peer_destroy (kptl_peer_t *peer)
 
         LASSERT (!in_interrupt());
         LASSERT (atomic_read(&peer->peer_refcount) == 0);
+        LASSERT (peer->peer_active_rxs == 0);
         LASSERT (peer->peer_state == PEER_STATE_ALLOCATED ||
                  peer->peer_state == PEER_STATE_ZOMBIE);
         LASSERT (list_empty(&peer->peer_sendq));
@@ -350,6 +354,11 @@ kptllnd_peer_close_locked(kptl_peer_t *peer, int why)
 
         case PEER_STATE_WAITING_HELLO:
         case PEER_STATE_ACTIVE:
+                /* Ensure new peers see a new incarnation of me */
+                LASSERT(peer->peer_myincarnation <= kptllnd_data.kptl_incarnation);
+                if (peer->peer_myincarnation == kptllnd_data.kptl_incarnation)
+                        kptllnd_data.kptl_incarnation++;
+
                 /* Removing from peer table */
                 kptllnd_data.kptl_n_active_peers--;
                 LASSERT (kptllnd_data.kptl_n_active_peers >= 0);
@@ -946,15 +955,42 @@ kptllnd_peer_handle_hello (ptl_process_id_t  initiator,
                         /* Completing HELLO handshake */
                         LASSERT(peer->peer_incarnation == 0);
 
+                        if (msg->ptlm_dststamp != 0 &&
+                            msg->ptlm_dststamp != peer->peer_myincarnation) {
+                                write_unlock_irqrestore(g_lock, flags);
+
+                                CERROR("Ignoring HELLO from %s: unexpected "
+                                       "dststamp "LPX64" ("LPX64" wanted)\n",
+                                       libcfs_id2str(lpid),
+                                       msg->ptlm_dststamp,
+                                       peer->peer_myincarnation);
+                                kptllnd_peer_decref(peer);
+                                return NULL;
+                        }
+                        
+                        /* Concurrent initiation or response to my HELLO */
                         peer->peer_state = PEER_STATE_ACTIVE;
                         peer->peer_incarnation = msg->ptlm_srcstamp;
                         peer->peer_next_matchbits = safe_matchbits;
-
+                        
                         write_unlock_irqrestore(g_lock, flags);
                         return peer;
                 }
 
-                /* remove old incarnation of this peer */
+                if (msg->ptlm_dststamp != 0 &&
+                    msg->ptlm_dststamp <= peer->peer_myincarnation) {
+                        write_unlock_irqrestore(g_lock, flags);
+
+                        CERROR("Ignoring stale HELLO from %s: "
+                               "dststamp "LPX64" (current "LPX64")\n",
+                               libcfs_id2str(lpid),
+                               msg->ptlm_dststamp,
+                               peer->peer_myincarnation);
+                        kptllnd_peer_decref(peer);
+                        return NULL;
+                }
+
+                /* Brand new connection attempt: remove old incarnation */
                 kptllnd_peer_close_locked(peer, 0);
         }
 

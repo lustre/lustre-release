@@ -14,6 +14,15 @@ TBD         Cluster File Systems, Inc. <info@clusterfs.com>
        * bug fixes
 
 Severity   : major
+Frequency  : after Ptllnd timeouts and portals congestion
+Bugzilla   : 11659
+Description: Credit overflows
+Details    : This was a bug in ptllnd connection establishment.  The fix
+             implements better peer stamps to disambiguate connection
+	     establishment and ensure both peers enter the credit flow
+	     state machine consistently.
+
+Severity   : major
 Frequency  : rare	
 Bugzilla   : 11394
 Description: kptllnd didn't propagate some network errors up to LNET 

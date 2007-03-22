@@ -217,9 +217,11 @@ struct kptl_peer
         lnet_process_id_t       peer_id;                /* Peer's LNET id */
         ptl_process_id_t        peer_ptlid;             /* Peer's portals id */
         __u64                   peer_incarnation;       /* peer's incarnation */
+        __u64                   peer_myincarnation;     /* my incarnation at HELLO */
         int                     peer_sent_hello;        /* have I sent HELLO? */
         int                     peer_credits;           /* number of send credits */
-        int                     peer_outstanding_credits;/* number of peer credits */
+        int                     peer_outstanding_credits;/* number of peer credits to return */
+        int                     peer_active_rxs;        /* # rx-es being handled */
         int                     peer_error;             /* errno on closing this peer */
         cfs_time_t              peer_last_alive;        /* when (in jiffies) I was last alive */
         __u64                   peer_next_matchbits;    /* Next value to register RDMA from peer */
