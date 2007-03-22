@@ -63,7 +63,7 @@ case "$lustretag" in
 
     b_new_cmd)
 	portalstag="b_new_portals"
-        lnettag="b_lnet_tmp"
+        # lnettag="b_lnet_tmp"
         ;;
 
     b_cmd*)
