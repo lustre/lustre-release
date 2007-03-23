@@ -1413,15 +1413,22 @@ static int mgs_write_log_params(struct obd_device *obd, struct fs_db *fsdb,
                         goto end_while;
 
                 /* Processed in mgs_write_log_ost */
-                if (class_match_param(ptr, PARAM_FAILMODE, NULL) == 0) 
+                if (class_match_param(ptr, PARAM_FAILMODE, NULL) == 0) {
+                        if (mti->mti_flags & LDD_F_PARAM) {
+                                LCONSOLE_ERROR("%s can only be changed with "
+                                              "tunefs.lustre and --writeconf\n",
+                                              ptr);
+                                rc = -EPERM;
+                        }
                         goto end_while;
+                }
 
                 if (class_match_param(ptr, PARAM_FAILNODE, NULL) == 0) {
                         /* Add a failover nidlist */
                         rc = 0;
                         /* We already processed failovers params for new
                            targets in mgs_write_log_target */
-                        if (mti->mti_flags & LDD_F_PARAM_FNID) {
+                        if (mti->mti_flags & LDD_F_PARAM) {
                                 CDEBUG(D_MGS, "Adding failnode\n");
                                 rc = mgs_write_log_add_failnid(obd, fsdb, mti);
                         }
@@ -1713,7 +1720,7 @@ int mgs_write_log_target(struct obd_device *obd,
         } else {
                 /* Just update the params from tunefs in mgs_write_log_params */
                 CDEBUG(D_MGS, "Update params for %s\n", mti->mti_svname);
-                mti->mti_flags |= LDD_F_PARAM_FNID;
+                mti->mti_flags |= LDD_F_PARAM;
         }
         
         rc = mgs_write_log_params(obd, fsdb, mti);
@@ -1948,7 +1955,7 @@ int mgs_setparam(struct obd_device *obd, struct lustre_cfg *lcfg, char *fsname)
                                      mti->mti_svname)) 
                         GOTO(out, rc = -EINVAL);
 
-        mti->mti_flags = rc | LDD_F_PARAM_FNID;
+        mti->mti_flags = rc | LDD_F_PARAM;
 
         down(&fsdb->fsdb_sem);
         rc = mgs_write_log_params(obd, fsdb, mti); 

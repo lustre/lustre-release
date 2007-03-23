@@ -50,7 +50,7 @@
 #define LDD_F_REWRITE_LDD   0x0080 /* rewrite the LDD */
 #define LDD_F_WRITECONF     0x0100 /* regenerate all logs for this fs */
 #define LDD_F_UPGRADE14     0x0200 /* COMPAT_14 */
-#define LDD_F_PARAM_FNID    0x0400 /* process failover nids as params */
+#define LDD_F_PARAM         0x0400 /* process as lctl conf_param */
 
 enum ldd_mount_type {
         LDD_MT_EXT3 = 0, 

@@ -161,6 +161,10 @@ static int filter_export_stats_init(struct obd_device *obd,
         ENTRY;
 
         init_brw_stats(&fed->fed_brw_stats);
+
+        if (obd_uuid_equals(&exp->exp_client_uuid, &obd->obd_uuid))
+                /* Self-export gets no proc entry */
+                RETURN(0);
         
         rc = lprocfs_exp_setup(exp);
         if (rc) 
@@ -206,10 +210,8 @@ static int filter_client_add(struct obd_device *obd, struct obd_export *exp,
         LASSERTF(cl_idx > -2, "%d\n", cl_idx);
 
         /* Self-export */
-        if (strcmp(fed->fed_fcd->fcd_uuid, obd->obd_uuid.uuid) == 0) {
-                init_brw_stats(&fed->fed_brw_stats);
+        if (strcmp(fed->fed_fcd->fcd_uuid, obd->obd_uuid.uuid) == 0) 
                 RETURN(0);
-        }
 
         /* the bitmap operations can handle cl_idx > sizeof(long) * 8, so
          * there's no need for extra complication here
@@ -239,7 +241,6 @@ static int filter_client_add(struct obd_device *obd, struct obd_export *exp,
         fed->fed_lr_off = le32_to_cpu(filter->fo_fsd->lsd_client_start) +
                 cl_idx * le16_to_cpu(filter->fo_fsd->lsd_client_size);
         LASSERTF(fed->fed_lr_off > 0, "fed_lr_off = %llu\n", fed->fed_lr_off);
-        filter_export_stats_init(obd, exp);
 
         CDEBUG(D_INFO, "client at index %d (%llu) with UUID '%s' added\n",
                fed->fed_lr_idx, fed->fed_lr_off, fed->fed_fcd->fcd_uuid);
@@ -305,8 +306,6 @@ static int filter_client_free(struct obd_export *exp)
 
         CDEBUG(D_INFO, "freeing client at idx %u, offset %lld with UUID '%s'\n",
                fed->fed_lr_idx, off, fed->fed_fcd->fcd_uuid);
-
-        lprocfs_exp_cleanup(exp);
 
         LASSERT(filter->fo_last_rcvd_slots != NULL);
 
@@ -753,6 +752,7 @@ static int filter_init_server_data(struct obd_device *obd, struct file * filp)
                 } else {
                         fed = &exp->exp_filter_data;
                         fed->fed_fcd = fcd;
+                        filter_export_stats_init(obd, exp);
                         rc = filter_client_add(obd, exp, cl_idx);
                         LASSERTF(rc == 0, "rc = %d\n", rc); /* can't fail existing */
 
@@ -2016,6 +2016,8 @@ static int filter_connect(struct lustre_handle *conn, struct obd_device *obd,
         if (rc)
                 GOTO(cleanup, rc);
 
+        filter_export_stats_init(obd, exp);
+
         if (!obd->obd_replayable)
                 GOTO(cleanup, rc = 0);
 
@@ -2166,6 +2168,8 @@ static int filter_destroy_export(struct obd_export *exp)
 
         if (obd_uuid_equals(&exp->exp_client_uuid, &exp->exp_obd->obd_uuid))
                 RETURN(0);
+
+        lprocfs_exp_cleanup(exp);
 
         if (exp->exp_obd->obd_replayable)
                 filter_client_free(exp);
@@ -2807,12 +2811,12 @@ static int filter_precreate(struct obd_device *obd, struct obdo *oa,
                 dparent = filter_parent_lock(obd, group, next_id);
                 if (IS_ERR(dparent))
                         GOTO(cleanup, rc = PTR_ERR(dparent));
-                cleanup_phase = 1;	/* filter_parent_unlock(dparent) */
+                cleanup_phase = 1;      /* filter_parent_unlock(dparent) */
 
                 dchild = filter_fid2dentry(obd, dparent, group, next_id);
                 if (IS_ERR(dchild))
                         GOTO(cleanup, rc = PTR_ERR(dchild));
-                cleanup_phase = 2;	/* f_dput(dchild) */
+                cleanup_phase = 2;      /* f_dput(dchild) */
 
                 if (dchild->d_inode != NULL) {
                         /* This would only happen if lastobjid was bad on disk*/

@@ -16,7 +16,7 @@ MDSOPT=${MDSOPT:-"--mountfsoptions=acl"}
 OSTCOUNT=${OSTCOUNT:-2}
 OSTDEVBASE=${OSTDEVBASE:-$TMP/${FSNAME}-ost}
 OSTSIZE=${OSTSIZE:-300000}
-OSTOPT=""
+OSTOPT=${OSTOPT:-""}
 # Can specify individual ost devs with
 # OSTDEV1="/dev/sda"
 # on specific hosts with
