@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# lc_net.sh - script for Lustre cluster network verification
+# lc_net - script for Lustre cluster network verification
 #
 ###############################################################################
 
@@ -27,7 +27,7 @@ EOF
 }
 
 # Get the library of functions
-. @scriptlibdir@/lc_common.sh
+. @scriptlibdir@/lc_common
 
 VERBOSE_OUTPUT=false
 # Get and check the positional parameters

@@ -1,10 +1,10 @@
 #!/bin/bash
 #
-# lustre_createcsv.sh - generate a csv file from a running lustre cluster
+# lustre_createcsv - generate a csv file from a running lustre cluster
 #
 # This script is used to collect lustre target informations, linux MD/LVM device
 # informations and HA software configurations in a lustre cluster to generate a
-# csv file. In reverse, the csv file could be parsed by lustre_config.sh to 
+# csv file. In reverse, the csv file could be parsed by lustre_config to 
 # configure multiple lustre servers in parallel.
 #
 # This script should be run on the MGS node.
@@ -37,7 +37,7 @@ EOF
 }
 
 # Get the library of functions
-. @scriptlibdir@/lc_common.sh
+. @scriptlibdir@/lc_common
 
 #**************************** Global variables ****************************#
 # csv file

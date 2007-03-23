@@ -3,7 +3,7 @@
 # vim:expandtab:shiftwidth=4:softtabstop=4:tabstop=4:
 
 #
-# convert an lmc batch file to a csv file for lustre_config.sh
+# convert an lmc batch file to a csv file for lustre_config
 #
 use strict; use warnings;
 

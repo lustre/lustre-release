@@ -1,5 +1,5 @@
 #!/usr/bin/perl
-# llobdstat.pl is a utility that parses obdfilter statistics files 
+# llobdstat is a utility that parses obdfilter statistics files 
 # found at proc/fs/lustre/<ostname>/stats.
 # It is mainly useful to watch the statistics change over time.
 

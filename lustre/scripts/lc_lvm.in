@@ -2,7 +2,7 @@
 #
 # vim:expandtab:shiftwidth=4:softtabstop=4:tabstop=4:
 #
-# lc_lvm.sh - configure Linux LVM devices from a csv file
+# lc_lvm - configure Linux LVM devices from a csv file
 #
 ################################################################################
 
@@ -118,7 +118,7 @@ EOF
 }
 
 # Get the library of functions
-. @scriptlibdir@/lc_common.sh
+. @scriptlibdir@/lc_common
 
 #***************************** Global variables *****************************#
 # All the LVM device items in the csv file

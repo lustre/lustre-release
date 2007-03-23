@@ -2,7 +2,7 @@
 #
 # vim:expandtab:shiftwidth=4:softtabstop=4:tabstop=4:
 #
-# lc_md.sh - configure Linux MD devices from a csv file
+# lc_md - configure Linux MD devices from a csv file
 #
 ################################################################################
 
@@ -70,7 +70,7 @@ EOF
 }
 
 # Get the library of functions
-. @scriptlibdir@/lc_common.sh
+. @scriptlibdir@/lc_common
 
 #***************************** Global variables *****************************#
 # All the MD device items in the csv file

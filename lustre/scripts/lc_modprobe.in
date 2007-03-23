@@ -1,12 +1,12 @@
 #!/bin/bash
 #
-# lc_modprobe.sh - add lustre module options into modprobe.conf or 
-#		   modules.conf
+# lc_modprobe - add lustre module options into modprobe.conf or 
+#	        modules.conf
 #
 #################################################################################
 
 # Get the library of functions
-. @scriptlibdir@/lc_common.sh
+. @scriptlibdir@/lc_common
 
 # Check the kernel version
 KERNEL_VERSION=`uname -r`

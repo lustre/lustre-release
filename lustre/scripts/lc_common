@@ -1,8 +1,8 @@
 #
 # vim:expandtab:shiftwidth=4:softtabstop=4:tabstop=4:
 #
-# lc_common.sh - This file contains functions to be used by most or all
-#                Lustre cluster config scripts.
+# lc_common - This file contains functions to be used by most or all
+#             Lustre cluster config scripts.
 #
 ################################################################################
 
@@ -25,14 +25,14 @@ MDADM=${MDADM:-"$RAID_CMD_PATH/mdadm"}
 
 # Some scripts to be called
 SCRIPTS_PATH=${CLUSTER_SCRIPTS_PATH:-"$(cd `dirname $0`; echo $PWD)"}
-MODULE_CONFIG=${SCRIPTS_PATH}/lc_modprobe.sh
-VERIFY_CLUSTER_NET=${SCRIPTS_PATH}/lc_net.sh
-GEN_HB_CONFIG=${SCRIPTS_PATH}/lc_hb.sh
-GEN_CLUMGR_CONFIG=${SCRIPTS_PATH}/lc_cluman.sh
-SCRIPT_VERIFY_SRVIP=${SCRIPTS_PATH}/lc_servip.sh
-SCRIPT_GEN_MONCF=${SCRIPTS_PATH}/lc_mon.sh
-SCRIPT_CONFIG_MD=${SCRIPTS_PATH}/lc_md.sh
-SCRIPT_CONFIG_LVM=${SCRIPTS_PATH}/lc_lvm.sh
+MODULE_CONFIG=${SCRIPTS_PATH}/lc_modprobe
+VERIFY_CLUSTER_NET=${SCRIPTS_PATH}/lc_net
+GEN_HB_CONFIG=${SCRIPTS_PATH}/lc_hb
+GEN_CLUMGR_CONFIG=${SCRIPTS_PATH}/lc_cluman
+SCRIPT_VERIFY_SRVIP=${SCRIPTS_PATH}/lc_servip
+SCRIPT_GEN_MONCF=${SCRIPTS_PATH}/lc_mon
+SCRIPT_CONFIG_MD=${SCRIPTS_PATH}/lc_md
+SCRIPT_CONFIG_LVM=${SCRIPTS_PATH}/lc_lvm
 
 # Variables of HA software
 HBVER_HBV1="hbv1"                   # Heartbeat version 1

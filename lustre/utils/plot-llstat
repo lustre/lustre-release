@@ -1,20 +1,20 @@
 #!/usr/bin/perl -w
-# Report generation for llstat.pl
+# Report generation for llstat
 # ===============================
-#        The plot-llstat.pl script is used to generate csv file and
-# instructions files for gnuplot from the output of llstat.pl script.
-# Since llstat.pl is generic in nature, plot-llstat.pl is also generic
+#        The plot-llstat script is used to generate csv file and
+# instructions files for gnuplot from the output of llstat script.
+# Since llstat is generic in nature, plot-llstat is also generic
 # script.
 #
 # Assume that:
 # operations = { open, close, read_bytes, write_bytes, connect, create, .. etc.}
 # parameters = { Rate, Total}
 #
-#        plot-llstat.pl script creates dat(csv) file using number of operations
+#        plot-llstat script creates dat(csv) file using number of operations
 # specified by the user. Number of operations equals to number of columns in csv
 # file. And values in those columns are equals to the corresponding value of
 # the "$param_inx" parameter from the output file.
-#        The plot-llstat.pl also creates .scr file that contains instructions
+#        The plot-llstat also creates .scr file that contains instructions
 # for gnuplot to plot the graph. After generating .dat and .scr files this
 # script invokes gnuplot to display graph.
 
@@ -27,22 +27,22 @@
 #    by changing value of $param_inx.
 
 # Syntax:
-# $ plot-llstat.pl <results_filename> [parameter index (default=2, i.e. Rate)]
+# $ plot-llstat <results_filename> [parameter index (default=2, i.e. Rate)]
 # [Note: 1. The output filt given to this script must have been generated 
-# 	    with -g option to the llstat.pl script.
+# 	    with -g option to the llstat script.
 #	 2. This script may need modifications whenever there will be 
-#           modifications in output format of llstat.pl script.]
+#           modifications in output format of llstat script.]
 
 # arg 0 is filename 
 sub usages_msg(){
-	print "$0 parses and graphs the output of llstat.pl using gnuplot,\n";
+	print "$0 parses and graphs the output of llstat using gnuplot,\n";
 	print "and generates .dat files for use in spreadsheets.\n";
 	print "Usage: $0 <results_filename> [parameter_index]\n";
 	print "         where parameter_index is one of:\n";
 	print "            1 - Count per interval\n";
 	print "            2 - Rate (count per second) (default)\n";
 	print "            3 - Total count\n";
-	print "ex: # llstat.pl -i2 -g -c lustre-OST0000 > log\n";
+	print "ex: # llstat -i2 -g -c lustre-OST0000 > log\n";
 	print "    # $0 log 3\n";
         exit 1;
 }

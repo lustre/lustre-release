@@ -1,7 +1,7 @@
 #!/bin/bash
 #
-# lc_cluman.sh - script for generating the Red Hat Cluster Manager
-#		 HA software's configuration files
+# lc_cluman - script for generating the Red Hat Cluster Manager
+#	      HA software's configuration files
 #
 ################################################################################
 
@@ -38,7 +38,7 @@ EOF
 }
 
 # Get the library of functions
-. @scriptlibdir@/lc_common.sh
+. @scriptlibdir@/lc_common
 
 #****************************** Global variables ******************************#
 TMP_DIR=${CLUMGR_TMP_DIR}		# Temporary directory

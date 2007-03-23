@@ -3,7 +3,7 @@
 # vim:expandtab:shiftwidth=4:softtabstop=4:tabstop=4:
 
 #
-# lustre_config.sh - format and set up multiple lustre servers from a csv file
+# lustre_config - format and set up multiple lustre servers from a csv file
 #
 # This script is used to parse each line of a spreadsheet (csv file) and 
 # execute remote commands to format (mkfs.lustre) every Lustre target 
@@ -228,7 +228,7 @@ EOF
 }
 
 # Get the library of functions
-. @scriptlibdir@/lc_common.sh
+. @scriptlibdir@/lc_common
 
 #***************************** Global variables *****************************#
 declare -a MGS_NODENAME             # node names of the MGS servers
@@ -1139,7 +1139,7 @@ modify_fstab() {
 
         # Execute remote command to modify /etc/fstab
         device_name=${DEVICE_NAME[i]//\//\\/}
-        COMMAND=". @scriptlibdir@/lc_common.sh; \
+        COMMAND=". @scriptlibdir@/lc_common; \
                 sed -i \"/^${device_name}\t/d\" \$(fcanon /etc/fstab); \
                 echo -e \"${mntent}\" >> \$(fcanon /etc/fstab)"
         ${REMOTE} ${HOST_NAME[i]} "${COMMAND}" >&2

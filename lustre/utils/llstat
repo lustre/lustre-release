@@ -1,5 +1,5 @@
 #!/usr/bin/perl
-# llstat.pl is a utility that takes stats files as input with optional 
+# llstat is a utility that takes stats files as input with optional 
 # clear-flag. The clear-flag is used to clear the stats file before 
 # printing stats information. The lustre stats files generally located
 # inside proc/fs/lustre/. This program first reads the required statistics

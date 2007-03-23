@@ -1,7 +1,7 @@
 #!/bin/bash
 #
-# lc_hb.sh - script for generating the Heartbeat HA software's
-#	     configuration files
+# lc_hb - script for generating the Heartbeat HA software's
+#         configuration files
 #
 ###############################################################################
 
@@ -31,7 +31,7 @@ EOF
 }
 
 # Get the library of functions
-. @scriptlibdir@/lc_common.sh
+. @scriptlibdir@/lc_common
 
 #****************************** Global variables ******************************#
 # Heartbeat tools
