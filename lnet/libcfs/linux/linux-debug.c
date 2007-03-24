@@ -81,7 +81,7 @@ void libcfs_run_upcall(char **argv)
         LASSERT(argc >= 2);
 
         rc = USERMODEHELPER(argv[0], argv, envp);
-        if (rc < 0) {
+        if (rc < 0 && rc != -ENOENT) {
                 CERROR("Error %d invoking LNET upcall %s %s%s%s%s%s%s%s%s; "
                        "check /proc/sys/lnet/upcall\n",
                        rc, argv[0], argv[1],
@@ -90,7 +90,7 @@ void libcfs_run_upcall(char **argv)
                        argc < 5 ? "" : ",", argc < 5 ? "" : argv[4],
                        argc < 6 ? "" : ",...");
         } else {
-                CWARN("Invoked LNET upcall %s %s%s%s%s%s%s%s%s\n",
+                CDEBUG(D_HA, "Invoked LNET upcall %s %s%s%s%s%s%s%s%s\n",
                        argv[0], argv[1],
                        argc < 3 ? "" : ",", argc < 3 ? "" : argv[2],
                        argc < 4 ? "" : ",", argc < 4 ? "" : argv[3],
