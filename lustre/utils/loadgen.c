@@ -248,7 +248,7 @@ static int write_proc(char *proc_path, char *value)
         return rc;
 }
 
-static int read_proc(char *proc_path, long long *value)
+static int read_proc(char *proc_path, unsigned long long *value)
 {
         int fd, rc;
         char buf[50];

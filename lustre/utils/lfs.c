@@ -37,6 +37,7 @@
 #include <fcntl.h>
 #include <dirent.h>
 #include <time.h>
+#include <ctype.h>
 
 #include <lnet/api-support.h>
 #include <lnet/lnetctl.h>
