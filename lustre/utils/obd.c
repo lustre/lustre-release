@@ -47,6 +47,7 @@
 #include <sys/time.h>
 #include <errno.h>
 #include <string.h>
+#include <ctype.h>
 
 #ifdef HAVE_ASM_PAGE_H
 #include <asm/page.h>           /* needed for PAGE_SIZE - rread */
