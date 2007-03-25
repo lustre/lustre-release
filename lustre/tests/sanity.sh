@@ -7,8 +7,8 @@
 set -e
 
 ONLY=${ONLY:-"$*"}
-# bug number for skipped test: 4900 4900 2108 9789 3637 9789 3561 5188/5749 10764
-ALWAYS_EXCEPT=${ALWAYS_EXCEPT:-"27o 27q  42a  42b  42c  42d  45   68        75"}
+# bug number for skipped test: 4900 4900 2108 3637 3561 5188/5749 10764
+ALWAYS_EXCEPT=${ALWAYS_EXCEPT:-"27o 27q  45   68      75"}
 # UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
 
 [ "$SLOW" = "no" ] && EXCEPT="$EXCEPT 24o 27m 36f 36g 51b 51c 63 64b 71 73 77 101 115"
@@ -1682,17 +1682,25 @@ count_ost_writes() {
 
 # decent default
 WRITEBACK_SAVE=500
+DIRTY_RATIO_SAVE=40
+MAX_DIRTY_RATIO=50
+BG_DIRTY_RATIO_SAVE=10
+MAX_BG_DIRTY_RATIO=25
 
 start_writeback() {
 	trap 0
-	# in 2.6, restore /proc/sys/vm/dirty_writeback_centisecs
+	# in 2.6, restore /proc/sys/vm/dirty_writeback_centisecs,
+	# dirty_ratio, dirty_background_ratio
 	if [ -f /proc/sys/vm/dirty_writeback_centisecs ]; then
 		echo $WRITEBACK_SAVE > /proc/sys/vm/dirty_writeback_centisecs
+		echo $BG_DIRTY_RATIO_SAVE > /proc/sys/vm/dirty_background_ratio
+		echo $DIRTY_RATIO_SAVE > /proc/sys/vm/dirty_ratio
 	else
 		# if file not here, we are a 2.4 kernel
 		kill -CONT `pidof kupdated`
 	fi
 }
+
 stop_writeback() {
 	# setup the trap first, so someone cannot exit the test at the
 	# exact wrong time and mess up a machine
@@ -1701,6 +1709,12 @@ stop_writeback() {
 	if [ -f /proc/sys/vm/dirty_writeback_centisecs ]; then
 		WRITEBACK_SAVE=`cat /proc/sys/vm/dirty_writeback_centisecs`
 		echo 0 > /proc/sys/vm/dirty_writeback_centisecs
+		# save and increase /proc/sys/vm/dirty_ratio
+		DIRTY_RATIO_SAVE=`cat /proc/sys/vm/dirty_ratio`
+		echo $MAX_DIRTY_RATIO > /proc/sys/vm/dirty_ratio
+		# save and increase /proc/sys/vm/dirty_background_ratio
+		BG_DIRTY_RATIO_SAVE=`cat /proc/sys/vm/dirty_background_ratio`
+		echo $MAX_BG_DIRTY_RATIO > /proc/sys/vm/dirty_background_ratio
 	else
 		# if file not here, we are a 2.4 kernel
 		kill -STOP `pidof kupdated`
