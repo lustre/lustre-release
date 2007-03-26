@@ -696,21 +696,23 @@ finish:
                         /* Sigh, some compilers do not like #ifdef in the middle
                            of macro arguments */
 #ifdef __KERNEL__
-                        const char *action = "upgrading this client";
+                        const char *older =
+                                "older.  Consider upgrading this client";
 #else
-                        const char *action = "recompiling this application";
+                        const char *older =
+                                "older.  Consider recompiling this application";
 #endif
+                        const char *newer = "newer than client version";
 
-                        CWARN("Server %s version (%d.%d.%d.%d) is much %s. "
-                              "Consider %s (%s).\n",
-                              obd2cli_tgt(imp->imp_obd),
-                              OBD_OCD_VERSION_MAJOR(ocd->ocd_version),
-                              OBD_OCD_VERSION_MINOR(ocd->ocd_version),
-                              OBD_OCD_VERSION_PATCH(ocd->ocd_version),
-                              OBD_OCD_VERSION_FIX(ocd->ocd_version),
-                              ocd->ocd_version > LUSTRE_VERSION_CODE ?
-                              "newer" : "older",
-                              action, LUSTRE_VERSION_STRING);
+                        LCONSOLE_WARN("Server %s version (%d.%d.%d.%d) "
+                                      "is much %s (%s)\n",
+                                      obd2cli_tgt(imp->imp_obd),
+                                      OBD_OCD_VERSION_MAJOR(ocd->ocd_version),
+                                      OBD_OCD_VERSION_MINOR(ocd->ocd_version),
+                                      OBD_OCD_VERSION_PATCH(ocd->ocd_version),
+                                      OBD_OCD_VERSION_FIX(ocd->ocd_version),
+                                      ocd->ocd_version > LUSTRE_VERSION_CODE ?
+                                      newer : older, LUSTRE_VERSION_STRING);
                 }
 
                 if (ocd->ocd_connect_flags & OBD_CONNECT_BRW_SIZE) {
@@ -745,18 +747,16 @@ finish:
                            /* Actually servers are only supposed to refuse
                               connection from liblustre clients, so we should
                               never see this from VFS context */
-                                CERROR("Server %s version (%d.%d.%d.%d) "
-                                       "refused connection from this client "
-                                       "as too %s version (%s).  Client must "
-                                       "be recompiled\n",
-                                      obd2cli_tgt(imp->imp_obd),
-                                      OBD_OCD_VERSION_MAJOR(ocd->ocd_version),
-                                      OBD_OCD_VERSION_MINOR(ocd->ocd_version),
-                                      OBD_OCD_VERSION_PATCH(ocd->ocd_version),
-                                      OBD_OCD_VERSION_FIX(ocd->ocd_version),
-                                      ocd->ocd_version > LUSTRE_VERSION_CODE ?
-                                      "old" : "new",
-                                      LUSTRE_VERSION_STRING);
+                                LCONSOLE_ERROR("Server %s version (%d.%d.%d.%d)"
+                                        " refused connection from this client "
+                                        "with an incompatible version (%s).  "
+                                        "Client must be recompiled\n",
+                                        obd2cli_tgt(imp->imp_obd),
+                                        OBD_OCD_VERSION_MAJOR(ocd->ocd_version),
+                                        OBD_OCD_VERSION_MINOR(ocd->ocd_version),
+                                        OBD_OCD_VERSION_PATCH(ocd->ocd_version),
+                                        OBD_OCD_VERSION_FIX(ocd->ocd_version),
+                                        LUSTRE_VERSION_STRING);
                                 ptlrpc_deactivate_import(imp);
                                 IMPORT_SET_STATE(imp, LUSTRE_IMP_CLOSED);
                         }
