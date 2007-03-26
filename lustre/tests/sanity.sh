@@ -3779,6 +3779,16 @@ test_117() # bug 10891
 }
 run_test 117 "verify fsfilt_extend =========="
 
+test_118() #bug 11710
+{
+	
+	multiop $DIR/$tfile oO_CREAT:O_RDWR:O_SYNC:w4096c;
+	dirty=$(grep -c dirty /proc/fs/lustre/llite/lustre-*/dump_page_cache)
+	
+	return $dirty
+}
+run_test 118 "verify O_SYNC work"
+
 TMPDIR=$OLDTMPDIR
 TMP=$OLDTMP
 HOME=$OLDHOME

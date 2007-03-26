@@ -1410,14 +1410,6 @@ out:
         retval = (sum > 0) ? sum : retval;
         lprocfs_counter_add(ll_i2sbi(inode)->ll_stats, LPROC_LL_WRITE_BYTES,
                             retval > 0 ? retval : 0);
-
-        if (retval > 0 && ((file->f_flags & O_SYNC) || IS_SYNC(inode))) {
-                rc = ll_sync_page_range(inode, inode->i_mapping, *ppos - retval,
-                                        count);
-                if (rc < 0)
-                        retval = rc;
-        }
-
         RETURN(retval);
 }
 

@@ -291,8 +291,7 @@ static int ll_ap_make_ready(void *data, int cmd)
         if (TryLockPage(page))
                 RETURN(-EAGAIN);
 
-        LL_CDEBUG_PAGE(D_PAGE, page, "made ready\n");
-        page_cache_get(page);
+        LASSERT(!PageWriteback(page));
 
         /* if we left PageDirty we might get another writepage call
          * in the future.  list walkers are bright enough
@@ -301,7 +300,20 @@ static int ll_ap_make_ready(void *data, int cmd)
          * we got the page cache list we'd create a lock inversion
          * with the removepage path which gets the page lock then the
          * cli lock */
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,0)
         clear_page_dirty(page);
+#else
+        LASSERTF(!PageWriteback(page),"cmd %x page %p ino %lu index %lu\n", cmd, page,
+                 page->mapping->host->i_ino, page->index);
+        clear_page_dirty_for_io(page);
+
+        /* This actually clears the dirty bit in the radix tree.*/
+        set_page_writeback(page);
+#endif
+
+        LL_CDEBUG_PAGE(D_PAGE, page, "made ready\n");
+        page_cache_get(page);
+
         RETURN(0);
 }
 
@@ -707,8 +719,12 @@ static int queue_or_sync_write(struct obd_export *exp, struct inode *inode,
 
         rc = oig_wait(oig);
 
-        if (!rc && async_flags & ASYNC_READY)
+        if (!rc && async_flags & ASYNC_READY) {
                 unlock_page(llap->llap_page);
+                if (PageWriteback(llap->llap_page)) {
+                        end_page_writeback(llap->llap_page);
+                }
+        }
 
         LL_CDEBUG_PAGE(D_PAGE, llap->llap_page, "sync write returned %d\n", rc);
 
@@ -827,6 +843,7 @@ int ll_ap_completion(void *data, int cmd, struct obdo *oa, int rc)
         llap = LLAP_FROM_COOKIE(data);
         page = llap->llap_page;
         LASSERT(PageLocked(page));
+        LASSERT(CheckWriteback(page,cmd));
 
         LL_CDEBUG_PAGE(D_PAGE, page, "completing cmd %d with %d\n", cmd, rc);
 
@@ -1350,6 +1367,9 @@ int ll_writepage(struct page *page)
         if (IS_ERR(llap))
                 GOTO(out, rc = PTR_ERR(llap));
 
+        LASSERT(!PageWriteback(page));
+        set_page_writeback(page);
+
         page_cache_get(page);
         if (llap->llap_write_queued) {
                 LL_CDEBUG_PAGE(D_PAGE, page, "marking urgent\n");
@@ -1367,6 +1387,9 @@ out:
                 if (!lli->lli_async_rc)
                         lli->lli_async_rc = rc;
                 /* re-dirty page on error so it retries write */
+                if (PageWriteback(page)) {
+                        end_page_writeback(page);
+                }
                 ll_redirty_page(page);
                 unlock_page(page);
         }

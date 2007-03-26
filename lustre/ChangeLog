@@ -322,7 +322,7 @@ Description: Crash on NFS re-export node
 Details    : under very unusual load conditions an assertion is hit in
 	     ll_intent_file_open()
 
-Severity   : major	     
+Severity   : major
 Frequency  : only if OST filesystem is corrupted
 Bugzilla   : 9829
 Description: client incorrectly hits assertion in ptlrpc_replay_req()
@@ -340,6 +340,14 @@ Details    : Large single O_DIRECT read and write calls can fail to allocate
 	     a sufficiently large buffer to process the request.  In case of
 	     allocation failure the allocation is retried with a smaller
 	     buffer and broken into smaller requests.
+
+Severity   : major
+Bugzilla   : 11710
+Frequency  : always
+Description: add support PG_writeback bit
+Details    : add support for PG_writeback bit for Lustre, for more carefull
+             work with page cache in 2.6 kernel. This also fix some deadlocks 
+	     and remove hack for work O_SYNC with 2.6 kernel.
 
 ------------------------------------------------------------------------------
 

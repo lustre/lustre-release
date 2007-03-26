@@ -61,6 +61,70 @@ pop_arg(int argc, char *argv[])
 
         return argv[cur_arg++];
 }
+
+struct flag_mapping {
+       const char *string;
+       const int  flag;
+} flag_table[] = {
+       {"O_RDONLY", O_RDONLY},
+       {"O_WRONLY", O_WRONLY},
+       {"O_RDWR", O_RDWR},
+       {"O_CREAT", O_CREAT},
+       {"O_EXCL", O_EXCL},
+       {"O_NOCTTY", O_NOCTTY},
+       {"O_TRUNC", O_TRUNC},
+       {"O_APPEND", O_APPEND},
+       {"O_NONBLOCK", O_NONBLOCK},
+       {"O_NDELAY", O_NDELAY},
+       {"O_SYNC", O_SYNC},
+#ifdef O_DIRECT
+       {"O_DIRECT", O_DIRECT},
+#endif
+       {"O_LARGEFILE", O_LARGEFILE},
+       {"O_DIRECTORY", O_DIRECTORY},
+       {"O_NOFOLLOW", O_NOFOLLOW},
+       {"", -1}
+};
+
+int get_flags(char *data, int *rflags)
+{
+        char *cloned_flags;
+        char *tmp;
+        int flag_set = 0;
+        int flags = 0;
+        int size = 0;
+
+        cloned_flags = strdup(data);
+        if (cloned_flags == NULL) {
+                fprintf(stderr, "Insufficient memory.\n");
+                exit(-1);
+        }
+
+        for (tmp = strtok(cloned_flags, ":"); tmp;
+             tmp = strtok(NULL, ":")) {
+                int i;
+
+                size = tmp - cloned_flags;
+                for (i = 0; flag_table[i].flag != -1; i++) {
+                        if (!strcmp(tmp, flag_table[i].string)){
+                                flags |= flag_table[i].flag;
+                                size += strlen(flag_table[i].string);
+                                flag_set = 1;
+                                break;
+                        }
+                }
+        }
+        free(cloned_flags);
+
+        if (!flag_set) {
+                *rflags = O_RDONLY;
+                return 0;
+        }
+
+        *rflags = flags;
+        return size;
+}
+
 #define POP_ARG() (pop_arg(argc, argv))
 #define min(a,b) ((a)>(b)?(b):(a))
 
@@ -72,6 +136,8 @@ int main(int argc, char **argv)
         size_t mmap_len = 0, i;
         unsigned char *mmap_ptr = NULL, junk = 0;
         int rc, len, fd = -1;
+        int flags;
+        int save_errno;
 
         if (argc < 3) {
                 fprintf(stderr, usage, argv[0]);
@@ -92,22 +158,25 @@ int main(int argc, char **argv)
                         break;
                 case 'c':
                         if (close(fd) == -1) {
+                                save_errno = errno;
                                 perror("close");
-                                exit(1);
+                                exit(save_errno);
                         }
                         fd = -1;
                         break;
                 case 'd':
                         if (mkdir(fname, 0755) == -1) {
+                                save_errno = errno;
                                 perror("mkdir(0755)");
-                                exit(1);
+                                exit(save_errno);
                         }
                         break;
                 case 'D':
                         fd = open(fname, O_DIRECTORY);
                         if (fd == -1) {
+                                save_errno = errno;
                                 perror("open(O_DIRECTORY)");
-                                exit(1);
+                                exit(save_errno);
                         }
                         break;
                 case 'l':
@@ -115,8 +184,9 @@ int main(int argc, char **argv)
                         if (!newfile)
                                 newfile = fname;
                         if (symlink(fname, newfile)) {
+                                save_errno = errno;
                                 perror("symlink()");
-                                exit(1);
+                                exit(save_errno);
                         }
                         break;
                 case 'L':
@@ -124,14 +194,16 @@ int main(int argc, char **argv)
                         if (!newfile)
                                 newfile = fname;
                         if (link(fname, newfile)) {
+                                save_errno = errno;
                                 perror("symlink()");
-                                exit(1);
+                                exit(save_errno);
                         }
                         break;
                 case 'm':
                         if (mknod(fname, S_IFREG | 0644, 0) == -1) {
+                                save_errno = errno;
                                 perror("mknod(S_IFREG|0644, 0)");
-                                exit(1);
+                                exit(save_errno);
                         }
                         break;
                 case 'M':
@@ -139,8 +211,9 @@ int main(int argc, char **argv)
                         mmap_ptr = mmap(NULL, mmap_len, PROT_WRITE | PROT_READ,
                                         MAP_SHARED, fd, 0);
                         if (mmap_ptr == MAP_FAILED) {
+                                save_errno = errno;
                                 perror("mmap");
-                                exit(1);
+                                exit(save_errno);
                         }
                         break;
                 case 'N':
@@ -148,41 +221,48 @@ int main(int argc, char **argv)
                         if (!newfile)
                                 newfile = fname;
                         if (rename (fname, newfile)) {
+                                save_errno = errno;
                                 perror("rename()");
-                                exit(1);
+                                exit(save_errno);
                         }
                         break;
                 case 'O':
                         fd = open(fname, O_CREAT|O_RDWR, 0644);
                         if (fd == -1) {
+                                save_errno = errno;
                                 perror("open(O_RDWR|O_CREAT)");
-                                exit(1);
+                                exit(save_errno);
                         }
                         break;
                 case 'o':
-                        fd = open(fname, O_RDONLY);
+                        len = get_flags(commands+1, &flags);
+                        commands += len;
+                        fd = open(fname, flags);
                         if (fd == -1) {
-                                perror("open(O_RDONLY)");
-                                exit(1);
+                                save_errno = errno;
+                                perror("open");
+                                exit(save_errno);
                         }
                         break;
-                case 'r': 
+                case 'r':
                         len = atoi(commands+1);
                         if (len <= 0)
                                 len = 1;
                         while(len > 0) {
                                 if (read(fd, &buf,
                                          min(len,sizeof(buf))) == -1) {
+                                        save_errno = errno;
                                         perror("read");
-                                        exit(1);
+                                        exit(save_errno);
                                 }
                                 len -= sizeof(buf);
                         }
                         break;
                 case 'S':
                         if (fstat(fd, &st) == -1) {
+                                save_errno = errno;
                                 perror("fstat");
-                                exit(1);
+                                exit(save_errno);
                         }
                         break;
                 case 'R':
@@ -191,46 +271,52 @@ int main(int argc, char **argv)
                         break;
                 case 's':
                         if (stat(fname, &st) == -1) {
+                                save_errno = errno;
                                 perror("stat");
-                                exit(1);
+                                exit(save_errno);
                         }
                         break;
                 case 't':
                         if (fchmod(fd, 0) == -1) {
+                                save_errno = errno;
                                 perror("fchmod");
-                                exit(1);
+                                exit(save_errno);
                         }
                         break;
                 case 'T':
                         len = atoi(commands+1);
                         if (ftruncate(fd, len) == -1) {
+                                save_errno = errno;
                                 printf("ftruncate (%d,%d)\n", fd, len);
                                 perror("ftruncate");
-                                exit(1);
+                                exit(save_errno);
                         }
                         break;
                 case 'u':
                         if (unlink(fname) == -1) {
+                                save_errno = errno;
                                 perror("unlink");
-                                exit(1);
+                                exit(save_errno);
                         }
                         break;
                 case 'U':
                         if (munmap(mmap_ptr, mmap_len)) {
+                                save_errno = errno;
                                 perror("munmap");
-                                exit(1);
+                                exit(save_errno);
                         }
                         break;
-                case 'w': 
+                case 'w':
                         len = atoi(commands+1);
                         if (len <= 0)
                                 len = 1;
                         while(len > 0) {
-                                if ((rc = write(fd, buf, 
+                                if ((rc = write(fd, buf,
                                                 min(len, sizeof(buf))))
                                     == -1) {
+                                        save_errno = errno;
                                         perror("write");
-                                        exit(1);
+                                        exit(save_errno);
                                 }
                                 len -= sizeof(buf);
                         }
@@ -241,20 +327,23 @@ int main(int argc, char **argv)
                         break;
                 case 'y':
                         if (fsync(fd) == -1) {
+                                save_errno = errno;
                                 perror("fsync");
-                                exit(1);
+                                exit(save_errno);
                         }
                         break;
                 case 'Y':
                         if (fdatasync(fd) == -1) {
+                                save_errno = errno;
                                 perror("fdatasync");
-                                exit(1);
+                                exit(save_errno);
                         }
                 case 'z':
                         len = atoi(commands+1);
                         if (lseek(fd, len, SEEK_SET) == -1) {
+                                save_errno = errno;
                                 perror("lseek");
-                                exit(1);
+                                exit(save_errno);
                         }
                         break;
                 case '0':

@@ -213,6 +213,8 @@ static inline int cleanup_group_info(void)
         flock_lock_file_wait(file, lock)
 #endif
 
+#define CheckWriteback(page, cmd) \
+        (!(!PageWriteback(page) && cmd == OBD_BRW_WRITE))
 
 #else /* 2.4.. */
 
@@ -354,6 +356,7 @@ static inline void cond_resched(void)
 #define __set_page_ll_data(page, llap) set_page_private(page, (unsigned long)llap)
 #define __clear_page_ll_data(page) set_page_private(page, 0)
 #define PageWriteback(page) 0
+#define CheckWriteback(page, cmd) 1
 #define set_page_writeback(page) do {} while (0)
 #define end_page_writeback(page) do {} while (0)
 

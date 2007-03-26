@@ -147,9 +147,3 @@ struct address_space_operations ll_aops = {
 #endif
 };
 
-int ll_sync_page_range(struct inode *inode, struct address_space *mapping,
-                       loff_t start, size_t count)
-{
-        return 0;
-}
-

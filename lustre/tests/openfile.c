@@ -81,7 +81,7 @@ int main(int argc, char** argv)
                         }
 
                         strncpy(cloned_flags, optarg, strlen(optarg)+1);
-                        for (tmp = strtok(optarg, ":|"); tmp;
+                        for (tmp = strtok(cloned_flags, ":|"); tmp;
                              tmp = strtok(NULL, ":|")) {
                                 int i = 0;
 #ifdef DEBUG
@@ -101,6 +101,7 @@ int main(int argc, char** argv)
                                         exit(-1);
                                 }
                         }
+                        free(cloned_flags);
 #ifdef DEBUG
                         printf("flags = %x\n", flags);
 #endif
