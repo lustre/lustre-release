@@ -1222,9 +1222,9 @@ static int filter_prepare_destroy(struct obd_device *obd, obd_id objid)
         ENTRY;
         /* Tell the clients that the object is gone now and that they should
          * throw away any cached pages. */
-        rc = ldlm_cli_enqueue_local(obd->obd_namespace, res_id, LDLM_EXTENT, 
-                                    &policy, LCK_PW, &flags, ldlm_blocking_ast, 
-                                    ldlm_completion_ast, NULL, NULL, 0, NULL, 
+        rc = ldlm_cli_enqueue_local(obd->obd_namespace, res_id, LDLM_EXTENT,
+                                    &policy, LCK_PW, &flags, ldlm_blocking_ast,
+                                    ldlm_completion_ast, NULL, NULL, 0, NULL,
                                     &lockh);
 
         /* We only care about the side-effects, just drop the lock. */
@@ -2378,6 +2378,9 @@ int filter_setattr_internal(struct obd_export *exp, struct dentry *dentry,
                 handle = fsfilt_start_log(exp->exp_obd, inode,
                                           FSFILT_OP_SETATTR, oti, 1);
 
+                if (IS_ERR(handle))
+                        GOTO(out_unlock, rc = PTR_ERR(handle));
+
                 /* update inode EA only once when inode is suid bit marked. As
                  * on 2.6.x UID and GID may be set separately, we check here
                  * only one of them to avoid double setting. */
@@ -2386,10 +2389,10 @@ int filter_setattr_internal(struct obd_export *exp, struct dentry *dentry,
         } else {
                 handle = fsfilt_start(exp->exp_obd, inode,
                                       FSFILT_OP_SETATTR, oti);
-        }
 
-        if (IS_ERR(handle))
-                GOTO(out_unlock, rc = PTR_ERR(handle));
+                if (IS_ERR(handle))
+                        GOTO(out_unlock, rc = PTR_ERR(handle));
+        }
 
         if (oa->o_valid & OBD_MD_FLFLAGS) {
                 rc = fsfilt_iocontrol(exp->exp_obd, inode, NULL,
