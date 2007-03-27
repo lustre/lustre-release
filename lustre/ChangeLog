@@ -1,4 +1,35 @@
 tbd         Cluster File Systems, Inc. <info@clusterfs.com>
+       * version 1.6.1
+       * CONFIGURATION CHANGE.  This version of Lustre WILL NOT
+	 INTEROPERATE with 1.4.x versions automatically.  In many cases a
+	 special upgrade step is needed. Please read the user documentation
+	 before upgrading any part of a 1.4.x system.
+       * WARNING: Lustre configuration and startup changes are required with
+	 1.6.x releases.  See https://mail.clusterfs.com/wikis/lustre/MountConf
+	 for details.
+       * Support for kernels:
+        2.6.9-42.0.10.EL (RHEL 4)
+        2.6.5-7.283 (SLES 9)
+        2.4.21-47.0.1.EL (RHEL 3)
+        2.6.12.6 vanilla (kernel.org)
+        2.6.16.27-0.9 (SLES 10)
+       * Client support for unpatched kernels:
+	(see https://mail.clusterfs.com/wikis/lustre/PatchlessClient)
+	2.6.16 - 2.6.19 vanilla (kernel.org)
+	2.6.9-42.0.8EL (RHEL 4)
+       * Recommended e2fsprogs version: 1.39.cfs5
+       * bug fixes
+       * Note that reiserfs quotas are temporarily disabled on SLES 10 in this
+	 kernel.
+
+Severity   : enhancement
+Bugzilla   : 10997
+Description: lfs setstripe use optional parameters instead of postional 
+	     parameters.
+
+--------------------------------------------------------------------------------
+
+tbd         Cluster File Systems, Inc. <info@clusterfs.com>
        * version 1.6.0
        * CONFIGURATION CHANGE.  This version of Lustre WILL NOT
 	 INTEROPERATE with older versions automatically.  In many cases a
@@ -12,7 +43,7 @@ tbd         Cluster File Systems, Inc. <info@clusterfs.com>
         2.6.5-7.283 (SLES 9)
         2.4.21-47.0.1.EL (RHEL 3)
         2.6.12.6 vanilla (kernel.org)
-        2.6.16.27-0.9 (SLES10)
+        2.6.16.27-0.9 (SLES 10)
        * Client support for unpatched kernels:
         (see https://mail.clusterfs.com/wikis/lustre/PatchlessClient)
         2.6.16 - 2.6.19 vanilla (kernel.org)
@@ -41,7 +72,7 @@ Bugzilla   : 9851
 Description: startup order invariance
 Details    : MDTs and OSTs can be started in any order.  Clients only
 	     require the MDT to complete startup.
-	
+
 Severity   : enhancement
 Bugzilla   : 4899
 Description: parallel, asynchronous orphan cleanup
@@ -54,14 +85,14 @@ Description: optimized stripe assignment
 Details    : stripe assignments are now made based on ost space available,
 	     ost previous usage, and OSS previous usage, in order to try
 	     to optimize storage space and networking resources.
-	
+
 Severity   : enhancement
 Bugzilla   : 4226
 Description: Permanently set tunables
 Details    : All writable /proc/fs/lustre tunables can now be permanently
 	     set on a per-server basis, at mkfs time or on a live
 	     system.
-	
+
 Severity   : enhancement
 Bugzilla   : 10547
 Description: Lustre message v2
@@ -79,7 +110,7 @@ Bugzilla   : 6062
 Description: SPEC SFS validation failure on NFS v2 over lustre.
 Details    : Changes the blocksize for regular files to be 2x RPC size,
 	     and not depend on stripe size.
-	
+
 Severity   : enhancement
 Bugzilla   : 9293
 Description: Multiple MD RPCs in flight.
@@ -103,13 +134,13 @@ Bugzilla   : 22485
 Description: per-client statistics on server
 Details    : Add ldlm and operations statistics for each client in
 	     /proc/fs/lustre/mds|obdfilter/*/exports/
-	
+
 Severity   : enhancement
 Bugzilla   : 22486
 Description: improved MDT statistics
 Details    : Add detailed MDT operations statistics in
 	     /proc/fs/lustre/mds/*/stats
-	
+
 Severity   : enhancement
 Bugzilla   : 10968
 Description: VFS operations stats
@@ -123,14 +154,14 @@ Bugzilla   : 6380
 Description: Fix client-side osc byte counters
 Details    : The osc read/write byte counters in
 	     /proc/fs/lustre/osc/*/stats are now working
-	
+
 Severity   : minor
 Frequency  : always as root on SLES
 Bugzilla   : 10667
 Description: Failure of copying files with lustre special EAs.
 Details    : Client side always return success for setxattr call for lustre
 	     special xattr (currently only "trusted.lov").
-	
+
 Severity   : minor
 Frequency  : always
 Bugzilla   : 10345
@@ -168,7 +199,7 @@ Severity   : enhancement
 Bugzilla   : 10998
 Description: provide MGS failover
 Details    : Added config lock reacquisition after MGS server failover. 
-	
+
 Severity   : enhancement
 Bugzilla   : 11461
 Description: add Linux 2.4 support
@@ -213,7 +244,7 @@ Description: Set external device read-only also
 Details    : During a commanded failover stop, we set the disk device
 	     read-only while the server shuts down. We now also set any
 	     external journal device read-only at the same time. 
-	
+
 Severity   : minor
 Frequency  : when upgrading from 1.4 while trying to change parameters	
 Bugzilla   : 11692
@@ -227,28 +258,6 @@ Bugzilla   : 11149
 Description: QOS code breaks on skipped indicies
 Details    : Add checks for missing OST indicies in the QOS code, so OSTs
 	     created with --index need not be sequential.
-
-Severity   : normal
-Frequency  : always
-Bugzilla   : 3244
-Description: Addition of EXT3_FEATURE_RO_COMPAT_DIR_NLINKS flag for
-	     > 32000 subdirectories
-Details    : Add EXT3_FEATURE_RO_COMPAT_DIR_NLINK flag to 
-	     EXT3_FEATURE_RO_COMPAT_SUPP. This flag will be set whenever
-	     subdirectory count crosses 32000. This will aid e2fsck to
-	     correctly handle more than 32000 subdirectories.
-	     
-Severity   : normal
-Frequency  : always
-Bugzilla   : 11090
-Description: versioning check is incomplete
-Details    : Checking the version difference of client vs. server, report
-             error if the gap is too big.
-
-Severity   : enhancement
-Bugzilla   : 10997
-Description: lfs setstripe use optional parameters instead of postional 
-             parameters.
 
 ------------------------------------------------------------------------------
 
@@ -341,12 +350,29 @@ Details    : Large single O_DIRECT read and write calls can fail to allocate
 	     allocation failure the allocation is retried with a smaller
 	     buffer and broken into smaller requests.
 
+Severity   : normal
+Frequency  : always
+Bugzilla   : 3244
+Description: Addition of EXT3_FEATURE_RO_COMPAT_DIR_NLINKS flag for
+	     > 32000 subdirectories
+Details    : Add EXT3_FEATURE_RO_COMPAT_DIR_NLINK flag to 
+	     EXT3_FEATURE_RO_COMPAT_SUPP. This flag will be set whenever
+	     subdirectory count crosses 32000. This will aid e2fsck to
+	     correctly handle more than 32000 subdirectories.
+
+Severity   : normal
+Frequency  : always
+Bugzilla   : 11090
+Description: versioning check is incomplete
+Details    : Checking the version difference of client vs. server, report
+	     error if the gap is too big.
+
 Severity   : major
 Bugzilla   : 11710
 Frequency  : always
 Description: add support PG_writeback bit
 Details    : add support for PG_writeback bit for Lustre, for more carefull
-             work with page cache in 2.6 kernel. This also fix some deadlocks 
+	     work with page cache in 2.6 kernel. This also fix some deadlocks 
 	     and remove hack for work O_SYNC with 2.6 kernel.
 
 ------------------------------------------------------------------------------
@@ -607,7 +633,7 @@ Bugzilla   : 10667
 Description: Error of copying files with lustre special EAs as root
 Details    : Client side always return success for setxattr call for lustre
 	     special xattr (currently only "trusted.lov").
-	
+
 Severity   : normal
 Frequency  : rarely on clusters with both ia64+i386 clients
 Bugzilla   : 10672
@@ -1201,7 +1227,7 @@ Description: Configuration change for the XT3
 	     Rather --with-portals=<path-to-portals-includes> is used to
 	     enable building on the XT3.  In addition to enable XT3 specific
 	     features the option --enable-cray-xt3 must be used.
-	
+
 Severity   : major
 Frequency  : rare
 Bugzilla   : 7407
@@ -3133,7 +3159,7 @@ tbd         Cluster File Systems, Inc. <info@clusterfs.com>
 	* add hard link support
 	* change obdfile creation method
 	* kernel patch changed
-	
+
 2002-09-19  Peter Braam  <braam@clusterfs.com>
 	* version 0_5_9
 	* bug fix
