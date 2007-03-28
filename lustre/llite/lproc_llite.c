@@ -656,7 +656,7 @@ int lprocfs_register_mountpoint(struct proc_dir_entry *parent,
         lprocfs_counter_init(vfs_ops_stats, VFS_OPS_TRUNCATE, 0, "truncate",
                              "reqs");
         lprocfs_counter_init(vfs_ops_stats, VFS_OPS_INODE_PERMISSION, 0,
-                             "inode permission", "reqs");
+                             "inode_permission", "reqs");
 
         err = lprocfs_register_stats(sbi->ll_proc_root, "vfs_ops_stats",
                                      vfs_ops_stats);
