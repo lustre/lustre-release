@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 
 LC_COLLATE="C"
 progname="${0##*/}"

@@ -309,7 +309,15 @@ extern int  lwt_snapshot (cycles_t *now, int *ncpu, int *total_size,
 # define LP_POISON ((void *)(long)0x5a5a5a5a)
 #endif
 
-#if (defined(__x86_64__) && defined(__KERNEL__))
+/* this is a bit chunky */
+
+#if defined(__KERNEL__)
+ #define _LWORDSIZE BITS_PER_LONG
+#else
+ #define _LWORDSIZE __WORDSIZE
+#endif
+
+#if (defined(__x86_64__) && (defined(__KERNEL__) || defined(CRAY_XT3)))
 /* x86_64 defines __u64 as "long" in userspace, but "long long" in the kernel */
 # define LPU64 "%Lu"
 # define LPD64 "%Ld"
@@ -317,14 +325,14 @@ extern int  lwt_snapshot (cycles_t *now, int *ncpu, int *total_size,
 # define LPF64 "L"
 # define LPSZ  "%lu"
 # define LPSSZ "%ld"
-#elif (BITS_PER_LONG == 32 || __WORDSIZE == 32)
+#elif (_LWORDSIZE == 32)
 # define LPU64 "%Lu"
 # define LPD64 "%Ld"
 # define LPX64 "%#Lx"
 # define LPF64 "L"
 # define LPSZ  "%u"
 # define LPSSZ "%d"
-#elif (BITS_PER_LONG == 64 || __WORDSIZE == 64)
+#elif (_LWORDSIZE == 64)
 # define LPU64 "%lu"
 # define LPD64 "%ld"
 # define LPX64 "%#lx"
@@ -335,5 +343,7 @@ extern int  lwt_snapshot (cycles_t *now, int *ncpu, int *total_size,
 #ifndef LPU64
 # error "No word size defined"
 #endif
+
+#undef _LWORDSIZE
 
 #endif

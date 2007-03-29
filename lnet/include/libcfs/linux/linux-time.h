@@ -234,7 +234,7 @@ static inline time_t cfs_duration_sec(cfs_duration_t d)
 static inline void cfs_duration_usec(cfs_duration_t d, struct timeval *s)
 {
 #if (BITS_PER_LONG == 32) && (HZ > 4096)
-        uint64_t t;
+        __u64 t;
 
         s->tv_sec = d / HZ;
         t = (d - (cfs_duration_t)s->tv_sec * HZ) * ONE_MILLION;
@@ -248,7 +248,7 @@ static inline void cfs_duration_usec(cfs_duration_t d, struct timeval *s)
 static inline void cfs_duration_nsec(cfs_duration_t d, struct timespec *s)
 {
 #if (BITS_PER_LONG == 32)
-        uint64_t t;
+        __u64 t;
 
         s->tv_sec = d / HZ;
         t = (d - s->tv_sec * HZ) * ONE_BILLION;

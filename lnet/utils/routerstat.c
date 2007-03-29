@@ -78,7 +78,7 @@ do_stat (int fd)
    }	 
    buffer[n] = 0;
    
-   n = sscanf (buffer, "%u %u %u %u %u %u %u %Lu %Lu %Lu %Lu",
+   n = sscanf (buffer, "%lu %lu %lu %lu %lu %lu %lu %Lu %Lu %Lu %Lu",
 	       &new_counter.msgs_alloc, &new_counter.msgs_max,
 	       &new_counter.errors, 
 	       &new_counter.send_count, &new_counter.recv_count,
