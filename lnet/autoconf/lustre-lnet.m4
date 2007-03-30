@@ -78,9 +78,7 @@ AC_ARG_ENABLE([libcfs_assert],
 			[disable libcfs LASSERT, LASSERTF]),
 	[],[disable_libcfs_assert='no'])
 AC_MSG_RESULT([$disable_libcfs_assert])
-if test x$disable_libcfs_assert != xno; then
-   AC_DEFINE(LIBCFS_DEBUG, 0, [disable libcfs LASSERT, LASSERTF])
-else
+if test x$disable_libcfs_assert = xno; then
    AC_DEFINE(LIBCFS_DEBUG, 1, [enable libcfs LASSERT, LASSERTF])
 fi
 ])
