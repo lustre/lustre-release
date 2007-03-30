@@ -48,7 +48,7 @@ fi
 #
 AC_DEFUN([LC_CONFIG_CDEBUG],
 [
-AC_MSG_CHECKING([whether to disable CDEBUG, CWARN])
+AC_MSG_CHECKING([whether to enable CDEBUG, CWARN])
 AC_ARG_ENABLE([libcfs_cdebug],
 	AC_HELP_STRING([--disable-libcfs-cdebug],
 			[disable libcfs CDEBUG, CWARN]),
@@ -72,7 +72,7 @@ else
    AC_DEFINE(CDEBUG_ENTRY_EXIT, 0, [disable libcfs ENTRY/EXIT])
 fi
 
-AC_MSG_CHECKING([whether to disable LASSERT, LASSERTF])
+AC_MSG_CHECKING([whether to enable LASSERT, LASSERTF])
 AC_ARG_ENABLE([libcfs_assert],
 	AC_HELP_STRING([--disable-libcfs-assert],
 			[disable libcfs LASSERT, LASSERTF]),
