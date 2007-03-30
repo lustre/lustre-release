@@ -42,6 +42,50 @@ fi
 ])
 
 #
+# LC_CONFIG_CDEBUG
+#
+# whether to enable various libcfs debugs (CDEBUG, ENTRY/EXIT, LASSERT, etc.)
+#
+AC_DEFUN([LC_CONFIG_CDEBUG],
+[
+AC_MSG_CHECKING([whether to disable CDEBUG, CWARN, etc.])
+AC_ARG_ENABLE([libcfs_cdebug],
+	AC_HELP_STRING([--disable-libcfs-cdebug],
+			[disable libcfs CDEBUG, CWARN]),
+	[],[disable_libcfs_cdebug='no'])
+AC_MSG_RESULT([$disable_libcfs_cdebug])
+if test x$disable_libcfs_cdebug != xno; then
+   AC_DEFINE(CDEBUG_ENABLED, 0, [disable libcfs CDEBUG, CWARN])
+else
+   AC_DEFINE(CDEBUG_ENABLED, 1, [enable libcfs CDEBUG, CWARN])
+fi
+
+AC_MSG_CHECKING([whether to enable ENTRY/EXIT])
+AC_ARG_ENABLE([libcfs_trace],
+	AC_HELP_STRING([--enable-libcfs-trace],
+			[enable libcfs ENTRY/EXIT]),
+	[],[enable_libcfs_trace='no'])
+AC_MSG_RESULT([$enable_libcfs_trace])
+if test x$enable_libcfs_trace != xno; then
+   AC_DEFINE(CDEBUG_ENTRY_EXIT, 1, [enable libcfs ENTRY/EXIT])
+else
+   AC_DEFINE(CDEBUG_ENTRY_EXIT, 0, [disable libcfs ENTRY/EXIT])
+fi
+
+AC_MSG_CHECKING([whether to disable LASSERT, LASSERTF])
+AC_ARG_ENABLE([libcfs_assert],
+	AC_HELP_STRING([--disable-libcfs-assert],
+			[disable libcfs LASSERT, LASSERTF]),
+	[],[disable_libcfs_assert='no'])
+AC_MSG_RESULT([$disable_libcfs_assert])
+if test x$disable_libcfs_assert != xno; then
+   AC_DEFINE(LIBCFS_DEBUG, 0, [disable libcfs LASSERT, LASSERTF])
+else
+   AC_DEFINE(LIBCFS_DEBUG, 1, [enable libcfs LASSERT, LASSERTF])
+fi
+])
+ 
+#
 # LN_CONFIG_AFFINITY
 #
 # check if cpu affinity is available/wanted
@@ -1050,6 +1094,7 @@ LB_LINUX_TRY_COMPILE([
 #
 AC_DEFUN([LN_PROG_LINUX],
 [
+LC_CONFIG_CDEBUG
 LN_FUNC_CPU_ONLINE
 LN_TYPE_GFP_T
 LN_TYPE_CPUMASK_T

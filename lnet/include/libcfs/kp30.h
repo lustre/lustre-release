@@ -4,7 +4,9 @@
 #ifndef __LIBCFS_KP30_H__
 #define __LIBCFS_KP30_H__
 
-#define LIBCFS_DEBUG
+/* Controlled via configure key */
+/* #define LIBCFS_DEBUG */
+
 #include <libcfs/libcfs.h>
 #include <lnet/types.h>
 

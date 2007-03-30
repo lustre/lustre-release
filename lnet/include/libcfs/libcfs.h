@@ -24,7 +24,8 @@
 #include <stdio.h>
 #endif
 
-#define LIBCFS_DEBUG
+/* Controlled via configure key */
+/* #define LIBCFS_DEBUG */
 
 #ifndef offsetof
 # define offsetof(typ,memb)     ((unsigned long)((char *)&(((typ *)0)->memb)))
@@ -163,7 +164,8 @@ typedef struct {
         cfs_duration_t  cdls_delay;
 } cfs_debug_limit_state_t;
 
-#define CDEBUG_ENABLED (1)
+/* Controlled via configure key */
+/* #define CDEBUG_ENABLED (1) */
 
 #ifdef __KERNEL__
 
@@ -245,7 +247,9 @@ do {                                                                    \
 #define GOTO(label, rc) do { ((void)(rc)); goto label; } while (0)
 #endif
 
-#define CDEBUG_ENTRY_EXIT (1)
+/* Controlled via configure key */
+/* #define CDEBUG_ENTRY_EXIT (1) */
+
 #if CDEBUG_ENTRY_EXIT
 
 /*
