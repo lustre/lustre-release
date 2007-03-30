@@ -194,6 +194,7 @@ do {                                            \
 #else /* CDEBUG_ENABLED */
 #define CDEBUG(mask, format, a...) (void)(0)
 #define CDEBUG_LIMIT(mask, format, a...) (void)(0)
+#warning "CDEBUG IS DISABLED. THIS SHOULD NEVER BE DONE FOR PRODUCTION!"
 #endif
 
 #elif defined(__arch_lib__) && !defined(LUSTRE_UTILS)
