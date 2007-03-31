@@ -1,4 +1,4 @@
-@LDISKFS_TRUE@subdir-m += ldiskfs
+@LDISKFS_TRUE@subdir-m += ldiskfs ldiskfs2
 
 subdir-m += lvfs
 subdir-m += obdclass

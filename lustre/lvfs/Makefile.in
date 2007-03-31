@@ -1,5 +1,6 @@
 MODULES := lvfs
 @SERVER_TRUE@MODULES += fsfilt_@BACKINGFS@
+@LDISKFS_TRUE@MODULES += fsfilt_ldiskfs2
 @QUOTA_TRUE@MODULES += quotafmt_test
 
 lvfs-objs := lvfs_common.o lvfs_linux.o fsfilt.o upcall_cache.o
@@ -9,12 +10,13 @@ lvfs-objs := lvfs_common.o lvfs_linux.o fsfilt.o upcall_cache.o
 
 ifeq ($(PATCHLEVEL),6)
 fsfilt_@BACKINGFS@-objs := fsfilt-@BACKINGFS@.o
+fsfilt_ldiskfs2-objs := fsfilt-ldiskfs2.o
 
 $(obj)/fsfilt-%.c: $(obj)/fsfilt_%.c
 	ln -s $< $@
 endif
 
 # for <ext3/xattr.h> on 2.6
-EXTRA_PRE_CFLAGS := -I@LINUX@/fs -I@LUSTRE@ -I@LUSTRE@/ldiskfs
+EXTRA_PRE_CFLAGS := -I@LINUX@/fs -I@LUSTRE@ -I@LUSTRE@/ldiskfs -I@LUSTRE@/ldiskfs2
 
 @INCLUDE_RULES@

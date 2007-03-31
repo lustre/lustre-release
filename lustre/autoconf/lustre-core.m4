@@ -340,8 +340,12 @@ if test x$enable_ldiskfs = xyes ; then
 
 	AC_DEFINE(CONFIG_LDISKFS_FS_MODULE, 1, [build ldiskfs as a module])
 	AC_DEFINE(CONFIG_LDISKFS_FS_XATTR, 1, [enable extended attributes for ldiskfs])
-	AC_DEFINE(CONFIG_LDISKFS_FS_POSIX_ACL, 1, [enable posix acls])
-	AC_DEFINE(CONFIG_LDISKFS_FS_SECURITY, 1, [enable fs security])
+	AC_DEFINE(CONFIG_LDISKFS_FS_POSIX_ACL, 1, [enable posix acls for ldiskfs])
+	AC_DEFINE(CONFIG_LDISKFS_FS_SECURITY, 1, [enable fs security for ldiskfs])
+
+	AC_DEFINE(CONFIG_LDISKFS2_FS_XATTR, 1, [enable extended attributes for ldiskfs2])
+	AC_DEFINE(CONFIG_LDISKFS2_FS_POSIX_ACL, 1, [enable posix acls for ldiskfs2])
+	AC_DEFINE(CONFIG_LDISKFS2_FS_SECURITY, 1, [enable fs security for ldiskfs2])
 fi
 
 AC_MSG_CHECKING([which backing filesystem to use])
@@ -1297,6 +1301,8 @@ lustre/kernel_patches/targets/suse-2.4.21-2.target
 lustre/kernel_patches/targets/sles-2.4.target
 lustre/ldiskfs/Makefile
 lustre/ldiskfs/autoMakefile
+lustre/ldiskfs2/Makefile
+lustre/ldiskfs2/autoMakefile
 lustre/ldlm/Makefile
 lustre/liblustre/Makefile
 lustre/liblustre/tests/Makefile
