@@ -21,8 +21,8 @@ fi
 [ "$TMP" ] || TMP=/tmp
 [ "$COUNT" ] || COUNT=1000
 [ "$DEBUG_LVL" ] || DEBUG_LVL=0
-[ "$DEBUG_OFF" ] || DEBUG_OFF="sysctl -w lnet.debug=$DEBUG_LVL"
-[ "$DEBUG_ON" ] || DEBUG_ON="sysctl -w lnet.debug=0x33f0484"
+[ "$DEBUG_OFF" ] || DEBUG_OFF="eval sysctl -w lnet.debug=\"$DEBUG_LVL\""
+[ "$DEBUG_ON" ] || DEBUG_ON="eval sysctl -w lnet.debug=0x33f0484"
 
 
 LIBLUSTRE=${LIBLUSTRE:-../liblustre}
