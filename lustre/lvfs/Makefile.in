@@ -1,7 +1,11 @@
 MODULES := lvfs
 @SERVER_TRUE@MODULES += fsfilt_@BACKINGFS@
+@QUOTA_TRUE@MODULES += quotafmt_test
 
 lvfs-objs := lvfs_common.o lvfs_linux.o fsfilt.o upcall_cache.o
+@QUOTA_TRUE@lvfs-objs += lustre_quota_fmt.o
+
+@QUOTA_TRUE@quotafmt-objs := quotafmt_test.o
 
 ifeq ($(PATCHLEVEL),6)
 fsfilt_@BACKINGFS@-objs := fsfilt-@BACKINGFS@.o
