@@ -75,7 +75,7 @@ init_test_env() {
 
 case `uname -r` in
 2.4.*) EXT=".o"; USE_QUOTA=no; FSTYPE=ext3 ;;
-    *) EXT=".ko"; USE_QUOTA=yes; FSTYPE=ldiskfs ;;
+    *) EXT=".ko"; USE_QUOTA=yes; [ "$FSTYPE" ] || FSTYPE=ldiskfs ;;
 esac
 
 load_module() {
@@ -117,6 +117,7 @@ load_modules() {
     load_module lov/lov
     load_module mds/mds
     [ "$FSTYPE" = "ldiskfs" ] && load_module ldiskfs/ldiskfs
+    [ "$FSTYPE" = "ldiskfs2" ] && load_module ldiskfs/ldiskfs2
     load_module lvfs/fsfilt_$FSTYPE
     load_module ost/ost
     load_module obdfilter/obdfilter
@@ -599,21 +600,23 @@ cleanupall() {
 }
 
 formatall() {
+    [ "$FSTYPE" ] && FSTYPE_OPT="--backfstype $FSTYPE"
+
     stopall
     # We need ldiskfs here, may as well load them all
     load_modules
     echo Formatting mds, osts
     if $VERBOSE; then
-        add mds $MDS_MKFS_OPTS --reformat $MDSDEV || exit 10
+        add mds $MDS_MKFS_OPTS $FSTYPE_OPT --reformat $MDSDEV || exit 10
     else
-        add mds $MDS_MKFS_OPTS --reformat $MDSDEV > /dev/null || exit 10
+        add mds $MDS_MKFS_OPTS $FSTYPE_OPT --reformat $MDSDEV > /dev/null || exit 10
     fi
 
     for num in `seq $OSTCOUNT`; do
         if $VERBOSE; then
-            add ost$num $OST_MKFS_OPTS --reformat `ostdevname $num` || exit 10
+            add ost$num $OST_MKFS_OPTS $FSTYPE_OPT --reformat `ostdevname $num` || exit 10
         else
-            add ost$num $OST_MKFS_OPTS --reformat `ostdevname $num` > /dev/null || exit 10
+            add ost$num $OST_MKFS_OPTS $FSTYPE_OPT --reformat `ostdevname $num` > /dev/null || exit 10
         fi
     done
 }

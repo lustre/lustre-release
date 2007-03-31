@@ -59,7 +59,6 @@
 /* used to describe the options to format the lustre disk, not persistent */
 struct mkfs_opts {
         struct lustre_disk_data mo_ldd; /* to be written in MOUNT_DATA_FILE */
-        char  mo_mount_type_string[20]; /* "ext3", "ldiskfs", ... */
         char  mo_device[128];           /* disk device name */
         char  mo_mkfsopts[128];         /* options to the backing-store mkfs */
         char  mo_loopdev[128];          /* in case a loop dev is needed */
@@ -448,7 +447,8 @@ int make_lustre_backfs(struct mkfs_opts *mop)
         }
 
         if ((mop->mo_ldd.ldd_mount_type == LDD_MT_EXT3) ||
-            (mop->mo_ldd.ldd_mount_type == LDD_MT_LDISKFS)) {
+            (mop->mo_ldd.ldd_mount_type == LDD_MT_LDISKFS) ||
+            (mop->mo_ldd.ldd_mount_type == LDD_MT_LDISKFS2)) {
                 __u64 device_sz = mop->mo_device_sz;
 
                 /* we really need the size */
@@ -1280,7 +1280,8 @@ int main(int argc, char *const argv[])
         /* These are the permanent mount options (always included) */ 
         switch (ldd->ldd_mount_type) {
         case LDD_MT_EXT3:
-        case LDD_MT_LDISKFS: {
+        case LDD_MT_LDISKFS:
+        case LDD_MT_LDISKFS2: {
                 sprintf(always_mountopts, "errors=remount-ro");
                 if (IS_MDT(ldd) || IS_MGS(ldd))
                         strcat(always_mountopts,
@@ -1291,7 +1292,8 @@ int main(int argc, char *const argv[])
                    if mounted with a kernel that doesn't include the CFS 
                    patches! */
                 if (IS_OST(ldd) && 
-                    ldd->ldd_mount_type == LDD_MT_LDISKFS) {
+                    (ldd->ldd_mount_type == LDD_MT_LDISKFS ||
+                     ldd->ldd_mount_type == LDD_MT_LDISKFS2)) {
                         strcat(default_mountopts, ",extents,mballoc");
                 }
                 break;

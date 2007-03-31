@@ -1214,11 +1214,17 @@ static struct vfsmount *server_kernel_mount(struct super_block *sb)
         if (IS_ERR(mnt)) {
                 rc = PTR_ERR(mnt);
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0))
-                CERROR("premount %s:%#lx ldiskfs failed (%d), is the ldiskfs "
-                       "module available?\n", lmd->lmd_dev, s_flags, rc);
-                GOTO(out_free, rc);
+                /* 2.6 kernels: if ldiskfs fails, try ldiskfs2 */
+                mnt = ll_kern_mount("ldiskfs2", s_flags, lmd->lmd_dev, 0);
+                if (IS_ERR(mnt)) {
+                        int rc2 = PTR_ERR(mnt);
+                        CERROR("premount %s:%#lx ldiskfs failed: %d, ldiskfs2 "
+                               "failed: %d.  Is the ldiskfs module available?\n",
+                               lmd->lmd_dev, s_flags, rc, rc2);
+                        GOTO(out_free, rc);
+                }
 #else
-                /* If ldisk fails, try ext3 */
+                /* 2.4 kernels: if ldiskfs fails, try ext3 */
                 mnt = ll_kern_mount("ext3", s_flags, lmd->lmd_dev, 0);
                 if (IS_ERR(mnt)) {
                         rc = PTR_ERR(mnt);
