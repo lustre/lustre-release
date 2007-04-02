@@ -6,7 +6,8 @@
 # in your .bashrc and you will get a nice bunch of CVS commit reminders:
 # <merge/land tag information>
 # b=<bug_number>
-# r=<reviewed by>
+# i=<inspected_by>
+# i=<inspected_by>
 #
 # Remember to remove the leading "CVS: " part of the comment before saving
 # your commit comment if you want those entries to be saved.
@@ -38,7 +39,8 @@ cat - >> $TMP <<- EOF
 	CVS: did you update the hours spent in Bugzilla?
 	CVS: did you verify/update the HLD/DLD in CVS?
 	CVS: b=<bug>
-	CVS: r=<reviewed_by>
+	CVS: i=<inspected_by>
+	CVS: i=<inspected_by>
 EOF
 
 	cat $1 >> $TMP
