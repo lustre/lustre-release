@@ -120,47 +120,47 @@ int l_has_lock(struct lustre_lock *);
 #define OBD_IOCTL_VERSION 0x00010004
 
 struct obd_ioctl_data {
-        uint32_t ioc_len;
-        uint32_t ioc_version;
+        __u32 ioc_len;
+        __u32 ioc_version;
 
-        uint64_t ioc_cookie;
-        uint32_t ioc_conn1;
-        uint32_t ioc_conn2;
+        __u64 ioc_cookie;
+        __u32 ioc_conn1;
+        __u32 ioc_conn2;
 
         struct obdo ioc_obdo1;
         struct obdo ioc_obdo2;
 
         obd_size         ioc_count;
         obd_off          ioc_offset;
-        uint32_t         ioc_dev;
-        uint32_t         ioc_command;
+        __u32            ioc_dev;
+        __u32            ioc_command;
 
-        uint64_t ioc_nid;
-        uint32_t ioc_nal;
-        uint32_t ioc_type;
+        __u64 ioc_nid;
+        __u32 ioc_nal;
+        __u32 ioc_type;
 
         /* buffers the kernel will treat as user pointers */
-        uint32_t ioc_plen1;
+        __u32    ioc_plen1;
         char    *ioc_pbuf1;
-        uint32_t ioc_plen2;
+        __u32    ioc_plen2;
         char    *ioc_pbuf2;
 
         /* inline buffers for various arguments */
-        uint32_t ioc_inllen1;
+        __u32    ioc_inllen1;
         char    *ioc_inlbuf1;
-        uint32_t ioc_inllen2;
+        __u32    ioc_inllen2;
         char    *ioc_inlbuf2;
-        uint32_t ioc_inllen3;
+        __u32    ioc_inllen3;
         char    *ioc_inlbuf3;
-        uint32_t ioc_inllen4;
+        __u32    ioc_inllen4;
         char    *ioc_inlbuf4;
 
         char    ioc_bulk[0];
 };
 
 struct obd_ioctl_hdr {
-        uint32_t ioc_len;
-        uint32_t ioc_version;
+        __u32    ioc_len;
+        __u32    ioc_version;
 };
 
 static inline int obd_ioctl_packlen(struct obd_ioctl_data *data)

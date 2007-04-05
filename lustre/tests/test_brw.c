@@ -152,7 +152,7 @@ int main(int argc, char **argv)
                 objid = 3;
         }
 
-        printf("%s: %s on %s(objid "LPX64") for "LPU64"x%ld pages \n",
+        printf("%s: %s on %s(objid "LPX64") for "LPSZ"x%ld pages \n",
                argv[0], 
 #ifdef O_DIRECT
                flags & O_DIRECT ? "directio" : "i/o",

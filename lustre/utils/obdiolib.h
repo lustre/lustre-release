@@ -17,35 +17,35 @@
 
 struct obdio_conn {
         int                    oc_fd;
-        uint32_t               oc_device;
+        __u32                  oc_device;
         struct obd_ioctl_data  oc_data;
         char                   oc_buffer[8192];
 };
 
 struct obdio_barrier {
-        uint64_t               ob_id;
-        uint64_t               ob_oid;
-        uint64_t               ob_npeers;
-        uint64_t               ob_ordinal;
-        uint64_t               ob_count;
+        __u64                  ob_id;
+        __u64                  ob_oid;
+        __u64                  ob_npeers;
+        __u64                  ob_ordinal;
+        __u64                  ob_count;
 };
 
 extern struct obdio_conn *obdio_connect(int device);
 extern void obdio_disconnect(struct obdio_conn *conn, int flags);
-extern int obdio_open(struct obdio_conn *conn, uint64_t oid,
+extern int obdio_open(struct obdio_conn *conn, __u64 oid,
                       struct lustre_handle *fh);
-extern int obdio_close(struct obdio_conn *conn, uint64_t oid,
+extern int obdio_close(struct obdio_conn *conn, __u64 oid,
                        struct lustre_handle *fh);
-extern int obdio_pread(struct obdio_conn *conn, uint64_t oid,
-                       void *buffer, uint32_t count, uint64_t offset);
-extern int obdio_pwrite(struct obdio_conn *conn, uint64_t oid,
-                        void *buffer, uint32_t count, uint64_t offset);
-extern int obdio_enqueue(struct obdio_conn *conn, uint64_t oid,
-                         int mode, uint64_t offset, uint32_t count,
+extern int obdio_pread(struct obdio_conn *conn, __u64 oid,
+                       void *buffer, __u32 count, __u64 offset);
+extern int obdio_pwrite(struct obdio_conn *conn, __u64 oid,
+                        void *buffer, __u32 count, __u64 offset);
+extern int obdio_enqueue(struct obdio_conn *conn, __u64 oid,
+                         int mode, __u64 offset, __u32 count,
                          struct lustre_handle *lh);
 extern int obdio_cancel(struct obdio_conn *conn, struct lustre_handle *lh);
 extern void *obdio_alloc_aligned_buffer(void **spacep, int size);
-extern struct obdio_barrier *obdio_new_barrier(uint64_t oid, uint64_t id,
+extern struct obdio_barrier *obdio_new_barrier(__u64 oid, __u64 id,
                                                int npeers);
 extern int obdio_setup_barrier(struct obdio_conn *conn,struct obdio_barrier *b);
 extern int obdio_barrier(struct obdio_conn *conn, struct obdio_barrier *b);

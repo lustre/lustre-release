@@ -452,6 +452,7 @@ AM_CONDITIONAL(DOC, test x$ENABLE_DOC = x1)
 AM_CONDITIONAL(INIT_SCRIPTS, test x$ENABLE_INIT_SCRIPTS = "x1")
 AM_CONDITIONAL(LINUX, test x$lb_target_os = "xlinux")
 AM_CONDITIONAL(DARWIN, test x$lb_target_os = "xdarwin")
+AM_CONDITIONAL(CRAY_XT3, test x$enable_cray_xt3 = "xyes")
 
 # this lets lustre cancel libsysio, per-branch or if liblustre is
 # disabled

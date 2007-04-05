@@ -106,8 +106,8 @@ obdio_disconnect (struct obdio_conn *conn, int flags)
 }
 
 int
-obdio_pread (struct obdio_conn *conn, uint64_t oid,
-             void *buffer, uint32_t count, uint64_t offset)
+obdio_pread (struct obdio_conn *conn, __u64 oid,
+             void *buffer, __u32 count, __u64 offset)
 {
         obdio_iocinit (conn);
 
@@ -125,8 +125,8 @@ obdio_pread (struct obdio_conn *conn, uint64_t oid,
 }
 
 int
-obdio_pwrite (struct obdio_conn *conn, uint64_t oid,
-              void *buffer, uint32_t count, uint64_t offset)
+obdio_pwrite (struct obdio_conn *conn, __u64 oid,
+              void *buffer, __u32 count, __u64 offset)
 {
         obdio_iocinit (conn);
 
@@ -144,8 +144,8 @@ obdio_pwrite (struct obdio_conn *conn, uint64_t oid,
 }
 
 int
-obdio_enqueue (struct obdio_conn *conn, uint64_t oid,
-               int mode, uint64_t offset, uint32_t count,
+obdio_enqueue (struct obdio_conn *conn, __u64 oid,
+               int mode, __u64 offset, __u32 count,
                struct lustre_handle *lh)
 {
         int   rc;
@@ -193,7 +193,7 @@ obdio_alloc_aligned_buffer (void **spacep, int size)
 }
 
 struct obdio_barrier *
-obdio_new_barrier (uint64_t oid, uint64_t id, int npeers)
+obdio_new_barrier (__u64 oid, __u64 id, int npeers)
 {
         struct obdio_barrier *b;
 

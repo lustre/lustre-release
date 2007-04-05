@@ -10,7 +10,11 @@ if LIBLUSTRE
 noinst_LIBRARIES = libtestcommon.a
 
 if LIBLUSTRE_TESTS
-noinst_PROGRAMS = sanity recovery_small replay_single replay_ost_single echo_test
+noinst_PROGRAMS = sanity echo_test
+
+if !CRAY_XT3
+noinst_PROGRAMS += recovery_small replay_single replay_ost_single
+endif # !CRAY_XT3
 
 if MPITESTS
 noinst_PROGRAMS += test_lock_cancel

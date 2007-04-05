@@ -116,7 +116,7 @@ static inline void obd_conn2data(struct obd_ioctl_data *data,
         data->ioc_cookie = conn->cookie;
 }
 
-int class_resolve_dev_name(uint32_t len, const char *name)
+int class_resolve_dev_name(__u32 len, const char *name)
 {
         int rc;
         int dev;

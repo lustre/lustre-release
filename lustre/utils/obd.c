@@ -2062,5 +2062,6 @@ void obd_finalize(int argc, char **argv)
         sigact.sa_flags = SA_RESTART;
         sigaction(SIGINT, &sigact, NULL);
 
+        shmem_stop();
         do_disconnect(argv[0], 1);
 }

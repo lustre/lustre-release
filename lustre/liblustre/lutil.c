@@ -104,11 +104,11 @@ static int get_ipv4_addr()
 
 void liblustre_init_random()
 {
-        int _rand_dev_fd;
         int seed[2];
         struct timeval tv;
 
 #ifdef LIBLUSTRE_USE_URANDOM
+        int _rand_dev_fd;
         _rand_dev_fd = syscall(SYS_open, "/dev/urandom", O_RDONLY);
         if (_rand_dev_fd >= 0) {
                 if (syscall(SYS_read, _rand_dev_fd,

@@ -38,10 +38,12 @@
 #include <dirent.h>
 #include <sys/uio.h>
 #include <sys/time.h>
+#include <time.h>
+#include <sys/ioctl.h>
 
 #include "test_common.h"
 #include <ioctl.h>
-#include <lustre/lustre_user.h>
+#include <lustre/liblustreapi.h>
 
 #ifndef PAGE_SIZE
 #define PAGE_SIZE getpagesize()
@@ -522,8 +524,7 @@ int t18(char *name)
 int t18b(char *name)
 {
         char file[MAX_PATH_LENGTH] = "";
-        char buf[128];
-        int fd, i;
+        int i;
         struct stat statbuf[3];
         ENTRY("utime should change mtime/atime/ctime");
         snprintf(file, MAX_PATH_LENGTH, "%s/test_t18b_file", lustre_path);
@@ -562,7 +563,7 @@ static int check_file_size(char *file, off_t size)
                 return(1);
         }
         if (statbuf.st_size != size) {
-                printf("size of %s: %ld != %ld\n", file, statbuf.st_size, size);
+                printf("size of %s: %ld != %lld\n", file, statbuf.st_size, size);
                 return(-1);
         }
         return 0;
@@ -685,7 +686,7 @@ int t21(char *name)
 
         fd = open(file, O_RDWR|O_CREAT, (mode_t)0666);
         if (fd < 0) {
-                printf("error open file: %m\n", file);
+                printf("error open file: %s\n", file);
                 return(-1);
         }
 
@@ -1243,7 +1244,7 @@ int t55(char *name)
                         printf("object %d:\n", index);
                         printf("\tobject_gr:    "LPX64"\n", lo->l_object_gr);
                         printf("\tobject_id:    "LPX64"\n", lo->l_object_id);
-                        printf("\tost_gen:      "LPX64"\n", lo->l_ost_gen);
+                        printf("\tost_gen:      %#x\n", lo->l_ost_gen);
                         printf("\tost_idx:      %u\n", lo->l_ost_idx);
                 }
         }
@@ -1309,7 +1310,7 @@ int t55(char *name)
                         printf("object %d:\n", index);
                         printf("\tobject_gr:    "LPX64"\n", lo->l_object_gr);
                         printf("\tobject_id:    "LPX64"\n", lo->l_object_id);
-                        printf("\tost_gen:      "LPX64"\n", lo->l_ost_gen);
+                        printf("\tost_gen:      %#x\n", lo->l_ost_gen);
                         printf("\tost_idx:      %u\n", lo->l_ost_idx);
                 }
         }

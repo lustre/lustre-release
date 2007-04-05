@@ -31,14 +31,14 @@
 
 int
 obdio_test_fixed_extent (struct obdio_conn *conn,
-                         uint32_t myhid, uint32_t mypid,
-                         int reps, int locked, uint64_t oid,
-                         uint64_t offset, uint32_t size)
+                         __u32 myhid, __u32 mypid,
+                         int reps, int locked, __u64 oid,
+                         __u64 offset, __u32 size)
 {
         struct lustre_handle lh;
         void                *space;
         void                *buffer;
-        uint32_t            *ibuf;
+        __u32               *ibuf;
         int                  i;
         int                  j;
         int                  rc = 0;
@@ -50,7 +50,7 @@ obdio_test_fixed_extent (struct obdio_conn *conn,
         }
 
         for (i = 0; i < reps; i++) {
-                ibuf = (uint32_t *) buffer;
+                ibuf = (__u32 *) buffer;
                 for (j = 0; j < size / (4 * sizeof (*ibuf)); j++) {
                         ibuf[0] = myhid;
                         ibuf[1] = mypid;
@@ -104,7 +104,7 @@ obdio_test_fixed_extent (struct obdio_conn *conn,
                         }
                 }
 
-                ibuf = (uint32_t *) buffer;
+                ibuf = (__u32 *) buffer;
                 for (j = 0; j < size / (4 * sizeof (*ibuf)); j++) {
                         if (ibuf[0] != myhid ||
                             ibuf[1] != mypid ||
@@ -129,9 +129,9 @@ obdio_test_fixed_extent (struct obdio_conn *conn,
 }
 
 int
-parse_kmg (uint64_t *valp, char *str)
+parse_kmg (__u64 *valp, char *str)
 {
-        uint64_t        val;
+        __u64           val;
         char            mod[32];
 
         switch (sscanf (str, LPU64"%1[gGmMkK]", &val, mod))
@@ -184,18 +184,18 @@ usage (char *cmdname, int help)
 int
 main (int argc, char **argv)
 {
-        uint32_t           mypid = getpid ();
-        uint32_t           myhid = gethostid ();
-        uint64_t           oid;
-        uint64_t           base_offset = 0;
-        uint32_t           size = 0;
+        __u32             mypid = getpid ();
+        __u32             myhid = gethostid ();
+        __u64             oid;
+        __u64             base_offset = 0;
+        __u32             size = 0;
         int                set_size = 0;
         int                device = -1;
         int                reps = 1;
         int                locked = 0;
         char              *end;
         struct obdio_conn *conn;
-        uint64_t           val;
+        __u64              val;
         int                v1;
         int                v2;
         int                rc;
@@ -229,7 +229,7 @@ main (int argc, char **argv)
                                          optarg);
                                 return (1);
                         }
-                        size = (uint32_t)val;
+                        size = (__u32)val;
                         set_size++;
                         break;
 

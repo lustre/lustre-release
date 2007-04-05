@@ -30,9 +30,9 @@
 #include "obdiolib.h"
 
 int
-parse_kmg (uint64_t *valp, char *str)
+parse_kmg (__u64 *valp, char *str)
 {
-        uint64_t        val;
+        __u64        val;
         char            mod[32];
 
         switch (sscanf (str, LPU64"%1[gGmMkK]", &val, mod))
@@ -100,9 +100,9 @@ exponential_modulus (int i, int base)
 int
 main (int argc, char **argv)
 {
-        uint64_t              bid = (((uint64_t)gethostid()) << 32) | getpid ();
+        __u64                 bid = (((__u64)gethostid()) << 32) | getpid ();
         int                   set_bid = 0;
-        uint64_t              oid;
+        __u64                 oid;
         int                   setup = 0;
         int                   device = -1;
         int                   npeers = 0;
@@ -111,7 +111,7 @@ main (int argc, char **argv)
         struct obdio_conn    *conn;
         struct obdio_barrier *b;
         char                 *end;
-        uint64_t              val;
+        __u64                 val;
         int                   rc;
         int                   c;
 

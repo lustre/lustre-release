@@ -307,9 +307,7 @@ char *lustre_path = NULL;
 void __liblustre_setup_(void)
 {
         char *target = NULL;
-        char *root_driver = "native";
         char *lustre_driver = "lustre";
-        char *root_path = "/";
         unsigned mntflgs = 0;
         int err;
 
@@ -336,7 +334,7 @@ void __liblustre_setup_(void)
         }
         _sysio_native_init();
 
-        err = _sysio_mount_root(root_path, root_driver, mntflgs, NULL);
+        err = _sysio_mount_root("/", "native", mntflgs, NULL);
         if (err) {
                 fprintf(stderr, "sysio mount failed: %s\n", strerror(errno));
                 exit(1);

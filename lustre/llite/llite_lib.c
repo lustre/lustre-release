@@ -1917,7 +1917,7 @@ int ll_obd_statfs(struct inode *inode, void *arg)
         char *buf = NULL;
         struct obd_ioctl_data *data = NULL;
         __u32 type, index;
-        int len, rc;
+        int len = 0, rc;
 
         if (!inode || !(sbi = ll_i2sbi(inode)))
                 GOTO(out_statfs, rc = -EINVAL);
