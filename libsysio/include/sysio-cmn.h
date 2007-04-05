@@ -98,14 +98,14 @@ struct iovec;
 /*
  * SYSIO name label macros
  */
-#ifndef SYIO_INTERFACE_NAME
+#ifndef SYSIO_INTERFACE_NAME
 #ifdef SYSIO_LABEL_NAMES
 #define SYSIO_INTERFACE_NAME(x) \
 	PREPEND(SYSIO_LABEL_NAMES, x)
 #else
 #define SYSIO_INTERFACE_NAME(x) x
 #endif /* SYSIO_LABEL_NAMES */
-#endif /* SYSIO_INTERFACE_NAME */
+#endif /* !SYSIO_INTERFACE_NAME */
 
 /* for debugging */
 #if 0
