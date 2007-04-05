@@ -393,6 +393,38 @@ static int filter_quota_acquire(struct obd_device *obd, unsigned int uid,
         RETURN(rc == -EAGAIN);
 }
 
+/* check whether the left quota of certain uid and uid can satisfy a write rpc
+ * when need to acquire quota, return QUOTA_RET_ACQUOTA */
+static int filter_quota_check(struct obd_device *obd, unsigned int uid, 
+                              unsigned int gid, int npage)
+{
+        struct lustre_quota_ctxt *qctxt = &obd->u.obt.obt_qctxt;
+        int i;
+        __u32 id[MAXQUOTAS] = { uid, gid };
+        struct qunit_data qdata[MAXQUOTAS];
+        int rc;
+        ENTRY;
+
+        CLASSERT(MAXQUOTAS < 4);
+        if (!sb_any_quota_enabled(qctxt->lqc_sb))
+                RETURN(0);
+
+        for (i = 0; i < MAXQUOTAS; i++) {
+                qdata[i].qd_id = id[i];
+                qdata[i].qd_flags = i;
+                qdata[i].qd_flags |= QUOTA_IS_BLOCK;
+                qdata[i].qd_count = 0;
+
+                qctxt_wait_pending_dqacq(qctxt, id[i], i, 1);
+                rc = compute_remquota(obd, qctxt, &qdata[i]);
+                if (rc == QUOTA_RET_OK && 
+                    qdata[i].qd_count < npage * CFS_PAGE_SIZE)
+                        RETURN(QUOTA_RET_ACQUOTA);
+        }
+
+        RETURN(rc);
+}
+
 static int mds_quota_init(void)
 {
         return lustre_dquot_init();
@@ -680,6 +712,7 @@ quota_interface_t filter_quota_interface = {
         .quota_getflag  = filter_quota_getflag,
         .quota_acquire  = filter_quota_acquire,
         .quota_adjust   = filter_quota_adjust,
+        .quota_chkquota = filter_quota_check,
 };
 #endif /* __KERNEL__ */
 

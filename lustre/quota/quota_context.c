@@ -221,6 +221,59 @@ out:
         return ret;
 }
 
+/* compute the remaining quota for certain gid or uid b=11693 */
+int compute_remquota(struct obd_device *obd,
+                     struct lustre_quota_ctxt *qctxt, struct qunit_data *qdata)
+{
+        struct super_block *sb = qctxt->lqc_sb;
+        __u64 usage, limit;
+        struct obd_quotactl *qctl;
+        int ret = QUOTA_RET_OK;
+        __u32 qdata_type = qdata->qd_flags & QUOTA_IS_GRP;
+        ENTRY;
+
+        if (!sb_any_quota_enabled(sb))
+                RETURN(QUOTA_RET_NOQUOTA);
+
+        /* ignore root user */
+        if (qdata->qd_id == 0 && qdata_type == USRQUOTA)
+                RETURN(QUOTA_RET_NOLIMIT);
+
+        OBD_ALLOC_PTR(qctl);
+        if (qctl == NULL) 
+                RETURN(-ENOMEM);
+
+        /* get fs quota usage & limit */
+        qctl->qc_cmd = Q_GETQUOTA;
+        qctl->qc_id = qdata->qd_id;
+        qctl->qc_type = qdata_type;
+        ret = fsfilt_quotactl(obd, sb, qctl);
+        if (ret) {
+                if (ret == -ESRCH)      /* no limit */
+                        ret = QUOTA_RET_NOLIMIT;
+                else
+                        CDEBUG(D_QUOTA, "can't get fs quota usage! (rc:%d)", 
+                               ret);
+                GOTO(out, ret);
+        }
+
+        usage = qctl->qc_dqblk.dqb_curspace;
+        limit = qctl->qc_dqblk.dqb_bhardlimit << QUOTABLOCK_BITS;
+        if (!limit){            /* no limit */
+                ret = QUOTA_RET_NOLIMIT;
+                GOTO(out, ret);
+        }
+
+        if (limit >= usage)
+                qdata->qd_count = limit - usage;
+        else
+                qdata->qd_count = 0;
+        EXIT;
+out:
+        OBD_FREE_PTR(qctl);
+        return ret;
+}
+
 /* caller must hold qunit_hash_lock */
 static struct lustre_qunit *dqacq_in_flight(struct lustre_quota_ctxt *qctxt,
                                             struct qunit_data *qdata)

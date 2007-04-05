@@ -35,8 +35,11 @@ LFS=${LFS:-lfs}
 LCTL=${LCTL:-lctl}
 SETSTRIPE=${SETSTRIPE:-"$LFS setstripe"}
 TSTID=${TSTID:-60000}
+TSTID2=${TSTID2:-60001}
 RUNAS=${RUNAS:-"runas -u $TSTID"}
+RUNAS2=${RUNAS2:-"runas -u $TSTID2"}
 TSTUSR=${TSTUSR:-"quota_usr"}
+TSTUSR2=${TSTUSR2:-"quota_2usr"}
 BLK_SZ=1024
 BUNIT_SZ=${BUNIT_SZ:-1000}	# default 1000 quota blocks
 BTUNE_SZ=${BTUNE_SZ:-500}	# default 50% of BUNIT_SZ
@@ -136,14 +139,30 @@ pass() {
 }
 
 mounted_lustre_filesystems() {
-	awk '($3 ~ "lustre" && $1 ~ ":") { print $2 }' /proc/mounts
+	awk '($3 ~ "lustre" && $1 ~ ":") { print $2 }' /proc/mounts | sed -n $1p
 }
-MOUNT="`mounted_lustre_filesystems`"
-if [ -z "$MOUNT" ]; then
+
+# Remember where our caller has hinted that we should mount lustre
+MOUNT_HINT=$MOUNT
+MOUNT_HINT2=$MOUNT2
+MOUNT="`mounted_lustre_filesystems 1`"
+MOUNT2="`mounted_lustre_filesystems 2`"
+if [ -n "$MOUNT" -a -z "$MOUNT2" ]; then
+        error "this test needs two mount point!"
+fi
+if [ -z "$MOUNT" -a -n "$MOUNT2" ]; then
+        error "this test needs two mount point!"
+fi
+if [ -z "$MOUNT" -a -z "$MOUNT2" ]; then
 	export QUOTA_OPTS="quotaon=ug"
-	sh llmount.sh
-	MOUNT="`mounted_lustre_filesystems`"
-	[ -z "$MOUNT" ] && error "NAME=$NAME not mounted"
+	export MOUNT=$MOUNT_HINT 
+	export MOUNT2=$MOUNT_HINT2
+	MOUNT2=${MOUNT2:-/mnt/lustre2}
+	sh llmount.sh 
+	MOUNT="`mounted_lustre_filesystems 1`"
+	MOUNT2="`mounted_lustre_filesystems 2`"
+	[ -z "$MOUNT" ] && error "NAME=$MOUNT not mounted"
+	[ -z "$MOUNT2" ] && error "NAME=$MOUNT2 not mounted"
 	I_MOUNTED=yes
 fi
 
@@ -161,6 +180,7 @@ ORIGFREE=`cat $LPROC/lov/$LOVNAME/kbytesavail`
 MAXFREE=${MAXFREE:-$((200000 * $OSTCOUNT))}
 MDS=$(\ls $LPROC/mds 2> /dev/null | grep -v num_refs | tail -n 1)
 TSTDIR="$MOUNT/quota_dir"
+TSTDIR2="$MOUNT2/quota_dir"
 
 build_test_filter
 
@@ -244,6 +264,12 @@ setup() {
 	fi
 	TSTID="`cat /etc/group | grep "$TSTUSR" | awk -F: '{print $3}'`"
 
+        GRP2="`cat /etc/group | grep "$TSTUSR2" | awk -F: '{print $1}'`"
+        if [ -z "$GRP2" ]; then
+                groupadd -g $TSTID2 "$TSTUSR2"
+        fi
+        TSTID2="`cat /etc/group | grep "$TSTUSR2" | awk -F: '{print $3}'`"
+
 	# create test user
 	USR="`cat /etc/passwd | grep "$TSTUSR" | awk -F: '{print $1}'`"
 	if [ -z "$USR" ]; then
@@ -251,10 +277,20 @@ setup() {
 	fi
 	
 	RUNAS="runas -u $TSTID"
+
+	USR2="`cat /etc/passwd | grep "$TSTUSR2" | awk -F: '{print $1}'`"
+        if [ -z "$USR2" ]; then
+                useradd -u $TSTID2 -g $TSTID2 -d /tmp "$TSTUSR2"
+        fi
+
+        RUNAS2="runas -u $TSTID2"
 	
 	# create test directory
 	[ -d $TSTDIR ] || mkdir $TSTDIR 
 	chmod 777 $TSTDIR
+
+        [ -d $TSTDIR2 ] || mkdir $TSTDIR2
+        chmod 777 $TSTDIR2
 }
 setup
 
@@ -654,7 +690,7 @@ run_test 8 "Run dbench with quota enabled ==========="
 
 # run for fixing bug10707, it needs a big room. test for 64bit
 test_9() {
-        lustrefs_size=`df | grep $MOUNT | awk '{print $(NF - 2)}'`
+        lustrefs_size=`df | grep $MOUNT | awk '{print $(NF - 2)}' | sed -n 1p`
         size_file=$((1024 * 1024 * 9 / 2 * $OSTCOUNT))
         echo "lustrefs_size:$lustrefs_size  size_file:$size_file"
         if [ $lustrefs_size -lt $size_file ]; then
@@ -702,7 +738,7 @@ run_test 9 "run for fixing bug10707(64bit) ==========="
 
 # run for fixing bug10707, it need a big room. test for 32bit
 test_10() {
-       lustrefs_size=`df | grep $MOUNT | awk '{print $(NF - 2)}'`
+       lustrefs_size=`df | grep $MOUNT | awk '{print $(NF - 2)}' | sed -n 1p`
        size_file=$((1024 * 1024 * 9 / 2 * $OSTCOUNT))
        echo "lustrefs_size:$lustrefs_size  size_file:$size_file"
        if [ $lustrefs_size -lt $size_file ]; then
@@ -764,7 +800,7 @@ run_test 10 "run for fixing bug10707(32bit) ==========="
 
 test_11() {
        #prepare the test
-       block_limit=`df | grep $MOUNT | awk '{print $(NF - 4)}'`
+       block_limit=`df | grep $MOUNT | awk '{print $(NF - 4)}'| sed -n 1p`
        echo $block_limit
        orig_dbr=`cat /proc/sys/vm/dirty_background_ratio`
        orig_dec=`cat /proc/sys/vm/dirty_expire_centisecs`
@@ -822,6 +858,122 @@ test_11() {
 }
 run_test 11 "run for fixing bug10912 ==========="
 
+# test a deadlock between quota and journal b=11693
+test_12() {
+	LIMIT=$(( $BUNIT_SZ * $(($OSTCOUNT + 1)) * 10)) # 10 bunits each sever
+	TESTFILE="$TSTDIR/quota_tst120"
+	TESTFILE2="$TSTDIR2/quota_tst121"
+	
+	echo "   User quota (limit: $LIMIT kilobytes)"
+	$LFS setquota -u $TSTUSR 0 $LIMIT 0 0 $MOUNT
+	
+	$LFS setstripe $TESTFILE 65536 0 1
+	chown $TSTUSR.$TSTUSR $TESTFILE
+	$LFS setstripe $TESTFILE2 65536 0 1
+        chown $TSTUSR2.$TSTUSR2 $TESTFILE2
+
+	#define OBD_FAIL_OST_HOLD_WRITE_RPC      0x21f
+	sysctl -w lustre.fail_loc=0x0000021f        
+
+	echo "   step1: write out of block quota ..."
+	$RUNAS dd if=/dev/zero of=$TESTFILE bs=$BLK_SZ count=$(($LIMIT*2)) & > /dev/null 2>&1
+	DDPID=$!
+	sleep 5
+	$RUNAS2 dd if=/dev/zero of=$TESTFILE2 bs=$BLK_SZ count=102400 & > /dev/null 2>&1
+	DDPID1=$!
+
+	echo  "   step2: testing ......"
+	count=0
+	while [ true ]; do
+	    if [ -z `ps -ef | awk '$2 == '${DDPID1}' { print $8 }'` ]; then break; fi
+	    count=$[count+1]
+	    if [ $count -gt 64 ]; then
+		sysctl -w lustre.fail_loc=0
+		error "dd should be finished!"
+	    fi
+	    sleep 1
+	done	
+	echo "(dd_pid=$DDPID1, time=$count)successful"
+
+	#Recover fail_loc and dd will finish soon
+	sysctl -w lustre.fail_loc=0
+
+	echo  "   step3: testing ......"
+	count=0
+	while [ true ]; do
+	    if [ -z `ps -ef | awk '$2 == '${DDPID}' { print $8 }'` ]; then break; fi
+	    count=$[count+1]
+	    if [ $count -gt 100 ]; then
+		error "dd should be finished!"
+	    fi
+	    sleep 1
+	done	
+	echo "(dd_pid=$DDPID, time=$count)successful"
+
+	rm -f $TESTFILE $TESTFILE2
+	
+	$LFS setquota -u $TSTUSR 0 0 0 0 $MOUNT		# clear user limit
+}
+run_test 12 "test a deadlock between quota and journal ==="
+
+# test multiple clients write block quota b=11693
+test_13() {
+	LIMIT=$(( $BUNIT_SZ * $(($OSTCOUNT + 1)) * 8 + $BUNIT_SZ ))
+	TESTFILE="$TSTDIR/quota_tst130"
+	TESTFILE2="$TSTDIR2/quota_tst131"
+	
+	echo "   User quota (limit: $LIMIT kilobytes)"
+	$LFS setquota -u $TSTUSR 0 $LIMIT 0 0 $MOUNT
+	
+	$LFS setstripe $TESTFILE 65536 0 1
+	chown $TSTUSR.$TSTUSR $TESTFILE
+	$LFS setstripe $TESTFILE2 65536 0 1
+        chown $TSTUSR.$TSTUSR $TESTFILE2
+
+	echo "   step1: write out of block quota ..."
+	# one bunit will give mds
+	$RUNAS dd if=/dev/zero of=$TESTFILE bs=$BLK_SZ count=$[($LIMIT - $BUNIT_SZ) / 2] & > /dev/null 2>&1
+	DDPID=$!
+	$RUNAS dd if=/dev/zero of=$TESTFILE2 bs=$BLK_SZ count=$[($LIMIT - $BUNIT_SZ) / 2] & > /dev/null 2>&1
+	DDPID1=$!
+
+	echo  "   step2: testing ......"
+	count=0
+	while [ true ]; do
+	    if [ -z `ps -ef | awk '$2 == '${DDPID}' { print $8 }'` ]; then break; fi
+	    count=$[count+1]
+	    if [ $count -gt 64 ]; then
+		error "dd should be finished!"
+	    fi
+	    sleep 1
+	done	
+	echo "(dd_pid=$DDPID, time=$count)successful"
+
+	count=0
+	while [ true ]; do
+	    if [ -z `ps -ef | awk '$2 == '${DDPID1}' { print $8 }'` ]; then break; fi
+	    count=$[count+1]
+	    if [ $count -gt 64 ]; then
+		error "dd should be finished!"
+	    fi
+	    sleep 1
+	done	
+	echo "(dd_pid=$DDPID1, time=$count)successful"
+
+	sync; sleep 5; sync;
+
+	echo  "   step3: checking ......"
+	fz=`stat -t $TESTFILE | awk '{print $2}'`
+	fz2=`stat -t $TESTFILE2 | awk '{print $2}'`
+	[ $fz  -ne $[($LIMIT - $BUNIT_SZ) / 2 * $BLK_SZ] ] && error "test13 failed!"
+	[ $fz2 -ne $[($LIMIT - $BUNIT_SZ) / 2 * $BLK_SZ] ] && error "test13 failed!"
+
+	rm -f $TESTFILE $TESTFILE2
+	
+	$LFS setquota -u $TSTUSR 0 0 0 0 $MOUNT		# clear user limit
+}
+run_test 13 "test multiple clients write block quota ==="
+
 # turn off quota
 test_99()
 {
@@ -837,6 +989,7 @@ if [ "`mount | grep ^$NAME`" ]; then
 	post_test
 	# delete test user and group
 	userdel "$TSTUSR"
+	userdel "$TSTUSR2"
 	if [ "$I_MOUNTED" = "yes" ]; then
 		cd $ORIG_PWD && (sh llmountcleanup.sh || error "llmountcleanup failed")
 	fi

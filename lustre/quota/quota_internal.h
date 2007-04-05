@@ -63,6 +63,8 @@ int qctxt_init(struct lustre_quota_ctxt *qctxt, struct super_block *sb,
 void qctxt_cleanup(struct lustre_quota_ctxt *qctxt, int force);
 void qslave_start_recovery(struct obd_device *obd, 
                            struct lustre_quota_ctxt *qctxt);
+int compute_remquota(struct obd_device *obd,
+                     struct lustre_quota_ctxt *qctxt, struct qunit_data *qdata);
 /* quota_master.c */
 int lustre_dquot_init(void);
 void lustre_dquot_exit(void);

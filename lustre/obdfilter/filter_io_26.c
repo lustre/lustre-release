@@ -514,23 +514,10 @@ int filter_direct_io(int rw, struct dentry *dchild, struct filter_iobuf *iobuf,
                 lquota_enforce(filter_quota_interface_ref, obd,
                                iobuf->dr_ignore_quota);
         }
-remap:
+
         rc = fsfilt_map_inode_pages(obd, inode, iobuf->dr_pages,
                                     iobuf->dr_npages, iobuf->dr_blocks,
                                     obdfilter_created_scratchpad, create, sem);
-
-        if (rc == -EDQUOT) {
-                LASSERT(rw == OBD_BRW_WRITE &&
-                        !cap_raised(current->cap_effective, CAP_SYS_RESOURCE));
-
-                /* Unfortunately, if quota master is too busy to handle the
-                 * pre-dqacq in time or this user has exceeded quota limit, we
-                 * have to wait for the completion of in flight dqacq/dqrel,
-                 * then try again */
-                if (lquota_acquire(filter_quota_interface_ref, obd,
-                                   inode->i_uid, inode->i_gid))
-                        goto remap;
-        }
 
         if (rw == OBD_BRW_WRITE) {
                 if (rc == 0) {
@@ -606,7 +593,7 @@ int filter_commitrw_write(struct obd_export *exp, struct obdo *oa,
         int i, err, cleanup_phase = 0;
         struct obd_device *obd = exp->exp_obd;
         void *wait_handle;
-        int   total_size = 0;
+        int   total_size = 0, rc2;
         unsigned int qcids[MAXQUOTAS] = {0, 0};
         ENTRY;
 
@@ -616,6 +603,22 @@ int filter_commitrw_write(struct obd_export *exp, struct obdo *oa,
 
         if (rc != 0)
                 GOTO(cleanup, rc);
+
+        /* Unfortunately, if quota master is too busy to handle the
+         * pre-dqacq in time and quota hash on ost is used up, we
+         * have to wait for the completion of in flight dqacq/dqrel,
+         * then try again */
+        if ((rc2 = lquota_chkquota(filter_quota_interface_ref, obd, oa->o_uid,
+                                   oa->o_gid, niocount)) == QUOTA_RET_ACQUOTA) {
+                OBD_FAIL_TIMEOUT(OBD_FAIL_OST_HOLD_WRITE_RPC, 90);
+                lquota_acquire(filter_quota_interface_ref, obd, oa->o_uid,
+                               oa->o_gid);
+        }
+
+        if (rc2 < 0) {
+                rc = rc2;
+                GOTO(cleanup, rc);
+        }
 
         iobuf = filter_iobuf_get(&obd->u.filter, oti);
         if (IS_ERR(iobuf))

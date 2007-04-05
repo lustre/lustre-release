@@ -132,6 +132,7 @@ extern int obd_race_state;
 #define OBD_FAIL_OST_BRW_SIZE            0x21c
 #define OBD_FAIL_OST_DROP_REQ            0x21d
 #define OBD_FAIL_OST_SETATTR_CREDITS     0x21e
+#define OBD_FAIL_OST_HOLD_WRITE_RPC      0x21f
 
 #define OBD_FAIL_LDLM                    0x300
 #define OBD_FAIL_LDLM_NAMESPACE_NEW      0x301
