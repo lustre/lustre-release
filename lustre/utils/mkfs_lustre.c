@@ -523,9 +523,15 @@ int make_lustre_backfs(struct mkfs_opts *mop)
                         strcat(mop->mo_mkfsopts, " -q");
                 }
 
-                /* Enable hashed b-tree directory lookup in large dirs bz6224 */
                 if (strstr(mop->mo_mkfsopts, "-O") == NULL) {
+                        /* Enable hashed b-tree directory lookup in large dirs
+                           bz6224 */
                         strcat(mop->mo_mkfsopts, " -O dir_index");
+
+                        /* ldiskfs2: do not initialize all groups. */
+                        if (mop->mo_ldd.ldd_mount_type == LDD_MT_LDISKFS2) {
+                                strcat(mop->mo_mkfsopts, ",uninit_groups");
+                        }
                 }
 
                 /* Allow reformat of full devices (as opposed to 
