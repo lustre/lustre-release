@@ -2325,7 +2325,8 @@ int ll_file_flock(struct file *file, int cmd, struct file_lock *file_lock)
         if ((file_lock->fl_flags & FL_FLOCK) && (rc == 0))
                 ll_flock_lock_file_wait(file, file_lock, (cmd == F_SETLKW));
 #ifdef HAVE_F_OP_FLOCK
-        if ((file_lock->fl_flags & FL_POSIX) &&(rc == 0))
+        if ((file_lock->fl_flags & FL_POSIX) && (rc == 0) &&
+            !(flags & LDLM_FL_TEST_LOCK))
                 posix_lock_file_wait(file, file_lock);
 #endif
 
