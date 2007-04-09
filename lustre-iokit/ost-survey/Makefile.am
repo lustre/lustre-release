@@ -1,3 +1,3 @@
-bin_SCRIPTS = ost-survey.pl plot-ost.pl
+bin_SCRIPTS = ost-survey plot-ost
 CLEANFILE = $(bin_SCRIPTS)
-EXTRA_DIST = README.ost-survey ost-survey.pl plot-ost.pl
+EXTRA_DIST = README.ost-survey ost-survey plot-ost

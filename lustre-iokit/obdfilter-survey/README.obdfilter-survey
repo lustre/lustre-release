@@ -107,15 +107,15 @@ case, you need to ensure...
 
 - First, bring up obdecho instances on the servers and echo_client instances
 on the clients:
-   - run the included echo.sh on a node that has Lustre installed.  
+   - run the included create-echoclient on a node that has Lustre installed.  
 	 -shell variables:
 	 - SERVERS: Set this to a list of server hostnames, or `hostname` of
 	   the current node will be used.  This may be the wrong interface, so
-	   check it.  NOTE: echo.sh could probably be smarter about this...
+	   check it.  NOTE: create-echoclient could probably be smarter about this...
 
 	   - NETS: set this if you are using a network type other than
 tcp.
-    - example: SERVERS=oss01-eth2 sh echo.sh
+    - example: SERVERS=oss01-eth2 sh create-echoclient
 
 - On the servers start the obdecho server and verify that it is up:
 

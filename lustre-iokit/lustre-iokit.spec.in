@@ -48,14 +48,14 @@ make install DESTDIR=$RPM_BUILD_ROOT
 
 %files
 /usr/bin/ior-survey
-/usr/bin/parse-ior.pl
-/usr/bin/echo.sh
+/usr/bin/parse-ior
+/usr/bin/create-echoclient
 /usr/bin/obdfilter-survey
-/usr/bin/obparse.pl
-/usr/bin/plot-ost.pl
-/usr/bin/ost-survey.pl
+/usr/bin/obparse
+/usr/bin/plot-ost
+/usr/bin/ost-survey
 /usr/bin/sgpdd-survey
-/usr/bin/parse-sgpdd.pl
+/usr/bin/parse-sgpdd
 %doc obdfilter-survey/README.obdfilter-survey
 %doc ior-survey/README.ior-survey
 %doc ost-survey/README.ost-survey
