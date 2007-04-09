@@ -40,22 +40,22 @@ A script to run the IOR benchmark. The latest version can be downloaded from htt
 
 %build
 rm -fr $RPM_BUILD_ROOT
-./configure --prefix=/usr/local
+./configure --prefix=/usr
 make
 
 %install
 make install DESTDIR=$RPM_BUILD_ROOT
 
 %files
-/usr/local/bin/ior-survey
-/usr/local/bin/parse-ior.pl
-/usr/local/bin/echo.sh
-/usr/local/bin/obdfilter-survey
-/usr/local/bin/obparse.pl
-/usr/local/bin/plot-ost.pl
-/usr/local/bin/ost-survey.pl
-/usr/local/bin/sgpdd-survey
-/usr/local/bin/parse-sgpdd.pl
+/usr/bin/ior-survey
+/usr/bin/parse-ior.pl
+/usr/bin/echo.sh
+/usr/bin/obdfilter-survey
+/usr/bin/obparse.pl
+/usr/bin/plot-ost.pl
+/usr/bin/ost-survey.pl
+/usr/bin/sgpdd-survey
+/usr/bin/parse-sgpdd.pl
 %doc obdfilter-survey/README.obdfilter-survey
 %doc ior-survey/README.ior-survey
 %doc ost-survey/README.ost-survey
