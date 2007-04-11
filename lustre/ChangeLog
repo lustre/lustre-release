@@ -27,6 +27,10 @@ Bugzilla   : 10997
 Description: lfs setstripe use optional parameters instead of postional 
 	     parameters.
 
+Severity   : enhancement 
+Bugzilla   : 10651
+Description: Nanosecond timestamp support.
+
 --------------------------------------------------------------------------------
 
 tbd         Cluster File Systems, Inc. <info@clusterfs.com>
