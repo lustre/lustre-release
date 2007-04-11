@@ -17,7 +17,7 @@ tbd         Cluster File Systems, Inc. <info@clusterfs.com>
 	(see https://mail.clusterfs.com/wikis/lustre/PatchlessClient)
 	2.6.16 - 2.6.19 vanilla (kernel.org)
 	2.6.9-42.0.8EL (RHEL 4)
-       * Recommended e2fsprogs version: 1.39.cfs5
+       * Recommended e2fsprogs version: 1.39.cfs6
        * bug fixes
        * Note that reiserfs quotas are temporarily disabled on SLES 10 in this
 	 kernel.
