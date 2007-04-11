@@ -1,5 +1,5 @@
-TBD         Cluster File Systems, Inc. <info@clusterfs.com>
-       * version 1.4.11 / 1.6.1
+2007-04-23  Cluster File Systems, Inc. <info@clusterfs.com>
+       * version 1.4.11
        * Support for networks:
 	socklnd   - kernels up to 2.6.16
 	qswlnd    - Qsnet kernel modules 5.20 and later
