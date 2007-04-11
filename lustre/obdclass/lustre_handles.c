@@ -30,6 +30,7 @@
 
 #include <obd_support.h>
 #include <lustre_handles.h>
+#include <lustre_lib.h>
 
 spinlock_t handle_lock;
 static __u64 handle_base;
@@ -145,7 +146,7 @@ int class_handle_init(void)
              bucket--)
                 CFS_INIT_LIST_HEAD(bucket);
 
-        get_random_bytes(&handle_base, sizeof(handle_base));
+        ll_get_random_bytes(&handle_base, sizeof(handle_base));
         LASSERT(handle_base != 0ULL);
 
         return 0;

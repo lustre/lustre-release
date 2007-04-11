@@ -1946,7 +1946,7 @@ static int mds_setup(struct obd_device *obd, obd_count len, void *buf)
         if (lcfg->lcfg_bufcount >= 4 && LUSTRE_CFG_BUFLEN(lcfg, 3) > 0) {
                 class_uuid_t uuid;
 
-                generate_random_uuid(uuid);
+                ll_generate_random_uuid(uuid);
                 class_uuid_unparse(uuid, &mds->mds_lov_uuid);
 
                 OBD_ALLOC(mds->mds_profile, LUSTRE_CFG_BUFLEN(lcfg, 3));

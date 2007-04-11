@@ -640,7 +640,7 @@ static int lustre_start_mgc(struct super_block *sb)
 
         /* Random uuid for MGC allows easier reconnects */
         OBD_ALLOC_PTR(uuid);
-        class_generate_random_uuid(uuidc);
+        ll_generate_random_uuid(uuidc);
         class_uuid_unparse(uuidc, uuid);
 
         /* Start the MGC */

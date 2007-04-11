@@ -15,8 +15,10 @@
 
 #ifndef __KERNEL__
 #include <liblustre.h>
+#define get_random_bytes(val, size)     (*val) = 0
 #endif
 #include <obd_class.h>
+#include <linux/random.h>
 
 /*
 From: George Marsaglia <geo@stat.fsu.edu>
@@ -66,3 +68,40 @@ void ll_srand(unsigned int seed1, unsigned int seed2)
 		seed_y = seed2;
 }
 EXPORT_SYMBOL(ll_srand);
+
+void ll_get_random_bytes(void *buf, int size)
+{
+        int *p = buf;
+        int rem, tmp;
+
+        LASSERT(size >= 0);
+
+        rem = min((int)((unsigned long)buf & (sizeof(int) - 1)), size);
+        if (rem) {
+                get_random_bytes(&tmp, sizeof(tmp));
+                tmp ^= ll_rand();
+                memcpy(buf, &tmp, rem);
+                p = buf + rem;
+                size -= rem;
+        }
+
+        while (size >= sizeof(int)) {
+                get_random_bytes(&tmp, sizeof(tmp));
+                *p = ll_rand() ^ tmp;
+                size -= sizeof(int);
+                p++;
+        }
+        buf = p;
+        if (size) {
+                get_random_bytes(&tmp, sizeof(tmp));
+                tmp ^= ll_rand();
+                memcpy(buf, &tmp, size);
+        }
+}
+EXPORT_SYMBOL(ll_get_random_bytes); 
+
+void ll_generate_random_uuid(unsigned char uuid_out[16])
+{
+        ll_get_random_bytes(uuid_out, sizeof(uuid_out));
+}
+EXPORT_SYMBOL(ll_generate_random_uuid);

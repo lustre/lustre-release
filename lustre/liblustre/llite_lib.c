@@ -84,7 +84,7 @@ int liblustre_process_log(struct config_llog_instance *cfg,
         struct obd_connect_data *ocd = NULL;
         ENTRY;
 
-        generate_random_uuid(uuid);
+        ll_generate_random_uuid(uuid);
         class_uuid_unparse(uuid, &mgc_uuid);
 
         nid = libcfs_str2nid(mgsnid);

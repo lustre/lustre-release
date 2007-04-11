@@ -125,28 +125,6 @@ int class_uuid_parse(struct obd_uuid in, class_uuid_t uu)
 
 void generate_random_uuid(unsigned char uuid_out[16]);
 
-/* We need to have some extra twiddling here because some systems have
- * no random state when they start up. */
-void class_generate_random_uuid(class_uuid_t uuid)
-{
-        struct timeval t;
-        int *i, j, k;
-
-        LASSERT(sizeof(class_uuid_t) % sizeof(*i) == 0);
-
-        j = jiffies;
-        do_gettimeofday(&t);
-        k = t.tv_usec;
-
-        generate_random_uuid(uuid);
-
-        for (i = (int *)uuid; (char *)i < (char *)uuid + sizeof(class_uuid_t); i++) {
-                *i ^= j ^ k;
-                j = ((j << 8) & 0xffffff00) | ((j >> 24) & 0x000000ff);
-                k = ((k >> 8) & 0x00ffffff) | ((k << 24) & 0xff000000);
-        }
-}
-
 void class_uuid_unparse(class_uuid_t uu, struct obd_uuid *out)
 {
         struct uuid uuid;

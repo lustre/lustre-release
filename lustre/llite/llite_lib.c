@@ -75,7 +75,7 @@ static struct ll_sb_info *ll_init_sbi(void)
         INIT_LIST_HEAD(&sbi->ll_conn_chain);
         INIT_LIST_HEAD(&sbi->ll_orphan_dentry_list);
 
-        class_generate_random_uuid(uuid);
+        ll_generate_random_uuid(uuid);
         class_uuid_unparse(uuid, &sbi->ll_sb_uuid);
         CDEBUG(D_HA, "generated uuid: %s\n", sbi->ll_sb_uuid.uuid);
 
@@ -702,7 +702,7 @@ static int old_lustre_process_log(struct super_block *sb, char *newprofile,
         int i, rc = 0, recov_bk = 1, failnodes = 0;
         ENTRY;
 
-        class_generate_random_uuid(uuid);
+        ll_generate_random_uuid(uuid);
         class_uuid_unparse(uuid, &mdc_uuid);
         CDEBUG(D_HA, "generated uuid: %s\n", mdc_uuid.uuid);
         

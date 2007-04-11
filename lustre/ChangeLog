@@ -31,6 +31,10 @@ Severity   : enhancement
 Bugzilla   : 10651
 Description: Nanosecond timestamp support.
 
+Severity   : enhancement 
+Bugzilla   : 10802
+Description: Move random uuid functions to prng.c.
+
 --------------------------------------------------------------------------------
 
 tbd         Cluster File Systems, Inc. <info@clusterfs.com>

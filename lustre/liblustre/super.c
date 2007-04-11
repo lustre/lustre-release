@@ -1884,7 +1884,7 @@ llu_fsswop_mount(const char *source,
                 RETURN(-ENOMEM);
 
         INIT_LIST_HEAD(&sbi->ll_conn_chain);
-        generate_random_uuid(uuid);
+        ll_generate_random_uuid(uuid);
         class_uuid_unparse(uuid, &sbi->ll_sb_uuid);
 
         /* generate a string unique to this super, let's try

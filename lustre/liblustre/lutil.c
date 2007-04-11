@@ -129,32 +129,6 @@ void liblustre_init_random()
         ll_srand(tv.tv_sec ^ __swab32(seed[0]), tv.tv_usec ^__swab32(getpid()));
 }
 
-void get_random_bytes(void *buf, int size)
-{
-        int *p = buf;
-        int rem;
-        LASSERT(size >= 0);
-
-        rem = min((unsigned long)buf & (sizeof(int) - 1), size);
-        if (rem) {
-                int val = ll_rand();
-                memcpy(buf, &val, rem);
-                p = buf + rem;
-                size -= rem;
-        }
-
-        while (size >= sizeof(int)) {
-                *p = ll_rand();
-                size -= sizeof(int);
-                p++;
-        }
-        buf = p;
-        if (size) {
-                int val = ll_rand();
-                memcpy(buf, &val, size);
-        }
-}
- 
 static void init_capability(int *res)
 {
 #ifdef HAVE_LIBCAP
@@ -236,11 +210,6 @@ int liblustre_init_current(char *comm)
         init_capability(&current->cap_effective);
 
         return 0;
-}
-
-void generate_random_uuid(unsigned char uuid_out[16])
-{
-        get_random_bytes(uuid_out, sizeof(uuid_out));
 }
 
 int init_lib_portals()

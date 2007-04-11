@@ -96,9 +96,9 @@ static int connect_echo_client(void)
 	int err;
 	ENTRY;
 
-        generate_random_uuid(osc_uuid);
+        ll_generate_random_uuid(osc_uuid);
         class_uuid_unparse(osc_uuid, &osc_uuid_str);
-        generate_random_uuid(echo_uuid);
+        ll_generate_random_uuid(echo_uuid);
         class_uuid_unparse(echo_uuid, &echo_uuid_str);
 
         nid = libcfs_str2nid(echo_server_nid);

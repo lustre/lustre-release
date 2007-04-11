@@ -173,7 +173,6 @@ struct mount_option_s
         ((unsigned long)(ptr) == 0 || (unsigned long)(ptr) > -1000UL)
 
 /* llite_lib.c */
-void generate_random_uuid(unsigned char uuid_out[16]);
 int liblustre_process_log(struct config_llog_instance *cfg, char *mgsnid,
                           char *profile, int allow_recov);
 int ll_parse_mount_target(const char *target, char **mgsnid,

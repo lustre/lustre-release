@@ -131,7 +131,7 @@ static int __init init_lustre_lite(void)
         lustre_register_client_fill_super(ll_fill_super);
         lustre_register_client_process_config(ll_process_config);
 
-        get_random_bytes(seed, sizeof(seed));
+        ll_get_random_bytes(seed, sizeof(seed));
 
         /* Nodes with small feet have little entropy
          * the NID for this node gives the most entropy in the low bits */
