@@ -13,4 +13,4 @@ ext3-ialloc-2.6.patch
 ext3-lookup-dotdot-2.6.9.patch
 ext3-sector_t-overflow-2.6.9-rhel4.patch
 ext3-check-jbd-errors-2.6.9.patch
-ext3-nanosecond-2.6.9-rhel4.patch
+ext3-nanosecond-2.6-rhel4.patch
