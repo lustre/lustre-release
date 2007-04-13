@@ -944,6 +944,7 @@ int ptlrpc_check_set(struct ptlrpc_request_set *set)
 int ptlrpc_expire_one_request(struct ptlrpc_request *req)
 {
         struct obd_import *imp = req->rq_import;
+        int rc = 0;
         ENTRY;
 
         DEBUG_REQ(D_ERROR|D_NETERROR, req, "timeout (sent at %lu, %lus ago)",
@@ -984,9 +985,15 @@ int ptlrpc_expire_one_request(struct ptlrpc_request *req)
                 RETURN(1);
         }
 
+        /* if request can't be resend we can't wait answer after timeout */
+        if (req->rq_no_resend) {
+                DEBUG_REQ(D_RPCTRACE, req, "TIMEOUT-NORESEND:");
+                rc = 1;
+        }
+
         ptlrpc_fail_import(imp, lustre_msg_get_conn_cnt(req->rq_reqmsg));
 
-        RETURN(0);
+        RETURN(rc);
 }
 
 int ptlrpc_expired_set(void *data)
@@ -1264,6 +1271,7 @@ void ptlrpc_unregister_reply (struct ptlrpc_request *request)
         int                rc;
         cfs_waitq_t       *wq;
         struct l_wait_info lwi;
+        ENTRY;
 
         LASSERT(!in_interrupt ());             /* might sleep */
 
@@ -1291,6 +1299,7 @@ void ptlrpc_unregister_reply (struct ptlrpc_request *request)
                 LASSERT (rc == -ETIMEDOUT);
                 DEBUG_REQ(D_WARNING, request, "Unexpectedly long timeout");
         }
+        EXIT;
 }
 
 /* caller must hold imp->imp_lock */

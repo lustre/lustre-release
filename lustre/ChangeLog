@@ -35,6 +35,14 @@ Severity   : enhancement
 Bugzilla   : 10802
 Description: Move random uuid functions to prng.c.
 
+Severity   : normal
+Frequency  : during server recovery
+Bugzilla   : 11203
+Description: MDS failing to send precreate requests due to OSCC_FLAG_RECOVERING
+Details    : request with rq_no_resend flag not awake l_wait_event if they get a
+             timeout.
+
+
 --------------------------------------------------------------------------------
 
 tbd         Cluster File Systems, Inc. <info@clusterfs.com>
