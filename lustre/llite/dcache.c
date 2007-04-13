@@ -185,6 +185,12 @@ int ll_drop_dentry(struct dentry *dentry)
                 spin_lock(&dcache_lock);
                 return 1;
         }
+	/* disconected dentry can not be find without lookup, because we 
+	 * not need his to unhash or mark invalid. */
+	if (dentry->d_flags & DCACHE_DISCONNECTED) {
+		unlock_dentry(dentry);
+		RETURN (0);
+	}
 
 #ifdef LUSTRE_KERNEL_VERSION
         if (!(dentry->d_flags & DCACHE_LUSTRE_INVALID)) {

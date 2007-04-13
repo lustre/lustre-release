@@ -42,6 +42,12 @@ Description: MDS failing to send precreate requests due to OSCC_FLAG_RECOVERING
 Details    : request with rq_no_resend flag not awake l_wait_event if they get a
              timeout.
 
+Severity   : minor
+Frequency  : nfs export on patchless client
+Bugzilla   : 11970
+Description: connectathon hang when test nfs export over patchless client
+Details    : Disconnected dentry cannot be found with lookup, so we do not need 
+             to unhash it or make it invalid
 
 --------------------------------------------------------------------------------
 
