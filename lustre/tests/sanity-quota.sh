@@ -155,25 +155,25 @@ mounted_lustre_filesystems() {
 
 # Remember where our caller has hinted that we should mount lustre
 MOUNT_HINT=$MOUNT
-MOUNT_HINT2=$MOUNT2
+MOUNT_HINT2=$MOUNT_2
 MOUNT="`mounted_lustre_filesystems 1`"
-MOUNT2="`mounted_lustre_filesystems 2`"
+MOUNT_2="`mounted_lustre_filesystems 2`"
 if [ $TEST_9_10 -eq 1 -a "$MOUNT" ]; then
         echo "test9 and test10 will run on $MOUNT"
-elif [ "$MOUNT" -a "$MOUNT2" ]; then
-	echo "testing on $MOUNT and $MOUNT2"
-elif [ "$MOUNT" -o "$MOUNT2" ]; then
-        error "test needs two mounts, only found $MOUNT $MOUNT2!"
+elif [ "$MOUNT" -a "$MOUNT_2" ]; then
+	echo "testing on $MOUNT and $MOUNT_2"
+elif [ "$MOUNT" -o "$MOUNT_2" ]; then
+        error "test needs two mounts, only found $MOUNT $MOUNT_2!"
 else
 	export QUOTA_OPTS="quotaon=ug"
 	export MOUNT=$MOUNT_HINT 
-	export MOUNT2=$MOUNT_HINT2
-	MOUNT2=${MOUNT2:-/mnt/lustre2}
+	export MOUNT_2=$MOUNT_HINT2
+	MOUNT_2=${MOUNT_2:-/mnt/lustre_2}
 	sh llmount.sh 
 	MOUNT="`mounted_lustre_filesystems 1`"
-	MOUNT2="`mounted_lustre_filesystems 2`"
+	MOUNT_2="`mounted_lustre_filesystems 2`"
 	[ -z "$MOUNT" ] && error "NAME=$MOUNT not mounted"
-	[ -z "$MOUNT2" ] && error "NAME=$MOUNT2 not mounted"
+	[ -z "$MOUNT_2" ] && error "NAME=$MOUNT_2 not mounted"
 	I_MOUNTED=yes
 fi
 
@@ -181,7 +181,7 @@ fi
 
 DIR=${DIR:-$MOUNT}
 [ -z "`echo $DIR | grep $MOUNT`" ] && echo "$DIR not in $MOUNT" && exit 99
-DIR2=${DIR2:-$MOUNT2}
+DIR2=${DIR2:-$MOUNT_2}
 
 LPROC=/proc/fs/lustre
 LOVNAME=`cat $LPROC/llite/*/lov/common_name | tail -n 1`

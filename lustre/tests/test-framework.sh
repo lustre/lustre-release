@@ -635,7 +635,7 @@ setupall() {
     done
     [ "$DAEMONFILE" ] && $LCTL debug_daemon start $DAEMONFILE $DAEMONSIZE
     mount_client $MOUNT
-    if [ "$MOUNT2" ]; then
+    if [ "$MOUNT_2" ]; then
 	mount_client $MOUNT2
     fi
     sleep 5
