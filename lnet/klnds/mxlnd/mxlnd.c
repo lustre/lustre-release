@@ -579,7 +579,7 @@ mxlnd_init_mx(lnet_ni_t *ni)
                 mx_finalize();
                 return -1;
         }
-        mxret = mx_set_request_timeout(kmxlnd_data.kmx_endpt, NULL, MXLND_COMM_TIMEOUT/HZ);
+        mxret = mx_set_request_timeout(kmxlnd_data.kmx_endpt, NULL, MXLND_COMM_TIMEOUT/HZ*1000);
         if (mxret != MX_SUCCESS) {
                 CERROR("mx_set_request_timeout() failed with %s\n", 
                         mx_strerror(mxret));

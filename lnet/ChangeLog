@@ -28,6 +28,11 @@
 	ptllnd    - Portals 3.3 / UNICOS/lc 1.5.x, 2.0.x
        * bug fixes
 
+Severity   : minor
+Frequency  : 'lctl peer_list' issued on a mx net
+Bugzilla   : 12237
+Description: Enable lctl's peer_list for MXLND
+
 Severity   : major
 Frequency  : after Ptllnd timeouts and portals congestion
 Bugzilla   : 11659

@@ -570,7 +570,7 @@ jt_ptl_print_peers (int argc, char **argv)
         int                      index;
         int                      rc;
 
-        if (!g_net_is_compatible (argv[0], SOCKLND, RALND, PTLLND,
+        if (!g_net_is_compatible (argv[0], SOCKLND, RALND, PTLLND, MXLND,
                                   OPENIBLND, CIBLND, IIBLND, VIBLND, O2IBLND, 0))
                 return -1;
 

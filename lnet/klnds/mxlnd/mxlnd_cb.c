@@ -1087,6 +1087,7 @@ int
 mxlnd_get_peer_info(int index, lnet_nid_t *nidp, int *count)
 {
         int                      i      = 0;
+        int                      ret    = -ENOENT;
         struct kmx_peer         *peer   = NULL;
         struct kmx_conn         *conn   = NULL;
 
@@ -1099,11 +1100,13 @@ mxlnd_get_peer_info(int index, lnet_nid_t *nidp, int *count)
 
                         *nidp = peer->mxp_nid;
                         *count = atomic_read(&peer->mxp_refcount);
+                        ret = 0;
+                        break;
                 }
         }
         read_unlock(&kmxlnd_data.kmx_peers_lock);
         
-        return -ENOENT;
+        return ret;
 }
 
 void
