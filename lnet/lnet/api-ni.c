@@ -751,6 +751,7 @@ lnet_unprepare (void)
 
                 CERROR ("Active msg %p on exit\n", msg);
                 LASSERT (msg->msg_onactivelist);
+                msg->msg_onactivelist = 0;
                 list_del (&msg->msg_activelist);
                 lnet_msg_free (msg);
         }
