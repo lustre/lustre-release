@@ -14,5 +14,7 @@ esac
 
 lctl modules | awk '{ print $2 }' | xargs $RMMOD >/dev/null 2>&1
 # do it again, in case we tried to unload the lnd's too early
+lctl modules | awk '{ print $2 }' | xargs $RMMOD >/dev/null 2>&1
+# third times the charm
 lsmod | grep lnet > /dev/null && lctl modules | awk '{ print $2 }' | xargs $RMMOD
 
