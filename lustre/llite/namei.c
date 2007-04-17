@@ -367,11 +367,11 @@ static void ll_d_add(struct dentry *de, struct inode *inode)
         __d_rehash(de, 0);
 }
 
-/* Search "inode"'s alias list for a dentry that has the same name and parent as
- * de.  If found, return it.  If not found, return de.
- * Lustre can`t be use d_add_unique because don`t unhash aliases for directory in
- * ll_revalidate_it. After revaliadate inode will be have hashed aliases and it`s
- * trigered BUG_ON in d_instantiate_unique (bug #10954).
+/* Search "inode"'s alias list for a dentry that has the same name and parent
+ * as de.  If found, return it.  If not found, return de.
+ * Lustre can't use d_add_unique because don't unhash aliases for directory
+ * in ll_revalidate_it.  After revaliadate inode will be have hashed aliases
+ * and it triggers BUG_ON in d_instantiate_unique (bug #10954).
  */
 struct dentry *ll_find_alias(struct inode *inode, struct dentry *de)
 {
@@ -424,8 +424,8 @@ struct dentry *ll_find_alias(struct inode *inode, struct dentry *de)
                 return dentry;
         }
         if (last_discon) {
-                 CDEBUG(D_DENTRY,"Reuse disconected dentry %p inode %p - refc %d\n",
-                        last_discon, last_discon->d_inode,
+                 CDEBUG(D_DENTRY, "Reuse disconnected dentry %p inode %p "
+                        "refc %d\n", last_discon, last_discon->d_inode,
                         atomic_read(&last_discon->d_count));
                  dget_locked(last_discon);
                  spin_unlock(&dcache_lock);
@@ -488,9 +488,8 @@ static int lookup_it_finish(struct ptlrpc_request *request, int offset,
                         /* We do not want to hash the dentry if don`t have a
                          * lock, but if this dentry is later used in d_move,
                          * we'd hit uninitialised list head d_hash, so we just
-                         * do this to init d_hash field but leave dentry unhashed.
-                         * (bug 10796).
-                         */
+                         * do this to init d_hash field but leave dentry
+                         * unhashed. (bug 10796). */
                         d_rehash(*de);
                         d_drop(*de);
                 }
