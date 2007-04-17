@@ -1801,7 +1801,15 @@ Index: linux-2.4.21-40.EL/include/linux/fs.h
  
  extern void inode_init_once(struct inode *);
  extern void iput(struct inode *);
-@@ -1625,6 +1651,8 @@ extern struct file_operations generic_ro
+@@ -1512,6 +1538,7 @@ static inline struct inode *iget_locked(
+ 	return iget4_locked(sb, ino, NULL, NULL);
+ }
+ 
++extern void __iget(struct inode * inode);
+ extern void clear_inode(struct inode *);
+ extern struct inode *new_inode(struct super_block *sb);
+ extern void remove_suid(struct inode *inode);
+@@ -1629,6 +1656,8 @@ extern struct file_operations generic_ro
  
  extern int vfs_readlink(struct dentry *, char *, int, const char *);
  extern int vfs_follow_link(struct nameidata *, const char *);
@@ -1889,3 +1897,24 @@ Index: linux-2.4.21-40.EL/kernel/ksyms.c
  EXPORT_SYMBOL(page_readlink);
  EXPORT_SYMBOL(page_follow_link);
  EXPORT_SYMBOL(page_symlink_inode_operations);
+@@ -592,6 +593,7 @@ EXPORT_SYMBOL(si_meminfo);
+ EXPORT_SYMBOL(sys_tz);
+ EXPORT_SYMBOL(file_fsync);
+ EXPORT_SYMBOL(fsync_buffers_list);
++EXPORT_SYMBOL(__iget);
+ EXPORT_SYMBOL(clear_inode);
+ EXPORT_SYMBOL(___strtok);
+ EXPORT_SYMBOL(init_special_inode);
+Index: linux-2.4.21-47.0.1.EL/fs/inode.c
+===================================================================
+--- linux-2.4.21-47.0.1.EL.orig/fs/inode.c
++++ linux-2.4.21-47.0.1.EL/fs/inode.c
+@@ -278,7 +278,7 @@ static inline void write_inode(struct in
+ 		inode->i_sb->s_op->write_inode(inode, sync);
+ }
+ 
+-static inline void __iget(struct inode * inode)
++void __iget(struct inode * inode)
+ {
+ 	if (atomic_read(&inode->i_count)) {
+ 		atomic_inc(&inode->i_count);

@@ -84,7 +84,7 @@ static int ll_test_inode(struct inode *inode, void *opaque)
                 /* add "duplicate" inode into deathrow for destroy */
                 spin_lock(&sbi->ll_deathrow_lock);
                 if (list_empty(&lli->lli_dead_list)) {
-                        atomic_inc(&inode->i_count);
+                        __iget(inode);
                         list_add(&lli->lli_dead_list, &sbi->ll_deathrow);
                 }
                 spin_unlock(&sbi->ll_deathrow_lock);

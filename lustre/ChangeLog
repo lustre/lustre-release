@@ -34,23 +34,19 @@ Details    : The on-disk ldiskfs filesystem has added support for nanosecond
 	     resolution timestamps.  There is not yet support for this at
 	     the Lustre filesystem level.
 
-Severity   : enhancement 
-Bugzilla   : 10802
-Description: Move random uuid functions to prng.c.
-
 Severity   : normal
 Frequency  : during server recovery
 Bugzilla   : 11203
 Description: MDS failing to send precreate requests due to OSCC_FLAG_RECOVERING
 Details    : request with rq_no_resend flag not awake l_wait_event if they get a
-             timeout.
+	     timeout.
 
 Severity   : minor
 Frequency  : nfs export on patchless client
 Bugzilla   : 11970
 Description: connectathon hang when test nfs export over patchless client
 Details    : Disconnected dentry cannot be found with lookup, so we do not need 
-             to unhash it or make it invalid
+	     to unhash it or make it invalid
 
 --------------------------------------------------------------------------------
 
@@ -284,9 +280,109 @@ Description: QOS code breaks on skipped indicies
 Details    : Add checks for missing OST indicies in the QOS code, so OSTs
 	     created with --index need not be sequential.
 
+Severity   : enhancement
+Bugzilla   : 11264
+Description: Add uninit_groups feature to ldiskfs2 to speed up e2fsck
+Details    : The uninit_groups feature works in conjunction with the kernel
+	     filesystem code (ldiskfs2 only) and e2fsprogs-1.39-cfs6 to speed
+	     up the pass1 processing of e2fsck.  This is a read-only feature
+	     in ldiskfs2 only, so older kernels and current ldiskfs cannot
+	     mount filesystems that have had this feature enabled.
+
+Severity   : enhancement
+Bugzilla   : 10816
+Description: Improve multi-block allocation algorithm to avoid fragmentation
+Details    : The mballoc3 code (ldiskfs2 only) adds new mechanisms to improve
+	     allocation locality and avoid filesystem fragmentation.
+
 ------------------------------------------------------------------------------
 
 TBD         Cluster File Systems, Inc. <info@clusterfs.com>
+       * version 1.4.12
+       * Support for kernels:
+        2.4.21-47.0.1.EL (RHEL 3)
+        2.6.5-7.283 (SLES 9)
+        2.6.9-42.0.10.EL (RHEL 4)
+        2.6.12.6 vanilla (kernel.org)
+        2.6.16.27-0.9 (SLES 10)
+       * Recommended e2fsprogs version: 1.39.cfs6
+       * Note that reiserfs quotas are disabled on SLES 10 in this kernel
+       * bug fixes
+
+------------------------------------------------------------------------------
+
+2007-04-30  Cluster File Systems, Inc. <info@clusterfs.com>
+       * version 1.4.11
+       * Support for kernels:
+        2.4.21-47.0.1.EL (RHEL 3)
+        2.6.5-7.283 (SLES 9)
+        2.6.9-42.0.10.EL (RHEL 4)
+        2.6.12.6 vanilla (kernel.org)
+        2.6.16.27-0.9 (SLES 10)
+       * Recommended e2fsprogs version: 1.39.cfs6
+       * Note that reiserfs quotas are disabled on SLES 10 in this kernel
+       * bug fixes
+
+Severity   : critical
+Frequency  : occasional, depends on client load and configuration
+Bugzilla   : 12181, 12203
+Description: data loss for recently-modified files
+Introduced : 1.4.6
+Details    : In some cases it is possible that recently written or created
+	     files may not be written to disk in a timely manner (this should
+	     normally be within 30s unless client IO load is very high).
+	     The problem appears as zero-length files or files that are a
+	     multiple of 1MB in size after a client crash or client eviction
+	     that are missing data at the end of the file.
+
+	     This problem is more likely to be hit on clients where files are
+	     repeatedly created and unlinked in the same directory, clients
+	     have a large amount of RAM, have many CPUs, the filesystem has
+	     many OSTs, the clients are rebooted frequently, and/or the files
+	     are not accessed by other nodes after being written.
+
+	     The presence of the problem can be detected by looking at
+	     /proc/sys/fs/inode-state.  If the first number (nr_inodes) is
+	     smaller than the second (nr_unused) then dirty files will not
+	     be flushed automatically to disk.  "sync; sleep 10" should be
+	     run several times on the node before unmounting it to update
+	     Lustre (this is also safe to run on nodes without this problem).
+
+	     There is also a related kernel bug in the RHEL4 4 2.6.9 kernel
+	     that can cause this same problem, so customers using that kernel
+	     also need to update the kernel in addition to Lustre.  In order
+	     to properly fix this bug, the RHEL3 2.4.21 kernel is also updated.
+
+	     It is normal that files written just before a client crash (less
+	     than 30s) may not yet have been flushed to disk, even for local
+	     filesystems.
+
+Severity   : normal
+Frequency  : frequent on thin XT3 nodes
+Bugzilla   : 10802
+Description: UUID collision on thin XT3 Linux nodes
+Details    : UUIDs on Compute Node Linux XT3 nodes were not generated
+	     randomly, since we relied on an insufficiently-seeded PRNG.
+
+Severity   : normal
+Frequency  : rare
+Bugzilla   : 11693
+Description: OSS hangs after "All ost request buffers busy"
+Details    : A deadlock between quota and journal operations caused OSS
+	     hangs after printing "All ost request buffers busy."
+
+Severity   : minor
+Frequency  : always on liblustre builds
+Bugzilla   : 11175
+Description: Cleanup compiler warnings on liblustre
+
+Severity   : enhancement
+Bugzilla   : 10802
+Description: Move random uuid functions to prng.c.
+
+------------------------------------------------------------------------------
+
+2007-04-01  Cluster File Systems, Inc. <info@clusterfs.com>
        * version 1.4.10
        * Support for kernels:
         2.6.16.21-0.8 (SLES10)
@@ -294,7 +390,7 @@ TBD         Cluster File Systems, Inc. <info@clusterfs.com>
         2.6.5-7.276 (SLES 9)
         2.4.21-47.0.1.EL (RHEL 3)
         2.6.12.6 vanilla (kernel.org)
-       * Recommended e2fsprogs version: 1.39.cfs2-0
+       * Recommended e2fsprogs version: 1.39.cfs5
 
 Severity   : major
 Frequency  : liblustre (e.g. catamount) on a large cluster with >= 8 OSTs/OSS
