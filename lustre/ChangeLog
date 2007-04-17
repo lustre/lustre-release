@@ -29,7 +29,10 @@ Description: lfs setstripe use optional parameters instead of postional
 
 Severity   : enhancement 
 Bugzilla   : 10651
-Description: Nanosecond timestamp support.
+Description: Nanosecond timestamp support for ldiskfs
+Details    : The on-disk ldiskfs filesystem has added support for nanosecond
+	     resolution timestamps.  There is not yet support for this at
+	     the Lustre filesystem level.
 
 Severity   : enhancement 
 Bugzilla   : 10802
