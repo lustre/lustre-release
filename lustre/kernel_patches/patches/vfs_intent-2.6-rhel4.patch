@@ -611,14 +611,18 @@
  	int nr_unused;
 --- linux-2.6.9.orig/include/linux/fs.h
 +++ linux-2.6.9/include/linux/fs.h
-@@ -75,6 +75,7 @@ extern int leases_enable, dir_notify_ena
+@@ -81,6 +81,11 @@ extern int leases_enable, dir_notify_ena
+ #define FMODE_PREAD	8
+ #define FMODE_PWRITE	FMODE_PREAD	/* These go hand in hand */
  
- #define FMODE_READ 1
- #define FMODE_WRITE 2
-+#define FMODE_EXEC 4
- 
- /* Internal kernel extensions */
- #define FMODE_LSEEK	4
++/* File is being opened for execution. Primary users of this flag are
++   distributed filesystems that can use it to achieve correct ETXTBUSY
++   behavior for cross-node execution/opening_for_writing of files */
++#define FMODE_EXEC	16
++
+ #define RW_MASK		1
+ #define RWA_MASK	2
+ #define READ 0
 @@ -259,6 +260,8 @@ typedef void (dio_iodone_t)(struct inode
  #define ATTR_ATTR_FLAG	1024
  #define ATTR_KILL_SUID	2048
