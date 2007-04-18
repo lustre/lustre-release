@@ -332,24 +332,23 @@ Index: linux-2.6.9-rhel4/include/linux/ext3_fs.h
  };
  
  #ifdef __KERNEL__
-@@ -565,6 +630,8 @@ static inline struct ext3_inode_info *EX
+@@ -565,6 +630,7 @@ static inline struct ext3_inode_info *EX
  #define EXT3_FEATURE_RO_COMPAT_LARGE_FILE	0x0002
  #define EXT3_FEATURE_RO_COMPAT_BTREE_DIR	0x0004
- #define EXT3_FEATURE_RO_COMPAT_DIR_NLINK      	0x0020
+ #define EXT4_FEATURE_RO_COMPAT_DIR_NLINK	0x0020
 +#define EXT3_FEATURE_RO_COMPAT_EXTRA_ISIZE	0x0040
-+
  
  #define EXT3_FEATURE_INCOMPAT_COMPRESSION	0x0001
  #define EXT3_FEATURE_INCOMPAT_FILETYPE		0x0002
-@@ -581,6 +648,7 @@ static inline struct ext3_inode_info *EX
+@@ -581,6 +647,7 @@ static inline struct ext3_inode_info *EX
  #define EXT3_FEATURE_RO_COMPAT_SUPP	(EXT3_FEATURE_RO_COMPAT_SPARSE_SUPER| \
  					 EXT3_FEATURE_RO_COMPAT_LARGE_FILE| \
- 					 EXT3_FEATURE_RO_COMPAT_DIR_NLINK| \
+ 					 EXT4_FEATURE_RO_COMPAT_DIR_NLINK| \
 +					 EXT3_FEATURE_RO_COMPAT_EXTRA_ISIZE| \
  					 EXT3_FEATURE_RO_COMPAT_BTREE_DIR)
  
  /*
-@@ -708,6 +776,12 @@ static inline struct ext3_inode *ext3_ra
+@@ -708,6 +775,12 @@ static inline struct ext3_inode *ext3_ra
  	return (struct ext3_inode *) (iloc->bh->b_data + iloc->offset);
  }
  
