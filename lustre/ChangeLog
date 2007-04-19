@@ -48,6 +48,14 @@ Description: connectathon hang when test nfs export over patchless client
 Details    : Disconnected dentry cannot be found with lookup, so we do not need 
 	     to unhash it or make it invalid
 
+Severity   : normal
+Bugzilla   : 12123
+Description: ENOENT returned for valid filehandle during dbench.
+Details:   : Check if a directory has children when invalidating dentries
+	     associated with an inode during lock cancellation. This fixes
+	     an incorrect ENOENT sometimes seen for valid filehandles during
+	     testing with dbench.
+
 --------------------------------------------------------------------------------
 
 tbd         Cluster File Systems, Inc. <info@clusterfs.com>

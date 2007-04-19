@@ -209,30 +209,28 @@ int ll_mdc_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock_desc *desc,
                 if (S_ISDIR(inode->i_mode) &&
                      (bits & MDS_INODELOCK_UPDATE)) {
                         struct dentry *dentry, *tmp, *dir;
-                        struct list_head *list;
+                        int alias_counter = 0;
 
                         CDEBUG(D_INODE, "invalidating inode %lu\n",
                                inode->i_ino);
                         truncate_inode_pages(inode->i_mapping, 0);
 
                         /* Drop possible cached negative dentries */
-                        list = &inode->i_dentry;
                         dir = NULL;
                         spin_lock(&dcache_lock);
-
+                        
                         /* It is possible to have several dentries (with
                            racer?) */
-                        while ((list = list->next) != &inode->i_dentry) {
-                                dir = list_entry(list, struct dentry, d_alias);
-#ifdef LUSTRE_KERNEL_VERSION
-                                if (!(dir->d_flags & DCACHE_LUSTRE_INVALID))
-#else
-                                if (!d_unhashed(dir))
-#endif
-                                        break;
-
-                                dir = NULL;
+                        list_for_each_entry_safe(dentry, tmp, 
+                                                 &inode->i_dentry,d_alias) {
+                                if (!list_empty(&dentry->d_subdirs))
+                                        dir = dentry;
+                                alias_counter ++;
                         }
+
+                        if (alias_counter > 1)
+                                CWARN("More than 1 alias dir %lu alias %d\n",
+                                       inode->i_ino, alias_counter);
 
                         if (dir) {
 restart:
