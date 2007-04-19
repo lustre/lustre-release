@@ -1312,7 +1312,8 @@ static int async_internal(int cmd, struct obd_export *exp, struct obdo *oa,
          * otherwise we may run out of space on OST due to grant. */
         spin_lock(&cli->cl_loi_list_lock);
         for (i = 0; i < page_count; i++) {
-                if (cli->cl_avail_grant >= CFS_PAGE_SIZE)
+                if (cli->cl_avail_grant >= CFS_PAGE_SIZE &&
+                    cmd == OBD_BRW_WRITE)
                         osc_consume_write_grant(cli, pga[i]);
         }
         spin_unlock(&cli->cl_loi_list_lock);
