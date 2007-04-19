@@ -384,10 +384,6 @@ Frequency  : always on liblustre builds
 Bugzilla   : 11175
 Description: Cleanup compiler warnings on liblustre
 
-Severity   : enhancement
-Bugzilla   : 10802
-Description: Move random uuid functions to prng.c.
-
 ------------------------------------------------------------------------------
 
 2007-04-01  Cluster File Systems, Inc. <info@clusterfs.com>
