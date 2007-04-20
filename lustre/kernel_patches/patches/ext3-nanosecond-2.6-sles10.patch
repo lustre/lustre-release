@@ -198,7 +198,7 @@ Index: linux-2.6.16.27-0.9/fs/ext3/super.c
 +		sbi->s_want_extra_isize = sizeof(struct ext3_inode) -
 +						     EXT3_GOOD_OLD_INODE_SIZE;
 +		if (EXT3_HAS_RO_COMPAT_FEATURE(sb,
-+				       EXT3_FEATURE_RO_COMPAT_EXTRA_ISIZE)) {
++				       EXT4_FEATURE_RO_COMPAT_EXTRA_ISIZE)) {
 +			if (sbi->s_want_extra_isize <
 +			    le16_to_cpu(es->s_want_extra_isize))
 +				sbi->s_want_extra_isize =
@@ -337,8 +337,8 @@ Index: linux-2.6.16.27-0.9/include/linux/ext3_fs.h
 @@ -583,6 +648,8 @@ static inline struct ext3_inode_info *EX
  #define EXT3_FEATURE_RO_COMPAT_LARGE_FILE	0x0002
  #define EXT3_FEATURE_RO_COMPAT_BTREE_DIR	0x0004
- #define EXT3_FEATURE_RO_COMPAT_DIR_NLINK      	0x0020
-+#define EXT3_FEATURE_RO_COMPAT_EXTRA_ISIZE	0x0040
+ #define EXT4_FEATURE_RO_COMPAT_DIR_NLINK      	0x0020
++#define EXT4_FEATURE_RO_COMPAT_EXTRA_ISIZE	0x0040
 +
  
  #define EXT3_FEATURE_INCOMPAT_COMPRESSION	0x0001
@@ -346,8 +346,8 @@ Index: linux-2.6.16.27-0.9/include/linux/ext3_fs.h
 @@ -599,6 +666,7 @@ static inline struct ext3_inode_info *EX
  #define EXT3_FEATURE_RO_COMPAT_SUPP	(EXT3_FEATURE_RO_COMPAT_SPARSE_SUPER| \
  					 EXT3_FEATURE_RO_COMPAT_LARGE_FILE| \
- 					 EXT3_FEATURE_RO_COMPAT_DIR_NLINK| \
-+					 EXT3_FEATURE_RO_COMPAT_EXTRA_ISIZE| \
+ 					 EXT4_FEATURE_RO_COMPAT_DIR_NLINK| \
++					 EXT4_FEATURE_RO_COMPAT_EXTRA_ISIZE| \
  					 EXT3_FEATURE_RO_COMPAT_BTREE_DIR)
  
  /*
