@@ -141,6 +141,20 @@ Details    : Changes the blocksize for regular files to be 2x RPC size,
 	     and not depend on stripe size.
 
 Severity   : enhancement
+Bugzilla   : 10088
+Description: fine-grained SMP locking inside DLM
+Details    : Improve DLM performance on SMP systems by removing the single
+	     per-namespace lock and replace it with per-resource locks.
+
+Severity   : enhancement
+Bugzilla   : 9332
+Description: don't hold multiple extent locks at one time
+Details    : To avoid client eviction during large writes, locks are not
+	     held on multiple stripes at one time or for very large writes.
+	     Otherwise, clients can block waiting for a lock on a failed OST
+	     while holding locks on other OSTs and be evicted.
+
+Severity   : enhancement
 Bugzilla   : 9293
 Description: Multiple MD RPCs in flight.
 Details    : Further unserialise some read-only MDT RPCs - learn about intents.
