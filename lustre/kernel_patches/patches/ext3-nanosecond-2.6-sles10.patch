@@ -337,7 +337,7 @@ Index: linux-2.6.16.27-0.9/include/linux/ext3_fs.h
 @@ -583,6 +648,8 @@ static inline struct ext3_inode_info *EX
  #define EXT3_FEATURE_RO_COMPAT_LARGE_FILE	0x0002
  #define EXT3_FEATURE_RO_COMPAT_BTREE_DIR	0x0004
- #define EXT4_FEATURE_RO_COMPAT_DIR_NLINK      	0x0020
+ #define EXT4_FEATURE_RO_COMPAT_DIR_NLINK	0x0020
 +#define EXT4_FEATURE_RO_COMPAT_EXTRA_ISIZE	0x0040
 +
  
