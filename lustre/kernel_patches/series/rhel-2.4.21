@@ -51,5 +51,4 @@ nfsd_iallocsem.patch
 linux-2.4.24-jbd-handle-EIO-rhel3.patch
 ext3-lookup-dotdot-2.4.20.patch 
 ext3-sector_t-overflow-2.4.patch
-new-tcp-zero-copy-2.4.21-rhel3.patch
 nfs_export_kernel-getattr_on_lookup-2.4.patch 

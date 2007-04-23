@@ -10,6 +10,5 @@ dcache-qstr-api-fix-2.6-suse.patch
 iallocsem_consistency.patch
 jbd-stats-2.6.5.patch 
 bitops_ext2_find_next_le_bit-2.6.patch
-new-tcp-zero-copy-2.6.5-sles9.patch
 2.6.5-quotafix.patch
 vfs_intent-reduce-stack-usage-2.6-suse-newer.patch

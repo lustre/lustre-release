@@ -17,7 +17,6 @@ ext3-san-2.4.20.patch
 ext3-map_inode_page.patch
 ext3-error-export.patch
 iopen-2.4.20.patch
-new-tcp-zero-copy-2.4.29-vanilla.patch
 jbd-dont-account-blocks-twice.patch
 jbd-commit-tricks.patch
 ext3-no-write-super-chaos.patch
