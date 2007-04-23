@@ -1,5 +1,5 @@
 2007-04-23  Cluster File Systems, Inc. <info@clusterfs.com>
-       * version 1.4.11
+       * version 1.4.11 / 1.6.1
        * Support for networks:
 	socklnd   - kernels up to 2.6.16
 	qswlnd    - Qsnet kernel modules 5.20 and later
@@ -12,6 +12,8 @@
 	mxlnd     - MX 1.2.1 or later
 	ptllnd    - Portals 3.3 / UNICOS/lc 1.5.x, 2.0.x
        * bug fixes
+
+------------------------------------------------------------------------------
 
 2007-04-01  Cluster File Systems, Inc. <info@clusterfs.com>
        * version 1.4.10 / 1.6.0
