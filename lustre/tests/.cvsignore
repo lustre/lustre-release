@@ -75,3 +75,4 @@ random-reads
 chownmany
 llverdev
 llverfs
+ll_getstripe_info
