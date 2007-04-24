@@ -1,4 +1,4 @@
-#!/bin/sh -e 
+#!/bin/bash -e 
 
 if [ ! -f .mergeinfo ] ; then
     echo ".mergeinfo doesn't exist - exit"

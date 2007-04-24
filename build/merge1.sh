@@ -1,4 +1,4 @@
-#!/bin/sh -e 
+#!/bin/bash -e 
 
 CONFLICTS=cvs-merge-conflicts
 CVS="cvs -z3"
