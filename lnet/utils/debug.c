@@ -321,42 +321,32 @@ struct dbg_line {
         char *file;
         char *fn;
         char *text;
-        struct list_head chain;
 };
 
-/* nurr. */
-static void list_add_ordered(struct dbg_line *new, struct list_head *head)
+static int cmp_rec(const void *p1, const void *p2)
 {
-        struct list_head *pos;
-        struct dbg_line *curr;
+        struct dbg_line *d1 = *(struct dbg_line **)p1;
+        struct dbg_line *d2 = *(struct dbg_line **)p2;
 
-        list_for_each(pos, head) {
-                curr = list_entry(pos, struct dbg_line, chain);
-
-                if (curr->hdr->ph_sec < new->hdr->ph_sec)
-                        continue;
-                if (curr->hdr->ph_sec == new->hdr->ph_sec &&
-                    curr->hdr->ph_usec < new->hdr->ph_usec)
-                        continue;
-
-                list_add(&new->chain, pos->prev);
-                return;
-        }
-        list_add_tail(&new->chain, head);
+        if (d1->hdr->ph_sec < d2->hdr->ph_sec)
+                return -1;
+        if (d1->hdr->ph_sec == d2->hdr->ph_sec &&
+            d1->hdr->ph_usec < d2->hdr->ph_usec)
+                return -1;
+        if (d1->hdr->ph_sec == d2->hdr->ph_sec &&
+            d1->hdr->ph_usec == d2->hdr->ph_usec)
+                return 0;
+        return 1;
 }
 
-static void print_saved_records(struct list_head *list, FILE *out)
+static void print_rec(struct dbg_line **linev, int used, FILE *out)
 {
-        struct list_head *pos, *tmp;
+        int i;
 
-        list_for_each_safe(pos, tmp, list) {
-                struct dbg_line *line;
-                struct ptldebug_header *hdr;
+        for (i = 0; i < used; i++) {
+                struct dbg_line *line = linev[i];
+                struct ptldebug_header *hdr = line->hdr;
 
-                line = list_entry(pos, struct dbg_line, chain);
-                list_del(&line->chain);
-
-                hdr = line->hdr;
                 fprintf(out, "%08x:%08x:%u:%u.%06llu:%u:%u:%u:(%s:%u:%s()) %s",
                         hdr->ph_subsys, hdr->ph_mask, hdr->ph_cpu_id,
                         hdr->ph_sec, (unsigned long long)hdr->ph_usec,
@@ -365,6 +355,26 @@ static void print_saved_records(struct list_head *list, FILE *out)
                 free(line->hdr);
                 free(line);
         }
+        free(linev);
+}
+
+static int add_rec(struct dbg_line *line, struct dbg_line ***linevp, int *lenp,
+                   int used)
+{
+        struct dbg_line **linev = *linevp;
+
+        if (used == *lenp) {
+                int nlen = *lenp + 512;
+                int nsize = nlen * sizeof(struct dbg_line *);
+
+                linev = *linevp ? realloc(*linevp, nsize) : malloc(nsize);
+                if (!linev)
+                        return 0;
+                *linevp = linev;
+                *lenp = nlen;
+        }
+        linev[used] = line; 
+        return 1;
 }
 
 static int parse_buffer(FILE *in, FILE *out)
@@ -374,9 +384,8 @@ static int parse_buffer(FILE *in, FILE *out)
         char buf[4097], *p;
         int rc;
         unsigned long dropped = 0, kept = 0;
-        struct list_head chunk_list;
-
-        CFS_INIT_LIST_HEAD(&chunk_list);
+        struct dbg_line **linev = NULL;
+        int linev_len = 0;
 
         while (1) {
                 rc = fread(buf, sizeof(hdr->ph_len) + sizeof(hdr->ph_flags), 1, in);
@@ -391,11 +400,6 @@ static int parse_buffer(FILE *in, FILE *out)
                                 "aborting.\n",
                                 hdr->ph_len);
                         break;
-                }
-
-                if (hdr->ph_flags & PH_FLAG_FIRST_RECORD) {
-                        print_saved_records(&chunk_list, out);
-                        assert(list_empty(&chunk_list));
                 }
 
                 rc = fread(buf + sizeof(hdr->ph_len) + sizeof(hdr->ph_flags), 1,
@@ -436,11 +440,18 @@ static int parse_buffer(FILE *in, FILE *out)
                 p += strlen(line->fn) + 1;
                 line->text = p;
 
-                list_add_ordered(line, &chunk_list);
+                if (!add_rec(line, &linev, &linev_len, kept)) {
+                        fprintf(stderr, "malloc failed; printing accumulated " 
+                                "records and exiting.\n");
+                        break;
+                }        
                 kept++;
         }
 
-        print_saved_records(&chunk_list, out);
+        if (linev) {
+                qsort(linev, kept, sizeof(struct dbg_line *), cmp_rec);
+                print_rec(linev, kept, out);
+        }
 
         printf("Debug log: %lu lines, %lu kept, %lu dropped.\n",
                 dropped + kept, kept, dropped);
