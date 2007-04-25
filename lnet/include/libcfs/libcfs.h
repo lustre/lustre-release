@@ -466,34 +466,35 @@ struct libcfs_debug_msg_data {
 
 extern int libcfs_debug_vmsg2(cfs_debug_limit_state_t *cdls,
                               int subsys, int mask,
-                              const char *file, const char *fn, const int line, 
-                              const char *format1, va_list args, 
-                              const char *format2, ...);
+                              const char *file, const char *fn, const int line,
+                              const char *format1, va_list args,
+                              const char *format2, ...)
+        __attribute__ ((format (printf, 9, 10)));
 
-#define libcfs_debug_vmsg(cdls, subsys, mask, file, fn, line, format, args) \
-    libcfs_debug_vmsg2(cdls, subsys, mask, file, fn, line, format, args, NULL, NULL)
+#define libcfs_debug_vmsg(cdls, subsys, mask, file, fn, line, format, args)   \
+    libcfs_debug_vmsg2(cdls, subsys, mask, file, fn,line,format,args,NULL,NULL)
 
-#define libcfs_debug_msg(cdls, subsys, mask, file, fn, line, format, a...) \
-    libcfs_debug_vmsg2(cdls, subsys, mask, file, fn, line, NULL, NULL, format, ##a) 
+#define libcfs_debug_msg(cdls, subsys, mask, file, fn, line, format, a...)    \
+    libcfs_debug_vmsg2(cdls, subsys, mask, file, fn,line,NULL,NULL,format, ##a)
 
-#define cdebug_va(cdls, mask, file, func, line, fmt, args)      do {            \
-        CHECK_STACK();                                                          \
-                                                                                \
-        if (((mask) & D_CANTMASK) != 0 ||                                       \
-            ((libcfs_debug & (mask)) != 0 &&                                    \
-             (libcfs_subsystem_debug & DEBUG_SUBSYSTEM) != 0))                  \
-                libcfs_debug_vmsg(cdls, DEBUG_SUBSYSTEM, (mask),                \
-                                  (file), (func), (line), fmt, args);           \
+#define cdebug_va(cdls, mask, file, func, line, fmt, args)      do {          \
+        CHECK_STACK();                                                        \
+                                                                              \
+        if (((mask) & D_CANTMASK) != 0 ||                                     \
+            ((libcfs_debug & (mask)) != 0 &&                                  \
+             (libcfs_subsystem_debug & DEBUG_SUBSYSTEM) != 0))                \
+                libcfs_debug_vmsg(cdls, DEBUG_SUBSYSTEM, (mask),              \
+                                  (file), (func), (line), fmt, args);         \
 } while(0);
 
-#define cdebug(cdls, mask, file, func, line, fmt, a...) do {                    \
-        CHECK_STACK();                                                          \
-                                                                                \
-        if (((mask) & D_CANTMASK) != 0 ||                                       \
-            ((libcfs_debug & (mask)) != 0 &&                                    \
-             (libcfs_subsystem_debug & DEBUG_SUBSYSTEM) != 0))                  \
-                libcfs_debug_msg(cdls, DEBUG_SUBSYSTEM, (mask),                 \
-                                 (file), (func), (line), fmt, ## a);            \
+#define cdebug(cdls, mask, file, func, line, fmt, a...) do {                  \
+        CHECK_STACK();                                                        \
+                                                                              \
+        if (((mask) & D_CANTMASK) != 0 ||                                     \
+            ((libcfs_debug & (mask)) != 0 &&                                  \
+             (libcfs_subsystem_debug & DEBUG_SUBSYSTEM) != 0))                \
+                libcfs_debug_msg(cdls, DEBUG_SUBSYSTEM, (mask),               \
+                                 (file), (func), (line), fmt, ## a);          \
 } while(0);
 
 extern void libcfs_assertion_failed(const char *expr, const char *file,
@@ -504,7 +505,7 @@ static inline void cfs_slow_warning(cfs_time_t now, int seconds, char *msg)
         if (cfs_time_after(cfs_time_current(),
                            cfs_time_add(now, cfs_time_seconds(15))))
                 CERROR("slow %s %lu sec\n", msg,
-                       cfs_duration_sec(cfs_time_sub(cfs_time_current(), now)));
+                       cfs_duration_sec(cfs_time_sub(cfs_time_current(),now)));
 }
 
 /*
