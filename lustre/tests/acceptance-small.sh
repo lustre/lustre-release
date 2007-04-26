@@ -28,6 +28,9 @@ fi
 LIBLUSTRE=${LIBLUSTRE:-../liblustre}
 LIBLUSTRETESTS=${LIBLUSTRETESTS:-$LIBLUSTRE/tests}
 
+STARTTIME=`date +%s`
+RANTEST=""
+
 LUSTRE=${LUSTRE:-`dirname $0`/..}
 . $LUSTRE/tests/test-framework.sh
 init_test_env $@
@@ -43,6 +46,7 @@ setup_if_needed() {
 
 title() {
     echo "-----============= acceptance-small: "$*" ============-----"
+    RANTEST=${RANTEST}$*", "
 }
 
 for NAME in $CONFIGS; do
@@ -247,7 +251,10 @@ if [ "$SANITY_QUOTA" != "no" ]; then
         sh sanity-quota.sh
 fi
 
-title FINISHED
 
 RC=$?
+title FINISHED
+echo "Finished at `date` in $((`date +%s` - $STARTTIME))s"
+echo "Tests ran: $RANTEST"
+
 echo "$0: completed with rc $RC" && exit $RC
