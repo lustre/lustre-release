@@ -63,8 +63,6 @@ struct obd_export {
         atomic_t                  exp_rpc_count;
         struct obd_uuid           exp_client_uuid;
         struct list_head          exp_obd_chain;
-        struct hlist_node         exp_uuid_hash; /* uuid-export hash*/
-        struct hlist_node         exp_nid_hash; /* nid-export hash */
         /* exp_obd_chain_timed fo ping evictor, protected by obd_dev_lock */
         struct list_head          exp_obd_chain_timed;
         struct obd_device        *exp_obd;

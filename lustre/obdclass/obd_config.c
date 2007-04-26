@@ -38,10 +38,6 @@
 #include <lprocfs_status.h>
 #include <libcfs/list.h>
 #include <lustre_param.h>
-#include <class_hash.h>
-
-extern struct lustre_hash_operations uuid_hash_operations;
-extern struct lustre_hash_operations nid_hash_operations;
 
 /*********** string parsing utils *********/
 
@@ -275,19 +271,6 @@ int class_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
         /* just leave this on forever.  I can't use obd_set_up here because
            other fns check that status, and we're not actually set up yet. */
         obd->obd_starting = 1;
- 
-        /* create an uuid-export hash body */
-        err = lustre_hash_init(&obd->obd_uuid_hash_body, "UUID_HASH", 
-                               128, &uuid_hash_operations);
-        if (err)
-                GOTO(err_exp, err);
-
-        /* create a nid-export hash body */
-        err = lustre_hash_init(&obd->obd_nid_hash_body, "NID_HASH", 
-                               128, &nid_hash_operations);
-        if (err)
-                GOTO(err_exp, err);
-
         spin_unlock(&obd->obd_dev_lock);
 
         exp = class_new_export(obd, &obd->obd_uuid);
@@ -314,8 +297,6 @@ int class_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
 
 err_exp:
         CERROR("setup %s failed (%d)\n", obd->obd_name, err);
-        lustre_hash_exit(&obd->obd_uuid_hash_body);
-        lustre_hash_exit(&obd->obd_nid_hash_body);
         class_unlink_export(obd->obd_self_export);
         obd->obd_self_export = NULL;
         obd->obd_starting = 0;
@@ -448,12 +429,6 @@ int class_cleanup(struct obd_device *obd, struct lustre_cfg *lcfg)
         }
 
         LASSERT(obd->obd_self_export);
-
-        /* destroy an uuid-export hash body */
-        lustre_hash_exit(&obd->obd_uuid_hash_body);
-
-        /* destroy a nid-export hash body */
-        lustre_hash_exit(&obd->obd_nid_hash_body);
 
         /* Precleanup stage 1, we must make sure all exports (other than the
            self-export) get destroyed. */
@@ -885,12 +860,12 @@ int class_process_proc_param(char *prefix, struct lprocfs_vars *lvars,
                 }    
                 if (!matched) {
                         CERROR("%s: unknown param %s\n",
-                               lustre_cfg_buf(lcfg, 0), key);
+                               lustre_cfg_string(lcfg, 0), key);
                         rc = -EINVAL;
                         /* continue parsing other params */
                 } else {
                         LCONSOLE_INFO("%s.%.*s: set parameter %.*s=%s\n", 
-                                      lustre_cfg_buf(lcfg, 0),
+                                      lustre_cfg_string(lcfg, 0),
                                       strlen(prefix) - 1, prefix,
                                       sval - key - 1, key, sval);
                 }

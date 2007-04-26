@@ -31,7 +31,6 @@
 #include <lustre/lustre_idl.h>
 #include <lustre_export.h>
 #include <lustre_quota.h>
-#include <class_hash.h>
 
 #define MAX_OBD_DEVICES 8192
 
@@ -733,10 +732,6 @@ struct obd_device {
                      obd_async_recov:1,   /* allow asyncronous orphan cleanup */
                      obd_no_conn:1;       /* deny new connections */
         atomic_t obd_refcount;
-        /* uuid-export hash body */
-        struct lustre_class_hash_body *obd_uuid_hash_body;
-        /* nid-export hash body */
-        struct lustre_class_hash_body *obd_nid_hash_body; 
         cfs_waitq_t             obd_refcount_waitq;
         struct list_head        obd_exports;
         int                     obd_num_exports;
