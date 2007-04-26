@@ -213,6 +213,7 @@ AC_ARG_ENABLE([uoss],
 	[enable_uoss='yes'],[enable_uoss='no'])
 if test x$enable_uoss != xno; then
         AC_DEFINE(UOSS_SUPPORT, 1, Enable user-level OSS)
+        AC_DEFINE(LUSTRE_ULEVEL_MT, 1, Multi-threaded user-level lustre port)
         enable_modules='no'
 fi
 ])
