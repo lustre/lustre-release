@@ -398,6 +398,11 @@ Frequency  : always on liblustre builds
 Bugzilla   : 11175
 Description: Cleanup compiler warnings on liblustre
 
+Severity   : minor
+Frequency  : always on liblustre builds on XT3
+Bugzilla   : 12146
+Description: LC_CONFIG_CDEBUG don't run while build liblustre on XT3.
+
 ------------------------------------------------------------------------------
 
 2007-04-01  Cluster File Systems, Inc. <info@clusterfs.com>
