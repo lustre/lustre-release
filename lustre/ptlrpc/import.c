@@ -405,7 +405,9 @@ int ptlrpc_connect_import(struct obd_import *imp, char *new_uuid)
                 if (imp->imp_recon_bk) {
                         CDEBUG(D_HA, "Last reconnection attempt (%d) for %s\n",
                                imp->imp_conn_cnt, obd2cli_tgt(imp->imp_obd));
+                        spin_lock(&imp->imp_lock);
                         imp->imp_last_recon = 1;
+                        spin_unlock(&imp->imp_lock);
                 }
         }
 
@@ -442,7 +444,9 @@ int ptlrpc_connect_import(struct obd_import *imp, char *new_uuid)
         aa->pcaa_initial_connect = initial_connect;
 
         if (aa->pcaa_initial_connect) {
+                spin_lock(&imp->imp_lock);
                 imp->imp_replayable = 1;
+                spin_unlock(&imp->imp_lock);
                 /* On an initial connect, we don't know which one of a
                    failover server pair is up.  Don't wait long. */
 #ifdef CRAY_XT3
@@ -515,7 +519,6 @@ static int ptlrpc_connect_interpret(struct ptlrpc_request *request,
                 spin_unlock(&imp->imp_lock);
                 RETURN(0);
         }
-        spin_unlock(&imp->imp_lock);
 
         if (rc)
                 GOTO(out, rc);
@@ -529,11 +532,13 @@ static int ptlrpc_connect_interpret(struct ptlrpc_request *request,
 
         if (aa->pcaa_initial_connect) {
                 if (msg_flags & MSG_CONNECT_REPLAYABLE) {
+                        imp->imp_replayable = 1;
+                        spin_unlock(&imp->imp_lock);
                         CDEBUG(D_HA, "connected to replayable target: %s\n",
                                obd2cli_tgt(imp->imp_obd));
-                        imp->imp_replayable = 1;
                 } else {
                         imp->imp_replayable = 0;
+                        spin_unlock(&imp->imp_lock);
                 }
 
                 if (msg_flags & MSG_CONNECT_NEXT_VER) {
@@ -550,6 +555,8 @@ static int ptlrpc_connect_interpret(struct ptlrpc_request *request,
 
                 IMPORT_SET_STATE(imp, LUSTRE_IMP_FULL);
                 GOTO(finish, rc = 0);
+        } else {
+                spin_unlock(&imp->imp_lock);
         }
 
         /* Determine what recovery state to move the import to. */
@@ -595,7 +602,11 @@ static int ptlrpc_connect_interpret(struct ptlrpc_request *request,
                         CDEBUG(D_HA, "%s: reconnected to %s during replay\n",
                                imp->imp_obd->obd_name,
                                obd2cli_tgt(imp->imp_obd));
+
+                        spin_lock(&imp->imp_lock);
                         imp->imp_resend_replay = 1;
+                        spin_unlock(&imp->imp_lock);
+
                         IMPORT_SET_STATE(imp, LUSTRE_IMP_REPLAY);
                 } else {
                         IMPORT_SET_STATE(imp, LUSTRE_IMP_RECOVER);
@@ -770,7 +781,9 @@ finish:
                        (char *)imp->imp_connection->c_remote_uuid.uuid, rc);
         }
         
+        spin_lock(&imp->imp_lock);
         imp->imp_last_recon = 0;
+        spin_unlock(&imp->imp_lock);
 
         cfs_waitq_signal(&imp->imp_recovery_waitq);
         RETURN(rc);

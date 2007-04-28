@@ -823,7 +823,10 @@ void class_destroy_import(struct obd_import *import)
 
         class_handle_unhash(&import->imp_handle);
 
+        spin_lock(&import->imp_lock);
         import->imp_generation++;
+        spin_unlock(&import->imp_lock);
+
         class_import_put(import);
 }
 EXPORT_SYMBOL(class_destroy_import);
@@ -900,7 +903,10 @@ static void class_disconnect_export_list(struct list_head *list, int flags)
         while (!list_empty(list)) {
                 exp = list_entry(list->next, struct obd_export, exp_obd_chain);
                 class_export_get(exp);
+
+                spin_lock(&exp->exp_lock);
                 exp->exp_flags = flags;
+                spin_unlock(&exp->exp_lock);
 
                 if (obd_uuid_equals(&exp->exp_client_uuid,
                                     &exp->exp_obd->obd_uuid)) {
@@ -920,7 +926,11 @@ static void class_disconnect_export_list(struct list_head *list, int flags)
                         class_export_put(exp);
                         continue;
                 }
+
+                spin_lock(&fake_exp->exp_lock);
                 fake_exp->exp_flags = flags;
+                spin_unlock(&fake_exp->exp_lock);
+
                 rc = obd_disconnect(fake_exp);
                 class_export_put(exp);
                 if (rc) {

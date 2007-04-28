@@ -475,9 +475,13 @@ void class_decref(struct obd_device *obd)
                 if (err)
                         CERROR("Precleanup %s returned %d\n",
                                obd->obd_name, err);
+
+                spin_lock(&obd->obd_self_export->exp_lock);
                 obd->obd_self_export->exp_flags |=
                         (obd->obd_fail ? OBD_OPT_FAILOVER : 0) |
                         (obd->obd_force ? OBD_OPT_FORCE : 0);
+                spin_unlock(&obd->obd_self_export->exp_lock);
+
                 /* note that we'll recurse into class_decref again */
                 class_unlink_export(obd->obd_self_export);
                 return;

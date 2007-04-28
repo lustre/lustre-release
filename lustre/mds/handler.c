@@ -380,7 +380,11 @@ int mds_init_export(struct obd_export *exp)
 
         INIT_LIST_HEAD(&med->med_open_head);
         spin_lock_init(&med->med_open_lock);
+	
+        spin_lock(&exp->exp_lock);
         exp->exp_connecting = 1;
+        spin_unlock(&exp->exp_lock);
+
         RETURN(0);
 }
 

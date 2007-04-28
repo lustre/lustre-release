@@ -265,8 +265,11 @@ static int filter_client_add(struct obd_device *obd, struct obd_export *exp,
                 } else {
                         rc = fsfilt_add_journal_cb(obd, 0, handle,
                                                    target_client_add_cb, exp);
-                        if (rc == 0)
+                        if (rc == 0) {
+                                spin_lock(&exp->exp_lock);
                                 exp->exp_need_sync = 1;
+                                spin_unlock(&exp->exp_lock);
+                        }
                         rc = fsfilt_write_record(obd, filter->fo_rcvd_filp,
                                                  fed->fed_fcd,
                                                  sizeof(*fed->fed_fcd),
@@ -332,7 +335,7 @@ static int filter_client_free(struct obd_export *exp)
                 push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
                 rc = fsfilt_write_record(obd, filter->fo_rcvd_filp, &zero_fcd,
                                          sizeof(zero_fcd), &off,
-                                         !exp->exp_libclient);
+                                         (!exp->exp_libclient || exp->exp_need_sync));
 
                 if (rc == 0)
                         /* update server's transno */
@@ -536,7 +539,10 @@ static int filter_init_export(struct obd_export *exp)
 {
         spin_lock_init(&exp->exp_filter_data.fed_lock);
         INIT_LIST_HEAD(&exp->exp_filter_data.fed_mod_list);
+	
+        spin_lock(&exp->exp_lock);
         exp->exp_connecting = 1;
+        spin_unlock(&exp->exp_lock);
 
         return 0;
 }
@@ -757,8 +763,12 @@ static int filter_init_server_data(struct obd_device *obd, struct file * filp)
                         LASSERTF(rc == 0, "rc = %d\n", rc); /* can't fail existing */
 
                         fcd = NULL;
+
+                        spin_lock(&exp->exp_lock);
                         exp->exp_replay_needed = 1;
                         exp->exp_connecting = 0;
+                        spin_unlock(&exp->exp_lock);
+
                         obd->obd_recoverable_clients++;
                         obd->obd_max_recoverable_clients++;
                         class_export_put(exp);
@@ -2403,11 +2413,14 @@ int filter_setattr_internal(struct obd_export *exp, struct dentry *dentry,
                         /* set cancel cookie callback function */
                         if (fsfilt_add_journal_cb(exp->exp_obd, 0, handle,
                                                   filter_cancel_cookies_cb,
-                                                  fcc))
+                                                  fcc)) {
+                                spin_lock(&exp->exp_lock);
                                 exp->exp_need_sync = 1;
-                        else
+                                spin_unlock(&exp->exp_lock);
+                        } else {
                                 fcc = NULL;
                 }
+        }
         }
 
         if (OBD_FAIL_CHECK(OBD_FAIL_OST_SETATTR_CREDITS))

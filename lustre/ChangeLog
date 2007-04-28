@@ -22,6 +22,13 @@ tbd         Cluster File Systems, Inc. <info@clusterfs.com>
        * Note that reiserfs quotas are temporarily disabled on SLES 10 in this
 	 kernel.
 
+Severity   : normal
+Frequency  : rare
+Bugzilla   : 11315
+Description: OST "spontaneously" evicts client; client has imp_pingable == 0
+Details    : Due to a race condition, liblustre clients were occasionally
+             evicted incorrectly.
+
 Severity   : enhancement
 Bugzilla   : 10997
 Description: lfs setstripe use optional parameters instead of postional 

@@ -142,8 +142,11 @@ int mds_client_add(struct obd_device *obd, struct obd_export *exp,
                 } else {
                         rc = fsfilt_add_journal_cb(obd, 0, handle,
                                                    target_client_add_cb, exp);
-                        if (rc == 0)
+                        if (rc == 0) {
+                                spin_lock(&exp->exp_lock);
                                 exp->exp_need_sync = 1;
+                                spin_unlock(&exp->exp_lock);
+                        }
                         rc = fsfilt_write_record(obd, file, med->med_mcd,
                                                  sizeof(*med->med_mcd),
                                                  &off, rc /* sync if no cb */);
@@ -209,7 +212,7 @@ int mds_client_free(struct obd_export *exp)
                 push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
                 rc = fsfilt_write_record(obd, mds->mds_rcvd_filp, &zero_mcd,
                                          sizeof(zero_mcd), &off,
-                                         !exp->exp_libclient);
+                                         (!exp->exp_libclient || exp->exp_need_sync));
                 pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
 
                 CDEBUG(rc == 0 ? D_INFO : D_ERROR,
@@ -406,8 +409,12 @@ static int mds_init_server_data(struct obd_device *obd, struct file *file)
 
 
                 mcd = NULL;
+	
+                spin_lock(&exp->exp_lock);
                 exp->exp_replay_needed = 1;
                 exp->exp_connecting = 0;
+                spin_unlock(&exp->exp_lock);
+
                 obd->obd_recoverable_clients++;
                 obd->obd_max_recoverable_clients++;
                 class_export_put(exp);

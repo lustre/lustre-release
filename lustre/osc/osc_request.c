@@ -3212,9 +3212,11 @@ static int osc_setinfo_mds_conn_interpret(struct ptlrpc_request *req,
                                "ctxt %p: %d\n", ctxt, rc);
         }
 
+        spin_lock(&imp->imp_lock);
         imp->imp_server_timeout = 1;
-        CDEBUG(D_HA, "pinging OST %s\n", obd2cli_tgt(imp->imp_obd));
         imp->imp_pingable = 1;
+        spin_unlock(&imp->imp_lock);
+        CDEBUG(D_HA, "pinging OST %s\n", obd2cli_tgt(imp->imp_obd));
 
         RETURN(rc);
 }
@@ -3254,7 +3256,9 @@ static int osc_set_info_async(struct obd_export *exp, obd_count keylen,
         if (KEY_IS(KEY_INIT_RECOV)) {
                 if (vallen != sizeof(int))
                         RETURN(-EINVAL);
+                spin_lock(&imp->imp_lock);
                 imp->imp_initial_recov = *(int *)val;
+                spin_unlock(&imp->imp_lock);
                 CDEBUG(D_HA, "%s: set imp_initial_recov = %d\n",
                        exp->exp_obd->obd_name,
                        imp->imp_initial_recov);

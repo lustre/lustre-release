@@ -744,7 +744,9 @@ int mgc_set_info_async(struct obd_export *exp, obd_count keylen,
         if (KEY_IS(KEY_INIT_RECOV)) {
                 if (vallen != sizeof(int))
                         RETURN(-EINVAL);
+                spin_lock(&imp->imp_lock);
                 imp->imp_initial_recov = *(int *)val;
+                spin_unlock(&imp->imp_lock);
                 CDEBUG(D_HA, "%s: set imp_initial_recov = %d\n",
                        exp->exp_obd->obd_name, imp->imp_initial_recov);
                 RETURN(0);
@@ -755,10 +757,12 @@ int mgc_set_info_async(struct obd_export *exp, obd_count keylen,
                 if (vallen != sizeof(int))
                         RETURN(-EINVAL);
                 value = *(int *)val;
+                spin_lock(&imp->imp_lock);
                 imp->imp_initial_recov_bk = value > 0;
                 /* Even after the initial connection, give up all comms if 
                    nobody answers the first time. */
                 imp->imp_recon_bk = 1;
+                spin_unlock(&imp->imp_lock);
                 CDEBUG(D_MGC, "InitRecov %s %d/%d:d%d:i%d:r%d:or%d:%s\n", 
                        imp->imp_obd->obd_name, value, imp->imp_initial_recov,
                        imp->imp_deactive, imp->imp_invalid, 

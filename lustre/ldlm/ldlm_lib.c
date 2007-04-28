@@ -318,7 +318,10 @@ int client_obd_setup(struct obd_device *obddev, obd_count len, void *buf)
                         CDEBUG(D_HA, "marking %s %s->%s as inactive\n",
                                name, obddev->obd_name,
                                cli->cl_target_uuid.uuid);
+                        
+                        spin_lock(&imp->imp_lock);
                         imp->imp_invalid = 1;
+                        spin_unlock(&imp->imp_lock);
                 }
         }
 
@@ -445,7 +448,9 @@ int client_disconnect_export(struct obd_export *exp)
         /* Mark import deactivated now, so we don't try to reconnect if any
          * of the cleanup RPCs fails (e.g. ldlm cancel, etc).  We don't
          * fully deactivate the import, or that would drop all requests. */
+        spin_lock(&imp->imp_lock);
         imp->imp_deactive = 1;
+        spin_unlock(&imp->imp_lock);
 
         /* Some non-replayable imports (MDS's OSCs) are pinged, so just
          * delete it regardless.  (It's safe to delete an import that was
@@ -527,7 +532,10 @@ void target_client_add_cb(struct obd_device *obd, __u64 transno, void *cb_data,
 
         CDEBUG(D_HA, "%s: committing for initial connect of %s\n",
                obd->obd_name, exp->exp_client_uuid.uuid);
+
+        spin_lock(&exp->exp_lock);
         exp->exp_need_sync = 0;
+        spin_unlock(&exp->exp_lock);
 }
 EXPORT_SYMBOL(target_client_add_cb);
 
@@ -693,7 +701,9 @@ int target_handle_connect(struct ptlrpc_request *req, svc_handler_t handler)
                                         break;
                         }
 
+                        spin_lock(&export->exp_lock);
                         export->exp_connecting = 1;
+                        spin_unlock(&export->exp_lock);
                         spin_unlock(&target->obd_dev_lock);
                         LASSERT(export->exp_obd == target);
 
@@ -814,14 +824,17 @@ int target_handle_connect(struct ptlrpc_request *req, svc_handler_t handler)
                 GOTO(out, rc = -EALREADY);
         }
         export->exp_conn_cnt = lustre_msg_get_conn_cnt(req->rq_reqmsg);
-        spin_unlock(&export->exp_lock);
 
         /* request from liblustre?  Don't evict it for not pinging. */
         if (lustre_msg_get_op_flags(req->rq_reqmsg) & MSG_CONNECT_LIBCLIENT) {
                 export->exp_libclient = 1;
+                spin_unlock(&export->exp_lock);
+
                 spin_lock(&target->obd_dev_lock);
                 list_del_init(&export->exp_obd_chain_timed);
                 spin_unlock(&target->obd_dev_lock);
+        } else {
+                spin_unlock(&export->exp_lock);
         }
 
         if (export->exp_connection != NULL)
@@ -856,8 +869,11 @@ int target_handle_connect(struct ptlrpc_request *req, svc_handler_t handler)
 
         class_import_put(revimp);
 out:
-        if (export)
+        if (export) {
+                spin_lock(&export->exp_lock);
                 export->exp_connecting = 0;
+                spin_unlock(&export->exp_lock);
+	}
         if (targref) 
                 class_decref(targref);
         if (rc)
@@ -1338,7 +1354,10 @@ int target_queue_final_reply(struct ptlrpc_request *req, int rc)
            export */
         if (req->rq_export->exp_replay_needed) {
                 --obd->obd_recoverable_clients;
+                
+                spin_lock(&req->rq_export->exp_lock);
                 req->rq_export->exp_replay_needed = 0;
+                spin_unlock(&req->rq_export->exp_lock);
         }
         recovery_done = (obd->obd_recoverable_clients == 0);
         spin_unlock_bh(&obd->obd_processing_task_lock);
