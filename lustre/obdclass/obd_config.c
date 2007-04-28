@@ -860,14 +860,14 @@ int class_process_proc_param(char *prefix, struct lprocfs_vars *lvars,
                 }    
                 if (!matched) {
                         CERROR("%s: unknown param %s\n",
-                               lustre_cfg_string(lcfg, 0), key);
+                               (char *)lustre_cfg_string(lcfg, 0), key);
                         rc = -EINVAL;
                         /* continue parsing other params */
                 } else {
                         LCONSOLE_INFO("%s.%.*s: set parameter %.*s=%s\n", 
-                                      lustre_cfg_string(lcfg, 0),
-                                      strlen(prefix) - 1, prefix,
-                                      sval - key - 1, key, sval);
+                                      (char *)lustre_cfg_string(lcfg, 0),
+                                      (int)strlen(prefix) - 1, prefix,
+                                      (int)(sval - key - 1), key, sval);
                 }
         }
         

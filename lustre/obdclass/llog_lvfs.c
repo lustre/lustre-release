@@ -267,8 +267,8 @@ static int llog_lvfs_write_rec(struct llog_handle *loghandle,
                                "modify record "LPX64": idx:%d/%u/%d, len:%u "
                                "offset %llu\n",
                                loghandle->lgh_id.lgl_oid, idx, rec->lrh_index,
-                               loghandle->lgh_cur_idx,
-                               rec->lrh_len, saved_offset - sizeof(*llh));
+                               loghandle->lgh_cur_idx, rec->lrh_len,
+                               (long long)(saved_offset - sizeof(*llh)));
                         if (rec->lrh_index != loghandle->lgh_cur_idx) {
                                 CERROR("modify idx mismatch %u/%d\n",
                                        idx, loghandle->lgh_cur_idx);

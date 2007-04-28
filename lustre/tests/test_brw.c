@@ -81,7 +81,7 @@ int main(int argc, char **argv)
 {
         int fd;
         char *buf;
-        loff_t count, last, offset;
+        long long count, last, offset;
         long pg_vec, len;
         __u64 objid;
         struct stat st;
@@ -152,8 +152,8 @@ int main(int argc, char **argv)
                 objid = 3;
         }
 
-        printf("%s: %s on %s(objid "LPX64") for "LPSZ"x%ld pages \n",
-               argv[0], 
+        printf("%s: %s on %s(objid "LPX64") for %llux%ld pages \n",
+               argv[0],
 #ifdef O_DIRECT
                flags & O_DIRECT ? "directio" : "i/o",
 #else

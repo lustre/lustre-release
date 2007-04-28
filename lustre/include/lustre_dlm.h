@@ -398,15 +398,16 @@ extern char *ldlm_it2str(int it);
 
 void _ldlm_lock_debug(struct ldlm_lock *lock, __u32 mask,
                       struct libcfs_debug_msg_data *data, const char *fmt,
-                      ...);
+                      ...)
+        __attribute__ ((format (printf, 4, 5)));
 
 #define LDLM_ERROR(lock, fmt, a...) do {                                 \
         static cfs_debug_limit_state_t _ldlm_cdls;                       \
         ldlm_lock_debug(&_ldlm_cdls, D_ERROR, lock,                      \
                         __FILE__, __FUNCTION__, __LINE__,                \
                         "### " fmt , ##a);                               \
-  } while (0)
-  
+} while (0)
+
 #define LDLM_DEBUG(lock, fmt, a...)   do {                              \
         ldlm_lock_debug(NULL, D_DLMTRACE, lock,                         \
                         __FILE__, __FUNCTION__, __LINE__,               \

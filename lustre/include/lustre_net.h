@@ -402,43 +402,44 @@ ptlrpc_rqphase2str(struct ptlrpc_request *req)
 /* Spare the preprocessor, spoil the bugs. */
 #define FLAG(field, str) (field ? str : "")
 
-#define DEBUG_REQ_FLAGS(req)                                                    \
-        ptlrpc_rqphase2str(req),                                                \
-        FLAG(req->rq_intr, "I"), FLAG(req->rq_replied, "R"),                    \
-        FLAG(req->rq_err, "E"),                                                 \
-        FLAG(req->rq_timedout, "X") /* eXpired */, FLAG(req->rq_resend, "S"),   \
-        FLAG(req->rq_restart, "T"), FLAG(req->rq_replay, "P"),                  \
-        FLAG(req->rq_no_resend, "N"),                                           \
+#define DEBUG_REQ_FLAGS(req)                                                  \
+        ptlrpc_rqphase2str(req),                                              \
+        FLAG(req->rq_intr, "I"), FLAG(req->rq_replied, "R"),                  \
+        FLAG(req->rq_err, "E"),                                               \
+        FLAG(req->rq_timedout, "X") /* eXpired */, FLAG(req->rq_resend, "S"), \
+        FLAG(req->rq_restart, "T"), FLAG(req->rq_replay, "P"),                \
+        FLAG(req->rq_no_resend, "N"),                                         \
         FLAG(req->rq_waiting, "W")
 
 #define REQ_FLAGS_FMT "%s:%s%s%s%s%s%s%s%s%s"
 
 void _debug_req(struct ptlrpc_request *req, __u32 mask,
-               struct libcfs_debug_msg_data *data, const char *fmt, ...);
+                struct libcfs_debug_msg_data *data, const char *fmt, ...)
+        __attribute__ ((format (printf, 4, 5)));
 
-#define debug_req(cdls, level, req, file, func, line, fmt, a...)                \
-do {                                                                            \
-        CHECK_STACK();                                                          \
-                                                                                \
-        if (((level) & D_CANTMASK) != 0 ||                                      \
-            ((libcfs_debug & (level)) != 0 &&                                   \
-             (libcfs_subsystem_debug & DEBUG_SUBSYSTEM) != 0)) {                \
-                static struct libcfs_debug_msg_data _req_dbg_data =             \
-                DEBUG_MSG_DATA_INIT(cdls, DEBUG_SUBSYSTEM, file, func, line);   \
-                _debug_req((req), (level), &_req_dbg_data, fmt, ##a);           \
-        }                                                                       \
+#define debug_req(cdls, level, req, file, func, line, fmt, a...)              \
+do {                                                                          \
+        CHECK_STACK();                                                        \
+                                                                              \
+        if (((level) & D_CANTMASK) != 0 ||                                    \
+            ((libcfs_debug & (level)) != 0 &&                                 \
+             (libcfs_subsystem_debug & DEBUG_SUBSYSTEM) != 0)) {              \
+                static struct libcfs_debug_msg_data _req_dbg_data =           \
+                DEBUG_MSG_DATA_INIT(cdls, DEBUG_SUBSYSTEM, file, func, line); \
+                _debug_req((req), (level), &_req_dbg_data, fmt, ##a);         \
+        }                                                                     \
 } while(0)
 
 /* for most callers (level is a constant) this is resolved at compile time */
-#define DEBUG_REQ(level, req, fmt, args...)                                    \
-do {                                                                           \
-        if ((level) & (D_ERROR | D_WARNING)) {                                 \
-                static cfs_debug_limit_state_t cdls;                           \
-                debug_req(&cdls, level, req, __FILE__, __func__, __LINE__,     \
-                          "@@@ "fmt, ## args);                                 \
-        } else                                                                 \
-                debug_req(NULL, level, req, __FILE__, __func__, __LINE__,      \
-                          "@@@ "fmt, ## args);                                 \
+#define DEBUG_REQ(level, req, fmt, args...)                                   \
+do {                                                                          \
+        if ((level) & (D_ERROR | D_WARNING)) {                                \
+            static cfs_debug_limit_state_t cdls;                              \
+            debug_req(&cdls, level, req, __FILE__, __func__, __LINE__,        \
+                      "@@@ "fmt" ", ## args);                                 \
+        } else                                                                \
+            debug_req(NULL, level, req, __FILE__, __func__, __LINE__,         \
+                      "@@@ "fmt" ", ## args);                                 \
 } while (0)
 
 struct ptlrpc_bulk_page {
