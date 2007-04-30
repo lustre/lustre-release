@@ -519,6 +519,7 @@ static int ptlrpc_connect_interpret(struct ptlrpc_request *request,
                 spin_unlock(&imp->imp_lock);
                 RETURN(0);
         }
+        spin_unlock(&imp->imp_lock);
 
         if (rc)
                 GOTO(out, rc);
@@ -528,6 +529,7 @@ static int ptlrpc_connect_interpret(struct ptlrpc_request *request,
         msg_flags = lustre_msg_get_op_flags(request->rq_repmsg);
 
         /* All imports are pingable */
+        spin_lock(&imp->imp_lock);
         imp->imp_pingable = 1;
 
         if (aa->pcaa_initial_connect) {
