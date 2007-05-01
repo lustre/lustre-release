@@ -30,6 +30,11 @@
 	ptllnd    - Portals 3.3 / UNICOS/lc 1.5.x, 2.0.x
        * bug fixes
 
+Severity   : major
+Frequency  : rare
+Bugzilla   : 12016
+Description: node crash on socket teardown race
+
 Severity   : minor
 Frequency  : 'lctl peer_list' issued on a mx net
 Bugzilla   : 12237

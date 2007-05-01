@@ -198,6 +198,7 @@ typedef struct                                  /* transmit packet */
         int                     tx_niov;        /* # packet iovec frags */
         struct iovec           *tx_iov;         /* packet iovec frags */
         int                     tx_nkiov;       /* # packet page frags */
+        unsigned int            tx_checked_zc;  /* Have I checked if I should ZC? */
         lnet_kiov_t            *tx_kiov;        /* packet page frags */
         struct ksock_conn      *tx_conn;        /* owning conn */
         lnet_msg_t             *tx_lnetmsg;     /* lnet message for lnet_finalize() */

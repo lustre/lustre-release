@@ -1447,9 +1447,13 @@ ksocknal_terminate_conn (ksock_conn_t *conn)
          * disengage the socket from its callbacks and close it.
          * ksnc_refcount will eventually hit zero, and then the reaper will
          * destroy it. */
-        ksock_peer_t   *peer = conn->ksnc_peer;
-        ksock_sched_t  *sched = conn->ksnc_scheduler;
-        int             failed = 0;
+        ksock_peer_t     *peer = conn->ksnc_peer;
+        ksock_sched_t    *sched = conn->ksnc_scheduler;
+        int               failed = 0;
+        struct list_head *tmp;
+        struct list_head *nxt;
+        ksock_tx_t       *tx;
+        LIST_HEAD        (zlist);
 
         LASSERT(conn->ksnc_closing);
 
@@ -1472,31 +1476,27 @@ ksocknal_terminate_conn (ksock_conn_t *conn)
         spin_unlock_bh (&sched->kss_lock);
 
         spin_lock(&peer->ksnp_lock);
-        if (!list_empty(&peer->ksnp_zc_req_list)) {
-                struct list_head *tmp;
-                struct list_head *nxt;
-                ksock_tx_t       *tx;
-                LIST_HEAD         (zlist);
 
-                list_for_each_safe(tmp, nxt, &peer->ksnp_zc_req_list) {
-                        tx = list_entry(tmp, ksock_tx_t, tx_zc_list);
+        list_for_each_safe(tmp, nxt, &peer->ksnp_zc_req_list) {
+                tx = list_entry(tmp, ksock_tx_t, tx_zc_list);
 
-                        if (tx->tx_conn != conn)
-                                continue;
-                        list_del(&tx->tx_zc_list);
-                        /* tell scheduler it's deleted */
-                        tx->tx_msg.ksm_zc_req_cookie = 0;
-                        list_add(&tx->tx_zc_list, &zlist);
-                }
-                spin_unlock(&peer->ksnp_lock);
+                if (tx->tx_conn != conn)
+                        continue;
 
-                list_for_each_safe(tmp, nxt, &zlist) {
-                        tx = list_entry(tmp, ksock_tx_t, tx_zc_list);
-                        list_del(&tx->tx_zc_list);
-                        ksocknal_tx_decref(tx);
-                }
-        } else {
-                spin_unlock(&peer->ksnp_lock);
+                LASSERT (tx->tx_msg.ksm_zc_req_cookie != 0);
+
+                tx->tx_msg.ksm_zc_req_cookie = 0;
+                list_del(&tx->tx_zc_list);
+                list_add(&tx->tx_zc_list, &zlist);
+        }
+
+        spin_unlock(&peer->ksnp_lock);
+
+        list_for_each_safe(tmp, nxt, &zlist) {
+                tx = list_entry(tmp, ksock_tx_t, tx_zc_list);
+
+                list_del(&tx->tx_zc_list);
+                ksocknal_tx_decref(tx);
         }
 
         /* serialise with callbacks */
