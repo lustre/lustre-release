@@ -1,6 +1,6 @@
 AUTOMAKE_OPTIONS = foreign
 
-SUBDIRS := . build @LIBSYSIO_SUBDIR@ @SNMP_SUBDIR@ lnet # lustre
+SUBDIRS := . build @LIBSYSIO_SUBDIR@ @SNMP_SUBDIR@ lnet lustre
 DIST_SUBDIRS := build @SNMP_DIST_SUBDIR@ libsysio lnet lustre
 
 EXTRA_DIST := config.h.in
