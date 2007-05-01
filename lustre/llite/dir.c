@@ -792,7 +792,7 @@ static int ll_dir_ioctl(struct inode *inode, struct file *file,
                 OBD_FREE_PTR(check);
                 RETURN(rc);
         }
-#if HAVE_QUOTA_SUPPORT
+#ifdef HAVE_QUOTA_SUPPORT
         case OBD_IOC_QUOTACTL: {
                 struct if_quotactl *qctl;
                 struct obd_quotactl *oqctl;
