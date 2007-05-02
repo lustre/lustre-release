@@ -169,7 +169,7 @@ typedef struct {
 
 #ifdef __KERNEL__
 
-#if CDEBUG_ENABLED
+#ifdef CDEBUG_ENABLED
 #define __CDEBUG(cdls, mask, format, a...)                              \
 do {                                                                    \
         CHECK_STACK();                                                  \
@@ -234,7 +234,7 @@ do {                                                                    \
 #define LCONSOLE_ERROR(format, a...) CDEBUG_LIMIT(D_CONSOLE | D_ERROR, format, ## a)
 #define LCONSOLE_EMERG(format, a...) CDEBUG(D_CONSOLE | D_EMERG, format, ## a)
 
-#if CDEBUG_ENABLED
+#ifdef CDEBUG_ENABLED
 
 #define GOTO(label, rc)                                                 \
 do {                                                                    \
@@ -251,7 +251,7 @@ do {                                                                    \
 /* Controlled via configure key */
 /* #define CDEBUG_ENTRY_EXIT (1) */
 
-#if CDEBUG_ENTRY_EXIT
+#ifdef CDEBUG_ENTRY_EXIT
 
 /*
  * if rc == NULL, we need to code as RETURN((void *)NULL), otherwise
