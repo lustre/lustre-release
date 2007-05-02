@@ -128,6 +128,22 @@ static void fatal(void)
 
 /*================ utility functions =====================*/
 
+char *strscat(char *dst, char *src, int buflen) {
+        dst[buflen - 1] = 0;
+        if (strlen(dst) + strlen(src) >= buflen) {
+                fprintf(stderr, "string buffer overflow (max %d): '%s' + '%s'"
+                        "\n", buflen, dst, src);
+                exit(EOVERFLOW);
+        }
+        return strcat(dst, src);
+
+}
+
+char *strscpy(char *dst, char *src, int buflen) {
+        dst[0] = 0;
+        return strscat(dst, src, buflen);
+}
+
 inline unsigned int 
 dev_major (unsigned long long int __dev)
 {
@@ -268,7 +284,8 @@ int loop_setup(struct mkfs_opts *mop)
                                         progname, ret, strerror(ret));
                                 return ret;
                         }
-                        strcpy(mop->mo_loopdev, l_device);
+                        strscpy(mop->mo_loopdev, l_device, 
+                                sizeof(mop->mo_loopdev));
                         return ret;
                 }
         }
@@ -279,7 +296,7 @@ int loop_setup(struct mkfs_opts *mop)
 
 int loop_cleanup(struct mkfs_opts *mop)
 {
-        char cmd[128];
+        char cmd[150];
         int ret = 1;
         if ((mop->mo_flags & MO_IS_LOOP) && *mop->mo_loopdev) {
                 sprintf(cmd, "losetup -d %s", mop->mo_loopdev);
@@ -430,11 +447,10 @@ static int is_lustre_target(struct mkfs_opts *mop)
 int make_lustre_backfs(struct mkfs_opts *mop)
 {
         char mkfs_cmd[PATH_MAX];
-        char buf[40];
+        char buf[64];
         char *dev;
         int ret = 0;
         int block_count = 0;
-        int left = sizeof(mkfs_cmd);
 
         if (mop->mo_device_sz != 0) {
                 if (mop->mo_device_sz < 8096){
@@ -470,7 +486,8 @@ int make_lustre_backfs(struct mkfs_opts *mop)
                                 journal_sz = max_sz;
                         if (journal_sz) {
                                 sprintf(buf, " -J size=%ld", journal_sz);
-                                strcat(mop->mo_mkfsopts, buf);
+                                strscat(mop->mo_mkfsopts, buf, 
+                                        sizeof(mop->mo_mkfsopts));
                         }
                 }
 
@@ -489,7 +506,8 @@ int make_lustre_backfs(struct mkfs_opts *mop)
                         
                         if (bytes_per_inode > 0) {
                                 sprintf(buf, " -i %ld", bytes_per_inode);
-                                strcat(mop->mo_mkfsopts, buf);
+                                strscat(mop->mo_mkfsopts, buf,
+                                        sizeof(mop->mo_mkfsopts));
                         }
                 }
                 
@@ -514,41 +532,44 @@ int make_lustre_backfs(struct mkfs_opts *mop)
 
                         if (inode_size > 0) {
                                 sprintf(buf, " -I %ld", inode_size);
-                                strcat(mop->mo_mkfsopts, buf);
+                                strscat(mop->mo_mkfsopts, buf,
+                                        sizeof(mop->mo_mkfsopts));
                         }
                         
                 }
 
                 if (verbose < 2) {
-                        strcat(mop->mo_mkfsopts, " -q");
+                        strscat(mop->mo_mkfsopts, " -q", 
+                                sizeof(mop->mo_mkfsopts));
                 }
 
                 if (strstr(mop->mo_mkfsopts, "-O") == NULL) {
                         /* Enable hashed b-tree directory lookup in large dirs
                            bz6224 */
-                        strcat(mop->mo_mkfsopts, " -O dir_index");
-
+                        strscat(mop->mo_mkfsopts, " -O dir_index",
+                                sizeof(mop->mo_mkfsopts));
                         /* ldiskfs2: do not initialize all groups. */
-                        if (mop->mo_ldd.ldd_mount_type == LDD_MT_LDISKFS2) {
-                                strcat(mop->mo_mkfsopts, ",uninit_groups");
-                        }
+                        if (mop->mo_ldd.ldd_mount_type == LDD_MT_LDISKFS2)
+                                strscat(mop->mo_mkfsopts, ",uninit_groups",
+                                        sizeof(mop->mo_mkfsopts));
                 }
 
                 /* Allow reformat of full devices (as opposed to 
                    partitions.)  We already checked for mounted dev. */
-                strcat(mop->mo_mkfsopts, " -F");
+                strscat(mop->mo_mkfsopts, " -F", sizeof(mop->mo_mkfsopts));
 
-                left -= snprintf(mkfs_cmd, left, 
-                                 "mkfs.ext2 -j -b %d -L %s ", L_BLOCK_SIZE,
-                                 mop->mo_ldd.ldd_svname);
+                snprintf(mkfs_cmd, sizeof(mkfs_cmd), 
+                         "mkfs.ext2 -j -b %d -L %s ", L_BLOCK_SIZE,
+                         mop->mo_ldd.ldd_svname);
 
         } else if (mop->mo_ldd.ldd_mount_type == LDD_MT_REISERFS) {
                 long journal_sz = 0; /* FIXME default journal size */
                 if (journal_sz > 0) { 
                         sprintf(buf, " --journal_size %ld", journal_sz);
-                        strcat(mop->mo_mkfsopts, buf);
+                        strscat(mop->mo_mkfsopts, buf,
+                                sizeof(mop->mo_mkfsopts));
                 }
-                left -= snprintf(mkfs_cmd, left, "mkreiserfs -ff ");
+                snprintf(mkfs_cmd, sizeof(mkfs_cmd), "mkreiserfs -ff ");
 
         } else {
                 fprintf(stderr,"%s: unsupported fs type: %d (%s)\n",
@@ -569,16 +590,12 @@ int make_lustre_backfs(struct mkfs_opts *mop)
         vprint("\toptions       %s\n", mop->mo_mkfsopts);
 
         /* mkfs_cmd's trailing space is important! */
-        strncat(mkfs_cmd, mop->mo_mkfsopts, left);
-        left = sizeof(mkfs_cmd) - strlen(mkfs_cmd) - 1;
-        strncat(mkfs_cmd, " ", left);
-        left = sizeof(mkfs_cmd) - strlen(mkfs_cmd) - 1;
-        strncat(mkfs_cmd, dev, left);
-        left = sizeof(mkfs_cmd) - strlen(mkfs_cmd) - 1;
+        strscat(mkfs_cmd, mop->mo_mkfsopts, sizeof(mkfs_cmd));
+        strscat(mkfs_cmd, " ", sizeof(mkfs_cmd));
+        strscat(mkfs_cmd, dev, sizeof(mkfs_cmd));
         if (block_count != 0) {
                 sprintf(buf, " %d", block_count);
-                strncat(mkfs_cmd, buf, left);
-                left = sizeof(mkfs_cmd) - strlen(mkfs_cmd) - 1;
+                strscat(mkfs_cmd, buf, sizeof(mkfs_cmd));
         }
 
         vprint("mkfs_cmd = %s\n", mkfs_cmd);
@@ -712,7 +729,7 @@ int write_local_files(struct mkfs_opts *mop)
                 /* Copy the old mdt log to fsname-MDT0000 (get old
                    name from mdt_UUID) */
                 ret = 1;
-                strcpy(filepnm, mop->mo_ldd.ldd_uuid);
+                strscpy(filepnm, mop->mo_ldd.ldd_uuid, sizeof(filepnm));
                 term = strstr(filepnm, "_UUID");
                 if (term) {
                         *term = '\0';
@@ -1086,8 +1103,8 @@ int parse_opts(int argc, char *const argv[], struct mkfs_opts *mop,
                         }
                         break;
                 case 'k':
-                        strncpy(mop->mo_mkfsopts, optarg, 
-                                sizeof(mop->mo_mkfsopts) - 1);
+                        strscpy(mop->mo_mkfsopts, optarg, 
+                                sizeof(mop->mo_mkfsopts));
                         break;
                 case 'L': {
                         char *tmp;
@@ -1109,8 +1126,8 @@ int parse_opts(int argc, char *const argv[], struct mkfs_opts *mop,
                                         "filesystem name\n", progname, *tmp);
                                 return 1;
                         }
-                        strncpy(mop->mo_ldd.ldd_fsname, optarg, 
-                                sizeof(mop->mo_ldd.ldd_fsname) - 1);
+                        strscpy(mop->mo_ldd.ldd_fsname, optarg, 
+                                sizeof(mop->mo_ldd.ldd_fsname));
                         break;
                 }
                 case 'm': {
@@ -1154,10 +1171,8 @@ int parse_opts(int argc, char *const argv[], struct mkfs_opts *mop,
                         mop->mo_flags |= MO_FORCEFORMAT;
                         break;
                 case 'u':
-                        strncpy(mop->mo_ldd.ldd_userdata, optarg,
+                        strscpy(mop->mo_ldd.ldd_userdata, optarg,
                                 sizeof(mop->mo_ldd.ldd_userdata));
-                        mop->mo_ldd.ldd_userdata[
-                                sizeof(mop->mo_ldd.ldd_userdata) - 1] = 0;
                         break;
                 case 'v':
                         verbose++;
@@ -1207,7 +1222,7 @@ int main(int argc, char *const argv[])
         set_defaults(&mop);
 
         /* device is last arg */
-        strcpy(mop.mo_device, argv[argc - 1]);
+        strscpy(mop.mo_device, argv[argc - 1], sizeof(mop.mo_device));
 
         /* Are we using a loop device? */
         ret = is_block(mop.mo_device);
@@ -1290,17 +1305,19 @@ int main(int argc, char *const argv[])
         case LDD_MT_LDISKFS2: {
                 sprintf(always_mountopts, "errors=remount-ro");
                 if (IS_MDT(ldd) || IS_MGS(ldd))
-                        strcat(always_mountopts,
-                               ",iopen_nopriv,user_xattr");
+                        strscat(always_mountopts, ",iopen_nopriv,user_xattr",
+                                sizeof(always_mountopts));
                 if ((get_os_version() == 24) && IS_OST(ldd))
-                        strcat(always_mountopts, ",asyncdel");
+                        strscat(always_mountopts, ",asyncdel",
+                                sizeof(always_mountopts));
                 /* NB: Files created while extents are enabled cannot be read
                    if mounted with a kernel that doesn't include the CFS 
                    patches! */
                 if (IS_OST(ldd) && 
                     (ldd->ldd_mount_type == LDD_MT_LDISKFS ||
                      ldd->ldd_mount_type == LDD_MT_LDISKFS2)) {
-                        strcat(default_mountopts, ",extents,mballoc");
+                        strscat(default_mountopts, ",extents,mballoc",
+                                sizeof(default_mountopts));
                 }
                 break;
         }
