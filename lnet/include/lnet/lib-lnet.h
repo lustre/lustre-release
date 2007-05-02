@@ -62,7 +62,7 @@ static inline int lnet_md_unlinkable (lnet_libmd_t *md)
 #define LNET_MUTEX_DOWN(m) mutex_down(m)
 #define LNET_MUTEX_UP(m)   mutex_up(m)
 #else
-# if !HAVE_LIBPTHREAD
+# ifndef HAVE_LIBPTHREAD
 #define LNET_SINGLE_THREADED_LOCK(l)            \
 do {                                            \
         LASSERT ((l) == 0);                     \

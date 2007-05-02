@@ -185,7 +185,7 @@ LNetEQPoll (lnet_handle_eq_t *eventqs, int neq, int timeout_ms,
 #else
         struct timeval   then;
         struct timeval   now;
-# if HAVE_LIBPTHREAD
+# ifdef HAVE_LIBPTHREAD
         struct timespec  ts;
 # endif
         lnet_ni_t       *eqwaitni = the_lnet.ln_eqwaitni;
@@ -283,7 +283,7 @@ LNetEQPoll (lnet_handle_eq_t *eventqs, int neq, int timeout_ms,
                         RETURN (0);
                 }
 
-# if !HAVE_LIBPTHREAD
+# ifndef HAVE_LIBPTHREAD
                 /* If I'm single-threaded, LNET fails at startup if it can't
                  * set the_lnet.ln_eqwaitni correctly.  */
                 LBUG();

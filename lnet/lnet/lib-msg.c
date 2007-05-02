@@ -54,7 +54,7 @@ lnet_enq_event_locked (lnet_eq_t *eq, lnet_event_t *ev)
         if (cfs_waitq_active(&the_lnet.ln_waitq))
                 cfs_waitq_broadcast(&the_lnet.ln_waitq);
 #else
-# if !HAVE_LIBPTHREAD
+# ifndef HAVE_LIBPTHREAD
         /* LNetEQPoll() calls into _the_ LND to wait for action */
 # else
         /* Wake anyone waiting in LNetEQPoll() */

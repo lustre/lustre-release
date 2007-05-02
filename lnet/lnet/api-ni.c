@@ -186,7 +186,7 @@ lnet_get_portals_compatibility(void)
         return 0;
 }
 
-# if !HAVE_LIBPTHREAD
+# ifndef HAVE_LIBPTHREAD
 
 void lnet_init_locks(void)
 {
@@ -1059,7 +1059,7 @@ lnet_startup_lndnis (void)
                                 the_lnet.ln_eqwaitni = ni;
                         }
                 } else {
-# if !HAVE_LIBPTHREAD
+# ifndef HAVE_LIBPTHREAD
                         LCONSOLE_ERROR("LND %s not supported in a "
                                        "single-threaded runtime\n",
                                        libcfs_lnd2str(lnd_type));
@@ -1146,7 +1146,7 @@ LNetInit(void)
 # ifdef CRAY_XT3
         LNET_REGISTER_ULND(the_ptllnd);
 # endif
-# if HAVE_LIBPTHREAD
+# ifdef HAVE_LIBPTHREAD
         LNET_REGISTER_ULND(the_tcplnd);
 # endif
 #endif

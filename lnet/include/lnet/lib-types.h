@@ -465,7 +465,7 @@ typedef struct
         struct semaphore   ln_api_mutex;
         struct semaphore   ln_lnd_mutex;
 #else
-# if !HAVE_LIBPTHREAD
+# ifndef HAVE_LIBPTHREAD
         int                ln_lock;
         int                ln_api_mutex;
         int                ln_lnd_mutex;
