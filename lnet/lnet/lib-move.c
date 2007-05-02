@@ -2116,6 +2116,8 @@ lnet_parse(lnet_ni_t *ni, lnet_hdr_t *hdr, lnet_nid_t from_nid,
         msg->msg_hdr.dest_nid = dest_nid;
         msg->msg_hdr.dest_pid = le32_to_cpu(msg->msg_hdr.dest_pid);
         msg->msg_hdr.payload_length = payload_length;
+
+        msg->msg_ev.sender = from_nid;
         
         switch (type) {
         case LNET_MSG_ACK:
@@ -2220,6 +2222,7 @@ LNetPut(lnet_nid_t self, lnet_handle_md_t mdh, lnet_ack_req_t ack,
         msg->msg_ev.initiator.nid = LNET_NID_ANY;
         msg->msg_ev.initiator.pid = the_lnet.ln_pid;
         msg->msg_ev.target = target;
+        msg->msg_ev.sender = LNET_NID_ANY;
         msg->msg_ev.pt_index = portal;
         msg->msg_ev.match_bits = match_bits;
         msg->msg_ev.rlength = md->md_length;
@@ -2291,6 +2294,7 @@ lnet_create_reply_msg (lnet_ni_t *ni, lnet_msg_t *getmsg)
 
         msg->msg_ev.type = LNET_EVENT_REPLY;
         msg->msg_ev.initiator = peer_id;
+        msg->msg_ev.sender = peer_id.nid;  /* optimized GETs can't be routed */
         msg->msg_ev.rlength = msg->msg_ev.mlength = getmd->md_length;
         msg->msg_ev.offset = 0;
 
@@ -2391,6 +2395,7 @@ LNetGet(lnet_nid_t self, lnet_handle_md_t mdh,
         msg->msg_ev.initiator.nid = LNET_NID_ANY;
         msg->msg_ev.initiator.pid = the_lnet.ln_pid;
         msg->msg_ev.target = target;
+        msg->msg_ev.sender = LNET_NID_ANY;
         msg->msg_ev.pt_index = portal;
         msg->msg_ev.match_bits = match_bits;
         msg->msg_ev.rlength = md->md_length;

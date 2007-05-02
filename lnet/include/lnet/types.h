@@ -130,22 +130,23 @@ typedef unsigned LNET_SEQ_BASETYPE lnet_seq_t;
 #pragma pack(push, 4)
 #endif
 typedef struct {
-        lnet_event_kind_t   type;
-	lnet_process_id_t   target;
+        lnet_process_id_t   target;
         lnet_process_id_t   initiator;
-#ifdef CRAY_XT3
-	lnet_uid_t          uid;
-#endif
+        lnet_nid_t          sender;
+        lnet_event_kind_t   type;
         unsigned int        pt_index;
         __u64               match_bits;
         unsigned int        rlength;
         unsigned int        mlength;
-        unsigned int        offset;
         lnet_handle_md_t    md_handle;
         lnet_md_t           md;
         __u64               hdr_data;
         int                 status;
         int                 unlinked;
+        unsigned int        offset;
+#ifdef CRAY_XT3
+        lnet_uid_t          uid;
+#endif
 
         volatile lnet_seq_t sequence;
 } lnet_event_t;

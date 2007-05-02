@@ -474,7 +474,8 @@ struct ptlrpc_bulk_desc {
         __u64                  bd_last_xid;
 
         struct ptlrpc_cb_id    bd_cbid;         /* network callback info */
-        lnet_handle_md_t        bd_md_h;         /* associated MD */
+        lnet_handle_md_t       bd_md_h;         /* associated MD */
+        lnet_nid_t             bd_sender;       /* stash event::sender */
 
 #if defined(__KERNEL__)
         lnet_kiov_t             bd_iov[0];

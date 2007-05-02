@@ -1130,21 +1130,32 @@ static int osc_brw_fini_request(struct ptlrpc_request *req, int rc)
 
         if (unlikely(body->oa.o_valid & OBD_MD_FLCKSUM)) {
                 static int cksum_counter;
-                __u32 server_cksum = body->oa.o_cksum;
+                __u32      server_cksum = body->oa.o_cksum;
+                char      *via;
+                char      *router;
+
                 client_cksum = osc_checksum_bulk(rc, aa->aa_page_count,
                                                  aa->aa_ppga);
 
+                if (peer->nid == req->rq_bulk->bd_sender) {
+                        via = router = "";
+                } else {
+                        via = " via ";
+                        router = libcfs_nid2str(req->rq_bulk->bd_sender);
+                }
+                
                 if (server_cksum == ~0 && rc > 0) {
                         CERROR("Protocol error: server %s set the 'checksum' "
                                "bit, but didn't send a checksum.  Not fatal, "
                                "but please tell CFS.\n",
                                libcfs_nid2str(peer->nid));
                 } else if (server_cksum != client_cksum) {
-                        LCONSOLE_ERROR("%s: BAD READ CHECKSUM: from %s inum "
+                        LCONSOLE_ERROR("%s: BAD READ CHECKSUM: from %s%s%s inum "
                                        LPU64"/"LPU64" object "LPU64"/"LPU64
                                        " extent ["LPU64"-"LPU64"]\n",
                                        req->rq_import->imp_obd->obd_name,
                                        libcfs_nid2str(peer->nid),
+                                       via, router,
                                        body->oa.o_valid & OBD_MD_FLFID ?
                                                 body->oa.o_fid : (__u64)0,
                                        body->oa.o_valid & OBD_MD_FLFID ?

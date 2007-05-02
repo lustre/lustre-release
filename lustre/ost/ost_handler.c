@@ -1047,8 +1047,10 @@ static int ost_brw_write(struct ptlrpc_request *req, struct obd_trans_info *oti)
                            objcount, ioo, npages, local_nb, oti, rc);
 
         if (unlikely(client_cksum != server_cksum && rc == 0)) {
-                int new_cksum = ost_checksum_bulk(desc);
+                int   new_cksum = ost_checksum_bulk(desc);
                 char *msg;
+                char *via;
+                char *router;
 
                 if (new_cksum == server_cksum)
                         msg = "changed in transit before arrival at OST";
@@ -1057,11 +1059,19 @@ static int ost_brw_write(struct ptlrpc_request *req, struct obd_trans_info *oti)
                 else
                         msg = "changed in transit AND after initial checksum";
 
-                LCONSOLE_ERROR("%s: BAD WRITE CHECKSUM: %s from %s inum "
+                if (req->rq_peer.nid == desc->bd_sender) {
+                        via = router = "";
+                } else {
+                        via = " via ";
+                        router = libcfs_nid2str(desc->bd_sender);
+                }
+                
+                LCONSOLE_ERROR("%s: BAD WRITE CHECKSUM: %s from %s%s%s inum "
                                LPU64"/"LPU64" object "LPU64"/"LPU64
                                " extent ["LPU64"-"LPU64"]\n",
                                req->rq_export->exp_obd->obd_name, msg,
                                libcfs_id2str(req->rq_peer),
+                               via, router,
                                body->oa.o_valid & OBD_MD_FLFID ?
                                                 body->oa.o_fid : (__u64)0,
                                body->oa.o_valid & OBD_MD_FLFID ?

@@ -101,6 +101,7 @@ int ptlrpc_start_bulk_transfer (struct ptlrpc_bulk_desc *desc)
         LASSERT (desc->bd_type == BULK_PUT_SOURCE ||
                  desc->bd_type == BULK_GET_SINK);
         desc->bd_success = 0;
+        desc->bd_sender = LNET_NID_ANY;
 
         md.user_ptr = &desc->bd_cbid;
         md.eq_handle = ptlrpc_eq_h;
@@ -210,6 +211,7 @@ int ptlrpc_register_bulk (struct ptlrpc_request *req)
                  desc->bd_type == BULK_GET_SOURCE);
 
         desc->bd_success = 0;
+        desc->bd_sender = LNET_NID_ANY;
 
         peer = desc->bd_import->imp_connection->c_peer;
 

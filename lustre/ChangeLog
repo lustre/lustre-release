@@ -22,6 +22,13 @@ tbd         Cluster File Systems, Inc. <info@clusterfs.com>
        * Note that reiserfs quotas are temporarily disabled on SLES 10 in this
 	 kernel.
 
+Severity   : enhancement
+Bugzilla   : 11548
+Description: Add LNET router traceability for debug purposes
+Details    : If a checksum failure occurs with a router as part of the
+             IO path, the NID of the last router that forwarded the bulk data
+	     is printed so it can be identified.
+
 Severity   : normal
 Frequency  : rare
 Bugzilla   : 11315

@@ -138,6 +138,7 @@ void client_bulk_callback (lnet_event_t *ev)
         if (ev->type != LNET_EVENT_UNLINK && ev->status == 0) {
                 desc->bd_success = 1;
                 desc->bd_nob_transferred = ev->mlength;
+                desc->bd_sender = ev->sender;
         }
 
         /* NB don't unlock till after wakeup; desc can disappear under us
@@ -312,6 +313,7 @@ void server_bulk_callback (lnet_event_t *ev)
                  * read/wrote the peer buffer and how much... */
                 desc->bd_success = 1;
                 desc->bd_nob_transferred = ev->mlength;
+                desc->bd_sender = ev->sender;
         }
 
         if (ev->unlinked) {
