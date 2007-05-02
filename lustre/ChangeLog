@@ -55,7 +55,6 @@ Description: connectathon hang when test nfs export over patchless client
 Details    : Disconnected dentry cannot be found with lookup, so we do not need 
 	     to unhash it or make it invalid
 
-Severity   : normal
 Bugzilla   : 12123
 Description: ENOENT returned for valid filehandle during dbench.
 Details:   : Check if a directory has children when invalidating dentries
@@ -65,7 +64,7 @@ Details:   : Check if a directory has children when invalidating dentries
 
 --------------------------------------------------------------------------------
 
-tbd         Cluster File Systems, Inc. <info@clusterfs.com>
+2007-04-19  Cluster File Systems, Inc. <info@clusterfs.com>
        * version 1.6.0
        * CONFIGURATION CHANGE.  This version of Lustre WILL NOT
 	 INTEROPERATE with older versions automatically.  In many cases a
@@ -75,19 +74,18 @@ tbd         Cluster File Systems, Inc. <info@clusterfs.com>
 	 this release.  See https://mail.clusterfs.com/wikis/lustre/MountConf
 	 for details.
        * Support for kernels:
-        2.6.9-42.0.10.EL (RHEL 4)
-        2.6.5-7.283 (SLES 9)
         2.4.21-47.0.1.EL (RHEL 3)
+        2.6.5-7.283 (SLES 9)
+        2.6.9-42.0.10.EL (RHEL 4)
         2.6.12.6 vanilla (kernel.org)
-        2.6.16.27-0.9 (SLES 10)
+        2.6.16.27-0.9 (SLES10)
        * Client support for unpatched kernels:
         (see https://mail.clusterfs.com/wikis/lustre/PatchlessClient)
         2.6.16 - 2.6.19 vanilla (kernel.org)
         2.6.9-42.0.8EL (RHEL 4)
-       * Recommended e2fsprogs version: 1.39.cfs5
+       * Recommended e2fsprogs version: 1.39.cfs6
+       * Note that reiserfs quotas are disabled on SLES 10 in this kernel
        * bug fixes
-       * Note that reiserfs quotas are temporarily disabled on SLES 10 in this
-	 kernel.
 
 Severity   : enhancement
 Bugzilla   : 8007
@@ -139,6 +137,14 @@ Bugzilla   : 9866
 Description: client OST exclusion list
 Details    : Clients can be started with a list of OSTs that should be
 	     declared "inactive" for known non-responsive OSTs.
+
+Severity   : normal
+Bugzilla   : 12123
+Description: ENOENT returned for valid filehandle during dbench.
+Details    : Check if a directory has children when invalidating dentries
+             associated with an inode during lock cancellation.  This fixes
+	     an incorrect ENOENT sometimes seen for valid filehandles during
+	     testing with dbench.
 
 Severity   : minor
 Frequency  : SFS test only (otherwise harmless)
@@ -237,7 +243,7 @@ Severity   : enhancement
 Bugzilla   : 11229
 Description: Easy OST removal
 Details    : OSTs can be permanently deactivated with e.g. 'lctl
-	     conf_param lustre-OST0001.osc.active=0'	
+	     conf_param lustre-OST0001.osc.active=0'
 
 Severity   : enhancement
 Bugzilla   : 11335
@@ -257,22 +263,22 @@ Details    : Added support for RHEL 2.4.21 kernel for 1.6 servers and clients
 
 Severity   : normal
 Bugzilla   : 11330
-Description: a large application tries to do I/O to the same resource and dies 
+Description: a large application tries to do I/O to the same resource and dies
 	     in the middle of it.
-Details    : Check the req->rq_arrival time after the call to 
+Details    : Check the req->rq_arrival time after the call to
 	     ost_brw_lock_get(), but before we do anything about
 	     processing it & sending the BULK transfer request. This
 	     should help move old stale pending locks off the queue as
 	     quickly as obd_timeout.
 
 Severity   : major
-Frequency  : when an incorrect nid is specified during startup 
+Frequency  : when an incorrect nid is specified during startup
 Bugzilla   : 10734
 Description: ptlrpc connect to non-existant node causes kernel crash
 Details    : LNET can't be re-entered from an event callback, which
 	     happened when we expire a message after the export has been
 	     cleaned up.  Instead, hand the zombie cleanup off to another
-	     thread. 
+	     thread.
 
 Severity   : enhancement
 Bugzilla   : 10902
@@ -281,22 +287,48 @@ Details    : Grouping plain/inodebits in granted list by their request modes
 	     and bits policy, thus improving the performance of search through
 	     the granted list.
 
+Severity   : major
+Frequency  : only if OST filesystem is corrupted
+Bugzilla   : 9829
+Description: client incorrectly hits assertion in ptlrpc_replay_req()
+Details    : for a short time RPCs with bulk IO are in the replay list,
+	     but replay of bulk IOs is unimplemented.  If the OST filesystem
+	     is corrupted due to disk cache incoherency and then replay is
+	     started it is possible to trip an assertion.  Avoid putting
+	     committed RPCs into the replay list at all to avoid this issue.
+
+Severity   : major
+Frequency  : liblustre (e.g. catamount) on a large cluster with >= 8 OSTs/OSS
+Bugzilla   : 11684
+Description: System hang on startup
+Details    : This bug allowed the liblustre (e.g. catamount) client to
+	     return to the app before handling all startup RPCs.  This
+	     could leave the node unresponsive to lustre network traffic
+	     and manifested as a server ptllnd timeout.
+
+Severity   : enhancement
+Bugzilla   : 11667
+Description: Add "/proc/sys/lustre/debug_peer_on_timeout"
+Details    : liblustre envirable: LIBLUSTRE_DEBUG_PEER_ON_TIMEOUT
+	     boolean to control whether to print peer debug info when a
+	     client's RPC times out.
+
 Severity   : minor
-Frequency  : only for kernels with patches from Lustre below 1.4.3  
+Frequency  : only for kernels with patches from Lustre below 1.4.3
 Bugzilla   : 11248
 Description: Remove old rdonly API
-Details    : Remove old rdonly API which unsed from at least lustre 1.4.3
+Details    : Remove old rdonly API which unused from at least lustre 1.4.3
 
 Severity   : major
 Frequency  : only for devices with external journals
 Bugzilla   : 10719
-Description: Set external device read-only also 
+Description: Set external device read-only also
 Details    : During a commanded failover stop, we set the disk device
 	     read-only while the server shuts down. We now also set any
-	     external journal device read-only at the same time. 
+	     external journal device read-only at the same time.
 
 Severity   : minor
-Frequency  : when upgrading from 1.4 while trying to change parameters	
+Frequency  : when upgrading from 1.4 while trying to change parameters
 Bugzilla   : 11692
 Description: The wrong (new) MDC name was used when setting parameters for
 	     upgraded MDT's.  Also allows changing of OSC (and MDC)
@@ -308,7 +340,7 @@ Bugzilla   : 11149
 Description: QOS code breaks on skipped indicies
 Details    : Add checks for missing OST indicies in the QOS code, so OSTs
 	     created with --index need not be sequential.
-
+	
 Severity   : enhancement
 Bugzilla   : 11264
 Description: Add uninit_groups feature to ldiskfs2 to speed up e2fsck
@@ -326,101 +358,18 @@ Details    : The mballoc3 code (ldiskfs2 only) adds new mechanisms to improve
 
 ------------------------------------------------------------------------------
 
-TBD         Cluster File Systems, Inc. <info@clusterfs.com>
-       * version 1.4.12
-       * Support for kernels:
-        2.4.21-47.0.1.EL (RHEL 3)
-        2.6.5-7.283 (SLES 9)
-        2.6.9-42.0.10.EL (RHEL 4)
-        2.6.12.6 vanilla (kernel.org)
-        2.6.16.27-0.9 (SLES 10)
-       * Recommended e2fsprogs version: 1.39.cfs6
-       * Note that reiserfs quotas are disabled on SLES 10 in this kernel
-       * bug fixes
-
-------------------------------------------------------------------------------
-
-2007-04-30  Cluster File Systems, Inc. <info@clusterfs.com>
-       * version 1.4.11
-       * Support for kernels:
-        2.4.21-47.0.1.EL (RHEL 3)
-        2.6.5-7.283 (SLES 9)
-        2.6.9-42.0.10.EL (RHEL 4)
-        2.6.12.6 vanilla (kernel.org)
-        2.6.16.27-0.9 (SLES 10)
-       * Recommended e2fsprogs version: 1.39.cfs6
-       * Note that reiserfs quotas are disabled on SLES 10 in this kernel
-       * bug fixes
-
-Severity   : critical
-Frequency  : occasional, depends on client load and configuration
-Bugzilla   : 12181, 12203
-Description: data loss for recently-modified files
-Introduced : 1.4.6
-Details    : In some cases it is possible that recently written or created
-	     files may not be written to disk in a timely manner (this should
-	     normally be within 30s unless client IO load is very high).
-	     The problem appears as zero-length files or files that are a
-	     multiple of 1MB in size after a client crash or client eviction
-	     that are missing data at the end of the file.
-
-	     This problem is more likely to be hit on clients where files are
-	     repeatedly created and unlinked in the same directory, clients
-	     have a large amount of RAM, have many CPUs, the filesystem has
-	     many OSTs, the clients are rebooted frequently, and/or the files
-	     are not accessed by other nodes after being written.
-
-	     The presence of the problem can be detected by looking at
-	     /proc/sys/fs/inode-state.  If the first number (nr_inodes) is
-	     smaller than the second (nr_unused) then dirty files will not
-	     be flushed automatically to disk.  "sync; sleep 10" should be
-	     run several times on the node before unmounting it to update
-	     Lustre (this is also safe to run on nodes without this problem).
-
-	     There is also a related kernel bug in the RHEL4 4 2.6.9 kernel
-	     that can cause this same problem, so customers using that kernel
-	     also need to update the kernel in addition to Lustre.  In order
-	     to properly fix this bug, the RHEL3 2.4.21 kernel is also updated.
-
-	     It is normal that files written just before a client crash (less
-	     than 30s) may not yet have been flushed to disk, even for local
-	     filesystems.
-
-Severity   : normal
-Frequency  : frequent on thin XT3 nodes
-Bugzilla   : 10802
-Description: UUID collision on thin XT3 Linux nodes
-Details    : UUIDs on Compute Node Linux XT3 nodes were not generated
-	     randomly, since we relied on an insufficiently-seeded PRNG.
-
-Severity   : normal
-Frequency  : rare
-Bugzilla   : 11693
-Description: OSS hangs after "All ost request buffers busy"
-Details    : A deadlock between quota and journal operations caused OSS
-	     hangs after printing "All ost request buffers busy."
-
-Severity   : minor
-Frequency  : always on liblustre builds
-Bugzilla   : 11175
-Description: Cleanup compiler warnings on liblustre
-
-Severity   : minor
-Frequency  : always on liblustre builds on XT3
-Bugzilla   : 12146
-Description: LC_CONFIG_CDEBUG don't run while build liblustre on XT3.
-
-------------------------------------------------------------------------------
-
 2007-04-01  Cluster File Systems, Inc. <info@clusterfs.com>
        * version 1.4.10
        * Support for kernels:
-        2.6.16.21-0.8 (SLES10)
-        2.6.9-42.0.8EL (RHEL 4)
-        2.6.5-7.276 (SLES 9)
         2.4.21-47.0.1.EL (RHEL 3)
+        2.6.5-7.283 (SLES 9)
+        2.6.9-42.0.10.EL (RHEL 4)
         2.6.12.6 vanilla (kernel.org)
+        2.6.16.27-0.9 (SLES 10)
        * Recommended e2fsprogs version: 1.39.cfs5
+
+       * Note that reiserfs quotas are disabled on SLES 10 in this kernel
+       * bug fixes
 
 Severity   : major
 Frequency  : liblustre (e.g. catamount) on a large cluster with >= 8 OSTs/OSS
@@ -451,7 +400,7 @@ Bugzilla   : 11110
 Description: Failure to close file and release space on NFS
 Details    : Put inode details into lock acquired in ll_intent_file_open. 
 	     Use mdc_intent_lock in ll_intent_open to properly
-	     detect all kind of errors unhandled by mdc_enqueue
+	     detect all kind of errors unhandled by mdc_enqueue.
 
 Severity   : major
 Frequency  : rare
@@ -464,8 +413,8 @@ Severity   : normal
 Frequency  : Only for files larger than 4GB on 32-bit clients.
 Bugzilla   : 11237
 Description: improperly doing page alignment of locks
-Details    : Modify lustre core code to use CFS_PAGE_* defines instead of 
-	     PAGE_*. Make CFS_PAGE_MASK a 64-bit mask.
+Details    : Modify lustre core code to use CFS_PAGE_* defines instead of
+	     PAGE_*.  Make CFS_PAGE_MASK a 64-bit mask.
 
 Severity   : normal
 Frequency  : rarely
@@ -501,15 +450,10 @@ Details    : Large single O_DIRECT read and write calls can fail to allocate
 	     allocation failure the allocation is retried with a smaller
 	     buffer and broken into smaller requests.
 
-Severity   : normal
-Frequency  : always
-Bugzilla   : 3244
-Description: Addition of EXT3_FEATURE_RO_COMPAT_DIR_NLINKS flag for
-	     > 32000 subdirectories
-Details    : Add EXT3_FEATURE_RO_COMPAT_DIR_NLINK flag to 
-	     EXT3_FEATURE_RO_COMPAT_SUPP. This flag will be set whenever
-	     subdirectory count crosses 32000. This will aid e2fsck to
-	     correctly handle more than 32000 subdirectories.
+Severity   : enhancement
+Bugzilla   : 11563
+Description: Add -o localflock option to simulate  old noflock behaviour.
+Details    : This will achieve local-only flock/fcntl locks coherentness.
 
 Severity   : normal
 Frequency  : always
@@ -526,17 +470,31 @@ Details    : add support for PG_writeback bit for Lustre, for more carefull
 	     work with page cache in 2.6 kernel. This also fix some deadlocks 
 	     and remove hack for work O_SYNC with 2.6 kernel.
 
+Severity   : enhancement
+Bugzilla   : 11264
+Description: Add uninit_groups feature to ldiskfs2 to speed up e2fsck
+Details    : The uninit_groups feature works in conjunction with the kernel
+	     filesystem code (ldiskfs2 only) and e2fsprogs-1.39-cfs6 to speed
+	     up the pass1 processing of e2fsck.  This is a read-only feature
+	     in ldiskfs2 only, so older kernels and current ldiskfs cannot
+	     mount filesystems that have had this feature enabled.
+
+Severity   : enhancement
+Bugzilla   : 10816
+Description: Improve multi-block allocation algorithm to avoid fragmentation
+Details    : The mballoc3 code (ldiskfs2 only) adds new mechanisms to improve
+	     allocation locality and avoid filesystem fragmentation.
+
 ------------------------------------------------------------------------------
 
-2006-02-09  Cluster File Systems, Inc. <info@clusterfs.com>
+2007-02-09  Cluster File Systems, Inc. <info@clusterfs.com>
        * version 1.4.9
        * Support for kernels:
-        2.6.16.21-0.8 (SLES10)
         2.6.9-42.0.3EL (RHEL 4)
         2.6.5-7.276 (SLES 9)
         2.4.21-47.0.1.EL (RHEL 3)
         2.6.12.6 vanilla (kernel.org)
-       * bug fixes
+       * Recommended e2fsprogs version: 1.39.cfs2-0
 
        * The backwards-compatible /proc/sys/portals symlink has been removed
 	 in this release.  Before upgrading, please ensure that you change
@@ -545,8 +503,15 @@ Details    : add support for PG_writeback bit for Lustre, for more carefull
 	 entry in /proc/sys/lnet or sysctl lnet.*.  This change can be made
 	 in advance of the upgrade on any system running Lustre 1.4.6 or
 	 newer, since /proc/sys/lnet was added in that version.
-       * Note that reiserfs quotas are temporarily disabled on SLES 10 in this
-	 kernel.
+       * Note that reiserfs quotas are disabled on SLES 10 in this kernel
+       * bug fixes
+
+Severity   : minor
+Frequency  : only when quota is used
+Bugzilla   : 11286
+Description: avoid scanning export list for quota master
+Details    : Change the algorithms to avoid scanning export list in order
+	     to improve the efficiency.
 
 Severity   : critical
 Frequency  : MDS failover only, very rarely
@@ -617,8 +582,8 @@ Frequency  : MDS failover only, very rarely
 Bugzilla   : 11277
 Description: clients may get ASSERTION(granted_lock != NULL)
 Details    : When request was taking a long time, and a client was resending
-	     a getattr by name lock request. The were multiple lock requests
-	     with the same client lock handle and
+	     a getattr by name lock request. The were multiple lock requests 
+	     with the same client lock handle and 
 	     mds_getattr_name->fixup_handle_for_resent_request found one of the
 	     lock handles but later failed with ASSERTION(granted_lock != NULL).
 
@@ -626,7 +591,7 @@ Severity   : major
 Frequency  : rare
 Bugzilla   : 10891
 Description: handle->h_buffer_credits > 0, assertion failure
-Details    : h_buffer_credits is zero after truncate, causing assertion 
+Details    : h_buffer_credits is zero after truncate, causing assertion
 	     failure.  This patch extends the transaction or creates a new
 	     one after truncate.
 
@@ -651,15 +616,15 @@ Frequency  : NFS re-export or patchless client
 Bugzilla   : 10796
 Description: Various nfs/patchless fixes.
 Details    : fixes reuse disconected alias for lookup process - this fixes
-	     warning "find_exported_dentry: npd != pd",
+	     warning "find_exported_dentry: npd != pd", 
 	     fix permission error with open files at nfs.
-	     fix apply umaks when do revalidate.
+	     fix apply umask when do revalidate.
 
 Severity   : normal
 Frequency  : occasional
 Bugzilla   : 11191
 Description: Crash on NFS re-export node
-Details    : calling clear_page() on the wrong pointer triggered oops in 
+Details    : calling clear_page() on the wrong pointer triggered oops in
 	     generic_mapping_read().
 
 Severity   : normal
@@ -676,6 +641,13 @@ Details    : If only a small amount of IO is done to the RAID device before
 	     reading it again it is possible to get stale data from the RAID
 	     cache instead of reading it from disk.
 
+Severity   : normal
+Frequency  : always for sles10 kernel
+Bugzilla   : 10947
+Description: sles10 support
+Details    : ll_follow_link: compile fixes and using of nd_set_link
+	     under newer kernels.
+
 Severity   : major
 Frequency  : depends on arch, kernel and compiler version, always on sles10
 	     kernel and x86_64
@@ -691,6 +663,7 @@ Description: lustre write performance loss in the SLES10 kernel
 Details    : the performance loss is caused by using of write barriers in the
 	     ext3 code. The SLES10 kernel turns barrier support on by
 	     default. The fix is to undo that change for ldiskfs.
+
 
 ------------------------------------------------------------------------------
 
@@ -802,6 +775,15 @@ Description: Overwriting in use executable truncates on-disk binary image
 Details    : If one node attempts to overwrite an executable in use by
 	     another node, we now correctly return ETXTBSY instead of
 	     truncating the file.
+
+Severity   : enhancement
+Bugzilla   : 4900
+Description: Async OSC create to avoid the blocking unnecessarily.
+Details    : If a OST has no remain object, system will block on the creating
+	     when need to create a new object on this OST. Now, ways use
+	     pre-created objects when available, instead of blocking on an
+	     empty osc while others are not empty.  If we must block, we block
+	     for the shortest possible period of time.
 
 Severity   : normal
 Frequency  : rare
