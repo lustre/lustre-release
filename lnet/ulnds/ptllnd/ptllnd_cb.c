@@ -568,7 +568,7 @@ ptllnd_set_txiov(ptllnd_tx_t *tx,
                         CDEBUG(D_NET, "npiov=%d\n",npiov);
                         CDEBUG(D_NET, "offset=%d\n",temp_offset);
                         CDEBUG(D_NET, "len=%d\n",resid);
-                        CDEBUG(D_NET, "iov[npiov].iov_len=%d\n",iov[npiov].iov_len);
+                        CDEBUG(D_NET, "iov[npiov].iov_len=%lu\n",iov[npiov].iov_len);
 
                         LASSERT (npiov < niov);
                         LASSERT (iov->iov_len >= temp_offset);
@@ -882,7 +882,7 @@ ptllnd_passive_rdma(ptllnd_peer_t *peer, int type, lnet_msg_t *msg,
         }
 
         CDEBUG(D_NET, "md.start=%p\n",md.start);
-        CDEBUG(D_NET, "md.length=%d\n",md.length);
+        CDEBUG(D_NET, "md.length=%llu\n",md.length);
         CDEBUG(D_NET, "md.threshold=%d\n",md.threshold);
         CDEBUG(D_NET, "md.max_size=%d\n",md.max_size);
         CDEBUG(D_NET, "md.options=0x%x\n",md.options);
@@ -1505,7 +1505,7 @@ ptllnd_buf_event (lnet_ni_t *ni, ptl_event_t *event)
                 /* Portals can't force message alignment - someone sending an
                  * odd-length message could misalign subsequent messages */
                 if ((event->mlength & 7) != 0) {
-                        CERROR("Message from %s has odd length %d: "
+                        CERROR("Message from %s has odd length %llu: "
                                "probable version incompatibility\n",
                                ptllnd_ptlid2str(event->initiator),
                                event->mlength);
