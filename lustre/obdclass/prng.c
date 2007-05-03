@@ -100,8 +100,8 @@ void ll_get_random_bytes(void *buf, int size)
 }
 EXPORT_SYMBOL(ll_get_random_bytes); 
 
-void ll_generate_random_uuid(unsigned char uuid_out[16])
+void ll_generate_random_uuid(class_uuid_t uuid_out)
 {
-        ll_get_random_bytes(uuid_out, sizeof(uuid_out));
+        ll_get_random_bytes(uuid_out, sizeof(class_uuid_t));
 }
 EXPORT_SYMBOL(ll_generate_random_uuid);

@@ -43,7 +43,6 @@
 unsigned int ll_rand(void);        /* returns a random 32-bit integer */
 void ll_srand(unsigned int, unsigned int);     /* seed the generator */
 void ll_get_random_bytes(void *buf, int size);
-void ll_generate_random_uuid(unsigned char uuid_out[16]);
 
 /* target.c */
 struct ptlrpc_request;

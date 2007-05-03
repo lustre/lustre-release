@@ -1413,4 +1413,7 @@ int class_del_uuid (char *uuid);
 void class_init_uuidlist(void);
 void class_exit_uuidlist(void);
 
+/* prng.c */
+void ll_generate_random_uuid(class_uuid_t uuid_out);
+
 #endif /* __LINUX_OBD_CLASS_H */
