@@ -174,57 +174,41 @@ static void find_param_fini(struct find_param *param)
 
 int llapi_lov_get_uuids(int fd, struct obd_uuid *uuidp, int *ost_count)
 {
-        struct obd_ioctl_data data = { 0, };
-        struct lov_desc desc = { 0, };
-        char *buf = NULL;
-        int max_ost_count, rc;
-        __u32 *obdgens;
+        char lov_name[sizeof(struct obd_uuid)];
+        char buf[1024];
+        FILE *fp;
+        int rc = 0, index = 0;
 
-        max_ost_count = (OBD_MAX_IOCTL_BUFFER - size_round(sizeof(data)) -
-                         size_round(sizeof(desc))) /
-                        (sizeof(*uuidp) + sizeof(*obdgens));
-        if (max_ost_count > *ost_count)
-                max_ost_count = *ost_count;
-
-        obdgens = malloc(size_round(max_ost_count * sizeof(*obdgens)));
-        if (!obdgens) {
-                err_msg("error: %d generation #'s", max_ost_count);
-                return(-ENOMEM);
-        }
-
-        data.ioc_inllen1 = sizeof(desc);
-        data.ioc_inlbuf1 = (char *)&desc;
-        data.ioc_inllen2 = size_round(max_ost_count * sizeof(*uuidp));
-        data.ioc_inlbuf2 = (char *)uuidp;
-        data.ioc_inllen3 = size_round(max_ost_count * sizeof(*obdgens));
-        data.ioc_inlbuf3 = (char *)obdgens;
-
-        desc.ld_tgt_count = max_ost_count;
-
-        if (obd_ioctl_pack(&data, &buf, OBD_MAX_IOCTL_BUFFER)) {
-                fprintf(stderr, "error: %s: internal packing error\n",
-                        __FUNCTION__);
-                rc = EINVAL;
-                goto out;
-        }
-
-        rc = ioctl(fd, OBD_IOC_LOV_GET_CONFIG, buf);
+        /* Get the lov name */
+        rc = ioctl(fd, OBD_IOC_GETNAME, (void *) lov_name);
         if (rc) {
+                if (errno != ENOTTY) {
+                        rc = errno;
+                        err_msg("error: can't get lov name.");
+                } else {
+                        rc = 0;
+                }
+                return rc;
+        }
+
+        /* Now get the ost uuids from /proc */
+        snprintf(buf, sizeof(buf), "/proc/fs/lustre/lov/%s/target_obd",
+                 lov_name);
+        fp = fopen(buf, "r");
+        if (fp == NULL) {
                 rc = errno;
-                err_msg("error: %s: getting LOV config", __FUNCTION__);
-                goto out;
+                err_msg("error: opening '%s'", buf);
+                return rc;
         }
 
-        if (obd_ioctl_unpack(&data, buf, OBD_MAX_IOCTL_BUFFER)) {
-                rc = errno = EINVAL;
-                err_msg("error: %s: internal ioctl unpack", __FUNCTION__);
-                goto out;
+        while ((fgets(buf, sizeof(buf), fp) != NULL) && index < *ost_count) {
+                if (sscanf(buf, "%d: %s", &index, &uuidp[index]) < 2)
+                        break;
+                index++;
         }
 
-        *ost_count = desc.ld_tgt_count;
-out:
-        free(buf);
-        free(obdgens);
+        fclose(fp);
+        *ost_count = index;
 
         return rc;
 }

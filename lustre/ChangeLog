@@ -69,6 +69,12 @@ Details:   : Check if a directory has children when invalidating dentries
 	     an incorrect ENOENT sometimes seen for valid filehandles during
 	     testing with dbench.
 
+Bugzilla   : 11757
+Description: fix llapi_lov_get_uuids() to allow many OSTs to be returned
+Details:   : Change llapi_lov_get_uuids() to read the UUIDs from /proc instead
+	     of using an ioctl. This allows lfsck for > 160 OSTs to succeed.
+
+
 --------------------------------------------------------------------------------
 
 2007-04-19  Cluster File Systems, Inc. <info@clusterfs.com>
