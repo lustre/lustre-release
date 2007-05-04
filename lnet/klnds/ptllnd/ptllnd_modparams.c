@@ -76,7 +76,7 @@ CFS_MODULE_PARM(reschedule_loops, "i", int, 0644,
                 "# of loops before scheduler does cond_resched()");
 
 #ifdef CRAY_XT3
-static int ptltrace_on_timeout = 0;
+static int ptltrace_on_timeout = 1;
 CFS_MODULE_PARM(ptltrace_on_timeout, "i", int, 0644,
 		"dump ptltrace on timeout");
 
