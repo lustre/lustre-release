@@ -1,12 +1,5 @@
 tbd         Cluster File Systems, Inc. <info@clusterfs.com>
        * version 1.6.1
-       * CONFIGURATION CHANGE.  This version of Lustre WILL NOT
-	 INTEROPERATE with 1.4.x versions automatically.  In many cases a
-	 special upgrade step is needed. Please read the user documentation
-	 before upgrading any part of a 1.4.x system.
-       * WARNING: Lustre configuration and startup changes are required with
-	 1.6.x releases.  See https://mail.clusterfs.com/wikis/lustre/MountConf
-	 for details.
        * Support for kernels:
         2.6.9-42.0.10.EL (RHEL 4)
         2.6.5-7.283 (SLES 9)
@@ -59,7 +52,7 @@ Severity   : minor
 Frequency  : nfs export on patchless client
 Bugzilla   : 11970
 Description: connectathon hang when test nfs export over patchless client
-Details    : Disconnected dentry cannot be found with lookup, so we do not need 
+Details    : Disconnected dentry cannot be found with lookup, so we do not need
 	     to unhash it or make it invalid
 
 Bugzilla   : 12123
@@ -75,6 +68,18 @@ Details:   : Change llapi_lov_get_uuids() to read the UUIDs from /proc instead
 	     of using an ioctl. This allows lfsck for > 160 OSTs to succeed.
 
 
+--------------------------------------------------------------------------------
+2007-05-03  Cluster File Systems, Inc. <info@clusterfs.com>
+       * version 1.6.0.1
+       * bug fixes
+
+Severity   : normal
+Frequency  : on some architectures	
+Bugzilla   : 12404
+Description: 1.6 client sometimes fails to mount from a 1.4 MDT
+Details    : Uninitialized flags sometimes cause configuration commands to
+	     be skipped.
+	
 --------------------------------------------------------------------------------
 
 2007-04-19  Cluster File Systems, Inc. <info@clusterfs.com>

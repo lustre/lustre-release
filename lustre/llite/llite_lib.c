@@ -866,7 +866,7 @@ int ll_fill_super(struct super_block *sb)
         struct ll_sb_info *sbi;
         char  *osc = NULL, *mdc = NULL;
         char  *profilenm = get_profile_name(sb);
-        struct config_llog_instance cfg;
+        struct config_llog_instance cfg = {0, };
         char   ll_instance[sizeof(sb) * 2 + 1];
         int    err;
         ENTRY;
@@ -892,7 +892,6 @@ int ll_fill_super(struct super_block *sb)
         sprintf(ll_instance, "%p", sb);
         cfg.cfg_instance = ll_instance;
         cfg.cfg_uuid = lsi->lsi_llsbi->ll_sb_uuid;
-        cfg.cfg_last_idx = 0;
 
         /* set up client obds */
         err = lustre_process_log(sb, profilenm, &cfg);
