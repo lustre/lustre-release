@@ -3,7 +3,6 @@ tbd         Cluster File Systems, Inc. <info@clusterfs.com>
        * Support for kernels:
         2.6.9-42.0.10.EL (RHEL 4)
         2.6.5-7.283 (SLES 9)
-        2.4.21-47.0.1.EL (RHEL 3)
         2.6.12.6 vanilla (kernel.org)
         2.6.16.27-0.9 (SLES 10)
        * Client support for unpatched kernels:
@@ -55,20 +54,13 @@ Description: connectathon hang when test nfs export over patchless client
 Details    : Disconnected dentry cannot be found with lookup, so we do not need
 	     to unhash it or make it invalid
 
-Bugzilla   : 12123
-Description: ENOENT returned for valid filehandle during dbench.
-Details:   : Check if a directory has children when invalidating dentries
-	     associated with an inode during lock cancellation. This fixes
-	     an incorrect ENOENT sometimes seen for valid filehandles during
-	     testing with dbench.
-
 Bugzilla   : 11757
 Description: fix llapi_lov_get_uuids() to allow many OSTs to be returned
 Details:   : Change llapi_lov_get_uuids() to read the UUIDs from /proc instead
 	     of using an ioctl. This allows lfsck for > 160 OSTs to succeed.
 
-
 --------------------------------------------------------------------------------
+
 2007-05-03  Cluster File Systems, Inc. <info@clusterfs.com>
        * version 1.6.0.1
        * bug fixes
@@ -388,6 +380,16 @@ Details    : The mballoc3 code (ldiskfs2 only) adds new mechanisms to improve
 
        * Note that reiserfs quotas are disabled on SLES 10 in this kernel
        * bug fixes
+
+Severity   : normal
+Frequency  : always
+Bugzilla   : 3244
+Description: Addition of EXT3_FEATURE_RO_COMPAT_DIR_NLINKS flag for
+             > 32000 subdirectories
+Details    : Add EXT3_FEATURE_RO_COMPAT_DIR_NLINK flag to 
+             EXT3_FEATURE_RO_COMPAT_SUPP. This flag will be set whenever
+             subdirectory count crosses 32000. This will aid e2fsck to
+             correctly handle more than 32000 subdirectories.
 
 Severity   : major
 Frequency  : liblustre (e.g. catamount) on a large cluster with >= 8 OSTs/OSS
