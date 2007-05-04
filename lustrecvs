@@ -59,6 +59,8 @@ case "$lustretag" in
     # this is the branch table
     # keep this list sorted alphabetically!
 
+    # These use special build directories 
+
     b1_4*) buildtag="b1_4" ;;
 
     b_release_1_4_6-patchless) buildtag="b1_4" ;;

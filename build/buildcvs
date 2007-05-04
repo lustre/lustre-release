@@ -20,6 +20,10 @@ case "$lustretag" in
 
     # this is the branch table
     # keep this list sorted alphabetically!
+
+    # Note these are "specials" -- branches using lnet HEAD don't need an
+    # entry here.
+
     b1_2)
         portalstag="b1_2"
         lnettag=""
@@ -45,16 +49,6 @@ case "$lustretag" in
 
     b1_4_next_recovery_transno)
         portalstag="b_hd_newconfig"
-        ;;
-
-    b1_5)
-        # Alias for HEAD
-        lustretag="HEAD"
-        ;;
-
-    b1_6)
-        # Alias for HEAD
-        lustretag="HEAD"
         ;;
 
     b_new_cmd)
