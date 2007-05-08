@@ -184,6 +184,7 @@ extern int obd_race_state;
 #define OBD_FAIL_TGT_DELAY_PRECREATE     0x705
 
 #define OBD_FAIL_MDC_REVALIDATE_PAUSE    0x800
+#define OBD_FAIL_MDC_ENQUEUE_PAUSE       0x801
 
 #define OBD_FAIL_MGS                     0x900
 #define OBD_FAIL_MGS_ALL_REQUEST_NET     0x901

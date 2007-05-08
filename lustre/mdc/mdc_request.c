@@ -558,11 +558,19 @@ void mdc_set_open_replay_data(struct obd_client_handle *och,
                         return;
                 }
 
+                spin_lock(&open_req->rq_lock);
+                if (!open_req->rq_replay) {
+                        OBD_FREE(mod, sizeof(*mod));
+                        spin_unlock(&open_req->rq_lock);
+                        return;
+                }
+
                 och->och_mod = mod;
                 mod->mod_och = och;
                 mod->mod_open_req = open_req;
                 open_req->rq_cb_data = mod;
                 open_req->rq_commit_cb = mdc_commit_open;
+                spin_unlock(&open_req->rq_lock);
         }
 
         memcpy(&rec->cr_replayfid, &body->fid1, sizeof rec->cr_replayfid);
@@ -651,10 +659,8 @@ int mdc_close(struct obd_export *exp, struct obdo *oa,
         mod = och->och_mod;
         if (likely(mod != NULL)) {
                 if (mod->mod_open_req->rq_type == LI_POISON) {
-                        /* FIXME This should be an ASSERT, but until we
-                           figure out why it can be poisoned here, give
-                           a reasonable return. bug 6155 */
                         CERROR("LBUG POISONED open %p!\n", mod->mod_open_req);
+                        LBUG();
                         ptlrpc_req_finished(req);
                         req = NULL;
                         GOTO(out, rc = -EIO);

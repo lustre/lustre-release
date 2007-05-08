@@ -865,5 +865,20 @@ test_57() { # bug 10866
 }
 run_test 57 "read procfs entries causes kernel crash"
 
+test_58() { # bug 11546
+#define OBD_FAIL_MDC_ENQUEUE_PAUSE        0x801
+        touch $MOUNT/$tfile
+        ls -la $MOUNT/$tfile
+        sysctl -w lustre.fail_loc=0x80000801
+        cp $MOUNT/$tfile /dev/null &
+        pid=$!
+        sleep 1
+        sysctl -w lustre.fail_loc=0
+        drop_bl_callback rm -f $MOUNT/$tfile
+        wait $pid
+        do_facet client "df $DIR"
+}
+run_test 58 "Eviction in the middle of open RPC reply processing"
+
 $CLEANUP
 echo "$0: completed"

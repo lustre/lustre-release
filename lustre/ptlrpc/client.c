@@ -1354,6 +1354,9 @@ void ptlrpc_free_committed(struct obd_import *imp)
                 DEBUG_REQ(D_HA, req, "committing (last_committed "LPU64")",
                           imp->imp_peer_committed_transno);
 free_req:
+                spin_lock(&req->rq_lock);
+                req->rq_replay = 0;
+                spin_unlock(&req->rq_lock);
                 if (req->rq_commit_cb != NULL)
                         req->rq_commit_cb(req);
                 list_del_init(&req->rq_replay_list);

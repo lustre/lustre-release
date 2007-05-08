@@ -59,6 +59,17 @@ Description: fix llapi_lov_get_uuids() to allow many OSTs to be returned
 Details:   : Change llapi_lov_get_uuids() to read the UUIDs from /proc instead
 	     of using an ioctl. This allows lfsck for > 160 OSTs to succeed.
 
+Severity   : minor
+Frequency  : rare
+Bugzilla   : 11546
+Description: open req refcounting wrong on reconnect
+Details    : If reconnect happened between getting open reply from server and
+	     call to mdc_set_replay_data in ll_file_open, we will schedule
+	     replay for unreferenced request that we are about to free.
+	     Subsequent close will crash in variety of ways.
+	     Check that request is still eligible for replay in
+	     mdc_set_replay_data().
+
 --------------------------------------------------------------------------------
 
 2007-05-03  Cluster File Systems, Inc. <info@clusterfs.com>

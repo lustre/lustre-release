@@ -687,6 +687,8 @@ int mdc_intent_lock(struct obd_export *exp, struct mdc_op_data *op_data,
             !it_open_error(DISP_OPEN_OPEN, it)) {
                 it_set_disposition(it, DISP_ENQ_OPEN_REF);
                 ptlrpc_request_addref(request); /* balanced in ll_file_open */
+                /* BUG 11546 - eviction in the middle of open rpc processing */
+                OBD_FAIL_TIMEOUT(OBD_FAIL_MDC_ENQUEUE_PAUSE, obd_timeout);
         }
 
         if (it->it_op & IT_CREAT) {
