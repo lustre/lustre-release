@@ -96,4 +96,7 @@ int LNetGet(lnet_nid_t        self,
 	    __u64             match_bits_in, 
 	    unsigned int      offset_in);
 
+
+int LNetSetAsync(lnet_process_id_t id, int nasync);
+
 #endif

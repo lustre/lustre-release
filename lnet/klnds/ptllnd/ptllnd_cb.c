@@ -127,7 +127,7 @@ kptllnd_init_rdma_md(kptl_tx_t *tx, unsigned int niov,
         
         memset(&tx->tx_rdma_md, 0, sizeof(tx->tx_rdma_md));
 
-        tx->tx_rdma_md.start     = tx->tx_rdma_frags;
+        tx->tx_rdma_md.start     = tx->tx_frags;
         tx->tx_rdma_md.user_ptr  = &tx->tx_rdma_eventarg;
         tx->tx_rdma_md.eq_handle = kptllnd_data.kptl_eqh;
         tx->tx_rdma_md.options   = PTL_MD_LUSTRE_COMPLETION_SEMANTICS |
@@ -151,7 +151,7 @@ kptllnd_init_rdma_md(kptl_tx_t *tx, unsigned int niov,
                 break;
                 
         case TX_TYPE_GET_RESPONSE:              /* active: I put */
-                tx->tx_rdma_md.threshold = 1;   /* SEND */
+                tx->tx_rdma_md.threshold = tx->tx_acked ? 2 : 1;   /* SEND + ACK? */
                 break;
         }
 
@@ -164,7 +164,7 @@ kptllnd_init_rdma_md(kptl_tx_t *tx, unsigned int niov,
         if (iov != NULL) {
                 tx->tx_rdma_md.options |= PTL_MD_IOVEC;
                 tx->tx_rdma_md.length = 
-                        lnet_extract_iov(PTL_MD_MAX_IOV, tx->tx_rdma_frags->iov,
+                        lnet_extract_iov(PTL_MD_MAX_IOV, tx->tx_frags->iov,
                                          niov, iov, offset, nob);
                 return;
         }
@@ -180,20 +180,20 @@ kptllnd_init_rdma_md(kptl_tx_t *tx, unsigned int niov,
         
         tx->tx_rdma_md.options |= PTL_MD_KIOV;
         tx->tx_rdma_md.length = 
-                lnet_extract_kiov(PTL_MD_MAX_IOV, tx->tx_rdma_frags->kiov,
+                lnet_extract_kiov(PTL_MD_MAX_IOV, tx->tx_frags->kiov,
                                   niov, kiov, offset, nob);
 #else
         if (iov != NULL) {
                 tx->tx_rdma_md.options |= PTL_MD_IOVEC;
                 tx->tx_rdma_md.length = 
-                        kptllnd_extract_iov(PTL_MD_MAX_IOV, tx->tx_rdma_frags->iov,
+                        kptllnd_extract_iov(PTL_MD_MAX_IOV, tx->tx_frags->iov,
                                             niov, iov, offset, nob);
                 return;
         }
 
         tx->tx_rdma_md.options |= PTL_MD_IOVEC | PTL_MD_PHYS;
         tx->tx_rdma_md.length =
-                kptllnd_extract_phys(PTL_MD_MAX_IOV, tx->tx_rdma_frags->iov,
+                kptllnd_extract_phys(PTL_MD_MAX_IOV, tx->tx_frags->iov,
                                      niov, kiov, offset, nob);
 #endif
 }
@@ -249,9 +249,11 @@ kptllnd_active_rdma(kptl_rx_t *rx, lnet_msg_t *lntmsg, int type,
 
         spin_unlock_irqrestore(&peer->peer_lock, flags);
 
+        tx->tx_tposted = jiffies;
+
         if (type == TX_TYPE_GET_RESPONSE)
                 ptlrc = PtlPut(mdh,
-                               PTL_NOACK_REQ,
+                               tx->tx_acked ? PTL_ACK_REQ : PTL_NOACK_REQ,
                                rx->rx_initiator,
                                *kptllnd_tunables.kptl_portal,
                                0,                     /* acl cookie */
@@ -293,8 +295,11 @@ kptllnd_send(lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg)
         lnet_kiov_t      *payload_kiov = lntmsg->msg_kiov;
         unsigned int      payload_offset = lntmsg->msg_offset;
         unsigned int      payload_nob = lntmsg->msg_len;
+        kptl_peer_t      *peer;
         kptl_tx_t        *tx;
         int               nob;
+        int               nfrag;
+        int               rc;
 
         LASSERT (payload_nob == 0 || payload_niov > 0);
         LASSERT (payload_niov <= LNET_MAX_IOV);
@@ -302,6 +307,10 @@ kptllnd_send(lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg)
         LASSERT (!(payload_kiov != NULL && payload_iov != NULL));
         LASSERT (!in_interrupt());
 
+        rc = kptllnd_find_target(&peer, target);
+        if (rc != 0)
+                return rc;
+        
         switch (type) {
         default:
                 LBUG();
@@ -309,9 +318,10 @@ kptllnd_send(lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg)
 
         case LNET_MSG_REPLY:
         case LNET_MSG_PUT:
-                /* Is the payload small enough not to need RDMA? */
+                /* Should the payload avoid RDMA? */
                 nob = offsetof(kptl_msg_t, ptlm_u.immediate.kptlim_payload[payload_nob]);
-                if (nob <= *kptllnd_tunables.kptl_max_msg_size)
+                if (payload_kiov == NULL && 
+                    nob <= peer->peer_max_msg_size)
                         break;
 
                 tx = kptllnd_get_idle_tx(TX_TYPE_PUT_REQUEST);
@@ -319,7 +329,8 @@ kptllnd_send(lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg)
                         CERROR("Can't send %s to %s: can't allocate descriptor\n",
                                lnet_msgtyp2str(type),
                                libcfs_id2str(target));
-                        return -ENOMEM;
+                        rc = -ENOMEM;
+                        goto out;
                 }
 
                 kptllnd_init_rdma_md(tx, payload_niov, 
@@ -335,8 +346,8 @@ kptllnd_send(lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg)
                        libcfs_id2str(target),
                        le32_to_cpu(lntmsg->msg_hdr.msg.put.ptl_index), tx);
 
-                kptllnd_tx_launch(tx, target);
-                return 0;
+                kptllnd_tx_launch(peer, tx, 0);
+                goto out;
 
         case LNET_MSG_GET:
                 /* routed gets don't RDMA */
@@ -347,14 +358,15 @@ kptllnd_send(lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg)
                 nob = lntmsg->msg_md->md_length;
                 nob = offsetof(kptl_msg_t, 
                                ptlm_u.immediate.kptlim_payload[nob]);
-                if (nob <= *kptllnd_tunables.kptl_max_msg_size)
+                if (nob <= peer->peer_max_msg_size)
                         break;
 
                 tx = kptllnd_get_idle_tx(TX_TYPE_GET_REQUEST);
                 if (tx == NULL) {
                         CERROR("Can't send GET to %s: can't allocate descriptor\n",
                                libcfs_id2str(target));
-                        return -ENOMEM;
+                        rc = -ENOMEM;
+                        goto out;
                 }
 
                 tx->tx_lnet_replymsg =
@@ -363,7 +375,8 @@ kptllnd_send(lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg)
                         CERROR("Failed to allocate LNET reply for %s\n",
                                libcfs_id2str(target));
                         kptllnd_tx_decref(tx);
-                        return -ENOMEM;
+                        rc = -ENOMEM;
+                        goto out;
                 }
 
                 if ((lntmsg->msg_md->md_options & LNET_MD_KIOV) == 0)
@@ -384,8 +397,8 @@ kptllnd_send(lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg)
                        libcfs_id2str(target),
                        le32_to_cpu(lntmsg->msg_hdr.msg.put.ptl_index), tx);
 
-                kptllnd_tx_launch(tx, target);
-                return 0;
+                kptllnd_tx_launch(peer, tx, 0);
+                goto out;
 
         case LNET_MSG_ACK:
                 CDEBUG(D_NET, "LNET_MSG_ACK\n");
@@ -393,29 +406,42 @@ kptllnd_send(lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg)
                 break;
         }
 
+        /* I don't have to handle kiovs */
+        LASSERT (payload_nob == 0 || payload_iov != NULL);
+
         tx = kptllnd_get_idle_tx(TX_TYPE_SMALL_MESSAGE);
         if (tx == NULL) {
                 CERROR("Can't send %s to %s: can't allocate descriptor\n",
                        lnet_msgtyp2str(type), libcfs_id2str(target));
-                        return -ENOMEM;
+                rc = -ENOMEM;
+                goto out;
         }
 
         tx->tx_lnet_msg = lntmsg;
         tx->tx_msg->ptlm_u.immediate.kptlim_hdr = *hdr;
 
-        if (payload_kiov != NULL)
-                lnet_copy_kiov2flat(*kptllnd_tunables.kptl_max_msg_size,
-                                    tx->tx_msg->ptlm_u.immediate.kptlim_payload,
-                                    0,
-                                    payload_niov, payload_kiov,
-                                    payload_offset, payload_nob);
-        else
-                lnet_copy_iov2flat(*kptllnd_tunables.kptl_max_msg_size,
-                                   tx->tx_msg->ptlm_u.immediate.kptlim_payload,
-                                   0,
-                                   payload_niov, payload_iov,
-                                   payload_offset, payload_nob);
+        if (payload_nob == 0) {
+                nfrag = 0;
+        } else {
+                tx->tx_frags->iov[0].iov_base = tx->tx_msg;
+                tx->tx_frags->iov[0].iov_len = offsetof(kptl_msg_t,
+                                                        ptlm_u.immediate.kptlim_payload);
 
+                /* NB relying on lustre not asking for PTL_MD_MAX_IOV
+                 * fragments!! */
+#ifdef _USING_LUSTRE_PORTALS_
+                nfrag = 1 + lnet_extract_iov(PTL_MD_MAX_IOV - 1, 
+                                             &tx->tx_frags->iov[1],
+                                             payload_niov, payload_iov,
+                                             payload_offset, payload_nob);
+#else
+                nfrag = 1 + kptllnd_extract_iov(PTL_MD_MAX_IOV - 1,
+                                                &tx->tx_frags->iov[1],
+                                                payload_niov, payload_iov,
+                                                payload_offset, payload_nob);
+#endif
+        }
+        
         nob = offsetof(kptl_immediate_msg_t, kptlim_payload[payload_nob]);
         kptllnd_init_msg(tx->tx_msg, PTLLND_MSG_TYPE_IMMEDIATE, nob);
 
@@ -428,8 +454,11 @@ kptllnd_send(lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg)
                le32_to_cpu(lntmsg->msg_hdr.msg.get.ptl_index) : -1,
                tx);
 
-        kptllnd_tx_launch(tx, target);
-        return 0;
+        kptllnd_tx_launch(peer, tx, nfrag);
+
+ out:
+        kptllnd_peer_decref(peer);
+        return rc;
 }
 
 int 

@@ -16,6 +16,9 @@
  *
  */
  
+/* Minimum buffer size that any peer will post to receive ptllnd messages */
+#define PTLLND_MIN_BUFFER_SIZE  256
+
 /************************************************************************
  * Tunable defaults that {u,k}lnds/ptllnd should have in common.
  */
@@ -23,11 +26,17 @@
 #define PTLLND_PORTAL           9          /* The same portal PTLPRC used when talking to cray portals */
 #define PTLLND_PID              9          /* The Portals PID */
 #define PTLLND_PEERCREDITS      8          /* concurrent sends to 1 peer */
-#define PTLLND_MAX_MSG_SIZE     512        /* Maximum message size */
+
+/* Default buffer size for kernel ptllnds (guaranteed eager) */
+#define PTLLND_MAX_KLND_MSG_SIZE 512
+
+/* Default buffer size for catamount ptllnds (not guaranteed eager) - large
+ * enough to avoid RDMA for anything sent while control is not in liblustre */
+#define PTLLND_MAX_ULND_MSG_SIZE 512
 
 
 /************************************************************************
- * Portals LNS Wire message format.
+ * Portals LND Wire message format.
  * These are sent in sender's byte order (i.e. receiver flips).
  */
 

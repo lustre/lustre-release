@@ -38,7 +38,8 @@
 # define PTLLND_TX_HISTORY         0
 #endif
 #define PTLLND_WARN_LONG_WAIT      5 /* seconds */
-#define PTLLND_ABORT_ON_NAK        1 /* abort app on protocol version mismatch */
+#define PTLLND_ABORT_ON_NAK        1 /* abort app on (e.g.) protocol version mismatch */
+#define PTLLND_DUMP_ON_NAK         0 /* dump debug? */
 
 
 /* Hack to record history 
@@ -76,6 +77,7 @@ typedef struct
         int                        plni_checksum;
         int                        plni_max_tx_history;
         int                        plni_abort_on_nak;
+        int                        plni_dump_on_nak;
 
         __u64                      plni_stamp;
         struct list_head           plni_active_txs;
@@ -96,6 +98,7 @@ typedef struct
         struct list_head           plni_buffers;
         int                        plni_nbuffers;
         int                        plni_nposted_buffers;
+        int                        plni_nmsgs;
 } ptllnd_ni_t;
 
 #define PTLLND_CREDIT_HIGHWATER(plni) ((plni)->plni_peer_credits - 1)
@@ -106,9 +109,21 @@ typedef struct
         lnet_ni_t                 *plp_ni;
         lnet_process_id_t          plp_id;
         ptl_process_id_t           plp_ptlid;
-        int                        plp_credits;
-        int                        plp_max_credits;
+        int                        plp_credits; /* # msg buffers reserved for me at peer */
+
+        /* credits for msg buffers I've posted for this peer...
+         * outstanding - free buffers I've still to inform my peer about
+         * sent        - free buffers I've told my peer about
+         * lazy        - additional buffers (over and above plni_peer_credits)
+         *               posted to prevent peer blocking on sending a non-RDMA
+         *               messages to me when LNET isn't eagerly responsive to
+         *               the network (i.e. liblustre doesn't have control). 
+         * extra_lazy  - lazy credits not required any more. */
         int                        plp_outstanding_credits;
+        int                        plp_sent_credits;
+        int                        plp_lazy_credits;
+        int                        plp_extra_lazy_credits;
+
         int                        plp_max_msg_size;
         int                        plp_refcount;
         int                        plp_recvd_hello:1;
@@ -221,15 +236,17 @@ int ptllnd_eager_recv(lnet_ni_t *ni, void *private, lnet_msg_t *msg,
 
 ptllnd_tx_t *ptllnd_new_tx(ptllnd_peer_t *peer, int type, int payload_nob);
 void ptllnd_notify(lnet_ni_t *ni, lnet_nid_t nid, int alive);
+int  ptllnd_setasync(lnet_ni_t *ni, lnet_process_id_t id, int n);
 void ptllnd_wait(lnet_ni_t *ni, int milliseconds);
 void ptllnd_check_sends(ptllnd_peer_t *peer);
 void ptllnd_debug_peer(lnet_ni_t *ni, lnet_process_id_t id);
 void ptllnd_destroy_peer(ptllnd_peer_t *peer);
 void ptllnd_close_peer(ptllnd_peer_t *peer, int error);
 int ptllnd_post_buffer(ptllnd_buffer_t *buf);
-int ptllnd_grow_buffers (lnet_ni_t *ni);
+int ptllnd_size_buffers (lnet_ni_t *ni, int delta);
 const char *ptllnd_evtype2str(int type);
 const char *ptllnd_msgtype2str(int type);
+const char *ptllnd_errtype2str(int type);
 char *ptllnd_ptlid2str(ptl_process_id_t id);
 
 static inline void

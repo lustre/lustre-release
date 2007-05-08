@@ -29,6 +29,7 @@ lnd_t               the_ptllnd = {
         .lnd_eager_recv = ptllnd_eager_recv,
         .lnd_notify     = ptllnd_notify,
         .lnd_wait       = ptllnd_wait,
+	.lnd_setasync   = ptllnd_setasync,
 };
 
 static int ptllnd_ni_count = 0;
@@ -83,6 +84,8 @@ ptllnd_history_init(void)
 		list_add(&he->he_list, &ptllnd_idle_history);
 	}
 
+	PTLLND_HISTORY("Init");
+
 	return 0;
 }
 
@@ -123,6 +126,8 @@ void
 ptllnd_dump_history(void)
 {
 	ptllnd_he_t    *he;
+
+	PTLLND_HISTORY("dumping...");
 	
 	while (!list_empty(&ptllnd_history_list)) {
 		he = list_entry(ptllnd_history_list.next,
@@ -136,6 +141,8 @@ ptllnd_dump_history(void)
 
 		list_add_tail(&he->he_list, &ptllnd_idle_history);
 	}
+
+	PTLLND_HISTORY("complete");
 }
 
 void 
@@ -262,7 +269,7 @@ ptllnd_get_tunables(lnet_ni_t *ni)
 
         rc = ptllnd_parse_int_tunable(&max_msg_size,
                                       "PTLLND_MAX_MSG_SIZE",
-                                      PTLLND_MAX_MSG_SIZE);
+                                      PTLLND_MAX_ULND_MSG_SIZE);
         if (rc != 0)
                 return rc;
 
@@ -306,9 +313,17 @@ ptllnd_get_tunables(lnet_ni_t *ni)
 	if (rc != 0)
 		return rc;
 
+	rc = ptllnd_parse_int_tunable(&plni->plni_dump_on_nak,
+				      "PTLLND_DUMP_ON_NAK",
+				      PTLLND_DUMP_ON_NAK);
+	if (rc != 0)
+		return rc;
+
         plni->plni_max_msg_size = max_msg_size & ~7;
-        if (plni->plni_max_msg_size < sizeof(kptl_msg_t))
-                plni->plni_max_msg_size = (sizeof(kptl_msg_t) + 7) & ~7;
+        if (plni->plni_max_msg_size < PTLLND_MIN_BUFFER_SIZE)
+                plni->plni_max_msg_size = PTLLND_MIN_BUFFER_SIZE;
+	CLASSERT ((PTLLND_MIN_BUFFER_SIZE & 7) == 0);
+	CLASSERT (sizeof(kptl_msg_t) <= PTLLND_MIN_BUFFER_SIZE);
 
         plni->plni_buffer_size = plni->plni_max_msg_size * msgs_per_buffer;
 
@@ -369,7 +384,7 @@ ptllnd_destroy_buffer (ptllnd_buffer_t *buf)
 }
 
 int
-ptllnd_grow_buffers (lnet_ni_t *ni)
+ptllnd_size_buffers (lnet_ni_t *ni, int delta)
 {
         ptllnd_ni_t     *plni = ni->ni_data;
         ptllnd_buffer_t *buf;
@@ -380,8 +395,10 @@ ptllnd_grow_buffers (lnet_ni_t *ni)
         CDEBUG(D_NET, "nposted_buffers = %d (before)\n",plni->plni_nposted_buffers);
         CDEBUG(D_NET, "nbuffers = %d (before)\n",plni->plni_nbuffers);
 
-        nmsgs = plni->plni_npeers * plni->plni_peer_credits +
-                plni->plni_msgs_spare;
+	plni->plni_nmsgs += delta;
+	LASSERT(plni->plni_nmsgs >= 0);
+	
+        nmsgs = plni->plni_nmsgs + plni->plni_msgs_spare;
 
         nbufs = (nmsgs * plni->plni_max_msg_size + plni->plni_buffer_size - 1) /
                 plni->plni_buffer_size;
@@ -393,7 +410,7 @@ ptllnd_grow_buffers (lnet_ni_t *ni)
                         return -ENOMEM;
 
                 rc = ptllnd_post_buffer(buf);
-                if (rc != 0){
+                if (rc != 0) {
                         /* TODO - this path seems to orpahn the buffer
                          * in a state where its not posted and will never be
                          * However it does not leak the buffer as it's
@@ -558,8 +575,8 @@ ptllnd_shutdown (lnet_ni_t *ni)
 
 	ptllnd_cull_tx_history(plni);
 
-        ptllnd_destroy_buffers(ni);
         ptllnd_close_peers(ni);
+        ptllnd_destroy_buffers(ni);
 
         while (plni->plni_npeers > 0) {
 		if (cfs_time_current_sec() > start + w) {
@@ -679,7 +696,7 @@ ptllnd_startup (lnet_ni_t *ni)
                libcfs_id2str((lnet_process_id_t) {
                        .nid = ni->ni_nid, .pid = the_lnet.ln_pid}));
 
-        rc = ptllnd_grow_buffers(ni);
+        rc = ptllnd_size_buffers(ni, 0);
         if (rc != 0)
                 goto failed4;
 
@@ -717,7 +734,7 @@ const char *ptllnd_evtype2str(int type)
                 DO_TYPE(PTL_EVENT_SEND_END);
                 DO_TYPE(PTL_EVENT_UNLINK);
         default:
-                return "";
+                return "<unknown event type>";
         }
 #undef DO_TYPE
 }
@@ -735,7 +752,51 @@ const char *ptllnd_msgtype2str(int type)
                 DO_TYPE(PTLLND_MSG_TYPE_NOOP);
                 DO_TYPE(PTLLND_MSG_TYPE_NAK);
         default:
-                return "";
+                return "<unknown msg type>";
+        }
+#undef DO_TYPE
+}
+
+const char *ptllnd_errtype2str(int type)
+{
+#define DO_TYPE(x) case x: return #x;
+        switch(type)
+        {
+                DO_TYPE(PTL_OK);
+                DO_TYPE(PTL_SEGV);
+                DO_TYPE(PTL_NO_SPACE);
+                DO_TYPE(PTL_ME_IN_USE);
+                DO_TYPE(PTL_NAL_FAILED);
+                DO_TYPE(PTL_NO_INIT);
+                DO_TYPE(PTL_IFACE_DUP);
+                DO_TYPE(PTL_IFACE_INVALID);
+                DO_TYPE(PTL_HANDLE_INVALID);
+                DO_TYPE(PTL_MD_INVALID);
+                DO_TYPE(PTL_ME_INVALID);
+                DO_TYPE(PTL_PROCESS_INVALID);
+                DO_TYPE(PTL_PT_INDEX_INVALID);
+                DO_TYPE(PTL_SR_INDEX_INVALID);
+                DO_TYPE(PTL_EQ_INVALID);
+                DO_TYPE(PTL_EQ_DROPPED);
+                DO_TYPE(PTL_EQ_EMPTY);
+                DO_TYPE(PTL_MD_NO_UPDATE);
+                DO_TYPE(PTL_FAIL);
+                DO_TYPE(PTL_AC_INDEX_INVALID);
+                DO_TYPE(PTL_MD_ILLEGAL);
+                DO_TYPE(PTL_ME_LIST_TOO_LONG);
+                DO_TYPE(PTL_MD_IN_USE);
+                DO_TYPE(PTL_NI_INVALID);
+                DO_TYPE(PTL_PID_INVALID);
+                DO_TYPE(PTL_PT_FULL);
+                DO_TYPE(PTL_VAL_FAILED);
+                DO_TYPE(PTL_NOT_IMPLEMENTED);
+                DO_TYPE(PTL_NO_ACK);
+                DO_TYPE(PTL_EQ_IN_USE);
+                DO_TYPE(PTL_PID_IN_USE);
+                DO_TYPE(PTL_INV_EQ_SIZE);
+                DO_TYPE(PTL_AGAIN);
+        default:
+                return "<unknown error type>";
         }
 #undef DO_TYPE
 }

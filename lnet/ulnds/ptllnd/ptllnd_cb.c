@@ -38,6 +38,10 @@ ptllnd_destroy_peer(ptllnd_peer_t *peer)
 {
         lnet_ni_t         *ni = peer->plp_ni;
         ptllnd_ni_t       *plni = ni->ni_data;
+        int                nmsg = peer->plp_lazy_credits +
+                                  plni->plni_peer_credits;
+
+        ptllnd_size_buffers(ni, -nmsg);
 
         LASSERT (peer->plp_closing);
         LASSERT (plni->plni_npeers > 0);
@@ -111,7 +115,7 @@ ptllnd_find_peer(lnet_ni_t *ni, lnet_process_id_t id, int create)
 
         /* New peer: check first for enough posted buffers */
         plni->plni_npeers++;
-        rc = ptllnd_grow_buffers(ni);
+        rc = ptllnd_size_buffers(ni, plni->plni_peer_credits);
         if (rc != 0) {
                 plni->plni_npeers--;
                 return NULL;
@@ -121,19 +125,20 @@ ptllnd_find_peer(lnet_ni_t *ni, lnet_process_id_t id, int create)
         if (plp == NULL) {
                 CERROR("Can't allocate new peer %s\n", libcfs_id2str(id));
                 plni->plni_npeers--;
+                ptllnd_size_buffers(ni, -plni->plni_peer_credits);
                 return NULL;
         }
-
-        CDEBUG(D_NET, "new peer=%p\n",plp);
 
         plp->plp_ni = ni;
         plp->plp_id = id;
         plp->plp_ptlid.nid = LNET_NIDADDR(id.nid);
         plp->plp_ptlid.pid = plni->plni_ptllnd_pid;
-        plp->plp_max_credits =
         plp->plp_credits = 1; /* add more later when she gives me credits */
         plp->plp_max_msg_size = plni->plni_max_msg_size; /* until I hear from her */
+        plp->plp_sent_credits = 1;              /* Implicit credit for HELLO */
         plp->plp_outstanding_credits = plni->plni_peer_credits - 1;
+        plp->plp_lazy_credits = 0;
+        plp->plp_extra_lazy_credits = 0;
         plp->plp_match = 0;
         plp->plp_stamp = 0;
         plp->plp_recvd_hello = 0;
@@ -157,9 +162,12 @@ ptllnd_find_peer(lnet_ni_t *ni, lnet_process_id_t id, int create)
         tx->tx_msg.ptlm_u.hello.kptlhm_matchbits = PTL_RESERVED_MATCHBITS;
         tx->tx_msg.ptlm_u.hello.kptlhm_max_msg_size = plni->plni_max_msg_size;
 
-        PTLLND_HISTORY("%s[%d/%d]: post hello %p", libcfs_id2str(id),
+        PTLLND_HISTORY("%s[%d/%d+%d(%d)]: post hello %p", libcfs_id2str(id),
                        tx->tx_peer->plp_credits,
-                       tx->tx_peer->plp_outstanding_credits, tx);
+                       tx->tx_peer->plp_outstanding_credits,
+                       tx->tx_peer->plp_sent_credits,
+                       plni->plni_peer_credits + 
+                       tx->tx_peer->plp_lazy_credits, tx);
         ptllnd_post_tx(tx);
 
         return plp;
@@ -233,7 +241,7 @@ ptllnd_debug_peer(lnet_ni_t *ni, lnet_process_id_t id)
                 return;
         }
         
-        CDEBUG(D_WARNING, "%s %s%s [%d] "LPD64".%06d m "LPD64" q %d/%d c %d/%d(%d)\n",
+        CDEBUG(D_WARNING, "%s %s%s [%d] "LPD64".%06d m "LPD64" q %d/%d c %d/%d+%d(%d)\n",
                libcfs_id2str(id), 
                plp->plp_recvd_hello ? "H" : "_",
                plp->plp_closing     ? "C" : "_",
@@ -242,7 +250,8 @@ ptllnd_debug_peer(lnet_ni_t *ni, lnet_process_id_t id)
                plp->plp_match,
                ptllnd_count_q(&plp->plp_txq),
                ptllnd_count_q(&plp->plp_activeq),
-               plp->plp_credits, plp->plp_outstanding_credits, plp->plp_max_credits);
+               plp->plp_credits, plp->plp_outstanding_credits, plp->plp_sent_credits,
+               plni->plni_peer_credits + plp->plp_lazy_credits);
 
         CDEBUG(D_WARNING, "txq:\n");
         list_for_each (tmp, &plp->plp_txq) {
@@ -287,7 +296,7 @@ ptllnd_notify(lnet_ni_t *ni, lnet_nid_t nid, int alive)
         ptllnd_peer_t     *peer;
         time_t             start = cfs_time_current_sec();
         int                w = PTLLND_WARN_LONG_WAIT;
-        
+
         /* This is only actually used to connect to routers at startup! */
         if (!alive) {
                 LBUG();
@@ -315,6 +324,46 @@ ptllnd_notify(lnet_ni_t *ni, lnet_nid_t nid, int alive)
         ptllnd_peer_decref(peer);
 }
 
+int
+ptllnd_setasync(lnet_ni_t *ni, lnet_process_id_t id, int nasync)
+{
+        ptllnd_peer_t *peer = ptllnd_find_peer(ni, id, nasync > 0);
+        int            rc;
+        
+        if (peer == NULL)
+                return -ENOMEM;
+
+        LASSERT (peer->plp_lazy_credits >= 0);
+        LASSERT (peer->plp_extra_lazy_credits >= 0);
+
+        /* If nasync < 0, we're being told we can reduce the total message
+         * headroom.  We can't do this right now because our peer might already
+         * have credits for the extra buffers, so we just account the extra
+         * headroom in case we need it later and only destroy buffers when the
+         * peer closes.
+         *
+         * Note that the following condition handles this case, where it
+         * actually increases the extra lazy credit counter. */
+
+        if (nasync <= peer->plp_extra_lazy_credits) {
+                peer->plp_extra_lazy_credits -= nasync;
+                return 0;
+        }
+
+        LASSERT (nasync > 0);
+
+        nasync -= peer->plp_extra_lazy_credits;
+        peer->plp_extra_lazy_credits = 0;
+        
+        rc = ptllnd_size_buffers(ni, nasync);
+        if (rc == 0) {
+                peer->plp_lazy_credits += nasync;
+                peer->plp_outstanding_credits += nasync;
+        }
+
+        return rc;
+}
+
 __u32
 ptllnd_cksum (void *ptr, int nob)
 {
@@ -336,7 +385,7 @@ ptllnd_new_tx(ptllnd_peer_t *peer, int type, int payload_nob)
         ptllnd_tx_t *tx;
         int          msgsize;
 
-        CDEBUG(D_NET, "peer=%p type=%d payload=%d\n",peer,type,payload_nob);
+        CDEBUG(D_NET, "peer=%p type=%d payload=%d\n", peer, type, payload_nob);
 
         switch (type) {
         default:
@@ -374,8 +423,6 @@ ptllnd_new_tx(ptllnd_peer_t *peer, int type, int payload_nob)
 
         msgsize = (msgsize + 7) & ~7;
         LASSERT (msgsize <= peer->plp_max_msg_size);
-
-        CDEBUG(D_NET, "msgsize=%d\n",msgsize);
 
         LIBCFS_ALLOC(tx, offsetof(ptllnd_tx_t, tx_msg) + msgsize);
 
@@ -534,11 +581,6 @@ ptllnd_set_txiov(ptllnd_tx_t *tx,
                 return 0;
         }
 
-        CDEBUG(D_NET, "niov  =%d\n",niov);
-        CDEBUG(D_NET, "offset=%d\n",offset);
-        CDEBUG(D_NET, "len   =%d\n",len);
-
-
         /*
          * Remove iovec's at the beginning that
          * are skipped because of the offset.
@@ -553,10 +595,6 @@ ptllnd_set_txiov(ptllnd_tx_t *tx,
                 iov++;
         }
 
-        CDEBUG(D_NET, "niov  =%d (after)\n",niov);
-        CDEBUG(D_NET, "offset=%d (after)\n",offset);
-        CDEBUG(D_NET, "len   =%d (after)\n",len);
-
         for (;;) {
                 int temp_offset = offset;
                 int resid = len;
@@ -565,11 +603,6 @@ ptllnd_set_txiov(ptllnd_tx_t *tx,
                         return -ENOMEM;
 
                 for (npiov = 0;; npiov++) {
-                        CDEBUG(D_NET, "npiov=%d\n",npiov);
-                        CDEBUG(D_NET, "offset=%d\n",temp_offset);
-                        CDEBUG(D_NET, "len=%d\n",resid);
-                        CDEBUG(D_NET, "iov[npiov].iov_len=%lu\n",iov[npiov].iov_len);
-
                         LASSERT (npiov < niov);
                         LASSERT (iov->iov_len >= temp_offset);
 
@@ -588,8 +621,6 @@ ptllnd_set_txiov(ptllnd_tx_t *tx,
                 if (npiov == niov) {
                         tx->tx_niov = niov;
                         tx->tx_iov = piov;
-                        CDEBUG(D_NET, "tx->tx_iov=%p\n",tx->tx_iov);
-                        CDEBUG(D_NET, "tx->tx_niov=%d\n",tx->tx_niov);
                         return 0;
                 }
 
@@ -681,7 +712,10 @@ ptllnd_check_sends(ptllnd_peer_t *peer)
         ptl_handle_md_t mdh;
         int             rc;
 
-        CDEBUG(D_NET, "plp_outstanding_credits=%d\n",peer->plp_outstanding_credits);
+        CDEBUG(D_NET, "%s: [%d/%d+%d(%d)\n",
+               libcfs_id2str(peer->plp_id), peer->plp_credits,
+               peer->plp_outstanding_credits, peer->plp_sent_credits,
+               plni->plni_peer_credits + peer->plp_lazy_credits);
 
         if (list_empty(&peer->plp_txq) &&
             peer->plp_outstanding_credits >= PTLLND_CREDIT_HIGHWATER(plni) &&
@@ -700,32 +734,34 @@ ptllnd_check_sends(ptllnd_peer_t *peer)
         while (!list_empty(&peer->plp_txq)) {
                 tx = list_entry(peer->plp_txq.next, ptllnd_tx_t, tx_list);
 
-                CDEBUG(D_NET, "Looking at TX=%p\n",tx);
-                CDEBUG(D_NET, "plp_credits=%d\n",peer->plp_credits);
-                CDEBUG(D_NET, "plp_outstanding_credits=%d\n",peer->plp_outstanding_credits);
-
                 LASSERT (tx->tx_msgsize > 0);
 
                 LASSERT (peer->plp_outstanding_credits >= 0);
-                LASSERT (peer->plp_outstanding_credits <=
-                         plni->plni_peer_credits);
+                LASSERT (peer->plp_sent_credits >= 0);
+                LASSERT (peer->plp_outstanding_credits + peer->plp_sent_credits
+                         <= plni->plni_peer_credits + peer->plp_lazy_credits);
                 LASSERT (peer->plp_credits >= 0);
-                LASSERT (peer->plp_credits <= peer->plp_max_credits);
 
                 if (peer->plp_credits == 0) {   /* no credits */
-                        PTLLND_HISTORY("%s[%d/%d]: no creds for %p",
+                        PTLLND_HISTORY("%s[%d/%d+%d(%d)]: no creds for %p",
                                        libcfs_id2str(peer->plp_id),
                                        peer->plp_credits,
-                                       peer->plp_outstanding_credits, tx);
+                                       peer->plp_outstanding_credits,
+                                       peer->plp_sent_credits,
+                                       plni->plni_peer_credits +
+                                       peer->plp_lazy_credits, tx);
                         break;
                 }
                 
                 if (peer->plp_credits == 1 &&   /* last credit reserved for */
                     peer->plp_outstanding_credits == 0) { /* returning credits */
-                        PTLLND_HISTORY("%s[%d/%d]: too few creds for %p",
+                        PTLLND_HISTORY("%s[%d/%d+%d(%d)]: too few creds for %p",
                                        libcfs_id2str(peer->plp_id),
                                        peer->plp_credits,
-                                       peer->plp_outstanding_credits, tx);
+                                       peer->plp_outstanding_credits,
+                                       peer->plp_sent_credits,
+                                       plni->plni_peer_credits +
+                                       peer->plp_lazy_credits, tx);
                         break;
                 }
                 
@@ -748,12 +784,11 @@ ptllnd_check_sends(ptllnd_peer_t *peer)
                  * until I receive the HELLO back */
                 tx->tx_msg.ptlm_dststamp = peer->plp_stamp;
 
-                CDEBUG(D_NET, "Returning %d to peer\n",peer->plp_outstanding_credits);
-
                 /*
                  * Return all the credits we have
                  */
                 tx->tx_msg.ptlm_credits = peer->plp_outstanding_credits;
+                peer->plp_sent_credits += peer->plp_outstanding_credits;
                 peer->plp_outstanding_credits = 0;
 
                 /*
@@ -782,11 +817,19 @@ ptllnd_check_sends(ptllnd_peer_t *peer)
                         break;
                 }
 
+                LASSERT (tx->tx_type != PTLLND_RDMA_WRITE &&
+                         tx->tx_type != PTLLND_RDMA_READ);
+                
                 tx->tx_reqmdh = mdh;
                 PTLLND_DBGT_STAMP(tx->tx_req_posted);
 
-                PTLLND_HISTORY("%s[%d/%d]: %s %p c %d", libcfs_id2str(peer->plp_id),
-                               peer->plp_credits, peer->plp_outstanding_credits,
+                PTLLND_HISTORY("%s[%d/%d+%d(%d)]: %s %p c %d",
+                               libcfs_id2str(peer->plp_id),
+                               peer->plp_credits,
+                               peer->plp_outstanding_credits,
+                               peer->plp_sent_credits,
+                               plni->plni_peer_credits +
+                               peer->plp_lazy_credits,
                                ptllnd_msgtype2str(tx->tx_type), tx,
                                tx->tx_msg.ptlm_credits);
 
@@ -881,13 +924,6 @@ ptllnd_passive_rdma(ptllnd_peer_t *peer, int type, lnet_msg_t *msg,
                 goto failed;
         }
 
-        CDEBUG(D_NET, "md.start=%p\n",md.start);
-        CDEBUG(D_NET, "md.length=%llu\n",md.length);
-        CDEBUG(D_NET, "md.threshold=%d\n",md.threshold);
-        CDEBUG(D_NET, "md.max_size=%d\n",md.max_size);
-        CDEBUG(D_NET, "md.options=0x%x\n",md.options);
-        CDEBUG(D_NET, "md.user_ptr=%p\n",md.user_ptr);
-
         PTLLND_DBGT_STAMP(tx->tx_bulk_posted);
 
         rc = PtlMDAttach(meh, md, LNET_UNLINK, &mdh);
@@ -922,9 +958,11 @@ ptllnd_passive_rdma(ptllnd_peer_t *peer, int type, lnet_msg_t *msg,
         }
 
         tx->tx_lnetmsg = msg;
-        PTLLND_HISTORY("%s[%d/%d]: post passive %s p %d %p",
+        PTLLND_HISTORY("%s[%d/%d+%d(%d)]: post passive %s p %d %p",
                        libcfs_id2str(msg->msg_target),
                        peer->plp_credits, peer->plp_outstanding_credits,
+                       peer->plp_sent_credits,
+                       plni->plni_peer_credits + peer->plp_lazy_credits,
                        lnet_msgtyp2str(msg->msg_type),
                        (le32_to_cpu(msg->msg_type) == LNET_MSG_PUT) ? 
                        le32_to_cpu(msg->msg_hdr.msg.put.ptl_index) :
@@ -1049,14 +1087,10 @@ ptllnd_send(lnet_ni_t *ni, void *private, lnet_msg_t *msg)
                 LBUG();
 
         case LNET_MSG_ACK:
-                CDEBUG(D_NET, "LNET_MSG_ACK\n");
-
                 LASSERT (msg->msg_len == 0);
                 break;                          /* send IMMEDIATE */
 
         case LNET_MSG_GET:
-                CDEBUG(D_NET, "LNET_MSG_GET nob=%d\n",msg->msg_md->md_length);
-
                 if (msg->msg_target_is_router)
                         break;                  /* send IMMEDIATE */
 
@@ -1075,10 +1109,8 @@ ptllnd_send(lnet_ni_t *ni, void *private, lnet_msg_t *msg)
 
         case LNET_MSG_REPLY:
         case LNET_MSG_PUT:
-                CDEBUG(D_NET, "LNET_MSG_PUT nob=%d\n",msg->msg_len);
                 nob = msg->msg_len;
                 nob = offsetof(kptl_msg_t, ptlm_u.immediate.kptlim_payload[nob]);
-                CDEBUG(D_NET, "msg_size=%d max=%d\n",msg->msg_len,plp->plp_max_msg_size);
                 if (nob <= plp->plp_max_msg_size)
                         break;                  /* send IMMEDIATE */
 
@@ -1092,7 +1124,6 @@ ptllnd_send(lnet_ni_t *ni, void *private, lnet_msg_t *msg)
         /* send IMMEDIATE
          * NB copy the payload so we don't have to do a fragmented send */
 
-        CDEBUG(D_NET, "IMMEDIATE len=%d\n", msg->msg_len);
         tx = ptllnd_new_tx(plp, PTLLND_MSG_TYPE_IMMEDIATE, msg->msg_len);
         if (tx == NULL) {
                 CERROR("Can't allocate tx for lnet type %d to %s\n",
@@ -1108,9 +1139,11 @@ ptllnd_send(lnet_ni_t *ni, void *private, lnet_msg_t *msg)
         tx->tx_msg.ptlm_u.immediate.kptlim_hdr = msg->msg_hdr;
 
         tx->tx_lnetmsg = msg;
-        PTLLND_HISTORY("%s[%d/%d]: post immediate %s p %d %p",
+        PTLLND_HISTORY("%s[%d/%d+%d(%d)]: post immediate %s p %d %p",
                        libcfs_id2str(msg->msg_target),
                        plp->plp_credits, plp->plp_outstanding_credits,
+                       plp->plp_sent_credits,
+                       plni->plni_peer_credits + plp->plp_lazy_credits,
                        lnet_msgtyp2str(msg->msg_type),
                        (le32_to_cpu(msg->msg_type) == LNET_MSG_PUT) ? 
                        le32_to_cpu(msg->msg_hdr.msg.put.ptl_index) :
@@ -1131,8 +1164,11 @@ ptllnd_rx_done(ptllnd_rx_t *rx)
 
         plp->plp_outstanding_credits++;
 
-        PTLLND_HISTORY("%s[%d/%d]: rx=%p done\n", libcfs_id2str(plp->plp_id),
-                       plp->plp_credits, plp->plp_outstanding_credits, rx);
+        PTLLND_HISTORY("%s[%d/%d+%d(%d)]: rx=%p done\n",
+                       libcfs_id2str(plp->plp_id),
+                       plp->plp_credits, plp->plp_outstanding_credits, 
+                       plp->plp_sent_credits,
+                       plni->plni_peer_credits + plp->plp_lazy_credits, rx);
 
         ptllnd_check_sends(rx->rx_peer);
 
@@ -1168,7 +1204,6 @@ ptllnd_recv(lnet_ni_t *ni, void *private, lnet_msg_t *msg,
 
         case PTLLND_MSG_TYPE_IMMEDIATE:
                 nob = offsetof(kptl_msg_t, ptlm_u.immediate.kptlim_payload[mlen]);
-                CDEBUG(D_NET, "PTLLND_MSG_TYPE_IMMEDIATE nob=%d\n",nob);
                 if (nob > rx->rx_nob) {
                         CERROR("Immediate message from %s too big: %d(%d)\n",
                                libcfs_id2str(rx->rx_peer->plp_id),
@@ -1184,14 +1219,12 @@ ptllnd_recv(lnet_ni_t *ni, void *private, lnet_msg_t *msg,
                 break;
 
         case PTLLND_MSG_TYPE_PUT:
-                CDEBUG(D_NET, "PTLLND_MSG_TYPE_PUT offset=%d mlen=%d\n",offset,mlen);
                 rc = ptllnd_active_rdma(rx->rx_peer, PTLLND_RDMA_READ, msg,
                                         rx->rx_msg->ptlm_u.rdma.kptlrm_matchbits,
                                         niov, iov, offset, mlen);
                 break;
 
         case PTLLND_MSG_TYPE_GET:
-                CDEBUG(D_NET, "PTLLND_MSG_TYPE_GET\n");
                 if (msg != NULL)
                         rc = ptllnd_active_rdma(rx->rx_peer, PTLLND_RDMA_WRITE, msg,
                                                 rx->rx_msg->ptlm_u.rdma.kptlrm_matchbits,
@@ -1212,6 +1245,9 @@ void
 ptllnd_abort_on_nak(lnet_ni_t *ni)
 {
         ptllnd_ni_t      *plni = ni->ni_data;
+
+        if (plni->plni_dump_on_nak)
+                ptllnd_dump_history();
 
         if (plni->plni_abort_on_nak)
                 abort();
@@ -1324,13 +1360,12 @@ ptllnd_parse_request(lnet_ni_t *ni, ptl_process_id_t initiator,
         }
 
         PTLLND_HISTORY("RX %s: %s %d %p", libcfs_id2str(srcid), 
-                       ptllnd_msgtype2str(msg->ptlm_type), msg->ptlm_credits, &rx);
+                       ptllnd_msgtype2str(msg->ptlm_type),
+                       msg->ptlm_credits, &rx);
 
         switch (msg->ptlm_type) {
         case PTLLND_MSG_TYPE_PUT:
         case PTLLND_MSG_TYPE_GET:
-                CDEBUG(D_NET, "PTLLND_MSG_TYPE_%s\n",
-                        msg->ptlm_type==PTLLND_MSG_TYPE_PUT ? "PUT" : "GET");
                 if (nob < basenob + sizeof(kptl_rdma_msg_t)) {
                         CERROR("Short rdma request from %s(%s)\n",
                                libcfs_id2str(srcid),
@@ -1342,7 +1377,6 @@ ptllnd_parse_request(lnet_ni_t *ni, ptl_process_id_t initiator,
                 break;
 
         case PTLLND_MSG_TYPE_IMMEDIATE:
-                CDEBUG(D_NET, "PTLLND_MSG_TYPE_IMMEDIATE\n");
                 if (nob < offsetof(kptl_msg_t,
                                    ptlm_u.immediate.kptlim_payload)) {
                         CERROR("Short immediate from %s(%s)\n",
@@ -1353,9 +1387,6 @@ ptllnd_parse_request(lnet_ni_t *ni, ptl_process_id_t initiator,
                 break;
 
         case PTLLND_MSG_TYPE_HELLO:
-                CDEBUG(D_NET, "PTLLND_MSG_TYPE_HELLO from %s(%s)\n",
-                               libcfs_id2str(srcid),
-                               ptllnd_ptlid2str(initiator));
                 if (nob < basenob + sizeof(kptl_hello_msg_t)) {
                         CERROR("Short hello from %s(%s)\n",
                                libcfs_id2str(srcid),
@@ -1369,9 +1400,6 @@ ptllnd_parse_request(lnet_ni_t *ni, ptl_process_id_t initiator,
                 break;
                 
         case PTLLND_MSG_TYPE_NOOP:
-                CDEBUG(D_NET, "PTLLND_MSG_TYPE_NOOP from %s(%s)\n",
-                               libcfs_id2str(srcid),
-                               ptllnd_ptlid2str(initiator));        
                 break;
 
         default:
@@ -1381,8 +1409,7 @@ ptllnd_parse_request(lnet_ni_t *ni, ptl_process_id_t initiator,
                 return;
         }
 
-        plp = ptllnd_find_peer(ni, srcid,
-                               msg->ptlm_type == PTLLND_MSG_TYPE_HELLO);
+        plp = ptllnd_find_peer(ni, srcid, 0);
         if (plp == NULL) {
                 CERROR("Can't find peer %s\n", libcfs_id2str(srcid));
                 return;
@@ -1396,19 +1423,10 @@ ptllnd_parse_request(lnet_ni_t *ni, ptl_process_id_t initiator,
                         return;
                 }
 
-                CDEBUG(D_NET, "maxsz %d match "LPX64" stamp "LPX64"\n",
-                       msg->ptlm_u.hello.kptlhm_max_msg_size,
-                       msg->ptlm_u.hello.kptlhm_matchbits,
-                       msg->ptlm_srcstamp);
-
-                plp->plp_max_msg_size = MAX(plni->plni_max_msg_size,
-                        msg->ptlm_u.hello.kptlhm_max_msg_size);
+                plp->plp_max_msg_size = msg->ptlm_u.hello.kptlhm_max_msg_size;
                 plp->plp_match = msg->ptlm_u.hello.kptlhm_matchbits;
                 plp->plp_stamp = msg->ptlm_srcstamp;
-                plp->plp_max_credits += msg->ptlm_credits;
                 plp->plp_recvd_hello = 1;
-
-                CDEBUG(D_NET, "plp_max_msg_size=%d\n",plp->plp_max_msg_size);
 
         } else if (!plp->plp_recvd_hello) {
 
@@ -1426,18 +1444,21 @@ ptllnd_parse_request(lnet_ni_t *ni, ptl_process_id_t initiator,
                 return;
         }
 
+        /* Check peer only sends when I've sent her credits */
+        if (plp->plp_sent_credits == 0) {
+                CERROR("%s[%d/%d+%d(%d)]: unexpected message\n",
+                       libcfs_id2str(plp->plp_id),
+                       plp->plp_credits, plp->plp_outstanding_credits, 
+                       plp->plp_sent_credits,
+                       plni->plni_peer_credits + plp->plp_lazy_credits);
+                return;
+        }
+        plp->plp_sent_credits--;
+        
+        /* No check for credit overflow - the peer may post new buffers after
+         * the startup handshake. */
         if (msg->ptlm_credits > 0) {
-                CDEBUG(D_NET, "Getting back %d credits from peer\n",msg->ptlm_credits);
-                if (plp->plp_credits + msg->ptlm_credits >
-                    plp->plp_max_credits) {
-                        CWARN("Too many credits from %s: %d + %d > %d\n",
-                              libcfs_id2str(srcid),
-                              plp->plp_credits, msg->ptlm_credits,
-                              plp->plp_max_credits);
-                        plp->plp_credits = plp->plp_max_credits;
-                } else {
-                        plp->plp_credits += msg->ptlm_credits;
-                }
+                plp->plp_credits += msg->ptlm_credits;
                 ptllnd_check_sends(plp);
         }
 
@@ -1448,8 +1469,6 @@ ptllnd_parse_request(lnet_ni_t *ni, ptl_process_id_t initiator,
         rx.rx_nob       = nob;
         plni->plni_nrxs++;
 
-        CDEBUG(D_NET, "rx=%p type=%d\n",&rx,msg->ptlm_type);
-
         switch (msg->ptlm_type) {
         default: /* message types have been checked already */
                 ptllnd_rx_done(&rx);
@@ -1457,20 +1476,15 @@ ptllnd_parse_request(lnet_ni_t *ni, ptl_process_id_t initiator,
 
         case PTLLND_MSG_TYPE_PUT:
         case PTLLND_MSG_TYPE_GET:
-                CDEBUG(D_NET, "PTLLND_MSG_TYPE_%s\n",
-                        msg->ptlm_type==PTLLND_MSG_TYPE_PUT ? "PUT" : "GET");
                 rc = lnet_parse(ni, &msg->ptlm_u.rdma.kptlrm_hdr,
                                 msg->ptlm_srcnid, &rx, 1);
-                CDEBUG(D_NET, "lnet_parse rc=%d\n",rc);
                 if (rc < 0)
                         ptllnd_rx_done(&rx);
                 break;
 
         case PTLLND_MSG_TYPE_IMMEDIATE:
-                CDEBUG(D_NET, "PTLLND_MSG_TYPE_IMMEDIATE\n");
                 rc = lnet_parse(ni, &msg->ptlm_u.immediate.kptlim_hdr,
                                 msg->ptlm_srcnid, &rx, 0);
-                CDEBUG(D_NET, "lnet_parse rc=%d\n",rc);
                 if (rc < 0)
                         ptllnd_rx_done(&rx);
                 break;
@@ -1492,12 +1506,12 @@ ptllnd_buf_event (lnet_ni_t *ni, ptl_event_t *event)
         LASSERT (event->type == PTL_EVENT_PUT_END ||
                  event->type == PTL_EVENT_UNLINK);
 
-        CDEBUG(D_NET, "buf=%p event=%d\n",buf,event->type);
-
         if (event->ni_fail_type != PTL_NI_OK) {
 
-                CERROR("event type %d, status %d from %s\n",
-                       event->type, event->ni_fail_type,
+                CERROR("event type %s(%d), status %s(%d) from %s\n",
+                       ptllnd_evtype2str(event->type), event->type,
+                       ptllnd_errtype2str(event->ni_fail_type), 
+                       event->ni_fail_type,
                        ptllnd_ptlid2str(event->initiator));
 
         } else if (event->type == PTL_EVENT_PUT_END) {
@@ -1528,8 +1542,6 @@ ptllnd_buf_event (lnet_ni_t *ni, ptl_event_t *event)
         repost = (event->type == PTL_EVENT_UNLINK);
 #endif
 
-        CDEBUG(D_NET, "repost=%d unlinked=%d\n",repost,unlinked);
-
         if (unlinked) {
                 LASSERT(buf->plb_posted);
                 buf->plb_posted = 0;
@@ -1555,19 +1567,16 @@ ptllnd_tx_event (lnet_ni_t *ni, ptl_event_t *event)
 #endif
 
         if (error)
-                CERROR("Error event type %d for %s for %s\n",
-                       event->type, ptllnd_msgtype2str(tx->tx_type),
+                CERROR("Error %s(%d) event %s(%d) unlinked %d, %s(%d) for %s\n",
+                       ptllnd_errtype2str(event->ni_fail_type),
+                       event->ni_fail_type,
+                       ptllnd_evtype2str(event->type), event->type,
+                       unlinked, ptllnd_msgtype2str(tx->tx_type), tx->tx_type,
                        libcfs_id2str(tx->tx_peer->plp_id));
 
         LASSERT (!PtlHandleIsEqual(event->md_handle, PTL_INVALID_HANDLE));
 
-        CDEBUG(D_NET, "tx=%p type=%s (%d)\n",tx,
-                ptllnd_msgtype2str(tx->tx_type),tx->tx_type);
-        CDEBUG(D_NET, "unlinked=%d\n",unlinked);
-        CDEBUG(D_NET, "error=%d\n",error);
-
         isreq = PtlHandleIsEqual(event->md_handle, tx->tx_reqmdh);
-        CDEBUG(D_NET, "isreq=%d\n",isreq);
         if (isreq) {
                 LASSERT (event->md.start == (void *)&tx->tx_msg);
                 if (unlinked) {
@@ -1577,7 +1586,6 @@ ptllnd_tx_event (lnet_ni_t *ni, ptl_event_t *event)
         }
 
         isbulk = PtlHandleIsEqual(event->md_handle, tx->tx_bulkmdh);
-        CDEBUG(D_NET, "isbulk=%d\n",isbulk);
         if ( isbulk && unlinked ) {
                 tx->tx_bulkmdh = PTL_INVALID_HANDLE;
                 PTLLND_DBGT_STAMP(tx->tx_bulk_done);
@@ -1585,10 +1593,12 @@ ptllnd_tx_event (lnet_ni_t *ni, ptl_event_t *event)
 
         LASSERT (!isreq != !isbulk);            /* always one and only 1 match */
 
-        PTLLND_HISTORY("%s[%d/%d]: TX done %p %s%s",
+        PTLLND_HISTORY("%s[%d/%d+%d(%d)]: TX done %p %s%s",
                        libcfs_id2str(tx->tx_peer->plp_id), 
                        tx->tx_peer->plp_credits,
                        tx->tx_peer->plp_outstanding_credits,
+                       tx->tx_peer->plp_sent_credits,
+                       plni->plni_peer_credits + tx->tx_peer->plp_lazy_credits,
                        tx, isreq ? "REQ" : "BULK", unlinked ? "(unlinked)" : "");
 
         LASSERT (!isreq != !isbulk);            /* always one and only 1 match */
@@ -1650,7 +1660,6 @@ ptllnd_tx_event (lnet_ni_t *ni, ptl_event_t *event)
                         tx->tx_status = -EIO;
                 list_del(&tx->tx_list);
                 list_add_tail(&tx->tx_list, &plni->plni_zombie_txs);
-                CDEBUG(D_NET, "tx=%p ONTO ZOMBIE LIST\n",tx);
         }
 }
 
@@ -1683,8 +1692,6 @@ ptllnd_wait (lnet_ni_t *ni, int milliseconds)
         for (;;) {
                 time_t  then = cfs_time_current_sec();
 
-                CDEBUG(D_NET, "Poll(%d)\n", timeout);
-                
                 rc = PtlEQPoll(&plni->plni_eqh, 1,
                                (timeout < 0) ? PTL_TIME_FOREVER : timeout,
                                &event, &which);
@@ -1696,7 +1703,6 @@ ptllnd_wait (lnet_ni_t *ni, int milliseconds)
                                (int)(cfs_time_current_sec() - then));
                 }
                 
-                CDEBUG(D_NET, "PtlEQPoll rc=%d\n",rc);
                 timeout = 0;
 
                 if (rc == PTL_EQ_EMPTY) {
@@ -1717,9 +1723,6 @@ ptllnd_wait (lnet_ni_t *ni, int milliseconds)
                         CERROR("Event queue: size %d is too small\n",
                                plni->plni_eq_size);
 
-                CDEBUG(D_NET, "event.type=%s(%d)\n",
-                       ptllnd_evtype2str(event.type),event.type);
-
                 found = 1;
                 switch (ptllnd_eventarg2type(event.md.user_ptr)) {
                 default:
@@ -1738,7 +1741,6 @@ ptllnd_wait (lnet_ni_t *ni, int milliseconds)
         while (!list_empty(&plni->plni_zombie_txs)) {
                 tx = list_entry(plni->plni_zombie_txs.next,
                                 ptllnd_tx_t, tx_list);
-                CDEBUG(D_NET, "Process ZOMBIE tx=%p\n",tx);
                 ptllnd_tx_done(tx);
         }
 

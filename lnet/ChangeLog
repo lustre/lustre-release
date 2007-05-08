@@ -32,6 +32,13 @@
 
 Severity   : major
 Frequency  : rare
+Bugzilla   : 11706
+Description: Added LNetSetAsync() to ensure single-threaded userspace
+             clients can be eager LNET receivers even when the application
+	     is not executing in the filesystem.
+	
+Severity   : major
+Frequency  : rare
 Bugzilla   : 12016
 Description: node crash on socket teardown race
 

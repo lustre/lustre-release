@@ -90,6 +90,7 @@ typedef struct
         int             *kptl_max_msg_size;     /* max immd message size*/
         int             *kptl_peer_hash_table_size; /* # slots in peer hash table */
         int             *kptl_reschedule_loops; /* scheduler yield loops */
+        int             *kptl_ack_puts;         /* make portals ack PUTs */
 #ifdef CRAY_XT3
         int             *kptl_ptltrace_on_timeout; /* dump pltrace on timeout? */
         char           **kptl_ptltrace_basename;  /* ptltrace dump file basename */
@@ -125,6 +126,7 @@ typedef struct kptl_rx                          /* receive message */
         kptl_rx_buffer_t       *rx_rxb;         /* the rx buffer pointer */
         kptl_msg_t             *rx_msg;         /* received message */
         int                     rx_nob;         /* received message size */
+        unsigned long           rx_treceived;   /* time received */
         ptl_process_id_t        rx_initiator;   /* sender's address */
 #ifdef CRAY_XT3
         ptl_uid_t               rx_uid;         /* sender's uid */
@@ -182,6 +184,7 @@ typedef struct kptl_tx                           /* transmit message */
         enum kptl_tx_type       tx_type;      /* small msg/{put,get}{req,resp} */
         int                     tx_active:1;  /* queued on the peer */
         int                     tx_idle:1;    /* on the free list */
+        int                     tx_acked:1;   /* portals ACK wanted (for debug only) */
         kptl_eventarg_t         tx_msg_eventarg; /* event->md.user_ptr */
         kptl_eventarg_t         tx_rdma_eventarg; /* event->md.user_ptr */
         int                     tx_status;    /* the status of this tx descriptor */
@@ -192,8 +195,9 @@ typedef struct kptl_tx                           /* transmit message */
         kptl_msg_t             *tx_msg;       /* the message data */
         kptl_peer_t            *tx_peer;      /* the peer this is waiting on */
         unsigned long           tx_deadline;  /* deadline */
-        ptl_md_t                tx_rdma_md;   /* rdma buffer */
-        kptl_fragvec_t         *tx_rdma_frags; /* buffer fragments */
+        unsigned long           tx_tposted;   /* time posted */
+        ptl_md_t                tx_rdma_md;   /* rdma descriptor */
+        kptl_fragvec_t         *tx_frags;     /* buffer fragments */
 } kptl_tx_t;
 
 enum kptllnd_peer_state
@@ -221,7 +225,8 @@ struct kptl_peer
         int                     peer_sent_hello;        /* have I sent HELLO? */
         int                     peer_credits;           /* number of send credits */
         int                     peer_outstanding_credits;/* number of peer credits to return */
-        int                     peer_active_rxs;        /* # rx-es being handled */
+        int                     peer_sent_credits;      /* #msg buffers posted for peer */
+        int                     peer_max_msg_size;      /* peer's rx buffer size */
         int                     peer_error;             /* errno on closing this peer */
         cfs_time_t              peer_last_alive;        /* when (in jiffies) I was last alive */
         __u64                   peer_next_matchbits;    /* Next value to register RDMA from peer */
@@ -319,6 +324,7 @@ void kptllnd_tunables_fini(void);
 
 const char *kptllnd_evtype2str(int evtype);
 const char *kptllnd_msgtype2str(int msgtype);
+const char *kptllnd_errtype2str(int errtype);
 
 static inline void *
 kptllnd_eventarg2obj (kptl_eventarg_t *eva)
@@ -413,7 +419,8 @@ void kptllnd_handle_closing_peers(void);
 int  kptllnd_peer_connect(kptl_tx_t *tx, lnet_nid_t nid);
 void kptllnd_peer_check_sends(kptl_peer_t *peer);
 void kptllnd_peer_check_bucket(int idx);
-void kptllnd_tx_launch(kptl_tx_t *tx, lnet_process_id_t target);
+void kptllnd_tx_launch(kptl_peer_t *peer, kptl_tx_t *tx, int nfrag);
+int  kptllnd_find_target(kptl_peer_t **peerp, lnet_process_id_t target);
 kptl_peer_t *kptllnd_peer_handle_hello(ptl_process_id_t initiator,
                                        kptl_msg_t *msg);
 kptl_peer_t *kptllnd_id2peer_locked(lnet_process_id_t id);

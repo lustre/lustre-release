@@ -2500,3 +2500,76 @@ LNetDist (lnet_nid_t dstnid, lnet_nid_t *srcnidp, int *orderp)
         return -EHOSTUNREACH;
 }
 
+int
+LNetSetAsync(lnet_process_id_t id, int nasync)
+{
+#ifdef __KERNEL__
+        return 0;
+#else
+        lnet_ni_t        *ni;
+        lnet_remotenet_t *rnet;
+        struct list_head *tmp;
+        lnet_route_t     *route;
+        lnet_nid_t       *nids;
+        int               nnids;
+        int               maxnids = 256;
+        int               rc = 0;
+        int               rc2;
+        
+        /* Target on a local network? */ 
+        
+        ni = lnet_net2ni(LNET_NIDNET(id.nid));
+        if (ni != NULL) {
+                if (ni->ni_lnd->lnd_setasync != NULL) 
+                        rc = (ni->ni_lnd->lnd_setasync)(ni, id, nasync);
+                lnet_ni_decref(ni);
+                return rc;
+        }
+
+        /* Target on a remote network: apply to routers */
+ again:
+        LIBCFS_ALLOC(nids, maxnids * sizeof(*nids));
+        if (nids == NULL)
+                return -ENOMEM;
+        nnids = 0;
+
+        /* Snapshot all the router NIDs */
+        LNET_LOCK();
+        rnet = lnet_find_net_locked(LNET_NIDNET(id.nid));
+        if (rnet != NULL) {
+                list_for_each(tmp, &rnet->lrn_routes) {
+                        if (nnids == maxnids) {
+                                LNET_UNLOCK();
+                                LIBCFS_FREE(nids, maxnids * sizeof(*nids));
+                                maxnids *= 2;
+                                goto again;
+                        }
+                        
+                        route = list_entry(tmp, lnet_route_t, lr_list);
+                        nids[nnids++] = route->lr_gateway->lp_nid;
+                }
+        }
+        LNET_UNLOCK();
+
+        /* set async on all the routers */
+        while (nnids-- > 0) {
+                id.pid = LUSTRE_SRV_LNET_PID;
+                id.nid = nids[nnids];
+
+                ni = lnet_net2ni(LNET_NIDNET(id.nid));
+                if (ni == NULL)
+                        continue;
+                
+                if (ni->ni_lnd->lnd_setasync != NULL) {
+                        rc2 = (ni->ni_lnd->lnd_setasync)(ni, id, nasync);
+                        if (rc2 != 0)
+                                rc = rc2;
+                }
+                lnet_ni_decref(ni);
+        }
+
+        LIBCFS_FREE(nids, maxnids * sizeof(*nids));
+        return rc;
+#endif
+}
+

@@ -22,12 +22,10 @@ void
 kptllnd_free_tx(kptl_tx_t *tx)
 {
         if (tx->tx_msg != NULL)
-                LIBCFS_FREE(tx->tx_msg, 
-                            *kptllnd_tunables.kptl_max_msg_size);
+                LIBCFS_FREE(tx->tx_msg, sizeof(*tx->tx_msg));
                         
-        if (tx->tx_rdma_frags != NULL)
-                LIBCFS_FREE(tx->tx_rdma_frags, 
-                            sizeof(*tx->tx_rdma_frags));
+        if (tx->tx_frags != NULL)
+                LIBCFS_FREE(tx->tx_frags, sizeof(*tx->tx_frags));
 
         LIBCFS_FREE(tx, sizeof(*tx));
 
@@ -59,16 +57,16 @@ kptllnd_alloc_tx(void)
         tx->tx_rdma_eventarg.eva_type = PTLLND_EVENTARG_TYPE_RDMA;
         tx->tx_msg_eventarg.eva_type = PTLLND_EVENTARG_TYPE_MSG;
         tx->tx_msg = NULL;
-        tx->tx_rdma_frags = NULL;
+        tx->tx_frags = NULL;
                 
-        LIBCFS_ALLOC(tx->tx_msg, *kptllnd_tunables.kptl_max_msg_size);
+        LIBCFS_ALLOC(tx->tx_msg, sizeof(*tx->tx_msg));
         if (tx->tx_msg == NULL) {
                 CERROR("Failed to allocate TX payload\n");
                 goto failed;
         }
 
-        LIBCFS_ALLOC(tx->tx_rdma_frags, sizeof(*tx->tx_rdma_frags));
-        if (tx->tx_rdma_frags == NULL) {
+        LIBCFS_ALLOC(tx->tx_frags, sizeof(*tx->tx_frags));
+        if (tx->tx_frags == NULL) {
                 CERROR("Failed to allocate TX frags\n");
                 goto failed;
         }
@@ -172,6 +170,8 @@ kptllnd_get_idle_tx(enum kptl_tx_type type)
         atomic_set(&tx->tx_refcount, 1);
         tx->tx_status = 0;
         tx->tx_idle = 0;
+        tx->tx_tposted = 0;
+        tx->tx_acked = *kptllnd_tunables.kptl_ack_puts;
 
         CDEBUG(D_NET, "tx=%p\n", tx);
         return tx;
@@ -401,11 +401,12 @@ kptllnd_tx_callback(ptl_event_t *ev)
 #else
         unlinked = (ev->type == PTL_EVENT_UNLINK);
 #endif
-        CDEBUG(D_NETTRACE, "%s[%d/%d]: %s(%d) tx=%p fail=%d unlinked=%d\n",
-               libcfs_id2str(peer->peer_id),
-               peer->peer_credits, peer->peer_outstanding_credits,
+        CDEBUG(D_NETTRACE, "%s[%d/%d+%d]: %s(%d) tx=%p fail=%s(%d) unlinked=%d\n",
+               libcfs_id2str(peer->peer_id), peer->peer_credits,
+               peer->peer_outstanding_credits, peer->peer_sent_credits,
                kptllnd_evtype2str(ev->type), ev->type, 
-               tx, ev->ni_fail_type, unlinked);
+               tx, kptllnd_errtype2str(ev->ni_fail_type),
+               ev->ni_fail_type, unlinked);
 
         switch (tx->tx_type) {
         default:
@@ -414,18 +415,21 @@ kptllnd_tx_callback(ptl_event_t *ev)
         case TX_TYPE_SMALL_MESSAGE:
                 LASSERT (ismsg);
                 LASSERT (ev->type == PTL_EVENT_UNLINK ||
-                         ev->type == PTL_EVENT_SEND_END);
+                         ev->type == PTL_EVENT_SEND_END ||
+                         (ev->type == PTL_EVENT_ACK && tx->tx_acked));
                 break;
 
         case TX_TYPE_PUT_REQUEST:
                 LASSERT (ev->type == PTL_EVENT_UNLINK ||
                          (ismsg && ev->type == PTL_EVENT_SEND_END) ||
+                         (ismsg && ev->type == PTL_EVENT_ACK && tx->tx_acked) ||
                          (!ismsg && ev->type == PTL_EVENT_GET_END));
                 break;
 
         case TX_TYPE_GET_REQUEST:
                 LASSERT (ev->type == PTL_EVENT_UNLINK ||
                          (ismsg && ev->type == PTL_EVENT_SEND_END) ||
+                         (ismsg && ev->type == PTL_EVENT_ACK && tx->tx_acked) ||
                          (!ismsg && ev->type == PTL_EVENT_PUT_END));
 
                 if (!ismsg && ok && ev->type == PTL_EVENT_PUT_END) {
@@ -451,21 +455,23 @@ kptllnd_tx_callback(ptl_event_t *ev)
         case TX_TYPE_GET_RESPONSE:
                 LASSERT (!ismsg);
                 LASSERT (ev->type == PTL_EVENT_UNLINK ||
-                         ev->type == PTL_EVENT_SEND_END);
+                         ev->type == PTL_EVENT_SEND_END ||
+                         (ev->type == PTL_EVENT_ACK && tx->tx_acked));
                 break;
         }
 
         if (ok) {
                 kptllnd_peer_alive(peer);
         } else {
-                CDEBUG(D_NETERROR, "%s: %s network error %d, t=%d\n",
+                CERROR("Portals error to %s: %s(%d) tx=%p fail=%s(%d) unlinked=%d\n",
                        libcfs_id2str(peer->peer_id),
-                       ismsg ? "msg" : "bulk",
-                       ev->ni_fail_type, tx->tx_type);
-                tx->tx_status = -EIO;
+                       kptllnd_evtype2str(ev->type), ev->type, 
+                       tx, kptllnd_errtype2str(ev->ni_fail_type),
+                       ev->ni_fail_type, unlinked);
+                tx->tx_status = -EIO; 
                 kptllnd_peer_close(peer, -EIO);
         }
-        
+
         if (!unlinked)
                 return;
 

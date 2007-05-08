@@ -166,6 +166,50 @@ const char *kptllnd_msgtype2str(int type)
 #undef DO_TYPE
 }
 
+const char *kptllnd_errtype2str(int type)
+{
+#define DO_TYPE(x) case x: return #x;
+        switch(type)
+        {
+                DO_TYPE(PTL_OK);
+                DO_TYPE(PTL_SEGV);
+                DO_TYPE(PTL_NO_SPACE);
+                DO_TYPE(PTL_ME_IN_USE);
+                DO_TYPE(PTL_NAL_FAILED);
+                DO_TYPE(PTL_NO_INIT);
+                DO_TYPE(PTL_IFACE_DUP);
+                DO_TYPE(PTL_IFACE_INVALID);
+                DO_TYPE(PTL_HANDLE_INVALID);
+                DO_TYPE(PTL_MD_INVALID);
+                DO_TYPE(PTL_ME_INVALID);
+                DO_TYPE(PTL_PROCESS_INVALID);
+                DO_TYPE(PTL_PT_INDEX_INVALID);
+                DO_TYPE(PTL_SR_INDEX_INVALID);
+                DO_TYPE(PTL_EQ_INVALID);
+                DO_TYPE(PTL_EQ_DROPPED);
+                DO_TYPE(PTL_EQ_EMPTY);
+                DO_TYPE(PTL_MD_NO_UPDATE);
+                DO_TYPE(PTL_FAIL);
+                DO_TYPE(PTL_AC_INDEX_INVALID);
+                DO_TYPE(PTL_MD_ILLEGAL);
+                DO_TYPE(PTL_ME_LIST_TOO_LONG);
+                DO_TYPE(PTL_MD_IN_USE);
+                DO_TYPE(PTL_NI_INVALID);
+                DO_TYPE(PTL_PID_INVALID);
+                DO_TYPE(PTL_PT_FULL);
+                DO_TYPE(PTL_VAL_FAILED);
+                DO_TYPE(PTL_NOT_IMPLEMENTED);
+                DO_TYPE(PTL_NO_ACK);
+                DO_TYPE(PTL_EQ_IN_USE);
+                DO_TYPE(PTL_PID_IN_USE);
+                DO_TYPE(PTL_INV_EQ_SIZE);
+                DO_TYPE(PTL_AGAIN);
+        default:
+                return "<unknown event type>";
+        }
+#undef DO_TYPE
+}
+
 __u32
 kptllnd_cksum (void *ptr, int nob)
 {
@@ -432,9 +476,12 @@ kptllnd_startup (lnet_ni_t *ni)
         }
 
         *kptllnd_tunables.kptl_max_msg_size &= ~7;
-        if (*kptllnd_tunables.kptl_max_msg_size < sizeof(kptl_msg_t))
-                *kptllnd_tunables.kptl_max_msg_size =
-                        (sizeof(kptl_msg_t) + 7) & ~7;
+        if (*kptllnd_tunables.kptl_max_msg_size < PTLLND_MIN_BUFFER_SIZE)
+                *kptllnd_tunables.kptl_max_msg_size = PTLLND_MIN_BUFFER_SIZE;
+
+        CLASSERT ((PTLLND_MIN_BUFFER_SIZE & 7) == 0);
+        CLASSERT (sizeof(kptl_msg_t) <= PTLLND_MIN_BUFFER_SIZE);
+
         /*
          * zero pointers, flags etc
          * put everything into a known state.

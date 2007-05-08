@@ -63,7 +63,7 @@ static int peercredits = PTLLND_PEERCREDITS;    /* <lnet/ptllnd_wire.h> */
 CFS_MODULE_PARM(peercredits, "i", int, 0444,
 		"concurrent sends to 1 peer");
 
-static int max_msg_size = PTLLND_MAX_MSG_SIZE;  /* <lnet/ptllnd_wire.h> */
+static int max_msg_size = PTLLND_MAX_KLND_MSG_SIZE;  /* <lnet/ptllnd_wire.h> */
 CFS_MODULE_PARM(max_msg_size, "i", int, 0444,
 		"max size of immediate message");
 
@@ -74,6 +74,10 @@ CFS_MODULE_PARM(peer_hash_table_size, "i", int, 0444,
 static int reschedule_loops = 100;
 CFS_MODULE_PARM(reschedule_loops, "i", int, 0644,
                 "# of loops before scheduler does cond_resched()");
+
+static int ack_puts = 0;
+CFS_MODULE_PARM(ack_puts, "i", int, 0644,
+		"get portals to ack all PUTs");
 
 #ifdef CRAY_XT3
 static int ptltrace_on_timeout = 1;
@@ -106,6 +110,7 @@ kptl_tunables_t kptllnd_tunables = {
         .kptl_max_msg_size           = &max_msg_size,
         .kptl_peer_hash_table_size   = &peer_hash_table_size,
         .kptl_reschedule_loops       = &reschedule_loops,
+        .kptl_ack_puts               = &ack_puts,
 #ifdef CRAY_XT3
         .kptl_ptltrace_on_timeout    = &ptltrace_on_timeout,
         .kptl_ptltrace_basename      = &ptltrace_basename,
@@ -156,15 +161,17 @@ static ctl_table kptllnd_ctl_table[] = {
 	 sizeof(int), 0444, NULL, &proc_dointvec},
 	{13, "reschedule_loops", &reschedule_loops,
 	 sizeof(int), 0444, NULL, &proc_dointvec},
-#ifdef CRAY_XT3
-	{14, "ptltrace_on_timeout", &ptltrace_on_timeout,
+	{14, "ack_puts", &ack_puts,
 	 sizeof(int), 0644, NULL, &proc_dointvec},
-	{15, "ptltrace_basename", ptltrace_basename_space,
+#ifdef CRAY_XT3
+	{15, "ptltrace_on_timeout", &ptltrace_on_timeout,
+	 sizeof(int), 0644, NULL, &proc_dointvec},
+	{16, "ptltrace_basename", ptltrace_basename_space,
 	 sizeof(ptltrace_basename_space), 0644, NULL, &proc_dostring,
 	 &sysctl_string},
 #endif
 #ifdef PJK_DEBUGGING
-	{16, "simulation_bitmap", &simulation_bitmap,
+	{17, "simulation_bitmap", &simulation_bitmap,
 	 sizeof(int), 0444, NULL, &proc_dointvec},
 #endif
 

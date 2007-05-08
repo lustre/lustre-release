@@ -332,6 +332,9 @@ typedef struct lnet_lnd
 #else
         /* wait for something to happen */
         void (*lnd_wait)(struct lnet_ni *ni, int milliseconds);
+
+        /* ensure non-RDMA messages can be received outside liblustre */
+        int (*lnd_setasync)(struct lnet_ni *ni, lnet_process_id_t id, int nasync);
 #endif
 } lnd_t;
 
