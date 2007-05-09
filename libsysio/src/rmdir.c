@@ -9,7 +9,7 @@
  *    terms of the GNU Lesser General Public License
  *    (see cit/LGPL or http://www.gnu.org/licenses/lgpl.html)
  *
- *    Cplant(TM) Copyright 1998-2003 Sandia Corporation. 
+ *    Cplant(TM) Copyright 1998-2006 Sandia Corporation. 
  *    Under the terms of Contract DE-AC04-94AL85000, there is a non-exclusive
  *    license for use of this work by or on behalf of the US Government.
  *    Export of this program may require a license from the United States
@@ -72,10 +72,9 @@ SYSIO_INTERFACE_NAME(rmdir)(const char *path)
 		err = -ENOTDIR;
 		goto error;
 	}
-	if (IS_RDONLY(pno, pno->p_base->pb_ino)) {
-		err = -EROFS;
+	err = _sysio_permitted(pno->p_parent, W_OK);
+	if (err)
 		goto error;
-	}
 	if (pno->p_ref > 1) {
 		err = -EBUSY;
 		goto error;
@@ -85,7 +84,7 @@ SYSIO_INTERFACE_NAME(rmdir)(const char *path)
 	 * driver is implemented using differentiated inode operations based
 	 * on file type, such as incore does.
 	 */
-	err = pno->p_parent->p_base->pb_ino->i_ops.inop_rmdir(pno);
+	err = (*pno->p_parent->p_base->pb_ino->i_ops.inop_rmdir)(pno);
 	if (err)
 		goto error;
 	/*

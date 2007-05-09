@@ -9,7 +9,7 @@
  *    terms of the GNU Lesser General Public License
  *    (see cit/LGPL or http://www.gnu.org/licenses/lgpl.html)
  *
- *    Cplant(TM) Copyright 1998-2003 Sandia Corporation. 
+ *    Cplant(TM) Copyright 1998-2006 Sandia Corporation. 
  *    Under the terms of Contract DE-AC04-94AL85000, there is a non-exclusive
  *    license for use of this work by or on behalf of the US Government.
  *    Export of this program may require a license from the United States
@@ -41,92 +41,122 @@
  * lee@sandia.gov
  */
 
+/* 
+ * Can't provoke a definition of the S_IFMT macros without a little extra work.
+ */
+#define _BSD_SOURCE
+
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <unistd.h>
 #include <errno.h>
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
-#include <sys/uio.h>
 #include <getopt.h>
 
 #if defined(SYSIO_LABEL_NAMES)
 #include "sysio.h"
 #endif
-#include "xtio.h"
 #include "test.h"
 
 /*
- * Rename a file system object.
+ * Create a node.
  *
- * Usage: test_rename <src> <dest>
+ * Usage: mknod path {f|b|c} [dev]
+ *
+ * The dev argument should not be present for regular file and FIFO object
+ * creation.
  */
 
-void	usage(void);
-int	rename_file(const char *spath, const char *dpath);
+static int do_mknod(const char *path, mode_t mode, dev_t dev);
+static void usage(void);
 
 int
-main(int argc, char * const argv[])
+main(int argc, char *const argv[])
 {
 	int	i;
 	int	err;
-	const char *spath, *dpath;
+	mode_t	mode;
+	dev_t	dev;
 	extern int _test_sysio_startup(void);
 
 	/*
-	 * Parse command-line args.
+	 * Parse command line arguments.
 	 */
-	while ((i = getopt(argc,
-			   argv,
-			   ""
-			   )) != -1)
+	while ((i = getopt(argc, argv, "")) != -1)
 		switch (i) {
 
 		default:
 			usage();
 		}
 
-	if (!(argc - optind))
-		usage();
-
+	/*
+	 * Init sysio lib.
+	 */
 	err = _test_sysio_startup();
 	if (err) {
 		errno = -err;
 		perror("sysio startup");
 		exit(1);
-	}	
+	}
 
-	(void )SYSIO_INTERFACE_NAME(umask)(022);
+	if (argc - optind < 2)
+		usage();
+	if (strlen(argv[optind + 1]) != 1)
+		usage();
+	mode = 0666;
+	switch (*argv[optind + 1]) {
+	
+	case 'f':
+		mode |= S_IFREG;
+		break;
+	case 'b':
+		mode |= S_IFBLK;
+		break;
+	case 'c':
+		mode |= S_IFCHR;
+		break;
+	case 'p':
+		mode |= S_IFIFO;
+		break;
+	default:
+		usage();
+	}
+	dev = 0;
+	if (!(S_ISREG(mode) || S_ISFIFO(mode)))
+		dev = atoi(argv[optind + 2]);
+	else if (argc - optind != 2) {
+		(void )fprintf(stderr, "Too many arguments\n");
+		usage();
+	}
+	(void )do_mknod(argv[optind + 0], mode, dev);
 
 	/*
-	 * Source
+	 * Clean up.
 	 */
-	spath = argv[optind++];
-	if (!(argc - optind))
-		usage();
-	/*
-	 * Destination
-	 */
-	dpath = argv[optind++];
-	if (argc - optind)
-		usage();
-
-	err = SYSIO_INTERFACE_NAME(rename)(spath, dpath);
-	if (err)
-		perror("rename");
-
 	_test_sysio_shutdown();
 
-	return err;
+	return 0;
 }
 
-void
+static int
+do_mknod(const char *path, mode_t mode, dev_t dev)
+{
+
+	if (SYSIO_INTERFACE_NAME(mknod)(path, mode, dev) != 0) {
+		perror(path);
+		return -1;
+	}
+
+	return 0;
+}
+
+static void
 usage()
 {
 
-	(void )fprintf(stderr,
-		       "Usage: test_rename"
-		       " source destination\n");
+	(void )fprintf(stderr, "Usage: mknod path {f|b|c|p} dev\n");
 	exit(1);
 }

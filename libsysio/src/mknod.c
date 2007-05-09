@@ -41,10 +41,6 @@
  * lee@sandia.gov
  */
 
-#if defined(__linux__)
-#define _BSD_SOURCE
-#endif
-
 #include <unistd.h>
 #include <errno.h>
 #include <assert.h>
@@ -61,6 +57,30 @@
 
 #undef mknod
 #undef __xmknod
+
+/*
+ * Internal routine to make a device node.
+ */
+int
+_sysio_mknod(struct pnode *pno, mode_t mode, dev_t dev)
+{
+
+	if (pno->p_base->pb_ino)
+		return -EEXIST;
+
+	/*
+	 * Support only regular, character-special and fifos right now.
+	 * (mode & S_IFMT) == 0 is the same as S_IFREG.
+	 */
+	if (!(S_ISREG(mode) || S_ISCHR(mode) || S_ISFIFO(mode)))
+		return -EINVAL;
+
+	if (IS_RDONLY(pno))
+		return -EROFS;
+	return (*pno->p_parent->p_base->pb_ino->i_ops.inop_mknod)(pno,
+								  mode,
+								  dev);
+}
 
 int
 PREPEND(__, SYSIO_INTERFACE_NAME(xmknod))(int __ver, 
@@ -79,33 +99,17 @@ PREPEND(__, SYSIO_INTERFACE_NAME(xmknod))(int __ver,
 		goto out;
 	}
 
-	/*
-	 * Support only regular, character-special and fifos right now.
-	 * (mode & S_IFMT) == 0 is the same as S_IFREG.
-	 */
-	if ((mode & S_IFMT) &&
-	    !(S_ISREG(mode) || S_ISCHR(mode) || S_ISFIFO(mode))) {
-		err = -EINVAL;
-		goto out;
-	}
-
-	mode &= ~(_sysio_umask & 0777);	/* apply umask */
+	mode &= ~(_sysio_umask & 0777);			/* apply umask */
 
 	INTENT_INIT(&intent, INT_CREAT, &mode, NULL);
 	err = _sysio_namei(_sysio_cwd, path, ND_NEGOK, &intent, &pno);
 	if (err)
 		goto out;
-	if (pno->p_base->pb_ino) {
-		err = -EEXIST;
-		goto error;
-	}
 
-	if (IS_RDONLY(pno, pno->p_base->pb_ino)) {
-		err = -EROFS;
+	err = _sysio_permitted(pno->p_parent, W_OK);
+	if (err)
 		goto error;
-	}
-	err =
-	    (*pno->p_parent->p_base->pb_ino->i_ops.inop_mknod)(pno, mode, *dev);
+	err = _sysio_mknod(pno, mode, *dev);
 error:
 	P_RELE(pno);
 out:

@@ -105,9 +105,7 @@ _sysio_iiox(int (*f)(struct inode *, struct ioctx *),
 	/*
 	 * Check that it was opened with flags supporting the operation.
 	 */
-	if (!(wr
-	        ? (fil->f_flags & (O_RDWR | O_WRONLY))
-		: !(fil->f_flags & O_WRONLY)))
+	if (!F_CHKRW(fil, wr ? 'w' : 'r'))
 		return -EBADF;
 
 	ino = fil->f_ino;

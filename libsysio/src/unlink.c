@@ -9,7 +9,7 @@
  *    terms of the GNU Lesser General Public License
  *    (see cit/LGPL or http://www.gnu.org/licenses/lgpl.html)
  *
- *    Cplant(TM) Copyright 1998-2003 Sandia Corporation. 
+ *    Cplant(TM) Copyright 1998-2006 Sandia Corporation. 
  *    Under the terms of Contract DE-AC04-94AL85000, there is a non-exclusive
  *    license for use of this work by or on behalf of the US Government.
  *    Export of this program may require a license from the United States
@@ -68,11 +68,12 @@ SYSIO_INTERFACE_NAME(unlink)(const char *path)
 	err = _sysio_namei(_sysio_cwd, path, ND_NOFOLLOW, &intent, &pno);
 	if (err)
 		goto out;
-	ino = pno->p_base->pb_ino;
-	if (IS_RDONLY(pno, ino)) {
-		err = -EROFS;
+
+	err = _sysio_permitted(pno->p_parent, W_OK);
+	if (err)
 		goto error;
-	}
+
+	ino = pno->p_base->pb_ino;
 	/*
 	 * Use the parent node operations to request the task in case the
 	 * driver is implemented using differentiated inode operations based

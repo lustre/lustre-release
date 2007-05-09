@@ -41,8 +41,6 @@
  * lee@sandia.gov
  */
 
-#define _BSD_SOURCE
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -51,6 +49,7 @@
 #include <sys/stat.h>
 #include <unistd.h>
 #include <sys/uio.h>
+#include <getopt.h>
 
 #if defined(SYSIO_LABEL_NAMES)
 #include "sysio.h"
@@ -208,7 +207,7 @@ statit(const char *path)
 	}
 	(void )printf("%s: %c", path, t);
 	if (S_ISLNK(stbuf.st_mode) && (size_t )cc < sizeof(buf))
-		(void )printf(" %.*s", cc, buf);
+		(void )printf(" %.*s", (int )cc, buf);
 	(void )putchar('\n');
 
 	return 0;

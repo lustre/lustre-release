@@ -9,7 +9,7 @@
  *    terms of the GNU Lesser General Public License
  *    (see cit/LGPL or http://www.gnu.org/licenses/lgpl.html)
  *
- *    Cplant(TM) Copyright 1998-2003 Sandia Corporation. 
+ *    Cplant(TM) Copyright 1998-2006 Sandia Corporation. 
  *    Under the terms of Contract DE-AC04-94AL85000, there is a non-exclusive
  *    license for use of this work by or on behalf of the US Government.
  *    Export of this program may require a license from the United States
@@ -323,8 +323,9 @@ struct nameidata {
 /*
  * Values for nameidata flags field.
  */
-#define ND_NOFOLLOW     0x01				/* no follow symlinks */
-#define ND_NEGOK        0x02				/* last missing is ok */
+#define ND_NOFOLLOW	0x01				/* no follow symlinks */
+#define ND_NEGOK	0x02				/* last missing is ok */
+#define ND_NOPERMCHECK	0x04				/* don't check perms */
 
 #ifdef AUTOMOUNT_FILE_NAME
 #define _ND_INIT_AUTOMOUNT(nd)	((nd)->nd_amcnt = 0)
@@ -399,16 +400,10 @@ struct ioctx {
     } while (0)
 
 /*
- * Return whether a pnode/inode is on a read-only mount or file system.
+ * Return whether access to a pnode is read-only.
  */
-#define IS_RDONLY(pno, ino) \
-	((((struct pnode *)(pno)) && \
-	  ((((struct pnode *)(pno))->p_mount->mnt_flags & MOUNT_F_RO) || \
-	   (((struct pnode *)(pno))->p_base->pb_ino && \
-	    (((struct pnode *)(pno))->p_base->pb_ino->i_fs->fs_flags & \
-	     FS_F_RO)))) || \
-	 (((struct inode *)(ino)) && \
-	  (((struct inode *)(ino))->i_fs->fs_flags & FS_F_RO)))
+#define IS_RDONLY(pno) \
+	((pno)->p_mount->mnt_flags & MOUNT_F_RO)
 
 extern struct pnode *_sysio_root;
 
@@ -463,7 +458,7 @@ extern int _sysio_path_walk(struct pnode *parent, struct nameidata *nd);
 #ifdef AUTOMOUNT_FILE_NAME
 extern void _sysio_next_component(const char *path, struct qstr *name);
 #endif
-extern int _sysio_permitted(struct inode *ino, int amode);
+extern int _sysio_permitted(struct pnode *pno, int amode);
 extern int _sysio_namei(struct pnode *pno,
                         const char *path,
                         unsigned flags,
@@ -487,3 +482,5 @@ extern int _sysio_ioctx_done(struct ioctx *ioctx);
 extern ssize_t _sysio_ioctx_wait(struct ioctx *ioctx);
 extern void _sysio_ioctx_complete(struct ioctx *ioctx);
 extern int _sysio_open(struct pnode *pno, int flags, mode_t mode);
+extern int _sysio_mkdir(struct pnode *where, mode_t mode);
+extern int _sysio_mknod(struct pnode *where, mode_t mode, dev_t dev);

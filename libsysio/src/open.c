@@ -9,7 +9,7 @@
  *    terms of the GNU Lesser General Public License
  *    (see cit/LGPL or http://www.gnu.org/licenses/lgpl.html)
  *
- *    Cplant(TM) Copyright 1998-2003 Sandia Corporation. 
+ *    Cplant(TM) Copyright 1998-2006 Sandia Corporation. 
  *    Under the terms of Contract DE-AC04-94AL85000, there is a non-exclusive
  *    license for use of this work by or on behalf of the US Government.
  *    Export of this program may require a license from the United States
@@ -79,7 +79,7 @@ _sysio_open(struct pnode *pno, int flags, mode_t mode)
 	int	err;
 	struct inode *ino;
 
-	ro = IS_RDONLY(pno, pno->p_base->pb_ino);
+	ro = IS_RDONLY(pno);
 	w = flags & (O_WRONLY|O_RDWR);
 	if (w == (O_WRONLY|O_RDWR)) {
 		/*
@@ -103,10 +103,7 @@ _sysio_open(struct pnode *pno, int flags, mode_t mode)
 		if (!err) {
 			ino = parent->p_base->pb_ino;
 			assert(ino);
-			err =
-			    !IS_RDONLY(parent, ino)
-			      ? (*ino->i_ops.inop_open)(pno, flags, mode)
-			      : -EROFS;
+			err = (*ino->i_ops.inop_open)(pno, flags, mode);
 		}
 	} else if ((flags & (O_CREAT|O_EXCL)) == (O_CREAT|O_EXCL))
 		err = -EEXIST;

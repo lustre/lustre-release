@@ -9,7 +9,7 @@
  *    terms of the GNU Lesser General Public License
  *    (see cit/LGPL or http://www.gnu.org/licenses/lgpl.html)
  *
- *    Cplant(TM) Copyright 1998-2005 Sandia Corporation. 
+ *    Cplant(TM) Copyright 1998-2006 Sandia Corporation. 
  *    Under the terms of Contract DE-AC04-94AL85000, there is a non-exclusive
  *    license for use of this work by or on behalf of the US Government.
  *    Export of this program may require a license from the United States
@@ -41,13 +41,15 @@
  * lee@sandia.gov
  */
 
+#ifdef __linux__
 #define _BSD_SOURCE
+#endif
 
 #if SYSIO_TRACING
 #include <stdio.h>
 #endif
 #include <stdlib.h>
-#if SYSIO_TRACING
+#ifdef _BSD_SOURCE
 #include <sys/syscall.h>
 #endif
 #include <unistd.h>
@@ -85,16 +87,23 @@
  * Tracing callback record.
  */
 struct trace_callback {
-	TAILQ_ENTRY(trace_callback) links;
-	void	(*f)(const char *file, const char *func, int line);
+	TAILQ_ENTRY(trace_callback) links;		/* trace list links */
+	void	(*f)(const char *file,			/* callback function */
+		     const char *func,
+		     int line,
+		     void *data);
+	void	*data;					/* callback data */
+	void	(*destructor)(void *data);		/* data destructor */
 };
 
 /*
  * Initialize a tracing callback record.
  */
-#define TCB_INIT(__tcb, __f) \
+#define TCB_INIT(__tcb, __f, __d, __destroy) \
 	do { \
 		(__tcb)->f = (__f); \
+		(__tcb)->data = (__d); \
+		(__tcb)->destructor = (__destroy); \
 	} while (0);
 
 /*
@@ -126,6 +135,12 @@ void	*_sysio_exit_trace_q = &_sysio_exit_trace_head;
 #define _irecheck(_l, _e) \
 	((_l) > INT_MAX)
 #endif
+
+/*
+ * In sysio_init we'll allow simple comments, strings outside {}
+ * delimited by COMMENT_INTRO, and '\n' or '\0'
+ */
+#define COMMENT_INTRO          '#'
 
 /*
  * In sysio_init we'll allow simple comments, strings outside {}
@@ -203,6 +218,7 @@ _sysio_shutdown()
 	_sysio_fd_shutdown();
 	_sysio_i_shutdown();
 	_sysio_fssw_shutdown();
+	_sysio_access_shutdown();
 #if SYSIO_TRACING
 	{
 		struct trace_callback *tcb;
@@ -210,14 +226,10 @@ _sysio_shutdown()
 		/*
 		 * Empty the trace queues and free the entries.
 		 */
-		while ((tcb = _sysio_entry_trace_head.tqh_first) != NULL) {
-			TAILQ_REMOVE(&_sysio_entry_trace_head, tcb, links);
-			free(tcb);
-		}
-		while ((tcb = _sysio_exit_trace_head.tqh_first) != NULL) {
-			TAILQ_REMOVE(&_sysio_exit_trace_head, tcb, links);
-			free(tcb);
-		}
+		while ((tcb = _sysio_entry_trace_head.tqh_first) != NULL)
+			_sysio_remove_trace(&_sysio_entry_trace_head, tcb);
+		while ((tcb = _sysio_exit_trace_head.tqh_first) != NULL)
+			_sysio_remove_trace(&_sysio_exit_trace_head, tcb);
 	}
 #endif
 #endif
@@ -316,14 +328,17 @@ void *
 _sysio_register_trace(void *q,
 		      void (*f)(const char *file,
 				const char *func,
-				int line))
+				int line,
+				void *data),
+		      void *data,
+		      void (*destructor)(void *data))
 {
 	struct trace_callback *tcb;
 
 	tcb = malloc(sizeof(struct trace_callback));
 	if (!tcb)
 		return NULL;
-	TCB_INIT(tcb, f);
+	TCB_INIT(tcb, f, data, destructor);
 	TAILQ_INSERT_TAIL((struct trace_q *)q, tcb, links);
 	return tcb;
 }
@@ -334,9 +349,14 @@ _sysio_register_trace(void *q,
 void
 _sysio_remove_trace(void *q, void *p)
 {
+	struct trace_callback *tcb;
 
-	TAILQ_REMOVE((struct trace_q *)q, (struct trace_callback *)p, links);
-	free(p);
+	tcb = (struct trace_callback *)p;
+
+	if (tcb->destructor)
+		(*tcb->destructor)(tcb->data);
+	TAILQ_REMOVE((struct trace_q *)q, tcb, links);
+	free(tcb);
 }
 
 void
@@ -352,7 +372,7 @@ _sysio_run_trace_q(void *q,
 
 	tcb = ((struct trace_q *)q)->tqh_first;
 	while (tcb) {
-		(*tcb->f)(file, func, line);
+		(*tcb->f)(file, func, line, tcb->data);
 		tcb = tcb->links.tqe_next;
 	}
 }
@@ -360,7 +380,8 @@ _sysio_run_trace_q(void *q,
 static void
 _sysio_trace_entry(const char *file __IS_UNUSED,
 		   const char *func,
-		   int line __IS_UNUSED)
+		   int line __IS_UNUSED,
+		   void *data __IS_UNUSED)
 {
 
 	_sysio_cprintf("+ENTER+ %s\n", func);
@@ -369,7 +390,8 @@ _sysio_trace_entry(const char *file __IS_UNUSED,
 static void
 _sysio_trace_exit(const char *file __IS_UNUSED,
 		  const char *func,
-		  int line __IS_UNUSED)
+		  int line __IS_UNUSED,
+		  void *data __IS_UNUSED)
 {
 
 	_sysio_cprintf("+EXIT+ %s\n", func);
@@ -526,6 +548,15 @@ do_creat(char *args)
 	struct intent intent;
 	dev_t	dev;
 	int	err;
+	enum {
+		CREATE_DIR	= 1,
+		CREATE_CHR	= 2,
+		CREATE_BLK	= 3,
+		CREATE_FILE	= 4
+	} op;
+	int	intent_mode;
+	struct inode *ino;
+	int	i;
   
 	len = strlen(args);
 	if (_sysio_get_args(args, v) - args != (ssize_t )len ||
@@ -558,69 +589,66 @@ do_creat(char *args)
 
 	if (!(dir = _sysio_cwd) && !(dir = _sysio_root))
 		return -ENOENT;
+
+	/*
+	 * Init, get the operation, setup the intent.
+	 */
 	err = 0;
 	mode = perms;
+	op = 0;
 	if (strcmp(v[0].ovi_value, "dir") == 0) {
-		INTENT_INIT(&intent, INT_CREAT, &mode, 0);
-		err =
-		    _sysio_namei(dir, v[1].ovi_value, ND_NEGOK, &intent, &pno);
-		if (err)
-			return err;
-		if (pno->p_base->pb_ino)
-			err = -EEXIST;
-		else if (IS_RDONLY(pno->p_parent,
-				   pno->p_parent->p_base->pb_ino))
-			err = -EROFS;
-		else {
-			struct inode *ino;
-
-			ino = pno->p_parent->p_base->pb_ino;
-			err = (*ino->i_ops.inop_mkdir)(pno, mode);
-		}
-		P_RELE(pno);
+		op = CREATE_DIR;
+		INTENT_INIT(&intent, INT_CREAT, &mode, NULL);
 	} else if (strcmp(v[0].ovi_value, "chr") == 0) {
-		if (!(v[5].ovi_value && parse_mm(v[5].ovi_value, &dev) == 0))
-			return -EINVAL;
+		op = CREATE_CHR;
 		mode |= S_IFCHR;
-		INTENT_INIT(&intent, INT_CREAT, &mode, 0);
-		err =
-		    _sysio_namei(dir, v[1].ovi_value, ND_NEGOK, &intent, &pno);
-		if (err)
-			return err;
-		if (pno->p_base->pb_ino)
-			err = -EEXIST;
-		else if (IS_RDONLY(pno->p_parent,
-				   pno->p_parent->p_base->pb_ino))
-			err = -EROFS;
-		else {
-			struct inode *ino;
-
-			ino = pno->p_parent->p_base->pb_ino;
-			err = (*ino->i_ops.inop_mknod)(pno, mode, dev);
-		}
-		P_RELE(pno);
+		INTENT_INIT(&intent, INT_CREAT, &mode, NULL);
+		if (!(v[5].ovi_value && parse_mm(v[5].ovi_value, &dev) == 0))
+			err = -EINVAL;
 	} else if (strcmp(v[0].ovi_value, "blk") == 0) {
-		/*
-		 * We don't support block special files yet.
-		 */
-		return -EINVAL;
+		op = CREATE_BLK;
+		mode |= S_IFBLK;
+		INTENT_INIT(&intent, INT_CREAT, &mode, NULL);
+		if (!(v[5].ovi_value && parse_mm(v[5].ovi_value, &dev) == 0))
+			err = -EINVAL;
 	} else if (strcmp(v[0].ovi_value, "file") == 0) {
-		int	i;
-		struct inode *ino;
+		op = CREATE_FILE;
+		intent_mode = O_CREAT|O_EXCL;
+		INTENT_INIT(&intent, INT_CREAT, &mode, &intent_mode);
+	} else
+		err = -EINVAL;
+	if (err)
+		return err;
 
-		i = O_CREAT|O_EXCL;
-		INTENT_INIT(&intent, INT_CREAT, &mode, &i);
-		err =
-		    _sysio_namei(dir, v[1].ovi_value, ND_NEGOK, &intent, &pno);
-		if (err)
-			return err;
+	/*
+	 * Lookup the given path.
+	 */
+	err =
+	    _sysio_namei(dir,
+			 v[1].ovi_value,
+			 ND_NEGOK|ND_NOPERMCHECK,
+			 &intent,
+			 &pno);
+	if (err)
+		return err;
+
+	/*
+	 * Perform.
+	 */
+	switch (op) {
+	case CREATE_DIR:
+		err = _sysio_mkdir(pno, mode);
+		break;
+	case CREATE_CHR:
+	case CREATE_BLK:
+		err = _sysio_mknod(pno, mode, dev);
+		break;
+	case CREATE_FILE:
 		err = _sysio_open(pno, O_CREAT|O_EXCL, mode);
-		if (err) {
-			P_RELE(pno);
-			return err;
-		}
+		if (err)
+			break;
 		ino = pno->p_base->pb_ino;
-		if (!err && v[6].ovi_value) {
+		if (v[6].ovi_value) {
 			struct iovec iovec;
 			struct intnl_xtvec xtvec;
 			struct ioctx io_context;
@@ -656,10 +684,12 @@ do_creat(char *args)
 		i = (*ino->i_ops.inop_close)(ino);
 		if (!err)
 			err = i;
-		P_RELE(pno);
-	} else 
-		err = -EINVAL;
+		break;
+	default:
+		abort();
+	}
 
+	P_RELE(pno);
 	return err;
 }
 
@@ -744,8 +774,13 @@ do_cd(char *args)
 	if (_sysio_get_args(args, v) - args != (ssize_t )len || !v[0].ovi_value)
 		return -EINVAL;
 
-	if (!(dir = _sysio_cwd) && !(dir = _sysio_root))
+	if (!(dir = _sysio_cwd) && !(dir = _sysio_root)) {
+		/*
+		 * We have no namespace yet. They really need to give us
+		 * something to work with.
+		 */
 		return -ENOENT;
+	}
 	err = _sysio_namei(dir, v[0].ovi_value, 0, NULL, &pno);
 	if (err)
 		return err;
@@ -791,7 +826,7 @@ do_chmd(char *args)
 
 	if (!(dir = _sysio_cwd) && !(dir = _sysio_root))
 		return -ENOENT;
-	err = _sysio_namei(dir, v[0].ovi_value, 0, NULL, &pno);
+	err = _sysio_namei(dir, v[0].ovi_value, ND_NOPERMCHECK, NULL, &pno);
 	if (err)
 		return err;
 	err = _sysio_setattr(pno, pno->p_base->pb_ino, SETATTR_MODE, &stbuf);
@@ -838,7 +873,7 @@ do_open(char *args)
 		return -ENOENT;
 	INTENT_INIT(&intent, INT_OPEN, &m, NULL);
 	pno = NULL;
-	err = _sysio_namei(dir, v[0].ovi_value, 0, &intent, &pno);
+	err = _sysio_namei(dir, v[0].ovi_value, ND_NOPERMCHECK, &intent, &pno);
 	if (err)
 		return err;
 	fil = NULL;
@@ -917,13 +952,17 @@ _sysio_boot_tracing(const char *arg)
 		if (entcb == NULL)
 			entcb =
 			    _sysio_register_trace(_sysio_entry_trace_q,
-						  _sysio_trace_entry);
+						  _sysio_trace_entry,
+						  NULL,
+						  NULL);
 		if (entcb == NULL)
 			return -errno;
 		if (exitcb == NULL)
 			exitcb =
 			    _sysio_register_trace(_sysio_exit_trace_q,
-						  _sysio_trace_exit);
+						  _sysio_trace_exit,
+						  NULL,
+						  NULL);
 		if (exitcb == NULL)
 			return -errno;
 	} else {
@@ -963,13 +1002,16 @@ _sysio_boot_namespace(const char *arg)
 		 */
 		while ((c = *arg) != '\0' && strchr(IGNORE_WHITE, c))
 			arg++;
-                if (COMMENT_INTRO == c) {
-                        while (*arg && (*arg != '\n')) {
-                                ++arg;
-                        }
+		if (COMMENT_INTRO == c) {
+			/*
+			 * Discard comment.
+			 */
+			while (*arg && (*arg != '\n')) {
+				++arg;
+			}
+			continue;
+		}
 
-                        continue;
-                }
 		if (c == '\0')
 			break;
 		if (c != '{') {

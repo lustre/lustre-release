@@ -52,6 +52,7 @@
 #include <sys/uio.h>
 #include <sys/queue.h>
 #include <dirent.h>
+#include <getopt.h>
 
 #if defined(SYSIO_LABEL_NAMES)
 #include "sysio.h"

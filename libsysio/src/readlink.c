@@ -41,9 +41,6 @@
  * lee@sandia.gov
  */
 
-#if defined(__linux__)
-#define _BSD_SOURCE
-#endif
 #include <unistd.h>
 #include <errno.h>
 #include <assert.h>

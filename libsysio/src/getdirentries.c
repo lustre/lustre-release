@@ -17,28 +17,6 @@
  */
 
 /*
- * #############################################################################
- * #
- * #     This Cplant(TM) source code is the property of Sandia National
- * #     Laboratories.
- * #
- * #     This Cplant(TM) source code is copyrighted by Sandia National
- * #     Laboratories.
- * #
- * #     The redistribution of this Cplant(TM) source code is subject to the
- * #     terms of the GNU Lesser General Public License
- * #     (see cit/LGPL or http://www.gnu.org/licenses/lgpl.html)
- * #
- * #     Cplant(TM) Copyright 1998-2004 Sandia Corporation. 
- * #     Under the terms of Contract DE-AC04-94AL85000, there is a non-exclusive
- * #     license for use of this work by or on behalf of the US Government.
- * #     Export of this program may require a license from the United States
- * #     Government.
- * #
- * #############################################################################
- */
-
-/*
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
  * License as published by the Free Software Foundation; either
@@ -120,8 +98,9 @@ PREPEND(_, SYSIO_INTERFACE_NAME(getdirentries64))(int fd,
 	SYSIO_INTERFACE_ENTER;
 
 	fil = _sysio_fd_find(fd);
-	if (!(fil && fil->f_ino))
-		return -EBADF;
+	if (!(fil && fil->f_ino)) {
+		SYSIO_INTERFACE_RETURN(-1, -EBADF);
+	}
 
 	cc = filldirents(fil, buf, nbytes, basep);
 	SYSIO_INTERFACE_RETURN(cc < 0 ? -1 : cc, cc < 0 ? (int )cc : 0);
@@ -190,8 +169,9 @@ SYSIO_INTERFACE_NAME(getdirentries)(int fd,
 	SYSIO_INTERFACE_ENTER;
 
 	fil = _sysio_fd_find(fd);
-	if (!(fil && fil->f_ino))
-		return -EBADF;
+	if (!(fil && fil->f_ino)) {
+		SYSIO_INTERFACE_RETURN(-1, -EBADF);
+	}
 
 	count = cc = filldirents(fil, buf, nbytes, &b);
 	d64p = (void *)buf;

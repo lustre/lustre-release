@@ -127,7 +127,7 @@ SYSIO_INTERFACE_NAME(rename)(const char *oldpath, const char *newpath)
 	 * If old == new, we're done.
 	 */
 	if (old->p_base->pb_ino == new->p_base->pb_ino)
-		goto out;
+		goto short_out;
 
 	if (new->p_base->pb_ino) {
 		/*
@@ -175,8 +175,10 @@ SYSIO_INTERFACE_NAME(rename)(const char *oldpath, const char *newpath)
 	if (new->p_base->pb_ino)
 		I_GONE(new->p_base->pb_ino);
 	new->p_base->pb_ino = old->p_base->pb_ino;
+	old->p_base->pb_ino = NULL;
 	I_REF(new->p_base->pb_ino);
 
+short_out:
 error1:
 	P_RELE(new);
 error2:
@@ -184,7 +186,6 @@ error2:
 error3:
 	if (err)
 		goto out;
-	_sysio_p_gone(old);					/* kill it! */
 out:
 	SYSIO_INTERFACE_RETURN(err ? -1 : 0, err);
 }

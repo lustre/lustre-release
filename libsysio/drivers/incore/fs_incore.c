@@ -546,29 +546,40 @@ _sysio_incore_fsswop_mount(const char *source,
 	 * Source is a specification for the root attributes of this
 	 * new file system in the format:
 	 *
-	 * <permissions>+<owner>+<group>
+	 * <permissions>[+<owner>][-<group>]
 	 */
 	ul = strtoul(source, &cp, 0);
 	mode = (mode_t )ul & 07777;
-	if (*cp != '+' ||
-	    (ul == ULONG_MAX && errno == ERANGE) ||
-	    (unsigned long)mode != ul ||
-	    mode > 07777)
-		return -EINVAL;
-	source = cp;
-	l = strtol(source, &cp, 0);
-	uid = (uid_t )l;
-	if (*cp != '+' ||
-	    ((l == LONG_MIN || l == LONG_MAX) && errno == ERANGE) ||
-	    (long )uid != l)
-		return -EINVAL;
-	source = cp;
-	l = strtol(source, &cp, 0);
-	gid = (gid_t )l;
-	if (*cp ||
-	    ((l == LONG_MIN || l == LONG_MAX) && errno == ERANGE) ||
-	    (long )gid != l)
-		return -EINVAL;
+	uid = getuid();					/* default */
+	gid = getgid();					/* default */
+	if (*cp != '\0') {
+		/*
+		 * Get user and/or group.
+		 */
+		if (*cp != '+' ||
+		    (ul == ULONG_MAX && errno == ERANGE) ||
+		    (unsigned long)mode != ul ||
+		    mode > 07777)
+			return -EINVAL;
+		source = cp;
+		l = strtol(source, &cp, 0);
+		uid = (uid_t )l;
+		if (((l == LONG_MIN || l == LONG_MAX) &&
+		     errno == ERANGE) ||
+		    (long )uid != l)
+			return -EINVAL;
+		if (*cp != '+')
+			return -EINVAL;
+		source = cp;
+		l = strtol(source, &cp, 0);
+		gid = (gid_t )l;
+		if (((l == LONG_MIN || l == LONG_MAX) &&
+		     errno == ERANGE) ||
+		    (long )gid != l)
+			return -EINVAL;
+		if (*cp != '\0')
+			return -EINVAL;
+	}
 
 	err = 0;
 
@@ -767,18 +778,29 @@ incore_directory_probe(void *data,
 
 static struct intnl_dirent *
 incore_directory_match(struct intnl_dirent *de,
-		       size_t reclen __IS_UNUSED,
+		       size_t reclen,
 		       struct lookup_data *ld)
 {
+	size_t	len;
 
 #if defined(BSD) || defined(REDSTORM)
 	if (IFTODT(de->d_type) == DT_WHT)
 		return NULL;
 #endif
-	if (
 #ifdef _DIRENT_HAVE_D_NAMLEN
-	    ld->name->len == de->d_namlen &&
+	len = de->d_namlen;
+#else
+	{
+		const char *cp, *end;
+
+		cp = de->d_name;
+		end = (const char *)de + reclen;
+		while (cp < end && *cp != '\0')
+			cp++;
+		len = cp - de->d_name;
+	}
 #endif
+	if (ld->name->len == len &&
 	    strncmp(de->d_name, ld->name->name, ld->name->len) == 0)
 		return de;
 	ld->de = de;
@@ -932,20 +954,29 @@ incore_directory_position(struct intnl_dirent *de,
 struct copy_info {
 	void	*data;
 	size_t	nbytes;
+	unsigned count;
 };
 
 /*
  * Eumeration callback.
  *
  * Note:
- * On those systems supporting white-out entries, they are returned. On
- * systems without, they are not.
+ * Whiteout entries are never returned.
  */
 static void *
 incore_directory_enumerate(struct intnl_dirent *de,
 			   size_t reclen,
 			   struct copy_info *cinfo) {
 
+#ifdef DT_WHT
+	if (de->d_type == DT_WHT) {
+		/*
+		 * Keep going  but skip the copy.
+		 */
+		return NULL;
+	}
+#endif
+	cinfo->count++;
 	if (reclen > cinfo->nbytes)
 		return de;
 	(void *)memcpy(cinfo->data, de, reclen);
@@ -984,6 +1015,7 @@ _sysio_incore_dirop_filldirentries(struct inode *ino,
 
 	copy_info.data = buf;
 	copy_info.nbytes = nbytes;
+	copy_info.count = 0;
 	off = (char *)de - (char *)icino->ici_data;
 	de =
 	    incore_directory_probe(de,
@@ -992,10 +1024,14 @@ _sysio_incore_dirop_filldirentries(struct inode *ino,
 				   (probe_ty )incore_directory_enumerate,
 				   NULL,
 				   &copy_info);
-	nbytes -= copy_info.nbytes;
 	icino->ici_st.st_atime = time(NULL);
+	if (nbytes == copy_info.nbytes && copy_info.count)
+		return -EINVAL;
+	nbytes -= copy_info.nbytes;
+#if 0
 	if (!nbytes)
 		return -EOVERFLOW;
+#endif
 	*posp += nbytes;
 	return (ssize_t )nbytes;
 }

@@ -41,8 +41,6 @@
  * lee@sandia.gov
  */
 
-#define _BSD_SOURCE
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -54,6 +52,7 @@
 #include <dirent.h>
 #include <sys/uio.h>
 #include <sys/queue.h>
+#include <getopt.h>
 
 #if defined(SYSIO_LABEL_NAMES)
 #include "sysio.h"

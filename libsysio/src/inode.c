@@ -9,7 +9,7 @@
  *    terms of the GNU Lesser General Public License
  *    (see cit/LGPL or http://www.gnu.org/licenses/lgpl.html)
  *
- *    Cplant(TM) Copyright 1998-2003 Sandia Corporation. 
+ *    Cplant(TM) Copyright 1998-2006 Sandia Corporation. 
  *    Under the terms of Contract DE-AC04-94AL85000, there is a non-exclusive
  *    license for use of this work by or on behalf of the US Government.
  *    Export of this program may require a license from the United States
@@ -869,15 +869,23 @@ _sysio_setattr(struct pnode *pno,
 	       unsigned mask,
 	       struct intnl_stat *stbuf)
 {
-	/* It is possible that pno is null (for ftruncate call). */
+	/*
+	 * It is possible that pno is null (for ftruncate call).
+	 */
 
-	if (pno) {
-	assert(!(pno->p_base->pb_ino && ino) || pno->p_base->pb_ino == ino);
-	if (IS_RDONLY(pno, ino))
-		return -EROFS;
-	}
-	if (!ino && pno->p_base->pb_ino)
+	if (pno)
+		assert(!ino || pno->p_base->pb_ino == ino);
+	if (!ino)
 		ino = pno->p_base->pb_ino;
+	assert(ino);
+
+	if (pno && IS_RDONLY(pno))
+		return -EROFS;
+
+	/*
+	 * Determining permission to change the attributes is
+	 * difficult, at best. Just try it.
+	 */
 	return (*ino->i_ops.inop_setattr)(pno, ino, mask, stbuf);
 }
 

@@ -9,7 +9,7 @@
  *    terms of the GNU Lesser General Public License
  *    (see cit/LGPL or http://www.gnu.org/licenses/lgpl.html)
  *
- *    Cplant(TM) Copyright 1998-2003 Sandia Corporation. 
+ *    Cplant(TM) Copyright 1998-2006 Sandia Corporation. 
  *    Under the terms of Contract DE-AC04-94AL85000, there is a non-exclusive
  *    license for use of this work by or on behalf of the US Government.
  *    Export of this program may require a license from the United States
@@ -41,11 +41,11 @@
  * lee@sandia.gov
  */
 
-#include <unistd.h>
 #include <errno.h>
 #include <assert.h>
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <unistd.h>
 #include <sys/queue.h>
 
 #include "sysio.h"
@@ -53,6 +53,24 @@
 #include "fs.h"
 #include "mount.h"
 #include "sysio-symbols.h"
+
+int
+_sysio_mkdir(struct pnode *pno, mode_t mode)
+{
+	int	err;
+	struct inode *parenti;
+
+	if (pno->p_base->pb_ino) 
+		return -EEXIST;
+
+	err = _sysio_permitted(pno->p_parent, W_OK);
+	if (err)
+		return err;
+
+	parenti = pno->p_parent->p_base->pb_ino;
+	assert(parenti);
+	return (*parenti->i_ops.inop_mkdir)(pno, mode);
+}
 
 int
 SYSIO_INTERFACE_NAME(mkdir)(const char *path, mode_t mode)
@@ -67,19 +85,9 @@ SYSIO_INTERFACE_NAME(mkdir)(const char *path, mode_t mode)
 	err = _sysio_namei(_sysio_cwd, path, ND_NEGOK, &intent, &pno);
 	if (err)
 		goto out;
-	if (pno->p_base->pb_ino) {
-		err = -EEXIST;
-		goto error;
-	}
 
-	if (IS_RDONLY(pno, pno->p_base->pb_ino)) {
-		err = -EROFS;
-		goto error;
-	}
-	mode |= S_IFDIR;
-	mode &= ~(_sysio_umask & 0777); /* apply umask */
-	err = (*pno->p_parent->p_base->pb_ino->i_ops.inop_mkdir)(pno, mode);
-error:
+	mode &= ~(_sysio_umask & 0777);			/* apply umask */
+	err = _sysio_mkdir(pno, mode);
 	P_RELE(pno);
 out:
 	SYSIO_INTERFACE_RETURN(err ? -1 : 0, err);

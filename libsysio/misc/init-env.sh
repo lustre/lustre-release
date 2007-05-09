@@ -15,19 +15,19 @@ if [ "x${SYSIO_AUTOMOUNT}" == "xyes" ]; then
 	# file system. Further automounts in the sub-mounts are not enabled.
 	#
 	_extras=" \
-		{mnt,	dev=\"incore:0755+0+0\",dir=\"/mnt\",fl=2} \
-		{creat, ft=dir,nm=\"/mnt/home\",pm=04755,ow=0,gr=0} \
+		{mnt,	dev=\"incore:0755\",dir=\"/mnt\",fl=2} \
+		{creat, ft=dir,nm=\"/mnt/home\",pm=04755} \
 		{creat, ft=file,nm=\"/mnt/home/.mount\",pm=0600, \
 			str=\"native:/home\"} \
 	"
 fi
 export SYSIO_NAMESPACE="\
 	{mnt,	dev=\"native:/\",dir=/,fl=${_root_flags:-0}} \
-	{mnt,	dev=\"incore:0755+0+0\",dir=\"/dev\"} \
+	{mnt,	dev=\"incore:0755\",dir=\"/dev\"} \
 	{creat,	ft=chr,nm=\"/dev/stdin\",pm=0400,mm=0+0} \
 	{creat,	ft=chr,nm=\"/dev/stdout\",pm=0200,mm=0+1} \
 	{creat,	ft=chr,nm=\"/dev/stderr\",pm=0200,mm=0+2} \
-	{creat,	ft=dir,nm=\"/dev/fd\",pm=0755,ow=0,gr=0} \
+	{creat,	ft=dir,nm=\"/dev/fd\",pm=0755} \
 	{creat,	ft=chr,nm=\"/dev/fd/0\",pm=0400,mm=0+0} \
 	{open,	nm=\"/dev/fd/0\",fd=0,m=0} \
 	{creat,	ft=chr,nm=\"/dev/fd/1\",pm=0200,mm=0+1} \

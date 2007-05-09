@@ -9,7 +9,7 @@
  *    terms of the GNU Lesser General Public License
  *    (see cit/LGPL or http://www.gnu.org/licenses/lgpl.html)
  *
- *    Cplant(TM) Copyright 1998-2003 Sandia Corporation. 
+ *    Cplant(TM) Copyright 1998-2005 Sandia Corporation. 
  *    Under the terms of Contract DE-AC04-94AL85000, there is a non-exclusive
  *    license for use of this work by or on behalf of the US Government.
  *    Export of this program may require a license from the United States
@@ -43,12 +43,12 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <unistd.h>
 #include <errno.h>
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
-#include <sys/uio.h>
 #include <getopt.h>
 
 #if defined(SYSIO_LABEL_NAMES)
@@ -58,37 +58,30 @@
 #include "test.h"
 
 /*
- * Rename a file system object.
+ * fcntl lock tests
  *
- * Usage: test_rename <src> <dest>
+ * Usage: test_fcnt_lock [<path> ...]
  */
 
 void	usage(void);
-int	rename_file(const char *spath, const char *dpath);
+void	do_tests(const char *path);
 
 int
 main(int argc, char * const argv[])
 {
 	int	i;
 	int	err;
-	const char *spath, *dpath;
 	extern int _test_sysio_startup(void);
 
 	/*
 	 * Parse command-line args.
 	 */
-	while ((i = getopt(argc,
-			   argv,
-			   ""
-			   )) != -1)
+	while ((i = getopt(argc, argv, "")) != -1)
 		switch (i) {
 
 		default:
 			usage();
 		}
-
-	if (!(argc - optind))
-		usage();
 
 	err = _test_sysio_startup();
 	if (err) {
@@ -97,28 +90,15 @@ main(int argc, char * const argv[])
 		exit(1);
 	}	
 
-	(void )SYSIO_INTERFACE_NAME(umask)(022);
+	while (optind < argc)
+		do_tests(argv[optind++]);
 
 	/*
-	 * Source
+	 * Clean up.
 	 */
-	spath = argv[optind++];
-	if (!(argc - optind))
-		usage();
-	/*
-	 * Destination
-	 */
-	dpath = argv[optind++];
-	if (argc - optind)
-		usage();
-
-	err = SYSIO_INTERFACE_NAME(rename)(spath, dpath);
-	if (err)
-		perror("rename");
-
 	_test_sysio_shutdown();
 
-	return err;
+	return 0;
 }
 
 void
@@ -126,7 +106,40 @@ usage()
 {
 
 	(void )fprintf(stderr,
-		       "Usage: test_rename"
-		       " source destination\n");
+		       "Usage: test_fcntl_lock"
+		       " source...\n");
 	exit(1);
+}
+
+void
+do_tests(const char *path)
+{
+	int	fd;
+	int	err;
+	struct flock flock;
+
+	fd = SYSIO_INTERFACE_NAME(open)(path, O_RDONLY);
+	if (fd < 0) {
+		perror(path);
+		return;
+	}
+	do {
+		flock.l_type = F_RDLCK;
+		flock.l_whence = SEEK_CUR;
+		flock.l_start = 0;
+		flock.l_len = 0;
+		flock.l_pid = 0;
+		err = SYSIO_INTERFACE_NAME(fcntl)(fd, F_SETLK, &flock);
+		if (err)
+			break;
+		flock.l_type = F_UNLCK;
+		err = SYSIO_INTERFACE_NAME(fcntl)(fd, F_SETLK, &flock);
+		if (err)
+			break;
+	} while (0);
+
+	if (err)
+		perror(path);
+	if (SYSIO_INTERFACE_NAME(close)(fd) != 0)
+		perror(path);
 }

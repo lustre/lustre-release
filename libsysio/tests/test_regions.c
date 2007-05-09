@@ -41,19 +41,6 @@
  * lee@sandia.gov
  */
 
-#define _BSD_SOURCE
-
-#if (_LARGEFILE64_SOURCE && \
-     ((defined(__STDC_VERSION__) && __STDC_VERSION__ == 199901L)))
-#define	GO64
-#else
-#warning Cannot prompt the 64-bit interface
-#endif
-
-#if defined(GO64) && defined(__GLIBC__)
-#define  _ISOC99_SOURCE 1
-#endif
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -64,6 +51,7 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <sys/uio.h>
+#include <getopt.h>
 
 #if defined(SYSIO_LABEL_NAMES)
 #include "sysio.h"
@@ -80,9 +68,7 @@
  * Destination will not be overwritten if it already exist.
  */
 
-#if (_LARGEFILE64_SOURCE && \
-     ((defined(__STDC_VERSION__) && __STDC_VERSION__ == 199901L) || \
-      (defined(_ISOC99_SOURCE) && _ISOC99_SOURCE)))
+#if defined(_LARGEFILE64_SOURCE) && _LARGEFILE64_SOURCE
 #define	GO64
 #else
 #warning Cannot prompt the 64-bit interface

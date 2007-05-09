@@ -41,8 +41,6 @@
  * lee@sandia.gov
  */
 
-#define _BSD_SOURCE
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -54,6 +52,7 @@
 #include <sys/statvfs.h>
 #endif
 #include <sys/uio.h>
+#include <getopt.h>
 
 #if defined(SYSIO_LABEL_NAMES)
 #include "sysio.h"

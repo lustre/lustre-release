@@ -43,6 +43,7 @@
 
 #include <unistd.h>
 #include <string.h>
+#include <fcntl.h>
 #include <errno.h>
 #include <assert.h>
 #include <sys/types.h>
@@ -52,6 +53,8 @@
 #include "sysio.h"
 #include "inode.h"
 #include "file.h"
+#include "fs.h"
+#include "mount.h"
 
 #include "sysio-symbols.h"
 
@@ -130,6 +133,10 @@ PREPEND(_, SYSIO_INTERFACE_NAME(ftruncate))(int fd, _SYSIO_OFF_T length)
 	err = 0;
 	fil = _sysio_fd_find(fd);
 	if (!fil) {
+		err = -EBADF;
+		goto out;
+	}
+	if (!F_CHKRW(fil, 'w')) {
 		err = -EBADF;
 		goto out;
 	}

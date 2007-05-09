@@ -9,7 +9,7 @@
  *    terms of the GNU Lesser General Public License
  *    (see cit/LGPL or http://www.gnu.org/licenses/lgpl.html)
  *
- *    Cplant(TM) Copyright 1998-2005 Sandia Corporation. 
+ *    Cplant(TM) Copyright 1998-2006 Sandia Corporation. 
  *    Under the terms of Contract DE-AC04-94AL85000, there is a non-exclusive
  *    license for use of this work by or on behalf of the US Government.
  *    Export of this program may require a license from the United States
@@ -89,7 +89,9 @@ struct intnl_xtvec;
 
 struct iovec;
 
-
+/*
+ * Symbol composition.
+ */
 #define _PREPEND_HELPER(p, x) \
 	p ## x
 #define PREPEND(p, x) \
@@ -160,7 +162,10 @@ extern void *_sysio_exit_trace_q;
 extern void *_sysio_register_trace(void *q,
 				   void (*)(const char *file,
 					    const char *func,
-					    int line));
+					    int line,
+					    void *data),
+				   void *data,
+				   void (*destructor)(void *data));
 extern void _sysio_remove_trace(void *q, void *p);
 extern void _sysio_run_trace_q(void *q,
 			       const char *file,
@@ -185,13 +190,13 @@ extern void _sysio_run_trace_q(void *q,
 	do { } while (0)
 #endif
 
-/* accounting for IO stats read and write char count */
+/* Accounting for IO stats; Read and write character count. */
 #if defined(REDSTORM)
 #define _SYSIO_UPDACCT(w, cc) \
 	do { \
 		if ((cc) < 0) \
 			break; \
-		if (!w) \
+		if (w) \
 			_add_iostats(0, (size_t )(cc)); \
 		else \
 			_add_iostats((size_t )(cc), 0); \

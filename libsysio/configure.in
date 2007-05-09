@@ -1,8 +1,10 @@
-AC_INIT(libsysio, 0.1)
+AC_INIT(libsysio, 1.2)
 
 AC_CANONICAL_HOST
 
 case "$host_os" in
+  aix*)
+  	;;
   linux*)
 	;;
   *)
@@ -11,9 +13,9 @@ case "$host_os" in
 esac
 
 AM_INIT_AUTOMAKE([subdir-objects])
+AC_PROG_CC
 AM_PROG_CC_C_O
 
-AC_PROG_CC
 AC_PROG_RANLIB
 AC_PROG_MAKE_SET
 AC_HEADER_STDC
@@ -112,6 +114,17 @@ AC_ARG_WITH(defer-init-cwd,
   [with_defer_init_cwd=no])
 AC_SUBST(DEFER_INIT_CWD)
 
+AC_ARG_WITH(tracing,
+  AC_HELP_STRING([--with-tracing],
+    [enable tracing support]),
+  [	case "${withval}" in
+	 yes) TRACING=-DSYSIO_TRACING=1 ;;
+	 no) ;;
+	 *) AC_MSG_ERROR(bad value ${withval} for --with-tracing) ;;
+	esac],
+  [TRACING=-DSYSIO_TRACING=1])
+AC_SUBST(TRACING)
+
 AC_ARG_WITH(cplant_yod,
    AC_HELP_STRING([--with-cplant-yod],[build cplant yod I/O driver]),
    [	case "${withval}" in	
@@ -169,6 +182,16 @@ if test x$with_lustre_hack = xyes; then
 	AC_DEFINE(HAVE_LUSTRE_HACK)
 fi
 
+AC_ARG_WITH(alternate-symbols,
+  AC_HELP_STRING([--with-alternate-symbols@<:@=<qualifier>@:>@],
+    [Prepend standard, public, symbols with a unique qualifer]),
+  [	case "${withval}" in
+	 yes) SYSIO_LABEL_NAMES=-DSYSIO_LABEL_NAMES=sysio_ ;;
+	 no) ;;
+	 *) SYSIO_LABEL_NAMES=-DSYSIO_LABEL_NAMES="${withval}" ;;
+	esac])
+AC_SUBST(SYSIO_LABEL_NAMES)
+
 # We keep the original values in `$config_*' and never modify them, so we
 # can write them unchanged into config.make.  Everything else uses
 # $machine, $vendor, and $os, and changes them whenever convenient.
@@ -207,6 +230,52 @@ os=$config_os
 # Unify this here.
 if test "$machine" = rs6000; then
 	machine="powerpc"
+fi
+
+case "$host_os" in
+  gnu* | linux*)
+	AC_DEFINE(_XOPEN_SOURCE, 600)
+	;;
+  aix*)
+	# ... and always needed...
+	AC_DEFINE(__USE_LARGEFILE64)
+	AC_DEFINE(_LARGE_FILES)
+	AC_DEFINE(_LARGE_FILE_API)
+	AC_DEFINE(_ALL_SOURCE)
+	AC_DEFINE(_XOPEN_SOURCE_EXTENDED)
+	;;
+esac
+
+AC_MSG_CHECKING(for symlink support)
+AC_TRY_COMPILE([
+#include <sys/types.h>
+#include <sys/stat.h>
+],[
+#ifndef S_ISLNK
+#error
+#endif
+],
+	symlink_support="yes",
+	symlink_support="no"
+)
+AC_MSG_RESULT($symlink_support)
+
+if test x$symlink_support = xyes; then
+	AC_MSG_CHECKING(if readlink returns int)
+	AC_TRY_COMPILE([
+#include <unistd.h>
+	],[
+		extern int readlink(const char *, char *, size_t);
+	],
+		readlink_returns_int="yes",
+		readlink_returns_int="no"
+	)
+	AC_MSG_RESULT($readlink_returns_int)
+	if test x$readlink_returns_int = no; then
+		AC_DEFINE(HAVE_POSIX_1003_READLINK,
+			  1,
+			  [readlink returns ssize_t])
+	fi
 fi
 
 AC_MSG_CHECKING(if readlink returns ssize_t)

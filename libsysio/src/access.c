@@ -9,7 +9,7 @@
  *    terms of the GNU Lesser General Public License
  *    (see cit/LGPL or http://www.gnu.org/licenses/lgpl.html)
  *
- *    Cplant(TM) Copyright 1998-2003 Sandia Corporation. 
+ *    Cplant(TM) Copyright 1998-2006 Sandia Corporation. 
  *    Under the terms of Contract DE-AC04-94AL85000, there is a non-exclusive
  *    license for use of this work by or on behalf of the US Government.
  *    Export of this program may require a license from the United States
@@ -50,20 +50,31 @@
 #include <sys/queue.h>
 
 #include "sysio.h"
+#include "mount.h"
+#include "fs.h"
 #include "inode.h"
 #include "sysio-symbols.h"
 
 /*
+ * Use a persistent buffer for gids. No, not a cache. We just want to
+ * avoid calling malloc over, and over, and...
+ */
+static gid_t *gids = NULL;
+static int gidslen = 0;
+
+/*
  * Check given access type on given inode.
  */
-static int
-_sysio_check_permission(struct inode *ino,
-			uid_t uid, gid_t gid,
-			gid_t gids[], size_t ngids,
-			int amode)
+int
+_sysio_check_permission(struct pnode *pno, struct creds *crp, int amode)
 {
 	mode_t	mask;
+	struct inode *ino;
+	int	err;
 	struct intnl_stat *stat;
+	gid_t	*gids;
+	int	ngids;
+	int	group_matched;
 
 	/*
 	 * Check amode.
@@ -82,69 +93,158 @@ _sysio_check_permission(struct inode *ino,
 	if (amode & X_OK)
 		mask |= S_IXUSR;
 
+	ino = pno->p_base->pb_ino;
+	assert(ino);
+
+	err = -EACCES;					/* assume error */
 	stat = &ino->i_stbuf;
-	if (stat->st_uid == uid && (stat->st_mode & mask) == mask) 
-		return 0;
+	do {
+		/*
+		 * Owner?
+		 */
+		if (stat->st_uid == crp->creds_uid) {
+			if ((stat->st_mode & mask) == mask)
+				err = 0;
+			break;
+		}
 
-	mask >>= 3;
-	if (stat->st_gid == gid && (stat->st_mode & mask) == mask)
-		return 0;
+		/*
+		 * Group?
+		 */
+		mask >>= 3;
+		group_matched = 0;
+		gids = crp->creds_gids;
+		ngids = crp->creds_ngids;
+		while (ngids) {
+			ngids--;
+			if (stat->st_gid == *gids++) {
+				group_matched = 1;
+				if ((stat->st_mode & mask) == mask)
+					err = 0;
+			}
+		}
+		if (group_matched)
+			break;
 
-	while (ngids) {
-		ngids--;
-		if (stat->st_gid == *gids++ && (stat->st_mode & mask) == mask)
-			return 0;
-	}
+		/*
+		 * Other?
+		 */
+		mask >>= 3;
+		if ((stat->st_mode & mask) == mask)
+			err = 0;
+	} while (0);
+	if (err)
+		return err;
 
-	mask >>= 3;
-	if ((stat->st_mode & mask) == mask)
-		return 0;
+	/*
+	 * Check for RO access to the file due to mount
+	 * options.
+	 */
+	if (amode & W_OK && IS_RDONLY(pno))
+		return -EROFS;
 
-	return -EACCES;
+	return 0;
 }
 
 /*
- * Determine if a given access is permitted to a give file.
+ * Cache groups.
  */
-int
-_sysio_permitted(struct inode *ino, int amode)
+static int
+_sysio_ldgroups(gid_t gid0, gid_t **gidsp, int *gidslenp)
 {
-	int	err;
-	gid_t	*gids;
-	int	n;
+	int	n, i;
 	void	*p;
 
-	err = 0;
-	gids = NULL;
+	n = *gidslenp;
+	if (n < 8) {
+		*gidsp = NULL;
+		n = 8;
+	}
 	for (;;) {
-		n = getgroups(0, NULL);
-		if (!n)
-			break;
-		p = realloc(gids, n * sizeof(gid_t));
-		if (!p && gids) {
-			err = -ENOMEM;
-			break;
+		/*
+		 * This is far more expensive than I would like. Each time
+		 * called it has to go to some length to acquire the
+		 * current uid and groups membership. We can't just cache
+		 * the result, either. The caller could have altered something
+		 * asynchronously. Wish we had easy access to this info.
+		 */
+		if (n > *gidslenp) {
+			p = realloc(*gidsp, (size_t )n * sizeof(gid_t));
+			if (!p)
+				return -errno;
+			*gidsp = p;
+			*gidslenp = n;
 		}
-		gids = p;
-		err = getgroups(n, gids);
-		if (err < 0) {
-			if (errno == EINVAL)
-				continue;
-			err = -errno;
-			break;
+		(*gidsp)[0] = gid0;
+		i = getgroups(n - 1, *gidsp + 1);
+		if (i < 0) {
+			if (errno != EINVAL)
+				return -errno;
+			if (INT_MAX / 2 < n)
+				return -EINVAL;
+			n *= 2;
+			continue;
 		}
-		err =
-		    _sysio_check_permission(ino,
-					    geteuid(), getegid(),
-					    gids, (size_t )n,
-					    amode);
 		break;
 	}
-	if (!gids)
+	return i;
+}
+
+/*
+ * Get current credentials.
+ */
+static int
+_sysio_ldcreds(uid_t uid, gid_t gid, struct creds *crp)
+{
+	int	n;
+
+	n = _sysio_ldgroups(gid, &gids, &gidslen);
+	if (n < 0)
+		return n;
+	crp->creds_uid = uid;
+	crp->creds_gids = gids;
+	crp->creds_ngids = n;
+
+	return 0;
+}
+
+static int
+_sysio_getcreds(struct creds *crp)
+{
+
+	return _sysio_ldcreds(getuid(), getgid(), crp);
+}
+
+/*
+ * Determine if a given access is permitted to a given file.
+ */
+int
+_sysio_permitted(struct pnode *pno, int amode)
+{
+	struct creds cr;
+	int	err;
+
+	err = _sysio_ldcreds(geteuid(), getegid(), &cr);
+	if (err < 0)
 		return err;
-	free(gids);
+	err = _sysio_check_permission(pno, &cr, amode);
 	return err;
 }
+
+#ifdef ZERO_SUM_MEMORY
+/*
+ * Clean up persistent resource on shutdown.
+ */
+void
+_sysio_access_shutdown()
+{
+
+	if (gids)
+		free(gids);
+	gids = NULL;
+	gidslen = 0;
+}
+#endif
 
 int
 SYSIO_INTERFACE_NAME(access)(const char *path, int amode)
@@ -152,6 +252,7 @@ SYSIO_INTERFACE_NAME(access)(const char *path, int amode)
 	struct intent intent;
 	int	err;
 	struct pnode *pno;
+	struct creds cr;
 
 	SYSIO_INTERFACE_DISPLAY_BLOCK;
 
@@ -161,11 +262,12 @@ SYSIO_INTERFACE_NAME(access)(const char *path, int amode)
 	err = _sysio_namei(_sysio_cwd, path, 0, &intent, &pno);
 	if (err)
 		SYSIO_INTERFACE_RETURN(-1, err);
+	err = _sysio_ldcreds(geteuid(), getegid(), &cr);
+	if (err < 0)
+		goto out;
 	err =
-	    _sysio_check_permission(pno->p_base->pb_ino,
-				    getuid(), getgid(),
-				    NULL, 0,
-				    amode);
+	    _sysio_check_permission(pno, &cr, amode);
+out:
 	P_RELE(pno);
 	SYSIO_INTERFACE_RETURN(err ? -1 : 0, err);
 }

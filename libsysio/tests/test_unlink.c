@@ -51,6 +51,7 @@
 #include <dirent.h>
 #endif
 #include <sys/uio.h>
+#include <getopt.h>
 
 #if defined(SYSIO_LABEL_NAMES)
 #include "sysio.h"

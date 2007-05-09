@@ -9,7 +9,7 @@
  *    terms of the GNU Lesser General Public License
  *    (see cit/LGPL or http://www.gnu.org/licenses/lgpl.html)
  *
- *    Cplant(TM) Copyright 1998-2003 Sandia Corporation. 
+ *    Cplant(TM) Copyright 1998-2006 Sandia Corporation. 
  *    Under the terms of Contract DE-AC04-94AL85000, there is a non-exclusive
  *    license for use of this work by or on behalf of the US Government.
  *    Export of this program may require a license from the United States
@@ -40,10 +40,6 @@
  *
  * lee@sandia.gov
  */
-
-#if defined(AUTOMOUNT_FILE_NAME) && defined(__linux__)
-#define _BSD_SOURCE
-#endif
 
 #include <stdlib.h>
 #include <string.h>
@@ -88,7 +84,8 @@ lookup(struct pnode *parent,
        struct qstr *name,
        struct pnode **pnop,
        struct intent *intnt,
-       const char *path)
+       const char *path,
+       int check_permissions)
 {
 	int	err;
 	struct pnode *pno;
@@ -96,9 +93,15 @@ lookup(struct pnode *parent,
 	if (!parent->p_base->pb_ino)
 		return -ENOTDIR;
 
-	err = _sysio_permitted(parent->p_base->pb_ino, X_OK);
-	if (err)
-		return err;
+	/*
+	 * Sometimes we don't want to check permissions. At initialization
+	 * time, for instance.
+	 */
+	if (check_permissions) {
+		err = _sysio_permitted(parent, X_OK);
+		if (err)
+			return err;
+	}
 
 	/*
 	 * Short-circuit `.' and `..'; We don't cache those.
@@ -151,6 +154,7 @@ lookup(struct pnode *parent,
  * ND_NOFOLLOW		symbolic links are not followed
  * ND_NEGOK		if terminal/leaf does not exist, return
  * 			 path node (alias) anyway.
+ * ND_NOPERMCHECK	do not check permissions
  */
 int
 _sysio_path_walk(struct pnode *parent, struct nameidata *nd)
@@ -297,7 +301,8 @@ _sysio_path_walk(struct pnode *parent, struct nameidata *nd)
 				   &_sysio_mount_file_name,
 				   &pno,
 				   NULL,
-				   NULL);
+				   NULL,
+				   1);
 			if (pno)
 				P_RELE(pno);
 			if (!err && _sysio_automount(pno) == 0) {
@@ -410,7 +415,8 @@ _sysio_path_walk(struct pnode *parent, struct nameidata *nd)
 			   (path || !next.len)
 			     ? nd->nd_intent
 			     : NULL,
-			   (path && next.len) ? path : NULL);
+			   (path && next.len) ? path : NULL,
+			   !(nd->nd_flags & ND_NOPERMCHECK));
 		if (err) {
 			if (err == -ENOENT &&
 			    !next.len &&

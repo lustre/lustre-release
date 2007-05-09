@@ -523,7 +523,9 @@ SYSIO_INTERFACE_NAME(bind)(int sockfd,
 {
 	int	err;
 	struct file *fil;
+#ifdef SYSIO_SYS_socketcall
 	unsigned long avec[3];
+#endif
 
 	err = 0;
 
@@ -559,7 +561,9 @@ SYSIO_INTERFACE_NAME(listen)(int s, int backlog)
 {
 	int	err;
 	struct file *fil;
+#ifdef SYSIO_SYS_socketcall
 	unsigned long avec[2];
+#endif
 
 	err = 0;
 
@@ -595,7 +599,9 @@ SYSIO_INTERFACE_NAME(connect)(int sockfd,
 {
 	int	err;
 	struct file *fil;
+#ifdef SYSIO_SYS_socketcall
 	unsigned long avec[3];
+#endif
 
 	err = 0;
 

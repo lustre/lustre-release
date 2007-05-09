@@ -1,6 +1,7 @@
 noinst_PROGRAMS = test_copy test_stats test_path test_list \
-	test_getcwd test_link test_unlink test_rename \
-	test_regions test_stddir test_fcntl_lock
+	test_getcwd test_link test_unlink test_symlink test_rename \
+	test_regions test_stddir test_fcntl_lock test_mknod test_mkdir \
+	test_chown
 
 CLEANFILES=drv_data.c
 
@@ -69,6 +70,10 @@ test_unlink_SOURCES=test_unlink.c $(CMNSRC)
 test_unlink_CFLAGS=$(CFL)
 test_unlink_DEPENDENCIES=$(LIBS)
 
+test_symlink_SOURCES=test_symlink.c $(CMNSRC)
+test_symlink_CFLAGS=$(CFL)
+test_symlink_DEPENDENCIES=$(LIBS)
+
 test_rename_SOURCES=test_rename.c $(CMNSRC)
 test_rename_CFLAGS=$(CFL)
 test_rename_DEPENDENCIES=$(LIBS)
@@ -84,6 +89,18 @@ test_stddir_DEPENDENCIES=$(LIBS)
 test_fcntl_lock_SOURCES=test_fcntl_lock.c $(CMNSRC)
 test_fcntl_lock_CFLAGS=$(CFL)
 test_fcntl_lock_DEPENDENCIES=$(LIBS)
+
+test_mknod_SOURCES=test_mknod.c $(CMNSRC)
+test_mknod_CFLAGS=$(CFL)
+test_mknod_DEPENDENCIES=$(LIBS)
+
+test_mkdir_SOURCES=test_mkdir.c $(CMNSRC)
+test_mkdir_CFLAGS=$(CFL)
+test_mkdir_DEPENDENCIES=$(LIBS)
+
+test_chown_SOURCES=test_chown.c $(CMNSRC)
+test_chown_CFLAGS=$(CFL)
+test_chown_DEPENDENCIES=$(LIBS)
 
 drv_data.c: $(CONFIG_DEPENDENCIES) $(top_srcdir)/tests/gendrvdata.sh
 	test -z "drv_data.c" && rm -f drv_data.c; \

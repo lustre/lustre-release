@@ -49,6 +49,7 @@
 #include <stdarg.h>
 
 #include "sysio-cmn.h"
+#include "creds.h"
 
 #if defined(_DIRENT_H) && _DIRENT_H
 /*
@@ -122,6 +123,9 @@ extern mode_t _sysio_umask;
 
 extern int _sysio_init(void);
 extern void _sysio_shutdown(void);
+#ifdef ZERO_SUM_MEMORY
+extern void _sysio_access_shutdown(void);
+#endif
 
 #if 0
 struct _sysio_boot_ctl {
@@ -175,6 +179,7 @@ extern int SYSIO_INTERFACE_NAME(fcntl64)(int fd, int cmd, ...);
 extern int SYSIO_INTERFACE_NAME(fstat)(int fd, struct stat *buf);
 #if _LARGEFILE64_SOURCE
 extern int SYSIO_INTERFACE_NAME(fstat64)(int fd, struct stat64 *buf);
+extern int SYSIO_INTERFACE_NAME(lstat64)(const char *path, struct stat64 *buf);
 #endif
 extern int SYSIO_INTERFACE_NAME(fsync)(int fd);
 extern char *SYSIO_INTERFACE_NAME(getcwd)(char *buf, size_t size);

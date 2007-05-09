@@ -1,4 +1,22 @@
 /*
+ *    This Cplant(TM) source code is the property of Sandia National
+ *    Laboratories.
+ *
+ *    This Cplant(TM) source code is copyrighted by Sandia National
+ *    Laboratories.
+ *
+ *    The redistribution of this Cplant(TM) source code is subject to the
+ *    terms of the GNU Lesser General Public License
+ *    (see cit/LGPL or http://www.gnu.org/licenses/lgpl.html)
+ *
+ *    Cplant(TM) Copyright 1998-2003 Sandia Corporation. 
+ *    Under the terms of Contract DE-AC04-94AL85000, there is a non-exclusive
+ *    license for use of this work by or on behalf of the US Government.
+ *    Export of this program may require a license from the United States
+ *    Government.
+ */
+
+/*
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
  * License as published by the Free Software Foundation; either
@@ -23,8 +41,19 @@
  * lee@sandia.gov
  */
 
-/* 
- * Boot time namespace assembly function
- */
-extern int run_cmds(char *buf);
+#include <unistd.h>
 
+#ifndef _CREDS_H_
+#define _CREDS_H_
+
+/*
+ * Data structure for user credentials
+ */
+
+struct creds {
+	uid_t creds_uid; 
+	gid_t *creds_gids; 
+	int creds_ngids;
+};
+
+#endif

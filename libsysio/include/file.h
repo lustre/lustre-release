@@ -9,7 +9,7 @@
  *    terms of the GNU Lesser General Public License
  *    (see cit/LGPL or http://www.gnu.org/licenses/lgpl.html)
  *
- *    Cplant(TM) Copyright 1998-2005 Sandia Corporation. 
+ *    Cplant(TM) Copyright 1998-2006 Sandia Corporation. 
  *    Under the terms of Contract DE-AC04-94AL85000, there is a non-exclusive
  *    license for use of this work by or on behalf of the US Government.
  *    Export of this program may require a license from the United States
@@ -111,6 +111,21 @@ struct file {
 		(fil)->f_ref = 0; \
 		(fil)->f_flags = (flags); \
 	} while (0)
+
+/*
+ * Determine if a file may be read/written.
+ *
+ * Given a ptr to an open file table entry and a flag indicating desired
+ * access return non-zero if the file record indicates that the access is
+ * permitted or zero, if not.
+ *
+ * 'r'	for read access check
+ * 'w'	for write access check
+ */
+
+#define F_CHKRW(_fil, _c) \
+	(((_c) == 'r' && !((_fil)->f_flags & O_WRONLY)) || \
+	 ((_c) == 'w' && ((_fil)->f_flags & (O_WRONLY | O_RDWR))))
 
 struct ioctx;
 

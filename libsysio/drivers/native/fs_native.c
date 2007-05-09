@@ -875,9 +875,11 @@ native_inop_setattr(struct pnode *pno,
 		/*
 		 * Do the truncate last. It can't be undone.
 		 */
-		 (void )(fd < 0
+		 err = fd < 0
 			   ? syscall(SYSIO_SYS_truncate, path, stat->st_size)
-			   : syscall(SYSIO_SYS_ftruncate, fd, stat->st_size));
+			   : syscall(SYSIO_SYS_ftruncate, fd, stat->st_size);
+		if (err)
+			err = -errno;
 	}
 	if (!err)
 		goto out;
