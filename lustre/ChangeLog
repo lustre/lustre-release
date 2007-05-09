@@ -14,6 +14,14 @@ tbd         Cluster File Systems, Inc. <info@clusterfs.com>
        * Note that reiserfs quotas are temporarily disabled on SLES 10 in this
 	 kernel.
 
+Severity   : minor
+Bugzilla   : 11512
+Description: Remove write from health_check, add configure option
+Details    : While an OSS is under a heavy ost_destroy load reading the 
+	     proc entry /proc/fs/lustre/health_check can take an unreasonably 
+             long time.  This disrupts our ability the effectively monitor 
+             the health of the filesystem. (LLNL)
+
 Severity   : enhancement
 Bugzilla   : 11548
 Description: Add LNET router traceability for debug purposes
