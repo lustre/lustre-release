@@ -399,6 +399,23 @@ fi
 ])
 
 #
+# LC_CONFIG_HEALTH_CHECK_WRITE
+#
+# Turn off the actual write to the disk
+#
+AC_DEFUN([LC_CONFIG_HEALTH_CHECK_WRITE],
+[AC_MSG_CHECKING([whether to enable a write with the health check])
+AC_ARG_ENABLE([health_write],
+        AC_HELP_STRING([--disable-health_write],
+                        [disable disk writes when doing health check]),
+        [],[enable_health_write='yes'])
+AC_MSG_RESULT([$enable_health_write])
+if test x$enable_health_write != xno ; then
+  AC_DEFINE(USE_HEALTH_CHECK_WRITE, 1, Write when Checking Health)
+fi
+])
+
+#
 # LC_CONFIG_LIBLUSTRE_RECOVERY
 #
 AC_DEFUN([LC_CONFIG_LIBLUSTRE_RECOVERY],
@@ -1042,6 +1059,7 @@ fi
 LC_CONFIG_PINGER
 LC_CONFIG_LIBLUSTRE_RECOVERY
 LC_CONFIG_QUOTA
+LC_CONFIG_HEALTH_CHECK_WRITE
 
 LC_TASK_PPTR
 

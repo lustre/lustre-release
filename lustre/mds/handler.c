@@ -2652,14 +2652,18 @@ static struct dentry *mds_lvfs_fid2dentry(__u64 id, __u32 gen, __u64 gr,
 static int mds_health_check(struct obd_device *obd)
 {
         struct obd_device_target *odt = &obd->u.obt;
+#ifdef USE_HEALTH_CHECK_WRITE
         struct mds_obd *mds = &obd->u.mds;
+#endif
         int rc = 0;
 
         if (odt->obt_sb->s_flags & MS_RDONLY)
                 rc = 1;
 
+#ifdef USE_HEALTH_CHECK_WRITE
         LASSERT(mds->mds_health_check_filp != NULL);
         rc |= !!lvfs_check_io_health(obd, mds->mds_health_check_filp);
+#endif
 
         return rc;
 }

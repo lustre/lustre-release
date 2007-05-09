@@ -3329,7 +3329,9 @@ int filter_iocontrol(unsigned int cmd, struct obd_export *exp,
 
 static int filter_health_check(struct obd_device *obd)
 {
+#ifdef USE_HEALTH_CHECK_WRITE
         struct filter_obd *filter = &obd->u.filter;
+#endif
         int rc = 0;
 
         /*
@@ -3339,8 +3341,10 @@ static int filter_health_check(struct obd_device *obd)
         if (obd->u.obt.obt_sb->s_flags & MS_RDONLY)
                 rc = 1;
 
+#ifdef USE_HEALTH_CHECK_WRITE
         LASSERT(filter->fo_health_check_filp != NULL);
         rc |= !!lvfs_check_io_health(obd, filter->fo_health_check_filp);
+#endif
 
         return rc;
 }
