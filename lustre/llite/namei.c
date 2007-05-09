@@ -73,21 +73,21 @@ static int ll_test_inode(struct inode *inode, void *opaque)
                 return 0;
 #endif
         if (inode->i_generation != md->body->generation) {
-                struct ll_sb_info *sbi = ll_i2sbi(inode);
-                struct ll_inode_info *lli = ll_i2info(inode);
-
+#ifdef HAVE_EXPORT___IGET
                 if (inode->i_state & (I_FREEING | I_CLEAR))
                         return 0;
                 if (inode->i_nlink == 0)
                         return 0;
 
                 /* add "duplicate" inode into deathrow for destroy */
-                spin_lock(&sbi->ll_deathrow_lock);
-                if (list_empty(&lli->lli_dead_list)) {
+                spin_lock(&ll_i2sbi(inode)->ll_deathrow_lock);
+                if (list_empty(&ll_i2info(inode)->lli_dead_list)) {
                         __iget(inode);
-                        list_add(&lli->lli_dead_list, &sbi->ll_deathrow);
+                        list_add(&ll_i2info(inode)->lli_dead_list,
+                                 &ll_i2sbi(inode)->ll_deathrow);
                 }
-                spin_unlock(&sbi->ll_deathrow_lock);
+                spin_unlock(&ll_i2sbi(inode)->ll_deathrow_lock);
+#endif
 
                 return 0;
         }
