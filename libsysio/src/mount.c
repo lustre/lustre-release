@@ -277,7 +277,7 @@ _sysio_mount_root(const char *source,
 		return err;
 
 	_sysio_root = mnt->mnt_root;
-#if !DEFER_INIT_CWD
+#ifndef DEFER_INIT_CWD
 	/*
 	 * It is very annoying to have to set the current working directory.
 	 * So... If it isn't set, make it the root now.

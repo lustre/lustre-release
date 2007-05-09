@@ -51,17 +51,10 @@
 #define __IS_UNUSED
 #endif
 
-#ifndef _LARGEFILE64_SOURCE
-/*
- * Not glibc I guess. Define this ourselves.
- */
-#define _LARGEFILE64_SOURCE		0
-#endif
-
 /*
  * Define internal file-offset type and it's maximum value.
  */
-#if _LARGEFILE64_SOURCE
+#ifdef _LARGEFILE64_SOURCE
 #define _SYSIO_OFF_T			off64_t
 #ifdef LLONG_MAX
 #define _SYSIO_OFF_T_MAX		(LLONG_MAX)
@@ -80,7 +73,7 @@
  * Internally, all file status is carried in the 64-bit capable
  * structure.
  */
-#if _LARGEFILE64_SOURCE
+#ifdef _LARGEFILE64_SOURCE
 #define intnl_xtvec xtvec64
 #else
 #define intnl_xtvec xtvec

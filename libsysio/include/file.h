@@ -61,7 +61,7 @@
 #define _SEEK_MAX(fil) \
 	(_F_LARGEFILE(fil) ? _SYSIO_OFF_T_MAX : LONG_MAX)
 
-#if _LARGEFILE64_SOURCE
+#ifdef _LARGEFILE64_SOURCE
 #define	_SYSIO_FLOCK	flock64
 #else
 #define	_SYSIO_FLOCK	flock
@@ -137,7 +137,7 @@ extern struct file *_sysio_fd_find(int fd);
 extern int _sysio_fd_set(struct file *fil, int fd, int force);
 extern int _sysio_fd_dup(int oldfd, int newfd, int force);
 extern int _sysio_fd_close_all(void);
-#if ZERO_SUM_MEMORY
+#ifdef ZERO_SUM_MEMORY
 extern void _sysio_fd_shutdown(void);
 #endif
 extern _SYSIO_OFF_T _sysio_lseek_prepare(struct file *fil,

@@ -21,7 +21,7 @@ _test_sysio_startup()
 	err = drv_init_all();
 	if (err)
 		return err;
-#if SYSIO_TRACING
+#ifdef SYSIO_TRACING
 	/*
 	 * tracing
 	 */
@@ -43,7 +43,7 @@ _test_sysio_startup()
 	err = _sysio_boot("namespace", arg);
 	if (err)
 		return err;
-#if DEFER_INIT_CWD
+#ifdef DEFER_INIT_CWD
 	/*
 	 * Current working directory.
 	 */

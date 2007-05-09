@@ -188,7 +188,7 @@ fd_grow(oftab_t *oftab, size_t n)
 	return 0;
 }
 
-#if ZERO_SUM_MEMORY
+#ifdef ZERO_SUM_MEMORY
 static void free_oftab(oftab_t *ot)
 {
 	if (ot->table) {

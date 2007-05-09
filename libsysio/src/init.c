@@ -45,17 +45,17 @@
 #define _BSD_SOURCE
 #endif
 
-#if SYSIO_TRACING
+#ifdef SYSIO_TRACING
 #include <stdio.h>
 #endif
 #include <stdlib.h>
-#ifdef _BSD_SOURCE
+#if defined(_BSD_SOURCE) || defined(SYSIO_TRACING)
 #include <sys/syscall.h>
 #endif
 #include <unistd.h>
 #include <string.h>
 #include <errno.h>
-#if SYSIO_TRACING
+#ifdef SYSIO_TRACING
 #include <stdarg.h>
 #endif
 #include <limits.h>
@@ -68,7 +68,7 @@
 
 #include "sysio.h"
 #include "xtio.h"
-#if SYSIO_TRACING
+#ifdef SYSIO_TRACING
 #include "native.h"
 #endif
 #include "inode.h"
@@ -81,7 +81,7 @@
 #include "stdfd.h"
 #endif
 
-#if SYSIO_TRACING
+#ifdef SYSIO_TRACING
 
 /*
  * Tracing callback record.
@@ -160,7 +160,7 @@ _sysio_init()
 	extern int _sysio_sockets_init(void);
 #endif
 
-#if SYSIO_TRACING
+#ifdef SYSIO_TRACING
 	/*
 	 * Initialize tracing callback queues.
 	 */
@@ -214,12 +214,12 @@ _sysio_shutdown()
 	      _sysio_unmount_all() == 0))
 			abort();
 
-#if ZERO_SUM_MEMORY
+#ifdef ZERO_SUM_MEMORY
 	_sysio_fd_shutdown();
 	_sysio_i_shutdown();
 	_sysio_fssw_shutdown();
 	_sysio_access_shutdown();
-#if SYSIO_TRACING
+#ifdef SYSIO_TRACING
 	{
 		struct trace_callback *tcb;
 
@@ -235,7 +235,7 @@ _sysio_shutdown()
 #endif
 }
 
-#if SYSIO_TRACING
+#ifdef SYSIO_TRACING
 
 #if !(defined(_HAVE_ASPRINTF) && _HAVE_ASPRINTF)
 /*
@@ -929,7 +929,7 @@ do_command(char *buf)
 	return -EINVAL;
 }
 
-#if SYSIO_TRACING
+#ifdef SYSIO_TRACING
 /*
  * Set/Unset tracing.
  */
@@ -1040,7 +1040,7 @@ _sysio_boot_namespace(const char *arg)
 		if (err)
 			break;
 	}
-#if SYSIO_TRACING
+#ifdef SYSIO_TRACING
 	if (err)
 		_sysio_cprintf("+NS init+ failed at expr %u (last = %s): %s\n", 
 			       count,
@@ -1051,7 +1051,7 @@ _sysio_boot_namespace(const char *arg)
 	return err;
 }
 
-#if DEFER_INIT_CWD
+#ifdef DEFER_INIT_CWD
 /*
  * Set deferred initial working directory.
  */
@@ -1067,15 +1067,15 @@ _sysio_boot_cwd(const char *arg)
 /*
  * Given an identifier and it's arguments, perform optional initializations.
  */
-int 
+int
 _sysio_boot(const char *opt, const char *arg)
 {
 	struct option_value_info vec[] = {
-#if SYSIO_TRACING
+#ifdef SYSIO_TRACING
 		{ "trace",	NULL },			/* tracing? */
 #endif
 		{ "namespace",	NULL },			/* init namespace? */
-#if DEFER_INIT_CWD
+#ifdef DEFER_INIT_CWD
 		{ "cwd",	NULL },			/* init working dir */
 #endif
 		{ NULL,		NULL }
@@ -1083,11 +1083,11 @@ _sysio_boot(const char *opt, const char *arg)
 	struct option_value_info *v;
 	unsigned u;
 	static int (*f[])(const char *) = {
-#if SYSIO_TRACING
+#ifdef SYSIO_TRACING
 		_sysio_boot_tracing,
 #endif
 		_sysio_boot_namespace,
-#if DEFER_INIT_CWD
+#ifdef DEFER_INIT_CWD
 		_sysio_boot_cwd,
 #endif
 		NULL					/* can't happen */

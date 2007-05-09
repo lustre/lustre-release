@@ -78,7 +78,7 @@
  * Internally, all directory entries are carried in the 64-bit capable
  * structure.
  */
-#if _LARGEFILE64_SOURCE
+#ifdef _LARGEFILE64_SOURCE
 #define intnl_dirent dirent64
 #else
 #define intnl_dirent dirent
@@ -89,7 +89,7 @@ struct dirent;
  * Internally, all file status is carried in the 64-bit capable
  * structure.
  */
-#if _LARGEFILE64_SOURCE
+#ifdef _LARGEFILE64_SOURCE
 #define intnl_stat stat64
 #else
 #define intnl_stat stat
@@ -97,7 +97,7 @@ struct dirent;
 struct stat;
 
 #ifdef _HAVE_STATVFS
-#if _LARGEFILE64_SOURCE
+#ifdef _LARGEFILE64_SOURCE
 #define intnl_statvfs statvfs64
 #else
 #define intnl_statvfs statvfs
@@ -177,14 +177,14 @@ extern int SYSIO_INTERFACE_NAME(dup2)(int oldfd, int newfd);
 extern int SYSIO_INTERFACE_NAME(fcntl)(int fd, int cmd, ...);
 extern int SYSIO_INTERFACE_NAME(fcntl64)(int fd, int cmd, ...);
 extern int SYSIO_INTERFACE_NAME(fstat)(int fd, struct stat *buf);
-#if _LARGEFILE64_SOURCE
+#ifdef _LARGEFILE64_SOURCE
 extern int SYSIO_INTERFACE_NAME(fstat64)(int fd, struct stat64 *buf);
 extern int SYSIO_INTERFACE_NAME(lstat64)(const char *path, struct stat64 *buf);
 #endif
 extern int SYSIO_INTERFACE_NAME(fsync)(int fd);
 extern char *SYSIO_INTERFACE_NAME(getcwd)(char *buf, size_t size);
 extern off_t SYSIO_INTERFACE_NAME(lseek)(int fd, off_t offset, int whence);
-#if _LARGEFILE64_SOURCE
+#ifdef _LARGEFILE64_SOURCE
 extern off64_t SYSIO_INTERFACE_NAME(lseek64)(int fd, off64_t offset, 
 					     int whence);
 #endif
@@ -195,7 +195,7 @@ extern int SYSIO_INTERFACE_NAME(getdirentries)(int fd, char *buf, int nbytes ,
 #else
 extern ssize_t SYSIO_INTERFACE_NAME(getdirentries)(int fd, char *buf, 
 						   size_t nbytes, off_t *basep);
-#if _LARGEFILE64_SOURCE
+#ifdef _LARGEFILE64_SOURCE
 extern ssize_t SYSIO_INTERFACE_NAME(getdirentries64)(int fd,
 						     char *buf,
 						     size_t nbytes,
@@ -204,15 +204,15 @@ extern ssize_t SYSIO_INTERFACE_NAME(getdirentries64)(int fd,
 #endif
 extern int SYSIO_INTERFACE_NAME(mkdir)(const char *path, mode_t mode);
 extern int SYSIO_INTERFACE_NAME(open)(const char *path, int flag, ...);
-#if _LARGEFILE64_SOURCE
+#ifdef _LARGEFILE64_SOURCE
 extern int SYSIO_INTERFACE_NAME(open64)(const char *path, int flag, ...);
 #endif
 extern int SYSIO_INTERFACE_NAME(creat)(const char *path, mode_t mode);
-#if _LARGEFILE64_SOURCE
+#ifdef _LARGEFILE64_SOURCE
 extern int SYSIO_INTERFACE_NAME(creat64)(const char *path, mode_t mode);
 #endif
 extern int SYSIO_INTERFACE_NAME(stat)(const char *path, struct stat *buf);
-#if _LARGEFILE64_SOURCE
+#ifdef _LARGEFILE64_SOURCE
 extern int SYSIO_INTERFACE_NAME(stat64)(const char *path, struct stat64 *buf);
 #endif
 extern ssize_t  SYSIO_INTERFACE_NAME(read)(int fd, void *buf, size_t count);
@@ -233,21 +233,21 @@ extern ssize_t SYSIO_INTERFACE_NAME(writev)(int fd,
 					    int count);
 #ifdef _HAVE_STATVFS
 extern int SYSIO_INTERFACE_NAME(statvfs)(const char *path, struct statvfs *buf);
-#if _LARGEFILE64_SOURCE
+#ifdef _LARGEFILE64_SOURCE
 extern int SYSIO_INTERFACE_NAME(statvfs64)(const char *path, 
 				struct statvfs64 *buf);
 #endif
 extern int SYSIO_INTERFACE_NAME(fstatvfs)(int fd, struct statvfs *buf);
-#if _LARGEFILE64_SOURCE
+#ifdef _LARGEFILE64_SOURCE
 extern int SYSIO_INTERFACE_NAME(fstatvfs64)(int fd, struct statvfs64 *buf);
 #endif
 #endif
 extern int SYSIO_INTERFACE_NAME(truncate)(const char *path, off_t length);
-#if _LARGEFILE64_SOURCE
+#ifdef _LARGEFILE64_SOURCE
 extern int SYSIO_INTERFACE_NAME(truncate64)(const char *path, off64_t length);
 #endif
 extern int SYSIO_INTERFACE_NAME(ftruncate)(int fd, off_t length);
-#if _LARGEFILE64_SOURCE
+#ifdef _LARGEFILE64_SOURCE
 extern int SYSIO_INTERFACE_NAME(ftruncate64)(int fd, off64_t length);
 #endif
 extern int SYSIO_INTERFACE_NAME(rmdir)(const char *path);

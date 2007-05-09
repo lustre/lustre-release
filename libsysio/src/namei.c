@@ -186,7 +186,7 @@ _sysio_path_walk(struct pnode *parent, struct nameidata *nd)
 		parent = nd->nd_root;
 	}
 
-#if DEFER_INIT_CWD
+#ifdef DEFER_INIT_CWD
 	if (!parent) {
 		const char *icwd;
 

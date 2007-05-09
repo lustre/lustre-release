@@ -104,7 +104,7 @@ out:
 	SYSIO_INTERFACE_RETURN(err ? -1 : 0, err);
 }
 
-#if _LARGEFILE64_SOURCE
+#ifdef _LARGEFILE64_SOURCE
 #undef truncate64
 sysio_sym_weak_alias(PREPEND(_, SYSIO_INTERFACE_NAME(truncate)),
 		     SYSIO_INTERFACE_NAME(truncate64))
@@ -145,7 +145,7 @@ out:
 	SYSIO_INTERFACE_RETURN(err ? -1 : 0, err);
 }
 
-#if _LARGEFILE64_SOURCE
+#ifdef _LARGEFILE64_SOURCE
 #undef ftruncate64
 sysio_sym_weak_alias(PREPEND(_, SYSIO_INTERFACE_NAME(ftruncate)), 
 		     SYSIO_INTERFACE_NAME(ftruncate64))

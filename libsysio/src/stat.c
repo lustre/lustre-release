@@ -68,7 +68,7 @@
 #define _STAT_VER		0
 #endif
 
-#if _LARGEFILE64_SOURCE
+#ifdef _LARGEFILE64_SOURCE
 static void
 convstat(struct stat64 *st64_buf, struct stat *st_buf)
 {
@@ -97,7 +97,7 @@ PREPEND(__, SYSIO_INTERFACE_NAME(fxstat))(int __ver,
 	struct file *fil;
 	int	err;
 	struct intnl_stat *buf;
-#if _LARGEFILE64_SOURCE
+#ifdef _LARGEFILE64_SOURCE
 	struct stat64 st64;
 #endif
 	SYSIO_INTERFACE_DISPLAY_BLOCK;
@@ -114,7 +114,7 @@ PREPEND(__, SYSIO_INTERFACE_NAME(fxstat))(int __ver,
 		err = -EBADF;
 		goto out;
 	}
-#if _LARGEFILE64_SOURCE
+#ifdef _LARGEFILE64_SOURCE
 	buf = &st64;
 #else
 	buf = __stat_buf;
@@ -125,7 +125,7 @@ PREPEND(__, SYSIO_INTERFACE_NAME(fxstat))(int __ver,
 	 */
 	err =
 	    fil->f_ino->i_ops.inop_getattr(NULL, fil->f_ino, buf);
-#if _LARGEFILE64_SOURCE
+#ifdef _LARGEFILE64_SOURCE
 	if (!err)
 		convstat(buf, __stat_buf);
 #endif
@@ -186,7 +186,7 @@ PREPEND(__, SYSIO_INTERFACE_NAME(xstat))(int __ver,
 	 * the inode are always correct or refresh them in the lookup, above.
 	 */
 	ino = pno->p_base->pb_ino;
-#if _LARGEFILE64_SOURCE
+#ifdef _LARGEFILE64_SOURCE
 	convstat(&ino->i_stbuf, __stat_buf);
 #else
 	(void )memcpy(__stat_buf, &ino->i_stbuf, sizeof(struct intnl_stat));
@@ -250,7 +250,7 @@ PREPEND(__, SYSIO_INTERFACE_NAME(lxstat))(int __ver,
 	 * the inode are always correct or refresh them in the lookup, above.
 	 */
 	ino = pno->p_base->pb_ino;
-#if _LARGEFILE64_SOURCE
+#ifdef _LARGEFILE64_SOURCE
 	convstat(&ino->i_stbuf, __stat_buf);
 #else
 	(void )memcpy(__stat_buf, &ino->i_stbuf, sizeof(struct intnl_stat));

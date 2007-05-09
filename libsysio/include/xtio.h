@@ -106,7 +106,7 @@ extern ioid_t SYSIO_INTERFACE_NAME(ipreadv)(int fd,
 					    size_t count,
 					    off_t offset);
 
-#if _LARGEFILE64_SOURCE
+#ifdef _LARGEFILE64_SOURCE
 /*
  * Post asynch read into buffers mapped by an iovec from file at given offset.
  */
@@ -124,7 +124,7 @@ extern ioid_t SYSIO_INTERFACE_NAME(ipread)(int fd,
 					   size_t count, 
 					   off_t offset);
 
-#if _LARGEFILE64_SOURCE
+#ifdef _LARGEFILE64_SOURCE
 /*
  * Post asynch read into buffer from file at given offset.
  */
@@ -142,7 +142,7 @@ extern ssize_t SYSIO_INTERFACE_NAME(preadv)(int fd,
 					    size_t count,
 					    off_t offset);
 
-#if _LARGEFILE64_SOURCE
+#ifdef _LARGEFILE64_SOURCE
 /*
  * Read into buffers mapped by an iovec from file at given offset.
  */
@@ -225,7 +225,7 @@ extern ioid_t SYSIO_INTERFACE_NAME(ipwritev)(int fd,
 					     const struct iovec *iov,
 					     size_t count,
 					     off_t offset);
-#if _LARGEFILE64_SOURCE
+#ifdef _LARGEFILE64_SOURCE
 /*
  * Post asynch write from buffers mapped by an iovec to file at given offset.
  */
@@ -243,7 +243,7 @@ extern ioid_t SYSIO_INTERFACE_NAME(ipwrite)(int fd,
 					    size_t count,
 					    off_t offset);
 
-#if _LARGEFILE64_SOURCE
+#ifdef _LARGEFILE64_SOURCE
 /*
  * Post asynch write from buffer to file at given offset.
  */
@@ -261,7 +261,7 @@ extern ssize_t SYSIO_INTERFACE_NAME(pwritev)(int fd,
 					     size_t count,
 					     off_t offset);
 
-#if _LARGEFILE64_SOURCE
+#ifdef _LARGEFILE64_SOURCE
 /*
  * Write from buffers mapped by an iovec to file at given offset.
  */

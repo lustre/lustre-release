@@ -149,7 +149,7 @@ fd_grow(size_t n)
 	return 0;
 }
 
-#if ZERO_SUM_MEMORY
+#ifdef ZERO_SUM_MEMORY
 void
 _sysio_fd_shutdown()
 {

@@ -118,7 +118,7 @@ _sysio_iiox(int (*f)(struct inode *, struct ioctx *),
 	cc =
 	    _sysio_validx(xtv, xtv_count,
 			  iov, iov_count,
-#if _LARGEFILE64_SOURCE && defined(O_LARGEFILE)
+#if defined(_LARGEFILE64_SOURCE) && defined(O_LARGEFILE)
 			  (fil->f_flags & O_LARGEFILE) == 0
 			    ? LONG_MAX
 			    :
@@ -465,7 +465,7 @@ PREPEND(_, SYSIO_INTERFACE_NAME(ipreadv))(int fd,
 	SYSIO_INTERFACE_RETURN(ioctx, 0);
 }
 
-#if _LARGEFILE64_SOURCE
+#ifdef _LARGEFILE64_SOURCE
 #undef ipread64v
 sysio_sym_weak_alias(PREPEND(_, SYSIO_INTERFACE_NAME(ipreadv)),
 		     SYSIO_INTERFACE_NAME(ipread64v))
@@ -515,7 +515,7 @@ PREPEND(_, SYSIO_INTERFACE_NAME(preadv))(int fd,
 	SYSIO_INTERFACE_RETURN(err ? -1 : cc, err);
 }
 
-#if _LARGEFILE64_SOURCE
+#ifdef _LARGEFILE64_SOURCE
 #undef pread64v
 sysio_sym_weak_alias(PREPEND(_, SYSIO_INTERFACE_NAME(preadv)), 
 		     SYSIO_INTERFACE_NAME(pread64v))
@@ -579,7 +579,7 @@ error:
 	SYSIO_INTERFACE_RETURN(ioctx, 0);
 }
 
-#if _LARGEFILE64_SOURCE
+#ifdef _LARGEFILE64_SOURCE
 #undef ipread64
 sysio_sym_weak_alias(PREPEND(_, SYSIO_INTERFACE_NAME(ipread)),
 		     SYSIO_INTERFACE_NAME(ipread64))
@@ -633,7 +633,7 @@ PREPEND(_, SYSIO_INTERFACE_NAME(pread))(int fd,
 	SYSIO_INTERFACE_RETURN(err ? -1 : cc, err);
 }
 
-#if _LARGEFILE64_SOURCE
+#ifdef _LARGEFILE64_SOURCE
 #undef pread64
 sysio_sym_weak_alias(PREPEND(_, SYSIO_INTERFACE_NAME(pread)),
 		     SYSIO_INTERFACE_NAME(pread64))
@@ -698,13 +698,13 @@ PREPEND(_, SYSIO_INTERFACE_NAME(ireadx))(int fd,
 	SYSIO_INTERFACE_RETURN(err ? IOID_FAIL : ioctx, err);
 }
 
-#if _LARGEFILE64_SOURCE
+#ifdef _LARGEFILE64_SOURCE
 #undef iread64x
 sysio_sym_weak_alias(PREPEND(_, SYSIO_INTERFACE_NAME(ireadx)),
 		     SYSIO_INTERFACE_NAME(iread64x))
 #endif
 
-#if _LARGEFILE64_SOURCE
+#ifdef _LARGEFILE64_SOURCE
 ioid_t
 SYSIO_INTERFACE_NAME(ireadx)(int fd,
 			     const struct iovec *iov, size_t iov_count,
@@ -774,7 +774,7 @@ SYSIO_INTERFACE_NAME(readx)(int fd,
 	return SYSIO_INTERFACE_NAME(iowait)(ioid);
 }
 
-#if _LARGEFILE64_SOURCE
+#ifdef _LARGEFILE64_SOURCE
 #undef iread64x
 ssize_t
 SYSIO_INTERFACE_NAME(read64x)(int fd,
@@ -993,7 +993,7 @@ PREPEND(_, SYSIO_INTERFACE_NAME(ipwritev))(int fd,
 	SYSIO_INTERFACE_RETURN(ioctx, 0);
 }
 
-#if _LARGEFILE64_SOURCE
+#ifdef _LARGEFILE64_SOURCE
 #undef ipwrite64v
 sysio_sym_weak_alias(PREPEND(_, SYSIO_INTERFACE_NAME(ipwritev)),
 		     SYSIO_INTERFACE_NAME(ipwrite64v))
@@ -1043,7 +1043,7 @@ PREPEND(_, SYSIO_INTERFACE_NAME(pwritev))(int fd,
 	SYSIO_INTERFACE_RETURN(err ? -1 : cc, err);
 }
 
-#if _LARGEFILE64_SOURCE
+#ifdef _LARGEFILE64_SOURCE
 #undef pwrite64v
 sysio_sym_weak_alias(PREPEND(_, SYSIO_INTERFACE_NAME(pwritev)),
 		     SYSIO_INTERFACE_NAME(pwrite64v))
@@ -1107,7 +1107,7 @@ error:
 	SYSIO_INTERFACE_RETURN(ioctx, 0);
 }
 
-#if _LARGEFILE64_SOURCE
+#ifdef _LARGEFILE64_SOURCE
 #undef ipwrite64
 sysio_sym_weak_alias(PREPEND(_, SYSIO_INTERFACE_NAME(ipwrite)),
 		     SYSIO_INTERFACE_NAME(ipwrite64))
@@ -1161,7 +1161,7 @@ PREPEND(_, SYSIO_INTERFACE_NAME(pwrite))(int fd,
 	SYSIO_INTERFACE_RETURN(err ? -1 : cc, err);
 }
 
-#if _LARGEFILE64_SOURCE
+#ifdef _LARGEFILE64_SOURCE
 #undef pwrite64
 sysio_sym_weak_alias(PREPEND(_, SYSIO_INTERFACE_NAME(pwrite)),
 		     SYSIO_INTERFACE_NAME(pwrite64))
@@ -1222,13 +1222,13 @@ PREPEND(_, SYSIO_INTERFACE_NAME(iwritex))(int fd,
 	SYSIO_INTERFACE_RETURN(err ? IOID_FAIL : ioctx, err);
 }
 
-#if _LARGEFILE64_SOURCE
+#ifdef _LARGEFILE64_SOURCE
 #undef iwrite64x
 sysio_sym_weak_alias(PREPEND(_, SYSIO_INTERFACE_NAME(iwritex)),
 		     SYSIO_INTERFACE_NAME(iwrite64x))
 #endif
 
-#if _LARGEFILE64_SOURCE
+#ifdef _LARGEFILE64_SOURCE
 ioid_t
 SYSIO_INTERFACE_NAME(iwritex)(int fd,
 			      const struct iovec *iov, size_t iov_count,
@@ -1299,7 +1299,7 @@ SYSIO_INTERFACE_NAME(writex)(int fd,
 	return SYSIO_INTERFACE_NAME(iowait)(ioid);
 }
 
-#if _LARGEFILE64_SOURCE
+#ifdef _LARGEFILE64_SOURCE
 #undef write64x
 ssize_t
 SYSIO_INTERFACE_NAME(write64x)(int fd,

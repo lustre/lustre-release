@@ -101,7 +101,7 @@ static size_t max_names = (2 * NAMES_TABLE_LEN);
  */
 #define PNODES_PER_CHUNK ((8 * 1024) / sizeof(struct pnode) - 2)
 
-#if ZERO_SUM_MEMORY
+#ifdef ZERO_SUM_MEMORY
 /*
  * Allocation information for pnodes bulk allocation.
  */
@@ -142,7 +142,7 @@ _sysio_i_init()
 	for (i = 0; i < NAMES_TABLE_LEN; i++)
 		LIST_INIT(&names[i]);
 
-#if ZERO_SUM_MEMORY
+#ifdef ZERO_SUM_MEMORY
 	LIST_INIT(&pnblocks);
 #endif
 	TAILQ_INIT(&_sysio_pnodes);
@@ -465,12 +465,12 @@ static void
 more_pnodes()
 {
 	size_t	n;
-#if ZERO_SUM_MEMORY
+#ifdef ZERO_SUM_MEMORY
 	struct pnodes_block *pnblk;
 #endif
 	struct pnode *pno;
 
-#if ZERO_SUM_MEMORY
+#ifdef ZERO_SUM_MEMORY
 	pnblk = malloc(sizeof(struct pnodes_block));
 	pno = NULL;
 	if (pnblk) {
@@ -489,7 +489,7 @@ more_pnodes()
 	} while (--n);
 }
 
-#if ZERO_SUM_MEMORY
+#ifdef ZERO_SUM_MEMORY
 /*
  * Shutdown
  */

@@ -97,22 +97,22 @@ do {                                            \
 /*
  * System calls.
  */
-#if _LARGEFILE64_SOURCE && defined(SYS_lstat64)
+#if defined(_LARGEFILE64_SOURCE) && defined(SYS_lstat64)
 #define SYSIO_SYS_stat		SYS_lstat64
 #elif defined(SYS_lstat)
 #define SYSIO_SYS_stat		SYS_lstat
 #endif
-#if _LARGEFILE64_SOURCE && defined(SYS_fstat64)
+#if defined(_LARGEFILE64_SOURCE) && defined(SYS_fstat64)
 #define SYSIO_SYS_fstat		SYS_fstat64
 #elif defined(SYS_fstat)
 #define SYSIO_SYS_fstat		SYS_fstat
 #endif
-#if _LARGEFILE64_SOURCE && defined(SYS_truncate64)
+#if defined(_LARGEFILE64_SOURCE) && defined(SYS_truncate64)
 #define SYSIO_SYS_truncate	SYS_truncate64
 #elif defined(SYS_truncate)
 #define SYSIO_SYS_truncate	SYS_truncate
 #endif
-#if _LARGEFILE64_SOURCE && defined(SYS_ftruncate64)
+#if defined(_LARGEFILE64_SOURCE) && defined(SYS_ftruncate64)
 #define SYSIO_SYS_ftruncate	SYS_ftruncate64
 #elif defined(SYS_ftruncate)
 #define SYSIO_SYS_ftruncate	SYS_ftruncate
@@ -123,7 +123,7 @@ do {                                            \
 #if defined(SYS_close)
 #define SYSIO_SYS_close		SYS_close
 #endif
-#if _LARGEFILE64_SOURCE && defined(SYS_lseek64)
+#if defined(_LARGEFILE64_SOURCE) && defined(SYS_lseek64)
 #define SYSIO_SYS_lseek		SYS_lseek64
 #elif defined(SYS_lseek)
 #define SYSIO_SYS_lseek		SYS_lseek
@@ -147,17 +147,17 @@ do {                                            \
 #if defined(SYS_writev)
 #define SYSIO_SYS_writev	SYS_writev
 #endif
-#if _LARGEFILE64_SOURCE && defined(SYS_pread64)
+#if defined(_LARGEFILE64_SOURCE) && defined(SYS_pread64)
 #define SYSIO_SYS_pread		SYS_pread64
 #elif defined(SYS_pread)
 #define SYSIO_SYS_pread		SYS_pread
 #endif
-#if _LARGEFILE64_SOURCE && defined(SYS_pwrite64)
+#if defined(_LARGEFILE64_SOURCE) && defined(SYS_pwrite64)
 #define SYSIO_SYS_pwrite	SYS_pwrite64
 #elif defined(SYS_pwrite)
 #define SYSIO_SYS_pwrite	SYS_pwrite
 #endif
-#if _LARGEFILE64_SOURCE && defined(SYS_fcntl64)
+#if defined(_LARGEFILE64_SOURCE) && defined(SYS_fcntl64)
 #define SYSIO_SYS_fcntl		SYS_fcntl64
 #elif defined(SYS_fcntl)
 #define SYSIO_SYS_fcntl		SYS_fcntl
@@ -165,7 +165,7 @@ do {                                            \
 #if defined(SYS_fsync)
 #define SYSIO_SYS_fsync		SYS_fsync
 #endif
-#if ALPHA_LINUX && defined(SYS_osf_fdatasync)
+#if defined(ALPHA_LINUX) && defined(SYS_osf_fdatasync)
 #define SYSIO_SYS_fdatasync	SYS_osf_fdatasync
 #elif defined(SYS_fdatasync)
 #define SYSIO_SYS_fdatasync	SYS_fdatasync
@@ -192,13 +192,13 @@ do {                                            \
 #define SYSIO_SYS_rmdir		SYS_rmdir
 #endif
 #if defined(SYS_getdirentries)
-#if _LARGEFILE64_SOURCE && defined(SYS_getdirentries64)
+#if defined(_LARGEFILE64_SOURCE) && defined(SYS_getdirentries64)
 #define SYSIO_SYS_getdirentries	SYS_getdirentries64
 #elif defined(SYS_getdirentries)
 #define SYSIO_SYS_getdirentries	SYS_getdirentries
 #endif
 #endif
-#if _LARGEFILE64_SOURCE && defined(SYS_getdents64)
+#if defined(_LARGEFILE64_SOURCE) && defined(SYS_getdents64)
 # define SYSIO_SYS_getdents64	SYS_getdents64
 #elif defined(SYS_getdents)
 # if defined (__mips64__)

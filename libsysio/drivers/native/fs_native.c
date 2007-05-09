@@ -933,7 +933,7 @@ native_pos(int fd, _SYSIO_OFF_T *offset, int whence)
 	assert(*offset >= 0);
 
 	off = *offset;
-#if _LARGEFILE64_SOURCE && defined(SYSIO_SYS__llseek)
+#if defined(_LARGEFILE64_SOURCE) && defined(SYSIO_SYS__llseek)
 	{
 		int	err;
 		err =

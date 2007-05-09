@@ -121,7 +121,7 @@ _sysio_lseek(struct file *fil,
 	return pos;
 }
 
-#if _LARGEFILE64_SOURCE
+#ifdef _LARGEFILE64_SOURCE
 #undef lseek64
 
 extern off64_t
@@ -200,7 +200,7 @@ SYSIO_INTERFACE_NAME(llseek)(unsigned int fd __IS_UNUSED,
 	fil = _sysio_fd_find(fd);
 	if (!fil)
 		SYSIO_INTERFACE_RETURN(-1, -EBADF);
-#if !_LARGEFILE64_SOURCE
+#ifndef _LARGEFILE64_SOURCE
 	if (offset_high) {
 		/*
 		 * We are using 32-bit internals. This just isn't

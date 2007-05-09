@@ -79,7 +79,7 @@
 #include "file.h"
 #include "sysio-symbols.h"
 
-#if DEFER_INIT_CWD
+#ifdef DEFER_INIT_CWD
 const char *_sysio_init_cwd = NULL;
 #endif
 
@@ -240,7 +240,7 @@ SYSIO_INTERFACE_NAME(getcwd)(char *buf, size_t size)
 	SYSIO_INTERFACE_DISPLAY_BLOCK;
 
 	SYSIO_INTERFACE_ENTER;
-#if DEFER_INIT_CWD
+#ifdef DEFER_INIT_CWD
 	if (!_sysio_cwd) {
 		struct pnode *pno;
 

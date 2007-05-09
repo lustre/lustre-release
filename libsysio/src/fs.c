@@ -106,7 +106,7 @@ _sysio_fssw_register(const char *name, struct fssw_ops *ops)
 	return 0;
 }
 
-#if ZERO_SUM_MEMORY
+#ifdef ZERO_SUM_MEMORY
 /*
  * Shutdown
  */

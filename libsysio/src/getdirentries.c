@@ -106,7 +106,7 @@ PREPEND(_, SYSIO_INTERFACE_NAME(getdirentries64))(int fd,
 	SYSIO_INTERFACE_RETURN(cc < 0 ? -1 : cc, cc < 0 ? (int )cc : 0);
 }
 
-#if _LARGEFILE64_SOURCE
+#ifdef _LARGEFILE64_SOURCE
 #undef getdirentries64
 sysio_sym_strong_alias(PREPEND(_, SYSIO_INTERFACE_NAME(getdirentries64)),
 		       SYSIO_INTERFACE_NAME(getdirentries64))

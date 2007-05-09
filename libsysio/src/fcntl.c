@@ -194,14 +194,14 @@ _sysio_vfcntl(int fd, int cmd, va_list ap)
 			}
 		}
 		break;
-#if !(_LARGEFILE64_SOURCE || F_GETLK64 == F_GETLK)
+#if !(defined(_LARGEFILE64_SOURCE) || F_GETLK64 == F_GETLK)
 	    case F_GETLK:
 	    case F_SETLK:
 	    case F_SETLKW:
 		{
 			struct intnl_stat buf;
 			struct flock *fl;
-#if _LARGEFILE64_SOURCE
+#ifdef _LARGEFILE64_SOURCE
 			struct _SYSIO_FLOCK flock64;
 #endif
 
@@ -220,7 +220,7 @@ _sysio_vfcntl(int fd, int cmd, va_list ap)
 			 * Copy args to a temp and normalize.
 			 */
 			fl = va_arg(ap, struct flock *);
-#if _LARGEFILE64_SOURCE
+#ifdef _LARGEFILE64_SOURCE
 			flock64.l_type = fl->l_type;
 			flock64.l_whence = fl->l_whence;
 			flock64.l_start = fl->l_start;
@@ -234,7 +234,7 @@ _sysio_vfcntl(int fd, int cmd, va_list ap)
 				rtn = -1;
 				break;
 			}
-#if _LARGEFILE64_SOURCE
+#ifdef _LARGEFILE64_SOURCE
 			/*
 			 * Copy back. Note that the fcntl_lock call
 			 * should have ensured that no overflow was possible.
@@ -251,7 +251,7 @@ _sysio_vfcntl(int fd, int cmd, va_list ap)
 		}
 		break;
 #endif /* !(_LARGEFILE64_SOURCE || F_GETLK64 == F_GETLK) */
-#if _LARGEFILE64_SOURCE
+#ifdef _LARGEFILE64_SOURCE
 	    case F_GETLK64:
 	    case F_SETLK64:
 	    case F_SETLKW64:
