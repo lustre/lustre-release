@@ -401,16 +401,16 @@ fi
 #
 # LC_CONFIG_HEALTH_CHECK_WRITE
 #
-# Turn off the actual write to the disk
+# Turn on the actual write to the disk
 #
 AC_DEFUN([LC_CONFIG_HEALTH_CHECK_WRITE],
 [AC_MSG_CHECKING([whether to enable a write with the health check])
-AC_ARG_ENABLE([health_write],
-        AC_HELP_STRING([--disable-health_write],
-                        [disable disk writes when doing health check]),
-        [],[enable_health_write='yes'])
+AC_ARG_ENABLE([health-write],
+        AC_HELP_STRING([--enable-health-write],
+                        [enable disk writes when doing health check]),
+        [],[enable_health_write='no'])
 AC_MSG_RESULT([$enable_health_write])
-if test x$enable_health_write != xno ; then
+if test x$enable_health_write == xyes ; then
   AC_DEFINE(USE_HEALTH_CHECK_WRITE, 1, Write when Checking Health)
 fi
 ])
@@ -521,7 +521,7 @@ LB_LINUX_TRY_COMPILE([
         #include <asm/page.h>
         #include <linux/mm.h>
 ],[
-       filemap_populate(NULL, 0, 0, __pgprot(0), 0, 0);
+	filemap_populate(NULL, 0, 0, __pgprot(0), 0, 0);
 ],[
         AC_MSG_RESULT([yes])
         AC_DEFINE(HAVE_FILEMAP_POPULATE, 1, [Kernel exports filemap_populate])
@@ -613,6 +613,20 @@ AC_DEFUN([LC_POSIX_ACL_XATTR_H],
 $1
 ],[
 AC_MSG_RESULT([no])
+])
+
+#
+# LC_EXPORT___IGET
+# starting from 2.6.19 linux kernel exports __iget()
+#
+AC_DEFUN([LC_EXPORT___IGET],
+[AC_MSG_CHECKING([if kernel exports __iget])
+	if grep -q "EXPORT_SYMBOL(__iget)" $LINUX/fs/inode.c 2>/dev/null ; then
+		AC_DEFINE(HAVE_EXPORT___IGET, 1, [kernel exports __iget])
+		AC_MSG_RESULT([yes])
+	else
+		AC_MSG_RESULT([no])
+	fi
 ])
 ])
 
@@ -1083,6 +1097,7 @@ LC_BIT_SPINLOCK_H
 LC_XATTR_ACL
 LC_STRUCT_INTENT_FILE
 LC_POSIX_ACL_XATTR_H
+LC_EXPORT___IGET
 LC_FUNC_SET_FS_PWD
 LC_FUNC_MS_FLOCK_LOCK
 LC_FUNC_HAVE_CAN_SLEEP_ARG

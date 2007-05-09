@@ -1,32 +1,24 @@
 tbd         Cluster File Systems, Inc. <info@clusterfs.com>
        * version 1.6.1
        * Support for kernels:
-        2.6.9-42.0.10.EL (RHEL 4)
+        2.4.21-47.0.1.EL (RHEL 3)
         2.6.5-7.283 (SLES 9)
+        2.6.9-42.0.10.EL (RHEL 4)
         2.6.12.6 vanilla (kernel.org)
         2.6.16.27-0.9 (SLES 10)
        * Client support for unpatched kernels:
 	(see https://mail.clusterfs.com/wikis/lustre/PatchlessClient)
 	2.6.16 - 2.6.19 vanilla (kernel.org)
-	2.6.9-42.0.8EL (RHEL 4)
+	2.6.9-42.0.8.EL (RHEL 4)
        * Recommended e2fsprogs version: 1.39.cfs6
+       * Note that reiserfs quotas are disabled on SLES 10 in this kernel.
        * bug fixes
-       * Note that reiserfs quotas are temporarily disabled on SLES 10 in this
-	 kernel.
-
-Severity   : minor
-Bugzilla   : 11512
-Description: Remove write from health_check, add configure option
-Details    : While an OSS is under a heavy ost_destroy load reading the 
-	     proc entry /proc/fs/lustre/health_check can take an unreasonably 
-             long time.  This disrupts our ability the effectively monitor 
-             the health of the filesystem. (LLNL)
 
 Severity   : enhancement
 Bugzilla   : 11548
 Description: Add LNET router traceability for debug purposes
 Details    : If a checksum failure occurs with a router as part of the
-             IO path, the NID of the last router that forwarded the bulk data
+	     IO path, the NID of the last router that forwarded the bulk data
 	     is printed so it can be identified.
 
 Severity   : normal
@@ -34,14 +26,14 @@ Frequency  : rare
 Bugzilla   : 11315
 Description: OST "spontaneously" evicts client; client has imp_pingable == 0
 Details    : Due to a race condition, liblustre clients were occasionally
-             evicted incorrectly.
+	     evicted incorrectly.
 
 Severity   : enhancement
 Bugzilla   : 10997
-Description: lfs setstripe use optional parameters instead of postional 
+Description: lfs setstripe use optional parameters instead of postional
 	     parameters.
 
-Severity   : enhancement 
+Severity   : enhancement
 Bugzilla   : 10651
 Description: Nanosecond timestamp support for ldiskfs
 Details    : The on-disk ldiskfs filesystem has added support for nanosecond
@@ -77,6 +69,17 @@ Details    : If reconnect happened between getting open reply from server and
 	     Subsequent close will crash in variety of ways.
 	     Check that request is still eligible for replay in
 	     mdc_set_replay_data().
+
+Severity   : minor
+Frequency  : rare
+Bugzilla   : 11512
+Description: disable writes to filesystem when reading health_check file
+Details    : the default for reading the health_check proc file has changed
+	     to NOT do a journal transaction and write to disk, because this
+	     can cause reads of the /proc file to hang and block HA state
+	     checking on a healthy but otherwise heavily loaded system.  It
+	     is possible to return to the previous behaviour during configure
+	     with --enable-health-write.
 
 --------------------------------------------------------------------------------
 
@@ -171,7 +174,7 @@ Severity   : normal
 Bugzilla   : 12123
 Description: ENOENT returned for valid filehandle during dbench.
 Details    : Check if a directory has children when invalidating dentries
-             associated with an inode during lock cancellation.  This fixes
+	     associated with an inode during lock cancellation.  This fixes
 	     an incorrect ENOENT sometimes seen for valid filehandles during
 	     testing with dbench.
 
@@ -283,7 +286,7 @@ Details    : Added basic proc entries for the MGS showing what filesystems
 Severity   : enhancement
 Bugzilla   : 10998
 Description: provide MGS failover
-Details    : Added config lock reacquisition after MGS server failover. 
+Details    : Added config lock reacquisition after MGS server failover.
 
 Severity   : enhancement
 Bugzilla   : 11461
@@ -400,15 +403,72 @@ Details    : The mballoc3 code (ldiskfs2 only) adds new mechanisms to improve
        * Note that reiserfs quotas are disabled on SLES 10 in this kernel
        * bug fixes
 
+Severity   : critical
+Frequency  : occasional, depends on client load and configuration
+Bugzilla   : 12181, 12203
+Description: data loss for recently-modified files
+Introduced : 1.4.6
+Details    : In some cases it is possible that recently written or created
+	     files may not be written to disk in a timely manner (this should
+	     normally be within 30s unless client IO load is very high).
+	     The problem appears as zero-length files or files that are a
+	     multiple of 1MB in size after a client crash or client eviction
+	     that are missing data at the end of the file.
+
+	     This problem is more likely to be hit on clients where files are
+	     repeatedly created and unlinked in the same directory, clients
+	     have a large amount of RAM, have many CPUs, the filesystem has
+	     many OSTs, the clients are rebooted frequently, and/or the files
+	     are not accessed by other nodes after being written.
+
+	     The presence of the problem can be detected by looking at
+	     /proc/sys/fs/inode-state.  If the first number (nr_inodes) is
+	     smaller than the second (nr_unused) then dirty files will not
+	     be flushed automatically to disk.  "sync; sleep 10" should be
+	     run several times on the node before unmounting it to update
+	     Lustre (this is also safe to run on nodes without this problem).
+
+	     There is also a related kernel bug in the RHEL4 4 2.6.9 kernel
+	     that can cause this same problem, so customers using that kernel
+	     also need to update the kernel in addition to Lustre.  In order
+	     to properly fix this bug, the RHEL3 2.4.21 kernel is also updated.
+
+	     It is normal that files written just before a client crash (less
+	     than 30s) may not yet have been flushed to disk, even for local
+	     filesystems.
+
 Severity   : normal
+Frequency  : frequent on thin XT3 nodes
+Bugzilla   : 10802
+Description: UUID collision on thin XT3 Linux nodes
+Details    : UUIDs on Compute Node Linux XT3 nodes were not generated
+	     randomly, since we relied on an insufficiently-seeded PRNG.
+
+Severity   : normal
+Frequency  : rare
+Bugzilla   : 11693
+Description: OSS hangs after "All ost request buffers busy"
+Details    : A deadlock between quota and journal operations caused OSS
+	     hangs after printing "All ost request buffers busy."
+
+Severity   : minor
+Frequency  : always on liblustre builds
+Bugzilla   : 11175
+Description: Cleanup compiler warnings on liblustre
+
+Severity   : minor
+Frequency  : always on liblustre builds on XT3
+Bugzilla   : 12146
+Description: LC_CONFIG_CDEBUG don't run while build liblustre on XT3.
+
 Frequency  : always
 Bugzilla   : 3244
 Description: Addition of EXT3_FEATURE_RO_COMPAT_DIR_NLINKS flag for
-             > 32000 subdirectories
+	     > 32000 subdirectories
 Details    : Add EXT3_FEATURE_RO_COMPAT_DIR_NLINK flag to 
-             EXT3_FEATURE_RO_COMPAT_SUPP. This flag will be set whenever
-             subdirectory count crosses 32000. This will aid e2fsck to
-             correctly handle more than 32000 subdirectories.
+	     EXT3_FEATURE_RO_COMPAT_SUPP. This flag will be set whenever
+	     subdirectory count crosses 32000. This will aid e2fsck to
+	     correctly handle more than 32000 subdirectories.
 
 Severity   : major
 Frequency  : liblustre (e.g. catamount) on a large cluster with >= 8 OSTs/OSS
@@ -430,21 +490,21 @@ Severity   : normal
 Frequency  : always
 Bugzilla   : 10214
 Description: make O_SYNC working on 2.6 kernels
-Details    : 2.6 kernels use different method for mark pages for write, 
+Details    : 2.6 kernels use different method for mark pages for write,
 	     so need add a code to lustre for O_SYNC work.
 
 Severity   : minor
 Frequency  : always
 Bugzilla   : 11110
 Description: Failure to close file and release space on NFS
-Details    : Put inode details into lock acquired in ll_intent_file_open. 
+Details    : Put inode details into lock acquired in ll_intent_file_open.
 	     Use mdc_intent_lock in ll_intent_open to properly
 	     detect all kind of errors unhandled by mdc_enqueue.
 
 Severity   : major
 Frequency  : rare
 Bugzilla   : 10866
-Description: proc file read during shutdown sometimes raced obd removal, 
+Description: proc file read during shutdown sometimes raced obd removal,
 	     causing node crash
 Details    : Add lock to prevent obd access after proc file removal.
 
@@ -506,7 +566,7 @@ Bugzilla   : 11710
 Frequency  : always
 Description: add support PG_writeback bit
 Details    : add support for PG_writeback bit for Lustre, for more carefull
-	     work with page cache in 2.6 kernel. This also fix some deadlocks 
+	     work with page cache in 2.6 kernel. This also fix some deadlocks
 	     and remove hack for work O_SYNC with 2.6 kernel.
 
 Severity   : enhancement
@@ -529,10 +589,11 @@ Details    : The mballoc3 code (ldiskfs2 only) adds new mechanisms to improve
 2007-02-09  Cluster File Systems, Inc. <info@clusterfs.com>
        * version 1.4.9
        * Support for kernels:
-        2.6.9-42.0.3EL (RHEL 4)
+        2.6.9-42.0.3.EL (RHEL 4)
         2.6.5-7.276 (SLES 9)
         2.4.21-47.0.1.EL (RHEL 3)
         2.6.12.6 vanilla (kernel.org)
+        2.6.16.21-0.8 (SLES10)
        * Recommended e2fsprogs version: 1.39.cfs2-0
 
        * The backwards-compatible /proc/sys/portals symlink has been removed
@@ -756,7 +817,7 @@ Severity   : normal
 Frequency  : always on ppc64
 Bugzilla   : 10634
 Description: the write to an ext3 filesystem mounted with mballoc got stuck
-Details    : ext3_mb_generate_buddy() uses find_next_bit() which does not 
+Details    : ext3_mb_generate_buddy() uses find_next_bit() which does not
 	     perform endianness conversion.
 
 Severity   : major
