@@ -414,7 +414,7 @@ kptllnd_rx_buffer_callback (ptl_event_t *ev)
                  * odd-length message will misalign subsequent messages and
                  * force the fixup below...  */
                 if ((ev->mlength & 7) != 0)
-                        CWARN("Message from %s has odd length %d: "
+                        CWARN("Message from %s has odd length %llu: "
                               "probable version incompatibility\n",
                               kptllnd_ptlid2str(ev->initiator),
                               ev->mlength);
