@@ -60,62 +60,6 @@ static int router_ping_timeout = 50;
 CFS_MODULE_PARM(router_ping_timeout, "i", int, 0444,
                 "Seconds to wait for the reply to a router health query");
 
-typedef struct
-{
-        work_struct_t           kpru_tq;
-        lnet_nid_t              kpru_nid;
-        int                     kpru_alive;
-        time_t                  kpru_when;
-} kpr_upcall_t;
-
-void
-kpr_do_upcall (void *arg)
-{
-        kpr_upcall_t *u = (kpr_upcall_t *)arg;
-
-#ifndef __WINNT__
-
-        char          nidstr[36];
-        char          whenstr[36];
-        char         *argv[] = {
-                NULL,
-                "ROUTER_NOTIFY",
-                nidstr,
-                u->kpru_alive ? "up" : "down",
-                whenstr,
-                NULL};
-
-        snprintf (nidstr, sizeof(nidstr), "%s", libcfs_nid2str(u->kpru_nid));
-        snprintf (whenstr, sizeof(whenstr), "%ld", u->kpru_when);
-
-        libcfs_run_upcall (argv);
-
-#endif /* __WINNT__ */
-
-        LIBCFS_FREE(u, sizeof(*u));
-}
-
-void
-kpr_upcall (lnet_nid_t gw_nid, int alive, time_t when)
-{
-        /* May be in arbitrary context */
-        kpr_upcall_t  *u;
-
-        LIBCFS_ALLOC_ATOMIC(u, sizeof(*u));
-        if (u == NULL) {
-                CERROR ("Upcall out of memory: nid %s %s\n",
-                        libcfs_nid2str(gw_nid), alive ? "up" : "down");
-                return;
-        }
-
-        u->kpru_nid        = gw_nid;
-        u->kpru_alive      = alive;
-        u->kpru_when       = when;
-
-        prepare_work (&u->kpru_tq, kpr_do_upcall, u);
-        schedule_work (&u->kpru_tq);
-}
-
 int
 lnet_peers_start_down(void)
 {
@@ -144,7 +88,7 @@ lnet_notify_locked(lnet_peer_t *lp, int notifylnd, int alive, time_t when)
         lp->lp_alive_count++;
         lp->lp_alive = !(!alive);               /* 1 bit! */
         lp->lp_notify = 1;
-        lp->lp_notifylnd = notifylnd;
+        lp->lp_notifylnd |= notifylnd;
 
         CDEBUG(D_NET, "set %s %d\n", libcfs_nid2str(lp->lp_nid), alive);
 }
@@ -154,8 +98,7 @@ lnet_do_notify (lnet_peer_t *lp)
 {
         lnet_ni_t *ni = lp->lp_ni;
         int        alive;
-        time_t     when;
-        int        lnd;
+        int        notifylnd;
         
         LNET_LOCK();
                 
@@ -171,28 +114,22 @@ lnet_do_notify (lnet_peer_t *lp)
         lp->lp_notifying = 1;
         
         while (lp->lp_notify) {
-                alive = lp->lp_alive;
-                when  = lp->lp_timestamp;
-                lnd   = lp->lp_notifylnd;
+                alive     = lp->lp_alive;
+                notifylnd = lp->lp_notifylnd;
 
-                lp->lp_notify = 0;
+                lp->lp_notifylnd = 0;
+                lp->lp_notify    = 0;
 
-                LNET_UNLOCK();
+                if (notifylnd && ni->ni_lnd->lnd_notify != NULL) {
+                        LNET_UNLOCK();
 
-                /* A new notification could happen now; I'll handle it when
-                 * control returns to me */
-                
-                if (!lnd) {
-                        CDEBUG(D_NET, "Upcall: NID %s is %s\n",
-                               libcfs_nid2str(lp->lp_nid),
-                               alive ? "alive" : "dead");
-                        kpr_upcall(lp->lp_nid, alive, when);
-                } else {
-                        if (ni->ni_lnd->lnd_notify != NULL)
-                                (ni->ni_lnd->lnd_notify)(ni, lp->lp_nid, alive);
+                        /* A new notification could happen now; I'll handle it
+                         * when control returns to me */
+
+                        (ni->ni_lnd->lnd_notify)(ni, lp->lp_nid, alive);
+
+                        LNET_LOCK();
                 }
-
-                LNET_LOCK();
         }
 
         lp->lp_notifying = 0;
