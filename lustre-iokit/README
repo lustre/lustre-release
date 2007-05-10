@@ -5,7 +5,12 @@ sgpdd-survey: - a test of the 'bare metal' performance, bypassing
 as much of the kernel as we can. Does not require Lustre, does
 require the sgp_dd package.  WILL ERASE ALL DATA ON DEVICE.
 
+obdfilter-survey:
+Shell script - tests performance of isolated OSTS, network 
+via echo clients, end-to-end test. 
+
 obdsurvey: - a test of Lustre performance with three modes:
+Maintained by Scali, included here as an extra.
 Requires Python > 2.2
 Requires Lustre
 
@@ -16,7 +21,4 @@ Requires Lustre
 ior-survey:
 A script to run the IOR benchmark. Version 2.8.6 of IOR is included
 
-obdfilter-survey:
-Obsoleted by obdsurvey, included for historical reasons, and for
-systems that do not have a recent version of Python.
 
