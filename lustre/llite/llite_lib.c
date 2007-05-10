@@ -83,8 +83,10 @@ static struct ll_sb_info *ll_init_sbi(void)
         list_add_tail(&sbi->ll_list, &ll_super_blocks);
         spin_unlock(&ll_sb_lock);
 
+#ifdef HAVE_EXPORT___IGET
         INIT_LIST_HEAD(&sbi->ll_deathrow);
         spin_lock_init(&sbi->ll_deathrow_lock);
+#endif
         for (i = 0; i < LL_PROCESS_HIST_MAX; i++) { 
                 spin_lock_init(&sbi->ll_rw_extents_info.pp_extents[i].pp_r_hist.oh_lock);
                 spin_lock_init(&sbi->ll_rw_extents_info.pp_extents[i].pp_w_hist.oh_lock);
@@ -453,6 +455,7 @@ void lustre_throw_orphan_dentries(struct super_block *sb)
 #define lustre_throw_orphan_dentries(sb)
 #endif
 
+#ifdef HAVE_EXPORT___IGET
 static void prune_dir_dentries(struct inode *inode)
 {
         struct dentry *dentry, *prev = NULL;
@@ -545,6 +548,9 @@ static void prune_deathrow(struct ll_sb_info *sbi, int try)
 
         } while (empty == 0);
 }
+#else /* !HAVE_EXPORT___IGET */
+#define prune_deathrow(sbi, try) do {} while (0)
+#endif /* HAVE_EXPORT___IGET */
 
 void client_common_put_super(struct super_block *sb)
 {
@@ -1143,9 +1149,11 @@ void ll_clear_inode(struct inode *inode)
 
         lli->lli_inode_magic = LLI_INODE_DEAD;
 
+#ifdef HAVE_EXPORT___IGET
         spin_lock(&sbi->ll_deathrow_lock);
         list_del_init(&lli->lli_dead_list);
         spin_unlock(&sbi->ll_deathrow_lock);
+#endif
 
         EXIT;
 }

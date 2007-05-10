@@ -255,8 +255,10 @@ struct ll_sb_info {
         unsigned int              ll_namelen;
         struct file_operations   *ll_fop;
 
+#ifdef HAVE_EXPORT___IGET
         struct list_head          ll_deathrow; /* inodes to be destroyed (b1443) */
         spinlock_t                ll_deathrow_lock;
+#endif
         /* =0 - hold lock over whole read/write
          * >0 - max. chunk to be read/written w/o lock re-acquiring */
         unsigned long             ll_max_rw_chunk;

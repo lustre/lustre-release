@@ -10,7 +10,7 @@ tbd         Cluster File Systems, Inc. <info@clusterfs.com>
 	(see https://mail.clusterfs.com/wikis/lustre/PatchlessClient)
 	2.6.16 - 2.6.19 vanilla (kernel.org)
 	2.6.9-42.0.8.EL (RHEL 4)
-       * Recommended e2fsprogs version: 1.39.cfs6
+       * Recommended e2fsprogs version: 1.39.cfs7
        * Note that reiserfs quotas are disabled on SLES 10 in this kernel.
        * bug fixes
 
@@ -95,12 +95,21 @@ Details    : the default for reading the health_check proc file has changed
        * bug fixes
 
 Severity   : normal
-Frequency  : on some architectures	
+Frequency  : on some architectures
 Bugzilla   : 12404
 Description: 1.6 client sometimes fails to mount from a 1.4 MDT
 Details    : Uninitialized flags sometimes cause configuration commands to
 	     be skipped.
-	
+
+Severity   : normal
+Frequency  : patchless clients only
+Bugzilla   : 12391
+Description: missing __iget() symbol export
+Details    : The __iget() symbol export is missing.  To avoid the need for
+	     this on patchless clients the deathrow inode reaper is turned
+	     off, and we depend on the VM to clean up old inodes.  This
+	     dependency was during via the fix for bug 12181.
+
 --------------------------------------------------------------------------------
 
 2007-04-19  Cluster File Systems, Inc. <info@clusterfs.com>
@@ -379,7 +388,7 @@ Bugzilla   : 11149
 Description: QOS code breaks on skipped indicies
 Details    : Add checks for missing OST indicies in the QOS code, so OSTs
 	     created with --index need not be sequential.
-	
+
 Severity   : enhancement
 Bugzilla   : 11264
 Description: Add uninit_groups feature to ldiskfs2 to speed up e2fsck
@@ -472,7 +481,7 @@ Frequency  : always
 Bugzilla   : 3244
 Description: Addition of EXT3_FEATURE_RO_COMPAT_DIR_NLINKS flag for
 	     > 32000 subdirectories
-Details    : Add EXT3_FEATURE_RO_COMPAT_DIR_NLINK flag to 
+Details    : Add EXT3_FEATURE_RO_COMPAT_DIR_NLINK flag to
 	     EXT3_FEATURE_RO_COMPAT_SUPP. This flag will be set whenever
 	     subdirectory count crosses 32000. This will aid e2fsck to
 	     correctly handle more than 32000 subdirectories.
@@ -689,8 +698,8 @@ Frequency  : MDS failover only, very rarely
 Bugzilla   : 11277
 Description: clients may get ASSERTION(granted_lock != NULL)
 Details    : When request was taking a long time, and a client was resending
-	     a getattr by name lock request. The were multiple lock requests 
-	     with the same client lock handle and 
+	     a getattr by name lock request. The were multiple lock requests
+	     with the same client lock handle and
 	     mds_getattr_name->fixup_handle_for_resent_request found one of the
 	     lock handles but later failed with ASSERTION(granted_lock != NULL).
 
@@ -723,7 +732,7 @@ Frequency  : NFS re-export or patchless client
 Bugzilla   : 10796
 Description: Various nfs/patchless fixes.
 Details    : fixes reuse disconected alias for lookup process - this fixes
-	     warning "find_exported_dentry: npd != pd", 
+	     warning "find_exported_dentry: npd != pd",
 	     fix permission error with open files at nfs.
 	     fix apply umask when do revalidate.
 
