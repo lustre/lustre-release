@@ -1,5 +1,5 @@
 AC_INIT
-AM_INIT_AUTOMAKE(lustre-iokit,1.0)
+AM_INIT_AUTOMAKE(lustre-iokit,1.1)
 AC_PATH_PROGS(BASH, bash)
 AC_PATH_PROGS(PERL, perl)
 RELEASE="`date +%Y%m%d%H%M`"
