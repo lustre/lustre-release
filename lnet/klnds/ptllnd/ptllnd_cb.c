@@ -648,6 +648,7 @@ kptllnd_watchdog(void *arg)
         int                 id = (long)arg;
         char                name[16];
         wait_queue_t        waitlink;
+        int                 stamp = 0;
         int                 peer_index = 0;
         unsigned long       deadline = jiffies;
         int                 timeout;
@@ -685,12 +686,13 @@ kptllnd_watchdog(void *arg)
                                 chunk = 1;
 
                         for (i = 0; i < chunk; i++) {
-                                kptllnd_peer_check_bucket(peer_index);
+                                kptllnd_peer_check_bucket(peer_index, stamp);
                                 peer_index = (peer_index + 1) %
                                      kptllnd_data.kptl_peer_hash_size;
                         }
 
                         deadline += p * HZ;
+                        stamp++;
                         continue;
                 }
 

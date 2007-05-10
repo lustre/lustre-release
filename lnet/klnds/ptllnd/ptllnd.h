@@ -228,6 +228,8 @@ struct kptl_peer
         int                     peer_sent_credits;      /* #msg buffers posted for peer */
         int                     peer_max_msg_size;      /* peer's rx buffer size */
         int                     peer_error;             /* errno on closing this peer */
+        int                     peer_retry_noop;        /* need to retry returning credits */
+        int                     peer_check_stamp;       /* watchdog check stamp */
         cfs_time_t              peer_last_alive;        /* when (in jiffies) I was last alive */
         __u64                   peer_next_matchbits;    /* Next value to register RDMA from peer */
         __u64                   peer_last_matchbits_seen; /* last matchbits used to RDMA to peer */
@@ -418,7 +420,7 @@ void kptllnd_peer_close(kptl_peer_t *peer, int why);
 void kptllnd_handle_closing_peers(void);
 int  kptllnd_peer_connect(kptl_tx_t *tx, lnet_nid_t nid);
 void kptllnd_peer_check_sends(kptl_peer_t *peer);
-void kptllnd_peer_check_bucket(int idx);
+void kptllnd_peer_check_bucket(int idx, int stamp);
 void kptllnd_tx_launch(kptl_peer_t *peer, kptl_tx_t *tx, int nfrag);
 int  kptllnd_find_target(kptl_peer_t **peerp, lnet_process_id_t target);
 kptl_peer_t *kptllnd_peer_handle_hello(ptl_process_id_t initiator,

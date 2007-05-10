@@ -32,10 +32,15 @@
 
 Severity   : major
 Frequency  : rare
-Bugzilla   : 11706
-Description: Added LNetSetAsync() to ensure single-threaded userspace
-             clients can be eager LNET receivers even when the application
-	     is not executing in the filesystem.
+Bugzilla   : 12455
+Description: A race in kernel ptllnd between deleting a peer and posting
+             new communications for it could hang communications -
+	     manifesting as "Unexpectedly long timeout" messages.
+	
+Severity   : major
+Frequency  : rare
+Bugzilla   : 12432
+Description: Kernel ptllnd lock ordering issue could hang a node.
 	
 Severity   : major
 Frequency  : rare
