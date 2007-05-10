@@ -380,11 +380,11 @@ else
 fi
 
 # get vmstat started
-# disable portals debug and get obdecho loaded on all relevant hosts
+# disable LNET debug and get obdecho loaded on all relevant hosts
 unique_hosts=(`unique ${host_names[@]}`)
 pidcount=0
 for host in ${unique_hosts[@]}; do
-    remote_shell $host "echo 0 > /proc/sys/portals/debug"
+    remote_shell $host "echo 0 > /proc/sys/lnet/debug"
     host_vmstatf=${vmstatf}_${host}
     echo -n > $host_vmstatf
     remote_shell $host "vmstat 5 >> $host_vmstatf" &
