@@ -252,6 +252,14 @@ ssize_t llu_iop_filldirentries(struct inode *ino, _SYSIO_OFF_T *basep,
                                                 le32_to_cpu(de->inode), d_type, &filled);
                                 if (over) {
                                         free_page(page);
+                                        /*
+                                         * if buffer overflow with no data
+                                         * returned yet, then report error
+                                         * instead of eof
+                                         */
+                                        if (filled == 0)
+                                                RETURN(-EINVAL);
+
                                         GOTO(done, 0);
                                 }
                         }

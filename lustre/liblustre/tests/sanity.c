@@ -1333,6 +1333,46 @@ int t55(char *name)
         LEAVE();
 }
 
+/*
+ * getdirentries should return -1 and set errno to EINVAL when the size
+ * specified as an argument is too small to contain at least one entry
+ * (see bugzilla ticket 12229)
+ */
+int t56(char *name)
+{
+        int fd;
+        size_t nbytes;
+        off_t basep = 0;
+        ssize_t rc = 0;
+        struct dirent dir;
+
+        ENTRY("getdirentries should fail if nbytes is too small");
+
+        /* Set count to be very small.  The result should be EINVAL */
+        nbytes = 8;
+
+        /* open the directory and call getdirentries */
+        fd = t_opendir(lustre_path);
+
+        rc = getdirentries(fd, (char *)&dir, nbytes, &basep);
+
+        if (rc != -1) {
+                printf("Test failed: getdirentries returned %d\n", rc);
+                t_close(fd);
+                return -1;
+        }
+        if (errno != EINVAL) {
+                printf("Test failed: getdirentries returned %d but errno is set"
+                                " to %d (should be EINVAL)\n", rc, errno);
+                t_close(fd);
+                return -1;
+        }
+        t_close(fd);
+
+        LEAVE();
+}
+
+
 extern void __liblustre_setup_(void);
 extern void __liblustre_cleanup_(void);
 
@@ -1380,6 +1420,7 @@ struct testlist {
         { t53, "53" },
         { t54, "54" },
         { t55, "55" },
+        { t56, "56" },
         { NULL, NULL }
 };
 

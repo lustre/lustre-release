@@ -14,6 +14,13 @@ tbd         Cluster File Systems, Inc. <info@clusterfs.com>
        * Note that reiserfs quotas are disabled on SLES 10 in this kernel.
        * bug fixes
 
+Severity   : normal
+Frequency  : liblustre clients only
+Bugzilla   : 12229
+Description: getdirentries does not give error when run on compute nodes
+Details    : getdirentries does not fail when the size specified as an argument
+	     is too small to contain at least one entry
+
 Severity   : enhancement
 Bugzilla   : 11548
 Description: Add LNET router traceability for debug purposes
