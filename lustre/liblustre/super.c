@@ -1282,8 +1282,8 @@ static int llu_file_flock(struct inode *ino,
         int flags = 0;
         int rc;
 
-        CDEBUG(D_VFSTRACE, "VFS Op:inode="LPU64" file_lock=%p\n",
-               st->st_ino, file_lock);
+        CDEBUG(D_VFSTRACE, "VFS Op:inode=%llu file_lock=%p\n",
+               (unsigned long long) st->st_ino, file_lock);
 
         flock.l_flock.pid = file_lock->fl_pid;
         flock.l_flock.start = file_lock->fl_start;
@@ -1335,8 +1335,9 @@ static int llu_file_flock(struct inode *ino,
                 LBUG();
         }
 
-        CDEBUG(D_DLMTRACE, "inode="LPU64", pid=%u, flags=%#x, mode=%u, "
-               "start="LPU64", end="LPU64"\n", st->st_ino, flock.l_flock.pid,
+        CDEBUG(D_DLMTRACE, "inode=%llu, pid=%u, flags=%#x, mode=%u, "
+               "start="LPU64", end="LPU64"\n",
+               (unsigned long long) st->st_ino, flock.l_flock.pid,
                flags, mode, flock.l_flock.start, flock.l_flock.end);
 
         rc = ldlm_cli_enqueue(llu_i2mdcexp(ino), NULL, res_id, 
