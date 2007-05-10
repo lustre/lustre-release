@@ -527,7 +527,7 @@ for ((rsz=$rszlo;rsz<=$rszhi;rsz*=2)); do
 		    tmpfi="${tmpf}_$idx"
 		    echo "=============> $test $client_name" >> $workf
 		    host="${host_names[$idx]}"
-		    scp -q ${host}:tmpfi $tmpfi > /dev/null
+		    scp -q ${host}:$tmpfi $tmpfi > /dev/null
 		    cat $tmpfi >> $workf
 		    get_stats $tmpfi >> $tmpf
 		    rm $tmpfi
