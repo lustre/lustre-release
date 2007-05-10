@@ -3,7 +3,7 @@ In order of preference:
 
 sgpdd-survey: - a test of the 'bare metal' performance, bypassing
 as much of the kernel as we can. Does not require Lustre, does
-require the sgp_dd package.
+require the sgp_dd package.  WILL ERASE ALL DATA ON DEVICE.
 
 obdsurvey: - a test of Lustre performance with three modes:
 Requires Python > 2.2
