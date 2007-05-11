@@ -153,16 +153,16 @@ Index: linux-2.6.5-7.283/include/linux/ext3_fs.h
  
  #ifdef __KERNEL__
 @@ -539,6 +556,7 @@ static inline struct ext3_inode_info *EX
- #define EXT3_FEATURE_RO_COMPAT_LARGE_FILE	0x0002
  #define EXT3_FEATURE_RO_COMPAT_BTREE_DIR	0x0004
+ #define EXT4_FEATURE_RO_COMPAT_GDT_CSUM		0x0010
  #define EXT4_FEATURE_RO_COMPAT_DIR_NLINK	0x0020
 +#define EXT4_FEATURE_RO_COMPAT_EXTRA_ISIZE	0x0040
  
  #define EXT3_FEATURE_INCOMPAT_COMPRESSION	0x0001
  #define EXT3_FEATURE_INCOMPAT_FILETYPE		0x0002
 @@ -555,6 +573,7 @@ static inline struct ext3_inode_info *EX
- #define EXT3_FEATURE_RO_COMPAT_SUPP	(EXT3_FEATURE_RO_COMPAT_SPARSE_SUPER| \
  					 EXT3_FEATURE_RO_COMPAT_LARGE_FILE| \
+ 					 EXT4_FEATURE_RO_COMPAT_GDT_CSUM| \
  					 EXT4_FEATURE_RO_COMPAT_DIR_NLINK| \
 +					 EXT4_FEATURE_RO_COMPAT_EXTRA_ISIZE| \
  					 EXT3_FEATURE_RO_COMPAT_BTREE_DIR)
@@ -172,24 +172,24 @@ Index: linux-2.6.5-7.283/include/linux/ext3_fs_i.h
 ===================================================================
 --- linux-2.6.5-7.283.orig/include/linux/ext3_fs_i.h
 +++ linux-2.6.5-7.283/include/linux/ext3_fs_i.h
-@@ -131,6 +131,7 @@ struct ext3_inode_info {
- 	struct inode vfs_inode;
+@@ -130,6 +130,7 @@ struct ext3_inode_info {
  
- 	struct ext3_ext_cache i_cached_extent;
+ 	/* on-disk additional length */
+ 	__u16 i_extra_isize;
 +	struct timespec i_crtime;
- };
  
- #endif	/* _LINUX_EXT3_FS_I */
+ 	/*
+ 	 * truncate_sem is for serialising ext3_truncate() against
 Index: linux-2.6.5-7.283/include/linux/ext3_fs_sb.h
 ===================================================================
 --- linux-2.6.5-7.283.orig/include/linux/ext3_fs_sb.h
 +++ linux-2.6.5-7.283/include/linux/ext3_fs_sb.h
-@@ -119,6 +119,8 @@ struct ext3_sb_info {
- 	spinlock_t s_bal_lock;
- 	unsigned long s_mb_buddies_generated;
- 	unsigned long long s_mb_generation_time;
-+
-+	unsigned int s_want_extra_isize; /* New inodes should reserve # bytes */
- };
+@@ -71,6 +71,8 @@ struct ext3_sb_info {
+ 	/* Last group used to allocate inode */
+ 	int s_last_alloc_group;
  
- #define EXT3_GROUP_INFO(sb, group)					   \
++	unsigned int s_want_extra_isize; /* New inodes should reserve # bytes */
++
+ 	/* root of the per fs reservation window tree */
+ 	spinlock_t s_rsv_window_lock;
+ 	struct rb_root s_rsv_window_root;
