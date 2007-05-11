@@ -1,4 +1,0 @@
-subdir-m += lnet
-subdir-m += lustre
-
-@INCLUDE_RULES@
