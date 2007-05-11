@@ -40,12 +40,13 @@ Index: linux-2.6.12.6-bull/include/linux/ext3_fs.h
  /*
   * Maximal mount counts between two filesystem checks
   */
-@@ -727,7 +736,7 @@ extern int ext3_bg_has_super(struct supe
+@@ -727,7 +736,8 @@ extern int ext3_bg_has_super(struct supe
  extern unsigned long ext3_bg_num_gdb(struct super_block *sb, int group);
  extern int ext3_new_block (handle_t *, struct inode *, unsigned long, int *);
  extern void ext3_free_blocks (handle_t *, struct inode *, unsigned long,
 -			      unsigned long);
 +			      unsigned long, int);
++extern int ext3_new_block_old(handle_t *, struct inode *, unsigned long, int *);
  extern void ext3_free_blocks_sb (handle_t *, struct super_block *,
  				 unsigned long, unsigned long, int *);
  extern unsigned long ext3_count_free_blocks (struct super_block *);
@@ -360,7 +361,7 @@ Index: linux-2.6.12.6-bull/fs/ext3/mballoc.c
 ===================================================================
 --- linux-2.6.12.6-bull.orig/fs/ext3/mballoc.c	2006-04-22 17:31:47.543334750 +0400
 +++ linux-2.6.12.6-bull/fs/ext3/mballoc.c	2006-04-30 01:24:11.000000000 +0400
-@@ -0,0 +1,2729 @@
+@@ -0,0 +1,2725 @@
 +/*
 + * Copyright (c) 2003-2005, Cluster File Systems, Inc, info@clusterfs.com
 + * Written by Alex Tomas <alex@clusterfs.com>
@@ -556,11 +557,7 @@ Index: linux-2.6.12.6-bull/fs/ext3/mballoc.c
 +
 +static struct proc_dir_entry *proc_root_ext3;
 +
-+int ext3_create (struct inode *, struct dentry *, int, struct nameidata *);
 +struct buffer_head * read_block_bitmap(struct super_block *, unsigned int);
-+int ext3_new_block_old(handle_t *, struct inode *, unsigned long, int *);
-+int ext3_mb_reserve_blocks(struct super_block *, int);
-+void ext3_mb_release_blocks(struct super_block *, int);
 +void ext3_mb_poll_new_transaction(struct super_block *, handle_t *);
 +void ext3_mb_free_committed_blocks(struct super_block *);
 +

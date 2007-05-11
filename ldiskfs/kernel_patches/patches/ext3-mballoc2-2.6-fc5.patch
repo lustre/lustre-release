@@ -17,7 +17,7 @@ Index: linux-2.6.16.i686/include/linux/ext3_fs.h
  /*
   * Special inodes numbers
   */
-@@ -383,6 +391,7 @@ struct ext3_inode {
+@@ -383,6 +391,7 @@
  #define EXT3_MOUNT_IOPEN_NOPRIV		0x800000/* Make iopen world-readable */
  #define EXT3_MOUNT_EXTENTS		0x1000000/* Extents support */
  #define EXT3_MOUNT_EXTDEBUG		0x2000000/* Extents debug */
@@ -40,12 +40,14 @@ Index: linux-2.6.16.i686/include/linux/ext3_fs.h
  /*
   * Maximal mount counts between two filesystem checks
   */
-@@ -744,7 +753,7 @@
+@@ -744,7 +753,9 @@
  extern unsigned long ext3_bg_num_gdb(struct super_block *sb, int group);
  extern int ext3_new_block (handle_t *, struct inode *, unsigned long, int *);
  extern void ext3_free_blocks (handle_t *, struct inode *, unsigned long,
 -			      unsigned long);
 +			      unsigned long, int);
++extern int ext3_new_block_old(handle_t *handle, struct inode *inode,
++			      unsigned long goal, int *errp);
  extern void ext3_free_blocks_sb (handle_t *, struct super_block *,
  				 unsigned long, unsigned long, int *);
  extern unsigned long ext3_count_free_blocks (struct super_block *);
@@ -86,7 +88,7 @@ Index: linux-2.6.16.i686/include/linux/ext3_fs_sb.h
  
  /*
   * third extended-fs super-block data in memory
-@@ -78,6 +84,43 @@ struct ext3_sb_info {
+@@ -78,6 +84,43 @@
  	char *s_qf_names[MAXQUOTAS];		/* Names of quota files with journalled quota */
  	int s_jquota_fmt;			/* Format of quota to use */
  #endif
@@ -134,7 +136,7 @@ Index: linux-2.6.16.i686/fs/ext3/super.c
 ===================================================================
 --- linux-2.6.16.i686.orig/fs/ext3/super.c	2006-05-30 22:55:32.000000000 +0800
 +++ linux-2.6.16.i686/fs/ext3/super.c	2006-05-30 23:02:59.000000000 +0800
-@@ -392,6 +392,7 @@ static void ext3_put_super (struct super
+@@ -392,6 +392,7 @@
  	struct ext3_super_block *es = sbi->s_es;
  	int i;
  
@@ -142,7 +144,7 @@ Index: linux-2.6.16.i686/fs/ext3/super.c
  	ext3_ext_release(sb);
  	ext3_xattr_put_super(sb);
  	journal_destroy(sbi->s_journal);
-@@ -640,6 +641,7 @@ enum {
+@@ -640,6 +641,7 @@
  	Opt_ignore, Opt_barrier, Opt_err, Opt_resize, Opt_usrquota,
  	Opt_iopen, Opt_noiopen, Opt_iopen_nopriv,
  	Opt_extents, Opt_noextents, Opt_extdebug,
@@ -150,7 +152,7 @@ Index: linux-2.6.16.i686/fs/ext3/super.c
  	Opt_grpquota
  };
  
-@@ -694,6 +695,9 @@ static match_table_t tokens = {
+@@ -694,6 +695,9 @@
  	{Opt_extents, "extents"},
  	{Opt_noextents, "noextents"},
  	{Opt_extdebug, "extdebug"},
@@ -160,7 +162,7 @@ Index: linux-2.6.16.i686/fs/ext3/super.c
  	{Opt_barrier, "barrier=%u"},
  	{Opt_err, NULL},
  	{Opt_resize, "resize"},
-@@ -1041,6 +1043,19 @@ clear_qf_name:
+@@ -1041,6 +1043,19 @@
  		case Opt_extdebug:
  			set_opt (sbi->s_mount_opt, EXTDEBUG);
  			break;
@@ -180,7 +182,7 @@ Index: linux-2.6.16.i686/fs/ext3/super.c
  		default:
  			printk (KERN_ERR
  				"EXT3-fs: Unrecognized mount option \"%s\" "
-@@ -1766,6 +1771,7 @@ static int ext3_fill_super (struct super
+@@ -1766,6 +1771,7 @@
  		ext3_count_dirs(sb));
  
  	ext3_ext_init(sb);
@@ -188,7 +190,7 @@ Index: linux-2.6.16.i686/fs/ext3/super.c
  	lock_kernel();
  	return 0;
  
-@@ -2699,7 +2705,13 @@ static struct file_system_type ext3_fs_t
+@@ -2699,7 +2705,13 @@
  
  static int __init init_ext3_fs(void)
  {
@@ -203,7 +205,7 @@ Index: linux-2.6.16.i686/fs/ext3/super.c
  	if (err)
  		return err;
  	err = init_inodecache();
-@@ -2721,6 +2733,7 @@ static void __exit exit_ext3_fs(void)
+@@ -2721,6 +2733,7 @@
  	unregister_filesystem(&ext3_fs_type);
  	destroy_inodecache();
  	exit_ext3_xattr();
@@ -215,7 +217,7 @@ Index: linux-2.6.16.i686/fs/ext3/extents.c
 ===================================================================
 --- linux-2.6.16.i686.orig/fs/ext3/extents.c	2006-05-30 22:55:32.000000000 +0800
 +++ linux-2.6.16.i686/fs/ext3/extents.c	2006-05-30 23:02:59.000000000 +0800
-@@ -771,7 +771,7 @@ cleanup:
+@@ -771,7 +771,7 @@
  		for (i = 0; i < depth; i++) {
  			if (!ablocks[i])
  				continue;
@@ -224,7 +226,7 @@ Index: linux-2.6.16.i686/fs/ext3/extents.c
  		}
  	}
  	kfree(ablocks);
-@@ -1428,7 +1428,7 @@ int ext3_ext_rm_idx(handle_t *handle, st
+@@ -1428,7 +1428,7 @@
  		  path->p_idx->ei_leaf);
  	bh = sb_find_get_block(tree->inode->i_sb, path->p_idx->ei_leaf);
  	ext3_forget(handle, 1, tree->inode, bh, path->p_idx->ei_leaf);
@@ -233,7 +235,7 @@ Index: linux-2.6.16.i686/fs/ext3/extents.c
  	return err;
  }
  
-@@ -1913,10 +1913,12 @@ ext3_remove_blocks(struct ext3_extents_t
+@@ -1913,10 +1913,12 @@
  	int needed = ext3_remove_blocks_credits(tree, ex, from, to);
  	handle_t *handle = ext3_journal_start(tree->inode, needed);
  	struct buffer_head *bh;
@@ -247,7 +249,7 @@ Index: linux-2.6.16.i686/fs/ext3/extents.c
  	if (from >= ex->ee_block && to == ex->ee_block + ex->ee_len - 1) {
  		/* tail removal */
  		unsigned long num, start;
-@@ -1928,7 +1930,7 @@ ext3_remove_blocks(struct ext3_extents_t
+@@ -1928,7 +1930,7 @@
  			bh = sb_find_get_block(tree->inode->i_sb, start + i);
  			ext3_forget(handle, 0, tree->inode, bh, start + i);
  		}
@@ -260,7 +262,7 @@ Index: linux-2.6.16.i686/fs/ext3/inode.c
 ===================================================================
 --- linux-2.6.16.i686.orig/fs/ext3/inode.c	2006-05-30 22:55:32.000000000 +0800
 +++ linux-2.6.16.i686/fs/ext3/inode.c	2006-05-30 23:02:59.000000000 +0800
-@@ -568,7 +568,7 @@ failed:
+@@ -568,7 +568,7 @@
  		ext3_journal_forget(handle, branch[i].bh);
  	}
  	for (i = 0; i < keys; i++)
@@ -269,7 +271,7 @@ Index: linux-2.6.16.i686/fs/ext3/inode.c
  	return err;
  }
  
-@@ -1862,7 +1862,7 @@ static void ext3_clear_blocks(handle_t *
+@@ -1862,7 +1862,7 @@
  		}
  	}
  
@@ -278,7 +280,7 @@ Index: linux-2.6.16.i686/fs/ext3/inode.c
  }
  
  /**
-@@ -2035,7 +2035,7 @@ static void ext3_free_branches(handle_t 
+@@ -2035,7 +2035,7 @@
  				ext3_journal_test_restart(handle, inode);
  			}
  
@@ -291,7 +293,7 @@ Index: linux-2.6.16.i686/fs/ext3/balloc.c
 ===================================================================
 --- linux-2.6.16.i686.orig/fs/ext3/balloc.c	2006-03-20 13:53:29.000000000 +0800
 +++ linux-2.6.16.i686/fs/ext3/balloc.c	2006-05-30 23:02:59.000000000 +0800
-@@ -80,7 +80,7 @@ struct ext3_group_desc * ext3_get_group_
+@@ -80,7 +80,7 @@
   *
   * Return buffer_head on success or NULL in case of failure.
   */
@@ -300,7 +302,7 @@ Index: linux-2.6.16.i686/fs/ext3/balloc.c
  read_block_bitmap(struct super_block *sb, unsigned int block_group)
  {
  	struct ext3_group_desc * desc;
-@@ -491,24 +491,6 @@ error_return:
+@@ -491,24 +491,6 @@
  	return;
  }
  
@@ -325,7 +327,7 @@ Index: linux-2.6.16.i686/fs/ext3/balloc.c
  /*
   * For ext3 allocations, we must not reuse any blocks which are
   * allocated in the bitmap buffer's "last committed data" copy.  This
-@@ -1154,7 +1136,7 @@ out:
+@@ -1154,7 +1136,7 @@
   * bitmap, and then for any free bit if that fails.
   * This function also updates quota and i_blocks field.
   */
@@ -338,7 +340,7 @@ Index: linux-2.6.16.i686/fs/ext3/xattr.c
 ===================================================================
 --- linux-2.6.16.i686.orig/fs/ext3/xattr.c	2006-03-20 13:53:29.000000000 +0800
 +++ linux-2.6.16.i686/fs/ext3/xattr.c	2006-05-30 23:02:59.000000000 +0800
-@@ -484,7 +484,7 @@ ext3_xattr_release_block(handle_t *handl
+@@ -484,7 +484,7 @@
  		ea_bdebug(bh, "refcount now=0; freeing");
  		if (ce)
  			mb_cache_entry_free(ce);
@@ -347,7 +349,7 @@ Index: linux-2.6.16.i686/fs/ext3/xattr.c
  		get_bh(bh);
  		ext3_forget(handle, 1, inode, bh, bh->b_blocknr);
  	} else {
-@@ -804,7 +804,7 @@ inserted:
+@@ -804,7 +804,7 @@
  			new_bh = sb_getblk(sb, block);
  			if (!new_bh) {
  getblk_failed:
@@ -360,7 +362,7 @@ Index: linux-2.6.16.i686/fs/ext3/mballoc.c
 ===================================================================
 --- linux-2.6.16.i686.orig/fs/ext3/mballoc.c	2006-05-31 04:14:15.752410384 +0800
 +++ linux-2.6.16.i686/fs/ext3/mballoc.c	2006-05-30 23:03:38.000000000 +0800
-@@ -0,0 +1,2729 @@
+@@ -0,0 +1,2725 @@
 +/*
 + * Copyright (c) 2003-2005, Cluster File Systems, Inc, info@clusterfs.com
 + * Written by Alex Tomas <alex@clusterfs.com>
@@ -468,7 +470,7 @@ Index: linux-2.6.16.i686/fs/ext3/mballoc.c
 +
 +struct ext3_group_info {
 +	unsigned long	bb_state;
-+	unsigned long	bb_tid;
++	unsigned long 	bb_tid;
 +	struct ext3_free_metadata *bb_md_cur;
 +	unsigned short	bb_first_free;
 +	unsigned short	bb_free;
@@ -504,7 +506,7 @@ Index: linux-2.6.16.i686/fs/ext3/mballoc.c
 +	__u16 ac_found;
 +	__u16 ac_tail;
 +	__u16 ac_buddy;
-+	__u8 ac_status;
++	__u8 ac_status;	
 +	__u8 ac_flags;		/* allocation hints */
 +	__u8 ac_criteria;
 +	__u8 ac_repeats;
@@ -556,11 +558,7 @@ Index: linux-2.6.16.i686/fs/ext3/mballoc.c
 +
 +static struct proc_dir_entry *proc_root_ext3;
 +
-+int ext3_create (struct inode *, struct dentry *, int, struct nameidata *);
-+struct buffer_head * read_block_bitmap(struct super_block *, unsigned int);
-+int ext3_new_block_old(handle_t *, struct inode *, unsigned long, int *);
-+int ext3_mb_reserve_blocks(struct super_block *, int);
-+void ext3_mb_release_blocks(struct super_block *, int);
++struct buffer_head *read_block_bitmap(struct super_block *, unsigned int);
 +void ext3_mb_poll_new_transaction(struct super_block *, handle_t *);
 +void ext3_mb_free_committed_blocks(struct super_block *);
 +
@@ -1565,11 +1563,11 @@ Index: linux-2.6.16.i686/fs/ext3/mballoc.c
 +	J_ASSERT(sbi->s_stripe != 0);
 +
 +	/* find first stripe-aligned block */
-+	i = e3b->bd_group * EXT3_BLOCKS_PER_GROUP(sb) +
-+		le32_to_cpu(sbi->s_es->s_first_data_block);
++	i = e3b->bd_group * EXT3_BLOCKS_PER_GROUP(sb)
++		+ le32_to_cpu(sbi->s_es->s_first_data_block);
 +	i = ((i + sbi->s_stripe - 1) / sbi->s_stripe) * sbi->s_stripe;
-+	i = (i - le32_to_cpu(sbi->s_es->s_first_data_block)) %
-+		EXT3_BLOCKS_PER_GROUP(sb);
++	i = (i - le32_to_cpu(sbi->s_es->s_first_data_block))
++			% EXT3_BLOCKS_PER_GROUP(sb);
 +
 +	while (i < sb->s_blocksize * 8) {
 +		if (!mb_test_bit(i, bitmap)) {
@@ -2918,7 +2916,7 @@ Index: linux-2.6.16.i686/fs/ext3/mballoc.c
 +	if (value <= 0)
 +		return -ERANGE;
 +
-+	ext3_mb_max_to_scan = value;
++	ext3_mb_max_to_scan = value;	
 +
 +	return count;
 +}
@@ -2957,7 +2955,7 @@ Index: linux-2.6.16.i686/fs/ext3/mballoc.c
 +	if (value <= 0)
 +		return -ERANGE;
 +
-+	ext3_mb_min_to_scan = value;
++	ext3_mb_min_to_scan = value;	
 +
 +	return count;
 +}
@@ -2996,7 +2994,7 @@ Index: linux-2.6.16.i686/fs/ext3/mballoc.c
 +	if (value <= 0)
 +		return -ERANGE;
 +
-+	ext3_mb_order2_reqs = value;
++	ext3_mb_order2_reqs = value;	
 +
 +	return count;
 +}
@@ -3094,7 +3092,7 @@ Index: linux-2.6.16.i686/fs/ext3/Makefile
 ===================================================================
 --- linux-2.6.16.i686.orig/fs/ext3/Makefile	2006-05-30 22:55:32.000000000 +0800
 +++ linux-2.6.16.i686/fs/ext3/Makefile	2006-05-30 23:02:59.000000000 +0800
-@@ -6,7 +6,7 @@ obj-$(CONFIG_EXT3_FS) += ext3.o
+@@ -6,7 +6,7 @@
  
  ext3-y	:= balloc.o bitmap.o dir.o file.o fsync.o ialloc.o inode.o iopen.o \
  	   ioctl.o namei.o super.o symlink.o hash.o resize.o \
