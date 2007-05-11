@@ -379,13 +379,13 @@ Index: linux-stage/include/linux/ext3_fs_i.h
 --- linux-stage.orig/include/linux/ext3_fs_i.h
 +++ linux-stage/include/linux/ext3_fs_i.h
 @@ -130,6 +130,7 @@ struct ext3_inode_info {
- 	struct inode vfs_inode;
  
- 	__u32 i_cached_extent[4];
+ 	/* on-disk additional length */
+ 	__u16 i_extra_isize;
 +	struct timespec i_crtime;
  
- 	/* mballoc */
- 	struct list_head i_prealloc_list;
+ 	/*
+ 	 * truncate_sem is for serialising ext3_truncate() against
 Index: linux-stage/include/linux/ext3_fs_sb.h
 ===================================================================
 --- linux-stage.orig/include/linux/ext3_fs_sb.h
