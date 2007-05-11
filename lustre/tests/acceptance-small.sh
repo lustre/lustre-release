@@ -190,8 +190,17 @@ for NAME in $CONFIGS; do
 	if [ "$LFSCK" != "no" -a -x /usr/sbin/lfsck ]; then
 	        title lfsck
 		E2VER=`e2fsck -V 2>&1 | head -n 1 | cut -d' ' -f 2`
-		[ `echo $E2VER | cut -d. -f2` -ge 39 ] && \
-			[ "`echo $E2VER | grep cfs`" ] && sh lfscktest.sh
+		if grep -q obdfilter /proc/fs/lustre/devices; then
+			if [ `echo $E2VER | cut -d. -f2` -ge 39 ] && \
+			   [ "`echo $E2VER | grep cfs`" ]; then
+			   	sh lfscktest.sh
+			else
+				e2fsck -V
+				echo "e2fsck does not support lfsck, skipping"
+			fi
+		else
+			echo "remote OST, skipping test"
+		fi
 	fi
 
 	if [ "$LIBLUSTRE" != "no" ]; then
