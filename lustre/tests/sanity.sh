@@ -3097,8 +3097,13 @@ test_78() { # bug 10901
 	F78SIZE=$(($(awk '/MemFree:/ { print $2 }' /proc/meminfo) / 1024))
 	[ $F78SIZE -gt 512 ] && F78SIZE=512
 	[ $F78SIZE -gt $((MAXFREE / 1024)) ] && F78SIZE=$((MAXFREE / 1024))
-	$SETSTRIPE $DIR/$tfile 0 -1 -1
-	$DIRECTIO rdwr $DIR/$tfile 0 $F78SIZE 1048576
+	SMALLESTOST=`lfs df $DIR |grep OST | awk '{print $4}' |sort -n |head -1`
+	[ $F78SIZE -gt $((SMALLESTOST * $OSTCOUNT / 1024)) ] && \
+		F78SIZE=$((SMALLESTOST * $OSTCOUNT / 1024))
+	$SETSTRIPE $DIR/$tfile 0 -1 -1 || error "setstripe failed"
+	$DIRECTIO rdwr $DIR/$tfile 0 $F78SIZE 1048576 || error "rdwr failed"
+
+	rm -f $DIR/$tfile
 }
 run_test 78 "handle large O_DIRECT writes correctly ============"
 
