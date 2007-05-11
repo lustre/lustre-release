@@ -13,8 +13,8 @@ diff -urp b1_4.RH_2_6_9_42_0_3.old/fs/fs-writeback.c b1_4.RH_2_6_9_42_0_3/fs/fs-
  __writeback_single_inode(struct inode *inode,
  			struct writeback_control *wbc)
  {
-+        if (!atomic_read(&inode->i_count))
-+        	WARN_ON(!(inode->i_state & I_WILL_FREE));
++	if (!atomic_read(&inode->i_count))
++		WARN_ON(!(inode->i_state & I_WILL_FREE));
 +	else
 +		WARN_ON(inode->i_state & I_WILL_FREE);
 +
@@ -40,7 +40,7 @@ diff -urp b1_4.RH_2_6_9_42_0_3.old/fs/inode.c b1_4.RH_2_6_9_42_0_3/fs/inode.c
  	if (inode->i_data.nrpages)
  		truncate_inode_pages(&inode->i_data, 0);
  	clear_inode(inode);
-+        wake_up_inode(inode);	
++	wake_up_inode(inode);	
  	destroy_inode(inode);
  }
  

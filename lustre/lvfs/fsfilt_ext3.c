@@ -862,6 +862,54 @@ static void ll_unmap_underlying_metadata(struct super_block *sb,
         unmap_underlying_metadata((sb)->s_bdev, blocknr)
 #endif
 
+#ifndef EXT3_MB_HINT_GROUP_ALLOC
+static unsigned long new_blocks(handle_t *handle, struct ext3_extents_tree *tree,
+                                struct ext3_ext_path *path, unsigned long block,
+                                int *count, int *err)
+{
+        unsigned long pblock, goal;
+        int aflags = 0;
+
+        goal = ext3_ext_find_goal(tree->inode, path, block, &aflags);
+        aflags |= 2; /* block have been already reserved */
+        lock_24kernel();
+        pblock = ext3_mb_new_blocks(handle, tree->inode, goal, count, aflags, err);
+        unlock_24kernel();
+        return pblock;
+
+}
+#else
+static unsigned long new_blocks(handle_t *handle, struct ext3_extents_tree *tree,
+                                struct ext3_ext_path *path, unsigned long block,
+                                int *count, int *err)
+{
+        struct ext3_allocation_request ar;
+        unsigned long pblock;
+        int aflags;
+
+        /* find neighbour allocated blocks */
+        ar.lleft = block;
+        *err = ext3_ext_search_left(tree, path, &ar.lleft, &ar.pleft);
+        if (*err)
+                return 0;
+        ar.lright = block;
+        *err = ext3_ext_search_right(tree, path, &ar.lright, &ar.pright);
+        if (*err)
+                return 0;
+
+        /* allocate new block */
+        ar.goal = ext3_ext_find_goal(tree->inode, path, block, &aflags);
+        ar.inode = tree->inode;
+        ar.logical = block;
+        ar.len = *count;
+        ar.flags = EXT3_MB_HINT_DATA;
+        pblock = ext3_mb_new_blocks(handle, &ar, err);
+        *count = ar.len;
+        return pblock;
+
+}
+#endif
+
 static int ext3_ext_new_extent_cb(struct ext3_extents_tree *tree,
                                   struct ext3_ext_path *path,
                                   struct ext3_ext_cache *cex)
@@ -869,11 +917,10 @@ static int ext3_ext_new_extent_cb(struct ext3_extents_tree *tree,
         struct inode *inode = tree->inode;
         struct bpointers *bp = tree->private;
         struct ext3_extent nex;
-        int count, err, goal;
         unsigned long pblock;
         unsigned long tgen;
+        int count, err, i;
         handle_t *handle;
-        int i, aflags = 0;
 
         i = EXT_DEPTH(tree);
         EXT_ASSERT(i == path->p_depth);
@@ -925,11 +972,7 @@ static int ext3_ext_new_extent_cb(struct ext3_extents_tree *tree,
         }
 
         count = cex->ec_len;
-        goal = ext3_ext_find_goal(inode, path, cex->ec_block, &aflags);
-        aflags |= 2; /* block have been already reserved */
-        lock_24kernel();
-        pblock = ext3_mb_new_blocks(handle, inode, goal, &count, aflags, &err);
-        unlock_24kernel();
+        pblock = new_blocks(handle, tree, path, cex->ec_block, &count, &err);
         if (!pblock)
                 goto out;
         EXT_ASSERT(count <= cex->ec_len);
@@ -939,8 +982,12 @@ static int ext3_ext_new_extent_cb(struct ext3_extents_tree *tree,
         nex.ee_start = pblock;
         nex.ee_len = count;
         err = ext3_ext_insert_extent(handle, tree, path, &nex);
-        if (err)
+        if (err) {
+                CERROR("can't insert extent: %d\n", err);
+                /* XXX: export ext3_free_blocks() */
+                /*ext3_free_blocks(handle, inode, nex.ee_start, nex.ee_len, 0);*/
                 goto out;
+        }
 
         /*
          * Putting len of the actual extent we just inserted,
