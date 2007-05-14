@@ -447,9 +447,11 @@ fi
 
 ])
 
+AC_CHECK_FUNCS(strnlen pread pwrite directio)
+
 CPPFLAGS="-I\$(top_builddir)/lnet/include -I\$(top_srcdir)/lnet/include -I\$(top_builddir)/lustre/include -I\$(top_srcdir)/lustre/include $CPPFLAGS"
 
-LLCPPFLAGS="-D__arch_lib__ -D_LARGEFILE64_SOURCE=1"
+LLCPPFLAGS="-D__arch_lib__ -D_LARGEFILE64_SOURCE=1 -D_GNU_SOURCE -D_XOPEN_SOURCE=500"
 AC_SUBST(LLCPPFLAGS)
 
 LLCFLAGS="-g -Wall -fPIC"
