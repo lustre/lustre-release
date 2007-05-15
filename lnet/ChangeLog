@@ -32,6 +32,12 @@
 
 Severity   : major
 Frequency  : rare
+Bugzilla   : 12458
+Description: Assertion failure in kernel ptllnd caused by posting passive
+             bulk buffers before connection establishment complete.
+	
+Severity   : major
+Frequency  : rare
 Bugzilla   : 12455
 Description: A race in kernel ptllnd between deleting a peer and posting
              new communications for it could hang communications -

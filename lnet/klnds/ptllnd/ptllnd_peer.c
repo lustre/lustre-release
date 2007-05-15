@@ -465,9 +465,7 @@ void
 kptllnd_post_tx(kptl_peer_t *peer, kptl_tx_t *tx, int nfrag)
 {
         /* CAVEAT EMPTOR: I take over caller's ref on 'tx' */
-        ptl_handle_md_t  rdma_mdh = PTL_INVALID_HANDLE;
-        ptl_handle_md_t  msg_mdh = PTL_INVALID_HANDLE;
-        ptl_handle_me_t  meh;
+        ptl_handle_md_t  msg_mdh;
         ptl_md_t         md;
         ptl_err_t        prc;
         unsigned long    flags;
@@ -481,48 +479,6 @@ kptllnd_post_tx(kptl_peer_t *peer, kptl_tx_t *tx, int nfrag)
                  tx->tx_type == TX_TYPE_GET_REQUEST);
 
         kptllnd_set_tx_peer(tx, peer);
-
-        if (tx->tx_type == TX_TYPE_PUT_REQUEST ||
-            tx->tx_type == TX_TYPE_GET_REQUEST) {
-
-                spin_lock_irqsave(&peer->peer_lock, flags);
-
-                /* Assume 64-bit matchbits can't wrap */
-                LASSERT (peer->peer_next_matchbits >= PTL_RESERVED_MATCHBITS);
-                tx->tx_msg->ptlm_u.rdma.kptlrm_matchbits =
-                        peer->peer_next_matchbits++;
-                        
-                spin_unlock_irqrestore(&peer->peer_lock, flags);
-
-                prc = PtlMEAttach(kptllnd_data.kptl_nih,
-                                  *kptllnd_tunables.kptl_portal,
-                                  peer->peer_ptlid,
-                                  tx->tx_msg->ptlm_u.rdma.kptlrm_matchbits,
-                                  0,             /* ignore bits */
-                                  PTL_UNLINK,
-                                  PTL_INS_BEFORE,
-                                  &meh);
-                if (prc != PTL_OK) {
-                        CERROR("PtlMEAttach(%s) failed: %d\n",
-                               libcfs_id2str(peer->peer_id), prc);
-                        goto failed;
-                }
-
-                prc = PtlMDAttach(meh, tx->tx_rdma_md, PTL_UNLINK, &rdma_mdh);
-                if (prc != PTL_OK) {
-                        CERROR("PtlMDAttach(%s) failed: %d\n",
-                               libcfs_id2str(tx->tx_peer->peer_id), prc);
-                        prc = PtlMEUnlink(meh);
-                        LASSERT(prc == PTL_OK);
-                        rdma_mdh = PTL_INVALID_HANDLE;
-                        goto failed;
-                }
-
-                /* I'm not racing with the event callback here.  It's a bug if
-                 * there's an event on the MD I just attached before I actually
-                 * send the RDMA request message which the event callback
-                 * catches by asserting 'rdma_mdh' is valid. */
-        }
 
         memset(&md, 0, sizeof(md));
 
@@ -547,15 +503,17 @@ kptllnd_post_tx(kptl_peer_t *peer, kptl_tx_t *tx, int nfrag)
 
         prc = PtlMDBind(kptllnd_data.kptl_nih, md, PTL_UNLINK, &msg_mdh);
         if (prc != PTL_OK) {
-                msg_mdh = PTL_INVALID_HANDLE;
-                goto failed;
+                CERROR("PtlMDBind(%s) failed: %d\n",
+                       libcfs_id2str(peer->peer_id), prc);
+                tx->tx_status = -EIO;
+                kptllnd_tx_decref(tx);
+                return;
         }
         
         spin_lock_irqsave(&peer->peer_lock, flags);
 
         tx->tx_deadline = jiffies + (*kptllnd_tunables.kptl_timeout * HZ);
         tx->tx_active = 1;
-        tx->tx_rdma_mdh = rdma_mdh;
         tx->tx_msg_mdh = msg_mdh;
 
 	/* Ensure HELLO is sent first */
@@ -565,24 +523,12 @@ kptllnd_post_tx(kptl_peer_t *peer, kptl_tx_t *tx, int nfrag)
 		list_add_tail(&tx->tx_list, &peer->peer_sendq);
 
         spin_unlock_irqrestore(&peer->peer_lock, flags);
-        return;
-        
- failed:
-        spin_lock_irqsave(&peer->peer_lock, flags);
-
-        tx->tx_status = -EIO;
-        tx->tx_rdma_mdh = rdma_mdh;
-        tx->tx_msg_mdh = msg_mdh;
-
-        spin_unlock_irqrestore(&peer->peer_lock, flags);
-
-        kptllnd_tx_decref(tx);
 }
 
 void
 kptllnd_peer_check_sends (kptl_peer_t *peer)
 {
-
+        ptl_handle_me_t  meh;
         kptl_tx_t       *tx;
         int              rc;
         unsigned long    flags;
@@ -618,8 +564,7 @@ kptllnd_peer_check_sends (kptl_peer_t *peer)
 
                 LASSERT (tx->tx_active);
                 LASSERT (!PtlHandleIsEqual(tx->tx_msg_mdh, PTL_INVALID_HANDLE));
-                LASSERT (tx->tx_type == TX_TYPE_SMALL_MESSAGE ||
-                         !PtlHandleIsEqual(tx->tx_rdma_mdh, PTL_INVALID_HANDLE));
+                LASSERT (PtlHandleIsEqual(tx->tx_rdma_mdh, PTL_INVALID_HANDLE));
 
                 LASSERT (peer->peer_outstanding_credits >= 0);
                 LASSERT (peer->peer_sent_credits >= 0);
@@ -677,9 +622,19 @@ kptllnd_peer_check_sends (kptl_peer_t *peer)
                         continue;
                 }
 
-                /* fill last-minute msg header fields */
+                /* fill last-minute msg fields */
                 kptllnd_msg_pack(tx->tx_msg, peer);
 
+                if (tx->tx_type == TX_TYPE_PUT_REQUEST ||
+                    tx->tx_type == TX_TYPE_GET_REQUEST) {
+                        /* peer_next_matchbits must be known good */
+                        LASSERT (peer->peer_state >= PEER_STATE_ACTIVE);
+                        /* Assume 64-bit matchbits can't wrap */
+                        LASSERT (peer->peer_next_matchbits >= PTL_RESERVED_MATCHBITS);
+                        tx->tx_msg->ptlm_u.rdma.kptlrm_matchbits =
+                                peer->peer_next_matchbits++;
+                }
+                
                 peer->peer_sent_credits += peer->peer_outstanding_credits;
                 peer->peer_outstanding_credits = 0;
                 peer->peer_credits--;
@@ -697,6 +652,39 @@ kptllnd_peer_check_sends (kptl_peer_t *peer)
 
                 spin_unlock_irqrestore(&peer->peer_lock, flags);
 
+                if (tx->tx_type == TX_TYPE_PUT_REQUEST ||
+                    tx->tx_type == TX_TYPE_GET_REQUEST) {
+                        /* Post bulk now we have safe matchbits */
+                        rc = PtlMEAttach(kptllnd_data.kptl_nih,
+                                         *kptllnd_tunables.kptl_portal,
+                                         peer->peer_ptlid,
+                                         tx->tx_msg->ptlm_u.rdma.kptlrm_matchbits,
+                                         0,             /* ignore bits */
+                                         PTL_UNLINK,
+                                         PTL_INS_BEFORE,
+                                         &meh);
+                        if (rc != PTL_OK) {
+                                CERROR("PtlMEAttach(%s) failed: %d\n",
+                                       libcfs_id2str(peer->peer_id), rc);
+                                goto failed;
+                        }
+
+                        rc = PtlMDAttach(meh, tx->tx_rdma_md, PTL_UNLINK,
+                                         &tx->tx_rdma_mdh);
+                        if (rc != PTL_OK) {
+                                CERROR("PtlMDAttach(%s) failed: %d\n",
+                                       libcfs_id2str(tx->tx_peer->peer_id), rc);
+                                rc = PtlMEUnlink(meh);
+                                LASSERT(rc == PTL_OK);
+                                tx->tx_rdma_mdh = PTL_INVALID_HANDLE;
+                                goto failed;
+                        }
+                        /* I'm not racing with the event callback here.  It's a
+                         * bug if there's an event on the MD I just attached
+                         * before I actually send the RDMA request message -
+                         * probably matchbits re-used in error. */
+                }
+
                 tx->tx_tposted = jiffies;       /* going on the wire */
 
                 rc = PtlPut (tx->tx_msg_mdh,
@@ -710,10 +698,7 @@ kptllnd_peer_check_sends (kptl_peer_t *peer)
                 if (rc != PTL_OK) {
                         CERROR("PtlPut %s error %d\n",
                                libcfs_id2str(peer->peer_id), rc);
-
-                        /* Nuke everything (including this tx) */
-                        kptllnd_peer_close(peer, -EIO);
-                        return;
+                        goto failed;
                 }
 
                 kptllnd_tx_decref(tx);          /* drop my ref */
@@ -722,6 +707,12 @@ kptllnd_peer_check_sends (kptl_peer_t *peer)
         }
 
         spin_unlock_irqrestore(&peer->peer_lock, flags);
+        return;
+
+ failed:
+        /* Nuke everything (including tx we were trying) */
+        kptllnd_peer_close(peer, -EIO);
+        kptllnd_tx_decref(tx);
 }
 
 kptl_tx_t *
