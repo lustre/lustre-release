@@ -88,6 +88,13 @@ Details    : the default for reading the health_check proc file has changed
 	     is possible to return to the previous behaviour during configure
 	     with --enable-health-write.
 
+Severity   : enhancement
+Bugzilla   : 10768
+Description: 64-bit inode version
+Details:   : Add a on-disk 64-bit inode version for ext3 to track changes made
+	     to the inode. This will be required for version-based recovery.	      
+
+
 --------------------------------------------------------------------------------
 
 2007-05-03  Cluster File Systems, Inc. <info@clusterfs.com>
