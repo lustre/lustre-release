@@ -1170,7 +1170,9 @@ int t54(char *name)
 }
 
 /* for O_DIRECTORY */
+#ifndef _GNU_SOURCE
 #define _GNU_SOURCE
+#endif
 
 #define STRIPE_SIZE       (2048 * 2048)
 #define STRIPE_OFFSET           0
