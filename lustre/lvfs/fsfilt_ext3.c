@@ -125,6 +125,28 @@ static char *fsfilt_ext3_uuid(struct super_block *sb)
         return EXT3_SB(sb)->s_es->s_uuid;
 }
 
+#ifdef HAVE_DISK_INODE_VERSION
+/*
+ * Get the 64-bit version for an inode.
+ */
+static __u64 fsfilt_ext3_get_version(struct inode *inode)
+{
+        return EXT3_I(inode)->i_fs_version;
+}
+
+/*
+ * Set the 64-bit version and return the old version.
+ */
+static __u64 fsfilt_ext3_set_version(struct inode *inode, __u64 new_version)
+{
+        __u64 old_version = EXT3_I(inode)->i_fs_version;
+
+        (EXT3_I(inode))->i_fs_version = new_version;
+        return old_version;
+}
+
+#endif
+
 /*
  * We don't currently need any additional blocks for rmdir and
  * unlink transactions because we are storing the OST oa_id inside
@@ -2074,6 +2096,10 @@ static struct fsfilt_operations fsfilt_ext3_ops = {
         .fs_get_op_len          = fsfilt_ext3_get_op_len,
         .fs_quotactl            = fsfilt_ext3_quotactl,
         .fs_quotacheck          = fsfilt_ext3_quotacheck,
+#ifdef HAVE_DISK_INODE_VERSION
+        .fs_get_version         = fsfilt_ext3_get_version,
+        .fs_set_version         = fsfilt_ext3_set_version,
+#endif
 #ifdef HAVE_QUOTA_SUPPORT
         .fs_quotainfo           = fsfilt_ext3_quotainfo,
         .fs_qids                = fsfilt_ext3_qids,
