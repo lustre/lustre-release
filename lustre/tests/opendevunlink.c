@@ -2,7 +2,9 @@
  * vim:expandtab:shiftwidth=8:tabstop=8:
  */
 
+#ifndef _GNU_SOURCE
 #define _GNU_SOURCE
+#endif
 
 #include <stdio.h>
 #include <errno.h>

@@ -1,7 +1,9 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  */
+#ifndef _GNU_SOURCE
 #define _GNU_SOURCE /* pull in O_DIRECTORY in bits/fcntl.h */
+#endif
 #include <stdio.h>
 #include <fcntl.h>
 #include <string.h>

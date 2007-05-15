@@ -6,8 +6,7 @@ AM_CFLAGS = $(LLCFLAGS)
 
 noinst_DATA =
 noinst_SCRIPTS = leak_finder.pl llecho.sh llmount.sh llmountcleanup.sh test-framework.sh
-noinst_SCRIPTS += runfailure-mds runvmstat runfailure-net
-noinst_SCRIPTS += runfailure-ost runiozone runregression-net.sh runtests
+noinst_SCRIPTS += runvmstat runiozone runtests
 noinst_SCRIPTS += sanity.sh rundbench
 noinst_SCRIPTS += cfg/local.sh
 
@@ -19,7 +18,7 @@ EXTRA_DIST = $(noinst_SCRIPTS) $(noinst_DATA) \
              acl/inheritance.test
 
 if TESTS
-noinst_PROGRAMS = openunlink testreq truncate directio openme writeme
+noinst_PROGRAMS = openunlink truncate directio openme writeme
 noinst_PROGRAMS += tchmod toexcl fsx test_brw openclose createdestroy
 noinst_PROGRAMS += stat createmany chownmany statmany multifstat createtest mlink utime
 noinst_PROGRAMS += opendirunlink opendevunlink unlinkmany fchdir_test checkstat

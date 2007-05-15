@@ -7,7 +7,9 @@
 #endif
 
 /* for O_DIRECTORY and O_DIRECT */
+#ifndef _GNU_SOURCE
 #define _GNU_SOURCE
+#endif
 
 #include <stdio.h>
 #include <sys/types.h>
