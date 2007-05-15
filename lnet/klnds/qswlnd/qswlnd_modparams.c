@@ -25,9 +25,9 @@ static int tx_maxcontig = (1<<10);
 CFS_MODULE_PARM(tx_maxcontig, "i", int, 0444,
 		"maximum payload to de-fragment");
 
-static int ntxmsgs = 256;
+static int ntxmsgs = 512;
 CFS_MODULE_PARM(ntxmsgs, "i", int, 0444,
-		"# 'normal' tx msg buffers");
+		"# tx msg buffers");
 
 static int credits = 128;
 CFS_MODULE_PARM(credits, "i", int, 0444,

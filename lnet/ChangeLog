@@ -29,7 +29,12 @@
 	mxlnd     - MX 1.2.1 or later
 	ptllnd    - Portals 3.3 / UNICOS/lc 1.5.x, 2.0.x
        * bug fixes
-
+	
+Severity   : normal
+Frequency  : rare
+Bugzilla   : 11472
+Description: Changed the default kqswlnd ntxmsg=512
+	
 Severity   : major
 Frequency  : rare
 Bugzilla   : 12458
