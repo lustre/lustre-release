@@ -1035,8 +1035,8 @@ int ll_glimpse_size(struct inode *inode, int ast_flags)
         LTIME_S(inode->i_ctime) = lvb.lvb_ctime;
         ll_inode_size_unlock(inode, 1);
 
-        CDEBUG(D_DLMTRACE, "glimpse: size: %llu, blocks: %lu\n",
-               inode->i_size, inode->i_blocks);
+        CDEBUG(D_DLMTRACE, "glimpse: size: %llu, blocks: %llu\n",
+               inode->i_size, (long long)inode->i_blocks);
 
         RETURN(rc);
 }
