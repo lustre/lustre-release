@@ -170,8 +170,10 @@ static int client_common_fill_super(struct super_block *sb,
         
         if (sbi->ll_flags & LL_SBI_FLOCK)
                 sbi->ll_fop = &ll_file_operations_flock;
-        else
+        else if (sbi->ll_flags & LL_SBI_LOCALFLOCK)
                 sbi->ll_fop = &ll_file_operations;
+        else
+                sbi->ll_fop = &ll_file_operations_noflock;
 
         err = obd_connect(&mdc_conn, obd, &sbi->ll_sb_uuid, data);
         if (err == -EBUSY) {
@@ -631,7 +633,12 @@ static int ll_options(char *options, int *flags)
                         *flags |= tmp;
                         goto next;
                 }
-                tmp = ll_set_opt("noflock", s1, LL_SBI_FLOCK);
+                tmp = ll_set_opt("localflock", s1, LL_SBI_LOCALFLOCK);
+                if (tmp) {
+                        *flags |= tmp;
+                        goto next;
+                }
+                tmp = ll_set_opt("noflock", s1, LL_SBI_FLOCK|LL_SBI_LOCALFLOCK);
                 if (tmp) {
                         *flags &= ~tmp;
                         goto next;

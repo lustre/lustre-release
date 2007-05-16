@@ -102,6 +102,14 @@ Details    : in some rare cases it was possible for a client to connect to
 	     an MDS multiple times.  Upon recovery the MDS would detect this
 	     and fail during startup.  Handle this more gracefully.
 
+Severity   : enhancement
+Bugzilla   : 11563
+Description: Add -o localflock option to simulate  old noflock
+behaviour.
+Details    : This will achieve local-only flock/fcntl locks
+	     coherentness.
+
+
 --------------------------------------------------------------------------------
 
 2007-05-03  Cluster File Systems, Inc. <info@clusterfs.com>

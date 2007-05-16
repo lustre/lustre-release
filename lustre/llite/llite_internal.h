@@ -225,6 +225,7 @@ enum vfs_track_type {
 #define LL_SBI_USER_XATTR       0x08 /* support user xattr */
 #define LL_SBI_ACL              0x10 /* support ACL */
 #define LL_SBI_JOIN             0x20 /* support JOIN */
+#define LL_SBI_LOCALFLOCK       0x40 /* Local flocks support by kernel */
 
 struct ll_sb_info {
         struct list_head          ll_list;
@@ -484,6 +485,7 @@ int ll_sync_page_range(struct inode *, struct address_space *, loff_t, size_t);
 /* llite/file.c */
 extern struct file_operations ll_file_operations;
 extern struct file_operations ll_file_operations_flock;
+extern struct file_operations ll_file_operations_noflock;
 extern struct inode_operations ll_file_inode_operations;
 extern int ll_inode_revalidate_it(struct dentry *, struct lookup_intent *);
 extern int ll_have_md_lock(struct inode *inode, __u64 bits);

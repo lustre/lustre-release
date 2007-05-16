@@ -2612,6 +2612,7 @@ check_capabilities:
 }
 #endif
 
+/* -o localflock - only provides locally consistent flock locks */
 struct file_operations ll_file_operations = {
         .read           = ll_file_read,
         .write          = ll_file_write,
@@ -2624,10 +2625,6 @@ struct file_operations ll_file_operations = {
         .sendfile       = ll_file_sendfile,
 #endif
         .fsync          = ll_fsync,
-#ifdef HAVE_F_OP_FLOCK
-        .flock          = ll_file_noflock,
-#endif
-        .lock           = ll_file_noflock
 };
 
 struct file_operations ll_file_operations_flock = {
@@ -2648,6 +2645,24 @@ struct file_operations ll_file_operations_flock = {
         .lock           = ll_file_flock
 };
 
+/* These are for -o noflock - to return ENOSYS on flock calls */
+struct file_operations ll_file_operations_noflock = {
+        .read           = ll_file_read,
+        .write          = ll_file_write,
+        .ioctl          = ll_file_ioctl,
+        .open           = ll_file_open,
+        .release        = ll_file_release,
+        .mmap           = ll_file_mmap,
+        .llseek         = ll_file_seek,
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0))
+        .sendfile       = ll_file_sendfile,
+#endif
+        .fsync          = ll_fsync,
+#ifdef HAVE_F_OP_FLOCK
+        .flock          = ll_file_noflock,
+#endif
+        .lock           = ll_file_noflock
+};
 
 struct inode_operations ll_file_inode_operations = {
 #ifdef LUSTRE_KERNEL_VERSION
