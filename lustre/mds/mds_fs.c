@@ -55,7 +55,7 @@ static int mds_export_stats_init(struct obd_device *obd, struct obd_export *exp)
         int rc, num_stats;
 
         rc = lprocfs_exp_setup(exp);
-        if (rc) 
+        if (rc)
                 return rc;
         num_stats = (sizeof(*obd->obd_type->typ_ops) / sizeof(void *)) +
                      LPROC_MDS_LAST - 1;
@@ -212,7 +212,8 @@ int mds_client_free(struct obd_export *exp)
                 push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
                 rc = fsfilt_write_record(obd, mds->mds_rcvd_filp, &zero_mcd,
                                          sizeof(zero_mcd), &off,
-                                         (!exp->exp_libclient || exp->exp_need_sync));
+                                         (!exp->exp_libclient ||
+                                          exp->exp_need_sync));
                 pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
 
                 CDEBUG(rc == 0 ? D_INFO : D_ERROR,
@@ -304,7 +305,7 @@ static int mds_init_server_data(struct obd_device *obd, struct file *file)
                 }
                 /* COMPAT_146 */
                 /* Assume old last_rcvd format unless I_C_LR is set */
-                if (!(lsd->lsd_feature_incompat & 
+                if (!(lsd->lsd_feature_incompat &
                       cpu_to_le32(OBD_INCOMPAT_COMMON_LR)))
                         lsd->lsd_mount_count = lsd->lsd_compat14;
                 /* end COMPAT_146 */
@@ -326,7 +327,7 @@ static int mds_init_server_data(struct obd_device *obd, struct file *file)
         }
 
         lsd->lsd_feature_compat = cpu_to_le32(OBD_COMPAT_MDT);
-        
+
         mds->mds_last_transno = le64_to_cpu(lsd->lsd_last_transno);
 
         CDEBUG(D_INODE, "%s: server last_transno: "LPU64"\n",
@@ -399,26 +400,33 @@ static int mds_init_server_data(struct obd_device *obd, struct file *file)
                        le64_to_cpu(mcd->mcd_last_xid));
 
                 exp = class_new_export(obd, (struct obd_uuid *)mcd->mcd_uuid);
-                if (IS_ERR(exp))
-                        GOTO(err_client, rc = PTR_ERR(exp));
+                if (IS_ERR(exp)) {
+                        if (PTR_ERR(exp) == -EALREADY) {
+                                /* export already exists, zero out this one */
+                                mcd->mcd_uuid[0] = '\0';
+                        } else {
+                                GOTO(err_client, rc = PTR_ERR(exp));
+                        }
+                } else {
+                        med = &exp->exp_mds_data;
+                        med->med_mcd = mcd;
+                        rc = mds_client_add(obd, exp, cl_idx);
+                        /* can't fail for existing client */
+                        LASSERTF(rc == 0, "rc = %d\n", rc);
 
-                med = &exp->exp_mds_data;
-                med->med_mcd = mcd;
-                rc = mds_client_add(obd, exp, cl_idx);
-                LASSERTF(rc == 0, "rc = %d\n", rc); /* can't fail existing */
+                        mcd = NULL;
 
+                        spin_lock(&exp->exp_lock);
+                        exp->exp_replay_needed = 1;
+                        exp->exp_connecting = 0;
+                        spin_unlock(&exp->exp_lock);
 
-                mcd = NULL;
-	
-                spin_lock(&exp->exp_lock);
-                exp->exp_replay_needed = 1;
-                exp->exp_connecting = 0;
-                spin_unlock(&exp->exp_lock);
+                        obd->obd_recoverable_clients++;
+                        obd->obd_max_recoverable_clients++;
+                        class_export_put(exp);
+                }
 
-                obd->obd_recoverable_clients++;
-                obd->obd_max_recoverable_clients++;
-                class_export_put(exp);
-
+                /* Need to check last_rcvd even for duplicated exports. */
                 CDEBUG(D_OTHER, "client at idx %d has last_transno = "LPU64"\n",
                        cl_idx, last_transno);
 
@@ -444,7 +452,7 @@ static int mds_init_server_data(struct obd_device *obd, struct file *file)
         }
 
         mds->mds_mount_count = mount_count + 1;
-        lsd->lsd_mount_count = lsd->lsd_compat14 = 
+        lsd->lsd_mount_count = lsd->lsd_compat14 =
                 cpu_to_le64(mds->mds_mount_count);
 
         /* save it, so mount count and last_transno is current */
@@ -583,7 +591,7 @@ int mds_fs_setup(struct obd_device *obd, struct vfsmount *mnt)
         file = filp_open(HEALTH_CHECK, O_RDWR | O_CREAT, 0644);
         if (IS_ERR(file)) {
                 rc = PTR_ERR(file);
-                CERROR("cannot open/create %s file: rc = %d\n", HEALTH_CHECK, rc);
+                CERROR("cannot open/create %s file: rc = %d\n",HEALTH_CHECK,rc);
                 GOTO(err_lov_objid, rc = PTR_ERR(file));
         }
         mds->mds_health_check_filp = file;
@@ -601,7 +609,7 @@ err_pop:
         return rc;
 
 err_health_check:
-        if (mds->mds_health_check_filp && 
+        if (mds->mds_health_check_filp &&
             filp_close(mds->mds_health_check_filp, 0))
                 CERROR("can't close %s after error\n", HEALTH_CHECK);
 err_lov_objid:
@@ -654,7 +662,7 @@ int mds_fs_cleanup(struct obd_device *obd)
                 rc = filp_close(mds->mds_health_check_filp, 0);
                 mds->mds_health_check_filp = NULL;
                 if (rc)
-                        CERROR("%s file won't close, rc=%d\n", HEALTH_CHECK, rc);
+                        CERROR("%s file won't close, rc=%d\n", HEALTH_CHECK,rc);
         }
         if (mds->mds_objects_dir != NULL) {
                 l_dput(mds->mds_objects_dir);

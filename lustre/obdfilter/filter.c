@@ -165,9 +165,9 @@ static int filter_export_stats_init(struct obd_device *obd,
         if (obd_uuid_equals(&exp->exp_client_uuid, &obd->obd_uuid))
                 /* Self-export gets no proc entry */
                 RETURN(0);
-        
+
         rc = lprocfs_exp_setup(exp);
-        if (rc) 
+        if (rc)
                 RETURN(rc);
 
         /* Create a per export proc entry for brw_stats */
@@ -210,7 +210,7 @@ static int filter_client_add(struct obd_device *obd, struct obd_export *exp,
         LASSERTF(cl_idx > -2, "%d\n", cl_idx);
 
         /* Self-export */
-        if (strcmp(fed->fed_fcd->fcd_uuid, obd->obd_uuid.uuid) == 0) 
+        if (strcmp(fed->fed_fcd->fcd_uuid, obd->obd_uuid.uuid) == 0)
                 RETURN(0);
 
         /* the bitmap operations can handle cl_idx > sizeof(long) * 8, so
@@ -335,7 +335,8 @@ static int filter_client_free(struct obd_export *exp)
                 push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
                 rc = fsfilt_write_record(obd, filter->fo_rcvd_filp, &zero_fcd,
                                          sizeof(zero_fcd), &off,
-                                         (!exp->exp_libclient || exp->exp_need_sync));
+                                         (!exp->exp_libclient ||
+                                          exp->exp_need_sync));
 
                 if (rc == 0)
                         /* update server's transno */
@@ -665,7 +666,7 @@ static int filter_init_server_data(struct obd_device *obd, struct file * filp)
                 filter->fo_subdir_count = le16_to_cpu(fsd->lsd_subdir_count);
                 /* COMPAT_146 */
                 /* Assume old last_rcvd format unless I_C_LR is set */
-                if (!(fsd->lsd_feature_incompat & 
+                if (!(fsd->lsd_feature_incompat &
                       cpu_to_le32(OBD_INCOMPAT_COMMON_LR)))
                         fsd->lsd_last_transno = fsd->lsd_compat14;
                 /* end COMPAT_146 */
@@ -760,7 +761,8 @@ static int filter_init_server_data(struct obd_device *obd, struct file * filp)
                         fed->fed_fcd = fcd;
                         filter_export_stats_init(obd, exp);
                         rc = filter_client_add(obd, exp, cl_idx);
-                        LASSERTF(rc == 0, "rc = %d\n", rc); /* can't fail existing */
+                        /* can't fail for existing client */
+                        LASSERTF(rc == 0, "rc = %d\n", rc);
 
                         fcd = NULL;
 
@@ -887,7 +889,7 @@ static int filter_prep_groups(struct obd_device *obd)
         }
         filter->fo_dentry_O = O_dentry;
         cleanup_phase = 1; /* O_dentry */
-        
+
         OBD_ALLOC(filter->fo_last_objids, FILTER_GROUPS * sizeof(__u64));
         if (filter->fo_last_objids == NULL)
                 GOTO(cleanup, rc = -ENOMEM);
@@ -1633,7 +1635,7 @@ int filter_common_setup(struct obd_device *obd, obd_count len, void *buf,
                 CERROR("Using old MDS mount method\n");
                 mnt = ll_kern_mount(lustre_cfg_string(lcfg, 2),
                                     MS_NOATIME|MS_NODIRATIME,
-                                    lustre_cfg_string(lcfg, 1), option);    
+                                    lustre_cfg_string(lcfg, 1), option);
                 if (IS_ERR(mnt)) {
                         rc = PTR_ERR(mnt);
                         LCONSOLE_ERROR("Can't mount disk %s (%d)\n",
@@ -1717,7 +1719,7 @@ int filter_common_setup(struct obd_device *obd, obd_count len, void *buf,
         } else {
                 str = "no UUID";
         }
-        
+
         label = fsfilt_get_label(obd, obd->u.obt.obt_sb);
 
         if (obd->obd_recovering) {
@@ -1951,7 +1953,7 @@ static int filter_connect_internal(struct obd_export *exp,
                 struct filter_obd *filter = &exp->exp_obd->u.filter;
                 struct lr_server_data *lsd = filter->fo_fsd;
                 int index = le32_to_cpu(lsd->lsd_ost_index);
-                
+
                 if (!(lsd->lsd_feature_compat &
                       cpu_to_le32(OBD_COMPAT_OST))) {
                         /* this will only happen on the first connect */
@@ -1973,8 +1975,9 @@ static int filter_connect_internal(struct obd_export *exp,
                 data->ocd_brw_size = 65536;
         } else if (data->ocd_connect_flags & OBD_CONNECT_BRW_SIZE) {
                 data->ocd_brw_size = min(data->ocd_brw_size,
-                                         (__u32)(PTLRPC_MAX_BRW_PAGES << CFS_PAGE_SHIFT));
-                LASSERT(data->ocd_brw_size); 
+                                         (__u32)(PTLRPC_MAX_BRW_PAGES <<
+                                                 CFS_PAGE_SHIFT));
+                LASSERT(data->ocd_brw_size);
         }
 
         /* FIXME: Do the same with the MDS UUID and fsd_peeruuid.
@@ -2461,8 +2464,8 @@ out_unlock:
         /* trigger quota release */
         if (ia_valid & (ATTR_SIZE | ATTR_UID | ATTR_GID)) {
                 unsigned int cur_ids[MAXQUOTAS] = {oa->o_uid, oa->o_gid};
-                int rc2 = lquota_adjust(filter_quota_interface_ref, exp->exp_obd, cur_ids,
-                                        orig_ids, rc, FSFILT_OP_SETATTR);
+                int rc2 = lquota_adjust(filter_quota_interface_ref,exp->exp_obd,
+                                        cur_ids, orig_ids,rc,FSFILT_OP_SETATTR);
                 CDEBUG(rc2 ? D_ERROR : D_QUOTA,
                        "filter adjust qunit. (rc:%d)\n", rc2);
         }
@@ -2904,7 +2907,7 @@ static int filter_precreate(struct obd_device *obd, struct obdo *oa,
         }
         *num = i;
 
-        CDEBUG(D_HA, "%s: created %d objects for group "LPU64": "LPU64" rc %d\n",
+        CDEBUG(D_HA,"%s: created %d objects for group "LPU64": "LPU64" rc %d\n",
                obd->obd_name, i, group, filter->fo_last_objids[group], rc);
 
         RETURN(rc);
@@ -3355,14 +3358,14 @@ static struct dentry *filter_lvfs_fid2dentry(__u64 id, __u32 gen, __u64 gr,
         return filter_fid2dentry(data, NULL, gr, id);
 }
 
-static int filter_process_config(struct obd_device *obd, obd_count len, void *buf)
+static int filter_process_config(struct obd_device *obd,obd_count len,void *buf)
 {
         struct lustre_cfg *lcfg = buf;
         struct lprocfs_static_vars lvars;
         int rc = 0;
 
         lprocfs_init_vars(filter, &lvars);
-        
+
         rc = class_process_proc_param(PARAM_OST, lvars.obd_vars, lcfg, obd);
 
         return(rc);
