@@ -109,6 +109,11 @@ behaviour.
 Details    : This will achieve local-only flock/fcntl locks
 	     coherentness.
 
+Severity   : minor
+Frequency  : rare
+Bugzilla   : 11658
+Description: log_commit_thread vs filter_destroy race leads to crash
+Details    : Take import reference before releasing llog record semaphore
 
 --------------------------------------------------------------------------------
 

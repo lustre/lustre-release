@@ -1122,5 +1122,23 @@ test_58() {
 }
 run_test 58 "test recovery from llog for setattr op (test llog_gen_rec)"
 
+# log_commit_thread vs filter_destroy race used to lead to import use after free
+# bug 11658
+test_59() {
+    mkdir $DIR/$tdir
+    createmany -o $DIR/$tdir/$tfile-%d 200
+    sync
+    unlinkmany $DIR/$tdir/$tfile-%d 200
+#define OBD_FAIL_PTLRPC_DELAY_RECOV       0x507
+    do_facet ost "sysctl -w lustre.fail_loc=0x507"
+    fail ost
+    fail mds
+    do_facet ost "sysctl -w lustre.fail_loc=0x0"
+    sleep 20
+    rmdir $DIR/$tdir
+}
+run_test 59 "test log_commit_thread vs filter_destroy race"
+
+
 equals_msg `basename $0`: test complete, cleaning up
 $CLEANUP
