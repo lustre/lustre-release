@@ -2982,6 +2982,8 @@ num_inodes() {
 }
 
 test_76() { # bug 1443
+	DETH=$(grep deathrow /proc/kallsyms /proc/ksyms 2> /dev/null | wc -l)
+	[ $DETH -eq 0 ] && echo "No _iget, skipping" && return 0
 	BEFORE_INODES=`num_inodes`
 	echo "before inodes: $BEFORE_INODES"
 	for i in `seq 1000`; do
