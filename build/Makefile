@@ -22,7 +22,7 @@ else
 
 # case #2
 # Note that this comes from make -C $LINUX -f $LUSTRE/build/Makefile
-# So the include Makefile includes $LINUX/Makefile, not this file
+# so "include Makefile" below includes $LINUX/Makefile, not this file
 include $(LUSTRE_LINUX_CONFIG)
 include Makefile
 
