@@ -22,9 +22,6 @@ AC_DEFUN([LB_CANONICAL_SYSTEM],
 	darwin*)
 		lb_target_os="darwin"
 		;;
-	solaris2.11*)
-		lb_target_os="SunOS"
-		;;
 esac
 AC_SUBST(lb_target_os)
 ])
@@ -197,24 +194,6 @@ if test x$enable_bgl != xno; then
         enable_server='no'
         enable_liblustre='no'
         enable_libreadline='no'
-fi
-])
-
-
-#
-# LB_CONFIG_UOSS
-#
-#
-AC_DEFUN([LB_CONFIG_UOSS],
-[AC_MSG_CHECKING([whether to build user-level oss])
-AC_ARG_ENABLE([uoss],
-	AC_HELP_STRING([--enable-uoss],
-			[enable building of user-level oss]),
-	[enable_uoss='yes'],[enable_uoss='no'])
-if test x$enable_uoss != xno; then
-        AC_DEFINE(UOSS_SUPPORT, 1, Enable user-level OSS)
-        AC_DEFINE(LUSTRE_ULEVEL_MT, 1, Multi-threaded user-level lustre port)
-        enable_modules='no'
 fi
 ])
 
@@ -447,11 +426,9 @@ fi
 
 ])
 
-AC_CHECK_FUNCS(strnlen pread pwrite directio)
-
 CPPFLAGS="-I\$(top_builddir)/lnet/include -I\$(top_srcdir)/lnet/include -I\$(top_builddir)/lustre/include -I\$(top_srcdir)/lustre/include $CPPFLAGS"
 
-LLCPPFLAGS="-D__arch_lib__ -D_LARGEFILE64_SOURCE=1 -D_GNU_SOURCE -D_XOPEN_SOURCE=500"
+LLCPPFLAGS="-D__arch_lib__ -D_LARGEFILE64_SOURCE=1"
 AC_SUBST(LLCPPFLAGS)
 
 LLCFLAGS="-g -Wall -fPIC"
@@ -476,7 +453,6 @@ AM_CONDITIONAL(INIT_SCRIPTS, test x$ENABLE_INIT_SCRIPTS = "x1")
 AM_CONDITIONAL(LINUX, test x$lb_target_os = "xlinux")
 AM_CONDITIONAL(DARWIN, test x$lb_target_os = "xdarwin")
 AM_CONDITIONAL(CRAY_XT3, test x$enable_cray_xt3 = "xyes")
-AM_CONDITIONAL(SUNOS, test x$lb_target_os = "xSunOS")
 
 # this lets lustre cancel libsysio, per-branch or if liblustre is
 # disabled
@@ -491,7 +467,6 @@ AC_SUBST(SYSIO)
 
 LB_LINUX_CONDITIONALS
 LB_DARWIN_CONDITIONALS
-# LB_SUNOS_CONDITIONALS
 
 LN_CONDITIONALS
 LC_CONDITIONALS
@@ -509,7 +484,6 @@ LB_INCLUDE_RULES
 
 LB_CONFIG_CRAY_XT3
 LB_CONFIG_BGL
-LB_CONFIG_UOSS
 LB_PATH_DEFAULTS
 
 LB_PROG_CC
