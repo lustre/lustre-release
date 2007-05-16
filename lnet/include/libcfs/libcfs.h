@@ -165,7 +165,7 @@ typedef struct {
 } cfs_debug_limit_state_t;
 
 /* Controlled via configure key */
-/* #define CDEBUG_ENABLED (1) */
+/* #define CDEBUG_ENABLED */
 
 #ifdef __KERNEL__
 
@@ -249,7 +249,7 @@ do {                                                                    \
 #endif
 
 /* Controlled via configure key */
-/* #define CDEBUG_ENTRY_EXIT (1) */
+/* #define CDEBUG_ENTRY_EXIT */
 
 #ifdef CDEBUG_ENTRY_EXIT
 
