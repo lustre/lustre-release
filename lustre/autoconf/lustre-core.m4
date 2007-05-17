@@ -1,4 +1,5 @@
 #* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
+#* vim:expandtab:shiftwidth=8:tabstop=8:
 #
 # LC_CONFIG_SRCDIR
 #
@@ -7,7 +8,7 @@
 AC_DEFUN([LC_CONFIG_SRCDIR],
 [AC_CONFIG_SRCDIR([lustre/obdclass/obdo.c])
 ])
-
+                           
 #
 # LC_PATH_DEFAULTS
 #
@@ -1039,22 +1040,38 @@ LB_LINUX_TRY_COMPILE([
 ])
 ])
 
-# LC_WB_RANGE_START
-# 2.6.20 rename struct writeback fields
-AC_DEFUN([LC_WB_RANGE_START],
-[AC_MSG_CHECKING([kernel has range_start in struct writeback_control])
+# LC_CANCEL_DIRTY_PAGE
+# 2.6.20 introduse cancel_dirty_page instead of 
+# clear_page_dirty.
+AC_DEFUN([LC_CANCEL_DIRTY_PAGE],
+[AC_MSG_CHECKING([kernel has cancel_dirty_page])
 LB_LINUX_TRY_COMPILE([
-        #include <linux/fs.h>
-        #include <linux/sched.h>
-        #include <linux/writeback.h>
+        #include <linux/page-flags.h>
 ],[
-        struct writeback_control wb;
-
-        wb.range_start = 0;
+        cancel_dirty_page(NULL, 0);
 ],[
         AC_MSG_RESULT(yes)
-        AC_DEFINE(HAVE_WB_RANGE_START, 1,
-                  [writeback control has range_start field])
+        AC_DEFINE(HAVE_CANCEL_DIRTY_PAGE, 1,
+                  [kernel has cancel_dirty_page instead of clear_page_dirty])
+],[
+        AC_MSG_RESULT(NO)
+])
+])
+
+# RHEL5 in FS-cache patch rename PG_checked flag
+# into PG_fs_misc
+AC_DEFUN([LC_PG_FS_MISC],
+[AC_MSG_CHECKING([kernel has PG_fs_misc])
+LB_LINUX_TRY_COMPILE([
+        #include <linux/page-flags.h>
+],[
+        #ifndef PG_fs_misc
+        #error PG_fs_misc not defined in kernel
+        #endif
+],[
+        AC_MSG_RESULT(yes)
+        AC_DEFINE(HAVE_PG_FS_MISC, 1,
+                  [is kernel have PG_fs_misc])
 ],[
         AC_MSG_RESULT(NO)
 ])
@@ -1068,7 +1085,7 @@ LB_LINUX_TRY_COMPILE([
 AC_DEFUN([LC_PROG_LINUX],
 [ LC_LUSTRE_VERSION_H
 if test x$enable_server = xyes ; then
-	LC_CONFIG_BACKINGFS
+        LC_CONFIG_BACKINGFS
 fi
 LC_CONFIG_PINGER
 LC_CONFIG_LIBLUSTRE_RECOVERY
@@ -1117,13 +1134,18 @@ LC_STATFS_DENTRY_PARAM
 LC_VFS_KERN_MOUNT
 LC_INVALIDATEPAGE_RETURN_INT
 LC_UMOUNTBEGIN_HAS_VFSMOUNT
-LC_WB_RANGE_START
+
+#2.6.18 + RHEL5 (fc6)
+LC_PG_FS_MISC
 
 # 2.6.19
 LC_INODE_BLKSIZE
 LC_VFS_READDIR_U64_INO
 LC_GENERIC_FILE_READ
 LC_GENERIC_FILE_WRITE
+
+# 2.6.20
+LC_CANCEL_DIRTY_PAGE
 ])
 
 #

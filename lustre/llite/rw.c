@@ -593,7 +593,7 @@ static struct ll_async_page *llap_from_page(struct page *page, unsigned origin)
         if (sbi->ll_async_page_count >= sbi->ll_async_page_max)
                 llap_shrink_cache(sbi, 0);
 
-        OBD_SLAB_ALLOC(llap, ll_async_page_slab, SLAB_KERNEL,
+        OBD_SLAB_ALLOC(llap, ll_async_page_slab, GFP_KERNEL,
                        ll_async_page_slab_size);
         if (llap == NULL)
                 RETURN(ERR_PTR(-ENOMEM));

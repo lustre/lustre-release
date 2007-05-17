@@ -58,7 +58,7 @@ static struct obd_device *obd_device_alloc(void)
 {
         struct obd_device *obd;
 
-        OBD_SLAB_ALLOC(obd, obd_device_cachep, SLAB_KERNEL, sizeof(*obd));
+        OBD_SLAB_ALLOC(obd, obd_device_cachep, GFP_KERNEL, sizeof(*obd));
         if (obd != NULL) {
                 obd->obd_magic = OBD_DEVICE_MAGIC;
         }

@@ -51,8 +51,10 @@
 
 typedef struct ext2_dir_entry_2 ext2_dirent;
 
-#define PageChecked(page)        test_bit(PG_checked, &(page)->flags)
-#define SetPageChecked(page)     set_bit(PG_checked, &(page)->flags)
+#ifdef HAVE_PG_FS_MISC
+#define PageChecked(page)        test_bit(PG_fs_misc, &(page)->flags)
+#define SetPageChecked(page)     set_bit(PG_fs_misc, &(page)->flags)
+#endif
 
 /* returns the page unlocked, but with a reference */
 static int ll_dir_readpage(struct file *file, struct page *page)

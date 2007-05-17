@@ -37,7 +37,7 @@ struct ll_file_data *ll_file_data_get(void)
 {
         struct ll_file_data *fd;
 
-        OBD_SLAB_ALLOC(fd, ll_file_data_slab, SLAB_KERNEL, sizeof *fd);
+        OBD_SLAB_ALLOC(fd, ll_file_data_slab, GFP_KERNEL, sizeof *fd);
         return fd;
 }
 

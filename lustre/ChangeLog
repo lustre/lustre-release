@@ -140,6 +140,10 @@ Details    : ll_revalidate_it should uses de_inode instead of op_data.fid2
 	     to check whether it is stale, because sometimes, we want the 
 	     enqueue happened anyway, and op_data.fid2 will not be initialized.
      
+Severity   : enhancement
+Bugzilla   : 11647
+Description: update patchless client
+Details    : Add support for patchless client with 2.6.20, 2.6.21 and RHEL 5
 
 --------------------------------------------------------------------------------
 
