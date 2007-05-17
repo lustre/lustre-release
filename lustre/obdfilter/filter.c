@@ -1935,12 +1935,14 @@ static int filter_connect_internal(struct obd_export *exp,
         data->ocd_version = LUSTRE_VERSION_CODE;
 
         if (exp->exp_connect_flags & OBD_CONNECT_GRANT) {
+                struct filter_export_data *fed = &exp->exp_filter_data;
                 obd_size left, want;
 
                 spin_lock(&exp->exp_obd->obd_osfs_lock);
                 left = filter_grant_space_left(exp);
                 want = data->ocd_grant;
-                data->ocd_grant = filter_grant(exp, 0, want, left);
+                filter_grant(exp, fed->fed_grant, want, left);
+                data->ocd_grant = fed->fed_grant;
                 spin_unlock(&exp->exp_obd->obd_osfs_lock);
 
                 CDEBUG(D_CACHE, "%s: cli %s/%p ocd_grant: %d want: "
