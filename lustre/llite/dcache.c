@@ -524,9 +524,13 @@ do_lookup:
                 struct mds_body *mds_body = lustre_msg_buf(req->rq_repmsg,
                                                            DLM_REPLY_REC_OFF,
                                                            sizeof(*mds_body));
+                struct ll_fid fid = { 0 };
+
+                if (de->d_inode)
+                         ll_inode2fid(&fid, de->d_inode);
+
                 /* see if we got same inode, if not - return error */
-                if(!memcmp(&op_data.fid2, &mds_body->fid1,
-                           sizeof(op_data.fid2)))
+                if(!memcmp(&fid, &mds_body->fid1, sizeof(struct ll_fid)))
                         goto revalidate_finish;
                 ll_intent_release(it);
         }
