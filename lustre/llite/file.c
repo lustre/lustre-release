@@ -81,7 +81,7 @@ static int ll_close_inode_openhandle(struct inode *inode,
                                    OBD_MD_FLSIZE | OBD_MD_FLBLOCKS |
                                    OBD_MD_FLATIME | OBD_MD_FLMTIME |
                                    OBD_MD_FLCTIME);
-        if (0 /* ll_is_inode_dirty(inode) */) {
+        if (ll_is_inode_dirty(inode)) {
                 oa->o_flags = MDS_BFLAG_UNCOMMITTED_WRITES;
                 oa->o_valid |= OBD_MD_FLFLAGS;
         }
@@ -90,7 +90,7 @@ static int ll_close_inode_openhandle(struct inode *inode,
         if (rc == EAGAIN) {
                 /* We are the last writer, so the MDS has instructed us to get
                  * the file size and any write cookies, then close again. */
-                //ll_queue_done_writing(inode);
+                ll_queue_done_writing(inode);
                 rc = 0;
         } else if (rc) {
                 CERROR("inode %lu mdc close failed: rc = %d\n",
@@ -812,7 +812,7 @@ static int ll_extent_lock_callback(struct ldlm_lock *lock,
                 lsm->lsm_oinfo[stripe]->loi_kms = kms;
                 unlock_res_and_lock(lock);
                 lov_stripe_unlock(lsm);
-                //ll_try_done_writing(inode);
+                ll_try_done_writing(inode);
         iput:
                 iput(inode);
                 break;
@@ -857,16 +857,16 @@ int ll_async_completion_ast(struct ldlm_lock *lock, int flags, void *data)
                 lvb = lock->l_lvb_data;
                 lsm->lsm_oinfo[stripe].loi_rss = lvb->lvb_size;
 
-                LOCK_INODE_MUTEX(inode);
                 lock_res_and_lock(lock);
+                ll_inode_size_lock(inode, 1);
                 kms = MAX(lsm->lsm_oinfo[stripe].loi_kms, lvb->lvb_size);
                 kms = ldlm_extent_shift_kms(NULL, kms);
                 if (lsm->lsm_oinfo[stripe].loi_kms != kms)
                         LDLM_DEBUG(lock, "updating kms from "LPU64" to "LPU64,
                                    lsm->lsm_oinfo[stripe].loi_kms, kms);
                 lsm->lsm_oinfo[stripe].loi_kms = kms;
+                ll_inode_size_unlock(inode, 1);
                 unlock_res_and_lock(lock);
-                UNLOCK_INODE_MUTEX(inode);
         }
 
 iput:
@@ -1534,7 +1534,7 @@ static int ll_lov_recreate_obj(struct inode *inode, struct file *file,
         if (oa == NULL)
                 RETURN(-ENOMEM);
 
-        down(&lli->lli_open_sem);
+        down(&lli->lli_size_sem);
         lsm = lli->lli_smd;
         if (lsm == NULL)
                 GOTO(out, rc = -ENOENT);
@@ -1559,7 +1559,7 @@ static int ll_lov_recreate_obj(struct inode *inode, struct file *file,
         OBD_FREE(lsm2, lsm_size);
         GOTO(out, rc);
 out:
-        up(&lli->lli_open_sem);
+        up(&lli->lli_size_sem);
         obdo_free(oa);
         return rc;
 }
@@ -1574,10 +1574,10 @@ int ll_lov_setstripe_ea_info(struct inode *inode, struct file *file,
         int rc = 0;
         ENTRY;
 
-        down(&lli->lli_open_sem);
+        down(&lli->lli_size_sem);
         lsm = lli->lli_smd;
         if (lsm) {
-                up(&lli->lli_open_sem);
+                up(&lli->lli_size_sem);
                 CDEBUG(D_IOCTL, "stripe already exists for ino %lu\n",
                        inode->i_ino);
                 RETURN(-EEXIST);
@@ -1595,7 +1595,7 @@ int ll_lov_setstripe_ea_info(struct inode *inode, struct file *file,
         ll_release_openhandle(file->f_dentry, &oit);
 
  out:
-        up(&lli->lli_open_sem);
+        up(&lli->lli_size_sem);
         ll_intent_release(&oit);
         RETURN(rc);
 out_req_free:

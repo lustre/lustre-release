@@ -68,9 +68,8 @@ extern struct file_operations ll_pgcache_seq_fops;
 
 struct ll_inode_info {
         int                     lli_inode_magic;
-        struct semaphore        lli_size_sem;
+        struct semaphore        lli_size_sem;           /* protect open and change size */
         void                   *lli_size_sem_owner;
-        struct semaphore        lli_open_sem;
         struct semaphore        lli_write_sem;
         struct lov_stripe_md   *lli_smd;
         char                   *lli_symlink_name;
@@ -80,11 +79,12 @@ struct ll_inode_info {
 
         /* this lock protects s_d_w and p_w_ll and mmap_cnt */
         spinlock_t              lli_lock;
+#ifdef HAVE_CLOSE_THREAD
         struct list_head        lli_pending_write_llaps;
-        int                     lli_send_done_writing;
-        atomic_t                lli_mmap_cnt;
-
         struct list_head        lli_close_item;
+        int                     lli_send_done_writing;
+#endif
+        atomic_t                lli_mmap_cnt;
 
         /* for writepage() only to communicate to fsync */
         int                     lli_async_rc;
@@ -127,6 +127,7 @@ static inline struct ll_inode_info *ll_i2info(struct inode *inode)
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0))
         return container_of(inode, struct ll_inode_info, lli_vfs_inode);
 #else
+        CLASSERT(sizeof(inode->u) >= sizeof(struct ll_inode_info));
         return (struct ll_inode_info *)&(inode->u.generic_ip);
 #endif
 }
@@ -452,7 +453,6 @@ extern struct inode_operations ll_dir_inode_operations;
 int ll_objects_destroy(struct ptlrpc_request *request, struct inode *dir);
 struct inode *ll_iget(struct super_block *sb, ino_t hash,
                       struct lustre_md *lic);
-struct dentry *ll_find_alias(struct inode *, struct dentry *);
 int ll_mdc_cancel_unused(struct lustre_handle *, struct inode *, int flags,
                          void *opaque);
 int ll_mdc_blocking_ast(struct ldlm_lock *, struct ldlm_lock_desc *,
@@ -475,7 +475,6 @@ int llap_shrink_cache(struct ll_sb_info *sbi, int shrink_fraction);
 extern struct cache_definition ll_cache_definition;
 void ll_removepage(struct page *page);
 int ll_readpage(struct file *file, struct page *page);
-struct ll_async_page *llap_from_cookie(void *cookie);
 struct ll_async_page *llap_cast_private(struct page *page);
 void ll_readahead_init(struct inode *inode, struct ll_readahead_state *ras);
 void ll_ra_accounting(struct ll_async_page *llap,struct address_space *mapping);
@@ -607,12 +606,25 @@ struct ll_close_queue {
         struct completion       lcq_comp;
 };
 
+#ifdef HAVE_CLOSE_THREAD
 void llap_write_pending(struct inode *inode, struct ll_async_page *llap);
 void llap_write_complete(struct inode *inode, struct ll_async_page *llap);
 void ll_open_complete(struct inode *inode);
 int ll_is_inode_dirty(struct inode *inode);
 void ll_try_done_writing(struct inode *inode);
 void ll_queue_done_writing(struct inode *inode);
+#else
+static inline void llap_write_pending(struct inode *inode,
+                                      struct ll_async_page *llap) { return; };
+static inline void llap_write_complete(struct inode *inode,
+                                       struct ll_async_page *llap) { return; };
+static inline void ll_open_complete(struct inode *inode) { return; };
+static inline int ll_is_inode_dirty(struct inode *inode) { return 0; };
+static inline void ll_try_done_writing(struct inode *inode) { return; };
+static inline void ll_queue_done_writing(struct inode *inode) { return; };
+//static inline void ll_close_thread_shutdown(struct ll_close_queue *lcq) { return; };
+//static inline int ll_close_thread_start(struct ll_close_queue **lcq_ret) { return 0; };
+#endif
 void ll_close_thread_shutdown(struct ll_close_queue *lcq);
 int ll_close_thread_start(struct ll_close_queue **lcq_ret);
 

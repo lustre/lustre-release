@@ -145,6 +145,13 @@ Bugzilla   : 11647
 Description: update patchless client
 Details    : Add support for patchless client with 2.6.20, 2.6.21 and RHEL 5
 
+Severity   : normal
+Frequency  : only with 2.4 kernel
+Bugzilla   : 12134
+Description: random memory corruption
+Details    : size of struct ll_inode_info is to big for union inode.u and this
+             can be cause of random memory corruption.
+
 --------------------------------------------------------------------------------
 
 2007-05-03  Cluster File Systems, Inc. <info@clusterfs.com>

@@ -110,7 +110,7 @@ static int ll_readlink(struct dentry *dentry, char *buffer, int buflen)
 
         CDEBUG(D_VFSTRACE, "VFS Op\n");
         /* on symlinks lli_open_sem protects lli_symlink_name allocation/data */
-        down(&lli->lli_open_sem);
+        down(&lli->lli_size_sem);
         rc = ll_readlink_internal(inode, &request, &symname);
         if (rc)
                 GOTO(out, rc);
@@ -118,7 +118,7 @@ static int ll_readlink(struct dentry *dentry, char *buffer, int buflen)
         rc = vfs_readlink(dentry, buffer, buflen, symname);
         ptlrpc_req_finished(request);
  out:
-        up(&lli->lli_open_sem);
+        up(&lli->lli_size_sem);
         RETURN(rc);
 }
 
@@ -152,9 +152,9 @@ static LL_FOLLOW_LINK_RETURN_TYPE ll_follow_link(struct dentry *dentry, struct n
 #endif
 
         CDEBUG(D_VFSTRACE, "VFS Op\n");
-        down(&lli->lli_open_sem);
+        down(&lli->lli_size_sem);
         rc = ll_readlink_internal(inode, &request, &symname);
-        up(&lli->lli_open_sem);
+        up(&lli->lli_size_sem);
         if (rc) {
                 path_release(nd); /* Kernel assumes that ->follow_link()
                                      releases nameidata on error */

@@ -677,23 +677,24 @@ next:
         }
         RETURN(0);
 }
-                
+
 void ll_lli_init(struct ll_inode_info *lli)
 {
-        sema_init(&lli->lli_open_sem, 1);
+        lli->lli_inode_magic = LLI_INODE_MAGIC;
         sema_init(&lli->lli_size_sem, 1);
         sema_init(&lli->lli_write_sem, 1);
         lli->lli_flags = 0;
         lli->lli_maxbytes = PAGE_CACHE_MAXBYTES;
         spin_lock_init(&lli->lli_lock);
-        INIT_LIST_HEAD(&lli->lli_pending_write_llaps);
-        lli->lli_inode_magic = LLI_INODE_MAGIC;
         sema_init(&lli->lli_och_sem, 1);
         lli->lli_mds_read_och = lli->lli_mds_write_och = NULL;
         lli->lli_mds_exec_och = NULL;
         lli->lli_open_fd_read_count = lli->lli_open_fd_write_count = 0;
         lli->lli_open_fd_exec_count = 0;
         INIT_LIST_HEAD(&lli->lli_dead_list);
+#ifdef HAVE_CLOSE_THREAD
+        INIT_LIST_HEAD(&lli->lli_pending_write_llaps);
+#endif
 }
 
 /* COMPAT_146 */

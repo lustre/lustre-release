@@ -665,7 +665,7 @@ static int queue_or_sync_write(struct obd_export *exp, struct inode *inode,
                                 0, 0, 0, async_flags);
         if (rc == 0) {
                 LL_CDEBUG_PAGE(D_PAGE, llap->llap_page, "write queued\n");
-                //llap_write_pending(inode, llap);
+                llap_write_pending(inode, llap);
                 GOTO(out, 0);
         }
 
@@ -870,7 +870,7 @@ int ll_ap_completion(void *data, int cmd, struct obdo *oa, int rc)
 
         unlock_page(page);
 
-        if (0 && cmd & OBD_BRW_WRITE) {
+        if (cmd & OBD_BRW_WRITE) {
                 llap_write_complete(page->mapping->host, llap);
                 ll_try_done_writing(page->mapping->host);
         }
