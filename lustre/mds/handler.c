@@ -1936,6 +1936,15 @@ static int mds_setup(struct obd_device *obd, obd_count len, void *buf)
         }
         ldlm_register_intent(obd->obd_namespace, mds_intent_policy);
 
+        lprocfs_init_vars(mds, &lvars);
+        if (lprocfs_obd_setup(obd, lvars.obd_vars) == 0 &&
+            lprocfs_alloc_obd_stats(obd, LPROC_MDS_LAST) == 0) {
+                /* Init private stats here */
+                mds_stats_counter_init(obd->obd_stats);
+                obd->obd_proc_exports = proc_mkdir("exports",
+                                                   obd->obd_proc_entry);
+        }
+
         rc = mds_fs_setup(obd, mnt);
         if (rc) {
                 CERROR("%s: MDS filesystem method init failed: rc = %d\n",
@@ -1985,15 +1994,6 @@ static int mds_setup(struct obd_device *obd, obd_count len, void *buf)
         */
         if (rc)
                 GOTO(err_qctxt, rc);
-
-        lprocfs_init_vars(mds, &lvars);
-        if (lprocfs_obd_setup(obd, lvars.obd_vars) == 0 &&
-            lprocfs_alloc_obd_stats(obd, LPROC_MDS_LAST) == 0) {
-                /* Init private stats here */
-                mds_stats_counter_init(obd->obd_stats);
-                obd->obd_proc_exports = proc_mkdir("exports",
-                                                   obd->obd_proc_entry);
-        }
 
         uuid_ptr = fsfilt_uuid(obd, obd->u.obt.obt_sb);
         if (uuid_ptr != NULL) {

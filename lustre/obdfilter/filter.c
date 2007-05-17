@@ -1775,13 +1775,10 @@ static int filter_setup(struct obd_device *obd, obd_count len, void *buf)
         if (!page)
                 RETURN(-ENOMEM);
 
-        memcpy((void *)page, lustre_cfg_buf(lcfg, 4),
-               LUSTRE_CFG_BUFLEN(lcfg, 4));
-        rc = filter_common_setup(obd, len, buf, (void *)page);
-        free_page(page);
-
+        /* lprocfs must be setup before the filter so state can be safely added
+         * to /proc incrementally as the filter is setup */
         lprocfs_init_vars(filter, &lvars);
-        if (rc == 0 && lprocfs_obd_setup(obd, lvars.obd_vars) == 0 &&
+        if (lprocfs_obd_setup(obd, lvars.obd_vars) == 0 &&
             lprocfs_alloc_obd_stats(obd, LPROC_FILTER_LAST) == 0) {
                 /* Init obdfilter private stats here */
                 lprocfs_counter_init(obd->obd_stats, LPROC_FILTER_READ_BYTES,
@@ -1793,6 +1790,16 @@ static int filter_setup(struct obd_device *obd, obd_count len, void *buf)
                 lproc_filter_attach_seqstat(obd);
                 obd->obd_proc_exports = proc_mkdir("exports",
                                                    obd->obd_proc_entry);
+        }
+
+        memcpy((void *)page, lustre_cfg_buf(lcfg, 4),
+               LUSTRE_CFG_BUFLEN(lcfg, 4));
+        rc = filter_common_setup(obd, len, buf, (void *)page);
+        free_page(page);
+
+        if (rc) {
+                lprocfs_obd_cleanup(obd);
+                lprocfs_free_obd_stats(obd);
         }
 
         return rc;

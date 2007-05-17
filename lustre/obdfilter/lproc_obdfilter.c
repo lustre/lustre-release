@@ -232,8 +232,7 @@ void filter_tally_write(struct obd_export *exp, struct page **pages,
 
         lprocfs_oh_tally_log2(&filter->fo_filter_stats.hist[BRW_W_PAGES],
                               nr_pages);
-        lprocfs_oh_tally_log2(&fed->fed_brw_stats.hist[BRW_W_PAGES],
-                              nr_pages);
+        lprocfs_oh_tally_log2(&fed->fed_brw_stats.hist[BRW_W_PAGES], nr_pages);
 
         while (nr_pages-- > 0) {
                 if (last_page && (*pages)->index != (last_page->index + 1))
@@ -262,6 +261,7 @@ void filter_tally_read(struct obd_export *exp, struct page **pages,
                        int nr_pages, unsigned long *blocks, int blocks_per_page)
 {
         struct filter_obd *filter = &exp->exp_obd->u.filter;
+        struct filter_export_data *fed = &exp->exp_filter_data;
         struct page *last_page = NULL;
         unsigned long *last_block = NULL;
         unsigned long discont_pages = 0;
@@ -271,7 +271,9 @@ void filter_tally_read(struct obd_export *exp, struct page **pages,
         if (nr_pages == 0)
                 return;
 
-        lprocfs_oh_tally_log2(&filter->fo_filter_stats.hist[BRW_R_PAGES], nr_pages);
+        lprocfs_oh_tally_log2(&filter->fo_filter_stats.hist[BRW_R_PAGES],
+                              nr_pages);
+        lprocfs_oh_tally_log2(&fed->fed_brw_stats.hist[BRW_R_PAGES], nr_pages);
 
         while (nr_pages-- > 0) {
                 if (last_page && (*pages)->index != (last_page->index + 1))
@@ -285,15 +287,14 @@ void filter_tally_read(struct obd_export *exp, struct page **pages,
                 }
         }
 
-        lprocfs_oh_tally_log2(&filter->fo_filter_stats.hist[BRW_R_PAGES], nr_pages);
-        lprocfs_oh_tally(&filter->fo_filter_stats.hist[BRW_R_DISCONT_PAGES], discont_pages);
-        lprocfs_oh_tally(&filter->fo_filter_stats.hist[BRW_R_DISCONT_BLOCKS], discont_blocks);
-
-        lprocfs_oh_tally_log2(&exp->exp_filter_data.fed_brw_stats.hist[BRW_R_PAGES],
-                              nr_pages);
-        lprocfs_oh_tally(&exp->exp_filter_data.fed_brw_stats.hist[BRW_R_DISCONT_PAGES],
+        lprocfs_oh_tally(&filter->fo_filter_stats.hist[BRW_R_DISCONT_PAGES],
                          discont_pages);
-        lprocfs_oh_tally(&exp->exp_filter_data.fed_brw_stats.hist[BRW_R_DISCONT_BLOCKS],
+        lprocfs_oh_tally(&filter->fo_filter_stats.hist[BRW_R_DISCONT_BLOCKS],
+                         discont_blocks);
+
+        lprocfs_oh_tally(&fed->fed_brw_stats.hist[BRW_R_DISCONT_PAGES],
+                         discont_pages);
+        lprocfs_oh_tally(&fed->fed_brw_stats.hist[BRW_R_DISCONT_BLOCKS],
                          discont_blocks);
 }
 
