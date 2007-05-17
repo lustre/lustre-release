@@ -84,7 +84,7 @@ ksocknal_lib_tunables_init ()
 	LASSERT (i < sizeof(ksocknal_ctl_table)/sizeof(ksocknal_ctl_table[0]));
 
         ksocknal_tunables.ksnd_sysctl =
-                register_sysctl_table(ksocknal_top_ctl_table, 0);
+                cfs_register_sysctl_table(ksocknal_top_ctl_table, 0);
 
         if (ksocknal_tunables.ksnd_sysctl == NULL)
 		CWARN("Can't setup /proc tunables\n");
@@ -96,7 +96,7 @@ void
 ksocknal_lib_tunables_fini ()
 {
         if (ksocknal_tunables.ksnd_sysctl != NULL)
-                unregister_sysctl_table(ksocknal_tunables.ksnd_sysctl);
+                cfs_unregister_sysctl_table(ksocknal_tunables.ksnd_sysctl);
 }
 #else
 int

@@ -195,8 +195,8 @@ kibnal_tunables_init ()
                               sizeof(ipif_basename_space));
 
 	kibnal_tunables.kib_sysctl =
-		register_sysctl_table(kibnal_top_ctl_table, 0);
-	
+		cfs_register_sysctl_table(kibnal_top_ctl_table, 0);
+
 	if (kibnal_tunables.kib_sysctl == NULL)
 		CWARN("Can't setup /proc tunables\n");
 
@@ -212,7 +212,7 @@ void
 kibnal_tunables_fini ()
 {
 	if (kibnal_tunables.kib_sysctl != NULL)
-		unregister_sysctl_table(kibnal_tunables.kib_sysctl);
+		cfs_unregister_sysctl_table(kibnal_tunables.kib_sysctl);
 }
 
 #else
@@ -229,9 +229,3 @@ kibnal_tunables_fini ()
 }
 
 #endif
-	
-		
-		
-
-	
-		

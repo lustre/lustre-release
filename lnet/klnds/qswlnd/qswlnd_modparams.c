@@ -121,7 +121,7 @@ int
 kqswnal_tunables_init ()
 {
 	kqswnal_tunables.kqn_sysctl =
-		register_sysctl_table(kqswnal_top_ctl_table, 0);
+		cfs_register_sysctl_table(kqswnal_top_ctl_table, 0);
 	
 	if (kqswnal_tunables.kqn_sysctl == NULL)
 		CWARN("Can't setup /proc tunables\n");
@@ -133,7 +133,7 @@ void
 kqswnal_tunables_fini ()
 {
 	if (kqswnal_tunables.kqn_sysctl != NULL)
-		unregister_sysctl_table(kqswnal_tunables.kqn_sysctl);
+		cfs_unregister_sysctl_table(kqswnal_tunables.kqn_sysctl);
 }
 #else
 int 

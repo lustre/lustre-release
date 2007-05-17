@@ -1066,7 +1066,7 @@ LB_LINUX_TRY_COMPILE([
 ])
 ])
 
-#2.6.19 API change
+# 2.6.19 API change
 #panic_notifier_list use atomic_notifier operations
 #
 AC_DEFUN([LN_ATOMIC_PANIC_NOTIFIER],
@@ -1080,6 +1080,42 @@ LB_LINUX_TRY_COMPILE([
         AC_MSG_RESULT(yes)
 	AC_DEFINE(HAVE_ATOMIC_PANIC_NOTIFIER, 1,
 		[panic_notifier_list is atomic_notifier_head])
+],[
+        AC_MSG_RESULT(NO)
+])
+])
+
+# 2.6.20 API change INIT_WORK use 2 args and not 
+# store data inside
+AC_DEFUN([LN_3ARGS_INIT_WORK],
+[AC_MSG_CHECKING([check INIT_WORK want 3 args])
+LB_LINUX_TRY_COMPILE([
+	#include <linux/workqueue.h>
+],[
+	struct work_struct work;
+
+	INIT_WORK(&work, NULL, NULL);
+],[
+        AC_MSG_RESULT(yes)
+        AC_DEFINE(HAVE_3ARGS_INIT_WORK, 1,
+                  [INIT_WORK use 3 args and store data inside])
+],[
+        AC_MSG_RESULT(NO)
+])
+])
+
+# 2.6.21 api change. 'register_sysctl_table' use only one argument,
+# instead of more old which need two.
+AC_DEFUN([LL_2ARGS_REGISTER_SYSCTL],
+[AC_MSG_CHECKING([check register_sysctl_table want 2 args])
+LB_LINUX_TRY_COMPILE([
+        #include <linux/sysctl.h>
+],[
+	return register_sysctl_table(NULL,0);
+],[
+        AC_MSG_RESULT(yes)
+        AC_DEFINE(HAVE_2ARGS_REGISTER_SYSCTL, 1,
+                  [register_sysctl_table want 2 args])
 ],[
         AC_MSG_RESULT(NO)
 ])
@@ -1117,6 +1153,10 @@ LN_TASKLIST_LOCK
 # 2.6.19
 LN_KMEM_CACHE_DESTROY_INT
 LN_ATOMIC_PANIC_NOTIFIER
+# 2.6.20
+LN_3ARGS_INIT_WORK
+# 2.6.21
+LL_2ARGS_REGISTER_SYSCTL
 ])
 
 #

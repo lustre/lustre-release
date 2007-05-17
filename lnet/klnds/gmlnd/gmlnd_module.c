@@ -93,7 +93,7 @@ gmnal_load(void)
 
 #if CONFIG_SYSCTL && !CFS_SYSFS_MODULE_PARM
         gmnal_tunables.gm_sysctl =
-                register_sysctl_table(gmnal_top_ctl_table, 0);
+                cfs_register_sysctl_table(gmnal_top_ctl_table, 0);
         
         if (gmnal_tunables.gm_sysctl == NULL)
                 CWARN("Can't setup /proc tunables\n");
@@ -118,7 +118,7 @@ gmnal_unload(void)
 	gmnal_fini();
 #if CONFIG_SYSCTL && !CFS_SYSFS_MODULE_PARM
         if (gmnal_tunables.gm_sysctl != NULL)
-                unregister_sysctl_table(gmnal_tunables.gm_sysctl);
+                cfs_unregister_sysctl_table(gmnal_tunables.gm_sysctl);
 #endif
 }
 

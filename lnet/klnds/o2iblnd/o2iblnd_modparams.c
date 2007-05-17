@@ -168,7 +168,7 @@ kiblnd_sysctl_init (void)
                               sizeof(ipif_basename_space));
 
 	kiblnd_tunables.kib_sysctl =
-		register_sysctl_table(kiblnd_top_ctl_table, 0);
+		cfs_register_sysctl_table(kiblnd_top_ctl_table, 0);
 
 	if (kiblnd_tunables.kib_sysctl == NULL)
 		CWARN("Can't setup /proc tunables\n");
@@ -178,7 +178,7 @@ void
 kiblnd_sysctl_fini (void)
 {
 	if (kiblnd_tunables.kib_sysctl != NULL)
-		unregister_sysctl_table(kiblnd_tunables.kib_sysctl);
+		cfs_unregister_sysctl_table(kiblnd_tunables.kib_sysctl);
 }
 
 #else
@@ -199,7 +199,7 @@ int
 kiblnd_tunables_init (void)
 {
         kiblnd_sysctl_init();
-        
+
         if (*kiblnd_tunables.kib_concurrent_sends > IBLND_RX_MSGS)
                 *kiblnd_tunables.kib_concurrent_sends = IBLND_RX_MSGS;
         if (*kiblnd_tunables.kib_concurrent_sends < IBLND_MSG_QUEUE_SIZE)

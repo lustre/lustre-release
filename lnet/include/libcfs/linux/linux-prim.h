@@ -59,8 +59,12 @@ typedef struct miscdevice		cfs_psdev_t;
 typedef struct ctl_table		cfs_sysctl_table_t;
 typedef struct ctl_table_header		cfs_sysctl_table_header_t;
 
+#ifdef HAVE_2ARGS_REGISTER_SYSCTL
 #define cfs_register_sysctl_table(t, a)	register_sysctl_table(t, a)
-#define cfs_unregister_sysctl_table(t)	unregister_sysctl_table(t, a)
+#else
+#define cfs_register_sysctl_table(t, a) register_sysctl_table(t)
+#endif
+#define cfs_unregister_sysctl_table(t)	unregister_sysctl_table(t)
 
 /*
  * Symbol register

@@ -68,14 +68,30 @@ static inline void our_cond_resched(void)
         if (current->need_resched)
                schedule ();
 }
-#define work_struct_t       struct tq_struct
-
+#define work_struct_t                   struct tq_struct
+#define cfs_get_work_data(type,field,data)   (data)
 #else
+
+#ifdef HAVE_3ARGS_INIT_WORK
 
 #define prepare_work(wq,cb,cbdata)                                            \
 do {                                                                          \
         INIT_WORK((wq), (void *)(cb), (void *)(cbdata));                      \
 } while (0)
+
+#define cfs_get_work_data(type,field,data)   (data)
+
+#else
+
+#define prepare_work(wq,cb,cbdata)                                            \
+do {                                                                          \
+        INIT_WORK((wq), (void *)(cb));                                        \
+} while (0)
+
+#define cfs_get_work_data(type,field,data) container_of(data,type,field)
+
+#endif
+
 #define wait_on_page wait_on_page_locked
 #define our_recalc_sigpending(current) recalc_sigpending()
 #define strtok(a,b) strpbrk(a, b)

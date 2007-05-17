@@ -192,7 +192,7 @@ kptllnd_tunables_init ()
                                 sizeof(ptltrace_basename_space));
 #endif
 	kptllnd_tunables.kptl_sysctl =
-		register_sysctl_table(kptllnd_top_ctl_table, 0);
+		cfs_register_sysctl_table(kptllnd_top_ctl_table, 0);
 
 	if (kptllnd_tunables.kptl_sysctl == NULL)
 		CWARN("Can't setup /proc tunables\n");
@@ -204,7 +204,7 @@ void
 kptllnd_tunables_fini ()
 {
 	if (kptllnd_tunables.kptl_sysctl != NULL)
-		unregister_sysctl_table(kptllnd_tunables.kptl_sysctl);
+		cfs_unregister_sysctl_table(kptllnd_tunables.kptl_sysctl);
 }
 
 #else

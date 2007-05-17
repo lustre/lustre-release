@@ -78,28 +78,86 @@ enum {
 int LL_PROC_PROTO(proc_dobitmasks);
 
 static struct ctl_table lnet_table[] = {
-        {PSDEV_DEBUG, "debug", &libcfs_debug, sizeof(int), 0644, NULL,
-         &proc_dobitmasks},
-        {PSDEV_SUBSYSTEM_DEBUG, "subsystem_debug", &libcfs_subsystem_debug,
-         sizeof(int), 0644, NULL, &proc_dobitmasks},
-        {PSDEV_PRINTK, "printk", &libcfs_printk, sizeof(int), 0644, NULL,
-         &proc_dobitmasks},
-        {PSDEV_CONSOLE_RATELIMIT, "console_ratelimit",&libcfs_console_ratelimit,
-         sizeof(int), 0644, NULL, &proc_dointvec},
-        {PSDEV_DEBUG_PATH, "debug_path", debug_file_path,
-         sizeof(debug_file_path), 0644, NULL, &proc_dostring, &sysctl_string},
-        {PSDEV_LNET_UPCALL, "upcall", lnet_upcall,
-         sizeof(lnet_upcall), 0644, NULL, &proc_dostring,
-         &sysctl_string},
-        {PSDEV_LNET_MEMUSED, "memused", (int *)&libcfs_kmemory.counter,
-         sizeof(int), 0444, NULL, &proc_dointvec},
-        {PSDEV_LNET_CATASTROPHE, "catastrophe", &libcfs_catastrophe,
-         sizeof(int), 0444, NULL, &proc_dointvec},
+        {
+                .ctl_name = PSDEV_DEBUG,
+                .procname = "debug",
+                .data     = &libcfs_debug,
+                .maxlen   = sizeof(int),
+                .mode     = 0644,
+                .proc_handler = &proc_dobitmasks
+        },
+        {
+                .ctl_name = PSDEV_SUBSYSTEM_DEBUG,
+                .procname = "subsystem_debug",
+                .data     = &libcfs_subsystem_debug,
+                .maxlen   = sizeof(int),
+                .mode     = 0644,
+                .proc_handler = &proc_dobitmasks
+        },
+        {
+                .ctl_name = PSDEV_PRINTK,
+                .procname = "printk",
+                .data     = &libcfs_printk,
+                .maxlen   = sizeof(int),
+                .mode     = 0644,
+                .proc_handler = &proc_dobitmasks
+        },
+        {
+                .ctl_name = PSDEV_CONSOLE_RATELIMIT,
+                .procname = "console_ratelimit",
+                .data     = &libcfs_console_ratelimit,
+                .maxlen   = sizeof(int),
+                .mode     = 0644,
+                .proc_handler = &proc_dointvec
+        },
+
+        {
+                .ctl_name = PSDEV_DEBUG_PATH,
+                .procname = "debug_path",
+                .data     = debug_file_path,
+                .maxlen   = sizeof(debug_file_path),
+                .mode     = 0644,
+                .proc_handler = &proc_dostring,
+                .strategy =  &sysctl_string
+        },
+
+        {
+                .ctl_name = PSDEV_LNET_UPCALL,
+                .procname = "upcall",
+                .data     = lnet_upcall,
+                .maxlen   = sizeof(lnet_upcall),
+                .mode     = 0644,
+                .proc_handler = &proc_dostring,
+                .strategy =  &sysctl_string
+        },
+        {
+                .ctl_name = PSDEV_LNET_MEMUSED,
+                .procname = "memused",
+                .data     = (int *)&libcfs_kmemory.counter,
+                .maxlen   = sizeof(int),
+                .mode     = 0444,
+                .proc_handler = &proc_dointvec
+        },
+        {
+                .ctl_name = PSDEV_LNET_CATASTROPHE,
+                .procname = "catastrophe",
+                .data     = &libcfs_catastrophe,
+                .maxlen   = sizeof(int),
+                .mode     = 0444,
+                .proc_handler = &proc_dointvec
+        },
         {0}
 };
 
 static struct ctl_table top_table[2] = {
-        {PSDEV_LNET, "lnet", NULL, 0, 0555, lnet_table},
+        {
+                .ctl_name = PSDEV_LNET,
+                .procname = "lnet",
+                .data     = NULL,
+                .maxlen   = 0,
+                .mode     = 0555,
+                .child    = lnet_table
+        },
         {0}
 };
 
@@ -174,7 +232,7 @@ int insert_proc(void)
 
 #ifdef CONFIG_SYSCTL
         if (!lnet_table_header)
-                lnet_table_header = register_sysctl_table(top_table, 0);
+                lnet_table_header = cfs_register_sysctl_table(top_table, 0);
 #endif
 
         ent = create_proc_entry("sys/lnet/dump_kernel", 0, NULL);
@@ -211,7 +269,7 @@ void remove_proc(void)
 
 #ifdef CONFIG_SYSCTL
         if (lnet_table_header)
-                unregister_sysctl_table(lnet_table_header);
+                cfs_unregister_sysctl_table(lnet_table_header);
         lnet_table_header = NULL;
 #endif
 }
