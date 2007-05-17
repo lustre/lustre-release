@@ -873,7 +873,7 @@ LB_LINUX_TRY_COMPILE([
 
 #
 # LC_VFS_KERN_MOUNT
-# starting from 2.6.18 kernel don`t export do_kern_mount
+# starting from 2.6.18 kernel don't export do_kern_mount
 # and want to use vfs_kern_mount instead.
 #
 AC_DEFUN([LC_VFS_KERN_MOUNT],
@@ -942,7 +942,7 @@ EXTRA_KCFLAGS="$tmp_flags"
 ])
 
 # 2.6.19 API changes
-# inode don`t have i_blksize field
+# inode don't have i_blksize field
 AC_DEFUN([LC_INODE_BLKSIZE],
 [AC_MSG_CHECKING([inode has i_blksize field])
 LB_LINUX_TRY_COMPILE([
@@ -1024,7 +1024,7 @@ LB_LINUX_TRY_COMPILE([
 ])
 
 # LC_NR_PAGECACHE
-# 2.6.18 don`t export nr_pagecahe
+# 2.6.18 don't export nr_pagecahe
 AC_DEFUN([LC_NR_PAGECACHE],
 [AC_MSG_CHECKING([kernel export nr_pagecache])
 LB_LINUX_TRY_COMPILE([
