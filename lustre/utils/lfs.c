@@ -755,12 +755,12 @@ static int mntdf(char *mntdir, int ishow, int cooked)
 
                 if (rc == -ENOTCONN || rc == -ETIMEDOUT || rc == -EIO ||
                     rc == -ENODATA || rc == 0) {
-                        showdf(mntdir, &stat_buf, uuid_buf.uuid, ishow, cooked,
-                               "MDT", index, rc);
+                        showdf(mntdir, &stat_buf, obd_uuid2str(&uuid_buf),
+                               ishow, cooked, "MDT", index, rc);
                 } else {
                         fprintf(stderr,
                                 "error: llapi_obd_statfs(%s): %s (%d)\n",
-                                uuid_buf.uuid, strerror(-rc), rc);
+                                obd_uuid2str(&uuid_buf), strerror(-rc), rc);
                         return rc;
                 }
                 if (rc == 0) {
@@ -782,8 +782,8 @@ static int mntdf(char *mntdir, int ishow, int cooked)
 
                 if (rc == -ENOTCONN || rc == -ETIMEDOUT || rc == -EIO ||
                     rc == -ENODATA || rc == 0) {
-                        showdf(mntdir, &stat_buf, uuid_buf.uuid, ishow, cooked,
-                               "OST", index, rc);
+                        showdf(mntdir, &stat_buf, obd_uuid2str(&uuid_buf),
+                               ishow, cooked, "OST", index, rc);
                 } else {
                         fprintf(stderr,
                                 "error: llapi_obd_statfs failed: %s (%d)\n",
@@ -1026,8 +1026,7 @@ static int lfs_quotacheck(int argc, char **argv)
         char *mnt;
         struct if_quotacheck qchk;
         struct if_quotactl qctl;
-        char *obd_type = qchk.obd_type;
-        char *obd_uuid = qchk.obd_uuid.uuid;
+        char *obd_type = (char *)qchk.obd_type;
         int rc;
 
         memset(&qchk, 0, sizeof(qchk));
@@ -1077,7 +1076,8 @@ static int lfs_quotacheck(int argc, char **argv)
         rc = llapi_poll_quotacheck(mnt, &qchk);
         if (rc) {
                 if (*obd_type)
-                        fprintf(stderr, "%s %s ", obd_type, obd_uuid);
+                        fprintf(stderr, "%s %s ", obd_type,
+                                obd_uuid2str(&qchk.obd_uuid));
                 fprintf(stderr, "quota check failed: %s\n", strerror(errno));
                 return rc;
         }
@@ -1089,8 +1089,8 @@ static int lfs_quotacheck(int argc, char **argv)
         rc = llapi_quotactl(mnt, &qctl);
         if (rc) {
                 if (*obd_type)
-                        fprintf(stderr, "%s %s ",
-                                qctl.obd_type, qctl.obd_uuid.uuid);
+                        fprintf(stderr, "%s %s ", (char *)qctl.obd_type,
+                                obd_uuid2str(&qctl.obd_uuid));
                 fprintf(stderr, "%s turn on quota failed: %s\n",
                         argv[0], strerror(errno));
                 return rc;
@@ -1104,8 +1104,7 @@ static int lfs_quotaon(int argc, char **argv)
         int c;
         char *mnt;
         struct if_quotactl qctl;
-        char *obd_type = qctl.obd_type;
-        char *obd_uuid = qctl.obd_uuid.uuid;
+        char *obd_type = (char *)qctl.obd_type;
         int rc;
 
         memset(&qctl, 0, sizeof(qctl));
@@ -1142,7 +1141,8 @@ static int lfs_quotaon(int argc, char **argv)
         rc = llapi_quotactl(mnt, &qctl);
         if (rc) {
                 if (*obd_type)
-                        fprintf(stderr, "%s %s ", obd_type, obd_uuid);
+                        fprintf(stderr, "%s %s ", obd_type,
+                                obd_uuid2str(&qctl.obd_uuid));
                 fprintf(stderr, "%s failed: %s\n", argv[0], strerror(errno));
                 return rc;
         }
@@ -1155,8 +1155,7 @@ static int lfs_quotaoff(int argc, char **argv)
         int c;
         char *mnt;
         struct if_quotactl qctl;
-        char *obd_type = qctl.obd_type;
-        char *obd_uuid = qctl.obd_uuid.uuid;
+        char *obd_type = (char *)qctl.obd_type;
         int rc;
 
         memset(&qctl, 0, sizeof(qctl));
@@ -1189,7 +1188,8 @@ static int lfs_quotaoff(int argc, char **argv)
         rc = llapi_quotactl(mnt, &qctl);
         if (rc) {
                 if (*obd_type)
-                        fprintf(stderr, "%s %s ", obd_type, obd_uuid);
+                        fprintf(stderr, "%s %s ", obd_type,
+                                obd_uuid2str(&qctl.obd_uuid));
                 fprintf(stderr, "quotaoff failed: %s\n", strerror(errno));
                 return rc;
         }
@@ -1266,8 +1266,7 @@ int lfs_setquota(int argc, char **argv)
         int c;
         char *mnt;
         struct if_quotactl qctl;
-        char *obd_type = qctl.obd_type;
-        char *obd_uuid = qctl.obd_uuid.uuid;
+        char *obd_type = (char *)qctl.obd_type;
         int rc;
 
         memset(&qctl, 0, sizeof(qctl));
@@ -1335,7 +1334,8 @@ int lfs_setquota(int argc, char **argv)
         rc = llapi_quotactl(mnt, &qctl);
         if (rc) {
                 if (*obd_type)
-                        fprintf(stderr, "%s %s ", obd_type, obd_uuid);
+                        fprintf(stderr, "%s %s ", obd_type,
+                                obd_uuid2str(&qctl.obd_uuid));
                 fprintf(stderr, "setquota failed: %s\n", strerror(errno));
                 return rc;
         }
@@ -1487,7 +1487,7 @@ static void print_mds_quota(char *mnt, struct if_quotactl *qctl)
         }
         qctl->qc_dqblk.dqb_valid = 0;
 
-        print_quota(qctl->obd_uuid.uuid, qctl, 0);
+        print_quota(obd_uuid2str(&qctl->obd_uuid), qctl, 0);
 }
 
 static void print_lov_quota(char *mnt, struct if_quotactl *qctl)
@@ -1521,7 +1521,7 @@ static void print_lov_quota(char *mnt, struct if_quotactl *qctl)
                         continue;
                 }
 
-                print_quota(uuidp->uuid, qctl, 1);
+                print_quota((char *)uuidp->uuid, qctl, 1);
         }
 
 out:
@@ -1534,8 +1534,8 @@ static int lfs_quota(int argc, char **argv)
         int c;
         char *name = NULL, *mnt;
         struct if_quotactl qctl;
-        char *obd_type = qctl.obd_type;
-        char *obd_uuid = qctl.obd_uuid.uuid;
+        char *obd_type = (char *)qctl.obd_type;
+        char *obd_uuid = (char *)qctl.obd_uuid.uuid;
         int rc;
 
         memset(&qctl, 0, sizeof(qctl));
