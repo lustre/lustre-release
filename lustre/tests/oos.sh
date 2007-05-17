@@ -78,6 +78,7 @@ fi
 #lctl debug_daemon stop
 
 rm -f $OOS
+sync; sleep 1; sync
 
 if [ $SUCCESS -eq 1 ]; then
 	echo "Success!"
