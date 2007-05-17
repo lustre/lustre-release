@@ -872,10 +872,10 @@ int ptlrpc_check_set(struct ptlrpc_request_set *set)
                                 /* Add this req to the delayed list so
                                    it can be errored if the import is
                                    evicted after recovery. */
-                                spin_lock(&req->rq_lock);
+                                spin_lock(&imp->imp_lock);
                                 list_add_tail(&req->rq_list,
                                               &imp->imp_delayed_list);
-                                spin_unlock(&req->rq_lock);
+                                spin_unlock(&imp->imp_lock);
                                 continue;
                         }
 

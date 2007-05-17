@@ -115,6 +115,13 @@ Bugzilla   : 11658
 Description: log_commit_thread vs filter_destroy race leads to crash
 Details    : Take import reference before releasing llog record semaphore
 
+Severity   : normal
+Frequency  : rare
+Bugzilla   : 12477
+Description: Wrong request locking in request set processing
+Details    : ptlrpc_check_set wrongly uses req->rq_lock for proctect add to
+	     imp_delayed_list, in this place should be used imp_lock.
+
 --------------------------------------------------------------------------------
 
 2007-05-03  Cluster File Systems, Inc. <info@clusterfs.com>
