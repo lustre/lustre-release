@@ -85,8 +85,9 @@ static void print_inode(struct inode *inode)
             S_ISLNK(inode->i_mode))
                 size = inode_get_bytes(inode);
 
-         CERROR("%lu: uid: %u, size: %llu, blocks: %lu, real size: %llu\n",
-               inode->i_ino, inode->i_uid, inode->i_size, inode->i_blocks, size);
+         CERROR("%lu: uid: %u, size: %llu, blocks: %llu, real size: %llu\n",
+               inode->i_ino, inode->i_uid, inode->i_size,
+               (long long)inode->i_blocks, size);
 }
 
 /* Test quotaon */
