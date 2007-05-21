@@ -951,58 +951,6 @@ jt_ptl_print_active_txs (int argc, char **argv)
         return 0;
 }
 
-int jt_ptl_ping_test(int argc, char **argv)
-{
-        int       rc;
-        lnet_nid_t nid;
-        long      count   = 1;
-        long      size    = 4;
-        long      timeout = 1;
-        struct libcfs_ioctl_data data;
-
-        if (argc < 2) {
-                fprintf(stderr, "usage: %s nid [count] [size] [timeout (secs)]\n", argv[0]);
-                return 0;
-        }
-
-        nid = libcfs_str2nid(argv[1]);
-        if (nid == LNET_NID_ANY) {
-                fprintf (stderr, "Can't parse nid \"%s\"\n", argv[1]);
-                return (-1);
-        }
-        
-        if (argc > 2)
-        {
-                count = atol(argv[2]);
-
-                if (count < 0 || count > 20000) 
-                {
-                        fprintf(stderr, "are you insane?  %ld is a crazy count.\n", count);
-                        return -1;
-                }
-        }
-        
-        if (argc > 3)
-                size= atol(argv[3]);
-
-        if (argc > 4)
-                timeout = atol (argv[4]);
-        
-        LIBCFS_IOC_INIT (data);
-        data.ioc_count   = count;
-        data.ioc_nid     = nid;
-        data.ioc_u32[0]  = size;
-        data.ioc_u32[1]  = timeout;
-        
-        rc = l_ioctl(LNET_DEV_ID, IOC_LIBCFS_PING_TEST, &data);
-        if (rc) {
-                fprintf(stderr, "failed to start pinger: %s\n",
-                        strerror(errno));
-                return -1;
-        }
-        return 0;
-}
-
 int jt_ptl_ping(int argc, char **argv)
 {
         int                      rc;
