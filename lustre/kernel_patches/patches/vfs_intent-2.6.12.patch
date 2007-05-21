@@ -1,19 +1,6 @@
----
- fs/exec.c              |   14 +++---
- fs/inode.c             |    1 
- fs/namei.c             |   99 +++++++++++++++++++++++++++++++++++++++++++++----
- fs/namespace.c         |   10 ++++
- fs/open.c              |   70 +++++++++++++++++++++-------------
- fs/stat.c              |   24 ++++++++---
- include/linux/dcache.h |    3 +
- include/linux/fs.h     |   10 ++++
- include/linux/mount.h  |    2 
- include/linux/namei.h  |   61 ++++++++++++++++++++++++++----
- 10 files changed, 241 insertions(+), 53 deletions(-)
-
 --- linux-2.6.12.6.orig/fs/exec.c
 +++ linux-2.6.12.6/fs/exec.c
-@@ -122,9 +122,10 @@ asmlinkage long sys_uselib(const char __
+@@ -122,9 +122,10 @@
  	struct file * file;
  	struct nameidata nd;
  	int error;
@@ -26,7 +13,7 @@
  	if (error)
  		goto out;
  
-@@ -136,7 +137,7 @@ asmlinkage long sys_uselib(const char __
+@@ -136,7 +137,7 @@
  	if (error)
  		goto exit;
  
@@ -35,7 +22,7 @@
  	error = PTR_ERR(file);
  	if (IS_ERR(file))
  		goto out;
-@@ -492,8 +493,9 @@ struct file *open_exec(const char *name)
+@@ -492,8 +493,9 @@
  	int err;
  	struct file *file;
  
@@ -47,7 +34,7 @@
  	file = ERR_PTR(err);
  
  	if (!err) {
-@@ -506,7 +508,7 @@ struct file *open_exec(const char *name)
+@@ -506,7 +508,7 @@
  				err = -EACCES;
  			file = ERR_PTR(err);
  			if (!err) {
@@ -58,7 +45,7 @@
  					if (err) {
 --- linux-2.6.12.6.orig/fs/namei.c
 +++ linux-2.6.12.6/fs/namei.c
-@@ -301,8 +301,19 @@ int deny_write_access(struct file * file
+@@ -301,8 +301,19 @@
  	return 0;
  }
  
@@ -78,7 +65,7 @@
  	dput(nd->dentry);
  	mntput(nd->mnt);
  }
-@@ -392,8 +403,11 @@ static struct dentry * real_lookup(struc
+@@ -392,8 +403,11 @@
  {
  	struct dentry * result;
  	struct inode *dir = parent->d_inode;
@@ -90,7 +77,7 @@
  	/*
  	 * First re-do the cached lookup just in case it was created
  	 * while we waited for the directory semaphore..
-@@ -427,13 +441,16 @@ static struct dentry * real_lookup(struc
+@@ -427,13 +441,16 @@
  	 * Uhhuh! Nasty case: the cache was re-populated while
  	 * we waited on the semaphore. Need to revalidate.
  	 */
@@ -109,7 +96,7 @@
  	return result;
  }
  
-@@ -462,6 +479,7 @@ static inline int __vfs_follow_link(stru
+@@ -462,6 +479,7 @@
  {
  	int res = 0;
  	char *name;
@@ -117,7 +104,7 @@
  	if (IS_ERR(link))
  		goto fail;
  
-@@ -471,6 +489,7 @@ static inline int __vfs_follow_link(stru
+@@ -471,6 +489,7 @@
  			/* weird __emul_prefix() stuff did it */
  			goto out;
  	}
@@ -125,7 +112,7 @@
  	res = link_path_walk(link, nd);
  out:
  	if (nd->depth || res || nd->last_type!=LAST_NORM)
-@@ -703,6 +722,33 @@ fail:
+@@ -703,6 +722,33 @@
  	return PTR_ERR(dentry);
  }
  
@@ -159,7 +146,7 @@
  /*
   * Name resolution.
   * This is the basic name resolution function, turning a pathname into
-@@ -800,7 +846,11 @@ static fastcall int __link_path_walk(con
+@@ -800,7 +846,11 @@
  			goto out_dput;
  
  		if (inode->i_op->follow_link) {
@@ -171,7 +158,7 @@
  			if (err)
  				goto return_err;
  			err = -ENOENT;
-@@ -839,6 +889,23 @@ last_component:
+@@ -839,6 +889,23 @@
  				inode = nd->dentry->d_inode;
  				/* fallthrough */
  			case 1:
@@ -195,7 +182,7 @@
  				goto return_reval;
  		}
  		if (nd->dentry->d_op && nd->dentry->d_op->d_hash) {
-@@ -846,7 +913,9 @@ last_component:
+@@ -846,7 +913,9 @@
  			if (err < 0)
  				break;
  		}
@@ -205,7 +192,7 @@
  		if (err)
  			break;
  		inode = next.dentry->d_inode;
-@@ -1097,7 +1166,7 @@ struct dentry * lookup_hash(struct qstr 
+@@ -1097,7 +1166,7 @@
  }
  
  /* SMP-safe */
@@ -214,7 +201,7 @@
  {
  	unsigned long hash;
  	struct qstr this;
-@@ -1117,11 +1186,16 @@ struct dentry * lookup_one_len(const cha
+@@ -1117,11 +1186,16 @@
  	}
  	this.hash = end_name_hash(hash);
  
@@ -232,7 +219,7 @@
  /*
   *	namei()
   *
-@@ -1133,7 +1207,7 @@ access:
+@@ -1133,7 +1207,7 @@
   * that namei follows links, while lnamei does not.
   * SMP-safe
   */
@@ -241,7 +228,7 @@
  {
  	char *tmp = getname(name);
  	int err = PTR_ERR(tmp);
-@@ -1145,6 +1219,12 @@ int fastcall __user_walk(const char __us
+@@ -1145,6 +1219,12 @@
  	return err;
  }
  
@@ -254,7 +241,7 @@
  /*
   * It's inline, so penalty for filesystems that don't use sticky bit is
   * minimal.
-@@ -1426,8 +1506,8 @@ int open_namei(const char * pathname, in
+@@ -1426,8 +1506,8 @@
  		acc_mode |= MAY_APPEND;
  
  	/* Fill in the open() intent data */
@@ -265,7 +252,7 @@
  
  	/*
  	 * The simplest case - just a plain lookup.
-@@ -1442,6 +1522,7 @@ int open_namei(const char * pathname, in
+@@ -1442,6 +1522,7 @@
  	/*
  	 * Create - we need to know the parent.
  	 */
@@ -273,7 +260,7 @@
  	error = path_lookup(pathname, LOOKUP_PARENT|LOOKUP_OPEN|LOOKUP_CREATE, nd);
  	if (error)
  		return error;
-@@ -1458,7 +1539,9 @@ int open_namei(const char * pathname, in
+@@ -1458,7 +1539,9 @@
  	dir = nd->dentry;
  	nd->flags &= ~LOOKUP_PARENT;
  	down(&dir->d_inode->i_sem);
@@ -283,7 +270,7 @@
  	path.mnt = nd->mnt;
  
  do_last:
-@@ -1564,7 +1647,9 @@ do_link:
+@@ -1564,7 +1647,9 @@
  	}
  	dir = nd->dentry;
  	down(&dir->d_inode->i_sem);
@@ -295,7 +282,7 @@
  	goto do_last;
 --- linux-2.6.12.6.orig/fs/namespace.c
 +++ linux-2.6.12.6/fs/namespace.c
-@@ -62,6 +62,7 @@ struct vfsmount *alloc_vfsmnt(const char
+@@ -62,6 +62,7 @@
  		INIT_LIST_HEAD(&mnt->mnt_mounts);
  		INIT_LIST_HEAD(&mnt->mnt_list);
  		INIT_LIST_HEAD(&mnt->mnt_fslink);
@@ -303,7 +290,7 @@
  		if (name) {
  			int size = strlen(name)+1;
  			char *newname = kmalloc(size, GFP_KERNEL);
-@@ -113,6 +114,7 @@ static inline int check_mnt(struct vfsmo
+@@ -113,6 +114,7 @@
  
  static void detach_mnt(struct vfsmount *mnt, struct nameidata *old_nd)
  {
@@ -311,7 +298,7 @@
  	old_nd->dentry = mnt->mnt_mountpoint;
  	old_nd->mnt = mnt->mnt_parent;
  	mnt->mnt_parent = mnt;
-@@ -176,6 +178,9 @@ void __mntput(struct vfsmount *mnt)
+@@ -176,6 +178,9 @@
  {
  	struct super_block *sb = mnt->mnt_sb;
  	dput(mnt->mnt_root);
@@ -321,7 +308,7 @@
  	free_vfsmnt(mnt);
  	deactivate_super(sb);
  }
-@@ -402,6 +407,8 @@ static int do_umount(struct vfsmount *mn
+@@ -402,6 +407,8 @@
  	 */
  
  	lock_kernel();
@@ -330,7 +317,7 @@
  	if( (flags&MNT_FORCE) && sb->s_op->umount_begin)
  		sb->s_op->umount_begin(sb);
  	unlock_kernel();
-@@ -627,6 +634,7 @@ static int do_loopback(struct nameidata 
+@@ -627,6 +634,7 @@
  		return err;
  	if (!old_name || !*old_name)
  		return -EINVAL;
@@ -338,7 +325,7 @@
  	err = path_lookup(old_name, LOOKUP_FOLLOW, &old_nd);
  	if (err)
  		return err;
-@@ -701,6 +709,7 @@ static int do_move_mount(struct nameidat
+@@ -701,6 +709,7 @@
  		return -EPERM;
  	if (!old_name || !*old_name)
  		return -EINVAL;
@@ -346,7 +333,7 @@
  	err = path_lookup(old_name, LOOKUP_FOLLOW, &old_nd);
  	if (err)
  		return err;
-@@ -1012,6 +1021,7 @@ long do_mount(char * dev_name, char * di
+@@ -1012,6 +1021,7 @@
  	int retval = 0;
  	int mnt_flags = 0;
  
@@ -356,7 +343,7 @@
  		flags &= ~MS_MGC_MSK;
 --- linux-2.6.12.6.orig/fs/open.c
 +++ linux-2.6.12.6/fs/open.c
-@@ -215,12 +215,12 @@ static inline long do_sys_truncate(const
+@@ -215,12 +215,12 @@
  	struct nameidata nd;
  	struct inode * inode;
  	int error;
@@ -371,7 +358,7 @@
  	if (error)
  		goto out;
  	inode = nd.dentry->d_inode;
-@@ -474,6 +474,7 @@ asmlinkage long sys_access(const char __
+@@ -474,6 +474,7 @@
  	int old_fsuid, old_fsgid;
  	kernel_cap_t old_cap;
  	int res;
@@ -379,7 +366,7 @@
  
  	if (mode & ~S_IRWXO)	/* where's F_OK, X_OK, W_OK, R_OK? */
  		return -EINVAL;
-@@ -498,13 +499,14 @@ asmlinkage long sys_access(const char __
+@@ -498,13 +499,14 @@
  	else
  		current->cap_effective = current->cap_permitted;
  
@@ -395,7 +382,7 @@
  		path_release(&nd);
  	}
  
-@@ -519,8 +521,9 @@ asmlinkage long sys_chdir(const char __u
+@@ -519,8 +521,9 @@
  {
  	struct nameidata nd;
  	int error;
@@ -406,7 +393,7 @@
  	if (error)
  		goto out;
  
-@@ -570,8 +573,9 @@ asmlinkage long sys_chroot(const char __
+@@ -570,8 +573,9 @@
  {
  	struct nameidata nd;
  	int error;
@@ -417,7 +404,7 @@
  	if (error)
  		goto out;
  
-@@ -750,27 +754,8 @@ asmlinkage long sys_fchown(unsigned int 
+@@ -750,27 +754,8 @@
   * for the internal routines (ie open_namei()/follow_link() etc). 00 is
   * used by symlinks.
   */
@@ -447,7 +434,7 @@
  {
  	struct file * f;
  	struct inode *inode;
-@@ -782,6 +767,7 @@ struct file *dentry_open(struct dentry *
+@@ -782,6 +767,7 @@
  		goto cleanup_dentry;
  	f->f_flags = flags;
  	f->f_mode = ((flags+1) & O_ACCMODE) | FMODE_LSEEK | FMODE_PREAD | FMODE_PWRITE;
@@ -455,7 +442,7 @@
  	inode = dentry->d_inode;
  	if (f->f_mode & FMODE_WRITE) {
  		error = get_write_access(inode);
-@@ -800,6 +786,7 @@ struct file *dentry_open(struct dentry *
+@@ -800,6 +786,7 @@
  		error = f->f_op->open(inode,f);
  		if (error)
  			goto cleanup_all;
@@ -463,7 +450,7 @@
  	}
  	f->f_flags &= ~(O_CREAT | O_EXCL | O_NOCTTY | O_TRUNC);
  
-@@ -825,6 +812,7 @@ cleanup_all:
+@@ -825,6 +812,7 @@
  cleanup_file:
  	put_filp(f);
  cleanup_dentry:
@@ -471,7 +458,7 @@
  	dput(dentry);
  	mntput(mnt);
  	return ERR_PTR(error);
-@@ -832,6 +820,36 @@ cleanup_dentry:
+@@ -832,6 +820,36 @@
  
  EXPORT_SYMBOL(dentry_open);
  
@@ -510,7 +497,7 @@
   */
 --- linux-2.6.12.6.orig/fs/stat.c
 +++ linux-2.6.12.6/fs/stat.c
-@@ -38,7 +38,7 @@ void generic_fillattr(struct inode *inod
+@@ -38,7 +38,7 @@
  
  EXPORT_SYMBOL(generic_fillattr);
  
@@ -519,7 +506,7 @@
  {
  	struct inode *inode = dentry->d_inode;
  	int retval;
-@@ -47,6 +47,8 @@ int vfs_getattr(struct vfsmount *mnt, st
+@@ -47,6 +47,8 @@
  	if (retval)
  		return retval;
  
@@ -528,7 +515,7 @@
  	if (inode->i_op->getattr)
  		return inode->i_op->getattr(mnt, dentry, stat);
  
-@@ -63,14 +65,20 @@ int vfs_getattr(struct vfsmount *mnt, st
+@@ -63,14 +65,20 @@
  
  EXPORT_SYMBOL(vfs_getattr);
  
@@ -551,7 +538,7 @@
  		path_release(&nd);
  	}
  	return error;
-@@ -82,10 +90,11 @@ int vfs_lstat(char __user *name, struct 
+@@ -82,10 +90,11 @@
  {
  	struct nameidata nd;
  	int error;
@@ -565,7 +552,7 @@
  		path_release(&nd);
  	}
  	return error;
-@@ -97,9 +106,12 @@ int vfs_fstat(unsigned int fd, struct ks
+@@ -97,9 +106,12 @@
  {
  	struct file *f = fget(fd);
  	int error = -EBADF;
@@ -581,7 +568,7 @@
  	return error;
 --- linux-2.6.12.6.orig/fs/inode.c
 +++ linux-2.6.12.6/fs/inode.c
-@@ -230,6 +230,7 @@ void __iget(struct inode * inode)
+@@ -230,6 +230,7 @@
  	inodes_stat.nr_unused--;
  }
  
@@ -599,7 +586,7 @@
  #include <linux/list.h>
  #include <linux/spinlock.h>
  #include <linux/cache.h>
-@@ -37,6 +38,8 @@ struct qstr {
+@@ -37,6 +38,8 @@
  	const unsigned char *name;
  };
  
@@ -610,7 +597,7 @@
  	int nr_unused;
 --- linux-2.6.12.6.orig/include/linux/fs.h
 +++ linux-2.6.12.6/include/linux/fs.h
-@@ -58,6 +58,7 @@ extern int dir_notify_enable;
+@@ -58,6 +58,7 @@
  
  #define FMODE_READ 1
  #define FMODE_WRITE 2
@@ -618,7 +605,7 @@
  
  /* Internal kernel extensions */
  #define FMODE_LSEEK	4
-@@ -260,6 +261,8 @@ typedef void (dio_iodone_t)(struct inode
+@@ -260,6 +261,8 @@
  #define ATTR_ATTR_FLAG	1024
  #define ATTR_KILL_SUID	2048
  #define ATTR_KILL_SGID	4096
@@ -627,7 +614,7 @@
  
  /*
   * This is the Inode Attributes structure, used for notify_change().  It
-@@ -463,6 +466,7 @@ struct inode {
+@@ -463,6 +466,7 @@
  	struct block_device	*i_bdev;
  	struct cdev		*i_cdev;
  	int			i_cindex;
@@ -635,7 +622,7 @@
  
  	__u32			i_generation;
  
-@@ -600,6 +604,7 @@ struct file {
+@@ -600,6 +604,7 @@
  	spinlock_t		f_ep_lock;
  #endif /* #ifdef CONFIG_EPOLL */
  	struct address_space	*f_mapping;
@@ -643,7 +630,7 @@
  };
  extern spinlock_t files_lock;
  #define file_list_lock() spin_lock(&files_lock);
-@@ -968,7 +973,9 @@ struct inode_operations {
+@@ -968,7 +973,9 @@
  	void (*truncate) (struct inode *);
  	int (*permission) (struct inode *, int, struct nameidata *);
  	int (*setattr) (struct dentry *, struct iattr *);
@@ -653,7 +640,7 @@
  	int (*setxattr) (struct dentry *, const char *,const void *,size_t,int);
  	ssize_t (*getxattr) (struct dentry *, const char *, void *, size_t);
  	ssize_t (*listxattr) (struct dentry *, char *, size_t);
-@@ -1008,6 +1015,7 @@ struct super_operations {
+@@ -1008,6 +1015,7 @@
  	int (*remount_fs) (struct super_block *, int *, char *);
  	void (*clear_inode) (struct inode *);
  	void (*umount_begin) (struct super_block *);
@@ -661,7 +648,7 @@
  
  	int (*show_options)(struct seq_file *, struct vfsmount *);
  
-@@ -1210,6 +1218,7 @@ extern int unregister_filesystem(struct 
+@@ -1210,6 +1218,7 @@
  extern struct vfsmount *kern_mount(struct file_system_type *);
  extern int may_umount_tree(struct vfsmount *);
  extern int may_umount(struct vfsmount *);
@@ -669,7 +656,7 @@
  extern long do_mount(char *, char *, char *, unsigned long, void *);
  
  extern int vfs_statfs(struct super_block *, struct kstatfs *);
-@@ -1262,6 +1271,7 @@ static inline int break_lease(struct ino
+@@ -1262,6 +1271,7 @@
  extern int do_truncate(struct dentry *, loff_t start);
  extern struct file *filp_open(const char *, int, int);
  extern struct file * dentry_open(struct dentry *, struct vfsmount *, int);
@@ -738,7 +725,7 @@
  enum { MAX_NESTED_LINKS = 5 };
  
  struct nameidata {
-@@ -21,10 +62,7 @@ struct nameidata {
+@@ -21,10 +62,7 @@
  	unsigned	depth;
  	char *saved_names[MAX_NESTED_LINKS + 1];
  
@@ -750,7 +737,7 @@
  };
  
  /*
-@@ -47,6 +85,8 @@ enum {LAST_NORM, LAST_ROOT, LAST_DOT, LA
+@@ -47,6 +85,8 @@
  #define LOOKUP_PARENT		16
  #define LOOKUP_NOALT		32
  #define LOOKUP_REVAL		64
@@ -759,7 +746,7 @@
  /*
   * Intent data
   */
-@@ -55,6 +95,12 @@ enum {LAST_NORM, LAST_ROOT, LAST_DOT, LA
+@@ -55,6 +95,12 @@
  #define LOOKUP_ACCESS		(0x0400)
  
  extern int FASTCALL(__user_walk(const char __user *, unsigned, struct nameidata *));
@@ -772,7 +759,7 @@
  #define user_path_walk(name,nd) \
  	__user_walk(name, LOOKUP_FOLLOW, nd)
  #define user_path_walk_link(name,nd) \
-@@ -67,7 +113,6 @@ extern void path_release_on_umount(struc
+@@ -67,7 +113,6 @@
  
  extern struct dentry * lookup_one_len(const char *, struct dentry *, int);
  extern struct dentry * lookup_hash(struct qstr *, struct dentry *);
@@ -782,7 +769,7 @@
  
 --- linux-2.6.12.6.orig/include/linux/mount.h
 +++ linux-2.6.12.6/include/linux/mount.h
-@@ -36,6 +36,8 @@ struct vfsmount
+@@ -36,6 +36,8 @@
  	struct list_head mnt_list;
  	struct list_head mnt_fslink;	/* link in fs-specific expiry list */
  	struct namespace *mnt_namespace; /* containing namespace */
