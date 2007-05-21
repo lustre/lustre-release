@@ -26,22 +26,6 @@
 #include <lnet/ptllnd.h>           /* Depends on portals/p30.h */
 #include <stdarg.h>
 
-#define PTLLND_DEBUG_TIMING 0
-
-#define PTLLND_MSGS_PER_BUFFER     64
-#define PTLLND_MSGS_SPARE          256
-#define PTLLND_PEER_HASH_SIZE      101
-#define PTLLND_EQ_SIZE             1024
-#if PTLLND_DEBUG_TIMING
-# define PTLLND_TX_HISTORY         1024
-#else
-# define PTLLND_TX_HISTORY         0
-#endif
-#define PTLLND_WARN_LONG_WAIT      5 /* seconds */
-#define PTLLND_ABORT_ON_NAK        1 /* abort app on (e.g.) protocol version mismatch */
-#define PTLLND_DUMP_ON_NAK         0 /* dump debug? */
-
-
 /* Hack to record history 
  * This should really be done by CDEBUG(D_NETTRACE...  */
 
@@ -76,8 +60,13 @@ typedef struct
         int                        plni_eq_size;
         int                        plni_checksum;
         int                        plni_max_tx_history;
+        int                        plni_abort_on_protocol_mismatch;
         int                        plni_abort_on_nak;
         int                        plni_dump_on_nak;
+        int                        plni_debug;
+        int                        plni_long_wait;
+        int                        plni_watchdog_interval;
+        int                        plni_timeout;
 
         __u64                      plni_stamp;
         struct list_head           plni_active_txs;
@@ -91,6 +80,9 @@ typedef struct
 
         struct list_head          *plni_peer_hash;
         int                        plni_npeers;
+
+        int                        plni_watchdog_nextt;
+        int                        plni_watchdog_peeridx;
 
         struct list_head           plni_tx_history;
         int                        plni_ntx_history;
@@ -162,14 +154,13 @@ typedef struct
         ptl_md_iovec_t            *tx_iov;
         ptl_handle_md_t            tx_bulkmdh;
         ptl_handle_md_t            tx_reqmdh;
-#if PTLLND_DEBUG_TIMING
         struct timeval             tx_bulk_posted;
         struct timeval             tx_bulk_done;
         struct timeval             tx_req_posted;
         struct timeval             tx_req_done;
-#endif
         int                        tx_completing; /* someone already completing */
         int                        tx_msgsize;  /* # bytes in tx_msg */
+        time_t                     tx_deadline; /* time to complete by */
         kptl_msg_t                 tx_msg;      /* message to send */
 } ptllnd_tx_t;
 
@@ -209,18 +200,6 @@ ptllnd_eventarg2obj (void *arg)
         return (void *)(ptr & ~PTLLND_EVENTARG_TYPE_MASK);
 }
 
-#if PTLLND_DEBUG_TIMING
-# define PTLLND_DBGT_INIT(tv)  memset(&(tv), 0, sizeof(tv))
-# define PTLLND_DBGT_STAMP(tv) gettimeofday(&(tv), NULL)
-# define DBGT_FMT              "%ld.%06ld"
-# define DBGT_ARGS(tv)         , (long)((tv).tv_sec), (long)((tv).tv_usec)
-#else
-# define PTLLND_DBGT_INIT(tv)
-# define PTLLND_DBGT_STAMP(tv)
-# define DBGT_FMT              "-"
-# define DBGT_ARGS(tv)
-#endif
-
 int ptllnd_parse_int_tunable(int *value, char *name, int dflt);
 void ptllnd_cull_tx_history(ptllnd_ni_t *plni);
 int ptllnd_startup(lnet_ni_t *ni);
@@ -248,6 +227,8 @@ const char *ptllnd_evtype2str(int type);
 const char *ptllnd_msgtype2str(int type);
 const char *ptllnd_errtype2str(int type);
 char *ptllnd_ptlid2str(ptl_process_id_t id);
+void ptllnd_dump_debug(lnet_ni_t *ni, lnet_process_id_t id);
+
 
 static inline void
 ptllnd_peer_addref (ptllnd_peer_t *peer)
@@ -263,15 +244,6 @@ ptllnd_peer_decref (ptllnd_peer_t *peer)
         peer->plp_refcount--;
         if (peer->plp_refcount == 0)
                 ptllnd_destroy_peer(peer);
-}
-
-static inline void
-ptllnd_post_tx(ptllnd_tx_t *tx)
-{
-        ptllnd_peer_t *peer = tx->tx_peer;
-        LASSERT(tx->tx_peer != NULL);
-        list_add_tail(&tx->tx_list, &peer->plp_txq);
-        ptllnd_check_sends(peer);
 }
 
 static inline lnet_nid_t

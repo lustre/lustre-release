@@ -251,6 +251,11 @@ ptllnd_get_tunables(lnet_ni_t *ni)
         int          rc;
         int          temp;
 
+	/*  Other tunable defaults depend on this */
+	rc = ptllnd_parse_int_tunable(&plni->plni_debug, "PTLLND_DEBUG", 0);
+	if (rc != 0)
+		return rc;
+
         rc = ptllnd_parse_int_tunable(&plni->plni_portal,
                                       "PTLLND_PORTAL", PTLLND_PORTAL);
         if (rc != 0)
@@ -274,26 +279,23 @@ ptllnd_get_tunables(lnet_ni_t *ni)
                 return rc;
 
         rc = ptllnd_parse_int_tunable(&msgs_per_buffer,
-                                      "PTLLND_MSGS_PER_BUFFER",
-                                      PTLLND_MSGS_PER_BUFFER);
+                                      "PTLLND_MSGS_PER_BUFFER", 64);
         if (rc != 0)
                 return rc;
 
         rc = ptllnd_parse_int_tunable(&plni->plni_msgs_spare,
-                                      "PTLLND_MSGS_SPARE",
-                                      PTLLND_MSGS_SPARE);
+                                      "PTLLND_MSGS_SPARE", 256);
         if (rc != 0)
                 return rc;
 
         rc = ptllnd_parse_int_tunable(&plni->plni_peer_hash_size,
-                                      "PTLLND_PEER_HASH_SIZE",
-                                      PTLLND_PEER_HASH_SIZE);
+                                      "PTLLND_PEER_HASH_SIZE", 101);
         if (rc != 0)
                 return rc;
 
 
         rc = ptllnd_parse_int_tunable(&plni->plni_eq_size,
-                                      "PTLLND_EQ_SIZE", PTLLND_EQ_SIZE);
+                                      "PTLLND_EQ_SIZE", 1024);
         if (rc != 0)
                 return rc;
 
@@ -303,21 +305,44 @@ ptllnd_get_tunables(lnet_ni_t *ni)
 		return rc;
 
 	rc = ptllnd_parse_int_tunable(&plni->plni_max_tx_history,
-				      "PTLLND_TX_HISTORY", PTLLND_TX_HISTORY);
+				      "PTLLND_TX_HISTORY",
+				      plni->plni_debug ? 1024 : 0);
+	if (rc != 0)
+		return rc;
+
+	rc = ptllnd_parse_int_tunable(&plni->plni_abort_on_protocol_mismatch,
+				      "PTLLND_ABORT_ON_PROTOCOL_MISMATCH", 1);
 	if (rc != 0)
 		return rc;
 
 	rc = ptllnd_parse_int_tunable(&plni->plni_abort_on_nak,
-				      "PTLLND_ABORT_ON_NAK",
-				      PTLLND_ABORT_ON_NAK);
+				      "PTLLND_ABORT_ON_NAK", 0);
 	if (rc != 0)
 		return rc;
 
 	rc = ptllnd_parse_int_tunable(&plni->plni_dump_on_nak,
-				      "PTLLND_DUMP_ON_NAK",
-				      PTLLND_DUMP_ON_NAK);
+				      "PTLLND_DUMP_ON_NAK", plni->plni_debug);
 	if (rc != 0)
 		return rc;
+
+	rc = ptllnd_parse_int_tunable(&plni->plni_watchdog_interval,
+				      "PTLLND_WATCHDOG_INTERVAL", 1);
+	if (rc != 0)
+		return rc;
+	if (plni->plni_watchdog_interval <= 0)
+		plni->plni_watchdog_interval = 1;
+
+	rc = ptllnd_parse_int_tunable(&plni->plni_timeout,
+				      "PTLLND_TIMEOUT", 50);
+	if (rc != 0)
+		return rc;
+
+	rc = ptllnd_parse_int_tunable(&plni->plni_long_wait,
+				      "PTLLND_LONG_WAIT",
+				      plni->plni_debug ? 5 : plni->plni_timeout);
+	if (rc != 0)
+		return rc;
+	plni->plni_long_wait *= 1000;		/* convert to mS */
 
         plni->plni_max_msg_size = max_msg_size & ~7;
         if (plni->plni_max_msg_size < PTLLND_MIN_BUFFER_SIZE)
@@ -445,19 +470,20 @@ ptllnd_destroy_buffers (lnet_ni_t *ni)
                 LASSERT (plni->plni_nbuffers > 0);
                 if (buf->plb_posted) {
 			time_t   start = cfs_time_current_sec();
-			int      w = PTLLND_WARN_LONG_WAIT;
-			
+			int      w = plni->plni_long_wait;
+
                         LASSERT (plni->plni_nposted_buffers > 0);
 
 #ifdef LUSTRE_PORTALS_UNLINK_SEMANTICS
                         (void) PtlMDUnlink(buf->plb_md);
 
 			while (buf->plb_posted) {
-				if (cfs_time_current_sec() > start + w) {
-					CWARN("Waited %ds to unlink buffer\n", w);
+				if (w > 0 && cfs_time_current_sec() > start + w/1000) {
+					CWARN("Waited %ds to unlink buffer\n",
+					      (int)(cfs_time_current_sec() - start));
 					w *= 2;
 				}
-				ptllnd_wait(ni, w*1000);
+				ptllnd_wait(ni, w);
 			}
 #else
                         while (buf->plb_posted) {
@@ -468,11 +494,12 @@ ptllnd_destroy_buffers (lnet_ni_t *ni)
                                         break;
                                 }
                                 LASSERT (rc == PTL_MD_IN_USE);
-				if (cfs_time_current_sec() > start + w) {
-					CWARN("Waited %ds to unlink buffer\n", w);
+				if (w > 0 && cfs_time_current_sec() > start + w/1000) {
+					CWARN("Waited %ds to unlink buffer\n",
+					      cfs_time_current_sec() - start);
 					w *= 2;
 				}
-				ptllnd_wait(ni, w*1000);
+				ptllnd_wait(ni, w);
                         }
 #endif
                 }
@@ -544,7 +571,7 @@ ptllnd_ctl(lnet_ni_t *ni, unsigned int cmd, void *arg)
 {
 	switch (cmd) {
 	case IOC_LIBCFS_DEBUG_PEER:
-		ptllnd_debug_peer(ni, *((lnet_process_id_t *)arg));
+		ptllnd_dump_debug(ni, *((lnet_process_id_t *)arg));
 		return 0;
 		
 	default:
@@ -568,7 +595,7 @@ ptllnd_shutdown (lnet_ni_t *ni)
         ptllnd_ni_t *plni = ni->ni_data;
         int          rc;
 	time_t       start = cfs_time_current_sec();
-	int          w = PTLLND_WARN_LONG_WAIT;
+	int          w = plni->plni_long_wait;
 
         LASSERT (ptllnd_ni_count == 1);
 	plni->plni_max_tx_history = 0;
@@ -579,11 +606,12 @@ ptllnd_shutdown (lnet_ni_t *ni)
         ptllnd_destroy_buffers(ni);
 
         while (plni->plni_npeers > 0) {
-		if (cfs_time_current_sec() > start + w) {
-			CWARN("Waited %ds for peers to shutdown\n", w);
+		if (w > 0 && cfs_time_current_sec() > start + w/1000) {
+			CWARN("Waited %ds for peers to shutdown\n",
+			      (int)(cfs_time_current_sec() - start));
 			w *= 2;
 		}
-                ptllnd_wait(ni, w*1000);
+                ptllnd_wait(ni, w);
 	}
 
         LASSERT (plni->plni_ntxs == 0);
@@ -636,6 +664,8 @@ ptllnd_startup (lnet_ni_t *ni)
         plni->plni_nrxs = 0;
         plni->plni_ntxs = 0;
 	plni->plni_ntx_history = 0;
+	plni->plni_watchdog_peeridx = 0;
+	plni->plni_watchdog_nextt = cfs_time_current_sec();
         CFS_INIT_LIST_HEAD(&plni->plni_zombie_txs);
         CFS_INIT_LIST_HEAD(&plni->plni_tx_history);
 
@@ -682,8 +712,6 @@ ptllnd_startup (lnet_ni_t *ni)
                 rc = -EINVAL;
                 goto failed4;
         }
-
-        CDEBUG(D_NET, "lnet nid=" LPX64 " (passed in)\n",ni->ni_nid);
 
         /*
          * Create the new NID.  Based on the LND network type
