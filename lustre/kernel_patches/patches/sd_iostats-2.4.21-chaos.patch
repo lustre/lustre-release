@@ -1,11 +1,7 @@
-Index: linux/Documentation/Configure.help
-===================================================================
-RCS file: /home/cvs/master/68chaos_eebperf/Documentation/Configure.help,v
-retrieving revision 1.1.1.1
-diff -u -p -r1.1.1.1 Configure.help
---- linux/Documentation/Configure.help	20 Aug 2004 18:09:23 -0000	1.1.1.1
-+++ linux/Documentation/Configure.help	26 Aug 2004 12:34:40 -0000
-@@ -7679,6 +7679,11 @@ CONFIG_SCSI_LOGGING
+diff -urp RH_2_4_21_47_0_1.orig/Documentation/Configure.help RH_2_4_21_47_0_1/Documentation/Configure.help
+--- RH_2_4_21_47_0_1.orig/Documentation/Configure.help	2006-11-20 16:59:49.000000000 +0200
++++ RH_2_4_21_47_0_1/Documentation/Configure.help	2007-05-21 19:13:23.000000000 +0300
+@@ -7620,6 +7620,11 @@ CONFIG_SCSI_LOGGING
    there should be no noticeable performance impact as long as you have
    logging turned off.
  
@@ -17,28 +13,20 @@ diff -u -p -r1.1.1.1 Configure.help
  QDIO base support for IBM S/390 and zSeries
  CONFIG_QDIO
    This driver provides the Queued Direct I/O base support for the
-Index: linux/drivers/scsi/Config.in
-===================================================================
-RCS file: /home/cvs/master/68chaos_eebperf/drivers/scsi/Config.in,v
-retrieving revision 1.1.1.1
-diff -u -p -r1.1.1.1 Config.in
---- linux/drivers/scsi/Config.in	20 Aug 2004 18:10:13 -0000	1.1.1.1
-+++ linux/drivers/scsi/Config.in	24 Aug 2004 14:30:08 -0000
+diff -urp RH_2_4_21_47_0_1.orig/drivers/scsi/Config.in RH_2_4_21_47_0_1/drivers/scsi/Config.in
+--- RH_2_4_21_47_0_1.orig/drivers/scsi/Config.in	2006-11-20 16:59:49.000000000 +0200
++++ RH_2_4_21_47_0_1/drivers/scsi/Config.in	2007-05-21 19:13:23.000000000 +0300
 @@ -4,6 +4,7 @@ dep_tristate '  SCSI disk support' CONFI
  
  if [ "$CONFIG_BLK_DEV_SD" != "n" ]; then
     int  'Maximum number of SCSI disks that can be loaded as modules' CONFIG_SD_EXTRA_DEVS 40
 +   bool 'SCSI disk I/O stats' CONFIG_SD_IOSTATS y
  fi
- 
- dep_tristate '  SCSI tape support' CONFIG_CHR_DEV_ST $CONFIG_SCSI
-Index: linux/drivers/scsi/sd.c
-===================================================================
-RCS file: /home/cvs/master/68chaos_eebperf/drivers/scsi/sd.c,v
-retrieving revision 1.1.1.1
-diff -u -p -r1.1.1.1 sd.c
---- linux/drivers/scsi/sd.c	20 Aug 2004 18:10:16 -0000	1.1.1.1
-+++ linux/drivers/scsi/sd.c	26 Aug 2004 13:34:39 -0000
+ if [ "$CONFIG_BLK_DEV_SD" != "n" -a "$CONFIG_DISKDUMP" != "n" ]; then
+    dep_tristate '  SCSI dump support' CONFIG_SCSI_DUMP $CONFIG_SCSI
+diff -urp RH_2_4_21_47_0_1.orig/drivers/scsi/sd.c RH_2_4_21_47_0_1/drivers/scsi/sd.c
+--- RH_2_4_21_47_0_1.orig/drivers/scsi/sd.c	2006-11-20 16:59:45.000000000 +0200
++++ RH_2_4_21_47_0_1/drivers/scsi/sd.c	2007-05-21 19:14:27.000000000 +0300
 @@ -65,6 +65,40 @@
   *  static const char RCSid[] = "$Header:";
   */
@@ -80,7 +68,7 @@ diff -u -p -r1.1.1.1 sd.c
  /* device number --> sd_gendisks index */
  #define SD_MAJOR_IDX(i)		( ((MAJOR(i) & 0x80) >> 4) + (MAJOR(i) & 7) )
  /* sd_gendisks index --> system major */
-@@ -351,6 +385,8 @@ static int sd_init_command(Scsi_Cmnd * S
+@@ -372,6 +406,8 @@ static int sd_init_command(Scsi_Cmnd * S
  	SCSI_LOG_HLQUEUE(2, printk("%s : real dev = /dev/%d, block = %d\n",
  				   nbuff, dev, block));
  
@@ -89,7 +77,7 @@ diff -u -p -r1.1.1.1 sd.c
  	/*
  	 * If we have a 1K hardware sectorsize, prevent access to single
  	 * 512 byte sectors.  In theory we could handle this - in fact
-@@ -545,7 +581,7 @@ static int sd_open(struct inode *inode, 
+@@ -575,7 +611,7 @@ static int sd_open(struct inode *inode, 
  			if (scsi_block_when_processing_errors(SDev))
  				scsi_ioctl(SDev, SCSI_IOCTL_DOORLOCK, NULL);
  
@@ -98,7 +86,43 @@ diff -u -p -r1.1.1.1 sd.c
  	return 0;
  
  error_out:
-@@ -1179,6 +1215,8 @@ static int sd_init()
+@@ -593,18 +629,31 @@ static int sd_release(struct inode *inod
+ {
+ 	int target;
+ 	Scsi_Device * SDev;
++	char nbuff[6];
+ 
+ 	target = DEVICE_NR(inode->i_rdev);
+ 	SDev = rscsi_disks[target].device;
+ 	if (!SDev)
+ 		return -ENODEV;
+ 
+-	SDev->access_count--;
+-
+-	if (SDev->removable) {
+-		if (!SDev->access_count)
++	if (!--SDev->access_count) {
++		/*
++		 * Remove sd_iostats information about this disk
++		 */
++		if (sd_iostats_procdir != NULL) {
++			sd_devname(target, nbuff);
++			remove_proc_entry(nbuff, sd_iostats_procdir);
++		}
++		if (sd_iostats != NULL) {
++			if (sd_iostats[target] != NULL) {
++				kfree (sd_iostats[target]);
++				sd_iostats[target] = NULL;
++			}
++		}
++		if (SDev->removable) {
+ 			if (scsi_block_when_processing_errors(SDev))
+ 				scsi_ioctl(SDev, SCSI_IOCTL_DOORUNLOCK, NULL);
++		}
+ 	}
+ 	if (SDev->host->hostt->module)
+ 		__MOD_DEC_USE_COUNT(SDev->host->hostt->module);
+@@ -1260,6 +1309,8 @@ static int sd_init()
  
  	memset(sd_varyio, 0, (sd_template.dev_max << 4)); 
  
@@ -107,7 +131,7 @@ diff -u -p -r1.1.1.1 sd.c
  	for (i = 0; i < sd_template.dev_max << 4; i++) {
  		sd_blocksizes[i] = 1024;
  		sd_hardsizes[i] = 512;
-@@ -1243,6 +1281,7 @@ cleanup_gendisks_de_arr:
+@@ -1324,6 +1375,7 @@ cleanup_gendisks_de_arr:
  	kfree(sd_gendisks);
  	sd_gendisks = NULL;
  cleanup_sd_gendisks:
@@ -115,7 +139,7 @@ diff -u -p -r1.1.1.1 sd.c
  	kfree(sd_varyio);
  cleanup_varyio:
  	kfree(sd_max_sectors);
-@@ -1466,6 +1505,316 @@ static void sd_detach(Scsi_Device * SDp)
+@@ -1547,6 +1599,321 @@ static void sd_detach(Scsi_Device * SDp)
  	return;
  }
  
@@ -137,15 +161,20 @@ diff -u -p -r1.1.1.1 sd.c
 +        int                i;
 +	int                maxi;
 +
-+	if (sd_iostats == NULL) {
++	if (seq == NULL || sd_iostats == NULL) {
 +		printk(KERN_ERR "sd_iostats_seq_show: NULL stats array\n");
 +		BUG();
 +	}
++	
++	if (index >= sd_template.dev_max || !rscsi_disks[index].device)
++		return -ENXIO;	/* No such device */
 +
 +	stats = sd_iostats[index];
 +	if (stats == NULL) {
-+		printk(KERN_ERR "sd_iostats_seq_show: NULL stats entry\n");
-+		BUG();
++                seq_printf(seq, "sd_iostats_seq_show: sd_iostats "
++				"entry %d does not exist\n",
++				index);
++		return 0;
 +	}
 +
 +        do_gettimeofday(&now);
@@ -432,7 +461,7 @@ diff -u -p -r1.1.1.1 sd.c
  static int __init init_sd(void)
  {
  	sd_template.module = THIS_MODULE;
-@@ -1488,6 +1837,7 @@ static void __exit exit_sd(void)
+@@ -1569,6 +1936,7 @@ static void __exit exit_sd(void)
  		kfree(sd_blocksizes);
  		kfree(sd_hardsizes);
  		kfree(sd_varyio);

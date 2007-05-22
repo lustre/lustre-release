@@ -1,8 +1,10 @@
 Index: linux-2.6.9-5.0.3.EL/drivers/scsi/Kconfig
 ===================================================================
---- linux-2.6.9-5.0.3.EL.orig/drivers/scsi/Kconfig	2005-04-01 18:36:39.218039672 +0300
-+++ linux-2.6.9-5.0.3.EL/drivers/scsi/Kconfig	2005-04-01 18:36:45.571073864 +0300
-@@ -61,6 +61,14 @@
+Index: linux+rhel4+chaos/drivers/scsi/Kconfig
+===================================================================
+--- linux+rhel4+chaos.orig/drivers/scsi/Kconfig
++++ linux+rhel4+chaos/drivers/scsi/Kconfig
+@@ -61,6 +61,14 @@ config SCSI_DUMP
  	help
  	   SCSI dump support
  
@@ -17,10 +19,10 @@ Index: linux-2.6.9-5.0.3.EL/drivers/scsi/Kconfig
  config CHR_DEV_ST
  	tristate "SCSI tape support"
  	depends on SCSI
-Index: linux-2.6.9-5.0.3.EL/drivers/scsi/sd.c
+Index: linux+rhel4+chaos/drivers/scsi/sd.c
 ===================================================================
---- linux-2.6.9-5.0.3.EL.orig/drivers/scsi/sd.c	2005-04-01 18:36:39.223038912 +0300
-+++ linux-2.6.9-5.0.3.EL/drivers/scsi/sd.c	2005-04-01 18:37:42.537413664 +0300
+--- linux+rhel4+chaos.orig/drivers/scsi/sd.c
++++ linux+rhel4+chaos/drivers/scsi/sd.c
 @@ -63,6 +63,38 @@
  
  #include "scsi_logging.h"
@@ -68,7 +70,7 @@ Index: linux-2.6.9-5.0.3.EL/drivers/scsi/sd.c
  /*
   * Time out in seconds for disks and Magneto-opticals (which are slower).
   */
-@@ -276,6 +309,9 @@
+@@ -278,6 +311,9 @@ static int sd_init_command(struct scsi_c
  	SCSI_LOG_HLQUEUE(2, printk("%s : block=%llu\n",
  				   disk->disk_name, (unsigned long long)block));
  
@@ -78,7 +80,7 @@ Index: linux-2.6.9-5.0.3.EL/drivers/scsi/sd.c
  	/*
  	 * If we have a 1K hardware sectorsize, prevent access to single
  	 * 512 byte sectors.  In theory we could handle this - in fact
-@@ -472,6 +508,7 @@
+@@ -474,6 +510,7 @@ static int sd_open(struct inode *inode, 
  			scsi_set_medium_removal(sdev, SCSI_REMOVAL_PREVENT);
  	}
  
@@ -86,7 +88,30 @@ Index: linux-2.6.9-5.0.3.EL/drivers/scsi/sd.c
  	return 0;
  
  error_out:
-@@ -1573,6 +1610,327 @@
+@@ -500,8 +537,20 @@ static int sd_release(struct inode *inod
+ 
+ 	SCSI_LOG_HLQUEUE(3, printk("sd_release: disk=%s\n", disk->disk_name));
+ 
+-	if (!--sdkp->openers && sdev->removable) {
+-		if (scsi_block_when_processing_errors(sdev))
++	if (!--sdkp->openers) {
++		/*
++		 * Remove sd_iostats information about this disk
++		 */
++		if (sd_iostats_procdir != NULL) {
++			remove_proc_entry(disk->disk_name, sd_iostats_procdir);
++		}
++		if (sd_iostats != NULL) {
++			if (sd_iostats[sdkp->index] != NULL) {
++				kfree (sd_iostats[sdkp->index]);
++				sd_iostats[sdkp->index] = NULL;
++			}
++		}
++		if (sdev->removable && scsi_block_when_processing_errors(sdev))
+ 			scsi_set_medium_removal(sdev, SCSI_REMOVAL_ALLOW);
+ 	}
+ 
+@@ -1575,6 +1624,342 @@ static void sd_shutdown(struct device *d
  	sd_sync_cache(sdp);
  }	
  
@@ -95,7 +120,7 @@ Index: linux-2.6.9-5.0.3.EL/drivers/scsi/sd.c
 +sd_iostats_seq_show(struct seq_file *seq, void *v)
 +{
 +        struct timeval     now;
-+        struct gendisk *disk = seq->private;
++        struct gendisk *disk;
 +        iostat_stats_t    *stats;
 +        unsigned long long read_len;
 +        unsigned long long read_len_tot;
@@ -108,6 +133,19 @@ Index: linux-2.6.9-5.0.3.EL/drivers/scsi/sd.c
 +        int                i;
 +        int                maxi;
 +
++	if (seq == NULL || seq->private == NULL) {
++		printk(KERN_ERR "sd_iostats_seq_show: NULL disk\n");
++		BUG();
++	}
++
++	disk = seq->private;
++
++	if (scsi_disk(disk) == NULL || (disk->flags & GENHD_FL_UP) == 0) {
++		seq_printf(seq, "sd_iostats_seq_show: Device %s "
++				"does not exist\n", disk->disk_name);
++		return 0;
++	}
++
 +        if (sd_iostats == NULL) {
 +                printk(KERN_ERR "sd_iostats_seq_show: NULL stats array\n");
 +                BUG();
@@ -115,8 +153,10 @@ Index: linux-2.6.9-5.0.3.EL/drivers/scsi/sd.c
 +
 +        stats = sd_iostats[scsi_disk(disk)->index];
 +        if (stats == NULL) {
-+                printk(KERN_ERR "sd_iostats_seq_show: NULL stats entry\n");
-+                BUG();
++                seq_printf(seq, "sd_iostats_seq_show: sd_iostats "
++				"entry %d does not exist\n",
++				scsi_disk(disk)->index);
++		return 0;
 +        }
 +
 +        do_gettimeofday(&now);
@@ -414,7 +454,7 @@ Index: linux-2.6.9-5.0.3.EL/drivers/scsi/sd.c
  /**
   *	init_sd - entry point for this driver (both when built in or when
   *	a module).
-@@ -1582,6 +1940,7 @@
+@@ -1584,6 +1969,7 @@ static void sd_shutdown(struct device *d
  static int __init init_sd(void)
  {
  	int majors = 0, i;
@@ -422,7 +462,7 @@ Index: linux-2.6.9-5.0.3.EL/drivers/scsi/sd.c
  
  	SCSI_LOG_HLQUEUE(3, printk("init_sd: sd driver entry point\n"));
  
-@@ -1592,7 +1951,10 @@
+@@ -1594,7 +1980,10 @@ static int __init init_sd(void)
  	if (!majors)
  		return -ENODEV;
  
@@ -434,7 +474,7 @@ Index: linux-2.6.9-5.0.3.EL/drivers/scsi/sd.c
  }
  
  /**
-@@ -1606,6 +1968,7 @@
+@@ -1608,6 +1997,7 @@ static void __exit exit_sd(void)
  
  	SCSI_LOG_HLQUEUE(3, printk("exit_sd: exiting sd driver\n"));
  
@@ -442,10 +482,10 @@ Index: linux-2.6.9-5.0.3.EL/drivers/scsi/sd.c
  	scsi_unregister_driver(&sd_template.gendrv);
  	for (i = 0; i < SD_MAJORS; i++)
  		unregister_blkdev(sd_major(i), "sd");
-Index: linux-2.6.9-5.0.3.EL/drivers/scsi/scsi_proc.c
+Index: linux+rhel4+chaos/drivers/scsi/scsi_proc.c
 ===================================================================
---- linux-2.6.9-5.0.3.EL.orig/drivers/scsi/scsi_proc.c	2005-04-01 18:36:39.234037240 +0300
-+++ linux-2.6.9-5.0.3.EL/drivers/scsi/scsi_proc.c	2005-04-01 18:36:45.578072800 +0300
+--- linux+rhel4+chaos.orig/drivers/scsi/scsi_proc.c
++++ linux+rhel4+chaos/drivers/scsi/scsi_proc.c
 @@ -38,7 +38,8 @@
  /* 4K page size, but our output routines, use some slack for overruns */
  #define PROC_BLOCK_SIZE (3*1024)
