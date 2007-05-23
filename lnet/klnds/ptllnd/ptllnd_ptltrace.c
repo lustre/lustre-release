@@ -48,7 +48,8 @@ kptllnd_ptltrace_to_file(char *filename)
         filp = cfs_filp_open(filename,
                              O_CREAT|O_EXCL|O_WRONLY|O_LARGEFILE, 0600, &rc);
         if (filp == NULL) {
-                CERROR("Error %d creating %s\n", rc, filename);
+                if (rc != -EEXIST)
+                        CERROR("Error %d creating %s\n", rc, filename);
                 goto out;
         }
 
@@ -80,7 +81,11 @@ kptllnd_ptltrace_to_file(char *filename)
                         break;
                 }
 
-                LASSERT (start >= tmpbuf && start + len <= tmpbuf + PAGE_SIZE);
+                if (start < tmpbuf || start + len > tmpbuf + PAGE_SIZE) {
+                        CERROR("ptl_proc_read bug: %p for %d not in %p for %d\n",
+                               start, len, tmpbuf, PAGE_SIZE);
+                        break;
+                }
 
                 rc = cfs_filp_write(filp, start, len, cfs_filp_poff(filp));
                 if (rc != len) {

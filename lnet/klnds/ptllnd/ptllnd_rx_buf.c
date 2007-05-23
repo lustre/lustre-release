@@ -415,10 +415,10 @@ kptllnd_rx_buffer_callback (ptl_event_t *ev)
                  * odd-length message will misalign subsequent messages and
                  * force the fixup below...  */
                 if ((ev->mlength & 7) != 0)
-                        CWARN("Message from %s has odd length %llu: "
+                        CWARN("Message from %s has odd length "LPU64": "
                               "probable version incompatibility\n",
                               kptllnd_ptlid2str(ev->initiator),
-                              ev->mlength);
+                              (__u64)ev->mlength);
 #endif
                 rx = kptllnd_rx_alloc();
                 if (rx == NULL) {
