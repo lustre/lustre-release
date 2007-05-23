@@ -532,7 +532,8 @@ kptllnd_startup (lnet_ni_t *ni)
          * Which is ok.
          */
         if (ptl_rc != PTL_OK && ptl_rc != PTL_IFACE_DUP) {
-                CERROR ("PtlNIInit: error %d\n", ptl_rc);
+                CERROR ("PtlNIInit: error %s(%d)\n",
+                        kptllnd_errtype2str(ptl_rc), ptl_rc);
                 rc = -EINVAL;
                 goto failed;
         }
@@ -543,7 +544,8 @@ kptllnd_startup (lnet_ni_t *ni)
                             kptllnd_eq_callback,     /* handler callback */
                             &kptllnd_data.kptl_eqh); /* output handle */
         if (ptl_rc != PTL_OK) {
-                CERROR("PtlEQAlloc failed %d\n", ptl_rc);
+                CERROR("PtlEQAlloc failed %s(%d)\n",
+                       kptllnd_errtype2str(ptl_rc), ptl_rc);
                 rc = -ENOMEM;
                 goto failed;
         }
@@ -554,7 +556,8 @@ kptllnd_startup (lnet_ni_t *ni)
         ptl_rc = PtlGetId(kptllnd_data.kptl_nih,
                           &kptllnd_data.kptl_portals_id);
         if (ptl_rc != PTL_OK) {
-                CERROR ("PtlGetID: error %d\n", ptl_rc);
+                CERROR ("PtlGetID: error %s(%d)\n",
+                        kptllnd_errtype2str(ptl_rc), ptl_rc);
                 rc = -EINVAL;
                 goto failed;
         }
@@ -818,13 +821,15 @@ kptllnd_shutdown (lnet_ni_t *ni)
         if (!PtlHandleIsEqual(kptllnd_data.kptl_eqh, PTL_INVALID_HANDLE)) {
                 prc = PtlEQFree(kptllnd_data.kptl_eqh);
                 if (prc != PTL_OK)
-                        CERROR("Error %d freeing portals EQ\n", prc);
+                        CERROR("Error %s(%d) freeing portals EQ\n",
+                               kptllnd_errtype2str(prc), prc);
         }
 
         if (!PtlHandleIsEqual(kptllnd_data.kptl_nih, PTL_INVALID_HANDLE)) {
                 prc = PtlNIFini(kptllnd_data.kptl_nih);
                 if (prc != PTL_OK)
-                        CERROR("Error %d finalizing portals NI\n", prc);
+                        CERROR("Error %s(%d) finalizing portals NI\n",
+                               kptllnd_errtype2str(prc), prc);
         }
         
         LASSERT (atomic_read(&kptllnd_data.kptl_ntx) == 0);

@@ -691,7 +691,8 @@ ptllnd_startup (lnet_ni_t *ni)
         rc = PtlNIInit(PTL_IFACE_DEFAULT, plni->plni_ptllnd_pid,
                        NULL, NULL, &plni->plni_nih);
         if (rc != PTL_OK && rc != PTL_IFACE_DUP) {
-                CERROR("PtlNIInit failed: %d\n", rc);
+                CERROR("PtlNIInit failed: %s(%d)\n",
+		       ptllnd_errtype2str(rc), rc);
                 rc = -ENODEV;
                 goto failed2;
         }
@@ -699,7 +700,8 @@ ptllnd_startup (lnet_ni_t *ni)
         rc = PtlEQAlloc(plni->plni_nih, plni->plni_eq_size,
                         PTL_EQ_HANDLER_NONE, &plni->plni_eqh);
         if (rc != PTL_OK) {
-                CERROR("PtlEQAlloc failed: %d\n", rc);
+                CERROR("PtlEQAlloc failed: %s(%d)\n",
+		       ptllnd_errtype2str(rc), rc);
                 rc = -ENODEV;
                 goto failed3;
         }
@@ -707,8 +709,10 @@ ptllnd_startup (lnet_ni_t *ni)
         /*
          * Fetch the Portals NID
          */
-        if(rc != PtlGetId(plni->plni_nih,&plni->plni_portals_id)){
-                CERROR ("PtlGetID failed : %d\n", rc);
+	rc = PtlGetId(plni->plni_nih, &plni->plni_portals_id);
+        if (rc != PTL_OK) {
+                CERROR ("PtlGetID failed : %s(%d)\n",
+			ptllnd_errtype2str(rc), rc);
                 rc = -EINVAL;
                 goto failed4;
         }

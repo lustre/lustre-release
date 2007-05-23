@@ -268,7 +268,8 @@ kptllnd_rx_buffer_post(kptl_rx_buffer_t *rxb)
                          PTL_INS_AFTER,
                          &meh);
         if (rc != PTL_OK) {
-                CERROR("PtlMeAttach rxb failed %d\n", rc);
+                CERROR("PtlMeAttach rxb failed %s(%d)\n",
+                       kptllnd_errtype2str(rc), rc);
                 goto failed;
         }
 
@@ -296,7 +297,8 @@ kptllnd_rx_buffer_post(kptl_rx_buffer_t *rxb)
                 return;
         }
         
-        CERROR("PtlMDAttach rxb failed %d\n", rc);
+        CERROR("PtlMDAttach rxb failed %s(%d)\n",
+               kptllnd_errtype2str(rc), rc);
         rc = PtlMEUnlink(meh);
         LASSERT(rc == PTL_OK);
 
@@ -395,16 +397,15 @@ kptllnd_rx_buffer_callback (ptl_event_t *ev)
         LASSERT (ev->type == PTL_EVENT_UNLINK ||
                  ev->match_bits == LNET_MSG_MATCHBITS);
 
-        if (ev->ni_fail_type != PTL_NI_OK)
+        if (ev->ni_fail_type != PTL_NI_OK) {
                 CERROR("Portals error from %s: %s(%d) rxb=%p fail=%s(%d) unlink=%dn",
                        kptllnd_ptlid2str(ev->initiator),
                        kptllnd_evtype2str(ev->type), ev->type, rxb,
                        kptllnd_errtype2str(ev->ni_fail_type),
                        ev->ni_fail_type, unlinked);
 
-        if (ev->type == PTL_EVENT_PUT_END &&
-            ev->ni_fail_type == PTL_NI_OK &&
-            !rxbp->rxbp_shutdown) {
+        } else if (ev->type == PTL_EVENT_PUT_END &&
+                   !rxbp->rxbp_shutdown) {
 
                 /* rxbp_shutdown sampled without locking!  I only treat it as a
                  * hint since shutdown can start while rx's are queued on
@@ -494,8 +495,9 @@ kptllnd_nak (kptl_rx_t *rx)
 
         rc = PtlMDBind(kptllnd_data.kptl_nih, md, PTL_UNLINK, &mdh);
         if (rc != PTL_OK) {
-                CWARN("Can't NAK %s: bind failed %d\n",
-                      kptllnd_ptlid2str(rx->rx_initiator), rc);
+                CWARN("Can't NAK %s: bind failed %s(%d)\n",
+                      kptllnd_ptlid2str(rx->rx_initiator),
+                      kptllnd_errtype2str(rc), rc);
                 return;
         }
 
@@ -504,8 +506,9 @@ kptllnd_nak (kptl_rx_t *rx)
                     LNET_MSG_MATCHBITS, 0, 0);
 
         if (rc != PTL_OK)
-                CWARN("Can't NAK %s: put failed %d\n",
-                      kptllnd_ptlid2str(rx->rx_initiator), rc);
+                CWARN("Can't NAK %s: put failed %s(%d)\n",
+                      kptllnd_ptlid2str(rx->rx_initiator),
+                      kptllnd_errtype2str(rc), rc);
 }
 
 void
@@ -548,9 +551,11 @@ kptllnd_rx_parse(kptl_rx_t *rx)
         srcid.nid = msg->ptlm_srcnid;
         srcid.pid = msg->ptlm_srcpid;
 
-        CDEBUG(D_NETTRACE, "%s: RX %s c %d %p rxb %p queued %lu ticks\n",
+        CDEBUG(D_NETTRACE, "%s: RX %s c %d %p rxb %p queued %lu ticks (%ld s)\n",
                libcfs_id2str(srcid), kptllnd_msgtype2str(msg->ptlm_type),
-               msg->ptlm_credits, rx, rx->rx_rxb, jiffies - rx->rx_treceived);
+               msg->ptlm_credits, rx, rx->rx_rxb, 
+               jiffies - rx->rx_treceived,
+               cfs_duration_sec(jiffies - rx->rx_treceived));
 
         if (srcid.nid != kptllnd_ptl2lnetnid(rx->rx_initiator.nid)) {
                 CERROR("Bad source id %s from %s\n",

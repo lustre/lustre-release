@@ -227,8 +227,9 @@ kptllnd_active_rdma(kptl_rx_t *rx, lnet_msg_t *lntmsg, int type,
         ptlrc = PtlMDBind(kptllnd_data.kptl_nih, tx->tx_rdma_md, 
                           PTL_UNLINK, &mdh);
         if (ptlrc != PTL_OK) {
-                CERROR("PtlMDBind(%s) failed: %d\n",
-                       libcfs_id2str(peer->peer_id), ptlrc);
+                CERROR("PtlMDBind(%s) failed: %s(%d)\n",
+                       libcfs_id2str(peer->peer_id),
+                       kptllnd_errtype2str(ptlrc), ptlrc);
                 tx->tx_status = -EIO;
                 kptllnd_tx_decref(tx);
                 return -EIO;
@@ -271,8 +272,9 @@ kptllnd_active_rdma(kptl_rx_t *rx, lnet_msg_t *lntmsg, int type,
                                0);                    /* offset */
 
         if (ptlrc != PTL_OK) {
-                CERROR("Ptl%s failed: %d\n", 
-                       (type == TX_TYPE_GET_RESPONSE) ? "Put" : "Get", ptlrc);
+                CERROR("Ptl%s failed: %s(%d)\n", 
+                       (type == TX_TYPE_GET_RESPONSE) ? "Put" : "Get",
+                       kptllnd_errtype2str(ptlrc), ptlrc);
                 
                 kptllnd_peer_close(peer, -EIO);
                 /* Everything (including this RDMA) queued on the peer will

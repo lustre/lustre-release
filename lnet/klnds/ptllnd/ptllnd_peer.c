@@ -503,8 +503,9 @@ kptllnd_post_tx(kptl_peer_t *peer, kptl_tx_t *tx, int nfrag)
 
         prc = PtlMDBind(kptllnd_data.kptl_nih, md, PTL_UNLINK, &msg_mdh);
         if (prc != PTL_OK) {
-                CERROR("PtlMDBind(%s) failed: %d\n",
-                       libcfs_id2str(peer->peer_id), prc);
+                CERROR("PtlMDBind(%s) failed: %s(%d)\n",
+                       libcfs_id2str(peer->peer_id),
+                       kptllnd_errtype2str(prc), prc);
                 tx->tx_status = -EIO;
                 kptllnd_tx_decref(tx);
                 return;
@@ -664,16 +665,18 @@ kptllnd_peer_check_sends (kptl_peer_t *peer)
                                          PTL_INS_BEFORE,
                                          &meh);
                         if (rc != PTL_OK) {
-                                CERROR("PtlMEAttach(%s) failed: %d\n",
-                                       libcfs_id2str(peer->peer_id), rc);
+                                CERROR("PtlMEAttach(%s) failed: %s(%d)\n",
+                                       libcfs_id2str(peer->peer_id),
+                                       kptllnd_errtype2str(rc), rc);
                                 goto failed;
                         }
 
                         rc = PtlMDAttach(meh, tx->tx_rdma_md, PTL_UNLINK,
                                          &tx->tx_rdma_mdh);
                         if (rc != PTL_OK) {
-                                CERROR("PtlMDAttach(%s) failed: %d\n",
-                                       libcfs_id2str(tx->tx_peer->peer_id), rc);
+                                CERROR("PtlMDAttach(%s) failed: %s(%d)\n",
+                                       libcfs_id2str(tx->tx_peer->peer_id),
+                                       kptllnd_errtype2str(rc), rc);
                                 rc = PtlMEUnlink(meh);
                                 LASSERT(rc == PTL_OK);
                                 tx->tx_rdma_mdh = PTL_INVALID_HANDLE;
@@ -696,8 +699,9 @@ kptllnd_peer_check_sends (kptl_peer_t *peer)
                              0,                 /* offset */
                              0);                /* header data */
                 if (rc != PTL_OK) {
-                        CERROR("PtlPut %s error %d\n",
-                               libcfs_id2str(peer->peer_id), rc);
+                        CERROR("PtlPut %s error %s(%d)\n",
+                               libcfs_id2str(peer->peer_id),
+                               kptllnd_errtype2str(rc), rc);
                         goto failed;
                 }
 

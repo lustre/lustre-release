@@ -713,7 +713,8 @@ ptllnd_post_buffer(ptllnd_buffer_t *buf)
                          anyid, LNET_MSG_MATCHBITS, 0,
                          PTL_UNLINK, PTL_INS_AFTER, &meh);
         if (rc != PTL_OK) {
-                CERROR("PtlMEAttach failed: %d\n", rc);
+                CERROR("PtlMEAttach failed: %s(%d)\n",
+                       ptllnd_errtype2str(rc), rc);
                 return -ENOMEM;
         }
 
@@ -724,7 +725,8 @@ ptllnd_post_buffer(ptllnd_buffer_t *buf)
         if (rc == PTL_OK)
                 return 0;
 
-        CERROR("PtlMDAttach failed: %d\n", rc);
+        CERROR("PtlMDAttach failed: %s(%d)\n",
+               ptllnd_errtype2str(rc), rc);
 
         buf->plb_posted = 0;
         plni->plni_nposted_buffers--;
@@ -843,8 +845,9 @@ ptllnd_check_sends(ptllnd_peer_t *peer)
 
                 rc = PtlMDBind(plni->plni_nih, md, LNET_UNLINK, &mdh);
                 if (rc != PTL_OK) {
-                        CERROR("PtlMDBind for %s failed: %d\n",
-                               libcfs_id2str(peer->plp_id), rc);
+                        CERROR("PtlMDBind for %s failed: %s(%d)\n",
+                               libcfs_id2str(peer->plp_id),
+                               ptllnd_errtype2str(rc), rc);
                         tx->tx_status = -EIO;
                         ptllnd_tx_done(tx);
                         break;
@@ -869,8 +872,9 @@ ptllnd_check_sends(ptllnd_peer_t *peer)
                 rc = PtlPut(mdh, PTL_NOACK_REQ, peer->plp_ptlid,
                             plni->plni_portal, 0, LNET_MSG_MATCHBITS, 0, 0);
                 if (rc != PTL_OK) {
-                        CERROR("PtlPut for %s failed: %d\n",
-                               libcfs_id2str(peer->plp_id), rc);
+                        CERROR("PtlPut for %s failed: %s(%d)\n",
+                               libcfs_id2str(peer->plp_id),
+                               ptllnd_errtype2str(rc), rc);
                         tx->tx_status = -EIO;
                         ptllnd_tx_done(tx);
                         break;
@@ -950,8 +954,9 @@ ptllnd_passive_rdma(ptllnd_peer_t *peer, int type, lnet_msg_t *msg,
         rc = PtlMEAttach(plni->plni_nih, plni->plni_portal, peer->plp_ptlid,
                          matchbits, 0, PTL_UNLINK, PTL_INS_BEFORE, &meh);
         if (rc != PTL_OK) {
-                CERROR("PtlMEAttach for %s failed: %d\n",
-                       libcfs_id2str(peer->plp_id), rc);
+                CERROR("PtlMEAttach for %s failed: %s(%d)\n",
+                       libcfs_id2str(peer->plp_id),
+                       ptllnd_errtype2str(rc), rc);
                 rc = -EIO;
                 goto failed;
         }
@@ -960,8 +965,9 @@ ptllnd_passive_rdma(ptllnd_peer_t *peer, int type, lnet_msg_t *msg,
 
         rc = PtlMDAttach(meh, md, LNET_UNLINK, &mdh);
         if (rc != PTL_OK) {
-                CERROR("PtlMDAttach for %s failed: %d\n",
-                       libcfs_id2str(peer->plp_id), rc);
+                CERROR("PtlMDAttach for %s failed: %s(%d)\n",
+                       libcfs_id2str(peer->plp_id),
+                       ptllnd_errtype2str(rc), rc);
                 rc2 = PtlMEUnlink(meh);
                 LASSERT (rc2 == PTL_OK);
                 rc = -EIO;
@@ -1051,8 +1057,9 @@ ptllnd_active_rdma(ptllnd_peer_t *peer, int type,
 
         rc = PtlMDBind(plni->plni_nih, md, LNET_UNLINK, &mdh);
         if (rc != PTL_OK) {
-                CERROR("PtlMDBind for %s failed: %d\n",
-                       libcfs_id2str(peer->plp_id), rc);
+                CERROR("PtlMDBind for %s failed: %s(%d)\n",
+                       libcfs_id2str(peer->plp_id),
+                       ptllnd_errtype2str(rc), rc);
                 rc = -EIO;
                 goto failed;
         }
@@ -1075,8 +1082,9 @@ ptllnd_active_rdma(ptllnd_peer_t *peer, int type,
         if (rc == PTL_OK)
                 return 0;
 
-        CERROR("Can't initiate RDMA with %s: %d\n",
-               libcfs_id2str(peer->plp_id), rc);
+        CERROR("Can't initiate RDMA with %s: %s(%d)\n",
+               libcfs_id2str(peer->plp_id),
+               ptllnd_errtype2str(rc), rc);
 
         tx->tx_lnetmsg = NULL;
  failed:
