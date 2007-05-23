@@ -100,7 +100,6 @@ void class_decref(struct obd_device *obd);
 #define CFG_F_SKIP      0x04   /* We should ignore this cfg command */
 #define CFG_F_COMPAT146 0x08   /* Allow old-style logs */
 #define CFG_F_EXCLUDE   0x10   /* OST exclusion list */
-#define CFG_F_SERVER146 0x20   /* Using old server */
 
 /* Passed as data param to class_config_parse_llog */
 struct config_llog_instance {

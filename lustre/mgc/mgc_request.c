@@ -147,7 +147,7 @@ static struct config_llog_data *config_log_find(char *logname,
         }
         spin_unlock(&config_list_lock);
 
-        CERROR("can't get log %s\n", logid);
+        CDEBUG(D_CONFIG, "can't get log %s\n", logid);
         RETURN(ERR_PTR(-ENOENT));
 out_found:
         atomic_inc(&cld->cld_refcount);
@@ -1031,11 +1031,6 @@ static int mgc_process_log(struct obd_device *mgc,
                 RETURN(-EINVAL);
         }
         if (cld->cld_stopping) 
-                RETURN(0);
-
-        if (cld->cld_cfg.cfg_flags & CFG_F_SERVER146)
-                /* If we started from an old MDT, don't bother trying to
-                   get log updates from the MGS */
                 RETURN(0);
 
         OBD_FAIL_TIMEOUT(OBD_FAIL_MGC_PROCESS_LOG, 20);
