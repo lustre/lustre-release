@@ -3796,6 +3796,20 @@ test_118() #bug 11710
 }
 run_test 118 "verify O_SYNC work"
 
+test_119() # bug 11737
+{
+        dd if=/dev/zero of=$DIR/$tfile bs=4k count=2
+        sync
+        # we ask to read 3 blocks -- more than a file size
+        NOB=`directio read $DIR/$tfile 0 3 | awk '/error/ {print $6}'`
+        # check if we have read num of bytes not equal to file size (8k)
+        if [ "$NOB" != "8192" ]; then
+                error "read $NOB bytes instead of 8192"
+        fi
+        rm -f $DIR/$tfile
+}
+run_test 119 "Short directIO read must return actual read amount"
+
 TMPDIR=$OLDTMPDIR
 TMP=$OLDTMP
 HOME=$OLDHOME

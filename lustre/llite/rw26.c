@@ -141,6 +141,7 @@ static ssize_t ll_direct_IO_26_seg(int rw, struct inode *inode,
         struct obdo oa;
         int i, rc = 0;
         size_t length;
+        loff_t file_offset_orig = file_offset;
         ENTRY;
 
         OBD_ALLOC(pga, sizeof(*pga) * page_count);
@@ -166,13 +167,10 @@ static ssize_t ll_direct_IO_26_seg(int rw, struct inode *inode,
 
         rc = obd_brw_rqset(rw == WRITE ? OBD_BRW_WRITE : OBD_BRW_READ,
                            ll_i2obdexp(inode), &oa, lsm, page_count, pga, NULL);
-        if (rc == 0) {
-                rc = size;
-                if (rw == WRITE) {
-                        lov_stripe_lock(lsm);
-                        obd_adjust_kms(ll_i2obdexp(inode), lsm, file_offset, 0);
-                        lov_stripe_unlock(lsm);
-                }
+        if ((rc > 0) && (rw == WRITE)) {
+                lov_stripe_lock(lsm);
+                obd_adjust_kms(ll_i2obdexp(inode), lsm, file_offset_orig + rc, 0);
+                lov_stripe_unlock(lsm);
         }
 
         OBD_FREE(pga, sizeof(*pga) * page_count);

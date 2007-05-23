@@ -152,6 +152,13 @@ Description: random memory corruption
 Details    : size of struct ll_inode_info is to big for union inode.u and this
              can be cause of random memory corruption.
 
+Severity   : normal
+Bugzilla   : 11737
+Description: Short directio read returns full requested size rather than
+             actual amount read.
+Details    : Direct I/O operations should return actual amount of bytes
+             transferred rather than requested size.
+
 --------------------------------------------------------------------------------
 
 2007-05-03  Cluster File Systems, Inc. <info@clusterfs.com>
