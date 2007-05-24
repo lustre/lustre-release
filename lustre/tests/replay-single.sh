@@ -1130,10 +1130,10 @@ test_59() {
     sync
     unlinkmany $DIR/$tdir/$tfile-%d 200
 #define OBD_FAIL_PTLRPC_DELAY_RECOV       0x507
-    do_facet ost "sysctl -w lustre.fail_loc=0x507"
-    fail ost
+    do_facet ost1 "sysctl -w lustre.fail_loc=0x507"
+    fail ost1
     fail mds
-    do_facet ost "sysctl -w lustre.fail_loc=0x0"
+    do_facet ost1 "sysctl -w lustre.fail_loc=0x0"
     sleep 20
     rmdir $DIR/$tdir
 }
