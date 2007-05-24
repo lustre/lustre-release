@@ -170,6 +170,18 @@ Description: Short directio read returns full requested size rather than
 Details    : Direct I/O operations should return actual amount of bytes
              transferred rather than requested size.
 
+Severity   : normal
+Frequency  : rare 
+Bugzilla   : 10818
+Description: Memory leak in recovery
+Details    : Lov_mds_md was not free in an error handler in mds_create_object.
+             It should also check obd_fail before fsfilt_start, otherwise if 
+             fsfilt_start return -EROFS,(failover mds during mds recovery).
+             then the req will return with repmsg->transno = 0 and rc = EROFS. 
+             and we met hit the assert LASSERT(req->rq_reqmsg->transno ==
+             req->rq_repmsg->transno) in ptlrpc_replay_interpret.  Fcc should 
+             be freed no matter whether fsfilt_commit success or not.
+
 --------------------------------------------------------------------------------
 
 2007-05-03  Cluster File Systems, Inc. <info@clusterfs.com>

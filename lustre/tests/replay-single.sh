@@ -740,10 +740,12 @@ run_test 32 "close() notices client eviction; close() after client eviction"
 # Abort recovery before client complete
 test_33() {
     replay_barrier mds
-    touch $DIR/$tfile
+    createmany -o $DIR/$tfile-%d 100 
     fail_abort mds
     # this file should be gone, because the replay was aborted
     $CHECKSTAT -t file $DIR/$tfile && return 3
+    $CHECKSTAT -t file $DIR/$tfile-* && return 3 
+    unlinkmany $DIR/$tfile-%d 0 100
     return 0
 }
 run_test 33 "abort recovery before client does replay"

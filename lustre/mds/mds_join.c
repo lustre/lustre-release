@@ -477,7 +477,7 @@ int mds_join_file(struct mds_update_record *rec, struct ptlrpc_request *req,
                       sizeof(struct lov_mds_md_join), "lov");
         mds_finish_join(mds, req, head_inode, head_lmmj);
 cleanup:
-        rc = mds_finish_transno(mds, head_inode, handle, req, rc, 0);
+        rc = mds_finish_transno(mds, head_inode, handle, req, rc, 0, 0);
         switch(cleanup_phase){
         case 3:
                 llog_close(llh_head);

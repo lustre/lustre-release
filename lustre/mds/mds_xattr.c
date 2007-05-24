@@ -310,7 +310,7 @@ int mds_setxattr_internal(struct ptlrpc_request *req, struct mds_body *body)
 
         LASSERT(rc <= 0);
 out_trans:
-        err = mds_finish_transno(mds, inode, handle, req, rc, 0);
+        err = mds_finish_transno(mds, inode, handle, req, rc, 0, 0);
 
 out_dput:
         l_dput(de);

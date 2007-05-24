@@ -132,7 +132,8 @@ int enqueue_ordered_locks(struct obd_device *obd, struct ldlm_res_id *p1_res_id,
                           ldlm_policy_data_t *p2_policy);
 void mds_commit_cb(struct obd_device *, __u64 last_rcvd, void *data, int error);
 int mds_finish_transno(struct mds_obd *mds, struct inode *inode, void *handle,
-                       struct ptlrpc_request *req, int rc, __u32 op_data);
+                       struct ptlrpc_request *req, int rc, __u32 op_data, 
+                       int force_sync);
 void mds_reconstruct_generic(struct ptlrpc_request *req);
 void mds_req_from_mcd(struct ptlrpc_request *req, struct mds_client_data *mcd);
 int mds_get_parent_child_locked(struct obd_device *obd, struct mds_obd *mds,

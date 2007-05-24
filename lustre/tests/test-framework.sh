@@ -188,7 +188,6 @@ unload_modules() {
         echo "$LEAK_PORTALS" 1>&2
         mv $TMP/debug $TMP/debug-leak.`date +%s` || true
         echo "Memory leaks detected"
-	[ "$LEAK_LUSTRE" -a $(echo $LEAK_LUSTRE | awk 'leaked=$8 {print leaked % 56}') == 0 ] && echo "ignoring known bug 10818" && return 0
         return 254
     fi
     echo "modules unloaded."

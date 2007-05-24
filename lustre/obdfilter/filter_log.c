@@ -107,6 +107,7 @@ void filter_cancel_cookies_cb(struct obd_device *obd, __u64 transno,
         if (error != 0) {
                 CDEBUG(D_INODE, "not cancelling llog cookie on error %d\n",
                        error);
+                OBD_FREE(cookie, sizeof(*cookie));
                 return;
         }
 

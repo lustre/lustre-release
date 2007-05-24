@@ -73,7 +73,7 @@ static void filter_commit_cb(struct obd_device *obd, __u64 transno,
 
 /* Assumes caller has already pushed us into the kernel context. */
 int filter_finish_transno(struct obd_export *exp, struct obd_trans_info *oti,
-                          int rc)
+                          int rc, int force_sync)
 {
         struct filter_obd *filter = &exp->exp_obd->u.filter;
         struct filter_export_data *fed = &exp->exp_filter_data;
@@ -115,11 +115,18 @@ int filter_finish_transno(struct obd_export *exp, struct obd_trans_info *oti,
                        fed->fed_lr_idx, fed->fed_lr_off);
                 err = -EINVAL;
         } else {
-                fsfilt_add_journal_cb(exp->exp_obd, last_rcvd, oti->oti_handle,
-                                      filter_commit_cb, NULL);
+                if (!force_sync)
+                        force_sync = fsfilt_add_journal_cb(exp->exp_obd, 
+                                                           last_rcvd,
+                                                           oti->oti_handle,
+                                                           filter_commit_cb,
+                                                           NULL);
+
                 err = fsfilt_write_record(exp->exp_obd, filter->fo_rcvd_filp,
                                           fcd, sizeof(*fcd), &off,
-                                          exp->exp_need_sync);
+                                          force_sync | exp->exp_need_sync);
+                if (force_sync)
+                        filter_commit_cb(exp->exp_obd, last_rcvd, NULL, err);
         }
         if (err) {
                 log_pri = D_ERROR;
@@ -2341,7 +2348,7 @@ int filter_setattr_internal(struct obd_export *exp, struct dentry *dentry,
         unsigned int orig_ids[MAXQUOTAS] = {0, 0};
         struct llog_cookie *fcc = NULL;
         struct filter_obd *filter;
-        int rc, err, locked = 0;
+        int rc, err, locked = 0, sync = 0;
         unsigned int ia_valid;
         struct inode *inode;
         struct iattr iattr;
@@ -2421,18 +2428,11 @@ int filter_setattr_internal(struct obd_export *exp, struct dentry *dentry,
                                       EXT3_IOC_SETFLAGS, (long)&oa->o_flags);
         } else {
                 rc = fsfilt_setattr(exp->exp_obd, dentry, handle, &iattr, 1);
-                if (fcc != NULL) {
+                if (fcc != NULL)
                         /* set cancel cookie callback function */
-                        if (fsfilt_add_journal_cb(exp->exp_obd, 0, handle,
-                                                  filter_cancel_cookies_cb,
-                                                  fcc)) {
-                                spin_lock(&exp->exp_lock);
-                                exp->exp_need_sync = 1;
-                                spin_unlock(&exp->exp_lock);
-                        } else {
-                                fcc = NULL;
-                }
-        }
+                        sync = fsfilt_add_journal_cb(exp->exp_obd, 0, handle,
+                                                     filter_cancel_cookies_cb,
+                                                     fcc);
         }
 
         if (OBD_FAIL_CHECK(OBD_FAIL_OST_SETATTR_CREDITS))
@@ -2441,13 +2441,19 @@ int filter_setattr_internal(struct obd_export *exp, struct dentry *dentry,
         /* The truncate might have used up our transaction credits.  Make
          * sure we have one left for the last_rcvd update. */
         err = fsfilt_extend(exp->exp_obd, inode, 1, handle);
-        rc = filter_finish_transno(exp, oti, rc);
+        rc = filter_finish_transno(exp, oti, rc, sync);
+        if (sync) {
+                filter_cancel_cookies_cb(exp->exp_obd, 0, fcc, rc);
+                fcc = NULL;
+        }
 
         err = fsfilt_commit(exp->exp_obd, inode, handle, 0);
         if (err) {
                 CERROR("error on commit, err = %d\n", err);
                 if (!rc)
                         rc = err;
+        } else {
+                fcc = NULL;
         }
 
         if (locked) {
@@ -2993,7 +2999,7 @@ int filter_destroy(struct obd_export *exp, struct obdo *oa,
         struct lvfs_run_ctxt saved;
         void *handle = NULL;
         struct llog_cookie *fcc = NULL;
-        int rc, rc2, cleanup_phase = 0;
+        int rc, rc2, cleanup_phase = 0, sync = 0;
         struct iattr iattr;
         ENTRY;
 
@@ -3088,19 +3094,28 @@ int filter_destroy(struct obd_export *exp, struct obdo *oa,
 cleanup:
         switch(cleanup_phase) {
         case 4:
-                if (fcc != NULL) {
-                        if (fsfilt_add_journal_cb(obd, 0, oti ?
-                                                  oti->oti_handle : handle,
-                                                  filter_cancel_cookies_cb,
-                                                  fcc) == 0)
-                                fcc = NULL;
+                if (fcc != NULL)
+                        sync = fsfilt_add_journal_cb(obd, 0, oti ?
+                                                     oti->oti_handle : handle,
+                                                     filter_cancel_cookies_cb,
+                                                     fcc);
+                /* If add_journal_cb failed, then filter_finish_transno
+                 * will commit the handle and we will do a sync 
+                 * on commit. then we call callback directly to free 
+                 * the fcc. 
+                 */
+                rc = filter_finish_transno(exp, oti, rc, sync);
+                if (sync) {
+                        filter_cancel_cookies_cb(obd, 0, fcc, rc); 
+                        fcc = NULL;
                 }
-                rc = filter_finish_transno(exp, oti, rc);
                 rc2 = fsfilt_commit(obd, dparent->d_inode, handle, 0);
                 if (rc2) {
                         CERROR("error on commit, err = %d\n", rc2);
                         if (!rc)
                                 rc = rc2;
+                } else {
+                        fcc = NULL;
                 }
         case 3:
                 filter_parent_unlock(dparent);

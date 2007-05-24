@@ -475,13 +475,14 @@ static int mds_create_objects(struct ptlrpc_request *req, int offset,
         if (IS_ERR(*handle)) {
                 rc = PTR_ERR(*handle);
                 *handle = NULL;
-                GOTO(out_oa, rc);
+                GOTO(free_diskmd, rc);
         }
 
         rc = fsfilt_set_md(obd, inode, *handle, lmm, lmm_size, "lov");
         lmm_buf = lustre_msg_buf(req->rq_repmsg, offset, lmm_size);
         LASSERT(lmm_buf);
         memcpy(lmm_buf, lmm, lmm_size);
+ free_diskmd:
         obd_free_diskmd(mds->mds_osc_exp, &lmm);
  out_oa:
         oti_free_cookies(&oti);
@@ -797,7 +798,7 @@ static int mds_open_by_fid(struct ptlrpc_request *req, struct ll_fid *fid,
 
         rc = mds_finish_open(req, dchild, body, flags, &handle, rec, rep, NULL);
         rc = mds_finish_transno(mds, dchild->d_inode, handle,
-                                req, rc, rep ? rep->lock_policy_res1 : 0);
+                                req, rc, rep ? rep->lock_policy_res1 : 0, 0);
         /* XXX what do we do here if mds_finish_transno itself failed? */
 
         l_dput(dchild);
@@ -1179,7 +1180,7 @@ found_child:
 
  cleanup:
         rc = mds_finish_transno(mds, dchild ? dchild->d_inode : NULL, handle,
-                                req, rc, rep ? rep->lock_policy_res1 : 0);
+                                req, rc, rep ? rep->lock_policy_res1 : 0, 0);
 
  cleanup_no_trans:
         switch (cleanup_phase) {
@@ -1390,7 +1391,7 @@ out:
 
  cleanup:
         if (req != NULL && reply_body != NULL) {
-                rc = mds_finish_transno(mds, pending_dir, handle, req, rc, 0);
+                rc = mds_finish_transno(mds, pending_dir, handle, req, rc, 0, 0);
         } else if (handle) {
                 int err = fsfilt_commit(obd, pending_dir, handle, 0);
                 if (err) {
