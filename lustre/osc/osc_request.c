@@ -3435,6 +3435,11 @@ static int osc_import_event(struct obd_device *obd,
                         oscc->oscc_flags |= OSCC_FLAG_RECOVERING;
                         spin_unlock(&oscc->oscc_lock);
                 }
+                cli = &obd->u.cli;
+                client_obd_list_lock(&cli->cl_loi_list_lock);
+                cli->cl_avail_grant = 0;
+                cli->cl_lost_grant = 0;
+                client_obd_list_unlock(&cli->cl_loi_list_lock);
 
                 break;
         }
@@ -3448,8 +3453,6 @@ static int osc_import_event(struct obd_device *obd,
                 /* Reset grants */
                 cli = &obd->u.cli;
                 client_obd_list_lock(&cli->cl_loi_list_lock);
-                cli->cl_avail_grant = 0;
-                cli->cl_lost_grant = 0;
                 /* all pages go to failing rpcs due to the invalid import */
                 osc_check_rpcs(cli);
                 client_obd_list_unlock(&cli->cl_loi_list_lock);

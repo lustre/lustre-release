@@ -133,6 +133,17 @@ Details    : When osc reconnect ost, OST(filter) should check whether it
 	     to update the client grant space info.
 
 Severity   : normal
+Frequency  : when client is evicted 
+Bugzilla   : 11662
+Description: Grant might be wrongly erased when osc is evicted by OST
+Details    : when the import is evicted by server, it will fork another 
+	     thread ptlrpc_invalidate_import_thread to invalidate the 
+	     import, where the grant will be set to 0.  While the original 
+	     thread will update the grant it got when connecting. So if 
+	     the former happened latter, the grant will be wrongly errased 
+	     because of this race.
+
+Severity   : normal
 Frequency  : rare 
 Bugzilla   : 12401
 Description: Checking Stale with correct fid 
