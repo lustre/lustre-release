@@ -17,7 +17,10 @@
 
 #define T1 "write data before unlink\n"
 #define T2 "write data after unlink\n"
-char buf[] = "yabba dabba doo, I'm coming for you, I live in a shoe, I don't know what to do.\n'Bigger, bigger,and bigger yet!' cried the Creator.  'You are not yet substantial enough for my boundless intents!'  And ever greater and greater the object became, until all was lost 'neath its momentus bulk.\n";
+char msg[] = "yabba dabba doo, I'm coming for you, I live in a shoe, I don't know what to do.\n'Bigger, bigger,and bigger yet!' cried the Creator.  'You are not yet substantial enough for my boundless intents!'  And ever greater and greater the object became, until all was lost 'neath its momentus bulk.\n";
+char *buf, *buf_align;
+int bufsize = 0;
+#define ALIGN 65535
 
 char usage[] = 
 "Usage: %s filename command-sequence\n"
@@ -250,21 +253,28 @@ int main(int argc, char **argv)
                         len = atoi(commands+1);
                         if (len <= 0)
                                 len = 1;
-                        while(len > 0) {
-                                if (read(fd, &buf,
-                                         min(len,sizeof(buf))) == -1) {
+                        if (bufsize < len) {
+                                buf = realloc(buf, len + ALIGN);
+                                if (buf == NULL) {
+                                        save_errno = errno;
+                                        perror("allocating buf for read\n");
+                                        exit(save_errno);
+                                }
+                                bufsize = len;
+                                buf_align = (char *)((long)(buf + ALIGN) &
+                                                     ~ALIGN);
+                        }
+                        while (len > 0) {
+                                rc = read(fd, buf_align, len);
+                                if (rc == -1) {
                                         save_errno = errno;
                                         perror("read");
                                         exit(save_errno);
                                 }
-                                len -= sizeof(buf);
-                        }
-                        break;
-                case 'S':
-                        if (fstat(fd, &st) == -1) {
-                                save_errno = errno;
-                                perror("fstat");
-                                exit(save_errno);
+                                if (rc < len)
+                                        fprintf(stderr, "short read: %u/%u\n",
+                                                rc, len);
+                                len -= rc;
                         }
                         break;
                 case 'R':
@@ -275,6 +285,13 @@ int main(int argc, char **argv)
                         if (stat(fname, &st) == -1) {
                                 save_errno = errno;
                                 perror("stat");
+                                exit(save_errno);
+                        }
+                        break;
+                case 'S':
+                        if (fstat(fd, &st) == -1) {
+                                save_errno = errno;
+                                perror("fstat");
                                 exit(save_errno);
                         }
                         break;
@@ -312,15 +329,29 @@ int main(int argc, char **argv)
                         len = atoi(commands+1);
                         if (len <= 0)
                                 len = 1;
-                        while(len > 0) {
-                                if ((rc = write(fd, buf,
-                                                min(len, sizeof(buf))))
-                                    == -1) {
+                        if (bufsize < len) {
+                                buf = realloc(buf, len + ALIGN);
+                                if (buf == NULL) {
+                                        save_errno = errno;
+                                        perror("allocating buf for write\n");
+                                        exit(save_errno);
+                                }
+                                bufsize = len;
+                                buf_align = (char *)((long)(buf + ALIGN) &
+                                                     ~ALIGN);
+                                strncpy(buf_align, msg, bufsize);
+                        }
+                        while (len > 0) {
+                                rc = write(fd, buf_align, len);
+                                if (rc == -1) {
                                         save_errno = errno;
                                         perror("write");
                                         exit(save_errno);
                                 }
-                                len -= sizeof(buf);
+                                if (rc < len)
+                                        fprintf(stderr, "short write: %u/%u\n",
+                                                rc, len);
+                                len -= rc;
                         }
                         break;
                 case 'W':
@@ -365,6 +396,9 @@ int main(int argc, char **argv)
                         exit(1);
                 }
         }
+
+        if (buf)
+                free(buf);
 
         return 0;
 }
