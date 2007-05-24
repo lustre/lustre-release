@@ -35,13 +35,13 @@ case $child in
   *) child="b_$child"
 esac
 
-if [ "$parent" != "HEAD" -a -f $dir/CVS/Tag ]; then
+#if [ "$parent" != "HEAD" -a -f $dir/CVS/Tag ]; then
 	# put in separate condition as bash evaluates all conditions unlike C
-	if [ "`cat $dir/CVS/Tag`" != "T$parent" ]; then
-		echo "This script must be run within the $parent branch"
-		exit 1
-	fi
-fi
+#	if [ "`cat $dir/CVS/Tag`" != "T$parent" ]; then
+#		echo "This script must be run within the $parent branch"
+#		exit 1
+#	fi
+#fi
 
 echo parent: $parent CHILD: $CHILD child: $child date: $date
 
