@@ -380,7 +380,7 @@ int mds_init_export(struct obd_export *exp)
 
         INIT_LIST_HEAD(&med->med_open_head);
         spin_lock_init(&med->med_open_lock);
-	
+        
         spin_lock(&exp->exp_lock);
         exp->exp_connecting = 1;
         spin_unlock(&exp->exp_lock);
@@ -2039,6 +2039,8 @@ err_fs:
         upcall_cache_cleanup(mds->mds_group_hash);
         mds->mds_group_hash = NULL;
 err_ns:
+        lprocfs_obd_cleanup(obd);
+        lprocfs_free_obd_stats(obd);
         ldlm_namespace_free(obd->obd_namespace, 0);
         obd->obd_namespace = NULL;
 err_ops:
