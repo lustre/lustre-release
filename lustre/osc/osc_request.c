@@ -1086,9 +1086,6 @@ static int osc_brw_fini_request(struct ptlrpc_request *req, int rc)
         if (rc < 0)
                 RETURN(rc);
 
-        if (req->rq_set && req->rq_set->set_countp)
-                atomic_add(rc, (atomic_t *)req->rq_set->set_countp);
-
         if (unlikely(aa->aa_oa->o_valid & OBD_MD_FLCKSUM))
                 client_cksum = aa->aa_oa->o_cksum; /* save for later */
 

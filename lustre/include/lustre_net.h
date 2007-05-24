@@ -181,8 +181,6 @@ struct ptlrpc_request_set {
         struct list_head  set_requests;
         set_interpreter_func    set_interpret; /* completion callback */
         void              *set_arg; /* completion context */
-        void              *set_countp; /* pointer to NOB counter in case 
-                                        * of directIO (bug11737) */
         /* locked so that any old caller can communicate requests to
          * the set holder who can then fold them into the lock-free set */
         spinlock_t        set_new_req_lock;
