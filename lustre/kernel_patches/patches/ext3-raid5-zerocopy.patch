@@ -1,0 +1,40 @@
+diff -pur linux-stage.orig/fs/ext3/writeback.c linux-stage/fs/ext3/writeback.c
+--- linux-stage.orig/fs/ext3/writeback.c	2007-05-18 13:27:02.000000000 -0700
++++ linux-stage/fs/ext3/writeback.c	2007-05-18 13:29:35.000000000 -0700
+@@ -273,7 +273,6 @@ int inline ext3_wb_release_space(struct 
+ 
+ static inline int ext3_wb_drop_page_reservation(struct page *page)
+ {
+-	struct inode *inode = page->mapping->host;
+ 	/* we just allocated blocks for this page. those blocks (and
+ 	 * probably metadata for them) were reserved before. now we
+ 	 * should drop reservation mark from the page. if we didn't
+@@ -329,7 +328,7 @@ static int ext3_wb_submit_extent(struct 
+ 		}
+ 		BUG_ON(blk < pstart || blk >= pstart + plen);
+ 
+-		BUG_ON(!PageUptodate(page));
++		BUG_ON(!PageUptodate(page) && !PageConstant(page));
+ 		BUG_ON(new && PageMappedToDisk(page));
+ 		/* XXX: mmap path BUG_ON(!new && !PageMappedToDisk(page));*/
+ 		SetPageMappedToDisk(page);
+@@ -761,7 +760,6 @@ int ext3_wb_writepages(struct address_sp
+ 			}
+ 
+ 			set_page_writeback(page);
+-			unlock_page(page);
+ 
+ 			if (wc.len == 0) {
+ 				wc.start = page->index;
+@@ -807,6 +805,11 @@ int ext3_wb_writepages(struct address_sp
+ 				end_page_writeback(page);
+ 				break;
+ 			}
++
++			if (!mapping_cap_page_constant_write(mapping) ||
++			    set_page_constant(page))
++				unlock_page(page);
++
+ 			written++;
+ 
+ 			wbc->nr_to_write--;
