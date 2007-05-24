@@ -182,6 +182,15 @@ Details    : Lov_mds_md was not free in an error handler in mds_create_object.
              req->rq_repmsg->transno) in ptlrpc_replay_interpret.  Fcc should 
              be freed no matter whether fsfilt_commit success or not.
 
+Severity   : minor
+Frequency  : only with huge count clients
+Bugzilla   : 11817
+Description: Prevents from taking the superblock lock in llap_from_page for 
+	     a soon died page.
+Details    : using LL_ORIGIN_REMOVEPAGE origin flag instead of LL_ORIGIN_UNKNOW 
+	     for llap_from_page call in ll_removepage prevents from taking the 
+	     superblock lock for a soon died page.
+
 --------------------------------------------------------------------------------
 
 2007-05-03  Cluster File Systems, Inc. <info@clusterfs.com>

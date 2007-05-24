@@ -914,7 +914,7 @@ void ll_removepage(struct page *page)
                 return;
         }
 
-        llap = llap_from_page(page, 0);
+        llap = llap_from_page(page, LLAP_ORIGIN_REMOVEPAGE);
         if (IS_ERR(llap)) {
                 CERROR("page %p ind %lu couldn't find llap: %ld\n", page,
                        page->index, PTR_ERR(llap));
