@@ -144,7 +144,7 @@ diff -pru linux-2.6.9.orig/drivers/md/raid5.c linux-2.6.9/drivers/md/raid5.c
 +			if (PageHighMem(page)) {
 +				h_ptr[1] = kmap_atomic(page, KM_USER0);
 +				xor_block(2, STRIPE_SIZE, h_ptr);
-+				kunmap_atomic(page, MK_USER0);
++				kunmap_atomic(page, KM_USER0);
 +			} else {
 +				ptr[count++] = page_address(page);
  			}
@@ -170,7 +170,7 @@ diff -pru linux-2.6.9.orig/drivers/md/raid5.c linux-2.6.9/drivers/md/raid5.c
 +			if (PageHighMem(page)) {
 +				h_ptr[1] = kmap_atomic(page, KM_USER0);
 +				xor_block(2, STRIPE_SIZE, h_ptr);
-+				kunmap_atomic(page, MK_USER0);
++				kunmap_atomic(page, KM_USER0);
 +			} else {
 +				ptr[count++] = page_address(page);
  			}
