@@ -729,7 +729,7 @@ int write_local_files(struct mkfs_opts *mop)
                 /* Copy the old mdt log to fsname-MDT0000 (get old
                    name from mdt_UUID) */
                 ret = 1;
-                strscpy(filepnm, mop->mo_ldd.ldd_uuid, sizeof(filepnm));
+                strscpy(filepnm, (char *)mop->mo_ldd.ldd_uuid, sizeof(filepnm));
                 term = strstr(filepnm, "_UUID");
                 if (term) {
                         *term = '\0';
