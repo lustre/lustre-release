@@ -8,9 +8,11 @@ LUSTRE=${LUSTRE:-`dirname $0`/..}
 SRCDIR="`dirname $0`"
 export PATH=/sbin:/usr/sbin:$SRCDIR:$SRCDIR/../utils:$PATH
 
+export NAME=${NAME:-local}
+
 . $LUSTRE/tests/test-framework.sh
 init_test_env $@
-. ${CONFIG:=$LUSTRE/tests/cfg/local.sh}
+. ${CONFIG:=$LUSTRE/tests/cfg/$NAME.sh}
 
 SETUP=${SETUP:-setupall}
 FORMAT=${FORMAT:-formatall}
@@ -44,15 +46,20 @@ while [ "$1" ]; do
 	shift
 done
 
-EXISTING_MOUNT=`awk '($3 ~ "lustre" && $1 ~ ":") { print $2 }' /proc/mounts`
-if [ -z "$EXISTING_MOUNT" ]; then
-        $FORMAT
-        $SETUP
-	EXISTING_MOUNT=`awk '($3 ~ "lustre" && $1 ~ ":") { print $2 }' /proc/mounts`
-	[ -z "$EXISTING_MOUNT" ] && fail "no lustre filesystem mounted" 1
-	I_MOUNTED="yes"
+mounted_lustre_filesystems() {
+	awk '($3 ~ "lustre" && $1 ~ ":") { print $2 }' /proc/mounts
+}
+
+MOUNTED="`mounted_lustre_filesystems`"
+if [ -z "$MOUNTED" ]; then
+	formatall
+	setupall
+	MOUNTED="`mounted_lustre_filesystems`"
+	[ -z "$MOUNTED" ] && error "NAME=$NAME not mounted"
+	I_MOUNTED=yes
 fi
-MOUNT=$EXISTING_MOUNT
+
+MOUNT=$MOUNTED
 
 OSCTMP=`echo $MOUNT | tr "/" "."`
 USED=`df | awk "/$OSCTMP/ { print \\$3 }" | tail -n 1`
@@ -150,6 +157,5 @@ if [ `expr $NOWUSED - $USED` -gt 1024 ]; then
 fi
 
 if [ "$I_MOUNTED" = "yes" ]; then
-	sync && sleep 2 && sync     # wait for delete thread
 	$CLEANUP
 fi
