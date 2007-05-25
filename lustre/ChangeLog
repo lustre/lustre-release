@@ -15,6 +15,12 @@ tbd         Cluster File Systems, Inc. <info@clusterfs.com>
        * bug fixes
 
 Severity   : normal
+Frequency  : SLES10 only
+Bugzilla   : 12538
+Description: sanity-quota.sh quotacheck failed: rc = -22
+Details    : Quotas cannot be enabled on SLES10.
+
+Severity   : normal
 Frequency  : sometimes when underlying device returns I/O errors
 Bugzilla   : 11743
 Description: OSTs not going read-only during write failures
