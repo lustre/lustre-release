@@ -15,6 +15,14 @@ tbd         Cluster File Systems, Inc. <info@clusterfs.com>
        * bug fixes
 
 Severity   : normal
+Frequency  : sometimes when underlying device returns I/O errors
+Bugzilla   : 11743
+Description: OSTs not going read-only during write failures
+Details    : OSTs are not remounted read-only when the journal commit threads
+	     get I/O errors because fsfilt_ext3 calls journal_start/stop()
+	     instead of the ext3 wrappers.
+
+Severity   : normal
 Frequency  : liblustre clients only
 Bugzilla   : 12229
 Description: getdirentries does not give error when run on compute nodes
