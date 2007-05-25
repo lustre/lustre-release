@@ -600,6 +600,7 @@ lnet_peer_seq_show (struct seq_file *s, void *iter)
         int                       minrtrcr;
         int                       rtrcr;
         int                       alive;
+        int                       rtr;
         int                       txqnob;
         int                       nrefs;
 
@@ -627,6 +628,7 @@ lnet_peer_seq_show (struct seq_file *s, void *iter)
         mintxcr  = lp->lp_mintxcredits;
         rtrcr    = lp->lp_rtrcredits;
         minrtrcr = lp->lp_minrtrcredits;
+        rtr      = lnet_isrouter(lp);
         alive    = lp->lp_alive;
         txqnob   = lp->lp_txqnob;
         nrefs    = lp->lp_refcount;
@@ -634,7 +636,8 @@ lnet_peer_seq_show (struct seq_file *s, void *iter)
         LNET_UNLOCK();
 
         seq_printf(s, "%-24s %4d %5s %5d %5d %5d %5d %5d %d\n",
-                   libcfs_nid2str(nid), nrefs, alive ? "up" : "down",
+                   libcfs_nid2str(nid), nrefs, 
+                   !rtr ? "~rtr" : (lp->lp_alive ? "up" : "down"),
                    maxcr, rtrcr, minrtrcr, txcr, mintxcr, txqnob);
         return 0;
 }

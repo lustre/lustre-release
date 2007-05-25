@@ -233,7 +233,7 @@ lnet_debug_peer(lnet_nid_t nid)
 
         CDEBUG(D_WARNING, "%-24s %4d %5s %5d %5d %5d %5d %5d %ld\n",
                libcfs_nid2str(lp->lp_nid), lp->lp_refcount, 
-               lp->lp_alive ? "up" : "down",
+               !lnet_isrouter(lp) ? "~rtr" : (lp->lp_alive ? "up" : "down"),
                lp->lp_ni->ni_peertxcredits, 
                lp->lp_rtrcredits, lp->lp_minrtrcredits, 
                lp->lp_txcredits, lp->lp_mintxcredits, lp->lp_txqnob);
