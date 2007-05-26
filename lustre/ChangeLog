@@ -140,7 +140,7 @@ Details    : When osc reconnect ost, OST(filter) should check whether it
 
 Severity   : normal
 Frequency  : when client is evicted 
-Bugzilla   : 11662
+Bugzilla   : 12371
 Description: Grant might be wrongly erased when osc is evicted by OST
 Details    : when the import is evicted by server, it will fork another 
 	     thread ptlrpc_invalidate_import_thread to invalidate the 
