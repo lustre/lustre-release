@@ -228,8 +228,6 @@ if [ -z "$MOUNTED" ]; then
 	I_MOUNTED=yes
 fi
 
-[ `echo $MOUNT | wc -w` -gt 1 ] && error "NAME=$NAME mounted more than once"
-
 DIR=${DIR:-$MOUNT}
 [ -z "`echo $DIR | grep $MOUNT`" ] && echo "$DIR not in $MOUNT" && exit 99
 
@@ -3344,7 +3342,7 @@ test_102b() {
 	local testfile=$DIR/$tfile
 	$SETSTRIPE $testfile 65536 1 2
 	getfattr -d -m "^trusted" $testfile 2> /dev/null | \
-	grep "trusted.lov" || error
+	grep "trusted.lov" || error "can't get trusted.lov from $testfile"
 
 	local testfile2=${testfile}2
 	local value=`getfattr -n trusted.lov $testfile 2> /dev/null | \
@@ -3356,8 +3354,8 @@ test_102b() {
 	$GETSTRIPE -v $testfile2 > $tmp_file
 	local stripe_size=`grep "size"  $tmp_file| awk '{print $2}'`
 	local stripe_count=`grep "count"  $tmp_file| awk '{print $2}'`
-	[ $stripe_size -eq 65536 ] || error "different stripe size"
-	[ $stripe_count -eq 2 ] || error "different stripe count"
+	[ $stripe_size -eq 65536 ] || error "stripe size $stripe_size != 65536"
+	[ $stripe_count -eq 2 ] || error "stripe count $stripe_count != 2"
 }
 run_test 102b "getfattr/setfattr for trusted.lov EAs ============"
 
@@ -3370,7 +3368,7 @@ test_102c() {
 	local testfile=$DIR/$tdir/$tfile
 	$RUNAS $SETSTRIPE $testfile 65536 1 2
 	$RUNAS getfattr -d -m "^trusted" $testfile 2> /dev/null | \
-	grep "trusted.lov" || error
+	grep "trusted.lov" || error "can't get trusted.lov from $testfile"
 
 	local testfile2=${testfile}2
 	local value=`getfattr -n trusted.lov $testfile 2> /dev/null | \
@@ -3382,8 +3380,8 @@ test_102c() {
 	$RUNAS $GETSTRIPE -v $testfile2 > $tmp_file
 	local stripe_size=`grep "size"  $tmp_file| awk '{print $2}'`
 	local stripe_count=`grep "count"  $tmp_file| awk '{print $2}'`
-	[ $stripe_size -eq 65536 ] || error "different stripe size"
-	[ $stripe_count -eq 2 ] || error "different stripe count"
+	[ $stripe_size -eq 65536 ] || error "stripe size $stripe_size != 65536"
+	[ $stripe_count -eq 2 ] || error "stripe count $stripe_count != 2"
 }
 run_test 102c "non-root getfattr/setfattr for trusted.lov EAs ==========="
 
@@ -3616,10 +3614,10 @@ test_105c() {
 }
 run_test 105c "lockf when mounted without -o flock test ========"
 
-test_106() { #10921
-        mkdir $DIR/d106
-	$DIR/d106 && error
-	chmod 777 $DIR/d106 || error
+test_106() { #bug 10921
+	mkdir $DIR/$tdir || error "mkdir $DIR/$tdir failed"
+	$DIR/$tdir && error "exec $DIR/$tdir succeeded"
+	chmod 777 $DIR/$tdir || error "chmod $DIR/$tdir failed"
 }
 run_test 106 "attempt exec of dir followed by chown of that dir"
 
