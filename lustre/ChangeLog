@@ -15,6 +15,13 @@ tbd         Cluster File Systems, Inc. <info@clusterfs.com>
        * bug fixes
 
 Severity   : normal
+Frequency  : rare
+Bugzilla   : 11722
+Description: Transient SCSI error results in persistent IO issue
+Details    : iobuf->dr_error is not reinitialized to 0 between two
+	     uses.
+
+Severity   : normal
 Frequency  : SLES10 only
 Bugzilla   : 12538
 Description: sanity-quota.sh quotacheck failed: rc = -22

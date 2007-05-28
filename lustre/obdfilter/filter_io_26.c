@@ -182,6 +182,7 @@ struct filter_iobuf *filter_alloc_iobuf(struct filter_obd *filter,
         spin_lock_init(&iobuf->dr_lock);
         iobuf->dr_max_pages = num_pages;
         iobuf->dr_npages = 0;
+        iobuf->dr_error = 0;
 
         RETURN(iobuf);
 
@@ -197,6 +198,7 @@ struct filter_iobuf *filter_alloc_iobuf(struct filter_obd *filter,
 static void filter_clear_iobuf(struct filter_iobuf *iobuf)
 {
         iobuf->dr_npages = 0;
+        iobuf->dr_error = 0;
         atomic_set(&iobuf->dr_numreqs, 0);
 }
 
