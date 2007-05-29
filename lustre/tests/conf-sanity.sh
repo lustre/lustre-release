@@ -883,7 +883,7 @@ test_26() {
     # we need modules before mount for sysctl, so make sure...
     [ -z "$(lsmod | grep lustre)" ] && modprobe lustre 
 #define OBD_FAIL_MDS_FS_SETUP            0x135
-    sysctl -w lustre.fail_loc=0x80000135
+    do_facet mds "sysctl -w lustre.fail_loc=0x80000135"
     start_mds && echo MDS started && return 1
     cat $LPROC/devices
     DEVS=$(cat $LPROC/devices | wc -l)

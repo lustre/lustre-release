@@ -405,7 +405,7 @@ test_14a() {
         multiop $DIR2/d14/multiop Oc && error "expected error, got success"
         kill -USR1 $MULTIPID || return 2
         wait $MULTIPID || return 3
-        rm $TMP/test14.junk
+        rm $TMP/test14.junk $DIR1/d14/multiop || error "removing multiop"
 }
 run_test 14a "open(RDWR) of executing file returns -ETXTBSY ===="
 
@@ -420,7 +420,7 @@ test_14b() { # bug 3192, 7040
         kill -USR1 $MULTIPID || return 2
         wait $MULTIPID || return 3
 	cmp `which multiop` $DIR1/d14/multiop || error "binary changed"
-        rm $TMP/test14.junk
+	rm $TMP/test14.junk $DIR1/d14/multiop || error "removing multiop"
 }
 run_test 14b "truncate of executing file returns -ETXTBSY ======"
 
@@ -434,7 +434,7 @@ test_14c() { # bug 3430, 7040
 	kill -USR1 $MULTIPID || return 2
 	wait $MULTIPID || return 3
 	cmp `which multiop` $DIR1/d14/multiop || error "binary changed"
-	rm $TMP/test14.junk
+	rm $TMP/test14.junk $DIR1/d14/multiop || error "removing multiop"
 }
 run_test 14c "open(O_TRUNC) of executing file return -ETXTBSY =="
 
@@ -449,7 +449,7 @@ test_14d() { # bug 10921
 	kill -USR1 $MULTIPID || return 2
 	wait $MULTIPID || return 3
 	cmp `which multiop` $DIR1/d14/multiop || error "binary changed"
-	rm $TMP/test14.junk
+	rm $TMP/test14.junk $DIR1/d14/multiop || error "removing multiop"
 }
 run_test 14d "chmod of executing file is still possible ========"
 
@@ -460,7 +460,9 @@ test_15() {	# bug 974 - ENOSPC
 run_test 15 "test out-of-space with multiple writers ==========="
 
 test_16() {
-	fsx -c 50 -p 100 -N 2500 -S 0 $MOUNT1/fsxfile $MOUNT2/fsxfile
+	rm -f $MOUNT1/fsxfile
+	lfs setstripe $MOUNT1/fsxfile 0 -1 -1 # b=10919
+	fsx -c 50 -p 100 -N 2500 -l $((SIZE * 256)) -S 0 $MOUNT1/fsxfile $MOUNT2/fsxfile
 }
 run_test 16 "2500 iterations of dual-mount fsx ================="
 

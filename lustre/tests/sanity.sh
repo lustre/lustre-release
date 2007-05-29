@@ -11,7 +11,7 @@ ONLY=${ONLY:-"$*"}
 ALWAYS_EXCEPT=${ALWAYS_EXCEPT:-"27o 27q  42a  42b  42c  42d  45   68        75"}
 # UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
 
-[ "$SLOW" = "no" ] && EXCEPT="$EXCEPT 24o 27m 36f 36g 51b 51c 63 64b 71 73 77 101 115"
+[ "$SLOW" = "no" ] && EXCEPT="$EXCEPT 24o 27m 36f 36g 51b 51c 63 64b 71 73 101 115"
 
 # Tests that fail on uml, maybe elsewhere, FIXME
 CPU=`awk '/model/ {print $4}' /proc/cpuinfo`
@@ -2550,7 +2550,7 @@ run_test 63b "async write errors should be returned to fsync ==="
 
 test_64a () {
 	df $DIR
-	grep "[0-9]" $LPROC/osc/*[oO][sS][cC]*/cur*
+	grep "[0-9]" $LPROC/osc/*[oO][sS][cC][_-]*/cur*
 }
 run_test 64a "verify filter grant calculations (in kernel) ====="
 
@@ -2676,9 +2676,9 @@ test_67() { # bug 3285 - supplementary group fails on MDS, passes on client
 run_test 67 "supplementary group failure (should return error) ="
 
 cleanup_67b() {
+	set +vx
 	trap 0
 	echo NONE > $LPROC/mds/$MDS/group_upcall
-	set +vx
 }
 
 test_67b() { # bug 3285 - supplementary group fails on MDS, passes on client
@@ -2695,7 +2695,6 @@ test_67b() { # bug 3285 - supplementary group fails on MDS, passes on client
 	chgrp $T67_UID $DIR/$tdir
 	echo `which l_getgroups` > $LPROC/mds/$MDS/group_upcall
 	l_getgroups -d $T67_UID
-	$RUNAS -u $T67_UID -g $((T67_UID + 1)) -G8,9 id
 	$RUNAS -u $T67_UID -g 999 -G8,9,$T67_UID touch $DIR/$tdir/$tfile || \
 		error "'touch $DIR/$tdir/$tfile' failed"
 	[ -f $DIR/$tdir/$tfile ] || error "$DIR/$tdir/$tfile create error"
@@ -3008,31 +3007,34 @@ set_checksums()
 }
 
 F77_TMP=$TMP/f77-temp
+F77SZ=8
+setup_f77() {
+	dd if=/dev/urandom of=$F77_TMP bs=1M count=$F77SZ || \
+		error "error writing to $F77_TMP"
+}
+
 test_77a() { # bug 10889
+	[ ! -f $F77_TMP ] && setup_f77
 	set_checksums 1
-	if [ ! -f $F77_TMP ]; then
-		dd if=/dev/urandom of=$F77_TMP bs=1M count=8 || \
-			error "error writing to $F77_TMP"
-	fi
-	dd if=$F77_TMP of=$DIR/$tfile bs=1M count=8 || error "dd error"
+	dd if=$F77_TMP of=$DIR/$tfile bs=1M count=$F77SZ || error "dd error"
 	set_checksums 0
 }
 run_test 77a "normal checksum read/write operation ============="
 
 test_77b() { # bug 10889
-	[ ! -f $F77_TMP ] && echo "requires 77a" && return  
+	[ ! -f $F77_TMP ] && setup_f77
 	#define OBD_FAIL_OSC_CHECKSUM_SEND       0x409
 	sysctl -w lustre.fail_loc=0x80000409
 	set_checksums 1
-	dd if=$F77_TMP of=$DIR/f77b bs=8M count=1 conv=sync || \
-		error "write error: rc=$?"
+	dd if=$F77_TMP of=$DIR/f77b bs=1M count=$F77SZ conv=sync || \
+		error "dd error: $?"
 	sysctl -w lustre.fail_loc=0
 	set_checksums 0
 }
 run_test 77b "checksum error on client write ===================="
 
 test_77c() { # bug 10889
-	[ ! -f $F77_TMP ] && echo "requires 77a" && return  
+	[ ! -f $DIR/f77b ] && log "requires 77b - skipping" && return  
 	cancel_lru_locks osc
 	#define OBD_FAIL_OSC_CHECKSUM_RECEIVE    0x408
 	sysctl -w lustre.fail_loc=0x80000408
@@ -3047,18 +3049,21 @@ test_77d() { # bug 10889
 	#define OBD_FAIL_OSC_CHECKSUM_SEND       0x409
 	sysctl -w lustre.fail_loc=0x80000409
 	set_checksums 1
-	directio write $DIR/f77  0 1 || error "direct write: rc=$?"
+	directio write $DIR/f77 0 $F77SZ $((1024 * 1024)) || \
+		error "direct write: rc=$?"
 	sysctl -w lustre.fail_loc=0
 	set_checksums 0
 }
 run_test 77d "checksum error on OST direct write ==============="
 
 test_77e() { # bug 10889
+	[ ! -f $DIR/f77 ] && log "requires 77d - skipping" && return  
 	#define OBD_FAIL_OSC_CHECKSUM_RECEIVE    0x408
 	sysctl -w lustre.fail_loc=0x80000408
 	set_checksums 1
 	cancel_lru_locks osc
-	directio read $DIR/f77 0 1 || error "direct read: rc=$?"
+	directio read $DIR/f77 0 $F77SZ $((1024 * 1024)) || \
+		error "direct read: rc=$?"
 	sysctl -w lustre.fail_loc=0
 	set_checksums 0
 }
@@ -3068,29 +3073,31 @@ test_77f() { # bug 10889
 	#define OBD_FAIL_OSC_CHECKSUM_SEND       0x409
 	sysctl -w lustre.fail_loc=0x409
 	set_checksums 1
-	directio write $DIR/f77 0 1 && error "direct write succeeded"
+	directio write $DIR/f77 0 $F77SZ $((1024 * 1024)) && \
+		error "direct write succeeded"
 	sysctl -w lustre.fail_loc=0
 	set_checksums 0
 }
 run_test 77f "repeat checksum error on write (expect error) ===="
 
 test_77g() { # bug 10889
-	[ ! -f $F77_TMP ] && echo "requires 77a" && return  
 	[ $(grep -c obdfilter $LPROC/devices) -eq 0 ] && \
 		echo "skipping $TESTNAME (remote OST)" && return
+	[ ! -f $F77_TMP ] && setup_f77
 	#define OBD_FAIL_OST_CHECKSUM_RECEIVE       0x21a
 	sysctl -w lustre.fail_loc=0x8000021a
 	set_checksums 1
-	dd if=$F77_TMP of=$DIR/f77 bs=8M count=1 || error "write error: rc=$?"
+	dd if=$F77_TMP of=$DIR/f77 bs=1M count=$F77SZ || \
+		error "write error: rc=$?"
 	sysctl -w lustre.fail_loc=0
 	set_checksums 0
 }
 run_test 77g "checksum error on OST write ======================"
 
 test_77h() { # bug 10889
-	[ ! -f $DIR/f77 ] && echo "requires 77a,g" && return  
 	[ $(grep -c obdfilter $LPROC/devices) -eq 0 ] && \
 		echo "skipping $TESTNAME (remote OST)" && return
+	[ ! -f $DIR/f77 ] && log "requires 77g - skipping" && return  
 	cancel_lru_locks osc
 	#define OBD_FAIL_OST_CHECKSUM_SEND          0x21b
 	sysctl -w lustre.fail_loc=0x8000021b
@@ -3212,7 +3219,7 @@ function get_named_value()
     done
 }
 
-export CACHE_MAX=`cat /proc/fs/lustre/llite/*/max_cached_mb | head -n 1`
+export CACHE_MAX=`cat $LPROC/llite/*/max_cached_mb | head -n 1`
 cleanup_101() {
 	for s in $LPROC/llite/*/max_cached_mb; do
 		echo $CACHE_MAX > $s
@@ -3707,6 +3714,8 @@ free_min_max () {
 
 test_116() {
 	[ "$OSTCOUNT" -lt "2" ] && echo "not enough OSTs" && return
+	[ $(grep -c obdfilter $LPROC/devices) -eq 0 ] &&
+		echo "remote MDS, skipping test" && return
 
 	echo -n "Free space priority "
 	cat $LPROC/lov/*/qos_prio_free
@@ -3798,9 +3807,9 @@ run_test 117 "verify fsfilt_extend =========="
 
 test_118() #bug 11710
 {
-	
+	sync; sleep 1; sync
 	multiop $DIR/$tfile oO_CREAT:O_RDWR:O_SYNC:w4096c;
-	dirty=$(grep -c dirty /proc/fs/lustre/llite/*/dump_page_cache)
+	dirty=$(grep -c dirty $LPROC/llite/*/dump_page_cache)
 	
 	return $dirty
 }

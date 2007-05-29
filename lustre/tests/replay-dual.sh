@@ -65,7 +65,6 @@ test_2() {
     checkstat $MOUNT2/adir && return 2
     return 0
 }
-
 run_test 2 "|X| mkdir adir"
 
 test_3() {
@@ -81,7 +80,6 @@ test_3() {
     checkstat $MOUNT2/adir/bdir && return 4
     return 0
 }
-
 run_test 3 "|X| mkdir adir, mkdir adir/bdir "
 
 test_4() {
@@ -99,7 +97,6 @@ test_4() {
     checkstat $MOUNT2/adir/bdir && return 5
     return 0
 }
-
 run_test 4 "|X| mkdir adir (-EEXIST), mkdir adir/bdir "
 
 

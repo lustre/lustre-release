@@ -832,13 +832,13 @@ run_test 55 "ost_brw_read/write drops timed-out read/write request"
 
 test_56() { # b=11277
 #define OBD_FAIL_MDS_RESEND      0x136
-        touch $MOUNT/$tfile
+        touch $DIR/$tfile
         do_facet mds sysctl -w lustre.fail_loc=0x80000136
-        stat $MOUNT/$tfile
+        stat $DIR/$tfile
         do_facet mds sysctl -w lustre.fail_loc=0
-        rm -f $MOUNT/$tfile
+        rm -f $DIR/$tfile
 }
-run_test 56 "replace lock race"
+run_test 56 "do not allow reconnect to busy exports"
 
 test_57_helper() {
         # no oscs means no client or mdt 

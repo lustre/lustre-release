@@ -744,7 +744,7 @@ test_33() {
     fail_abort mds
     # this file should be gone, because the replay was aborted
     $CHECKSTAT -t file $DIR/$tfile && return 3
-    $CHECKSTAT -t file $DIR/$tfile-* && return 3 
+    $CHECKSTAT -t file $DIR/$tfile-* && return 4 
     unlinkmany $DIR/$tfile-%d 0 100
     return 0
 }
