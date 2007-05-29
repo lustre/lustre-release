@@ -38,6 +38,8 @@ fi
 
 SAVE_PWD=$PWD
 
+export NAME=${NAME:-local}
+
 LUSTRE=${LUSTRE:-`dirname $0`/..}
 . $LUSTRE/tests/test-framework.sh
 init_test_env $@
@@ -166,6 +168,7 @@ run_test() {
 error () {
 	sysctl -w lustre.fail_loc=0 2> /dev/null || true
 	log "$0: FAIL: $TESTNAME $@"
+	$LCTL dk $TMP/lustre-log-$TESTNAME.log
 	if [ "$SANITYLOG" ]; then
 		echo "$0: FAIL: $TESTNAME $@" >> $SANITYLOG
 	else

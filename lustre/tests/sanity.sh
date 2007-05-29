@@ -1737,7 +1737,7 @@ test_42a() {
 	stop_writeback
 	sync; sleep 1; sync # just to be safe
 	BEFOREWRITES=`count_ost_writes`
-	grep "[0-9]" $LPROC/osc/*[oO][sS][cC]*/cur_grant_bytes
+	grep "[0-9]" $LPROC/osc/*[oO][sS][cC][_-]*/cur_grant_bytes
 	dd if=/dev/zero of=$DIR/f42a bs=1024 count=100
 	AFTERWRITES=`count_ost_writes`
 	[ $BEFOREWRITES -eq $AFTERWRITES ] || \
@@ -2725,8 +2725,8 @@ swap_used() {
 # and then consuming memory until it is used.
 test_68() {
 	[ "$UID" != 0 ] && echo "skipping $TESTNAME (must run as root)" && return
-	[ "`lsmod|grep obdfilter`" ] && echo "skipping $TESTNAME (local OST)" && \
-		return
+	grep -q obdfilter $LPROC/devices && \
+		echo "skip $TESTNAME (local OST)" && return
 
 	find_loop_dev
 	dd if=/dev/zero of=$DIR/f68 bs=64k count=1024
@@ -2996,15 +2996,26 @@ test_76() { # bug 1443
 }
 run_test 76 "destroy duplicate inodes in client inode cache ===="
 
+export ORIG_CSUM=""
+set_checksums()
+{
+	[ "$ORIG_CSUM" ]||ORIG_CSUM=`cat $LPROC/llite/*/checksum_pages|head -n1`
+	for f in $LPROC/llite/*/checksum_pages; do
+		echo $1 >> $f
+	done
+
+	return 0
+}
+
 F77_TMP=$TMP/f77-temp
 test_77a() { # bug 10889
-	for f in  $LPROC/llite/${FSNAME}-*/checksum_pages ; do echo 1 >> $f ; done
+	set_checksums 1
 	if [ ! -f $F77_TMP ]; then
 		dd if=/dev/urandom of=$F77_TMP bs=1M count=8 || \
 			error "error writing to $F77_TMP"
 	fi
 	dd if=$F77_TMP of=$DIR/$tfile bs=1M count=8 || error "dd error"
-	for f in  $LPROC/llite/${FSNAME}-*/checksum_pages ; do echo 0 >> $f ; done
+	set_checksums 0
 }
 run_test 77a "normal checksum read/write operation ============="
 
@@ -3012,11 +3023,11 @@ test_77b() { # bug 10889
 	[ ! -f $F77_TMP ] && echo "requires 77a" && return  
 	#define OBD_FAIL_OSC_CHECKSUM_SEND       0x409
 	sysctl -w lustre.fail_loc=0x80000409
-	for f in  $LPROC/llite/${FSNAME}-*/checksum_pages ; do echo 1 >> $f ; done
+	set_checksums 1
 	dd if=$F77_TMP of=$DIR/f77b bs=8M count=1 conv=sync || \
 		error "write error: rc=$?"
 	sysctl -w lustre.fail_loc=0
-	for f in  $LPROC/llite/${FSNAME}-*/checksum_pages ; do echo 0 >> $f ; done
+	set_checksums 0
 }
 run_test 77b "checksum error on client write ===================="
 
@@ -3025,71 +3036,72 @@ test_77c() { # bug 10889
 	cancel_lru_locks osc
 	#define OBD_FAIL_OSC_CHECKSUM_RECEIVE    0x408
 	sysctl -w lustre.fail_loc=0x80000408
-	for f in  $LPROC/llite/${FSNAME}-*/checksum_pages ; do echo 1 >> $f ; done
+	set_checksums 1
 	cmp $F77_TMP $DIR/f77b || error "file compare failed"
 	sysctl -w lustre.fail_loc=0
-	for f in  $LPROC/llite/${FSNAME}-*/checksum_pages ; do echo 0 >> $f ; done
+	set_checksums 0
 }
 run_test 77c "checksum error on client read ==================="
 
 test_77d() { # bug 10889
 	#define OBD_FAIL_OSC_CHECKSUM_SEND       0x409
 	sysctl -w lustre.fail_loc=0x80000409
-	for f in  $LPROC/llite/${FSNAME}-*/checksum_pages ; do echo 1 >> $f ; done
+	set_checksums 1
 	directio write $DIR/f77  0 1 || error "direct write: rc=$?"
 	sysctl -w lustre.fail_loc=0
-	for f in  $LPROC/llite/${FSNAME}-*/checksum_pages ; do echo 0 >> $f ; done
+	set_checksums 0
 }
 run_test 77d "checksum error on OST direct write ==============="
 
 test_77e() { # bug 10889
 	#define OBD_FAIL_OSC_CHECKSUM_RECEIVE    0x408
 	sysctl -w lustre.fail_loc=0x80000408
-	for f in $LPROC/llite/${FSNAME}-*/checksum_pages ; do echo 1 >> $f ; done
+	set_checksums 1
 	cancel_lru_locks osc
 	directio read $DIR/f77 0 1 || error "direct read: rc=$?"
 	sysctl -w lustre.fail_loc=0
-	for f in $LPROC/llite/${FSNAME}-*/checksum_pages ; do echo 0 >> $f ; done
+	set_checksums 0
 }
 run_test 77e "checksum error on OST direct read ================"
 
 test_77f() { # bug 10889
 	#define OBD_FAIL_OSC_CHECKSUM_SEND       0x409
 	sysctl -w lustre.fail_loc=0x409
-	for f in $LPROC/llite/${FSNAME}-*/checksum_pages ; do echo 1 >> $f ; done
+	set_checksums 1
 	directio write $DIR/f77 0 1 && error "direct write succeeded"
 	sysctl -w lustre.fail_loc=0
-	for f in $LPROC/llite/${FSNAME}-*/checksum_pages ; do echo 0 >> $f ; done
+	set_checksums 0
 }
 run_test 77f "repeat checksum error on write (expect error) ===="
 
 test_77g() { # bug 10889
 	[ ! -f $F77_TMP ] && echo "requires 77a" && return  
-	[ -z "`lsmod|grep obdfilter`" ] &&
+	[ $(grep -c obdfilter $LPROC/devices) -eq 0 ] && \
 		echo "skipping $TESTNAME (remote OST)" && return
 	#define OBD_FAIL_OST_CHECKSUM_RECEIVE       0x21a
 	sysctl -w lustre.fail_loc=0x8000021a
-	for f in  $LPROC/llite/${FSNAME}-*/checksum_pages ; do echo 1 >> $f ; done
+	set_checksums 1
 	dd if=$F77_TMP of=$DIR/f77 bs=8M count=1 || error "write error: rc=$?"
 	sysctl -w lustre.fail_loc=0
-	for f in $LPROC/llite/${FSNAME}-*/checksum_pages ; do echo 0 >> $f ; done
+	set_checksums 0
 }
 run_test 77g "checksum error on OST write ======================"
 
 test_77h() { # bug 10889
 	[ ! -f $DIR/f77 ] && echo "requires 77a,g" && return  
-	[ -z "`lsmod|grep obdfilter`" ] &&
+	[ $(grep -c obdfilter $LPROC/devices) -eq 0 ] && \
 		echo "skipping $TESTNAME (remote OST)" && return
 	cancel_lru_locks osc
 	#define OBD_FAIL_OST_CHECKSUM_SEND          0x21b
 	sysctl -w lustre.fail_loc=0x8000021b
-	for f in $LPROC/llite/${FSNAME}-*/checksum_pages ; do echo 1 >> $f ; done
+	set_checksums 1
 	cmp $F77_TMP $DIR/f77 || error "file compare failed"
 	sysctl -w lustre.fail_loc=0
-	for f in $LPROC/llite/${FSNAME}-*/checksum_pages ; do echo 0 >> $f ; done
+	set_checksums 0
 }
 run_test 77h "checksum error on OST read ======================="
 
+[ "$ORIG_CSUM" ] && set_checksums $ORIG_CSUM || true
 rm -f $F77_TMP
 unset F77_TMP
 
@@ -3676,7 +3688,7 @@ test_115() {
 run_test 115 "verify dynamic thread creation===================="
 
 free_min_max () {
-	AVAIL=($(cat $LPROC/osc/*[oO][sS][cC]-*/kbytesavail))
+	AVAIL=($(cat $LPROC/osc/*[oO][sS][cC][-_]*/kbytesavail))
 	echo OST kbytes available: ${AVAIL[@]}
 	MAXI=0; MAXV=${AVAIL[0]}
 	MINI=0; MINV=${AVAIL[0]}
@@ -3788,7 +3800,7 @@ test_118() #bug 11710
 {
 	
 	multiop $DIR/$tfile oO_CREAT:O_RDWR:O_SYNC:w4096c;
-	dirty=$(grep -c dirty /proc/fs/lustre/llite/lustre-*/dump_page_cache)
+	dirty=$(grep -c dirty /proc/fs/lustre/llite/*/dump_page_cache)
 	
 	return $dirty
 }

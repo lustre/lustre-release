@@ -104,6 +104,9 @@ load_modules() {
 
     echo Loading modules from $LUSTRE
     load_module ../lnet/libcfs/libcfs
+    [ -z "$LNETOPTS" ] && \
+        LNETOPTS=`awk '/options lnet/ { print $3 }' /etc/modprobe.conf`
+    echo "lnet options: '$LNETOPTS'"
     # note that insmod will ignore anything in modprobe.conf
     load_module ../lnet/lnet/lnet $LNETOPTS
     LNETLND=${LNETLND:-"socklnd/ksocklnd"}
@@ -604,6 +607,7 @@ formatall() {
     stopall
     # We need ldiskfs here, may as well load them all
     load_modules
+    [ "$CLIENTONLY" ] && return
     echo Formatting mds, osts
     if $VERBOSE; then
         add mds $MDS_MKFS_OPTS $FSTYPE_OPT --reformat $MDSDEV || exit 10
@@ -626,12 +630,14 @@ mount_client() {
 
 setupall() {
     load_modules
-    echo Setup mdt, osts
-    start mds $MDSDEV $MDS_MOUNT_OPTS
-    for num in `seq $OSTCOUNT`; do
-        DEVNAME=`ostdevname $num`
-        start ost$num $DEVNAME $OST_MOUNT_OPTS
-    done
+    if [ -z "$CLIENTONLY" ]; then
+        echo Setup mdt, osts
+        start mds $MDSDEV $MDS_MOUNT_OPTS
+        for num in `seq $OSTCOUNT`; do
+            DEVNAME=`ostdevname $num`
+            start ost$num $DEVNAME $OST_MOUNT_OPTS
+        done
+    fi
     [ "$DAEMONFILE" ] && $LCTL debug_daemon start $DAEMONFILE $DAEMONSIZE
     mount_client $MOUNT
     if [ "$MOUNT_2" ]; then
@@ -784,7 +790,8 @@ pgcache_empty() {
 # Test interface 
 error() {
     sysctl -w lustre.fail_loc=0 2> /dev/null || true
-    echo "${TESTSUITE}: **** FAIL:" $@
+    log "${TESTSUITE}: **** FAIL:" $@
+    $LCTL dk $TMP/lustre-log-$TESTNAME.log
     log "FAIL: $TESTNAME $@"
     exit 1
 }
