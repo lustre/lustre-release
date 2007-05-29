@@ -105,7 +105,7 @@ load_modules() {
     echo Loading modules from $LUSTRE
     load_module ../lnet/libcfs/libcfs
     [ -z "$LNETOPTS" ] && \
-        LNETOPTS=`awk '/options lnet/ { print $3 }' /etc/modprobe.conf`
+        LNETOPTS=$(awk '/^options lnet/ { print $0}' /etc/modprobe.conf | sed 's/^options lnet //g')
     echo "lnet options: '$LNETOPTS'"
     # note that insmod will ignore anything in modprobe.conf
     load_module ../lnet/lnet/lnet $LNETOPTS
