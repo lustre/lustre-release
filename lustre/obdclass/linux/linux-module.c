@@ -323,7 +323,7 @@ struct lprocfs_vars lprocfs_base[] = {
 #endif /* LPROCFS */
 
 #ifdef __KERNEL__
-static void *obd_device_list_seq_start(struct seq_file *p, loff_t*pos)
+static void *obd_device_list_seq_start(struct seq_file *p, loff_t *pos)
 {
         if (*pos >= class_devno_max())
                 return NULL;
@@ -346,7 +346,7 @@ static void *obd_device_list_seq_next(struct seq_file *p, void *v, loff_t *pos)
 
 static int obd_device_list_seq_show(struct seq_file *p, void *v)
 {
-        int index = *(int*)v;
+        int index = *(loff_t *)v;
         struct obd_device *obd = class_num2obd(index);
         char *status;
 
