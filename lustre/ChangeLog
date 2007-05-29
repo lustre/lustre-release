@@ -21,6 +21,12 @@ Description: Transient SCSI error results in persistent IO issue
 Details    : iobuf->dr_error is not reinitialized to 0 between two
 	     uses.
 
+Severity   : minor
+Bugzilla   : 12364
+Description: poor connect scaling with increasing client count
+Details    : Don't run filter_grant_sanity_check for more than 100 exports
+	     to improve scaling for large numbers of clients.
+
 Severity   : normal
 Frequency  : SLES10 only
 Bugzilla   : 12538

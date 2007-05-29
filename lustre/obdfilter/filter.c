@@ -2093,6 +2093,11 @@ static void filter_grant_sanity_check(struct obd_device *obd, const char *func)
         if (list_empty(&obd->obd_exports))
                 return;
 
+        /* We don't want to do this for large machines that do lots of
+           mounts or unmounts.  It burns... */
+        if (obd->obd_num_exports > 100)
+                return;
+
         spin_lock(&obd->obd_osfs_lock);
         spin_lock(&obd->obd_dev_lock);
         list_for_each_entry(exp, &obd->obd_exports, exp_obd_chain) {
