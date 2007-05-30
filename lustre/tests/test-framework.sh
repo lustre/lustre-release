@@ -10,6 +10,7 @@ export REFORMAT=""
 export VERBOSE=false
 export GMNALNID=${GMNALNID:-/usr/sbin/gmlndnid}
 export CATASTROPHE=${CATASTROPHE:-/proc/sys/lnet/catastrophe}
+#export PDSH="pdsh -S -Rssh -w"
 
 # eg, assert_env LUSTRE MDSNODES OSTNODES CLIENTS
 assert_env() {
@@ -164,10 +165,10 @@ wait_for_lnet() {
 unload_modules() {
     lsmod | grep lnet > /dev/null && $LCTL dl && $LCTL dk $TMP/debug
     local MODULES=$($LCTL modules | awk '{ print $2 }')
-    $RMMOD $MODULES >/dev/null 2>&1 || true
+    $RMMOD $MODULES > /dev/null 2>&1 || true
      # do it again, in case we tried to unload ksocklnd too early
     MODULES=$($LCTL modules | awk '{ print $2 }')
-    [ -n "$MODULES" ] && $RMMOD $MODULES >/dev/null || true
+    [ -n "$MODULES" ] && $RMMOD $MODULES > /dev/null 2>&1 || true
     MODULES=$($LCTL modules | awk '{ print $2 }')
     if [ -n "$MODULES" ]; then
     echo "Modules still loaded: "
@@ -178,7 +179,7 @@ unload_modules() {
         lsmod
         return 2
     else
-        echo "Lustre stopped, but LNET is still loaded"
+        echo "Lustre stopped but LNET is still loaded, waiting..."
         wait_for_lnet || return 3
     fi
     fi
@@ -213,7 +214,7 @@ start() {
         echo Start of ${device} on ${facet} failed ${RC}
     else 
         do_facet ${facet} sync
-        label=`do_facet ${facet} "e2label ${device}" | grep -v "CMD: "`
+        label=$(do_facet ${facet} "e2label ${device}")
         [ -z "$label" ] && echo no label for ${device} && exit 1
         eval export ${facet}_svc=${label}
         eval export ${facet}_dev=${device}
@@ -230,7 +231,7 @@ stop() {
     HOST=`facet_active_host $facet`
     [ -z $HOST ] && echo stop: no host for $facet && return 0
 
-    running=`do_facet ${facet} "grep -c ${MOUNT%/*}/${facet}' ' /proc/mounts" | grep -v "CMD: "`
+    running=$(do_facet ${facet} "grep -c ${MOUNT%/*}/${facet}' ' /proc/mounts") || true
     if [ ${running} -ne 0 ]; then
         echo "Stopping ${MOUNT%/*}/${facet} (opts:$@)"
         do_facet ${facet} umount -d $@ ${MOUNT%/*}/${facet}
@@ -242,7 +243,7 @@ stop() {
     local INTERVAL=1
     # conf-sanity 31 takes a long time cleanup
     while [ $WAIT -lt 300 ]; do
-	running=$(do_facet ${facet} "[ -e $LPROC ] && grep ST' ' $LPROC/devices" | grep -v "CMD: ") || true
+	running=$(do_facet ${facet} "[ -e $LPROC ] && grep ST' ' $LPROC/devices") || true
 	if [ -z "${running}" ]; then
 	    return 0
 	fi
@@ -285,7 +286,7 @@ zconf_umount() {
     client=$1
     mnt=$2
     [ "$3" ] && force=-f
-    local running=`do_node $client "grep -c $mnt' ' /proc/mounts" | grep -v "CMD: "`
+    local running=$(do_node $client "grep -c $mnt' ' /proc/mounts") || true
     if [ $running -ne 0 ]; then
         echo "Stopping client $mnt (opts:$force)"
         do_node $client umount $force $mnt
@@ -544,10 +545,11 @@ do_node() {
         myPDSH="no_dsh"
     fi
     if $VERBOSE; then
-        echo "CMD: $HOST $@"
+        echo "CMD: $HOST $@" >&2
         $myPDSH $HOST $LCTL mark "$@" > /dev/null 2>&1 || :
     fi
-    $myPDSH $HOST "(PATH=\$PATH:$RLUSTRE/utils:$RLUSTRE/tests:/sbin:/usr/sbin; cd $RPWD; sh -c \"$@\")"
+    $myPDSH $HOST "(PATH=\$PATH:$RLUSTRE/utils:$RLUSTRE/tests:/sbin:/usr/sbin; cd $RPWD; sh -c \"$@\")" | sed "s/^${HOST}: //"
+    return ${PIPESTATUS[0]}
 }
 
 do_facet() {
@@ -793,6 +795,7 @@ error() {
     log "${TESTSUITE}: **** FAIL:" $@
     $LCTL dk $TMP/lustre-log-$TESTNAME.log
     log "FAIL: $TESTNAME $@"
+    $LCTL dk $TMP/lustrefail_${TESTSUITE}_${TESTNAME}.$(date +%s)
     exit 1
 }
 
