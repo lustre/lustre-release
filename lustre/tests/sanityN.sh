@@ -20,6 +20,7 @@ CHECKSTAT=${CHECKSTAT:-"checkstat -v"}
 CREATETEST=${CREATETEST:-createtest}
 GETSTRIPE=${GETSTRIPE:-lfs getstripe}
 SETSTRIPE=${SETSTRIPE:-lstripe}
+LFS=${LFS:-lfs}
 LCTL=${LCTL:-lctl}
 MCREATE=${MCREATE:-mcreate}
 OPENFILE=${OPENFILE:-openfile}
@@ -27,6 +28,8 @@ OPENUNLINK=${OPENUNLINK:-openunlink}
 TOEXCL=${TOEXCL:-toexcl}
 TRUNCATE=${TRUNCATE:-truncate}
 export TMP=${TMP:-/tmp}
+CHECK_GRANT=${CHECK_GRANT:-"no"}
+
 
 if [ $UID -ne 0 ]; then
 	RUNAS_ID="$UID"
@@ -87,6 +90,7 @@ run_one() {
 	export tfile=f${testnum}
 	export tdir=d${base}
 	test_$1 || error "exit with rc=$?"
+	check_grant || error "check grant fail"
 	unset TESTNAME
 	pass "($((`date +%s` - $BEFORE))s)"
 	cd $SAVE_PWD
@@ -131,6 +135,54 @@ _basetest() {
 
 basetest() {
     IFS=abcdefghijklmnopqrstuvwxyz _basetest $1
+}
+
+sync_clients() {
+	cd $DIR1
+	sync; sleep 1; sync
+	cd $DIR2
+	sync; sleep 1; sync
+
+	cd $SAVE_PWD
+}
+
+check_grant() {
+	[ "$CHECK_GRANT" == "no" ] && return 0
+
+	echo -n "checking grant......"
+	cd $SAVE_PWD
+	# write some data to sync client lost_grant
+	rm -f $DIR1/${tfile}_check_grant_* 2>&1
+	for i in `seq $OSTCOUNT`; do
+		$LFS setstripe $DIR1/${tfile}_check_grant_$i 0 $(($i -1)) 1
+		dd if=/dev/zero of=$DIR1/${tfile}_check_grant_$i bs=4k \
+					      count=1 > /dev/null 2>&1 
+	done
+	# sync all the data and make sure no pending data on server
+	sync_clients
+	
+	#get client grant and server grant 
+	client_grant=0
+       	for d in /proc/fs/lustre/osc/*/cur_grant_bytes; do 
+		client_grant=$(($client_grant + `cat $d`))
+	done
+	server_grant=0
+	for d in /proc/fs/lustre/obdfilter/*/tot_granted; do
+		server_grant=$(($server_grant + `cat $d`))
+	done
+
+	# cleanup the check_grant file
+	for i in `seq $OSTCOUNT`; do
+	        rm $DIR1/${tfile}_check_grant_$i
+	done
+
+	#check whether client grant == server grant 
+	if [ $client_grant != $server_grant ]; then
+		echo "failed: client:${client_grant} server: ${server_grant}"
+		return 1
+	else
+		echo "pass"
+	fi
 }
 
 run_test() {
@@ -203,6 +255,10 @@ export DIR1=${DIR1:-$MOUNT1}
 export DIR2=${DIR2:-$MOUNT2}
 [ -z "`echo $DIR1 | grep $MOUNT1`" ] && echo "$DIR1 not in $MOUNT1" && exit 96
 [ -z "`echo $DIR2 | grep $MOUNT2`" ] && echo "$DIR2 not in $MOUNT2" && exit 95
+
+LPROC=/proc/fs/lustre
+LOVNAME=`cat $LPROC/llite/*/lov/common_name | tail -n 1`
+OSTCOUNT=`cat $LPROC/lov/$LOVNAME/numobd`
 
 rm -rf $DIR1/[df][0-9]* $DIR1/lnk
 
