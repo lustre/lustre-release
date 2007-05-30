@@ -686,7 +686,6 @@ finish:
                 if (!exp) {
                         /* This could happen if export is cleaned during the 
                            connect attempt */
-                        spin_unlock(&imp->imp_lock);
                         CERROR("Missing export for %s\n", 
                                imp->imp_obd->obd_name);
                         GOTO(out, rc = -ENODEV);
