@@ -150,6 +150,32 @@ struct inode *ll_iget(struct super_block *sb, ino_t hash,
 }
 #endif
 
+static void ll_drop_negative_dentry(struct inode *dir)
+{ 
+        struct dentry *dentry, *tmp_alias, *tmp_subdir;
+
+        spin_lock(&dcache_lock);
+restart:
+        list_for_each_entry_safe(dentry, tmp_alias,
+                                 &dir->i_dentry,d_alias) {
+                if (!list_empty(&dentry->d_subdirs)) {
+                        struct dentry *child;
+                        list_for_each_entry_safe(child, tmp_subdir,
+                                                 &dentry->d_subdirs,
+                                                 d_child) {
+                                /* XXX Print some debug here? */
+                                if (!child->d_inode)
+                                /* Negative dentry. If we were
+                                   dropping dcache lock, go
+                                   throught the list again */
+                                        if (ll_drop_dentry(child))
+                                                goto restart;
+                        }
+                }
+        }
+        spin_unlock(&dcache_lock);
+}
+
 int ll_mdc_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock_desc *desc,
                         void *data, int flag)
 {
@@ -208,46 +234,10 @@ int ll_mdc_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock_desc *desc,
 
                 if (S_ISDIR(inode->i_mode) &&
                      (bits & MDS_INODELOCK_UPDATE)) {
-                        struct dentry *dentry, *tmp, *dir;
-                        int alias_counter = 0;
-
                         CDEBUG(D_INODE, "invalidating inode %lu\n",
                                inode->i_ino);
                         truncate_inode_pages(inode->i_mapping, 0);
-
-                        /* Drop possible cached negative dentries */
-                        dir = NULL;
-                        spin_lock(&dcache_lock);
-                        
-                        /* It is possible to have several dentries (with
-                           racer?) */
-                        list_for_each_entry_safe(dentry, tmp, 
-                                                 &inode->i_dentry,d_alias) {
-                                if (!list_empty(&dentry->d_subdirs))
-                                        dir = dentry;
-                                alias_counter ++;
-                        }
-
-                        if (alias_counter > 1)
-                                CWARN("More than 1 alias dir %lu alias %d\n",
-                                       inode->i_ino, alias_counter);
-
-                        if (dir) {
-restart:
-                                list_for_each_entry_safe(dentry, tmp,
-                                                         &dir->d_subdirs,
-                                                         d_child)
-                                {
-                                        /* XXX Print some debug here? */
-                                        if (!dentry->d_inode)
-                                                /* Negative dentry. If we were
-                                                   dropping dcache lock, go
-                                                   throught the list again */
-                                                if (ll_drop_dentry(dentry))
-                                                        goto restart;
-                                }
-                        }
-                        spin_unlock(&dcache_lock);
+                        ll_drop_negative_dentry(inode);
                 }
 
                 if (inode->i_sb->s_root &&
