@@ -258,8 +258,10 @@ long filter_grant(struct obd_export *exp, obd_size current_grant,
                 }
         }
 
-        CDEBUG(D_CACHE,"%s: cli %s/%p wants: "LPU64" granting: "LPU64"\n",
-               obd->obd_name, exp->exp_client_uuid.uuid, exp, want, grant);
+        CDEBUG(D_CACHE,
+               "%s: cli %s/%p wants: "LPU64" current grant "LPU64 
+               " granting: "LPU64"\n", obd->obd_name, exp->exp_client_uuid.uuid,
+               exp, want, current_grant, grant);
         CDEBUG(D_CACHE,
                "%s: cli %s/%p tot cached:"LPU64" granted:"LPU64
                " num_exports: %d\n", obd->obd_name, exp->exp_client_uuid.uuid,
@@ -386,9 +388,9 @@ static int filter_preprw_read(int cmd, struct obd_export *exp, struct obdo *oa,
  * right on through.
  *
  * Caller must hold obd_osfs_lock. */
-static int filter_grant_check(struct obd_export *exp, int objcount,
-                              struct fsfilt_objinfo *fso, int niocount,
-                              struct niobuf_remote *rnb,
+static int filter_grant_check(struct obd_export *exp, struct obdo *oa, 
+                              int objcount, struct fsfilt_objinfo *fso, 
+                              int niocount, struct niobuf_remote *rnb,
                               struct niobuf_local *lnb, obd_size *left,
                               struct inode *inode)
 {
@@ -410,7 +412,8 @@ static int filter_grant_check(struct obd_export *exp, int objcount,
                         if (tmp)
                                 bytes += blocksize - tmp;
 
-                        if (rnb[n].flags & OBD_BRW_FROM_GRANT) {
+                        if ((rnb[n].flags & OBD_BRW_FROM_GRANT) &&
+                            (oa->o_valid & OBD_MD_FLGRANT)) {
                                 if (fed->fed_grant < used + bytes) {
                                         CDEBUG(D_CACHE,
                                                "%s: cli %s/%p claims %ld+%d "
@@ -552,26 +555,26 @@ static int filter_preprw_write(int cmd, struct obd_export *exp, struct obdo *oa,
          * already exist so we can store the reservation handle there. */
         fmd = filter_fmd_find(exp, obj->ioo_id, obj->ioo_gr);
 
+        LASSERT(oa != NULL);
         spin_lock(&exp->exp_obd->obd_osfs_lock);
-        if (oa) {
-                filter_grant_incoming(exp, oa);
-                if (fmd && fmd->fmd_mactime_xid > oti->oti_xid)
-                        oa->o_valid &= ~(OBD_MD_FLMTIME | OBD_MD_FLCTIME |
-                                         OBD_MD_FLATIME);
-                else
-                        obdo_to_inode(dentry->d_inode, oa, OBD_MD_FLATIME |
-                                      OBD_MD_FLMTIME | OBD_MD_FLCTIME);
-        }
+ 
+        filter_grant_incoming(exp, oa);
+        if (fmd && fmd->fmd_mactime_xid > oti->oti_xid)
+                oa->o_valid &= ~(OBD_MD_FLMTIME | OBD_MD_FLCTIME |
+                                 OBD_MD_FLATIME);
+        else
+                obdo_to_inode(dentry->d_inode, oa, OBD_MD_FLATIME |
+                              OBD_MD_FLMTIME | OBD_MD_FLCTIME);
         cleanup_phase = 3;
 
         left = filter_grant_space_left(exp);
 
-        rc = filter_grant_check(exp, objcount, &fso, niocount, nb, res,
+        rc = filter_grant_check(exp, oa, objcount, &fso, niocount, nb, res,
                                 &left, dentry->d_inode);
 
         /* do not zero out oa->o_valid as it is used in filter_commitrw_write()
          * for setting UID/GID and fid EA in first write time. */
-        if (oa && oa->o_valid & OBD_MD_FLGRANT) {
+        if (oa->o_valid & OBD_MD_FLGRANT) {
                 oa->o_grant = filter_grant(exp,oa->o_grant,oa->o_undirty,left);
                 oa->o_valid |= OBD_MD_FLGRANT;
         }

@@ -975,6 +975,14 @@ static int ost_brw_write(struct ptlrpc_request *req, struct obd_trans_info *oti)
         /* obd_preprw clobbers oa->valid, so save what we need */
         client_cksum = body->oa.o_valid & OBD_MD_FLCKSUM ? body->oa.o_cksum : 0;
 
+        /* Because we already sync grant info with client when reconnect,
+         * grant info will be cleared for resent req, then fed_grant and 
+         * total_grant will not be modified in following preprw_write*/ 
+        if (lustre_msg_get_flags(req->rq_reqmsg) & (MSG_RESENT | MSG_REPLAY)) {
+                DEBUG_REQ(D_CACHE, req, "clear resent/replay req grant info\n");
+                body->oa.o_valid &= ~OBD_MD_FLGRANT;
+        }
+
         rc = obd_preprw(OBD_BRW_WRITE, req->rq_export, &body->oa, objcount,
                         ioo, npages, pp_rnb, local_nb, oti);
         if (rc != 0)

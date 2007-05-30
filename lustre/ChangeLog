@@ -160,6 +160,15 @@ Details    : When osc reconnect ost, OST(filter) should check whether it
 	     to update the client grant space info.
 
 Severity   : normal
+Frequency  : when client reconnect to OST 
+Bugzilla   : 11662
+Description: Grant Leak when osc do resend and replay bulk write
+Details	   : When osc reconnect to OST, OST(filter)should clear grant info of
+	     bulk write request, because the grant info while be sync between
+	     OSC and OST when reconnect, and we should ignore the grant info
+	     these of resend/replay write req.
+
+Severity   : normal
 Frequency  : when client is evicted 
 Bugzilla   : 12371
 Description: Grant might be wrongly erased when osc is evicted by OST
