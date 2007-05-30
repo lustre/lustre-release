@@ -435,6 +435,7 @@ static int filter_grant_check(struct obd_export *exp, struct obdo *oa,
                                 /* if enough space, pretend it was granted */
                                 ungranted += bytes;
                                 rnb[n].flags |= OBD_BRW_GRANTED;
+                                lnb[n].lnb_grant_used = bytes;
                                 CDEBUG(0, "idx %d ungranted=%lu\n",n,ungranted);
                                 rc = 0;
                                 continue;
@@ -460,8 +461,9 @@ static int filter_grant_check(struct obd_export *exp, struct obdo *oa,
          * happens in filter_grant_commit() after the writes are done. */
         *left -= ungranted;
         fed->fed_grant -= used;
-        fed->fed_pending += used;
-        exp->exp_obd->u.filter.fo_tot_pending += used;
+        fed->fed_pending += used + ungranted;
+        exp->exp_obd->u.filter.fo_tot_granted += ungranted;
+        exp->exp_obd->u.filter.fo_tot_pending += used + ungranted;
 
         CDEBUG(mask,
                "%s: cli %s/%p used: %lu ungranted: %lu grant: %lu dirty: %lu\n",
