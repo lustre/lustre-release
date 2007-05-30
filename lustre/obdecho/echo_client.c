@@ -1383,7 +1383,7 @@ echo_client_setup(struct obd_device *obddev, obd_count len, void *buf)
                 return -ENOMEM;
         }
 
-        ocd->ocd_connect_flags = OBD_CONNECT_VERSION;
+        ocd->ocd_connect_flags = OBD_CONNECT_VERSION | OBD_CONNECT_REQPORTAL;
         ocd->ocd_version = LUSTRE_VERSION_CODE;
 
         rc = obd_connect(&conn, tgt, &echo_uuid, ocd);
