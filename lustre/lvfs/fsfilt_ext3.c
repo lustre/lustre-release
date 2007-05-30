@@ -68,6 +68,15 @@
 #define FSFILT_DELETE_TRANS_BLOCKS(sb)    EXT3_DELETE_TRANS_BLOCKS(sb)
 #endif
 
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
+#define fsfilt_ext3_journal_start(inode, nblocks) \
+                                journal_start(EXT3_JOURNAL(inode),nblocks)
+#define fsfilt_ext3_journal_stop(handle)          journal_stop(handle)
+#else
+#define fsfilt_ext3_journal_start(inode, nblocks) ext3_journal_start(inode, nblocks)
+#define fsfilt_ext3_journal_stop(handle)          ext3_journal_stop(handle)
+#endif
+
 static kmem_cache_t *fcb_cache;
 
 struct fsfilt_cb_data {
@@ -256,7 +265,7 @@ static void *fsfilt_ext3_start(struct inode *inode, int op, void *desc_private,
  journal_start:
         LASSERTF(nblocks > 0, "can't start %d credit transaction\n", nblocks);
         lock_24kernel();
-        handle = journal_start(EXT3_JOURNAL(inode), nblocks);
+        handle = fsfilt_ext3_journal_start(inode, nblocks);
         unlock_24kernel();
 
         if (!IS_ERR(handle))
@@ -395,7 +404,7 @@ static void *fsfilt_ext3_brw_start(int objcount, struct fsfilt_objinfo *fso,
 
         LASSERTF(needed > 0, "can't start %d credit transaction\n", needed);
         lock_24kernel();
-        handle = journal_start(journal, needed);
+        handle = fsfilt_ext3_journal_start(fso->fso_dentry->d_inode, needed);
         unlock_24kernel();
         if (IS_ERR(handle)) {
                 CERROR("can't get handle for %d credits: rc = %ld\n", needed,
@@ -437,7 +446,7 @@ static int fsfilt_ext3_commit(struct inode *inode, void *h, int force_sync)
                 handle->h_sync = 1; /* recovery likes this */
 
         lock_24kernel();
-        rc = journal_stop(handle);
+        rc = fsfilt_ext3_journal_stop(handle);
         unlock_24kernel();
 
         return rc;
@@ -463,7 +472,7 @@ static int fsfilt_ext3_commit_async(struct inode *inode, void *h,
         tid = transaction->t_tid;
         /* we don't want to be blocked */
         handle->h_sync = 0;
-        rc = journal_stop(handle);
+        rc = fsfilt_ext3_journal_stop(handle);
         if (rc) {
                 CERROR("error while stopping transaction: %d\n", rc);
                 unlock_24kernel();
@@ -977,7 +986,7 @@ static int ext3_ext_new_extent_cb(struct ext3_extents_tree *tree,
         ext3_up_truncate_sem(inode);
 
         lock_24kernel();
-        handle = journal_start(EXT3_JOURNAL(inode), count+EXT3_ALLOC_NEEDED+1);
+        handle = fsfilt_ext3_journal_start(inode, count+EXT3_ALLOC_NEEDED+1);
         unlock_24kernel();
         if (IS_ERR(handle)) {
                 ext3_down_truncate_sem(inode);
@@ -988,7 +997,7 @@ static int ext3_ext_new_extent_cb(struct ext3_extents_tree *tree,
         if (tgen != EXT_GENERATION(tree)) {
                 /* the tree has changed. so path can be invalid at moment */
                 lock_24kernel();
-                journal_stop(handle);
+                fsfilt_ext3_journal_stop(handle);
                 unlock_24kernel();
                 return EXT_REPEAT;
         }
@@ -1023,7 +1032,7 @@ static int ext3_ext_new_extent_cb(struct ext3_extents_tree *tree,
 
 out:
         lock_24kernel();
-        journal_stop(handle);
+        fsfilt_ext3_journal_stop(handle);
         unlock_24kernel();
 map:
         if (err >= 0) {
@@ -1249,7 +1258,6 @@ static int fsfilt_ext3_write_record(struct file *file, void *buf, int bufsize,
         struct inode *inode = file->f_dentry->d_inode;
         loff_t old_size = inode->i_size, offset = *offs;
         loff_t new_size = inode->i_size;
-        journal_t *journal;
         handle_t *handle;
         int err = 0, block_count = 0, blocksize, size, boffs;
 
@@ -1258,9 +1266,8 @@ static int fsfilt_ext3_write_record(struct file *file, void *buf, int bufsize,
         block_count = (*offs & (blocksize - 1)) + bufsize;
         block_count = (block_count + blocksize - 1) >> inode->i_blkbits;
 
-        journal = EXT3_SB(inode->i_sb)->s_journal;
         lock_24kernel();
-        handle = journal_start(journal,
+        handle = fsfilt_ext3_journal_start(inode,
                                block_count * FSFILT_DATA_TRANS_BLOCKS(inode->i_sb) + 2);
         unlock_24kernel();
         if (IS_ERR(handle)) {
@@ -1322,7 +1329,7 @@ out:
         }
 
         lock_24kernel();
-        journal_stop(handle);
+        fsfilt_ext3_journal_stop(handle);
         unlock_24kernel();
 
         if (err == 0)

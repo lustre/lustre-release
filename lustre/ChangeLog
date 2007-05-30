@@ -21,6 +21,14 @@ Description: Transient SCSI error results in persistent IO issue
 Details    : iobuf->dr_error is not reinitialized to 0 between two
 	     uses.
 
+Severity   : normal
+Frequency  : sometimes when underlying device returns I/O errors
+Bugzilla   : 11743
+Description: OSTs not going read-only during write failures
+Details    : OSTs are not remounted read-only when the journal commit threads
+	     get I/O errors because fsfilt_ext3 calls journal_start/stop()
+	     instead of the ext3 wrappers.
+
 Severity   : minor
 Bugzilla   : 12364
 Description: poor connect scaling with increasing client count
