@@ -101,10 +101,8 @@ struct fsfilt_operations {
         int     (* fs_get_op_len)(int, struct fsfilt_objinfo *, int);
         int     (* fs_quotacheck)(struct super_block *sb,
                                   struct obd_quotactl *oqctl);
-#ifdef HAVE_DISK_INODE_VERSION
         __u64   (* fs_get_version) (struct inode *inode);
         __u64   (* fs_set_version) (struct inode *inode, __u64 new_version);
-#endif
         int     (* fs_quotactl)(struct super_block *sb,
                                 struct obd_quotactl *oqctl);
         int     (* fs_quotainfo)(struct lustre_quota_info *lqi, int type,
@@ -461,19 +459,21 @@ static inline int fsfilt_setup(struct obd_device *obd, struct super_block *fs)
         return 0;
 }
 
-#ifdef HAVE_DISK_INODE_VERSION
-static inline void fsfilt_set_version(struct obd_device *obd,
-				      struct inode *inode, __u64 new_version)
+static inline __u64 fsfilt_set_version(struct obd_device *obd,
+                                      struct inode *inode, __u64 new_version)
 {
-	obd->obd_fsops->fs_set_version(inode, new_version);
+        if (obd->obd_fsops->fs_set_version)
+                return obd->obd_fsops->fs_set_version(inode, new_version);
+        return -EOPNOTSUPP;
 }
 
 static inline __u64 fsfilt_get_version(struct obd_device *obd,
-				       struct inode *inode)
+                                       struct inode *inode)
 {
-	return obd->obd_fsops->fs_get_version(inode);
+        if (obd->obd_fsops->fs_set_version)
+                return obd->obd_fsops->fs_get_version(inode);
+        return -EOPNOTSUPP;
 }
-#endif
 
 #endif /* __KERNEL__ */
 
