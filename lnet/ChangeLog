@@ -30,6 +30,12 @@
 	ptllnd    - Portals 3.3 / UNICOS/lc 1.5.x, 2.0.x
        * bug fixes
 	
+Severity   : minor
+Frequency  : rare
+Description: the_lnet.ln_finalizing was not set when the current thread is
+             about to complete messages. It only affects multi-threaded 
+	     user space LNet.
+	
 Severity   : normal
 Frequency  : rare
 Bugzilla   : 11472
