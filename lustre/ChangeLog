@@ -16,6 +16,13 @@ tbd         Cluster File Systems, Inc. <info@clusterfs.com>
 
 Severity   : normal
 Frequency  : rare
+Bugzilla   : 12470
+Description: server LBUG when using old ost_num_threads parameter
+Details    : Accept the old ost_num_threads parameter but warn that it
+	     is deprecated, and fix an off-by-one error that caused an LBUG.
+
+Severity   : normal
+Frequency  : rare
 Bugzilla   : 11722
 Description: Transient SCSI error results in persistent IO issue
 Details    : iobuf->dr_error is not reinitialized to 0 between two

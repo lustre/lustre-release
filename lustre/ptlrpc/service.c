@@ -1090,7 +1090,7 @@ int ptlrpc_start_thread(struct obd_device *dev, struct ptlrpc_service *svc)
         CDEBUG(D_RPCTRACE, "%s started %d min %d max %d running %d\n",
                svc->srv_name, svc->srv_threads_started, svc->srv_threads_min,
                svc->srv_threads_max, svc->srv_threads_running);
-        if (svc->srv_threads_started >= svc->srv_threads_max) 
+        if (svc->srv_threads_started >= svc->srv_threads_max)
                 RETURN(-EMFILE);
 
         OBD_ALLOC(thread, sizeof(*thread));
@@ -1105,7 +1105,7 @@ int ptlrpc_start_thread(struct obd_device *dev, struct ptlrpc_service *svc)
                 RETURN(-EMFILE);
         }
         list_add(&thread->t_link, &svc->srv_threads);
-        id = ++svc->srv_threads_started;
+        id = svc->srv_threads_started++;
         spin_unlock(&svc->srv_lock);
 
         thread->t_id = id;

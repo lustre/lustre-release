@@ -55,6 +55,10 @@ static int oss_num_threads;
 CFS_MODULE_PARM(oss_num_threads, "i", int, 0444,
                 "number of OSS service threads to start");
 
+static int ost_num_threads;
+CFS_MODULE_PARM(ost_num_threads, "i", int, 0444,
+                "number of OST service threads to start (deprecated)");
+
 void oti_to_request(struct obd_trans_info *oti, struct ptlrpc_request *req)
 {
         struct oti_req_ack_lock *ack_lock;
@@ -1604,7 +1608,7 @@ static int ost_thread_init(struct ptlrpc_thread *thread)
 
         LASSERT(thread != NULL);
         LASSERT(thread->t_data == NULL);
-        LASSERT(thread->t_id <= OSS_THREADS_MAX);
+        LASSERTF(thread->t_id <= OSS_THREADS_MAX, "%u\n", thread->t_id);
 
         OBD_ALLOC_PTR(tls);
         if (tls != NULL) {
@@ -1809,6 +1813,14 @@ static int __init ost_init(void)
         lprocfs_init_vars(ost, &lvars);
         rc = class_register_type(&ost_obd_ops, lvars.module_vars,
                                  LUSTRE_OSS_NAME);
+
+        if (ost_num_threads != 0 && oss_num_threads == 0) {
+                LCONSOLE_INFO("ost_num_threads module parameter is deprecated, "
+                              "use oss_num_threads instead or unset both for "
+                              "dynamic thread startup\n");
+                oss_num_threads = ost_num_threads;
+        }
+
         RETURN(rc);
 }
 
