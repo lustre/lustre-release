@@ -247,6 +247,13 @@ Details    : in some rare cases, the open intent error is not checked before
 	     ASSERTION(open_req->rq_transno != 0), because it tries to release
 	     the failed open handle.
 
+Severity   : normal
+Frequency  : rare
+Bugzilla   : 12556 
+Description: Set cat log bitmap only after create log success. 
+Details    : in some rare cases, the cat log bitmap is set too early. and it 
+	     should be set only after create log success.
+
 --------------------------------------------------------------------------------
 
 2007-05-03  Cluster File Systems, Inc. <info@clusterfs.com>

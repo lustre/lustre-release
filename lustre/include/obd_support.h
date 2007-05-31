@@ -100,6 +100,7 @@ extern int obd_race_state;
 #define OBD_FAIL_MDS_SETXATTR_WRITE      0x134
 #define OBD_FAIL_MDS_FS_SETUP            0x135
 #define OBD_FAIL_MDS_RESEND              0x136
+#define OBD_FAIL_MDS_LLOG_CREATE_FAILED  0x137
 
 #define OBD_FAIL_OST                     0x200
 #define OBD_FAIL_OST_CONNECT_NET         0x201
