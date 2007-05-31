@@ -2484,9 +2484,9 @@ test_60b() { # bug 6411
 run_test 60b "limit repeated messages from CERROR/CWARN ========"
 
 test_60c() {
-	echo "create 100 files" 
+	echo "create 5000 files" 
 	createmany -o $DIR/f60c- 5000
-        sysctl -w lustre.fail_loc=0x80000137
+	sysctl -w lustre.fail_loc=0x80000137
 	unlinkmany $DIR/f60c- 5000
 }
 run_test 60c "unlink file when mds full"
