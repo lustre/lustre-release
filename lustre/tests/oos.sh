@@ -27,7 +27,7 @@ ORIGFREE=`cat /proc/fs/lustre/llite/*/kbytesavail | head -n 1`
 MAXFREE=${MAXFREE:-$((400000 * $STRIPECOUNT))}
 if [ $ORIGFREE -gt $MAXFREE ]; then
 	echo "skipping out-of-space test on $OSC"
-	echo "reports ${ORIGFREE}kB free, more tham MAXFREE ${MAXFREE}kB"
+	echo "reports ${ORIGFREE}kB free, more than MAXFREE ${MAXFREE}kB"
 	echo "increase $MAXFREE (or reduce test fs size) to proceed"
 	exit 0
 fi
@@ -54,8 +54,10 @@ sync; sleep 1 ; sync
 
 for OSC in /proc/fs/lustre/osc/*-osc-*; do
 	AVAIL=`cat $OSC/kbytesavail`
-	GRANT=`cat $OSC/cur_grant_bytes`
-	[ $(($AVAIL - $GRANT / 1024)) -lt 400 ] && OSCFULL=full
+	GRANT=$((`cat $OSC/cur_grant_bytes` / 1024))
+	echo -n "$(basename $OSC) avl=$AVAIL grnt=$GRANT diff=$(($AVAIL - $GRANT))"
+	[ $(($AVAIL - $GRANT)) -lt 400 ] && OSCFULL=full && echo -n " FULL"
+	echo " "
 done
 
 if [ -z "$OSCFULL" ]; then
@@ -78,7 +80,6 @@ fi
 #lctl debug_daemon stop
 
 rm -f $OOS
-sync; sleep 1; sync
 
 if [ $SUCCESS -eq 1 ]; then
 	echo "Success!"
