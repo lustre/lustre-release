@@ -238,6 +238,15 @@ Details    : using LL_ORIGIN_REMOVEPAGE origin flag instead of LL_ORIGIN_UNKNOW
 	     for llap_from_page call in ll_removepage prevents from taking the 
 	     superblock lock for a soon died page.
 
+Severity   : normal
+Frequency  : rare
+Bugzilla   : 11935 
+Description: Not check open intent error before release open handle
+Details    : in some rare cases, the open intent error is not checked before
+	     release open handle, which may cause
+	     ASSERTION(open_req->rq_transno != 0), because it tries to release
+	     the failed open handle.
+
 --------------------------------------------------------------------------------
 
 2007-05-03  Cluster File Systems, Inc. <info@clusterfs.com>

@@ -288,15 +288,17 @@ static int ll_intent_file_open(struct file *file, void *lmm,
                 /* reason for keep own exit path - don`t flood log
                 * with messages with -ESTALE errors.
                 */
-                if (!it_disposition(itp, DISP_OPEN_OPEN))
+                if (!it_disposition(itp, DISP_OPEN_OPEN) || 
+                     it_open_error(DISP_OPEN_OPEN, itp))
                         GOTO(out, rc);
                 ll_release_openhandle(file->f_dentry, itp);
                 GOTO(out_stale, rc);
         }
 
-        if (rc != 0) {
-               CERROR("lock enqueue: err: %d\n", rc);
-               GOTO(out, rc);
+        if (rc != 0 || it_open_error(DISP_OPEN_OPEN, itp)) {
+                rc = rc ? rc : it_open_error(DISP_OPEN_OPEN, itp);
+                CERROR("lock enqueue: err: %d\n", rc);
+                GOTO(out, rc);
         }
 
         if (itp->d.lustre.it_lock_mode)
@@ -442,7 +444,14 @@ int ll_file_open(struct inode *inode, struct file *file)
                 if (it_disposition(it, DISP_OPEN_OPEN)) {
                         /* Well, there's extra open request that we do not need,
                            let's close it somehow. This will decref request. */
+                        rc = it_open_error(DISP_OPEN_OPEN, it);
+                        if (rc) {
+                                ll_file_data_put(fd);
+                                GOTO(out_och_free, rc);
+                        }       
                         ll_release_openhandle(file->f_dentry, it);
+                        lprocfs_counter_incr(ll_i2sbi(inode)->ll_stats, 
+                                             LPROC_LL_OPEN);
                 }
                 (*och_usecount)++;
 
@@ -1899,9 +1908,10 @@ static int join_file(struct inode *head_inode, struct file *head_filp,
 
         rc = oit.d.lustre.it_status;
 
-        if (rc < 0) {
+        if (rc < 0 || it_open_error(DISP_OPEN_OPEN, &oit)) {
+                rc = rc ? rc : it_open_error(DISP_OPEN_OPEN, &oit);
                 ptlrpc_req_finished((struct ptlrpc_request *)
-                                                          oit.d.lustre.it_data);
+                                    oit.d.lustre.it_data);
                 GOTO(out, rc);
         }
 
@@ -2027,6 +2037,8 @@ int ll_release_openhandle(struct dentry *dentry, struct lookup_intent *it)
         /* No open handle to close? Move away */
         if (!it_disposition(it, DISP_OPEN_OPEN))
                 RETURN(0);
+
+        LASSERT(it_open_error(DISP_OPEN_OPEN, it) == 0);
 
         OBD_ALLOC(och, sizeof(*och));
         if (!och)
