@@ -254,6 +254,13 @@ Description: Set cat log bitmap only after create log success.
 Details    : in some rare cases, the cat log bitmap is set too early. and it 
 	     should be set only after create log success.
 
+Severity   : major
+Bugzilla   : 11971
+Description: Accessing a block bevice can re-enable I/O when Lustre is
+	     tearing down a device.
+Details    : dev_clear_rdonly(bdev) must be called in kill_bdev() instead of
+	     blkdev_put().
+
 --------------------------------------------------------------------------------
 
 2007-05-03  Cluster File Systems, Inc. <info@clusterfs.com>
