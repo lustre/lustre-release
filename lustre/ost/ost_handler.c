@@ -1438,6 +1438,14 @@ static int ost_handle(struct ptlrpc_request *req)
                 break;
         case OST_WRITE:
                 CDEBUG(D_INODE, "write\n");
+                /* req->rq_request_portal would be nice, if it was set */
+                if (req->rq_rqbd->rqbd_service->srv_req_portal !=OST_IO_PORTAL){
+                        CERROR("%s: deny write request from %s to portal %u\n",
+                               req->rq_export->exp_obd->obd_name,
+                               obd_export_nid2str(req->rq_export),
+                               req->rq_rqbd->rqbd_service->srv_req_portal);
+                        GOTO(out, rc = -EPROTO);
+                }
                 OBD_FAIL_RETURN(OBD_FAIL_OST_BRW_NET, 0);
                 if (OBD_FAIL_CHECK_ONCE(OBD_FAIL_OST_ENOSPC))
                         GOTO(out, rc = -ENOSPC);
@@ -1449,6 +1457,14 @@ static int ost_handle(struct ptlrpc_request *req)
                 RETURN(rc);
         case OST_READ:
                 CDEBUG(D_INODE, "read\n");
+                /* req->rq_request_portal would be nice, if it was set */
+                if (req->rq_rqbd->rqbd_service->srv_req_portal !=OST_IO_PORTAL){
+                        CERROR("%s: deny read request from %s to portal %u\n",
+                               req->rq_export->exp_obd->obd_name,
+                               obd_export_nid2str(req->rq_export),
+                               req->rq_rqbd->rqbd_service->srv_req_portal);
+                        GOTO(out, rc = -EPROTO);
+                }
                 OBD_FAIL_RETURN(OBD_FAIL_OST_BRW_NET, 0);
                 rc = ost_brw_read(req, oti);
                 LASSERT(current->journal_info == NULL);

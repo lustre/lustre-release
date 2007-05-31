@@ -475,10 +475,7 @@ static int osc_punch(struct obd_export *exp, struct obd_info *oinfo,
         if (!req)
                 RETURN(-ENOMEM);
 
-        /* FIXME bug 249. Also see bug 7198 */
-        if (class_exp2cliimp(exp)->imp_connect_data.ocd_connect_flags &
-            OBD_CONNECT_REQPORTAL)
-                req->rq_request_portal = OST_IO_PORTAL;
+        req->rq_request_portal = OST_IO_PORTAL;         /* bug 7198 */
 
         body = lustre_msg_buf(req->rq_reqmsg, REQ_REC_OFF, sizeof(*body));
         memcpy(&body->oa, oinfo->oi_oa, sizeof(*oinfo->oi_oa));
@@ -575,10 +572,7 @@ static int osc_destroy(struct obd_export *exp, struct obdo *oa,
         if (!req)
                 RETURN(-ENOMEM);
 
-        /* FIXME bug 249. Also see bug 7198 */
-        if (class_exp2cliimp(exp)->imp_connect_data.ocd_connect_flags &
-            OBD_CONNECT_REQPORTAL)
-                req->rq_request_portal = OST_IO_PORTAL;
+        req->rq_request_portal = OST_IO_PORTAL;         /* bug 7198 */
 
         body = lustre_msg_buf(req->rq_reqmsg, REQ_REC_OFF, sizeof(*body));
 
@@ -905,10 +899,7 @@ static int osc_brw_prep_request(int cmd, struct client_obd *cli,struct obdo *oa,
         if (req == NULL)
                 RETURN (-ENOMEM);
 
-        /* FIXME bug 249. Also see bug 7198 */
-        if (cli->cl_import->imp_connect_data.ocd_connect_flags &
-            OBD_CONNECT_REQPORTAL)
-                req->rq_request_portal = OST_IO_PORTAL;
+        req->rq_request_portal = OST_IO_PORTAL;         /* bug 7198 */
 
         if (opc == OST_WRITE)
                 desc = ptlrpc_prep_bulk_imp (req, page_count,
