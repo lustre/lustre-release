@@ -965,7 +965,7 @@ kptllnd_peer_handle_hello (ptl_process_id_t  initiator,
                 CERROR("%s: max message size %d < MIN %d",
                        libcfs_id2str(lpid),
                        msg->ptlm_u.hello.kptlhm_max_msg_size,
-                       *kptllnd_tunables.kptl_max_msg_size);
+                       PTLLND_MIN_BUFFER_SIZE);
                 return NULL;
         }
 
