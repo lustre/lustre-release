@@ -182,12 +182,8 @@ int llapi_lov_get_uuids(int fd, struct obd_uuid *uuidp, int *ost_count)
         /* Get the lov name */
         rc = ioctl(fd, OBD_IOC_GETNAME, (void *) lov_name);
         if (rc) {
-                if (errno != ENOTTY) {
-                        rc = errno;
-                        err_msg("error: can't get lov name.");
-                } else {
-                        rc = 0;
-                }
+                rc = errno;
+                err_msg("error: can't get lov name.");
                 return rc;
         }
 
