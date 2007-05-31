@@ -908,7 +908,10 @@ int ll_fill_super(struct super_block *sb)
         cfg.cfg_uuid = lsi->lsi_llsbi->ll_sb_uuid;
 
         /* set up client obds */
-        err = lustre_process_log(sb, profilenm, &cfg);
+        if (strchr(profilenm, '/') != NULL) /* COMPAT_146 */
+                err = -EINVAL; /* skip error messages, use old config code */
+        else
+                err = lustre_process_log(sb, profilenm, &cfg);
         /* COMPAT_146 */
         if (err < 0) {
                 char *oldname;
