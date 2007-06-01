@@ -198,7 +198,7 @@ int llapi_lov_get_uuids(int fd, struct obd_uuid *uuidp, int *ost_count)
         }
 
         while ((fgets(buf, sizeof(buf), fp) != NULL) && index < *ost_count) {
-                if (sscanf(buf, "%d: %s", &index, (char *)&uuidp[index].uuid)<2)
+                if (sscanf(buf, "%d: %s", &index, uuidp[index].uuid) < 2)
                         break;
                 index++;
         }
