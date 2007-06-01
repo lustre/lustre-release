@@ -87,7 +87,7 @@ static struct ll_sb_info *ll_init_sbi(void)
         INIT_LIST_HEAD(&sbi->ll_deathrow);
         spin_lock_init(&sbi->ll_deathrow_lock);
 #endif
-        for (i = 0; i < LL_PROCESS_HIST_MAX; i++) { 
+        for (i = 0; i <= LL_PROCESS_HIST_MAX; i++) { 
                 spin_lock_init(&sbi->ll_rw_extents_info.pp_extents[i].pp_r_hist.oh_lock);
                 spin_lock_init(&sbi->ll_rw_extents_info.pp_extents[i].pp_w_hist.oh_lock);
         }
