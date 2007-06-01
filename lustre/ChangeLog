@@ -7,9 +7,9 @@ tbd         Cluster File Systems, Inc. <info@clusterfs.com>
         2.6.12.6 vanilla (kernel.org)
         2.6.16.27-0.9 (SLES 10)
        * Client support for unpatched kernels:
-	(see https://mail.clusterfs.com/wikis/lustre/PatchlessClient)
-	2.6.16 - 2.6.19 vanilla (kernel.org)
-	2.6.9-42.0.8.EL (RHEL 4)
+        (see http://wiki.lustre.org/index.php?title=Patchless_Client)
+        2.6.9-42.0.10.EL (RHEL 4)
+        2.6.16 - 2.6.21 vanilla (kernel.org)
        * Recommended e2fsprogs version: 1.39.cfs7
        * Note that reiserfs quotas are disabled on SLES 10 in this kernel.
        * bug fixes
@@ -204,7 +204,7 @@ Description: Checking Stale with correct fid
 Details    : ll_revalidate_it should uses de_inode instead of op_data.fid2 
 	     to check whether it is stale, because sometimes, we want the 
 	     enqueue happened anyway, and op_data.fid2 will not be initialized.
-     
+
 Severity   : enhancement
 Bugzilla   : 11647
 Description: update patchless client
@@ -215,19 +215,19 @@ Frequency  : only with 2.4 kernel
 Bugzilla   : 12134
 Description: random memory corruption
 Details    : size of struct ll_inode_info is to big for union inode.u and this
-             can be cause of random memory corruption.
+	     can be cause of random memory corruption.
 
 Severity   : normal
 Frequency  : rare 
 Bugzilla   : 10818
 Description: Memory leak in recovery
 Details    : Lov_mds_md was not free in an error handler in mds_create_object.
-             It should also check obd_fail before fsfilt_start, otherwise if 
-             fsfilt_start return -EROFS,(failover mds during mds recovery).
-             then the req will return with repmsg->transno = 0 and rc = EROFS. 
-             and we met hit the assert LASSERT(req->rq_reqmsg->transno ==
-             req->rq_repmsg->transno) in ptlrpc_replay_interpret.  Fcc should 
-             be freed no matter whether fsfilt_commit success or not.
+	     It should also check obd_fail before fsfilt_start, otherwise if 
+	     fsfilt_start return -EROFS,(failover mds during mds recovery).
+	     then the req will return with repmsg->transno = 0 and rc = EROFS. 
+	     and we met hit the assert LASSERT(req->rq_reqmsg->transno ==
+	     req->rq_repmsg->transno) in ptlrpc_replay_interpret.  Fcc should 
+	     be freed no matter whether fsfilt_commit success or not.
 
 Severity   : minor
 Frequency  : only with huge count clients
