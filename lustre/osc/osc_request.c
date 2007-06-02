@@ -1024,11 +1024,13 @@ static int check_write_checksum(struct obdo *oa, const lnet_process_id_t *peer,
         new_cksum = osc_checksum_bulk(nob, page_count, pga);
 
         if (new_cksum == server_cksum)
-                msg = "changed on the client after we checksummed it";
+                msg = "changed on the client after we checksummed it - "
+                      "likely false positive due to mmap IO (bug 11742)";
         else if (new_cksum == client_cksum)
                 msg = "changed in transit before arrival at OST";
         else
-                msg = "changed in transit AND doesn't match the original";
+                msg = "changed in transit AND doesn't match the original - "
+                      "likely false positive due to mmap IO (bug 11742)";
 
         LCONSOLE_ERROR("BAD WRITE CHECKSUM: %s: from %s inum "LPU64"/"LPU64
                        " object "LPU64"/"LPU64" extent ["LPU64"-"LPU64"]\n",
@@ -1092,10 +1094,10 @@ static int osc_brw_fini_request(struct ptlrpc_request *req, int rc)
                 if (unlikely((aa->aa_oa->o_valid & OBD_MD_FLCKSUM) &&
                              client_cksum &&
                              check_write_checksum(&body->oa, peer, client_cksum,
-                                                 body->oa.o_cksum,
-                                                 aa->aa_requested_nob,
-                                                 aa->aa_page_count,
-                                                 aa->aa_ppga)))
+                                                  body->oa.o_cksum,
+                                                  aa->aa_requested_nob,
+                                                  aa->aa_page_count,
+                                                  aa->aa_ppga)))
                         RETURN(-EAGAIN);
 
                 rc = check_write_rcs(req, aa->aa_requested_nob,aa->aa_nio_count,
