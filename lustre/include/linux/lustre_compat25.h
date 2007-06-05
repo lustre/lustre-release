@@ -497,6 +497,7 @@ ll_kern_mount(const char *fstype, int flags, const char *name, void *data)
         if (!type)
                 return ERR_PTR(-ENODEV);
         mnt = vfs_kern_mount(type, flags, name, data);
+        module_put(type->owner);
         return mnt;
 }
 #else

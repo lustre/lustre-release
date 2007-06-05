@@ -15,6 +15,13 @@ tbd         Cluster File Systems, Inc. <info@clusterfs.com>
        * bug fixes
 
 Severity   : normal
+Frequency  : 2.6.18 servers only
+Bugzilla   : 12546
+Description: ll_kern_mount() doesn't release the module reference
+Details    : The ldiskfs module reference count never drops down to 0
+	     because ll_kern_mount() doesn't release the module reference.
+
+Severity   : normal
 Frequency  : rare
 Bugzilla   : 12470
 Description: server LBUG when using old ost_num_threads parameter
