@@ -957,6 +957,8 @@ static int ptlrpc_main(void *arg)
 
                 lc_watchdog_disable(watchdog);
 
+                cond_resched();
+
                 l_wait_event_exclusive (svc->srv_waitq,
                               ((thread->t_flags & SVC_STOPPING) != 0 &&
                                svc->srv_n_difficult_replies == 0) ||
