@@ -235,6 +235,13 @@ static int mds_lov_update_desc(struct obd_device *obd, struct obd_export *lov)
                "%d/%d\n", mds->mds_max_mdsize, mds->mds_max_cookiesize,
                stripes);
 
+        /* If we added a target we have to reconnect the llogs */
+        /* We only _need_ to do this at first add (idx), or the first time
+           after recovery.  However, it should now be safe to call anytime. */
+        mutex_down(&obd->obd_dev_sem);
+        llog_cat_initialize(obd, mds->mds_lov_desc.ld_tgt_count, NULL);
+        mutex_up(&obd->obd_dev_sem);
+
 out:
         OBD_FREE(ld, sizeof(*ld));
         RETURN(rc);
@@ -291,14 +298,6 @@ static int mds_lov_update_mds(struct obd_device *obd,
                 CDEBUG(D_CONFIG, "last object "LPU64" from OST %d\n",
                       mds->mds_lov_objids[idx], idx);
         }
-
-        /* If we added a target we have to reconnect the llogs */
-        /* We only _need_ to do this at first add (idx), or the first time
-           after recovery.  However, it should now be safe to call anytime. */
-        CDEBUG(D_CONFIG, "reset llogs idx=%d\n", idx);
-        mutex_down(&obd->obd_dev_sem);
-        llog_cat_initialize(obd, mds->mds_lov_desc.ld_tgt_count, uuid);
-        mutex_up(&obd->obd_dev_sem);
 
         RETURN(rc);
 }

@@ -1141,6 +1141,19 @@ test_59() {
 }
 run_test 59 "test log_commit_thread vs filter_destroy race"
 
+# race between add unlink llog vs cat log init in post_recovery (only for b1_6)
+# bug 12086: should no oops and No ctxt error for this test
+test_60() {
+    mkdir $DIR/$tdir
+    createmany -o $DIR/$tdir/$tfile-%d 200
+    replay_barrier mds
+    unlinkmany $DIR/$tdir/$tfile-%d 0 100
+    fail mds
+    unlinkmany $DIR/$tdir/$tfile-%d 100 100
+    local no_ctxt=`dmesg | grep "No ctxt"`
+    [ -z "$no_ctxt" ] || error "ctxt is not initialized in recovery" 
+}
+run_test 60 "test llog post recovery init vs llog unlink"
 
 equals_msg `basename $0`: test complete, cleaning up
 $CLEANUP

@@ -275,6 +275,16 @@ Description: service threads may hog cpus when ther eis a lot of requests
 Details    : Insert cond_resched to give other threads a chance to use some of
              the cpu
 
+Severity   : normal
+Frequency  : rare
+Bugzilla   : 12086 
+Description: the cat log was not initialized in recovery 
+Details    : When mds(mgs) do recovery, the tgt_count might be zero, so the
+	     unlink log on mds will not be initialized until mds post
+	     recovery. And also in mds post recovery, the unlink log will 
+	     initialization will be done asynchronausly, so there will be race
+	     between add unlink log and unlink log initialization.
+
 --------------------------------------------------------------------------------
 
 2007-05-03  Cluster File Systems, Inc. <info@clusterfs.com>
