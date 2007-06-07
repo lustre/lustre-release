@@ -106,11 +106,9 @@ static int ll_direct_IO_24(int rw,
         ll_inode_fill_obdo(inode, rw, &oa);
 
         if (rw == OBD_BRW_WRITE)
-                lprocfs_counter_add(ll_i2sbi(inode)->ll_stats,
-                                    LPROC_LL_DIRECT_WRITE, iobuf->length);
+                ll_stats_ops_tally(ll_i2sbi(inode), LPROC_LL_DIRECT_WRITE, iobuf->length);
         else
-                lprocfs_counter_add(ll_i2sbi(inode)->ll_stats,
-                                    LPROC_LL_DIRECT_READ, iobuf->length);
+                ll_stats_ops_tally(ll_i2sbi(inode), LPROC_LL_DIRECT_READ, iobuf->length);
         rc = obd_brw_rqset(rw, ll_i2obdexp(inode), &oa, lsm, iobuf->nr_pages,
                            pga, NULL);
         if (rc == 0) {

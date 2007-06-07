@@ -234,14 +234,12 @@ int ll_file_release(struct inode *inode, struct file *file)
         ENTRY;
         CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu/%u(%p)\n", inode->i_ino,
                inode->i_generation, inode);
-        ll_vfs_ops_tally(sbi, VFS_OPS_RELEASE);
 
         /* don't do anything for / */
         if (inode->i_sb->s_root == file->f_dentry)
                 RETURN(0);
 
-        lprocfs_counter_incr(sbi->ll_stats, LPROC_LL_RELEASE);
-
+        ll_stats_ops_tally(sbi, LPROC_LL_RELEASE, 1);
         fd = LUSTRE_FPRIVATE(file);
         LASSERT(fd != NULL);
 
@@ -385,7 +383,6 @@ int ll_file_open(struct inode *inode, struct file *file)
 
         CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu/%u(%p), flags %o\n", inode->i_ino,
                inode->i_generation, inode, file->f_flags);
-        ll_vfs_ops_tally(ll_i2sbi(inode), VFS_OPS_OPEN);
 
         /* don't do anything for / */
         if (inode->i_sb->s_root == file->f_dentry)
@@ -494,7 +491,7 @@ int ll_file_open(struct inode *inode, struct file *file)
                         GOTO(out_och_free, rc);
                 }
 
-                lprocfs_counter_incr(ll_i2sbi(inode)->ll_stats, LPROC_LL_OPEN);
+                ll_stats_ops_tally(ll_i2sbi(inode), LPROC_LL_OPEN, 1);
                 rc = ll_local_open(file, it, fd, *och_p);
                 LASSERTF(rc == 0, "rc = %d\n", rc);
         }
@@ -1162,14 +1159,12 @@ static ssize_t ll_file_read(struct file *file, char *buf, size_t count,
         ENTRY;
         CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu/%u(%p),size="LPSZ",offset=%Ld\n",
                inode->i_ino, inode->i_generation, inode, count, *ppos);
-        ll_vfs_ops_tally(sbi, VFS_OPS_READ);
-
         /* "If nbyte is 0, read() will return 0 and have no other results."
          *                      -- Single Unix Spec */
         if (count == 0)
                 RETURN(0);
 
-        lprocfs_counter_add(sbi->ll_stats, LPROC_LL_READ_BYTES, count);
+        ll_stats_ops_tally(sbi, LPROC_LL_READ_BYTES, count);
 
         if (!lsm) {
                 /* Read on file with no objects should return zero-filled
@@ -1287,7 +1282,7 @@ repeat:
         /* BUG: 5972 */
         file_accessed(file);
         retval = generic_file_read(file, buf, chunk, ppos);
-        ll_rw_stats_tally(ll_i2sbi(inode), current->pid, file, count, 0);
+        ll_rw_stats_tally(sbi, current->pid, file, count, 0);
 
         ll_tree_unlock(&tree);
 
@@ -1325,7 +1320,6 @@ static ssize_t ll_file_write(struct file *file, const char *buf, size_t count,
 
         CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu/%u(%p),size="LPSZ",offset=%Ld\n",
                inode->i_ino, inode->i_generation, inode, count, *ppos);
-        ll_vfs_ops_tally(sbi, VFS_OPS_WRITE);
         
         SIGNAL_MASK_ASSERT(); /* XXX BUG 1511 */
 
@@ -1417,8 +1411,8 @@ out:
         up(&ll_i2info(inode)->lli_write_sem);
 
         retval = (sum > 0) ? sum : retval;
-        lprocfs_counter_add(ll_i2sbi(inode)->ll_stats, LPROC_LL_WRITE_BYTES,
-                            retval > 0 ? retval : 0);
+        ll_stats_ops_tally(ll_i2sbi(inode), LPROC_LL_WRITE_BYTES,
+                           retval > 0 ? retval : 0);
         RETURN(retval);
 }
 
@@ -1448,9 +1442,7 @@ static ssize_t ll_file_sendfile(struct file *in_file, loff_t *ppos,size_t count,
         if (count == 0)
                 RETURN(0);
 
-        lprocfs_counter_add(ll_i2sbi(inode)->ll_stats, LPROC_LL_READ_BYTES,
-                            count);
-
+        ll_stats_ops_tally(ll_i2sbi(inode), LPROC_LL_READ_BYTES, count);
         /* turn off the kernel's read-ahead */
         in_file->f_ra.ra_pages = 0;
 
@@ -2065,13 +2057,12 @@ int ll_file_ioctl(struct inode *inode, struct file *file, unsigned int cmd,
 
         CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu/%u(%p),cmd=%x\n", inode->i_ino,
                inode->i_generation, inode, cmd);
-        ll_vfs_ops_tally(ll_i2sbi(inode), VFS_OPS_IOCTL);
+        ll_stats_ops_tally(ll_i2sbi(inode), LPROC_LL_IOCTL, 1);
 
         /* asm-ppc{,64} declares TCGETS, et. al. as type 't' not 'T' */
         if (_IOC_TYPE(cmd) == 'T' || _IOC_TYPE(cmd) == 't') /* tty ioctls */
                 RETURN(-ENOTTY);
 
-        lprocfs_counter_incr(ll_i2sbi(inode)->ll_stats, LPROC_LL_IOCTL);
         switch(cmd) {
         case LL_IOC_GETFLAGS:
                 /* Get the current value of the file flags */
@@ -2154,8 +2145,7 @@ loff_t ll_file_seek(struct file *file, loff_t offset, int origin)
         CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu/%u(%p), to=%Lu=%#Lx(%s)\n",
                inode->i_ino, inode->i_generation, inode, retval, retval,
                origin == 2 ? "SEEK_END": origin == 1 ? "SEEK_CUR" : "SEEK_SET");
-        ll_vfs_ops_tally(ll_i2sbi(inode), VFS_OPS_SEEK);
-        lprocfs_counter_incr(ll_i2sbi(inode)->ll_stats, LPROC_LL_LLSEEK);
+        ll_stats_ops_tally(ll_i2sbi(inode), LPROC_LL_LLSEEK, 1);
         
         if (origin == 2) { /* SEEK_END */
                 int nonblock = 0, rc;
@@ -2202,8 +2192,7 @@ int ll_fsync(struct file *file, struct dentry *dentry, int data)
         ENTRY;
         CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu/%u(%p)\n", inode->i_ino,
                inode->i_generation, inode);
-        ll_vfs_ops_tally(ll_i2sbi(inode), VFS_OPS_FSYNC);
-        lprocfs_counter_incr(ll_i2sbi(inode)->ll_stats, LPROC_LL_FSYNC);
+        ll_stats_ops_tally(ll_i2sbi(inode), LPROC_LL_FSYNC, 1);
 
         /* fsync's caller has already called _fdata{sync,write}, we want
          * that IO to finish before calling the osc and mdc sync methods */
@@ -2264,7 +2253,7 @@ int ll_file_flock(struct file *file, int cmd, struct file_lock *file_lock)
 
         CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu file_lock=%p\n",
                inode->i_ino, file_lock);
-        ll_vfs_ops_tally(ll_i2sbi(inode), VFS_OPS_FLOCK);
+        ll_stats_ops_tally(ll_i2sbi(inode), LPROC_LL_FLOCK, 1);
 
         if (file_lock->fl_flags & FL_FLOCK) {
                 LASSERT((cmd == F_SETLKW) || (cmd == F_SETLK));
@@ -2415,7 +2404,7 @@ int ll_inode_revalidate_it(struct dentry *dentry, struct lookup_intent *it)
         CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu/%u(%p),name=%s\n",
                inode->i_ino, inode->i_generation, inode, dentry->d_name.name);
 #if (LINUX_VERSION_CODE <= KERNEL_VERSION(2,5,0))
-        lprocfs_counter_incr(ll_i2sbi(inode)->ll_stats, LPROC_LL_REVALIDATE);
+        ll_stats_ops_tally(ll_i2sbi(inode), LPROC_LL_REVALIDATE, 1);
 #endif
 
         exp = ll_i2mdcexp(inode);
@@ -2501,7 +2490,7 @@ int ll_getattr_it(struct vfsmount *mnt, struct dentry *de,
         int res = 0;
 
         res = ll_inode_revalidate_it(de, it);
-        lprocfs_counter_incr(ll_i2sbi(inode)->ll_stats, LPROC_LL_GETATTR);
+        ll_stats_ops_tally(ll_i2sbi(inode), LPROC_LL_GETATTR, 1);
 
         if (res)
                 return res;
@@ -2533,7 +2522,6 @@ int ll_getattr(struct vfsmount *mnt, struct dentry *de, struct kstat *stat)
 {
         struct lookup_intent it = { .it_op = IT_GETATTR };
 
-        ll_vfs_ops_tally(ll_i2sbi(de->d_inode), VFS_OPS_GETATTR);
         return ll_getattr_it(mnt, de, &it, stat);
 }
 #endif
@@ -2569,7 +2557,7 @@ int ll_inode_permission(struct inode *inode, int mask, struct nameidata *nd)
         CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu/%u(%p), mask %o\n",
                inode->i_ino, inode->i_generation, inode, mask);
 
-        ll_vfs_ops_tally(ll_i2sbi(inode), VFS_OPS_INODE_PERMISSION);
+        ll_stats_ops_tally(ll_i2sbi(inode), LPROC_LL_INODE_PERM, 1);
         return generic_permission(inode, mask, lustre_check_acl);
 }
 #else
@@ -2584,7 +2572,7 @@ int ll_inode_permission(struct inode *inode, int mask)
 
         CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu/%u(%p), mask %o\n",
                inode->i_ino, inode->i_generation, inode, mask);
-        ll_vfs_ops_tally(ll_i2sbi(inode), VFS_OPS_INODE_PERMISSION);
+        ll_stats_ops_tally(ll_i2sbi(inode), LPROC_LL_INODE_PERM, 1);
 
         if ((mask & MAY_WRITE) && IS_RDONLY(inode) &&
             (S_ISREG(mode) || S_ISDIR(mode) || S_ISLNK(mode)))

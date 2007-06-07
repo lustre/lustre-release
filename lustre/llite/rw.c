@@ -89,11 +89,11 @@ static int ll_brw(int cmd, struct inode *inode, struct obdo *oa,
         pg.flag = flags;
 
         if (cmd & OBD_BRW_WRITE)
-                lprocfs_counter_add(ll_i2sbi(inode)->ll_stats,
-                                    LPROC_LL_BRW_WRITE, pg.count);
+                ll_stats_ops_tally(ll_i2sbi(inode), LPROC_LL_BRW_WRITE,
+                                   pg.count);
         else
-                lprocfs_counter_add(ll_i2sbi(inode)->ll_stats,
-                                    LPROC_LL_BRW_READ, pg.count);
+                ll_stats_ops_tally(ll_i2sbi(inode), LPROC_LL_BRW_READ,
+                           pg.count);
         oinfo.oi_oa = oa;
         oinfo.oi_md = lsm;
         rc = obd_brw(cmd, ll_i2obdexp(inode), &oinfo, 1, &pg, NULL);
@@ -121,7 +121,7 @@ void ll_truncate(struct inode *inode)
         CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu/%u(%p) to %Lu=%#Lx\n",inode->i_ino,
                inode->i_generation, inode, inode->i_size, inode->i_size);
 
-        ll_vfs_ops_tally(ll_i2sbi(inode), VFS_OPS_TRUNCATE);
+        ll_stats_ops_tally(ll_i2sbi(inode), LPROC_LL_TRUNC, 1);
         if (lli->lli_size_sem_owner != current) {
                 EXIT;
                 return;
@@ -771,15 +771,13 @@ int ll_commit_write(struct file *file, struct page *page, unsigned from,
         /* queue a write for some time in the future the first time we
          * dirty the page */
         if (!PageDirty(page)) {
-                lprocfs_counter_incr(ll_i2sbi(inode)->ll_stats,
-                                     LPROC_LL_DIRTY_MISSES);
+                ll_stats_ops_tally(ll_i2sbi(inode), LPROC_LL_DIRTY_MISSES, 1);
 
                 rc = queue_or_sync_write(exp, inode, llap, to, 0);
                 if (rc)
                         GOTO(out, rc);
         } else {
-                lprocfs_counter_incr(ll_i2sbi(inode)->ll_stats,
-                                     LPROC_LL_DIRTY_HITS);
+                ll_stats_ops_tally(ll_i2sbi(inode), LPROC_LL_DIRTY_HITS, 1);
         }
 
         /* put the page in the page cache, from now on ll_removepage is

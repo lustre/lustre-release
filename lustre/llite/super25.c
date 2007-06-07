@@ -40,7 +40,7 @@ static kmem_cache_t *ll_inode_cachep;
 static struct inode *ll_alloc_inode(struct super_block *sb)
 {
         struct ll_inode_info *lli;
-        lprocfs_counter_incr((ll_s2sbi(sb))->ll_stats, LPROC_LL_ALLOC_INODE);
+        ll_stats_ops_tally(ll_s2sbi(sb), LPROC_LL_ALLOC_INODE, 1);
         OBD_SLAB_ALLOC(lli, ll_inode_cachep, GFP_KERNEL, sizeof *lli);
         if (lli == NULL)
                 return NULL;

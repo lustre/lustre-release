@@ -50,6 +50,7 @@ enum {
          LPROC_LL_FSYNC,
          LPROC_LL_SETATTR,
          LPROC_LL_TRUNC,
+         LPROC_LL_FLOCK,
 
 #if (LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))
          LPROC_LL_GETATTR,
@@ -60,7 +61,9 @@ enum {
          LPROC_LL_ALLOC_INODE,
          LPROC_LL_SETXATTR,
          LPROC_LL_GETXATTR,
-
+         LPROC_LL_LISTXATTR,
+         LPROC_LL_REMOVEXATTR,
+         LPROC_LL_INODE_PERM,
          LPROC_LL_DIRECT_READ,
          LPROC_LL_DIRECT_WRITE,
          LPROC_LL_FILE_OPCODES

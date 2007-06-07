@@ -491,7 +491,7 @@ static int ll_dir_ioctl(struct inode *inode, struct file *file,
         if (_IOC_TYPE(cmd) == 'T' || _IOC_TYPE(cmd) == 't') /* tty ioctls */
                 return -ENOTTY;
 
-        lprocfs_counter_incr(ll_i2sbi(inode)->ll_stats, LPROC_LL_IOCTL);
+        ll_stats_ops_tally(ll_i2sbi(inode), LPROC_LL_IOCTL, 1);
         switch(cmd) {
         case EXT3_IOC_GETFLAGS:
         case EXT3_IOC_SETFLAGS:

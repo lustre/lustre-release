@@ -110,7 +110,6 @@ int ll_setxattr_common(struct inode *inode, const char *name,
         int xattr_type, rc;
         ENTRY;
 
-        lprocfs_counter_incr(sbi->ll_stats, LPROC_LL_SETXATTR);
 
         xattr_type = get_xattr_type(name);
         rc = xattr_type_filter(sbi, xattr_type);
@@ -148,7 +147,7 @@ int ll_setxattr(struct dentry *dentry, const char *name,
         CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu/%u(%p), xattr %s\n",
                inode->i_ino, inode->i_generation, inode, name);
 
-        ll_vfs_ops_tally(ll_i2sbi(inode), VFS_OPS_SETXATTR);
+        ll_stats_ops_tally(ll_i2sbi(inode), LPROC_LL_SETXATTR, 1);
 
         if (strncmp(name, XATTR_TRUSTED_PREFIX, 8) == 0 &&
             strcmp(name + 8, "lov") == 0) {
@@ -185,7 +184,7 @@ int ll_removexattr(struct dentry *dentry, const char *name)
         CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu/%u(%p), xattr %s\n",
                inode->i_ino, inode->i_generation, inode, name);
 
-        ll_vfs_ops_tally(ll_i2sbi(inode), VFS_OPS_REMOVEXATTR);
+        ll_stats_ops_tally(ll_i2sbi(inode), LPROC_LL_REMOVEXATTR, 1);
         return ll_setxattr_common(inode, name, NULL, 0, 0,
                                   OBD_MD_FLXATTRRM);
 }
@@ -205,7 +204,6 @@ int ll_getxattr_common(struct inode *inode, const char *name,
         CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu/%u(%p)\n",
                inode->i_ino, inode->i_generation, inode);
 
-        lprocfs_counter_incr(sbi->ll_stats, LPROC_LL_GETXATTR);
 
         /* listxattr have slightly different behavior from of ext3:
          * without 'user_xattr' ext3 will list all xattr names but
@@ -305,7 +303,7 @@ ssize_t ll_getxattr(struct dentry *dentry, const char *name,
         CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu/%u(%p), xattr %s\n",
                inode->i_ino, inode->i_generation, inode, name);
 
-        ll_vfs_ops_tally(ll_i2sbi(inode), VFS_OPS_GETXATTR);
+        ll_stats_ops_tally(ll_i2sbi(inode), LPROC_LL_GETXATTR, 1);
 
          if (strncmp(name, XATTR_TRUSTED_PREFIX, 8) == 0 &&
              strcmp(name + 8, "lov") == 0) {
@@ -355,7 +353,7 @@ ssize_t ll_listxattr(struct dentry *dentry, char *buffer, size_t size)
         CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu/%u(%p)\n",
                inode->i_ino, inode->i_generation, inode);
 
-        ll_vfs_ops_tally(ll_i2sbi(inode), VFS_OPS_LISTXATTR);
+        ll_stats_ops_tally(ll_i2sbi(inode), LPROC_LL_LISTXATTR, 1);
 
         rc = ll_getxattr_common(inode, NULL, buffer, size, OBD_MD_FLXATTRLS);
 

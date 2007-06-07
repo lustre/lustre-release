@@ -211,11 +211,9 @@ static ssize_t ll_direct_IO_26(int rw, struct kiocb *iocb,
                MAX_DIO_SIZE >> CFS_PAGE_SHIFT);
 
         if (rw == WRITE)
-                lprocfs_counter_add(ll_i2sbi(inode)->ll_stats,
-                                    LPROC_LL_DIRECT_WRITE, count);
+                ll_stats_ops_tally(ll_i2sbi(inode), LPROC_LL_DIRECT_WRITE, count);
         else
-                lprocfs_counter_add(ll_i2sbi(inode)->ll_stats,
-                                    LPROC_LL_DIRECT_READ, count);
+                ll_stats_ops_tally(ll_i2sbi(inode), LPROC_LL_DIRECT_READ, count);
 
         /* Check that all user buffers are aligned as well */
         for (seg = 0; seg < nr_segs; seg++) {

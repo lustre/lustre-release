@@ -190,33 +190,13 @@ struct ll_rw_process_info {
         struct file               *rw_last_file;
 };
 
-enum vfs_ops_list {
-        VFS_OPS_READ = 0,
-        VFS_OPS_WRITE,
-        VFS_OPS_IOCTL,
-        VFS_OPS_OPEN,
-        VFS_OPS_RELEASE,
-        VFS_OPS_MMAP,
-        VFS_OPS_SEEK,
-        VFS_OPS_FSYNC,
-        VFS_OPS_FLOCK,
-        VFS_OPS_SETATTR,
-        VFS_OPS_GETATTR,
-        VFS_OPS_SETXATTR,
-        VFS_OPS_GETXATTR,
-        VFS_OPS_LISTXATTR,
-        VFS_OPS_REMOVEXATTR,
-        VFS_OPS_TRUNCATE,
-        VFS_OPS_INODE_PERMISSION,
-        VFS_OPS_LAST,
-};
 
-enum vfs_track_type {
-        VFS_TRACK_ALL = 0,  /* track all processes */
-        VFS_TRACK_PID,      /* track process with this pid */
-        VFS_TRACK_PPID,     /* track processes with this ppid */
-        VFS_TRACK_GID,      /* track processes with this gid */
-        VFS_TRACK_LAST,
+enum stats_track_type {
+        STATS_TRACK_ALL = 0,  /* track all processes */
+        STATS_TRACK_PID,      /* track process with this pid */
+        STATS_TRACK_PPID,     /* track processes with this ppid */
+        STATS_TRACK_GID,      /* track processes with this gid */
+        STATS_TRACK_LAST,
 };
 
 /* flags for sbi->ll_flags */
@@ -233,6 +213,8 @@ struct ll_sb_info {
         /* this protects pglist and ra_info.  It isn't safe to
          * grab from interrupt contexts */
         spinlock_t                ll_lock;
+        spinlock_t                ll_pp_extent_lock; /* Lock for pp_extent entries */
+        spinlock_t                ll_process_lock; /* Lock for ll_rw_process_info */
         struct obd_uuid           ll_sb_uuid;
         struct obd_export        *ll_mdc_exp;
         struct obd_export        *ll_osc_exp;
@@ -272,9 +254,9 @@ struct ll_sb_info {
         unsigned int              ll_offset_process_count;
         struct ll_rw_process_info ll_rw_offset_info[LL_OFFSET_HIST_MAX];
         unsigned int              ll_rw_offset_entry_count;
-        struct lprocfs_stats     *ll_vfs_ops_stats;
-        enum vfs_track_type       ll_vfs_track_type;
-        int                       ll_vfs_track_id;
+        enum stats_track_type     ll_stats_track_type;
+        int                       ll_stats_track_id;
+        int                       ll_rw_stats_on;
 };
 
 #define LL_DEFAULT_MAX_RW_CHUNK         (32 * 1024 * 1024)
@@ -436,12 +418,12 @@ struct ll_ra_read *ll_ra_read_get(struct file *f);
 int lprocfs_register_mountpoint(struct proc_dir_entry *parent,
                                 struct super_block *sb, char *osc, char *mdc);
 void lprocfs_unregister_mountpoint(struct ll_sb_info *sbi);
-void ll_vfs_ops_tally(struct ll_sb_info *sbi, int op);
+void ll_stats_ops_tally(struct ll_sb_info *sbi, int op, int count);
 #else
 static inline int lprocfs_register_mountpoint(struct proc_dir_entry *parent,
                         struct super_block *sb, char *osc, char *mdc){return 0;}
 static inline void lprocfs_unregister_mountpoint(struct ll_sb_info *sbi) {}
-static void ll_vfs_ops_tally(struct ll_sb_info *sbi, int op) {}
+static void ll_stats_ops_tally(struct ll_sb_info *sbi, int op, int count) {}
 #endif
 
 

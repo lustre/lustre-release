@@ -62,6 +62,9 @@ static struct ll_sb_info *ll_init_sbi(void)
 
         spin_lock_init(&sbi->ll_lock);
         spin_lock_init(&sbi->ll_lco.lco_lock);
+        spin_lock_init(&sbi->ll_pp_extent_lock);
+        spin_lock_init(&sbi->ll_process_lock);
+        sbi->ll_rw_stats_on = 0;
         INIT_LIST_HEAD(&sbi->ll_pglist);
         if (num_physpages >> (20 - CFS_PAGE_SHIFT) < 512)
                 sbi->ll_async_page_max = num_physpages / 2;
@@ -1198,7 +1201,7 @@ int ll_setattr_raw(struct inode *inode, struct iattr *attr)
 
         CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu valid %x\n", inode->i_ino,
                attr->ia_valid);
-        lprocfs_counter_incr(ll_i2sbi(inode)->ll_stats, LPROC_LL_SETATTR);
+        ll_stats_ops_tally(ll_i2sbi(inode), LPROC_LL_SETATTR, 1);
 
         if (ia_valid & ATTR_SIZE) {
                 if (attr->ia_size > ll_file_maxbytes(inode)) {
@@ -1373,8 +1376,6 @@ int ll_setattr_raw(struct inode *inode, struct iattr *attr)
 
 int ll_setattr(struct dentry *de, struct iattr *attr)
 {
-        ll_vfs_ops_tally(ll_i2sbi(de->d_inode), VFS_OPS_SETATTR);
-
         if ((attr->ia_valid & (ATTR_CTIME|ATTR_SIZE|ATTR_MODE)) ==
             (ATTR_CTIME|ATTR_SIZE|ATTR_MODE))
                 attr->ia_valid |= MDS_OPEN_OWNEROVERRIDE;
@@ -1440,7 +1441,7 @@ int ll_statfs(struct dentry *de, struct kstatfs *sfs)
         int rc;
 
         CDEBUG(D_VFSTRACE, "VFS Op: at "LPU64" jiffies\n", get_jiffies_64());
-        lprocfs_counter_incr(ll_s2sbi(sb)->ll_stats, LPROC_LL_STAFS);
+        ll_stats_ops_tally(ll_s2sbi(sb), LPROC_LL_STAFS, 1);
 
         /* For now we will always get up-to-date statfs values, but in the
          * future we may allow some amount of caching on the client (e.g.
