@@ -218,11 +218,11 @@ do {                                                                           \
    do {                                         \
         (ptr) = malloc(size);                   \
         memset(ptr, 0, size);                   \
-   } while (0);
+   } while (0)
 # else
-#  define LIBCFS_ALLOC(ptr, size) do { (ptr) = calloc(1,size); } while (0);
+#  define LIBCFS_ALLOC(ptr, size) do { (ptr) = calloc(1,size); } while (0)
 # endif
-# define LIBCFS_FREE(a, b) do { free(a); } while (0);
+# define LIBCFS_FREE(a, b) do { free(a); } while (0)
 
 void libcfs_debug_dumplog(void);
 int libcfs_debug_init(unsigned long bufsize);
