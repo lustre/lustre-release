@@ -511,7 +511,7 @@ Index: linux-2.6.10/arch/um/os-Linux/elf_aux.c
 +				elf_aux_hwcap = auxv->a_un.a_val;
 +				break;
 +			case AT_PLATFORM:
-+				elf_aux_platform = auxv->a_un.a_ptr;
++				elf_aux_platform = auxv->a_un.a_val;
 +				break;
 +			case AT_PAGESZ:
 +				page_size = auxv->a_un.a_val;
