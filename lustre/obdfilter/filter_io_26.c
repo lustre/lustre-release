@@ -523,9 +523,9 @@ int filter_direct_io(int rw, struct dentry *dchild, struct filter_iobuf *iobuf,
 
         if (rw == OBD_BRW_WRITE) {
                 if (rc == 0) {
-                        filter_tally_write(exp, iobuf->dr_pages,
-                                           iobuf->dr_npages, iobuf->dr_blocks,
-                                           blocks_per_page);
+                        filter_tally(exp, iobuf->dr_pages,
+                                     iobuf->dr_npages, iobuf->dr_blocks,
+                                     blocks_per_page, 1);
                         if (attr->ia_size > inode->i_size)
                                 attr->ia_valid |= ATTR_SIZE;
                         rc = fsfilt_setattr(obd, dchild,
@@ -547,9 +547,8 @@ int filter_direct_io(int rw, struct dentry *dchild, struct filter_iobuf *iobuf,
                 if (rc != 0)
                         RETURN(rc);
         } else if (rc == 0) {
-                filter_tally_read(exp, iobuf->dr_pages,
-                                  iobuf->dr_npages, iobuf->dr_blocks,
-                                  blocks_per_page);
+                filter_tally(exp, iobuf->dr_pages, iobuf->dr_npages,
+                             iobuf->dr_blocks, blocks_per_page, 0);
         }
 
         rc = filter_clear_page_cache(inode, iobuf);

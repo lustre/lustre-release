@@ -270,7 +270,7 @@ Details    : dev_clear_rdonly(bdev) must be called in kill_bdev() instead of
 
 Severity   : minor
 Bugzilla   : 11706
-Description: service threads may hog cpus when ther eis a lot of requests
+Description: service threads may hog cpus when there are a lot of requests
              coming
 Details    : Insert cond_resched to give other threads a chance to use some of
              the cpu
@@ -284,6 +284,14 @@ Details    : When mds(mgs) do recovery, the tgt_count might be zero, so the
 	     recovery. And also in mds post recovery, the unlink log will 
 	     initialization will be done asynchronausly, so there will be race
 	     between add unlink log and unlink log initialization.
+
+Severity   : normal
+Bugzilla   : 12597
+Description: brw_stats were being printed incorrectly
+Details    : brw_stats were being printed as log2 but all of them were not
+             recorded as log2. Also remove some code duplication arising from
+             filter_tally_{read,write}.
+
 
 --------------------------------------------------------------------------------
 

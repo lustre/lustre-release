@@ -216,8 +216,8 @@ static struct lprocfs_vars lprocfs_module_vars[] = {
         { 0 }
 };
 
-void filter_tally_write(struct obd_export *exp, struct page **pages,
-                        int nr_pages, unsigned long *blocks,int blocks_per_page)
+void filter_tally(struct obd_export *exp, struct page **pages, int nr_pages,
+                  unsigned long *blocks, int blocks_per_page, int wr)
 {
         struct filter_obd *filter = &exp->exp_obd->u.filter;
         struct filter_export_data *fed = &exp->exp_filter_data;
@@ -230,9 +230,10 @@ void filter_tally_write(struct obd_export *exp, struct page **pages,
         if (nr_pages == 0)
                 return;
 
-        lprocfs_oh_tally_log2(&filter->fo_filter_stats.hist[BRW_W_PAGES],
+        lprocfs_oh_tally_log2(&filter->fo_filter_stats.hist[BRW_R_PAGES + wr],
                               nr_pages);
-        lprocfs_oh_tally_log2(&fed->fed_brw_stats.hist[BRW_W_PAGES], nr_pages);
+        lprocfs_oh_tally_log2(&fed->fed_brw_stats.hist[BRW_R_PAGES + wr],
+                              nr_pages);
 
         while (nr_pages-- > 0) {
                 if (last_page && (*pages)->index != (last_page->index + 1))
@@ -246,81 +247,51 @@ void filter_tally_write(struct obd_export *exp, struct page **pages,
                 }
         }
 
-        lprocfs_oh_tally(&filter->fo_filter_stats.hist[BRW_W_DISCONT_PAGES],
+        lprocfs_oh_tally(&filter->fo_filter_stats.hist[BRW_R_DISCONT_PAGES +wr],
                          discont_pages);
-        lprocfs_oh_tally(&filter->fo_filter_stats.hist[BRW_W_DISCONT_BLOCKS],
+        lprocfs_oh_tally(&fed->fed_brw_stats.hist[BRW_R_DISCONT_PAGES + wr],
+                         discont_pages);
+        lprocfs_oh_tally(&filter->fo_filter_stats.hist[BRW_R_DISCONT_BLOCKS+wr],
                          discont_blocks);
-
-        lprocfs_oh_tally(&fed->fed_brw_stats.hist[BRW_W_DISCONT_PAGES],
-                         discont_pages);
-        lprocfs_oh_tally(&fed->fed_brw_stats.hist[BRW_W_DISCONT_BLOCKS],
-                         discont_blocks);
-}
-
-void filter_tally_read(struct obd_export *exp, struct page **pages,
-                       int nr_pages, unsigned long *blocks, int blocks_per_page)
-{
-        struct filter_obd *filter = &exp->exp_obd->u.filter;
-        struct filter_export_data *fed = &exp->exp_filter_data;
-        struct page *last_page = NULL;
-        unsigned long *last_block = NULL;
-        unsigned long discont_pages = 0;
-        unsigned long discont_blocks = 0;
-        int i;
-
-        if (nr_pages == 0)
-                return;
-
-        lprocfs_oh_tally_log2(&filter->fo_filter_stats.hist[BRW_R_PAGES],
-                              nr_pages);
-        lprocfs_oh_tally_log2(&fed->fed_brw_stats.hist[BRW_R_PAGES], nr_pages);
-
-        while (nr_pages-- > 0) {
-                if (last_page && (*pages)->index != (last_page->index + 1))
-                        discont_pages++;
-                last_page = *pages;
-                pages++;
-                for (i = 0; i < blocks_per_page; i++) {
-                        if (last_block && *blocks != (*last_block + 1))
-                                discont_blocks++;
-                        last_block = blocks++;
-                }
-        }
-
-        lprocfs_oh_tally(&filter->fo_filter_stats.hist[BRW_R_DISCONT_PAGES],
-                         discont_pages);
-        lprocfs_oh_tally(&filter->fo_filter_stats.hist[BRW_R_DISCONT_BLOCKS],
-                         discont_blocks);
-
-        lprocfs_oh_tally(&fed->fed_brw_stats.hist[BRW_R_DISCONT_PAGES],
-                         discont_pages);
-        lprocfs_oh_tally(&fed->fed_brw_stats.hist[BRW_R_DISCONT_BLOCKS],
+        lprocfs_oh_tally(&fed->fed_brw_stats.hist[BRW_R_DISCONT_BLOCKS + wr],
                          discont_blocks);
 }
 
 #define pct(a,b) (b ? a * 100 / b : 0)
 
-static void display_brw_stats(struct seq_file *seq, struct obd_histogram *read,
-                              struct obd_histogram *write)
+static void display_brw_stats(struct seq_file *seq, char *name, char *units,
+        struct obd_histogram *read, struct obd_histogram *write, int log2)
 {
-        unsigned long read_tot = 0, write_tot = 0, read_cum, write_cum;
+        unsigned long read_tot, write_tot, r, w, read_cum = 0, write_cum = 0;
         int i;
+
+        seq_printf(seq, "\n%26s read      |     write\n", " ");
+        seq_printf(seq, "%-22s %-5s %% cum %% |  %-5s %% cum %%\n", 
+                   name, units, units);
 
         read_tot = lprocfs_oh_sum(read);
         write_tot = lprocfs_oh_sum(write);
-
-        read_cum = 0;
-        write_cum = 0;
         for (i = 0; i < OBD_HIST_MAX; i++) {
-                unsigned long r = read->oh_buckets[i];
-                unsigned long w = write->oh_buckets[i];
+                r = read->oh_buckets[i];
+                w = write->oh_buckets[i];
                 read_cum += r;
                 write_cum += w;
-                seq_printf(seq, "%u:\t\t%10lu %3lu %3lu   | %10lu %3lu %3lu\n",
-                                 1 << i, r, pct(r, read_tot),
-                                 pct(read_cum, read_tot), w,
-                                 pct(w, write_tot),
-                                 pct(write_cum, write_tot));
+                if (read_cum == 0 && write_cum == 0)
+                        continue;
+
+                if (!log2) 
+                        seq_printf(seq, "%u", i);
+                else if (i < 10)
+                        seq_printf(seq, "%u", 1<<i);
+                else if (i < 20)
+                        seq_printf(seq, "%uK", 1<<(i-10));
+                else
+                        seq_printf(seq, "%uM", 1<<(i-20));
+
+                seq_printf(seq, ":\t\t%10lu %3lu %3lu   | %4lu %3lu %3lu\n",
+                           r, pct(r, read_tot), pct(read_cum, read_tot), 
+                           w, pct(w, write_tot), pct(write_cum, write_tot));
+
                 if (read_cum == read_tot && write_cum == write_tot)
                         break;
         }
@@ -329,91 +300,44 @@ static void display_brw_stats(struct seq_file *seq, struct obd_histogram *read,
 static void brw_stats_show(struct seq_file *seq, struct brw_stats *brw_stats)
 {
         struct timeval now;
-#if (LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))
-        unsigned long read_tot = 0, write_tot = 0, read_cum, write_cum;
-        int i;
-#endif
-
-        do_gettimeofday(&now);
 
         /* this sampling races with updates */
-
+        do_gettimeofday(&now);
         seq_printf(seq, "snapshot_time:         %lu.%lu (secs.usecs)\n",
                    now.tv_sec, now.tv_usec);
 
-        seq_printf(seq, "\n\t\t\tread\t\t\twrite\n");
-        seq_printf(seq, "pages per brw         brws   %% cum %% |");
-        seq_printf(seq, "       rpcs   %% cum %%\n");
+        display_brw_stats(seq, "pages per bulk r/w", "rpcs",
+                          &brw_stats->hist[BRW_R_PAGES],
+                          &brw_stats->hist[BRW_W_PAGES], 1);
 
-        display_brw_stats(seq, &brw_stats->hist[BRW_R_PAGES], &brw_stats->hist[BRW_W_PAGES]);
+        display_brw_stats(seq, "discontiguous pages", "rpcs",
+                          &brw_stats->hist[BRW_R_DISCONT_PAGES],
+                          &brw_stats->hist[BRW_W_DISCONT_PAGES], 0);
 
-        seq_printf(seq, "\n\t\t\tread\t\t\twrite\n");
-        seq_printf(seq, "discont pages         rpcs   %% cum %% |");
-        seq_printf(seq, "       rpcs   %% cum %%\n");
+        display_brw_stats(seq, "discontiguous blocks", "rpcs",
+                          &brw_stats->hist[BRW_R_DISCONT_BLOCKS],
+                          &brw_stats->hist[BRW_W_DISCONT_BLOCKS], 0);
 
-        display_brw_stats(seq, &brw_stats->hist[BRW_R_DISCONT_PAGES],
-                          &brw_stats->hist[BRW_W_DISCONT_PAGES]);
-
-        seq_printf(seq, "\n\t\t\tread\t\t\twrite\n");
-        seq_printf(seq, "discont blocks        rpcs   %% cum %% |");
-        seq_printf(seq, "       rpcs   %% cum %%\n");
-
-        display_brw_stats(seq, &brw_stats->hist[BRW_R_DISCONT_BLOCKS],
-                          &brw_stats->hist[BRW_W_DISCONT_BLOCKS]);
-
-        seq_printf(seq, "\n\t\t\tread\t\t\twrite\n");
-        seq_printf(seq, "dio frags             rpcs   %% cum %% |");
-        seq_printf(seq, "       rpcs   %% cum %%\n");
-
-        display_brw_stats(seq, &brw_stats->hist[BRW_R_DIO_FRAGS],
-                          &brw_stats->hist[BRW_W_DIO_FRAGS]);
+        display_brw_stats(seq, "disk fragmented I/Os", "ios",
+                          &brw_stats->hist[BRW_R_DIO_FRAGS],
+                          &brw_stats->hist[BRW_W_DIO_FRAGS], 0);
 
 #if (LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))
-        seq_printf(seq, "\n\t\t\tread\t\t\twrite\n");
-        seq_printf(seq, "disk ios in flight     ios   %% cum %% |");
-        seq_printf(seq, "       rpcs   %% cum %%\n");
+        display_brw_stats(seq, "disk I/Os in flight", "ios",
+                          &brw_stats->hist[BRW_R_RPC_HIST],
+                          &brw_stats->hist[BRW_W_RPC_HIST], 0);
 
-        display_brw_stats(seq, &brw_stats->hist[BRW_R_RPC_HIST],
-                          &brw_stats->hist[BRW_W_RPC_HIST]);
-
-        seq_printf(seq, "\n\t\t\tread\t\t\twrite\n");
-        seq_printf(seq, "io time (1/%ds)     rpcs   %% cum %% |", HZ);
-        seq_printf(seq, "       rpcs   %% cum %%\n");
-
-        display_brw_stats(seq, &brw_stats->hist[BRW_R_IO_TIME],
-                          &brw_stats->hist[BRW_W_IO_TIME]);
-
-        seq_printf(seq, "\n\t\t\tread\t\t\twrite\n");
-        seq_printf(seq, "disk I/O size         count  %% cum %% |");
-        seq_printf(seq, "       count  %% cum %%\n");
-
-        read_tot = lprocfs_oh_sum(&brw_stats->hist[BRW_R_DISK_IOSIZE]);
-        write_tot = lprocfs_oh_sum(&brw_stats->hist[BRW_W_DISK_IOSIZE]);
-
-        read_cum = 0;
-        write_cum = 0;
-        for (i = 0; i < OBD_HIST_MAX; i++) {
-                unsigned long r = brw_stats->hist[BRW_R_DISK_IOSIZE].oh_buckets[i];
-                unsigned long w = brw_stats->hist[BRW_W_DISK_IOSIZE].oh_buckets[i];
-
-                read_cum += r;
-                write_cum += w;
-                if (read_cum == 0 && write_cum == 0)
-                        continue;
-
-                if (i < 10)
-                        seq_printf(seq, "%u", 1<<i);
-                else if (i < 20)
-                        seq_printf(seq, "%uK", 1<<(i-10));
-                else
-                        seq_printf(seq, "%uM", 1<<(i-20));
-
-                seq_printf(seq, ":\t\t%10lu %3lu %3lu   | %10lu %3lu %3lu\n",
-                           r, pct(r, read_tot), pct(read_cum, read_tot),
-                           w, pct(w, write_tot), pct(write_cum, write_tot));
-                if (read_cum == read_tot && write_cum == write_tot)
-                        break;
+        {
+                char title[24];
+                sprintf(title, "I/O time (1/%ds)", HZ);
+                display_brw_stats(seq, title, "ios",
+                                  &brw_stats->hist[BRW_R_IO_TIME],
+                                  &brw_stats->hist[BRW_W_IO_TIME], 1);
         }
+
+        display_brw_stats(seq, "disk I/O size", "ios",
+                          &brw_stats->hist[BRW_R_DISK_IOSIZE],
+                          &brw_stats->hist[BRW_W_DISK_IOSIZE], 1);
 #endif
 }
 

@@ -174,23 +174,13 @@ int filter_recov_log_mds_ost_cb(struct llog_handle *llh,
                                struct llog_rec_hdr *rec, void *data);
 
 #ifdef LPROCFS
-void filter_tally_write(struct obd_export *exp, struct page **pages,
-                        int nr_pages, unsigned long *blocks,
-                        int blocks_per_page);
-void filter_tally_read(struct obd_export *exp, struct page **pages,
-                       int nr_pages, unsigned long *blocks,
-                       int blocks_per_page);
+void filter_tally(struct obd_export *exp, struct page **pages, int nr_pages,
+                  unsigned long *blocks, int blocks_per_page, int wr);
 int lproc_filter_attach_seqstat(struct obd_device *dev);
 #else
-static inline void filter_tally_write(struct obd_export *exp,
-                                      struct page **pages, int nr_pages,
-                                 unsigned long *blocks, int blocks_per_page) {}
-static inline void filter_tally_read(struct obd_export *exp,
-                                 struct page **pages, int nr_pages,
-                                 unsigned long *blocks, int blocks_per_page) {}
-static inline void filter_tally_read(struct filter_obd *filter,
-                                 struct page **pages, int nr_pages,
-                                 unsigned long *blocks, int blocks_per_page) {}
+static inline void filter_tally(struct obd_export *exp, struct page **pages,
+                                int nr_pages, unsigned long *blocks,
+                                int blocks_per_page, int wr) {}
 static inline int lproc_filter_attach_seqstat(struct obd_device *dev) {}
 #endif
 

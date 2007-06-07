@@ -240,9 +240,9 @@ int filter_direct_io(int rw, struct dentry *dchild, struct filter_iobuf *buf,
 
         if (rw == OBD_BRW_WRITE) {
                 if (rc == 0) {
-                        filter_tally_write(exp, iobuf->maplist, iobuf->nr_pages,
-                                           KIOBUF_GET_BLOCKS(iobuf),
-                                           blocks_per_page);
+                        filter_tally(exp, iobuf->maplist, iobuf->nr_pages,
+                                     KIOBUF_GET_BLOCKS(iobuf), blocks_per_page,
+                                     1);
 
                         if (attr->ia_size > inode->i_size)
                                 attr->ia_valid |= ATTR_SIZE;
@@ -264,8 +264,8 @@ int filter_direct_io(int rw, struct dentry *dchild, struct filter_iobuf *buf,
                 if (rc)
                         GOTO(cleanup, rc);
         } else {
-                filter_tally_read(exp, iobuf->maplist, iobuf->nr_pages,
-                                  KIOBUF_GET_BLOCKS(iobuf), blocks_per_page);
+                filter_tally(exp, iobuf->maplist, iobuf->nr_pages,
+                             KIOBUF_GET_BLOCKS(iobuf), blocks_per_page, 0);
         }
 
         rc = filter_clear_page_cache(inode, iobuf);
