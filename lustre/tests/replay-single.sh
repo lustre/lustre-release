@@ -743,8 +743,7 @@ test_33() {
     createmany -o $DIR/$tfile-%d 100 
     fail_abort mds
     # this file should be gone, because the replay was aborted
-    $CHECKSTAT -t file $DIR/$tfile && return 3
-    $CHECKSTAT -t file $DIR/$tfile-* && return 4 
+    $CHECKSTAT -t file $DIR/$tfile-* && return 3 
     unlinkmany $DIR/$tfile-%d 0 100
     return 0
 }
