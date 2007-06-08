@@ -530,7 +530,7 @@ BuildKernel()
 	--kerneldir $RPM_SOURCE_DIR \
 	-j $RPM_BUILD_NCPUS \
 	--destdir $RPM_BUILD_ROOT \
-	-- --disable-tests \
+	-- --enable-tests \
 	@CONFIGURE_FLAGS@
 }
 

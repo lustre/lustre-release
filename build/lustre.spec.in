@@ -68,6 +68,16 @@ Conflicts: lustre-deps-sles
 This package has RPM dependencies appropriate for RHEL, RHL, and FC
 systems.
 
+%package tests
+Summary: Lustre testing framework
+Group: Development/Kernel
+Provides: lustre-tests = %{version}
+Requires: lustre = %{version}
+
+%description tests
+This package contains a set of test binaries and scripts that are intended
+to be used by the Lustre testing framework.
+
 %prep
 %setup -qn lustre-%{version}
 
@@ -157,6 +167,9 @@ fi
 # uncomment these lines to enable deps packages
 # %files deps-sles
 # %files deps-rhel
+
+%files tests
+%attr(-, root, root) %{_libdir}/lustre/tests/*
 
 %post modules
 if [ -f /boot/System.map-%{kversion} ]; then
