@@ -92,8 +92,6 @@ struct fsfilt_operations {
                                        int pages, unsigned long *blocks,
                                        int *created, int create,
                                        struct semaphore *sem);
-        int     (* fs_prep_san_write)(struct inode *inode, long *blocks,
-                                      int nblocks, loff_t newsize);
         int     (* fs_write_record)(struct file *, void *, int size, loff_t *,
                                     int force_sync);
         int     (* fs_read_record)(struct file *, void *, int size, loff_t *);
@@ -430,13 +428,6 @@ static inline int fsfilt_map_inode_pages(struct obd_device *obd,
 {
         return obd->obd_fsops->fs_map_inode_pages(inode, page, pages, blocks,
                                                   created, create, sem);
-}
-
-static inline int fs_prep_san_write(struct obd_device *obd, struct inode *inode,
-                                    long *blocks, int nblocks, loff_t newsize)
-{
-        return obd->obd_fsops->fs_prep_san_write(inode, blocks,
-                                                 nblocks, newsize);
 }
 
 static inline int fsfilt_read_record(struct obd_device *obd, struct file *file,

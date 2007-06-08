@@ -1196,14 +1196,6 @@ int fsfilt_ext3_map_inode_pages(struct inode *inode, struct page **page,
         return rc;
 }
 
-extern int ext3_prep_san_write(struct inode *inode, long *blocks,
-                               int nblocks, loff_t newsize);
-static int fsfilt_ext3_prep_san_write(struct inode *inode, long *blocks,
-                                      int nblocks, loff_t newsize)
-{
-        return ext3_prep_san_write(inode, blocks, nblocks, newsize);
-}
-
 static int fsfilt_ext3_read_record(struct file * file, void *buf,
                                    int size, loff_t *offs)
 {
@@ -2098,7 +2090,6 @@ static struct fsfilt_operations fsfilt_ext3_ops = {
         .fs_statfs              = fsfilt_ext3_statfs,
         .fs_sync                = fsfilt_ext3_sync,
         .fs_map_inode_pages     = fsfilt_ext3_map_inode_pages,
-        .fs_prep_san_write      = fsfilt_ext3_prep_san_write,
         .fs_write_record        = fsfilt_ext3_write_record,
         .fs_read_record         = fsfilt_ext3_read_record,
         .fs_setup               = fsfilt_ext3_setup,
