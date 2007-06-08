@@ -409,11 +409,15 @@ static int filter_sync_inode_data(struct inode *inode, int locked)
         if (!locked)
                 LOCK_INODE_MUTEX(inode);
         if (inode->i_mapping->nrpages) {
+#ifdef PF_SYNCWRITE
                 current->flags |= PF_SYNCWRITE;
+#endif
                 rc = filemap_fdatawrite(inode->i_mapping);
                 if (rc == 0)
                         rc = filemap_fdatawait(inode->i_mapping);
+#ifdef PF_SYNCWRITE
                 current->flags &= ~PF_SYNCWRITE;
+#endif
         }
         if (!locked)
                 UNLOCK_INODE_MUTEX(inode);
