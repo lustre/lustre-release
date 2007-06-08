@@ -16,6 +16,6 @@ ldiskfs_sources := $(ldiskfs_patched_sources)
 
 ldiskfs-objs := $(filter %.o,$(ldiskfs_sources:.c=.o))
 
-EXTRA_PRE_CFLAGS := -I@LINUX@/fs -I@LUSTRE@ -I@LUSTRE@/ldiskfs
+EXTRA_PRE_CFLAGS := -I@LINUX@/fs -I@LDISKFSDIR@
 
 @INCLUDE_RULES@

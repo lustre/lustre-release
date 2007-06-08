@@ -1,8 +1,4 @@
-if MODULES
-if LDISKFS
 modulefs_DATA = ldiskfs$(KMODEXT)
-endif
-endif
 
 ldiskfs_linux_headers := $(addprefix linux/,$(subst ext3,ldiskfs,$(notdir $(linux_headers))))
 
@@ -25,12 +21,8 @@ ldiskfs_sed_flags = \
 linux/ldiskfs%.h: linux-stage/include/linux/ext3%.h
 	sed $(strip $(ldiskfs_sed_flags)) $< > $@
 
-#
-# FIXME: we need to grab the series in configure somehow
-# (see bug 1679)
-#
-series := @top_srcdir@/lustre/kernel_patches/series/ldiskfs-$(LDISKFS_SERIES)
-patches := @top_srcdir@/lustre/kernel_patches/patches
+series := @top_srcdir@/kernel_patches/series/ldiskfs-$(LDISKFS_SERIES)
+patches := @top_srcdir@/kernel_patches/patches
 
 sources: $(ext3_sources) $(ext3_headers) $(linux_headers) $(series)
 	rm -rf linux-stage linux sources $(ldiskfs_SOURCES)
