@@ -1,0 +1,1831 @@
+Date: Fri, 08 Jun 2007 14:04:34 -0400
+From: Weikuan Yu <weikuan.yu@gmail.com>
+To: Weikuan Yu <weikuan.yu@gmail.com>
+Subject: Re: [Lustre-discuss] MPI-IO for Lustre
+Cc: lustre-discuss@clusterfs.com
+
+
+This is the MPICH2 patch I originally started as a base for some ROMIO
+optimizations over Lustre. It should work fine for MPICH2-1.0.3 on
+experimental systems. However, use it as your risk :)
+
+Given time, I will try to push out my optimizations after some cleanup. I
+would very happy to hear feedbacks on what features people would need most
+at the time.
+
+--
+Weikuan
+
+
+diff -ruN romio-orig/adio/ad_lustre/ad_lustre.c romio/adio/ad_lustre/ad_lustre.c
+--- romio-orig/adio/ad_lustre/ad_lustre.c	1969-12-31 19:00:00.000000000 -0500
++++ romio/adio/ad_lustre/ad_lustre.c	2006-09-06 18:40:56.000844619 -0400
+@@ -0,0 +1,37 @@
++/* -*- Mode: C; c-basic-offset:4 ; -*- */
++/*
++ *   $Id: ad_lustre.c,v 1.1.1.1 2004/11/04 11:03:38 liam Exp $
++ *
++ *   Copyright (C) 2001 University of Chicago.
++ *   See COPYRIGHT notice in top-level directory.
++ */
++
++#include "ad_lustre.h"
++
++/* adioi.h has the ADIOI_Fns_struct define */
++#include "adioi.h"
++
++struct ADIOI_Fns_struct ADIO_LUSTRE_operations = {
++    ADIOI_LUSTRE_Open, /* Open */
++    ADIOI_LUSTRE_ReadContig, /* ReadContig */
++    ADIOI_LUSTRE_WriteContig, /* WriteContig */
++    ADIOI_GEN_ReadStridedColl, /* ReadStridedColl */
++    ADIOI_GEN_WriteStridedColl, /* WriteStridedColl */
++    ADIOI_GEN_SeekIndividual, /* SeekIndividual */
++    ADIOI_LUSTRE_Fcntl, /* Fcntl */
++    ADIOI_LUSTRE_SetInfo, /* SetInfo */
++    ADIOI_GEN_ReadStrided, /* ReadStrided */
++    ADIOI_GEN_WriteStrided, /* WriteStrided */
++    ADIOI_LUSTRE_Close, /* Close */
++    ADIOI_LUSTRE_IreadContig, /* IreadContig */
++    ADIOI_LUSTRE_IwriteContig, /* IwriteContig */
++    ADIOI_LUSTRE_ReadDone, /* ReadDone */
++    ADIOI_LUSTRE_WriteDone, /* WriteDone */
++    ADIOI_LUSTRE_ReadComplete, /* ReadComplete */
++    ADIOI_LUSTRE_WriteComplete, /* WriteComplete */
++    ADIOI_LUSTRE_IreadStrided, /* IreadStrided */
++    ADIOI_LUSTRE_IwriteStrided, /* IwriteStrided */
++    ADIOI_GEN_Flush, /* Flush */
++    ADIOI_LUSTRE_Resize, /* Resize */
++    ADIOI_GEN_Delete, /* Delete */
++};
+diff -ruN romio-orig/adio/ad_lustre/ad_lustre_close.c romio/adio/ad_lustre/ad_lustre_close.c
+--- romio-orig/adio/ad_lustre/ad_lustre_close.c	1969-12-31 19:00:00.000000000 -0500
++++ romio/adio/ad_lustre/ad_lustre_close.c	2006-09-06 17:10:35.000683211 -0400
+@@ -0,0 +1,32 @@
++/* -*- Mode: C; c-basic-offset:4 ; -*- */
++/*
++ *   $Id: ad_lustre_close.c,v 1.1.1.1 2004/11/04 11:03:38 liam Exp $
++ *
++ *   Copyright (C) 1997 University of Chicago.
++ *   See COPYRIGHT notice in top-level directory.
++ */
++
++#include "ad_lustre.h"
++
++void ADIOI_LUSTRE_Close(ADIO_File fd, int *error_code)
++{
++    int err;
++#if defined(MPICH2) || !defined(PRINT_ERR_MSG)
++    static char myname[] = "ADIOI_LUSTRE_CLOSE";
++#endif
++
++    err = close(fd->fd_sys);
++    if (err == -1) {
++#ifdef MPICH2
++	*error_code = MPIR_Err_create_code(MPI_SUCCESS, MPIR_ERR_RECOVERABLE, myname, __LINE__, MPI_ERR_IO, "**io",
++	    "**io %s", strerror(errno));
++#elif defined(PRINT_ERR_MSG)
++			*error_code = MPI_ERR_UNKNOWN;
++#else
++	*error_code = MPIR_Err_setmsg(MPI_ERR_IO, MPIR_ADIO_ERROR,
++			      myname, "I/O Error", "%s", strerror(errno));
++	ADIOI_Error(fd, *error_code, myname);
++#endif
++    }
++    else *error_code = MPI_SUCCESS;
++}
+diff -ruN romio-orig/adio/ad_lustre/ad_lustre_done.c romio/adio/ad_lustre/ad_lustre_done.c
+--- romio-orig/adio/ad_lustre/ad_lustre_done.c	1969-12-31 19:00:00.000000000 -0500
++++ romio/adio/ad_lustre/ad_lustre_done.c	2006-09-06 17:10:35.000692922 -0400
+@@ -0,0 +1,188 @@
++/* -*- Mode: C; c-basic-offset:4 ; -*- */
++/*
++ *   $Id: ad_lustre_done.c,v 1.1.1.1 2004/11/04 11:03:38 liam Exp $
++ *
++ *   Copyright (C) 1997 University of Chicago.
++ *   See COPYRIGHT notice in top-level directory.
++ */
++
++#include "ad_lustre.h"
++
++int ADIOI_LUSTRE_ReadDone(ADIO_Request *request, ADIO_Status *status, int *error_code)
++{
++#ifndef NO_AIO
++    int done=0;
++#if defined(MPICH2) || !defined(PRINT_ERR_MSG)
++    static char myname[] = "ADIOI_LUSTRE_READDONE";
++#endif
++#ifdef AIO_SUN
++    aio_result_t *result=0, *tmp;
++#else
++    int err;
++#endif
++#ifdef AIO_HANDLE_IN_AIOCB
++    struct aiocb *tmp1;
++#endif
++#endif
++
++    if (*request == ADIO_REQUEST_NULL) {
++	*error_code = MPI_SUCCESS;
++	return 1;
++    }
++
++#ifdef NO_AIO
++/* HP, FreeBSD, Linux */
++#ifdef HAVE_STATUS_SET_BYTES
++    MPIR_Status_set_bytes(status, (*request)->datatype, (*request)->nbytes);
++#endif
++    (*request)->fd->async_count--;
++    ADIOI_Free_request((ADIOI_Req_node *) (*request));
++    *request = ADIO_REQUEST_NULL;
++    *error_code = MPI_SUCCESS;
++    return 1;
++#endif
++
++#ifdef AIO_SUN
++    if ((*request)->queued) {
++	tmp = (aio_result_t *) (*request)->handle;
++	if (tmp->aio_return == AIO_INPROGRESS) {
++	    done = 0;
++	    *error_code = MPI_SUCCESS;
++	}
++	else if (tmp->aio_return != -1) {
++	    result = (aio_result_t *) aiowait(0); /* dequeue any one request */
++	    done = 1;
++	    (*request)->nbytes = tmp->aio_return;
++	    *error_code = MPI_SUCCESS;
++	}
++	else {
++#ifdef MPICH2
++	    *error_code = MPIR_Err_create_code(MPI_SUCCESS, MPIR_ERR_RECOVERABLE, myname, __LINE__, MPI_ERR_IO, "**io",
++		"**io %s", strerror(tmp->aio_errno));
++	    return;
++#elif defined(PRINT_ERR_MSG)
++	    *error_code = MPI_ERR_UNKNOWN;
++#else
++	    *error_code = MPIR_Err_setmsg(MPI_ERR_IO, MPIR_ADIO_ERROR,
++		         myname, "I/O Error", "%s", strerror(tmp->aio_errno));
++	    ADIOI_Error((*request)->fd, *error_code, myname);
++#endif
++	}
++    } /* if ((*request)->queued) ... */
++    else {
++	/* ADIOI_Complete_Async completed this request, but request object
++           was not freed. */
++	done = 1;
++	*error_code = MPI_SUCCESS;
++    }
++#ifdef HAVE_STATUS_SET_BYTES
++    if (done && ((*request)->nbytes != -1))
++	MPIR_Status_set_bytes(status, (*request)->datatype, (*request)->nbytes);
++#endif
++
++#endif
++
++#ifdef AIO_HANDLE_IN_AIOCB
++/* IBM */
++    if ((*request)->queued) {
++	tmp1 = (struct aiocb *) (*request)->handle;
++	errno = aio_error(tmp1->aio_handle);
++	if (errno == EINPROG) {
++	    done = 0;
++	    *error_code = MPI_SUCCESS;
++	}
++	else {
++	    err = aio_return(tmp1->aio_handle);
++	    (*request)->nbytes = err;
++	    errno = aio_error(tmp1->aio_handle);
++
++	    done = 1;
++
++	    if (err == -1) {
++#ifdef MPICH2
++		*error_code = MPIR_Err_create_code(MPI_SUCCESS, MPIR_ERR_RECOVERABLE, myname, __LINE__, MPI_ERR_IO, "**io",
++		    "**io %s", strerror(errno));
++		return;
++#elif defined(PRINT_ERR_MSG)
++				*error_code = MPI_ERR_UNKNOWN;
++#else
++		*error_code = MPIR_Err_setmsg(MPI_ERR_IO, MPIR_ADIO_ERROR,
++			      myname, "I/O Error", "%s", strerror(errno));
++		ADIOI_Error((*request)->fd, *error_code, myname);
++#endif
++	    }
++	    else *error_code = MPI_SUCCESS;
++	}
++    } /* if ((*request)->queued) */
++    else {
++	done = 1;
++	*error_code = MPI_SUCCESS;
++    }
++#ifdef HAVE_STATUS_SET_BYTES
++    if (done && ((*request)->nbytes != -1))
++	MPIR_Status_set_bytes(status, (*request)->datatype, (*request)->nbytes);
++#endif
++
++#elif (!defined(NO_AIO) && !defined(AIO_SUN))
++/* DEC, SGI IRIX 5 and 6 */
++    if ((*request)->queued) {
++	errno = aio_error((const struct aiocb *) (*request)->handle);
++	if (errno == EINPROGRESS) {
++	    done = 0;
++	    *error_code = MPI_SUCCESS;
++	}
++	else {
++	    err = aio_return((struct aiocb *) (*request)->handle);
++	    (*request)->nbytes = err;
++	    errno = aio_error((struct aiocb *) (*request)->handle);
++
++	    done = 1;
++
++	    if (err == -1) {
++#ifdef MPICH2
++		*error_code = MPIR_Err_create_code(MPI_SUCCESS, MPIR_ERR_RECOVERABLE, myname, __LINE__, MPI_ERR_IO, "**io",
++		    "**io %s", strerror(errno));
++		return;
++#elif defined(PRINT_ERR_MSG)
++				*error_code = MPI_ERR_UNKNOWN;
++#else /* MPICH-1 */
++		*error_code = MPIR_Err_setmsg(MPI_ERR_IO, MPIR_ADIO_ERROR,
++			      myname, "I/O Error", "%s", strerror(errno));
++		ADIOI_Error((*request)->fd, *error_code, myname);
++#endif
++	    }
++	    else *error_code = MPI_SUCCESS;
++	}
++    } /* if ((*request)->queued) */
++    else {
++	done = 1;
++	*error_code = MPI_SUCCESS;
++    }
++#ifdef HAVE_STATUS_SET_BYTES
++    if (done && ((*request)->nbytes != -1))
++	MPIR_Status_set_bytes(status, (*request)->datatype, (*request)->nbytes);
++#endif
++
++#endif
++
++#ifndef NO_AIO
++    if (done) {
++	/* if request is still queued in the system, it is also there
++           on ADIOI_Async_list. Delete it from there. */
++	if ((*request)->queued) ADIOI_Del_req_from_list(request);
++
++	(*request)->fd->async_count--;
++	if ((*request)->handle) ADIOI_Free((*request)->handle);
++	ADIOI_Free_request((ADIOI_Req_node *) (*request));
++	*request = ADIO_REQUEST_NULL;
++    }
++    return done;
++#endif
++
++}
++
++
++int ADIOI_LUSTRE_WriteDone(ADIO_Request *request, ADIO_Status *status, int *error_code)
++{
++    return ADIOI_LUSTRE_ReadDone(request, status, error_code);
++}
+diff -ruN romio-orig/adio/ad_lustre/ad_lustre_fcntl.c romio/adio/ad_lustre/ad_lustre_fcntl.c
+--- romio-orig/adio/ad_lustre/ad_lustre_fcntl.c	1969-12-31 19:00:00.000000000 -0500
++++ romio/adio/ad_lustre/ad_lustre_fcntl.c	2006-09-06 18:43:11.000365177 -0400
+@@ -0,0 +1,127 @@
++/* -*- Mode: C; c-basic-offset:4 ; -*- */
++/*
++ *   $Id: ad_lustre_fcntl.c,v 1.1.1.1 2004/11/04 11:03:38 liam Exp $
++ *
++ *   Copyright (C) 1997 University of Chicago.
++ *   See COPYRIGHT notice in top-level directory.
++ */
++
++#include "ad_lustre.h"
++#include "adio_extern.h"
++/* #ifdef MPISGI
++#include "mpisgi2.h"
++#endif */
++
++void ADIOI_LUSTRE_Fcntl(ADIO_File fd, int flag, ADIO_Fcntl_t *fcntl_struct, int *error_code)
++{
++    int i, ntimes;
++    ADIO_Offset curr_fsize, alloc_size, size, len, done;
++    ADIO_Status status;
++    char *buf;
++#if defined(MPICH2) || !defined(PRINT_ERR_MSG)
++    static char myname[] = "ADIOI_LUSTRE_FCNTL";
++#endif
++
++    switch(flag) {
++    case ADIO_FCNTL_GET_FSIZE:
++	fcntl_struct->fsize = lseek(fd->fd_sys, 0, SEEK_END);
++	if (fd->fp_sys_posn != -1)
++	     lseek(fd->fd_sys, fd->fp_sys_posn, SEEK_SET);
++	if (fcntl_struct->fsize == -1) {
++#ifdef MPICH2
++	    *error_code = MPIR_Err_create_code(MPI_SUCCESS, MPIR_ERR_RECOVERABLE, myname, __LINE__, MPI_ERR_IO, "**io",
++		"**io %s", strerror(errno));
++#elif defined(PRINT_ERR_MSG)
++			*error_code = MPI_ERR_UNKNOWN;
++#else /* MPICH-1 */
++	    *error_code = MPIR_Err_setmsg(MPI_ERR_IO, MPIR_ADIO_ERROR,
++			      myname, "I/O Error", "%s", strerror(errno));
++	    ADIOI_Error(fd, *error_code, myname);
++#endif
++	}
++	else *error_code = MPI_SUCCESS;
++	break;
++
++    case ADIO_FCNTL_SET_DISKSPACE:
++	/* will be called by one process only */
++	/* On file systems with no preallocation function, I have to
++           explicitly write
++           to allocate space. Since there could be holes in the file,
++           I need to read up to the current file size, write it back,
++           and then write beyond that depending on how much
++           preallocation is needed.
++           read/write in sizes of no more than ADIOI_PREALLOC_BUFSZ */
++
++	curr_fsize = lseek(fd->fd_sys, 0, SEEK_END);
++	alloc_size = fcntl_struct->diskspace;
++
++	size = ADIOI_MIN(curr_fsize, alloc_size);
++
++	ntimes = (size + ADIOI_PREALLOC_BUFSZ - 1)/ADIOI_PREALLOC_BUFSZ;
++	buf = (char *) ADIOI_Malloc(ADIOI_PREALLOC_BUFSZ);
++	done = 0;
++
++	for (i=0; i<ntimes; i++) {
++	    len = ADIOI_MIN(size-done, ADIOI_PREALLOC_BUFSZ);
++	    ADIO_ReadContig(fd, buf, len, MPI_BYTE, ADIO_EXPLICIT_OFFSET, done,
++			    &status, error_code);
++	    if (*error_code != MPI_SUCCESS) {
++#ifdef MPICH2
++		*error_code = MPIR_Err_create_code(MPI_SUCCESS, MPIR_ERR_RECOVERABLE, myname, __LINE__, MPI_ERR_IO, "**io",
++		    "**io %s", strerror(errno));
++#elif defined(PRINT_ERR_MSG)
++		FPRINTF(stderr, "ADIOI_LUSTRE_Fcntl: To preallocate disk space, ROMIO needs to read the file and write it back, but is unable to read the file. Please give the file read permission and open it with MPI_MODE_RDWR.\n");
++		MPI_Abort(MPI_COMM_WORLD, 1);
++#else /* MPICH-1 */
++		*error_code = MPIR_Err_setmsg(MPI_ERR_IO, MPIR_PREALLOC_PERM,
++			      myname, (char *) 0, (char *) 0);
++		ADIOI_Error(fd, *error_code, myname);
++#endif
++                return;
++	    }
++	    ADIO_WriteContig(fd, buf, len, MPI_BYTE, ADIO_EXPLICIT_OFFSET,
++                             done, &status, error_code);
++	    if (*error_code != MPI_SUCCESS) return;
++	    done += len;
++	}
++
++	if (alloc_size > curr_fsize) {
++	    memset(buf, 0, ADIOI_PREALLOC_BUFSZ);
++	    size = alloc_size - curr_fsize;
++	    ntimes = (size + ADIOI_PREALLOC_BUFSZ - 1)/ADIOI_PREALLOC_BUFSZ;
++	    for (i=0; i<ntimes; i++) {
++		len = ADIOI_MIN(alloc_size-done, ADIOI_PREALLOC_BUFSZ);
++		ADIO_WriteContig(fd, buf, len, MPI_BYTE, ADIO_EXPLICIT_OFFSET,
++				 done, &status, error_code);
++		if (*error_code != MPI_SUCCESS) return;
++		done += len;
++	    }
++	}
++	ADIOI_Free(buf);
++	if (fd->fp_sys_posn != -1)
++	    lseek(fd->fd_sys, fd->fp_sys_posn, SEEK_SET);
++	*error_code = MPI_SUCCESS;
++	break;
++
++#if 0
++    case ADIO_FCNTL_SET_IOMODE:
++        /* for implementing PFS I/O modes. will not occur in MPI-IO
++           implementation.*/
++	if (fd->iomode != fcntl_struct->iomode) {
++	    fd->iomode = fcntl_struct->iomode;
++	    MPI_Barrier(MPI_COMM_WORLD);
++	}
++	*error_code = MPI_SUCCESS;
++	break;
++#endif
++
++    case ADIO_FCNTL_SET_ATOMICITY:
++	fd->atomicity = (fcntl_struct->atomicity == 0) ? 0 : 1;
++	*error_code = MPI_SUCCESS;
++	break;
++
++    default:
++	FPRINTF(stderr, "Unknown flag passed to ADIOI_LUSTRE_Fcntl\n");
++	MPI_Abort(MPI_COMM_WORLD, 1);
++    }
++}
+diff -ruN romio-orig/adio/ad_lustre/ad_lustre_flush.c romio/adio/ad_lustre/ad_lustre_flush.c
+--- romio-orig/adio/ad_lustre/ad_lustre_flush.c	1969-12-31 19:00:00.000000000 -0500
++++ romio/adio/ad_lustre/ad_lustre_flush.c	2006-09-06 17:10:35.000711888 -0400
+@@ -0,0 +1,14 @@
++/* -*- Mode: C; c-basic-offset:4 ; -*- */
++/*
++ *   $Id: ad_lustre_flush.c,v 1.1.1.1 2004/11/04 11:03:38 liam Exp $
++ *
++ *   Copyright (C) 1997 University of Chicago.
++ *   See COPYRIGHT notice in top-level directory.
++ */
++
++#include "ad_lustre.h"
++
++void ADIOI_LUSTRE_Flush(ADIO_File fd, int *error_code)
++{
++    ADIOI_GEN_Flush(fd, error_code);
++}
+diff -ruN romio-orig/adio/ad_lustre/ad_lustre.h romio/adio/ad_lustre/ad_lustre.h
+--- romio-orig/adio/ad_lustre/ad_lustre.h	1969-12-31 19:00:00.000000000 -0500
++++ romio/adio/ad_lustre/ad_lustre.h	2006-09-06 17:10:35.000722616 -0400
+@@ -0,0 +1,36 @@
++/* -*- Mode: C; c-basic-offset:4 ; -*- */
++/*
++ *   $Id: ad_lustre.h,v 1.2 2005/07/07 14:38:17 liam Exp $
++ *
++ *   Copyright (C) 1997 University of Chicago.
++ *   See COPYRIGHT notice in top-level directory.
++ */
++
++#ifndef AD_UNIX_INCLUDE
++#define AD_UNIX_INCLUDE
++
++/* temp*/
++#define HAVE_ASM_TYPES_H 1
++
++#include <unistd.h>
++#include <linux/types.h>
++#include <fcntl.h>
++#include <sys/ioctl.h>
++#include "lustre/lustre_user.h"
++#include "adio.h"
++
++#ifndef NO_AIO
++#ifdef AIO_SUN
++#include <sys/asynch.h>
++#else
++#include <aio.h>
++#ifdef NEEDS_ADIOCB_T
++typedef struct adiocb adiocb_t;
++#endif
++#endif
++#endif
++
++int ADIOI_LUSTRE_aio(ADIO_File fd, void *buf, int len, ADIO_Offset offset,
++		  int wr, void *handle);
++
++#endif
+diff -ruN romio-orig/adio/ad_lustre/ad_lustre_hints.c romio/adio/ad_lustre/ad_lustre_hints.c
+--- romio-orig/adio/ad_lustre/ad_lustre_hints.c	1969-12-31 19:00:00.000000000 -0500
++++ romio/adio/ad_lustre/ad_lustre_hints.c	2006-09-06 17:10:35.000741994 -0400
+@@ -0,0 +1,130 @@
++/* -*- Mode: C; c-basic-offset:4 ; -*- */
++/*
++ *   $Id: ad_lustre_hints.c,v 1.2 2005/07/07 14:38:17 liam Exp $
++ *
++ *   Copyright (C) 1997 University of Chicago.
++ *   See COPYRIGHT notice in top-level directory.
++ */
++
++#include "ad_lustre.h"
++
++void ADIOI_LUSTRE_SetInfo(ADIO_File fd, MPI_Info users_info, int *error_code)
++{
++    char *value, *value_in_fd;
++    int flag, tmp_val, str_factor=-1, str_unit=0, start_iodev=-1;
++    struct lov_user_md lum = { 0 };
++    int err, myrank, fd_sys, perm, amode, old_mask;
++
++    if ( (fd->info) == MPI_INFO_NULL) {
++	/* This must be part of the open call. can set striping parameters
++           if necessary. */
++	MPI_Info_create(&(fd->info));
++
++	/* has user specified striping or server buffering parameters
++           and do they have the same value on all processes? */
++	if (users_info != MPI_INFO_NULL) {
++	    value = (char *) ADIOI_Malloc((MPI_MAX_INFO_VAL+1)*sizeof(char));
++
++	    MPI_Info_get(users_info, "striping_factor", MPI_MAX_INFO_VAL,
++			 value, &flag);
++	    if (flag) {
++		str_factor=atoi(value);
++		tmp_val = str_factor;
++		MPI_Bcast(&tmp_val, 1, MPI_INT, 0, fd->comm);
++		if (tmp_val != str_factor) {
++		    FPRINTF(stderr, "ADIOI_LUSTRE_SetInfo: the value for key \"striping_factor\" must be the same on all processes\n");
++		    MPI_Abort(MPI_COMM_WORLD, 1);
++		}
++	    }
++
++	    MPI_Info_get(users_info, "striping_unit", MPI_MAX_INFO_VAL,
++			 value, &flag);
++	    if (flag) {
++		str_unit=atoi(value);
++		tmp_val = str_unit;
++		MPI_Bcast(&tmp_val, 1, MPI_INT, 0, fd->comm);
++		if (tmp_val != str_unit) {
++		    FPRINTF(stderr, "ADIOI_LUSTRE_SetInfo: the value for key \"striping_unit\" must be the same on all processes\n");
++		    MPI_Abort(MPI_COMM_WORLD, 1);
++		}
++	    }
++
++	    MPI_Info_get(users_info, "start_iodevice", MPI_MAX_INFO_VAL,
++			 value, &flag);
++	    if (flag) {
++		start_iodev=atoi(value);
++		tmp_val = start_iodev;
++		MPI_Bcast(&tmp_val, 1, MPI_INT, 0, fd->comm);
++		if (tmp_val != start_iodev) {
++		    FPRINTF(stderr, "ADIOI_LUSTRE_SetInfo: the value for key \"start_iodevice\" must be the same on all processes\n");
++		    MPI_Abort(MPI_COMM_WORLD, 1);
++		}
++	    }
++
++         /* if user has specified striping info, process 0 tries to set it */
++	    if ((str_factor > 0) || (str_unit > 0) || (start_iodev >= 0)) {
++		MPI_Comm_rank(fd->comm, &myrank);
++		if (!myrank) {
++		    if (fd->perm == ADIO_PERM_NULL) {
++			old_mask = umask(022);
++			umask(old_mask);
++			perm = old_mask ^ 0666;
++		    }
++		    else perm = fd->perm;
++
++		    amode = 0;
++		    if (fd->access_mode & ADIO_CREATE)
++			amode = amode | O_CREAT;
++		    if (fd->access_mode & ADIO_RDONLY)
++			amode = amode | O_RDONLY;
++		    if (fd->access_mode & ADIO_WRONLY)
++			amode = amode | O_WRONLY;
++		    if (fd->access_mode & ADIO_RDWR)
++			amode = amode | O_RDWR;
++		    if (fd->access_mode & ADIO_EXCL)
++			amode = amode | O_EXCL;
++
++		    /* we need to create file so ensure this is set */
++                    amode = amode | O_LOV_DELAY_CREATE | O_CREAT;
++
++                    fd_sys = open(fd->filename, amode, perm);
++                    if (fd_sys == -1) {
++		        if (errno != EEXIST)
++			    printf("Failure to open file %s %d %d\n",strerror(errno), amode, perm);
++                    } else {
++                        lum.lmm_magic = LOV_USER_MAGIC;
++                        lum.lmm_pattern = 0;
++                        lum.lmm_stripe_size = str_unit;
++                        lum.lmm_stripe_count = str_factor;
++                        lum.lmm_stripe_offset = start_iodev;
++
++                        err = ioctl(fd_sys, LL_IOC_LOV_SETSTRIPE, &lum);
++                        if (err == -1 && errno != EEXIST) {
++			    printf("Failure to set stripe info %s \n",strerror(errno));
++                        }
++
++                        close(fd_sys);
++                   }
++
++		}
++		MPI_Barrier(fd->comm);
++	    }
++
++	    ADIOI_Free(value);
++	}
++
++	/* set the values for collective I/O and data sieving parameters */
++	ADIOI_GEN_SetInfo(fd, users_info, error_code);
++    }
++
++    else {
++	/* The file has been opened previously and fd->fd_sys is a valid
++           file descriptor. cannot set striping parameters now. */
++
++	/* set the values for collective I/O and data sieving parameters */
++	ADIOI_GEN_SetInfo(fd, users_info, error_code);
++
++    }
++
++    *error_code = MPI_SUCCESS;
++}
+diff -ruN romio-orig/adio/ad_lustre/ad_lustre_iread.c romio/adio/ad_lustre/ad_lustre_iread.c
+--- romio-orig/adio/ad_lustre/ad_lustre_iread.c	1969-12-31 19:00:00.000000000 -0500
++++ romio/adio/ad_lustre/ad_lustre_iread.c	2006-09-06 17:10:35.000751765 -0400
+@@ -0,0 +1,106 @@
++/* -*- Mode: C; c-basic-offset:4 ; -*- */
++/*
++ *   $Id: ad_lustre_iread.c,v 1.1.1.1 2004/11/04 11:03:38 liam Exp $
++ *
++ *   Copyright (C) 1997 University of Chicago.
++ *   See COPYRIGHT notice in top-level directory.
++ */
++
++#include "ad_lustre.h"
++
++void ADIOI_LUSTRE_IreadContig(ADIO_File fd, void *buf, int count,
++                MPI_Datatype datatype, int file_ptr_type,
++                ADIO_Offset offset, ADIO_Request *request, int *error_code)
++{
++    int len, typesize;
++#ifdef NO_AIO
++    ADIO_Status status;
++#else
++    int err=-1;
++#if defined(MPICH2) || !defined(PRINT_ERR_MSG)
++    static char myname[] = "ADIOI_LUSTRE_IREADCONTIG";
++#endif
++#endif
++
++    (*request) = ADIOI_Malloc_request();
++    (*request)->optype = ADIOI_READ;
++    (*request)->fd = fd;
++    (*request)->datatype = datatype;
++
++    MPI_Type_size(datatype, &typesize);
++    len = count * typesize;
++
++#ifdef NO_AIO
++    /* HP, FreeBSD, Linux */
++    /* no support for nonblocking I/O. Use blocking I/O. */
++
++    ADIOI_LUSTRE_ReadContig(fd, buf, len, MPI_BYTE, file_ptr_type, offset,
++			 &status, error_code);
++    (*request)->queued = 0;
++#ifdef HAVE_STATUS_SET_BYTES
++    if (*error_code == MPI_SUCCESS) {
++	MPI_Get_elements(&status, MPI_BYTE, &len);
++	(*request)->nbytes = len;
++    }
++#endif
++
++#else
++    if (file_ptr_type == ADIO_INDIVIDUAL) offset = fd->fp_ind;
++    err = ADIOI_LUSTRE_aio(fd, buf, len, offset, 0, &((*request)->handle));
++    if (file_ptr_type == ADIO_INDIVIDUAL) fd->fp_ind += len;
++
++    (*request)->queued = 1;
++    ADIOI_Add_req_to_list(request);
++
++    if (err == -1) {
++#ifdef MPICH2
++	*error_code = MPIR_Err_create_code(MPI_SUCCESS, MPIR_ERR_RECOVERABLE, myname, __LINE__, MPI_ERR_IO, "**io",
++	    "**io %s", strerror(errno));
++	return;
++#elif defined(PRINT_ERR_MSG)
++			*error_code = MPI_ERR_UNKNOWN;
++#else /* MPICH-1 */
++	*error_code = MPIR_Err_setmsg(MPI_ERR_IO, MPIR_ADIO_ERROR,
++			      myname, "I/O Error", "%s", strerror(errno));
++	ADIOI_Error(fd, *error_code, myname);
++#endif
++    }
++    else *error_code = MPI_SUCCESS;
++#endif  /* NO_AIO */
++
++    fd->fp_sys_posn = -1;   /* set it to null. */
++    fd->async_count++;
++}
++
++
++
++void ADIOI_LUSTRE_IreadStrided(ADIO_File fd, void *buf, int count,
++		       MPI_Datatype datatype, int file_ptr_type,
++                       ADIO_Offset offset, ADIO_Request *request, int
++                       *error_code)
++{
++    ADIO_Status status;
++#ifdef HAVE_STATUS_SET_BYTES
++    int typesize;
++#endif
++
++    *request = ADIOI_Malloc_request();
++    (*request)->optype = ADIOI_READ;
++    (*request)->fd = fd;
++    (*request)->datatype = datatype;
++    (*request)->queued = 0;
++    (*request)->handle = 0;
++
++/* call the blocking version. It is faster because it does data sieving. */
++    ADIOI_LUSTRE_ReadStrided(fd, buf, count, datatype, file_ptr_type,
++                            offset, &status, error_code);
++
++    fd->async_count++;
++
++#ifdef HAVE_STATUS_SET_BYTES
++    if (*error_code == MPI_SUCCESS) {
++	MPI_Type_size(datatype, &typesize);
++	(*request)->nbytes = count * typesize;
++    }
++#endif
++}
+diff -ruN romio-orig/adio/ad_lustre/ad_lustre_iwrite.c romio/adio/ad_lustre/ad_lustre_iwrite.c
+--- romio-orig/adio/ad_lustre/ad_lustre_iwrite.c	1969-12-31 19:00:00.000000000 -0500
++++ romio/adio/ad_lustre/ad_lustre_iwrite.c	2006-09-06 17:10:35.000761678 -0400
+@@ -0,0 +1,268 @@
++/* -*- Mode: C; c-basic-offset:4 ; -*- */
++/*
++ *   $Id: ad_lustre_iwrite.c,v 1.1.1.1 2004/11/04 11:03:38 liam Exp $
++ *
++ *   Copyright (C) 1997 University of Chicago.
++ *   See COPYRIGHT notice in top-level directory.
++ */
++
++#include "ad_lustre.h"
++
++void ADIOI_LUSTRE_IwriteContig(ADIO_File fd, void *buf, int count,
++                MPI_Datatype datatype, int file_ptr_type,
++                ADIO_Offset offset, ADIO_Request *request, int *error_code)
++{
++    int len, typesize;
++#ifdef NO_AIO
++    ADIO_Status status;
++#else
++    int err=-1;
++#if defined(MPICH2) || !defined(PRINT_ERR_MSG)
++    static char myname[] = "ADIOI_LUSTRE_IWRITECONTIG";
++#endif
++#endif
++
++    *request = ADIOI_Malloc_request();
++    (*request)->optype = ADIOI_WRITE;
++    (*request)->fd = fd;
++    (*request)->datatype = datatype;
++
++    MPI_Type_size(datatype, &typesize);
++    len = count * typesize;
++
++#ifdef NO_AIO
++    /* HP, FreeBSD, Linux */
++    /* no support for nonblocking I/O. Use blocking I/O. */
++
++    ADIOI_LUSTRE_WriteContig(fd, buf, len, MPI_BYTE, file_ptr_type, offset,
++			  &status, error_code);
++    (*request)->queued = 0;
++#ifdef HAVE_STATUS_SET_BYTES
++    if (*error_code == MPI_SUCCESS) {
++	MPI_Get_elements(&status, MPI_BYTE, &len);
++	(*request)->nbytes = len;
++    }
++#endif
++
++#else
++    if (file_ptr_type == ADIO_INDIVIDUAL) offset = fd->fp_ind;
++    err = ADIOI_LUSTRE_aio(fd, buf, len, offset, 1, &((*request)->handle));
++    if (file_ptr_type == ADIO_INDIVIDUAL) fd->fp_ind += len;
++
++    (*request)->queued = 1;
++    ADIOI_Add_req_to_list(request);
++
++    if (err == -1) {
++#ifdef MPICH2
++	*error_code = MPIR_Err_create_code(MPI_SUCCESS, MPIR_ERR_RECOVERABLE, myname, __LINE__, MPI_ERR_IO, "**io",
++	    "**io %s", strerror(errno));
++	return;
++#elif defined(PRINT_ERR_MSG)
++			*error_code = MPI_ERR_UNKNOWN;
++#else /* MPICH-1 */
++	*error_code = MPIR_Err_setmsg(MPI_ERR_IO, MPIR_ADIO_ERROR,
++			      myname, "I/O Error", "%s", strerror(errno));
++	ADIOI_Error(fd, *error_code, myname);
++#endif
++    }
++    else *error_code = MPI_SUCCESS;
++#endif /* NO_AIO */
++
++    fd->fp_sys_posn = -1;   /* set it to null. */
++    fd->async_count++;
++}
++
++
++
++
++void ADIOI_LUSTRE_IwriteStrided(ADIO_File fd, void *buf, int count,
++		       MPI_Datatype datatype, int file_ptr_type,
++                       ADIO_Offset offset, ADIO_Request *request, int
++                       *error_code)
++{
++    ADIO_Status status;
++#ifdef HAVE_STATUS_SET_BYTES
++    int typesize;
++#endif
++
++    *request = ADIOI_Malloc_request();
++    (*request)->optype = ADIOI_WRITE;
++    (*request)->fd = fd;
++    (*request)->datatype = datatype;
++    (*request)->queued = 0;
++    (*request)->handle = 0;
++
++/* call the blocking version. It is faster because it does data sieving. */
++    ADIOI_LUSTRE_WriteStrided(fd, buf, count, datatype, file_ptr_type,
++                            offset, &status, error_code);
++
++    fd->async_count++;
++
++#ifdef HAVE_STATUS_SET_BYTES
++    if (*error_code == MPI_SUCCESS) {
++	MPI_Type_size(datatype, &typesize);
++	(*request)->nbytes = count * typesize;
++    }
++#endif
++}
++
++
++/* This function is for implementation convenience. It is not user-visible.
++   It takes care of the differences in the interface for nonblocking I/O
++   on various Unix machines! If wr==1 write, wr==0 read. */
++
++int ADIOI_LUSTRE_aio(ADIO_File fd, void *buf, int len, ADIO_Offset offset,
++		  int wr, void *handle)
++{
++    int err=-1, fd_sys;
++
++#ifndef NO_AIO
++    int error_code;
++#ifdef AIO_SUN
++    aio_result_t *result;
++#else
++    struct aiocb *aiocbp;
++#endif
++#endif
++
++    fd_sys = fd->fd_sys;
++
++#ifdef AIO_SUN
++    result = (aio_result_t *) ADIOI_Malloc(sizeof(aio_result_t));
++    result->aio_return = AIO_INPROGRESS;
++    if (wr) err = aiowrite(fd_sys, buf, len, offset, SEEK_SET, result);
++    else err = aioread(fd_sys, buf, len, offset, SEEK_SET, result);
++
++    if (err == -1) {
++	if (errno == EAGAIN) {
++       /* the man pages say EPROCLIM, but in reality errno is set to EAGAIN! */
++
++        /* exceeded the max. no. of outstanding requests.
++           complete all previous async. requests and try again.*/
++
++	    ADIOI_Complete_async(&error_code);
++	    if (wr) err = aiowrite(fd_sys, buf, len, offset, SEEK_SET, result);
++	    else err = aioread(fd_sys, buf, len, offset, SEEK_SET, result);
++
++	    while (err == -1) {
++		if (errno == EAGAIN) {
++                    /* sleep and try again */
++                    sleep(1);
++		    if (wr) err = aiowrite(fd_sys, buf, len, offset, SEEK_SET, result);
++		    else err = aioread(fd_sys, buf, len, offset, SEEK_SET, result);
++		}
++                else {
++                    FPRINTF(stderr, "Unknown errno %d in ADIOI_LUSTRE_aio\n", errno);
++                    MPI_Abort(MPI_COMM_WORLD, 1);
++                }
++	    }
++	}
++        else {
++            FPRINTF(stderr, "Unknown errno %d in ADIOI_LUSTRE_aio\n", errno);
++            MPI_Abort(MPI_COMM_WORLD, 1);
++        }
++    }
++
++    *((aio_result_t **) handle) = result;
++#endif
++
++#ifdef NO_FD_IN_AIOCB
++/* IBM */
++    aiocbp = (struct aiocb *) ADIOI_Malloc(sizeof(struct aiocb));
++    aiocbp->aio_whence = SEEK_SET;
++    aiocbp->aio_offset = offset;
++    aiocbp->aio_buf = buf;
++    aiocbp->aio_nbytes = len;
++    if (wr) err = aio_write(fd_sys, aiocbp);
++    else err = aio_read(fd_sys, aiocbp);
++
++    if (err == -1) {
++	if (errno == EAGAIN) {
++        /* exceeded the max. no. of outstanding requests.
++          complete all previous async. requests and try again. */
++
++	    ADIOI_Complete_async(&error_code);
++	    if (wr) err = aio_write(fd_sys, aiocbp);
++	    else err = aio_read(fd_sys, aiocbp);
++
++            while (err == -1) {
++                if (errno == EAGAIN) {
++                    /* sleep and try again */
++                    sleep(1);
++		    if (wr) err = aio_write(fd_sys, aiocbp);
++		    else err = aio_read(fd_sys, aiocbp);
++		}
++                else {
++                    FPRINTF(stderr, "Unknown errno %d in ADIOI_LUSTRE_aio\n", errno);
++                    MPI_Abort(MPI_COMM_WORLD, 1);
++                }
++            }
++	}
++        else {
++            FPRINTF(stderr, "Unknown errno %d in ADIOI_LUSTRE_aio\n", errno);
++            MPI_Abort(MPI_COMM_WORLD, 1);
++        }
++    }
++
++    *((struct aiocb **) handle) = aiocbp;
++
++#elif (!defined(NO_AIO) && !defined(AIO_SUN))
++/* DEC, SGI IRIX 5 and 6 */
++
++    aiocbp = (struct aiocb *) ADIOI_Calloc(sizeof(struct aiocb), 1);
++    aiocbp->aio_fildes = fd_sys;
++    aiocbp->aio_offset = offset;
++    aiocbp->aio_buf = buf;
++    aiocbp->aio_nbytes = len;
++
++#ifdef AIO_PRIORITY_DEFAULT
++/* DEC */
++    aiocbp->aio_reqprio = AIO_PRIO_DFL;   /* not needed in DEC Unix 4.0 */
++    aiocbp->aio_sigevent.sigev_signo = 0;
++#else
++    aiocbp->aio_reqprio = 0;
++#endif
++
++#ifdef AIO_SIGNOTIFY_NONE
++/* SGI IRIX 6 */
++    aiocbp->aio_sigevent.sigev_notify = SIGEV_NONE;
++#else
++    aiocbp->aio_sigevent.sigev_signo = 0;
++#endif
++
++    if (wr) err = aio_write(aiocbp);
++    else err = aio_read(aiocbp);
++
++    if (err == -1) {
++	if (errno == EAGAIN) {
++        /* exceeded the max. no. of outstanding requests.
++           complete all previous async. requests and try again. */
++
++	    ADIOI_Complete_async(&error_code);
++	    if (wr) err = aio_write(aiocbp);
++	    else err = aio_read(aiocbp);
++
++	    while (err == -1) {
++		if (errno == EAGAIN) {
++		    /* sleep and try again */
++		    sleep(1);
++		    if (wr) err = aio_write(aiocbp);
++		    else err = aio_read(aiocbp);
++		}
++		else {
++		    FPRINTF(stderr, "Unknown errno %d in ADIOI_LUSTRE_aio\n", errno);
++		    MPI_Abort(MPI_COMM_WORLD, 1);
++		}
++	    }
++        }
++	else {
++	    FPRINTF(stderr, "Unknown errno %d in ADIOI_LUSTRE_aio\n", errno);
++	    MPI_Abort(MPI_COMM_WORLD, 1);
++	}
++    }
++
++    *((struct aiocb **) handle) = aiocbp;
++#endif
++
++    return err;
++}
+diff -ruN romio-orig/adio/ad_lustre/ad_lustre_open.c romio/adio/ad_lustre/ad_lustre_open.c
+--- romio-orig/adio/ad_lustre/ad_lustre_open.c	1969-12-31 19:00:00.000000000 -0500
++++ romio/adio/ad_lustre/ad_lustre_open.c	2006-09-06 17:10:35.000771351 -0400
+@@ -0,0 +1,100 @@
++/* -*- Mode: C; c-basic-offset:4 ; -*- */
++/*
++ *   $Id: ad_lustre_open.c,v 1.1.1.1 2004/11/04 11:03:38 liam Exp $
++ *
++ *   Copyright (C) 1997 University of Chicago.
++ *   See COPYRIGHT notice in top-level directory.
++ */
++
++#include "ad_lustre.h"
++
++void ADIOI_LUSTRE_Open(ADIO_File fd, int *error_code)
++{
++    int perm, old_mask, amode;
++    struct lov_user_md lum = { 0 };
++    char *value;
++
++#if defined(MPICH2) || !defined(PRINT_ERR_MSG)
++    static char myname[] = "ADIOI_LUSTRE_OPEN";
++#endif
++
++    if (fd->perm == ADIO_PERM_NULL) {
++	old_mask = umask(022);
++	umask(old_mask);
++	perm = old_mask ^ 0666;
++    }
++    else perm = fd->perm;
++
++    amode = 0;
++    if (fd->access_mode & ADIO_CREATE)
++	amode = amode | O_CREAT;
++    if (fd->access_mode & ADIO_RDONLY)
++	amode = amode | O_RDONLY;
++    if (fd->access_mode & ADIO_WRONLY)
++	amode = amode | O_WRONLY;
++    if (fd->access_mode & ADIO_RDWR)
++	amode = amode | O_RDWR;
++    if (fd->access_mode & ADIO_EXCL)
++	amode = amode | O_EXCL;
++
++    fd->fd_sys = open(fd->filename, amode, perm);
++
++    if (fd->fd_sys != -1) {
++        int err;
++
++        value = (char *) ADIOI_Malloc((MPI_MAX_INFO_VAL+1)*sizeof(char));
++
++        /* get file striping information and set it in info */
++        lum.lmm_magic = LOV_USER_MAGIC;
++        err = ioctl(fd->fd_sys, LL_IOC_LOV_GETSTRIPE, (void *) &lum);
++
++        if (!err) {
++            sprintf(value, "%d", lum.lmm_stripe_size);
++            MPI_Info_set(fd->info, "striping_unit", value);
++
++            sprintf(value, "%d", lum.lmm_stripe_count);
++            MPI_Info_set(fd->info, "striping_factor", value);
++
++            sprintf(value, "%d", lum.lmm_stripe_offset);
++            MPI_Info_set(fd->info, "start_iodevice", value);
++        }
++        ADIOI_Free(value);
++
++        if (fd->access_mode & ADIO_APPEND)
++            fd->fp_ind = fd->fp_sys_posn = lseek(fd->fd_sys, 0, SEEK_END);
++    }
++
++
++    if ((fd->fd_sys != -1) && (fd->access_mode & ADIO_APPEND))
++	fd->fp_ind = fd->fp_sys_posn = lseek(fd->fd_sys, 0, SEEK_END);
++
++    if (fd->fd_sys == -1) {
++#ifdef MPICH2
++	if (errno == ENAMETOOLONG)
++	    *error_code = MPIR_Err_create_code(MPI_SUCCESS, MPIR_ERR_RECOVERABLE, myname, __LINE__, MPI_ERR_BAD_FILE, "**filenamelong", "**filenamelong %s %d", fd->filename, strlen(fd->filename));
++	else if (errno == ENOENT)
++	    *error_code = MPIR_Err_create_code(MPI_SUCCESS, MPIR_ERR_RECOVERABLE, myname, __LINE__, MPI_ERR_NO_SUCH_FILE, "**filenoexist", "**filenoexist %s", fd->filename);
++	else if (errno == ENOTDIR || errno == ELOOP)
++	    *error_code = MPIR_Err_create_code(MPI_SUCCESS, MPIR_ERR_RECOVERABLE, myname, __LINE__, MPI_ERR_BAD_FILE, "**filenamedir", "**filenamedir %s", fd->filename);
++	else if (errno == EACCES) {
++	    *error_code = MPIR_Err_create_code(MPI_SUCCESS, MPIR_ERR_RECOVERABLE, myname, __LINE__, MPI_ERR_ACCESS, "**fileaccess", "**fileaccess %s",
++					       fd->filename);
++	}
++	else if (errno == EROFS) {
++	    /* Read only file or file system and write access requested */
++	    *error_code = MPIR_Err_create_code(MPI_SUCCESS, MPIR_ERR_RECOVERABLE, myname, __LINE__, MPI_ERR_READ_ONLY, "**ioneedrd", 0);
++	}
++	else {
++	    *error_code = MPIR_Err_create_code(MPI_SUCCESS, MPIR_ERR_RECOVERABLE, myname, __LINE__, MPI_ERR_IO, "**io",
++	    "**io %s", strerror(errno));
++	}
++#elif defined(PRINT_ERR_MSG)
++			*error_code = MPI_ERR_UNKNOWN;
++#else /* MPICH-1 */
++	*error_code = MPIR_Err_setmsg(MPI_ERR_IO, MPIR_ADIO_ERROR,
++			      myname, "I/O Error", "%s", strerror(errno));
++	ADIOI_Error(ADIO_FILE_NULL, *error_code, myname);
++#endif
++    }
++    else *error_code = MPI_SUCCESS;
++}
+diff -ruN romio-orig/adio/ad_lustre/ad_lustre_rdcoll.c romio/adio/ad_lustre/ad_lustre_rdcoll.c
+--- romio-orig/adio/ad_lustre/ad_lustre_rdcoll.c	1969-12-31 19:00:00.000000000 -0500
++++ romio/adio/ad_lustre/ad_lustre_rdcoll.c	2006-09-06 17:10:35.000780880 -0400
+@@ -0,0 +1,18 @@
++/* -*- Mode: C; c-basic-offset:4 ; -*- */
++/*
++ *   $Id: ad_lustre_rdcoll.c,v 1.1.1.1 2004/11/04 11:03:38 liam Exp $
++ *
++ *   Copyright (C) 1997 University of Chicago.
++ *   See COPYRIGHT notice in top-level directory.
++ */
++
++#include "ad_lustre.h"
++
++void ADIOI_LUSTRE_ReadStridedColl(ADIO_File fd, void *buf, int count,
++                       MPI_Datatype datatype, int file_ptr_type,
++                       ADIO_Offset offset, ADIO_Status *status, int
++                       *error_code)
++{
++    ADIOI_GEN_ReadStridedColl(fd, buf, count, datatype, file_ptr_type,
++			      offset, status, error_code);
++}
+diff -ruN romio-orig/adio/ad_lustre/ad_lustre_read.c romio/adio/ad_lustre/ad_lustre_read.c
+--- romio-orig/adio/ad_lustre/ad_lustre_read.c	1969-12-31 19:00:00.000000000 -0500
++++ romio/adio/ad_lustre/ad_lustre_read.c	2006-09-06 17:10:35.000790846 -0400
+@@ -0,0 +1,67 @@
++/* -*- Mode: C; c-basic-offset:4 ; -*- */
++/*
++ *   $Id: ad_lustre_read.c,v 1.1.1.1 2004/11/04 11:03:38 liam Exp $
++ *
++ *   Copyright (C) 1997 University of Chicago.
++ *   See COPYRIGHT notice in top-level directory.
++ */
++
++#include "ad_lustre.h"
++
++void ADIOI_LUSTRE_ReadContig(ADIO_File fd, void *buf, int count,
++                     MPI_Datatype datatype, int file_ptr_type,
++		     ADIO_Offset offset, ADIO_Status *status, int *error_code)
++{
++    int err=-1, datatype_size, len;
++#if defined(MPICH2) || !defined(PRINT_ERR_MSG)
++    static char myname[] = "ADIOI_LUSTRE_READCONTIG";
++#endif
++
++    MPI_Type_size(datatype, &datatype_size);
++    len = datatype_size * count;
++
++    if (file_ptr_type == ADIO_EXPLICIT_OFFSET) {
++	if (fd->fp_sys_posn != offset)
++	    lseek(fd->fd_sys, offset, SEEK_SET);
++	err = read(fd->fd_sys, buf, len);
++	fd->fp_sys_posn = offset + len;
++	/* individual file pointer not updated */
++    }
++    else {  /* read from curr. location of ind. file pointer */
++	if (fd->fp_sys_posn != fd->fp_ind)
++	    lseek(fd->fd_sys, fd->fp_ind, SEEK_SET);
++	err = read(fd->fd_sys, buf, len);
++	fd->fp_ind += err;
++	fd->fp_sys_posn = fd->fp_ind;
++    }
++
++#ifdef HAVE_STATUS_SET_BYTES
++    if (err != -1) MPIR_Status_set_bytes(status, datatype, err);
++#endif
++
++    if (err == -1) {
++#ifdef MPICH2
++	*error_code = MPIR_Err_create_code(MPI_SUCCESS, MPIR_ERR_RECOVERABLE, myname, __LINE__, MPI_ERR_IO, "**io",
++	    "**io %s", strerror(errno));
++#elif defined(PRINT_ERR_MSG)
++			*error_code = MPI_ERR_UNKNOWN;
++#else /* MPICH-1 */
++	*error_code = MPIR_Err_setmsg(MPI_ERR_IO, MPIR_ADIO_ERROR,
++			      myname, "I/O Error", "%s", strerror(errno));
++	ADIOI_Error(fd, *error_code, myname);
++#endif
++    }
++    else *error_code = MPI_SUCCESS;
++}
++
++
++
++
++void ADIOI_LUSTRE_ReadStrided(ADIO_File fd, void *buf, int count,
++                       MPI_Datatype datatype, int file_ptr_type,
++                       ADIO_Offset offset, ADIO_Status *status, int
++                       *error_code)
++{
++    ADIOI_GEN_ReadStrided(fd, buf, count, datatype, file_ptr_type,
++                        offset, status, error_code);
++}
+diff -ruN romio-orig/adio/ad_lustre/ad_lustre_resize.c romio/adio/ad_lustre/ad_lustre_resize.c
+--- romio-orig/adio/ad_lustre/ad_lustre_resize.c	1969-12-31 19:00:00.000000000 -0500
++++ romio/adio/ad_lustre/ad_lustre_resize.c	2006-09-06 17:10:35.000807397 -0400
+@@ -0,0 +1,32 @@
++/* -*- Mode: C; c-basic-offset:4 ; -*- */
++/*
++ *   $Id: ad_lustre_resize.c,v 1.1.1.1 2004/11/04 11:03:38 liam Exp $
++ *
++ *   Copyright (C) 1997 University of Chicago.
++ *   See COPYRIGHT notice in top-level directory.
++ */
++
++#include "ad_lustre.h"
++
++void ADIOI_LUSTRE_Resize(ADIO_File fd, ADIO_Offset size, int *error_code)
++{
++    int err;
++#if defined(MPICH2) || !defined(PRINT_ERR_MSG)
++    static char myname[] = "ADIOI_LUSTRE_RESIZE";
++#endif
++
++    err = ftruncate(fd->fd_sys, size);
++    if (err == -1) {
++#ifdef MPICH2
++	*error_code = MPIR_Err_create_code(MPI_SUCCESS, MPIR_ERR_RECOVERABLE, myname, __LINE__, MPI_ERR_IO, "**io",
++	    "**io %s", strerror(errno));
++#elif defined(PRINT_ERR_MSG)
++			*error_code = MPI_ERR_UNKNOWN;
++#else /* MPICH-1 */
++	*error_code = MPIR_Err_setmsg(MPI_ERR_IO, MPIR_ADIO_ERROR,
++			      myname, "I/O Error", "%s", strerror(errno));
++	ADIOI_Error(fd, *error_code, myname);
++#endif
++    }
++    else *error_code = MPI_SUCCESS;
++}
+diff -ruN romio-orig/adio/ad_lustre/ad_lustre_seek.c romio/adio/ad_lustre/ad_lustre_seek.c
+--- romio-orig/adio/ad_lustre/ad_lustre_seek.c	1969-12-31 19:00:00.000000000 -0500
++++ romio/adio/ad_lustre/ad_lustre_seek.c	2006-09-06 17:10:35.000816583 -0400
+@@ -0,0 +1,15 @@
++/* -*- Mode: C; c-basic-offset:4 ; -*- */
++/*
++ *   $Id: ad_lustre_seek.c,v 1.1.1.1 2004/11/04 11:03:38 liam Exp $
++ *
++ *   Copyright (C) 1997 University of Chicago.
++ *   See COPYRIGHT notice in top-level directory.
++ */
++
++#include "ad_lustre.h"
++
++ADIO_Offset ADIOI_LUSTRE_SeekIndividual(ADIO_File fd, ADIO_Offset offset,
++		      int whence, int *error_code)
++{
++    return ADIOI_GEN_SeekIndividual(fd, offset, whence, error_code);
++}
+diff -ruN romio-orig/adio/ad_lustre/ad_lustre_wait.c romio/adio/ad_lustre/ad_lustre_wait.c
+--- romio-orig/adio/ad_lustre/ad_lustre_wait.c	1969-12-31 19:00:00.000000000 -0500
++++ romio/adio/ad_lustre/ad_lustre_wait.c	2006-09-06 18:45:39.000190529 -0400
+@@ -0,0 +1,188 @@
++/* -*- Mode: C; c-basic-offset:4 ; -*- */
++/*
++ *   $Id: ad_lustre_wait.c,v 1.1.1.1 2004/11/04 11:03:38 liam Exp $
++ *
++ *   Copyright (C) 1997 University of Chicago.
++ *   See COPYRIGHT notice in top-level directory.
++ */
++
++#include "ad_lustre.h"
++
++void ADIOI_LUSTRE_ReadComplete(ADIO_Request *request, ADIO_Status *status, int *error_code)
++{
++#ifndef NO_AIO
++#if defined(MPICH2) || !defined(PRINT_ERR_MSG)
++    static char myname[] = "ADIOI_LUSTRE_READCOMPLETE";
++#endif
++#ifdef AIO_SUN
++    aio_result_t *result=0, *tmp;
++#else
++    int err;
++#endif
++#ifdef AIO_HANDLE_IN_AIOCB
++    struct aiocb *tmp1;
++#endif
++#endif
++
++    if (*request == ADIO_REQUEST_NULL) {
++	*error_code = MPI_SUCCESS;
++	return;
++    }
++
++#ifdef AIO_SUN
++    if ((*request)->queued) {  /* dequeue it */
++	tmp = (aio_result_t *) (*request)->handle;
++	while (tmp->aio_return == AIO_INPROGRESS) usleep(1000);
++	/* sleep for 1 ms., until done. Is 1 ms. a good number? */
++	/* when done, dequeue any one request */
++	result = (aio_result_t *) aiowait(0);
++
++        (*request)->nbytes = tmp->aio_return;
++
++	if (tmp->aio_return == -1) {
++#ifdef MPICH2
++	    *error_code = MPIR_Err_create_code(MPI_SUCCESS, MPIR_ERR_RECOVERABLE, myname, __LINE__, MPI_ERR_IO, "**io",
++		"**io %s", strerror(tmp->aio_errno));
++	    return;
++#elif defined(PRINT_ERR_MSG)
++			*error_code = MPI_ERR_UNKNOWN;
++#else /* MPICH-1 */
++	    *error_code = MPIR_Err_setmsg(MPI_ERR_IO, MPIR_ADIO_ERROR,
++			  myname, "I/O Error", "%s", strerror(tmp->aio_errno));
++	    ADIOI_Error((*request)->fd, *error_code, myname);
++#endif
++	}
++	else *error_code = MPI_SUCCESS;
++
++/* aiowait only dequeues a request. The completion of a request can be
++   checked by just checking the aio_return flag in the handle passed
++   to the original aioread()/aiowrite(). Therefore, I need to ensure
++   that aiowait() is called exactly once for each previous
++   aioread()/aiowrite(). This is also taken care of in ADIOI_xxxDone */
++    }
++    else *error_code = MPI_SUCCESS;
++
++#ifdef HAVE_STATUS_SET_BYTES
++    if ((*request)->nbytes != -1)
++	MPIR_Status_set_bytes(status, (*request)->datatype, (*request)->nbytes);
++#endif
++
++#endif
++
++#ifdef AIO_HANDLE_IN_AIOCB
++/* IBM */
++    if ((*request)->queued) {
++	do {
++	    err = aio_suspend(1, (struct aiocb **) &((*request)->handle));
++	} while ((err == -1) && (errno == EINTR));
++
++	tmp1 = (struct aiocb *) (*request)->handle;
++	if (err != -1) {
++	    err = aio_return(tmp1->aio_handle);
++	    (*request)->nbytes = err;
++	    errno = aio_error(tmp1->aio_handle);
++	}
++	else (*request)->nbytes = -1;
++
++/* on DEC, it is required to call aio_return to dequeue the request.
++   IBM man pages don't indicate what function to use for dequeue.
++   I'm assuming it is aio_return! POSIX says aio_return may be called
++   only once on a given handle. */
++
++	if (err == -1) {
++#ifdef MPICH2
++	    *error_code = MPIR_Err_create_code(MPI_SUCCESS, MPIR_ERR_RECOVERABLE, myname, __LINE__, MPI_ERR_IO, "**io",
++		"**io %s", strerror(errno));
++	    return;
++#elif defined(PRINT_ERR_MSG)
++			*error_code = MPI_ERR_UNKNOWN;
++#else /* MPICH-1 */
++	    *error_code = MPIR_Err_setmsg(MPI_ERR_IO, MPIR_ADIO_ERROR,
++             myname, "I/O Error", "%s", strerror(errno));
++	    ADIOI_Error((*request)->fd, *error_code, myname);
++#endif
++	}
++	else *error_code = MPI_SUCCESS;
++    } /* if ((*request)->queued)  */
++    else *error_code = MPI_SUCCESS;
++
++#ifdef HAVE_STATUS_SET_BYTES
++    if ((*request)->nbytes != -1)
++	MPIR_Status_set_bytes(status, (*request)->datatype, (*request)->nbytes);
++#endif
++
++#elif (!defined(NO_AIO) && !defined(AIO_SUN))
++/* DEC, SGI IRIX 5 and 6 */
++    if ((*request)->queued) {
++	do {
++	    err = aio_suspend((const struct aiocb_t **) &((*request)->handle), 1, 0);
++	} while ((err == -1) && (errno == EINTR));
++
++	if (err != -1) {
++	    err = aio_return((struct aiocb *) (*request)->handle);
++	    (*request)->nbytes = err;
++	    errno = aio_error((struct aiocb *) (*request)->handle);
++	}
++	else (*request)->nbytes = -1;
++
++	if (err == -1) {
++#ifdef MPICH2
++	    *error_code = MPIR_Err_create_code(MPI_SUCCESS, MPIR_ERR_RECOVERABLE, myname, __LINE__, MPI_ERR_IO, "**io",
++		"**io %s", strerror(errno));
++	    return;
++#elif defined(PRINT_ERR_MSG)
++			*error_code = MPI_ERR_UNKNOWN;
++#else /* MPICH-1 */
++	    *error_code = MPIR_Err_setmsg(MPI_ERR_IO, MPIR_ADIO_ERROR,
++	 	            myname, "I/O Error", "%s", strerror(errno));
++	    ADIOI_Error((*request)->fd, *error_code, myname);
++#endif
++	}
++	else *error_code = MPI_SUCCESS;
++    } /* if ((*request)->queued) */
++    else *error_code = MPI_SUCCESS;
++#ifdef HAVE_STATUS_SET_BYTES
++    if ((*request)->nbytes != -1)
++	MPIR_Status_set_bytes(status, (*request)->datatype, (*request)->nbytes);
++#endif
++#endif
++
++#ifndef NO_AIO
++    if ((*request)->queued != -1) {
++
++	/* queued = -1 is an internal hack used when the request must
++	   be completed, but the request object should not be
++	   freed. This is used in ADIOI_Complete_async, because the user
++	   will call MPI_Wait later, which would require status to
++	   be filled. Ugly but works. queued = -1 should be used only
++	   in ADIOI_Complete_async.
++           This should not affect the user in any way. */
++
++	/* if request is still queued in the system, it is also there
++           on ADIOI_Async_list. Delete it from there. */
++	if ((*request)->queued) ADIOI_Del_req_from_list(request);
++
++	(*request)->fd->async_count--;
++	if ((*request)->handle) ADIOI_Free((*request)->handle);
++	ADIOI_Free_request((ADIOI_Req_node *) (*request));
++	*request = ADIO_REQUEST_NULL;
++    }
++
++#else
++/* HP, FreeBSD, Linux */
++
++#ifdef HAVE_STATUS_SET_BYTES
++    MPIR_Status_set_bytes(status, (*request)->datatype, (*request)->nbytes);
++#endif
++    (*request)->fd->async_count--;
++    ADIOI_Free_request((ADIOI_Req_node *) (*request));
++    *request = ADIO_REQUEST_NULL;
++    *error_code = MPI_SUCCESS;
++#endif
++}
++
++
++void ADIOI_LUSTRE_WriteComplete(ADIO_Request *request, ADIO_Status *status, int *error_code)
++{
++    ADIOI_LUSTRE_ReadComplete(request, status, error_code);
++}
+diff -ruN romio-orig/adio/ad_lustre/ad_lustre_wrcoll.c romio/adio/ad_lustre/ad_lustre_wrcoll.c
+--- romio-orig/adio/ad_lustre/ad_lustre_wrcoll.c	1969-12-31 19:00:00.000000000 -0500
++++ romio/adio/ad_lustre/ad_lustre_wrcoll.c	2006-09-06 17:10:35.000835460 -0400
+@@ -0,0 +1,18 @@
++/* -*- Mode: C; c-basic-offset:4 ; -*- */
++/*
++ *   $Id: ad_lustre_wrcoll.c,v 1.1.1.1 2004/11/04 11:03:38 liam Exp $
++ *
++ *   Copyright (C) 1997 University of Chicago.
++ *   See COPYRIGHT notice in top-level directory.
++ */
++
++#include "ad_lustre.h"
++
++void ADIOI_LUSTRE_WriteStridedColl(ADIO_File fd, void *buf, int count,
++                       MPI_Datatype datatype, int file_ptr_type,
++                       ADIO_Offset offset, ADIO_Status *status, int
++                       *error_code)
++{
++    ADIOI_GEN_WriteStridedColl(fd, buf, count, datatype, file_ptr_type,
++			      offset, status, error_code);
++}
+diff -ruN romio-orig/adio/ad_lustre/ad_lustre_write.c romio/adio/ad_lustre/ad_lustre_write.c
+--- romio-orig/adio/ad_lustre/ad_lustre_write.c	1969-12-31 19:00:00.000000000 -0500
++++ romio/adio/ad_lustre/ad_lustre_write.c	2006-09-06 17:10:35.000844658 -0400
+@@ -0,0 +1,66 @@
++/* -*- Mode: C; c-basic-offset:4 ; -*- */
++/*
++ *   $Id: ad_lustre_write.c,v 1.1.1.1 2004/11/04 11:03:38 liam Exp $
++ *
++ *   Copyright (C) 1997 University of Chicago.
++ *   See COPYRIGHT notice in top-level directory.
++ */
++
++#include "ad_lustre.h"
++
++void ADIOI_LUSTRE_WriteContig(ADIO_File fd, void *buf, int count,
++                   MPI_Datatype datatype, int file_ptr_type,
++	           ADIO_Offset offset, ADIO_Status *status, int *error_code)
++{
++    int err=-1, datatype_size, len;
++#if defined(MPICH2) || !defined(PRINT_ERR_MSG)
++    static char myname[] = "ADIOI_LUSTRE_WRITECONTIG";
++#endif
++
++    MPI_Type_size(datatype, &datatype_size);
++    len = datatype_size * count;
++
++    if (file_ptr_type == ADIO_EXPLICIT_OFFSET) {
++	if (fd->fp_sys_posn != offset)
++	    lseek(fd->fd_sys, offset, SEEK_SET);
++	err = write(fd->fd_sys, buf, len);
++	fd->fp_sys_posn = offset + err;
++	/* individual file pointer not updated */
++    }
++    else { /* write from curr. location of ind. file pointer */
++	if (fd->fp_sys_posn != fd->fp_ind)
++	    lseek(fd->fd_sys, fd->fp_ind, SEEK_SET);
++	err = write(fd->fd_sys, buf, len);
++	fd->fp_ind += err;
++	fd->fp_sys_posn = fd->fp_ind;
++    }
++
++#ifdef HAVE_STATUS_SET_BYTES
++    if (err != -1 && status) MPIR_Status_set_bytes(status, datatype, err);
++#endif
++
++    if (err == -1) {
++#ifdef MPICH2
++	*error_code = MPIR_Err_create_code(MPI_SUCCESS, MPIR_ERR_RECOVERABLE, myname, __LINE__, MPI_ERR_IO, "**io",
++	    "**io %s", strerror(errno));
++#elif defined(PRINT_ERR_MSG)
++			*error_code = MPI_ERR_UNKNOWN;
++#else
++	*error_code = MPIR_Err_setmsg(MPI_ERR_IO, MPIR_ADIO_ERROR,
++			      myname, "I/O Error", "%s", strerror(errno));
++	ADIOI_Error(fd, *error_code, myname);
++#endif
++    }
++    else *error_code = MPI_SUCCESS;
++}
++
++
++
++void ADIOI_LUSTRE_WriteStrided(ADIO_File fd, void *buf, int count,
++                       MPI_Datatype datatype, int file_ptr_type,
++                       ADIO_Offset offset, ADIO_Status *status, int
++                       *error_code)
++{
++    ADIOI_GEN_WriteStrided(fd, buf, count, datatype, file_ptr_type,
++                        offset, status, error_code);
++}
+diff -ruN romio-orig/adio/ad_lustre/Makefile.in romio/adio/ad_lustre/Makefile.in
+--- romio-orig/adio/ad_lustre/Makefile.in	1969-12-31 19:00:00.000000000 -0500
++++ romio/adio/ad_lustre/Makefile.in	2006-09-06 18:48:56.000800829 -0400
+@@ -0,0 +1,51 @@
++CC          = @CC@
++AR          = @AR@
++RANLIB      = @RANLIB@
++LIBNAME     = @LIBNAME@
++srcdir      = @srcdir@
++CC_SHL      = @CC_SHL@
++SHLIBNAME   = @SHLIBNAME@
++
++INCLUDE_DIR = -I@MPI_INCLUDE_DIR@ -I${srcdir}/../include -I../include -I../../include -I${srcdir}/../../../../include -I../../../../include
++CFLAGS      = @CPPFLAGS@ @CFLAGS@ $(INCLUDE_DIR)
++
++top_builddir  = @master_topbuild_dir@
++LIBTOOL       = @LIBTOOL@
++C_COMPILE_SHL = $(CC_SHL) @CFLAGS@ $(INCLUDE_DIR)
++
++@VPATH@
++
++AD_LUSTRE_OBJECTS = ad_lustre.o ad_lustre_close.o ad_lustre_read.o \
++      ad_lustre_open.o ad_lustre_write.o ad_lustre_done.o \
++      ad_lustre_fcntl.o ad_lustre_iread.o ad_lustre_iwrite.o ad_lustre_wait.o \
++      ad_lustre_resize.o ad_lustre_hints.o
++
++default: $(LIBNAME)
++	@if [ "@ENABLE_SHLIB@" != "none" ] ; then \
++	    $(MAKE) $(SHLIBNAME).la ;\
++	fi
++
++.SUFFIXES: $(SUFFIXES) .p .lo
++
++.c.o:
++	$(CC) $(CFLAGS) -c $<
++.c.lo:
++	$(C_COMPILE_SHL) -c $< -o _s$*.o
++	@mv -f _s$*.o $*.lo
++#	$(C_COMPILE_SHL) -c $<
++#	@mv -f $*.o $*.lo
++
++$(LIBNAME): $(AD_LUSTRE_OBJECTS)
++	$(AR) $(LIBNAME) $(AD_LUSTRE_OBJECTS)
++	$(RANLIB) $(LIBNAME)
++
++AD_LUSTRE_LOOBJECTS=$(AD_LUSTRE_OBJECTS:.o=.lo)
++$(SHLIBNAME).la: $(AD_LUSTRE_LOOBJECTS)
++	$(AR) $(SHLIBNAME).la $(AD_LUSTRE_LOOBJECTS)
++
++coverage:
++	-@for file in  ${AD_LUSTRE_OBJECTS:.o=.c} ; do \
++		gcov -b -f $$file ; done
++
++clean:
++	@rm -f *.o *.lo
+diff -ruN romio-orig/adio/common/ad_fstype.c romio/adio/common/ad_fstype.c
+--- romio-orig/adio/common/ad_fstype.c	2005-08-11 19:33:46.000000000 -0400
++++ romio/adio/common/ad_fstype.c	2006-09-06 17:41:20.000830936 -0400
+@@ -265,6 +265,9 @@
+     /* if UFS support is enabled, default to that */
+     *fstype = ADIO_UFS;
+     return;
++# elif defined(LINUX) && defined(ROMIO_LUSTRE)
++# warning use correct include
++# define LL_SUPER_MAGIC 0x0BD00BD0
+ # endif
+ 
+     /* --BEGIN ERROR HANDLING-- */
+@@ -308,6 +311,13 @@
+     }
+ # endif
+ 
++# ifdef LL_SUPER_MAGIC
++    if (fsbuf.f_type == LL_SUPER_MAGIC) {
++	*fstype = ADIO_LUSTRE;
++	return;
++    }
++# endif
++
+ # ifdef PAN_KERNEL_FS_CLIENT_SUPER_MAGIC
+     if (fsbuf.f_type == PAN_KERNEL_FS_CLIENT_SUPER_MAGIC) {
+ 	*fstype = ADIO_PANFS;
+@@ -458,6 +468,11 @@
+     {
+ 	*fstype = ADIO_GRIDFTP;
+     }
++    else if (!strncmp(filename, "lustre:", 7)
++	     || !strncmp(filename, "LUSTRE:", 7))
++    {
++	*fstype = ADIO_LUSTRE;
++    }
+     else {
+ #ifdef ROMIO_NTFS
+ 	*fstype = ADIO_NTFS;
+@@ -657,6 +672,14 @@
+ 	*ops = &ADIO_GRIDFTP_operations;
+ #endif
+     }
++    if (file_system == ADIO_LUSTRE) {
++#ifndef ROMIO_LUSTRE
++	*error_code = MPIR_Err_create_code(MPI_SUCCESS, MPIR_ERR_RECOVERABLE, myname, __LINE__, MPI_ERR_IO, "**iofstypeunsupported", 0);
++	return;
++#else
++	*ops = &ADIO_LUSTRE_operations;
++#endif
++    }
+     *error_code = MPI_SUCCESS;
+     *fstype = file_system;
+     return;
+diff -ruN romio-orig/adio/include/adio.h romio/adio/include/adio.h
+--- romio-orig/adio/include/adio.h	2006-06-09 17:45:04.000000000 -0400
++++ romio/adio/include/adio.h	2006-09-06 17:44:16.000614058 -0400
+@@ -302,6 +302,7 @@
+ #define ADIO_PVFS2               160   /* PVFS2: 2nd generation PVFS */
+ #define ADIO_PANFS               161   /* Panasas FS */
+ #define ADIO_GRIDFTP             162   /* Globus GridFTP */
++#define ADIO_LUSTRE              163   /* Lustre */
+ 
+ #define ADIO_SEEK_SET            SEEK_SET
+ #define ADIO_SEEK_CUR            SEEK_CUR
+diff -ruN romio-orig/adio/include/adioi_fs_proto.h romio/adio/include/adioi_fs_proto.h
+--- romio-orig/adio/include/adioi_fs_proto.h	2005-06-08 17:16:39.000000000 -0400
++++ romio/adio/include/adioi_fs_proto.h	2006-09-06 17:48:11.000523566 -0400
+@@ -49,6 +49,68 @@
+ /* prototypes are in adio/ad_sfs/ad_sfs.h */
+ #endif
+ 
++#ifdef ROMIO_LUSTRE
++extern struct ADIOI_Fns_struct ADIO_LUSTRE_operations;
++
++void ADIOI_LUSTRE_Open(ADIO_File fd, int *error_code);
++void ADIOI_LUSTRE_Close(ADIO_File fd, int *error_code);
++void ADIOI_LUSTRE_ReadContig(ADIO_File fd, void *buf, int count,
++                      MPI_Datatype datatype, int file_ptr_type,
++                     ADIO_Offset offset, ADIO_Status *status, int
++		     *error_code);
++void ADIOI_LUSTRE_WriteContig(ADIO_File fd, void *buf, int count,
++                      MPI_Datatype datatype, int file_ptr_type,
++                      ADIO_Offset offset, ADIO_Status *status, int
++		      *error_code);
++void ADIOI_LUSTRE_IwriteContig(ADIO_File fd, void *buf, int count,
++                      MPI_Datatype datatype, int file_ptr_type,
++                      ADIO_Offset offset, ADIO_Request *request, int
++		      *error_code);
++void ADIOI_LUSTRE_IreadContig(ADIO_File fd, void *buf, int count,
++                      MPI_Datatype datatype, int file_ptr_type,
++                      ADIO_Offset offset, ADIO_Request *request, int
++		      *error_code);
++int ADIOI_LUSTRE_ReadDone(ADIO_Request *request, ADIO_Status *status, int
++		       *error_code);
++int ADIOI_LUSTRE_WriteDone(ADIO_Request *request, ADIO_Status *status, int
++		       *error_code);
++void ADIOI_LUSTRE_ReadComplete(ADIO_Request *request, ADIO_Status *status, int
++		       *error_code);
++void ADIOI_LUSTRE_WriteComplete(ADIO_Request *request, ADIO_Status *status,
++			int *error_code);
++void ADIOI_LUSTRE_Fcntl(ADIO_File fd, int flag, ADIO_Fcntl_t *fcntl_struct, int
++		*error_code);
++void ADIOI_LUSTRE_WriteStrided(ADIO_File fd, void *buf, int count,
++		       MPI_Datatype datatype, int file_ptr_type,
++		       ADIO_Offset offset, ADIO_Status *status, int
++		       *error_code);
++void ADIOI_LUSTRE_ReadStrided(ADIO_File fd, void *buf, int count,
++		       MPI_Datatype datatype, int file_ptr_type,
++		       ADIO_Offset offset, ADIO_Status *status, int
++		       *error_code);
++void ADIOI_LUSTRE_WriteStridedColl(ADIO_File fd, void *buf, int count,
++		       MPI_Datatype datatype, int file_ptr_type,
++		       ADIO_Offset offset, ADIO_Status *status, int
++		       *error_code);
++void ADIOI_LUSTRE_ReadStridedColl(ADIO_File fd, void *buf, int count,
++		       MPI_Datatype datatype, int file_ptr_type,
++		       ADIO_Offset offset, ADIO_Status *status, int
++		       *error_code);
++void ADIOI_LUSTRE_IreadStrided(ADIO_File fd, void *buf, int count,
++		       MPI_Datatype datatype, int file_ptr_type,
++		       ADIO_Offset offset, ADIO_Request *request, int
++		       *error_code);
++void ADIOI_LUSTRE_IwriteStrided(ADIO_File fd, void *buf, int count,
++		       MPI_Datatype datatype, int file_ptr_type,
++		       ADIO_Offset offset, ADIO_Request *request, int
++		       *error_code);
++void ADIOI_LUSTRE_Flush(ADIO_File fd, int *error_code);
++void ADIOI_LUSTRE_Resize(ADIO_File fd, ADIO_Offset size, int *error_code);
++ADIO_Offset ADIOI_LUSTRE_SeekIndividual(ADIO_File fd, ADIO_Offset offset,
++                       int whence, int *error_code);
++void ADIOI_LUSTRE_SetInfo(ADIO_File fd, MPI_Info users_info, int *error_code);
++#endif
++
+ #ifdef ROMIO_NTFS
+ extern struct ADIOI_Fns_struct ADIO_NTFS_operations;
+ /* prototypes are in adio/ad_ntfs/ad_ntfs.h */
+diff -ruN romio-orig/adio/include/mpio_error.h romio/adio/include/mpio_error.h
+--- romio-orig/adio/include/mpio_error.h	2005-05-23 19:27:50.000000000 -0400
++++ romio/adio/include/mpio_error.h	2006-09-06 17:10:35.000984078 -0400
+@@ -63,6 +63,7 @@
+ #define MPIR_ERR_FILETYPE 33 
+ #define MPIR_ERR_NO_NTFS 35
+ #define MPIR_ERR_NO_TESTFS 36
++#define MPIR_ERR_NO_LUSTRE 37
+ 
+ /* MPI_ERR_COMM */
+ #ifndef MPIR_ERR_COMM_NULL
+diff -ruN romio-orig/adio/include/romioconf.h.in romio/adio/include/romioconf.h.in
+--- romio-orig/adio/include/romioconf.h.in	2006-08-11 09:48:44.000000000 -0400
++++ romio/adio/include/romioconf.h.in	2006-09-06 17:43:08.000599274 -0400
+@@ -276,6 +276,9 @@
+ /* Define for ROMIO with PVFS2 */
+ #undef ROMIO_PVFS2
+ 
++/* Define for ROMIO with LUSTRE */
++#undef ROMIO_LUSTRE
++
+ /* Define if int64_t must be defined for PVFS */
+ #undef ROMIO_PVFS_NEEDS_INT64_DEFINITION
+ 
+diff -ruN romio-orig/configure romio/configure
+--- romio-orig/configure	2006-08-11 09:48:45.000000000 -0400
++++ romio/configure	2006-09-06 17:20:57.000555513 -0400
+@@ -1400,7 +1400,7 @@
+ #
+ have_aio=no
+ #
+-known_filesystems="nfs ufs pfs pvfs pvfs2 testfs xfs panfs gridftp"
++known_filesystems="nfs ufs pfs pvfs pvfs2 testfs xfs panfs gridftp lustre"
+ known_mpi_impls="mpich2_mpi mpich_mpi sgi_mpi hp_mpi cray_mpi lam_mpi"
+ #
+ # Defaults
+@@ -7490,6 +7490,14 @@
+ 
+ fi
+ 
++if test -n "$file_system_lustre"; then
++
++cat >>confdefs.h <<\_ACEOF
++#define ROMIO_LUSTRE 1
++_ACEOF
++
++fi
++
+ #
+ # Check for presence and characteristics of async. I/O calls if
+ # not disabled.
+@@ -11977,7 +11985,7 @@
+ # are active will be called by the top level ROMIO make
+           ac_config_commands="$ac_config_commands default-1"
+ 
+-                                                                                                                                                                                                                                                                                                                                          ac_config_files="$ac_config_files Makefile localdefs mpi-io/Makefile mpi2-other/info/Makefile mpi2-other/array/Makefile adio/common/Makefile test/Makefile test/misc.c test/large_file.c test/runtests util/romioinstall include/mpio.h include/mpiof.h adio/ad_nfs/Makefile adio/ad_ufs/Makefile adio/ad_panfs/Makefile adio/ad_xfs/Makefile adio/ad_sfs/Makefile adio/ad_pfs/Makefile adio/ad_testfs/Makefile adio/ad_pvfs/Makefile adio/ad_pvfs2/Makefile adio/ad_gridftp/Makefile mpi-io/fortran/Makefile mpi2-other/info/fortran/Makefile mpi2-other/array/fortran/Makefile test/fmisc.f test/fcoll_test.f test/pfcoll_test.f test/fperf.f mpi-io/glue/mpich2/Makefile mpi-io/glue/mpich1/Makefile mpi-io/glue/default/Makefile"
++                                                                                                                                                                                                                                                                                                                                          ac_config_files="$ac_config_files Makefile localdefs mpi-io/Makefile mpi2-other/info/Makefile mpi2-other/array/Makefile adio/common/Makefile test/Makefile test/misc.c test/large_file.c test/runtests util/romioinstall include/mpio.h include/mpiof.h adio/ad_nfs/Makefile adio/ad_ufs/Makefile adio/ad_panfs/Makefile adio/ad_xfs/Makefile adio/ad_sfs/Makefile adio/ad_pfs/Makefile adio/ad_testfs/Makefile adio/ad_pvfs/Makefile adio/ad_pvfs2/Makefile adio/ad_gridftp/Makefile adio/ad_lustre/Makefile mpi-io/fortran/Makefile mpi2-other/info/fortran/Makefile mpi2-other/array/fortran/Makefile test/fmisc.f test/fcoll_test.f test/pfcoll_test.f test/fperf.f mpi-io/glue/mpich2/Makefile mpi-io/glue/mpich1/Makefile mpi-io/glue/default/Makefile"
+ cat >confcache <<\_ACEOF
+ # This file is a shell script that caches the results of configure
+ # tests run on this system so they can be shared between configure
+@@ -12535,6 +12543,7 @@
+   "adio/ad_pvfs/Makefile" ) CONFIG_FILES="$CONFIG_FILES adio/ad_pvfs/Makefile" ;;
+   "adio/ad_pvfs2/Makefile" ) CONFIG_FILES="$CONFIG_FILES adio/ad_pvfs2/Makefile" ;;
+   "adio/ad_gridftp/Makefile" ) CONFIG_FILES="$CONFIG_FILES adio/ad_gridftp/Makefile" ;;
++  "adio/ad_lustre/Makefile" ) CONFIG_FILES="$CONFIG_FILES adio/ad_lustre/Makefile" ;;
+   "mpi-io/fortran/Makefile" ) CONFIG_FILES="$CONFIG_FILES mpi-io/fortran/Makefile" ;;
+   "mpi2-other/info/fortran/Makefile" ) CONFIG_FILES="$CONFIG_FILES mpi2-other/info/fortran/Makefile" ;;
+   "mpi2-other/array/fortran/Makefile" ) CONFIG_FILES="$CONFIG_FILES mpi2-other/array/fortran/Makefile" ;;
+diff -ruN romio-orig/configure.in romio/configure.in
+--- romio-orig/configure.in	2006-07-24 17:55:57.000000000 -0400
++++ romio/configure.in	2006-09-06 17:16:13.000525117 -0400
+@@ -93,7 +93,7 @@
+ #
+ have_aio=no
+ #
+-known_filesystems="nfs ufs pfs pvfs pvfs2 testfs xfs panfs gridftp"
++known_filesystems="nfs ufs pfs pvfs pvfs2 testfs xfs panfs gridftp lustre"
+ known_mpi_impls="mpich2_mpi mpich_mpi sgi_mpi hp_mpi cray_mpi lam_mpi"
+ #
+ # Defaults
+@@ -1062,6 +1062,9 @@
+ if test -n "$file_system_testfs"; then
+     AC_DEFINE(ROMIO_TESTFS,1,[Define for ROMIO with TESTFS])
+ fi
++if test -n "$file_system_lustre"; then
++    AC_DEFINE(ROMIO_LUSTRE,1,[Define for ROMIO with LUSTRE])
++fi
+ 
+ if test -n "$file_system_xfs"; then
+     AC_DEFINE(ROMIO_XFS,1,[Define for ROMIO with XFS])
+@@ -2024,6 +2027,7 @@
+ 		   adio/ad_testfs/Makefile adio/ad_pvfs/Makefile \
+ 		   adio/ad_pvfs2/Makefile \
+ 		   adio/ad_gridftp/Makefile \
++  		   adio/ad_lustre/Makefile \
+                    mpi-io/fortran/Makefile mpi2-other/info/fortran/Makefile \
+                    mpi2-other/array/fortran/Makefile test/fmisc.f \
+                    test/fcoll_test.f test/pfcoll_test.f test/fperf.f \
+diff -ruN romio-orig/Makefile.in romio/Makefile.in
+--- romio-orig/Makefile.in	2005-05-24 18:53:11.000000000 -0400
++++ romio/Makefile.in	2006-09-06 17:13:25.000393429 -0400
+@@ -14,7 +14,7 @@
+ MPIO_DIRS   = mpi-io
+ EXTRA_SRC_DIRS = @EXTRA_SRC_DIRS@
+ FILE_SYS_DIRS = @FILE_SYS_DIRS@
+-ALL_DIRS    = mpi-io mpi-io/fortran mpi2-other/info mpi2-other/info/fortran mpi2-other/array mpi2-other/array/fortran adio/common adio/ad_pfs adio/ad_piofs adio/ad_nfs adio/ad_ufs adio/ad_xfs adio/ad_hfs adio/ad_sfs adio/ad_testfs adio/ad_pvfs adio/ad_pvfs2 adio/ad_panfs adio/ad_gridftp test
++ALL_DIRS    = mpi-io mpi-io/fortran mpi2-other/info mpi2-other/info/fortran mpi2-other/array mpi2-other/array/fortran adio/common adio/ad_pfs adio/ad_piofs adio/ad_nfs adio/ad_ufs adio/ad_xfs adio/ad_hfs adio/ad_sfs adio/ad_testfs adio/ad_pvfs adio/ad_pvfs2 adio/ad_panfs adio/ad_gridftp adio/ad_lustre test
+ SHELL       = /bin/sh
+ 
+ @VPATH@
