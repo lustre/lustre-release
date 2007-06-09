@@ -243,9 +243,11 @@ declare -a TARGET_OPTS              # target services in one failover group
 declare -a HOST_NAME MODULE_OPTS DEVICE_NAME MOUNT_POINT DEVICE_TYPE FS_NAME
 declare -a MGS_NIDS INDEX FORMAT_OPTIONS MKFS_OPTIONS MOUNT_OPTIONS FAILOVERS
 
-# Corresponding to MGS_NIDS and FAILOVERS arrays,
-# IP addresses in which were converted to hostnames
-declare -a MGS_NIDS_NAMES FAILOVERS_NAMES
+# Heartbeat software requires that node names in the configuration directive
+# must (normally) match the "uname -n" of that machine. Since the value of the
+# "failover nids" field in the csv file is the NID(s) of failover partner node,
+# we have to figure out the corresponding hostname of that node.
+declare -a FAILOVERS_NAMES
 
 VERIFY_CONNECT=true
 CONFIG_MD_LVM=false
@@ -804,12 +806,6 @@ get_items() {
         MODULE_OPTS[idx]=`echo "${MODULE_OPTS[idx]}" | sed 's/"/\\\"/g'`
 
         # Convert IP addresses in NIDs to hostnames
-        MGS_NIDS_NAMES[idx]=$(ip2hostname_multi_node ${MGS_NIDS[idx]})
-        if [ ${PIPESTATUS[0]} -ne 0 ]; then
-            echo >&2 "${MGS_NIDS_NAMES[idx]}"
-            return 1
-        fi
-
         FAILOVERS_NAMES[idx]=$(ip2hostname_multi_node ${FAILOVERS[idx]})
         if [ ${PIPESTATUS[0]} -ne 0 ]; then
             echo >&2 "${FAILOVERS_NAMES[idx]}"
@@ -838,7 +834,6 @@ check_lnet_connect() {
 
     local COMMAND RET_STR
     local mgs_prim_nids
-    local nids nids_names
     local nids_str=
     local mgs_nid 
     local ping_mgs
@@ -849,7 +844,7 @@ check_lnet_connect() {
     "${HOST_NAME[i]} and the MGS node ${mgs_node}"
     mgs_prim_nids=`echo ${MGS_NIDS[i]} | awk -F: '{print $1}'`
 
-    if [ -z "${mgs_node}" ]; then
+    if [ -z "${mgs_node}" -o $MGS_NUM -eq 1 ]; then
         nids_str=${mgs_prim_nids}    # nids of primary MGS node
         if [ -z "${nids_str}" ]; then
             echo >&2 $"`basename $0`: check_lnet_connect() error:"\
@@ -858,21 +853,11 @@ check_lnet_connect() {
             return 1
         fi
     else
-        for nids in ${MGS_NIDS[i]//:/ }; do
-            nids_names=$(ip2hostname_single_node ${nids})
-            if [ ${PIPESTATUS[0]} -ne 0 ]; then
-                echo >&2 "${nids_names}"
-                return 1
-            fi
-
-            [ "${nids_names}" != "${nids_names#*$mgs_node*}" ]\
-            && nids_str=${nids} # nids of backup MGS node
-        done
-        if [ -z "${nids_str}" ]; then
-            echo >&2 $"`basename $0`: check_lnet_connect() error:"\
-            "Check the mgs nids item of host ${HOST_NAME[i]}!"\
-            "Can not figure out which nids corresponding to the MGS"\
-            "node ${mgs_node} from \"${MGS_NIDS[i]}\"!"
+        # Get the corresponding NID(s) of the MGS node ${mgs_node}
+        # from the "mgs nids" field
+        nids_str=$(get_mgs_nids ${mgs_node} ${MGS_NIDS[i]})
+        if [ ${PIPESTATUS[0]} -ne 0 ]; then
+            echo >&2 "${nids_str}"
             return 1
         fi
     fi

@@ -317,7 +317,7 @@ construct_mdadm_rm_cmdline() {
         # Remove the "missing" devices from the component devices
         real_devs=`echo ${MD_DEVS[i]} | sed 's/missing//g'`
         # Over-written the superblock with zeros
-        mdadm_cmd=${mdadm_cmd}" && ${MDADM} --zero-superblock ${real_devs}"
+        mdadm_cmd=${mdadm_cmd}" && ${MDADM} --zero-superblock ${real_devs} || true"
     fi
 
     echo ${mdadm_cmd}
