@@ -3,6 +3,9 @@
 AC_INIT([Lustre ldiskfs], 3.0.0, [https://bugzilla.lustre.org/])
 AC_CONFIG_SRCDIR([lustre-ldiskfs.spec.in])
 
+# Don't look for install-sh, etc. in ..
+AC_CONFIG_AUX_DIR([.])
+
 AC_CANONICAL_SYSTEM
 
 AM_INIT_AUTOMAKE
