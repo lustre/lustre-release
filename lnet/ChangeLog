@@ -30,6 +30,10 @@
 	ptllnd    - Portals 3.3 / UNICOS/lc 1.5.x, 2.0.x
        * bug fixes
 	
+Severity   : normal
+Frequency  : rare
+Description: gmlnd ignored some transmit errors when finalizing lnet messages.
+
 Severity   : minor
 Frequency  : rare
 Description: ptllnd logs a piece of incorrect debug info in kptllnd_peer_handle_hello.

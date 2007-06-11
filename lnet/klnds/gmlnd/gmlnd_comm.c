@@ -191,7 +191,7 @@ gmnal_tx_done(gmnal_tx_t *tx, int rc)
 
         /* Delay finalize until tx is free */
         if (lnetmsg != NULL)
-                lnet_finalize(gmni->gmni_ni, lnetmsg, 0);
+                lnet_finalize(gmni->gmni_ni, lnetmsg, rc);
 }
 
 void 
