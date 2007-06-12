@@ -304,82 +304,34 @@ kernel patches from Lustre version 1.4.3 or above.])
 #
 # LC_CONFIG_BACKINGFS
 #
-# whether to use ldiskfs instead of ext3
+# setup, check the backing filesystem
 #
 AC_DEFUN([LC_CONFIG_BACKINGFS],
 [
-BACKINGFS='ext3'
+BACKINGFS="ldiskfs"
 
-# 2.6 gets ldiskfs
-AC_MSG_CHECKING([whether to enable ldiskfs])
-AC_ARG_ENABLE([ldiskfs],
-	AC_HELP_STRING([--enable-ldiskfs],
-			[use ldiskfs for the Lustre backing FS]),
-	[],[enable_ldiskfs="$linux25"])
-AC_MSG_RESULT([$enable_ldiskfs])
+if test x$with_ldiskfs = xno ; then
+	BACKINGFS="ext3"
 
-if test x$enable_ldiskfs = xyes ; then
-	BACKINGFS="ldiskfs"
-
-	AC_MSG_CHECKING([whether to enable quilt for making ldiskfs])
-	AC_ARG_ENABLE([quilt],
-			AC_HELP_STRING([--disable-quilt],[disable use of quilt for ldiskfs]),
-			[],[enable_quilt='yes'])
-	AC_MSG_RESULT([$enable_quilt])
-
-	AC_PATH_PROG(PATCH, patch, [no])
-
-	if test x$enable_quilt = xno ; then
-	    QUILT="no"
-	else
-	    AC_PATH_PROG(QUILT, quilt, [no])
+	if test x$linux25$enable_server = xyesyes ; then
+		AC_MSG_ERROR([ldiskfs is required for 2.6-based servers.])
 	fi
 
-	if test x$enable_ldiskfs$PATCH$QUILT = xyesnono ; then
-		AC_MSG_ERROR([Quilt or patch are needed to build the ldiskfs module (for Linux 2.6)])
-	fi
-
-	AC_DEFINE(CONFIG_LDISKFS_FS_MODULE, 1, [build ldiskfs as a module])
-	AC_DEFINE(CONFIG_LDISKFS_FS_XATTR, 1, [enable extended attributes for ldiskfs])
-	AC_DEFINE(CONFIG_LDISKFS_FS_POSIX_ACL, 1, [enable posix acls for ldiskfs])
-	AC_DEFINE(CONFIG_LDISKFS_FS_SECURITY, 1, [enable fs security for ldiskfs])
-
-	AC_DEFINE(CONFIG_LDISKFS2_FS_XATTR, 1, [enable extended attributes for ldiskfs2])
-	AC_DEFINE(CONFIG_LDISKFS2_FS_POSIX_ACL, 1, [enable posix acls for ldiskfs2])
-	AC_DEFINE(CONFIG_LDISKFS2_FS_SECURITY, 1, [enable fs security for ldiskfs2])
-fi
+	# --- Check that ext3 and ext3 xattr are enabled in the kernel
+	LC_CONFIG_EXT3([],[
+		AC_MSG_ERROR([Lustre requires that ext3 is enabled in the kernel])
+	],[
+		AC_MSG_WARN([Lustre requires that extended attributes for ext3 are enabled in the kernel])
+		AC_MSG_WARN([This build may fail.])
+	])
+else
+	# ldiskfs is enabled
+	LB_DEFINE_LDISKFS_OPTIONS
+fi #ldiskfs
 
 AC_MSG_CHECKING([which backing filesystem to use])
 AC_MSG_RESULT([$BACKINGFS])
 AC_SUBST(BACKINGFS)
-
-case $BACKINGFS in
-	ext3)
-		# --- Check that ext3 and ext3 xattr are enabled in the kernel
-		LC_CONFIG_EXT3([],[
-			AC_MSG_ERROR([Lustre requires that ext3 is enabled in the kernel])
-		],[
-			AC_MSG_WARN([Lustre requires that extended attributes for ext3 are enabled in the kernel])
-			AC_MSG_WARN([This build may fail.])
-		])
-		;;
-	ldiskfs)
-		AC_MSG_CHECKING([which ldiskfs series to use])
-		case $LINUXRELEASE in
-		2.6.5*) LDISKFS_SERIES="2.6-suse.series" ;;
-		2.6.9*) LDISKFS_SERIES="2.6-rhel4.series" ;;
-		2.6.10-ac*) LDISKFS_SERIES="2.6-fc3.series" ;;
-		2.6.10*) LDISKFS_SERIES="2.6-rhel4.series" ;;
-		2.6.12*) LDISKFS_SERIES="2.6.12-vanilla.series" ;;
-		2.6.15*) LDISKFS_SERIES="2.6-fc5.series";;
-		2.6.16*) LDISKFS_SERIES="2.6-sles10.series";;
-		2.6.18*) LDISKFS_SERIES="2.6.18-vanilla.series";;
-		*) AC_MSG_WARN([Unknown kernel version $LINUXRELEASE, fix lustre/autoconf/lustre-core.m4])
-		esac
-		AC_MSG_RESULT([$LDISKFS_SERIES])
-		AC_SUBST(LDISKFS_SERIES)
-		;;
-esac # $BACKINGFS
 ])
 
 #
@@ -1315,7 +1267,6 @@ fi
 #
 AC_DEFUN([LC_CONDITIONALS],
 [AM_CONDITIONAL(LIBLUSTRE, test x$enable_liblustre = xyes)
-AM_CONDITIONAL(LDISKFS, test x$enable_ldiskfs = xyes)
 AM_CONDITIONAL(USE_QUILT, test x$QUILT != xno)
 AM_CONDITIONAL(LIBLUSTRE_TESTS, test x$enable_liblustre_tests = xyes)
 AM_CONDITIONAL(MPITESTS, test x$enable_mpitests = xyes, Build MPI Tests)
@@ -1354,10 +1305,6 @@ lustre/kernel_patches/targets/rh-2.4.target
 lustre/kernel_patches/targets/rhel-2.4.target
 lustre/kernel_patches/targets/suse-2.4.21-2.target
 lustre/kernel_patches/targets/sles-2.4.target
-lustre/ldiskfs/Makefile
-lustre/ldiskfs/autoMakefile
-lustre/ldiskfs2/Makefile
-lustre/ldiskfs2/autoMakefile
 lustre/ldlm/Makefile
 lustre/liblustre/Makefile
 lustre/liblustre/tests/Makefile

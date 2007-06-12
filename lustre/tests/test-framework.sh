@@ -120,8 +120,7 @@ load_modules() {
     load_module osc/osc
     load_module lov/lov
     load_module mds/mds
-    [ "$FSTYPE" = "ldiskfs" ] && load_module ldiskfs/ldiskfs
-    [ "$FSTYPE" = "ldiskfs2" ] && load_module ldiskfs/ldiskfs2
+    [ "$FSTYPE" = "ldiskfs" ] && load_module ../ldiskfs/ldiskfs/ldiskfs
     load_module lvfs/fsfilt_$FSTYPE
     load_module ost/ost
     load_module obdfilter/obdfilter
