@@ -15,7 +15,20 @@ AC_PROG_CC
 LB_CANONICAL_SYSTEM
 LB_INCLUDE_RULES
 LB_PROG_CC
-LB_PROG_LINUX
+
+AC_MSG_CHECKING([whether to build kernel modules])
+AC_ARG_ENABLE([modules],
+	AC_HELP_STRING([--disable-modules],
+			[disable building of Lustre kernel modules]),
+	[],[
+		enable_modules='yes'
+	])
+AC_MSG_RESULT([$enable_modules])
+
+if test x$enable_modules = xyes ; then
+	LB_PROG_LINUX
+fi
+
 LB_CONFIG_HEADERS
 
 # These allow Lustre Makefiles and autoMakefiles to be used unchanged.
