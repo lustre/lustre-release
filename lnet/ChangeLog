@@ -30,6 +30,12 @@
 	ptllnd    - Portals 3.3 / UNICOS/lc 1.5.x, 2.0.x
        * bug fixes
 	
+Severity   : minor
+Frequency  : rare
+Description: Ptllnd didn't init kptllnd_data.kptl_idle_txs before it could be
+	     possibly accessed in kptllnd_shutdown. Ptllnd should init 
+	     kptllnd_data.kptl_ptlid2str_lock before calling kptllnd_ptlid2str.
+
 Severity   : normal
 Frequency  : rare
 Description: gmlnd ignored some transmit errors when finalizing lnet messages.

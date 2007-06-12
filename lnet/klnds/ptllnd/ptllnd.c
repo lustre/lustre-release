@@ -471,7 +471,7 @@ kptllnd_startup (lnet_ni_t *ni)
         }
 
         if (*kptllnd_tunables.kptl_max_procs_per_node < 1) {
-                CERROR("max_procs_per_node must be > 1\n");
+                CERROR("max_procs_per_node must be >= 1\n");
                 return -EINVAL;
         }
 
@@ -489,6 +489,25 @@ kptllnd_startup (lnet_ni_t *ni)
         memset (&kptllnd_data, 0, sizeof (kptllnd_data));
         kptllnd_data.kptl_eqh = PTL_INVALID_HANDLE;
         kptllnd_data.kptl_nih = PTL_INVALID_HANDLE;
+
+        /*
+         * Setup the sched locks/lists/waitq
+         */
+        spin_lock_init(&kptllnd_data.kptl_sched_lock);
+        init_waitqueue_head(&kptllnd_data.kptl_sched_waitq);
+        INIT_LIST_HEAD(&kptllnd_data.kptl_sched_txq);
+        INIT_LIST_HEAD(&kptllnd_data.kptl_sched_rxq);
+        INIT_LIST_HEAD(&kptllnd_data.kptl_sched_rxbq);
+
+        /* init kptl_ptlid2str_lock before any call to kptllnd_ptlid2str */
+        spin_lock_init(&kptllnd_data.kptl_ptlid2str_lock);
+
+        /*
+         * Setup the tx locks/lists
+         */
+        spin_lock_init(&kptllnd_data.kptl_tx_lock);
+        INIT_LIST_HEAD(&kptllnd_data.kptl_idle_txs);
+        atomic_set(&kptllnd_data.kptl_ntx, 0);
 
         /*
          * Uptick the module reference count
@@ -586,30 +605,12 @@ kptllnd_startup (lnet_ni_t *ni)
         CDEBUG(D_NET, "Incarnation="LPX64"\n", kptllnd_data.kptl_incarnation);
 
         /*
-         * Setup the sched locks/lists/waitq
-         */
-        spin_lock_init(&kptllnd_data.kptl_sched_lock);
-        init_waitqueue_head(&kptllnd_data.kptl_sched_waitq);
-        INIT_LIST_HEAD(&kptllnd_data.kptl_sched_txq);
-        INIT_LIST_HEAD(&kptllnd_data.kptl_sched_rxq);
-        INIT_LIST_HEAD(&kptllnd_data.kptl_sched_rxbq);
-
-        /*
-         * Setup the tx locks/lists
-         */
-        spin_lock_init(&kptllnd_data.kptl_tx_lock);
-        INIT_LIST_HEAD(&kptllnd_data.kptl_idle_txs);
-        atomic_set(&kptllnd_data.kptl_ntx, 0);
-
-        /*
          * Allocate and setup the peer hash table
          */
         rwlock_init(&kptllnd_data.kptl_peer_rw_lock);
         init_waitqueue_head(&kptllnd_data.kptl_watchdog_waitq);
         INIT_LIST_HEAD(&kptllnd_data.kptl_closing_peers);
         INIT_LIST_HEAD(&kptllnd_data.kptl_zombie_peers);
-
-        spin_lock_init(&kptllnd_data.kptl_ptlid2str_lock);
 
         kptllnd_data.kptl_peer_hash_size =
                 *kptllnd_tunables.kptl_peer_hash_table_size;
