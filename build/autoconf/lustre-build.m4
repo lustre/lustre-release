@@ -153,9 +153,66 @@ case x$with_sysio in
 		;;
 esac
 
-# We have to configure even if we don't build here for make dist to
-# work
+# We have to configure even if we don't build here for make dist to work
 AC_CONFIG_SUBDIRS(libsysio)
+])
+
+#
+# LB_PATH_LDISKFS
+#
+# Handle internal/external ldiskfs
+#
+AC_DEFUN([LB_PATH_LDISKFS],
+[AC_ARG_WITH([ldiskfs],
+	AC_HELP_STRING([--with-ldiskfs=path],
+			[set path to ldiskfs source (default is included ldiskfs)]),
+	[],[
+		if test x$linux25$enable_server = xyesyes ; then
+			with_ldiskfs=yes
+		else
+			with_ldiskfs=no
+		fi
+	])
+AC_MSG_CHECKING([location of ldiskfs])
+case x$with_ldiskfs in
+	xyes)
+		AC_MSG_RESULT([internal])
+		LB_CHECK_FILE([$srcdir/ldiskfs/lustre-ldiskfs.spec.in],[],[
+			AC_MSG_ERROR([A complete internal ldiskfs was not found.])
+		])
+		LDISKFS_SUBDIR="ldiskfs"
+		LDISKFS_DIR="$PWD/ldiskfs"
+		;;
+	xno)
+		AC_MSG_RESULT([disabled])
+		;;
+	*)
+		AC_MSG_RESULT([$with_ldiskfs])
+		LB_CHECK_FILE([$with_ldiskfs/ldiskfs/linux/ldiskfs_fs.h],[],[
+			AC_MSG_ERROR([A complete (built) external ldiskfs was not found.])
+		])
+		LDISKFS_DIR=$with_ldiskfs
+		;;
+esac
+AC_SUBST(LDISKFS_DIR)
+AC_SUBST(LDISKFS_SUBDIR)
+
+# We have to configure even if we don't build here for make dist to work
+AC_CONFIG_SUBDIRS(ldiskfs)
+])
+
+#
+# LB_DEFINE_LDISKFS_OPTIONS
+#
+# Enable config options related to ldiskfs.  These are used both by ldiskfs
+# and lvfs (which includes ldiskfs headers.)
+#
+AC_DEFUN([LB_DEFINE_LDISKFS_OPTIONS],
+[
+	AC_DEFINE(CONFIG_LDISKFS_FS_MODULE, 1, [build ldiskfs as a module])
+	AC_DEFINE(CONFIG_LDISKFS_FS_XATTR, 1, [enable extended attributes for ldiskfs])
+	AC_DEFINE(CONFIG_LDISKFS_FS_POSIX_ACL, 1, [enable posix acls for ldiskfs])
+	AC_DEFINE(CONFIG_LDISKFS_FS_SECURITY, 1, [enable fs security for ldiskfs])
 ])
 
 #
@@ -231,6 +288,8 @@ if test x$enable_modules = xyes ; then
 	case $target_os in
 		linux*)
 			LB_PROG_LINUX
+			LN_PROG_LINUX
+			LC_PROG_LINUX
 			;;
 		darwin*)
 			LB_PROG_DARWIN
@@ -339,7 +398,7 @@ AC_SUBST(EXTRA_KCFLAGS)
 # defines for including the toplevel Rules
 #
 AC_DEFUN([LB_INCLUDE_RULES],
-[INCLUDE_RULES="include $PWD/build/Rules"
+[INCLUDE_RULES="include $PWD/Rules"
 AC_SUBST(INCLUDE_RULES)
 ])
 
@@ -473,6 +532,22 @@ LC_CONDITIONALS
 ])
 
 #
+# LB_CONFIG_FILES
+#
+# build-specific config files
+#
+AC_DEFUN([LB_CONFIG_FILES],
+[
+AC_CONFIG_FILES(
+[Makefile
+autoMakefile
+]
+[Rules:build/Rules.in]
+AC_PACKAGE_TARNAME[.spec]
+)
+])
+
+#
 # LB_CONFIGURE
 #
 # main configure steps
@@ -488,9 +563,6 @@ LB_PATH_DEFAULTS
 
 LB_PROG_CC
 
-LB_PATH_LIBSYSIO
-LB_PATH_SNMP
-
 LB_CONFIG_DOCS
 LB_CONFIG_UTILS
 LB_CONFIG_TESTS
@@ -502,6 +574,10 @@ LC_CONFIG_LDISKFS
 LN_CONFIG_CDEBUG
 
 LB_CONFIG_MODULES
+
+LB_PATH_LIBSYSIO
+LB_PATH_SNMP
+LB_PATH_LDISKFS
 
 LC_CONFIG_LIBLUSTRE
 LN_CONFIGURE
@@ -515,15 +591,7 @@ fi
 LB_CONDITIONALS
 LB_CONFIG_HEADERS
 
-AC_CONFIG_FILES(
-[Makefile:build/Makefile.in.toplevel]
-[autoMakefile
-build/autoMakefile
-build/autoconf/Makefile
-build/Rules
-build/lustre.spec
-])
-
+LB_CONFIG_FILES
 LN_CONFIG_FILES
 LC_CONFIG_FILES
 if test "$SNMP_DIST_SUBDIR" ; then

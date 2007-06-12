@@ -4,6 +4,7 @@ portalstag=""
 lnettag="HEAD"
 libsysiotag="HEAD"
 snmptag="HEAD"
+ldiskfstag="HEAD"
 
 export LC_COLLATE=C
 
@@ -180,3 +181,6 @@ cvs_cmd portals portals "$portalstag"
 cvs_cmd lnet lnet "$lnettag"
 cvs_cmd snmp lustre-snmp "$snmptag"
 cvs_cmd lustre lustre-core "$lustretag"
+cvs_cmd ldiskfs ldiskfs "$ldiskfstag"
+
+[ -a ldiskfs/build ] || ln -sf ../build ldiskfs/build

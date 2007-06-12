@@ -1,7 +1,7 @@
-EXTRA_DIST := Makefile Makefile.in.toplevel		       \
-	autoMakefile.am.toplevel lbuild linux-merge-config.awk \
+EXTRA_DIST := Makefile                                         \
+	autoMakefile.toplevel.am lbuild linux-merge-config.awk \
 	linux-merge-modules.awk linux-rhconfig.h lmake	       \
-	lustre-kernel-2.4.spec.in lustre.spec lustre.spec      \
+	lustre-kernel-2.4.spec.in                              \
 	suse-functions.sh suse-post.sh suse-postun.sh	       \
 	suse-trigger-script.sh.in README.kernel-source	       \
 	sles8-post.sh sles8-postun.sh sles8-pre.sh	       \
@@ -9,10 +9,9 @@ EXTRA_DIST := Makefile Makefile.in.toplevel		       \
 	sles8-update_rcfile_setting.sh			       \
 	update_oldconfig
 
-CONFIG_CLEAN_FILES := lustre.spec
-
 MOSTLYCLEANFILES := @MOSTLYCLEANFILES@ 
 
+# Override the default distclean, which removes Makefile
 distclean: distclean-recursive
 	@true
 

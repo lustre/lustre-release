@@ -78,8 +78,16 @@ check_version() {
 }
 
 echo "Checking for a complete tree..."
-# required directories
-for dir in build lnet lustre ; do
+if [ -d kernel_patches ] ; then
+    # This is ldiskfs
+    REQUIRED_DIRS="build"
+else
+    REQUIRED_DIRS="build lnet lustre"
+    OPTIONAL_DIRS="snmp portals"
+    CONFIGURE_DIRS="libsysio ldiskfs"
+fi
+
+for dir in $REQUIRED_DIRS ; do
     if [ ! -d "$dir" ] ; then
 	cat >&2 <<EOF
 Your tree seems to be missing $dir.
@@ -89,8 +97,8 @@ EOF
     fi
     ACLOCAL_FLAGS="$ACLOCAL_FLAGS -I $PWD/$dir/autoconf"
 done
-# some are optional
-for dir in snmp portals; do
+# optional directories for Lustre
+for dir in $OPTIONAL_DIRS; do
     if [ -d "$dir" ] ; then
 	ACLOCAL_FLAGS="$ACLOCAL_FLAGS -I $PWD/$dir/autoconf"
     fi
@@ -108,9 +116,12 @@ automake-1.7 -a -c
 echo "Running autoconf..."
 autoconf
 
-if [ -d libsysio ] ; then
-    pushd libsysio >/dev/null
-    echo "Running autogen for libsysio..."
-    sh autogen.sh
-    popd >/dev/null
-fi
+# Run autogen.sh in these directories
+for dir in $CONFIGURE_DIRS; do
+    if [ -d $dir ] ; then
+        pushd $dir >/dev/null
+        echo "Running autogen for $dir..."
+        sh autogen.sh
+        popd >/dev/null
+    fi
+done

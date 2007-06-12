@@ -512,9 +512,9 @@ build_lustre()
 	-e s^@LINUXRELEASE@^${FULL_VERSION}^g \
 	-e s^@RELEASE@^${FULL_VERSION//-/_}^g \
 	-e s^@ac_configure_args@^"--with-linux=${PWD}/linux ${CONFIGURE_FLAGS}"^g \
-	< build/lustre.spec.in \
-	> build/lustre.spec
-    $RPMBUILD --target ${TARGET_ARCH} -bb build/lustre.spec \
+	< lustre.spec.in \
+	> lustre.spec
+    $RPMBUILD --target ${TARGET_ARCH} -bb lustre.spec \
         --define "_tmppath $TMPDIR" \
 	--define "_topdir $(lbuild_topdir)" || \
 	fatal 1 "Error building Lustre rpms."

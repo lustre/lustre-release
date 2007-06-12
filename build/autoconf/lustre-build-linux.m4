@@ -392,12 +392,6 @@ LB_LINUX_CONFIG([KMOD],[],[
 
 #LB_LINUX_CONFIG_BIG_STACK
 
-# LNet tests
-LN_PROG_LINUX
-
-# Lustre tests
-LC_PROG_LINUX
-
 ])
 
 #

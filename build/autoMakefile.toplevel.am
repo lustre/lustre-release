@@ -1,9 +1,7 @@
+# This file is included by each package's toplevel autoMakefile[.am],
+# which must define SUBDIRS as a minimum.
+
 AUTOMAKE_OPTIONS = foreign
-
-SUBDIRS := . build @LIBSYSIO_SUBDIR@ @SNMP_SUBDIR@ lnet lustre
-DIST_SUBDIRS := build @SNMP_DIST_SUBDIR@ libsysio lnet lustre
-
-EXTRA_DIST := config.h.in
 
 # these empty rules are needed so that automake doesn't add its own
 # recursive rules
@@ -27,9 +25,12 @@ tags:
 	find $(top_srcdir) -name '*.[hc]' |grep -v linux-stage |xargs ctags $$CTAGSF -a
 
 if MODULES
+sources: all-sources
+
 all-sources:
-	$(MAKE) sources -C lnet
-	$(MAKE) sources -C lustre
+	for dir in $(SOURCES_SUBDIRS) ; do \
+		$(MAKE) sources -C $$dir ; \
+	done
 
 if LINUX
 all-am: modules
@@ -62,11 +63,36 @@ dist-hook:
 			-name .svn -o \
 			-name .#* | xargs rm -rf
 
-build/lustre.spec: build/lustre.spec.in config.status
-	./config.status build/lustre.spec
+EXTRA_DIST = @PACKAGE_TARNAME@.spec					\
+	build/Makefile build/autoMakefile.toplevel.am build/lbuild	\
+	build/linux-merge-config.awk build/linux-merge-modules.awk	\
+	build/linux-rhconfig.h build/lmake build/Rules.in		\
+	build/lustre-kernel-2.4.spec.in build/suse-functions.sh		\
+	build/suse-post.sh build/suse-postun.sh				\
+	build/suse-trigger-script.sh.in build/README.kernel-source	\
+	build/sles8-post.sh build/sles8-postun.sh build/sles8-pre.sh	\
+	build/sles8-update_INITRD_MODULES.sh				\
+	build/sles8-update_rcfile_setting.sh build/update_oldconfig	\
+	build/autoconf/lustre-build-linux.m4				\
+	build/autoconf/lustre-build.m4
 
-rpms: build/lustre.spec dist Makefile
+rpms-real: @PACKAGE_TARNAME@.spec dist Makefile
 	rpmbuild -ta $(distdir).tar.gz
 
-srpm: build/lustre.spec dist Makefile
+srpm-real: @PACKAGE_TARNAME@.spec dist Makefile
 	rpmbuild -ts $(distdir).tar.gz
+
+rpms:
+	for subdir in $(RPM_SUBDIRS) ; do				\
+		echo "Making rpms in $$subdir";				\
+		(cd $$subdir && $(MAKE) $(AM_MAKEFLAGS) rpms);		\
+	done;								\
+	$(MAKE) $(AM_MAKEFLAGS) rpms-real
+
+srpm:
+	for subdir in $(RPM_SUBDIRS) ; do				\
+		echo "Making srpm in $$subdir";				\
+		(cd $$subdir && $(MAKE) $(AM_MAKEFLAGS) srpm);		\
+	done;								\
+	$(MAKE) $(AM_MAKEFLAGS) srpm-real
+

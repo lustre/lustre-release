@@ -580,7 +580,7 @@ build_lustre()
 
     ./configure "--with-linux=${LINUX}" ${CONFIGURE_FLAGS}
 
-    $RPMBUILD $targets -bb build/lustre.spec \
+    $RPMBUILD $targets -bb lustre.spec \
         --define "_tmppath $TMPDIR" \
         --define "_topdir $TOPDIR" || \
         fatal 1 "Error building rpms for $BUILD_ARCHS."
