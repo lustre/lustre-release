@@ -16,9 +16,3 @@ NB - The patches in the 2.6-suse series should already be in the SLES9 SP1
      kernel.  The patches in the 2.6-suse-newer series are patches that
      have been created since the SP1 kernel was released and should be
      applied to the already-patched SP1 kernel.
-
-NB - The patches in the ldiskfs series should not be applied to the kernel.
-     They are instead applied by the lustre build process to create the
-     ldiskfs kernel module instead of modifying the core ext3 code.
-
-
