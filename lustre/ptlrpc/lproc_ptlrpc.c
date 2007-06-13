@@ -24,6 +24,10 @@
  */
 #define DEBUG_SUBSYSTEM S_CLASS
 
+#ifndef __KERNEL__
+# include <liblustre.h>
+#endif
+
 #include <obd_support.h>
 #include <obd.h>
 #include <lprocfs_status.h>

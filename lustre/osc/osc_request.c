@@ -1032,7 +1032,7 @@ static int check_write_checksum(struct obdo *oa, const lnet_process_id_t *peer,
                 msg = "changed in transit AND doesn't match the original - "
                       "likely false positive due to mmap IO (bug 11742)";
 
-        LCONSOLE_ERROR("BAD WRITE CHECKSUM: %s: from %s inum "LPU64"/"LPU64
+        LCONSOLE_ERROR(0x132, "BAD WRITE CHECKSUM: %s: from %s inum "LPU64"/"LPU64
                        " object "LPU64"/"LPU64" extent ["LPU64"-"LPU64"]\n",
                        msg, libcfs_nid2str(peer->nid),
                        oa->o_valid & OBD_MD_FLFID ? oa->o_fid : (__u64)0,
@@ -1143,9 +1143,9 @@ static int osc_brw_fini_request(struct ptlrpc_request *req, int rc)
                                "but please tell CFS.\n",
                                libcfs_nid2str(peer->nid));
                 } else if (server_cksum != client_cksum) {
-                        LCONSOLE_ERROR("%s: BAD READ CHECKSUM: from %s%s%s inum "
-                                       LPU64"/"LPU64" object "LPU64"/"LPU64
-                                       " extent ["LPU64"-"LPU64"]\n",
+                        LCONSOLE_ERROR(0x133, "%s: BAD READ CHECKSUM: from %s"
+                                       "%s%s inum "LPU64"/"LPU64" object "LPU64
+                                       "/"LPU64" extent ["LPU64"-"LPU64"]\n",
                                        req->rq_import->imp_obd->obd_name,
                                        libcfs_nid2str(peer->nid),
                                        via, router,

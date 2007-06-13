@@ -1477,8 +1477,9 @@ static int llu_iop_fcntl(struct inode *ino, int cmd, va_list ap, int *rtn)
                 flags = va_arg(ap, long);
                 flags &= FCNTL_FLMASK;
                 if (flags & FCNTL_FLMASK_INVALID) {
-                        CERROR("liblustre don't support O_NONBLOCK, O_ASYNC, "
-                               "and O_DIRECT on file descriptor\n");
+                        LCONSOLE_ERROR(0x010, "liblustre does not support "
+                                      "the O_NONBLOCK or O_ASYNC flags. "
+                                      "Please fix your application.\n");
                         *rtn = -EINVAL;
                         err = EINVAL;
                         break;

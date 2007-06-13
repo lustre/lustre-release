@@ -362,15 +362,15 @@ int lustre_process_log(struct super_block *sb, char *logname,
         lustre_cfg_free(lcfg);
 
         if (rc == -EINVAL)
-                LCONSOLE_ERROR("%s: The configuration from log '%s' failed "
-                               "(%d). Make sure this client and "
+                LCONSOLE_ERROR(0x15b, "%s: The configuration from log '%s' "
+                               "failed (%d). Make sure this client and "
                                "the MGS are running compatible versions of "
                                "Lustre.\n",
                                mgc->obd_name, logname, rc);
 
         if (rc)
-                LCONSOLE_ERROR("%s: The configuration from log '%s' failed "
-                               "(%d). This may be the result of "
+                LCONSOLE_ERROR(0x15c, "%s: The configuration from log '%s' "
+                               "failed (%d). This may be the result of "
                                "communication errors between this node and "
                                "the MGS, a bad configuration, or other errors."
                                " See the syslog for more information.\n",
@@ -468,8 +468,8 @@ static int server_start_mgs(struct super_block *sb)
         lmi = server_find_mount(LUSTRE_MGS_OBDNAME);
         if (lmi) {
                 lsi = s2lsi(lmi->lmi_sb);
-                LCONSOLE_ERROR("The MGS service was already started from "
-                               "server %s\n", lsi->lsi_ldd->ldd_svname);
+                LCONSOLE_ERROR(0x15d, "The MGS service was already started "
+                               "from server %s\n", lsi->lsi_ldd->ldd_svname);
                 RETURN(-EALREADY);
         }
 
@@ -483,8 +483,8 @@ static int server_start_mgs(struct super_block *sb)
                 server_deregister_mount(LUSTRE_MGS_OBDNAME);
 
         if (rc)
-                LCONSOLE_ERROR("Failed to start MGS '%s' (%d).  Is the 'mgs' "
-                               "module loaded?\n", LUSTRE_MGS_OBDNAME, rc);
+                LCONSOLE_ERROR(0x15e, "Failed to start MGS '%s' (%d).  Is the "
+                         "'mgs' module loaded?\n", LUSTRE_MGS_OBDNAME, rc);
 
         RETURN(rc);
 }
@@ -1048,15 +1048,15 @@ static int server_start_targets(struct super_block *sb, struct vfsmount *mnt)
                 CERROR("Required registration failed for %s: %d\n",
                        lsi->lsi_ldd->ldd_svname, rc);
                 if (rc == -EIO) {
-                        LCONSOLE_ERROR("Communication error with the MGS.  Is "
-                                       "the MGS running?\n");
+                        LCONSOLE_ERROR(0x15f, "Communication error with the "
+                                       "MGS.  Is the MGS running?\n");
                 }
                 GOTO(out_mgc, rc);
         }
         if (rc == -EINVAL) {
-                LCONSOLE_ERROR("The MGS is refusing to allow this server (%s) "
-                               "to start.  Please see messages on the MGS node."
-                               "\n", lsi->lsi_ldd->ldd_svname);
+                LCONSOLE_ERROR(0x160, "The MGS is refusing to allow this "
+                               "server (%s) to start.  Please see messages on"
+                               " the MGS node.\n", lsi->lsi_ldd->ldd_svname);
                 GOTO(out_mgc, rc);
         }
 
@@ -1539,8 +1539,8 @@ static int server_fill_super(struct super_block *sb)
                lsi->lsi_lmd->lmd_dev);
 
         if (class_name2obd(lsi->lsi_ldd->ldd_svname)) {
-                LCONSOLE_ERROR("The target named %s is already running. "
-                               "Double-mount may have compromised the disk "
+                LCONSOLE_ERROR(0x161, "The target named %s is already running."
+                               " Double-mount may have compromised the disk "
                                "journal.\n", lsi->lsi_ldd->ldd_svname);
                 unlock_mntput(mnt);
                 lustre_put_lsi(sb);
@@ -1751,14 +1751,14 @@ static int lmd_parse(char *options, struct lustre_mount_data *lmd)
 
         LASSERT(lmd);
         if (!options) {
-                LCONSOLE_ERROR("Missing mount data: check that "
+                LCONSOLE_ERROR(0x162, "Missing mount data: check that "
                                "/sbin/mount.lustre is installed.\n");
                 RETURN(-EINVAL);
         }
 
         /* Options should be a string - try to detect old lmd data */
         if ((raw->lmd_magic & 0xffffff00) == (LMD_MAGIC & 0xffffff00)) {
-                LCONSOLE_ERROR("You're using an old version of "
+                LCONSOLE_ERROR(0x163, "You're using an old version of "
                                "/sbin/mount.lustre.  Please install version "
                                "%s\n", LUSTRE_VERSION_STRING);
                 RETURN(-EINVAL);
@@ -1818,7 +1818,7 @@ static int lmd_parse(char *options, struct lustre_mount_data *lmd)
         }
 
         if (!devname) {
-                LCONSOLE_ERROR("Can't find the device name "
+                LCONSOLE_ERROR(0x164, "Can't find the device name "
                                "(need mount option 'device=...')\n");
                 goto invalid;
         }
@@ -1888,8 +1888,8 @@ int lustre_fill_super(struct super_block *sb, void *data, int silent)
         if (lmd_is_client(lmd)) {
                 CDEBUG(D_MOUNT, "Mounting client %s\n", lmd->lmd_profile);
                 if (!client_fill_super) {
-                        LCONSOLE_ERROR("Nothing registered for client mount!"
-                               " Is the 'lustre' module loaded?\n");
+                        LCONSOLE_ERROR(0x165, "Nothing registered for client "
+                               "mount! Is the 'lustre' module loaded?\n");
                         rc = -ENODEV;
                 } else {
                         rc = lustre_start_mgc(sb);

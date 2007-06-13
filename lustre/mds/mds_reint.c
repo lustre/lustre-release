@@ -1992,7 +1992,7 @@ int mds_get_parents_children_locked(struct obd_device *obd,
         *de_oldp = ll_lookup_one_len(old_name, *de_srcdirp, old_len - 1);
         if (IS_ERR(*de_oldp)) {
                 rc = PTR_ERR(*de_oldp);
-                CERROR("old child lookup error (%.*s): %d\n",
+                CDEBUG(D_INODE, "old child lookup error (%.*s): %d\n",
                        old_len - 1, old_name, rc);
                 GOTO(cleanup, rc);
         }

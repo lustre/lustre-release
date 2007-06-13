@@ -180,9 +180,9 @@ static int client_common_fill_super(struct super_block *sb,
 
         err = obd_connect(&mdc_conn, obd, &sbi->ll_sb_uuid, data);
         if (err == -EBUSY) {
-                LCONSOLE_ERROR("An MDT (mdc %s) is performing recovery, of "
-                               "which this client is not a part.  Please wait "
-                               "for recovery to complete, abort, or "
+                LCONSOLE_ERROR(0x14f, "An MDT (mdc %s) is performing recovery,"
+                               " of which this client is not a part. Please "
+                               "wait for recovery to complete, abort, or "
                                "time out.\n", mdc);
                 GOTO(out, err);
         } else if (err) {
@@ -268,9 +268,9 @@ static int client_common_fill_super(struct super_block *sb,
 
         err = obd_connect(&osc_conn, obd, &sbi->ll_sb_uuid, data);
         if (err == -EBUSY) {                                                
-                LCONSOLE_ERROR("An OST (osc %s) is performing recovery, of "
-                               "which this client is not a part.  Please wait "
-                               "for recovery to complete, abort, or "
+                LCONSOLE_ERROR(0x150, "An OST (osc %s) is performing recovery,"
+                               " of which this client is not a part.  Please "
+                               "wait for recovery to complete, abort, or "
                                "time out.\n", osc);
                 GOTO(out, err);
         } else if (err) {
@@ -287,7 +287,7 @@ static int client_common_fill_super(struct super_block *sb,
         err = obd_prep_async_page(sbi->ll_osc_exp, NULL, NULL, NULL,
                                   0, NULL, NULL, NULL);
         if (err < 0) {
-                LCONSOLE_ERROR("There are no OST's in this filesystem. "
+                LCONSOLE_ERROR(0x151, "There are no OST's in this filesystem. "
                                "There must be at least one active OST for "
                                "a client to start.\n");
                 GOTO(out_osc, err);
@@ -668,7 +668,8 @@ static int ll_options(char *options, int *flags)
                         goto next;
                 }
 
-                LCONSOLE_ERROR("Unknown option '%s', won't mount.\n", s1);
+                LCONSOLE_ERROR(0x152, "Unknown option '%s', won't mount.\n",
+                               s1);
                 RETURN(-EINVAL);
 
 next:
@@ -765,9 +766,9 @@ static int old_lustre_process_log(struct super_block *sb, char *newprofile,
 
         rc = do_lcfg(MDCDEV, 0, LCFG_SETUP, mdt, niduuid, 0, 0);
         if (rc < 0) {
-                LCONSOLE_ERROR("I couldn't establish a connection with the MDT."
-                               " Check that the MDT host NID is correct and the"
-                               " networks are up.\n");
+                LCONSOLE_ERROR(0x153, "I couldn't establish a connection with "
+                               "the MDT. Check that the MDT host NID is "
+                               "correct and the networks are up.\n");
                 GOTO(out_detach, rc);
         }
 
@@ -838,18 +839,18 @@ static int old_lustre_process_log(struct super_block *sb, char *newprofile,
                 break;
         }
         case -EINVAL:
-                LCONSOLE_ERROR("%s: The configuration '%s' could not be read "
-                               "from the MDT '%s'.  Make sure this client and "
-                               "the MDT are running compatible versions of "
-                               "Lustre.\n",
+                LCONSOLE_ERROR(0x154, "%s: The configuration '%s' could not "
+                               "be read from the MDT '%s'.  Make sure this "
+                               "client and the MDT are running compatible "
+                               "versions of Lustre.\n",
                                obd->obd_name, profile, mdt);
                 /* fall through */
         default:
-                LCONSOLE_ERROR("%s: The configuration '%s' could not be read "
-                               "from the MDT '%s'.  This may be the result of "
-                               "communication errors between the client and "
-                               "the MDT, or if the MDT is not running.\n",
-                               obd->obd_name, profile, mdt);
+                LCONSOLE_ERROR(0x155, "%s: The configuration '%s' could not "
+                               "be read from the MDT '%s'.  This may be the "
+                               "result of communication errors between the "
+                               "client and the MDT, or if the MDT is not "
+                               "running.\n", obd->obd_name, profile, mdt);
                 break;
         }
 
@@ -955,9 +956,9 @@ int ll_fill_super(struct super_block *sb)
 
         lprof = class_get_profile(profilenm);
         if (lprof == NULL) {
-                LCONSOLE_ERROR("The client profile '%s' could not be read "
-                               "from the MGS.  Does that filesystem exist?\n",
-                               profilenm);
+                LCONSOLE_ERROR(0x156, "The client profile '%s' could not be "
+                               "read from the MGS.  Does that filesystem "
+                               "exist?\n", profilenm);
                 GOTO(out_free, err = -EINVAL);
         }
         CDEBUG(D_CONFIG, "Found profile %s: mdc=%s osc=%s\n", profilenm, 

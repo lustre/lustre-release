@@ -132,9 +132,9 @@ int ptlrpc_set_import_discon(struct obd_import *imp, __u32 conn_cnt)
                                imp->imp_obd->obd_name, target_len, target_start,
                                libcfs_nid2str(imp->imp_connection->c_peer.nid));
                 } else {
-                        LCONSOLE_ERROR("%s: Connection to service %.*s via nid "
-                               "%s was lost; in progress operations using this "
-                               "service will fail.\n",
+                        LCONSOLE_ERROR(0x166, "%s: Connection to service %.*s "
+                               "via nid %s was lost; in progress operations "
+                               "using this service will fail.\n",
                                imp->imp_obd->obd_name, target_len, target_start,
                                libcfs_nid2str(imp->imp_connection->c_peer.nid));
                 }
@@ -872,9 +872,9 @@ int ptlrpc_import_recovery_state_machine(struct obd_import *imp)
                 /* Don't care about MGC eviction */
                 if (strcmp(imp->imp_obd->obd_type->typ_name,
                            LUSTRE_MGC_NAME) != 0) {
-                        LCONSOLE_ERROR("This client was evicted by %.*s; "
-                                       "in progress operations using this "
-                                       "service will fail.\n",
+                        LCONSOLE_ERROR(0x167, "This client was evicted by "
+                                       "%.*s; in progress operations using "
+                                       "this service will fail.\n",
                                        target_len, target_start);
                 }
                 CDEBUG(D_HA, "evicted from %s@%s; invalidating\n",

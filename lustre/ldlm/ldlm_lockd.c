@@ -419,13 +419,11 @@ static void ldlm_failed_ast(struct ldlm_lock *lock, int rc,
         struct ptlrpc_connection *conn = lock->l_export->exp_connection;
         char                     *str = libcfs_nid2str(conn->c_peer.nid);
 
-        LCONSOLE_ERROR("A client on nid %s was evicted from service %s.\n",
-                       str, lock->l_export->exp_obd->obd_name);
+        LCONSOLE_ERROR(0x138, "A client on nid %s was evicted from "
+                 "service %s.\n", str, lock->l_export->exp_obd->obd_name);
 
-        LDLM_ERROR(lock, "%s AST failed (%d): evicting client %s@%s NID %s"
-                   " (%s)", ast_type, rc, lock->l_export->exp_client_uuid.uuid,
-                   conn->c_remote_uuid.uuid, libcfs_nid2str(conn->c_peer.nid),
-                   str);
+        LCONSOLE_ERROR(0x012, "Lock %s callback to %s timed out for resource "
+                 "%d\n", ast_type, obd_export_nid2str(lock->l_export), rc);
 
         if (obd_dump_on_timeout)
                 libcfs_debug_dumplog();

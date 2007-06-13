@@ -105,7 +105,8 @@ struct obd_type *class_get_type(const char *name)
                         CDEBUG(D_INFO, "Loaded module '%s'\n", modname);
                         type = class_search_type(name);
                 } else {
-                        LCONSOLE_ERROR("Can't load module '%s'\n", modname);
+                        LCONSOLE_ERROR(0x158, "Can't load module '%s'\n",
+                                       modname);
                 }
         }
 #endif

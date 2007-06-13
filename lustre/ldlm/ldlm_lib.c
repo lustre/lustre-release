@@ -578,7 +578,7 @@ int target_handle_connect(struct ptlrpc_request *req, svc_handler_t handler)
         /* end COMPAT_146 */
 
         if (!target || target->obd_stopping || !target->obd_set_up) {
-                LCONSOLE_ERROR("UUID '%s' is not available "
+                LCONSOLE_ERROR(0x137, "UUID '%s' is not available "
                                " for connect (%s)\n", str,
                                !target ? "no target" :
                                (target->obd_stopping ? "stopping" :

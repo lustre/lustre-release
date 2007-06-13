@@ -322,13 +322,13 @@ static int mgs_check_target(struct obd_device *obd, struct mgs_target_info *mti)
 
         rc = mgs_check_index(obd, mti);
         if (rc == 0) {
-                LCONSOLE_ERROR("%s claims to have registered, but this MGS "
-                               "does not know about it.  Assuming writeconf.\n",
-                               mti->mti_svname);
+                LCONSOLE_ERROR(0x13b, "%s claims to have registered, but this "
+                               "MGS does not know about it.  Assuming "
+                               "writeconf.\n", mti->mti_svname);
                 mti->mti_flags |= LDD_F_WRITECONF;
                 rc = 1;
         } else if (rc == -1) {
-                LCONSOLE_ERROR("Client log %s-client has disappeared! "
+                LCONSOLE_ERROR(0x13c, "Client log %s-client has disappeared! "
                                "Regenerating all logs.\n",
                                mti->mti_fsname);
                 mti->mti_flags |= LDD_F_WRITECONF;
@@ -375,7 +375,7 @@ static int mgs_handle_target_reg(struct ptlrpc_request *req)
            revoke at the end they will just update from where they left off. */
         lockrc = mgs_get_cfg_lock(obd, mti->mti_fsname, &lockh);
         if (lockrc != ELDLM_OK) {
-                LCONSOLE_ERROR("%s: Can't signal other nodes to update "
+                LCONSOLE_ERROR(0x13d, "%s: Can't signal other nodes to update "
                                "their configuration (%d). Updating local logs "
                                "anyhow; you might have to manually restart "
                                "other nodes to get the latest configuration.\n",

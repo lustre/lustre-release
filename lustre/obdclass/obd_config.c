@@ -98,7 +98,7 @@ int class_parse_nid(char *buf, lnet_nid_t *nid, char **endh)
         *endp = '\0';
         *nid = libcfs_str2nid(buf);
         if (*nid == LNET_NID_ANY) {
-                LCONSOLE_ERROR("Can't parse NID '%s'\n", buf);
+                LCONSOLE_ERROR(0x159, "Can't parse NID '%s'\n", buf);
                 *endp = tmp;
                 return -EINVAL;
         }
@@ -735,7 +735,7 @@ int class_process_config(struct lustre_cfg *lcfg)
                 GOTO(out, err = 0);
         }
         case LCFG_SET_UPCALL: {
-                LCONSOLE_ERROR("recovery upcall is deprecated\n");
+                LCONSOLE_ERROR(0x15a, "recovery upcall is deprecated\n");
                 /* COMPAT_146 Don't fail on old configs */
                 GOTO(out, err = 0);
         }

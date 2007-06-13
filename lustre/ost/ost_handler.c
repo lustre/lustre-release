@@ -1078,8 +1078,8 @@ static int ost_brw_write(struct ptlrpc_request *req, struct obd_trans_info *oti)
                         router = libcfs_nid2str(desc->bd_sender);
                 }
                 
-                LCONSOLE_ERROR("%s: BAD WRITE CHECKSUM: %s from %s%s%s inum "
-                               LPU64"/"LPU64" object "LPU64"/"LPU64
+                LCONSOLE_ERROR(0x168, "%s: BAD WRITE CHECKSUM: %s from %s%s%s "
+                               "inum "LPU64"/"LPU64" object "LPU64"/"LPU64
                                " extent ["LPU64"-"LPU64"]\n",
                                req->rq_export->exp_obd->obd_name, msg,
                                libcfs_id2str(req->rq_peer),
