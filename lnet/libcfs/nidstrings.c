@@ -527,7 +527,7 @@ EXPORT_SYMBOL(libcfs_setnet0alias);
 void
 libcfs_setnet0alias(int lnd)
 {
-        LCONSOLE_ERROR("Liblustre cannot interoperate with old Portals.\n"
-                       "portals_compatibility must be set to 'none'.\n");
+        LCONSOLE_ERROR(0x125, "Liblustre cannot interoperate with old Portals."
+                       "\nportals_compatibility must be set to 'none'.\n");
 }
 #endif

@@ -268,7 +268,7 @@ kqswnal_startup (lnet_ni_t *ni)
 
 	if (*kqswnal_tunables.kqn_credits >=
 	    *kqswnal_tunables.kqn_ntxmsgs) {
-		LCONSOLE_ERROR("Configuration error: please set "
+		LCONSOLE_ERROR(0x12e, "Configuration error: please set "
 			       "ntxmsgs(%d) > credits(%d)\n",
 			       *kqswnal_tunables.kqn_ntxmsgs,
 			       *kqswnal_tunables.kqn_credits);

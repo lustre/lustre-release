@@ -2277,7 +2277,7 @@ ksocknal_recv_hello (lnet_ni_t *ni, ksock_conn_t *conn,
                 *peerid = recv_id;
         } else if (peerid->pid != recv_id.pid ||
                    !lnet_ptlcompat_matchnid(peerid->nid, recv_id.nid)) {
-                LCONSOLE_ERROR("Connected successfully to %s on host "
+                LCONSOLE_ERROR(0x130, "Connected successfully to %s on host "
                                "%u.%u.%u.%u, but they claimed they were "
                                "%s; please check your Lustre "
                                "configuration.\n",

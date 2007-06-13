@@ -2746,8 +2746,8 @@ kiblnd_cm_callback(struct rdma_cm_id *cmid, struct rdma_cm_event *event)
                 return 0;
 
 	case RDMA_CM_EVENT_DEVICE_REMOVAL:
-                LCONSOLE_ERROR("Received notification of device removal\n");
-                LCONSOLE_ERROR("Please shutdown LNET to allow this to proceed\n");
+                LCONSOLE_ERROR(0x131, "Received notification of device removal\n"
+                        "Please shutdown LNET to allow this to proceed\n");
                 /* Can't remove network from underneath LNET for now, so I have
                  * to ignore this */
 		return 0;

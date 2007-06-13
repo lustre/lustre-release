@@ -88,7 +88,7 @@ lnet_connect_console_error (int rc, lnet_nid_t peer_nid,
                        HIPQUAD(peer_ip), peer_port);
                 break;
         case -ECONNRESET:
-                LCONSOLE_ERROR("Connection to %s at host %u.%u.%u.%u on "
+                LCONSOLE_ERROR(0x11b, "Connection to %s at host %u.%u.%u.%u on "
                                "port %d was reset: "
                                "is it running a compatible version of Lustre "
                                "and is %s one of its NIDs?\n",
@@ -97,20 +97,20 @@ lnet_connect_console_error (int rc, lnet_nid_t peer_nid,
                                libcfs_nid2str(peer_nid));
                 break;
         case -EPROTO:
-                LCONSOLE_ERROR("Protocol error connecting to %s at host "
+                LCONSOLE_ERROR(0x11c, "Protocol error connecting to %s at host "
                                "%u.%u.%u.%u on port %d: "
                                "is it running a compatible version of Lustre?\n",
                                libcfs_nid2str(peer_nid),
                                HIPQUAD(peer_ip), peer_port);
                 break;
         case -EADDRINUSE:
-                LCONSOLE_ERROR("No privileged ports available to connect to "
+                LCONSOLE_ERROR(0x11d, "No privileged ports available to connect to "
                                "%s at host %u.%u.%u.%u on port %d\n",
                                libcfs_nid2str(peer_nid),
                                HIPQUAD(peer_ip), peer_port);
                 break;
         default:
-                LCONSOLE_ERROR("Unexpected error %d connecting to %s at "
+                LCONSOLE_ERROR(0x11e, "Unexpected error %d connecting to %s at "
                                "host %u.%u.%u.%u on port %d\n", rc,
                                libcfs_nid2str(peer_nid),
                                HIPQUAD(peer_ip), peer_port);
@@ -249,7 +249,7 @@ lnet_accept(lnet_ni_t *blind_ni, cfs_socket_t *sock, __u32 magic)
                 else
                         str = "unrecognised";
             
-                LCONSOLE_ERROR("Refusing connection from %u.%u.%u.%u magic %08x: "
+                LCONSOLE_ERROR(0x11f, "Refusing connection from %u.%u.%u.%u magic %08x: "
                                " %s acceptor protocol\n",
                                HIPQUAD(peer_ip), magic, str);
                 return -EPROTO;
@@ -308,7 +308,7 @@ lnet_accept(lnet_ni_t *blind_ni, cfs_socket_t *sock, __u32 magic)
             ni->ni_nid != cr.acr_nid) { /* right NET, wrong NID! */
                 if (ni != NULL)
                         lnet_ni_decref(ni);
-                LCONSOLE_ERROR("Refusing connection from %u.%u.%u.%u for %s: "
+                LCONSOLE_ERROR(0x120, "Refusing connection from %u.%u.%u.%u for %s: "
                                " No matching NI\n",
                                HIPQUAD(peer_ip), libcfs_nid2str(cr.acr_nid));
                 return -EPERM;
@@ -317,7 +317,7 @@ lnet_accept(lnet_ni_t *blind_ni, cfs_socket_t *sock, __u32 magic)
         if (ni->ni_lnd->lnd_accept == NULL) {
                 /* This catches a request for the loopback LND */
                 lnet_ni_decref(ni);
-                LCONSOLE_ERROR("Refusing connection from %u.%u.%u.%u for %s: "
+                LCONSOLE_ERROR(0x121, "Refusing connection from %u.%u.%u.%u for %s: "
                                " NI doesn not accept IP connections\n",
                                HIPQUAD(peer_ip), libcfs_nid2str(cr.acr_nid));
                 return -EPERM;
@@ -377,11 +377,11 @@ lnet_acceptor(void *arg)
 				0, accept_port, accept_backlog);
 	if (rc != 0) {
                 if (rc == -EADDRINUSE)
-                        LCONSOLE_ERROR("Can't start acceptor on port %d: "
+                        LCONSOLE_ERROR(0x122, "Can't start acceptor on port %d: "
                                        "port already in use\n",
                                        accept_port);
                 else
-                        LCONSOLE_ERROR("Can't start acceptor on port %d: "
+                        LCONSOLE_ERROR(0x123, "Can't start acceptor on port %d: "
                                        "unexpected error %d\n",
                                        accept_port, rc);
 
@@ -482,7 +482,7 @@ lnet_acceptor_start(void)
         } else if (!strcmp(accept, "none")) {
                 return 0;
         } else {
-                LCONSOLE_ERROR ("Can't parse 'accept=\"%s\"'\n",
+                LCONSOLE_ERROR (0x124, "Can't parse 'accept=\"%s\"'\n",
                                 accept);
                 return -EINVAL;
         }

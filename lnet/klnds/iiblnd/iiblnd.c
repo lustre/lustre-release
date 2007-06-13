@@ -2128,7 +2128,7 @@ kibnal_module_init (void)
         int    rc;
 
         if (the_lnet.ln_ptlcompat != 0) {
-                LCONSOLE_ERROR("IIB does not support portals compatibility mode\n");
+                LCONSOLE_ERROR(0x12c, "IIB does not support portals compatibility mode\n");
                 return -ENODEV;
         }
         

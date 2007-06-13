@@ -61,8 +61,8 @@ lnet_get_networks(void)
         int     rc;
 
         if (*networks != 0 && *ip2nets != 0) {
-                LCONSOLE_ERROR("Please specify EITHER 'networks' or 'ip2nets'"
-                               " but not both at once\n");
+                LCONSOLE_ERROR(0x101, "Please specify EITHER 'networks' or "
+                               "'ip2nets' but not both at once\n");
                 return NULL;
         }
         
@@ -94,7 +94,7 @@ lnet_get_portals_compatibility(void)
                 LCONSOLE_WARN("Starting in strong portals-compatible mode\n");
         } 
 
-        LCONSOLE_ERROR("portals_compatibility=\"%s\" not supported\n",
+        LCONSOLE_ERROR(0x102, "portals_compatibility=\"%s\" not supported\n",
                        portals_compatibility);
         return -EINVAL;
 }
@@ -138,7 +138,7 @@ lnet_get_networks (void)
 
 #ifdef NOT_YET
         if (networks != NULL && ip2nets != NULL) {
-                LCONSOLE_ERROR("Please set EITHER 'LNET_NETWORKS' or "
+                LCONSOLE_ERROR(0x103, "Please set EITHER 'LNET_NETWORKS' or "
                                "'LNET_IP2NETS' but not both at once\n");
                 return NULL;
         }
@@ -1002,9 +1002,9 @@ lnet_startup_lndnis (void)
                                        libcfs_lnd2str(lnd_type),
                                        libcfs_lnd2modname(lnd_type), rc);
 #ifndef CONFIG_KMOD
-                                LCONSOLE_ERROR("Your kernel must be compiled "
-                                               "with CONFIG_KMOD set for "
-                                               "automatic module loading.");
+                                LCONSOLE_ERROR(0x104, "Your kernel must be "
+                                         "compiled with CONFIG_KMOD set for "
+                                         "automatic module loading.");
 #endif
                                 goto failed;
                         }
@@ -1031,7 +1031,7 @@ lnet_startup_lndnis (void)
                 LNET_MUTEX_UP(&the_lnet.ln_lnd_mutex);
 
                 if (rc != 0) {
-                        LCONSOLE_ERROR("Error %d starting up LNI %s\n",
+                        LCONSOLE_ERROR(0x105, "Error %d starting up LNI %s\n",
                                        rc, libcfs_lnd2str(lnd->lnd_type));
                         LNET_LOCK();
                         lnd->lnd_refcount--;
@@ -1060,7 +1060,7 @@ lnet_startup_lndnis (void)
                         }
                 } else {
 # ifndef HAVE_LIBPTHREAD
-                        LCONSOLE_ERROR("LND %s not supported in a "
+                        LCONSOLE_ERROR(0x106, "LND %s not supported in a "
                                        "single-threaded runtime\n",
                                        libcfs_lnd2str(lnd_type));
                         goto failed;
@@ -1069,7 +1069,7 @@ lnet_startup_lndnis (void)
 #endif
                 if (ni->ni_peertxcredits == 0 ||
                     ni->ni_maxtxcredits == 0) {
-                        LCONSOLE_ERROR("LNI %s has no %scredits\n",
+                        LCONSOLE_ERROR(0x107, "LNI %s has no %scredits\n",
                                        libcfs_lnd2str(lnd->lnd_type),
                                        ni->ni_peertxcredits == 0 ?
                                        "" : "per-peer ");
@@ -1085,8 +1085,8 @@ lnet_startup_lndnis (void)
                 /* Handle nidstrings for network 0 just like this one */
                 if (the_lnet.ln_ptlcompat > 0) {
                         if (nicount > 0) {
-                                LCONSOLE_ERROR("Can't run > 1 network when "
-                                               "portals_compatibility is set\n");
+                                LCONSOLE_ERROR(0x108, "Can't run > 1 network "
+                                       "when portals_compatibility is set\n");
                                 goto failed;
                         }
                         libcfs_setnet0alias(lnd->lnd_type);
@@ -1097,7 +1097,7 @@ lnet_startup_lndnis (void)
 
         if (the_lnet.ln_eqwaitni != NULL && nicount > 1) {
                 lnd_type = the_lnet.ln_eqwaitni->ni_lnd->lnd_type;
-                LCONSOLE_ERROR("LND %s can only run single-network\n",
+                LCONSOLE_ERROR(0x109, "LND %s can only run single-network\n",
                                libcfs_lnd2str(lnd_type));
                 goto failed;
         }

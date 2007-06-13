@@ -224,6 +224,13 @@ do {                                                                    \
 
 #endif /* !__KERNEL__ */
 
+/* 
+ * Lustre Error Checksum: calculates checksum 
+ * of Hex number by XORing each bit.
+ */
+#define LERRCHKSUM(hexnum) (((hexnum) & 0xf) ^ ((hexnum) >> 4 & 0xf) ^ \
+                           ((hexnum) >> 8 & 0xf))
+
 #define CWARN(format, a...)          CDEBUG_LIMIT(D_WARNING, format, ## a)
 #define CERROR(format, a...)         CDEBUG_LIMIT(D_ERROR, format, ## a)
 #define CEMERG(format, a...)         CDEBUG_LIMIT(D_EMERG, format, ## a)
@@ -231,7 +238,8 @@ do {                                                                    \
 #define LCONSOLE(mask, format, a...) CDEBUG(D_CONSOLE | (mask), format, ## a)
 #define LCONSOLE_INFO(format, a...)  CDEBUG_LIMIT(D_CONSOLE, format, ## a)
 #define LCONSOLE_WARN(format, a...)  CDEBUG_LIMIT(D_CONSOLE | D_WARNING, format, ## a)
-#define LCONSOLE_ERROR(format, a...) CDEBUG_LIMIT(D_CONSOLE | D_ERROR, format, ## a)
+#define LCONSOLE_ERROR(errnum, format, a...) CDEBUG_LIMIT(D_CONSOLE | D_ERROR, \
+                         "%x-%x: " format, errnum, LERRCHKSUM(errnum),  ## a)
 #define LCONSOLE_EMERG(format, a...) CDEBUG(D_CONSOLE | D_EMERG, format, ## a)
 
 #ifdef CDEBUG_ENABLED

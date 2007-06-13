@@ -782,7 +782,7 @@ lnet_router_checker_start(void)
 
         if (check_routers_before_use &&
             dead_router_check_interval <= 0) {
-                LCONSOLE_ERROR("'dead_router_check_interval' must be set if "
+                LCONSOLE_ERROR(0x10a, "'dead_router_check_interval' must be set if "
                                "'check_routers_before_use' is set\n");
                 return -EINVAL;
         }
@@ -981,13 +981,13 @@ lnet_alloc_rtrpools(int im_a_router)
         } else if (!strcmp(forwarding, "enabled")) {
                 /* explicitly enabled */
         } else {
-                LCONSOLE_ERROR("'forwarding' not set to either "
+                LCONSOLE_ERROR(0x10b, "'forwarding' not set to either "
                                "'enabled' or 'disabled'\n");
                 return -EINVAL;
         }
         
         if (tiny_router_buffers <= 0) {
-                LCONSOLE_ERROR("tiny_router_buffers=%d invalid when "
+                LCONSOLE_ERROR(0x10c, "tiny_router_buffers=%d invalid when "
                                "routing enabled\n", tiny_router_buffers);
                 rc = -EINVAL;
                 goto failed;
@@ -999,7 +999,7 @@ lnet_alloc_rtrpools(int im_a_router)
                 goto failed;
 
         if (small_router_buffers <= 0) {
-                LCONSOLE_ERROR("small_router_buffers=%d invalid when "
+                LCONSOLE_ERROR(0x10d, "small_router_buffers=%d invalid when "
                                "routing enabled\n", small_router_buffers);
                 rc = -EINVAL;
                 goto failed;
@@ -1011,7 +1011,7 @@ lnet_alloc_rtrpools(int im_a_router)
                 goto failed;
 
         if (large_router_buffers <= 0) {
-                LCONSOLE_ERROR("large_router_buffers=%d invalid when "
+                LCONSOLE_ERROR(0x10e, "large_router_buffers=%d invalid when "
                                "routing enabled\n", large_router_buffers);
                 rc = -EINVAL;
                 goto failed;
