@@ -7,11 +7,15 @@ ext3-ea-in-inode-2.6-rhel4.patch
 export-ext3-2.6-rhel4.patch
 ext3-include-fixes-2.6-rhel4.patch
 ext3-extents-2.6.9-rhel4.patch
-ext3-mballoc2-2.6.9-rhel4.patch 
+ext3-extents-fixes-2.6.9-rhel4.patch 
+ext3-extents-multiblock-directio-2.6.9-rhel4.patch
+ext3-extents-search-2.6.9-rhel4.patch
+ext3-mballoc3-core.patch 
+ext3-mballoc3-rhel4.patch 
 ext3-nlinks-2.6.9.patch
 ext3-ialloc-2.6.patch
 ext3-lookup-dotdot-2.6.9.patch
 ext3-sector_t-overflow-2.6.9-rhel4.patch
 ext3-check-jbd-errors-2.6.9.patch
+ext3-uninit-2.6.9.patch
 ext3-nanosecond-2.6-rhel4.patch
-ext3-extents-bug11324.patch
