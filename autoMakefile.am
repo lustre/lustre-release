@@ -3,7 +3,7 @@ DIST_SUBDIRS := @SNMP_DIST_SUBDIR@ libsysio ldiskfs lnet lustre
 SOURCES_SUBDIRS := @LDISKFS_SUBDIR@ lnet lustre
 RPM_SUBDIRS := @LDISKFS_SUBDIR@
 
-include build/autoMakefile.toplevel.am
+include build/autoMakefile.am.toplevel
 
 EXTRA_DIST += config.h.in
 
