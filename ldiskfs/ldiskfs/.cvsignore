@@ -1,0 +1,11 @@
+.*.cmd
+Makefile
+autoMakefile.in
+autoMakefile
+ldiskfs.ko
+ldiskfs.mod.c
+linux-stage
+linux
+*.c
+*.h
+sources
