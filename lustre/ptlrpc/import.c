@@ -759,7 +759,8 @@ finish:
                            /* Actually servers are only supposed to refuse
                               connection from liblustre clients, so we should
                               never see this from VFS context */
-                                LCONSOLE_ERROR("Server %s version (%d.%d.%d.%d)"
+                                LCONSOLE_ERROR(0x16a, "Server %s version "
+                                        "(%d.%d.%d.%d)"
                                         " refused connection from this client "
                                         "with an incompatible version (%s).  "
                                         "Client must be recompiled\n",

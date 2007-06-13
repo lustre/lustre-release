@@ -1415,9 +1415,9 @@ static int mgs_write_log_params(struct obd_device *obd, struct fs_db *fsdb,
                 /* Processed in mgs_write_log_ost */
                 if (class_match_param(ptr, PARAM_FAILMODE, NULL) == 0) {
                         if (mti->mti_flags & LDD_F_PARAM) {
-                                LCONSOLE_ERROR("%s can only be changed with "
-                                              "tunefs.lustre and --writeconf\n",
-                                              ptr);
+                                LCONSOLE_ERROR(0x169, "%s can only be changed "
+                                               "with tunefs.lustre and "
+                                               "--writeconf\n", ptr);
                                 rc = -EPERM;
                         }
                         goto end_while;
