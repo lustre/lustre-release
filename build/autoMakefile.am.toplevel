@@ -64,7 +64,7 @@ dist-hook:
 			-name .#* | xargs rm -rf
 
 EXTRA_DIST = @PACKAGE_TARNAME@.spec					\
-	build/Makefile build/autoMakefile.toplevel.am build/lbuild	\
+	build/Makefile build/autoMakefile.am.toplevel build/lbuild	\
 	build/linux-merge-config.awk build/linux-merge-modules.awk	\
 	build/linux-rhconfig.h build/lmake build/Rules.in		\
 	build/lustre-kernel-2.4.spec.in build/suse-functions.sh		\

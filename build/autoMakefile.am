@@ -1,5 +1,5 @@
 EXTRA_DIST := Makefile                                         \
-	autoMakefile.toplevel.am lbuild linux-merge-config.awk \
+	autoMakefile.am.toplevel lbuild linux-merge-config.awk \
 	linux-merge-modules.awk linux-rhconfig.h lmake	       \
 	lustre-kernel-2.4.spec.in                              \
 	suse-functions.sh suse-post.sh suse-postun.sh	       \
