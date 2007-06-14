@@ -1004,71 +1004,68 @@ static struct file_operations lnet_ni_fops = {
 void
 lnet_proc_init(void)
 {
-        struct proc_dir_entry *stats;
-        struct proc_dir_entry *routes;
-        struct proc_dir_entry *routers;
-        struct proc_dir_entry *peers;
+        struct proc_dir_entry *pde;
 
         /* Initialize LNET_PROC_STATS */
-        stats = create_proc_entry (LNET_PROC_STATS, 0644, NULL);
-        if (stats == NULL) {
+        pde = create_proc_entry (LNET_PROC_STATS, 0644, NULL);
+        if (pde == NULL) {
                 CERROR("couldn't create proc entry %s\n", LNET_PROC_STATS);
                 return;
         }
 
-        stats->data = NULL;
-        stats->read_proc = lnet_router_proc_stats_read;
-        stats->write_proc = lnet_router_proc_stats_write;
+        pde->data = NULL;
+        pde->read_proc = lnet_router_proc_stats_read;
+        pde->write_proc = lnet_router_proc_stats_write;
 
         /* Initialize LNET_PROC_ROUTES */
-        routes = create_proc_entry (LNET_PROC_ROUTES, 0444, NULL);
-        if (routes == NULL) {
+        pde = create_proc_entry (LNET_PROC_ROUTES, 0444, NULL);
+        if (pde == NULL) {
                 CERROR("couldn't create proc entry %s\n", LNET_PROC_ROUTES);
                 return;
         }
 
-        routes->proc_fops = &lnet_routes_fops;
-        routes->data = NULL;
+        pde->proc_fops = &lnet_routes_fops;
+        pde->data = NULL;
 
         /* Initialize LNET_PROC_ROUTERS */
-        routers = create_proc_entry (LNET_PROC_ROUTERS, 0444, NULL);
-        if (routers == NULL) {
+        pde = create_proc_entry (LNET_PROC_ROUTERS, 0444, NULL);
+        if (pde == NULL) {
                 CERROR("couldn't create proc entry %s\n", LNET_PROC_ROUTERS);
                 return;
         }
 
-        routers->proc_fops = &lnet_routers_fops;
-        routers->data = NULL;
+        pde->proc_fops = &lnet_routers_fops;
+        pde->data = NULL;
 
         /* Initialize LNET_PROC_PEERS */
-        peers = create_proc_entry (LNET_PROC_PEERS, 0444, NULL);
-        if (peers == NULL) {
+        pde = create_proc_entry (LNET_PROC_PEERS, 0444, NULL);
+        if (pde == NULL) {
                 CERROR("couldn't create proc entry %s\n", LNET_PROC_PEERS);
                 return;
         }
 
-        peers->proc_fops = &lnet_peer_fops;
-        peers->data = NULL;
+        pde->proc_fops = &lnet_peer_fops;
+        pde->data = NULL;
 
         /* Initialize LNET_PROC_BUFFERS */
-        peers = create_proc_entry (LNET_PROC_BUFFERS, 0444, NULL);
-        if (peers == NULL) {
+        pde = create_proc_entry (LNET_PROC_BUFFERS, 0444, NULL);
+        if (pde == NULL) {
                 CERROR("couldn't create proc entry %s\n", LNET_PROC_BUFFERS);
                 return;
         }
 
-        peers->proc_fops = &lnet_buffers_fops;
-        peers->data = NULL;
+        pde->proc_fops = &lnet_buffers_fops;
+        pde->data = NULL;
 
         /* Initialize LNET_PROC_NIS */
-        peers = create_proc_entry (LNET_PROC_NIS, 0444, NULL);
-        if (peers == NULL) {
+        pde = create_proc_entry (LNET_PROC_NIS, 0444, NULL);
+        if (pde == NULL) {
                 CERROR("couldn't create proc entry %s\n", LNET_PROC_NIS);
                 return;
         }
 
-        peers->proc_fops = &lnet_ni_fops;
-        peers->data = NULL;
+        pde->proc_fops = &lnet_ni_fops;
+        pde->data = NULL;
 }
 
 void
