@@ -1,7 +1,0 @@
-subdir-m += libcfs
-
-lnet-subdirs += lnet
-lnet-subdirs += klnds
-subdir-m += $(lnet-subdirs)
-
-@INCLUDE_RULES@
