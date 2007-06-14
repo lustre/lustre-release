@@ -1357,7 +1357,8 @@ kibnal_eager_recv (lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg,
 
         if (conn->ibc_version == IBNAL_MSG_VERSION_RDMAREPLYNOTRSRVD) {
                 /* Can't block if RDMA completions need normal credits */
-                LCONSOLE_ERROR(0x12a, "Dropping message from %s: no buffers free. "
+                LCONSOLE_ERROR_MSG(0x12a, 
+                               "Dropping message from %s: no buffers free. "
                                "%s is running an old version of LNET that may "
                                "deadlock if messages wait for buffers)\n",
                                libcfs_nid2str(conn->ibc_peer->ibp_nid),

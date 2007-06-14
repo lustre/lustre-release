@@ -2277,13 +2277,13 @@ ksocknal_recv_hello (lnet_ni_t *ni, ksock_conn_t *conn,
                 *peerid = recv_id;
         } else if (peerid->pid != recv_id.pid ||
                    !lnet_ptlcompat_matchnid(peerid->nid, recv_id.nid)) {
-                LCONSOLE_ERROR(0x130, "Connected successfully to %s on host "
-                               "%u.%u.%u.%u, but they claimed they were "
-                               "%s; please check your Lustre "
-                               "configuration.\n",
-                               libcfs_id2str(*peerid),
-                               HIPQUAD(conn->ksnc_ipaddr),
-                               libcfs_id2str(recv_id));
+                LCONSOLE_ERROR_MSG(0x130, "Connected successfully to %s on host"
+                                   " %u.%u.%u.%u, but they claimed they were "
+                                   "%s; please check your Lustre "
+                                   "configuration.\n",
+                                   libcfs_id2str(*peerid),
+                                   HIPQUAD(conn->ksnc_ipaddr),
+                                   libcfs_id2str(recv_id));
                 return -EPROTO;
         }
 

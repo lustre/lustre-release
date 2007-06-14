@@ -238,8 +238,10 @@ do {                                                                    \
 #define LCONSOLE(mask, format, a...) CDEBUG(D_CONSOLE | (mask), format, ## a)
 #define LCONSOLE_INFO(format, a...)  CDEBUG_LIMIT(D_CONSOLE, format, ## a)
 #define LCONSOLE_WARN(format, a...)  CDEBUG_LIMIT(D_CONSOLE | D_WARNING, format, ## a)
-#define LCONSOLE_ERROR(errnum, format, a...) CDEBUG_LIMIT(D_CONSOLE | D_ERROR, \
-                         "%x-%x: " format, errnum, LERRCHKSUM(errnum),  ## a)
+#define LCONSOLE_ERROR_MSG(errnum, format, a...) CDEBUG_LIMIT(D_CONSOLE | D_ERROR, \
+                           "%x-%x: " format, errnum, LERRCHKSUM(errnum),  ## a)
+#define LCONSOLE_ERROR(format, a...) LCONSOLE_ERROR_MSG(0x00, format, ## a)
+
 #define LCONSOLE_EMERG(format, a...) CDEBUG(D_CONSOLE | D_EMERG, format, ## a)
 
 #ifdef CDEBUG_ENABLED

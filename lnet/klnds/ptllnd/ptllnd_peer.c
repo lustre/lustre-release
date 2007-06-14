@@ -806,10 +806,11 @@ kptllnd_peer_check_bucket (int idx, int stamp)
                 nactive = kptllnd_count_queue(&peer->peer_activeq);
                 spin_unlock_irqrestore(&peer->peer_lock, flags);
 
-                LCONSOLE_ERROR(0x126, "Timing out %s: %s\n",
-                               libcfs_id2str(peer->peer_id),
-                               (tx->tx_tposted == 0) ? 
-                               "no free peer buffers" : "please check Portals");
+                LCONSOLE_ERROR_MSG(0x126, "Timing out %s: %s\n",
+                                   libcfs_id2str(peer->peer_id),
+                                   (tx->tx_tposted == 0) ? 
+                                   "no free peer buffers" : 
+                                   "please check Portals");
 
                 CERROR("%s timed out: cred %d outstanding %d, sent %d, "
                        "sendq %d, activeq %d Tx %p %s (%s%s%s) status %d "
@@ -874,12 +875,12 @@ kptllnd_id2peer_locked (lnet_process_id_t id)
 void
 kptllnd_peertable_overflow_msg(char *str, lnet_process_id_t id)
 {
-        LCONSOLE_ERROR(0x127, "%s %s overflows the peer table[%d]: "
-                       "messages may be dropped\n",
-                       str, libcfs_id2str(id),
-                       kptllnd_data.kptl_n_active_peers);
-        LCONSOLE_ERROR(0x128, "Please correct by increasing "
-                       "'max_nodes' or 'max_procs_per_node'\n");
+        LCONSOLE_ERROR_MSG(0x127, "%s %s overflows the peer table[%d]: "
+                           "messages may be dropped\n",
+                           str, libcfs_id2str(id),
+                           kptllnd_data.kptl_n_active_peers);
+        LCONSOLE_ERROR_MSG(0x128, "Please correct by increasing "
+                           "'max_nodes' or 'max_procs_per_node'\n");
 }
 
 __u64

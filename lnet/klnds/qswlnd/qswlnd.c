@@ -1,4 +1,5 @@
-/*
+ /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
+ * vim:expandtab:shiftwidth=8:tabstop=8:
  * Copyright (C) 2002-2004 Cluster File Systems, Inc.
  *   Author: Eric Barton <eric@bartonsoftware.com>
  *
@@ -268,10 +269,10 @@ kqswnal_startup (lnet_ni_t *ni)
 
 	if (*kqswnal_tunables.kqn_credits >=
 	    *kqswnal_tunables.kqn_ntxmsgs) {
-		LCONSOLE_ERROR(0x12e, "Configuration error: please set "
-			       "ntxmsgs(%d) > credits(%d)\n",
-			       *kqswnal_tunables.kqn_ntxmsgs,
-			       *kqswnal_tunables.kqn_credits);
+		LCONSOLE_ERROR_MSG(0x12e, "Configuration error: please set "
+			           "ntxmsgs(%d) > credits(%d)\n",
+			       	   *kqswnal_tunables.kqn_ntxmsgs,
+				   *kqswnal_tunables.kqn_credits);
 	}
         
 	CDEBUG (D_MALLOC, "start kmem %d\n", atomic_read(&libcfs_kmemory));

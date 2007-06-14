@@ -52,10 +52,10 @@ lnet_syntax(char *name, char *str, int offset, int width)
         memset(dashes, '-', sizeof(dashes));
         dashes[sizeof(dashes)-1] = 0;
         
-	LCONSOLE_ERROR(0x10f, "Error parsing '%s=\"%s\"'\n", name, str);
-	LCONSOLE_ERROR(0x110, "here...........%.*s..%.*s|%.*s|\n", 
-                       (int)strlen(name), dots, offset, dots,
-                       (width < 1) ? 0 : width - 1, dashes);
+	LCONSOLE_ERROR_MSG(0x10f, "Error parsing '%s=\"%s\"'\n", name, str);
+	LCONSOLE_ERROR_MSG(0x110, "here...........%.*s..%.*s|%.*s|\n", 
+                           (int)strlen(name), dots, offset, dots,
+                            (width < 1) ? 0 : width - 1, dashes);
 }
 
 int 
@@ -126,8 +126,8 @@ lnet_new_ni(__u32 net, struct list_head *nilist)
         lnet_ni_t *ni;
 
         if (!lnet_net_unique(net, nilist)) {
-                LCONSOLE_ERROR(0x111, "Duplicate network specified: %s\n",
-                               libcfs_net2str(net));
+                LCONSOLE_ERROR_MSG(0x111, "Duplicate network specified: %s\n",
+                                   libcfs_net2str(net));
                 return NULL;
         }
         
@@ -161,7 +161,8 @@ lnet_parse_networks(struct list_head *nilist, char *networks)
 
 	if (strlen(networks) > LNET_SINGLE_TEXTBUF_NOB) {
 		/* _WAY_ conservative */
-		LCONSOLE_ERROR(0x112, "Can't parse networks: string too long\n");
+		LCONSOLE_ERROR_MSG(0x112, "Can't parse networks: string too "
+                                   "long\n");
 		return -EINVAL;
 	}
 
@@ -202,7 +203,8 @@ lnet_parse_networks(struct list_head *nilist, char *networks)
 			if (net == LNET_NIDNET(LNET_NID_ANY)) {
                                 lnet_syntax("networks", networks, 
                                             str - tokens, strlen(str));
-                                LCONSOLE_ERROR(0x113, "Unrecognised network type\n");
+                                LCONSOLE_ERROR_MSG(0x113, "Unrecognised network"
+                                                   " type\n");
                                 goto failed;
                         }
 
@@ -224,8 +226,8 @@ lnet_parse_networks(struct list_head *nilist, char *networks)
 
                 if (nnets > 0 &&
                     the_lnet.ln_ptlcompat > 0) {
-                        LCONSOLE_ERROR(0x114, "Only 1 network supported when "
-                                       "'portals_compatible' is set\n");
+                        LCONSOLE_ERROR_MSG(0x114, "Only 1 network supported when"
+                                           " 'portals_compatible' is set\n");
                         goto failed;
                 }
 
@@ -258,8 +260,9 @@ lnet_parse_networks(struct list_head *nilist, char *networks)
                         }
 
                         if (niface == LNET_MAX_INTERFACES) {
-                                LCONSOLE_ERROR(0x115, "Too many interfaces for net %s\n",
-                                               libcfs_net2str(net));
+                                LCONSOLE_ERROR_MSG(0x115, "Too many interfaces "
+                                                   "for net %s\n",
+                                                   libcfs_net2str(net));
                                 goto failed;
                         }
 
@@ -713,8 +716,8 @@ lnet_parse_routes (char *routes, int *im_a_router)
         if (the_lnet.ln_ptlcompat > 0 && 
             routes[0] != 0) {
                 /* Can't route when running in compatibility mode */
-                LCONSOLE_ERROR(0x116, "Route tables are not supported when "
-                               "'portals_compatible' is set\n");
+                LCONSOLE_ERROR_MSG(0x116, "Route tables are not supported when "
+                                   "'portals_compatible' is set\n");
                 return -EINVAL;
         }
         
@@ -1276,14 +1279,14 @@ lnet_parse_ip2nets (char **networksp, char *ip2nets)
         int        rc;
 
         if (nip < 0) {
-                LCONSOLE_ERROR(0x117, "Error %d enumerating local IP interfaces "
-                               "for ip2nets to match\n", nip);
+                LCONSOLE_ERROR_MSG(0x117, "Error %d enumerating local IP "
+                                   "interfaces for ip2nets to match\n", nip);
                 return nip;
         }
 
         if (nip == 0) {
-                LCONSOLE_ERROR(0x118, "No local IP interfaces "
-                               "for ip2nets to match\n");
+                LCONSOLE_ERROR_MSG(0x118, "No local IP interfaces "
+                                   "for ip2nets to match\n");
                 return -ENOENT;
         }
 
@@ -1291,13 +1294,13 @@ lnet_parse_ip2nets (char **networksp, char *ip2nets)
         lnet_ipaddr_free_enumeration(ipaddrs, nip);
 
         if (rc < 0) {
-                LCONSOLE_ERROR(0x119, "Error %d parsing ip2nets\n", rc);
+                LCONSOLE_ERROR_MSG(0x119, "Error %d parsing ip2nets\n", rc);
                 return rc;
         }
 
         if (rc == 0) {
-                LCONSOLE_ERROR(0x11a, "ip2nets does not match "
-                               "any local IP interfaces\n");
+                LCONSOLE_ERROR_MSG(0x11a, "ip2nets does not match "
+                                   "any local IP interfaces\n");
                 return -ENOENT;
         }
 

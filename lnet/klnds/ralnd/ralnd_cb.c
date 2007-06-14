@@ -766,8 +766,8 @@ kranal_eager_recv (lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg,
 {
         kra_conn_t *conn = (kra_conn_t *)private;
 
-        LCONSOLE_ERROR(0x12b, "Dropping message from %s: no buffers free.\n",
-                       libcfs_nid2str(conn->rac_peer->rap_nid));
+        LCONSOLE_ERROR_MSG(0x12b, "Dropping message from %s: no buffers free.\n",
+                           libcfs_nid2str(conn->rac_peer->rap_nid));
 
         return -EDEADLK;
 }

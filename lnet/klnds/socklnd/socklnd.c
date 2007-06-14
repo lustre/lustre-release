@@ -965,9 +965,9 @@ ksocknal_accept (lnet_ni_t *ni, cfs_socket_t *sock)
 
         LIBCFS_ALLOC(cr, sizeof(*cr));
         if (cr == NULL) {
-                LCONSOLE_ERROR(0x12f, "Dropping connection request from "
-                               "%u.%u.%u.%u: memory exhausted\n",
-                               HIPQUAD(peer_ip));
+                LCONSOLE_ERROR_MSG(0x12f, "Dropping connection request from "
+                                   "%u.%u.%u.%u: memory exhausted\n",
+                                   HIPQUAD(peer_ip));
                 return -ENOMEM;
         }
 
