@@ -572,7 +572,9 @@ static int ptlrpc_check_status(struct ptlrpc_request *req)
         if (lustre_msg_get_type(req->rq_repmsg) == PTL_RPC_MSG_ERR) {
                 LCONSOLE_ERROR_MSG(0x011, "an error ocurred while communicating"
                                    " with %s The %s operation failed with %d",
-                                   obd_export_nid2str(req->rq_export),
+                                   req->rq_export ? 
+                                        obd_export_nid2str(req->rq_export)
+                                        : "(no nid)",
                                    ll_opcode2str(lustre_msg_get_opc(req->rq_reqmsg)),
                                    err);
                 RETURN(err < 0 ? err : -EINVAL);
