@@ -1078,21 +1078,22 @@ static int ost_brw_write(struct ptlrpc_request *req, struct obd_trans_info *oti)
                         router = libcfs_nid2str(desc->bd_sender);
                 }
                 
-                LCONSOLE_ERROR(0x168, "%s: BAD WRITE CHECKSUM: %s from %s%s%s "
-                               "inum "LPU64"/"LPU64" object "LPU64"/"LPU64
-                               " extent ["LPU64"-"LPU64"]\n",
-                               req->rq_export->exp_obd->obd_name, msg,
-                               libcfs_id2str(req->rq_peer),
-                               via, router,
-                               body->oa.o_valid & OBD_MD_FLFID ?
+                LCONSOLE_ERROR_MSG(0x168, "%s: BAD WRITE CHECKSUM: %s from %s"
+                                   "%s%s inum "LPU64"/"LPU64" object "LPU64"/"
+                                   LPU64" extent ["LPU64"-"LPU64"]\n",
+                                   req->rq_export->exp_obd->obd_name, msg,
+                                   libcfs_id2str(req->rq_peer),
+                                   via, router,
+                                   body->oa.o_valid & OBD_MD_FLFID ?
                                                 body->oa.o_fid : (__u64)0,
-                               body->oa.o_valid & OBD_MD_FLFID ?
+                                   body->oa.o_valid & OBD_MD_FLFID ?
                                                 body->oa.o_generation :(__u64)0,
-                               body->oa.o_id,
-                               body->oa.o_valid & OBD_MD_FLGROUP ?
+                                   body->oa.o_id,
+                                   body->oa.o_valid & OBD_MD_FLGROUP ?
                                                 body->oa.o_gr : (__u64)0,
-                               pp_rnb[0].offset,
-                               pp_rnb[npages-1].offset+pp_rnb[npages-1].len-1);
+                                   pp_rnb[0].offset,
+                                   pp_rnb[npages-1].offset+pp_rnb[npages-1].len
+                                   - 1 );
                 CERROR("client csum %x, original server csum %x, "
                        "server csum now %x\n",
                        client_cksum, server_cksum, new_cksum);

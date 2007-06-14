@@ -379,9 +379,9 @@ static int qos_calc_rr(struct lov_obd *lov)
 
         if (placed != real_count) {
                 /* This should never happen */
-                LCONSOLE_ERROR(0x14e, "Failed to place all OSTs in the "
-                               "round-robin list (%d of %d).\n", 
-                               placed, real_count);
+                LCONSOLE_ERROR_MSG(0x14e, "Failed to place all OSTs in the "
+                                   "round-robin list (%d of %d).\n", 
+                                   placed, real_count);
                 for (i = 0; i < ost_count; i++) {
                         LCONSOLE(D_WARNING, "rr #%d ost idx=%d\n", i,
                                  lov->lov_qos.lq_rr_array[i]);

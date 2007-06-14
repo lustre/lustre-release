@@ -297,10 +297,10 @@ static int mds_init_server_data(struct obd_device *obd, struct file *file)
                         GOTO(err_msd, rc);
                 }
                 if (strcmp(lsd->lsd_uuid, obd->obd_uuid.uuid) != 0) {
-                        LCONSOLE_ERROR(0x157, "Trying to start OBD %s using "
-                                       "the wrong disk %s. Were the /dev/ "
-                                       "assignments rearranged?\n",
-                                       obd->obd_uuid.uuid, lsd->lsd_uuid);
+                        LCONSOLE_ERROR_MSG(0x157, "Trying to start OBD %s using"
+                                           " the wrong disk %s. Were the /dev/ "
+                                           "assignments rearranged?\n",
+                                           obd->obd_uuid.uuid, lsd->lsd_uuid);
                         GOTO(err_msd, rc = -EINVAL);
                 }
                 /* COMPAT_146 */

@@ -431,12 +431,13 @@ int ldlm_namespace_free(struct ldlm_namespace *ns, int force)
                 rc = l_wait_event(ns->ns_waitq,
                                   ns->ns_refcount == 0, &lwi);
                 if (ns->ns_refcount)
-                        LCONSOLE_ERROR(0x139, "Lock manager: wait for %s "
-                                       "namespace cleanup aborted with %d "
-                                       "resources in use. (%d)\nI'm going "
-                                       "to try to clean up anyway, but I "
-                                       "might need a reboot of this node.\n",
-                                       ns->ns_name, (int) ns->ns_refcount, rc);
+                        LCONSOLE_ERROR_MSG(0x139, "Lock manager: wait for %s "
+                                           "namespace cleanup aborted with %d "
+                                           "resources in use. (%d)\nI'm going "
+                                           "to try to clean up anyway, but I "
+                                           "might need a reboot of this node.\n",
+                                            ns->ns_name, (int) ns->ns_refcount, 
+                                            rc);
                 CDEBUG(D_DLMTRACE,
                        "dlm namespace %s free done waiting\n", ns->ns_name);
         }

@@ -1073,9 +1073,9 @@ static int mgc_process_log(struct obd_device *mgc,
                         rc = mgc_copy_llog(mgc, ctxt, lctxt, cld->cld_logname);
                 if (rcl || rc) {
                         if (mgc_llog_is_empty(mgc, lctxt, cld->cld_logname)) {
-                                LCONSOLE_ERROR(0x13a, "Failed to get MGS "
-                                               "log %s and no local copy.\n",
-                                               cld->cld_logname);
+                                LCONSOLE_ERROR_MSG(0x13a, "Failed to get MGS "
+                                                   "log %s and no local copy."
+                                                   "\n", cld->cld_logname);
                                 GOTO(out_pop, rc = -ENOTCONN);
                         }
                         LCONSOLE_WARN("Failed to get MGS log %s, using "

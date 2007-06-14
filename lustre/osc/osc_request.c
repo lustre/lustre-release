@@ -1032,15 +1032,17 @@ static int check_write_checksum(struct obdo *oa, const lnet_process_id_t *peer,
                 msg = "changed in transit AND doesn't match the original - "
                       "likely false positive due to mmap IO (bug 11742)";
 
-        LCONSOLE_ERROR(0x132, "BAD WRITE CHECKSUM: %s: from %s inum "LPU64"/"LPU64
-                       " object "LPU64"/"LPU64" extent ["LPU64"-"LPU64"]\n",
-                       msg, libcfs_nid2str(peer->nid),
-                       oa->o_valid & OBD_MD_FLFID ? oa->o_fid : (__u64)0,
-                       oa->o_valid & OBD_MD_FLFID ? oa->o_generation : (__u64)0,
-                       oa->o_id,
-                       oa->o_valid & OBD_MD_FLGROUP ? oa->o_gr : (__u64)0,
-                       pga[0]->off,
-                       pga[page_count-1]->off + pga[page_count-1]->count - 1);
+        LCONSOLE_ERROR_MSG(0x132, "BAD WRITE CHECKSUM: %s: from %s inum "
+                           LPU64"/"LPU64" object "LPU64"/"LPU64" extent "
+                           "["LPU64"-"LPU64"]\n",
+                           msg, libcfs_nid2str(peer->nid),
+                           oa->o_valid & OBD_MD_FLFID ? oa->o_fid : (__u64)0,
+                           oa->o_valid & OBD_MD_FLFID ? oa->o_generation : 
+                                                        (__u64)0,
+                           oa->o_id,
+                           oa->o_valid & OBD_MD_FLGROUP ? oa->o_gr : (__u64)0,
+                           pga[0]->off,
+                           pga[page_count-1]->off + pga[page_count-1]->count - 1);
         CERROR("original client csum %x, server csum %x, client csum now %x\n",
                client_cksum, server_cksum, new_cksum);
 
@@ -1143,22 +1145,23 @@ static int osc_brw_fini_request(struct ptlrpc_request *req, int rc)
                                "but please tell CFS.\n",
                                libcfs_nid2str(peer->nid));
                 } else if (server_cksum != client_cksum) {
-                        LCONSOLE_ERROR(0x133, "%s: BAD READ CHECKSUM: from %s"
-                                       "%s%s inum "LPU64"/"LPU64" object "LPU64
-                                       "/"LPU64" extent ["LPU64"-"LPU64"]\n",
-                                       req->rq_import->imp_obd->obd_name,
-                                       libcfs_nid2str(peer->nid),
-                                       via, router,
-                                       body->oa.o_valid & OBD_MD_FLFID ?
+                        LCONSOLE_ERROR_MSG(0x133, "%s: BAD READ CHECKSUM: from "
+                                           "%s%s%s inum "LPU64"/"LPU64" object "
+                                           LPU64"/"LPU64" extent "
+                                           "["LPU64"-"LPU64"]\n",
+                                           req->rq_import->imp_obd->obd_name,
+                                           libcfs_nid2str(peer->nid),
+                                           via, router,
+                                           body->oa.o_valid & OBD_MD_FLFID ?
                                                 body->oa.o_fid : (__u64)0,
-                                       body->oa.o_valid & OBD_MD_FLFID ?
+                                           body->oa.o_valid & OBD_MD_FLFID ?
                                                 body->oa.o_generation :(__u64)0,
-                                       body->oa.o_id,
-                                       body->oa.o_valid & OBD_MD_FLGROUP ?
+                                           body->oa.o_id,
+                                           body->oa.o_valid & OBD_MD_FLGROUP ?
                                                 body->oa.o_gr : (__u64)0,
-                                       aa->aa_ppga[0]->off,
-                                       aa->aa_ppga[aa->aa_page_count-1]->off +
-                                       aa->aa_ppga[aa->aa_page_count-1]->count -
+                                           aa->aa_ppga[0]->off,
+                                           aa->aa_ppga[aa->aa_page_count-1]->off +
+                                           aa->aa_ppga[aa->aa_page_count-1]->count -
                                                                         1);
                         CERROR("client %x, server %x\n",
                                client_cksum, server_cksum);

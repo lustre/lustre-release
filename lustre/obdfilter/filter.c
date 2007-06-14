@@ -663,10 +663,10 @@ static int filter_init_server_data(struct obd_device *obd, struct file * filp)
                         GOTO(err_fsd, rc);
                 }
                 if (strcmp(fsd->lsd_uuid, obd->obd_uuid.uuid) != 0) {
-                        LCONSOLE_ERROR(0x134, "Trying to start OBD %s using "
-                                       "the wrong disk %s. Were the /dev/ "
-                                       "assignments rearranged?\n",
-                                       obd->obd_uuid.uuid, fsd->lsd_uuid);
+                        LCONSOLE_ERROR_MSG(0x134, "Trying to start OBD %s using"
+                                           " the wrong disk %s. Were the /dev/ "
+                                           "assignments rearranged?\n",
+                                           obd->obd_uuid.uuid, fsd->lsd_uuid);
                         GOTO(err_fsd, rc = -EINVAL);
                 }
                 mount_count = le64_to_cpu(fsd->lsd_mount_count);
@@ -1645,8 +1645,8 @@ int filter_common_setup(struct obd_device *obd, obd_count len, void *buf,
                                     lustre_cfg_string(lcfg, 1), option);
                 if (IS_ERR(mnt)) {
                         rc = PTR_ERR(mnt);
-                        LCONSOLE_ERROR(0x135, "Can't mount disk %s (%d)\n",
-                                       lustre_cfg_string(lcfg, 1), rc);
+                        LCONSOLE_ERROR_MSG(0x135, "Can't mount disk %s (%d)\n",
+                                           lustre_cfg_string(lcfg, 1), rc);
                         RETURN(rc);
                 }
 
@@ -1980,11 +1980,12 @@ static int filter_connect_internal(struct obd_export *exp,
                         filter_update_server_data(exp->exp_obd,
                                                   filter->fo_rcvd_filp, lsd, 1);
                 } else if (index != data->ocd_index) {
-                        LCONSOLE_ERROR(0x136, "Connection from %s to index %u "
-                                       "doesn't match actual OST index %u in "
-                                       "last_rcvd file, bad configuration?\n",
-                                       obd_export_nid2str(exp), index,
-                                       data->ocd_index);
+                        LCONSOLE_ERROR_MSG(0x136, "Connection from %s to index "
+                                           "%u doesn't match actual OST index "
+                                           "%u in last_rcvd file, bad "
+                                           "configuration?\n",
+                                           obd_export_nid2str(exp), index,
+                                           data->ocd_index);
                         RETURN(-EBADF);
                 }
         }

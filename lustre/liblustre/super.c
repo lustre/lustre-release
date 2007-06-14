@@ -1477,9 +1477,9 @@ static int llu_iop_fcntl(struct inode *ino, int cmd, va_list ap, int *rtn)
                 flags = va_arg(ap, long);
                 flags &= FCNTL_FLMASK;
                 if (flags & FCNTL_FLMASK_INVALID) {
-                        LCONSOLE_ERROR(0x010, "liblustre does not support "
-                                      "the O_NONBLOCK or O_ASYNC flags. "
-                                      "Please fix your application.\n");
+                        LCONSOLE_ERROR_MSG(0x010, "liblustre does not support "
+                                           "the O_NONBLOCK or O_ASYNC flags. "
+                                           "Please fix your application.\n");
                         *rtn = -EINVAL;
                         err = EINVAL;
                         break;
