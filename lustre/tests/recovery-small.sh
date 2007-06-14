@@ -1,4 +1,3 @@
-
 #!/bin/bash
 
 set -e
@@ -20,7 +19,7 @@ SETUP=${SETUP:-"setup"}
 CLEANUP=${CLEANUP:-"cleanup"}
 
 setup() {
-    formatall
+    [ "$REFORMAT" ] && formatall
     setupall
 }
 
@@ -202,7 +201,7 @@ test_16() {
     cancel_lru_locks osc
     # OST bulk will time out here, client resends
     do_facet client "cmp /etc/termcap $MOUNT/termcap" || return 1
-    sysctl -w lustre.fail_loc=0
+    do_facet ost1 sysctl -w lustre.fail_loc=0
     # give recovery a chance to finish (shouldn't take long)
     sleep $TIMEOUT
     do_facet client "cmp /etc/termcap $MOUNT/termcap" || return 2
@@ -213,13 +212,13 @@ run_test 16 "timeout bulk put, don't evict client (2732)"
 test_17() {
     # OBD_FAIL_PTLRPC_BULK_GET_NET 0x0503 | OBD_FAIL_ONCE
     # OST bulk will time out here, client retries
-    sysctl -w lustre.fail_loc=0x80000503
+    do_facet ost1 sysctl -w lustre.fail_loc=0x80000503
     # need to ensure we send an RPC
     do_facet client cp /etc/termcap $DIR/$tfile
     sync
 
     sleep $TIMEOUT
-    sysctl -w lustre.fail_loc=0
+    do_facet ost1 sysctl -w lustre.fail_loc=0
     do_facet client "df $DIR"
     # expect cmp to succeed, client resent bulk
     do_facet client "cmp /etc/termcap $DIR/$tfile" || return 3

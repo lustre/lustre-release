@@ -6,7 +6,7 @@ set -e
 #set -x
 
 
-export REFORMAT=""
+export REFORMAT=${REFORMAT:-""}
 export VERBOSE=false
 export GMNALNID=${GMNALNID:-/usr/sbin/gmlndnid}
 export CATASTROPHE=${CATASTROPHE:-/proc/sys/lnet/catastrophe}
@@ -456,6 +456,18 @@ h2gm () {
     fi
 }
 
+h2ptl() {
+   if [ "$1" = "client" -o "$1" = "'*'" ]; then echo \'*\'; else
+       ID=`xtprocadmin -n $1 2>/dev/null | egrep -v 'NID' | awk '{print $1}'`
+       if [ -z "$ID" ]; then
+           echo "Could not get a ptl id for $1..."
+           exit 1
+       fi
+       echo $ID"@ptl"
+   fi
+}
+declare -fx h2ptl
+
 h2tcp() {
     if [ "$1" = "client" -o "$1" = "'*'" ]; then echo \'*\'; else
         echo $1"@tcp" 
@@ -633,6 +645,8 @@ setupall() {
     load_modules
     if [ -z "$CLIENTONLY" ]; then
         echo Setup mdt, osts
+        echo $REFORMAT | grep -q "reformat" \
+	    || do_facet mds "$TUNEFS --writeconf $MDSDEV"
         start mds $MDSDEV $MDS_MOUNT_OPTS
         for num in `seq $OSTCOUNT`; do
             DEVNAME=`ostdevname $num`
