@@ -142,6 +142,8 @@ void lbug_with_loc(char *file, const char *func, const int line)
         libcfs_debug_dumpstack(NULL);
         libcfs_debug_dumplog();
         libcfs_run_lbug_upcall(file, func, line);
+        if (libcfs_panic_on_lbug)
+                panic("LBUG");
         set_task_state(current, TASK_UNINTERRUPTIBLE);
         while (1)
                 schedule();

@@ -73,6 +73,7 @@ enum {
         PSDEV_LNET_UPCALL,        /* User mode upcall script  */
         PSDEV_LNET_MEMUSED,       /* bytes currently PORTAL_ALLOCated */
         PSDEV_LNET_CATASTROPHE,   /* if we have LBUGged or panic'd */
+        PSDEV_LNET_PANIC_ON_LBUG, /* flag to panic on LBUG */
 };
 
 int LL_PROC_PROTO(proc_dobitmasks);
@@ -142,6 +143,14 @@ static struct ctl_table lnet_table[] = {
                 .ctl_name = PSDEV_LNET_CATASTROPHE,
                 .procname = "catastrophe",
                 .data     = &libcfs_catastrophe,
+                .maxlen   = sizeof(int),
+                .mode     = 0444,
+                .proc_handler = &proc_dointvec
+        },
+        {
+                .ctl_name = PSDEV_LNET_PANIC_ON_LBUG,
+                .procname = "panic_on_lbug",
+                .data     = &libcfs_panic_on_lbug,
                 .maxlen   = sizeof(int),
                 .mode     = 0444,
                 .proc_handler = &proc_dointvec

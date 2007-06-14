@@ -59,6 +59,9 @@ EXPORT_SYMBOL(portal_enter_debugger);
 unsigned int libcfs_catastrophe;
 EXPORT_SYMBOL(libcfs_catastrophe);
 
+unsigned int libcfs_panic_on_lbug = 0;
+EXPORT_SYMBOL(libcfs_panic_on_lbug);
+
 atomic_t libcfs_kmemory = ATOMIC_INIT(0);
 EXPORT_SYMBOL(libcfs_kmemory);
 

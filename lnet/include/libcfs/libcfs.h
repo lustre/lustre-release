@@ -76,6 +76,7 @@ int libcfs_debug_str2mask(int *mask, const char *str, int is_subsys);
 
 /* Has there been an LBUG? */
 extern unsigned int libcfs_catastrophe;
+extern unsigned int libcfs_panic_on_lbug;
 
 /*
  * struct ptldebug_header is defined in libcfs/<os>/libcfs.h
