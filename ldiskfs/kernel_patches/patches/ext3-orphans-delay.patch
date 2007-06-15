@@ -1,8 +1,8 @@
-Index: iam/fs/ext3/super.c
+Index: linux-stage/fs/ext3/super.c
 ===================================================================
---- iam.orig/fs/ext3/super.c
-+++ iam/fs/ext3/super.c
-@@ -147,6 +147,8 @@ static void ext3_handle_error(struct sup
+--- linux-stage.orig/fs/ext3/super.c	2007-06-15 11:56:38.000000000 +0800
++++ linux-stage/fs/ext3/super.c	2007-06-15 12:00:50.000000000 +0800
+@@ -148,6 +148,8 @@
  	EXT3_SB(sb)->s_mount_state |= EXT3_ERROR_FS;
  	es->s_state |= cpu_to_le16(EXT3_ERROR_FS);
  
@@ -11,7 +11,7 @@ Index: iam/fs/ext3/super.c
  	if (sb->s_flags & MS_RDONLY)
  		return;
  
-@@ -1168,7 +1170,7 @@ static int ext3_check_descriptors (struc
+@@ -1262,7 +1264,7 @@
   * e2fsck was run on this filesystem, and it must have already done the orphan
   * inode cleanup for us, so we can safely abort without any further action.
   */
@@ -20,7 +20,7 @@ Index: iam/fs/ext3/super.c
  				 struct ext3_super_block * es)
  {
  	unsigned int s_flags = sb->s_flags;
-@@ -1256,7 +1258,9 @@ static void ext3_orphan_cleanup (struct 
+@@ -1350,7 +1352,9 @@
  	}
  #endif
  	sb->s_flags = s_flags; /* Restore MS_RDONLY status */
@@ -30,7 +30,7 @@ Index: iam/fs/ext3/super.c
  
  #define log2(n) ffz(~(n))
  
-@@ -1682,8 +1686,7 @@ static int ext3_fill_super (struct super
+@@ -1804,8 +1808,7 @@
  	 * superblock lock.
  	 */
  	EXT3_SB(sb)->s_mount_state |= EXT3_ORPHAN_FS;
