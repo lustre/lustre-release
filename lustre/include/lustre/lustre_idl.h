@@ -1079,6 +1079,7 @@ typedef enum {
         MGS_TARGET_DEL,
         MGS_LAST_OPC
 } mgs_cmd_t;
+#define MGS_FIRST_OPC MGS_CONNECT
 
 /* We pass this info to the MGS so it can write config logs */
 #define MTI_NAME_MAXLEN 64

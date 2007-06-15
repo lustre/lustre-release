@@ -85,6 +85,11 @@ struct ll_rpc_opcode {
         { LDLM_BL_CALLBACK, "ldlm_bl_callback" },
         { LDLM_CP_CALLBACK, "ldlm_cp_callback" },
         { LDLM_GL_CALLBACK, "ldlm_gl_callback" },
+        { MGS_CONNECT,      "mgs_connect" },
+        { MGS_DISCONNECT,   "mgs_disconnect" },
+        { MGS_EXCEPTION,    "mgs_exception" },
+        { MGS_TARGET_REG,   "mgs_target_reg" },
+        { MGS_TARGET_DEL,   "mgs_target_del" },
         { OBD_PING,         "obd_ping" },
         { OBD_LOG_CANCEL,   "llog_origin_handle_cancel"},
 };
