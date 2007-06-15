@@ -12,7 +12,7 @@ liblustreclass_a_SOURCES += lustre_handles.c lustre_peer.c lprocfs_status.c
 liblustreclass_a_SOURCES += obdo.c obd_config.c llog.c llog_obd.c llog_cat.c 
 liblustreclass_a_SOURCES += llog_lvfs.c llog_swab.c 
 liblustreclass_a_SOURCES += prng.c #llog_ioctl.c rbtree.c
-liblustreclass_a_CPPFLAGS = $(LLCPPFLAGS) -DLUSTRE_VERSION=\"32\" -DBUILD_VERSION=\"1\"
+liblustreclass_a_CPPFLAGS = $(LLCPPFLAGS)
 liblustreclass_a_CFLAGS = $(LLCFLAGS)
 
 endif

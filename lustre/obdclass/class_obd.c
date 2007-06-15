@@ -39,9 +39,7 @@
 #include <obd_class.h>
 #include <lustre_debug.h>
 #include <lprocfs_status.h>
-#ifdef __KERNEL__
-#include <linux/lustre_build_version.h>
-#endif
+#include <lustre/lustre_build_version.h>
 #include <libcfs/list.h>
 #include "llog_internal.h"
 

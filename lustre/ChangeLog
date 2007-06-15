@@ -14,6 +14,12 @@ tbd         Cluster File Systems, Inc. <info@clusterfs.com>
        * Note that reiserfs quotas are disabled on SLES 10 in this kernel.
        * bug fixes
 
+Severity   : enhancement
+Bugzilla   : 12194
+Description: add optional extra BUILD_VERSION info
+Details    : add a new environment variable (namely LUSTRE_VERS) which allows
+	     to override the lustre version.
+
 Severity   : normal
 Frequency  : 2.6.18 servers only
 Bugzilla   : 12546

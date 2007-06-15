@@ -53,7 +53,7 @@ sources: $(LDISKFS) lvfs-sources obdclass-sources lustre_build_version
 
 all-recursive: lustre_build_version
 
-BUILD_VER_H=$(top_builddir)/lustre/include/linux/lustre_build_version.h
+BUILD_VER_H=$(top_builddir)/lustre/include/lustre/lustre_build_version.h
 
 lustre_build_version:
 	perl $(top_builddir)/lustre/scripts/version_tag.pl $(top_srcdir) $(top_builddir) > tmpver

@@ -66,8 +66,8 @@
 #include <obd_class.h>
 #include <lprocfs_status.h>
 #include <lustre_ver.h>
+#include <lustre/lustre_build_version.h>
 #ifdef __KERNEL__
-#include <linux/lustre_build_version.h>
 #include <linux/lustre_version.h>
 
 int proc_version;

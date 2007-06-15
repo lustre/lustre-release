@@ -6,7 +6,7 @@
 #include <sys/proc.h>
 #include <sys/unistd.h>
 #include <mach/mach_types.h>
-#include <linux/lustre_build_version.h>
+#include <lustre/lustre_build_version.h>
 
 #define DEBUG_SUBSYSTEM S_CLASS
                                                                                                                                                                      
