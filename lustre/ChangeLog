@@ -298,6 +298,12 @@ Details    : brw_stats were being printed as log2 but all of them were not
              recorded as log2. Also remove some code duplication arising from
              filter_tally_{read,write}.
 
+Severity   : normal
+Bugzilla   : 11674
+Frequency  : rare, only in recovery.
+Description: ASSERTION(req->rq_type != LI_POISON) failed
+Details    : imp_lock should be held while iterating over imp_sending_list for
+             prevent destroy request after get timeout in ptlrpc_queue_wait.
 
 --------------------------------------------------------------------------------
 

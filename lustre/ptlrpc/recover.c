@@ -150,7 +150,6 @@ int ptlrpc_resend(struct obd_import *imp)
                 spin_unlock(&imp->imp_lock);
                 RETURN(-1);
         }
-        spin_unlock(&imp->imp_lock);
 
         list_for_each_entry_safe(req, next, &imp->imp_sending_list, rq_list) {
                 LASSERTF((long)req > CFS_PAGE_SIZE && req != LP_POISON,
@@ -159,6 +158,7 @@ int ptlrpc_resend(struct obd_import *imp)
                 if (!req->rq_no_resend)
                         ptlrpc_resend_req(req);
         }
+        spin_unlock(&imp->imp_lock);
 
         RETURN(0);
 }
