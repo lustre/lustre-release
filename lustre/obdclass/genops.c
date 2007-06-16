@@ -638,9 +638,10 @@ void class_export_destroy(struct obd_export *exp)
                 ptlrpc_put_connection_superhack(exp->exp_connection);
 
         LASSERT(list_empty(&exp->exp_outstanding_replies));
+        LASSERT(list_empty(&exp->exp_handle.h_link));
         obd_destroy_export(exp);
 
-        OBD_FREE_RCU(exp, sizeof(*exp), &exp->exp_handle);
+        OBD_FREE(exp, sizeof(*exp));
         class_decref(obd);
 }
 
@@ -775,8 +776,10 @@ void class_import_destroy(struct obd_import *import)
                 OBD_FREE(imp_conn, sizeof(*imp_conn));
         }
 
+        LASSERT(list_empty(&import->imp_handle.h_link));
         class_decref(import->imp_obd);
-        OBD_FREE_RCU(import, sizeof(*import), &import->imp_handle);
+        OBD_FREE(import, sizeof(*import));
+
         EXIT;
 }
 EXPORT_SYMBOL(class_import_put);

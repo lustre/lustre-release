@@ -10,16 +10,6 @@
 #include <asm/atomic.h>
 #include <linux/list.h>
 #include <linux/random.h>
-#include <linux/version.h>
-#include <linux/spinlock.h>
-#include <linux/types.h>
-
-# if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,0))
-#  include <linux/rcupdate.h> /* for rcu_head{} */
-# else
-struct rcu_head { };
-# endif
-
-#endif /* ifdef __KERNEL__ */
+#endif
 
 #endif

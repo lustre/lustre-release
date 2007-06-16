@@ -128,12 +128,6 @@ struct ldlm_lock *ldlm_lock_get(struct ldlm_lock *lock)
         return lock;
 }
 
-static void ldlm_lock_free(struct ldlm_lock *lock, size_t size)
-{
-        LASSERT(size == sizeof(*lock));
-        OBD_SLAB_FREE(lock, ldlm_lock_slab, sizeof(*lock));
-}
-
 void ldlm_lock_put(struct ldlm_lock *lock)
 {
         ENTRY;
@@ -156,16 +150,13 @@ void ldlm_lock_put(struct ldlm_lock *lock)
                 atomic_dec(&res->lr_namespace->ns_locks);
                 ldlm_resource_putref(res);
                 lock->l_resource = NULL;
-                if (lock->l_export) {
+                if (lock->l_export)
                         class_export_put(lock->l_export);
-                        lock->l_export = NULL;
-                }
 
                 if (lock->l_lvb_data != NULL)
                         OBD_FREE(lock->l_lvb_data, lock->l_lvb_len);
 
-                OBD_FREE_RCU_CB(lock, sizeof(*lock), &lock->l_handle, 
-                                ldlm_lock_free);
+                OBD_SLAB_FREE(lock, ldlm_lock_slab, sizeof(*lock));
         }
 
         EXIT;

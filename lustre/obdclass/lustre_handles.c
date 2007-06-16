@@ -32,35 +32,11 @@
 #include <lustre_handles.h>
 #include <lustre_lib.h>
 
-#if !defined(__KERNEL__) || (LINUX_VERSION_CODE < KERNEL_VERSION(2,6,0))
-# define list_add_rcu            list_add
-# define list_del_rcu            list_del
-# define list_for_each_rcu       list_for_each
-# define list_for_each_safe_rcu  list_for_each_safe
-
-# ifndef __KERNEL__
-#  define rcu_read_lock()
-#  define rcu_read_unlock()
-# else /* 2.4 kernels? */
-#  undef rcu_read_lock
-#  undef rcu_read_unlock
-#  define rcu_read_lock()         spin_lock(&bucket->lock)
-#  define rcu_read_unlock()       spin_unlock(&bucket->lock)
-# endif /* ifndef __KERNEL__ */
-
-#endif /* if !defined(__KERNEL__) || (LINUX_VERSION_CODE < KERNEL_VERSION(2,6,0)) */
-
-
+spinlock_t handle_lock;
 static __u64 handle_base;
 #define HANDLE_INCR 7
-static spinlock_t handle_base_lock;
-
-static struct handle_bucket {
-        spinlock_t lock;
-        struct list_head head;
-} *handle_hash;
-
-static atomic_t handle_count = ATOMIC_INIT(0);
+static struct list_head *handle_hash = NULL;
+static int handle_count = 0;
 
 #define HANDLE_HASH_SIZE (1 << 14)
 #define HANDLE_HASH_MASK (HANDLE_HASH_SIZE - 1)
@@ -71,20 +47,25 @@ static atomic_t handle_count = ATOMIC_INIT(0);
  */
 void class_handle_hash(struct portals_handle *h, portals_handle_addref_cb cb)
 {
-        struct handle_bucket *bucket;
+        struct list_head *bucket;
         ENTRY;
 
         LASSERT(h != NULL);
         LASSERT(list_empty(&h->h_link));
 
+        spin_lock(&handle_lock);
+
         /*
          * This is fast, but simplistic cookie generation algorithm, it will
          * need a re-do at some point in the future for security.
          */
-        spin_lock(&handle_base_lock);
+        h->h_cookie = handle_base;
         handle_base += HANDLE_INCR;
 
-        h->h_cookie = handle_base;
+        bucket = handle_hash + (h->h_cookie & HANDLE_HASH_MASK);
+        list_add(&h->h_link, bucket);
+        handle_count++;
+
         if (unlikely(handle_base == 0)) {
                 /*
                  * Cookie of zero is "dangerous", because in many places it's
@@ -94,17 +75,10 @@ void class_handle_hash(struct portals_handle *h, portals_handle_addref_cb cb)
                 CWARN("The universe has been exhausted: cookie wrap-around.\n");
                 handle_base += HANDLE_INCR;
         }
-        spin_unlock(&handle_base_lock);
 
-        atomic_inc(&handle_count);
+        spin_unlock(&handle_lock);
+
         h->h_addref = cb;
-        spin_lock_init(&h->h_lock);
-
-        bucket = &handle_hash[h->h_cookie & HANDLE_HASH_MASK];
-        spin_lock(&bucket->lock);
-        list_add_rcu(&h->h_link, &bucket->head);
-        spin_unlock(&bucket->lock);
-
         CDEBUG(D_INFO, "added object %p with handle "LPX64" to hash\n",
                h, h->h_cookie);
         EXIT;
@@ -121,90 +95,56 @@ static void class_handle_unhash_nolock(struct portals_handle *h)
         CDEBUG(D_INFO, "removing object %p with handle "LPX64" from hash\n",
                h, h->h_cookie);
 
-        spin_lock(&h->h_lock);
-        if (h->h_cookie == 0) {
-                spin_unlock(&h->h_lock);
-                return;
-        }
-        h->h_cookie = 0;
-        spin_unlock(&h->h_lock);
-        list_del_rcu(&h->h_link);
+        handle_count--;
+        list_del_init(&h->h_link);
 }
 
 void class_handle_unhash(struct portals_handle *h)
 {
-        struct handle_bucket *bucket;
-        bucket = handle_hash + (h->h_cookie & HANDLE_HASH_MASK);
-
-        spin_lock(&bucket->lock);
+        spin_lock(&handle_lock);
         class_handle_unhash_nolock(h);
-        spin_unlock(&bucket->lock);
-
-        atomic_dec(&handle_count);
+        spin_unlock(&handle_lock);
 }
 
 void *class_handle2object(__u64 cookie)
 {
-        struct handle_bucket *bucket;
-        struct list_head *tmp;
+        struct list_head *bucket, *tmp;
         void *retval = NULL;
         ENTRY;
 
         LASSERT(handle_hash != NULL);
 
-        /* Be careful when you want to change this code. See the 
-         * rcu_read_lock() definition on top this file. - jxiong */
         bucket = handle_hash + (cookie & HANDLE_HASH_MASK);
 
-        rcu_read_lock();
-        list_for_each_rcu(tmp, &bucket->head) {
+        spin_lock(&handle_lock);
+        list_for_each(tmp, bucket) {
                 struct portals_handle *h;
                 h = list_entry(tmp, struct portals_handle, h_link);
-                if (h->h_cookie != cookie)
-                        continue;
 
-                spin_lock(&h->h_lock);
-                if (likely(h->h_cookie != 0)) {
+                if (h->h_cookie == cookie) {
                         h->h_addref(h);
                         retval = h;
+                        break;
                 }
-                spin_unlock(&h->h_lock);
-                break;
         }
-        rcu_read_unlock();
+        spin_unlock(&handle_lock);
 
         RETURN(retval);
 }
 
-void class_handle_free_cb(struct rcu_head *rcu)
-{
-        struct portals_handle *h = RCU2HANDLE(rcu);
-        if (h->h_free_cb) {
-                h->h_free_cb(h->h_ptr, h->h_size);
-        } else {
-                void *ptr = h->h_ptr;
-                unsigned int size = h->h_size;
-                OBD_FREE(ptr, size);
-        }
-}
-
-
 int class_handle_init(void)
 {
-        struct handle_bucket *bucket;
+        struct list_head *bucket;
 
         LASSERT(handle_hash == NULL);
 
-        OBD_VMALLOC(handle_hash, sizeof(*bucket) * HANDLE_HASH_SIZE);
+        OBD_VMALLOC(handle_hash, sizeof(*handle_hash) * HANDLE_HASH_SIZE);
         if (handle_hash == NULL)
                 return -ENOMEM;
 
-        spin_lock_init(&handle_base_lock);
         for (bucket = handle_hash + HANDLE_HASH_SIZE - 1; bucket >= handle_hash;
-             bucket--) {
-                CFS_INIT_LIST_HEAD(&bucket->head);
-                spin_lock_init(&bucket->lock);
-        }
+             bucket--)
+                CFS_INIT_LIST_HEAD(bucket);
 
         ll_get_random_bytes(&handle_base, sizeof(handle_base));
         LASSERT(handle_base != 0ULL);
@@ -216,10 +156,10 @@ static void cleanup_all_handles(void)
 {
         int i;
 
+        spin_lock(&handle_lock);
         for (i = 0; i < HANDLE_HASH_SIZE; i++) {
                 struct list_head *tmp, *pos;
-                spin_lock(&handle_hash[i].lock);
-                list_for_each_safe_rcu(tmp, pos, &(handle_hash[i].head)) {
+                list_for_each_safe(tmp, pos, &(handle_hash[i])) {
                         struct portals_handle *h;
                         h = list_entry(tmp, struct portals_handle, h_link);
 
@@ -228,24 +168,22 @@ static void cleanup_all_handles(void)
 
                         class_handle_unhash_nolock(h);
                 }
-                spin_unlock(&handle_hash[i].lock);
         }
+        spin_unlock(&handle_lock);
 }
 
 void class_handle_cleanup(void)
 {
-        int count;
         LASSERT(handle_hash != NULL);
 
-        count = atomic_read(&handle_count);
-        if (count != 0) {
-                CERROR("handle_count at cleanup: %d\n", count);
+        if (handle_count != 0) {
+                CERROR("handle_count at cleanup: %d\n", handle_count);
                 cleanup_all_handles();
         }
 
         OBD_VFREE(handle_hash, sizeof(*handle_hash) * HANDLE_HASH_SIZE);
         handle_hash = NULL;
 
-        if (atomic_read(&handle_count))
-                CERROR("leaked %d handles\n", atomic_read(&handle_count));
+        if (handle_count)
+                CERROR("leaked %d handles\n", handle_count);
 }
