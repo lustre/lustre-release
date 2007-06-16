@@ -991,19 +991,7 @@ Index: linux-stage/include/linux/lustre_iam.h
  /*
   *  linux/include/linux/lustre_iam.h
   */
-@@ -39,11 +41,21 @@
- /* logical equivalence */
- #define equi(a, b) (!!(a) == !!(b))
- 
-+/* implication */
-+#define ergo(a, b) (!(a) || (b))
-+/* logical equivalence */
-+#define equi(a, b) (!!(a) == !!(b))
-+
-+#define CLASSERT(cond) ({ switch(42) { case (cond): case 0: break; } })
-+
- enum {
-         /*
+@@ -39,6 +41,9 @@
           * Maximal number of non-leaf levels in htree. In the stock ext3 this
           * is 2.
           */
