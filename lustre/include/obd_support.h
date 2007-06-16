@@ -358,8 +358,28 @@ do {                                                                          \
         cfs_free(ptr);                                                        \
         (ptr) = (void *)0xdeadbeef;                                           \
 } while (0)
+
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,6,0))
+# define my_call_rcu(rcu, cb)            (cb)(rcu)
+#else
+# define my_call_rcu(rcu, cb, ...)       call_rcu(rcu, cb)
+#endif
+
+#define OBD_FREE_RCU_CB(ptr, size, handle, free_cb)                           \
+do {                                                                          \
+        struct portals_handle *__h = (handle);                                \
+        LASSERT(handle);                                                      \
+        __h->h_ptr = (ptr);                                                   \
+        __h->h_size = (size);                                                 \
+        __h->h_free_cb = (void (*)(void *, size_t))(free_cb);                 \
+        my_call_rcu(&__h->h_rcu, class_handle_free_cb);                       \
+        (ptr) = (void *)0xdeadbeef;                                           \
+} while(0)
+#define OBD_FREE_RCU(ptr, size, handle) OBD_FREE_RCU_CB(ptr, size, handle, NULL)
 #else
 #define OBD_FREE(ptr, size) ((void)(size), free((ptr)))
+#define OBD_FREE_RCU(ptr, size, handle) (OBD_FREE(ptr, size))
+#define OBD_FREE_RCU_CB(ptr, size, handle, cb)     ((*(cb))(ptr, size))
 #endif
 
 #ifdef __arch_um__
