@@ -111,9 +111,12 @@ static inline void lov_llh_put(struct lov_lock_handles *llh)
                 atomic_read(&llh->llh_refcount) < 0x5a5a);
         if (atomic_dec_and_test(&llh->llh_refcount)) {
                 class_handle_unhash(&llh->llh_handle);
-                LASSERT(list_empty(&llh->llh_handle.h_link));
-                OBD_FREE(llh, sizeof *llh +
-                         sizeof(*llh->llh_handles) * llh->llh_stripe_count);
+                /* The structure may be held by other threads because RCU. -jxiong */
+                if (atomic_read(&llh->llh_refcount))
+                        return;
+
+                OBD_FREE_RCU(llh, sizeof *llh +
+                         sizeof(*llh->llh_handles) * llh->llh_stripe_count, &llh->llh_handle);
         }
 }
 

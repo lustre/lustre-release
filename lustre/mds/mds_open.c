@@ -110,8 +110,7 @@ static void mds_mfd_put(struct mds_file_data *mfd)
         LASSERT(atomic_read(&mfd->mfd_refcount) > 0 &&
                 atomic_read(&mfd->mfd_refcount) < 0x5a5a);
         if (atomic_dec_and_test(&mfd->mfd_refcount)) {
-                LASSERT(list_empty(&mfd->mfd_handle.h_link));
-                OBD_FREE(mfd, sizeof *mfd);
+                OBD_FREE_RCU(mfd, sizeof *mfd, &mfd->mfd_handle);
         }
 }
 
