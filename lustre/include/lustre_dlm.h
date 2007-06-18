@@ -512,6 +512,7 @@ void ldlm_reprocess_all(struct ldlm_resource *res);
 void ldlm_reprocess_all_ns(struct ldlm_namespace *ns);
 void ldlm_lock_dump(int level, struct ldlm_lock *lock, int pos);
 void ldlm_lock_dump_handle(int level, struct lustre_handle *);
+void ldlm_unlink_lock_skiplist(struct ldlm_lock *req);
 
 /* resource.c */
 struct ldlm_namespace *ldlm_namespace_new(char *name, __u32 local);

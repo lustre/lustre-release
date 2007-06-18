@@ -305,6 +305,12 @@ Description: ASSERTION(req->rq_type != LI_POISON) failed
 Details    : imp_lock should be held while iterating over imp_sending_list for
              prevent destroy request after get timeout in ptlrpc_queue_wait.
 
+Severity   : normal
+Bugzilla   : 12689
+Description: replay-single.sh test 52 fails
+Details    : A lock's skiplist need to be cleanup when it being unlinked 
+             from its resource list.
+
 --------------------------------------------------------------------------------
 
 2007-05-03  Cluster File Systems, Inc. <info@clusterfs.com>

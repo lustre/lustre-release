@@ -749,6 +749,7 @@ void ldlm_resource_insert_lock_after(struct ldlm_lock *original,
 void ldlm_resource_unlink_lock(struct ldlm_lock *lock)
 {
         check_res_locked(lock->l_resource);
+        ldlm_unlink_lock_skiplist(lock);
         list_del_init(&lock->l_res_link);
 }
 

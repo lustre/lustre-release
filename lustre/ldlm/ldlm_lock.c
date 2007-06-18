@@ -1397,9 +1397,13 @@ void ldlm_cancel_callback(struct ldlm_lock *lock)
         }
 }
 
-static void ldlm_unlink_lock_skiplist(struct ldlm_lock *req)
+void ldlm_unlink_lock_skiplist(struct ldlm_lock *req)
 {
         struct ldlm_lock *lock;
+
+        if (req->l_resource->lr_type != LDLM_PLAIN &&
+            req->l_resource->lr_type != LDLM_IBITS)
+                return;
         
         if (LDLM_SL_HEAD(&req->l_sl_mode)) {
                 lock = list_entry(req->l_res_link.next, struct ldlm_lock,
@@ -1472,11 +1476,6 @@ void ldlm_lock_cancel(struct ldlm_lock *lock)
         /* Yes, second time, just in case it was added again while we were
            running with no res lock in ldlm_cancel_callback */
         ldlm_del_waiting_lock(lock); 
-        if (!(LDLM_SL_EMPTY(&lock->l_sl_mode) &&
-              LDLM_SL_EMPTY(&lock->l_sl_policy)) &&
-            (lock->l_resource->lr_type == LDLM_PLAIN ||
-             lock->l_resource->lr_type == LDLM_IBITS))
-                ldlm_unlink_lock_skiplist(lock);
         ldlm_resource_unlink_lock(lock);
         ldlm_lock_destroy_nolock(lock);
         unlock_res_and_lock(lock);
@@ -1574,8 +1573,6 @@ struct ldlm_resource *ldlm_lock_convert(struct ldlm_lock *lock, int new_mode,
                 else if (lock->l_res_link.next != &res->lr_granted)
                         mark_lock = list_entry(lock->l_res_link.next,
                                                struct ldlm_lock, l_res_link);
-                if (join != LDLM_JOIN_NONE)
-                        ldlm_unlink_lock_skiplist(lock);
         }
         ldlm_resource_unlink_lock(lock);
 
