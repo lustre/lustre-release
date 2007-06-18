@@ -1719,7 +1719,7 @@ kibnal_startup (lnet_ni_t *ni)
         /* Find IP address from <ipif base name><hca number> */
         snprintf(ipif_name, sizeof(ipif_name), "%s%d",
                  *kibnal_tunables.kib_ipif_basename, devno);
-        if (strlen(ipif_name) == sizeof(ipif_name - 1)) {
+        if (strlen(ipif_name) == sizeof(ipif_name) - 1) {
                 CERROR("IPoIB interface name %s truncated\n", ipif_name);
                 return -EINVAL;
         }
