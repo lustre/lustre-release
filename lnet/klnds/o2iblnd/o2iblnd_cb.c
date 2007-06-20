@@ -566,7 +566,7 @@ kiblnd_kvaddr_to_page (unsigned long vaddr)
                 LASSERT (page != NULL);
                 return page;
         }
-#if CONFIG_HIGHMEM
+#ifdef CONFIG_HIGHMEM
         if (vaddr >= PKMAP_BASE &&
             vaddr < (PKMAP_BASE + LAST_PKMAP * PAGE_SIZE)) {
                 /* No highmem pages only used for bulk (kiov) I/O */
