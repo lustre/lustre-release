@@ -66,13 +66,14 @@ static int ll_direct_IO_24(int rw,
         struct brw_page *pga;
         struct obdo oa;
         int length, i, flags, rc = 0;
-        loff_t offset;
+        loff_t offset, offset_orig;
         ENTRY;
 
         if (!lsm || !lsm->lsm_object_id)
                 RETURN(-EBADF);
 
         offset = ((obd_off)blocknr << inode->i_blkbits);
+        offset_orig = offset;
         CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu/%u(%p), size="LPSZ
                ", offset=%lld=%llx, pages %u\n",
                inode->i_ino, inode->i_generation, inode, iobuf->length,
@@ -111,13 +112,10 @@ static int ll_direct_IO_24(int rw,
                 ll_stats_ops_tally(ll_i2sbi(inode), LPROC_LL_DIRECT_READ, iobuf->length);
         rc = obd_brw_rqset(rw, ll_i2obdexp(inode), &oa, lsm, iobuf->nr_pages,
                            pga, NULL);
-        if (rc == 0) {
-                rc = iobuf->length;
-                if (rw == OBD_BRW_WRITE) {
-                        lov_stripe_lock(lsm);
-                        obd_adjust_kms(ll_i2obdexp(inode), lsm, offset, 0);
-                        lov_stripe_unlock(lsm);
-                }
+        if ((rc > 0) && (rw == OBD_BRW_WRITE)) {
+                lov_stripe_lock(lsm);
+                obd_adjust_kms(ll_i2obdexp(inode), lsm, offset_orig + rc, 0);
+                lov_stripe_unlock(lsm);
         }
 
         OBD_FREE(pga, sizeof(*pga) * iobuf->nr_pages);

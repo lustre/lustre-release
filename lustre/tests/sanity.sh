@@ -3121,6 +3121,7 @@ rm -f $F77_TMP
 unset F77_TMP
 
 test_78() { # bug 10901
+ 	NSEQ=5
 	F78SIZE=$(($(awk '/MemFree:/ { print $2 }' /proc/meminfo) / 1024))
 	[ $F78SIZE -gt 512 ] && F78SIZE=512
 	[ $F78SIZE -gt $((MAXFREE / 1024)) ] && F78SIZE=$((MAXFREE / 1024))
@@ -3128,7 +3129,11 @@ test_78() { # bug 10901
 	[ $F78SIZE -gt $((SMALLESTOST * $OSTCOUNT / 1024)) ] && \
 		F78SIZE=$((SMALLESTOST * $OSTCOUNT / 1024))
 	$SETSTRIPE $DIR/$tfile 0 -1 -1 || error "setstripe failed"
-	$DIRECTIO rdwr $DIR/$tfile 0 $F78SIZE 1048576 || error "rdwr failed"
+ 	for i in `seq 1 $NSEQ`
+ 	do
+ 		echo directIO rdwr round $i of $NSEQ
+  	 	$DIRECTIO rdwr $DIR/$tfile 0 $F78SIZE 1048576 || error "rdwr failed"
+  	done
 
 	rm -f $DIR/$tfile
 }
@@ -3822,6 +3827,34 @@ test_118() #bug 11710
 	return $dirty
 }
 run_test 118 "verify O_SYNC work"
+
+test_119a() # bug 11737
+{
+        BSIZE=$((512 * 1024))
+        directio write $DIR/$tfile 0 1 $BSIZE
+        # We ask to read two blocks, which is more than a file size.
+        # directio will indicate an error when requested and actual
+        # sizes aren't equeal (a normal situation in this case) and
+        # print actual read amount.
+        NOB=`directio read $DIR/$tfile 0 2 $BSIZE | awk '/error/ {print $6}'`
+        if [ "$NOB" != "$BSIZE" ]; then
+                error "read $NOB bytes instead of $BSIZE"
+        fi
+        rm -f $DIR/$tfile
+}
+run_test 119a "Short directIO read must return actual read amount"
+
+test_119b() # bug 11737
+{
+        [ "$OSTCOUNT" -lt "2" ] && echo "skipping 2-stripe test" && return
+
+        lfs setstripe $DIR/$tfile 0 -1 2
+        dd if=/dev/zero of=$DIR/$tfile bs=1M count=1 seek=1 || error "dd failed"
+        sync
+        multiop $DIR/$tfile oO_RDONLY:O_DIRECT:r$((2048 * 1024)) || \
+                error "direct read failed"
+}
+run_test 119b "Sparse directIO read must return actual read amount"
 
 TMPDIR=$OLDTMPDIR
 TMP=$OLDTMP

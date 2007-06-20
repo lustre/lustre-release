@@ -106,7 +106,7 @@ int main(int argc, char **argv)
 
                 rc = read(fd, rbuf, len);
                 if (rc != len) {
-                        printf("Read error: %s (rc = %d)\n",strerror(errno),rc);
+                        printf("Read error: %s rc = %d\n",strerror(errno),rc);
                         return 1;
                 }
 

@@ -311,6 +311,13 @@ Description: replay-single.sh test 52 fails
 Details    : A lock's skiplist need to be cleanup when it being unlinked 
              from its resource list.
 
+Severity   : normal
+Bugzilla   : 11737
+Description: Short directio read returns full requested size rather than
+             actual amount read.
+Details    : Direct I/O operations should return actual amount of bytes
+             transferred rather than requested size.
+
 --------------------------------------------------------------------------------
 
 2007-05-03  Cluster File Systems, Inc. <info@clusterfs.com>
