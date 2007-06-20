@@ -4,7 +4,7 @@
 	socklnd   - kernels up to 2.6.16
 	qswlnd    - Qsnet kernel modules 5.20 and later
 	openiblnd - IbGold 1.8.2
-	o2iblnd   - OFED 1.1
+	o2iblnd   - OFED 1.1 and 1.2
 	viblnd    - Voltaire ibhost 3.4.5 and later
 	ciblnd    - Topspin 3.2.0
 	iiblnd    - Infiniserv 3.3 + PathBits patch
@@ -16,6 +16,21 @@
 Severity   : normal
 Bugzilla   : 11680
 Description: make panic on lbug configurable
+
+Severity   : major
+Bugzilla   : 12316
+Description: Add OFED1.2 support to o2iblnd
+Details    : o2iblnd depends on OFED's modules, if out-tree OFED's modules
+             are installed (other than kernel's in-tree infiniband), there
+             could be some problem while insmod o2iblnd (mismatch CRC of 
+             ib_* symbols).
+             If extra Module.symvers is supported in kernel (i.e, 2.6.17),
+             this link provides solution:
+             https://bugs.openfabrics.org/show_bug.cgi?id=355
+             if extra Module.symvers is not supported in kernel, we will
+             have to run the script in bug 12316 to update
+             $LINUX/module.symvers before building o2iblnd.
+             More details about this are in bug 12316.
 
 ------------------------------------------------------------------------------
 

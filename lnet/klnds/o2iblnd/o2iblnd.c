@@ -697,11 +697,10 @@ kiblnd_create_conn (kib_peer_t *peer, struct rdma_cm_id *cmid, int state)
                 rx->rx_conn = conn;
                 rx->rx_msg = (kib_msg_t *)(((char *)page_address(page)) +
                                            page_offset);
-                rx->rx_msgaddr = dma_map_single(cmid->device->dma_device,
-                                                rx->rx_msg,
-                                                IBLND_MSG_SIZE,
-                                                DMA_FROM_DEVICE);
-                pci_unmap_addr_set(rx, rx_msgunmap, rx->rx_msgaddr);
+                rx->rx_msgaddr = kiblnd_dma_map_single(cmid->device,
+                                                       rx->rx_msg, IBLND_MSG_SIZE,
+                                                       DMA_FROM_DEVICE);
+                KIBLND_UNMAP_ADDR_SET(rx, rx_msgunmap, rx->rx_msgaddr);
 
                 CDEBUG(D_NET,"rx %d: %p "LPX64"("LPX64")\n",
                        i, rx->rx_msg, rx->rx_msgaddr,
@@ -882,9 +881,10 @@ kiblnd_destroy_conn (kib_conn_t *conn)
 
                         LASSERT (rx->rx_nob >= 0); /* not posted */
 
-                        dma_unmap_single(conn->ibc_cmid->device->dma_device,
-                                         pci_unmap_addr(rx, rx_msgunmap),
-                                         IBLND_MSG_SIZE, DMA_FROM_DEVICE);
+                        kiblnd_dma_unmap_single(conn->ibc_cmid->device,
+                                                KIBLND_UNMAP_ADDR(rx, rx_msgunmap,
+                                                                  rx->rx_msgaddr),
+                                                IBLND_MSG_SIZE, DMA_FROM_DEVICE);
                 }
 
                 kiblnd_free_pages(conn->ibc_rx_pages);
@@ -1215,9 +1215,10 @@ kiblnd_unmap_tx_descs (lnet_ni_t *ni)
         for (i = 0; i < IBLND_TX_MSGS(); i++) {
                 tx = &net->ibn_tx_descs[i];
 
-                dma_unmap_single(net->ibn_dev->ibd_cmid->device->dma_device,
-                                 pci_unmap_addr(tx, tx_msgunmap),
-                                 IBLND_MSG_SIZE, DMA_TO_DEVICE);
+                kiblnd_dma_unmap_single(net->ibn_dev->ibd_cmid->device,
+                                        KIBLND_UNMAP_ADDR(tx, tx_msgunmap,
+                                                          tx->tx_msgaddr),
+                                        IBLND_MSG_SIZE, DMA_TO_DEVICE);
         }
 }
 
@@ -1246,10 +1247,10 @@ kiblnd_map_tx_descs (lnet_ni_t *ni)
                 tx->tx_msg = (kib_msg_t *)(((char *)page_address(page)) +
                                            page_offset);
 
-                tx->tx_msgaddr = dma_map_single(
-                        net->ibn_dev->ibd_cmid->device->dma_device,
+                tx->tx_msgaddr = kiblnd_dma_map_single(
+                        net->ibn_dev->ibd_cmid->device,
                         tx->tx_msg, IBLND_MSG_SIZE, DMA_TO_DEVICE);
-                pci_unmap_addr_set(tx, tx_msgunmap, tx->tx_msgaddr);
+                KIBLND_UNMAP_ADDR_SET(tx, tx_msgunmap, tx->tx_msgaddr);
 
                 list_add(&tx->tx_list, &net->ibn_idle_txs);
 

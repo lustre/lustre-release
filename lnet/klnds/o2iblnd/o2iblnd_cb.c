@@ -90,8 +90,8 @@ kiblnd_tx_done (lnet_ni_t *ni, kib_tx_t *tx)
         }
 #else
         if (tx->tx_nfrags != 0) {
-                dma_unmap_sg(net->ibn_dev->ibd_cmid->device->dma_device,
-                             tx->tx_frags, tx->tx_nfrags, tx->tx_dmadir);
+                kiblnd_dma_unmap_sg(net->ibn_dev->ibd_cmid->device,
+                                    tx->tx_frags, tx->tx_nfrags, tx->tx_dmadir);
                 tx->tx_nfrags = 0;
         }
 #endif
@@ -639,14 +639,17 @@ kiblnd_setup_rd_iov(lnet_ni_t *ni, kib_tx_t *tx, kib_rdma_desc_t *rd,
         tx->tx_nfrags = sg - tx->tx_frags;
         tx->tx_dmadir = (rd != tx->tx_rd) ? DMA_FROM_DEVICE : DMA_TO_DEVICE;
 
-        rd->rd_nfrags = dma_map_sg(net->ibn_dev->ibd_cmid->device->dma_device,
-                                   tx->tx_frags, tx->tx_nfrags, tx->tx_dmadir);
+        rd->rd_nfrags = kiblnd_dma_map_sg(net->ibn_dev->ibd_cmid->device,
+                                          tx->tx_frags, tx->tx_nfrags,
+                                          tx->tx_dmadir);
         rd->rd_key    = (rd != tx->tx_rd) ? 
                         net->ibn_dev->ibd_mr->rkey : net->ibn_dev->ibd_mr->lkey;
 
         for (i = 0; i < rd->rd_nfrags; i++) {
-                rd->rd_frags[i].rf_nob  = sg_dma_len(&tx->tx_frags[i]);
-                rd->rd_frags[i].rf_addr = sg_dma_address(&tx->tx_frags[i]);
+                rd->rd_frags[i].rf_nob  = kiblnd_sg_dma_len(
+                        net->ibn_dev->ibd_cmid->device, &tx->tx_frags[i]);
+                rd->rd_frags[i].rf_addr = kiblnd_sg_dma_address(
+                        net->ibn_dev->ibd_cmid->device, &tx->tx_frags[i]);
         }
         
         return 0;
@@ -697,14 +700,16 @@ kiblnd_setup_rd_kiov (lnet_ni_t *ni, kib_tx_t *tx, kib_rdma_desc_t *rd,
         tx->tx_nfrags = sg - tx->tx_frags;
         tx->tx_dmadir = (rd != tx->tx_rd) ? DMA_FROM_DEVICE : DMA_TO_DEVICE;
 
-        rd->rd_nfrags = dma_map_sg(net->ibn_dev->ibd_cmid->device->dma_device,
-                                   tx->tx_frags, tx->tx_nfrags, tx->tx_dmadir);
+        rd->rd_nfrags = kiblnd_dma_map_sg(net->ibn_dev->ibd_cmid->device,
+                                          tx->tx_frags, tx->tx_nfrags, tx->tx_dmadir);
         rd->rd_key    = (rd != tx->tx_rd) ? 
                         net->ibn_dev->ibd_mr->rkey : net->ibn_dev->ibd_mr->lkey;
 
         for (i = 0; i < tx->tx_nfrags; i++) {
-                rd->rd_frags[i].rf_nob  = sg_dma_len(&tx->tx_frags[i]);
-                rd->rd_frags[i].rf_addr = sg_dma_address(&tx->tx_frags[i]);
+                rd->rd_frags[i].rf_nob  = kiblnd_sg_dma_len(
+                        net->ibn_dev->ibd_cmid->device, &tx->tx_frags[i]);
+                rd->rd_frags[i].rf_addr = kiblnd_sg_dma_address(
+                        net->ibn_dev->ibd_cmid->device, &tx->tx_frags[i]);
 #if 0
                 CDEBUG(D_WARNING,"frag[%d]: "LPX64" for %d\n",
                        i, rd->rd_frags[i].rf_addr, rd->rd_frags[i].rf_nob);
@@ -2610,8 +2615,8 @@ kiblnd_cm_callback(struct rdma_cm_id *cmid, struct rdma_cm_event *event)
 	case RDMA_CM_EVENT_CONNECT_REQUEST:
                 /* destroy cmid on failure */
 		rc = kiblnd_passive_connect(cmid, 
-                                            event->private_data,
-                                            event->private_data_len);
+                                            (void *)KIBLND_CONN_PARAM(event),
+                                            KIBLND_CONN_PARAM_LEN(event));
                 CDEBUG(D_NET, "connreq: %d\n", rc);
                 return rc;
                 
@@ -2703,8 +2708,8 @@ kiblnd_cm_callback(struct rdma_cm_id *cmid, struct rdma_cm_event *event)
 
                 case IBLND_CONN_ACTIVE_CONNECT:
                         kiblnd_rejected(conn, event->status,
-                                        event->private_data,
-                                        event->private_data_len);
+                                        (void *)KIBLND_CONN_PARAM(event),
+                                        KIBLND_CONN_PARAM_LEN(event));
                         break;
                 }
                 kiblnd_conn_decref(conn);
@@ -2726,8 +2731,8 @@ kiblnd_cm_callback(struct rdma_cm_id *cmid, struct rdma_cm_event *event)
                         CDEBUG(D_NET, "ESTABLISHED(active): %s\n",
                                libcfs_nid2str(conn->ibc_peer->ibp_nid));
                         kiblnd_check_connreply(conn,
-                                               event->private_data,
-                                               event->private_data_len);
+                                               (void *)KIBLND_CONN_PARAM(event),
+                                               KIBLND_CONN_PARAM_LEN(event));
                         break;
                 }
                 /* net keeps its ref on conn! */

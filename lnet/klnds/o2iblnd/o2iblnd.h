@@ -569,6 +569,110 @@ kiblnd_rd_size (kib_rdma_desc_t *rd)
 }
 #endif
 
+#if (IBLND_OFED_VERSION == 102)
+
+static inline __u64 kiblnd_dma_map_single(struct ib_device *dev,
+                                          void *msg, size_t size,
+                                          enum dma_data_direction direction)
+{
+        return ib_dma_map_single(dev, msg, size, direction);
+}
+
+static inline void kiblnd_dma_unmap_single(struct ib_device *dev,
+                                           __u64 addr, size_t size,
+                                          enum dma_data_direction direction)
+{
+        ib_dma_unmap_single(dev, addr, size, direction);
+}
+
+#define KIBLND_UNMAP_ADDR_SET(p, m, a)  do {} while (0)
+#define KIBLND_UNMAP_ADDR(p, m, a)      (a)
+
+static inline int kiblnd_dma_map_sg(struct ib_device *dev,
+                                    struct scatterlist *sg, int nents,
+                                    enum dma_data_direction direction)
+{
+        return ib_dma_map_sg(dev, sg, nents, direction);
+}
+
+static inline void kiblnd_dma_unmap_sg(struct ib_device *dev,
+                                       struct scatterlist *sg, int nents,
+                                       enum dma_data_direction direction)
+{
+        ib_dma_unmap_sg(dev, sg, nents, direction);
+}
+
+static inline __u64 kiblnd_sg_dma_address(struct ib_device *dev,
+                                          struct scatterlist *sg)
+{
+        return ib_sg_dma_address(dev, sg);
+}
+
+static inline unsigned int kiblnd_sg_dma_len(struct ib_device *dev,
+                                             struct scatterlist *sg)
+{
+        return ib_sg_dma_len(dev, sg);
+}
+
+/* XXX We use KIBLND_CONN_PARAM(e) as writable buffer, it's not strictly
+ * right because OFED1.2 defines it as const, to use it we have to add
+ * (void *) cast to overcome "const" */
+
+#define KIBLND_CONN_PARAM(e)            ((e)->param.conn.private_data)
+#define KIBLND_CONN_PARAM_LEN(e)        ((e)->param.conn.private_data_len)
+
+#elif (IBLND_OFED_VERSION == 101)
+
+static inline dma_addr_t kiblnd_dma_map_single(struct ib_device *dev,
+                                               void *msg, size_t size,
+                                               enum dma_data_direction direction)
+{
+        return dma_map_single(dev->dma_device, msg, size, direction);
+}
+
+static inline void kiblnd_dma_unmap_single(struct ib_device *dev,
+                                           dma_addr_t addr, size_t size,
+                                           enum dma_data_direction direction)
+{
+        dma_unmap_single(dev->dma_device, addr, size, direction);
+}
+
+#define KIBLND_UNMAP_ADDR_SET(p, m, a)  pci_unmap_addr_set(p, m, a)
+#define KIBLND_UNMAP_ADDR(p, m, a)      pci_unmap_addr(p, m)
+
+static inline int kiblnd_dma_map_sg(struct ib_device *dev,
+                                    struct scatterlist *sg, int nents,
+                                    enum dma_data_direction direction)
+{
+        return dma_map_sg(dev->dma_device, sg, nents, direction);
+}
+
+static inline void kiblnd_dma_unmap_sg(struct ib_device *dev,
+                                       struct scatterlist *sg, int nents,
+                                       enum dma_data_direction direction)
+{
+        return dma_unmap_sg(dev->dma_device, sg, nents, direction);
+}
+
+
+static inline dma_addr_t kiblnd_sg_dma_address(struct ib_device *dev,
+                                               struct scatterlist *sg)
+{
+        return sg_dma_address(sg);
+}
+
+
+static inline unsigned int kiblnd_sg_dma_len(struct ib_device *dev,
+                                             struct scatterlist *sg)
+{
+        return sg_dma_len(sg);
+}
+
+#define KIBLND_CONN_PARAM(e)            ((e)->private_data)
+#define KIBLND_CONN_PARAM_LEN(e)        ((e)->private_data_len)
+
+#endif
+
 int  kiblnd_startup (lnet_ni_t *ni);
 void kiblnd_shutdown (lnet_ni_t *ni);
 int  kiblnd_ctl (lnet_ni_t *ni, unsigned int cmd, void *arg);
