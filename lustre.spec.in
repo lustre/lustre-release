@@ -110,6 +110,14 @@ rm -f $RPM_BUILD_ROOT%{_libdir}/libsysio.a
 # Remove ldiskfs module(s) - they are packaged by the ldiskfs .spec.
 rm -rf $RPM_BUILD_ROOT/lib/modules/%{kversion}/kernel/fs/lustre-ldiskfs
 
+# hack to include the llog_test module in lustre-tests
+llog_base=$RPM_BUILD_DIR/lustre-%{version}/lustre/obdclass/llog_test
+if [ -e ${llog_base}.ko ]; then
+  cp ${llog_base}.ko $RPM_BUILD_ROOT/lib/modules/%{kversion}/kernel/fs/lustre
+elif [ -e ${llog_base}.o ]; then
+  cp ${llog_base}.o $RPM_BUILD_ROOT/lib/modules/%{kversion}/kernel/fs/lustre
+fi
+
 # Create the pristine source directory.
 cd $RPM_BUILD_DIR/lustre-%{version}
 mkdir -p $RPM_BUILD_ROOT/usr/src
@@ -155,12 +163,21 @@ else
   echo '%attr(-, root, root) /usr/include/linux/lustre_idl.h' >>lustre.files
 fi
 
+echo '%attr(-, root, root) %{_libdir}/lustre/tests/*' >lustre-tests.files
+echo '%attr(-, root, root) /lib/modules/%{kversion}/kernel/fs/lustre/llog_test.*' >>lustre-tests.files
+modules_excludes="llog_test"
+if [ -d $RPM_BUILD_ROOT%{_libdir}/lustre/liblustre/tests ] ; then
+  echo '%attr(-, root, root) %{_libdir}/lustre/liblustre/tests/*' >>lustre-tests.files
+fi
+
+pushd $RPM_BUILD_ROOT >/dev/null
+find lib/modules/%{kversion}/kernel -type f | awk "!/($modules_excludes)/ {print \"/\"\$0}" >>$RPM_BUILD_DIR/lustre-%{version}/lustre-modules.files
+popd >/dev/null
+
 %files -f lustre.files
 
-%files modules
+%files modules -f lustre-modules.files
 %attr(-, root, root) %doc COPYING
-%attr(-, root, root) /lib/modules/%{kversion}/kernel/fs/lustre
-%attr(-, root, root) /lib/modules/%{kversion}/kernel/net/lustre
 
 %files source
 %attr(-, root, root) /usr/src/lustre-%{version}
@@ -169,8 +186,7 @@ fi
 # %files deps-sles
 # %files deps-rhel
 
-%files tests
-%attr(-, root, root) %{_libdir}/lustre/tests/*
+%files tests -f lustre-tests.files
 
 %post modules
 if [ -f /boot/System.map-%{kversion} ]; then
