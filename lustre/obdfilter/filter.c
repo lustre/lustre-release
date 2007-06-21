@@ -34,8 +34,9 @@
  */
 
 #define DEBUG_SUBSYSTEM S_FILTER
-
+#ifdef HAVE_KERNEL_CONFIG_H
 #include <linux/config.h>
+#endif
 #include <linux/module.h>
 #include <linux/fs.h>
 #include <linux/dcache.h>

@@ -325,6 +325,12 @@ Details    : decrease the amount of synchronous RPC between clients and servers
              by canceling conflicing lock before the operation on the client side
              and packing thier handles into the main operation RPC to server.
 
+Severity   : enhancement
+Bugzilla   : 12605
+Description: add #ifdef HAVE_KERNEL_CONFIG_H
+Details    : kernels from 2.6.21 not need include linux/config.h, but add include 
+	     linux/autoconf.h in commpiler command line.
+
 --------------------------------------------------------------------------------
 
 2007-05-03  Cluster File Systems, Inc. <info@clusterfs.com>
