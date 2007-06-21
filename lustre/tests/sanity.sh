@@ -2486,6 +2486,7 @@ run_test 60b "limit repeated messages from CERROR/CWARN ========"
 test_60c() {
 	echo "create 5000 files" 
 	createmany -o $DIR/f60c- 5000
+#define OBD_FAIL_MDS_LLOG_CREATE_FAILED  0x137
 	sysctl -w lustre.fail_loc=0x80000137
 	unlinkmany $DIR/f60c- 5000
 }
@@ -3826,7 +3827,7 @@ test_118() #bug 11710
 	
 	return $dirty
 }
-run_test 118 "verify O_SYNC work"
+run_test 118 "verify O_SYNC works"
 
 test_119a() # bug 11737
 {
