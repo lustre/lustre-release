@@ -38,8 +38,9 @@
 #ifndef EXPORT_SYMTAB
 # define EXPORT_SYMTAB
 #endif
-
-#include "linux/config.h"
+#ifdef HAVE_KERNEL_CONFIG_H
+#include <linux/config.h>
+#endif
 #include "linux/module.h"
 #include "linux/tty.h"
 #include "linux/kernel.h"

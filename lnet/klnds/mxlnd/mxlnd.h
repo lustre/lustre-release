@@ -25,8 +25,9 @@
 #ifndef EXPORT_SYMTAB
 #define EXPORT_SYMTAB
 #endif
-
+#ifdef HAVE_KERNEL_CONFIG_H
 #include <linux/config.h>
+#endif
 #include <linux/module.h>       /* module */
 #include <linux/kernel.h>       /* module */
 #include <linux/mm.h>

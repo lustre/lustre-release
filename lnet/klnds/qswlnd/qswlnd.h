@@ -30,8 +30,9 @@
 
 #include <qsnet/kernel.h>
 #undef printf                                   /* nasty QSW #define */
-
+#ifdef HAVE_KERNEL_CONFIG_H
 #include <linux/config.h>
+#endif
 #include <linux/module.h>
 
 #include <elan/epcomms.h>
