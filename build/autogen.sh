@@ -81,6 +81,7 @@ echo "Checking for a complete tree..."
 if [ -d kernel_patches ] ; then
     # This is ldiskfs
     REQUIRED_DIRS="build"
+    CONFIGURE_DIRS=""
 else
     REQUIRED_DIRS="build lnet lustre"
     OPTIONAL_DIRS="snmp portals"
