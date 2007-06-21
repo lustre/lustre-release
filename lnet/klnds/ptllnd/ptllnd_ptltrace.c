@@ -82,7 +82,7 @@ kptllnd_ptltrace_to_file(char *filename)
                 }
 
                 if (start < tmpbuf || start + len > tmpbuf + PAGE_SIZE) {
-                        CERROR("ptl_proc_read bug: %p for %d not in %p for %d\n",
+                        CERROR("ptl_proc_read bug: %p for %d not in %p for %ld\n",
                                start, len, tmpbuf, PAGE_SIZE);
                         break;
                 }
