@@ -14,6 +14,11 @@ tbd         Cluster File Systems, Inc. <info@clusterfs.com>
        * Note that reiserfs quotas are disabled on SLES 10 in this kernel.
        * bug fixes
 
+Severity   : enhancement
+Bugzilla   : 12678
+Description: remove fs_prep_san_write operation and related patches
+Details    : remove the ext3-san-jdike patches which are no longer useful.
+
 Severity   : normal
 Frequency  : rare
 Bugzilla   : 11324
