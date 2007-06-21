@@ -574,7 +574,7 @@ static int ptlrpc_check_status(struct ptlrpc_request *req)
                 __u32 opc = lustre_msg_get_opc(req->rq_reqmsg);
 
                 LCONSOLE_ERROR_MSG(0x011, "an error ocurred while communicating"
-                                   " with %s The %s operation failed with %d",
+                                   " with %s The %s operation failed with %d\n",
                                    exp ? obd_export_nid2str(exp) : "(no nid)",
                                    ll_opcode2str(opc), err);
                 RETURN(err < 0 ? err : -EINVAL);
@@ -608,19 +608,19 @@ static int after_reply(struct ptlrpc_request *req)
         LASSERT (req->rq_nob_received <= req->rq_replen);
         rc = lustre_unpack_msg(req->rq_repmsg, req->rq_nob_received);
         if (rc) {
-                DEBUG_REQ(D_ERROR, req, "unpack_rep failed: %d\n", rc);
+                DEBUG_REQ(D_ERROR, req, "unpack_rep failed: %d", rc);
                 RETURN(-EPROTO);
         }
 
         rc = lustre_unpack_rep_ptlrpc_body(req, MSG_PTLRPC_BODY_OFF);
         if (rc) {
-                DEBUG_REQ(D_ERROR, req, "unpack ptlrpc body failed: %d\n", rc);
+                DEBUG_REQ(D_ERROR, req, "unpack ptlrpc body failed: %d", rc);
                 RETURN(-EPROTO);
         }
 
         if (lustre_msg_get_type(req->rq_repmsg) != PTL_RPC_MSG_REPLY &&
             lustre_msg_get_type(req->rq_repmsg) != PTL_RPC_MSG_ERR) {
-                DEBUG_REQ(D_ERROR, req, "invalid packet received (type=%u)\n",
+                DEBUG_REQ(D_ERROR, req, "invalid packet received (type=%u)",
                           lustre_msg_get_type(req->rq_repmsg));
                 RETURN(-EPROTO);
         }

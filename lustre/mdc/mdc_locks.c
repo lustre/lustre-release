@@ -209,7 +209,7 @@ static void mdc_realloc_openmsg(struct ptlrpc_request *req,
         if (new_msg != NULL) {
                 struct lustre_msg *old_msg = req->rq_reqmsg;
 
-                DEBUG_REQ(D_INFO, req, "replace reqmsg for larger EA %u\n",
+                DEBUG_REQ(D_INFO, req, "replace reqmsg for larger EA %u",
                           body->eadatasize);
                 memcpy(new_msg, old_msg, old_size);
                 lustre_msg_set_buflen(new_msg, DLM_INTENT_REC_OFF + 2,

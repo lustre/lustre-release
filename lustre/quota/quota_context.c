@@ -544,7 +544,7 @@ static int dqacq_interpret(struct ptlrpc_request *req, void *data, int rc)
                 qdata = lustre_quota_old_to_new(qdata_old);
         }
         if (qdata == NULL) {
-                DEBUG_REQ(D_ERROR, req, "error unpacking qunit_data\n");
+                DEBUG_REQ(D_ERROR, req, "error unpacking qunit_data");
                 RETURN(-EPROTO);
         }
 

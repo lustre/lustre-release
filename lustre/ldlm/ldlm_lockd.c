@@ -785,7 +785,7 @@ int ldlm_handle_enqueue(struct ptlrpc_request *req,
 
         if (dlm_req->lock_desc.l_resource.lr_type < LDLM_MIN_TYPE ||
             dlm_req->lock_desc.l_resource.lr_type >= LDLM_MAX_TYPE) {
-                DEBUG_REQ(D_ERROR, req, "invalid lock request type %d\n",
+                DEBUG_REQ(D_ERROR, req, "invalid lock request type %d",
                           dlm_req->lock_desc.l_resource.lr_type);
                 GOTO(out, rc = -EFAULT);
         }
@@ -793,7 +793,7 @@ int ldlm_handle_enqueue(struct ptlrpc_request *req,
         if (dlm_req->lock_desc.l_req_mode <= LCK_MINMODE ||
             dlm_req->lock_desc.l_req_mode >= LCK_MAXMODE ||
             dlm_req->lock_desc.l_req_mode & (dlm_req->lock_desc.l_req_mode-1)) {
-                DEBUG_REQ(D_ERROR, req, "invalid lock request mode %d\n",
+                DEBUG_REQ(D_ERROR, req, "invalid lock request mode %d",
                           dlm_req->lock_desc.l_req_mode);
                 GOTO(out, rc = -EFAULT);
         }
@@ -801,12 +801,12 @@ int ldlm_handle_enqueue(struct ptlrpc_request *req,
         if (req->rq_export->exp_connect_flags & OBD_CONNECT_IBITS) {
                 if (dlm_req->lock_desc.l_resource.lr_type == LDLM_PLAIN) {
                         DEBUG_REQ(D_ERROR, req,
-                                  "PLAIN lock request from IBITS client?\n");
+                                  "PLAIN lock request from IBITS client?");
                         GOTO(out, rc = -EPROTO);
                 }
         } else if (dlm_req->lock_desc.l_resource.lr_type == LDLM_IBITS) {
                 DEBUG_REQ(D_ERROR, req,
-                          "IBITS lock request from unaware client?\n");
+                          "IBITS lock request from unaware client?");
                 GOTO(out, rc = -EPROTO);
         }
 

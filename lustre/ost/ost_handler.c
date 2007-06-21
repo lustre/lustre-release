@@ -673,7 +673,7 @@ static int ost_brw_read(struct ptlrpc_request *req, struct obd_trans_info *oti)
 
         niocount = ioo->ioo_bufcnt;
         if (niocount > PTLRPC_MAX_BRW_PAGES) {
-                DEBUG_REQ(D_ERROR, req, "bulk has too many pages (%d)\n",
+                DEBUG_REQ(D_ERROR, req, "bulk has too many pages (%d)",
                           niocount);
                 GOTO(out, rc = -EFAULT);
         }
@@ -809,7 +809,7 @@ static int ost_brw_read(struct ptlrpc_request *req, struct obd_trans_info *oti)
                                 rc = -ETIMEDOUT;
                         }
                 } else {
-                        DEBUG_REQ(D_ERROR, req, "bulk PUT failed: rc %d\n", rc);
+                        DEBUG_REQ(D_ERROR, req, "bulk PUT failed: rc %d", rc);
                 }
                 comms_error = rc != 0;
         }
@@ -919,7 +919,7 @@ static int ost_brw_write(struct ptlrpc_request *req, struct obd_trans_info *oti)
         }
 
         if (niocount > PTLRPC_MAX_BRW_PAGES) {
-                DEBUG_REQ(D_ERROR, req, "bulk has too many pages (%d)\n",
+                DEBUG_REQ(D_ERROR, req, "bulk has too many pages (%d)",
                           niocount);
                 GOTO(out, rc = -EFAULT);
         }
@@ -992,7 +992,7 @@ static int ost_brw_write(struct ptlrpc_request *req, struct obd_trans_info *oti)
          * grant info will be cleared for resent req, then fed_grant and 
          * total_grant will not be modified in following preprw_write*/ 
         if (lustre_msg_get_flags(req->rq_reqmsg) & (MSG_RESENT | MSG_REPLAY)) {
-                DEBUG_REQ(D_CACHE, req, "clear resent/replay req grant info\n");
+                DEBUG_REQ(D_CACHE, req, "clear resent/replay req grant info");
                 body->oa.o_valid &= ~OBD_MD_FLGRANT;
         }
 
@@ -1037,7 +1037,7 @@ static int ost_brw_write(struct ptlrpc_request *req, struct obd_trans_info *oti)
                         rc = -ETIMEDOUT;
                 }
         } else {
-                DEBUG_REQ(D_ERROR, req, "ptlrpc_bulk_get failed: rc %d\n", rc);
+                DEBUG_REQ(D_ERROR, req, "ptlrpc_bulk_get failed: rc %d", rc);
         }
         comms_error = rc != 0;
 
@@ -1521,7 +1521,7 @@ static int ost_handle(struct ptlrpc_request *req)
                 break;
         /* FIXME - just reply status */
         case LLOG_ORIGIN_CONNECT:
-                DEBUG_REQ(D_INODE, req, "log connect\n");
+                DEBUG_REQ(D_INODE, req, "log connect");
                 rc = llog_handle_connect(req);
                 req->rq_status = rc;
                 rc = lustre_pack_reply(req, 1, NULL, NULL);

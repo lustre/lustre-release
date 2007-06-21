@@ -491,11 +491,11 @@ int mgs_handle(struct ptlrpc_request *req)
                 req->rq_status = rc;            /* superfluous? */
                 break;
         case MGS_TARGET_REG:
-                DEBUG_REQ(D_MGS, req, "target add\n");
+                DEBUG_REQ(D_MGS, req, "target add");
                 rc = mgs_handle_target_reg(req);
                 break;
         case MGS_TARGET_DEL:
-                DEBUG_REQ(D_MGS, req, "target del\n");
+                DEBUG_REQ(D_MGS, req, "target del");
                 //rc = mgs_handle_target_del(req);
                 break;
 
@@ -516,7 +516,7 @@ int mgs_handle(struct ptlrpc_request *req)
                 rc = target_handle_ping(req);
                 break;
         case OBD_LOG_CANCEL:
-                DEBUG_REQ(D_MGS, req, "log cancel\n");
+                DEBUG_REQ(D_MGS, req, "log cancel");
                 rc = -ENOTSUPP; /* la la la */
                 break;
 

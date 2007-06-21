@@ -560,7 +560,7 @@ int target_handle_connect(struct ptlrpc_request *req, svc_handler_t handler)
         LASSERT_REQSWAB(req, REQ_REC_OFF);
         str = lustre_msg_string(req->rq_reqmsg, REQ_REC_OFF, sizeof(tgtuuid)-1);
         if (str == NULL) {
-                DEBUG_REQ(D_ERROR, req, "bad target UUID for connect\n");
+                DEBUG_REQ(D_ERROR, req, "bad target UUID for connect");
                 GOTO(out, rc = -EINVAL);
         }
 
@@ -602,7 +602,7 @@ int target_handle_connect(struct ptlrpc_request *req, svc_handler_t handler)
         str = lustre_msg_string(req->rq_reqmsg, REQ_REC_OFF + 1,
                                 sizeof(cluuid) - 1);
         if (str == NULL) {
-                DEBUG_REQ(D_ERROR, req, "bad client UUID for connect\n");
+                DEBUG_REQ(D_ERROR, req, "bad client UUID for connect");
                 GOTO(out, rc = -EINVAL);
         }
 
@@ -644,14 +644,14 @@ int target_handle_connect(struct ptlrpc_request *req, svc_handler_t handler)
         if (lustre_msg_get_op_flags(req->rq_reqmsg) & MSG_CONNECT_LIBCLIENT) {
                 if (!data) {
                         DEBUG_REQ(D_WARNING, req, "Refusing old (unversioned) "
-                                  "libclient connection attempt\n");
+                                  "libclient connection attempt");
                         GOTO(out, rc = -EPROTO);
                 } else if (data->ocd_version < LUSTRE_VERSION_CODE -
                                                LUSTRE_VERSION_ALLOWED_OFFSET ||
                            data->ocd_version > LUSTRE_VERSION_CODE +
                                                LUSTRE_VERSION_ALLOWED_OFFSET) {
                         DEBUG_REQ(D_WARNING, req, "Refusing %s (%d.%d.%d.%d) "
-                                  "libclient connection attempt\n",
+                                  "libclient connection attempt",
                                   data->ocd_version < LUSTRE_VERSION_CODE ?
                                   "old" : "new",
                                   OBD_OCD_VERSION_MAJOR(data->ocd_version),
@@ -797,7 +797,7 @@ int target_handle_connect(struct ptlrpc_request *req, svc_handler_t handler)
          * that to go to zero before we get our new export reference. */
         export = class_conn2export(&conn);
         if (!export) {
-                DEBUG_REQ(D_ERROR, req, "Missing export!\n");
+                DEBUG_REQ(D_ERROR, req, "Missing export!");
                 GOTO(out, rc = -ENODEV);
         }
 

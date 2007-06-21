@@ -129,7 +129,7 @@ static int mds_getxattr_internal(struct obd_device *obd,
 
         if (reqbody->valid & OBD_MD_FLXATTR) {
                 xattr_name = lustre_msg_string(req->rq_reqmsg, REQ_REC_OFF+1,0);
-                DEBUG_REQ(D_INODE, req, "getxattr %s\n", xattr_name);
+                DEBUG_REQ(D_INODE, req, "getxattr %s", xattr_name);
 
                 if (inode->i_op && inode->i_op->getxattr) {
                         lock_24kernel();
@@ -142,7 +142,7 @@ static int mds_getxattr_internal(struct obd_device *obd,
                     rc != -ERANGE)
                         CDEBUG(D_OTHER, "getxattr failed: %d\n", rc);
         } else if (reqbody->valid & OBD_MD_FLXATTRLS) {
-                DEBUG_REQ(D_INODE, req, "listxattr\n");
+                DEBUG_REQ(D_INODE, req, "listxattr");
 
                 if (inode->i_op && inode->i_op->listxattr) {
                         lock_24kernel();
@@ -243,7 +243,7 @@ int mds_setxattr_internal(struct ptlrpc_request *req, struct mds_body *body)
                 GOTO(out, rc = -EPROTO);
         }
 
-        DEBUG_REQ(D_INODE, req, "%sxattr %s\n",
+        DEBUG_REQ(D_INODE, req, "%sxattr %s",
                   body->valid & OBD_MD_FLXATTR ? "set" : "remove",
                   xattr_name);
 

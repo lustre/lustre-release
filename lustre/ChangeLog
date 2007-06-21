@@ -338,6 +338,11 @@ Details    : 2.6.22 has only one visble change, SLAB_CTOR_* constants is
 	     removed. In this case we need drop using os depended interface to
 	     kmem_cache and use cfs_mem_cache API.
 
+Severity   : minor
+Bugzilla   : 12747
+Description: fix mal-formatted messages
+Details    : fix some mal-formatted DEBUG_REQ and LCONSOLE_ERROR_MSG messages 
+
 --------------------------------------------------------------------------------
 
 2007-05-03  Cluster File Systems, Inc. <info@clusterfs.com>
