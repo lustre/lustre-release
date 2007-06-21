@@ -1150,7 +1150,7 @@ LB_LINUX_TRY_COMPILE([
 
 ],[
         AC_MSG_RESULT(yes)
-        AC_DEFINE(HAVE_KMEM_CACHE_n, 1,
+        AC_DEFINE(HAVE_KMEM_CACHE_S, 1,
                   [kernel has struct kmem_cache_s])
 ],[
         AC_MSG_RESULT(NO)
