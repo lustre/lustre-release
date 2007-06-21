@@ -952,7 +952,8 @@ int ptlrpc_expire_one_request(struct ptlrpc_request *req)
         int rc = 0;
         ENTRY;
 
-        DEBUG_REQ(D_ERROR|D_NETERROR, req, "timeout (sent at %lu, %lus ago)",
+        DEBUG_REQ(D_ERROR|D_NETERROR, req, "%s (sent at %lu, %lus ago)",
+                  req->rq_net_err ? "network error" : "timeout",
                   (long)req->rq_sent, CURRENT_SECONDS - req->rq_sent);
 
         if (imp != NULL && obd_debug_peer_on_timeout)
