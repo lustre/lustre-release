@@ -66,9 +66,9 @@ static int __init init_lustre_lite(void)
 
         printk(KERN_INFO "Lustre: Lustre Client File System; "
                "info@clusterfs.com\n");
-        ll_file_data_slab = kmem_cache_create("ll_file_data",
-                                              sizeof(struct ll_file_data), 0,
-                                              SLAB_HWCACHE_ALIGN, NULL, NULL);
+        ll_file_data_slab = cfs_mem_cache_create("ll_file_data",
+                                                 sizeof(struct ll_file_data), 0,
+                                                 SLAB_HWCACHE_ALIGN);
         if (ll_file_data_slab == NULL)
                 return -ENOMEM;
 
@@ -108,10 +108,10 @@ static void __exit exit_lustre_lite(void)
 
         ll_unregister_cache(&ll_cache_definition);
 
-        rc = kmem_cache_destroy(ll_file_data_slab);
+        rc = cfs_mem_cache_destroy(ll_file_data_slab);
         LASSERTF(rc == 0, "couldn't destroy ll_file_data slab\n");
         if (ll_async_page_slab) {
-                rc = kmem_cache_destroy(ll_async_page_slab);
+                rc = cfs_mem_cache_destroy(ll_async_page_slab);
                 LASSERTF(rc == 0, "couldn't destroy ll_async_page slab\n");
         }
 

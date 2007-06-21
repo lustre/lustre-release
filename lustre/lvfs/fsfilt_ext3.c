@@ -77,7 +77,7 @@
 #define fsfilt_ext3_journal_stop(handle)          ext3_journal_stop(handle)
 #endif
 
-static kmem_cache_t *fcb_cache;
+static cfs_mem_cache_t *fcb_cache;
 
 struct fsfilt_cb_data {
         struct journal_callback cb_jcb; /* jbd private data - MUST BE FIRST */
@@ -2113,9 +2113,8 @@ static int __init fsfilt_ext3_init(void)
 {
         int rc;
 
-        fcb_cache = kmem_cache_create("fsfilt_ext3_fcb",
-                                      sizeof(struct fsfilt_cb_data), 0,
-                                      0, NULL, NULL);
+        fcb_cache = cfs_mem_cache_create("fsfilt_ext3_fcb",
+                                         sizeof(struct fsfilt_cb_data), 0, 0);
         if (!fcb_cache) {
                 CERROR("error allocating fsfilt journal callback cache\n");
                 GOTO(out, rc = -ENOMEM);
@@ -2124,7 +2123,7 @@ static int __init fsfilt_ext3_init(void)
         rc = fsfilt_register_ops(&fsfilt_ext3_ops);
 
         if (rc) {
-                int err = kmem_cache_destroy(fcb_cache);
+                int err = cfs_mem_cache_destroy(fcb_cache);
                 LASSERTF(err == 0, "error destroying new cache: rc %d\n", err);
         }
 out:
@@ -2136,7 +2135,7 @@ static void __exit fsfilt_ext3_exit(void)
         int rc;
 
         fsfilt_unregister_ops(&fsfilt_ext3_ops);
-        rc = kmem_cache_destroy(fcb_cache);
+        rc = cfs_mem_cache_destroy(fcb_cache);
         LASSERTF(rc == 0, "couldn't destroy fcb_cache slab\n");
 }
 

@@ -36,7 +36,7 @@
 #include <lustre_param.h>
 #include "llite_internal.h"
 
-kmem_cache_t *ll_file_data_slab;
+cfs_mem_cache_t *ll_file_data_slab;
 
 LIST_HEAD(ll_super_blocks);
 spinlock_t ll_sb_lock = SPIN_LOCK_UNLOCKED;
@@ -298,9 +298,9 @@ static int client_common_fill_super(struct super_block *sb,
         if (!ll_async_page_slab) {
                 ll_async_page_slab_size =
                         size_round(sizeof(struct ll_async_page)) + err;
-                ll_async_page_slab = kmem_cache_create("ll_async_page",
-                                                       ll_async_page_slab_size,
-                                                       0, 0, NULL, NULL);
+                ll_async_page_slab = cfs_mem_cache_create("ll_async_page",
+                                                          ll_async_page_slab_size,
+                                                          0, 0);
                 if (!ll_async_page_slab)
                         GOTO(out_osc, -ENOMEM);
         }

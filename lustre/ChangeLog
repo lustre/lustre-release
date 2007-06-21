@@ -9,7 +9,7 @@ tbd         Cluster File Systems, Inc. <info@clusterfs.com>
        * Client support for unpatched kernels:
         (see http://wiki.lustre.org/index.php?title=Patchless_Client)
         2.6.9-42.0.10.EL (RHEL 4)
-        2.6.16 - 2.6.21 vanilla (kernel.org)
+        2.6.16 - 2.6.22 vanilla (kernel.org)
        * Recommended e2fsprogs version: 1.39.cfs7
        * Note that reiserfs quotas are disabled on SLES 10 in this kernel.
        * bug fixes
@@ -328,8 +328,15 @@ Details    : decrease the amount of synchronous RPC between clients and servers
 Severity   : enhancement
 Bugzilla   : 12605
 Description: add #ifdef HAVE_KERNEL_CONFIG_H
-Details    : kernels from 2.6.21 not need include linux/config.h, but add include 
+Details    : kernels from 2.6.19 not need include linux/config.h, but add include 
 	     linux/autoconf.h in commpiler command line.
+
+Severity   : enhancement
+Bugzilla   : 12764
+Description: patchless client support for 2.6.22 kernel
+Details    : 2.6.22 has only one visble change, SLAB_CTOR_* constants is
+	     removed. In this case we need drop using os depended interface to
+	     kmem_cache and use cfs_mem_cache API.
 
 --------------------------------------------------------------------------------
 

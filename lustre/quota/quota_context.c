@@ -36,7 +36,7 @@ unsigned long default_btune_ratio = 50;                   /* 50 percentage */
 unsigned long default_iunit_sz = 5000;       /* 5000 inodes */
 unsigned long default_itune_ratio = 50;      /* 50 percentage */
 
-kmem_cache_t *qunit_cachep = NULL;
+cfs_mem_cache_t *qunit_cachep = NULL;
 struct list_head qunit_hash[NR_DQHASH];
 spinlock_t qunit_hash_lock = SPIN_LOCK_UNLOCKED;
 
@@ -71,13 +71,9 @@ void qunit_cache_cleanup(void)
         spin_unlock(&qunit_hash_lock);
 
         if (qunit_cachep) {
-#ifdef HAVE_KMEM_CACHE_DESTROY_INT
                 int rc;
-                rc = kmem_cache_destroy(qunit_cachep);
+                rc = cfs_mem_cache_destroy(qunit_cachep);
                 LASSERTF(rc == 0, "couldn't destory qunit_cache slab\n");
-#else
-                kmem_cache_destroy(qunit_cachep);
-#endif
                 qunit_cachep = NULL;
         }
         EXIT;
@@ -89,9 +85,9 @@ int qunit_cache_init(void)
         ENTRY;
 
         LASSERT(qunit_cachep == NULL);
-        qunit_cachep = kmem_cache_create("ll_qunit_cache",
-                                         sizeof(struct lustre_qunit),
-                                         0, 0, NULL, NULL);
+        qunit_cachep = cfs_mem_cache_create("ll_qunit_cache",
+                                            sizeof(struct lustre_qunit),
+                                            0, 0);
         if (!qunit_cachep)
                 RETURN(-ENOMEM);
 

@@ -54,7 +54,7 @@
                 pos = n, n = pos->prev )
 #endif
 
-kmem_cache_t *ll_async_page_slab = NULL;
+cfs_mem_cache_t *ll_async_page_slab = NULL;
 size_t ll_async_page_slab_size = 0;
 
 /* SYNCHRONOUS I/O to object storage for an inode */

@@ -64,7 +64,7 @@
 #include "filter_internal.h"
 
 static struct lvfs_callback_ops filter_lvfs_ops;
-kmem_cache_t *ll_fmd_cachep;
+cfs_mem_cache_t *ll_fmd_cachep;
 
 static void filter_commit_cb(struct obd_device *obd, __u64 transno,
                              void *cb_data, int error)
@@ -3454,9 +3454,9 @@ static int __init obdfilter_init(void)
         if (obdfilter_created_scratchpad == NULL)
                 return -ENOMEM;
 
-        ll_fmd_cachep = kmem_cache_create("ll_fmd_cache",
-                                         sizeof(struct filter_mod_data),
-                                         0, 0, NULL, NULL);
+        ll_fmd_cachep = cfs_mem_cache_create("ll_fmd_cache",
+                                             sizeof(struct filter_mod_data),
+                                             0, 0);
         if (!ll_fmd_cachep)
                 GOTO(out, rc = -ENOMEM);
 
@@ -3468,7 +3468,7 @@ static int __init obdfilter_init(void)
         if (rc) {
                 int err;
 
-                err = kmem_cache_destroy(ll_fmd_cachep);
+                err = cfs_mem_cache_destroy(ll_fmd_cachep);
                 LASSERTF(err == 0, "Cannot destroy ll_fmd_cachep: rc %d\n",err);
                 ll_fmd_cachep = NULL;
 out:
@@ -3489,7 +3489,7 @@ static void __exit obdfilter_exit(void)
                 PORTAL_SYMBOL_PUT(filter_quota_interface);
 
         if (ll_fmd_cachep) {
-                int rc = kmem_cache_destroy(ll_fmd_cachep);
+                int rc = cfs_mem_cache_destroy(ll_fmd_cachep);
                 LASSERTF(rc == 0, "Cannot destroy ll_fmd_cachep: rc %d\n", rc);
                 ll_fmd_cachep = NULL;
         }

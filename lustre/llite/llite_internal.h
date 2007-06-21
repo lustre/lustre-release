@@ -333,7 +333,7 @@ struct ll_readahead_state {
         struct list_head ras_read_beads;
 };
 
-extern kmem_cache_t *ll_file_data_slab;
+extern cfs_mem_cache_t *ll_file_data_slab;
 struct lustre_handle;
 struct ll_file_data {
         struct ll_readahead_state fd_ras;
@@ -368,7 +368,7 @@ void ll_i2gids(__u32 *suppgids, struct inode *i1,struct inode *i2);
 
 #define LLAP_MAGIC 98764321
 
-extern kmem_cache_t *ll_async_page_slab;
+extern cfs_mem_cache_t *ll_async_page_slab;
 extern size_t ll_async_page_slab_size;
 struct ll_async_page {
         int              llap_magic;

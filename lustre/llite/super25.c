@@ -35,7 +35,7 @@
 #include <lprocfs_status.h>
 #include "llite_internal.h"
 
-static kmem_cache_t *ll_inode_cachep;
+static cfs_mem_cache_t *ll_inode_cachep;
 
 static struct inode *ll_alloc_inode(struct super_block *sb)
 {
@@ -57,21 +57,11 @@ static void ll_destroy_inode(struct inode *inode)
         OBD_SLAB_FREE(ptr, ll_inode_cachep, sizeof(*ptr));
 }
 
-static void init_once(void * foo, kmem_cache_t * cachep, unsigned long flags)
-{
-        struct ll_inode_info *lli = foo;
-
-        if ((flags & (SLAB_CTOR_VERIFY|SLAB_CTOR_CONSTRUCTOR)) ==
-            SLAB_CTOR_CONSTRUCTOR)
-                inode_init_once(&lli->lli_vfs_inode);
-}
-
 int ll_init_inodecache(void)
 {
-        ll_inode_cachep = kmem_cache_create("lustre_inode_cache",
-                                            sizeof(struct ll_inode_info),
-                                            0, SLAB_HWCACHE_ALIGN,
-                                            init_once, NULL);
+        ll_inode_cachep = cfs_mem_cache_create("lustre_inode_cache",
+                                               sizeof(struct ll_inode_info),
+                                               0, SLAB_HWCACHE_ALIGN);
         if (ll_inode_cachep == NULL)
                 return -ENOMEM;
         return 0;
@@ -79,14 +69,10 @@ int ll_init_inodecache(void)
 
 void ll_destroy_inodecache(void)
 {
-#ifdef HAVE_KMEM_CACHE_DESTROY_INT
         int rc;
- 
-        rc = kmem_cache_destroy(ll_inode_cachep);
+
+        rc = cfs_mem_cache_destroy(ll_inode_cachep);
         LASSERTF(rc == 0, "ll_inode_cache: not all structures were freed\n");
-#else
-        kmem_cache_destroy(ll_inode_cachep);
-#endif
 }
 
 /* exported operations */
@@ -115,9 +101,9 @@ static int __init init_lustre_lite(void)
         rc = ll_init_inodecache();
         if (rc)
                 return -ENOMEM;
-        ll_file_data_slab = kmem_cache_create("ll_file_data",
-                                              sizeof(struct ll_file_data), 0,
-                                              SLAB_HWCACHE_ALIGN, NULL, NULL);
+        ll_file_data_slab = cfs_mem_cache_create("ll_file_data",
+                                                 sizeof(struct ll_file_data), 0,
+                                                 SLAB_HWCACHE_ALIGN);
         if (ll_file_data_slab == NULL) {
                 ll_destroy_inodecache();
                 return -ENOMEM;
@@ -152,9 +138,7 @@ static int __init init_lustre_lite(void)
 
 static void __exit exit_lustre_lite(void)
 {
-#ifdef HAVE_KMEM_CACHE_DESTROY_INT
         int rc;
-#endif
 
         lustre_register_client_fill_super(NULL);
         lustre_register_client_process_config(NULL);
@@ -162,19 +146,12 @@ static void __exit exit_lustre_lite(void)
         ll_unregister_cache(&ll_cache_definition);
 
         ll_destroy_inodecache();
-#ifdef HAVE_KMEM_CACHE_DESTROY_INT
-        rc = kmem_cache_destroy(ll_file_data_slab);
+        rc = cfs_mem_cache_destroy(ll_file_data_slab);
         LASSERTF(rc == 0, "couldn't destroy ll_file_data slab\n");
-#else
-        kmem_cache_destroy(ll_file_data_slab);
-#endif
+        
         if (ll_async_page_slab) {
-#ifdef HAVE_KMEM_CACHE_DESTROY_INT
-                rc = kmem_cache_destroy(ll_async_page_slab);
+                rc = cfs_mem_cache_destroy(ll_async_page_slab);
                 LASSERTF(rc == 0, "couldn't destroy ll_async_page slab\n");
-#else
-                kmem_cache_destroy(ll_async_page_slab);
-#endif
         }
 
         if (proc_lustre_fs_root) 
