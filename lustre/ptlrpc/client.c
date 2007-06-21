@@ -570,13 +570,13 @@ static int ptlrpc_check_status(struct ptlrpc_request *req)
 
         err = lustre_msg_get_status(req->rq_repmsg);
         if (lustre_msg_get_type(req->rq_repmsg) == PTL_RPC_MSG_ERR) {
+                struct obd_export *exp = req->rq_export;
+                __u32 opc = lustre_msg_get_opc(req->rq_reqmsg);
+
                 LCONSOLE_ERROR_MSG(0x011, "an error ocurred while communicating"
                                    " with %s The %s operation failed with %d",
-                                   req->rq_export ? 
-                                        obd_export_nid2str(req->rq_export)
-                                        : "(no nid)",
-                                   ll_opcode2str(lustre_msg_get_opc(req->rq_reqmsg)),
-                                   err);
+                                   exp ? obd_export_nid2str(exp) : "(no nid)",
+                                   ll_opcode2str(opc), err);
                 RETURN(err < 0 ? err : -EINVAL);
         }
 

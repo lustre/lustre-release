@@ -151,6 +151,8 @@ extern int obd_race_state;
 #define OBD_FAIL_LDLM_RECOV_CLIENTS      0x30d
 #define OBD_FAIL_LDLM_ENQUEUE_OLD_EXPORT 0x30e
 #define OBD_FAIL_LDLM_GLIMPSE            0x30f
+#define OBD_FAIL_LDLM_CANCEL_RACE        0x310
+#define OBD_FAIL_LDLM_CANCEL_EVICT_RACE  0x311
 
 #define OBD_FAIL_OSC                     0x400
 #define OBD_FAIL_OSC_BRW_READ_BULK       0x401

@@ -129,31 +129,15 @@ struct obd_info;
 
 typedef int (*obd_enqueue_update_f)(struct obd_info *oinfo, int rc);
 
-/* obd_enqueue parameters common for all levels (lov, osc). */
-struct obd_enqueue_info {
-        /* Flags used while lock handling. */
-        int   ei_flags;
-        /* Type of the lock being enqueued. */
-        __u32 ei_type;
-        /* Mode of the lock being enqueued. */
-        __u32 ei_mode;
-        /* Different callbacks for lock handling (blocking, completion,
-           glimpse */
-        void *ei_cb_bl;
-        void *ei_cb_cp;
-        void *ei_cb_gl;
-        /* Data to be passed into callbacks. */
-        void *ei_cbdata;
-        /* Request set for OSC async requests. */
-        struct ptlrpc_request_set *ei_rqset;
-};
-
 /* obd info for a particular level (lov, osc). */
 struct obd_info {
         /* Lock policy. It keeps an extent which is specific for a particular
          * OSC. (e.g. lov_prep_enqueue_set initialises extent of the policy,
          * and osc_enqueue passes it into ldlm_lock_match & ldlm_cli_enqueue. */
         ldlm_policy_data_t      oi_policy;
+        /* Flags used while lock handling. The flags obtained on the enqueue
+         * request are set here, therefore they are request specific. */
+        int                     oi_flags;
         /* Lock handle specific for every OSC lock. */
         struct lustre_handle   *oi_lockh;
         /* lsm data specific for every OSC. */
@@ -939,7 +923,8 @@ struct obd_ops {
                           int niocount, struct niobuf_local *local,
                           struct obd_trans_info *oti, int rc);
         int (*o_enqueue)(struct obd_export *, struct obd_info *oinfo,
-                         struct obd_enqueue_info *einfo);
+                         struct ldlm_enqueue_info *einfo,
+                         struct ptlrpc_request_set *rqset);
         int (*o_match)(struct obd_export *, struct lov_stripe_md *, __u32 type,
                        ldlm_policy_data_t *, __u32 mode, int *flags, void *data,
                        struct lustre_handle *lockh);

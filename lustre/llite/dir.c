@@ -220,15 +220,15 @@ static struct page *ll_get_dir_page(struct inode *dir, unsigned long n)
                              &res_id, LDLM_IBITS, &policy, LCK_CR, &lockh);
         if (!rc) {
                 struct lookup_intent it = { .it_op = IT_READDIR };
+                struct ldlm_enqueue_info einfo = { LDLM_IBITS, LCK_CR,
+                       ll_mdc_blocking_ast, ldlm_completion_ast, NULL, dir };
                 struct ptlrpc_request *request;
                 struct mdc_op_data data;
 
-                ll_prepare_mdc_op_data(&data, dir, NULL, NULL, 0, 0);
+                ll_prepare_mdc_op_data(&data, dir, NULL, NULL, 0, 0, NULL);
 
-                rc = mdc_enqueue(ll_i2sbi(dir)->ll_mdc_exp, LDLM_IBITS, &it,
-                                 LCK_CR, &data, &lockh, NULL, 0,
-                                 ldlm_completion_ast, ll_mdc_blocking_ast, dir,
-                                 0);
+                rc = mdc_enqueue(ll_i2sbi(dir)->ll_mdc_exp, &einfo, &it,
+                                 &data, &lockh, NULL, 0, 0);
 
                 request = (struct ptlrpc_request *)it.d.lustre.it_data;
                 if (request)
@@ -402,7 +402,7 @@ int ll_dir_setstripe(struct inode *inode, struct lov_user_md *lump)
         if (lump->lmm_magic != cpu_to_le32(LOV_USER_MAGIC))
                 lustre_swab_lov_user_md(lump);
 
-        ll_prepare_mdc_op_data(&data, inode, NULL, NULL, 0, 0);
+        ll_prepare_mdc_op_data(&data, inode, NULL, NULL, 0, 0, NULL);
 
         /* swabbing is done in lov_setstripe() on server side */
         rc = mdc_setattr(sbi->ll_mdc_exp, &data,

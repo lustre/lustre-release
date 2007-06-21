@@ -200,6 +200,17 @@ int ll_mdc_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock_desc *desc,
                 if (inode == NULL)
                         break;
 
+                LASSERT(lock->l_flags & LDLM_FL_CANCELING);
+                if ((bits & MDS_INODELOCK_LOOKUP) &&
+                    ll_have_md_lock(inode, MDS_INODELOCK_LOOKUP))
+                        bits &= ~MDS_INODELOCK_LOOKUP;
+                if ((bits & MDS_INODELOCK_UPDATE) &&
+                    ll_have_md_lock(inode, MDS_INODELOCK_UPDATE))
+                        bits &= ~MDS_INODELOCK_UPDATE;
+                if ((bits & MDS_INODELOCK_OPEN) &&
+                    ll_have_md_lock(inode, MDS_INODELOCK_OPEN))
+                        bits &= ~MDS_INODELOCK_OPEN;
+                
                 if (lock->l_resource->lr_name.name[0] != inode->i_ino ||
                     lock->l_resource->lr_name.name[1] != inode->i_generation) {
                         LDLM_ERROR(lock, "data mismatch with ino %lu/%u (%p)",
@@ -306,26 +317,27 @@ void ll_i2gids(__u32 *suppgids, struct inode *i1, struct inode *i2)
         }
 }
 
-int ll_prepare_mdc_op_data(struct mdc_op_data *data, struct inode *i1,
+int ll_prepare_mdc_op_data(struct mdc_op_data *op_data, struct inode *i1,
                             struct inode *i2, const char *name, int namelen,
-                            int mode)
+                            int mode, void *data)
 {
         LASSERT(i1);
 
         if (namelen > ll_i2sbi(i1)->ll_namelen)
                 return -ENAMETOOLONG;
-        ll_i2gids(data->suppgids, i1, i2);
-        ll_inode2fid(&data->fid1, i1);
+        ll_i2gids(op_data->suppgids, i1, i2);
+        ll_inode2fid(&op_data->fid1, i1);
 
         if (i2)
-                ll_inode2fid(&data->fid2, i2);
+                ll_inode2fid(&op_data->fid2, i2);
         else
-                memset(&data->fid2, 0, sizeof(data->fid2));
+                memset(&op_data->fid2, 0, sizeof(op_data->fid2));
 
-        data->name = name;
-        data->namelen = namelen;
-        data->create_mode = mode;
-        data->mod_time = CURRENT_SECONDS;
+        op_data->name = name;
+        op_data->namelen = namelen;
+        op_data->create_mode = mode;
+        op_data->mod_time = CURRENT_SECONDS;
+        op_data->data = data;
 
         return 0;
 }
@@ -522,7 +534,7 @@ static struct dentry *ll_lookup_it(struct inode *parent, struct dentry *dentry,
         icbd.icbd_parent = parent;
 
         rc = ll_prepare_mdc_op_data(&op_data, parent, NULL, dentry->d_name.name,
-                                    dentry->d_name.len, lookup_flags);
+                                    dentry->d_name.len, lookup_flags, NULL);
         if (rc)
                 RETURN(ERR_PTR(rc));
 
@@ -813,7 +825,7 @@ static int ll_new_node(struct inode *dir, struct qstr *name,
                 tgt_len = strlen(tgt)+1;
 
         err = ll_prepare_mdc_op_data(&op_data, dir, NULL, name->name,
-                                     name->len, 0);
+                                     name->len, 0, NULL);
         if (err)
                 GOTO(err_exit, err);
 
@@ -950,7 +962,7 @@ static int ll_link_generic(struct inode *src,  struct inode *dir,
                dir->i_generation, dir, name->len, name->name);
 
         err = ll_prepare_mdc_op_data(&op_data, src, dir, name->name,
-                                     name->len, 0);
+                                     name->len, 0, NULL);
         if (err)
                 GOTO(out, err);
         err = mdc_link(sbi->ll_mdc_exp, &op_data, &request);
@@ -984,11 +996,27 @@ static int ll_mkdir_generic(struct inode *dir, struct qstr *name, int mode,
         RETURN(err);
 }
 
+/* Try to find the child dentry by its name.
+   If found, put the result fid into @fid. */
+static void ll_get_child_fid(struct inode * dir, struct qstr *name,
+                             struct ll_fid *fid)
+{
+        struct dentry *parent, *child;
+        
+        parent = list_entry(dir->i_dentry.next, struct dentry, d_alias);
+        child = d_lookup(parent, name);
+        if (child) {
+                if (child->d_inode)
+                        ll_inode2fid(fid, child->d_inode);
+                dput(child);
+        }
+}
+
 static int ll_rmdir_generic(struct inode *dir, struct dentry *dparent,
                             struct qstr *name)
 {
         struct ptlrpc_request *request = NULL;
-        struct mdc_op_data op_data;
+        struct mdc_op_data op_data = {{0}};
         struct dentry *dentry;
         int rc;
         ENTRY;
@@ -1008,9 +1036,11 @@ static int ll_rmdir_generic(struct inode *dir, struct dentry *dparent,
         }
 
         rc = ll_prepare_mdc_op_data(&op_data, dir, NULL, name->name,
-                                    name->len, S_IFDIR);
+                                    name->len, S_IFDIR, NULL);
         if (rc)
                 GOTO(out, rc);
+        
+        ll_get_child_fid(dir, name, &op_data.fid3);
         rc = mdc_unlink(ll_i2sbi(dir)->ll_mdc_exp, &op_data, &request);
         if (rc)
                 GOTO(out, rc);
@@ -1100,7 +1130,7 @@ int ll_objects_destroy(struct ptlrpc_request *request, struct inode *dir)
 static int ll_unlink_generic(struct inode * dir, struct qstr *name)
 {
         struct ptlrpc_request *request = NULL;
-        struct mdc_op_data op_data;
+        struct mdc_op_data op_data = {{0}};
         int rc;
         ENTRY;
 
@@ -1108,9 +1138,11 @@ static int ll_unlink_generic(struct inode * dir, struct qstr *name)
                name->len, name->name, dir->i_ino, dir->i_generation, dir);
 
         rc = ll_prepare_mdc_op_data(&op_data, dir, NULL, name->name,
-                                    name->len, 0);
+                                    name->len, 0, NULL);
         if (rc)
                 GOTO(out, rc);
+
+        ll_get_child_fid(dir, name, &op_data.fid3);
         rc = mdc_unlink(ll_i2sbi(dir)->ll_mdc_exp, &op_data, &request);
         if (rc)
                 GOTO(out, rc);
@@ -1131,7 +1163,7 @@ static int ll_rename_generic(struct inode *src, struct qstr *src_name,
 {
         struct ptlrpc_request *request = NULL;
         struct ll_sb_info *sbi = ll_i2sbi(src);
-        struct mdc_op_data op_data;
+        struct mdc_op_data op_data = {{0}};
         int err;
 
         ENTRY;
@@ -1140,9 +1172,12 @@ static int ll_rename_generic(struct inode *src, struct qstr *src_name,
                src->i_ino, src->i_generation, src, tgt_name->len,
                tgt_name->name, tgt->i_ino, tgt->i_generation, tgt);
 
-        err = ll_prepare_mdc_op_data(&op_data, src, tgt, NULL, 0, 0);
+        err = ll_prepare_mdc_op_data(&op_data, src, tgt, NULL, 0, 0, NULL);
         if (err)
                 GOTO(out, err);
+        
+        ll_get_child_fid(src, src_name, &op_data.fid3);
+        ll_get_child_fid(tgt, tgt_name, &op_data.fid4);
         err = mdc_rename(sbi->ll_mdc_exp, &op_data,
                          src_name->name, src_name->len,
                          tgt_name->name, tgt_name->len, &request);

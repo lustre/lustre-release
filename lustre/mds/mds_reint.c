@@ -518,6 +518,9 @@ static int mds_reint_setattr(struct mds_update_record *rec, int offset,
 
         MDS_CHECK_RESENT(req, reconstruct_reint_setattr(rec, offset, req));
 
+        if (rec->ur_dlm)
+                ldlm_request_cancel(req, rec->ur_dlm, 0);
+
         if (rec->ur_iattr.ia_valid & ATTR_FROM_OPEN ||
             (req->rq_export->exp_connect_flags & OBD_CONNECT_RDONLY)) {
                 de = mds_fid2dentry(mds, rec->ur_fid1, NULL);
@@ -783,6 +786,9 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
 
         if (OBD_FAIL_CHECK(OBD_FAIL_MDS_REINT_CREATE))
                 GOTO(cleanup, rc = -ESTALE);
+
+        if (rec->ur_dlm)
+                ldlm_request_cancel(req, rec->ur_dlm, 0);
 
         dparent = mds_fid2locked_dentry(obd, rec->ur_fid1, NULL, LCK_EX, &lockh,
                                         rec->ur_name, rec->ur_namelen - 1,
@@ -1568,6 +1574,9 @@ static int mds_reint_unlink(struct mds_update_record *rec, int offset,
         if (OBD_FAIL_CHECK(OBD_FAIL_MDS_REINT_UNLINK))
                 GOTO(cleanup, rc = -ENOENT);
 
+        if (rec->ur_dlm)
+                ldlm_request_cancel(req, rec->ur_dlm, 0);
+
         rc = mds_get_parent_child_locked(obd, mds, rec->ur_fid1,
                                          &parent_lockh, &dparent, LCK_EX,
                                          MDS_INODELOCK_UPDATE, 
@@ -1807,6 +1816,9 @@ static int mds_reint_link(struct mds_update_record *rec, int offset,
         if (OBD_FAIL_CHECK(OBD_FAIL_MDS_REINT_LINK))
                 GOTO(cleanup, rc = -ENOENT);
 
+        if (rec->ur_dlm)
+                ldlm_request_cancel(req, rec->ur_dlm, 0);
+        
         /* Step 1: Lookup the source inode and target directory by FID */
         de_src = mds_fid2dentry(mds, rec->ur_fid1, NULL);
         if (IS_ERR(de_src))
@@ -2148,6 +2160,9 @@ static int mds_reint_rename(struct mds_update_record *rec, int offset,
         mds_counter_incr(req->rq_export, LPROC_MDS_RENAME);
         
         MDS_CHECK_RESENT(req, mds_reconstruct_generic(req));
+
+        if (rec->ur_dlm)
+                ldlm_request_cancel(req, rec->ur_dlm, 0);
 
         rc = mds_get_parents_children_locked(obd, mds, rec->ur_fid1, &de_srcdir,
                                              rec->ur_fid2, &de_tgtdir, LCK_EX,

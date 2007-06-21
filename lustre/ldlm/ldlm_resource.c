@@ -118,6 +118,26 @@ static int lprocfs_uint_rd(char *page, char **start, off_t off,
         return snprintf(page, count, "%u\n", *temp);
 }
 
+#define MAX_STRING_SIZE 128
+static int lprocfs_uint_wr(struct file *file, const char *buffer,
+                           unsigned long count, void *data)
+{
+        unsigned *p = data;
+        char dummy[MAX_STRING_SIZE + 1], *end;
+        unsigned long tmp;
+
+        dummy[MAX_STRING_SIZE] = '\0';
+        if (copy_from_user(dummy, buffer, MAX_STRING_SIZE))
+                return -EFAULT;
+
+        tmp = simple_strtoul(dummy, &end, 0);
+        if (dummy == end)
+                return -EINVAL;
+
+        *p = (unsigned int)tmp;
+        return count;
+}
+
 static int lprocfs_read_lru_size(char *page, char **start, off_t off,
                                  int count, int *eof, void *data)
 {
@@ -126,7 +146,6 @@ static int lprocfs_read_lru_size(char *page, char **start, off_t off,
                                &ns->ns_max_unused);
 }
 
-#define MAX_STRING_SIZE 128
 static int lprocfs_write_lru_size(struct file *file, const char *buffer,
                                   unsigned long count, void *data)
 {
@@ -200,6 +219,13 @@ void ldlm_proc_namespace(struct ldlm_namespace *ns)
                 lock_vars[0].read_fptr = lprocfs_read_lru_size;
                 lock_vars[0].write_fptr = lprocfs_write_lru_size;
                 lprocfs_add_vars(ldlm_ns_proc_dir, lock_vars, 0);
+                
+                snprintf(lock_name, MAX_STRING_SIZE, "%s/lru_max_age",
+                         ns->ns_name);
+                lock_vars[0].data = &ns->ns_max_age;
+                lock_vars[0].read_fptr = lprocfs_uint_rd;
+                lock_vars[0].write_fptr = lprocfs_uint_wr;
+                lprocfs_add_vars(ldlm_ns_proc_dir, lock_vars, 0);
         }
 }
 #undef MAX_STRING_SIZE
@@ -249,6 +275,7 @@ struct ldlm_namespace *ldlm_namespace_new(char *name, __u32 client)
         CFS_INIT_LIST_HEAD(&ns->ns_unused_list);
         ns->ns_nr_unused = 0;
         ns->ns_max_unused = LDLM_DEFAULT_LRU_SIZE;
+        ns->ns_max_age = LDLM_DEFAULT_MAX_ALIVE;
         spin_lock_init(&ns->ns_unused_lock);
 
         mutex_down(&ldlm_namespace_lock);
@@ -311,13 +338,15 @@ static void cleanup_resource(struct ldlm_resource *res, struct list_head *q,
                 lock->l_flags |= LDLM_FL_FAILED;
                 lock->l_flags |= flags;
 
+                /* ... without sending a CANCEL message for local_only. */
+                if (local_only)
+                        lock->l_flags |= LDLM_FL_LOCAL_ONLY;
+
                 if (local_only && (lock->l_readers || lock->l_writers)) {
                         /* This is a little bit gross, but much better than the
                          * alternative: pretend that we got a blocking AST from
                          * the server, so that when the lock is decref'd, it
                          * will go away ... */
-                        /* ... without sending a CANCEL message. */
-                        lock->l_flags |= LDLM_FL_LOCAL_ONLY;
                         unlock_res(res);
                         LDLM_DEBUG(lock, "setting FL_LOCAL_ONLY");
                         if (lock->l_completion_ast)
@@ -331,14 +360,9 @@ static void cleanup_resource(struct ldlm_resource *res, struct list_head *q,
 
                         unlock_res(res);
                         ldlm_lock2handle(lock, &lockh);
-                        if (!local_only) {
-                                rc = ldlm_cli_cancel(&lockh);
-                                if (rc)
-                                        CERROR("ldlm_cli_cancel: %d\n", rc);
-                        }
-                        /* Force local cleanup on errors, too. */
-                        if (local_only || rc != ELDLM_OK)
-                                ldlm_lock_cancel(lock);
+                        rc = ldlm_cli_cancel(&lockh);
+                        if (rc)
+                                CERROR("ldlm_cli_cancel: %d\n", rc);
                 } else {
                         ldlm_resource_unlink_lock(lock);
                         unlock_res(res);

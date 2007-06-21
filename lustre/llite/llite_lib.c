@@ -154,7 +154,8 @@ static int client_common_fill_super(struct super_block *sb,
         /* indicate the features supported by this client */
         data->ocd_connect_flags = OBD_CONNECT_IBITS | OBD_CONNECT_NODEVOH |
                                   OBD_CONNECT_JOIN |
-                                  OBD_CONNECT_ATTRFID | OBD_CONNECT_VERSION;
+                                  OBD_CONNECT_ATTRFID | OBD_CONNECT_VERSION |
+                                  OBD_CONNECT_CANCELSET;
 #ifdef CONFIG_FS_POSIX_ACL
         data->ocd_connect_flags |= OBD_CONNECT_ACL;
 #endif
@@ -255,7 +256,8 @@ static int client_common_fill_super(struct super_block *sb,
         }
 
         data->ocd_connect_flags = OBD_CONNECT_GRANT | OBD_CONNECT_VERSION |
-                                  OBD_CONNECT_REQPORTAL | OBD_CONNECT_BRW_SIZE;
+                                  OBD_CONNECT_REQPORTAL | OBD_CONNECT_BRW_SIZE |
+                                  OBD_CONNECT_CANCELSET;
 
         CDEBUG(D_RPCTRACE, "ocd_connect_flags: "LPX64" ocd_version: %d "
                "ocd_grant: %d\n", data->ocd_connect_flags,
@@ -1257,7 +1259,7 @@ int ll_setattr_raw(struct inode *inode, struct iattr *attr)
 
         /* We always do an MDS RPC, even if we're only changing the size;
          * only the MDS knows whether truncate() should fail with -ETXTBUSY */
-        ll_prepare_mdc_op_data(&op_data, inode, NULL, NULL, 0, 0);
+        ll_prepare_mdc_op_data(&op_data, inode, NULL, NULL, 0, 0, NULL);
 
         rc = mdc_setattr(sbi->ll_mdc_exp, &op_data,
                          attr, NULL, 0, NULL, 0, &request);
@@ -1746,7 +1748,7 @@ int ll_iocontrol(struct inode *inode, struct file *file,
                 if (!oinfo.oi_oa)
                         RETURN(-ENOMEM);
 
-                ll_prepare_mdc_op_data(&op_data, inode, NULL, NULL, 0, 0);
+                ll_prepare_mdc_op_data(&op_data, inode, NULL, NULL, 0, 0, NULL);
 
                 memset(&attr, 0, sizeof(attr));
                 attr.ia_attr_flags = flags;

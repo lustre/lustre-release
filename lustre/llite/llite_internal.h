@@ -441,7 +441,7 @@ int ll_mdc_blocking_ast(struct ldlm_lock *, struct ldlm_lock_desc *,
                         void *data, int flag);
 int ll_prepare_mdc_op_data(struct mdc_op_data *,
                            struct inode *i1, struct inode *i2,
-                           const char *name, int namelen, int mode);
+                           const char *name, int namelen, int mode, void *data);
 #ifndef LUSTRE_KERNEL_VERSION
 struct lookup_intent *ll_convert_intent(struct open_intent *oit,
                                         int lookup_flags);

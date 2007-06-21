@@ -8,7 +8,12 @@ typedef enum {
         LDLM_SYNC,
 } ldlm_sync_t;
 
+/* Cancel lru flag, it indicates we cancel aged locks. */
+#define LDLM_CANCEL_AGED 0x00000001
+
 int ldlm_cancel_lru(struct ldlm_namespace *ns, ldlm_sync_t sync);
+int ldlm_cancel_lru_local(struct ldlm_namespace *ns, struct list_head *cancels,
+                          int count, int max, int flags);
 
 /* ldlm_resource.c */
 int ldlm_resource_putref_locked(struct ldlm_resource *res);
@@ -18,8 +23,7 @@ void ldlm_resource_insert_lock_after(struct ldlm_lock *original,
 /* ldlm_lock.c */
 void ldlm_grant_lock(struct ldlm_lock *lock, struct list_head *work_list);
 struct ldlm_lock *
-ldlm_lock_create(struct ldlm_namespace *ns,
-                 struct lustre_handle *parent_lock_handle, struct ldlm_res_id,
+ldlm_lock_create(struct ldlm_namespace *ns, struct ldlm_res_id,
                  ldlm_type_t type, ldlm_mode_t, ldlm_blocking_callback,
                  ldlm_completion_callback, ldlm_glimpse_callback, void *data,
                  __u32 lvb_len);
@@ -38,7 +42,7 @@ void ldlm_lock_destroy_nolock(struct ldlm_lock *lock);
 
 /* ldlm_lockd.c */
 int ldlm_bl_to_thread(struct ldlm_namespace *ns, struct ldlm_lock_desc *ld,
-                      struct ldlm_lock *lock);
+                      struct ldlm_lock *lock, int flags);
 void ldlm_handle_bl_callback(struct ldlm_namespace *ns,
                              struct ldlm_lock_desc *ld, struct ldlm_lock *lock);
 

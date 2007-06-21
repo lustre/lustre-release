@@ -380,7 +380,7 @@ int ll_revalidate_it(struct dentry *de, int lookup_flags,
         LASSERT(it);
 
         ll_prepare_mdc_op_data(&op_data, de->d_parent->d_inode, de->d_inode,
-                               de->d_name.name, de->d_name.len, 0);
+                               de->d_name.name, de->d_name.len, 0, NULL);
 
         if ((it->it_op == IT_OPEN) && de->d_inode) {
                 struct inode *inode = de->d_inode;
@@ -517,7 +517,7 @@ do_lookup:
         }
         /*do real lookup here */
         ll_prepare_mdc_op_data(&op_data, de->d_parent->d_inode, NULL,
-                               de->d_name.name, de->d_name.len, 0);
+                               de->d_name.name, de->d_name.len, 0, NULL);
         rc = mdc_intent_lock(exp, &op_data, NULL, 0,  it, 0, &req,
                              ll_mdc_blocking_ast, 0);
         if (rc >= 0) {

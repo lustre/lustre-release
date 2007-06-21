@@ -31,7 +31,7 @@ struct osc_async_args {
 struct osc_enqueue_args {
         struct obd_export       *oa_exp;
         struct obd_info         *oa_oi;
-        struct obd_enqueue_info *oa_ei;
+        struct ldlm_enqueue_info*oa_ei;
 };
 
 #endif

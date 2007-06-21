@@ -150,9 +150,6 @@ void ldlm_lock_put(struct ldlm_lock *lock)
                 LASSERT(list_empty(&lock->l_res_link));
                 LASSERT(list_empty(&lock->l_pending_chain));
 
-                if (lock->l_parent)
-                        LDLM_LOCK_PUT(lock->l_parent);
-
                 atomic_dec(&res->lr_namespace->ns_locks);
                 ldlm_resource_putref(res);
                 lock->l_resource = NULL;
@@ -204,12 +201,6 @@ int ldlm_lock_destroy_internal(struct ldlm_lock *lock)
 {
         ENTRY;
 
-        if (!list_empty(&lock->l_children)) {
-                LDLM_ERROR(lock, "still has children (%p)!",
-                           lock->l_children.next);
-                ldlm_lock_dump(D_ERROR, lock, 0);
-                LBUG();
-        }
         if (lock->l_readers || lock->l_writers) {
                 LDLM_ERROR(lock, "lock still has references");
                 ldlm_lock_dump(D_ERROR, lock, 0);
@@ -289,8 +280,7 @@ static void lock_handle_addref(void *lock)
  *        after return, ldlm_*_put the resource and parent
  * returns: lock with refcount 2 - one for current caller and one for remote
  */
-static struct ldlm_lock *ldlm_lock_new(struct ldlm_lock *parent,
-                                       struct ldlm_resource *resource)
+static struct ldlm_lock *ldlm_lock_new(struct ldlm_resource *resource)
 {
         struct ldlm_lock *lock;
         ENTRY;
@@ -305,12 +295,10 @@ static struct ldlm_lock *ldlm_lock_new(struct ldlm_lock *parent,
         lock->l_resource = ldlm_resource_getref(resource);
 
         atomic_set(&lock->l_refc, 2);
-        CFS_INIT_LIST_HEAD(&lock->l_children);
         CFS_INIT_LIST_HEAD(&lock->l_res_link);
         CFS_INIT_LIST_HEAD(&lock->l_lru);
         CFS_INIT_LIST_HEAD(&lock->l_export_chain);
         CFS_INIT_LIST_HEAD(&lock->l_pending_chain);
-        CFS_INIT_LIST_HEAD(&lock->l_tmp);
         CFS_INIT_LIST_HEAD(&lock->l_bl_ast);
         CFS_INIT_LIST_HEAD(&lock->l_cp_ast);
         cfs_waitq_init(&lock->l_waitq);
@@ -322,14 +310,6 @@ static struct ldlm_lock *ldlm_lock_new(struct ldlm_lock *parent,
         lock->l_sl_policy.next = NULL;
 
         atomic_inc(&resource->lr_namespace->ns_locks);
-
-        if (parent != NULL) {
-                spin_lock(&resource->lr_namespace->ns_hash_lock);
-                lock->l_parent = LDLM_LOCK_GET(parent);
-                list_add(&lock->l_childof, &parent->l_children);
-                spin_unlock(&resource->lr_namespace->ns_hash_lock);
-        }
-
         CFS_INIT_LIST_HEAD(&lock->l_handle.h_link);
         class_handle_hash(&lock->l_handle, lock_handle_addref);
 
@@ -606,7 +586,7 @@ void ldlm_lock_decref_internal(struct ldlm_lock *lock, __u32 mode)
                 ldlm_lock_remove_from_lru(lock);
                 unlock_res_and_lock(lock);
                 if ((lock->l_flags & LDLM_FL_ATOMIC_CB) ||
-                                ldlm_bl_to_thread(ns, NULL, lock) != 0)
+                                ldlm_bl_to_thread(ns, NULL, lock, 0) != 0)
                         ldlm_handle_bl_callback(ns, NULL, lock);
         } else if (ns->ns_client == LDLM_NAMESPACE_CLIENT &&
                    !lock->l_readers && !lock->l_writers &&
@@ -615,12 +595,16 @@ void ldlm_lock_decref_internal(struct ldlm_lock *lock, __u32 mode)
                  * reference, put it on the LRU. */
                 LASSERT(list_empty(&lock->l_lru));
                 LASSERT(ns->ns_nr_unused >= 0);
+                lock->l_last_used = cfs_time_current();
                 spin_lock(&ns->ns_unused_lock);
                 list_add_tail(&lock->l_lru, &ns->ns_unused_list);
                 ns->ns_nr_unused++;
                 spin_unlock(&ns->ns_unused_lock);
                 unlock_res_and_lock(lock);
-                ldlm_cancel_lru(ns, LDLM_ASYNC);
+                /* Call ldlm_cancel_lru() only if EARLY_CANCEL is not supported
+                 * by the server, otherwise, it is done on enqueue. */
+                if (!exp_connect_cancelset(lock->l_conn_export))
+                        ldlm_cancel_lru(ns, LDLM_ASYNC);
         } else {
                 unlock_res_and_lock(lock);
         }
@@ -1068,7 +1052,6 @@ int ldlm_lock_match(struct ldlm_namespace *ns, int flags,
 
 /* Returns a referenced lock */
 struct ldlm_lock *ldlm_lock_create(struct ldlm_namespace *ns,
-                                   struct lustre_handle *parent_lock_handle,
                                    struct ldlm_res_id res_id, ldlm_type_t type,
                                    ldlm_mode_t mode,
                                    ldlm_blocking_callback blocking,
@@ -1076,24 +1059,16 @@ struct ldlm_lock *ldlm_lock_create(struct ldlm_namespace *ns,
                                    ldlm_glimpse_callback glimpse,
                                    void *data, __u32 lvb_len)
 {
-        struct ldlm_resource *res, *parent_res = NULL;
-        struct ldlm_lock *lock, *parent_lock = NULL;
+        struct ldlm_lock *lock;
+        struct ldlm_resource *res;
         ENTRY;
 
-        if (parent_lock_handle) {
-                parent_lock = ldlm_handle2lock(parent_lock_handle);
-                if (parent_lock)
-                        parent_res = parent_lock->l_resource;
-        }
-
-        res = ldlm_resource_get(ns, parent_res, res_id, type, 1);
+        res = ldlm_resource_get(ns, NULL, res_id, type, 1);
         if (res == NULL)
                 RETURN(NULL);
 
-        lock = ldlm_lock_new(parent_lock, res);
+        lock = ldlm_lock_new(res);
         ldlm_resource_putref(res);
-        if (parent_lock != NULL)
-                LDLM_LOCK_PUT(parent_lock);
 
         if (lock == NULL)
                 RETURN(NULL);
@@ -1395,6 +1370,7 @@ void ldlm_cancel_callback(struct ldlm_lock *lock)
                         LDLM_DEBUG(lock, "no blocking ast");
                 }
         }
+        lock->l_flags |= LDLM_FL_BL_DONE;
 }
 
 void ldlm_unlink_lock_skiplist(struct ldlm_lock *req)
@@ -1510,6 +1486,8 @@ void ldlm_cancel_locks_for_export(struct obd_export *exp)
                 spin_unlock(&exp->exp_ldlm_data.led_lock);
 
                 LDLM_DEBUG(lock, "export %p", exp);
+                ldlm_res_lvbo_update(res, NULL, 0, 1);
+
                 ldlm_lock_cancel(lock);
                 ldlm_reprocess_all(res);
 

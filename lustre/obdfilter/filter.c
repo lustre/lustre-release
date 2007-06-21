@@ -1470,8 +1470,7 @@ static int filter_intent_policy(struct ldlm_namespace *ns,
                          *
                          * Of course, this will all disappear when we switch to
                          * taking liblustre locks on the OST. */
-                        if (ns->ns_lvbo && ns->ns_lvbo->lvbo_update)
-                                ns->ns_lvbo->lvbo_update(res, NULL, 0, 1);
+                        ldlm_res_lvbo_update(res, NULL, 0, 1);
                 }
                 RETURN(ELDLM_LOCK_ABORTED);
         }
@@ -1497,8 +1496,8 @@ static int filter_intent_policy(struct ldlm_namespace *ns,
          * XXX nikita: situation when ldlm_server_glimpse_ast() failed before
          * sending ast is not handled. This can result in lost client writes.
          */
-        if (rc != 0 && ns->ns_lvbo && ns->ns_lvbo->lvbo_update)
-                ns->ns_lvbo->lvbo_update(res, NULL, 0, 1);
+        if (rc != 0)
+                ldlm_res_lvbo_update(res, NULL, 0, 1);
 
         lock_res(res);
         *reply_lvb = *res_lvb;
@@ -2500,7 +2499,6 @@ int filter_setattr(struct obd_export *exp, struct obd_info *oinfo,
                    struct obd_trans_info *oti)
 {
         struct ldlm_res_id res_id = { .name = { oinfo->oi_oa->o_id } };
-        struct ldlm_valblock_ops *ns_lvbo;
         struct filter_mod_data *fmd;
         struct lvfs_run_ctxt saved;
         struct filter_obd *filter;
@@ -2535,9 +2533,7 @@ int filter_setattr(struct obd_export *exp, struct obd_info *oinfo,
                                 res_id, LDLM_EXTENT, 0);
 
         if (res != NULL) {
-                ns_lvbo = res->lr_namespace->ns_lvbo;
-                if (ns_lvbo && ns_lvbo->lvbo_update)
-                        rc = ns_lvbo->lvbo_update(res, NULL, 0, 0);
+                rc = ldlm_res_lvbo_update(res, NULL, 0, 0);
                 ldlm_resource_putref(res);
         }
 

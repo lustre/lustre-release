@@ -318,6 +318,13 @@ Description: Short directio read returns full requested size rather than
 Details    : Direct I/O operations should return actual amount of bytes
              transferred rather than requested size.
 
+Severity   : enhancement
+Bugzilla   : 10589
+Description: metadata RPC reduction (e.g. for rm performance)
+Details    : decrease the amount of synchronous RPC between clients and servers
+             by canceling conflicing lock before the operation on the client side
+             and packing thier handles into the main operation RPC to server.
+
 --------------------------------------------------------------------------------
 
 2007-05-03  Cluster File Systems, Inc. <info@clusterfs.com>

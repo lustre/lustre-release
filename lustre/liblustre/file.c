@@ -97,6 +97,7 @@ void llu_prepare_mdc_op_data(struct mdc_op_data *data,
         data->namelen = namelen;
         data->create_mode = mode;
         data->mod_time = CURRENT_TIME;
+        data->data = NULL;
 }
 
 void obdo_refresh_inode(struct inode *dst,

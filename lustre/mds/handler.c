@@ -2258,7 +2258,7 @@ static void fixup_handle_for_resent_req(struct ptlrpc_request *req, int offset,
         struct obd_export *exp = req->rq_export;
         struct ldlm_request *dlmreq =
                 lustre_msg_buf(req->rq_reqmsg, offset, sizeof(*dlmreq));
-        struct lustre_handle remote_hdl = dlmreq->lock_handle1;
+        struct lustre_handle remote_hdl = dlmreq->lock_handle[0];
         struct list_head *iter;
 
         if (!(lustre_msg_get_flags(req->rq_reqmsg) & MSG_RESENT))

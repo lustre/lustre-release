@@ -283,17 +283,20 @@ extern void lustre_swab_ptlrpc_body(struct ptlrpc_body *pb);
 #define OBD_CONNECT_QUOTA64    0x80000ULL /* 64bit qunit_data.qd_count b=10707*/
 #define OBD_CONNECT_FID_CAPA  0x100000ULL /* fid capability */
 #define OBD_CONNECT_OSS_CAPA  0x200000ULL /* OSS capability */
+#define OBD_CONNECT_CANCELSET 0x400000ULL /* Early batched cancels. */
 /* also update obd_connect_names[] for lprocfs_rd_connect_flags()
  * and lustre/utils/wirecheck.c */
 
 #define MDS_CONNECT_SUPPORTED  (OBD_CONNECT_RDONLY | OBD_CONNECT_VERSION | \
                                 OBD_CONNECT_ACL | OBD_CONNECT_XATTR | \
                                 OBD_CONNECT_IBITS | OBD_CONNECT_JOIN | \
-                                OBD_CONNECT_NODEVOH | OBD_CONNECT_ATTRFID)
+                                OBD_CONNECT_NODEVOH | OBD_CONNECT_ATTRFID | \
+                                OBD_CONNECT_CANCELSET)
 #define OST_CONNECT_SUPPORTED  (OBD_CONNECT_SRVLOCK | OBD_CONNECT_GRANT | \
                                 OBD_CONNECT_REQPORTAL | OBD_CONNECT_VERSION | \
                                 OBD_CONNECT_TRUNCLOCK | OBD_CONNECT_INDEX | \
-                                OBD_CONNECT_BRW_SIZE | OBD_CONNECT_QUOTA64)
+                                OBD_CONNECT_BRW_SIZE | OBD_CONNECT_QUOTA64 | \
+                                OBD_CONNECT_CANCELSET)
 #define ECHO_CONNECT_SUPPORTED (0)
 #define MGS_CONNECT_SUPPORTED  (OBD_CONNECT_VERSION)
 
@@ -305,6 +308,9 @@ extern void lustre_swab_ptlrpc_body(struct ptlrpc_body *pb);
 #define OBD_OCD_VERSION_MINOR(version) ((int)((version)>>16)&255)
 #define OBD_OCD_VERSION_PATCH(version) ((int)((version)>>8)&255)
 #define OBD_OCD_VERSION_FIX(version)   ((int)(version)&255)
+
+#define exp_connect_cancelset(exp) \
+        ((exp) ? (exp)->exp_connect_flags & OBD_CONNECT_CANCELSET : 0)
 
 /* This structure is used for both request and reply.
  *
@@ -1046,13 +1052,26 @@ struct ldlm_lock_desc {
 
 extern void lustre_swab_ldlm_lock_desc (struct ldlm_lock_desc *l);
 
+#define LDLM_LOCKREQ_HANDLES 2
+#define LDLM_ENQUEUE_CANCEL_OFF 1
+
 struct ldlm_request {
         __u32 lock_flags;
-        __u32 lock_padding;     /* also fix lustre_swab_ldlm_request */
+        __u32 lock_count;
         struct ldlm_lock_desc lock_desc;
-        struct lustre_handle lock_handle1;
-        struct lustre_handle lock_handle2;
+        struct lustre_handle lock_handle[LDLM_LOCKREQ_HANDLES];
 };
+
+/* If LDLM_ENQUEUE, 1 slot is already occupied, 1 is available.
+ * Otherwise, 2 are available. */
+#define ldlm_request_bufsize(count,type)                                \
+({                                                                      \
+        int _avail = LDLM_LOCKREQ_HANDLES;                              \
+        _avail -= (type == LDLM_ENQUEUE ? LDLM_ENQUEUE_CANCEL_OFF : 0); \
+        sizeof(struct ldlm_request) +                                   \
+        (count - _avail > 0 ? count - _avail : 0) *                     \
+        sizeof(struct lustre_handle);                                   \
+})
 
 extern void lustre_swab_ldlm_request (struct ldlm_request *rq);
 

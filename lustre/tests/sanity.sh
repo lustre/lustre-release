@@ -3856,6 +3856,139 @@ test_119b() # bug 11737
 }
 run_test 119b "Sparse directIO read must return actual read amount"
 
+test_120a() {
+        mkdir $DIR/$tdir
+        cancel_lru_locks mdc
+        stat $DIR/$tdir > /dev/null
+        can1=`awk '/ldlm_cancel/ {print $2}' $LPROC/ldlm/services/ldlm_canceld/stats`
+        blk1=`awk '/ldlm_bl_callback/ {print $2}' $LPROC/ldlm/services/ldlm_cbd/stats`
+        mkdir $DIR/$tdir/d1
+        can2=`awk '/ldlm_cancel/ {print $2}' $LPROC/ldlm/services/ldlm_canceld/stats`
+        blk2=`awk '/ldlm_bl_callback/ {print $2}' $LPROC/ldlm/services/ldlm_cbd/stats`
+        [ $can1 -eq $can2 ] || error $((can2-can1)) "cancel RPC occured."
+        [ $blk1 -eq $blk2 ] || error $((blk2-blk1)) "blocking RPC occured."
+}
+run_test 120a "Early Lock Cancel: mkdir test"
+
+test_120b() {
+        mkdir $DIR/$tdir
+        cancel_lru_locks mdc
+        stat $DIR/$tdir > /dev/null
+        can1=`awk '/ldlm_cancel/ {print $2}' $LPROC/ldlm/services/ldlm_canceld/stats`
+        blk1=`awk '/ldlm_bl_callback/ {print $2}' $LPROC/ldlm/services/ldlm_cbd/stats`
+        touch $DIR/$tdir/f1
+        blk2=`awk '/ldlm_bl_callback/ {print $2}' $LPROC/ldlm/services/ldlm_cbd/stats`
+        can2=`awk '/ldlm_cancel/ {print $2}' $LPROC/ldlm/services/ldlm_canceld/stats`
+        [ $can1 -eq $can2 ] || error $((can2-can1)) "cancel RPC occured."
+        [ $blk1 -eq $blk2 ] || error $((blk2-blk1)) "blocking RPC occured."
+}
+run_test 120b "Early Lock Cancel: create test"
+
+test_120c() {
+        mkdir -p $DIR/$tdir/d1 $DIR/$tdir/d2
+        touch $DIR/$tdir/d1/f1
+        cancel_lru_locks mdc
+        stat $DIR/$tdir/d1 $DIR/$tdir/d2 $DIR/$tdir/d1/f1 > /dev/null
+        can1=`awk '/ldlm_cancel/ {print $2}' $LPROC/ldlm/services/ldlm_canceld/stats`
+        blk1=`awk '/ldlm_bl_callback/ {print $2}' $LPROC/ldlm/services/ldlm_cbd/stats`
+        ln $DIR/$tdir/d1/f1 $DIR/$tdir/d2/f2
+        can2=`awk '/ldlm_cancel/ {print $2}' $LPROC/ldlm/services/ldlm_canceld/stats`
+        blk2=`awk '/ldlm_bl_callback/ {print $2}' $LPROC/ldlm/services/ldlm_cbd/stats`
+        [ $can1 -eq $can2 ] || error $((can2-can1)) "cancel RPC occured."
+        [ $blk1 -eq $blk2 ] || error $((blk2-blk1)) "blocking RPC occured."
+}
+run_test 120c "Early Lock Cancel: link test"
+
+test_120d() {
+        touch $DIR/$tdir
+        cancel_lru_locks mdc
+        stat $DIR/$tdir > /dev/null
+        can1=`awk '/ldlm_cancel/ {print $2}' $LPROC/ldlm/services/ldlm_canceld/stats`
+        blk1=`awk '/ldlm_bl_callback/ {print $2}' $LPROC/ldlm/services/ldlm_cbd/stats`
+        chmod a+x $DIR/$tdir
+        can2=`awk '/ldlm_cancel/ {print $2}' $LPROC/ldlm/services/ldlm_canceld/stats`
+        blk2=`awk '/ldlm_bl_callback/ {print $2}' $LPROC/ldlm/services/ldlm_cbd/stats`
+        [ $can1 -eq $can2 ] || error $((can2-can1)) "cancel RPC occured."
+        [ $blk1 -eq $blk2 ] || error $((blk2-blk1)) "blocking RPC occured."
+}
+run_test 120d "Early Lock Cancel: setattr test"
+
+test_120e() {
+        mkdir $DIR/$tdir
+        dd if=/dev/zero of=$DIR/$tdir/f1 count=1
+        cancel_lru_locks mdc
+        cancel_lru_locks osc
+        dd if=$DIR/$tdir/f1 of=/dev/null
+        stat $DIR/$tdir $DIR/$tdir/f1 > /dev/null
+        can1=`awk '/ldlm_cancel/ {print $2}' $LPROC/ldlm/services/ldlm_canceld/stats`
+        blk1=`awk '/ldlm_bl_callback/ {print $2}' $LPROC/ldlm/services/ldlm_cbd/stats`
+        unlink $DIR/$tdir/f1
+        can2=`awk '/ldlm_cancel/ {print $2}' $LPROC/ldlm/services/ldlm_canceld/stats`
+        blk2=`awk '/ldlm_bl_callback/ {print $2}' $LPROC/ldlm/services/ldlm_cbd/stats`
+        [ $can1 -eq $can2 ] || error $((can2-can1)) "cancel RPC occured."
+        [ $blk1 -eq $blk2 ] || error $((blk2-blk1)) "blocking RPC occured."
+}
+run_test 120e "Early Lock Cancel: unlink test"
+
+test_120f() {
+        mkdir -p $DIR/$tdir/d1 $DIR/$tdir/d2
+        dd if=/dev/zero of=$DIR/$tdir/d1/f1 count=1
+        dd if=/dev/zero of=$DIR/$tdir/d2/f2 count=1
+        cancel_lru_locks mdc
+        cancel_lru_locks osc
+        dd if=$DIR/$tdir/d1/f1 of=/dev/null
+        dd if=$DIR/$tdir/d2/f2 of=/dev/null
+        stat $DIR/$tdir/d1 $DIR/$tdir/d2 $DIR/$tdir/d1/f1 $DIR/$tdir/d2/f2 > /dev/null
+        can1=`awk '/ldlm_cancel/ {print $2}' $LPROC/ldlm/services/ldlm_canceld/stats`
+        blk1=`awk '/ldlm_bl_callback/ {print $2}' $LPROC/ldlm/services/ldlm_cbd/stats`
+        mv $DIR/$tdir/d1/f1 $DIR/$tdir/d2/f2
+        can2=`awk '/ldlm_cancel/ {print $2}' $LPROC/ldlm/services/ldlm_canceld/stats`
+        blk2=`awk '/ldlm_bl_callback/ {print $2}' $LPROC/ldlm/services/ldlm_cbd/stats`
+        [ $can1 -eq $can2 ] || error $((can2-can1)) "cancel RPC occured."
+        [ $blk1 -eq $blk2 ] || error $((blk2-blk1)) "blocking RPC occured."
+}
+run_test 120f "Early Lock Cancel: rename test"
+
+test_120g() {
+        count=10000
+        echo create $count files
+        mkdir  $DIR/$tdir
+        cancel_lru_locks mdc
+        cancel_lru_locks osc
+        t0=`date +%s`
+        
+        can0=`awk '/ldlm_cancel/ {print $2}' $LPROC/ldlm/services/ldlm_canceld/stats`
+        blk0=`awk '/ldlm_bl_callback/ {print $2}' $LPROC/ldlm/services/ldlm_cbd/stats`
+        createmany -o $DIR/$tdir/f $count
+        sync
+        can1=`awk '/ldlm_cancel/ {print $2}' $LPROC/ldlm/services/ldlm_canceld/stats`
+        blk1=`awk '/ldlm_bl_callback/ {print $2}' $LPROC/ldlm/services/ldlm_cbd/stats`
+        t1=`date +%s`
+        echo total: $((can1-can0)) cancels, $((blk1-blk0)) blockings
+        echo rm $count files
+        rm -r $DIR/$tdir
+        sync
+        can2=`awk '/ldlm_cancel/ {print $2}' $LPROC/ldlm/services/ldlm_canceld/stats`
+        blk2=`awk '/ldlm_bl_callback/ {print $2}' $LPROC/ldlm/services/ldlm_cbd/stats`
+        t2=`date +%s`
+        echo total: $count removes in $((t2-t1))
+        echo total: $((can2-can1)) cancels, $((blk2-blk1)) blockings
+        sleep 2
+        # wait for commitment of removal
+}
+run_test 120g "Early Lock Cancel: performance test"
+
+test_121() { #bug #10589
+	rm -rf $DIR/$tfile
+	writes=`dd if=/dev/zero of=$DIR/$tfile count=1 2>&1 | awk 'BEGIN { FS="+" } /out/ {print $1}'`
+	sysctl -w lustre.fail_loc=0x310
+	cancel_lru_locks osc > /dev/null
+	reads=`dd if=$DIR/$tfile of=/dev/null 2>&1 | awk 'BEGIN { FS="+" } /in/ {print $1}'`
+	sysctl -w lustre.fail_loc=0
+	[ $reads -eq $writes ] || error "read" $reads "blocks, must be" $writes
+}
+run_test 121 "read cancel race ========="
+
 TMPDIR=$OLDTMPDIR
 TMP=$OLDTMP
 HOME=$OLDHOME

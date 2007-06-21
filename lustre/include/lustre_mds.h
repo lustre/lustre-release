@@ -48,11 +48,14 @@ struct lustre_md {
 struct mdc_op_data {
         struct ll_fid    fid1;
         struct ll_fid    fid2;
+        struct ll_fid    fid3;
+        struct ll_fid    fid4;
         __u64            mod_time;
         const char      *name;
         int              namelen;
         __u32            create_mode;
         __u32            suppgids[2];
+        void            *data;
 };
 
 struct mds_update_record {
@@ -74,6 +77,7 @@ struct mds_update_record {
         __u32 ur_mode;
         __u32 ur_flags;
         struct lvfs_grp_hash_entry *ur_grp_entry;
+        struct ldlm_request *ur_dlm;
 };
 
 /* file data for open files on MDS */
@@ -122,17 +126,10 @@ int mdc_intent_lock(struct obd_export *exp,
                     struct lookup_intent *, int,
                     struct ptlrpc_request **reqp,
                     ldlm_blocking_callback cb_blocking, int extra_lock_flags);
-int mdc_enqueue(struct obd_export *exp,
-                int lock_type,
-                struct lookup_intent *it,
-                int lock_mode,
-                struct mdc_op_data *data,
-                struct lustre_handle *lockh,
-                void *lmm,
-                int lmmlen,
-                ldlm_completion_callback cb_completion,
-                ldlm_blocking_callback cb_blocking,
-                void *cb_data, int extra_lock_flags);
+int mdc_enqueue(struct obd_export *exp, struct ldlm_enqueue_info *einfo,
+                struct lookup_intent *it, struct mdc_op_data *data,
+                struct lustre_handle *lockh, void *lmm, int lmmlen,
+                int extra_lock_flags);
 
 /* mdc/mdc_request.c */
 int mdc_init_ea_size(struct obd_export *mdc_exp, struct obd_export *lov_exp);
@@ -182,6 +179,9 @@ int mdc_rename(struct obd_export *exp, struct mdc_op_data *data,
 int mdc_sync(struct obd_export *exp, struct ll_fid *fid,
              struct ptlrpc_request **);
 int mdc_create_client(struct obd_uuid uuid, struct ptlrpc_client *cl);
+int mdc_resource_get_unused(struct obd_export *exp, struct ll_fid *fid,
+                            struct list_head *cancels, ldlm_mode_t mode,
+                            __u64 bits);
 
 /* Store the generation of a newly-created inode in |req| for replay. */
 void mdc_store_inode_generation(struct ptlrpc_request *req, int reqoff,

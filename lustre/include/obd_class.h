@@ -1115,30 +1115,30 @@ static inline int obd_iocontrol(unsigned int cmd, struct obd_export *exp,
 
 static inline int obd_enqueue_rqset(struct obd_export *exp,
                                     struct obd_info *oinfo,
-                                    struct obd_enqueue_info *einfo)
+                                    struct ldlm_enqueue_info *einfo)
 {
+        struct ptlrpc_request_set *set = NULL;
         int rc;
         ENTRY;
 
         EXP_CHECK_OP(exp, enqueue);
         EXP_COUNTER_INCREMENT(exp, enqueue);
 
-        einfo->ei_rqset =  ptlrpc_prep_set();
-        if (einfo->ei_rqset == NULL)
+        set =  ptlrpc_prep_set();
+        if (set == NULL)
                 RETURN(-ENOMEM);
 
-        rc = OBP(exp->exp_obd, enqueue)(exp, oinfo, einfo);
+        rc = OBP(exp->exp_obd, enqueue)(exp, oinfo, einfo, set);
         if (rc == 0)
-                rc = ptlrpc_set_wait(einfo->ei_rqset);
-        ptlrpc_set_destroy(einfo->ei_rqset);
-        einfo->ei_rqset = NULL;
-
+                rc = ptlrpc_set_wait(set);
+        ptlrpc_set_destroy(set);
         RETURN(rc);
 }
 
 static inline int obd_enqueue(struct obd_export *exp,
                               struct obd_info *oinfo,
-                              struct obd_enqueue_info *einfo)
+                              struct ldlm_enqueue_info *einfo,
+                              struct ptlrpc_request_set *set)
 {
         int rc;
         ENTRY;
@@ -1146,7 +1146,7 @@ static inline int obd_enqueue(struct obd_export *exp,
         EXP_CHECK_OP(exp, enqueue);
         EXP_COUNTER_INCREMENT(exp, enqueue);
 
-        rc = OBP(exp->exp_obd, enqueue)(exp, oinfo, einfo);
+        rc = OBP(exp->exp_obd, enqueue)(exp, oinfo, einfo, set);
         RETURN(rc);
 }
 

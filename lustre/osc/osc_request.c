@@ -543,6 +543,28 @@ static int osc_sync(struct obd_export *exp, struct obdo *oa,
         return rc;
 }
 
+/* Find and cancel locally locks matched by @mode in the resource found by
+ * @objid. Found locks are added into @cancel list. Returns the amount of
+ * locks added to @cancels list. */
+static int osc_resource_get_unused(struct obd_export *exp, __u64 objid,
+                                   struct list_head *cancels, ldlm_mode_t mode,
+                                   int lock_flags)
+{
+        struct ldlm_namespace *ns = exp->exp_obd->obd_namespace;
+        struct ldlm_res_id res_id = { .name = { objid } };
+        struct ldlm_resource *res = ldlm_resource_get(ns, NULL, res_id, 0, 0);
+        int count;
+        ENTRY;
+
+        if (res == NULL)
+                RETURN(0);
+
+        count = ldlm_cancel_resource_local(res, cancels, NULL, mode,
+                                           lock_flags, 0, NULL);
+        ldlm_resource_putref(res);
+        RETURN(count);
+}
+
 /* Destroy requests can be async always on the client, and we don't even really
  * care about the return code since the client cannot do anything at all about
  * a destroy failure.
@@ -557,9 +579,11 @@ static int osc_destroy(struct obd_export *exp, struct obdo *oa,
                        struct lov_stripe_md *ea, struct obd_trans_info *oti,
                        struct obd_export *md_export)
 {
+        CFS_LIST_HEAD(cancels);
         struct ptlrpc_request *req;
         struct ost_body *body;
-        int size[2] = { sizeof(struct ptlrpc_body), sizeof(*body) };
+        int size[3] = { sizeof(struct ptlrpc_body), sizeof(*body), 0 };
+        int count, bufcount = 2;
         ENTRY;
 
         if (!oa) {
@@ -567,8 +591,19 @@ static int osc_destroy(struct obd_export *exp, struct obdo *oa,
                 RETURN(-EINVAL);
         }
 
+        count = osc_resource_get_unused(exp, oa->o_id, &cancels, LCK_PW,
+                                        LDLM_FL_DISCARD_DATA);
+        if (exp_connect_cancelset(exp) && count) {
+                bufcount = 3;
+                size[REQ_REC_OFF + 1] = ldlm_request_bufsize(count,OST_DESTROY);
+        }
         req = ptlrpc_prep_req(class_exp2cliimp(exp), LUSTRE_OST_VERSION,
-                              OST_DESTROY, 2, size, NULL);
+                              OST_DESTROY, bufcount, size, NULL);
+        if (req)
+                ldlm_cli_cancel_list(&cancels, count, req, REQ_REC_OFF + 1);
+        else
+                ldlm_lock_list_put(&cancels, l_bl_ast, count);
+
         if (!req)
                 RETURN(-ENOMEM);
 
@@ -2686,7 +2721,7 @@ static int osc_enqueue_fini(struct ptlrpc_request *req, struct obd_info *oinfo,
 static int osc_enqueue_interpret(struct ptlrpc_request *req,
                                  struct osc_enqueue_args *aa, int rc)
 {
-        int intent = aa->oa_ei->ei_flags & LDLM_FL_HAS_INTENT;
+        int intent = aa->oa_oi->oi_flags & LDLM_FL_HAS_INTENT;
         struct lov_stripe_md *lsm = aa->oa_oi->oi_md;
         struct ldlm_lock *lock;
 
@@ -2697,7 +2732,7 @@ static int osc_enqueue_interpret(struct ptlrpc_request *req,
         /* Complete obtaining the lock procedure. */
         rc = ldlm_cli_enqueue_fini(aa->oa_exp, req, aa->oa_ei->ei_type, 1,
                                    aa->oa_ei->ei_mode,
-                                   &aa->oa_ei->ei_flags,
+                                   &aa->oa_oi->oi_flags,
                                    &lsm->lsm_oinfo[0]->loi_lvb,
                                    sizeof(lsm->lsm_oinfo[0]->loi_lvb),
                                    lustre_swab_ost_lvb,
@@ -2724,13 +2759,14 @@ static int osc_enqueue_interpret(struct ptlrpc_request *req,
  * is excluded from the cluster -- such scenarious make the life difficult, so
  * release locks just after they are obtained. */
 static int osc_enqueue(struct obd_export *exp, struct obd_info *oinfo,
-                       struct obd_enqueue_info *einfo)
+                       struct ldlm_enqueue_info *einfo,
+                       struct ptlrpc_request_set *rqset)
 {
         struct ldlm_res_id res_id = { .name = {oinfo->oi_md->lsm_object_id} };
         struct obd_device *obd = exp->exp_obd;
         struct ldlm_reply *rep;
         struct ptlrpc_request *req = NULL;
-        int intent = einfo->ei_flags & LDLM_FL_HAS_INTENT;
+        int intent = oinfo->oi_flags & LDLM_FL_HAS_INTENT;
         int rc;
         ENTRY;
 
@@ -2744,12 +2780,13 @@ static int osc_enqueue(struct obd_export *exp, struct obd_info *oinfo,
                 goto no_match;
 
         /* Next, search for already existing extent locks that will cover us */
-        rc = ldlm_lock_match(obd->obd_namespace, einfo->ei_flags | LDLM_FL_LVB_READY, &res_id,
+        rc = ldlm_lock_match(obd->obd_namespace,
+                             oinfo->oi_flags | LDLM_FL_LVB_READY, &res_id,
                              einfo->ei_type, &oinfo->oi_policy, einfo->ei_mode,
                              oinfo->oi_lockh);
         if (rc == 1) {
                 osc_set_data_with_check(oinfo->oi_lockh, einfo->ei_cbdata,
-                                        einfo->ei_flags);
+                                        oinfo->oi_flags);
                 if (intent) {
                         /* I would like to be able to ASSERT here that rss <=
                          * kms, but I can't, for reasons which are explained in
@@ -2760,7 +2797,7 @@ static int osc_enqueue(struct obd_export *exp, struct obd_info *oinfo,
                 oinfo->oi_cb_up(oinfo, ELDLM_OK);
 
                 /* For async requests, decref the lock. */
-                if (einfo->ei_rqset)
+                if (rqset)
                         ldlm_lock_decref(oinfo->oi_lockh, einfo->ei_mode);
 
                 RETURN(ELDLM_OK);
@@ -2779,7 +2816,8 @@ static int osc_enqueue(struct obd_export *exp, struct obd_info *oinfo,
          * locks out from other users right now, too. */
 
         if (einfo->ei_mode == LCK_PR) {
-                rc = ldlm_lock_match(obd->obd_namespace, einfo->ei_flags | LDLM_FL_LVB_READY,
+                rc = ldlm_lock_match(obd->obd_namespace,
+                                     oinfo->oi_flags | LDLM_FL_LVB_READY,
                                      &res_id, einfo->ei_type, &oinfo->oi_policy,
                                      LCK_PW, oinfo->oi_lockh);
                 if (rc == 1) {
@@ -2787,11 +2825,11 @@ static int osc_enqueue(struct obd_export *exp, struct obd_info *oinfo,
                          * be more elegant than adding another parameter to
                          * lock_match.  I want a second opinion. */
                         /* addref the lock only if not async requests. */
-                        if (!einfo->ei_rqset)
+                        if (!rqset)
                                 ldlm_lock_addref(oinfo->oi_lockh, LCK_PR);
                         osc_set_data_with_check(oinfo->oi_lockh,
                                                 einfo->ei_cbdata,
-                                                einfo->ei_flags);
+                                                oinfo->oi_flags);
                         oinfo->oi_cb_up(oinfo, ELDLM_OK);
                         ldlm_lock_decref(oinfo->oi_lockh, LCK_PW);
                         RETURN(ELDLM_OK);
@@ -2802,10 +2840,10 @@ static int osc_enqueue(struct obd_export *exp, struct obd_info *oinfo,
         if (intent) {
                 int size[3] = {
                         [MSG_PTLRPC_BODY_OFF] = sizeof(struct ptlrpc_body),
-                        [DLM_LOCKREQ_OFF]     = sizeof(struct ldlm_request) };
+                        [DLM_LOCKREQ_OFF]     = sizeof(struct ldlm_request),
+                        [DLM_LOCKREQ_OFF + 1] = 0 };
 
-                req = ptlrpc_prep_req(class_exp2cliimp(exp), LUSTRE_DLM_VERSION,
-                                      LDLM_ENQUEUE, 2, size, NULL);
+                req = ldlm_prep_enqueue_req(exp, 2, size, NULL, 0);
                 if (req == NULL)
                         RETURN(-ENOMEM);
 
@@ -2816,18 +2854,15 @@ static int osc_enqueue(struct obd_export *exp, struct obd_info *oinfo,
         }
 
         /* users of osc_enqueue() can pass this flag for ldlm_lock_match() */
-        einfo->ei_flags &= ~LDLM_FL_BLOCK_GRANTED;
+        oinfo->oi_flags &= ~LDLM_FL_BLOCK_GRANTED;
 
-        rc = ldlm_cli_enqueue(exp, &req, res_id, einfo->ei_type,
-                              &oinfo->oi_policy, einfo->ei_mode,
-                              &einfo->ei_flags, einfo->ei_cb_bl,
-                              einfo->ei_cb_cp, einfo->ei_cb_gl,
-                              einfo->ei_cbdata,
+        rc = ldlm_cli_enqueue(exp, &req, einfo, res_id,
+                              &oinfo->oi_policy, &oinfo->oi_flags,
                               &oinfo->oi_md->lsm_oinfo[0]->loi_lvb,
                               sizeof(oinfo->oi_md->lsm_oinfo[0]->loi_lvb),
                               lustre_swab_ost_lvb, oinfo->oi_lockh,
-                              einfo->ei_rqset ? 1 : 0);
-        if (einfo->ei_rqset) {
+                              rqset ? 1 : 0);
+        if (rqset) {
                 if (!rc) {
                         struct osc_enqueue_args *aa;
                         CLASSERT(sizeof(*aa) <= sizeof(req->rq_async_args));
@@ -2837,7 +2872,7 @@ static int osc_enqueue(struct obd_export *exp, struct obd_info *oinfo,
                         aa->oa_exp = exp;
 
                         req->rq_interpret_reply = osc_enqueue_interpret;
-                        ptlrpc_set_add_req(einfo->ei_rqset, req);
+                        ptlrpc_set_add_req(rqset, req);
                 } else if (intent) {
                         ptlrpc_req_finished(req);
                 }
