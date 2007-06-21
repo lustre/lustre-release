@@ -14,6 +14,13 @@ tbd         Cluster File Systems, Inc. <info@clusterfs.com>
        * Note that reiserfs quotas are disabled on SLES 10 in this kernel.
        * bug fixes
 
+Severity   : normal
+Frequency  : rare
+Bugzilla   : 11324
+Description: LDISKFS-fs error (device sdc): ldiskfs_free_blocks
+Details    : a disk corruption can cause the mballoc code to assert on a
+	     double free.
+
 Severity   : enhancement
 Bugzilla   : 12194
 Description: add optional extra BUILD_VERSION info
