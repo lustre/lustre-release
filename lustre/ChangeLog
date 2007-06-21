@@ -313,6 +313,7 @@ Details    : A lock's skiplist need to be cleanup when it being unlinked
 
 Severity   : normal
 Bugzilla   : 11737
+Frequency  : always
 Description: Short directio read returns full requested size rather than
              actual amount read.
 Details    : Direct I/O operations should return actual amount of bytes
@@ -340,8 +341,16 @@ Details    : 2.6.22 has only one visble change, SLAB_CTOR_* constants is
 
 Severity   : minor
 Bugzilla   : 12747
+Frequency  : always
 Description: fix mal-formatted messages
 Details    : fix some mal-formatted DEBUG_REQ and LCONSOLE_ERROR_MSG messages 
+
+
+Severity   : minor
+Bugzilla   : 11737
+Frequency  : always in liblustre
+Description: wrong IS_ERR implementation in liblustre.h
+Details    : fix IS_ERR implementation in liblustre.h for right detect errors.
 
 --------------------------------------------------------------------------------
 

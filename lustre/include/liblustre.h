@@ -145,7 +145,7 @@ static inline void *kmalloc(int size, int prot)
 #define GFP_HIGHUSER 1
 #define GFP_ATOMIC 1
 #define GFP_NOFS 1
-#define IS_ERR(a) ((unsigned long)(a) < 1000)
+#define IS_ERR(a) ((unsigned long)(a) > (unsigned long)-1000L)
 #define PTR_ERR(a) ((long)(a))
 #define ERR_PTR(a) ((void*)((long)(a)))
 
