@@ -140,33 +140,3 @@ diff -rup linux-2.6.16.i686.orig/include/linux/fs.h linux-2.6.16.i686/include/li
  extern int set_blocksize(struct block_device *, int);
  extern int sb_set_blocksize(struct super_block *, int);
  extern int sb_min_blocksize(struct super_block *, int);
-diff -rup linux-2.6.16.i686.orig/include/linux/fs.h.orig linux-2.6.16.i686/include/linux/fs.h.orig
---- linux-2.6.16.i686.orig/include/linux/fs.h.orig	2007-05-29 15:24:37.000000000 +0300
-+++ linux-2.6.16.i686/include/linux/fs.h.orig	2007-05-29 15:24:38.000000000 +0300
-@@ -1568,7 +1568,7 @@ ssize_t generic_file_write_nolock(struct
- extern ssize_t generic_file_sendfile(struct file *, loff_t *, size_t, read_actor_t, void *);
- extern void do_generic_mapping_read(struct address_space *mapping,
- 				    struct file_ra_state *, struct file *,
--				    loff_t *, read_descriptor_t *, read_actor_t);
-+				    loff_t *, read_descriptor_t *, read_actor_t, int);
- extern void
- file_ra_state_init(struct file_ra_state *ra, struct address_space *mapping);
- extern ssize_t generic_file_readv(struct file *filp, const struct iovec *iov, 
-@@ -1600,14 +1600,15 @@ static inline int xip_truncate_page(stru
- 
- static inline void do_generic_file_read(struct file * filp, loff_t *ppos,
- 					read_descriptor_t * desc,
--					read_actor_t actor)
-+					read_actor_t actor, int nonblock)
- {
- 	do_generic_mapping_read(filp->f_mapping,
- 				&filp->f_ra,
- 				filp,
- 				ppos,
- 				desc,
--				actor);
-+				actor,
-+				nonblock);
- }
- 
- ssize_t __blockdev_direct_IO(int rw, struct kiocb *iocb, struct inode *inode,
