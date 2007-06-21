@@ -1120,7 +1120,7 @@ LB_LINUX_TRY_COMPILE([
 
 # 2.6.21 api change. 'register_sysctl_table' use only one argument,
 # instead of more old which need two.
-AC_DEFUN([LL_2ARGS_REGISTER_SYSCTL],
+AC_DEFUN([LN_2ARGS_REGISTER_SYSCTL],
 [AC_MSG_CHECKING([check register_sysctl_table want 2 args])
 LB_LINUX_TRY_COMPILE([
         #include <linux/sysctl.h>
@@ -1133,6 +1133,29 @@ LB_LINUX_TRY_COMPILE([
 ],[
         AC_MSG_RESULT(NO)
 ])
+])
+
+# 2.6.21 uses struct kmem_cache instead of kmem_cache_s for
+# kmem_cache_t
+AC_DEFUN([LN_KMEM_CACHE_S],
+[AC_MSG_CHECKING([check kernel has struct kmem_cache_s])
+tmp_flags="$EXTRA_KCFLAGS"
+EXTRA_KCFLAGS="-Werror"
+LB_LINUX_TRY_COMPILE([
+        #include <linux/slab.h>
+],[
+	struct kmem_cache_s *cachep = NULL;
+	
+	kmem_cache_free(cachep, NULL);
+
+],[
+        AC_MSG_RESULT(yes)
+        AC_DEFINE(HAVE_KMEM_CACHE_n, 1,
+                  [kernel has struct kmem_cache_s])
+],[
+        AC_MSG_RESULT(NO)
+])
+EXTRA_KCFLAGS="$tmp_flags"
 ])
 
 #
@@ -1170,7 +1193,8 @@ LN_ATOMIC_PANIC_NOTIFIER
 # 2.6.20
 LN_3ARGS_INIT_WORK
 # 2.6.21
-LL_2ARGS_REGISTER_SYSCTL
+LN_2ARGS_REGISTER_SYSCTL
+LN_KMEM_CACHE_S
 ])
 
 #

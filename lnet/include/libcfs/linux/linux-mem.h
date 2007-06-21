@@ -97,7 +97,11 @@ extern void  cfs_free_large(void *addr);
  * SLAB allocator
  * XXX Liang: move these declare to public file
  */
-typedef kmem_cache_t    cfs_mem_cache_t;
+#ifdef HAVE_KMEM_CACHE_S
+typedef struct kmem_cache_s cfs_mem_cache_t;
+#else
+typedef struct kmem_cache cfs_mem_cache_t;
+#endif
 extern cfs_mem_cache_t * cfs_mem_cache_create (const char *, size_t, size_t, unsigned long);
 extern int cfs_mem_cache_destroy ( cfs_mem_cache_t * );
 extern void *cfs_mem_cache_alloc ( cfs_mem_cache_t *, int);
