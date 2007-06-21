@@ -238,7 +238,8 @@ static inline void cfs_duration_usec(cfs_duration_t d, struct timeval *s)
 
         s->tv_sec = d / HZ;
         t = (d - (cfs_duration_t)s->tv_sec * HZ) * ONE_MILLION;
-        s->tv_usec = do_div (t, HZ);
+        do_div(t, HZ);
+        s->tv_usec = t;
 #else
         s->tv_sec = d / HZ;
         s->tv_usec = ((d - (cfs_duration_t)s->tv_sec * HZ) * ONE_MILLION) / HZ;
@@ -252,7 +253,8 @@ static inline void cfs_duration_nsec(cfs_duration_t d, struct timespec *s)
 
         s->tv_sec = d / HZ;
         t = (d - s->tv_sec * HZ) * ONE_BILLION;
-        s->tv_nsec = do_div (t, HZ);
+        do_div(t, HZ);
+        s->tv_nsec = t;
 #else
         s->tv_sec = d / HZ;
         s->tv_nsec = ((d - s->tv_sec * HZ) * ONE_BILLION) / HZ;
