@@ -8,6 +8,7 @@ ext3-extents-2.6.16-sles10.patch
 ext3-extents-fixes-2.6.9-rhel4.patch 
 ext3-extents-multiblock-directio-2.6.9-rhel4.patch
 ext3-extents-search-2.6.9-rhel4.patch
+ext3-extents-sanity-checks.patch
 ext3-mballoc3-core.patch 
 ext3-mballoc3-sles10.patch 
 ext3-nlinks-2.6.9.patch
