@@ -134,6 +134,7 @@ extern int obd_race_state;
 #define OBD_FAIL_OST_DROP_REQ            0x21d
 #define OBD_FAIL_OST_SETATTR_CREDITS     0x21e
 #define OBD_FAIL_OST_HOLD_WRITE_RPC      0x21f
+#define OBD_FAIL_OST_BRW_WRITE_BULK2     0x220
 
 #define OBD_FAIL_LDLM                    0x300
 #define OBD_FAIL_LDLM_NAMESPACE_NEW      0x301
@@ -164,6 +165,7 @@ extern int obd_race_state;
 #define OBD_FAIL_OSC_SHUTDOWN            0x407
 #define OBD_FAIL_OSC_CHECKSUM_RECEIVE    0x408
 #define OBD_FAIL_OSC_CHECKSUM_SEND       0x409
+#define OBD_FAIL_OSC_BRW_PREP_REQ2       0x40a
 
 #define OBD_FAIL_PTLRPC                  0x500
 #define OBD_FAIL_PTLRPC_ACK              0x501

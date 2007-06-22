@@ -359,6 +359,7 @@ static inline void cond_resched(void)
 #define CheckWriteback(page, cmd) 1
 #define set_page_writeback(page) do {} while (0)
 #define end_page_writeback(page) do {} while (0)
+#define wait_on_page_writeback(page do {} while (0)
 
 static inline int mapping_mapped(struct address_space *mapping)
 {

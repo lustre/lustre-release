@@ -701,7 +701,11 @@ static inline void del_timer(struct timer_list *l)
         free(l);
 }
 
+
+
 typedef struct { volatile int counter; } atomic_t;
+
+#define ATOMIC_INIT(i)  { (i) }
 
 #define atomic_read(a) ((a)->counter)
 #define atomic_set(a,b) do {(a)->counter = b; } while (0)
@@ -711,7 +715,6 @@ typedef struct { volatile int counter; } atomic_t;
 #define atomic_dec(a)  do { (a)->counter--; } while (0)
 #define atomic_add(b,a)  do {(a)->counter += b;} while (0)
 #define atomic_sub(b,a)  do {(a)->counter -= b;} while (0)
-#define ATOMIC_INIT(i) { i }
 
 #ifndef likely
 #define likely(exp) (exp)

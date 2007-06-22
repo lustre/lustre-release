@@ -880,6 +880,8 @@ static int ost_brw_write(struct ptlrpc_request *req, struct obd_trans_info *oti)
 
         if (OBD_FAIL_CHECK(OBD_FAIL_OST_BRW_WRITE_BULK))
                 GOTO(out, rc = -EIO);
+        if (OBD_FAIL_CHECK(OBD_FAIL_OST_BRW_WRITE_BULK2))
+                GOTO(out, rc = -EFAULT);
 
         /* pause before transaction has been started */
         OBD_FAIL_TIMEOUT(OBD_FAIL_OST_BRW_PAUSE_BULK | OBD_FAIL_ONCE,

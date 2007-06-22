@@ -378,6 +378,14 @@ Details    : improve checks for exported symbols. This allow run check without
              sources, but with Module.symvers shipped with kernel distribution.
              add check for truncate_complete_page used by patchless client.
 
+Severity   : major
+Bugzilla   : 11710
+Frequency  : always
+Description: improve handling recoverable errors
+Details    : if request processig with error which can be recoverable on server side
+	     request should be resend, otherwise page released from cache and marked 
+	     as error.
+
 --------------------------------------------------------------------------------
 
 2007-05-03  Cluster File Systems, Inc. <info@clusterfs.com>
