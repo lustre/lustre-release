@@ -44,7 +44,7 @@ lnet_md_unlink(lnet_libmd_t *md)
                                 lnet_me_unlink(me);
                 }
 
-                /* emsure all future handle lookups fail */
+                /* ensure all future handle lookups fail */
                 lnet_invalidate_handle(&md->md_lh);
         }
 

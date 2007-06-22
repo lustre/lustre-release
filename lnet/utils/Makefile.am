@@ -19,10 +19,19 @@ sbin_PROGRAMS = debugctl
 
 lib_LIBRARIES = libptlctl.a
 
+if LIBLUSTRE
+noinst_LIBRARIES += liblst.a
+liblst_a_SOURCES =
+endif
+
 libptlctl_a_SOURCES = portals.c nidstrings.c debug.c l_ioctl.c parser.c parser.h
 
 if UTILS
-sbin_PROGRAMS += ptlctl routerstat wirecheck 
+sbin_PROGRAMS += ptlctl routerstat wirecheck lst lstclient
+if LIBLUSTRE
+sbin_PROGRAMS += lstclient
+endif
+
 if BUILD_GMLND
 sbin_PROGRAMS += gmlndnid
 endif
@@ -45,5 +54,29 @@ debugctl_SOURCES = debugctl.c
 debugctl_LDADD = -L. -lptlctl $(LIBREADLINE) $(LIBEFENCE)
 debugctl_DEPENDENCIES = libptlctl.a
 
+lst_SOURCES = lst.c
+lst_LDADD = -L. -lptlctl $(LIBREADLINE) $(LIBEFENCE)
+lst_DEPENDENCIES = libptlctl.a
+
+LND_LIBS =
+if BUILD_USOCKLND
+LND_LIBS +=    $(top_builddir)/lnet/ulnds/socklnd/libsocklnd.a
+endif
+if BUILD_UPTLLND
+LND_LIBS +=   $(top_builddir)/lnet/ulnds/ptllnd/libptllnd.a
+endif
+
+if LIBLUSTRE
+LIB_SELFTEST = $(top_builddir)/lnet/libcfs/libcfs.a $(top_builddir)/lnet/lnet/liblnet.a $(top_builddir)/lnet/selftest/libselftest.a
+liblst.a : $(LIB_SELFTEST)
+	sh $(srcdir)/genlib.sh "$(LIBS)" "$(LND_LIBS)" "$(PTHREAD_LIBS)"
+
+lstclient_SOURCES = lstclient.c
+lstclient_LDADD = -L. -lptlctl -llst $(LIBREADLINE) $(LIBEFENCE) $(PTHREAD_LIBS)
+lstclient_DEPENDENCIES = libptlctl.a liblst.a
+endif
+
 nidstrings.c: @top_srcdir@/lnet/libcfs/nidstrings.c
 	ln -sf $< $@
+
+EXTRA_DIST = genlib.sh

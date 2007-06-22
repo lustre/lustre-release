@@ -545,6 +545,7 @@ extern int libcfs_ioctl_popdata(void *arg, void *buf, int size);
 #define IOC_LIBCFS_TESTPROTOCOMPAT         _IOWR('e', 60, IOCTL_LIBCFS_TYPE)
 #define IOC_LIBCFS_PING                    _IOWR('e', 61, IOCTL_LIBCFS_TYPE)
 #define IOC_LIBCFS_DEBUG_PEER              _IOWR('e', 62, IOCTL_LIBCFS_TYPE)
+#define IOC_LIBCFS_LNETST                  _IOWR('e', 63, IOCTL_LIBCFS_TYPE)
 /* lnd ioctls */
 #define IOC_LIBCFS_REGISTER_MYNID          _IOWR('e', 70, IOCTL_LIBCFS_TYPE)
 #define IOC_LIBCFS_CLOSE_CONNECTION        _IOWR('e', 71, IOCTL_LIBCFS_TYPE)

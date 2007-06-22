@@ -41,4 +41,4 @@ when now(void);
 /*
  * hacking for CFS internal MPI testing
  */ 
-#define ENABLE_SELECT_DISPATCH
+#undef ENABLE_SELECT_DISPATCH

@@ -2,6 +2,7 @@ subdir-m += libcfs
 
 lnet-subdirs += lnet
 lnet-subdirs += klnds
+lnet-subdirs += selftest
 subdir-m += $(lnet-subdirs)
 
 @INCLUDE_RULES@

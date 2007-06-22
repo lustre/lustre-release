@@ -333,6 +333,10 @@ int Parser_commands(void)
                 if (*s) {
                         add_history(s);
                         rc = execute_line(s);
+
+                        /* reset optind to 0 to tell getopt
+                         * to reinitialize itself */
+                        optind = 0;
                 }
                 
                 free(line);

@@ -7,4 +7,6 @@ ptlctl
 routerstat
 wirecheck
 gmlndnid
+lst
+lstclient
 .*.cmd

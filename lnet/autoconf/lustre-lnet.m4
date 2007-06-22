@@ -1431,6 +1431,8 @@ lnet/libcfs/autoMakefile
 lnet/libcfs/linux/Makefile
 lnet/lnet/Makefile
 lnet/lnet/autoMakefile
+lnet/selftest/Makefile
+lnet/selftest/autoMakefile
 lnet/ulnds/Makefile
 lnet/ulnds/autoMakefile
 lnet/ulnds/socklnd/Makefile

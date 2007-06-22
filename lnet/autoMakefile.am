@@ -3,7 +3,7 @@
 # This code is issued under the GNU General Public License.
 # See the file COPYING in this distribution
 
-SUBDIRS = libcfs lnet klnds ulnds doc utils include	\
+SUBDIRS = libcfs lnet klnds ulnds selftest doc utils include	\
 	autoconf
 
 sources:

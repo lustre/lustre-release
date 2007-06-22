@@ -13,6 +13,11 @@
 	ptllnd    - Portals 3.3 / UNICOS/lc 1.5.x, 2.0.x
        * bug fixes
 
+Severity   : major
+Bugzilla   : 10916
+Description: added LNET self test
+Details    : landing b_self_test
+
 Severity   : minor
 Frequency  : rare
 Bugzilla   : 12227
