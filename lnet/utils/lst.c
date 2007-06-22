@@ -2911,7 +2911,7 @@ out:
         return rc;
 }
 
-command_t lst_cmdlist[] = {
+static command_t lst_cmdlist[] = {
 	{"new_session",		jt_lst_new_session,	NULL,
          "Usage: lst new_session [--timeout TIME] [--force] [NAME]"	                },
 	{"end_session",		jt_lst_end_session,	NULL,
