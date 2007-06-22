@@ -1031,35 +1031,22 @@ LB_LINUX_TRY_COMPILE([
 # we export show_task(), but not all kernels have it (yet)
 #
 AC_DEFUN([LN_FUNC_SHOW_TASK],
-[AC_MSG_CHECKING([if kernel exports show_task])
-have_show_task=0
-for file in ksyms sched ; do
-	if grep -q "EXPORT_SYMBOL(show_task)" \
-		 "$LINUX/kernel/$file.c" 2>/dev/null ; then
-		have_show_task=1
-		break
-	fi
-done
-if test x$have_show_task = x1 ; then
-	AC_DEFINE(HAVE_SHOW_TASK, 1, [show_task is exported])
-	AC_MSG_RESULT([yes])
-else
-	AC_MSG_RESULT([no])
-fi
+[LB_CHECK_SYMBOL_EXPORT([show_task],
+[kernel/ksyms.c kernel/sched.c],[
+AC_DEFINE(HAVE_SHOW_TASK, 1, [show_task is exported])
+],[
+])
 ])
 
 # LN_TASKLIST_LOCK
 # 2.6.18 remove tasklist_lock export
 AC_DEFUN([LN_TASKLIST_LOCK],
-[AC_MSG_CHECKING([kernel export tasklist_lock])
-        if grep -q "EXPORT_SYMBOL(tasklist_lock)" \
-                 "$LINUX/kernel/fork.c" 2>/dev/null ; then
-                AC_DEFINE(HAVE_TASKLIST_LOCK, 1,
-                          [tasklist_lock exported])
-                AC_MSG_RESULT([yes])
-        else
-                AC_MSG_RESULT([no])
-        fi
+[LB_CHECK_SYMBOL_EXPORT([tasklist_lock],
+[kernel/fork.c],[
+AC_DEFINE(HAVE_TASKLIST_LOCK, 1,
+         [tasklist_lock exported])
+],[
+])
 ])
 
 # 2.6.19 API changes

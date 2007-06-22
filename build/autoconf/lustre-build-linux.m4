@@ -403,3 +403,40 @@ AC_DEFUN([LB_LINUX_CONDITIONALS],
 [AM_CONDITIONAL(LINUX25, test x$linux25 = xyes)
 ])
 
+
+#
+# LB_CHECK_SYMBOL_EXPORT
+# check symbol exported or not 
+# $1 - symbol
+# $2 - file(s) for find.
+# $3 - do 'yes'
+# $4 - do 'no'
+#
+# 2.6 based kernels - put modversion info into $LINUX/Module.modvers
+# or check 
+AC_DEFUN([LB_CHECK_SYMBOL_EXPORT],
+[AC_MSG_CHECKING([if Linux was built with symbol $1 is exported])
+grep -q -E '[[[:space:]]]$1[[[:space:]]]' $LINUX/Module.symvers 2>/dev/null
+rc=$?
+if test $rc -ne 0; then
+    export=0
+    for file in $2; do
+    	grep -q -E "EXPORT_SYMBOL.*($1)" "$LINUX/$file" 2>/dev/null
+    	rc=$?
+	if test $rc -eq 0; then
+		export=1
+		break;
+	fi
+    done
+    if test $export -eq 0; then
+    	AC_MSG_RESULT([no])
+    	$4
+    else
+    	AC_MSG_RESULT([yes])
+    	$3
+    fi
+else
+    AC_MSG_RESULT([yes])
+    $3
+fi
+])
