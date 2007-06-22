@@ -370,6 +370,14 @@ Description: Correct condition for output debug message.
 Details    : inode i_nlink equal zero is not enough for output message about disk
 	     corruption, i_ctime and i_mode should be also checked.
 
+Severity   : minor
+Bugzilla   : 12415
+Frequency  : always in patchless client
+Description: add configure check for truncate_complete_page
+Details    : improve checks for exported symbols. This allow run check without
+             sources, but with Module.symvers shipped with kernel distribution.
+             add check for truncate_complete_page used by patchless client.
+
 --------------------------------------------------------------------------------
 
 2007-05-03  Cluster File Systems, Inc. <info@clusterfs.com>

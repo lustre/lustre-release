@@ -567,21 +567,20 @@ $1
 ],[
 AC_MSG_RESULT([no])
 ])
+])
 
 #
 # LC_EXPORT___IGET
 # starting from 2.6.19 linux kernel exports __iget()
 #
 AC_DEFUN([LC_EXPORT___IGET],
-[AC_MSG_CHECKING([if kernel exports __iget])
-	if grep -q "EXPORT_SYMBOL(__iget)" $LINUX/fs/inode.c 2>/dev/null ; then
-		AC_DEFINE(HAVE_EXPORT___IGET, 1, [kernel exports __iget])
-		AC_MSG_RESULT([yes])
-	else
-		AC_MSG_RESULT([no])
-	fi
+[LB_CHECK_SYMBOL_EXPORT([__iget],
+[fs/inode.c],[
+        AC_DEFINE(HAVE_EXPORT___IGET, 1, [kernel exports __iget])
+],[
 ])
 ])
+
 
 AC_DEFUN([LC_LUSTRE_VERSION_H],
 [LB_CHECK_FILE([$LINUX/include/linux/lustre_version.h],[
@@ -598,15 +597,11 @@ AC_DEFUN([LC_LUSTRE_VERSION_H],
 ])
 
 AC_DEFUN([LC_FUNC_SET_FS_PWD],
-[AC_MSG_CHECKING([if kernel exports show_task])
-have_show_task=0
-        if grep -q "EXPORT_SYMBOL(show_task)" \
-                 "$LINUX/fs/namespace.c" 2>/dev/null ; then
-		AC_DEFINE(HAVE_SET_FS_PWD, 1, [set_fs_pwd is exported])
-		AC_MSG_RESULT([yes])
-	else
-		AC_MSG_RESULT([no])
-        fi
+[LB_CHECK_SYMBOL_EXPORT([set_fs_pwd],
+[fs/namespace.c],[
+        AC_DEFINE(HAVE_SET_FS_PWD, 1, [set_fs_pwd is exported])
+],[
+])
 ])
 
 
@@ -1029,6 +1024,16 @@ LB_LINUX_TRY_COMPILE([
 ])
 ])
 
+AC_DEFUN([LC_EXPORT_TRUNCATE_COMPLETE],
+[LB_CHECK_SYMBOL_EXPORT([truncate_complete_page],
+[mm/truncate.c],[
+AC_DEFINE(HAVE_TRUNCATE_COMPLETE_PAGE, 1,
+            [kernel export truncate_complete_page])
+],[
+])
+])
+
+
 #
 # LC_PROG_LINUX
 #
@@ -1045,6 +1050,8 @@ LC_CONFIG_QUOTA
 LC_CONFIG_HEALTH_CHECK_WRITE
 
 LC_TASK_PPTR
+# RHEL4 pachess
+LC_EXPORT_TRUNCATE_COMPLETE
 
 LC_STRUCT_KIOBUF
 LC_FUNC_COND_RESCHED
