@@ -3132,8 +3132,9 @@ test_78() { # bug 10901
 	$SETSTRIPE $DIR/$tfile 0 -1 -1 || error "setstripe failed"
  	for i in `seq 1 $NSEQ`
  	do
+ 		FSIZE=$(($F78SIZE / ($NSEQ - $i + 1)))
  		echo directIO rdwr round $i of $NSEQ
-  	 	$DIRECTIO rdwr $DIR/$tfile 0 $F78SIZE 1048576 || error "rdwr failed"
+  	 	$DIRECTIO rdwr $DIR/$tfile 0 $FSIZE 1048576 || error "rdwr failed"
   	done
 
 	rm -f $DIR/$tfile
