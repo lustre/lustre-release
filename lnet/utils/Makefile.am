@@ -27,7 +27,7 @@ endif
 libptlctl_a_SOURCES = portals.c nidstrings.c debug.c l_ioctl.c parser.c parser.h
 
 if UTILS
-sbin_PROGRAMS += ptlctl routerstat wirecheck lst lstclient
+sbin_PROGRAMS += ptlctl routerstat wirecheck lst
 if LIBLUSTRE
 sbin_PROGRAMS += lstclient
 endif
