@@ -3096,7 +3096,7 @@ test_77g() { # bug 10889
 	#define OBD_FAIL_OST_CHECKSUM_RECEIVE       0x21a
 	sysctl -w lustre.fail_loc=0x8000021a
 	set_checksums 1
-	dd if=$F77_TMP of=$DIR/f77 bs=1M count=$F77SZ || \
+	dd if=$F77_TMP of=$DIR/f77g bs=1M count=$F77SZ || \
 		error "write error: rc=$?"
 	sysctl -w lustre.fail_loc=0
 	set_checksums 0
@@ -3111,7 +3111,7 @@ test_77h() { # bug 10889
 	#define OBD_FAIL_OST_CHECKSUM_SEND          0x21b
 	sysctl -w lustre.fail_loc=0x8000021b
 	set_checksums 1
-	cmp $F77_TMP $DIR/f77 || error "file compare failed"
+	cmp $F77_TMP $DIR/f77g || error "file compare failed"
 	sysctl -w lustre.fail_loc=0
 	set_checksums 0
 }

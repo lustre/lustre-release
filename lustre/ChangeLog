@@ -386,6 +386,11 @@ Details    : if request processig with error which can be recoverable on server 
 	     request should be resend, otherwise page released from cache and marked 
 	     as error.
 
+Severity   : normal
+Bugzilla   : 12646
+Description: sanity.sh test_77h fails with "test_77h file compare failed"
+Details    : test_77h uses a file which was messed by other test case.
+
 --------------------------------------------------------------------------------
 
 2007-05-03  Cluster File Systems, Inc. <info@clusterfs.com>
