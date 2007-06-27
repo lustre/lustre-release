@@ -3106,7 +3106,7 @@ run_test 77g "checksum error on OST write ======================"
 test_77h() { # bug 10889
 	[ $(grep -c obdfilter $LPROC/devices) -eq 0 ] && \
 		echo "skipping $TESTNAME (remote OST)" && return
-	[ ! -f $DIR/f77 ] && log "requires 77g - skipping" && return  
+	[ ! -f $DIR/f77g ] && log "requires 77g - skipping" && return  
 	cancel_lru_locks osc
 	#define OBD_FAIL_OST_CHECKSUM_SEND          0x21b
 	sysctl -w lustre.fail_loc=0x8000021b
