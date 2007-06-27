@@ -36,6 +36,7 @@ struct st_timer_data {
         struct list_head stt_hash[STTIMER_NSLOTS];
         int              stt_shuttingdown;
 #ifdef __KERNEL__
+        cfs_waitq_t      stt_waitq;
         int              stt_nthreads;
 #endif
 } stt_data;
@@ -157,9 +158,9 @@ stt_timer_main (void *arg)
         while (!stt_data.stt_shuttingdown) {
                 stt_check_timers(&stt_data.stt_prev_slot);
 
-                set_current_state(CFS_TASK_INTERRUPTIBLE);
-                cfs_schedule_timeout(CFS_TASK_INTERRUPTIBLE,
-                                     cfs_time_seconds(STTIMER_SLOTTIME));
+                wait_event_timeout(stt_data.stt_waitq,
+                                   stt_data.stt_shuttingdown,
+                                   cfs_time_seconds(STTIMER_SLOTTIME));
         }
 
         spin_lock(&stt_data.stt_lock);
@@ -216,9 +217,10 @@ stt_startup (void)
 
 #ifdef __KERNEL__
         stt_data.stt_nthreads = 0;
+        cfs_waitq_init(&stt_data.stt_waitq);
         rc = stt_start_timer_thread();
         if (rc != 0)
-                CERROR ("Can't spawn timer, stt_startup() has failed: %d\n", rc);
+                CERROR ("Can't spawn timer thread: %d\n", rc);
 #endif
 
         return rc;
@@ -237,6 +239,7 @@ stt_shutdown (void)
         stt_data.stt_shuttingdown = 1;
 
 #ifdef __KERNEL__
+        cfs_waitq_signal(&stt_data.stt_waitq);
         lst_wait_until(stt_data.stt_nthreads == 0, stt_data.stt_lock,
                        "waiting for %d threads to terminate\n",
                        stt_data.stt_nthreads);

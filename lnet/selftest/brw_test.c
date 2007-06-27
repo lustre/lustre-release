@@ -164,6 +164,7 @@ brw_fill_bulk (srpc_bulk_t *bk, int pattern, __u64 magic)
 #ifdef __KERNEL__
                 pg = bk->bk_iovs[i].kiov_page;
 #else
+                LASSERT (bk->bk_pages != NULL);
                 pg = bk->bk_pages[i];
 #endif
                 brw_fill_page(pg, pattern, magic);
@@ -180,6 +181,7 @@ brw_check_bulk (srpc_bulk_t *bk, int pattern, __u64 magic)
 #ifdef __KERNEL__
                 pg = bk->bk_iovs[i].kiov_page;
 #else
+                LASSERT (bk->bk_pages != NULL);
                 pg = bk->bk_pages[i];
 #endif
                 if (brw_check_page(pg, pattern, magic) != 0) {
@@ -237,14 +239,10 @@ brw_client_done_rpc (sfw_test_unit_t *tsu, srpc_client_rpc_t *rpc)
 
         LASSERT (sn != NULL);
 
-#ifndef __KERNEL__
-        rpc->crpc_bulk.bk_pages = NULL;
-#endif
-
         if (rpc->crpc_status != 0) {
                 CERROR ("BRW RPC to %s failed with %d\n",
                         libcfs_id2str(rpc->crpc_dest), rpc->crpc_status);
-                return;
+                goto out;
         }
 
         if (msg->msg_magic != SRPC_MSG_MAGIC) {
@@ -261,10 +259,10 @@ brw_client_done_rpc (sfw_test_unit_t *tsu, srpc_client_rpc_t *rpc)
 
         if (reply->brw_status != 0) {
                 atomic_inc(&sn->sn_brw_errors);
-                return;
+                goto out;
         }
 
-        if (reqst->brw_rw == LST_BRW_WRITE) return;
+        if (reqst->brw_rw == LST_BRW_WRITE) goto out;
 
         if (brw_check_bulk(&rpc->crpc_bulk, reqst->brw_flags, magic) != 0) {
                 CERROR ("Bulk data from %s is corrupted!\n",
@@ -273,6 +271,10 @@ brw_client_done_rpc (sfw_test_unit_t *tsu, srpc_client_rpc_t *rpc)
                 atomic_inc(&sn->sn_brw_errors);
         }
 
+out:
+#ifndef __KERNEL__
+        rpc->crpc_bulk.bk_pages = NULL;
+#endif
         return;
 }
 
