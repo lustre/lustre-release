@@ -128,7 +128,9 @@ load_modules() {
     load_module mgc/mgc
     load_module mgs/mgs
     rm -f $TMP/ogdb-`hostname`
-    $LCTL modules > $TMP/ogdb-`hostname`
+    OGDB=$TMP
+    [ -d /r ] && OGDB="/r/tmp"
+    $LCTL modules > $OGDB/ogdb-`hostname`
     # 'mount' doesn't look in $PATH, just sbin
     [ -f $LUSTRE/utils/mount.lustre ] && cp $LUSTRE/utils/mount.lustre /sbin/. || true
 }
