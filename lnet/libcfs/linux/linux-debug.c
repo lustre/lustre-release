@@ -121,7 +121,7 @@ void lbug_with_loc(char *file, const char *func, const int line)
 {
         libcfs_catastrophe = 1;
         libcfs_debug_msg(NULL, 0, D_EMERG, file, func, line,
-                         "LBUG - trying to dump log to /tmp/lustre-log\n");
+                         "LBUG - trying to dump log to %s\n", debug_file_path);
         libcfs_debug_dumplog();
         libcfs_run_lbug_upcall(file, func, line);
         asm("int $3");

@@ -67,7 +67,11 @@ EXPORT_SYMBOL(libcfs_kmemory);
 
 static cfs_waitq_t debug_ctlwq;
 
+#ifdef __arch_um__
+char debug_file_path[1024] = "/r/tmp/lustre-log";
+#else
 char debug_file_path[1024] = "/tmp/lustre-log";
+#endif
 
 int libcfs_panic_in_progress;
 
