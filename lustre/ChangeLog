@@ -391,6 +391,11 @@ Bugzilla   : 12646
 Description: sanity.sh test_77h fails with "test_77h file compare failed"
 Details    : test_77h uses a file which was messed by other test case.
 
+Severity   : normal
+Bugzilla   : 12576
+Description: Not Check whether lov_tgts is NULL in some lov functions
+Details    : Checking whether lov_tgts is NULL in some functions. 
+
 --------------------------------------------------------------------------------
 
 2007-05-03  Cluster File Systems, Inc. <info@clusterfs.com>

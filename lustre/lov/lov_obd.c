@@ -1944,6 +1944,10 @@ static int lov_change_cbdata(struct obd_export *exp,
                 struct lov_stripe_md submd;
 
                 loi = lsm->lsm_oinfo[i];
+                if (!lov->lov_tgts[loi->loi_ost_idx]) {
+                        CDEBUG(D_HA, "lov idx %d NULL \n", loi->loi_ost_idx);
+                        continue;
+                }
                 submd.lsm_object_id = loi->loi_id;
                 submd.lsm_stripe_count = 0;
                 rc = obd_change_cbdata(lov->lov_tgts[loi->loi_ost_idx]->ltd_exp,
@@ -2029,8 +2033,12 @@ static int lov_cancel_unused(struct obd_export *exp,
                 int err;
 
                 loi = lsm->lsm_oinfo[i];
-                if (!lov->lov_tgts[loi->loi_ost_idx] || 
-                    !lov->lov_tgts[loi->loi_ost_idx]->ltd_active)
+                if (!lov->lov_tgts[loi->loi_ost_idx]) {
+                        CDEBUG(D_HA, "lov idx %d NULL\n", loi->loi_ost_idx);
+                        continue;
+                }
+
+                if (!lov->lov_tgts[loi->loi_ost_idx]->ltd_active)
                         CDEBUG(D_HA, "lov idx %d inactive\n", loi->loi_ost_idx);
 
                 submd.lsm_object_id = loi->loi_id;
@@ -2066,8 +2074,12 @@ static int lov_join_lru(struct obd_export *exp,
                 int rc = 0;
 
                 loi = lsm->lsm_oinfo[i];
-                if (!lov->lov_tgts[loi->loi_ost_idx] || 
-                    !lov->lov_tgts[loi->loi_ost_idx]->ltd_active)
+                if (!lov->lov_tgts[loi->loi_ost_idx]) {
+                        CDEBUG(D_HA, "lov idx %d NULL\n", loi->loi_ost_idx);
+                        continue;
+                }
+
+                if (!lov->lov_tgts[loi->loi_ost_idx]->ltd_active)
                         CDEBUG(D_HA, "lov idx %d inactive\n", loi->loi_ost_idx);
 
                 submd.lsm_object_id = loi->loi_id;
