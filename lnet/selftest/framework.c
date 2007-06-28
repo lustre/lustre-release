@@ -215,6 +215,12 @@ sfw_session_removed (void)
         return (sfw_data.fw_session == NULL) ? 1 : 0;
 }
 
+void
+sfw_set_session_timeout (int timeout)
+{
+        session_timeout = timeout;
+}
+
 #endif
 
 void

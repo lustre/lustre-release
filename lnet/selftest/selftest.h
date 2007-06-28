@@ -516,6 +516,8 @@ swi_state2str (int state)
 #ifndef __KERNEL__
 
 int stt_poll_interval(void);
+int sfw_session_removed(void);
+void sfw_set_session_timeout(int timeout);
 
 int stt_check_events(void);
 int swi_check_events(void);
