@@ -1,73 +1,7 @@
-Index: linux-2.6.9-42.0.10.EL_lustre.1.4.10/include/linux/ext3_fs_sb.h
+Index: linux-2.6.9-full/include/linux/ext3_fs.h
 ===================================================================
---- linux-2.6.9-42.0.10.EL_lustre.1.4.10.orig/include/linux/ext3_fs_sb.h	2007-06-14 13:59:04.000000000 +0200
-+++ linux-2.6.9-42.0.10.EL_lustre.1.4.10/include/linux/ext3_fs_sb.h	2007-06-14 14:16:57.000000000 +0200
-@@ -81,6 +81,61 @@ struct ext3_sb_info {
- 	char *s_qf_names[MAXQUOTAS];		/* Names of quota files with journalled quota */
- 	int s_jquota_fmt;			/* Format of quota to use */
- #endif
-+
-+	/* for buddy allocator */
-+	struct ext3_group_info ***s_group_info;
-+	struct inode *s_buddy_cache;
-+	long s_blocks_reserved;
-+	spinlock_t s_reserve_lock;
-+	struct list_head s_active_transaction;
-+	struct list_head s_closed_transaction;
-+	struct list_head s_committed_transaction;
-+	spinlock_t s_md_lock;
-+	tid_t s_last_transaction;
-+	unsigned short *s_mb_offsets, *s_mb_maxs;
-+
-+	/* tunables */
-+	unsigned long s_mb_factor;
-+	unsigned long s_stripe;
-+	unsigned long s_mb_stream_request;
-+	unsigned long s_mb_max_to_scan;
-+	unsigned long s_mb_min_to_scan;
-+	unsigned long s_mb_max_groups_to_scan;
-+	unsigned long s_mb_stats;
-+	unsigned long s_mb_order2_reqs;
-+
-+	/* history to debug policy */
-+	struct ext3_mb_history *s_mb_history;
-+	int s_mb_history_cur;
-+	int s_mb_history_max;
-+	int s_mb_history_num;
-+	struct proc_dir_entry *s_mb_proc;
-+	spinlock_t s_mb_history_lock;
-+	int s_mb_history_filter;
-+
-+	/* stats for buddy allocator */
-+	spinlock_t s_mb_pa_lock;
-+	atomic_t s_bal_reqs;	/* number of reqs with len > 1 */
-+	atomic_t s_bal_success;	/* we found long enough chunks */
-+	atomic_t s_bal_allocated;	/* in blocks */
-+	atomic_t s_bal_ex_scanned;	/* total extents scanned */
-+	atomic_t s_bal_goals;	/* goal hits */
-+	atomic_t s_bal_breaks;	/* too long searches */
-+	atomic_t s_bal_2orders;	/* 2^order hits */
-+	spinlock_t s_bal_lock;
-+	unsigned long s_mb_buddies_generated;
-+	unsigned long long s_mb_generation_time;
-+	atomic_t s_mb_lost_chunks;
-+	atomic_t s_mb_preallocated;
-+	atomic_t s_mb_discarded;
-+
-+	/* locality groups */
-+	struct ext3_locality_group *s_locality_groups;
-+
- };
- 
-+#define EXT3_GROUP_INFO(sb, group)					   \
-+	EXT3_SB(sb)->s_group_info[(group) >> EXT3_DESC_PER_BLOCK_BITS(sb)] \
-+				 [(group) & (EXT3_DESC_PER_BLOCK(sb) - 1)]
-+
- #endif	/* _LINUX_EXT3_FS_SB */
-Index: linux-2.6.9-42.0.10.EL_lustre.1.4.10/include/linux/ext3_fs.h
-===================================================================
---- linux-2.6.9-42.0.10.EL_lustre.1.4.10.orig/include/linux/ext3_fs.h	2007-06-14 13:59:04.000000000 +0200
-+++ linux-2.6.9-42.0.10.EL_lustre.1.4.10/include/linux/ext3_fs.h	2007-06-14 14:16:57.000000000 +0200
+--- linux-2.6.9-full.orig/include/linux/ext3_fs.h	2007-06-08 23:44:08.000000000 +0400
++++ linux-2.6.9-full/include/linux/ext3_fs.h	2007-06-29 11:31:13.000000000 +0400
 @@ -57,6 +57,30 @@ struct statfs;
  #define ext3_debug(f, a...)	do {} while (0)
  #endif
@@ -135,10 +69,76 @@ Index: linux-2.6.9-42.0.10.EL_lustre.1.4.10/include/linux/ext3_fs.h
  
  /* inode.c */
  extern int ext3_block_truncate_page(handle_t *, struct page *,
-Index: linux-2.6.9-42.0.10.EL_lustre.1.4.10/fs/ext3/super.c
+Index: linux-2.6.9-full/include/linux/ext3_fs_sb.h
 ===================================================================
---- linux-2.6.9-42.0.10.EL_lustre.1.4.10.orig/fs/ext3/super.c	2007-06-14 13:59:04.000000000 +0200
-+++ linux-2.6.9-42.0.10.EL_lustre.1.4.10/fs/ext3/super.c	2007-06-14 14:16:57.000000000 +0200
+--- linux-2.6.9-full.orig/include/linux/ext3_fs_sb.h	2007-06-08 23:44:07.000000000 +0400
++++ linux-2.6.9-full/include/linux/ext3_fs_sb.h	2007-06-29 11:31:13.000000000 +0400
+@@ -81,6 +81,61 @@ struct ext3_sb_info {
+ 	char *s_qf_names[MAXQUOTAS];		/* Names of quota files with journalled quota */
+ 	int s_jquota_fmt;			/* Format of quota to use */
+ #endif
++
++	/* for buddy allocator */
++	struct ext3_group_info ***s_group_info;
++	struct inode *s_buddy_cache;
++	long s_blocks_reserved;
++	spinlock_t s_reserve_lock;
++	struct list_head s_active_transaction;
++	struct list_head s_closed_transaction;
++	struct list_head s_committed_transaction;
++	spinlock_t s_md_lock;
++	tid_t s_last_transaction;
++	unsigned short *s_mb_offsets, *s_mb_maxs;
++
++	/* tunables */
++	unsigned long s_mb_factor;
++	unsigned long s_stripe;
++	unsigned long s_mb_stream_request;
++	unsigned long s_mb_max_to_scan;
++	unsigned long s_mb_min_to_scan;
++	unsigned long s_mb_max_groups_to_scan;
++	unsigned long s_mb_stats;
++	unsigned long s_mb_order2_reqs;
++
++	/* history to debug policy */
++	struct ext3_mb_history *s_mb_history;
++	int s_mb_history_cur;
++	int s_mb_history_max;
++	int s_mb_history_num;
++	struct proc_dir_entry *s_mb_proc;
++	spinlock_t s_mb_history_lock;
++	int s_mb_history_filter;
++
++	/* stats for buddy allocator */
++	spinlock_t s_mb_pa_lock;
++	atomic_t s_bal_reqs;	/* number of reqs with len > 1 */
++	atomic_t s_bal_success;	/* we found long enough chunks */
++	atomic_t s_bal_allocated;	/* in blocks */
++	atomic_t s_bal_ex_scanned;	/* total extents scanned */
++	atomic_t s_bal_goals;	/* goal hits */
++	atomic_t s_bal_breaks;	/* too long searches */
++	atomic_t s_bal_2orders;	/* 2^order hits */
++	spinlock_t s_bal_lock;
++	unsigned long s_mb_buddies_generated;
++	unsigned long long s_mb_generation_time;
++	atomic_t s_mb_lost_chunks;
++	atomic_t s_mb_preallocated;
++	atomic_t s_mb_discarded;
++
++	/* locality groups */
++	struct ext3_locality_group *s_locality_groups;
++
+ };
+ 
++#define EXT3_GROUP_INFO(sb, group)					   \
++	EXT3_SB(sb)->s_group_info[(group) >> EXT3_DESC_PER_BLOCK_BITS(sb)] \
++				 [(group) & (EXT3_DESC_PER_BLOCK(sb) - 1)]
++
+ #endif	/* _LINUX_EXT3_FS_SB */
+Index: linux-2.6.9-full/fs/ext3/super.c
+===================================================================
+--- linux-2.6.9-full.orig/fs/ext3/super.c	2007-06-08 23:44:08.000000000 +0400
++++ linux-2.6.9-full/fs/ext3/super.c	2007-06-29 11:31:13.000000000 +0400
 @@ -394,6 +394,7 @@ void ext3_put_super (struct super_block 
  	struct ext3_super_block *es = sbi->s_es;
  	int i;
@@ -179,11 +179,11 @@ Index: linux-2.6.9-42.0.10.EL_lustre.1.4.10/fs/ext3/super.c
  }
  
  int ext3_prep_san_write(struct inode *inode, long *blocks,
-Index: linux-2.6.9-42.0.10.EL_lustre.1.4.10/fs/ext3/mballoc.c
+Index: linux-2.6.9-full/fs/ext3/mballoc.c
 ===================================================================
---- /dev/null	1970-01-01 00:00:00.000000000 +0000
-+++ linux-2.6.9-42.0.10.EL_lustre.1.4.10/fs/ext3/mballoc.c	2007-06-14 14:19:27.000000000 +0200
-@@ -0,0 +1,4369 @@
+--- linux-2.6.9-full.orig/fs/ext3/mballoc.c	2007-06-17 11:25:39.317298699 +0400
++++ linux-2.6.9-full/fs/ext3/mballoc.c	2007-06-29 12:06:50.000000000 +0400
+@@ -0,0 +1,4371 @@
 +/*
 + * Copyright (c) 2003-2006, Cluster File Systems, Inc, info@clusterfs.com
 + * Written by Alex Tomas <alex@clusterfs.com>
@@ -3091,7 +3091,7 @@ Index: linux-2.6.9-42.0.10.EL_lustre.1.4.10/fs/ext3/mballoc.c
 +	struct ext3_sb_info *sbi;
 +	struct super_block *sb;
 +	sector_t block;
-+	int len, err;
++	int err;
 +
 +	BUG_ON(ac->ac_status != AC_STATUS_FOUND);
 +	BUG_ON(ac->ac_b_ex.fe_len <= 0);
@@ -3102,20 +3102,6 @@ Index: linux-2.6.9-42.0.10.EL_lustre.1.4.10/fs/ext3/mballoc.c
 +
 +	ext3_debug("using block group %d(%d)\n", ac->ac_b_group.group,
 +			gdp->bg_free_blocks_count);
-+
-+	/* time to check quota, we can't do this before because
-+	 * having quota spent on preallocated-unused-yet blocks
-+	 * would be wrong */
-+	len = ac->ac_b_ex.fe_len;
-+	while (len && DQUOT_ALLOC_BLOCK(ac->ac_inode, len)) len--;
-+	if (ac->ac_b_ex.fe_len != len) {
-+		/* some blocks can't be allocated due to quota
-+		 * we have to return them back */
-+		BUG();
-+	}
-+	err = -EDQUOT;
-+	if (len == 0)
-+		goto out_err;
 +
 +	err = -EIO;
 +	bitmap_bh = read_block_bitmap(sb, ac->ac_b_ex.fe_group);
@@ -4233,8 +4219,8 @@ Index: linux-2.6.9-42.0.10.EL_lustre.1.4.10/fs/ext3/mballoc.c
 +	struct ext3_allocation_context ac;
 +	struct ext3_sb_info *sbi;
 +	struct super_block *sb;
-+	unsigned long block;
-+	int err, freed;
++	unsigned long block = 0;
++	int freed, inquota;
 +
 +	sb = ar->inode->i_sb;
 +	sbi = EXT3_SB(sb);
@@ -4245,14 +4231,26 @@ Index: linux-2.6.9-42.0.10.EL_lustre.1.4.10/fs/ext3/mballoc.c
 +			printk(KERN_ERR "EXT3-fs: multiblock request with "
 +					"mballoc disabled!\n");
 +		ar->len = 1;
-+		err = ext3_new_block_old(handle, ar->inode, ar->goal, errp);
-+		return err;
++		block = ext3_new_block_old(handle, ar->inode, ar->goal, errp);
++		return block;
 +	}
++
++	while (ar->len && DQUOT_ALLOC_BLOCK(ar->inode, ar->len)) {
++		ar->flags |= EXT3_MB_HINT_NOPREALLOC;
++		ar->len--;
++	}
++	if (ar->len == 0) {
++		*errp = -EDQUOT;
++		return 0;
++	}
++	inquota = ar->len;
 +
 +	ext3_mb_poll_new_transaction(sb, handle);
 +
-+	if ((err = ext3_mb_initialize_context(&ac, ar)))
-+		return err;
++	if ((*errp = ext3_mb_initialize_context(&ac, ar))) {
++		ar->len = 0;
++		goto out;
++	}
 +
 +	ac.ac_op = EXT3_MB_HISTORY_PREALLOC;
 +	if (!ext3_mb_use_preallocated(&ac)) {
@@ -4283,11 +4281,15 @@ Index: linux-2.6.9-42.0.10.EL_lustre.1.4.10/fs/ext3/mballoc.c
 +			goto repeat;
 +		*errp = -ENOSPC;
 +		ac.ac_b_ex.fe_len = 0;
-+		block = 0;
++		ar->len = 0;
 +		ext3_mb_show_ac(&ac);
 +	}
 +
 +	ext3_mb_release_context(&ac);
++
++out:
++	if (ar->len < inquota)
++		DQUOT_FREE_BLOCK(ar->inode, inquota - ar->len);
 +
 +	return block;
 +}
