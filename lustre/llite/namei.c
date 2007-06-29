@@ -1096,7 +1096,7 @@ int ll_objects_destroy(struct ptlrpc_request *request, struct inode *dir)
         if (rc)
                 GOTO(out_free_memmd, rc);
 
-        oa = obdo_alloc();
+        OBDO_ALLOC(oa);
         if (oa == NULL)
                 GOTO(out_free_memmd, rc = -ENOMEM);
 
@@ -1117,7 +1117,7 @@ int ll_objects_destroy(struct ptlrpc_request *request, struct inode *dir)
         }
 
         rc = obd_destroy(ll_i2obdexp(dir), oa, lsm, &oti, ll_i2mdcexp(dir));
-        obdo_free(oa);
+        OBDO_FREE(oa);
         if (rc)
                 CERROR("obd destroy objid "LPX64" error %d\n",
                        lsm->lsm_object_id, rc);

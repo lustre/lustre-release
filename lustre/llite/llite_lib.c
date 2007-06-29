@@ -1349,7 +1349,8 @@ int ll_setattr_raw(struct inode *inode, struct iattr *attr)
         } else if (ia_valid & (ATTR_MTIME | ATTR_MTIME_SET)) {
                 obd_flag flags;
                 struct obd_info oinfo = { { { 0 } } };
-                struct obdo *oa = obdo_alloc();
+                struct obdo *oa;
+                OBDO_ALLOC(oa);
 
                 CDEBUG(D_INODE, "set mtime on OST inode %lu to %lu\n",
                        inode->i_ino, LTIME_S(attr->ia_mtime));
@@ -1370,7 +1371,7 @@ int ll_setattr_raw(struct inode *inode, struct iattr *attr)
                         rc = obd_setattr_rqset(sbi->ll_osc_exp, &oinfo, NULL);
                         if (rc)
                                 CERROR("obd_setattr_async fails: rc=%d\n", rc);
-                        obdo_free(oa);
+                        OBDO_FREE(oa);
                 } else {
                         rc = -ENOMEM;
                 }
@@ -1744,7 +1745,7 @@ int ll_iocontrol(struct inode *inode, struct file *file,
                         RETURN(-EFAULT);
 
                 oinfo.oi_md = lsm;
-                oinfo.oi_oa = obdo_alloc();
+                OBDO_ALLOC(oinfo.oi_oa);
                 if (!oinfo.oi_oa)
                         RETURN(-ENOMEM);
 
@@ -1758,7 +1759,7 @@ int ll_iocontrol(struct inode *inode, struct file *file,
                                  (struct iattr *)&attr, NULL, 0, NULL, 0, &req);
                 ptlrpc_req_finished(req);
                 if (rc || lsm == NULL) {
-                        obdo_free(oinfo.oi_oa);
+                        OBDO_FREE(oinfo.oi_oa);
                         RETURN(rc);
                 }
 
@@ -1769,7 +1770,7 @@ int ll_iocontrol(struct inode *inode, struct file *file,
                 obdo_from_inode(oinfo.oi_oa, inode,
                                 OBD_MD_FLFID | OBD_MD_FLGENER);
                 rc = obd_setattr_rqset(sbi->ll_osc_exp, &oinfo, NULL);
-                obdo_free(oinfo.oi_oa);
+                OBDO_FREE(oinfo.oi_oa);
                 if (rc) {
                         if (rc != -EPERM && rc != -EACCES)
                                 CERROR("mdc_setattr_async fails: rc = %d\n", rc);

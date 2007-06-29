@@ -1512,7 +1512,7 @@ static int osc_brw(int cmd, struct obd_export *exp, struct obd_info *oinfo,
                         *oinfo->oi_oa = *saved_oa;
                 } else if (page_count > pages_per_brw) {
                         /* save a copy of oa (brw will clobber it) */
-                        saved_oa = obdo_alloc();
+                        OBDO_ALLOC(saved_oa);
                         if (saved_oa == NULL)
                                 GOTO(out, rc = -ENOMEM);
                         *saved_oa = *oinfo->oi_oa;
@@ -1532,7 +1532,7 @@ out:
         osc_release_ppga(orig, page_count_orig);
 
         if (saved_oa != NULL)
-                obdo_free(saved_oa);
+                OBDO_FREE(saved_oa);
 
         RETURN(rc);
 }
@@ -1879,7 +1879,7 @@ static int brw_interpret_oap(struct ptlrpc_request *request, void *data, int rc)
 
         client_obd_list_unlock(&cli->cl_loi_list_lock);
 
-        obdo_free(aa->aa_oa);
+        OBDO_FREE(aa->aa_oa);
 
         osc_release_ppga(aa->aa_ppga, aa->aa_page_count);
         RETURN(rc);
@@ -1905,7 +1905,7 @@ static struct ptlrpc_request *osc_build_req(struct client_obd *cli,
         if (pga == NULL)
                 RETURN(ERR_PTR(-ENOMEM));
 
-        oa = obdo_alloc();
+        OBDO_ALLOC(oa);
         if (oa == NULL)
                 GOTO(out, req = ERR_PTR(-ENOMEM));
 
@@ -1950,7 +1950,7 @@ static struct ptlrpc_request *osc_build_req(struct client_obd *cli,
 out:
         if (IS_ERR(req)) {
                 if (oa)
-                        obdo_free(oa);
+                        OBDO_FREE(oa);
                 if (pga)
                         OBD_FREE(pga, sizeof(*pga) * page_count);
         }
@@ -2402,7 +2402,7 @@ static int osc_queue_async_io(struct obd_export *exp, struct lov_stripe_md *lsm,
                 struct obd_async_page_ops *ops;
                 struct obdo *oa;
 
-                oa = obdo_alloc();
+                OBDO_ALLOC(oa);
                 if (oa == NULL)
                         RETURN(-ENOMEM);
 
@@ -2412,7 +2412,7 @@ static int osc_queue_async_io(struct obd_export *exp, struct lov_stripe_md *lsm,
                     NO_QUOTA)
                         rc = -EDQUOT;
 
-                obdo_free(oa);
+                OBDO_FREE(oa);
                 if (rc)
                         RETURN(rc);
         }

@@ -396,6 +396,12 @@ Bugzilla   : 12576
 Description: Not Check whether lov_tgts is NULL in some lov functions
 Details    : Checking whether lov_tgts is NULL in some functions. 
 
+Severity   : normal
+Bugzilla   : 11815
+Description: replace obdo_alloc() with OBDO_ALLOC macro
+Details    : nothing special is done in obdo_alloc() function, and for 
+             debugging purpose, it needs to be replaced with macros.
+
 --------------------------------------------------------------------------------
 
 2007-05-03  Cluster File Systems, Inc. <info@clusterfs.com>

@@ -440,6 +440,11 @@ do {                                                                          \
         (ptr) = (void *)0xdeadbeef;                                           \
 } while (0)
 
+#define OBD_SLAB_ALLOC_PTR(ptr, slab)                                         \
+        OBD_SLAB_ALLOC((ptr), (slab), CFS_ALLOC_STD, sizeof *(ptr))
+#define OBD_SLAB_FREE_PTR(ptr, slab)                                          \
+        OBD_SLAB_FREE((ptr), (slab), sizeof *(ptr))
+
 #define KEY_IS(str) (keylen >= strlen(key) && strcmp(key, str) == 0)
 
 #if defined(__linux__)

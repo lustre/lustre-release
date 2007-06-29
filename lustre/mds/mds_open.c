@@ -370,7 +370,7 @@ static int mds_create_objects(struct ptlrpc_request *req, int offset,
         if (OBD_FAIL_CHECK_ONCE(OBD_FAIL_MDS_ALLOC_OBDO))
                 GOTO(out_ids, rc = -ENOMEM);
 
-        oinfo.oi_oa = obdo_alloc();
+        OBDO_ALLOC(oinfo.oi_oa);
         if (oinfo.oi_oa == NULL)
                 GOTO(out_ids, rc = -ENOMEM);
         oinfo.oi_oa->o_uid = 0; /* must have 0 uid / gid on OST */
@@ -485,7 +485,7 @@ static int mds_create_objects(struct ptlrpc_request *req, int offset,
         obd_free_diskmd(mds->mds_osc_exp, &lmm);
  out_oa:
         oti_free_cookies(&oti);
-        obdo_free(oinfo.oi_oa);
+        OBDO_FREE(oinfo.oi_oa);
  out_ids:
         if (rc) {
                 OBD_FREE(*ids, mds->mds_lov_desc.ld_tgt_count * sizeof(**ids));

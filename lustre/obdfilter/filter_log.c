@@ -133,7 +133,7 @@ static int filter_recov_log_unlink_cb(struct llog_ctxt *ctxt,
         ENTRY;
 
         lur = (struct llog_unlink_rec *)rec;
-        oa = obdo_alloc();
+        OBDO_ALLOC(oa);
         if (oa == NULL) 
                 RETURN(-ENOMEM);
         oa->o_valid |= OBD_MD_FLCOOKIE;
@@ -143,7 +143,7 @@ static int filter_recov_log_unlink_cb(struct llog_ctxt *ctxt,
         oid = oa->o_id;
 
         rc = filter_destroy(exp, oa, NULL, NULL, NULL);
-        obdo_free(oa);
+        OBDO_FREE(oa);
         if (rc == -ENOENT) {
                 CDEBUG(D_HA, "object already removed, send cookie\n");
                 llog_cancel(ctxt, NULL, 1, cookie, 0);
@@ -171,7 +171,7 @@ static int filter_recov_log_setattr_cb(struct llog_ctxt *ctxt,
         ENTRY;
 
         lsr = (struct llog_setattr_rec *)rec;
-        oinfo.oi_oa = obdo_alloc();
+        OBDO_ALLOC(oinfo.oi_oa);
 
         oinfo.oi_oa->o_valid |= (OBD_MD_FLID | OBD_MD_FLUID | OBD_MD_FLGID |
                                  OBD_MD_FLCOOKIE);
@@ -183,7 +183,7 @@ static int filter_recov_log_setattr_cb(struct llog_ctxt *ctxt,
         oid = oinfo.oi_oa->o_id;
 
         rc = filter_setattr(exp, &oinfo, NULL);
-        obdo_free(oinfo.oi_oa);
+        OBDO_FREE(oinfo.oi_oa);
 
         if (rc == -ENOENT) {
                 CDEBUG(D_HA, "object already removed, send cookie\n");

@@ -885,7 +885,7 @@ static int lov_clear_orphans(struct obd_export *export, struct obdo *src_oa,
 
         lov = &export->exp_obd->u.lov;
 
-        tmp_oa = obdo_alloc();
+        OBDO_ALLOC(tmp_oa);
         if (tmp_oa == NULL)
                 RETURN(-ENOMEM);
 
@@ -936,7 +936,7 @@ static int lov_clear_orphans(struct obd_export *export, struct obdo *src_oa,
         }
         lov_putref(export->exp_obd);
 
-        obdo_free(tmp_oa);
+        OBDO_FREE(tmp_oa);
         RETURN(rc);
 }
 

@@ -438,7 +438,7 @@ int mds_osc_setattr_async(struct obd_device *obd, struct inode *inode,
                 RETURN(0);
 
         /* first get memory EA */
-        oinfo.oi_oa = obdo_alloc();
+        OBDO_ALLOC(oinfo.oi_oa);
         if (!oinfo.oi_oa)
                 RETURN(-ENOMEM);
 
@@ -478,7 +478,7 @@ int mds_osc_setattr_async(struct obd_device *obd, struct inode *inode,
 out:
         if (oinfo.oi_md)
                 obd_free_memmd(mds->mds_osc_exp, &oinfo.oi_md);
-        obdo_free(oinfo.oi_oa);
+        OBDO_FREE(oinfo.oi_oa);
         RETURN(rc);
 }
 

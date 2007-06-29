@@ -71,7 +71,7 @@ static int ll_close_inode_openhandle(struct inode *inode,
         if (obd->obd_no_recov)
                 GOTO(out, rc = 0);
 
-        oa = obdo_alloc();
+        OBDO_ALLOC(oa);
         if (!oa)
                 RETURN(-ENOMEM); // XXX We leak openhandle and request here.
 
@@ -97,7 +97,7 @@ static int ll_close_inode_openhandle(struct inode *inode,
                        inode->i_ino, rc);
         }
 
-        obdo_free(oa);
+        OBDO_FREE(oa);
 
         if (rc == 0) {
                 rc = ll_objects_destroy(req, inode);
@@ -1543,7 +1543,7 @@ static int ll_lov_recreate_obj(struct inode *inode, struct file *file,
         if (rc) {
                 RETURN(-EFAULT);
         }
-        oa = obdo_alloc();
+        OBDO_ALLOC(oa);
         if (oa == NULL)
                 RETURN(-ENOMEM);
 
@@ -1573,7 +1573,7 @@ static int ll_lov_recreate_obj(struct inode *inode, struct file *file,
         GOTO(out, rc);
 out:
         up(&lli->lli_size_sem);
-        obdo_free(oa);
+        OBDO_FREE(oa);
         return rc;
 }
 
@@ -2230,8 +2230,9 @@ int ll_fsync(struct file *file, struct dentry *dentry, int data)
                 ptlrpc_req_finished(req);
 
         if (data && lsm) {
-                struct obdo *oa = obdo_alloc();
+                struct obdo *oa;
 
+                OBDO_ALLOC(oa);
                 if (!oa)
                         RETURN(rc ? rc : -ENOMEM);
 
@@ -2244,7 +2245,7 @@ int ll_fsync(struct file *file, struct dentry *dentry, int data)
                                0, OBD_OBJECT_EOF);
                 if (!rc)
                         rc = err;
-                obdo_free(oa);
+                OBDO_FREE(oa);
         }
 
         RETURN(rc);

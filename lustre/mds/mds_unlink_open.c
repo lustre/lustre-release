@@ -76,7 +76,7 @@ int mds_osc_destroy_orphan(struct obd_device *obd,
         if (rc)
                 GOTO(out_free_memmd, rc);
 
-        oa = obdo_alloc();
+        OBDO_ALLOC(oa);
         if (oa == NULL)
                 GOTO(out_free_memmd, rc = -ENOMEM);
         oa->o_id = lsm->lsm_object_id;
@@ -88,7 +88,7 @@ int mds_osc_destroy_orphan(struct obd_device *obd,
                 oti.oti_logcookies = logcookies;
         }
         rc = obd_destroy(mds->mds_osc_exp, oa, lsm, &oti, obd->obd_self_export);
-        obdo_free(oa);
+        OBDO_FREE(oa);
         if (rc)
                 CDEBUG(D_INODE, "destroy orphan objid 0x"LPX64" on ost error "
                        "%d\n", lsm->lsm_object_id, rc);

@@ -1382,19 +1382,16 @@ extern void obd_cleanup_caches(void);
 
 /* support routines */
 extern cfs_mem_cache_t *obdo_cachep;
-static inline struct obdo *obdo_alloc(void)
-{
-        struct obdo *oa;
 
-        OBD_SLAB_ALLOC(oa, obdo_cachep, CFS_ALLOC_STD, sizeof(*oa));
+#define OBDO_ALLOC(ptr)                                                       \
+do {                                                                          \
+        OBD_SLAB_ALLOC_PTR((ptr), obdo_cachep);                               \
+} while(0)
 
-        return oa;
-}
-
-static inline void obdo_free(struct obdo *oa)
-{
-        OBD_SLAB_FREE(oa, obdo_cachep, sizeof(*oa));
-}
+#define OBDO_FREE(ptr)                                                        \
+do {                                                                          \
+        OBD_SLAB_FREE_PTR((ptr), obdo_cachep);                                \
+} while(0)
 
 /* I'm as embarrassed about this as you are.
  *

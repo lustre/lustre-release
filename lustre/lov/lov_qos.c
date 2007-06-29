@@ -837,7 +837,7 @@ int qos_prep_create(struct obd_export *exp, struct lov_request_set *set)
                 if (req->rq_oi.oi_md == NULL)
                         GOTO(out_err, rc = -ENOMEM);
 
-                req->rq_oi.oi_oa = obdo_alloc();
+                OBDO_ALLOC(req->rq_oi.oi_oa);
                 if (req->rq_oi.oi_oa == NULL)
                         GOTO(out_err, rc = -ENOMEM);
 

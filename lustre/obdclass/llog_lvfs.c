@@ -638,7 +638,7 @@ static int llog_lvfs_create(struct llog_ctxt *ctxt, struct llog_handle **res,
                 handle->lgh_id.lgl_ogen =
                         handle->lgh_file->f_dentry->d_inode->i_generation;
         } else {
-                oa = obdo_alloc();
+                OBDO_ALLOC(oa);
                 if (oa == NULL)
                         GOTO(cleanup, rc = -ENOMEM);
 
@@ -668,7 +668,7 @@ static int llog_lvfs_create(struct llog_ctxt *ctxt, struct llog_handle **res,
         handle->lgh_ctxt = ctxt;
  finish:
         if (oa)
-                obdo_free(oa);
+                OBDO_FREE(oa);
         RETURN(rc);
 cleanup:
         switch (cleanup_phase) {
@@ -727,7 +727,7 @@ static int llog_lvfs_destroy(struct llog_handle *handle)
                 RETURN(rc);
         }
 
-        oa = obdo_alloc();
+        OBDO_ALLOC(oa);
         if (oa == NULL)
                 RETURN(-ENOMEM);
 
@@ -742,7 +742,7 @@ static int llog_lvfs_destroy(struct llog_handle *handle)
 
         rc = obd_destroy(handle->lgh_ctxt->loc_exp, oa, NULL, NULL, NULL);
  out:
-        obdo_free(oa);
+        OBDO_FREE(oa);
         RETURN(rc);
 }
 
