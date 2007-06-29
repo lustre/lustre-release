@@ -600,15 +600,15 @@ test_21() {
 run_test 21 "write to dangling link ============================"
 
 test_22() {
-	mkdir $DIR/d22
-	chown $RUNAS_ID $DIR/d22
-	# Tar gets pissy if it can't access $PWD *sigh*
-	(cd $TMP || error "cd $TMP failed";
+	WDIR=$DIR/$tdir
+	mkdir $WDIR
+	chown $RUNAS_ID $WDIR
+	(cd $WDIR || error "cd $WDIR failed";
 	$RUNAS tar cf - /etc/hosts /etc/sysconfig/network | \
-	$RUNAS tar xfC - $DIR/d22)
-	ls -lR $DIR/d22/etc || error "ls -lR $DIR/d22/etc failed"
-	$CHECKSTAT -t dir $DIR/d22/etc || error "checkstat -t dir failed"
-	$CHECKSTAT -u \#$RUNAS_ID $DIR/d22/etc || error "checkstat -u failed"
+	$RUNAS tar xf -)
+	ls -lR $WDIR/etc || error "ls -lR $WDIR/etc failed"
+	$CHECKSTAT -t dir $WDIR/etc || error "checkstat -t dir failed"
+	$CHECKSTAT -u \#$RUNAS_ID $WDIR/etc || error "checkstat -u failed"
 }
 run_test 22 "unpack tar archive as non-root user ==============="
 
