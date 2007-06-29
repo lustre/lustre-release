@@ -557,7 +557,7 @@ do_check_set:
                 req = list_entry(iter, struct ptlrpc_request,
                                  rq_set_chain);
 
-                if (req->rq_replied)
+                if (req->rq_phase == RQ_PHASE_COMPLETE)
                         continue;
 
                 req->rq_phase = RQ_PHASE_COMPLETE;
