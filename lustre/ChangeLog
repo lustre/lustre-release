@@ -15,6 +15,13 @@ tbd         Cluster File Systems, Inc. <info@clusterfs.com>
        * bug fixes
 
 Severity   : normal
+Frequency  : rare
+Bugzilla   : 12629
+Description: Deadlock during metadata tests
+Details    : in prune_dir_dentries(), shrink_dcache_parent() should not be
+             called with the per-dentry lock held.
+
+Severity   : normal
 Frequency  : SLES9 only
 Bugzilla   : 12744
 Description: Lustre patched kernel for SLES9 SP3 has NR_CPUS set to 8

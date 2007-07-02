@@ -482,9 +482,7 @@ restart:
                         spin_unlock(&dcache_lock);
 
                         /* try to kill all child dentries */
-                        lock_dentry(dentry);
                         shrink_dcache_parent(dentry);
-                        unlock_dentry(dentry);
                         dput(dentry);
 
                         /* now try to get rid of current dentry */
