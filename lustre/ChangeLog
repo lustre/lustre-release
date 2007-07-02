@@ -14,6 +14,12 @@ tbd         Cluster File Systems, Inc. <info@clusterfs.com>
        * Note that reiserfs quotas are disabled on SLES 10 in this kernel.
        * bug fixes
 
+Severity   : normal
+Frequency  : SLES9 only
+Bugzilla   : 12744
+Description: Lustre patched kernel for SLES9 SP3 has NR_CPUS set to 8
+Details    : set CONFIG_NR_CPUS to 128 instead of 8.
+
 Severity   : enhancement
 Bugzilla   : 12678
 Description: remove fs_prep_san_write operation and related patches
