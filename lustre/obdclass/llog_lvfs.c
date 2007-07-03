@@ -479,7 +479,7 @@ static int llog_lvfs_prev_block(struct llog_handle *loghandle,
         if (len == 0 || len & (LLOG_CHUNK_SIZE - 1))
                 RETURN(-EINVAL);
 
-        CDEBUG(D_OTHER, "looking for log index %u n", prev_idx);
+        CDEBUG(D_OTHER, "looking for log index %u\n", prev_idx);
 
         cur_offset = LLOG_CHUNK_SIZE;
         llog_skip_over(&cur_offset, 0, prev_idx);
