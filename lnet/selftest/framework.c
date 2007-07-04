@@ -15,6 +15,10 @@
 #include "selftest.h"
 
 
+int brw_inject_errors = 0;
+CFS_MODULE_PARM(brw_inject_errors, "i", int, 0644,
+                "# data errors to inject randomly, zero by default");
+
 static int session_timeout = 100;
 CFS_MODULE_PARM(session_timeout, "i", int, 0444,
                 "test session timeout in seconds (100 by default, 0 == never)");
@@ -41,6 +45,7 @@ do {                                    \
 #define sfw_unpack_fw_counters(fc)        \
 do {                                      \
         __swab32s(&(fc).brw_errors);      \
+        __swab32s(&(fc).ping_errors);     \
         __swab32s(&(fc).active_tests);    \
         __swab32s(&(fc).active_batches);  \
         __swab32s(&(fc).zombie_sessions); \
@@ -179,8 +184,7 @@ sfw_deactivate_session (void)
         int            nactive = 0;
         sfw_batch_t   *tsb;
 
-        if (sn == NULL)
-                return;
+        if (sn == NULL) return;
 
         LASSERT (!sn->sn_timer_active);
 
@@ -215,12 +219,6 @@ sfw_session_removed (void)
         return (sfw_data.fw_session == NULL) ? 1 : 0;
 }
 
-void
-sfw_set_session_timeout (int timeout)
-{
-        session_timeout = timeout;
-}
-
 #endif
 
 void
@@ -253,6 +251,7 @@ sfw_init_session (sfw_session_t *sn, lst_sid_t sid, const char *name)
         CFS_INIT_LIST_HEAD(&sn->sn_list);
         CFS_INIT_LIST_HEAD(&sn->sn_batches);
         atomic_set(&sn->sn_brw_errors, 0);
+        atomic_set(&sn->sn_ping_errors, 0);
         strncpy(&sn->sn_name[0], name, LST_NAME_SIZE);
 
         sn->sn_timer_active = 0;
@@ -378,6 +377,7 @@ sfw_get_stats (srpc_stat_reqst_t *request, srpc_stat_reply_t *reply)
         srpc_get_counters(&reply->str_rpc);
 
         cnt->brw_errors      = atomic_read(&sn->sn_brw_errors);
+        cnt->ping_errors     = atomic_read(&sn->sn_ping_errors);
         cnt->zombie_sessions = atomic_read(&sfw_data.fw_nzombies);
 
         cnt->active_tests = cnt->active_batches = 0;
@@ -538,8 +538,7 @@ sfw_destroy_test_instance (sfw_test_instance_t *tsi)
         srpc_client_rpc_t *rpc;
         sfw_test_unit_t   *tsu;
 
-        if (!tsi->tsi_is_client)
-                goto clean;
+        if (!tsi->tsi_is_client) goto clean;
 
         tsi->tsi_ops->tso_fini(tsi);
 
@@ -666,13 +665,13 @@ sfw_add_test_instance (sfw_batch_t *tsb, srpc_server_rpc_t *rpc)
         CFS_INIT_LIST_HEAD(&tsi->tsi_free_rpcs);
         CFS_INIT_LIST_HEAD(&tsi->tsi_active_rpcs);
 
-        tsi->tsi_stopping   = 0;
-        tsi->tsi_batch      = tsb;
-        tsi->tsi_loop       = req->tsr_loop;
-        tsi->tsi_concur     = req->tsr_concur;
-        tsi->tsi_service    = req->tsr_service;
-        tsi->tsi_is_client  = !!(req->tsr_is_client);
-        tsi->tsi_stop_onerr = !!(req->tsr_stop_onerr);
+        tsi->tsi_stopping      = 0;
+        tsi->tsi_batch         = tsb;
+        tsi->tsi_loop          = req->tsr_loop;
+        tsi->tsi_concur        = req->tsr_concur;
+        tsi->tsi_service       = req->tsr_service;
+        tsi->tsi_is_client     = !!(req->tsr_is_client);
+        tsi->tsi_stoptsu_onerr = !!(req->tsr_stop_onerr);
 
         rc = sfw_load_test(tsi);
         if (rc != 0) {
@@ -791,10 +790,6 @@ sfw_test_rpc_done (srpc_client_rpc_t *rpc)
         sfw_test_instance_t *tsi = tsu->tsu_instance;
         int                  done = 0;
 
-        if (rpc->crpc_status != 0 && tsu->tsu_error == 0 &&
-            (rpc->crpc_status != -EINTR || !tsi->tsi_stopping))
-                tsu->tsu_error = rpc->crpc_status;
-
         tsi->tsi_ops->tso_done_rpc(tsu, rpc);
                       
         spin_lock(&tsi->tsi_lock);
@@ -807,7 +802,7 @@ sfw_test_rpc_done (srpc_client_rpc_t *rpc)
         /* batch is stopping or loop is done or get error */
         if (tsi->tsi_stopping ||
             tsu->tsu_loop == 0 ||
-            (tsu->tsu_error != 0 && tsi->tsi_stop_onerr))
+            (rpc->crpc_status != 0 && tsi->tsi_stoptsu_onerr))
                 done = 1;
 
         /* dec ref for poster */
@@ -871,8 +866,7 @@ sfw_run_test (swi_workitem_t *wi)
 
         LASSERT (wi == &tsu->tsu_worker);
 
-        tsu->tsu_error = tsi->tsi_ops->tso_prep_rpc(tsu, tsu->tsu_dest, &rpc);
-        if (tsu->tsu_error != 0) {
+        if (tsi->tsi_ops->tso_prep_rpc(tsu, tsu->tsu_dest, &rpc) != 0) {
                 LASSERT (rpc == NULL);
                 goto test_done;
         }
@@ -937,10 +931,7 @@ sfw_run_batch (sfw_batch_t *tsb)
 
                 list_for_each_entry (tsu, &tsi->tsi_units, tsu_list) {
                         atomic_inc(&tsi->tsi_nactive);
-
-                        tsu->tsu_error = 0;
-                        tsu->tsu_loop  = tsi->tsi_loop;
-
+                        tsu->tsu_loop = tsi->tsi_loop;
                         wi = &tsu->tsu_worker;
                         swi_init_workitem(wi, tsu, sfw_run_test);
                         swi_schedule_workitem(wi);
@@ -1517,6 +1508,16 @@ sfw_startup (void)
         srpc_service_t  *sv;
         sfw_test_case_t *tsc;
 
+#ifndef __KERNEL__
+        char *s;
+
+        s = getenv("SESSION_TIMEOUT");
+        session_timeout = s != NULL ? atoi(s) : session_timeout;
+
+        s = getenv("BRW_INJECT_ERRORS");
+        brw_inject_errors = s != NULL ? atoi(s) : brw_inject_errors;
+#endif
+
         if (session_timeout < 0) {
                 CERROR ("Session timeout must be non-negative: %d\n",
                         session_timeout);
@@ -1525,7 +1526,7 @@ sfw_startup (void)
 
         if (session_timeout == 0)
                 CWARN ("Zero session_timeout specified "
-                       "- test sessions never timeout.\n");
+                       "- test sessions never expire.\n");
 
         memset(&sfw_data, 0, sizeof(struct smoketest_framework));
 

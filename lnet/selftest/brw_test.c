@@ -10,15 +10,15 @@
 #include "selftest.h"
 
 
-static int brw_inject_errors = 0;
-CFS_MODULE_PARM(brw_inject_errors, "i", int, 0644,
-                "# data errors to inject randomly");
+extern int brw_inject_errors;
 
 static void
 brw_client_fini (sfw_test_instance_t *tsi)
 {
         srpc_bulk_t     *bulk;
         sfw_test_unit_t *tsu;
+
+        LASSERT (tsi->tsi_is_client);
 
         list_for_each_entry (tsu, &tsi->tsi_units, tsu_list) {
                 bulk = tsu->tsu_private;
@@ -37,6 +37,8 @@ brw_client_init (sfw_test_instance_t *tsi)
         int               npg = breq->blk_npg;
         srpc_bulk_t      *bulk;
         sfw_test_unit_t  *tsu;
+
+        LASSERT (tsi->tsi_is_client);
 
         if (npg > LNET_MAX_IOV || npg <= 0)
                 return -EINVAL;
@@ -91,8 +93,7 @@ brw_fill_page (cfs_page_t *pg, int pattern, __u64 magic)
 
         LASSERT (addr != NULL);
 
-        if (pattern == LST_BRW_CHECK_NONE)
-                return;
+        if (pattern == LST_BRW_CHECK_NONE) return;
 
         if (magic == BRW_MAGIC)
                 magic += brw_inject_one_error();
@@ -231,17 +232,20 @@ brw_client_prep_rpc (sfw_test_unit_t *tsu,
 static void
 brw_client_done_rpc (sfw_test_unit_t *tsu, srpc_client_rpc_t *rpc)
 {
-        __u64             magic = BRW_MAGIC;
-        srpc_msg_t       *msg = &rpc->crpc_replymsg;
-        srpc_brw_reply_t *reply = &msg->msg_body.brw_reply;
-        srpc_brw_reqst_t *reqst = &rpc->crpc_reqstmsg.msg_body.brw_reqst;
-        sfw_session_t    *sn = tsu->tsu_instance->tsi_batch->bat_session;
+        __u64                magic = BRW_MAGIC;
+        sfw_test_instance_t *tsi = tsu->tsu_instance;
+        sfw_session_t       *sn = tsi->tsi_batch->bat_session;
+        srpc_msg_t          *msg = &rpc->crpc_replymsg;
+        srpc_brw_reply_t    *reply = &msg->msg_body.brw_reply;
+        srpc_brw_reqst_t    *reqst = &rpc->crpc_reqstmsg.msg_body.brw_reqst;
 
         LASSERT (sn != NULL);
 
         if (rpc->crpc_status != 0) {
                 CERROR ("BRW RPC to %s failed with %d\n",
                         libcfs_id2str(rpc->crpc_dest), rpc->crpc_status);
+                if (!tsi->tsi_stopping) /* rpc could have been aborted */
+                        atomic_inc(&sn->sn_brw_errors);
                 goto out;
         }
 
@@ -250,15 +254,13 @@ brw_client_done_rpc (sfw_test_unit_t *tsu, srpc_client_rpc_t *rpc)
                 __swab32s(&reply->brw_status);
         }
 
-        if (tsu->tsu_error == 0)
-                tsu->tsu_error = -reply->brw_status;
-
         CDEBUG (reply->brw_status ? D_WARNING : D_NET,
                 "BRW RPC to %s finished with brw_status: %d\n",
                 libcfs_id2str(rpc->crpc_dest), reply->brw_status);
 
         if (reply->brw_status != 0) {
                 atomic_inc(&sn->sn_brw_errors);
+                rpc->crpc_status = -reply->brw_status;
                 goto out;
         }
 
@@ -267,8 +269,8 @@ brw_client_done_rpc (sfw_test_unit_t *tsu, srpc_client_rpc_t *rpc)
         if (brw_check_bulk(&rpc->crpc_bulk, reqst->brw_flags, magic) != 0) {
                 CERROR ("Bulk data from %s is corrupted!\n",
                         libcfs_id2str(rpc->crpc_dest));
-                tsu->tsu_error = -EBADMSG;
                 atomic_inc(&sn->sn_brw_errors);
+                rpc->crpc_status = -EBADMSG;
         }
 
 out:

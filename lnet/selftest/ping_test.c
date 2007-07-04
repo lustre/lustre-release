@@ -15,7 +15,6 @@
 typedef struct {
         spinlock_t      pnd_lock;       /* serialize */
         int             pnd_counter;    /* sequence counter */
-        int             pnd_err_count;  /* error count */
 } lst_ping_data_t;
 
 static lst_ping_data_t  lst_ping_data;
@@ -23,18 +22,28 @@ static lst_ping_data_t  lst_ping_data;
 static int
 ping_client_init(sfw_test_instance_t *tsi)
 {
+        LASSERT (tsi->tsi_is_client);
+
         spin_lock_init(&lst_ping_data.pnd_lock);
-        lst_ping_data.pnd_counter   = 0;
-        lst_ping_data.pnd_err_count = 0;
+        lst_ping_data.pnd_counter = 0;
 
         return 0;
 }
 
 static void
-ping_client_fini(sfw_test_instance_t *tsi)
+ping_client_fini (sfw_test_instance_t *tsi)
 {
-        CWARN("Total ping %d, failed ping: %d\n",
-              lst_ping_data.pnd_counter, lst_ping_data.pnd_err_count);
+        sfw_session_t *sn = tsi->tsi_batch->bat_session;
+        int            errors;
+
+        LASSERT (sn != NULL);
+        LASSERT (tsi->tsi_is_client);
+
+        errors = atomic_read(&sn->sn_ping_errors);
+        if (errors)
+                CWARN ("%d pings have failed.\n", errors);
+        else
+                CDEBUG (D_NET, "Ping test finished OK.\n");
 }
 
 static int
@@ -65,49 +74,53 @@ ping_client_prep_rpc(sfw_test_unit_t *tsu,
 }
 
 static void
-ping_client_done_rpc(sfw_test_unit_t *tsu, srpc_client_rpc_t *rpc)
+ping_client_done_rpc (sfw_test_unit_t *tsu, srpc_client_rpc_t *rpc)
 {
-        srpc_ping_reqst_t *req;
-        srpc_ping_reply_t *rep;
-        struct timeval     tv;
+        sfw_test_instance_t *tsi = tsu->tsu_instance;
+        sfw_session_t       *sn = tsi->tsi_batch->bat_session;
+        srpc_ping_reqst_t   *reqst = &rpc->crpc_reqstmsg.msg_body.ping_reqst;
+        srpc_ping_reply_t   *reply = &rpc->crpc_replymsg.msg_body.ping_reply;
+        struct timeval       tv;
 
-        req = &rpc->crpc_reqstmsg.msg_body.ping_reqst;
-        rep = &rpc->crpc_replymsg.msg_body.ping_reply;
-
-        if (rpc->crpc_status == 0 &&
-            rpc->crpc_replymsg.msg_magic != SRPC_MSG_MAGIC) {
-                __swab32s(&rep->pnr_seq);
-                __swab32s(&rep->pnr_magic);
-                __swab32s(&rep->pnr_status);
-        }
+        LASSERT (sn != NULL);
 
         if (rpc->crpc_status != 0) {
+                if (!tsi->tsi_stopping) /* rpc could have been aborted */
+                        atomic_inc(&sn->sn_ping_errors);
                 CERROR ("Unable to ping %s (%d): %d\n",
                         libcfs_id2str(rpc->crpc_dest),
-                        req->pnr_seq, rpc->crpc_status);
-        } else if (rep->pnr_magic != LST_PING_TEST_MAGIC) {
-                tsu->tsu_error = -EBADMSG;
-                CERROR ("Bad magic %u from %s, %u expected.\n",
-                        rep->pnr_magic, libcfs_id2str(rpc->crpc_dest),
-                        LST_PING_TEST_MAGIC);
-        } else if (rep->pnr_seq != req->pnr_seq) {
-                tsu->tsu_error = -EBADMSG;
-                CERROR ("Bad seq %u from %s, %u expected.\n",
-                        rep->pnr_seq, libcfs_id2str(rpc->crpc_dest),
-                        req->pnr_seq);
-        }
+                        reqst->pnr_seq, rpc->crpc_status);
+                return;
+        } 
 
-        if (tsu->tsu_error != 0) {
-                spin_lock(&lst_ping_data.pnd_lock);
-                lst_ping_data.pnd_err_count++;
-                spin_unlock(&lst_ping_data.pnd_lock);
+        if (rpc->crpc_replymsg.msg_magic != SRPC_MSG_MAGIC) {
+                __swab32s(&reply->pnr_seq);
+                __swab32s(&reply->pnr_magic);
+                __swab32s(&reply->pnr_status);
+        }
+        
+        if (reply->pnr_magic != LST_PING_TEST_MAGIC) {
+                rpc->crpc_status = -EBADMSG;
+                atomic_inc(&sn->sn_ping_errors);
+                CERROR ("Bad magic %u from %s, %u expected.\n",
+                        reply->pnr_magic, libcfs_id2str(rpc->crpc_dest),
+                        LST_PING_TEST_MAGIC);
+                return;
+        } 
+        
+        if (reply->pnr_seq != reqst->pnr_seq) {
+                rpc->crpc_status = -EBADMSG;
+                atomic_inc(&sn->sn_ping_errors);
+                CERROR ("Bad seq %u from %s, %u expected.\n",
+                        reply->pnr_seq, libcfs_id2str(rpc->crpc_dest),
+                        reqst->pnr_seq);
                 return;
         }
 
         cfs_fs_timeval(&tv);
-        CDEBUG (D_NET, "%d reply in %u usec\n", rep->pnr_seq,
-                (unsigned)((tv.tv_sec - (unsigned)req->pnr_time_sec) * 1000000 +
-                           (tv.tv_usec - req->pnr_time_usec)));
+        CDEBUG (D_NET, "%d reply in %u usec\n", reply->pnr_seq,
+                (unsigned)((tv.tv_sec - (unsigned)reqst->pnr_time_sec) * 1000000
+                           + (tv.tv_usec - reqst->pnr_time_usec)));
         return;
 }
 

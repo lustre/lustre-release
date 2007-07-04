@@ -441,6 +441,7 @@ typedef struct {
         __u32 active_batches;
         __u32 zombie_sessions;
         __u32 brw_errors;
+        __u32 ping_errors;
 } sfw_counters_t;
 
 #endif

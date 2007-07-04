@@ -316,6 +316,7 @@ typedef struct {
         struct list_head  sn_batches; /* list of batches */
         char              sn_name[LST_NAME_SIZE];
         atomic_t          sn_brw_errors;
+        atomic_t          sn_ping_errors;
 } sfw_session_t;
 
 #define sfw_sid_equal(sid0, sid1)     ((sid0).ses_nid == (sid1).ses_nid && \
@@ -347,10 +348,10 @@ typedef struct sfw_test_instance {
         sfw_test_client_ops_t  *tsi_ops;          /* test client operations */
 
         /* public parameter for all test units */
-        int                     tsi_is_client:1;  /* is test client */
-        int                     tsi_stop_onerr:1; /* stop on error */
-        int                     tsi_concur;       /* concurrency */
-        int                     tsi_loop;         /* loop count */
+        int                     tsi_is_client:1;     /* is test client */
+        int                     tsi_stoptsu_onerr:1; /* stop tsu on error */
+        int                     tsi_concur;          /* concurrency */
+        int                     tsi_loop;            /* loop count */
 
         /* status of test instance */
         spinlock_t              tsi_lock;         /* serialize */
@@ -377,7 +378,6 @@ typedef struct sfw_test_unit {
         struct list_head        tsu_list;         /* chain on lst_test_instance */
         lnet_process_id_t       tsu_dest;         /* id of dest node */
         int                     tsu_loop;         /* loop count of the test */
-        int                     tsu_error;        /* error code */
         sfw_test_instance_t    *tsu_instance;     /* pointer to test instance */
         void                   *tsu_private;      /* private data */
         swi_workitem_t          tsu_worker;       /* workitem of the test unit */
@@ -517,7 +517,6 @@ swi_state2str (int state)
 
 int stt_poll_interval(void);
 int sfw_session_removed(void);
-void sfw_set_session_timeout(int timeout);
 
 int stt_check_events(void);
 int swi_check_events(void);
