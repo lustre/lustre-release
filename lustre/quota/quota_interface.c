@@ -281,6 +281,37 @@ int lprocfs_wr_type(struct file *file, const char *buffer,
         return count;
 }
 EXPORT_SYMBOL(lprocfs_wr_type);
+
+int lprocfs_filter_rd_limit(char *page, char **start, off_t off, int count, 
+                                   int *eof, void *data)
+{
+        struct obd_device *obd = (struct obd_device *)data;
+        LASSERT(obd != NULL);
+        
+        return snprintf(page, count, "%lu\n", 
+                        obd->u.obt.obt_qctxt.lqc_limit_sz);
+}
+EXPORT_SYMBOL(lprocfs_filter_rd_limit);
+
+int lprocfs_filter_wr_limit(struct file *file, const char *buffer,
+                                   unsigned long count, void *data)
+{
+        struct obd_device *obd = (struct obd_device *)data;
+        int val, rc;
+        LASSERT(obd != NULL);
+        
+        rc = lprocfs_write_helper(buffer, count, &val);
+        if (rc)
+                return rc;
+        
+        if (val <= 1 << 20)
+                return -EINVAL;
+        
+        obd->u.obt.obt_qctxt.lqc_limit_sz = val;
+        return count;
+} 
+EXPORT_SYMBOL(lprocfs_filter_wr_limit);
+
 #endif /* LPROCFS */
 
 static int filter_quota_setup(struct obd_device *obd)
@@ -401,6 +432,7 @@ static int filter_quota_check(struct obd_device *obd, unsigned int uid,
         struct lustre_quota_ctxt *qctxt = &obd->u.obt.obt_qctxt;
         int i;
         __u32 id[MAXQUOTAS] = { uid, gid };
+        __u64 limit;
         struct qunit_data qdata[MAXQUOTAS];
         int rc;
         ENTRY;
@@ -417,8 +449,11 @@ static int filter_quota_check(struct obd_device *obd, unsigned int uid,
 
                 qctxt_wait_pending_dqacq(qctxt, id[i], i, 1);
                 rc = compute_remquota(obd, qctxt, &qdata[i]);
+                limit = npage * CFS_PAGE_SIZE;
+                if (limit < qctxt->lqc_limit_sz )
+                        limit =  qctxt->lqc_limit_sz;
                 if (rc == QUOTA_RET_OK && 
-                    qdata[i].qd_count < npage * CFS_PAGE_SIZE)
+                    qdata[i].qd_count < limit)
                         RETURN(QUOTA_RET_ACQUOTA);
         }
 

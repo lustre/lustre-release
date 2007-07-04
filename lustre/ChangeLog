@@ -15,6 +15,14 @@ tbd         Cluster File Systems, Inc. <info@clusterfs.com>
        * bug fixes
 
 Severity   : normal
+Frequency  : when qunit size is too small(less than 20M)
+Bugzilla   : 12588
+Description: write is stopped by improper -EDQUOT
+Details    : If the master is busy and qunit size is small enough(let's say 1M), 
+	     the slave can not get quota from master on time, which will lead 
+	     slave to trigger a -EQUOTA to client.
+
+Severity   : normal
 Frequency  : rare
 Bugzilla   : 12629
 Description: Deadlock during metadata tests

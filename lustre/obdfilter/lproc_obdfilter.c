@@ -203,6 +203,8 @@ static struct lprocfs_vars lprocfs_obd_vars[] = {
         { "quota_iunit_sz", lprocfs_rd_iunit, lprocfs_wr_iunit, 0},
         { "quota_itune_sz", lprocfs_rd_itune, lprocfs_wr_itune, 0},
         { "quota_type",     lprocfs_rd_type, lprocfs_wr_type, 0},
+        { "quota_limit_sz", lprocfs_filter_rd_limit,
+                            lprocfs_filter_wr_limit, 0},
 #endif
         { "client_cache_count", lprocfs_filter_rd_fmd_max_num,
                           lprocfs_filter_wr_fmd_max_num, 0 },

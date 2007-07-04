@@ -142,6 +142,9 @@ struct lustre_quota_ctxt {
                                          * more than this value + 1 iunit */
         unsigned long lqc_bunit_sz;     /* Unit size of block quota */
         unsigned long lqc_btune_sz;     /* See comment of lqc_itune_sz */
+        unsigned long lqc_limit_sz;     /* When remaining quota on ost is less 
+                                         * than this value, ost will request
+                                         * quota from mds */
 };
 
 #else
@@ -430,6 +433,11 @@ int lprocfs_rd_type(char *page, char **start, off_t off, int count,
                     int *eof, void *data);
 int lprocfs_wr_type(struct file *file, const char *buffer,
                     unsigned long count, void *data);
+int lprocfs_filter_rd_limit(char *page, char **start, off_t off, int count, 
+                            int *eof, void *data);
+int lprocfs_filter_wr_limit(struct file *file, const char *buffer,
+                            unsigned long count, void *data);
+
 
 #ifndef __KERNEL__
 extern quota_interface_t osc_quota_interface;

@@ -35,6 +35,7 @@ unsigned long default_bunit_sz = 100 * 1024 * 1024;       /* 100M bytes */
 unsigned long default_btune_ratio = 50;                   /* 50 percentage */
 unsigned long default_iunit_sz = 5000;       /* 5000 inodes */
 unsigned long default_itune_ratio = 50;      /* 50 percentage */
+unsigned long default_limit_sz = 20 * 1024 * 1024;
 
 cfs_mem_cache_t *qunit_cachep = NULL;
 struct list_head qunit_hash[NR_DQHASH];
@@ -772,6 +773,7 @@ qctxt_init(struct lustre_quota_ctxt *qctxt, struct super_block *sb,
         qctxt->lqc_btune_sz = default_bunit_sz / 100 * default_btune_ratio;
         qctxt->lqc_iunit_sz = default_iunit_sz;
         qctxt->lqc_itune_sz = default_iunit_sz * default_itune_ratio / 100;
+        qctxt->lqc_limit_sz = default_limit_sz;
 
         RETURN(0);
 }
