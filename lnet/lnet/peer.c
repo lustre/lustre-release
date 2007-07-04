@@ -185,6 +185,12 @@ lnet_nid2peer_locked(lnet_peer_t **lpp, lnet_nid_t nid)
                 LIBCFS_FREE(lp, sizeof(*lp));
                 LNET_LOCK();
 
+                if (the_lnet.ln_shutdown) {
+                        lnet_peer_decref_locked(lp2);
+                        *lpp = NULL;
+                        return -ESHUTDOWN;
+                }
+
                 *lpp = lp2;
                 return 0;
         }

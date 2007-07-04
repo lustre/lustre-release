@@ -1432,7 +1432,10 @@ LNetClearLazyPortal(int portal)
                 return 0;
         }
 
-        CDEBUG(D_NET, "clearing portal %d lazy\n", portal);
+        if (the_lnet.ln_shutdown)
+                CWARN ("Active lazy portal %d on exit\n", portal);
+        else
+                CDEBUG (D_NET, "clearing portal %d lazy\n", portal);
 
         /* grab all the blocked messages atomically */
         list_add(&zombies, &ptl->ptl_msgq);
@@ -1619,7 +1622,7 @@ lnet_parse_put(lnet_ni_t *ni, lnet_msg_t *msg)
                 
         case LNET_MATCHMD_NONE:
                 rc = lnet_eager_recv_locked(msg);
-                if (rc == 0) {
+                if (rc == 0 && !the_lnet.ln_shutdown) {
                         list_add_tail(&msg->msg_list, 
                                       &the_lnet.ln_portals[index].ptl_msgq);
 
@@ -1645,7 +1648,6 @@ lnet_parse_put(lnet_ni_t *ni, lnet_msg_t *msg)
                 LNET_UNLOCK();
 
                 return ENOENT;          /* +ve: OK but no match */
-
         }
 }
 
@@ -2054,8 +2056,8 @@ lnet_parse(lnet_ni_t *ni, lnet_hdr_t *hdr, lnet_nid_t from_nid,
         msg = lnet_msg_alloc();
         if (msg == NULL) {
                 CERROR("%s, src %s: Dropping %s (out of memory)\n",
-                       libcfs_nid2str(from_nid), libcfs_nid2str(src_nid)
-                       , lnet_msgtyp2str(type));
+                       libcfs_nid2str(from_nid), libcfs_nid2str(src_nid), 
+                       lnet_msgtyp2str(type));
                 goto drop;
         }
 

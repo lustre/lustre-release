@@ -713,8 +713,6 @@ lnet_unprepare (void)
         LASSERT (the_lnet.ln_nzombie_nis == 0);
                
         for (idx = 0; idx < the_lnet.ln_nportals; idx++) {
-
-                LNetClearLazyPortal(idx);
                 LASSERT (list_empty(&the_lnet.ln_portals[idx].ptl_msgq));
 
                 while (!list_empty (&the_lnet.ln_portals[idx].ptl_ml)) {
@@ -904,9 +902,14 @@ lnet_shutdown_lndnis (void)
         }
 
         LNET_UNLOCK();
+
+        /* Clear lazy portals and drop delayed messages which hold refs
+         * on their lnet_msg_t::msg_rxpeer */
+        for (i = 0; i < the_lnet.ln_nportals; i++)
+                LNetClearLazyPortal(i);
+
         /* Clear the peer table and wait for all peers to go (they hold refs on
          * their NIs) */
-
         lnet_clear_peer_table();
 
         LNET_LOCK();
