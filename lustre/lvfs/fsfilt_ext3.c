@@ -603,7 +603,7 @@ static int fsfilt_ext3_set_md(struct inode *inode, void *handle,
 
         unlock_24kernel();
 
-        if (rc)
+        if (rc && rc != -EROFS)
                 CERROR("error adding MD data to inode %lu: rc = %d\n",
                        inode->i_ino, rc);
         return rc;
