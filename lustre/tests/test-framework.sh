@@ -193,6 +193,7 @@ unload_modules() {
         echo "$LEAK_PORTALS" 1>&2
         mv $TMP/debug $TMP/debug-leak.`date +%s` || true
         echo "Memory leaks detected"
+	[ -n "$IGNORE_LEAK" ] && echo "ignoring leaks" && return 0
         return 254
     fi
     echo "modules unloaded."
@@ -806,11 +807,12 @@ pgcache_empty() {
 ##################################
 # Test interface 
 error() {
+    local ERRLOG
     sysctl -w lustre.fail_loc=0 2> /dev/null || true
-    log "${TESTSUITE}: **** FAIL:" $@
-    $LCTL dk $TMP/lustre-log-$TESTNAME.log
-    log "FAIL: $TESTNAME $@"
-    $LCTL dk $TMP/lustrefail_${TESTSUITE}_${TESTNAME}.$(date +%s)
+    log "${TESTSUITE} ${TESTNAME}: **** FAIL:" $@
+    ERRLOG=$TMP/lustre_${TESTSUITE}_${TESTNAME}.$(date +%s)
+    echo "Dumping lctl log to $ERRLOG"
+    $LCTL dk $ERRLOG
     exit 1
 }
 

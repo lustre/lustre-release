@@ -1400,8 +1400,7 @@ static int filter_intent_policy(struct ldlm_namespace *ns,
                  * list (and potentially being added to l_pending_list by an
                  * AST) when we are going to drop this lock ASAP. */
                 if (lock->l_export->exp_libclient ||
-                    OBD_FAIL_CHECK(OBD_FAIL_LDLM_GLIMPSE)) {
-                        OBD_FAIL_TIMEOUT(OBD_FAIL_LDLM_GLIMPSE, 2);
+                    OBD_FAIL_TIMEOUT(OBD_FAIL_LDLM_GLIMPSE, 2)) {
                         ldlm_resource_unlink_lock(lock);
                         err = ELDLM_LOCK_ABORTED;
                 } else {

@@ -58,6 +58,7 @@ int obd_memmax;
 
 /* The following are visible and mutable through /proc/sys/lustre/. */
 unsigned int obd_fail_loc;
+unsigned int obd_fail_val;
 unsigned int obd_debug_peer_on_timeout;
 unsigned int obd_dump_on_timeout;
 unsigned int obd_dump_on_eviction;
@@ -375,6 +376,7 @@ void *obd_psdev = NULL;
 
 EXPORT_SYMBOL(obd_devs);
 EXPORT_SYMBOL(obd_fail_loc);
+EXPORT_SYMBOL(obd_fail_val);
 EXPORT_SYMBOL(obd_print_fail_loc);
 EXPORT_SYMBOL(obd_race_waitq);
 EXPORT_SYMBOL(obd_race_state);
