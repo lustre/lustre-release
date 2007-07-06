@@ -396,6 +396,7 @@ typedef struct {
                                                                lstio_bulk_param_t,
                                                                lstio_ping_param_t,
                                                                ... more */
+        int                    *lstio_tes_retp;         /* OUT: private returned value */
         struct list_head       *lstio_tes_resultp;      /* OUT: list head of result buffer */
 } lstio_test_args_t;
 

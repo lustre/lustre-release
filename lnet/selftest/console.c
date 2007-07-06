@@ -1204,7 +1204,7 @@ again:
 int
 lstcon_test_add(char *name, int type, int loop, int concur,
                 int dist, int span, char *src_name, char * dst_name,
-                void *param, int paramlen, struct list_head *result_up)
+                void *param, int paramlen, int *retp, struct list_head *result_up)
                 
 {
         lstcon_group_t  *src_grp = NULL;
@@ -1235,6 +1235,9 @@ lstcon_test_add(char *name, int type, int loop, int concur,
                 CDEBUG(D_NET, "Can't find group %s\n", dst_name);
                 goto out;
         }
+
+        if (dst_grp->grp_userland)
+                *retp = 1;
 
         LIBCFS_ALLOC(test, offsetof(lstcon_test_t, tes_param[paramlen]));
         if (!test) {
@@ -1848,6 +1851,9 @@ lstcon_acceptor_handle (srpc_server_rpc_t *rpc)
 
         ndl->ndl_node->nd_state   = LST_NODE_ACTIVE;
         ndl->ndl_node->nd_timeout = console_session.ses_timeout;
+
+        if (grp->grp_userland == 0)
+                grp->grp_userland = 1;
 
         strcpy(jrep->join_session, console_session.ses_name);
         jrep->join_timeout = console_session.ses_timeout;

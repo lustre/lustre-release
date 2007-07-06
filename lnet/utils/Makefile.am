@@ -68,7 +68,7 @@ endif
 
 if LIBLUSTRE
 LIB_SELFTEST = $(top_builddir)/lnet/libcfs/libcfs.a $(top_builddir)/lnet/lnet/liblnet.a $(top_builddir)/lnet/selftest/libselftest.a
-liblst.a : $(LIB_SELFTEST)
+liblst.a : $(LIB_SELFTEST) $(LND_LIBS)
 	sh $(srcdir)/genlib.sh "$(LIBS)" "$(LND_LIBS)" "$(PTHREAD_LIBS)"
 
 lstclient_SOURCES = lstclient.c

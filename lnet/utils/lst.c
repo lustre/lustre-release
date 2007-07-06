@@ -1896,6 +1896,132 @@ out:
 }
 
 int
+jt_lst_show_error(int argc, char **argv)
+{
+        struct list_head      head;
+        lst_stat_req_param_t *srp;
+        lstcon_rpc_ent_t     *ent;
+        sfw_counters_t       *sfwk;
+        srpc_counters_t      *srpc;
+        lnet_counters_t      *lnet;
+        lnet_process_id_t    *idsp   = NULL;
+        char                 *name   = NULL;
+        int                   optidx = 0;
+        int                   count  = 0;
+        int                   type   = 0;
+        int                   timeout = 5;
+        int                   ecount = 0;
+        int                   rc;
+        int                   c;
+
+
+        static struct option show_error_opts[] =
+        {
+                {"group"  , required_argument, 0, 'g' },
+                {"nodes"  , required_argument, 0, 'n' },
+                {0,         0,                 0,  0  }
+        };
+
+        if (session_key == 0) {
+                fprintf(stderr,
+                        "Can't find env LST_SESSION or value is not valid\n");
+                return -1;
+        }
+
+        while (1) {
+                c = getopt_long(argc, argv, "g:n:", show_error_opts, &optidx);
+
+                if (c == -1)
+                        break;
+        
+                switch (c) {
+                case 'g':
+                        type = LST_OPC_GROUP;
+                        name = optarg;
+                        break;
+                case 'n': 
+                        type = LST_OPC_NODES;
+                        name = optarg;
+                        break;
+                default:
+                        lst_print_usage(argv[0]);
+                        return -1;
+                }
+        }
+
+        if (optind != argc || type == 0) {
+                lst_print_usage(argv[0]);
+                return -1;
+        }
+
+        if (name == NULL) {
+                fprintf(stderr, "Missing name of target (group | nodes)\n");
+                return -1;
+        }
+
+        rc = lst_get_node_count(type, name, &count, &idsp);
+        if (rc < 0) {
+                fprintf(stderr, "Failed to get count of nodes from %s: %s\n",
+                        name, strerror(errno));
+                return -1;
+        }
+        
+        CFS_INIT_LIST_HEAD(&head);
+
+        rc = lst_alloc_rpcent(&head, count, sizeof(sfw_counters_t) +
+                                            sizeof(srpc_counters_t) +
+                                            sizeof(lnet_counters_t));
+        if (rc != 0) {
+                fprintf(stderr, "Out of memory\n");
+                goto out;
+        }
+
+        rc = lst_stat_ioctl(name, count, idsp, timeout, &head);
+        if (rc == -1) {
+                lst_print_error(name, "Failed to show errors of %s: %s\n",
+                                name, strerror(errno));
+                goto out;
+        }
+
+        list_for_each_entry(ent, &head, rpe_link) {
+                if (ent->rpe_rpc_errno != 0) {
+                        ecount ++;
+                        fprintf(stderr, "RPC failure, can't show error on %s\n",
+                                libcfs_id2str(ent->rpe_peer));
+                        continue;
+                }
+
+                if (ent->rpe_fwk_errno != 0) {
+                        ecount ++;
+                        fprintf(stderr, "Framework failure, can't show error on %s\n",
+                                libcfs_id2str(ent->rpe_peer));
+                        continue;
+                }
+
+                sfwk = (sfw_counters_t *)&ent->rpe_payload[0];
+                srpc = (srpc_counters_t *)((char *)sfwk + sizeof(*sfwk));
+                lnet = (lnet_counters_t *)((char *)srpc + sizeof(*srpc));
+
+                if (srpc->errors == 0 &&
+                    sfwk->brw_errors == 0 && sfwk->ping_errors == 0)
+                        continue;
+
+                ecount ++;
+                fprintf(stderr, "[%s]: %d RPC errors, %d brw errors, %d ping errors\n",
+                        libcfs_id2str(ent->rpe_peer), srpc->errors, 
+                        sfwk->brw_errors, sfwk->ping_errors);
+        }
+
+        fprintf(stdout, "Total %d errors in %s\n", ecount, name);
+out:
+        lst_free_rpcent(&head);
+        if (idsp != NULL)
+                free(idsp);
+
+        return 0;
+}
+
+int
 lst_add_batch_ioctl (char *name)
 {
         lstio_batch_add_args_t  args = {
@@ -2737,7 +2863,7 @@ lst_get_test_param(char *test, int argc, char **argv, void **param, int *plen)
 int
 lst_add_test_ioctl(char *batch, int type, int loop, int concur,
                    int dist, int span, char *sgrp, char *dgrp,
-                   void *param, int plen, struct list_head *resultp)
+                   void *param, int plen, int *retp, struct list_head *resultp)
 {
         lstio_test_args_t args = {
                 .lstio_tes_key          = session_key,
@@ -2754,6 +2880,7 @@ lst_add_test_ioctl(char *batch, int type, int loop, int concur,
                 .lstio_tes_dgrp_name    = dgrp,
                 .lstio_tes_param_len    = plen,
                 .lstio_tes_param        = param,
+                .lstio_tes_retp         = retp,
                 .lstio_tes_resultp      = resultp,
         };
 
@@ -2778,6 +2905,7 @@ jt_lst_add_test(int argc, char **argv)
         int               plen   = 0;
         int               fcount = 0;
         int               tcount = 0;
+        int               ret    = 0;
         int               type;
         int               rc;
         int               c;
@@ -2888,10 +3016,16 @@ jt_lst_add_test(int argc, char **argv)
         }
 
         rc = lst_add_test_ioctl(batch, type, loop, concur,
-                                dist, span, from, to, param, plen, &head);
+                                dist, span, from, to, param, plen, &ret, &head);
 
         if (rc == 0) {
                 fprintf(stdout, "Test was added successfully\n");
+                if (ret != 0) {
+                        fprintf(stdout, "Server group contains userland test "
+                                "nodes, old version of tcplnd can't accept "
+                                "connection request\n");
+                }
+
                 goto out;
         }
 
@@ -2931,6 +3065,8 @@ static command_t lst_cmdlist[] = {
         {"stat",                jt_lst_stat,            NULL,
          "Usage: lst stat [--bw] [--rate] [--read] [--write] [--max] [--min] [--avg] "
          " [--timeout #] [--delay #] GROUP [GROUP]"                                     },
+        {"show_error",          jt_lst_show_error,      NULL,
+         "Usage: lst show_error [--group NAME] | [--nodes IDS]"                         },
         {"add_batch",           jt_lst_add_batch,       NULL,
          "Usage: lst add_batch NAME"                                                    },
         {"run",                 jt_lst_start_batch,     NULL,

@@ -685,9 +685,11 @@ int lst_test_add_ioctl(lstio_test_args_t *args)
         char           *srcgrp = NULL;
         char           *dstgrp = NULL;
         void           *param = NULL;
+        int             ret = 0;
         int             rc = -ENOMEM;
 
         if (args->lstio_tes_resultp == NULL ||
+            args->lstio_tes_retp == NULL ||
             args->lstio_tes_bat_name == NULL || /* no specified batch */
             args->lstio_tes_bat_nmlen <= 0 ||
             args->lstio_tes_bat_nmlen > LST_NAME_SIZE ||
@@ -743,7 +745,11 @@ int lst_test_add_ioctl(lstio_test_args_t *args)
                             args->lstio_tes_concur,
                             args->lstio_tes_dist, args->lstio_tes_span,
                             srcgrp, dstgrp, param, args->lstio_tes_param_len,
-                            args->lstio_tes_resultp);
+                            &ret, args->lstio_tes_resultp);
+
+        if (ret != 0)
+                rc = (copy_to_user(args->lstio_tes_retp, &ret, sizeof(ret))) ?
+                     -EFAULT : 0;
 out:
         if (name != NULL)
                 LIBCFS_FREE(name, args->lstio_tes_bat_nmlen + 1);

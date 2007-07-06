@@ -38,6 +38,7 @@ typedef struct {
 typedef struct {
         struct list_head        grp_link;       /* chain on global group list */
         int                     grp_ref;        /* reference count */
+        int                     grp_userland;   /* has userland nodes */
         int                     grp_nnode;      /* # of nodes */
         char                    grp_name[LST_NAME_SIZE]; /* group name */
 
@@ -184,7 +185,7 @@ extern int lstcon_nodes_stat(int count, lnet_process_id_t *ids_up,
                              int timeout, struct list_head *result_up);
 extern int lstcon_test_add(char *name, int type, int loop, int concur,
                            int dist, int span, char *src_name, char * dst_name,
-                           void *param, int paramlen, struct list_head *result_up);
+                           void *param, int paramlen, int *retp, struct list_head *result_up);
 #endif
 
 #endif  
