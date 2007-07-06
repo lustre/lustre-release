@@ -3,7 +3,7 @@ tbd         Cluster File Systems, Inc. <info@clusterfs.com>
        * Support for kernels:
         2.4.21-47.0.1.EL (RHEL 3)
         2.6.5-7.283 (SLES 9)
-        2.6.9-42.0.10.EL (RHEL 4)
+        2.6.9-55.EL (RHEL 4)
         2.6.12.6 vanilla (kernel.org)
         2.6.16.27-0.9 (SLES 10)
        * Client support for unpatched kernels:
@@ -13,6 +13,26 @@ tbd         Cluster File Systems, Inc. <info@clusterfs.com>
        * Recommended e2fsprogs version: 1.39.cfs7
        * Note that reiserfs quotas are disabled on SLES 10 in this kernel.
        * bug fixes
+
+Severity   : normal
+Frequency  : only for i686
+Bugzilla   : 12695
+Description: 1.4.11 RC1 build fails for RHEL 4, i686
+Details    : Fixed config variable for build.
+
+Severity   : normal
+Frequency  : rare
+Bugzilla   : 12415
+Description: Updated patchess for new RHEL4 kernel
+Details    : Updated patch inode-nr_unused-2.6.9-rhel4.patch
+	     Updated patch jbd-stats-2.6.9.patch
+	     Updated patch qsnet-rhel4-2.6.patch
+	     Updated patch quota-deadlock-on-pagelock-core.patch
+	     Updated patch vfs_intent-2.6-rhel4.patch
+	     Updated patch vfs_races-2.6-rhel4.patch
+	     Updated series file 2.6-rhel4-titech.series
+	     Updated series file 2.6-rhel4.series
+	     Updated kernel config files
 
 Severity   : normal
 Frequency  : when qunit size is too small(less than 20M)
