@@ -1,2 +1,0 @@
-export QUILT_DIFF_OPTS="-upa"
-export QUILT_NO_DIFF_TIMESTAMPS=1
