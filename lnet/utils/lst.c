@@ -68,6 +68,7 @@ free_lstrs(lstr_t **list)
         }
 }
 
+void
 new_lstrs(lstr_t **list, char *prefix, char *postfix,
           int lo, int hi, int stride)
 {
@@ -160,7 +161,7 @@ expand_strs(char *str, lstr_t **head)
         lstr_t  *list = NULL;
         lstr_t  *nlist;
         lstr_t  *l;
-        int      rc;
+        int      rc = 0;
         int      expanded;
 
         l = alloc_lstr(strlen(str) + 1);
@@ -370,7 +371,7 @@ lst_free_rpcent(struct list_head *head)
         }
 }
 
-int
+void
 lst_reset_rpcent(struct list_head *head)
 {
         lstcon_rpc_ent_t *ent;
@@ -679,6 +680,16 @@ lst_ping_ioctl(char *str, int type, int timeout,
         return lst_ioctl (LSTIO_DEBUG, &args, sizeof(args));
 }
 
+int lst_info_batch_ioctl(char *batch, int test, int server,
+                        lstcon_test_batch_ent_t *entp, int *idxp,
+                        int *ndentp, lstcon_node_ent_t *dentsp);
+
+int lst_info_group_ioctl(char *name, lstcon_ndlist_ent_t *gent,
+                         int *idx, int *count, lstcon_node_ent_t *dents);
+
+int lst_query_batch_ioctl(char *batch, int test, int server,
+                          int timeout, struct list_head *head);
+
 int
 lst_get_node_count(int type, char *str, int *countp, lnet_process_id_t **idspp)
 {
@@ -734,7 +745,6 @@ jt_lst_ping(int argc,  char **argv)
         int                type    = 0;
         int                rc      = 0;
         int                c;
-        int                i;
 
         static struct option ping_opts[] =
         {
@@ -1240,7 +1250,7 @@ jt_lst_list_group(int argc, char **argv)
         int               i;
         int               j;
         int               c;
-        int               rc;
+        int               rc = 0;
 
         static struct option list_group_opts[] =
         {
@@ -1598,8 +1608,6 @@ lst_print_lnet_stat(char *name, int bwrt, int rdwr, int type)
         int     end1   = 1;
         int     start2 = 0;
         int     end2   = 1;
-        int     start3 = 0;
-        int     end3   = 2;
         int     i;
         int     j;
 
@@ -1737,11 +1745,9 @@ jt_lst_stat(int argc, char **argv)
 {
         struct list_head      head;
         lst_stat_req_param_t *srp;
-        lstcon_rpc_ent_t     *ent;
-        char                 *name;
+        char                 *name    = NULL;
         time_t                last    = 0;
         int                   optidx  = 0;
-        int                   count   = 0;
         int                   timeout = 5; /* default timeout, 5 sec */
         int                   delay   = 5; /* default delay, 5 sec */
         int                   lnet    = 1; /* lnet stat by default */
@@ -1750,7 +1756,6 @@ jt_lst_stat(int argc, char **argv)
         int                   type    = -1;
         int                   idx     = 0;
         int                   rc;
-        int                   i;
         int                   c;
 
         static struct option stat_opts[] =
@@ -1899,7 +1904,6 @@ int
 jt_lst_show_error(int argc, char **argv)
 {
         struct list_head      head;
-        lst_stat_req_param_t *srp;
         lstcon_rpc_ent_t     *ent;
         sfw_counters_t       *sfwk;
         srpc_counters_t      *srpc;
@@ -2413,7 +2417,6 @@ jt_lst_list_batch(int argc, char **argv)
         int                  ntest   = 0;
         int                  test    = 0;
         int                  c       = 0;
-        int                  i;
         int                  rc;
 
         static struct option list_batch_opts[] =
@@ -2586,11 +2589,9 @@ jt_lst_query_batch(int argc, char **argv)
 {
         lstcon_test_batch_ent_t ent;
         struct list_head     head;
-        lstcon_rpc_ent_t    *rent    = NULL;
         char                *batch   = NULL;
         time_t               last    = 0;
         int                  optidx  = 0;
-        int                  index   = 0;
         int                  verbose = 0;
         int                  server  = 0;
         int                  timeout = 5; /* default 5 seconds */
@@ -2788,7 +2789,6 @@ int
 lst_get_test_param(char *test, int argc, char **argv, void **param, int *plen)
 {
         lst_test_bulk_param_t *bulk = NULL;
-        lst_test_ping_param_t *ping = NULL;
         int                    type;
         int                    i = 0;
 
@@ -3104,8 +3104,6 @@ lst_initialize(void)
 int
 main(int argc, char **argv)
 {
-        int     rc;
-
         setlinebuf(stdout);
 
         if (lst_initialize() < 0)
