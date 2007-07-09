@@ -166,26 +166,30 @@ int tcpnal_recv(lnet_ni_t     *ni,
 
         /* FIXME
          * 1. Is this effecient enough? change to use readv() directly?
-         * 2. need check return from read_connection()
          * - MeiJia
          */
         for (i = 0; i < ntiov; i++)
-                read_connection(private, tiov[i].iov_base, tiov[i].iov_len);
+                if (!read_connection(private, tiov[i].iov_base, tiov[i].iov_len))
+                        return -EIO;
+                        
 
 finalize:
-        /* FIXME; we always assume success here... */
-        lnet_finalize(ni, cookie, 0);
-
         LASSERT(rlen >= mlen);
 
         if (mlen != rlen){
+                int rc;
                 char *trash=malloc(rlen - mlen);
 
-                /*TODO: check error status*/
-                read_connection(private, trash, rlen - mlen);
+                if (!trash)
+                        return -ENOMEM;
+                
+                rc = read_connection(private, trash, rlen - mlen);
                 free(trash);
+                if (!rc)
+                        return -EIO;
         }
 
+        lnet_finalize(ni, cookie, 0);
         return(0);
 }
 
