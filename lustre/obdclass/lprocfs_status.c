@@ -513,6 +513,7 @@ static const char *obd_connect_names[] = {
         "64bit_qdata",
         "fid_capability",
         "oss_capability",
+        "early_lock_cancel",
         NULL
 };
 
