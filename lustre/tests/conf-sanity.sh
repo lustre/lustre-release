@@ -905,7 +905,7 @@ set_and_check() {
 	echo "Setting $PARAM from $ORIG to $FINAL"
 	$LCTL conf_param $PARAM=$FINAL
 	local RESULT
-	local MAX=20
+	local MAX=30
 	local WAIT=0
 	while [ 1 ]; do
 	    sleep 5
