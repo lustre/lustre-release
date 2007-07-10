@@ -392,7 +392,6 @@ void select_timer_block(when until)
     struct timeval *timeout_pointer;
     int max, nready;
 
-again:
     if (until) {
         when interval;
         interval = until - now();
