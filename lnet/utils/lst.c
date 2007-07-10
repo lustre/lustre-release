@@ -6,8 +6,11 @@
  * This file is part of Lustre, http://www.lustre.org
  */
 
+#define _GNU_SOURCE
+
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <getopt.h>
 #include <errno.h>
 #include <pwd.h>
@@ -430,6 +433,16 @@ lst_print_transerr(struct list_head *head, char *optstr)
         }
 }
 
+int lst_info_batch_ioctl(char *batch, int test, int server,
+                        lstcon_test_batch_ent_t *entp, int *idxp,
+                        int *ndentp, lstcon_node_ent_t *dentsp);
+
+int lst_info_group_ioctl(char *name, lstcon_ndlist_ent_t *gent,
+                         int *idx, int *count, lstcon_node_ent_t *dents);
+
+int lst_query_batch_ioctl(char *batch, int test, int server,
+                          int timeout, struct list_head *head);
+
 int
 lst_ioctl(unsigned int opc, void *buf, int len)
 {
@@ -679,16 +692,6 @@ lst_ping_ioctl(char *str, int type, int timeout,
 
         return lst_ioctl (LSTIO_DEBUG, &args, sizeof(args));
 }
-
-int lst_info_batch_ioctl(char *batch, int test, int server,
-                        lstcon_test_batch_ent_t *entp, int *idxp,
-                        int *ndentp, lstcon_node_ent_t *dentsp);
-
-int lst_info_group_ioctl(char *name, lstcon_ndlist_ent_t *gent,
-                         int *idx, int *count, lstcon_node_ent_t *dents);
-
-int lst_query_batch_ioctl(char *batch, int test, int server,
-                          int timeout, struct list_head *head);
 
 int
 lst_get_node_count(int type, char *str, int *countp, lnet_process_id_t **idspp)
@@ -1420,9 +1423,10 @@ lst_stat_req_param_free(lst_stat_req_param_t *srp)
 }
 
 static int
-lst_stat_req_param_alloc(char *name, lst_stat_req_param_t **srpp)
+lst_stat_req_param_alloc(char *name, lst_stat_req_param_t **srpp, int save_old)
 {
         lst_stat_req_param_t *srp = NULL;
+        int                   count = save_old ? 2 : 1;
         int                   rc;
         int                   i;
 
@@ -1436,14 +1440,15 @@ lst_stat_req_param_alloc(char *name, lst_stat_req_param_t **srpp)
 
         rc = lst_get_node_count(LST_OPC_GROUP, name,
                                 &srp->srp_count, NULL);
-        if (rc != 0) {
+        if (rc != 0 && errno == ENOENT) {
                 rc = lst_get_node_count(LST_OPC_NODES, name,
                                         &srp->srp_count, &srp->srp_ids);
         }
 
         if (rc != 0) {
                 fprintf(stderr,
-                        "Failed to get count of nodes from %s\n", name);
+                        "Failed to get count of nodes from %s: %s\n",
+                        name, strerror(errno));
                 lst_stat_req_param_free(srp);
 
                 return rc;
@@ -1451,7 +1456,7 @@ lst_stat_req_param_alloc(char *name, lst_stat_req_param_t **srpp)
 
         srp->srp_name = name;
 
-        for (i = 0; i < 2; i++) {
+        for (i = 0; i < count; i++) {
                 rc = lst_alloc_rpcent(&srp->srp_result[i], srp->srp_count,
                                       sizeof(sfw_counters_t)  +
                                       sizeof(srpc_counters_t) +
@@ -1745,7 +1750,6 @@ jt_lst_stat(int argc, char **argv)
 {
         struct list_head      head;
         lst_stat_req_param_t *srp;
-        char                 *name    = NULL;
         time_t                last    = 0;
         int                   optidx  = 0;
         int                   timeout = 5; /* default timeout, 5 sec */
@@ -1851,9 +1855,7 @@ jt_lst_stat(int argc, char **argv)
         CFS_INIT_LIST_HEAD(&head);
 
         while (optind < argc) {
-                name = argv[optind++];
-                
-                rc = lst_stat_req_param_alloc(name, &srp);
+                rc = lst_stat_req_param_alloc(argv[optind++], &srp, 1);
                 if (rc != 0) 
                         goto out;
 
@@ -1876,7 +1878,7 @@ jt_lst_stat(int argc, char **argv)
                                             timeout, &srp->srp_result[idx]);
                         if (rc == -1) {
                                 lst_print_error("stat", "Failed to stat %s: %s\n",
-                                                name, strerror(errno));
+                                                srp->srp_name, strerror(errno));
                                 goto out;
                         }
 
@@ -1904,28 +1906,23 @@ int
 jt_lst_show_error(int argc, char **argv)
 {
         struct list_head      head;
+        lst_stat_req_param_t *srp;
         lstcon_rpc_ent_t     *ent;
         sfw_counters_t       *sfwk;
         srpc_counters_t      *srpc;
         lnet_counters_t      *lnet;
-        lnet_process_id_t    *idsp   = NULL;
-        char                 *name   = NULL;
-        int                   optidx = 0;
-        int                   count  = 0;
-        int                   type   = 0;
-        int                   timeout = 5;
-        int                   ecount = 0;
-        int                   rc;
+        int                   show_rpc = 1;
+        int                   optidx   = 0;
+        int                   rc       = 0;
+        int                   ecount;
         int                   c;
 
-
-        static struct option show_error_opts[] =
+        static struct option  show_error_opts[] =
         {
-                {"group"  , required_argument, 0, 'g' },
-                {"nodes"  , required_argument, 0, 'n' },
+                {"session", no_argument,       0, 's' },
                 {0,         0,                 0,  0  }
         };
-
+ 
         if (session_key == 0) {
                 fprintf(stderr,
                         "Can't find env LST_SESSION or value is not valid\n");
@@ -1933,96 +1930,103 @@ jt_lst_show_error(int argc, char **argv)
         }
 
         while (1) {
-                c = getopt_long(argc, argv, "g:n:", show_error_opts, &optidx);
+                c = getopt_long(argc, argv, "s", show_error_opts, &optidx);
 
                 if (c == -1)
                         break;
         
                 switch (c) {
-                case 'g':
-                        type = LST_OPC_GROUP;
-                        name = optarg;
+                case 's':
+                        show_rpc  = 0;
                         break;
-                case 'n': 
-                        type = LST_OPC_NODES;
-                        name = optarg;
-                        break;
+
                 default:
                         lst_print_usage(argv[0]);
                         return -1;
                 }
         }
-
-        if (optind != argc || type == 0) {
+ 
+        if (optind == argc) {
                 lst_print_usage(argv[0]);
                 return -1;
         }
 
-        if (name == NULL) {
-                fprintf(stderr, "Missing name of target (group | nodes)\n");
-                return -1;
-        }
-
-        rc = lst_get_node_count(type, name, &count, &idsp);
-        if (rc < 0) {
-                fprintf(stderr, "Failed to get count of nodes from %s: %s\n",
-                        name, strerror(errno));
-                return -1;
-        }
-        
         CFS_INIT_LIST_HEAD(&head);
 
-        rc = lst_alloc_rpcent(&head, count, sizeof(sfw_counters_t) +
-                                            sizeof(srpc_counters_t) +
-                                            sizeof(lnet_counters_t));
-        if (rc != 0) {
-                fprintf(stderr, "Out of memory\n");
-                goto out;
+        while (optind < argc) {
+                rc = lst_stat_req_param_alloc(argv[optind++], &srp, 0);
+                if (rc != 0) 
+                        goto out;
+
+                list_add_tail(&srp->srp_link, &head);
         }
 
-        rc = lst_stat_ioctl(name, count, idsp, timeout, &head);
-        if (rc == -1) {
-                lst_print_error(name, "Failed to show errors of %s: %s\n",
-                                name, strerror(errno));
-                goto out;
-        }
+        list_for_each_entry(srp, &head, srp_link) {
+                rc = lst_stat_ioctl(srp->srp_name, srp->srp_count,
+                                    srp->srp_ids, 5, &srp->srp_result[0]);
 
-        list_for_each_entry(ent, &head, rpe_link) {
-                if (ent->rpe_rpc_errno != 0) {
-                        ecount ++;
-                        fprintf(stderr, "RPC failure, can't show error on %s\n",
-                                libcfs_id2str(ent->rpe_peer));
-                        continue;
+                if (rc == -1) {
+                        lst_print_error(srp->srp_name, "Failed to show errors of %s: %s\n",
+                                        srp->srp_name, strerror(errno));
+                        goto out;
                 }
 
-                if (ent->rpe_fwk_errno != 0) {
+                fprintf(stdout, "%s:\n", srp->srp_name);
+
+                ecount = 0;
+
+                list_for_each_entry(ent, &srp->srp_result[0], rpe_link) {
+                        if (ent->rpe_rpc_errno != 0) {
+                                ecount ++;
+                                fprintf(stderr, "RPC failure, can't show error on %s\n",
+                                        libcfs_id2str(ent->rpe_peer));
+                                continue;
+                        }
+
+                        if (ent->rpe_fwk_errno != 0) {
+                                ecount ++;
+                                fprintf(stderr, "Framework failure, can't show error on %s\n",
+                                        libcfs_id2str(ent->rpe_peer));
+                                continue;
+                        }
+
+                        sfwk = (sfw_counters_t *)&ent->rpe_payload[0];
+                        srpc = (srpc_counters_t *)((char *)sfwk + sizeof(*sfwk));
+                        lnet = (lnet_counters_t *)((char *)srpc + sizeof(*srpc));
+
+                        if (srpc->errors == 0 &&
+                            sfwk->brw_errors == 0 && sfwk->ping_errors == 0)
+                                continue;
+
+                        if (!show_rpc  && 
+                            sfwk->brw_errors == 0 && sfwk->ping_errors == 0)
+                                continue;
+        
                         ecount ++;
-                        fprintf(stderr, "Framework failure, can't show error on %s\n",
-                                libcfs_id2str(ent->rpe_peer));
-                        continue;
+
+                        fprintf(stderr, "%s: [Session %d brw errors, %d ping errors]%c",
+                                libcfs_id2str(ent->rpe_peer), 
+                                sfwk->brw_errors, sfwk->ping_errors,
+                                show_rpc  ? ' ' : '\n');
+
+                        if (!show_rpc)
+                                continue;
+
+                        fprintf(stderr, "[RPC: %d errors, %d dropped, %d expired]\n",
+                                srpc->errors, srpc->rpcs_dropped, srpc->rpcs_expired);
                 }
-
-                sfwk = (sfw_counters_t *)&ent->rpe_payload[0];
-                srpc = (srpc_counters_t *)((char *)sfwk + sizeof(*sfwk));
-                lnet = (lnet_counters_t *)((char *)srpc + sizeof(*srpc));
-
-                if (srpc->errors == 0 &&
-                    sfwk->brw_errors == 0 && sfwk->ping_errors == 0)
-                        continue;
-
-                ecount ++;
-                fprintf(stderr, "[%s]: %d RPC errors, %d brw errors, %d ping errors\n",
-                        libcfs_id2str(ent->rpe_peer), srpc->errors, 
-                        sfwk->brw_errors, sfwk->ping_errors);
+        
+                fprintf(stdout, "Total %d error nodes in %s\n", ecount, srp->srp_name);
         }
-
-        fprintf(stdout, "Total %d errors in %s\n", ecount, name);
 out:
-        lst_free_rpcent(&head);
-        if (idsp != NULL)
-                free(idsp);
+        while (!list_empty(&head)) {
+                srp = list_entry(head.next, lst_stat_req_param_t, srp_link);
 
-        return 0;
+                list_del(&srp->srp_link);
+                lst_stat_req_param_free(srp);
+        }
+
+        return rc;
 }
 
 int
@@ -2786,66 +2790,103 @@ lst_parse_distribute(char *dstr, int *dist, int *span)
 }
 
 int
+lst_get_bulk_param(int argc, char **argv, lst_test_bulk_param_t *bulk)
+{
+        char   *tok = NULL;
+        char   *end = NULL;
+        int     rc  = 0;
+        int     i   = 0;
+
+        bulk->blk_size  = 4096;
+        bulk->blk_opc   = LST_BRW_READ;
+        bulk->blk_flags = LST_BRW_CHECK_NONE;
+
+        while (i < argc) {
+                if (strcasestr(argv[i], "check=") == argv[i] ||
+                    strcasestr(argv[i], "c=") == argv[i]) {
+                        tok = strchr(argv[i], '=') + 1;
+
+                        if (strcasecmp(tok, "full") == 0) {
+                                bulk->blk_flags = LST_BRW_CHECK_FULL;
+                        } else if (strcasecmp(tok, "simple") == 0) {
+                                bulk->blk_flags = LST_BRW_CHECK_SIMPLE;
+                        } else {
+                                fprintf(stderr, "Unknow flag %s\n", tok);
+                                return -1;
+                        }
+                                
+                } else if (strcasestr(argv[i], "size=") == argv[i] ||
+                         strcasestr(argv[i], "s=") == argv[i]) {
+                        tok = strchr(argv[i], '=') + 1;
+
+                        bulk->blk_size = strtol(tok, &end, 0);
+                        if (bulk->blk_size <= 0) {
+                                fprintf(stderr, "Invalid size %s\n", tok);
+                                return -1;
+                        }
+
+                        if (end == NULL)
+                                return 0;
+
+                        if (*end == 'k' || *end == 'K')
+                                bulk->blk_size *= 1024;
+                        else if (*end == 'm' || *end == 'M')
+                                bulk->blk_size *= 1024 * 1024;
+
+                        if (bulk->blk_size > CFS_PAGE_SIZE * LNET_MAX_IOV) {
+                                fprintf(stderr, "Size exceed limitation: %d bytes\n",
+                                        bulk->blk_size);
+                                return -1;
+                        }
+                        
+                } else if (strcasecmp(argv[i], "read") == 0 ||
+                           strcasecmp(argv[i], "r") == 0) {
+                        bulk->blk_opc = LST_BRW_READ;
+                
+                } else if (strcasecmp(argv[i], "write") == 0 ||
+                           strcasecmp(argv[i], "w") == 0) {
+                        bulk->blk_opc = LST_BRW_WRITE;
+
+                } else {
+                        fprintf(stderr, "Unknow parameter: %s\n", argv[i]);
+                        return -1;
+                }
+
+                i++;
+        }
+
+        return rc;
+}
+
+int
 lst_get_test_param(char *test, int argc, char **argv, void **param, int *plen)
 {
         lst_test_bulk_param_t *bulk = NULL;
         int                    type;
-        int                    i = 0;
 
         type = lst_test_name2type(test);
-        if (type < 0)
-                return -EINVAL;
+        if (type < 0) {
+                fprintf(stderr, "Unknow test name %s\n", test);
+                return -1;
+        }
 
         switch (type) {
         case LST_TEST_PING:
                 break;
 
         case LST_TEST_BULK:
-                if (i == argc)
-                        return -EINVAL;
-
                 bulk = malloc(sizeof(*bulk));
-                if (bulk == NULL)
-                        return -ENOMEM;
+                if (bulk == NULL) {
+                        fprintf(stderr, "Out of memory\n");
+                        return -1;
+                }
 
                 memset(bulk, 0, sizeof(*bulk));
 
-                if (strcmp(argv[i], "w") == 0)
-                        bulk->blk_opc = LST_BRW_WRITE;
-                else  /* read by default */
-                        bulk->blk_opc = LST_BRW_READ;
-
-                if (++i == argc) {
-                        /* 1 page by default */
-                        bulk->blk_flags = LST_BRW_CHECK_NONE;
-                        bulk->blk_npg   = 1;
-                        *param = bulk;
-                        *plen  = sizeof(*bulk);
-                        break;
-
-                } 
-
-                bulk->blk_npg = atoi(argv[i]);
-                if (bulk->blk_npg <= 0 ||
-                    bulk->blk_npg >= LNET_MAX_IOV) {
+                if (lst_get_bulk_param(argc, argv, bulk) != 0) {
                         free(bulk);
-                        return -EINVAL;
+                        return -1;
                 }
-
-                if (++i == argc) {
-                        bulk->blk_flags = LST_BRW_CHECK_NONE;
-                        *param = bulk;
-                        *plen  = sizeof(*bulk);
-                        break;
-                }
-
-                /* posion pages */
-                if (strcmp(argv[i], "s") == 0) 
-                        bulk->blk_flags = LST_BRW_CHECK_SIMPLE;
-                else if (strcmp(argv[i], "f") == 0)
-                        bulk->blk_flags = LST_BRW_CHECK_FULL;
-                else
-                        bulk->blk_flags = LST_BRW_CHECK_NONE;
 
                 *param = bulk;
                 *plen  = sizeof(*bulk);
@@ -2988,8 +3029,7 @@ jt_lst_add_test(int argc, char **argv)
 
         type = lst_get_test_param(test, argc, argv, &param, &plen);
         if (type < 0) {
-                fprintf(stderr, "Can't parse test (%s)  parameter: %s\n",
-                        test, strerror(-type));
+                fprintf(stderr, "Failed to add test (%s)\n", test);
                 return -1;
         }
 

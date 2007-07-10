@@ -137,7 +137,7 @@ typedef struct {
 
 typedef struct {
         __u32                   blk_opc;        /* bulk operation code */
-        __u32                   blk_npg;        /* # pages */
+        __u32                   blk_npg;        /* # of pages */
         __u32                   blk_flags;      /* reserved flags */
 } WIRE_ATTR test_bulk_req_t;
 

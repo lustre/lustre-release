@@ -1274,7 +1274,7 @@ lstcon_test_add(char *name, int type, int loop, int concur,
 
         if (lstcon_trans_stat()->trs_rpc_errno != 0 ||
             lstcon_trans_stat()->trs_fwk_errno != 0)
-                CDEBUG(D_NET, "Failed to add test %d to batch %s", type, name);
+                CDEBUG(D_NET, "Failed to add test %d to batch %s\n", type, name);
 
         /* add to test list anyway, so user can check what's going on */
         list_add_tail(&test->tes_link, &batch->bat_test_list);

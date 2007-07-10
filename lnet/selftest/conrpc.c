@@ -755,7 +755,7 @@ lstcon_bulkrpc_prep(lst_test_bulk_param_t *param, srpc_test_reqst_t *req)
         test_bulk_req_t *brq = &req->tsr_u.bulk;
 
         brq->blk_opc    = param->blk_opc;
-        brq->blk_npg    = param->blk_npg;
+        brq->blk_npg    = (param->blk_size + CFS_PAGE_SIZE - 1) / CFS_PAGE_SIZE;
         brq->blk_flags  = param->blk_flags;
 
         return 0;

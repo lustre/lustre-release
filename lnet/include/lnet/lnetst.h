@@ -413,17 +413,17 @@ typedef enum {
 
 typedef struct {
         int                     blk_opc;                /* bulk operation code */
-        int                     blk_npg;                /* # pages */
+        int                     blk_size;               /* size (bytes) */
         int                     blk_time;               /* time of running the test*/
         int                     blk_flags;              /* reserved flags */
-} lst_test_bulk_param_t, lst_bulk_param_t;
+} lst_test_bulk_param_t;
 
 typedef struct {
         int                     png_size;               /* size of ping message */
         int                     png_time;               /* time */
         int                     png_loop;               /* loop */
         int                     png_flags;              /* reserved flags */
-} lst_test_ping_param_t, lst_ping_param_t;
+} lst_test_ping_param_t;
 
 /* more tests */
 
