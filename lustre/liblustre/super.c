@@ -1397,7 +1397,7 @@ static int llu_fcntl_getlk(struct inode *ino, struct flock *flock)
         struct file_lock fl;
         int error;
 
-        error = EINVAL;
+        error = -EINVAL;
         if ((flock->l_type != F_RDLCK) && (flock->l_type != F_WRLCK))
                 goto out;
 
@@ -1479,8 +1479,8 @@ static int llu_iop_fcntl(struct inode *ino, int cmd, va_list ap, int *rtn)
                         LCONSOLE_ERROR_MSG(0x010, "liblustre does not support "
                                            "the O_NONBLOCK or O_ASYNC flags. "
                                            "Please fix your application.\n");
-                        *rtn = -EINVAL;
-                        err = EINVAL;
+                        *rtn = -1;
+                        err = -EINVAL;
                         break;
                 }
                 lli->lli_open_flags = (int)(flags & FCNTL_FLMASK) |
@@ -1515,8 +1515,8 @@ static int llu_iop_fcntl(struct inode *ino, int cmd, va_list ap, int *rtn)
                 break;
         default:
                 CERROR("unsupported fcntl cmd %x\n", cmd);
-                *rtn = -ENOSYS;
-                err = ENOSYS;
+                *rtn = -1;
+                err = -ENOSYS;
                 break;
         }
 

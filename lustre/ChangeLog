@@ -443,6 +443,12 @@ Description: replace obdo_alloc() with OBDO_ALLOC macro
 Details    : nothing special is done in obdo_alloc() function, and for 
              debugging purpose, it needs to be replaced with macros.
 
+Severity   : normal
+Bugzilla   : 12784
+Description: bad return value and errno from fcntl call
+Details    : In liblustre API, errno should be a negative value if error
+             happens.
+
 --------------------------------------------------------------------------------
 
 2007-05-03  Cluster File Systems, Inc. <info@clusterfs.com>
