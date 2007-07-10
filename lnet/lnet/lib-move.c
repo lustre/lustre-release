@@ -36,7 +36,7 @@ static void lnet_drop_delayed_put(lnet_msg_t *msg, char *reason);
 
 #define LNET_MATCHMD_NONE     0   /* Didn't match */
 #define LNET_MATCHMD_OK       1   /* Matched OK */
-#define LNET_MATCHMD_DROP     2   /* Must be disarded */
+#define LNET_MATCHMD_DROP     2   /* Must be discarded */
 
 static int
 lnet_try_match_md (int index, int op_mask, lnet_process_id_t src,
