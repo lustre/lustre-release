@@ -31,7 +31,11 @@ relink $image-%ver_str /boot/$image$SHORTNM
 if test "$YAST_IS_RUNNING" != instsys ; then
     if [ -f /etc/fstab ]; then
 	echo Setting up /lib/modules/%ver_str
-	/sbin/update-modules.dep -v %ver_str
+        if [ -x /sbin/update-modules.dep ]; then
+	    /sbin/update-modules.dep -v %ver_str
+        else
+            /sbin/depmod -a -F /boot/System.map-%ver_str %ver_str
+        fi
 	cd /boot
 	/sbin/mkinitrd -k $image-%ver_str -i initrd-%ver_str $NOBOOTSPLASH
 
