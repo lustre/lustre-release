@@ -14,7 +14,7 @@ noinst_PROGRAMS = wirecheck wiretest obdio obdbarrier
 # mount only finds helpers in /sbin
 rootsbin_PROGRAMS = mount.lustre
 sbin_PROGRAMS = mkfs.lustre tunefs.lustre lctl \
-	l_getgroups llverfs llverdev llog_reader lr_reader
+	l_getgroups llverfs llverdev llog_reader lr_reader ltrack_stats
 if LIBPTHREAD
 sbin_PROGRAMS += loadgen
 endif
@@ -84,6 +84,8 @@ tunefs_lustre_SOURCES = $(mkfs_lustre_SOURCES)
 tunefs_lustre_CPPFLAGS = -DTUNEFS $(AM_CPPFLAGS)
 tunefs_lustre_LDADD := $(mkfs_lustre_LDADD)
 tunefs_lustre_DEPENDENCIES := $(mkfs_lustre_DEPENDENCIES)
+
+ltrack_stats_SOURCES = ltrack_stats.c
 
 EXTRA_DIST = $(sbin_scripts) $(bin_scripts)
 
