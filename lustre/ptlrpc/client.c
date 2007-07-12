@@ -909,7 +909,9 @@ int ptlrpc_check_set(struct ptlrpc_request_set *set)
                          * was good after getting the REPLY for her GET or
                          * the ACK for her PUT. */
                         DEBUG_REQ(D_ERROR, req, "bulk transfer failed");
-                        LBUG();
+                        req->rq_status = -EIO;
+                        req->rq_phase = RQ_PHASE_INTERPRET;
+                        GOTO(interpret, req->rq_status);
                 }
 
                 req->rq_phase = RQ_PHASE_INTERPRET;

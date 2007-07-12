@@ -4291,6 +4291,15 @@ test_121() { #bug #10589
 }
 run_test 121 "read cancel race ========="
 
+test_122() { #bug #11544
+        #define OBD_FAIL_PTLRPC_CLIENT_BULK_CB   0x508
+        sysctl -w lustre.fail_loc=0x508
+        dd if=/dev/zero of=$DIR/$tfile count=1
+        sync
+        sysctl -w lustre.fail_loc=0
+}
+run_test 122 "fail client bulk callback (shouldn't LBUG)"
+
 TMPDIR=$OLDTMPDIR
 TMP=$OLDTMP
 HOME=$OLDHOME

@@ -176,6 +176,7 @@ extern int obd_race_state;
 #define OBD_FAIL_PTLRPC_DROP_RPC         0x505
 #define OBD_FAIL_PTLRPC_DELAY_SEND       0x506
 #define OBD_FAIL_PTLRPC_DELAY_RECOV      0x507
+#define OBD_FAIL_PTLRPC_CLIENT_BULK_CB   0x508
 
 #define OBD_FAIL_OBD_PING_NET            0x600
 #define OBD_FAIL_OBD_LOG_CANCEL_NET      0x601

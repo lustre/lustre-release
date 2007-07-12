@@ -458,6 +458,13 @@ Description: bad return value and errno from fcntl call
 Details    : In liblustre API, errno should be a negative value if error
              happens.
 
+Severity   : normal
+Bugzilla   : 11544
+Description: ptlrpc_check_set() LBUG
+Details    : In case of positive reply from server and failed client bulk
+             callback after bulk transfer shouldn't LBUG, but process this
+             request as erroneous.
+
 --------------------------------------------------------------------------------
 
 2007-05-03  Cluster File Systems, Inc. <info@clusterfs.com>
