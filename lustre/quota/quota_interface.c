@@ -340,7 +340,9 @@ static int filter_quota_setinfo(struct obd_export *exp, struct obd_device *obd)
         struct obd_import *imp;
 
         /* setup the quota context import */
+        spin_lock(&obd->u.obt.obt_qctxt.lqc_lock);
         obd->u.obt.obt_qctxt.lqc_import = exp->exp_imp_reverse;
+        spin_unlock(&obd->u.obt.obt_qctxt.lqc_lock);
 
         /* make imp's connect flags equal relative exp's connect flags 
          * adding it to avoid the scan export list
@@ -354,6 +356,22 @@ static int filter_quota_setinfo(struct obd_export *exp, struct obd_device *obd)
         qslave_start_recovery(obd, &obd->u.obt.obt_qctxt);
         return 0;
 }
+
+static int filter_quota_clearinfo(struct obd_export *exp, struct obd_device *obd)
+{
+        struct lustre_quota_ctxt *qctxt = &obd->u.obt.obt_qctxt;
+
+        /* when exp->exp_imp_reverse is destroyed, the corresponding lqc_import
+         * should be invalid b=12374 */
+        if (qctxt->lqc_import == exp->exp_imp_reverse) {
+                spin_lock(&qctxt->lqc_lock);
+                qctxt->lqc_import = NULL;
+                spin_unlock(&qctxt->lqc_lock);
+        }
+
+        return 0;
+}
+
 static int filter_quota_enforce(struct obd_device *obd, unsigned int ignore)
 {
         ENTRY;
@@ -743,6 +761,7 @@ quota_interface_t filter_quota_interface = {
         .quota_check    = target_quota_check,
         .quota_ctl      = filter_quota_ctl,
         .quota_setinfo  = filter_quota_setinfo,
+        .quota_clearinfo = filter_quota_clearinfo,
         .quota_enforce  = filter_quota_enforce,
         .quota_getflag  = filter_quota_getflag,
         .quota_acquire  = filter_quota_acquire,

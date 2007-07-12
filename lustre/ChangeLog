@@ -35,6 +35,15 @@ Details    : Updated patch inode-nr_unused-2.6.9-rhel4.patch
 	     Updated kernel config files
 
 Severity   : normal
+Frequency  : rare
+Bugzilla   : 12374
+Description: lquota slave complains LBUG when reconnecting with mds
+             or failover in mds.
+Details    : quota slave depends qctxt->lqc_import to send its quota request.
+             This pointer will be invalid if mds did failover or broke its
+             connect to osts, which leads to LBUG.
+
+Severity   : normal	
 Frequency  : when qunit size is too small(less than 20M)
 Bugzilla   : 12588
 Description: write is stopped by improper -EDQUOT
