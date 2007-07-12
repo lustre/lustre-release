@@ -52,8 +52,12 @@ lstjn_join_session(char *ses, char *grp)
         srpc_mksn_reply_t *srep;
         int                rc;
 
-        sesid.nid = libcfs_str2nid(ses);
         sesid.pid = LUSTRE_LNET_PID;
+        sesid.nid = libcfs_str2nid(ses);
+        if (sesid.nid == LNET_NID_ANY) {
+                fprintf(stderr, "Invalid session NID: %s\n", ses);
+                return -1;
+        }
 
         rpc = sfw_create_rpc(sesid, SRPC_SERVICE_JOIN, 0,
                              0, lstjn_rpc_done, NULL);
