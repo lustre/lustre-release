@@ -1017,7 +1017,9 @@ AC_DEFUN([LC_PAGE_CONSTANT],
 LB_LINUX_TRY_COMPILE([
         #include <linux/page-flags.h>
 ],[
-        PageConstant((struct page *)NULL);
+        #ifndef PG_constant
+        #error "Have no raid5 zcopy patch"
+        #endif
 ],[
         AC_MSG_RESULT(yes)
         AC_DEFINE(HAVE_PAGE_CONSTANT, 1, [kernel have PageConstant supported])
