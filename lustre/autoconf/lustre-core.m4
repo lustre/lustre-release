@@ -1005,6 +1005,27 @@ LB_LINUX_TRY_COMPILE([
 ])
 ])
 
+#
+# LC_PAGE_CONSTANT
+#
+# In order to support raid5 zerocopy patch, we have to patch the kernel to make
+# it support constant page, which means the page won't be modified during the
+# IO.
+#
+AC_DEFUN([LC_PAGE_CONSTANT],
+[AC_MSG_CHECKING([if kernel have PageConstant defined])
+LB_LINUX_TRY_COMPILE([
+        #include <linux/page-flags.h>
+],[
+        PageConstant((struct page *)NULL);
+],[
+        AC_MSG_RESULT(yes)
+        AC_DEFINE(HAVE_PAGE_CONSTANT, 1, [kernel have PageConstant supported])
+],[
+        AC_MSG_RESULT(no);
+])
+])
+
 # RHEL5 in FS-cache patch rename PG_checked flag
 # into PG_fs_misc
 AC_DEFUN([LC_PG_FS_MISC],
@@ -1106,6 +1127,9 @@ LC_GENERIC_FILE_WRITE
 
 # 2.6.20
 LC_CANCEL_DIRTY_PAGE
+
+# raid5-zerocopy patch
+LC_PAGE_CONSTANT
 ])
 
 #
