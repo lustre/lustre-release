@@ -1111,18 +1111,9 @@ ksocknal_new_packet (ksock_conn_t *conn, int nob_to_skip)
                         conn->ksnc_rx_iov = (struct iovec *)&conn->ksnc_rx_iov_space;
                         conn->ksnc_rx_iov[0].iov_base = (char *)&conn->ksnc_msg;
 
-                        if (conn->ksnc_type == SOCKLND_CONN_BULK_IN) {
-                                /* always expect lnet_hdr_t to avoid extra-read for better performance */
-                                conn->ksnc_rx_nob_wanted = offsetof(ksock_msg_t, ksm_u.lnetmsg.ksnm_payload);
-                                conn->ksnc_rx_nob_left = offsetof(ksock_msg_t, ksm_u.lnetmsg.ksnm_payload);
-                                conn->ksnc_rx_iov[0].iov_len  = offsetof(ksock_msg_t, ksm_u.lnetmsg.ksnm_payload);
-
-                        } else {
-                                /* can't make sure if it's noop or not */
-                                conn->ksnc_rx_nob_wanted = offsetof(ksock_msg_t, ksm_u);
-                                conn->ksnc_rx_nob_left = offsetof(ksock_msg_t, ksm_u);
-                                conn->ksnc_rx_iov[0].iov_len  = offsetof(ksock_msg_t, ksm_u);
-                        } 
+                        conn->ksnc_rx_nob_wanted = offsetof(ksock_msg_t, ksm_u);
+                        conn->ksnc_rx_nob_left = offsetof(ksock_msg_t, ksm_u);
+                        conn->ksnc_rx_iov[0].iov_len  = offsetof(ksock_msg_t, ksm_u);
                         break;
 
                 case KSOCK_PROTO_V1:
@@ -1351,24 +1342,19 @@ ksocknal_process_receive (ksock_conn_t *conn)
                 }
                 LASSERT (conn->ksnc_msg.ksm_type == KSOCK_MSG_LNET);
 
-                if (conn->ksnc_type == SOCKLND_CONN_BULK_IN) {
-                        conn->ksnc_rx_state = SOCKNAL_RX_LNET_HEADER;
-                        /* has read lnet_hdr_t already (re ksocknal_new_packet), fall through */
-                } else {
-                        conn->ksnc_rx_state = SOCKNAL_RX_LNET_HEADER;
-                        conn->ksnc_rx_nob_wanted = sizeof(ksock_lnet_msg_t);
-                        conn->ksnc_rx_nob_left = sizeof(ksock_lnet_msg_t);
+                conn->ksnc_rx_state = SOCKNAL_RX_LNET_HEADER;
+                conn->ksnc_rx_nob_wanted = sizeof(ksock_lnet_msg_t);
+                conn->ksnc_rx_nob_left = sizeof(ksock_lnet_msg_t);
         
-                        conn->ksnc_rx_iov = (struct iovec *)&conn->ksnc_rx_iov_space;
-                        conn->ksnc_rx_iov[0].iov_base = (char *)&conn->ksnc_msg.ksm_u.lnetmsg;
-                        conn->ksnc_rx_iov[0].iov_len  = sizeof(ksock_lnet_msg_t);
+                conn->ksnc_rx_iov = (struct iovec *)&conn->ksnc_rx_iov_space;
+                conn->ksnc_rx_iov[0].iov_base = (char *)&conn->ksnc_msg.ksm_u.lnetmsg;
+                conn->ksnc_rx_iov[0].iov_len  = sizeof(ksock_lnet_msg_t);
 
-                        conn->ksnc_rx_niov = 1;
-                        conn->ksnc_rx_kiov = NULL;
-                        conn->ksnc_rx_nkiov = 0;
+                conn->ksnc_rx_niov = 1;
+                conn->ksnc_rx_kiov = NULL;
+                conn->ksnc_rx_nkiov = 0;
 
-                        goto again;     /* read lnet header now */
-                }
+                goto again;     /* read lnet header now */
 
         case SOCKNAL_RX_LNET_HEADER:
                 /* unpack message header */
