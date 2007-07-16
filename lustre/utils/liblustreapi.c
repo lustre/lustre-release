@@ -1227,7 +1227,7 @@ static int cb_quotachown(char *path, DIR *parent, DIR *d, void *data)
          * invoke syscall directly. */
         rc = syscall(SYS_chown, path, -1, -1);
         if (rc)
-                err_msg("error: chown %s (%u,%u)", path);
+                err_msg("error: chown %s", path);
 
         rc = chmod(path, st->st_mode);
         if (rc)
