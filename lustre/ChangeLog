@@ -477,15 +477,6 @@ Details    : In case of positive reply from server and failed client bulk
              callback after bulk transfer shouldn't LBUG, but process this
              request as erroneous.
 
-Severity   : enhancement
-Bugzilla   : 10968
-Description: VFS operations stats tool.
-Details    : Tool which collects stats by tracking value written in pid,
-             ppid, gid and uses llstat to generate output to plot graph using
-             plot-llstat
-	     Updated lustre/utils/Makefile.am
-	     Added lustre/utils/ltrack_stats.c
-
 --------------------------------------------------------------------------------
 
 2007-05-03  Cluster File Systems, Inc. <info@clusterfs.com>
@@ -647,8 +638,7 @@ Severity   : enhancement
 Bugzilla   : 10968
 Description: VFS operations stats
 Details    : Add client VFS call stats, trackable by pid, ppid, or gid
-	     /proc/fs/lustre/llite/*/vfs_ops_stats
-	     /proc/fs/lustre/llite/*/vfs_track_[pid|ppid|gid]
+	     /proc/fs/lustre/llite/*/stats_track_[pid|ppid|gid]
 
 Severity   : minor
 Frequency  : always
