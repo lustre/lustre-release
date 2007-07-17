@@ -1,7 +1,6 @@
 # lustre.spec
 %define version @VERSION@
 %define kversion @LINUXRELEASE@
-%define sles10build @SLES10BUILD@
 
 Summary: Lustre File System
 Name: lustre
@@ -23,9 +22,6 @@ Userspace tools and files for the Lustre file system.
 Summary: Kernel Lustre modules for Linux %{kversion}
 Requires: modutils >= 2.4.10
 Group: Development/Kernel
-%if %{sles10build}
-AutoReqProv: no
-%endif
 
 %description modules
 Lustre file system, server and network drivers for Linux %{kversion}.
