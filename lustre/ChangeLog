@@ -14,6 +14,11 @@ tbd         Cluster File Systems, Inc. <info@clusterfs.com>
        * Note that reiserfs quotas are disabled on SLES 10 in this kernel.
        * bug fixes
 
+Severity   : enhancement
+Bugzilla   : 11039
+Description: 2.6.18 server support (lustre 1.6.1)
+Details    : Support for 2.6.18 kernels on the server side.
+
 Severity   : normal
 Frequency  : rare
 Bugzilla   : 12696

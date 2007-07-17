@@ -68,6 +68,13 @@
 #define FSFILT_DELETE_TRANS_BLOCKS(sb)    EXT3_DELETE_TRANS_BLOCKS(sb)
 #endif
 
+#ifdef EXT3_SINGLEDATA_TRANS_BLOCKS_HAS_SB
+/* for kernels 2.6.18 and later */
+#define FSFILT_SINGLEDATA_TRANS_BLOCKS(sb) EXT3_SINGLEDATA_TRANS_BLOCKS(sb)
+#else
+#define FSFILT_SINGLEDATA_TRANS_BLOCKS(sb) EXT3_SINGLEDATA_TRANS_BLOCKS
+#endif
+
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
 #define fsfilt_ext3_journal_start(inode, nblocks) \
                                 journal_start(EXT3_JOURNAL(inode),nblocks)
@@ -166,7 +173,7 @@ static void *fsfilt_ext3_start(struct inode *inode, int op, void *desc_private,
                                int logs)
 {
         /* For updates to the last received file */
-        int nblocks = EXT3_SINGLEDATA_TRANS_BLOCKS;
+        int nblocks = FSFILT_SINGLEDATA_TRANS_BLOCKS(inode->i_sb);
         journal_t *journal;
         void *handle;
 
@@ -182,11 +189,11 @@ static void *fsfilt_ext3_start(struct inode *inode, int op, void *desc_private,
                 /* delete one file + create/update logs for each stripe */
                 nblocks += FSFILT_DELETE_TRANS_BLOCKS(inode->i_sb);
                 nblocks += (EXT3_INDEX_EXTRA_TRANS_BLOCKS +
-                            EXT3_SINGLEDATA_TRANS_BLOCKS) * logs;
+                            FSFILT_SINGLEDATA_TRANS_BLOCKS(inode->i_sb)) * logs;
                 break;
         case FSFILT_OP_RENAME:
                 /* modify additional directory */
-                nblocks += EXT3_SINGLEDATA_TRANS_BLOCKS;
+                nblocks += FSFILT_SINGLEDATA_TRANS_BLOCKS(inode->i_sb);
                 /* no break */
         case FSFILT_OP_SYMLINK:
                 /* additional block + block bitmap + GDT for long symlink */
@@ -220,7 +227,7 @@ static void *fsfilt_ext3_start(struct inode *inode, int op, void *desc_private,
                          FSFILT_DATA_TRANS_BLOCKS(inode->i_sb);
                 /* create/update logs for each stripe */
                 nblocks += (EXT3_INDEX_EXTRA_TRANS_BLOCKS +
-                            EXT3_SINGLEDATA_TRANS_BLOCKS) * logs;
+                            FSFILT_SINGLEDATA_TRANS_BLOCKS(inode->i_sb)) * logs;
                 break;
         case FSFILT_OP_SETATTR:
                 /* Setattr on inode */
@@ -229,7 +236,7 @@ static void *fsfilt_ext3_start(struct inode *inode, int op, void *desc_private,
                          FSFILT_DATA_TRANS_BLOCKS(inode->i_sb);
                 /* quota chown log for each stripe */
                 nblocks += (EXT3_INDEX_EXTRA_TRANS_BLOCKS +
-                            EXT3_SINGLEDATA_TRANS_BLOCKS) * logs;
+                            FSFILT_SINGLEDATA_TRANS_BLOCKS(inode->i_sb)) * logs;
                 break;
         case FSFILT_OP_CANCEL_UNLINK:
                 /* blocks for log header bitmap update OR
@@ -245,7 +252,7 @@ static void *fsfilt_ext3_start(struct inode *inode, int op, void *desc_private,
                 /*create array log for head file*/ 
                 nblocks += 3;
                 nblocks += (EXT3_INDEX_EXTRA_TRANS_BLOCKS +
-                            EXT3_SINGLEDATA_TRANS_BLOCKS);
+                            FSFILT_SINGLEDATA_TRANS_BLOCKS(inode->i_sb));
                 /*update head file array */
                 nblocks += EXT3_INDEX_EXTRA_TRANS_BLOCKS +
                          FSFILT_DATA_TRANS_BLOCKS(inode->i_sb);
@@ -353,7 +360,7 @@ static int fsfilt_ext3_credits_needed(int objcount, struct fsfilt_objinfo *fso,
          * quota file that is active.  This is at least true for now.
          */
         needed += hweight32(sb_any_quota_enabled(sb)) *
-                EXT3_SINGLEDATA_TRANS_BLOCKS;
+                FSFILT_SINGLEDATA_TRANS_BLOCKS(sb);
 #endif
 
         return needed;
@@ -813,6 +820,25 @@ static int fsfilt_ext3_sync(struct super_block *sb)
 #define ext3_down_truncate_sem(inode)  mutex_lock(&EXT3_I(inode)->truncate_mutex);
 #endif
 
+#ifndef EXT_ASSERT
+#define EXT_ASSERT(cond)  BUG_ON(!(cond))
+#endif
+
+#ifdef EXT3_EXT_HAS_NO_TREE
+/* for kernels 2.6.18 and later */
+#define ext3_ext_base                   inode
+#define ext3_ext_base2inode(inode)      (inode)
+#define EXT_DEPTH(inode)                ext_depth(inode)
+#define EXT_GENERATION(inode)           ext_generation(inode)
+#define fsfilt_ext3_ext_walk_space(inode, block, num, cb, cbdata) \
+                        ext3_ext_walk_space(inode, block, num, cb, cbdata);
+#else
+#define ext3_ext_base                   ext3_extents_tree
+#define ext3_ext_base2inode(tree)       (tree->inode)
+#define fsfilt_ext3_ext_walk_space(tree, block, num, cb, cbdata) \
+                        ext3_ext_walk_space(tree, block, num, cb);
+#endif
+
 #include <linux/lustre_version.h>
 #if EXT3_EXT_MAGIC == 0xf301
 #define ee_start e_start
@@ -894,66 +920,77 @@ static void ll_unmap_underlying_metadata(struct super_block *sb,
 #endif
 
 #ifndef EXT3_MB_HINT_GROUP_ALLOC
-static unsigned long new_blocks(handle_t *handle, struct ext3_extents_tree *tree,
+static unsigned long new_blocks(handle_t *handle, struct ext3_ext_base *base,
                                 struct ext3_ext_path *path, unsigned long block,
-                                int *count, int *err)
+                                unsigned long *count, int *err)
 {
         unsigned long pblock, goal;
         int aflags = 0;
+        struct inode *inode = ext3_ext_base2inode(base);
 
-        goal = ext3_ext_find_goal(tree->inode, path, block, &aflags);
+        goal = ext3_ext_find_goal(inode, path, block, &aflags);
         aflags |= 2; /* block have been already reserved */
         lock_24kernel();
-        pblock = ext3_mb_new_blocks(handle, tree->inode, goal, count, aflags, err);
+        pblock = ext3_mb_new_blocks(handle, inode, goal, count, aflags, err);
         unlock_24kernel();
         return pblock;
 
 }
 #else
-static unsigned long new_blocks(handle_t *handle, struct ext3_extents_tree *tree,
+static unsigned long new_blocks(handle_t *handle, struct ext3_ext_base *base,
                                 struct ext3_ext_path *path, unsigned long block,
-                                int *count, int *err)
+                                unsigned long *count, int *err)
 {
+        struct inode *inode = ext3_ext_base2inode(base);
         struct ext3_allocation_request ar;
         unsigned long pblock;
         int aflags;
 
         /* find neighbour allocated blocks */
         ar.lleft = block;
-        *err = ext3_ext_search_left(tree, path, &ar.lleft, &ar.pleft);
+        *err = ext3_ext_search_left(base, path, &ar.lleft, &ar.pleft);
         if (*err)
                 return 0;
         ar.lright = block;
-        *err = ext3_ext_search_right(tree, path, &ar.lright, &ar.pright);
+        *err = ext3_ext_search_right(base, path, &ar.lright, &ar.pright);
         if (*err)
                 return 0;
 
         /* allocate new block */
-        ar.goal = ext3_ext_find_goal(tree->inode, path, block, &aflags);
-        ar.inode = tree->inode;
+        ar.goal = ext3_ext_find_goal(inode, path, block, &aflags);
+        ar.inode = inode;
         ar.logical = block;
         ar.len = *count;
         ar.flags = EXT3_MB_HINT_DATA;
         pblock = ext3_mb_new_blocks(handle, &ar, err);
         *count = ar.len;
         return pblock;
-
 }
 #endif
 
-static int ext3_ext_new_extent_cb(struct ext3_extents_tree *tree,
+#ifdef EXT3_EXT_HAS_NO_TREE
+static int ext3_ext_new_extent_cb(struct ext3_ext_base *base,
+                                  struct ext3_ext_path *path,
+                                  struct ext3_ext_cache *cex,
+                                  void *cbdata)
+{
+        struct bpointers *bp = cbdata;
+#else
+static int ext3_ext_new_extent_cb(struct ext3_ext_base *base,
                                   struct ext3_ext_path *path,
                                   struct ext3_ext_cache *cex)
 {
-        struct inode *inode = tree->inode;
-        struct bpointers *bp = tree->private;
+        struct bpointers *bp = base->private;
+#endif
+        struct inode *inode = ext3_ext_base2inode(base);
         struct ext3_extent nex;
         unsigned long pblock;
         unsigned long tgen;
-        int count, err, i;
+        int err, i;
+        unsigned long count;
         handle_t *handle;
 
-        i = EXT_DEPTH(tree);
+        i = EXT_DEPTH(base);
         EXT_ASSERT(i == path->p_depth);
         EXT_ASSERT(path[i].p_hdr);
 
@@ -981,8 +1018,8 @@ static int ext3_ext_new_extent_cb(struct ext3_extents_tree *tree,
                 return EXT_CONTINUE;
         }
 
-        tgen = EXT_GENERATION(tree);
-        count = ext3_ext_calc_credits_for_insert(tree, path);
+        tgen = EXT_GENERATION(base);
+        count = ext3_ext_calc_credits_for_insert(base, path);
         ext3_up_truncate_sem(inode);
 
         lock_24kernel();
@@ -994,7 +1031,7 @@ static int ext3_ext_new_extent_cb(struct ext3_extents_tree *tree,
         }
 
         ext3_down_truncate_sem(inode);
-        if (tgen != EXT_GENERATION(tree)) {
+        if (tgen != EXT_GENERATION(base)) {
                 /* the tree has changed. so path can be invalid at moment */
                 lock_24kernel();
                 fsfilt_ext3_journal_stop(handle);
@@ -1003,7 +1040,7 @@ static int ext3_ext_new_extent_cb(struct ext3_extents_tree *tree,
         }
 
         count = cex->ec_len;
-        pblock = new_blocks(handle, tree, path, cex->ec_block, &count, &err);
+        pblock = new_blocks(handle, base, path, cex->ec_block, &count, &err);
         if (!pblock)
                 goto out;
         EXT_ASSERT(count <= cex->ec_len);
@@ -1012,7 +1049,7 @@ static int ext3_ext_new_extent_cb(struct ext3_extents_tree *tree,
         nex.ee_block = cex->ec_block;
         nex.ee_start = pblock;
         nex.ee_len = count;
-        err = ext3_ext_insert_extent(handle, tree, path, &nex);
+        err = ext3_ext_insert_extent(handle, base, path, &nex);
         if (err) {
                 CERROR("can't insert extent: %d\n", err);
                 /* XXX: export ext3_free_blocks() */
@@ -1075,15 +1112,22 @@ int fsfilt_map_nblocks(struct inode *inode, unsigned long block,
                        unsigned long num, unsigned long *blocks,
                        int *created, int create)
 {
+#ifdef EXT3_EXT_HAS_NO_TREE
+        struct ext3_ext_base *base = inode;
+#else
         struct ext3_extents_tree tree;
+        struct ext3_ext_base *base = &tree;
+#endif
         struct bpointers bp;
         int err;
 
         CDEBUG(D_OTHER, "blocks %lu-%lu requested for inode %u\n",
                block, block + num - 1, (unsigned) inode->i_ino);
 
-        ext3_init_tree_desc(&tree, inode);
+#ifndef EXT3_EXT_HAS_NO_TREE
+        ext3_init_tree_desc(base, inode);
         tree.private = &bp;
+#endif
         bp.blocks = blocks;
         bp.created = created;
         bp.start = block;
@@ -1091,8 +1135,8 @@ int fsfilt_map_nblocks(struct inode *inode, unsigned long block,
         bp.create = create;
 
         ext3_down_truncate_sem(inode);
-        err = ext3_ext_walk_space(&tree, block, num, ext3_ext_new_extent_cb);
-        ext3_ext_invalidate_cache(&tree);
+        err = fsfilt_ext3_ext_walk_space(base, block, num, ext3_ext_new_extent_cb, &bp);
+        ext3_ext_invalidate_cache(base);
         ext3_up_truncate_sem(inode);
 
         return err;
