@@ -288,6 +288,14 @@ static int import_select_connection(struct obd_import *imp)
                         else if (cfs_time_before_64(conn->oic_last_attempt,
                                                     imp_conn->oic_last_attempt))
                                 imp_conn = conn;
+                } else {
+                        /* Exceptionally unlikely case caused by the node
+                         * booting and attempting to mount lustre faster than
+                         * than RECONNECT_INTERVAL seconds. */
+                        if (unlikely(conn->oic_last_attempt == 0)) {
+                                imp_conn = conn;
+                                break;
+                        }
                 }
         }
 

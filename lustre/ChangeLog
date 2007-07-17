@@ -15,6 +15,13 @@ tbd         Cluster File Systems, Inc. <info@clusterfs.com>
        * bug fixes
 
 Severity   : normal
+Frequency  : rare
+Bugzilla   : 12696
+Description: ASSERTION(imp->imp_conn_current) failed
+Details    : an assertion failure is hit if a client node boots and attempts to
+	     mount a lustre filesystem faster than RECONNECT_INTERVAL seconds.
+
+Severity   : normal
 Frequency  : only for i686
 Bugzilla   : 12695
 Description: 1.4.11 RC1 build fails for RHEL 4, i686
