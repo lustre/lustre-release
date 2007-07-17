@@ -11,7 +11,7 @@ ONLY=${ONLY:-"$*"}
 ALWAYS_EXCEPT=${ALWAYS_EXCEPT:-"27o 27q  42a  42b  42c  42d  45   68        75"}
 # UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
 
-[ "$SLOW" = "no" ] && EXCEPT="$EXCEPT 24o 27m 36f 36g 51b 51c 63 64b 71 73 101 115"
+[ "$SLOW" = "no" ] && EXCEPT="$EXCEPT 24o 27m 36f 36g 51b 51c 60c 63 64b 71 73 101 103 115 120g"
 
 # Tests that fail on uml, maybe elsewhere, FIXME
 CPU=`awk '/model/ {print $4}' /proc/cpuinfo`
@@ -71,7 +71,7 @@ else
 	fi
 fi
 
-SANITYLOG=${SANITYLOG:-/tmp/sanity.log}
+SANITYLOG=${SANITYLOG:-$TMP/sanity.log}
 
 export NAME=${NAME:-local}
 
@@ -208,7 +208,6 @@ error() {
 	else
 		exit 1
 	fi
-	sysctl -w lustre.fail_loc=0
 }
 
 pass() { 
@@ -253,6 +252,8 @@ echo # add a newline after mke2fs.
 
 umask 077
 
+OLDDEBUG="`sysctl lnet.debug 2> /dev/null`"
+sysctl -w lnet.debug=-1 2> /dev/null || true
 test_0() {
 	touch $DIR/$tfile
 	$CHECKSTAT -t file $DIR/$tfile || error
@@ -1011,7 +1012,7 @@ exhaust_precreations() {
 
 	mkdir -p $DIR/d27/${OST}
 	$SETSTRIPE $DIR/d27/${OST} 0 $OSTIDX 1
-#define OBD_FAIL_OST_ENOSPC              0x215
+	#define OBD_FAIL_OST_ENOSPC 0x215
 	sysctl -w lustre.fail_loc=0x215
 	echo "Creating to objid $last_id on ost $OST..."
 	createmany -o $DIR/d27/${OST}/f $next_id $((last_id - next_id + 2))
@@ -1865,7 +1866,7 @@ run_test 43c "md5sum of copy into lustre========================"
 test_44() {
 	[  "$OSTCOUNT" -lt "2" ] && echo "skipping 2-stripe test" && return
 	dd if=/dev/zero of=$DIR/f1 bs=4k count=1 seek=1023
-	dd if=$DIR/f1 bs=4k count=1
+	dd if=$DIR/f1 of=/dev/null bs=4k count=1
 }
 run_test 44 "zero length read from a sparse stripe ============="
 
@@ -2486,7 +2487,7 @@ run_test 60b "limit repeated messages from CERROR/CWARN ========"
 test_60c() {
 	echo "create 5000 files" 
 	createmany -o $DIR/f60c- 5000
-#define OBD_FAIL_MDS_LLOG_CREATE_FAILED  0x137
+	#define OBD_FAIL_MDS_LLOG_CREATE_FAILED  0x137
 	sysctl -w lustre.fail_loc=0x80000137
 	unlinkmany $DIR/f60c- 5000
 }
@@ -2506,6 +2507,7 @@ test_62() {
         f="$DIR/f62"
         echo foo > $f
         cancel_lru_locks osc
+        #define OBD_FAIL_OSC_MATCH 0x405
         sysctl -w lustre.fail_loc=0x405
         cat $f && error "cat succeeded, expect -EIO"
         sysctl -w lustre.fail_loc=0
@@ -2542,7 +2544,7 @@ test_63b() {
 	dd if=/dev/zero of=$DIR/$tfile bs=4k count=1
 	rm $DIR/$tfile
 
-	#define OBD_FAIL_OSC_BRW_PREP_REQ        0x406
+	#define OBD_FAIL_OSC_BRW_PREP_REQ 0x406
 	sysctl -w lustre.fail_loc=0x80000406
 	multiop $DIR/$tfile Owy && \
 		$LCTL dk /tmp/test63b.debug && \
@@ -2771,6 +2773,7 @@ test_69() {
 		return 0
 	fi
 
+	#define OBD_FAIL_OST_ENOENT 0x217
 	sysctl -w lustre.fail_loc=0x217
 	truncate $f 1 # vmtruncate() will ignore truncate() error.
 	$DIRECTIO write $f 0 2 && error "write succeeded, expect -ENOENT"
@@ -2781,6 +2784,7 @@ test_69() {
 	cancel_lru_locks osc
 	$DIRECTIO read $f 0 1 || error "read error"
 
+	#define OBD_FAIL_OST_ENOENT 0x217
 	sysctl -w lustre.fail_loc=0x217
 	$DIRECTIO read $f 1 1 && error "read succeeded, expect -ENOENT"
 
@@ -2842,10 +2846,11 @@ test_73() {
 	#give multiop a chance to open
 	usleep 500
 
-	echo 0x80000129 > /proc/sys/lustre/fail_loc
+	#define OBD_FAIL_MDS_PAUSE_OPEN 0x129
+	sysctl -w lustre.fail_loc=0x80000129
 	multiop $DIR/d73-1/f73-2 Oc &
 	sleep 1
-	echo 0 > /proc/sys/lustre/fail_loc
+	sysctl -w lustre.fail_loc=0
 
 	multiop $DIR/d73-2/f73-3 Oc &
 	pid3=$!
@@ -3124,17 +3129,23 @@ unset F77_TMP
 test_78() { # bug 10901
  	NSEQ=5
 	F78SIZE=$(($(awk '/MemFree:/ { print $2 }' /proc/meminfo) / 1024))
+	echo "MemFree: $F78SIZE, Max file size: $MAXFREE"
+	MEMTOTAL=$(($(awk '/MemTotal:/ { print $2 }' /proc/meminfo) / 2048))
+	echo "MemTotal: $((MEMTOTAL * 2))"
+	[ $F78SIZE -gt $MEMTOTAL ] && F78SIZE=$MEMTOTAL
 	[ $F78SIZE -gt 512 ] && F78SIZE=512
 	[ $F78SIZE -gt $((MAXFREE / 1024)) ] && F78SIZE=$((MAXFREE / 1024))
 	SMALLESTOST=`lfs df $DIR |grep OST | awk '{print $4}' |sort -n |head -1`
+	echo "Smallest OST: $SMALLESTOST"
 	[ $F78SIZE -gt $((SMALLESTOST * $OSTCOUNT / 1024)) ] && \
 		F78SIZE=$((SMALLESTOST * $OSTCOUNT / 1024))
+	echo "File size: $F78SIZE"
 	$SETSTRIPE $DIR/$tfile 0 -1 -1 || error "setstripe failed"
  	for i in `seq 1 $NSEQ`
  	do
  		FSIZE=$(($F78SIZE / ($NSEQ - $i + 1)))
  		echo directIO rdwr round $i of $NSEQ
-  	 	$DIRECTIO rdwr $DIR/$tfile 0 $FSIZE 1048576 || error "rdwr failed"
+  	 	$DIRECTIO rdwr $DIR/$tfile 0 $FSIZE 1048576||error "rdwr failed"
   	done
 
 	rm -f $DIR/$tfile
@@ -3153,30 +3164,32 @@ OLDHOME=$HOME
 [ $RUNAS_ID -ne $UID ] && HOME=/tmp
 
 test_99a() {
-	mkdir -p $DIR/d99cvsroot
-	chown $RUNAS_ID $DIR/d99cvsroot
-	$RUNAS cvs -d $DIR/d99cvsroot init || error
+	mkdir -p $DIR/d99cvsroot || error "mkdir $DIR/d99cvsroot failed"
+	chown $RUNAS_ID $DIR/d99cvsroot || error "chown $DIR/d99cvsroot failed"
+	$RUNAS cvs -d $DIR/d99cvsroot init || error "cvs init failed"
 }
 run_test 99a "cvs init ========================================="
 
 test_99b() {
 	[ ! -d $DIR/d99cvsroot ] && test_99a
-	cd /etc/init.d
+	cd /etc/init.d || error "cd /etc/init.d failed"
 	# some versions of cvs import exit(1) when asked to import links or
 	# files they can't read.  ignore those files.
 	TOIGNORE=$(find . -type l -printf '-I %f\n' -o \
 			! -perm +4 -printf '-I %f\n')
 	$RUNAS cvs -d $DIR/d99cvsroot import -m "nomesg" $TOIGNORE \
-		d99reposname vtag rtag
+		d99reposname vtag rtag || error "cvs import failed"
 }
 run_test 99b "cvs import ======================================="
 
 test_99c() {
 	[ ! -d $DIR/d99cvsroot ] && test_99b
-	cd $DIR
-	mkdir -p $DIR/d99reposname
-	chown $RUNAS_ID $DIR/d99reposname
-	$RUNAS cvs -d $DIR/d99cvsroot co d99reposname
+	cd $DIR || error "cd $DIR failed"
+	mkdir -p $DIR/d99reposname || error "mkdir $DIR/d99reposname failed"
+	chown $RUNAS_ID $DIR/d99reposname || \
+		error "chown $DIR/d99reposname failed"
+	$RUNAS cvs -d $DIR/d99cvsroot co d99reposname || \
+		error "cvs co d99reposname failed"
 }
 run_test 99c "cvs checkout ====================================="
 
@@ -3672,7 +3685,7 @@ test_107() {
         wait $SLEEPPID
         if [ -e $file ]; then
                 size=`stat -c%s $file`
-                [ $size -eq 0 ] && error "Fail to create core file $file"
+                [ $size -eq 0 ] && error "Zero length core file $file"
         else
                 error "Fail to create core file $file"
         fi
@@ -3818,7 +3831,7 @@ test_117() # bug 10891
         sysctl -w lustre.fail_loc=0
         echo "Truncate succeeded."
 }
-run_test 117 "verify fsfilt_extend =========="
+run_test 117 "verify fsfilt_extend ============================="
 
 # Reset async IO behavior after error case
 reset_async() {
@@ -3844,7 +3857,7 @@ test_118a() #bug 11710
 		return 1;
         fi
 }
-run_test 118a "verify O_SYNC works =========="
+run_test 118a "verify O_SYNC works ============================="
 
 test_118b()
 {
@@ -3877,7 +3890,7 @@ test_118b()
 	
 	return 0
 }
-run_test 118b "Reclaim dirty pages on fatal error =========="
+run_test 118b "Reclaim dirty pages on fatal error =============="
 
 test_118c()
 {
@@ -3917,7 +3930,7 @@ test_118c()
 	echo "Dirty pages flushed via fsync on EROFS"
 	return 0
 }
-run_test 118c "Fsync blocks on EROFS until dirty pages are flushed =========="
+run_test 118c "Fsync blocks on EROFS until dirty pages are flushed"
 
 test_118d()
 {
@@ -3952,7 +3965,7 @@ test_118d()
 	echo "Dirty pages gaurenteed flushed via fsync"
 	return 0
 }
-run_test 118d "Fsync validation inject a delay of the bulk =========="
+run_test 118d "Fsync validation inject a delay of the bulk ====="
 
 test_118f() {
         reset_async
@@ -3985,7 +3998,7 @@ test_118f() {
         reset_async
 	return 0
 }
-run_test 118f "Simulate unrecoverable OSC side error =========="
+run_test 118f "Simulate unrecoverable OSC side error ==========="
 
 test_118g() {
         reset_async
@@ -4019,7 +4032,7 @@ test_118g() {
         reset_async
 	return 0
 }
-run_test 118g "Don't stay in wait if we got local -ENOMEM  =========="
+run_test 118g "Don't stay in wait if we got local -ENOMEM ======"
 
 test_118h() {
         reset_async
@@ -4054,7 +4067,7 @@ test_118h() {
         reset_async
 	return 0
 }
-run_test 118h "Verify timeout in handling recoverables errors  =========="
+run_test 118h "Verify timeout in handling recoverables errors =="
 
 test_118i() {
         reset_async
@@ -4093,7 +4106,7 @@ test_118i() {
         reset_async
 	return 0
 }
-run_test 118i "Fix error before timeout in recoverable error  =========="
+run_test 118i "Fix error before timeout in recoverable error ==="
 
 test_118j() {
         reset_async
@@ -4128,7 +4141,7 @@ test_118j() {
         reset_async
 	return 0
 }
-run_test 118j "Simulate unrecoverable OST side error =========="
+run_test 118j "Simulate unrecoverable OST side error ==========="
 
 test_119a() # bug 11737
 {
@@ -4170,7 +4183,7 @@ test_120a() {
         [ $can1 -eq $can2 ] || error $((can2-can1)) "cancel RPC occured."
         [ $blk1 -eq $blk2 ] || error $((blk2-blk1)) "blocking RPC occured."
 }
-run_test 120a "Early Lock Cancel: mkdir test"
+run_test 120a "Early Lock Cancel: mkdir test ==================="
 
 test_120b() {
         mkdir $DIR/$tdir
@@ -4184,7 +4197,7 @@ test_120b() {
         [ $can1 -eq $can2 ] || error $((can2-can1)) "cancel RPC occured."
         [ $blk1 -eq $blk2 ] || error $((blk2-blk1)) "blocking RPC occured."
 }
-run_test 120b "Early Lock Cancel: create test"
+run_test 120b "Early Lock Cancel: create test =================="
 
 test_120c() {
         mkdir -p $DIR/$tdir/d1 $DIR/$tdir/d2
@@ -4199,7 +4212,7 @@ test_120c() {
         [ $can1 -eq $can2 ] || error $((can2-can1)) "cancel RPC occured."
         [ $blk1 -eq $blk2 ] || error $((blk2-blk1)) "blocking RPC occured."
 }
-run_test 120c "Early Lock Cancel: link test"
+run_test 120c "Early Lock Cancel: link test ===================="
 
 test_120d() {
         touch $DIR/$tdir
@@ -4213,7 +4226,7 @@ test_120d() {
         [ $can1 -eq $can2 ] || error $((can2-can1)) "cancel RPC occured."
         [ $blk1 -eq $blk2 ] || error $((blk2-blk1)) "blocking RPC occured."
 }
-run_test 120d "Early Lock Cancel: setattr test"
+run_test 120d "Early Lock Cancel: setattr test ================="
 
 test_120e() {
         mkdir $DIR/$tdir
@@ -4230,7 +4243,7 @@ test_120e() {
         [ $can1 -eq $can2 ] || error $((can2-can1)) "cancel RPC occured."
         [ $blk1 -eq $blk2 ] || error $((blk2-blk1)) "blocking RPC occured."
 }
-run_test 120e "Early Lock Cancel: unlink test"
+run_test 120e "Early Lock Cancel: unlink test =================="
 
 test_120f() {
         mkdir -p $DIR/$tdir/d1 $DIR/$tdir/d2
@@ -4249,7 +4262,7 @@ test_120f() {
         [ $can1 -eq $can2 ] || error $((can2-can1)) "cancel RPC occured."
         [ $blk1 -eq $blk2 ] || error $((blk2-blk1)) "blocking RPC occured."
 }
-run_test 120f "Early Lock Cancel: rename test"
+run_test 120f "Early Lock Cancel: rename test =================="
 
 test_120g() {
         count=10000
@@ -4278,7 +4291,7 @@ test_120g() {
         sleep 2
         # wait for commitment of removal
 }
-run_test 120g "Early Lock Cancel: performance test"
+run_test 120g "Early Lock Cancel: performance test ============="
 
 test_121() { #bug #10589
 	rm -rf $DIR/$tfile
@@ -4289,7 +4302,7 @@ test_121() { #bug #10589
 	sysctl -w lustre.fail_loc=0
 	[ $reads -eq $writes ] || error "read" $reads "blocks, must be" $writes
 }
-run_test 121 "read cancel race ========="
+run_test 121 "read cancel race ================================="
 
 test_122() { #bug #11544
         #define OBD_FAIL_PTLRPC_CLIENT_BULK_CB   0x508
@@ -4298,7 +4311,7 @@ test_122() { #bug #11544
         sync
         sysctl -w lustre.fail_loc=0
 }
-run_test 122 "fail client bulk callback (shouldn't LBUG)"
+run_test 122 "fail client bulk callback (shouldn't LBUG) ======="
 
 TMPDIR=$OLDTMPDIR
 TMP=$OLDTMP
@@ -4306,10 +4319,12 @@ HOME=$OLDHOME
 
 log "cleanup: ======================================================"
 if [ "`mount | grep $MOUNT`" ]; then
-    rm -rf $DIR/[Rdfs][1-9]*
+	rm -rf $DIR/[Rdfs][1-9]*
 fi
 if [ "$I_MOUNTED" = "yes" ]; then
-    cleanupall -f || error "cleanup failed"
+	cleanupall -f || error "cleanup failed"
+else
+	sysctl -w lnet.debug="$OLDDEBUG" 2> /dev/null || true
 fi
 
 

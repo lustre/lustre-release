@@ -47,7 +47,6 @@ init_test_env() {
     export TUNEFS=${TUNEFS:-"$LUSTRE/utils/tunefs.lustre"}
     [ ! -f "$TUNEFS" ] && export TUNEFS=$(which tunefs.lustre) 
     export CHECKSTAT="${CHECKSTAT:-checkstat} "
-    export FSYTPE=${FSTYPE:-"ext3"}
     export NAME=${NAME:-local}
     export LPROC=/proc/fs/lustre
 
@@ -75,8 +74,8 @@ init_test_env() {
 }
 
 case `uname -r` in
-2.4.*) EXT=".o"; USE_QUOTA=no; FSTYPE=ext3 ;;
-    *) EXT=".ko"; USE_QUOTA=yes; [ "$FSTYPE" ] || FSTYPE=ldiskfs ;;
+2.4.*) EXT=".o"; USE_QUOTA=no;;
+    *) EXT=".ko"; USE_QUOTA=yes;;
 esac
 
 load_module() {
