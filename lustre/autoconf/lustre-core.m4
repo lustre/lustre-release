@@ -329,13 +329,6 @@ else
 	LB_DEFINE_LDISKFS_OPTIONS
 fi #ldiskfs
 
-# Check for SLES 10 to enable RPM lustre.spec changes
-SLES10BUILD=0
-case $LINUXRELEASE in
-2.6.16*) SLES10BUILD=1
-esac
-AC_SUBST(SLES10BUILD)
-
 AC_MSG_CHECKING([which backing filesystem to use])
 AC_MSG_RESULT([$BACKINGFS])
 AC_SUBST(BACKINGFS)
