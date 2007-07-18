@@ -151,7 +151,7 @@ case "$lustretag" in
         ;;
     
     # CMD3
-    b_post_cmd3|b1_8_gssfix)
+    b_post_cmd3|b1_8_gssfix|b_new_cmd_sles10)
         ldiskfstag="b1_8_iam"
         ;;
 
