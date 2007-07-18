@@ -509,6 +509,12 @@ Details    : the definition for OBD_IOC_GETNAME changed in 1.6.0.  One of the
 	     Add the old ioctl number to the handler so both old and new
 	     lfsck can work.
 
+Severity   : normal
+Bugzilla   : 11301
+Description: parallel lock callbacks
+Details    : Instead of sending blocking and completion callbacks as separated
+             requests, adding them to a set and sending in parallel.
+
 --------------------------------------------------------------------------------
 
 2007-05-03  Cluster File Systems, Inc. <info@clusterfs.com>

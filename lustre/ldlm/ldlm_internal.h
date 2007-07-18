@@ -21,6 +21,17 @@ void ldlm_resource_insert_lock_after(struct ldlm_lock *original,
                                      struct ldlm_lock *new);
 
 /* ldlm_lock.c */
+
+/* Number of blocking/completion callbacks that will be sent in
+ * parallel (see bug 11301). */
+#define PARALLEL_AST_LIMIT      200
+
+struct ldlm_cb_set_arg {
+        struct ptlrpc_request_set *set;
+        atomic_t restart;
+        __u16 type; /* LDLM_BL_CALLBACK or LDLM_CP_CALLBACK */
+};
+
 void ldlm_grant_lock(struct ldlm_lock *lock, struct list_head *work_list);
 struct ldlm_lock *
 ldlm_lock_create(struct ldlm_namespace *ns, struct ldlm_res_id,
