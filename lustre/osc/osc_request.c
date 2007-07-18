@@ -427,13 +427,12 @@ int osc_real_create(struct obd_export *exp, struct obdo *oa,
 
         CDEBUG(D_HA, "transno: "LPD64"\n",
                lustre_msg_get_transno(req->rq_repmsg));
-        EXIT;
 out_req:
         ptlrpc_req_finished(req);
 out:
         if (rc && !*ea)
                 obd_free_memmd(exp, &lsm);
-        return rc;
+        RETURN(rc);
 }
 
 static int osc_punch_interpret(struct ptlrpc_request *req,
@@ -3342,7 +3341,7 @@ static int osc_set_info_async(struct obd_export *exp, obd_count keylen,
         if (req == NULL)
                 RETURN(-ENOMEM);
 
-        if (KEY_IS("mds_conn"))
+        if (KEY_IS(KEY_MDS_CONN))
                 req->rq_interpret_reply = osc_setinfo_mds_conn_interpret;
 
         ptlrpc_req_set_repsize(req, 1, NULL);

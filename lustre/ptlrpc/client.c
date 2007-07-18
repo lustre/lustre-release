@@ -511,13 +511,9 @@ static int ptlrpc_import_delay_req(struct obd_import *imp,
                  imp->imp_state == LUSTRE_IMP_CONNECTING) {
                 /* allow CONNECT even if import is invalid */ ;
         } else if (imp->imp_invalid) {
-                /* If the import has been invalidated (such as by an OST
-                 * failure) the request must fail with -EINVAL.  This
-                 * indicates the requests should be discarded, an -EIO
-                 * may result in a resend of the request. */
                 if (!imp->imp_deactive)
                         DEBUG_REQ(D_ERROR, req, "IMP_INVALID");
-                *status = -EINVAL;
+                *status = -ESHUTDOWN; /* bz 12940 */
         } else if (req->rq_import_generation != imp->imp_generation) {
                 DEBUG_REQ(D_ERROR, req, "req wrong generation:");
                 *status = -EIO;

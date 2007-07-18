@@ -220,7 +220,7 @@ void request_in_callback(lnet_event_t *ev)
 
         if (ev->unlinked) {
                 service->srv_nrqbd_receiving--;
-                CDEBUG(D_RPCTRACE,"Buffer complete: %d buffers still posted\n",
+                CDEBUG(D_INFO, "Buffer complete: %d buffers still posted\n",
                        service->srv_nrqbd_receiving);
 
                 /* Normally, don't complain about 0 buffers posted; LNET won't

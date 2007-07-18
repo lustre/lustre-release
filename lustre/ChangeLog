@@ -14,6 +14,13 @@ tbd         Cluster File Systems, Inc. <info@clusterfs.com>
        * Note that reiserfs quotas are disabled on SLES 10 in this kernel.
        * bug fixes
 
+Severity   : minor
+Frequency  : at statup only
+Bugzilla   : 12860
+Description: mds_lov_synchronize race leads to various problems
+Details    : simultaneous MDT->OST connections at startup can cause the 
+	     sync to abort, leaving the OSC in a bad state.
+
 Severity   : enhancement
 Bugzilla   : 12194
 Description: add optional extra BUILD_VERSION info
