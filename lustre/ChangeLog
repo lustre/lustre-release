@@ -493,11 +493,21 @@ Details    : a disk corruption can cause the mballoc code to assert on a
 	     ext3_error() instead of assertions.
 
 Severity   : major
+Frequency  : only with mballoc3 code and deep extent trees
 Bugzilla   : 12861
-Description: ldiskfs_ext_search_right: bad header in inode #3981353: unexpected
-	     eh_depth
+Description: ldiskfs_ext_search_right: bad header in inode: unexpected eh_depth
 Details    : a wrong check of extent headers in ldiskfs_ext_search_right()
 	     can cause the filesystem to be remounted read-only.
+
+Severity   : normal
+Frequency  : rare
+Bugzilla   : 13063
+Description: lfsck built against 1.4.x cannot run against 1.6.0 lustre
+Details    : the definition for OBD_IOC_GETNAME changed in 1.6.0.  One of the
+	     few external users of this ioctl number is lfsck's call to
+	     llapi_lov_get_uuids() and this caused lfsck to fail at startup.
+	     Add the old ioctl number to the handler so both old and new
+	     lfsck can work.
 
 --------------------------------------------------------------------------------
 

@@ -906,6 +906,7 @@ static int ll_dir_ioctl(struct inode *inode, struct file *file,
                 RETURN(rc);
         }
 #endif /* HAVE_QUOTA_SUPPORT */
+        case OBD_IOC_GETNAME_OLD:
         case OBD_IOC_GETNAME: {
                 struct obd_device *obd = class_exp2obd(sbi->ll_osc_exp);
                 if (!obd)

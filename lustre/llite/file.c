@@ -2132,6 +2132,17 @@ int ll_file_ioctl(struct inode *inode, struct file *file, unsigned int cmd,
                 RETURN(ll_put_grouplock(inode, file, arg));
         case IOC_OBD_STATFS:
                 RETURN(ll_obd_statfs(inode, (void *)arg));
+        case OBD_IOC_GETNAME_OLD:
+        case OBD_IOC_GETNAME: {
+                struct obd_device *obd =
+                        class_exp2obd(ll_i2sbi(inode)->ll_osc_exp);
+                if (!obd)
+                        RETURN(-EFAULT);
+                if (copy_to_user((void *)arg, obd->obd_name,
+                                strlen(obd->obd_name) + 1))
+                        RETURN (-EFAULT);
+                RETURN(0);
+        }
 
         /* We need to special case any other ioctls we want to handle,
          * to send them to the MDS/OST as appropriate and to properly
