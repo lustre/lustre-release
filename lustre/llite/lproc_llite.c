@@ -728,14 +728,17 @@ static int llite_dump_pgcache_seq_show(struct seq_file *seq, void *v)
                 LASSERTF(llap->llap_origin < LLAP__ORIGIN_MAX, "%u\n",
                          llap->llap_origin);
 
-                seq_printf(seq, "%5lu | %p %p %s %s %s %s | %p %p %lu %u [",
+                seq_printf(seq," %5lu | %p %p %s %s %s %s | %p %lu/%u(%p) "
+                           "%lu %u [",
                            sbi->ll_pglist_gen,
                            llap, llap->llap_cookie,
                            llap_origins[llap->llap_origin],
                            llap->llap_write_queued ? "wq" : "- ",
                            llap->llap_defer_uptodate ? "du" : "- ",
                            PageWriteback(page) ? "wb" : "-",
-                           page, page->mapping->host, page->index,
+                           page, page->mapping->host->i_ino,
+                           page->mapping->host->i_generation,
+                           page->mapping->host, page->index,
                            page_count(page));
                 seq_page_flag(seq, page, locked, has_flags);
                 seq_page_flag(seq, page, error, has_flags);
