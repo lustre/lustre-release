@@ -482,7 +482,15 @@ Frequency  : rare
 Bugzilla   : 11324
 Description: LDISKFS-fs error (device sdc): ldiskfs_free_blocks
 Details    : a disk corruption can cause the mballoc code to assert on a
-	     double free.
+	     double free or other extent corruptions. Handle these with
+	     ext3_error() instead of assertions.
+
+Severity   : major
+Bugzilla   : 12861
+Description: ldiskfs_ext_search_right: bad header in inode #3981353: unexpected
+	     eh_depth
+Details    : a wrong check of extent headers in ldiskfs_ext_search_right()
+	     can cause the filesystem to be remounted read-only.
 
 --------------------------------------------------------------------------------
 
