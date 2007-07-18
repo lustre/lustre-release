@@ -55,8 +55,8 @@ struct ll_rpc_opcode {
         { OST_OPEN,         "ost_open" },
         { OST_CLOSE,        "ost_close" },
         { OST_STATFS,       "ost_statfs" },
-        { 14,                NULL },
-        { 15,                NULL },
+        { 14,                NULL },    /* formerly OST_SAN_READ */
+        { 15,                NULL },    /* formerly OST_SAN_WRITE */
         { OST_SYNC,         "ost_sync" },
         { OST_SET_INFO,     "ost_set_info" },
         { OST_QUOTACHECK,   "ost_quotacheck" },
@@ -91,7 +91,17 @@ struct ll_rpc_opcode {
         { MGS_TARGET_REG,   "mgs_target_reg" },
         { MGS_TARGET_DEL,   "mgs_target_del" },
         { OBD_PING,         "obd_ping" },
-        { OBD_LOG_CANCEL,   "llog_origin_handle_cancel"},
+        { OBD_LOG_CANCEL,   "llog_origin_handle_cancel" },
+        { OBD_QC_CALLBACK,  "obd_quota_callback" },
+        { LLOG_ORIGIN_HANDLE_CREATE,     "llog_origin_handle_create" },
+        { LLOG_ORIGIN_HANDLE_NEXT_BLOCK, "llog_origin_handle_next_block"},
+        { LLOG_ORIGIN_HANDLE_READ_HEADER,"llog_origin_handle_read_header" },
+        { LLOG_ORIGIN_HANDLE_WRITE_REC,  "llog_origin_handle_write_rec" },
+        { LLOG_ORIGIN_HANDLE_CLOSE,      "llog_origin_handle_close" },
+        { LLOG_ORIGIN_CONNECT,           "llog_origin_connect" },
+        { LLOG_CATINFO,                  "llog_catinfo" },
+        { LLOG_ORIGIN_HANDLE_PREV_BLOCK, "llog_origin_handle_prev_block" },
+        { LLOG_ORIGIN_HANDLE_DESTROY,    "llog_origin_handle_destroy" },
 };
 
 const char* ll_opcode2str(__u32 opcode)

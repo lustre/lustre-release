@@ -926,6 +926,7 @@ int ldlm_cli_cancel(struct lustre_handle *lockh)
         LDLM_LOCK_PUT(lock);
         return rc < 0 ? rc : 0;
 }
+
 /* - Free space in lru for @count new locks,
  *   redundant unused locks are canceled locally;
  * - also cancel locally unused aged locks;
@@ -961,13 +962,13 @@ int ldlm_cancel_lru_local(struct ldlm_namespace *ns, struct list_head *cancels,
                 }
                 if (&lock->l_lru == &ns->ns_unused_list)
                         break;
-                
+
                 if ((added >= count) && 
                     (!(flags & LDLM_CANCEL_AGED) ||
                      cfs_time_before_64(cur, (__u64)ns->ns_max_age +
                                         lock->l_last_used)))
                         break;
-                
+
                 LDLM_LOCK_GET(lock); /* dropped by bl thread */
                 spin_unlock(&ns->ns_unused_lock);
 

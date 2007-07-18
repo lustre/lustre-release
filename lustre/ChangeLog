@@ -10,83 +10,9 @@ tbd         Cluster File Systems, Inc. <info@clusterfs.com>
         (see http://wiki.lustre.org/index.php?title=Patchless_Client)
         2.6.9-42.0.10.EL (RHEL 4)
         2.6.16 - 2.6.22 vanilla (kernel.org)
-       * Recommended e2fsprogs version: 1.39.cfs7
+       * Recommended e2fsprogs version: 1.39.cfs8
        * Note that reiserfs quotas are disabled on SLES 10 in this kernel.
        * bug fixes
-
-Severity   : enhancement
-Bugzilla   : 11039
-Description: 2.6.18 server support (lustre 1.6.1)
-Details    : Support for 2.6.18 kernels on the server side.
-
-Severity   : normal
-Frequency  : rare
-Bugzilla   : 12696
-Description: ASSERTION(imp->imp_conn_current) failed
-Details    : an assertion failure is hit if a client node boots and attempts to
-	     mount a lustre filesystem faster than RECONNECT_INTERVAL seconds.
-
-Severity   : normal
-Frequency  : only for i686
-Bugzilla   : 12695
-Description: 1.4.11 RC1 build fails for RHEL 4, i686
-Details    : Fixed config variable for build.
-
-Severity   : normal
-Frequency  : rare
-Bugzilla   : 12415
-Description: Updated patchess for new RHEL4 kernel
-Details    : Updated patch inode-nr_unused-2.6.9-rhel4.patch
-	     Updated patch jbd-stats-2.6.9.patch
-	     Updated patch qsnet-rhel4-2.6.patch
-	     Updated patch quota-deadlock-on-pagelock-core.patch
-	     Updated patch vfs_intent-2.6-rhel4.patch
-	     Updated patch vfs_races-2.6-rhel4.patch
-	     Updated series file 2.6-rhel4-titech.series
-	     Updated series file 2.6-rhel4.series
-	     Updated kernel config files
-
-Severity   : normal
-Frequency  : rare
-Bugzilla   : 12374
-Description: lquota slave complains LBUG when reconnecting with mds
-             or failover in mds.
-Details    : quota slave depends qctxt->lqc_import to send its quota request.
-             This pointer will be invalid if mds did failover or broke its
-             connect to osts, which leads to LBUG.
-
-Severity   : normal	
-Frequency  : when qunit size is too small(less than 20M)
-Bugzilla   : 12588
-Description: write is stopped by improper -EDQUOT
-Details    : If the master is busy and qunit size is small enough(let's say 1M), 
-	     the slave can not get quota from master on time, which will lead 
-	     slave to trigger a -EQUOTA to client.
-
-Severity   : normal
-Frequency  : rare
-Bugzilla   : 12629
-Description: Deadlock during metadata tests
-Details    : in prune_dir_dentries(), shrink_dcache_parent() should not be
-             called with the per-dentry lock held.
-
-Severity   : normal
-Frequency  : SLES9 only
-Bugzilla   : 12744
-Description: Lustre patched kernel for SLES9 SP3 has NR_CPUS set to 8
-Details    : set CONFIG_NR_CPUS to 128 instead of 8.
-
-Severity   : enhancement
-Bugzilla   : 12678
-Description: remove fs_prep_san_write operation and related patches
-Details    : remove the ext3-san-jdike patches which are no longer useful.
-
-Severity   : normal
-Frequency  : rare
-Bugzilla   : 11324
-Description: LDISKFS-fs error (device sdc): ldiskfs_free_blocks
-Details    : a disk corruption can cause the mballoc code to assert on a
-	     double free.
 
 Severity   : enhancement
 Bugzilla   : 12194
@@ -351,9 +277,7 @@ Details    : dev_clear_rdonly(bdev) must be called in kill_bdev() instead of
 Severity   : minor
 Bugzilla   : 11706
 Description: service threads may hog cpus when there are a lot of requests
-             coming
-Details    : Insert cond_resched to give other threads a chance to use some of
-             the cpu
+Details    : Insert cond_resched to give other threads a chance to use some CPU
 
 Severity   : normal
 Frequency  : rare
@@ -369,42 +293,42 @@ Severity   : normal
 Bugzilla   : 12597
 Description: brw_stats were being printed incorrectly
 Details    : brw_stats were being printed as log2 but all of them were not
-             recorded as log2. Also remove some code duplication arising from
-             filter_tally_{read,write}.
+	     recorded as log2. Also remove some code duplication arising from
+	     filter_tally_{read,write}.
 
 Severity   : normal
 Bugzilla   : 11674
 Frequency  : rare, only in recovery.
 Description: ASSERTION(req->rq_type != LI_POISON) failed
 Details    : imp_lock should be held while iterating over imp_sending_list for
-             prevent destroy request after get timeout in ptlrpc_queue_wait.
+	     prevent destroy request after get timeout in ptlrpc_queue_wait.
 
 Severity   : normal
 Bugzilla   : 12689
 Description: replay-single.sh test 52 fails
 Details    : A lock's skiplist need to be cleanup when it being unlinked 
-             from its resource list.
+	     from its resource list.
 
 Severity   : normal
 Bugzilla   : 11737
 Frequency  : always
 Description: Short directio read returns full requested size rather than
-             actual amount read.
+	     actual amount read.
 Details    : Direct I/O operations should return actual amount of bytes
-             transferred rather than requested size.
+	     transferred rather than requested size.
 
 Severity   : enhancement
 Bugzilla   : 10589
 Description: metadata RPC reduction (e.g. for rm performance)
 Details    : decrease the amount of synchronous RPC between clients and servers
-             by canceling conflicing lock before the operation on the client side
-             and packing thier handles into the main operation RPC to server.
+	     by canceling conflicing lock before the operation on the client
+	     and packing thier handles into the main operation RPC to server.
 
 Severity   : enhancement
 Bugzilla   : 12605
 Description: add #ifdef HAVE_KERNEL_CONFIG_H
-Details    : kernels from 2.6.19 not need include linux/config.h, but add include 
-	     linux/autoconf.h in commpiler command line.
+Details    : kernels from 2.6.19 not need include linux/config.h, but add
+	     include linux/autoconf.h in commpiler command line.
 
 Severity   : enhancement
 Bugzilla   : 12764
@@ -429,24 +353,24 @@ Severity   : minor
 Bugzilla   : 10419
 Frequency  : always
 Description: Correct condition for output debug message.
-Details    : inode i_nlink equal zero is not enough for output message about disk
-	     corruption, i_ctime and i_mode should be also checked.
+Details    : inode i_nlink equal zero is not enough for output message about
+	     disk corruption, i_ctime and i_mode should be also checked.
 
 Severity   : minor
 Bugzilla   : 12415
 Frequency  : always in patchless client
 Description: add configure check for truncate_complete_page
 Details    : improve checks for exported symbols. This allow run check without
-             sources, but with Module.symvers shipped with kernel distribution.
-             add check for truncate_complete_page used by patchless client.
+	     sources, but with Module.symvers shipped with kernel distribution.
+	     add check for truncate_complete_page used by patchless client.
 
 Severity   : major
 Bugzilla   : 11710
 Frequency  : always
 Description: improve handling recoverable errors
-Details    : if request processig with error which can be recoverable on server side
-	     request should be resend, otherwise page released from cache and marked 
-	     as error.
+Details    : if request processig with error which can be recoverable on server
+	     request should be resend, otherwise page released from cache and
+	     marked as error.
 
 Severity   : normal
 Bugzilla   : 12646
@@ -462,20 +386,103 @@ Severity   : normal
 Bugzilla   : 11815
 Description: replace obdo_alloc() with OBDO_ALLOC macro
 Details    : nothing special is done in obdo_alloc() function, and for 
-             debugging purpose, it needs to be replaced with macros.
+	     debugging purpose, it needs to be replaced with macros.
 
 Severity   : normal
 Bugzilla   : 12784
 Description: bad return value and errno from fcntl call
 Details    : In liblustre API, errno should be a negative value if error
-             happens.
+	     happens.
 
 Severity   : normal
 Bugzilla   : 11544
 Description: ptlrpc_check_set() LBUG
 Details    : In case of positive reply from server and failed client bulk
-             callback after bulk transfer shouldn't LBUG, but process this
-             request as erroneous.
+	     callback after bulk transfer shouldn't LBUG, but process this
+	     request as erroneous.
+
+Severity   : enhancement
+Bugzilla   : 10968
+Description: VFS operations stats tool.
+Details    : Tool which collects stats by tracking value written in pid,
+	     ppid, gid and uses llstat to generate output to plot graph using
+	     plot-llstat
+	     Updated lustre/utils/Makefile.am
+	     Added lustre/utils/ltrack_stats.c
+
+Severity   : enhancement
+Bugzilla   : 11039
+Description: 2.6.18 server support (lustre 1.6.1)
+Details    : Support for 2.6.18 kernels on the server side.
+
+Severity   : normal
+Frequency  : rare
+Bugzilla   : 12696
+Description: ASSERTION(imp->imp_conn_current) failed
+Details    : an assertion failure is hit if a client node boots and attempts to
+	     mount a lustre filesystem faster than RECONNECT_INTERVAL seconds.
+
+Severity   : normal
+Frequency  : only for i686
+Bugzilla   : 12695
+Description: 1.4.11 RC1 build fails for RHEL 4, i686
+Details    : Fixed config variable for build.
+
+Severity   : normal
+Frequency  : rare
+Bugzilla   : 12415
+Description: Updated patchess for new RHEL4 kernel
+Details    : Updated patch inode-nr_unused-2.6.9-rhel4.patch
+	     Updated patch jbd-stats-2.6.9.patch
+	     Updated patch qsnet-rhel4-2.6.patch
+	     Updated patch quota-deadlock-on-pagelock-core.patch
+	     Updated patch vfs_intent-2.6-rhel4.patch
+	     Updated patch vfs_races-2.6-rhel4.patch
+	     Updated series file 2.6-rhel4-titech.series
+	     Updated series file 2.6-rhel4.series
+	     Updated kernel config files
+
+Severity   : normal
+Frequency  : rare
+Bugzilla   : 12374
+Description: lquota slave complains LBUG when reconnecting with mds
+	     or failover in mds.
+Details    : quota slave depends qctxt->lqc_import to send its quota request.
+	     This pointer will be invalid if mds did failover or broke its
+	     connect to osts, which leads to LBUG.
+
+Severity   : normal	
+Frequency  : when qunit size is too small(less than 20M)
+Bugzilla   : 12588
+Description: write is stopped by improper -EDQUOT
+Details    : If the master is busy and qunit size is small enough(let's say 1M),
+	     the slave can not get quota from master on time, which will lead 
+	     slave to trigger a -EQUOTA to client.
+
+Severity   : normal
+Frequency  : rare
+Bugzilla   : 12629
+Description: Deadlock during metadata tests
+Details    : in prune_dir_dentries(), shrink_dcache_parent() should not be
+	     called with the per-dentry lock held.
+
+Severity   : normal
+Frequency  : SLES9 only
+Bugzilla   : 12744
+Description: Lustre patched kernel for SLES9 SP3 has NR_CPUS set to 8
+Details    : set CONFIG_NR_CPUS to 128 instead of 8.
+
+Severity   : enhancement
+Bugzilla   : 12678
+Description: remove fs_prep_san_write operation and related patches
+Details    : remove the ext3-san-jdike patches which are no longer useful.
+
+Severity   : normal
+Frequency  : rare
+Bugzilla   : 11324
+Description: LDISKFS-fs error (device sdc): ldiskfs_free_blocks
+Details    : a disk corruption can cause the mballoc code to assert on a
+	     double free.
 
 --------------------------------------------------------------------------------
 

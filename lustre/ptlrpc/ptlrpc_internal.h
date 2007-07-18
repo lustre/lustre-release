@@ -92,17 +92,26 @@ static inline int opcode_offset(__u32 opc) {
                         (LDLM_LAST_OPC - LDLM_FIRST_OPC) +
                         (MDS_LAST_OPC - MDS_FIRST_OPC) +
                         (OST_LAST_OPC - OST_FIRST_OPC));
+        } else if (opc < LLOG_LAST_OPC) {
+                /* LLOG Opcode */
+                return (opc - LLOG_FIRST_OPC +
+                        (OBD_LAST_OPC - OBD_FIRST_OPC) +
+                        (MGS_LAST_OPC - MGS_FIRST_OPC) +
+                        (LDLM_LAST_OPC - LDLM_FIRST_OPC) +
+                        (MDS_LAST_OPC - MDS_FIRST_OPC) +
+                        (OST_LAST_OPC - OST_FIRST_OPC));
         } else {
                 /* Unknown Opcode */
                 return -1;
         }
 }
 
-#define LUSTRE_MAX_OPCODES ((LDLM_LAST_OPC - LDLM_FIRST_OPC)   + \
+#define LUSTRE_MAX_OPCODES ((OST_LAST_OPC - OST_FIRST_OPC)     + \
                             (MDS_LAST_OPC - MDS_FIRST_OPC)     + \
-                            (OST_LAST_OPC - OST_FIRST_OPC)     + \
+                            (LDLM_LAST_OPC - LDLM_FIRST_OPC)   + \
+                            (MGS_LAST_OPC - MGS_FIRST_OPC)     + \
                             (OBD_LAST_OPC - OBD_FIRST_OPC)     + \
-                            (MGS_LAST_OPC - MGS_FIRST_OPC))
+                            (LLOG_LAST_OPC - LLOG_FIRST_OPC))
 
 enum {
         PTLRPC_REQWAIT_CNTR = 0,
