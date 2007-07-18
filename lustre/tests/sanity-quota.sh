@@ -213,21 +213,21 @@ build_test_filter
 set_blk_tunesz() {
 	# set btune size on all obdfilters
 	do_facet ost1 "set -x; for i in /proc/fs/lustre/obdfilter/*/quota_btune_sz; do
-		echo $(($1 * BLK_SZ)) > \\\$i
+		echo $(($1 * BLK_SZ)) >> \\\$i;
 	done"
 	# set btune size on mds
 	do_facet mds "for i in /proc/fs/lustre/mds/${FSNAME}-MDT*/quota_btune_sz; do
-		echo $(($1 * BLK_SZ)) > \\\$i
+		echo $(($1 * BLK_SZ)) >> \\\$i;
 	done"
 }
 
 # set_blk_unitsz(bunit_sz)
 set_blk_unitsz() {
 	do_facet ost1 "for i in /proc/fs/lustre/obdfilter/*/quota_bunit_sz; do
-		echo $(($1 * BLK_SZ)) > \\\$i
+		echo $(($1 * BLK_SZ)) >> \\\$i;
 	done"
 	do_facet mds "for i in /proc/fs/lustre/mds/${FSNAME}-MDT*/quota_bunit_sz; do
-		echo $(($1 * BLK_SZ)) > \\\$i
+		echo $(($1 * BLK_SZ)) >> \\\$i;
 	done"
 }
 
@@ -235,21 +235,21 @@ set_blk_unitsz() {
 set_file_tunesz() {
 	# set iunit and itune size on all obdfilters
 	do_facet ost1 "for i in /proc/fs/lustre/obdfilter/*/quota_itune_sz; do
-		echo $1 > \\\$i
+		echo $1 >> \\\$i;
 	done"
 	# set iunit and itune size on mds
 	do_facet mds "for i in /proc/fs/lustre/mds/${FSNAME}-MDT*/quota_itune_sz; do
-		echo $1 > \\\$i
+		echo $1 >> \\\$i;
 	done"
 }
 
 # set_file_unitsz(iunit_sz)
 set_file_unitsz() {
-	do_facet ost1 "for i in \`ls /proc/fs/lustre/obdfilter/*/quota_iunit_sz\`; do
-		echo $1 > \\\$i
+	do_facet ost1 "for i in /proc/fs/lustre/obdfilter/*/quota_iunit_sz; do
+		echo $1 >> \\\$i;
 	done"
-	do_facet mds "for i in \`ls /proc/fs/lustre/mds/${FSNAME}-MDT*/quota_iunit_sz\`; do
-		echo $1 > \\\$i
+	do_facet mds "for i in /proc/fs/lustre/mds/${FSNAME}-MDT*/quota_iunit_sz; do
+		echo $1 >> \\\$i;
 	done"
 }
 
