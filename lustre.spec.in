@@ -217,8 +217,21 @@ do
 	fi
 done
 
-
 %postun modules
+if [ -f /boot/System.map-%{kversion} ]; then
+	depmod -ae -F /boot/System.map-%{kversion} %{kversion} || exit 0
+else
+	depmod -ae %{kversion} || exit 0
+fi
+
+%post tests
+if [ -f /boot/System.map-%{kversion} ]; then
+	depmod -ae -F /boot/System.map-%{kversion} %{kversion} || exit 0
+else
+	depmod -ae %{kversion} || exit 0
+fi
+
+%postun tests
 if [ -f /boot/System.map-%{kversion} ]; then
 	depmod -ae -F /boot/System.map-%{kversion} %{kversion} || exit 0
 else
