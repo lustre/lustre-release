@@ -111,7 +111,7 @@ static int osc_interpret_create(struct ptlrpc_request *req, void *data, int rc)
         }
         }
 
-        CDEBUG(D_HA, "preallocated through id "LPU64" (next to use "LPU64")\n",
+        CDEBUG(D_RPCTRACE, "prealloc through id "LPU64", next to use "LPU64"\n",
                oscc->oscc_last_id, oscc->oscc_next_id);
 
         cfs_waitq_signal(&oscc->oscc_waitq);
@@ -162,7 +162,7 @@ static int oscc_internal_create(struct osc_creator *oscc)
         body->oa.o_id = oscc->oscc_last_id + oscc->oscc_grow_count;
         body->oa.o_valid |= OBD_MD_FLID;
         spin_unlock(&oscc->oscc_lock);
-        CDEBUG(D_HA, "preallocating through id "LPU64" (last seen "LPU64")\n",
+        CDEBUG(D_RPCTRACE, "prealloc through id "LPU64" (last seen "LPU64")\n",
                body->oa.o_id, oscc->oscc_last_id);
 
         ptlrpc_req_set_repsize(request, 2, size);
@@ -271,15 +271,12 @@ int osc_create(struct obd_export *exp, struct obdo *oa,
                 }
                 oscc->oscc_flags |= OSCC_FLAG_SYNC_IN_PROGRESS;
                 spin_unlock(&oscc->oscc_lock);
-                CDEBUG(D_HA, "%s: oscc recovery started\n",
-                       oscc->oscc_obd->obd_name);
+                CDEBUG(D_HA, "%s: oscc recovery started - delete to "LPU64"\n",
+                       oscc->oscc_obd->obd_name, oscc->oscc_next_id - 1);
 
                 /* delete from next_id on up */
                 oa->o_valid |= OBD_MD_FLID;
                 oa->o_id = oscc->oscc_next_id - 1;
-
-                CDEBUG(D_HA, "%s: deleting to next_id: "LPU64"\n",
-                       oscc->oscc_obd->obd_name, oa->o_id);
 
                 rc = osc_real_create(exp, oa, ea, NULL);
 
@@ -348,7 +345,7 @@ int osc_create(struct obd_export *exp, struct obdo *oa,
                         oscc->oscc_next_id++;
                         try_again = 0;
 
-                        CDEBUG(D_HA, "%s: set oscc_next_id = "LPU64"\n",
+                        CDEBUG(D_RPCTRACE, "%s: set oscc_next_id = "LPU64"\n",
                                exp->exp_obd->obd_name, oscc->oscc_next_id);
                 } else if (oscc->oscc_flags & OSCC_FLAG_NOSPC) {
                         rc = -ENOSPC;
@@ -362,7 +359,7 @@ int osc_create(struct obd_export *exp, struct obdo *oa,
         }
 
         if (rc == 0)
-                CDEBUG(D_HA, "%s: returning objid "LPU64"\n",
+                CDEBUG(D_INFO, "%s: returning objid "LPU64"\n",
                        obd2cli_tgt(oscc->oscc_obd), lsm->lsm_object_id);
         else if (*ea == NULL)
                 obd_free_memmd(exp, &lsm);

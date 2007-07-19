@@ -352,7 +352,7 @@ void mdc_store_inode_generation(struct ptlrpc_request *req, int reqoff,
                 LBUG();
         }
 
-        DEBUG_REQ(D_HA, req, "storing generation %u for ino "LPU64,
+        DEBUG_REQ(D_INODE, req, "storing generation %u for ino "LPU64,
                   rec->cr_replayfid.generation, rec->cr_replayfid.id);
 }
 
@@ -512,7 +512,7 @@ static void mdc_replay_open(struct ptlrpc_request *req)
                 struct lustre_handle *file_fh;
                 LASSERT(och->och_magic == OBD_CLIENT_HANDLE_MAGIC);
                 file_fh = &och->och_fh;
-                CDEBUG(D_HA, "updating handle from "LPX64" to "LPX64"\n",
+                CDEBUG(D_RPCTRACE, "updating handle from "LPX64" to "LPX64"\n",
                        file_fh->cookie, body->handle.cookie);
                 memcpy(&old, file_fh, sizeof(old));
                 memcpy(file_fh, &body->handle, sizeof(*file_fh));
@@ -526,7 +526,7 @@ static void mdc_replay_open(struct ptlrpc_request *req)
                                             sizeof(*close_body));
                 if (och != NULL)
                         LASSERT(!memcmp(&old, &close_body->handle, sizeof old));
-                DEBUG_REQ(D_HA, close_req, "updating close body with new fh");
+                DEBUG_REQ(D_RPCTRACE, close_req, "updating close with new fh");
                 memcpy(&close_body->handle, &body->handle,
                        sizeof(close_body->handle));
         }
@@ -581,7 +581,7 @@ void mdc_set_open_replay_data(struct obd_client_handle *och,
                 LBUG();
         }
 
-        DEBUG_REQ(D_HA, open_req, "set up replay data");
+        DEBUG_REQ(D_RPCTRACE, open_req, "set up replay data");
 }
 
 void mdc_clear_open_replay_data(struct obd_client_handle *och)
@@ -604,7 +604,7 @@ static void mdc_commit_close(struct ptlrpc_request *req)
         struct ptlrpc_request *open_req;
         struct obd_import *imp = req->rq_import;
 
-        DEBUG_REQ(D_HA, req, "close req committed");
+        DEBUG_REQ(D_RPCTRACE, req, "close req committed");
         if (mod == NULL)
                 return;
 
@@ -617,7 +617,7 @@ static void mdc_commit_close(struct ptlrpc_request *req)
         LASSERT(open_req != LP_POISON);
         LASSERT(open_req->rq_type != LI_POISON);
 
-        DEBUG_REQ(D_HA, open_req, "open req balanced");
+        DEBUG_REQ(D_RPCTRACE, open_req, "open req balanced");
         LASSERT(open_req->rq_transno != 0);
         LASSERT(open_req->rq_import == imp);
 
@@ -666,9 +666,9 @@ int mdc_close(struct obd_export *exp, struct obdo *oa,
                         GOTO(out, rc = -EIO);
                 }
                 mod->mod_close_req = req;
-                DEBUG_REQ(D_HA, mod->mod_open_req, "matched open");
+                DEBUG_REQ(D_RPCTRACE, mod->mod_open_req, "matched open");
         } else {
-                CDEBUG(D_HA, "couldn't find open req; expecting close error\n");
+                CDEBUG(D_RPCTRACE, "couldn't find open req; expecting error\n");
         }
 
         mdc_close_pack(req, REQ_REC_OFF, oa, oa->o_valid, och);
@@ -683,7 +683,7 @@ int mdc_close(struct obd_export *exp, struct obdo *oa,
         mdc_put_rpc_lock(obd->u.cli.cl_close_lock, NULL);
 
         if (req->rq_repmsg == NULL) {
-                CDEBUG(D_HA, "request failed to send: %p, %d\n", req,
+                CDEBUG(D_RPCTRACE, "request failed to send: %p, %d\n", req,
                        req->rq_status);
                 if (rc == 0)
                         rc = req->rq_status ? req->rq_status : -EIO;

@@ -80,7 +80,7 @@ static struct ll_sb_info *ll_init_sbi(void)
 
         ll_generate_random_uuid(uuid);
         class_uuid_unparse(uuid, &sbi->ll_sb_uuid);
-        CDEBUG(D_HA, "generated uuid: %s\n", sbi->ll_sb_uuid.uuid);
+        CDEBUG(D_CONFIG, "generated uuid: %s\n", sbi->ll_sb_uuid.uuid);
 
         spin_lock(&ll_sb_lock);
         list_add_tail(&sbi->ll_list, &ll_super_blocks);

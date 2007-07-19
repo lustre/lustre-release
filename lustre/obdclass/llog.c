@@ -85,7 +85,7 @@ int llog_cancel_rec(struct llog_handle *loghandle, int index)
         int rc = 0;
         ENTRY;
 
-        CDEBUG(D_HA, "canceling %d in log "LPX64"\n",
+        CDEBUG(D_RPCTRACE, "canceling %d in log "LPX64"\n",
                index, loghandle->lgh_id.lgl_oid);
 
         if (index == 0) {
@@ -94,7 +94,7 @@ int llog_cancel_rec(struct llog_handle *loghandle, int index)
         }
 
         if (!ext2_clear_bit(index, llh->llh_bitmap)) {
-                CDEBUG(D_HA, "catalog index %u already clear?\n", index);
+                CDEBUG(D_RPCTRACE, "catalog index %u already clear?\n", index);
                 RETURN(-EINVAL);
         }
 
@@ -379,7 +379,7 @@ int llog_reverse_process(struct llog_handle *loghandle, llog_cb_t cb,
                 rec = buf;
                 idx = le32_to_cpu(rec->lrh_index);
                 if (idx < index)
-                        CDEBUG(D_HA, "index %u : idx %u\n", index, idx);
+                        CDEBUG(D_RPCTRACE, "index %u : idx %u\n", index, idx);
                 while (idx < index) {
                         rec = ((void *)rec + le32_to_cpu(rec->lrh_len));
                         idx ++;

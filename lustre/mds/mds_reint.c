@@ -71,10 +71,10 @@ static void mds_cancel_cookies_cb(struct obd_device *obd, __u64 transno,
 
         obd_transno_commit_cb(obd, transno, error);
 
-        CDEBUG(D_HA, "cancelling %d cookies\n",
+        CDEBUG(D_RPCTRACE, "cancelling %d cookies\n",
                (int)(mlcd->mlcd_cookielen / sizeof(*mlcd->mlcd_cookies)));
 
-        rc = obd_unpackmd(obd->u.mds.mds_osc_exp, &lsm, mlcd->mlcd_lmm, 
+        rc = obd_unpackmd(obd->u.mds.mds_osc_exp, &lsm, mlcd->mlcd_lmm,
                           mlcd->mlcd_eadatalen);
         if (rc < 0) {
                 CERROR("bad LSM cancelling %d log cookies: rc %d\n",
@@ -111,7 +111,7 @@ int mds_finish_transno(struct mds_obd *mds, struct inode *inode, void *handle,
         __u64 transno, prev_transno;
         int err;
         loff_t off;
-        int log_pri = D_HA;
+        int log_pri = D_RPCTRACE;
         ENTRY;
 
         if (IS_ERR(handle)) {
@@ -365,7 +365,7 @@ void mds_steal_ack_locks(struct ptlrpc_request *req)
                                          oldrep->rs_modes[i]);
                 oldrep->rs_nlocks = 0;
 
-                DEBUG_REQ(D_HA, req, "stole locks for");
+                DEBUG_REQ(D_DLMTRACE, req, "stole locks for");
                 ptlrpc_schedule_difficult_reply (oldrep);
 
                 spin_unlock (&svc->srv_lock);
@@ -387,7 +387,7 @@ void mds_req_from_mcd(struct ptlrpc_request *req, struct mds_client_data *mcd)
                 req->rq_status = le32_to_cpu(mcd->mcd_last_result);
                 lustre_msg_set_status(req->rq_repmsg, req->rq_status);
         }
-        DEBUG_REQ(D_HA, req, "restoring transno "LPD64"/status %d",
+        DEBUG_REQ(D_RPCTRACE, req, "restoring transno "LPD64"/status %d",
                   req->rq_transno, req->rq_status);
 
         mds_steal_ack_locks(req);

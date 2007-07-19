@@ -559,7 +559,7 @@ int mds_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
         }
 
         case OBD_IOC_SYNC: {
-                CDEBUG(D_HA, "syncing mds %s\n", obd->obd_name);
+                CDEBUG(D_INFO, "syncing mds %s\n", obd->obd_name);
                 rc = fsfilt_sync(obd, obd->u.obt.obt_sb);
                 RETURN(rc);
         }

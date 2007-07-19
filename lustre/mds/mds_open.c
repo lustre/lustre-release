@@ -1274,7 +1274,7 @@ int mds_mfd_close(struct ptlrpc_request *req, int offset,
                 int stripe_count = 0;
                 LASSERT(rc == 0); /* mds_put_write_access must have succeeded */
 
-                CDEBUG(D_HA, "destroying orphan object %s\n", fidname);
+                CDEBUG(D_INODE, "destroying orphan object %s\n", fidname);
 
                 if ((S_ISREG(inode->i_mode) && inode->i_nlink != 1) ||
                     (S_ISDIR(inode->i_mode) && inode->i_nlink != 2))
@@ -1437,7 +1437,7 @@ int mds_close(struct ptlrpc_request *req, int offset)
                 MDS_CHECK_RESENT(req, mds_reconstruct_generic(req));
         }
 
-        CDEBUG(D_HA, "close req->rep_len %d mdsize %d cookiesize %d\n",
+        CDEBUG(D_INODE, "close req->rep_len %d mdsize %d cookiesize %d\n",
                req->rq_replen,
                obd->u.mds.mds_max_mdsize, obd->u.mds.mds_max_cookiesize);
         mds_counter_incr(req->rq_export, LPROC_MDS_CLOSE);

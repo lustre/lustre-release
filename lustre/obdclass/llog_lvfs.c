@@ -161,7 +161,7 @@ static int llog_lvfs_read_header(struct llog_handle *handle)
         obd = handle->lgh_ctxt->loc_exp->exp_obd;
 
         if (handle->lgh_file->f_dentry->d_inode->i_size == 0) {
-                CDEBUG(D_HA, "not reading header from 0-byte log\n");
+                CDEBUG(D_RPCTRACE, "not reading header from 0-byte log\n");
                 RETURN(LLOG_EEMPTY);
         }
 
@@ -343,7 +343,7 @@ static int llog_lvfs_write_rec(struct llog_handle *loghandle,
         if (rc)
                 RETURN(rc);
 
-        CDEBUG(D_HA, "added record "LPX64": idx: %u, %u bytes\n",
+        CDEBUG(D_RPCTRACE, "added record "LPX64": idx: %u, %u bytes\n",
                loghandle->lgh_id.lgl_oid, index, rec->lrh_len);
         if (rc == 0 && reccookie) {
                 reccookie->lgc_lgl = loghandle->lgh_id;

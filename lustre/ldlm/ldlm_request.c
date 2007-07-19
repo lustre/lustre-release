@@ -855,8 +855,8 @@ int ldlm_cli_cancel_req(struct obd_export *exp,
         while (1) {
                 imp = class_exp2cliimp(exp);
                 if (imp == NULL || imp->imp_invalid) {
-                        CDEBUG(D_HA, "skipping cancel on invalid import %p\n",
-                               imp);
+                        CDEBUG(D_DLMTRACE,
+                               "skipping cancel on invalid import %p\n", imp);
                         break;
                 }
 

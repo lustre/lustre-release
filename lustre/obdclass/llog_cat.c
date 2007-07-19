@@ -90,7 +90,7 @@ static struct llog_handle *llog_cat_new_log(struct llog_handle *cathandle)
         llh->llh_count++;
         llh->llh_tail.lrt_index = index;
 
-        CDEBUG(D_HA, "new recovery log "LPX64":%x for index %u of catalog "
+        CDEBUG(D_RPCTRACE,"new recovery log "LPX64":%x for index %u of catalog "
                LPX64"\n", loghandle->lgh_id.lgl_oid, loghandle->lgh_id.lgl_ogen,
                index, cathandle->lgh_id.lgl_oid);
         /* build the record for this log in the catalog */
@@ -324,8 +324,8 @@ int llog_cat_cancel_records(struct llog_handle *cathandle, int count,
                         llog_cat_set_first_idx(cathandle, index);
                         rc = llog_cancel_rec(cathandle, index);
                         if (rc == 0)
-                                CDEBUG(D_HA, "cancel plain log at index %u "
-                                       "of catalog "LPX64"\n",
+                                CDEBUG(D_RPCTRACE,"cancel plain log at index %u"
+                                       " of catalog "LPX64"\n",
                                        index, cathandle->lgh_id.lgl_oid);
                 }
         }
@@ -485,7 +485,7 @@ int llog_cat_set_first_idx(struct llog_handle *cathandle, int index)
                         }
                 }
 out:
-                CDEBUG(D_HA, "set catlog "LPX64" first idx %u\n",
+                CDEBUG(D_RPCTRACE, "set catlog "LPX64" first idx %u\n",
                        cathandle->lgh_id.lgl_oid, llh->llh_cat_idx);
         }
 

@@ -1116,7 +1116,7 @@ int ptlrpc_set_wait(struct ptlrpc_request_set *set)
 
                 /* wait until all complete, interrupted, or an in-flight
                  * req times out */
-                CDEBUG(D_HA, "set %p going to sleep for %d seconds\n",
+                CDEBUG(D_RPCTRACE, "set %p going to sleep for %d seconds\n",
                        set, timeout);
                 lwi = LWI_TIMEOUT_INTR(cfs_time_seconds(timeout ? timeout : 1),
                                        ptlrpc_expired_set,
@@ -1323,12 +1323,12 @@ void ptlrpc_free_committed(struct obd_import *imp)
 
         if (imp->imp_peer_committed_transno == imp->imp_last_transno_checked &&
             imp->imp_generation == imp->imp_last_generation_checked) {
-                CDEBUG(D_HA, "%s: skip recheck for last_committed "LPU64"\n",
+                CDEBUG(D_RPCTRACE, "%s: skip recheck: last_committed "LPU64"\n",
                        imp->imp_obd->obd_name, imp->imp_peer_committed_transno);
                 return;
         }
-        
-        CDEBUG(D_HA, "%s: committing for last_committed "LPU64" gen %d\n",
+
+        CDEBUG(D_RPCTRACE, "%s: committing for last_committed "LPU64" gen %d\n",
                imp->imp_obd->obd_name, imp->imp_peer_committed_transno,
                imp->imp_generation);
         imp->imp_last_transno_checked = imp->imp_peer_committed_transno;
@@ -1342,22 +1342,22 @@ void ptlrpc_free_committed(struct obd_import *imp)
                 last_req = req;
 
                 if (req->rq_import_generation < imp->imp_generation) {
-                        DEBUG_REQ(D_HA, req, "freeing request with old gen");
+                        DEBUG_REQ(D_RPCTRACE, req, "free request with old gen");
                         GOTO(free_req, 0);
                 }
 
                 if (req->rq_replay) {
-                        DEBUG_REQ(D_HA, req, "keeping (FL_REPLAY)");
+                        DEBUG_REQ(D_RPCTRACE, req, "keeping (FL_REPLAY)");
                         continue;
                 }
 
                 /* not yet committed */
                 if (req->rq_transno > imp->imp_peer_committed_transno) {
-                        DEBUG_REQ(D_HA, req, "stopping search");
+                        DEBUG_REQ(D_RPCTRACE, req, "stopping search");
                         break;
                 }
 
-                DEBUG_REQ(D_HA, req, "committing (last_committed "LPU64")",
+                DEBUG_REQ(D_RPCTRACE, req, "commit (last_committed "LPU64")",
                           imp->imp_peer_committed_transno);
 free_req:
                 spin_lock(&req->rq_lock);
@@ -1795,7 +1795,7 @@ void ptlrpc_abort_inflight(struct obd_import *imp)
                 struct ptlrpc_request *req =
                         list_entry(tmp, struct ptlrpc_request, rq_list);
 
-                DEBUG_REQ(D_HA, req, "inflight");
+                DEBUG_REQ(D_RPCTRACE, req, "inflight");
 
                 spin_lock (&req->rq_lock);
                 if (req->rq_import_generation < imp->imp_generation) {
@@ -1809,7 +1809,7 @@ void ptlrpc_abort_inflight(struct obd_import *imp)
                 struct ptlrpc_request *req =
                         list_entry(tmp, struct ptlrpc_request, rq_list);
 
-                DEBUG_REQ(D_HA, req, "aborting waiting req");
+                DEBUG_REQ(D_RPCTRACE, req, "aborting waiting req");
 
                 spin_lock (&req->rq_lock);
                 if (req->rq_import_generation < imp->imp_generation) {

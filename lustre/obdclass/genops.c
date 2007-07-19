@@ -932,12 +932,8 @@ static void class_disconnect_export_list(struct list_head *list, int flags)
 
                 rc = obd_disconnect(fake_exp);
                 class_export_put(exp);
-                if (rc) {
-                        CDEBUG(D_HA, "disconnecting export %p failed: %d\n",
-                               exp, rc);
-                } else {
-                        CDEBUG(D_HA, "export %p disconnected\n", exp);
-                }
+                CDEBUG(D_HA, "disconnecting export %s (%p): rc %d\n",
+                       exp->exp_client_uuid.uuid, exp, rc);
         }
         EXIT;
 }

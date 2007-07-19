@@ -594,7 +594,7 @@ ptlrpc_server_handle_request(struct ptlrpc_service *svc,
                     request->rq_export->exp_obd->obd_fail) {
                         /* Failing over, don't handle any more reqs, send
                            error response instead. */
-                        CDEBUG(D_HA, "Dropping req %p for failed obd %s\n",
+                        CDEBUG(D_RPCTRACE,"Dropping req %p for failed obd %s\n",
                                request, request->rq_export->exp_obd->obd_name);
                         request->rq_status = -ENODEV;
                         ptlrpc_error(request);
@@ -667,7 +667,7 @@ put_conn:
                        request->rq_status,
                        reply ? lustre_msg_get_status(request->rq_repmsg): -999);
         else
-                CDEBUG(D_HA, "request "LPU64" opc %u from %s processed in "
+                CDEBUG(D_RPCTRACE,"request "LPU64" opc %u from %s processed in "
                        "%ldus (%ldus total) trans "LPU64" rc %d/%d\n",
                        request->rq_xid, lustre_msg_get_opc(request->rq_reqmsg),
                        libcfs_id2str(request->rq_peer), timediff,

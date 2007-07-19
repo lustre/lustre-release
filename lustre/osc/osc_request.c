@@ -3270,7 +3270,7 @@ static int osc_setinfo_mds_conn_interpret(struct ptlrpc_request *req,
         imp->imp_server_timeout = 1;
         imp->imp_pingable = 1;
         spin_unlock(&imp->imp_lock);
-        CDEBUG(D_HA, "pinging OST %s\n", obd2cli_tgt(imp->imp_obd));
+        CDEBUG(D_RPCTRACE, "pinging OST %s\n", obd2cli_tgt(imp->imp_obd));
 
         RETURN(rc);
 }

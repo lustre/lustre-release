@@ -515,6 +515,13 @@ Description: parallel lock callbacks
 Details    : Instead of sending blocking and completion callbacks as separated
              requests, adding them to a set and sending in parallel.
 
+Severity   : normal
+Bugzilla   : 12417
+Description: Disable most debugging by default
+Details    : To improve performance, disable most logging (for debug purposes)
+	     by default.  VFSTRACE, RPCTRACE, and DLMTRACE are now off by
+	     default, and HA includes fewer messages.
+
 --------------------------------------------------------------------------------
 
 2007-05-03  Cluster File Systems, Inc. <info@clusterfs.com>

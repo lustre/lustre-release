@@ -81,7 +81,7 @@ int filter_finish_transno(struct obd_export *exp, struct obd_trans_info *oti,
         struct filter_client_data *fcd = fed->fed_fcd;
         __u64 last_rcvd;
         loff_t off;
-        int err, log_pri = D_HA;
+        int err, log_pri = D_RPCTRACE;
 
         /* Propagate error code. */
         if (rc)
@@ -2715,7 +2715,7 @@ static int filter_handle_precreate(struct obd_export *exp, struct obdo *oa,
                         diff = 1;
                 else
                         diff = oa->o_id - filter_last_id(filter, group);
-                CDEBUG(D_HA, "filter_last_id() = "LPU64" -> diff = %d\n",
+                CDEBUG(D_RPCTRACE, "filter_last_id() = "LPU64" -> diff = %d\n",
                        filter_last_id(filter, group), diff);
 
                 LASSERTF(diff >= 0,"%s: "LPU64" - "LPU64" = %d\n",obd->obd_name,
@@ -2809,8 +2809,8 @@ static int filter_precreate(struct obd_device *obd, struct obdo *oa,
                         RETURN(-ENOMEM);
                 rc = filter_statfs(obd, osfs, cfs_time_current_64() - HZ);
                 if (rc == 0 && osfs->os_bavail < (osfs->os_blocks >> 10)) {
-                        CDEBUG(D_HA,"%s: not enough space for create "LPU64"\n",
-                               obd->obd_name, osfs->os_bavail <<
+                        CDEBUG(D_RPCTRACE,"%s: not enough space for create "
+                               LPU64"\n", obd->obd_name, osfs->os_bavail <<
                                filter->fo_vfsmnt->mnt_sb->s_blocksize_bits);
                         *num = 0;
                         rc = -ENOSPC;
@@ -2820,8 +2820,8 @@ static int filter_precreate(struct obd_device *obd, struct obdo *oa,
                         RETURN(rc);
         }
 
-        CDEBUG(D_HA, "%s: precreating %d objects in group "LPU64" at "LPU64"\n",
-               obd->obd_name, *num, group, oa->o_id);
+        CDEBUG(D_RPCTRACE, "%s: precreating %d objects in group "LPU64
+               " at "LPU64"\n", obd->obd_name, *num, group, oa->o_id);
 
         for (i = 0; i < *num && err == 0; i++) {
                 int cleanup_phase = 0;
@@ -2921,14 +2921,16 @@ static int filter_precreate(struct obd_device *obd, struct obdo *oa,
                 if (rc)
                         break;
                 if (time_after(jiffies, enough_time)) {
-                        CDEBUG(D_HA, "%s: precreate slow - want %d got %d \n",
+                        CDEBUG(D_RPCTRACE,
+                               "%s: precreate slow - want %d got %d \n",
                                obd->obd_name, *num, i);
                         break;
                 }
         }
         *num = i;
 
-        CDEBUG(D_HA,"%s: created %d objects for group "LPU64": "LPU64" rc %d\n",
+        CDEBUG(D_RPCTRACE,
+               "%s: created %d objects for group "LPU64": "LPU64" rc %d\n",
                obd->obd_name, i, group, filter->fo_last_objids[group], rc);
 
         RETURN(rc);
@@ -3307,7 +3309,7 @@ int filter_iocontrol(unsigned int cmd, struct obd_export *exp,
         }
 
         case OBD_IOC_SYNC: {
-                CDEBUG(D_HA, "syncing ost %s\n", obd->obd_name);
+                CDEBUG(D_RPCTRACE, "syncing ost %s\n", obd->obd_name);
                 rc = fsfilt_sync(obd, obd->u.obt.obt_sb);
                 RETURN(rc);
         }

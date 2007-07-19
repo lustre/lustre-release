@@ -530,7 +530,7 @@ void target_client_add_cb(struct obd_device *obd, __u64 transno, void *cb_data,
 {
         struct obd_export *exp = cb_data;
 
-        CDEBUG(D_HA, "%s: committing for initial connect of %s\n",
+        CDEBUG(D_RPCTRACE, "%s: committing for initial connect of %s\n",
                obd->obd_name, exp->exp_client_uuid.uuid);
 
         spin_lock(&exp->exp_lock);
