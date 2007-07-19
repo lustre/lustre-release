@@ -722,13 +722,13 @@ static inline int ll_ext_to_inode_flags(int flags)
                (flags & ~MDS_BFLAG_EXT_FLAGS);
 }
 
-/* If MDS_BFLAG_EXT_FLAGS is set it means we requested EXT3_*_FL inode flags
- * and we pass these straight through.  Otherwise we need to convert from
- * S_* flags to their EXT3_*_FL equivalents (see bug 9486). */
-static inline int ll_inode_to_ext_flags(int oflags, int iflags)
+/* If keep is set, we do not do anything with iflags, if it is not set, we
+ * assume that iflags are inode flags and we need to conver those to
+ * EXT3_*_FL flags (see bug 9486 and 12848) */
+static inline int ll_inode_to_ext_flags(int iflags, int keep)
 {
-        return (oflags & MDS_BFLAG_EXT_FLAGS) ? (oflags & ~MDS_BFLAG_EXT_FLAGS):
-               (((iflags & S_SYNC)      ? MDS_SYNC_FL      : 0) |
+        return keep ? (iflags & ~MDS_BFLAG_EXT_FLAGS) :
+                (((iflags & S_SYNC)     ? MDS_SYNC_FL      : 0) |
                 ((iflags & S_NOATIME)   ? MDS_NOATIME_FL   : 0) |
                 ((iflags & S_APPEND)    ? MDS_APPEND_FL    : 0) |
 #if defined(S_DIRSYNC)

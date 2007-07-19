@@ -2188,6 +2188,22 @@ test_52b() {
 }
 run_test 52b "immutable flag test (should return errors) ======="
 
+test_52c() { # 12848 simulating client < 1.4.7
+        [ -f $DIR/d52c/foo ] && chattr -i $DIR/d52b/foo
+        mkdir -p $DIR/d52c
+        touch $DIR/d52c/foo
+        # skip MDS_BFLAG_EXT_FLAGS in mdc_getattr_pack
+#define OBD_FAIL_MDC_OLD_EXT_FLAGS       0x802
+        sysctl -w lustre.fail_loc=0x802
+        chattr =i $DIR/d52c/foo || error
+        lsattr $DIR/d52c/foo | egrep -q "^-+i-+ $DIR/d52c/foo" || error
+        chattr -i $DIR/d52c/foo || error
+        sysctl -w lustre.fail_loc=0
+
+        rm -fr $DIR/d52c || error
+}
+run_test 52c "immutable flag test for client < 1.4.7 ======="
+
 test_53() {
 	[ -z "$MDS" ] && echo "skipping $TESTNAME with remote MDS" && return
 	

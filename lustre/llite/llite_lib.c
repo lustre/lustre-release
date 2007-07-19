@@ -1728,7 +1728,8 @@ int ll_iocontrol(struct inode *inode, struct file *file,
 
                 /* We want to return EXT3_*_FL flags to the caller via this
                  * ioctl.  An older MDS may be sending S_* flags, fix it up. */
-                flags = ll_inode_to_ext_flags(body->flags, body->flags);
+                flags = ll_inode_to_ext_flags(body->flags,
+                                              body->flags & MDS_BFLAG_EXT_FLAGS);
                 ptlrpc_req_finished (req);
 
                 RETURN(put_user(flags, (int *)arg));

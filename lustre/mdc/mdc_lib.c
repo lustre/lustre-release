@@ -302,6 +302,11 @@ void mdc_getattr_pack(struct ptlrpc_request *req, int offset, int valid,
         b->capability = current->cap_effective;
         b->valid = valid;
         b->flags = flags | MDS_BFLAG_EXT_FLAGS;
+        /* skip MDS_BFLAG_EXT_FLAGS to verify the "client < 1.4.7" case 
+         * refer to bug 12848.
+         */
+        if (OBD_FAIL_CHECK(OBD_FAIL_MDC_OLD_EXT_FLAGS))
+                b->flags &= ~MDS_BFLAG_EXT_FLAGS;
         b->suppgid = data->suppgids[0];
 
         b->fid1 = data->fid1;

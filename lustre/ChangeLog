@@ -544,6 +544,13 @@ Details    : The __iget() symbol export is missing.  To avoid the need for
 	     off, and we depend on the VM to clean up old inodes.  This
 	     dependency was during via the fix for bug 12181.
 
+Severity   : normal
+Frequency  : always
+Bugzilla   : 12848
+Description: sanity.sh fail: test_52b
+Details    : The ll_inode_to_ext_flags() has a glitch which makes MDS return
+             incorrect inode's flags to client.
+
 --------------------------------------------------------------------------------
 
 2007-04-19  Cluster File Systems, Inc. <info@clusterfs.com>
