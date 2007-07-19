@@ -37,8 +37,7 @@ unsigned int libcfs_subsystem_debug = ~0;
 EXPORT_SYMBOL(libcfs_subsystem_debug);
 
 unsigned int libcfs_debug = (D_EMERG | D_ERROR | D_WARNING | D_CONSOLE |
-                             D_NETERROR | D_HA | D_CONFIG | D_IOCTL |
-                             D_DLMTRACE | D_RPCTRACE | D_VFSTRACE);
+                             D_NETERROR | D_HA | D_CONFIG | D_IOCTL);
 EXPORT_SYMBOL(libcfs_debug);
 
 unsigned int libcfs_printk;
