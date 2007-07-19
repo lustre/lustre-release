@@ -8,11 +8,11 @@ tbd         Cluster File Systems, Inc. <info@clusterfs.com>
         2.6.16.27-0.9 (SLES 10)
        * Client support for unpatched kernels:
         (see http://wiki.lustre.org/index.php?title=Patchless_Client)
-        2.6.9-42.0.10.EL (RHEL 4)
         2.6.16 - 2.6.22 vanilla (kernel.org)
+       * Due to recently discovered recovery problems, we do not recommend
+        using patchless RHEL 4 clients with this or any earlier release.
        * Recommended e2fsprogs version: 1.39.cfs8
        * Note that reiserfs quotas are disabled on SLES 10 in this kernel.
-       * bug fixes
 
 Severity   : normal
 Frequency  : rare
