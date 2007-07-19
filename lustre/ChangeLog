@@ -1,11 +1,10 @@
 tbd         Cluster File Systems, Inc. <info@clusterfs.com>
        * version 1.6.1
        * Support for kernels:
-        2.4.21-47.0.1.EL (RHEL 3)
         2.6.5-7.283 (SLES 9)
         2.6.9-55.EL (RHEL 4)
-        2.6.12.6 vanilla (kernel.org)
         2.6.16.27-0.9 (SLES 10)
+        2.6.18.8 vanilla (kernel.org)
        * Client support for unpatched kernels:
         (see http://wiki.lustre.org/index.php?title=Patchless_Client)
         2.6.16 - 2.6.22 vanilla (kernel.org)
