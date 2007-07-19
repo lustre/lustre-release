@@ -317,8 +317,106 @@ gather_stop() {
 	stop_targets_script
 }
 
+get_end_line_num()
+{
+	local log_name=$1
+
+	ln=`grep -n snapshot_time ${log_name}  | awk -F":" '{ln=$1;} END{print ln;}'`
+	total_ln=`wc ${log_name} | awk '{print $1}'`			
+
+	local endlen=$((${total_ln} - ${ln}))
+	echo $endlen
+}
+
+get_csv()
+{
+	local logdir=$1
+	local statf=$2
+
+	local statf_name=`basename ${statf}`
+	type_name=`echo ${statf_name} | awk -F "." '{print $3}'`
+	stat_name=`head -n 1 ${statf} | awk '{print $4}'`
+	stat_type=`head -n 1 ${statf} | awk '{print $1}'`
+
+	#currently, it can only analyse client application log
+	if [ "$stat_type" != "client" ]; then
+		error "can not analyse ${statf} ......."
+	fi
+
+	#create the header
+	echo "${node_name}_${type_name}, ${stat_name}" \
+			>> $logdir/analyse_${type_name}.csv
+
+	#get total stats collection
+	end_len=`get_end_line_num ${statf}`
+	if [ $end_len != 1 -a $end_len != 0 ]; then
+		if [ "$type_name" != "osc-rpc_stats" ]; then
+			tail -n $end_len ${statf} | awk '{print $1 "," $2}' \
+				>> $logdir/analyse_${type_name}.csv
+		else
+			tail -n $end_len ${statf} |		 	\
+			awk  '/^[[:digit:]]/{print $1","$2","$6} 	\
+			      /^page/{print "page per rpc,read,write"}  \
+			      /^rpcs/{print "rpcs,read,write"}		\
+			      /^offset/{print "offset, read,write"}' 	\
+			>> $logdir/analyse_${type_name}.csv
+		fi
+	fi
+}
+
+gather_analyse()
+{
+	local log_tarball=$1
+	local option=$2
+
+	#validating option
+	if [ -z "$log_tarball" -o -r "$option" ]; then
+		usage;
+	fi
+
+	if [ ! -r $log_tarball ]; then
+		error " not exist $log_tarball "
+	fi
+
+	shift
+
+	local date=`date +%F-%H-%M`
+	local logdir="analyse-${date}" 
+
+	mkdir -p ${TMP}/${logdir}
+	mkdir -p ${TMP}/${logdir}/tmp
+
+	$UNTAR $log_tarball -C ${TMP}/${logdir}/tmp 1>/dev/null 2>&1
+	for log_file in `find $TMP/$logdir/tmp`; do
+		if test -f $log_file; then
+			#get the node name
+			local file_name=`basename ${log_file}`
+			node_name=`echo ${file_name} | awk -F "-" '{print $2}'`
+			echo "analysing the sublog ...$log_file"
+			mkdir -p ${TMP}/${logdir}/${node_name}
+			mkdir -p ${TMP}/${logdir}/${node_name}/tmp
+
+			$UNTAR $log_file -C ${TMP}/${logdir}/${node_name}/tmp 1>/dev/null 2>&1
+			for statf in `find ${TMP}/${logdir}/${node_name}/tmp`; do
+				if test -f $statf ; then
+					if [ "$option" == "csv" ]; then
+						get_csv "$TMP/$logdir/${node_name}" "$statf"
+					fi
+				fi
+			done
+			rm -rf ${TMP}/${logdir}/${node_name}/tmp
+		fi
+	done
+
+	rm -rf ${TMP}/${logdir}/tmp
+	$TAR ${TMP}/${logdir}.tar.gz ${TMP}/${logdir} 1>/dev/null 2>&1
+
+	echo "create analysed tarball ${TMP}/${logdir}.tar.gz"
+}
+
 case $OPTION in
 	start) gather_start ;;
 	stop)  gather_stop $@;;
+	analyse) gather_analyse $@;;
 	*) error "Unknown option ${OPTION}"
 esac
