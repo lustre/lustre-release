@@ -14,6 +14,12 @@ tbd         Cluster File Systems, Inc. <info@clusterfs.com>
        * Note that reiserfs quotas are disabled on SLES 10 in this kernel.
        * bug fixes
 
+Severity   : normal
+Frequency  : rare
+Bugzilla   : 12543
+Description: Routinely utilize latest Quadrics drivers in CFS releases
+Details    : Update patch qsnet-rhel4-2.6.patch.
+
 Severity   : minor
 Frequency  : at statup only
 Bugzilla   : 12860
