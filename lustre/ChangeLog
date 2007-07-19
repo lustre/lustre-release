@@ -528,6 +528,12 @@ Details    : To improve performance, disable most logging (for debug purposes)
 	     by default.  VFSTRACE, RPCTRACE, and DLMTRACE are now off by
 	     default, and HA includes fewer messages.
 
+Severity   : minor
+Bugzilla   : 12858
+Frequency  : only run on patchless client.
+Description: use do_facet on sanity.sh for test handling recoverables errors
+Details    : use do_facet instead of direct use sysctl for set fail_loc on OST
+
 --------------------------------------------------------------------------------
 
 2007-05-03  Cluster File Systems, Inc. <info@clusterfs.com>
