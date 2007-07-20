@@ -540,6 +540,14 @@ Details    : Hash tables noticeably help when a lot of clients connect to a
              server, to faster identify duplicate connections or reconnects,
 	     also to faster find export to evict in manual eviction case.
 
+Severity   : normal
+Bugzilla   : 11190
+Description: Sometimes, when the server evict a client, and the client will
+             not be evicted as soon as possible.
+Details    : In enqueue req, the error was returned by intent, instead of
+             rq_status which make ptlrpc layer not detect this error, and 
+	     does not evict the client. So enqueue error should be returned
+	     by rq_status. 
 
 --------------------------------------------------------------------------------
 

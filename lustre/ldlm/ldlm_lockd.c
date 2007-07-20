@@ -1004,12 +1004,11 @@ existing_lock:
 
         EXIT;
  out:
-        req->rq_status = err;
+        req->rq_status = rc ?: err;  /* return either error - bug 11190 */
         if (req->rq_reply_state == NULL) {
                 err = lustre_pack_reply(req, 1, NULL, NULL);
                 if (rc == 0)
                         rc = err;
-                req->rq_status = rc;
         }
 
         /* The LOCK_CHANGED code in ldlm_lock_enqueue depends on this

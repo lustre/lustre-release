@@ -412,8 +412,6 @@ int mdc_enqueue(struct obd_export *exp, struct ldlm_enqueue_info *einfo,
                 lockreq->lock_flags |= LDLM_FL_INTENT_ONLY;
         }
 
-        /* This can go when we're sure that this can never happen */
-        LASSERT(rc != -ENOENT);
         if (rc == ELDLM_LOCK_ABORTED) {
                 einfo->ei_mode = 0;
                 memset(lockh, 0, sizeof(*lockh));

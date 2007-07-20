@@ -2399,8 +2399,9 @@ static int mds_intent_policy(struct ldlm_namespace *ns,
 
                 /* If there was an error of some sort or if we are not
                  * returning any locks */
-                if (rep->lock_policy_res2 ||
-                    !intent_disposition(rep, DISP_OPEN_LOCK))
+                if (rep->lock_policy_res2)
+                        RETURN(rep->lock_policy_res2);
+                if (!intent_disposition(rep, DISP_OPEN_LOCK))
                         RETURN(ELDLM_LOCK_ABORTED);
                 break;
         case IT_LOOKUP:
