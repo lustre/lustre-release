@@ -1,5 +1,4 @@
 ext3-wantedi-2.6-rhel4.patch
-ext3-san-jdike-2.6-suse.patch
 iopen-2.6-fc5.patch
 ext3-map_inode_page-2.6-suse.patch
 export-ext3-2.6-rhel4.patch
