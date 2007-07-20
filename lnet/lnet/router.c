@@ -30,13 +30,13 @@ static char *forwarding = "";
 CFS_MODULE_PARM(forwarding, "s", charp, 0444,
                 "Explicitly enable/disable forwarding between networks");
 
-static int tiny_router_buffers = 512;
+static int tiny_router_buffers = 1024;
 CFS_MODULE_PARM(tiny_router_buffers, "i", int, 0444,
                 "# of 0 payload messages to buffer in the router");
-static int small_router_buffers = 256;
+static int small_router_buffers = 8192;
 CFS_MODULE_PARM(small_router_buffers, "i", int, 0444,
                 "# of small (1 page) messages to buffer in the router");
-static int large_router_buffers = 32;
+static int large_router_buffers = 512;
 CFS_MODULE_PARM(large_router_buffers, "i", int, 0444,
                 "# of large messages to buffer in the router");
 
