@@ -29,7 +29,7 @@ sources: all-sources
 
 all-sources:
 	for dir in $(SOURCES_SUBDIRS) ; do \
-		$(MAKE) sources -C $$dir ; \
+		$(MAKE) sources -C $$dir || exit $$? ; \
 	done
 
 if LINUX
