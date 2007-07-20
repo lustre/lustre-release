@@ -533,6 +533,14 @@ Frequency  : only run on patchless client.
 Description: use do_facet on sanity.sh for test handling recoverables errors
 Details    : use do_facet instead of direct use sysctl for set fail_loc on OST
 
+Severity   : normal
+Bugzilla   : 11013
+Description: hash tables for lists of nids, connections and uuids
+Details    : Hash tables noticeably help when a lot of clients connect to a
+             server, to faster identify duplicate connections or reconnects,
+	     also to faster find export to evict in manual eviction case.
+
+
 --------------------------------------------------------------------------------
 
 2007-05-03  Cluster File Systems, Inc. <info@clusterfs.com>

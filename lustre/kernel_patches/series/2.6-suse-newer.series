@@ -12,3 +12,4 @@ jbd-stats-2.6.5.patch
 bitops_ext2_find_next_le_bit-2.6.patch
 2.6.5-quotafix.patch
 vfs_intent-reduce-stack-usage-2.6-suse-newer.patch
+atomic_add_return-sles9.patch

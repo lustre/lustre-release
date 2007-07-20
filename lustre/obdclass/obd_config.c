@@ -38,6 +38,10 @@
 #include <lprocfs_status.h>
 #include <libcfs/list.h>
 #include <lustre_param.h>
+#include <class_hash.h>
+
+extern struct lustre_hash_operations uuid_hash_operations;
+extern struct lustre_hash_operations nid_hash_operations;
 
 /*********** string parsing utils *********/
 
@@ -271,7 +275,21 @@ int class_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
         /* just leave this on forever.  I can't use obd_set_up here because
            other fns check that status, and we're not actually set up yet. */
         obd->obd_starting = 1;
+ 
+        /* create an uuid-export hash body */
+        err = lustre_hash_init(&obd->obd_uuid_hash_body, "UUID_HASH", 
+                               128, &uuid_hash_operations);
+        if (err) {
+                spin_unlock(&obd->obd_dev_lock);
+                GOTO(err_hash, err);
+        }
+
+        /* create a nid-export hash body */
+        err = lustre_hash_init(&obd->obd_nid_hash_body, "NID_HASH", 
+                               128, &nid_hash_operations);
         spin_unlock(&obd->obd_dev_lock);
+        if (err)
+                GOTO(err_hash, err);
 
         exp = class_new_export(obd, &obd->obd_uuid);
         if (IS_ERR(exp))
@@ -296,10 +314,13 @@ int class_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
         RETURN(0);
 
 err_exp:
-        CERROR("setup %s failed (%d)\n", obd->obd_name, err);
         class_unlink_export(obd->obd_self_export);
         obd->obd_self_export = NULL;
+err_hash:
+        lustre_hash_exit(&obd->obd_uuid_hash_body);
+        lustre_hash_exit(&obd->obd_nid_hash_body);
         obd->obd_starting = 0;
+        CERROR("setup %s failed (%d)\n", obd->obd_name, err);
         RETURN(err);
 }
 
@@ -429,6 +450,12 @@ int class_cleanup(struct obd_device *obd, struct lustre_cfg *lcfg)
         }
 
         LASSERT(obd->obd_self_export);
+
+        /* destroy an uuid-export hash body */
+        lustre_hash_exit(&obd->obd_uuid_hash_body);
+
+        /* destroy a nid-export hash body */
+        lustre_hash_exit(&obd->obd_nid_hash_body);
 
         /* Precleanup stage 1, we must make sure all exports (other than the
            self-export) get destroyed. */

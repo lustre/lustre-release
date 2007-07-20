@@ -1,0 +1,86 @@
+diff -urp linux-2.6.5-7.283.orig/include/asm-i386/atomic.h linux-2.6.5-7.283/include/asm-i386/atomic.h
+--- linux-2.6.5-7.283.orig/include/asm-i386/atomic.h	2004-04-04 06:36:52.000000000 +0300
++++ linux-2.6.5-7.283/include/asm-i386/atomic.h	2007-05-21 09:40:48.000000000 +0300
+@@ -176,6 +176,47 @@ static __inline__ int atomic_add_negativ
+ 	return c;
+ }
+ 
++/**
++ * atomic_add_return - add and return
++ * @v: pointer of type atomic_t
++ * @i: integer value to add
++ *
++ * Atomically adds @i to @v and returns @i + @v
++ */
++static __inline__ int atomic_add_return(int i, atomic_t *v)
++{
++	int __i;
++#ifdef CONFIG_M386
++	unsigned long flags;
++	if(unlikely(boot_cpu_data.x86==3))
++		goto no_xadd;
++#endif
++	/* Modern 486+ processor */
++	__i = i;
++	__asm__ __volatile__(
++		LOCK_PREFIX "xaddl %0, %1"
++		:"+r" (i), "+m" (v->counter)
++		: : "memory");
++	return i + __i;
++
++#ifdef CONFIG_M386
++no_xadd: /* Legacy 386 processor */
++	local_irq_save(flags);
++	__i = atomic_read(v);
++	atomic_set(v, i + __i);
++	local_irq_restore(flags);
++	return i + __i;
++#endif
++}
++
++static __inline__ int atomic_sub_return(int i, atomic_t *v)
++{
++	return atomic_add_return(-i,v);
++}
++
++#define atomic_inc_return(v)  (atomic_add_return(1,v))
++#define atomic_dec_return(v)  (atomic_sub_return(1,v))
++
+ /* These are x86-specific, used by some header files */
+ #define atomic_clear_mask(mask, addr) \
+ __asm__ __volatile__(LOCK "andl %0,%1" \
+diff -urp linux-2.6.5-7.283.orig/include/asm-x86_64/atomic.h linux-2.6.5-7.283/include/asm-x86_64/atomic.h
+--- linux-2.6.5-7.283.orig/include/asm-x86_64/atomic.h	2004-04-04 06:38:20.000000000 +0300
++++ linux-2.6.5-7.283/include/asm-x86_64/atomic.h	2007-05-21 09:47:04.000000000 +0300
+@@ -178,6 +178,31 @@ static __inline__ int atomic_add_negativ
+ 	return c;
+ }
+ 
++/**
++ * atomic_add_return - add and return
++ * @i: integer value to add
++ * @v: pointer of type atomic_t
++ *
++ * Atomically adds @i to @v and returns @i + @v
++ */
++static __inline__ int atomic_add_return(int i, atomic_t *v)
++{
++	int __i = i;
++	__asm__ __volatile__(
++		LOCK_PREFIX "xaddl %0, %1"
++		:"+r" (i), "+m" (v->counter)
++		: : "memory");
++	return i + __i;
++}
++
++static __inline__ int atomic_sub_return(int i, atomic_t *v)
++{
++	return atomic_add_return(-i,v);
++}
++
++#define atomic_inc_return(v)  (atomic_add_return(1,v))
++#define atomic_dec_return(v)  (atomic_sub_return(1,v))
++
+ /* These are x86-specific, used by some header files */
+ #define atomic_clear_mask(mask, addr) \
+ __asm__ __volatile__(LOCK "andl %0,%1" \
