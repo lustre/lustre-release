@@ -70,3 +70,11 @@ CLEANFILES = sources $(notdir $(linux_headers) $(ext3_headers) $(ext3_sources) $
 
 clean: clean-am
 	rm -rf linux linux-stage
+
+all: @LINUX_OBJ@/Module.symvers
+
+# Update the kernel's Module.symvers to add ldiskfs symbols before building
+# fsfilt_ldiskfs - see bug 12842.
+@LINUX_OBJ@/Module.symvers: ldiskfs.o
+	$(MODPOST) -m -i @LINUX_OBJ@/Module.symvers \
+		-o @LINUX_OBJ@/Module.symvers ldiskfs.o
