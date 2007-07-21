@@ -14,7 +14,7 @@ tbd         Cluster File Systems, Inc. <info@clusterfs.com>
        * Note that reiserfs quotas are disabled on SLES 10 in this kernel.
        * Starting with this release, the ldiskfs backing filesystem required
         by Lustre is now in its own package, lustre-ldiskfs.  This package
-        so be installed.  It is versioned separately from Lustre and
+        should be installed.  It is versioned separately from Lustre and
         may be released separately in future.
 
 Severity   : normal
@@ -612,6 +612,15 @@ Details    : The ll_inode_to_ext_flags() has a glitch which makes MDS return
        * Recommended e2fsprogs version: 1.39.cfs6
        * Note that reiserfs quotas are disabled on SLES 10 in this kernel
        * bug fixes
+
+Severity   : enhancement
+Bugzilla   : 4900
+Description: Async OSC create to avoid the blocking unnecessarily.
+Details    : If a OST has no remain object, system will block on the creating
+            when need to create a new object on this OST. Now, ways use
+            pre-created objects when available, instead of blocking on an
+            empty osc while others are not empty.  If we must block, we block
+            for the shortest possible period of time.
 
 Severity   : enhancement
 Bugzilla   : 8007
