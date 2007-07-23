@@ -101,7 +101,6 @@ AC_SUBST(RELEASE)
 ])
 
 #
-#
 # LB_LINUX_PATH
 #
 # Find paths for linux, handling kernel-source rpms
@@ -188,13 +187,6 @@ if grep rhconfig $LINUX_OBJ/include/linux/version.h >/dev/null ; then
 	EXTRA_KCFLAGS="-include $KERNEL_SOURCE_HEADER $EXTRA_KCFLAGS"
 fi
 
-# Find the modpost utility
-AC_CHECK_FILE([$LINUX_OBJ/scripts/mod/modpost],
-	[MODPOST=$LINUX_OBJ/scripts/mod/modpost],
-	[AC_MSG_ERROR([modpost not found.])]
-)
-AC_SUBST(MODPOST)
-
 # this is needed before we can build modules
 LB_LINUX_UML
 LB_LINUX_VERSION
@@ -207,11 +199,11 @@ LB_LINUX_TRY_COMPILE([],[],[
 	AC_MSG_RESULT([no])
 	AC_MSG_WARN([Consult config.log for details.])
 	AC_MSG_WARN([If you are trying to build with a kernel-source rpm, consult build/README.kernel-source])
-	AC_MSG_ERROR([Kernel modules cannot be built.])
+	AC_MSG_ERROR([Kernel modules cannot be build.])
 ])
 
 LB_LINUX_RELEASE
-]) # end of LB_LINUX_PATH
+])
 
 #
 # LB_LINUX_UML
