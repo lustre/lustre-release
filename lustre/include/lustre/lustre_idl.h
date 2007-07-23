@@ -284,6 +284,8 @@ extern void lustre_swab_ptlrpc_body(struct ptlrpc_body *pb);
 #define OBD_CONNECT_FID_CAPA  0x100000ULL /* fid capability */
 #define OBD_CONNECT_OSS_CAPA  0x200000ULL /* OSS capability */
 #define OBD_CONNECT_CANCELSET 0x400000ULL /* Early batched cancels. */
+#define OBD_CONNECT_SOM     0x00800000ULL /* Size on MDS */
+#define OBD_CONNECT_AT      0x01000000ULL /* client uses adaptive timeouts */
 /* also update obd_connect_names[] for lprocfs_rd_connect_flags()
  * and lustre/utils/wirecheck.c */
 

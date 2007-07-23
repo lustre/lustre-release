@@ -514,6 +514,8 @@ static const char *obd_connect_names[] = {
         "fid_capability",
         "oss_capability",
         "early_lock_cancel",
+        "size_on_mds",
+        "adaptive_timeout",
         NULL
 };
 

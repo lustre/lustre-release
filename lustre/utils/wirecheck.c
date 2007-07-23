@@ -179,6 +179,8 @@ static void check_obd_connect_data(void)
         CHECK_CDEFINE(OBD_CONNECT_FID_CAPA);
         CHECK_CDEFINE(OBD_CONNECT_OSS_CAPA);
         CHECK_CDEFINE(OBD_CONNECT_CANCELSET);
+        CHECK_CDEFINE(OBD_CONNECT_SOM);
+        CHECK_CDEFINE(OBD_CONNECT_AT);
 }
 
 static void
