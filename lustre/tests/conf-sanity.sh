@@ -217,6 +217,8 @@ run_test 4 "force cleanup ost, then cleanup"
 test_5() {
 	setup
 	touch $DIR/$tfile || return 1
+	fuser -m -v $MOUNT && echo "$MOUNT is in use by user space process."
+
 	stop_mds -f || return 2
 
 	# cleanup may return an error from the failed
