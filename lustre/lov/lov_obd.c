@@ -513,7 +513,7 @@ static int lov_add_target(struct obd_device *obd, struct obd_uuid *uuidp,
 
                 CDEBUG(D_CONFIG, "tgts: %p size: %d\n",
                        lov->lov_tgts, lov->lov_tgt_size);
-        }       
+        }
 
 
         OBD_ALLOC_PTR(tgt);

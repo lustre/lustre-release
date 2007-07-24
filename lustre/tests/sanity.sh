@@ -1141,6 +1141,48 @@ test_27x() { # bug 10997
 }
 run_test 27x "check lfs setstripe -c -s -i options ============="
 
+test_27u() { # bug 4900
+        [ "$OSTCOUNT" -lt "2" -o -z "$MDS" ] && echo "skip $TESTNAME" && return
+        #define OBD_FAIL_MDS_OSC_PRECREATE      0x139
+
+        sysctl -w lustre.fail_loc=0x139
+        mkdir -p $DIR/d27u
+        createmany -o $DIR/d27u/t- 1000
+        sysctl -w lustre.fail_loc=0
+
+        $LFS getstripe $DIR/d27u > $TMP/files
+        OBJS=`cat $TMP/files | awk -vobjs=0 '($1 == 0) { objs += 1 } END { print objs;}'`
+        unlinkmany $DIR/d27u/t- 1000
+        [ $OBJS -gt 0 ] && \
+                error "Found $OBJS objects were created on OST-0" || pass
+}
+run_test 27u "skip object creation on OSC w/o objects =========="
+
+test_27v() { # bug 4900
+        [ "$OSTCOUNT" -lt "2" -o -z "$MDS" ] && echo "skip $TESTNAME" && return
+        exhaust_all_precreations
+
+        mkdir -p $DIR/$tdir
+        lfs setstripe $DIR/$tdir 0 -1 1         # 1 stripe / file
+
+        touch $DIR/$tdir/$tfile
+        #define OBD_FAIL_TGT_DELAY_PRECREATE     0x705
+        sysctl -w lustre.fail_loc=0x705
+        START=`date +%s`
+        for F in `seq 1 32`; do
+                touch $DIR/$tdir/$tfile.$F
+        done
+        sysctl -w lustre.fail_loc=0
+
+        FINISH=`date +%s`
+        TIMEOUT=`sysctl -n lustre.timeout`
+        [ $((FINISH - START)) -ge $((TIMEOUT / 2)) ] && \
+               error "$FINISH - $START >= $TIMEOUT / 2"
+
+        reset_enospc
+}
+run_test 27v "skip object creation on slow OST ================="
+
 test_28() {
 	mkdir $DIR/d28
 	$CREATETEST $DIR/d28/ct || error
@@ -2670,7 +2712,7 @@ test_65j() { # bug6367
 		cleanup -f || error "failed to unmount"
 		setup
 	fi
-	$SETSTRIPE -d $MOUNT
+	$SETSTRIPE -d $MOUNT || error "setstripe failed"
 }
 run_test 65j "set default striping on root directory (bug 6367)="
 
