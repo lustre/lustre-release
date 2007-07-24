@@ -58,7 +58,7 @@ else
 fi
 
 # Set this true to check file contents
-verify=0
+verify=${verify:-0}
 
 # total size (MBytes) per obd instance
 # large enough to avoid cache effects 
@@ -460,7 +460,7 @@ for ((rsz=$rszlo;rsz<=$rszhi;rsz*=2)); do
 		echo "=============> Create $nobj on $client_name" >> $workf
 		first_obj=`create_objects $host $devno $nobj $tmpf`
 		cat $tmpf >> $workf
-		rm $tmpf
+		rm -f $tmpf
 		if [ $first_obj = "ERROR" ]; then
 		    print_summary "created object #s on $client_name not contiguous"
 		    exit 1
@@ -514,7 +514,7 @@ for ((rsz=$rszlo;rsz<=$rszhi;rsz*=2)); do
                 t1=`date +%s.%N`
                 # clean up per-host script files
                 for host in ${unique_hosts[@]}; do
-                    rm ${cmdsf}_${host}
+                    rm -f ${cmdsf}_${host}
                 done
 		# compute bandwidth from total data / elapsed time
 		str=`awk "BEGIN {printf \"%7.2f \",\
@@ -530,13 +530,13 @@ for ((rsz=$rszlo;rsz<=$rszhi;rsz*=2)); do
 		    scp -q ${host}:$tmpfi $tmpfi > /dev/null
 		    cat $tmpfi >> $workf
 		    get_stats $tmpfi >> $tmpf
-		    rm $tmpfi
+		    rm -f $tmpfi
 		done
 		# compute/display global min/max stats
 		echo "=============> $test global" >> $workf
 		cat $tmpf >> $workf
 		stats=(`get_global_stats $tmpf`)
-		rm $tmpf
+		rm -f $tmpf
 		if ((stats[0] <= 0)); then
 		    if ((stats[0] < 0)); then
 			str=`printf "%17s " ERROR`
@@ -560,7 +560,7 @@ for ((rsz=$rszlo;rsz<=$rszhi;rsz*=2)); do
 		echo "=============> Destroy $nobj on $client_name" >> $workf
 		destroy_objects $host $devno $first_obj $nobj $tmpf
 		cat $tmpf >> $workf
-		rm $tmpf
+		rm -f $tmpf
 	    done
 	done
     done
