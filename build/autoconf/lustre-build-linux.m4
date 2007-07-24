@@ -188,16 +188,6 @@ if grep rhconfig $LINUX_OBJ/include/linux/version.h >/dev/null ; then
 	EXTRA_KCFLAGS="-include $KERNEL_SOURCE_HEADER $EXTRA_KCFLAGS"
 fi
 
-# Find the modpost utility
-AC_CHECK_FILE([$LINUX_OBJ/scripts/mod/modpost],
-	[MODPOST=$LINUX_OBJ/scripts/mod/modpost],
-	[AC_CHECK_FILE([$LINUX_OBJ/scripts/modpost],
-		[MODPOST=$LINUX_OBJ/scripts/modpost],
-		AC_MSG_ERROR([modpost not found.])
-	)]
-)
-AC_SUBST(MODPOST)
-
 # this is needed before we can build modules
 LB_LINUX_UML
 LB_LINUX_VERSION
@@ -215,6 +205,44 @@ LB_LINUX_TRY_COMPILE([],[],[
 
 LB_LINUX_RELEASE
 ]) # end of LB_LINUX_PATH
+
+#
+#
+# LB_LINUX_MODPOST
+#
+# Find modpost and check it
+#
+AC_DEFUN([LB_LINUX_MODPOST],
+[
+# Find the modpost utility
+AC_CHECK_FILE([$LINUX_OBJ/scripts/mod/modpost],
+	[MODPOST=$LINUX_OBJ/scripts/mod/modpost],
+	[AC_CHECK_FILE([$LINUX_OBJ/scripts/modpost],
+		[MODPOST=$LINUX_OBJ/scripts/modpost],
+		AC_MSG_ERROR([modpost not found.])
+	)]
+)
+AC_SUBST(MODPOST)
+
+# Ensure it can run
+AC_MSG_CHECKING([if modpost can be run])
+if $MODPOST ; then
+	AC_MSG_RESULT([yes])
+else
+	AC_MSG_ERROR([modpost can not be run.])
+fi
+
+# Check if modpost supports (and therefore requires) -m
+AC_MSG_CHECKING([if modpost supports -m])
+if $MODPOST -m 2>/dev/null ; then
+	AC_MSG_RESULT([yes])
+	MODPOST_ARGS=-m
+else
+	AC_MSG_RESULT([no])
+	MODPOST_ARGS=""
+fi
+AC_SUBST(MODPOST_ARGS)
+])
 
 #
 # LB_LINUX_UML

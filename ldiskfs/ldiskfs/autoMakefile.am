@@ -76,5 +76,5 @@ all: @LINUX_OBJ@/Module.symvers
 # Update the kernel's Module.symvers to add ldiskfs symbols before building
 # fsfilt_ldiskfs - see bug 12842.
 @LINUX_OBJ@/Module.symvers: ldiskfs.o
-	cd .. ; $(MODPOST) -m -i @LINUX_OBJ@/Module.symvers \
+	cd .. ; $(MODPOST) $(MODPOST_ARGS) -i @LINUX_OBJ@/Module.symvers \
 		-o @LINUX_OBJ@/Module.symvers ldiskfs/ldiskfs.o
