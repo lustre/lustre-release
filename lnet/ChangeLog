@@ -1,4 +1,4 @@
-2006-06-22  Cluster File Systems, Inc. <info@clusterfs.com>
+2007-07-30  Cluster File Systems, Inc. <info@clusterfs.com>
        * version 1.4.11 / 1.6.1
        * Support for networks:
 	socklnd   - kernels up to 2.6.16
