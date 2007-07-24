@@ -447,7 +447,6 @@ struct mds_obd {
         obd_id                          *mds_lov_objids;
         int                              mds_lov_objids_size;
         __u32                            mds_lov_objids_in_file;
-        unsigned int                     mds_lov_objids_dirty:1;
         int                              mds_lov_nextid_set;
         struct file                     *mds_lov_objid_filp;
         struct file                     *mds_health_check_filp;
@@ -458,8 +457,11 @@ struct mds_obd {
         struct semaphore                 mds_qonoff_sem;
         struct semaphore                 mds_health_sem;
         unsigned long                    mds_lov_objids_valid:1,
+                                         mds_lov_objids_dirty:1,
                                          mds_fl_user_xattr:1,
-                                         mds_fl_acl:1;
+                                         mds_fl_acl:1,
+                                         mds_fl_cfglog:1,
+                                         mds_fl_synced:1;
 };
 
 struct echo_obd {
@@ -679,6 +681,9 @@ enum obd_notify_event {
         /* Configuration event */
         OBD_NOTIFY_CONFIG
 };
+
+#define CONFIG_LOG  0x1  /* finished processing config log */
+#define CONFIG_SYNC 0x2  /* mdt synced 1 ost */
 
 /*
  * Data structure used to pass obd_notify()-event to non-obd listeners (llite

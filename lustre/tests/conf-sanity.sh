@@ -294,8 +294,6 @@ run_test 5d "mount with ost down"
 test_5e() {
 	start_ost
 	start_mds
-        # give MDS a chance to connect to OSTs (bz 10476)
-	sleep 5	
 
 #define OBD_FAIL_PTLRPC_DELAY_SEND       0x506
 	do_facet client "sysctl -w lustre.fail_loc=0x80000506"
@@ -768,24 +766,19 @@ test_22() {
         #reformat to remove all logs
         reformat
 	start_mds
-	echo Client mount before any osts are in the logs
-	mount_client $MOUNT
-	check_mount && return 41
-	pass
-
-	echo Client mount with ost in logs, but none running
-	start_ost
-	stop_ost
-	mount_client $MOUNT
-	# check_mount will block trying to contact ost
-	umount_client $MOUNT
-	pass
 
 	echo Client mount with a running ost
 	start_ost
 	mount_client $MOUNT
-	sleep 5	#bz10476
 	check_mount || return 41
+	umount_client $MOUNT
+	pass
+
+	echo Client mount with ost in logs, but none running
+	stop_ost
+	mount_client $MOUNT
+	# check_mount will block trying to contact ost
+	umount_client $MOUNT
 	pass
 
 	cleanup
@@ -1081,15 +1074,6 @@ test_32a() {
 	$LCTL conf_param lustre-MDT0000.failover.node=$NID || return 10
 	echo "ok."
 
-	# With a new good MDT failover nid, we should be able to mount a client
-	# (but it cant talk to OST)
-        local OLDMOUNTOPT=$MOUNTOPT
-        MOUNTOPT="exclude=lustre-OST0000"
-	mount_client $MOUNT
-        MOUNTOPT=$OLDMOUNTOPT
-	set_and_check "cat $LPROC/mdc/*/max_rpcs_in_flight" "lustre-MDT0000.mdc.max_rpcs_in_flight" || return 11
-
-	zconf_umount `hostname` $MOUNT -f
 	cleanup_nocli
 
         # mount a second time to make sure we didnt leave upgrade flag on

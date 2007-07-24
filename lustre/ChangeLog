@@ -17,6 +17,15 @@ tbd         Cluster File Systems, Inc. <info@clusterfs.com>
         should be installed.  It is versioned separately from Lustre and
         may be released separately in future.
 
+Severity   : minor
+Frequency  : only at startup
+Bugzilla   : 11778
+Description: Delay client connections to MDT until fist MDT->OST connect
+Details    : If a client tried to create a new file before the MDT had
+	     connected to any OSTs, the create would return EIO.  Now
+	     the client will simply block until the MDT connects to the 
+	     first OST and the create can succeed.
+	
 Severity   : normal
 Frequency  : only for SLES9
 Bugzilla   : 12543

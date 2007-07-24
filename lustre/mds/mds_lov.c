@@ -632,6 +632,18 @@ int mds_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
 
 }
 
+/* Collect the preconditions we need to allow client connects */
+static void mds_allow_cli(struct obd_device *obd, unsigned int flag)
+{
+        if (flag & CONFIG_LOG)
+                obd->u.mds.mds_fl_cfglog = 1;
+        if (flag & CONFIG_SYNC)
+                obd->u.mds.mds_fl_synced = 1;
+        if (obd->u.mds.mds_fl_cfglog && obd->u.mds.mds_fl_synced)
+                /* Open for clients */
+                obd->obd_no_conn = 0;
+}
+
 struct mds_lov_sync_info {
         struct obd_device *mlsi_obd;     /* the lov device to sync */
         struct obd_device *mlsi_watched; /* target osc */
@@ -705,7 +717,12 @@ out:
                        rc);
                 obd_notify(mds->mds_osc_obd, watched, OBD_NOTIFY_INACTIVE,
                            NULL);
+        } else {
+                /* We've successfully synced at least 1 OST and are ready
+                   to handle client requests */
+                mds_allow_cli(obd, CONFIG_SYNC);
         }
+
         class_decref(obd);
         return rc;
 }
@@ -792,8 +809,7 @@ int mds_notify(struct obd_device *obd, struct obd_device *watched,
         case OBD_NOTIFY_SYNC_NONBLOCK:
                 break;
         case OBD_NOTIFY_CONFIG:
-                /* Open for clients */
-                obd->obd_no_conn = 0;
+                mds_allow_cli(obd, (unsigned int)data);
         default:
                 RETURN(0);
         }
@@ -816,6 +832,7 @@ int mds_notify(struct obd_device *obd, struct obd_device *watched,
                 mutex_down(&obd->obd_dev_sem);
                 rc = mds_lov_update_desc(obd, obd->u.mds.mds_osc_exp);
                 mutex_up(&obd->obd_dev_sem);
+                mds_allow_cli(obd, CONFIG_SYNC);
                 RETURN(rc);
         }
 
