@@ -565,6 +565,13 @@ Details    : In enqueue req, the error was returned by intent, instead of
 	     does not evict the client. So enqueue error should be returned
 	     by rq_status. 
 
+Severity   : normal
+Bugzilla   : 12975
+Frequency  : rare
+Description: Using wrong pointer in osc_brw_prep_request
+Details    : Access to array[-1] can produce panic if kernel compiled with
+	     CONFIG_PAGE_ALLOC enabled
+	     
 --------------------------------------------------------------------------------
 
 2007-05-03  Cluster File Systems, Inc. <info@clusterfs.com>
