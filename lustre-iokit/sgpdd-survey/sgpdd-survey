@@ -37,8 +37,6 @@ thrhi=${thrhi:-4096}
 #####################################################################
 # leave the rest of this alone unless you know what you're doing...
 
-# sgp_dd's idea of disk sector size (Bytes)
-bs=512
 # and max # threads one instance will spawn
 SG_MAX_QUEUE=16
 
@@ -80,6 +78,13 @@ fi
 
 ndevs=${#devs[@]}
 
+# determine block size. This should also work for raw devices
+# If it fails, set to 512
+bs=$((`sg_readcap -b ${devs[0]}  |awk '{print $2}'`))
+if [ $bs == 0  ];then
+	echo "sg_readcap failed, setting block size to 512"
+	bs=512
+fi
 rsltf=${rslt}.summary
 workf=${rslt}.detail
 echo -n > $rsltf
@@ -151,7 +156,9 @@ for ((rsz=$rszlo;rsz<=$rszhi;rsz*=2)); do
 		for ((i=0;i<ndevs;i++)); do
 		    for ((j=0;j<crg;j++)); do
 			rtmp=${tmpf}_${i}_${j}
-			if grep 'time to transfer data' $rtmp > /dev/null 2>&1; then
+			if grep 'error' $rtmp > /dev/null 2>&1; then
+				echo "Error found in $rtmp"
+			elif grep 'time to transfer data' $rtmp > /dev/null 2>&1; then
 			    ok=$((ok + 1))
 			fi
 			cat ${rtmp} >> $tmpf

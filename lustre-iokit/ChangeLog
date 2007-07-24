@@ -1,1 +1,6 @@
 2006-10-31 - Borrowing mjmac's most excellent work and setting up autogen/RPM
+2007-07-24 - 
+	Bugs committed:
+	10851 - minor obdfilter fixes
+	11485 - sgpdd_survey uses readcap for block size
+	12741 - better error checking for sgpdd_survey
