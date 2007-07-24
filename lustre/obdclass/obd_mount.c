@@ -771,7 +771,8 @@ static int lustre_stop_mgc(struct super_block *sb)
 
         /* Clean the nid uuids */
         if (!niduuid)
-                RETURN(-ENOMEM);
+                GOTO(out, rc = -ENOMEM);
+
         for (i = 0; i < lsi->lsi_lmd->lmd_mgs_failnodes; i++) {
                 sprintf(ptr, "_%x", i);
                 rc = do_lcfg(LUSTRE_MGC_OBDNAME, 0, LCFG_DEL_UUID,
@@ -780,10 +781,11 @@ static int lustre_stop_mgc(struct super_block *sb)
                         CERROR("del MDC UUID %s failed: rc = %d\n",
                                niduuid, rc);
         }
-        OBD_FREE(niduuid, len);
-        /* class_import_put will get rid of the additional connections */
-
 out:
+        if (niduuid)
+                OBD_FREE(niduuid, len);
+
+        /* class_import_put will get rid of the additional connections */
         mutex_up(&mgc_start_lock);
         RETURN(rc);
 }
