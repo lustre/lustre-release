@@ -17,39 +17,6 @@
         should be installed.  It is versioned separately from Lustre and
         may be released separately in future.
 
-Severity   : minor
-Frequency  : only at startup
-Bugzilla   : 11778
-Description: Delay client connections to MDT until fist MDT->OST connect
-Details    : If a client tried to create a new file before the MDT had
-	     connected to any OSTs, the create would return EIO.  Now
-	     the client will simply block until the MDT connects to the 
-	     first OST and the create can succeed.
-	
-Severity   : normal
-Frequency  : only for SLES9
-Bugzilla   : 12543
-Description: Routinely utilize latest Quadrics drivers in CFS releases
-Details    : Update patch qsnet-suse-2.6.patch.
-
-Severity   : normal
-Frequency  : only for sles10
-Bugzilla   : 12771
-Description: Update patches for SLES 10 SP1 kernel.
-Details    : Update the patch vfs_intent-2.6-sles10.patch.
-
-Severity   : normal
-Frequency  : rare
-Bugzilla   : 12543
-Description: Routinely utilize latest Quadrics drivers in CFS releases
-Details    : Update patch qsnet-rhel4-2.6.patch.
-
-Severity   : minor
-Frequency  : at statup only
-Bugzilla   : 12860
-Description: mds_lov_synchronize race leads to various problems
-Details    : simultaneous MDT->OST connections at startup can cause the 
-	     sync to abort, leaving the OSC in a bad state.
 
 Severity   : enhancement
 Bugzilla   : 12194
@@ -543,7 +510,7 @@ Severity   : normal
 Bugzilla   : 11301
 Description: parallel lock callbacks
 Details    : Instead of sending blocking and completion callbacks as separated
-             requests, adding them to a set and sending in parallel.
+	     requests, adding them to a set and sending in parallel.
 
 Severity   : normal
 Bugzilla   : 12417
@@ -562,18 +529,51 @@ Severity   : normal
 Bugzilla   : 11013
 Description: hash tables for lists of nids, connections and uuids
 Details    : Hash tables noticeably help when a lot of clients connect to a
-             server, to faster identify duplicate connections or reconnects,
+	     server, to faster identify duplicate connections or reconnects,
 	     also to faster find export to evict in manual eviction case.
 
 Severity   : normal
 Bugzilla   : 11190
 Description: Sometimes, when the server evict a client, and the client will
-             not be evicted as soon as possible.
+	     not be evicted as soon as possible.
 Details    : In enqueue req, the error was returned by intent, instead of
-             rq_status which make ptlrpc layer not detect this error, and 
+	     rq_status which make ptlrpc layer not detect this error, and 
 	     does not evict the client. So enqueue error should be returned
 	     by rq_status. 
 
+Severity   : minor
+Frequency  : only at startup
+Bugzilla   : 11778
+Description: Delay client connections to MDT until fist MDT->OST connect
+Details    : If a client tried to create a new file before the MDT had
+	     connected to any OSTs, the create would return EIO.  Now
+	     the client will simply block until the MDT connects to the 
+	     first OST and the create can succeed.
+	
+Severity   : normal
+Frequency  : only for SLES9
+Bugzilla   : 12543
+Description: Routinely utilize latest Quadrics drivers in CFS releases
+Details    : Update patch qsnet-suse-2.6.patch.
+
+Severity   : normal
+Frequency  : only for sles10
+Bugzilla   : 12771
+Description: Update patches for SLES 10 SP1 kernel.
+Details    : Update the patch vfs_intent-2.6-sles10.patch.
+
+Severity   : normal
+Frequency  : rare
+Bugzilla   : 12543
+Description: Routinely utilize latest Quadrics drivers in CFS releases
+Details    : Update patch qsnet-rhel4-2.6.patch.
+
+Severity   : minor
+Frequency  : at statup only
+Bugzilla   : 12860
+Description: mds_lov_synchronize race leads to various problems
+Details    : simultaneous MDT->OST connections at startup can cause the 
+	     sync to abort, leaving the OSC in a bad state.
 Severity   : normal
 Bugzilla   : 12975
 Frequency  : rare
