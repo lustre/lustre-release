@@ -3,7 +3,7 @@
 
 #include <linux/lustre_version.h>
 
-#ifndef LUSTRE_KERNEL_VERSION
+#ifndef HAVE_VFS_INTENT_PATCHES
 #define IT_OPEN     (1)
 #define IT_CREAT    (1<<1)
 #define IT_READDIR  (1<<2)

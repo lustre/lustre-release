@@ -201,7 +201,7 @@ static inline int cleanup_group_info(void)
 
 #include <linux/proc_fs.h>
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,11)
+#ifndef HAVE___D_REHASH
 #define __d_rehash(dentry, lock) d_rehash_cond(dentry, lock)
 #endif
 

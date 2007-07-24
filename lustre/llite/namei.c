@@ -411,7 +411,7 @@ struct dentry *ll_find_alias(struct inode *inode, struct dentry *de)
                 dget_locked(dentry);
                 lock_dentry(dentry);
                 __d_drop(dentry);
-#ifdef LUSTRE_KERNEL_VERSION
+#ifdef DCACHE_LUSTRE_INVALID
                 dentry->d_flags &= ~DCACHE_LUSTRE_INVALID;
 #endif
                 unlock_dentry(dentry);
@@ -570,7 +570,7 @@ static struct dentry *ll_lookup_it(struct inode *parent, struct dentry *dentry,
 }
 
 #if (LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))
-#ifdef LUSTRE_KERNEL_VERSION
+#ifdef HAVE_VFS_INTENT_PATCHES
 static struct dentry *ll_lookup_nd(struct inode *parent, struct dentry *dentry,
                                    struct nameidata *nd)
 {
@@ -886,7 +886,7 @@ static int ll_mknod_generic(struct inode *dir, struct qstr *name, int mode,
 }
 
 #if (LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))
-#ifndef LUSTRE_KERNEL_VERSION
+#ifndef HAVE_VFS_INTENT_PATCHES
 static int ll_create_nd(struct inode *dir, struct dentry *dentry, int mode, struct nameidata *nd)
 {
         struct lookup_intent *it = ll_d2d(dentry)->lld_it;
@@ -1196,7 +1196,7 @@ out:
         return(err);
 }
 
-#ifdef LUSTRE_KERNEL_VERSION
+#ifdef HAVE_VFS_INTENT_PATCHES
 static int ll_mknod_raw(struct nameidata *nd, int mode, dev_t rdev)
 {
         return ll_mknod_generic(nd->dentry->d_inode, &nd->last, mode,rdev,NULL);
@@ -1269,7 +1269,7 @@ static int ll_rename(struct inode *old_dir, struct dentry *old_dentry,
 #endif
 
 struct inode_operations ll_dir_inode_operations = {
-#ifdef LUSTRE_KERNEL_VERSION
+#ifdef HAVE_VFS_INTENT_PATCHES
         .link_raw           = ll_link_raw,
         .unlink_raw         = ll_unlink_raw,
         .symlink_raw        = ll_symlink_raw,
@@ -1306,7 +1306,7 @@ struct inode_operations ll_dir_inode_operations = {
 };
 
 struct inode_operations ll_special_inode_operations = {
-#ifdef LUSTRE_KERNEL_VERSION
+#ifdef HAVE_VFS_INTENT_PATCHES
         .setattr_raw    = ll_setattr_raw,
 #endif
         .setattr        = ll_setattr,

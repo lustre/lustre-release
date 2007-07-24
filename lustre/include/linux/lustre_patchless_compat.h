@@ -24,7 +24,6 @@
 #define LUSTRE_PATCHLESS_COMPAT_H
 
 #include <linux/lustre_version.h>
-#ifndef LUSTRE_KERNEL_VERSION
 #include <linux/fs.h>
 
 #ifndef HAVE_TRUNCATE_COMPLETE_PAGE
@@ -78,8 +77,9 @@ truncate_complete_page(struct address_space *mapping, struct page *page)
         ll_remove_from_page_cache(page);
         page_cache_release(page);       /* pagecache ref */
 }
-#endif
+#endif /* HAVE_TRUNCATE_COMPLETE_PAGE */
 
+#if !defined(HAVE_D_REHASH_COND) && !defined(HAVE___D_REHASH)
 /* megahack */
 static inline void d_rehash_cond(struct dentry * entry, int lock)
 {
@@ -93,8 +93,7 @@ static inline void d_rehash_cond(struct dentry * entry, int lock)
 }
 
 #define __d_rehash(dentry, lock) d_rehash_cond(dentry, lock)
-
-#define LUSTRE_PATCHLESS
+#endif /* !HAVE_D_REHASH_COND && !HAVE___D_REHASH*/
 
 #ifndef ATTR_FROM_OPEN
 #define ATTR_FROM_OPEN 0
@@ -102,7 +101,5 @@ static inline void d_rehash_cond(struct dentry * entry, int lock)
 #ifndef ATTR_RAW
 #define ATTR_RAW 0
 #endif
-
-#endif /* LUSTRE_KERNEL_VERSION */
 
 #endif

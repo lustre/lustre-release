@@ -132,7 +132,7 @@ static LL_FOLLOW_LINK_RETURN_TYPE ll_follow_link(struct dentry *dentry, struct n
 {
         struct inode *inode = dentry->d_inode;
         struct ll_inode_info *lli = ll_i2info(inode);
-#ifdef LUSTRE_KERNEL_VERSION
+#ifdef HAVE_VFS_INTENT_PATCHES
         struct lookup_intent *it = ll_nd2it(nd);
 #endif
         struct ptlrpc_request *request;
@@ -140,7 +140,7 @@ static LL_FOLLOW_LINK_RETURN_TYPE ll_follow_link(struct dentry *dentry, struct n
         char *symname;
         ENTRY;
 
-#ifdef LUSTRE_KERNEL_VERSION
+#ifdef HAVE_VFS_INTENT_PATCHES
         if (it != NULL) {
                 int op = it->it_op;
                 int mode = it->it_create_mode;
@@ -199,7 +199,7 @@ static void ll_put_link(struct dentry *dentry, struct nameidata *nd, void *cooki
 struct inode_operations ll_fast_symlink_inode_operations = {
         .readlink       = ll_readlink,
         .setattr        = ll_setattr,
-#ifdef LUSTRE_KERNEL_VERSION
+#ifdef HAVE_VFS_INTENT_PATCHES
         .setattr_raw    = ll_setattr_raw,
 #endif
         .follow_link    = ll_follow_link,

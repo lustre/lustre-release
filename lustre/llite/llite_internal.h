@@ -36,7 +36,7 @@ struct lustre_intent_data {
 #define LL_IT2STR(it) ((it) ? ldlm_it2str((it)->it_op) : "0")
 #define LUSTRE_FPRIVATE(file) ((file)->private_data)
 
-#ifdef LUSTRE_KERNEL_VERSION
+#ifdef HAVE_VFS_INTENT_PATCHES
 static inline struct lookup_intent *ll_nd2it(struct nameidata *nd)
 {
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0))
@@ -52,7 +52,7 @@ struct ll_dentry_data {
         int                      lld_mnt_count;
         struct obd_client_handle lld_cwd_och;
         struct obd_client_handle lld_mnt_och;
-#ifndef LUSTRE_KERNEL_VERSION
+#ifndef HAVE_VFS_INTENT_PATCHES
         struct lookup_intent     *lld_it;
 #endif
 };
@@ -442,7 +442,7 @@ int ll_mdc_blocking_ast(struct ldlm_lock *, struct ldlm_lock_desc *,
 int ll_prepare_mdc_op_data(struct mdc_op_data *,
                            struct inode *i1, struct inode *i2,
                            const char *name, int namelen, int mode, void *data);
-#ifndef LUSTRE_KERNEL_VERSION
+#ifndef HAVE_VFS_INTENT_PATCHES
 struct lookup_intent *ll_convert_intent(struct open_intent *oit,
                                         int lookup_flags);
 #endif

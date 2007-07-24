@@ -389,7 +389,7 @@ int ll_file_open(struct inode *inode, struct file *file)
         if (inode->i_sb->s_root == file->f_dentry)
                 RETURN(0);
 
-#ifdef LUSTRE_KERNEL_VERSION
+#ifdef HAVE_VFS_INTENT_PATCHES
         it = file->f_it;
 #else
         it = file->private_data; /* XXX: compat macro */
@@ -2688,7 +2688,7 @@ struct file_operations ll_file_operations_noflock = {
 };
 
 struct inode_operations ll_file_inode_operations = {
-#ifdef LUSTRE_KERNEL_VERSION
+#ifdef HAVE_VFS_INTENT_PATCHES
         .setattr_raw    = ll_setattr_raw,
 #endif
         .setattr        = ll_setattr,

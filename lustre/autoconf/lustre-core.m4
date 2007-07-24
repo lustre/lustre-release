@@ -1056,6 +1056,48 @@ AC_DEFINE(HAVE_TRUNCATE_COMPLETE_PAGE, 1,
 ])
 ])
 
+AC_DEFUN([LC_EXPORT_D_REHASH_COND],
+[LB_CHECK_SYMBOL_EXPORT([d_rehash_cond],
+[fs/dcache.c],[
+AC_DEFINE(HAVE_D_REHASH_COND, 1,
+            [d_rehash_cond is exported by the kernel])
+],[
+])
+])
+
+AC_DEFUN([LC_EXPORT___D_REHASH],
+[LB_CHECK_SYMBOL_EXPORT([__d_rehash],
+[fs/dcache.c],[
+AC_DEFINE(HAVE___D_REHASH, 1,
+            [__d_rehash is exported by the kernel])
+],[
+])
+])
+
+#
+# LC_VFS_INTENT_PATCHES
+#
+# check if the kernel has the VFS intent patches
+AC_DEFUN([LC_VFS_INTENT_PATCHES],
+[AC_MSG_CHECKING([if the kernel has the VFS intent patches])
+LB_LINUX_TRY_COMPILE([
+	#include <linux/fs.h>
+        #include <linux/namei.h>
+],[
+        struct nameidata nd;
+        struct lookup_intent *it;
+
+        it = &nd.intent;
+        intent_init(it, IT_OPEN);
+        it->d.lustre.it_disposition = 0;
+        it->d.lustre.it_data = NULL;
+],[
+        AC_MSG_RESULT([yes])
+        AC_DEFINE(HAVE_VFS_INTENT_PATCHES, 1, [VFS intent patches are applied])
+],[
+        AC_MSG_RESULT([no])
+])
+])
 
 #
 # LC_PROG_LINUX
@@ -1075,6 +1117,8 @@ LC_CONFIG_HEALTH_CHECK_WRITE
 LC_TASK_PPTR
 # RHEL4 pachess
 LC_EXPORT_TRUNCATE_COMPLETE
+LC_EXPORT_D_REHASH_COND
+LC_EXPORT___D_REHASH
 
 LC_STRUCT_KIOBUF
 LC_FUNC_COND_RESCHED
@@ -1104,6 +1148,9 @@ LC_FUNC_F_OP_FLOCK
 LC_QUOTA_READ
 LC_COOKIE_FOLLOW_LINK
 LC_FUNC_RCU
+
+# does the kernel have VFS intent patches?
+LC_VFS_INTENT_PATCHES
 
 # 2.6.15
 LC_INODE_I_MUTEX

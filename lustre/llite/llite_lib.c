@@ -113,7 +113,7 @@ void ll_free_sbi(struct super_block *sb)
 }
 
 static struct dentry_operations ll_d_root_ops = {
-#ifdef LUSTRE_KERNEL_VERSION
+#ifdef DCACHE_LUSTRE_INVALID
         .d_compare = ll_dcompare,
 #endif
 };
