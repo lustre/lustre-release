@@ -13,6 +13,14 @@
        * Recommended e2fsprogs version: 1.39.cfs8
        * Note that reiserfs quotas are disabled on SLES 10 in this kernel.
 
+
+Severity   : enhancement
+Bugzilla   : 12786
+Description: lfs setstripe enhancement
+Details    : Make lfs setstripe understand 'k', 'm' and 'g' for stripe size.
+
+--------------------------------------------------------------------------------
+
 2007-07-30         Cluster File Systems, Inc. <info@clusterfs.com>
        * version 1.6.1
        * Support for kernels:
