@@ -110,8 +110,7 @@ static void mds_mfd_put(struct mds_file_data *mfd)
         LASSERT(atomic_read(&mfd->mfd_refcount) > 0 &&
                 atomic_read(&mfd->mfd_refcount) < 0x5a5a);
         if (atomic_dec_and_test(&mfd->mfd_refcount)) {
-                LASSERT(list_empty(&mfd->mfd_handle.h_link));
-                OBD_FREE(mfd, sizeof *mfd);
+                OBD_FREE_RCU(mfd, sizeof *mfd, &mfd->mfd_handle);
         }
 }
 
@@ -371,7 +370,7 @@ static int mds_create_objects(struct ptlrpc_request *req, int offset,
         if (OBD_FAIL_CHECK_ONCE(OBD_FAIL_MDS_ALLOC_OBDO))
                 GOTO(out_ids, rc = -ENOMEM);
 
-        oinfo.oi_oa = obdo_alloc();
+        OBDO_ALLOC(oinfo.oi_oa);
         if (oinfo.oi_oa == NULL)
                 GOTO(out_ids, rc = -ENOMEM);
         oinfo.oi_oa->o_uid = 0; /* must have 0 uid / gid on OST */
@@ -475,17 +474,18 @@ static int mds_create_objects(struct ptlrpc_request *req, int offset,
         if (IS_ERR(*handle)) {
                 rc = PTR_ERR(*handle);
                 *handle = NULL;
-                GOTO(out_oa, rc);
+                GOTO(free_diskmd, rc);
         }
 
         rc = fsfilt_set_md(obd, inode, *handle, lmm, lmm_size, "lov");
         lmm_buf = lustre_msg_buf(req->rq_repmsg, offset, lmm_size);
         LASSERT(lmm_buf);
         memcpy(lmm_buf, lmm, lmm_size);
+ free_diskmd:
         obd_free_diskmd(mds->mds_osc_exp, &lmm);
  out_oa:
         oti_free_cookies(&oti);
-        obdo_free(oinfo.oi_oa);
+        OBDO_FREE(oinfo.oi_oa);
  out_ids:
         if (rc) {
                 OBD_FREE(*ids, mds->mds_lov_desc.ld_tgt_count * sizeof(**ids));
@@ -797,7 +797,7 @@ static int mds_open_by_fid(struct ptlrpc_request *req, struct ll_fid *fid,
 
         rc = mds_finish_open(req, dchild, body, flags, &handle, rec, rep, NULL);
         rc = mds_finish_transno(mds, dchild->d_inode, handle,
-                                req, rc, rep ? rep->lock_policy_res1 : 0);
+                                req, rc, rep ? rep->lock_policy_res1 : 0, 0);
         /* XXX what do we do here if mds_finish_transno itself failed? */
 
         l_dput(dchild);
@@ -1179,7 +1179,7 @@ found_child:
 
  cleanup:
         rc = mds_finish_transno(mds, dchild ? dchild->d_inode : NULL, handle,
-                                req, rc, rep ? rep->lock_policy_res1 : 0);
+                                req, rc, rep ? rep->lock_policy_res1 : 0, 0);
 
  cleanup_no_trans:
         switch (cleanup_phase) {
@@ -1274,7 +1274,7 @@ int mds_mfd_close(struct ptlrpc_request *req, int offset,
                 int stripe_count = 0;
                 LASSERT(rc == 0); /* mds_put_write_access must have succeeded */
 
-                CDEBUG(D_HA, "destroying orphan object %s\n", fidname);
+                CDEBUG(D_INODE, "destroying orphan object %s\n", fidname);
 
                 if ((S_ISREG(inode->i_mode) && inode->i_nlink != 1) ||
                     (S_ISDIR(inode->i_mode) && inode->i_nlink != 2))
@@ -1390,7 +1390,7 @@ out:
 
  cleanup:
         if (req != NULL && reply_body != NULL) {
-                rc = mds_finish_transno(mds, pending_dir, handle, req, rc, 0);
+                rc = mds_finish_transno(mds, pending_dir, handle, req, rc, 0, 0);
         } else if (handle) {
                 int err = fsfilt_commit(obd, pending_dir, handle, 0);
                 if (err) {
@@ -1437,7 +1437,7 @@ int mds_close(struct ptlrpc_request *req, int offset)
                 MDS_CHECK_RESENT(req, mds_reconstruct_generic(req));
         }
 
-        CDEBUG(D_HA, "close req->rep_len %d mdsize %d cookiesize %d\n",
+        CDEBUG(D_INODE, "close req->rep_len %d mdsize %d cookiesize %d\n",
                req->rq_replen,
                obd->u.mds.mds_max_mdsize, obd->u.mds.mds_max_cookiesize);
         mds_counter_incr(req->rq_export, LPROC_MDS_CLOSE);

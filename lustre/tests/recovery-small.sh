@@ -1,10 +1,9 @@
-
 #!/bin/bash
 
 set -e
 
-#         bug  11190 5494 7288 5493
-ALWAYS_EXCEPT="19b   24   27   52 $RECOVERY_SMALL_EXCEPT"
+#         bug  11190 5494 5493
+ALWAYS_EXCEPT="19b   24   52 $RECOVERY_SMALL_EXCEPT"
 
 PTLDEBUG=${PTLDEBUG:--1}
 LUSTRE=${LUSTRE:-`dirname $0`/..}
@@ -20,7 +19,7 @@ SETUP=${SETUP:-"setup"}
 CLEANUP=${CLEANUP:-"cleanup"}
 
 setup() {
-    formatall
+    [ "$REFORMAT" ] && formatall
     setupall
 }
 
@@ -202,7 +201,7 @@ test_16() {
     cancel_lru_locks osc
     # OST bulk will time out here, client resends
     do_facet client "cmp /etc/termcap $MOUNT/termcap" || return 1
-    sysctl -w lustre.fail_loc=0
+    do_facet ost1 sysctl -w lustre.fail_loc=0
     # give recovery a chance to finish (shouldn't take long)
     sleep $TIMEOUT
     do_facet client "cmp /etc/termcap $MOUNT/termcap" || return 2
@@ -213,13 +212,13 @@ run_test 16 "timeout bulk put, don't evict client (2732)"
 test_17() {
     # OBD_FAIL_PTLRPC_BULK_GET_NET 0x0503 | OBD_FAIL_ONCE
     # OST bulk will time out here, client retries
-    sysctl -w lustre.fail_loc=0x80000503
+    do_facet ost1 sysctl -w lustre.fail_loc=0x80000503
     # need to ensure we send an RPC
     do_facet client cp /etc/termcap $DIR/$tfile
     sync
 
     sleep $TIMEOUT
-    sysctl -w lustre.fail_loc=0
+    do_facet ost1 sysctl -w lustre.fail_loc=0
     do_facet client "df $DIR"
     # expect cmp to succeed, client resent bulk
     do_facet client "cmp /etc/termcap $DIR/$tfile" || return 3
@@ -604,7 +603,8 @@ test_26() {      # bug 5921 - evict dead exports by pinger
 run_test 26 "evict dead exports"
 
 test_26b() {      # bug 10140 - evict dead exports by pinger
-	zconf_mount `hostname` $MOUNT2
+	client_df
+	zconf_mount `hostname` $MOUNT2 || error "Failed to mount $MOUNT2"
 	MDS_FILE=$LPROC/mds/${mds_svc}/num_exports
         MDS_NEXP1="`do_facet mds cat $MDS_FILE | cut -d' ' -f2`"
 	OST_FILE=$LPROC/obdfilter/${ost1_svc}/num_exports
@@ -879,6 +879,18 @@ test_58() { # bug 11546
         do_facet client "df $DIR"
 }
 run_test 58 "Eviction in the middle of open RPC reply processing"
+
+test_59() { # bug 10589
+	zconf_mount `hostname` $MOUNT2 || error "Failed to mount $MOUNT2"
+	sysctl -w lustre.fail_loc=0x311
+	writes=`dd if=/dev/zero of=$DIR2/$tfile count=1 2>&1 | awk 'BEGIN { FS="+" } /out/ {print $1}'`
+	sysctl -w lustre.fail_loc=0
+	sync
+	zconf_umount `hostname` $DIR2 -f
+	reads=`dd if=$DIR/$tfile of=/dev/null 2>&1 | awk 'BEGIN { FS="+" } /in/ {print $1}'`
+	[ $reads -eq $writes ] || error "read" $reads "blocks, must be" $writes
+}
+run_test 59 "Read cancel race on client eviction"
 
 $CLEANUP
 echo "$0: completed"

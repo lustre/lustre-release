@@ -23,11 +23,11 @@ nobase_noinst_DATA = acl/cp.test acl/getfacl-noacl.test acl/inheritance.test
 nobase_noinst_DATA += acl/misc.test acl/permissions.test acl/setfacl.test
 
 EXTRA_DIST = $(noinst_SCRIPTS) $(noinst_DATA) \
-			 $(nobase_noinst_SCRIPTS) $(nobase_noinst_DATA) \
-			 sanity.sh rundbench
+             $(nobase_noinst_SCRIPTS) $(nobase_noinst_DATA) \
+             sanity.sh rundbench
 
 if TESTS
-noinst_PROGRAMS = openunlink testreq truncate directio openme writeme
+noinst_PROGRAMS = openunlink truncate directio openme writeme
 noinst_PROGRAMS += tchmod toexcl fsx test_brw openclose createdestroy
 noinst_PROGRAMS += stat createmany chownmany statmany multifstat createtest mlink utime
 noinst_PROGRAMS += opendirunlink opendevunlink unlinkmany fchdir_test checkstat

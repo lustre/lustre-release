@@ -104,6 +104,11 @@ static int dio_complete_routine(struct bio *bio, unsigned int done, int error)
         struct filter_iobuf *iobuf = bio->bi_private;
         unsigned long        flags;
 
+#ifdef HAVE_PAGE_CONSTANT
+        struct bio_vec *bvl;
+        int i;
+#endif
+
         /* CAVEAT EMPTOR: possibly in IRQ context 
          * DO NOT record procfs stats here!!! */
 
@@ -127,6 +132,11 @@ static int dio_complete_routine(struct bio *bio, unsigned int done, int error)
                        bio->bi_private);
                 return 0;
         }
+
+#ifdef HAVE_PAGE_CONSTANT
+        bio_for_each_segment(bvl, bio, i)
+                ClearPageConstant(bvl->bv_page);
+#endif
 
         spin_lock_irqsave(&iobuf->dr_lock, flags);
         if (iobuf->dr_error == 0)
@@ -182,6 +192,7 @@ struct filter_iobuf *filter_alloc_iobuf(struct filter_obd *filter,
         spin_lock_init(&iobuf->dr_lock);
         iobuf->dr_max_pages = num_pages;
         iobuf->dr_npages = 0;
+        iobuf->dr_error = 0;
 
         RETURN(iobuf);
 
@@ -197,6 +208,7 @@ struct filter_iobuf *filter_alloc_iobuf(struct filter_obd *filter,
 static void filter_clear_iobuf(struct filter_iobuf *iobuf)
 {
         iobuf->dr_npages = 0;
+        iobuf->dr_error = 0;
         atomic_set(&iobuf->dr_numreqs, 0);
 }
 
@@ -292,6 +304,18 @@ int filter_do_bio(struct obd_export *exp, struct inode *inode,
                                (sector + nblocks*(blocksize>>9)) ==
                                (blocks[block_idx + i + nblocks] << sector_bits))
                                 nblocks++;
+
+#ifdef HAVE_PAGE_CONSTANT
+                        /* I only set the page to be constant only if it 
+                         * is mapped to a contiguous underlying disk block(s). 
+                         * It will then make sure the corresponding device 
+                         * cache of raid5 will be overwritten by this page. 
+                         * - jay */
+                        if ((rw == OBD_BRW_WRITE) && 
+                            (nblocks == blocks_per_page) && 
+                            mapping_cap_page_constant_write(inode->i_mapping))
+                                SetPageConstant(page);
+#endif
 
                         if (bio != NULL &&
                             can_be_merged(bio, sector) &&
@@ -407,11 +431,15 @@ static int filter_sync_inode_data(struct inode *inode, int locked)
         if (!locked)
                 LOCK_INODE_MUTEX(inode);
         if (inode->i_mapping->nrpages) {
+#ifdef PF_SYNCWRITE
                 current->flags |= PF_SYNCWRITE;
+#endif
                 rc = filemap_fdatawrite(inode->i_mapping);
                 if (rc == 0)
                         rc = filemap_fdatawait(inode->i_mapping);
+#ifdef PF_SYNCWRITE
                 current->flags &= ~PF_SYNCWRITE;
+#endif
         }
         if (!locked)
                 UNLOCK_INODE_MUTEX(inode);
@@ -521,9 +549,9 @@ int filter_direct_io(int rw, struct dentry *dchild, struct filter_iobuf *iobuf,
 
         if (rw == OBD_BRW_WRITE) {
                 if (rc == 0) {
-                        filter_tally_write(exp, iobuf->dr_pages,
-                                           iobuf->dr_npages, iobuf->dr_blocks,
-                                           blocks_per_page);
+                        filter_tally(exp, iobuf->dr_pages,
+                                     iobuf->dr_npages, iobuf->dr_blocks,
+                                     blocks_per_page, 1);
                         if (attr->ia_size > inode->i_size)
                                 attr->ia_valid |= ATTR_SIZE;
                         rc = fsfilt_setattr(obd, dchild,
@@ -532,7 +560,7 @@ int filter_direct_io(int rw, struct dentry *dchild, struct filter_iobuf *iobuf,
 
                 UNLOCK_INODE_MUTEX(inode);
 
-                rc2 = filter_finish_transno(exp, oti, 0);
+                rc2 = filter_finish_transno(exp, oti, 0, 0);
                 if (rc2 != 0) {
                         CERROR("can't close transaction: %d\n", rc2);
                         if (rc == 0)
@@ -545,9 +573,8 @@ int filter_direct_io(int rw, struct dentry *dchild, struct filter_iobuf *iobuf,
                 if (rc != 0)
                         RETURN(rc);
         } else if (rc == 0) {
-                filter_tally_read(exp, iobuf->dr_pages,
-                                  iobuf->dr_npages, iobuf->dr_blocks,
-                                  blocks_per_page);
+                filter_tally(exp, iobuf->dr_pages, iobuf->dr_npages,
+                             iobuf->dr_blocks, blocks_per_page, 0);
         }
 
         rc = filter_clear_page_cache(inode, iobuf);

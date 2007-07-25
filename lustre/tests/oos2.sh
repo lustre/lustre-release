@@ -83,6 +83,7 @@ if [ "$RECORDSOUT" -ne $(($FILESIZE / 1024)) ]; then
 fi
 
 rm -f $OOS $OOS2
+sync; sleep 1; sync
 
 if [ $SUCCESS -eq 1 ]; then
 	echo "Success!"

@@ -39,9 +39,7 @@
 #include <obd_class.h>
 #include <lustre_debug.h>
 #include <lprocfs_status.h>
-#ifdef __KERNEL__
-#include <linux/lustre_build_version.h>
-#endif
+#include <lustre/lustre_build_version.h>
 #include <libcfs/list.h>
 #include "llog_internal.h"
 
@@ -60,6 +58,7 @@ int obd_memmax;
 
 /* The following are visible and mutable through /proc/sys/lustre/. */
 unsigned int obd_fail_loc;
+unsigned int obd_fail_val;
 unsigned int obd_debug_peer_on_timeout;
 unsigned int obd_dump_on_timeout;
 unsigned int obd_dump_on_eviction;
@@ -377,6 +376,7 @@ void *obd_psdev = NULL;
 
 EXPORT_SYMBOL(obd_devs);
 EXPORT_SYMBOL(obd_fail_loc);
+EXPORT_SYMBOL(obd_fail_val);
 EXPORT_SYMBOL(obd_print_fail_loc);
 EXPORT_SYMBOL(obd_race_waitq);
 EXPORT_SYMBOL(obd_race_state);
@@ -418,6 +418,7 @@ EXPORT_SYMBOL(lustre_uuid_to_peer);
 EXPORT_SYMBOL(class_handle_hash);
 EXPORT_SYMBOL(class_handle_unhash);
 EXPORT_SYMBOL(class_handle2object);
+EXPORT_SYMBOL(class_handle_free_cb);
 
 /* obd_config.c */
 EXPORT_SYMBOL(class_incref);
@@ -510,7 +511,6 @@ int obd_init_checks(void)
 #endif
 
 extern spinlock_t obd_types_lock;
-extern spinlock_t handle_lock;
 extern int class_procfs_init(void);
 extern int class_procfs_clean(void);
 
@@ -534,7 +534,6 @@ int init_obdclass(void)
 #endif
 
         spin_lock_init(&obd_types_lock);
-        spin_lock_init(&handle_lock);
         cfs_waitq_init(&obd_race_waitq);
         obd_zombie_impexp_init();
 

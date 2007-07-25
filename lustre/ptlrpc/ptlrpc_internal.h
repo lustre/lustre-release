@@ -79,9 +79,24 @@ static inline int opcode_offset(__u32 opc) {
                 return (opc - LDLM_FIRST_OPC +
                         (MDS_LAST_OPC - MDS_FIRST_OPC) +
                         (OST_LAST_OPC - OST_FIRST_OPC));
+        } else if (opc < MGS_LAST_OPC) {
+                /* MGS Opcode */
+                return (opc - MGS_FIRST_OPC +
+                        (LDLM_LAST_OPC - LDLM_FIRST_OPC) +
+                        (MDS_LAST_OPC - MDS_FIRST_OPC) +
+                        (OST_LAST_OPC - OST_FIRST_OPC));
         } else if (opc < OBD_LAST_OPC) {
                 /* OBD Ping */
                 return (opc - OBD_FIRST_OPC +
+                        (MGS_LAST_OPC - MGS_FIRST_OPC) +
+                        (LDLM_LAST_OPC - LDLM_FIRST_OPC) +
+                        (MDS_LAST_OPC - MDS_FIRST_OPC) +
+                        (OST_LAST_OPC - OST_FIRST_OPC));
+        } else if (opc < LLOG_LAST_OPC) {
+                /* LLOG Opcode */
+                return (opc - LLOG_FIRST_OPC +
+                        (OBD_LAST_OPC - OBD_FIRST_OPC) +
+                        (MGS_LAST_OPC - MGS_FIRST_OPC) +
                         (LDLM_LAST_OPC - LDLM_FIRST_OPC) +
                         (MDS_LAST_OPC - MDS_FIRST_OPC) +
                         (OST_LAST_OPC - OST_FIRST_OPC));
@@ -91,10 +106,12 @@ static inline int opcode_offset(__u32 opc) {
         }
 }
 
-#define LUSTRE_MAX_OPCODES ((LDLM_LAST_OPC - LDLM_FIRST_OPC)   + \
+#define LUSTRE_MAX_OPCODES ((OST_LAST_OPC - OST_FIRST_OPC)     + \
                             (MDS_LAST_OPC - MDS_FIRST_OPC)     + \
-                            (OST_LAST_OPC - OST_FIRST_OPC)     + \
-                            (OBD_LAST_OPC - OBD_FIRST_OPC))
+                            (LDLM_LAST_OPC - LDLM_FIRST_OPC)   + \
+                            (MGS_LAST_OPC - MGS_FIRST_OPC)     + \
+                            (OBD_LAST_OPC - OBD_FIRST_OPC)     + \
+                            (LLOG_LAST_OPC - LLOG_FIRST_OPC))
 
 enum {
         PTLRPC_REQWAIT_CNTR = 0,
@@ -108,7 +125,7 @@ int ptlrpc_expire_one_request(struct ptlrpc_request *req);
 
 /* pers.c */
 void ptlrpc_fill_bulk_md(lnet_md_t *md, struct ptlrpc_bulk_desc *desc);
-void ptlrpc_add_bulk_page(struct ptlrpc_bulk_desc *desc, cfs_page_t *page, 
+void ptlrpc_add_bulk_page(struct ptlrpc_bulk_desc *desc, cfs_page_t *page,
                           int pageoffset, int len);
 void ptl_rpc_wipe_bulk_pages(struct ptlrpc_bulk_desc *desc);
 
@@ -124,4 +141,8 @@ int ping_evictor_wake(struct obd_export *exp);
 #define ping_evictor_wake(exp)     1
 #endif
 
+static inline int ptlrpc_recoverable_error(int rc)
+{ 
+        return (rc == -ENOTCONN || rc == -ENODEV);
+}
 #endif /* PTLRPC_INTERNAL_H */

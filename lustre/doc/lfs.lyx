@@ -56,15 +56,7 @@ lfs
 
 \series bold
 lfs\InsetSpace ~
-find [--atime|-A N] [--mtime|-M N] [--ctime|-C N] [--maxdepth|-D N] [--print0
-|-P] [--print|-p] [--obd|-O <uuid>] <dir/file>
-\end_layout
-
-\begin_layout Standard
-
-\series bold
-lfs\InsetSpace ~
-find [--quiet|-q] [--verbose|-v] [--recursive|-r] <dir/file>
+find [[!] --atime|-A N] [[!] --mtime|-M N] [[!] --ctime|-C N] [--maxdepth|-D N] [[!] --name|-n pattern] [--print0|-P] [--print|-p] [--obd|-O <uuid>] <dir/file>
 \end_layout
 
 \begin_layout Standard

@@ -283,8 +283,8 @@ int llog_obd_origin_cleanup(struct llog_ctxt *ctxt)
                                 llog_cat_set_first_idx(cathandle, index);
                                 rc = llog_cancel_rec(cathandle, index);
                                 if (rc == 0)
-                                        CDEBUG(D_HA, "cancel plain log at index"
-                                               " %u of catalog "LPX64"\n",
+                                        CDEBUG(D_RPCTRACE, "cancel plain log at"
+                                               "index %u of catalog "LPX64"\n",
                                                index,cathandle->lgh_id.lgl_oid);
                         }
                 }

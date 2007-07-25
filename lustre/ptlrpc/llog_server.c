@@ -434,7 +434,7 @@ pop_ctxt:
         if (rc)
                 CERROR("cancel %d llog-records failed: %d\n", num_cookies, rc);
         else
-                CDEBUG(D_HA, "cancel %d llog-records\n", num_cookies);
+                CDEBUG(D_RPCTRACE, "cancel %d llog-records\n", num_cookies);
 
         RETURN(rc);
 }

@@ -40,7 +40,7 @@
 #include <lustre_dlm.h>
 #include <obd.h>          /* for struct lov_stripe_md */
 #include <obd_lov.h>
-#include <linux/lustre_build_version.h>
+#include <lustre/lustre_build_version.h>
 
 #include <unistd.h>
 #include <sys/un.h>

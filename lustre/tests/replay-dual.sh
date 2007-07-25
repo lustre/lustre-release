@@ -30,7 +30,7 @@ fi
 
 setup() {
     cleanup
-    formatall
+    [ "$REFORMAT" ] && formatall
     setupall
     mount_client $MOUNT2
 }

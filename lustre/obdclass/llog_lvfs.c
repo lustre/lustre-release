@@ -161,7 +161,7 @@ static int llog_lvfs_read_header(struct llog_handle *handle)
         obd = handle->lgh_ctxt->loc_exp->exp_obd;
 
         if (handle->lgh_file->f_dentry->d_inode->i_size == 0) {
-                CDEBUG(D_HA, "not reading header from 0-byte log\n");
+                CDEBUG(D_RPCTRACE, "not reading header from 0-byte log\n");
                 RETURN(LLOG_EEMPTY);
         }
 
@@ -343,7 +343,7 @@ static int llog_lvfs_write_rec(struct llog_handle *loghandle,
         if (rc)
                 RETURN(rc);
 
-        CDEBUG(D_HA, "added record "LPX64": idx: %u, %u bytes\n",
+        CDEBUG(D_RPCTRACE, "added record "LPX64": idx: %u, %u bytes\n",
                loghandle->lgh_id.lgl_oid, index, rec->lrh_len);
         if (rc == 0 && reccookie) {
                 reccookie->lgc_lgl = loghandle->lgh_id;
@@ -479,7 +479,7 @@ static int llog_lvfs_prev_block(struct llog_handle *loghandle,
         if (len == 0 || len & (LLOG_CHUNK_SIZE - 1))
                 RETURN(-EINVAL);
 
-        CDEBUG(D_OTHER, "looking for log index %u n", prev_idx);
+        CDEBUG(D_OTHER, "looking for log index %u\n", prev_idx);
 
         cur_offset = LLOG_CHUNK_SIZE;
         llog_skip_over(&cur_offset, 0, prev_idx);
@@ -638,7 +638,7 @@ static int llog_lvfs_create(struct llog_ctxt *ctxt, struct llog_handle **res,
                 handle->lgh_id.lgl_ogen =
                         handle->lgh_file->f_dentry->d_inode->i_generation;
         } else {
-                oa = obdo_alloc();
+                OBDO_ALLOC(oa);
                 if (oa == NULL)
                         GOTO(cleanup, rc = -ENOMEM);
 
@@ -668,7 +668,7 @@ static int llog_lvfs_create(struct llog_ctxt *ctxt, struct llog_handle **res,
         handle->lgh_ctxt = ctxt;
  finish:
         if (oa)
-                obdo_free(oa);
+                OBDO_FREE(oa);
         RETURN(rc);
 cleanup:
         switch (cleanup_phase) {
@@ -727,7 +727,7 @@ static int llog_lvfs_destroy(struct llog_handle *handle)
                 RETURN(rc);
         }
 
-        oa = obdo_alloc();
+        OBDO_ALLOC(oa);
         if (oa == NULL)
                 RETURN(-ENOMEM);
 
@@ -742,7 +742,7 @@ static int llog_lvfs_destroy(struct llog_handle *handle)
 
         rc = obd_destroy(handle->lgh_ctxt->loc_exp, oa, NULL, NULL, NULL);
  out:
-        obdo_free(oa);
+        OBDO_FREE(oa);
         RETURN(rc);
 }
 

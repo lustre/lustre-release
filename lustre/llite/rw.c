@@ -54,7 +54,7 @@
                 pos = n, n = pos->prev )
 #endif
 
-kmem_cache_t *ll_async_page_slab = NULL;
+cfs_mem_cache_t *ll_async_page_slab = NULL;
 size_t ll_async_page_slab_size = 0;
 
 /* SYNCHRONOUS I/O to object storage for an inode */
@@ -89,11 +89,11 @@ static int ll_brw(int cmd, struct inode *inode, struct obdo *oa,
         pg.flag = flags;
 
         if (cmd & OBD_BRW_WRITE)
-                lprocfs_counter_add(ll_i2sbi(inode)->ll_stats,
-                                    LPROC_LL_BRW_WRITE, pg.count);
+                ll_stats_ops_tally(ll_i2sbi(inode), LPROC_LL_BRW_WRITE,
+                                   pg.count);
         else
-                lprocfs_counter_add(ll_i2sbi(inode)->ll_stats,
-                                    LPROC_LL_BRW_READ, pg.count);
+                ll_stats_ops_tally(ll_i2sbi(inode), LPROC_LL_BRW_READ,
+                           pg.count);
         oinfo.oi_oa = oa;
         oinfo.oi_md = lsm;
         rc = obd_brw(cmd, ll_i2obdexp(inode), &oinfo, 1, &pg, NULL);
@@ -121,7 +121,7 @@ void ll_truncate(struct inode *inode)
         CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu/%u(%p) to %Lu=%#Lx\n",inode->i_ino,
                inode->i_generation, inode, inode->i_size, inode->i_size);
 
-        ll_vfs_ops_tally(ll_i2sbi(inode), VFS_OPS_TRUNCATE);
+        ll_stats_ops_tally(ll_i2sbi(inode), LPROC_LL_TRUNC, 1);
         if (lli->lli_size_sem_owner != current) {
                 EXIT;
                 return;
@@ -492,18 +492,16 @@ int llap_shrink_cache(struct ll_sb_info *sbi, int shrink_fraction)
                         continue;
                 }
 
-                if (llap->llap_write_queued || PageDirty(page) ||
-                    (!PageUptodate(page) &&
-                     llap->llap_origin != LLAP_ORIGIN_READAHEAD))
-                        keep = 1;
-                else
-                        keep = 0;
+               keep = (llap->llap_write_queued || PageDirty(page) ||
+                      PageWriteback(page) || (!PageUptodate(page) &&
+                      llap->llap_origin != LLAP_ORIGIN_READAHEAD));
 
-                LL_CDEBUG_PAGE(D_PAGE, page,"%s LRU page: %s%s%s%s origin %s\n",
+                LL_CDEBUG_PAGE(D_PAGE, page,"%s LRU page: %s%s%s%s%s origin %s\n",
                                keep ? "keep" : "drop",
                                llap->llap_write_queued ? "wq " : "",
                                PageDirty(page) ? "pd " : "",
                                PageUptodate(page) ? "" : "!pu ",
+                               PageWriteback(page) ? "wb" : "",
                                llap->llap_defer_uptodate ? "" : "!du",
                                llap_origins[llap->llap_origin]);
 
@@ -593,7 +591,7 @@ static struct ll_async_page *llap_from_page(struct page *page, unsigned origin)
         if (sbi->ll_async_page_count >= sbi->ll_async_page_max)
                 llap_shrink_cache(sbi, 0);
 
-        OBD_SLAB_ALLOC(llap, ll_async_page_slab, SLAB_KERNEL,
+        OBD_SLAB_ALLOC(llap, ll_async_page_slab, GFP_KERNEL,
                        ll_async_page_slab_size);
         if (llap == NULL)
                 RETURN(ERR_PTR(-ENOMEM));
@@ -665,7 +663,7 @@ static int queue_or_sync_write(struct obd_export *exp, struct inode *inode,
                                 0, 0, 0, async_flags);
         if (rc == 0) {
                 LL_CDEBUG_PAGE(D_PAGE, llap->llap_page, "write queued\n");
-                //llap_write_pending(inode, llap);
+                llap_write_pending(inode, llap);
                 GOTO(out, 0);
         }
 
@@ -771,15 +769,13 @@ int ll_commit_write(struct file *file, struct page *page, unsigned from,
         /* queue a write for some time in the future the first time we
          * dirty the page */
         if (!PageDirty(page)) {
-                lprocfs_counter_incr(ll_i2sbi(inode)->ll_stats,
-                                     LPROC_LL_DIRTY_MISSES);
+                ll_stats_ops_tally(ll_i2sbi(inode), LPROC_LL_DIRTY_MISSES, 1);
 
                 rc = queue_or_sync_write(exp, inode, llap, to, 0);
                 if (rc)
                         GOTO(out, rc);
         } else {
-                lprocfs_counter_incr(ll_i2sbi(inode)->ll_stats,
-                                     LPROC_LL_DIRTY_HITS);
+                ll_stats_ops_tally(ll_i2sbi(inode), LPROC_LL_DIRTY_HITS, 1);
         }
 
         /* put the page in the page cache, from now on ll_removepage is
@@ -861,16 +857,13 @@ int ll_ap_completion(void *data, int cmd, struct obdo *oa, int rc)
         } else {
                 if (cmd & OBD_BRW_READ) {
                         llap->llap_defer_uptodate = 0;
-                } else {
-                        ll_redirty_page(page);
-                        ret = 1;
                 }
                 SetPageError(page);
         }
 
         unlock_page(page);
 
-        if (0 && cmd & OBD_BRW_WRITE) {
+        if (cmd & OBD_BRW_WRITE) {
                 llap_write_complete(page->mapping->host, llap);
                 ll_try_done_writing(page->mapping->host);
         }
@@ -914,7 +907,7 @@ void ll_removepage(struct page *page)
                 return;
         }
 
-        llap = llap_from_page(page, 0);
+        llap = llap_from_page(page, LLAP_ORIGIN_REMOVEPAGE);
         if (IS_ERR(llap)) {
                 CERROR("page %p ind %lu couldn't find llap: %ld\n", page,
                        page->index, PTR_ERR(llap));
@@ -1390,7 +1383,9 @@ out:
                 if (PageWriteback(page)) {
                         end_page_writeback(page);
                 }
-                ll_redirty_page(page);
+                /* resend page only for not started IO*/
+                if (!PageError(page))
+                        ll_redirty_page(page);
                 unlock_page(page);
         }
         RETURN(rc);
@@ -1451,7 +1446,9 @@ int ll_readpage(struct file *filp, struct page *page)
                 ras_update(ll_i2sbi(inode), inode, &fd->fd_ras, page->index,
                            llap->llap_defer_uptodate);
 
+
         if (llap->llap_defer_uptodate) {
+                /* This is the callpath if we got the page from a readahead */
                 llap->llap_ra_used = 1;
                 rc = ll_readahead(&fd->fd_ras, exp, page->mapping, oig,
                                   fd->fd_flags);
@@ -1467,7 +1464,8 @@ int ll_readpage(struct file *filp, struct page *page)
         if (likely((fd->fd_flags & LL_FILE_IGNORE_LOCK) == 0)) {
                 rc = ll_page_matches(page, fd->fd_flags);
                 if (rc < 0) {
-                        LL_CDEBUG_PAGE(D_ERROR, page, "lock match failed: rc %d\n", rc);
+                        LL_CDEBUG_PAGE(D_ERROR, page,
+                                       "lock match failed: rc %d\n", rc);
                         GOTO(out, rc);
                 }
 
@@ -1484,6 +1482,8 @@ int ll_readpage(struct file *filp, struct page *page)
                 GOTO(out, rc);
 
         LL_CDEBUG_PAGE(D_PAGE, page, "queued readpage\n");
+        /* We have just requested the actual page we want, see if we can tack
+         * on some readahead to that page's RPC before it is sent. */
         if (ll_i2sbi(inode)->ll_ra_info.ra_max_pages)
                 ll_readahead(&fd->fd_ras, exp, page->mapping, oig,
                              fd->fd_flags);

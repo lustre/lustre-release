@@ -6,10 +6,11 @@ set -e
 #set -x
 
 
-export REFORMAT=""
+export REFORMAT=${REFORMAT:-""}
 export VERBOSE=false
 export GMNALNID=${GMNALNID:-/usr/sbin/gmlndnid}
 export CATASTROPHE=${CATASTROPHE:-/proc/sys/lnet/catastrophe}
+#export PDSH="pdsh -S -Rssh -w"
 
 # eg, assert_env LUSTRE MDSNODES OSTNODES CLIENTS
 assert_env() {
@@ -46,7 +47,6 @@ init_test_env() {
     export TUNEFS=${TUNEFS:-"$LUSTRE/utils/tunefs.lustre"}
     [ ! -f "$TUNEFS" ] && export TUNEFS=$(which tunefs.lustre) 
     export CHECKSTAT="${CHECKSTAT:-checkstat} "
-    export FSYTPE=${FSTYPE:-"ext3"}
     export NAME=${NAME:-local}
     export LPROC=/proc/fs/lustre
 
@@ -74,8 +74,8 @@ init_test_env() {
 }
 
 case `uname -r` in
-2.4.*) EXT=".o"; USE_QUOTA=no; FSTYPE=ext3 ;;
-    *) EXT=".ko"; USE_QUOTA=yes; [ "$FSTYPE" ] || FSTYPE=ldiskfs ;;
+2.4.*) EXT=".o"; USE_QUOTA=no;;
+    *) EXT=".ko"; USE_QUOTA=yes;;
 esac
 
 load_module() {
@@ -104,6 +104,9 @@ load_modules() {
 
     echo Loading modules from $LUSTRE
     load_module ../lnet/libcfs/libcfs
+    [ -z "$LNETOPTS" ] && \
+        LNETOPTS=$(awk '/^options lnet/ { print $0}' /etc/modprobe.conf | sed 's/^options lnet //g')
+    echo "lnet options: '$LNETOPTS'"
     # note that insmod will ignore anything in modprobe.conf
     load_module ../lnet/lnet/lnet $LNETOPTS
     LNETLND=${LNETLND:-"socklnd/ksocklnd"}
@@ -116,8 +119,7 @@ load_modules() {
     load_module osc/osc
     load_module lov/lov
     load_module mds/mds
-    [ "$FSTYPE" = "ldiskfs" ] && load_module ldiskfs/ldiskfs
-    [ "$FSTYPE" = "ldiskfs2" ] && load_module ldiskfs/ldiskfs2
+    [ "$FSTYPE" = "ldiskfs" ] && load_module ../ldiskfs/ldiskfs/ldiskfs
     load_module lvfs/fsfilt_$FSTYPE
     load_module ost/ost
     load_module obdfilter/obdfilter
@@ -125,7 +127,9 @@ load_modules() {
     load_module mgc/mgc
     load_module mgs/mgs
     rm -f $TMP/ogdb-`hostname`
-    $LCTL modules > $TMP/ogdb-`hostname`
+    OGDB=$TMP
+    [ -d /r ] && OGDB="/r/tmp"
+    $LCTL modules > $OGDB/ogdb-`hostname`
     # 'mount' doesn't look in $PATH, just sbin
     [ -f $LUSTRE/utils/mount.lustre ] && cp $LUSTRE/utils/mount.lustre /sbin/. || true
 }
@@ -161,10 +165,10 @@ wait_for_lnet() {
 unload_modules() {
     lsmod | grep lnet > /dev/null && $LCTL dl && $LCTL dk $TMP/debug
     local MODULES=$($LCTL modules | awk '{ print $2 }')
-    $RMMOD $MODULES >/dev/null 2>&1 || true
+    $RMMOD $MODULES > /dev/null 2>&1 || true
      # do it again, in case we tried to unload ksocklnd too early
     MODULES=$($LCTL modules | awk '{ print $2 }')
-    [ -n "$MODULES" ] && $RMMOD $MODULES >/dev/null || true
+    [ -n "$MODULES" ] && $RMMOD $MODULES > /dev/null 2>&1 || true
     MODULES=$($LCTL modules | awk '{ print $2 }')
     if [ -n "$MODULES" ]; then
     echo "Modules still loaded: "
@@ -175,7 +179,7 @@ unload_modules() {
         lsmod
         return 2
     else
-        echo "Lustre stopped, but LNET is still loaded"
+        echo "Lustre stopped but LNET is still loaded, waiting..."
         wait_for_lnet || return 3
     fi
     fi
@@ -188,7 +192,7 @@ unload_modules() {
         echo "$LEAK_PORTALS" 1>&2
         mv $TMP/debug $TMP/debug-leak.`date +%s` || true
         echo "Memory leaks detected"
-	[ "$LEAK_LUSTRE" -a $(echo $LEAK_LUSTRE | awk 'leaked=$8 {print leaked % 56}') == 0 ] && echo "ignoring known bug 10818" && return 0
+	[ -n "$IGNORE_LEAK" ] && echo "ignoring leaks" && return 0
         return 254
     fi
     echo "modules unloaded."
@@ -211,7 +215,7 @@ start() {
         echo Start of ${device} on ${facet} failed ${RC}
     else 
         do_facet ${facet} sync
-        label=`do_facet ${facet} "e2label ${device}" | grep -v "CMD: "`
+        label=$(do_facet ${facet} "e2label ${device}")
         [ -z "$label" ] && echo no label for ${device} && exit 1
         eval export ${facet}_svc=${label}
         eval export ${facet}_dev=${device}
@@ -228,7 +232,7 @@ stop() {
     HOST=`facet_active_host $facet`
     [ -z $HOST ] && echo stop: no host for $facet && return 0
 
-    running=`do_facet ${facet} "grep -c ${MOUNT%/*}/${facet}' ' /proc/mounts" | grep -v "CMD: "`
+    running=$(do_facet ${facet} "grep -c ${MOUNT%/*}/${facet}' ' /proc/mounts") || true
     if [ ${running} -ne 0 ]; then
         echo "Stopping ${MOUNT%/*}/${facet} (opts:$@)"
         do_facet ${facet} umount -d $@ ${MOUNT%/*}/${facet}
@@ -240,7 +244,7 @@ stop() {
     local INTERVAL=1
     # conf-sanity 31 takes a long time cleanup
     while [ $WAIT -lt 300 ]; do
-	running=$(do_facet ${facet} "[ -e $LPROC ] && grep ST' ' $LPROC/devices" | grep -v "CMD: ") || true
+	running=$(do_facet ${facet} "[ -e $LPROC ] && grep ST' ' $LPROC/devices") || true
 	if [ -z "${running}" ]; then
 	    return 0
 	fi
@@ -283,7 +287,7 @@ zconf_umount() {
     client=$1
     mnt=$2
     [ "$3" ] && force=-f
-    local running=`do_node $client "grep -c $mnt' ' /proc/mounts" | grep -v "CMD: "`
+    local running=$(do_node $client "grep -c $mnt' ' /proc/mounts") || true
     if [ $running -ne 0 ]; then
         echo "Stopping client $mnt (opts:$force)"
         do_node $client umount $force $mnt
@@ -454,6 +458,18 @@ h2gm () {
     fi
 }
 
+h2ptl() {
+   if [ "$1" = "client" -o "$1" = "'*'" ]; then echo \'*\'; else
+       ID=`xtprocadmin -n $1 2>/dev/null | egrep -v 'NID' | awk '{print $1}'`
+       if [ -z "$ID" ]; then
+           echo "Could not get a ptl id for $1..."
+           exit 1
+       fi
+       echo $ID"@ptl"
+   fi
+}
+declare -fx h2ptl
+
 h2tcp() {
     if [ "$1" = "client" -o "$1" = "'*'" ]; then echo \'*\'; else
         echo $1"@tcp" 
@@ -542,10 +558,11 @@ do_node() {
         myPDSH="no_dsh"
     fi
     if $VERBOSE; then
-        echo "CMD: $HOST $@"
+        echo "CMD: $HOST $@" >&2
         $myPDSH $HOST $LCTL mark "$@" > /dev/null 2>&1 || :
     fi
-    $myPDSH $HOST "(PATH=\$PATH:$RLUSTRE/utils:$RLUSTRE/tests:/sbin:/usr/sbin; cd $RPWD; sh -c \"$@\")"
+    $myPDSH $HOST "(PATH=\$PATH:$RLUSTRE/utils:$RLUSTRE/tests:/sbin:/usr/sbin; cd $RPWD; sh -c \"$@\")" | sed "s/^${HOST}: //"
+    return ${PIPESTATUS[0]}
 }
 
 do_facet() {
@@ -605,6 +622,7 @@ formatall() {
     stopall
     # We need ldiskfs here, may as well load them all
     load_modules
+    [ "$CLIENTONLY" ] && return
     echo Formatting mds, osts
     if $VERBOSE; then
         add mds $MDS_MKFS_OPTS $FSTYPE_OPT --reformat $MDSDEV || exit 10
@@ -627,12 +645,16 @@ mount_client() {
 
 setupall() {
     load_modules
-    echo Setup mdt, osts
-    start mds $MDSDEV $MDS_MOUNT_OPTS
-    for num in `seq $OSTCOUNT`; do
-        DEVNAME=`ostdevname $num`
-        start ost$num $DEVNAME $OST_MOUNT_OPTS
-    done
+    if [ -z "$CLIENTONLY" ]; then
+        echo Setup mdt, osts
+        echo $REFORMAT | grep -q "reformat" \
+	    || do_facet mds "$TUNEFS --writeconf $MDSDEV"
+        start mds $MDSDEV $MDS_MOUNT_OPTS
+        for num in `seq $OSTCOUNT`; do
+            DEVNAME=`ostdevname $num`
+            start ost$num $DEVNAME $OST_MOUNT_OPTS
+        done
+    fi
     [ "$DAEMONFILE" ] && $LCTL debug_daemon start $DAEMONFILE $DAEMONSIZE
     mount_client $MOUNT
     if [ "$MOUNT_2" ]; then
@@ -784,9 +806,12 @@ pgcache_empty() {
 ##################################
 # Test interface 
 error() {
+    local ERRLOG
     sysctl -w lustre.fail_loc=0 2> /dev/null || true
-    echo "${TESTSUITE}: **** FAIL:" $@
-    log "FAIL: $TESTNAME $@"
+    log "${TESTSUITE} ${TESTNAME}: **** FAIL:" $@
+    ERRLOG=$TMP/lustre_${TESTSUITE}_${TESTNAME}.$(date +%s)
+    echo "Dumping lctl log to $ERRLOG"
+    $LCTL dk $ERRLOG
     exit 1
 }
 

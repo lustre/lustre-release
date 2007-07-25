@@ -142,6 +142,7 @@
 
 struct ptlrpc_connection {
         struct list_head        c_link;
+        struct hlist_node       c_hash;
         lnet_nid_t              c_self;
         lnet_process_id_t       c_peer;
         struct obd_uuid         c_remote_uuid;
@@ -181,6 +182,8 @@ struct ptlrpc_request_set {
         struct list_head  set_requests;
         set_interpreter_func    set_interpret; /* completion callback */
         void              *set_arg; /* completion context */
+        void              *set_countp; /* pointer to NOB counter in case 
+                                        * of directIO (bug11737) */
         /* locked so that any old caller can communicate requests to
          * the set holder who can then fold them into the lock-free set */
         spinlock_t        set_new_req_lock;
@@ -601,7 +604,7 @@ struct ptlrpc_connection *ptlrpc_get_connection(lnet_process_id_t peer,
                                                 lnet_nid_t self, struct obd_uuid *uuid);
 int ptlrpc_put_connection(struct ptlrpc_connection *c);
 struct ptlrpc_connection *ptlrpc_connection_addref(struct ptlrpc_connection *);
-void ptlrpc_init_connection(void);
+int ptlrpc_init_connection(void);
 void ptlrpc_cleanup_connection(void);
 extern lnet_pid_t ptl_get_pid(void);
 
@@ -869,6 +872,7 @@ int ptlrpcd_addref(void);
 void ptlrpcd_decref(void);
 
 /* ptlrpc/lproc_ptlrpc.c */
+const char* ll_opcode2str(__u32 opcode);
 #ifdef LPROCFS
 void ptlrpc_lprocfs_register_obd(struct obd_device *obd);
 void ptlrpc_lprocfs_unregister_obd(struct obd_device *obd);

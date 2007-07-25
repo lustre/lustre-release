@@ -1102,7 +1102,7 @@ echo_client_enqueue(struct obd_export *exp, struct obdo *oa,
         struct obd_device      *obd = exp->exp_obd;
         struct echo_client_obd *ec = &obd->u.echo_client;
         struct lustre_handle   *ulh = obdo_handle (oa);
-        struct obd_enqueue_info einfo = { 0 };
+        struct ldlm_enqueue_info einfo = { 0 };
         struct obd_info oinfo = { { { 0 } } };
         struct ec_object       *eco;
         struct ec_lock         *ecl;
@@ -1140,7 +1140,7 @@ echo_client_enqueue(struct obd_export *exp, struct obdo *oa,
         oinfo.oi_policy = ecl->ecl_policy;
         oinfo.oi_lockh = &ecl->ecl_lock_handle;
         oinfo.oi_md = eco->eco_lsm;
-        rc = obd_enqueue(ec->ec_exp, &oinfo, &einfo);
+        rc = obd_enqueue(ec->ec_exp, &oinfo, &einfo, NULL);
         if (rc != 0)
                 goto failed_1;
 
@@ -1383,7 +1383,7 @@ echo_client_setup(struct obd_device *obddev, obd_count len, void *buf)
                 return -ENOMEM;
         }
 
-        ocd->ocd_connect_flags = OBD_CONNECT_VERSION;
+        ocd->ocd_connect_flags = OBD_CONNECT_VERSION | OBD_CONNECT_REQPORTAL;
         ocd->ocd_version = LUSTRE_VERSION_CODE;
 
         rc = obd_connect(&conn, tgt, &echo_uuid, ocd);

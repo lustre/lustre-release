@@ -217,6 +217,8 @@ run_test 4 "force cleanup ost, then cleanup"
 test_5() {
 	setup
 	touch $DIR/$tfile || return 1
+	fuser -m -v $MOUNT && echo "$MOUNT is in use by user space process."
+
 	stop_mds -f || return 2
 
 	# cleanup may return an error from the failed
@@ -292,8 +294,6 @@ run_test 5d "mount with ost down"
 test_5e() {
 	start_ost
 	start_mds
-        # give MDS a chance to connect to OSTs (bz 10476)
-	sleep 5	
 
 #define OBD_FAIL_PTLRPC_DELAY_SEND       0x506
 	do_facet client "sysctl -w lustre.fail_loc=0x80000506"
@@ -766,24 +766,19 @@ test_22() {
         #reformat to remove all logs
         reformat
 	start_mds
-	echo Client mount before any osts are in the logs
-	mount_client $MOUNT
-	check_mount && return 41
-	pass
-
-	echo Client mount with ost in logs, but none running
-	start_ost
-	stop_ost
-	mount_client $MOUNT
-	# check_mount will block trying to contact ost
-	umount_client $MOUNT
-	pass
 
 	echo Client mount with a running ost
 	start_ost
 	mount_client $MOUNT
-	sleep 5	#bz10476
 	check_mount || return 41
+	umount_client $MOUNT
+	pass
+
+	echo Client mount with ost in logs, but none running
+	stop_ost
+	mount_client $MOUNT
+	# check_mount will block trying to contact ost
+	umount_client $MOUNT
 	pass
 
 	cleanup
@@ -883,7 +878,7 @@ test_26() {
     # we need modules before mount for sysctl, so make sure...
     [ -z "$(lsmod | grep lustre)" ] && modprobe lustre 
 #define OBD_FAIL_MDS_FS_SETUP            0x135
-    sysctl -w lustre.fail_loc=0x80000135
+    do_facet mds "sysctl -w lustre.fail_loc=0x80000135"
     start_mds && echo MDS started && return 1
     cat $LPROC/devices
     DEVS=$(cat $LPROC/devices | wc -l)
@@ -905,7 +900,7 @@ set_and_check() {
 	echo "Setting $PARAM from $ORIG to $FINAL"
 	$LCTL conf_param $PARAM=$FINAL
 	local RESULT
-	local MAX=20
+	local MAX=30
 	local WAIT=0
 	while [ 1 ]; do
 	    sleep 5
@@ -1079,16 +1074,8 @@ test_32a() {
 	$LCTL conf_param lustre-MDT0000.failover.node=$NID || return 10
 	echo "ok."
 
-	# With a new good MDT failover nid, we should be able to mount a client
-	# (but it cant talk to OST)
-        local OLDMOUNTOPT=$MOUNTOPT
-        MOUNTOPT="exclude=lustre-OST0000"
-	mount_client $MOUNT
-        MOUNTOPT=$OLDMOUNTOPT
-	set_and_check "cat $LPROC/mdc/*/max_rpcs_in_flight" "lustre-MDT0000.mdc.max_rpcs_in_flight" || return 11
-
-	zconf_umount `hostname` $MOUNT -f
 	cleanup_nocli
+	load_modules
 
         # mount a second time to make sure we didnt leave upgrade flag on
         $TUNEFS --dryrun $TMP/$tdir/mds || error "tunefs failed"

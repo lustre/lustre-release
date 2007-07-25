@@ -3,7 +3,9 @@
  */
 
 /* for O_DIRECTORY */
+#ifndef _GNU_SOURCE
 #define _GNU_SOURCE
+#endif
 
 #include <fcntl.h>
 #include <unistd.h>

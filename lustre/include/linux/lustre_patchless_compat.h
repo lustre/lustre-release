@@ -1,8 +1,29 @@
+/* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
+ * vim:expandtab:shiftwidth=8:tabstop=8:
+ *
+ *  Copyright (C) 2002, 2003 Cluster File Systems, Inc.
+ *
+ *   This file is part of Lustre, http://www.lustre.org.
+ *
+ *   Lustre is free software; you can redistribute it and/or
+ *   modify it under the terms of version 2 of the GNU General Public
+ *   License as published by the Free Software Foundation.
+ *
+ *   Lustre is distributed in the hope that it will be useful,
+ *   but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *   GNU General Public License for more details.
+ *
+ *   You should have received a copy of the GNU General Public License
+ *   along with Lustre; if not, write to the Free Software
+ *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ *
+ */
+
 #ifndef LUSTRE_PATCHLESS_COMPAT_H
 #define LUSTRE_PATCHLESS_COMPAT_H
 
 #include <linux/lustre_version.h>
-#ifndef LUSTRE_KERNEL_VERSION
 #include <linux/fs.h>
 
 #ifndef HAVE_TRUNCATE_COMPLETE_PAGE
@@ -46,14 +67,19 @@ truncate_complete_page(struct address_space *mapping, struct page *page)
         if (PagePrivate(page))
                 page->mapping->a_ops->invalidatepage(page, 0);
 
+#ifdef HAVE_CANCEL_DIRTY_PAGE
+        cancel_dirty_page(page, PAGE_SIZE);
+#else
         clear_page_dirty(page);
+#endif
         ClearPageUptodate(page);
         ClearPageMappedToDisk(page);
         ll_remove_from_page_cache(page);
         page_cache_release(page);       /* pagecache ref */
 }
-#endif
+#endif /* HAVE_TRUNCATE_COMPLETE_PAGE */
 
+#if !defined(HAVE_D_REHASH_COND) && !defined(HAVE___D_REHASH)
 /* megahack */
 static inline void d_rehash_cond(struct dentry * entry, int lock)
 {
@@ -67,8 +93,7 @@ static inline void d_rehash_cond(struct dentry * entry, int lock)
 }
 
 #define __d_rehash(dentry, lock) d_rehash_cond(dentry, lock)
-	
-#define LUSTRE_PATCHLESS
+#endif /* !HAVE_D_REHASH_COND && !HAVE___D_REHASH*/
 
 #ifndef ATTR_FROM_OPEN
 #define ATTR_FROM_OPEN 0
@@ -76,7 +101,5 @@ static inline void d_rehash_cond(struct dentry * entry, int lock)
 #ifndef ATTR_RAW
 #define ATTR_RAW 0
 #endif
-
-#endif /* LUSTRE_KERNEL_VERSION */
 
 #endif

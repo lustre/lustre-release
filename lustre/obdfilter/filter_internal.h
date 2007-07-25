@@ -98,7 +98,8 @@ struct dentry *__filter_oa2dentry(struct obd_device *obd, struct obdo *oa,
                                   const char *what, int quiet);
 #define filter_oa2dentry(obd, oa) __filter_oa2dentry(obd, oa, __FUNCTION__, 0)
 
-int filter_finish_transno(struct obd_export *, struct obd_trans_info *, int rc);
+int filter_finish_transno(struct obd_export *, struct obd_trans_info *, int rc,
+                          int force_sync);
 __u64 filter_next_id(struct filter_obd *, struct obdo *);
 __u64 filter_last_id(struct filter_obd *, obd_gr group);
 int filter_update_fidea(struct obd_export *exp, struct inode *inode,
@@ -173,23 +174,13 @@ int filter_recov_log_mds_ost_cb(struct llog_handle *llh,
                                struct llog_rec_hdr *rec, void *data);
 
 #ifdef LPROCFS
-void filter_tally_write(struct obd_export *exp, struct page **pages,
-                        int nr_pages, unsigned long *blocks,
-                        int blocks_per_page);
-void filter_tally_read(struct obd_export *exp, struct page **pages,
-                       int nr_pages, unsigned long *blocks,
-                       int blocks_per_page);
+void filter_tally(struct obd_export *exp, struct page **pages, int nr_pages,
+                  unsigned long *blocks, int blocks_per_page, int wr);
 int lproc_filter_attach_seqstat(struct obd_device *dev);
 #else
-static inline void filter_tally_write(struct obd_export *exp,
-                                      struct page **pages, int nr_pages,
-                                 unsigned long *blocks, int blocks_per_page) {}
-static inline void filter_tally_read(struct obd_export *exp,
-                                 struct page **pages, int nr_pages,
-                                 unsigned long *blocks, int blocks_per_page) {}
-static inline void filter_tally_read(struct filter_obd *filter,
-                                 struct page **pages, int nr_pages,
-                                 unsigned long *blocks, int blocks_per_page) {}
+static inline void filter_tally(struct obd_export *exp, struct page **pages,
+                                int nr_pages, unsigned long *blocks,
+                                int blocks_per_page, int wr) {}
 static inline int lproc_filter_attach_seqstat(struct obd_device *dev) {}
 #endif
 

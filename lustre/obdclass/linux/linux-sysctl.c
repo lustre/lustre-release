@@ -52,6 +52,7 @@ struct ctl_table_header *obd_table_header = NULL;
 
 enum {
         OBD_FAIL_LOC = 1,       /* control test failures instrumentation */
+        OBD_FAIL_VAL,           /* userdata for fail loc */
         OBD_TIMEOUT,            /* RPC timeout before recovery/intr */
         OBD_DUMP_ON_TIMEOUT,    /* dump kernel debug log upon eviction */
         OBD_MEMUSED,            /* bytes currently OBD_ALLOCated */
@@ -85,6 +86,8 @@ int LL_PROC_PROTO(proc_set_timeout)
 static ctl_table obd_table[] = {
         {OBD_FAIL_LOC, "fail_loc", &obd_fail_loc, sizeof(int), 0644, NULL,
                 &proc_fail_loc},
+        {OBD_FAIL_VAL, "fail_val", &obd_fail_val, sizeof(int), 0644, NULL,
+                &proc_dointvec},
         {OBD_TIMEOUT, "timeout", &obd_timeout, sizeof(int), 0644, NULL,
                 &proc_set_timeout},
         {OBD_DEBUG_PEER_ON_TIMEOUT, "debug_peer_on_timeout", 
@@ -110,7 +113,7 @@ void obd_sysctl_init (void)
 {
 #ifdef CONFIG_SYSCTL
         if ( !obd_table_header )
-                obd_table_header = register_sysctl_table(parent_table, 0);
+                obd_table_header = cfs_register_sysctl_table(parent_table, 0);
 #endif
 }
 
@@ -118,7 +121,7 @@ void obd_sysctl_clean (void)
 {
 #ifdef CONFIG_SYSCTL
         if ( obd_table_header )
-                unregister_sysctl_table(obd_table_header);
+                cfs_unregister_sysctl_table(obd_table_header);
         obd_table_header = NULL;
 #endif
 }

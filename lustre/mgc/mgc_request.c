@@ -147,7 +147,7 @@ static struct config_llog_data *config_log_find(char *logname,
         }
         spin_unlock(&config_list_lock);
 
-        CERROR("can't get log %s\n", logid);
+        CDEBUG(D_CONFIG, "can't get log %s\n", logid);
         RETURN(ERR_PTR(-ENOENT));
 out_found:
         atomic_inc(&cld->cld_refcount);
@@ -598,6 +598,9 @@ static int mgc_enqueue(struct obd_export *exp, struct lov_stripe_md *lsm,
                        struct lustre_handle *lockh)
 {                       
         struct config_llog_data *cld = (struct config_llog_data *)data;
+        struct ldlm_enqueue_info einfo = { type, mode, mgc_blocking_ast,
+                ldlm_completion_ast, NULL, data};
+
         int rc;
         ENTRY;
 
@@ -611,10 +614,8 @@ static int mgc_enqueue(struct obd_export *exp, struct lov_stripe_md *lsm,
         /* We need a callback for every lockholder, so don't try to
            ldlm_lock_match (see rev 1.1.2.11.2.47) */
 
-        rc = ldlm_cli_enqueue(exp, NULL, cld->cld_resid,
-                              type, NULL, mode, flags, 
-                              mgc_blocking_ast, ldlm_completion_ast, NULL,
-                              data, NULL, 0, NULL, lockh, 0);
+        rc = ldlm_cli_enqueue(exp, NULL, &einfo, cld->cld_resid,
+                              NULL, flags, NULL, 0, NULL, lockh, 0);
         /* A failed enqueue should still call the mgc_blocking_ast, 
            where it will be requeued if needed ("grant failed"). */ 
 
@@ -1033,11 +1034,6 @@ static int mgc_process_log(struct obd_device *mgc,
         if (cld->cld_stopping) 
                 RETURN(0);
 
-        if (cld->cld_cfg.cfg_flags & CFG_F_SERVER146)
-                /* If we started from an old MDT, don't bother trying to
-                   get log updates from the MGS */
-                RETURN(0);
-
         OBD_FAIL_TIMEOUT(OBD_FAIL_MGC_PROCESS_LOG, 20);
 
         lsi = s2lsi(cld->cld_cfg.cfg_sb);
@@ -1078,9 +1074,9 @@ static int mgc_process_log(struct obd_device *mgc,
                         rc = mgc_copy_llog(mgc, ctxt, lctxt, cld->cld_logname);
                 if (rcl || rc) {
                         if (mgc_llog_is_empty(mgc, lctxt, cld->cld_logname)) {
-                                LCONSOLE_ERROR("Failed to get MGS log %s "
-                                               "and no local copy.\n",
-                                               cld->cld_logname);
+                                LCONSOLE_ERROR_MSG(0x13a, "Failed to get MGS "
+                                                   "log %s and no local copy."
+                                                   "\n", cld->cld_logname);
                                 GOTO(out_pop, rc = -ENOTCONN);
                         }
                         LCONSOLE_WARN("Failed to get MGS log %s, using "

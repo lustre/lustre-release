@@ -201,7 +201,7 @@ static inline int cleanup_group_info(void)
 
 #include <linux/proc_fs.h>
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,11)
+#ifndef HAVE___D_REHASH
 #define __d_rehash(dentry, lock) d_rehash_cond(dentry, lock)
 #endif
 
@@ -359,6 +359,7 @@ static inline void cond_resched(void)
 #define CheckWriteback(page, cmd) 1
 #define set_page_writeback(page) do {} while (0)
 #define end_page_writeback(page) do {} while (0)
+#define wait_on_page_writeback(page do {} while (0)
 
 static inline int mapping_mapped(struct address_space *mapping)
 {
@@ -497,6 +498,7 @@ ll_kern_mount(const char *fstype, int flags, const char *name, void *data)
         if (!type)
                 return ERR_PTR(-ENODEV);
         mnt = vfs_kern_mount(type, flags, name, data);
+        module_put(type->owner);
         return mnt;
 }
 #else

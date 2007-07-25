@@ -5,13 +5,12 @@ lfs \- Lustre utility to create a file with specific striping pattern, find the 
 .br
 .B lfs
 .br
-.B lfs find [--atime|-A N] [--mtime|-M N] [--ctime|-C N] [--maxdepth|-D N]
-         \fB[--print0|-P] [--print|-p] [--obd|-O <uuid>] <dir/file>\fR
-.br
-.B lfs find [--quiet|-q] [--verbose|-v] [--recursive|-r] <dir|file>
+.B lfs find [[!] --atime|-A N] [[!] --mtime|-M N] [[!] --ctime|-C N]
+	\fB[--maxdepth|-D N] [--name|-n pattern] [--print0|-P] [--print|-p]
+	\fB[--obd|-O <uuid>] <dir|file>\fR
 .br
 .B lfs getstripe [--obd|-O <uuid>] [--quiet|-q] [--verbose|-v] 
-              \fB[--recursive|-r] <dir/file>\fR
+              \fB[--recursive|-r] <dir|file>\fR
 .br
 .B lfs setstripe <filename|dirname> <stripe-size> <start-ost> <stripe-cnt> 
 .br

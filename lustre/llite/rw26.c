@@ -141,6 +141,7 @@ static ssize_t ll_direct_IO_26_seg(int rw, struct inode *inode,
         struct obdo oa;
         int i, rc = 0;
         size_t length;
+        loff_t file_offset_orig = file_offset;
         ENTRY;
 
         OBD_ALLOC(pga, sizeof(*pga) * page_count);
@@ -166,13 +167,10 @@ static ssize_t ll_direct_IO_26_seg(int rw, struct inode *inode,
 
         rc = obd_brw_rqset(rw == WRITE ? OBD_BRW_WRITE : OBD_BRW_READ,
                            ll_i2obdexp(inode), &oa, lsm, page_count, pga, NULL);
-        if (rc == 0) {
-                rc = size;
-                if (rw == WRITE) {
-                        lov_stripe_lock(lsm);
-                        obd_adjust_kms(ll_i2obdexp(inode), lsm, file_offset, 0);
-                        lov_stripe_unlock(lsm);
-                }
+        if ((rc > 0) && (rw == WRITE)) {
+                lov_stripe_lock(lsm);
+                obd_adjust_kms(ll_i2obdexp(inode), lsm, file_offset_orig + rc, 0);
+                lov_stripe_unlock(lsm);
         }
 
         OBD_FREE(pga, sizeof(*pga) * page_count);
@@ -211,11 +209,9 @@ static ssize_t ll_direct_IO_26(int rw, struct kiocb *iocb,
                MAX_DIO_SIZE >> CFS_PAGE_SHIFT);
 
         if (rw == WRITE)
-                lprocfs_counter_add(ll_i2sbi(inode)->ll_stats,
-                                    LPROC_LL_DIRECT_WRITE, count);
+                ll_stats_ops_tally(ll_i2sbi(inode), LPROC_LL_DIRECT_WRITE, count);
         else
-                lprocfs_counter_add(ll_i2sbi(inode)->ll_stats,
-                                    LPROC_LL_DIRECT_READ, count);
+                ll_stats_ops_tally(ll_i2sbi(inode), LPROC_LL_DIRECT_READ, count);
 
         /* Check that all user buffers are aligned as well */
         for (seg = 0; seg < nr_segs; seg++) {

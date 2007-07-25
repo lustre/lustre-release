@@ -511,11 +511,9 @@ static int ptlrpc_import_delay_req(struct obd_import *imp,
                  imp->imp_state == LUSTRE_IMP_CONNECTING) {
                 /* allow CONNECT even if import is invalid */ ;
         } else if (imp->imp_invalid) {
-                /* If the import has been invalidated (such as by an OST
-                 * failure), the request must fail with -EIO. */
                 if (!imp->imp_deactive)
                         DEBUG_REQ(D_ERROR, req, "IMP_INVALID");
-                *status = -EIO;
+                *status = -ESHUTDOWN; /* bz 12940 */
         } else if (req->rq_import_generation != imp->imp_generation) {
                 DEBUG_REQ(D_ERROR, req, "req wrong generation:");
                 *status = -EIO;
@@ -570,8 +568,13 @@ static int ptlrpc_check_status(struct ptlrpc_request *req)
 
         err = lustre_msg_get_status(req->rq_repmsg);
         if (lustre_msg_get_type(req->rq_repmsg) == PTL_RPC_MSG_ERR) {
-                DEBUG_REQ(D_ERROR, req, "type == PTL_RPC_MSG_ERR, err == %d",
-                          err);
+                struct obd_export *exp = req->rq_export;
+                __u32 opc = lustre_msg_get_opc(req->rq_reqmsg);
+
+                LCONSOLE_ERROR_MSG(0x011, "an error ocurred while communicating"
+                                   " with %s The %s operation failed with %d\n",
+                                   exp ? obd_export_nid2str(exp) : "(no nid)",
+                                   ll_opcode2str(opc), err);
                 RETURN(err < 0 ? err : -EINVAL);
         }
 
@@ -603,19 +606,19 @@ static int after_reply(struct ptlrpc_request *req)
         LASSERT (req->rq_nob_received <= req->rq_replen);
         rc = lustre_unpack_msg(req->rq_repmsg, req->rq_nob_received);
         if (rc) {
-                DEBUG_REQ(D_ERROR, req, "unpack_rep failed: %d\n", rc);
+                DEBUG_REQ(D_ERROR, req, "unpack_rep failed: %d", rc);
                 RETURN(-EPROTO);
         }
 
         rc = lustre_unpack_rep_ptlrpc_body(req, MSG_PTLRPC_BODY_OFF);
         if (rc) {
-                DEBUG_REQ(D_ERROR, req, "unpack ptlrpc body failed: %d\n", rc);
+                DEBUG_REQ(D_ERROR, req, "unpack ptlrpc body failed: %d", rc);
                 RETURN(-EPROTO);
         }
 
         if (lustre_msg_get_type(req->rq_repmsg) != PTL_RPC_MSG_REPLY &&
             lustre_msg_get_type(req->rq_repmsg) != PTL_RPC_MSG_ERR) {
-                DEBUG_REQ(D_ERROR, req, "invalid packet received (type=%u)\n",
+                DEBUG_REQ(D_ERROR, req, "invalid packet received (type=%u)",
                           lustre_msg_get_type(req->rq_repmsg));
                 RETURN(-EPROTO);
         }
@@ -625,7 +628,7 @@ static int after_reply(struct ptlrpc_request *req)
         /* Either we've been evicted, or the server has failed for
          * some reason. Try to reconnect, and if that fails, punt to the
          * upcall. */
-        if ((rc == -ENOTCONN) || (rc == -ENODEV)) {
+        if (ptlrpc_recoverable_error(rc)) {
                 if (req->rq_send_state != LUSTRE_IMP_FULL ||
                     imp->imp_obd->obd_no_recov || imp->imp_dlm_fake) {
                         RETURN(-ENOTCONN);
@@ -872,10 +875,10 @@ int ptlrpc_check_set(struct ptlrpc_request_set *set)
                                 /* Add this req to the delayed list so
                                    it can be errored if the import is
                                    evicted after recovery. */
-                                spin_lock(&req->rq_lock);
+                                spin_lock(&imp->imp_lock);
                                 list_add_tail(&req->rq_list,
                                               &imp->imp_delayed_list);
-                                spin_unlock(&req->rq_lock);
+                                spin_unlock(&imp->imp_lock);
                                 continue;
                         }
 
@@ -902,7 +905,9 @@ int ptlrpc_check_set(struct ptlrpc_request_set *set)
                          * was good after getting the REPLY for her GET or
                          * the ACK for her PUT. */
                         DEBUG_REQ(D_ERROR, req, "bulk transfer failed");
-                        LBUG();
+                        req->rq_status = -EIO;
+                        req->rq_phase = RQ_PHASE_INTERPRET;
+                        GOTO(interpret, req->rq_status);
                 }
 
                 req->rq_phase = RQ_PHASE_INTERPRET;
@@ -947,7 +952,8 @@ int ptlrpc_expire_one_request(struct ptlrpc_request *req)
         int rc = 0;
         ENTRY;
 
-        DEBUG_REQ(D_ERROR|D_NETERROR, req, "timeout (sent at %lu, %lus ago)",
+        DEBUG_REQ(D_ERROR|D_NETERROR, req, "%s (sent at %lu, %lus ago)",
+                  req->rq_net_err ? "network error" : "timeout",
                   (long)req->rq_sent, CURRENT_SECONDS - req->rq_sent);
 
         if (imp != NULL && obd_debug_peer_on_timeout)
@@ -1110,7 +1116,7 @@ int ptlrpc_set_wait(struct ptlrpc_request_set *set)
 
                 /* wait until all complete, interrupted, or an in-flight
                  * req times out */
-                CDEBUG(D_HA, "set %p going to sleep for %d seconds\n",
+                CDEBUG(D_RPCTRACE, "set %p going to sleep for %d seconds\n",
                        set, timeout);
                 lwi = LWI_TIMEOUT_INTR(cfs_time_seconds(timeout ? timeout : 1),
                                        ptlrpc_expired_set,
@@ -1317,12 +1323,12 @@ void ptlrpc_free_committed(struct obd_import *imp)
 
         if (imp->imp_peer_committed_transno == imp->imp_last_transno_checked &&
             imp->imp_generation == imp->imp_last_generation_checked) {
-                CDEBUG(D_HA, "%s: skip recheck for last_committed "LPU64"\n",
+                CDEBUG(D_RPCTRACE, "%s: skip recheck: last_committed "LPU64"\n",
                        imp->imp_obd->obd_name, imp->imp_peer_committed_transno);
                 return;
         }
-        
-        CDEBUG(D_HA, "%s: committing for last_committed "LPU64" gen %d\n",
+
+        CDEBUG(D_RPCTRACE, "%s: committing for last_committed "LPU64" gen %d\n",
                imp->imp_obd->obd_name, imp->imp_peer_committed_transno,
                imp->imp_generation);
         imp->imp_last_transno_checked = imp->imp_peer_committed_transno;
@@ -1336,22 +1342,22 @@ void ptlrpc_free_committed(struct obd_import *imp)
                 last_req = req;
 
                 if (req->rq_import_generation < imp->imp_generation) {
-                        DEBUG_REQ(D_HA, req, "freeing request with old gen");
+                        DEBUG_REQ(D_RPCTRACE, req, "free request with old gen");
                         GOTO(free_req, 0);
                 }
 
                 if (req->rq_replay) {
-                        DEBUG_REQ(D_HA, req, "keeping (FL_REPLAY)");
+                        DEBUG_REQ(D_RPCTRACE, req, "keeping (FL_REPLAY)");
                         continue;
                 }
 
                 /* not yet committed */
                 if (req->rq_transno > imp->imp_peer_committed_transno) {
-                        DEBUG_REQ(D_HA, req, "stopping search");
+                        DEBUG_REQ(D_RPCTRACE, req, "stopping search");
                         break;
                 }
 
-                DEBUG_REQ(D_HA, req, "committing (last_committed "LPU64")",
+                DEBUG_REQ(D_RPCTRACE, req, "commit (last_committed "LPU64")",
                           imp->imp_peer_committed_transno);
 free_req:
                 spin_lock(&req->rq_lock);
@@ -1789,7 +1795,7 @@ void ptlrpc_abort_inflight(struct obd_import *imp)
                 struct ptlrpc_request *req =
                         list_entry(tmp, struct ptlrpc_request, rq_list);
 
-                DEBUG_REQ(D_HA, req, "inflight");
+                DEBUG_REQ(D_RPCTRACE, req, "inflight");
 
                 spin_lock (&req->rq_lock);
                 if (req->rq_import_generation < imp->imp_generation) {
@@ -1803,7 +1809,7 @@ void ptlrpc_abort_inflight(struct obd_import *imp)
                 struct ptlrpc_request *req =
                         list_entry(tmp, struct ptlrpc_request, rq_list);
 
-                DEBUG_REQ(D_HA, req, "aborting waiting req");
+                DEBUG_REQ(D_RPCTRACE, req, "aborting waiting req");
 
                 spin_lock (&req->rq_lock);
                 if (req->rq_import_generation < imp->imp_generation) {

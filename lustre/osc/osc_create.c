@@ -66,7 +66,23 @@ static int osc_interpret_create(struct ptlrpc_request *req, void *data, int rc)
         
         spin_lock(&oscc->oscc_lock);
         oscc->oscc_flags &= ~OSCC_FLAG_CREATING;
-        if (rc == -ENOSPC || rc == -EROFS) {
+        switch (rc) {
+        case 0: {
+                if (body) {
+                        int diff = body->oa.o_id - oscc->oscc_last_id;
+
+                        if (diff < oscc->oscc_grow_count)
+                                oscc->oscc_grow_count =
+                                        max(diff/3, OST_MIN_PRECREATE);
+                        else
+                                oscc->oscc_flags &= ~OSCC_FLAG_LOW;
+                        oscc->oscc_last_id = body->oa.o_id;
+                }
+                spin_unlock(&oscc->oscc_lock);
+                break;
+        }
+        case -ENOSPC:
+        case -EROFS: {
                 oscc->oscc_flags |= OSCC_FLAG_NOSPC;
                 if (body && rc == -ENOSPC) {
                         oscc->oscc_grow_count = OST_MIN_PRECREATE;
@@ -74,7 +90,17 @@ static int osc_interpret_create(struct ptlrpc_request *req, void *data, int rc)
                 }
                 spin_unlock(&oscc->oscc_lock);
                 DEBUG_REQ(D_INODE, req, "OST out of space, flagging");
-        } else if (rc != 0 && rc != -EIO) {
+                break;
+        }
+        case -EIO: {
+                /* filter always set body->oa.o_id as the last_id 
+                 * of filter (see filter_handle_precreate for detail)*/
+                if (body && body->oa.o_id > oscc->oscc_last_id)
+                        oscc->oscc_last_id = body->oa.o_id;
+                spin_unlock(&oscc->oscc_lock);
+                break;
+        }
+        default: {
                 oscc->oscc_flags |= OSCC_FLAG_RECOVERING;
                 oscc->oscc_grow_count = OST_MIN_PRECREATE;
                 spin_unlock(&oscc->oscc_lock);
@@ -82,29 +108,10 @@ static int osc_interpret_create(struct ptlrpc_request *req, void *data, int rc)
                           "unknown rc %d from async create: failing oscc", rc);
                 ptlrpc_fail_import(req->rq_import,
                                    lustre_msg_get_conn_cnt(req->rq_reqmsg));
-        } else {
-                if (rc == 0) {
-                        if (body) {
-                                int diff = body->oa.o_id - oscc->oscc_last_id;
-
-                                if (diff < oscc->oscc_grow_count)
-                                        oscc->oscc_grow_count =
-                                                max(diff/3, OST_MIN_PRECREATE);
-                                else
-                                        oscc->oscc_flags &= ~OSCC_FLAG_LOW;
-                                oscc->oscc_last_id = body->oa.o_id;
-                        }
-                } else {
-                        /* filter always set body->oa.o_id as the last_id 
-                         * of filter (see filter_handle_precreate for detail)*/
-                        if (body && body->oa.o_id > oscc->oscc_last_id)
-                                oscc->oscc_last_id = body->oa.o_id;
-                }
-                spin_unlock(&oscc->oscc_lock);
-
+        }
         }
 
-        CDEBUG(D_HA, "preallocated through id "LPU64" (next to use "LPU64")\n",
+        CDEBUG(D_RPCTRACE, "prealloc through id "LPU64", next to use "LPU64"\n",
                oscc->oscc_last_id, oscc->oscc_next_id);
 
         cfs_waitq_signal(&oscc->oscc_waitq);
@@ -155,7 +162,7 @@ static int oscc_internal_create(struct osc_creator *oscc)
         body->oa.o_id = oscc->oscc_last_id + oscc->oscc_grow_count;
         body->oa.o_valid |= OBD_MD_FLID;
         spin_unlock(&oscc->oscc_lock);
-        CDEBUG(D_HA, "preallocating through id "LPU64" (last seen "LPU64")\n",
+        CDEBUG(D_RPCTRACE, "prealloc through id "LPU64" (last seen "LPU64")\n",
                body->oa.o_id, oscc->oscc_last_id);
 
         ptlrpc_req_set_repsize(request, 2, size);
@@ -232,6 +239,39 @@ int oscc_recovering(struct osc_creator *oscc)
         return recov;
 }
 
+/* decide if the OST has remaining object, return value :
+        0 : the OST has remaining object, and don't need to do precreate.
+        1 : the OST has no remaining object, and will send a RPC for precreate.
+        2 : the OST has no remaining object, and will not get any for
+            a potentially very long time
+ */
+int osc_precreate(struct obd_export *exp, int need_create)
+{
+        struct osc_creator *oscc = &exp->exp_obd->u.cli.cl_oscc;
+        struct obd_import *imp = exp->exp_imp_reverse;
+        ENTRY;
+
+        LASSERT(oscc != NULL);
+        if (imp != NULL && imp->imp_deactive)
+                RETURN(2);
+
+        if (oscc->oscc_last_id < oscc->oscc_next_id) {
+                if (oscc->oscc_flags & OSCC_FLAG_NOSPC ||
+                    oscc_recovering(oscc))
+                        RETURN(2);
+
+                if (oscc->oscc_flags & OSCC_FLAG_CREATING)
+                        RETURN(1);
+
+                if (!need_create)
+                        RETURN(1);
+
+                oscc_internal_create(oscc);
+                RETURN(1);
+        }
+        RETURN(0);
+}
+
 int osc_create(struct obd_export *exp, struct obdo *oa,
                struct lov_stripe_md **ea, struct obd_trans_info *oti)
 {
@@ -264,15 +304,12 @@ int osc_create(struct obd_export *exp, struct obdo *oa,
                 }
                 oscc->oscc_flags |= OSCC_FLAG_SYNC_IN_PROGRESS;
                 spin_unlock(&oscc->oscc_lock);
-                CDEBUG(D_HA, "%s: oscc recovery started\n",
-                       oscc->oscc_obd->obd_name);
+                CDEBUG(D_HA, "%s: oscc recovery started - delete to "LPU64"\n",
+                       oscc->oscc_obd->obd_name, oscc->oscc_next_id - 1);
 
                 /* delete from next_id on up */
                 oa->o_valid |= OBD_MD_FLID;
                 oa->o_id = oscc->oscc_next_id - 1;
-
-                CDEBUG(D_HA, "%s: deleting to next_id: "LPU64"\n",
-                       oscc->oscc_obd->obd_name, oa->o_id);
 
                 rc = osc_real_create(exp, oa, ea, NULL);
 
@@ -310,8 +347,8 @@ int osc_create(struct obd_export *exp, struct obdo *oa,
                 if (oscc_recovering(oscc)) {
                         struct l_wait_info lwi;
 
-                        CDEBUG(D_HA,"%p: oscc recovery in progress, waiting\n",
-                               oscc);
+                        CDEBUG(D_HA,"%s: oscc recovery in progress, waiting\n",
+                               oscc->oscc_obd->obd_name);
 
                         lwi = LWI_TIMEOUT(cfs_timeout_cap(cfs_time_seconds(obd_timeout/4)),
                                           NULL, NULL);
@@ -319,12 +356,12 @@ int osc_create(struct obd_export *exp, struct obdo *oa,
                                           !oscc_recovering(oscc), &lwi);
                         LASSERT(rc == 0 || rc == -ETIMEDOUT);
                         if (rc == -ETIMEDOUT) {
-                                CDEBUG(D_HA,"%p: timeout waiting on recovery\n",
-                                       oscc);
+                                CDEBUG(D_HA,"%s: timeout waiting on recovery\n",
+                                       oscc->oscc_obd->obd_name);
                                 RETURN(rc);
                         }
-                        CDEBUG(D_HA, "%p: oscc recovery over, waking up\n",
-                               oscc);
+                        CDEBUG(D_HA, "%s: oscc recovery over, waking up\n",
+                               oscc->oscc_obd->obd_name);
                 }
 
                 spin_lock(&oscc->oscc_lock);
@@ -341,7 +378,7 @@ int osc_create(struct obd_export *exp, struct obdo *oa,
                         oscc->oscc_next_id++;
                         try_again = 0;
 
-                        CDEBUG(D_HA, "%s: set oscc_next_id = "LPU64"\n",
+                        CDEBUG(D_RPCTRACE, "%s: set oscc_next_id = "LPU64"\n",
                                exp->exp_obd->obd_name, oscc->oscc_next_id);
                 } else if (oscc->oscc_flags & OSCC_FLAG_NOSPC) {
                         rc = -ENOSPC;
@@ -355,7 +392,7 @@ int osc_create(struct obd_export *exp, struct obdo *oa,
         }
 
         if (rc == 0)
-                CDEBUG(D_HA, "%s: returning objid "LPU64"\n",
+                CDEBUG(D_INFO, "%s: returning objid "LPU64"\n",
                        obd2cli_tgt(oscc->oscc_obd), lsm->lsm_object_id);
         else if (*ea == NULL)
                 obd_free_memmd(exp, &lsm);

@@ -55,6 +55,10 @@ static int oss_num_threads;
 CFS_MODULE_PARM(oss_num_threads, "i", int, 0444,
                 "number of OSS service threads to start");
 
+static int ost_num_threads;
+CFS_MODULE_PARM(ost_num_threads, "i", int, 0444,
+                "number of OST service threads to start (deprecated)");
+
 void oti_to_request(struct obd_trans_info *oti, struct ptlrpc_request *req)
 {
         struct oti_req_ack_lock *ack_lock;
@@ -87,6 +91,15 @@ static int ost_destroy(struct obd_export *exp, struct ptlrpc_request *req,
                                   lustre_swab_ost_body);
         if (body == NULL)
                 RETURN(-EFAULT);
+
+        if (lustre_msg_buflen(req->rq_reqmsg, REQ_REC_OFF + 1)) {
+                struct ldlm_request *dlm;
+                dlm = lustre_swab_reqbuf(req, REQ_REC_OFF + 1, sizeof(*dlm),
+                                         lustre_swab_ldlm_request);
+                if (dlm == NULL)
+                        RETURN (-EFAULT);
+                ldlm_request_cancel(req, dlm, 0);
+        }
 
         rc = lustre_pack_reply(req, 2, size, NULL);
         if (rc)
@@ -660,7 +673,7 @@ static int ost_brw_read(struct ptlrpc_request *req, struct obd_trans_info *oti)
 
         niocount = ioo->ioo_bufcnt;
         if (niocount > PTLRPC_MAX_BRW_PAGES) {
-                DEBUG_REQ(D_ERROR, req, "bulk has too many pages (%d)\n",
+                DEBUG_REQ(D_ERROR, req, "bulk has too many pages (%d)",
                           niocount);
                 GOTO(out, rc = -EFAULT);
         }
@@ -796,7 +809,7 @@ static int ost_brw_read(struct ptlrpc_request *req, struct obd_trans_info *oti)
                                 rc = -ETIMEDOUT;
                         }
                 } else {
-                        DEBUG_REQ(D_ERROR, req, "bulk PUT failed: rc %d\n", rc);
+                        DEBUG_REQ(D_ERROR, req, "bulk PUT failed: rc %d", rc);
                 }
                 comms_error = rc != 0;
         }
@@ -867,6 +880,8 @@ static int ost_brw_write(struct ptlrpc_request *req, struct obd_trans_info *oti)
 
         if (OBD_FAIL_CHECK(OBD_FAIL_OST_BRW_WRITE_BULK))
                 GOTO(out, rc = -EIO);
+        if (OBD_FAIL_CHECK(OBD_FAIL_OST_BRW_WRITE_BULK2))
+                GOTO(out, rc = -EFAULT);
 
         /* pause before transaction has been started */
         OBD_FAIL_TIMEOUT(OBD_FAIL_OST_BRW_PAUSE_BULK | OBD_FAIL_ONCE,
@@ -906,7 +921,7 @@ static int ost_brw_write(struct ptlrpc_request *req, struct obd_trans_info *oti)
         }
 
         if (niocount > PTLRPC_MAX_BRW_PAGES) {
-                DEBUG_REQ(D_ERROR, req, "bulk has too many pages (%d)\n",
+                DEBUG_REQ(D_ERROR, req, "bulk has too many pages (%d)",
                           niocount);
                 GOTO(out, rc = -EFAULT);
         }
@@ -975,6 +990,14 @@ static int ost_brw_write(struct ptlrpc_request *req, struct obd_trans_info *oti)
         /* obd_preprw clobbers oa->valid, so save what we need */
         client_cksum = body->oa.o_valid & OBD_MD_FLCKSUM ? body->oa.o_cksum : 0;
 
+        /* Because we already sync grant info with client when reconnect,
+         * grant info will be cleared for resent req, then fed_grant and 
+         * total_grant will not be modified in following preprw_write*/ 
+        if (lustre_msg_get_flags(req->rq_reqmsg) & (MSG_RESENT | MSG_REPLAY)) {
+                DEBUG_REQ(D_CACHE, req, "clear resent/replay req grant info");
+                body->oa.o_valid &= ~OBD_MD_FLGRANT;
+        }
+
         rc = obd_preprw(OBD_BRW_WRITE, req->rq_export, &body->oa, objcount,
                         ioo, npages, pp_rnb, local_nb, oti);
         if (rc != 0)
@@ -1016,7 +1039,7 @@ static int ost_brw_write(struct ptlrpc_request *req, struct obd_trans_info *oti)
                         rc = -ETIMEDOUT;
                 }
         } else {
-                DEBUG_REQ(D_ERROR, req, "ptlrpc_bulk_get failed: rc %d\n", rc);
+                DEBUG_REQ(D_ERROR, req, "ptlrpc_bulk_get failed: rc %d", rc);
         }
         comms_error = rc != 0;
 
@@ -1066,21 +1089,22 @@ static int ost_brw_write(struct ptlrpc_request *req, struct obd_trans_info *oti)
                         router = libcfs_nid2str(desc->bd_sender);
                 }
                 
-                LCONSOLE_ERROR("%s: BAD WRITE CHECKSUM: %s from %s%s%s inum "
-                               LPU64"/"LPU64" object "LPU64"/"LPU64
-                               " extent ["LPU64"-"LPU64"]\n",
-                               req->rq_export->exp_obd->obd_name, msg,
-                               libcfs_id2str(req->rq_peer),
-                               via, router,
-                               body->oa.o_valid & OBD_MD_FLFID ?
+                LCONSOLE_ERROR_MSG(0x168, "%s: BAD WRITE CHECKSUM: %s from %s"
+                                   "%s%s inum "LPU64"/"LPU64" object "LPU64"/"
+                                   LPU64" extent ["LPU64"-"LPU64"]\n",
+                                   req->rq_export->exp_obd->obd_name, msg,
+                                   libcfs_id2str(req->rq_peer),
+                                   via, router,
+                                   body->oa.o_valid & OBD_MD_FLFID ?
                                                 body->oa.o_fid : (__u64)0,
-                               body->oa.o_valid & OBD_MD_FLFID ?
+                                   body->oa.o_valid & OBD_MD_FLFID ?
                                                 body->oa.o_generation :(__u64)0,
-                               body->oa.o_id,
-                               body->oa.o_valid & OBD_MD_FLGROUP ?
+                                   body->oa.o_id,
+                                   body->oa.o_valid & OBD_MD_FLGROUP ?
                                                 body->oa.o_gr : (__u64)0,
-                               pp_rnb[0].offset,
-                               pp_rnb[npages-1].offset+pp_rnb[npages-1].len-1);
+                                   pp_rnb[0].offset,
+                                   pp_rnb[npages-1].offset+pp_rnb[npages-1].len
+                                   - 1 );
                 CERROR("client csum %x, original server csum %x, "
                        "server csum now %x\n",
                        client_cksum, server_cksum, new_cksum);
@@ -1426,6 +1450,14 @@ static int ost_handle(struct ptlrpc_request *req)
                 break;
         case OST_WRITE:
                 CDEBUG(D_INODE, "write\n");
+                /* req->rq_request_portal would be nice, if it was set */
+                if (req->rq_rqbd->rqbd_service->srv_req_portal !=OST_IO_PORTAL){
+                        CERROR("%s: deny write request from %s to portal %u\n",
+                               req->rq_export->exp_obd->obd_name,
+                               obd_export_nid2str(req->rq_export),
+                               req->rq_rqbd->rqbd_service->srv_req_portal);
+                        GOTO(out, rc = -EPROTO);
+                }
                 OBD_FAIL_RETURN(OBD_FAIL_OST_BRW_NET, 0);
                 if (OBD_FAIL_CHECK_ONCE(OBD_FAIL_OST_ENOSPC))
                         GOTO(out, rc = -ENOSPC);
@@ -1437,6 +1469,14 @@ static int ost_handle(struct ptlrpc_request *req)
                 RETURN(rc);
         case OST_READ:
                 CDEBUG(D_INODE, "read\n");
+                /* req->rq_request_portal would be nice, if it was set */
+                if (req->rq_rqbd->rqbd_service->srv_req_portal !=OST_IO_PORTAL){
+                        CERROR("%s: deny read request from %s to portal %u\n",
+                               req->rq_export->exp_obd->obd_name,
+                               obd_export_nid2str(req->rq_export),
+                               req->rq_rqbd->rqbd_service->srv_req_portal);
+                        GOTO(out, rc = -EPROTO);
+                }
                 OBD_FAIL_RETURN(OBD_FAIL_OST_BRW_NET, 0);
                 rc = ost_brw_read(req, oti);
                 LASSERT(current->journal_info == NULL);
@@ -1483,7 +1523,7 @@ static int ost_handle(struct ptlrpc_request *req)
                 break;
         /* FIXME - just reply status */
         case LLOG_ORIGIN_CONNECT:
-                DEBUG_REQ(D_INODE, req, "log connect\n");
+                DEBUG_REQ(D_INODE, req, "log connect");
                 rc = llog_handle_connect(req);
                 req->rq_status = rc;
                 rc = lustre_pack_reply(req, 1, NULL, NULL);
@@ -1596,7 +1636,7 @@ static int ost_thread_init(struct ptlrpc_thread *thread)
 
         LASSERT(thread != NULL);
         LASSERT(thread->t_data == NULL);
-        LASSERT(thread->t_id <= OSS_THREADS_MAX);
+        LASSERTF(thread->t_id <= OSS_THREADS_MAX, "%u\n", thread->t_id);
 
         OBD_ALLOC_PTR(tls);
         if (tls != NULL) {
@@ -1801,6 +1841,14 @@ static int __init ost_init(void)
         lprocfs_init_vars(ost, &lvars);
         rc = class_register_type(&ost_obd_ops, lvars.module_vars,
                                  LUSTRE_OSS_NAME);
+
+        if (ost_num_threads != 0 && oss_num_threads == 0) {
+                LCONSOLE_INFO("ost_num_threads module parameter is deprecated, "
+                              "use oss_num_threads instead or unset both for "
+                              "dynamic thread startup\n");
+                oss_num_threads = ost_num_threads;
+        }
+
         RETURN(rc);
 }
 

@@ -1170,7 +1170,9 @@ int t54(char *name)
 }
 
 /* for O_DIRECTORY */
+#ifndef _GNU_SOURCE
 #define _GNU_SOURCE
+#endif
 
 #define STRIPE_SIZE       (2048 * 2048)
 #define STRIPE_OFFSET           0
@@ -1357,12 +1359,12 @@ int t56(char *name)
         rc = getdirentries(fd, (char *)&dir, nbytes, &basep);
 
         if (rc != -1) {
-                printf("Test failed: getdirentries returned %d\n", rc);
+                printf("Test failed: getdirentries returned %ld\n", rc);
                 t_close(fd);
                 return -1;
         }
         if (errno != EINVAL) {
-                printf("Test failed: getdirentries returned %d but errno is set"
+                printf("Test failed: getdirentries returned %ld but errno is set"
                                 " to %d (should be EINVAL)\n", rc, errno);
                 t_close(fd);
                 return -1;

@@ -26,8 +26,8 @@ gen_config() {
     
     add_lov lov1 mds --stripe_sz $STRIPE_BYTES \
 	--stripe_cnt $STRIPES_PER_OBJ --stripe_pattern 0
-    add_ost ost --lov lov1 --dev $OSTDEV --size $OSTSIZE
-    add_ost ost2 --lov lov1 --dev ${OSTDEV}-2 --size $OSTSIZE
+    add_ost ost --lov lov1 --dev `ostdevname 1` --size $OSTSIZE
+    add_ost ost2 --lov lov1 --dev `ostdevname 2` --size $OSTSIZE
     add_client client mds --lov lov1 --path $MOUNT
 }
 
@@ -43,7 +43,7 @@ if [ "$ONLY" == "cleanup" ]; then
 fi
 
 setup() {
-    formatall
+    [ "$REFORMAT" ] && formatall
     setupall
 }
 
@@ -740,10 +740,11 @@ run_test 32 "close() notices client eviction; close() after client eviction"
 # Abort recovery before client complete
 test_33() {
     replay_barrier mds
-    touch $DIR/$tfile
+    createmany -o $DIR/$tfile-%d 100 
     fail_abort mds
     # this file should be gone, because the replay was aborted
-    $CHECKSTAT -t file $DIR/$tfile && return 3
+    $CHECKSTAT -t file $DIR/$tfile-* && return 3 
+    unlinkmany $DIR/$tfile-%d 0 100
     return 0
 }
 run_test 33 "abort recovery before client does replay"
@@ -1121,6 +1122,37 @@ test_58() {
     rmdir $DIR/$tdir
 }
 run_test 58 "test recovery from llog for setattr op (test llog_gen_rec)"
+
+# log_commit_thread vs filter_destroy race used to lead to import use after free
+# bug 11658
+test_59() {
+    mkdir $DIR/$tdir
+    createmany -o $DIR/$tdir/$tfile-%d 200
+    sync
+    unlinkmany $DIR/$tdir/$tfile-%d 200
+#define OBD_FAIL_PTLRPC_DELAY_RECOV       0x507
+    do_facet ost1 "sysctl -w lustre.fail_loc=0x507"
+    fail ost1
+    fail mds
+    do_facet ost1 "sysctl -w lustre.fail_loc=0x0"
+    sleep 20
+    rmdir $DIR/$tdir
+}
+run_test 59 "test log_commit_thread vs filter_destroy race"
+
+# race between add unlink llog vs cat log init in post_recovery (only for b1_6)
+# bug 12086: should no oops and No ctxt error for this test
+test_60() {
+    mkdir $DIR/$tdir
+    createmany -o $DIR/$tdir/$tfile-%d 200
+    replay_barrier mds
+    unlinkmany $DIR/$tdir/$tfile-%d 0 100
+    fail mds
+    unlinkmany $DIR/$tdir/$tfile-%d 100 100
+    local no_ctxt=`dmesg | grep "No ctxt"`
+    [ -z "$no_ctxt" ] || error "ctxt is not initialized in recovery" 
+}
+run_test 60 "test llog post recovery init vs llog unlink"
 
 equals_msg `basename $0`: test complete, cleaning up
 $CLEANUP

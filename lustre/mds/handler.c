@@ -225,12 +225,18 @@ struct dentry *mds_fid2dentry(struct mds_obd *mds, struct ll_fid *fid,
         if (!inode)
                 RETURN(ERR_PTR(-ENOENT));
 
-        if (inode->i_generation == 0 || inode->i_nlink == 0) {
-                LCONSOLE_WARN("Found inode with zero generation or link -- this"
-                              " may indicate disk corruption (inode: %lu/%u, "
-                              "link %lu, count %d)\n", inode->i_ino,
-                              inode->i_generation,(unsigned long)inode->i_nlink,
-                              atomic_read(&inode->i_count));
+       if (inode->i_nlink == 0) {
+                if (inode->i_mode == 0 &&
+                    LTIME_S(inode->i_ctime) == 0 ) {
+                        struct obd_device *obd = container_of(mds, struct
+                                                              obd_device, u.mds);
+                        LCONSOLE_WARN("Found inode with zero nlink, mode and "
+                                      "ctime -- this may indicate disk"
+                                      "corruption (device %s, inode %lu, link:"
+                                      " %lu, count: %d)\n", obd->obd_name, inode->i_ino,
+                                      (unsigned long)inode->i_nlink,
+                                      atomic_read(&inode->i_count));
+                }
                 dput(result);
                 RETURN(ERR_PTR(-ENOENT));
         }
@@ -380,7 +386,7 @@ int mds_init_export(struct obd_export *exp)
 
         INIT_LIST_HEAD(&med->med_open_head);
         spin_lock_init(&med->med_open_lock);
-	
+        
         spin_lock(&exp->exp_lock);
         exp->exp_connecting = 1;
         spin_unlock(&exp->exp_lock);
@@ -1936,6 +1942,15 @@ static int mds_setup(struct obd_device *obd, obd_count len, void *buf)
         }
         ldlm_register_intent(obd->obd_namespace, mds_intent_policy);
 
+        lprocfs_init_vars(mds, &lvars);
+        if (lprocfs_obd_setup(obd, lvars.obd_vars) == 0 &&
+            lprocfs_alloc_obd_stats(obd, LPROC_MDS_LAST) == 0) {
+                /* Init private stats here */
+                mds_stats_counter_init(obd->obd_stats);
+                obd->obd_proc_exports = proc_mkdir("exports",
+                                                   obd->obd_proc_entry);
+        }
+
         rc = mds_fs_setup(obd, mnt);
         if (rc) {
                 CERROR("%s: MDS filesystem method init failed: rc = %d\n",
@@ -1986,15 +2001,6 @@ static int mds_setup(struct obd_device *obd, obd_count len, void *buf)
         if (rc)
                 GOTO(err_qctxt, rc);
 
-        lprocfs_init_vars(mds, &lvars);
-        if (lprocfs_obd_setup(obd, lvars.obd_vars) == 0 &&
-            lprocfs_alloc_obd_stats(obd, LPROC_MDS_LAST) == 0) {
-                /* Init private stats here */
-                mds_stats_counter_init(obd->obd_stats);
-                obd->obd_proc_exports = proc_mkdir("exports",
-                                                   obd->obd_proc_entry);
-        }
-
         uuid_ptr = fsfilt_uuid(obd, obd->u.obt.obt_sb);
         if (uuid_ptr != NULL) {
                 class_uuid_unparse(uuid_ptr, &uuid);
@@ -2039,6 +2045,8 @@ err_fs:
         upcall_cache_cleanup(mds->mds_group_hash);
         mds->mds_group_hash = NULL;
 err_ns:
+        lprocfs_obd_cleanup(obd);
+        lprocfs_free_obd_stats(obd);
         ldlm_namespace_free(obd->obd_namespace, 0);
         obd->obd_namespace = NULL;
 err_ops:
@@ -2134,9 +2142,10 @@ int mds_postrecov(struct obd_device *obd)
         LASSERT(!obd->obd_recovering);
         LASSERT(llog_get_context(obd, LLOG_MDS_OST_ORIG_CTXT) != NULL);
 
-        /* FIXME why not put this in the synchronize? */
         /* set nextid first, so we are sure it happens */
+        mutex_down(&obd->obd_dev_sem);
         rc = mds_lov_set_nextid(obd);
+        mutex_up(&obd->obd_dev_sem);
         if (rc) {
                 CERROR("%s: mds_lov_set_nextid failed %d\n",
                        obd->obd_name, rc);
@@ -2256,7 +2265,7 @@ static void fixup_handle_for_resent_req(struct ptlrpc_request *req, int offset,
         struct obd_export *exp = req->rq_export;
         struct ldlm_request *dlmreq =
                 lustre_msg_buf(req->rq_reqmsg, offset, sizeof(*dlmreq));
-        struct lustre_handle remote_hdl = dlmreq->lock_handle1;
+        struct lustre_handle remote_hdl = dlmreq->lock_handle[0];
         struct list_head *iter;
 
         if (!(lustre_msg_get_flags(req->rq_reqmsg) & MSG_RESENT))
@@ -2271,7 +2280,7 @@ static void fixup_handle_for_resent_req(struct ptlrpc_request *req, int offset,
                 if (lock->l_remote_handle.cookie == remote_hdl.cookie) {
                         lockh->cookie = lock->l_handle.h_cookie;
                         LDLM_DEBUG(lock, "restoring lock cookie");
-                        DEBUG_REQ(D_HA, req, "restoring lock cookie "LPX64,
+                        DEBUG_REQ(D_DLMTRACE, req,"restoring lock cookie "LPX64,
                                   lockh->cookie);
                         if (old_lock)
                                 *old_lock = LDLM_LOCK_GET(lock);
@@ -2298,7 +2307,7 @@ static void fixup_handle_for_resent_req(struct ptlrpc_request *req, int offset,
 
         lustre_msg_clear_flags(req->rq_reqmsg, MSG_RESENT);
 
-        DEBUG_REQ(D_HA, req, "no existing lock with rhandle "LPX64,
+        DEBUG_REQ(D_DLMTRACE, req, "no existing lock with rhandle "LPX64,
                   remote_hdl.cookie);
 }
 
@@ -2390,8 +2399,9 @@ static int mds_intent_policy(struct ldlm_namespace *ns,
 
                 /* If there was an error of some sort or if we are not
                  * returning any locks */
-                if (rep->lock_policy_res2 ||
-                    !intent_disposition(rep, DISP_OPEN_LOCK))
+                if (rep->lock_policy_res2)
+                        RETURN(rep->lock_policy_res2);
+                if (!intent_disposition(rep, DISP_OPEN_LOCK))
                         RETURN(ELDLM_LOCK_ABORTED);
                 break;
         case IT_LOOKUP:

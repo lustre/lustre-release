@@ -92,8 +92,6 @@ struct fsfilt_operations {
                                        int pages, unsigned long *blocks,
                                        int *created, int create,
                                        struct semaphore *sem);
-        int     (* fs_prep_san_write)(struct inode *inode, long *blocks,
-                                      int nblocks, loff_t newsize);
         int     (* fs_write_record)(struct file *, void *, int size, loff_t *,
                                     int force_sync);
         int     (* fs_read_record)(struct file *, void *, int size, loff_t *);
@@ -101,6 +99,8 @@ struct fsfilt_operations {
         int     (* fs_get_op_len)(int, struct fsfilt_objinfo *, int);
         int     (* fs_quotacheck)(struct super_block *sb,
                                   struct obd_quotactl *oqctl);
+        __u64   (* fs_get_version) (struct inode *inode);
+        __u64   (* fs_set_version) (struct inode *inode, __u64 new_version);
         int     (* fs_quotactl)(struct super_block *sb,
                                 struct obd_quotactl *oqctl);
         int     (* fs_quotainfo)(struct lustre_quota_info *lqi, int type,
@@ -430,13 +430,6 @@ static inline int fsfilt_map_inode_pages(struct obd_device *obd,
                                                   created, create, sem);
 }
 
-static inline int fs_prep_san_write(struct obd_device *obd, struct inode *inode,
-                                    long *blocks, int nblocks, loff_t newsize)
-{
-        return obd->obd_fsops->fs_prep_san_write(inode, blocks,
-                                                 nblocks, newsize);
-}
-
 static inline int fsfilt_read_record(struct obd_device *obd, struct file *file,
                                      void *buf, loff_t size, loff_t *offs)
 {
@@ -455,6 +448,22 @@ static inline int fsfilt_setup(struct obd_device *obd, struct super_block *fs)
         if (obd->obd_fsops->fs_setup)
                 return obd->obd_fsops->fs_setup(fs);
         return 0;
+}
+
+static inline __u64 fsfilt_set_version(struct obd_device *obd,
+                                      struct inode *inode, __u64 new_version)
+{
+        if (obd->obd_fsops->fs_set_version)
+                return obd->obd_fsops->fs_set_version(inode, new_version);
+        return -EOPNOTSUPP;
+}
+
+static inline __u64 fsfilt_get_version(struct obd_device *obd,
+                                       struct inode *inode)
+{
+        if (obd->obd_fsops->fs_set_version)
+                return obd->obd_fsops->fs_get_version(inode);
+        return -EOPNOTSUPP;
 }
 
 #endif /* __KERNEL__ */

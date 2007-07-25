@@ -128,6 +128,12 @@ struct ldlm_lock *ldlm_lock_get(struct ldlm_lock *lock)
         return lock;
 }
 
+static void ldlm_lock_free(struct ldlm_lock *lock, size_t size)
+{
+        LASSERT(size == sizeof(*lock));
+        OBD_SLAB_FREE(lock, ldlm_lock_slab, sizeof(*lock));
+}
+
 void ldlm_lock_put(struct ldlm_lock *lock)
 {
         ENTRY;
@@ -144,19 +150,19 @@ void ldlm_lock_put(struct ldlm_lock *lock)
                 LASSERT(list_empty(&lock->l_res_link));
                 LASSERT(list_empty(&lock->l_pending_chain));
 
-                if (lock->l_parent)
-                        LDLM_LOCK_PUT(lock->l_parent);
-
                 atomic_dec(&res->lr_namespace->ns_locks);
                 ldlm_resource_putref(res);
                 lock->l_resource = NULL;
-                if (lock->l_export)
+                if (lock->l_export) {
                         class_export_put(lock->l_export);
+                        lock->l_export = NULL;
+                }
 
                 if (lock->l_lvb_data != NULL)
                         OBD_FREE(lock->l_lvb_data, lock->l_lvb_len);
 
-                OBD_SLAB_FREE(lock, ldlm_lock_slab, sizeof(*lock));
+                OBD_FREE_RCU_CB(lock, sizeof(*lock), &lock->l_handle, 
+                      	        ldlm_lock_free);
         }
 
         EXIT;
@@ -195,12 +201,6 @@ int ldlm_lock_destroy_internal(struct ldlm_lock *lock)
 {
         ENTRY;
 
-        if (!list_empty(&lock->l_children)) {
-                LDLM_ERROR(lock, "still has children (%p)!",
-                           lock->l_children.next);
-                ldlm_lock_dump(D_ERROR, lock, 0);
-                LBUG();
-        }
         if (lock->l_readers || lock->l_writers) {
                 LDLM_ERROR(lock, "lock still has references");
                 ldlm_lock_dump(D_ERROR, lock, 0);
@@ -280,8 +280,7 @@ static void lock_handle_addref(void *lock)
  *        after return, ldlm_*_put the resource and parent
  * returns: lock with refcount 2 - one for current caller and one for remote
  */
-static struct ldlm_lock *ldlm_lock_new(struct ldlm_lock *parent,
-                                       struct ldlm_resource *resource)
+static struct ldlm_lock *ldlm_lock_new(struct ldlm_resource *resource)
 {
         struct ldlm_lock *lock;
         ENTRY;
@@ -296,12 +295,10 @@ static struct ldlm_lock *ldlm_lock_new(struct ldlm_lock *parent,
         lock->l_resource = ldlm_resource_getref(resource);
 
         atomic_set(&lock->l_refc, 2);
-        CFS_INIT_LIST_HEAD(&lock->l_children);
         CFS_INIT_LIST_HEAD(&lock->l_res_link);
         CFS_INIT_LIST_HEAD(&lock->l_lru);
         CFS_INIT_LIST_HEAD(&lock->l_export_chain);
         CFS_INIT_LIST_HEAD(&lock->l_pending_chain);
-        CFS_INIT_LIST_HEAD(&lock->l_tmp);
         CFS_INIT_LIST_HEAD(&lock->l_bl_ast);
         CFS_INIT_LIST_HEAD(&lock->l_cp_ast);
         cfs_waitq_init(&lock->l_waitq);
@@ -313,14 +310,6 @@ static struct ldlm_lock *ldlm_lock_new(struct ldlm_lock *parent,
         lock->l_sl_policy.next = NULL;
 
         atomic_inc(&resource->lr_namespace->ns_locks);
-
-        if (parent != NULL) {
-                spin_lock(&resource->lr_namespace->ns_hash_lock);
-                lock->l_parent = LDLM_LOCK_GET(parent);
-                list_add(&lock->l_childof, &parent->l_children);
-                spin_unlock(&resource->lr_namespace->ns_hash_lock);
-        }
-
         CFS_INIT_LIST_HEAD(&lock->l_handle.h_link);
         class_handle_hash(&lock->l_handle, lock_handle_addref);
 
@@ -556,15 +545,12 @@ void ldlm_lock_addref_internal(struct ldlm_lock *lock, __u32 mode)
         unlock_res_and_lock(lock);
 }
 
-void ldlm_lock_decref_internal(struct ldlm_lock *lock, __u32 mode)
+/* only called in ldlm_flock_destroy and for local locks.
+ * for LDLM_FLOCK type locks, l_blocking_ast is null, and
+ * ldlm_lock_remove_from_lru() does nothing, it is safe 
+ * for ldlm_flock_destroy usage by dropping some code */
+void ldlm_lock_decref_internal_nolock(struct ldlm_lock *lock, __u32 mode)
 {
-        struct ldlm_namespace *ns;
-        ENTRY;
-
-        lock_res_and_lock(lock);
-
-        ns = lock->l_resource->lr_namespace;
-
         LDLM_DEBUG(lock, "ldlm_lock_decref(%s)", ldlm_lockname[mode]);
         if (mode & (LCK_NL | LCK_CR | LCK_PR)) {
                 LASSERT(lock->l_readers > 0);
@@ -574,6 +560,19 @@ void ldlm_lock_decref_internal(struct ldlm_lock *lock, __u32 mode)
                 LASSERT(lock->l_writers > 0);
                 lock->l_writers--;
         }
+
+        LDLM_LOCK_PUT(lock);    /* matches the ldlm_lock_get in addref */
+}
+void ldlm_lock_decref_internal(struct ldlm_lock *lock, __u32 mode)
+{
+        struct ldlm_namespace *ns;
+        ENTRY;
+
+        lock_res_and_lock(lock);
+
+        ns = lock->l_resource->lr_namespace;
+
+        ldlm_lock_decref_internal_nolock(lock, mode);
 
         if (lock->l_flags & LDLM_FL_LOCAL &&
             !lock->l_readers && !lock->l_writers) {
@@ -597,7 +596,7 @@ void ldlm_lock_decref_internal(struct ldlm_lock *lock, __u32 mode)
                 ldlm_lock_remove_from_lru(lock);
                 unlock_res_and_lock(lock);
                 if ((lock->l_flags & LDLM_FL_ATOMIC_CB) ||
-                                ldlm_bl_to_thread(ns, NULL, lock) != 0)
+                                ldlm_bl_to_thread(ns, NULL, lock, 0) != 0)
                         ldlm_handle_bl_callback(ns, NULL, lock);
         } else if (ns->ns_client == LDLM_NAMESPACE_CLIENT &&
                    !lock->l_readers && !lock->l_writers &&
@@ -606,17 +605,19 @@ void ldlm_lock_decref_internal(struct ldlm_lock *lock, __u32 mode)
                  * reference, put it on the LRU. */
                 LASSERT(list_empty(&lock->l_lru));
                 LASSERT(ns->ns_nr_unused >= 0);
+                lock->l_last_used = cfs_time_current();
                 spin_lock(&ns->ns_unused_lock);
                 list_add_tail(&lock->l_lru, &ns->ns_unused_list);
                 ns->ns_nr_unused++;
                 spin_unlock(&ns->ns_unused_lock);
                 unlock_res_and_lock(lock);
-                ldlm_cancel_lru(ns, LDLM_ASYNC);
+                /* Call ldlm_cancel_lru() only if EARLY_CANCEL is not supported
+                 * by the server, otherwise, it is done on enqueue. */
+                if (!exp_connect_cancelset(lock->l_conn_export))
+                        ldlm_cancel_lru(ns, LDLM_ASYNC);
         } else {
                 unlock_res_and_lock(lock);
         }
-
-        LDLM_LOCK_PUT(lock);    /* matches the ldlm_lock_get in addref */
 
         EXIT;
 }
@@ -1059,7 +1060,6 @@ int ldlm_lock_match(struct ldlm_namespace *ns, int flags,
 
 /* Returns a referenced lock */
 struct ldlm_lock *ldlm_lock_create(struct ldlm_namespace *ns,
-                                   struct lustre_handle *parent_lock_handle,
                                    struct ldlm_res_id res_id, ldlm_type_t type,
                                    ldlm_mode_t mode,
                                    ldlm_blocking_callback blocking,
@@ -1067,24 +1067,16 @@ struct ldlm_lock *ldlm_lock_create(struct ldlm_namespace *ns,
                                    ldlm_glimpse_callback glimpse,
                                    void *data, __u32 lvb_len)
 {
-        struct ldlm_resource *res, *parent_res = NULL;
-        struct ldlm_lock *lock, *parent_lock = NULL;
+        struct ldlm_lock *lock;
+        struct ldlm_resource *res;
         ENTRY;
 
-        if (parent_lock_handle) {
-                parent_lock = ldlm_handle2lock(parent_lock_handle);
-                if (parent_lock)
-                        parent_res = parent_lock->l_resource;
-        }
-
-        res = ldlm_resource_get(ns, parent_res, res_id, type, 1);
+        res = ldlm_resource_get(ns, NULL, res_id, type, 1);
         if (res == NULL)
                 RETURN(NULL);
 
-        lock = ldlm_lock_new(parent_lock, res);
+        lock = ldlm_lock_new(res);
         ldlm_resource_putref(res);
-        if (parent_lock != NULL)
-                LDLM_LOCK_PUT(parent_lock);
 
         if (lock == NULL)
                 RETURN(NULL);
@@ -1230,13 +1222,38 @@ int ldlm_reprocess_queue(struct ldlm_resource *res, struct list_head *queue,
         RETURN(rc);
 }
 
+/* Helper function for pair ldlm_run_{bl,cp}_ast_work().
+ * 
+ * Send an existing rpc set specified by @arg->set and then
+ * destroy it. Create new one if @do_create flag is set. */
+static void
+ldlm_send_and_maybe_create_set(struct ldlm_cb_set_arg *arg, int do_create)
+{
+        int rc;
+
+        rc = ptlrpc_set_wait(arg->set);
+        if (arg->type == LDLM_BL_CALLBACK)
+                OBD_FAIL_TIMEOUT(OBD_FAIL_LDLM_GLIMPSE, 2);
+        ptlrpc_set_destroy(arg->set);
+
+        if (do_create)
+                arg->set = ptlrpc_prep_set();
+}
+
 int ldlm_run_bl_ast_work(struct list_head *rpc_list)
 {
+        struct ldlm_cb_set_arg arg;
         struct list_head *tmp, *pos;
         struct ldlm_lock_desc d;
-        int rc = 0, retval = 0;
+        int ast_count;
+        int rc = 0;
         ENTRY;
 
+        arg.set = ptlrpc_prep_set();
+        atomic_set(&arg.restart, 0);
+        arg.type = LDLM_BL_CALLBACK;
+
+        ast_count = 0;
         list_for_each_safe(tmp, pos, rpc_list) {
                 struct ldlm_lock *lock =
                         list_entry(tmp, struct ldlm_lock, l_bl_ast);
@@ -1255,23 +1272,43 @@ int ldlm_run_bl_ast_work(struct list_head *rpc_list)
 
                 LDLM_LOCK_PUT(lock->l_blocking_lock);
                 lock->l_blocking_lock = NULL;
-                rc = lock->l_blocking_ast(lock, &d, NULL, LDLM_CB_BLOCKING);
-
-                if (rc == -ERESTART)
-                        retval = rc;
-                else if (rc)
-                        CDEBUG(D_DLMTRACE, "Failed AST - should clean & "
-                               "disconnect client\n");
+                rc = lock->l_blocking_ast(lock, &d, (void *)&arg, 
+                                          LDLM_CB_BLOCKING);
                 LDLM_LOCK_PUT(lock);
+                ast_count++;
+
+                /* Send the request set if it exceeds the PARALLEL_AST_LIMIT,
+                 * and create a new set for requests that remained in
+                 * @rpc_list */
+                if (unlikely(ast_count == PARALLEL_AST_LIMIT)) {
+                        ldlm_send_and_maybe_create_set(&arg, 1);
+                        ast_count = 0;
+                }
         }
-        RETURN(retval);
+
+        if (ast_count > 0)
+                ldlm_send_and_maybe_create_set(&arg, 0);
+        else
+                /* In case when number of ASTs is multiply of
+                 * PARALLEL_AST_LIMIT or @rpc_list was initially empty,
+                 * @arg.set must be destroyed here, otherwise we get 
+                 * write memory leaking. */
+                ptlrpc_set_destroy(arg.set);
+
+        RETURN(atomic_read(&arg.restart) ? -ERESTART : 0);
 }
 
 int ldlm_run_cp_ast_work(struct list_head *rpc_list)
 {
+        struct ldlm_cb_set_arg arg;
         struct list_head *tmp, *pos;
-        int rc = 0, retval = 0;
+        int ast_count;
+        int rc = 0;
         ENTRY;
+
+        arg.set = ptlrpc_prep_set();
+        atomic_set(&arg.restart, 0);
+        arg.type = LDLM_CP_CALLBACK;
 
         /* It's possible to receive a completion AST before we've set
          * the l_completion_ast pointer: either because the AST arrived
@@ -1284,6 +1321,7 @@ int ldlm_run_cp_ast_work(struct list_head *rpc_list)
          * reader/writer reference, which we won't do until we get the
          * reply and finish enqueueing. */
         
+        ast_count = 0;
         list_for_each_safe(tmp, pos, rpc_list) {
                 struct ldlm_lock *lock =
                         list_entry(tmp, struct ldlm_lock, l_cp_ast);
@@ -1295,16 +1333,31 @@ int ldlm_run_cp_ast_work(struct list_head *rpc_list)
                 lock->l_flags &= ~LDLM_FL_CP_REQD;
                 unlock_res_and_lock(lock);
 
-                if (lock->l_completion_ast != NULL)
-                        rc = lock->l_completion_ast(lock, 0, 0);
-                if (rc == -ERESTART)
-                        retval = rc;
-                else if (rc)
-                        CDEBUG(D_DLMTRACE, "Failed AST - should clean & "
-                               "disconnect client\n");
+                if (lock->l_completion_ast != NULL) {
+                        rc = lock->l_completion_ast(lock, 0, (void *)&arg);
+                        ast_count++;
+                }
                 LDLM_LOCK_PUT(lock);
+
+                /* Send the request set if it exceeds the PARALLEL_AST_LIMIT,
+                 * and create a new set for requests that remained in
+                 * @rpc_list */
+                if (unlikely(ast_count == PARALLEL_AST_LIMIT)) {
+                        ldlm_send_and_maybe_create_set(&arg, 1);
+                        ast_count = 0;
+                }
         }
-        RETURN(retval);
+
+        if (ast_count > 0)
+                ldlm_send_and_maybe_create_set(&arg, 0);
+        else
+                /* In case when number of ASTs is multiply of
+                 * PARALLEL_AST_LIMIT or @rpc_list was initially empty,
+                 * @arg.set must be destroyed here, otherwise we get 
+                 * write memory leaking. */
+                ptlrpc_set_destroy(arg.set);
+
+        RETURN(atomic_read(&arg.restart) ? -ERESTART : 0);
 }
 
 static int reprocess_one_queue(struct ldlm_resource *res, void *closure)
@@ -1386,11 +1439,16 @@ void ldlm_cancel_callback(struct ldlm_lock *lock)
                         LDLM_DEBUG(lock, "no blocking ast");
                 }
         }
+        lock->l_flags |= LDLM_FL_BL_DONE;
 }
 
-static void ldlm_unlink_lock_skiplist(struct ldlm_lock *req)
+void ldlm_unlink_lock_skiplist(struct ldlm_lock *req)
 {
         struct ldlm_lock *lock;
+
+        if (req->l_resource->lr_type != LDLM_PLAIN &&
+            req->l_resource->lr_type != LDLM_IBITS)
+                return;
         
         if (LDLM_SL_HEAD(&req->l_sl_mode)) {
                 lock = list_entry(req->l_res_link.next, struct ldlm_lock,
@@ -1463,11 +1521,6 @@ void ldlm_lock_cancel(struct ldlm_lock *lock)
         /* Yes, second time, just in case it was added again while we were
            running with no res lock in ldlm_cancel_callback */
         ldlm_del_waiting_lock(lock); 
-        if (!(LDLM_SL_EMPTY(&lock->l_sl_mode) &&
-              LDLM_SL_EMPTY(&lock->l_sl_policy)) &&
-            (lock->l_resource->lr_type == LDLM_PLAIN ||
-             lock->l_resource->lr_type == LDLM_IBITS))
-                ldlm_unlink_lock_skiplist(lock);
         ldlm_resource_unlink_lock(lock);
         ldlm_lock_destroy_nolock(lock);
         unlock_res_and_lock(lock);
@@ -1502,6 +1555,8 @@ void ldlm_cancel_locks_for_export(struct obd_export *exp)
                 spin_unlock(&exp->exp_ldlm_data.led_lock);
 
                 LDLM_DEBUG(lock, "export %p", exp);
+                ldlm_res_lvbo_update(res, NULL, 0, 1);
+
                 ldlm_lock_cancel(lock);
                 ldlm_reprocess_all(res);
 
@@ -1565,8 +1620,6 @@ struct ldlm_resource *ldlm_lock_convert(struct ldlm_lock *lock, int new_mode,
                 else if (lock->l_res_link.next != &res->lr_granted)
                         mark_lock = list_entry(lock->l_res_link.next,
                                                struct ldlm_lock, l_res_link);
-                if (join != LDLM_JOIN_NONE)
-                        ldlm_unlink_lock_skiplist(lock);
         }
         ldlm_resource_unlink_lock(lock);
 

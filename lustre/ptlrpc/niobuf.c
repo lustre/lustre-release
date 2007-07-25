@@ -300,7 +300,7 @@ void ptlrpc_unregister_bulk (struct ptlrpc_request *req)
                         return;
 
                 LASSERT (rc == -ETIMEDOUT);
-                DEBUG_REQ(D_WARNING,req,"Unexpectedly long timeout: desc %p\n",
+                DEBUG_REQ(D_WARNING,req,"Unexpectedly long timeout: desc %p",
                           desc);
         }
 }

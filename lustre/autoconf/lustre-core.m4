@@ -1,4 +1,5 @@
 #* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
+#* vim:expandtab:shiftwidth=8:tabstop=8:
 #
 # LC_CONFIG_SRCDIR
 #
@@ -7,7 +8,7 @@
 AC_DEFUN([LC_CONFIG_SRCDIR],
 [AC_CONFIG_SRCDIR([lustre/obdclass/obdo.c])
 ])
-
+                           
 #
 # LC_PATH_DEFAULTS
 #
@@ -303,82 +304,34 @@ kernel patches from Lustre version 1.4.3 or above.])
 #
 # LC_CONFIG_BACKINGFS
 #
-# whether to use ldiskfs instead of ext3
+# setup, check the backing filesystem
 #
 AC_DEFUN([LC_CONFIG_BACKINGFS],
 [
-BACKINGFS='ext3'
+BACKINGFS="ldiskfs"
 
-# 2.6 gets ldiskfs
-AC_MSG_CHECKING([whether to enable ldiskfs])
-AC_ARG_ENABLE([ldiskfs],
-	AC_HELP_STRING([--enable-ldiskfs],
-			[use ldiskfs for the Lustre backing FS]),
-	[],[enable_ldiskfs="$linux25"])
-AC_MSG_RESULT([$enable_ldiskfs])
+if test x$with_ldiskfs = xno ; then
+	BACKINGFS="ext3"
 
-if test x$enable_ldiskfs = xyes ; then
-	BACKINGFS="ldiskfs"
-
-	AC_MSG_CHECKING([whether to enable quilt for making ldiskfs])
-	AC_ARG_ENABLE([quilt],
-			AC_HELP_STRING([--disable-quilt],[disable use of quilt for ldiskfs]),
-			[],[enable_quilt='yes'])
-	AC_MSG_RESULT([$enable_quilt])
-
-	AC_PATH_PROG(PATCH, patch, [no])
-
-	if test x$enable_quilt = xno ; then
-	    QUILT="no"
-	else
-	    AC_PATH_PROG(QUILT, quilt, [no])
+	if test x$linux25$enable_server = xyesyes ; then
+		AC_MSG_ERROR([ldiskfs is required for 2.6-based servers.])
 	fi
 
-	if test x$enable_ldiskfs$PATCH$QUILT = xyesnono ; then
-		AC_MSG_ERROR([Quilt or patch are needed to build the ldiskfs module (for Linux 2.6)])
-	fi
-
-	AC_DEFINE(CONFIG_LDISKFS_FS_MODULE, 1, [build ldiskfs as a module])
-	AC_DEFINE(CONFIG_LDISKFS_FS_XATTR, 1, [enable extended attributes for ldiskfs])
-	AC_DEFINE(CONFIG_LDISKFS_FS_POSIX_ACL, 1, [enable posix acls for ldiskfs])
-	AC_DEFINE(CONFIG_LDISKFS_FS_SECURITY, 1, [enable fs security for ldiskfs])
-
-	AC_DEFINE(CONFIG_LDISKFS2_FS_XATTR, 1, [enable extended attributes for ldiskfs2])
-	AC_DEFINE(CONFIG_LDISKFS2_FS_POSIX_ACL, 1, [enable posix acls for ldiskfs2])
-	AC_DEFINE(CONFIG_LDISKFS2_FS_SECURITY, 1, [enable fs security for ldiskfs2])
-fi
+	# --- Check that ext3 and ext3 xattr are enabled in the kernel
+	LC_CONFIG_EXT3([],[
+		AC_MSG_ERROR([Lustre requires that ext3 is enabled in the kernel])
+	],[
+		AC_MSG_WARN([Lustre requires that extended attributes for ext3 are enabled in the kernel])
+		AC_MSG_WARN([This build may fail.])
+	])
+else
+	# ldiskfs is enabled
+	LB_DEFINE_LDISKFS_OPTIONS
+fi #ldiskfs
 
 AC_MSG_CHECKING([which backing filesystem to use])
 AC_MSG_RESULT([$BACKINGFS])
 AC_SUBST(BACKINGFS)
-
-case $BACKINGFS in
-	ext3)
-		# --- Check that ext3 and ext3 xattr are enabled in the kernel
-		LC_CONFIG_EXT3([],[
-			AC_MSG_ERROR([Lustre requires that ext3 is enabled in the kernel])
-		],[
-			AC_MSG_WARN([Lustre requires that extended attributes for ext3 are enabled in the kernel])
-			AC_MSG_WARN([This build may fail.])
-		])
-		;;
-	ldiskfs)
-		AC_MSG_CHECKING([which ldiskfs series to use])
-		case $LINUXRELEASE in
-		2.6.5*) LDISKFS_SERIES="2.6-suse.series" ;;
-		2.6.9*) LDISKFS_SERIES="2.6-rhel4.series" ;;
-		2.6.10-ac*) LDISKFS_SERIES="2.6-fc3.series" ;;
-		2.6.10*) LDISKFS_SERIES="2.6-rhel4.series" ;;
-		2.6.12*) LDISKFS_SERIES="2.6.12-vanilla.series" ;;
-		2.6.15*) LDISKFS_SERIES="2.6-fc5.series";;
-		2.6.16*) LDISKFS_SERIES="2.6-sles10.series";;
-		2.6.18*) LDISKFS_SERIES="2.6.18-vanilla.series";;
-		*) AC_MSG_WARN([Unknown kernel version $LINUXRELEASE, fix lustre/autoconf/lustre-core.m4])
-		esac
-		AC_MSG_RESULT([$LDISKFS_SERIES])
-		AC_SUBST(LDISKFS_SERIES)
-		;;
-esac # $BACKINGFS
 ])
 
 #
@@ -614,21 +567,20 @@ $1
 ],[
 AC_MSG_RESULT([no])
 ])
+])
 
 #
 # LC_EXPORT___IGET
 # starting from 2.6.19 linux kernel exports __iget()
 #
 AC_DEFUN([LC_EXPORT___IGET],
-[AC_MSG_CHECKING([if kernel exports __iget])
-	if grep -q "EXPORT_SYMBOL(__iget)" $LINUX/fs/inode.c 2>/dev/null ; then
-		AC_DEFINE(HAVE_EXPORT___IGET, 1, [kernel exports __iget])
-		AC_MSG_RESULT([yes])
-	else
-		AC_MSG_RESULT([no])
-	fi
+[LB_CHECK_SYMBOL_EXPORT([__iget],
+[fs/inode.c],[
+        AC_DEFINE(HAVE_EXPORT___IGET, 1, [kernel exports __iget])
+],[
 ])
 ])
+
 
 AC_DEFUN([LC_LUSTRE_VERSION_H],
 [LB_CHECK_FILE([$LINUX/include/linux/lustre_version.h],[
@@ -645,15 +597,11 @@ AC_DEFUN([LC_LUSTRE_VERSION_H],
 ])
 
 AC_DEFUN([LC_FUNC_SET_FS_PWD],
-[AC_MSG_CHECKING([if kernel exports show_task])
-have_show_task=0
-        if grep -q "EXPORT_SYMBOL(show_task)" \
-                 "$LINUX/fs/namespace.c" 2>/dev/null ; then
-		AC_DEFINE(HAVE_SET_FS_PWD, 1, [set_fs_pwd is exported])
-		AC_MSG_RESULT([yes])
-	else
-		AC_MSG_RESULT([no])
-        fi
+[LB_CHECK_SYMBOL_EXPORT([set_fs_pwd],
+[fs/namespace.c],[
+        AC_DEFINE(HAVE_SET_FS_PWD, 1, [set_fs_pwd is exported])
+],[
+])
 ])
 
 
@@ -872,7 +820,7 @@ LB_LINUX_TRY_COMPILE([
 
 #
 # LC_VFS_KERN_MOUNT
-# starting from 2.6.18 kernel doesn't export do_kern_mount
+# starting from 2.6.18 kernel don't export do_kern_mount
 # and want to use vfs_kern_mount instead.
 #
 AC_DEFUN([LC_VFS_KERN_MOUNT],
@@ -941,7 +889,7 @@ EXTRA_KCFLAGS="$tmp_flags"
 ])
 
 # 2.6.19 API changes
-# inode doesn't have i_blksize field
+# inode don't have i_blksize field
 AC_DEFUN([LC_INODE_BLKSIZE],
 [AC_MSG_CHECKING([inode has i_blksize field])
 LB_LINUX_TRY_COMPILE([
@@ -1023,7 +971,7 @@ LB_LINUX_TRY_COMPILE([
 ])
 
 # LC_NR_PAGECACHE
-# 2.6.18 doesn't export nr_pagecahe
+# 2.6.18 don't export nr_pagecahe
 AC_DEFUN([LC_NR_PAGECACHE],
 [AC_MSG_CHECKING([kernel export nr_pagecache])
 LB_LINUX_TRY_COMPILE([
@@ -1039,24 +987,115 @@ LB_LINUX_TRY_COMPILE([
 ])
 ])
 
-# LC_WB_RANGE_START
-# 2.6.20 rename struct writeback fields
-AC_DEFUN([LC_WB_RANGE_START],
-[AC_MSG_CHECKING([kernel has range_start in struct writeback_control])
+# LC_CANCEL_DIRTY_PAGE
+# 2.6.20 introduse cancel_dirty_page instead of 
+# clear_page_dirty.
+AC_DEFUN([LC_CANCEL_DIRTY_PAGE],
+[AC_MSG_CHECKING([kernel has cancel_dirty_page])
 LB_LINUX_TRY_COMPILE([
-        #include <linux/fs.h>
-        #include <linux/sched.h>
-        #include <linux/writeback.h>
+        #include <linux/page-flags.h>
 ],[
-        struct writeback_control wb;
-
-        wb.range_start = 0;
+        cancel_dirty_page(NULL, 0);
 ],[
         AC_MSG_RESULT(yes)
-        AC_DEFINE(HAVE_WB_RANGE_START, 1,
-                  [writeback control has range_start field])
+        AC_DEFINE(HAVE_CANCEL_DIRTY_PAGE, 1,
+                  [kernel has cancel_dirty_page instead of clear_page_dirty])
 ],[
         AC_MSG_RESULT(NO)
+])
+])
+
+#
+# LC_PAGE_CONSTANT
+#
+# In order to support raid5 zerocopy patch, we have to patch the kernel to make
+# it support constant page, which means the page won't be modified during the
+# IO.
+#
+AC_DEFUN([LC_PAGE_CONSTANT],
+[AC_MSG_CHECKING([if kernel have PageConstant defined])
+LB_LINUX_TRY_COMPILE([
+        #include <linux/page-flags.h>
+],[
+        #ifndef PG_constant
+        #error "Have no raid5 zcopy patch"
+        #endif
+],[
+        AC_MSG_RESULT(yes)
+        AC_DEFINE(HAVE_PAGE_CONSTANT, 1, [kernel have PageConstant supported])
+],[
+        AC_MSG_RESULT(no);
+])
+])
+
+# RHEL5 in FS-cache patch rename PG_checked flag
+# into PG_fs_misc
+AC_DEFUN([LC_PG_FS_MISC],
+[AC_MSG_CHECKING([kernel has PG_fs_misc])
+LB_LINUX_TRY_COMPILE([
+        #include <linux/page-flags.h>
+],[
+        #ifndef PG_fs_misc
+        #error PG_fs_misc not defined in kernel
+        #endif
+],[
+        AC_MSG_RESULT(yes)
+        AC_DEFINE(HAVE_PG_FS_MISC, 1,
+                  [is kernel have PG_fs_misc])
+],[
+        AC_MSG_RESULT(NO)
+])
+])
+
+AC_DEFUN([LC_EXPORT_TRUNCATE_COMPLETE],
+[LB_CHECK_SYMBOL_EXPORT([truncate_complete_page],
+[mm/truncate.c],[
+AC_DEFINE(HAVE_TRUNCATE_COMPLETE_PAGE, 1,
+            [kernel export truncate_complete_page])
+],[
+])
+])
+
+AC_DEFUN([LC_EXPORT_D_REHASH_COND],
+[LB_CHECK_SYMBOL_EXPORT([d_rehash_cond],
+[fs/dcache.c],[
+AC_DEFINE(HAVE_D_REHASH_COND, 1,
+            [d_rehash_cond is exported by the kernel])
+],[
+])
+])
+
+AC_DEFUN([LC_EXPORT___D_REHASH],
+[LB_CHECK_SYMBOL_EXPORT([__d_rehash],
+[fs/dcache.c],[
+AC_DEFINE(HAVE___D_REHASH, 1,
+            [__d_rehash is exported by the kernel])
+],[
+])
+])
+
+#
+# LC_VFS_INTENT_PATCHES
+#
+# check if the kernel has the VFS intent patches
+AC_DEFUN([LC_VFS_INTENT_PATCHES],
+[AC_MSG_CHECKING([if the kernel has the VFS intent patches])
+LB_LINUX_TRY_COMPILE([
+	#include <linux/fs.h>
+        #include <linux/namei.h>
+],[
+        struct nameidata nd;
+        struct lookup_intent *it;
+
+        it = &nd.intent;
+        intent_init(it, IT_OPEN);
+        it->d.lustre.it_disposition = 0;
+        it->d.lustre.it_data = NULL;
+],[
+        AC_MSG_RESULT([yes])
+        AC_DEFINE(HAVE_VFS_INTENT_PATCHES, 1, [VFS intent patches are applied])
+],[
+        AC_MSG_RESULT([no])
 ])
 ])
 
@@ -1068,7 +1107,7 @@ LB_LINUX_TRY_COMPILE([
 AC_DEFUN([LC_PROG_LINUX],
 [ LC_LUSTRE_VERSION_H
 if test x$enable_server = xyes ; then
-	LC_CONFIG_BACKINGFS
+        LC_CONFIG_BACKINGFS
 fi
 LC_CONFIG_PINGER
 LC_CONFIG_LIBLUSTRE_RECOVERY
@@ -1076,6 +1115,10 @@ LC_CONFIG_QUOTA
 LC_CONFIG_HEALTH_CHECK_WRITE
 
 LC_TASK_PPTR
+# RHEL4 pachess
+LC_EXPORT_TRUNCATE_COMPLETE
+LC_EXPORT_D_REHASH_COND
+LC_EXPORT___D_REHASH
 
 LC_STRUCT_KIOBUF
 LC_FUNC_COND_RESCHED
@@ -1104,6 +1147,10 @@ LC_FUNC_HAVE_CAN_SLEEP_ARG
 LC_FUNC_F_OP_FLOCK
 LC_QUOTA_READ
 LC_COOKIE_FOLLOW_LINK
+LC_FUNC_RCU
+
+# does the kernel have VFS intent patches?
+LC_VFS_INTENT_PATCHES
 
 # 2.6.15
 LC_INODE_I_MUTEX
@@ -1117,13 +1164,21 @@ LC_STATFS_DENTRY_PARAM
 LC_VFS_KERN_MOUNT
 LC_INVALIDATEPAGE_RETURN_INT
 LC_UMOUNTBEGIN_HAS_VFSMOUNT
-LC_WB_RANGE_START
+
+#2.6.18 + RHEL5 (fc6)
+LC_PG_FS_MISC
 
 # 2.6.19
 LC_INODE_BLKSIZE
 LC_VFS_READDIR_U64_INO
 LC_GENERIC_FILE_READ
 LC_GENERIC_FILE_WRITE
+
+# 2.6.20
+LC_CANCEL_DIRTY_PAGE
+
+# raid5-zerocopy patch
+LC_PAGE_CONSTANT
 ])
 
 #
@@ -1245,6 +1300,37 @@ LB_LINUX_TRY_COMPILE([
 ])
 
 #
+# LC_FUNC_RCU
+#
+# kernels prior than 2.6.0(?) have no RCU supported; in kernel 2.6.5(SUSE), 
+# call_rcu takes three parameters.
+#
+AC_DEFUN([LC_FUNC_RCU],
+[AC_MSG_CHECKING([if kernel have RCU supported])
+LB_LINUX_TRY_COMPILE([
+        #include <linux/rcupdate.h>
+],[],[
+        AC_DEFINE(HAVE_RCU, 1, [have RCU defined])
+        AC_MSG_RESULT([yes])
+
+        AC_MSG_CHECKING([if call_rcu takes three parameters])
+        LB_LINUX_TRY_COMPILE([
+                #include <linux/rcupdate.h>
+        ],[
+                struct rcu_head rh;
+                call_rcu(&rh, (void (*)(struct rcu_head *))1, NULL);
+        ],[
+                AC_DEFINE(HAVE_CALL_RCU_PARAM, 1, [call_rcu takes three parameters])
+                AC_MSG_RESULT([yes])
+        ],[
+                AC_MSG_RESULT([no]) 
+        ])
+],[
+        AC_MSG_RESULT([no])
+])
+])
+
+#
 # LC_CONFIGURE
 #
 # other configure checks
@@ -1293,7 +1379,6 @@ fi
 #
 AC_DEFUN([LC_CONDITIONALS],
 [AM_CONDITIONAL(LIBLUSTRE, test x$enable_liblustre = xyes)
-AM_CONDITIONAL(LDISKFS, test x$enable_ldiskfs = xyes)
 AM_CONDITIONAL(USE_QUILT, test x$QUILT != xno)
 AM_CONDITIONAL(LIBLUSTRE_TESTS, test x$enable_liblustre_tests = xyes)
 AM_CONDITIONAL(MPITESTS, test x$enable_mpitests = xyes, Build MPI Tests)
@@ -1332,10 +1417,6 @@ lustre/kernel_patches/targets/rh-2.4.target
 lustre/kernel_patches/targets/rhel-2.4.target
 lustre/kernel_patches/targets/suse-2.4.21-2.target
 lustre/kernel_patches/targets/sles-2.4.target
-lustre/ldiskfs/Makefile
-lustre/ldiskfs/autoMakefile
-lustre/ldiskfs2/Makefile
-lustre/ldiskfs2/autoMakefile
 lustre/ldlm/Makefile
 lustre/liblustre/Makefile
 lustre/liblustre/tests/Makefile

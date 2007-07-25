@@ -156,7 +156,12 @@ sub generate_ver($$$)
                             $hour, $min, $sec);
 
     print "#define BUILD_VERSION \"";
-    if ($pristine) {
+
+    my $lustre_vers = $ENV{LUSTRE_VERS};
+
+    if ($lustre_vers) {
+        print "$tag-$lustre_vers\"\n";
+    } elsif ($pristine) {
         print "$tag-$show_last-PRISTINE-$linuxdir-$kernver\"\n";
     } else {
         print "$tag-$show_last-CHANGED-$linuxdir-$kernver\"\n";

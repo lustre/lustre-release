@@ -119,6 +119,9 @@ void client_bulk_callback (lnet_event_t *ev)
         struct ptlrpc_bulk_desc *desc = cbid->cbid_arg;
         ENTRY;
 
+        if (OBD_FAIL_CHECK(OBD_FAIL_PTLRPC_CLIENT_BULK_CB))
+                ev->status = -EIO;
+
         LASSERT ((desc->bd_type == BULK_PUT_SINK && 
                   ev->type == LNET_EVENT_PUT) ||
                  (desc->bd_type == BULK_GET_SOURCE &&
@@ -217,7 +220,7 @@ void request_in_callback(lnet_event_t *ev)
 
         if (ev->unlinked) {
                 service->srv_nrqbd_receiving--;
-                CDEBUG(D_RPCTRACE,"Buffer complete: %d buffers still posted\n",
+                CDEBUG(D_INFO, "Buffer complete: %d buffers still posted\n",
                        service->srv_nrqbd_receiving);
 
                 /* Normally, don't complain about 0 buffers posted; LNET won't

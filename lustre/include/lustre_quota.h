@@ -136,12 +136,16 @@ struct lustre_quota_ctxt {
                       lqc_atype:2,      /* Turn on user/group quota at setup automatically, 
                                          * 0: none, 1: user quota, 2: group quota, 3: both */
                       lqc_status:1;     /* Quota status. 0:Off, 1:On */
+        spinlock_t    lqc_lock;         /* guard lqc_imp_valid now */
         unsigned long lqc_iunit_sz;     /* Unit size of file quota */
         unsigned long lqc_itune_sz;     /* Trigger dqacq when available file quota less than
                                          * this value, trigger dqrel when available file quota
                                          * more than this value + 1 iunit */
         unsigned long lqc_bunit_sz;     /* Unit size of block quota */
         unsigned long lqc_btune_sz;     /* See comment of lqc_itune_sz */
+        unsigned long lqc_limit_sz;     /* When remaining quota on ost is less 
+                                         * than this value, ost will request
+                                         * quota from mds */
 };
 
 #else
@@ -194,6 +198,9 @@ typedef struct {
         
         /* For quota slave, set import, trigger quota recovery */
         int (*quota_setinfo) (struct obd_export *, struct obd_device *);
+        
+        /* For quota slave, clear import when relative import is invalid */
+        int (*quota_clearinfo) (struct obd_export *, struct obd_device *);
         
         /* For quota slave, set proper thread resoure capability */
         int (*quota_enforce) (struct obd_device *, unsigned int);
@@ -362,6 +369,18 @@ static inline int lquota_setinfo(quota_interface_t *interface,
         RETURN(rc);
 }
 
+static inline int lquota_clearinfo(quota_interface_t *interface,
+                                   struct obd_export *exp, 
+                                   struct obd_device *obd) 
+{
+        int rc;
+        ENTRY;
+
+        QUOTA_CHECK_OP(interface, clearinfo);
+        rc = QUOTA_OP(interface, clearinfo)(exp, obd);
+        RETURN(rc);
+}
+
 static inline int lquota_enforce(quota_interface_t *interface, 
                                  struct obd_device *obd,
                                  unsigned int ignore)
@@ -430,6 +449,11 @@ int lprocfs_rd_type(char *page, char **start, off_t off, int count,
                     int *eof, void *data);
 int lprocfs_wr_type(struct file *file, const char *buffer,
                     unsigned long count, void *data);
+int lprocfs_filter_rd_limit(char *page, char **start, off_t off, int count, 
+                            int *eof, void *data);
+int lprocfs_filter_wr_limit(struct file *file, const char *buffer,
+                            unsigned long count, void *data);
+
 
 #ifndef __KERNEL__
 extern quota_interface_t osc_quota_interface;

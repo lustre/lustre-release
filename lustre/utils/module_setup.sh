@@ -31,8 +31,7 @@ cp -u ../osc/osc.$EXT $MDIR
 cp -u ../lov/lov.$EXT $MDIR
 cp -u ../mds/mds.$EXT $MDIR
 cp -u ../lvfs/$FSFLT.$EXT $MDIR
-[ $KVER == "26" ] && cp -u ../ldiskfs/ldiskfs.$EXT $MDIR
-[ $KVER == "26" ] && cp -u ../ldiskfs2/ldiskfs2.$EXT $MDIR
+[ $KVER == "26" ] && cp -u ../../ldiskfs/ldiskfs/ldiskfs.$EXT $MDIR
 cp -u ../ost/ost.$EXT $MDIR
 cp -u ../obdfilter/obdfilter.$EXT $MDIR
 cp -u ../llite/lustre.$EXT $MDIR

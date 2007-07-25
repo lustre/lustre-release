@@ -28,6 +28,7 @@
 #include <lustre_lite.h>
 #include "llite_internal.h"
 
+#ifdef HAVE_CLOSE_THREAD
 /* record that a write is in flight */
 void llap_write_pending(struct inode *inode, struct ll_async_page *llap)
 {
@@ -107,7 +108,6 @@ void ll_queue_done_writing(struct inode *inode)
         EXIT;
 }
 
-#if 0
 /* If we know the file size and have the cookies:
  *  - send a DONE_WRITING rpc
  *
@@ -169,7 +169,7 @@ static void ll_close_done_writing(struct inode *inode)
         rc = mdc_done_writing(ll_i2sbi(inode)->ll_mdc_exp, &obdo);
  out:
 }
-#endif
+
 
 static struct ll_inode_info *ll_close_next_lli(struct ll_close_queue *lcq)
 {
@@ -188,6 +188,15 @@ static struct ll_inode_info *ll_close_next_lli(struct ll_close_queue *lcq)
         spin_unlock(&lcq->lcq_lock);
         return lli;
 }
+#else
+static struct ll_inode_info *ll_close_next_lli(struct ll_close_queue *lcq)
+{
+        if (lcq->lcq_list.next == NULL)
+                return ERR_PTR(-1);
+
+	return NULL;
+}
+#endif
 
 static int ll_close_thread(void *arg)
 {
@@ -255,3 +264,5 @@ void ll_close_thread_shutdown(struct ll_close_queue *lcq)
         wait_for_completion(&lcq->lcq_comp);
         OBD_FREE(lcq, sizeof(*lcq));
 }
+
+

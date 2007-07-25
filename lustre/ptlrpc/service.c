@@ -594,7 +594,7 @@ ptlrpc_server_handle_request(struct ptlrpc_service *svc,
                     request->rq_export->exp_obd->obd_fail) {
                         /* Failing over, don't handle any more reqs, send
                            error response instead. */
-                        CDEBUG(D_HA, "Dropping req %p for failed obd %s\n",
+                        CDEBUG(D_RPCTRACE,"Dropping req %p for failed obd %s\n",
                                request, request->rq_export->exp_obd->obd_name);
                         request->rq_status = -ENODEV;
                         ptlrpc_error(request);
@@ -667,7 +667,7 @@ put_conn:
                        request->rq_status,
                        reply ? lustre_msg_get_status(request->rq_repmsg): -999);
         else
-                CDEBUG(D_HA, "request "LPU64" opc %u from %s processed in "
+                CDEBUG(D_RPCTRACE,"request "LPU64" opc %u from %s processed in "
                        "%ldus (%ldus total) trans "LPU64" rc %d/%d\n",
                        request->rq_xid, lustre_msg_get_opc(request->rq_reqmsg),
                        libcfs_id2str(request->rq_peer), timediff,
@@ -957,6 +957,8 @@ static int ptlrpc_main(void *arg)
 
                 lc_watchdog_disable(watchdog);
 
+                cond_resched();
+
                 l_wait_event_exclusive (svc->srv_waitq,
                               ((thread->t_flags & SVC_STOPPING) != 0 &&
                                svc->srv_n_difficult_replies == 0) ||
@@ -1090,7 +1092,7 @@ int ptlrpc_start_thread(struct obd_device *dev, struct ptlrpc_service *svc)
         CDEBUG(D_RPCTRACE, "%s started %d min %d max %d running %d\n",
                svc->srv_name, svc->srv_threads_started, svc->srv_threads_min,
                svc->srv_threads_max, svc->srv_threads_running);
-        if (svc->srv_threads_started >= svc->srv_threads_max) 
+        if (svc->srv_threads_started >= svc->srv_threads_max)
                 RETURN(-EMFILE);
 
         OBD_ALLOC(thread, sizeof(*thread));
@@ -1105,7 +1107,7 @@ int ptlrpc_start_thread(struct obd_device *dev, struct ptlrpc_service *svc)
                 RETURN(-EMFILE);
         }
         list_add(&thread->t_link, &svc->srv_threads);
-        id = ++svc->srv_threads_started;
+        id = svc->srv_threads_started++;
         spin_unlock(&svc->srv_lock);
 
         thread->t_id = id;

@@ -36,7 +36,7 @@ struct lov_request {
 };
 
 struct lov_request_set {
-        struct obd_enqueue_info *set_ei;
+        struct ldlm_enqueue_info*set_ei;
         struct obd_info         *set_oi;
         atomic_t                 set_refcount;
         struct obd_export       *set_exp;
@@ -111,9 +111,12 @@ static inline void lov_llh_put(struct lov_lock_handles *llh)
                 atomic_read(&llh->llh_refcount) < 0x5a5a);
         if (atomic_dec_and_test(&llh->llh_refcount)) {
                 class_handle_unhash(&llh->llh_handle);
-                LASSERT(list_empty(&llh->llh_handle.h_link));
-                OBD_FREE(llh, sizeof *llh +
-                         sizeof(*llh->llh_handles) * llh->llh_stripe_count);
+                /* The structure may be held by other threads because RCU. -jxiong */
+                if (atomic_read(&llh->llh_refcount))
+                        return;
+
+                OBD_FREE_RCU(llh, sizeof *llh +
+                         sizeof(*llh->llh_handles) * llh->llh_stripe_count, &llh->llh_handle);
         }
 }
 
@@ -141,6 +144,8 @@ int lov_stripe_intersects(struct lov_stripe_md *lsm, int stripeno,
 int lov_stripe_number(struct lov_stripe_md *lsm, obd_off lov_off);
 
 /* lov_qos.c */
+#define LOV_USES_ASSIGNED_STRIPE        0
+#define LOV_USES_DEFAULT_STRIPE         1
 int qos_add_tgt(struct obd_device *obd, __u32 index);
 int qos_del_tgt(struct obd_device *obd, __u32 index);
 void qos_shrink_lsm(struct lov_request_set *set);
@@ -192,9 +197,10 @@ int lov_prep_sync_set(struct obd_export *exp, struct obd_info *obd_info,
                       obd_off end, struct lov_request_set **reqset);
 int lov_fini_sync_set(struct lov_request_set *set);
 int lov_prep_enqueue_set(struct obd_export *exp, struct obd_info *oinfo,
-                         struct obd_enqueue_info *einfo,
+                         struct ldlm_enqueue_info *einfo,
                          struct lov_request_set **reqset);
-int lov_fini_enqueue_set(struct lov_request_set *set, __u32 mode, int rc);
+int lov_fini_enqueue_set(struct lov_request_set *set, __u32 mode, int rc,
+                         struct ptlrpc_request_set *rqset);
 int lov_prep_match_set(struct obd_export *exp, struct obd_info *oinfo,
                        struct lov_stripe_md *lsm,
                        ldlm_policy_data_t *policy, __u32 mode,

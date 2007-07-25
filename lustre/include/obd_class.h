@@ -100,7 +100,6 @@ void class_decref(struct obd_device *obd);
 #define CFG_F_SKIP      0x04   /* We should ignore this cfg command */
 #define CFG_F_COMPAT146 0x08   /* Allow old-style logs */
 #define CFG_F_EXCLUDE   0x10   /* OST exclusion list */
-#define CFG_F_SERVER146 0x20   /* Using old server */
 
 /* Passed as data param to class_config_parse_llog */
 struct config_llog_instance {
@@ -474,6 +473,18 @@ static inline int obd_checkmd(struct obd_export *exp,
         EXP_COUNTER_INCREMENT(exp, checkmd);
 
         rc = OBP(exp->exp_obd, checkmd)(exp, md_exp, mem_tgt);
+        RETURN(rc);
+}
+
+static inline int obd_precreate(struct obd_export *exp, int need_create)
+{
+        int rc;
+        ENTRY;
+
+        EXP_CHECK_OP(exp, precreate);
+        OBD_COUNTER_INCREMENT(exp->exp_obd, precreate);
+
+        rc = OBP(exp->exp_obd, precreate)(exp, need_create);
         RETURN(rc);
 }
 
@@ -912,12 +923,15 @@ static inline int obd_brw_rqset(int cmd, struct obd_export *exp,
 {
         struct ptlrpc_request_set *set = NULL;
         struct obd_info oinfo = { { { 0 } } };
+        atomic_t nob;
         int rc = 0;
         ENTRY;
 
         set =  ptlrpc_prep_set();
         if (set == NULL)
                 RETURN(-ENOMEM);
+        atomic_set(&nob, 0);
+        set->set_countp = &nob;
 
         oinfo.oi_oa = oa;
         oinfo.oi_md = lsm;
@@ -926,6 +940,8 @@ static inline int obd_brw_rqset(int cmd, struct obd_export *exp,
                 rc = ptlrpc_set_wait(set);
                 if (rc)
                         CERROR("error from callback: rc = %d\n", rc);
+                else
+                        rc = atomic_read(&nob);
         } else {
                 CDEBUG(rc == -ENOSPC ? D_INODE : D_ERROR,
                        "error from obd_brw_async: rc = %d\n", rc);
@@ -1111,30 +1127,30 @@ static inline int obd_iocontrol(unsigned int cmd, struct obd_export *exp,
 
 static inline int obd_enqueue_rqset(struct obd_export *exp,
                                     struct obd_info *oinfo,
-                                    struct obd_enqueue_info *einfo)
+                                    struct ldlm_enqueue_info *einfo)
 {
+        struct ptlrpc_request_set *set = NULL;
         int rc;
         ENTRY;
 
         EXP_CHECK_OP(exp, enqueue);
         EXP_COUNTER_INCREMENT(exp, enqueue);
 
-        einfo->ei_rqset =  ptlrpc_prep_set();
-        if (einfo->ei_rqset == NULL)
+        set =  ptlrpc_prep_set();
+        if (set == NULL)
                 RETURN(-ENOMEM);
 
-        rc = OBP(exp->exp_obd, enqueue)(exp, oinfo, einfo);
+        rc = OBP(exp->exp_obd, enqueue)(exp, oinfo, einfo, set);
         if (rc == 0)
-                rc = ptlrpc_set_wait(einfo->ei_rqset);
-        ptlrpc_set_destroy(einfo->ei_rqset);
-        einfo->ei_rqset = NULL;
-
+                rc = ptlrpc_set_wait(set);
+        ptlrpc_set_destroy(set);
         RETURN(rc);
 }
 
 static inline int obd_enqueue(struct obd_export *exp,
                               struct obd_info *oinfo,
-                              struct obd_enqueue_info *einfo)
+                              struct ldlm_enqueue_info *einfo,
+                              struct ptlrpc_request_set *set)
 {
         int rc;
         ENTRY;
@@ -1142,7 +1158,7 @@ static inline int obd_enqueue(struct obd_export *exp,
         EXP_CHECK_OP(exp, enqueue);
         EXP_COUNTER_INCREMENT(exp, enqueue);
 
-        rc = OBP(exp->exp_obd, enqueue)(exp, oinfo, einfo);
+        rc = OBP(exp->exp_obd, enqueue)(exp, oinfo, einfo, set);
         RETURN(rc);
 }
 
@@ -1378,19 +1394,16 @@ extern void obd_cleanup_caches(void);
 
 /* support routines */
 extern cfs_mem_cache_t *obdo_cachep;
-static inline struct obdo *obdo_alloc(void)
-{
-        struct obdo *oa;
 
-        OBD_SLAB_ALLOC(oa, obdo_cachep, CFS_ALLOC_STD, sizeof(*oa));
+#define OBDO_ALLOC(ptr)                                                       \
+do {                                                                          \
+        OBD_SLAB_ALLOC_PTR((ptr), obdo_cachep);                               \
+} while(0)
 
-        return oa;
-}
-
-static inline void obdo_free(struct obdo *oa)
-{
-        OBD_SLAB_FREE(oa, obdo_cachep, sizeof(*oa));
-}
+#define OBDO_FREE(ptr)                                                        \
+do {                                                                          \
+        OBD_SLAB_FREE_PTR((ptr), obdo_cachep);                                \
+} while(0)
 
 /* I'm as embarrassed about this as you are.
  *

@@ -76,7 +76,7 @@ int mds_osc_destroy_orphan(struct obd_device *obd,
         if (rc)
                 GOTO(out_free_memmd, rc);
 
-        oa = obdo_alloc();
+        OBDO_ALLOC(oa);
         if (oa == NULL)
                 GOTO(out_free_memmd, rc = -ENOMEM);
         oa->o_id = lsm->lsm_object_id;
@@ -88,7 +88,7 @@ int mds_osc_destroy_orphan(struct obd_device *obd,
                 oti.oti_logcookies = logcookies;
         }
         rc = obd_destroy(mds->mds_osc_exp, oa, lsm, &oti, obd->obd_self_export);
-        obdo_free(oa);
+        OBDO_FREE(oa);
         if (rc)
                 CDEBUG(D_INODE, "destroy orphan objid 0x"LPX64" on ost error "
                        "%d\n", lsm->lsm_object_id, rc);
@@ -257,15 +257,12 @@ int mds_cleanup_pending(struct obd_device *obd)
                 MDS_UP_READ_ORPHAN_SEM(child_inode);
 
                 rc = mds_unlink_orphan(obd, dchild, child_inode, pending_dir);
-                if (rc == 0) {
-                        item ++;
-                        CDEBUG(D_HA, "%s: removed orphan %s\n",
-                               obd->obd_name, d_name);
-                } else {
-                        CDEBUG(D_INODE, "%s: removed orphan %s failed,"
-                               " rc = %d\n", obd->obd_name, d_name, rc);
+                CDEBUG(D_INODE, "%s: removed orphan %s: rc %d\n",
+                       obd->obd_name, d_name, rc);
+                if (rc == 0)
+                        item++;
+                else
                         rc = 0;
-                }
 next:
                 l_dput(dchild);
                 UNLOCK_INODE_MUTEX(pending_dir);

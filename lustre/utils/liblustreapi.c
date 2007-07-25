@@ -182,12 +182,8 @@ int llapi_lov_get_uuids(int fd, struct obd_uuid *uuidp, int *ost_count)
         /* Get the lov name */
         rc = ioctl(fd, OBD_IOC_GETNAME, (void *) lov_name);
         if (rc) {
-                if (errno != ENOTTY) {
-                        rc = errno;
-                        err_msg("error: can't get lov name.");
-                } else {
-                        rc = 0;
-                }
+                rc = errno;
+                err_msg("error: can't get lov name.");
                 return rc;
         }
 
@@ -202,7 +198,7 @@ int llapi_lov_get_uuids(int fd, struct obd_uuid *uuidp, int *ost_count)
         }
 
         while ((fgets(buf, sizeof(buf), fp) != NULL) && index < *ost_count) {
-                if (sscanf(buf, "%d: %s", &index, (char *)&uuidp[index].uuid)<2)
+                if (sscanf(buf, "%d: %s", &index, uuidp[index].uuid) < 2)
                         break;
                 index++;
         }
@@ -1231,7 +1227,7 @@ static int cb_quotachown(char *path, DIR *parent, DIR *d, void *data)
          * invoke syscall directly. */
         rc = syscall(SYS_chown, path, -1, -1);
         if (rc)
-                err_msg("error: chown %s (%u,%u)", path);
+                err_msg("error: chown %s", path);
 
         rc = chmod(path, st->st_mode);
         if (rc)

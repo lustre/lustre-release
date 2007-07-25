@@ -530,7 +530,7 @@ void target_client_add_cb(struct obd_device *obd, __u64 transno, void *cb_data,
 {
         struct obd_export *exp = cb_data;
 
-        CDEBUG(D_HA, "%s: committing for initial connect of %s\n",
+        CDEBUG(D_RPCTRACE, "%s: committing for initial connect of %s\n",
                obd->obd_name, exp->exp_client_uuid.uuid);
 
         spin_lock(&exp->exp_lock);
@@ -548,7 +548,6 @@ int target_handle_connect(struct ptlrpc_request *req, svc_handler_t handler)
         struct obd_uuid tgtuuid;
         struct obd_uuid cluuid;
         struct obd_uuid remote_uuid;
-        struct list_head *p;
         char *str, *tmp;
         int rc = 0, abort_recovery;
         struct obd_connect_data *data;
@@ -560,7 +559,7 @@ int target_handle_connect(struct ptlrpc_request *req, svc_handler_t handler)
         LASSERT_REQSWAB(req, REQ_REC_OFF);
         str = lustre_msg_string(req->rq_reqmsg, REQ_REC_OFF, sizeof(tgtuuid)-1);
         if (str == NULL) {
-                DEBUG_REQ(D_ERROR, req, "bad target UUID for connect\n");
+                DEBUG_REQ(D_ERROR, req, "bad target UUID for connect");
                 GOTO(out, rc = -EINVAL);
         }
 
@@ -578,11 +577,11 @@ int target_handle_connect(struct ptlrpc_request *req, svc_handler_t handler)
         /* end COMPAT_146 */
 
         if (!target || target->obd_stopping || !target->obd_set_up) {
-                LCONSOLE_ERROR("UUID '%s' is not available "
-                               " for connect (%s)\n", str,
-                               !target ? "no target" :
-                               (target->obd_stopping ? "stopping" :
-                                "not set up"));
+                LCONSOLE_ERROR_MSG(0x137, "UUID '%s' is not available "
+                                   " for connect (%s)\n", str,
+                                   !target ? "no target" :
+                                   (target->obd_stopping ? "stopping" :
+                                   "not set up"));
                 GOTO(out, rc = -ENODEV);
         }
 
@@ -602,7 +601,7 @@ int target_handle_connect(struct ptlrpc_request *req, svc_handler_t handler)
         str = lustre_msg_string(req->rq_reqmsg, REQ_REC_OFF + 1,
                                 sizeof(cluuid) - 1);
         if (str == NULL) {
-                DEBUG_REQ(D_ERROR, req, "bad client UUID for connect\n");
+                DEBUG_REQ(D_ERROR, req, "bad client UUID for connect");
                 GOTO(out, rc = -EINVAL);
         }
 
@@ -644,14 +643,14 @@ int target_handle_connect(struct ptlrpc_request *req, svc_handler_t handler)
         if (lustre_msg_get_op_flags(req->rq_reqmsg) & MSG_CONNECT_LIBCLIENT) {
                 if (!data) {
                         DEBUG_REQ(D_WARNING, req, "Refusing old (unversioned) "
-                                  "libclient connection attempt\n");
+                                  "libclient connection attempt");
                         GOTO(out, rc = -EPROTO);
                 } else if (data->ocd_version < LUSTRE_VERSION_CODE -
                                                LUSTRE_VERSION_ALLOWED_OFFSET ||
                            data->ocd_version > LUSTRE_VERSION_CODE +
                                                LUSTRE_VERSION_ALLOWED_OFFSET) {
                         DEBUG_REQ(D_WARNING, req, "Refusing %s (%d.%d.%d.%d) "
-                                  "libclient connection attempt\n",
+                                  "libclient connection attempt",
                                   data->ocd_version < LUSTRE_VERSION_CODE ?
                                   "old" : "new",
                                   OBD_OCD_VERSION_MAJOR(data->ocd_version),
@@ -675,43 +674,37 @@ int target_handle_connect(struct ptlrpc_request *req, svc_handler_t handler)
                 goto dont_check_exports;
 
         spin_lock(&target->obd_dev_lock);
-        list_for_each(p, &target->obd_exports) {
-                export = list_entry(p, struct obd_export, exp_obd_chain);
-                if (obd_uuid_equals(&cluuid, &export->exp_client_uuid)) {
-                        if (export->exp_connecting) { /* bug 9635, et. al. */
-                                CWARN("%s: exp %p already connecting\n",
-                                      export->exp_obd->obd_name, export);
-                                export = NULL;
-                                rc = -EALREADY;
-                                break;
-                        }
+        export = lustre_hash_get_object_by_key(target->obd_uuid_hash_body, &cluuid);
 
-                        /* make darn sure this is coming from the same peer
-                         * if the UUIDs matched */
-                        if ((export->exp_connection != NULL) &&
-                                        (strcmp(libcfs_nid2str(req->rq_peer.nid),
-                                                libcfs_nid2str(export->exp_connection->c_peer.nid)))) {
-                                        CWARN("%s: cookie %s seen on new NID %s when "
-                                                        "existing NID %s is already connected\n",
-                                                        target->obd_name, cluuid.uuid,
-                                                        libcfs_nid2str(req->rq_peer.nid),
-                                                        libcfs_nid2str(export->exp_connection->c_peer.nid));
-                                        export = NULL;
-                                        rc = -EALREADY;
-                                        break;
-                        }
-
-                        spin_lock(&export->exp_lock);
-                        export->exp_connecting = 1;
-                        spin_unlock(&export->exp_lock);
-                        spin_unlock(&target->obd_dev_lock);
-                        LASSERT(export->exp_obd == target);
-
-                        rc = target_handle_reconnect(&conn, export, &cluuid);
-                        break;
-                }
+        if (export != NULL && export->exp_connecting) { /* bug 9635, et. al. */
+                CWARN("%s: exp %p already connecting\n",
+                      export->exp_obd->obd_name, export);
+                class_export_put(export);
                 export = NULL;
+                rc = -EALREADY;
+        } else if (export != NULL && export->exp_connection != NULL &&
+                   req->rq_peer.nid != export->exp_connection->c_peer.nid) {
+                /* make darn sure this is coming from the same peer
+                 * if the UUIDs matched */
+                  CWARN("%s: cookie %s seen on new NID %s when "
+                          "existing NID %s is already connected\n",
+                        target->obd_name, cluuid.uuid,
+                  libcfs_nid2str(req->rq_peer.nid),
+                  libcfs_nid2str(export->exp_connection->c_peer.nid));
+                  class_export_put(export);
+                  export = NULL;
+                  rc = -EALREADY;
+        } else if (export != NULL) {
+                spin_lock(&export->exp_lock);
+                export->exp_connecting = 1;
+                spin_unlock(&export->exp_lock);
+                class_export_put(export);
+                spin_unlock(&target->obd_dev_lock);
+                LASSERT(export->exp_obd == target);
+
+                rc = target_handle_reconnect(&conn, export, &cluuid);
         }
+
         /* If we found an export, we already unlocked. */
         if (!export) {
                 spin_unlock(&target->obd_dev_lock);
@@ -797,7 +790,7 @@ int target_handle_connect(struct ptlrpc_request *req, svc_handler_t handler)
          * that to go to zero before we get our new export reference. */
         export = class_conn2export(&conn);
         if (!export) {
-                DEBUG_REQ(D_ERROR, req, "Missing export!\n");
+                DEBUG_REQ(D_ERROR, req, "Missing export!");
                 GOTO(out, rc = -ENODEV);
         }
 
@@ -842,6 +835,14 @@ int target_handle_connect(struct ptlrpc_request *req, svc_handler_t handler)
         export->exp_connection = ptlrpc_get_connection(req->rq_peer,
                                                        req->rq_self,
                                                        &remote_uuid);
+
+        spin_lock(&target->obd_dev_lock);
+        /* Export might be hashed already, e.g. if this is reconnect */
+        if (hlist_unhashed(&export->exp_nid_hash))
+                lustre_hash_additem(export->exp_obd->obd_nid_hash_body, 
+                                    &export->exp_connection->c_peer.nid, 
+                                    &export->exp_nid_hash);
+        spin_unlock(&target->obd_dev_lock);
 
         if (lustre_msg_get_op_flags(req->rq_repmsg) & MSG_CONNECT_RECONNECT)
                 GOTO(out, rc = 0);

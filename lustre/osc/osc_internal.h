@@ -54,6 +54,7 @@ struct osc_cache_waiter {
 #define OSCC_FLAG_LOW                0x10
 #define OSCC_FLAG_EXITING            0x20
 
+int osc_precreate(struct obd_export *exp, int need_create);
 int osc_create(struct obd_export *exp, struct obdo *oa,
 	       struct lov_stripe_md **ea, struct obd_trans_info *oti);
 int osc_real_create(struct obd_export *exp, struct obdo *oa,
@@ -71,5 +72,30 @@ static inline int lproc_osc_attach_seqstat(struct obd_device *dev) {return 0;}
 #define min_t(type,x,y) \
         ({ type __x = (x); type __y = (y); __x < __y ? __x: __y; })
 #endif
+
+static inline int osc_recoverable_error(int rc)
+{
+        return (rc == -EIO || rc == -EROFS || rc == -ENOMEM || rc == -EAGAIN);
+}
+
+/* osc_requests.c */
+
+/* how long time request will be resend after got a recoverable error.
+ * time measured in seconds */
+extern atomic_t osc_resend_time;
+/*default timeout is 10s */
+#define OSC_DEFAULT_TIMEOUT 10
+
+static inline int osc_should_resend(cfs_time_t start)
+{
+        cfs_duration_t resend = atomic_read(&osc_resend_time);
+        int ret;
+
+        ret = resend != 0 && 
+              (cfs_time_after(cfs_time_add(start, resend),
+               cfs_time_current()));
+
+        return ret;
+}
 
 #endif /* OSC_INTERNAL_H */

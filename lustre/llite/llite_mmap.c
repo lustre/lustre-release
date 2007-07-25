@@ -628,7 +628,7 @@ int ll_file_mmap(struct file * file, struct vm_area_struct * vma)
         int rc;
         ENTRY;
 
-        ll_vfs_ops_tally(ll_i2sbi(file->f_dentry->d_inode), VFS_OPS_MMAP);
+        ll_stats_ops_tally(ll_i2sbi(file->f_dentry->d_inode), LPROC_LL_MAP, 1);
         rc = generic_file_mmap(file, vma);
         if (rc == 0) {
 #if !defined(HAVE_FILEMAP_POPULATE) && \

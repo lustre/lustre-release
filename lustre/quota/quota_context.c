@@ -35,8 +35,9 @@ unsigned long default_bunit_sz = 100 * 1024 * 1024;       /* 100M bytes */
 unsigned long default_btune_ratio = 50;                   /* 50 percentage */
 unsigned long default_iunit_sz = 5000;       /* 5000 inodes */
 unsigned long default_itune_ratio = 50;      /* 50 percentage */
+unsigned long default_limit_sz = 20 * 1024 * 1024;
 
-kmem_cache_t *qunit_cachep = NULL;
+cfs_mem_cache_t *qunit_cachep = NULL;
 struct list_head qunit_hash[NR_DQHASH];
 spinlock_t qunit_hash_lock = SPIN_LOCK_UNLOCKED;
 
@@ -71,13 +72,9 @@ void qunit_cache_cleanup(void)
         spin_unlock(&qunit_hash_lock);
 
         if (qunit_cachep) {
-#ifdef HAVE_KMEM_CACHE_DESTROY_INT
                 int rc;
-                rc = kmem_cache_destroy(qunit_cachep);
+                rc = cfs_mem_cache_destroy(qunit_cachep);
                 LASSERTF(rc == 0, "couldn't destory qunit_cache slab\n");
-#else
-                kmem_cache_destroy(qunit_cachep);
-#endif
                 qunit_cachep = NULL;
         }
         EXIT;
@@ -89,9 +86,9 @@ int qunit_cache_init(void)
         ENTRY;
 
         LASSERT(qunit_cachep == NULL);
-        qunit_cachep = kmem_cache_create("ll_qunit_cache",
-                                         sizeof(struct lustre_qunit),
-                                         0, 0, NULL, NULL);
+        qunit_cachep = cfs_mem_cache_create("ll_qunit_cache",
+                                            sizeof(struct lustre_qunit),
+                                            0, 0);
         if (!qunit_cachep)
                 RETURN(-ENOMEM);
 
@@ -293,7 +290,7 @@ static struct lustre_qunit *alloc_qunit(struct lustre_quota_ctxt *qctxt,
         struct lustre_qunit *qunit = NULL;
         ENTRY;
 
-        OBD_SLAB_ALLOC(qunit, qunit_cachep, SLAB_NOFS, sizeof(*qunit));
+        OBD_SLAB_ALLOC(qunit, qunit_cachep, GFP_NOFS, sizeof(*qunit));
         if (qunit == NULL)
                 RETURN(NULL);
 
@@ -548,7 +545,7 @@ static int dqacq_interpret(struct ptlrpc_request *req, void *data, int rc)
                 qdata = lustre_quota_old_to_new(qdata_old);
         }
         if (qdata == NULL) {
-                DEBUG_REQ(D_ERROR, req, "error unpacking qunit_data\n");
+                DEBUG_REQ(D_ERROR, req, "error unpacking qunit_data");
                 RETURN(-EPROTO);
         }
 
@@ -589,6 +586,7 @@ schedule_dqacq(struct obd_device *obd,
         struct qunit_data *reqdata;
         struct dqacq_async_args *aa;
         int size[2] = { sizeof(struct ptlrpc_body), sizeof(*reqdata) };
+        struct obd_import *imp = NULL;
         int rc = 0;
         ENTRY;
 
@@ -628,18 +626,38 @@ schedule_dqacq(struct obd_device *obd,
                 RETURN((rc && rc != -EDQUOT) ? rc : rc2);
         }
 
+        spin_lock(&qctxt->lqc_lock);
+        if (!qctxt->lqc_import) {
+                spin_unlock(&qctxt->lqc_lock);
+                QDATA_DEBUG(qdata, "lqc_import is invalid.\n");
+                spin_lock(&qunit_hash_lock);
+                if (wait)
+                        list_del_init(&qw.qw_entry);
+                remove_qunit_nolock(qunit);
+                free_qunit(empty);
+                qunit = NULL;
+                spin_unlock(&qunit_hash_lock);
+                RETURN(-EAGAIN);
+        } else {
+                imp = class_import_get(qctxt->lqc_import);
+        }
+        spin_unlock(&qctxt->lqc_lock);
+
         /* build dqacq/dqrel request */
-        LASSERT(qctxt->lqc_import);
-        req = ptlrpc_prep_req(qctxt->lqc_import, LUSTRE_MDS_VERSION, opc, 2,
+        LASSERT(imp);
+        req = ptlrpc_prep_req(imp, LUSTRE_MDS_VERSION, opc, 2,
                               size, NULL);
         if (!req) {
                 dqacq_completion(obd, qctxt, qdata, -ENOMEM, opc);
+                class_import_put(imp);
                 RETURN(-ENOMEM);
         }
 
-        LASSERT(!should_translate_quota(qctxt->lqc_import) || 
-                qdata->qd_count <= MAX_QUOTA_COUNT32);
-        if (should_translate_quota(qctxt->lqc_import) ||
+        LASSERTF(!should_translate_quota(imp) ||
+                 qdata->qd_count <= MAX_QUOTA_COUNT32,
+                 "qd_count: "LPU64"; should_translate_quota: %d.\n",
+                 qdata->qd_count, should_translate_quota(imp));
+        if (should_translate_quota(imp) ||
             OBD_FAIL_CHECK(OBD_FAIL_QUOTA_QD_COUNT_32BIT))
         {
                 struct qunit_data_old *reqdata_old, *tmp;
@@ -658,6 +676,7 @@ schedule_dqacq(struct obd_device *obd,
                 CDEBUG(D_QUOTA, "qd_count is 64bit!\n");
         }
         ptlrpc_req_set_repsize(req, 2, size);
+        class_import_put(imp);
 
         CLASSERT(sizeof(*aa) <= sizeof(req->rq_async_args));
         aa = (struct dqacq_async_args *)&req->rq_async_args;
@@ -766,6 +785,8 @@ qctxt_init(struct lustre_quota_ctxt *qctxt, struct super_block *sb,
         if (rc)
                 RETURN(rc);
 
+        spin_lock_init(&qctxt->lqc_lock);
+        spin_lock(&qctxt->lqc_lock);
         qctxt->lqc_handler = handler;
         qctxt->lqc_sb = sb;
         qctxt->lqc_import = NULL;
@@ -776,6 +797,8 @@ qctxt_init(struct lustre_quota_ctxt *qctxt, struct super_block *sb,
         qctxt->lqc_btune_sz = default_bunit_sz / 100 * default_btune_ratio;
         qctxt->lqc_iunit_sz = default_iunit_sz;
         qctxt->lqc_itune_sz = default_iunit_sz * default_itune_ratio / 100;
+        qctxt->lqc_limit_sz = default_limit_sz;
+        spin_unlock(&qctxt->lqc_lock);
 
         RETURN(0);
 }

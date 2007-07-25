@@ -71,10 +71,10 @@ static void mds_cancel_cookies_cb(struct obd_device *obd, __u64 transno,
 
         obd_transno_commit_cb(obd, transno, error);
 
-        CDEBUG(D_HA, "cancelling %d cookies\n",
+        CDEBUG(D_RPCTRACE, "cancelling %d cookies\n",
                (int)(mlcd->mlcd_cookielen / sizeof(*mlcd->mlcd_cookies)));
 
-        rc = obd_unpackmd(obd->u.mds.mds_osc_exp, &lsm, mlcd->mlcd_lmm, 
+        rc = obd_unpackmd(obd->u.mds.mds_osc_exp, &lsm, mlcd->mlcd_lmm,
                           mlcd->mlcd_eadatalen);
         if (rc < 0) {
                 CERROR("bad LSM cancelling %d log cookies: rc %d\n",
@@ -102,7 +102,8 @@ static void mds_cancel_cookies_cb(struct obd_device *obd, __u64 transno,
 
 /* Assumes caller has already pushed us into the kernel context. */
 int mds_finish_transno(struct mds_obd *mds, struct inode *inode, void *handle,
-                       struct ptlrpc_request *req, int rc, __u32 op_data)
+                       struct ptlrpc_request *req, int rc, __u32 op_data, 
+                       int force_sync)
 {
         struct mds_export_data *med = &req->rq_export->exp_mds_data;
         struct mds_client_data *mcd = med->med_mcd;
@@ -110,7 +111,7 @@ int mds_finish_transno(struct mds_obd *mds, struct inode *inode, void *handle,
         __u64 transno, prev_transno;
         int err;
         loff_t off;
-        int log_pri = D_HA;
+        int log_pri = D_RPCTRACE;
         ENTRY;
 
         if (IS_ERR(handle)) {
@@ -119,7 +120,7 @@ int mds_finish_transno(struct mds_obd *mds, struct inode *inode, void *handle,
         }
 
         /* if the export has already been failed, we have no last_rcvd slot */
-        if (req->rq_export->exp_failed) {
+        if (req->rq_export->exp_failed || obd->obd_fail) {
                 CWARN("commit transaction for disconnected client %s: rc %d\n",
                       req->rq_export->exp_client_uuid.uuid, rc);
                 if (rc == 0)
@@ -184,11 +185,18 @@ int mds_finish_transno(struct mds_obd *mds, struct inode *inode, void *handle,
                 CERROR("client idx %d has offset %lld\n", med->med_lr_idx, off);
                 err = -EINVAL;
         } else {
-                fsfilt_add_journal_cb(req->rq_export->exp_obd, transno, handle,
-                                      mds_commit_cb, NULL);
+                struct obd_export *exp = req->rq_export;
+
+                if (!force_sync)
+                        force_sync = fsfilt_add_journal_cb(exp->exp_obd,transno, 
+                                                          handle, mds_commit_cb,
+                                                          NULL);
+
                 err = fsfilt_write_record(obd, mds->mds_rcvd_filp, mcd,
-                                          sizeof(*mcd), &off,
-                                          req->rq_export->exp_need_sync);
+                                          sizeof(*mcd), &off, 
+                                          force_sync | exp->exp_need_sync);
+                if (force_sync)
+                        mds_commit_cb(obd, transno, NULL, err);
         }
 
         if (err) {
@@ -357,7 +365,7 @@ void mds_steal_ack_locks(struct ptlrpc_request *req)
                                          oldrep->rs_modes[i]);
                 oldrep->rs_nlocks = 0;
 
-                DEBUG_REQ(D_HA, req, "stole locks for");
+                DEBUG_REQ(D_DLMTRACE, req, "stole locks for");
                 ptlrpc_schedule_difficult_reply (oldrep);
 
                 spin_unlock (&svc->srv_lock);
@@ -379,7 +387,7 @@ void mds_req_from_mcd(struct ptlrpc_request *req, struct mds_client_data *mcd)
                 req->rq_status = le32_to_cpu(mcd->mcd_last_result);
                 lustre_msg_set_status(req->rq_repmsg, req->rq_status);
         }
-        DEBUG_REQ(D_HA, req, "restoring transno "LPD64"/status %d",
+        DEBUG_REQ(D_RPCTRACE, req, "restoring transno "LPD64"/status %d",
                   req->rq_transno, req->rq_status);
 
         mds_steal_ack_locks(req);
@@ -430,7 +438,7 @@ int mds_osc_setattr_async(struct obd_device *obd, struct inode *inode,
                 RETURN(0);
 
         /* first get memory EA */
-        oinfo.oi_oa = obdo_alloc();
+        OBDO_ALLOC(oinfo.oi_oa);
         if (!oinfo.oi_oa)
                 RETURN(-ENOMEM);
 
@@ -470,7 +478,7 @@ int mds_osc_setattr_async(struct obd_device *obd, struct inode *inode,
 out:
         if (oinfo.oi_md)
                 obd_free_memmd(mds->mds_osc_exp, &oinfo.oi_md);
-        obdo_free(oinfo.oi_oa);
+        OBDO_FREE(oinfo.oi_oa);
         RETURN(rc);
 }
 
@@ -495,7 +503,7 @@ static int mds_reint_setattr(struct mds_update_record *rec, int offset,
         struct lov_mds_md *lmm = NULL;
         struct llog_cookie *logcookies = NULL;
         int lmm_size = 0, need_lock = 1, cookie_size = 0;
-        int rc = 0, cleanup_phase = 0, err, locked = 0;
+        int rc = 0, cleanup_phase = 0, err, locked = 0, sync = 0;
         unsigned int qcids[MAXQUOTAS] = { 0, 0 };
         unsigned int qpids[MAXQUOTAS] = { rec->ur_iattr.ia_uid, 
                                           rec->ur_iattr.ia_gid };
@@ -509,6 +517,9 @@ static int mds_reint_setattr(struct mds_update_record *rec, int offset,
         OBD_COUNTER_INCREMENT(obd, setattr);
 
         MDS_CHECK_RESENT(req, reconstruct_reint_setattr(rec, offset, req));
+
+        if (rec->ur_dlm)
+                ldlm_request_cancel(req, rec->ur_dlm, 0);
 
         if (rec->ur_iattr.ia_valid & ATTR_FROM_OPEN ||
             (req->rq_export->exp_connect_flags & OBD_CONNECT_RDONLY)) {
@@ -674,9 +685,9 @@ static int mds_reint_setattr(struct mds_update_record *rec, int offset,
         EXIT;
  cleanup:
         if (mlcd != NULL)
-                fsfilt_add_journal_cb(req->rq_export->exp_obd, 0, handle,
-                                      mds_cancel_cookies_cb, mlcd);
-        err = mds_finish_transno(mds, inode, handle, req, rc, 0);
+                sync = fsfilt_add_journal_cb(req->rq_export->exp_obd, 0, handle,
+                                             mds_cancel_cookies_cb, mlcd);
+        err = mds_finish_transno(mds, inode, handle, req, rc, 0, sync);
         /* do mds to ost setattr if needed */
         if (!rc && !err && lmm_size)
                 mds_osc_setattr_async(obd, inode, lmm, lmm_size,
@@ -775,6 +786,9 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
 
         if (OBD_FAIL_CHECK(OBD_FAIL_MDS_REINT_CREATE))
                 GOTO(cleanup, rc = -ESTALE);
+
+        if (rec->ur_dlm)
+                ldlm_request_cancel(req, rec->ur_dlm, 0);
 
         dparent = mds_fid2locked_dentry(obd, rec->ur_fid1, NULL, LCK_EX, &lockh,
                                         rec->ur_name, rec->ur_namelen - 1,
@@ -933,7 +947,7 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
         EXIT;
 
 cleanup:
-        err = mds_finish_transno(mds, dir, handle, req, rc, 0);
+        err = mds_finish_transno(mds, dir, handle, req, rc, 0, 0);
 
         if (rc && created) {
                 /* Destroy the file we just created.  This should not need
@@ -1560,6 +1574,9 @@ static int mds_reint_unlink(struct mds_update_record *rec, int offset,
         if (OBD_FAIL_CHECK(OBD_FAIL_MDS_REINT_UNLINK))
                 GOTO(cleanup, rc = -ENOENT);
 
+        if (rec->ur_dlm)
+                ldlm_request_cancel(req, rec->ur_dlm, 0);
+
         rc = mds_get_parent_child_locked(obd, mds, rec->ur_fid1,
                                          &parent_lockh, &dparent, LCK_EX,
                                          MDS_INODELOCK_UPDATE, 
@@ -1724,7 +1741,7 @@ cleanup:
         }
 
         rc = mds_finish_transno(mds, dparent ? dparent->d_inode : NULL,
-                                handle, req, rc, 0);
+                                handle, req, rc, 0, 0);
         if (!rc)
                 (void)obd_set_info_async(mds->mds_osc_exp, strlen("unlinked"),
                                          "unlinked", 0, NULL, NULL);
@@ -1799,6 +1816,9 @@ static int mds_reint_link(struct mds_update_record *rec, int offset,
         if (OBD_FAIL_CHECK(OBD_FAIL_MDS_REINT_LINK))
                 GOTO(cleanup, rc = -ENOENT);
 
+        if (rec->ur_dlm)
+                ldlm_request_cancel(req, rec->ur_dlm, 0);
+        
         /* Step 1: Lookup the source inode and target directory by FID */
         de_src = mds_fid2dentry(mds, rec->ur_fid1, NULL);
         if (IS_ERR(de_src))
@@ -1874,7 +1894,7 @@ static int mds_reint_link(struct mds_update_record *rec, int offset,
                 CERROR("vfs_link error %d\n", rc);
 cleanup:
         rc = mds_finish_transno(mds, de_tgt_dir ? de_tgt_dir->d_inode : NULL,
-                                handle, req, rc, 0);
+                                handle, req, rc, 0, 0);
         EXIT;
 
         switch (cleanup_phase) {
@@ -1984,7 +2004,7 @@ int mds_get_parents_children_locked(struct obd_device *obd,
         *de_oldp = ll_lookup_one_len(old_name, *de_srcdirp, old_len - 1);
         if (IS_ERR(*de_oldp)) {
                 rc = PTR_ERR(*de_oldp);
-                CERROR("old child lookup error (%.*s): %d\n",
+                CDEBUG(D_INODE, "old child lookup error (%.*s): %d\n",
                        old_len - 1, old_name, rc);
                 GOTO(cleanup, rc);
         }
@@ -2141,6 +2161,9 @@ static int mds_reint_rename(struct mds_update_record *rec, int offset,
         
         MDS_CHECK_RESENT(req, mds_reconstruct_generic(req));
 
+        if (rec->ur_dlm)
+                ldlm_request_cancel(req, rec->ur_dlm, 0);
+
         rc = mds_get_parents_children_locked(obd, mds, rec->ur_fid1, &de_srcdir,
                                              rec->ur_fid2, &de_tgtdir, LCK_EX,
                                              rec->ur_name, rec->ur_namelen,
@@ -2266,7 +2289,7 @@ no_unlink:
         GOTO(cleanup, rc);
 cleanup:
         rc = mds_finish_transno(mds, de_tgtdir ? de_tgtdir->d_inode : NULL,
-                                handle, req, rc, 0);
+                                handle, req, rc, 0, 0);
 
         switch (cleanup_phase) {
         case 4:

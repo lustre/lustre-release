@@ -56,6 +56,11 @@ ITUNE_SZ=${ITUNE_SZ:-5}		# default 50% of IUNIT_SZ
 MAX_DQ_TIME=604800
 MAX_IQ_TIME=604800
 
+LUSTRE=${LUSTRE:-`dirname $0`/..}
+. $LUSTRE/tests/test-framework.sh
+init_test_env $@
+. ${CONFIG:=$LUSTRE/tests/cfg/$NAME.sh}
+
 log() {
 	echo "$*"
 	$LCTL mark "$*" 2> /dev/null || true
@@ -169,7 +174,7 @@ else
 	export MOUNT=$MOUNT_HINT 
 	export MOUNT_2=$MOUNT_HINT2
 	MOUNT_2=${MOUNT_2:-/mnt/lustre_2}
-	sh llmount.sh 
+	bash llmount.sh 
 	MOUNT="`mounted_lustre_filesystems 1`"
 	MOUNT_2="`mounted_lustre_filesystems 2`"
 	[ -z "$MOUNT" ] && error "NAME=$MOUNT not mounted"
@@ -207,45 +212,45 @@ build_test_filter
 # set_blk_tunables(btune_sz)
 set_blk_tunesz() {
 	# set btune size on all obdfilters
-	for i in /proc/fs/lustre/obdfilter/*/quota_btune_sz; do
-		echo $(($1 * $BLK_SZ)) > $i
-	done
+	do_facet ost1 "set -x; for i in /proc/fs/lustre/obdfilter/*/quota_btune_sz; do
+		echo $(($1 * BLK_SZ)) >> \\\$i;
+	done"
 	# set btune size on mds
-	for i in /proc/fs/lustre/mds/lustre-MDT*/quota_btune_sz; do
-		echo $(($1 * $BLK_SZ)) > $i
-	done
+	do_facet mds "for i in /proc/fs/lustre/mds/${FSNAME}-MDT*/quota_btune_sz; do
+		echo $(($1 * BLK_SZ)) >> \\\$i;
+	done"
 }
 
 # set_blk_unitsz(bunit_sz)
 set_blk_unitsz() {
-	for i in /proc/fs/lustre/obdfilter/*/quota_bunit_sz; do
-		echo $(($1 * $BLK_SZ)) > $i
-	done
-	for i in /proc/fs/lustre/mds/lustre-MDT*/quota_bunit_sz; do
-		echo $(($1 * $BLK_SZ)) > $i
-	done
+	do_facet ost1 "for i in /proc/fs/lustre/obdfilter/*/quota_bunit_sz; do
+		echo $(($1 * BLK_SZ)) >> \\\$i;
+	done"
+	do_facet mds "for i in /proc/fs/lustre/mds/${FSNAME}-MDT*/quota_bunit_sz; do
+		echo $(($1 * BLK_SZ)) >> \\\$i;
+	done"
 }
 
 # set_file_tunesz(itune_sz)
 set_file_tunesz() {
 	# set iunit and itune size on all obdfilters
-	for i in /proc/fs/lustre/obdfilter/*/quota_itune_sz; do
-		echo $1 > $i
-	done
+	do_facet ost1 "for i in /proc/fs/lustre/obdfilter/*/quota_itune_sz; do
+		echo $1 >> \\\$i;
+	done"
 	# set iunit and itune size on mds
-	for i in /proc/fs/lustre/mds/lustre-MDT*/quota_itune_sz; do
-		echo $1 > $i
-	done
+	do_facet mds "for i in /proc/fs/lustre/mds/${FSNAME}-MDT*/quota_itune_sz; do
+		echo $1 >> \\\$i;
+	done"
 }
 
 # set_file_unitsz(iunit_sz)
 set_file_unitsz() {
-	for i in `ls /proc/fs/lustre/obdfilter/*/quota_iunit_sz`; do
-		echo $1 > $i
-	done;
-	for i in `ls /proc/fs/lustre/mds/lustre-MDT*/quota_iunit_sz`; do
-		echo $1 > $i
-	done
+	do_facet ost1 "for i in /proc/fs/lustre/obdfilter/*/quota_iunit_sz; do
+		echo $1 >> \\\$i;
+	done"
+	do_facet mds "for i in /proc/fs/lustre/mds/${FSNAME}-MDT*/quota_iunit_sz; do
+		echo $1 >> \\\$i;
+	done"
 }
 
 # These are for test on local machine,if run sanity-quota.sh on 
@@ -514,11 +519,13 @@ test_file_soft() {
 	echo "    Create files to exceed soft limit"
 	$RUNAS createmany -m ${TESTFILE}_ $((LIMIT + 1)) || \
 		error "create failure, but expect success"
+	sync; sleep 1; sync
 	echo "    Done"
 
 	echo "    Create file before timer goes off"
 	$RUNAS touch ${TESTFILE}_before || \
 		error "failed create before timer expired, but expect success"
+	sync; sleep 1; sync
 	echo "    Done"
 
 	echo "    Sleep $TIMER seconds ..."
@@ -531,8 +538,10 @@ test_file_soft() {
 	echo "    Create file after timer goes off"
 	$RUNAS createmany -m ${TESTFILE}_after_ $((IUNIT_SZ - 2)) || \
 		error "create ${TESTFILE}_after failure, but expect success"
+	sync; sleep 1; sync
 	$RUNAS touch ${TESTFILE}_after && \
 		error "create after timer expired, but expect EDQUOT"
+	sync; sleep 1; sync
 
 	$SHOW_QUOTA_USER
 	$SHOW_QUOTA_GROUP
@@ -545,6 +554,7 @@ test_file_soft() {
 	echo "    Create file"
 	$RUNAS touch ${TESTFILE}_xxx || \
 		error "touch after timer stop failure, but expect success"
+	sync; sleep 1; sync
 	echo "    Done"
 
 	# cleanup
@@ -597,7 +607,7 @@ test_5() {
 	dd if=/dev/zero of=$TSTDIR/quota_tst50_1 bs=$BLK_SZ count=$((BLIMIT+1)) || error "write failure, expect success"
 
 	echo "  Chown files to $TSTUSR.$TSTUSR ..."
-	for i in `seq 0 ILIMIT`; do
+	for i in `seq 0 $ILIMIT`; do
 		chown $TSTUSR.$TSTUSR $TSTDIR/quota_tst50_$i || \
 			error "chown failure, but expect success"
 	done
@@ -896,24 +906,26 @@ test_11() {
 	   echo -n "    create a file for uid "
 	   for j in `seq 1 30`; do
 	       echo -n "$j "
-	       runas -u $j dd if=/dev/zero of=$TESTDIR/$j  bs=$BLK_SZ > /dev/null 2>&1 &
+               # 30MB per dd for a total of 900MB (if space even permits)
+	       runas -u $j dd if=/dev/zero of=$TESTDIR/$j  bs=$BLK_SZ count=30720 > /dev/null 2>&1 &
 	   done
 	   echo ""
-	   PROCS=$(ps -e | grep dd | wc -l)
+	   PROCS=$(ps -ef | grep -v grep | grep "dd if /dev/zero of $TESTDIR" | wc -l)
+           LAST_USED=0
 	   while [ $PROCS -gt 0 ]; do 
 	     sleep 60
 	     MINS=$(($MINS+1))
-	     PROCS=$(ps -e | grep dd | wc -l)
+	     PROCS=$(ps -ef | grep -v grep | grep "dd if /dev/zero of $TESTDIR" | wc -l)
 	     USED=$(du -s $TESTDIR | awk '{print $1}')
 	     PCT=$(($USED * 100 / $block_limit))
 	     echo "${i}/${REPS} ${PCT}% p${PROCS} t${MINS}  "
-	     if [ $MINS -gt 30 ]; then
-		 error "Aborting after $MINS minutes"
-		 kill -9 $(ps -ef | grep $TESTDIR | grep -v grep | awk '{ print $2 }')
+	     if [ $USED -le $LAST_USED ]; then
+		 kill -9 $(ps -ef | grep "dd if /dev/zero of $TESTDIR" | grep -v grep | awk '{ print $2 }')
 		 i=$REPS
 		 RV=2
 		 break
 	     fi
+             LAST_USED=$USED
 	   done
 	   echo "    removing the test files..."
 	   rm -rf $TESTDIR
@@ -927,6 +939,9 @@ test_11() {
        echo $orig_dec > /proc/sys/vm/dirty_expire_centisecs
        echo $orig_dr  > /proc/sys/vm/dirty_ratio
        echo $orig_dwc > /proc/sys/vm/dirty_writeback_centisecs
+       if [ $RV -ne 0 ]; then
+           error "Nothing was written for over a minute... aborting"
+       fi
        return $RV
 }
 run_test 11 "run for fixing bug10912 ==========="

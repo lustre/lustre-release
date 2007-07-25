@@ -31,6 +31,7 @@
 #include <lustre/lustre_idl.h>
 #include <lustre_export.h>
 #include <lustre_quota.h>
+#include <class_hash.h>
 
 #define MAX_OBD_DEVICES 8192
 
@@ -129,31 +130,15 @@ struct obd_info;
 
 typedef int (*obd_enqueue_update_f)(struct obd_info *oinfo, int rc);
 
-/* obd_enqueue parameters common for all levels (lov, osc). */
-struct obd_enqueue_info {
-        /* Flags used while lock handling. */
-        int   ei_flags;
-        /* Type of the lock being enqueued. */
-        __u32 ei_type;
-        /* Mode of the lock being enqueued. */
-        __u32 ei_mode;
-        /* Different callbacks for lock handling (blocking, completion,
-           glimpse */
-        void *ei_cb_bl;
-        void *ei_cb_cp;
-        void *ei_cb_gl;
-        /* Data to be passed into callbacks. */
-        void *ei_cbdata;
-        /* Request set for OSC async requests. */
-        struct ptlrpc_request_set *ei_rqset;
-};
-
 /* obd info for a particular level (lov, osc). */
 struct obd_info {
         /* Lock policy. It keeps an extent which is specific for a particular
          * OSC. (e.g. lov_prep_enqueue_set initialises extent of the policy,
          * and osc_enqueue passes it into ldlm_lock_match & ldlm_cli_enqueue. */
         ldlm_policy_data_t      oi_policy;
+        /* Flags used while lock handling. The flags obtained on the enqueue
+         * request are set here, therefore they are request specific. */
+        int                     oi_flags;
         /* Lock handle specific for every OSC lock. */
         struct lustre_handle   *oi_lockh;
         /* lsm data specific for every OSC. */
@@ -462,7 +447,6 @@ struct mds_obd {
         obd_id                          *mds_lov_objids;
         int                              mds_lov_objids_size;
         __u32                            mds_lov_objids_in_file;
-        unsigned int                     mds_lov_objids_dirty:1;
         int                              mds_lov_nextid_set;
         struct file                     *mds_lov_objid_filp;
         struct file                     *mds_health_check_filp;
@@ -473,8 +457,11 @@ struct mds_obd {
         struct semaphore                 mds_qonoff_sem;
         struct semaphore                 mds_health_sem;
         unsigned long                    mds_lov_objids_valid:1,
+                                         mds_lov_objids_dirty:1,
                                          mds_fl_user_xattr:1,
-                                         mds_fl_acl:1;
+                                         mds_fl_acl:1,
+                                         mds_fl_cfglog:1,
+                                         mds_fl_synced:1;
 };
 
 struct echo_obd {
@@ -695,6 +682,9 @@ enum obd_notify_event {
         OBD_NOTIFY_CONFIG
 };
 
+#define CONFIG_LOG  0x1  /* finished processing config log */
+#define CONFIG_SYNC 0x2  /* mdt synced 1 ost */
+
 /*
  * Data structure used to pass obd_notify()-event to non-obd listeners (llite
  * and liblustre being main examples).
@@ -731,6 +721,10 @@ struct obd_device {
                      obd_fail:1,          /* cleanup with failover */
                      obd_async_recov:1,   /* allow asyncronous orphan cleanup */
                      obd_no_conn:1;       /* deny new connections */
+        /* uuid-export hash body */
+        struct lustre_class_hash_body *obd_uuid_hash_body;
+        /* nid-export hash body */
+        struct lustre_class_hash_body *obd_nid_hash_body; 
         atomic_t obd_refcount;
         cfs_waitq_t             obd_refcount_waitq;
         struct list_head        obd_exports;
@@ -864,6 +858,7 @@ struct obd_ops {
                          struct lov_stripe_md *mem_tgt);
         int (*o_preallocate)(struct lustre_handle *, obd_count *req,
                              obd_id *ids);
+        int (*o_precreate)(struct obd_export *exp, int need_create);
         int (*o_create)(struct obd_export *exp,  struct obdo *oa,
                         struct lov_stripe_md **ea, struct obd_trans_info *oti);
         int (*o_destroy)(struct obd_export *exp, struct obdo *oa,
@@ -939,7 +934,8 @@ struct obd_ops {
                           int niocount, struct niobuf_local *local,
                           struct obd_trans_info *oti, int rc);
         int (*o_enqueue)(struct obd_export *, struct obd_info *oinfo,
-                         struct obd_enqueue_info *einfo);
+                         struct ldlm_enqueue_info *einfo,
+                         struct ptlrpc_request_set *rqset);
         int (*o_match)(struct obd_export *, struct lov_stripe_md *, __u32 type,
                        ldlm_policy_data_t *, __u32 mode, int *flags, void *data,
                        struct lustre_handle *lockh);

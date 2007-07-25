@@ -29,6 +29,7 @@
 extern atomic_t obd_memory;
 extern int obd_memmax;
 extern unsigned int obd_fail_loc;
+extern unsigned int obd_fail_val;
 extern unsigned int obd_debug_peer_on_timeout;
 extern unsigned int obd_dump_on_timeout;
 extern unsigned int obd_dump_on_eviction;
@@ -100,6 +101,9 @@ extern int obd_race_state;
 #define OBD_FAIL_MDS_SETXATTR_WRITE      0x134
 #define OBD_FAIL_MDS_FS_SETUP            0x135
 #define OBD_FAIL_MDS_RESEND              0x136
+#define OBD_FAIL_MDS_LLOG_CREATE_FAILED  0x137
+#define OBD_FAIL_MDS_LOV_SYNC_RACE       0x138
+#define OBD_FAIL_MDS_OSC_PRECREATE       0x139
 
 #define OBD_FAIL_OST                     0x200
 #define OBD_FAIL_OST_CONNECT_NET         0x201
@@ -133,6 +137,7 @@ extern int obd_race_state;
 #define OBD_FAIL_OST_DROP_REQ            0x21d
 #define OBD_FAIL_OST_SETATTR_CREDITS     0x21e
 #define OBD_FAIL_OST_HOLD_WRITE_RPC      0x21f
+#define OBD_FAIL_OST_BRW_WRITE_BULK2     0x220
 
 #define OBD_FAIL_LDLM                    0x300
 #define OBD_FAIL_LDLM_NAMESPACE_NEW      0x301
@@ -150,6 +155,8 @@ extern int obd_race_state;
 #define OBD_FAIL_LDLM_RECOV_CLIENTS      0x30d
 #define OBD_FAIL_LDLM_ENQUEUE_OLD_EXPORT 0x30e
 #define OBD_FAIL_LDLM_GLIMPSE            0x30f
+#define OBD_FAIL_LDLM_CANCEL_RACE        0x310
+#define OBD_FAIL_LDLM_CANCEL_EVICT_RACE  0x311
 
 #define OBD_FAIL_OSC                     0x400
 #define OBD_FAIL_OSC_BRW_READ_BULK       0x401
@@ -161,6 +168,7 @@ extern int obd_race_state;
 #define OBD_FAIL_OSC_SHUTDOWN            0x407
 #define OBD_FAIL_OSC_CHECKSUM_RECEIVE    0x408
 #define OBD_FAIL_OSC_CHECKSUM_SEND       0x409
+#define OBD_FAIL_OSC_BRW_PREP_REQ2       0x40a
 
 #define OBD_FAIL_PTLRPC                  0x500
 #define OBD_FAIL_PTLRPC_ACK              0x501
@@ -169,6 +177,8 @@ extern int obd_race_state;
 #define OBD_FAIL_PTLRPC_BULK_PUT_NET     0x504
 #define OBD_FAIL_PTLRPC_DROP_RPC         0x505
 #define OBD_FAIL_PTLRPC_DELAY_SEND       0x506
+#define OBD_FAIL_PTLRPC_DELAY_RECOV      0x507
+#define OBD_FAIL_PTLRPC_CLIENT_BULK_CB   0x508
 
 #define OBD_FAIL_OBD_PING_NET            0x600
 #define OBD_FAIL_OBD_LOG_CANCEL_NET      0x601
@@ -185,6 +195,7 @@ extern int obd_race_state;
 
 #define OBD_FAIL_MDC_REVALIDATE_PAUSE    0x800
 #define OBD_FAIL_MDC_ENQUEUE_PAUSE       0x801
+#define OBD_FAIL_MDC_OLD_EXT_FLAGS       0x802
 
 #define OBD_FAIL_MGS                     0x900
 #define OBD_FAIL_MGS_ALL_REQUEST_NET     0x901
@@ -197,39 +208,86 @@ extern int obd_race_state;
 
 #define OBD_FAIL_LPROC_REMOVE            0xB00
 
-/* preparation for a more advanced failure testbed (not functional yet) */
+/* Failure injection control */
 #define OBD_FAIL_MASK_SYS    0x0000FF00
-#define OBD_FAIL_MASK_LOC    (0x000000FF | OBD_FAIL_MASK_SYS)
+#define OBD_FAIL_MASK_LOC   (0x000000FF | OBD_FAIL_MASK_SYS)
 #define OBD_FAIL_ONCE        0x80000000
 #define OBD_FAILED           0x40000000
+/* The following flags aren't made to be combined */
+#define OBD_FAIL_SKIP        0x20000000 /* skip N then fail */
+#define OBD_FAIL_SOME        0x10000000 /* fail N times */
+#define OBD_FAIL_RAND        0x08000000 /* fail 1/N of the time */
+#define OBD_FAIL_USR1        0x04000000 /* user flag */
 
-#define OBD_FAIL_CHECK(id)   (((obd_fail_loc & OBD_FAIL_MASK_LOC) ==           \
-                              ((id) & OBD_FAIL_MASK_LOC)) &&                   \
-                              ((obd_fail_loc & (OBD_FAILED | OBD_FAIL_ONCE))!= \
-                                (OBD_FAILED | OBD_FAIL_ONCE)))
+static inline int obd_fail_check(__u32 id)
+{
+        static int count = 0;
+        if (likely((obd_fail_loc & OBD_FAIL_MASK_LOC) != 
+                   (id & OBD_FAIL_MASK_LOC)))
+                return 0;
+        
+        if ((obd_fail_loc & (OBD_FAILED | OBD_FAIL_ONCE)) ==
+            (OBD_FAILED | OBD_FAIL_ONCE)) {
+                count = 0; /* paranoia */
+                return 0;
+        }
 
-#define OBD_FAIL_CHECK_ONCE(id)                                              \
-({      int _ret_ = 0;                                                       \
-        if (OBD_FAIL_CHECK(id)) {                                            \
+        if (obd_fail_loc & OBD_FAIL_RAND) {
+                unsigned int ll_rand(void);
+                if (obd_fail_val < 2)
+                        return 0;
+                if (ll_rand() % obd_fail_val > 0)
+                        return 0;
+        }
+
+        if (obd_fail_loc & OBD_FAIL_SKIP) {
+                count++;
+                if (count < obd_fail_val) 
+                        return 0;
+                count = 0;
+        }
+
+        /* Overridden by FAIL_ONCE */
+        if (obd_fail_loc & OBD_FAIL_SOME) {
+                count++;
+                if (count >= obd_fail_val) {
+                        count = 0;
+                        /* Don't fail anymore */
+                        obd_fail_loc |= OBD_FAIL_ONCE;
+                }
+        }
+
+        obd_fail_loc |= OBD_FAILED;
+        /* Handle old checks that OR in this */
+        if (id & OBD_FAIL_ONCE)
+                obd_fail_loc |= OBD_FAIL_ONCE;
+
+        return 1;
+}
+
+#define OBD_FAIL_CHECK(id)                                                   \
+({                                                                           \
+        int _ret_ = 0;                                                       \
+        if (unlikely(obd_fail_loc && (_ret_ = obd_fail_check(id)))) {        \
                 CERROR("*** obd_fail_loc=%x ***\n", id);                     \
-                obd_fail_loc |= OBD_FAILED;                                  \
-                if ((id) & OBD_FAIL_ONCE)                                    \
-                        obd_fail_loc |= OBD_FAIL_ONCE;                       \
-                _ret_ = 1;                                                   \
         }                                                                    \
         _ret_;                                                               \
 })
 
+/* deprecated - just use OBD_FAIL_CHECK */
+#define OBD_FAIL_CHECK_ONCE OBD_FAIL_CHECK
+
 #define OBD_FAIL_RETURN(id, ret)                                             \
 do {                                                                         \
-        if (OBD_FAIL_CHECK_ONCE(id)) {                                       \
+        if (unlikely(obd_fail_loc && obd_fail_check(id))) {                  \
+                CERROR("*** obd_fail_return=%x rc=%d ***\n", id, ret);       \
                 RETURN(ret);                                                 \
         }                                                                    \
 } while(0)
 
 #define OBD_FAIL_TIMEOUT(id, secs)                                           \
-do {                                                                         \
-        if (OBD_FAIL_CHECK_ONCE(id)) {                                       \
+({      int _ret_ = 0;                                                       \
+        if (unlikely(obd_fail_loc && (_ret_ = obd_fail_check(id)))) {        \
                 CERROR("obd_fail_timeout id %x sleeping for %d secs\n",      \
                        (id), (secs));                                        \
                 set_current_state(TASK_UNINTERRUPTIBLE);                     \
@@ -237,8 +295,23 @@ do {                                                                         \
                                     cfs_time_seconds(secs));                 \
                 set_current_state(TASK_RUNNING);                             \
                 CERROR("obd_fail_timeout id %x awake\n", (id));              \
-       }                                                                     \
-} while(0)
+        }                                                                    \
+        _ret_;                                                               \
+})
+
+#define OBD_FAIL_TIMEOUT_MS(id, ms)                                          \
+({      int _ret_ = 0;                                                       \
+        if (unlikely(obd_fail_loc && (_ret_ = obd_fail_check(id)))) {        \
+                CERROR("obd_fail_timeout id %x sleeping for %d ms\n",        \
+                       (id), (ms));                                          \
+                set_current_state(TASK_UNINTERRUPTIBLE);                     \
+                cfs_schedule_timeout(CFS_TASK_UNINT,                         \
+                                     cfs_time_seconds(ms)/1000);             \
+                set_current_state(TASK_RUNNING);                             \
+                CERROR("obd_fail_timeout id %x awake\n", (id));              \
+        }                                                                    \
+        _ret_;                                                               \
+})
 
 #ifdef __KERNEL__
 /* The idea here is to synchronise two threads to force a race. The
@@ -247,7 +320,7 @@ do {                                                                         \
  * the first and continues. */
 #define OBD_RACE(id)                                                         \
 do {                                                                         \
-        if  (OBD_FAIL_CHECK_ONCE(id)) {                                      \
+        if (unlikely(obd_fail_loc && obd_fail_check(id))) {                  \
                 obd_race_state = 0;                                          \
                 CERROR("obd_race id %x sleeping\n", (id));                   \
                 OBD_SLEEP_ON(obd_race_waitq, obd_race_state != 0);           \
@@ -356,8 +429,32 @@ do {                                                                          \
         cfs_free(ptr);                                                        \
         (ptr) = (void *)0xdeadbeef;                                           \
 } while (0)
+
+#ifdef HAVE_RCU
+# ifdef HAVE_CALL_RCU_PARAM
+#  define my_call_rcu(rcu, cb)            call_rcu(rcu, cb, rcu)
+# else
+#  define my_call_rcu(rcu, cb)            call_rcu(rcu, cb)
+# endif
+#else
+# define my_call_rcu(rcu, cb)             (cb)(rcu)
+#endif
+
+#define OBD_FREE_RCU_CB(ptr, size, handle, free_cb)                           \
+do {                                                                          \
+        struct portals_handle *__h = (handle);                                \
+        LASSERT(handle);                                                      \
+        __h->h_ptr = (ptr);                                                   \
+        __h->h_size = (size);                                                 \
+        __h->h_free_cb = (void (*)(void *, size_t))(free_cb);                 \
+        my_call_rcu(&__h->h_rcu, class_handle_free_cb);                       \
+        (ptr) = (void *)0xdeadbeef;                                           \
+} while(0)
+#define OBD_FREE_RCU(ptr, size, handle) OBD_FREE_RCU_CB(ptr, size, handle, NULL)
 #else
 #define OBD_FREE(ptr, size) ((void)(size), free((ptr)))
+#define OBD_FREE_RCU(ptr, size, handle) (OBD_FREE(ptr, size))
+#define OBD_FREE_RCU_CB(ptr, size, handle, cb)     ((*(cb))(ptr, size))
 #endif
 
 #ifdef __arch_um__
@@ -409,6 +506,11 @@ do {                                                                          \
         cfs_mem_cache_free(slab, ptr);                                        \
         (ptr) = (void *)0xdeadbeef;                                           \
 } while (0)
+
+#define OBD_SLAB_ALLOC_PTR(ptr, slab)                                         \
+        OBD_SLAB_ALLOC((ptr), (slab), CFS_ALLOC_STD, sizeof *(ptr))
+#define OBD_SLAB_FREE_PTR(ptr, slab)                                          \
+        OBD_SLAB_FREE((ptr), (slab), sizeof *(ptr))
 
 #define KEY_IS(str) (keylen >= strlen(key) && strcmp(key, str) == 0)
 

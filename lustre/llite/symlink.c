@@ -110,7 +110,7 @@ static int ll_readlink(struct dentry *dentry, char *buffer, int buflen)
 
         CDEBUG(D_VFSTRACE, "VFS Op\n");
         /* on symlinks lli_open_sem protects lli_symlink_name allocation/data */
-        down(&lli->lli_open_sem);
+        down(&lli->lli_size_sem);
         rc = ll_readlink_internal(inode, &request, &symname);
         if (rc)
                 GOTO(out, rc);
@@ -118,7 +118,7 @@ static int ll_readlink(struct dentry *dentry, char *buffer, int buflen)
         rc = vfs_readlink(dentry, buffer, buflen, symname);
         ptlrpc_req_finished(request);
  out:
-        up(&lli->lli_open_sem);
+        up(&lli->lli_size_sem);
         RETURN(rc);
 }
 
@@ -132,7 +132,7 @@ static LL_FOLLOW_LINK_RETURN_TYPE ll_follow_link(struct dentry *dentry, struct n
 {
         struct inode *inode = dentry->d_inode;
         struct ll_inode_info *lli = ll_i2info(inode);
-#ifdef LUSTRE_KERNEL_VERSION
+#ifdef HAVE_VFS_INTENT_PATCHES
         struct lookup_intent *it = ll_nd2it(nd);
 #endif
         struct ptlrpc_request *request;
@@ -140,7 +140,7 @@ static LL_FOLLOW_LINK_RETURN_TYPE ll_follow_link(struct dentry *dentry, struct n
         char *symname;
         ENTRY;
 
-#ifdef LUSTRE_KERNEL_VERSION
+#ifdef HAVE_VFS_INTENT_PATCHES
         if (it != NULL) {
                 int op = it->it_op;
                 int mode = it->it_create_mode;
@@ -152,9 +152,9 @@ static LL_FOLLOW_LINK_RETURN_TYPE ll_follow_link(struct dentry *dentry, struct n
 #endif
 
         CDEBUG(D_VFSTRACE, "VFS Op\n");
-        down(&lli->lli_open_sem);
+        down(&lli->lli_size_sem);
         rc = ll_readlink_internal(inode, &request, &symname);
-        up(&lli->lli_open_sem);
+        up(&lli->lli_size_sem);
         if (rc) {
                 path_release(nd); /* Kernel assumes that ->follow_link()
                                      releases nameidata on error */
@@ -199,7 +199,7 @@ static void ll_put_link(struct dentry *dentry, struct nameidata *nd, void *cooki
 struct inode_operations ll_fast_symlink_inode_operations = {
         .readlink       = ll_readlink,
         .setattr        = ll_setattr,
-#ifdef LUSTRE_KERNEL_VERSION
+#ifdef HAVE_VFS_INTENT_PATCHES
         .setattr_raw    = ll_setattr_raw,
 #endif
         .follow_link    = ll_follow_link,

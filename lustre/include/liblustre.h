@@ -145,7 +145,7 @@ static inline void *kmalloc(int size, int prot)
 #define GFP_HIGHUSER 1
 #define GFP_ATOMIC 1
 #define GFP_NOFS 1
-#define IS_ERR(a) ((unsigned long)(a) < 1000)
+#define IS_ERR(a) ((unsigned long)(a) > (unsigned long)-1000L)
 #define PTR_ERR(a) ((long)(a))
 #define ERR_PTR(a) ((void*)((long)(a)))
 
@@ -294,6 +294,8 @@ extern int echo_client_init(void);
 /* general stuff */
 
 #define EXPORT_SYMBOL(S)
+
+struct rcu_head { };
 
 typedef struct { } spinlock_t;
 typedef __u64 kdev_t;
@@ -699,7 +701,11 @@ static inline void del_timer(struct timer_list *l)
         free(l);
 }
 
+
+
 typedef struct { volatile int counter; } atomic_t;
+
+#define ATOMIC_INIT(i)  { (i) }
 
 #define atomic_read(a) ((a)->counter)
 #define atomic_set(a,b) do {(a)->counter = b; } while (0)
@@ -709,6 +715,8 @@ typedef struct { volatile int counter; } atomic_t;
 #define atomic_dec(a)  do { (a)->counter--; } while (0)
 #define atomic_add(b,a)  do {(a)->counter += b;} while (0)
 #define atomic_sub(b,a)  do {(a)->counter -= b;} while (0)
+#define atomic_sub_return(n,a) ((a)->counter -= n)
+#define atomic_dec_return(a)  atomic_sub_return(1,a)
 
 #ifndef likely
 #define likely(exp) (exp)

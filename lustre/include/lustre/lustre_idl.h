@@ -283,17 +283,22 @@ extern void lustre_swab_ptlrpc_body(struct ptlrpc_body *pb);
 #define OBD_CONNECT_QUOTA64    0x80000ULL /* 64bit qunit_data.qd_count b=10707*/
 #define OBD_CONNECT_FID_CAPA  0x100000ULL /* fid capability */
 #define OBD_CONNECT_OSS_CAPA  0x200000ULL /* OSS capability */
+#define OBD_CONNECT_CANCELSET 0x400000ULL /* Early batched cancels. */
+#define OBD_CONNECT_SOM     0x00800000ULL /* Size on MDS */
+#define OBD_CONNECT_AT      0x01000000ULL /* client uses adaptive timeouts */
 /* also update obd_connect_names[] for lprocfs_rd_connect_flags()
  * and lustre/utils/wirecheck.c */
 
 #define MDS_CONNECT_SUPPORTED  (OBD_CONNECT_RDONLY | OBD_CONNECT_VERSION | \
                                 OBD_CONNECT_ACL | OBD_CONNECT_XATTR | \
                                 OBD_CONNECT_IBITS | OBD_CONNECT_JOIN | \
-                                OBD_CONNECT_NODEVOH | OBD_CONNECT_ATTRFID)
+                                OBD_CONNECT_NODEVOH | OBD_CONNECT_ATTRFID | \
+                                OBD_CONNECT_CANCELSET)
 #define OST_CONNECT_SUPPORTED  (OBD_CONNECT_SRVLOCK | OBD_CONNECT_GRANT | \
                                 OBD_CONNECT_REQPORTAL | OBD_CONNECT_VERSION | \
                                 OBD_CONNECT_TRUNCLOCK | OBD_CONNECT_INDEX | \
-                                OBD_CONNECT_BRW_SIZE | OBD_CONNECT_QUOTA64)
+                                OBD_CONNECT_BRW_SIZE | OBD_CONNECT_QUOTA64 | \
+                                OBD_CONNECT_CANCELSET)
 #define ECHO_CONNECT_SUPPORTED (0)
 #define MGS_CONNECT_SUPPORTED  (OBD_CONNECT_VERSION)
 
@@ -305,6 +310,9 @@ extern void lustre_swab_ptlrpc_body(struct ptlrpc_body *pb);
 #define OBD_OCD_VERSION_MINOR(version) ((int)((version)>>16)&255)
 #define OBD_OCD_VERSION_PATCH(version) ((int)((version)>>8)&255)
 #define OBD_OCD_VERSION_FIX(version)   ((int)(version)&255)
+
+#define exp_connect_cancelset(exp) \
+        ((exp) ? (exp)->exp_connect_flags & OBD_CONNECT_CANCELSET : 0)
 
 /* This structure is used for both request and reply.
  *
@@ -357,19 +365,19 @@ typedef enum {
 } ost_cmd_t;
 #define OST_FIRST_OPC  OST_REPLY
 
-typedef uint64_t        obd_id;
-typedef uint64_t        obd_gr;
-typedef uint64_t        obd_time;
-typedef uint64_t        obd_size;
-typedef uint64_t        obd_off;
-typedef uint64_t        obd_blocks;
-typedef uint32_t        obd_blksize;
-typedef uint32_t        obd_mode;
-typedef uint32_t        obd_uid;
-typedef uint32_t        obd_gid;
-typedef uint32_t        obd_flag;
-typedef uint64_t        obd_valid;
-typedef uint32_t        obd_count;
+typedef __u64 obd_id;
+typedef __u64 obd_gr;
+typedef __u64 obd_time;
+typedef __u64 obd_size;
+typedef __u64 obd_off;
+typedef __u64 obd_blocks;
+typedef __u64 obd_valid;
+typedef __u32 obd_blksize;
+typedef __u32 obd_mode;
+typedef __u32 obd_uid;
+typedef __u32 obd_gid;
+typedef __u32 obd_flag;
+typedef __u32 obd_count;
 
 #define OBD_FL_INLINEDATA    (0x00000001)
 #define OBD_FL_OBDMDEXISTS   (0x00000002)
@@ -716,13 +724,13 @@ static inline int ll_ext_to_inode_flags(int flags)
                (flags & ~MDS_BFLAG_EXT_FLAGS);
 }
 
-/* If MDS_BFLAG_EXT_FLAGS is set it means we requested EXT3_*_FL inode flags
- * and we pass these straight through.  Otherwise we need to convert from
- * S_* flags to their EXT3_*_FL equivalents (see bug 9486). */
-static inline int ll_inode_to_ext_flags(int oflags, int iflags)
+/* If keep is set, we do not do anything with iflags, if it is not set, we
+ * assume that iflags are inode flags and we need to conver those to
+ * EXT3_*_FL flags (see bug 9486 and 12848) */
+static inline int ll_inode_to_ext_flags(int iflags, int keep)
 {
-        return (oflags & MDS_BFLAG_EXT_FLAGS) ? (oflags & ~MDS_BFLAG_EXT_FLAGS):
-               (((iflags & S_SYNC)      ? MDS_SYNC_FL      : 0) |
+        return keep ? (iflags & ~MDS_BFLAG_EXT_FLAGS) :
+                (((iflags & S_SYNC)     ? MDS_SYNC_FL      : 0) |
                 ((iflags & S_NOATIME)   ? MDS_NOATIME_FL   : 0) |
                 ((iflags & S_APPEND)    ? MDS_APPEND_FL    : 0) |
 #if defined(S_DIRSYNC)
@@ -1046,13 +1054,26 @@ struct ldlm_lock_desc {
 
 extern void lustre_swab_ldlm_lock_desc (struct ldlm_lock_desc *l);
 
+#define LDLM_LOCKREQ_HANDLES 2
+#define LDLM_ENQUEUE_CANCEL_OFF 1
+
 struct ldlm_request {
         __u32 lock_flags;
-        __u32 lock_padding;     /* also fix lustre_swab_ldlm_request */
+        __u32 lock_count;
         struct ldlm_lock_desc lock_desc;
-        struct lustre_handle lock_handle1;
-        struct lustre_handle lock_handle2;
+        struct lustre_handle lock_handle[LDLM_LOCKREQ_HANDLES];
 };
+
+/* If LDLM_ENQUEUE, 1 slot is already occupied, 1 is available.
+ * Otherwise, 2 are available. */
+#define ldlm_request_bufsize(count,type)                                \
+({                                                                      \
+        int _avail = LDLM_LOCKREQ_HANDLES;                              \
+        _avail -= (type == LDLM_ENQUEUE ? LDLM_ENQUEUE_CANCEL_OFF : 0); \
+        sizeof(struct ldlm_request) +                                   \
+        (count - _avail > 0 ? count - _avail : 0) *                     \
+        sizeof(struct lustre_handle);                                   \
+})
 
 extern void lustre_swab_ldlm_request (struct ldlm_request *rq);
 
@@ -1079,6 +1100,7 @@ typedef enum {
         MGS_TARGET_DEL,
         MGS_LAST_OPC
 } mgs_cmd_t;
+#define MGS_FIRST_OPC MGS_CONNECT
 
 /* We pass this info to the MGS so it can write config logs */
 #define MTI_NAME_MAXLEN 64
@@ -1322,7 +1344,7 @@ struct llog_cookie {
 } __attribute__((packed));
 
 /* llog protocol */
-enum llogd_rpc_ops {
+typedef enum {
         LLOG_ORIGIN_HANDLE_CREATE       = 501,
         LLOG_ORIGIN_HANDLE_NEXT_BLOCK   = 502,
         LLOG_ORIGIN_HANDLE_READ_HEADER  = 503,
@@ -1332,7 +1354,9 @@ enum llogd_rpc_ops {
         LLOG_CATINFO                    = 507,  /* for lfs catinfo */
         LLOG_ORIGIN_HANDLE_PREV_BLOCK   = 508,
         LLOG_ORIGIN_HANDLE_DESTROY      = 509,  /* for destroy llog object*/
-};
+        LLOG_LAST_OPC
+} llog_cmd_t;
+#define LLOG_FIRST_OPC LLOG_ORIGIN_HANDLE_CREATE
 
 struct llogd_body {
         struct llog_logid  lgd_logid;

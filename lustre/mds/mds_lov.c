@@ -159,8 +159,10 @@ int mds_lov_set_nextid(struct obd_device *obd)
         ENTRY;
 
         LASSERT(!obd->obd_recovering);
-
         LASSERT(mds->mds_lov_objids != NULL);
+     
+        /* obd->obd_dev_sem must be held so mds_lov_objids doesn't change */
+        LASSERT_SEM_LOCKED(&obd->obd_dev_sem);
 
         rc = obd_set_info_async(mds->mds_osc_exp, strlen(KEY_NEXT_ID),
                                 KEY_NEXT_ID,
@@ -235,6 +237,11 @@ static int mds_lov_update_desc(struct obd_device *obd, struct obd_export *lov)
                "%d/%d\n", mds->mds_max_mdsize, mds->mds_max_cookiesize,
                stripes);
 
+        /* If we added a target we have to reconnect the llogs */
+        /* We only _need_ to do this at first add (idx), or the first time
+           after recovery.  However, it should now be safe to call anytime. */
+        llog_cat_initialize(obd, mds->mds_lov_desc.ld_tgt_count, NULL);
+
 out:
         OBD_FREE(ld, sizeof(*ld));
         RETURN(rc);
@@ -253,53 +260,54 @@ static int mds_lov_update_mds(struct obd_device *obd,
         int rc = 0;
         ENTRY;
 
+        /* Don't let anyone else mess with mds_lov_objids now */
+        mutex_down(&obd->obd_dev_sem);
+
         old_count = mds->mds_lov_desc.ld_tgt_count;
         rc = mds_lov_update_desc(obd, mds->mds_osc_exp);
-        if (rc)
-                RETURN(rc);
+        if (rc) 
+                GOTO(out, rc);
 
         CDEBUG(D_CONFIG, "idx=%d, recov=%d/%d, cnt=%d/%d\n",
                idx, obd->obd_recovering, obd->obd_async_recov, old_count,
                mds->mds_lov_desc.ld_tgt_count);
 
         /* idx is set as data from lov_notify. */
-        if (idx != MDSLOV_NO_INDEX && !obd->obd_recovering) {
-                if (idx >= mds->mds_lov_desc.ld_tgt_count) {
-                        CERROR("index %d > count %d!\n", idx,
-                               mds->mds_lov_desc.ld_tgt_count);
-                        RETURN(-EINVAL);
-                }
-
-                if (idx >= mds->mds_lov_objids_in_file) {
-                        /* We never read this lastid; ask the osc */
-                        obd_id lastid;
-                        __u32 size = sizeof(lastid);
-                        rc = obd_get_info(watched->obd_self_export,
-                                          strlen("last_id"),
-                                          "last_id", &size, &lastid);
-                        if (rc)
-                                RETURN(rc);
-                        mds->mds_lov_objids[idx] = lastid;
-                        mds->mds_lov_objids_dirty = 1;
-                        mds_lov_write_objids(obd);
-                } else {
-                        /* We have read this lastid from disk; tell the osc.
-                           Don't call this during recovery. */
-                        rc = mds_lov_set_nextid(obd);
-                }
-
-                CDEBUG(D_CONFIG, "last object "LPU64" from OST %d\n",
-                      mds->mds_lov_objids[idx], idx);
+        if (idx == MDSLOV_NO_INDEX || obd->obd_recovering) 
+                GOTO(out, rc);
+                
+        if (idx >= mds->mds_lov_desc.ld_tgt_count) {
+                CERROR("index %d > count %d!\n", idx, 
+                       mds->mds_lov_desc.ld_tgt_count);
+                GOTO(out, rc = -EINVAL);
         }
 
-        /* If we added a target we have to reconnect the llogs */
-        /* We only _need_ to do this at first add (idx), or the first time
-           after recovery.  However, it should now be safe to call anytime. */
-        CDEBUG(D_CONFIG, "reset llogs idx=%d\n", idx);
-        mutex_down(&obd->obd_dev_sem);
-        llog_cat_initialize(obd, mds->mds_lov_desc.ld_tgt_count, uuid);
-        mutex_up(&obd->obd_dev_sem);
+        if (idx >= mds->mds_lov_objids_in_file) {
+                /* We never read this lastid; ask the osc */
+                obd_id lastid;
+                __u32 size = sizeof(lastid);
+                rc = obd_get_info(watched->obd_self_export, strlen("last_id"),
+                                  "last_id", &size, &lastid);
+                if (rc)
+                        GOTO(out, rc);
+                mds->mds_lov_objids[idx] = lastid;
+                mds->mds_lov_objids_dirty = 1;
+                mds_lov_write_objids(obd);
+        } else {
+                /* We have read this lastid from disk; tell the osc.
+                   Don't call this during recovery. */
+                rc = mds_lov_set_nextid(obd);
+                if (rc) {
+                        CERROR("Failed to set next id, idx=%d rc=%d\n", idx,rc);
+                        /* Don't abort the rest of the sync */
+                        rc = 0;
+                }
+        }
 
+        CDEBUG(D_CONFIG, "last object "LPU64" from OST %d rc=%d\n",
+               mds->mds_lov_objids[idx], idx, rc);
+out:
+        mutex_up(&obd->obd_dev_sem);
         RETURN(rc);
 }
 
@@ -351,6 +359,7 @@ int mds_lov_connect(struct obd_device *obd, char * lov_name)
         /* Deny new client connections until we are sure we have some OSTs */
         obd->obd_no_conn = 1;
 
+        mutex_down(&obd->obd_dev_sem);
         rc = mds_lov_read_objids(obd);
         if (rc) {
                 CERROR("cannot read %s: rc = %d\n", "lov_objids", rc);
@@ -385,6 +394,7 @@ int mds_lov_connect(struct obd_device *obd, char * lov_name)
                                        "writing objids file: %d\n", rc);
                 }
         }
+        mutex_up(&obd->obd_dev_sem);
 
         /* I want to see a callback happen when the OBD moves to a
          * "For General Use" state, and that's when we'll call
@@ -396,6 +406,7 @@ int mds_lov_connect(struct obd_device *obd, char * lov_name)
         RETURN(rc);
 
 err_reg:
+        mutex_up(&obd->obd_dev_sem);
         obd_register_observer(mds->mds_osc_obd, NULL);
 err_discon:
         obd_disconnect(mds->mds_osc_exp);
@@ -548,7 +559,7 @@ int mds_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
         }
 
         case OBD_IOC_SYNC: {
-                CDEBUG(D_HA, "syncing mds %s\n", obd->obd_name);
+                CDEBUG(D_INFO, "syncing mds %s\n", obd->obd_name);
                 rc = fsfilt_sync(obd, obd->u.obt.obt_sb);
                 RETURN(rc);
         }
@@ -621,6 +632,18 @@ int mds_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
 
 }
 
+/* Collect the preconditions we need to allow client connects */
+static void mds_allow_cli(struct obd_device *obd, unsigned int flag)
+{
+        if (flag & CONFIG_LOG)
+                obd->u.mds.mds_fl_cfglog = 1;
+        if (flag & CONFIG_SYNC)
+                obd->u.mds.mds_fl_synced = 1;
+        if (obd->u.mds.mds_fl_cfglog && obd->u.mds.mds_fl_synced)
+                /* Open for clients */
+                obd->obd_no_conn = 0;
+}
+
 struct mds_lov_sync_info {
         struct obd_device *mlsi_obd;     /* the lov device to sync */
         struct obd_device *mlsi_watched; /* target osc */
@@ -650,9 +673,13 @@ static int __mds_lov_synchronize(void *data)
         uuid = &watched->u.cli.cl_target_uuid;
         LASSERT(uuid);
 
+        OBD_RACE(OBD_FAIL_MDS_LOV_SYNC_RACE);
+
         rc = mds_lov_update_mds(obd, watched, idx, uuid);
-        if (rc != 0)
+        if (rc != 0) {
+                CERROR("%s failed at update_mds: %d\n", obd_uuid2str(uuid), rc);
                 GOTO(out, rc);
+        }
 
         rc = obd_set_info_async(mds->mds_osc_exp, strlen(KEY_MDS_CONN),
                                 KEY_MDS_CONN, 0, uuid, NULL);
@@ -664,8 +691,8 @@ static int __mds_lov_synchronize(void *data)
                           NULL, NULL, uuid);
 
         if (rc != 0) {
-                CERROR("%s: failed at llog_origin_connect: %d\n",
-                       obd->obd_name, rc);
+                CERROR("%s failed at llog_origin_connect: %d\n",
+                       obd_uuid2str(uuid), rc);
                 GOTO(out, rc);
         }
 
@@ -677,13 +704,25 @@ static int __mds_lov_synchronize(void *data)
 
         rc = mds_lov_clear_orphans(mds, uuid);
         if (rc != 0) {
-                CERROR("%s: failed at mds_lov_clear_orphans: %d\n",
-                       obd->obd_name, rc);
+                CERROR("%s failed at mds_lov_clear_orphans: %d\n",
+                       obd_uuid2str(uuid), rc);
                 GOTO(out, rc);
         }
 
         EXIT;
 out:
+        if (rc) {
+                /* Deactivate it for safety */
+                CERROR("%s sync failed %d, deactivating\n", obd_uuid2str(uuid),
+                       rc);
+                obd_notify(mds->mds_osc_obd, watched, OBD_NOTIFY_INACTIVE,
+                           NULL);
+        } else {
+                /* We've successfully synced at least 1 OST and are ready
+                   to handle client requests */
+                mds_allow_cli(obd, CONFIG_SYNC);
+        }
+
         class_decref(obd);
         return rc;
 }
@@ -770,8 +809,7 @@ int mds_notify(struct obd_device *obd, struct obd_device *watched,
         case OBD_NOTIFY_SYNC_NONBLOCK:
                 break;
         case OBD_NOTIFY_CONFIG:
-                /* Open for clients */
-                obd->obd_no_conn = 0;
+                mds_allow_cli(obd, (unsigned int)data);
         default:
                 RETURN(0);
         }
@@ -791,7 +829,10 @@ int mds_notify(struct obd_device *obd, struct obd_device *watched,
                 /* We still have to fix the lov descriptor for ost's added
                    after the mdt in the config log.  They didn't make it into
                    mds_lov_connect. */
+                mutex_down(&obd->obd_dev_sem);
                 rc = mds_lov_update_desc(obd, obd->u.mds.mds_osc_exp);
+                mutex_up(&obd->obd_dev_sem);
+                mds_allow_cli(obd, CONFIG_SYNC);
                 RETURN(rc);
         }
 

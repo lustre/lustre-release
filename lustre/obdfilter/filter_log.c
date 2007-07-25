@@ -107,6 +107,7 @@ void filter_cancel_cookies_cb(struct obd_device *obd, __u64 transno,
         if (error != 0) {
                 CDEBUG(D_INODE, "not cancelling llog cookie on error %d\n",
                        error);
+                OBD_FREE(cookie, sizeof(*cookie));
                 return;
         }
 
@@ -132,7 +133,7 @@ static int filter_recov_log_unlink_cb(struct llog_ctxt *ctxt,
         ENTRY;
 
         lur = (struct llog_unlink_rec *)rec;
-        oa = obdo_alloc();
+        OBDO_ALLOC(oa);
         if (oa == NULL) 
                 RETURN(-ENOMEM);
         oa->o_valid |= OBD_MD_FLCOOKIE;
@@ -142,15 +143,15 @@ static int filter_recov_log_unlink_cb(struct llog_ctxt *ctxt,
         oid = oa->o_id;
 
         rc = filter_destroy(exp, oa, NULL, NULL, NULL);
-        obdo_free(oa);
+        OBDO_FREE(oa);
         if (rc == -ENOENT) {
-                CDEBUG(D_HA, "object already removed, send cookie\n");
+                CDEBUG(D_RPCTRACE, "object already removed, send cookie\n");
                 llog_cancel(ctxt, NULL, 1, cookie, 0);
                 RETURN(0);
         }
 
         if (rc == 0)
-                CDEBUG(D_HA, "object: "LPU64" in record is destroyed\n", oid);
+                CDEBUG(D_RPCTRACE, "object "LPU64" is destroyed\n", oid);
 
         RETURN(rc);
 }
@@ -170,7 +171,7 @@ static int filter_recov_log_setattr_cb(struct llog_ctxt *ctxt,
         ENTRY;
 
         lsr = (struct llog_setattr_rec *)rec;
-        oinfo.oi_oa = obdo_alloc();
+        OBDO_ALLOC(oinfo.oi_oa);
 
         oinfo.oi_oa->o_valid |= (OBD_MD_FLID | OBD_MD_FLUID | OBD_MD_FLGID |
                                  OBD_MD_FLCOOKIE);
@@ -182,16 +183,16 @@ static int filter_recov_log_setattr_cb(struct llog_ctxt *ctxt,
         oid = oinfo.oi_oa->o_id;
 
         rc = filter_setattr(exp, &oinfo, NULL);
-        obdo_free(oinfo.oi_oa);
+        OBDO_FREE(oinfo.oi_oa);
 
         if (rc == -ENOENT) {
-                CDEBUG(D_HA, "object already removed, send cookie\n");
+                CDEBUG(D_RPCTRACE, "object already removed, send cookie\n");
                 llog_cancel(ctxt, NULL, 1, cookie, 0);
                 RETURN(0);
         }
 
         if (rc == 0)
-                CDEBUG(D_HA, "object: "LPU64" in record is chown/chgrp\n", oid);
+                CDEBUG(D_RPCTRACE, "object "LPU64" is chown/chgrp\n", oid);
 
         RETURN(rc);
 }

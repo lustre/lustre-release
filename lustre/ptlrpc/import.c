@@ -132,10 +132,10 @@ int ptlrpc_set_import_discon(struct obd_import *imp, __u32 conn_cnt)
                                imp->imp_obd->obd_name, target_len, target_start,
                                libcfs_nid2str(imp->imp_connection->c_peer.nid));
                 } else {
-                        LCONSOLE_ERROR("%s: Connection to service %.*s via nid "
-                               "%s was lost; in progress operations using this "
-                               "service will fail.\n",
-                               imp->imp_obd->obd_name, target_len, target_start,
+                        LCONSOLE_ERROR_MSG(0x166, "%s: Connection to service "
+                               "%.*s via nid %s was lost; in progress "
+                               "operations using this service will fail.\n",
+                               imp->imp_obd->obd_name, target_len, target_start, 
                                libcfs_nid2str(imp->imp_connection->c_peer.nid));
                 }
                 IMPORT_SET_STATE_NOLOCK(imp, LUSTRE_IMP_DISCON);
@@ -288,6 +288,14 @@ static int import_select_connection(struct obd_import *imp)
                         else if (cfs_time_before_64(conn->oic_last_attempt,
                                                     imp_conn->oic_last_attempt))
                                 imp_conn = conn;
+                } else {
+                        /* Exceptionally unlikely case caused by the node
+                         * booting and attempting to mount lustre faster than
+                         * than RECONNECT_INTERVAL seconds. */
+                        if (unlikely(conn->oic_last_attempt == 0)) {
+                                imp_conn = conn;
+                                break;
+                        }
                 }
         }
 
@@ -686,7 +694,6 @@ finish:
                 if (!exp) {
                         /* This could happen if export is cleaned during the 
                            connect attempt */
-                        spin_unlock(&imp->imp_lock);
                         CERROR("Missing export for %s\n", 
                                imp->imp_obd->obd_name);
                         GOTO(out, rc = -ENODEV);
@@ -760,7 +767,8 @@ finish:
                            /* Actually servers are only supposed to refuse
                               connection from liblustre clients, so we should
                               never see this from VFS context */
-                                LCONSOLE_ERROR("Server %s version (%d.%d.%d.%d)"
+                                LCONSOLE_ERROR_MSG(0x16a, "Server %s version "
+                                        "(%d.%d.%d.%d)"
                                         " refused connection from this client "
                                         "with an incompatible version (%s).  "
                                         "Client must be recompiled\n",
@@ -873,10 +881,10 @@ int ptlrpc_import_recovery_state_machine(struct obd_import *imp)
                 /* Don't care about MGC eviction */
                 if (strcmp(imp->imp_obd->obd_type->typ_name,
                            LUSTRE_MGC_NAME) != 0) {
-                        LCONSOLE_ERROR("This client was evicted by %.*s; "
-                                       "in progress operations using this "
-                                       "service will fail.\n",
-                                       target_len, target_start);
+                        LCONSOLE_ERROR_MSG(0x167, "This client was evicted by "
+                                           "%.*s; in progress operations using "
+                                           "this service will fail.\n",
+                                           target_len, target_start);
                 }
                 CDEBUG(D_HA, "evicted from %s@%s; invalidating\n",
                        obd2cli_tgt(imp->imp_obd),
