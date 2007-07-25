@@ -42,6 +42,8 @@ init_test_env() {
     export PATH=:$PATH:$LUSTRE/utils:$LUSTRE/tests
     export LCTL=${LCTL:-"$LUSTRE/utils/lctl"}
     [ ! -f "$LCTL" ] && export LCTL=$(which lctl) 
+    export LFS=${LFS:-"$LUSTRE/utils/lfs"}
+    [ ! -f "$LFS" ] && export LFS=$(which lfs) 
     export MKFS=${MKFS:-"$LUSTRE/utils/mkfs.lustre"}
     [ ! -f "$MKFS" ] && export MKFS=$(which mkfs.lustre) 
     export TUNEFS=${TUNEFS:-"$LUSTRE/utils/tunefs.lustre"}
@@ -803,6 +805,15 @@ pgcache_empty() {
     return 0
 }
 
+debugsave() {
+    DEBUGSAVE="$(sysctl -n lnet.debug)"
+}
+
+debugrestore() {
+    [ -n "$DEBUGSAVE" ] && sysctl -w lnet.debug=\"$DEBUGSAVE\"
+    DEBUGSAVE=""
+}
+
 ##################################
 # Test interface 
 error() {
@@ -812,6 +823,7 @@ error() {
     ERRLOG=$TMP/lustre_${TESTSUITE}_${TESTNAME}.$(date +%s)
     echo "Dumping lctl log to $ERRLOG"
     $LCTL dk $ERRLOG
+    debugrestore
     exit 1
 }
 

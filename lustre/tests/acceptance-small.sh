@@ -25,9 +25,16 @@ fi
 [ "$DEBUG_OFF" ] || DEBUG_OFF="eval sysctl -w lnet.debug=\"$DEBUG_LVL\""
 [ "$DEBUG_ON" ] || DEBUG_ON="eval sysctl -w lnet.debug=0x33f0484"
 
+if [ "$ONLY" ]; then
+    export RUNTESTS="no" SANITY="no" DBENCH="no" BONNIE="no" IOZONE="no" FSX="no" SANITYN="no" LFSCK="no" LIBLUSTRE="no" REPLAY_SINGLE="no" CONF_SANITY="no" RECOVERY_SMALL="no" REPLAY_OST_SINGLE="no" REPLAY_DUAL="no" INSANITY="no" SANITY_QUOTA="no"
+    for O in $ONLY; do
+	export ${O}="yes"
+    done
+    export ONLY=""
+fi
 
-LIBLUSTRE=${LIBLUSTRE:-../liblustre}
-LIBLUSTRETESTS=${LIBLUSTRETESTS:-$LIBLUSTRE/tests}
+
+LIBLUSTRETESTS=${LIBLUSTRETESTS:-../liblustre/tests}
 
 STARTTIME=`date +%s`
 RANTEST=""
@@ -47,6 +54,7 @@ setup_if_needed() {
 
 title() {
     echo "-----============= acceptance-small: "$*" ============-----"
+    $LCTL mark "----===== $* =====----" 2> /dev/null || true
     RANTEST=${RANTEST}$*", "
 }
 
@@ -116,9 +124,11 @@ for NAME in $CONFIGS; do
 		SPACE=`df -P $MOUNT | tail -n 1 | awk '{ print $4 }'`
 		[ $SPACE -lt $SIZE ] && SIZE=$((SPACE * 3 / 4))
 		IOZONE_OPTS="-i 0 -i 1 -i 2 -e -+d -r $RSIZE -s $SIZE"
-		IOZFILE="-f $MOUNT/iozone"
+		IOZFILE="$MOUNT/iozone"
+		# $SPACE was calculated with all OSTs
+		$LFS setstripe $IOZFILE 0 -1 -1
 		$DEBUG_OFF
-		iozone $IOZONE_OPTS $IOZFILE
+		iozone $IOZONE_OPTS -f $IOZFILE
 		$DEBUG_ON
 		$CLEANUP
 		$SETUP
@@ -217,6 +227,7 @@ for NAME in $CONFIGS; do
 		#export LIBLUSTRE_DEBUG_MASK=`cat /proc/sys/lnet/debug`
 		if [ -x $LIBLUSTRETESTS/sanity ]; then
 			mkdir -p $MOUNT2
+			echo $LIBLUSTRETESTS/sanity --target=$LIBLUSTRE_MOUNT_TARGET
 			$LIBLUSTRETESTS/sanity --target=$LIBLUSTRE_MOUNT_TARGET
 		fi
 		$CLEANUP

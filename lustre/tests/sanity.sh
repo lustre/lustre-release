@@ -2020,8 +2020,8 @@ test_48a() { # bug 2399
 		touch .foo || error "'touch .foo' failed after recreating cwd"
 		mkdir .bar || error "'mkdir .foo' failed after recreating cwd"
 	fi
-	ls . || error "'ls .' failed after recreating cwd"
-	ls .. || error "'ls ..' failed after removing cwd"
+	ls . > /dev/null || error "'ls .' failed after recreating cwd"
+	ls .. > /dev/null || error "'ls ..' failed after removing cwd"
 	cd . || error "'cd .' failed after recreating cwd"
 	mkdir . && error "'mkdir .' worked after recreating cwd"
 	rmdir . && error "'rmdir .' worked after recreating cwd"
@@ -2041,8 +2041,8 @@ test_48b() { # bug 2399
 		touch .foo && error "'touch .foo' worked after removing cwd"
 		mkdir .foo && error "'mkdir .foo' worked after removing cwd"
 	fi
-	ls . && error "'ls .' worked after removing cwd"
-	ls .. || error "'ls ..' failed after removing cwd"
+	ls . > /dev/null && error "'ls .' worked after removing cwd"
+	ls .. > /dev/null || error "'ls ..' failed after removing cwd"
 	cd . && error "'cd .' worked after removing cwd"
 	mkdir . && error "'mkdir .' worked after removing cwd"
 	rmdir . && error "'rmdir .' worked after removing cwd"
@@ -2596,7 +2596,7 @@ run_test 63 "Verify oig_wait interruption does not crash ======="
 # bug 2248 - async write errors didn't return to application on sync
 # bug 3677 - async write errors left page locked
 test_63b() {
-	DBG_SAVE="`sysctl -n lnet.debug`"
+	debugsave
 	sysctl -w lnet.debug=-1
 
 	# ensure we have a grant to do async writes
@@ -2606,15 +2606,11 @@ test_63b() {
 	#define OBD_FAIL_OSC_BRW_PREP_REQ 0x406
 	sysctl -w lustre.fail_loc=0x80000406
 	multiop $DIR/$tfile Owy && \
-		$LCTL dk /tmp/test63b.debug && \
-		sysctl -w lnet.debug="$DBG_SAVE" && \
 		error "sync didn't return ENOMEM"
 	sync; sleep 2; sync	# do a real sync this time to flush page
 	grep locked $LPROC/llite/*/dump_page_cache && \
-		$LCTL dk /tmp/test63b.debug && \
-		sysctl -w lnet.debug="$DBG_SAVE" && \
 		error "locked page left in cache after async error" || true
-	sysctl -w lnet.debug="$DBG_SAVE"
+	debugrestore
 }
 run_test 63b "async write errors should be returned to fsync ==="
 

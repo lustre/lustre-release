@@ -775,8 +775,8 @@ test_9() {
         fi
 
         # set the D_QUOTA flag
-	DBG_SAVE="`sysctl -n lnet.debug`"
-	sysctl -w lnet.debug="$DBG_SAVE quota"
+	debugsave
+	sysctl -w lnet.debug="+quota"
 
         TESTFILE="$TSTDIR/quota_tst90"
 
@@ -807,7 +807,7 @@ test_9() {
         $RUNAS rm -f $TESTFILE 
         RC=$?
 
-	sysctl -w lnet.debug="$DBG_SAVE"
+	debugrestore
         return $RC
 }
 run_test 9 "run for fixing bug10707(64bit) ==========="
@@ -830,12 +830,9 @@ test_10() {
 	sync; sleep 10; sync;
 
 	# set the D_QUOTA flag
-	set_flag=0
-	if [ -z "`sysctl lnet.debug | grep quota`" ]; then
-		sysctl -w lnet.debug="+quota"
-		set_flag=1
-	fi
-
+	debugsave
+	sysctl -w lnet.debug="+quota"
+	
 	# make qd_count 32 bit
 	sysctl -w lustre.fail_loc=0xA00
 
@@ -870,9 +867,7 @@ test_10() {
 	RC=$?
 
 	# clear the flage
-	if [ $set_flag -eq 1 ]; then
-		sysctl -w lnet.debug="-quota"
-	fi
+	debugrestore
 
 	# make qd_count 64 bit
 	sysctl -w lustre.fail_loc=0
