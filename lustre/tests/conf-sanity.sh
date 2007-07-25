@@ -1075,6 +1075,7 @@ test_32a() {
 	echo "ok."
 
 	cleanup_nocli
+	load_modules
 
         # mount a second time to make sure we didnt leave upgrade flag on
         $TUNEFS --dryrun $TMP/$tdir/mds || error "tunefs failed"
