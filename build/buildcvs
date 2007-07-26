@@ -116,6 +116,12 @@ case "$lustretag" in
 	lustretag="HEAD"
 	;;
 
+    b_usocklnd)
+        # lnet usocklnd development branch
+	lnettag="b_usocklnd"
+	lustretag="b1_6_usocklnd"
+	;;
+
     # before 1_4_6, we didn't have lnet or snmp
     b_release_1_2_*|b_release_1_4_[0-5])
         portalstag="$lustretag"
