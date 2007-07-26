@@ -36,6 +36,7 @@
 #include <lustre_mds.h>
 #include <lustre_dlm.h>
 #include <lustre_net.h>
+#include "ldlm_internal.h"
 
 /* @priority: if non-zero, move the selected to the list head
  * @create: if zero, only search in existed connections
