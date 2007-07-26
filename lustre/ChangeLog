@@ -33,6 +33,12 @@ Bugzilla   : 12211
 Description: randomly memory allocation failure util
 Details    : Make lustre randomly failed allocating memory for testing purpose.
 
+Severity   : normal
+Frequency  : only for SLES10
+Bugzilla   : 12771
+Description: Update kernel patch for SLES10 SP1
+Details    : Add patch blkdev_tunables-2.6-sles10.patch to 2.6-sles10.series.
+
 --------------------------------------------------------------------------------
 
 2007-07-30         Cluster File Systems, Inc. <info@clusterfs.com>
