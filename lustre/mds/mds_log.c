@@ -56,6 +56,8 @@ static int mds_llog_origin_add(struct llog_ctxt *ctxt,
 
         lctxt = llog_get_context(lov_obd, ctxt->loc_idx);
         rc = llog_add(lctxt, rec, lsm, logcookies, numcookies);
+        llog_ctxt_put(lctxt);
+
         RETURN(rc);
 }
 
@@ -72,6 +74,7 @@ static int mds_llog_origin_connect(struct llog_ctxt *ctxt, int count,
 
         lctxt = llog_get_context(lov_obd, ctxt->loc_idx);
         rc = llog_connect(lctxt, count, logid, gen, uuid);
+        llog_ctxt_put(lctxt);
         RETURN(rc);
 }
 
@@ -86,6 +89,7 @@ static int mds_llog_repl_cancel(struct llog_ctxt *ctxt, struct lov_stripe_md *ls
 
         lctxt = llog_get_context(lov_obd, ctxt->loc_idx);
         rc = llog_cancel(lctxt, lsm, count, cookies, flags);
+        llog_ctxt_put(lctxt);
         RETURN(rc);
 }
 
@@ -119,6 +123,7 @@ int mds_log_op_unlink(struct obd_device *obd,
         ctxt = llog_get_context(obd, LLOG_MDS_OST_ORIG_CTXT);
         rc = llog_add(ctxt, &lur->lur_hdr, lsm, logcookies,
                       cookies_size / sizeof(struct llog_cookie));
+        llog_ctxt_put(ctxt);
 
         OBD_FREE(lur, sizeof(*lur));
 out:
@@ -162,6 +167,8 @@ int mds_log_op_setattr(struct obd_device *obd, struct inode *inode,
         ctxt = llog_get_context(obd, LLOG_MDS_OST_ORIG_CTXT);
         rc = llog_add(ctxt, &lsr->lsr_hdr, lsm, logcookies,
                       cookies_size / sizeof(struct llog_cookie));
+
+        llog_ctxt_put(ctxt);
 
         OBD_FREE(lsr, sizeof(*lsr));
  out:

@@ -91,6 +91,8 @@ static void mds_cancel_cookies_cb(struct obd_device *obd, __u64 transno,
                 rc = llog_cancel(ctxt, lsm, mlcd->mlcd_cookielen /
                                                 sizeof(*mlcd->mlcd_cookies),
                                  mlcd->mlcd_cookies, OBD_LLOG_FL_SENDNOW);
+                llog_ctxt_put(ctxt);
+
                 if (rc)
                         CERROR("error cancelling %d log cookies: rc %d\n",
                                (int)(mlcd->mlcd_cookielen /

@@ -120,6 +120,7 @@ int llog_cat_set_first_idx(struct llog_handle *cathandle, int index);
 /* llog_obd.c */
 int llog_setup(struct obd_device *obd, int index, struct obd_device *disk_obd,
                int count,  struct llog_logid *logid,struct llog_operations *op);
+int __llog_ctxt_put(struct llog_ctxt *ctxt);
 int llog_cleanup(struct llog_ctxt *);
 int llog_sync(struct llog_ctxt *ctxt, struct obd_export *exp);
 int llog_add(struct llog_ctxt *ctxt, struct llog_rec_hdr *rec,
@@ -212,6 +213,8 @@ struct llog_ctxt {
         struct llog_handle      *loc_handle;
         struct llog_canceld_ctxt *loc_llcd;
         struct semaphore         loc_sem; /* protects loc_llcd and loc_imp */
+        atomic_t                 loc_refcount;
+        struct llog_commit_master *loc_lcm;
         void                    *llog_proc_cb;
 };
 
@@ -267,13 +270,49 @@ static inline int llog_data_len(int len)
         return size_round(len);
 }
 
-static inline struct llog_ctxt *llog_get_context(struct obd_device *obd,
-                                                 int index)
-{
-        if (index < 0 || index >= LLOG_MAX_CTXTS)
-                return NULL;
+#define llog_ctxt_get(ctxt)                                                 \
+({                                                                          \
+         struct llog_ctxt *ctxt_ = ctxt;                                    \
+         LASSERT(atomic_read(&ctxt_->loc_refcount) > 0);                    \
+         atomic_inc(&ctxt_->loc_refcount);                                  \
+         CDEBUG(D_INFO, "GETting ctxt %p : new refcount %d\n", ctxt_,       \
+                atomic_read(&ctxt_->loc_refcount));                         \
+         ctxt_;                                                             \
+})
+ 
+#define llog_ctxt_put(ctxt)                                                 \
+do {                                                                        \
+         if ((ctxt) == NULL)                                                \
+                 break;                                                     \
+         CDEBUG(D_INFO, "PUTting ctxt %p : new refcount %d\n", (ctxt),      \
+                atomic_read(&(ctxt)->loc_refcount) - 1);                    \
+         LASSERT(atomic_read(&(ctxt)->loc_refcount) > 0);                   \
+         LASSERT(atomic_read(&(ctxt)->loc_refcount) < 0x5a5a5a);            \
+         __llog_ctxt_put(ctxt);                                             \
+} while (0)
 
-        return obd->obd_llog_ctxt[index];
+static inline struct llog_ctxt *llog_get_context(struct obd_device *obd,
+                                                   int index)
+{
+         struct llog_ctxt *ctxt;
+ 
+         if (index < 0 || index >= LLOG_MAX_CTXTS)
+                 return NULL;
+        
+         spin_lock(&obd->obd_dev_lock);  
+         if (obd->obd_llog_ctxt[index] == NULL) {
+                 spin_unlock(&obd->obd_dev_lock);
+                 CWARN("obd %p and ctxt index %d is NULL \n", obd, index);
+                 return NULL;
+         }
+         ctxt = llog_ctxt_get(obd->obd_llog_ctxt[index]);
+         spin_unlock(&obd->obd_dev_lock);
+         return ctxt;
+}
+
+static inline int llog_ctxt_null(struct obd_device *obd, int index)
+{
+        return (obd->obd_llog_ctxt[index] == NULL);
 }
 
 static inline int llog_write_rec(struct llog_handle *handle,

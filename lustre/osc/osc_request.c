@@ -3272,6 +3272,7 @@ static int osc_setinfo_mds_conn_interpret(struct ptlrpc_request *req,
                                "ctxt %p: %d\n", ctxt, rc);
         }
 
+        llog_ctxt_put(ctxt);
         spin_lock(&imp->imp_lock);
         imp->imp_server_timeout = 1;
         imp->imp_pingable = 1;
@@ -3456,6 +3457,8 @@ static int osc_disconnect(struct obd_export *exp)
         if (obd->u.cli.cl_conn_count == 1)
                 /* flush any remaining cancel messages out to the target */
                 llog_sync(ctxt, exp);
+        
+        llog_ctxt_put(ctxt);
 
         rc = client_disconnect_export(exp);
         return rc;

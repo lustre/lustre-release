@@ -63,8 +63,6 @@ void ptlrpc_lprocfs_do_request_stat (struct ptlrpc_request *req,
 #endif /* LPROCFS */
 
 /* recovd_thread.c */
-int llog_init_commit_master(void);
-int llog_cleanup_commit_master(int force);
 
 static inline int opcode_offset(__u32 opc) {
         if (opc < OST_LAST_OPC) {

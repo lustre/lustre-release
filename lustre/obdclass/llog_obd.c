@@ -38,24 +38,78 @@
 #include "llog_internal.h"
 
 /* helper functions for calling the llog obd methods */
+static struct llog_ctxt* llog_new_ctxt(struct obd_device *obd)
+{
+        struct llog_ctxt *ctxt;
 
+        OBD_ALLOC(ctxt, sizeof(*ctxt));
+        if (!ctxt)
+                return NULL;
+        
+        ctxt->loc_obd = obd;
+        atomic_set(&ctxt->loc_refcount, 1);
+        
+        return ctxt;
+}
+
+static void llog_ctxt_destroy(struct llog_ctxt *ctxt)
+{
+        if (ctxt->loc_exp)
+                class_export_put(ctxt->loc_exp);
+        OBD_FREE(ctxt, sizeof(*ctxt));
+        return;
+}
+
+int __llog_ctxt_put(struct llog_ctxt *ctxt)
+{
+        struct obd_device *obd;
+        int rc = 0;
+
+        obd = ctxt->loc_obd;
+        spin_lock(&obd->obd_dev_lock);
+        if (!atomic_dec_and_test(&ctxt->loc_refcount)) {
+                spin_unlock(&obd->obd_dev_lock);
+                return rc;
+        }
+        obd->obd_llog_ctxt[ctxt->loc_idx] = NULL;
+        spin_unlock(&obd->obd_dev_lock);
+
+        LASSERT(obd->obd_stopping == 1);
+        /* cleanup the llog ctxt here */
+        if (CTXTP(ctxt, cleanup))
+                rc = CTXTP(ctxt, cleanup)(ctxt);
+ 
+        llog_ctxt_destroy(ctxt);
+        wake_up(&obd->obd_llog_waitq);
+        return rc;
+}
+EXPORT_SYMBOL(__llog_ctxt_put);
+ 
 int llog_cleanup(struct llog_ctxt *ctxt)
 {
-        int rc = 0;
+        struct l_wait_info lwi = LWI_INTR(LWI_ON_SIGNAL_NOOP, NULL);
+        struct obd_device *obd = ctxt->loc_obd;
+        int rc, idx;
         ENTRY;
 
         if (!ctxt) {
                 CERROR("No ctxt\n");
                 RETURN(-ENODEV);
         }
-        
-        if (CTXTP(ctxt, cleanup))
-                rc = CTXTP(ctxt, cleanup)(ctxt);
 
-        ctxt->loc_obd->obd_llog_ctxt[ctxt->loc_idx] = NULL;
-        if (ctxt->loc_exp)
-                class_export_put(ctxt->loc_exp);
-        OBD_FREE(ctxt, sizeof(*ctxt));
+        /*banlance the ctxt get when calling llog_cleanup */
+        llog_ctxt_put(ctxt);
+
+        /* sync with other llog ctxt user thread */
+        spin_lock(&obd->obd_dev_lock);
+        LASSERT(obd->obd_stopping == 1);
+        spin_unlock(&obd->obd_dev_lock);
+
+        idx = ctxt->loc_idx;
+        /*try to free the ctxt */
+        rc = __llog_ctxt_put(ctxt);
+
+        l_wait_event(obd->obd_llog_waitq, llog_ctxt_null(obd, idx), &lwi);
 
         RETURN(rc);
 }
@@ -71,24 +125,23 @@ int llog_setup(struct obd_device *obd, int index, struct obd_device *disk_obd,
         if (index < 0 || index >= LLOG_MAX_CTXTS)
                 RETURN(-EFAULT);
 
-        if (obd->obd_llog_ctxt[index]) {
+        ctxt = llog_get_context(obd, index); 
+        if (ctxt) {
                 /* mds_lov_update_mds might call here multiple times. So if the
                    llog is already set up then don't to do it again. */
                 CDEBUG(D_CONFIG, "obd %s ctxt %d already set up\n", 
                        obd->obd_name, index);
-                ctxt = obd->obd_llog_ctxt[index];
                 LASSERT(ctxt->loc_obd == obd);
                 LASSERT(ctxt->loc_exp == disk_obd->obd_self_export);
                 LASSERT(ctxt->loc_logops == op);
+                llog_ctxt_put(ctxt); 
                 GOTO(out, rc = 0);
         }
-        
-        OBD_ALLOC(ctxt, sizeof(*ctxt));
+        ctxt = llog_new_ctxt(obd);
         if (!ctxt)
                 GOTO(out, rc = -ENOMEM);
 
         obd->obd_llog_ctxt[index] = ctxt;
-        ctxt->loc_obd = obd;
         ctxt->loc_exp = class_export_get(disk_obd->obd_self_export);
         ctxt->loc_idx = index;
         ctxt->loc_logops = op;
@@ -96,13 +149,9 @@ int llog_setup(struct obd_device *obd, int index, struct obd_device *disk_obd,
 
         if (op->lop_setup)
                 rc = op->lop_setup(obd, index, disk_obd, count, logid);
-        
-        if (rc) {
-                obd->obd_llog_ctxt[index] = NULL;
-                class_export_put(ctxt->loc_exp);
-                OBD_FREE(ctxt, sizeof(*ctxt));
-        }
-        
+
+        if (rc)
+                llog_ctxt_destroy(ctxt);
 out:
         RETURN(rc);
 }
@@ -247,7 +296,8 @@ int llog_obd_origin_setup(struct obd_device *obd, int index,
         rc = llog_process(handle, (llog_cb_t)cat_cancel_cb, NULL, NULL);
         if (rc)
                 CERROR("llog_process with cat_cancel_cb failed: %d\n", rc);
- out:
+out:
+        llog_ctxt_put(ctxt);
         RETURN(rc);
 }
 EXPORT_SYMBOL(llog_obd_origin_setup);

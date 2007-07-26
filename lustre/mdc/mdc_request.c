@@ -828,6 +828,7 @@ static int mdc_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
         case OBD_IOC_PARSE: {
                 ctxt = llog_get_context(exp->exp_obd, LLOG_CONFIG_REPL_CTXT);
                 rc = class_config_parse_llog(ctxt, data->ioc_inlbuf1, NULL);
+                llog_ctxt_put(ctxt);
                 GOTO(out, rc);
         }
 #ifdef __KERNEL__
@@ -835,7 +836,7 @@ static int mdc_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
         case OBD_IOC_LLOG_PRINT: {
                 ctxt = llog_get_context(obd, LLOG_CONFIG_REPL_CTXT);
                 rc = llog_ioctl(ctxt, cmd, data);
-
+                llog_ctxt_put(ctxt);
                 GOTO(out, rc);
         }
 #endif
@@ -1284,6 +1285,7 @@ static int mdc_llog_init(struct obd_device *obd, struct obd_device *tgt,
         if (rc == 0) {
                 ctxt = llog_get_context(obd, LLOG_CONFIG_REPL_CTXT);
                 ctxt->loc_imp = obd->u.cli.cl_import;
+                llog_ctxt_put(ctxt);
         }
 
         rc = llog_setup(obd, LLOG_LOVEA_REPL_CTXT, tgt, 0, NULL,
@@ -1291,6 +1293,7 @@ static int mdc_llog_init(struct obd_device *obd, struct obd_device *tgt,
         if (rc == 0) {
                 ctxt = llog_get_context(obd, LLOG_LOVEA_REPL_CTXT);
                 ctxt->loc_imp = obd->u.cli.cl_import;
+                llog_ctxt_put(ctxt);
         }
 
         RETURN(rc);

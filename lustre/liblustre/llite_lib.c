@@ -167,9 +167,10 @@ int liblustre_process_log(struct config_llog_instance *cfg,
 
         exp = class_conn2export(&mgc_conn);
 
-        ctxt = exp->exp_obd->obd_llog_ctxt[LLOG_CONFIG_REPL_CTXT];
+        ctxt = llog_get_context(exp->exp_obd, LLOG_CONFIG_REPL_CTXT);
         cfg->cfg_flags |= CFG_F_COMPAT146;
         rc = class_config_parse_llog(ctxt, profile, cfg);
+        llog_ctxt_put(ctxt);
         if (rc) {
                 CERROR("class_config_parse_llog failed: rc = %d\n", rc);
         }

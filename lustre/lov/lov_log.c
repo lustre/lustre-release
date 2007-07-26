@@ -92,6 +92,7 @@ static int lov_llog_origin_add(struct llog_ctxt *ctxt,
 
                 rc += llog_add(cctxt, rec, NULL, logcookies + rc,
                                 numcookies - rc);
+                llog_ctxt_put(cctxt);
         }
 
         RETURN(rc);
@@ -120,6 +121,8 @@ static int lov_llog_origin_connect(struct llog_ctxt *ctxt, int count,
                 child = lov->lov_tgts[i]->ltd_exp->exp_obd;
                 cctxt = llog_get_context(child, ctxt->loc_idx);
                 rc = llog_connect(cctxt, 1, logid, gen, uuid);
+                llog_ctxt_put(cctxt);
+ 
                 if (rc) {
                         CERROR("error osc_llog_connect tgt %d (%d)\n", i, rc);
                         if (!err) 
@@ -154,6 +157,7 @@ static int lov_llog_repl_cancel(struct llog_ctxt *ctxt, struct lov_stripe_md *ls
                 int err;
 
                 err = llog_cancel(cctxt, NULL, 1, cookies, flags);
+                llog_ctxt_put(cctxt);
                 if (err && lov->lov_tgts[loi->loi_ost_idx]->ltd_active) {
                         CERROR("error: objid "LPX64" subobj "LPX64
                                " on OST idx %d: rc = %d\n", lsm->lsm_object_id,

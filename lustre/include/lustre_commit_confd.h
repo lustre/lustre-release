@@ -51,8 +51,8 @@ struct llog_commit_daemon {
 };
 
 /* ptlrpc/recov_thread.c */
-int llog_start_commit_thread(void);
-struct llog_canceld_ctxt *llcd_grab(void);
-void llcd_send(struct llog_canceld_ctxt *llcd);
+int llog_start_commit_thread(struct llog_commit_master *);
 
+int llog_init_commit_master(struct llog_commit_master *);
+int llog_cleanup_commit_master(struct llog_commit_master *lcm, int force);
 #endif /* _LUSTRE_COMMIT_CONFD_H */

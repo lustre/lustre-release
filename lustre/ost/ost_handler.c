@@ -1671,11 +1671,6 @@ static int ost_setup(struct obd_device *obd, obd_count len, void *buf)
         rc = cleanup_group_info();
         if (rc)
                 RETURN(rc);
-
-        rc = llog_start_commit_thread();
-        if (rc < 0)
-                RETURN(rc);
-
         lprocfs_init_vars(ost, &lvars);
         lprocfs_obd_setup(obd, lvars.obd_vars);
 

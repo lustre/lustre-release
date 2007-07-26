@@ -310,6 +310,7 @@ struct filter_obd {
 
         int                      fo_fmd_max_num; /* per exp filter_mod_data */
         int                      fo_fmd_max_age; /* jiffies to fmd expiry */
+        void                     *fo_lcm;
 };
 
 #define OSC_MAX_RIF_DEFAULT       8
@@ -727,6 +728,7 @@ struct obd_device {
         struct lustre_class_hash_body *obd_nid_hash_body; 
         atomic_t obd_refcount;
         cfs_waitq_t             obd_refcount_waitq;
+        cfs_waitq_t             obd_llog_waitq;
         struct list_head        obd_exports;
         int                     obd_num_exports;
         struct ldlm_namespace  *obd_namespace;

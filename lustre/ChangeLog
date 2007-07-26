@@ -19,6 +19,15 @@ Bugzilla   : 12786
 Description: lfs setstripe enhancement
 Details    : Make lfs setstripe understand 'k', 'm' and 'g' for stripe size.
 
+Severity   : normal
+Frequency  : mds/oss recovery 
+Bugzilla   : 10800
+Description: llog ctxt is refrenced after it has been freed. 
+Details    : llog ctxt refcount was added to avoide the race between ctxt free
+	     and llog recovery process. Each llog user must hold ctxt refcount
+	     before it access the llog. And the llog ctxt can only be freed
+	     when its refcount is zero.
+
 --------------------------------------------------------------------------------
 
 2007-07-30         Cluster File Systems, Inc. <info@clusterfs.com>

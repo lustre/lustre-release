@@ -873,6 +873,7 @@ static int mgc_llog_init(struct obd_device *obd, struct obd_device *tgt,
         if (rc == 0) {
                 ctxt = llog_get_context(obd, LLOG_CONFIG_REPL_CTXT);
                 ctxt->loc_imp = obd->u.cli.cl_import;
+                llog_ctxt_put(ctxt);
         }
 
         RETURN(rc);
@@ -1085,6 +1086,7 @@ static int mgc_process_log(struct obd_device *mgc,
                 /* Now, whether we copied or not, start using the local llog.
                    If we failed to copy, we'll start using whatever the old 
                    log has. */
+                llog_ctxt_put(ctxt);
                 ctxt = lctxt;
         }
 
@@ -1092,8 +1094,11 @@ static int mgc_process_log(struct obd_device *mgc,
            copy of the instance for the update.  The cfg_last_idx will
            be updated here. */
         rc = class_config_parse_llog(ctxt, cld->cld_logname, &cld->cld_cfg);
-        
- out_pop:
+ 
+out_pop:
+        llog_ctxt_put(ctxt);
+        if (ctxt != lctxt)
+                llog_ctxt_put(lctxt);
         if (must_pop) 
                 pop_ctxt(&saved, &mgc->obd_lvfs_ctxt, NULL);
 

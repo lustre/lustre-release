@@ -55,13 +55,10 @@
 
 #ifdef __KERNEL__
 
-static struct llog_commit_master lustre_lcm;
-static struct llog_commit_master *lcm = &lustre_lcm;
-
 /* Allocate new commit structs in case we do not have enough.
  * Make the llcd size small enough that it fits into a single page when we
  * are sending/receiving it. */
-static int llcd_alloc(void)
+static int llcd_alloc(struct llog_commit_master *lcm)
 {
         struct llog_canceld_ctxt *llcd;
         int llcd_size;
@@ -85,7 +82,7 @@ static int llcd_alloc(void)
 }
 
 /* Get a free cookie struct from the list */
-struct llog_canceld_ctxt *llcd_grab(void)
+static struct llog_canceld_ctxt *llcd_grab(struct llog_commit_master *lcm)
 {
         struct llog_canceld_ctxt *llcd;
 
@@ -93,7 +90,7 @@ repeat:
         spin_lock(&lcm->lcm_llcd_lock);
         if (list_empty(&lcm->lcm_llcd_free)) {
                 spin_unlock(&lcm->lcm_llcd_lock);
-                if (llcd_alloc() < 0) {
+                if (llcd_alloc(lcm) < 0) {
                         CERROR("unable to allocate log commit data!\n");
                         return NULL;
                 }
@@ -110,10 +107,12 @@ repeat:
 
         return llcd;
 }
-EXPORT_SYMBOL(llcd_grab);
 
 static void llcd_put(struct llog_canceld_ctxt *llcd)
 {
+        struct llog_commit_master *lcm = llcd->llcd_lcm;
+
+        llog_ctxt_put(llcd->llcd_ctxt);
         if (atomic_read(&lcm->lcm_llcd_numfree) >= lcm->lcm_llcd_maxfree) {
                 int llcd_size = llcd->llcd_size +
                          offsetof(struct llog_canceld_ctxt, llcd_cookies);
@@ -127,15 +126,16 @@ static void llcd_put(struct llog_canceld_ctxt *llcd)
 }
 
 /* Send some cookies to the appropriate target */
-void llcd_send(struct llog_canceld_ctxt *llcd)
+static void llcd_send(struct llog_canceld_ctxt *llcd)
 {
-        spin_lock(&llcd->llcd_lcm->lcm_llcd_lock);
-        list_add_tail(&llcd->llcd_list, &llcd->llcd_lcm->lcm_llcd_pending);
-        spin_unlock(&llcd->llcd_lcm->lcm_llcd_lock);
-
+        if (!(llcd->llcd_lcm->lcm_flags & LLOG_LCM_FL_EXIT)) {
+                spin_lock(&llcd->llcd_lcm->lcm_llcd_lock);
+                list_add_tail(&llcd->llcd_list,
+                              &llcd->llcd_lcm->lcm_llcd_pending);
+                spin_unlock(&llcd->llcd_lcm->lcm_llcd_lock);
+        }
         cfs_waitq_signal_nr(&llcd->llcd_lcm->lcm_waitq, 1);
 }
-EXPORT_SYMBOL(llcd_send);
 
 /* deleted objects have a commit callback that cancels the MDS
  * log record for the deletion.  The commit callback calls this
@@ -161,7 +161,7 @@ int llog_obd_repl_cancel(struct llog_ctxt *ctxt,
 
         if (count > 0 && cookies != NULL) {
                 if (llcd == NULL) {
-                        llcd = llcd_grab();
+                        llcd = llcd_grab(ctxt->loc_lcm);
                         if (llcd == NULL) {
                                 CERROR("couldn't get an llcd - dropped "LPX64
                                        ":%x+%u\n",
@@ -170,7 +170,7 @@ int llog_obd_repl_cancel(struct llog_ctxt *ctxt,
                                        cookies->lgc_index);
                                 GOTO(out, rc = -ENOMEM);
                         }
-                        llcd->llcd_ctxt = ctxt;
+                        llcd->llcd_ctxt = llog_ctxt_get(ctxt);
                         ctxt->loc_llcd = llcd;
                 }
 
@@ -254,7 +254,7 @@ static int log_commit_thread(void *arg)
                 /* If we do not have enough pages available, allocate some */
                 while (atomic_read(&lcm->lcm_llcd_numfree) <
                        lcm->lcm_llcd_minfree) {
-                        if (llcd_alloc() < 0)
+                        if (llcd_alloc(lcm) < 0)
                                 break;
                 }
 
@@ -291,7 +291,7 @@ static int log_commit_thread(void *arg)
 
                 if (atomic_read(&lcm->lcm_thread_numidle) <= 1 &&
                     atomic_read(&lcm->lcm_thread_total) < lcm->lcm_thread_max) {
-                        rc = llog_start_commit_thread();
+                        rc = llog_start_commit_thread(lcm);
                         if (rc < 0)
                                 CERROR("error starting thread: rc %d\n", rc);
                 }
@@ -444,7 +444,7 @@ static int log_commit_thread(void *arg)
         return 0;
 }
 
-int llog_start_commit_thread(void)
+int llog_start_commit_thread(struct llog_commit_master *lcm)
 {
         int rc;
         ENTRY;
@@ -470,7 +470,7 @@ static struct llog_process_args {
         void                    *llpa_arg;
 } llpa;
 
-int llog_init_commit_master(void)
+int llog_init_commit_master(struct llog_commit_master *lcm)
 {
         CFS_INIT_LIST_HEAD(&lcm->lcm_thread_busy);
         CFS_INIT_LIST_HEAD(&lcm->lcm_thread_idle);
@@ -488,8 +488,10 @@ int llog_init_commit_master(void)
         sema_init(&llpa.llpa_sem, 1);
         return 0;
 }
+EXPORT_SYMBOL(llog_init_commit_master);
 
-int llog_cleanup_commit_master(int force)
+int llog_cleanup_commit_master(struct llog_commit_master *lcm,
+                               int force)
 {
         lcm->lcm_flags |= LLOG_LCM_FL_EXIT;
         if (force)
@@ -500,6 +502,7 @@ int llog_cleanup_commit_master(int force)
                                  atomic_read(&lcm->lcm_thread_total) == 0);
         return 0;
 }
+EXPORT_SYMBOL(llog_cleanup_commit_master);
 
 static int log_process_thread(void *args)
 {
@@ -517,12 +520,12 @@ static int log_process_thread(void *args)
         rc = llog_create(ctxt, &llh, &logid, NULL);
         if (rc) {
                 CERROR("llog_create failed %d\n", rc);
-                RETURN(rc);
+                GOTO(out, rc);
         }
         rc = llog_init_handle(llh, LLOG_F_IS_CAT, NULL);
         if (rc) {
                 CERROR("llog_init_handle failed %d\n", rc);
-                GOTO(out, rc);
+                GOTO(release_llh, rc);
         }
 
         if (cb) {
@@ -536,24 +539,33 @@ static int log_process_thread(void *args)
         CDEBUG(D_HA, "send llcd %p:%p forcibly after recovery\n",
                ctxt->loc_llcd, ctxt);
         llog_sync(ctxt, NULL);
-out:
+
+release_llh:
         rc = llog_cat_put(llh);
         if (rc)
                 CERROR("llog_cat_put failed %d\n", rc);
-
+out:
+        llog_ctxt_put(ctxt);
         RETURN(rc);
 }
 
 static int llog_recovery_generic(struct llog_ctxt *ctxt, void *handle,void *arg)
 {
+        struct obd_device *obd = ctxt->loc_obd;
         int rc;
         ENTRY;
 
+        if (obd->obd_stopping)
+                RETURN(-ENODEV);
+
         mutex_down(&llpa.llpa_sem);
-        llpa.llpa_ctxt = ctxt;
         llpa.llpa_cb = handle;
         llpa.llpa_arg = arg;
-
+        llpa.llpa_ctxt = llog_get_context(ctxt->loc_obd, ctxt->loc_idx);
+        if (!llpa.llpa_ctxt) {
+                up(&llpa.llpa_sem);
+                RETURN(-ENODEV);
+        }
         rc = cfs_kernel_thread(log_process_thread, &llpa, CLONE_VM | CLONE_FILES);
         if (rc < 0)
                 CERROR("error starting log_process_thread: %d\n", rc);
@@ -581,13 +593,13 @@ int llog_repl_connect(struct llog_ctxt *ctxt, int count,
 
         mutex_down(&ctxt->loc_sem);
         ctxt->loc_gen = *gen;
-        llcd = llcd_grab();
+        llcd = llcd_grab(ctxt->loc_lcm);
         if (llcd == NULL) {
                 CERROR("couldn't get an llcd\n");
                 mutex_up(&ctxt->loc_sem);
                 RETURN(-ENOMEM);
         }
-        llcd->llcd_ctxt = ctxt;
+        llcd->llcd_ctxt = llog_ctxt_get(ctxt);
         ctxt->loc_llcd = llcd;
         mutex_up(&ctxt->loc_sem);
 

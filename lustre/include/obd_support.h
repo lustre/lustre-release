@@ -104,6 +104,7 @@ extern int obd_race_state;
 #define OBD_FAIL_MDS_LLOG_CREATE_FAILED  0x137
 #define OBD_FAIL_MDS_LOV_SYNC_RACE       0x138
 #define OBD_FAIL_MDS_OSC_PRECREATE       0x139
+#define OBD_FAIL_MDS_LLOG_SYNC_TIMEOUT   0x13a
 
 #define OBD_FAIL_OST                     0x200
 #define OBD_FAIL_OST_CONNECT_NET         0x201
@@ -138,6 +139,8 @@ extern int obd_race_state;
 #define OBD_FAIL_OST_SETATTR_CREDITS     0x21e
 #define OBD_FAIL_OST_HOLD_WRITE_RPC      0x21f
 #define OBD_FAIL_OST_BRW_WRITE_BULK2     0x220
+#define OBD_FAIL_OST_LLOG_RECOVERY_TIMEOUT 0x221
+#define OBD_FAIL_OST_CANCEL_COOKIE_TIMEOUT 0x222
 
 #define OBD_FAIL_LDLM                    0x300
 #define OBD_FAIL_LDLM_NAMESPACE_NEW      0x301

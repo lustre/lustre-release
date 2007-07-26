@@ -157,10 +157,6 @@ static int mgs_setup(struct obd_device *obd, obd_count len, void *buf)
                 GOTO(err_ns, rc);
         }
 
-        rc = llog_start_commit_thread();
-        if (rc < 0)
-                GOTO(err_fs, rc);
-
         rc = llog_setup(obd, LLOG_CONFIG_ORIG_CTXT, obd, 0, NULL,
                         &llog_lvfs_ops);
         if (rc)
@@ -635,6 +631,7 @@ out_free:
                 push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
                 rc = class_config_dump_llog(ctxt, data->ioc_inlbuf1, NULL);
                 pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
+                llog_ctxt_put(ctxt);
                 if (rc)
                         RETURN(rc);
 
@@ -650,6 +647,7 @@ out_free:
                 push_ctxt(&saved, &ctxt->loc_exp->exp_obd->obd_lvfs_ctxt, NULL);
                 rc = llog_ioctl(ctxt, cmd, data);
                 pop_ctxt(&saved, &ctxt->loc_exp->exp_obd->obd_lvfs_ctxt, NULL);
+                llog_ctxt_put(ctxt);
 
                 RETURN(rc);
         }

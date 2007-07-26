@@ -94,6 +94,7 @@ static int llog_test_1(struct obd_device *obd, char *name)
         rc = llog_create(ctxt, &llh, NULL, name);
         if (rc) {
                 CERROR("1a: llog_create with name %s failed: %d\n", name, rc);
+                llog_ctxt_put(ctxt);
                 RETURN(rc);
         }
         llog_init_handle(llh, LLOG_F_IS_PLAIN, &uuid);
@@ -104,6 +105,7 @@ static int llog_test_1(struct obd_device *obd, char *name)
  out:
         CWARN("1b: close newly-created log\n");
         rc2 = llog_close(llh);
+        llog_ctxt_put(ctxt);
         if (rc2) {
                 CERROR("1b: close log %s failed: %d\n", name, rc2);
                 if (rc == 0)
@@ -126,18 +128,18 @@ static int llog_test_2(struct obd_device *obd, char *name,
         rc = llog_create(ctxt, llh, NULL, name);
         if (rc) {
                 CERROR("2a: re-open log with name %s failed: %d\n", name, rc);
-                RETURN(rc);
+                GOTO(out, rc);
         }
         llog_init_handle(*llh, LLOG_F_IS_PLAIN, &uuid);
 
         if ((rc = verify_handle("2", *llh, 1)))
-                RETURN(rc);
+                GOTO(out, rc);
 
         CWARN("2b: create a log without specified NAME & LOGID\n");
         rc = llog_create(ctxt, &loghandle, NULL, NULL);
         if (rc) {
                 CERROR("2b: create log failed\n");
-                RETURN(rc);
+                GOTO(out, rc);
         }
         llog_init_handle(loghandle, LLOG_F_IS_PLAIN, &uuid);
         logid = loghandle->lgh_id;
@@ -147,7 +149,7 @@ static int llog_test_2(struct obd_device *obd, char *name,
         rc = llog_create(ctxt, &loghandle, &logid, NULL);
         if (rc) {
                 CERROR("2b: re-open log by LOGID failed\n");
-                RETURN(rc);
+                GOTO(out, rc);
         }
         llog_init_handle(loghandle, LLOG_F_IS_PLAIN, &uuid);
 
@@ -155,9 +157,11 @@ static int llog_test_2(struct obd_device *obd, char *name,
         rc = llog_destroy(loghandle);
         if (rc) {
                 CERROR("2b: destroy log failed\n");
-                RETURN(rc);
+                GOTO(out, rc);
         }
         llog_free_handle(loghandle);
+out:
+        llog_ctxt_put(ctxt);
 
         RETURN(rc);
 }
@@ -261,10 +265,10 @@ static int llog_test_4(struct obd_device *obd)
         }
         num_recs++;
         if ((rc = verify_handle("4b", cath, 2)))
-                RETURN(rc);
+                GOTO(ctxt_release, rc);
 
         if ((rc = verify_handle("4b", cath->u.chd.chd_current_log, num_recs)))
-                RETURN(rc);
+                GOTO(ctxt_release, rc);
 
         CWARN("4c: cancel 1 log record\n");
         rc = llog_cat_cancel_records(cath, 1, &cookie);
@@ -275,7 +279,7 @@ static int llog_test_4(struct obd_device *obd)
         num_recs--;
 
         if ((rc = verify_handle("4c", cath->u.chd.chd_current_log, num_recs)))
-                RETURN(rc);
+                GOTO(ctxt_release, rc);
 
         CWARN("4d: write 40,000 more log records\n");
         for (i = 0; i < 40000; i++) {
@@ -311,6 +315,8 @@ static int llog_test_4(struct obd_device *obd)
  out:
         CWARN("4f: put newly-created catalog\n");
         rc = llog_cat_put(cath);
+ctxt_release:
+        llog_ctxt_put(ctxt);
         if (rc)
                 CERROR("1b: close log %s failed: %d\n", name, rc);
         RETURN(rc);
@@ -437,6 +443,8 @@ static int llog_test_5(struct obd_device *obd)
                 rc = llog_cat_put(llh);
         if (rc)
                 CERROR("1b: close log %s failed: %d\n", name, rc);
+        llog_ctxt_put(ctxt);
+
         RETURN(rc);
 }
 
@@ -458,13 +466,13 @@ static int llog_test_6(struct obd_device *obd, char *name)
         if (mdc_obd == NULL) {
                 CERROR("6: no MDC devices connected to %s found.\n",
                        mds_uuid->uuid);
-                RETURN(-ENOENT);
+                GOTO(ctxt_release, rc = -ENOENT);
         }
 
         rc = obd_connect(&exph, mdc_obd, &uuid, NULL /* obd_connect_data */);
         if (rc) {
                 CERROR("6: failed to connect to MDC: %s\n", mdc_obd->obd_name);
-                RETURN(rc);
+                GOTO(ctxt_release, rc);
         }
         exp = class_conn2export(&exph);
 
@@ -472,7 +480,8 @@ static int llog_test_6(struct obd_device *obd, char *name)
         rc = llog_create(nctxt, &llh, NULL, name);
         if (rc) {
                 CERROR("6: llog_create failed %d\n", rc);
-                RETURN(rc);
+                llog_ctxt_put(nctxt);
+                GOTO(ctxt_release, rc);
         }
 
         rc = llog_init_handle(llh, LLOG_F_IS_PLAIN, NULL);
@@ -491,12 +500,13 @@ static int llog_test_6(struct obd_device *obd, char *name)
 
 parse_out:
         rc = llog_close(llh);
+        llog_ctxt_put(nctxt);
         if (rc) {
                 CERROR("6: llog_close failed: rc = %d\n", rc);
         }
-
         rc = obd_disconnect(exp);
-
+ctxt_release:
+        llog_ctxt_put(ctxt);
         RETURN(rc);
 }
 
@@ -516,7 +526,7 @@ static int llog_test_7(struct obd_device *obd)
         rc = llog_create(ctxt, &llh, NULL, name);
         if (rc) {
                 CERROR("7: llog_create with name %s failed: %d\n", name, rc);
-                RETURN(rc);
+                GOTO(ctxt_release, rc);
         }
         llog_init_handle(llh, LLOG_F_IS_PLAIN, &uuid);
 
@@ -525,7 +535,7 @@ static int llog_test_7(struct obd_device *obd)
         rc = llog_write_rec(llh,  &lcr.lcr_hdr, NULL, 0, NULL, -1);
         if (rc) {
                 CERROR("7: write one log record failed: %d\n", rc);
-                RETURN(rc);
+                GOTO(ctxt_release, rc);
         }
 
         rc = llog_destroy(llh);
@@ -533,6 +543,8 @@ static int llog_test_7(struct obd_device *obd)
                 CERROR("7: llog_destroy failed: %d\n", rc);
         else
                 llog_free_handle(llh); 
+ctxt_release:
+        llog_ctxt_put(ctxt);
         RETURN(rc);
 }
 
@@ -591,7 +603,7 @@ static int llog_run_tests(struct obd_device *obd)
         case 0:
                 pop_ctxt(&saved, &ctxt->loc_exp->exp_obd->obd_lvfs_ctxt, NULL);
         }
-
+        llog_ctxt_put(ctxt);
         return rc;
 }
 

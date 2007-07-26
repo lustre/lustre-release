@@ -102,19 +102,27 @@ void filter_cancel_cookies_cb(struct obd_device *obd, __u64 transno,
                               void *cb_data, int error)
 {
         struct llog_cookie *cookie = cb_data;
+        struct llog_ctxt *ctxt;
         int rc;
 
-        if (error != 0) {
-                CDEBUG(D_INODE, "not cancelling llog cookie on error %d\n",
-                       error);
+        if (error != 0 || obd->obd_stopping) {
+                CDEBUG(D_INODE, "not cancel logcookie err %d stopping %d \n",
+                       error, obd->obd_stopping);
                 OBD_FREE(cookie, sizeof(*cookie));
                 return;
         }
 
-        rc = llog_cancel(llog_get_context(obd, cookie->lgc_subsys + 1),
-                         NULL, 1, cookie, 0);
+        ctxt = llog_get_context(obd, cookie->lgc_subsys + 1);
+        if (!ctxt)
+                GOTO(out, rc = 0);
+
+        OBD_FAIL_TIMEOUT(OBD_FAIL_OST_CANCEL_COOKIE_TIMEOUT, 30);
+
+        rc = llog_cancel(ctxt, NULL, 1, cookie, 0);
         if (rc)
                 CERROR("error cancelling log cookies: rc = %d\n", rc);
+out:
+        llog_ctxt_put(ctxt);
         OBD_FREE(cookie, sizeof(*cookie));
 }
 
@@ -134,7 +142,7 @@ static int filter_recov_log_unlink_cb(struct llog_ctxt *ctxt,
 
         lur = (struct llog_unlink_rec *)rec;
         OBDO_ALLOC(oa);
-        if (oa == NULL) 
+        if (oa == NULL)
                 RETURN(-ENOMEM);
         oa->o_valid |= OBD_MD_FLCOOKIE;
         oa->o_id = lur->lur_oid;
@@ -205,11 +213,15 @@ int filter_recov_log_mds_ost_cb(struct llog_handle *llh,
         int rc = 0;
         ENTRY;
 
+        if (ctxt->loc_obd->obd_stopping)
+                RETURN(LLOG_PROC_BREAK);
+
         if (!(llh->lgh_hdr->llh_flags & LLOG_F_IS_PLAIN)) {
                 CERROR("log is not plain\n");
                 RETURN(-EINVAL);
         }
 
+        OBD_FAIL_TIMEOUT(OBD_FAIL_OST_LLOG_RECOVERY_TIMEOUT, 30);
         cookie.lgc_lgl = llh->lgh_id;
         cookie.lgc_subsys = LLOG_MDS_OST_ORIG_CTXT;
         cookie.lgc_index = rec->lrh_index;

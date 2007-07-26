@@ -832,6 +832,7 @@ static int old_lustre_process_log(struct super_block *sb, char *newprofile,
          */
         rc = class_config_dump_llog(ctxt, profile, cfg);
 #endif
+        llog_ctxt_put(ctxt);
         switch (rc) {
         case 0: {
                 /* Set the caller's profile name to the old-style */

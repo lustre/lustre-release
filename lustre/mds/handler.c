@@ -1958,10 +1958,6 @@ static int mds_setup(struct obd_device *obd, obd_count len, void *buf)
                 GOTO(err_ns, rc);
         }
 
-        rc = llog_start_commit_thread();
-        if (rc < 0)
-                GOTO(err_fs, rc);
-
         if (lcfg->lcfg_bufcount >= 4 && LUSTRE_CFG_BUFLEN(lcfg, 3) > 0) {
                 class_uuid_t uuid;
 
@@ -2133,6 +2129,7 @@ err_cleanup:
 
 int mds_postrecov(struct obd_device *obd)
 {
+        struct llog_ctxt *ctxt;
         int rc;
         ENTRY;
 
@@ -2140,7 +2137,9 @@ int mds_postrecov(struct obd_device *obd)
                 RETURN(0);
 
         LASSERT(!obd->obd_recovering);
-        LASSERT(llog_get_context(obd, LLOG_MDS_OST_ORIG_CTXT) != NULL);
+        ctxt = llog_get_context(obd, LLOG_MDS_OST_ORIG_CTXT); 
+        LASSERT(ctxt != NULL);
+        llog_ctxt_put(ctxt);
 
         /* set nextid first, so we are sure it happens */
         mutex_down(&obd->obd_dev_sem);
