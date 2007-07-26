@@ -45,6 +45,11 @@ Description: omit set fsid for export NFS
 Details    : fix set/restore device id for avoid EMFILE error and mark lustre fs
 	     as FS_REQUIRES_DEV for avoid problems with generate fsid.
 
+Severity   : major
+Bugzilla   : 12769
+Description: Add sync option to mount_lustre.c
+Details    : Client loses data written to lustre after a network interruption.
+
 --------------------------------------------------------------------------------
 
 2007-07-30         Cluster File Systems, Inc. <info@clusterfs.com>
