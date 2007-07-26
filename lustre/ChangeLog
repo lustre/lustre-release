@@ -50,6 +50,10 @@ Bugzilla   : 12769
 Description: Add sync option to mount_lustre.c
 Details    : Client loses data written to lustre after a network interruption.
 
+Severity   : normal
+Bugzilla   : 10595
+Description: Error message improvement.
+Details    : Merging of two LCONSOLE_ERROR_MSG into one.
 --------------------------------------------------------------------------------
 
 2007-07-30         Cluster File Systems, Inc. <info@clusterfs.com>
