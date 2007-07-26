@@ -45,6 +45,7 @@
 #define DEBUG_SUBSYSTEM S_CLASS
 
 #include <obd_support.h>
+#include <lprocfs_status.h>
 
 struct ctl_table_header *obd_table_header = NULL;
 
@@ -60,6 +61,7 @@ enum {
         OBD_LDLM_TIMEOUT,       /* LDLM timeout for ASTs before client eviction */
         OBD_DUMP_ON_EVICTION,   /* dump kernel debug log upon eviction */
         OBD_DEBUG_PEER_ON_TIMEOUT, /* dump peer debug when RPC times out */
+        OBD_ALLOC_FAIL_RATE,    /* memory allocation random failure rate */
 };
 
 int LL_PROC_PROTO(proc_fail_loc)
@@ -83,6 +85,41 @@ int LL_PROC_PROTO(proc_set_timeout)
         return rc;
 }
 
+#ifdef RANDOM_FAIL_ALLOC
+int LL_PROC_PROTO(proc_alloc_fail_rate)
+{
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,8)
+        loff_t *ppos = &filp->f_pos;
+#endif
+        int rc          = 0;
+
+        if (!table->data || !table->maxlen || !*lenp || (*ppos && !write)) {
+                *lenp = 0;
+                return 0;
+        }
+        if (write) {
+                rc = lprocfs_write_frac_helper(buffer, *lenp, 
+                                               (unsigned int*)table->data,
+                                               OBD_ALLOC_FAIL_MULT);
+        } else {
+                char buf[21];
+                int  len;
+
+                len = lprocfs_read_frac_helper(buf, 21,
+                                               *(unsigned int*)table->data,
+                                               OBD_ALLOC_FAIL_MULT);
+                if (len > *lenp)
+                        len = *lenp;
+                buf[len] = '\0';
+                if (copy_to_user(buffer, buf, len))
+                        return -EFAULT;
+                *lenp = len;
+        }
+        *ppos += *lenp;
+        return rc;
+}
+#endif
+
 static ctl_table obd_table[] = {
         {OBD_FAIL_LOC, "fail_loc", &obd_fail_loc, sizeof(int), 0644, NULL,
                 &proc_fail_loc},
@@ -101,6 +138,10 @@ static ctl_table obd_table[] = {
                 sizeof(int), 0644, NULL, &proc_dointvec},
         {OBD_LDLM_TIMEOUT, "ldlm_timeout", &ldlm_timeout, sizeof(int), 0644,
                 NULL, &proc_set_timeout},
+#ifdef RANDOM_FAIL_ALLOC
+        {OBD_ALLOC_FAIL_RATE, "alloc_fail_rate", &obd_alloc_fail_rate, 
+                sizeof(int), 0644, NULL, &proc_alloc_fail_rate},
+#endif
         { 0 }
 };
 

@@ -28,6 +28,11 @@ Details    : llog ctxt refcount was added to avoide the race between ctxt free
 	     before it access the llog. And the llog ctxt can only be freed
 	     when its refcount is zero.
 
+Severity   : enhancement
+Bugzilla   : 12211
+Description: randomly memory allocation failure util
+Details    : Make lustre randomly failed allocating memory for testing purpose.
+
 --------------------------------------------------------------------------------
 
 2007-07-30         Cluster File Systems, Inc. <info@clusterfs.com>
