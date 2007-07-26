@@ -355,6 +355,7 @@ int client_connect_import(struct lustre_handle *dlm_handle,
         struct obd_import *imp = cli->cl_import;
         struct obd_export *exp;
         struct obd_connect_data *ocd;
+        struct ldlm_namespace *to_be_freed = NULL;
         int rc;
         ENTRY;
 
@@ -404,7 +405,8 @@ int client_connect_import(struct lustre_handle *dlm_handle,
 
         if (rc) {
 out_ldlm:
-                ldlm_namespace_free(obd->obd_namespace, 0);
+                ldlm_namespace_free_prior(obd->obd_namespace);
+                to_be_freed = obd->obd_namespace;
                 obd->obd_namespace = NULL;
 out_disco:
                 cli->cl_conn_count--;
@@ -414,6 +416,8 @@ out_disco:
         }
 out_sem:
         mutex_up(&cli->cl_sem);
+        if (to_be_freed)
+                ldlm_namespace_free_post(to_be_freed, 0);
         return rc;
 }
 
@@ -422,6 +426,7 @@ int client_disconnect_export(struct obd_export *exp)
         struct obd_device *obd = class_exp2obd(exp);
         struct client_obd *cli;
         struct obd_import *imp;
+        struct ldlm_namespace *to_be_freed = NULL;
         int rc = 0, err;
         ENTRY;
 
@@ -462,7 +467,8 @@ int client_disconnect_export(struct obd_export *exp)
                 ldlm_cli_cancel_unused(obd->obd_namespace, NULL,
                                        obd->obd_no_recov ? LDLM_FL_LOCAL_ONLY:0,
                                        NULL);
-                ldlm_namespace_free(obd->obd_namespace, obd->obd_no_recov);
+                ldlm_namespace_free_prior(obd->obd_namespace);
+                to_be_freed = obd->obd_namespace;
                 obd->obd_namespace = NULL;
         }
 
@@ -482,6 +488,8 @@ int client_disconnect_export(struct obd_export *exp)
                 rc = err;
  out_sem:
         mutex_up(&cli->cl_sem);
+        if (to_be_freed)
+                ldlm_namespace_free_post(to_be_freed, obd->obd_no_recov);
         RETURN(rc);
 }
 
