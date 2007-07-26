@@ -1,4 +1,4 @@
-SUBDIRS = obdfilter-survey sgpdd-survey ost-survey ior-survey
+SUBDIRS = obdfilter-survey sgpdd-survey ost-survey ior-survey stats-collect
 
 EXTRA_DIST = lustre-iokit.spec
 
