@@ -1,7 +1,29 @@
-#TARGETS: the Node set we will do the script 
-PERCH_BIG_FS_MDS_LIST="nid00135"
-PERCH_BIG_FS_OST_LIST="nid00128 nid00131 nid00136 nid00139 nid00008 nid00011 nid00012"
-export TARGETS="${PERCH_BIG_FS_MDS_LIST} ${PERCH_BIG_FS_OST_LIST}" 
+#
+# system configuration.  Set these variables to point to the locations
+# of various system utilities.
+#
+AWK=/usr/bin/awk
+XARGS=/usr/bin/xargs
+
+#
+# control debug output.  set PRINT_INFO_MSGS=1 to see additional messages
+#   set PRINT_DEBUG_MSGS=1 to see debug messages
+#
+PRINT_INFO_MSGS=0
+PRINT_DEBUG_MSGS=0
+
+#
+# TARGETS: set this variable to the list of nodes you want to
+# gather stats from
+#
+# Example:
+#
+PERCH_MDS_LIST="nid00135"
+PERCH_OST_LIST="nid00128 nid00131 nid00136 nid00139 nid00008 nid00011 nid00012"
+
+MDS_LIST=${PERCH_MDS_LIST}
+OST_LIST=${PERCH_OST_LIST}
+export TARGETS="${MDS_LIST} ${OST_LIST}" 
 
 #script var 
 #case $TARGET in
