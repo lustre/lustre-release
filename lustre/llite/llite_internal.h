@@ -257,6 +257,9 @@ struct ll_sb_info {
         enum stats_track_type     ll_stats_track_type;
         int                       ll_stats_track_id;
         int                       ll_rw_stats_on;
+
+        dev_t                     ll_sdev_orig; /* save s_dev before assign for
+                                                 * clustred nfs */
 };
 
 #define LL_DEFAULT_MAX_RW_CHUNK         (32 * 1024 * 1024)

@@ -154,7 +154,7 @@ static void __exit exit_lustre_lite(void)
                 LASSERTF(rc == 0, "couldn't destroy ll_async_page slab\n");
         }
 
-        if (proc_lustre_fs_root) 
+        if (proc_lustre_fs_root)
                 lprocfs_remove(&proc_lustre_fs_root);
 }
 

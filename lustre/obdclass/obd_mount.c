@@ -1968,7 +1968,7 @@ struct file_system_type lustre_fs_type = {
         .name         = "lustre",
         .get_sb       = lustre_get_sb,
         .kill_sb      = kill_anon_super,
-        .fs_flags     = FS_BINARY_MOUNTDATA,
+        .fs_flags     = FS_BINARY_MOUNTDATA | FS_REQUIRES_DEV,
 };
 
 #else

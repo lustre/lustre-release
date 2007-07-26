@@ -239,7 +239,7 @@ static int client_common_fill_super(struct super_block *sb,
         if (data->ocd_connect_flags & OBD_CONNECT_JOIN)
                 sbi->ll_flags |= LL_SBI_JOIN;
 
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,6,0))
+        sbi->ll_sdev_orig = sb->s_dev;
         /* We set sb->s_dev equal on all lustre clients in order to support
          * NFS export clustering.  NFSD requires that the FSID be the same
          * on all clients. */
@@ -247,8 +247,6 @@ static int client_common_fill_super(struct super_block *sb,
          * only a node-local comparison. */
         sb->s_dev = get_uuid2int(sbi2mdc(sbi)->cl_target_uuid.uuid,
                                  strlen(sbi2mdc(sbi)->cl_target_uuid.uuid));
-#endif
-
         obd = class_name2obd(osc);
         if (!obd) {
                 CERROR("OSC %s: not setup or attached\n", osc);
@@ -577,6 +575,9 @@ void client_common_put_super(struct super_block *sb)
         sbi->ll_mdc_exp = NULL;
 
         lustre_throw_orphan_dentries(sb);
+        /* restore s_dev from changed for clustred NFS*/
+        sb->s_dev = sbi->ll_sdev_orig;
+
         EXIT;
 }
 
