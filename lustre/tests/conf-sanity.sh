@@ -898,7 +898,7 @@ set_and_check() {
 	    FINAL=$(($ORIG + 5))
 	fi
 	echo "Setting $PARAM from $ORIG to $FINAL"
-	$LCTL conf_param $PARAM=$FINAL
+	do_facet mds "$LCTL conf_param $PARAM=$FINAL" || error conf_param failed
 	local RESULT
 	local MAX=30
 	local WAIT=0
