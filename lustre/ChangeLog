@@ -76,6 +76,13 @@ Details    : Merging of two LCONSOLE_ERROR_MSG into one.
         may be released separately in future.
 
 
+Severity   : normal
+Frequency  : rare
+Bugzilla   : 13129
+Description: server LBUG when shutting down
+Details    : Block umount forever until the mount refcount is zero rather
+	     than giving up after an arbitrary timeout.
+	
 Severity   : enhancement
 Bugzilla   : 12194
 Description: add optional extra BUILD_VERSION info
