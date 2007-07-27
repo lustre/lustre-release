@@ -810,7 +810,7 @@ debugsave() {
 }
 
 debugrestore() {
-    [ -n "$DEBUGSAVE" ] && sysctl -w lnet.debug=\"$DEBUGSAVE\"
+    [ -n "$DEBUGSAVE" ] && sysctl -w lnet.debug="${DEBUGSAVE}"
     DEBUGSAVE=""
 }
 
