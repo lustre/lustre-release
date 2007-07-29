@@ -1,3 +1,10 @@
 tbd         Cluster File Systems, Inc. <info@clusterfs.com>
        * version 3.0.0
        * Initial release of ldiskfs as a separate package.
+
+Severity   : normal
+Frequency  : rare
+Bugzilla   : 12415
+Description: Updated patchess for new RHEL4 kernel
+Details    : Add patch ext3-unlink-race.patch
+	     Updated series file ldiskfs-2.6-rhel4.series

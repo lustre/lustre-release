@@ -27,6 +27,7 @@ AC_MSG_RESULT([$enable_modules])
 
 if test x$enable_modules = xyes ; then
 	LB_PROG_LINUX
+	LB_LINUX_MODPOST
 fi
 
 LB_CONFIG_HEADERS

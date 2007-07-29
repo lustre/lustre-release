@@ -2086,7 +2086,7 @@ Index: linux-2.6.9-full/fs/ext3/mballoc.c
 +		return -EIO;
 +	size = sizeof(struct ext3_mb_history) * sbi->s_mb_history_max;
 +	s->history = kmalloc(size, GFP_KERNEL);
-+	if (s == NULL) {
++	if (s->history == NULL) {
 +		kfree(s);
 +		return -EIO;
 +	}

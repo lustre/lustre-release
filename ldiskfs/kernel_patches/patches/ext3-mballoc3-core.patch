@@ -1,7 +1,78 @@
+Index: linux-2.6.9-full/include/linux/ext3_fs.h
+===================================================================
+--- linux-2.6.9-full.orig/include/linux/ext3_fs.h	2007-06-08 23:44:08.000000000 +0400
++++ linux-2.6.9-full/include/linux/ext3_fs.h	2007-07-19 09:39:07.000000000 +0400
+@@ -57,6 +57,30 @@ struct statfs;
+ #define ext3_debug(f, a...)	do {} while (0)
+ #endif
+ 
++#define EXT3_MULTIBLOCK_ALLOCATOR	1
++
++#define EXT3_MB_HINT_MERGE		1	/* prefer goal again. length */
++#define EXT3_MB_HINT_RESERVED		2	/* blocks already reserved */
++#define EXT3_MB_HINT_METADATA		4	/* metadata is being allocated */
++#define EXT3_MB_HINT_FIRST		8	/* first blocks in the file */
++#define EXT3_MB_HINT_BEST		16	/* search for the best chunk */
++#define EXT3_MB_HINT_DATA		32	/* data is being allocated */
++#define EXT3_MB_HINT_NOPREALLOC		64	/* don't preallocate (for tails) */
++#define EXT3_MB_HINT_GROUP_ALLOC	128	/* allocate for locality group */
++#define EXT3_MB_HINT_GOAL_ONLY		256	/* allocate goal blocks or none */
++
++struct ext3_allocation_request {
++	struct inode *inode;	/* target inode for block we're allocating */
++	unsigned long logical;	/* logical block in target inode */
++	unsigned long goal;	/* phys. target (a hint) */
++	unsigned long lleft;	/* the closest logical allocated block to the left */
++	unsigned long pleft;	/* phys. block for ^^^ */
++	unsigned long lright;	/* the closest logical allocated block to the right */
++	unsigned long pright;	/* phys. block for ^^^ */
++	unsigned long len;	/* how many blocks we want to allocate */
++	unsigned long flags;	/* flags. see above EXT3_MB_HINT_* */
++};
++
+ /*
+  * Special inodes numbers
+  */
+@@ -387,6 +411,14 @@ struct ext3_inode {
+ #define ext3_find_first_zero_bit	ext2_find_first_zero_bit
+ #define ext3_find_next_zero_bit		ext2_find_next_zero_bit
+ 
++#ifndef ext2_find_next_le_bit
++#ifdef __LITTLE_ENDIAN
++#define ext2_find_next_le_bit(addr, size, off) find_next_bit((addr), (size), (off))
++#else
++#error "mballoc needs a patch for big-endian systems - CFS bug 10634"
++#endif	/* __LITTLE_ENDIAN */
++#endif	/* !ext2_find_next_le_bit */
++
+ /*
+  * Maximal mount counts between two filesystem checks
+  */
+@@ -763,6 +795,20 @@ extern unsigned long ext3_count_dirs (st
+ extern void ext3_check_inodes_bitmap (struct super_block *);
+ extern unsigned long ext3_count_free (struct buffer_head *, unsigned);
+ 
++/* mballoc.c */
++extern long ext3_mb_stats;
++extern long ext3_mb_max_to_scan;
++extern int ext3_mb_init(struct super_block *, int);
++extern int ext3_mb_release(struct super_block *);
++extern unsigned long ext3_mb_new_blocks(handle_t *, struct ext3_allocation_request *, int *);
++extern int ext3_mb_reserve_blocks(struct super_block *, int);
++extern void ext3_mb_release_blocks(struct super_block *, int);
++extern void ext3_mb_release_blocks(struct super_block *, int);
++extern void ext3_mb_discard_inode_preallocations(struct inode *);
++extern int __init init_ext3_proc(void);
++extern void exit_ext3_proc(void);
++extern void ext3_mb_free_blocks(handle_t *, struct inode *, unsigned long, unsigned long, int, int *);
++
+ 
+ /* inode.c */
+ extern int ext3_block_truncate_page(handle_t *, struct page *,
 Index: linux-2.6.9-full/include/linux/ext3_fs_sb.h
 ===================================================================
---- linux-2.6.9-full.orig/include/linux/ext3_fs_sb.h	2006-05-18 23:57:04.000000000 +0400
-+++ linux-2.6.9-full/include/linux/ext3_fs_sb.h	2007-03-28 15:42:16.000000000 +0400
+--- linux-2.6.9-full.orig/include/linux/ext3_fs_sb.h	2007-06-08 23:44:07.000000000 +0400
++++ linux-2.6.9-full/include/linux/ext3_fs_sb.h	2007-07-19 09:39:07.000000000 +0400
 @@ -81,6 +81,61 @@ struct ext3_sb_info {
  	char *s_qf_names[MAXQUOTAS];		/* Names of quota files with journalled quota */
  	int s_jquota_fmt;			/* Format of quota to use */
@@ -64,81 +135,10 @@ Index: linux-2.6.9-full/include/linux/ext3_fs_sb.h
 +				 [(group) & (EXT3_DESC_PER_BLOCK(sb) - 1)]
 +
  #endif	/* _LINUX_EXT3_FS_SB */
-Index: linux-2.6.9-full/include/linux/ext3_fs.h
-===================================================================
---- linux-2.6.9-full.orig/include/linux/ext3_fs.h	2007-03-28 01:29:39.000000000 +0400
-+++ linux-2.6.9-full/include/linux/ext3_fs.h	2007-03-28 15:45:07.000000000 +0400
-@@ -57,6 +57,30 @@ struct statfs;
- #define ext3_debug(f, a...)	do {} while (0)
- #endif
- 
-+#define EXT3_MULTIBLOCK_ALLOCATOR	1
-+
-+#define EXT3_MB_HINT_MERGE		1	/* prefer goal again. length */
-+#define EXT3_MB_HINT_RESERVED		2	/* blocks already reserved */
-+#define EXT3_MB_HINT_METADATA		4	/* metadata is being allocated */
-+#define EXT3_MB_HINT_FIRST		8	/* first blocks in the file */
-+#define EXT3_MB_HINT_BEST		16	/* search for the best chunk */
-+#define EXT3_MB_HINT_DATA		32	/* data is being allocated */
-+#define EXT3_MB_HINT_NOPREALLOC		64	/* don't preallocate (for tails) */
-+#define EXT3_MB_HINT_GROUP_ALLOC	128	/* allocate for locality group */
-+#define EXT3_MB_HINT_GOAL_ONLY		256	/* allocate goal blocks or none */
-+
-+struct ext3_allocation_request {
-+	struct inode *inode;	/* target inode for block we're allocating */
-+	unsigned long logical;	/* logical block in target inode */
-+	unsigned long goal;	/* phys. target (a hint) */
-+	unsigned long lleft;	/* the closest logical allocated block to the left */
-+	unsigned long pleft;	/* phys. block for ^^^ */
-+	unsigned long lright;	/* the closest logical allocated block to the right */
-+	unsigned long pright;	/* phys. block for ^^^ */
-+	unsigned long len;	/* how many blocks we want to allocate */
-+	unsigned long flags;	/* flags. see above EXT3_MB_HINT_* */
-+};
-+
- /*
-  * Special inodes numbers
-  */
-@@ -404,6 +413,14 @@
- #define ext3_find_first_zero_bit	ext2_find_first_zero_bit
- #define ext3_find_next_zero_bit		ext2_find_next_zero_bit
- 
-+#ifndef ext2_find_next_le_bit
-+#ifdef __LITTLE_ENDIAN
-+#define ext2_find_next_le_bit(addr, size, off) find_next_bit((addr), (size), (off))
-+#else
-+#error "mballoc needs a patch for big-endian systems - CFS bug 10634"
-+#endif	/* __LITTLE_ENDIAN */
-+#endif	/* !ext2_find_next_le_bit */
-+
- /*
-  * Maximal mount counts between two filesystem checks
-  */
-@@ -763,6 +787,20 @@ extern unsigned long ext3_count_dirs (st
- extern void ext3_check_inodes_bitmap (struct super_block *);
- extern unsigned long ext3_count_free (struct buffer_head *, unsigned);
- 
-+/* mballoc.c */
-+extern long ext3_mb_stats;
-+extern long ext3_mb_max_to_scan;
-+extern int ext3_mb_init(struct super_block *, int);
-+extern int ext3_mb_release(struct super_block *);
-+extern unsigned long ext3_mb_new_blocks(handle_t *, struct ext3_allocation_request *, int *);
-+extern int ext3_mb_reserve_blocks(struct super_block *, int);
-+extern void ext3_mb_release_blocks(struct super_block *, int);
-+extern void ext3_mb_release_blocks(struct super_block *, int);
-+extern void ext3_mb_discard_inode_preallocations(struct inode *);
-+extern int __init init_ext3_proc(void);
-+extern void exit_ext3_proc(void);
-+extern void ext3_mb_free_blocks(handle_t *, struct inode *, unsigned long, unsigned long, int, int *);
-+
- 
- /* inode.c */
- extern int ext3_block_truncate_page(handle_t *, struct page *,
 Index: linux-2.6.9-full/fs/ext3/super.c
 ===================================================================
---- linux-2.6.9-full.orig/fs/ext3/super.c	2007-03-28 01:29:38.000000000 +0400
-+++ linux-2.6.9-full/fs/ext3/super.c	2007-03-28 15:42:16.000000000 +0400
+--- linux-2.6.9-full.orig/fs/ext3/super.c	2007-06-08 23:44:08.000000000 +0400
++++ linux-2.6.9-full/fs/ext3/super.c	2007-07-19 09:39:07.000000000 +0400
 @@ -394,6 +394,7 @@ void ext3_put_super (struct super_block 
  	struct ext3_super_block *es = sbi->s_es;
  	int i;
@@ -156,7 +156,7 @@ Index: linux-2.6.9-full/fs/ext3/super.c
  	return &ei->vfs_inode;
  }
  
-@@ -2433,7 +2436,13 @@ static struct file_system_type ext3_fs_t
+@@ -2576,7 +2579,13 @@ static struct file_system_type ext3_fs_t
  
  static int __init init_ext3_fs(void)
  {
@@ -171,7 +171,7 @@ Index: linux-2.6.9-full/fs/ext3/super.c
  	if (err)
  		return err;
  	err = init_inodecache();
-@@ -2455,6 +2464,7 @@ static void __exit exit_ext3_fs(void)
+@@ -2598,6 +2607,7 @@ static void __exit exit_ext3_fs(void)
  	unregister_filesystem(&ext3_fs_type);
  	destroy_inodecache();
  	exit_ext3_xattr();
@@ -181,9 +181,9 @@ Index: linux-2.6.9-full/fs/ext3/super.c
  int ext3_prep_san_write(struct inode *inode, long *blocks,
 Index: linux-2.6.9-full/fs/ext3/mballoc.c
 ===================================================================
---- linux-2.6.9-full.orig/fs/ext3/mballoc.c	2007-02-13 18:39:59.640066087 +0300
-+++ linux-2.6.9-full/fs/ext3/mballoc.c	2007-03-29 00:28:40.000000000 +0400
-@@ -0,0 +1,4342 @@
+--- linux-2.6.9-full.orig/fs/ext3/mballoc.c	2007-07-14 04:24:39.138985848 +0400
++++ linux-2.6.9-full/fs/ext3/mballoc.c	2007-07-20 11:31:03.000000000 +0400
+@@ -0,0 +1,4391 @@
 +/*
 + * Copyright (c) 2003-2006, Cluster File Systems, Inc, info@clusterfs.com
 + * Written by Alex Tomas <alex@clusterfs.com>
@@ -822,14 +822,28 @@ Index: linux-2.6.9-full/fs/ext3/mballoc.c
 +}
 +
 +#ifdef DOUBLE_CHECK
-+void mb_free_blocks_double(struct ext3_buddy *e3b, int first, int count)
++void mb_free_blocks_double(struct inode *inode, struct ext3_buddy *e3b,
++		           int first, int count)
 +{
 +	int i;
++	struct super_block *sb = e3b->bd_sb;
++
 +	if (unlikely(e3b->bd_info->bb_bitmap == NULL))
 +		return;
-+	BUG_ON(!ext3_is_group_locked(e3b->bd_sb, e3b->bd_group));
++	BUG_ON(!ext3_is_group_locked(sb, e3b->bd_group));
 +	for (i = 0; i < count; i++) {
-+		BUG_ON(!mb_test_bit(first + i, e3b->bd_info->bb_bitmap));
++		if (!mb_test_bit(first + i, e3b->bd_info->bb_bitmap)) {
++			unsigned long blocknr;
++			blocknr = e3b->bd_group * EXT3_BLOCKS_PER_GROUP(sb);
++			blocknr += first + i;
++			blocknr +=
++			    le32_to_cpu(EXT3_SB(sb)->s_es->s_first_data_block);
++
++			ext3_error(sb, __FUNCTION__, "double-free of inode"
++				   " %lu's block %lu(bit %u in group %u)\n",
++				   inode ? inode->i_ino : 0, blocknr,
++				   first + i, e3b->bd_group);
++		}
 +		mb_clear_bit(first + i, e3b->bd_info->bb_bitmap);
 +	}
 +}
@@ -865,7 +879,7 @@ Index: linux-2.6.9-full/fs/ext3/mballoc.c
 +}
 +
 +#else
-+#define mb_free_blocks_double(a,b,c)
++#define mb_free_blocks_double(a,b,c,d)
 +#define mb_mark_used_double(a,b,c)
 +#define mb_cmp_bitmaps(a,b)
 +#endif
@@ -1350,15 +1364,17 @@ Index: linux-2.6.9-full/fs/ext3/mballoc.c
 +	}
 +}
 +
-+static int mb_free_blocks(struct ext3_buddy *e3b, int first, int count)
++static int mb_free_blocks(struct inode *inode, struct ext3_buddy *e3b,
++			  int first, int count)
 +{
 +	int block = 0, max = 0, order;
 +	void *buddy, *buddy2;
++	struct super_block *sb = e3b->bd_sb;
 +
-+	BUG_ON(first + count > (e3b->bd_sb->s_blocksize << 3));
-+	BUG_ON(!ext3_is_group_locked(e3b->bd_sb, e3b->bd_group));
++	BUG_ON(first + count > (sb->s_blocksize << 3));
++	BUG_ON(!ext3_is_group_locked(sb, e3b->bd_group));
 +	mb_check_buddy(e3b);
-+	mb_free_blocks_double(e3b, first, count);
++	mb_free_blocks_double(inode, e3b, first, count);
 +
 +	e3b->bd_info->bb_free += count;
 +	if (first < e3b->bd_info->bb_first_free)
@@ -1367,7 +1383,7 @@ Index: linux-2.6.9-full/fs/ext3/mballoc.c
 +	/* let's maintain fragments counter */
 +	if (first != 0)
 +		block = !mb_test_bit(first - 1, EXT3_MB_BITMAP(e3b));
-+	if (first + count < EXT3_SB(e3b->bd_sb)->s_mb_maxs[0])
++	if (first + count < EXT3_SB(sb)->s_mb_maxs[0])
 +		max = !mb_test_bit(first + count, EXT3_MB_BITMAP(e3b));
 +	if (block && max)
 +		e3b->bd_info->bb_fragments--;
@@ -1379,7 +1395,18 @@ Index: linux-2.6.9-full/fs/ext3/mballoc.c
 +		block = first++;
 +		order = 0;
 +
-+		BUG_ON(!mb_test_bit(block, EXT3_MB_BITMAP(e3b)));
++		if (!mb_test_bit(block, EXT3_MB_BITMAP(e3b))) {
++			unsigned long blocknr;
++			blocknr = e3b->bd_group * EXT3_BLOCKS_PER_GROUP(sb);
++			blocknr += block;
++			blocknr +=
++			    le32_to_cpu(EXT3_SB(sb)->s_es->s_first_data_block);
++
++			ext3_error(sb, __FUNCTION__, "double-free of inode"
++				   " %lu's block %lu(bit %u in group %u)\n",
++				   inode ? inode->i_ino : 0, blocknr, block,
++				   e3b->bd_group);
++		}
 +		mb_clear_bit(block, EXT3_MB_BITMAP(e3b));
 +		e3b->bd_info->bb_counters[order]++;
 +
@@ -2717,7 +2744,7 @@ Index: linux-2.6.9-full/fs/ext3/mballoc.c
 +		ext3_lock_group(sb, md->group);
 +		for (i = 0; i < md->num; i++) {
 +			mb_debug(" %u", md->blocks[i]);
-+			err = mb_free_blocks(&e3b, md->blocks[i], 1);
++			err = mb_free_blocks(NULL, &e3b, md->blocks[i], 1);
 +			BUG_ON(err != 0);
 +		}
 +		mb_debug("\n");
@@ -3064,7 +3091,7 @@ Index: linux-2.6.9-full/fs/ext3/mballoc.c
 +	struct ext3_sb_info *sbi;
 +	struct super_block *sb;
 +	sector_t block;
-+	int len, err;
++	int err;
 +
 +	BUG_ON(ac->ac_status != AC_STATUS_FOUND);
 +	BUG_ON(ac->ac_b_ex.fe_len <= 0);
@@ -3075,20 +3102,6 @@ Index: linux-2.6.9-full/fs/ext3/mballoc.c
 +
 +	ext3_debug("using block group %d(%d)\n", ac->ac_b_group.group,
 +			gdp->bg_free_blocks_count);
-+
-+	/* time to check quota, we can't do this before because
-+	 * having quota spent on preallocated-unused-yet blocks
-+	 * would be wrong */
-+	len = ac->ac_b_ex.fe_len;
-+	while (len && DQUOT_ALLOC_BLOCK(ac->ac_inode, len)) len--;
-+	if (ac->ac_b_ex.fe_len != len) {
-+		/* some blocks can't be allocated due to quota
-+		 * we have to return them back */
-+		BUG();
-+	}
-+	err = -EDQUOT;
-+	if (len == 0)
-+		goto out_err;
 +
 +	err = -EIO;
 +	bitmap_bh = read_block_bitmap(sb, ac->ac_b_ex.fe_group);
@@ -3260,6 +3273,15 @@ Index: linux-2.6.9-full/fs/ext3/mballoc.c
 +		unsigned long pa_end;
 +
 +		pa = list_entry(cur, struct ext3_prealloc_space, pa_inode_list);
++
++		if (pa->pa_deleted)
++			continue;
++		spin_lock(&pa->pa_lock);
++		if (pa->pa_deleted) {
++			spin_unlock(&pa->pa_lock);
++			continue;
++		}
++
 +		pa_end = pa->pa_lstart + pa->pa_len;
 +
 +		/* PA must not overlap original request */
@@ -3267,10 +3289,14 @@ Index: linux-2.6.9-full/fs/ext3/mballoc.c
 +			ac->ac_o_ex.fe_logical < pa->pa_lstart));
 +
 +		/* skip PA normalized request doesn't overlap with */
-+		if (pa->pa_lstart >= end)
++		if (pa->pa_lstart >= end) {
++			spin_unlock(&pa->pa_lock);
 +			continue;
-+		if (pa_end <= start)
++		}
++		if (pa_end <= start) {
++			spin_unlock(&pa->pa_lock);
 +			continue;
++		}
 +		BUG_ON(pa->pa_lstart <= start && pa_end >= end);
 +
 +		if (pa_end <= ac->ac_o_ex.fe_logical) {
@@ -3282,6 +3308,7 @@ Index: linux-2.6.9-full/fs/ext3/mballoc.c
 +			BUG_ON(pa->pa_lstart > end);
 +			end = pa->pa_lstart;
 +		}
++		spin_unlock(&pa->pa_lock);
 +	}
 +	rcu_read_unlock();
 +	size = end - start;
@@ -3292,8 +3319,12 @@ Index: linux-2.6.9-full/fs/ext3/mballoc.c
 +		struct ext3_prealloc_space *pa;
 +		unsigned long pa_end;
 +		pa = list_entry(cur, struct ext3_prealloc_space, pa_inode_list);
-+		pa_end = pa->pa_lstart + pa->pa_len;
-+		BUG_ON(!(start >= pa_end || end <= pa->pa_lstart));
++		spin_lock(&pa->pa_lock);
++		if (pa->pa_deleted == 0) {
++			pa_end = pa->pa_lstart + pa->pa_len;
++			BUG_ON(!(start >= pa_end || end <= pa->pa_lstart));
++		}
++		spin_unlock(&pa->pa_lock);
 +	}
 +	rcu_read_unlock();
 +
@@ -3757,7 +3788,7 @@ Index: linux-2.6.9-full/fs/ext3/mballoc.c
 +		ac.ac_b_ex.fe_logical = 0;
 +		ext3_mb_store_history(&ac);
 +
-+		mb_free_blocks(e3b, bit, next - bit);
++		mb_free_blocks(pa->pa_inode, e3b, bit, next - bit);
 +		bit = next + 1;
 +	}
 +	if (free != pa->pa_free) {
@@ -3785,7 +3816,7 @@ Index: linux-2.6.9-full/fs/ext3/mballoc.c
 +	BUG_ON(pa->pa_deleted == 0);
 +	ext3_get_group_no_and_offset(sb, pa->pa_pstart, &group, &bit);
 +	BUG_ON(group != e3b->bd_group);
-+	mb_free_blocks(e3b, bit, pa->pa_len);
++	mb_free_blocks(pa->pa_inode, e3b, bit, pa->pa_len);
 +	atomic_add(pa->pa_len, &EXT3_SB(sb)->s_mb_discarded);
 +
 +	ac.ac_sb = sb;
@@ -3869,8 +3900,10 @@ Index: linux-2.6.9-full/fs/ext3/mballoc.c
 +	}
 +
 +	/* if we still need more blocks and some PAs were used, try again */
-+	if (free < needed && busy)
++	if (free < needed && busy) {
++		ext3_unlock_group(sb, group);
 +		goto repeat;
++	}
 +
 +	/* found anything to free? */
 +	if (list_empty(&list)) {
@@ -4206,8 +4239,8 @@ Index: linux-2.6.9-full/fs/ext3/mballoc.c
 +	struct ext3_allocation_context ac;
 +	struct ext3_sb_info *sbi;
 +	struct super_block *sb;
-+	unsigned long block;
-+	int err, freed;
++	unsigned long block = 0;
++	int freed, inquota;
 +
 +	sb = ar->inode->i_sb;
 +	sbi = EXT3_SB(sb);
@@ -4218,14 +4251,26 @@ Index: linux-2.6.9-full/fs/ext3/mballoc.c
 +			printk(KERN_ERR "EXT3-fs: multiblock request with "
 +					"mballoc disabled!\n");
 +		ar->len = 1;
-+		err = ext3_new_block_old(handle, ar->inode, ar->goal, errp);
-+		return err;
++		block = ext3_new_block_old(handle, ar->inode, ar->goal, errp);
++		return block;
 +	}
++
++	while (ar->len && DQUOT_ALLOC_BLOCK(ar->inode, ar->len)) {
++		ar->flags |= EXT3_MB_HINT_NOPREALLOC;
++		ar->len--;
++	}
++	if (ar->len == 0) {
++		*errp = -EDQUOT;
++		return 0;
++	}
++	inquota = ar->len;
 +
 +	ext3_mb_poll_new_transaction(sb, handle);
 +
-+	if ((err = ext3_mb_initialize_context(&ac, ar)))
-+		return err;
++	if ((*errp = ext3_mb_initialize_context(&ac, ar))) {
++		ar->len = 0;
++		goto out;
++	}
 +
 +	ac.ac_op = EXT3_MB_HISTORY_PREALLOC;
 +	if (!ext3_mb_use_preallocated(&ac)) {
@@ -4256,11 +4301,15 @@ Index: linux-2.6.9-full/fs/ext3/mballoc.c
 +			goto repeat;
 +		*errp = -ENOSPC;
 +		ac.ac_b_ex.fe_len = 0;
-+		block = 0;
++		ar->len = 0;
 +		ext3_mb_show_ac(&ac);
 +	}
 +
 +	ext3_mb_release_context(&ac);
++
++out:
++	if (ar->len < inquota)
++		DQUOT_FREE_BLOCK(ar->inode, inquota - ar->len);
 +
 +	return block;
 +}
@@ -4494,7 +4543,7 @@ Index: linux-2.6.9-full/fs/ext3/mballoc.c
 +		ext3_mb_free_metadata(handle, &e3b, block_group, bit, count);
 +	} else {
 +		ext3_lock_group(sb, block_group);
-+		err = mb_free_blocks(&e3b, bit, count);
++		err = mb_free_blocks(inode, &e3b, bit, count);
 +		ext3_mb_return_to_preallocation(inode, &e3b, block, count);
 +		ext3_unlock_group(sb, block_group);
 +		BUG_ON(err != 0);
