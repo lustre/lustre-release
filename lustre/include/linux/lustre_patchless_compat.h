@@ -1,3 +1,25 @@
+/* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
+ * vim:expandtab:shiftwidth=8:tabstop=8:
+ *
+ *  Copyright (C) 2002, 2003 Cluster File Systems, Inc.
+ *
+ *   This file is part of Lustre, http://www.lustre.org.
+ *
+ *   Lustre is free software; you can redistribute it and/or
+ *   modify it under the terms of version 2 of the GNU General Public
+ *   License as published by the Free Software Foundation.
+ *
+ *   Lustre is distributed in the hope that it will be useful,
+ *   but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *   GNU General Public License for more details.
+ *
+ *   You should have received a copy of the GNU General Public License
+ *   along with Lustre; if not, write to the Free Software
+ *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ *
+ */
+
 #ifndef LUSTRE_PATCHLESS_COMPAT_H
 #define LUSTRE_PATCHLESS_COMPAT_H
 
@@ -26,10 +48,11 @@ static inline void ll_remove_from_page_cache(struct page *page)
         page->mapping = NULL;
         mapping->nrpages--;
 #ifdef HAVE_NR_PAGECACHE
-	atomic_add(-1, &nr_pagecache); // XXX pagecache_acct(-1);
+        atomic_add(-1, &nr_pagecache); // XXX pagecache_acct(-1);
 #else
-	__dec_zone_page_state(page, NR_FILE_PAGES);
+        __dec_zone_page_state(page, NR_FILE_PAGES);
 #endif
+
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,15))
         write_unlock_irq(&mapping->tree_lock);
 #else
@@ -46,7 +69,11 @@ truncate_complete_page(struct address_space *mapping, struct page *page)
         if (PagePrivate(page))
                 page->mapping->a_ops->invalidatepage(page, 0);
 
+#ifdef HAVE_CANCEL_DIRTY_PAGE
+        cancel_dirty_page(page, PAGE_SIZE);
+#else
         clear_page_dirty(page);
+#endif
         ClearPageUptodate(page);
         ClearPageMappedToDisk(page);
         ll_remove_from_page_cache(page);
@@ -67,7 +94,7 @@ static inline void d_rehash_cond(struct dentry * entry, int lock)
 }
 
 #define __d_rehash(dentry, lock) d_rehash_cond(dentry, lock)
-	
+
 #define LUSTRE_PATCHLESS
 
 #ifndef ATTR_FROM_OPEN

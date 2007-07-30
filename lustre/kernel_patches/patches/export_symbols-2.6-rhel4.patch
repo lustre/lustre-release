@@ -79,3 +79,16 @@ Index: linux-2.6.9-5.0.3.EL/fs/dcache.c
  
  void d_genocide(struct dentry *root)
  {
+Index: linux-2.6.12-rc6/net/sunrpc/sunrpc_syms.c
+===================================================================
+--- linux-2.6.12.orig/net/sunrpc/sunrpc_syms.c	2005-12-14 23:20:39.000000000 -0700
++++ linux-2.6.12/net/sunrpc/sunrpc_syms.c	2005-12-14 23:21:47.000000000 -0700
+@@ -58,6 +58,8 @@ EXPORT_SYMBOL(rpc_unlink);
+ EXPORT_SYMBOL(rpc_wake_up);
+ EXPORT_SYMBOL(rpc_queue_upcall);
+ EXPORT_SYMBOL(rpc_mkpipe);
++EXPORT_SYMBOL(rpc_mkdir);
++EXPORT_SYMBOL(rpc_rmdir);
+ 
+ /* Client transport */
+ EXPORT_SYMBOL(xprt_create_proto);

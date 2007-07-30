@@ -7,11 +7,11 @@ AUTOMAKE_OPTIONS = foreign
 
 # also update lustre/autoconf/lustre-core.m4 AC_CONFIG_FILES
 ALWAYS_SUBDIRS := include lvfs obdclass ldlm ptlrpc osc lov obdecho \
-	mgc doc utils tests scripts autoconf contrib
+	mgc fid fld doc utils tests scripts autoconf contrib
 
-SERVER_SUBDIRS := ldiskfs ldiskfs2 obdfilter ost mds mgs
+SERVER_SUBDIRS := obdfilter ost mds mgs mdt cmm mdd osd
 
-CLIENT_SUBDIRS := mdc llite
+CLIENT_SUBDIRS := mdc lmv llite
 
 QUOTA_SUBDIRS := quota
 
@@ -44,14 +44,6 @@ DIST_SUBDIRS := $(ALWAYS_SUBDIRS) $(SERVER_SUBDIRS) $(CLIENT_SUBDIRS)	\
 
 EXTRA_DIST = BUGS FDL kernel_patches
 
-if LDISKFS
-LDISKFS = ldiskfs-sources ldiskfs2-sources
-ldiskfs-sources:
-	$(MAKE) sources -C ldiskfs
-ldiskfs2-sources:
-	$(MAKE) sources -C ldiskfs2
-endif
-
 lvfs-sources:
 	$(MAKE) sources -C lvfs
 obdclass-sources:
@@ -61,7 +53,7 @@ sources: $(LDISKFS) lvfs-sources obdclass-sources lustre_build_version
 
 all-recursive: lustre_build_version
 
-BUILD_VER_H=$(top_builddir)/lustre/include/linux/lustre_build_version.h
+BUILD_VER_H=$(top_builddir)/lustre/include/lustre/lustre_build_version.h
 
 lustre_build_version:
 	perl $(top_builddir)/lustre/scripts/version_tag.pl $(top_srcdir) $(top_builddir) > tmpver

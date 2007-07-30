@@ -64,6 +64,8 @@ struct lvfs_dentry_params
         __lvfs_set_rdonly(lvfs_sbdev(sb), fsfilt_journal_sbdev(obd, sb))
 
 void __lvfs_set_rdonly(lvfs_sbdev_type dev, lvfs_sbdev_type jdev);
+
 int lvfs_check_rdonly(lvfs_sbdev_type dev);
+void lvfs_clear_rdonly(lvfs_sbdev_type dev);
 
 #endif /*  __LVFS_LINUX_H__ */

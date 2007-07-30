@@ -8,7 +8,7 @@
 #include <liblustre.h>
 #include <obd.h>
 #include <obd_class.h>
-#include <lustre_mds.h>
+#include <lustre_mdc.h>
 #include <lustre_lite.h>
 #include <lustre_ver.h>
 
@@ -26,12 +26,11 @@ struct ll_file_data {
         unsigned long fd_gid;
 };
 
-struct llu_sb_info
-{
+struct llu_sb_info {
         struct obd_uuid          ll_sb_uuid;
-        struct obd_export       *ll_mdc_exp;
-        struct obd_export       *ll_osc_exp;
-        obd_id                   ll_rootino;
+        struct obd_export       *ll_md_exp;
+        struct obd_export       *ll_dt_exp;
+        struct lu_fid            ll_root_fid;
         int                      ll_flags;
         struct lustre_client_ocd ll_lco;
         struct list_head         ll_conn_chain;
@@ -43,18 +42,21 @@ struct llu_sb_info
 
 #define LL_SBI_NOLCK            0x1
 
-#define LLI_F_HAVE_OST_SIZE_LOCK        0
-#define LLI_F_HAVE_MDS_SIZE_LOCK        1
+enum lli_flags {
+        /* MDS has an authority for the Size-on-MDS attributes. */
+        LLIF_MDS_SIZE_LOCK      = (1 << 0),
+};
 
 struct llu_inode_info {
         struct llu_sb_info     *lli_sbi;
-        struct ll_fid           lli_fid;
+        struct lu_fid           lli_fid;
 
         struct lov_stripe_md   *lli_smd;
         char                   *lli_symlink_name;
         struct semaphore        lli_open_sem;
         __u64                   lli_maxbytes;
         unsigned long           lli_flags;
+        __u64                   lli_ioepoch;
 
         /* for libsysio */
         struct file_identifier  lli_sysio_fid;
@@ -99,18 +101,20 @@ static inline struct llu_sb_info *llu_i2sbi(struct inode *inode)
 
 static inline struct obd_export *llu_i2obdexp(struct inode *inode)
 {
-        return llu_i2info(inode)->lli_sbi->ll_osc_exp;
+        return llu_i2info(inode)->lli_sbi->ll_dt_exp;
 }
 
 static inline struct obd_export *llu_i2mdcexp(struct inode *inode)
 {
-        return llu_i2info(inode)->lli_sbi->ll_mdc_exp;
+        return llu_i2info(inode)->lli_sbi->ll_md_exp;
 }
 
 static inline int llu_is_root_inode(struct inode *inode)
 {
-        return (llu_i2info(inode)->lli_fid.id ==
-                llu_i2info(inode)->lli_sbi->ll_rootino);
+        return (fid_seq(&llu_i2info(inode)->lli_fid) ==
+                fid_seq(&llu_i2info(inode)->lli_sbi->ll_root_fid) &&
+                fid_oid(&llu_i2info(inode)->lli_fid) ==
+                fid_oid(&llu_i2info(inode)->lli_sbi->ll_root_fid));
 }
 
 #define LL_SAVE_INTENT(inode, it)                                              \
@@ -139,9 +143,10 @@ do {                                                                           \
 #define LL_LOOKUP_POSITIVE 1
 #define LL_LOOKUP_NEGATIVE 2
 
-static inline void ll_inode2fid(struct ll_fid *fid, struct inode *inode)
+static inline struct lu_fid *ll_inode2fid(struct inode *inode)
 {
-        *fid = llu_i2info(inode)->lli_fid;
+        LASSERT(inode != NULL);
+        return &llu_i2info(inode)->lli_fid;
 }
 
 struct it_cb_data {
@@ -165,8 +170,8 @@ static inline __u64 ll_file_maxbytes(struct inode *inode)
 
 struct mount_option_s
 {
-        char *mdc_uuid;
-        char *osc_uuid;
+        char *md_uuid;
+        char *dt_uuid;
 };
 
 #define IS_BAD_PTR(ptr)         \
@@ -181,29 +186,30 @@ int ll_parse_mount_target(const char *target, char **mgsnid,
 extern struct mount_option_s mount_option;
 
 /* super.c */
-void llu_update_inode(struct inode *inode, struct mds_body *body,
+void llu_update_inode(struct inode *inode, struct mdt_body *body,
                       struct lov_stripe_md *lmm);
 void obdo_to_inode(struct inode *dst, struct obdo *src, obd_flag valid);
 void obdo_from_inode(struct obdo *dst, struct inode *src, obd_flag valid);
 int ll_it_open_error(int phase, struct lookup_intent *it);
 struct inode *llu_iget(struct filesys *fs, struct lustre_md *md);
-int llu_inode_getattr(struct inode *inode, struct lov_stripe_md *lsm);
+int llu_inode_getattr(struct inode *inode, struct obdo *obdo);
+int llu_md_setattr(struct inode *inode, struct md_op_data *op_data);
 int llu_setattr_raw(struct inode *inode, struct iattr *attr);
 
 extern struct fssw_ops llu_fssw_ops;
 
 /* file.c */
-void llu_prepare_mdc_op_data(struct mdc_op_data *data,
-                             struct inode *i1,
-                             struct inode *i2,
-                             const char *name,
-                             int namelen,
-                             int mode);
+void llu_prep_md_op_data(struct md_op_data *op_data, struct inode *i1,
+                         struct inode *i2, const char *name, int namelen,
+                         int mode, __u32 opc);
+void llu_finish_md_op_data(struct md_op_data *op_data);
 int llu_create(struct inode *dir, struct pnode_base *pnode, int mode);
 int llu_local_open(struct llu_inode_info *lli, struct lookup_intent *it);
 int llu_iop_open(struct pnode *pnode, int flags, mode_t mode);
-int llu_mdc_close(struct obd_export *mdc_exp, struct inode *inode);
+int llu_md_close(struct obd_export *md_exp, struct inode *inode);
 int llu_file_release(struct inode *inode);
+int llu_sizeonmds_update(struct inode *inode, struct lustre_handle *fh,
+                         __u64 ioepoch);
 int llu_iop_close(struct inode *inode);
 _SYSIO_OFF_T llu_iop_pos(struct inode *ino, _SYSIO_OFF_T off);
 int llu_vmtruncate(struct inode * inode, loff_t offset, obd_flag obd_flags);
@@ -214,6 +220,7 @@ int llu_objects_destroy(struct ptlrpc_request *request, struct inode *dir);
 int llu_iop_read(struct inode *ino, struct ioctx *ioctxp);
 int llu_iop_write(struct inode *ino, struct ioctx *ioctxp);
 int llu_iop_iodone(struct ioctx *ioctxp);
+int llu_local_size(struct inode *inode);
 int llu_glimpse_size(struct inode *inode);
 int llu_extent_lock(struct ll_file_data *fd, struct inode *inode,
                     struct lov_stripe_md *lsm, int mode,
@@ -230,13 +237,17 @@ int llu_iop_lookup(struct pnode *pnode,
                    const char *path);
 void unhook_stale_inode(struct pnode *pno);
 struct inode *llu_inode_from_lock(struct ldlm_lock *lock);
-int llu_mdc_blocking_ast(struct ldlm_lock *lock,
-                         struct ldlm_lock_desc *desc,
-                         void *data, int flag);
+int llu_md_blocking_ast(struct ldlm_lock *lock,
+                        struct ldlm_lock_desc *desc,
+                        void *data, int flag);
 
 /* dir.c */
 ssize_t llu_iop_filldirentries(struct inode *ino, _SYSIO_OFF_T *basep, 
                                char *buf, size_t nbytes);
+
+/* liblustre/llite_fid.c*/
+unsigned long llu_fid_build_ino(struct llu_sb_info *sbi, 
+                                struct lu_fid *fid);
 
 /* ext2 related */
 #define EXT2_NAME_LEN (255)

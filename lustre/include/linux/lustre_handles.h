@@ -10,6 +10,16 @@
 #include <asm/atomic.h>
 #include <linux/list.h>
 #include <linux/random.h>
-#endif
+#include <linux/version.h>
+#include <linux/spinlock.h>
+#include <linux/types.h>
+
+# ifdef HAVE_RCU
+#  include <linux/rcupdate.h> /* for rcu_head{} */
+# else
+struct rcu_head { };
+# endif
+
+#endif /* ifdef __KERNEL__ */
 
 #endif

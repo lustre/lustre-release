@@ -6,10 +6,11 @@ set -e
 #set -x
 
 
-export REFORMAT=""
+export REFORMAT=${REFORMAT:-""}
 export VERBOSE=false
 export GMNALNID=${GMNALNID:-/usr/sbin/gmlndnid}
 export CATASTROPHE=${CATASTROPHE:-/proc/sys/lnet/catastrophe}
+#export PDSH="pdsh -S -Rssh -w"
 
 # eg, assert_env LUSTRE MDSNODES OSTNODES CLIENTS
 assert_env() {
@@ -38,7 +39,7 @@ init_test_env() {
     [ -d /r ] && export ROOT=${ROOT:-/r}
     export TMP=${TMP:-$ROOT/tmp}
 
-    export PATH=:$PATH:$LUSTRE/utils:$LUSTRE/tests
+    export PATH=:$PATH:$LUSTRE/utils:$LUSTRE/utils/gss:$LUSTRE/tests
     export LCTL=${LCTL:-"$LUSTRE/utils/lctl"}
     [ ! -f "$LCTL" ] && export LCTL=$(which lctl) 
     export MKFS=${MKFS:-"$LUSTRE/utils/mkfs.lustre"}
@@ -46,13 +47,23 @@ init_test_env() {
     export TUNEFS=${TUNEFS:-"$LUSTRE/utils/tunefs.lustre"}
     [ ! -f "$TUNEFS" ] && export TUNEFS=$(which tunefs.lustre) 
     export CHECKSTAT="${CHECKSTAT:-checkstat} "
-    export FSYTPE=${FSTYPE:-"ext3"}
+    export FSYTPE=${FSTYPE:-"ldiskfs"}
     export NAME=${NAME:-local}
     export LPROC=/proc/fs/lustre
+    export LGSSD=${LGSSD:-"$LUSTRE/utils/gss/lgssd"}
+    export LSVCGSSD=${LSVCGSSD:-"$LUSTRE/utils/gss/lsvcgssd"}
+    export KRB5DIR=${KRB5DIR:-"/usr/kerberos"}
 
     if [ "$ACCEPTOR_PORT" ]; then
         export PORT_OPT="--port $ACCEPTOR_PORT"
     fi
+
+    case "x$SEC" in
+        xkrb5*)
+            echo "Using GSS/krb5 ptlrpc security flavor"
+            export USING_KRB5="y"
+            ;;
+    esac
 
     # Paths on remote nodes, if different 
     export RLUSTRE=${RLUSTRE:-$LUSTRE}
@@ -73,12 +84,8 @@ init_test_env() {
     ONLY=${ONLY:-$*}
 }
 
-case `uname -r` in
-2.4.*) EXT=".o"; USE_QUOTA=no; FSTYPE=ext3 ;;
-    *) EXT=".ko"; USE_QUOTA=yes; [ "$FSTYPE" ] || FSTYPE=ldiskfs ;;
-esac
-
 load_module() {
+    EXT=".ko"
     module=$1
     shift
     BASE=`basename $module $EXT`
@@ -87,7 +94,12 @@ load_module() {
         insmod ${LUSTRE}/${module}${EXT} $@
     else
         # must be testing a "make install" or "rpm" installation
-        modprobe $BASE $@
+        # note failed to load ptlrpc_gss is considered not fatal
+        if [ "$BASE" == "ptlrpc_gss" ]; then
+            modprobe $BASE $@ || echo "gss/krb5 is not supported"
+        else
+            modprobe $BASE $@
+        fi
     fi
 }
 
@@ -104,21 +116,34 @@ load_modules() {
 
     echo Loading modules from $LUSTRE
     load_module ../lnet/libcfs/libcfs
+    [ -z "$LNETOPTS" ] && \
+        LNETOPTS=$(awk '/^options lnet/ { print $0}' /etc/modprobe.conf | sed 's/^options lnet //g')
+    echo "lnet options: '$LNETOPTS'"
     # note that insmod will ignore anything in modprobe.conf
     load_module ../lnet/lnet/lnet $LNETOPTS
     LNETLND=${LNETLND:-"socklnd/ksocklnd"}
     load_module ../lnet/klnds/$LNETLND
+    [ "$FSTYPE" = "ldiskfs" ] && load_module ../ldiskfs/ldiskfs/ldiskfs
     load_module lvfs/lvfs
     load_module obdclass/obdclass
+    load_module lvfs/fsfilt_$FSTYPE
     load_module ptlrpc/ptlrpc
-    [ "$USE_QUOTA" = "yes" ] && load_module quota/lquota
+    load_module ptlrpc/gss/ptlrpc_gss
+    # Now, some modules depend on lquota without USE_QUOTA check,
+    # will fix later. Disable check "$USE_QUOTA" = "yes" temporary.
+    #[ "$USE_QUOTA" = "yes" ] && load_module quota/lquota
+    load_module quota/lquota
+    load_module fid/fid
+    load_module fld/fld
+    load_module lmv/lmv
     load_module mdc/mdc
     load_module osc/osc
     load_module lov/lov
     load_module mds/mds
-    [ "$FSTYPE" = "ldiskfs" ] && load_module ldiskfs/ldiskfs
-    [ "$FSTYPE" = "ldiskfs2" ] && load_module ldiskfs/ldiskfs2
-    load_module lvfs/fsfilt_$FSTYPE
+    load_module mdd/mdd
+    load_module mdt/mdt
+    load_module cmm/cmm
+    load_module osd/osd
     load_module ost/ost
     load_module obdfilter/obdfilter
     load_module llite/lustre
@@ -142,7 +167,7 @@ wait_for_lnet() {
     MODULES=$($LCTL modules | awk '{ print $2 }')
     while [ -n "$MODULES" ]; do
     sleep 5
-    $RMMOD $MODULES >/dev/null 2>&1 || true
+    $RMMOD $MODULES > /dev/null 2>&1 || true
     MODULES=$($LCTL modules | awk '{ print $2 }')
         if [ -z "$MODULES" ]; then
         return 0
@@ -161,10 +186,10 @@ wait_for_lnet() {
 unload_modules() {
     lsmod | grep lnet > /dev/null && $LCTL dl && $LCTL dk $TMP/debug
     local MODULES=$($LCTL modules | awk '{ print $2 }')
-    $RMMOD $MODULES >/dev/null 2>&1 || true
+    $RMMOD $MODULES > /dev/null 2>&1 || true
      # do it again, in case we tried to unload ksocklnd too early
     MODULES=$($LCTL modules | awk '{ print $2 }')
-    [ -n "$MODULES" ] && $RMMOD $MODULES >/dev/null || true
+    [ -n "$MODULES" ] && $RMMOD $MODULES > /dev/null 2>&1 || true
     MODULES=$($LCTL modules | awk '{ print $2 }')
     if [ -n "$MODULES" ]; then
     echo "Modules still loaded: "
@@ -175,7 +200,7 @@ unload_modules() {
         lsmod
         return 2
     else
-        echo "Lustre stopped, but LNET is still loaded"
+        echo "Lustre stopped but LNET is still loaded, waiting..."
         wait_for_lnet || return 3
     fi
     fi
@@ -188,11 +213,100 @@ unload_modules() {
         echo "$LEAK_PORTALS" 1>&2
         mv $TMP/debug $TMP/debug-leak.`date +%s` || true
         echo "Memory leaks detected"
-	[ "$LEAK_LUSTRE" -a $(echo $LEAK_LUSTRE | awk 'leaked=$8 {print leaked % 56}') == 0 ] && echo "ignoring known bug 10818" && return 0
         return 254
     fi
     echo "modules unloaded."
     return 0
+}
+
+check_gss_daemon_facet() {
+    facet=$1
+    dname=$2
+
+    num=`do_facet $facet ps -o cmd -C $dname | grep $dname | wc -l`
+    if [ $num -ne 1 ]; then
+        echo "$num instance of $dname on $facet"
+        return 1
+    fi
+    return 0
+}
+
+send_sigint() {
+    local facet=$1
+    shift
+    do_facet $facet "killall -2 $@ 2>/dev/null || true"
+}
+
+start_gss_daemons() {
+    # starting on MDT
+    for num in `seq $MDSCOUNT`; do
+        do_facet mds$num "$LSVCGSSD -v"
+        do_facet mds$num "$LGSSD -v"
+    done
+    # starting on OSTs
+    for num in `seq $OSTCOUNT`; do
+        do_facet ost$num "$LSVCGSSD -v"
+    done
+    # starting on client
+    # FIXME: is "client" the right facet name?
+    do_facet client "$LGSSD -v"
+
+    # wait daemons entering "stable" status
+    sleep 5
+
+    #
+    # check daemons are running
+    #
+    for num in `seq $MDSCOUNT`; do
+        check_gss_daemon_facet mds$num lsvcgssd
+        check_gss_daemon_facet mds$num lgssd
+    done
+    for num in `seq $OSTCOUNT`; do
+        check_gss_daemon_facet ost$num lsvcgssd
+    done
+    check_gss_daemon_facet client lgssd
+}
+
+stop_gss_daemons() {
+    for num in `seq $MDSCOUNT`; do
+        send_sigint mds$num lsvcgssd lgssd
+    done
+    for num in `seq $OSTCOUNT`; do
+        send_sigint ost$num lsvcgssd
+    done
+    send_sigint client lgssd
+}
+
+init_krb5_env() {
+    if [ ! -z $SEC ]; then
+        MDS_MOUNT_OPTS=$MDS_MOUNT_OPTS,sec=$SEC
+        OST_MOUNT_OPTS=$OST_MOUNT_OPTS,sec=$SEC
+    fi
+
+    if [ ! -z $USING_KRB5 ]; then
+        start_gss_daemons
+    fi
+}
+
+cleanup_krb5_env() {
+    if [ ! -z $USING_KRB5 ]; then
+        stop_gss_daemons
+        # maybe cleanup credential cache?
+    fi
+}
+
+mdsdevlabel() {
+    local num=$1
+    local device=`mdsdevname $num`
+    local label=`do_facet mds$num "e2label ${device}" | grep -v "CMD: "`
+    echo -n $label
+}
+
+ostdevlabel() {
+    local num=$1
+    local device=`ostdevname $num`
+    local label=`do_facet ost$num "e2label ${device}" | grep -v "CMD: "`
+    echo -n $label
 }
 
 # Facet functions
@@ -211,7 +325,7 @@ start() {
         echo Start of ${device} on ${facet} failed ${RC}
     else 
         do_facet ${facet} sync
-        label=`do_facet ${facet} "e2label ${device}" | grep -v "CMD: "`
+        label=$(do_facet ${facet} "e2label ${device}")
         [ -z "$label" ] && echo no label for ${device} && exit 1
         eval export ${facet}_svc=${label}
         eval export ${facet}_dev=${device}
@@ -228,7 +342,7 @@ stop() {
     HOST=`facet_active_host $facet`
     [ -z $HOST ] && echo stop: no host for $facet && return 0
 
-    running=`do_facet ${facet} "grep -c ${MOUNT%/*}/${facet}' ' /proc/mounts" | grep -v "CMD: "`
+    running=$(do_facet ${facet} "grep -c ${MOUNT%/*}/${facet}' ' /proc/mounts") || true
     if [ ${running} -ne 0 ]; then
         echo "Stopping ${MOUNT%/*}/${facet} (opts:$@)"
         do_facet ${facet} umount -d $@ ${MOUNT%/*}/${facet}
@@ -240,16 +354,16 @@ stop() {
     local INTERVAL=1
     # conf-sanity 31 takes a long time cleanup
     while [ $WAIT -lt 300 ]; do
-	running=$(do_facet ${facet} "[ -e $LPROC ] && grep ST' ' $LPROC/devices" | grep -v "CMD: ") || true
-	if [ -z "${running}" ]; then
-	    return 0
-	fi
-	echo "waited $WAIT for${running}"
-	if [ $INTERVAL -lt 64 ]; then 
-	    INTERVAL=$((INTERVAL + INTERVAL))
-	fi
-	sleep $INTERVAL
-	WAIT=$((WAIT + INTERVAL))
+        running=$(do_facet ${facet} "[ -e $LPROC ] && grep ST' ' $LPROC/devices") || true
+        if [ -z "${running}" ]; then
+	        return 0
+        fi
+        echo "waited $WAIT for${running}"
+        if [ $INTERVAL -lt 64 ]; then 
+            INTERVAL=$((INTERVAL + INTERVAL))
+        fi
+        sleep $INTERVAL
+        WAIT=$((WAIT + INTERVAL))
     done
     echo "service didn't stop after $WAIT seconds.  Still running:"
     echo ${running}
@@ -283,7 +397,7 @@ zconf_umount() {
     client=$1
     mnt=$2
     [ "$3" ] && force=-f
-    local running=`do_node $client "grep -c $mnt' ' /proc/mounts" | grep -v "CMD: "`
+    local running=$(do_node $client "grep -c $mnt' ' /proc/mounts") || true
     if [ $running -ne 0 ]; then
         echo "Stopping client $mnt (opts:$force)"
         do_node $client umount $force $mnt
@@ -414,12 +528,12 @@ replay_barrier_nodf() {
 }
 
 mds_evict_client() {
-    UUID=`cat /proc/fs/lustre/mdc/${mds_svc}-mdc-*/uuid`
-    do_facet mds "echo $UUID > /proc/fs/lustre/mds/${mds_svc}/evict_client"
+    UUID=`cat /proc/fs/lustre/mdc/${mds1_svc}-mdc-*/uuid`
+    do_facet mds1 "echo $UUID > /proc/fs/lustre/mdt/${mds1_svc}/evict_client"
 }
 
 ost_evict_client() {
-    UUID=`cat /proc/fs/lustre/osc/${ost1_svc}-osc-*/uuid`
+    UUID=`grep ${ost1_svc}-osc- $LPROC/devices | egrep -v 'MDT' | awk '{print $5}'`
     do_facet ost1 "echo $UUID > /proc/fs/lustre/obdfilter/${ost1_svc}/evict_client"
 }
 
@@ -454,10 +568,26 @@ h2gm () {
     fi
 }
 
-h2tcp() {
+h2name_or_ip() {
     if [ "$1" = "client" -o "$1" = "'*'" ]; then echo \'*\'; else
-        echo $1"@tcp" 
+        echo $1"@$2" 
     fi
+}
+
+h2ptl() {
+   if [ "$1" = "client" -o "$1" = "'*'" ]; then echo \'*\'; else
+       ID=`xtprocadmin -n $1 2>/dev/null | egrep -v 'NID' | awk '{print $1}'`
+       if [ -z "$ID" ]; then
+           echo "Could not get a ptl id for $1..."
+           exit 1
+       fi
+       echo $ID"@ptl"
+   fi
+}
+declare -fx h2ptl
+
+h2tcp() {
+    h2name_or_ip "$1" "tcp"
 }
 declare -fx h2tcp
 
@@ -474,12 +604,14 @@ h2elan() {
 declare -fx h2elan
 
 h2openib() {
-    if [ "$1" = "client" -o "$1" = "'*'" ]; then echo \'*\'; else
-        ID=`echo $1 | sed 's/[^0-9]*//g'`
-        echo $ID"@openib"
-    fi
+    h2name_or_ip "$1" "openib"
 }
 declare -fx h2openib
+
+h2o2ib() {
+    h2name_or_ip "$1" "o2ib"
+}
+declare -fx h2o2ib
 
 facet_host() {
     local facet=$1
@@ -542,10 +674,11 @@ do_node() {
         myPDSH="no_dsh"
     fi
     if $VERBOSE; then
-        echo "CMD: $HOST $@"
+        echo "CMD: $HOST $@" >&2
         $myPDSH $HOST $LCTL mark "$@" > /dev/null 2>&1 || :
     fi
-    $myPDSH $HOST "(PATH=\$PATH:$RLUSTRE/utils:$RLUSTRE/tests:/sbin:/usr/sbin; cd $RPWD; sh -c \"$@\")"
+    $myPDSH $HOST "(PATH=\$PATH:$RLUSTRE/utils:$RLUSTRE/tests:/sbin:/usr/sbin; cd $RPWD; sh -c \"$@\")" | sed "s/^${HOST}: //"
+    return ${PIPESTATUS[0]}
 }
 
 do_facet() {
@@ -573,21 +706,31 @@ ostdevname() {
     echo -n $DEVPTR
 }
 
+mdsdevname() {
+    num=$1
+    DEVNAME=MDSDEV$num
+    #if $MDSDEVn isn't defined, default is $MDSDEVBASE + num
+    eval DEVPTR=${!DEVNAME:=${MDSDEVBASE}${num}}
+    echo -n $DEVPTR
+}
+
 ########
 ## MountConf setup
 
 stopall() {
     # make sure we are using the primary server, so test-framework will
     # be able to clean up properly.
-    activemds=`facet_active mds`
-    if [ $activemds != "mds" ]; then
-        fail mds
+    activemds=`facet_active mds1`
+    if [ $activemds != "mds1" ]; then
+        fail mds1
     fi
     
     # assume client mount is local 
     grep " $MOUNT " /proc/mounts && zconf_umount `hostname` $MOUNT $*
     grep " $MOUNT2 " /proc/mounts && zconf_umount `hostname` $MOUNT2 $*
-    stop mds -f
+    for num in `seq $MDSCOUNT`; do
+        stop mds$num -f
+    done
     for num in `seq $OSTCOUNT`; do
         stop ost$num -f
     done
@@ -597,6 +740,13 @@ stopall() {
 cleanupall() {
     stopall $*
     unload_modules
+    cleanup_krb5_env
+}
+
+mdsmkfsopts()
+{
+    local nr=$1
+    test $nr = 1 && echo -n $MDS_MKFS_OPTS || echo -n $MDSn_MKFS_OPTS
 }
 
 formatall() {
@@ -605,18 +755,23 @@ formatall() {
     stopall
     # We need ldiskfs here, may as well load them all
     load_modules
-    echo Formatting mds, osts
-    if $VERBOSE; then
-        add mds $MDS_MKFS_OPTS $FSTYPE_OPT --reformat $MDSDEV || exit 10
-    else
-        add mds $MDS_MKFS_OPTS $FSTYPE_OPT --reformat $MDSDEV > /dev/null || exit 10
-    fi
+    [ "$CLIENTONLY" ] && return
+    echo "Formatting mdts, osts"
+    for num in `seq $MDSCOUNT`; do
+        echo "Format mds$num: $(mdsdevname $num)"
+        if $VERBOSE; then
+            add mds$num `mdsmkfsopts $num` $FSTYPE_OPT --reformat `mdsdevname $num` || exit 9
+        else
+            add mds$num `mdsmkfsopts $num` $FSTYPE_OPT --reformat `mdsdevname $num` > /dev/null || exit 9
+        fi
+    done
 
     for num in `seq $OSTCOUNT`; do
+        echo "Format ost$num: $(ostdevname $num)"
         if $VERBOSE; then
-            add ost$num $OST_MKFS_OPTS $FSTYPE_OPT --reformat `ostdevname $num` || exit 10
+            add ost$num $OST_MKFS_OPTS --reformat `ostdevname $num` || exit 10
         else
-            add ost$num $OST_MKFS_OPTS $FSTYPE_OPT --reformat `ostdevname $num` > /dev/null || exit 10
+            add ost$num $OST_MKFS_OPTS --reformat `ostdevname $num` > /dev/null || exit 10
         fi
     done
 }
@@ -627,12 +782,20 @@ mount_client() {
 
 setupall() {
     load_modules
-    echo Setup mdt, osts
-    start mds $MDSDEV $MDS_MOUNT_OPTS
-    for num in `seq $OSTCOUNT`; do
-        DEVNAME=`ostdevname $num`
-        start ost$num $DEVNAME $OST_MOUNT_OPTS
-    done
+    init_krb5_env
+    if [ -z "$CLIENTONLY" ]; then
+        echo "Setup mdts, osts"
+        for num in `seq $MDSCOUNT`; do
+            DEVNAME=$(mdsdevname $num)
+            echo $REFORMAT | grep -q "reformat" \
+            || do_facet mds$num "$TUNEFS --writeconf $DEVNAME"
+            start mds$num $DEVNAME $MDS_MOUNT_OPTS
+        done
+        for num in `seq $OSTCOUNT`; do
+            DEVNAME=$(ostdevname $num)
+            start ost$num $DEVNAME $OST_MOUNT_OPTS
+        done
+    fi
     [ "$DAEMONFILE" ] && $LCTL debug_daemon start $DAEMONFILE $DAEMONSIZE
     mount_client $MOUNT
     if [ "$MOUNT_2" ]; then
@@ -785,8 +948,10 @@ pgcache_empty() {
 # Test interface 
 error() {
     sysctl -w lustre.fail_loc=0 2> /dev/null || true
-    echo "${TESTSUITE}: **** FAIL:" $@
+    log "${TESTSUITE}: **** FAIL:" $@
+    $LCTL dk $TMP/lustre-log-$TESTNAME.log
     log "FAIL: $TESTNAME $@"
+    $LCTL dk $TMP/lustrefail_${TESTSUITE}_${TESTNAME}.$(date +%s)
     exit 1
 }
 

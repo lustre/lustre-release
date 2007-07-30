@@ -1,0 +1,72 @@
+#!/bin/sh
+
+#
+# Fork the next patch in the series
+#
+
+. patchfns >/dev/null || . /usr/lib/patch-scripts/patchfns >/dev/null || { \
+	echo "Impossible to find my library 'patchfns'."
+	echo "Check your install, or go to the right directory"
+	exit 1
+}
+
+usage()
+{
+	echo "Usage: trypatch <newname>"
+	exit 1
+}
+
+if [ $# -ne 1 ]
+then
+	usage
+fi
+
+NEW=$1
+BASE=`stripit $NEW`
+SERIES=series
+
+if [ ! -e $SERIES ]
+then
+	echo 'File "series" not found'
+	exit 1
+fi
+
+if  grep $BASE $SERIES >& /dev/null  ; then 
+        echo "Patch $NEW already exists in series"
+        exit 1
+fi
+
+if [ ! -f $P/patches/$BASE.patch ] ; then 
+        echo "Patch $NEW doesn't exist as a file"
+        exit 1
+fi
+
+$TMPSERIES=$(mktemp /tmp/series-XXXXXXXX)
+top=$(toppatch)
+if [ x"$top" == x ]
+then
+	todo=$(head -1 $SERIES)
+else
+	last_in_series=$(stripit $(tail -1 $SERIES))
+	if [ $last_in_series == $top ]
+	then
+		echo "Series fully applied.  Ends at $top"
+		exit 0
+	fi
+	todo=$(grep -C1 "^$top\.patch" $SERIES | tail -1)
+	if [ x$todo = x ]
+	then
+		todo=$(head -1 $SERIES)
+	fi
+fi
+
+if  patch -p1 -i $P/patches/$BASE.patch ; then 
+    patch -R -p1 -i $P/patches/$BASE.patch
+
+    $basetodo=$(basename $todo)
+    sed "s/$todo/$BASE/" < $SERIES > $TMPSERIES
+    mv -f $TMPSERIES $SERIES
+    echo "Replaced $todo with $BASE"
+else 
+    echo "Failed to replace $todo with $BASE"
+fi

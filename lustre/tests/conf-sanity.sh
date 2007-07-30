@@ -12,23 +12,25 @@ set -e
 ONLY=${ONLY:-"$*"}
 
 # These tests don't apply to mountconf
-#              xml xml xml xml xml xml dumb FIXME
-MOUNTCONFSKIP="10  11  12  13  13b 14  15   18"
+MOUNTCONFSKIP="9 10 11 12 13 13b 14 15 18"
 
 # bug number for skipped test:
-ALWAYS_EXCEPT=" $CONF_SANITY_EXCEPT $MOUNTCONFSKIP"
+ALWAYS_EXCEPT=" $CONF_SANITY_EXCEPT $MOUNTCONFSKIP 16 23"
 # UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
 
 SRCDIR=`dirname $0`
 PATH=$PWD/$SRCDIR:$SRCDIR:$SRCDIR/../utils:$PATH
 
+PTLDEBUG=${PTLDEBUG:--1}
 LUSTRE=${LUSTRE:-`dirname $0`/..}
 RLUSTRE=${RLUSTRE:-$LUSTRE}
+MOUNTLUSTRE=${MOUNTLUSTRE:-/sbin/mount.lustre}
+MKFSLUSTRE=${MKFSLUSTRE:-/usr/sbin/mkfs.lustre}
 HOSTNAME=`hostname`
 
 . $LUSTRE/tests/test-framework.sh
 init_test_env $@
-. ${CONFIG:=$LUSTRE/tests/cfg/$NAME.sh}
+. ${CONFIG:=$LUSTRE/tests/cfg/local.sh}
 
 reformat() {
         formatall
@@ -163,6 +165,7 @@ fi
 
 gen_config
 
+init_krb5_env
 
 test_0() {
         setup
@@ -840,6 +843,7 @@ test_24a() {
 	sleep 10
 	[ -e $MOUNT2/$tfile ] && error "File bleed" && return 7
 	# 2 should work
+	sleep 5
 	cp /etc/passwd $MOUNT2/b || return 3
 	rm $MOUNT2/b || return 4
 	# 2 is actually mounted
@@ -851,8 +855,8 @@ test_24a() {
  	umount_client $MOUNT 
 	# the MDS must remain up until last MDT
 	stop_mds
-	MDS=$(awk '($3 ~ "mdt" && $4 ~ "MDS") { print $4 }' $LPROC/devices)
-	[ -z "$MDS" ] && error "No MDS" && return 8
+	MDS=$(awk '($3 ~ "mdt" && $4 ~ "MDT") { print $4 }' $LPROC/devices)
+	[ -z "$MDS" ] && error "No MDT" && return 8
 	umount $MOUNT2
 	stop fs2mds -f
 	stop fs2ost -f
@@ -883,7 +887,7 @@ test_26() {
     # we need modules before mount for sysctl, so make sure...
     [ -z "$(lsmod | grep lustre)" ] && modprobe lustre 
 #define OBD_FAIL_MDS_FS_SETUP            0x135
-    sysctl -w lustre.fail_loc=0x80000135
+    do_facet mds "sysctl -w lustre.fail_loc=0x80000135"
     start_mds && echo MDS started && return 1
     cat $LPROC/devices
     DEVS=$(cat $LPROC/devices | wc -l)
@@ -936,8 +940,8 @@ run_test 27a "Reacquire MGS lock if OST started first"
 test_27b() {
         setup
 	facet_failover mds
-	set_and_check "cat $LPROC/mds/$FSNAME-MDT0000/group_acquire_expire" "$FSNAME-MDT0000.mdt.group_acquire_expire" || return 3 
-	set_and_check "cat $LPROC/mdc/$FSNAME-MDT0000-mdc-*/max_rpcs_in_flight" "$FSNAME-MDT0000.mdc.max_rpcs_in_flight" || return 4 
+	set_and_check "cat $LPROC/mdt/$FSNAME-MDT0000/identity_acquire_expire" "$FSNAME-MDT0000.mdt.identity_acquire_expire" || return 3
+	set_and_check "cat $LPROC/mdc/$FSNAME-MDT0000-mdc-*/max_rpcs_in_flight" "$FSNAME-MDT0000.mdc.max_rpcs_in_flight" || return 4
 	cleanup
 }
 run_test 27b "Reacquire MGS lock after failover"
@@ -970,8 +974,8 @@ test_29() {
 	sleep 10
 
 	local PARAM="$FSNAME-OST0001.osc.active"
-	local PROC_ACT="$LPROC/osc/$FSNAME-OST0001-osc-*/active"
-	local PROC_UUID="$LPROC/osc/$FSNAME-OST0001-osc-*/ost_server_uuid"
+	local PROC_ACT="$LPROC/osc/$FSNAME-OST0001-osc-[^M]*/active"
+	local PROC_UUID="$LPROC/osc/$FSNAME-OST0001-osc-[^M]*/ost_server_uuid"
 	if [ ! -r $PROC_ACT ]; then
 	    echo "Can't read $PROC_ACT"
 	    ls $LPROC/osc/$FSNAME-*
@@ -990,7 +994,7 @@ test_29() {
 	fi
 
 	# check MDT too 
-	local MPROC="$LPROC/osc/$FSNAME-OST0001-osc/active"
+	local MPROC="$LPROC/osc/$FSNAME-OST0001-osc-[M]*/active"
 	if [ -r $MPROC ]; then
 	    RESULT=$(cat $MPROC)
 	    if [ $RESULT -ne $DEAC ]; then
@@ -1142,6 +1146,7 @@ run_test 32b "Upgrade from 1.4 with writeconf"
 
 umount_client $MOUNT	
 cleanup_nocli
+cleanup_krb5_env
 
 equals_msg "Done"
 echo "$0: completed"

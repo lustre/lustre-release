@@ -223,7 +223,7 @@ int llog_origin_handle_next_block(struct ptlrpc_request *req)
         ptr = lustre_msg_buf(req->rq_repmsg, REPLY_REC_OFF, sizeof (body));
         memcpy(ptr, body, sizeof(*body));
 
-        ptr = lustre_msg_buf(req->rq_repmsg, REPLY_REC_OFF+1, LLOG_CHUNK_SIZE);
+        ptr = lustre_msg_buf(req->rq_repmsg, REPLY_REC_OFF + 1, LLOG_CHUNK_SIZE);
         memcpy(ptr, buf, LLOG_CHUNK_SIZE);
 
 out_close:

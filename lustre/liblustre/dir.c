@@ -67,29 +67,31 @@ static int llu_dir_do_readpage(struct inode *inode, struct page *page)
         struct llu_inode_info *lli = llu_i2info(inode);
         struct intnl_stat *st = llu_i2stat(inode);
         struct llu_sb_info *sbi = llu_i2sbi(inode);
-        struct ll_fid mdc_fid;
         __u64 offset;
         int rc = 0;
         struct ptlrpc_request *request;
         struct lustre_handle lockh;
-        struct mds_body *body;
+        struct mdt_body *body;
         struct lookup_intent it = { .it_op = IT_READDIR };
-        struct mdc_op_data data;
-        struct obd_device *obddev = class_exp2obd(sbi->ll_mdc_exp);
+        struct md_op_data op_data;
+        struct obd_device *obddev = class_exp2obd(sbi->ll_md_exp);
         struct ldlm_res_id res_id =
-                { .name = {st->st_ino, (__u64)lli->lli_st_generation} };
+                { .name = {fid_seq(&lli->lli_fid), 
+                           fid_oid(&lli->lli_fid), 
+                           fid_ver(&lli->lli_fid)} };
         ldlm_policy_data_t policy = { .l_inodebits = { MDS_INODELOCK_UPDATE } };
         ENTRY;
 
         rc = ldlm_lock_match(obddev->obd_namespace, LDLM_FL_BLOCK_GRANTED,
                              &res_id, LDLM_IBITS, &policy, LCK_CR, &lockh);
         if (!rc) {
-                llu_prepare_mdc_op_data(&data, inode, NULL, NULL, 0, 0);
+                llu_prep_md_op_data(&op_data, inode, NULL, NULL, 0, 0,
+                                    LUSTRE_OPC_ANY);
 
-                rc = mdc_enqueue(sbi->ll_mdc_exp, LDLM_IBITS, &it, LCK_CR,
-                                 &data, &lockh, NULL, 0,
-                                 ldlm_completion_ast, llu_mdc_blocking_ast,
-                                 inode, LDLM_FL_CANCEL_ON_BLOCK);
+                rc = md_enqueue(sbi->ll_md_exp, LDLM_IBITS, &it, LCK_CR,
+                                &op_data, &lockh, NULL, 0,
+                                ldlm_completion_ast, llu_md_blocking_ast,
+                                inode, LDLM_FL_CANCEL_ON_BLOCK);
                 request = (struct ptlrpc_request *)it.d.lustre.it_data;
                 if (request)
                         ptlrpc_req_finished(request);
@@ -100,16 +102,14 @@ static int llu_dir_do_readpage(struct inode *inode, struct page *page)
         }
         ldlm_lock_dump_handle(D_OTHER, &lockh);
 
-        mdc_pack_fid(&mdc_fid, st->st_ino, lli->lli_st_generation, S_IFDIR);
-
         offset = (__u64)page->index << CFS_PAGE_SHIFT;
-        rc = mdc_readpage(sbi->ll_mdc_exp, &mdc_fid,
-                          offset, page, &request);
+        rc = md_readpage(sbi->ll_md_exp, &lli->lli_fid, NULL,
+                         offset, page, &request);
         if (!rc) {
                 body = lustre_msg_buf(request->rq_repmsg, REPLY_REC_OFF,
                                       sizeof(*body));
-                LASSERT(body != NULL);         /* checked by mdc_readpage() */
-                /* swabbed by mdc_readpage() */
+                LASSERT(body != NULL);         /* checked by md_readpage() */
+                /* swabbed by md_readpage() */
                 LASSERT_REPSWABBED(request, REPLY_REC_OFF);
 
                 st->st_size = body->size;
@@ -202,8 +202,8 @@ ssize_t llu_iop_filldirentries(struct inode *ino, _SYSIO_OFF_T *basep,
         struct llu_inode_info *lli = llu_i2info(ino);
         struct intnl_stat *st = llu_i2stat(ino);
         loff_t pos = *basep, offset;
+        unsigned long maxpages, pgidx;
         int filled = 0;
-        unsigned long pgidx, maxpages;
         ENTRY;
 
         liblustre_wait_event(0);
@@ -229,7 +229,7 @@ ssize_t llu_iop_filldirentries(struct inode *ino, _SYSIO_OFF_T *basep,
                 if (IS_ERR(page))
                         continue;
 
-                /* size might have been updated by mdc_readpage */
+                /* size might have been updated by md_readpage */
                 maxpages = (st->st_size + CFS_PAGE_SIZE - 1) >> CFS_PAGE_SHIFT;
 
                 /* fill in buffer */
@@ -247,8 +247,8 @@ ssize_t llu_iop_filldirentries(struct inode *ino, _SYSIO_OFF_T *basep,
 
                                 offset = (char*) de - addr;
                                 over =  filldir(buf, nbytes, de->name, de->name_len,
-                                                (((__u64)pgidx << CFS_PAGE_SHIFT) | offset)
-                                                + le16_to_cpu(de->rec_len),
+                                                (((__u64)pgidx << PAGE_SHIFT) | offset) +
+                                                le16_to_cpu(de->rec_len),
                                                 le32_to_cpu(de->inode), d_type, &filled);
                                 if (over) {
                                         free_page(page);
@@ -259,7 +259,6 @@ ssize_t llu_iop_filldirentries(struct inode *ino, _SYSIO_OFF_T *basep,
                                          */
                                         if (filled == 0)
                                                 RETURN(-EINVAL);
-
                                         GOTO(done, 0);
                                 }
                         }
@@ -268,7 +267,7 @@ ssize_t llu_iop_filldirentries(struct inode *ino, _SYSIO_OFF_T *basep,
                 free_page(page);
         }
 done:
-        lli->lli_dir_pos = (__u64)pgidx << CFS_PAGE_SHIFT | offset;
+        lli->lli_dir_pos = pgidx << CFS_PAGE_SHIFT | offset;
         *basep = lli->lli_dir_pos;
         liblustre_wait_event(0);
         RETURN(filled);

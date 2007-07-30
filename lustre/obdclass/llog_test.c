@@ -461,7 +461,8 @@ static int llog_test_6(struct obd_device *obd, char *name)
                 RETURN(-ENOENT);
         }
 
-        rc = obd_connect(&exph, mdc_obd, &uuid, NULL /* obd_connect_data */);
+        rc = obd_connect(NULL,
+                         &exph, mdc_obd, &uuid, NULL /* obd_connect_data */);
         if (rc) {
                 CERROR("6: failed to connect to MDC: %s\n", mdc_obd->obd_name);
                 RETURN(rc);
@@ -529,10 +530,10 @@ static int llog_test_7(struct obd_device *obd)
         }
 
         rc = llog_destroy(llh);
-        if (rc) 
+        if (rc)
                 CERROR("7: llog_destroy failed: %d\n", rc);
         else
-                llog_free_handle(llh); 
+                llog_free_handle(llh);
         RETURN(rc);
 }
 
@@ -596,14 +597,15 @@ static int llog_run_tests(struct obd_device *obd)
 }
 
 
-static int llog_test_llog_init(struct obd_device *obd, struct obd_device *tgt,
-                               int count, struct llog_catid *logid,
-                               struct obd_uuid *uuid)
+static int llog_test_llog_init(struct obd_device *obd, struct obd_llogs *llogs,
+                               struct obd_device *tgt, int count, 
+                               struct llog_catid *logid, struct obd_uuid *uuid)
 {
         int rc;
         ENTRY;
 
-        rc = llog_setup(obd, LLOG_TEST_ORIG_CTXT, tgt, 0, NULL, &llog_lvfs_ops);
+        rc = llog_setup(obd, llogs, LLOG_TEST_ORIG_CTXT, tgt, 0, NULL, 
+                        &llog_lvfs_ops);
         RETURN(rc);
 }
 
@@ -627,10 +629,9 @@ static int llog_test_cleanup(struct obd_device *obd)
         return rc;
 }
 
-static int llog_test_setup(struct obd_device *obd, obd_count len, void *buf)
+static int llog_test_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
 {
         struct lprocfs_static_vars lvars;
-        struct lustre_cfg *lcfg = buf;
         struct obd_device *tgt;
         int rc;
         ENTRY;
@@ -652,7 +653,7 @@ static int llog_test_setup(struct obd_device *obd, obd_count len, void *buf)
                 RETURN(-EINVAL);
         }
 
-        rc = obd_llog_init(obd, tgt, 0, NULL, NULL);
+        rc = obd_llog_init(obd, NULL, tgt, 0, NULL, NULL);
         if (rc)
                 RETURN(rc);
 
@@ -687,7 +688,8 @@ static int __init llog_test_init(void)
         struct lprocfs_static_vars lvars;
 
         lprocfs_init_vars(llog_test, &lvars);
-        return class_register_type(&llog_obd_ops,lvars.module_vars,"llog_test");
+        return class_register_type(&llog_obd_ops, NULL,
+                                   lvars.module_vars,"llog_test", NULL);
 }
 
 static void __exit llog_test_exit(void)

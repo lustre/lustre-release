@@ -246,6 +246,7 @@ int llog_process(struct llog_handle *loghandle, llog_cb_t cb,
                        index, last_index);
 
                 /* get the buf with our target record; avoid old garbage */
+                memset(buf, 0, LLOG_CHUNK_SIZE);
                 last_offset = cur_offset;
                 rc = llog_next_block(loghandle, &saved_index, index,
                                      &cur_offset, buf, LLOG_CHUNK_SIZE);
@@ -267,7 +268,7 @@ int llog_process(struct llog_handle *loghandle, llog_cb_t cb,
 
                         CDEBUG(D_OTHER, "after swabbing, type=%#x idx=%d\n",
                                rec->lrh_type, rec->lrh_index);
-                        
+ 
                         if (rec->lrh_index == 0)
                                 GOTO(out, 0); /* no more records */
 
@@ -284,7 +285,7 @@ int llog_process(struct llog_handle *loghandle, llog_cb_t cb,
                                 continue;
                         }
 
-                        CDEBUG(D_OTHER, 
+                        CDEBUG(D_OTHER,
                                "lrh_index: %d lrh_len: %d (%d remains)\n",
                                rec->lrh_index, rec->lrh_len,
                                (int)(buf + LLOG_CHUNK_SIZE - (char *)rec));

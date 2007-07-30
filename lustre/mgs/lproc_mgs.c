@@ -33,7 +33,6 @@
 #include <lprocfs_status.h>
 #include "mgs_internal.h"
 
-
 #ifdef LPROCFS
 
 static int lprocfs_mgs_rd_mntdev(char *page, char **start, off_t off, int count,

@@ -67,7 +67,7 @@ sub extractpid
 {
     $line = shift;
 #    print "$_\n";
-    if ($line =~ m/\d+:\d+:\d+:\d+\.\d+:\d+:\d+:*$/) {
+    if ($line =~ /(\d+)\:(\d+)\:(\d+)\:(\d+\.\d+)\:(\d+)\:(\d+)\:.*/) {
 	return $6;
     }
 }
@@ -76,7 +76,7 @@ sub extracthostpid
 {
     $line = shift;
 #    print "$_\n";
-    if ($line =~ m/\d+:\d+:\d+:\d+\.\d+:\d+:\d+:\d+:*$/) {
+    if ($line =~ /(\d+)\:(\d+)\:(\d+)\:(\d+\.\d+)\:(\d+)\:(\d+)\:(\d+)\:.*/) {
 	return $7;
     }
 }
@@ -271,15 +271,15 @@ print "pid: $pid, dlm_ns: $dlm_ns\n";
 print "extract_start: $extract_start\n";
 print "extract_end:   $extract_end\n";
 while (<LOG>) {
-    if ($extract_start && $extract_start != LLANAYZE_FOUND) {
+    if ($extract_start && $extract_start ne "LLANAYZE_FOUND") {
         next if (index($_, $extract_start, 0) == -1);
-        $extract_start = LLANAYZE_FOUND;
+        $extract_start = "LLANAYZE_FOUND";
     }
 
     if ($extract_end) {
-        next if ($extract_end == LLANAYZE_FOUND);
+	next if ($extract_end eq "LLANAYZE_FOUND");
         if (index($_, $extract_end, 0) != -1) {
-             $extract_end = LLANAYZE_FOUND;
+             $extract_end = "LLANAYZE_FOUND";
         }
     }
 

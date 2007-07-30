@@ -1,0 +1,29 @@
+#!/usr/bin/perl -w
+$out = "";
+while (<>) {
+	next if (/^Only/);
+	next if (/^Binary/);
+	if (/^diff/ || /^Index/) {
+		if ($out) {
+			close OUT;
+		}
+		(@out) = split(' ', $_);
+		shift(@out) if (/^diff/);
+		$out = pop(@out);
+		$out =~ s:/*usr/:/:;
+		$out =~ s:/*src/:/:;
+		$out =~ s:^/*linux[^/]*::;
+		$out =~ s:\(w\)::;
+		next if ($out eq "");
+		$out = "/var/tmp/patches/$out";
+		$dir = $out;
+		$dir =~ s:/[^/]*$::;
+		print STDERR "$out\n";
+		system("mkdir -p $dir");
+		open(OUT, ">$out") || die("cannot open $out");
+	}
+	if ($out) {
+		print OUT $_;
+	}
+}
+

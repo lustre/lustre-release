@@ -141,6 +141,7 @@ static char *convert_hostnames(char *s1)
                 sep = *s2;
                 *s2 = '\0';     
                 nid = libcfs_str2nid(s1);
+                *s2 = sep;                      /* back to original string */
                 if (nid == LNET_NID_ANY)
                         goto out_free;
                 c += snprintf(c, left, "%s%c", libcfs_nid2str(nid), sep);
@@ -243,7 +244,7 @@ int parse_options(char *orig_options, int *flagp)
 int main(int argc, char *const argv[])
 {
         char default_options[] = "";
-        char *source, *target, *ptr;
+        char *usource, *source, *target, *ptr;
         char *options, *optcopy, *orig_options = default_options;
         int i, nargs = 3, opt, rc, flags, optlen;
         static struct option long_opt[] = {
@@ -301,7 +302,8 @@ int main(int argc, char *const argv[])
                 usage(stderr);
         }
 
-        source = convert_hostnames(argv[optind]);
+        usource = argv[optind];
+        source = convert_hostnames(usource);
         target = argv[optind + 1];
         ptr = target + strlen(target) - 1;
         while ((ptr > target) && (*ptr == '/')) {
@@ -309,14 +311,14 @@ int main(int argc, char *const argv[])
                 ptr--;
         }
 
-        if (!source) {
+        if (!usource || !source) {
                 usage(stderr);
         }
 
         if (verbose) {
                 for (i = 0; i < argc; i++)
                         printf("arg[%d] = %s\n", i, argv[i]);
-                printf("source = %s, target = %s\n", source, target);
+                printf("source = %s (%s), target = %s\n", usource, source, target);
                 printf("options = %s\n", orig_options);
         }
 
@@ -330,17 +332,17 @@ int main(int argc, char *const argv[])
         }
 
         if (!force) {
-                rc = check_mtab_entry(source, target, "lustre");
+                rc = check_mtab_entry(usource, target, "lustre");
                 if (rc && !(flags & MS_REMOUNT)) {
                         fprintf(stderr, "%s: according to %s %s is "
                                 "already mounted on %s\n",
-                                progname, MOUNTED, source, target);
+                                progname, MOUNTED, usource, target);
                         return(EEXIST);
                 }
                 if (!rc && (flags & MS_REMOUNT)) {
                         fprintf(stderr, "%s: according to %s %s is "
                                 "not already mounted on %s\n",
-                                progname, MOUNTED, source, target);
+                                progname, MOUNTED, usource, target);
                         return(ENOENT);
                 }
         }
@@ -380,14 +382,14 @@ int main(int argc, char *const argv[])
 
                 rc = errno;
 
-                cli = strrchr(source, ':');
+                cli = strrchr(usource, ':');
                 if (cli && (strlen(cli) > 2)) 
                         cli += 2;
                 else
                         cli = NULL;
 
                 fprintf(stderr, "%s: mount %s at %s failed: %s\n", progname, 
-                        source, target, strerror(errno));
+                        usource, target, strerror(errno));
                 if (errno == ENODEV)
                         fprintf(stderr, "Are the lustre modules loaded?\n"
                                 "Check /etc/modprobe.conf and /proc/filesystems"
@@ -406,16 +408,16 @@ int main(int argc, char *const argv[])
                 }
                 if (errno == EALREADY)
                         fprintf(stderr, "The target service is already running."
-                                " (%s)\n", source);
+                                " (%s)\n", usource);
                 if (errno == ENXIO)
                         fprintf(stderr, "The target service failed to start "
                                 "(bad config log?) (%s).  "
-                                "See /var/log/messages.\n", source);
+                                "See /var/log/messages.\n", usource);
                 if (errno == EIO)
                         fprintf(stderr, "Is the MGS running?\n");
                 if (errno == EADDRINUSE)
                         fprintf(stderr, "The target service's index is already "
-                                "in use. (%s)\n", source);
+                                "in use. (%s)\n", usource);
                 if (errno == EINVAL) {
                         fprintf(stderr, "This may have multiple causes.\n");
                         if (cli) 
@@ -426,14 +428,14 @@ int main(int argc, char *const argv[])
                 }
 
                 /* May as well try to clean up loop devs */
-                if (strncmp(source, "/dev/loop", 9) == 0) {
+                if (strncmp(usource, "/dev/loop", 9) == 0) {
                         char cmd[256];
-                        sprintf(cmd, "/sbin/losetup -d %s", source);
+                        sprintf(cmd, "/sbin/losetup -d %s", usource);
                         system(cmd);
                 }
 
         } else if (!nomtab) {
-                rc = update_mtab_entry(source, target, "lustre", orig_options,
+                rc = update_mtab_entry(usource, target, "lustre", orig_options,
                                        0,0,0);
         }
 

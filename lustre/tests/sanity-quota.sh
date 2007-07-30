@@ -194,7 +194,7 @@ STRIPECOUNT=`cat $LPROC/lov/$LOVNAME/stripecount`
 STRIPESIZE=`cat $LPROC/lov/$LOVNAME/stripesize`
 ORIGFREE=`cat $LPROC/lov/$LOVNAME/kbytesavail`
 MAXFREE=${MAXFREE:-$((200000 * $OSTCOUNT))}
-MDS=$(\ls $LPROC/mds 2> /dev/null | grep -v num_refs | tail -n 1)
+MDS=$(\ls $LPROC/mdt 2> /dev/null | grep -v num_refs | tail -n 1)
 TSTDIR=$DIR/quota_test_dir
 TSTDIR2=$DIR2/quota_test_dir
 SHOW_QUOTA_USER="$LFS quota -u $TSTUSR $MOUNT"
@@ -617,7 +617,7 @@ test_6() {
 		return 0;
 	fi
 
-	LIMIT=$((BUNIT_SZ * (OSTCOUNT + 1) * 5)) # 5 bunits per server
+	LIMIT=$(($BUNIT_SZ * $(($OSTCOUNT + 1)) * 5)) # 5 bunits per server
 	FILEA="$TSTDIR/quota_tst60_a"
 	FILEB="$TSTDIR/quota_tst60_b"
 	

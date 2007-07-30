@@ -38,22 +38,7 @@
 #endif
 #endif
 
-void mdc_readdir_pack(struct ptlrpc_request *req, int offset, __u64 pg_off,
-                      __u32 size, struct ll_fid *fid)
-{
-        struct mds_body *b;
-
-        b = lustre_msg_buf(req->rq_reqmsg, offset, sizeof(*b));
-        b->fsuid = current->fsuid;
-        b->fsgid = current->fsgid;
-        b->capability = current->cap_effective;
-        b->fid1 = *fid;
-        b->size = pg_off;                       /* !! */
-        b->suppgid = -1;
-        b->nlink = size;                        /* !! */
-}
-
-static void mdc_pack_body(struct mds_body *b)
+static void mdc_pack_body(struct mdt_body *b)
 {
         LASSERT (b != NULL);
 
@@ -62,46 +47,98 @@ static void mdc_pack_body(struct mds_body *b)
         b->capability = current->cap_effective;
 }
 
-void mdc_pack_req_body(struct ptlrpc_request *req, int offset,
-                       __u64 valid, struct ll_fid *fid, int ea_size, int flags)
+void mdc_pack_capa(struct ptlrpc_request *req, int offset, struct obd_capa *oc)
 {
-        struct mds_body *b = lustre_msg_buf(req->rq_reqmsg, offset, sizeof(*b));
+        struct lustre_capa *c;
 
-        if (fid)
-                b->fid1 = *fid;
+        if (oc == NULL) {
+                LASSERT(lustre_msg_buflen(req->rq_reqmsg, offset) == 0);
+                return;
+        }
+
+        c = lustre_msg_buf(req->rq_reqmsg, offset, sizeof(*c));
+        LASSERT(c != NULL);
+        capa_cpy(c, oc);
+        DEBUG_CAPA(D_SEC, c, "pack");
+}
+
+void mdc_is_subdir_pack(struct ptlrpc_request *req, int offset,
+                        const struct lu_fid *pfid,
+                        const struct lu_fid *cfid, int flags)
+{
+        struct mdt_body *b = lustre_msg_buf(req->rq_reqmsg, offset, sizeof(*b));
+
+        if (pfid)
+                b->fid1 = *pfid;
+        if (cfid)
+                b->fid2 = *cfid;
+        b->valid = OBD_MD_FLID;
+        b->flags = flags;
+}
+
+void mdc_pack_req_body(struct ptlrpc_request *req, int offset,
+                       __u64 valid, const struct lu_fid *fid,
+                       struct obd_capa *oc, int ea_size, int flags)
+{
+        struct mdt_body *b = lustre_msg_buf(req->rq_reqmsg, offset, sizeof(*b));
+
         b->valid = valid;
         b->eadatasize = ea_size;
         b->flags = flags;
         mdc_pack_body(b);
+        if (fid) {
+                b->fid1 = *fid;
+                mdc_pack_capa(req, offset + 1, oc);
+        }
+}
+
+void mdc_readdir_pack(struct ptlrpc_request *req, int offset, __u64 pgoff,
+                      __u32 size, const struct lu_fid *fid, struct obd_capa *oc)
+{
+        struct mdt_body *b;
+
+        b = lustre_msg_buf(req->rq_reqmsg, offset, sizeof(*b));
+        b->fid1 = *fid;
+        b->size = pgoff;                       /* !! */
+        b->suppgid = -1;
+        b->nlink = size;                        /* !! */
+        mdc_pack_body(b);
+        mdc_pack_capa(req, offset + 1, oc);
 }
 
 /* packing of MDS records */
 void mdc_create_pack(struct ptlrpc_request *req, int offset,
-                     struct mdc_op_data *op_data, const void *data, int datalen,
+                     struct md_op_data *op_data, const void *data, int datalen,
                      __u32 mode, __u32 uid, __u32 gid, __u32 cap_effective,
                      __u64 rdev)
 {
-        struct mds_rec_create *rec;
+        struct mdt_rec_create *rec;
         char *tmp;
-        rec = lustre_msg_buf(req->rq_reqmsg, offset, sizeof (*rec));
+        
+        rec = lustre_msg_buf(req->rq_reqmsg, offset, sizeof(*rec));
 
         rec->cr_opcode = REINT_CREATE;
         rec->cr_fsuid = uid;
         rec->cr_fsgid = gid;
         rec->cr_cap = cap_effective;
-        rec->cr_fid = op_data->fid1;
-        memset(&rec->cr_replayfid, 0, sizeof(rec->cr_replayfid));
+        rec->cr_fid1 = op_data->op_fid1;
+        rec->cr_fid2 = op_data->op_fid2;
         rec->cr_mode = mode;
         rec->cr_rdev = rdev;
-        rec->cr_time = op_data->mod_time;
-        rec->cr_suppgid = op_data->suppgids[0];
+        rec->cr_time = op_data->op_mod_time;
+        rec->cr_suppgid1 = op_data->op_suppgids[0];
+        rec->cr_suppgid2 = op_data->op_suppgids[1];
+        rec->cr_flags = op_data->op_flags;
+        rec->cr_bias = op_data->op_bias;
 
-        tmp = lustre_msg_buf(req->rq_reqmsg, offset + 1, op_data->namelen + 1);
-        LOGL0(op_data->name, op_data->namelen, tmp);
+        mdc_pack_capa(req, offset + 1, op_data->op_capa1);
+
+        tmp = lustre_msg_buf(req->rq_reqmsg, offset + 2, op_data->op_namelen + 1);
+        LOGL0(op_data->op_name, op_data->op_namelen, tmp);
 
         if (data) {
-                tmp = lustre_msg_buf(req->rq_reqmsg, offset + 2, datalen);
-                memcpy (tmp, data, datalen);
+                tmp = lustre_msg_buf(req->rq_reqmsg, offset + 3, datalen);
+                memcpy(tmp, data, datalen);
         }
 }
 
@@ -127,21 +164,21 @@ static __u32 mds_pack_open_flags(__u32 flags)
 
 /* packing of MDS records */
 void mdc_join_pack(struct ptlrpc_request *req, int offset,
-                   struct mdc_op_data *op_data, __u64 head_size)
+                   struct md_op_data *op_data, __u64 head_size)
 {
-        struct mds_rec_join *rec;
+        struct mdt_rec_join *rec;
 
         rec = lustre_msg_buf(req->rq_reqmsg, offset, sizeof(*rec));
         LASSERT(rec != NULL);
-        rec->jr_fid = op_data->fid2;
+        rec->jr_fid = op_data->op_fid2;
         rec->jr_headsize = head_size;
 }
 
 void mdc_open_pack(struct ptlrpc_request *req, int offset,
-                   struct mdc_op_data *op_data, __u32 mode, __u64 rdev,
+                   struct md_op_data *op_data, __u32 mode, __u64 rdev,
                    __u32 flags, const void *lmm, int lmmlen)
 {
-        struct mds_rec_create *rec;
+        struct mdt_rec_create *rec;
         char *tmp;
         rec = lustre_msg_buf(req->rq_reqmsg, offset, sizeof (*rec));
 
@@ -150,209 +187,232 @@ void mdc_open_pack(struct ptlrpc_request *req, int offset,
         rec->cr_fsuid = current->fsuid;
         rec->cr_fsgid = current->fsgid;
         rec->cr_cap = current->cap_effective;
-        rec->cr_fid = op_data->fid1;
-        memset(&rec->cr_replayfid, 0, sizeof(rec->cr_replayfid));
+        if (op_data != NULL) {
+                rec->cr_fid1 = op_data->op_fid1;
+                rec->cr_fid2 = op_data->op_fid2;
+        }
         rec->cr_mode = mode;
         rec->cr_flags = mds_pack_open_flags(flags);
+        rec->cr_time = op_data->op_mod_time;
         rec->cr_rdev = rdev;
-        rec->cr_time = op_data->mod_time;
-        rec->cr_suppgid = op_data->suppgids[0];
+        rec->cr_suppgid1 = op_data->op_suppgids[0];
+        rec->cr_suppgid2 = op_data->op_suppgids[1];
+        rec->cr_bias = op_data->op_bias;
 
-        if (op_data->name) {
-                tmp = lustre_msg_buf(req->rq_reqmsg, offset + 1,
-                                     op_data->namelen + 1);
-                LOGL0(op_data->name, op_data->namelen, tmp);
+        mdc_pack_capa(req, offset + 1, op_data->op_capa1);
+        /* the next buffer is child capa, which is used for replay,
+         * will be packed from the data in reply message. */
+
+        if (op_data->op_name) {
+                tmp = lustre_msg_buf(req->rq_reqmsg, offset + 3,
+                                     op_data->op_namelen + 1);
+                LOGL0(op_data->op_name, op_data->op_namelen, tmp);
         }
 
         if (lmm) {
                 rec->cr_flags |= MDS_OPEN_HAS_EA;
 #ifndef __KERNEL__
                 /*XXX a hack for liblustre to set EA (LL_IOC_LOV_SETSTRIPE) */
-                rec->cr_replayfid = op_data->fid2;
+                rec->cr_fid2 = op_data->op_fid2;
 #endif
-                tmp = lustre_msg_buf(req->rq_reqmsg, offset + 2, lmmlen);
+                tmp = lustre_msg_buf(req->rq_reqmsg, offset + 4, lmmlen);
                 memcpy (tmp, lmm, lmmlen);
         }
 }
 
-void mdc_setattr_pack(struct ptlrpc_request *req, int offset,
-                      struct mdc_op_data *data, struct iattr *iattr, void *ea,
-                      int ealen, void *ea2, int ea2len)
+static void mdc_setattr_pack_rec(struct mdt_rec_setattr *rec,
+                                 struct md_op_data *op_data)
 {
-        struct mds_rec_setattr *rec = lustre_msg_buf(req->rq_reqmsg, offset,
-                                                     sizeof(*rec));
         rec->sa_opcode = REINT_SETATTR;
         rec->sa_fsuid = current->fsuid;
         rec->sa_fsgid = current->fsgid;
         rec->sa_cap = current->cap_effective;
-        rec->sa_fid = data->fid1;
         rec->sa_suppgid = -1;
 
-        if (iattr) {
-                rec->sa_valid = iattr->ia_valid;
-                rec->sa_mode = iattr->ia_mode;
-                rec->sa_uid = iattr->ia_uid;
-                rec->sa_gid = iattr->ia_gid;
-                rec->sa_size = iattr->ia_size;
-                rec->sa_atime = LTIME_S(iattr->ia_atime);
-                rec->sa_mtime = LTIME_S(iattr->ia_mtime);
-                rec->sa_ctime = LTIME_S(iattr->ia_ctime);
-                rec->sa_attr_flags =
-                               ((struct ll_iattr_struct *)iattr)->ia_attr_flags;
-                if ((iattr->ia_valid & ATTR_GID) && in_group_p(iattr->ia_gid))
-                        rec->sa_suppgid = iattr->ia_gid;
-                else
-                        rec->sa_suppgid = data->suppgids[0];
+        rec->sa_fid = op_data->op_fid1;
+        rec->sa_valid = op_data->op_attr.ia_valid;
+        rec->sa_mode = op_data->op_attr.ia_mode;
+        rec->sa_uid = op_data->op_attr.ia_uid;
+        rec->sa_gid = op_data->op_attr.ia_gid;
+        rec->sa_size = op_data->op_attr.ia_size;
+        rec->sa_blocks = op_data->op_attr_blocks;
+        rec->sa_atime = LTIME_S(op_data->op_attr.ia_atime);
+        rec->sa_mtime = LTIME_S(op_data->op_attr.ia_mtime);
+        rec->sa_ctime = LTIME_S(op_data->op_attr.ia_ctime);
+        rec->sa_attr_flags = ((struct ll_iattr *)&op_data->op_attr)->ia_attr_flags;
+        if ((op_data->op_attr.ia_valid & ATTR_GID) &&
+            in_group_p(op_data->op_attr.ia_gid))
+                rec->sa_suppgid = op_data->op_attr.ia_gid;
+        else
+                rec->sa_suppgid = op_data->op_suppgids[0];
+}
+
+static void mdc_epoch_pack(struct mdt_epoch *epoch, struct md_op_data *op_data)
+{
+        memcpy(&epoch->handle, &op_data->op_handle, sizeof(epoch->handle));
+        epoch->ioepoch = op_data->op_ioepoch;
+        epoch->flags = op_data->op_flags;
+}
+
+void mdc_setattr_pack(struct ptlrpc_request *req, int offset,
+                      struct md_op_data *op_data, void *ea,
+                      int ealen, void *ea2, int ea2len)
+{
+        struct mdt_rec_setattr *rec;
+        struct mdt_epoch *epoch;
+        
+        rec = lustre_msg_buf(req->rq_reqmsg, offset, sizeof (*rec));        
+        mdc_setattr_pack_rec(rec, op_data);
+
+        mdc_pack_capa(req, offset + 1, op_data->op_capa1);
+
+        if (op_data->op_flags & (MF_SOM_CHANGE | MF_EPOCH_OPEN)) {
+                epoch = lustre_msg_buf(req->rq_reqmsg, offset + 2,
+                                        sizeof(*epoch));
+                mdc_epoch_pack(epoch, op_data);
         }
 
         if (ealen == 0)
                 return;
 
-        memcpy(lustre_msg_buf(req->rq_reqmsg, offset + 1, ealen), ea, ealen);
+        memcpy(lustre_msg_buf(req->rq_reqmsg, offset + 3, ealen), ea, ealen);
 
         if (ea2len == 0)
                 return;
 
-        memcpy(lustre_msg_buf(req->rq_reqmsg, offset + 2, ea2len), ea2, ea2len);
+        memcpy(lustre_msg_buf(req->rq_reqmsg, offset + 4, ea2len), ea2, ea2len);
 }
 
 void mdc_unlink_pack(struct ptlrpc_request *req, int offset,
-                     struct mdc_op_data *data)
+                     struct md_op_data *op_data)
 {
-        struct mds_rec_unlink *rec;
+        struct mdt_rec_unlink *rec;
         char *tmp;
 
         rec = lustre_msg_buf(req->rq_reqmsg, offset, sizeof (*rec));
         LASSERT (rec != NULL);
 
         rec->ul_opcode = REINT_UNLINK;
-        rec->ul_fsuid = current->fsuid;
-        rec->ul_fsgid = current->fsgid;
-        rec->ul_cap = current->cap_effective;
-        rec->ul_mode = data->create_mode;
-        rec->ul_suppgid = data->suppgids[0];
-        rec->ul_fid1 = data->fid1;
-        rec->ul_fid2 = data->fid2;
-        rec->ul_time = data->mod_time;
+        rec->ul_fsuid = op_data->op_fsuid;//current->fsuid;
+        rec->ul_fsgid = op_data->op_fsgid;//current->fsgid;
+        rec->ul_cap = op_data->op_cap;//current->cap_effective;
+        rec->ul_mode = op_data->op_mode;
+        rec->ul_suppgid = op_data->op_suppgids[0];
+        rec->ul_fid1 = op_data->op_fid1;
+        rec->ul_fid2 = op_data->op_fid2;
+        rec->ul_time = op_data->op_mod_time;
+        rec->ul_bias = op_data->op_bias;
 
-        tmp = lustre_msg_buf(req->rq_reqmsg, offset + 1, data->namelen + 1);
-        LASSERT (tmp != NULL);
-        LOGL0(data->name, data->namelen, tmp);
+        mdc_pack_capa(req, offset + 1, op_data->op_capa1);
+
+        tmp = lustre_msg_buf(req->rq_reqmsg, offset + 2, op_data->op_namelen + 1);
+        LASSERT(tmp != NULL);
+        LOGL0(op_data->op_name, op_data->op_namelen, tmp);
 }
 
 void mdc_link_pack(struct ptlrpc_request *req, int offset,
-                   struct mdc_op_data *data)
+                   struct md_op_data *op_data)
 {
-        struct mds_rec_link *rec;
+        struct mdt_rec_link *rec;
         char *tmp;
 
         rec = lustre_msg_buf(req->rq_reqmsg, offset, sizeof (*rec));
 
         rec->lk_opcode = REINT_LINK;
-        rec->lk_fsuid = current->fsuid;
-        rec->lk_fsgid = current->fsgid;
-        rec->lk_cap = current->cap_effective;
-        rec->lk_suppgid1 = data->suppgids[0];
-        rec->lk_suppgid2 = data->suppgids[1];
-        rec->lk_fid1 = data->fid1;
-        rec->lk_fid2 = data->fid2;
-        rec->lk_time = data->mod_time;
+        rec->lk_fsuid = op_data->op_fsuid;//current->fsuid;
+        rec->lk_fsgid = op_data->op_fsgid;//current->fsgid;
+        rec->lk_cap = op_data->op_cap;//current->cap_effective;
+        rec->lk_suppgid1 = op_data->op_suppgids[0];
+        rec->lk_suppgid2 = op_data->op_suppgids[1];
+        rec->lk_fid1 = op_data->op_fid1;
+        rec->lk_fid2 = op_data->op_fid2;
+        rec->lk_time = op_data->op_mod_time;
+        rec->lk_bias = op_data->op_bias;
 
-        tmp = lustre_msg_buf(req->rq_reqmsg, offset + 1, data->namelen + 1);
-        LOGL0(data->name, data->namelen, tmp);
+        mdc_pack_capa(req, offset + 1, op_data->op_capa1);
+        mdc_pack_capa(req, offset + 2, op_data->op_capa2);
+
+        tmp = lustre_msg_buf(req->rq_reqmsg, offset + 3, op_data->op_namelen + 1);
+        LOGL0(op_data->op_name, op_data->op_namelen, tmp);
 }
 
 void mdc_rename_pack(struct ptlrpc_request *req, int offset,
-                     struct mdc_op_data *data,
+                     struct md_op_data *op_data,
                      const char *old, int oldlen, const char *new, int newlen)
 {
-        struct mds_rec_rename *rec;
+        struct mdt_rec_rename *rec;
         char *tmp;
 
         rec = lustre_msg_buf(req->rq_reqmsg, offset, sizeof (*rec));
 
         /* XXX do something about time, uid, gid */
         rec->rn_opcode = REINT_RENAME;
-        rec->rn_fsuid = current->fsuid;
-        rec->rn_fsgid = current->fsgid;
-        rec->rn_cap = current->cap_effective;
-        rec->rn_suppgid1 = data->suppgids[0];
-        rec->rn_suppgid2 = data->suppgids[1];
-        rec->rn_fid1 = data->fid1;
-        rec->rn_fid2 = data->fid2;
-        rec->rn_time = data->mod_time;
+        rec->rn_fsuid = op_data->op_fsuid;//current->fsuid;
+        rec->rn_fsgid = op_data->op_fsgid;//current->fsgid;
+        rec->rn_cap = op_data->op_cap;//current->cap_effective;
+        rec->rn_suppgid1 = op_data->op_suppgids[0];
+        rec->rn_suppgid2 = op_data->op_suppgids[1];
+        rec->rn_fid1 = op_data->op_fid1;
+        rec->rn_fid2 = op_data->op_fid2;
+        rec->rn_time = op_data->op_mod_time;
+        rec->rn_mode = op_data->op_mode;
+        rec->rn_bias = op_data->op_bias;
 
-        tmp = lustre_msg_buf(req->rq_reqmsg, offset + 1, oldlen + 1);
+        mdc_pack_capa(req, offset + 1, op_data->op_capa1);
+        mdc_pack_capa(req, offset + 2, op_data->op_capa2);
+
+        tmp = lustre_msg_buf(req->rq_reqmsg, offset + 3, oldlen + 1);
         LOGL0(old, oldlen, tmp);
 
         if (new) {
-                tmp = lustre_msg_buf(req->rq_reqmsg, offset + 2, newlen + 1);
+                tmp = lustre_msg_buf(req->rq_reqmsg, offset + 4, newlen + 1);
                 LOGL0(new, newlen, tmp);
         }
 }
 
-void mdc_getattr_pack(struct ptlrpc_request *req, int offset, int valid,
-                      int flags, struct mdc_op_data *data)
+void mdc_getattr_pack(struct ptlrpc_request *req, int offset, __u64 valid,
+                      int flags, struct md_op_data *op_data)
 {
-        struct mds_body *b;
-        b = lustre_msg_buf(req->rq_reqmsg, offset, sizeof(*b));
+        struct mdt_body *b;
+        b = lustre_msg_buf(req->rq_reqmsg, offset, sizeof (*b));
 
         b->fsuid = current->fsuid;
         b->fsgid = current->fsgid;
         b->capability = current->cap_effective;
         b->valid = valid;
+        if (op_data->op_bias & MDS_CHECK_SPLIT)
+                b->valid |= OBD_MD_FLCKSPLIT;
+        if (op_data->op_bias & MDS_CROSS_REF)
+                b->valid |= OBD_MD_FLCROSSREF;
         b->flags = flags | MDS_BFLAG_EXT_FLAGS;
-        b->suppgid = data->suppgids[0];
+        b->suppgid = op_data->op_suppgids[0];
 
-        b->fid1 = data->fid1;
-        b->fid2 = data->fid2;
-        if (data->name) {
+        b->fid1 = op_data->op_fid1;
+        b->fid2 = op_data->op_fid2;
+
+        mdc_pack_capa(req, offset + 1, op_data->op_capa1);
+
+        if (op_data->op_name) {
                 char *tmp;
-                tmp = lustre_msg_buf(req->rq_reqmsg, offset + 1,
-                                     data->namelen + 1);
-                LOGL0(data->name, data->namelen, tmp);
+                tmp = lustre_msg_buf(req->rq_reqmsg, offset + 2,
+                                     op_data->op_namelen + 1);
+                LOGL0(op_data->op_name, op_data->op_namelen, tmp);
         }
 }
 
-void mdc_close_pack(struct ptlrpc_request *req, int offset, struct obdo *oa,
-                    int valid, struct obd_client_handle *och)
+void mdc_close_pack(struct ptlrpc_request *req, int offset,
+                    struct md_op_data *op_data)
 {
-        struct mds_body *body;
+        struct mdt_epoch *epoch;
+        struct mdt_rec_setattr *rec;
 
-        body = lustre_msg_buf(req->rq_reqmsg, offset, sizeof(*body));
+        epoch = lustre_msg_buf(req->rq_reqmsg, offset, sizeof(*epoch));
+        rec = lustre_msg_buf(req->rq_reqmsg, offset + 1, sizeof(*rec));
 
-        mdc_pack_fid(&body->fid1, oa->o_id, 0, oa->o_mode);
-        memcpy(&body->handle, &och->och_fh, sizeof(body->handle));
-        if (oa->o_valid & OBD_MD_FLATIME) {
-                body->atime = oa->o_atime;
-                body->valid |= OBD_MD_FLATIME;
-        }
-        if (oa->o_valid & OBD_MD_FLMTIME) {
-                body->mtime = oa->o_mtime;
-                body->valid |= OBD_MD_FLMTIME;
-        }
-        if (oa->o_valid & OBD_MD_FLCTIME) {
-                body->ctime = oa->o_ctime;
-                body->valid |= OBD_MD_FLCTIME;
-        }
-        if (oa->o_valid & OBD_MD_FLSIZE) {
-                body->size = oa->o_size;
-                body->valid |= OBD_MD_FLSIZE;
-        }
-        if (oa->o_valid & OBD_MD_FLBLOCKS) {
-                body->blocks = oa->o_blocks;
-                body->valid |= OBD_MD_FLBLOCKS;
-        }
-        if (oa->o_valid & OBD_MD_FLFLAGS) {
-                body->flags = oa->o_flags;
-                body->valid |= OBD_MD_FLFLAGS;
-        }
+        mdc_setattr_pack_rec(rec, op_data);
+        mdc_pack_capa(req, offset + 2, op_data->op_capa1);
+        mdc_epoch_pack(epoch, op_data);
 }
-
-struct mdc_cache_waiter {       
-        struct list_head        mcw_entry;
-        wait_queue_head_t       mcw_waitq;
-};
 
 static int mdc_req_avail(struct client_obd *cli, struct mdc_cache_waiter *mcw)
 {

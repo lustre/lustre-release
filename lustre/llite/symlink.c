@@ -34,9 +34,9 @@ static int ll_readlink_internal(struct inode *inode,
 {
         struct ll_inode_info *lli = ll_i2info(inode);
         struct ll_sb_info *sbi = ll_i2sbi(inode);
-        struct ll_fid fid;
-        struct mds_body *body;
         int rc, symlen = inode->i_size + 1;
+        struct mdt_body *body;
+        struct obd_capa *oc;
         ENTRY;
 
         *request = NULL;
@@ -47,9 +47,10 @@ static int ll_readlink_internal(struct inode *inode,
                 RETURN(0);
         }
 
-        ll_inode2fid(&fid, inode);
-        rc = mdc_getattr(sbi->ll_mdc_exp, &fid,
-                         OBD_MD_LINKNAME, symlen, request);
+        oc = ll_mdscapa_get(inode);
+        rc = md_getattr(sbi->ll_md_exp, ll_inode2fid(inode), oc,
+                        OBD_MD_LINKNAME, symlen, request);
+        capa_put(oc);
         if (rc) {
                 if (rc != -ENOENT)
                         CERROR("inode %lu: rc = %d\n", inode->i_ino, rc);
@@ -110,7 +111,7 @@ static int ll_readlink(struct dentry *dentry, char *buffer, int buflen)
 
         CDEBUG(D_VFSTRACE, "VFS Op\n");
         /* on symlinks lli_open_sem protects lli_symlink_name allocation/data */
-        down(&lli->lli_open_sem);
+        down(&lli->lli_size_sem);
         rc = ll_readlink_internal(inode, &request, &symname);
         if (rc)
                 GOTO(out, rc);
@@ -118,7 +119,7 @@ static int ll_readlink(struct dentry *dentry, char *buffer, int buflen)
         rc = vfs_readlink(dentry, buffer, buflen, symname);
         ptlrpc_req_finished(request);
  out:
-        up(&lli->lli_open_sem);
+        up(&lli->lli_size_sem);
         RETURN(rc);
 }
 
@@ -128,7 +129,8 @@ static int ll_readlink(struct dentry *dentry, char *buffer, int buflen)
 # define LL_FOLLOW_LINK_RETURN_TYPE int
 #endif
 
-static LL_FOLLOW_LINK_RETURN_TYPE ll_follow_link(struct dentry *dentry, struct nameidata *nd)
+static LL_FOLLOW_LINK_RETURN_TYPE ll_follow_link(struct dentry *dentry,
+                                                 struct nameidata *nd)
 {
         struct inode *inode = dentry->d_inode;
         struct ll_inode_info *lli = ll_i2info(inode);
@@ -152,9 +154,9 @@ static LL_FOLLOW_LINK_RETURN_TYPE ll_follow_link(struct dentry *dentry, struct n
 #endif
 
         CDEBUG(D_VFSTRACE, "VFS Op\n");
-        down(&lli->lli_open_sem);
+        down(&lli->lli_size_sem);
         rc = ll_readlink_internal(inode, &request, &symname);
-        up(&lli->lli_open_sem);
+        up(&lli->lli_size_sem);
         if (rc) {
                 path_release(nd); /* Kernel assumes that ->follow_link()
                                      releases nameidata on error */
@@ -164,21 +166,21 @@ static LL_FOLLOW_LINK_RETURN_TYPE ll_follow_link(struct dentry *dentry, struct n
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,6,8))
         rc = vfs_follow_link(nd, symname);
 #else
-# ifdef HAVE_COOKIE_FOLLOW_LINK
+#ifdef HAVE_COOKIE_FOLLOW_LINK
         nd_set_link(nd, symname);
         /* @symname may contain a pointer to the request message buffer,
            we delay request releasing until ll_put_link then. */
         RETURN(request);
-# else
+#else
         if (request != NULL) {
                 /* falling back to recursive follow link if the request
                  * needs to be cleaned up still. */
-                rc = vfs_follow_link(nd, symname);
+        rc = vfs_follow_link(nd, symname);
                 GOTO(out, rc);
         }
         nd_set_link(nd, symname);
         RETURN(0);
-# endif
+#endif
 #endif
 out:
         ptlrpc_req_finished(request);

@@ -24,6 +24,10 @@
  */
 #define DEBUG_SUBSYSTEM S_CLASS
 
+#ifndef __KERNEL__
+# include <liblustre.h>
+#endif
+
 #include <obd_support.h>
 #include <obd.h>
 #include <lprocfs_status.h>
@@ -51,8 +55,8 @@ struct ll_rpc_opcode {
         { OST_OPEN,         "ost_open" },
         { OST_CLOSE,        "ost_close" },
         { OST_STATFS,       "ost_statfs" },
-        { 14,                NULL },
-        { 15,                NULL },
+        { 14,               "ost_san_read" },
+        { 15,               "ost_san_write" },
         { OST_SYNC,         "ost_sync" },
         { OST_SET_INFO,     "ost_set_info" },
         { OST_QUOTACHECK,   "ost_quotacheck" },
@@ -75,14 +79,36 @@ struct ll_rpc_opcode {
         { MDS_QUOTACTL,     "mds_quotactl" },
         { MDS_GETXATTR,     "mds_getxattr" },
         { MDS_SETXATTR,     "mds_setxattr" },
+        { MDS_WRITEPAGE,    "mds_writepage" },
+        { MDS_IS_SUBDIR,    "mds_is_subdir" },
         { LDLM_ENQUEUE,     "ldlm_enqueue" },
         { LDLM_CONVERT,     "ldlm_convert" },
         { LDLM_CANCEL,      "ldlm_cancel" },
         { LDLM_BL_CALLBACK, "ldlm_bl_callback" },
         { LDLM_CP_CALLBACK, "ldlm_cp_callback" },
         { LDLM_GL_CALLBACK, "ldlm_gl_callback" },
+        { MGS_CONNECT,      "mgs_connect" },
+        { MGS_DISCONNECT,   "mgs_disconnect" },
+        { MGS_EXCEPTION,    "mgs_exception" },
+        { MGS_TARGET_REG,   "mgs_target_reg" },
+        { MGS_TARGET_DEL,   "mgs_target_del" },
         { OBD_PING,         "obd_ping" },
-        { OBD_LOG_CANCEL,   "llog_origin_handle_cancel"},
+        { OBD_LOG_CANCEL,   "llog_origin_handle_cancel" },
+        { OBD_QC_CALLBACK,  "obd_qc_callback" },
+        { LLOG_ORIGIN_HANDLE_CREATE, "llog_origin_handle_create" },
+        { LLOG_ORIGIN_HANDLE_NEXT_BLOCK, "llog_origin_handle_next_block" },
+        { LLOG_ORIGIN_HANDLE_READ_HEADER, "llog_origin_handle_read_header" },
+        { LLOG_ORIGIN_HANDLE_WRITE_REC, "llog_origin_handle_write_rec" },
+        { LLOG_ORIGIN_HANDLE_CLOSE, "llog_origin_handle_close" },
+        { LLOG_ORIGIN_CONNECT, "llog_origin_connect" },
+        { LLOG_CATINFO,     "llog_catinfo" },
+        { LLOG_ORIGIN_HANDLE_PREV_BLOCK, "llog_origin_handle_prev_block" },
+        { LLOG_ORIGIN_HANDLE_DESTROY, "llog_origin_handle_destroy" },
+        { FLD_QUERY,        "fld_query" },
+        { SEQ_QUERY,        "seq_query" },
+        { SEC_CTX_INIT,     "sec_ctx_init" },
+        { SEC_CTX_INIT_CONT,"sec_ctx_init_cont" },
+        { SEC_CTX_FINI,     "sec_ctx_fini" }
 };
 
 const char* ll_opcode2str(__u32 opcode)
@@ -195,7 +221,7 @@ ptlrpc_lprocfs_write_req_history_max(struct file *file, const char *buffer,
          * hose a kernel by allowing the request history to grow too
          * far. */
         bufpages = (svc->srv_buf_size + CFS_PAGE_SIZE - 1) >> CFS_PAGE_SHIFT;
-        if (val > num_physpages/(2*bufpages))
+        if (val > num_physpages/(2 * bufpages))
                 return -ERANGE;
 
         spin_lock(&svc->srv_lock);
@@ -327,8 +353,8 @@ static int ptlrpc_lprocfs_svc_req_history_show(struct seq_file *s, void *iter)
                  * parser. Currently I only print stuff here I know is OK
                  * to look at coz it was set up in request_in_callback()!!! */
                 seq_printf(s, LPD64":%s:%s:"LPD64":%d:%s ",
-                           req->rq_history_seq, libcfs_nid2str(req->rq_self), 
-                           libcfs_id2str(req->rq_peer), req->rq_xid, 
+                           req->rq_history_seq, libcfs_nid2str(req->rq_self),
+                           libcfs_id2str(req->rq_peer), req->rq_xid,
                            req->rq_reqlen,ptlrpc_rqphase2str(req));
 
                 if (svc->srv_request_history_print_fn == NULL)
@@ -441,9 +467,10 @@ EXPORT_SYMBOL(ptlrpc_lprocfs_brw);
 
 void ptlrpc_lprocfs_unregister_service(struct ptlrpc_service *svc)
 {
-        if (svc->srv_procroot != NULL) 
+        if (svc->srv_procroot != NULL)
                 lprocfs_remove(&svc->srv_procroot);
-        if (svc->srv_stats) 
+
+        if (svc->srv_stats)
                 lprocfs_free_stats(&svc->srv_stats);
 }
 
@@ -451,6 +478,7 @@ void ptlrpc_lprocfs_unregister_obd(struct obd_device *obd)
 {
         if (obd->obd_svc_procroot)
                 lprocfs_remove(&obd->obd_svc_procroot);
+
         if (obd->obd_svc_stats)
                 lprocfs_free_stats(&obd->obd_svc_stats);
 }
@@ -472,7 +500,7 @@ int lprocfs_wr_evict_client(struct file *file, const char *buffer,
          * - jay, jxiong@clusterfs.com */
         class_incref(obd);
         LPROCFS_EXIT();
-
+ 
         sscanf(buffer, "%40s", tmpbuf);
         obd_export_evict_by_uuid(obd, tmpbuf);
 

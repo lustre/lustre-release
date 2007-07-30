@@ -1,10 +1,9 @@
-
 #!/bin/bash
 
 set -e
 
-#         bug  11190 5494 7288 5493
-ALWAYS_EXCEPT="19b   24   27   52 $RECOVERY_SMALL_EXCEPT"
+#         bug  5494 7288 5493
+ALWAYS_EXCEPT="24   27   52 $RECOVERY_SMALL_EXCEPT"
 
 PTLDEBUG=${PTLDEBUG:--1}
 LUSTRE=${LUSTRE:-`dirname $0`/..}
@@ -20,7 +19,7 @@ SETUP=${SETUP:-"setup"}
 CLEANUP=${CLEANUP:-"cleanup"}
 
 setup() {
-    formatall
+    [ "$REFORMAT" ] && formatall
     setupall
 }
 
@@ -136,8 +135,8 @@ run_test 11 "wake up a thread waiting for completion after eviction (b=2460)"
 #b=2494
 test_12(){
     $LCTL mark multiop $MOUNT/$tfile OS_c 
-    do_facet mds "sysctl -w lustre.fail_loc=0x115"
-    clear_failloc mds $((TIMEOUT * 2)) &
+    do_facet $SINGLEMDS "sysctl -w lustre.fail_loc=0x115"
+    clear_failloc $SINGLEMDS $((TIMEOUT * 2)) &
     multiop $MOUNT/$tfile OS_c  &
     PID=$!
 #define OBD_FAIL_MDS_CLOSE_NET           0x115
@@ -154,9 +153,9 @@ test_13() {
     mkdir $MOUNT/readdir || return 1
     touch $MOUNT/readdir/newentry || return
 # OBD_FAIL_MDS_READPAGE_NET|OBD_FAIL_ONCE
-    do_facet mds "sysctl -w lustre.fail_loc=0x80000104"
+    do_facet $SINGLEMDS "sysctl -w lustre.fail_loc=0x80000104"
     ls $MOUNT/readdir || return 3
-    do_facet mds "sysctl -w lustre.fail_loc=0"
+    do_facet $SINGLEMDS "sysctl -w lustre.fail_loc=0"
     rm -rf $MOUNT/readdir || return 4
 }
 run_test 13 "mdc_readpage restart test (bug 1138)"
@@ -166,14 +165,14 @@ test_14() {
     mkdir $MOUNT/readdir
     touch $MOUNT/readdir/newentry
 # OBD_FAIL_MDS_SENDPAGE|OBD_FAIL_ONCE
-    do_facet mds "sysctl -w lustre.fail_loc=0x80000106"
+    do_facet $SINGLEMDS "sysctl -w lustre.fail_loc=0x80000106"
     ls $MOUNT/readdir || return 1
-    do_facet mds "sysctl -w lustre.fail_loc=0"
+    do_facet $SINGLEMDS "sysctl -w lustre.fail_loc=0"
 }
 run_test 14 "mdc_readpage resend test (bug 1138)"
 
 test_15() {
-    do_facet mds "sysctl -w lustre.fail_loc=0x80000128"
+    do_facet $SINGLEMDS "sysctl -w lustre.fail_loc=0x80000128"
     touch $DIR/$tfile && return 1
     return 0
 }
@@ -198,11 +197,11 @@ test_16() {
     stop_read_ahead
 
 #define OBD_FAIL_PTLRPC_BULK_PUT_NET 0x504 | OBD_FAIL_ONCE
-    do_facet ost1 sysctl -w lustre.fail_loc=0x80000504
+    do_facet ost1 "sysctl -w lustre.fail_loc=0x80000504"
     cancel_lru_locks osc
     # OST bulk will time out here, client resends
     do_facet client "cmp /etc/termcap $MOUNT/termcap" || return 1
-    sysctl -w lustre.fail_loc=0
+    do_facet ost1 sysctl -w lustre.fail_loc=0
     # give recovery a chance to finish (shouldn't take long)
     sleep $TIMEOUT
     do_facet client "cmp /etc/termcap $MOUNT/termcap" || return 2
@@ -213,13 +212,13 @@ run_test 16 "timeout bulk put, don't evict client (2732)"
 test_17() {
     # OBD_FAIL_PTLRPC_BULK_GET_NET 0x0503 | OBD_FAIL_ONCE
     # OST bulk will time out here, client retries
-    sysctl -w lustre.fail_loc=0x80000503
+    do_facet ost1 sysctl -w lustre.fail_loc=0x80000503
     # need to ensure we send an RPC
     do_facet client cp /etc/termcap $DIR/$tfile
     sync
 
     sleep $TIMEOUT
-    sysctl -w lustre.fail_loc=0
+    do_facet ost1 sysctl -w lustre.fail_loc=0
     do_facet client "df $DIR"
     # expect cmp to succeed, client resent bulk
     do_facet client "cmp /etc/termcap $DIR/$tfile" || return 3
@@ -242,7 +241,7 @@ test_18a() {
 
     do_facet client cp /etc/termcap $f
     sync
-    local osc2dev=`grep ${ost2_svc}-osc- $LPROC/devices | awk '{print $1}'`
+    local osc2dev=`grep ${ost2_svc}-osc- $LPROC/devices | egrep -v 'MDT' | awk '{print $1}'`
     $LCTL --device $osc2dev deactivate || return 3
     # my understanding is that there should be nothing in the page
     # cache after the client reconnects?     
@@ -338,18 +337,18 @@ test_21a() {
        multiop $DIR/$tdir-1/f O_c &
        close_pid=$!
 
-       do_facet mds "sysctl -w lustre.fail_loc=0x80000129"
+       do_facet $SINGLEMDS "sysctl -w lustre.fail_loc=0x80000129"
        multiop $DIR/$tdir-2/f Oc &
        open_pid=$!
        sleep 1
-       do_facet mds "sysctl -w lustre.fail_loc=0"
+       do_facet $SINGLEMDS "sysctl -w lustre.fail_loc=0"
 
-       do_facet mds "sysctl -w lustre.fail_loc=0x80000115"
+       do_facet $SINGLEMDS "sysctl -w lustre.fail_loc=0x80000115"
        kill -USR1 $close_pid
        cancel_lru_locks mdc
        wait $close_pid || return 1
        wait $open_pid || return 2
-       do_facet mds "sysctl -w lustre.fail_loc=0"
+       do_facet $SINGLEMDS "sysctl -w lustre.fail_loc=0"
 
        $CHECKSTAT -t file $DIR/$tdir-1/f || return 3
        $CHECKSTAT -t file $DIR/$tdir-2/f || return 4
@@ -364,11 +363,11 @@ test_21b() {
        multiop $DIR/$tdir-1/f O_c &
        close_pid=$!
 
-       do_facet mds "sysctl -w lustre.fail_loc=0x80000107"
+       do_facet $SINGLEMDS "sysctl -w lustre.fail_loc=0x80000107"
        mcreate $DIR/$tdir-2/f &
        open_pid=$!
        sleep 1
-       do_facet mds "sysctl -w lustre.fail_loc=0"
+       do_facet $SINGLEMDS "sysctl -w lustre.fail_loc=0"
 
        kill -USR1 $close_pid
        cancel_lru_locks mdc
@@ -387,19 +386,19 @@ test_21c() {
        multiop $DIR/$tdir-1/f O_c &
        close_pid=$!
 
-       do_facet mds "sysctl -w lustre.fail_loc=0x80000107"
+       do_facet $SINGLEMDS "sysctl -w lustre.fail_loc=0x80000107"
        mcreate $DIR/$tdir-2/f &
        open_pid=$!
        sleep 3
-       do_facet mds "sysctl -w lustre.fail_loc=0"
+       do_facet $SINGLEMDS "sysctl -w lustre.fail_loc=0"
 
-       do_facet mds "sysctl -w lustre.fail_loc=0x80000115"
+       do_facet $SINGLEMDS "sysctl -w lustre.fail_loc=0x80000115"
        kill -USR1 $close_pid
        cancel_lru_locks mdc
        wait $close_pid || return 1
        wait $open_pid || return 2
 
-       do_facet mds "sysctl -w lustre.fail_loc=0"
+       do_facet $SINGLEMDS "sysctl -w lustre.fail_loc=0"
 
        $CHECKSTAT -t file $DIR/$tdir-1/f || return 2
        $CHECKSTAT -t file $DIR/$tdir-2/f || return 3
@@ -413,16 +412,16 @@ test_21d() {
        multiop $DIR/$tdir-1/f O_c &
        pid=$!
 
-       do_facet mds "sysctl -w lustre.fail_loc=0x80000129"
+       do_facet $SINGLEMDS "sysctl -w lustre.fail_loc=0x80000129"
        multiop $DIR/$tdir-2/f Oc &
        sleep 1
-       do_facet mds "sysctl -w lustre.fail_loc=0"
+       do_facet $SINGLEMDS "sysctl -w lustre.fail_loc=0"
 
-       do_facet mds "sysctl -w lustre.fail_loc=0x80000122"
+       do_facet $SINGLEMDS "sysctl -w lustre.fail_loc=0x80000122"
        kill -USR1 $pid
        cancel_lru_locks mdc
        wait $pid || return 1
-       do_facet mds "sysctl -w lustre.fail_loc=0"
+       do_facet $SINGLEMDS "sysctl -w lustre.fail_loc=0"
 
        $CHECKSTAT -t file $DIR/$tdir-1/f || return 2
        $CHECKSTAT -t file $DIR/$tdir-2/f || return 3
@@ -437,10 +436,10 @@ test_21e() {
        multiop $DIR/$tdir-1/f O_c &
        pid=$!
 
-       do_facet mds "sysctl -w lustre.fail_loc=0x80000119"
+       do_facet $SINGLEMDS "sysctl -w lustre.fail_loc=0x80000119"
        touch $DIR/$tdir-2/f &
        sleep 1
-       do_facet mds "sysctl -w lustre.fail_loc=0"
+       do_facet $SINGLEMDS "sysctl -w lustre.fail_loc=0"
 
        kill -USR1 $pid
        cancel_lru_locks mdc
@@ -459,16 +458,16 @@ test_21f() {
        multiop $DIR/$tdir-1/f O_c &
        pid=$!
 
-       do_facet mds "sysctl -w lustre.fail_loc=0x80000119"
+       do_facet $SINGLEMDS "sysctl -w lustre.fail_loc=0x80000119"
        touch $DIR/$tdir-2/f &
        sleep 1
-       do_facet mds "sysctl -w lustre.fail_loc=0"
+       do_facet $SINGLEMDS "sysctl -w lustre.fail_loc=0"
 
-       do_facet mds "sysctl -w lustre.fail_loc=0x80000122"
+       do_facet $SINGLEMDS "sysctl -w lustre.fail_loc=0x80000122"
        kill -USR1 $pid
        cancel_lru_locks mdc
        wait $pid || return 1
-       do_facet mds "sysctl -w lustre.fail_loc=0"
+       do_facet $SINGLEMDS "sysctl -w lustre.fail_loc=0"
 
        $CHECKSTAT -t file $DIR/$tdir-1/f || return 2
        $CHECKSTAT -t file $DIR/$tdir-2/f || return 3
@@ -482,16 +481,16 @@ test_21g() {
        multiop $DIR/$tdir-1/f O_c &
        pid=$!
 
-       do_facet mds "sysctl -w lustre.fail_loc=0x80000119"
+       do_facet $SINGLEMDS "sysctl -w lustre.fail_loc=0x80000119"
        touch $DIR/$tdir-2/f &
        sleep 1
-       do_facet mds "sysctl -w lustre.fail_loc=0"
+       do_facet $SINGLEMDS "sysctl -w lustre.fail_loc=0"
 
-       do_facet mds "sysctl -w lustre.fail_loc=0x80000115"
+       do_facet $SINGLEMDS "sysctl -w lustre.fail_loc=0x80000115"
        kill -USR1 $pid
        cancel_lru_locks mdc
        wait $pid || return 1
-       do_facet mds "sysctl -w lustre.fail_loc=0"
+       do_facet $SINGLEMDS "sysctl -w lustre.fail_loc=0"
 
        $CHECKSTAT -t file $DIR/$tdir-1/f || return 2
        $CHECKSTAT -t file $DIR/$tdir-2/f || return 3
@@ -505,17 +504,17 @@ test_21h() {
        multiop $DIR/$tdir-1/f O_c &
        pid=$!
 
-       do_facet mds "sysctl -w lustre.fail_loc=0x80000107"
+       do_facet $SINGLEMDS "sysctl -w lustre.fail_loc=0x80000107"
        touch $DIR/$tdir-2/f &
        touch_pid=$!
        sleep 1
-       do_facet mds "sysctl -w lustre.fail_loc=0"
+       do_facet $SINGLEMDS "sysctl -w lustre.fail_loc=0"
 
-       do_facet mds "sysctl -w lustre.fail_loc=0x80000122"
+       do_facet $SINGLEMDS "sysctl -w lustre.fail_loc=0x80000122"
        cancel_lru_locks mdc
        kill -USR1 $pid
        wait $pid || return 1
-       do_facet mds "sysctl -w lustre.fail_loc=0"
+       do_facet $SINGLEMDS "sysctl -w lustre.fail_loc=0"
 
        wait $touch_pid || return 2
 
@@ -530,7 +529,7 @@ test_22() {
     f1=$DIR/${tfile}-1
     f2=$DIR/${tfile}-2
     
-    do_facet mds "sysctl -w lustre.fail_loc=0x80000115"
+    do_facet $SINGLEMDS "sysctl -w lustre.fail_loc=0x80000115"
     multiop $f2 Oc &
     close_pid=$!
 
@@ -538,7 +537,7 @@ test_22() {
     multiop $f1 msu || return 1
 
     cancel_lru_locks mdc
-    do_facet mds "sysctl -w lustre.fail_loc=0"
+    do_facet $SINGLEMDS "sysctl -w lustre.fail_loc=0"
 
     wait $close_pid || return 2
     rm -rf $f2 || return 4
@@ -554,7 +553,7 @@ test_23() { #b=4561
     # try the close
     drop_request "kill -USR1 $pid"
 
-    fail mds
+    fail $SINGLEMDS
     wait $pid || return 1
     return 0
 }
@@ -604,9 +603,10 @@ test_26() {      # bug 5921 - evict dead exports by pinger
 run_test 26 "evict dead exports"
 
 test_26b() {      # bug 10140 - evict dead exports by pinger
-	zconf_mount `hostname` $MOUNT2
-	MDS_FILE=$LPROC/mds/${mds_svc}/num_exports
-        MDS_NEXP1="`do_facet mds cat $MDS_FILE | cut -d' ' -f2`"
+	client_df
+        zconf_mount `hostname` $MOUNT2 || error "Failed to mount $MOUNT2"
+	MDS_FILE=$LPROC/mdt/${mds1_svc}/num_exports
+        MDS_NEXP1="`do_facet $SINGLEMDS cat $MDS_FILE | cut -d' ' -f2`"
 	OST_FILE=$LPROC/obdfilter/${ost1_svc}/num_exports
         OST_NEXP1="`do_facet ost1 cat $OST_FILE | cut -d' ' -f2`"
 	echo starting with $OST_NEXP1 OST and $MDS_NEXP1 MDS exports
@@ -617,7 +617,7 @@ test_26b() {      # bug 10140 - evict dead exports by pinger
 	echo Waiting for $(($TIMEOUT * 4)) secs
 	sleep $(($TIMEOUT * 4))
         OST_NEXP2="`do_facet ost1 cat $OST_FILE | cut -d' ' -f2`"
-        MDS_NEXP2="`do_facet mds cat $MDS_FILE | cut -d' ' -f2`"
+        MDS_NEXP2="`do_facet $SINGLEMDS cat $MDS_FILE | cut -d' ' -f2`"
 	echo ending with $OST_NEXP2 OST and $MDS_NEXP2 MDS exports
         [ $OST_NEXP1 -le $OST_NEXP2 ] && error "client not evicted from OST"
         [ $MDS_NEXP1 -le $MDS_NEXP2 ] && error "client not evicted from MDS"
@@ -633,7 +633,7 @@ test_27() {
 	CLIENT_PID=$!
 	sleep 1
 	FAILURE_MODE="SOFT"
-	facet_failover mds
+	facet_failover $SINGLEMDS
 #define OBD_FAIL_OSC_SHUTDOWN            0x407
 	sysctl -w lustre.fail_loc=0x80000407
 	# need to wait for reconnect
@@ -642,7 +642,7 @@ test_27() {
 	    sleep 1
 	    echo -n .
 	done
-	facet_failover mds
+	facet_failover $SINGLEMDS
 	#no crashes allowed!
         kill -USR1 $CLIENT_PID
 	wait $CLIENT_PID 
@@ -653,12 +653,12 @@ run_test 27 "fail LOV while using OSC's"
 test_28() {      # bug 6086 - error adding new clients
 	do_facet client mcreate $MOUNT/$tfile       || return 1
 	drop_bl_callback "chmod 0777 $MOUNT/$tfile" ||echo "evicted as expected"
-	#define OBD_FAIL_MDS_ADD_CLIENT 0x12f
-	do_facet mds sysctl -w lustre.fail_loc=0x8000012f
+	#define OBD_FAIL_MDS_CLIENT_ADD 0x12f
+	do_facet $SINGLEMDS "sysctl -w lustre.fail_loc=0x8000012f"
 	# fail once (evicted), reconnect fail (fail_loc), ok
-	df || (sleep 1; df) || (sleep 1; df) || error "reconnect failed"
+	df || (sleep 10; df) || (sleep 10; df) || error "reconnect failed"
 	rm -f $MOUNT/$tfile
-	fail mds		# verify MDS last_rcvd can be loaded
+	fail $SINGLEMDS		# verify MDS last_rcvd can be loaded
 }
 run_test 28 "handle error adding new clients (bug 6086)"
 
@@ -670,12 +670,12 @@ test_50() {
 	echo writemany pid $CLIENT_PID
 	sleep 10
 	FAILURE_MODE="SOFT"
-	fail mds
+	fail $SINGLEMDS
 	# wait for client to reconnect to MDS
 	sleep 60
-	fail mds
+	fail $SINGLEMDS
 	sleep 60
-	fail mds
+	fail $SINGLEMDS
 	# client process should see no problems even though MDS went down
 	sleep $TIMEOUT
         kill -USR1 $CLIENT_PID
@@ -694,7 +694,7 @@ test_51() {
 	CLIENT_PID=$!
 	sleep 1
 	FAILURE_MODE="SOFT"
-	facet_failover mds
+	facet_failover $SINGLEMDS
 	# failover at various points during recovery
 	SEQ="1 5 10 $(seq $TIMEOUT 5 $(($TIMEOUT+10)))"
         echo will failover at $SEQ
@@ -702,7 +702,7 @@ test_51() {
           do
           echo failover in $i sec
           sleep $i
-          facet_failover mds
+          facet_failover $SINGLEMDS
         done
 	# client process should see no problems even though MDS went down
 	# and recovery was interrupted
@@ -764,7 +764,7 @@ test_54() {
         touch $DIR2/$tfile.1
         sleep 10
         cat $DIR2/$tfile.missing # save transno = 0, rc != 0 into last_rcvd
-        fail mds
+        fail $SINGLEMDS
         umount $MOUNT2
         ERROR=`dmesg | egrep "(test 54|went back in time)" | tail -n1 | grep "went back in time"`
         [ x"$ERROR" == x ] || error "back in time occured"
@@ -833,9 +833,9 @@ run_test 55 "ost_brw_read/write drops timed-out read/write request"
 test_56() { # b=11277
 #define OBD_FAIL_MDS_RESEND      0x136
         touch $DIR/$tfile
-        do_facet mds sysctl -w lustre.fail_loc=0x80000136
+        do_facet $SINGLEMDS "sysctl -w lustre.fail_loc=0x80000136"
         stat $DIR/$tfile
-        do_facet mds sysctl -w lustre.fail_loc=0
+        do_facet $SINGLEMDS "sysctl -w lustre.fail_loc=0"
         rm -f $DIR/$tfile
 }
 run_test 56 "do not allow reconnect to busy exports"
@@ -857,7 +857,7 @@ test_57() { # bug 10866
         sysctl -w lustre.fail_loc=0x80000B00
         zconf_umount `hostname` $DIR
         sysctl -w lustre.fail_loc=0x80000B00
-        fail_abort mds
+        fail_abort $SINGLEMDS
         kill -9 $pid
         sysctl -w lustre.fail_loc=0
         mount_client $DIR

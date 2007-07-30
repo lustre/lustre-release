@@ -2,12 +2,12 @@
 PATH=`dirname $0`:`dirname $0`/../utils:$PATH
 TMP=${TMP:-/tmp}
 
-MDS=`ls $LPROC/mds | grep -v num_refs | head -n 1`
+MDS=`ls /proc/fs/lustre/mdt | grep -v num_refs | head -n 1`
 [ -z "$MDS" ] && echo "no MDS available, skipping llog test" && exit 0
 
 case `uname -r` in
-2.4.*) insmod ../obdclass/llog_test.o || exit 1 ;;
-2.6.*) insmod ../obdclass/llog_test.ko || exit 1 ;;
+2.4.*) modprobe llog_test || exit 1 ;;
+2.6.*) modprobe llog_test || exit 1 ;;
 *) echo "unknown kernel version `uname -r`" && exit 99 ;;
 esac
 lctl modules > $TMP/ogdb-`hostname`

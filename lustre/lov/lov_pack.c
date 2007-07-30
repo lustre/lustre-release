@@ -41,7 +41,7 @@ void lov_dump_lmm_v1(int level, struct lov_mds_md_v1 *lmm)
 {
         struct lov_ost_data_v1 *lod;
         int i;
-
+        
         CDEBUG(level, "objid "LPX64", magic 0x%08x, pattern %#x\n",
                le64_to_cpu(lmm->lmm_object_id), le32_to_cpu(lmm->lmm_magic),
                le32_to_cpu(lmm->lmm_pattern));
@@ -60,12 +60,12 @@ void lov_dump_lmm_join(int level, struct lov_mds_md_join *lmmj)
 {
 
         CDEBUG(level, "objid "LPX64", magic 0x%08X, pattern %#X\n",
-               le64_to_cpu(lmmj->lmmj_md.lmm_object_id), 
+               le64_to_cpu(lmmj->lmmj_md.lmm_object_id),
                le32_to_cpu(lmmj->lmmj_md.lmm_magic),
                le32_to_cpu(lmmj->lmmj_md.lmm_pattern));
         CDEBUG(level,"stripe_size %u, stripe_count %u extent_count %u \n",
                le32_to_cpu(lmmj->lmmj_md.lmm_stripe_size),
-               le32_to_cpu(lmmj->lmmj_md.lmm_stripe_count), 
+               le32_to_cpu(lmmj->lmmj_md.lmm_stripe_count),
                le32_to_cpu(lmmj->lmmj_extent_count));
 }
 
@@ -88,7 +88,6 @@ int lov_packmd(struct obd_export *exp, struct lov_mds_md **lmmp,
 {
         struct obd_device *obd = class_exp2obd(exp);
         struct lov_obd *lov = &obd->u.lov;
-        struct lov_oinfo *loi;
         struct lov_mds_md *lmm;
         int stripe_count = lov->desc.ld_tgt_count;
         int lmm_size;
@@ -136,7 +135,8 @@ int lov_packmd(struct obd_export *exp, struct lov_mds_md **lmmp,
         lmm->lmm_pattern = cpu_to_le32(lsm->lsm_pattern);
 
         for (i = 0; i < stripe_count; i++) {
-                loi = lsm->lsm_oinfo[i];
+                struct lov_oinfo *loi = lsm->lsm_oinfo[i];
+
                 /* XXX LOV STACKING call down to osc_packmd() to do packing */
                 LASSERTF(loi->loi_id, "lmm_oid "LPU64" stripe %u/%u idx %u\n",
                          lmm->lmm_object_id, i, stripe_count, loi->loi_ost_idx);
@@ -183,7 +183,7 @@ static int lov_verify_lmm(void *lmm, int lmm_bytes, int *stripe_count)
         return rc;
 }
 
-int lov_alloc_memmd(struct lov_stripe_md **lsmp, int stripe_count, 
+int lov_alloc_memmd(struct lov_stripe_md **lsmp, int stripe_count,
                       int pattern, int magic)
 {
         int i, lsm_size;
@@ -193,7 +193,7 @@ int lov_alloc_memmd(struct lov_stripe_md **lsmp, int stripe_count,
 
         *lsmp = lsm_alloc_plain(stripe_count, &lsm_size);
         if (!*lsmp) {
-                CERROR("can't allocate lsmp, stripe_count %d\n", stripe_count);
+                CERROR("can't allocate lsmp stripe_count %d\n", stripe_count);
                 RETURN(-ENOMEM);
         }
 
@@ -213,10 +213,10 @@ int lov_alloc_memmd(struct lov_stripe_md **lsmp, int stripe_count,
 void lov_free_memmd(struct lov_stripe_md **lsmp)
 {
         struct lov_stripe_md *lsm = *lsmp;
-        
+
         LASSERT(lsm_op_find(lsm->lsm_magic) != NULL);
         lsm_op_find(lsm->lsm_magic)->lsm_free(lsm);
-        
+
         *lsmp = NULL;
 }
 
@@ -224,7 +224,7 @@ void lov_free_memmd(struct lov_stripe_md **lsmp)
 /* Unpack LOV object metadata from disk storage.  It is packed in LE byte
  * order and is opaque to the networking layer.
  */
-int lov_unpackmd(struct obd_export *exp,  struct lov_stripe_md **lsmp, 
+int lov_unpackmd(struct obd_export *exp,  struct lov_stripe_md **lsmp,
                  struct lov_mds_md *lmm, int lmm_bytes)
 {
         struct obd_device *obd = class_exp2obd(exp);
@@ -250,14 +250,13 @@ int lov_unpackmd(struct obd_export *exp,  struct lov_stripe_md **lsmp,
                 LBUG();
                 RETURN(lov_stripe_md_size(stripe_count));
         }
-
         /* If we are passed an allocated struct but nothing to unpack, free */
         if (*lsmp && !lmm) {
                 lov_free_memmd(lsmp);
                 RETURN(0);
         }
 
-        lsm_size = lov_alloc_memmd(lsmp, stripe_count, LOV_PATTERN_RAID0, 
+        lsm_size = lov_alloc_memmd(lsmp, stripe_count, LOV_PATTERN_RAID0,
                                    magic);
         if (lsm_size < 0)
                 RETURN(lsm_size);
@@ -276,15 +275,8 @@ int lov_unpackmd(struct obd_export *exp,  struct lov_stripe_md **lsmp,
         RETURN(lsm_size);
 }
 
-/* Configure object striping information on a new file.
- *
- * @lmmu is a pointer to a user struct with one or more of the fields set to
- * indicate the application preference: lmm_stripe_count, lmm_stripe_size,
- * lmm_stripe_offset, and lmm_stripe_pattern.  lmm_magic must be LOV_MAGIC.
- * @lsmp is a pointer to an in-core stripe MD that needs to be filled in.
- */
-int lov_setstripe(struct obd_export *exp, struct lov_stripe_md **lsmp,
-                  struct lov_user_md *lump)
+static int __lov_setstripe(struct obd_export *exp, struct lov_stripe_md **lsmp,
+                           struct lov_user_md *lump)
 {
         struct obd_device *obd = class_exp2obd(exp);
         struct lov_obd *lov = &obd->u.lov;
@@ -335,21 +327,42 @@ int lov_setstripe(struct obd_export *exp, struct lov_stripe_md **lsmp,
         }
         stripe_count = lov_get_stripecnt(lov, lum.lmm_stripe_count);
 
-        if ((__u64)lum.lmm_stripe_size * stripe_count > ~0U) {
-                CDEBUG(D_IOCTL, "stripe width %ux%u exceeds %u bytes\n",
-                       lum.lmm_stripe_size, (int)lum.lmm_stripe_count, ~0U);
+        if ((__u64)lum.lmm_stripe_size * stripe_count > ~0UL) {
+                CDEBUG(D_IOCTL, "stripe width %ux%i exeeds %lu bytes\n",
+                       lum.lmm_stripe_size, (int)lum.lmm_stripe_count, ~0UL);
                 RETURN(-EINVAL);
         }
 
         rc = lov_alloc_memmd(lsmp, stripe_count, lum.lmm_pattern, LOV_MAGIC);
 
-        if (rc < 0)
-                RETURN(rc);
-
-        (*lsmp)->lsm_oinfo[0]->loi_ost_idx = lum.lmm_stripe_offset;
-        (*lsmp)->lsm_stripe_size = lum.lmm_stripe_size;
+        if (rc >= 0) {
+                (*lsmp)->lsm_oinfo[0]->loi_ost_idx = lum.lmm_stripe_offset;
+                (*lsmp)->lsm_stripe_size = lum.lmm_stripe_size;
+                rc = 0;
+        }
 
         RETURN(0);
+}
+
+/* Configure object striping information on a new file.
+ *
+ * @lmmu is a pointer to a user struct with one or more of the fields set to
+ * indicate the application preference: lmm_stripe_count, lmm_stripe_size,
+ * lmm_stripe_offset, and lmm_stripe_pattern.  lmm_magic must be LOV_MAGIC.
+ * @lsmp is a pointer to an in-core stripe MD that needs to be filled in.
+ */
+int lov_setstripe(struct obd_export *exp, struct lov_stripe_md **lsmp,
+                  struct lov_user_md *lump)
+{
+        int rc;
+        mm_segment_t seg;
+
+        seg = get_fs();
+        set_fs(KERNEL_DS);
+
+        rc = __lov_setstripe(exp, lsmp, lump);
+        set_fs(seg);
+        RETURN(rc);
 }
 
 int lov_setea(struct obd_export *exp, struct lov_stripe_md **lsmp,
@@ -401,42 +414,52 @@ int lov_setea(struct obd_export *exp, struct lov_stripe_md **lsmp,
 int lov_getstripe(struct obd_export *exp, struct lov_stripe_md *lsm,
                   struct lov_user_md *lump)
 {
+        /*
+         * XXX huge struct allocated on stack.
+         */
         struct lov_user_md lum;
         struct lov_mds_md *lmmk = NULL;
         int rc, lmm_size;
+        mm_segment_t seg;
         ENTRY;
 
         if (!lsm)
                 RETURN(-ENODATA);
 
+        /*
+         * "Switch to kernel segment" to allow copying from kernel space by
+         * copy_{to,from}_user().
+         */
+        seg = get_fs();
+        set_fs(KERNEL_DS);
         rc = copy_from_user(&lum, lump, sizeof(lum));
         if (rc)
-                RETURN(-EFAULT);
-
-        if (lum.lmm_magic != LOV_USER_MAGIC)
-                RETURN(-EINVAL);
-
-        rc = lov_packmd(exp, &lmmk, lsm);
-        if (rc < 0)
-                RETURN(rc);
-        lmm_size = rc;
-        rc = 0;
-
-        /* FIXME: Bug 1185 - copy fields properly when structs change */
-        LASSERT(sizeof(lum) == sizeof(*lmmk));
-        LASSERT(sizeof(lum.lmm_objects[0]) == sizeof(lmmk->lmm_objects[0]));
-
-        /* User wasn't expecting this many OST entries */
-        if (lum.lmm_stripe_count == 0) {
-                if (copy_to_user(lump, lmmk, sizeof(lum)))
-                        rc = -EFAULT;
-        } else if (lum.lmm_stripe_count < lmmk->lmm_stripe_count) {
-                rc = -EOVERFLOW;
-        } else if (copy_to_user(lump, lmmk, lmm_size)) {
                 rc = -EFAULT;
+        else if (lum.lmm_magic != LOV_USER_MAGIC)
+                rc = -EINVAL;
+        else {
+                rc = lov_packmd(exp, &lmmk, lsm);
+                if (rc < 0)
+                        RETURN(rc);
+                lmm_size = rc;
+                rc = 0;
+
+                /* FIXME: Bug 1185 - copy fields properly when structs change */
+                CLASSERT(sizeof lum == sizeof *lmmk);
+                CLASSERT(sizeof lum.lmm_objects[0] ==
+                         sizeof lmmk->lmm_objects[0]);
+
+                /* User wasn't expecting this many OST entries */
+                if (lum.lmm_stripe_count == 0) {
+                        if (copy_to_user(lump, lmmk, sizeof lum))
+                                rc = -EFAULT;
+                } else if (lum.lmm_stripe_count < lmmk->lmm_stripe_count) {
+                        rc = -EOVERFLOW;
+                } else if (copy_to_user(lump, lmmk, sizeof lum))
+                        rc = -EFAULT;
+
+                obd_free_diskmd(exp, &lmmk);
         }
-
-        obd_free_diskmd(exp, &lmmk);
-
+        set_fs(seg);
         RETURN(rc);
 }

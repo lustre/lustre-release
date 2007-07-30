@@ -1,0 +1,15 @@
+.Xrefs
+config.log
+config.status
+configure
+Makefile
+.deps
+tags
+TAGS
+.*.cmd
+autoMakefile.in
+autoMakefile
+*.ko
+*.mod.c
+.*.flags
+.depend

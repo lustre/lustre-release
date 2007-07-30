@@ -1,0 +1,97 @@
+#!/bin/sh
+
+. patchfns >/dev/null || . /usr/lib/patch-scripts/patchfns >/dev/null || { \
+	echo "Impossible to find my library 'patchfns'."
+	echo "Check your install, or go to the right directory"
+	exit 1
+}
+do_apply()
+{
+	FILES=$(cat $P/pc/$PATCH_NAME.pc)
+	for file in $FILES
+	do
+		copy_file_to_bup $file $PATCH_NAME
+	done
+
+	silent=-s
+	if [ $opt_force != 0 ]
+	then
+		silent=
+	fi
+
+	if patch -p1 $silent -i "$1" || [ $opt_force != 0 ]
+	then
+		true
+	else
+		echo SOMETHING WENT WRONG
+		exit 1
+	fi
+}
+
+add_to_db()
+{
+	basename "$1" >> "$DB"
+}
+
+usage()
+{
+	echo "Usage: apatch patchname"
+	exit 1
+}
+
+opt_force=0
+PATCH_NAMES=""
+
+for i in $*
+do
+	case "$i" in
+	-f)
+		opt_force=1;;
+	*)
+		PATCH_NAMES="$PATCH_NAMES $i"
+	esac
+done
+
+if [ x"$PATCH_NAMES" == x ]
+then
+	usage
+fi
+
+apatch()
+{
+	PATCH_NAME=$(stripit $1)
+
+	need_file_there $P/pc/$PATCH_NAME.pc
+
+	if is_applied "$PATCH_NAME"
+	then
+		echo "$PATCH_NAME" is already applied
+		exit 1
+	fi
+	
+	if [ $opt_force != 0 ]
+	then
+		echo FORCING PATCH
+	fi
+
+	if [ $opt_force != 0 ] || can_apply $P/patches/"$PATCH_NAME".patch
+	then
+		check_pc_match $P/patches/"$PATCH_NAME".patch $P/pc/"$PATCH_NAME".pc 
+		do_apply $P/patches/"$PATCH_NAME".patch
+		add_to_db "$PATCH_NAME"
+		echo applied $PATCH_NAME
+		echo
+	else
+		echo "$PATCH_NAME" does not apply
+		exit 1
+	fi
+}
+
+for i in $PATCH_NAMES
+do
+	if ! apatch $i
+	then
+		exit 1
+	fi
+done
+

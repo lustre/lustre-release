@@ -65,6 +65,7 @@ struct obd_import {
         struct list_head          imp_delayed_list;
 
         struct obd_device        *imp_obd;
+        struct ptlrpc_sec        *imp_sec;
         cfs_waitq_t               imp_recovery_waitq;
 
         atomic_t                  imp_inflight;
@@ -79,6 +80,7 @@ struct obd_import {
         struct lustre_handle      imp_remote_handle;
         cfs_time_t                imp_next_ping;   /* jiffies */
         __u64                     imp_last_success_conn;   /* jiffies, 64-bit */
+        cfs_time_t                imp_next_reconnect;      /* seconds */
 
         /* all available obd_import_conn linked here */
         struct list_head          imp_conn_list;
@@ -88,7 +90,8 @@ struct obd_import {
         spinlock_t                imp_lock;
 
         /* flags */
-        unsigned int              imp_invalid:1,          /* evicted */
+        unsigned int              imp_no_timeout:1,       /* timeouts are disabled */
+                                  imp_invalid:1,          /* evicted */
                                   imp_deactive:1,         /* administratively disabled */
                                   imp_replayable:1,       /* try to recover the import */
                                   imp_dlm_fake:1,         /* don't run recovery (timeout instead) */
@@ -103,6 +106,7 @@ struct obd_import {
         __u32                     imp_connect_op;
         struct obd_connect_data   imp_connect_data;
         __u64                     imp_connect_flags_orig;
+        int                       imp_connect_error;
 
         __u32                     imp_msg_magic;
 

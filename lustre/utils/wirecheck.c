@@ -152,10 +152,11 @@ static void check_obd_connect_data(void)
         CHECK_MEMBER(obd_connect_data, ocd_ibits_known);
         CHECK_MEMBER(obd_connect_data, ocd_nllu);
         CHECK_MEMBER(obd_connect_data, ocd_nllg);
+        CHECK_MEMBER(obd_connect_data, ocd_transno);
+        CHECK_MEMBER(obd_connect_data, ocd_group);
         CHECK_MEMBER(obd_connect_data, padding1);
         CHECK_MEMBER(obd_connect_data, padding2);
         CHECK_MEMBER(obd_connect_data, padding3);
-        CHECK_MEMBER(obd_connect_data, padding4);
 
         CHECK_CDEFINE(OBD_CONNECT_RDONLY);
         CHECK_CDEFINE(OBD_CONNECT_INDEX);
@@ -165,9 +166,8 @@ static void check_obd_connect_data(void)
         CHECK_CDEFINE(OBD_CONNECT_REQPORTAL);
         CHECK_CDEFINE(OBD_CONNECT_ACL);
         CHECK_CDEFINE(OBD_CONNECT_XATTR);
-        CHECK_CDEFINE(OBD_CONNECT_CROW);
+        CHECK_CDEFINE(OBD_CONNECT_REAL);
         CHECK_CDEFINE(OBD_CONNECT_TRUNCLOCK);
-        CHECK_CDEFINE(OBD_CONNECT_TRANSNO);
         CHECK_CDEFINE(OBD_CONNECT_IBITS);
         CHECK_CDEFINE(OBD_CONNECT_JOIN);
         CHECK_CDEFINE(OBD_CONNECT_ATTRFID);
@@ -176,6 +176,10 @@ static void check_obd_connect_data(void)
         CHECK_CDEFINE(OBD_CONNECT_RMT_CLIENT);
         CHECK_CDEFINE(OBD_CONNECT_BRW_SIZE);
         CHECK_CDEFINE(OBD_CONNECT_QUOTA64);
+        CHECK_CDEFINE(OBD_CONNECT_MDS_CAPA);
+        CHECK_CDEFINE(OBD_CONNECT_OSS_CAPA);
+        CHECK_CDEFINE(OBD_CONNECT_MDS_MDS);
+        CHECK_CDEFINE(OBD_CONNECT_SOM);
 }
 
 static void
@@ -255,7 +259,6 @@ check_obdo(void)
         CHECK_CDEFINE(OBD_FL_DEBUG_CHECK);
         CHECK_CDEFINE(OBD_FL_NO_USRQUOTA);
         CHECK_CDEFINE(OBD_FL_NO_GRPQUOTA);
-        CHECK_CDEFINE(OBD_FL_CREATE_CROW);
 }
 
 static void
@@ -817,7 +820,7 @@ check_llog_size_change_rec(void)
         CHECK_STRUCT(llog_size_change_rec);
         CHECK_MEMBER(llog_size_change_rec, lsc_hdr);
         CHECK_MEMBER(llog_size_change_rec, lsc_fid);
-        CHECK_MEMBER(llog_size_change_rec, lsc_io_epoch);
+        CHECK_MEMBER(llog_size_change_rec, lsc_ioepoch);
         CHECK_MEMBER(llog_size_change_rec, padding);
         CHECK_MEMBER(llog_size_change_rec, lsc_tail);
 }

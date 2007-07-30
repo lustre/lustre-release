@@ -1,0 +1,32 @@
+#!/bin/sh
+# Extract names of new files from a patch, print them out
+
+PATCHFILE=$1
+case "$PATCHFILE" in
+*.gz) CMD="gzip -d < $PATCHFILE";;
+*)    CMD="cat $PATCHFILE";;
+esac
+
+TMP=$(mktemp /tmp/tbp-XXXXXX) || exit 1
+TMP2=$(mktemp /tmp/tbp2-XXXXXX) || exit 1
+
+eval $CMD | egrep '^\+\+\+ |^\-\-\- ' > $TMP
+
+cat $TMP | sed -e 's@[^/]*/\([^ 	]*\).*@\1@' \
+	 | grep -v '^dev\/null$' \
+	 | sort \
+	 | uniq \
+	 > $TMP2
+
+rm -f $TMP
+grep < $TMP2 '^[+][+][+]' > /dev/null
+if [ "$?" = "0" ]
+then
+	echo "WARNING: $PATCHFILE appears to be -p0 form rather than -p1." 1>&2
+	echo "         Use "\'"p0-2-p1 . . < $PATCHFILE"\'" to fix" 1>&2
+	awk '{ print $2 }' < $TMP2
+else
+	cat $TMP2
+fi | grep -v '~'
+
+rm -f $TMP2

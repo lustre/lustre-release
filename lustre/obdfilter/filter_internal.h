@@ -18,8 +18,8 @@
 
 #define FILTER_INIT_OBJID 0
 
-#define FILTER_SUBDIR_COUNT      32            /* set to zero for no subdirs */
-#define FILTER_GROUPS 3 /* must be at least 3; not dynamic yet */
+#define FILTER_SUBDIR_COUNT 32 /* set to zero for no subdirs */
+#define FILTER_GROUPS        3 /* must be at least 3; not dynamic yet */
 
 #define FILTER_ROCOMPAT_SUPP (0)
 
@@ -38,7 +38,8 @@ struct filter_client_data {
         __u8  fcd_uuid[40];        /* client UUID */
         __u64 fcd_last_rcvd;       /* last completed transaction ID */
         __u64 fcd_last_xid;        /* client RPC xid for the last transaction */
-        __u8  fcd_padding[LR_CLIENT_SIZE - 56];
+        __u32 fcd_group;           /* mds group */
+        __u8  fcd_padding[LR_CLIENT_SIZE - 60];
 };
 
 /* Limit the returned fields marked valid to those that we actually might set */
@@ -90,6 +91,10 @@ enum {
 #define OBDFILTER_CREATED_SCRATCHPAD_ENTRIES 1024
 extern int *obdfilter_created_scratchpad;
 
+extern void target_recovery_fini(struct obd_device *obd);
+extern void target_recovery_init(struct obd_device *obd,
+                                 svc_handler_t handler);
+
 /* filter.c */
 void f_dput(struct dentry *);
 struct dentry *filter_fid2dentry(struct obd_device *, struct dentry *dir,
@@ -98,7 +103,8 @@ struct dentry *__filter_oa2dentry(struct obd_device *obd, struct obdo *oa,
                                   const char *what, int quiet);
 #define filter_oa2dentry(obd, oa) __filter_oa2dentry(obd, oa, __FUNCTION__, 0)
 
-int filter_finish_transno(struct obd_export *, struct obd_trans_info *, int rc);
+int filter_finish_transno(struct obd_export *, struct obd_trans_info *, int rc,
+                          int force_sync);
 __u64 filter_next_id(struct filter_obd *, struct obdo *);
 __u64 filter_last_id(struct filter_obd *, obd_gr group);
 int filter_update_fidea(struct obd_export *exp, struct inode *inode,
@@ -106,7 +112,7 @@ int filter_update_fidea(struct obd_export *exp, struct inode *inode,
 int filter_update_server_data(struct obd_device *, struct file *,
                               struct lr_server_data *, int force_sync);
 int filter_update_last_objid(struct obd_device *, obd_gr, int force_sync);
-int filter_common_setup(struct obd_device *, obd_count len, void *buf,
+int filter_common_setup(struct obd_device *, struct lustre_cfg *lcfg,
                         void *option);
 int filter_destroy(struct obd_export *exp, struct obdo *oa,
                    struct lov_stripe_md *md, struct obd_trans_info *,
@@ -118,6 +124,9 @@ int filter_setattr(struct obd_export *exp, struct obd_info *oinfo,
 
 struct dentry *filter_create_object(struct obd_device *obd, struct obdo *oa);
 
+struct obd_llogs *filter_grab_llog_for_group(struct obd_device *obd, int group,
+                                             struct obd_export *export);
+
 /* filter_lvb.c */
 extern struct ldlm_valblock_ops filter_lvbo;
 
@@ -125,7 +134,8 @@ extern struct ldlm_valblock_ops filter_lvbo;
 /* filter_io.c */
 int filter_preprw(int cmd, struct obd_export *, struct obdo *, int objcount,
                   struct obd_ioobj *, int niocount, struct niobuf_remote *,
-                  struct niobuf_local *, struct obd_trans_info *);
+                  struct niobuf_local *, struct obd_trans_info *,
+                  struct lustre_capa *);
 int filter_commitrw(int cmd, struct obd_export *, struct obdo *, int objcount,
                     struct obd_ioobj *, int niocount, struct niobuf_local *,
                     struct obd_trans_info *, int rc);
@@ -163,7 +173,7 @@ struct ost_filterdata {
 };
 int filter_log_sz_change(struct llog_handle *cathandle,
                          struct ll_fid *mds_fid,
-                         __u32 io_epoch,
+                         __u32 ioepoch,
                          struct llog_cookie *logcookie,
                          struct inode *inode);
 //int filter_get_catalog(struct obd_device *);
@@ -173,28 +183,32 @@ int filter_recov_log_mds_ost_cb(struct llog_handle *llh,
                                struct llog_rec_hdr *rec, void *data);
 
 #ifdef LPROCFS
-void filter_tally_write(struct obd_export *exp, struct page **pages,
-                        int nr_pages, unsigned long *blocks,
-                        int blocks_per_page);
-void filter_tally_read(struct obd_export *exp, struct page **pages,
-                       int nr_pages, unsigned long *blocks,
-                       int blocks_per_page);
+void filter_tally(struct obd_export *exp, struct page **pages, int nr_pages,
+                  unsigned long *blocks, int blocks_per_page, int wr);
 int lproc_filter_attach_seqstat(struct obd_device *dev);
 #else
-static inline void filter_tally_write(struct obd_export *exp,
-                                      struct page **pages, int nr_pages,
-                                 unsigned long *blocks, int blocks_per_page) {}
-static inline void filter_tally_read(struct obd_export *exp,
-                                 struct page **pages, int nr_pages,
-                                 unsigned long *blocks, int blocks_per_page) {}
-static inline void filter_tally_read(struct filter_obd *filter,
-                                 struct page **pages, int nr_pages,
-                                 unsigned long *blocks, int blocks_per_page) {}
+static inline void filter_tally(struct obd_export *exp, struct page **pages,
+                                int nr_pages, unsigned long *blocks,
+                                int blocks_per_page, int wr) {}
 static inline int lproc_filter_attach_seqstat(struct obd_device *dev) {}
 #endif
 
 /* Quota stuff */
 extern quota_interface_t *filter_quota_interface_ref;
 
+/* Capability */
+static inline __u64 obdo_mdsno(struct obdo *oa)
+{
+        return oa->o_gr - FILTER_GROUP_MDS0;
+}
+
+int filter_update_capa_key(struct obd_device *obd, struct lustre_capa_key *key);
+int filter_auth_capa(struct obd_export *exp, struct lu_fid *fid, __u64 mdsid,
+                     struct lustre_capa *capa, __u64 opc);
+void filter_free_capa_keys(struct filter_obd *filter);
+
+void blacklist_add(uid_t uid);
+void blacklist_del(uid_t uid);
+int blacklist_display(char *buf, int bufsize);
 
 #endif /* _FILTER_INTERNAL_H */

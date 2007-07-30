@@ -191,6 +191,7 @@ int liblustre_init_current(char *comm)
 
         strncpy(current->comm, comm, sizeof(current->comm));
         current->pid = getpid();
+        current->gid = getgid();
         current->fsuid = geteuid();
         current->fsgid = getegid();
         memset(&current->pending, 0, sizeof(current->pending));

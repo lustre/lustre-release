@@ -47,11 +47,11 @@
 #include "mds_internal.h"
 
 int mds_osc_destroy_orphan(struct obd_device *obd,
-                           umode_t mode,
-                           struct lov_mds_md *lmm,
-                           int lmm_size,
-                           struct llog_cookie *logcookies,
-                           int log_unlink)
+                                  umode_t mode,
+                                  struct lov_mds_md *lmm,
+                                  int lmm_size,
+                                  struct llog_cookie *logcookies,
+                                  int log_unlink)
 {
         struct mds_obd *mds = &obd->u.mds;
         struct lov_stripe_md *lsm = NULL;
@@ -76,19 +76,20 @@ int mds_osc_destroy_orphan(struct obd_device *obd,
         if (rc)
                 GOTO(out_free_memmd, rc);
 
-        oa = obdo_alloc();
+        OBDO_ALLOC(oa);
         if (oa == NULL)
                 GOTO(out_free_memmd, rc = -ENOMEM);
         oa->o_id = lsm->lsm_object_id;
+        oa->o_gr = lsm->lsm_object_gr;
         oa->o_mode = mode & S_IFMT;
-        oa->o_valid = OBD_MD_FLID | OBD_MD_FLTYPE;
+        oa->o_valid = OBD_MD_FLID | OBD_MD_FLTYPE | OBD_MD_FLGROUP;
 
         if (log_unlink && logcookies) {
                 oa->o_valid |= OBD_MD_FLCOOKIE;
                 oti.oti_logcookies = logcookies;
         }
         rc = obd_destroy(mds->mds_osc_exp, oa, lsm, &oti, obd->obd_self_export);
-        obdo_free(oa);
+        OBDO_FREE(oa);
         if (rc)
                 CDEBUG(D_INODE, "destroy orphan objid 0x"LPX64" on ost error "
                        "%d\n", lsm->lsm_object_id, rc);

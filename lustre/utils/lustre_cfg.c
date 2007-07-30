@@ -40,7 +40,7 @@
 #include <lustre_dlm.h>
 #include <obd.h>          /* for struct lov_stripe_md */
 #include <obd_lov.h>
-#include <linux/lustre_build_version.h>
+#include <lustre/lustre_build_version.h>
 
 #include <unistd.h>
 #include <sys/un.h>
@@ -489,7 +489,6 @@ int jt_lcfg_mgsparam(int argc, char **argv)
                 return CMD_HELP;
 
         lustre_cfg_bufs_reset(&bufs, NULL);
-
         for (i = 1; i < argc; i++) {
                 lustre_cfg_bufs_set_string(&bufs, i, argv[i]);
         }

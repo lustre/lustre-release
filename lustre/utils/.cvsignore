@@ -21,6 +21,9 @@ obdbarrier
 lload
 llverfs
 llverdev
+l_getidentity
+l_facl
+req_layout
 l_getgroups
 .*.cmd
 .*.d

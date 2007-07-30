@@ -1,0 +1,17 @@
+#!/bin/sh
+
+. patchfns 2>/dev/null ||
+. /usr/lib/patch-scripts/patchfns 2>/dev/null ||
+. $PATCHSCRIPTS_LIBDIR/patchfns 2>/dev/null ||
+{
+	echo "Impossible to find my library 'patchfns'."
+	echo "Check your install, or go to the right directory"
+	exit 1
+}
+
+if [ $# -eq 0 ]
+then
+	cat_series
+else
+	__cat_series $1
+fi

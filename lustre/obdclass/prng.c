@@ -105,3 +105,4 @@ void ll_generate_random_uuid(class_uuid_t uuid_out)
         ll_get_random_bytes(uuid_out, sizeof(class_uuid_t));
 }
 EXPORT_SYMBOL(ll_generate_random_uuid);
+

@@ -1,0 +1,76 @@
+#!/bin/sh
+
+#
+# Fork the next patch in the series
+#
+
+. patchfns >/dev/null || . /usr/lib/patch-scripts/patchfns >/dev/null || { \
+	echo "Impossible to find my library 'patchfns'."
+	echo "Check your install, or go to the right directory"
+	exit 1
+}
+
+usage()
+{
+	echo "Usage: forkpatch <newname>"
+	exit 1
+}
+
+if [ $# -ne 1 ]
+then
+	usage
+fi
+
+NEW=$1
+BASE=`stripit $NEW`
+SERIES=series
+
+if [ ! -e $SERIES ]
+then
+	echo 'File "series" not found'
+	exit 1
+fi
+
+if [ -f $P/$BASE.patch ] ; then 
+        echo "Patch $NEW already exists as a file"
+        exit 1
+fi
+
+if  grep $BASE $SERIES >& /dev/null ; then 
+        echo "Patch $NEW already exists in series"
+        exit 1
+fi
+
+TMPSERIES=$(mktemp /tmp/series-XXXXXXXX)
+top=$(toppatch)
+if [ x"$top" == x ]
+then
+	todo=$(head -1 $SERIES)
+else
+	last_in_series=$(stripit $(tail -1 $SERIES))
+	if [ $last_in_series == $top ]
+	then
+		echo "Series fully applied.  Ends at $top"
+		exit 0
+	fi
+	todo=$(grep -C1 "^$top\.patch" $SERIES | tail -1)
+	if [ x$todo = x ]
+	then
+		todo=$(head -1 $SERIES)
+	fi
+fi
+
+basetodo=`stripit $todo`
+
+sed "s/$todo/$BASE.patch/" < $SERIES > $TMPSERIES
+cat $TMPSERIES > $SERIES
+rm -f $TMPSERIES
+cp -f $P/patches/$todo $P/patches/$BASE.patch
+cp -f $P/pc/$basetodo.pc $P/pc/$BASE.pc
+if [ -f $P/txt/$basetodo.txt ]; then 
+     cp -f $P/txt/$basetodo.txt $P/txt/$BASE.txt
+else 
+     echo "Warning no documentation for $BASE"
+fi
+
+echo "Cloned $todo to $BASE"

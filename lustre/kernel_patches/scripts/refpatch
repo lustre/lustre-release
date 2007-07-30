@@ -1,0 +1,32 @@
+#!/bin/sh
+
+. patchfns >/dev/null || . /usr/lib/patch-scripts/patchfns >/dev/null || { \
+	echo "Impossible to find my library 'patchfns'."
+	echo "Check your install, or go to the right directory"
+	exit 1
+}
+
+usage()
+{
+	echo "Usage: refpatch"
+	exit 1
+}
+
+doit()
+{
+	echo $* 1>&2
+	$* || {
+		echo oops
+		exit 1 
+	}
+}
+
+if [ $# != 0 ]
+then
+	usage
+fi
+
+TOP_PATCH=$(top_patch)
+mpatch $* $(top_patch)
+sum-series applied-patch
+echo "Refreshed $TOP_PATCH"

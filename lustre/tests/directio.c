@@ -1,7 +1,9 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  */
+#ifndef _GNU_SOURCE
 #define  _GNU_SOURCE
+#endif
 #include <stdio.h>
 #include <string.h>
 #include <unistd.h>
@@ -104,7 +106,7 @@ int main(int argc, char **argv)
 
                 rc = read(fd, rbuf, len);
                 if (rc != len) {
-                        printf("Read error: %s (rc = %d)\n",strerror(errno),rc);
+                        printf("Read error: %s rc = %d\n",strerror(errno),rc);
                         return 1;
                 }
 

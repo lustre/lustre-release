@@ -62,6 +62,7 @@ struct lov_async_page {
         int                             lap_stripe;
         obd_off                         lap_sub_offset;
         obd_id                          lap_loi_id;
+        obd_gr                          lap_loi_gr;
         void                            *lap_sub_cookie;
         struct obd_async_page_ops       *lap_caller_ops;
         void                            *lap_caller_data;
@@ -111,9 +112,14 @@ static inline void lov_llh_put(struct lov_lock_handles *llh)
                 atomic_read(&llh->llh_refcount) < 0x5a5a);
         if (atomic_dec_and_test(&llh->llh_refcount)) {
                 class_handle_unhash(&llh->llh_handle);
-                LASSERT(list_empty(&llh->llh_handle.h_link));
-                OBD_FREE(llh, sizeof *llh +
-                         sizeof(*llh->llh_handles) * llh->llh_stripe_count);
+                /* The structure may be held by other threads because RCU. 
+                 *   -jxiong */
+                if (atomic_read(&llh->llh_refcount))
+                        return;
+
+                OBD_FREE_RCU(llh, sizeof *llh +
+                             sizeof(*llh->llh_handles) * llh->llh_stripe_count,
+                             &llh->llh_handle);
         }
 }
 
@@ -223,8 +229,9 @@ void lov_getref(struct obd_device *obd);
 void lov_putref(struct obd_device *obd);
 
 /* lov_log.c */
-int lov_llog_init(struct obd_device *obd, struct obd_device *tgt,
-                  int count, struct llog_catid *logid, struct obd_uuid *uuid);
+int lov_llog_init(struct obd_device *obd, struct obd_llogs *llogs, 
+                  struct obd_device *tgt, int count, struct llog_catid *logid, 
+                  struct obd_uuid *uuid);
 int lov_llog_finish(struct obd_device *obd, int count);
 
 /* lov_pack.c */

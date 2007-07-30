@@ -1,0 +1,72 @@
+#!/bin/sh
+
+. patchfns >/dev/null || . /usr/lib/patch-scripts/patchfns >/dev/null || { \
+	echo "Impossible to find my library 'patchfns'."
+	echo "Check your install, or go to the right directory"
+	exit 1
+}
+
+usage()
+{
+	echo "Usage: poppatch [npatches]"
+	exit 1
+}
+
+doit()
+{
+	echo $* 1>&2
+	$* || {
+		echo oops
+		exit 1 
+	}
+}
+
+if [ $# -gt 1 ]
+then
+	usage
+fi
+
+NR=1
+STOP_AT=""
+if [ $# -eq 1 ]
+then
+	if is_numeric $1
+	then
+		NR=$1
+	else
+		NR=1000
+		STOP_AT=$(stripit $1)
+	fi
+fi
+
+pop_one()
+{
+	TOP_PATCH=$(top_patch)
+	if [ x$TOP_PATCH == x ]
+	then
+		echo "no patches applied"
+		exit 0
+	else
+		popped_patch="$(top_patch)"
+		if ! rpatch $(top_patch)
+		then
+			echo still at $(top_patch)
+			exit 1
+		fi
+		echo
+	fi
+}
+
+for i in $(seq 1 $NR)
+do
+	pop_one
+	if [ x$STOP_AT != "x" ]
+	then
+		if [ $STOP_AT == $(toppatch) ]
+		then
+                        sum-series applied-patch
+			exit 0
+		fi
+	fi
+done
+sum-series applied-patch

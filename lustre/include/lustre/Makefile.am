@@ -4,7 +4,7 @@
 # See the file COPYING in this distribution
 
 if UTILS
-pkginclude_HEADERS = lustre_idl.h lustre_user.h liblustreapi.h types.h
+pkginclude_HEADERS = lustre_idl.h lustre_user.h liblustreapi.h libiam.h types.h
 endif
 
-EXTRA_DIST = lustre_idl.h lustre_user.h liblustreapi.h types.h
+EXTRA_DIST = lustre_idl.h lustre_user.h liblustreapi.h libiam.h types.h

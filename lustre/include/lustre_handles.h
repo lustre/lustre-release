@@ -29,14 +29,24 @@ struct portals_handle {
         struct list_head h_link;
         __u64 h_cookie;
         portals_handle_addref_cb h_addref;
+
+        /* newly added fields to handle the RCU issue. -jxiong */
+        spinlock_t h_lock;
+        unsigned int h_size;
+        void *h_ptr;
+        void (*h_free_cb)(void *, size_t);
+        struct rcu_head h_rcu;
 };
+#define RCU2HANDLE(rcu)    container_of(rcu, struct portals_handle, h_rcu)
 
 /* handles.c */
 
 /* Add a handle to the hash table */
 void class_handle_hash(struct portals_handle *, portals_handle_addref_cb);
 void class_handle_unhash(struct portals_handle *);
+void class_handle_hash_back(struct portals_handle *);
 void *class_handle2object(__u64 cookie);
+void class_handle_free_cb(struct rcu_head *);
 int class_handle_init(void);
 void class_handle_cleanup(void);
 

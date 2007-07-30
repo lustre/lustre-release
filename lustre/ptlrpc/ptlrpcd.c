@@ -54,6 +54,7 @@ struct ptlrpcd_ctl {
         char                      pc_name[16];
 #ifndef __KERNEL__
         int                       pc_recurred;
+        void                     *pc_callback;
         void                     *pc_wait_callback;
         void                     *pc_idle_callback;
 #endif

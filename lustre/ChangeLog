@@ -7,12 +7,59 @@ tbd         Cluster File Systems, Inc. <info@clusterfs.com>
         2.6.12.6 vanilla (kernel.org)
         2.6.16.27-0.9 (SLES 10)
        * Client support for unpatched kernels:
-	(see https://mail.clusterfs.com/wikis/lustre/PatchlessClient)
-	2.6.16 - 2.6.19 vanilla (kernel.org)
-	2.6.9-42.0.8.EL (RHEL 4)
+        (see http://wiki.lustre.org/index.php?title=Patchless_Client)
+        2.6.9-42.0.10.EL (RHEL 4)
+        2.6.16 - 2.6.21 vanilla (kernel.org)
        * Recommended e2fsprogs version: 1.39.cfs7
        * Note that reiserfs quotas are disabled on SLES 10 in this kernel.
        * bug fixes
+
+Severity   : enhancement
+Bugzilla   : 12194
+Description: add optional extra BUILD_VERSION info
+Details    : add a new environment variable (namely LUSTRE_VERS) which allows
+	     to override the lustre version.
+
+Severity   : normal
+Frequency  : 2.6.18 servers only
+Bugzilla   : 12546
+Description: ll_kern_mount() doesn't release the module reference
+Details    : The ldiskfs module reference count never drops down to 0
+	     because ll_kern_mount() doesn't release the module reference.
+
+Severity   : normal
+Frequency  : rare
+Bugzilla   : 12470
+Description: server LBUG when using old ost_num_threads parameter
+Details    : Accept the old ost_num_threads parameter but warn that it
+	     is deprecated, and fix an off-by-one error that caused an LBUG.
+
+Severity   : normal
+Frequency  : rare
+Bugzilla   : 11722
+Description: Transient SCSI error results in persistent IO issue
+Details    : iobuf->dr_error is not reinitialized to 0 between two
+	     uses.
+
+Severity   : normal
+Frequency  : sometimes when underlying device returns I/O errors
+Bugzilla   : 11743
+Description: OSTs not going read-only during write failures
+Details    : OSTs are not remounted read-only when the journal commit threads
+	     get I/O errors because fsfilt_ext3 calls journal_start/stop()
+	     instead of the ext3 wrappers.
+
+Severity   : minor
+Bugzilla   : 12364
+Description: poor connect scaling with increasing client count
+Details    : Don't run filter_grant_sanity_check for more than 100 exports
+	     to improve scaling for large numbers of clients.
+
+Severity   : normal
+Frequency  : SLES10 only
+Bugzilla   : 12538
+Description: sanity-quota.sh quotacheck failed: rc = -22
+Details    : Quotas cannot be enabled on SLES10.
 
 Severity   : normal
 Frequency  : liblustre clients only
@@ -88,6 +135,189 @@ Details    : the default for reading the health_check proc file has changed
 	     is possible to return to the previous behaviour during configure
 	     with --enable-health-write.
 
+Severity   : enhancement
+Bugzilla   : 10768
+Description: 64-bit inode version
+Details:   : Add a on-disk 64-bit inode version for ext3 to track changes made
+	     to the inode. This will be required for version-based recovery.
+
+Severity   : normal
+Frequency  : rare
+Bugzilla   : 11818
+Description: MDS fails to start if a duplicate client export is detected
+Details    : in some rare cases it was possible for a client to connect to
+	     an MDS multiple times.  Upon recovery the MDS would detect this
+	     and fail during startup.  Handle this more gracefully.
+
+Severity   : enhancement
+Bugzilla   : 11563
+Description: Add -o localflock option to simulate  old noflock
+behaviour.
+Details    : This will achieve local-only flock/fcntl locks
+	     coherentness.
+
+Severity   : minor
+Frequency  : rare
+Bugzilla   : 11658
+Description: log_commit_thread vs filter_destroy race leads to crash
+Details    : Take import reference before releasing llog record semaphore
+
+Severity   : normal
+Frequency  : rare
+Bugzilla   : 12477
+Description: Wrong request locking in request set processing
+Details    : ptlrpc_check_set wrongly uses req->rq_lock for proctect add to
+	     imp_delayed_list, in this place should be used imp_lock.
+
+Severity   : normal
+Frequency  : when reconnection
+Bugzilla   : 11662
+Description: Grant Leak when osc reconnect to OST
+Details    : When osc reconnect ost, OST(filter) should check whether it
+	     should grant more space to client by comparing fed_grant and
+	     cl_avail_grant, and return the granted space to client instead
+	     of "new granted" space, because client will call osc_init_grant
+	     to update the client grant space info.
+
+Severity   : normal
+Frequency  : when client reconnect to OST 
+Bugzilla   : 11662
+Description: Grant Leak when osc do resend and replay bulk write
+Details	   : When osc reconnect to OST, OST(filter)should clear grant info of
+	     bulk write request, because the grant info while be sync between
+	     OSC and OST when reconnect, and we should ignore the grant info
+	     these of resend/replay write req.
+
+Severity   : normal
+Frequency  : rare 
+Bugzilla   : 11662
+Description: Grant space more than avaiable left space sometimes.
+Details	   : When then OST is about to be full, if two bulk writing from
+	     different clients came to OST. Accord the avaliable space of the
+	     OST, the first req should be permitted, and the second one
+	     should be denied by ENOSPC. But if the seconde arrived before 
+	     the first one is commited. The OST might wrongly permit second
+	     writing, which will cause grant space > avaiable space.
+
+Severity   : normal
+Frequency  : when client is evicted 
+Bugzilla   : 12371
+Description: Grant might be wrongly erased when osc is evicted by OST
+Details    : when the import is evicted by server, it will fork another 
+	     thread ptlrpc_invalidate_import_thread to invalidate the 
+	     import, where the grant will be set to 0.  While the original 
+	     thread will update the grant it got when connecting. So if 
+	     the former happened latter, the grant will be wrongly errased 
+	     because of this race.
+
+Severity   : normal
+Frequency  : rare 
+Bugzilla   : 12401
+Description: Checking Stale with correct fid 
+Details    : ll_revalidate_it should uses de_inode instead of op_data.fid2 
+	     to check whether it is stale, because sometimes, we want the 
+	     enqueue happened anyway, and op_data.fid2 will not be initialized.
+
+Severity   : enhancement
+Bugzilla   : 11647
+Description: update patchless client
+Details    : Add support for patchless client with 2.6.20, 2.6.21 and RHEL 5
+
+Severity   : normal
+Frequency  : only with 2.4 kernel
+Bugzilla   : 12134
+Description: random memory corruption
+Details    : size of struct ll_inode_info is to big for union inode.u and this
+	     can be cause of random memory corruption.
+
+Severity   : normal
+Frequency  : rare 
+Bugzilla   : 10818
+Description: Memory leak in recovery
+Details    : Lov_mds_md was not free in an error handler in mds_create_object.
+	     It should also check obd_fail before fsfilt_start, otherwise if 
+	     fsfilt_start return -EROFS,(failover mds during mds recovery).
+	     then the req will return with repmsg->transno = 0 and rc = EROFS. 
+	     and we met hit the assert LASSERT(req->rq_reqmsg->transno ==
+	     req->rq_repmsg->transno) in ptlrpc_replay_interpret.  Fcc should 
+	     be freed no matter whether fsfilt_commit success or not.
+
+Severity   : minor
+Frequency  : only with huge count clients
+Bugzilla   : 11817
+Description: Prevents from taking the superblock lock in llap_from_page for 
+	     a soon died page.
+Details    : using LL_ORIGIN_REMOVEPAGE origin flag instead of LL_ORIGIN_UNKNOW 
+	     for llap_from_page call in ll_removepage prevents from taking the 
+	     superblock lock for a soon died page.
+
+Severity   : normal
+Frequency  : rare
+Bugzilla   : 11935 
+Description: Not check open intent error before release open handle
+Details    : in some rare cases, the open intent error is not checked before
+	     release open handle, which may cause
+	     ASSERTION(open_req->rq_transno != 0), because it tries to release
+	     the failed open handle.
+
+Severity   : normal
+Frequency  : rare
+Bugzilla   : 12556 
+Description: Set cat log bitmap only after create log success. 
+Details    : in some rare cases, the cat log bitmap is set too early. and it 
+	     should be set only after create log success.
+
+Severity   : major
+Bugzilla   : 11971
+Description: Accessing a block bevice can re-enable I/O when Lustre is
+	     tearing down a device.
+Details    : dev_clear_rdonly(bdev) must be called in kill_bdev() instead of
+	     blkdev_put().
+
+Severity   : minor
+Bugzilla   : 11706
+Description: service threads may hog cpus when there are a lot of requests
+             coming
+Details    : Insert cond_resched to give other threads a chance to use some of
+             the cpu
+
+Severity   : normal
+Frequency  : rare
+Bugzilla   : 12086 
+Description: the cat log was not initialized in recovery 
+Details    : When mds(mgs) do recovery, the tgt_count might be zero, so the
+	     unlink log on mds will not be initialized until mds post
+	     recovery. And also in mds post recovery, the unlink log will 
+	     initialization will be done asynchronausly, so there will be race
+	     between add unlink log and unlink log initialization.
+
+Severity   : normal
+Bugzilla   : 12597
+Description: brw_stats were being printed incorrectly
+Details    : brw_stats were being printed as log2 but all of them were not
+             recorded as log2. Also remove some code duplication arising from
+             filter_tally_{read,write}.
+
+Severity   : normal
+Bugzilla   : 11674
+Frequency  : rare, only in recovery.
+Description: ASSERTION(req->rq_type != LI_POISON) failed
+Details    : imp_lock should be held while iterating over imp_sending_list for
+             prevent destroy request after get timeout in ptlrpc_queue_wait.
+
+Severity   : normal
+Bugzilla   : 12689
+Description: replay-single.sh test 52 fails
+Details    : A lock's skiplist need to be cleanup when it being unlinked 
+             from its resource list.
+
+Severity   : normal
+Bugzilla   : 11737
+Description: Short directio read returns full requested size rather than
+             actual amount read.
+Details    : Direct I/O operations should return actual amount of bytes
+             transferred rather than requested size.
+
 --------------------------------------------------------------------------------
 
 2007-05-03  Cluster File Systems, Inc. <info@clusterfs.com>
@@ -117,23 +347,14 @@ Details    : The __iget() symbol export is missing.  To avoid the need for
        * CONFIGURATION CHANGE.  This version of Lustre WILL NOT
 	 INTEROPERATE with older versions automatically.  In many cases a
 	 special upgrade step is needed. Please read the
-	 user documentation before upgrading any part of a 1.4.x system.
+	 user documentation before upgrading any part of a live system.
+       * WIRE PROTOCOL CHANGE from previous 1.6 beta versions.  This
+         version will not interoperate with 1.6 betas before beta5 (1.5.95).  
        * WARNING: Lustre configuration and startup changes are required with
 	 this release.  See https://mail.clusterfs.com/wikis/lustre/MountConf
 	 for details.
-       * Support for kernels:
-        2.4.21-47.0.1.EL (RHEL 3)
-        2.6.5-7.283 (SLES 9)
-        2.6.9-42.0.10.EL (RHEL 4)
-        2.6.12.6 vanilla (kernel.org)
-        2.6.16.27-0.9 (SLES10)
-       * Client support for unpatched kernels:
-        (see https://mail.clusterfs.com/wikis/lustre/PatchlessClient)
-        2.6.16 - 2.6.19 vanilla (kernel.org)
-        2.6.9-42.0.8EL (RHEL 4)
-       * Recommended e2fsprogs version: 1.39.cfs6
-       * Note that reiserfs quotas are disabled on SLES 10 in this kernel
        * bug fixes
+
 
 Severity   : enhancement
 Bugzilla   : 8007
@@ -154,7 +375,7 @@ Bugzilla   : 9851
 Description: startup order invariance
 Details    : MDTs and OSTs can be started in any order.  Clients only
 	     require the MDT to complete startup.
-
+	
 Severity   : enhancement
 Bugzilla   : 4899
 Description: parallel, asynchronous orphan cleanup
@@ -166,15 +387,15 @@ Bugzilla   : 9862
 Description: optimized stripe assignment
 Details    : stripe assignments are now made based on ost space available,
 	     ost previous usage, and OSS previous usage, in order to try
-	     to optimize storage space and networking resources.
-
+	     to optimize storage space and networking resources. 
+	
 Severity   : enhancement
 Bugzilla   : 4226
 Description: Permanently set tunables
 Details    : All writable /proc/fs/lustre tunables can now be permanently
-	     set on a per-server basis, at mkfs time or on a live
+             set on a per-server basis, at mkfs time or on a live
 	     system.
-
+	
 Severity   : enhancement
 Bugzilla   : 10547
 Description: Lustre message v2
@@ -186,81 +407,37 @@ Description: client OST exclusion list
 Details    : Clients can be started with a list of OSTs that should be
 	     declared "inactive" for known non-responsive OSTs.
 
-Severity   : normal
-Bugzilla   : 12123
-Description: ENOENT returned for valid filehandle during dbench.
-Details    : Check if a directory has children when invalidating dentries
-	     associated with an inode during lock cancellation.  This fixes
-	     an incorrect ENOENT sometimes seen for valid filehandles during
-	     testing with dbench.
-
 Severity   : minor
-Frequency  : SFS test only (otherwise harmless)
 Bugzilla   : 6062
 Description: SPEC SFS validation failure on NFS v2 over lustre.
 Details    : Changes the blocksize for regular files to be 2x RPC size,
-	     and not depend on stripe size.
-
-Severity   : enhancement
-Bugzilla   : 10088
-Description: fine-grained SMP locking inside DLM
-Details    : Improve DLM performance on SMP systems by removing the single
-	     per-namespace lock and replace it with per-resource locks.
-
-Severity   : enhancement
-Bugzilla   : 9332
-Description: don't hold multiple extent locks at one time
-Details    : To avoid client eviction during large writes, locks are not
-	     held on multiple stripes at one time or for very large writes.
-	     Otherwise, clients can block waiting for a lock on a failed OST
-	     while holding locks on other OSTs and be evicted.
-
+             and not depend on stripe size.
+	
 Severity   : enhancement
 Bugzilla   : 9293
 Description: Multiple MD RPCs in flight.
-Details    : Further unserialise some read-only MDT RPCs - learn about intents.
-	     To avoid overly-overloading MDT, introduce a limit on number of
-	     MDT RPCs in flight for a single client and add /proc controls
-	     to adjust this limit.
+Details    : Further unserialise some read-only MDS RPCs - learn about intents.
+             To avoid overly-overloading MDS, introduce a limit on number of
+             MDS RPCs in flight for a single client and add /proc controls
+             to adjust this limit.
 
 Severity   : enhancement
 Bugzilla   : 22484
 Description: client read/write statistics
 Details    : Add client read/write call usage stats for performance
-	     analysis of user processes.
+	     analysis of user processes. 
 	     /proc/fs/lustre/llite/*/offset_stats shows non-sequential
 	     file access. extents_stats shows chunk size distribution.
 	     extents_stats_per_process show chunk size distribution per
-	     user process.
-
-Severity   : enhancement
-Bugzilla   : 22485
-Description: per-client statistics on server
-Details    : Add ldlm and operations statistics for each client in
-	     /proc/fs/lustre/mds|obdfilter/*/exports/
+	     user process. 
 
 Severity   : enhancement
 Bugzilla   : 22486
-Description: improved MDT statistics
-Details    : Add detailed MDT operations statistics in
-	     /proc/fs/lustre/mds/*/stats
-
-Severity   : enhancement
-Bugzilla   : 10968
-Description: VFS operations stats
-Details    : Add client VFS call stats, trackable by pid, ppid, or gid
-	     /proc/fs/lustre/llite/*/vfs_ops_stats
-	     /proc/fs/lustre/llite/*/vfs_track_[pid|ppid|gid]
+Description: mds statistics
+Details    : Add detailed mds operations statistics in  
+	     /proc/fs/lustre/mds/*/stats.
 
 Severity   : minor
-Frequency  : always
-Bugzilla   : 6380
-Description: Fix client-side osc byte counters
-Details    : The osc read/write byte counters in
-	     /proc/fs/lustre/osc/*/stats are now working
-
-Severity   : minor
-Frequency  : always as root on SLES
 Bugzilla   : 10667
 Description: Failure of copying files with lustre special EAs.
 Details    : Client side always return success for setxattr call for lustre
@@ -780,7 +957,6 @@ Details    : the performance loss is caused by using of write barriers in the
 	     ext3 code. The SLES10 kernel turns barrier support on by
 	     default. The fix is to undo that change for ldiskfs.
 
-
 ------------------------------------------------------------------------------
 
 2006-12-09  Cluster File Systems, Inc. <info@clusterfs.com>
@@ -997,13 +1173,13 @@ Details    : The number of open files grows over time, whether or not
 
 ------------------------------------------------------------------------------
 
-2006-08-20  Cluster File Systems, Inc. <info@clusterfs.com>
+08-20-2006  Cluster File Systems, Inc. <info@clusterfs.com>
        * version 1.4.7
        * Support for kernels:
-        2.6.9-42.EL (RHEL 4)
-        2.6.5-7.267 (SLES 9)
-        2.4.21-40.EL (RHEL 3)
-        2.6.12.6 vanilla (kernel.org)
+	2.6.9-42.EL (RHEL 4)
+	2.6.5-7.276 (SLES 9)
+	2.4.21-40.EL (RHEL 3)
+	2.6.12.6 vanilla (kernel.org)
        * bug fixes
 
 Severity   : major
@@ -1034,14 +1210,6 @@ Details    : If setting attributes on a file created under NFS that had
 	     never been opened it would be possible to oops the client
 	     if the file had no objects.
 
-Severity   : major
-Frequency  : rare
-Bugzilla   : 9326, 10402, 10897
-Description: client crash in ptlrpcd_wake() thread when sending async RPC
-Details    : It is possible that ptlrpcd_wake() dereferences a freed async
-	     RPC.  In rare cases the ptlrpcd thread alread processed the RPC
-	     before ptlrpcd_wake() was called and the request was freed.
-
 Severity   : minor
 Frequency  : always for liblustre
 Bugzilla   : 10290
@@ -1071,7 +1239,7 @@ Details    : If an OST is started on a device that has never been formatted
 	     or if the filesystem is corrupt and cannot even mount then the
 	     error handling cleanup routines would dereference a NULL pointer.
 
-Severity   : normal
+Severity   : medium
 Frequency  : rare
 Bugzilla   : 10047
 Description: NULL pointer deref in llap_from_page.
@@ -1090,7 +1258,7 @@ Details    : sendfile called ll_readpage without right page locks present.
 	     around call to generic_file_sendfile() much like we do in
 	     ll_file_read().
 
-Severity   : normal
+Severity   : medium
 Frequency  : with certain MDS communication failures at client mount time
 Bugzilla   : 10268
 Description: NULL pointer deref after failed client mount
@@ -1101,7 +1269,7 @@ Details    : a client connection request may delayed by the network layer
 	     reference from the request import to the obd device and delay
 	     the cleanup until the network drops the request.
 
-Severity   : normal
+Severity   : medium
 Frequency  : occasionally during client (re)connect
 Bugzilla   : 9387
 Description: assertion failure during client (re)connect
@@ -1112,7 +1280,7 @@ Details    : processing a client connection request may be delayed by the
 	     client may trip an assertion failure in ptlrpc_connect_interpret()
 	     which thought it would be the only running connect process.
 
-Severity   : normal
+Severity   : medium
 Frequency  : only with obd_echo servers and clients that are rebooted
 Bugzilla   : 10140
 Description: kernel BUG accessing uninitialized data structure
@@ -1149,7 +1317,7 @@ Description: Support NFS exporting on 2.6 kernels.
 Details    : Implement non-rawops metadata methods for NFS server to use without
 	     changing NFS server code.
 
-Severity   : normal
+Severity   : medium
 Frequency  : very rare (synthetic metadata workload only)
 Bugzilla   : 9974
 Description: two racing renames might cause an MDS thread to deadlock
@@ -1278,7 +1446,7 @@ Details    : Kenrel kmalloc limits allocations to 128kB and this prevents
 Severity   : critical
 Frequency  : Always, for 32-bit kernel without CONFIG_LBD and filesystem > 2TB
 Bugzilla   : 6191
-Description: filesystem corruption for non-standard kernels and very large OSTs
+Description: ldiskfs crash at mount for filesystem larger than 2TB with mballoc
 Details    : If a 32-bit kernel is compiled without CONFIG_LBD enabled and a
 	     filesystems larger than 2TB is mounted then the kernel will
 	     silently corrupt the start of the filesystem.  CONFIG_LBD is
@@ -1336,6 +1504,15 @@ Details    : protect inode from truncation within vfs_unlink() context
 	     just take a reference before calling vfs_unlink() and release it
 	     when parent's i_sem is free.
 
+Severity   : major
+Frequency  : rare
+Bugzilla   : 4778
+Description: last_id value checked outside lock on OST caused LASSERT failure
+Details    : If there were multiple MDS->OST object precreate requests in
+	     flight, it was possible that the OST's last object id was checked
+	     outside a lock and incorrectly tripped an assertion.  Move checks
+	     inside locks, and discard old precreate requests.
+
 Severity   : minor
 Frequency  : always, if extents are used on OSTs
 Bugzilla   : 10703
@@ -1355,14 +1532,6 @@ Details    : Using a 32-bit jiffies timer with HZ=1000 may cause backup
 	     import connections to be ignored if the 32-bit jiffies counter
 	     wraps.  Use a 64-bit jiffies counter.
 
-Severity   : major
-Frequency  : during server recovery
-Bugzilla   : 10479
-Description: crash after server is denying duplicate export
-Details    : If clients are resending connect requests to the server, the
-	     server refuses to allow a client to connect multiple times.
-	     Fixed a bug in the handling of this case.
-
 Severity   : minor
 Frequency  : very large clusters immediately after boot
 Bugzilla   : 10083
@@ -1378,11 +1547,11 @@ Frequency  : Sometimes during replay
 Bugzilla   : 9314
 Description: Assertion failure in ll_local_open after replay.
 Details    : If replay happened on an open request reply before we were able
-	     to set replay handler, reply will become not swabbed tripping the
-	     assertion in ll_local_open. Now we set the handler right after
-	     recognising of open request
+             to set replay handler, reply will become not swabbed tripping the
+             assertion in ll_local_open. Now we set the handler right after
+             recognising of open request
 
-Severity   : minor
+Severity   : trivial
 Frequency  : very rare
 Bugzilla   : 10584
 Description: kernel reports "badness in vsnprintf"
@@ -1409,7 +1578,7 @@ Severity   : minor
 Frequency  : always
 Bugzilla   : 10611
 Description: Inability to activate failout mode
-Details    : lconf script incorrectly assumed that in python string's numeric
+Details    : lconf script incorrectly assumed that in pythong string's numeric
 	     value is used in comparisons.
 
 Severity   : minor
@@ -1421,7 +1590,7 @@ Details    : When selecting which OSTs to stripe files over, for files with
 	     the MDS is always picking the same starting OST for each file.
 	     Return the OST selection heuristic to the original design.
 
-Severity   : minor
+Severity   : trivial
 Frequency  : rare
 Bugzilla   : 10673
 Description: mount failures may take full timeout to return an error
@@ -1429,10 +1598,46 @@ Details    : Under some heavy load conditions it is possible that a
 	     failed mount can wait for the full obd_timeout interval,
 	     possibly several minutes, before reporting an error.
 	     Instead return an error as soon as the status is known.
+Severity   : major
+Frequency  : quota enabled and large files being deleted
+Bugzilla   : 10707
+Description: releasing more than 4GB of quota at once hangs OST
+Details    : If a user deletes more than 4GB of files on a single OST it
+	     will cause the OST to spin in an infinite loop.  Release
+	     quota in < 4GB chunks, or use a 64-bit value for 1.4.7.1+.
+
+Severity   : trivial
+Frequency  : rare
+Bugzilla   : 10845
+Description: statfs data retrieved from /proc may be stale or zero
+Details    : When reading per-device statfs data from /proc, in the
+	     {kbytes,files}_{total,free,avail} files, it may appear
+	     as zero or be out of date.
+
+Severity   : trivial
+Frequency  : systems with MD RAID1 external journal devices
+Bugzilla   : 10832
+Description: lconf's call to blkid is confused by RAID1 journal devices
+Details    : Use the "blkid -l" flag to locate the MD RAID device instead
+	     of returning all block devices that match the journal UUID.
+
+Severity   : normal
+Frequency  : always, for aggregate stripe size over 4GB
+Bugzilla   : 10725
+Description: assertion fails when trying to use 4GB stripe size
+Details    : Use "setstripe" to set stripe size over 4GB will fail the kernel,
+             complaining "ASSERTION(lsm->lsm_xfersize != 0)"
+
+Severity   : normal
+Frequency  : always on ppc64
+Bugzilla   : 10634
+Description: the first write on an ext3 filesystem with mballoc got stuck
+Details    : ext3_mb_generate_buddy() uses find_next_bit() which does not
+             perform endianness conversion.
 
 ------------------------------------------------------------------------------
 
-2006-02-14  Cluster File Systems, Inc. <info@clusterfs.com>
+02-14-2006  Cluster File Systems, Inc. <info@clusterfs.com>
        * version 1.4.6
        * WIRE PROTOCOL CHANGE.  This version of Lustre networking WILL NOT
 	 INTEROPERATE with older versions automatically.  Please read the
@@ -1476,7 +1681,7 @@ Description: Configuration change for the XT3
 	     Rather --with-portals=<path-to-portals-includes> is used to
 	     enable building on the XT3.  In addition to enable XT3 specific
 	     features the option --enable-cray-xt3 must be used.
-
+	
 Severity   : major
 Frequency  : rare
 Bugzilla   : 7407
@@ -2057,7 +2262,7 @@ Details    : Add sub-command 'df' on 'lfs' to report the disk space usage of
 
 ------------------------------------------------------------------------------
 
-2005-08-26  Cluster File Systems, Inc. <info@clusterfs.com>
+08-26-2005  Cluster File Systems, Inc. <info@clusterfs.com>
        * version 1.4.5
        * bug fixes
 
@@ -3408,7 +3613,7 @@ tbd         Cluster File Systems, Inc. <info@clusterfs.com>
 	* add hard link support
 	* change obdfile creation method
 	* kernel patch changed
-
+	
 2002-09-19  Peter Braam  <braam@clusterfs.com>
 	* version 0_5_9
 	* bug fix

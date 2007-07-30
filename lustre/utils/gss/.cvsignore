@@ -1,0 +1,11 @@
+.Xrefs
+Makefile
+Makefile.in
+.deps
+tags
+TAGS
+lgssd
+lsvcgssd
+l_idmap
+.*.cmd
+.*.d

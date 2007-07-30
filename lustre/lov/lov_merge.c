@@ -50,7 +50,6 @@
 int lov_merge_lvb(struct obd_export *exp, struct lov_stripe_md *lsm,
                   struct ost_lvb *lvb, int kms_only)
 {
-        struct lov_oinfo *loi;
         __u64 size = 0;
         __u64 blocks = 0;
         __u64 current_mtime = lvb->lvb_mtime;
@@ -64,9 +63,9 @@ int lov_merge_lvb(struct obd_export *exp, struct lov_stripe_md *lsm,
 #endif
 
         for (i = 0; i < lsm->lsm_stripe_count; i++) {
+                struct lov_oinfo *loi = lsm->lsm_oinfo[i];
                 obd_size lov_size, tmpsize;
 
-                loi = lsm->lsm_oinfo[i];
                 tmpsize = loi->loi_kms;
                 if (kms_only == 0 && loi->loi_lvb.lvb_size > tmpsize)
                         tmpsize = loi->loi_lvb.lvb_size;
@@ -112,14 +111,12 @@ int lov_adjust_kms(struct obd_export *exp, struct lov_stripe_md *lsm,
 #endif
 
         if (shrink) {
-                struct lov_oinfo *loi;
                 for (; stripe < lsm->lsm_stripe_count; stripe++) {
-                        loi = lsm->lsm_oinfo[stripe];
+                        struct lov_oinfo *loi = lsm->lsm_oinfo[stripe];
                         kms = lov_size_to_stripe(lsm, size, stripe);
                         CDEBUG(D_INODE,
                                "stripe %d KMS %sing "LPU64"->"LPU64"\n",
-                               stripe, kms > loi->loi_kms ? "increas" :
-                               kms < loi->loi_kms ? "shrink" : "leav",
+                               stripe, kms > loi->loi_kms ? "increas":"shrink",
                                loi->loi_kms, kms);
                         loi->loi_kms = loi->loi_lvb.lvb_size = kms;
                 }

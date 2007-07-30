@@ -39,7 +39,7 @@
 static struct list_head lustre_dquot_hash[NR_DQHASH];
 static spinlock_t dquot_hash_lock = SPIN_LOCK_UNLOCKED;
 
-kmem_cache_t *lustre_dquot_cachep;
+cfs_mem_cache_t *lustre_dquot_cachep;
 
 int lustre_dquot_init(void)
 {
@@ -47,9 +47,9 @@ int lustre_dquot_init(void)
         ENTRY;
 
         LASSERT(lustre_dquot_cachep == NULL);
-        lustre_dquot_cachep = kmem_cache_create("lustre_dquot_cache",
+        lustre_dquot_cachep = cfs_mem_cache_create("lustre_dquot_cache",
                                                 sizeof(struct lustre_dquot),
-                                                0, 0, NULL, NULL);
+                                                0, 0);
         if (!lustre_dquot_cachep)
                 return (-ENOMEM);
 
@@ -69,13 +69,9 @@ void lustre_dquot_exit(void)
                 LASSERT(list_empty(lustre_dquot_hash + i));
         }
         if (lustre_dquot_cachep) {
-#ifdef HAVE_KMEM_CACHE_DESTROY_INT
                 int rc;
-                rc = kmem_cache_destroy(lustre_dquot_cachep);
+                rc = cfs_mem_cache_destroy(lustre_dquot_cachep);
                 LASSERTF(rc == 0,"couldn't destroy lustre_dquot_cachep slab\n");
-#else
-                kmem_cache_destroy(lustre_dquot_cachep);
-#endif
                 lustre_dquot_cachep = NULL;
         }
         EXIT;
@@ -116,7 +112,7 @@ static struct lustre_dquot *alloc_dquot(struct lustre_quota_info *lqi,
         struct lustre_dquot *dquot = NULL;
         ENTRY;
 
-        OBD_SLAB_ALLOC(dquot, lustre_dquot_cachep, SLAB_NOFS, sizeof(*dquot));
+        OBD_SLAB_ALLOC(dquot, lustre_dquot_cachep, GFP_NOFS, sizeof(*dquot));
         if (dquot == NULL)
                 RETURN(NULL);
 
@@ -305,7 +301,7 @@ int mds_quota_adjust(struct obd_device *obd, unsigned int qcids[],
         int rc2 = 0;
         ENTRY;
 
-        if (rc && rc != -EDQUOT && rc != ENOLCK)
+        if (rc && rc != -EDQUOT)
                 RETURN(0);
 
         switch (opc) {
@@ -342,7 +338,7 @@ int filter_quota_adjust(struct obd_device *obd, unsigned int qcids[],
         int rc2 = 0;
         ENTRY;
 
-        if (rc && rc != -EDQUOT)
+        if (rc && rc != -EDQUOT && rc != ENOLCK)
                 RETURN(0);
 
         switch (opc) {

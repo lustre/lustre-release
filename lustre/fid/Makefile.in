@@ -1,0 +1,4 @@
+MODULES := fid
+fid-objs := fid_handler.o fid_store.o fid_request.o lproc_fid.o fid_lib.o
+
+@INCLUDE_RULES@

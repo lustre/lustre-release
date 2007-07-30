@@ -1,0 +1,26 @@
+#!/bin/sh
+#
+# Grab a patch frmo kernel.org, install it.
+#
+# Usage: linus-patch http://www.kernel.org/pub/linux/kernel/people/dwmw2/bk-2.5/cset-1.786.152.7-to-1.798.txt.gz
+#
+
+. patchfns >/dev/null || . /usr/lib/patch-scripts/patchfns >/dev/null || { \
+	echo "Impossible to find my library 'patchfns'."
+	echo "Check your install, or go to the right directory"
+	exit 1
+}
+
+poppatch 999 || die poppatch
+wget $1 || die wget
+FILE=$(basename $1)
+gzip -d < $FILE > $P/patches/linus.patch
+pcpatch linus || die pcpatch
+(
+	echo DESC
+	echo $FILE
+	echo EDESC
+	echo
+	echo $FILE
+) > $P/txt/linus.txt
+rm $FILE

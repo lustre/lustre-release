@@ -12,6 +12,10 @@ ALWAYS_EXCEPT=${ALWAYS_EXCEPT:-"14b  28"}
 # Tests that fail on uml
 [ "$UML" = "true" ] && EXCEPT="$EXCEPT 7"
 
+# Join file feature is not supported currently.
+# It will be ported soon.
+EXCEPT="$EXCEPT 22"
+
 SRCDIR=`dirname $0`
 PATH=$PWD/$SRCDIR:$SRCDIR:$SRCDIR/../utils:$PATH
 
@@ -20,6 +24,7 @@ CHECKSTAT=${CHECKSTAT:-"checkstat -v"}
 CREATETEST=${CREATETEST:-createtest}
 GETSTRIPE=${GETSTRIPE:-lfs getstripe}
 SETSTRIPE=${SETSTRIPE:-lstripe}
+LFS=${LFS:-lfs}
 LCTL=${LCTL:-lctl}
 MCREATE=${MCREATE:-mcreate}
 OPENFILE=${OPENFILE:-openfile}
@@ -27,6 +32,8 @@ OPENUNLINK=${OPENUNLINK:-openunlink}
 TOEXCL=${TOEXCL:-toexcl}
 TRUNCATE=${TRUNCATE:-truncate}
 export TMP=${TMP:-/tmp}
+CHECK_GRANT=${CHECK_GRANT:-"no"}
+
 
 if [ $UID -ne 0 ]; then
 	RUNAS_ID="$UID"
@@ -38,10 +45,16 @@ fi
 
 SAVE_PWD=$PWD
 
+export NAME=${NAME:-local}
+
 LUSTRE=${LUSTRE:-`dirname $0`/..}
 . $LUSTRE/tests/test-framework.sh
 init_test_env $@
 . ${CONFIG:=$LUSTRE/tests/cfg/$NAME.sh}
+
+if [ ! -z "$USING_KRB5" ]; then
+    $RUNAS krb5_login.sh || exit 1
+fi
 
 cleanup() {
 	echo -n "cln.."
@@ -85,6 +98,7 @@ run_one() {
 	export tfile=f${testnum}
 	export tdir=d${base}
 	test_$1 || error "exit with rc=$?"
+	check_grant || error "check grant fail"
 	unset TESTNAME
 	pass "($((`date +%s` - $BEFORE))s)"
 	cd $SAVE_PWD
@@ -131,6 +145,54 @@ basetest() {
     IFS=abcdefghijklmnopqrstuvwxyz _basetest $1
 }
 
+sync_clients() {
+	cd $DIR1
+	sync; sleep 1; sync
+	cd $DIR2
+	sync; sleep 1; sync
+
+	cd $SAVE_PWD
+}
+
+check_grant() {
+	[ "$CHECK_GRANT" == "no" ] && return 0
+
+	echo -n "checking grant......"
+	cd $SAVE_PWD
+	# write some data to sync client lost_grant
+	rm -f $DIR1/${tfile}_check_grant_* 2>&1
+	for i in `seq $OSTCOUNT`; do
+		$LFS setstripe $DIR1/${tfile}_check_grant_$i 0 $(($i -1)) 1
+		dd if=/dev/zero of=$DIR1/${tfile}_check_grant_$i bs=4k \
+					      count=1 > /dev/null 2>&1 
+	done
+	# sync all the data and make sure no pending data on server
+	sync_clients
+	
+	#get client grant and server grant 
+	client_grant=0
+       	for d in /proc/fs/lustre/osc/*/cur_grant_bytes; do 
+		client_grant=$(($client_grant + `cat $d`))
+	done
+	server_grant=0
+	for d in /proc/fs/lustre/obdfilter/*/tot_granted; do
+		server_grant=$(($server_grant + `cat $d`))
+	done
+
+	# cleanup the check_grant file
+	for i in `seq $OSTCOUNT`; do
+	        rm $DIR1/${tfile}_check_grant_$i
+	done
+
+	#check whether client grant == server grant 
+	if [ $client_grant != $server_grant ]; then
+		echo "failed: client:${client_grant} server: ${server_grant}"
+		return 1
+	else
+		echo "pass"
+	fi
+}
+
 run_test() {
          export base=`basetest $1`
          if [ "$ONLY" ]; then
@@ -166,7 +228,8 @@ run_test() {
 error () {
 	sysctl -w lustre.fail_loc=0 2> /dev/null || true
 	log "$0: FAIL: $TESTNAME $@"
-	if [ "$SANITYLOG" ]; then
+	$LCTL dk $TMP/lustre-log-$TESTNAME.log
+        if [ "$SANITYLOG" ]; then
 		echo "$0: FAIL: $TESTNAME $@" >> $SANITYLOG
 	else
 		exit 1
@@ -200,6 +263,10 @@ export DIR1=${DIR1:-$MOUNT1}
 export DIR2=${DIR2:-$MOUNT2}
 [ -z "`echo $DIR1 | grep $MOUNT1`" ] && echo "$DIR1 not in $MOUNT1" && exit 96
 [ -z "`echo $DIR2 | grep $MOUNT2`" ] && echo "$DIR2 not in $MOUNT2" && exit 95
+
+LPROC=/proc/fs/lustre
+LOVNAME=`cat $LPROC/llite/*/lov/common_name | tail -n 1`
+OSTCOUNT=`cat $LPROC/lov/$LOVNAME/numobd`
 
 rm -rf $DIR1/[df][0-9]* $DIR1/lnk
 
@@ -402,7 +469,7 @@ test_14a() {
         multiop $DIR2/d14/multiop Oc && error "expected error, got success"
         kill -USR1 $MULTIPID || return 2
         wait $MULTIPID || return 3
-        rm $TMP/test14.junk
+        rm $TMP/test14.junk $DIR1/d14/multiop || error "removing multiop"
 }
 run_test 14a "open(RDWR) of executing file returns -ETXTBSY ===="
 
@@ -417,7 +484,7 @@ test_14b() { # bug 3192, 7040
         kill -USR1 $MULTIPID || return 2
         wait $MULTIPID || return 3
 	cmp `which multiop` $DIR1/d14/multiop || error "binary changed"
-        rm $TMP/test14.junk
+	rm $TMP/test14.junk $DIR1/d14/multiop || error "removing multiop"
 }
 run_test 14b "truncate of executing file returns -ETXTBSY ======"
 
@@ -431,7 +498,7 @@ test_14c() { # bug 3430, 7040
 	kill -USR1 $MULTIPID || return 2
 	wait $MULTIPID || return 3
 	cmp `which multiop` $DIR1/d14/multiop || error "binary changed"
-	rm $TMP/test14.junk
+	rm $TMP/test14.junk $DIR1/d14/multiop || error "removing multiop"
 }
 run_test 14c "open(O_TRUNC) of executing file return -ETXTBSY =="
 
@@ -446,18 +513,22 @@ test_14d() { # bug 10921
 	kill -USR1 $MULTIPID || return 2
 	wait $MULTIPID || return 3
 	cmp `which multiop` $DIR1/d14/multiop || error "binary changed"
-	rm $TMP/test14.junk
+	rm $TMP/test14.junk $DIR1/d14/multiop || error "removing multiop"
 }
 run_test 14d "chmod of executing file is still possible ========"
 
 test_15() {	# bug 974 - ENOSPC
 	echo "PATH=$PATH"
 	sh oos2.sh $MOUNT1 $MOUNT2
+	grant_error=`dmesg | grep "> available"`
+	[ -z "$grant_error" ] || error "$grant_error"
 }
 run_test 15 "test out-of-space with multiple writers ==========="
 
 test_16() {
-	fsx -c 50 -p 100 -N 2500 -S 0 $MOUNT1/fsxfile $MOUNT2/fsxfile
+	rm -f $MOUNT1/fsxfile
+	lfs setstripe $MOUNT1/fsxfile 0 -1 -1 # b=10919
+	fsx -c 50 -p 100 -N 2500 -l $((SIZE * 256)) -S 0 $MOUNT1/fsxfile $MOUNT2/fsxfile
 }
 run_test 16 "2500 iterations of dual-mount fsx ================="
 
@@ -597,6 +668,7 @@ test_24() {
 	lfs df -ih $DIR2/$tfile || error "lfs df -ih $DIR2/$tfile failed"
 	
 	OSC=`lctl dl | awk '/-osc-|OSC.*MNT/ {print $4}' | head -n 1`
+#	OSC=`lctl dl | awk '/-osc-/ {print $4}' | head -n 1`
 	lctl --device %$OSC deactivate
 	lfs df -i || error "lfs df -i with deactivated OSC failed"
 	lctl --device %$OSC recover
@@ -646,7 +718,7 @@ test_26b() {
 run_test 26b "sync mtime between ost and mds"
 
 test_27() {
-	cancel_lru_locks OSC
+	cancel_lru_locks osc
 	lctl clear
 	dd if=/dev/zero of=$DIR2/$tfile bs=$((4096+4))k conv=notrunc count=4 seek=3 &
 	DD2_PID=$!

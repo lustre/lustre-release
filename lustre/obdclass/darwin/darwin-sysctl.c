@@ -6,7 +6,7 @@
 #include <sys/proc.h>
 #include <sys/unistd.h>
 #include <mach/mach_types.h>
-#include <linux/lustre_build_version.h>
+#include <lustre/lustre_build_version.h>
 
 #define DEBUG_SUBSYSTEM S_CLASS
                                                                                                                                                                      
@@ -64,7 +64,7 @@ static cfs_sysctl_table_t      parent_table[] = {
 	&sysctl__lustre_fail_loc,
 	&sysctl__lustre_timeout,
 	&sysctl__lustre_dump_on_timeout,
-	&sysctl__lustre_debug_peer_on_timeout,
+        &sysctl__lustre_debug_peer_on_timeout,
 	&sysctl__lustre_upcall,
 	&sysctl__lustre_memused,
 	&sysctl__lustre_filter_sync_on_commit,

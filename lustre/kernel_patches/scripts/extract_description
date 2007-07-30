@@ -1,0 +1,87 @@
+#!/bin/sh
+
+insert_line()
+{
+	PATTERN="$1"
+	LINE="$2"
+	FILE="$3"
+	awk ' BEGIN { found=0; }
+		/'"$PATTERN"'/ { 
+			print; 
+			if (!found)
+				printf("%s\n", "'$LINE'"); 
+			found=1; 
+			next;
+		}
+		{ print; }
+	' < "$FILE"
+}
+
+# extract the description from the top of a patch
+# filter stdin
+# collapse adjacent blank lines to a single blank line
+# remove any lines that look like diffstat output
+# stop output on encountering a line beginning with '---' (beginning of patch)
+
+	TMPFILE=`mktemp /tmp/xdtmp.XXXXXX` || exit 1
+	formail -kfcb -X 'From:' -X 'Subject:' |\
+	awk '
+		BEGIN { found_end=0; lastone="x"; }
+		/^ .* [|] +[0-9]+ [+-]+$/ { 
+			#/* we found something like diffstat output... */
+			if (found_end == 1) {
+				/* we are past end of diffstat, let it pass */
+				print;
+			}
+			next;
+		}
+		/^ [1-9][0-9]* files changed/ {
+			#/* end of diffstat output, stop filtering diffstat */
+			found_end=1;
+			next;
+		}
+		/^--- / { exit; }
+		{
+			#/* collapse adjacent blank lines to 1 blank line */ 
+			if ( $0 == "" && lastone == "" )
+				next;
+			else 
+				print; 
+		  	lastone=$0;
+		}
+	' | awk '{ if ($0 == "" && FNR == 1)  next; print; }' > "$TMPFILE"
+
+	descs=`head -10 $TMPFILE | grep -c '^[	]*DESC[ 	]*$'`
+	if [ "$descs" = "0" ]
+	then
+		# DESC is not 1st non blank line in the file
+		echo "DESC"
+		descs=0
+	fi
+	edescs=`grep -c '^EDESC$' "$TMPFILE"`
+	subjects=`grep -c '^[ 	]*Subject[:]' "$TMPFILE"`
+	froms=`grep -c '^[ 	]*From[:]' "$TMPFILE"`
+	if [ "$edescs" = "0" ]
+	then
+		if [ "$subjects" != "0" ]
+		then
+			insert_line '^Subject[:]' 'EDESC' "$TMPFILE"
+		else
+			if [ "$froms" != "0" ]
+			then
+				insert_line '^From[:]' 'EDESC' "$TMPFILE"
+			else
+				if [ "$descs" = "0" ]
+				then
+					# blank DESC line...
+					echo '(undescribed patch)'
+					echo EDESC
+					cat "$TMPFILE"
+				else
+					insert_line '^DESC$' "EDESC" "$TMPFILE"
+				fi
+			fi
+		fi
+	else
+		cat $TMPFILE
+	fi

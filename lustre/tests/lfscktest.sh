@@ -15,6 +15,8 @@ GETFATTR=${GETFATTR:-getfattr}
 SETFATTR=${SETFATTR:-setfattr}
 MAX_ERR=1
 
+FSTYPE=${FSTYPE:-ldiskfs}
+
 export PATH=$LFSCK_PATH:`dirname $0`:`dirname $0`/../utils:$PATH
 
 [ -z "`which $GETFATTR`" ] && echo "$0: $GETFATTR not found" && exit 5

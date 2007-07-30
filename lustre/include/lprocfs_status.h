@@ -164,7 +164,7 @@ static inline void lprocfs_counter_add(struct lprocfs_stats *stats, int idx,
 {
         struct lprocfs_counter *percpu_cntr;
 
-        if (!stats)
+        if (stats == NULL)
                 return;
         percpu_cntr = &(stats->ls_percpu[smp_processor_id()]->lp_cntr[idx]);
         atomic_inc(&percpu_cntr->lc_cntl.la_entry);
@@ -186,7 +186,7 @@ static inline void lprocfs_counter_incr(struct lprocfs_stats *stats, int idx)
 {
         struct lprocfs_counter *percpu_cntr;
 
-        if (!stats)
+        if (stats == NULL)
                 return;
         percpu_cntr = &(stats->ls_percpu[smp_processor_id()]->lp_cntr[idx]);
         atomic_inc(&percpu_cntr->lc_cntl.la_entry);
@@ -403,7 +403,7 @@ static inline void lprocfs_init_ops_stats(int num_private_stats,
                                           struct lprocfs_stats *stats)
 { return; }
 static inline int lprocfs_alloc_obd_stats(struct obd_device *obddev,
-                                          unsigned int num_private_stats)
+                                             unsigned int num_private_stats)
 { return 0; }
 static inline void lprocfs_free_obd_stats(struct obd_device *obddev)
 { return; }

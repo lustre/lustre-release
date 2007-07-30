@@ -440,10 +440,9 @@ static int quotfmt_test_cleanup(struct obd_device *obd)
         RETURN(0);
 }
 
-static int quotfmt_test_setup(struct obd_device *obd, obd_count len, void *buf)
+static int quotfmt_test_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
 {
         struct lprocfs_static_vars lvars;
-        struct lustre_cfg *lcfg = buf;
         struct obd_device *tgt;
         int rc;
         ENTRY;
@@ -487,8 +486,8 @@ static int __init quotfmt_test_init(void)
         struct lprocfs_static_vars lvars;
 
         lprocfs_init_vars(quotfmt_test, &lvars);
-        return class_register_type(&quotfmt_obd_ops, lvars.module_vars,
-                                   "quotfmt_test");
+        return class_register_type(&quotfmt_obd_ops, NULL, lvars.module_vars,
+                                   "quotfmt_test", NULL);
 }
 
 static void __exit quotfmt_test_exit(void)

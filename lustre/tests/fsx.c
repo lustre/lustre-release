@@ -438,21 +438,21 @@ assign_fd_policy(char *policy)
 	}
 }
 
-int 
+int
 get_fd(void)
 {
 	struct test_file *tf = get_tf();
 	return tf->fd;
 }
 
-static const char *basename(const char *path)
+static const char *my_basename(const char *path)
 {
 	char *c = strrchr(path, '/');
 
 	return c ? c++ : path;
 }
 
-void 
+void
 open_test_files(char **argv, int argc)
 {
 	struct test_file *tf;
@@ -1334,14 +1334,14 @@ main(int argc, char **argv)
 
 	open_test_files(argv, argc);
 
-	strncat(goodfile, dirpath ? basename(fname) : fname, 256);
+	strncat(goodfile, dirpath ? my_basename(fname) : fname, 256);
 	strcat (goodfile, ".fsxgood");
 	fsxgoodfd = open(goodfile, O_RDWR|O_CREAT|O_TRUNC, 0666);
 	if (fsxgoodfd < 0) {
 		prterr(goodfile);
 		exit(92);
 	}
-	strncat(logfile, dirpath ? basename(fname) : fname, 256);
+	strncat(logfile, dirpath ? my_basename(fname) : fname, 256);
 	strcat (logfile, ".fsxlog");
 	fsxlogf = fopen(logfile, "w");
 	if (fsxlogf == NULL) {

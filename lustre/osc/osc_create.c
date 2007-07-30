@@ -79,12 +79,12 @@ static int osc_interpret_create(struct ptlrpc_request *req, void *data, int rc)
                 oscc->oscc_grow_count = OST_MIN_PRECREATE;
                 spin_unlock(&oscc->oscc_lock);
                 DEBUG_REQ(D_ERROR, req,
-                          "unknown rc %d from async create: failing oscc", rc);
+                          "Unknown rc %d from async create: failing oscc", rc);
                 ptlrpc_fail_import(req->rq_import,
                                    lustre_msg_get_conn_cnt(req->rq_reqmsg));
         } else {
                 if (rc == 0) {
-                        if (body) {
+                         if (body) {
                                 int diff = body->oa.o_id - oscc->oscc_last_id;
 
                                 if (diff < oscc->oscc_grow_count)
@@ -153,7 +153,9 @@ static int oscc_internal_create(struct osc_creator *oscc)
 
         spin_lock(&oscc->oscc_lock);
         body->oa.o_id = oscc->oscc_last_id + oscc->oscc_grow_count;
-        body->oa.o_valid |= OBD_MD_FLID;
+        body->oa.o_gr = oscc->oscc_oa.o_gr;
+        LASSERT(body->oa.o_gr > 0);
+        body->oa.o_valid |= OBD_MD_FLID | OBD_MD_FLGROUP;
         spin_unlock(&oscc->oscc_lock);
         CDEBUG(D_HA, "preallocating through id "LPU64" (last seen "LPU64")\n",
                body->oa.o_id, oscc->oscc_last_id);
@@ -235,20 +237,23 @@ int oscc_recovering(struct osc_creator *oscc)
 int osc_create(struct obd_export *exp, struct obdo *oa,
                struct lov_stripe_md **ea, struct obd_trans_info *oti)
 {
-        struct lov_stripe_md *lsm;
         struct osc_creator *oscc = &exp->exp_obd->u.cli.cl_oscc;
+        struct lov_stripe_md *lsm;
         int try_again = 1, rc = 0;
         ENTRY;
+
         LASSERT(oa);
         LASSERT(ea);
-
-        if ((oa->o_valid & OBD_MD_FLGROUP) && (oa->o_gr != 0))
-                RETURN(osc_real_create(exp, oa, ea, oti));
+        LASSERT(oa->o_gr > 0);
+        LASSERT(oa->o_valid & OBD_MD_FLGROUP);
 
         if ((oa->o_valid & OBD_MD_FLFLAGS) &&
             oa->o_flags == OBD_FL_RECREATE_OBJS) {
                 RETURN(osc_real_create(exp, oa, ea, oti));
         }
+
+        if (oa->o_gr == FILTER_GROUP_LLOG || oa->o_gr == FILTER_GROUP_ECHO)
+                RETURN(osc_real_create(exp, oa, ea, oti));
 
         /* this is the special case where create removes orphans */
         if ((oa->o_valid & OBD_MD_FLFLAGS) &&

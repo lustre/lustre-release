@@ -203,12 +203,12 @@ typedef struct {
         
         /* For quota slave, acquire/release quota from master if needed */
         int (*quota_acquire) (struct obd_device *, unsigned int, unsigned int);
-
+        
         /* For quota slave, check whether specified uid/gid's remaining quota
          * can finish a write rpc */
         int (*quota_chkquota) (struct obd_device *, unsigned int, unsigned int,
                                int);
-        
+
         /* For quota client, poll if the quota check done */
         int (*quota_poll_check) (struct obd_export *, struct if_quotacheck *);
         
@@ -255,7 +255,7 @@ static inline int lquota_exit(quota_interface_t *interface)
 }
 
 static inline int lquota_setup(quota_interface_t *interface,
-                               struct obd_device *obd)
+                               struct obd_device *obd) 
 {
         int rc;
         ENTRY;

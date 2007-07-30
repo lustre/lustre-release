@@ -97,7 +97,7 @@ int ptlrpc_replay_next(struct obd_import *imp, int *inflight)
          */
         list_for_each_safe(tmp, pos, &imp->imp_replay_list) {
                 req = list_entry(tmp, struct ptlrpc_request, rq_replay_list);
-
+                
                 /* If need to resend the last sent transno (because a
                    reconnect has occurred), then stop on the matching
                    req and send it again. If, however, the last sent
@@ -150,7 +150,6 @@ int ptlrpc_resend(struct obd_import *imp)
                 spin_unlock(&imp->imp_lock);
                 RETURN(-1);
         }
-        spin_unlock(&imp->imp_lock);
 
         list_for_each_entry_safe(req, next, &imp->imp_sending_list, rq_list) {
                 LASSERTF((long)req > CFS_PAGE_SIZE && req != LP_POISON,
@@ -159,6 +158,7 @@ int ptlrpc_resend(struct obd_import *imp)
                 if (!req->rq_no_resend)
                         ptlrpc_resend_req(req);
         }
+        spin_unlock(&imp->imp_lock);
 
         RETURN(0);
 }
@@ -244,7 +244,7 @@ int ptlrpc_set_import_active(struct obd_import *imp, int active)
                 spin_lock(&imp->imp_lock);
                 imp->imp_deactive = 0;
                 spin_unlock(&imp->imp_lock);
-
+                
                 CDEBUG(D_HA, "setting import %s VALID\n",
                        obd2cli_tgt(imp->imp_obd));
                 rc = ptlrpc_recover_import(imp, NULL);

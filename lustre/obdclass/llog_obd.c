@@ -51,8 +51,8 @@ int llog_cleanup(struct llog_ctxt *ctxt)
         
         if (CTXTP(ctxt, cleanup))
                 rc = CTXTP(ctxt, cleanup)(ctxt);
-
         ctxt->loc_obd->obd_llog_ctxt[ctxt->loc_idx] = NULL;
+
         if (ctxt->loc_exp)
                 class_export_put(ctxt->loc_exp);
         OBD_FREE(ctxt, sizeof(*ctxt));
@@ -61,8 +61,9 @@ int llog_cleanup(struct llog_ctxt *ctxt)
 }
 EXPORT_SYMBOL(llog_cleanup);
 
-int llog_setup(struct obd_device *obd, int index, struct obd_device *disk_obd,
-               int count, struct llog_logid *logid, struct llog_operations *op)
+int llog_setup(struct obd_device *obd,  struct obd_llogs *llogs, int index, 
+               struct obd_device *disk_obd, int count, struct llog_logid *logid,
+               struct llog_operations *op)
 {
         int rc = 0;
         struct llog_ctxt *ctxt;
@@ -71,7 +72,10 @@ int llog_setup(struct obd_device *obd, int index, struct obd_device *disk_obd,
         if (index < 0 || index >= LLOG_MAX_CTXTS)
                 RETURN(-EFAULT);
 
-        if (obd->obd_llog_ctxt[index]) {
+        /* in some recovery cases, obd_llog_ctxt might already be set, 
+         * but llogs might still be zero, for example in obd_filter recovery */
+        if (obd->obd_llog_ctxt[index] &&
+            (!llogs || (llogs && llogs->llog_ctxt[index]))) {
                 /* mds_lov_update_mds might call here multiple times. So if the
                    llog is already set up then don't to do it again. */
                 CDEBUG(D_CONFIG, "obd %s ctxt %d already set up\n", 
@@ -82,12 +86,17 @@ int llog_setup(struct obd_device *obd, int index, struct obd_device *disk_obd,
                 LASSERT(ctxt->loc_logops == op);
                 GOTO(out, rc = 0);
         }
-        
+
         OBD_ALLOC(ctxt, sizeof(*ctxt));
         if (!ctxt)
                 GOTO(out, rc = -ENOMEM);
 
-        obd->obd_llog_ctxt[index] = ctxt;
+        if (llogs)
+                llogs->llog_ctxt[index] = ctxt;
+
+        if (!obd->obd_llog_ctxt[index])
+                obd->obd_llog_ctxt[index] = ctxt;
+
         ctxt->loc_obd = obd;
         ctxt->loc_exp = class_export_get(disk_obd->obd_self_export);
         ctxt->loc_idx = index;
@@ -95,14 +104,14 @@ int llog_setup(struct obd_device *obd, int index, struct obd_device *disk_obd,
         sema_init(&ctxt->loc_sem, 1);
 
         if (op->lop_setup)
-                rc = op->lop_setup(obd, index, disk_obd, count, logid);
-        
+                rc = op->lop_setup(obd, llogs, index, disk_obd, count, logid);
+
         if (rc) {
                 obd->obd_llog_ctxt[index] = NULL;
                 class_export_put(ctxt->loc_exp);
                 OBD_FREE(ctxt, sizeof(*ctxt));
         }
-        
+
 out:
         RETURN(rc);
 }
@@ -136,6 +145,7 @@ int llog_add(struct llog_ctxt *ctxt, struct llog_rec_hdr *rec,
         }
         
         CTXT_CHECK_OP(ctxt, add, -EOPNOTSUPP);
+
         rc = CTXTP(ctxt, add)(ctxt, rec, lsm, logcookies, numcookies);
         RETURN(rc);
 }
@@ -197,10 +207,10 @@ static int cat_cancel_cb(struct llog_handle *cathandle,
                 llog_cat_set_first_idx(cathandle, index);
                 rc = llog_cancel_rec(cathandle, index);
                 if (rc == 0)
-                        CDEBUG(D_HA, "cancel log "LPX64":%x at index %u of "
-                               "catalog "LPX64"\n", lir->lid_id.lgl_oid,
-                               lir->lid_id.lgl_ogen, rec->lrh_index,
-                               cathandle->lgh_id.lgl_oid);
+                        CDEBUG(D_HA, "cancel log "LPX64":%x at index %u of catalog "
+                              LPX64"\n", lir->lid_id.lgl_oid,
+                              lir->lid_id.lgl_ogen, rec->lrh_index,
+                              cathandle->lgh_id.lgl_oid);
         }
 
         RETURN(rc);
@@ -208,8 +218,8 @@ static int cat_cancel_cb(struct llog_handle *cathandle,
 
 /* lop_setup method for filter/osc */
 // XXX how to set exports
-int llog_obd_origin_setup(struct obd_device *obd, int index,
-                          struct obd_device *disk_obd, int count,
+int llog_obd_origin_setup(struct obd_device *obd, struct obd_llogs *llogs,
+                          int index, struct obd_device *disk_obd, int count,
                           struct llog_logid *logid)
 {
         struct llog_ctxt *ctxt;
@@ -223,7 +233,11 @@ int llog_obd_origin_setup(struct obd_device *obd, int index,
 
         LASSERT(count == 1);
 
-        ctxt = llog_get_context(obd, index);
+        if (!llogs)
+                ctxt = llog_get_context(obd, index);
+        else
+                ctxt = llog_get_context_from_llogs(llogs, index);
+        
         LASSERT(ctxt);
         llog_gen_init(ctxt);
 
@@ -312,8 +326,8 @@ int llog_obd_origin_add(struct llog_ctxt *ctxt,
 }
 EXPORT_SYMBOL(llog_obd_origin_add);
 
-int llog_cat_initialize(struct obd_device *obd, int count,
-                        struct obd_uuid *uuid)
+int llog_cat_initialize(struct obd_device *obd, struct obd_llogs *llogs,
+                        int count, struct obd_uuid *uuid)
 {
         char name[32] = CATLIST;
         struct llog_catid *idarray;
@@ -331,7 +345,7 @@ int llog_cat_initialize(struct obd_device *obd, int count,
                 GOTO(out, rc);
         }
 
-        rc = obd_llog_init(obd, obd, count, idarray, uuid);
+        rc = obd_llog_init(obd, llogs, obd, count, idarray, uuid);
         if (rc) {
                 CERROR("rc: %d\n", rc);
                 GOTO(out, rc);
@@ -349,15 +363,17 @@ int llog_cat_initialize(struct obd_device *obd, int count,
 }
 EXPORT_SYMBOL(llog_cat_initialize);
 
-int obd_llog_init(struct obd_device *obd, struct obd_device *disk_obd,
-                  int count, struct llog_catid *logid, struct obd_uuid *uuid)
+int obd_llog_init(struct obd_device *obd, struct obd_llogs *llogs, 
+                  struct obd_device *disk_obd, int count, 
+                  struct llog_catid *logid, struct obd_uuid *uuid)
 {
         int rc;
         ENTRY;
-        OBD_CHECK_OP(obd, llog_init, 0);
+        OBD_CHECK_DT_OP(obd, llog_init, 0);
         OBD_COUNTER_INCREMENT(obd, llog_init);
 
-        rc = OBP(obd, llog_init)(obd, disk_obd, count, logid, uuid);
+        rc = OBP(obd, llog_init)(obd, llogs, disk_obd, count, logid, 
+                                 uuid);
         RETURN(rc);
 }
 EXPORT_SYMBOL(obd_llog_init);
@@ -366,10 +382,11 @@ int obd_llog_finish(struct obd_device *obd, int count)
 {
         int rc;
         ENTRY;
-        OBD_CHECK_OP(obd, llog_finish, 0);
+        OBD_CHECK_DT_OP(obd, llog_finish, 0);
         OBD_COUNTER_INCREMENT(obd, llog_finish);
 
         rc = OBP(obd, llog_finish)(obd, count);
         RETURN(rc);
 }
 EXPORT_SYMBOL(obd_llog_finish);
+

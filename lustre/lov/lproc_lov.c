@@ -304,7 +304,7 @@ static int lov_target_seq_open(struct inode *inode, struct file *file)
         struct proc_dir_entry *dp = PDE(inode);
         struct seq_file *seq;
         int rc;
-
+        
         LPROCFS_ENTRY_AND_CHECK(dp);
         rc = seq_open(file, &lov_tgt_sops);
         if (rc) {

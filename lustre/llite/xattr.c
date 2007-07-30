@@ -29,20 +29,9 @@
 #include <obd_support.h>
 #include <lustre_lite.h>
 #include <lustre_dlm.h>
-#include <linux/lustre_version.h>
-
-#ifndef POSIX_ACL_XATTR_ACCESS
-#ifndef XATTR_NAME_ACL_ACCESS
-#define XATTR_NAME_ACL_ACCESS   "system.posix_acl_access"
-#endif
-#define POSIX_ACL_XATTR_ACCESS XATTR_NAME_ACL_ACCESS
-#endif
-#ifndef POSIX_ACL_XATTR_DEFAULT
-#ifndef XATTR_NAME_ACL_DEFAULT
-#define XATTR_NAME_ACL_DEFAULT  "system.posix_acl_default"
-#endif
-#define POSIX_ACL_XATTR_DEFAULT XATTR_NAME_ACL_DEFAULT
-#endif
+#include <lustre_ver.h>
+//#include <lustre_mdc.h>
+#include <linux/lustre_acl.h>
 
 #include "llite_internal.h"
 
@@ -84,9 +73,10 @@ int get_xattr_type(const char *name)
 static
 int xattr_type_filter(struct ll_sb_info *sbi, int xattr_type)
 {
-        if ((xattr_type == XATTR_ACL_ACCESS_T ||
-             xattr_type == XATTR_ACL_DEFAULT_T) &&
-            !(sbi->ll_flags & LL_SBI_ACL))
+        if (((xattr_type == XATTR_ACL_ACCESS_T) ||
+            (xattr_type == XATTR_ACL_DEFAULT_T)) &&
+            (!(sbi->ll_flags & LL_SBI_ACL) ||
+            (sbi->ll_flags & LL_SBI_RMT_CLIENT)))
                 return -EOPNOTSUPP;
 
         if (xattr_type == XATTR_USER_T && !(sbi->ll_flags & LL_SBI_USER_XATTR))
@@ -106,11 +96,9 @@ int ll_setxattr_common(struct inode *inode, const char *name,
 {
         struct ll_sb_info *sbi = ll_i2sbi(inode);
         struct ptlrpc_request *req;
-        struct ll_fid fid;
         int xattr_type, rc;
+        struct obd_capa *oc;
         ENTRY;
-
-        lprocfs_counter_incr(sbi->ll_stats, LPROC_LL_SETXATTR);
 
         xattr_type = get_xattr_type(name);
         rc = xattr_type_filter(sbi, xattr_type);
@@ -121,9 +109,10 @@ int ll_setxattr_common(struct inode *inode, const char *name,
         if (xattr_type == XATTR_TRUSTED_T && strcmp(name, "trusted.lov") == 0)
                 RETURN(0);
 
-        ll_inode2fid(&fid, inode);
-        rc = mdc_setxattr(sbi->ll_mdc_exp, &fid, valid,
-                          name, value, size, 0, flags, &req);
+        oc = ll_mdscapa_get(inode);
+        rc = md_setxattr(sbi->ll_md_exp, ll_inode2fid(inode), oc, valid, name,
+                         value, size, 0, flags, &req);
+        capa_put(oc);
         if (rc) {
                 if (rc == -EOPNOTSUPP && xattr_type == XATTR_USER_T) {
                         LCONSOLE_INFO("Disabling user_xattr feature because "
@@ -148,7 +137,7 @@ int ll_setxattr(struct dentry *dentry, const char *name,
         CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu/%u(%p), xattr %s\n",
                inode->i_ino, inode->i_generation, inode, name);
 
-        ll_vfs_ops_tally(ll_i2sbi(inode), VFS_OPS_SETXATTR);
+        ll_stats_ops_tally(ll_i2sbi(inode), LPROC_LL_SETXATTR, 1);
 
         if (strncmp(name, XATTR_TRUSTED_PREFIX, 8) == 0 &&
             strcmp(name + 8, "lov") == 0) {
@@ -185,7 +174,7 @@ int ll_removexattr(struct dentry *dentry, const char *name)
         CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu/%u(%p), xattr %s\n",
                inode->i_ino, inode->i_generation, inode, name);
 
-        ll_vfs_ops_tally(ll_i2sbi(inode), VFS_OPS_REMOVEXATTR);
+        ll_stats_ops_tally(ll_i2sbi(inode), LPROC_LL_REMOVEXATTR, 1);
         return ll_setxattr_common(inode, name, NULL, 0, 0,
                                   OBD_MD_FLXATTRRM);
 }
@@ -196,16 +185,14 @@ int ll_getxattr_common(struct inode *inode, const char *name,
 {
         struct ll_sb_info *sbi = ll_i2sbi(inode);
         struct ptlrpc_request *req = NULL;
-        struct mds_body *body;
-        struct ll_fid fid;
-        void *xdata;
+        struct mdt_body *body;
         int xattr_type, rc;
+        void *xdata;
+        struct obd_capa *oc;
         ENTRY;
 
         CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu/%u(%p)\n",
                inode->i_ino, inode->i_generation, inode);
-
-        lprocfs_counter_incr(sbi->ll_stats, LPROC_LL_GETXATTR);
 
         /* listxattr have slightly different behavior from of ext3:
          * without 'user_xattr' ext3 will list all xattr names but
@@ -244,9 +231,10 @@ int ll_getxattr_common(struct inode *inode, const char *name,
 #endif
 
 do_getxattr:
-        ll_inode2fid(&fid, inode);
-        rc = mdc_getxattr(sbi->ll_mdc_exp, &fid, valid, name, NULL, 0, size,
-                          &req);
+        oc = ll_mdscapa_get(inode);
+        rc = md_getxattr(sbi->ll_md_exp, ll_inode2fid(inode), oc, valid, name,
+                         NULL, 0, size, 0, &req);
+        capa_put(oc);
         if (rc) {
                 if (rc == -EOPNOTSUPP && xattr_type == XATTR_USER_T) {
                         LCONSOLE_INFO("Disabling user_xattr feature because "
@@ -305,7 +293,7 @@ ssize_t ll_getxattr(struct dentry *dentry, const char *name,
         CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu/%u(%p), xattr %s\n",
                inode->i_ino, inode->i_generation, inode, name);
 
-        ll_vfs_ops_tally(ll_i2sbi(inode), VFS_OPS_GETXATTR);
+        ll_stats_ops_tally(ll_i2sbi(inode), LPROC_LL_GETXATTR, 1);
 
          if (strncmp(name, XATTR_TRUSTED_PREFIX, 8) == 0 &&
              strcmp(name + 8, "lov") == 0) {
@@ -349,13 +337,13 @@ ssize_t ll_listxattr(struct dentry *dentry, char *buffer, size_t size)
 {
         struct inode *inode = dentry->d_inode;
         int rc = 0, rc2 = 0;
-
+        
         LASSERT(inode);
 
         CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu/%u(%p)\n",
                inode->i_ino, inode->i_generation, inode);
 
-        ll_vfs_ops_tally(ll_i2sbi(inode), VFS_OPS_LISTXATTR);
+        ll_stats_ops_tally(ll_i2sbi(inode), LPROC_LL_LISTXATTR, 1);
 
         rc = ll_getxattr_common(inode, NULL, buffer, size, OBD_MD_FLXATTRLS);
 
@@ -377,7 +365,7 @@ ssize_t ll_listxattr(struct dentry *dentry, char *buffer, size_t size)
                 if (rc2 < 0) {
                         GOTO(out, rc2 = 0);
                 } else {
-                        const int prefix_len = sizeof(XATTR_TRUSTED_PREFIX)-1;
+                        const int prefix_len = sizeof(XATTR_TRUSTED_PREFIX) - 1;
                         const size_t name_len   = sizeof("lov") - 1;
                         const size_t total_len  = prefix_len + name_len + 1;
 

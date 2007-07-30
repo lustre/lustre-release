@@ -85,6 +85,21 @@ void lustre_swab_ll_fid(struct ll_fid *fid)
 }
 EXPORT_SYMBOL(lustre_swab_ll_fid);
 
+void lustre_swab_lu_fid(struct lu_fid *fid)
+{
+        __swab64s (&fid->f_seq);
+        __swab32s (&fid->f_oid);
+        __swab32s (&fid->f_ver);
+}
+EXPORT_SYMBOL(lustre_swab_lu_fid);
+
+void lustre_swab_lu_range(struct lu_range *range)
+{
+        __swab64s (&range->lr_start);
+        __swab64s (&range->lr_end);
+}
+EXPORT_SYMBOL(lustre_swab_lu_range);
+
 void lustre_swab_llog_rec(struct llog_rec_hdr *rec, struct llog_rec_tail *tail)
 {
         __swab32s(&rec->lrh_len);
@@ -97,7 +112,7 @@ void lustre_swab_llog_rec(struct llog_rec_hdr *rec, struct llog_rec_tail *tail)
                         (struct llog_size_change_rec *)rec;
 
                 lustre_swab_ll_fid(&lsc->lsc_fid);
-                __swab32s(&lsc->lsc_io_epoch);
+                __swab32s(&lsc->lsc_ioepoch);
 
                 break;
         }

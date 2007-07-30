@@ -56,6 +56,9 @@ enum lcfg_command_type {
         LCFG_LOG_START      = 0x00ce011,
         LCFG_LOG_END        = 0x00ce012,
         LCFG_LOV_ADD_INA    = 0x00ce013,
+        LCFG_ADD_MDC        = 0x00cf014,
+        LCFG_DEL_MDC        = 0x00cf015,
+        LCFG_SEC_FLAVOR     = 0x00ce016,
 };
 
 struct lustre_cfg_bufs {
@@ -252,5 +255,10 @@ static inline int lustre_cfg_sanity_check(void *buf, int len)
 
         RETURN(0);
 }
+
+/* default value for nllu/nllg for llite */
+#define NOBODY_UID      99
+#define NOBODY_GID      99
+#define INVALID_UID     (-1)
 
 #endif // _LUSTRE_CFG_H

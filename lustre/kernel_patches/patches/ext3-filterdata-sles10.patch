@@ -1,0 +1,25 @@
+Index: linux-2.6.16.27-0.9-full/include/linux/ext3_fs_i.h
+===================================================================
+--- linux-2.6.16.27-0.9-full.orig/include/linux/ext3_fs_i.h	2007-03-28 16:03:20.000000000 +0400
++++ linux-2.6.16.27-0.9-full/include/linux/ext3_fs_i.h	2007-03-28 19:40:53.000000000 +0400
+@@ -139,6 +139,8 @@ struct ext3_inode_info {
+ 	/* mballoc */
+ 	struct list_head i_prealloc_list;
+ 	spinlock_t i_prealloc_lock;
++
++	void *i_filterdata;
+ };
+ 
+ #endif	/* _LINUX_EXT3_FS_I */
+Index: linux-2.6.16.27-0.9-full/fs/ext3/super.c
+===================================================================
+--- linux-2.6.16.27-0.9-full.orig/fs/ext3/super.c	2007-03-28 18:20:17.000000000 +0400
++++ linux-2.6.16.27-0.9-full/fs/ext3/super.c	2007-03-28 19:40:53.000000000 +0400
+@@ -462,6 +462,7 @@ static struct inode *ext3_alloc_inode(st
+ 	memset(&ei->i_cached_extent, 0, sizeof(ei->i_cached_extent));
+ 	INIT_LIST_HEAD(&ei->i_prealloc_list);
+ 	spin_lock_init(&ei->i_prealloc_lock);
++	ei->i_filterdata = NULL;
+ 	return &ei->vfs_inode;
+ }
+ 

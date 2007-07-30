@@ -14,21 +14,21 @@ init_test_env $@
 
 
 # Skip these tests
-# bug number:  4176 
-ALWAYS_EXCEPT="39   $REPLAY_SINGLE_EXCEPT"
+# bug number: 2766 4176
+ALWAYS_EXCEPT="0b  39   $REPLAY_SINGLE_EXCEPT"
 
 gen_config() {
     rm -f $XMLCONFIG
-    add_mds mds --dev $MDSDEV --size $MDSSIZE
+    add_mds $SINGLEMDS --dev $MDSDEV --size $MDSSIZE
     if [ ! -z "$mdsfailover_HOST" ]; then
-	 add_mdsfailover mds --dev $MDSDEV --size $MDSSIZE
+	 add_mdsfailover $SINGLEMDS --dev $MDSDEV --size $MDSSIZE
     fi
     
-    add_lov lov1 mds --stripe_sz $STRIPE_BYTES \
+    add_lov lov1 $SINGLEMDS --stripe_sz $STRIPE_BYTES \
 	--stripe_cnt $STRIPES_PER_OBJ --stripe_pattern 0
-    add_ost ost --lov lov1 --dev $OSTDEV --size $OSTSIZE
-    add_ost ost2 --lov lov1 --dev ${OSTDEV}-2 --size $OSTSIZE
-    add_client client mds --lov lov1 --path $MOUNT
+    add_ost ost --lov lov1 --dev `ostdevname 1` --size $OSTSIZE
+    add_ost ost2 --lov lov1 --dev `ostdevname 2` --size $OSTSIZE
+    add_client client $SINGLEMDS --lov lov1 --path $MOUNT
 }
 
 build_test_filter
@@ -43,7 +43,7 @@ if [ "$ONLY" == "cleanup" ]; then
 fi
 
 setup() {
-    formatall
+    [ "$REFORMAT" ] && formatall
     setupall
 }
 
@@ -56,8 +56,11 @@ fi
 mkdir -p $DIR
 
 test_0() {
-    replay_barrier mds
-    fail mds
+    sleep 10
+    mkdir $DIR/$tfile
+    replay_barrier $SINGLEMDS
+    fail $SINGLEMDS
+    rmdir $DIR/$tfile
 }
 run_test 0 "empty replay"
 
@@ -70,63 +73,88 @@ test_0b() {
 }
 run_test 0b "ensure object created after recover exists. (3284)"
 
+seq_set_width()
+{
+    local mds=$1
+    local width=$2
+    local file=`ls /proc/fs/lustre/seq/cli-srv-$mds-mdc-*/width` 
+    echo $width > $file
+}
+
+seq_get_width()
+{
+    local mds=$1
+    local file=`ls /proc/fs/lustre/seq/cli-srv-$mds-mdc-*/width` 
+    cat $file
+}
+
+# This test should pass for single-mds and multi-mds configs.
+# But for different configurations it tests different things.
+#
+# single-mds
+# ----------
+# (1) fld_create replay should happen;
+#
+# (2) fld_create replay should not return -EEXISTS, if it does
+# this means sequence manager recovery code is buggy and allocated 
+# same sequence two times after recovery.
+#
+# multi-mds
+# ---------
+# (1) fld_create replay may not happen, because its home MDS is 
+# MDS2 which is not involved to revovery;
+#
+# (2) as fld_create does not happen on MDS1, it does not make any 
+# problem.
+test_0c() {
+    local label=`mdsdevlabel 1`
+    [ -z "$label" ] && echo "No label for mds1" && return 1
+
+    replay_barrier $SINGLEMDS
+    local sw=`seq_get_width $label`
+    
+    # make seq manager switch to next sequence each 
+    # time as new fid is needed.
+    seq_set_width $label 1
+    
+    # make sure that fld has created at least one new 
+    # entry on server
+    touch $DIR/$tfile || return 2
+    seq_set_width $label $sw
+    
+    # fail $SINGLEMDS and start recovery, replay RPCs, etc.
+    fail $SINGLEMDS
+    
+    # wait for recovery finish
+    sleep 10
+    df $MOUNT
+    
+    # flush fld cache and dentry cache to make it lookup 
+    # created entry instead of revalidating existent one
+    umount $MOUNT
+    zconf_mount `hostname` $MOUNT
+    
+    # issue lookup which should call fld lookup which 
+    # should fail if client did not replay fld create 
+    # correctly and server has no fld entry
+    touch $DIR/$tfile || return 3
+    rm $DIR/$tfile || return 4
+}
+run_test 0c "fld create"
+
 test_1() {
-    replay_barrier mds
+    replay_barrier $SINGLEMDS
     mcreate $DIR/$tfile
-    fail mds
+    fail $SINGLEMDS
     $CHECKSTAT -t file $DIR/$tfile || return 1
     rm $DIR/$tfile
 }
 run_test 1 "simple create"
 
-test_1a() {
-    do_facet ost1 "sysctl -w lustre.fail_loc=0"
-
-    rm -fr $DIR/$tfile
-    local old_last_id=`cat $LPROC/obdfilter/*/last_id`
-    touch -o $DIR/$tfile 1
-    sync
-    local new_last_id=`cat $LPROC/obdfilter/*/last_id`
-    
-    test "$old_last_id" = "$new_last_id" || {
-	echo "OST object create is caused by MDS"
-	return 1
-    }
-    
-    old_last_id=`cat $LPROC/obdfilter/*/last_id`
-    echo "data" > $DIR/$tfile
-    sync
-    new_last_id=`cat $LPROC/obdfilter/*/last_id`
-    test "$old_last_id" = "$new_last_id "&& {
-	echo "CROW does not work on write"
-	return 1
-    }
-    
-    rm -fr $DIR/$tfile
-
-#define OBD_FAIL_OST_CROW_EIO | OBD_FAIL_ONCE
-    do_facet ost1 "sysctl -w lustre.fail_loc=0x80000801"
-
-    rm -fr $DIR/1a1
-    old_last_id=`cat $LPROC/obdfilter/*/last_id`
-    echo "data" > $DIR/1a1
-    sync
-    new_last_id=`cat $LPROC/obdfilter/*/last_id`
-    test "$old_last_id" = "$new_last_id" || {
-	echo "CROW does work with fail_loc=0x80000801"
-	return 1
-    }
-    
-    rm -fr $DIR/1a1
-    
-    do_facet ost1 "sysctl -w lustre.fail_loc=0"
-}
-#CROW run_test 1a "CROW object create (check OST last_id)"
-
 test_2a() {
-    replay_barrier mds
+    replay_barrier $SINGLEMDS
     touch $DIR/$tfile
-    fail mds
+    fail $SINGLEMDS
     $CHECKSTAT -t file $DIR/$tfile || return 1
     rm $DIR/$tfile
 }
@@ -134,43 +162,43 @@ run_test 2a "touch"
 
 test_2b() {
     ./mcreate $DIR/$tfile
-    replay_barrier mds
+    replay_barrier $SINGLEMDS
     touch $DIR/$tfile
-    fail mds
+    fail $SINGLEMDS
     $CHECKSTAT -t file $DIR/$tfile || return 1
     rm $DIR/$tfile
 }
 run_test 2b "touch"
 
 test_3a() {
-    replay_barrier mds
+    replay_barrier $SINGLEMDS
     mcreate $DIR/$tfile
     o_directory $DIR/$tfile
-    fail mds
+    fail $SINGLEMDS
     $CHECKSTAT -t file $DIR/$tfile || return 2
     rm $DIR/$tfile
 }
 run_test 3a "replay failed open(O_DIRECTORY)"
 
 test_3b() {
-    replay_barrier mds
+    replay_barrier $SINGLEMDS
 #define OBD_FAIL_MDS_OPEN_PACK | OBD_FAIL_ONCE
-    do_facet mds "sysctl -w lustre.fail_loc=0x80000114"
+    do_facet $SINGLEMDS "sysctl -w lustre.fail_loc=0x80000114"
     touch $DIR/$tfile
-    do_facet mds "sysctl -w lustre.fail_loc=0"
-    fail mds
+    do_facet $SINGLEMDS "sysctl -w lustre.fail_loc=0"
+    fail $SINGLEMDS
     $CHECKSTAT -t file $DIR/$tfile && return 2
     return 0
 }
 run_test 3b "replay failed open -ENOMEM"
 
 test_3c() {
-    replay_barrier mds
+    replay_barrier $SINGLEMDS
 #define OBD_FAIL_MDS_ALLOC_OBDO | OBD_FAIL_ONCE
-    do_facet mds "sysctl -w lustre.fail_loc=0x80000128"
+    do_facet $SINGLEMDS "sysctl -w lustre.fail_loc=0x80000128"
     touch $DIR/$tfile
-    do_facet mds "sysctl -w lustre.fail_loc=0"
-    fail mds
+    do_facet $SINGLEMDS "sysctl -w lustre.fail_loc=0"
+    fail $SINGLEMDS
 
     $CHECKSTAT -t file $DIR/$tfile && return 2
     return 0
@@ -178,11 +206,11 @@ test_3c() {
 run_test 3c "replay failed open -ENOMEM"
 
 test_4() {
-    replay_barrier mds
+    replay_barrier $SINGLEMDS
     for i in `seq 10`; do
         echo "tag-$i" > $DIR/$tfile-$i
     done 
-    fail mds
+    fail $SINGLEMDS
     for i in `seq 10`; do
       grep -q "tag-$i" $DIR/$tfile-$i || error "$tfile-$i"
     done 
@@ -190,9 +218,9 @@ test_4() {
 run_test 4 "|x| 10 open(O_CREAT)s"
 
 test_4b() {
-    replay_barrier mds
+    replay_barrier $SINGLEMDS
     rm -rf $DIR/$tfile-*
-    fail mds
+    fail $SINGLEMDS
     $CHECKSTAT -t file $DIR/$tfile-* && return 1 || true
 }
 run_test 4b "|x| rm 10 files"
@@ -200,11 +228,11 @@ run_test 4b "|x| rm 10 files"
 # The idea is to get past the first block of precreated files on both 
 # osts, and then replay.
 test_5() {
-    replay_barrier mds
+    replay_barrier $SINGLEMDS
     for i in `seq 220`; do
         echo "tag-$i" > $DIR/$tfile-$i
     done 
-    fail mds
+    fail $SINGLEMDS
     for i in `seq 220`; do
       grep -q "tag-$i" $DIR/$tfile-$i || error "f1c-$i"
     done 
@@ -216,10 +244,10 @@ run_test 5 "|x| 220 open(O_CREAT)"
 
 
 test_6() {
-    replay_barrier mds
+    replay_barrier $SINGLEMDS
     mkdir $DIR/$tdir
     mcreate $DIR/$tdir/$tfile
-    fail mds
+    fail $SINGLEMDS
     $CHECKSTAT -t dir $DIR/$tdir || return 1
     $CHECKSTAT -t file $DIR/$tdir/$tfile || return 2
     sleep 2
@@ -228,18 +256,18 @@ test_6() {
 run_test 6 "mkdir + contained create"
 
 test_6b() {
-    replay_barrier mds
+    replay_barrier $SINGLEMDS
     rm -rf $DIR/$tdir
-    fail mds
+    fail $SINGLEMDS
     $CHECKSTAT -t dir $DIR/$tdir && return 1 || true 
 }
 run_test 6b "|X| rmdir"
 
 test_7() {
     mkdir $DIR/$tdir
-    replay_barrier mds
+    replay_barrier $SINGLEMDS
     mcreate $DIR/$tdir/$tfile
-    fail mds
+    fail $SINGLEMDS
     $CHECKSTAT -t dir $DIR/$tdir || return 1
     $CHECKSTAT -t file $DIR/$tdir/$tfile || return 2
     rm -fr $DIR/$tdir
@@ -247,11 +275,13 @@ test_7() {
 run_test 7 "mkdir |X| contained create"
 
 test_8() {
-    replay_barrier mds
+    # make sure no side-effect from previous test.
+    rm -f $DIR/$tfile
+    replay_barrier $SINGLEMDS
     multiop $DIR/$tfile mo_c &
     MULTIPID=$!
     sleep 1
-    fail mds
+    fail $SINGLEMDS
     ls $DIR/$tfile
     $CHECKSTAT -t file $DIR/$tfile || return 1
     kill -USR1 $MULTIPID || return 2
@@ -261,10 +291,10 @@ test_8() {
 run_test 8 "creat open |X| close"
 
 test_9() {
-    replay_barrier mds
+    replay_barrier $SINGLEMDS
     mcreate $DIR/$tfile
     local old_inum=`ls -i $DIR/$tfile | awk '{print $1}'`
-    fail mds
+    fail $SINGLEMDS
     local new_inum=`ls -i $DIR/$tfile | awk '{print $1}'`
 
     echo " old_inum == $old_inum, new_inum == $new_inum"
@@ -281,10 +311,10 @@ run_test 9  "|X| create (same inum/gen)"
 
 test_10() {
     mcreate $DIR/$tfile
-    replay_barrier mds
+    replay_barrier $SINGLEMDS
     mv $DIR/$tfile $DIR/$tfile-2
     rm -f $DIR/$tfile
-    fail mds
+    fail $SINGLEMDS
     $CHECKSTAT $DIR/$tfile && return 1
     $CHECKSTAT $DIR/$tfile-2 ||return 2
     rm $DIR/$tfile-2
@@ -296,11 +326,11 @@ test_11() {
     mcreate $DIR/$tfile
     echo "old" > $DIR/$tfile
     mv $DIR/$tfile $DIR/$tfile-2
-    replay_barrier mds
+    replay_barrier $SINGLEMDS
     echo "new" > $DIR/$tfile
     grep new $DIR/$tfile 
     grep old $DIR/$tfile-2
-    fail mds
+    fail $SINGLEMDS
     grep new $DIR/$tfile || return 1
     grep old $DIR/$tfile-2 || return 2
 }
@@ -313,11 +343,11 @@ test_12() {
     # give multiop a chance to open
     sleep 1
     rm -f $DIR/$tfile
-    replay_barrier mds
+    replay_barrier $SINGLEMDS
     kill -USR1 $pid
     wait $pid || return 1
 
-    fail mds
+    fail $SINGLEMDS
     [ -e $DIR/$tfile ] && return 2
     return 0
 }
@@ -334,8 +364,8 @@ test_13() {
     sleep 1 
     chmod 0 $DIR/$tfile
     $CHECKSTAT -p 0 $DIR/$tfile
-    replay_barrier mds
-    fail mds
+    replay_barrier $SINGLEMDS
+    fail $SINGLEMDS
     kill -USR1 $pid
     wait $pid || return 1
 
@@ -350,11 +380,11 @@ test_14() {
     # give multiop a chance to open
     sleep 1 
     rm -f $DIR/$tfile
-    replay_barrier mds
+    replay_barrier $SINGLEMDS
     kill -USR1 $pid || return 1
     wait $pid || return 2
 
-    fail mds
+    fail $SINGLEMDS
     [ -e $DIR/$tfile ] && return 3
     return 0
 }
@@ -366,12 +396,12 @@ test_15() {
     # give multiop a chance to open
     sleep 1 
     rm -f $DIR/$tfile
-    replay_barrier mds
+    replay_barrier $SINGLEMDS
     touch $DIR/g11 || return 1
     kill -USR1 $pid
     wait $pid || return 2
 
-    fail mds
+    fail $SINGLEMDS
     [ -e $DIR/$tfile ] && return 3
     touch $DIR/h11 || return 4
     return 0
@@ -380,11 +410,11 @@ run_test 15 "open(O_CREAT), unlink |X|  touch new, close"
 
 
 test_16() {
-    replay_barrier mds
+    replay_barrier $SINGLEMDS
     mcreate $DIR/$tfile
     munlink $DIR/$tfile
     mcreate $DIR/$tfile-2
-    fail mds
+    fail $SINGLEMDS
     [ -e $DIR/$tfile ] && return 1
     [ -e $DIR/$tfile-2 ] || return 2
     munlink $DIR/$tfile-2 || return 3
@@ -392,12 +422,12 @@ test_16() {
 run_test 16 "|X| open(O_CREAT), unlink, touch new,  unlink new"
 
 test_17() {
-    replay_barrier mds
+    replay_barrier $SINGLEMDS
     multiop $DIR/$tfile O_c &
     pid=$!
     # give multiop a chance to open
     sleep 1 
-    fail mds
+    fail $SINGLEMDS
     kill -USR1 $pid || return 1
     wait $pid || return 2
     $CHECKSTAT -t file $DIR/$tfile || return 3
@@ -406,7 +436,7 @@ test_17() {
 run_test 17 "|X| open(O_CREAT), |replay| close"
 
 test_18() {
-    replay_barrier mds
+    replay_barrier $SINGLEMDS
     multiop $DIR/$tfile O_tSc &
     pid=$!
     # give multiop a chance to open
@@ -417,7 +447,7 @@ test_18() {
     kill -USR1 $pid
     wait $pid || return 2
 
-    fail mds
+    fail $SINGLEMDS
     [ -e $DIR/$tfile ] && return 3
     [ -e $DIR/$tfile-2 ] || return 4
     # this touch frequently fails
@@ -430,25 +460,25 @@ run_test 18 "|X| open(O_CREAT), unlink, touch new, close, touch, unlink"
 
 # bug 1855 (a simpler form of test_11 above)
 test_19() {
-    replay_barrier mds
+    replay_barrier $SINGLEMDS
     mcreate $DIR/$tfile
     echo "old" > $DIR/$tfile
     mv $DIR/$tfile $DIR/$tfile-2
     grep old $DIR/$tfile-2
-    fail mds
+    fail $SINGLEMDS
     grep old $DIR/$tfile-2 || return 2
 }
 run_test 19 "|X| mcreate, open, write, rename "
 
 test_20() {
-    replay_barrier mds
+    replay_barrier $SINGLEMDS
     multiop $DIR/$tfile O_tSc &
     pid=$!
     # give multiop a chance to open
     sleep 1 
     rm -f $DIR/$tfile
 
-    fail mds
+    fail $SINGLEMDS
     kill -USR1 $pid
     wait $pid || return 1
     [ -e $DIR/$tfile ] && return 2
@@ -470,7 +500,7 @@ test_20b() { # bug 10480
     mds_evict_client
     df -P $DIR || df -P $DIR || true    # reconnect
 
-    fail mds                            # start orphan recovery
+    fail $SINGLEMDS                            # start orphan recovery
     df -P $DIR || df -P $DIR || true    # reconnect
     sleep 2
 
@@ -502,7 +532,7 @@ test_20c() { # bug 10480
 run_test 20c "check that client eviction does not affect file content"
 
 test_21() {
-    replay_barrier mds
+    replay_barrier $SINGLEMDS
     multiop $DIR/$tfile O_tSc &
     pid=$!
     # give multiop a chance to open
@@ -510,7 +540,7 @@ test_21() {
     rm -f $DIR/$tfile
     touch $DIR/g11 || return 1
 
-    fail mds
+    fail $SINGLEMDS
     kill -USR1 $pid
     wait $pid || return 2
     [ -e $DIR/$tfile ] && return 3
@@ -525,10 +555,10 @@ test_22() {
     # give multiop a chance to open
     sleep 1 
 
-    replay_barrier mds
+    replay_barrier $SINGLEMDS
     rm -f $DIR/$tfile
 
-    fail mds
+    fail $SINGLEMDS
     kill -USR1 $pid
     wait $pid || return 1
     [ -e $DIR/$tfile ] && return 2
@@ -542,11 +572,11 @@ test_23() {
     # give multiop a chance to open
     sleep 1 
 
-    replay_barrier mds
+    replay_barrier $SINGLEMDS
     rm -f $DIR/$tfile
     touch $DIR/g11 || return 1
 
-    fail mds
+    fail $SINGLEMDS
     kill -USR1 $pid
     wait $pid || return 2
     [ -e $DIR/$tfile ] && return 3
@@ -561,8 +591,8 @@ test_24() {
     # give multiop a chance to open
     sleep 1 
 
-    replay_barrier mds
-    fail mds
+    replay_barrier $SINGLEMDS
+    fail $SINGLEMDS
     rm -f $DIR/$tfile
     kill -USR1 $pid
     wait $pid || return 1
@@ -578,8 +608,8 @@ test_25() {
     sleep 1 
     rm -f $DIR/$tfile
 
-    replay_barrier mds
-    fail mds
+    replay_barrier $SINGLEMDS
+    fail $SINGLEMDS
     kill -USR1 $pid
     wait $pid || return 1
     [ -e $DIR/$tfile ] && return 2
@@ -588,7 +618,7 @@ test_25() {
 run_test 25 "open(O_CREAT), unlink, replay, close (test mds_cleanup_orphans)"
 
 test_26() {
-    replay_barrier mds
+    replay_barrier $SINGLEMDS
     multiop $DIR/$tfile-1 O_tSc &
     pid1=$!
     multiop $DIR/$tfile-2 O_tSc &
@@ -600,7 +630,7 @@ test_26() {
     kill -USR1 $pid2
     wait $pid2 || return 1
 
-    fail mds
+    fail $SINGLEMDS
     kill -USR1 $pid1
     wait $pid1 || return 2
     [ -e $DIR/$tfile-1 ] && return 3
@@ -610,7 +640,7 @@ test_26() {
 run_test 26 "|X| open(O_CREAT), unlink two, close one, replay, close one (test mds_cleanup_orphans)"
 
 test_27() {
-    replay_barrier mds
+    replay_barrier $SINGLEMDS
     multiop $DIR/$tfile-1 O_tSc &
     pid1=$!
     multiop $DIR/$tfile-2 O_tSc &
@@ -620,7 +650,7 @@ test_27() {
     rm -f $DIR/$tfile-1
     rm -f $DIR/$tfile-2
 
-    fail mds
+    fail $SINGLEMDS
     kill -USR1 $pid1
     wait $pid1 || return 1
     kill -USR1 $pid2
@@ -638,13 +668,13 @@ test_28() {
     pid2=$!
     # give multiop a chance to open
     sleep 1 
-    replay_barrier mds
+    replay_barrier $SINGLEMDS
     rm -f $DIR/$tfile-1
     rm -f $DIR/$tfile-2
     kill -USR1 $pid2
     wait $pid2 || return 1
 
-    fail mds
+    fail $SINGLEMDS
     kill -USR1 $pid1
     wait $pid1 || return 2
     [ -e $DIR/$tfile-1 ] && return 3
@@ -660,11 +690,11 @@ test_29() {
     pid2=$!
     # give multiop a chance to open
     sleep 1 
-    replay_barrier mds
+    replay_barrier $SINGLEMDS
     rm -f $DIR/$tfile-1
     rm -f $DIR/$tfile-2
 
-    fail mds
+    fail $SINGLEMDS
     kill -USR1 $pid1
     wait $pid1 || return 1
     kill -USR1 $pid2
@@ -685,8 +715,8 @@ test_30() {
     rm -f $DIR/$tfile-1
     rm -f $DIR/$tfile-2
 
-    replay_barrier mds
-    fail mds
+    replay_barrier $SINGLEMDS
+    fail $SINGLEMDS
     kill -USR1 $pid1
     wait $pid1 || return 1
     kill -USR1 $pid2
@@ -706,9 +736,9 @@ test_31() {
     sleep 1 
     rm -f $DIR/$tfile-1
 
-    replay_barrier mds
+    replay_barrier $SINGLEMDS
     rm -f $DIR/$tfile-2
-    fail mds
+    fail $SINGLEMDS
     kill -USR1 $pid1
     wait $pid1 || return 1
     kill -USR1 $pid2
@@ -739,14 +769,28 @@ run_test 32 "close() notices client eviction; close() after client eviction"
 
 # Abort recovery before client complete
 test_33() {
-    replay_barrier mds
-    touch $DIR/$tfile
-    fail_abort mds
+    replay_barrier $SINGLEMDS
+    createmany -o $DIR/$tfile-%d 100
+    fail_abort $SINGLEMDS
     # this file should be gone, because the replay was aborted
-    $CHECKSTAT -t file $DIR/$tfile && return 3
+    $CHECKSTAT -t file $DIR/$tfile-* && return 3 
+    unlinkmany $DIR/$tfile-%d 0 100
     return 0
 }
 run_test 33 "abort recovery before client does replay"
+
+# Stale FID sequence 
+test_33a() {
+    replay_barrier $SINGLEMDS
+    createmany -o $DIR/$tfile-%d 10
+    fail_abort $SINGLEMDS
+    unlinkmany $DIR/$tfile-%d 0 10
+    # recreate shouldn't fail
+    createmany -o $DIR/$tfile-%d 10 || return 3
+    unlinkmany $DIR/$tfile-%d 0 10
+    return 0
+}
+run_test 33a "fid shouldn't be reused after abort recovery"
 
 test_34() {
     multiop $DIR/$tfile O_c &
@@ -755,8 +799,8 @@ test_34() {
     sleep 1 
     rm -f $DIR/$tfile
 
-    replay_barrier mds
-    fail_abort mds
+    replay_barrier $SINGLEMDS
+    fail_abort $SINGLEMDS
     kill -USR1 $pid
     [ -e $DIR/$tfile ] && return 1
     sync
@@ -769,13 +813,13 @@ test_35() {
     touch $DIR/$tfile
 
 #define OBD_FAIL_MDS_REINT_NET_REP       0x119
-    do_facet mds "sysctl -w lustre.fail_loc=0x80000119"
+    do_facet $SINGLEMDS "sysctl -w lustre.fail_loc=0x80000119"
     rm -f $DIR/$tfile &
     sleep 1
     sync
     sleep 1
     # give a chance to remove from MDS
-    fail_abort mds
+    fail_abort $SINGLEMDS
     $CHECKSTAT -t file $DIR/$tfile && return 1 || true
 }
 run_test 35 "test recovery from llog for unlink op"
@@ -783,10 +827,10 @@ run_test 35 "test recovery from llog for unlink op"
 # b=2432 resent cancel after replay uses wrong cookie,
 # so don't resend cancels
 test_36() {
-    replay_barrier mds
+    replay_barrier $SINGLEMDS
     touch $DIR/$tfile
     checkstat $DIR/$tfile
-    facet_failover mds
+    facet_failover $SINGLEMDS
     cancel_lru_locks mdc
     if dmesg | grep "unknown lock cookie"; then 
 	echo "cancel after replay failed"
@@ -805,10 +849,10 @@ test_37() {
     sleep 1 
     rmdir $DIR/$tfile
 
-    replay_barrier mds
+    replay_barrier $SINGLEMDS
     # clear the dmesg buffer so we only see errors from this recovery
     dmesg -c >/dev/null
-    fail_abort mds
+    fail_abort $SINGLEMDS
     kill -USR1 $pid
     dmesg | grep  "mds_unlink_orphan.*error .* unlinking orphan" && return 1
     sync
@@ -819,8 +863,8 @@ run_test 37 "abort recovery before client does replay (test mds_cleanup_orphans 
 test_38() {
     createmany -o $DIR/$tfile-%d 800
     unlinkmany $DIR/$tfile-%d 0 400
-    replay_barrier mds
-    fail mds
+    replay_barrier $SINGLEMDS
+    fail $SINGLEMDS
     unlinkmany $DIR/$tfile-%d 400 400
     sleep 2
     $CHECKSTAT -t file $DIR/$tfile-* && return 1 || true
@@ -829,12 +873,11 @@ run_test 38 "test recovery from unlink llog (test llog_gen_rec) "
 
 test_39() { # bug 4176
     createmany -o $DIR/$tfile-%d 800
-    replay_barrier mds
+    replay_barrier $SINGLEMDS
     unlinkmany $DIR/$tfile-%d 0 400
-    fail mds
+    fail $SINGLEMDS
     unlinkmany $DIR/$tfile-%d 400 400
     sleep 2
-    ls -1f $DIR/$tfile-*
     $CHECKSTAT -t file $DIR/$tfile-* && return 1 || true
 }
 run_test 39 "test recovery from unlink llog (test llog_gen_rec) "
@@ -851,9 +894,9 @@ test_40(){
     writeme -s $MOUNT/${tfile}-2 &
     WRITE_PID=$!
     sleep 1
-    facet_failover mds
+    facet_failover $SINGLEMDS
 #define OBD_FAIL_MDS_CONNECT_NET         0x117
-    do_facet mds "sysctl -w lustre.fail_loc=0x80000117"
+    do_facet $SINGLEMDS "sysctl -w lustre.fail_loc=0x80000117"
     kill -USR1 $PID
     stat1=`count_ost_writes`
     sleep $TIMEOUT
@@ -893,7 +936,7 @@ test_41() {
     do_facet client dd if=/dev/zero of=$f bs=4k count=1 || return 3
     cancel_lru_locks osc
     # fail ost2 and read from ost1
-    local osc2dev=`grep ${ost2_svc}-osc- $LPROC/devices | awk '{print $1}'`
+    local osc2dev=`grep ${ost2_svc}-osc-MDT0000 $LPROC/devices | awk '{print $1}'`
     [ "$osc2dev" ] || return 4
     $LCTL --device $osc2dev deactivate || return 1
     do_facet client dd if=$f of=/dev/null bs=4k count=1 || return 3
@@ -908,7 +951,7 @@ test_42() {
     createmany -o $DIR/$tfile-%d 800
     replay_barrier ost1
     unlinkmany $DIR/$tfile-%d 0 400
-    DEBUG42="`sysctl -n lnet.debug`"
+    DEBUG42=`sysctl -n lnet.debug`
     sysctl -w lnet.debug=-1
     facet_failover ost1
     
@@ -917,7 +960,7 @@ test_42() {
     #[ $blocks_after -lt $blocks ] || return 1
     echo wait for MDS to timeout and recover
     sleep $((TIMEOUT * 2))
-    sysctl -w lnet.debug=$DEBUG42
+    sysctl -w lnet.debug="$DEBUG42"
     unlinkmany $DIR/$tfile-%d 400 400
     $CHECKSTAT -t file $DIR/$tfile-* && return 2 || true
 }
@@ -925,11 +968,11 @@ run_test 42 "recovery after ost failure"
 
 # timeout in MDS/OST recovery RPC will LBUG MDS
 test_43() { # bug 2530
-    replay_barrier mds
+    replay_barrier $SINGLEMDS
 
     # OBD_FAIL_OST_CREATE_NET 0x204
     do_facet ost1 "sysctl -w lustre.fail_loc=0x80000204"
-    fail mds
+    fail $SINGLEMDS
     sleep 10
     do_facet ost1 "sysctl -w lustre.fail_loc=0"
 
@@ -938,36 +981,36 @@ test_43() { # bug 2530
 run_test 43 "mds osc import failure during recovery; don't LBUG"
 
 test_44() {
-    mdcdev=`awk '/-mdc-/ {print $1}' $LPROC/devices`
+    mdcdev=`awk '/MDT0000-mdc-/ {print $1}' $LPROC/devices`
     [ "$mdcdev" ] || exit 2
     for i in `seq 1 10`; do
 	#define OBD_FAIL_TGT_CONN_RACE     0x701
-	do_facet mds "sysctl -w lustre.fail_loc=0x80000701"
+	do_facet $SINGLEMDS "sysctl -w lustre.fail_loc=0x80000701"
 	$LCTL --device $mdcdev recover
 	df $MOUNT
     done
-    do_facet mds "sysctl -w lustre.fail_loc=0"
+    do_facet $SINGLEMDS "sysctl -w lustre.fail_loc=0"
     return 0
 }
 run_test 44 "race in target handle connect"
 
 test_44b() {
-    mdcdev=`awk '/-mdc-/ {print $1}' $LPROC/devices`
+    mdcdev=`awk '/MDT0000-mdc-/ {print $1}' $LPROC/devices`
     [ "$mdcdev" ] || exit 2
     for i in `seq 1 10`; do
 	#define OBD_FAIL_TGT_DELAY_RECONNECT 0x704
-	do_facet mds "sysctl -w lustre.fail_loc=0x80000704"
+	do_facet $SINGLEMDS "sysctl -w lustre.fail_loc=0x80000704"
 	$LCTL --device $mdcdev recover
 	df $MOUNT
     done
-    do_facet mds "sysctl -w lustre.fail_loc=0"
+    do_facet $SINGLEMDS "sysctl -w lustre.fail_loc=0"
     return 0
 }
 run_test 44b "race in target handle connect"
 
 # Handle failed close
 test_45() {
-    mdcdev=`awk '/-mdc-/ {print $1}' $LPROC/devices`
+    mdcdev=`awk '/MDT0000-mdc-/ {print $1}' $LPROC/devices`
     [ "$mdcdev" ] || exit 2
     $LCTL --device $mdcdev recover
 
@@ -994,7 +1037,7 @@ run_test 45 "Handle failed close"
 test_46() {
     dmesg -c >/dev/null
     drop_reply "touch $DIR/$tfile"
-    fail mds
+    fail $SINGLEMDS
     # ironically, the previous test, 45, will cause a real forced close,
     # so just look for one for this test
     dmesg | grep -i "force closing client file handle for $tfile" && return 1
@@ -1026,10 +1069,10 @@ test_47() { # bug 2824
 run_test 47 "MDS->OSC failure during precreate cleanup (2824)"
 
 test_48() {
-    replay_barrier mds
+    replay_barrier $SINGLEMDS
     createmany -o $DIR/$tfile 20  || return 1
     # OBD_FAIL_OST_EROFS 0x216
-    fail mds
+    fail $SINGLEMDS
     do_facet ost1 "sysctl -w lustre.fail_loc=0x80000216"
     df $MOUNT || return 2
 
@@ -1042,7 +1085,7 @@ test_48() {
 run_test 48 "MDS->OSC failure during precreate cleanup (2824)"
 
 test_50() {
-    local oscdev=`grep ${ost1_svc}-osc- $LPROC/devices | awk '{print $1}'`
+    local oscdev=`grep ${ost1_svc}-osc-MDT0000 $LPROC/devices | awk '{print $1}'`
     [ "$oscdev" ] || return 1
     $LCTL --device $oscdev recover &&  $LCTL --device $oscdev recover
     # give the mds_lov_sync threads a chance to run
@@ -1056,11 +1099,11 @@ test_52() {
     cancel_lru_locks mdc
 
     multiop $DIR/$tfile s || return 1
-    replay_barrier mds
+    replay_barrier $SINGLEMDS
 #define OBD_FAIL_LDLM_REPLY              0x30c
-    do_facet mds "sysctl -w lustre.fail_loc=0x8000030c"
-    fail mds || return 2
-    do_facet mds "sysctl -w lustre.fail_loc=0x0"
+    do_facet $SINGLEMDS "sysctl -w lustre.fail_loc=0x8000030c"
+    fail $SINGLEMDS || return 2
+    do_facet $SINGLEMDS "sysctl -w lustre.fail_loc=0x0"
 
     $CHECKSTAT -t file $DIR/$tfile-* && return 3 || true
 }
@@ -1072,11 +1115,11 @@ run_test 52 "time out lock replay (3764)"
 #b3761 ASSERTION(hash != 0) failed
 test_55() {
 # OBD_FAIL_MDS_OPEN_CREATE | OBD_FAIL_ONCE
-    do_facet mds "sysctl -w lustre.fail_loc=0x8000012b"
+    do_facet $SINGLEMDS "sysctl -w lustre.fail_loc=0x8000012b"
     touch $DIR/$tfile &
     # give touch a chance to run
     sleep 5
-    do_facet mds "sysctl -w lustre.fail_loc=0x0"
+    do_facet $SINGLEMDS "sysctl -w lustre.fail_loc=0x0"
     rm $DIR/$tfile
     return 0
 }
@@ -1085,9 +1128,9 @@ run_test 55 "let MDS_CHECK_RESENT return the original return code instead of 0"
 #b3440 ASSERTION(rec->ur_fid2->id) failed
 test_56() {
     ln -s foo $DIR/$tfile
-    replay_barrier mds
+    replay_barrier $SINGLEMDS
     #drop_reply "cat $DIR/$tfile"
-    fail mds
+    fail $SINGLEMDS
     sleep 10
 }
 run_test 56 "don't replay a symlink open request (3440)"
@@ -1095,13 +1138,13 @@ run_test 56 "don't replay a symlink open request (3440)"
 #recovery one mds-ost setattr from llog
 test_57() {
 #define OBD_FAIL_MDS_OST_SETATTR       0x12c
-    do_facet mds "sysctl -w lustre.fail_loc=0x8000012c"
+    do_facet $SINGLEMDS "sysctl -w lustre.fail_loc=0x8000012c"
     touch $DIR/$tfile
-    replay_barrier mds
-    fail mds
+    replay_barrier $SINGLEMDS
+    fail $SINGLEMDS
     sleep 1
     $CHECKSTAT -t file $DIR/$tfile || return 1
-    do_facet mds "sysctl -w lustre.fail_loc=0x0"
+    do_facet $SINGLEMDS "sysctl -w lustre.fail_loc=0x0"
     rm $DIR/$tfile
 }
 run_test 57 "test recovery from llog for setattr op"
@@ -1109,18 +1152,49 @@ run_test 57 "test recovery from llog for setattr op"
 #recovery many mds-ost setattr from llog
 test_58() {
 #define OBD_FAIL_MDS_OST_SETATTR       0x12c
-    do_facet mds "sysctl -w lustre.fail_loc=0x8000012c"
+    do_facet $SINGLEMDS "sysctl -w lustre.fail_loc=0x8000012c"
     mkdir $DIR/$tdir
     createmany -o $DIR/$tdir/$tfile-%d 2500
-    replay_barrier mds
-    fail mds
+    replay_barrier $SINGLEMDS
+    fail $SINGLEMDS
     sleep 2
     $CHECKSTAT -t file $DIR/$tdir/$tfile-* || return 1
-    do_facet mds "sysctl -w lustre.fail_loc=0x0"
+    do_facet $SINGLEMDS "sysctl -w lustre.fail_loc=0x0"
     unlinkmany $DIR/$tdir/$tfile-%d 2500
     rmdir $DIR/$tdir
 }
 run_test 58 "test recovery from llog for setattr op (test llog_gen_rec)"
+
+# log_commit_thread vs filter_destroy race used to lead to import use after free
+# bug 11658
+test_59() {
+    mkdir $DIR/$tdir
+    createmany -o $DIR/$tdir/$tfile-%d 200
+    sync
+    unlinkmany $DIR/$tdir/$tfile-%d 200
+#define OBD_FAIL_PTLRPC_DELAY_RECOV       0x507
+    do_facet ost1 "sysctl -w lustre.fail_loc=0x507"
+    fail ost1
+    fail $SINGLEMDS
+    do_facet ost1 "sysctl -w lustre.fail_loc=0x0"
+    sleep 20
+    rmdir $DIR/$tdir
+}
+run_test 59 "test log_commit_thread vs filter_destroy race"
+
+# race between add unlink llog vs cat log init in post_recovery (only for b1_6)
+# bug 12086: should no oops and No ctxt error for this test
+test_60() {
+    mkdir $DIR/$tdir
+    createmany -o $DIR/$tdir/$tfile-%d 200
+    replay_barrier $SINGLEMDS
+    unlinkmany $DIR/$tdir/$tfile-%d 0 100
+    fail $SINGLEMDS
+    unlinkmany $DIR/$tdir/$tfile-%d 100 100
+    local no_ctxt=`dmesg | grep "No ctxt"`
+    [ -z "$no_ctxt" ] || error "ctxt is not initialized in recovery" 
+}
+run_test 60 "test llog post recovery init vs llog unlink"
 
 equals_msg `basename $0`: test complete, cleaning up
 $CLEANUP

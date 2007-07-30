@@ -3,7 +3,9 @@
  */
 
 /* for O_DIRECTORY */
+#ifndef _GNU_SOURCE
 #define _GNU_SOURCE
+#endif
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -48,7 +50,7 @@ int main(int argc, char **argv)
         if (fddir1 == -1) {
                 fprintf(stderr, "open %s fails: %s\n",
                         dname1, strerror(errno));
-                exit(1);
+                exit(2);
         }
         
         // doesn't matter if the two dirs are the same??
@@ -56,7 +58,7 @@ int main(int argc, char **argv)
         if (fddir2 == -1) {
                 fprintf(stderr, "open %s fails: %s\n",
                         dname2, strerror(errno));
-                exit(1);
+                exit(3);
         }
         
         // another method
@@ -74,17 +76,17 @@ int main(int argc, char **argv)
         if (rc) {
                 fprintf(stderr, "unlink %s error: %s\n", 
                         dname1, strerror(errno));
-                exit(1);
+                exit(4);
         }
 
         if (access(dname2, F_OK) == 0){
                 fprintf(stderr, "%s still exists\n", dname2);
-                exit(1);
+                exit(5);
         }
 
         if (access(dname1, F_OK) == 0){
                 fprintf(stderr, "%s still exists\n", dname1);
-                exit(1);
+                exit(6);
         }
 
         // fchmod the dir
@@ -93,7 +95,7 @@ int main(int argc, char **argv)
         {
                 fprintf(stderr, "fchmod unlinked dir fails %s\n", 
                         strerror(errno));
-                exit(1);
+                exit(7);
         }
                 
         // fstat two dirs to check if they are the same
@@ -102,19 +104,19 @@ int main(int argc, char **argv)
         {
                 fprintf(stderr, "fstat unlinked dir %s fails %s\n", 
                         dname1, strerror(errno));
-                exit(1);
+                exit(8);
         }
 
         rc = fstat(fddir2, &st2);
         if (rc == -1) {
                 fprintf(stderr, "fstat dir %s fails %s\n",
                         dname2, strerror(errno));
-                exit(1);
+                exit(9);
         }
 
         if (st1.st_mode != st2.st_mode) {  // can we do this?
                 fprintf(stderr, "fstat different value on %s and %s\n",                                 dname1, dname2);
-                exit(1);
+                exit(10);
         }        
 
         fprintf(stderr, "Ok, everything goes well.\n");

@@ -101,10 +101,10 @@ err:
 
 void ldlm_proc_cleanup(void)
 {
-        if (ldlm_svc_proc_dir) 
+        if (ldlm_svc_proc_dir)
                 lprocfs_remove(&ldlm_svc_proc_dir);
 
-        if (ldlm_ns_proc_dir) 
+        if (ldlm_ns_proc_dir)
                 lprocfs_remove(&ldlm_ns_proc_dir);
 
         if (ldlm_type_proc_dir)
@@ -122,8 +122,7 @@ static int lprocfs_read_lru_size(char *page, char **start, off_t off,
                                  int count, int *eof, void *data)
 {
         struct ldlm_namespace *ns = data;
-        return lprocfs_uint_rd(page, start, off, count, eof,
-                               &ns->ns_max_unused);
+        return snprintf(page, count, "%u\n", ns->ns_max_unused);
 }
 
 #define MAX_STRING_SIZE 128
@@ -282,10 +281,10 @@ static void cleanup_resource(struct ldlm_resource *res, struct list_head *q,
         int local_only = (flags & LDLM_FL_LOCAL_ONLY);
         ENTRY;
 
-        
+
         do {
                 struct ldlm_lock *lock = NULL;
- 
+
                 /* first, we look for non-cleaned-yet lock
                  * all cleaned locks are marked by CLEANED flag */
                 lock_res(res);
@@ -299,7 +298,7 @@ static void cleanup_resource(struct ldlm_resource *res, struct list_head *q,
                         lock->l_flags |= LDLM_FL_CLEANED;
                         break;
                 }
-                
+
                 if (lock == NULL) {
                         unlock_res(res);
                         break;
@@ -431,12 +430,13 @@ int ldlm_namespace_free(struct ldlm_namespace *ns, int force)
                 rc = l_wait_event(ns->ns_waitq,
                                   ns->ns_refcount == 0, &lwi);
                 if (ns->ns_refcount)
-                        LCONSOLE_ERROR("Lock manager: wait for %s namespace "
-                                       "cleanup aborted with %d resources in "
-                                       "use. (%d)\nI'm going to try to clean "
-                                       "up anyway, but I might need a reboot "
-                                       "of this node.\n", ns->ns_name,
-                                       (int) ns->ns_refcount, rc);
+                        LCONSOLE_ERROR_MSG(0x139, "Lock manager: wait for %s "
+                                           "namespace cleanup aborted with %d "
+                                           "resources in use. (%d)\nI'm going "
+                                           "to try to clean up anyway, but I "
+                                           "might need a reboot of this node.\n",
+                                            ns->ns_name, (int) ns->ns_refcount, 
+                                            rc);
                 CDEBUG(D_DLMTRACE,
                        "dlm namespace %s free done waiting\n", ns->ns_name);
         }
@@ -448,16 +448,17 @@ int ldlm_namespace_free(struct ldlm_namespace *ns, int force)
 
         ldlm_put_ref(force);
 
-        return ELDLM_OK;
+        RETURN(ELDLM_OK);
 }
 
-static __u32 ldlm_hash_fn(struct ldlm_resource *parent, struct ldlm_res_id name)
+static __u32 ldlm_hash_fn(struct ldlm_resource *parent,
+                          const struct ldlm_res_id *name)
 {
         __u32 hash = 0;
         int i;
 
         for (i = 0; i < RES_NAME_SIZE; i++)
-                hash += name.name[i];
+                hash += name->name[i];
 
         hash += (__u32)((unsigned long)parent >> 4);
 
@@ -491,7 +492,8 @@ static struct ldlm_resource *ldlm_resource_new(void)
 
 /* must be called with hash lock held */
 static struct ldlm_resource *
-ldlm_resource_find(struct ldlm_namespace *ns, struct ldlm_res_id name, __u32 hash)
+ldlm_resource_find(struct ldlm_namespace *ns, const struct ldlm_res_id *name,
+                   __u32 hash)
 {
         struct list_head *bucket, *tmp;
         struct ldlm_resource *res;
@@ -501,7 +503,7 @@ ldlm_resource_find(struct ldlm_namespace *ns, struct ldlm_res_id name, __u32 has
 
         list_for_each(tmp, bucket) {
                 res = list_entry(tmp, struct ldlm_resource, lr_hash);
-                if (memcmp(&res->lr_name, &name, sizeof(res->lr_name)) == 0)
+                if (memcmp(&res->lr_name, name, sizeof(res->lr_name)) == 0)
                         return res;
         }
 
@@ -512,7 +514,7 @@ ldlm_resource_find(struct ldlm_namespace *ns, struct ldlm_res_id name, __u32 has
  * Returns: newly-allocated, referenced, unlocked resource */
 static struct ldlm_resource *
 ldlm_resource_add(struct ldlm_namespace *ns, struct ldlm_resource *parent,
-                  struct ldlm_res_id name, __u32 hash, ldlm_type_t type)
+                  const struct ldlm_res_id *name, __u32 hash, ldlm_type_t type)
 {
         struct list_head *bucket;
         struct ldlm_resource *res, *old_res;
@@ -525,7 +527,7 @@ ldlm_resource_add(struct ldlm_namespace *ns, struct ldlm_resource *parent,
         if (!res)
                 RETURN(NULL);
 
-        res->lr_name = name;
+        res->lr_name = *name;
         res->lr_namespace = ns;
         res->lr_type = type;
         res->lr_most_restr = LCK_NL;
@@ -566,7 +568,7 @@ ldlm_resource_add(struct ldlm_namespace *ns, struct ldlm_resource *parent,
                 rc = ns->ns_lvbo->lvbo_init(res);
                 if (rc)
                         CERROR("lvbo_init failed for resource "
-                               LPU64": rc %d\n", name.name[0], rc);
+                               LPU64": rc %d\n", name->name[0], rc);
                 /* we create resource with locked lr_lvb_sem */
                 up(&res->lr_lvb_sem);
         }
@@ -579,7 +581,7 @@ ldlm_resource_add(struct ldlm_namespace *ns, struct ldlm_resource *parent,
  * Returns: referenced, unlocked ldlm_resource or NULL */
 struct ldlm_resource *
 ldlm_resource_get(struct ldlm_namespace *ns, struct ldlm_resource *parent,
-                  struct ldlm_res_id name, ldlm_type_t type, int create)
+                  const struct ldlm_res_id *name, ldlm_type_t type, int create)
 {
         __u32 hash = ldlm_hash_fn(parent, name);
         struct ldlm_resource *res = NULL;
@@ -587,7 +589,7 @@ ldlm_resource_get(struct ldlm_namespace *ns, struct ldlm_resource *parent,
 
         LASSERT(ns != NULL);
         LASSERT(ns->ns_hash != NULL);
-        LASSERT(name.name[0] != 0);
+        LASSERT(name->name[0] != 0);
 
         spin_lock(&ns->ns_hash_lock);
         res = ldlm_resource_find(ns, name, hash);
@@ -748,6 +750,7 @@ void ldlm_resource_insert_lock_after(struct ldlm_lock *original,
 void ldlm_resource_unlink_lock(struct ldlm_lock *lock)
 {
         check_res_locked(lock->l_resource);
+        ldlm_unlink_lock_skiplist(lock);
         list_del_init(&lock->l_res_link);
 }
 
@@ -782,8 +785,8 @@ void ldlm_namespace_dump(int level, struct ldlm_namespace *ns)
         if (!((libcfs_debug | D_ERROR) & level))
                 return;
 
-        CDEBUG(level, "--- Namespace: %s (rc: %d, client: %d)\n", 
-               ns->ns_name, ns->ns_refcount, ns->ns_client);
+        CDEBUG(level, "--- Namespace: %s (rc: %d, client: %d)\n",
+                  ns->ns_name, ns->ns_refcount, ns->ns_client);
 
         if (cfs_time_before(cfs_time_current(), ns->ns_next_dump))
                 return;
@@ -800,7 +803,7 @@ void ldlm_namespace_dump(int level, struct ldlm_namespace *ns)
                 lock_res(res);
                 ldlm_resource_dump(level, res);
                 unlock_res(res);
-                
+
                 spin_lock(&ns->ns_hash_lock);
                 tmp = tmp->next;
                 ldlm_resource_putref_locked(res);

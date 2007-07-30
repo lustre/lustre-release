@@ -258,8 +258,10 @@ long filter_grant(struct obd_export *exp, obd_size current_grant,
                 }
         }
 
-        CDEBUG(D_CACHE,"%s: cli %s/%p wants: "LPU64" granting: "LPU64"\n",
-               obd->obd_name, exp->exp_client_uuid.uuid, exp, want, grant);
+        CDEBUG(D_CACHE,
+               "%s: cli %s/%p wants: "LPU64" current grant "LPU64 
+               " granting: "LPU64"\n", obd->obd_name, exp->exp_client_uuid.uuid,
+               exp, want, current_grant, grant);
         CDEBUG(D_CACHE,
                "%s: cli %s/%p tot cached:"LPU64" granted:"LPU64
                " num_exports: %d\n", obd->obd_name, exp->exp_client_uuid.uuid,
@@ -273,7 +275,8 @@ static int filter_preprw_read(int cmd, struct obd_export *exp, struct obdo *oa,
                               int objcount, struct obd_ioobj *obj,
                               int niocount, struct niobuf_remote *nb,
                               struct niobuf_local *res,
-                              struct obd_trans_info *oti)
+                              struct obd_trans_info *oti,
+                              struct lustre_capa *capa)
 {
         struct obd_device *obd = exp->exp_obd;
         struct lvfs_run_ctxt saved;
@@ -292,7 +295,12 @@ static int filter_preprw_read(int cmd, struct obd_export *exp, struct obdo *oa,
         LASSERTF(objcount == 1, "%d\n", objcount);
         LASSERTF(obj->ioo_bufcnt > 0, "%d\n", obj->ioo_bufcnt);
 
-        if (oa->o_valid & OBD_MD_FLGRANT) {
+        rc = filter_auth_capa(exp, NULL, obdo_mdsno(oa), capa,
+                              CAPA_OPC_OSS_READ);
+        if (rc)
+                RETURN(rc);
+
+        if (oa && oa->o_valid & OBD_MD_FLGRANT) {
                 spin_lock(&obd->obd_osfs_lock);
                 filter_grant_incoming(exp, oa);
 
@@ -356,6 +364,7 @@ static int filter_preprw_read(int cmd, struct obd_export *exp, struct obdo *oa,
                 GOTO(cleanup, rc);
 
         lprocfs_counter_add(obd->obd_stats, LPROC_FILTER_READ_BYTES, tot_bytes);
+
         lprocfs_counter_add(exp->exp_ops_stats, LPROC_FILTER_READ_BYTES,
                             tot_bytes);
 
@@ -386,9 +395,9 @@ static int filter_preprw_read(int cmd, struct obd_export *exp, struct obdo *oa,
  * right on through.
  *
  * Caller must hold obd_osfs_lock. */
-static int filter_grant_check(struct obd_export *exp, int objcount,
-                              struct fsfilt_objinfo *fso, int niocount,
-                              struct niobuf_remote *rnb,
+static int filter_grant_check(struct obd_export *exp, struct obdo *oa, 
+                              int objcount, struct fsfilt_objinfo *fso, 
+                              int niocount, struct niobuf_remote *rnb,
                               struct niobuf_local *lnb, obd_size *left,
                               struct inode *inode)
 {
@@ -410,7 +419,8 @@ static int filter_grant_check(struct obd_export *exp, int objcount,
                         if (tmp)
                                 bytes += blocksize - tmp;
 
-                        if (rnb[n].flags & OBD_BRW_FROM_GRANT) {
+                        if ((rnb[n].flags & OBD_BRW_FROM_GRANT) &&
+                            (oa->o_valid & OBD_MD_FLGRANT)) {
                                 if (fed->fed_grant < used + bytes) {
                                         CDEBUG(D_CACHE,
                                                "%s: cli %s/%p claims %ld+%d "
@@ -432,6 +442,7 @@ static int filter_grant_check(struct obd_export *exp, int objcount,
                                 /* if enough space, pretend it was granted */
                                 ungranted += bytes;
                                 rnb[n].flags |= OBD_BRW_GRANTED;
+                                lnb[n].lnb_grant_used = bytes;
                                 CDEBUG(0, "idx %d ungranted=%lu\n",n,ungranted);
                                 rc = 0;
                                 continue;
@@ -457,8 +468,9 @@ static int filter_grant_check(struct obd_export *exp, int objcount,
          * happens in filter_grant_commit() after the writes are done. */
         *left -= ungranted;
         fed->fed_grant -= used;
-        fed->fed_pending += used;
-        exp->exp_obd->u.filter.fo_tot_pending += used;
+        fed->fed_pending += used + ungranted;
+        exp->exp_obd->u.filter.fo_tot_granted += ungranted;
+        exp->exp_obd->u.filter.fo_tot_pending += used + ungranted;
 
         CDEBUG(mask,
                "%s: cli %s/%p used: %lu ungranted: %lu grant: %lu dirty: %lu\n",
@@ -506,7 +518,8 @@ static int filter_preprw_write(int cmd, struct obd_export *exp, struct obdo *oa,
                                int objcount, struct obd_ioobj *obj,
                                int niocount, struct niobuf_remote *nb,
                                struct niobuf_local *res,
-                               struct obd_trans_info *oti)
+                               struct obd_trans_info *oti,
+                               struct lustre_capa *capa)
 {
         struct lvfs_run_ctxt saved;
         struct niobuf_remote *rnb;
@@ -521,6 +534,11 @@ static int filter_preprw_write(int cmd, struct obd_export *exp, struct obdo *oa,
         ENTRY;
         LASSERT(objcount == 1);
         LASSERT(obj->ioo_bufcnt > 0);
+
+        rc = filter_auth_capa(exp, NULL, obdo_mdsno(oa), capa,
+                              CAPA_OPC_OSS_WRITE);
+        if (rc)
+                RETURN(rc);
 
         push_ctxt(&saved, &exp->exp_obd->obd_lvfs_ctxt, NULL);
         iobuf = filter_iobuf_get(&exp->exp_obd->u.filter, oti);
@@ -552,26 +570,25 @@ static int filter_preprw_write(int cmd, struct obd_export *exp, struct obdo *oa,
          * already exist so we can store the reservation handle there. */
         fmd = filter_fmd_find(exp, obj->ioo_id, obj->ioo_gr);
 
+        LASSERT(oa != NULL);
         spin_lock(&exp->exp_obd->obd_osfs_lock);
-        if (oa) {
-                filter_grant_incoming(exp, oa);
-                if (fmd && fmd->fmd_mactime_xid > oti->oti_xid)
-                        oa->o_valid &= ~(OBD_MD_FLMTIME | OBD_MD_FLCTIME |
-                                         OBD_MD_FLATIME);
-                else
-                        obdo_to_inode(dentry->d_inode, oa, OBD_MD_FLATIME |
-                                      OBD_MD_FLMTIME | OBD_MD_FLCTIME);
-        }
+        filter_grant_incoming(exp, oa);
+        if (fmd && fmd->fmd_mactime_xid > oti->oti_xid)
+                oa->o_valid &= ~(OBD_MD_FLMTIME | OBD_MD_FLCTIME |
+                                 OBD_MD_FLATIME);
+        else
+                obdo_to_inode(dentry->d_inode, oa, OBD_MD_FLATIME |
+                              OBD_MD_FLMTIME | OBD_MD_FLCTIME);
         cleanup_phase = 3;
 
         left = filter_grant_space_left(exp);
 
-        rc = filter_grant_check(exp, objcount, &fso, niocount, nb, res,
+        rc = filter_grant_check(exp, oa, objcount, &fso, niocount, nb, res,
                                 &left, dentry->d_inode);
 
         /* do not zero out oa->o_valid as it is used in filter_commitrw_write()
          * for setting UID/GID and fid EA in first write time. */
-        if (oa && oa->o_valid & OBD_MD_FLGRANT) {
+        if (oa->o_valid & OBD_MD_FLGRANT) {
                 oa->o_grant = filter_grant(exp,oa->o_grant,oa->o_undirty,left);
                 oa->o_valid |= OBD_MD_FLGRANT;
         }
@@ -648,9 +665,7 @@ static int filter_preprw_write(int cmd, struct obd_export *exp, struct obdo *oa,
 
         fsfilt_check_slow(exp->exp_obd, now, obd_timeout, "start_page_write");
 
-        lprocfs_counter_add(exp->exp_obd->obd_stats, LPROC_FILTER_WRITE_BYTES,
-                            tot_bytes);
-        lprocfs_counter_add(exp->exp_ops_stats, LPROC_FILTER_WRITE_BYTES, 
+        lprocfs_counter_add(exp->exp_ops_stats, LPROC_FILTER_WRITE_BYTES,
                             tot_bytes);
         EXIT;
 cleanup:
@@ -680,14 +695,14 @@ cleanup:
 int filter_preprw(int cmd, struct obd_export *exp, struct obdo *oa,
                   int objcount, struct obd_ioobj *obj, int niocount,
                   struct niobuf_remote *nb, struct niobuf_local *res,
-                  struct obd_trans_info *oti)
+                  struct obd_trans_info *oti, struct lustre_capa *capa)
 {
         if (cmd == OBD_BRW_WRITE)
                 return filter_preprw_write(cmd, exp, oa, objcount, obj,
-                                           niocount, nb, res, oti);
+                                           niocount, nb, res, oti, capa);
         if (cmd == OBD_BRW_READ)
                 return filter_preprw_read(cmd, exp, oa, objcount, obj,
-                                          niocount, nb, res, oti);
+                                          niocount, nb, res, oti, capa);
         LBUG();
         return -EPROTO;
 }
@@ -716,7 +731,8 @@ static int filter_commitrw_read(struct obd_export *exp, struct obdo *oa,
                                 struct obd_trans_info *oti, int rc)
 {
         struct inode *inode = NULL;
-        struct ldlm_res_id res_id = { .name = { obj->ioo_id } };
+        struct ldlm_res_id res_id = { .name = { obj->ioo_id, 0,
+                                                obj->ioo_gr, 0} };
         struct ldlm_resource *resource = NULL;
         struct ldlm_namespace *ns = exp->exp_obd->obd_namespace;
         ENTRY;
@@ -725,7 +741,7 @@ static int filter_commitrw_read(struct obd_export *exp, struct obdo *oa,
          * and we should update the lvb so that other glimpses will also
          * get the updated value. bug 5972 */
         if (oa && ns && ns->ns_lvbo && ns->ns_lvbo->lvbo_update) {
-                resource = ldlm_resource_get(ns, NULL, res_id, LDLM_EXTENT, 0);
+                resource = ldlm_resource_get(ns, NULL, &res_id, LDLM_EXTENT, 0);
 
                 if (resource != NULL) {
                         ns->ns_lvbo->lvbo_update(resource, NULL, 0, 1);
@@ -855,7 +871,7 @@ int filter_brw(int cmd, struct obd_export *exp, struct obd_info *oinfo,
         ioo.ioo_bufcnt = oa_bufs;
 
         ret = filter_preprw(cmd, exp, oinfo->oi_oa, 1, &ioo,
-                            oa_bufs, rnb, lnb, oti);
+                            oa_bufs, rnb, lnb, oti, oinfo_capa(oinfo));
         if (ret != 0)
                 GOTO(out, ret);
 

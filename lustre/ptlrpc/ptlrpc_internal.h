@@ -79,9 +79,54 @@ static inline int opcode_offset(__u32 opc) {
                 return (opc - LDLM_FIRST_OPC +
                         (MDS_LAST_OPC - MDS_FIRST_OPC) +
                         (OST_LAST_OPC - OST_FIRST_OPC));
+        } else if (opc < MGS_LAST_OPC) {
+                /* MGS Opcode */
+                return (opc - MGS_FIRST_OPC +
+                        (LDLM_LAST_OPC - LDLM_FIRST_OPC) +
+                        (MDS_LAST_OPC - MDS_FIRST_OPC) +
+                        (OST_LAST_OPC - OST_FIRST_OPC));
         } else if (opc < OBD_LAST_OPC) {
                 /* OBD Ping */
                 return (opc - OBD_FIRST_OPC +
+                        (MGS_LAST_OPC - MGS_FIRST_OPC) +
+                        (LDLM_LAST_OPC - LDLM_FIRST_OPC) +
+                        (MDS_LAST_OPC - MDS_FIRST_OPC) +
+                        (OST_LAST_OPC - OST_FIRST_OPC));
+        } else if (opc < LLOG_LAST_OPC) {
+                /* LLOG opcode */
+                return (opc - LLOG_FIRST_OPC +
+                        (OBD_LAST_OPC - OBD_FIRST_OPC) +
+                        (MGS_LAST_OPC - MGS_FIRST_OPC) +
+                        (LDLM_LAST_OPC - LDLM_FIRST_OPC) +
+                        (MDS_LAST_OPC - MDS_FIRST_OPC) +
+                        (OST_LAST_OPC - OST_FIRST_OPC));
+        } else if (opc < FLD_LAST_OPC) {
+                /* FLD opcode */
+                return (opc - FLD_FIRST_OPC +
+                        (LLOG_LAST_OPC - LLOG_FIRST_OPC) +
+                        (OBD_LAST_OPC - OBD_FIRST_OPC) +
+                        (MGS_LAST_OPC - MGS_FIRST_OPC) +
+                        (LDLM_LAST_OPC - LDLM_FIRST_OPC) +
+                        (MDS_LAST_OPC - MDS_FIRST_OPC) +
+                        (OST_LAST_OPC - OST_FIRST_OPC));
+        } else if (opc < SEQ_LAST_OPC) {
+                /* SEQ opcode */
+                return (opc - SEQ_FIRST_OPC +
+                        (FLD_LAST_OPC - FLD_FIRST_OPC) +
+                        (LLOG_LAST_OPC - LLOG_FIRST_OPC) +
+                        (OBD_LAST_OPC - OBD_FIRST_OPC) +
+                        (MGS_LAST_OPC - MGS_FIRST_OPC) +
+                        (LDLM_LAST_OPC - LDLM_FIRST_OPC) +
+                        (MDS_LAST_OPC - MDS_FIRST_OPC) +
+                        (OST_LAST_OPC - OST_FIRST_OPC));
+        } else if (opc < SEC_LAST_OPC) {
+                /* SEC opcode */
+                return (opc - SEC_FIRST_OPC +
+                        (SEQ_LAST_OPC - SEQ_FIRST_OPC) +
+                        (FLD_LAST_OPC - FLD_FIRST_OPC) +
+                        (LLOG_LAST_OPC - LLOG_FIRST_OPC) +
+                        (OBD_LAST_OPC - OBD_FIRST_OPC) +
+                        (MGS_LAST_OPC - MGS_FIRST_OPC) +
                         (LDLM_LAST_OPC - LDLM_FIRST_OPC) +
                         (MDS_LAST_OPC - MDS_FIRST_OPC) +
                         (OST_LAST_OPC - OST_FIRST_OPC));
@@ -94,8 +139,12 @@ static inline int opcode_offset(__u32 opc) {
 #define LUSTRE_MAX_OPCODES ((LDLM_LAST_OPC - LDLM_FIRST_OPC)   + \
                             (MDS_LAST_OPC - MDS_FIRST_OPC)     + \
                             (OST_LAST_OPC - OST_FIRST_OPC)     + \
-                            (OBD_LAST_OPC - OBD_FIRST_OPC))
-
+                            (OBD_LAST_OPC - OBD_FIRST_OPC)     + \
+                            (FLD_LAST_OPC - FLD_FIRST_OPC)     + \
+                            (SEQ_LAST_OPC - SEQ_FIRST_OPC)     + \
+                            (MGS_LAST_OPC - MGS_FIRST_OPC)     + \
+                            (LLOG_LAST_OPC - LLOG_FIRST_OPC)   + \
+                            (SEC_LAST_OPC - SEC_FIRST_OPC))
 enum {
         PTLRPC_REQWAIT_CNTR = 0,
         PTLRPC_REQQDEPTH_CNTR,
@@ -112,6 +161,10 @@ void ptlrpc_add_bulk_page(struct ptlrpc_bulk_desc *desc, cfs_page_t *page,
                           int pageoffset, int len);
 void ptl_rpc_wipe_bulk_pages(struct ptlrpc_bulk_desc *desc);
 
+/* pack_generic.c */
+struct ptlrpc_reply_state *lustre_get_emerg_rs(struct ptlrpc_service *svc);
+void lustre_put_emerg_rs(struct ptlrpc_reply_state *rs);
+
 /* pinger.c */
 int ptlrpc_start_pinger(void);
 int ptlrpc_stop_pinger(void);
@@ -123,5 +176,28 @@ int ping_evictor_wake(struct obd_export *exp);
 #else
 #define ping_evictor_wake(exp)     1
 #endif
+
+/* sec_null.c */
+int  sptlrpc_null_init(void);
+void sptlrpc_null_fini(void);
+
+/* sec_plain.c */
+int  sptlrpc_plain_init(void);
+void sptlrpc_plain_fini(void);
+
+/* sec_bulk.c */
+int  sptlrpc_enc_pool_init(void);
+void sptlrpc_enc_pool_fini(void);
+int sptlrpc_proc_read_enc_pool(char *page, char **start, off_t off, int count,
+                               int *eof, void *data);
+const char * sptlrpc_bulk_csum_alg2name(__u32 csum_alg);
+
+/* sec_lproc.c */
+int  sptlrpc_lproc_init(void);
+void sptlrpc_lproc_fini(void);
+
+/* sec.c */
+int  sptlrpc_init(void);
+void sptlrpc_fini(void);
 
 #endif /* PTLRPC_INTERNAL_H */

@@ -49,7 +49,7 @@ test_0a() {
 
 setup() {
     gen_config
-    start mds $MDSDEV $MDS_MOUNT_OPTS
+    start mds1 `mdsdevname 1` $MDS_MOUNT_OPTS
     start ost1 `ostdevname 1` $OST_MOUNT_OPTS
     [ "$DAEMONFILE" ] && $LCTL debug_daemon start $DAEMONFILE $DAEMONSIZE
 
@@ -60,6 +60,7 @@ setup() {
     if [ -z "`grep " $MOUNT " /proc/mounts`" ]; then
 	zconf_mount `hostname` $MOUNT || error "mount fail"
     fi
+    sleep 5
 
     do_facet ost1 "sysctl -w lustre.fail_loc=0"
 }
@@ -178,7 +179,7 @@ run_test 6 "Fail OST before obd_destroy"
 test_7() {
     f=$DIR/$tfile
     rm -f $f
-    sync && sleep 2 && sync	# wait for delete thread
+    sync && sleep 5 && sync	# wait for delete thread
     before=`kbytesfree`
     dd if=/dev/urandom bs=4096 count=1280 of=$f || return 4
     sync
@@ -192,7 +193,7 @@ test_7() {
     $CHECKSTAT -t file $f && return 2 || true
     sync
     # let the delete happen
-    sleep 2
+    sleep 5
     after=`kbytesfree`
     log "before: $before after: $after"
     (( $before <= $after + 40 )) || return 3	# take OST logs into account
@@ -201,5 +202,3 @@ run_test 7 "Fail OST before obd_destroy"
 
 equals_msg test complete, cleaning up
 $CLEANUP
-echo "$0: completed"
-

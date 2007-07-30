@@ -221,7 +221,7 @@ static void mds_finish_join(struct mds_obd *mds, struct ptlrpc_request *req,
         CDEBUG(D_INFO, "change the max md size from %d to "LPSZ"\n",
                mds->mds_max_mdsize, sizeof(*lmmj));
 
-        if (mds->mds_max_mdsize < max_easize || 
+        if (mds->mds_max_mdsize < max_easize ||
             mds->mds_max_cookiesize < max_cookiesize) {
                 body->max_mdsize = mds->mds_max_mdsize > max_easize ?
                                    mds->mds_max_mdsize : max_easize;
@@ -260,8 +260,10 @@ static int mds_join_unlink_tail_inode(struct mds_update_record *rec,
                 ldlm_lock_decref(lockh, LCK_EX);
 
         head_inode = dchild->d_inode;
-        mdc_pack_fid(&head_fid, head_inode->i_ino, head_inode->i_generation,
-                      head_inode->i_mode & S_IFMT);
+
+        head_fid.id = head_inode->i_ino;
+        head_fid.generation = head_inode->i_generation;
+        head_fid.f_type = head_inode->i_mode & S_IFMT;
 
         rc = mds_get_parents_children_locked(obd, mds, &join_rec->jr_fid,
                                              &de_tailparent, &head_fid,
@@ -477,7 +479,7 @@ int mds_join_file(struct mds_update_record *rec, struct ptlrpc_request *req,
                       sizeof(struct lov_mds_md_join), "lov");
         mds_finish_join(mds, req, head_inode, head_lmmj);
 cleanup:
-        rc = mds_finish_transno(mds, head_inode, handle, req, rc, 0);
+        rc = mds_finish_transno(mds, head_inode, handle, req, rc, 0, 0);
         switch(cleanup_phase){
         case 3:
                 llog_close(llh_head);

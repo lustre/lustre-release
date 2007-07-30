@@ -166,7 +166,7 @@ int llog_obd_repl_cancel(struct llog_ctxt *ctxt,
                                 CERROR("couldn't get an llcd - dropped "LPX64
                                        ":%x+%u\n",
                                        cookies->lgc_lgl.lgl_oid,
-                                       cookies->lgc_lgl.lgl_ogen,
+                                       cookies->lgc_lgl.lgl_ogen, 
                                        cookies->lgc_index);
                                 GOTO(out, rc = -ENOMEM);
                         }
@@ -174,7 +174,7 @@ int llog_obd_repl_cancel(struct llog_ctxt *ctxt,
                         ctxt->loc_llcd = llcd;
                 }
 
-                memcpy((char *)llcd->llcd_cookies + llcd->llcd_cookiebytes,
+                memcpy((char *)llcd->llcd_cookies + llcd->llcd_cookiebytes, 
                        cookies, sizeof(*cookies));
                 llcd->llcd_cookiebytes += sizeof(*cookies);
         } else {
@@ -222,6 +222,7 @@ static int log_commit_thread(void *arg)
         struct llog_commit_master *lcm = arg;
         struct llog_commit_daemon *lcd;
         struct llog_canceld_ctxt *llcd, *n;
+        struct obd_import *import = NULL;
         ENTRY;
 
         OBD_ALLOC(lcd, sizeof(*lcd));
@@ -243,9 +244,12 @@ static int log_commit_thread(void *arg)
         CDEBUG(D_HA, "%s started\n", cfs_curproc_comm());
         do {
                 struct ptlrpc_request *request;
-                struct obd_import *import = NULL;
                 struct list_head *sending_list;
                 int rc = 0;
+
+                if (import)
+                        class_import_put(import);
+                import = NULL;
 
                 /* If we do not have enough pages available, allocate some */
                 while (atomic_read(&lcm->lcm_llcd_numfree) <
@@ -272,6 +276,8 @@ static int log_commit_thread(void *arg)
 
                 sending_list = &lcm->lcm_llcd_pending;
         resend:
+                if (import)
+                        class_import_put(import);
                 import = NULL;
                 if (lcm->lcm_flags & LLOG_LCM_FL_EXIT) {
                         lcm->lcm_llcd_maxfree = 0;
@@ -301,6 +307,8 @@ static int log_commit_thread(void *arg)
                                           typeof(*llcd), llcd_list);
                         LASSERT(llcd->llcd_lcm == lcm);
                         import = llcd->llcd_ctxt->loc_imp;
+                        if (import)
+                                class_import_get(import);
                 }
                 list_for_each_entry_safe(llcd, n, sending_list, llcd_list) {
                         LASSERT(llcd->llcd_lcm == lcm);
@@ -350,6 +358,8 @@ static int log_commit_thread(void *arg)
                                 llcd_put(llcd);
                                 continue;
                         }
+
+                        OBD_FAIL_TIMEOUT(OBD_FAIL_PTLRPC_DELAY_RECOV, 10);
 
                         request = ptlrpc_prep_req(import, LUSTRE_LOG_VERSION,
                                                   OBD_LOG_CANCEL, 2, size,bufs);
@@ -403,6 +413,9 @@ static int log_commit_thread(void *arg)
                                 goto resend;
                 }
         } while(1);
+
+        if (import)
+                class_import_put(import);
 
         /* If we are force exiting, just drop all of the cookies. */
         if (lcm->lcm_flags & LLOG_LCM_FL_EXIT_FORCE) {

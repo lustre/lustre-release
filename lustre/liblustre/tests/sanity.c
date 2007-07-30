@@ -554,7 +554,7 @@ int t18b(char *name)
         LEAVE();
 }
 
-static int check_file_size(char *file, off_t size)
+static int check_file_size(char *file, long long size)
 {
         struct stat statbuf;
 
@@ -563,7 +563,7 @@ static int check_file_size(char *file, off_t size)
                 return(1);
         }
         if (statbuf.st_size != size) {
-                printf("size of %s: %ld != %lld\n", file, statbuf.st_size, (unsigned long long )size);
+                printf("size of %s: %ld != %lld\n", file, statbuf.st_size, size);
                 return(-1);
         }
         return 0;
@@ -778,7 +778,7 @@ int t23(char *name)
         char path[MAX_PATH_LENGTH];
         int fd;
         long long ret;
-        loff_t off;
+        long long off;
 
         ENTRY("handle seek > 2GB");
         snprintf(path, MAX_PATH_LENGTH, "%s/f%s", lustre_path, name);
@@ -827,7 +827,7 @@ int t23(char *name)
         ret = lseek(fd, -buf_size + 2, SEEK_CUR);
         if (ret != off) {
                 printf("relative seek error for %d %llu != %llu\n",
-                       -buf_size + 2, ret, (unsigned long long) off);
+                       -buf_size + 2, ret, off);
                 if (ret == -1)
                         perror("relative seek");
                 return -1;
@@ -853,7 +853,7 @@ int t23(char *name)
         off = 2048ULL * 1024 * 1024, SEEK_SET;
         ret = lseek(fd, off, SEEK_SET);
         if (ret != off) {
-                printf("seek 2GB error for %llu != %llu\n", ret, (unsigned long long) off);
+                printf("seek 2GB error for %llu != %llu\n", ret, off);
                 if (ret == -1)
                         perror("seek 2GB");
                 return -1;
@@ -986,13 +986,13 @@ int t50b(char *name)
         loff_t off_array[] = {1, 17, 255, 258, 4095, 4097, 8191,
                               1024*1024*1024*1024ULL};
         int i;
-        loff_t offset;
+        long long offset;
 
         ENTRY("4k un-aligned i/o sanity");
         for (i = 0; i < sizeof(off_array)/sizeof(loff_t); i++) {
                 offset = off_array[i];
                 printf("16 per xfer(total %d), offset %10lld...\t",
-                        _npages, (unsigned long long) offset);
+                        _npages, offset);
                 if (pages_io(16, offset) != 0)
                         return 1;
         }
@@ -1012,7 +1012,7 @@ int t51(char *name)
 {
         char file[MAX_PATH_LENGTH] = "";
         int fd;
-        off_t size;
+        long long size;
         int result;
 
         ENTRY("truncate() should truncate file to proper length");
@@ -1170,7 +1170,9 @@ int t54(char *name)
 }
 
 /* for O_DIRECTORY */
+#ifndef _GNU_SOURCE
 #define _GNU_SOURCE
+#endif
 
 #define STRIPE_SIZE       (2048 * 2048)
 #define STRIPE_OFFSET           0
@@ -1371,7 +1373,6 @@ int t56(char *name)
 
         LEAVE();
 }
-
 
 extern void __liblustre_setup_(void);
 extern void __liblustre_cleanup_(void);

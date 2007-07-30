@@ -56,13 +56,13 @@ static int lsm_lmm_verify_common(struct lov_mds_md *lmm, int lmm_bytes,
                 lov_dump_lmm_v1(D_WARNING, lmm);
                 return -EINVAL;
         }
-
+        
         if (lmm->lmm_object_id == 0) {
                 CERROR("zero object id\n");
                 lov_dump_lmm_v1(D_WARNING, lmm);
                 return -EINVAL;
         }
-
+        
         if (lmm->lmm_pattern != cpu_to_le32(LOV_PATTERN_RAID0)) {
                 CERROR("bad striping pattern\n");
                 lov_dump_lmm_v1(D_WARNING, lmm);
@@ -95,7 +95,7 @@ struct lov_stripe_md *lsm_alloc_plain(int stripe_count, int *size)
                 return NULL;;
 
         for (i = 0; i < stripe_count; i++) {
-                OBD_SLAB_ALLOC(loi, lov_oinfo_slab, SLAB_NOFS, sizeof(*loi));
+                OBD_SLAB_ALLOC(loi, lov_oinfo_slab, GFP_NOFS, sizeof(*loi));
                 if (loi == NULL)
                         goto err;
                 lsm->lsm_oinfo[i] = loi;

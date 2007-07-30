@@ -6,6 +6,7 @@ set -e
 
 PATH=`dirname $0`/../utils:$PATH
 
+[ -z "$CONFIG" -a "$NAME" ] && CONFIGS=$NAME
 [ "$CONFIGS" ] || CONFIGS="local"  #"local lov"
 [ "$MAX_THREADS" ] || MAX_THREADS=20
 RAMKB=`awk '/MemTotal:/ { print $2 }' /proc/meminfo`

@@ -231,9 +231,9 @@ ldlm_extent_compat_queue(struct list_head *queue, struct ldlm_lock *req,
                            lock in the waiting queue or if there is not any,
                            then in front of first non-GROUP lock */
                         if (lock->l_req_mode != LCK_GROUP) {
-                                /* Ok, we hit non-GROUP lock, there should be no
-                                more GROUP locks later on, queue in front of
-                                first non-GROUP lock */
+                                /* Ok, we hit non-GROUP lock, there should
+                                 * be no more GROUP locks later on, queue in
+                                 * front of first non-GROUP lock */
 
                                 ldlm_resource_insert_lock_after(lock, req);
                                 list_del_init(&lock->l_res_link);
@@ -291,13 +291,13 @@ ldlm_extent_compat_queue(struct list_head *queue, struct ldlm_lock *req,
                 }
 
                 if (unlikely(req_mode == LCK_GROUP &&
-                             (lock->l_req_mode != lock->l_granted_mode))) {
+                    (lock->l_req_mode != lock->l_granted_mode))) {
                         scan = 1;
                         compat = 0;
                         if (lock->l_req_mode != LCK_GROUP) {
-                                /* Ok, we hit non-GROUP lock, there should
-                                 * be no more GROUP locks later on, queue in
-                                 * front of first non-GROUP lock */
+                        /* Ok, we hit non-GROUP lock, there should be no
+                           more GROUP locks later on, queue in front of
+                           first non-GROUP lock */
 
                                 ldlm_resource_insert_lock_after(lock, req);
                                 list_del_init(&lock->l_res_link);

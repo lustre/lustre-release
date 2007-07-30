@@ -62,7 +62,7 @@ ldlm_inodebits_compat_queue(struct list_head *queue, struct ldlm_lock *req,
                                                   l_sl_mode)->l_res_link;
                         continue;
                 }
-
+                
                 tmp_tail = tmp;
                 if (LDLM_SL_HEAD(&lock->l_sl_mode))
                         tmp_tail = &list_entry(lock->l_sl_mode.next,
@@ -74,7 +74,7 @@ ldlm_inodebits_compat_queue(struct list_head *queue, struct ldlm_lock *req,
                                 /* conflicting policy */
                                 if (!work_list)
                                         RETURN(0);
-                               
+
                                 compat = 0;
                                 if (lock->l_blocking_ast)
                                         ldlm_add_ast_work_item(lock, req, 

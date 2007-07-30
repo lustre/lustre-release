@@ -66,8 +66,8 @@
 #include <obd_class.h>
 #include <lprocfs_status.h>
 #include <lustre_ver.h>
+#include <lustre/lustre_build_version.h>
 #ifdef __KERNEL__
-#include <linux/lustre_build_version.h>
 #include <linux/lustre_version.h>
 
 int proc_version;
@@ -323,7 +323,7 @@ struct lprocfs_vars lprocfs_base[] = {
 #endif /* LPROCFS */
 
 #ifdef __KERNEL__
-static void *obd_device_list_seq_start(struct seq_file *p, loff_t*pos)
+static void *obd_device_list_seq_start(struct seq_file *p, loff_t *pos)
 {
         if (*pos >= class_devno_max())
                 return NULL;
@@ -346,7 +346,7 @@ static void *obd_device_list_seq_next(struct seq_file *p, void *v, loff_t *pos)
 
 static int obd_device_list_seq_show(struct seq_file *p, void *v)
 {
-        int index = *(int*)v;
+        int index = *(loff_t *)v;
         struct obd_device *obd = class_num2obd(index);
         char *status;
 
@@ -431,8 +431,9 @@ int class_procfs_init(void)
 int class_procfs_clean(void)
 {
         ENTRY;
-        if (proc_lustre_root) 
+        if (proc_lustre_root) {
                 lprocfs_remove(&proc_lustre_root);
+        }
         RETURN(0);
 }
 

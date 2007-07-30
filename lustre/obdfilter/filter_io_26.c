@@ -68,7 +68,8 @@ static void record_start_io(struct filter_iobuf *iobuf, int rw, int size,
                 atomic_inc(&filter->fo_r_in_flight);
                 lprocfs_oh_tally(&filter->fo_filter_stats.hist[BRW_R_RPC_HIST],
                                  atomic_read(&filter->fo_r_in_flight));
-                lprocfs_oh_tally_log2(&filter->fo_filter_stats.hist[BRW_R_DISK_IOSIZE], size);
+                lprocfs_oh_tally_log2(&filter->fo_filter_stats.hist[BRW_R_DISK_IOSIZE],
+                                      size);
                 lprocfs_oh_tally(&exp->exp_filter_data.fed_brw_stats.hist[BRW_R_RPC_HIST],
                                  atomic_read(&filter->fo_r_in_flight));
                 lprocfs_oh_tally_log2(&exp->exp_filter_data.fed_brw_stats.hist[BRW_R_DISK_IOSIZE], size);
@@ -76,7 +77,8 @@ static void record_start_io(struct filter_iobuf *iobuf, int rw, int size,
                 atomic_inc(&filter->fo_w_in_flight);
                 lprocfs_oh_tally(&filter->fo_filter_stats.hist[BRW_W_RPC_HIST],
                                  atomic_read(&filter->fo_w_in_flight));
-                lprocfs_oh_tally_log2(&filter->fo_filter_stats.hist[BRW_W_DISK_IOSIZE], size);
+                lprocfs_oh_tally_log2(&filter->fo_filter_stats.hist[BRW_W_DISK_IOSIZE],
+                                      size);
                 lprocfs_oh_tally(&exp->exp_filter_data.fed_brw_stats.hist[BRW_W_RPC_HIST],
                                  atomic_read(&filter->fo_w_in_flight));
                 lprocfs_oh_tally_log2(&exp->exp_filter_data.fed_brw_stats.hist[BRW_W_DISK_IOSIZE], size);
@@ -182,6 +184,7 @@ struct filter_iobuf *filter_alloc_iobuf(struct filter_obd *filter,
         spin_lock_init(&iobuf->dr_lock);
         iobuf->dr_max_pages = num_pages;
         iobuf->dr_npages = 0;
+        iobuf->dr_error = 0;
 
         RETURN(iobuf);
 
@@ -197,6 +200,7 @@ struct filter_iobuf *filter_alloc_iobuf(struct filter_obd *filter,
 static void filter_clear_iobuf(struct filter_iobuf *iobuf)
 {
         iobuf->dr_npages = 0;
+        iobuf->dr_error = 0;
         atomic_set(&iobuf->dr_numreqs, 0);
 }
 
@@ -362,21 +366,21 @@ int filter_do_bio(struct obd_export *exp, struct inode *inode,
         wait_event(iobuf->dr_wait, atomic_read(&iobuf->dr_numreqs) == 0);
 
         if (rw == OBD_BRW_READ) {
-                lprocfs_oh_tally(&obd->u.filter.fo_filter_stats.hist[BRW_R_DIO_FRAGS], frags);
+                lprocfs_oh_tally(&obd->u.filter.fo_filter_stats.hist[BRW_R_DIO_FRAGS],
+                                 frags);
                 lprocfs_oh_tally(&exp->exp_filter_data.fed_brw_stats.hist[BRW_R_DIO_FRAGS],
                                  frags);
                 lprocfs_oh_tally_log2(&obd->u.filter.fo_filter_stats.hist[BRW_R_IO_TIME],
                                       jiffies - start_time);
-                lprocfs_oh_tally_log2(&exp->exp_filter_data.fed_brw_stats.hist[BRW_R_IO_TIME],
-                                 jiffies - start_time);
+                lprocfs_oh_tally_log2(&exp->exp_filter_data.fed_brw_stats.hist[BRW_R_IO_TIME], jiffies - start_time);
         } else {
-                lprocfs_oh_tally(&obd->u.filter.fo_filter_stats.hist[BRW_W_DIO_FRAGS], frags);
+                lprocfs_oh_tally(&obd->u.filter.fo_filter_stats.hist[BRW_W_DIO_FRAGS],
+                                 frags);
                 lprocfs_oh_tally(&exp->exp_filter_data.fed_brw_stats.hist[BRW_W_DIO_FRAGS],
                                  frags);
                 lprocfs_oh_tally_log2(&obd->u.filter.fo_filter_stats.hist[BRW_W_IO_TIME],
                                       jiffies - start_time);
-                lprocfs_oh_tally_log2(&exp->exp_filter_data.fed_brw_stats.hist[BRW_W_IO_TIME],
-                                 jiffies - start_time);
+                lprocfs_oh_tally_log2(&exp->exp_filter_data.fed_brw_stats.hist[BRW_W_IO_TIME], jiffies - start_time);
         }
 
         if (rc == 0)
@@ -407,18 +411,21 @@ static int filter_sync_inode_data(struct inode *inode, int locked)
         if (!locked)
                 LOCK_INODE_MUTEX(inode);
         if (inode->i_mapping->nrpages) {
+#ifdef PF_SYNCWRITE
                 current->flags |= PF_SYNCWRITE;
+#endif
                 rc = filemap_fdatawrite(inode->i_mapping);
                 if (rc == 0)
                         rc = filemap_fdatawait(inode->i_mapping);
+#ifdef PF_SYNCWRITE
                 current->flags &= ~PF_SYNCWRITE;
+#endif
         }
         if (!locked)
                 UNLOCK_INODE_MUTEX(inode);
 
         return rc;
 }
-
 /* Clear pages from the mapping before we do direct IO to that offset.
  * Now that the only source of such pages in the truncate path flushes
  * these pages to disk and then discards them, this is error condition.
@@ -511,8 +518,7 @@ int filter_direct_io(int rw, struct dentry *dchild, struct filter_iobuf *iobuf,
                 create = 1;
                 sem = &obd->u.filter.fo_alloc_lock;
 
-                lquota_enforce(filter_quota_interface_ref, obd,
-                               iobuf->dr_ignore_quota);
+                lquota_enforce(filter_quota_interface_ref, obd, iobuf->dr_ignore_quota);
         }
 
         rc = fsfilt_map_inode_pages(obd, inode, iobuf->dr_pages,
@@ -521,9 +527,9 @@ int filter_direct_io(int rw, struct dentry *dchild, struct filter_iobuf *iobuf,
 
         if (rw == OBD_BRW_WRITE) {
                 if (rc == 0) {
-                        filter_tally_write(exp, iobuf->dr_pages,
-                                           iobuf->dr_npages, iobuf->dr_blocks,
-                                           blocks_per_page);
+                        filter_tally(exp, iobuf->dr_pages,
+                                     iobuf->dr_npages, iobuf->dr_blocks,
+                                     blocks_per_page, 1);
                         if (attr->ia_size > inode->i_size)
                                 attr->ia_valid |= ATTR_SIZE;
                         rc = fsfilt_setattr(obd, dchild,
@@ -532,22 +538,22 @@ int filter_direct_io(int rw, struct dentry *dchild, struct filter_iobuf *iobuf,
 
                 UNLOCK_INODE_MUTEX(inode);
 
-                rc2 = filter_finish_transno(exp, oti, 0);
+                rc2 = filter_finish_transno(exp, oti, 0, 0);
                 if (rc2 != 0) {
                         CERROR("can't close transaction: %d\n", rc2);
                         if (rc == 0)
                                 rc = rc2;
                 }
 
-                rc2 =fsfilt_commit_async(obd,inode,oti->oti_handle,wait_handle);
+                rc2 = fsfilt_commit_async(obd,inode,oti->oti_handle,
+                                          wait_handle);
                 if (rc == 0)
                         rc = rc2;
                 if (rc != 0)
                         RETURN(rc);
         } else if (rc == 0) {
-                filter_tally_read(exp, iobuf->dr_pages,
-                                  iobuf->dr_npages, iobuf->dr_blocks,
-                                  blocks_per_page);
+                filter_tally(exp, iobuf->dr_pages, iobuf->dr_npages,
+                             iobuf->dr_blocks, blocks_per_page, 0);
         }
 
         rc = filter_clear_page_cache(inode, iobuf);

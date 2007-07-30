@@ -17,7 +17,7 @@ extern int llapi_file_create(const char *name, unsigned long stripe_size,
 extern int llapi_file_get_stripe(const char *path, struct lov_user_md *lum);
 #define HAVE_LLAPI_FILE_LOOKUP
 extern int llapi_file_lookup(int dirfd, const char *name);
-
+ 
 struct find_param {
         unsigned int maxdepth;
         time_t  atime;
@@ -67,4 +67,6 @@ extern int llapi_quotacheck(char *mnt, int check_type);
 extern int llapi_poll_quotacheck(char *mnt, struct if_quotacheck *qchk);
 extern int llapi_quotactl(char *mnt, struct if_quotactl *qctl);
 extern int llapi_target_iterate(int type_num, char **obd_type, void *args, llapi_cb_t cb);
+extern int llapi_getfacl(char *fname, char *cmd);
+extern int llapi_setfacl(char *fname, char *cmd);
 #endif

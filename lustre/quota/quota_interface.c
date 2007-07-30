@@ -46,7 +46,6 @@
 
 
 #ifdef __KERNEL__
-
 /* quota proc file handling functions */
 #ifdef LPROCFS
 int lprocfs_rd_bunit(char *page, char **start, off_t off, int count, 
@@ -79,6 +78,7 @@ int lprocfs_wr_bunit(struct file *file, const char *buffer,
         LASSERT(obd != NULL);
 
         rc = lprocfs_write_helper(buffer, count, &val);
+
         if (rc)
                 return rc;
 
@@ -158,11 +158,11 @@ int lprocfs_wr_itune(struct file *file, const char *buffer,
         struct obd_device *obd = (struct obd_device *)data;
         int val, rc;
         LASSERT(obd != NULL);
-
+ 
         rc = lprocfs_write_helper(buffer, count, &val);
         if (rc)
                 return rc;
-        
+
         if (val <= MIN_QLIMIT || 
             val >= obd->u.obt.obt_qctxt.lqc_iunit_sz)
                 return -EINVAL;
@@ -197,7 +197,7 @@ int lprocfs_rd_type(char *page, char **start, off_t off, int count,
 }
 EXPORT_SYMBOL(lprocfs_rd_type);
 
-static int auto_quota_on(struct obd_device *obd, int type, 
+static int auto_quota_on(struct obd_device *obd, int type,
                          struct super_block *sb, int is_master)
 {
         struct obd_quotactl *oqctl;
@@ -238,7 +238,7 @@ local_quota:
                 CDEBUG(rc == -ENOENT ? D_QUOTA : D_ERROR, 
                        "auto-enable local quota failed. rc=%d\n", rc);
                 if (is_master)
-                        mds_quota_off(obd, oqctl);
+                         mds_quota_off(obd, oqctl);
         } else {
                 obd->u.obt.obt_qctxt.lqc_status = 1;
         }
@@ -248,6 +248,7 @@ out_pop:
         OBD_FREE_PTR(oqctl);
         RETURN(rc);
 }
+
 
 int lprocfs_wr_type(struct file *file, const char *buffer,
                     unsigned long count, void *data)
@@ -295,6 +296,7 @@ static int filter_quota_setup(struct obd_device *obd)
                 CERROR("initialize quota context failed! (rc:%d)\n", rc);
                 RETURN(rc);
         }
+
         RETURN(rc);
 }
 
@@ -373,16 +375,16 @@ static int filter_quota_getflag(struct obd_device *obd, struct obdo *oa)
                 oa->o_valid |= (cnt == USRQUOTA) ?
                                OBD_MD_FLUSRQUOTA : OBD_MD_FLGRPQUOTA;
                 if (oqctl->qc_dqblk.dqb_bhardlimit &&
-                   (toqb(oqctl->qc_dqblk.dqb_curspace) > 
+                   (toqb(oqctl->qc_dqblk.dqb_curspace) >
                     oqctl->qc_dqblk.dqb_bhardlimit))
-                        oa->o_flags |= (cnt == USRQUOTA) ? 
+                        oa->o_flags |= (cnt == USRQUOTA) ?
                                 OBD_FL_NO_USRQUOTA : OBD_FL_NO_GRPQUOTA;
         }
         OBD_FREE_PTR(oqctl);
         RETURN(rc);
 }
 
-static int filter_quota_acquire(struct obd_device *obd, unsigned int uid, 
+static int filter_quota_acquire(struct obd_device *obd, unsigned int uid,
                                 unsigned int gid)
 {
         struct lustre_quota_ctxt *qctxt = &obd->u.obt.obt_qctxt;
@@ -391,6 +393,17 @@ static int filter_quota_acquire(struct obd_device *obd, unsigned int uid,
 
         rc = qctxt_adjust_qunit(obd, qctxt, uid, gid, 1, 1);
         RETURN(rc == -EAGAIN);
+}
+
+static int mds_quota_init(void)
+{
+        return lustre_dquot_init();
+}
+
+static int mds_quota_exit(void)
+{
+        lustre_dquot_exit();
+        return 0;
 }
 
 /* check whether the left quota of certain uid and uid can satisfy a write rpc
@@ -425,17 +438,6 @@ static int filter_quota_check(struct obd_device *obd, unsigned int uid,
         RETURN(rc);
 }
 
-static int mds_quota_init(void)
-{
-        return lustre_dquot_init();
-}
-
-static int mds_quota_exit(void)
-{
-        lustre_dquot_exit();
-        return 0;
-}
-
 static int mds_quota_setup(struct obd_device *obd)
 {
         struct obd_device_target *obt = &obd->u.obt;
@@ -451,6 +453,7 @@ static int mds_quota_setup(struct obd_device *obd)
                 CERROR("initialize quota context failed! (rc:%d)\n", rc);
                 RETURN(rc);
         }
+
         RETURN(rc);
 }
 
@@ -505,7 +508,7 @@ static inline int hashfn(struct client_obd *cli, unsigned long id, int type)
 /* caller must hold qinfo_list_lock */
 static inline void insert_qinfo_hash(struct osc_quota_info *oqi)
 {
-        struct list_head *head = qinfo_hash + 
+        struct list_head *head = qinfo_hash +
                 hashfn(oqi->oqi_cli, oqi->oqi_id, oqi->oqi_type);
 
         LASSERT_SPIN_LOCKED(&qinfo_list_lock);
@@ -558,7 +561,7 @@ static void free_qinfo(struct osc_quota_info *oqi)
         OBD_SLAB_FREE(oqi, qinfo_cachep, sizeof(*oqi));
 }
 
-int osc_quota_chkdq(struct client_obd *cli, 
+int osc_quota_chkdq(struct client_obd *cli,
                     unsigned int uid, unsigned int gid)
 {
         unsigned int id;
@@ -581,7 +584,7 @@ int osc_quota_chkdq(struct client_obd *cli,
         RETURN(rc);
 }
 
-int osc_quota_setdq(struct client_obd *cli, 
+int osc_quota_setdq(struct client_obd *cli,
                     unsigned int uid, unsigned int gid,
                     obd_flag valid, obd_flag flags)
 {
@@ -594,12 +597,12 @@ int osc_quota_setdq(struct client_obd *cli,
         for (cnt = 0; cnt < MAXQUOTAS; cnt++) {
                 struct osc_quota_info *oqi, *old;
 
-                if (!(valid & ((cnt == USRQUOTA) ? 
+                if (!(valid & ((cnt == USRQUOTA) ?
                     OBD_MD_FLUSRQUOTA : OBD_MD_FLGRPQUOTA)))
                         continue;
 
                 id = (cnt == USRQUOTA) ? uid : gid;
-                noquota = (cnt == USRQUOTA) ? 
+                noquota = (cnt == USRQUOTA) ?
                     (flags & OBD_FL_NO_USRQUOTA) : (flags & OBD_FL_NO_GRPQUOTA);
 
                 oqi = alloc_qinfo(cli, id, cnt);

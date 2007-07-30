@@ -69,7 +69,6 @@ static int osc_wr_active(struct file *file, const char *buffer,
         return count;
 }
 
-
 static int osc_rd_max_pages_per_rpc(char *page, char **start, off_t off,
                                     int count, int *eof, void *data)
 {
@@ -88,7 +87,7 @@ static int osc_wr_max_pages_per_rpc(struct file *file, const char *buffer,
 {
         struct obd_device *dev = data;
         struct client_obd *cli = &dev->u.cli;
-        struct obd_connect_data *ocd;
+        struct obd_connect_data *ocd = &cli->cl_import->imp_connect_data;
         int val, rc;
 
         rc = lprocfs_write_helper(buffer, count, &val);
@@ -96,7 +95,6 @@ static int osc_wr_max_pages_per_rpc(struct file *file, const char *buffer,
                 return rc;
 
         LPROCFS_CLIMP_CHECK(dev);
-        ocd = &cli->cl_import->imp_connect_data;
         if (val < 1 || val > ocd->ocd_brw_size >> CFS_PAGE_SHIFT) {
                 LPROCFS_CLIMP_EXIT(dev);
                 return -ERANGE;
@@ -104,6 +102,7 @@ static int osc_wr_max_pages_per_rpc(struct file *file, const char *buffer,
         client_obd_list_lock(&cli->cl_loi_list_lock);
         cli->cl_max_pages_per_rpc = val;
         client_obd_list_unlock(&cli->cl_loi_list_lock);
+        
         LPROCFS_CLIMP_EXIT(dev);
         return count;
 }
@@ -126,24 +125,24 @@ static int osc_wr_max_rpcs_in_flight(struct file *file, const char *buffer,
 {
         struct obd_device *dev = data;
         struct client_obd *cli = &dev->u.cli;
-        struct ptlrpc_request_pool *pool;
+        struct ptlrpc_request_pool *pool = cli->cl_import->imp_rq_pool;
         int val, rc;
 
         rc = lprocfs_write_helper(buffer, count, &val);
         if (rc)
                 return rc;
+
         if (val < 1 || val > OSC_MAX_RIF_MAX)
                 return -ERANGE;
 
         LPROCFS_CLIMP_CHECK(dev);
-        pool = cli->cl_import->imp_rq_pool;
         if (pool && val > cli->cl_max_rpcs_in_flight)
                 pool->prp_populate(pool, val-cli->cl_max_rpcs_in_flight);
 
         client_obd_list_lock(&cli->cl_loi_list_lock);
         cli->cl_max_rpcs_in_flight = val;
         client_obd_list_unlock(&cli->cl_loi_list_lock);
-
+        
         LPROCFS_CLIMP_EXIT(dev);
         return count;
 }
@@ -176,7 +175,8 @@ static int osc_wr_max_dirty_mb(struct file *file, const char *buffer,
         if (rc)
                 return rc;
 
-        if (pages_number < 0 || pages_number > OSC_MAX_DIRTY_MB_MAX << (20 - CFS_PAGE_SHIFT) ||
+        if (pages_number < 0 ||
+            pages_number > OSC_MAX_DIRTY_MB_MAX << (20 - CFS_PAGE_SHIFT) ||
             pages_number > num_physpages / 4) /* 1/4 of RAM */
                 return -ERANGE;
 
@@ -329,6 +329,7 @@ static struct lprocfs_vars lprocfs_obd_vars[] = {
         { "prealloc_next_id", osc_rd_prealloc_next_id, 0, 0 },
         { "prealloc_last_id", osc_rd_prealloc_last_id, 0, 0 },
         { "checksums",       osc_rd_checksum, osc_wr_checksum, 0 },
+        { "sptlrpc",         sptlrpc_lprocfs_rd, 0, 0 },
         { 0 }
 };
 

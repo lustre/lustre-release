@@ -18,6 +18,7 @@
  *   along with Lustre; if not, write to the Free Software
  *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
+
 #ifdef HAVE_KERNEL_CONFIG_H
 #include <linux/config.h>
 #endif
@@ -45,6 +46,7 @@
 
 #define DEBUG_SUBSYSTEM S_LLITE
 
+//#include <lustre_mdc.h>
 #include <lustre_lite.h>
 #include "llite_internal.h"
 #include <linux/lustre_compat25.h>
@@ -270,7 +272,7 @@ static void policy_from_vma(ldlm_policy_data_t *policy,
                             size_t count)
 {
         policy->l_extent.start = ((addr - vma->vm_start) & CFS_PAGE_MASK) +
-                                 ((__u64)vma->vm_pgoff << CFS_PAGE_SHIFT);
+                                 (vma->vm_pgoff << CFS_PAGE_SHIFT);
         policy->l_extent.end = (policy->l_extent.start + count - 1) |
                                ~CFS_PAGE_MASK;
 }
@@ -399,7 +401,7 @@ struct page *ll_nopage(struct vm_area_struct *vma, unsigned long address,
 
         lov_stripe_lock(lsm);
         inode_init_lvb(inode, &lvb);
-        obd_merge_lvb(ll_i2obdexp(inode), lsm, &lvb, 1);
+        obd_merge_lvb(ll_i2dtexp(inode), lsm, &lvb, 1);
         kms = lvb.lvb_size;
 
         pgoff = ((address - vma->vm_start) >> CFS_PAGE_SHIFT) + vma->vm_pgoff;
@@ -420,7 +422,7 @@ struct page *ll_nopage(struct vm_area_struct *vma, unsigned long address,
                  * will always be >= the kms value here.  b=11081 */
                 if (inode->i_size < kms) {
                         inode->i_size = kms;
-			 CDEBUG(D_INODE, "ino=%lu, updating i_size %llu\n",
+                        CDEBUG(D_INODE, "ino=%lu, updating i_size %llu\n",
                                inode->i_ino, inode->i_size);
                 }
                 lov_stripe_unlock(lsm);
@@ -432,8 +434,8 @@ struct page *ll_nopage(struct vm_area_struct *vma, unsigned long address,
          * bug 10919 */
         lov_stripe_lock(lsm);
         if (mode == LCK_PW)
-                obd_adjust_kms(ll_i2obdexp(inode), lsm,
-                               min_t(loff_t, policy.l_extent.end,inode->i_size),
+                obd_adjust_kms(ll_i2dtexp(inode), lsm,
+                               min_t(loff_t, policy.l_extent.end, inode->i_size),
                                0);
         lov_stripe_unlock(lsm);
 
@@ -484,7 +486,7 @@ static void ll_vm_open(struct vm_area_struct * vma)
 
                 if (!lsm)
                         return;
-                count = obd_join_lru(sbi->ll_osc_exp, lsm, 0);
+                count = obd_join_lru(sbi->ll_dt_exp, lsm, 0);
                 VMA_DEBUG(vma, "split %d unused locks from lru\n", count);
         } else {
                 spin_unlock(&lli->lli_lock);
@@ -513,7 +515,7 @@ static void ll_vm_close(struct vm_area_struct *vma)
 
                 if (!lsm)
                         return;
-                count = obd_join_lru(sbi->ll_osc_exp, lsm, 1);
+                count = obd_join_lru(sbi->ll_dt_exp, lsm, 1);
                 VMA_DEBUG(vma, "join %d unused locks to lru\n", count);
         } else {
                 spin_unlock(&lli->lli_lock);
@@ -628,7 +630,7 @@ int ll_file_mmap(struct file * file, struct vm_area_struct * vma)
         int rc;
         ENTRY;
 
-        ll_vfs_ops_tally(ll_i2sbi(file->f_dentry->d_inode), VFS_OPS_MMAP);
+        ll_stats_ops_tally(ll_i2sbi(file->f_dentry->d_inode), LPROC_LL_MAP, 1);
         rc = generic_file_mmap(file, vma);
         if (rc == 0) {
 #if !defined(HAVE_FILEMAP_POPULATE) && \

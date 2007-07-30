@@ -36,8 +36,9 @@
 static int lprocfs_filter_rd_groups(char *page, char **start, off_t off,
                                     int count, int *eof, void *data)
 {
+        struct obd_device *obd = (struct obd_device *)data;
         *eof = 1;
-        return snprintf(page, count, "%u\n", FILTER_GROUPS);
+        return snprintf(page, count, "%u\n", obd->u.filter.fo_group_count);
 }
 
 static int lprocfs_filter_rd_tot_dirty(char *page, char **start, off_t off,
@@ -86,12 +87,23 @@ static int lprocfs_filter_rd_last_id(char *page, char **start, off_t off,
                                      int count, int *eof, void *data)
 {
         struct obd_device *obd = data;
+        struct filter_obd *filter = &obd->u.filter;
+        int retval = 0, rc, i;
 
         if (obd == NULL)
                 return 0;
 
-        return snprintf(page, count, LPU64"\n",
-                        filter_last_id(&obd->u.filter, 0));
+        for (i = FILTER_GROUP_MDS0; i < filter->fo_group_count; i++) {
+                rc = snprintf(page, count, LPU64"\n",filter_last_id(filter, i));
+                if (rc < 0) {
+                        retval = rc;
+                        break;
+                }
+                page += rc;
+                count -= rc;
+                retval += rc;
+        }
+        return retval;
 }
 
 int lprocfs_filter_rd_readcache(char *page, char **start, off_t off, int count,
@@ -119,6 +131,7 @@ int lprocfs_filter_wr_readcache(struct file *file, const char *buffer,
         obd->u.filter.fo_readcache_max_filesize = val;
         return count;
 }
+
 
 int lprocfs_filter_rd_fmd_max_num(char *page, char **start, off_t off,
                                   int count, int *eof, void *data)
@@ -176,6 +189,83 @@ int lprocfs_filter_wr_fmd_max_age(struct file *file, const char *buffer,
         return count;
 }
 
+static int lprocfs_filter_rd_capa(char *page, char **start, off_t off,
+                                  int count, int *eof, void *data)
+{
+        struct obd_device *obd = data;
+        int rc;
+
+        rc = snprintf(page, count, "capability on: %s\n",
+                      obd->u.filter.fo_fl_oss_capa ? "oss" : "");
+        return rc;
+}
+
+static int lprocfs_filter_wr_capa(struct file *file, const char *buffer,
+                                  unsigned long count, void *data)
+{
+        struct obd_device *obd = data;
+        int val, rc;
+
+        rc = lprocfs_write_helper(buffer, count, &val);
+        if (rc)
+                return rc;
+
+        if (val & ~0x1) {
+                CERROR("invalid capability mode, only 0/1 are accepted.\n"
+                       " 1: enable oss fid capability\n"
+                       " 0: disable oss fid capability\n");
+                return -EINVAL;
+        }
+
+        obd->u.filter.fo_fl_oss_capa = val;
+        LCONSOLE_INFO("OSS %s %s fid capability.\n", obd->obd_name,
+                      val ? "enabled" : "disabled");
+        return count;
+}
+
+static int lprocfs_filter_rd_capa_count(char *page, char **start, off_t off,
+                                        int count, int *eof, void *data)
+{
+        return snprintf(page, count, "%d %d\n",
+                        capa_count[CAPA_SITE_CLIENT],
+                        capa_count[CAPA_SITE_SERVER]);
+}
+
+static
+int lprocfs_filter_rd_blacklist(char *page, char **start, off_t off, int count,
+                                int *eof, void *data)
+{
+        int rc;
+
+        rc = blacklist_display(page, count);
+        *eof = 1;
+        return rc;
+}
+
+static
+int lprocfs_filter_wr_blacklist(struct file *file, const char *buffer,
+                                unsigned long count, void *data)
+{
+        int add;
+        uid_t uid = -1;
+
+        if (count < 2)
+                return count;
+        if (buffer[0] == '+')
+                add = 1;
+        else if (buffer[0] == '-')
+                add = 0;
+        else
+                return count;
+
+        sscanf(buffer + 1, "%u", &uid);
+        if (add)
+                blacklist_add(uid);
+        else
+                blacklist_del(uid);
+        return count;
+}
+
 static struct lprocfs_vars lprocfs_obd_vars[] = {
         { "uuid",         lprocfs_rd_uuid,          0, 0 },
         { "blocksize",    lprocfs_rd_blksize,       0, 0 },
@@ -208,6 +298,11 @@ static struct lprocfs_vars lprocfs_obd_vars[] = {
                           lprocfs_filter_wr_fmd_max_num, 0 },
         { "client_cache_seconds", lprocfs_filter_rd_fmd_max_age,
                           lprocfs_filter_wr_fmd_max_age, 0 },
+        { "capa",         lprocfs_filter_rd_capa,
+                          lprocfs_filter_wr_capa, 0 },
+        { "capa_count",   lprocfs_filter_rd_capa_count, 0, 0 },
+        { "blacklist",    lprocfs_filter_rd_blacklist,
+                          lprocfs_filter_wr_blacklist, 0 },
         { 0 }
 };
 
@@ -216,8 +311,8 @@ static struct lprocfs_vars lprocfs_module_vars[] = {
         { 0 }
 };
 
-void filter_tally_write(struct obd_export *exp, struct page **pages,
-                        int nr_pages, unsigned long *blocks,int blocks_per_page)
+void filter_tally(struct obd_export *exp, struct page **pages, int nr_pages,
+                  unsigned long *blocks, int blocks_per_page, int wr)
 {
         struct filter_obd *filter = &exp->exp_obd->u.filter;
         struct filter_export_data *fed = &exp->exp_filter_data;
@@ -230,9 +325,9 @@ void filter_tally_write(struct obd_export *exp, struct page **pages,
         if (nr_pages == 0)
                 return;
 
-        lprocfs_oh_tally_log2(&filter->fo_filter_stats.hist[BRW_W_PAGES],
+        lprocfs_oh_tally_log2(&filter->fo_filter_stats.hist[BRW_R_PAGES + wr],
                               nr_pages);
-        lprocfs_oh_tally_log2(&fed->fed_brw_stats.hist[BRW_W_PAGES],
+        lprocfs_oh_tally_log2(&fed->fed_brw_stats.hist[BRW_R_PAGES + wr],
                               nr_pages);
 
         while (nr_pages-- > 0) {
@@ -247,79 +342,51 @@ void filter_tally_write(struct obd_export *exp, struct page **pages,
                 }
         }
 
-        lprocfs_oh_tally(&filter->fo_filter_stats.hist[BRW_W_DISCONT_PAGES],
+        lprocfs_oh_tally(&filter->fo_filter_stats.hist[BRW_R_DISCONT_PAGES +wr],
                          discont_pages);
-        lprocfs_oh_tally(&filter->fo_filter_stats.hist[BRW_W_DISCONT_BLOCKS],
+        lprocfs_oh_tally(&fed->fed_brw_stats.hist[BRW_R_DISCONT_PAGES + wr],
+                         discont_pages);
+        lprocfs_oh_tally(&filter->fo_filter_stats.hist[BRW_R_DISCONT_BLOCKS+wr],
                          discont_blocks);
-
-        lprocfs_oh_tally(&fed->fed_brw_stats.hist[BRW_W_DISCONT_PAGES],
-                         discont_pages);
-        lprocfs_oh_tally(&fed->fed_brw_stats.hist[BRW_W_DISCONT_BLOCKS],
-                         discont_blocks);
-}
-
-void filter_tally_read(struct obd_export *exp, struct page **pages,
-                       int nr_pages, unsigned long *blocks, int blocks_per_page)
-{
-        struct filter_obd *filter = &exp->exp_obd->u.filter;
-        struct page *last_page = NULL;
-        unsigned long *last_block = NULL;
-        unsigned long discont_pages = 0;
-        unsigned long discont_blocks = 0;
-        int i;
-
-        if (nr_pages == 0)
-                return;
-
-        lprocfs_oh_tally_log2(&filter->fo_filter_stats.hist[BRW_R_PAGES], nr_pages);
-
-        while (nr_pages-- > 0) {
-                if (last_page && (*pages)->index != (last_page->index + 1))
-                        discont_pages++;
-                last_page = *pages;
-                pages++;
-                for (i = 0; i < blocks_per_page; i++) {
-                        if (last_block && *blocks != (*last_block + 1))
-                                discont_blocks++;
-                        last_block = blocks++;
-                }
-        }
-
-        lprocfs_oh_tally_log2(&filter->fo_filter_stats.hist[BRW_R_PAGES], nr_pages);
-        lprocfs_oh_tally(&filter->fo_filter_stats.hist[BRW_R_DISCONT_PAGES], discont_pages);
-        lprocfs_oh_tally(&filter->fo_filter_stats.hist[BRW_R_DISCONT_BLOCKS], discont_blocks);
-
-        lprocfs_oh_tally_log2(&exp->exp_filter_data.fed_brw_stats.hist[BRW_R_PAGES],
-                              nr_pages);
-        lprocfs_oh_tally(&exp->exp_filter_data.fed_brw_stats.hist[BRW_R_DISCONT_PAGES],
-                         discont_pages);
-        lprocfs_oh_tally(&exp->exp_filter_data.fed_brw_stats.hist[BRW_R_DISCONT_BLOCKS],
+        lprocfs_oh_tally(&fed->fed_brw_stats.hist[BRW_R_DISCONT_BLOCKS + wr],
                          discont_blocks);
 }
 
 #define pct(a,b) (b ? a * 100 / b : 0)
 
-static void display_brw_stats(struct seq_file *seq, struct obd_histogram *read,
-                              struct obd_histogram *write)
+static void display_brw_stats(struct seq_file *seq, char *name, char *units,
+        struct obd_histogram *read, struct obd_histogram *write, int log2)
 {
-        unsigned long read_tot = 0, write_tot = 0, read_cum, write_cum;
+        unsigned long read_tot, write_tot, r, w, read_cum = 0, write_cum = 0;
         int i;
+
+        seq_printf(seq, "\n%26s read      |     write\n", " ");
+        seq_printf(seq, "%-22s %-5s %% cum %% |  %-5s %% cum %%\n", 
+                   name, units, units);
 
         read_tot = lprocfs_oh_sum(read);
         write_tot = lprocfs_oh_sum(write);
-
-        read_cum = 0;
-        write_cum = 0;
         for (i = 0; i < OBD_HIST_MAX; i++) {
-                unsigned long r = read->oh_buckets[i];
-                unsigned long w = write->oh_buckets[i];
+                r = read->oh_buckets[i];
+                w = write->oh_buckets[i];
                 read_cum += r;
                 write_cum += w;
-                seq_printf(seq, "%u:\t\t%10lu %3lu %3lu   | %10lu %3lu %3lu\n",
-                                 1 << i, r, pct(r, read_tot),
-                                 pct(read_cum, read_tot), w,
-                                 pct(w, write_tot),
-                                 pct(write_cum, write_tot));
+                if (read_cum == 0 && write_cum == 0)
+                        continue;
+
+                if (!log2) 
+                        seq_printf(seq, "%u", i);
+                else if (i < 10)
+                        seq_printf(seq, "%u", 1<<i);
+                else if (i < 20)
+                        seq_printf(seq, "%uK", 1<<(i-10));
+                else
+                        seq_printf(seq, "%uM", 1<<(i-20));
+
+                seq_printf(seq, ":\t\t%10lu %3lu %3lu   | %4lu %3lu %3lu\n",
+                           r, pct(r, read_tot), pct(read_cum, read_tot), 
+                           w, pct(w, write_tot), pct(write_cum, write_tot));
+
                 if (read_cum == read_tot && write_cum == write_tot)
                         break;
         }
@@ -328,91 +395,44 @@ static void display_brw_stats(struct seq_file *seq, struct obd_histogram *read,
 static void brw_stats_show(struct seq_file *seq, struct brw_stats *brw_stats)
 {
         struct timeval now;
-#if (LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))
-        unsigned long read_tot = 0, write_tot = 0, read_cum, write_cum;
-        int i;
-#endif
-
-        do_gettimeofday(&now);
 
         /* this sampling races with updates */
-
+        do_gettimeofday(&now);
         seq_printf(seq, "snapshot_time:         %lu.%lu (secs.usecs)\n",
                    now.tv_sec, now.tv_usec);
 
-        seq_printf(seq, "\n\t\t\tread\t\t\twrite\n");
-        seq_printf(seq, "pages per brw         brws   %% cum %% |");
-        seq_printf(seq, "       rpcs   %% cum %%\n");
+        display_brw_stats(seq, "pages per bulk r/w", "rpcs",
+                          &brw_stats->hist[BRW_R_PAGES],
+                          &brw_stats->hist[BRW_W_PAGES], 1);
 
-        display_brw_stats(seq, &brw_stats->hist[BRW_R_PAGES], &brw_stats->hist[BRW_W_PAGES]);
+        display_brw_stats(seq, "discontiguous pages", "rpcs",
+                          &brw_stats->hist[BRW_R_DISCONT_PAGES],
+                          &brw_stats->hist[BRW_W_DISCONT_PAGES], 0);
 
-        seq_printf(seq, "\n\t\t\tread\t\t\twrite\n");
-        seq_printf(seq, "discont pages         rpcs   %% cum %% |");
-        seq_printf(seq, "       rpcs   %% cum %%\n");
+        display_brw_stats(seq, "discontiguous blocks", "rpcs",
+                          &brw_stats->hist[BRW_R_DISCONT_BLOCKS],
+                          &brw_stats->hist[BRW_W_DISCONT_BLOCKS], 0);
 
-        display_brw_stats(seq, &brw_stats->hist[BRW_R_DISCONT_PAGES],
-                          &brw_stats->hist[BRW_W_DISCONT_PAGES]);
-
-        seq_printf(seq, "\n\t\t\tread\t\t\twrite\n");
-        seq_printf(seq, "discont blocks        rpcs   %% cum %% |");
-        seq_printf(seq, "       rpcs   %% cum %%\n");
-
-        display_brw_stats(seq, &brw_stats->hist[BRW_R_DISCONT_BLOCKS],
-                          &brw_stats->hist[BRW_W_DISCONT_BLOCKS]);
-
-        seq_printf(seq, "\n\t\t\tread\t\t\twrite\n");
-        seq_printf(seq, "dio frags             rpcs   %% cum %% |");
-        seq_printf(seq, "       rpcs   %% cum %%\n");
-
-        display_brw_stats(seq, &brw_stats->hist[BRW_R_DIO_FRAGS],
-                          &brw_stats->hist[BRW_W_DIO_FRAGS]);
+        display_brw_stats(seq, "disk fragmented I/Os", "ios",
+                          &brw_stats->hist[BRW_R_DIO_FRAGS],
+                          &brw_stats->hist[BRW_W_DIO_FRAGS], 0);
 
 #if (LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))
-        seq_printf(seq, "\n\t\t\tread\t\t\twrite\n");
-        seq_printf(seq, "disk ios in flight     ios   %% cum %% |");
-        seq_printf(seq, "       rpcs   %% cum %%\n");
+        display_brw_stats(seq, "disk I/Os in flight", "ios",
+                          &brw_stats->hist[BRW_R_RPC_HIST],
+                          &brw_stats->hist[BRW_W_RPC_HIST], 0);
 
-        display_brw_stats(seq, &brw_stats->hist[BRW_R_RPC_HIST],
-                          &brw_stats->hist[BRW_W_RPC_HIST]);
-
-        seq_printf(seq, "\n\t\t\tread\t\t\twrite\n");
-        seq_printf(seq, "io time (1/%ds)     rpcs   %% cum %% |", HZ);
-        seq_printf(seq, "       rpcs   %% cum %%\n");
-
-        display_brw_stats(seq, &brw_stats->hist[BRW_R_IO_TIME],
-                          &brw_stats->hist[BRW_W_IO_TIME]);
-
-        seq_printf(seq, "\n\t\t\tread\t\t\twrite\n");
-        seq_printf(seq, "disk I/O size         count  %% cum %% |");
-        seq_printf(seq, "       count  %% cum %%\n");
-
-        read_tot = lprocfs_oh_sum(&brw_stats->hist[BRW_R_DISK_IOSIZE]);
-        write_tot = lprocfs_oh_sum(&brw_stats->hist[BRW_W_DISK_IOSIZE]);
-
-        read_cum = 0;
-        write_cum = 0;
-        for (i = 0; i < OBD_HIST_MAX; i++) {
-                unsigned long r = brw_stats->hist[BRW_R_DISK_IOSIZE].oh_buckets[i];
-                unsigned long w = brw_stats->hist[BRW_W_DISK_IOSIZE].oh_buckets[i];
-
-                read_cum += r;
-                write_cum += w;
-                if (read_cum == 0 && write_cum == 0)
-                        continue;
-
-                if (i < 10)
-                        seq_printf(seq, "%u", 1<<i);
-                else if (i < 20)
-                        seq_printf(seq, "%uK", 1<<(i-10));
-                else
-                        seq_printf(seq, "%uM", 1<<(i-20));
-
-                seq_printf(seq, ":\t\t%10lu %3lu %3lu   | %10lu %3lu %3lu\n",
-                           r, pct(r, read_tot), pct(read_cum, read_tot),
-                           w, pct(w, write_tot), pct(write_cum, write_tot));
-                if (read_cum == read_tot && write_cum == write_tot)
-                        break;
+        {
+                char title[24];
+                sprintf(title, "I/O time (1/%ds)", HZ);
+                display_brw_stats(seq, title, "ios",
+                                  &brw_stats->hist[BRW_R_IO_TIME],
+                                  &brw_stats->hist[BRW_W_IO_TIME], 1);
         }
+
+        display_brw_stats(seq, "disk I/O size", "ios",
+                          &brw_stats->hist[BRW_R_DISK_IOSIZE],
+                          &brw_stats->hist[BRW_W_DISK_IOSIZE], 1);
 #endif
 }
 

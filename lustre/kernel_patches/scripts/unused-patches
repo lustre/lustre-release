@@ -1,0 +1,39 @@
+#!/bin/sh
+
+#
+# List unused patches
+#
+
+. patchfns >/dev/null || . /usr/lib/patch-scripts/patchfns >/dev/null || { \
+	echo "Impossible to find my library 'patchfns'."
+	echo "Check your install, or go to the right directory"
+	exit 1
+}
+
+usage()
+{
+	echo "Usage: unused-patches"
+	exit 1
+}
+
+if [ $# -ne 0 ] 
+then
+	usage
+fi
+
+for FILE in $(ls $P/patches)
+do
+        BASE=`stripit $FILE`
+#       echo checking $BASE in $P/patches
+	if  grep $FILE $P/series/*  >&  /dev/null ; then 
+                true
+#                echo $FILE found in $P/series
+        else 
+            if [ $BASE != CVS ]; then
+                echo patches/$FILE
+                echo txt/$BASE.txt
+                echo pc/$BASE.pc
+            fi
+	fi
+done
+

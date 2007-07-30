@@ -1,0 +1,256 @@
+DB=applied-patches
+
+#
+# Work out where the user's pc/, patch/ and txt/ directories live.
+#
+# If the user specified PATCHSCRIPTS in environment then use that (it's
+# probably a relative path)
+#
+# If there is a directory ./patch-scripts then use that
+#
+# Otherwise use "."
+#
+
+if [ x$PATCHSCRIPTS_LIBDIR != x ]
+then
+	P=$PATCHSCRIPTS_LIBDIR
+elif [ -d ./patch-scripts ]
+then
+	P=./patch-scripts
+elif [ -d ./patches ]
+then
+	P=.
+else
+	echo "could not locate your pc/ and patches/ directories"
+	exit 1
+fi
+
+top_patch()
+{
+	tail -1 $DB
+}
+
+die()
+{
+	echo error: $*
+	exit 1
+}
+
+is_numeric()
+{
+	if echo $1 | egrep '^[0-9]*$' > /dev/null
+	then
+		return 0
+	fi
+	return 1
+}
+
+is_applied_last()
+{
+	name="$(stripit $1)"
+	top_patch >$DB.1
+	if grep "^$name$" "$DB.1" > /dev/null 2>&1
+	then
+		rm $DB.1
+		return 0
+	else
+		rm $DB.1
+		return 1
+	fi
+}
+
+is_applied()
+{
+	name=$(stripit "$1")
+	if grep "^$name$" "$DB" > /dev/null 2>&1
+	then
+		return 0
+	else
+		return 1
+	fi
+}
+check_pc_match()
+{
+	if [ -f /usr/bin/lsdiff ]; then
+		tmpfile=$(mktemp /tmp/p_XXXXXX) || exit 1
+		lsdiff --strip=1 $1 > $tmpfile 
+		diff $2 $tmpfile > /dev/null
+		if [ $? != 0 ]; then
+			echo " $1 do not match with $2 "
+			echo " $2 will be changed to match $2"
+			# cat $tmpfile > $P/pc/$PATCH_NAME.pc
+		fi
+		rm -rf $tmpfile
+	fi
+} 
+can_apply()
+{
+	if patch -p1 --dry-run -i "$1" -f
+	then
+		return 0
+	else
+		return 1
+	fi
+}
+
+can_remove()
+{
+	if patch -R -p1 --dry-run -i $P/patches/"$1".patch -f
+	then
+		return 0
+	else
+		return 1
+	fi
+}
+
+remove_from_db()
+{
+	tmpfile=$(mktemp /tmp/p_XXXXXX)
+	name="$1"
+	sed -e "/^$name$/d" < "$DB" > $tmpfile
+	mv $tmpfile "$DB"
+}
+
+stripit()
+{
+	ret=$(basename $1)
+	ret=$(echo $ret | sed -e 's/\.patch$//')
+	ret=$(echo $ret | sed -e 's/\.pc$//')
+	ret=$(echo $ret | sed -e 's/\.txt$//')
+	echo $ret
+}
+
+top_is_current()
+{
+	patch_name=$(top_patch)
+	if [ x$patch_name == x ]
+	then
+		return 1
+	else
+		patch_file=$P/patches/"$patch_name".patch
+		files=$(cat $P/pc/$patch_name.pc)
+		for file in $files
+		do
+			if [ $file -nt $patch_file ]
+			then
+				echo $file newer than $patch_file
+				return 0
+			fi
+		done
+	fi
+	return 1
+}
+
+need_top_current()
+{
+	if top_is_current
+	then
+		echo "Error: Top patch is not up-to-date"
+		exit 1
+	fi
+}
+
+warn_top_current()
+{
+	if top_is_current
+	then
+		echo "Warning: Top patch is not up-to-date"
+	fi
+}
+
+file_in_patch()
+{
+	file=$1
+	patch=$2
+
+	if [ -e $P/pc/$patch.pc ]
+	then
+		if grep "^"$file"$" $P/pc/$patch.pc > /dev/null
+		then
+			return 0
+		fi
+	fi
+	return 1
+}
+
+# copy_file_to_bup filename patchname
+copy_file_to_bup()
+{
+	file=$1
+	patch=$2
+	bup="$file"~"$patch"
+	orig="$file"~"orig"
+	src_dir=`pwd`
+
+	if [ -e $bup ]
+	then
+		echo "Cannot install file $file in patch $patch: backup $bup exists"
+		exit 1
+	fi
+	if [ -e $file ]
+	then
+		cp -p $file "$file"~"$patch"
+	else
+		echo "file $file appears to be newly added"
+	fi
+	if [ ! -L "$orig" ]; then
+		ln -s "$src_dir/$bup" $orig
+	fi	
+}
+
+install_file_in_patch()
+{
+	file=$1
+	patch=$2
+
+	copy_file_to_bup $file $patch
+	echo $file >> $P/pc/$patch.pc
+#	touch $P/txt/$patch.txt
+}
+
+need_file_there()
+{
+	if [ ! -e $1 ]
+	then
+		echo "File $1 does not exist"
+		exit 1
+	fi
+}
+
+desc()
+{
+	state=0
+	while read x
+	do
+		if [ x"$x" = xDESC ]
+		then
+			state=1
+		elif [ x"$x" = xEDESC ]
+		then
+			state=0
+		elif [ $state = 1 ]
+		then
+			echo "  $x"
+		fi
+	done
+}
+
+body()
+{
+	file=$1
+
+	did_stuff=0
+	while read x
+	do
+		if [ x"$x" = xEDESC ]
+		then
+			cat
+			did_stuff=1
+		fi
+	done < $file
+
+	if [ $did_stuff = 0 ]
+	then
+		cat $file
+	fi
+}

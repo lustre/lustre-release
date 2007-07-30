@@ -20,6 +20,10 @@ if MPITESTS
 noinst_PROGRAMS += test_lock_cancel
 endif # MPITESTS
 
+liblustre_testdir=$(libdir)/lustre/liblustre/tests
+liblustre_test_PROGRAMS = $(noinst_PROGRAMS)
+liblustre_test_LIBRARIES = $(noinst_LIBRARIES)
+
 endif # LIBLUSTRE_TESTS
 endif # LIBLUSTRE
 

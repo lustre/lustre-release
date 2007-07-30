@@ -35,6 +35,7 @@
 #include <obd_support.h>
 #include <obd_class.h>
 #include <lustre_net.h>
+#include <lustre_req_layout.h>
 
 #include "ptlrpc_internal.h"
 
@@ -58,38 +59,53 @@ __init int ptlrpc_init(void)
         init_mutex(&pinger_sem);
         init_mutex(&ptlrpcd_sem);
 
-        rc = ptlrpc_init_portals();
+        rc = req_layout_init();
         if (rc)
                 RETURN(rc);
         cleanup_phase = 1;
+
+        rc = ptlrpc_init_portals();
+        if (rc)
+                RETURN(rc);
+        cleanup_phase = 2;
 
         ptlrpc_init_connection();
         rc = llog_init_commit_master();
         if (rc)
                 GOTO(cleanup, rc);
-        cleanup_phase = 2;
+        cleanup_phase = 3;
 
         ptlrpc_put_connection_superhack = ptlrpc_put_connection;
 
         rc = ptlrpc_start_pinger();
         if (rc)
                 GOTO(cleanup, rc);
-        cleanup_phase = 3;
+        cleanup_phase = 4;
 
         rc = ldlm_init();
         if (rc)
                 GOTO(cleanup, rc);
+        cleanup_phase = 5;
+
+        rc = sptlrpc_init();
+        if (rc)
+                GOTO(cleanup, rc);
+
         RETURN(0);
 
 cleanup:
         switch(cleanup_phase) {
-        case 3:
+        case 5:
+                ldlm_exit();
+        case 4:
                 ptlrpc_stop_pinger();
-        case 2:
+        case 3:
                 llog_cleanup_commit_master(1);
                 ptlrpc_cleanup_connection();
-        case 1:
+        case 2:
                 ptlrpc_exit_portals();
+        case 1:
+                req_layout_fini();
         default: ;
         }
 
@@ -99,6 +115,7 @@ cleanup:
 #ifdef __KERNEL__
 static void __exit ptlrpc_exit(void)
 {
+        sptlrpc_fini();
         ldlm_exit();
         ptlrpc_stop_pinger();
         ptlrpc_exit_portals();
@@ -179,12 +196,13 @@ EXPORT_SYMBOL(lustre_msg_swabbed);
 EXPORT_SYMBOL(lustre_msg_check_version);
 EXPORT_SYMBOL(lustre_pack_request);
 EXPORT_SYMBOL(lustre_pack_reply);
-EXPORT_SYMBOL(lustre_shrink_reply);
+EXPORT_SYMBOL(lustre_shrink_msg);
 EXPORT_SYMBOL(lustre_free_reply_state);
 EXPORT_SYMBOL(lustre_msg_size);
 EXPORT_SYMBOL(lustre_unpack_msg);
 EXPORT_SYMBOL(lustre_msg_buf);
 EXPORT_SYMBOL(lustre_msg_string);
+EXPORT_SYMBOL(lustre_swab_ptlrpc_body);
 EXPORT_SYMBOL(lustre_swab_buf);
 EXPORT_SYMBOL(lustre_swab_reqbuf);
 EXPORT_SYMBOL(lustre_swab_repbuf);
@@ -197,15 +215,26 @@ EXPORT_SYMBOL(lustre_swab_ost_last_id);
 EXPORT_SYMBOL(lustre_swab_ost_lvb);
 EXPORT_SYMBOL(lustre_swab_mds_status_req);
 EXPORT_SYMBOL(lustre_swab_mds_body);
+EXPORT_SYMBOL(lustre_swab_mdt_body);
+EXPORT_SYMBOL(lustre_swab_mdt_epoch);
 EXPORT_SYMBOL(lustre_swab_obd_quotactl);
+EXPORT_SYMBOL(lustre_swab_mds_remote_perm);
+EXPORT_SYMBOL(lustre_swab_mdt_remote_perm);
 EXPORT_SYMBOL(lustre_swab_mds_rec_setattr);
+EXPORT_SYMBOL(lustre_swab_mdt_rec_setattr);
 EXPORT_SYMBOL(lustre_swab_mds_rec_create);
+EXPORT_SYMBOL(lustre_swab_mdt_rec_create);
 EXPORT_SYMBOL(lustre_swab_mds_rec_join);
+EXPORT_SYMBOL(lustre_swab_mdt_rec_join);
 EXPORT_SYMBOL(lustre_swab_mds_rec_link);
+EXPORT_SYMBOL(lustre_swab_mdt_rec_link);
 EXPORT_SYMBOL(lustre_swab_mds_rec_unlink);
+EXPORT_SYMBOL(lustre_swab_mdt_rec_unlink);
 EXPORT_SYMBOL(lustre_swab_mds_rec_rename);
+EXPORT_SYMBOL(lustre_swab_mdt_rec_rename);
 EXPORT_SYMBOL(lustre_swab_lov_desc);
 EXPORT_SYMBOL(lustre_swab_lov_user_md);
+EXPORT_SYMBOL(lustre_swab_lov_mds_md);
 EXPORT_SYMBOL(lustre_swab_lov_user_md_objects);
 EXPORT_SYMBOL(lustre_swab_lov_user_md_join);
 EXPORT_SYMBOL(lustre_swab_ldlm_res_id);
@@ -244,6 +273,10 @@ EXPORT_SYMBOL(lustre_msg_set_transno);
 EXPORT_SYMBOL(lustre_msg_set_status);
 EXPORT_SYMBOL(lustre_msg_set_conn_cnt);
 EXPORT_SYMBOL(lustre_swab_mgs_target_info);
+EXPORT_SYMBOL(lustre_swab_md_fld);
+EXPORT_SYMBOL(lustre_swab_generic_32s);
+EXPORT_SYMBOL(lustre_swab_lustre_capa);
+EXPORT_SYMBOL(lustre_swab_lustre_capa_key);
 
 /* recover.c */
 EXPORT_SYMBOL(ptlrpc_disconnect_import);

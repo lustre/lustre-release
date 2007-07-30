@@ -1,5 +1,4 @@
-@LDISKFS_TRUE@subdir-m += ldiskfs ldiskfs2
-
+subdir-m += fid
 subdir-m += lvfs
 subdir-m += obdclass
 subdir-m += lov
@@ -8,8 +7,8 @@ subdir-m += osc
 subdir-m += obdecho
 subdir-m += mgc
 
-@SERVER_TRUE@subdir-m += mds obdfilter ost mgs
-@CLIENT_TRUE@subdir-m += mdc llite 
+@SERVER_TRUE@subdir-m += mds obdfilter ost mgs mdt cmm mdd osd
+@CLIENT_TRUE@subdir-m += mdc lmv llite fld
 @QUOTA_TRUE@subdir-m += quota
 
 @INCLUDE_RULES@

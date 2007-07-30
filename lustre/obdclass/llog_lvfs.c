@@ -89,6 +89,7 @@ static int llog_lvfs_write_blob(struct obd_device *obd, struct l_file *file,
         struct llog_rec_tail end;
         loff_t saved_off = file->f_pos;
         int buflen = rec->lrh_len;
+
         ENTRY;
 
         file->f_pos = off;
@@ -231,7 +232,7 @@ static int llog_lvfs_write_rec(struct llog_handle *loghandle,
         if (buf)
                 /* write_blob adds header and tail to lrh_len. */ 
                 reclen = sizeof(*rec) + rec->lrh_len + 
-                        sizeof(struct llog_rec_tail);
+                         sizeof(struct llog_rec_tail);
 
         if (idx != -1) {
                 loff_t saved_offset;
@@ -241,7 +242,7 @@ static int llog_lvfs_write_rec(struct llog_handle *loghandle,
                         CERROR("idx != -1 in empty log\n");
                         LBUG();
                 }
-                
+
                 if (idx && llh->llh_size && llh->llh_size != rec->lrh_len)
                         RETURN(-EINVAL);
 
@@ -421,7 +422,7 @@ static int llog_lvfs_next_block(struct llog_handle *loghandle, int *cur_idx,
                 /* put number of bytes read into rc to make code simpler */
                 rc = ppos - *cur_offset;
                 *cur_offset = ppos;
-                
+
                 if (rc < len) {
                         /* signal the end of the valid buffer to llog_process */
                         memset(buf + rc, 0, len - rc);
@@ -638,7 +639,7 @@ static int llog_lvfs_create(struct llog_ctxt *ctxt, struct llog_handle **res,
                 handle->lgh_id.lgl_ogen =
                         handle->lgh_file->f_dentry->d_inode->i_generation;
         } else {
-                oa = obdo_alloc();
+                OBDO_ALLOC(oa);
                 if (oa == NULL)
                         GOTO(cleanup, rc = -ENOMEM);
 
@@ -668,7 +669,7 @@ static int llog_lvfs_create(struct llog_ctxt *ctxt, struct llog_handle **res,
         handle->lgh_ctxt = ctxt;
  finish:
         if (oa)
-                obdo_free(oa);
+                OBDO_FREE(oa);
         RETURN(rc);
 cleanup:
         switch (cleanup_phase) {
@@ -727,7 +728,7 @@ static int llog_lvfs_destroy(struct llog_handle *handle)
                 RETURN(rc);
         }
 
-        oa = obdo_alloc();
+        OBDO_ALLOC(oa);
         if (oa == NULL)
                 RETURN(-ENOMEM);
 
@@ -742,7 +743,7 @@ static int llog_lvfs_destroy(struct llog_handle *handle)
 
         rc = obd_destroy(handle->lgh_ctxt->loc_exp, oa, NULL, NULL, NULL);
  out:
-        obdo_free(oa);
+        OBDO_FREE(oa);
         RETURN(rc);
 }
 
