@@ -176,7 +176,7 @@ Index: iam-src/fs/ext3/namei.c
  	if (!(EXT3_I(dir)->i_flags & EXT3_INDEX_FL)) {
  		hinfo.hash_version = EXT3_SB(dir->i_sb)->s_def_hash_version;
  		hinfo.seed = EXT3_SB(dir->i_sb)->s_hash_seed;
-@@ -611,13 +619,12 @@ int ext3_htree_fill_tree(struct file *di
+@@ -611,19 +619,18 @@ int ext3_htree_fill_tree(struct file *di
  	}
  	hinfo.hash = start_hash;
  	hinfo.minor_hash = 0;
@@ -191,8 +191,15 @@ Index: iam-src/fs/ext3/namei.c
 +		de = (struct ext3_dir_entry_2 *) path.dp_frames[0].bh->b_data;
  		if ((err = ext3_htree_store_dirent(dir_file, 0, 0, de)) != 0)
  			goto errout;
+ 		count++;
+ 	}
+ 	if (start_hash < 2 || (start_hash ==2 && start_minor_hash==0)) {
+-		de = (struct ext3_dir_entry_2 *) frames[0].bh->b_data;
++		de = (struct ext3_dir_entry_2 *) path.dp_frames[0].bh->b_data;
  		de = ext3_next_entry(de);
-@@ -627,7 +634,7 @@ int ext3_htree_fill_tree(struct file *di
+ 		if ((err = ext3_htree_store_dirent(dir_file, 2, 0, de)) != 0)
+ 			goto errout;
+@@ -637,7 +639,7 @@ int ext3_htree_fill_tree(struct file *di
  	}
  
  	while (1) {
@@ -201,7 +208,7 @@ Index: iam-src/fs/ext3/namei.c
  		ret = htree_dirblock_to_tree(dir_file, dir, block, &hinfo,
  					     start_hash, start_minor_hash);
  		if (ret < 0) {
-@@ -636,8 +643,7 @@ int ext3_htree_fill_tree(struct file *di
+@@ -641,8 +648,7 @@ int ext3_htree_fill_tree(struct file *di
  		}
  		count += ret;
  		hashval = ~0;

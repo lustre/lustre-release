@@ -1307,7 +1307,7 @@ Index: linux-2.6.9/fs/ext3/namei.c
  	if (!(EXT3_I(dir)->i_flags & EXT3_INDEX_FL)) {
  		hinfo.hash_version = EXT3_SB(dir->i_sb)->s_def_hash_version;
  		hinfo.seed = EXT3_SB(dir->i_sb)->s_hash_seed;
-@@ -865,7 +1384,7 @@
+@@ -865,13 +1384,13 @@
  
  	/* Add '.' and '..' from the htree header */
  	if (!start_hash && !start_minor_hash) {
@@ -1315,7 +1315,14 @@ Index: linux-2.6.9/fs/ext3/namei.c
 +		de = (struct ext3_dir_entry_2 *) path->ip_frames[0].bh->b_data;
  		if ((err = ext3_htree_store_dirent(dir_file, 0, 0, de)) != 0)
  			goto errout;
+ 		count++;
+ 	}
+ 	if (start_hash < 2 || (start_hash ==2 && start_minor_hash==0)) {
+-		de = (struct ext3_dir_entry_2 *) path->dp_frames[0].bh->b_data;
++		de = (struct ext3_dir_entry_2 *) path->ip_frames[0].bh->b_data;
  		de = ext3_next_entry(de);
+ 		if ((err = ext3_htree_store_dirent(dir_file, 2, 0, de)) != 0)
+ 			goto errout;
 @@ -875,7 +1394,7 @@
  	}
  
