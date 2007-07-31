@@ -185,12 +185,12 @@ run_test() {
  	fi
         testname=EXCEPT_$1
         if [ ${!testname}x != x ]; then
-                 echo "skipping excluded test $1"
+                 TESTNAME=test_$1 skip "skipping excluded test $1"
                  return 0
         fi
         testname=EXCEPT_$base
         if [ ${!testname}x != x ]; then
-                 echo "skipping excluded test $1 (base $base)"
+                 TESTNAME=test_$1 skip "skipping excluded test $1 (base $base)"
                  return 0
         fi
         run_one $1 "$2"
@@ -212,6 +212,12 @@ error() {
 
 pass() { 
 	echo PASS $@
+}
+
+skip () {
+	log "$0: SKIP: $TESTNAME $@"
+	[ "$SANITYLOG" ] && echo "$0: SKIP: $TESTNAME $@" >> $SANITYLOG
+
 }
 
 mounted_lustre_filesystems() {
@@ -3227,6 +3233,7 @@ run_test 99a "cvs init ========================================="
 
 test_99b() {
 	[ ! -d $DIR/d99cvsroot ] && test_99a
+	$RUNAS [ ! -w /tmp ] && skip "/tmp has wrong w permission -- skipping" && return
 	cd /etc/init.d || error "cd /etc/init.d failed"
 	# some versions of cvs import exit(1) when asked to import links or
 	# files they can't read.  ignore those files.
@@ -4386,5 +4393,5 @@ fi
 
 
 echo '=========================== finished ==============================='
-[ -f "$SANITYLOG" ] && cat $SANITYLOG && exit 1 || true
+[ -f "$SANITYLOG" ] && cat $SANITYLOG && grep -q FAIL $SANITYLOG && exit 1 || true
 echo "$0: completed"
