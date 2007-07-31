@@ -731,8 +731,10 @@ out:
                 /* Deactivate it for safety */
                 CERROR("%s sync failed %d, deactivating\n", obd_uuid2str(uuid),
                        rc);
-                obd_notify(mds->mds_osc_obd, watched, OBD_NOTIFY_INACTIVE,
-                           NULL);
+                if (!obd->obd_stopping && mds->mds_osc_obd &&
+                    !mds->mds_osc_obd->obd_stopping && !watched->obd_stopping) 
+                        obd_notify(mds->mds_osc_obd, watched,
+                                   OBD_NOTIFY_INACTIVE, NULL);
         } else {
                 /* We've successfully synced at least 1 OST and are ready
                    to handle client requests */
