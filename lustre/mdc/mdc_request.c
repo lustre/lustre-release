@@ -1487,6 +1487,7 @@ static int mdc_setup(struct obd_device *obd, struct lustre_cfg *cfg)
                 GOTO(err_close_lock, rc);
         lprocfs_init_vars(mdc, &lvars);
         lprocfs_obd_setup(obd, lvars.obd_vars);
+        ptlrpc_lprocfs_register_obd(obd);
 
         rc = obd_llog_init(obd, NULL, obd, 0, NULL, NULL);
         if (rc) {

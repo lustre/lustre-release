@@ -180,6 +180,7 @@ static void check_obd_connect_data(void)
         CHECK_CDEFINE(OBD_CONNECT_OSS_CAPA);
         CHECK_CDEFINE(OBD_CONNECT_MDS_MDS);
         CHECK_CDEFINE(OBD_CONNECT_SOM);
+        CHECK_CDEFINE(OBD_CONNECT_CANCELSET);
 }
 
 static void
@@ -664,10 +665,9 @@ check_ldlm_request(void)
         BLANK_LINE();
         CHECK_STRUCT(ldlm_request);
         CHECK_MEMBER(ldlm_request, lock_flags);
-        CHECK_MEMBER(ldlm_request, lock_padding);
+        CHECK_MEMBER(ldlm_request, lock_count);
         CHECK_MEMBER(ldlm_request, lock_desc);
-        CHECK_MEMBER(ldlm_request, lock_handle1);
-        CHECK_MEMBER(ldlm_request, lock_handle2);
+        CHECK_MEMBER(ldlm_request, lock_handle);
 }
 
 static void
@@ -676,8 +676,8 @@ check_ldlm_reply(void)
         BLANK_LINE();
         CHECK_STRUCT(ldlm_reply);
         CHECK_MEMBER(ldlm_reply, lock_flags);
-        CHECK_MEMBER(ldlm_request, lock_padding);
-        CHECK_MEMBER(ldlm_request, lock_desc);
+        CHECK_MEMBER(ldlm_reply, lock_padding);
+        CHECK_MEMBER(ldlm_reply, lock_desc);
         CHECK_MEMBER(ldlm_reply, lock_handle);
         CHECK_MEMBER(ldlm_reply, lock_policy_res1);
         CHECK_MEMBER(ldlm_reply, lock_policy_res2);

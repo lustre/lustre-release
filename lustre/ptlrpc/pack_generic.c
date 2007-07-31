@@ -2173,10 +2173,9 @@ void lustre_swab_ldlm_lock_desc (struct ldlm_lock_desc *l)
 void lustre_swab_ldlm_request (struct ldlm_request *rq)
 {
         __swab32s (&rq->lock_flags);
-        CLASSERT(offsetof(typeof(*rq), lock_padding) != 0);
         lustre_swab_ldlm_lock_desc (&rq->lock_desc);
-        /* lock_handle1 opaque */
-        /* lock_handle2 opaque */
+        __swab32s (&rq->lock_count);
+        /* lock_handle[] opaque */
 }
 
 void lustre_swab_ldlm_reply (struct ldlm_reply *r)

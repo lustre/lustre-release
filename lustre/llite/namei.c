@@ -169,6 +169,17 @@ int ll_md_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock_desc *desc,
                 if (inode == NULL)
                         break;
 
+                LASSERT(lock->l_flags & LDLM_FL_CANCELING);
+                if ((bits & MDS_INODELOCK_LOOKUP) &&
+                    ll_have_md_lock(inode, MDS_INODELOCK_LOOKUP))
+                        bits &= ~MDS_INODELOCK_LOOKUP;
+                if ((bits & MDS_INODELOCK_UPDATE) &&
+                    ll_have_md_lock(inode, MDS_INODELOCK_UPDATE))
+                        bits &= ~MDS_INODELOCK_UPDATE;
+                if ((bits & MDS_INODELOCK_OPEN) &&
+                    ll_have_md_lock(inode, MDS_INODELOCK_OPEN))
+                        bits &= ~MDS_INODELOCK_OPEN;
+
                 fid = ll_inode2fid(inode);
                 if (lock->l_resource->lr_name.name[0] != fid_seq(fid) ||
                     lock->l_resource->lr_name.name[1] != fid_oid(fid) ||
@@ -469,7 +480,8 @@ static struct dentry *ll_lookup_it(struct inode *parent, struct dentry *dentry,
                 opc = LUSTRE_OPC_ANY;
 
         op_data = ll_prep_md_op_data(NULL, parent, NULL, dentry->d_name.name,
-                                     dentry->d_name.len, lookup_flags, opc);
+                                     dentry->d_name.len, lookup_flags, opc,
+                                     NULL);
         if (IS_ERR(op_data))
                 RETURN((void *)op_data);
 
@@ -757,7 +769,7 @@ static int ll_new_node(struct inode *dir, struct qstr *name,
                 tgt_len = strlen(tgt) + 1;
 
         op_data = ll_prep_md_op_data(NULL, dir, NULL, name->name,
-                                     name->len, 0, opc);
+                                     name->len, 0, opc, NULL);
         if (IS_ERR(op_data))
                 GOTO(err_exit, err = PTR_ERR(op_data));
 
@@ -896,7 +908,7 @@ static int ll_link_generic(struct inode *src,  struct inode *dir,
                dir->i_generation, dir, name->len, name->name);
 
         op_data = ll_prep_md_op_data(NULL, src, dir, name->name, name->len,
-                                     0, LUSTRE_OPC_ANY);
+                                     0, LUSTRE_OPC_ANY, NULL);
         if (IS_ERR(op_data))
                 RETURN(PTR_ERR(op_data));
 
@@ -930,6 +942,22 @@ static int ll_mkdir_generic(struct inode *dir, struct qstr *name,
         RETURN(err);
 }
 
+/* Try to find the child dentry by its name.
+   If found, put the result fid into @fid. */
+static void ll_get_child_fid(struct inode * dir, struct qstr *name,
+                             struct lu_fid *fid)
+{
+        struct dentry *parent, *child;
+        
+        parent = list_entry(dir->i_dentry.next, struct dentry, d_alias);
+        child = d_lookup(parent, name);
+        if (child) {
+                if (child->d_inode)
+                        *fid = *ll_inode2fid(child->d_inode);
+                dput(child);
+        }
+}
+
 static int ll_rmdir_generic(struct inode *dir, struct dentry *dparent,
                             struct dentry *dchild, struct qstr *name)
 {
@@ -945,10 +973,11 @@ static int ll_rmdir_generic(struct inode *dir, struct dentry *dparent,
                 RETURN(-EBUSY);
 
         op_data = ll_prep_md_op_data(NULL, dir, NULL, name->name, name->len,
-                                     S_IFDIR, LUSTRE_OPC_ANY);
+                                     S_IFDIR, LUSTRE_OPC_ANY, NULL);
         if (IS_ERR(op_data))
                 RETURN(PTR_ERR(op_data));
 
+        ll_get_child_fid(dir, name, &op_data->op_fid3);
         rc = md_unlink(ll_i2sbi(dir)->ll_md_exp, op_data, &request);
         ll_finish_md_op_data(op_data);
         if (rc == 0)
@@ -1051,10 +1080,11 @@ static int ll_unlink_generic(struct inode *dir, struct dentry *dparent,
                 RETURN(-EBUSY);
 
         op_data = ll_prep_md_op_data(NULL, dir, NULL, name->name,
-                                     name->len, 0, LUSTRE_OPC_ANY);
+                                     name->len, 0, LUSTRE_OPC_ANY, NULL);
         if (IS_ERR(op_data))
                 RETURN(PTR_ERR(op_data));
 
+        ll_get_child_fid(dir, name, &op_data->op_fid3);
         rc = md_unlink(ll_i2sbi(dir)->ll_md_exp, op_data, &request);
         ll_finish_md_op_data(op_data);
 
@@ -1089,10 +1119,12 @@ static int ll_rename_generic(struct inode *src, struct dentry *src_dparent,
                 RETURN(-EBUSY);
 
         op_data = ll_prep_md_op_data(NULL, src, tgt, NULL, 0, 0,
-                                     LUSTRE_OPC_ANY);
+                                     LUSTRE_OPC_ANY, NULL);
         if (IS_ERR(op_data))
                 RETURN(PTR_ERR(op_data));
 
+        ll_get_child_fid(src, src_name, &op_data->op_fid3);
+        ll_get_child_fid(tgt, tgt_name, &op_data->op_fid4);
         err = md_rename(sbi->ll_md_exp, op_data,
                         src_name->name, src_name->len,
                         tgt_name->name, tgt_name->len, &request);

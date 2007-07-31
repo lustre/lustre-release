@@ -966,6 +966,8 @@ struct lu_context;
 struct md_op_data {
         struct lu_fid           op_fid1; /* operation fid1 (usualy parent) */
         struct lu_fid           op_fid2; /* operation fid2 (usualy child) */
+        struct lu_fid           op_fid3; /* 2 extra fids to find conflicting */
+        struct lu_fid           op_fid4; /* to the operation locks. */
         mdsno_t                 op_mds;  /* what mds server open will go to */
         struct lustre_handle    op_handle;
         __u64                   op_mod_time;
@@ -978,6 +980,7 @@ struct md_op_data {
         __u32                   op_fsuid;
         __u32                   op_fsgid;
         __u32                   op_cap;
+        void                   *op_data;
 
         /* iattr fields and blocks. */
         struct iattr            op_attr;
@@ -1300,7 +1303,8 @@ struct md_ops {
                             struct lustre_handle *);
 
         int (*m_cancel_unused)(struct obd_export *, const struct lu_fid *,
-                               int flags, void *opaque);
+                               ldlm_policy_data_t *, ldlm_mode_t, int flags,
+                               void *opaque);
         int (*m_renew_capa)(struct obd_export *, struct obd_capa *oc,
                             renew_capa_cb_t cb);
 

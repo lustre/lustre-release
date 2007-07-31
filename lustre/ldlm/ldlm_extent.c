@@ -347,12 +347,10 @@ destroylock:
 
 /* If first_enq is 0 (ie, called from ldlm_reprocess_queue):
   *   - blocking ASTs have already been sent
-  *   - the caller has already initialized req->lr_tmp
   *   - must call this function with the ns lock held
   *
   * If first_enq is 1 (ie, called from ldlm_lock_enqueue):
   *   - blocking ASTs have not been sent
-  *   - the caller has NOT initialized req->lr_tmp, so we must
   *   - must call this function with the ns lock held once */
 int ldlm_process_extent_lock(struct ldlm_lock *lock, int *flags, int first_enq,
                              ldlm_error_t *err, struct list_head *work_list)

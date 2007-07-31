@@ -28,6 +28,7 @@ struct obd_device;
 #define OBD_LDLM_DEVICENAME  "ldlm"
 
 #define LDLM_DEFAULT_LRU_SIZE (100 * smp_num_cpus)
+#define LDLM_DEFAULT_MAX_ALIVE (cfs_time_seconds(36000))
 
 typedef enum {
         ELDLM_OK = 0,
@@ -131,6 +132,8 @@ typedef enum {
 #define LDLM_FL_LOCK_PROTECT   0x8000000
 #define LDLM_FL_LOCK_PROTECT_BIT  27
 
+/* Cancel lock asynchronously. See ldlm_cli_cancel_unused_resource. */
+#define LDLM_FL_ASYNC           0x20000000
 
 /* The blocking callback is overloaded to perform two functions.  These flags
  * indicate which operation should be performed. */
@@ -149,7 +152,7 @@ typedef enum {
 #define LCK_COMPAT_PR  (LCK_COMPAT_PW | LCK_PR)
 #define LCK_COMPAT_CW  (LCK_COMPAT_PW | LCK_CW)
 #define LCK_COMPAT_CR  (LCK_COMPAT_CW | LCK_PR | LCK_PW)
-#define LCK_COMPAT_NL  (LCK_COMPAT_CR | LCK_EX)
+#define LCK_COMPAT_NL  (LCK_COMPAT_CR | LCK_EX | LCK_GROUP)
 #define LCK_COMPAT_GROUP  (LCK_GROUP | LCK_NL)
 
 extern ldlm_mode_t lck_compat_array[];
@@ -226,6 +229,7 @@ struct ldlm_namespace {
         spinlock_t             ns_unused_lock;
 
         unsigned int           ns_max_unused;
+        unsigned int           ns_max_age;
         cfs_time_t             ns_next_dump;   /* next debug dump, jiffies */
 
         atomic_t               ns_locks;
@@ -261,13 +265,6 @@ struct ldlm_lock {
 
         /* ldlm_lock_change_resource() can change this */
         struct ldlm_resource *l_resource;
-
-        /* set once, no need to protect it */
-        struct ldlm_lock     *l_parent;
-
-        /* protected by ns_hash_lock */
-        struct list_head      l_children;
-        struct list_head      l_childof;
 
         /* protected by ns_hash_lock. FIXME */
         struct list_head      l_lru;
@@ -327,8 +324,6 @@ struct ldlm_lock {
         __u32                 l_pid;            /* pid which created this lock */
         __u32                 l_pidb;           /* who holds LOCK_PROTECT_BIT */
 
-        struct list_head      l_tmp;
-
         /* for ldlm_add_ast_work_item() */
         struct list_head      l_bl_ast;
         struct list_head      l_cp_ast;
@@ -360,10 +355,6 @@ struct ldlm_resource {
         struct semaphore       lr_lvb_sem;
         __u32                  lr_lvb_len;
         void                  *lr_lvb_data;
-
-        /* lr_tmp holds a list head temporarily, during the building of a work
-         * queue.  see ldlm_add_ast_work_item and ldlm_run_ast_work */
-        void                  *lr_tmp;
 };
 
 struct ldlm_ast_work {
@@ -463,6 +454,8 @@ int ldlm_handle_enqueue(struct ptlrpc_request *req, ldlm_completion_callback,
                         ldlm_blocking_callback, ldlm_glimpse_callback);
 int ldlm_handle_convert(struct ptlrpc_request *req);
 int ldlm_handle_cancel(struct ptlrpc_request *req);
+int ldlm_request_cancel(struct ptlrpc_request *req,
+                        const struct ldlm_request *dlm_req, int first);
 int ldlm_del_waiting_lock(struct ldlm_lock *lock);
 int ldlm_refresh_waiting_lock(struct ldlm_lock *lock);
 void ldlm_revoke_export_locks(struct obd_export *exp);
@@ -497,6 +490,18 @@ do {                                            \
         ldlm_lock_get(lock);                    \
         /*LDLM_DEBUG((lock), "get");*/          \
         lock;                                   \
+})
+
+#define ldlm_lock_list_put(head, member, count)                 \
+({                                                              \
+        struct ldlm_lock *_lock, *_next;                        \
+        int c = count;                                          \
+        list_for_each_entry_safe(_lock, _next, head, member) {  \
+                list_del_init(&_lock->member);                  \
+                LDLM_LOCK_PUT(_lock);                           \
+                if (--c == 0)                                   \
+                        break;                                  \
+        }                                                       \
 })
 
 struct ldlm_lock *ldlm_lock_get(struct ldlm_lock *lock);
@@ -570,6 +575,9 @@ int ldlm_cli_enqueue(struct obd_export *exp, struct ptlrpc_request **reqp,
                      ldlm_glimpse_callback glimpse,
                      void *data, void *lvb, __u32 lvb_len, void *lvb_swabber,
                      struct lustre_handle *lockh, int async);
+struct ptlrpc_request *ldlm_prep_enqueue_req(struct obd_export *exp,
+                                             int bufcount, int *size,
+                                             struct list_head *head, int count);
 int ldlm_handle_enqueue0(struct ldlm_namespace *ns, struct ptlrpc_request *req,
                          const struct ldlm_request *dlm_req,
                          const struct ldlm_callback_suite *cbs);
@@ -595,9 +603,22 @@ int ldlm_handle_convert0(struct ptlrpc_request *req,
 int ldlm_cli_cancel(struct lustre_handle *lockh);
 int ldlm_cli_cancel_unused(struct ldlm_namespace *, const struct ldlm_res_id *,
                            int flags, void *opaque);
+int ldlm_cli_cancel_unused_resource(struct ldlm_namespace *ns,
+                                    const struct ldlm_res_id *res_id,
+                                    ldlm_policy_data_t *policy,
+                                    int mode, int flags, void *opaque);
+int ldlm_cli_cancel_req(struct obd_export *exp, struct list_head *head,
+                        int count, int flags);
 int ldlm_cli_join_lru(struct ldlm_namespace *,
                       const struct ldlm_res_id *, int join);
-
+int ldlm_cancel_resource_local(struct ldlm_resource *res,
+                               struct list_head *cancels,
+                               ldlm_policy_data_t *policy,
+                               ldlm_mode_t mode, int lock_flags,
+                               int flags, void *opaque);
+int ldlm_cli_cancel_list(struct list_head *head, int count,
+                         struct ptlrpc_request *req, int off, int flags);
+ 
 /* mds/handler.c */
 /* This has to be here because recursive inclusion sucks. */
 int intent_disposition(struct ldlm_reply *rep, int flag);

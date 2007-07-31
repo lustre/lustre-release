@@ -137,7 +137,8 @@ static const struct req_msg_field *mds_reint_create_rmt_acl_client[] = {
         &RMF_REC_CREATE,
         &RMF_CAPA1,
         &RMF_NAME,
-        &RMF_EADATA
+        &RMF_EADATA,
+        &RMF_DLM_REQ
 };
 
 static const struct req_msg_field *mds_reint_create_sym_client[] = {
@@ -145,7 +146,8 @@ static const struct req_msg_field *mds_reint_create_sym_client[] = {
         &RMF_REC_CREATE,
         &RMF_CAPA1,
         &RMF_NAME,
-        &RMF_SYMTGT
+        &RMF_SYMTGT,
+        &RMF_DLM_REQ
 };
 
 static const struct req_msg_field *mds_reint_create_slave_client[] = {
@@ -178,7 +180,8 @@ static const struct req_msg_field *mds_reint_unlink_client[] = {
         &RMF_PTLRPC_BODY,
         &RMF_REC_UNLINK,
         &RMF_CAPA1,
-        &RMF_NAME
+        &RMF_NAME,
+        &RMF_DLM_REQ
 };
 
 static const struct req_msg_field *mds_reint_link_client[] = {
@@ -186,7 +189,8 @@ static const struct req_msg_field *mds_reint_link_client[] = {
         &RMF_REC_LINK,
         &RMF_CAPA1,
         &RMF_CAPA2,
-        &RMF_NAME
+        &RMF_NAME,
+        &RMF_DLM_REQ
 };
 
 static const struct req_msg_field *mds_reint_rename_client[] = {
@@ -195,7 +199,8 @@ static const struct req_msg_field *mds_reint_rename_client[] = {
         &RMF_CAPA1,
         &RMF_CAPA2,
         &RMF_NAME,
-        &RMF_SYMTGT
+        &RMF_SYMTGT,
+        &RMF_DLM_REQ
 };
 
 static const struct req_msg_field *mds_last_unlink_server[] = {
@@ -211,7 +216,8 @@ static const struct req_msg_field *mds_reint_setattr_client[] = {
         &RMF_CAPA1,
         &RMF_MDT_EPOCH,
         &RMF_EADATA,
-        &RMF_LOGCOOKIES
+        &RMF_LOGCOOKIES,
+        &RMF_DLM_REQ
 };
 
 static const struct req_msg_field *mds_connect_client[] = {
@@ -925,6 +931,7 @@ static void *__req_capsule_get(struct req_capsule *pill,
                           field->rmf_name, offset, lustre_msg_bufcount(msg), fmt->rf_name,
                           lustre_msg_buflen(msg, offset), field->rmf_size,
                           rcl_names[loc]);
+
         return value;
 }
 

@@ -381,6 +381,52 @@ test_4a() {
 ## this test is very time-consuming, don't run it by default
 #run_test 4a " FIDS/ nlink overflow test  ============================="
 
+test_5a() {
+        mount_client $MOUNT2
+        # create a cross-ref file
+        mkdir -p $MOUNT/$tdir/d1
+        mkdir -p $MOUNT2/$tdir/d2
+        dd if=/dev/zero of=$MOUNT/$tdir/d1/f1 count=1
+        mv $MOUNT2/$tdir/d1/f1 $MOUNT2/$tdir/d2/
+        # XXX: a check the file is a cross-ref one is needed.
+	cancel_lru_locks mdc
+	cancel_lru_locks osc
+        dd if=$MOUNT2/$tdir/d2/f1 of=/dev/null
+        stat $MOUNT2/$tdir/d2 $MOUNT2/$tdir/d2/f1 > /dev/null
+        can1=`awk '/ldlm_cancel/ {print $2}' /proc/fs/lustre/ldlm/services/ldlm_canceld/stats`
+        blk1=`awk '/ldlm_bl_callback/ {print $2}' /proc/fs/lustre/ldlm/services/ldlm_cbd/stats`
+        unlink $MOUNT2/$tdir/d2/f1
+        can2=`awk '/ldlm_cancel/ {print $2}' /proc/fs/lustre/ldlm/services/ldlm_canceld/stats`
+        blk2=`awk '/ldlm_bl_callback/ {print $2}' /proc/fs/lustre/ldlm/services/ldlm_cbd/stats`
+        umount $MOUNT2
+        [ $can1 -eq $can2 ] && error "It does not look like a cross-ref file."
+        [ $[$can1+1] -eq $can2 ] || error $[$[$can2-$can1]] "cancel RPC occured."
+        [ $blk1 -eq $blk2 ] || error $[$[$blk2-$blk1]] "blocking RPC occured."
+}
+run_test 5a "Early Lock Cancel: cross-ref unlink"
+
+test_5b() {
+        mount_client $MOUNT2
+        # create a cross-ref file
+        mkdir -p $MOUNT/$tdir/d1
+        mkdir -p $MOUNT2/$tdir/d2
+        dd if=/dev/zero of=$MOUNT/$tdir/d1/f1 count=1
+	cancel_lru_locks mdc
+	cancel_lru_locks osc
+        dd if=$MOUNT2/$tdir/d1/f1 of=/dev/null
+        stat $MOUNT2/$tdir/d1/f1 $MOUNT2/$tdir/d2 > /dev/null
+        can1=`awk '/ldlm_cancel/ {print $2}' /proc/fs/lustre/ldlm/services/ldlm_canceld/stats`
+        blk1=`awk '/ldlm_bl_callback/ {print $2}' /proc/fs/lustre/ldlm/services/ldlm_cbd/stats`
+        ln $MOUNT2/$tdir/d1/f1 $MOUNT2/$tdir/d2/f2
+        can2=`awk '/ldlm_cancel/ {print $2}' /proc/fs/lustre/ldlm/services/ldlm_canceld/stats`
+        blk2=`awk '/ldlm_bl_callback/ {print $2}' /proc/fs/lustre/ldlm/services/ldlm_cbd/stats`
+        umount $MOUNT2
+        [ $can1 -eq $can2 ] && error "It does not look like a cross-ref file."
+        [ $[$can1+1] -eq $can2 ] || error $[$[$can2-$can1]] "cancel RPC occured."
+        [ $blk1 -eq $blk2 ] || error $[$[$blk2-$blk1]] "blocking RPC occured."
+}
+run_test 5b "Early Lock Cancel: cross-ref link"
+
 TMPDIR=$OLDTMPDIR
 TMP=$OLDTMP
 HOME=$OLDHOME

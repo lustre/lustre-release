@@ -475,8 +475,6 @@ struct inode *ll_iget(struct super_block *sb, ino_t hash,
 struct dentry *ll_find_alias(struct inode *, struct dentry *);
 int ll_md_blocking_ast(struct ldlm_lock *, struct ldlm_lock_desc *,
                        void *data, int flag);
-int ll_md_cancel_unused(struct lustre_handle *, struct inode *, int flags,
-                        void *opaque);
 #ifndef LUSTRE_KERNEL_VERSION
 struct lookup_intent *ll_convert_intent(struct open_intent *oit,
                                         int lookup_flags);
@@ -613,7 +611,7 @@ int ll_ioctl_setfacl(struct inode *inode, struct rmtacl_ioctl_data *ioc);
 struct md_op_data *ll_prep_md_op_data(struct md_op_data *op_data,
                                       struct inode *i1, struct inode *i2,
                                       const char *name, int namelen,
-                                      int mode, __u32 opc);
+                                      int mode, __u32 opc, void *data);
 void ll_finish_md_op_data(struct md_op_data *op_data);
 
 /* llite/llite_nfs.c */

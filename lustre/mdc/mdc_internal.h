@@ -116,7 +116,9 @@ int mdc_enqueue(struct obd_export *exp,
                 ldlm_completion_callback cb_completion,
                 ldlm_blocking_callback cb_blocking,
                 void *cb_data, int extra_lock_flags);
-
+int mdc_resource_get_unused(struct obd_export *exp, struct lu_fid *fid,
+                            struct list_head *cancels, ldlm_mode_t mode,
+                            __u64 bits);
 /* mdc/mdc_request.c */
 int mdc_fid_alloc(struct obd_export *exp, struct lu_fid *fid,
                   struct md_op_data *op_data);
@@ -158,6 +160,7 @@ int mdc_setattr(struct obd_export *exp, struct md_op_data *op_data,
 int mdc_unlink(struct obd_export *exp, struct md_op_data *op_data,
                struct ptlrpc_request **request);
 int mdc_cancel_unused(struct obd_export *exp, const struct lu_fid *fid,
+                      ldlm_policy_data_t *policy, ldlm_mode_t mode,
                       int flags, void *opaque);
 int mdc_lock_match(struct obd_export *exp, int flags,
                    const struct lu_fid *fid, ldlm_type_t type,

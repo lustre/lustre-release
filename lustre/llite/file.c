@@ -336,7 +336,7 @@ static int ll_intent_file_open(struct file *file, void *lmm,
 
         op_data  = ll_prep_md_op_data(NULL, parent->d_inode,
                                       file->f_dentry->d_inode, name, len,
-                                      O_RDWR, LUSTRE_OPC_ANY);
+                                      O_RDWR, LUSTRE_OPC_ANY, NULL);
         if (IS_ERR(op_data))
                 RETURN(PTR_ERR(op_data));
 
@@ -2022,8 +2022,6 @@ static int join_file(struct inode *head_inode, struct file *head_filp,
                                    .it_flags = head_filp->f_flags|O_JOIN_FILE};
         struct lustre_handle lockh;
         struct md_op_data *op_data;
-        __u32  hsize = head_inode->i_size >> 32;
-        __u32  tsize = head_inode->i_size;
         int    rc;
         ENTRY;
 
@@ -2034,13 +2032,13 @@ static int join_file(struct inode *head_inode, struct file *head_filp,
         op_data = ll_prep_md_op_data(NULL, head_inode, tail_parent,
                                      tail_dentry->d_name.name,
                                      tail_dentry->d_name.len, 0,
-                                     LUSTRE_OPC_ANY);
+                                     LUSTRE_OPC_ANY, &head_inode->i_size);
         if (IS_ERR(op_data))
                 RETURN(PTR_ERR(op_data));
 
         rc = md_enqueue(ll_i2mdexp(head_inode), LDLM_IBITS, &oit, LCK_CW,
-                        op_data, &lockh, &tsize, 0, ldlm_completion_ast,
-                        ll_md_blocking_ast, &hsize, 0);
+                        op_data, &lockh, NULL, 0, ldlm_completion_ast,
+                        ll_md_blocking_ast, NULL, 0);
 
         ll_finish_md_op_data(op_data);
         if (rc < 0)
@@ -2590,7 +2588,7 @@ int ll_inode_revalidate_it(struct dentry *dentry, struct lookup_intent *it)
                 /* Call getattr by fid, so do not provide name at all. */
                 op_data = ll_prep_md_op_data(NULL, dentry->d_parent->d_inode,
                                              dentry->d_inode, NULL, 0, 0,
-                                             LUSTRE_OPC_ANY);
+                                             LUSTRE_OPC_ANY, NULL);
                 if (IS_ERR(op_data))
                         RETURN(PTR_ERR(op_data));
 

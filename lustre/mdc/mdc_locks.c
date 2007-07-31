@@ -167,7 +167,8 @@ int mdc_lock_match(struct obd_export *exp, int flags,
 
 int mdc_cancel_unused(struct obd_export *exp,
                       const struct lu_fid *fid,
-                      int flags, void *opaque)
+                      ldlm_policy_data_t *policy,
+                      ldlm_mode_t mode, int flags, void *opaque)
 {
         struct ldlm_res_id res_id =
                 { .name = {fid_seq(fid),
@@ -178,8 +179,8 @@ int mdc_cancel_unused(struct obd_export *exp,
 
         ENTRY;
 
-        rc = ldlm_cli_cancel_unused(obd->obd_namespace, &res_id,
-                                    flags, opaque);
+        rc = ldlm_cli_cancel_unused_resource(obd->obd_namespace, &res_id,
+                                             policy, mode, flags, opaque);
         RETURN(rc);
 }
 
@@ -269,7 +270,8 @@ int mdc_enqueue(struct obd_export *exp,
         struct ldlm_reply *lockrep;
         int size[9] = { [MSG_PTLRPC_BODY_OFF] = sizeof(struct ptlrpc_body),
                         [DLM_LOCKREQ_OFF]     = sizeof(*lockreq),
-                        [DLM_INTENT_IT_OFF]   = sizeof(*lit) };
+                        [DLM_INTENT_IT_OFF]   = sizeof(*lit),
+                        0, 0, 0, 0, 0, 0 };
         int repsize[7] = { [MSG_PTLRPC_BODY_OFF] = sizeof(struct ptlrpc_body),
                            [DLM_LOCKREPLY_OFF]   = sizeof(*lockrep),
                            [DLM_REPLY_REC_OFF]   = sizeof(struct mdt_body),
@@ -285,6 +287,9 @@ int mdc_enqueue(struct obd_export *exp,
 
         if (it->it_op & IT_OPEN) {
                 int do_join = !!(it->it_flags & O_JOIN_FILE);
+                CFS_LIST_HEAD(cancels);
+                int count = 0;
+                int mode;
 
                 it->it_create_mode = (it->it_create_mode & ~S_IFMT) | S_IFREG;
 
@@ -301,27 +306,46 @@ int mdc_enqueue(struct obd_export *exp,
                  */
                 size[DLM_INTENT_REC_OFF + 4] = max(lmmsize,
                                            obddev->u.cli.cl_default_mds_easize);
+
+                /* XXX: openlock is not cancelled for cross-refs. */
+                /* If inode is known, cancel conflicting OPEN locks. */
+                if (fid_is_sane(&op_data->op_fid2)) {
+                        if (it->it_flags & (FMODE_WRITE|MDS_OPEN_TRUNC))
+                                mode = LCK_CW;
+#ifdef FMODE_EXEC
+                        else if (it->it_flags & FMODE_EXEC)
+                                mode = LCK_PR;
+#endif
+                        else 
+                                mode = LCK_CR;
+                        count = mdc_resource_get_unused(exp, &op_data->op_fid2,
+                                                        &cancels, mode,
+                                                        MDS_INODELOCK_OPEN);
+                }
+
+                /* If CREATE or JOIN_FILE, cancel parent's UPDATE lock. */
+                if (it->it_op & IT_CREAT || it->it_flags & O_JOIN_FILE)
+                        mode = LCK_EX;
+                else
+                        mode = LCK_CR;
+                count += mdc_resource_get_unused(exp, &op_data->op_fid1,
+                                                 &cancels, mode,
+                                                 MDS_INODELOCK_UPDATE);
+
                 if (do_join)
                         size[DLM_INTENT_REC_OFF + 5] =
                                                 sizeof(struct mdt_rec_join);
 
-                req = ptlrpc_prep_req(class_exp2cliimp(exp), LUSTRE_DLM_VERSION,
-                                      LDLM_ENQUEUE, 8 + do_join, size, NULL);
+                req = ldlm_prep_enqueue_req(exp, 8 + do_join, size, &cancels,
+                                            count);
                 if (!req)
                         RETURN(-ENOMEM);
 
                 if (do_join) {
-                        __u64 head_size = *(__u32*)cb_data;
-                        __u32 tsize = *(__u32*)lmm;
-
                         /* join is like an unlink of the tail */
                         policy.l_inodebits.bits = MDS_INODELOCK_UPDATE;
-                        /* when joining file, cb_data and lmm args together
-                         * indicate the head file size*/
                         mdc_join_pack(req, DLM_INTENT_REC_OFF + 5, op_data,
-                                      (head_size << 32) | tsize);
-                        cb_data = NULL;
-                        lmm = NULL;
+                                      (*(__u64 *)op_data->op_data));
                 }
 
                 spin_lock(&req->rq_lock);
@@ -350,8 +374,7 @@ int mdc_enqueue(struct obd_export *exp,
                                                sizeof(struct lustre_capa) : 0;
                 size[DLM_INTENT_REC_OFF + 2] = op_data->op_namelen + 1;
                 policy.l_inodebits.bits = MDS_INODELOCK_UPDATE;
-                req = ptlrpc_prep_req(class_exp2cliimp(exp), LUSTRE_DLM_VERSION,
-                                      LDLM_ENQUEUE, 6, size, NULL);
+                req = ldlm_prep_enqueue_req(exp, 6, size, NULL, 0);
                 if (!req)
                         RETURN(-ENOMEM);
 
@@ -378,8 +401,7 @@ int mdc_enqueue(struct obd_export *exp,
                 if (it->it_op & IT_GETATTR)
                         policy.l_inodebits.bits = MDS_INODELOCK_UPDATE;
 
-                req = ptlrpc_prep_req(class_exp2cliimp(exp), LUSTRE_DLM_VERSION,
-                                      LDLM_ENQUEUE, 6, size, NULL);
+                req = ldlm_prep_enqueue_req(exp, 6, size, NULL, 0);
                 if (!req)
                         RETURN(-ENOMEM);
 
@@ -398,8 +420,7 @@ int mdc_enqueue(struct obd_export *exp,
                 repsize[repbufcnt++] = sizeof(struct lustre_capa);
         } else if (it->it_op == IT_READDIR) {
                 policy.l_inodebits.bits = MDS_INODELOCK_UPDATE;
-                req = ptlrpc_prep_req(class_exp2cliimp(exp), LUSTRE_DLM_VERSION,
-                                      LDLM_ENQUEUE, 2, size, NULL);
+                req = ldlm_prep_enqueue_req(exp, 2, size, NULL, 0);
                 if (!req)
                         RETURN(-ENOMEM);
 

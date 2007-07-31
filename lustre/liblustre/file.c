@@ -97,6 +97,7 @@ void llu_prep_md_op_data(struct md_op_data *op_data, struct inode *i1,
         op_data->op_mode = mode;
         op_data->op_namelen = namelen;
         op_data->op_mod_time = CURRENT_TIME;
+        op_data->op_data = NULL;
 }
 
 void llu_finish_md_op_data(struct md_op_data *op_data)

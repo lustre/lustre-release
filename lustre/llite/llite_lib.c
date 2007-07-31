@@ -192,7 +192,8 @@ static int client_common_fill_super(struct super_block *sb, char *md, char *dt,
         data->ocd_connect_flags = OBD_CONNECT_IBITS | OBD_CONNECT_NODEVOH |
                                   OBD_CONNECT_JOIN |
                                   OBD_CONNECT_ATTRFID | OBD_CONNECT_VERSION |
-                                  OBD_CONNECT_MDS_CAPA | OBD_CONNECT_OSS_CAPA;
+                                  OBD_CONNECT_MDS_CAPA | OBD_CONNECT_OSS_CAPA |
+                                  OBD_CONNECT_CANCELSET;
 #ifdef CONFIG_FS_POSIX_ACL
         data->ocd_connect_flags |= OBD_CONNECT_ACL;
 #endif
@@ -351,7 +352,8 @@ static int client_common_fill_super(struct super_block *sb, char *md, char *dt,
         }
 
         data->ocd_connect_flags = OBD_CONNECT_GRANT | OBD_CONNECT_VERSION |
-                                  OBD_CONNECT_REQPORTAL | OBD_CONNECT_BRW_SIZE;
+                                  OBD_CONNECT_REQPORTAL | OBD_CONNECT_BRW_SIZE |
+                                  OBD_CONNECT_CANCELSET;
         if (sbi->ll_flags & LL_SBI_OSS_CAPA)
                 data->ocd_connect_flags |= OBD_CONNECT_OSS_CAPA;
 
@@ -1115,7 +1117,7 @@ int ll_md_setattr(struct inode *inode, struct md_op_data *op_data)
         ENTRY;
         
         op_data = ll_prep_md_op_data(op_data, inode, NULL, NULL, 0, 0, 
-                                     LUSTRE_OPC_ANY);
+                                     LUSTRE_OPC_ANY, NULL);
         if (IS_ERR(op_data))
                 RETURN(PTR_ERR(op_data));
 
@@ -1809,7 +1811,7 @@ int ll_iocontrol(struct inode *inode, struct file *file,
                         RETURN(-ENOMEM);
 
                 op_data = ll_prep_md_op_data(NULL, inode, NULL, NULL, 0, 0,
-                                             LUSTRE_OPC_ANY);
+                                             LUSTRE_OPC_ANY, NULL);
                 if (IS_ERR(op_data))
                         RETURN(PTR_ERR(op_data));
 
@@ -2129,7 +2131,7 @@ int ll_process_config(struct lustre_cfg *lcfg)
 struct md_op_data * ll_prep_md_op_data(struct md_op_data *op_data,
                                        struct inode *i1, struct inode *i2,
                                        const char *name, int namelen,
-                                       int mode, __u32 opc)
+                                       int mode, __u32 opc, void *data)
 {
         LASSERT(i1 != NULL);
 
@@ -2163,6 +2165,7 @@ struct md_op_data * ll_prep_md_op_data(struct md_op_data *op_data,
         op_data->op_bias = MDS_CHECK_SPLIT;
         op_data->op_opc = opc;
         op_data->op_mds = 0;
+        op_data->op_data = data;
 
         return op_data;
 }

@@ -1921,7 +1921,8 @@ static inline int md_set_lock_data(struct obd_export *exp,
 
 static inline int md_cancel_unused(struct obd_export *exp,
                                    const struct lu_fid *fid,
-                                   int flags, void *opaque)
+                                   ldlm_policy_data_t *policy,
+                                   ldlm_mode_t mode, int flags, void *opaque)
 {
         int rc;
         ENTRY;
@@ -1929,7 +1930,8 @@ static inline int md_cancel_unused(struct obd_export *exp,
         EXP_CHECK_MD_OP(exp, cancel_unused);
         EXP_MD_COUNTER_INCREMENT(exp, cancel_unused);
 
-        rc = MDP(exp->exp_obd, cancel_unused)(exp, fid, flags, opaque);
+        rc = MDP(exp->exp_obd, cancel_unused)(exp, fid, policy, mode,
+                                              flags, opaque);
         RETURN(rc);
 }
 

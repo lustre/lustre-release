@@ -2620,7 +2620,7 @@ static void mdt_intent_fixup_resent(struct mdt_thread_info *info,
                 return;
 
         dlmreq = req_capsule_client_get(&info->mti_pill, &RMF_DLM_REQ);
-        remote_hdl = dlmreq->lock_handle1;
+        remote_hdl = dlmreq->lock_handle[0];
 
         spin_lock(&exp->exp_ldlm_data.led_lock);
         list_for_each(iter, &exp->exp_ldlm_data.led_held_locks) {

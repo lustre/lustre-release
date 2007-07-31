@@ -522,6 +522,7 @@ extern void lustre_swab_ptlrpc_body(struct ptlrpc_body *pb);
 #define OBD_CONNECT_OSS_CAPA   0x00200000ULL /* OSS capability */
 #define OBD_CONNECT_MDS_MDS    0x00400000ULL /* MDS-MDS connection*/
 #define OBD_CONNECT_SOM        0x00800000ULL /* SOM feature */
+#define OBD_CONNECT_CANCELSET  0x01000000ULL /* Early batched cancels. */
 #define OBD_CONNECT_REAL       0x00000200ULL /* real connection */
 /* also update obd_connect_names[] for lprocfs_rd_connect_flags()
  * and lustre/utils/wirecheck.c */
@@ -533,12 +534,12 @@ extern void lustre_swab_ptlrpc_body(struct ptlrpc_body *pb);
                                 OBD_CONNECT_LCL_CLIENT | \
                                 OBD_CONNECT_RMT_CLIENT | \
                                 OBD_CONNECT_MDS_CAPA | OBD_CONNECT_OSS_CAPA | \
-                                OBD_CONNECT_MDS_MDS)
+                                OBD_CONNECT_MDS_MDS | OBD_CONNECT_CANCELSET)
 #define OST_CONNECT_SUPPORTED  (OBD_CONNECT_SRVLOCK | OBD_CONNECT_GRANT | \
                                 OBD_CONNECT_REQPORTAL | OBD_CONNECT_VERSION | \
                                 OBD_CONNECT_TRUNCLOCK | OBD_CONNECT_INDEX | \
                                 OBD_CONNECT_BRW_SIZE | OBD_CONNECT_QUOTA64 | \
-                                OBD_CONNECT_OSS_CAPA)
+                                OBD_CONNECT_OSS_CAPA | OBD_CONNECT_CANCELSET)
 #define ECHO_CONNECT_SUPPORTED (0)
 #define MGS_CONNECT_SUPPORTED  (OBD_CONNECT_VERSION)
 
@@ -550,6 +551,9 @@ extern void lustre_swab_ptlrpc_body(struct ptlrpc_body *pb);
 #define OBD_OCD_VERSION_MINOR(version) ((int)((version)>>16)&255)
 #define OBD_OCD_VERSION_PATCH(version) ((int)((version)>>8)&255)
 #define OBD_OCD_VERSION_FIX(version)   ((int)(version)&255)
+
+#define exp_connect_cancelset(exp) \
+        ((exp) ? (exp)->exp_connect_flags & OBD_CONNECT_CANCELSET : 0)
 
 /* This structure is used for both request and reply.
  *
@@ -955,13 +959,20 @@ struct mds_status_req {
 extern void lustre_swab_mds_status_req (struct mds_status_req *r);
 
 /* mdt_thread_info.mti_flags. */
-enum mdt_ioepoch_flags {
+enum md_op_flags {
         /* The flag indicates Size-on-MDS attributes are changed. */
-        MF_SOM_CHANGE   = (1 << 0),
+        MF_SOM_CHANGE           = (1 << 0),
         /* Flags indicates an epoch opens or closes. */
-        MF_EPOCH_OPEN   = (1 << 1),
-        MF_EPOCH_CLOSE  = (1 << 2),
+        MF_EPOCH_OPEN           = (1 << 1),
+        MF_EPOCH_CLOSE          = (1 << 2),
+        MF_MDC_CANCEL_FID1      = (1 << 3),
+        MF_MDC_CANCEL_FID2      = (1 << 4),
+        MF_MDC_CANCEL_FID3      = (1 << 5),
+        MF_MDC_CANCEL_FID4      = (1 << 6),
 };
+
+#define MF_SOM_LOCAL_FLAGS (MF_MDC_CANCEL_FID1 | MF_MDC_CANCEL_FID2 | \
+                            MF_MDC_CANCEL_FID3 | MF_MDC_CANCEL_FID4)
 
 #define MDS_BFLAG_UNCOMMITTED_WRITES   0x1
 #define MDS_BFLAG_EXT_FLAGS     0x80000000 /* == EXT3_RESERVED_FL */
@@ -1559,15 +1570,28 @@ struct ldlm_lock_desc {
 
 extern void lustre_swab_ldlm_lock_desc (struct ldlm_lock_desc *l);
 
+#define LDLM_LOCKREQ_HANDLES 2
+#define LDLM_ENQUEUE_CANCEL_OFF 1
+
 struct ldlm_request {
         __u32 lock_flags;
-        __u32 lock_padding;     /* also fix lustre_swab_ldlm_request */
+        __u32 lock_count;
         struct ldlm_lock_desc lock_desc;
-        struct lustre_handle lock_handle1;
-        struct lustre_handle lock_handle2;
+        struct lustre_handle lock_handle[LDLM_LOCKREQ_HANDLES];
 };
 
 extern void lustre_swab_ldlm_request (struct ldlm_request *rq);
+
+/* If LDLM_ENQUEUE, 1 slot is already occupied, 1 is available.
+ * Otherwise, 2 are available. */
+#define ldlm_request_bufsize(count,type)                                \
+({                                                                      \
+        int _avail = LDLM_LOCKREQ_HANDLES;                              \
+        _avail -= (type == LDLM_ENQUEUE ? LDLM_ENQUEUE_CANCEL_OFF : 0); \
+        sizeof(struct ldlm_request) +                                   \
+        (count > _avail ? count - _avail : 0) *                         \
+        sizeof(struct lustre_handle);                                   \
+})
 
 struct ldlm_reply {
         __u32 lock_flags;
@@ -1579,7 +1603,6 @@ struct ldlm_reply {
 };
 
 extern void lustre_swab_ldlm_reply (struct ldlm_reply *r);
-
 
 /*
  * Opcodes for mountconf (mgs and mgc)

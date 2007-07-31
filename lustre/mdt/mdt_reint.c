@@ -294,6 +294,9 @@ static int mdt_reint_setattr(struct mdt_thread_info *info,
         DEBUG_REQ(D_INODE, req, "setattr "DFID" %x", PFID(rr->rr_fid1),
                   (unsigned int)ma->ma_attr.la_valid);
 
+        if (info->mti_dlm_req)
+                ldlm_request_cancel(req, info->mti_dlm_req, 0);
+        
         repbody = req_capsule_server_get(&info->mti_pill, &RMF_MDT_BODY);
         mo = mdt_object_find(info->mti_env, info->mti_mdt, rr->rr_fid1);
         if (IS_ERR(mo))
@@ -408,6 +411,9 @@ static int mdt_reint_create(struct mdt_thread_info *info,
         if (MDT_FAIL_CHECK(OBD_FAIL_MDS_REINT_CREATE))
                 GOTO(out, rc = err_serious(-ESTALE));
 
+        if (info->mti_dlm_req)
+                ldlm_request_cancel(mdt_info_req(info), info->mti_dlm_req, 0);
+
         switch (info->mti_attr.ma_attr.la_mode & S_IFMT) {
         case S_IFDIR:{
                 /* Cross-ref case. */
@@ -452,6 +458,9 @@ static int mdt_reint_unlink(struct mdt_thread_info *info,
 
         DEBUG_REQ(D_INODE, req, "unlink "DFID"/%s", PFID(rr->rr_fid1),
                   rr->rr_name);
+
+        if (info->mti_dlm_req)
+                ldlm_request_cancel(req, info->mti_dlm_req, 0);
 
         if (MDT_FAIL_CHECK(OBD_FAIL_MDS_REINT_UNLINK))
                 GOTO(out, rc = err_serious(-ENOENT));
@@ -555,6 +564,9 @@ static int mdt_reint_link(struct mdt_thread_info *info,
 
         if (MDT_FAIL_CHECK(OBD_FAIL_MDS_REINT_LINK))
                 GOTO(out, rc = err_serious(-ENOENT));
+
+        if (info->mti_dlm_req)
+                ldlm_request_cancel(req, info->mti_dlm_req, 0);
 
         if (info->mti_cross_ref) {
                 /* MDT holding name ask us to add ref. */
@@ -812,6 +824,9 @@ static int mdt_reint_rename(struct mdt_thread_info *info,
         struct lu_name          *lname;
         int                      rc;
         ENTRY;
+
+        if (info->mti_dlm_req)
+                ldlm_request_cancel(mdt_info_req(info), info->mti_dlm_req, 0);
 
         if (info->mti_cross_ref) {
                 rc = mdt_reint_rename_tgt(info);

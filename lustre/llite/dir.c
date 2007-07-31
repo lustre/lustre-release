@@ -302,7 +302,7 @@ static struct page *ll_get_dir_page(struct inode *dir, __u32 hash, int exact,
                 struct md_op_data *op_data;
 
                 op_data = ll_prep_md_op_data(NULL, dir, NULL, NULL, 0, 0, 
-                                             LUSTRE_OPC_ANY);
+                                             LUSTRE_OPC_ANY, NULL);
                 if (IS_ERR(op_data))
                         return (void *)op_data;
 
@@ -547,7 +547,7 @@ int ll_dir_setstripe(struct inode *inode, struct lov_user_md *lump)
                 lustre_swab_lov_user_md(lump);
 
         op_data = ll_prep_md_op_data(NULL, inode, NULL, NULL, 0, 0,
-                                     LUSTRE_OPC_ANY);
+                                     LUSTRE_OPC_ANY, NULL);
         if (IS_ERR(op_data))
                 RETURN(PTR_ERR(op_data));
 

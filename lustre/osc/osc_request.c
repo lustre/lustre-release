@@ -573,6 +573,28 @@ static int osc_sync(struct obd_export *exp, struct obdo *oa,
         return rc;
 }
 
+/* Find and cancel locally locks matched by @mode in the resource found by
+ * @objid. Found locks are added into @cancel list. Returns the amount of
+ * locks added to @cancels list. */
+static int osc_resource_get_unused(struct obd_export *exp, struct obdo *oa,
+                                   struct list_head *cancels, ldlm_mode_t mode,
+                                   int lock_flags)
+{
+        struct ldlm_namespace *ns = exp->exp_obd->obd_namespace;
+        struct ldlm_res_id res_id = { .name = { oa->o_id, 0, oa->o_gr, 0 } };
+        struct ldlm_resource *res = ldlm_resource_get(ns, NULL, &res_id, 0, 0);
+        int count;
+        ENTRY;
+
+        if (res == NULL)
+                RETURN(0);
+
+        count = ldlm_cancel_resource_local(res, cancels, NULL, mode,
+                                           lock_flags, 0, NULL);
+        ldlm_resource_putref(res);
+        RETURN(count);
+}
+
 /* Destroy requests can be async always on the client, and we don't even really
  * care about the return code since the client cannot do anything at all about
  * a destroy failure.
@@ -587,9 +609,11 @@ static int osc_destroy(struct obd_export *exp, struct obdo *oa,
                        struct lov_stripe_md *ea, struct obd_trans_info *oti,
                        struct obd_export *md_export)
 {
+        CFS_LIST_HEAD(cancels);
         struct ptlrpc_request *req;
         struct ost_body *body;
-        int size[2] = { sizeof(struct ptlrpc_body), sizeof(*body) };
+        int size[3] = { sizeof(struct ptlrpc_body), sizeof(*body), 0 };
+        int count, bufcount = 2;
         ENTRY;
 
         if (!oa) {
@@ -597,8 +621,19 @@ static int osc_destroy(struct obd_export *exp, struct obdo *oa,
                 RETURN(-EINVAL);
         }
 
+        count = osc_resource_get_unused(exp, oa, &cancels, LCK_PW,
+                                        LDLM_FL_DISCARD_DATA);
+        if (exp_connect_cancelset(exp) && count) {
+                bufcount = 3;
+                size[REQ_REC_OFF + 1] = ldlm_request_bufsize(count,OST_DESTROY);
+        }
         req = ptlrpc_prep_req(class_exp2cliimp(exp), LUSTRE_OST_VERSION,
-                              OST_DESTROY, 2, size, NULL);
+                              OST_DESTROY, bufcount, size, NULL);
+        if (req)
+                ldlm_cli_cancel_list(&cancels, count, req, REQ_REC_OFF + 1, 0);
+        else
+                ldlm_lock_list_put(&cancels, l_bl_ast, count);
+
         if (!req)
                 RETURN(-ENOMEM);
 
@@ -2865,10 +2900,10 @@ static int osc_enqueue(struct obd_export *exp, struct obd_info *oinfo,
         if (intent) {
                 int size[3] = {
                         [MSG_PTLRPC_BODY_OFF] = sizeof(struct ptlrpc_body),
-                        [DLM_LOCKREQ_OFF]     = sizeof(struct ldlm_request) };
+                        [DLM_LOCKREQ_OFF]     = sizeof(struct ldlm_request),
+                        [DLM_LOCKREQ_OFF + 1] = 0 };
 
-                req = ptlrpc_prep_req(class_exp2cliimp(exp), LUSTRE_DLM_VERSION,
-                                      LDLM_ENQUEUE, 2, size, NULL);
+                req = ldlm_prep_enqueue_req(exp, 2, size, NULL, 0);
                 if (req == NULL)
                         RETURN(-ENOMEM);
 
@@ -2987,8 +3022,7 @@ static int osc_cancel_unused(struct obd_export *exp,
                 resp = &res_id;
         }
 
-        return ldlm_cli_cancel_unused(obd->obd_namespace, resp, flags,
-                                      opaque);
+        return ldlm_cli_cancel_unused(obd->obd_namespace, resp, flags, opaque);
 }
 
 static int osc_join_lru(struct obd_export *exp,

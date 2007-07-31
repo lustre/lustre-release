@@ -39,6 +39,7 @@
 
 #include <obd_class.h>
 #include "mdc_internal.h"
+#include <lustre_fid.h>
 
 /* mdc_setattr does its own semaphore handling */
 static int mdc_reint(struct ptlrpc_request *request,
@@ -62,6 +63,33 @@ static int mdc_reint(struct ptlrpc_request *request,
         return rc;
 }
 
+/* Find and cancel locally locks matched by inode @bits & @mode in the resource
+ * found by @fid. Found locks are added into @cancel list. Returns the amount of
+ * locks added to @cancels list. */
+int mdc_resource_get_unused(struct obd_export *exp, struct lu_fid *fid,
+                            struct list_head *cancels, ldlm_mode_t mode,
+                            __u64 bits)
+{
+        ldlm_policy_data_t policy = {{0}};
+        struct ldlm_res_id res_id;
+        struct ldlm_resource *res;
+        int count;
+        ENTRY;
+
+        fid_build_reg_res_name(fid, &res_id);
+        res = ldlm_resource_get(exp->exp_obd->obd_namespace,
+                                NULL, &res_id, 0, 0);
+        if (res == NULL)
+                RETURN(0);
+
+        /* Initialize ibits lock policy. */
+        policy.l_inodebits.bits = bits;
+        count = ldlm_cancel_resource_local(res, cancels, &policy,
+                                           mode, 0, 0, NULL);
+        ldlm_resource_putref(res);
+        RETURN(count);
+}
+
 /* If mdc_setattr is called with an 'iattr', then it is a normal RPC that
  * should take the normal semaphore and go to the normal portal.
  *
@@ -72,19 +100,21 @@ int mdc_setattr(struct obd_export *exp, struct md_op_data *op_data,
                 void *ea, int ealen, void *ea2, int ea2len,
                 struct ptlrpc_request **request)
 {
+        CFS_LIST_HEAD(cancels);
         struct ptlrpc_request *req;
         struct mdt_rec_setattr *rec;
         struct mdc_rpc_lock *rpc_lock;
         struct obd_device *obd = exp->exp_obd;
-        int size[6] = { sizeof(struct ptlrpc_body),
-                        sizeof(*rec), 0, 0, ealen, ea2len };
-        int bufcount = 4, rc;
+        int size[7] = { sizeof(struct ptlrpc_body),
+                        sizeof(*rec), 0, 0, ealen, ea2len, 0 };
+        int count = 0, bufcount = 4, rc;
+        __u64 bits;
         ENTRY;
 
         LASSERT(op_data != NULL);
 
         size[REQ_REC_OFF + 1] = op_data->op_capa1 ?
-                                        sizeof(struct lustre_capa) : 0;
+                sizeof(struct lustre_capa) : 0;
 
         if (op_data->op_flags & (MF_SOM_CHANGE | MF_EPOCH_OPEN))
                 size[REQ_REC_OFF + 2] = sizeof(struct mdt_epoch);
@@ -95,8 +125,24 @@ int mdc_setattr(struct obd_export *exp, struct md_op_data *op_data,
                         bufcount++;
         }
 
+        bits = MDS_INODELOCK_UPDATE;
+        if (op_data->op_attr.ia_valid & (ATTR_MODE|ATTR_UID|ATTR_GID))
+                bits |= MDS_INODELOCK_LOOKUP;
+        if ((op_data->op_flags & MF_MDC_CANCEL_FID1) && 
+            (fid_is_sane(&op_data->op_fid1)))
+                count = mdc_resource_get_unused(exp, &op_data->op_fid1,
+                                                &cancels, LCK_EX, bits);
+        if (exp_connect_cancelset(exp) && count) {
+                bufcount = 7;
+                size[REQ_REC_OFF + 5] = ldlm_request_bufsize(count, MDS_REINT);
+        }
         req = ptlrpc_prep_req(class_exp2cliimp(exp), LUSTRE_MDS_VERSION,
                               MDS_REINT, bufcount, size, NULL);
+        if (req)
+                ldlm_cli_cancel_list(&cancels, count, req, REQ_REC_OFF + 5, 0);
+        else
+                ldlm_lock_list_put(&cancels, l_bl_ast, count);
+
         if (req == NULL)
                 RETURN(-ENOMEM);
 
@@ -129,12 +175,14 @@ int mdc_create(struct obd_export *exp, struct md_op_data *op_data,
                const void *data, int datalen, int mode, __u32 uid, __u32 gid,
                __u32 cap_effective, __u64 rdev, struct ptlrpc_request **request)
 {
-        int size[5] = { sizeof(struct ptlrpc_body),
+        int size[6] = { sizeof(struct ptlrpc_body),
                         sizeof(struct mdt_rec_create),
-                        0, op_data->op_namelen + 1 };
+                        0, op_data->op_namelen + 1, 0, 0 };
         struct obd_device *obd = exp->exp_obd;
         int level, bufcount = 4, rc;
         struct ptlrpc_request *req;
+        int count = 0;
+        CFS_LIST_HEAD(cancels);
         ENTRY;
 
         /* For case if upper layer did not alloc fid, do it now. */
@@ -158,8 +206,22 @@ int mdc_create(struct obd_export *exp, struct md_op_data *op_data,
                 bufcount++;
         }
 
+        if ((op_data->op_flags & MF_MDC_CANCEL_FID1) && 
+            (fid_is_sane(&op_data->op_fid1)))
+                count = mdc_resource_get_unused(exp, &op_data->op_fid1,
+                                                &cancels, LCK_EX,
+                                                MDS_INODELOCK_UPDATE);
+        if (exp_connect_cancelset(exp) && count) {
+                bufcount = 6;
+                size[REQ_REC_OFF + 4] = ldlm_request_bufsize(count, MDS_REINT);
+        }
         req = ptlrpc_prep_req(class_exp2cliimp(exp), LUSTRE_MDS_VERSION,
                               MDS_REINT, bufcount, size, NULL);
+        if (req)
+                ldlm_cli_cancel_list(&cancels, count, req, REQ_REC_OFF + 4, 0);
+        else
+                ldlm_lock_list_put(&cancels, l_bl_ast, count);
+
         if (req == NULL)
                 RETURN(-ENOMEM);
 
@@ -206,21 +268,41 @@ int mdc_create(struct obd_export *exp, struct md_op_data *op_data,
 int mdc_unlink(struct obd_export *exp, struct md_op_data *op_data,
                struct ptlrpc_request **request)
 {
+        CFS_LIST_HEAD(cancels);
         struct obd_device *obd = class_exp2obd(exp);
         struct ptlrpc_request *req = *request;
-        int size[4] = { sizeof(struct ptlrpc_body),
+        int size[5] = { sizeof(struct ptlrpc_body),
                         sizeof(struct mdt_rec_unlink),
-                        0, op_data->op_namelen + 1 };
-        int rc;
+                        0, op_data->op_namelen + 1, 0 };
+        int count = 0, rc, bufcount = 4;
         ENTRY;
 
         LASSERT(req == NULL);
 
         size[REQ_REC_OFF + 1] = op_data->op_capa1 ?
-                                        sizeof(struct lustre_capa) : 0;
+                sizeof(struct lustre_capa) : 0;
 
+        if ((op_data->op_flags & MF_MDC_CANCEL_FID1) && 
+            (fid_is_sane(&op_data->op_fid1)))
+                count = mdc_resource_get_unused(exp, &op_data->op_fid1,
+                                                &cancels, LCK_EX,
+                                                MDS_INODELOCK_UPDATE);
+        if ((op_data->op_flags & MF_MDC_CANCEL_FID3) && 
+            (fid_is_sane(&op_data->op_fid3)))
+                count += mdc_resource_get_unused(exp, &op_data->op_fid3,
+                                                 &cancels, LCK_EX,
+                                                 MDS_INODELOCK_FULL);
+        if (exp_connect_cancelset(exp) && count) {
+                bufcount = 5;
+                size[REQ_REC_OFF + 3] = ldlm_request_bufsize(count, MDS_REINT);
+        }
         req = ptlrpc_prep_req(class_exp2cliimp(exp), LUSTRE_MDS_VERSION,
-                              MDS_REINT, 4, size, NULL);
+                              MDS_REINT, bufcount, size, NULL);
+        if (req)
+                ldlm_cli_cancel_list(&cancels, count, req, REQ_REC_OFF + 3, 0);
+        else
+                ldlm_lock_list_put(&cancels, l_bl_ast, count);
+
         if (req == NULL)
                 RETURN(-ENOMEM);
         *request = req;
@@ -241,12 +323,13 @@ int mdc_unlink(struct obd_export *exp, struct md_op_data *op_data,
 int mdc_link(struct obd_export *exp, struct md_op_data *op_data,
              struct ptlrpc_request **request)
 {
+        CFS_LIST_HEAD(cancels);
         struct obd_device *obd = exp->exp_obd;
         struct ptlrpc_request *req;
-        int size[5] = { sizeof(struct ptlrpc_body),
+        int size[6] = { sizeof(struct ptlrpc_body),
                         sizeof(struct mdt_rec_link),
-                        0, 0, op_data->op_namelen + 1 };
-        int rc;
+                        0, 0, op_data->op_namelen + 1, 0 };
+        int count = 0, rc, bufcount = 5;
         ENTRY;
 
         size[REQ_REC_OFF + 1] = op_data->op_capa1 ?
@@ -254,8 +337,28 @@ int mdc_link(struct obd_export *exp, struct md_op_data *op_data,
         size[REQ_REC_OFF + 2] = op_data->op_capa2 ?
                 sizeof(struct lustre_capa) : 0;
 
+        if ((op_data->op_flags & MF_MDC_CANCEL_FID2) &&
+            (fid_is_sane(&op_data->op_fid2)))
+                count = mdc_resource_get_unused(exp, &op_data->op_fid2,
+                                                &cancels, LCK_EX,
+                                                MDS_INODELOCK_UPDATE);
+        if ((op_data->op_flags & MF_MDC_CANCEL_FID1) &&
+            (fid_is_sane(&op_data->op_fid1)))
+                count += mdc_resource_get_unused(exp, &op_data->op_fid1,
+                                                 &cancels, LCK_EX,
+                                                 MDS_INODELOCK_UPDATE);
+        if (exp_connect_cancelset(exp) && count) {
+                bufcount = 6;
+                size[REQ_REC_OFF + 4] = ldlm_request_bufsize(count, MDS_REINT);
+        }
+
         req = ptlrpc_prep_req(class_exp2cliimp(exp), LUSTRE_MDS_VERSION,
-                              MDS_REINT, 5, size, NULL);
+                              MDS_REINT, bufcount, size, NULL);
+        if (req)
+                ldlm_cli_cancel_list(&cancels, count, req, REQ_REC_OFF + 4, 0);
+        else
+                ldlm_lock_list_put(&cancels, l_bl_ast, count);
+
         if (req == NULL)
                 RETURN(-ENOMEM);
 
@@ -276,12 +379,13 @@ int mdc_rename(struct obd_export *exp, struct md_op_data *op_data,
                const char *old, int oldlen, const char *new, int newlen,
                struct ptlrpc_request **request)
 {
+        CFS_LIST_HEAD(cancels);
         struct obd_device *obd = exp->exp_obd;
         struct ptlrpc_request *req;
-        int size[6] = { sizeof(struct ptlrpc_body),
+        int size[7] = { sizeof(struct ptlrpc_body),
                         sizeof(struct mdt_rec_rename),
-                        0, 0, oldlen + 1, newlen + 1 };
-        int rc;
+                        0, 0, oldlen + 1, newlen + 1, 0 };
+        int count = 0, rc, bufcount = 6;
         ENTRY;
 
         size[REQ_REC_OFF + 1] = op_data->op_capa1 ?
@@ -289,8 +393,37 @@ int mdc_rename(struct obd_export *exp, struct md_op_data *op_data,
         size[REQ_REC_OFF + 2] = op_data->op_capa2 ?
                                         sizeof(struct lustre_capa) : 0;
 
+        if ((op_data->op_flags & MF_MDC_CANCEL_FID1) &&
+            (fid_is_sane(&op_data->op_fid1)))
+                count = mdc_resource_get_unused(exp, &op_data->op_fid1,
+                                                &cancels, LCK_EX,
+                                                MDS_INODELOCK_UPDATE);
+        if ((op_data->op_flags & MF_MDC_CANCEL_FID2) &&
+            (fid_is_sane(&op_data->op_fid2)))
+                count += mdc_resource_get_unused(exp, &op_data->op_fid2,
+                                                 &cancels, LCK_EX,
+                                                 MDS_INODELOCK_UPDATE);
+        if ((op_data->op_flags & MF_MDC_CANCEL_FID3) && 
+            (fid_is_sane(&op_data->op_fid3)))
+                count += mdc_resource_get_unused(exp, &op_data->op_fid3,
+                                                 &cancels, LCK_EX,
+                                                 MDS_INODELOCK_LOOKUP);
+        if ((op_data->op_flags & MF_MDC_CANCEL_FID4) &&
+             (fid_is_sane(&op_data->op_fid4)))
+                count += mdc_resource_get_unused(exp, &op_data->op_fid4,
+                                                 &cancels, LCK_EX,
+                                                 MDS_INODELOCK_FULL);
+        if (exp_connect_cancelset(exp) && count) {
+                bufcount = 7;
+                size[REQ_REC_OFF + 5] = ldlm_request_bufsize(count, MDS_REINT);
+        }
         req = ptlrpc_prep_req(class_exp2cliimp(exp), LUSTRE_MDS_VERSION,
-                              MDS_REINT, 6, size, NULL);
+                              MDS_REINT, bufcount, size, NULL);
+        if (req)
+                ldlm_cli_cancel_list(&cancels, count, req, REQ_REC_OFF + 5, 0);
+        else
+                ldlm_lock_list_put(&cancels, l_bl_ast, count);
+
         if (req == NULL)
                 RETURN(-ENOMEM);
 
