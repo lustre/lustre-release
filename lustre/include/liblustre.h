@@ -725,7 +725,6 @@ typedef struct { volatile int counter; } atomic_t;
 #define atomic_dec(a)  do { (a)->counter--; } while (0)
 #define atomic_add(b,a)  do {(a)->counter += b;} while (0)
 #define atomic_sub(b,a)  do {(a)->counter -= b;} while (0)
-#define ATOMIC_INIT(i) { i }
 
 #ifndef likely
 #define likely(exp) (exp)
