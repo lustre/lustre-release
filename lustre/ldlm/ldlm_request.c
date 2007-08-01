@@ -517,11 +517,10 @@ struct ptlrpc_request *ldlm_prep_enqueue_req(struct obd_export *exp,
                  * will incrment @lock_count according to the lock handle amount
                  * actually written to the buffer. */
                 dlm->lock_count = LDLM_ENQUEUE_CANCEL_OFF;
-        }
-        if (req)
                 ldlm_cli_cancel_list(cancels, count, req, DLM_LOCKREQ_OFF, 0);
-        else
+        } else {
                 ldlm_lock_list_put(cancels, l_bl_ast, count);
+        }
         RETURN(req);
 }
 

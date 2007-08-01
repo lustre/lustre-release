@@ -629,7 +629,7 @@ static int osc_destroy(struct obd_export *exp, struct obdo *oa,
         }
         req = ptlrpc_prep_req(class_exp2cliimp(exp), LUSTRE_OST_VERSION,
                               OST_DESTROY, bufcount, size, NULL);
-        if (req)
+        if (exp_connect_cancelset(exp) && req)
                 ldlm_cli_cancel_list(&cancels, count, req, REQ_REC_OFF + 1, 0);
         else
                 ldlm_lock_list_put(&cancels, l_bl_ast, count);
