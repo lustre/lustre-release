@@ -360,8 +360,10 @@ wait_for() {
 
 client_df() {
     # not every config has many clients
-    if [ ! -z "$CLIENTS" ]; then
+    if [ -n "$CLIENTS" ]; then
         $PDSH $CLIENTS "df $MOUNT" > /dev/null
+    else
+	df $MOUNT > /dev/null
     fi
 }
 
