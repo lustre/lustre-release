@@ -8,3 +8,6 @@
 	Fixes for bug: 11171
 	- Added common library "libobd"
 	- Improved obdfilter-survey
+2007-08-01 Jitendra Pawar <jitendra@clusterfs.com>
+	Fixes for bug: 10961
+	- Modified README.obdfilter-survey
