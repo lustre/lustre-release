@@ -1843,7 +1843,7 @@ ksocknal_add_interface(lnet_ni_t *ni, __u32 ipaddress, __u32 netmask)
                         list_for_each(ptmp, &ksocknal_data.ksnd_peers[i]) {
                                 peer = list_entry(ptmp, ksock_peer_t, ksnp_list);
 
-                                for (j = 0; i < peer->ksnp_n_passive_ips; j++)
+                                for (j = 0; j < peer->ksnp_n_passive_ips; j++)
                                         if (peer->ksnp_passive_ips[j] == ipaddress)
                                                 iface->ksni_npeers++;
 
