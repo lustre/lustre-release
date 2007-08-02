@@ -330,14 +330,16 @@ int llog_cat_initialize(struct obd_device *obd, struct obd_llogs *llogs,
                         int count, struct obd_uuid *uuid)
 {
         char name[32] = CATLIST;
-        struct llog_catid *idarray;
+        struct llog_catid *idarray = NULL;
         int size = sizeof(*idarray) * count;
         int rc;
         ENTRY;
 
-        OBD_ALLOC(idarray, size);
-        if (!idarray) 
-                RETURN(-ENOMEM);
+        if (count) {
+                OBD_VMALLOC(idarray, size);
+                if (!idarray)
+                        RETURN(-ENOMEM);
+        }
 
         rc = llog_get_cat_list(obd, obd, name, count, idarray);
         if (rc) {
@@ -358,7 +360,8 @@ int llog_cat_initialize(struct obd_device *obd, struct obd_llogs *llogs,
         }
 
  out:
-        OBD_FREE(idarray, size);
+        if (idarray)
+                OBD_VFREE(idarray, size);
         RETURN(rc);
 }
 EXPORT_SYMBOL(llog_cat_initialize);
