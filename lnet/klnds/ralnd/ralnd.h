@@ -88,7 +88,7 @@ typedef struct
         int              *kra_max_immediate;    /* immediate payload breakpoint */
 
 #if CONFIG_SYSCTL && !CFS_SYSFS_MODULE_PARM
-        struct ctl_table_header *kra_sysctl;    /* sysctl interface */
+        cfs_sysctl_table_header_t *kra_sysctl;  /* sysctl interface */
 #endif
 } kra_tunables_t;
 
@@ -429,7 +429,7 @@ int kranal_recv(lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg,
 int kranal_accept(lnet_ni_t *ni, struct socket *sock);
 
 extern void kranal_free_acceptsock (kra_acceptsock_t *ras);
-extern int kranal_listener_procint (ctl_table *table,
+extern int kranal_listener_procint (cfs_sysctl_table_t *table,
                                     int write, struct file *filp,
                                     void *buffer, size_t *lenp);
 extern void kranal_update_reaper_timeout (long timeout);

@@ -108,7 +108,7 @@ typedef unsigned long cpumask_t;
 #define ll_proc_dostring(table, write, filp, buffer, lenp, ppos)        \
         proc_dostring(table, write, filp, buffer, lenp)
 #define LL_PROC_PROTO(name)                                             \
-        name(ctl_table *table, int write, struct file *filp,            \
+        name(cfs_sysctl_table_t *table, int write, struct file *filp,   \
              void __user *buffer, size_t *lenp)
 #else
 #define ll_proc_dointvec(table, write, filp, buffer, lenp, ppos)        \
@@ -116,7 +116,7 @@ typedef unsigned long cpumask_t;
 #define ll_proc_dostring(table, write, filp, buffer, lenp, ppos)        \
         proc_dostring(table, write, filp, buffer, lenp, ppos);
 #define LL_PROC_PROTO(name)                                             \
-        name(ctl_table *table, int write, struct file *filp,            \
+        name(cfs_sysctl_table_t *table, int write, struct file *filp,   \
              void __user *buffer, size_t *lenp, loff_t *ppos)
 #endif
 

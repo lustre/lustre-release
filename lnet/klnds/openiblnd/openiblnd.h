@@ -161,7 +161,7 @@ typedef struct
         int      *kib_credits;                  /* # concurrent sends */
         int      *kib_peercredits;              /* # concurrent sends to 1 peer */
 
-        struct ctl_table_header *kib_sysctl;    /* sysctl interface */
+        cfs_sysctl_table_header_t *kib_sysctl;  /* sysctl interface */
 } kib_tunables_t;
 
 typedef struct

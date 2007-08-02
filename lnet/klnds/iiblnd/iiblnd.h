@@ -140,7 +140,7 @@ typedef struct
         int              *kib_sd_retries;       /* # concurrent sends to 1 peer */
         int              *kib_concurrent_sends; /* send work queue sizing */
 #if CONFIG_SYSCTL && !CFS_SYSFS_MODULE_PARM
-        struct ctl_table_header *kib_sysctl;    /* sysctl interface */
+        cfs_sysctl_table_header_t *kib_sysctl;  /* sysctl interface */
 #endif
 } kib_tunables_t;
 
