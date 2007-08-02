@@ -11,7 +11,8 @@
 
 # result file prefix.  date/time+hostname makes unique
 # NB ensure the path exists if it includes subdirs
-rslt=${rslt:-"/tmp/sgpdd_survey_`date +%F@%R`_`uname -n`"}
+rslt_loc=${rslt_loc:-"/tmp"}
+rslt=${rslt:-"$rslt_loc/sgpdd_survey_`date +%F@%R`_`uname -n`"}
 
 # what to do (read or write)
 actions=${actions:-"write read"}
@@ -47,12 +48,12 @@ if [ "$scsidevs" ]; then
         # we will test for a LUN, the test for a partition
         # if the partition number is > 9 this will fail
     for d in $scsidevs; do
-	devs[$i]=`sg_map | awk "{if ($ 2 == \"$d\") print $ 1}"`
+	devs[$i]=`sg_map | awk "{if (\\\$2 == \"$d\") print \\\$1}"`
         if [ -z "${devs[i]}" ]; then
             echo "Can't find SG device for $d, testing for partition"
             pt=`echo $d | sed 's/[0-9]$//'`
             # Try again
-            devs[$i]=`sg_map | awk "{if ($ 2 == \"$pt\") print $ 1}"`
+            devs[$i]=`sg_map | awk "{if (\\\$2 == \"$pt\") print \\\$1}"`
             if [ -z "${devs[i]}" ]; then
                 echo "Can't find SG device $pt"
                 exit 1
@@ -80,7 +81,7 @@ ndevs=${#devs[@]}
 
 # determine block size. This should also work for raw devices
 # If it fails, set to 512
-bs=$((`sg_readcap -b ${devs[0]}  |awk '{print $2}'`))
+bs=$((`sg_readcap -b ${devs[0]} | awk '{print $2}'`))
 if [ $bs == 0  ];then
 	echo "sg_readcap failed, setting block size to 512"
 	bs=512
@@ -133,6 +134,11 @@ for ((rsz=$rszlo;rsz<=$rszhi;rsz*=2)); do
 		t0=`date +%s.%N`
 		for ((i=0;i<ndevs;i++)); do
 		    dev=${devs[i]}
+		    devsize=$((bs*`sg_readcap -b ${dev} | awk '{print $1}'`/1024))
+		    if [ $devsize -lt $actual_size ]; then
+			echo -e "device $(sg_map | grep $dev | awk '{ print $2; }') not big enough: $devsize < $actual_size.\nConsider reducing \$size"
+			exit 1
+		    fi
 		    if [ $action = read ]; then
 			inf="if=$dev"
 			outf="of=/dev/null"

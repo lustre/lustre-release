@@ -87,5 +87,5 @@ phased by seeks at the given record size.
 The included script "parse.pl" will process output files and create
 .csv files for spreadsheet import
 
-The "plot-sgpdd.pl" script plots the results directly using gnuplot.
+The "plot-sgpdd" script plots the results directly using gnuplot.
 

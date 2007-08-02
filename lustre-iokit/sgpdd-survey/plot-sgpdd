@@ -2,7 +2,7 @@
 # Report generation for plot-sgpdd
 # ================================
 #        The plot-sgpdd script is used to generate csv file and
-# instructions files for gnuplot from the output of sgpdd-survey.pl script.
+# instructions files for gnuplot from the output of sgpdd-survey script.
 #
 #        The plot-sgpdd also creates .scr file that contains instructions
 # for gnuplot to plot the graph. After generating .dat and .scr files this
@@ -12,13 +12,13 @@
 # $ sgpdd-survey > log_filename
 # $ plot-sgpdd <log_filename>
 # [Note: 1. This script may need modifications whenever there will be
-#           modifications in output format of sgpdd-survey.pl script.
+#           modifications in output format of sgpdd-survey script.
 #        2. Gnuplot version 4.0 or above is required.]
 
 sub usage() 
 {
 	print STDERR "Usage: $0 [options] <log_filename>\n";
-	print STDERR "  $0 parses and plots graphs from the output of sgpdd-survey.pl\n";
+	print STDERR "  $0 parses and plots graphs from the output of sgpdd-survey\n";
 	print STDERR "  It generates text data files (.dat) and graphs (.png) using gnuplot.\n";
 	print STDERR "options:\n";
 	print STDERR "	--rt: Subtitle for read graphs\n";
