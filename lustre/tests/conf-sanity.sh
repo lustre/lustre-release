@@ -1127,6 +1127,29 @@ test_32b() {
 }
 run_test 32b "Upgrade from 1.4 with writeconf"
 
+test_33() { # bug 12333
+        local FSNAME2=test1234
+        local fs2mds_HOST=$mds_HOST
+        local fs2ost_HOST=$ost_HOST
+        local fs2mdsdev=${MDSDEV}_2
+        local fs2ostdev=$(ostdevname 1)_2
+        add fs2mds $MDS_MKFS_OPTS --fsname=${FSNAME2} --reformat $fs2mdsdev || exit 10
+        add fs2ost $OST_MKFS_OPTS --fsname=${FSNAME2} --index=8191 --mgsnode=`hostname`@tcp --reformat $fs2ostdev || exit 10
+
+        start fs2mds $fs2mdsdev $MDS_MOUNT_OPTS
+        start fs2ost $fs2ostdev $OST_MOUNT_OPTS
+        mkdir -p $MOUNT2
+        mount -t lustre $MGSNID:/${FSNAME2} $MOUNT2 || return 1
+        echo "ok."
+
+        umount -d $MOUNT2
+        stop fs2ost -f
+        stop fs2mds -f
+        rm -rf $MOUNT2 $fs2mdsdev $fs2ostdev
+        cleanup_nocli || return 6
+}
+run_test 33 "Mount ost with a large index number"
+
 umount_client $MOUNT	
 cleanup_nocli
 
