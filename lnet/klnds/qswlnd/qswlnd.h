@@ -30,7 +30,7 @@
 
 #include <qsnet/kernel.h>
 #undef printf                                   /* nasty QSW #define */
-#ifdef HAVE_KERNEL_CONFIG_H
+#ifndef AUTOCONF_INCLUDED
 #include <linux/config.h>
 #endif
 #include <linux/module.h>
