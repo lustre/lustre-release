@@ -51,6 +51,8 @@ static unsigned int cfs_alloc_flags_to_gfp(u_int32_t flags)
 #endif
         if (flags & CFS_ALLOC_FS)
                 mflags |= __GFP_FS;
+        if (flags & CFS_ALLOC_HIGH)
+                mflags |= __GFP_HIGH;
         return mflags;
 }
 
@@ -83,13 +85,18 @@ cfs_free_large(void *addr)
 	vfree(addr);
 }
 
-cfs_page_t *cfs_alloc_page(unsigned int flags)
+cfs_page_t *cfs_alloc_pages(unsigned int flags, unsigned int order)
 {
         /*
          * XXX nikita: do NOT call portals_debug_msg() (CDEBUG/ENTRY/EXIT)
          * from here: this will lead to infinite recursion.
          */
-        return alloc_pages(cfs_alloc_flags_to_gfp(flags), 0);
+        return alloc_pages(cfs_alloc_flags_to_gfp(flags), order);
+}
+
+void __cfs_free_pages(cfs_page_t *page, unsigned int order)
+{
+        __free_pages(page, order);
 }
 
 cfs_mem_cache_t *
@@ -126,7 +133,8 @@ EXPORT_SYMBOL(cfs_alloc);
 EXPORT_SYMBOL(cfs_free);
 EXPORT_SYMBOL(cfs_alloc_large);
 EXPORT_SYMBOL(cfs_free_large);
-EXPORT_SYMBOL(cfs_alloc_page);
+EXPORT_SYMBOL(cfs_alloc_pages);
+EXPORT_SYMBOL(__cfs_free_pages);
 EXPORT_SYMBOL(cfs_mem_cache_create);
 EXPORT_SYMBOL(cfs_mem_cache_destroy);
 EXPORT_SYMBOL(cfs_mem_cache_alloc);
