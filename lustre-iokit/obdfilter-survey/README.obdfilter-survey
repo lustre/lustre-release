@@ -125,13 +125,13 @@ To run against network-disk:
 1. Automated run:
 Setup the lustre with required OST's. Make sure that obdecho.ko module is
 present. Then invoke the obdfilter-survey script with parameter case=netdisk.
-e.g. : $ nobjhi=2 thrhi=2 size=1024 case=netdisk sh -x obdfilter-survey
+e.g. : $ nobjhi=2 thrhi=2 size=1024 case=netdisk sh obdfilter-survey
 
 2. Manual run:
 While running manually you need to tell the script all the names of the
 echo_client instances, which should already be up and running.
 e.g. $ nobjhi=2 thrhi=2 size=1024 ECHO_CLIENTS="ECHO_<osc_name> ..." \
-       sh -x obdfilter-survey
+       sh obdfilter-survey
 
 
 Output files:
