@@ -1347,12 +1347,15 @@ static int brw_interpret(struct ptlrpc_request *request, void *data, int rc)
         }
         if ((rc >= 0) && request->rq_set && request->rq_set->set_countp)
                 atomic_add(nob, (atomic_t *)request->rq_set->set_countp);
+        client_obd_list_lock(&aa->aa_cli->cl_loi_list_lock);
+        if (lustre_msg_get_opc(request->rq_reqmsg) == OST_WRITE)
+                aa->aa_cli->cl_w_in_flight--;
+        else
+                aa->aa_cli->cl_r_in_flight--;
 
-        spin_lock(&aa->aa_cli->cl_loi_list_lock);
         for (i = 0; i < aa->aa_page_count; i++)
                 osc_release_write_grant(aa->aa_cli, aa->aa_ppga[i], 1);
-        spin_unlock(&aa->aa_cli->cl_loi_list_lock);
-
+        client_obd_list_unlock(&aa->aa_cli->cl_loi_list_lock);
         osc_release_ppga(aa->aa_ppga, aa->aa_page_count);
 
         RETURN(rc);
@@ -1365,30 +1368,49 @@ static int async_internal(int cmd, struct obd_export *exp, struct obdo *oa,
         struct ptlrpc_request     *request;
         struct client_obd         *cli = &exp->exp_obd->u.cli;
         int                        rc, i;
+        struct osc_brw_async_args *aa;
         ENTRY;
 
         /* Consume write credits even if doing a sync write -
          * otherwise we may run out of space on OST due to grant. */
         if (cmd == OBD_BRW_WRITE) {
-                spin_lock(&cli->cl_loi_list_lock);
+                client_obd_list_lock(&cli->cl_loi_list_lock);
                 for (i = 0; i < page_count; i++) {
                         if (cli->cl_avail_grant >= CFS_PAGE_SIZE)
                                 osc_consume_write_grant(cli, pga[i]);
                 }
-                spin_unlock(&cli->cl_loi_list_lock);
+                client_obd_list_unlock(&cli->cl_loi_list_lock);
         }
 
         rc = osc_brw_prep_request(cmd, &exp->exp_obd->u.cli, oa, lsm,
                                   page_count, pga, &request);
 
+        aa = (struct osc_brw_async_args *)&request->rq_async_args;
+        if (cmd == OBD_BRW_READ) {
+                lprocfs_oh_tally_log2(&cli->cl_read_page_hist, page_count);
+                lprocfs_oh_tally(&cli->cl_read_rpc_hist, cli->cl_r_in_flight);
+                ptlrpc_lprocfs_brw(request, OST_READ, aa->aa_requested_nob);
+        } else {
+                lprocfs_oh_tally_log2(&cli->cl_write_page_hist, page_count);
+                lprocfs_oh_tally(&cli->cl_write_rpc_hist,
+                                 cli->cl_w_in_flight);
+                ptlrpc_lprocfs_brw(request, OST_WRITE, aa->aa_requested_nob);
+        }
+
         if (rc == 0) {
                 request->rq_interpret_reply = brw_interpret;
                 ptlrpc_set_add_req(set, request);
+                client_obd_list_lock(&cli->cl_loi_list_lock);
+                if (cmd == OBD_BRW_READ)
+                        cli->cl_r_in_flight++;
+                else
+                        cli->cl_w_in_flight++;
+                client_obd_list_unlock(&cli->cl_loi_list_lock);
         } else if (cmd == OBD_BRW_WRITE) {
-                spin_lock(&cli->cl_loi_list_lock);
+                client_obd_list_lock(&cli->cl_loi_list_lock);
                 for (i = 0; i < page_count; i++)
                         osc_release_write_grant(cli, pga[i], 0);
-                spin_unlock(&cli->cl_loi_list_lock);
+                client_obd_list_unlock(&cli->cl_loi_list_lock);
         }
 
         RETURN (rc);
@@ -1861,9 +1883,7 @@ static int brw_interpret_oap(struct ptlrpc_request *request, void *data, int rc)
         }
 
         cli = aa->aa_cli;
-
         client_obd_list_lock(&cli->cl_loi_list_lock);
-
         /* We need to decrement before osc_ap_completion->osc_wake_cache_waiters
          * is called so we know whether to go to sync BRWs or wait for more
          * RPCs to complete */
@@ -1881,7 +1901,6 @@ static int brw_interpret_oap(struct ptlrpc_request *request, void *data, int rc)
 
         osc_wake_cache_waiters(cli);
         osc_check_rpcs(cli);
-
         client_obd_list_unlock(&cli->cl_loi_list_lock);
 
         OBDO_FREE(aa->aa_oa);

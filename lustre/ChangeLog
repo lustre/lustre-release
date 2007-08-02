@@ -82,6 +82,13 @@ Description: Kernel patches for RHEL4 55.0.2 kernel update
 Details    : Remove inode-nr_unused-2.6.9-rhel4.patch from 2.6-rhel4.series.
 	     Update target file and kernel config.
 
+Severity   : major
+Bugzilla   : 13093
+Description: O_DIRECT bypasses client statistics.
+Details    : When running with O_DIRECT I/O, neither the client rpc_stats nor 
+	     read_ahead_stats were updated. Copied stats section from 
+	     osc_send_oap_rpc() into async_internal().
+
 --------------------------------------------------------------------------------
 
 2007-07-30         Cluster File Systems, Inc. <info@clusterfs.com>
