@@ -98,7 +98,7 @@ static int mds_sendpage(struct ptlrpc_request *req, struct file *file,
         for (i = 0, tmpcount = count; i < npages; i++, tmpcount -= tmpsize) {
                 tmpsize = tmpcount > CFS_PAGE_SIZE ? CFS_PAGE_SIZE : tmpcount;
 
-                pages[i] = alloc_pages(GFP_KERNEL, 0);
+                pages[i] = cfs_alloc_page(CFS_ALLOC_STD);
                 if (pages[i] == NULL)
                         GOTO(cleanup_buf, rc = -ENOMEM);
 
@@ -157,7 +157,7 @@ static int mds_sendpage(struct ptlrpc_request *req, struct file *file,
  cleanup_buf:
         for (i = 0; i < npages; i++)
                 if (pages[i])
-                        __free_pages(pages[i], 0);
+                        __cfs_free_page(pages[i]);
 
         ptlrpc_free_bulk(desc);
  out_free:

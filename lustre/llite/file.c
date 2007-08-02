@@ -38,14 +38,14 @@ struct ll_file_data *ll_file_data_get(void)
 {
         struct ll_file_data *fd;
 
-        OBD_SLAB_ALLOC(fd, ll_file_data_slab, GFP_KERNEL, sizeof *fd);
+        OBD_SLAB_ALLOC_PTR(fd, ll_file_data_slab);
         return fd;
 }
 
 static void ll_file_data_put(struct ll_file_data *fd)
 {
         if (fd != NULL)
-                OBD_SLAB_FREE(fd, ll_file_data_slab, sizeof *fd);
+                OBD_SLAB_FREE_PTR(fd, ll_file_data_slab);
 }
 
 void ll_pack_inode2opdata(struct inode *inode, struct md_op_data *op_data,

@@ -423,8 +423,10 @@ static inline cfs_page_t *alloc_pages(int mask, unsigned long order)
         }
         return pg;
 }
+#define cfs_alloc_pages(mask, order)  alloc_pages((mask), (order))
 
-#define alloc_page(mask) alloc_pages((mask), 0)
+#define alloc_page(mask)      alloc_pages((mask), 0)
+#define cfs_alloc_page(mask)  alloc_page(mask)
 
 static inline void __free_pages(cfs_page_t *pg, int what)
 {
@@ -435,9 +437,11 @@ static inline void __free_pages(cfs_page_t *pg, int what)
 #endif
         free(pg);
 }
+#define __cfs_free_pages(pg, order)  __free_pages((pg), (order))
 
 #define __free_page(page) __free_pages((page), 0)
 #define free_page(page) __free_page(page)
+#define __cfs_free_page(page)  __cfs_free_pages((page), 0)
 
 static inline cfs_page_t* __grab_cache_page(unsigned long index)
 {

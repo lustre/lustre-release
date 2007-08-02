@@ -841,7 +841,7 @@ static int llite_dump_pgcache_seq_open(struct inode *inode, struct file *file)
 
         LPROCFS_ENTRY_AND_CHECK(dp);
 
-        OBD_ALLOC_GFP(dummy_llap, sizeof(*dummy_llap), GFP_KERNEL);
+        OBD_ALLOC_PTR_WAIT(dummy_llap);
         if (dummy_llap == NULL)
                 GOTO(out, rc);
         dummy_llap->llap_page = NULL;
