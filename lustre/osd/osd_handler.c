@@ -656,7 +656,7 @@ static struct thandle *osd_trans_start(const struct lu_env *env,
                 RETURN(ERR_PTR(hook_res));
 
         if (osd_param_is_sane(dev, p)) {
-                OBD_ALLOC_GFP(oh, sizeof *oh, GFP_NOFS);
+                OBD_ALLOC_GFP(oh, sizeof *oh, CFS_ALLOC_IO);
                 if (oh != NULL) {
                         /*
                          * XXX temporary stuff. Some abstraction layer should

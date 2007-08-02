@@ -612,7 +612,7 @@ static int cmm_split_process_dir(const struct lu_env *env,
         rdpg->rp_pages  = cmm_env_info(env)->cmi_pages;
 
         for (i = 0; i < rdpg->rp_npages; i++) {
-                rdpg->rp_pages[i] = alloc_pages(GFP_KERNEL, 0);
+                rdpg->rp_pages[i] = cfs_alloc_page(CFS_ALLOC_STD);
                 if (rdpg->rp_pages[i] == NULL)
                         GOTO(cleanup, rc = -ENOMEM);
         }
@@ -642,7 +642,7 @@ static int cmm_split_process_dir(const struct lu_env *env,
 cleanup:
         for (i = 0; i < rdpg->rp_npages; i++)
                 if (rdpg->rp_pages[i] != NULL)
-                        __free_pages(rdpg->rp_pages[i], 0);
+                        __cfs_free_page(rdpg->rp_pages[i]);
         return rc;
 }
 
