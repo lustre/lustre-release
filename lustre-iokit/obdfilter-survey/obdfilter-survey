@@ -36,7 +36,7 @@
 #  client systems on which this test runs.]
 
 # include library 
-source libobd
+source libecho
 
 # create a set of objects, check there are 'n' contiguous ones and
 # return the first or 'ERROR'
