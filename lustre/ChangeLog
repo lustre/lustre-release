@@ -70,6 +70,12 @@ Bugzilla   : 12415
 Description: updated patchess for new RHEL4 kernel
 Details    : Fixed ext3-unlink-race.patch per Kalpak's comment.
 
+Severity   : normal
+Bugzilla   : 13006
+Description: warnings with build patchless client with vanila 2.6.19 and up
+Details    : change the old ctl_table style and replace ctl_table/ctl_table_header 
+	     with cfs_sysctl_table_t/cfs_sysctl_table_header_t
+
 --------------------------------------------------------------------------------
 
 2007-07-30         Cluster File Systems, Inc. <info@clusterfs.com>
