@@ -155,11 +155,11 @@ test_6() {
     before=`kbytesfree`
     dd if=/dev/urandom bs=4096 count=1280 of=$f || return 28
     lfs getstripe $f
+    sync
+    sleep 2					# ensure we have a fresh statfs
+    sync
 #define OBD_FAIL_MDS_REINT_NET_REP       0x119
     do_facet mds "sysctl -w lustre.fail_loc=0x80000119"
-    sync
-    sleep 1					# ensure we have a fresh statfs
-    sync
     after_dd=`kbytesfree`
     log "before: $before after_dd: $after_dd"
     (( $before > $after_dd )) || return 1
@@ -182,7 +182,8 @@ test_7() {
     before=`kbytesfree`
     dd if=/dev/urandom bs=4096 count=1280 of=$f || return 4
     sync
-    sleep 1					# ensure we have a fresh statfs
+    sleep 2					# ensure we have a fresh statfs
+    sync
     after_dd=`kbytesfree`
     log "before: $before after_dd: $after_dd"
     (( $before > $after_dd )) || return 1
