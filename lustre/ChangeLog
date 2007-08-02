@@ -65,6 +65,11 @@ Bugzilla   : 12333
 Description: obdclass is limited by single OBD_ALLOC(idarray)
 Details    : replace OBD_ALLOC/OBD_FREE with OBD_VMALLOC/OBD_VFREE
 
+Severity   : normal
+Bugzilla   : 12415
+Description: updated patchess for new RHEL4 kernel
+Details    : Fixed ext3-unlink-race.patch per Kalpak's comment.
+
 --------------------------------------------------------------------------------
 
 2007-07-30         Cluster File Systems, Inc. <info@clusterfs.com>
