@@ -2,7 +2,7 @@
        * version 1.6.2
        * Support for kernels:
         2.6.5-7.283 (SLES 9)
-        2.6.9-55.EL (RHEL 4)
+        2.6.9-55.0.2.EL (RHEL 4)
         2.6.16.46-0.14 (SLES 10)
         2.6.18.8 vanilla (kernel.org)
        * Client support for unpatched kernels:
@@ -75,6 +75,12 @@ Bugzilla   : 13006
 Description: warnings with build patchless client with vanila 2.6.19 and up
 Details    : change the old ctl_table style and replace ctl_table/ctl_table_header 
 	     with cfs_sysctl_table_t/cfs_sysctl_table_header_t
+
+Severity   : normal
+Bugzilla   : 12839
+Description: Kernel patches for RHEL4 55.0.2 kernel update
+Details    : Remove inode-nr_unused-2.6.9-rhel4.patch from 2.6-rhel4.series.
+	     Update target file and kernel config.
 
 --------------------------------------------------------------------------------
 

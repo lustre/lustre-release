@@ -28,4 +28,3 @@ bitops_ext2_find_next_le_bit-2.6.patch
 quota-deadlock-on-pagelock-core.patch
 quota-umount-race-fix.patch
 quota-deadlock-on-pagelock-ext3.patch
-inode-nr_unused-2.6.9-rhel4.patch
