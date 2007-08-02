@@ -46,7 +46,7 @@
 
 #include <obd_support.h>
 
-struct ctl_table_header *obd_table_header = NULL;
+cfs_sysctl_table_header_t *obd_table_header = NULL;
 
 #define OBD_SYSCTL 300
 
@@ -82,28 +82,76 @@ int LL_PROC_PROTO(proc_set_timeout)
         return rc;
 }
 
-static ctl_table obd_table[] = {
-        {OBD_FAIL_LOC, "fail_loc", &obd_fail_loc, sizeof(int), 0644, NULL,
-                &proc_fail_loc},
-        {OBD_TIMEOUT, "timeout", &obd_timeout, sizeof(int), 0644, NULL,
-                &proc_set_timeout},
-        {OBD_DEBUG_PEER_ON_TIMEOUT, "debug_peer_on_timeout", 
-                &obd_debug_peer_on_timeout,
-                sizeof(int), 0644, NULL, &proc_dointvec},
-        {OBD_DUMP_ON_TIMEOUT, "dump_on_timeout", &obd_dump_on_timeout,
-                sizeof(int), 0644, NULL, &proc_dointvec},
-        {OBD_DUMP_ON_EVICTION, "dump_on_eviction", &obd_dump_on_eviction,
-                sizeof(int), 0644, NULL, &proc_dointvec},
-        {OBD_MEMUSED, "memused", (int *)&obd_memory.counter,
-                sizeof(int), 0644, NULL, &proc_dointvec},
-        {OBD_LDLM_TIMEOUT, "ldlm_timeout", &ldlm_timeout, sizeof(int), 0644,
-                NULL, &proc_set_timeout},
+static cfs_sysctl_table_t obd_table[] = {
+        {
+                .ctl_name = OBD_FAIL_LOC,
+                .procname = "fail_loc",
+                .data     = &obd_fail_loc,
+                .maxlen   = sizeof(int),
+                .mode     = 0644,
+                .proc_handler = &proc_fail_loc
+        },
+        {
+                .ctl_name = OBD_TIMEOUT,
+                .procname = "timeout",
+                .data     = &obd_timeout,
+                .maxlen   = sizeof(int),
+                .mode     = 0644,
+                .proc_handler = &proc_set_timeout
+        },
+        {
+                .ctl_name = OBD_DEBUG_PEER_ON_TIMEOUT,
+                .procname = "debug_peer_on_timeout",
+                .data     = &obd_debug_peer_on_timeout,
+                .maxlen   = sizeof(int),
+                .mode     = 0644,
+                .proc_handler = &proc_dointvec
+        },
+        {
+                .ctl_name = OBD_DUMP_ON_TIMEOUT,
+                .procname = "dump_on_timeout",
+                .data     = &obd_dump_on_timeout,
+                .maxlen   = sizeof(int),
+                .mode     = 0644,
+                .proc_handler = &proc_dointvec
+        },
+        {
+                .ctl_name = OBD_DUMP_ON_EVICTION,
+                .procname = "dump_on_eviction",
+                .data     = &obd_dump_on_eviction,
+                .maxlen   = sizeof(int),
+                .mode     = 0644,
+                .proc_handler = &proc_dointvec
+        },
+        {
+                .ctl_name = OBD_MEMUSED,
+                .procname = "memused",
+                .data     = (int *)&obd_memory.counter,
+                .maxlen   = sizeof(int),
+                .mode     = 0644,
+                .proc_handler = &proc_dointvec
+        },
+        {
+                .ctl_name = OBD_LDLM_TIMEOUT,
+                .procname = "ldlm_timeout",
+                .data     = &ldlm_timeout,
+                .maxlen   = sizeof(int),
+                .mode     = 0644,
+                .proc_handler = &proc_set_timeout
+        },
         { 0 }
 };
 
-static ctl_table parent_table[] = {
-       {OBD_SYSCTL, "lustre", NULL, 0, 0555, obd_table},
-       {0}
+static cfs_sysctl_table_t parent_table[] = {
+        {
+                .ctl_name = OBD_SYSCTL,
+                .procname = "lustre",
+                .data     = NULL,
+                .maxlen   = 0,
+                .mode     = 0555,
+                .child    = obd_table
+        },
+        {0}
 };
 
 void obd_sysctl_init (void)
