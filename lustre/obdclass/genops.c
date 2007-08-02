@@ -59,7 +59,7 @@ static struct obd_device *obd_device_alloc(void)
 {
         struct obd_device *obd;
 
-        OBD_SLAB_ALLOC(obd, obd_device_cachep, GFP_KERNEL, sizeof(*obd));
+        OBD_SLAB_ALLOC_PTR(obd, obd_device_cachep);
         if (obd != NULL) {
                 obd->obd_magic = OBD_DEVICE_MAGIC;
         }
@@ -72,7 +72,7 @@ static void obd_device_free(struct obd_device *obd)
         LASSERT(obd != NULL);
         LASSERTF(obd->obd_magic == OBD_DEVICE_MAGIC, "obd %p obd_magic %08x != %08x\n", 
                  obd, obd->obd_magic, OBD_DEVICE_MAGIC);
-        OBD_SLAB_FREE(obd, obd_device_cachep, sizeof(*obd));
+        OBD_SLAB_FREE_PTR(obd, obd_device_cachep);
 }
 EXPORT_SYMBOL(obd_device_free);
 

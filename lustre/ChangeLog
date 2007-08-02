@@ -54,6 +54,12 @@ Severity   : normal
 Bugzilla   : 10595
 Description: Error message improvement.
 Details    : Merging of two LCONSOLE_ERROR_MSG into one.
+
+Severity   : normal
+Bugzilla   : 12606
+Description: don't use GFP_* in generic Lustre code.
+Details    : Use cfs_alloc_* functions and CFS_* flags for code portability.
+
 --------------------------------------------------------------------------------
 
 2007-07-30         Cluster File Systems, Inc. <info@clusterfs.com>

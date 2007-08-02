@@ -1615,7 +1615,7 @@ static void ost_thread_done(struct ptlrpc_thread *thread)
         if (tls != NULL) {
                 for (i = 0; i < OST_THREAD_POOL_SIZE; ++ i) {
                         if (tls->page[i] != NULL)
-                                __free_page(tls->page[i]);
+                                __cfs_free_page(tls->page[i]);
                 }
                 OBD_FREE_PTR(tls);
                 thread->t_data = NULL;
@@ -1646,7 +1646,7 @@ static int ost_thread_init(struct ptlrpc_thread *thread)
                  * populate pool
                  */
                 for (i = 0; i < OST_THREAD_POOL_SIZE; ++ i) {
-                        tls->page[i] = alloc_page(OST_THREAD_POOL_GFP);
+                        tls->page[i] = cfs_alloc_page(OST_THREAD_POOL_GFP);
                         if (tls->page[i] == NULL) {
                                 ost_thread_done(thread);
                                 result = -ENOMEM;
