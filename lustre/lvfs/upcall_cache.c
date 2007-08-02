@@ -23,7 +23,7 @@
 
 #define DEBUG_SUBSYSTEM S_SEC
 
-#ifdef HAVE_KERNEL_CONFIG_H
+#ifndef AUTOCONF_INCLUDED
 #include <linux/config.h>
 #endif
 #include <linux/module.h>
