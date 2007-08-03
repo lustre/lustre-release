@@ -105,7 +105,9 @@ EXPORT_SYMBOL(sptlrpc_unregister_policy);
 static
 struct ptlrpc_sec_policy * sptlrpc_flavor2policy(ptlrpc_sec_flavor_t flavor)
 {
+#ifdef CONFIG_KMOD
         static DECLARE_MUTEX(load_mutex);
+#endif
         static atomic_t         loaded = ATOMIC_INIT(0);
         struct                  ptlrpc_sec_policy *policy;
         __u32                   number = SEC_FLAVOR_POLICY(flavor), flag = 0;
@@ -113,7 +115,9 @@ struct ptlrpc_sec_policy * sptlrpc_flavor2policy(ptlrpc_sec_flavor_t flavor)
         if (number >= SPTLRPC_POLICY_MAX)
                 return NULL;
 
+#ifdef CONFIG_KMOD
 again:
+#endif
         read_lock(&policy_lock);
         policy = policies[number];
         if (policy && !try_module_get(policy->sp_owner))

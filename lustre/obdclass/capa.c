@@ -56,13 +56,13 @@ cfs_mem_cache_t *capa_cachep = NULL;
 spinlock_t capa_lock = SPIN_LOCK_UNLOCKED;
 
 struct list_head capa_list[CAPA_SITE_MAX];
-#endif
-/* capa count */
-int capa_count[CAPA_SITE_MAX] = { 0, };
 
 static struct capa_hmac_alg capa_hmac_algs[] = {
         DEF_CAPA_HMAC_ALG("sha1", SHA1, 20, 20),
 };
+#endif
+/* capa count */
+int capa_count[CAPA_SITE_MAX] = { 0, };
 
 EXPORT_SYMBOL(capa_cachep);
 EXPORT_SYMBOL(capa_list);

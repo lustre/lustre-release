@@ -42,6 +42,8 @@
 #include <fcntl.h>
 #include <errno.h>
 #include <unistd.h>
+/* For nanosleep() */
+#include <time.h>
 
 #include "svcgssd.h"
 #include "err_util.h"

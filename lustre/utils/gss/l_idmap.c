@@ -1,6 +1,8 @@
 #include <sys/types.h>
 #include <stdlib.h>
 #include <stdio.h>
+/* For basename() */
+#include <libgen.h>
 
 #include "lsupport.h"
 

@@ -93,7 +93,7 @@ void print_layout(const struct req_format *rf)
 
                         fld = rf->rf_fields[j].d[k];
 
-                        printf("        F%s %i [%03.3i%s %-20.20s (",
+                        printf("        F%s %i [%3.3i%s %-20.20s (",
                                prefix[j], k, offset,
                                variable ? " + ...]" : "]      ",
                                fld->rmf_name);

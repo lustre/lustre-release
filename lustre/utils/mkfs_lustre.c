@@ -686,7 +686,7 @@ int write_local_files(struct mkfs_opts *mop)
         sprintf(filepnm, "%s/%s", mntpt, MOUNT_CONFIGS_DIR);
         ret = mkdir(filepnm, 0777);
         if ((ret != 0) && (errno != EEXIST)) {
-                fprintf(stderr, "%s: Can't make configs dir %s (%d)\n",
+                fprintf(stderr, "%s: Can't make configs dir %s (%s)\n",
                         progname, filepnm, strerror(errno));
                 goto out_umnt;
         } else if (errno == EEXIST) {
@@ -696,7 +696,7 @@ int write_local_files(struct mkfs_opts *mop)
         sprintf(filepnm, "%s/%s", mntpt, "ROOT");
         ret = mkdir(filepnm, 0777);
         if ((ret != 0) && (errno != EEXIST)) {
-                fprintf(stderr, "%s: Can't make ROOT dir %s (%d)\n",
+                fprintf(stderr, "%s: Can't make ROOT dir %s (%s)\n",
                         progname, filepnm, strerror(errno));
                 goto out_umnt;
         } else if (errno == EEXIST) {
@@ -1229,6 +1229,7 @@ int parse_opts(int argc, char *const argv[], struct mkfs_opts *mop,
 
 #define LDISKFS_IOC_GETVERSION _IOR('f', 3, long)
 
+#ifndef TUNEFS /* mkfs.lustre */
 static int mkfs_iam_insert(int key_need_convert, char *keybuf,
                            int rec_need_convert, char *recbuf, char *filename)
 {
@@ -1443,6 +1444,7 @@ out_rmdir:
         rmdir(mntpt);
         return ret;
 }
+#endif
 
 int main(int argc, char *const argv[])
 {

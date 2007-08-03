@@ -38,6 +38,8 @@
 #include <dirent.h>
 #include <time.h>
 #include <ctype.h>
+/* For dirname() */
+#include <libgen.h>
 
 #include <lnet/api-support.h>
 #include <lnet/lnetctl.h>
@@ -1776,7 +1778,7 @@ static int acl_cmd_parse(int argc, char **argv, char *fname, char *cmd)
                 if (!mnt)
                         break;
 
-                if (!llapi_is_lustre_mnttype(mnt))
+                if (!llapi_is_lustre_mnttype(mnt->mnt_type))
                         continue;
 
                 if (!strncmp(mnt->mnt_dir, path, strlen(mnt->mnt_dir))) {

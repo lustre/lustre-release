@@ -1046,6 +1046,7 @@ void ptlrpc_free_clone( struct ptlrpc_request *req)
         OBD_FREE_PTR(req);
 }
 
+#ifdef __KERNEL__
 static void target_finish_recovery(struct obd_device *obd)
 {
         ENTRY;
@@ -1094,6 +1095,7 @@ static void abort_lock_replay_queue(struct obd_device *obd)
                 ptlrpc_free_clone(req);
         }
 }
+#endif
 
 /* Called from a cleanup function if the device is being cleaned up
    forcefully.  The exports should all have been disconnected already,
@@ -1178,7 +1180,7 @@ void target_start_recovery_timer(struct obd_device *obd)
 {
         spin_lock_bh(&obd->obd_processing_task_lock);
         if (obd->obd_recovery_handler
-            || timer_pending(&obd->obd_recovery_timer)) {
+            || timer_pending((struct timer_list *)&obd->obd_recovery_timer)) {
                 spin_unlock_bh(&obd->obd_processing_task_lock);
                 return;
         }

@@ -440,7 +440,9 @@ static int cml_create(const struct lu_env *env, struct md_object *mo_p,
                         spec, ma);
 
         EXIT;
+#ifdef HAVE_SPLIT_SUPPORT
 out:
+#endif
         return rc;
 }
 

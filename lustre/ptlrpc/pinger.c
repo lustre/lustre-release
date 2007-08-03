@@ -86,7 +86,10 @@ static inline int ptlrpc_next_reconnect(struct obd_import *imp)
 
 static atomic_t suspend_timeouts = ATOMIC_INIT(0);
 static cfs_time_t suspend_wakeup_time = 0;
+
+#ifdef __KERNEL__
 static wait_queue_head_t suspend_timeouts_waitq;
+#endif
 
 cfs_time_t ptlrpc_suspend_wakeup_time(void)
 {

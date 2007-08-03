@@ -966,6 +966,7 @@ int import_set_conn_priority(struct obd_import *imp, struct obd_uuid *uuid);
 /* ptlrpc/pinger.c */
 int ptlrpc_pinger_add_import(struct obd_import *imp);
 int ptlrpc_pinger_del_import(struct obd_import *imp);
+cfs_time_t ptlrpc_suspend_wakeup_time(void);
 #ifdef __KERNEL__
 void ping_evictor_start(void);
 void ping_evictor_stop(void);

@@ -44,6 +44,10 @@
 #include <fcntl.h>
 #include <signal.h>
 #include <unistd.h>
+/* For time() */
+#include <time.h>
+/* For waitpid() */
+#include <wait.h>
 
 #include "gssd.h"
 #include "err_util.h"

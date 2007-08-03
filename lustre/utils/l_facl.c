@@ -86,7 +86,7 @@ static char *get_lustre_mount(void)
                 if (!mnt)
                         break;
 
-                if (!llapi_is_lustre_mnttype(mnt))
+                if (!llapi_is_lustre_mnttype(mnt->mnt_type))
                         continue;
 
                 /*
