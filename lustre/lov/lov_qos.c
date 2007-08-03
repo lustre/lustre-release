@@ -487,7 +487,7 @@ int qos_remedy_create(struct lov_request_set *set, struct lov_request *req)
 /* Allocate objects on osts with round-robin algorithm */
 static int alloc_rr(struct lov_obd *lov, int *idx_arr, int *stripe_cnt_orig, int flags)
 {
-        unsigned array_idx, array_idx_temp, ost_count = lov->desc.ld_tgt_count;
+        unsigned array_idx, ost_count = lov->desc.ld_tgt_count;
         unsigned ost_active_count = lov->desc.ld_active_tgt_count;
         int i, *idx_pos;
         __u32 ost_idx;
@@ -516,18 +516,17 @@ static int alloc_rr(struct lov_obd *lov, int *idx_arr, int *stripe_cnt_orig, int
                 lov->lov_start_idx %= ost_count;
                 ++lov->lov_offset_idx;
         }
+        down_read(&lov->lov_qos.lq_rw_sem);
+        ost_start_idx_temp = lov->lov_start_idx;
+
+repeat_find :
         array_idx = (lov->lov_start_idx + lov->lov_offset_idx) % ost_count;
+        idx_pos = idx_arr;
 #ifdef QOS_DEBUG
         CDEBUG(D_QOS, "want %d startidx %d startcnt %d offset %d arrayidx %d\n",
                stripe_cnt, lov->lov_start_idx, lov->lov_start_count,
                lov->lov_offset_idx, array_idx);
 #endif
-        down_read(&lov->lov_qos.lq_rw_sem);
-        ost_start_idx_temp = lov->lov_start_idx;
-        array_idx_temp = array_idx;
-
-repeat_find :
-        idx_pos = idx_arr;
 
         for (i = 0; i < ost_count; i++, array_idx=(array_idx + 1) % ost_count) {
                 ++lov->lov_start_idx;
@@ -563,7 +562,6 @@ repeat_find :
                 first_pass = 0;
                 want_level = 1; 
                 lov->lov_start_idx = ost_start_idx_temp;
-                array_idx = array_idx_temp;
                 goto repeat_find;
         }
 
@@ -578,13 +576,14 @@ static int alloc_specific(struct lov_obd *lov, struct lov_stripe_md *lsm,
                           int *idx_arr)
 {
         unsigned ost_idx, ost_count = lov->desc.ld_tgt_count;
-        int i, *idx_pos = idx_arr;
+        int i, *idx_pos;
         int first_pass = 1;
         int want_level = 0;
         ENTRY;
 
 repeat_find:
         ost_idx = lsm->lsm_oinfo[0]->loi_ost_idx;
+        idx_pos = idx_arr;
         for (i = 0; i < ost_count; i++, ost_idx = (ost_idx + 1) % ost_count) {
                 if (!lov->lov_tgts[ost_idx] ||
                     !lov->lov_tgts[ost_idx]->ltd_active) {

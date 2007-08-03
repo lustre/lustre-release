@@ -699,9 +699,16 @@ Details    : If a OST has no remain object, system will block on the creating
 Severity   : normal
 Bugzilla   : 13148
 Frequency  : only in recovery
-Description: Mark OST as as early accessible if his start SYNC.
+Description: Mark OST as early accessible if his start SYNC.
 Details    : osc_precreate return flag early accessible if oscc marked as 
              OSCC_FLAG_SYNC_IN_PROGRESS.
+
+Severity   : normal
+Bugzilla   : 13196
+Frequency  : rare
+Description: Sometimes precreate code can triger create object on wrong ost
+Details    : Wrong protected or not not restored variables aftre precreate loop
+             can produce creation object on wrong ost.
 	     
 --------------------------------------------------------------------------------
 
