@@ -25,7 +25,7 @@ ksocknal_lib_tunables_init ()
         int    i = 0;
         int    j = 1;
 
-        ksocknal_ctl_table[i++] =
+        ksocknal_ctl_table[i++] = (cfs_sysctl_table_t)
                 {
                         .ctl_name = j++,
                         .procname = "timeout",
@@ -34,7 +34,7 @@ ksocknal_lib_tunables_init ()
                         .mode     = 0644,
                         .proc_handler = &proc_dointvec
                 };
-        ksocknal_ctl_table[i++] =
+        ksocknal_ctl_table[i++] = (cfs_sysctl_table_t)
                 {
                         .ctl_name = j++,
                         .procname = "credits",
@@ -43,7 +43,7 @@ ksocknal_lib_tunables_init ()
                         .mode     = 0444,
                         .proc_handler = &proc_dointvec
                 };
-        ksocknal_ctl_table[i++] =
+        ksocknal_ctl_table[i++] = (cfs_sysctl_table_t)
                 {
                         .ctl_name = j++,
                         .procname = "peer_credits",
@@ -52,7 +52,7 @@ ksocknal_lib_tunables_init ()
                         .mode     = 0444,
                         .proc_handler = &proc_dointvec
                 };
-        ksocknal_ctl_table[i++] =
+        ksocknal_ctl_table[i++] = (cfs_sysctl_table_t)
                 {
                         .ctl_name = j++,
                         .procname = "nconnds",
@@ -61,7 +61,7 @@ ksocknal_lib_tunables_init ()
                         .mode     = 0444,
                         .proc_handler = &proc_dointvec
                 };
-        ksocknal_ctl_table[i++] =
+        ksocknal_ctl_table[i++] = (cfs_sysctl_table_t)
                 {
                         .ctl_name = j++,
                         .procname = "min_reconnectms",
@@ -70,7 +70,7 @@ ksocknal_lib_tunables_init ()
                         .mode     = 0444,
                         .proc_handler = &proc_dointvec
                 };
-        ksocknal_ctl_table[i++] =
+        ksocknal_ctl_table[i++] = (cfs_sysctl_table_t)
                 {
                         .ctl_name = j++,
                         .procname = "max_reconnectms",
@@ -79,7 +79,7 @@ ksocknal_lib_tunables_init ()
                         .mode     = 0444,
                         .proc_handler = &proc_dointvec
                 };
-        ksocknal_ctl_table[i++] =
+        ksocknal_ctl_table[i++] = (cfs_sysctl_table_t)
                 {
                         .ctl_name = j++,
                         .procname = "eager_ack",
@@ -88,7 +88,7 @@ ksocknal_lib_tunables_init ()
                         .mode     = 0644,
                         .proc_handler = &proc_dointvec
                 };
-        ksocknal_ctl_table[i++] =
+        ksocknal_ctl_table[i++] = (cfs_sysctl_table_t)
                 {
                         .ctl_name = j++,
                         .procname = "zero_copy",
@@ -97,7 +97,7 @@ ksocknal_lib_tunables_init ()
                         .mode     = 0644,
                         .proc_handler = &proc_dointvec
                 };
-        ksocknal_ctl_table[i++] =
+        ksocknal_ctl_table[i++] = (cfs_sysctl_table_t)
                 {
                         .ctl_name = j++,
                         .procname = "typed",
@@ -106,7 +106,7 @@ ksocknal_lib_tunables_init ()
                         .mode     = 0444,
                         .proc_handler = &proc_dointvec
                 };
-        ksocknal_ctl_table[i++] =
+        ksocknal_ctl_table[i++] = (cfs_sysctl_table_t)
                 {
                         .ctl_name = j++,
                         .procname = "min_bulk",
@@ -115,7 +115,7 @@ ksocknal_lib_tunables_init ()
                         .mode     = 0644,
                         .proc_handler = &proc_dointvec
                 };
-        ksocknal_ctl_table[i++] =
+        ksocknal_ctl_table[i++] = (cfs_sysctl_table_t)
                 {
                         .ctl_name = j++,
                         .procname = "rx_buffer_size",
@@ -124,7 +124,7 @@ ksocknal_lib_tunables_init ()
                         .mode     = 0644,
                         .proc_handler = &proc_dointvec
                 };
-        ksocknal_ctl_table[i++] =
+        ksocknal_ctl_table[i++] = (cfs_sysctl_table_t)
                 {
                         .ctl_name = j++,
                         .procname = "tx_buffer_size",
@@ -133,7 +133,7 @@ ksocknal_lib_tunables_init ()
                         .mode     = 0644,
                         .proc_handler = &proc_dointvec
                 };
-        ksocknal_ctl_table[i++] =
+        ksocknal_ctl_table[i++] = (cfs_sysctl_table_t)
                 {
                         .ctl_name = j++,
                         .procname = "nagle",
@@ -143,7 +143,7 @@ ksocknal_lib_tunables_init ()
                         .proc_handler = &proc_dointvec
                 };
 #if CPU_AFFINITY
-        ksocknal_ctl_table[i++] =
+        ksocknal_ctl_table[i++] = (cfs_sysctl_table_t)
                 {
                         .ctl_name = j++,
                         .procname = "irq_affinity",
@@ -153,7 +153,7 @@ ksocknal_lib_tunables_init ()
                         .proc_handler = &proc_dointvec
                 };
 #endif
-        ksocknal_ctl_table[i++] =
+        ksocknal_ctl_table[i++] = (cfs_sysctl_table_t)
                 {
                         .ctl_name = j++,
                         .procname = "keepalive_idle",
@@ -162,7 +162,7 @@ ksocknal_lib_tunables_init ()
                         .mode     = 0644,
                         .proc_handler = &proc_dointvec
                 };
-        ksocknal_ctl_table[i++] =
+        ksocknal_ctl_table[i++] = (cfs_sysctl_table_t)
                 {
                         .ctl_name = j++,
                         .procname = "keepalive_count",
@@ -171,7 +171,7 @@ ksocknal_lib_tunables_init ()
                         .mode     = 0644,
                         .proc_handler = &proc_dointvec
                 };
-        ksocknal_ctl_table[i++] =
+        ksocknal_ctl_table[i++] = (cfs_sysctl_table_t)
                 {
                         .ctl_name = j++,
                         .procname = "keepalive_intvl",
@@ -181,7 +181,7 @@ ksocknal_lib_tunables_init ()
                         .proc_handler = &proc_dointvec
                 };
 #ifdef SOCKNAL_BACKOFF
-        ksocknal_ctl_table[i++] =
+        ksocknal_ctl_table[i++] = (cfs_sysctl_table_t)
                 {
                         .ctl_name = j++,
                         .procname = "backoff_init",
@@ -190,7 +190,7 @@ ksocknal_lib_tunables_init ()
                         .mode     = 0644,
                         .proc_handler = &proc_dointvec
                 };
-        ksocknal_ctl_table[i++] =
+        ksocknal_ctl_table[i++] = (cfs_sysctl_table_t)
                 {
                         .ctl_name = j++,
                         .procname = "backoff_max",
