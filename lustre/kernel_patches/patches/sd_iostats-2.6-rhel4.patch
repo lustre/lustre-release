@@ -1,7 +1,9 @@
-Index: linux-2.6.9/drivers/scsi/Kconfig
+Index: linux-2.6.9-5.0.3.EL/drivers/scsi/Kconfig
 ===================================================================
---- linux-2.6.9.orig/drivers/scsi/Kconfig	2007-08-02 09:26:17.000000000 +0200
-+++ linux-2.6.9/drivers/scsi/Kconfig	2007-08-02 09:26:21.000000000 +0200
+Index: linux+rhel4+chaos/drivers/scsi/Kconfig
+===================================================================
+--- linux+rhel4+chaos.orig/drivers/scsi/Kconfig
++++ linux+rhel4+chaos/drivers/scsi/Kconfig
 @@ -61,6 +61,14 @@ config SCSI_DUMP
  	help
  	   SCSI dump support
@@ -17,10 +19,10 @@ Index: linux-2.6.9/drivers/scsi/Kconfig
  config CHR_DEV_ST
  	tristate "SCSI tape support"
  	depends on SCSI
-Index: linux-2.6.9/drivers/scsi/sd.c
+Index: linux+rhel4+chaos/drivers/scsi/sd.c
 ===================================================================
---- linux-2.6.9.orig/drivers/scsi/sd.c	2007-08-02 09:26:17.000000000 +0200
-+++ linux-2.6.9/drivers/scsi/sd.c	2007-08-02 09:29:31.000000000 +0200
+--- linux+rhel4+chaos.orig/drivers/scsi/sd.c
++++ linux+rhel4+chaos/drivers/scsi/sd.c
 @@ -63,6 +63,38 @@
  
  #include "scsi_logging.h"
@@ -60,27 +62,15 @@ Index: linux-2.6.9/drivers/scsi/sd.c
  /*
   * More than enough for everybody ;)  The huge number of majors
   * is a leftover from 16bit dev_t days, we don't really need that
-@@ -71,10 +103,18 @@
- #define SD_MAJORS	16
- 
- /*
-- * This is limited by the naming scheme enforced in sd_probe,
-+ * SD_MAX_DISKS is limited by the naming scheme enforced in sd_probe,
-  * add another character to it if you really need more disks.
-+ *
-+ * SD_STATS must not be less than SD_MAX_DISKS and, is limited by 131072/8
-+ * for sd_iostats kmalloc (see kmalloc_sizes.h)
+@@ -76,6 +108,7 @@
   */
-+#if (defined(CONFIG_SD_IOSTATS) && defined(CONFIG_PROC_FS))
-+#define SD_STATS	16384
-+#define SD_MAX_DISKS	SD_STATS
-+#else
  #define SD_MAX_DISKS	(((26 * 26) + 26 + 1) * 26)
-+#endif
  
++#define SD_STATS 256
  /*
   * Time out in seconds for disks and Magneto-opticals (which are slower).
-@@ -278,6 +318,9 @@ static int sd_init_command(struct scsi_c
+  */
+@@ -278,6 +311,9 @@ static int sd_init_command(struct scsi_c
  	SCSI_LOG_HLQUEUE(2, printk("%s : block=%llu\n",
  				   disk->disk_name, (unsigned long long)block));
  
@@ -90,7 +80,7 @@ Index: linux-2.6.9/drivers/scsi/sd.c
  	/*
  	 * If we have a 1K hardware sectorsize, prevent access to single
  	 * 512 byte sectors.  In theory we could handle this - in fact
-@@ -474,6 +517,7 @@ static int sd_open(struct inode *inode, 
+@@ -474,6 +510,7 @@ static int sd_open(struct inode *inode, 
  			scsi_set_medium_removal(sdev, SCSI_REMOVAL_PREVENT);
  	}
  
@@ -98,7 +88,7 @@ Index: linux-2.6.9/drivers/scsi/sd.c
  	return 0;
  
  error_out:
-@@ -500,8 +544,20 @@ static int sd_release(struct inode *inod
+@@ -500,8 +537,20 @@ static int sd_release(struct inode *inod
  
  	SCSI_LOG_HLQUEUE(3, printk("sd_release: disk=%s\n", disk->disk_name));
  
@@ -121,7 +111,7 @@ Index: linux-2.6.9/drivers/scsi/sd.c
  			scsi_set_medium_removal(sdev, SCSI_REMOVAL_ALLOW);
  	}
  
-@@ -1575,6 +1631,342 @@ static void sd_shutdown(struct device *d
+@@ -1575,6 +1624,342 @@ static void sd_shutdown(struct device *d
  	sd_sync_cache(sdp);
  }	
  
@@ -464,7 +454,7 @@ Index: linux-2.6.9/drivers/scsi/sd.c
  /**
   *	init_sd - entry point for this driver (both when built in or when
   *	a module).
-@@ -1584,6 +1976,7 @@ static void sd_shutdown(struct device *d
+@@ -1584,6 +1969,7 @@ static void sd_shutdown(struct device *d
  static int __init init_sd(void)
  {
  	int majors = 0, i;
@@ -472,7 +462,7 @@ Index: linux-2.6.9/drivers/scsi/sd.c
  
  	SCSI_LOG_HLQUEUE(3, printk("init_sd: sd driver entry point\n"));
  
-@@ -1594,7 +1987,10 @@ static int __init init_sd(void)
+@@ -1594,7 +1980,10 @@ static int __init init_sd(void)
  	if (!majors)
  		return -ENODEV;
  
@@ -484,7 +474,7 @@ Index: linux-2.6.9/drivers/scsi/sd.c
  }
  
  /**
-@@ -1608,6 +2004,7 @@ static void __exit exit_sd(void)
+@@ -1608,6 +1997,7 @@ static void __exit exit_sd(void)
  
  	SCSI_LOG_HLQUEUE(3, printk("exit_sd: exiting sd driver\n"));
  
@@ -492,10 +482,10 @@ Index: linux-2.6.9/drivers/scsi/sd.c
  	scsi_unregister_driver(&sd_template.gendrv);
  	for (i = 0; i < SD_MAJORS; i++)
  		unregister_blkdev(sd_major(i), "sd");
-Index: linux-2.6.9/drivers/scsi/scsi_proc.c
+Index: linux+rhel4+chaos/drivers/scsi/scsi_proc.c
 ===================================================================
---- linux-2.6.9.orig/drivers/scsi/scsi_proc.c	2007-08-02 09:26:17.000000000 +0200
-+++ linux-2.6.9/drivers/scsi/scsi_proc.c	2007-08-02 09:26:21.000000000 +0200
+--- linux+rhel4+chaos.orig/drivers/scsi/scsi_proc.c
++++ linux+rhel4+chaos/drivers/scsi/scsi_proc.c
 @@ -38,7 +38,8 @@
  /* 4K page size, but our output routines, use some slack for overruns */
  #define PROC_BLOCK_SIZE (3*1024)

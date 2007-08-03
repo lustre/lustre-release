@@ -11,12 +11,6 @@ tbd         Cluster File Systems, Inc. <info@clusterfs.com>
        * Recommended e2fsprogs version: 1.39.cfs8
        * Note that reiserfs quotas are disabled on SLES 10 in this kernel.
 
-Severity   : normal
-Frequency  : when using more than 256 SCSI disks on a single server
-Bugzilla   : 12755
-Description: Kernel BUG: sd_iostats_bump: unexpected disk index
-Details    : a kernel BUG is hit when using more than 256 SCSI disks.
-
 2007-08-10         Cluster File Systems, Inc. <info@clusterfs.com>
        * version 1.6.1
        * Support for kernels:
