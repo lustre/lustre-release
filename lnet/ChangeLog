@@ -28,6 +28,12 @@
        * bug fixes
 
 Severity   : minor
+Bugzilla   : 11223
+Details    : Change "dropped message" CERRORs to D_NETERROR so they are
+             logged instead of creating "console chatter" when a lustre
+	     timeout races with normal RPC completion.
+
+Severity   : minor
 Details    : lnet_clear_peer_table can wait forever if user forgets to
              clear a lazy portal.
 
