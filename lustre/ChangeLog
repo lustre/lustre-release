@@ -107,12 +107,6 @@ Bugzilla   : 11802
 Description: lustre support for RHEL5
 Details    : Add support for RHEL5.
 
-Severity   : normal
-Frequency  : when using more than 256 SCSI disks on a single server
-Bugzilla   : 12755
-Description: Kernel BUG: sd_iostats_bump: unexpected disk index
-Details    : a kernel BUG is hit when using more than 256 SCSI disks.
-
 --------------------------------------------------------------------------------
 
 2007-07-30         Cluster File Systems, Inc. <info@clusterfs.com>
