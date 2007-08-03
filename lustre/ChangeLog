@@ -89,6 +89,12 @@ Frequency  : only for Cray XT3
 Description: peer credits not enough on many OST per OSS systems.
 Details    : Use new lnet way to add credits as we need those for pings and ASTs
 
+Severity   : minor
+Bugzilla   : 12790
+Frequency  : only with liblustre
+Description: Liblustre is not releasing flock locks on file close.
+Details    : Release flock locks on file close.
+
 --------------------------------------------------------------------------------
 
 2007-07-30         Cluster File Systems, Inc. <info@clusterfs.com>

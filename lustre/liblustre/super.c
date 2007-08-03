@@ -1267,9 +1267,7 @@ static int llu_iop_rmdir_raw(struct pnode *pno)
 #define FCNTL_FLMASK_INVALID (O_NONBLOCK|O_ASYNC)
 
 /* refer to ll_file_flock() for details */
-static int llu_file_flock(struct inode *ino,
-                          int cmd,
-                          struct file_lock *file_lock)
+int llu_file_flock(struct inode *ino, int cmd, struct file_lock *file_lock)
 {
         struct llu_inode_info *lli = llu_i2info(ino);
         struct intnl_stat *st = llu_i2stat(ino);

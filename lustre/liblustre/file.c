@@ -402,8 +402,32 @@ int llu_file_release(struct inode *inode)
 int llu_iop_close(struct inode *inode)
 {
         int rc;
+        struct ldlm_res_id res_id =
+                { .name = {llu_i2stat(inode)->st_ino,
+                 (__u64)llu_i2info(inode)->lli_st_generation, LDLM_FLOCK} };
+        struct lustre_handle lockh = {0};
 
         liblustre_wait_event(0);
+
+        /* If we have posix locks on this file - clear all of those */
+        if (ldlm_lock_match(
+                      class_exp2obd(llu_i2mdcexp(inode))->obd_namespace,
+                      LDLM_FL_BLOCK_GRANTED|LDLM_FL_TEST_LOCK|LDLM_FL_CBPENDING,
+                      &res_id, LDLM_FLOCK, NULL, LCK_PR|LCK_PW, &lockh)) {
+                struct file_lock lock;
+                lock.fl_type = F_UNLCK;
+                lock.fl_flags = FL_POSIX;
+                lock.fl_start = 0;
+                lock.fl_end = OFFSET_MAX;
+                lock.fl_pid = getpid();
+                lock.fl_notify = NULL;
+                lock.fl_insert = NULL;
+                lock.fl_remove = NULL;
+                lock.fl_owner = NULL;
+                lock.fl_file = NULL;
+
+                llu_file_flock(inode, F_SETLK, &lock);
+        }
 
         rc = llu_file_release(inode);
         if (rc) {

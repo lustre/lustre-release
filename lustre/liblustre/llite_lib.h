@@ -189,6 +189,7 @@ int ll_it_open_error(int phase, struct lookup_intent *it);
 struct inode *llu_iget(struct filesys *fs, struct lustre_md *md);
 int llu_inode_getattr(struct inode *inode, struct lov_stripe_md *lsm);
 int llu_setattr_raw(struct inode *inode, struct iattr *attr);
+int llu_file_flock(struct inode *ino, int cmd, struct file_lock *file_lock);
 
 extern struct fssw_ops llu_fssw_ops;
 
