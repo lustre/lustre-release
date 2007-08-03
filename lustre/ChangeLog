@@ -83,6 +83,12 @@ Details    : When running with O_DIRECT I/O, neither the client rpc_stats nor
 	     read_ahead_stats were updated. Copied stats section from 
 	     osc_send_oap_rpc() into async_internal().
 
+Severity   : minor
+Bugzilla   : 11706
+Frequency  : only for Cray XT3
+Description: peer credits not enough on many OST per OSS systems.
+Details    : Use new lnet way to add credits as we need those for pings and ASTs
+
 --------------------------------------------------------------------------------
 
 2007-07-30         Cluster File Systems, Inc. <info@clusterfs.com>

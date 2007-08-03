@@ -1109,6 +1109,7 @@ static int mdc_import_event(struct obd_device *obd, struct obd_import *imp,
 
         switch (event) {
         case IMP_EVENT_DISCON: {
+                ptlrpc_import_setasync(imp, -obd->obd_namespace->ns_max_unused);
                 break;
         }
         case IMP_EVENT_INACTIVE: {
@@ -1127,6 +1128,7 @@ static int mdc_import_event(struct obd_device *obd, struct obd_import *imp,
                 break;
         }
         case IMP_EVENT_OCD:
+                ptlrpc_import_setasync(imp, obd->obd_namespace->ns_max_unused);
                 break;
 
         default:

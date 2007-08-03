@@ -1031,3 +1031,11 @@ out:
         RETURN(rc);
 }
 
+/* Sets maximal number of RPCs possible originating from other side of this
+   import (server) to us and number of async RPC replies that we are not waiting
+   for arriving */
+void ptlrpc_import_setasync(struct obd_import *imp, int count)
+{
+        LNetSetAsync(imp->imp_connection->c_peer, count);
+}
+

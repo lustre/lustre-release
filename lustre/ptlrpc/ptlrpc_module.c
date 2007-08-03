@@ -252,6 +252,7 @@ EXPORT_SYMBOL(ptlrpc_deactivate_import);
 EXPORT_SYMBOL(ptlrpc_invalidate_import);
 EXPORT_SYMBOL(ptlrpc_fail_import);
 EXPORT_SYMBOL(ptlrpc_recover_import);
+EXPORT_SYMBOL(ptlrpc_import_setasync);
 
 /* pinger.c */
 EXPORT_SYMBOL(ptlrpc_pinger_add_import);

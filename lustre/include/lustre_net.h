@@ -750,6 +750,7 @@ int ptlrpc_connect_import(struct obd_import *imp, char * new_uuid);
 int ptlrpc_init_import(struct obd_import *imp);
 int ptlrpc_disconnect_import(struct obd_import *imp, int noclose);
 int ptlrpc_import_recovery_state_machine(struct obd_import *imp);
+void ptlrpc_import_setasync(struct obd_import *imp, int count);
 
 /* ptlrpc/pack_generic.c */
 int lustre_msg_swabbed(struct lustre_msg *msg);

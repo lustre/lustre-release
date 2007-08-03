@@ -3508,6 +3508,7 @@ static int osc_import_event(struct obd_device *obd,
                 cli->cl_avail_grant = 0;
                 cli->cl_lost_grant = 0;
                 client_obd_list_unlock(&cli->cl_loi_list_lock);
+                ptlrpc_import_setasync(imp, -1);
 
                 break;
         }
@@ -3551,6 +3552,7 @@ static int osc_import_event(struct obd_device *obd,
                 if (ocd->ocd_connect_flags & OBD_CONNECT_REQPORTAL)
                         imp->imp_client->cli_request_portal =OST_REQUEST_PORTAL;
 
+                ptlrpc_import_setasync(imp, 1);
                 rc = obd_notify_observer(obd, obd, OBD_NOTIFY_OCD, NULL);
                 break;
         }
