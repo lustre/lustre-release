@@ -107,6 +107,14 @@ Bugzilla   : 11802
 Description: lustre support for RHEL5
 Details    : Add support for RHEL5.
 
+Severity   : minor
+Bugzilla   : 11327
+Frequency  : rare
+Description: ASSERTION(export != NULL) failed in target_handle_connect
+Details    : Assetion hit is result of rare race between disconnect and connet
+	     to same nid. target_handle_connect found old connect cockie and
+	     tried to reconnect, but can't find export for this cockie.
+
 --------------------------------------------------------------------------------
 
 2007-07-30         Cluster File Systems, Inc. <info@clusterfs.com>

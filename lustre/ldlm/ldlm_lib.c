@@ -703,6 +703,12 @@ int target_handle_connect(struct ptlrpc_request *req, svc_handler_t handler)
                   class_export_put(export);
                   export = NULL;
                   rc = -EALREADY;
+        } else if (export != NULL && export->exp_failed) { /* bug 11327 */
+                CDEBUG(D_HA, "%s: exp %p evict in progress - new cookie needed "
+                      "for connect\n", export->exp_obd->obd_name, export);
+                class_export_put(export);
+                export = NULL;
+                rc = -ENODEV;
         } else if (export != NULL) {
                 spin_lock(&export->exp_lock);
                 export->exp_connecting = 1;
@@ -821,7 +827,7 @@ int target_handle_connect(struct ptlrpc_request *req, svc_handler_t handler)
                        cluuid.uuid, libcfs_nid2str(req->rq_peer.nid),
                        export->exp_conn_cnt,
                        lustre_msg_get_conn_cnt(req->rq_reqmsg));
-                       
+
                 spin_unlock(&export->exp_lock);
                 GOTO(out, rc = -EALREADY);
         }
@@ -848,8 +854,8 @@ int target_handle_connect(struct ptlrpc_request *req, svc_handler_t handler)
         spin_lock(&target->obd_dev_lock);
         /* Export might be hashed already, e.g. if this is reconnect */
         if (hlist_unhashed(&export->exp_nid_hash))
-                lustre_hash_additem(export->exp_obd->obd_nid_hash_body, 
-                                    &export->exp_connection->c_peer.nid, 
+                lustre_hash_additem(export->exp_obd->obd_nid_hash_body,
+                                    &export->exp_connection->c_peer.nid,
                                     &export->exp_nid_hash);
         spin_unlock(&target->obd_dev_lock);
 
@@ -884,7 +890,7 @@ out:
                 export->exp_connecting = 0;
                 spin_unlock(&export->exp_lock);
 	}
-        if (targref) 
+        if (targref)
                 class_decref(targref);
         if (rc)
                 req->rq_status = rc;
