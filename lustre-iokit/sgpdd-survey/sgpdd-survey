@@ -136,7 +136,9 @@ for ((rsz=$rszlo;rsz<=$rszhi;rsz*=2)); do
 		    dev=${devs[i]}
 		    devsize=$((bs*`sg_readcap -b ${dev} | awk '{print $1}'`/1024))
 		    if [ $devsize -lt $actual_size ]; then
-			echo -e "device $(sg_map | grep $dev | awk '{ print $2; }') not big enough: $devsize < $actual_size.\nConsider reducing \$size"
+			_dev=$(sg_map | grep $dev | awk '{ print $2; }')
+			echo -e "device $_dev not big enough: $devsize <" \
+				"$actual_size.\nConsider reducing \$size"
 			exit 1
 		    fi
 		    if [ $action = read ]; then
