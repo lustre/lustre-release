@@ -54,6 +54,8 @@
 #define SOCKNAL_SINGLE_FRAG_TX      0           /* disable multi-fragment sends */
 #define SOCKNAL_SINGLE_FRAG_RX      0           /* disable multi-fragment receives */
 
+#define SOCKNAL_VERSION_DEBUG       0           /* enable protocol version debugging */
+
 /* risk kmap deadlock on multi-frag I/O (backs off to single-frag if disabled).
  * no risk if we're not running on a CONFIG_HIGHMEM platform. */
 #ifdef CONFIG_HIGHMEM
@@ -114,6 +116,9 @@ typedef struct
 #ifdef SOCKNAL_BACKOFF
         int              *ksnd_backoff_init;    /* initial TCP backoff */
         int              *ksnd_backoff_max;     /* maximum TCP backoff */
+#endif
+#if SOCKNAL_VERSION_DEBUG
+        int              *ksnd_protocol;        /* protocol version */
 #endif
 #if defined(CONFIG_SYSCTL) && !CFS_SYSFS_MODULE_PARM
         cfs_sysctl_table_header_t *ksnd_sysctl;   /* sysctl interface */
@@ -186,7 +191,7 @@ typedef struct
 struct ksock_conn;                              /* forward ref */
 struct ksock_peer;                              /* forward ref */
 struct ksock_route;                             /* forward ref */
-struct ksock_protocol;                          /* forward ref */
+struct ksock_proto;                             /* forward ref */
 
 typedef struct                                  /* transmit packet */
 {
@@ -251,7 +256,7 @@ typedef struct ksock_conn
         int                 ksnc_closing:1;     /* being shut down */
         int                 ksnc_flip:1;        /* flip or not, only for V2.x */
         int                 ksnc_zc_capable:1;  /* enable to ZC */
-        __u64               ksnc_incarnation;   /* peer's incarnation */
+        struct ksock_proto *ksnc_proto;         /* protocol for the connection */
 
         /* reader */
         struct list_head    ksnc_rx_list;       /* where I enq waiting input or a forwarding descriptor */
@@ -285,8 +290,6 @@ typedef struct ksock_conn
         atomic_t            ksnc_tx_nob;        /* # bytes queued */
         int                 ksnc_tx_ready;      /* write space */
         int                 ksnc_tx_scheduled;  /* being progressed */
-
-        struct ksock_protocol *ksnc_proto;      /* protocol table for the connection */
         
 #if !SOCKNAL_SINGLE_FRAG_RX
         struct iovec        ksnc_rx_scratch_iov[LNET_MAX_IOV];
@@ -313,7 +316,6 @@ typedef struct ksock_route
         unsigned int        ksnr_deleted:1;     /* been removed from peer? */
         unsigned int        ksnr_share_count;   /* created explicitly? */
         int                 ksnr_conn_count;    /* # conns established by this route */
-        struct ksock_protocol *ksnr_proto  ;    /* protocol table for connecting */
 } ksock_route_t;
 
 typedef struct ksock_peer
@@ -326,6 +328,8 @@ typedef struct ksock_peer
         int                 ksnp_accepting;     /* # passive connections pending */
         int                 ksnp_error;         /* errno on closing last conn */
         __u64               ksnp_zc_next_cookie;/* ZC completion cookie */
+        __u64               ksnp_incarnation;   /* latest known peer incarnation */
+        struct ksock_proto *ksnp_proto;         /* latest known peer protocol */
         struct list_head    ksnp_conns;         /* all active connections */
         struct list_head    ksnp_routes;        /* routes */
         struct list_head    ksnp_tx_queue;      /* waiting packets */
@@ -347,17 +351,17 @@ typedef struct ksock_connreq
 extern ksock_nal_data_t ksocknal_data;
 extern ksock_tunables_t ksocknal_tunables;
 
-typedef struct ksock_protocol
+typedef struct ksock_proto
 {
         int     pro_version;                                                /* version number of protocol */
         int     (*pro_send_hello)(ksock_conn_t *, ksock_hello_msg_t *);     /* handshake function */
         int     (*pro_recv_hello)(ksock_conn_t *, ksock_hello_msg_t *, int);/* handshake function */
         void    (*pro_pack)(ksock_tx_t *);                                  /* message pack */
         void    (*pro_unpack)(ksock_msg_t *);                               /* message unpack */
-} ksock_protocol_t;
+} ksock_proto_t;
 
-extern ksock_protocol_t ksocknal_protocol_v1x;
-extern ksock_protocol_t ksocknal_protocol_v2x;
+extern ksock_proto_t ksocknal_protocol_v1x;
+extern ksock_proto_t ksocknal_protocol_v2x;
 
 #define KSOCK_PROTO_V1_MAJOR    LNET_PROTO_TCP_VERSION_MAJOR
 #define KSOCK_PROTO_V1_MINOR    LNET_PROTO_TCP_VERSION_MINOR
@@ -497,7 +501,8 @@ extern int ksocknal_create_conn (lnet_ni_t *ni, ksock_route_t *route,
 extern void ksocknal_close_conn_locked (ksock_conn_t *conn, int why);
 extern void ksocknal_terminate_conn (ksock_conn_t *conn);
 extern void ksocknal_destroy_conn (ksock_conn_t *conn);
-extern int ksocknal_close_stale_conns_locked (ksock_peer_t *peer, __u64 incarnation);
+extern int  ksocknal_close_peer_conns_locked (ksock_peer_t *peer,
+                                              __u32 ipaddr, int why);
 extern int ksocknal_close_conn_and_siblings (ksock_conn_t *conn, int why);
 extern int ksocknal_close_matching_conns (lnet_process_id_t id, __u32 ipaddr);
 
@@ -511,7 +516,6 @@ extern int ksocknal_new_packet (ksock_conn_t *conn, int skip);
 extern int ksocknal_scheduler (void *arg);
 extern int ksocknal_connd (void *arg);
 extern int ksocknal_reaper (void *arg);
-extern ksock_protocol_t * ksocknal_compat_protocol(ksock_hello_msg_t *);
 extern int ksocknal_send_hello (lnet_ni_t *ni, ksock_conn_t *conn,
                                 lnet_nid_t peer_nid, ksock_hello_msg_t *hello);
 extern int ksocknal_recv_hello (lnet_ni_t *ni, ksock_conn_t *conn, 

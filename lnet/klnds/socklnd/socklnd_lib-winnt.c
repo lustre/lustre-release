@@ -656,6 +656,7 @@ ksocknal_sched_conn (ksock_conn_t *conn, int mode, ksock_tx_t *tx)
 
         if (mode) { /* transmission can continue ... */ 
 
+#error "This is out of date - we should be calling ksocknal_write_callback()"
                 conn->ksnc_tx_ready = 1;
 
                 if (tx) {

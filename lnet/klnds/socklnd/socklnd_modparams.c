@@ -126,6 +126,12 @@ CFS_MODULE_PARM(backoff_max, "i", int, 0644,
                 "seconds for maximum tcp backoff");
 #endif
 
+#if SOCKNAL_VERSION_DEBUG
+static int protocol = 2;
+CFS_MODULE_PARM(protocol, "i", int, 0644,
+                "protocol version");
+#endif
+
 ksock_tunables_t ksocknal_tunables = {
         .ksnd_timeout         = &sock_timeout,
 	.ksnd_credits         = &credits,
@@ -151,6 +157,9 @@ ksock_tunables_t ksocknal_tunables = {
 #ifdef SOCKNAL_BACKOFF
         .ksnd_backoff_init    = &backoff_init,
         .ksnd_backoff_max     = &backoff_max,
+#endif
+#if SOCKNAL_VERSION_DEBUG
+        .ksnd_protocol        = &protocol,
 #endif
 };
 

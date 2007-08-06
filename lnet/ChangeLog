@@ -27,6 +27,14 @@
 	ptllnd    - Portals 3.3 / UNICOS/lc 1.5.x, 2.0.x
        * bug fixes
 
+Severity   : major
+Bugzilla   : 12014
+Description: ASSERTION failures when upgrading to the patchless zero-copy
+             socklnd 
+Details    : This bug affects "rolling upgrades", causing an inconsistent
+             protocol version negotiation and subsequent assertion failure
+	     during rolling upgrades after the first wave of upgrades.
+
 Severity   : minor
 Bugzilla   : 11223
 Details    : Change "dropped message" CERRORs to D_NETERROR so they are
