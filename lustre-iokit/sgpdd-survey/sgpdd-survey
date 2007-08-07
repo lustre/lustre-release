@@ -41,12 +41,26 @@ thrhi=${thrhi:-4096}
 # and max # threads one instance will spawn
 SG_MAX_QUEUE=16
 
+# is the sg module loaded?
+sg_is_loaded=$(grep -q "^sg " /proc/modules && echo true || echo false)
+
+# did we load it?
+sg_was_loaded=false
+
 # map given device names into SG device names
 i=0
 devs=()
 if [ "$scsidevs" ]; then
         # we will test for a LUN, the test for a partition
         # if the partition number is > 9 this will fail
+
+    # make sure sg kernel module is loaded
+    if ! $sg_is_loaded; then
+	echo "loading the sg kernel module"
+	modprobe sg && sg_was_loaded=true
+	sg_is_loaded=true
+    fi
+
     for d in $scsidevs; do
 	devs[$i]=`sg_map | awk "{if (\\\$2 == \"$d\") print \\\$1}"`
         if [ -z "${devs[i]}" ]; then
@@ -55,7 +69,7 @@ if [ "$scsidevs" ]; then
             # Try again
             devs[$i]=`sg_map | awk "{if (\\\$2 == \"$pt\") print \\\$1}"`
             if [ -z "${devs[i]}" ]; then
-                echo "Can't find SG device $pt"
+                echo -e "Can't find SG device $pt.\nDo you have the sg module configured for your kernel?"
                 exit 1
            fi
 	fi
@@ -191,3 +205,8 @@ for ((rsz=$rszlo;rsz<=$rszhi;rsz*=2)); do
 	done
     done
 done
+
+if $sg_was_loaded; then
+    echo "unloading sg module"
+    rmmod sg
+fi
