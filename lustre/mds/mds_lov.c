@@ -642,7 +642,7 @@ int mds_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
 }
 
 /* Collect the preconditions we need to allow client connects */
-static void mds_allow_cli(struct obd_device *obd, unsigned int flag)
+static void mds_allow_cli(struct obd_device *obd, unsigned long flag)
 {
         if (flag & CONFIG_LOG)
                 obd->u.mds.mds_fl_cfglog = 1;
@@ -827,7 +827,7 @@ int mds_notify(struct obd_device *obd, struct obd_device *watched,
         case OBD_NOTIFY_SYNC_NONBLOCK:
                 break;
         case OBD_NOTIFY_CONFIG:
-                mds_allow_cli(obd, (unsigned int)data);
+                mds_allow_cli(obd, (unsigned long)data);
         default:
                 RETURN(0);
         }
