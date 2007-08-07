@@ -99,7 +99,7 @@ destroy_objects () {
 
 get_stats () {
     local rfile=$1
-    awk < $rfile \
+    gawk < $rfile \
 	'/^Selected device [0-9]+$/ {n = 0; next}\
 	/error/ {n = -1; exit}\
 	/^[0-9]+\/[0-9]+ Total: [0-9]+\.[0-9]+\/second$/ {n++; v=strtonum($3); \
@@ -175,7 +175,8 @@ fi
 
 # result file prefix (date/time + hostname makes unique)
 # NB ensure path to it exists
-rslt=${rslt:-"/tmp/obdfilter_survey_`date +%F@%R`_`uname -n`"}
+rslt_loc=${rslt_loc:-"/tmp"}
+rslt=${rslt:-"$rslt_loc/obdfilter_survey_`date +%F@%R`_`uname -n`"}
 
 # what tests to run (first must be write)
 tests_str=${tests_str:-""}
@@ -263,7 +264,7 @@ if [ $case == "network" ]; then
 	echo "Specify the server NID"
 	exit 1;
     fi
-    osc_names_string=`ssh root@"$server_nid" lctl dl`
+    osc_names_string=`dsh $server_nid root "lctl dl"`
     count=0;
     for name in $osc_names_str; do
         count=$((count+1))
@@ -275,7 +276,7 @@ if [ $case == "network" ]; then
     fi
     # Now do the server setup
     setup_srv_obd $server_nid "ost_testfs"
-    op_string=`ssh root@"$server_nid" lctl dl`
+    op_string=`dsh $server_nid root "lctl dl"`
     
     obdecho=0
     ost=0 
@@ -481,9 +482,7 @@ for ((rsz = $rszlo; rsz <= $rszhi; rsz*=2)); do
                 t0=`date +%s.%N`
                 pidcount=0
                 for host in ${unique_hosts[@]}; do
-		    # brutal hack to deal with a non-shared /tmp
-		    scp -q ${cmdsf}_${host} ${host}:/tmp > /dev/null
-                    remote_shell $host bash ${cmdsf}_${host} &
+                    remote_shell $host bash < ${cmdsf}_${host} &
                     pidarray[$pidcount]=$!
                     pidcount=$((pidcount+1))
                 done
@@ -509,8 +508,7 @@ for ((rsz = $rszlo; rsz <= $rszhi; rsz*=2)); do
 		    tmpfi="${tmpf}_$idx"
 		    echo "=============> $test $client_name" >> $workf
 		    host="${host_names[$idx]}"
-		    scp -q ${host}:$tmpfi $tmpfi > /dev/null
-		    cat $tmpfi >> $workf
+		    remote_shell $host cat $tmpfi >> $workf
 		    get_stats $tmpfi >> $tmpf
 		    rm $tmpfi
 		done

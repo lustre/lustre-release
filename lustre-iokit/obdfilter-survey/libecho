@@ -30,6 +30,33 @@ declare -a vmstatpids
 declare -a do_unload_echo
 
 
+DSH=${DSH:-"ssh"}
+
+dsh () {
+    local node="$1"
+    local user="$2"
+    shift 2
+    local command="$@"
+
+    local here=$(pwd)
+
+    command="cd $here; export PATH=/sbin:/usr/sbin:\$PATH; $command"
+
+    case $DSH in
+	ssh)
+	    if [ -n "$user" ]; then
+		user="$user@"
+	    fi
+	    $DSH $user$node "$command"
+	    ;;
+	rsh)
+	    if [ -n "$user" ]; then
+		user="-l $user"
+	    fi
+	    $DSH $user $node "$command"
+	    ;;
+    esac
+}
 # This function executes the command sent through parameters to host
 # parameters
 # 1. hostname
@@ -53,11 +80,17 @@ custom_remote_shell () {
 remote_shell () {
     host=$1
     shift
-    cmds="$*"
+    cmds="$@"
     if [ "$host" = "localhost" -o "$host" = `uname -n` ]; then
 	eval "$cmds"
     else
-	custom_remote_shell $host "$cmds"
+	# split $host into $host and $user
+	local user=""
+	if [[ $host == *@* ]]; then
+	    user=${host%@*}
+	    host=${host#*@}
+	fi
+	dsh $host "$user" "$cmds"
     fi
 }
 
