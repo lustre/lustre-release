@@ -38,6 +38,36 @@
 # include library 
 source libecho
 
+# The following variables can be set in the environment, or on the
+# command line
+# result file prefix (date/time + hostname makes unique)
+# NB ensure path to it exists
+rslt_loc=${rslt_loc:-"/tmp"}
+rslt=${rslt:-"$rslt_loc/obdfilter_survey_`date +%F@%R`_`uname -n`"}
+
+# Set this true to check file contents
+verify=${verify:-0}
+
+# total size (MBytes) per obd instance
+# large enough to avoid cache effects 
+# and to make test startup/shutdown overhead insignificant
+size=${size:-16384}
+
+# record size (KBytes)
+rszlo=${rszlo:-1024}
+rszhi=${rszhi:-1024}
+
+# number of objects per OST
+nobjlo=${nobjlo:-1}
+#was nobjhi=${nobjhi:-512}
+nobjhi=${nobjhi:-16}
+
+# threads per OST (1024 max)
+thrlo=${thrlo:-1}
+thrhi=${thrhi:-16}
+
+# End of variables
+
 # create a set of objects, check there are 'n' contiguous ones and
 # return the first or 'ERROR'
 # parameter: 1. hostname
@@ -173,10 +203,6 @@ if [ -n "$ECHO_CLIENTS" ]; then
     done
 fi
 
-# result file prefix (date/time + hostname makes unique)
-# NB ensure path to it exists
-rslt_loc=${rslt_loc:-"/tmp"}
-rslt=${rslt:-"$rslt_loc/obdfilter_survey_`date +%F@%R`_`uname -n`"}
 
 # what tests to run (first must be write)
 tests_str=${tests_str:-""}
@@ -191,27 +217,6 @@ else
     #tests=(write rewrite read reread rewrite_again)
     tests=(write rewrite read)
 fi
-
-# Set this true to check file contents
-verify=0
-
-# total size (MBytes) per obd instance
-# large enough to avoid cache effects 
-# and to make test startup/shutdown overhead insignificant
-size=${size:-16384}
-
-# record size (KBytes)
-rszlo=${rszlo:-1024}
-rszhi=${rszhi:-1024}
-
-# number of objects per OST
-nobjlo=${nobjlo:-1}
-#was nobjhi=${nobjhi:-512}
-nobjhi=${nobjhi:-16}
-
-# threads per OST (1024 max)
-thrlo=${thrlo:-1}
-thrhi=${thrhi:-16}
 
 # restart from here iff all are defined
 restart_rsz=
