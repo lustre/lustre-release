@@ -1527,7 +1527,7 @@ int ksocknal_scheduler (void *arg)
 #if defined(CONFIG_SMP) && defined(CPU_AFFINITY)
         id = ksocknal_sched2cpu(id);
         if (cpu_online(id)) {
-                cpumask_t m;
+                cpumask_t m = CPU_MASK_NONE;
                 cpu_set(id, m);
                 set_cpus_allowed(current, m);
         } else {
