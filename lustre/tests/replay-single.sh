@@ -462,7 +462,7 @@ test_20b() { # bug 10480
     dd if=/dev/zero of=$DIR/$tfile bs=4k count=10000 &
     pid=$!
     while [ ! -e $DIR/$tfile ] ; do
-        usleep 60                           # give dd a chance to start
+        sleep 0.060s                           # give dd a chance to start
     done
 
     lfs getstripe $DIR/$tfile || return 1
@@ -888,6 +888,10 @@ run_test 40 "cause recovery in ptlrpc, ensure IO continues"
 # the page, guarnateeing that the unlock from the RPC completion would
 # assert on trying to unlock the unlocked page.
 test_41() {
+    [ $OSTCOUNT -lt 2 ] && \
+	echo "skipping test 41: we don't have a second OST to test with" && \
+	return
+
     local f=$MOUNT/$tfile
     # make sure the start of the file is ost1
     lfs setstripe $f $((128 * 1024)) 0 0 

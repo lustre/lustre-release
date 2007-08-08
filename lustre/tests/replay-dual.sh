@@ -429,7 +429,7 @@ test_18() { # bug 3822 - evicting client with enqueued lock
 #define OBD_FAIL_LDLM_BL_CALLBACK        0x305
     do_facet client sysctl -w lustre.fail_loc=0x80000305  # drop cb, evict
     cancel_lru_locks mdc
-    usleep 500 # wait to ensure first client is one that will be evicted
+    sleep 0.500s # wait to ensure first client is one that will be evicted
     openfile -f O_RDONLY $MOUNT2/$tdir/f0
     wait $OPENPID
     dmesg | grep "entering recovery in server" && \

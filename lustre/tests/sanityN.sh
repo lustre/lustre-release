@@ -411,7 +411,7 @@ test_11() {
 	mkdir $DIR1/d11
 	multiop $DIR1/d11/f O_c &
 	MULTIPID=$!
-	usleep 200
+	sleep 0.200s
 	cp -p /bin/ls $DIR1/d11/f
 	$DIR2/d11/f
 	RC=$?
@@ -713,7 +713,7 @@ test_27() {
 	lctl clear
 	dd if=/dev/zero of=$DIR2/$tfile bs=$((4096+4))k conv=notrunc count=4 seek=3 &
 	DD2_PID=$!
-	usleep 50
+	sleep 0.050s
 	log "dd 1 started"
 	
 	dd if=/dev/zero of=$DIR1/$tfile bs=$((16384-1024))k conv=notrunc count=1 seek=4 &
@@ -771,7 +771,7 @@ test_29() { # bug 10999
 	#define OBD_FAIL_LDLM_GLIMPSE  0x30f
 	sysctl -w lustre.fail_loc=0x8000030f
 	ls -l $DIR2/$tfile &
-	usleep 500
+	sleep 0.500s
 	dd if=/dev/zero of=$DIR1/$tfile bs=4k count=1
 	wait
 }
