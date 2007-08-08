@@ -797,8 +797,7 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
                                         MDS_INODELOCK_UPDATE);
         if (IS_ERR(dparent)) {
                 rc = PTR_ERR(dparent);
-                if (rc != -ENOENT)
-                        CERROR("parent "LPU64"/%u lookup error %d\n",
+                CDEBUG(D_DENTRY, "parent "LPU64"/%u lookup error %d\n",
                                rec->ur_fid1->id, rec->ur_fid1->generation, rc);
                 GOTO(cleanup, rc);
         }
@@ -811,8 +810,7 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
         dchild = ll_lookup_one_len(rec->ur_name, dparent, rec->ur_namelen - 1);
         if (IS_ERR(dchild)) {
                 rc = PTR_ERR(dchild);
-                if (rc != -ENAMETOOLONG)
-                CERROR("child lookup error %d\n", rc);
+                CDEBUG(D_DENTRY, "child lookup error %d\n", rc);
                 GOTO(cleanup, rc);
         }
 
@@ -2006,7 +2004,7 @@ int mds_get_parents_children_locked(struct obd_device *obd,
         *de_oldp = ll_lookup_one_len(old_name, *de_srcdirp, old_len - 1);
         if (IS_ERR(*de_oldp)) {
                 rc = PTR_ERR(*de_oldp);
-                CDEBUG(D_INODE, "old child lookup error (%.*s): %d\n",
+                CDEBUG(D_INODE, "old child lookup error (%.*s): rc %d\n",
                        old_len - 1, old_name, rc);
                 GOTO(cleanup, rc);
         }
@@ -2030,8 +2028,7 @@ int mds_get_parents_children_locked(struct obd_device *obd,
         *de_newp = ll_lookup_one_len(new_name, *de_tgtdirp, new_len - 1);
         if (IS_ERR(*de_newp)) {
                 rc = PTR_ERR(*de_newp);
-                if (rc != -ENAMETOOLONG)
-                CERROR("new child lookup error (%.*s): %d\n",
+                CDEBUG(D_DENTRY, "new child lookup error (%.*s): rc %d\n",
                        old_len - 1, old_name, rc);
                 GOTO(cleanup, rc);
         }
