@@ -70,14 +70,14 @@ for NAME in $CONFIGS; do
 
 	if [ "$RUNTESTS" != "no" ]; then
 	        title runtests
-		sh runtests
+		bash runtests
 		$CLEANUP
 		$SETUP
 	fi
 
 	if [ "$SANITY" != "no" ]; then
 	        title sanity
-		SANITYLOG=/tmp/sanity.log sh sanity.sh
+		SANITYLOG=/tmp/sanity.log bash sanity.sh
 		$CLEANUP
 		$SETUP
 	fi
@@ -90,13 +90,13 @@ for NAME in $CONFIGS; do
 		[ $THREADS -lt $DB_THREADS ] && DB_THREADS=$THREADS
 
 		$DEBUG_OFF
-		sh rundbench 1
+		bash rundbench 1
 		$DEBUG_ON
 		$CLEANUP
 		$SETUP
 		if [ $DB_THREADS -gt 1 ]; then
 			$DEBUG_OFF
-			sh rundbench $DB_THREADS
+			bash rundbench $DB_THREADS
 			$DEBUG_ON
 			$CLEANUP
 			$SETUP
@@ -190,7 +190,7 @@ for NAME in $CONFIGS; do
 		mkdir -p $MOUNT2
 		mount_client $MOUNT2
 		#echo "can't mount2 for '$NAME', skipping sanityN.sh"
-		SANITYLOG=$TMP/sanity.log START=: CLEAN=: sh sanityN.sh
+		SANITYLOG=$TMP/sanity.log START=: CLEAN=: bash sanityN.sh
 		umount $MOUNT2
 
 		$DEBUG_ON
@@ -204,7 +204,7 @@ for NAME in $CONFIGS; do
 		if grep -q obdfilter /proc/fs/lustre/devices; then
 			if [ `echo $E2VER | cut -d. -f2` -ge 39 ] && \
 			   [ "`echo $E2VER | grep cfs`" ]; then
-			   	sh lfscktest.sh
+			   	bash lfscktest.sh
 			else
 				e2fsck -V
 				echo "e2fsck does not support lfsck, skipping"
@@ -239,37 +239,37 @@ done
 
 if [ "$REPLAY_SINGLE" != "no" ]; then
         title replay-single
-	sh replay-single.sh
+	bash replay-single.sh
 fi
 
 if [ "$CONF_SANITY" != "no" ]; then
         title conf-sanity
-        sh conf-sanity.sh
+        bash conf-sanity.sh
 fi
 
 if [ "$RECOVERY_SMALL" != "no" ]; then
         title recovery-small
-        sh recovery-small.sh
+        bash recovery-small.sh
 fi
 
 if [ "$REPLAY_OST_SINGLE" != "no" ]; then
         title replay-ost-single
-        sh replay-ost-single.sh
+        bash replay-ost-single.sh
 fi
 
 if [ "$REPLAY_DUAL" != "no" ]; then
         title replay-dual
-        sh replay-dual.sh
+        bash replay-dual.sh
 fi
 
 if [ "$INSANITY" != "no" ]; then
         title insanity
-        sh insanity.sh -r
+        bash insanity.sh -r
 fi
 
 if [ "$SANITY_QUOTA" != "no" ]; then
         title sanity-quota
-        sh sanity-quota.sh
+        bash sanity-quota.sh
 fi
 
 
