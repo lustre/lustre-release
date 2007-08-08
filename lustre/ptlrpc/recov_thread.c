@@ -584,7 +584,7 @@ static int llog_recovery_generic(struct llog_ctxt *ctxt, void *handle,void *arg)
         llpa.llpa_arg = arg;
         llpa.llpa_ctxt = llog_get_context(ctxt->loc_obd, ctxt->loc_idx);
         if (!llpa.llpa_ctxt) {
-                up(&llpa.llpa_sem);
+                mutex_up(&llpa.llpa_sem);
                 RETURN(-ENODEV);
         }
         rc = cfs_kernel_thread(log_process_thread, &llpa, CLONE_VM | CLONE_FILES);
