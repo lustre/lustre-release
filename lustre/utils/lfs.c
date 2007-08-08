@@ -356,7 +356,7 @@ static int lfs_find(int argc, char **argv)
 
         memset(&param, 0, sizeof(param));
 
-        while ((c = getopt_long_only(argc, argv, "-A:C:D:M:n:PpOqrv",
+        while ((c = getopt_long_only(argc, argv, "-A:C:D:M:n:PpO:qrv",
                                      long_opts, NULL)) >= 0)
         {
                 xtime = NULL;
