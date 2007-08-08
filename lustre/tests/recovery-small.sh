@@ -60,21 +60,25 @@ test_3() {
 }
 run_test 3 "stat: drop req, drop rep"
 
+SAMPLE_NAME=recovery-small.junk
+SAMPLE_FILE=$TMP/$SAMPLE_NAME
+dd if=/dev/urandom of=$SAMPLE_FILE bs=1K count=4
+
 test_4() {
-    do_facet client "cp /etc/inittab $MOUNT/inittab" || return 1
-    drop_request "cat $MOUNT/inittab > /dev/null"   || return 2
-    drop_reply "cat $MOUNT/inittab > /dev/null"     || return 3
+    do_facet client "cp $SAMPLE_FILE $MOUNT/$SAMPLE_NAME" || return 1
+    drop_request "cat $MOUNT/$SAMPLE_NAME > /dev/null"   || return 2
+    drop_reply "cat $MOUNT/$SAMPLE_NAME > /dev/null"     || return 3
 }
 run_test 4 "open: drop req, drop rep"
 
 test_5() {
-    drop_request "mv $MOUNT/inittab $MOUNT/renamed" || return 1
+    drop_request "mv $MOUNT/$SAMPLE_NAME $MOUNT/renamed" || return 1
     drop_reint_reply "mv $MOUNT/renamed $MOUNT/renamed-again" || return 2
     do_facet client "checkstat -v $MOUNT/renamed-again"  || return 3
 }
 run_test 5 "rename: drop req, drop rep"
 
-[ ! -e $MOUNT/renamed-again ] && cp /etc/inittab $MOUNT/renamed-again
+[ ! -e $MOUNT/renamed-again ] && cp $SAMPLE_FILE $MOUNT/renamed-again
 test_6() {
     drop_request "mlink $MOUNT/renamed-again $MOUNT/link1" || return 1
     drop_reint_reply "mlink $MOUNT/renamed-again $MOUNT/link2"   || return 2
@@ -95,10 +99,13 @@ test_8() {
 }
 run_test 8 "touch: drop rep (bug 1423)"
 
+SAMPLE_FILE=$TMP/recovery-small.junk
+dd if=/dev/urandom of=$SAMPLE_FILE bs=1M count=4
+
 #bug 1420
 test_9() {
     pause_bulk "cp /etc/profile $MOUNT/$tfile"       || return 1
-    do_facet client "cp /etc/termcap $MOUNT/${tfile}.2"  || return 2
+    do_facet client "cp $SAMPLE_FILE $MOUNT/${tfile}.2"  || return 2
     do_facet client "sync"
     do_facet client "rm $MOUNT/$tfile $MOUNT/${tfile}.2" || return 3
 }
@@ -192,7 +199,7 @@ start_read_ahead() {
 }
 
 test_16() {
-    do_facet client cp /etc/termcap $MOUNT
+    do_facet client cp $SAMPLE_FILE $MOUNT
     sync
     stop_read_ahead
 
@@ -200,11 +207,11 @@ test_16() {
     do_facet ost1 sysctl -w lustre.fail_loc=0x80000504
     cancel_lru_locks osc
     # OST bulk will time out here, client resends
-    do_facet client "cmp /etc/termcap $MOUNT/termcap" || return 1
+    do_facet client "cmp $SAMPLE_FILE $MOUNT/${SAMPLE_FILE##*/}" || return 1
     do_facet ost1 sysctl -w lustre.fail_loc=0
     # give recovery a chance to finish (shouldn't take long)
     sleep $TIMEOUT
-    do_facet client "cmp /etc/termcap $MOUNT/termcap" || return 2
+    do_facet client "cmp $SAMPLE_FILE $MOUNT/${SAMPLE_FILE##*/}" || return 2
     start_read_ahead
 }
 run_test 16 "timeout bulk put, don't evict client (2732)"
@@ -214,14 +221,14 @@ test_17() {
     # OST bulk will time out here, client retries
     do_facet ost1 sysctl -w lustre.fail_loc=0x80000503
     # need to ensure we send an RPC
-    do_facet client cp /etc/termcap $DIR/$tfile
+    do_facet client cp $SAMPLE_FILE $DIR/$tfile
     sync
 
     sleep $TIMEOUT
     do_facet ost1 sysctl -w lustre.fail_loc=0
     do_facet client "df $DIR"
     # expect cmp to succeed, client resent bulk
-    do_facet client "cmp /etc/termcap $DIR/$tfile" || return 3
+    do_facet client "cmp $SAMPLE_FILE $DIR/$tfile" || return 3
     do_facet client "rm $DIR/$tfile" || return 4
     return 0
 }
@@ -239,7 +246,7 @@ test_18a() {
     # 1 stripe on ost2
     lfs setstripe $f $((128 * 1024)) 1 1
 
-    do_facet client cp /etc/termcap $f
+    do_facet client cp $SAMPLE_FILE $f
     sync
     local osc2dev=`grep ${ost2_svc}-osc- $LPROC/devices | awk '{print $1}'`
     $LCTL --device $osc2dev deactivate || return 3
@@ -265,7 +272,7 @@ test_18b() {
     lfs setstripe $f $((128 * 1024)) 0 1
     lfs setstripe $f2 $((128 * 1024)) 0 1
 
-    do_facet client cp /etc/termcap $f
+    do_facet client cp $SAMPLE_FILE $f
     sync
     ost_evict_client
     # allow recovery to complete
@@ -564,9 +571,9 @@ test_24() {	# bug 2248 - eviction fails writeback but app doesn't see it
 	cancel_lru_locks osc
 	multiop $DIR/$tdir/$tfile Owy_wyc &
 	MULTI_PID=$!
-	usleep 500
+	sleep 0.500s
 	ost_evict_client
-	usleep 500
+	sleep 0.500s
 	kill -USR1 $MULTI_PID
 	wait $MULTI_PID
 	rc=$?
