@@ -49,6 +49,7 @@ init_test_env() {
     export TUNEFS=${TUNEFS:-"$LUSTRE/utils/tunefs.lustre"}
     [ ! -f "$TUNEFS" ] && export TUNEFS=$(which tunefs.lustre) 
     export CHECKSTAT="${CHECKSTAT:-checkstat} "
+    export FSYTPE=${FSTYPE:-"ldiskfs"}
     export NAME=${NAME:-local}
     export LPROC=/proc/fs/lustre
 
@@ -76,7 +77,7 @@ init_test_env() {
 }
 
 case `uname -r` in
-2.4.*) EXT=".o"; USE_QUOTA=no;;
+2.4.*) EXT=".o"; USE_QUOTA=no; [ ! "$CLIENTONLY" ] && FSTYPE=ext3;;
     *) EXT=".ko"; USE_QUOTA=yes;;
 esac
 
@@ -106,8 +107,10 @@ load_modules() {
 
     echo Loading modules from $LUSTRE
     load_module ../lnet/libcfs/libcfs
-    [ -z "$LNETOPTS" ] && \
-        LNETOPTS=$(awk '/^options lnet/ { print $0}' /etc/modprobe.conf | sed 's/^options lnet //g')
+    [ -f /etc/modprobe.conf ] && MODPROBECONF=/etc/modprobe.conf
+    [ -f /etc/modprobe.d/Lustre ] && MODPROBECONF=/etc/modprobe.d/Lustre
+    [ -z "$LNETOPTS" -a -n "$MODPROBECONF" ] && \
+        LNETOPTS=$(awk '/^options lnet/ { print $0}' $MODPROBECONF | sed 's/^options lnet //g')
     echo "lnet options: '$LNETOPTS'"
     # note that insmod will ignore anything in modprobe.conf
     load_module ../lnet/lnet/lnet $LNETOPTS
@@ -120,14 +123,17 @@ load_modules() {
     load_module mdc/mdc
     load_module osc/osc
     load_module lov/lov
-    load_module mds/mds
-    [ "$FSTYPE" = "ldiskfs" ] && load_module ../ldiskfs/ldiskfs/ldiskfs
-    load_module lvfs/fsfilt_$FSTYPE
-    load_module ost/ost
-    load_module obdfilter/obdfilter
+    if [ -z "$CLIENTONLY" ]; then
+        load_module mgs/mgs
+        load_module mds/mds
+        [ "$FSTYPE" = "ldiskfs" ] && load_module ldiskfs/ldiskfs
+        load_module lvfs/fsfilt_$FSTYPE
+        load_module ost/ost
+        load_module obdfilter/obdfilter
+    fi
+
     load_module llite/lustre
     load_module mgc/mgc
-    load_module mgs/mgs
     rm -f $TMP/ogdb-`hostname`
     OGDB=$TMP
     [ -d /r ] && OGDB="/r/tmp"
@@ -608,6 +614,7 @@ stopall() {
     # assume client mount is local 
     grep " $MOUNT " /proc/mounts && zconf_umount `hostname` $MOUNT $*
     grep " $MOUNT2 " /proc/mounts && zconf_umount `hostname` $MOUNT2 $*
+    [ "$CLIENTONLY" ] && return
     stop mds -f
     for num in `seq $OSTCOUNT`; do
         stop ost$num -f
