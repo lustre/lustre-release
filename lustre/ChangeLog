@@ -736,7 +736,17 @@ Frequency  : rare
 Description: Sometimes precreate code can triger create object on wrong ost
 Details    : Wrong protected or not not restored variables aftre precreate loop
              can produce creation object on wrong ost.
-	     
+	
+Severity   : normal
+Frequency  : oss recovery 
+Bugzilla   : 10800
+Description: llog_commit_thread cleanup should sync with llog_commit_thread
+	     start
+Details    : llog_commit_thread_count should be synced between llog_commit
+	     start and cleanup, so new llog_commit thread should not be started 
+	     when llog_commit threads being stopped to avoid accessing some 
+	     freed stuff.
+     
 --------------------------------------------------------------------------------
 
 2007-05-03  Cluster File Systems, Inc. <info@clusterfs.com>

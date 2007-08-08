@@ -217,31 +217,26 @@ int llog_obd_repl_sync(struct llog_ctxt *ctxt, struct obd_export *exp)
 }
 EXPORT_SYMBOL(llog_obd_repl_sync);
 
+static void llog_lcm_dec(struct llog_commit_master *lcm)
+{
+        atomic_dec(&lcm->lcm_thread_total);
+        cfs_waitq_signal(&lcm->lcm_waitq);
+}
+
 static int log_commit_thread(void *arg)
 {
-        struct llog_commit_master *lcm = arg;
-        struct llog_commit_daemon *lcd;
+        struct llog_commit_daemon *lcd = arg;
+        struct llog_commit_master *lcm = lcd->lcd_lcm;
         struct llog_canceld_ctxt *llcd, *n;
         struct obd_import *import = NULL;
         ENTRY;
 
-        OBD_ALLOC(lcd, sizeof(*lcd));
-        if (lcd == NULL)
-                RETURN(-ENOMEM);
-
-        spin_lock(&lcm->lcm_thread_lock);
         THREAD_NAME(cfs_curproc_comm(), CFS_CURPROC_COMM_MAX - 1,
-                    "ll_log_comt_%02d", atomic_read(&lcm->lcm_thread_total));
-        atomic_inc(&lcm->lcm_thread_total);
-        spin_unlock(&lcm->lcm_thread_lock);
-
+                    "ll_log_comt_%02d", lcd->lcd_index);
+        
         ptlrpc_daemonize(cfs_curproc_comm()); /* thread never needs to do IO */
-
-        CFS_INIT_LIST_HEAD(&lcd->lcd_lcm_list);
-        CFS_INIT_LIST_HEAD(&lcd->lcd_llcd_list);
-        lcd->lcd_lcm = lcm;
-
         CDEBUG(D_HA, "%s started\n", cfs_curproc_comm());
+        
         do {
                 struct ptlrpc_request *request;
                 struct list_head *sending_list;
@@ -429,36 +424,58 @@ static int log_commit_thread(void *arg)
                         llcd_put(llcd);
         }
 
-        spin_lock(&lcm->lcm_thread_lock);
-        list_del(&lcd->lcd_lcm_list);
-        spin_unlock(&lcm->lcm_thread_lock);
-        OBD_FREE(lcd, sizeof(*lcd));
 
         CDEBUG(D_HA, "%s exiting\n", cfs_curproc_comm());
 
         spin_lock(&lcm->lcm_thread_lock);
-        atomic_dec(&lcm->lcm_thread_total);
+        list_del(&lcd->lcd_lcm_list);
         spin_unlock(&lcm->lcm_thread_lock);
-        cfs_waitq_signal(&lcm->lcm_waitq);
+        OBD_FREE_PTR(lcd);
+        llog_lcm_dec(lcm);
 
-        return 0;
+        RETURN(0);
 }
 
 int llog_start_commit_thread(struct llog_commit_master *lcm)
 {
-        int rc;
+        struct llog_commit_daemon *lcd;
+        int rc, index; 
         ENTRY;
 
         if (atomic_read(&lcm->lcm_thread_total) >= lcm->lcm_thread_max)
                 RETURN(0);
 
-        rc = cfs_kernel_thread(log_commit_thread, lcm, CLONE_VM | CLONE_FILES);
-        if (rc < 0) {
-                CERROR("error starting thread #%d: %d\n",
-                       atomic_read(&lcm->lcm_thread_total), rc);
-                RETURN(rc);
+        /* Check whether it will be cleanup llog commit thread first,
+         * If not, increate the lcm_thread_total count to prevent the 
+         * lcm being freed when the log_commit_thread is started */
+        spin_lock(&lcm->lcm_thread_lock);
+        if (!lcm->lcm_flags & LLOG_LCM_FL_EXIT) { 
+                atomic_inc(&lcm->lcm_thread_total);
+                index = atomic_read(&lcm->lcm_thread_total);
+                spin_unlock(&lcm->lcm_thread_lock);
+        } else {
+                spin_unlock(&lcm->lcm_thread_lock);
+                RETURN(0);
         }
 
+        OBD_ALLOC_PTR(lcd);
+        if (lcd == NULL)
+                GOTO(cleanup, rc = -ENOMEM);
+
+        CFS_INIT_LIST_HEAD(&lcd->lcd_lcm_list);
+        CFS_INIT_LIST_HEAD(&lcd->lcd_llcd_list);
+        lcd->lcd_index = index;
+        lcd->lcd_lcm = lcm;
+
+        rc = cfs_kernel_thread(log_commit_thread, lcd, CLONE_VM | CLONE_FILES);
+cleanup:
+        if (rc < 0) {
+                CERROR("error starting thread #%d: %d\n", lcd->lcd_index, rc);
+                llog_lcm_dec(lcm);
+                if (lcd) 
+                        OBD_FREE_PTR(lcd);
+                RETURN(rc);
+        }
         RETURN(0);
 }
 EXPORT_SYMBOL(llog_start_commit_thread);
@@ -493,9 +510,13 @@ EXPORT_SYMBOL(llog_init_commit_master);
 int llog_cleanup_commit_master(struct llog_commit_master *lcm,
                                int force)
 {
+        spin_lock(&lcm->lcm_thread_lock);
         lcm->lcm_flags |= LLOG_LCM_FL_EXIT;
         if (force)
                 lcm->lcm_flags |= LLOG_LCM_FL_EXIT_FORCE;
+        
+        spin_unlock(&lcm->lcm_thread_lock);
+        
         cfs_waitq_signal(&lcm->lcm_waitq);
 
         wait_event_interruptible(lcm->lcm_waitq,
