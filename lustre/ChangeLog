@@ -21,6 +21,12 @@ Bugzilla   : 12333
 Description: obdclass is limited by single OBD_ALLOC(idarray)
 Details    : replace OBD_ALLOC/OBD_FREE with OBD_VMALLOC/OBD_VFREE
 
+Severity   : normal
+Bugzilla   : 13006
+Description: warnings with build patchless client with vanila 2.6.19 and up
+Details    : change old ctl_table style and replace ctl_table/ctl_table_header
+	     with cfs_sysctl_table_t/cfs_sysctl_table_header_t
+
 --------------------------------------------------------------------------------
 
 2007-08-10         Cluster File Systems, Inc. <info@clusterfs.com>
