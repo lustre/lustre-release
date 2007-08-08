@@ -741,11 +741,11 @@ Severity   : normal
 Frequency  : oss recovery 
 Bugzilla   : 10800
 Description: llog_commit_thread cleanup should sync with llog_commit_thread
-	     start
+             start
 Details    : llog_commit_thread_count should be synced between llog_commit
-	     start and cleanup, so new llog_commit thread should not be started 
-	     when llog_commit threads being stopped to avoid accessing some 
-	     freed stuff.
+             start and cleanup, so new llog_commit thread should not be started 
+             when llog_commit threads being stopped to avoid accessing some 
+             freed stuff.
      
 --------------------------------------------------------------------------------
 
