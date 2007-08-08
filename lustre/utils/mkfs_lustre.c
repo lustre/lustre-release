@@ -410,7 +410,7 @@ static int file_in_dev(char *file_name, char *dev_name)
                         fprintf(stderr, "In all likelihood, the "
                                 "'unsupported feature' is 'extents', which "
                                 "older debugfs does not understand.\n"
-                                "Use e2fsprogs-1.38-cfs1 or later, available "
+                                "Use e2fsprogs-1.39-cfs8 or later, available "
                                 "from ftp://ftp.lustre.org/pub/lustre/other/"
                                 "e2fsprogs/\n");
                 }
