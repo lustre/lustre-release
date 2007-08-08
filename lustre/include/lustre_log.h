@@ -302,7 +302,7 @@ static inline struct llog_ctxt *llog_get_context(struct obd_device *obd,
          spin_lock(&obd->obd_dev_lock);  
          if (obd->obd_llog_ctxt[index] == NULL) {
                  spin_unlock(&obd->obd_dev_lock);
-                 CWARN("obd %p and ctxt index %d is NULL \n", obd, index);
+                 CDEBUG(D_INFO, "obd %p and ctxt index %d is NULL \n", obd, index);
                  return NULL;
          }
          ctxt = llog_ctxt_get(obd->obd_llog_ctxt[index]);
