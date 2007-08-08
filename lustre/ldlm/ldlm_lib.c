@@ -464,17 +464,17 @@ int client_disconnect_export(struct obd_export *exp)
         (void)ptlrpc_pinger_del_import(imp);
 
         if (obd->obd_namespace != NULL) {
-                /* obd_no_recov == local only */
+                /* obd_force == local only */
                 ldlm_cli_cancel_unused(obd->obd_namespace, NULL,
-                                       obd->obd_no_recov ? LDLM_FL_LOCAL_ONLY:0,
+                                       obd->obd_force ? LDLM_FL_LOCAL_ONLY:0,
                                        NULL);
                 ldlm_namespace_free_prior(obd->obd_namespace);
                 to_be_freed = obd->obd_namespace;
                 obd->obd_namespace = NULL;
         }
 
-        /* Yeah, obd_no_recov also (mainly) means "forced shutdown". */
-        if (!obd->obd_no_recov)
+        /* Yeah, obd_force means "forced shutdown". */
+        if (!obd->obd_force)
                 rc = ptlrpc_disconnect_import(imp, 0);
 
         ptlrpc_invalidate_import(imp);

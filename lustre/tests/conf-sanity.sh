@@ -87,6 +87,16 @@ stop_ost2() {
 	stop ost2 -f  || return 93
 }
 
+start_client() {
+	echo "start client on `facet_active_host client`"
+	start client || return 99 
+}
+
+stop_client() {
+	echo "stop client on `facet_active_host client`"
+	stop client || return 100 
+}
+
 mount_client() {
 	local MOUNTPATH=$1
 	echo "mount $FSNAME on ${MOUNTPATH}....."
@@ -109,8 +119,12 @@ umount_client() {
 }
 
 manual_umount_client(){
+	local rc
+	local FORCE=$1
 	echo "manual umount lustre on ${MOUNT}...."
-	do_facet client "umount -d $MOUNT"
+	do_facet client "umount -d ${FORCE} $MOUNT"
+	rc=$?
+	return $rc
 }
 
 setup() {
@@ -1079,6 +1093,7 @@ test_32a() {
 
         # mount a second time to make sure we didnt leave upgrade flag on
         $TUNEFS --dryrun $TMP/$tdir/mds || error "tunefs failed"
+	load_modules
         start mds $TMP/$tdir/mds "-o loop,exclude=lustre-OST0000" || return 12
         cleanup_nocli
 
@@ -1152,6 +1167,67 @@ run_test 33 "Mount ost with a large index number"
 
 umount_client $MOUNT	
 cleanup_nocli
+
+test_33() {
+        setup
+
+        do_facet client dd if=/dev/zero of=$MOUNT/24 bs=1024k count=1
+        # Drop lock cancelation reply during umount
+	#define OBD_FAIL_LDLM_CANCEL             0x304
+        do_facet client sysctl -w lustre.fail_loc=0x80000304
+        #sysctl -w lnet.debug=-1
+        umount_client $MOUNT
+        cleanup
+}
+run_test 33 "Drop cancel during umount"
+
+test_34a() {
+        setup
+	do_facet client multiop $DIR/file O_c &
+
+	manual_umount_client
+	rc=$?
+	do_facet client killall -USR1 multiop
+	if [ $rc -eq 0 ]; then
+		error "umount not fail!"
+	fi
+	sleep 1
+        cleanup
+}
+run_test 34a "umount with opened file should be fail"
+
+
+test_34b() {
+	setup
+	touch $DIR/$tfile || return 1
+	stop_mds --force || return 2
+
+ 	manual_umount_client --force
+	rc=$?
+	if [ $rc -ne 0 ]; then
+		error "mtab after failed umount - rc $rc"
+	fi
+
+	cleanup
+	return 0	
+}
+run_test 34b "force umount with failed mds should be normal"
+
+test_34c() {
+	setup
+	touch $DIR/$tfile || return 1
+	stop_ost --force || return 2
+
+ 	manual_umount_client --force
+	rc=$?
+	if [ $rc -ne 0 ]; then
+		error "mtab after failed umount - rc $rc"
+	fi
+
+	cleanup
+	return 0	
+}
+run_test 34c "force umount with failed mds should be normal"
 
 equals_msg "Done"
 echo "$0: completed"

@@ -1016,7 +1016,7 @@ void ll_put_super(struct super_block *sb)
         if (sbi->ll_mdc_exp) {
                 obd = class_exp2obd(sbi->ll_mdc_exp);
                 if (obd) 
-                        force = obd->obd_no_recov;
+                        force = obd->obd_force;
         }
         
         /* We need to set force before the lov_disconnect in 
@@ -1824,7 +1824,7 @@ void ll_umount_begin(struct super_block *sb)
                 EXIT;
                 return;
         }
-        obd->obd_no_recov = 1;
+        obd->obd_force = 1;
         obd_iocontrol(IOC_OSC_SET_ACTIVE, sbi->ll_mdc_exp, sizeof ioc_data,
                       &ioc_data, NULL);
 
@@ -1836,7 +1836,7 @@ void ll_umount_begin(struct super_block *sb)
                 return;
         }
 
-        obd->obd_no_recov = 1;
+        obd->obd_force = 1;
         obd_iocontrol(IOC_OSC_SET_ACTIVE, sbi->ll_osc_exp, sizeof ioc_data,
                       &ioc_data, NULL);
 

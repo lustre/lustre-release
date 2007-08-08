@@ -115,6 +115,13 @@ Details    : Assetion hit is result of rare race between disconnect and connet
 	     to same nid. target_handle_connect found old connect cockie and
 	     tried to reconnect, but can't find export for this cockie.
 
+Severity   : normal
+Bugzilla   : 11756
+Frequency  : rare
+Description: umount blocks forever on error
+Details    : In result of wrong using obd_no_recov and obd_force flags client can
+             hand if cancel or some other requests is lost.
+
 --------------------------------------------------------------------------------
 
 2007-07-30         Cluster File Systems, Inc. <info@clusterfs.com>

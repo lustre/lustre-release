@@ -269,6 +269,9 @@ int ptlrpc_pinger_add_import(struct obd_import *imp)
         mutex_down(&pinger_sem);
         CDEBUG(D_HA, "adding pingable import %s->%s\n",
                imp->imp_obd->obd_uuid.uuid, obd2cli_tgt(imp->imp_obd));
+        /* if we add to pinger we want recovery on this import */
+        imp->imp_obd->obd_no_recov = 0;
+
         ptlrpc_update_next_ping(imp);
         /* XXX sort, blah blah */
         list_add_tail(&imp->imp_pinger_chain, &pinger_imports);
@@ -290,6 +293,8 @@ int ptlrpc_pinger_del_import(struct obd_import *imp)
         list_del_init(&imp->imp_pinger_chain);
         CDEBUG(D_HA, "removing pingable import %s->%s\n",
                imp->imp_obd->obd_uuid.uuid, obd2cli_tgt(imp->imp_obd));
+        /* if we remove from pinger we don't want recovery on this import */
+        imp->imp_obd->obd_no_recov = 1;
         class_import_put(imp);
         mutex_up(&pinger_sem);
         RETURN(0);

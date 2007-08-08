@@ -68,7 +68,7 @@ static int ll_close_inode_openhandle(struct inode *inode,
          * canceling "open lock" and we do not call mdc_close() in this case, as
          * it will not be successful, as import is already deactivated.
          */
-        if (obd->obd_no_recov)
+        if (obd->obd_force)
                 GOTO(out, rc = 0);
 
         OBDO_ALLOC(oa);
