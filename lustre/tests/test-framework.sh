@@ -127,7 +127,7 @@ load_modules() {
     if [ -z "$CLIENTONLY" ]; then
         load_module mgs/mgs
         load_module mds/mds
-        [ "$FSTYPE" = "ldiskfs" ] && load_module ../ldiskfs/ldiskfs
+        [ "$FSTYPE" = "ldiskfs" ] && load_module ../ldiskfs/ldiskfs/ldiskfs
         load_module lvfs/fsfilt_$FSTYPE
         load_module ost/ost
         load_module obdfilter/obdfilter
