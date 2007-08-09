@@ -70,6 +70,7 @@ struct obd_import {
 
         atomic_t                  imp_inflight;
         atomic_t                  imp_replay_inflight;
+        atomic_t                  imp_inval_count;
         enum lustre_imp_state     imp_state;
         int                       imp_generation;
         __u32                     imp_conn_cnt;

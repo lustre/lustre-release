@@ -79,6 +79,11 @@ Details    : Port older jbd statistics patch for sles10
         should be installed.  It is versioned separately from Lustre and
         may be released separately in future.
 
+Severity   : minor
+Bugzilla   : 13147
+Description: block reactivating mgc import until all deactivates complete
+Details    : Fix race when failing back MDT/MGS to itself (testing)
+
 Severity   : enhancement
 Bugzilla   : 12194
 Description: add optional extra BUILD_VERSION info
