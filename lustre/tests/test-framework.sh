@@ -123,17 +123,17 @@ load_modules() {
     load_module mdc/mdc
     load_module osc/osc
     load_module lov/lov
+    load_module mgc/mgc
     if [ -z "$CLIENTONLY" ]; then
         load_module mgs/mgs
         load_module mds/mds
-        [ "$FSTYPE" = "ldiskfs" ] && load_module ldiskfs/ldiskfs
+        [ "$FSTYPE" = "ldiskfs" ] && load_module ../ldiskfs/ldiskfs
         load_module lvfs/fsfilt_$FSTYPE
         load_module ost/ost
         load_module obdfilter/obdfilter
     fi
 
     load_module llite/lustre
-    load_module mgc/mgc
     rm -f $TMP/ogdb-`hostname`
     OGDB=$TMP
     [ -d /r ] && OGDB="/r/tmp"
