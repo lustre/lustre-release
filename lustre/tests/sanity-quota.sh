@@ -1053,8 +1053,6 @@ test_13() {
 	$SHOW_QUOTA_USER
 	[ $((fz + fz2)) -lt $((BUNIT_SZ * BLK_SZ * 10)) ] && \
 		error "files too small $fz + $fz < $((BUNIT_SZ * BLK_SZ * 10))"
-	[ $((fz + fz2)) -gt $((BUNIT_SZ * BLK_SZ * 11)) ] && \
-		error "files too large $fz + $fz > $((BUNIT_SZ * BLK_SZ * 11))"
 
 	rm -f $TESTFILE $TESTFILE.2
 	
