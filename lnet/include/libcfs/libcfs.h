@@ -358,6 +358,7 @@ struct lc_watchdog *lc_watchdog_add(int time,
                                     void *data);
 
 /* Enables a watchdog and resets its timer. */
+void lc_watchdog_touch_ms(struct lc_watchdog *lcw, int timeout_ms);
 void lc_watchdog_touch(struct lc_watchdog *lcw);
 
 /* Disable a watchdog; touch it to restart it. */
