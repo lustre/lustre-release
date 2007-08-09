@@ -53,6 +53,11 @@ Frequency  : Only for test_13 in sanity-quota.sh
 Description: a bug in quota test script
 Details    : shouldn't check overfull allocated quota
 
+Severity   : normal
+Bugzilla   : 12955
+Description: jbd statistics
+Details    : Port older jbd statistics patch for sles10
+
 --------------------------------------------------------------------------------
 
 2007-08-10         Cluster File Systems, Inc. <info@clusterfs.com>
