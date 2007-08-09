@@ -102,7 +102,7 @@ echo "done"
 
 # Apply all of the changes to your local tree:
 echo -n "Updating as -j ${CHILD}_BASE -j ${PARENT}_${CHILD}_LAND_CHILD_$date ..."
-$CVS update -j ${CHILD}_BASE -j ${PARENT}_${CHILD}_LAND_CHILD_$date $dir
+$CVS update -j ${CHILD}_BASE -j ${PARENT}_${CHILD}_LAND_CHILD_$date -dP $dir
 echo "done"
 
 echo -n "Recording conflicts in $CONFLICTS ..."
