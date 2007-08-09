@@ -41,6 +41,12 @@ Frequency  : Only for SLES9
 Description: Kernel patches for SLES9 2.6.5-7.286 kernel
 Details    : Update target/ChangeLog/which_patch .
 
+Severity   : normal
+Bugzilla   : 13170
+Frequency  : Only for test_10 in sanity-quota.sh
+Description: a bug in quota test code
+Details    : checking a test flag in a wrong place
+
 --------------------------------------------------------------------------------
 
 2007-08-10         Cluster File Systems, Inc. <info@clusterfs.com>

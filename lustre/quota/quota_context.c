@@ -54,7 +54,8 @@ int should_translate_quota (struct obd_import *imp)
         ENTRY;
 
         LASSERT(imp);
-        if (imp->imp_connect_data.ocd_connect_flags & OBD_CONNECT_QUOTA64)
+        if ((imp->imp_connect_data.ocd_connect_flags & OBD_CONNECT_QUOTA64) && 
+            !OBD_FAIL_CHECK(OBD_FAIL_QUOTA_QD_COUNT_32BIT))
                 RETURN(0);
         else
                 RETURN(1);
@@ -635,8 +636,7 @@ schedule_dqacq(struct obd_device *obd,
 
         LASSERT(!should_translate_quota(qctxt->lqc_import) || 
                 qdata->qd_count <= MAX_QUOTA_COUNT32);
-        if (should_translate_quota(qctxt->lqc_import) ||
-            OBD_FAIL_CHECK(OBD_FAIL_QUOTA_QD_COUNT_32BIT))
+        if (should_translate_quota(qctxt->lqc_import))
         {
                 struct qunit_data_old *reqdata_old, *tmp;
                         
