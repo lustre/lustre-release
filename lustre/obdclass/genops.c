@@ -812,6 +812,7 @@ struct obd_import *class_new_import(struct obd_device *obd)
         atomic_set(&imp->imp_refcount, 2);
         atomic_set(&imp->imp_inflight, 0);
         atomic_set(&imp->imp_replay_inflight, 0);
+        atomic_set(&imp->imp_inval_count, 0);
         CFS_INIT_LIST_HEAD(&imp->imp_conn_list);
         CFS_INIT_LIST_HEAD(&imp->imp_handle.h_link);
         class_handle_hash(&imp->imp_handle, import_handle_addref);

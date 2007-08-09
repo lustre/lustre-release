@@ -398,7 +398,7 @@ facet_failover() {
     wait_for $facet
     local dev=${facet}_dev
     local opt=${facet}_opt
-    start $facet ${!dev} ${!opt}
+    start $facet ${!dev} ${!opt} || error "Restart of $facet failed"
 }
 
 obd_name() {

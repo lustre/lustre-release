@@ -188,6 +188,8 @@ void ptlrpc_invalidate_import(struct obd_import *imp)
         struct l_wait_info lwi;
         int rc;
 
+        atomic_inc(&imp->imp_inval_count);
+
         if (!imp->imp_invalid)
                 ptlrpc_deactivate_import(imp);
 
@@ -206,6 +208,9 @@ void ptlrpc_invalidate_import(struct obd_import *imp)
                        atomic_read(&imp->imp_inflight));
 
         obd_import_event(imp->imp_obd, imp, IMP_EVENT_INVALIDATE);
+
+        atomic_dec(&imp->imp_inval_count);
+        cfs_waitq_signal(&imp->imp_recovery_waitq);
 }
 
 /* unset imp_invalid */

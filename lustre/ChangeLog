@@ -14,6 +14,11 @@
        * Recommended e2fsprogs version: 1.39.cfs8
        * Note that reiserfs quotas are disabled on SLES 10 in this kernel.
 
+Severity   : minor
+Bugzilla   : 13147
+Description: block reactivating mgc import until all deactivates complete
+Details    : Fix race when failing back MDT/MGS to itself (testing)
+
 Severity   : enhancement
 Bugzilla   : 12786
 Description: lfs setstripe enhancement
