@@ -27,6 +27,13 @@ Description: warnings with build patchless client with vanila 2.6.19 and up
 Details    : change old ctl_table style and replace ctl_table/ctl_table_header
 	     with cfs_sysctl_table_t/cfs_sysctl_table_header_t
 
+Severity   : normal
+Bugzilla   : 13177
+Frequency  : Only for SLES
+Description: sanity_quota fail test_1
+Details    : There are multiple occurences of $TSTUSR in SLES's /etc/group
+             file, which makes TSTID[2] inunique.
+
 --------------------------------------------------------------------------------
 
 2007-08-10         Cluster File Systems, Inc. <info@clusterfs.com>
