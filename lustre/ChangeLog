@@ -122,6 +122,13 @@ Description: umount blocks forever on error
 Details    : In result of wrong using obd_no_recov and obd_force flags client can
              hand if cancel or some other requests is lost.
 
+Severity   : normal
+Bugzilla   : 13177
+Frequency  : Only for SLES
+Description: sanity_quota fail test_1
+Details    : There are multiple occurences of $TSTUSR in SLES's /etc/group
+             file, which makes TSTID[2] inunique.
+
 --------------------------------------------------------------------------------
 
 2007-07-30         Cluster File Systems, Inc. <info@clusterfs.com>

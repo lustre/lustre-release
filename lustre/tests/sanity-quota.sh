@@ -285,27 +285,27 @@ post_test() {
 
 setup() {
 	# create local test group
-	GRP="`cat /etc/group | grep "$TSTUSR" | awk -F: '{print $1}'`"
+	GRP="`cat /etc/group | grep "^${TSTUSR}:" | awk -F: '{print $1}'`"
 	if [ -z "$GRP" ]; then
 		groupadd -g $TSTID "$TSTUSR"
 	fi
-	TSTID="`cat /etc/group | grep "$TSTUSR" | awk -F: '{print $3}'`"
+	TSTID="`cat /etc/group | grep "^${TSTUSR}:" | awk -F: '{print $3}'`"
 
-        GRP2="`cat /etc/group | grep "$TSTUSR2" | awk -F: '{print $1}'`"
+        GRP2="`cat /etc/group | grep "^${TSTUSR2}:" | awk -F: '{print $1}'`"
         if [ -z "$GRP2" ]; then
                 groupadd -g $TSTID2 "$TSTUSR2"
         fi
-        TSTID2="`cat /etc/group | grep "$TSTUSR2" | awk -F: '{print $3}'`"
+        TSTID2="`cat /etc/group | grep "^${TSTUSR2}:" | awk -F: '{print $3}'`"
 
 	# create test user
-	USR="`cat /etc/passwd | grep "$TSTUSR" | awk -F: '{print $1}'`"
+	USR="`cat /etc/passwd | grep "^${TSTUSR}:" | awk -F: '{print $1}'`"
 	if [ -z "$USR" ]; then
 		useradd -u $TSTID -g $TSTID -d /tmp "$TSTUSR"
 	fi
 	
 	RUNAS="runas -u $TSTID"
 
-	USR2="`cat /etc/passwd | grep "$TSTUSR2" | awk -F: '{print $1}'`"
+	USR2="`cat /etc/passwd | grep "^${TSTUSR2}:" | awk -F: '{print $1}'`"
         if [ -z "$USR2" ]; then
                 useradd -u $TSTID2 -g $TSTID2 -d /tmp "$TSTUSR2"
         fi
