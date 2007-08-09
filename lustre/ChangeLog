@@ -47,6 +47,12 @@ Frequency  : Only for test_10 in sanity-quota.sh
 Description: a bug in quota test code
 Details    : checking a test flag in a wrong place
 
+Severity   : normal
+Bugzilla   : 13171
+Frequency  : Only for test_13 in sanity-quota.sh
+Description: a bug in quota test script
+Details    : shouldn't check overfull allocated quota
+
 --------------------------------------------------------------------------------
 
 2007-08-10         Cluster File Systems, Inc. <info@clusterfs.com>
