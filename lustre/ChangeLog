@@ -1,6 +1,7 @@
 tbd         Cluster File Systems, Inc. <info@clusterfs.com>
        * version 1.8.0
        * Support for kernels:
+        2.6.5-7.286 (SLES 9)
         2.6.9-55.EL (RHEL 4)
         2.6.16.46-0.14 (SLES 10)
         2.6.18.8 vanilla (kernel.org)
@@ -33,6 +34,12 @@ Frequency  : Only for SLES
 Description: sanity_quota fail test_1
 Details    : There are multiple occurences of $TSTUSR in SLES's /etc/group
              file, which makes TSTID[2] inunique.
+
+Severity   : normal
+Bugzilla   : 13249
+Frequency  : Only for SLES9
+Description: Kernel patches for SLES9 2.6.5-7.286 kernel
+Details    : Update target/ChangeLog/which_patch .
 
 --------------------------------------------------------------------------------
 
