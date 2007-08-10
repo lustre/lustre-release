@@ -837,7 +837,8 @@ void ll_pgcache_remove_extent(struct inode *inode, struct lov_stripe_md *lsm,
                 if (!discard && clear_page_dirty_for_io(page)) {
                         rc = ll_call_writepage(inode, page);
                         if (rc != 0)
-                                CERROR("writepage of page %p failed: %d\n",
+                                CERROR("writepage inode %lu(%p) of page %p "
+                                       "failed: %d\n", inode->i_ino, inode,
                                        page, rc);
                         /* either waiting for io to complete or reacquiring
                          * the lock that the failed writepage released */

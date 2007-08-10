@@ -58,6 +58,10 @@ Bugzilla   : 12955
 Description: jbd statistics
 Details    : Port older jbd statistics patch for sles10
 
+Severity   : enhancement
+Bugzilla   : 11721
+Description: Add printing inode info into message about error in writepage.
+
 --------------------------------------------------------------------------------
 
 2007-08-10         Cluster File Systems, Inc. <info@clusterfs.com>
