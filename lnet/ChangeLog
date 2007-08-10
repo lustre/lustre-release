@@ -12,6 +12,14 @@
 	mxlnd     - MX 1.2.1 or later
 	ptllnd    - Portals 3.3 / UNICOS/lc 1.5.x, 2.0.x
 
+Severity   : normal
+Bugzilla   : 13279
+Description: open files rlimit 1024 reached while liblustre testing
+Details    : ulnds/socklnd must close open socket after unsuccessful
+             'say hello' attempt.
+
+------------------------------------------------------------------------------
+
 2007-07-30  Cluster File Systems, Inc. <info@clusterfs.com>
        * version 1.4.11 / 1.6.1
        * Support for networks:
