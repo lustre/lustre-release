@@ -353,7 +353,7 @@ test_6a() {
 run_test 6a "touch .../f6a; chmod .../f6a ======================"
 
 test_6b() {
-	[ $RUNAS_ID -eq $UID ] && echo "skipping $TESTNAME" && return
+	[ $RUNAS_ID -eq $UID ] && skip "RUNAS_ID = UID = $UID -- skipping" && return
 	if [ ! -f $DIR/f6a ]; then
 		touch $DIR/f6a
 		chmod 0666 $DIR/f6a
@@ -364,7 +364,7 @@ test_6b() {
 run_test 6b "$RUNAS chmod .../f6a (should return error) =="
 
 test_6c() {
-	[ $RUNAS_ID -eq $UID ] && echo "skipping $TESTNAME" && return
+	[ $RUNAS_ID -eq $UID ] && skip "RUNAS_ID = UID = $UID -- skipping" && return
 	touch $DIR/f6c
 	chown $RUNAS_ID $DIR/f6c || error
 	$CHECKSTAT -t file -u \#$RUNAS_ID $DIR/f6c || error
@@ -372,7 +372,7 @@ test_6c() {
 run_test 6c "touch .../f6c; chown .../f6c ======================"
 
 test_6d() {
-	[ $RUNAS_ID -eq $UID ] && echo "skipping $TESTNAME" && return
+	[ $RUNAS_ID -eq $UID ] && skip "RUNAS_ID = UID = $UID -- skipping" && return
 	if [ ! -f $DIR/f6c ]; then
 		touch $DIR/f6c
 		chown $RUNAS_ID $DIR/f6c
@@ -383,7 +383,7 @@ test_6d() {
 run_test 6d "$RUNAS chown .../f6c (should return error) =="
 
 test_6e() {
-	[ $RUNAS_ID -eq $UID ] && echo "skipping $TESTNAME" && return
+	[ $RUNAS_ID -eq $UID ] && skip "RUNAS_ID = UID = $UID -- skipping" && return
 	touch $DIR/f6e
 	chgrp $RUNAS_ID $DIR/f6e || error
 	$CHECKSTAT -t file -u \#$UID -g \#$RUNAS_ID $DIR/f6e || error
@@ -391,7 +391,7 @@ test_6e() {
 run_test 6e "touch .../f6e; chgrp .../f6e ======================"
 
 test_6f() {
-	[ $RUNAS_ID -eq $UID ] && echo "skipping $TESTNAME" && return
+	[ $RUNAS_ID -eq $UID ] && skip "RUNAS_ID = UID = $UID -- skipping" && return
 	if [ ! -f $DIR/f6e ]; then
 		touch $DIR/f6e
 		chgrp $RUNAS_ID $DIR/f6e
@@ -402,7 +402,7 @@ test_6f() {
 run_test 6f "$RUNAS chgrp .../f6e (should return error) =="
 
 test_6g() {
-	[ $RUNAS_ID -eq $UID ] && echo "skipping $TESTNAME" && return
+	[ $RUNAS_ID -eq $UID ] && skip "RUNAS_ID = UID = $UID -- skipping" && return
         mkdir $DIR/d6g || error
         chmod 777 $DIR/d6g || error
         $RUNAS mkdir $DIR/d6g/d || error
@@ -413,7 +413,7 @@ test_6g() {
 run_test 6g "Is new dir in sgid dir inheriting group?"
 
 test_6h() { # bug 7331
-	[ $RUNAS_ID -eq $UID ] && echo "skipping $TESTNAME" && return
+	[ $RUNAS_ID -eq $UID ] && skip "RUNAS_ID = UID = $UID -- skipping" && return
 	touch $DIR/f6h || error "touch failed"
 	chown $RUNAS_ID:$RUNAS_ID $DIR/f6h || error "initial chown failed"
 	$RUNAS -G$RUNAS_ID chown $RUNAS_ID:0 $DIR/f6h && error "chown worked"
@@ -571,7 +571,7 @@ test_19b() {
 run_test 19b "ls -l .../f19 (should return error) =============="
 
 test_19c() {
-	[ $RUNAS_ID -eq $UID ] && echo "skipping $TESTNAME" && return
+	[ $RUNAS_ID -eq $UID ] && skip "RUNAS_ID = UID = $UID -- skipping" && return
 	$RUNAS touch $DIR/f19 && error || true
 }
 run_test 19c "$RUNAS touch .../f19 (should return error) =="
@@ -897,7 +897,7 @@ test_27a() {
 run_test 27a "one stripe file =================================="
 
 test_27c() {
-	[ "$OSTCOUNT" -lt "2" ] && echo "skipping 2-stripe test" && return
+	[ "$OSTCOUNT" -lt "2" ] && skip "skipping 2-stripe test" && return
 	mkdir -p $DIR/d27
 	$SETSTRIPE $DIR/d27/f01 65536 0 2 || error "lstripe failed"
 	[ `$GETSTRIPE $DIR/d27/f01 | grep -A 10 obdidx | wc -l` -eq 4 ] ||
@@ -974,9 +974,9 @@ test_27l() {
 run_test 27l "check setstripe permissions (should return error)"
 
 test_27m() {
-	[ "$OSTCOUNT" -lt "2" ] && echo "skipping out-of-space test on OST0" && return
+	[ "$OSTCOUNT" -lt "2" ] && skip "$OSTCOUNT < 2 OSTs -- skipping" && return
 	if [ $ORIGFREE -gt $MAXFREE ]; then
-		echo "skipping out-of-space test on OST0"
+		skip "$ORIGFREE > $MAXFREE skipping out-of-space test on OST0"
 		return
 	fi
 	mkdir -p $DIR/d27
@@ -1036,7 +1036,7 @@ exhaust_all_precreations() {
 
 test_27n() {
 	[ "$OSTCOUNT" -lt "2" -o -z "$MDS" ] && \
-		echo "skip $TESTNAME for remote MDS or OST count" && return
+		skip "too few OSTs, or remote MDS" && return
 
 	reset_enospc
 	rm -f $DIR/d27/f27n
@@ -1049,7 +1049,8 @@ test_27n() {
 run_test 27n "create file with some full OSTs =================="
 
 test_27o() {
-	[ "$OSTCOUNT" -lt "2" -o -z "$MDS" ] && echo "skipping $TESTNAME" && return
+	[ "$OSTCOUNT" -lt "2" -o -z "$MDS" ] && \
+		skip "too few OSTs, or remote MDS" && return
 
 	reset_enospc
 	rm -f $DIR/d27/f27o
@@ -1063,7 +1064,8 @@ test_27o() {
 run_test 27o "create file with all full OSTs (should error) ===="
 
 test_27p() {
-	[ "$OSTCOUNT" -lt "2" -o -z "$MDS" ] && echo "skipping $TESTNAME" && return
+	[ "$OSTCOUNT" -lt "2" -o -z "$MDS" ] && \
+		skip "too few OSTs, or remote MDS" && return
 
 	reset_enospc
 	rm -f $DIR/d27/f27p
@@ -1081,7 +1083,8 @@ test_27p() {
 run_test 27p "append to a truncated file with some full OSTs ==="
 
 test_27q() {
-	[ "$OSTCOUNT" -lt "2" -o -z "$MDS" ] && echo "skipping $TESTNAME" && return
+	[ "$OSTCOUNT" -lt "2" -o -z "$MDS" ] && \
+		skip "too few OSTs, or remote MDS" && return
 
 	reset_enospc
 	rm -f $DIR/d27/f27q
@@ -1100,7 +1103,8 @@ test_27q() {
 run_test 27q "append to truncated file with all OSTs full (should error) ==="
 
 test_27r() {
-	[ "$OSTCOUNT" -lt "2" -o -z "$MDS" ] && echo "skipping $TESTNAME" && return
+	[ "$OSTCOUNT" -lt "2" -o -z "$MDS" ] && \
+		skip "too few OSTs, or remote MDS" && return
 
 	reset_enospc
 	rm -f $DIR/d27/f27r
@@ -1135,7 +1139,7 @@ test_27x() { # bug 10997
         size=`$LSTRIPEINFO $DIR/d27w/f0 | awk {'print $1'}`
         [ $size -ne 65536 ] && error "stripe size $size != 65536" || true
 
-        [ "$OSTCOUNT" -lt "2" ] && echo "skipping multiple stripe count/offset test" && return
+        [ "$OSTCOUNT" -lt "2" ] && skip "skipping multiple stripe count/offset test" && return
         for i in `seq 1 $OSTCOUNT`; do
                 offset=$(($i-1))
                 $LSTRIPE $DIR/d27w/f$i -c $i -i $offset || error "lstripe -c $i -i $offset failed"
@@ -1148,7 +1152,9 @@ test_27x() { # bug 10997
 run_test 27x "check lfs setstripe -c -s -i options ============="
 
 test_27u() { # bug 4900
-        [ "$OSTCOUNT" -lt "2" -o -z "$MDS" ] && echo "skip $TESTNAME" && return
+        [ "$OSTCOUNT" -lt "2" -o -z "$MDS" ] && \
+		skip "too few OSTs, or remote MDS" && return
+
         #define OBD_FAIL_MDS_OSC_PRECREATE      0x139
 
         sysctl -w lustre.fail_loc=0x139
@@ -1165,7 +1171,9 @@ test_27u() { # bug 4900
 run_test 27u "skip object creation on OSC w/o objects =========="
 
 test_27v() { # bug 4900
-        [ "$OSTCOUNT" -lt "2" -o -z "$MDS" ] && echo "skip $TESTNAME" && return
+        [ "$OSTCOUNT" -lt "2" -o -z "$MDS" ] && \
+		skip "too few OSTs, or remote MDS" && return
+
         exhaust_all_precreations
 
         mkdir -p $DIR/$tdir
@@ -1629,7 +1637,7 @@ test_36d() {
 run_test 36d "non-root OST utime check (open, utime) ==========="
 
 test_36e() {
-	[ $RUNAS_ID -eq $UID ] && echo "skipping $TESTNAME" && return
+	[ $RUNAS_ID -eq $UID ] && skip "RUNAS_ID = UID = $UID -- skipping" && return
 	mkdir -p $DIR/$tdir
 	touch $DIR/$tdir/$tfile
 	$RUNAS utime $DIR/$tdir/$tfile && \
@@ -1663,7 +1671,7 @@ run_test 36f "utime on file racing with OST BRW write =========="
 
 export FMD_MAX_AGE=`cat $LPROC/obdfilter/*/client_cache_seconds 2> /dev/null | head -n 1`
 test_36g() {
-	[ -z "$FMD_MAX_AGE" ] && echo "skip $TESTNAME for remote OST" && return
+	[ -z "$FMD_MAX_AGE" ] && skip "skip test for remote OST" && return
 	FMD_BEFORE="`awk '/ll_fmd_cache/ { print $2 }' /proc/slabinfo`"
 	touch $DIR/d36/$tfile
 	sleep $((FMD_MAX_AGE + 12))
@@ -1912,7 +1920,7 @@ test_43c() {
 run_test 43c "md5sum of copy into lustre========================"
 
 test_44() {
-	[  "$OSTCOUNT" -lt "2" ] && echo "skipping 2-stripe test" && return
+	[  "$OSTCOUNT" -lt "2" ] && skip "skipping 2-stripe test" && return
 	dd if=/dev/zero of=$DIR/f1 bs=4k count=1 seek=1023
 	dd if=$DIR/f1 of=/dev/null bs=4k count=1
 }
@@ -2153,7 +2161,7 @@ export NUMTEST=70000
 test_51b() {
 	NUMFREE=`df -i -P $DIR | tail -n 1 | awk '{ print $4 }'`
 	[ $NUMFREE -lt 21000 ] && \
-		echo "skipping $TESTNAME, not enough free inodes ($NUMFREE)" && \
+		skip "not enough free inodes ($NUMFREE)" && \
 		return
 
 	check_kernel_version 40 || NUMTEST=31000
@@ -2165,7 +2173,7 @@ test_51b() {
 run_test 51b "mkdir .../t-0 --- .../t-$NUMTEST ===================="
 
 test_51c() {
-	[ ! -d $DIR/d51b ] && echo "skipping $TESTNAME: $DIR/51b missing" && \
+	[ ! -d $DIR/d51b ] && skip "$DIR/51b missing" && \
 		return
 
 	unlinkmany -d $DIR/d51b/t- $NUMTEST
@@ -2173,7 +2181,7 @@ test_51c() {
 run_test 51c "rmdir .../t-0 --- .../t-$NUMTEST ===================="
 
 test_51d() {
-        [  "$OSTCOUNT" -lt "3" ] && echo "skipping test with few OSTs" && return
+        [  "$OSTCOUNT" -lt "3" ] && skip "skipping test with few OSTs" && return
         mkdir -p $DIR/d51d
         createmany -o $DIR/d51d/t- 1000
         $LFS getstripe $DIR/d51d > $TMP/files
@@ -2255,7 +2263,7 @@ test_52c() { # 12848 simulating client < 1.4.7
 run_test 52c "immutable flag test for client < 1.4.7 ======="
 
 test_53() {
-	[ -z "$MDS" ] && echo "skipping $TESTNAME with remote MDS" && return
+	[ -z "$MDS" ] && skip "skipping test with remote MDS" && return
 	
         for i in `ls -d $LPROC/osc/*-osc 2> /dev/null` ; do
                 ostname=`basename $i | cut -d - -f 1-2`
@@ -2270,8 +2278,8 @@ test_53() {
 run_test 53 "verify that MDS and OSTs agree on pre-creation ===="
 
 test_54a() {
-        [ ! -f "$SOCKETSERVER" ] && echo "no socketserver, skipping" && return
-        [ ! -f "$SOCKETCLIENT" ] && echo "no socketclient, skipping" && return
+        [ ! -f "$SOCKETSERVER" ] && skip "no socketserver, skipping" && return
+        [ ! -f "$SOCKETCLIENT" ] && skip "no socketclient, skipping" && return
      	$SOCKETSERVER $DIR/socket
      	$SOCKETCLIENT $DIR/socket || error
       	$MUNLINK $DIR/socket
@@ -2353,7 +2361,7 @@ check_fstype() {
 test_55() {
         rm -rf $DIR/d55
         mkdir $DIR/d55
-        check_fstype && echo "can't find fs $FSTYPE, skipping $TESTNAME" && return
+        check_fstype && skip "can't find fs $FSTYPE" && return
         mount -t $FSTYPE -o loop,iopen $EXT2_DEV $DIR/d55 || error "mounting"
         touch $DIR/d55/foo
         $IOPENTEST1 $DIR/d55/foo $DIR/d55 || error "running $IOPENTEST1"
@@ -2403,7 +2411,7 @@ test_56() {
                 error "lfs getstripe --obd wrong_uuid should return error message"
 
         [  "$OSTCOUNT" -lt 2 ] && \
-                echo "skipping other lfs getstripe --obd test" && return
+                skip "skipping other lfs getstripe --obd test" && return
         FILENUM=`$GETSTRIPE --recursive $DIR/d56 | sed -n '/^[	 ]*1[	 ]/p' | wc -l`
         OBDUUID=`$GETSTRIPE --recursive $DIR/d56 | sed -n '/^[	 ]*1:/p' | awk '{print $2}'`
         FOUND=`$GETSTRIPE -r --obd $OBDUUID $DIR/d56 | wc -l`
@@ -2468,7 +2476,7 @@ test_56h() {
 run_test 56h "check lfs find ! -name ============================="
 
 test_57a() {
-	[ -z "$MDS" ] && echo "skipping $TESTNAME for remote MDS" && return
+	[ -z "$MDS" ] && skip "skipping test for remote MDS" && return
 	for DEV in `cat $LPROC/mds/*/mntdev`; do
 		dumpe2fs -h $DEV > $TMP/t57a.dump || error "can't access $DEV"
 		DEVISIZE=`awk '/Inode size:/ { print $3 }' $TMP/t57a.dump`
@@ -2519,7 +2527,7 @@ test_57b() {
 run_test 57b "default LOV EAs are stored inside large inodes ==="
 
 test_58() {
-    [ -z "$(which wiretest 2>/dev/null)" ] && echo "skipping $TESTNAME (could not find wiretest)" && return
+    [ -z "$(which wiretest 2>/dev/null)" ] && skip "could not find wiretest" && return
     wiretest
 }
 run_test 58 "verify cross-platform wire constants =============="
@@ -2537,7 +2545,7 @@ run_test 59 "verify cancellation of llog records async ========="
 
 TEST60_HEAD="test_60 run $RANDOM"
 test_60() {
-        [ ! -f run-llog.sh ] && echo "missing subtest, skipping" && return
+        [ ! -f run-llog.sh ] && skip "missing subtest run-llog.sh" && return
 	log "$TEST60_HEAD - from kernel mode"
 	sh run-llog.sh
 }
@@ -2628,7 +2636,7 @@ test_64a () {
 run_test 64a "verify filter grant calculations (in kernel) ====="
 
 test_64b () {
-        [ ! -f oos.sh ] && echo "missing subtest, skipping" && return
+        [ ! -f oos.sh ] && skip "missing subtest oos.sh" && return
 	sh oos.sh $MOUNT
 }
 run_test 64b "check out-of-space detection on client ==========="
@@ -2730,7 +2738,7 @@ test_66() {
 run_test 66 "update inode blocks count on client ==============="
 
 test_67() { # bug 3285 - supplementary group fails on MDS, passes on client
-	[ "$RUNAS_ID" = "$UID" ] && echo "skipping $TESTNAME" && return
+	[ "$RUNAS_ID" = "$UID" ] && skip "RUNAS_ID = UID = $UID -- skipping" && return
 	check_kernel_version 35 || return 0
 	mkdir $DIR/$tdir
 	chmod 771 $DIR/$tdir
@@ -2756,11 +2764,11 @@ cleanup_67b() {
 
 test_67b() { # bug 3285 - supplementary group fails on MDS, passes on client
 	T67_UID=${T67_UID:-1}	# needs to be in /etc/groups on MDS, gid == uid
-	[ "$UID" = "$T67_UID" ] && echo "skipping $TESTNAME" && return
+	[ "$UID" = "$T67_UID" ] && skip "UID = T67_UID = $UID -- skipping" && return
 	check_kernel_version 35 || return 0
-	[ -z "$MDS" ] && echo "skipping $TESTNAME - no MDS" && return
+	[ -z "$MDS" ] && skip "no MDS" && return
 	GROUP_UPCALL=`cat $LPROC/mds/$MDS/group_upcall`
-	[ "$GROUP_UPCALL" != "NONE" ] && echo "skip $TESTNAME - upcall" &&return
+	[ "$GROUP_UPCALL" != "NONE" ] && skip "skip test - upcall" &&return
 	set -vx
 	trap cleanup_67b EXIT
 	mkdir -p $DIR/$tdir
@@ -2796,9 +2804,9 @@ swap_used() {
 # excercise swapping to lustre by adding a high priority swapfile entry
 # and then consuming memory until it is used.
 test_68() {
-	[ "$UID" != 0 ] && echo "skipping $TESTNAME (must run as root)" && return
+	[ "$UID" != 0 ] && skip "must run as root" && return
 	grep -q obdfilter $LPROC/devices && \
-		echo "skip $TESTNAME (local OST)" && return
+		skip "local OST" && return
 
 	find_loop_dev
 	dd if=/dev/zero of=$DIR/f68 bs=64k count=1024
@@ -2825,13 +2833,13 @@ run_test 68 "support swapping to Lustre ========================"
 # #define OBD_FAIL_OST_ENOENT 0x217
 test_69() {
 	[ $(grep -c obdfilter $LPROC/devices) -eq 0 ] &&
-		echo "skipping $TESTNAME for remote OST" && return
+		skip "skipping test for remote OST" && return
 
 	f="$DIR/$tfile"
 	touch $f
 
 	if ! $DIRECTIO write ${f}.2 0 1; then
-		echo "skipping $TESTNAME - O_DIRECT not implemented"
+		skip "O_DIRECT not implemented"
 		return 0
 	fi
 
@@ -2856,7 +2864,7 @@ test_69() {
 run_test 69 "verify oa2dentry return -ENOENT doesn't LBUG ======"
 
 test_71() {
-        which dbench > /dev/null 2>&1 || echo "dbench not installed, skip this test" && return 0
+        which dbench > /dev/null 2>&1 || skip "dbench not installed, skip this test" && return 0
 	DBENCH_LIB=${DBENCH_LIB:-/usr/lib/dbench}
 	PATH=${DBENCH_LIB}:${PATH}
 	cp `which dbench` $DIR
@@ -2885,7 +2893,7 @@ run_test 71 "Running dbench on lustre (don't segment fault) ===="
 
 test_72() { # bug 5695 - Test that on 2.6 remove_suid works properly
 	check_kernel_version 43 || return 0
-	[ "$RUNAS_ID" = "$UID" ] && echo "skipping $TESTNAME" && return
+	[ "$RUNAS_ID" = "$UID" ] && skip "RUNAS_ID = UID = $UID -- skipping" && return
 	touch $DIR/f72
 	chmod 777 $DIR/f72
 	chmod ug+s $DIR/f72
@@ -3056,7 +3064,7 @@ num_inodes() {
 
 test_76() { # bug 1443
 	DETH=$(grep deathrow /proc/kallsyms /proc/ksyms 2> /dev/null | wc -l)
-	[ $DETH -eq 0 ] && echo "No _iget, skipping" && return 0
+	[ $DETH -eq 0 ] && skip "No _iget." && return 0
 	BEFORE_INODES=`num_inodes`
 	echo "before inodes: $BEFORE_INODES"
 	for i in `seq 1000`; do
@@ -3110,7 +3118,7 @@ test_77b() { # bug 10889
 run_test 77b "checksum error on client write ===================="
 
 test_77c() { # bug 10889
-	[ ! -f $DIR/f77b ] && log "requires 77b - skipping" && return  
+	[ ! -f $DIR/f77b ] && skip "requires 77b - skipping" && return  
 	cancel_lru_locks osc
 	#define OBD_FAIL_OSC_CHECKSUM_RECEIVE    0x408
 	sysctl -w lustre.fail_loc=0x80000408
@@ -3133,7 +3141,7 @@ test_77d() { # bug 10889
 run_test 77d "checksum error on OST direct write ==============="
 
 test_77e() { # bug 10889
-	[ ! -f $DIR/f77 ] && log "requires 77d - skipping" && return  
+	[ ! -f $DIR/f77 ] && skip "requires 77d - skipping" && return  
 	#define OBD_FAIL_OSC_CHECKSUM_RECEIVE    0x408
 	sysctl -w lustre.fail_loc=0x80000408
 	set_checksums 1
@@ -3158,7 +3166,7 @@ run_test 77f "repeat checksum error on write (expect error) ===="
 
 test_77g() { # bug 10889
 	[ $(grep -c obdfilter $LPROC/devices) -eq 0 ] && \
-		echo "skipping $TESTNAME (remote OST)" && return
+		skip "remote OST" && return
 	[ ! -f $F77_TMP ] && setup_f77
 	#define OBD_FAIL_OST_CHECKSUM_RECEIVE       0x21a
 	sysctl -w lustre.fail_loc=0x8000021a
@@ -3172,8 +3180,8 @@ run_test 77g "checksum error on OST write ======================"
 
 test_77h() { # bug 10889
 	[ $(grep -c obdfilter $LPROC/devices) -eq 0 ] && \
-		echo "skipping $TESTNAME (remote OST)" && return
-	[ ! -f $DIR/f77g ] && log "requires 77g - skipping" && return  
+		skip "remote OST" && return
+	[ ! -f $DIR/f77g ] && skip "requires 77g - skipping" && return  
 	cancel_lru_locks osc
 	#define OBD_FAIL_OST_CHECKSUM_SEND          0x21b
 	sysctl -w lustre.fail_loc=0x8000021b
@@ -3403,9 +3411,9 @@ test_102a() {
 	rm -f $testfile
         touch $testfile
 
-	[ "$UID" != 0 ] && echo "skipping $TESTNAME (must run as root)" && return
-	[ -z "`grep xattr $LPROC/mdc/*[mM][dD][cC]*/connect_flags`" ] && echo "skipping $TESTNAME (must have user_xattr)" && return
-	[ -z "$(which setfattr 2>/dev/null)" ] && echo "skipping $TESTNAME (could not find setfattr)" && return
+	[ "$UID" != 0 ] && skip "must run as root" && return
+	[ -z "`grep xattr $LPROC/mdc/*[mM][dD][cC]*/connect_flags`" ] && skip "must have user_xattr" && return
+	[ -z "$(which setfattr 2>/dev/null)" ] && skip "could not find setfattr" && return
 
 	echo "set/get xattr..."
         setfattr -n trusted.name1 -v value1 $testfile || error
@@ -3448,7 +3456,7 @@ run_test 102a "user xattr test =================================="
 test_102b() {
 	# b10930: get/set/list trusted.lov xattr
 	echo "get/set/list trusted.lov xattr ..."
-	[ "$OSTCOUNT" -lt "2" ] && echo "skipping 2-stripe test" && return
+	[ "$OSTCOUNT" -lt "2" ] && skip "skipping 2-stripe test" && return
 	local testfile=$DIR/$tfile
 	$SETSTRIPE $testfile 65536 1 2
 	getfattr -d -m "^trusted" $testfile 2> /dev/null | \
@@ -3472,7 +3480,7 @@ run_test 102b "getfattr/setfattr for trusted.lov EAs ============"
 test_102c() {
 	# b10930: get/set/list trusted.lov xattr
 	echo "get/set/list trusted.lov xattr ..."
-	[ "$OSTCOUNT" -lt "2" ] && echo "skipping 2-stripe test" && return
+	[ "$OSTCOUNT" -lt "2" ] && skip "skipping 2-stripe test" && return
 	mkdir -p $DIR/$tdir
 	chown $RUNAS_ID $DIR/$tdir
 	local testfile=$DIR/$tdir/$tfile
@@ -3571,9 +3579,9 @@ test_102d() {
 	star --xhelp 2>&1 | grep -q nolustre  
 	if [ $? -ne 0 ]
 	then
-		echo "$TESTNUM being skipped because a lustre-aware star is not installed." && return
+		skip "being skipped because a lustre-aware star is not installed." && return
 	fi
-	[ "$OSTCOUNT" -lt "4" ] && echo "skipping 4-stripe test" && return
+	[ "$OSTCOUNT" -lt "4" ] && skip "skipping 4-stripe test" && return
 	setup_test102
 	mkdir -p $DIR/d102d
 	star -x  f=$TMP/f102.tar -C $DIR/d102d
@@ -3588,9 +3596,9 @@ test_102e() {
 	star --xhelp 2>&1 | grep -q nolustre  
 	if [ $? -ne 0 ]
 	then
-		echo "$TESTNUM being skipped because a lustre-aware star is not installed." && return
+		skip "being skipped because a lustre-aware star is not installed." && return
 	fi
-	[ "$OSTCOUNT" -lt "4" ] && echo "skipping 4-stripe test" && return
+	[ "$OSTCOUNT" -lt "4" ] && skip "skipping 4-stripe test" && return
 	setup_test102
 	mkdir -p $DIR/d102e
 	star -x  -preserve-osts f=$TMP/f102.tar -C $DIR/d102e
@@ -3604,9 +3612,9 @@ test_102f() {
 	star --xhelp 2>&1 | grep -q nolustre  
 	if [ $? -ne 0 ]
 	then
-		echo "$TESTNUM being skipped because a lustre-aware star is not installed." && return
+		skip "being skipped because a lustre-aware star is not installed." && return
 	fi
-	[ "$OSTCOUNT" -lt "4" ] && echo "skipping 4-stripe test" && return
+	[ "$OSTCOUNT" -lt "4" ] && skip "skipping 4-stripe test" && return
 	setup_test102
 	mkdir -p $DIR/d102f
 	cd $DIR
@@ -3621,9 +3629,9 @@ test_102g() {
 	star --xhelp 2>&1 | grep -q nolustre  
 	if [ $? -ne 0 ]
 	then
-		echo "$TESTNUM being skipped because a lustre-aware star is not installed." && return
+		skip "being skipped because a lustre-aware star is not installed." && return
 	fi
-	[ "$OSTCOUNT" -lt "4" ] && echo "skipping 4-stripe test" && return
+	[ "$OSTCOUNT" -lt "4" ] && skip "skipping 4-stripe test" && return
 	setup_test102
 	mkdir -p $DIR/d102g
 	cd $DIR
@@ -3641,9 +3649,9 @@ run_acl_subtest()
 }
 
 test_103 () {
-    [ "$UID" != 0 ] && echo "skipping $TESTNAME (must run as root)" && return
-    [ -z "$(grep acl $LPROC/mdc/*[mM][dD][cC]*/connect_flags)" ] && echo "skipping $TESTNAME (must have acl enabled)" && return
-    [ -z "$(which setfacl 2>/dev/null)" ] && echo "skipping $TESTNAME (could not find setfacl)" && return
+    [ "$UID" != 0 ] && skip "must run as root" && return
+    [ -z "$(grep acl $LPROC/mdc/*[mM][dD][cC]*/connect_flags)" ] && skip "must have acl enabled" && return
+    [ -z "$(which setfacl 2>/dev/null)" ] && skip "could not find setfacl" && return
 
     SAVE_UMASK=`umask`
     umask 0022
@@ -3760,7 +3768,7 @@ run_test 107 "Coredump on SIG"
 test_115() {
 	OSTIO_pre=$(ps -e|grep ll_ost_io|awk '{print $4}'|sort -n|tail -1|\
 	    cut -c11-20)
-        [ -z "$OSTIO_pre" ] && echo "skipping $TESTNAME: no OSS threads" && \
+        [ -z "$OSTIO_pre" ] && skip "no OSS threads" && \
 	    return
         echo "Starting with $OSTIO_pre threads"
 
@@ -3806,14 +3814,14 @@ free_min_max () {
 test_116() {
 	[ "$OSTCOUNT" -lt "2" ] && echo "not enough OSTs" && return
 	[ $(grep -c obdfilter $LPROC/devices) -eq 0 ] &&
-		echo "remote MDS, skipping test" && return
+		skip "remote MDS, skipping test" && return
 
 	echo -n "Free space priority "
 	cat $LPROC/lov/*/qos_prio_free
        	DELAY=$(cat $LPROC/lov/*/qos_maxage | head -1 | awk '{print $1}')
 	declare -a AVAIL
 	free_min_max
-	[ $MINV -gt 960000 ] && echo "too much free space in OST$MINI, skip" &&\
+	[ $MINV -gt 960000 ] && skip "too much free space in OST$MINI" &&\
 		return
 
 	# generate uneven OSTs
@@ -4226,7 +4234,7 @@ run_test 119a "Short directIO read must return actual read amount"
 
 test_119b() # bug 11737
 {
-        [ "$OSTCOUNT" -lt "2" ] && echo "skipping 2-stripe test" && return
+        [ "$OSTCOUNT" -lt "2" ] && skip "skipping 2-stripe test" && return
 
         lfs setstripe $DIR/$tfile 0 -1 2
         dd if=/dev/zero of=$DIR/$tfile bs=1M count=1 seek=1 || error "dd failed"
