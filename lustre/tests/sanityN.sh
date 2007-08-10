@@ -3,8 +3,8 @@
 set -e
 
 ONLY=${ONLY:-"$*"}
-# bug number for skipped test:  3192 9977
-ALWAYS_EXCEPT=${ALWAYS_EXCEPT:-"14b  28"}
+# bug number for skipped test:  3192
+ALWAYS_EXCEPT=${ALWAYS_EXCEPT:-"14b"}
 # UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
 
 [ "$SLOW" = "no" ] && EXCEPT="$EXCEPT 16"
@@ -730,28 +730,14 @@ test_27() {
 run_test 27 "align non-overlapping extent locks from request ==="
 
 test_28() { # bug 9977
-	ECHO_UUID="ECHO_osc1_UUID"
-	tOST=`$LCTL dl | | awk '/-osc-|OSC.*MNT/ { print $4 }' | head -1`
+	ostID=`$LCTL dl | awk '/-osc-|OSC.*MNT/ { ost++; if (ost == 2) { print $1 } }'`
 
 	lfs setstripe $DIR1/$tfile 1048576 0 2
-	tOBJID=`lfs getstripe $DIR1/$tfile |grep "^[[:space:]]\+1" |awk '{print $2}'`
+	tOBJID=`lfs getstripe $DIR1/$tfile | awk '/^[[:space:]]+1/ {print $2}'`
 	dd if=/dev/zero of=$DIR1/$tfile bs=1024k count=2
 
-	$LCTL <<-EOF
-		newdev
-		attach echo_client ECHO_osc1 $ECHO_UUID
-		setup $tOST
-	EOF
-
-	tECHOID=`$LCTL dl | grep $ECHO_UUID | awk '{print $1}'`
-	$LCTL --device $tECHOID destroy "${tOBJID}:0"
+	$LCTL --device $ostID destroy "${tOBJID}"
     
-    	$LCTL <<-EOF
-		cfg_device ECHO_osc1
-		cleanup
-		detach
-	EOF
-
 	# reading of 1st stripe should pass
 	dd if=$DIR2/$tfile of=/dev/null bs=1024k count=1 || error
 	# reading of 2nd stripe should fail (this stripe was destroyed)

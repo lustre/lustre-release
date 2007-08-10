@@ -94,6 +94,8 @@ static int filter_lvbo_init(struct ldlm_resource *res)
 out_dentry:
         f_dput(dentry);
 
+        if (rc)
+                OST_LVB_SET_ERR(lvb->lvb_blocks, rc);
         /* Don't free lvb data on lookup error */
         return rc;
 }

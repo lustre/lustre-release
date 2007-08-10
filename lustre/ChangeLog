@@ -157,6 +157,14 @@ Bugzilla   : 12955
 Description: jbd statistics
 Details    : Port older jbd statistics patch for sles10
 
+Severity   : normal
+Bugzilla   : 9977
+Frequency  : rare
+Description: lvbo_init failed for resource with missing objects.
+Details    : Fix returning error if we do stat for file with missing/corrupted
+             objects and i_size set to all sum of size of all avaible objects.
+	     if we to truncate/write to missing object - it is recreated.
+
 --------------------------------------------------------------------------------
 
 2007-07-30         Cluster File Systems, Inc. <info@clusterfs.com>

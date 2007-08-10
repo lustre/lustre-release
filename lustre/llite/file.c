@@ -1046,7 +1046,7 @@ int ll_glimpse_size(struct inode *inode, int ast_flags)
 
         ll_inode_size_lock(inode, 1);
         inode_init_lvb(inode, &lvb);
-        obd_merge_lvb(sbi->ll_osc_exp, lli->lli_smd, &lvb, 0);
+        rc = obd_merge_lvb(sbi->ll_osc_exp, lli->lli_smd, &lvb, 0);
         inode->i_size = lvb.lvb_size;
         inode->i_blocks = lvb.lvb_blocks;
         LTIME_S(inode->i_mtime) = lvb.lvb_mtime;

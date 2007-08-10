@@ -116,6 +116,7 @@ int filter_setattr_internal(struct obd_export *exp, struct dentry *dentry,
                             struct obdo *oa, struct obd_trans_info *oti);
 int filter_setattr(struct obd_export *exp, struct obd_info *oinfo,
                    struct obd_trans_info *oti);
+int filter_recreate(struct obd_device *obd, struct obdo *oa);
 
 struct dentry *filter_create_object(struct obd_device *obd, struct obdo *oa);
 

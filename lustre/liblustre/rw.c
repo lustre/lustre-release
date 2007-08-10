@@ -259,15 +259,18 @@ int llu_glimpse_size(struct inode *inode)
         }
 
         inode_init_lvb(inode, &lvb);
-        obd_merge_lvb(sbi->ll_osc_exp, lli->lli_smd, &lvb, 0);
+        rc = obd_merge_lvb(sbi->ll_osc_exp, lli->lli_smd, &lvb, 0);
         st->st_size = lvb.lvb_size;
         st->st_blocks = lvb.lvb_blocks;
+        /* handle st_blocks overflow gracefully */
+        if (st->st_blocks < lvb.lvb_blocks)
+                st->st_blocks = ~0UL;
         st->st_mtime = lvb.lvb_mtime;
         st->st_atime = lvb.lvb_atime;
         st->st_ctime = lvb.lvb_ctime;
 
-        CDEBUG(D_DLMTRACE, "glimpse: size: %llu, blocks: %llu\n",
-               (long long)st->st_size, (long long)st->st_blocks);
+        CDEBUG(D_DLMTRACE, "glimpse: size: %llu, blocks: "LPU64"\n",
+               (long long)st->st_size, st->st_blocks);
 
         RETURN(rc);
 }

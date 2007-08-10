@@ -2860,23 +2860,21 @@ static int filter_precreate(struct obd_device *obd, struct obdo *oa,
         for (i = 0; i < *num && err == 0; i++) {
                 int cleanup_phase = 0;
 
-                if (filter->fo_destroy_in_progress) {
-                        CWARN("%s: precreate aborted by destroy\n",
-                              obd->obd_name);
-                        rc = -EAGAIN;
-                        break;
-                }
-
                 if (recreate_obj) {
                         __u64 last_id;
                         next_id = oa->o_id;
                         last_id = filter_last_id(filter, group);
                         if (next_id > last_id) {
-                                CERROR("Error: Trying to recreate obj greater"
+                                CERROR("%s: trying to recreate obj greater"
                                        "than last id "LPD64" > "LPD64"\n",
-                                       next_id, last_id);
+                                       obd->obd_name, next_id, last_id);
                                 GOTO(cleanup, rc = -EINVAL);
                         }
+                } else if (filter->fo_destroy_in_progress) {
+                        CWARN("%s: precreate aborted by destroy\n",
+                              obd->obd_name);
+                        rc = -EAGAIN;
+                        break;
                 } else
                         next_id = filter_last_id(filter, group) + 1;
 
@@ -2970,20 +2968,72 @@ static int filter_precreate(struct obd_device *obd, struct obdo *oa,
         RETURN(rc);
 }
 
+int filter_recreate(struct obd_device *obd, struct obdo *oa)
+{
+        struct ldlm_res_id res_id = { .name = { oa->o_id } };
+        struct ldlm_valblock_ops *ns_lvbo;
+        struct ldlm_resource *res;
+        obd_valid old_valid = oa->o_valid;
+        obd_flag old_flags = oa->o_flags;
+        int diff = 1, rc;
+        ENTRY;
+
+        if (oa->o_id > filter_last_id(&obd->u.filter, oa->o_gr)) {
+                CERROR("recreate objid "LPU64" > last id "LPU64"\n",
+                       oa->o_id, filter_last_id(&obd->u.filter, oa->o_gr));
+                RETURN(-EINVAL);
+        }
+
+        if ((oa->o_valid & OBD_MD_FLFLAGS) == 0) {
+                oa->o_valid |= OBD_MD_FLFLAGS;
+                oa->o_flags = OBD_FL_RECREATE_OBJS;
+        } else {
+                oa->o_flags |= OBD_FL_RECREATE_OBJS;
+        }
+
+        down(&obd->u.filter.fo_create_lock);
+        rc = filter_precreate(obd, oa, oa->o_gr, &diff);
+        up(&obd->u.filter.fo_create_lock);
+
+        res = ldlm_resource_get(obd->obd_namespace, NULL,
+                                res_id, LDLM_EXTENT, 0);
+        if (res != NULL) {
+                /* Update lvb->lvb_blocks for the recreated object */
+                ns_lvbo = res->lr_namespace->ns_lvbo;
+                if (ns_lvbo && ns_lvbo->lvbo_update) {
+                        rc = ns_lvbo->lvbo_update(res, NULL, 0, 1);
+                        if (rc)
+                                RETURN(rc);
+                }
+                ldlm_resource_putref(res);
+        }
+
+        if (rc == 0)
+                CWARN("%s: recreated missing object "LPU64"/"LPU64"\n",
+                      obd->obd_name, oa->o_id, oa->o_gr);
+
+        oa->o_valid = old_valid;
+        oa->o_flags = old_flags;
+        RETURN(rc);
+}
+
 static int filter_create(struct obd_export *exp, struct obdo *oa,
                          struct lov_stripe_md **ea, struct obd_trans_info *oti)
 {
         struct obd_device *obd = NULL;
         struct lvfs_run_ctxt saved;
         struct lov_stripe_md *lsm = NULL;
+        struct ldlm_res_id res_id = { .name = { oa->o_id } };
+        ldlm_policy_data_t policy = { .l_extent = { 0, OBD_OBJECT_EOF } };
+        struct lustre_handle lockh;
+        int flags = 0;
         int rc = 0;
         ENTRY;
 
         if (!(oa->o_valid & OBD_MD_FLGROUP))
                 oa->o_gr = 0;
 
-        CDEBUG(D_INFO, "filter_create(od->o_gr="LPU64",od->o_id="LPU64")\n",
-               oa->o_gr, oa->o_id);
+        CDEBUG(D_INFO, "object "LPU64"/"LPU64"\n", oa->o_id, oa->o_gr);
         if (ea != NULL) {
                 lsm = *ea;
                 if (lsm == NULL) {
@@ -2998,19 +3048,16 @@ static int filter_create(struct obd_export *exp, struct obdo *oa,
 
         if ((oa->o_valid & OBD_MD_FLFLAGS) &&
             (oa->o_flags & OBD_FL_RECREATE_OBJS)) {
-                if (oa->o_id > filter_last_id(&obd->u.filter, oa->o_gr)) {
-                        CERROR("recreate objid "LPU64" > last id "LPU64"\n",
-                               oa->o_id, filter_last_id(&obd->u.filter,
-                                                        oa->o_gr));
-                        rc = -EINVAL;
-                } else {
-                        struct filter_obd *filter = &obd->u.filter;
-                        int diff = 1;
-
-                        down(&filter->fo_create_lock);
-                        rc = filter_precreate(obd, oa, oa->o_gr, &diff);
-                        up(&filter->fo_create_lock);
-                }
+                /* Cancel all conflicting extent locks on recreating object,
+                 * thus object's metadata will be updated on the clients */
+                rc = ldlm_cli_enqueue_local(obd->obd_namespace, res_id,
+                                            LDLM_EXTENT, &policy, LCK_PW,
+                                            &flags, ldlm_blocking_ast,
+                                            ldlm_completion_ast,
+                                            ldlm_glimpse_ast, NULL, 0,
+                                            NULL, &lockh);
+                rc = filter_recreate(obd, oa);
+                ldlm_lock_decref(&lockh, LCK_PW);
         } else {
                 rc = filter_handle_precreate(exp, oa, oa->o_gr, oti);
         }
@@ -3190,7 +3237,10 @@ static int filter_truncate(struct obd_export *exp, struct obd_info *oinfo,
                            struct obd_trans_info *oti,
                            struct ptlrpc_request_set *rqset)
 {
-        int rc;
+        struct obdo *oa = oinfo->oi_oa;
+        struct dentry *dentry;
+        struct lvfs_run_ctxt saved;
+        int rc = 0;
         ENTRY;
 
         if (oinfo->oi_policy.l_extent.end != OBD_OBJECT_EOF) {
@@ -3200,11 +3250,45 @@ static int filter_truncate(struct obd_export *exp, struct obd_info *oinfo,
         }
 
         CDEBUG(D_INODE, "calling truncate for object "LPU64", valid = "LPX64
-               ", o_size = "LPD64"\n", oinfo->oi_oa->o_id,
-               oinfo->oi_oa->o_valid, oinfo->oi_policy.l_extent.start);
+               ", o_size = "LPD64"\n", oa->o_id,
+               oa->o_valid, oinfo->oi_policy.l_extent.start);
 
-        oinfo->oi_oa->o_size = oinfo->oi_policy.l_extent.start;
+        oa->o_size = oinfo->oi_policy.l_extent.start;
+
+        if (!(oa->o_valid & OBD_MD_FLGROUP))
+                oa->o_gr = 0;
+
+        push_ctxt(&saved, &exp->exp_obd->obd_lvfs_ctxt, NULL);
+        lock_kernel();
+
+        dentry = filter_fid2dentry(exp->exp_obd, NULL, oa->o_gr, oa->o_id);
+        if (IS_ERR(dentry))
+                GOTO(out_unlock, rc = PTR_ERR(dentry));
+
+        if (dentry->d_inode == NULL) {
+                if (oinfo->oi_policy.l_extent.start == 0 &&
+                    filter_recreate(exp->exp_obd, oa) == 0) {
+                        f_dput(dentry);
+                        dentry = filter_fid2dentry(exp->exp_obd, NULL,
+                                                   oa->o_gr, oa->o_id);
+                }
+                if (IS_ERR(dentry) || dentry->d_inode == NULL) {
+                        CERROR("%s: punch missing obj "LPU64"/"LPU64": rc %d\n",
+                               exp->exp_obd->obd_name, oa->o_id, oa->o_gr, rc);
+                        if (IS_ERR(dentry))
+                                GOTO(out_unlock, rc = -ENOENT);
+                        GOTO(out_dput, rc = -ENOENT);
+                }
+        }
+
         rc = filter_setattr(exp, oinfo, oti);
+
+out_dput:
+        f_dput(dentry);
+out_unlock:
+        unlock_kernel();
+        pop_ctxt(&saved, &exp->exp_obd->obd_lvfs_ctxt, NULL);
+
         RETURN(rc);
 }
 
