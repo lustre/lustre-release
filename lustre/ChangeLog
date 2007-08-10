@@ -782,6 +782,10 @@ Details    : llog_commit_thread_count should be synced between llog_commit
              when llog_commit threads being stopped to avoid accessing some 
              freed stuff.
      
+Severity   : enhancement
+Bugzilla   : 11721
+Description: Add printing inode info into message about error in writepage.
+
 --------------------------------------------------------------------------------
 
 2007-05-03  Cluster File Systems, Inc. <info@clusterfs.com>

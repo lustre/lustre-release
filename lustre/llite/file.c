@@ -732,7 +732,8 @@ void ll_pgcache_remove_extent(struct inode *inode, struct lov_stripe_md *lsm,
                         lock_page(page);
                         wait_on_page_writeback(page);
                         if (rc != 0) {
-                                CERROR("writepage of page %p failed: %d\n",
+                                CERROR("writepage inode %lu(%p) of page %p "
+                                       "failed: %d\n", inode->i_ino, inode,
                                        page, rc);
 #if (LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))
                                 if (rc == -ENOSPC)
