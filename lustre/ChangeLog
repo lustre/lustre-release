@@ -165,6 +165,13 @@ Details    : Fix returning error if we do stat for file with missing/corrupted
              objects and i_size set to all sum of size of all avaible objects.
 	     if we to truncate/write to missing object - it is recreated.
 
+Severity   : minor
+Bugzilla   : 13276
+Frequency  : rare
+Description: Oops in read and write path when failing to allocate lock.
+Details    : Check if lock allocation failed and return error back.
+
+
 --------------------------------------------------------------------------------
 
 2007-07-30         Cluster File Systems, Inc. <info@clusterfs.com>
