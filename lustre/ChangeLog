@@ -171,6 +171,15 @@ Frequency  : rare
 Description: Oops in read and write path when failing to allocate lock.
 Details    : Check if lock allocation failed and return error back.
 
+Severity   : normal
+Bugzilla   : 13103
+Frequency  : When flocks are used.
+Description: assertion failure in ldlm_cli_enquque_fini for non NULL lock.
+Details    : Flock locks might destroy just granted lock if it could be merged
+             with another existing flock, this is done in completion handler,
+	     so teach ldlm_cli_enquque_fini that this is a valid case for
+	     flock locks.
+
 
 --------------------------------------------------------------------------------
 
