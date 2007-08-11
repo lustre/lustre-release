@@ -1224,6 +1224,10 @@ repeat:
         }
        
         node = ll_node_from_inode(inode, *ppos, end, LCK_PR);
+        if (IS_ERR(node)){
+                GOTO(out, rc = PTR_ERR(node));
+        }
+
         tree.lt_fd = LUSTRE_FPRIVATE(file);
         rc = ll_tree_lock(&tree, node, buf, count,
                           file->f_flags & O_NONBLOCK ? LDLM_FL_BLOCK_NOWAIT :0);
@@ -1398,7 +1402,7 @@ repeat:
 
         if (*ppos >= maxbytes) {
                 send_sig(SIGXFSZ, current, 0);
-                GOTO(out, retval = -EFBIG);
+                GOTO(out_unlock, retval = -EFBIG);
         }
         if (*ppos + count > maxbytes)
                 count = maxbytes - *ppos;
@@ -1410,9 +1414,10 @@ repeat:
         retval = generic_file_write(file, buf, chunk, ppos);
         ll_rw_stats_tally(ll_i2sbi(inode), current->pid, file, count, 1);
 
-out:
+out_unlock:
         ll_tree_unlock(&tree);
 
+out:
         if (retval > 0) {
                 buf += retval;
                 count -= retval;
@@ -1464,6 +1469,9 @@ static ssize_t ll_file_sendfile(struct file *in_file, loff_t *ppos,size_t count,
                 RETURN(generic_file_sendfile(in_file, ppos, count, actor, target));
 
         node = ll_node_from_inode(inode, *ppos, *ppos + count - 1, LCK_PR);
+        if (IS_ERR(node))
+                RETURN(PTR_ERR(node));
+
         tree.lt_fd = LUSTRE_FPRIVATE(in_file);
         rc = ll_tree_lock(&tree, node, NULL, count,
                           in_file->f_flags & O_NONBLOCK?LDLM_FL_BLOCK_NOWAIT:0);
