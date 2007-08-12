@@ -323,7 +323,11 @@ int ldlm_cli_enqueue_fini(struct obd_export *exp, struct ptlrpc_request *req,
 
         lock = ldlm_handle2lock(lockh);
         /* ldlm_cli_enqueue is holding a reference on this lock. */
-        LASSERT(lock != NULL);
+        if (!lock) {
+                LASSERT(type == LDLM_FLOCK);
+                RETURN(-ENOLCK);
+        }
+
         if (rc != ELDLM_OK) {
                 LASSERT(!is_replay);
                 LDLM_DEBUG(lock, "client-side enqueue END (%s)",
@@ -552,7 +556,7 @@ int ldlm_cli_enqueue(struct obd_export *exp, struct ptlrpc_request **reqp,
                         [DLM_LOCKREQ_OFF]     = sizeof(*body),
                         [DLM_REPLY_REC_OFF]   = lvb_len };
         int is_replay = *flags & LDLM_FL_REPLAY;
-        int req_passed_in = 1, rc;
+        int req_passed_in = 1, rc, err;
         struct ptlrpc_request *req;
         ENTRY;
 
@@ -646,9 +650,16 @@ int ldlm_cli_enqueue(struct obd_export *exp, struct ptlrpc_request **reqp,
 
         LDLM_DEBUG(lock, "sending request");
         rc = ptlrpc_queue_wait(req);
-        rc = ldlm_cli_enqueue_fini(exp, req, type, policy ? 1 : 0,
-                                   mode, flags, lvb, lvb_len, lvb_swabber,
-                                   lockh, rc);
+        err = ldlm_cli_enqueue_fini(exp, req, type, policy ? 1 : 0,
+                                    mode, flags, lvb, lvb_len, lvb_swabber,
+                                    lockh, rc);
+
+        /* If ldlm_cli_enqueue_fini did not find the lock, we need to free
+         * one reference that we took */
+        if (err == -ENOLCK)
+                LDLM_LOCK_PUT(lock);
+        else
+                rc = err;
 
         if (!req_passed_in && req != NULL) {
                 ptlrpc_req_finished(req);

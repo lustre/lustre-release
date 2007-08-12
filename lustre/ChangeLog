@@ -69,6 +69,15 @@ Description: reply_lock_interpret crash due to race with it and lock cancel.
 Details    : Do not replay locks that are being cancelled. Do not reference
              locks by their address during replay, just by their handle.
 
+Severity   : normal
+Bugzilla   : 13103
+Frequency  : When flocks are used.
+Description: assertion failure in ldlm_cli_enquque_fini for non NULL lock.
+Details    : Flock locks might destroy just granted lock if it could be merged
+             with another existing flock, this is done in completion handler,
+	     so teach ldlm_cli_enquque_fini that this is a valid case for
+	     flock locks.
+
 --------------------------------------------------------------------------------
 
 2007-08-10         Cluster File Systems, Inc. <info@clusterfs.com>
