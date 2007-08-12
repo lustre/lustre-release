@@ -108,6 +108,7 @@ static
 int mdc_getattr_common(struct obd_export *exp, unsigned int ea_size, 
                        unsigned int acl_size, struct ptlrpc_request *req)
 {
+        struct obd_device *obddev = class_exp2obd(exp);
         struct mds_body *body;
         void *eadata;
         int size[4] = { sizeof(struct ptlrpc_body), sizeof(*body) };
@@ -128,7 +129,9 @@ int mdc_getattr_common(struct obd_export *exp, unsigned int ea_size,
 
         ptlrpc_req_set_repsize(req, bufcount, size);
 
+        mdc_enter_request(&obddev->u.cli);
         rc = ptlrpc_queue_wait(req);
+        mdc_exit_request(&obddev->u.cli);
         if (rc != 0)
                 RETURN (rc);
 
@@ -236,6 +239,7 @@ int mdc_xattr_common(struct obd_export *exp, struct ll_fid *fid,
                      const char *input, int input_size, int output_size,
                      int flags, struct ptlrpc_request **request)
 {
+        struct obd_device *obddev = class_exp2obd(exp);
         struct ptlrpc_request *req;
         int size[4] = { sizeof(struct ptlrpc_body), sizeof(struct mds_body) };
         // int size[3] = {sizeof(struct mds_body)}, bufcnt = 1;
@@ -287,11 +291,15 @@ int mdc_xattr_common(struct obd_export *exp, struct ll_fid *fid,
         /* make rpc */
         if (opcode == MDS_SETXATTR)
                 mdc_get_rpc_lock(exp->exp_obd->u.cli.cl_rpc_lock, NULL);
+        else
+                mdc_enter_request(&obddev->u.cli);
 
         rc = ptlrpc_queue_wait(req);
 
         if (opcode == MDS_SETXATTR)
                 mdc_put_rpc_lock(exp->exp_obd->u.cli.cl_rpc_lock, NULL);
+        else
+                mdc_exit_request(&obddev->u.cli);
 
         if (rc != 0)
                 GOTO(err_out, rc);

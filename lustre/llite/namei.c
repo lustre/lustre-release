@@ -373,7 +373,7 @@ static void ll_d_add(struct dentry *de, struct inode *inode)
  * in ll_revalidate_it.  After revaliadate inode will be have hashed aliases
  * and it triggers BUG_ON in d_instantiate_unique (bug #10954).
  */
-struct dentry *ll_find_alias(struct inode *inode, struct dentry *de)
+static struct dentry *ll_find_alias(struct inode *inode, struct dentry *de)
 {
         struct list_head *tmp;
         struct dentry *dentry;
@@ -442,8 +442,8 @@ struct dentry *ll_find_alias(struct inode *inode, struct dentry *de)
         return de;
 }
 
-static int lookup_it_finish(struct ptlrpc_request *request, int offset,
-                            struct lookup_intent *it, void *data)
+int lookup_it_finish(struct ptlrpc_request *request, int offset,
+                     struct lookup_intent *it, void *data)
 {
         struct it_cb_data *icbd = data;
         struct dentry **de = icbd->icbd_childp;
@@ -530,8 +530,17 @@ static struct dentry *ll_lookup_it(struct inode *parent, struct dentry *dentry,
                         RETURN(ERR_PTR(rc));
         }
 
-        icbd.icbd_childp = &dentry;
+        if (it->it_op == IT_GETATTR) {
+                rc = ll_statahead_enter(parent, &dentry, 1);
+                if (rc >= 0) {
+                        ll_statahead_exit(dentry, rc);
+                        if (rc == 1)
+                                RETURN(retval = dentry);
+                }
+        }
+
         icbd.icbd_parent = parent;
+        icbd.icbd_childp = &dentry;
 
         rc = ll_prepare_mdc_op_data(&op_data, parent, NULL, dentry->d_name.name,
                                     dentry->d_name.len, lookup_flags, NULL);
@@ -540,9 +549,10 @@ static struct dentry *ll_lookup_it(struct inode *parent, struct dentry *dentry,
 
         it->it_create_mode &= ~current->fs->umask;
 
+        up(&parent->i_sem);
         rc = mdc_intent_lock(ll_i2mdcexp(parent), &op_data, NULL, 0, it,
                              lookup_flags, &req, ll_mdc_blocking_ast, 0);
-
+        down(&parent->i_sem);
         if (rc < 0)
                 GOTO(out, retval = ERR_PTR(rc));
 

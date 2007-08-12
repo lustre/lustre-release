@@ -315,7 +315,8 @@ void mdc_getattr_pack(struct ptlrpc_request *req, int offset, int valid,
                 char *tmp;
                 tmp = lustre_msg_buf(req->rq_reqmsg, offset + 1,
                                      data->namelen + 1);
-                LOGL0(data->name, data->namelen, tmp);
+                memcpy(tmp, data->name, data->namelen);
+                data->name = tmp;
         }
 }
 
@@ -396,8 +397,8 @@ void mdc_exit_request(struct client_obd *cli)
 
         spin_lock(&cli->cl_loi_list_lock);
         cli->cl_r_in_flight--;
+
         list_for_each_safe(l, tmp, &cli->cl_cache_waiters) {
-                
                 if (cli->cl_r_in_flight >= cli->cl_max_rpcs_in_flight) {
                         /* No free request slots anymore */
                         break;
