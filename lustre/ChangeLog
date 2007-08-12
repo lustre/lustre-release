@@ -78,6 +78,12 @@ Details    : Flock locks might destroy just granted lock if it could be merged
 	     so teach ldlm_cli_enquque_fini that this is a valid case for
 	     flock locks.
 
+Severity   : minor
+Bugzilla   : 13276
+Frequency  : rare
+Description: Oops in read and write path when failing to allocate lock.
+Details    : Check if lock allocation failed and return error back.
+
 --------------------------------------------------------------------------------
 
 2007-08-10         Cluster File Systems, Inc. <info@clusterfs.com>
