@@ -180,6 +180,13 @@ Details    : Flock locks might destroy just granted lock if it could be merged
 	     so teach ldlm_cli_enquque_fini that this is a valid case for
 	     flock locks.
 
+Severity   : normal
+Bugzilla   : 11974
+Frequency  : Rare
+Description: reply_lock_interpret crash due to race with it and lock cancel.
+Details    : Do not replay locks that are being cancelled. Do not reference
+             locks by their address during replay, just by their handle.
+
 
 --------------------------------------------------------------------------------
 
