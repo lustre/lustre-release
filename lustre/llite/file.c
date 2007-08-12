@@ -1363,7 +1363,7 @@ repeat:
 
         node = ll_node_from_inode(inode, *ppos, end, LCK_PR);
         if (IS_ERR(node)){
-                GOTO(out, rc = PTR_ERR(node));
+                GOTO(out, retval = PTR_ERR(node));
         }
 
         tree.lt_fd = LUSTRE_FPRIVATE(file);
