@@ -62,6 +62,13 @@ Severity   : enhancement
 Bugzilla   : 11721
 Description: Add printing inode info into message about error in writepage.
 
+Severity   : normal
+Bugzilla   : 11974
+Frequency  : Rare
+Description: reply_lock_interpret crash due to race with it and lock cancel.
+Details    : Do not replay locks that are being cancelled. Do not reference
+             locks by their address during replay, just by their handle.
+
 --------------------------------------------------------------------------------
 
 2007-08-10         Cluster File Systems, Inc. <info@clusterfs.com>

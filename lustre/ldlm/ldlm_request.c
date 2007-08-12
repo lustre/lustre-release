@@ -43,6 +43,10 @@ struct lock_wait_data {
         __u32             lwd_conn_cnt;
 };
 
+struct ldlm_async_args {
+        struct lustre_handle lock_handle;
+};
+
 int ldlm_expired_completion_wait(void *data)
 {
         struct lock_wait_data *lwd = data;
@@ -877,6 +881,7 @@ int ldlm_cli_cancel_req(struct obd_export *exp, struct list_head *cancels,
                         GOTO(out, rc = -ENOMEM);
 
                 req->rq_no_resend = 1;
+                req->rq_no_delay = 1;
 
                 /* XXX FIXME bug 249 */
                 req->rq_request_portal = LDLM_CANCEL_REQUEST_PORTAL;
@@ -899,7 +904,8 @@ int ldlm_cli_cancel_req(struct obd_export *exp, struct list_head *cancels,
                                "out of sync -- not fatal\n",
                                libcfs_nid2str(req->rq_import->
                                               imp_connection->c_peer.nid));
-                } else if (rc == -ETIMEDOUT) {
+                } else if (rc == -ETIMEDOUT && /* check there was no reconnect*/
+                           req->rq_import_generation == imp->imp_generation) {
                         ptlrpc_req_finished(req);
                         continue;
                 } else if (rc != ELDLM_OK) {
@@ -1473,7 +1479,7 @@ static int ldlm_chain_lock_for_replay(struct ldlm_lock *lock, void *closure)
 }
 
 static int replay_lock_interpret(struct ptlrpc_request *req,
-                                    void * data, int rc)
+                                 struct ldlm_async_args *aa, int rc)
 {
         struct ldlm_lock *lock;
         struct ldlm_reply *reply;
@@ -1483,8 +1489,6 @@ static int replay_lock_interpret(struct ptlrpc_request *req,
         if (rc != ELDLM_OK)
                 GOTO(out, rc);
 
-        lock = req->rq_async_args.pointer_arg[0];
-        LASSERT(lock != NULL);
 
         reply = lustre_swab_repbuf(req, DLM_LOCKREPLY_OFF, sizeof(*reply),
                                    lustre_swab_ldlm_reply);
@@ -1493,10 +1497,21 @@ static int replay_lock_interpret(struct ptlrpc_request *req,
                 GOTO (out, rc = -EPROTO);
         }
 
+        lock = ldlm_handle2lock(&aa->lock_handle);
+        if (!lock) {
+                CERROR("received replay ack for unknown local cookie "LPX64
+                       " remote cookie "LPX64 " from server %s id %s\n",
+                       aa->lock_handle.cookie, reply->lock_handle.cookie,
+                       req->rq_export->exp_client_uuid.uuid,
+                       libcfs_id2str(req->rq_peer));
+                GOTO(out, rc = -ESTALE);
+        }
+
         lock->l_remote_handle = reply->lock_handle;
         LDLM_DEBUG(lock, "replayed lock:");
         ptlrpc_import_recovery_state_machine(req->rq_import);
- out:
+        LDLM_LOCK_PUT(lock);
+out:
         if (rc != ELDLM_OK)
                 ptlrpc_connect_import(req->rq_import, NULL);
 
@@ -1509,10 +1524,18 @@ static int replay_one_lock(struct obd_import *imp, struct ldlm_lock *lock)
         struct ptlrpc_request *req;
         struct ldlm_request *body;
         struct ldlm_reply *reply;
+        struct ldlm_async_args *aa;
         int buffers = 2;
         int size[3] = { sizeof(struct ptlrpc_body) };
         int flags;
         ENTRY;
+
+
+        /* Bug 11974: Do not replay a lock which is actively being canceled */
+        if (lock->l_flags & LDLM_FL_CANCELING) {
+                LDLM_DEBUG(lock, "Not replaying canceled lock:");
+                RETURN(0);
+        }
 
         /* If this is reply-less callback lock, we cannot replay it, since
          * server might have long dropped it, but notification of that event was
@@ -1574,7 +1597,9 @@ static int replay_one_lock(struct obd_import *imp, struct ldlm_lock *lock)
         LDLM_DEBUG(lock, "replaying lock:");
 
         atomic_inc(&req->rq_import->imp_replay_inflight);
-        req->rq_async_args.pointer_arg[0] = lock;
+        CLASSERT(sizeof(*aa) <= sizeof(req->rq_async_args));
+        aa = (struct ldlm_async_args *)&req->rq_async_args;
+        aa->lock_handle = body->lock_handle[0];
         req->rq_interpret_reply = replay_lock_interpret;
         ptlrpcd_add_req(req);
 
