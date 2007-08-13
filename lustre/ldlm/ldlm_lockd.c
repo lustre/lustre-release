@@ -368,7 +368,7 @@ int ldlm_del_waiting_lock(struct ldlm_lock *lock)
 
 /*
  * Prolong the lock
- * 
+ *
  * Called with namespace lock held.
  */
 int ldlm_refresh_waiting_lock(struct ldlm_lock *lock)
@@ -422,7 +422,7 @@ static void ldlm_failed_ast(struct ldlm_lock *lock, int rc,
 
         LCONSOLE_ERROR_MSG(0x138, "%s: A client on nid %s was evicted due "
                              "to a lock %s callback to %s timed out: rc %d\n",
-                             lock->l_export->exp_obd->obd_name, str, 
+                             lock->l_export->exp_obd->obd_name, str,
                              ast_type, obd_export_nid2str(lock->l_export), rc);
 
         if (obd_dump_on_timeout)
@@ -488,16 +488,16 @@ static int ldlm_cb_interpret(struct ptlrpc_request *req, void *data, int rc)
         lock = req->rq_async_args.pointer_arg[1];
         LASSERT(lock != NULL);
         if (rc != 0) {
-                /* If client canceled the lock but the cancel has not 
+                /* If client canceled the lock but the cancel has not
                  * been recieved yet, we need to update lvbo to have the
                  * proper attributes cached. */
                 if (rc == -EINVAL && arg->type == LDLM_BL_CALLBACK)
-                        ldlm_res_lvbo_update(lock->l_resource, NULL, 
+                        ldlm_res_lvbo_update(lock->l_resource, NULL,
                                              0, 1);
-                rc = ldlm_handle_ast_error(lock, req, rc, 
+                rc = ldlm_handle_ast_error(lock, req, rc,
                                            arg->type == LDLM_BL_CALLBACK
                                            ? "blocking" : "completion");
-        }                
+        }
 
         LDLM_LOCK_PUT(lock);
 
@@ -525,11 +525,18 @@ static inline int ldlm_bl_and_cp_ast_fini(struct ptlrpc_request *req,
         } else {
                 LDLM_LOCK_GET(lock);
                 ptlrpc_set_add_req(arg->set, req);
-        }       
+        }
 
         RETURN(rc);
 }
 
+/*
+ * ->l_blocking_ast() method for server-side locks. This is invoked when newly
+ * enqueued server lock conflicts with given one.
+ *
+ * Sends blocking ast rpc to the client owning that lock; arms timeout timer
+ * to wait for client response.
+ */
 int ldlm_server_blocking_ast(struct ldlm_lock *lock,
                              struct ldlm_lock_desc *desc,
                              void *data, int flag)
@@ -555,7 +562,7 @@ int ldlm_server_blocking_ast(struct ldlm_lock *lock,
                               NULL);
         if (req == NULL)
                 RETURN(-ENOMEM);
- 
+
         req->rq_async_args.pointer_arg[0] = arg;
         req->rq_async_args.pointer_arg[1] = lock;
         req->rq_interpret_reply = ldlm_cb_interpret;
@@ -600,7 +607,8 @@ int ldlm_server_blocking_ast(struct ldlm_lock *lock,
         if (instant_cancel) {
                 unlock_res(lock->l_resource);
                 ldlm_lock_cancel(lock);
-        } else if (lock->l_granted_mode == lock->l_req_mode) {
+        } else {
+                LASSERT(lock->l_granted_mode == lock->l_req_mode);
                 ldlm_add_waiting_lock(lock);
                 unlock_res(lock->l_resource);
         }
@@ -655,7 +663,7 @@ int ldlm_server_completion_ast(struct ldlm_lock *lock, int flags, void *data)
 
         req->rq_async_args.pointer_arg[0] = arg;
         req->rq_async_args.pointer_arg[1] = lock;
-        req->rq_interpret_reply = ldlm_cb_interpret;       
+        req->rq_interpret_reply = ldlm_cb_interpret;
 
         body = lustre_msg_buf(req->rq_reqmsg, DLM_LOCKREQ_OFF, sizeof(*body));
         body->lock_handle[0] = lock->l_remote_handle;
@@ -814,7 +822,7 @@ int ldlm_handle_enqueue(struct ptlrpc_request *req,
         flags = dlm_req->lock_flags;
 
         LASSERT(req->rq_export);
-        
+
         if (req->rq_export->exp_ldlm_stats)
                 lprocfs_counter_incr(req->rq_export->exp_ldlm_stats,
                                      LDLM_ENQUEUE - LDLM_FIRST_OPC);
@@ -847,7 +855,7 @@ int ldlm_handle_enqueue(struct ptlrpc_request *req,
         }
 
 #if 0
-        /* FIXME this makes it impossible to use LDLM_PLAIN locks -- check 
+        /* FIXME this makes it impossible to use LDLM_PLAIN locks -- check
            against server's _CONNECT_SUPPORTED flags? (I don't want to use
            ibits for mgc/mgs) */
 
@@ -968,7 +976,7 @@ existing_lock:
                                 unlock_res_and_lock(lock);
                                 ldlm_lock_cancel(lock);
                                 lock_res_and_lock(lock);
-                        } else if (lock->l_granted_mode == lock->l_req_mode)
+                        } else
                                 ldlm_add_waiting_lock(lock);
                 }
         }
@@ -1186,7 +1194,7 @@ int ldlm_handle_cancel(struct ptlrpc_request *req)
 
         if (!ldlm_request_cancel(req, dlm_req, 0))
                 req->rq_status = ESTALE;
-        
+
         if (ptlrpc_reply(req) != 0)
                 LBUG();
 
@@ -1315,7 +1323,7 @@ static void ldlm_handle_gl_callback(struct ptlrpc_request *req,
         lock_res_and_lock(lock);
         if (lock->l_granted_mode == LCK_PW &&
             !lock->l_readers && !lock->l_writers &&
-            cfs_time_after(cfs_time_current(), 
+            cfs_time_after(cfs_time_current(),
                            cfs_time_add(lock->l_last_used, cfs_time_seconds(10)))) {
                 unlock_res_and_lock(lock);
                 if (ldlm_bl_to_thread(ns, NULL, lock, 0))
@@ -1736,7 +1744,7 @@ static int ldlm_setup(void)
                                 LDLM_CANCEL_REPLY_PORTAL, ldlm_timeout * 6000,
                                 ldlm_cancel_handler, "ldlm_canceld",
                                 ldlm_svc_proc_dir, NULL,
-                                LDLM_THREADS_AUTO_MIN, LDLM_THREADS_AUTO_MAX, 
+                                LDLM_THREADS_AUTO_MIN, LDLM_THREADS_AUTO_MAX,
                                 "ldlm_cn");
 
         if (!ldlm_state->ldlm_cancel_service) {
