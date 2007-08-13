@@ -124,15 +124,15 @@ Severity   : normal
 Bugzilla   : 11756
 Frequency  : rare
 Description: umount blocks forever on error
-Details    : In result of wrong using obd_no_recov and obd_force flags client can
-             hand if cancel or some other requests is lost.
+Details    : In result of wrong using obd_no_recov and obd_force flags client
+	     can hand if cancel or some other requests is lost.
 
 Severity   : normal
 Bugzilla   : 13177
 Frequency  : Only for SLES
 Description: sanity_quota fail test_1
 Details    : There are multiple occurences of $TSTUSR in SLES's /etc/group
-             file, which makes TSTID[2] inunique.
+	     file, which makes TSTID[2] inunique.
 
 Severity   : normal
 Bugzilla   : 13249
@@ -359,10 +359,8 @@ Details    : in some rare cases it was possible for a client to connect to
 
 Severity   : enhancement
 Bugzilla   : 11563
-Description: Add -o localflock option to simulate  old noflock
-behaviour.
-Details    : This will achieve local-only flock/fcntl locks
-	     coherentness.
+Description: Add -o localflock option to simulate old noflock behaviour.
+Details    : This will achieve local-only flock/fcntl locks coherentness.
 
 Severity   : minor
 Frequency  : rare
@@ -378,9 +376,9 @@ Details    : ptlrpc_check_set wrongly uses req->rq_lock for proctect add to
 	     imp_delayed_list, in this place should be used imp_lock.
 
 Severity   : normal
-Frequency  : when reconnection
+Frequency  : when reconnecting
 Bugzilla   : 11662
-Description: Grant Leak when osc reconnect to OST
+Description: Grant leak when OSC reconnect to OST
 Details    : When osc reconnect ost, OST(filter) should check whether it
 	     should grant more space to client by comparing fed_grant and
 	     cl_avail_grant, and return the granted space to client instead
@@ -388,10 +386,10 @@ Details    : When osc reconnect ost, OST(filter) should check whether it
 	     to update the client grant space info.
 
 Severity   : normal
-Frequency  : when client reconnect to OST 
+Frequency  : when client reconnects to OST 
 Bugzilla   : 11662
-Description: Grant Leak when osc do resend and replay bulk write
-Details	   : When osc reconnect to OST, OST(filter)should clear grant info of
+Description: Grant leak when OSC does a resend and replays bulk write
+Details	   : When osc reconnect to OST, OST(filter) should clear grant info of
 	     bulk write request, because the grant info while be sync between
 	     OSC and OST when reconnect, and we should ignore the grant info
 	     these of resend/replay write req.
@@ -399,7 +397,7 @@ Details	   : When osc reconnect to OST, OST(filter)should clear grant info of
 Severity   : normal
 Frequency  : rare 
 Bugzilla   : 11662
-Description: Grant space more than avaiable left space sometimes.
+Description: Grant space more than avaiable space sometimes.
 Details	   : When then OST is about to be full, if two bulk writing from
 	     different clients came to OST. Accord the avaliable space of the
 	     OST, the first req should be permitted, and the second one
@@ -451,13 +449,13 @@ Details    : Lov_mds_md was not free in an error handler in mds_create_object.
 	     be freed no matter whether fsfilt_commit success or not.
 
 Severity   : minor
-Frequency  : only with huge count clients
+Frequency  : only with huge numbers of clients
 Bugzilla   : 11817
 Description: Prevents from taking the superblock lock in llap_from_page for 
 	     a soon died page.
 Details    : using LL_ORIGIN_REMOVEPAGE origin flag instead of LL_ORIGIN_UNKNOW 
-	     for llap_from_page call in ll_removepage prevents from taking the 
-	     superblock lock for a soon died page.
+	     for llap_from_page call in ll_removepage() prevents from taking
+	     the superblock lock for a soon died page.
 
 Severity   : normal
 Frequency  : rare
@@ -799,25 +797,25 @@ Bugzilla   : 13148
 Frequency  : only in recovery
 Description: Mark OST as early accessible if his start SYNC.
 Details    : osc_precreate return flag early accessible if oscc marked as 
-             OSCC_FLAG_SYNC_IN_PROGRESS.
+	     OSCC_FLAG_SYNC_IN_PROGRESS.
 
 Severity   : normal
 Bugzilla   : 13196
 Frequency  : rare
 Description: Sometimes precreate code can triger create object on wrong ost
 Details    : Wrong protected or not not restored variables aftre precreate loop
-             can produce creation object on wrong ost.
+	     can produce creation object on wrong ost.
 	
 Severity   : normal
 Frequency  : oss recovery 
 Bugzilla   : 10800
 Description: llog_commit_thread cleanup should sync with llog_commit_thread
-             start
+	     start
 Details    : llog_commit_thread_count should be synced between llog_commit
-             start and cleanup, so new llog_commit thread should not be started 
-             when llog_commit threads being stopped to avoid accessing some 
-             freed stuff.
-     
+	     start and cleanup, so new llog_commit thread should not be started 
+	     when llog_commit threads being stopped to avoid accessing some 
+	     freed stuff.
+
 Severity   : enhancement
 Bugzilla   : 11721
 Description: Add printing inode info into message about error in writepage.
