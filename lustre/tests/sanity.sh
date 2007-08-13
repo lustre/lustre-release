@@ -1997,12 +1997,13 @@ run_test 44 "zero length read from a sparse stripe ============="
 test_44a() {
     local nstripe=`$LCTL lov_getconfig $DIR | grep default_stripe_count: | \
                          awk '{print $2}'`
+    [ -z "$nstripe" ] && skip "can't get stripe info" && return
+    [ "$nstripe" -gt "$OSTCOUNT" ] && skip "Wrong default_stripe_count: $nstripe (OSTCOUNT: $OSTCOUNT)" && return
     local stride=`$LCTL lov_getconfig $DIR | grep default_stripe_size: | \
                       awk '{print $2}'`
     if [ $nstripe -eq 0 -o $nstripe -gt 1024 ] ; then
         nstripe=`$LCTL lov_getconfig $DIR | grep obd_count: | awk '{print $2}'`
     fi
-    [ -z "$nstripe" ] && error "can't get stripe info"
 
     OFFSETS="0 $((stride/2)) $((stride-1))"
     for offset in $OFFSETS ; do
