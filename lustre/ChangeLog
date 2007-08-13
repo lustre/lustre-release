@@ -214,7 +214,6 @@ Details    : perform client-side metadata stat-ahead when the client detects
         should be installed.  It is versioned separately from Lustre and
         may be released separately in future.
 
-
 Severity   : normal
 Frequency  : rare
 Bugzilla   : 13129
@@ -569,14 +568,6 @@ Description: add configure check for truncate_complete_page
 Details    : improve checks for exported symbols. This allow run check without
 	     sources, but with Module.symvers shipped with kernel distribution.
 	     add check for truncate_complete_page used by patchless client.
-
-Severity   : major
-Bugzilla   : 11710
-Frequency  : always
-Description: improve handling recoverable errors
-Details    : if request processig with error which can be recoverable on server
-	     request should be resend, otherwise page released from cache and
-	     marked as error.
 
 Severity   : normal
 Bugzilla   : 12646

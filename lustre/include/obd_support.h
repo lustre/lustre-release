@@ -140,7 +140,6 @@ extern unsigned int obd_alloc_fail_rate;
 #define OBD_FAIL_OST_DROP_REQ            0x21d
 #define OBD_FAIL_OST_SETATTR_CREDITS     0x21e
 #define OBD_FAIL_OST_HOLD_WRITE_RPC      0x21f
-#define OBD_FAIL_OST_BRW_WRITE_BULK2     0x220
 #define OBD_FAIL_OST_LLOG_RECOVERY_TIMEOUT 0x221
 #define OBD_FAIL_OST_CANCEL_COOKIE_TIMEOUT 0x222
 
@@ -173,7 +172,6 @@ extern unsigned int obd_alloc_fail_rate;
 #define OBD_FAIL_OSC_SHUTDOWN            0x407
 #define OBD_FAIL_OSC_CHECKSUM_RECEIVE    0x408
 #define OBD_FAIL_OSC_CHECKSUM_SEND       0x409
-#define OBD_FAIL_OSC_BRW_PREP_REQ2       0x40a
 
 #define OBD_FAIL_PTLRPC                  0x500
 #define OBD_FAIL_PTLRPC_ACK              0x501

@@ -493,16 +493,18 @@ int llap_shrink_cache(struct ll_sb_info *sbi, int shrink_fraction)
                         continue;
                 }
 
-               keep = (llap->llap_write_queued || PageDirty(page) ||
-                      PageWriteback(page) || (!PageUptodate(page) &&
-                      llap->llap_origin != LLAP_ORIGIN_READAHEAD));
+                if (llap->llap_write_queued || PageDirty(page) ||
+                    (!PageUptodate(page) &&
+                     llap->llap_origin != LLAP_ORIGIN_READAHEAD))
+                        keep = 1;
+                else
+                        keep = 0;
 
-                LL_CDEBUG_PAGE(D_PAGE, page,"%s LRU page: %s%s%s%s%s origin %s\n",
+                LL_CDEBUG_PAGE(D_PAGE, page,"%s LRU page: %s%s%s%s origin %s\n",
                                keep ? "keep" : "drop",
                                llap->llap_write_queued ? "wq " : "",
                                PageDirty(page) ? "pd " : "",
                                PageUptodate(page) ? "" : "!pu ",
-                               PageWriteback(page) ? "wb" : "",
                                llap->llap_defer_uptodate ? "" : "!du",
                                llap_origins[llap->llap_origin]);
 
@@ -858,6 +860,9 @@ int ll_ap_completion(void *data, int cmd, struct obdo *oa, int rc)
         } else {
                 if (cmd & OBD_BRW_READ) {
                         llap->llap_defer_uptodate = 0;
+                } else {
+                        ll_redirty_page(page);
+                        ret = 1;
                 }
                 SetPageError(page);
         }
@@ -1384,9 +1389,7 @@ out:
                 if (PageWriteback(page)) {
                         end_page_writeback(page);
                 }
-                /* resend page only for not started IO*/
-                if (!PageError(page))
-                        ll_redirty_page(page);
+                ll_redirty_page(page);
                 unlock_page(page);
         }
         RETURN(rc);

@@ -66,9 +66,6 @@ static void osc_release_ppga(struct brw_page **ppga, obd_count count);
 static quota_interface_t *quota_interface;
 extern quota_interface_t osc_quota_interface;
 
-/* by default 10s */
-atomic_t osc_resend_time; 
-
 /* Pack OSC object metadata for disk storage (LE byte order). */
 static int osc_packmd(struct obd_export *exp, struct lov_mds_md **lmmp,
                       struct lov_stripe_md *lsm)
@@ -920,9 +917,6 @@ static int osc_brw_prep_request(int cmd, struct client_obd *cli,struct obdo *oa,
         struct brw_page *pg_prev;
 
         ENTRY;
-        OBD_FAIL_RETURN(OBD_FAIL_OSC_BRW_PREP_REQ, -ENOMEM); /* Recoverable */
-        OBD_FAIL_RETURN(OBD_FAIL_OSC_BRW_PREP_REQ2, -EINVAL); /* Fatal */
-
         opc = ((cmd & OBD_BRW_WRITE) != 0) ? OST_WRITE : OST_READ;
         pool = ((cmd & OBD_BRW_WRITE) != 0) ? cli->cl_import->imp_rq_pool :NULL;
 
@@ -934,6 +928,7 @@ static int osc_brw_prep_request(int cmd, struct client_obd *cli,struct obdo *oa,
         size[REQ_REC_OFF + 1] = sizeof(*ioobj);
         size[REQ_REC_OFF + 2] = niocount * sizeof(*niobuf);
 
+        OBD_FAIL_RETURN(OBD_FAIL_OSC_BRW_PREP_REQ, -ENOMEM);
         req = ptlrpc_prep_req_pool(cli->cl_import, LUSTRE_OST_VERSION, opc, 4, size,
                                    NULL, pool);
         if (req == NULL)
@@ -1041,7 +1036,7 @@ static int osc_brw_prep_request(int cmd, struct client_obd *cli,struct obdo *oa,
         aa->aa_requested_nob = requested_nob;
         aa->aa_nio_count = niocount;
         aa->aa_page_count = page_count;
-        aa->aa_start_send = cfs_time_current();
+        aa->aa_retries = 5;     /*retry for checksum errors; lprocfs? */
         aa->aa_ppga = pga;
         aa->aa_cli = cli;
         INIT_LIST_HEAD(&aa->aa_oaps);
@@ -1240,8 +1235,7 @@ static int osc_brw_internal(int cmd, struct obd_export *exp,struct obdo *oa,
                             obd_count page_count, struct brw_page **pga)
 {
         struct ptlrpc_request *request;
-        int                    rc;
-        cfs_time_t             start_send = cfs_time_current();
+        int                    rc, retries = 5; /* lprocfs? */
         ENTRY;
 
 restart_bulk:
@@ -1261,12 +1255,10 @@ restart_bulk:
         rc = osc_brw_fini_request(request, rc);
 
         ptlrpc_req_finished(request);
-        if (osc_recoverable_error(rc)) {
-                if (!osc_should_resend(start_send)) {
-                        CERROR("too many resend retries, returning error\n");
-                        RETURN(-EIO);
-                }
-                goto restart_bulk;
+        if (rc == -EAGAIN) {
+                if (retries-- > 0)
+                        goto restart_bulk;
+                rc = -EIO;
         }
         RETURN(rc);
 }
@@ -1281,12 +1273,12 @@ int osc_brw_redo_request(struct ptlrpc_request *request,
         int rc = 0;
         ENTRY;
 
-        if (!osc_should_resend(aa->aa_start_send)) {
-                CERROR("too many resend retries, returning error\n");
+        if (aa->aa_retries-- <= 0) {
+                CERROR("too many checksum retries, returning error\n");
                 RETURN(-EIO);
         }
 
-        DEBUG_REQ(D_ERROR, request, "redo for recoverable error");
+        DEBUG_REQ(D_ERROR, request, "redo for checksum error");
         list_for_each_entry(oap, &aa->aa_oaps, oap_rpc_item) {
                 if (oap->oap_request != NULL) {
                         LASSERTF(request == oap->oap_request,
@@ -1339,8 +1331,7 @@ static int brw_interpret(struct ptlrpc_request *request, void *data, int rc)
         ENTRY;
 
         rc = osc_brw_fini_request(request, rc);
-        CDEBUG(D_INODE, "request %p aa %p rc %d\n", request, aa, rc);	
-        if (osc_recoverable_error(rc)) {
+        if (rc == -EAGAIN) {
                 rc = osc_brw_redo_request(request, aa);
                 if (rc == 0)
                         RETURN(0);
@@ -1779,7 +1770,7 @@ unlock:
  * the app does an fsync.  As long as errors persist we force future rpcs to be
  * sync so that the app can get a sync error and break the cycle of queueing
  * pages for which writeback will fail. */
-static void osc_process_ar(struct osc_async_rc *ar, __u64 xid,
+static void osc_process_ar(struct osc_async_rc *ar, struct ptlrpc_request *req,
                            int rc)
 {
         if (rc) {
@@ -1792,7 +1783,7 @@ static void osc_process_ar(struct osc_async_rc *ar, __u64 xid,
 
         }
 
-        if (ar->ar_force_sync && (xid >= ar->ar_min_xid))
+        if (ar->ar_force_sync && req && (ptlrpc_req_xid(req) >= ar->ar_min_xid))
                 ar->ar_force_sync = 0;
 }
 
@@ -1816,21 +1807,18 @@ static void osc_oap_to_pending(struct osc_async_page *oap)
 static void osc_ap_completion(struct client_obd *cli, struct obdo *oa,
                               struct osc_async_page *oap, int sent, int rc)
 {
-        __u64 xid = 0;
-
         ENTRY;
-        if (oap->oap_request != NULL) {
-                xid = ptlrpc_req_xid(oap->oap_request);
-                ptlrpc_req_finished(oap->oap_request);
-                oap->oap_request = NULL;
-        }
-
         oap->oap_async_flags = 0;
         oap->oap_interrupted = 0;
 
         if (oap->oap_cmd & OBD_BRW_WRITE) {
-                osc_process_ar(&cli->cl_ar, xid, rc);
-                osc_process_ar(&oap->oap_loi->loi_ar, xid, rc);
+                osc_process_ar(&cli->cl_ar, oap->oap_request, rc);
+                osc_process_ar(&oap->oap_loi->loi_ar, oap->oap_request, rc);
+        }
+
+        if (oap->oap_request != NULL) {
+                ptlrpc_req_finished(oap->oap_request);
+                oap->oap_request = NULL;
         }
 
         if (rc == 0 && oa != NULL) {
@@ -1875,11 +1863,11 @@ static int brw_interpret_oap(struct ptlrpc_request *request, void *data, int rc)
 
         rc = osc_brw_fini_request(request, rc);
         CDEBUG(D_INODE, "request %p aa %p rc %d\n", request, aa, rc);
-
-	if (osc_recoverable_error(rc)) {
+        if (rc == -EAGAIN) {
                 rc = osc_brw_redo_request(request, aa);
                 if (rc == 0)
                         RETURN(0);
+                GOTO(out, rc);
         }
 
         cli = aa->aa_cli;
@@ -1905,6 +1893,8 @@ static int brw_interpret_oap(struct ptlrpc_request *request, void *data, int rc)
 
         OBDO_FREE(aa->aa_oa);
 
+        rc = 0;
+out:
         osc_release_ppga(aa->aa_ppga, aa->aa_page_count);
         RETURN(rc);
 }
@@ -3732,13 +3722,13 @@ struct obd_ops osc_obd_ops = {
         .o_llog_finish          = osc_llog_finish,
         .o_process_config       = osc_process_config,
 };
+
 int __init osc_init(void)
 {
         struct lprocfs_static_vars lvars;
         int rc;
         ENTRY;
 
-        atomic_set(&osc_resend_time, cfs_time_seconds(OSC_DEFAULT_TIMEOUT));
         lprocfs_init_vars(osc, &lvars);
 
         request_module("lquota");

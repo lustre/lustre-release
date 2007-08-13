@@ -303,30 +303,6 @@ static int osc_wr_checksum(struct file *file, const char *buffer,
         return count;
 }
 
-static int osc_rd_resendtime(char *page, char **start, off_t off, int count,
-                             int *eof, void *data)
-{
-        return snprintf(page, count, CFS_TIME_T, 
-                        cfs_duration_sec(atomic_read(&osc_resend_time)));
-}
-
-static int osc_wr_resendtime(struct file *file, const char *buffer,
-                             unsigned long count, void *data)
-{
-        int val, rc;
-
-        rc = lprocfs_write_helper(buffer, count, &val);
-        if (rc)
-                return rc;
-
-        if (val < 0)
-               return -EINVAL;
-
-        atomic_set(&osc_resend_time, cfs_time_seconds(val));
-
-        return count;
-}
-
 static struct lprocfs_vars lprocfs_obd_vars[] = {
         { "uuid",            lprocfs_rd_uuid,        0, 0 },
         { "ping",            0, lprocfs_wr_ping,        0 },
@@ -358,7 +334,6 @@ static struct lprocfs_vars lprocfs_obd_vars[] = {
 
 static struct lprocfs_vars lprocfs_module_vars[] = {
         { "num_refs",        lprocfs_rd_numrefs,     0, 0 },
-        { "resend_timeout",  osc_rd_resendtime, osc_wr_resendtime, 0},
         { 0 }
 };
 
@@ -488,4 +463,3 @@ int lproc_osc_attach_seqstat(struct obd_device *dev)
 
 LPROCFS_INIT_VARS(osc, lprocfs_module_vars, lprocfs_obd_vars)
 #endif /* LPROCFS */
-
