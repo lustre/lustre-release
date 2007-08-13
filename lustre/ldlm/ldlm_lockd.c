@@ -438,11 +438,11 @@ static void ldlm_failed_ast(struct ldlm_lock *lock, int rc,
         char                     *str = libcfs_nid2str(conn->c_peer.nid);
 
         LCONSOLE_ERROR_MSG(0x138, "A client on nid %s was evicted from "
-                           "service %s.\n", str, 
+                           "service %s.\n", str,
                            lock->l_export->exp_obd->obd_name);
 
         LCONSOLE_ERROR_MSG(0x012, "Lock %s callback to %s timed out for "
-                           "resource %d\n", ast_type, 
+                           "resource %d\n", ast_type,
                            obd_export_nid2str(lock->l_export), rc);
 
         if (obd_dump_on_timeout)
@@ -497,6 +497,13 @@ static int ldlm_handle_ast_error(struct ldlm_lock *lock,
         return rc;
 }
 
+/*
+ * ->l_blocking_ast() method for server-side locks. This is invoked when newly
+ * enqueued server lock conflicts with given one.
+ *
+ * Sends blocking ast rpc to the client owning that lock; arms timeout timer
+ * to wait for client response.
+ */
 int ldlm_server_blocking_ast(struct ldlm_lock *lock,
                              struct ldlm_lock_desc *desc,
                              void *data, int flag)
@@ -556,7 +563,8 @@ int ldlm_server_blocking_ast(struct ldlm_lock *lock,
         if (instant_cancel) {
                 unlock_res(lock->l_resource);
                 ldlm_lock_cancel(lock);
-        } else if (lock->l_granted_mode == lock->l_req_mode) {
+        } else {
+                LASSERT(lock->l_granted_mode == lock->l_req_mode);
                 ldlm_add_waiting_lock(lock);
                 unlock_res(lock->l_resource);
         }
@@ -639,7 +647,7 @@ int ldlm_server_completion_ast(struct ldlm_lock *lock, int flags, void *data)
 
         LDLM_DEBUG(lock, "server preparing completion AST (after %ldus wait)",
                    total_enqueue_wait);
-        
+
         ptlrpc_req_set_repsize(req, 1, NULL);
 
         req->rq_send_state = LUSTRE_IMP_FULL;
@@ -941,7 +949,7 @@ existing_lock:
                                 unlock_res_and_lock(lock);
                                 ldlm_lock_cancel(lock);
                                 lock_res_and_lock(lock);
-                        } else if (lock->l_granted_mode == lock->l_req_mode)
+                        } else
                                 ldlm_add_waiting_lock(lock);
                 }
         }
@@ -1203,7 +1211,7 @@ int ldlm_handle_cancel(struct ptlrpc_request *req)
                 CERROR("out of memory\n");
                 RETURN(-ENOMEM);
         }
-        
+
         if (!ldlm_request_cancel(req, dlm_req, 0))
                 req->rq_status = ESTALE;
 
