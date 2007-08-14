@@ -1,15 +1,15 @@
 2007-08-27         Cluster File Systems, Inc. <info@clusterfs.com>
        * version 1.6.2
        * Support for networks:
-	socklnd   - kernels up to 2.6.16
-	qswlnd    - Qsnet kernel modules 5.20 and later
-	openiblnd - IbGold 1.8.2
-	o2iblnd   - OFED 1.1 and 1.2
-	viblnd    - Voltaire ibhost 3.4.5 and later
-	ciblnd    - Topspin 3.2.0
-	iiblnd    - Infiniserv 3.3 + PathBits patch
-	gmlnd     - GM 2.1.22 and later
-	mxlnd     - MX 1.2.1 or later
+	socklnd   - kernels up to 2.6.16,
+	qswlnd    - Qsnet kernel modules 5.20 and later,
+	openiblnd - IbGold 1.8.2,
+	o2iblnd   - OFED 1.1 and 1.2,
+	viblnd    - Voltaire ibhost 3.4.5 and later,
+	ciblnd    - Topspin 3.2.0,
+	iiblnd    - Infiniserv 3.3 + PathBits patch,
+	gmlnd     - GM 2.1.22 and later,
+	mxlnd     - MX 1.2.1 or later,
 	ptllnd    - Portals 3.3 / UNICOS/lc 1.5.x, 2.0.x
 
 Severity   : normal
@@ -23,17 +23,16 @@ Details    : ulnds/socklnd must close open socket after unsuccessful
 2007-07-30  Cluster File Systems, Inc. <info@clusterfs.com>
        * version 1.4.11 / 1.6.1
        * Support for networks:
-	socklnd   - kernels up to 2.6.16
-	qswlnd    - Qsnet kernel modules 5.20 and later
-	openiblnd - IbGold 1.8.2
-	o2iblnd   - OFED 1.1 and 1.2
-	viblnd    - Voltaire ibhost 3.4.5 and later
-	ciblnd    - Topspin 3.2.0
-	iiblnd    - Infiniserv 3.3 + PathBits patch
-	gmlnd     - GM 2.1.22 and later
-	mxlnd     - MX 1.2.1 or later
+	socklnd   - kernels up to 2.6.16,
+	qswlnd    - Qsnet kernel modules 5.20 and later,
+	openiblnd - IbGold 1.8.2,
+	o2iblnd   - OFED 1.1 and 1.2,
+	viblnd    - Voltaire ibhost 3.4.5 and later,
+	ciblnd    - Topspin 3.2.0,
+	iiblnd    - Infiniserv 3.3 + PathBits patch,
+	gmlnd     - GM 2.1.22 and later,
+	mxlnd     - MX 1.2.1 or later,
 	ptllnd    - Portals 3.3 / UNICOS/lc 1.5.x, 2.0.x
-       * bug fixes
 
 Severity   : minor
 Bugzilla   : 13288
@@ -98,17 +97,16 @@ Details    : o2iblnd depends on OFED's modules, if out-tree OFED's modules
 2007-04-01  Cluster File Systems, Inc. <info@clusterfs.com>
        * version 1.4.10 / 1.6.0
        * Support for networks:
-	socklnd   - kernels up to 2.6.16
-	qswlnd    - Qsnet kernel modules 5.20 and later
-	openiblnd - IbGold 1.8.2
-	o2iblnd   - OFED 1.1
-	viblnd    - Voltaire ibhost 3.4.5 and later
-	ciblnd    - Topspin 3.2.0
-	iiblnd    - Infiniserv 3.3 + PathBits patch
-	gmlnd     - GM 2.1.22 and later
-	mxlnd     - MX 1.2.1 or later
+	socklnd   - kernels up to 2.6.16,
+	qswlnd    - Qsnet kernel modules 5.20 and later,
+	openiblnd - IbGold 1.8.2,
+	o2iblnd   - OFED 1.1,
+	viblnd    - Voltaire ibhost 3.4.5 and later,
+	ciblnd    - Topspin 3.2.0,
+	iiblnd    - Infiniserv 3.3 + PathBits patch,
+	gmlnd     - GM 2.1.22 and later,
+	mxlnd     - MX 1.2.1 or later,
 	ptllnd    - Portals 3.3 / UNICOS/lc 1.5.x, 2.0.x
-       * bug fixes
 	
 Severity   : minor
 Frequency  : rare
