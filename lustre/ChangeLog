@@ -1,13 +1,13 @@
 tbd         Cluster File Systems, Inc. <info@clusterfs.com>
        * version 1.8.0
        * Support for kernels:
-        2.6.5-7.286 (SLES 9)
-        2.6.9-55.EL (RHEL 4)
-        2.6.16.46-0.14 (SLES 10)
+        2.6.5-7.286 (SLES 9),
+        2.6.9-55.EL (RHEL 4),
+        2.6.16.46-0.14 (SLES 10),
         2.6.18.8 vanilla (kernel.org)
        * Client support for unpatched kernels:
         (see http://wiki.lustre.org/index.php?title=Patchless_Client)
-        2.6.9-42.0.10.EL (RHEL 4)
+        2.6.9-42.0.10.EL (RHEL 4),
         2.6.16 - 2.6.21 vanilla (kernel.org)
        * Recommended e2fsprogs version: 1.39.cfs8
        * Note that reiserfs quotas are disabled on SLES 10 in this kernel.
@@ -95,9 +95,9 @@ Details    : The stripe offset is compared to lov->desc.ld_tgt_count
 2007-08-10         Cluster File Systems, Inc. <info@clusterfs.com>
        * version 1.6.1
        * Support for kernels:
-        2.6.5-7.283 (SLES 9)
-        2.6.9-55.EL (RHEL 4)
-        2.6.16.46-0.14 (SLES 10)
+        2.6.5-7.283 (SLES 9),
+        2.6.9-55.EL (RHEL 4),
+        2.6.16.46-0.14 (SLES 10),
         2.6.18.8 vanilla (kernel.org)
        * Client support for unpatched kernels:
         (see http://wiki.lustre.org/index.php?title=Patchless_Client)
