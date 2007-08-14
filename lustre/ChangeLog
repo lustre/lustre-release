@@ -1,10 +1,10 @@
 2007-08-27         Cluster File Systems, Inc. <info@clusterfs.com>
        * version 1.6.2
        * Support for kernels:
-        2.6.5-7.286 (SLES 9)
-        2.6.9-55.0.2.EL (RHEL 4)
-        2.6.16.46-0.14 (SLES 10)
-        2.6.18-8.1.8.el5 (RHEL 5)
+        2.6.5-7.286 (SLES 9),
+        2.6.9-55.0.2.EL (RHEL 4),
+        2.6.16.46-0.14 (SLES 10),
+        2.6.18-8.1.8.el5 (RHEL 5),
         2.6.18.8 vanilla (kernel.org)
        * Client support for unpatched kernels:
         (see http://wiki.lustre.org/index.php?title=Patchless_Client)
@@ -204,9 +204,9 @@ Details    : The stripe offset is compared to 'lov->desc.ld_tgt_count'
 2007-07-30         Cluster File Systems, Inc. <info@clusterfs.com>
        * version 1.6.1
        * Support for kernels:
-        2.6.5-7.283 (SLES 9)
-        2.6.9-55.EL (RHEL 4)
-        2.6.16.46-0.14 (SLES 10)
+        2.6.5-7.283 (SLES 9),
+        2.6.9-55.EL (RHEL 4),
+        2.6.16.46-0.14 (SLES 10),
         2.6.18.8 vanilla (kernel.org)
        * Client support for unpatched kernels:
         (see http://wiki.lustre.org/index.php?title=Patchless_Client)
@@ -858,14 +858,14 @@ Details    : The ll_inode_to_ext_flags() has a glitch which makes MDS return
 	 this release.  See https://mail.clusterfs.com/wikis/lustre/MountConf
 	 for details.
        * Support for kernels:
-        2.4.21-47.0.1.EL (RHEL 3)
-        2.6.5-7.283 (SLES 9)
-        2.6.9-42.0.10.EL (RHEL 4)
-        2.6.12.6 vanilla (kernel.org)
+        2.4.21-47.0.1.EL (RHEL 3),
+        2.6.5-7.283 (SLES 9),
+        2.6.9-42.0.10.EL (RHEL 4),
+        2.6.12.6 vanilla (kernel.org),
         2.6.16.27-0.9 (SLES10)
        * Client support for unpatched kernels:
         (see https://mail.clusterfs.com/wikis/lustre/PatchlessClient)
-        2.6.16 - 2.6.19 vanilla (kernel.org)
+        2.6.16 - 2.6.19 vanilla (kernel.org),
         2.6.9-42.0.8EL (RHEL 4)
        * Recommended e2fsprogs version: 1.39.cfs6
        * Note that reiserfs quotas are disabled on SLES 10 in this kernel
