@@ -84,6 +84,12 @@ Frequency  : rare
 Description: Oops in read and write path when failing to allocate lock.
 Details    : Check if lock allocation failed and return error back.
 
+Severity   : normal 
+Bugzilla   : 11679
+Description: lstripe command fails for valid OST index
+Details    : The stripe offset is compared to lov->desc.ld_tgt_count
+	     instead of lov->desc.ld_active_tgt_count.
+
 --------------------------------------------------------------------------------
 
 2007-08-10         Cluster File Systems, Inc. <info@clusterfs.com>
