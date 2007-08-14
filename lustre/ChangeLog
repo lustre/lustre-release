@@ -193,6 +193,12 @@ Description: client-side metadata stat-ahead during readdir(directory readahead)
 Details    : perform client-side metadata stat-ahead when the client detects
              readdir and sequential stat of dir entries therein
 
+Severity   : normal 
+Bugzilla   : 11679
+Description: lstripe command fails for valid OST index
+Details    : The stripe offset is compared to 'lov->desc.ld_tgt_count' 
+	     instead of lov->desc.ld_active_tgt_count.
+
 --------------------------------------------------------------------------------
 
 2007-07-30         Cluster File Systems, Inc. <info@clusterfs.com>

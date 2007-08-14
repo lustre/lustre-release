@@ -2728,6 +2728,35 @@ test_65j() { # bug6367
 }
 run_test 65j "set default striping on root directory (bug 6367)="
 
+test_65k() { # bug11679
+        [ "$OSTCOUNT" -lt 2 ] && skip "too few OSTs" && return
+
+        echo "Check OST status: "
+        MDS_OSCS=`do_facet mds lctl dl | awk '/[oO][sS][cC].*md[ts]/ { print $4 }'`
+        for OSC in $MDS_OSCS; do
+                echo $OSC "is activate"
+                do_facet mds lctl --device %$OSC activate
+        done
+        mkdir -p $DIR/$tdir
+        for INACTIVE_OSC in $MDS_OSCS; do
+                echo $INACTIVE_OSC "is Deactivate:"
+                do_facet mds lctl --device  %$INACTIVE_OSC deactivate
+                for STRIPE_OSC in $MDS_OSCS; do
+                        STRIPE_OST=`osc_to_ost $STRIPE_OSC`
+                        STRIPE_INDEX=`do_facet mds cat $LPROC/lov/*md*/target_obd |
+                                      grep $STRIPE_OST | awk -F: '{print $1}'`
+                        echo "$SETSTRIPE $DIR/$tdir/${STRIPE_INDEX} 0 ${STRIPE_INDEX} 1"
+                        do_facet mds $SETSTRIPE $DIR/$tdir/${STRIPE_INDEX} 0 ${STRIPE_INDEX} 1
+                        RC=$?
+                        [ $RC -ne 0 ] && error "setstripe should have succeeded"
+                done
+                rm -f $DIR/$tdir/*
+                echo $INACTIVE_OSC "is Activate."
+                do_facet mds lctl --device  %$INACTIVE_OSC activate
+        done
+}
+run_test 65k "validate manual striping works properly with deactivated OSCs"
+
 # bug 2543 - update blocks count on client
 test_66() {
 	COUNT=${COUNT:-8}
