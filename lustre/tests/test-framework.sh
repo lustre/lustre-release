@@ -937,3 +937,15 @@ canonical_path() {
     (cd `dirname $1`; echo $PWD/`basename $1`)
 }
 
+########################
+# helper functions
+
+osc_to_ost()
+{
+    osc=$1
+    ost=`echo $1 | awk -F_ '{print $3}'`
+    if [ -z $ost ]; then
+        ost=`echo $1 | sed 's/-osc.*//'`
+    fi
+    echo $ost
+}
