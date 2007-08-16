@@ -3888,6 +3888,7 @@ test_116() {
 
 	# now fill using QOS
 	echo writing a bunch of files to QOS-assigned OSTs
+	$SETSTRIPE $DIR/$tdir 0 -1 1
 	i=1
 	while [ $FILL -gt 0 ]; do
 	    dd if=/dev/zero of=$DIR/$tdir/$tfile-$i bs=1024 count=200 2>/dev/null
