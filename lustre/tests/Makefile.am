@@ -55,6 +55,7 @@ mmap_sanity_SOURCES= mmap_sanity.c
 
 LIBLUSTREAPI := $(top_builddir)/lustre/utils/liblustreapi.a
 ll_getstripe_info_LDADD=$(LIBLUSTREAPI)
+multiop_LDADD=$(LIBLUSTREAPI)
 
 if MPITESTS
 LAM_LD_FLAGS=-L/opt/lam/lib -lmpi -llam -lpthread
