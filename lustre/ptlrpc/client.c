@@ -512,9 +512,8 @@ static int ptlrpc_import_delay_req(struct obd_import *imp,
                 /* allow CONNECT even if import is invalid */ ;
         } else if (imp->imp_invalid) {
                 /* If the import has been invalidated (such as by an OST
-                 * failure) the request must fail with -EINVAL.  This
                  * failure) the request must fail with -ESHUTDOWN.  This
-                 * indicates the requests should be discarded, an -EIO
+                 * indicates the requests should be discarded; an -EIO
                  * may result in a resend of the request. */              
                 if (!imp->imp_deactive)
                         DEBUG_REQ(D_ERROR, req, "IMP_INVALID");
@@ -573,13 +572,13 @@ static int ptlrpc_check_status(struct ptlrpc_request *req)
 
         err = lustre_msg_get_status(req->rq_repmsg);
         if (lustre_msg_get_type(req->rq_repmsg) == PTL_RPC_MSG_ERR) {
-                struct obd_export *exp = req->rq_export;
+                struct obd_import *imp = req->rq_import;
                 __u32 opc = lustre_msg_get_opc(req->rq_reqmsg);
 
-                LCONSOLE_ERROR_MSG(0x011, "an error ocurred while communicating"
-                                   " with %s The %s operation failed with %d\n",
-                                   exp ? obd_export_nid2str(exp) : "(no nid)",
-                                   ll_opcode2str(opc), err);
+                LCONSOLE_ERROR_MSG(0x011,"an error occurred while communicating"
+                               " with %s. The %s operation failed with %d\n",
+                               libcfs_nid2str(imp->imp_connection->c_peer.nid),
+                               ll_opcode2str(opc), err);
                 RETURN(err < 0 ? err : -EINVAL);
         }
 
