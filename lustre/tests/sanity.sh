@@ -84,7 +84,6 @@ init_test_env $@
 
 cleanup() {
 	echo -n "cln.."
-	pgrep ll_sa > /dev/null && { echo "There are ll_sa thread not exit!"; exit 20; }
 	cleanupall ${FORCE} $* || { echo "FAILed to clean up"; exit 20; }
 }
 CLEANUP=${CLEANUP:-:}
@@ -4115,75 +4114,18 @@ test_122() { #bug #11544
 }
 run_test 122 "fail client bulk callback (shouldn't LBUG) ======="
 
-test_123() # statahead(bug 11401)
-{
-        if [ -z "$(grep "processor.*: 1" /proc/cpuinfo)" ]; then
-                log "single core CPU, skipping test"  # && return
-        fi
-
-        mkdir -p $DIR/$tdir
-
-        for ((i=1, j=0; i<=10000; j=$i, i=$((i * 10)) )); do
-                createmany -o $DIR/$tdir/$tfile $j $((i - j))
-
-                grep '[0-9]' $LPROC/llite/*/statahead_max
-                cancel_lru_locks mdc
-                stime=`date +%s`
-                ls -l $DIR/$tdir > /dev/null
-                etime=`date +%s`
-                delta_sa=$((etime - stime))
-                echo "ls $i files with statahead:    $delta_sa sec"
-
-                for client in $LPROC/llite/*; do
-                        max=`cat $client/statahead_max`
-                        cat $client/statahead_stats
-                        echo 0 > $client/statahead_max
-                done
-
-                grep '[0-9]' $LPROC/llite/*/statahead_max
-                cancel_lru_locks mdc
-                stime=`date +%s`
-                ls -l $DIR/$tdir > /dev/null
-                etime=`date +%s`
-                delta=$((etime - stime))
-                echo "ls $i files without statahead: $delta sec"
-
-                for client in /proc/fs/lustre/llite/*; do
-                        cat $client/statahead_stats
-                        echo $max > $client/statahead_max
-                done
-
-                if [ $delta_sa -gt $delta ]; then
-                        error "ls $i files is slower with statahead!"
-                fi
-        done
-        echo "ls done"
-
-        stime=`date +%s`
-        rm -r $DIR/$tdir
-        sync
-        etime=`date +%s`
-        delta=$((etime - stime))
-        echo "rm -r $DIR/$tdir/: $delta seconds"
-        echo "rm done"
-        cat /proc/fs/lustre/llite/*/statahead_stats
-        # wait for commitment of removal
-        sleep 2
-}
-run_test 123 "verify statahead work"
-
 TMPDIR=$OLDTMPDIR
 TMP=$OLDTMP
 HOME=$OLDHOME
 
 log "cleanup: ======================================================"
 if [ "`mount | grep $MOUNT`" ]; then
-    rm -rf $DIR/[Rdfs][1-9]*
+	rm -rf $DIR/[Rdfs][1-9]*
 fi
 if [ "$I_MOUNTED" = "yes" ]; then
-    cleanupall -f || error "cleanup failed"
+	cleanupall -f || error "cleanup failed"
 else
-        sysctl -w lnet.debug="$OLDDEBUG" 2> /dev/null || true
+	sysctl -w lnet.debug="$OLDDEBUG" 2> /dev/null || true
 fi
 
 

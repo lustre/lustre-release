@@ -187,11 +187,6 @@ Description: reply_lock_interpret crash due to race with it and lock cancel.
 Details    : Do not replay locks that are being cancelled. Do not reference
              locks by their address during replay, just by their handle.
 
-Severity   : enhancement
-Bugzilla   : 11401
-Description: client-side metadata stat-ahead during readdir(directory readahead)
-Details    : perform client-side metadata stat-ahead when the client detects
-             readdir and sequential stat of dir entries therein
 
 Severity   : normal 
 Bugzilla   : 11679
