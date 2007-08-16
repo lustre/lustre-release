@@ -11,7 +11,7 @@
         2.6.16 - 2.6.22 vanilla (kernel.org)
        * Due to recently discovered recovery problems, we do not recommend
         using patchless RHEL 4 clients with this or any earlier release.
-       * Recommended e2fsprogs version: 1.39.cfs8
+       * Recommended e2fsprogs version: 1.40.2-cfs1
        * Note that reiserfs quotas are disabled on SLES 10 in this kernel.
 
 2007-08-27         Cluster File Systems, Inc. <info@clusterfs.com>
