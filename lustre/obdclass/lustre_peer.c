@@ -138,43 +138,45 @@ int class_add_uuid(const char *uuid, __u64 nid)
 int class_del_uuid(const char *uuid)
 {
         struct list_head  deathrow;
-        struct uuid_nid_data *data, *n;
+        struct uuid_nid_data *data;
+        int found = 0;
 
         CFS_INIT_LIST_HEAD (&deathrow);
 
         spin_lock (&g_uuid_lock);
-
-        list_for_each_entry_safe(data, n, &g_uuid_list, un_list) {
-                if (uuid == NULL) {
-                        list_del (&data->un_list);
-                        list_add (&data->un_list, &deathrow);
-                } else if (strcmp(data->un_uuid, uuid) == 0) {
+        if (uuid == NULL) {
+                list_splice_init(&g_uuid_list, &deathrow);
+                found = 1;
+        } else {
+                list_for_each_entry(data, &g_uuid_list, un_list) {
+                        if (strcmp(data->un_uuid, uuid))
+                                continue;
                         --data->un_count;
-                        if (data->un_count <= 0) {
-                                list_del (&data->un_list);
-                                list_add (&data->un_list, &deathrow);
-                        }
+                        LASSERT(data->un_count >= 0);
+                        if (data->un_count == 0)
+                                list_move(&data->un_list, &deathrow);
+                        found = 1;
                         break;
                 }
         }
         spin_unlock (&g_uuid_lock);
 
-        if (list_empty (&deathrow)) {
+        if (!found) {
                 if (uuid)
-                        CERROR("delete non-existent uuid %s\n", uuid);
+                        CERROR("Try to delete a non-existent uuid %s\n", uuid);
                 return -EINVAL;
         }
 
-        do {
+        while (!list_empty(&deathrow)) {
                 data = list_entry(deathrow.next, struct uuid_nid_data, un_list);
+                list_del(&data->un_list);
 
-                list_del (&data->un_list);
                 CDEBUG(D_INFO, "del uuid %s %s\n", data->un_uuid,
                        libcfs_nid2str(data->un_nid));
 
                 OBD_FREE(data->un_uuid, strlen(data->un_uuid) + 1);
                 OBD_FREE(data, sizeof(*data));
-        } while (!list_empty (&deathrow));
+        }
 
         return 0;
 }
