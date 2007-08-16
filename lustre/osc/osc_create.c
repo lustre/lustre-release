@@ -244,6 +244,7 @@ int oscc_recovering(struct osc_creator *oscc)
         1 : the OST has no remaining object, and will send a RPC for precreate.
         2 : the OST has no remaining object, and will not get any for
             a potentially very long time
+     1000 : unusable
  */
 int osc_precreate(struct obd_export *exp, int need_create)
 {
@@ -253,16 +254,19 @@ int osc_precreate(struct obd_export *exp, int need_create)
 
         LASSERT(oscc != NULL);
         if (imp != NULL && imp->imp_deactive)
-                RETURN(2);
+                RETURN(1000);
 
         if (oscc->oscc_last_id < oscc->oscc_next_id) {
                 spin_lock(&oscc->oscc_lock);
+                if (oscc->oscc_flags & OSCC_FLAG_NOSPC) {
+                        spin_unlock(&oscc->oscc_lock);
+                        RETURN(1000);
+                }
                 if (oscc->oscc_flags & OSCC_FLAG_SYNC_IN_PROGRESS) {
                         spin_unlock(&oscc->oscc_lock);
                         RETURN(1);
                 }
-                if (oscc->oscc_flags & OSCC_FLAG_NOSPC ||
-                    oscc->oscc_flags & OSCC_FLAG_RECOVERING) {
+                if (oscc->oscc_flags & OSCC_FLAG_RECOVERING) {
                         spin_unlock(&oscc->oscc_lock);
                         RETURN(2);
                 }
