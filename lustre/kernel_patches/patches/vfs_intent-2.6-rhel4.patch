@@ -581,14 +581,6 @@ diff -rup RH_2_6_9_55.orig/fs/namei.c RH_2_6_9_55/fs/namei.c
 diff -urNp RH_2_6_9_42_0_3.orig/fs/namespace.c RH_2_6_9_42_0_3/fs/namespace.c
 --- RH_2_6_9_42_0_3.orig/fs/namespace.c
 +++ RH_2_6_9_42_0_3/fs/namespace.c
-@@ -61,6 +61,7 @@ struct vfsmount *alloc_vfsmnt(const char
- 		INIT_LIST_HEAD(&mnt->mnt_mounts);
- 		INIT_LIST_HEAD(&mnt->mnt_list);
- 		INIT_LIST_HEAD(&mnt->mnt_fslink);
-+		INIT_LIST_HEAD(&mnt->mnt_lustre_list);
- 		if (name) {
- 			int size = strlen(name)+1;
- 			char *newname = kmalloc(size, GFP_KERNEL);
 @@ -114,6 +115,7 @@ static inline int check_mnt(struct vfsmo
  
  static void detach_mnt(struct vfsmount *mnt, struct nameidata *old_nd)
@@ -1344,11 +1336,10 @@ diff -rup RH_2_6_9_55.orig/include/linux/fs.h RH_2_6_9_55/include/linux/fs.h
 diff -rup RH_2_6_9_55.orig/include/linux/mount.h RH_2_6_9_55/include/linux/mount.h
 --- RH_2_6_9_55.orig/include/linux/mount.h
 +++ RH_2_6_9_55/include/linux/mount.h
-@@ -34,6 +34,8 @@ struct vfsmount
+@@ -34,6 +34,7 @@ struct vfsmount
  	struct list_head mnt_list;
  	struct list_head mnt_fslink;	/* link in fs-specific expiry list */
  	struct namespace *mnt_namespace; /* containing namespace */
-+	struct list_head mnt_lustre_list; /* GNS mount list */
 +	unsigned long mnt_last_used;	/* for GNS auto-umount (jiffies) */
  };
  

@@ -117,6 +117,11 @@ Description: llapi_file_create() does not allow some changes
 Details    : add llapi_file_open() that allows specifying the mode and 
 	     open flags, and also returns an open file handle.
 
+Severity   : normal
+Bugzilla   : 11248
+Description: merge and cleanup kernel patches.
+Details    : Remove mnt_lustre_list in vfs_intent-2.6-rhel4.patch.
+
 --------------------------------------------------------------------------------
 
 2007-08-10         Cluster File Systems, Inc. <info@clusterfs.com>
@@ -2805,6 +2810,12 @@ Details    : The b_committed_data struct is protected by the big kernel lock
 Severity   : minor
 Bugzilla   : 6147
 Description: Changes the "SCSI I/O Stats" kernel patch to default to "enabled"
+
+Severity   : Minor
+Frequency  : Rare
+Bugzilla   : 11248
+Description: merge and cleanup kernel patches.
+Details    : 
 
 -----------------------------------------------------------------------------
 
