@@ -49,7 +49,7 @@ struct ldlm_resource * lock_res_and_lock(struct ldlm_lock *lock)
                 return res;
         } 
 
-        lock_bitlock(lock);
+        spin_lock(&lock->l_lock);
         res = lock->l_resource;
         lock_res(res);
         return res;
@@ -66,6 +66,6 @@ void unlock_res_and_lock(struct ldlm_lock *lock)
         }
 
         unlock_res(res);
-        unlock_bitlock(lock);
+        spin_unlock(&lock->l_lock);
 }
 
