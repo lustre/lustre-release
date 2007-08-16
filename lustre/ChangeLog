@@ -90,6 +90,12 @@ Description: lstripe command fails for valid OST index
 Details    : The stripe offset is compared to lov->desc.ld_tgt_count
 	     instead of lov->desc.ld_active_tgt_count.
 
+Severity   : normal
+Bugzilla   : 12584
+Description: sanity.sh failed test 103
+Details    : RHEL mis-interpret setfacl "-X" param, so we won't test setfacl
+             with param "-X".
+
 --------------------------------------------------------------------------------
 
 2007-08-10         Cluster File Systems, Inc. <info@clusterfs.com>
