@@ -14,6 +14,11 @@
        * Recommended e2fsprogs version: 1.40.2-cfs1
        * Note that reiserfs quotas are disabled on SLES 10 in this kernel.
 
+Severity   : major
+Bugzilla   : 12932
+Description: obd_health_check_timeout too short
+Details    : set obd_health_check_timeout as 1.5x of obd_timeout
+
 2007-08-27         Cluster File Systems, Inc. <info@clusterfs.com>
        * version 1.6.2
        * Support for kernels:
