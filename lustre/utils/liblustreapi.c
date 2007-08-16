@@ -69,16 +69,17 @@ static void err_msg(char *fmt, ...)
         fprintf(stderr, ": %s (%d)\n", strerror(tmp_errno), tmp_errno);
 }
 
-int llapi_file_create(const char *name, unsigned long stripe_size, int stripe_offset,
-                      int stripe_count, int stripe_pattern)
+int llapi_file_open(const char *name, int flags, int mode,
+                    unsigned long stripe_size, int stripe_offset,
+                    int stripe_count, int stripe_pattern)
 {
         struct lov_user_md lum = { 0 };
         int fd, rc = 0;
         int isdir = 0;
         int page_size;
 
-        fd = open(name, O_CREAT | O_RDWR | O_LOV_DELAY_CREATE, 0644);
-        if (errno == EISDIR) {
+        fd = open(name, flags | O_LOV_DELAY_CREATE, mode);
+        if (fd < 0 && errno == EISDIR) {
                 fd = open(name, O_DIRECTORY | O_RDONLY);
                 isdir++;
         }
@@ -138,12 +139,26 @@ int llapi_file_create(const char *name, unsigned long stripe_size, int stripe_of
                         (__u64)LL_IOC_LOV_SETSTRIPE, name, fd, errmsg);
         }
 out:
-        if (close(fd) < 0) {
-                if (rc == 0)
-                        rc = -errno;
-                err_msg("error on close for '%s' (%d)", name, fd);
+        if (rc) {
+                close(fd);
+                fd = rc;
         }
-        return rc;
+
+        return fd;
+}
+
+int llapi_file_create(const char *name, unsigned long stripe_size,
+                      int stripe_offset, int stripe_count, int stripe_pattern)
+{
+        int fd;
+
+        fd = llapi_file_open(name, O_CREAT | O_WRONLY, 0644, stripe_size,
+                             stripe_offset, stripe_count, stripe_pattern);
+        if (fd < 0)
+                return fd;
+
+        close(fd);
+        return 0;
 }
 
 typedef int (semantic_func_t)(char *path, DIR *parent, DIR *d, void *data);

@@ -14,6 +14,7 @@
 #include <signal.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include <lustre/liblustreapi.h>
 
 #define T1 "write data before unlink\n"
 #define T2 "write data after unlink\n"
@@ -26,6 +27,7 @@ char usage[] =
 "Usage: %s filename command-sequence\n"
 "    command-sequence items:\n"
 "        c  close\n"
+"        C[num] create with optional stripes\n"
 "        d  mkdir\n"
 "        D  open(O_DIRECTORY)\n"
 "        L  link\n"
@@ -168,6 +170,16 @@ int main(int argc, char **argv)
                                 exit(save_errno);
                         }
                         fd = -1;
+                        break;
+                case 'C':
+                        len = atoi(commands+1);
+                        fd = llapi_file_open(fname, O_CREAT | O_WRONLY, 0644,
+                                             0, 0, len, 0);
+                        if (fd == -1) {
+                                save_errno = errno;
+                                perror("create stripe file");
+                                exit(save_errno);
+                        }
                         break;
                 case 'd':
                         if (mkdir(fname, 0755) == -1) {

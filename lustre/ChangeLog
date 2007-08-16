@@ -111,6 +111,12 @@ Bugzilla   : 12932
 Description: obd_health_check_timeout too short
 Details    : set obd_health_check_timeout as 1.5x of obd_timeout
 
+Severity   : normal
+Bugzilla   : 12192
+Description: llapi_file_create() does not allow some changes
+Details    : add llapi_file_open() that allows specifying the mode and 
+	     open flags, and also returns an open file handle.
+
 --------------------------------------------------------------------------------
 
 2007-08-10         Cluster File Systems, Inc. <info@clusterfs.com>

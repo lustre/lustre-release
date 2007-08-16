@@ -14,6 +14,9 @@ typedef void (*llapi_cb_t)(char *obd_type_name, char *obd_name, char *obd_uuid, 
 extern int llapi_file_create(const char *name, unsigned long stripe_size,
                              int stripe_offset, int stripe_count,
                              int stripe_pattern);
+extern int llapi_file_open(const char *name, int flags, int mode,
+                           unsigned long stripe_size, int stripe_offset,
+                           int stripe_count, int stripe_pattern);
 extern int llapi_file_get_stripe(const char *path, struct lov_user_md *lum);
 #define HAVE_LLAPI_FILE_LOOKUP
 extern int llapi_file_lookup(int dirfd, const char *name);

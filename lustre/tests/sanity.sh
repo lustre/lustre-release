@@ -843,6 +843,12 @@ test_24t() {
 }
 run_test 24t "mkdir .../R16a/b/c; rename .../R16a/b/c .../R16a ="
 
+test_24u() { # bug12192
+        multiop $DIR/$tfile C2w$((2048 * 1024))c || error
+        $CHECKSTAT -s $((2048 * 1024)) $DIR/$tfile || error "wrong file size"
+}
+run_test 24u "create stripe file"
+
 test_25a() {
 	echo '== symlink sanity ============================================='
 
