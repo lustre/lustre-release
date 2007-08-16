@@ -70,7 +70,9 @@ static int lsm_lmm_verify_common(struct lov_mds_md *lmm, int lmm_bytes,
         }
 
         if (lmm->lmm_stripe_size == 0 ||
-            (__u64)le32_to_cpu(lmm->lmm_stripe_size)*stripe_count > 0xffffffff){
+            (stripe_count != -1 &&
+             (__u64)le32_to_cpu(lmm->lmm_stripe_size)*stripe_count >
+             0xffffffff)) {
                 CERROR("bad stripe size %u\n",
                        le32_to_cpu(lmm->lmm_stripe_size));
                 lov_dump_lmm_v1(D_WARNING, lmm);

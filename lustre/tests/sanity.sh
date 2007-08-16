@@ -2823,6 +2823,13 @@ test_65k() { # bug11679
 }
 run_test 65k "validate manual striping works properly with deactivated OSCs"
 
+test_65l() { # bug 12836
+	mkdir -p $DIR/$tdir
+	$LFS setstripe $DIR/$tdir 65536 -1 -1
+	$LFS find -mtime -1 $DIR
+}
+run_test 65l "lfs find on -1 stipe dir ========================"
+
 # bug 2543 - update blocks count on client
 test_66() {
 	COUNT=${COUNT:-8}

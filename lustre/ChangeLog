@@ -101,6 +101,11 @@ Bugzilla   : 12743
 Description: df doesn't work properly if diskfs blocksize != 4K
 Details    : Choose biggest blocksize of OST's as the LOV's blocksize.
 
+Severity   : normal
+Bugzilla   : 12836
+Description: lfs find on -1 stripe looping in lsm_lmm_verify_common()
+Details    : Avoid lov_verify_lmm_common() on directory with -1 stripe count.
+
 --------------------------------------------------------------------------------
 
 2007-08-10         Cluster File Systems, Inc. <info@clusterfs.com>
