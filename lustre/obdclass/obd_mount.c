@@ -1296,27 +1296,25 @@ out_free:
         RETURN(ERR_PTR(rc));
 }
 
+/* We have to wait for everything to finish, including lnet lnd expires,
+   before it is safe to free the sb */
 static void server_wait_finished(struct vfsmount *mnt)
 {
         wait_queue_head_t   waitq;
         struct l_wait_info  lwi;
-        int                 retries = 120;
+        int                 waited = 0;
 
         init_waitqueue_head(&waitq);
 
-        while ((atomic_read(&mnt->mnt_count) > 1) && (retries > 0)) {
-                LCONSOLE_WARN("Mount still busy with %d refs, waiting for "
-                              "%d secs...\n",
-                              atomic_read(&mnt->mnt_count), retries);
-
+        while (atomic_read(&mnt->mnt_count) > 1) {
+                if (waited && (waited % 30 == 0)) 
+                        LCONSOLE_WARN("Mount still busy with %d refs after "
+                                      "%d secs\n", atomic_read(&mnt->mnt_count), 
+                                      waited);
                 /* Wait for a bit */
-                retries -= 5;
-                lwi = LWI_TIMEOUT(5 * HZ, NULL, NULL);
+                waited += 3;
+                lwi = LWI_TIMEOUT(cfs_time_seconds(3), NULL, NULL);
                 l_wait_event(waitq, 0, &lwi);
-        }
-        if (atomic_read(&mnt->mnt_count) > 1) {
-                CERROR("Mount %p is still busy (%d refs), giving up.\n",
-                       mnt, atomic_read(&mnt->mnt_count));
         }
 }
 
@@ -1968,7 +1966,7 @@ struct file_system_type lustre_fs_type = {
         .name         = "lustre",
         .get_sb       = lustre_get_sb,
         .kill_sb      = kill_anon_super,
-        .fs_flags     = FS_BINARY_MOUNTDATA,
+        .fs_flags     = FS_BINARY_MOUNTDATA | FS_REQUIRES_DEV,
 };
 
 #else

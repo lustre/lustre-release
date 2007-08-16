@@ -1370,6 +1370,16 @@ if test "$enable_mindf" = "yes" ;  then
       AC_DEFINE([MIN_DF], 1, [Report minimum OST free space])
 fi
 
+AC_ARG_ENABLE([fail_alloc],
+        AC_HELP_STRING([--disable-fail-alloc],
+                [disable randomly alloc failure]),
+        [],[enable_fail_alloc=yes])
+AC_MSG_CHECKING([whether to randomly failing memory alloc])
+AC_MSG_RESULT([$enable_fail_alloc])
+if test x$enable_fail_alloc != xno ; then
+        AC_DEFINE([RANDOM_FAIL_ALLOC], 1, [enable randomly alloc failure])
+fi
+
 ])
 
 #

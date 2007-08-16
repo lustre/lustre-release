@@ -419,8 +419,7 @@ int ldlm_namespace_cleanup(struct ldlm_namespace *ns, int flags)
         return ELDLM_OK;
 }
 
-/* Cleanup, but also free, the namespace */
-int ldlm_namespace_free(struct ldlm_namespace *ns, int force)
+int ldlm_namespace_free_prior(struct ldlm_namespace *ns)
 {
         ENTRY;
         if (!ns)
@@ -432,19 +431,6 @@ int ldlm_namespace_free(struct ldlm_namespace *ns, int force)
 
         /* At shutdown time, don't call the cancellation callback */
         ldlm_namespace_cleanup(ns, 0);
-
-#ifdef LPROCFS
-        {
-                struct proc_dir_entry *dir;
-                dir = lprocfs_srch(ldlm_ns_proc_dir, ns->ns_name);
-                if (dir == NULL) {
-                        CERROR("dlm namespace %s has no procfs dir?\n",
-                               ns->ns_name);
-                } else {
-                        lprocfs_remove(&dir);
-                }
-        }
-#endif
 
         if (ns->ns_refcount > 0) {
                 struct l_wait_info lwi = LWI_INTR(LWI_ON_SIGNAL_NOOP, NULL);
@@ -466,13 +452,58 @@ int ldlm_namespace_free(struct ldlm_namespace *ns, int force)
                        "dlm namespace %s free done waiting\n", ns->ns_name);
         }
 
+        RETURN(ELDLM_OK);
+}
+
+int ldlm_namespace_free_post(struct ldlm_namespace *ns, int force)
+{
+        ENTRY;
+        if (!ns)
+                RETURN(ELDLM_OK);
+
+#ifdef LPROCFS
+        {
+                struct proc_dir_entry *dir;
+                dir = lprocfs_srch(ldlm_ns_proc_dir, ns->ns_name);
+                if (dir == NULL) {
+                        CERROR("dlm namespace %s has no procfs dir?\n",
+                               ns->ns_name);
+                } else {
+                        lprocfs_remove(&dir);
+                }
+        }
+#endif
+
         POISON(ns->ns_hash, 0x5a, sizeof(*ns->ns_hash) * RES_HASH_SIZE);
         OBD_VFREE(ns->ns_hash, sizeof(*ns->ns_hash) * RES_HASH_SIZE);
         OBD_FREE(ns->ns_name, strlen(ns->ns_name) + 1);
         OBD_FREE(ns, sizeof(*ns));
 
         ldlm_put_ref(force);
+        RETURN(ELDLM_OK);
+}
 
+/* Cleanup the resource, and free namespace.
+ * bug 12864:
+ * Deadlock issue: 
+ * proc1: destroy import 
+ *        class_disconnect_export(grab cl_sem) -> 
+ *              -> ldlm_namespace_free -> 
+ *              -> lprocfs_remove(grab _lprocfs_lock).
+ * proc2: read proc info
+ *        lprocfs_fops_read(grab _lprocfs_lock) ->
+ *              -> osc_rd_active, etc(grab cl_sem).
+ *
+ * So that I have to split the ldlm_namespace_free into two parts - the first
+ * part ldlm_namespace_free_prior is used to cleanup the resource which is
+ * being used; the 2nd part ldlm_namespace_free_post is used to unregister the
+ * lprocfs entries, and then free memory. It will be called w/o cli->cl_sem 
+ * held.
+ */
+int ldlm_namespace_free(struct ldlm_namespace *ns, int force)
+{
+        ldlm_namespace_free_prior(ns);
+        ldlm_namespace_free_post(ns, force);
         return ELDLM_OK;
 }
 

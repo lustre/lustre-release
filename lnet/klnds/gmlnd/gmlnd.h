@@ -38,7 +38,7 @@
 #ifndef EXPORT_SYMTAB
 # define EXPORT_SYMTAB
 #endif
-#ifdef HAVE_KERNEL_CONFIG_H
+#ifndef AUTOCONF_INCLUDED
 #include <linux/config.h>
 #endif
 #include "linux/module.h"
@@ -200,7 +200,7 @@ typedef struct {
         int              *gm_nrx_large;
 
 #if CONFIG_SYSCTL && !CFS_SYSFS_MODULE_PARM
-        struct ctl_table_header *gm_sysctl;    /* sysctl interface */
+        cfs_sysctl_table_header_t *gm_sysctl;   /* sysctl interface */
 #endif
 } gmnal_tunables_t;
 

@@ -25,9 +25,16 @@ fi
 [ "$DEBUG_OFF" ] || DEBUG_OFF="eval sysctl -w lnet.debug=\"$DEBUG_LVL\""
 [ "$DEBUG_ON" ] || DEBUG_ON="eval sysctl -w lnet.debug=0x33f0484"
 
+if [ "$ONLY" ]; then
+    export RUNTESTS="no" SANITY="no" DBENCH="no" BONNIE="no" IOZONE="no" FSX="no" SANITYN="no" LFSCK="no" LIBLUSTRE="no" REPLAY_SINGLE="no" CONF_SANITY="no" RECOVERY_SMALL="no" REPLAY_OST_SINGLE="no" REPLAY_DUAL="no" INSANITY="no" SANITY_QUOTA="no"
+    for O in $ONLY; do
+	export ${O}="yes"
+    done
+    export ONLY=""
+fi
 
-LIBLUSTRE=${LIBLUSTRE:-../liblustre}
-LIBLUSTRETESTS=${LIBLUSTRETESTS:-$LIBLUSTRE/tests}
+
+LIBLUSTRETESTS=${LIBLUSTRETESTS:-../liblustre/tests}
 
 STARTTIME=`date +%s`
 RANTEST=""
@@ -47,6 +54,7 @@ setup_if_needed() {
 
 title() {
     echo "-----============= acceptance-small: "$*" ============-----"
+    $LCTL mark "----===== $* =====----" 2> /dev/null || true
     RANTEST=${RANTEST}$*", "
 }
 
@@ -62,14 +70,14 @@ for NAME in $CONFIGS; do
 
 	if [ "$RUNTESTS" != "no" ]; then
 	        title runtests
-		sh runtests
+		bash runtests
 		$CLEANUP
 		$SETUP
 	fi
 
 	if [ "$SANITY" != "no" ]; then
 	        title sanity
-		SANITYLOG=/tmp/sanity.log sh sanity.sh
+		SANITYLOG=/tmp/sanity.log bash sanity.sh
 		$CLEANUP
 		$SETUP
 	fi
@@ -82,13 +90,13 @@ for NAME in $CONFIGS; do
 		[ $THREADS -lt $DB_THREADS ] && DB_THREADS=$THREADS
 
 		$DEBUG_OFF
-		sh rundbench 1
+		bash rundbench 1
 		$DEBUG_ON
 		$CLEANUP
 		$SETUP
 		if [ $DB_THREADS -gt 1 ]; then
 			$DEBUG_OFF
-			sh rundbench $DB_THREADS
+			bash rundbench $DB_THREADS
 			$DEBUG_ON
 			$CLEANUP
 			$SETUP
@@ -116,9 +124,11 @@ for NAME in $CONFIGS; do
 		SPACE=`df -P $MOUNT | tail -n 1 | awk '{ print $4 }'`
 		[ $SPACE -lt $SIZE ] && SIZE=$((SPACE * 3 / 4))
 		IOZONE_OPTS="-i 0 -i 1 -i 2 -e -+d -r $RSIZE -s $SIZE"
-		IOZFILE="-f $MOUNT/iozone"
+		IOZFILE="$MOUNT/iozone"
+		# $SPACE was calculated with all OSTs
+		$LFS setstripe $IOZFILE 0 -1 -1
 		$DEBUG_OFF
-		iozone $IOZONE_OPTS $IOZFILE
+		iozone $IOZONE_OPTS -f $IOZFILE
 		$DEBUG_ON
 		$CLEANUP
 		$SETUP
@@ -180,7 +190,7 @@ for NAME in $CONFIGS; do
 		mkdir -p $MOUNT2
 		mount_client $MOUNT2
 		#echo "can't mount2 for '$NAME', skipping sanityN.sh"
-		SANITYLOG=$TMP/sanity.log START=: CLEAN=: sh sanityN.sh
+		SANITYLOG=$TMP/sanity.log START=: CLEAN=: bash sanityN.sh
 		umount $MOUNT2
 
 		$DEBUG_ON
@@ -194,7 +204,7 @@ for NAME in $CONFIGS; do
 		if grep -q obdfilter /proc/fs/lustre/devices; then
 			if [ `echo $E2VER | cut -d. -f2` -ge 39 ] && \
 			   [ "`echo $E2VER | grep cfs`" ]; then
-			   	sh lfscktest.sh
+			   	bash lfscktest.sh
 			else
 				e2fsck -V
 				echo "e2fsck does not support lfsck, skipping"
@@ -217,6 +227,7 @@ for NAME in $CONFIGS; do
 		#export LIBLUSTRE_DEBUG_MASK=`cat /proc/sys/lnet/debug`
 		if [ -x $LIBLUSTRETESTS/sanity ]; then
 			mkdir -p $MOUNT2
+			echo $LIBLUSTRETESTS/sanity --target=$LIBLUSTRE_MOUNT_TARGET
 			$LIBLUSTRETESTS/sanity --target=$LIBLUSTRE_MOUNT_TARGET
 		fi
 		$CLEANUP
@@ -228,37 +239,37 @@ done
 
 if [ "$REPLAY_SINGLE" != "no" ]; then
         title replay-single
-	sh replay-single.sh
+	bash replay-single.sh
 fi
 
 if [ "$CONF_SANITY" != "no" ]; then
         title conf-sanity
-        sh conf-sanity.sh
+        bash conf-sanity.sh
 fi
 
 if [ "$RECOVERY_SMALL" != "no" ]; then
         title recovery-small
-        sh recovery-small.sh
+        bash recovery-small.sh
 fi
 
 if [ "$REPLAY_OST_SINGLE" != "no" ]; then
         title replay-ost-single
-        sh replay-ost-single.sh
+        bash replay-ost-single.sh
 fi
 
 if [ "$REPLAY_DUAL" != "no" ]; then
         title replay-dual
-        sh replay-dual.sh
+        bash replay-dual.sh
 fi
 
 if [ "$INSANITY" != "no" ]; then
         title insanity
-        sh insanity.sh -r
+        bash insanity.sh -r
 fi
 
 if [ "$SANITY_QUOTA" != "no" ]; then
         title sanity-quota
-        sh sanity-quota.sh
+        bash sanity-quota.sh
 fi
 
 

@@ -37,14 +37,14 @@ struct ll_file_data *ll_file_data_get(void)
 {
         struct ll_file_data *fd;
 
-        OBD_SLAB_ALLOC(fd, ll_file_data_slab, GFP_KERNEL, sizeof *fd);
+        OBD_SLAB_ALLOC_PTR(fd, ll_file_data_slab);
         return fd;
 }
 
 static void ll_file_data_put(struct ll_file_data *fd)
 {
         if (fd != NULL)
-                OBD_SLAB_FREE(fd, ll_file_data_slab, sizeof *fd);
+                OBD_SLAB_FREE_PTR(fd, ll_file_data_slab);
 }
 
 static int ll_close_inode_openhandle(struct inode *inode,
@@ -68,7 +68,7 @@ static int ll_close_inode_openhandle(struct inode *inode,
          * canceling "open lock" and we do not call mdc_close() in this case, as
          * it will not be successful, as import is already deactivated.
          */
-        if (obd->obd_no_recov)
+        if (obd->obd_force)
                 GOTO(out, rc = 0);
 
         OBDO_ALLOC(oa);
@@ -638,10 +638,9 @@ void ll_pgcache_remove_extent(struct inode *inode, struct lov_stripe_md *lsm,
         struct page *page;
         int rc, rc2, discard = lock->l_flags & LDLM_FL_DISCARD_DATA;
         struct lustre_handle lockh;
-        struct address_space *mapping = inode->i_mapping;
-
         ENTRY;
-        tmpex = lock->l_policy_data;
+
+        memcpy(&tmpex, &lock->l_policy_data, sizeof(tmpex));
         CDEBUG(D_INODE|D_PAGE, "inode %lu(%p) ["LPU64"->"LPU64"] size: %llu\n",
                inode->i_ino, inode, tmpex.l_extent.start, tmpex.l_extent.end,
                inode->i_size);
@@ -684,8 +683,8 @@ void ll_pgcache_remove_extent(struct inode *inode, struct lov_stripe_md *lsm,
         for (i = start; i <= end; i += (j + skip)) {
                 j = min(count - (i % count), end - i + 1);
                 LASSERT(j > 0);
-                LASSERT(mapping);
-                if (ll_teardown_mmaps(mapping,
+                LASSERT(inode->i_mapping);
+                if (ll_teardown_mmaps(inode->i_mapping,
                                       (__u64)i << CFS_PAGE_SHIFT,
                                       ((__u64)(i+j) << CFS_PAGE_SHIFT) - 1) )
                         break;
@@ -710,14 +709,14 @@ void ll_pgcache_remove_extent(struct inode *inode, struct lov_stripe_md *lsm,
                          tmpex.l_extent.start, lock->l_policy_data.l_extent.end,
                          start, i, end);
 
-                if (!mapping_has_pages(mapping)) {
+                if (!mapping_has_pages(inode->i_mapping)) {
                         CDEBUG(D_INODE|D_PAGE, "nothing left\n");
                         break;
                 }
 
                 cond_resched();
 
-                page = find_get_page(mapping, i);
+                page = find_get_page(inode->i_mapping, i);
                 if (page == NULL)
                         continue;
                 LL_CDEBUG_PAGE(D_PAGE, page, "lock page idx %lu ext "LPU64"\n",
@@ -727,22 +726,12 @@ void ll_pgcache_remove_extent(struct inode *inode, struct lov_stripe_md *lsm,
                 /* page->mapping to check with racing against teardown */
                 if (!discard && clear_page_dirty_for_io(page)) {
                         rc = ll_call_writepage(inode, page);
+                        if (rc != 0)
+                                CERROR("writepage of page %p failed: %d\n",
+                                       page, rc);
                         /* either waiting for io to complete or reacquiring
                          * the lock that the failed writepage released */
                         lock_page(page);
-                        wait_on_page_writeback(page);
-                        if (rc != 0) {
-                                CERROR("writepage of page %p failed: %d\n",
-                                       page, rc);
-#if (LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))
-                                if (rc == -ENOSPC)
-                                        set_bit(AS_ENOSPC, &mapping->flags);
-                                else
-                                        set_bit(AS_EIO, &mapping->flags);
-#else
-                                mapping->gfp_mask |= AS_EIO_MASK;
-#endif
-                        }
                 }
 
                 tmpex.l_extent.end = tmpex.l_extent.start + CFS_PAGE_SIZE - 1;
@@ -757,7 +746,7 @@ void ll_pgcache_remove_extent(struct inode *inode, struct lov_stripe_md *lsm,
                         // checking again to account for writeback's lock_page()
                         LL_CDEBUG_PAGE(D_PAGE, page, "truncating\n");
                         if (llap)
-                                ll_ra_accounting(llap, mapping);
+                                ll_ra_accounting(llap, inode->i_mapping);
                         ll_truncate_complete_page(page);
                 }
                 unlock_page(page);
@@ -1045,7 +1034,7 @@ int ll_glimpse_size(struct inode *inode, int ast_flags)
 
         ll_inode_size_lock(inode, 1);
         inode_init_lvb(inode, &lvb);
-        obd_merge_lvb(sbi->ll_osc_exp, lli->lli_smd, &lvb, 0);
+        rc = obd_merge_lvb(sbi->ll_osc_exp, lli->lli_smd, &lvb, 0);
         inode->i_size = lvb.lvb_size;
         inode->i_blocks = lvb.lvb_blocks;
         LTIME_S(inode->i_mtime) = lvb.lvb_mtime;
@@ -1223,6 +1212,10 @@ repeat:
         }
        
         node = ll_node_from_inode(inode, *ppos, end, LCK_PR);
+        if (IS_ERR(node)){
+                GOTO(out, retval = PTR_ERR(node));
+        }
+
         tree.lt_fd = LUSTRE_FPRIVATE(file);
         rc = ll_tree_lock(&tree, node, buf, count,
                           file->f_flags & O_NONBLOCK ? LDLM_FL_BLOCK_NOWAIT :0);
@@ -1397,7 +1390,7 @@ repeat:
 
         if (*ppos >= maxbytes) {
                 send_sig(SIGXFSZ, current, 0);
-                GOTO(out, retval = -EFBIG);
+                GOTO(out_unlock, retval = -EFBIG);
         }
         if (*ppos + count > maxbytes)
                 count = maxbytes - *ppos;
@@ -1409,9 +1402,10 @@ repeat:
         retval = generic_file_write(file, buf, chunk, ppos);
         ll_rw_stats_tally(ll_i2sbi(inode), current->pid, file, count, 1);
 
-out:
+out_unlock:
         ll_tree_unlock(&tree);
 
+out:
         if (retval > 0) {
                 buf += retval;
                 count -= retval;
@@ -1463,6 +1457,9 @@ static ssize_t ll_file_sendfile(struct file *in_file, loff_t *ppos,size_t count,
                 RETURN(generic_file_sendfile(in_file, ppos, count, actor, target));
 
         node = ll_node_from_inode(inode, *ppos, *ppos + count - 1, LCK_PR);
+        if (IS_ERR(node))
+                RETURN(PTR_ERR(node));
+
         tree.lt_fd = LUSTRE_FPRIVATE(in_file);
         rc = ll_tree_lock(&tree, node, NULL, count,
                           in_file->f_flags & O_NONBLOCK?LDLM_FL_BLOCK_NOWAIT:0);

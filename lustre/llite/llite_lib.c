@@ -239,7 +239,7 @@ static int client_common_fill_super(struct super_block *sb,
         if (data->ocd_connect_flags & OBD_CONNECT_JOIN)
                 sbi->ll_flags |= LL_SBI_JOIN;
 
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,6,0))
+        sbi->ll_sdev_orig = sb->s_dev;
         /* We set sb->s_dev equal on all lustre clients in order to support
          * NFS export clustering.  NFSD requires that the FSID be the same
          * on all clients. */
@@ -247,8 +247,6 @@ static int client_common_fill_super(struct super_block *sb,
          * only a node-local comparison. */
         sb->s_dev = get_uuid2int(sbi2mdc(sbi)->cl_target_uuid.uuid,
                                  strlen(sbi2mdc(sbi)->cl_target_uuid.uuid));
-#endif
-
         obd = class_name2obd(osc);
         if (!obd) {
                 CERROR("OSC %s: not setup or attached\n", osc);
@@ -577,6 +575,9 @@ void client_common_put_super(struct super_block *sb)
         sbi->ll_mdc_exp = NULL;
 
         lustre_throw_orphan_dentries(sb);
+        /* restore s_dev from changed for clustred NFS*/
+        sb->s_dev = sbi->ll_sdev_orig;
+
         EXIT;
 }
 
@@ -832,6 +833,7 @@ static int old_lustre_process_log(struct super_block *sb, char *newprofile,
          */
         rc = class_config_dump_llog(ctxt, profile, cfg);
 #endif
+        llog_ctxt_put(ctxt);
         switch (rc) {
         case 0: {
                 /* Set the caller's profile name to the old-style */
@@ -1014,7 +1016,7 @@ void ll_put_super(struct super_block *sb)
         if (sbi->ll_mdc_exp) {
                 obd = class_exp2obd(sbi->ll_mdc_exp);
                 if (obd) 
-                        force = obd->obd_no_recov;
+                        force = obd->obd_force;
         }
         
         /* We need to set force before the lov_disconnect in 
@@ -1822,7 +1824,7 @@ void ll_umount_begin(struct super_block *sb)
                 EXIT;
                 return;
         }
-        obd->obd_no_recov = 1;
+        obd->obd_force = 1;
         obd_iocontrol(IOC_OSC_SET_ACTIVE, sbi->ll_mdc_exp, sizeof ioc_data,
                       &ioc_data, NULL);
 
@@ -1834,7 +1836,7 @@ void ll_umount_begin(struct super_block *sb)
                 return;
         }
 
-        obd->obd_no_recov = 1;
+        obd->obd_force = 1;
         obd_iocontrol(IOC_OSC_SET_ACTIVE, sbi->ll_osc_exp, sizeof ioc_data,
                       &ioc_data, NULL);
 

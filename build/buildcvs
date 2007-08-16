@@ -52,9 +52,10 @@ case "$lustretag" in
         portalstag="b_hd_newconfig"
         ;;
 
-    b_new_cmd)
-	portalstag="b_new_portals"
-        # lnettag="b_lnet_tmp"
+    b1_8)
+        # b1_8 is an alias for HEAD.
+        lustretag="HEAD"
+        ldiskfstag="b1_8_iam"
         ;;
 
     b_cmd*)
@@ -69,6 +70,17 @@ case "$lustretag" in
 
     b_ioprovement)
         portalstag="b_ioprovement"
+        ;;
+
+    b_mpilnd)
+        # lnet mpilnd development branch
+	lnettag="b_mpilnd"
+	lustretag="HEAD"
+	;;
+
+    b_new_cmd)
+	portalstag="b_new_portals"
+        # lnettag="b_lnet_tmp"
         ;;
 
     b_newconfig_rdmarouting)
@@ -95,26 +107,14 @@ case "$lustretag" in
         portalstag="b_port_test"
         ;;
 
-    b_ptl_smallfix)
-        portalstag="b_ptl_smallfix"
-        lustretag="b1_4"
-        ;;
-
     b_ptlrpc_cleanup)
         portalstag="b_ptlrpc_cleanup"
         ;;
 
-    b_self_test)
-        # lnet self test development branch
-	lnettag="b_self_test"
-	lustretag="HEAD"
-	;;
-
-    b_mpilnd)
-        # lnet mpilnd development branch
-	lnettag="b_mpilnd"
-	lustretag="HEAD"
-	;;
+    b_ptl_smallfix)
+        portalstag="b_ptl_smallfix"
+        lustretag="b1_4"
+        ;;
 
     # before 1_4_6, we didn't have lnet or snmp
     b_release_1_2_*|b_release_1_4_[0-5])
@@ -124,18 +124,18 @@ case "$lustretag" in
         snmptag=""
         ;;
 
-    b_release_1_4_6-patchless)
-        portalstag=b_release_1_4_6
-        lnettag=b_release_1_4_6-patchless
-        libsysiotag=b_release_1_4_6
-        snmptag=b_release_1_4_6
-        ;;
-
     b_release_1_4_6)
         portalstag="$lustretag"
         lnettag="$lustretag"
         libsysiotag="$lustretag"
         snmptag="$lustretag"
+        ;;
+
+    b_release_1_4_6-patchless)
+        portalstag=b_release_1_4_6
+        lnettag=b_release_1_4_6-patchless
+        libsysiotag=b_release_1_4_6
+        snmptag=b_release_1_4_6
         ;;
 
     # all later b_release_* tags
@@ -145,16 +145,29 @@ case "$lustretag" in
         snmptag="$lustretag"
         ;;
 
-    # uOSS
-    b_uoss)
-        lnettag="b_uoss"
-        ;;
-    
+    b_self_test)
+        # lnet self test development branch
+	lnettag="b_self_test"
+	lustretag="HEAD"
+	;;
+
+    b_usocklnd)
+        # lnet usocklnd development branch
+	lnettag="b_usocklnd"
+	lustretag="b1_6_usocklnd"
+	;;
+
     # CMD3
-    b_post_cmd3|b1_8_gssfix|b_new_cmd_sles10)
+    HEAD|b_post_cmd3|b1_8_gssfix|b_new_cmd_sles10)
+        # Update b1_8 above when changing this.
         ldiskfstag="b1_8_iam"
         ;;
 
+    # uOSS
+    b_hd_dmu)
+        lnettag="b_uoss"
+        ;;
+    
     # v1.0-v1.3, v1.4.0-v1.4.2
     v1_[0-3]_*|v1_4_[0-2]|v1_4_[0-2]_*)
         portalstag="$lustretag"

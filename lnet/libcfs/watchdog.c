@@ -314,7 +314,7 @@ static void lcw_update_time(struct lc_watchdog *lcw, const char *message)
         lcw->lcw_last_touched = newtime;
 }
 
-void lc_watchdog_touch(struct lc_watchdog *lcw)
+void lc_watchdog_touch_ms(struct lc_watchdog *lcw, int timeout_ms)
 {
         ENTRY;
         LASSERT(lcw != NULL);
@@ -326,9 +326,17 @@ void lc_watchdog_touch(struct lc_watchdog *lcw)
         lcw_update_time(lcw, "touched");
         lcw->lcw_state = LC_WATCHDOG_ENABLED;
 
-        mod_timer(&lcw->lcw_timer, jiffies + lcw->lcw_time);
+        mod_timer(&lcw->lcw_timer, jiffies +
+                  cfs_time_seconds(timeout_ms) / 1000);
 
         EXIT;
+}
+EXPORT_SYMBOL(lc_watchdog_touch_ms);
+
+/* deprecated - use above instead */
+void lc_watchdog_touch(struct lc_watchdog *lcw)
+{
+        lc_watchdog_touch_ms(lcw, cfs_duration_sec(lcw->lcw_time) * 1000);
 }
 EXPORT_SYMBOL(lc_watchdog_touch);
 
@@ -394,6 +402,11 @@ struct lc_watchdog *lc_watchdog_add(int timeout_ms,
         return &watchdog;
 }
 EXPORT_SYMBOL(lc_watchdog_add);
+
+void lc_watchdog_touch_ms(struct lc_watchdog *lcw, int timeout_ms)
+{
+}
+EXPORT_SYMBOL(lc_watchdog_touch_ms);
 
 void lc_watchdog_touch(struct lc_watchdog *lcw)
 {

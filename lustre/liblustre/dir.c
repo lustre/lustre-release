@@ -131,7 +131,7 @@ static struct page *llu_dir_read_page(struct inode *ino, unsigned long pgidx)
         int rc;
         ENTRY;
 
-        page = alloc_page(0);
+        page = cfs_alloc_page(0);
         if (!page) {
                 CERROR("alloc page failed\n");
                 RETURN(ERR_PTR(-ENOMEM));

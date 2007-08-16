@@ -762,6 +762,7 @@ ptllnd_check_sends(ptllnd_peer_t *peer)
                         CERROR("Can't return credits to %s\n",
                                libcfs_id2str(peer->plp_id));
                 } else {
+                        ptllnd_set_tx_deadline(tx);
                         list_add_tail(&tx->tx_list, &peer->plp_txq);
                 }
         }

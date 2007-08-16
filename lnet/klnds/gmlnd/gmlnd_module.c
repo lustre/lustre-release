@@ -61,61 +61,110 @@ gmnal_tunables_t gmnal_tunables = {
 };
 
 #if CONFIG_SYSCTL && !CFS_SYSFS_MODULE_PARM
-static ctl_table gmnal_ctl_table[] = {
-	{1, "port", &port,
-	 sizeof (int), 0444, NULL, &proc_dointvec},
-	{2, "ntx", &ntx, 
-	 sizeof (int), 0444, NULL, &proc_dointvec},
-	{3, "credits", &credits,
-	 sizeof (int), 0444, NULL, &proc_dointvec},
-	{4, "peer_credits", &peer_credits,
-	 sizeof (int), 0444, NULL, &proc_dointvec},
-	{5, "nlarge_tx_bufs", &nlarge_tx_bufs,
-	 sizeof (int), 0444, NULL, &proc_dointvec},
-	{6, "nrx_small", &nrx_small,
-	 sizeof (int), 0444, NULL, &proc_dointvec},
-	{7, "nrx_large", &nrx_large,
-	 sizeof (int), 0444, NULL, &proc_dointvec},
-	{0}
+static cfs_sysctl_table_t gmnal_ctl_table[] = {
+        {
+                .ctl_name = 1,
+                .procname = "port",
+                .data     = &port,
+                .maxlen   = sizeof (int),
+                .data     = 0444,
+                .proc_handler = &proc_dointvec
+        },
+        {
+                .ctl_name = 2,
+                .procname = "ntx",
+                .data     = &ntx,
+                .maxlen   = sizeof (int),
+                .mode     = 0444,
+                .proc_handler = &proc_dointvec
+        },
+        {
+                .ctl_name = 3,
+                .procname = "credits",
+                .data     = &credits,
+                .maxlen   = sizeof (int),
+                .mode     = 0444,
+                .proc_handler = &proc_dointvec
+        },
+        {
+                .ctl_name = 4,
+                .procname = "peer_credits",
+                .data     = &peer_credits,
+                .maxlen   = sizeof (int),
+                .mode     = 0444,
+                .proc_handler = &proc_dointvec
+        },
+        {
+                .ctl_name = 5,
+                .procname = "nlarge_tx_bufs",
+                .data     = &nlarge_tx_bufs,
+                .maxlen   = sizeof (int),
+                .mode     = 0444,
+                .proc_handler = &proc_dointvec
+        },
+        {
+                .ctl_name = 6,
+                .procname = "nrx_small",
+                .data     = &nrx_small,
+                .maxlen   = sizeof (int),
+                .mode     = 0444,
+                .proc_handler = &proc_dointvec
+        },
+        {
+                .ctl_name = 7,
+                .procname = "nrx_large",
+                .data     = &nrx_large,
+                .maxlen   = sizeof (int),
+                .mode     = 0444,
+                .proc_handler = &proc_dointvec
+        },
+        {0}
 };
 
-static ctl_table gmnal_top_ctl_table[] = {
-	{207, "gmnal", NULL, 0, 0555, gmnal_ctl_table},
-	{0}
+static cfs_sysctl_table_t gmnal_top_ctl_table[] = {
+        {
+                .ctl_name = 207,
+                .procname = "gmnal",
+                .data     = NULL,
+                .maxlen   = 0,
+                .mode     = 0555,
+                .child    = gmnal_ctl_table
+        },
+        {0}
 };
 #endif
 
 static int __init
 gmnal_load(void)
 {
-	int	status;
-	CDEBUG(D_TRACE, "This is the gmnal module initialisation routine\n");
+        int     status;
+        CDEBUG(D_TRACE, "This is the gmnal module initialisation routine\n");
 
 #if CONFIG_SYSCTL && !CFS_SYSFS_MODULE_PARM
         gmnal_tunables.gm_sysctl =
                 cfs_register_sysctl_table(gmnal_top_ctl_table, 0);
-        
+
         if (gmnal_tunables.gm_sysctl == NULL)
                 CWARN("Can't setup /proc tunables\n");
 #endif
-	CDEBUG(D_NET, "Calling gmnal_init\n");
+        CDEBUG(D_NET, "Calling gmnal_init\n");
         status = gmnal_init();
-	if (status == 0) {
-		CDEBUG(D_NET, "Portals GMNAL initialised ok\n");
-	} else {
-		CDEBUG(D_NET, "Portals GMNAL Failed to initialise\n");
-		return(-ENODEV);
-	}
+        if (status == 0) {
+                CDEBUG(D_NET, "Portals GMNAL initialised ok\n");
+        } else {
+                CDEBUG(D_NET, "Portals GMNAL Failed to initialise\n");
+                return(-ENODEV);
+        }
 
-	CDEBUG(D_NET, "This is the end of the gmnal init routine");
+        CDEBUG(D_NET, "This is the end of the gmnal init routine");
 
-	return(0);
+        return(0);
 }
 
 static void __exit
 gmnal_unload(void)
 {
-	gmnal_fini();
+        gmnal_fini();
 #if CONFIG_SYSCTL && !CFS_SYSFS_MODULE_PARM
         if (gmnal_tunables.gm_sysctl != NULL)
                 cfs_unregister_sysctl_table(gmnal_tunables.gm_sysctl);

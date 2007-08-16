@@ -97,7 +97,7 @@ static int mds_sendpage(struct ptlrpc_request *req, struct file *file,
         for (i = 0, tmpcount = count; i < npages; i++, tmpcount -= tmpsize) {
                 tmpsize = tmpcount > CFS_PAGE_SIZE ? CFS_PAGE_SIZE : tmpcount;
 
-                pages[i] = alloc_pages(GFP_KERNEL, 0);
+                pages[i] = cfs_alloc_page(CFS_ALLOC_STD);
                 if (pages[i] == NULL)
                         GOTO(cleanup_buf, rc = -ENOMEM);
 
@@ -156,7 +156,7 @@ static int mds_sendpage(struct ptlrpc_request *req, struct file *file,
  cleanup_buf:
         for (i = 0; i < npages; i++)
                 if (pages[i])
-                        __free_pages(pages[i], 0);
+                        __cfs_free_page(pages[i]);
 
         ptlrpc_free_bulk(desc);
  out_free:
@@ -1224,16 +1224,16 @@ static int mds_readpage(struct ptlrpc_request *req, int offset)
                 GOTO(out_pop, rc = PTR_ERR(file));
 
         /* body->size is actually the offset -eeb */
-        if ((body->size & (de->d_inode->i_blksize - 1)) != 0) {
+        if ((body->size & (de->d_inode->i_sb->s_blocksize - 1)) != 0) {
                 CERROR("offset "LPU64" not on a block boundary of %lu\n",
-                       body->size, de->d_inode->i_blksize);
+                       body->size, de->d_inode->i_sb->s_blocksize);
                 GOTO(out_file, rc = -EFAULT);
         }
 
         /* body->nlink is actually the #bytes to read -eeb */
-        if (body->nlink & (de->d_inode->i_blksize - 1)) {
+        if (body->nlink & (de->d_inode->i_sb->s_blocksize - 1)) {
                 CERROR("size %u is not multiple of blocksize %lu\n",
-                       body->nlink, de->d_inode->i_blksize);
+                       body->nlink, de->d_inode->i_sb->s_blocksize);
                 GOTO(out_file, rc = -EFAULT);
         }
 
@@ -1958,10 +1958,6 @@ static int mds_setup(struct obd_device *obd, obd_count len, void *buf)
                 GOTO(err_ns, rc);
         }
 
-        rc = llog_start_commit_thread();
-        if (rc < 0)
-                GOTO(err_fs, rc);
-
         if (lcfg->lcfg_bufcount >= 4 && LUSTRE_CFG_BUFLEN(lcfg, 3) > 0) {
                 class_uuid_t uuid;
 
@@ -2133,6 +2129,7 @@ err_cleanup:
 
 int mds_postrecov(struct obd_device *obd)
 {
+        struct llog_ctxt *ctxt;
         int rc;
         ENTRY;
 
@@ -2140,7 +2137,9 @@ int mds_postrecov(struct obd_device *obd)
                 RETURN(0);
 
         LASSERT(!obd->obd_recovering);
-        LASSERT(llog_get_context(obd, LLOG_MDS_OST_ORIG_CTXT) != NULL);
+        ctxt = llog_get_context(obd, LLOG_MDS_OST_ORIG_CTXT); 
+        LASSERT(ctxt != NULL);
+        llog_ctxt_put(ctxt);
 
         /* set nextid first, so we are sure it happens */
         mutex_down(&obd->obd_dev_sem);

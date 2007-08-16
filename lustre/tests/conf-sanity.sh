@@ -87,6 +87,16 @@ stop_ost2() {
 	stop ost2 -f  || return 93
 }
 
+start_client() {
+	echo "start client on `facet_active_host client`"
+	start client || return 99 
+}
+
+stop_client() {
+	echo "stop client on `facet_active_host client`"
+	stop client || return 100 
+}
+
 mount_client() {
 	local MOUNTPATH=$1
 	echo "mount $FSNAME on ${MOUNTPATH}....."
@@ -109,8 +119,12 @@ umount_client() {
 }
 
 manual_umount_client(){
+	local rc
+	local FORCE=$1
 	echo "manual umount lustre on ${MOUNT}...."
-	do_facet client "umount -d $MOUNT"
+	do_facet client "umount -d ${FORCE} $MOUNT"
+	rc=$?
+	return $rc
 }
 
 setup() {
@@ -231,8 +245,8 @@ test_5() {
 	kill -TERM $UMOUNT_PID
 	echo "waiting for umount to finish"
 	wait $UMOUNT_PID
-	if grep " $MOUNT " /etc/mtab; then
-		echo "test 5: mtab after failed umount"
+	if grep " $MOUNT " /proc/mounts; then
+		echo "test 5: /proc/mounts after failed umount"
 		umount $MOUNT &
 		UMOUNT_PID=$!
 		sleep 2
@@ -240,7 +254,7 @@ test_5() {
 		kill -TERM $UMOUNT_PID
 		echo "waiting for umount to finish"
 		wait $UMOUNT_PID
-		grep " $MOUNT " /etc/mtab && echo "test 5: mtab after second umount" && return 11
+		grep " $MOUNT " /proc/mounts && echo "test 5: /proc/mounts after second umount" && return 11
 	fi
 
 	manual_umount_client
@@ -898,7 +912,7 @@ set_and_check() {
 	    FINAL=$(($ORIG + 5))
 	fi
 	echo "Setting $PARAM from $ORIG to $FINAL"
-	$LCTL conf_param $PARAM=$FINAL
+	do_facet mds "$LCTL conf_param $PARAM=$FINAL" || error conf_param failed
 	local RESULT
 	local MAX=30
 	local WAIT=0
@@ -1079,6 +1093,7 @@ test_32a() {
 
         # mount a second time to make sure we didnt leave upgrade flag on
         $TUNEFS --dryrun $TMP/$tdir/mds || error "tunefs failed"
+	load_modules
         start mds $TMP/$tdir/mds "-o loop,exclude=lustre-OST0000" || return 12
         cleanup_nocli
 
@@ -1127,8 +1142,92 @@ test_32b() {
 }
 run_test 32b "Upgrade from 1.4 with writeconf"
 
+test_33() { # bug 12333
+        local FSNAME2=test1234
+        local fs2mds_HOST=$mds_HOST
+        local fs2ost_HOST=$ost_HOST
+        local fs2mdsdev=${MDSDEV}_2
+        local fs2ostdev=$(ostdevname 1)_2
+        add fs2mds $MDS_MKFS_OPTS --fsname=${FSNAME2} --reformat $fs2mdsdev || exit 10
+        add fs2ost $OST_MKFS_OPTS --fsname=${FSNAME2} --index=8191 --mgsnode=`hostname`@tcp --reformat $fs2ostdev || exit 10
+
+        start fs2mds $fs2mdsdev $MDS_MOUNT_OPTS
+        start fs2ost $fs2ostdev $OST_MOUNT_OPTS
+        mkdir -p $MOUNT2
+        mount -t lustre $MGSNID:/${FSNAME2} $MOUNT2 || return 1
+        echo "ok."
+
+        umount -d $MOUNT2
+        stop fs2ost -f
+        stop fs2mds -f
+        rm -rf $MOUNT2 $fs2mdsdev $fs2ostdev
+        cleanup_nocli || return 6
+}
+run_test 33 "Mount ost with a large index number"
+
 umount_client $MOUNT	
 cleanup_nocli
+
+test_33() {
+        setup
+
+        do_facet client dd if=/dev/zero of=$MOUNT/24 bs=1024k count=1
+        # Drop lock cancelation reply during umount
+	#define OBD_FAIL_LDLM_CANCEL             0x304
+        do_facet client sysctl -w lustre.fail_loc=0x80000304
+        #sysctl -w lnet.debug=-1
+        umount_client $MOUNT
+        cleanup
+}
+run_test 33 "Drop cancel during umount"
+
+test_34a() {
+        setup
+	do_facet client multiop $DIR/file O_c &
+
+	manual_umount_client
+	rc=$?
+	do_facet client killall -USR1 multiop
+	if [ $rc -eq 0 ]; then
+		error "umount not fail!"
+	fi
+	sleep 1
+        cleanup
+}
+run_test 34a "umount with opened file should be fail"
+
+
+test_34b() {
+	setup
+	touch $DIR/$tfile || return 1
+	stop_mds --force || return 2
+
+ 	manual_umount_client --force
+	rc=$?
+	if [ $rc -ne 0 ]; then
+		error "mtab after failed umount - rc $rc"
+	fi
+
+	cleanup
+	return 0	
+}
+run_test 34b "force umount with failed mds should be normal"
+
+test_34c() {
+	setup
+	touch $DIR/$tfile || return 1
+	stop_ost --force || return 2
+
+ 	manual_umount_client --force
+	rc=$?
+	if [ $rc -ne 0 ]; then
+		error "mtab after failed umount - rc $rc"
+	fi
+
+	cleanup
+	return 0	
+}
+run_test 34c "force umount with failed mds should be normal"
 
 equals_msg "Done"
 echo "$0: completed"

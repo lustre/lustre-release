@@ -19,7 +19,7 @@
 #ifndef EXPORT_SYMTAB
 # define EXPORT_SYMTAB
 #endif
-#ifdef HAVE_KERNEL_CONFIG_H
+#ifndef AUTOCONF_INCLUDED
 #include <linux/config.h>
 #endif
 #include <linux/module.h>
@@ -101,7 +101,7 @@ typedef struct
 #endif
 
 #if CONFIG_SYSCTL && !CFS_SYSFS_MODULE_PARM
-        struct ctl_table_header *kptl_sysctl;    /* sysctl interface */
+        cfs_sysctl_table_header_t *kptl_sysctl; /* sysctl interface */
 #endif
 } kptl_tunables_t;
 

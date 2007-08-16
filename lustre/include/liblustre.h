@@ -413,8 +413,10 @@ static inline cfs_page_t *alloc_pages(int mask, unsigned long order)
         }
         return pg;
 }
+#define cfs_alloc_pages(mask, order)  alloc_pages((mask), (order))
 
-#define alloc_page(mask) alloc_pages((mask), 0)
+#define alloc_page(mask)      alloc_pages((mask), 0)
+#define cfs_alloc_page(mask)  alloc_page(mask)
 
 static inline void __free_pages(cfs_page_t *pg, int what)
 {
@@ -425,9 +427,11 @@ static inline void __free_pages(cfs_page_t *pg, int what)
 #endif
         free(pg);
 }
+#define __cfs_free_pages(pg, order)  __free_pages((pg), (order))
 
 #define __free_page(page) __free_pages((page), 0)
 #define free_page(page) __free_page(page)
+#define __cfs_free_page(page)  __cfs_free_pages((page), 0)
 
 static inline cfs_page_t* __grab_cache_page(unsigned long index)
 {
@@ -701,11 +705,9 @@ static inline void del_timer(struct timer_list *l)
         free(l);
 }
 
-
-
 typedef struct { volatile int counter; } atomic_t;
 
-#define ATOMIC_INIT(i)  { (i) }
+#define ATOMIC_INIT(i) { i }
 
 #define atomic_read(a) ((a)->counter)
 #define atomic_set(a,b) do {(a)->counter = b; } while (0)
@@ -752,9 +754,6 @@ typedef enum {
 cap_t   cap_get_proc(void);
 int     cap_get_flag(cap_t, cap_value_t, cap_flag_t, cap_flag_value_t *);
 
-/* log related */
-static inline int llog_init_commit_master(void) { return 0; }
-static inline int llog_cleanup_commit_master(int force) { return 0; }
 static inline void libcfs_run_lbug_upcall(char *file, const char *fn,
                                            const int l){}
 

@@ -39,7 +39,6 @@
 #include <libcfs/kp30.h>
 #include <lustre_fsfilt.h>
 #include <obd.h>
-#include <obd_class.h>
 #include <linux/module.h>
 #include <linux/init.h>
 #include <linux/lustre_compat25.h>
@@ -52,6 +51,9 @@
 
 atomic_t obd_memory;
 int obd_memmax;
+unsigned int obd_fail_val;
+unsigned int obd_fail_loc;
+unsigned int obd_alloc_fail_rate = 0;
 
 /* Debugging check only needed during development */
 #ifdef OBD_CTXT_DEBUG
@@ -527,6 +529,10 @@ static void __exit lvfs_linux_exit(void)
         EXIT;
         return;
 }
+
+EXPORT_SYMBOL(obd_fail_loc);
+EXPORT_SYMBOL(obd_alloc_fail_rate);
+EXPORT_SYMBOL(obd_fail_val);
 
 MODULE_AUTHOR("Cluster File Systems, Inc. <info@clusterfs.com>");
 MODULE_DESCRIPTION("Lustre VFS Filesystem Helper v0.1");

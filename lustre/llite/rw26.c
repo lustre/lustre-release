@@ -20,7 +20,7 @@
  *   along with Lustre; if not, write to the Free Software
  *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
-#ifdef HAVE_KERNEL_CONFIG_H
+#ifndef AUTOCONF_INCLUDED
 #include <linux/config.h>
 #endif
 #include <linux/kernel.h>
@@ -102,7 +102,7 @@ static inline int ll_get_user_pages(int rw, unsigned long user_addr,
         page_count = ((user_addr + size + CFS_PAGE_SIZE - 1) >> CFS_PAGE_SHIFT)-
                       (user_addr >> CFS_PAGE_SHIFT);
 
-        OBD_ALLOC_GFP(*pages, page_count * sizeof(**pages), GFP_KERNEL);
+        OBD_ALLOC_WAIT(*pages, page_count * sizeof(**pages));
         if (*pages) {
                 down_read(&current->mm->mmap_sem);
                 result = get_user_pages(current, current->mm, user_addr,

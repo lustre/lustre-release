@@ -188,6 +188,8 @@ void ptlrpc_invalidate_import(struct obd_import *imp)
         struct l_wait_info lwi;
         int rc;
 
+        atomic_inc(&imp->imp_inval_count);
+
         if (!imp->imp_invalid)
                 ptlrpc_deactivate_import(imp);
 
@@ -206,6 +208,9 @@ void ptlrpc_invalidate_import(struct obd_import *imp)
                        atomic_read(&imp->imp_inflight));
 
         obd_import_event(imp->imp_obd, imp, IMP_EVENT_INVALIDATE);
+
+        atomic_dec(&imp->imp_inval_count);
+        cfs_waitq_signal(&imp->imp_recovery_waitq);
 }
 
 /* unset imp_invalid */
@@ -1029,5 +1034,13 @@ out:
         spin_unlock(&imp->imp_lock);
 
         RETURN(rc);
+}
+
+/* Sets maximal number of RPCs possible originating from other side of this
+   import (server) to us and number of async RPC replies that we are not waiting
+   for arriving */
+void ptlrpc_import_setasync(struct obd_import *imp, int count)
+{
+        LNetSetAsync(imp->imp_connection->c_peer, count);
 }
 

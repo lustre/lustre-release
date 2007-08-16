@@ -99,6 +99,16 @@ _sysio_check_permission(struct pnode *pno, struct creds *crp, int amode)
 	err = -EACCES;					/* assume error */
 	stat = &ino->i_stbuf;
 	do {
+#ifdef _SYSIO_ROOT_UID
+		/*
+		 * Root?
+		 */
+		if (_sysio_is_root(crp)) {
+			err = 0;
+			break;
+		}
+#endif
+
 		/*
 		 * Owner?
 		 */

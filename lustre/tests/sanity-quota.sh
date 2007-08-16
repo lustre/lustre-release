@@ -285,27 +285,27 @@ post_test() {
 
 setup() {
 	# create local test group
-	GRP="`cat /etc/group | grep "$TSTUSR" | awk -F: '{print $1}'`"
+	GRP="`cat /etc/group | grep "^${TSTUSR}:" | awk -F: '{print $1}'`"
 	if [ -z "$GRP" ]; then
 		groupadd -g $TSTID "$TSTUSR"
 	fi
-	TSTID="`cat /etc/group | grep "$TSTUSR" | awk -F: '{print $3}'`"
+	TSTID="`cat /etc/group | grep "^${TSTUSR}:" | awk -F: '{print $3}'`"
 
-        GRP2="`cat /etc/group | grep "$TSTUSR2" | awk -F: '{print $1}'`"
+        GRP2="`cat /etc/group | grep "^${TSTUSR2}:" | awk -F: '{print $1}'`"
         if [ -z "$GRP2" ]; then
                 groupadd -g $TSTID2 "$TSTUSR2"
         fi
-        TSTID2="`cat /etc/group | grep "$TSTUSR2" | awk -F: '{print $3}'`"
+        TSTID2="`cat /etc/group | grep "^${TSTUSR2}:" | awk -F: '{print $3}'`"
 
 	# create test user
-	USR="`cat /etc/passwd | grep "$TSTUSR" | awk -F: '{print $1}'`"
+	USR="`cat /etc/passwd | grep "^${TSTUSR}:" | awk -F: '{print $1}'`"
 	if [ -z "$USR" ]; then
 		useradd -u $TSTID -g $TSTID -d /tmp "$TSTUSR"
 	fi
 	
 	RUNAS="runas -u $TSTID"
 
-	USR2="`cat /etc/passwd | grep "$TSTUSR2" | awk -F: '{print $1}'`"
+	USR2="`cat /etc/passwd | grep "^${TSTUSR2}:" | awk -F: '{print $1}'`"
         if [ -z "$USR2" ]; then
                 useradd -u $TSTID2 -g $TSTID2 -d /tmp "$TSTUSR2"
         fi
@@ -775,8 +775,8 @@ test_9() {
         fi
 
         # set the D_QUOTA flag
-	DBG_SAVE="`sysctl -n lnet.debug`"
-	sysctl -w lnet.debug="$DBG_SAVE quota"
+	debugsave
+	sysctl -w lnet.debug="+quota"
 
         TESTFILE="$TSTDIR/quota_tst90"
 
@@ -807,7 +807,7 @@ test_9() {
         $RUNAS rm -f $TESTFILE 
         RC=$?
 
-	sysctl -w lnet.debug="$DBG_SAVE"
+	debugrestore
         return $RC
 }
 run_test 9 "run for fixing bug10707(64bit) ==========="
@@ -830,12 +830,9 @@ test_10() {
 	sync; sleep 10; sync;
 
 	# set the D_QUOTA flag
-	set_flag=0
-	if [ -z "`sysctl lnet.debug | grep quota`" ]; then
-		sysctl -w lnet.debug="+quota"
-		set_flag=1
-	fi
-
+	debugsave
+	sysctl -w lnet.debug="+quota"
+	
 	# make qd_count 32 bit
 	sysctl -w lustre.fail_loc=0xA00
 
@@ -870,9 +867,7 @@ test_10() {
 	RC=$?
 
 	# clear the flage
-	if [ $set_flag -eq 1 ]; then
-		sysctl -w lnet.debug="-quota"
-	fi
+	debugrestore
 
 	# make qd_count 64 bit
 	sysctl -w lustre.fail_loc=0
@@ -1058,8 +1053,6 @@ test_13() {
 	$SHOW_QUOTA_USER
 	[ $((fz + fz2)) -lt $((BUNIT_SZ * BLK_SZ * 10)) ] && \
 		error "files too small $fz + $fz < $((BUNIT_SZ * BLK_SZ * 10))"
-	[ $((fz + fz2)) -gt $((BUNIT_SZ * BLK_SZ * 11)) ] && \
-		error "files too large $fz + $fz > $((BUNIT_SZ * BLK_SZ * 11))"
 
 	rm -f $TESTFILE $TESTFILE.2
 	

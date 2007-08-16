@@ -48,7 +48,6 @@
 #include <libcfs/kp30.h>
 #include <lustre_fsfilt.h>
 #include <obd.h>
-#include <obd_class.h>
 #include <lustre_quota.h>
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
 #include <linux/iobuf.h>
@@ -753,7 +752,7 @@ static int fsfilt_ext3_add_journal_cb(struct obd_device *obd, __u64 last_rcvd,
 {
         struct fsfilt_cb_data *fcb;
 
-        OBD_SLAB_ALLOC(fcb, fcb_cache, GFP_NOFS, sizeof *fcb);
+        OBD_SLAB_ALLOC(fcb, fcb_cache, CFS_ALLOC_IO, sizeof *fcb);
         if (fcb == NULL)
                 RETURN(-ENOMEM);
 

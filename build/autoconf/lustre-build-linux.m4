@@ -160,12 +160,6 @@ LB_CHECK_FILES([$LINUX_OBJ/include/linux/autoconf.h
 		$LINUX_OBJ/include/linux/version.h
 		],[],
 	[AC_MSG_ERROR([Run make config in $LINUX.])])
-#
-LB_CHECK_FILE([$LINUX_OBJ/include/linux/config.h],
-	[ AC_DEFINE(HAVE_KERNEL_CONFIG_H, 1,
-		[kernel modules need to include config.h])
-	]
-)
 
 # ------------ rhconfig.h includes runtime-generated bits --
 # red hat kernel-source checks
@@ -334,7 +328,7 @@ AC_DEFUN([LB_LINUX_TRY_COMPILE],
 AC_DEFUN([LB_LINUX_CONFIG],
 [AC_MSG_CHECKING([if Linux was built with CONFIG_$1])
 LB_LINUX_TRY_COMPILE([
-#ifdef HAVE_KERNEL_CONFIG_H
+#ifndef AUTOCONF_INCLUDED
 #include <linux/config.h>
 #endif
 ],[

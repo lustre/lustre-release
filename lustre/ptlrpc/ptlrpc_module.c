@@ -68,17 +68,12 @@ __init int ptlrpc_init(void)
                 GOTO(cleanup, rc);
         cleanup_phase = 2;
 
-        rc = llog_init_commit_master();
-        if (rc)
-                GOTO(cleanup, rc);
-        cleanup_phase = 3;
-
         ptlrpc_put_connection_superhack = ptlrpc_put_connection;
 
         rc = ptlrpc_start_pinger();
         if (rc)
                 GOTO(cleanup, rc);
-        cleanup_phase = 4;
+        cleanup_phase = 3;
 
         rc = ldlm_init();
         if (rc)
@@ -87,10 +82,8 @@ __init int ptlrpc_init(void)
 
 cleanup:
         switch(cleanup_phase) {
-        case 4:
-                ptlrpc_stop_pinger();
         case 3:
-                llog_cleanup_commit_master(1);
+                ptlrpc_stop_pinger();
         case 2:
                 ptlrpc_cleanup_connection();
         case 1:
@@ -108,7 +101,6 @@ static void __exit ptlrpc_exit(void)
         ptlrpc_stop_pinger();
         ptlrpc_exit_portals();
         ptlrpc_cleanup_connection();
-        llog_cleanup_commit_master(0);
 }
 
 /* connection.c */
@@ -260,6 +252,7 @@ EXPORT_SYMBOL(ptlrpc_deactivate_import);
 EXPORT_SYMBOL(ptlrpc_invalidate_import);
 EXPORT_SYMBOL(ptlrpc_fail_import);
 EXPORT_SYMBOL(ptlrpc_recover_import);
+EXPORT_SYMBOL(ptlrpc_import_setasync);
 
 /* pinger.c */
 EXPORT_SYMBOL(ptlrpc_pinger_add_import);

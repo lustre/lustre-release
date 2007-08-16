@@ -26,7 +26,7 @@
 # define EXPORT_SYMTAB
 #endif
 
-#ifdef HAVE_KERNEL_CONFIG_H
+#ifndef AUTOCONF_INCLUDED
 #include <linux/config.h>
 #endif
 #include <linux/module.h>
@@ -59,7 +59,7 @@
 #include <asm/div64.h>
 #include "tracefile.h"
 
-static struct ctl_table_header *lnet_table_header = NULL;
+static cfs_sysctl_table_header_t *lnet_table_header = NULL;
 extern char lnet_upcall[1024];
 
 #define PSDEV_LNET  (0x100)
@@ -78,7 +78,7 @@ enum {
 
 int LL_PROC_PROTO(proc_dobitmasks);
 
-static struct ctl_table lnet_table[] = {
+static cfs_sysctl_table_t lnet_table[] = {
         {
                 .ctl_name = PSDEV_DEBUG,
                 .procname = "debug",
@@ -158,7 +158,7 @@ static struct ctl_table lnet_table[] = {
         {0}
 };
 
-static struct ctl_table top_table[2] = {
+static cfs_sysctl_table_t top_table[2] = {
         {
                 .ctl_name = PSDEV_LNET,
                 .procname = "lnet",
@@ -179,11 +179,11 @@ int LL_PROC_PROTO(proc_dobitmasks)
          * and proc_dostring into doing the drudgery by cheating
          * with a dummy ctl_table
          */
-        struct ctl_table dummy = *table;
+        cfs_sysctl_table_t dummy = *table;
         unsigned int *mask = (unsigned int *)table->data;
         int           is_subsys = (mask == &libcfs_subsystem_debug) ? 1 : 0;
 
-	str = kmalloc(tmpstrlen, GFP_USER);
+        str = kmalloc(tmpstrlen, GFP_USER);
         if (str == NULL)
                 return -ENOMEM;
 

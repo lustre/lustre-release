@@ -613,7 +613,7 @@ ksocknal_find_conn_locked (int payload_nob, ksock_peer_t *peer)
                                         SOCK_WMEM_QUEUED(c->ksnc_sock);
 #endif
                 LASSERT (!c->ksnc_closing);
-                LASSERT(c->ksnc_proto != NULL);
+                LASSERT (c->ksnc_proto != NULL);
 
                 if (fallback == NULL || nob < fnob) {
                         fallback = c;
@@ -1527,7 +1527,7 @@ int ksocknal_scheduler (void *arg)
 #if defined(CONFIG_SMP) && defined(CPU_AFFINITY)
         id = ksocknal_sched2cpu(id);
         if (cpu_online(id)) {
-                cpumask_t m;
+                cpumask_t m = CPU_MASK_NONE;
                 cpu_set(id, m);
                 set_cpus_allowed(current, m);
         } else {
@@ -1739,14 +1739,19 @@ void ksocknal_write_callback (ksock_conn_t *conn)
         EXIT;
 }
 
-ksock_protocol_t *
-ksocknal_compat_protocol (ksock_hello_msg_t *hello)
+ksock_proto_t *
+ksocknal_parse_proto_version (ksock_hello_msg_t *hello)
 {
         if ((hello->kshm_magic   == LNET_PROTO_MAGIC &&
              hello->kshm_version == KSOCK_PROTO_V2) ||
             (hello->kshm_magic   == __swab32(LNET_PROTO_MAGIC) &&
-             hello->kshm_version == __swab32(KSOCK_PROTO_V2)))
+             hello->kshm_version == __swab32(KSOCK_PROTO_V2))) {
+#if SOCKNAL_VERSION_DEBUG
+                if (*ksocknal_tunables.ksnd_protocol != 2)
+                        return NULL;
+#endif
                 return &ksocknal_protocol_v2x;
+        }
 
         if (hello->kshm_magic == le32_to_cpu(LNET_PROTO_TCP_MAGIC)) {
                 lnet_magicversion_t *hmv = (lnet_magicversion_t *)hello;
@@ -2071,7 +2076,7 @@ ksocknal_unpack_msg_v2(ksock_msg_t *msg)
         return;  /* Do nothing */
 }
 
-ksock_protocol_t  ksocknal_protocol_v1x =
+ksock_proto_t  ksocknal_protocol_v1x =
 {
         KSOCK_PROTO_V1,
         ksocknal_send_hello_v1,
@@ -2080,7 +2085,7 @@ ksock_protocol_t  ksocknal_protocol_v1x =
         ksocknal_unpack_msg_v1
 };
 
-ksock_protocol_t  ksocknal_protocol_v2x =
+ksock_proto_t  ksocknal_protocol_v2x =
 {
         KSOCK_PROTO_V2,
         ksocknal_send_hello_v2,
@@ -2137,15 +2142,22 @@ ksocknal_recv_hello (lnet_ni_t *ni, ksock_conn_t *conn,
                      ksock_hello_msg_t *hello, lnet_process_id_t *peerid,
                      __u64 *incarnation)
 {
+        /* Return < 0        fatal error
+         *        0          success
+         *        EALREADY   lost connection race
+         *        EPROTO     protocol version mismatch
+         */
         cfs_socket_t        *sock = conn->ksnc_sock;
-        int                  active;
+        int                  active = (conn->ksnc_proto != NULL);
         int                  timeout;
-        int                  match = 0;
+        int                  proto_match;
         int                  rc;
-        ksock_protocol_t    *proto;
+        ksock_proto_t       *proto;
         lnet_process_id_t    recv_id;
 
-        active = (peerid->nid != LNET_NID_ANY);
+        /* socket type set on active connections - not set on passive */
+        LASSERT (!active == !(conn->ksnc_type != SOCKLND_CONN_NONE));
+        
         timeout = active ? *ksocknal_tunables.ksnd_timeout :
                             lnet_acceptor_timeout();
 
@@ -2153,7 +2165,7 @@ ksocknal_recv_hello (lnet_ni_t *ni, ksock_conn_t *conn,
         if (rc != 0) {
                 CERROR ("Error %d reading HELLO from %u.%u.%u.%u\n",
                         rc, HIPQUAD(conn->ksnc_ipaddr));
-                LASSERT (rc < 0 && rc != -EALREADY);
+                LASSERT (rc < 0);
                 return rc;
         }
 
@@ -2185,7 +2197,7 @@ ksocknal_recv_hello (lnet_ni_t *ni, ksock_conn_t *conn,
                 if (rc != 0) {
                         CERROR ("Error %d reading HELLO from %u.%u.%u.%u\n",
                                 rc, HIPQUAD(conn->ksnc_ipaddr));
-                        LASSERT (rc < 0 && rc != -EALREADY);
+                        LASSERT (rc < 0);
                         return rc;
                 }
         
@@ -2204,15 +2216,19 @@ ksocknal_recv_hello (lnet_ni_t *ni, ksock_conn_t *conn,
         if (rc != 0) {
                 CERROR ("Error %d reading HELLO from %u.%u.%u.%u\n",
                         rc, HIPQUAD(conn->ksnc_ipaddr));
-                LASSERT (rc < 0 && rc != -EALREADY);
+                LASSERT (rc < 0);
                 return rc;
         }
 
-        proto = ksocknal_compat_protocol(hello);
+        proto = ksocknal_parse_proto_version(hello);
         if (proto == NULL) {
                 if (!active) { 
                         /* unknown protocol from peer, tell peer my protocol */
                         conn->ksnc_proto = &ksocknal_protocol_v2x;
+#if SOCKNAL_VERSION_DEBUG
+                        if (*ksocknal_tunables.ksnd_protocol != 2)
+                                conn->ksnc_proto = &ksocknal_protocol_v1x;
+#endif
                         hello->kshm_nips = 0;
                         ksocknal_send_hello(ni, conn, ni->ni_nid, hello);
                 }
@@ -2225,9 +2241,7 @@ ksocknal_recv_hello (lnet_ni_t *ni, ksock_conn_t *conn,
                 return -EPROTO;
         }
 
-        if (conn->ksnc_proto == proto)
-                match = 1;
-
+        proto_match = (conn->ksnc_proto == proto);
         conn->ksnc_proto = proto;
 
         /* receive the rest of hello message anyway */
@@ -2235,8 +2249,11 @@ ksocknal_recv_hello (lnet_ni_t *ni, ksock_conn_t *conn,
         if (rc != 0) {
                 CERROR("Error %d reading or checking hello from from %u.%u.%u.%u\n",
                        rc, HIPQUAD(conn->ksnc_ipaddr));
+                LASSERT (rc < 0);
                 return rc;
         }
+
+        *incarnation = hello->kshm_src_incarnation;
 
         if (hello->kshm_src_nid == LNET_NID_ANY) {
                 CERROR("Expecting a HELLO hdr with a NID, but got LNET_NID_ANY"
@@ -2259,10 +2276,23 @@ ksocknal_recv_hello (lnet_ni_t *ni, ksock_conn_t *conn,
 
         }
         
-        if (!active) {                          /* don't know peer's nid yet */
+        if (!active) {
                 *peerid = recv_id;
-        } else if (peerid->pid != recv_id.pid ||
-                   !lnet_ptlcompat_matchnid(peerid->nid, recv_id.nid)) {
+
+                /* peer determines type */
+                conn->ksnc_type = ksocknal_invert_type(hello->kshm_ctype);
+                if (conn->ksnc_type == SOCKLND_CONN_NONE) {
+                        CERROR ("Unexpected type %d from %s ip %u.%u.%u.%u\n",
+                                hello->kshm_ctype, libcfs_id2str(*peerid), 
+                                HIPQUAD(conn->ksnc_ipaddr));
+                        return -EPROTO;
+                }
+
+                return 0;
+        }
+
+        if (peerid->pid != recv_id.pid ||
+            !lnet_ptlcompat_matchnid(peerid->nid, recv_id.nid)) {
                 LCONSOLE_ERROR_MSG(0x130, "Connected successfully to %s on host"
                                    " %u.%u.%u.%u, but they claimed they were "
                                    "%s; please check your Lustre "
@@ -2273,30 +2303,18 @@ ksocknal_recv_hello (lnet_ni_t *ni, ksock_conn_t *conn,
                 return -EPROTO;
         }
 
-        if (conn->ksnc_type == SOCKLND_CONN_NONE) {
-                /* I've accepted this connection; peer determines type */
-                conn->ksnc_type = ksocknal_invert_type(hello->kshm_ctype);
-                if (conn->ksnc_type == SOCKLND_CONN_NONE) {
-                        CERROR ("Unexpected type %d from %s ip %u.%u.%u.%u\n",
-                                hello->kshm_ctype, libcfs_id2str(*peerid), 
-                                HIPQUAD(conn->ksnc_ipaddr));
-                        return -EPROTO;
-                }
-        } else if (hello->kshm_ctype == SOCKLND_CONN_NONE) {
-                if (match) {
-                        /* lost a connection race */
-                        return -EALREADY;
-                }
-                /* unmatched protocol get SOCKLND_CONN_NONE anyway */
-        } else if (ksocknal_invert_type(hello->kshm_ctype) != conn->ksnc_type) {
+        if (hello->kshm_ctype == SOCKLND_CONN_NONE) {
+                /* Possible protocol mismatch or I lost the connection race */
+                return proto_match ? EALREADY : EPROTO;
+        }
+
+        if (ksocknal_invert_type(hello->kshm_ctype) != conn->ksnc_type) {
                 CERROR ("Mismatched types: me %d, %s ip %u.%u.%u.%u %d\n",
                         conn->ksnc_type, libcfs_id2str(*peerid), 
                         HIPQUAD(conn->ksnc_ipaddr),
                         hello->kshm_ctype);
                 return -EPROTO;
         }
-
-        *incarnation = hello->kshm_src_incarnation;
 
         return 0;
 }
@@ -2373,7 +2391,6 @@ ksocknal_connect (ksock_route_t *route)
                         goto failed;
 
                 rc = ksocknal_create_conn(peer->ksnp_ni, route, sock, type);
-
                 if (rc < 0) {
                         lnet_connect_console_error(rc, peer->ksnp_id.nid,
                                                    route->ksnr_ipaddr, 
@@ -2381,13 +2398,9 @@ ksocknal_connect (ksock_route_t *route)
                         goto failed;
                 }
 
-                /* rc == EALREADY means I lost a connection race and my
-                 * peer is connecting to me.
-                 * rc == EPROTO means my peer is speaking an older 
-                 * protocol version. */
-                LASSERT (rc == 0 || rc == EALREADY || rc == EPROTO);
-
-                retry_later = rc != 0;
+                /* A +ve RC means I have to retry because I lost the connection
+                 * race or I have to renegotiate protocol version */
+                retry_later = (rc != 0);
                 if (retry_later)
                         CDEBUG(D_NET, "peer %s: conn race, retry later.\n",
                                libcfs_nid2str(peer->ksnp_id.nid));

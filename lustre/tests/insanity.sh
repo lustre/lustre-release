@@ -187,9 +187,11 @@ test_0() {
     echo "Waiting for df pid: $DFPID"
     wait $DFPID || { echo "df returned $?" && return 2; }
 
-    facet_failover ost2 || return 5
-    echo "Waiting for df pid: $DFPID"
-    wait $DFPID || { echo "df returned $?" && return 3; }
+    if [ $OSTCOUNT -gt 1 ]; then
+	facet_failover ost2 || return 5
+	echo "Waiting for df pid: $DFPID"
+	wait $DFPID || { echo "df returned $?" && return 3; }
+    fi
     return 0
 }
 run_test 0 "Fail all nodes, independently"
@@ -315,6 +317,8 @@ run_test 4 "Fourth Failure Mode: OST/MDS `date`"
 
 ############### Fifth Failure Mode ###############
 test_5() {
+    [ $OSTCOUNT -lt 1 ] && echo "skipping test_5, not enough OSTs" && return 0
+
     echo "Fifth Failure Mode: OST/OST `date`"
 
     #Create files

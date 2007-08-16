@@ -42,11 +42,14 @@ init_test_env() {
     export PATH=:$PATH:$LUSTRE/utils:$LUSTRE/tests
     export LCTL=${LCTL:-"$LUSTRE/utils/lctl"}
     [ ! -f "$LCTL" ] && export LCTL=$(which lctl) 
+    export LFS=${LFS:-"$LUSTRE/utils/lfs"}
+    [ ! -f "$LFS" ] && export LFS=$(which lfs) 
     export MKFS=${MKFS:-"$LUSTRE/utils/mkfs.lustre"}
     [ ! -f "$MKFS" ] && export MKFS=$(which mkfs.lustre) 
     export TUNEFS=${TUNEFS:-"$LUSTRE/utils/tunefs.lustre"}
     [ ! -f "$TUNEFS" ] && export TUNEFS=$(which tunefs.lustre) 
     export CHECKSTAT="${CHECKSTAT:-checkstat} "
+    export FSYTPE=${FSTYPE:-"ldiskfs"}
     export NAME=${NAME:-local}
     export LPROC=/proc/fs/lustre
 
@@ -74,7 +77,7 @@ init_test_env() {
 }
 
 case `uname -r` in
-2.4.*) EXT=".o"; USE_QUOTA=no;;
+2.4.*) EXT=".o"; USE_QUOTA=no; [ ! "$CLIENTONLY" ] && FSTYPE=ext3;;
     *) EXT=".ko"; USE_QUOTA=yes;;
 esac
 
@@ -104,8 +107,10 @@ load_modules() {
 
     echo Loading modules from $LUSTRE
     load_module ../lnet/libcfs/libcfs
-    [ -z "$LNETOPTS" ] && \
-        LNETOPTS=$(awk '/^options lnet/ { print $0}' /etc/modprobe.conf | sed 's/^options lnet //g')
+    [ -f /etc/modprobe.conf ] && MODPROBECONF=/etc/modprobe.conf
+    [ -f /etc/modprobe.d/Lustre ] && MODPROBECONF=/etc/modprobe.d/Lustre
+    [ -z "$LNETOPTS" -a -n "$MODPROBECONF" ] && \
+        LNETOPTS=$(awk '/^options lnet/ { print $0}' $MODPROBECONF | sed 's/^options lnet //g')
     echo "lnet options: '$LNETOPTS'"
     # note that insmod will ignore anything in modprobe.conf
     load_module ../lnet/lnet/lnet $LNETOPTS
@@ -118,14 +123,17 @@ load_modules() {
     load_module mdc/mdc
     load_module osc/osc
     load_module lov/lov
-    load_module mds/mds
-    [ "$FSTYPE" = "ldiskfs" ] && load_module ../ldiskfs/ldiskfs/ldiskfs
-    load_module lvfs/fsfilt_$FSTYPE
-    load_module ost/ost
-    load_module obdfilter/obdfilter
-    load_module llite/lustre
     load_module mgc/mgc
-    load_module mgs/mgs
+    if [ -z "$CLIENTONLY" ]; then
+        load_module mgs/mgs
+        load_module mds/mds
+        [ "$FSTYPE" = "ldiskfs" ] && load_module ../ldiskfs/ldiskfs/ldiskfs
+        load_module lvfs/fsfilt_$FSTYPE
+        load_module ost/ost
+        load_module obdfilter/obdfilter
+    fi
+
+    load_module llite/lustre
     rm -f $TMP/ogdb-`hostname`
     OGDB=$TMP
     [ -d /r ] && OGDB="/r/tmp"
@@ -358,8 +366,10 @@ wait_for() {
 
 client_df() {
     # not every config has many clients
-    if [ ! -z "$CLIENTS" ]; then
+    if [ -n "$CLIENTS" ]; then
         $PDSH $CLIENTS "df $MOUNT" > /dev/null
+    else
+	df $MOUNT > /dev/null
     fi
 }
 
@@ -388,7 +398,7 @@ facet_failover() {
     wait_for $facet
     local dev=${facet}_dev
     local opt=${facet}_opt
-    start $facet ${!dev} ${!opt}
+    start $facet ${!dev} ${!opt} || error "Restart of $facet failed"
 }
 
 obd_name() {
@@ -604,6 +614,7 @@ stopall() {
     # assume client mount is local 
     grep " $MOUNT " /proc/mounts && zconf_umount `hostname` $MOUNT $*
     grep " $MOUNT2 " /proc/mounts && zconf_umount `hostname` $MOUNT2 $*
+    [ "$CLIENTONLY" ] && return
     stop mds -f
     for num in `seq $OSTCOUNT`; do
         stop ost$num -f
@@ -803,6 +814,15 @@ pgcache_empty() {
     return 0
 }
 
+debugsave() {
+    DEBUGSAVE="$(sysctl -n lnet.debug)"
+}
+
+debugrestore() {
+    [ -n "$DEBUGSAVE" ] && sysctl -w lnet.debug="${DEBUGSAVE}"
+    DEBUGSAVE=""
+}
+
 ##################################
 # Test interface 
 error() {
@@ -812,6 +832,7 @@ error() {
     ERRLOG=$TMP/lustre_${TESTSUITE}_${TESTNAME}.$(date +%s)
     echo "Dumping lctl log to $ERRLOG"
     $LCTL dk $ERRLOG
+    debugrestore
     exit 1
 }
 
@@ -916,3 +937,15 @@ canonical_path() {
     (cd `dirname $1`; echo $PWD/`basename $1`)
 }
 
+########################
+# helper functions
+
+osc_to_ost()
+{
+    osc=$1
+    ost=`echo $1 | awk -F_ '{print $3}'`
+    if [ -z $ost ]; then
+        ost=`echo $1 | sed 's/-osc.*//'`
+    fi
+    echo $ost
+}

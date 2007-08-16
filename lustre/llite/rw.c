@@ -20,7 +20,7 @@
  *   along with Lustre; if not, write to the Free Software
  *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
-#ifdef HAVE_KERNEL_CONFIG_H
+#ifndef AUTOCONF_INCLUDED
 #include <linux/config.h>
 #endif
 #include <linux/kernel.h>
@@ -139,8 +139,9 @@ void ll_truncate(struct inode *inode)
          * race condition. */
         lov_stripe_lock(lli->lli_smd);
         inode_init_lvb(inode, &lvb);
-        obd_merge_lvb(ll_i2obdexp(inode), lli->lli_smd, &lvb, 0);
-        if (lvb.lvb_size == inode->i_size) {
+        rc = obd_merge_lvb(ll_i2obdexp(inode), lli->lli_smd, &lvb, 0);
+        oa.o_blocks = lvb.lvb_blocks;
+        if (lvb.lvb_size == inode->i_size && rc == 0) {
                 CDEBUG(D_VFSTRACE, "skipping punch for obj "LPX64", %Lu=%#Lx\n",
                        lli->lli_smd->lsm_object_id,inode->i_size,inode->i_size);
                 lov_stripe_unlock(lli->lli_smd);
@@ -492,16 +493,18 @@ int llap_shrink_cache(struct ll_sb_info *sbi, int shrink_fraction)
                         continue;
                 }
 
-               keep = (llap->llap_write_queued || PageDirty(page) ||
-                      PageWriteback(page) || (!PageUptodate(page) &&
-                      llap->llap_origin != LLAP_ORIGIN_READAHEAD));
+                if (llap->llap_write_queued || PageDirty(page) ||
+                    (!PageUptodate(page) &&
+                     llap->llap_origin != LLAP_ORIGIN_READAHEAD))
+                        keep = 1;
+                else
+                        keep = 0;
 
-                LL_CDEBUG_PAGE(D_PAGE, page,"%s LRU page: %s%s%s%s%s origin %s\n",
+                LL_CDEBUG_PAGE(D_PAGE, page,"%s LRU page: %s%s%s%s origin %s\n",
                                keep ? "keep" : "drop",
                                llap->llap_write_queued ? "wq " : "",
                                PageDirty(page) ? "pd " : "",
                                PageUptodate(page) ? "" : "!pu ",
-                               PageWriteback(page) ? "wb" : "",
                                llap->llap_defer_uptodate ? "" : "!du",
                                llap_origins[llap->llap_origin]);
 
@@ -591,7 +594,7 @@ static struct ll_async_page *llap_from_page(struct page *page, unsigned origin)
         if (sbi->ll_async_page_count >= sbi->ll_async_page_max)
                 llap_shrink_cache(sbi, 0);
 
-        OBD_SLAB_ALLOC(llap, ll_async_page_slab, GFP_KERNEL,
+        OBD_SLAB_ALLOC(llap, ll_async_page_slab, CFS_ALLOC_STD,
                        ll_async_page_slab_size);
         if (llap == NULL)
                 RETURN(ERR_PTR(-ENOMEM));
@@ -857,6 +860,9 @@ int ll_ap_completion(void *data, int cmd, struct obdo *oa, int rc)
         } else {
                 if (cmd & OBD_BRW_READ) {
                         llap->llap_defer_uptodate = 0;
+                } else {
+                        ll_redirty_page(page);
+                        ret = 1;
                 }
                 SetPageError(page);
         }
@@ -1383,9 +1389,7 @@ out:
                 if (PageWriteback(page)) {
                         end_page_writeback(page);
                 }
-                /* resend page only for not started IO*/
-                if (!PageError(page))
-                        ll_redirty_page(page);
+                ll_redirty_page(page);
                 unlock_page(page);
         }
         RETURN(rc);

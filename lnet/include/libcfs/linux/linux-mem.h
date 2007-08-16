@@ -43,9 +43,6 @@ typedef struct page                     cfs_page_t;
 #define CFS_PAGE_SHIFT                  PAGE_CACHE_SHIFT
 #define CFS_PAGE_MASK                   (~((__u64)CFS_PAGE_SIZE-1))
 
-cfs_page_t *cfs_alloc_page(unsigned int flags);
-#define cfs_free_page(p)		__free_pages(p, 0)
-
 static inline void *cfs_page_address(cfs_page_t *page)
 {
         /*
@@ -86,6 +83,13 @@ extern void  cfs_free(void *addr);
 
 extern void *cfs_alloc_large(size_t nr_bytes);
 extern void  cfs_free_large(void *addr);
+
+extern cfs_page_t *cfs_alloc_pages(unsigned int flags, unsigned int order);
+extern void __cfs_free_pages(cfs_page_t *page, unsigned int order);
+
+#define cfs_alloc_page(flags)  cfs_alloc_pages(flags, 0)
+#define __cfs_free_page(page)  __cfs_free_pages(page, 0)
+#define cfs_free_page(p)       __free_pages(p, 0)
 
 /*
  * In Linux there is no way to determine whether current execution context is

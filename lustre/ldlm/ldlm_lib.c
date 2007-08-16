@@ -36,6 +36,7 @@
 #include <lustre_mds.h>
 #include <lustre_dlm.h>
 #include <lustre_net.h>
+#include "ldlm_internal.h"
 
 /* @priority: if non-zero, move the selected to the list head
  * @create: if zero, only search in existed connections
@@ -355,6 +356,7 @@ int client_connect_import(struct lustre_handle *dlm_handle,
         struct obd_import *imp = cli->cl_import;
         struct obd_export *exp;
         struct obd_connect_data *ocd;
+        struct ldlm_namespace *to_be_freed = NULL;
         int rc;
         ENTRY;
 
@@ -404,7 +406,8 @@ int client_connect_import(struct lustre_handle *dlm_handle,
 
         if (rc) {
 out_ldlm:
-                ldlm_namespace_free(obd->obd_namespace, 0);
+                ldlm_namespace_free_prior(obd->obd_namespace);
+                to_be_freed = obd->obd_namespace;
                 obd->obd_namespace = NULL;
 out_disco:
                 cli->cl_conn_count--;
@@ -414,6 +417,8 @@ out_disco:
         }
 out_sem:
         mutex_up(&cli->cl_sem);
+        if (to_be_freed)
+                ldlm_namespace_free_post(to_be_freed, 0);
         return rc;
 }
 
@@ -422,6 +427,7 @@ int client_disconnect_export(struct obd_export *exp)
         struct obd_device *obd = class_exp2obd(exp);
         struct client_obd *cli;
         struct obd_import *imp;
+        struct ldlm_namespace *to_be_freed = NULL;
         int rc = 0, err;
         ENTRY;
 
@@ -458,16 +464,17 @@ int client_disconnect_export(struct obd_export *exp)
         (void)ptlrpc_pinger_del_import(imp);
 
         if (obd->obd_namespace != NULL) {
-                /* obd_no_recov == local only */
+                /* obd_force == local only */
                 ldlm_cli_cancel_unused(obd->obd_namespace, NULL,
-                                       obd->obd_no_recov ? LDLM_FL_LOCAL_ONLY:0,
+                                       obd->obd_force ? LDLM_FL_LOCAL_ONLY:0,
                                        NULL);
-                ldlm_namespace_free(obd->obd_namespace, obd->obd_no_recov);
+                ldlm_namespace_free_prior(obd->obd_namespace);
+                to_be_freed = obd->obd_namespace;
                 obd->obd_namespace = NULL;
         }
 
-        /* Yeah, obd_no_recov also (mainly) means "forced shutdown". */
-        if (!obd->obd_no_recov)
+        /* Yeah, obd_force means "forced shutdown". */
+        if (!obd->obd_force)
                 rc = ptlrpc_disconnect_import(imp, 0);
 
         ptlrpc_invalidate_import(imp);
@@ -482,6 +489,8 @@ int client_disconnect_export(struct obd_export *exp)
                 rc = err;
  out_sem:
         mutex_up(&cli->cl_sem);
+        if (to_be_freed)
+                ldlm_namespace_free_post(to_be_freed, obd->obd_no_recov);
         RETURN(rc);
 }
 
@@ -694,6 +703,12 @@ int target_handle_connect(struct ptlrpc_request *req, svc_handler_t handler)
                   class_export_put(export);
                   export = NULL;
                   rc = -EALREADY;
+        } else if (export != NULL && export->exp_failed) { /* bug 11327 */
+                CDEBUG(D_HA, "%s: exp %p evict in progress - new cookie needed "
+                      "for connect\n", export->exp_obd->obd_name, export);
+                class_export_put(export);
+                export = NULL;
+                rc = -ENODEV;
         } else if (export != NULL) {
                 spin_lock(&export->exp_lock);
                 export->exp_connecting = 1;
@@ -812,7 +827,7 @@ int target_handle_connect(struct ptlrpc_request *req, svc_handler_t handler)
                        cluuid.uuid, libcfs_nid2str(req->rq_peer.nid),
                        export->exp_conn_cnt,
                        lustre_msg_get_conn_cnt(req->rq_reqmsg));
-                       
+
                 spin_unlock(&export->exp_lock);
                 GOTO(out, rc = -EALREADY);
         }
@@ -839,8 +854,8 @@ int target_handle_connect(struct ptlrpc_request *req, svc_handler_t handler)
         spin_lock(&target->obd_dev_lock);
         /* Export might be hashed already, e.g. if this is reconnect */
         if (hlist_unhashed(&export->exp_nid_hash))
-                lustre_hash_additem(export->exp_obd->obd_nid_hash_body, 
-                                    &export->exp_connection->c_peer.nid, 
+                lustre_hash_additem(export->exp_obd->obd_nid_hash_body,
+                                    &export->exp_connection->c_peer.nid,
                                     &export->exp_nid_hash);
         spin_unlock(&target->obd_dev_lock);
 
@@ -875,7 +890,7 @@ out:
                 export->exp_connecting = 0;
                 spin_unlock(&export->exp_lock);
 	}
-        if (targref) 
+        if (targref)
                 class_decref(targref);
         if (rc)
                 req->rq_status = rc;

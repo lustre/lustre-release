@@ -1,9 +1,207 @@
+2007-08-27         Cluster File Systems, Inc. <info@clusterfs.com>
+       * version 1.6.2
+       * Support for kernels:
+        2.6.5-7.286 (SLES 9),
+        2.6.9-55.0.2.EL (RHEL 4),
+        2.6.16.46-0.14 (SLES 10),
+        2.6.18-8.1.8.el5 (RHEL 5),
+        2.6.18.8 vanilla (kernel.org)
+       * Client support for unpatched kernels:
+        (see http://wiki.lustre.org/index.php?title=Patchless_Client)
+        2.6.16 - 2.6.22 vanilla (kernel.org)
+       * Due to recently discovered recovery problems, we do not recommend
+        using patchless RHEL 4 clients with this or any earlier release.
+       * Recommended e2fsprogs version: 1.39.cfs8
+       * Note that reiserfs quotas are disabled on SLES 10 in this kernel.
+
+Severity   : minor
+Bugzilla   : 13147
+Description: block reactivating mgc import until all deactivates complete
+Details    : Fix race when failing back MDT/MGS to itself (testing)
+
+Severity   : enhancement
+Bugzilla   : 12786
+Description: lfs setstripe enhancement
+Details    : Make lfs setstripe understand 'k', 'm' and 'g' for stripe size.
+
+Severity   : normal
+Frequency  : mds/oss recovery 
+Bugzilla   : 10800
+Description: llog ctxt is refrenced after it has been freed. 
+Details    : llog ctxt refcount was added to avoide the race between ctxt free
+	     and llog recovery process. Each llog user must hold ctxt refcount
+	     before it access the llog. And the llog ctxt can only be freed
+	     when its refcount is zero.
+
+Severity   : enhancement
+Bugzilla   : 12211
+Description: randomly memory allocation failure util
+Details    : Make lustre randomly failed allocating memory for testing purpose.
+
+Severity   : normal
+Frequency  : only for SLES10
+Bugzilla   : 12771
+Description: Update kernel patch for SLES10 SP1
+Details    : Add patch blkdev_tunables-2.6-sles10.patch to 2.6-sles10.series.
+
+Severity   : enhancement
+Bugzilla   : 10786/9303
+Description: omit set fsid for export NFS
+Details    : fix set/restore device id for avoid EMFILE error and mark lustre fs
+	     as FS_REQUIRES_DEV for avoid problems with generate fsid.
+
+Severity   : major
+Bugzilla   : 12769
+Description: Add sync option to mount_lustre.c
+Details    : Client loses data written to lustre after a network interruption.
+
+Severity   : normal
+Bugzilla   : 10595
+Description: Error message improvement.
+Details    : Merging of two LCONSOLE_ERROR_MSG into one.
+
+Severity   : normal
+Bugzilla   : 12606
+Description: don't use GFP_* in generic Lustre code.
+Details    : Use cfs_alloc_* functions and CFS_* flags for code portability.
+
+Severity   : normal
+Bugzilla   : 12333
+Description: obdclass is limited by single OBD_ALLOC(idarray)
+Details    : replace OBD_ALLOC/OBD_FREE with OBD_VMALLOC/OBD_VFREE
+
+Severity   : normal
+Bugzilla   : 12415
+Description: updated patchess for new RHEL4 kernel
+Details    : Fixed ext3-unlink-race.patch per Kalpak's comment.
+
+Severity   : normal
+Bugzilla   : 13006
+Description: warnings with build patchless client with vanila 2.6.19 and up
+Details    : change old ctl_table style and replace ctl_table/ctl_table_header 
+	     with cfs_sysctl_table_t/cfs_sysctl_table_header_t
+
+Severity   : major
+Bugzilla   : 13093
+Description: O_DIRECT bypasses client statistics.
+Details    : When running with O_DIRECT I/O, neither the client rpc_stats nor 
+	     read_ahead_stats were updated. Copied stats section from 
+	     osc_send_oap_rpc() into async_internal().
+
+Severity   : minor
+Bugzilla   : 11706
+Frequency  : only for Cray XT3
+Description: peer credits not enough on many OST per OSS systems.
+Details    : Use new lnet way to add credits as we need those for pings and ASTs
+
+Severity   : minor
+Bugzilla   : 12790
+Frequency  : only with liblustre
+Description: Liblustre is not releasing flock locks on file close.
+Details    : Release flock locks on file close.
+
+Severity   : minor
+Bugzilla   : 12839
+Frequency  : only for RHEL4
+Description: Update kernel patches for kernel-2.6.9-55.0.2.EL
+Details    : Remove inode-nr_unused-2.6.9-rhel4.patch from 2.6-rhel4.series
+	     Update target file and kernel config.
+
+Severity   : normal
+Bugzilla   : 11802
+Description: lustre support for RHEL5
+Details    : Add support for RHEL5.
+
+Severity   : minor
+Bugzilla   : 11327
+Frequency  : rare
+Description: ASSERTION(export != NULL) failed in target_handle_connect
+Details    : Assetion hit is result of rare race between disconnect and connet
+	     to same nid. target_handle_connect found old connect cockie and
+	     tried to reconnect, but can't find export for this cockie.
+
+Severity   : normal
+Bugzilla   : 11756
+Frequency  : rare
+Description: umount blocks forever on error
+Details    : In result of wrong using obd_no_recov and obd_force flags client
+	     can hand if cancel or some other requests is lost.
+
+Severity   : normal
+Bugzilla   : 13177
+Frequency  : Only for SLES
+Description: sanity_quota fail test_1
+Details    : There are multiple occurences of $TSTUSR in SLES's /etc/group
+	     file, which makes TSTID[2] inunique.
+
+Severity   : normal
+Bugzilla   : 13249
+Frequency  : Only for SLES9
+Description: Kernel patches for SLES9 2.6.5-7.286 kernel
+Details    : Update target/ChangeLog/which_patch .
+
+Severity   : normal
+Bugzilla   : 13170
+Frequency  : Only for test_10 in sanity-quota.sh
+Description: a bug in quota test code
+Details    : checking a test flag in a wrong place
+
+Severity   : normal
+Bugzilla   : 13171
+Frequency  : Only for test_13 in sanity-quota.sh
+Description: a bug in quota test script
+Details    : shouldn't check overfull allocated quota
+
+Severity   : normal
+Bugzilla   : 12955
+Description: jbd statistics
+Details    : Port older jbd statistics patch for sles10
+
+Severity   : normal
+Bugzilla   : 9977
+Frequency  : rare
+Description: lvbo_init failed for resource with missing objects.
+Details    : Fix returning error if we do stat for file with missing/corrupted
+             objects and i_size set to all sum of size of all avaible objects.
+	     if we to truncate/write to missing object - it is recreated.
+
+Severity   : minor
+Bugzilla   : 13276
+Frequency  : rare
+Description: Oops in read and write path when failing to allocate lock.
+Details    : Check if lock allocation failed and return error back.
+
+Severity   : normal
+Bugzilla   : 13103
+Frequency  : When flocks are used.
+Description: assertion failure in ldlm_cli_enquque_fini for non NULL lock.
+Details    : Flock locks might destroy just granted lock if it could be merged
+             with another existing flock, this is done in completion handler,
+	     so teach ldlm_cli_enquque_fini that this is a valid case for
+	     flock locks.
+
+Severity   : normal
+Bugzilla   : 11974
+Frequency  : Rare
+Description: reply_lock_interpret crash due to race with it and lock cancel.
+Details    : Do not replay locks that are being cancelled. Do not reference
+             locks by their address during replay, just by their handle.
+
+
+Severity   : normal 
+Bugzilla   : 11679
+Description: lstripe command fails for valid OST index
+Details    : The stripe offset is compared to 'lov->desc.ld_tgt_count' 
+	     instead of lov->desc.ld_active_tgt_count.
+
+--------------------------------------------------------------------------------
+
 2007-07-30         Cluster File Systems, Inc. <info@clusterfs.com>
        * version 1.6.1
        * Support for kernels:
-        2.6.5-7.283 (SLES 9)
-        2.6.9-55.EL (RHEL 4)
-        2.6.16.46-0.14 (SLES 10)
+        2.6.5-7.283 (SLES 9),
+        2.6.9-55.EL (RHEL 4),
+        2.6.16.46-0.14 (SLES 10),
         2.6.18.8 vanilla (kernel.org)
        * Client support for unpatched kernels:
         (see http://wiki.lustre.org/index.php?title=Patchless_Client)
@@ -17,7 +215,13 @@
         should be installed.  It is versioned separately from Lustre and
         may be released separately in future.
 
-
+Severity   : normal
+Frequency  : rare
+Bugzilla   : 13129
+Description: server LBUG when shutting down
+Details    : Block umount forever until the mount refcount is zero rather
+	     than giving up after an arbitrary timeout.
+	
 Severity   : enhancement
 Bugzilla   : 12194
 Description: add optional extra BUILD_VERSION info
@@ -155,10 +359,8 @@ Details    : in some rare cases it was possible for a client to connect to
 
 Severity   : enhancement
 Bugzilla   : 11563
-Description: Add -o localflock option to simulate  old noflock
-behaviour.
-Details    : This will achieve local-only flock/fcntl locks
-	     coherentness.
+Description: Add -o localflock option to simulate old noflock behaviour.
+Details    : This will achieve local-only flock/fcntl locks coherentness.
 
 Severity   : minor
 Frequency  : rare
@@ -174,9 +376,9 @@ Details    : ptlrpc_check_set wrongly uses req->rq_lock for proctect add to
 	     imp_delayed_list, in this place should be used imp_lock.
 
 Severity   : normal
-Frequency  : when reconnection
+Frequency  : when reconnecting
 Bugzilla   : 11662
-Description: Grant Leak when osc reconnect to OST
+Description: Grant leak when OSC reconnect to OST
 Details    : When osc reconnect ost, OST(filter) should check whether it
 	     should grant more space to client by comparing fed_grant and
 	     cl_avail_grant, and return the granted space to client instead
@@ -184,10 +386,10 @@ Details    : When osc reconnect ost, OST(filter) should check whether it
 	     to update the client grant space info.
 
 Severity   : normal
-Frequency  : when client reconnect to OST 
+Frequency  : when client reconnects to OST 
 Bugzilla   : 11662
-Description: Grant Leak when osc do resend and replay bulk write
-Details	   : When osc reconnect to OST, OST(filter)should clear grant info of
+Description: Grant leak when OSC does a resend and replays bulk write
+Details	   : When osc reconnect to OST, OST(filter) should clear grant info of
 	     bulk write request, because the grant info while be sync between
 	     OSC and OST when reconnect, and we should ignore the grant info
 	     these of resend/replay write req.
@@ -195,7 +397,7 @@ Details	   : When osc reconnect to OST, OST(filter)should clear grant info of
 Severity   : normal
 Frequency  : rare 
 Bugzilla   : 11662
-Description: Grant space more than avaiable left space sometimes.
+Description: Grant space more than avaiable space sometimes.
 Details	   : When then OST is about to be full, if two bulk writing from
 	     different clients came to OST. Accord the avaliable space of the
 	     OST, the first req should be permitted, and the second one
@@ -247,13 +449,13 @@ Details    : Lov_mds_md was not free in an error handler in mds_create_object.
 	     be freed no matter whether fsfilt_commit success or not.
 
 Severity   : minor
-Frequency  : only with huge count clients
+Frequency  : only with huge numbers of clients
 Bugzilla   : 11817
 Description: Prevents from taking the superblock lock in llap_from_page for 
 	     a soon died page.
 Details    : using LL_ORIGIN_REMOVEPAGE origin flag instead of LL_ORIGIN_UNKNOW 
-	     for llap_from_page call in ll_removepage prevents from taking the 
-	     superblock lock for a soon died page.
+	     for llap_from_page call in ll_removepage() prevents from taking
+	     the superblock lock for a soon died page.
 
 Severity   : normal
 Frequency  : rare
@@ -367,14 +569,6 @@ Description: add configure check for truncate_complete_page
 Details    : improve checks for exported symbols. This allow run check without
 	     sources, but with Module.symvers shipped with kernel distribution.
 	     add check for truncate_complete_page used by patchless client.
-
-Severity   : major
-Bugzilla   : 11710
-Frequency  : always
-Description: improve handling recoverable errors
-Details    : if request processig with error which can be recoverable on server
-	     request should be resend, otherwise page released from cache and
-	     marked as error.
 
 Severity   : normal
 Bugzilla   : 12646
@@ -589,7 +783,35 @@ Details    : If a OST has no remain object, system will block on the creating
 	     pre-created objects when available, instead of blocking on an
 	     empty osc while others are not empty.  If we must block, we block
 	     for the shortest possible period of time.
-	     
+
+Severity   : normal
+Bugzilla   : 13148
+Frequency  : only in recovery
+Description: Mark OST as early accessible if his start SYNC.
+Details    : osc_precreate return flag early accessible if oscc marked as 
+	     OSCC_FLAG_SYNC_IN_PROGRESS.
+
+Severity   : normal
+Bugzilla   : 13196
+Frequency  : rare
+Description: Sometimes precreate code can triger create object on wrong ost
+Details    : Wrong protected or not not restored variables aftre precreate loop
+	     can produce creation object on wrong ost.
+	
+Severity   : normal
+Frequency  : oss recovery 
+Bugzilla   : 10800
+Description: llog_commit_thread cleanup should sync with llog_commit_thread
+	     start
+Details    : llog_commit_thread_count should be synced between llog_commit
+	     start and cleanup, so new llog_commit thread should not be started 
+	     when llog_commit threads being stopped to avoid accessing some 
+	     freed stuff.
+
+Severity   : enhancement
+Bugzilla   : 11721
+Description: Add printing inode info into message about error in writepage.
+
 --------------------------------------------------------------------------------
 
 2007-05-03  Cluster File Systems, Inc. <info@clusterfs.com>
@@ -617,7 +839,7 @@ Frequency  : always
 Bugzilla   : 12848
 Description: sanity.sh fail: test_52b
 Details    : The ll_inode_to_ext_flags() has a glitch which makes MDS return
-             incorrect inode's flags to client.
+	     incorrect inode's flags to client.
 
 --------------------------------------------------------------------------------
 
@@ -631,14 +853,14 @@ Details    : The ll_inode_to_ext_flags() has a glitch which makes MDS return
 	 this release.  See https://mail.clusterfs.com/wikis/lustre/MountConf
 	 for details.
        * Support for kernels:
-        2.4.21-47.0.1.EL (RHEL 3)
-        2.6.5-7.283 (SLES 9)
-        2.6.9-42.0.10.EL (RHEL 4)
-        2.6.12.6 vanilla (kernel.org)
+        2.4.21-47.0.1.EL (RHEL 3),
+        2.6.5-7.283 (SLES 9),
+        2.6.9-42.0.10.EL (RHEL 4),
+        2.6.12.6 vanilla (kernel.org),
         2.6.16.27-0.9 (SLES10)
        * Client support for unpatched kernels:
         (see https://mail.clusterfs.com/wikis/lustre/PatchlessClient)
-        2.6.16 - 2.6.19 vanilla (kernel.org)
+        2.6.16 - 2.6.19 vanilla (kernel.org),
         2.6.9-42.0.8EL (RHEL 4)
        * Recommended e2fsprogs version: 1.39.cfs6
        * Note that reiserfs quotas are disabled on SLES 10 in this kernel

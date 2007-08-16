@@ -491,8 +491,10 @@ connection force_tcp_connection(manager    m,
     }
     
     /* say hello */
-    if (tcpnal_hello(fd, nid))
+    if (tcpnal_hello(fd, nid)) {
+            close(fd);
             goto out;
+    }
     
     conn = allocate_connection(m, nid, fd);
     

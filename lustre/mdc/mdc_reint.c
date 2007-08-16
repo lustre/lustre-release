@@ -28,7 +28,7 @@
 #define DEBUG_SUBSYSTEM S_MDC
 
 #ifdef __KERNEL__
-#ifdef HAVE_KERNEL_CONFIG_H
+#ifndef AUTOCONF_INCLUDED
 # include <linux/config.h>
 #endif
 # include <linux/module.h>
@@ -127,7 +127,7 @@ int mdc_setattr(struct obd_export *exp, struct mdc_op_data *op_data,
         }
         req = ptlrpc_prep_req(class_exp2cliimp(exp), LUSTRE_MDS_VERSION,
                               MDS_REINT, bufcount, size, NULL);
-        if (req)
+        if (exp_connect_cancelset(exp) && req)
                 ldlm_cli_cancel_list(&cancels, count, req, REQ_REC_OFF + 3);
         else
                 ldlm_lock_list_put(&cancels, l_bl_ast, count);
@@ -186,7 +186,7 @@ int mdc_create(struct obd_export *exp, struct mdc_op_data *op_data,
         }
         req = ptlrpc_prep_req(class_exp2cliimp(exp), LUSTRE_MDS_VERSION,
                               MDS_REINT, bufcount, size, NULL);
-        if (req)
+        if (exp_connect_cancelset(exp) && req)
                 ldlm_cli_cancel_list(&cancels, count, req, REQ_REC_OFF + 3);
         else
                 ldlm_lock_list_put(&cancels, l_bl_ast, count);
@@ -242,7 +242,7 @@ int mdc_unlink(struct obd_export *exp, struct mdc_op_data *op_data,
         }
         req = ptlrpc_prep_req(class_exp2cliimp(exp), LUSTRE_MDS_VERSION,
                               MDS_REINT, bufcount, size, NULL);
-        if (req)
+        if (exp_connect_cancelset(exp) && req)
                 ldlm_cli_cancel_list(&cancels, count, req, REQ_REC_OFF + 2);
         else
                 ldlm_lock_list_put(&cancels, l_bl_ast, count);
@@ -286,7 +286,7 @@ int mdc_link(struct obd_export *exp, struct mdc_op_data *op_data,
         }
         req = ptlrpc_prep_req(class_exp2cliimp(exp), LUSTRE_MDS_VERSION,
                               MDS_REINT, bufcount, size, NULL);
-        if (req)
+        if (exp_connect_cancelset(exp) && req)
                 ldlm_cli_cancel_list(&cancels, count, req, REQ_REC_OFF + 2);
         else
                 ldlm_lock_list_put(&cancels, l_bl_ast, count);
@@ -336,7 +336,7 @@ int mdc_rename(struct obd_export *exp, struct mdc_op_data *op_data,
         }
         req = ptlrpc_prep_req(class_exp2cliimp(exp), LUSTRE_MDS_VERSION,
                               MDS_REINT, bufcount, size, NULL);
-        if (req)
+        if (exp_connect_cancelset(exp) && req)
                 ldlm_cli_cancel_list(&cancels, count, req, REQ_REC_OFF + 3);
         else
                 ldlm_lock_list_put(&cancels, l_bl_ast, count);

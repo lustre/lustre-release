@@ -182,6 +182,7 @@ static const struct opt_map opt_map[] = {
   { "nosuid",   0, MS_NOSUID },      /* don't honor suid executables */
   { "dev",      1, MS_NODEV  },      /* interpret device files  */
   { "nodev",    0, MS_NODEV  },      /* don't interpret devices */
+  { "sync",     0, MS_SYNCHRONOUS},  /* synchronous I/O */
   { "async",    1, MS_SYNCHRONOUS},  /* asynchronous I/O */
   { "auto",     0, 0         },      /* Can be mounted using -a */
   { "noauto",   0, 0         },      /* Can only be mounted explicitly */

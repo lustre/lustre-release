@@ -1965,6 +1965,7 @@ static int lov_cancel(struct obd_export *exp, struct lov_stripe_md *lsm,
         struct list_head *pos;
         struct lov_obd *lov = &exp->exp_obd->u.lov;
         struct lustre_handle *lov_lockhp;
+        ldlm_mode_t this_mode;
         int err = 0, rc = 0;
         ENTRY;
 
@@ -1983,8 +1984,17 @@ static int lov_cancel(struct obd_export *exp, struct lov_stripe_md *lsm,
                 req = list_entry(pos, struct lov_request, rq_link);
                 lov_lockhp = set->set_lockh->llh_handles + req->rq_stripe;
 
+                /* If this lock was used for a write or truncate, the object
+                 * will have been recreated by the OST, cancel the lock
+                 * (setting LCK_GROUP incidentally causes immediate cancel). */
+                if (OST_LVB_IS_ERR(lsm->lsm_oinfo[req->rq_stripe]->loi_lvb.lvb_blocks) &&
+                    (mode == LCK_PW || mode == LCK_CW))
+                        this_mode = LCK_GROUP;
+                else
+                        this_mode = mode;
+
                 rc = obd_cancel(lov->lov_tgts[req->rq_idx]->ltd_exp,
-                                req->rq_oi.oi_md, mode, lov_lockhp);
+                                req->rq_oi.oi_md, this_mode, lov_lockhp);
                 rc = lov_update_common_set(set, req, rc);
                 if (rc) {
                         CERROR("error: cancel objid "LPX64" subobj "

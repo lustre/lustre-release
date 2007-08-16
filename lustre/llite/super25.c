@@ -41,7 +41,7 @@ static struct inode *ll_alloc_inode(struct super_block *sb)
 {
         struct ll_inode_info *lli;
         ll_stats_ops_tally(ll_s2sbi(sb), LPROC_LL_ALLOC_INODE, 1);
-        OBD_SLAB_ALLOC(lli, ll_inode_cachep, GFP_KERNEL, sizeof *lli);
+        OBD_SLAB_ALLOC_PTR(lli, ll_inode_cachep);
         if (lli == NULL)
                 return NULL;
 
@@ -54,7 +54,7 @@ static struct inode *ll_alloc_inode(struct super_block *sb)
 static void ll_destroy_inode(struct inode *inode)
 {
         struct ll_inode_info *ptr = ll_i2info(inode);
-        OBD_SLAB_FREE(ptr, ll_inode_cachep, sizeof(*ptr));
+        OBD_SLAB_FREE_PTR(ptr, ll_inode_cachep);
 }
 
 int ll_init_inodecache(void)
@@ -154,7 +154,7 @@ static void __exit exit_lustre_lite(void)
                 LASSERTF(rc == 0, "couldn't destroy ll_async_page slab\n");
         }
 
-        if (proc_lustre_fs_root) 
+        if (proc_lustre_fs_root)
                 lprocfs_remove(&proc_lustre_fs_root);
 }
 

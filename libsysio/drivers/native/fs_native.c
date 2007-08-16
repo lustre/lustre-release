@@ -969,7 +969,7 @@ native_ifilldirentries(struct native_inode *nino,
 	int	err;
 	ssize_t	cc;
 #if defined(SYSIO_SYS_getdirentries)
-	_SYSIO_OFF_T	waste;
+	_SYSIO_OFF_T	waste=*posp;
 #endif
 
 	if (*posp < 0)

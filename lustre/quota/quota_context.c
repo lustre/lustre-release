@@ -55,7 +55,8 @@ int should_translate_quota (struct obd_import *imp)
         ENTRY;
 
         LASSERT(imp);
-        if (imp->imp_connect_data.ocd_connect_flags & OBD_CONNECT_QUOTA64)
+        if ((imp->imp_connect_data.ocd_connect_flags & OBD_CONNECT_QUOTA64) && 
+            !OBD_FAIL_CHECK(OBD_FAIL_QUOTA_QD_COUNT_32BIT))
                 RETURN(0);
         else
                 RETURN(1);
@@ -290,7 +291,7 @@ static struct lustre_qunit *alloc_qunit(struct lustre_quota_ctxt *qctxt,
         struct lustre_qunit *qunit = NULL;
         ENTRY;
 
-        OBD_SLAB_ALLOC(qunit, qunit_cachep, GFP_NOFS, sizeof(*qunit));
+        OBD_SLAB_ALLOC(qunit, qunit_cachep, CFS_ALLOC_IO, sizeof(*qunit));
         if (qunit == NULL)
                 RETURN(NULL);
 
@@ -657,8 +658,7 @@ schedule_dqacq(struct obd_device *obd,
                  qdata->qd_count <= MAX_QUOTA_COUNT32,
                  "qd_count: "LPU64"; should_translate_quota: %d.\n",
                  qdata->qd_count, should_translate_quota(imp));
-        if (should_translate_quota(imp) ||
-            OBD_FAIL_CHECK(OBD_FAIL_QUOTA_QD_COUNT_32BIT))
+        if (should_translate_quota(imp))
         {
                 struct qunit_data_old *reqdata_old, *tmp;
                         

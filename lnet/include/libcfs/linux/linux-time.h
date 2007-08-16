@@ -73,7 +73,7 @@
 #define ONE_MILLION 1000000
 
 #ifdef __KERNEL__
-#ifdef HAVE_KERNEL_CONFIG_H
+#ifndef AUTOCONF_INCLUDED
 #include <linux/config.h>
 #endif
 #include <linux/module.h>

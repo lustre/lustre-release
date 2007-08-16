@@ -117,6 +117,8 @@ int llog_handle_connect(struct ptlrpc_request *req)
         ctxt = llog_get_context(obd, req_body->lgdc_ctxt_idx);
         rc = llog_connect(ctxt, 1, &req_body->lgdc_logid,
                           &req_body->lgdc_gen, NULL);
+
+        llog_ctxt_put(ctxt);
         if (rc != 0)
                 CERROR("failed at llog_relp_connect\n");
 

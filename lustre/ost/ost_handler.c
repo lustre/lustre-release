@@ -880,8 +880,6 @@ static int ost_brw_write(struct ptlrpc_request *req, struct obd_trans_info *oti)
 
         if (OBD_FAIL_CHECK(OBD_FAIL_OST_BRW_WRITE_BULK))
                 GOTO(out, rc = -EIO);
-        if (OBD_FAIL_CHECK(OBD_FAIL_OST_BRW_WRITE_BULK2))
-                GOTO(out, rc = -EFAULT);
 
         /* pause before transaction has been started */
         OBD_FAIL_TIMEOUT(OBD_FAIL_OST_BRW_PAUSE_BULK | OBD_FAIL_ONCE,
@@ -1615,7 +1613,7 @@ static void ost_thread_done(struct ptlrpc_thread *thread)
         if (tls != NULL) {
                 for (i = 0; i < OST_THREAD_POOL_SIZE; ++ i) {
                         if (tls->page[i] != NULL)
-                                __free_page(tls->page[i]);
+                                __cfs_free_page(tls->page[i]);
                 }
                 OBD_FREE_PTR(tls);
                 thread->t_data = NULL;
@@ -1646,7 +1644,7 @@ static int ost_thread_init(struct ptlrpc_thread *thread)
                  * populate pool
                  */
                 for (i = 0; i < OST_THREAD_POOL_SIZE; ++ i) {
-                        tls->page[i] = alloc_page(OST_THREAD_POOL_GFP);
+                        tls->page[i] = cfs_alloc_page(OST_THREAD_POOL_GFP);
                         if (tls->page[i] == NULL) {
                                 ost_thread_done(thread);
                                 result = -ENOMEM;
@@ -1671,11 +1669,6 @@ static int ost_setup(struct obd_device *obd, obd_count len, void *buf)
         rc = cleanup_group_info();
         if (rc)
                 RETURN(rc);
-
-        rc = llog_start_commit_thread();
-        if (rc < 0)
-                RETURN(rc);
-
         lprocfs_init_vars(ost, &lvars);
         lprocfs_obd_setup(obd, lvars.obd_vars);
 

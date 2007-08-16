@@ -452,12 +452,15 @@ int mds_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
         switch (cmd) {
         case OBD_IOC_RECORD: {
                 char *name = data->ioc_inlbuf1;
+                struct llog_ctxt *ctxt;
+
                 if (mds->mds_cfg_llh)
                         RETURN(-EBUSY);
 
+                ctxt = llog_get_context(obd, LLOG_CONFIG_ORIG_CTXT);
                 push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
-                rc = llog_create(llog_get_context(obd, LLOG_CONFIG_ORIG_CTXT),
-                                 &mds->mds_cfg_llh, NULL, name);
+                rc = llog_create(ctxt, &mds->mds_cfg_llh, NULL, name);
+                llog_ctxt_put(ctxt);
                 if (rc == 0)
                         llog_init_handle(mds->mds_cfg_llh, LLOG_F_IS_PLAIN,
                                          &cfg_uuid);
@@ -482,12 +485,14 @@ int mds_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
 
         case OBD_IOC_CLEAR_LOG: {
                 char *name = data->ioc_inlbuf1;
+                struct llog_ctxt *ctxt;
                 if (mds->mds_cfg_llh)
                         RETURN(-EBUSY);
 
+                ctxt = llog_get_context(obd, LLOG_CONFIG_ORIG_CTXT);
                 push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
-                rc = llog_create(llog_get_context(obd, LLOG_CONFIG_ORIG_CTXT),
-                                 &mds->mds_cfg_llh, NULL, name);
+                rc = llog_create(ctxt, &mds->mds_cfg_llh, NULL, name);
+                llog_ctxt_put(ctxt);
                 if (rc == 0) {
                         llog_init_handle(mds->mds_cfg_llh, LLOG_F_IS_PLAIN,
                                          NULL);
@@ -540,6 +545,7 @@ int mds_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
                 push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
                 rc = class_config_parse_llog(ctxt, data->ioc_inlbuf1, NULL);
                 pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
+                llog_ctxt_put(ctxt);
                 if (rc)
                         RETURN(rc);
 
@@ -552,6 +558,7 @@ int mds_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
                 push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
                 rc = class_config_dump_llog(ctxt, data->ioc_inlbuf1, NULL);
                 pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
+                llog_ctxt_put(ctxt);
                 if (rc)
                         RETURN(rc);
 
@@ -600,6 +607,7 @@ int mds_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
                 rc = llog_ioctl(ctxt, cmd, data);
                 pop_ctxt(&saved, &ctxt->loc_exp->exp_obd->obd_lvfs_ctxt, NULL);
                 llog_cat_initialize(obd, mds->mds_lov_desc.ld_tgt_count, NULL);
+                llog_ctxt_put(ctxt);
                 rc2 = obd_set_info_async(mds->mds_osc_exp,
                                          strlen(KEY_MDS_CONN), KEY_MDS_CONN,
                                          0, NULL, NULL);
@@ -615,6 +623,7 @@ int mds_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
                 push_ctxt(&saved, &ctxt->loc_exp->exp_obd->obd_lvfs_ctxt, NULL);
                 rc = llog_ioctl(ctxt, cmd, data);
                 pop_ctxt(&saved, &ctxt->loc_exp->exp_obd->obd_lvfs_ctxt, NULL);
+                llog_ctxt_put(ctxt);
 
                 RETURN(rc);
         }
@@ -633,7 +642,7 @@ int mds_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
 }
 
 /* Collect the preconditions we need to allow client connects */
-static void mds_allow_cli(struct obd_device *obd, unsigned int flag)
+static void mds_allow_cli(struct obd_device *obd, unsigned long flag)
 {
         if (flag & CONFIG_LOG)
                 obd->u.mds.mds_fl_cfglog = 1;
@@ -663,6 +672,7 @@ static int __mds_lov_synchronize(void *data)
         struct mds_obd *mds = &obd->u.mds;
         struct obd_uuid *uuid;
         __u32  idx = mlsi->mlsi_index;
+        struct llog_ctxt *ctxt;
         int rc = 0;
         ENTRY;
 
@@ -686,9 +696,15 @@ static int __mds_lov_synchronize(void *data)
         if (rc != 0)
                 GOTO(out, rc);
 
-        rc = llog_connect(llog_get_context(obd, LLOG_MDS_OST_ORIG_CTXT),
-                          mds->mds_lov_desc.ld_tgt_count,
-                          NULL, NULL, uuid);
+        ctxt = llog_get_context(obd, LLOG_MDS_OST_ORIG_CTXT);
+        if (!ctxt) 
+              RETURN(-ENODEV); 
+        
+        OBD_FAIL_TIMEOUT(OBD_FAIL_MDS_LLOG_SYNC_TIMEOUT, 60);
+
+        rc = llog_connect(ctxt, obd->u.mds.mds_lov_desc.ld_tgt_count, 
+                          NULL, NULL, uuid); 
+        llog_ctxt_put(ctxt);
 
         if (rc != 0) {
                 CERROR("%s failed at llog_origin_connect: %d\n",
@@ -715,8 +731,10 @@ out:
                 /* Deactivate it for safety */
                 CERROR("%s sync failed %d, deactivating\n", obd_uuid2str(uuid),
                        rc);
-                obd_notify(mds->mds_osc_obd, watched, OBD_NOTIFY_INACTIVE,
-                           NULL);
+                if (!obd->obd_stopping && mds->mds_osc_obd &&
+                    !mds->mds_osc_obd->obd_stopping && !watched->obd_stopping) 
+                        obd_notify(mds->mds_osc_obd, watched,
+                                   OBD_NOTIFY_INACTIVE, NULL);
         } else {
                 /* We've successfully synced at least 1 OST and are ready
                    to handle client requests */
@@ -809,7 +827,7 @@ int mds_notify(struct obd_device *obd, struct obd_device *watched,
         case OBD_NOTIFY_SYNC_NONBLOCK:
                 break;
         case OBD_NOTIFY_CONFIG:
-                mds_allow_cli(obd, (unsigned int)data);
+                mds_allow_cli(obd, (unsigned long)data);
         default:
                 RETURN(0);
         }
@@ -836,7 +854,7 @@ int mds_notify(struct obd_device *obd, struct obd_device *watched,
                 RETURN(rc);
         }
 
-        LASSERT(llog_get_context(obd, LLOG_MDS_OST_ORIG_CTXT) != NULL);
+        LASSERT(!llog_ctxt_null(obd, LLOG_MDS_OST_ORIG_CTXT));
         rc = mds_lov_start_synchronize(obd, watched, data,
                                        !(ev == OBD_NOTIFY_SYNC));
 

@@ -358,6 +358,7 @@ struct lc_watchdog *lc_watchdog_add(int time,
                                     void *data);
 
 /* Enables a watchdog and resets its timer. */
+void lc_watchdog_touch_ms(struct lc_watchdog *lcw, int timeout_ms);
 void lc_watchdog_touch(struct lc_watchdog *lcw);
 
 /* Disable a watchdog; touch it to restart it. */
@@ -546,18 +547,18 @@ static inline cfs_duration_t cfs_timeout_cap(cfs_duration_t timeout)
  */
 enum cfs_alloc_flags {
         /* allocation is not allowed to block */
-        CFS_ALLOC_ATOMIC = (1 << 0),
+        CFS_ALLOC_ATOMIC = 0x1,
         /* allocation is allowed to block */
-        CFS_ALLOC_WAIT = (1 << 1),
+        CFS_ALLOC_WAIT   = 0x2,
         /* allocation should return zeroed memory */
-        CFS_ALLOC_ZERO   = (1 << 2),
+        CFS_ALLOC_ZERO   = 0x4,
         /* allocation is allowed to call file-system code to free/clean
          * memory */
-        CFS_ALLOC_FS     = (1 << 3),
+        CFS_ALLOC_FS     = 0x8,
         /* allocation is allowed to do io to free/clean memory */
-        CFS_ALLOC_IO     = (1 << 4),
+        CFS_ALLOC_IO     = 0x10,
         /* don't report allocation failure to the console */
-        CFS_ALLOC_NOWARN = (1 << 5),
+        CFS_ALLOC_NOWARN = 0x20,
         /* standard allocator flag combination */
         CFS_ALLOC_STD    = CFS_ALLOC_FS | CFS_ALLOC_IO,
         CFS_ALLOC_USER   = CFS_ALLOC_WAIT | CFS_ALLOC_FS | CFS_ALLOC_IO,
@@ -567,7 +568,7 @@ enum cfs_alloc_flags {
 enum cfs_alloc_page_flags {
         /* allow to return page beyond KVM. It has to be mapped into KVM by
          * cfs_page_map(); */
-        CFS_ALLOC_HIGH   = (1 << 5),
+        CFS_ALLOC_HIGH   = 0x40,
         CFS_ALLOC_HIGHUSER = CFS_ALLOC_WAIT | CFS_ALLOC_FS | CFS_ALLOC_IO | CFS_ALLOC_HIGH,
 };
 

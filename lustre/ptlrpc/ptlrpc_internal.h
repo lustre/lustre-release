@@ -63,8 +63,6 @@ void ptlrpc_lprocfs_do_request_stat (struct ptlrpc_request *req,
 #endif /* LPROCFS */
 
 /* recovd_thread.c */
-int llog_init_commit_master(void);
-int llog_cleanup_commit_master(int force);
 
 static inline int opcode_offset(__u32 opc) {
         if (opc < OST_LAST_OPC) {
@@ -125,7 +123,7 @@ int ptlrpc_expire_one_request(struct ptlrpc_request *req);
 
 /* pers.c */
 void ptlrpc_fill_bulk_md(lnet_md_t *md, struct ptlrpc_bulk_desc *desc);
-void ptlrpc_add_bulk_page(struct ptlrpc_bulk_desc *desc, cfs_page_t *page,
+void ptlrpc_add_bulk_page(struct ptlrpc_bulk_desc *desc, cfs_page_t *page, 
                           int pageoffset, int len);
 void ptl_rpc_wipe_bulk_pages(struct ptlrpc_bulk_desc *desc);
 
@@ -141,8 +139,4 @@ int ping_evictor_wake(struct obd_export *exp);
 #define ping_evictor_wake(exp)     1
 #endif
 
-static inline int ptlrpc_recoverable_error(int rc)
-{ 
-        return (rc == -ENOTCONN || rc == -ENODEV);
-}
 #endif /* PTLRPC_INTERNAL_H */
