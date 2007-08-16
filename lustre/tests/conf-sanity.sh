@@ -28,6 +28,9 @@ HOSTNAME=`hostname`
 
 . $LUSTRE/tests/test-framework.sh
 init_test_env $@
+# use small MDS + OST size to speed formatting time
+MDSSIZE=40000
+OSTSIZE=40000
 . ${CONFIG:=$LUSTRE/tests/cfg/$NAME.sh}
 
 reformat() {
@@ -625,54 +628,53 @@ run_test 15 "zconf-mount without /sbin/mount.lustre (should return error)"
 test_16() {
         TMPMTPT="${MOUNT%/*}/conf16"
 
-        if [ ! -f "$MDSDEV" ]; then
-            echo "no $MDSDEV existing, so mount Lustre to create one"
-	    setup
+        if [ ! -e "$MDSDEV" ]; then
+            log "no $MDSDEV existing, so mount Lustre to create one"
+            setup
             check_mount || return 41
             cleanup || return $?
         fi
 
-        echo "change the mode of $MDSDEV/OBJECTS,LOGS,PENDING to 555"
+        [ -f "$MDSDEV" ] && LOOPOPT="-o loop"
+
+        log "change the mode of $MDSDEV/OBJECTS,LOGS,PENDING to 555"
         do_facet mds "mkdir -p $TMPMTPT &&
-                      mount -o loop -t ext3 $MDSDEV $TMPMTPT &&
+                      mount $LOOPOPT -t $FSTYPE $MDSDEV $TMPMTPT &&
                       chmod 555 $TMPMTPT/{OBJECTS,LOGS,PENDING} &&
                       umount $TMPMTPT" || return $?
 
-        echo "mount Lustre to change the mode of OBJECTS/LOGS/PENDING, then umount Lustre"
+        log "mount Lustre to change the mode of OBJECTS/LOGS/PENDING, then umount Lustre"
 	setup
         check_mount || return 41
         cleanup || return $?
 
-        echo "read the mode of OBJECTS/LOGS/PENDING and check if they has been changed properly"
+        log "read the mode of OBJECTS/LOGS/PENDING and check if they has been changed properly"
         EXPECTEDOBJECTSMODE=`do_facet mds "debugfs -R 'stat OBJECTS' $MDSDEV 2> /dev/null" | grep 'Mode: ' | sed -e "s/.*Mode: *//" -e "s/ *Flags:.*//"`
         EXPECTEDLOGSMODE=`do_facet mds "debugfs -R 'stat LOGS' $MDSDEV 2> /dev/null" | grep 'Mode: ' | sed -e "s/.*Mode: *//" -e "s/ *Flags:.*//"`
         EXPECTEDPENDINGMODE=`do_facet mds "debugfs -R 'stat PENDING' $MDSDEV 2> /dev/null" | grep 'Mode: ' | sed -e "s/.*Mode: *//" -e "s/ *Flags:.*//"`
 
         if [ "$EXPECTEDOBJECTSMODE" = "0777" ]; then
-                echo "Success:Lustre change the mode of OBJECTS correctly"
+                log "Success:Lustre change the mode of OBJECTS correctly"
         else
-                echo "Error: Lustre does not change mode of OBJECTS properly"
-                return 1
+                error "Lustre does not change mode of OBJECTS properly"
         fi
 
         if [ "$EXPECTEDLOGSMODE" = "0777" ]; then
-                echo "Success:Lustre change the mode of LOGS correctly"
+                log "Success:Lustre change the mode of LOGS correctly"
         else
-                echo "Error: Lustre does not change mode of LOGS properly"
-                return 1
+                error "Lustre does not change mode of LOGS properly"
         fi
 
         if [ "$EXPECTEDPENDINGMODE" = "0777" ]; then
-                echo "Success:Lustre change the mode of PENDING correctly"
+                log "Success:Lustre change the mode of PENDING correctly"
         else
-                echo "Error: Lustre does not change mode of PENDING properly"
-                return 1
+                error "Lustre does not change mode of PENDING properly"
         fi
 }
 run_test 16 "verify that lustre will correct the mode of OBJECTS/LOGS/PENDING"
 
 test_17() {
-        if [ ! -f "$MDSDEV" ]; then
+        if [ ! -e "$MDSDEV" ]; then
             echo "no $MDSDEV existing, so mount Lustre to create one"
 	    setup
             check_mount || return 41
@@ -701,13 +703,11 @@ test_18() {
         check_mount || return 41
 
         echo "check journal size..."
-        FOUNDJOURNALSIZE=`do_facet mds "debugfs -R 'stat <8>' $MDSDEV" | awk '/Size: / { print $NF; exit;}'`
-        if [ "$FOUNDJOURNALSIZE" = "79691776" ]; then
-                echo "Success:lconf creates large journals"
+        FOUNDSIZE=`do_facet mds "debugfs -c -R 'stat <8>' $MDSDEV" | awk '/Size: / { print $NF; exit;}'`
+        if [ $FOUNDSIZE -gt $((32 * 1024 * 1024)) ]; then
+                log "Success: mkfs creates large journals"
         else
-                echo "Error:lconf not create large journals correctly"
-                echo "expected journal size: 79691776(76M), found journal size: $FOUNDJOURNALSIZE"
-                return 1
+                error "expected journal size > 32M, found $((FOUNDSIZE >> 20))M"
         fi
 
         cleanup || return $?
@@ -715,7 +715,7 @@ test_18() {
         MDSSIZE=$OLDMDSSIZE
         gen_config
 }
-run_test 18 "check lconf creates large journals"
+run_test 18 "check mkfs creates large journals"
 
 test_19a() {
 	start_mds || return 1
@@ -829,16 +829,22 @@ test_23() {
 
 test_24a() {
 	local fs2mds_HOST=$mds_HOST
+	local fs2ost_HOST=$ost_HOST
+
+	[ -z "$fs2ost_DEV" -o -z "$fs2mds_DEV" ] && [ -b "$MDSDEV" ] && \
+            log "mixed loopback and real device not working" && return
+
+	local fs2mdsdev=${fs2mds_DEV:-${MDSDEV}_2}
+	local fs2ostdev=${fs2ost_DEV:-$(ostdevname 1)_2}
+
 	# test 8-char fsname as well
 	local FSNAME2=test1234
-        add fs2mds $MDS_MKFS_OPTS --fsname=${FSNAME2} --nomgs --mgsnode=$MGSNID --reformat ${MDSDEV}_2 || exit 10
+	add fs2mds $MDS_MKFS_OPTS --fsname=${FSNAME2} --nomgs --mgsnode=$MGSNID --reformat $fs2mdsdev || exit 10
 
-	local fs2ost_HOST=$ost_HOST
-	local fs2ostdev=$(ostdevname 1)_2
 	add fs2ost $OST_MKFS_OPTS --fsname=${FSNAME2} --reformat $fs2ostdev || exit 10
 
 	setup
-	start fs2mds ${MDSDEV}_2 $MDS_MOUNT_OPTS
+	start fs2mds $fs2mdsdev $MDS_MOUNT_OPTS
 	start fs2ost $fs2ostdev $OST_MOUNT_OPTS
 	mkdir -p $MOUNT2
 	mount -t lustre $MGSNID:/${FSNAME2} $MOUNT2 || return 1
@@ -871,9 +877,14 @@ run_test 24a "Multiple MDTs on a single node"
 
 test_24b() {
 	local fs2mds_HOST=$mds_HOST
-        add fs2mds $MDS_MKFS_OPTS --fsname=${FSNAME}2 --mgs --reformat ${MDSDEV}_2 || exit 10
+        [ -z "$fs2mds_DEV" ] && [ -b "$MDSDEV" ] && \
+            log "mixed loopback and real device not working" && return
+
+	local fs2mdsdev=${fs2mds_DEV:-${MDSDEV}_2}
+
+        add fs2mds $MDS_MKFS_OPTS --fsname=${FSNAME}2 --mgs --reformat $fs2mdsdev || exit 10 
 	setup
-	start fs2mds ${MDSDEV}_2 $MDS_MOUNT_OPTS && return 2
+	start fs2mds $fs2mdsdev $MDS_MOUNT_OPTS && return 2
 	cleanup || return 6
 }
 run_test 24b "Multiple MGSs on a single node (should return err)"
@@ -1146,8 +1157,12 @@ test_33() { # bug 12333
         local FSNAME2=test1234
         local fs2mds_HOST=$mds_HOST
         local fs2ost_HOST=$ost_HOST
-        local fs2mdsdev=${MDSDEV}_2
-        local fs2ostdev=$(ostdevname 1)_2
+
+        [ -z "$fs2ost_DEV" -o -z "$fs2mds_DEV" ] && [ -b "$MDSDEV" ] && \
+            log "mixed loopback and real device not working" && return
+
+        local fs2mdsdev=${fs2mds_DEV:-${MDSDEV}_2}
+        local fs2ostdev=${fs2ost_DEV:-$(ostdevname 1)_2}
         add fs2mds $MDS_MKFS_OPTS --fsname=${FSNAME2} --reformat $fs2mdsdev || exit 10
         add fs2ost $OST_MKFS_OPTS --fsname=${FSNAME2} --index=8191 --mgsnode=`hostname`@tcp --reformat $fs2ostdev || exit 10
 
@@ -1168,7 +1183,7 @@ run_test 33 "Mount ost with a large index number"
 umount_client $MOUNT	
 cleanup_nocli
 
-test_33() {
+test_33a() {
         setup
 
         do_facet client dd if=/dev/zero of=$MOUNT/24 bs=1024k count=1
@@ -1179,7 +1194,7 @@ test_33() {
         umount_client $MOUNT
         cleanup
 }
-run_test 33 "Drop cancel during umount"
+run_test 33a "Drop cancel during umount"
 
 test_34a() {
         setup
