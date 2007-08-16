@@ -1428,6 +1428,7 @@ int ll_statfs_internal(struct super_block *sb, struct obd_statfs *osfs,
                obd_osfs.os_bavail, obd_osfs.os_blocks, obd_osfs.os_ffree,
                obd_osfs.os_files);
 
+        osfs->os_bsize = obd_osfs.os_bsize;
         osfs->os_blocks = obd_osfs.os_blocks;
         osfs->os_bfree = obd_osfs.os_bfree;
         osfs->os_bavail = obd_osfs.os_bavail;

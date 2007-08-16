@@ -1497,6 +1497,8 @@ int lov_fini_statfs_set(struct lov_request_set *set)
 void lov_update_statfs(struct obd_device *obd, struct obd_statfs *osfs,
                        struct obd_statfs *lov_sfs, int success)
 {
+        int shift = 0, quit = 0;
+        __u64 tmp;
         spin_lock(&obd->obd_osfs_lock);
         memcpy(&obd->obd_osfs, lov_sfs, sizeof(*lov_sfs));
         obd->obd_osfs_age = get_jiffies_64();
@@ -1505,6 +1507,33 @@ void lov_update_statfs(struct obd_device *obd, struct obd_statfs *osfs,
         if (success == 0) {
                 memcpy(osfs, lov_sfs, sizeof(*lov_sfs));
         } else {
+                if (osfs->os_bsize != lov_sfs->os_bsize) {
+                        /* assume all block sizes are always powers of 2 */
+                        /* get the bits difference */
+                        tmp = osfs->os_bsize | lov_sfs->os_bsize;
+                        for (shift = 0; shift <= 64; ++shift) {
+                                if (tmp & 1) {
+                                        if (quit)
+                                                break;
+                                        else
+                                                quit = 1;
+                                        shift = 0;
+                                }
+                                tmp >>= 1;
+                        }
+                }
+
+                if (osfs->os_bsize < lov_sfs->os_bsize) {
+                        osfs->os_bsize = lov_sfs->os_bsize;
+
+                        osfs->os_bfree  >>= shift;
+                        osfs->os_bavail >>= shift;
+                        osfs->os_blocks >>= shift;
+                } else if (shift != 0) {
+                        lov_sfs->os_bfree  >>= shift;
+                        lov_sfs->os_bavail >>= shift;
+                        lov_sfs->os_blocks >>= shift;
+                }
 #ifdef MIN_DF
                 /* Sandia requested that df (and so, statfs) only
                    returned minimal available space on
