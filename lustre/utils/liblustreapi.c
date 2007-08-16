@@ -785,7 +785,8 @@ static int cb_find_init(char *path, DIR *parent, DIR *dir, void *data)
                 decision = -1;
 
         /* If a OST UUID is given, and some OST matches, check it here. */
-        if (decision != -1 && param->obdindex != OBD_NOT_FOUND) {
+        if (decision != -1 && param->obdindex != OBD_NOT_FOUND &&
+            S_ISREG(st->st_mode)) {
                 /* Only those files should be accepted, which have a strip on
                  * the specified OST. */
                 if (!param->lmd->lmd_lmm.lmm_stripe_count) {
@@ -808,14 +809,17 @@ static int cb_find_init(char *path, DIR *parent, DIR *dir, void *data)
         if (!decision) {
                 int for_mds;
 
-                for_mds = lustre_fs ? param->lmd->lmd_lmm.lmm_stripe_count : 0;
+                for_mds = lustre_fs ? (S_ISREG(st->st_mode) &&
+                                       param->lmd->lmd_lmm.lmm_stripe_count)
+                                    : 0;
                 decision = find_time_check(st, param, for_mds);
         }
 
         /* If file still fits the request, ask osd for updated info.
            The regulat stat is almost of the same speed as some new
            'glimpse-size-ioctl'. */
-        if (!decision && param->lmd->lmd_lmm.lmm_stripe_count) {
+        if (!decision && param->lmd->lmd_lmm.lmm_stripe_count &&
+            S_ISREG(st->st_mode)) {
                 if (dir) {
                         ret = ioctl(dirfd(dir), IOC_LOV_GETINFO,
                                     (void *)param->lmd);
