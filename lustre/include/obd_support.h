@@ -35,7 +35,6 @@ extern unsigned int obd_dump_on_eviction;
 extern unsigned int obd_timeout;          /* seconds */
 #define PING_INTERVAL max(obd_timeout / 4, 1U)
 #define RECONNECT_INTERVAL max(obd_timeout / 10, 10U)
-#define LDLM_TIMEOUT_DEFAULT 20
 extern unsigned int ldlm_timeout;
 extern unsigned int obd_health_check_timeout;
 extern unsigned int obd_sync_filter;
@@ -43,6 +42,13 @@ extern unsigned int obd_max_dirty_pages;
 extern atomic_t obd_dirty_pages;
 extern cfs_waitq_t obd_race_waitq;
 extern int obd_race_state;
+
+/* Timeout definitions */
+#define LDLM_TIMEOUT_DEFAULT 20
+#define OBD_TIMEOUT_DEFAULT 100
+#define HEALTH_CHECK_COEF 3 / 2
+#define HEALTH_CHECK_TIMEOUT_DEFAULT (OBD_TIMEOUT_DEFAULT * HEALTH_CHECK_COEF)
+#define HEALTH_CHECK_TIMEOUT (obd_timeout * HEALTH_CHECK_COEF)
 
 #define OBD_FAIL_MDS                     0x100
 #define OBD_FAIL_MDS_HANDLE_UNPACK       0x101
