@@ -128,10 +128,6 @@ typedef enum {
  * w/o involving separate thread. in order to decrease cs rate */
 #define LDLM_FL_ATOMIC_CB      0x4000000
 
-/* while this flag is set, the lock can't change resource */
-#define LDLM_FL_LOCK_PROTECT   0x8000000
-#define LDLM_FL_LOCK_PROTECT_BIT  27
-
 /* Cancel lock asynchronously. See ldlm_cli_cancel_unused_resource. */
 #define LDLM_FL_ASYNC           0x20000000
 
@@ -263,6 +259,10 @@ struct ldlm_lock {
         struct portals_handle l_handle; // must be first in the structure
         atomic_t              l_refc;
 
+        /* internal spinlock protects l_resource.  we should hold this lock 
+         * first before grabbing res_lock.*/
+        spinlock_t            l_lock;
+
         /* ldlm_lock_change_resource() can change this */
         struct ldlm_resource *l_resource;
 
@@ -289,13 +289,11 @@ struct ldlm_lock {
         struct obd_export    *l_export;
         struct obd_export    *l_conn_export;
 
-        /* protected by lr_lock */
-        __u32                 l_flags;
-
         struct lustre_handle  l_remote_handle;
         ldlm_policy_data_t    l_policy_data;
 
         /* protected by lr_lock */
+        __u32                 l_flags;
         __u32                 l_readers;
         __u32                 l_writers;
         __u8                  l_destroyed;
@@ -322,7 +320,6 @@ struct ldlm_lock {
         cfs_time_t            l_callback_timeout; /* jiffies */
 
         __u32                 l_pid;            /* pid which created this lock */
-        __u32                 l_pidb;           /* who holds LOCK_PROTECT_BIT */
 
         /* for ldlm_add_ast_work_item() */
         struct list_head      l_bl_ast;
@@ -649,60 +646,7 @@ static inline void check_res_locked(struct ldlm_resource *res)
 {
         LASSERT_SPIN_LOCKED(&res->lr_lock);
 }
-#ifdef __KERNEL__
-# if LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,60)
-static inline void lock_bitlock(struct ldlm_lock *lock)
-{
-        bit_spin_lock(LDLM_FL_LOCK_PROTECT_BIT, (void *) &lock->l_flags);
-        LASSERT(lock->l_pidb == 0);
-        lock->l_pidb = current->pid;
-}
 
-static inline void unlock_bitlock(struct ldlm_lock *lock)
-{
-        LASSERT(lock->l_pidb == current->pid);
-        lock->l_pidb = 0;
-        bit_spin_unlock(LDLM_FL_LOCK_PROTECT_BIT, (void *) &lock->l_flags);
-}
-#else /* LINUX_VERSION_CODE < KERNEL_VERSION(2,5,60) */
-static inline void lock_bitlock(struct ldlm_lock *lock)
-{
-#if defined(CONFIG_SMP) || defined(CONFIG_DEBUG_SPINLOCK)
-        /* bit_spin_lock(LDLM_FL_LOCK_PROTECT_BIT, (void *)&lock->l_flags);*/
-        while (test_and_set_bit(LDLM_FL_LOCK_PROTECT_BIT, &lock->l_flags)) {
-                while (test_bit(LDLM_FL_LOCK_PROTECT_BIT, &lock->l_flags))
-                        cpu_relax();
-        }
-#endif
-
-        LASSERT(lock->l_pidb == 0);
-        lock->l_pidb = current->pid;
-}
-
-static inline void unlock_bitlock(struct ldlm_lock *lock)
-{
-        LASSERT(lock->l_pidb == current->pid);
-        lock->l_pidb = 0;
-
-#if defined(CONFIG_SMP) || defined(CONFIG_DEBUG_SPINLOCK)
-        /* bit_spin_unlock(LDLM_FL_LOCK_PROTECT_BIT, (void *)&lock->l_flags);*/
-        BUG_ON(!test_bit(LDLM_FL_LOCK_PROTECT_BIT, &lock->l_flags));
-        smp_mb__before_clear_bit();
-        clear_bit(LDLM_FL_LOCK_PROTECT_BIT, &lock->l_flags);
-#endif
-}
-#endif /* LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,60) */
-#else /* !__KERNEL__ */
-static inline void lock_bitlock(struct ldlm_lock *lock)
-{
-        lock->l_flags |= 1 << LDLM_FL_LOCK_PROTECT_BIT;
-}
-
-static inline void unlock_bitlock(struct ldlm_lock *lock)
-{
-        lock->l_flags &= ~(1 << LDLM_FL_LOCK_PROTECT_BIT);
-}
-#endif /* __KERNEL__ */
 struct ldlm_resource * lock_res_and_lock(struct ldlm_lock *lock);
 void unlock_res_and_lock(struct ldlm_lock *lock);
 

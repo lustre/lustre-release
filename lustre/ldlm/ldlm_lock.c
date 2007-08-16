@@ -291,6 +291,7 @@ static struct ldlm_lock *ldlm_lock_new(struct ldlm_resource *resource)
         if (lock == NULL)
                 RETURN(NULL);
 
+        spin_lock_init(&lock->l_lock);
         lock->l_resource = ldlm_resource_getref(resource);
 
         atomic_set(&lock->l_refc, 2);
@@ -302,7 +303,6 @@ static struct ldlm_lock *ldlm_lock_new(struct ldlm_resource *resource)
         CFS_INIT_LIST_HEAD(&lock->l_cp_ast);
         cfs_waitq_init(&lock->l_waitq);
         lock->l_blocking_lock = NULL;
-        lock->l_pidb = 0;
         lock->l_sl_mode.prev = NULL;
         lock->l_sl_mode.next = NULL;
         lock->l_sl_policy.prev = NULL;
@@ -352,9 +352,8 @@ int ldlm_lock_change_resource(struct ldlm_namespace *ns, struct ldlm_lock *lock,
                        sizeof(lock->l_resource->lr_name)) != 0);
         lock_res(newres);
         lock->l_resource = newres;
-        unlock_res(newres);
         unlock_res(oldres);
-        unlock_bitlock(lock);
+        unlock_res_and_lock(lock);
 
         /* ...and the flowers are still standing! */
         ldlm_resource_putref(oldres);
