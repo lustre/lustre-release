@@ -19,6 +19,14 @@ Bugzilla   : 12932
 Description: obd_health_check_timeout too short
 Details    : set obd_health_check_timeout as 1.5x of obd_timeout
 
+Severity   : normal
+Bugzilla   : 12584
+Description: sanity.sh failed test 103
+Details    : RHEL mis-interpret setfacl "-X" param, so we won't test setfacl
+             with param "-X".
+
+--------------------------------------------------------------------------------
+
 2007-08-27         Cluster File Systems, Inc. <info@clusterfs.com>
        * version 1.6.2
        * Support for kernels:
