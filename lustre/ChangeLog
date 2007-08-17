@@ -41,6 +41,11 @@ Bugzilla   : 12836
 Description: lfs find on -1 stripe looping in lsm_lmm_verify_common()
 Details    : Avoid lov_verify_lmm_common() on directory with -1 stripe count.
 
+Severity   : normal
+Bugzilla   : 11248
+Description: merge and cleanup kernel patches.
+Details    : Remove mnt_lustre_list in vfs_intent-2.6-rhel4.patch.
+
 --------------------------------------------------------------------------------
 
 2007-08-27         Cluster File Systems, Inc. <info@clusterfs.com>
