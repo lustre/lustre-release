@@ -2834,7 +2834,7 @@ test_65l() { # bug 12836
 	$LFS setstripe $DIR/$tdir 65536 -1 -1
 	$LFS find -mtime -1 $DIR
 }
-run_test 65l "lfs find on -1 stipe dir ========================"
+run_test 65l "lfs find on -1 stripe dir ========================"
 
 # bug 2543 - update blocks count on client
 test_66() {
