@@ -101,6 +101,8 @@ mkdir $DST || fail "can't mkdir $DST" 10
 # ok, that hopefully worked, so let's do a little more, with files that
 # haven't changed in the last day (hopefully they don't change during test)
 FILES=`find $SRC -type f -mtime +1 -ctime +1 | head -n $COUNT`
+[ -z "$FILES" ] && fail "No unchanged files - is $SRC a new dir?"
+
 log "copying files from $SRC to $DST$SRC at `date`"
 tar cf - $FILES | tar xvf - -C $DST > /dev/null || fail "copying $SRC" 11
 
