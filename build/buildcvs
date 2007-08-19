@@ -158,7 +158,7 @@ case "$lustretag" in
 	;;
 
     # CMD3
-    HEAD|b_post_cmd3|b1_8_gssfix|b_new_cmd_sles10)
+    HEAD|b_post_cmd3|b1_8_gssfix|b_new_cmd_sles10|b1_6_head_sync)
         # Update b1_8 above when changing this.
         ldiskfstag="b1_8_iam"
         ;;
