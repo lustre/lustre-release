@@ -22,7 +22,9 @@ AC_DEFUN([LB_CANONICAL_SYSTEM],
 	darwin*)
 		lb_target_os="darwin"
 		;;
-esac
+	solaris2.11*)
+		lb_target_os="SunOS"
+		;;esac
 AC_SUBST(lb_target_os)
 ])
 
@@ -108,6 +110,26 @@ if test x${!lb_pathvar} != x -a x${!lb_pathvar} != xno ; then
 	AC_MSG_RESULT([${!lb_libvar}])
 fi
 ])
+])
+
+#
+# LB_PATH_DMU
+# Support for --with-dmu
+#
+AC_DEFUN([LB_PATH_DMU],
+[AC_ARG_WITH([dmu],
+	AC_HELP_STRING([--with-dmu=path],
+		       [set path to a built dmu]),
+	[
+		DMU_SRC=$with_dmu
+		dmu=true
+	],
+	[
+		dmu=false
+		DMU_SRC=""
+	])
+AM_CONDITIONAL([ENABLE_DMU], [test x$dmu = xtrue])
+AC_SUBST(DMU_SRC)
 ])
 
 #
@@ -253,6 +275,26 @@ if test x$enable_bgl != xno; then
         enable_libreadline='no'
 fi
 ])
+
+
+#
+# LB_CONFIG_UOSS
+#
+#
+AC_DEFUN([LB_CONFIG_UOSS],
+[AC_MSG_CHECKING([whether to build user-level oss])
+AC_ARG_ENABLE([uoss],
+	AC_HELP_STRING([--enable-uoss],
+			[enable building of user-level oss]),
+	[enable_uoss='yes'],[enable_uoss='no'])
+if test x$enable_uoss != xno; then
+        AC_DEFINE(UOSS_SUPPORT, 1, Enable user-level OSS)
+        AC_DEFINE(LUSTRE_ULEVEL_MT, 1, Multi-threaded user-level lustre port)
+	enable_ulevel_mt='yes'
+        enable_modules='no'
+fi
+])
+
 
 #
 # LB_PATH_SNMP
@@ -512,6 +554,7 @@ AM_CONDITIONAL(INIT_SCRIPTS, test x$ENABLE_INIT_SCRIPTS = "x1")
 AM_CONDITIONAL(LINUX, test x$lb_target_os = "xlinux")
 AM_CONDITIONAL(DARWIN, test x$lb_target_os = "xdarwin")
 AM_CONDITIONAL(CRAY_XT3, test x$enable_cray_xt3 = "xyes")
+AM_CONDITIONAL(SUNOS, test x$lb_target_os = "xSunOS")
 
 # this lets lustre cancel libsysio, per-branch or if liblustre is
 # disabled
@@ -574,6 +617,9 @@ LC_CONFIG_LDISKFS
 LN_CONFIG_CDEBUG
 
 LB_CONFIG_MODULES
+
+LB_PATH_DMU
+LB_CONFIG_UOSS
 
 LB_PATH_LIBSYSIO
 LB_PATH_SNMP

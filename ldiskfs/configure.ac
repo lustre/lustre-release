@@ -16,12 +16,34 @@ LB_CANONICAL_SYSTEM
 LB_INCLUDE_RULES
 LB_PROG_CC
 
+
+#
+# LC_TARGET_SUPPORTED
+#
+# is the target os supported?
+#
+AC_DEFUN([LC_TARGET_SUPPORTED],
+[case $target_os in
+	linux* | darwin*)
+$1
+		;;
+	*)
+$2
+		;;
+esac
+])
+
+
 AC_MSG_CHECKING([whether to build kernel modules])
 AC_ARG_ENABLE([modules],
 	AC_HELP_STRING([--disable-modules],
 			[disable building of Lustre kernel modules]),
 	[],[
-		enable_modules='yes'
+		LC_TARGET_SUPPORTED([
+			enable_modules='yes'
+		],[
+			enable_modules='no'
+		])
 	])
 AC_MSG_RESULT([$enable_modules])
 
