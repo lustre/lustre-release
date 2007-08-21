@@ -58,6 +58,11 @@ Details    : The journal checksum feature adds two new flags i.e
 	     blocks to be written to disk. This behavior is controlled
 	     using JBD2_FEATURE_ASYNC_COMMIT flag.
 
+Severity   : normal
+Bugzilla   : 13039
+Description: RedHat Update kernel for RHEL5
+Details    : Kernel config file for RHEL5.
+
 --------------------------------------------------------------------------------
 
 2007-08-27         Cluster File Systems, Inc. <info@clusterfs.com>
