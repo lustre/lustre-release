@@ -1209,7 +1209,7 @@ int obd_export_evict_by_nid(struct obd_device *obd, char *nid)
                          libcfs_nid2str(nid_key), nid);
         
                 exports_evicted++;
-                CWARN("%s: evict NID '%s' (%s) #%d at adminstrative request\n",
+                CDEBUG(D_HA, "%s: evict NID '%s' (%s) #%d at adminstrative request\n",
                        obd->obd_name, nid, doomed_exp->exp_client_uuid.uuid,
                        exports_evicted);
                 class_fail_export(doomed_exp);
