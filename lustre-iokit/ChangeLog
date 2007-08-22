@@ -11,3 +11,7 @@
 2007-08-01 Jitendra Pawar <jitendra@clusterfs.com>
 	Fixes for bug: 10961
 	- Modified README.obdfilter-survey
+2007-08-22 Jitendra Pawar <jitendra@clusterfs.com>
+	Aditions for bug: 11171
+	- Added automatic ondecho module load support on client and server
+	- Added flexible OSS setup and cleanup

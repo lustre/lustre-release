@@ -57,22 +57,6 @@ dsh () {
 	    ;;
     esac
 }
-# This function executes the command sent through parameters to host
-# parameters
-# 1. hostname
-# 2. command to be executed on host
-custom_remote_shell () {
-    host=$1
-    shift
-    cmds="$*"
-    here=`pwd`
-    # Hop on to the remote node, chdir to 'here' and run the given
-    # commands. One of the following will probably work.
-    ssh $host "cd $here; $cmds"
-    #rsh $host "cd $here; $cmds"
-    # we have to remove the leading `uname -n`: from pdsh output lines
-    #pdsh -w $host "cd $here; $cmds" | sed 's/^[^:]*://'
-}
 
 # how to run commands on other nodes
 # You need to make this work on your cluster if you have specified
@@ -173,6 +157,7 @@ get_devnos () {
 
 # do cleanup and exit.
 cleanup () {
+    local clean_srv_OSS=$2
     for ((i = 0; i < ndevs; i++)); do
     	host=${host_names[$i]}
 	    if [ -n ${do_teardown_ec[$i]} ]; then
@@ -181,7 +166,7 @@ cleanup () {
     done
     pidcount=0
     for host in ${unique_hosts[@]}; do
-        remote_shell $host "killall vmstat -q" &
+        remote_shell $host "killall -q vmstat >/dev/null 2>&1" &
         pid=$!
         kill -term ${vmstatpids[$pidcount]} 2>/dev/null
         kill -kill ${vmstatpids[$pidcount]} 2>/dev/null
@@ -193,23 +178,31 @@ cleanup () {
     done
     if [ $case == "network" ]; then
         lctl <<EOF
-        device osc_testfs
+        cfg_device osc_testfs
         cleanup
         detach
 EOF
         remote_shell "root@$server_nid" "lctl << EOF
-            device OSS
-            cleanup
-            detach
-            device ost_testfs
+            cfg_device echo_srv
             cleanup
             detach
 EOF"
     fi
-    if [ $1 -ne 0 ]; then 
-	echo "program exited with error "
+    if [ $clean_srv_OSS ]; then
+        remote_shell "root@$server_nid" "lctl << EOF
+            cfg_device OSS
+            cleanup
+            detach
+EOF"
+    fi
+    if [ $1 ]; then
+        if [ $1 -ne 0 ]; then
+            echo "program exited with error "
+        else
+            echo "done!"
+        fi
     else
-	echo "done!"
+        echo "Terminated"
     fi
     exit $1
 }
@@ -275,11 +268,11 @@ ec_using_srv_nid () {
     local server_nid=$1
     local ocsname=$2
     local oscuuid=$3
+    $lctl add_uuid testfs_UUID $server_nid@tcp >/dev/null 2>&1
     $lctl <<EOF
-        add_uuid testfs_UUID $server_nid@tcp
         attach osc $ocsname $oscuuid
         cfg_device $ocsname
-        setup ost_testfs_UUID testfs_UUID
+        setup echo_srv_UUID testfs_UUID
 EOF
     $lctl <<EOF
         attach echo_client ECHO_$ocsname $oscuuid
@@ -287,19 +280,25 @@ EOF
 EOF
 }
 
-# setup obdecho and ost on server
+# setup obdecho on server
 setup_srv_obd () {
     local server_nid=$1
     local test_ostfsnm=$2
-    echo 
     remote_shell "root@$server_nid" "$lctl << EOF
-       	attach obdecho $test_ostfsnm ${test_ostfsnm}_UUID
+        attach obdecho $test_ostfsnm ${test_ostfsnm}_UUID
         cfg_device $test_ostfsnm
         setup
+EOF"
+}
+
+# setup OSS on server
+setup_OSS () {
+    local server_nid=$1
+    remote_shell "root@$server_nid" "$lctl << EOF
         attach ost OSS OSS_UUID
         cfg_device OSS
         setup
-EOF"  
+EOF"
 }
 
 # cleanup and detach the echo-clients that we have created during the test.

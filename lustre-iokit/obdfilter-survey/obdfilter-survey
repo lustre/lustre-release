@@ -240,6 +240,10 @@ snap=1
 #####################################################################
 # leave the rest of this alone unless you know what you're doing...
 
+# check and insert obdecho module
+if ! lsmod | grep obdecho > /dev/null; then
+    modprobe obdecho
+fi
 if [ ${#tests[@]} -eq 0 -o "${tests[0]}" != "write" ]; then
     echo "tests: ${tests[@]}"
     echo "First test must be 'write'" 1>&2
@@ -269,34 +273,24 @@ if [ $case == "network" ]; then
 	echo "Specify the server NID"
 	exit 1;
     fi
-    osc_names_string=`dsh $server_nid root "lctl dl"`
-    count=0;
-    for name in $osc_names_str; do
-        count=$((count+1))
-    done
-
-    if [ $count != 0 ]; then
-        echo "The existing setup must be cleaned";
-        exit 0;
+    # check for obdecho module on server
+    if ! dsh $server_nid root "lsmod | grep obdecho > /dev/null"; then
+        dsh $server_nid root "modprobe obdecho"
     fi
     # Now do the server setup
-    setup_srv_obd $server_nid "ost_testfs"
-    op_string=`dsh $server_nid root "lctl dl"`
-    
-    obdecho=0
-    ost=0 
-    for name in $op_string; do
-	if [ "$name" = "obdecho" ]; then
-	    obdecho=1
-	fi
-	if [ "$name" = "ost" ]; then
-	    ost=1
-	fi
-    done
-
-    if (( $obdecho == 0 || $ost == 0 )); then
-	echo "Server setup not done properly"
-	exit 1
+    setup_srv_obd $server_nid "echo_srv"
+    oss_on_srv=`dsh $server_nid root "lctl dl | grep OSS | awk '{ print $4 }'"`
+    if [ ! $oss_on_srv ]; then
+        setup_OSS $server_nid
+        clean_srv_OSS=1
+    fi
+    if ! dsh $server_nid root "lctl dl | grep obdecho > /dev/null 2>&1"; then
+        echo "obdecho not setup on server"
+        exit 1
+    fi
+    if ! dsh $server_nid root "lctl dl | grep ost > /dev/null 2>&1"; then
+        echo "ost not setup on server"
+        exit 1
     fi
     # Now start client setup
     osc_names_str=$(lctl dl)
@@ -404,6 +398,7 @@ for ((i=0; i < ndevs; i++)); do
     client_names[$i]=${devno[1]}
     do_teardown_ec[$i]=${devno[2]}
 done
+print_summary "$(date) Obdfilter-survey for case=$case from $(hostname)"
 for ((rsz = $rszlo; rsz <= $rszhi; rsz*=2)); do
     for ((nobj = $nobjlo; nobj <= $nobjhi; nobj*=2)); do 
 	for ((thr = $thrlo; thr <= $thrhi; thr*=2)); do
@@ -550,6 +545,5 @@ for ((rsz = $rszlo; rsz <= $rszhi; rsz*=2)); do
 	done
     done
 done
-
-cleanup 0
+cleanup 0 $clean_srv_OSS
 exit 0
