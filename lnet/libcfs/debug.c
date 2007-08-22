@@ -228,7 +228,7 @@ libcfs_debug_mask2str(char *str, int size, int mask, int is_subsys)
                                         str[len] = ' ';
                                 len++;
                         }
-                
+
                         while (*token != 0) {
                                 if (len < size)
                                         str[len] = *token;
@@ -264,7 +264,7 @@ libcfs_debug_token2mask(int *mask, const char *str, int len, int is_subsys)
                 token = fn(bit);
                 if (token == NULL)              /* unused? */
                         continue;
-                
+
                 /* strcasecmp */
                 for (j = 0; ; j++) {
                         if (j == len) {         /* end of token */
@@ -274,13 +274,13 @@ libcfs_debug_token2mask(int *mask, const char *str, int len, int is_subsys)
                                 }
                                 break;
                         }
-                        
+
                         if (token[j] == 0)
                                 break;
-                                
+
                         if (str[j] == token[j])
                                 continue;
-                        
+
                         if (str[j] < 'A' || 'Z' < str[j])
                                 break;
 
@@ -288,7 +288,7 @@ libcfs_debug_token2mask(int *mask, const char *str, int len, int is_subsys)
                                 break;
                 }
         }
-        
+
         return -EINVAL;                         /* no match */
 }
 
@@ -306,7 +306,7 @@ libcfs_debug_str2mask(int *mask, const char *str, int is_subsys)
          * appears first in <str>, '*mask' is used as the starting point
          * (relative), otherwise 0 is used (absolute).  An operator applies to
          * all following tokens up to the next operator. */
-        
+
         while (*str != 0) {
                 while (isspace(*str)) /* skip whitespace */
                         str++;
@@ -334,13 +334,13 @@ libcfs_debug_str2mask(int *mask, const char *str, int is_subsys)
                 /* match token */
                 if (libcfs_debug_token2mask(&t, str, n, is_subsys) != 0)
                         return -EINVAL;
-                
+
                 matched = 1;
                 if (op == '-')
                         m &= ~t;
                 else
                         m |= t;
-                
+
                 str += n;
         }
 
@@ -471,10 +471,10 @@ unsigned int libcfs_console_ratelimit = 1;
 #else /* !HAVE_CATAMOUNT_DATA_H */
 #ifdef HAVE_NETDB_H
 #include <sys/utsname.h>
-#endif /* HAVE_CATAMOUNT_DATA_H */
+#endif /* HAVE_NETDB_H */
 struct utsname *tmp_utsname;
 static char source_nid[sizeof(tmp_utsname->nodename)];
-#endif /* __KERNEL__ */
+#endif /* HAVE_CATAMOUNT_DATA_H */
 
 static int source_pid;
 int smp_processor_id = 1;
