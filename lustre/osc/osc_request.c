@@ -3744,6 +3744,7 @@ struct obd_ops osc_obd_ops = {
         .o_statfs_async         = osc_statfs_async,
         .o_packmd               = osc_packmd,
         .o_unpackmd             = osc_unpackmd,
+        .o_precreate            = osc_precreate,
         .o_create               = osc_create,
         .o_destroy              = osc_destroy,
         .o_getattr              = osc_getattr,

@@ -37,8 +37,7 @@
 #include <obd_lov.h>
 #include "lov_internal.h"
 
-               
-/* #define QOS_DEBUG 1 */
+/* #define QOS_DEBUG 1  */
 #define D_QOS D_OTHER
 
 #define TGT_BAVAIL(i) (lov->lov_tgts[i]->ltd_exp->exp_obd->obd_osfs.os_bavail * \
@@ -55,7 +54,7 @@ int qos_add_tgt(struct obd_device *obd, __u32 index)
         ENTRY;
 
         /* We only need this QOS struct on MDT, not clients - but we may not
-           have registered the LOV's observer yet, so there's no way to know */              
+           have registered the LOV's observer yet, so there's no way to know */
         if (!exp || !exp->exp_connection) {
                 CERROR("Missing connection\n");
                 RETURN(-ENOTCONN);
@@ -498,19 +497,29 @@ int qos_remedy_create(struct lov_request_set *set, struct lov_request *req)
         RETURN(rc);
 }
 
+static int min_stripe_count(int stripe_cnt, int flags)
+{
+        return (flags & LOV_USES_DEFAULT_STRIPE ?
+                stripe_cnt - (stripe_cnt / 4) : stripe_cnt);
+}
+
 #define LOV_CREATE_RESEED_MULT 4
 #define LOV_CREATE_RESEED_MIN  1000
 /* Allocate objects on osts with round-robin algorithm */
-static int alloc_rr(struct lov_obd *lov, int *idx_arr, int *stripe_cnt)
+static int alloc_rr(struct lov_obd *lov, int *idx_arr, int *stripe_cnt,
+                    int flags)
 {
         unsigned array_idx, ost_count = lov->desc.ld_tgt_count;
         unsigned ost_active_count = lov->desc.ld_active_tgt_count;
-        int i, *idx_pos = idx_arr;
+        int i, *idx_pos;
         __u32 ost_idx;
+        int ost_start_idx_temp;
+        int speed = 0;
+        int stripe_cnt_min = min_stripe_count(*stripe_cnt, flags);
         ENTRY;
 
         i = qos_calc_rr(lov);
-        if (i) 
+        if (i)
                 RETURN(i);
 
         if (--lov->lov_start_count <= 0) {
@@ -518,40 +527,61 @@ static int alloc_rr(struct lov_obd *lov, int *idx_arr, int *stripe_cnt)
                 lov->lov_start_count =
                         (LOV_CREATE_RESEED_MIN / max(ost_active_count, 1U) +
                          LOV_CREATE_RESEED_MULT) * max(ost_active_count, 1U);
-        } else if (*stripe_cnt >= ost_active_count || 
+        } else if (stripe_cnt_min >= ost_active_count ||
                    lov->lov_start_idx > ost_count) {
                 /* If we have allocated from all of the OSTs, slowly
                    precess the next start */
                 lov->lov_start_idx %= ost_count;
                 ++lov->lov_offset_idx;
         }
+        down_read(&lov->lov_qos.lq_rw_sem);
+        ost_start_idx_temp = lov->lov_start_idx;
+
+repeat_find:
         array_idx = (lov->lov_start_idx + lov->lov_offset_idx) % ost_count;
+        idx_pos = idx_arr;
 #ifdef QOS_DEBUG
         CDEBUG(D_QOS, "want %d startidx %d startcnt %d offset %d arrayidx %d\n",
-               *stripe_cnt, lov->lov_start_idx, lov->lov_start_count,
+               stripe_cnt_min, lov->lov_start_idx, lov->lov_start_count,
                lov->lov_offset_idx, array_idx);
 #endif
 
-        down_read(&lov->lov_qos.lq_rw_sem);
         for (i = 0; i < ost_count; i++, array_idx=(array_idx + 1) % ost_count) {
                 ++lov->lov_start_idx;
                 ost_idx = lov->lov_qos.lq_rr_array[array_idx];
 #ifdef QOS_DEBUG
                 CDEBUG(D_QOS, "#%d strt %d act %d strp %d ary %d idx %d\n",
-                       i, lov->lov_start_idx, 
+                       i, lov->lov_start_idx,
                        ((ost_idx != LOV_QOS_EMPTY) && lov->lov_tgts[ost_idx]) ?
                        lov->lov_tgts[ost_idx]->ltd_active : 0,
                        idx_pos - idx_arr, array_idx, ost_idx);
 #endif
-                if ((ost_idx == LOV_QOS_EMPTY) || !lov->lov_tgts[ost_idx] || 
-                    !lov->lov_tgts[ost_idx]->ltd_active) 
+                if ((ost_idx == LOV_QOS_EMPTY) || !lov->lov_tgts[ost_idx] ||
+                    !lov->lov_tgts[ost_idx]->ltd_active)
                         continue;
+                /* Fail Check before osc_precreate() is called
+                   so we can only 'fail' single OSC. */
+                if (OBD_FAIL_CHECK(OBD_FAIL_MDS_OSC_PRECREATE) && ost_idx == 0)
+                        continue;
+
+                /* Drop slow OSCs if we can */
+                if (obd_precreate(lov->lov_tgts[ost_idx]->ltd_exp, speed == 0) >
+                                  speed)
+                        continue;
+
                 *idx_pos = ost_idx;
                 idx_pos++;
                 /* We have enough stripes */
-                if (idx_pos - idx_arr == *stripe_cnt) 
+                if (idx_pos - idx_arr == *stripe_cnt)
                         break;
         }
+        if ((speed < 2) && (idx_pos - idx_arr < stripe_cnt_min)) {
+                /* Try again, allowing slower OSCs */
+                speed++;
+                lov->lov_start_idx = ost_start_idx_temp;
+                goto repeat_find;
+        }
+
         up_read(&lov->lov_qos.lq_rw_sem);
 
         *stripe_cnt = idx_pos - idx_arr;
@@ -563,21 +593,41 @@ static int alloc_specific(struct lov_obd *lov, struct lov_stripe_md *lsm,
                           int *idx_arr)
 {
         unsigned ost_idx, ost_count = lov->desc.ld_tgt_count;
-        int i, *idx_pos = idx_arr;
+        int i, *idx_pos;
+        int speed = 0;
         ENTRY;
 
+repeat_find:
+        idx_pos = idx_arr;
         ost_idx = lsm->lsm_oinfo[0]->loi_ost_idx;
         for (i = 0; i < ost_count; i++, ost_idx = (ost_idx + 1) % ost_count) {
                 if (!lov->lov_tgts[ost_idx] || 
                     !lov->lov_tgts[ost_idx]->ltd_active) {
                         continue;
                 }
+
+                /* Fail Check before osc_precreate() is called
+                   so we can only 'fail' single OSC. */
+                if (OBD_FAIL_CHECK(OBD_FAIL_MDS_OSC_PRECREATE) && ost_idx == 0)
+                        continue;
+
+                /* Drop slow OSCs if we can */
+                if (obd_precreate(lov->lov_tgts[ost_idx]->ltd_exp, speed == 0) >
+                    speed)
+                        continue;
+
                 *idx_pos = ost_idx;
                 idx_pos++;
-                /* got enough ost */
+                /* We have enough stripes */
                 if (idx_pos - idx_arr == lsm->lsm_stripe_count)
                         RETURN(0);
         }
+        if (speed < 2) {
+                /* Try again, allowing slower OSCs */
+                speed++;
+                goto repeat_find;
+        }
+
         /* If we were passed specific striping params, then a failure to
          * meet those requirements is an error, since we can't reallocate
          * that memory (it might be part of a larger array or something).
@@ -593,7 +643,8 @@ static int alloc_specific(struct lov_obd *lov, struct lov_stripe_md *lsm,
    - free space
    - network resources (shared OSS's)
 */
-static int alloc_qos(struct obd_export *exp, int *idx_arr, int *stripe_cnt)
+static int alloc_qos(struct obd_export *exp, int *idx_arr, int *stripe_cnt,
+                     int flags)
 {
         struct lov_obd *lov = &exp->exp_obd->u.lov;
         static time_t last_warn = 0;
@@ -601,8 +652,12 @@ static int alloc_qos(struct obd_export *exp, int *idx_arr, int *stripe_cnt)
         __u64 total_bavail, total_weight = 0;
         __u32 ost_count;
         int nfound, good_osts, i, warn = 0, rc = 0;
+        int stripe_cnt_min = min_stripe_count(*stripe_cnt, flags);
         ENTRY;
-        
+
+        if (stripe_cnt_min < 1)
+                GOTO(out, rc = -EINVAL);
+
         lov_getref(exp->exp_obd);
 
         /* Detect -EAGAIN early, before expensive lock is taken. */
@@ -658,6 +713,14 @@ static int alloc_qos(struct obd_export *exp, int *idx_arr, int *stripe_cnt)
                         continue;
                 }
 
+                /* Fail Check before osc_precreate() is called
+                   so we can only 'fail' single OSC. */
+                if (OBD_FAIL_CHECK(OBD_FAIL_MDS_OSC_PRECREATE) && i == 0)
+                        continue;
+
+                if (obd_precreate(lov->lov_tgts[i]->ltd_exp, 1) >= 2)
+                        continue;
+
                 lov->lov_tgts[i]->ltd_qos.ltq_usable = 1;
                 qos_calc_weight(lov, i);
                 total_bavail += bavail;
@@ -665,17 +728,20 @@ static int alloc_qos(struct obd_export *exp, int *idx_arr, int *stripe_cnt)
 
                 good_osts++;
         }
-        
+
         if (!total_bavail)
                 GOTO(out_up_write, rc = -ENOSPC);
-       
-        /* if we don't have enough good OSTs, we reduce the stripe count. */
+
+         if (good_osts < stripe_cnt_min)
+                GOTO(out_up_write, rc = -EAGAIN);
+
+        /* We have enough osts */
         if (good_osts < *stripe_cnt)
                 *stripe_cnt = good_osts;
 
-        if (!*stripe_cnt) 
+        if (!*stripe_cnt)
                 GOTO(out_up_write, rc = -EAGAIN);
-        
+
         /* Find enough OSTs with weighted random allocation. */
         nfound = 0;
         while (nfound < *stripe_cnt) {
@@ -713,6 +779,7 @@ static int alloc_qos(struct obd_export *exp, int *idx_arr, int *stripe_cnt)
                         if (!lov->lov_tgts[i] ||
                             !lov->lov_tgts[i]->ltd_qos.ltq_usable)
                                 continue;
+
                         cur_weight += lov->lov_tgts[i]->ltd_qos.ltq_weight;
                         if (cur_weight >= rand) {
 #ifdef QOS_DEBUG
@@ -738,7 +805,7 @@ out_up_write:
         
 out:
         if (rc == -EAGAIN)
-                rc = alloc_rr(lov, idx_arr, stripe_cnt);
+                rc = alloc_rr(lov, idx_arr, stripe_cnt, flags);
         
         lov_putref(exp->exp_obd);
         RETURN(rc);
@@ -746,7 +813,7 @@ out:
 
 /* return new alloced stripe count on success */
 static int alloc_idx_array(struct obd_export *exp, struct lov_stripe_md *lsm, 
-                           int newea, int **idx_arr, int *arr_cnt)
+                           int newea, int **idx_arr, int *arr_cnt, int flags)
 {
         struct lov_obd *lov = &exp->exp_obd->u.lov;
         int stripe_cnt = lsm->lsm_stripe_count;
@@ -763,7 +830,7 @@ static int alloc_idx_array(struct obd_export *exp, struct lov_stripe_md *lsm,
 
         if (newea || 
             lsm->lsm_oinfo[0]->loi_ost_idx >= lov->desc.ld_tgt_count) 
-                rc = alloc_qos(exp, tmp_arr, &stripe_cnt);
+                rc = alloc_qos(exp, tmp_arr, &stripe_cnt, flags);
         else
                 rc = alloc_specific(lov, lsm, tmp_arr);
 
@@ -792,13 +859,14 @@ int qos_prep_create(struct obd_export *exp, struct lov_request_set *set)
         struct obd_trans_info *oti = set->set_oti;
         int i, stripes, rc = 0, newea = 0;
         int *idx_arr, idx_cnt = 0;
+        int flag = LOV_USES_ASSIGNED_STRIPE;
         ENTRY;
 
         LASSERT(src_oa->o_valid & OBD_MD_FLID);
         LASSERT(src_oa->o_valid & OBD_MD_FLGROUP);
  
         if (set->set_oi->oi_md == NULL) {
-                int stripe_cnt = lov_get_stripecnt(lov, 0);
+                int stripes_def = lov_get_stripecnt(lov, 0);
 
                 /* If the MDS file was truncated up to some size, stripe over
                  * enough OSTs to allow the file to be created at that size. 
@@ -821,10 +889,11 @@ int qos_prep_create(struct obd_export *exp, struct lov_request_set *set)
                         }
                         lov_putref(exp->exp_obd);
 
-                        if (stripes < stripe_cnt)
-                                stripes = stripe_cnt;
+                        if (stripes < stripes_def)
+                                stripes = stripes_def;
                 } else {
-                        stripes = stripe_cnt;
+                         flag = LOV_USES_DEFAULT_STRIPE;
+                         stripes = stripes_def;
                 }
 
                 rc = lov_alloc_memmd(&set->set_oi->oi_md, stripes, 
@@ -833,8 +902,8 @@ int qos_prep_create(struct obd_export *exp, struct lov_request_set *set)
                                      LOV_MAGIC);
                 if (rc < 0)
                         GOTO(out_err, rc);
-                rc = 0;
                 newea = 1;
+                rc = 0;
         }
 
         lsm = set->set_oi->oi_md;
@@ -848,7 +917,7 @@ int qos_prep_create(struct obd_export *exp, struct lov_request_set *set)
                 lsm->lsm_pattern = lov->desc.ld_pattern;
         }
 
-        stripes = alloc_idx_array(exp, lsm, newea, &idx_arr, &idx_cnt);
+        stripes = alloc_idx_array(exp, lsm, newea, &idx_arr, &idx_cnt, flag);
         if (stripes <= 0)
                 GOTO(out_err, rc = stripes ? stripes : -EIO);
         LASSERTF(stripes <= lsm->lsm_stripe_count,"requested %d allocated %d\n",

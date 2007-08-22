@@ -3321,6 +3321,8 @@ static int filter_precreate(struct obd_device *obd, struct obdo *oa,
 
         LASSERT(down_trylock(&filter->fo_create_locks[group]) != 0);
 
+        OBD_FAIL_TIMEOUT(OBD_FAIL_TGT_DELAY_PRECREATE, obd_timeout / 2);
+
         if ((oa->o_valid & OBD_MD_FLFLAGS) &&
             (oa->o_flags & OBD_FL_RECREATE_OBJS)) {
                 recreate_obj = 1;

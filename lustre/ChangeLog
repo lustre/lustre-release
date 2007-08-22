@@ -471,6 +471,15 @@ Details    : decrease the amount of synchronous RPC between clients and servers
              by canceling conflicing lock before the operation on the client side
              and packing thier handles into the main operation RPC to server.
 
+Severity   : enhancement
+Bugzilla   : 4900
+Description: Async OSC create to avoid the blocking unnecessarily.
+Details    : If a OST has no remain object, system will block on the creating
+            when need to create a new object on this OST. Now, ways use
+            pre-created objects when available, instead of blocking on an
+            empty osc while others are not empty.  If we must block, we block
+            for the shortest possible period of time.
+
 --------------------------------------------------------------------------------
 
 2007-05-03  Cluster File Systems, Inc. <info@clusterfs.com>
@@ -507,6 +516,7 @@ Details    : The __iget() symbol export is missing.  To avoid the need for
 	 this release.  See https://mail.clusterfs.com/wikis/lustre/MountConf
 	 for details.
        * bug fixes
+
 
 
 Severity   : enhancement

@@ -632,6 +632,18 @@ static inline int obd_checkmd(struct obd_export *exp,
         RETURN(rc);
 }
 
+static inline int obd_precreate(struct obd_export *exp, int need_create)
+{
+        int rc;
+        ENTRY;
+
+        EXP_CHECK_DT_OP(exp, precreate);
+        OBD_COUNTER_INCREMENT(exp->exp_obd, precreate);
+
+        rc = OBP(exp->exp_obd, precreate)(exp, need_create);
+        RETURN(rc);
+}
+
 static inline int obd_create(struct obd_export *exp, struct obdo *obdo,
                              struct lov_stripe_md **ea,
                              struct obd_trans_info *oti)

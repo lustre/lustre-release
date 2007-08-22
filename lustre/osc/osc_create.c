@@ -234,6 +234,51 @@ int oscc_recovering(struct osc_creator *oscc)
         return recov;
 }
 
+/* decide if the OST has remaining object, return value :
+        0 : the OST has remaining object, and don't need to do precreate.
+        1 : the OST has no remaining object, and will send a RPC for precreate.
+        2 : the OST has no remaining object, and will not get any for
+            a potentially very long time
+     1000 : unusable
+ */
+int osc_precreate(struct obd_export *exp, int need_create)
+{
+        struct osc_creator *oscc = &exp->exp_obd->u.cli.cl_oscc;
+        struct obd_import *imp = exp->exp_imp_reverse;
+        ENTRY;
+
+        LASSERT(oscc != NULL);
+        if (imp != NULL && imp->imp_deactive)
+                RETURN(1000);
+
+        if (oscc->oscc_last_id < oscc->oscc_next_id) {
+                spin_lock(&oscc->oscc_lock);
+                if (oscc->oscc_flags & OSCC_FLAG_NOSPC) {
+                        spin_unlock(&oscc->oscc_lock);
+                        RETURN(1000);
+                }
+                if (oscc->oscc_flags & OSCC_FLAG_SYNC_IN_PROGRESS) {
+                        spin_unlock(&oscc->oscc_lock);
+                        RETURN(1);
+                }
+                if (oscc->oscc_flags & OSCC_FLAG_RECOVERING) {
+                        spin_unlock(&oscc->oscc_lock);
+                        RETURN(2);
+                }
+                spin_unlock(&oscc->oscc_lock);
+
+                if (oscc->oscc_flags & OSCC_FLAG_CREATING)
+                        RETURN(1);
+
+                if (!need_create)
+                        RETURN(1);
+
+                oscc_internal_create(oscc);
+                RETURN(1);
+        }
+        RETURN(0);
+}
+
 int osc_create(struct obd_export *exp, struct obdo *oa,
                struct lov_stripe_md **ea, struct obd_trans_info *oti)
 {
