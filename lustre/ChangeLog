@@ -63,6 +63,11 @@ Bugzilla   : 13039
 Description: RedHat Update kernel for RHEL5
 Details    : Kernel config file for RHEL5.
 
+Severity   : minor
+Bugzilla   : 12446
+Description: OSS needs mutliple precreate threads
+Details    : Add ability to start more than one create thread per OSS.
+
 --------------------------------------------------------------------------------
 
 2007-08-27         Cluster File Systems, Inc. <info@clusterfs.com>

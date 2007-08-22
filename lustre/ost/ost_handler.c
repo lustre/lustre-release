@@ -59,6 +59,10 @@ static int ost_num_threads;
 CFS_MODULE_PARM(ost_num_threads, "i", int, 0444,
                 "number of OST service threads to start (deprecated)");
 
+static int oss_num_create_threads;
+CFS_MODULE_PARM(oss_num_create_threads, "i", int, 0444,
+                "number of OSS create threads to start");
+
 void oti_to_request(struct obd_trans_info *oti, struct ptlrpc_request *req)
 {
         struct oti_req_ack_lock *ack_lock;
@@ -1663,6 +1667,8 @@ static int ost_setup(struct obd_device *obd, obd_count len, void *buf)
         struct lprocfs_static_vars lvars;
         int oss_min_threads;
         int oss_max_threads;
+        int oss_min_create_threads;
+        int oss_max_create_threads;
         int rc;
         ENTRY;
 
@@ -1709,13 +1715,27 @@ static int ost_setup(struct obd_device *obd, obd_count len, void *buf)
         if (rc)
                 GOTO(out_service, rc = -EINVAL);
 
+        if (oss_num_create_threads) {
+                if (oss_num_create_threads > OSS_MAX_CREATE_THREADS)
+                        oss_num_create_threads = OSS_MAX_CREATE_THREADS;
+                if (oss_num_create_threads < OSS_DEF_CREATE_THREADS)
+                        oss_num_create_threads = OSS_DEF_CREATE_THREADS;
+                oss_min_create_threads = oss_max_create_threads = 
+                        oss_num_create_threads;
+        } else {
+                oss_min_create_threads = OSS_DEF_CREATE_THREADS;
+                oss_max_create_threads = OSS_MAX_CREATE_THREADS;
+        }
+
         ost->ost_create_service =
                 ptlrpc_init_svc(OST_NBUFS, OST_BUFSIZE, OST_MAXREQSIZE,
                                 OST_MAXREPSIZE, OST_CREATE_PORTAL,
                                 OSC_REPLY_PORTAL,
                                 obd_timeout * 1000, ost_handle, "ost_create",
                                 obd->obd_proc_entry, ost_print_req,
-                                1, 1, "ll_ost_creat");
+                                oss_min_create_threads,
+                                oss_max_create_threads,
+                                "ll_ost_creat");
         if (ost->ost_create_service == NULL) {
                 CERROR("failed to start OST create service\n");
                 GOTO(out_service, rc = -ENOMEM);
