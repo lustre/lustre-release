@@ -936,11 +936,11 @@ test_41() {
     do_facet client dd if=/dev/zero of=$f bs=4k count=1 || return 3
     cancel_lru_locks osc
     # fail ost2 and read from ost1
-    local osc2dev=`grep ${ost2_svc}-osc-MDT0000 $LPROC/devices | awk '{print $1}'`
-    [ "$osc2dev" ] || return 4
-    $LCTL --device $osc2dev deactivate || return 1
+    local osc2dev=`do_facet mds "grep ${ost2_svc}-osc-MDT0000 $LPROC/devices" | awk '{print $1}'`
+    [ -z "$osc2dev" ] && echo "OST: $ost2_svc" && cat $LPROC/devices && return 4
+    do_facet mds $LCTL --device $osc2dev deactivate || return 1
     do_facet client dd if=$f of=/dev/null bs=4k count=1 || return 3
-    $LCTL --device $osc2dev activate || return 2
+    do_facet mds $LCTL --device $osc2dev activate || return 2
     return 0
 }
 run_test 41 "read from a valid osc while other oscs are invalid"
