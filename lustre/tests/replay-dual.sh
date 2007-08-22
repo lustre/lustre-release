@@ -156,9 +156,9 @@ test_9() {
     mcreate $MOUNT1/$tfile-1
     mcreate $MOUNT2/$tfile-2
     # drop first reint reply
-    sysctl -w lustre.fail_loc=0x80000119
+    do_facet $SINGLEMDS sysctl -w lustre.fail_loc=0x80000119
     fail $SINGLEMDS
-    sysctl -w lustre.fail_loc=0
+    do_facet $SINGLEMDS sysctl -w lustre.fail_loc=0
 
     rm $MOUNT1/$tfile-[1,2] || return 1
 
@@ -172,9 +172,9 @@ test_10() {
     munlink $MOUNT1/$tfile-1
     mcreate $MOUNT2/$tfile-2
     # drop first reint reply
-    sysctl -w lustre.fail_loc=0x80000119
+    do_facet $SINGLEMDS sysctl -w lustre.fail_loc=0x80000119
     fail $SINGLEMDS
-    sysctl -w lustre.fail_loc=0
+    do_facet $SINGLEMDS sysctl -w lustre.fail_loc=0
 
     checkstat $MOUNT1/$tfile-1 && return 1
     checkstat $MOUNT1/$tfile-2 || return 2
@@ -192,11 +192,11 @@ test_11() {
     mcreate $MOUNT2/$tfile-4
     mcreate $MOUNT1/$tfile-5
     # drop all reint replies for a while
-    sysctl -w lustre.fail_loc=0x0119
+    do_facet $SINGLEMDS sysctl -w lustre.fail_loc=0x0119
     facet_failover $SINGLEMDS
     #sleep for while, let both clients reconnect and timeout
     sleep $((TIMEOUT * 2))
-    sysctl -w lustre.fail_loc=0
+    do_facet $SINGLEMDS sysctl -w lustre.fail_loc=0
 
     rm $MOUNT1/$tfile-[1-5] || return 1
 
@@ -212,10 +212,10 @@ test_12() {
     sleep 5
 
 #define OBD_FAIL_LDLM_ENQUEUE            0x302
-    sysctl -w lustre.fail_loc=0x80000302
+    do_facet $SINGLEMDS sysctl -w lustre.fail_loc=0x80000302
     facet_failover $SINGLEMDS
     df $MOUNT || return 1
-    sysctl -w lustre.fail_loc=0
+    do_facet $SINGLEMDS sysctl -w lustre.fail_loc=0
 
     ls $DIR/$tfile
     kill -USR1 $MULTIPID || return 3
@@ -238,10 +238,10 @@ test_13() {
     wait $MULTIPID || return 4
 
     # drop close 
-    sysctl -w lustre.fail_loc=0x80000115
+    do_facet $SINGLEMDS sysctl -w lustre.fail_loc=0x80000115
     facet_failover $SINGLEMDS
     df $MOUNT || return 1
-    sysctl -w lustre.fail_loc=0
+    do_facet $SINGLEMDS sysctl -w lustre.fail_loc=0
 
     ls $DIR/$tfile
     $CHECKSTAT -t file $DIR/$tfile || return 2
@@ -266,7 +266,7 @@ test_14() {
     # first 25 files should have been replayed 
     unlinkmany $MOUNT1/$tfile- 25 || return 2
 
-    zconf_mount `hostname` $MOUNT2
+    zconf_mount `hostname` $MOUNT2 || error "mount $MOUNT2 fail" 
     return 0
 }
 run_test 14 "timeouts waiting for lost client during replay"
@@ -283,7 +283,7 @@ test_15() {
     unlinkmany $MOUNT1/$tfile- 25 || return 2
     [ -e $MOUNT1/$tfile-2-0 ] && error "$tfile-2-0 exists"
 
-    zconf_mount `hostname` $MOUNT2
+    zconf_mount `hostname` $MOUNT2 || error "mount $MOUNT2 fail"
     return 0
 }
 run_test 15 "timeout waiting for lost client during replay, 1 client completes"
@@ -332,7 +332,7 @@ test_15a() {
 	    }
     done
 
-    zconf_mount `hostname` $MOUNT2
+    zconf_mount `hostname` $MOUNT2 || error "mount $MOUNT2 fail"
     return 0
 }
 #CROW run_test 15a "OST clear orphans - synchronize ids on MDS and OST"
@@ -348,7 +348,7 @@ test_15b() {
     df $MOUNT || return 1
     do_facet ost1 "sysctl -w lustre.fail_loc=0"
     
-    zconf_mount `hostname` $MOUNT2
+    zconf_mount `hostname` $MOUNT2 || error "mount $MOUNT2 fail"
     return 0
 }
 #CROW run_test 15b "multiple delayed OST clear orphans"
@@ -364,7 +364,7 @@ test_15c() {
 
     df $MOUNT || return 1
     
-    zconf_mount `hostname` $MOUNT2
+    zconf_mount `hostname` $MOUNT2 || error "mount $MOUNT2 fail"
     return 0
 }
 run_test 15c "remove multiple OST orphans"
@@ -382,7 +382,7 @@ test_16() {
 
     unlinkmany $MOUNT1/$tfile- 25 || return 2
 
-    zconf_mount `hostname` $MOUNT2
+    zconf_mount `hostname` $MOUNT2 || error "mount $MOUNT2 fail"
     return 0
 
 }
@@ -403,7 +403,7 @@ test_17() {
 
     unlinkmany $MOUNT1/$tfile- 25 || return 2
 
-    zconf_mount `hostname` $MOUNT2
+    zconf_mount `hostname` $MOUNT2 || error "mount $MOUNT2 fail"
     return 0
 
 }
