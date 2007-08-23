@@ -109,20 +109,20 @@ check_version automake automake-1.7 "1.7.8"
 check_version autoconf autoconf "2.57"
 
 echo "Running aclocal-1.7 $ACLOCAL_FLAGS..."
-aclocal-1.7 $ACLOCAL_FLAGS
+aclocal-1.7 $ACLOCAL_FLAGS || exit 1
 echo "Running autoheader..."
-autoheader
+autoheader || exit 1
 echo "Running automake-1.7..."
-automake-1.7 -a -c
+automake-1.7 -a -c || exit 1
 echo "Running autoconf..."
-autoconf
+autoconf || exit 1
 
 # Run autogen.sh in these directories
 for dir in $CONFIGURE_DIRS; do
     if [ -d $dir ] ; then
         pushd $dir >/dev/null
         echo "Running autogen for $dir..."
-        sh autogen.sh
+        sh autogen.sh || exit $?
         popd >/dev/null
     fi
 done
