@@ -2851,7 +2851,7 @@ test_65k() { # bug11679
                 echo $OSC "is activate"
                 do_facet mds lctl --device %$OSC activate
         done
-        mkdir -p $DIR/$tdir
+        do_facet client mkdir -p $DIR/$tdir
         for INACTIVE_OSC in $MDS_OSCS; do
                 echo $INACTIVE_OSC "is Deactivate:"
                 do_facet mds lctl --device  %$INACTIVE_OSC deactivate
@@ -2860,11 +2860,11 @@ test_65k() { # bug11679
                         STRIPE_INDEX=`do_facet mds cat $LPROC/lov/*md*/target_obd |
                                       grep $STRIPE_OST | awk -F: '{print $1}'`
                         echo "$SETSTRIPE $DIR/$tdir/${STRIPE_INDEX} 0 ${STRIPE_INDEX} 1"
-                        do_facet mds $SETSTRIPE $DIR/$tdir/${STRIPE_INDEX} 0 ${STRIPE_INDEX} 1
+                        do_facet client $SETSTRIPE $DIR/$tdir/${STRIPE_INDEX} 0 ${STRIPE_INDEX} 1
                         RC=$?
                         [ $RC -ne 0 ] && error "setstripe should have succeeded"
                 done
-                rm -f $DIR/$tdir/*
+                do_facet client rm -f $DIR/$tdir/*
                 echo $INACTIVE_OSC "is Activate."
                 do_facet mds lctl --device  %$INACTIVE_OSC activate
         done

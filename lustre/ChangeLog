@@ -139,6 +139,11 @@ Bugzilla   : 12446
 Description: OSS needs mutliple precreate threads
 Details    : Add ability to start more than one create thread per OSS.
 
+Severity   : normal
+Bugzilla   : 13362
+Description: Sanity.sh test_65k failed: setstripe should have succeeded
+Details    : execute lfs setstripe on client
+
 --------------------------------------------------------------------------------
 
 2007-08-10         Cluster File Systems, Inc. <info@clusterfs.com>
