@@ -284,6 +284,9 @@ static inline int obd_fail_check(__u32 id)
         _ret_;                                                               \
 })
 
+#define OBD_FAIL_CHECK_QUIET(id)                                             \
+        (unlikely(obd_fail_loc) ? obd_fail_check(id) : 0)
+
 /* deprecated - just use OBD_FAIL_CHECK */
 #define OBD_FAIL_CHECK_ONCE OBD_FAIL_CHECK
 
@@ -352,7 +355,7 @@ do {                                                                         \
 extern atomic_t libcfs_kmemory;
 
 #ifdef RANDOM_FAIL_ALLOC
-#define HAS_FAIL_ALLOC_FLAG OBD_FAIL_CHECK(OBD_FAIL_GENERAL_ALLOC)
+#define HAS_FAIL_ALLOC_FLAG OBD_FAIL_CHECK_QUIET(OBD_FAIL_GENERAL_ALLOC)
 #else
 #define HAS_FAIL_ALLOC_FLAG 0
 #endif
