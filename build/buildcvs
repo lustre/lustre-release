@@ -166,6 +166,7 @@ case "$lustretag" in
     # uOSS
     b_hd_dmu)
         lnettag="b_uoss"
+        ldiskfstag="b1_8_iam"
         ;;
     
     # v1.0-v1.3, v1.4.0-v1.4.2
