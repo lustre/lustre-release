@@ -68,6 +68,11 @@ Bugzilla   : 12446
 Description: OSS needs mutliple precreate threads
 Details    : Add ability to start more than one create thread per OSS.
 
+Severity   : normal
+Bugzilla   : 13362
+Description: Sanity.sh test_65k failed: setstripe should have succeeded
+Details    : execute lfs setstripe on client
+
 --------------------------------------------------------------------------------
 
 2007-08-27         Cluster File Systems, Inc. <info@clusterfs.com>
@@ -258,7 +263,6 @@ Frequency  : Rare
 Description: reply_lock_interpret crash due to race with it and lock cancel.
 Details    : Do not replay locks that are being cancelled. Do not reference
              locks by their address during replay, just by their handle.
-
 
 Severity   : normal 
 Bugzilla   : 11679
