@@ -143,6 +143,7 @@ case "$lustretag" in
         lnettag="$lustretag"
         libsysiotag="$lustretag"
         snmptag="$lustretag"
+        ldiskfstag="$lustretag"
         ;;
 
     b_self_test)
@@ -198,6 +199,7 @@ case "$lustretag" in
         lnettag="$lustretag"
         libsysiotag="$lustretag"
         snmptag="$lustretag"
+        ldiskfstag="$lustretag"
         ;;
 esac
 
