@@ -113,26 +113,6 @@ fi
 ])
 
 #
-# LB_PATH_DMU
-# Support for --with-dmu
-#
-AC_DEFUN([LB_PATH_DMU],
-[AC_ARG_WITH([dmu],
-	AC_HELP_STRING([--with-dmu=path],
-		       [set path to a built dmu]),
-	[
-		DMU_SRC=$with_dmu
-		dmu=true
-	],
-	[
-		dmu=false
-		DMU_SRC=""
-	])
-AM_CONDITIONAL([ENABLE_DMU], [test x$dmu = xtrue])
-AC_SUBST(DMU_SRC)
-])
-
-#
 # LB_PATH_LIBSYSIO
 #
 # Handle internal/external libsysio
@@ -287,14 +267,61 @@ AC_ARG_ENABLE([uoss],
 	AC_HELP_STRING([--enable-uoss],
 			[enable building of user-level oss]),
 	[enable_uoss='yes'],[enable_uoss='no'])
+AC_MSG_RESULT([$enable_uoss])
 if test x$enable_uoss != xno; then
         AC_DEFINE(UOSS_SUPPORT, 1, Enable user-level OSS)
         AC_DEFINE(LUSTRE_ULEVEL_MT, 1, Multi-threaded user-level lustre port)
 	enable_ulevel_mt='yes'
         enable_modules='no'
+	enable_client='no'
+	enable_tests='no'
+	enable_liblustre='no'
+        with_ldiskfs=no
 fi
 ])
 
+#
+# LB_PATH_DMU
+# Support for --with-dmu
+#
+AC_DEFUN([LB_PATH_DMU],
+[AC_ARG_WITH([dmu],
+	AC_HELP_STRING([--with-dmu=path],
+		       [set path to a built dmu]),
+	[
+		DMU_SRC=$with_dmu
+		dmu=true
+	],
+	[
+		dmu=false
+		DMU_SRC=""
+	])
+AM_CONDITIONAL([ENABLE_DMU], [test x$dmu = xtrue])
+AC_SUBST(DMU_SRC)
+AC_DEFINE(DMU_OSD, 1, Enable DMU OSD)
+])
+
+#
+# Support for --enable-posix-dmu
+#
+AC_DEFUN([LB_POSIX_OSD],
+[AC_MSG_CHECKING([whether to posix osd])
+AC_ARG_ENABLE([posix-osd],
+	AC_HELP_STRING([--enable-posix-osd],
+			[enable using of posix osd]),
+	[enable_posix_osd='yes'],[enable_posix_osd='no'])
+AC_MSG_RESULT([$enable_posix_osd])
+if test x$enable_posix_osd != xno; then
+        AC_DEFINE(POSIX_OSD, 1, Enable POSIX OSD)
+        AC_DEFINE(LUSTRE_ULEVEL_MT, 1, Multi-threaded user-level lustre port)
+	enable_ulevel_mt='yes'
+        enable_modules='no'
+	enable_client='no'
+	enable_tests='no'
+	enable_liblustre='no'
+        with_ldiskfs=no
+fi
+])
 
 #
 # LB_PATH_SNMP
@@ -606,6 +633,10 @@ LB_PATH_DEFAULTS
 
 LB_PROG_CC
 
+LB_PATH_DMU
+LB_CONFIG_UOSS
+LB_POSIX_OSD
+
 LB_CONFIG_DOCS
 LB_CONFIG_UTILS
 LB_CONFIG_TESTS
@@ -617,9 +648,6 @@ LC_CONFIG_LDISKFS
 LN_CONFIG_CDEBUG
 
 LB_CONFIG_MODULES
-
-LB_PATH_DMU
-LB_CONFIG_UOSS
 
 LB_PATH_LIBSYSIO
 LB_PATH_SNMP
