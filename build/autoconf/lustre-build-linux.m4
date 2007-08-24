@@ -309,6 +309,21 @@ rm -f build/conftest.o build/conftest.mod.c build/conftest.mod.o build/conftest.
 ])
 
 #
+# LB_LINUX_ARCH
+#
+# Determine the kernel's idea of the current architecture
+#
+AC_DEFUN([LB_LINUX_ARCH],
+         [AC_MSG_CHECKING([Linux kernel architecture])
+          AS_IF([rm -f $PWD/build/arch
+                 make -s --no-print-directory echoarch -f $PWD/build/Makefile \
+                     LUSTRE_LINUX_CONFIG=$LINUX_CONFIG -C $LINUX_OBJ $ARCH_UM \
+                     ARCHFILE=$PWD/build/arch && LINUX_ARCH=`cat $PWD/build/arch`],
+                [AC_MSG_RESULT([$LINUX_ARCH])],
+                [AC_MSG_ERROR([Could not determine the kernel architecture.])])
+          rm -f build/arch])
+
+#
 # LB_LINUX_TRY_COMPILE
 #
 # like AC_TRY_COMPILE

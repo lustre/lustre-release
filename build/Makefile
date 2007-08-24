@@ -1,5 +1,5 @@
 #
-# There are three ways this Makefile can be called:
+# There are four ways this Makefile can be called:
 #
 # 
 # 1.  As a subdirectory from the toplevel, for automake
@@ -9,6 +9,8 @@
 #
 # 3.  At configure time, as the toplevel module dir for building
 #     kernel tests
+#
+# 4.  At configure time, to determine the kernel's idea of $(ARCH)
 #
 
 ifeq ($(PATCHLEVEL),)
@@ -47,3 +49,8 @@ include $(TOPDIR)/Rules.make
 endif
 
 endif # PATCHLEVEL
+
+# case 4
+
+echoarch:
+	echo $(ARCH) >$(ARCHFILE)
