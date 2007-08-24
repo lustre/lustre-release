@@ -1074,6 +1074,29 @@ AC_DEFINE(HAVE___D_REHASH, 1,
 ])
 ])
 
+# The actual symbol exported varies among architectures, so we need
+# to check many symbols (but only in the current architecture.)  No
+# matter what symbol is exported, the kernel #defines node_to_cpumask
+# to the appropriate function and that's what we use.
+AC_DEFUN([LC_EXPORT_NODE_TO_CPUMASK],
+         [LB_LINUX_ARCH
+          LB_CHECK_SYMBOL_EXPORT([node_to_cpumask],
+                                 [arch/$LINUX_ARCH/mm/numa.c],
+                                 [AC_DEFINE(HAVE_NODE_TO_CPUMASK, 1,
+                                            [node_to_cpumask is exported by
+                                             the kernel])]) # x86_64
+          LB_CHECK_SYMBOL_EXPORT([node_to_cpu_mask],
+                                 [arch/$LINUX_ARCH/kernel/smpboot.c],
+                                 [AC_DEFINE(HAVE_NODE_TO_CPUMASK, 1,
+                                            [node_to_cpumask is exported by
+                                             the kernel])]) # ia64
+          LB_CHECK_SYMBOL_EXPORT([node_2_cpu_mask],
+                                 [arch/$LINUX_ARCH/kernel/smpboot.c],
+                                 [AC_DEFINE(HAVE_NODE_TO_CPUMASK, 1,
+                                            [node_to_cpumask is exported by
+                                             the kernel])]) # i386
+          ])
+
 #
 # LC_VFS_INTENT_PATCHES
 #
@@ -1115,10 +1138,11 @@ LC_CONFIG_QUOTA
 LC_CONFIG_HEALTH_CHECK_WRITE
 
 LC_TASK_PPTR
-# RHEL4 pachess
+# RHEL4 patches
 LC_EXPORT_TRUNCATE_COMPLETE
 LC_EXPORT_D_REHASH_COND
 LC_EXPORT___D_REHASH
+LC_EXPORT_NODE_TO_CPUMASK
 
 LC_STRUCT_KIOBUF
 LC_FUNC_COND_RESCHED

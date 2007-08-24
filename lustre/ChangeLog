@@ -79,6 +79,13 @@ Description: mds_obd_create error creating tmp object
 Details    : When the user sets quota on root, llog will be affected and can't 
              create files and write files.
 
+Severity   : normal
+Frequency  : Always on ia64 patchless client, and possibly others.
+Bugzilla   : 12826
+Description: Add EXPORT_SYMBOL check for node_to_cpumask symbol.
+Details    : This allows the patchless client to be loaded on architectures
+             without this export.
+
 --------------------------------------------------------------------------------
 
 2007-08-27         Cluster File Systems, Inc. <info@clusterfs.com>
