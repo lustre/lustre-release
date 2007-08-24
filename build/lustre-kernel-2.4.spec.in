@@ -364,6 +364,11 @@ is necessary if you want to access a Lustre filesystem.
 #The Lustre book, sample configurations, and other documentation for
 #Lustre.
 
+# This is required in rpm >= 4.4.? and _should_ be set by the %setup macro
+# but isn't, at least for 4.4.2.  Yay RPM.
+%define buildsubdir lustre-kernel-%{version}
+%define _buildsubdir lustre-kernel-%{version}
+
 %prep
 %setup -n lustre-kernel-%{version} -q -c
 if [ ! -d lustre ] ; then
@@ -648,16 +653,25 @@ BuildObj ()
 	$MAKE clean
 	rm -rf $o/.config.old $o/include/config
         # Replace the Makefile in the object directory with a version
-        # that has relative path names.
+        # that has relative path names.  This is done by fixing the Makefile
+        # after the fact to work with 2.6.17 and newer mkmakefile.
         read VERSION PATCHLEVEL SUBLEVEL <<-EOF
 $(set -- 2.6.5 ; echo ${*//./ })
 EOF
+	rm -f $o/Makefile
         source scripts/mkmakefile \
 	    ../../../linux-%{KVERREL} \
-            ../linux-%{KVERREL}-obj/%{_target_cpu}/$flavor \
+            $o \
 	    $VERSION \
 	    $PATCHLEVEL \
-	    > $o/Makefile
+	    > $o/Makefile.in
+	if [ -f $o/Makefile ] ; then
+		# will exist only for 2.6.17 and newer because mkmakefile
+		# now writes the makefile to $o instead of stdout
+		mv -f $o/Makefile $o/Makefile.in
+	fi
+	sed -e "s^$o^../linux-%{KVERREL}-obj/%{_target_cpu}/$flavor^" \
+		$o/Makefile.in > $o/Makefile
 	zcat "$RPM_BUILD_ROOT/boot/symvers-%{KVERREL}-%{_target_cpu}${flavtgt}.gz" \
 	    > $o/Module.symvers
 }
