@@ -214,9 +214,6 @@ int dqacq_handler(struct obd_device *obd, struct qunit_data *qdata, int opc)
 
         OBD_FAIL_RETURN(OBD_FAIL_OBD_DQACQ, -EIO);
 
-        /* slaves never acquires qunit for user root */
-        LASSERT(qdata->qd_id || qdata_type);
-
         dquot = lustre_dqget(obd, info, qdata->qd_id, qdata_type);
         if (IS_ERR(dquot))
                 RETURN(PTR_ERR(dquot));
@@ -651,31 +648,32 @@ static int mds_init_slave_ilimits(struct obd_device *obd,
         /* XXX: for file limits only adjust local now */
         unsigned int uid = 0, gid = 0;
         struct obd_quotactl *ioqc = NULL;
+        int flag;
         int rc;
         ENTRY;
 
         /* if we are going to set zero limit, needn't init slaves */
-        if (!oqctl->qc_dqblk.dqb_ihardlimit && !oqctl->qc_dqblk.dqb_isoftlimit)
+        if (!oqctl->qc_dqblk.dqb_ihardlimit && !oqctl->qc_dqblk.dqb_isoftlimit &&
+            set)
                 RETURN(0);
-        
-        if (!set)
-                goto acquire;
 
         OBD_ALLOC_PTR(ioqc);
         if (!ioqc)
                 RETURN(-ENOMEM);
-
-        ioqc->qc_cmd = Q_INITQUOTA;
+        
+        flag = oqctl->qc_dqblk.dqb_ihardlimit || 
+               oqctl->qc_dqblk.dqb_isoftlimit || set;
+        ioqc->qc_cmd = flag ? Q_INITQUOTA : Q_SETQUOTA;
         ioqc->qc_id = oqctl->qc_id;
         ioqc->qc_type = oqctl->qc_type;
         ioqc->qc_dqblk.dqb_valid = QIF_ILIMITS;
-        ioqc->qc_dqblk.dqb_ihardlimit = MIN_QLIMIT;
+        ioqc->qc_dqblk.dqb_ihardlimit = flag ? MIN_QLIMIT : 0;
 
         /* set local limit to MIN_QLIMIT */
         rc = fsfilt_quotactl(obd, obd->u.obt.obt_sb, ioqc);
         if (rc)
                 GOTO(out, rc);
-acquire:
+
         /* trigger local qunit pre-acquire */
         if (oqctl->qc_type == USRQUOTA)
                 uid = oqctl->qc_id;
@@ -701,29 +699,30 @@ static int mds_init_slave_blimits(struct obd_device *obd,
         struct mds_obd *mds = &obd->u.mds;
         struct obd_quotactl *ioqc;
         unsigned int uid = 0, gid = 0;
+        int flag;
         int rc;
         ENTRY;
 
         /* if we are going to set zero limit, needn't init slaves */
-        if (!oqctl->qc_dqblk.dqb_bhardlimit && !oqctl->qc_dqblk.dqb_bsoftlimit)
+        if (!oqctl->qc_dqblk.dqb_bhardlimit && !oqctl->qc_dqblk.dqb_bsoftlimit &&
+            set)
                 RETURN(0);
 
         OBD_ALLOC_PTR(ioqc);
         if (!ioqc)
                 RETURN(-ENOMEM);
 
-        ioqc->qc_cmd = Q_INITQUOTA;
+        flag = oqctl->qc_dqblk.dqb_bhardlimit || 
+               oqctl->qc_dqblk.dqb_bsoftlimit || set;
+        ioqc->qc_cmd = flag ? Q_INITQUOTA : Q_SETQUOTA;
         ioqc->qc_id = oqctl->qc_id;
         ioqc->qc_type = oqctl->qc_type;
         ioqc->qc_dqblk.dqb_valid = QIF_BLIMITS;
-        ioqc->qc_dqblk.dqb_bhardlimit = set ? MIN_QLIMIT : 0;
+        ioqc->qc_dqblk.dqb_bhardlimit = flag ? MIN_QLIMIT : 0;
 
-        /* set local limit to MIN_QLIMIT */
-        if (set) {
-                rc = fsfilt_quotactl(obd, obd->u.obt.obt_sb, ioqc);
-                if (rc)
-                        GOTO(out, rc);
-        }
+        rc = fsfilt_quotactl(obd, obd->u.obt.obt_sb, ioqc);
+        if (rc)
+                GOTO(out, rc);
 
         /* trigger local qunit pre-acquire */
         if (oqctl->qc_type == USRQUOTA)

@@ -218,6 +218,14 @@ struct llog_ctxt {
         void                    *llog_proc_cb;
 };
 
+#ifndef __KERNEL__
+
+#define cap_raise(c, flag) do {} while(0)
+
+#define CAP_SYS_RESOURCE 24
+
+#endif   /* !__KERNEL__ */
+
 static inline void llog_gen_init(struct llog_ctxt *ctxt)
 {
         struct obd_device *obd = ctxt->loc_exp->exp_obd;
@@ -321,6 +329,7 @@ static inline int llog_write_rec(struct llog_handle *handle,
                                  int numcookies, void *buf, int idx)
 {
         struct llog_operations *lop;
+        __u32 cap;
         int rc, buflen;
         ENTRY;
 
@@ -337,7 +346,10 @@ static inline int llog_write_rec(struct llog_handle *handle,
                 buflen = rec->lrh_len;
         LASSERT(size_round(buflen) == buflen);
 
+        cap = current->cap_effective;             
+        cap_raise(current->cap_effective, CAP_SYS_RESOURCE); 
         rc = lop->lop_write_rec(handle, rec, logcookies, numcookies, buf, idx);
+        current->cap_effective = cap; 
         RETURN(rc);
 }
 
@@ -433,6 +445,7 @@ static inline int llog_create(struct llog_ctxt *ctxt, struct llog_handle **res,
                               struct llog_logid *logid, char *name)
 {
         struct llog_operations *lop;
+        __u32 cap;
         int rc;
         ENTRY;
 
@@ -442,7 +455,10 @@ static inline int llog_create(struct llog_ctxt *ctxt, struct llog_handle **res,
         if (lop->lop_create == NULL)
                 RETURN(-EOPNOTSUPP);
 
+        cap = current->cap_effective;             
+        cap_raise(current->cap_effective, CAP_SYS_RESOURCE);
         rc = lop->lop_create(ctxt, res, logid, name);
+        current->cap_effective = cap; 
         RETURN(rc);
 }
 
