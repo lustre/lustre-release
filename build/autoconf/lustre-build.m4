@@ -290,15 +290,24 @@ AC_DEFUN([LB_PATH_DMU],
 		       [set path to a built dmu]),
 	[
 		DMU_SRC=$with_dmu
-		dmu=true
+		enable_dmu_osd=yes
 	],
 	[
-		dmu=false
+		enable_dmu_osd=no
 		DMU_SRC=""
 	])
-AM_CONDITIONAL([ENABLE_DMU], [test x$dmu = xtrue])
+AC_MSG_RESULT([$dmu])
+if test x$enable_dmu_osd != xno; then
+        AC_DEFINE(ENABLE_DMU, 1, Enable POSIX OSD)
+        AC_DEFINE(DMU_OSD, 1, Enable POSIX OSD)
+	enable_ulevel_mt='yes'
+        enable_modules='no'
+	enable_client='no'
+	enable_tests='no'
+	enable_liblustre='no'
+        with_ldiskfs=no
+fi
 AC_SUBST(DMU_SRC)
-AC_DEFINE(DMU_OSD, 1, Enable DMU OSD)
 ])
 
 #
