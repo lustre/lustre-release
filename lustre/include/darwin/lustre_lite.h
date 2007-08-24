@@ -9,8 +9,6 @@
  * Copyright (C) 2002 Cluster File Systems, Inc. <info@clusterfs.com>
  */
 
-
-
 #ifndef _DARWIN_LL_H
 #define _DARWIN_LL_H
 
