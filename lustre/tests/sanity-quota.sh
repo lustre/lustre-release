@@ -1102,7 +1102,7 @@ test_13(){
 	# do the check
 	dmesg | tail | grep "\-122" |grep llog_obd_origin_add && error "test_13 failed."
 	$LFS setquota -u root 0 0 0 0 $MOUNT
-	check_if_quota_zero u root
+	#check_if_quota_zero u root
 
 	# clean 
 	unlinkmany ${TESTFILE} 15
