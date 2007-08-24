@@ -708,7 +708,7 @@ int mds_obd_create(struct obd_export *exp, struct obdo *oa,
         ENTRY;
 
         /* the owner of object file should always be root */
-        ucred.luc_cap = current->cap_effective | CAP_SYS_RESOURCE;
+        cap_raise(ucred.luc_cap, CAP_SYS_RESOURCE);
 
         if (strncmp(exp->exp_obd->obd_name, MDD_OBD_NAME,
                                    strlen(MDD_OBD_NAME))) {
@@ -800,7 +800,7 @@ int mds_obd_destroy(struct obd_export *exp, struct obdo *oa,
         int err, namelen, rc = 0;
         ENTRY;
 
-        ucred.luc_cap = current->cap_effective | CAP_SYS_RESOURCE;
+        cap_raise(ucred.luc_cap, CAP_SYS_RESOURCE);
         push_ctxt(&saved, &obd->obd_lvfs_ctxt, &ucred);
 
         namelen = ll_fid2str(fidname, oa->o_id, oa->o_generation);

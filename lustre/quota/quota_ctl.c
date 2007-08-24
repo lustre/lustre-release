@@ -128,6 +128,20 @@ int filter_quota_ctl(struct obd_export *exp, struct obd_quotactl *oqctl)
                         atomic_inc(&obt->obt_quotachecking);
                 }
                 break;
+        case Q_SETQUOTA:
+                qctxt_wait_pending_dqacq(&obd->u.obt.obt_qctxt, 
+                                         oqctl->qc_id, oqctl->qc_type, 1);
+
+                push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
+                rc = fsfilt_quotactl(obd, obd->u.obt.obt_sb, oqctl);
+
+                if (!rc) {
+                        oqctl->qc_cmd = Q_SYNC;
+                        fsfilt_quotactl(obd, obd->u.obt.obt_sb, oqctl);
+                        oqctl->qc_cmd = Q_SETQUOTA;
+                }
+                pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
+                break;
         case Q_INITQUOTA:
                 {
                 unsigned int uid = 0, gid = 0;
@@ -234,7 +248,8 @@ int lov_quota_ctl(struct obd_export *exp, struct obd_quotactl *oqctl)
         ENTRY;
 
         if (oqctl->qc_cmd != Q_QUOTAON && oqctl->qc_cmd != Q_QUOTAOFF &&
-            oqctl->qc_cmd != Q_GETOQUOTA && oqctl->qc_cmd != Q_INITQUOTA) {
+            oqctl->qc_cmd != Q_GETOQUOTA && oqctl->qc_cmd != Q_INITQUOTA &&
+            oqctl->qc_cmd != Q_SETQUOTA) {
                 CERROR("bad quota opc %x for lov obd", oqctl->qc_cmd);
                 RETURN(-EFAULT);
         }

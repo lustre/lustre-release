@@ -1050,6 +1050,56 @@ test_13() {
 }
 run_test 13 "test multiple clients write block quota ==="
 
+check_if_quota_zero(){
+        line=`$LFS quota -$1 $2 $MOUNT | wc -l`
+	for i in `seq 3 $line`; do
+	    for j in 3 4 6 7; do
+		tmp=`$LFS quota -$1 $2 $MOUNT | sed -n ${i}p | 
+                     awk  '{print $'"$j"'}'`
+		[ -n "$tmp" ] && [ $tmp -ne 0 ] && $LFS quota -$1 $2 $MOUNT && \
+		    error "quota on $1 isn't clean"
+	    done
+	done
+	echo "pass check_if_quota_zero"
+}
+
+# test setting quota on root, b=12223
+test_13(){
+        TESTFILE="$TSTDIR/quota_tst13"
+
+	# reboot the lustre
+	cd $T_PWD; sh llmountcleanup.sh || error "llmountcleanup failed"
+	sh llmount.sh 
+	pre_test
+	setup
+	run_test 0 "reboot lustre"
+
+	# out of root's file and block quota
+        $LFS setquota -u root 10 10 10 10 $MOUNT
+	createmany -m ${TESTFILE} 20 || \
+	    error "unexpected: user(root) create files failly!"
+	dd if=/dev/zero of=$TESTFILE bs=4k count=4096 || \
+	    error "unexpected: user(root) write files failly!"
+	chmod 666 $TESTFILE
+	$RUNAS dd if=/dev/zero of=${TESTFILE} seek=4096 bs=4k count=4096 && \
+	    error "unexpected: user(quota_usr) write a file successfully!"	
+
+	# trigger the llog
+	chmod 777 $MOUNT
+	for i in `seq 1 10`; do $RUNAS touch ${TESTFILE}a_$i; done 
+	for i in `seq 1 10`; do $RUNAS rm -f ${TESTFILE}a_$i; done 
+
+	# do the check
+	dmesg | tail | grep "\-122" |grep llog_obd_origin_add && error "test_13 failed."
+	$LFS setquota -u root 0 0 0 0 $MOUNT
+	#check_if_quota_zero u root
+
+	# clean 
+	unlinkmany ${TESTFILE} 15
+	rm -f $TESTFILE
+}
+run_test 13 "test setting quota on root ==="
+
 # turn off quota
 test_99()
 {

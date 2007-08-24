@@ -210,10 +210,6 @@ check_cur_qunit(struct obd_device *obd,
         if (!sb_any_quota_enabled(sb))
                 RETURN(0);
 
-        /* ignore root user */
-        if (qdata->qd_id == 0 && qdata_type == USRQUOTA)
-                RETURN(0);
-
         OBD_ALLOC_PTR(qctl);
         if (qctl == NULL)
                 RETURN(-ENOMEM);

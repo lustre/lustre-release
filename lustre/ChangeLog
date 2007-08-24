@@ -144,6 +144,12 @@ Bugzilla   : 13362
 Description: Sanity.sh test_65k failed: setstripe should have succeeded
 Details    : execute lfs setstripe on client
 
+Severity   : major
+Bugzilla   : 12223
+Description: mds_obd_create error creating tmp object
+Details    : When the user sets quota on root, llog will be affected and can't 
+             create files and write files.
+
 --------------------------------------------------------------------------------
 
 2007-08-10         Cluster File Systems, Inc. <info@clusterfs.com>

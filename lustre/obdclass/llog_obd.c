@@ -136,6 +136,7 @@ int llog_add(struct llog_ctxt *ctxt, struct llog_rec_hdr *rec,
                 struct lov_stripe_md *lsm, struct llog_cookie *logcookies,
                 int numcookies)
 {
+        __u32 cap;
         int rc;
         ENTRY;
 
@@ -145,8 +146,10 @@ int llog_add(struct llog_ctxt *ctxt, struct llog_rec_hdr *rec,
         }
         
         CTXT_CHECK_OP(ctxt, add, -EOPNOTSUPP);
-
+	cap = current->cap_effective;             
+        cap_raise(current->cap_effective, CAP_SYS_RESOURCE);
         rc = CTXTP(ctxt, add)(ctxt, rec, lsm, logcookies, numcookies);
+	current->cap_effective = cap; 
         RETURN(rc);
 }
 EXPORT_SYMBOL(llog_add);
