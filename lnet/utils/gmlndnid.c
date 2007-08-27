@@ -2,6 +2,7 @@
   * vim:expandtab:shiftwidth=8:tabstop=8:
   *
   *  Copyright (c) 2003 Los Alamos National Laboratory (LANL)
+  *  Copyright (C) 2005 Cluster File Systems, Inc. All rights reserved.
   *
   *   This file is part of Lustre, http://www.lustre.org/
   *
