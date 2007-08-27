@@ -98,6 +98,12 @@ setup() {
 	echo "done"
 }
 
+skip () {
+        log "$0: SKIP: $TESTNAME $@"
+        [ "$SANITYLOG" ] && echo "$0: SKIP: $TESTNAME $@" >> $SANITYLOG
+
+} 
+
 check_kernel_version() {
 	VERSION_FILE=$LPROC/version
 	WANT_VER=$1
