@@ -4,6 +4,7 @@ tbd         Cluster File Systems, Inc. <info@clusterfs.com>
         2.6.5-7.286 (SLES 9),
         2.6.9-55.EL (RHEL 4),
         2.6.16.46-0.14 (SLES 10),
+        2.6.18-8.1.8.EL5 (RHEL 5).
         2.6.18.8 vanilla (kernel.org)
        * Client support for unpatched kernels:
         (see http://wiki.lustre.org/index.php?title=Patchless_Client)
@@ -156,6 +157,11 @@ Bugzilla   : 12826
 Description: Add EXPORT_SYMBOL check for node_to_cpumask symbol.
 Details    : This allows the patchless client to be loaded on architectures
              without this export. 
+
+Severity   : normal
+Bugzilla   : 13039
+Description: RedHat Update kernel for RHEL5
+Details    : Add the kernel config file for RHEL5.
 
 --------------------------------------------------------------------------------
 
