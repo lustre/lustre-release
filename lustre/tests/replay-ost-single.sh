@@ -67,7 +67,6 @@ setup() {
 mkdir -p $DIR
 
 $SETUP
-
 test_0b() {
     fail ost1
     cp /etc/profile  $DIR/$tfile

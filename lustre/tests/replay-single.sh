@@ -6,52 +6,23 @@ set -e
 #
 # This test needs to be run on the client
 #
-
+SAVE_PWD=$PWD
 LUSTRE=${LUSTRE:-`dirname $0`/..}
+SETUP=${SETUP:-}
+CLEANUP=${CLEANUP:-}
 . $LUSTRE/tests/test-framework.sh
 init_test_env $@
 . ${CONFIG:=$LUSTRE/tests/cfg/$NAME.sh}
-
+CHECK_GRANT=${CHECK_GRANT:-"yes"}
+GRANT_CHECK_LIST=${GRANT_CHECK_LIST:-""}
 
 # Skip these tests
 # bug number: 
 ALWAYS_EXCEPT="$REPLAY_SINGLE_EXCEPT"
 
-gen_config() {
-    rm -f $XMLCONFIG
-    add_mds mds --dev $MDSDEV --size $MDSSIZE
-    if [ ! -z "$mdsfailover_HOST" ]; then
-	 add_mdsfailover mds --dev $MDSDEV --size $MDSSIZE
-    fi
-    
-    add_lov lov1 mds --stripe_sz $STRIPE_BYTES \
-	--stripe_cnt $STRIPES_PER_OBJ --stripe_pattern 0
-    add_ost ost --lov lov1 --dev `ostdevname 1` --size $OSTSIZE
-    add_ost ost2 --lov lov1 --dev `ostdevname 2` --size $OSTSIZE
-    add_client client mds --lov lov1 --path $MOUNT
-}
-
 build_test_filter
 
-SETUP=${SETUP:-"setup"}
-CLEANUP=${CLEANUP:-"cleanupall"}
-
-if [ "$ONLY" == "cleanup" ]; then
-    sysctl -w lnet.debug=0 || true
-    $CLEANUP
-    exit 0
-fi
-
-setup() {
-    [ "$REFORMAT" ] && formatall
-    setupall
-}
-
-$SETUP
-
-if [ "$ONLY" == "setup" ]; then
-    exit 0
-fi
+cleanup_and_setup_lustre
 
 mkdir -p $DIR
 
@@ -1199,4 +1170,5 @@ test_61c() {
 run_test 61c "test race mds llog sync vs llog cleanup"
 
 equals_msg `basename $0`: test complete, cleaning up
-$CLEANUP
+
+check_and_cleanup_lustre

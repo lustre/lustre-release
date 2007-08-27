@@ -4,7 +4,7 @@ set -e
 
 ONLY=${ONLY:-"$*"}
 # bug number for skipped test:  3192
-ALWAYS_EXCEPT=${ALWAYS_EXCEPT:-"14b"}
+-ALWAYS_EXCEPT=${ALWAYS_EXCEPT:-"14b"}
 # UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
 
 [ "$SLOW" = "no" ] && EXCEPT="$EXCEPT 16"
@@ -20,16 +20,15 @@ CHECKSTAT=${CHECKSTAT:-"checkstat -v"}
 CREATETEST=${CREATETEST:-createtest}
 GETSTRIPE=${GETSTRIPE:-lfs getstripe}
 SETSTRIPE=${SETSTRIPE:-lstripe}
-LFS=${LFS:-lfs}
-LCTL=${LCTL:-lctl}
 MCREATE=${MCREATE:-mcreate}
 OPENFILE=${OPENFILE:-openfile}
 OPENUNLINK=${OPENUNLINK:-openunlink}
 TOEXCL=${TOEXCL:-toexcl}
 TRUNCATE=${TRUNCATE:-truncate}
 export TMP=${TMP:-/tmp}
-CHECK_GRANT=${CHECK_GRANT:-"no"}
-
+MOUNT_2=${MOUNT_2:-"yes"}
+CHECK_GRANT=${CHECK_GRANT:-"yes"}
+GRANT_CHECK_LIST=${GRANT_CHECK_LIST:-""}
 
 if [ $UID -ne 0 ]; then
 	RUNAS_ID="$UID"
@@ -45,216 +44,18 @@ export NAME=${NAME:-local}
 
 LUSTRE=${LUSTRE:-`dirname $0`/..}
 . $LUSTRE/tests/test-framework.sh
+CLEANUP=${CLEANUP:-:}
+SETUP=${SETUP:-:}
 init_test_env $@
 . ${CONFIG:=$LUSTRE/tests/cfg/$NAME.sh}
 
-cleanup() {
-	echo -n "cln.."
-	grep " $MOUNT2 " /proc/mounts && zconf_umount `hostname` $MOUNT2 ${FORCE}
-	cleanupall ${FORCE} > /dev/null || { echo "FAILed to clean up"; exit 20; }
-}
-CLEANUP=${CLEANUP:-:}
-
-setup() {
-	echo -n "mnt.."
-	setupall || exit 10
-	echo "done"
-}
-SETUP=${SETUP:-:}
-
-log() {
-	echo "$*"
-	lctl mark "$*" 2> /dev/null || true
-}
-
-trace() {
-	log "STARTING: $*"
-	strace -o $TMP/$1.strace -ttt $*
-	RC=$?
-	log "FINISHED: $*: rc $RC"
-	return 1
-}
 TRACE=${TRACE:-""}
 
 LPROC=/proc/fs/lustre
 
-run_one() {
-	if ! grep -q $DIR /proc/mounts; then
-		$SETUP
-	fi
-	testnum=$1
-	message=$2
-	BEFORE=`date +%s`
-	log "== test $testnum: $message= `date +%H:%M:%S` ($BEFORE)"
-	export TESTNAME=test_$testnum
-	export tfile=f${testnum}
-	export tdir=d${base}
-	test_$1 || error "exit with rc=$?"
-	check_grant || error "check grant fail"
-	unset TESTNAME
-	pass "($((`date +%s` - $BEFORE))s)"
-	cd $SAVE_PWD
-	$CLEANUP
-}
-
-build_test_filter() {
-	[ "$ALWAYS_EXCEPT$EXCEPT$SANITYN_EXCEPT" ] && \
-	    echo "Skipping tests: `echo $ALWAYS_EXCEPT $EXCEPT $SANITYN_EXCEPT`"
-
-        for O in $ONLY; do
-            eval ONLY_${O}=true
-        done
-        for E in $EXCEPT $ALWAYS_EXCEPT $SANITY_EXCEPT; do
-            eval EXCEPT_${E}=true
-        done
-}
-
-_basetest() {
-    echo $*
-}
-
-basetest() {
-    IFS=abcdefghijklmnopqrstuvwxyz _basetest $1
-}
-
-build_test_filter() {
-	[ "$ALWAYS_EXCEPT$EXCEPT$SANITYN_EXCEPT" ] && \
-	    echo "Skipping tests: `echo $ALWAYS_EXCEPT $EXCEPT $SANITYN_EXCEPT`"
-
-        for O in $ONLY; do
-            eval ONLY_${O}=true
-        done
-        for E in $EXCEPT $ALWAYS_EXCEPT $SANITYN_EXCEPT; do
-            eval EXCEPT_${E}=true
-        done
-}
-
-_basetest() {
-    echo $*
-}
-
-basetest() {
-    IFS=abcdefghijklmnopqrstuvwxyz _basetest $1
-}
-
-sync_clients() {
-	cd $DIR1
-	sync; sleep 1; sync
-	cd $DIR2
-	sync; sleep 1; sync
-
-	cd $SAVE_PWD
-}
-
-check_grant() {
-	[ "$CHECK_GRANT" == "no" ] && return 0
-
-	echo -n "checking grant......"
-	cd $SAVE_PWD
-	# write some data to sync client lost_grant
-	rm -f $DIR1/${tfile}_check_grant_* 2>&1
-	for i in `seq $OSTCOUNT`; do
-		$LFS setstripe $DIR1/${tfile}_check_grant_$i 0 $(($i -1)) 1
-		dd if=/dev/zero of=$DIR1/${tfile}_check_grant_$i bs=4k \
-					      count=1 > /dev/null 2>&1 
-	done
-	# sync all the data and make sure no pending data on server
-	sync_clients
-	
-	#get client grant and server grant 
-	client_grant=0
-       	for d in /proc/fs/lustre/osc/*/cur_grant_bytes; do 
-		client_grant=$(($client_grant + `cat $d`))
-	done
-	server_grant=0
-	for d in /proc/fs/lustre/obdfilter/*/tot_granted; do
-		server_grant=$(($server_grant + `cat $d`))
-	done
-
-	# cleanup the check_grant file
-	for i in `seq $OSTCOUNT`; do
-	        rm $DIR1/${tfile}_check_grant_$i
-	done
-
-	#check whether client grant == server grant 
-	if [ $client_grant != $server_grant ]; then
-		echo "failed: client:${client_grant} server: ${server_grant}"
-		return 1
-	else
-		echo "pass"
-	fi
-}
-
-run_test() {
-         export base=`basetest $1`
-         if [ "$ONLY" ]; then
-                 testname=ONLY_$1
-                 if [ ${!testname}x != x ]; then
- 			run_one $1 "$2"
- 			return $?
-                 fi
-                 testname=ONLY_$base
-                 if [ ${!testname}x != x ]; then
-                         run_one $1 "$2"
-                         return $?
-                 fi
-                 echo -n "."
-                 return 0
- 	fi
-        testname=EXCEPT_$1
-        if [ ${!testname}x != x ]; then
-                 echo "skipping excluded test $1"
-                 return 0
-        fi
-        testname=EXCEPT_$base
-        if [ ${!testname}x != x ]; then
-                 echo "skipping excluded test $1 (base $base)"
-                 return 0
-        fi
-        run_one $1 "$2"
- 	return $?
-}
-
 [ "$SANITYLOG" ] && rm -f $SANITYLOG || true
 
-error () {
-	sysctl -w lustre.fail_loc=0 2> /dev/null || true
-	log "$0: FAIL: $TESTNAME $@"
-	$LCTL dk $TMP/lustre-log-$TESTNAME.log
-	if [ "$SANITYLOG" ]; then
-		echo "$0: FAIL: $TESTNAME $@" >> $SANITYLOG
-	else
-		exit 1
-	fi
-}
-
-pass() {
-	echo PASS $@
-}
-
-mounted_lustre_filesystems() {
-	awk '($3 ~ "lustre" && $1 ~ ":") { print $2 }' /proc/mounts
-}
-MOUNTED="`mounted_lustre_filesystems`"
-if [ -z "$MOUNTED" ]; then
-    formatall
-    setupall
-    mount_client $MOUNT2
-    MOUNTED="`mounted_lustre_filesystems`"
-    [ -z "$MOUNTED" ] && error "NAME=$NAME not mounted"
-    I_MOUNTED=yes
-fi
-export MOUNT1=`mounted_lustre_filesystems | head -n 1`
-[ -z "$MOUNT1" ] && error "NAME=$NAME not mounted once"
-export MOUNT2=`mounted_lustre_filesystems | tail -n 1`
-[ "$MOUNT1" = "$MOUNT2" ] && error "NAME=$NAME not mounted twice"
-[ `mounted_lustre_filesystems | wc -l` -ne 2 ] && \
-	error "NAME=$NAME mounted more than twice"
-
-export DIR1=${DIR1:-$MOUNT1}
-export DIR2=${DIR2:-$MOUNT2}
-[ -z "`echo $DIR1 | grep $MOUNT1`" ] && echo "$DIR1 not in $MOUNT1" && exit 96
-[ -z "`echo $DIR2 | grep $MOUNT2`" ] && echo "$DIR2 not in $MOUNT2" && exit 95
+check_and_setup_lustre
 
 LPROC=/proc/fs/lustre
 LOVNAME=`cat $LPROC/llite/*/lov/common_name | tail -n 1`
@@ -778,10 +579,8 @@ test_30() { #bug #11110
 run_test 30 "recreate file race ========="
 
 log "cleanup: ======================================================"
-rm -rf $DIR1/[df][0-9]* $DIR1/lnk || true
-if [ "$I_MOUNTED" = "yes" ]; then
-    cleanup
-fi
+
+check_and_cleanup_lustre
 
 echo '=========================== finished ==============================='
 [ -f "$SANITYLOG" ] && cat $SANITYLOG && exit 1 || true

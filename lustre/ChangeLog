@@ -86,6 +86,12 @@ Description: Add EXPORT_SYMBOL check for node_to_cpumask symbol.
 Details    : This allows the patchless client to be loaded on architectures
              without this export.
 
+Severity   : normal
+Bugzilla   : 12599
+Description: move common funcs to test-frame.sh
+Details    : cleanup those test-scripts and move some common funcs to
+             test-frame.sh 
+
 --------------------------------------------------------------------------------
 
 2007-08-27         Cluster File Systems, Inc. <info@clusterfs.com>

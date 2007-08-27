@@ -15,32 +15,10 @@ build_test_filter
 
 # Allow us to override the setup if we already have a mounted system by
 # setting SETUP=" " and CLEANUP=" "
-SETUP=${SETUP:-"setup"}
-CLEANUP=${CLEANUP:-"cleanup"}
+SETUP=${SETUP:-""}
+CLEANUP=${CLEANUP:-""}
 
-setup() {
-    [ "$REFORMAT" ] && formatall
-    setupall
-}
-
-cleanup() {
-	cleanupall || { echo "FAILed to clean up"; exit 20; }
-}
-
-if [ ! -z "$EVAL" ]; then
-    eval "$EVAL"
-    exit $?
-fi
-
-if [ "$ONLY" == "cleanup" ]; then
-    sysctl -w lnet.debug=0 || true
-    cleanup
-    exit
-fi
-
-$SETUP
-
-[ "$ONLY" == "setup" ] && exit
+cleanup_and_setup_lustre
 
 test_1() {
     drop_request "mcreate $MOUNT/1"  || return 1
@@ -899,5 +877,5 @@ test_59() { # bug 10589
 }
 run_test 59 "Read cancel race on client eviction"
 
-$CLEANUP
+check_and_cleanup_lustre
 echo "$0: completed"
