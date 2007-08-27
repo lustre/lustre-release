@@ -45,6 +45,7 @@
 #include <lustre_log.h>
 #include <libcfs/list.h>
 #include <lvfs.h>
+#include <lustre_fsfilt.h>
 
 #ifdef __KERNEL__
 int llog_origin_connect(struct llog_ctxt *ctxt, int count,
@@ -57,7 +58,9 @@ int llog_origin_connect(struct llog_ctxt *ctxt, int count,
         struct llogd_conn_body *req_body;
         int size[2] = { sizeof(struct ptlrpc_body),
                         sizeof(struct llogd_conn_body) };
-        int rc;
+        struct inode* inode = ctxt->loc_handle->lgh_file->f_dentry->d_inode;
+        void *handle;
+        int rc, rc1;
         ENTRY;
 
         if (list_empty(&ctxt->loc_handle->u.chd.chd_head)) {
@@ -74,11 +77,25 @@ int llog_origin_connect(struct llog_ctxt *ctxt, int count,
                 RETURN(-ENOMEM);
         lgr->lgr_hdr.lrh_len = lgr->lgr_tail.lrt_len = sizeof(*lgr);
         lgr->lgr_hdr.lrh_type = LLOG_GEN_REC;
+
+        handle = fsfilt_start_log(ctxt->loc_exp->exp_obd, inode, 
+                                  FSFILT_OP_CANCEL_UNLINK, NULL, 1);
+       
+        if (IS_ERR(handle)) {
+                CERROR("fsfilt_start failed: %ld\n", PTR_ERR(handle));
+                OBD_FREE(lgr, sizeof(*lgr));
+                rc = PTR_ERR(handle);
+                RETURN(rc);
+        }
         lgr->lgr_gen = ctxt->loc_gen;
         rc = llog_add(ctxt, &lgr->lgr_hdr, NULL, NULL, 1);
         OBD_FREE(lgr, sizeof(*lgr));
-        if (rc != 1)
+        
+        rc1 = fsfilt_commit(ctxt->loc_exp->exp_obd, inode, handle, 0);
+        if (rc != 1 || rc1 != 0) {
+                rc = (rc != 1) ? rc : rc1;
                 RETURN(rc);
+        }
 
         LASSERT(ctxt->loc_imp);
         imp = ctxt->loc_imp;

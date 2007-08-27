@@ -92,6 +92,14 @@ Description: move common funcs to test-frame.sh
 Details    : cleanup those test-scripts and move some common funcs to
              test-frame.sh 
 
+Severity   : normal
+Frequency  : rare 
+Bugzilla   : 13142
+Description: disorder of journal start and llog_add cause deadlock.
+Details    : in llog_origin_connect, journal start should happen before 
+             llog_add keep the same order as other functions to avoid 
+	     the deadlock. 
+
 --------------------------------------------------------------------------------
 
 2007-08-27         Cluster File Systems, Inc. <info@clusterfs.com>
