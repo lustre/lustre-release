@@ -100,6 +100,11 @@ Details    : in llog_origin_connect, journal start should happen before
              llog_add keep the same order as other functions to avoid 
 	     the deadlock. 
 
+Severity   : normal
+Bugzilla   : 13039
+Description: RedHat Update kernel for RHEL5
+Details    : Modify the kernel config file more closer RHEL5.
+
 --------------------------------------------------------------------------------
 
 2007-08-27         Cluster File Systems, Inc. <info@clusterfs.com>
