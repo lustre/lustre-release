@@ -168,6 +168,11 @@ Bugzilla   : 13039
 Description: RedHat Update kernel for RHEL5
 Details    : Modify the kernel config file more closer RHEL5.
 
+Severity   : normal
+Bugzilla   : 13360
+Description: Build failure against Centos5 (RHEL5)
+Details    : Define PAGE_SIZE when it isn't present.
+
 --------------------------------------------------------------------------------
 
 2007-08-10         Cluster File Systems, Inc. <info@clusterfs.com>

@@ -46,6 +46,30 @@
 #include <libcfs/user-time.h>
 #include <signal.h>
 #include <stdlib.h>
+#include <unistd.h>
+
+#ifndef PAGE_SIZE
+
+#define PAGE_SIZE (getpagesize())
+static __inline__ int getpageshift()
+{
+        int pagesize = getpagesize();
+#if (__GNUC__ >= 4) || ((__GNUC__ == 3) && (__GNUC_MINOR__ >= 4))
+        /* unsigned int is 32 bits on all our architectures */
+        return (__builtin_clz(pagesize) ^ 31);
+#else
+        register int pageshift = -1;
+        while (pagesize) { pagesize >>= 1; pageshift++; }
+        return pageshift;
+#endif
+}
+
+#undef  PAGE_MASK
+#define PAGE_MASK  (~(PAGE_SIZE-1))
+#undef  PAGE_SHIFT
+#define PAGE_SHIFT (getpageshift())
+
+#endif
 
 /*
  * Wait Queue. No-op implementation.
