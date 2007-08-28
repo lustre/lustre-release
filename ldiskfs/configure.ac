@@ -16,13 +16,30 @@ LB_CANONICAL_SYSTEM
 LB_INCLUDE_RULES
 LB_PROG_CC
 
+AC_ARG_WITH([dmu],,[enable_uoss='yes'],[])
+
+AC_ARG_ENABLE([posix-osd],,,[enable_uoss='yes'],[])
+
+
 AC_MSG_CHECKING([whether to build kernel modules])
 AC_ARG_ENABLE([modules],
-	AC_HELP_STRING([--disable-modules],
-			[disable building of Lustre kernel modules]),
-	[],[
-		enable_modules='yes'
-	])
+        AC_HELP_STRING([--disable-modules],
+                        [disable building of Lustre kernel modules]),
+        [],[
+        case $target_os in
+                linux*)
+                        if test x$enable_uoss = xyes ; then
+                                enable_modules='no'
+                        else
+                                enable_modules='yes'
+                        fi
+                        ;;
+                *)
+                        enable_modules='no'
+                        ;;
+        esac
+                
+        ])
 AC_MSG_RESULT([$enable_modules])
 
 if test x$enable_modules = xyes ; then
@@ -63,6 +80,7 @@ AM_CONDITIONAL(USE_QUILT, test x$QUILT != xno)
 
 LB_DEFINE_LDISKFS_OPTIONS
 
+if test x$enable_modules = xyes ; then
 AC_MSG_CHECKING([which ldiskfs series to use])
 case $LINUXRELEASE in
 2.6.5*) LDISKFS_SERIES="2.6-suse.series" ;;
@@ -77,6 +95,7 @@ case $LINUXRELEASE in
 esac
 AC_MSG_RESULT([$LDISKFS_SERIES])
 AC_SUBST(LDISKFS_SERIES)
+fi
 
 AC_SUBST(ac_configure_args)
 
