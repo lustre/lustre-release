@@ -1010,3 +1010,11 @@ const char * sptlrpc_bulk_priv_alg2name(__u32 priv_alg)
         return "unknown_priv";
 }
 EXPORT_SYMBOL(sptlrpc_bulk_priv_alg2name);
+
+__u32 sptlrpc_bulk_priv_alg2flags(__u32 priv_alg)
+{
+        if (priv_alg < BULK_PRIV_ALG_MAX)
+                return priv_types[priv_alg].flags;
+        return 0;
+}
+EXPORT_SYMBOL(sptlrpc_bulk_priv_alg2flags);

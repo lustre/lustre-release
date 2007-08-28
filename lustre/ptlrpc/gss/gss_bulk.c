@@ -72,16 +72,18 @@ int do_bulk_privacy(struct gss_ctx *gctx,
         /* compute the secret iv */
         lgss_plain_encrypt(gctx, sizeof(local_iv), bsd->bsd_iv, local_iv);
 
-        tfm = crypto_alloc_tfm(priv_types[alg].name, priv_types[alg].flags);
+        tfm = crypto_alloc_tfm(sptlrpc_bulk_priv_alg2name(alg),
+                               sptlrpc_bulk_priv_alg2flags(alg));
         if (tfm == NULL) {
-                CERROR("Failed to allocate TFM %s\n", priv_types[alg].name);
+                CERROR("Failed to allocate TFM %s\n",
+                       sptlrpc_bulk_priv_alg2name(alg));
                 return -ENOMEM;
         }
 
         rc = crypto_cipher_setkey(tfm, local_iv, sizeof(local_iv));
         if (rc) {
                 CERROR("Failed to set key for TFM %s: %d\n",
-                       priv_types[alg].name, rc);
+                       sptlrpc_bulk_priv_alg2name(alg), rc);
                 crypto_free_tfm(tfm);
                 return rc;
         }
@@ -91,10 +93,10 @@ int do_bulk_privacy(struct gss_ctx *gctx,
                 sg.offset = desc->bd_iov[i].kiov_offset;
                 sg.length = desc->bd_iov[i].kiov_len;
 
-                if (desc->bd_enc_iov) {
-                        sg2.page = desc->bd_enc_iov[i].kiov_page;
-                        sg2.offset = desc->bd_enc_iov[i].kiov_offset;
-                        sg2.length = desc->bd_enc_iov[i].kiov_len;
+                if (desc->bd_enc_pages) {
+                        sg2.page = desc->bd_enc_pages[i];
+                        sg2.offset = desc->bd_iov[i].kiov_offset;
+                        sg2.length = desc->bd_iov[i].kiov_len;
 
                         sgd = &sg2;
                 } else
@@ -106,6 +108,9 @@ int do_bulk_privacy(struct gss_ctx *gctx,
                         rc = crypto_cipher_decrypt(tfm, sgd, &sg, sg.length);
 
                 LASSERT(rc == 0);
+
+                if (desc->bd_enc_pages)
+                        desc->bd_iov[i].kiov_page = desc->bd_enc_pages[i];
 
                 /* although the procedure might be lengthy, the crypto functions
                  * internally called cond_resched() from time to time.

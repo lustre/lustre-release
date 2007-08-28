@@ -405,6 +405,7 @@ struct ptlrpc_bulk_sec_desc {
 
 const char * sptlrpc_bulk_csum_alg2name(__u32 csum_alg);
 const char * sptlrpc_bulk_priv_alg2name(__u32 priv_alg);
+__u32 sptlrpc_bulk_priv_alg2flags(__u32 priv_alg);
 
 /*
  * lprocfs
