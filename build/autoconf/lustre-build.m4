@@ -258,29 +258,6 @@ fi
 
 
 #
-# LB_CONFIG_UOSS
-#
-#
-AC_DEFUN([LB_CONFIG_UOSS],
-[AC_MSG_CHECKING([whether to build user-level oss])
-AC_ARG_ENABLE([uoss],
-	AC_HELP_STRING([--enable-uoss],
-			[enable building of user-level oss]),
-	[enable_uoss='yes'],[enable_uoss='no'])
-AC_MSG_RESULT([$enable_uoss])
-if test x$enable_uoss != xno; then
-        AC_DEFINE(UOSS_SUPPORT, 1, Enable user-level OSS)
-        AC_DEFINE(LUSTRE_ULEVEL_MT, 1, Multi-threaded user-level lustre port)
-	enable_ulevel_mt='yes'
-        enable_modules='no'
-	enable_client='no'
-	enable_tests='no'
-	enable_liblustre='no'
-        with_ldiskfs=no
-fi
-])
-
-#
 # LB_PATH_DMU
 # Support for --with-dmu
 #
@@ -298,8 +275,10 @@ AC_DEFUN([LB_PATH_DMU],
 	])
 AC_MSG_RESULT([$dmu])
 if test x$enable_dmu_osd != xno; then
-        AC_DEFINE(ENABLE_DMU, 1, Enable POSIX OSD)
-        AC_DEFINE(DMU_OSD, 1, Enable POSIX OSD)
+        AC_DEFINE(ENABLE_DMU, 1, Enable DMU OSD)
+        AC_DEFINE(DMU_OSD, 1, Enable DMU OSD)
+        AC_DEFINE(UOSS_SUPPORT, 1, Enable user-level OSS)
+        AC_DEFINE(LUSTRE_ULEVEL_MT, 1, Multi-threaded user-level lustre port)
 	enable_ulevel_mt='yes'
         enable_modules='no'
 	enable_client='no'
@@ -322,6 +301,7 @@ AC_ARG_ENABLE([posix-osd],
 AC_MSG_RESULT([$enable_posix_osd])
 if test x$enable_posix_osd != xno; then
         AC_DEFINE(POSIX_OSD, 1, Enable POSIX OSD)
+        AC_DEFINE(UOSS_SUPPORT, 1, Enable user-level OSS)
         AC_DEFINE(LUSTRE_ULEVEL_MT, 1, Multi-threaded user-level lustre port)
 	enable_ulevel_mt='yes'
         enable_modules='no'
@@ -643,7 +623,6 @@ LB_PATH_DEFAULTS
 LB_PROG_CC
 
 LB_PATH_DMU
-LB_CONFIG_UOSS
 LB_POSIX_OSD
 
 LB_CONFIG_DOCS
