@@ -279,9 +279,10 @@ if test x$enable_dmu_osd != xno; then
         AC_DEFINE(DMU_OSD, 1, Enable DMU OSD)
         AC_DEFINE(UOSS_SUPPORT, 1, Enable user-level OSS)
         AC_DEFINE(LUSTRE_ULEVEL_MT, 1, Multi-threaded user-level lustre port)
-	enable_ulevel_mt='yes'
+        enable_uoss='yes'
+        enable_ulevel_mt='yes'
         enable_modules='no'
-	enable_client='no'
+        enable_client='no'
 	enable_tests='no'
 	enable_liblustre='no'
         with_ldiskfs=no
@@ -303,7 +304,8 @@ if test x$enable_posix_osd != xno; then
         AC_DEFINE(POSIX_OSD, 1, Enable POSIX OSD)
         AC_DEFINE(UOSS_SUPPORT, 1, Enable user-level OSS)
         AC_DEFINE(LUSTRE_ULEVEL_MT, 1, Multi-threaded user-level lustre port)
-	enable_ulevel_mt='yes'
+        enable_uoss='yes'
+        enable_ulevel_mt='yes'
         enable_modules='no'
 	enable_client='no'
 	enable_tests='no'
