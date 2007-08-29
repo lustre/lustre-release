@@ -110,6 +110,11 @@ Bugzilla   : 13360
 Description: Build failure against Centos5 (RHEL5)
 Details    : Define PAGE_SIZE when it isn't present.
 
+Severity   : minor
+Bugzilla   : 13363
+Description: test_7 on sanity-quota.sh can't be used on separate machines
+Details    : add facet to handle it
+
 --------------------------------------------------------------------------------
 
 2007-08-27         Cluster File Systems, Inc. <info@clusterfs.com>
