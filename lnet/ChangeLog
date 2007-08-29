@@ -1,7 +1,7 @@
 2007-09-24         Cluster File Systems, Inc. <info@clusterfs.com>
        * version 1.6.3
        * Support for networks:
-	socklnd   - any kernel supported by Lustre
+	socklnd   - any kernel supported by Lustre,
 	qswlnd    - Qsnet kernel modules 5.20 and later,
 	openiblnd - IbGold 1.8.2,
 	o2iblnd   - OFED 1.1 and 1.2,
