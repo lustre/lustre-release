@@ -21,6 +21,7 @@ AC_ARG_ENABLE([modules],
         AC_HELP_STRING([--disable-modules],
                         [disable building of Lustre kernel modules]),
         [],[
+                enable_modules='yes'
         ])
 AC_MSG_RESULT([$enable_modules])
 
