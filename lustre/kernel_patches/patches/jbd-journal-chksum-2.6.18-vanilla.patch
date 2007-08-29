@@ -155,7 +155,7 @@ Index: linux-2.6.18-8.1.8/fs/jbd/commit.c
 +	}
 +	return ret;
 +}
-++
++
  void journal_do_submit_data(struct buffer_head **wbuf, int bufs)
  {
  	int i;
