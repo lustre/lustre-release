@@ -164,7 +164,7 @@ Description: Update kernel patch for SLES10 SP1
 Details    : Add patch blkdev_tunables-2.6-sles10.patch to 2.6-sles10.series.
 
 Severity   : enhancement
-Bugzilla   : 10786/9303
+Bugzilla   : 10786
 Description: omit set fsid for export NFS
 Details    : fix set/restore device id for avoid EMFILE error and mark lustre fs
 	     as FS_REQUIRES_DEV for avoid problems with generate fsid.
