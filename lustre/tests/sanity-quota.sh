@@ -712,8 +712,8 @@ test_7()
 	[ $TOTAL_LIMIT -eq $LIMIT ] || error "total limits not recovery!"
 	echo "  total limits = $TOTAL_LIMIT"
 	
-	OST0_UUID=`$LCTL dl | awk '$3 ~ /obdfilter/ { print $5 }'| head -n1`
-	[ -z "$OST0_UUID" ] && OST0_UUID=`$LCTL dl | awk '$3 ~ /obdfilter/ { print $5 }'|head -n1`
+        OST0_UUID=`do_facet ost1 "$LCTL dl | grep -m1 obdfilter" | awk '{print $((NF-1))}'`
+        [ -z "$OST0_UUID" ] && OST0_UUID=`do_facet ost1 "$LCTL dl | grep -m1 obdfilter" | awk '{print $((NF-1))}'`
 	OST0_LIMIT="`$LFS quota -o $OST0_UUID -u $TSTUSR $MOUNT | awk '/^.*[[:digit:]+][[:space:]+]/ { print $3 }'`"
 	[ $OST0_LIMIT -eq $BUNIT_SZ ] || error "high limits not released!"
 	echo "  limits on $OST0_UUID = $OST0_LIMIT"
