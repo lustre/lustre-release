@@ -135,6 +135,12 @@ Details    : after a connection loss, the lustre client should attempt to
 	     reconnect to the last active server first before trying the
 	     other potential connections.
 
+Severity   : enhancement
+Bugzilla   : 11270
+Description: eliminate client locks in face of contention
+Details    : file contention detection and lockless i/o implementation
+             for contended files.
+
 --------------------------------------------------------------------------------
 
 2007-08-27         Cluster File Systems, Inc. <info@clusterfs.com>

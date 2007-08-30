@@ -221,6 +221,12 @@ struct ldlm_valblock_ops {
                            int buf_idx, int increase);
 };
 
+/* default values for the "max_nolock_size", "contention_time"
+ * and "contended_locks" namespace tunables */
+#define NS_DEFAULT_MAX_NOLOCK_BYTES 131072
+#define NS_DEFAULT_CONTENTION_SECONDS 2
+#define NS_DEFAULT_CONTENDED_LOCKS 0
+
 struct ldlm_namespace {
         char                  *ns_name;
         __u32                  ns_client; /* is this a client-side lock tree? */
@@ -244,6 +250,14 @@ struct ldlm_namespace {
         struct ldlm_valblock_ops *ns_lvbo;
         void                  *ns_lvbp;
         cfs_waitq_t            ns_waitq;
+        /* if more than @ns_contented_locks found, the resource considered
+         * as contended */
+        unsigned               ns_contended_locks;
+        /* the resource remembers contended state during @ns_contention_time,
+         * in seconds */
+        unsigned               ns_contention_time;
+        /* limit size of nolock requests, in bytes */
+        unsigned               ns_max_nolock_size;
 };
 
 /*
@@ -362,6 +376,9 @@ struct ldlm_resource {
         struct semaphore       lr_lvb_sem;
         __u32                  lr_lvb_len;
         void                  *lr_lvb_data;
+
+        /* when the resource was considered as contended */
+        cfs_time_t             lr_contention_time;
 };
 
 struct ldlm_ast_work {
@@ -450,6 +467,8 @@ int ldlm_replay_locks(struct obd_import *imp);
 void ldlm_resource_iterate(struct ldlm_namespace *, struct ldlm_res_id *,
                            ldlm_iterator_t iter, void *data);
 
+/* measure lock contention and return -EBUSY if locking contention is high */
+#define LDLM_FL_DENY_ON_CONTENTION 0x10000000
 
 /* ldlm_flock.c */
 int ldlm_flock_completion_ast(struct ldlm_lock *lock, int flags, void *data);

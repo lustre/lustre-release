@@ -65,6 +65,8 @@ extern struct file_operations ll_pgcache_seq_fops;
 #define LLI_INODE_DEAD                  0xdeadd00d
 #define LLI_F_HAVE_OST_SIZE_LOCK        0
 #define LLI_F_HAVE_MDS_SIZE_LOCK        1
+#define LLI_F_CONTENDED                 2
+#define LLI_F_SRVLOCK                   3
 
 struct ll_inode_info {
         int                     lli_inode_magic;
@@ -76,6 +78,7 @@ struct ll_inode_info {
         __u64                   lli_maxbytes;
         __u64                   lli_io_epoch;
         unsigned long           lli_flags;
+        cfs_time_t              lli_contention_time;
 
         /* this lock protects s_d_w and p_w_ll and mmap_cnt */
         spinlock_t              lli_lock;
@@ -208,6 +211,9 @@ enum stats_track_type {
 #define LL_SBI_JOIN             0x20 /* support JOIN */
 #define LL_SBI_LOCALFLOCK       0x40 /* Local flocks support by kernel */
 
+/* default value for ll_sb_info->contention_time */
+#define SBI_DEFAULT_CONTENTION_SECONDS     60
+
 struct ll_sb_info {
         struct list_head          ll_list;
         /* this protects pglist and ra_info.  It isn't safe to
@@ -234,6 +240,8 @@ struct ll_sb_info {
         unsigned long             ll_async_page_count;
         unsigned long             ll_pglist_gen;
         struct list_head          ll_pglist; /* all pages (llap_pglist_item) */
+
+        unsigned                  ll_contention_time; /* seconds */
 
         struct ll_ra_info         ll_ra_info;
         unsigned int              ll_namelen;
@@ -400,6 +408,7 @@ enum {
         LLAP_ORIGIN_COMMIT_WRITE,
         LLAP_ORIGIN_WRITEPAGE,
         LLAP_ORIGIN_REMOVEPAGE,
+        LLAP_ORIGIN_LOCKLESS_IO,
         LLAP__ORIGIN_MAX,
 };
 extern char *llap_origins[];
@@ -464,6 +473,9 @@ struct ll_async_page *llap_cast_private(struct page *page);
 void ll_readahead_init(struct inode *inode, struct ll_readahead_state *ras);
 void ll_ra_accounting(struct ll_async_page *llap,struct address_space *mapping);
 void ll_truncate(struct inode *inode);
+int ll_file_punch(struct inode *, loff_t, int);
+ssize_t ll_file_lockless_io(struct file *, char *, size_t, loff_t *, int);
+void ll_clear_file_contended(struct inode*);
 int ll_sync_page_range(struct inode *, struct address_space *, loff_t, size_t);
 
 /* llite/file.c */

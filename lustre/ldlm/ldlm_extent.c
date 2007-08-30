@@ -31,6 +31,7 @@
 
 #include <lustre_dlm.h>
 #include <obd_support.h>
+#include <obd.h>
 #include <lustre_lib.h>
 
 #include "ldlm_internal.h"
@@ -193,6 +194,18 @@ static void ldlm_extent_policy(struct ldlm_resource *res,
         }
 }
 
+static int ldlm_check_contention(struct ldlm_lock *lock, int contended_locks)
+{
+        struct ldlm_resource *res = lock->l_resource;
+        cfs_time_t now = cfs_time_current();
+
+        CDEBUG(D_DLMTRACE, "contended locks = %d\n", contended_locks);
+        if (contended_locks > res->lr_namespace->ns_contended_locks)
+                res->lr_contention_time = now;
+        return cfs_time_before(now, cfs_time_add(res->lr_contention_time,
+                cfs_time_seconds(res->lr_namespace->ns_contention_time)));
+}
+
 /* Determine if the lock is compatible with all locks on the queue.
  * We stop walking the queue if we hit ourselves so we don't take
  * conflicting locks enqueued after us into accound, or we'd wait forever.
@@ -205,7 +218,7 @@ static void ldlm_extent_policy(struct ldlm_resource *res,
 static int
 ldlm_extent_compat_queue(struct list_head *queue, struct ldlm_lock *req,
                          int *flags, ldlm_error_t *err,
-                         struct list_head *work_list)
+                         struct list_head *work_list, int *contended_locks)
 {
         struct list_head *tmp;
         struct ldlm_lock *lock;
@@ -222,7 +235,7 @@ ldlm_extent_compat_queue(struct list_head *queue, struct ldlm_lock *req,
                 lock = list_entry(tmp, struct ldlm_lock, l_res_link);
 
                 if (req == lock)
-                        RETURN(compat);
+                        break;
 
                 if (unlikely(scan)) {
                         /* We only get here if we are queuing GROUP lock
@@ -238,13 +251,15 @@ ldlm_extent_compat_queue(struct list_head *queue, struct ldlm_lock *req,
                                 ldlm_resource_insert_lock_after(lock, req);
                                 list_del_init(&lock->l_res_link);
                                 ldlm_resource_insert_lock_after(req, lock);
-                                RETURN(0);
+                                compat = 0;
+                                break;
                         }
                         if (req->l_policy_data.l_extent.gid ==
                              lock->l_policy_data.l_extent.gid) {
                                 /* found it */
                                 ldlm_resource_insert_lock_after(lock, req);
-                                RETURN(0);
+                                compat = 0;
+                                break;
                         }
                         continue;
                 }
@@ -302,13 +317,13 @@ ldlm_extent_compat_queue(struct list_head *queue, struct ldlm_lock *req,
                                 ldlm_resource_insert_lock_after(lock, req);
                                 list_del_init(&lock->l_res_link);
                                 ldlm_resource_insert_lock_after(req, lock);
-                                RETURN(0);
+                                break;
                         }
                         if (req->l_policy_data.l_extent.gid ==
                              lock->l_policy_data.l_extent.gid) {
                                 /* found it */
                                 ldlm_resource_insert_lock_after(lock, req);
-                                RETURN(0);
+                                break;
                         }
                         continue;
                 }
@@ -332,10 +347,24 @@ ldlm_extent_compat_queue(struct list_head *queue, struct ldlm_lock *req,
                 if (!work_list)
                         RETURN(0);
 
+                /* don't count conflicting glimpse locks */
+                *contended_locks +=
+                        !(lock->l_req_mode == LCK_PR &&
+                          lock->l_policy_data.l_extent.start == 0 &&
+                          lock->l_policy_data.l_extent.end == OBD_OBJECT_EOF);
+
                 compat = 0;
                 if (lock->l_blocking_ast)
                         ldlm_add_ast_work_item(lock, req, work_list);
         }
+
+        if (ldlm_check_contention(req, *contended_locks) &&
+            compat == 0 &&
+            (*flags & LDLM_FL_DENY_ON_CONTENTION) &&
+            req->l_req_mode != LCK_GROUP &&
+            req_end - req_start <=
+            req->l_resource->lr_namespace->ns_max_nolock_size)
+                GOTO(destroylock, compat = -EBUSY);
 
         RETURN(compat);
 destroylock:
@@ -343,6 +372,27 @@ destroylock:
         ldlm_lock_destroy_nolock(req);
         *err = compat;
         RETURN(compat);
+}
+
+static void discard_bl_list(struct list_head *bl_list)
+{
+        struct list_head *tmp, *pos;
+        ENTRY;
+
+        list_for_each_safe(pos, tmp, bl_list) {
+                struct ldlm_lock *lock =
+                        list_entry(pos, struct ldlm_lock, l_bl_ast);
+
+                list_del_init(&lock->l_bl_ast);
+                LASSERT(lock->l_flags & LDLM_FL_AST_SENT);
+                lock->l_flags &= ~LDLM_FL_AST_SENT;
+                LASSERT(lock->l_bl_ast_run == 0);
+                LASSERT(lock->l_blocking_lock);
+                LDLM_LOCK_PUT(lock->l_blocking_lock);
+                lock->l_blocking_lock = NULL;
+                LDLM_LOCK_PUT(lock);
+        }
+        EXIT;
 }
 
 /* If first_enq is 0 (ie, called from ldlm_reprocess_queue):
@@ -358,9 +408,12 @@ int ldlm_process_extent_lock(struct ldlm_lock *lock, int *flags, int first_enq,
         struct ldlm_resource *res = lock->l_resource;
         struct list_head rpc_list = CFS_LIST_HEAD_INIT(rpc_list);
         int rc, rc2;
+        int contended_locks = 0;
         ENTRY;
 
         LASSERT(list_empty(&res->lr_converting));
+        LASSERT(!(*flags & LDLM_FL_DENY_ON_CONTENTION) ||
+                !(lock->l_flags & LDLM_AST_DISCARD_DATA));
         check_res_locked(res);
         *err = ELDLM_OK;
 
@@ -372,10 +425,11 @@ int ldlm_process_extent_lock(struct ldlm_lock *lock, int *flags, int first_enq,
                  * being true, we want to find out. */
                 LASSERT(*flags == 0);
                 rc = ldlm_extent_compat_queue(&res->lr_granted, lock, flags,
-                                              err, NULL);
+                                              err, NULL, &contended_locks);
                 if (rc == 1) {
                         rc = ldlm_extent_compat_queue(&res->lr_waiting, lock,
-                                                      flags, err, NULL);
+                                                      flags, err, NULL,
+                                                      &contended_locks);
                 }
                 if (rc == 0)
                         RETURN(LDLM_ITER_STOP);
@@ -389,13 +443,16 @@ int ldlm_process_extent_lock(struct ldlm_lock *lock, int *flags, int first_enq,
         }
 
  restart:
-        rc = ldlm_extent_compat_queue(&res->lr_granted, lock, flags, err, &rpc_list);
+        contended_locks = 0;
+        rc = ldlm_extent_compat_queue(&res->lr_granted, lock, flags, err,
+                                      &rpc_list, &contended_locks);
         if (rc < 0)
                 GOTO(out, rc); /* lock was destroyed */
         if (rc == 2)
                 goto grant;
 
-        rc2 = ldlm_extent_compat_queue(&res->lr_waiting, lock, flags, err, &rpc_list);
+        rc2 = ldlm_extent_compat_queue(&res->lr_waiting, lock, flags, err,
+                                       &rpc_list, &contended_locks);
         if (rc2 < 0)
                 GOTO(out, rc = rc2); /* lock was destroyed */
 
@@ -424,8 +481,12 @@ int ldlm_process_extent_lock(struct ldlm_lock *lock, int *flags, int first_enq,
                 *flags |= LDLM_FL_NO_TIMEOUT;
 
         }
-        rc = 0;
+        RETURN(0);
 out:
+        if (!list_empty(&rpc_list)) {
+                LASSERT(!(lock->l_flags & LDLM_AST_DISCARD_DATA));
+                discard_bl_list(&rpc_list);
+        }
         RETURN(rc);
 }
 

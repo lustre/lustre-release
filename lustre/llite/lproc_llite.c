@@ -437,6 +437,26 @@ static int ll_wr_track_gid(struct file *file, const char *buffer,
         return (ll_wr_track_id(buffer, count, data, STATS_TRACK_GID));
 }
 
+static int ll_rd_contention_time(char *page, char **start, off_t off,
+                                 int count, int *eof, void *data)
+{
+        struct super_block *sb = data;
+
+        *eof = 1;
+        return snprintf(page, count, "%u\n", ll_s2sbi(sb)->ll_contention_time);
+
+}
+
+static int ll_wr_contention_time(struct file *file, const char *buffer,
+                                 unsigned long count, void *data)
+{
+        struct super_block *sb = data;
+        struct ll_sb_info *sbi = ll_s2sbi(sb);
+
+        return lprocfs_write_helper(buffer, count,&sbi->ll_contention_time) ?:
+                count;
+}
+
 static struct lprocfs_vars lprocfs_obd_vars[] = {
         { "uuid",         ll_rd_sb_uuid,          0, 0 },
         //{ "mntpt_path",   ll_rd_path,             0, 0 },
@@ -458,6 +478,7 @@ static struct lprocfs_vars lprocfs_obd_vars[] = {
         { "stats_track_pid",  ll_rd_track_pid, ll_wr_track_pid, 0 },
         { "stats_track_ppid", ll_rd_track_ppid, ll_wr_track_ppid, 0 },
         { "stats_track_gid",  ll_rd_track_gid, ll_wr_track_gid, 0 },
+        { "contention_seconds", ll_rd_contention_time, ll_wr_contention_time, 0},
         { 0 }
 };
 
@@ -515,6 +536,10 @@ struct llite_file_opcode {
                                    "direct_read" },
         { LPROC_LL_DIRECT_WRITE,   LPROCFS_CNTR_AVGMINMAX|LPROCFS_TYPE_PAGES,
                                    "direct_write" },
+        { LPROC_LL_LOCKLESS_READ,  LPROCFS_CNTR_AVGMINMAX|LPROCFS_TYPE_BYTES,
+                                   "lockless_read_bytes" },
+        { LPROC_LL_LOCKLESS_WRITE, LPROCFS_CNTR_AVGMINMAX|LPROCFS_TYPE_BYTES,
+                                   "lockless_write_bytes" },
 
 };
 

@@ -66,6 +66,8 @@ enum {
          LPROC_LL_INODE_PERM,
          LPROC_LL_DIRECT_READ,
          LPROC_LL_DIRECT_WRITE,
+         LPROC_LL_LOCKLESS_READ,
+         LPROC_LL_LOCKLESS_WRITE,
          LPROC_LL_FILE_OPCODES
 };
 
