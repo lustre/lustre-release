@@ -166,8 +166,7 @@ void ptlrpc_lprocfs_register(struct proc_dir_entry *root, char *dir,
                 __u32 opcode = ll_rpc_opcode_table[i].opcode;
                 lprocfs_counter_init(svc_stats, PTLRPC_LAST_CNTR + i,
                                      svc_counter_config, ll_opcode2str(opcode),
-                                     (i == OST_WRITE || i == OST_READ) ? 
-                                     "bytes" : "usec");
+                                     "usec");
         }
 
         rc = lprocfs_register_stats(svc_procroot, name, svc_stats);
