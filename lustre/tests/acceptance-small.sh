@@ -25,14 +25,13 @@ fi
 [ "$DEBUG_OFF" ] || DEBUG_OFF="eval sysctl -w lnet.debug=\"$DEBUG_LVL\""
 [ "$DEBUG_ON" ] || DEBUG_ON="eval sysctl -w lnet.debug=0x33f0484"
 
-if [ "$ONLY" ]; then
+if [ "$ACC_SM_ONLY" ]; then
     export RUNTESTS="no" SANITY="no" DBENCH="no" BONNIE="no" IOZONE="no" FSX="no" SANITYN="no" LFSCK="no" LIBLUSTRE="no" REPLAY_SINGLE="no" CONF_SANITY="no" RECOVERY_SMALL="no" REPLAY_OST_SINGLE="no" REPLAY_DUAL="no" INSANITY="no" SANITY_QUOTA="no"
-    for O in $ONLY; do
+    for O in $ACC_SM_ONLY; do
+	O=`echo $O | tr "[:lower:]" "[:upper:]"`
 	export ${O}="yes"
     done
-    export ONLY=""
 fi
-
 
 LIBLUSTRETESTS=${LIBLUSTRETESTS:-../liblustre/tests}
 
