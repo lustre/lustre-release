@@ -178,6 +178,13 @@ Bugzilla   : 13363
 Description: test_7 on sanity-quota.sh can't be used on separate machines
 Details    : add facet to handle it
 
+Severity   : normal
+Bugzilla   : 13030
+Description: "ll_intent_file_open()) lock enqueue: err: -13" with nfs
+Details    : with NFS, the anon dentry's parent was set to itself in
+             d_alloc_anon(), so in MDS, we use rec->ur_fid1 to find the
+             corresponding dentry other than use rec->ur_name.
+
 --------------------------------------------------------------------------------
 
 2007-08-10         Cluster File Systems, Inc. <info@clusterfs.com>

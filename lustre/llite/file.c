@@ -356,7 +356,7 @@ static int ll_intent_file_open(struct file *file, void *lmm,
 
         if (rc != 0 || it_open_error(DISP_OPEN_OPEN, itp)) {
                 rc = rc ? rc : it_open_error(DISP_OPEN_OPEN, itp);
-                CERROR("lock enqueue: err: %d\n", rc);
+                CDEBUG(D_VFSTRACE, "lock enqueue: err: %d\n", rc);
                 GOTO(out, rc);
         }
 
