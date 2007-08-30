@@ -181,6 +181,7 @@ static inline cfs_duration_t cfs_time_sub(cfs_time_t t1, cfs_time_t t2)
 #define cfs_time_add_64     cfs_time_add
 #define cfs_time_shift_64   cfs_time_shift
 #define cfs_time_before_64  cfs_time_before
+#define cfs_time_beforeq_64 cfs_time_beforeq
 
 #define CFS_TIME_T              "%lu"
 #define CFS_DURATION_T          "%ld"

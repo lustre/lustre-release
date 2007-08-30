@@ -221,6 +221,7 @@ static inline void cfs_fs_time_nsec(cfs_fs_time_t *t, struct timespec *s)
 #define cfs_time_add_64     cfs_time_add
 #define cfs_time_shift_64   cfs_time_shift
 #define cfs_time_before_64  cfs_time_before
+#define cfs_time_beforeq_64 cfs_time_beforeq
 
 /*
  * One jiffy

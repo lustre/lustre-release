@@ -281,12 +281,17 @@ static inline int cfs_time_before_64(__u64 t1, __u64 t2)
         return (__s64)t2 - (__s64)t1 > 0;
 }
 
+static inline int cfs_time_beforeq_64(__u64 t1, __u64 t2)
+{
+        return (__s64)t2 - (__s64)t1 >= 0;
+}
+
 #else
 #define cfs_time_current_64 cfs_time_current
 #define cfs_time_add_64     cfs_time_add
 #define cfs_time_shift_64   cfs_time_shift
 #define cfs_time_before_64  cfs_time_before
-
+#define cfs_time_beforeq_64 cfs_time_beforeq
 #endif
 
 /*

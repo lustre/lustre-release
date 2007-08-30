@@ -213,6 +213,7 @@ static inline void cfs_duration_nsec(cfs_duration_t d, struct timespec *s)
 #define cfs_time_add_64     cfs_time_add
 #define cfs_time_shift_64   cfs_time_shift
 #define cfs_time_before_64  cfs_time_before
+#define cfs_time_beforeq_64 cfs_time_beforeq
 
 /* 
  * One jiffy (in nanoseconds)
