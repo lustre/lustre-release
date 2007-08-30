@@ -1568,6 +1568,7 @@ static int mdc_cleanup(struct obd_device *obd)
         OBD_FREE(cli->cl_setattr_lock, sizeof (*cli->cl_setattr_lock));
         OBD_FREE(cli->cl_close_lock, sizeof (*cli->cl_close_lock));
 
+        ptlrpc_lprocfs_unregister_obd(obd);
         lprocfs_obd_cleanup(obd);
         ptlrpcd_decref();
 
