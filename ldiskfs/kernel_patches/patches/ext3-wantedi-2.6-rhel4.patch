@@ -1,6 +1,7 @@
-diff -urp RH_2_6_9_42_0_3.orig/fs/ext3/ialloc.c RH_2_6_9_42_0_3/fs/ext3/ialloc.c
---- RH_2_6_9_42_0_3.orig/fs/ext3/ialloc.c	2006-10-23 13:32:46.000000000 +0300
-+++ RH_2_6_9_42_0_3/fs/ext3/ialloc.c	2007-02-16 07:22:28.000000000 +0200
+Index: linux-2.6.9/fs/ext3/ialloc.c
+===================================================================
+--- linux-2.6.9.orig/fs/ext3/ialloc.c	2007-08-29 18:27:45.000000000 +0200
++++ linux-2.6.9/fs/ext3/ialloc.c	2007-08-29 18:27:48.000000000 +0200
 @@ -419,7 +419,8 @@ static int find_group_other(struct super
   * For other inodes, search forward from the parent directory's block
   * group to find a free inode.
@@ -53,10 +54,19 @@ diff -urp RH_2_6_9_42_0_3.orig/fs/ext3/ialloc.c RH_2_6_9_42_0_3/fs/ext3/ialloc.c
  	if (S_ISDIR(mode)) {
  		if (test_opt (sb, OLDALLOC))
  			group = find_group_dir(sb, dir);
-diff -urp RH_2_6_9_42_0_3.orig/fs/ext3/ioctl.c RH_2_6_9_42_0_3/fs/ext3/ioctl.c
---- RH_2_6_9_42_0_3.orig/fs/ext3/ioctl.c	2006-10-23 13:32:46.000000000 +0300
-+++ RH_2_6_9_42_0_3/fs/ext3/ioctl.c	2007-02-16 07:22:28.000000000 +0200
-@@ -25,6 +25,31 @@ int ext3_ioctl (struct inode * inode, st
+Index: linux-2.6.9/fs/ext3/ioctl.c
+===================================================================
+--- linux-2.6.9.orig/fs/ext3/ioctl.c	2007-08-29 18:27:45.000000000 +0200
++++ linux-2.6.9/fs/ext3/ioctl.c	2007-08-29 18:28:46.000000000 +0200
+@@ -13,6 +13,7 @@
+ #include <linux/ext3_jbd.h>
+ #include <linux/time.h>
+ #include <asm/uaccess.h>
++#include <linux/namei.h>
+ 
+ 
+ int ext3_ioctl (struct inode * inode, struct file * filp, unsigned int cmd,
+@@ -25,6 +26,31 @@ int ext3_ioctl (struct inode * inode, st
  	ext3_debug ("cmd = %u, arg = %lu\n", cmd, arg);
  
  	switch (cmd) {
@@ -88,10 +98,11 @@ diff -urp RH_2_6_9_42_0_3.orig/fs/ext3/ioctl.c RH_2_6_9_42_0_3/fs/ext3/ioctl.c
  	case EXT3_IOC_GETFLAGS:
  		flags = ei->i_flags & EXT3_FL_USER_VISIBLE;
  		return put_user(flags, (int __user *) arg);
-diff -urp RH_2_6_9_42_0_3.orig/fs/ext3/namei.c RH_2_6_9_42_0_3/fs/ext3/namei.c
---- RH_2_6_9_42_0_3.orig/fs/ext3/namei.c	2006-10-23 13:32:59.000000000 +0300
-+++ RH_2_6_9_42_0_3/fs/ext3/namei.c	2007-02-22 18:58:13.000000000 +0200
-@@ -1624,6 +1633,28 @@ static int ext3_add_nondir(handle_t *han
+Index: linux-2.6.9/fs/ext3/namei.c
+===================================================================
+--- linux-2.6.9.orig/fs/ext3/namei.c	2007-08-29 18:27:45.000000000 +0200
++++ linux-2.6.9/fs/ext3/namei.c	2007-08-29 18:27:48.000000000 +0200
+@@ -1637,6 +1637,28 @@ static int ext3_add_nondir(handle_t *han
  	return err;
  }
  
@@ -120,7 +131,7 @@ diff -urp RH_2_6_9_42_0_3.orig/fs/ext3/namei.c RH_2_6_9_42_0_3/fs/ext3/namei.c
  /*
   * By the time this is called, we already have created
   * the directory cache entry for the new file, but it
-@@ -1649,7 +1672,7 @@ retry:
+@@ -1662,7 +1684,7 @@ retry:
  	if (IS_DIRSYNC(dir))
  		handle->h_sync = 1;
  
@@ -129,7 +140,7 @@ diff -urp RH_2_6_9_42_0_3.orig/fs/ext3/namei.c RH_2_6_9_42_0_3/fs/ext3/namei.c
  	err = PTR_ERR(inode);
  	if (!IS_ERR(inode)) {
  		inode->i_op = &ext3_file_inode_operations;
-@@ -1683,7 +1706,7 @@ retry:
+@@ -1696,7 +1718,7 @@ retry:
  	if (IS_DIRSYNC(dir))
  		handle->h_sync = 1;
  
@@ -138,7 +149,7 @@ diff -urp RH_2_6_9_42_0_3.orig/fs/ext3/namei.c RH_2_6_9_42_0_3/fs/ext3/namei.c
  	err = PTR_ERR(inode);
  	if (!IS_ERR(inode)) {
  		init_special_inode(inode, inode->i_mode, rdev);
-@@ -1719,7 +1742,7 @@ retry:
+@@ -1732,7 +1754,7 @@ retry:
  	if (IS_DIRSYNC(dir))
  		handle->h_sync = 1;
  
@@ -147,7 +158,7 @@ diff -urp RH_2_6_9_42_0_3.orig/fs/ext3/namei.c RH_2_6_9_42_0_3/fs/ext3/namei.c
  	err = PTR_ERR(inode);
  	if (IS_ERR(inode))
  		goto out_stop;
-@@ -2124,7 +2147,7 @@ retry:
+@@ -2137,7 +2159,7 @@ retry:
  	if (IS_DIRSYNC(dir))
  		handle->h_sync = 1;
  
@@ -156,9 +167,10 @@ diff -urp RH_2_6_9_42_0_3.orig/fs/ext3/namei.c RH_2_6_9_42_0_3/fs/ext3/namei.c
  	err = PTR_ERR(inode);
  	if (IS_ERR(inode))
  		goto out_stop;
-diff -urp RH_2_6_9_42_0_3.orig/include/linux/ext3_fs.h RH_2_6_9_42_0_3/include/linux/ext3_fs.h
---- RH_2_6_9_42_0_3.orig/include/linux/ext3_fs.h	2006-10-23 13:32:46.000000000 +0300
-+++ RH_2_6_9_42_0_3/include/linux/ext3_fs.h	2007-02-16 07:22:28.000000000 +0200
+Index: linux-2.6.9/include/linux/ext3_fs.h
+===================================================================
+--- linux-2.6.9.orig/include/linux/ext3_fs.h	2007-08-29 18:27:44.000000000 +0200
++++ linux-2.6.9/include/linux/ext3_fs.h	2007-08-29 18:27:48.000000000 +0200
 @@ -741,7 +741,8 @@ extern int ext3fs_dirhash(const char *na
  			  dx_hash_info *hinfo);
  
