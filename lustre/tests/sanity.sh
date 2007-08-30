@@ -76,8 +76,6 @@ else
 	fi
 fi
 
-SANITYLOG=${SANITYLOG:-/tmp/sanity.log}
-
 export NAME=${NAME:-local}
 
 SAVE_PWD=$PWD
@@ -91,6 +89,9 @@ if [ ! -z "$USING_KRB5" ]; then
     $RUNAS krb5_login.sh || exit 1
     $RUNAS -u $(($RUNAS_ID + 1)) krb5_login.sh || exit 1
 fi
+
+SANITYLOG=${TESTSUITELOG:-$TMP/$(basename $0 .sh).log}
+FAIL_ON_ERROR=false
 
 cleanup() {
 	echo -n "cln.."
@@ -253,7 +254,6 @@ STRIPECOUNT=`cat $LPROC/lov/$LOVNAME/stripecount`
 STRIPESIZE=`cat $LPROC/lov/$LOVNAME/stripesize`
 ORIGFREE=`cat $LPROC/lov/$LOVNAME/kbytesavail`
 MAXFREE=${MAXFREE:-$((200000 * $OSTCOUNT))}
-MDS=$(\ls $LPROC/mdt 2> /dev/null | grep -v num_refs | tail -n 1)
 
 [ -f $DIR/d52a/foo ] && chattr -a $DIR/d52a/foo
 [ -f $DIR/d52b/foo ] && chattr -i $DIR/d52b/foo
@@ -1070,8 +1070,8 @@ exhaust_all_precreations() {
 }
 
 test_27n() {
-	[ "$OSTCOUNT" -lt "2" -o -z "$MDS" ] && \
-		skip "too few OSTs, or remote MDS" && return
+	[ "$OSTCOUNT" -lt "2" ] && skip "too few OSTs" && return
+	remote_mds && skip "remote MDS" && return
 
 	reset_enospc
 	rm -f $DIR/d27/f27n
@@ -1084,8 +1084,8 @@ test_27n() {
 run_test 27n "create file with some full OSTs =================="
 
 test_27o() {
-	[ "$OSTCOUNT" -lt "2" -o -z "$MDS" ] && \
-		skip "too few OSTs, or remote MDS" && return
+	[ "$OSTCOUNT" -lt "2" ] && skip "too few OSTs" && return
+	remote_mds && skip "remote MDS" && return
 
 	reset_enospc
 	rm -f $DIR/d27/f27o
@@ -1100,8 +1100,8 @@ test_27o() {
 run_test 27o "create file with all full OSTs (should error) ===="
 
 test_27p() {
-	[ "$OSTCOUNT" -lt "2" -o -z "$MDS" ] && \
-		skip "too few OSTs, or remote MDS" && return
+	[ "$OSTCOUNT" -lt "2" ] && skip "too few OSTs" && return
+	remote_mds && skip "remote MDS" && return
 
 	reset_enospc
 	rm -f $DIR/d27/f27p
@@ -1119,8 +1119,8 @@ test_27p() {
 run_test 27p "append to a truncated file with some full OSTs ==="
 
 test_27q() {
-	[ "$OSTCOUNT" -lt "2" -o -z "$MDS" ] && \
-		skip "too few OSTs, or remote MDS" && return
+	[ "$OSTCOUNT" -lt "2" ] && skip "too few OSTs" && return
+	remote_mds && skip "remote MDS" && return
 
 	reset_enospc
 	rm -f $DIR/d27/f27q
@@ -1139,8 +1139,8 @@ test_27q() {
 run_test 27q "append to truncated file with all OSTs full (should error) ==="
 
 test_27r() {
-	[ "$OSTCOUNT" -lt "2" -o -z "$MDS" ] && \
-		skip "too few OSTs, or remote MDS" && return
+	[ "$OSTCOUNT" -lt "2" ] && skip "too few OSTs" && return
+	remote_mds && skip "remote MDS" && return
 
 	reset_enospc
 	rm -f $DIR/d27/f27r
@@ -1782,9 +1782,7 @@ test_36f() {
 }
 run_test 36f "utime on file racing with OST BRW write =========="
 
-if [ -d $LPROC/obdfilter ]; then
-export FMD_MAX_AGE=`cat $LPROC/obdfilter/*/client_cache_seconds | head -n 1`
-fi
+export FMD_MAX_AGE=`do_facet ost1 cat $LPROC/obdfilter/*/client_cache_seconds | head -n 1`
 test_36g() {
 	[ -z "$FMD_MAX_AGE" ] && skip "skip test for remote OST" && return
 	FMD_BEFORE="`awk '/ll_fmd_cache/ { print $2 }' /proc/slabinfo`"
@@ -2367,6 +2365,8 @@ test_52b() {
 run_test 52b "immutable flag test (should return errors) ======="
 
 test_53() {
+	remote_mds && skip "remote MDS" && return
+
 	# only test MDT0000 
         for i in `ls -d $LPROC/osc/*-osc-MDT0000 2> /dev/null` ; do
                 ostname=`basename $i | cut -d - -f 1-2`
@@ -2580,6 +2580,8 @@ run_test 56h "check lfs find ! -name ============================="
 
 test_57a() {
 	# note test will not do anything if MDS is not local
+	remote_mds && skip "remote MDS" && return
+
 	[ -z "$MDS" ] && skip "skipping test for remote MDS" && return
 	for DEV in `cat $LPROC/mds/*/mntdev`; do
 		dumpe2fs -h $DEV > $TMP/t57a.dump || error "can't access $DEV"
@@ -3949,8 +3951,7 @@ free_min_max () {
 
 test_116() {
 	[ "$OSTCOUNT" -lt "2" ] && skip "$OSTCOUNT < 2 OSTs" && return
-	[ $(grep -c obdfilter $LPROC/devices) -eq 0 ] &&
-		skip "remote MDS, skipping test" && return
+	remote_mds && skip "remote MDS" && return
 
 	echo -n "Free space priority "
 	cat $LPROC/lov/*-clilov-*/qos_prio_free

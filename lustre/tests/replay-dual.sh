@@ -445,9 +445,10 @@ test_19() { # Bug 10991 - resend of open request does not fail assertion.
 run_test 19 "resend of open request"
 
 if [ "$ONLY" != "setup" ]; then
-   equals_msg test complete, cleaning up
+   equals_msg `basename $0`: test complete, cleaning up
    SLEEP=$((`date +%s` - $NOW))
    [ $SLEEP -lt $TIMEOUT ] && sleep $SLEEP
    $CLEANUP
 fi
-echo "$0: completed"
+[ -f "$TESTSUITELOG" ] && cat $TESTSUITELOG || true
+

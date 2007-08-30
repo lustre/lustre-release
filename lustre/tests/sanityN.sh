@@ -52,6 +52,9 @@ LUSTRE=${LUSTRE:-`dirname $0`/..}
 init_test_env $@
 . ${CONFIG:=$LUSTRE/tests/cfg/$NAME.sh}
 
+SANITYLOG=${TESTSUITELOG:-$TMP/$(basename $0 .sh).log}
+FAIL_ON_ERROR=false
+
 if [ ! -z "$USING_KRB5" ]; then
     $RUNAS krb5_login.sh || exit 1
 fi
@@ -533,7 +536,7 @@ test_16() {
 run_test 16 "2500 iterations of dual-mount fsx ================="
 
 test_17() { # bug 3513, 3667
-	[ ! -d /proc/fs/lustre/ost ] && echo "skipping OST-only test" && return
+	[ ! -d /proc/fs/lustre/ost ] && skip "remote OST, skipping OST-only test" && return
 
 	cp /etc/termcap $DIR1/f17
 	cancel_lru_locks osc > /dev/null
@@ -677,7 +680,8 @@ test_24() {
 run_test 24 "lfs df [-ih] [path] test ========================="
 
 test_25() {
-	[ `cat $LPROC/mdc/*-mdc-*/connect_flags | grep -c acl` -lt 2 ] && echo "skipping $TESTNAME (must have acl)" && return
+	[ `cat $LPROC/mdc/*-mdc-*/connect_flags | grep -c acl` -lt 2 ] && \
+	    skip "must have acl, skipping" && return
 
 	mkdir $DIR1/$tdir || error "mkdir $DIR1/$tdir"
 	touch $DIR1/$tdir/f1 || error "touch $DIR1/$tdir/f1"
@@ -807,6 +811,5 @@ if [ "$I_MOUNTED" = "yes" ]; then
 fi
 
 echo '=========================== finished ==============================='
-[ -f "$SANITYLOG" ] && cat $SANITYLOG && exit 1 || true
+[ -f "$SANITYLOG" ] && cat $SANITYLOG && grep -q FAIL $SANITYLOG && exit 1 || true
 echo "$0: completed"
-

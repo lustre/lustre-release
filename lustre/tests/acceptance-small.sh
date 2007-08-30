@@ -78,7 +78,7 @@ for NAME in $CONFIGS; do
 
 	if [ "$SANITY" != "no" ]; then
 	        title sanity
-		SANITYLOG=/tmp/sanity.log sh sanity.sh
+		sh sanity.sh
 		$CLEANUP
 		$SETUP
 	fi
@@ -189,7 +189,7 @@ for NAME in $CONFIGS; do
 		mkdir -p $MOUNT2
 		mount_client $MOUNT2
 		#echo "can't mount2 for '$NAME', skipping sanityN.sh"
-		SANITYLOG=$TMP/sanity.log START=: CLEAN=: sh sanityN.sh
+		START=: CLEAN=: sh sanityN.sh
 		umount $MOUNT2
 
 		$DEBUG_ON
@@ -219,7 +219,10 @@ for NAME in $CONFIGS; do
 		$CLEANUP
 		unload_modules
 		# Liblustre needs accept=all, noacl
-		LNETOPTS="accept=all" MDS_MOUNT_OPTS="${MDS_MOUNT_OPTS},noacl" $SETUP
+		[ -f /etc/modprobe.conf ] && MODPROBECONF=/etc/modprobe.conf
+		[ -f /etc/modprobe.d/Lustre ] && MODPROBECONF=/etc/modprobe.d/Lustre
+
+		LNETOPTS="$(awk '/^options lnet/ { print $0}' $MODPROBECONF | sed 's/^options lnet //g') accept=all" MDS_MOUNT_OPTS="${MDS_MOUNT_OPTS},noacl" $SETUP
 		export LIBLUSTRE_MOUNT_POINT=$MOUNT2
 		export LIBLUSTRE_MOUNT_TARGET=$MGSNID:/$FSNAME
 		export LIBLUSTRE_TIMEOUT=`cat /proc/sys/lustre/timeout`

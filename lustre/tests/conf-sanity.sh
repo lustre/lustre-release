@@ -602,7 +602,7 @@ test_15() {
 		echo "save $MOUNTLUSTRE to $MOUNTLUSTRE.sav"
 		mv $MOUNTLUSTRE $MOUNTLUSTRE.sav && trap cleanup_15 EXIT INT
 		if [ -f $MOUNTLUSTRE ]; then
-			echo "$MOUNTLUSTRE cannot be moved, skipping test"
+			skip "$MOUNTLUSTRE cannot be moved, skipping test"
 			return 0
 		fi
 	fi
@@ -980,7 +980,7 @@ test_28() {
 run_test 28 "permanent parameter setting"
 
 test_29() {
-	[ "$OSTCOUNT" -lt "2" ] && echo "skipping deactivate test" && return
+	[ "$OSTCOUNT" -lt "2" ] && skip "$OSTCOUNT < 2, skipping" && return
         setup > /dev/null 2>&1
 	start_ost2
 	sleep 10
@@ -1070,9 +1070,9 @@ test_32a() {
         #       there appears to be a lot of assumption here about loopback
         #       devices
         # or maybe this test is just totally useless on a client-only system
-        [ -z "$TUNEFS" ] && echo "No tunefs" && return
-        [ ! -r disk1_4.zip ] && echo "Cant find disk1_4.zip, skipping" && return
-	unzip -o -j -d $TMP/$tdir disk1_4.zip || { echo "Cant unzip disk1_4, skipping" && return ; }
+        [ -z "$TUNEFS" ] && skip "No tunefs" && return
+        [ ! -r disk1_4.zip ] && skip "Cant find disk1_4.zip, skipping" && return
+	unzip -o -j -d $TMP/$tdir disk1_4.zip || { skip "Cant unzip disk1_4, skipping" && return ; }
 	load_modules
 	sysctl lnet.debug=$PTLDEBUG
 
@@ -1126,9 +1126,9 @@ test_32b() {
         #       there appears to be a lot of assumption here about loopback
         #       devices
         # or maybe this test is just totally useless on a client-only system
-        [ -z "$TUNEFS" ] && echo "No tunefs" && return
-        [ ! -r disk1_4.zip ] && echo "Cant find disk1_4.zip, skipping" && return
-	unzip -o -j -d $TMP/$tdir disk1_4.zip || { echo "Cant unzip disk1_4, skipping" && return ; }
+        [ -z "$TUNEFS" ] && skip "No tunefs" && return
+        [ ! -r disk1_4.zip ] && skip "Cant find disk1_4.zip, skipping" && return
+	unzip -o -j -d $TMP/$tdir disk1_4.zip || { skip "Cant unzip disk1_4, skipping" && return ; }
 	load_modules
 	sysctl lnet.debug=$PTLDEBUG
 
@@ -1197,5 +1197,5 @@ umount_client $MOUNT
 cleanup_nocli
 cleanup_krb5_env
 
-equals_msg "Done"
-echo "$0: completed"
+equals_msg `basename $0`: test complete
+[ -f "$TESTSUITELOG" ] && cat $TESTSUITELOG || true

@@ -228,7 +228,7 @@ test_17() {
 run_test 17 "timeout bulk get, don't evict client (2732)"
 
 test_18a() {
-    [ -z ${ost2_svc} ] && echo Skipping, needs 2 osts && return 0
+    [ -z ${ost2_svc} ] && skip "needs 2 osts" && return 0
 
     do_facet client mkdir -p $MOUNT/$tdir
     f=$MOUNT/$tdir/$tfile
@@ -578,10 +578,8 @@ run_test 24 "fsync error (should return error)"
 
 test_26() {      # bug 5921 - evict dead exports by pinger
 # this test can only run from a client on a separate node.
-	[ "`lsmod | grep obdfilter`" ] && \
-	    echo "skipping test 26 (local OST)" && return
-	[ "`lsmod | grep mds`" ] && \
-	    echo "skipping test 26 (local MDS)" && return
+	remote_ost || skip "local OST" && return
+	remote_mds || skip "local MDS" && return
 	OST_FILE=$LPROC/obdfilter/${ost1_svc}/num_exports
         OST_EXP="`do_facet ost1 cat $OST_FILE`"
 	OST_NEXP1=`echo $OST_EXP | cut -d' ' -f2`
@@ -626,8 +624,7 @@ test_26b() {      # bug 10140 - evict dead exports by pinger
 run_test 26b "evict dead exports"
 
 test_27() {
-	[ "`lsmod | grep mds`" ] || \
-	    { echo "skipping test 27 (non-local MDS)" && return 0; }
+	remote_mds && { skip "remote MDS" && return 0; }
 	mkdir -p $DIR/$tdir
 	writemany -q -a $DIR/$tdir/$tfile 0 5 &
 	CLIENT_PID=$!
@@ -773,8 +770,7 @@ run_test 54 "back in time"
 
 # bug 11330 - liblustre application death during I/O locks up OST
 test_55() {
-	[ "`lsmod | grep obdfilter`" ] || \
-	    { echo "skipping test 55 (non-local OST)" && return 0; }	
+	remote_ost && { skip "remote OST" && return 0; }
 
 	mkdir -p $DIR/$tdir
 
@@ -880,5 +876,6 @@ test_58() { # bug 11546
 }
 run_test 58 "Eviction in the middle of open RPC reply processing"
 
+equals_msg `basename $0`: test complete, cleaning up
 $CLEANUP
-echo "$0: completed"
+[ -f "$TESTSUITELOG" ] && cat $TESTSUITELOG || true

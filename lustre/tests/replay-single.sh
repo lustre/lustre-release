@@ -930,6 +930,10 @@ run_test 40 "cause recovery in ptlrpc, ensure IO continues"
 # the page, guarnateeing that the unlock from the RPC completion would
 # assert on trying to unlock the unlocked page.
 test_41() {
+    [ $OSTCOUNT -lt 2 ] && \
+	skip "skipping test 41: we don't have a second OST to test with" && \
+	return
+
     local f=$MOUNT/$tfile
     # make sure the start of the file is ost1
     lfs setstripe $f $((128 * 1024)) 0 0 
@@ -1198,3 +1202,4 @@ run_test 60 "test llog post recovery init vs llog unlink"
 
 equals_msg `basename $0`: test complete, cleaning up
 $CLEANUP
+[ -f "$TESTSUITELOG" ] && cat $TESTSUITELOG || true

@@ -571,5 +571,6 @@ test_10() {
 }
 run_test 10 "Running Availability for 6 hours..."
 
-equals_msg "Done, cleaning up"
+equals_msg `basename $0`: test complete, cleaning up
 $CLEANUP
+[ -f "$TESTSUITELOG" ] && cat $TESTSUITELOG || true
