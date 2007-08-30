@@ -24,7 +24,6 @@
  *
  */
 
-
 #include <stdlib.h>
 #include <sys/ioctl.h>
 #include <stdio.h>

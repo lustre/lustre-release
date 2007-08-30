@@ -23,7 +23,6 @@
  *
  */
 
-
 /* for O_DIRECTORY */
 #define _GNU_SOURCE
 
