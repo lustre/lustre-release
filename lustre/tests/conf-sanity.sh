@@ -866,7 +866,7 @@ test_24a() {
  	umount_client $MOUNT 
 	# the MDS must remain up until last MDT
 	stop_mds
-	MDS=$(awk '($3 ~ "mdt" && $4 ~ "MDS") { print $4 }' $LPROC/devices)
+	MDS=$(do_facet mds "cat $LPROC/devices" | awk '($3 ~ "mdt" && $4 ~ "MDS") { print $4 }')
 	[ -z "$MDS" ] && error "No MDS" && return 8
 	umount $MOUNT2
 	stop fs2mds -f
