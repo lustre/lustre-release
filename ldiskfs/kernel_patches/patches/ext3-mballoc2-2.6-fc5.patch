@@ -362,7 +362,7 @@ Index: linux-2.6.16.i686/fs/ext3/mballoc.c
 ===================================================================
 --- linux-2.6.16.i686.orig/fs/ext3/mballoc.c	2006-05-31 04:14:15.752410384 +0800
 +++ linux-2.6.16.i686/fs/ext3/mballoc.c	2006-05-30 23:03:38.000000000 +0800
-@@ -0,0 +1,2725 @@
+@@ -0,0 +1,2726 @@
 +/*
 + * Copyright (c) 2003-2005, Cluster File Systems, Inc, info@clusterfs.com
 + * Written by Alex Tomas <alex@clusterfs.com>
@@ -2243,7 +2243,8 @@ Index: linux-2.6.16.i686/fs/ext3/mballoc.c
 +	spin_lock_init(&sbi->s_mb_history_lock);
 +	i = sbi->s_mb_history_max * sizeof(struct ext3_mb_history);
 +	sbi->s_mb_history = kmalloc(i, GFP_KERNEL);
-+	memset(sbi->s_mb_history, 0, i);
++       if (likely(sbi->s_mb_history != NULL))
++               memset(sbi->s_mb_history, 0, i);
 +	/* if we can't allocate history, then we simple won't use it */
 +}
 +
@@ -2254,7 +2255,7 @@ Index: linux-2.6.16.i686/fs/ext3/mballoc.c
 +	struct ext3_sb_info *sbi = EXT3_SB(sb);
 +	struct ext3_mb_history h;
 +
-+	if (likely(sbi->s_mb_history == NULL))
++	if (unlikely(sbi->s_mb_history == NULL))
 +		return;
 +
 +	h.pid = current->pid;
