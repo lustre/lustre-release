@@ -896,7 +896,7 @@ run_test 25 "Verify modules are referenced"
 test_26() {
     load_modules
     # we need modules before mount for sysctl, so make sure...
-    [ -z "$(lsmod | grep lustre)" ] && modprobe lustre 
+    do_facet mds "lsmod | grep -q lustre || modprobe lustre"
 #define OBD_FAIL_MDS_FS_SETUP            0x135
     do_facet mds "sysctl -w lustre.fail_loc=0x80000135"
     start_mds && echo MDS started && return 1
@@ -908,11 +908,12 @@ test_26() {
 run_test 26 "MDT startup failure cleans LOV (should return errs)"
 
 set_and_check() {
-        local TEST=$1
-	local PARAM=$2
-	local ORIG=$($TEST) 
-	if [ $# -gt 2 ]; then
-	    local FINAL=$3
+	local myfacet=$1
+	local TEST=$2
+	local PARAM=$3
+	local ORIG=$(do_facet $myfacet "$TEST") 
+	if [ $# -gt 3 ]; then
+	    local FINAL=$4
 	else
 	    local -i FINAL
 	    FINAL=$(($ORIG + 5))
@@ -924,7 +925,7 @@ set_and_check() {
 	local WAIT=0
 	while [ 1 ]; do
 	    sleep 5
-	    RESULT=$($TEST) 
+	    RESULT=$(do_facet $myfacet "$TEST") 
 	    if [ $RESULT -eq $FINAL ]; then
 		echo "Updated config after $WAIT sec (got $RESULT)"
 		break
@@ -943,7 +944,7 @@ test_27a() {
 	start_mds || return 2
 	echo "Requeue thread should have started: " 
 	ps -e | grep ll_cfg_requeue 
-	set_and_check "cat $LPROC/obdfilter/$FSNAME-OST0000/client_cache_seconds" "$FSNAME-OST0000.ost.client_cache_seconds" || return 3 
+	set_and_check ost1 "cat $LPROC/obdfilter/$FSNAME-OST0000/client_cache_seconds" "$FSNAME-OST0000.ost.client_cache_seconds" || return 3 
 	cleanup_nocli
 }
 run_test 27a "Reacquire MGS lock if OST started first"
@@ -951,8 +952,8 @@ run_test 27a "Reacquire MGS lock if OST started first"
 test_27b() {
         setup
 	facet_failover mds
-	set_and_check "cat $LPROC/mdt/$FSNAME-MDT0000/identity_acquire_expire" "$FSNAME-MDT0000.mdt.identity_acquire_expire" || return 3
-	set_and_check "cat $LPROC/mdc/$FSNAME-MDT0000-mdc-*/max_rpcs_in_flight" "$FSNAME-MDT0000.mdc.max_rpcs_in_flight" || return 4
+	set_and_check mds "cat $LPROC/mdt/$FSNAME-MDT0000/identity_acquire_expire" "$FSNAME-MDT0000.mdt.identity_acquire_expire" || return 3
+	set_and_check client "cat $LPROC/mdc/$FSNAME-MDT0000-mdc-*/max_rpcs_in_flight" "$FSNAME-MDT0000.mdc.max_rpcs_in_flight" || return 4
 	cleanup
 }
 run_test 27b "Reacquire MGS lock after failover"
@@ -963,8 +964,8 @@ test_28() {
 	ORIG=$($TEST) 
 	declare -i FINAL
 	FINAL=$(($ORIG + 10))
-	set_and_check "$TEST" "$FSNAME.llite.max_read_ahead_whole_mb" || return 3
-	set_and_check "$TEST" "$FSNAME.llite.max_read_ahead_whole_mb" || return 3
+	set_and_check client "$TEST" "$FSNAME.llite.max_read_ahead_whole_mb" || return 3
+	set_and_check client "$TEST" "$FSNAME.llite.max_read_ahead_whole_mb" || return 3
  	umount_client $MOUNT || return 200
 	mount_client $MOUNT
 	RESULT=$($TEST)
@@ -994,7 +995,7 @@ test_29() {
 	fi
 	ACTV=$(cat $PROC_ACT)
 	DEAC=$((1 - $ACTV))
-	set_and_check "cat $PROC_ACT" "$PARAM" $DEAC || return 2
+	set_and_check client "cat $PROC_ACT" "$PARAM" $DEAC || return 2
         # also check ost_server_uuid status
 	RESULT=$(grep DEACTIV $PROC_UUID)
 	if [ -z "$RESULT" ]; then
@@ -1006,12 +1007,12 @@ test_29() {
 
 	# check MDT too 
 	local MPROC="$LPROC/osc/$FSNAME-OST0001-osc-[M]*/active"
-	if [ -r $MPROC ]; then
-	    RESULT=$(cat $MPROC)
-	    if [ $RESULT -ne $DEAC ]; then
-		echo "MDT not deactivated: $(cat $MPROC)"
-		return 4
-	    fi
+        RESULT=`do_facet mds " [ -r $MPROC ] && cat $MPROC"`
+        [ ${PIPESTATUS[0]} = 0 ] || error "Can't read $MPROC"
+        if [ $RESULT -ne $DEAC ]; then
+            echo "MDT not deactivated: $RESULT"
+            return 4
+        else
 	    echo "MDT deactivated also"
 	fi
 
@@ -1027,7 +1028,7 @@ test_29() {
 	fi
 
 	# make sure it reactivates
-	set_and_check "cat $PROC_ACT" "$PARAM" $ACTV || return 6
+	set_and_check client "cat $PROC_ACT" "$PARAM" $ACTV || return 6
 
  	umount_client $MOUNT
 	stop_ost2
@@ -1045,13 +1046,13 @@ test_30() {
 	TEST="cat $LPROC/llite/$FSNAME-*/max_read_ahead_whole_mb"
 	ORIG=$($TEST) 
 	for i in $(seq 1 20); do 
-	    set_and_check "$TEST" "$FSNAME.llite.max_read_ahead_whole_mb" $i || return 3
+	    set_and_check client "$TEST" "$FSNAME.llite.max_read_ahead_whole_mb" $i || return 3
 	done
 	# make sure client restart still works 
  	umount_client $MOUNT
 	mount_client $MOUNT || return 4
 	[ "$($TEST)" -ne "$i" ] && return 5   
-	set_and_check "$TEST" "$FSNAME.llite.max_read_ahead_whole_mb" $ORIG || return 6
+	set_and_check client "$TEST" "$FSNAME.llite.max_read_ahead_whole_mb" $ORIG || return 6
 	cleanup
 }
 run_test 30 "Big config llog"
@@ -1064,6 +1065,11 @@ test_31() { # bug 10734
 run_test 31 "Connect to non-existent node (shouldn't crash)"
 
 test_32a() {
+        # XXX - make this run on client-only systems with real hardware on
+        #       the OST and MDT
+        #       there appears to be a lot of assumption here about loopback
+        #       devices
+        # or maybe this test is just totally useless on a client-only system
         [ -z "$TUNEFS" ] && echo "No tunefs" && return
         [ ! -r disk1_4.zip ] && echo "Cant find disk1_4.zip, skipping" && return
 	unzip -o -j -d $TMP/$tdir disk1_4.zip || { echo "Cant unzip disk1_4, skipping" && return ; }
@@ -1100,7 +1106,7 @@ test_32a() {
         MOUNTOPT="exclude=lustre-OST0000"
 	mount_client $MOUNT
         MOUNTOPT=$OLDMOUNTOPT
-	set_and_check "cat $LPROC/mdc/*/max_rpcs_in_flight" "lustre-MDT0000.mdc.max_rpcs_in_flight" || return 11
+	set_and_check client "cat $LPROC/mdc/*/max_rpcs_in_flight" "lustre-MDT0000.mdc.max_rpcs_in_flight" || return 11
 
 	zconf_umount `hostname` $MOUNT -f
 	cleanup_nocli
@@ -1115,6 +1121,11 @@ test_32a() {
 run_test 32a "Upgrade from 1.4 (not live)"
 
 test_32b() {
+        # XXX - make this run on client-only systems with real hardware on
+        #       the OST and MDT
+        #       there appears to be a lot of assumption here about loopback
+        #       devices
+        # or maybe this test is just totally useless on a client-only system
         [ -z "$TUNEFS" ] && echo "No tunefs" && return
         [ ! -r disk1_4.zip ] && echo "Cant find disk1_4.zip, skipping" && return
 	unzip -o -j -d $TMP/$tdir disk1_4.zip || { echo "Cant unzip disk1_4, skipping" && return ; }
@@ -1146,7 +1157,7 @@ test_32b() {
 	# a fully-functioning client
 	echo "Check client and old fs contents"
 	mount_client $MOUNT
-	set_and_check "cat $LPROC/mdc/*/max_rpcs_in_flight" "lustre-MDT0000.mdc.max_rpcs_in_flight" || return 11
+	set_and_check client "cat $LPROC/mdc/*/max_rpcs_in_flight" "lustre-MDT0000.mdc.max_rpcs_in_flight" || return 11
 	[ "$(cksum $MOUNT/passwd | cut -d' ' -f 1,2)" == "2479747619 779" ] || return 12  
 	echo "ok."
 
