@@ -38,6 +38,7 @@ init_test_env() {
 
     [ -d /r ] && export ROOT=${ROOT:-/r}
     export TMP=${TMP:-$ROOT/tmp}
+    export TESTSUITELOG=${TMP}/${TESTSUITE}.log
 
     export PATH=:$PATH:$LUSTRE/utils:$LUSTRE/tests
     export LCTL=${LCTL:-"$LUSTRE/utils/lctl"}
@@ -76,6 +77,9 @@ init_test_env() {
 
     shift $((OPTIND - 1))
     ONLY=${ONLY:-$*}
+
+    [ "$TESTSUITELOG" ] && rm -f $TESTSUITELOG || true
+
 }
 
 case `uname -r` in
@@ -863,6 +867,7 @@ debugrestore() {
     DEBUGSAVE=""
 }
 
+FAIL_ON_ERROR=true
 ##################################
 # Test interface 
 error() {
@@ -871,9 +876,20 @@ error() {
     log "${TESTSUITE} ${TESTNAME}: **** FAIL:" $@
     ERRLOG=$TMP/lustre_${TESTSUITE}_${TESTNAME}.$(date +%s)
     echo "Dumping lctl log to $ERRLOG"
+    # We need to dump the logs on all nodes
     $LCTL dk $ERRLOG
+    [ ! "$mds_HOST" = "$(hostname)" ] && do_node $mds_HOST $LCTL dk $ERRLOG
+    [ ! "$ost_HOST" = "$(hostname)" -a ! "$ost_HOST" = "$mds_HOST" ] && do_node $ost_HOST $LCTL dk $ERRLOG
     debugrestore
-    exit 1
+    [ "$TESTSUITELOG" ] && echo "$0: FAIL: $TESTNAME $@" >> $TESTSUITELOG
+    if $FAIL_ON_ERROR; then
+	exit 1
+    fi
+}
+
+skip () {
+	log " SKIP: ${TESTSUITE} ${TESTNAME} $@"
+	[ "$TESTSUITELOG" ] && echo "${TESTSUITE}: SKIP: $TESTNAME $@" >> $TESTSUITELOG
 }
 
 build_test_filter() {
@@ -917,12 +933,12 @@ run_test() {
     fi
     testname=EXCEPT_$1
     if [ ${!testname}x != x ]; then
-        log "skipping excluded test $1"
+        TESTNAME=test_$1 skip "skipping excluded test $1"
         return 0
     fi
     testname=EXCEPT_$base
     if [ ${!testname}x != x ]; then
-        log "skipping excluded test $1 (base $base)"
+        TESTNAME=test_$1 skip "skipping excluded test $1 (base $base)"
         return 0
     fi
     run_one $1 "$2"
@@ -952,11 +968,6 @@ trace() {
 	log "FINISHED: $*: rc $RC"
 	return 1
 }
-
-skip () {
-        log "$0: SKIP: $TESTNAME $@"
-        [ "$SANITYLOG" ] && echo "$0: SKIP: $TESTNAME $@" >> $SANITYLOG
-} 
 
 pass() {
     echo PASS $@
@@ -1053,4 +1064,14 @@ osc_to_ost()
         ost=`echo $1 | sed 's/-osc.*//'`
     fi
     echo $ost
+}
+
+remote_mds ()
+{
+    [ ! -e /proc/fs/lustre/mds/*MDT* ]
+}
+
+remote_ost ()
+{
+    [ $(grep -c obdfilter $LPROC/devices) -eq 0 ]
 }

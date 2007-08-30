@@ -199,7 +199,6 @@ test_7() {
 }
 run_test 7 "Fail OST before obd_destroy"
 
-equals_msg test complete, cleaning up
+equals_msg `basename $0`: test complete, cleaning up
 $CLEANUP
-echo "$0: completed"
-
+[ -f "$TESTSUITELOG" ] && cat $TESTSUITELOG || true

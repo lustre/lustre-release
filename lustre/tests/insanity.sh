@@ -317,7 +317,7 @@ run_test 4 "Fourth Failure Mode: OST/MDS `date`"
 
 ############### Fifth Failure Mode ###############
 test_5() {
-    [ $OSTCOUNT -lt 1 ] && echo "skipping test_5, not enough OSTs" && return 0
+    [ $OSTCOUNT -lt 1 ] && skip "$OSTCOUNT < 1, not enough OSTs" && return 0
 
     echo "Fifth Failure Mode: OST/OST `date`"
 
@@ -575,7 +575,6 @@ test_10() {
 }
 run_test 10 "Running Availability for 6 hours..."
 
-equals_msg "Done, cleaning up"
+equals_msg `basename $0`: test complete, cleaning up
 $CLEANUP
-echo "$0: completed"
-
+[ -f "$TESTSUITELOG" ] && cat $TESTSUITELOG || true

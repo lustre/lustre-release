@@ -61,6 +61,9 @@ LUSTRE=${LUSTRE:-`dirname $0`/..}
 init_test_env $@
 . ${CONFIG:=$LUSTRE/tests/cfg/$NAME.sh}
 
+QUOTALOG=${TESTSUITELOG:-$TMP/$(basename $0 .sh).log}
+FAIL_ON_ERROR=false
+
 log() {
 	echo "$*"
 	$LCTL mark "$*" 2> /dev/null || true
@@ -126,12 +129,12 @@ run_test() {
  	fi
         testname=EXCEPT_$1
         if [ ${!testname}x != x ]; then
-                 echo "skipping excluded test $1"
+                 TESTNAME=test_$1 skip "skipping excluded test $1"
                  return 0
         fi
         testname=EXCEPT_$base
         if [ ${!testname}x != x ]; then
-                 echo "skipping excluded test $1 (base $base)"
+                 TESTNAME=test_$1 skip "skipping excluded test $1 (base $base)"
                  return 0
         fi
         run_one $1 "$2"
@@ -139,20 +142,6 @@ run_test() {
 }
 
 [ "$QUOTALOG" ] && rm -f $QUOTALOG || true
-
-error() { 
-	sysctl -w lustre.fail_loc=0
-	log "FAIL: $TESTNAME $@"
-	if [ "$QUOTALOG" ]; then
-		echo "FAIL: $TESTNAME $@" >> $QUOTALOG
-	else
-		exit 1
-	fi
-}
-
-pass() { 
-	echo PASS $@
-}
 
 mounted_lustre_filesystems() {
 	awk '($3 ~ "lustre" && $1 ~ ":") { print $2 }' /proc/mounts | sed -n ${1}p
@@ -623,7 +612,7 @@ run_test 5 "Chown & chgrp successfully even out of block/file quota ==="
 # block quota acquire & release
 test_6() {
 	if [ $OSTCOUNT -lt 2 ]; then
-		echo "WARN: too few osts, skip this test."
+		skip "$OSTCOUNT < 2, too few osts"
 		return 0;
 	fi
 
@@ -684,10 +673,7 @@ run_test 6 "Block quota acquire & release ========="
 # quota recovery (block quota only by now)
 test_7()
 {
-	if [ -z "`lsmod|grep mds`" ]; then 
-		echo "WARN: no local mds, skip this test"
-		return 0
-	fi
+	remote_mds && skip "remote mds"
 
 	LIMIT=$(( $BUNIT_SZ * $(($OSTCOUNT + 1)) * 10)) # 10 bunits each sever
 	TESTFILE="$TSTDIR/quota_tst70"
@@ -739,7 +725,7 @@ test_8() {
 	FILE_LIMIT=1000000
 	DBENCH_LIB=${DBENCH_LIB:-/usr/lib/dbench}
 	
-	[ ! -d $DBENCH_LIB ] && echo "dbench not installed, skip this test" && return 0
+	[ ! -d $DBENCH_LIB ] && skip "dbench not installed" && return 0
 	
 	echo "  Set enough high limit for user: $TSTUSR"
 	$LFS setquota -u $TSTUSR 0 $BLK_LIMIT 0 $FILE_LIMIT $MOUNT
@@ -770,7 +756,7 @@ test_9() {
         size_file=$((1024 * 1024 * 9 / 2 * $OSTCOUNT))
         echo "lustrefs_size:$lustrefs_size  size_file:$size_file"
         if [ $lustrefs_size -lt $size_file ]; then
-	    echo "WARN: less than $size_file free, skip this test."
+	    skip "less than $size_file free"
 	    return 0;
         fi
 
@@ -818,12 +804,12 @@ test_10() {
 	size_file=$((1024 * 1024 * 9 / 2 * $OSTCOUNT))
 	echo "lustrefs_size:$lustrefs_size  size_file:$size_file"
 	if [ $lustrefs_size -lt $size_file ]; then
-		echo "WARN: less than $size_file free, skip this test."
+		skip "less than $size_file free"
 		return 0;
 	fi
 
 	if [ ! -d /proc/fs/lustre/ost/ -o ! -d /proc/fs/lustre/mds ]; then
-		echo "WARN: mds or ost isn't local, skip this test."
+		skip "mds or ost isn't local"
 		return 0;
 	fi
 
@@ -1134,5 +1120,5 @@ if [ "`mount | grep ^$NAME`" ]; then
 fi
 
 echo '=========================== finished ==============================='
-[ -f "$QUOTALOG" ] && cat $QUOTALOG && exit 1
+[ -f "$QUOTALOG" ] && cat $QUOTALOG && grep -q FAIL $QUOTALOG && exit 1 || true
 echo "$0: completed"

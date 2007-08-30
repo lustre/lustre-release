@@ -860,7 +860,7 @@ run_test 40 "cause recovery in ptlrpc, ensure IO continues"
 # assert on trying to unlock the unlocked page.
 test_41() {
     [ $OSTCOUNT -lt 2 ] && \
-	echo "skipping test 41: we don't have a second OST to test with" && \
+	skip "skipping test 41: we don't have a second OST to test with" && \
 	return
 
     local f=$MOUNT/$tfile
@@ -1170,5 +1170,5 @@ test_61c() {
 run_test 61c "test race mds llog sync vs llog cleanup"
 
 equals_msg `basename $0`: test complete, cleaning up
-
 check_and_cleanup_lustre
+[ -f "$TESTSUITELOG" ] && cat $TESTSUITELOG || true
