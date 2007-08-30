@@ -89,6 +89,7 @@ command_t cmdlist[] = {
          "       or \n"
          "       setstripe -d <dirname>   (to delete default striping)\n"
          "\tstripe_size:  Number of bytes on each OST (0 filesystem default)\n"
+         "\t              Can be specified with k, m or g (in KB, MB and GB respectively)\n"
          "\tstripe_index: OST index of first stripe (-1 filesystem default)\n"
          "\tstripe_count: Number of OSTs to stripe over (0 default, -1 all)"},
         {"getstripe", lfs_getstripe, 0,
@@ -163,7 +164,7 @@ static int lfs_setstripe(int argc, char **argv)
 {
         char *fname;
         int result;
-        long st_size;
+        unsigned long st_size;
         int  st_offset, st_count;
         char *end;
         int c;
@@ -255,11 +256,24 @@ static int lfs_setstripe(int argc, char **argv)
         if (stripe_size_arg != NULL) {
                 st_size = strtoul(stripe_size_arg, &end, 0);
                 if (*end != '\0') {
-                        fprintf(stderr, "error: %s: bad stripe size '%s'\n",
-                                argv[0], stripe_size_arg);
-                        return CMD_HELP;
+                        if ((*end == 'k' || *end == 'K') && 
+                            *(end+1) == '\0' &&
+                            (st_size & (~0UL << (32 - 10))) == 0) {
+                                st_size <<= 10;
+                        } else if ((*end == 'm' || *end == 'M') && 
+                                   *(end+1) == '\0' &&
+                                   (st_size & (~0UL << (32 - 20))) == 0) {
+                                st_size <<= 20;
+                        } else if ((*end == 'g' || *end == 'G') && 
+                                   *(end+1) == '\0' &&
+                                   (st_size & (~0UL << (32 - 30))) == 0) {
+                                st_size <<= 30;
+                        } else {
+                                fprintf(stderr, "error: %s: bad stripe size '%s'\n",
+                                        argv[0], stripe_size_arg);
+                                return CMD_HELP;
+                        }
                 }
-
         }
         /* get the stripe offset */
         if (stripe_off_arg != NULL) {

@@ -185,6 +185,11 @@ Details    : with NFS, the anon dentry's parent was set to itself in
              d_alloc_anon(), so in MDS, we use rec->ur_fid1 to find the
              corresponding dentry other than use rec->ur_name.
 
+Severity   : enhancement
+Bugzilla   : 12786
+Description: lfs setstripe enhancement
+Details    : Make lfs setstripe understand 'k', 'm' and 'g' for stripe size.
+
 --------------------------------------------------------------------------------
 
 2007-08-10         Cluster File Systems, Inc. <info@clusterfs.com>
