@@ -1254,5 +1254,51 @@ test_34c() {
 }
 run_test 34c "force umount with failed mds should be normal"
 
+test_35() { # bug 12459
+	setup
+
+	debugsave
+	sysctl -w lnet.debug="ha"
+
+	log "Set up a fake failnode for the MDS"
+	FAKENID="127.0.0.2"
+	$LCTL conf_param ${FSNAME}-MDT0000.failover.node=$FAKENID || return 4
+
+	log "Wait for RECONNECT_INTERVAL seconds (10s)"
+	sleep 10
+
+	MSG="conf-sanity.sh test_33 `date +%F%kh%Mm%Ss`"
+	$LCTL clear
+	log "$MSG"
+	log "Stopping the MDT:"
+	stop_mds || return 5
+
+	df $MOUNT > /dev/null 2>&1 &
+	DFPID=$!
+	log "Restarting the MDT:"
+	start_mds || return 6
+	log "Wait for df ($DFPID) ... "
+	wait $DFPID
+	log "done"
+	debugrestore
+
+	# retrieve from the log the first server that the client tried to
+	# contact after the connection loss
+	$LCTL dk $TMP/lustre-log-$TESTNAME.log
+	NEXTCONN=`awk "/${MSG}/ {start = 1;}
+		       /import_select_connection.*${FSNAME}-MDT0000-mdc.* using connection/ {
+				if (start) {
+					if (\\\$NF ~ /$FAKENID/)
+						print \\\$NF;
+					else
+						print 0;
+					exit;
+				}
+		       }" $TMP/lustre-log-$TESTNAME.log`
+	[ "$NEXTCONN" != "0" ] && log "The client didn't try to reconnect to the last active server (tried ${NEXTCONN} instead)" && return 7
+	cleanup
+}
+run_test 35 "Reconnect to the last active server first"
+
 equals_msg "Done"
 echo "$0: completed"
