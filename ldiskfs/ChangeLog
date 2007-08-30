@@ -8,17 +8,7 @@ Bugzilla   : 12415
 Description: Updated patchess for new RHEL4 kernel
 Details    : Add patch ext3-unlink-race.patch
 	     Updated series file ldiskfs-2.6-rhel4.series
-
-Severity   : major
-Frequency  : rare
-Bugzilla   : 6334
-Description: Multiple mount protection(MMP) support.
-Details    : This feature will protect the filesystem from being mounted more
-	     than once simultaneously. It will also protect changes by e2fsprogs
-	     to the filesystem if it is mounted. This assumes high importance
-	     in a shared storage environment where multiple mounts can severely
-	     corrupt the filesystem.
-
+	     
 Severity   : normal
 Bugzilla   : 10657
 Description: Add journal checksum support. (ext3 part)

@@ -1,0 +1,431 @@
+Index: linux-2.6.9/fs/ext3/namei.c
+===================================================================
+--- linux-2.6.9.orig/fs/ext3/namei.c	2006-04-23 22:35:38.000000000 +0800
++++ linux-2.6.9/fs/ext3/namei.c	2006-04-23 22:35:47.000000000 +0800
+@@ -48,6 +48,11 @@
+ #define NAMEI_RA_SIZE        (NAMEI_RA_CHUNKS * NAMEI_RA_BLOCKS)
+ #define NAMEI_RA_INDEX(c,b)  (((c) * NAMEI_RA_BLOCKS) + (b))
+ 
++/*
++ * Maximal number of non-leaf levels in htree. In the stock ext3 this is 2.
++ */
++#define DX_MAX_TREE_HEIGHT (5)
++
+ static struct buffer_head *ext3_append(handle_t *handle,
+ 					struct inode *inode,
+ 					u32 *block, int *err)
+@@ -75,7 +80,7 @@
+ #ifdef DX_DEBUG
+ #define dxtrace(command) command
+ #else
+-#define dxtrace(command) 
++#define dxtrace(command)
+ #endif
+ 
+ struct fake_dirent
+@@ -168,7 +173,7 @@
+ static void dx_insert_block (struct dx_frame *frame, u32 hash, u32 block);
+ static int ext3_htree_next_block(struct inode *dir, __u32 hash,
+ 				 struct dx_frame *frame,
+-				 struct dx_frame *frames, 
++				 struct dx_frame *frames,
+ 				 __u32 *start_hash);
+ static struct buffer_head * ext3_dx_find_entry(struct dentry *dentry,
+ 		       struct ext3_dir_entry_2 **res_dir, int *err);
+@@ -249,7 +254,7 @@
+ }
+ 
+ struct stats
+-{ 
++{
+ 	unsigned names;
+ 	unsigned space;
+ 	unsigned bcount;
+@@ -367,7 +372,7 @@
+ 		goto fail;
+ 	}
+ 
+-	if ((indirect = root->info.indirect_levels) > 1) {
++	if ((indirect = root->info.indirect_levels) > DX_MAX_TREE_HEIGHT - 1) {
+ 		ext3_warning(dir->i_sb, __FUNCTION__,
+ 			     "Unimplemented inode hash depth: %#06x",
+ 			     root->info.indirect_levels);
+@@ -436,12 +441,15 @@
+ 
+ static void dx_release (struct dx_frame *frames)
+ {
++	int height;
++
+ 	if (frames[0].bh == NULL)
+ 		return;
+-
+-	if (((struct dx_root *) frames[0].bh->b_data)->info.indirect_levels)
+-		brelse(frames[1].bh);
+-	brelse(frames[0].bh);
++	height = ((struct dx_root *)frames[0].bh->b_data)->info.indirect_levels;
++	for (; height >= 0; height--) {
++		assert(frames[height].bh != NULL);
++		brelse(frames[height].bh);
++	}
+ }
+ 
+ /*
+@@ -463,7 +471,7 @@
+  */
+ static int ext3_htree_next_block(struct inode *dir, __u32 hash,
+ 				 struct dx_frame *frame,
+-				 struct dx_frame *frames, 
++				 struct dx_frame *frames,
+ 				 __u32 *start_hash)
+ {
+ 	struct dx_frame *p;
+@@ -582,7 +590,7 @@
+ {
+ 	struct dx_hash_info hinfo;
+ 	struct ext3_dir_entry_2 *de;
+-	struct dx_frame frames[2], *frame;
++	struct dx_frame frames[DX_MAX_TREE_HEIGHT], *frame;
+ 	struct inode *dir;
+ 	int block, err;
+ 	int count = 0;
+@@ -627,7 +635,7 @@
+ 		}
+ 		count += ret;
+ 		hashval = ~0;
+-		ret = ext3_htree_next_block(dir, HASH_NB_ALWAYS, 
++		ret = ext3_htree_next_block(dir, HASH_NB_ALWAYS,
+ 					    frame, frames, &hashval);
+ 		*next_hash = hashval;
+ 		if (ret < 0) {
+@@ -644,7 +652,7 @@
+ 			break;
+ 	}
+ 	dx_release(frames);
+-	dxtrace(printk("Fill tree: returned %d entries, next hash: %x\n", 
++	dxtrace(printk("Fill tree: returned %d entries, next hash: %x\n",
+ 		       count, *next_hash));
+ 	return count;
+ errout:
+@@ -918,7 +926,7 @@
+ 	struct super_block * sb;
+ 	struct dx_hash_info	hinfo;
+ 	u32 hash;
+-	struct dx_frame frames[2], *frame;
++	struct dx_frame frames[DX_MAX_TREE_HEIGHT], *frame;
+ 	struct ext3_dir_entry_2 *de, *top;
+ 	struct buffer_head *bh;
+ 	unsigned long block;
+@@ -1037,7 +1045,7 @@
+ 		parent = ERR_PTR(-ENOMEM);
+ 	}
+ 	return parent;
+-} 
++}
+ 
+ #define S_SHIFT 12
+ static unsigned char ext3_type_by_mode[S_IFMT >> S_SHIFT] = {
+@@ -1098,6 +1106,8 @@
+ 	return prev;
+ }
+ 
++/* Allocate new node, and split leaf node @bh into it, inserting new pointer
++ * into parent node identified by @frame */
+ static struct ext3_dir_entry_2 *do_split(handle_t *handle, struct inode *dir,
+ 			struct buffer_head **bh,struct dx_frame *frame,
+ 			struct dx_hash_info *hinfo, int *error)
+@@ -1185,7 +1195,7 @@
+  * add_dirent_to_buf will attempt search the directory block for
+  * space.  It will return -ENOSPC if no space is available, and -EIO
+  * and -EEXIST if directory entry already exists.
+- * 
++ *
+  * NOTE!  bh is NOT released in the case where ENOSPC is returned.  In
+  * all other cases bh is released.
+  */
+@@ -1286,7 +1296,7 @@
+ 	int		namelen = dentry->d_name.len;
+ 	struct buffer_head *bh2;
+ 	struct dx_root	*root;
+-	struct dx_frame	frames[2], *frame;
++	struct dx_frame	frames[DX_MAX_TREE_HEIGHT], *frame;
+ 	struct dx_entry *entries;
+ 	struct ext3_dir_entry_2	*de, *de2;
+ 	char		*data1, *top;
+@@ -1427,20 +1437,29 @@
+ static int ext3_dx_add_entry(handle_t *handle, struct dentry *dentry,
+ 			     struct inode *inode)
+ {
+-	struct dx_frame frames[2], *frame;
+-	struct dx_entry *entries, *at;
++	struct dx_frame frames[DX_MAX_TREE_HEIGHT] = {{0,},}, *frame, *safe;
++	struct dx_node *node2;
++	struct dx_entry *entries;   /* old block contents */
++	struct dx_entry *entries2;  /* new block contents */
+ 	struct dx_hash_info hinfo;
+ 	struct buffer_head * bh;
++	struct buffer_head *bh_new[DX_MAX_TREE_HEIGHT] = {0};
+ 	struct inode *dir = dentry->d_parent->d_inode;
+ 	struct super_block * sb = dir->i_sb;
+ 	struct ext3_dir_entry_2 *de;
++	u32 newblock[DX_MAX_TREE_HEIGHT] = {0};
+ 	int err;
++	int nr_splet;
++	int i;
++	size_t isize;
+ 
+ 	frame = dx_probe(dentry, NULL, &hinfo, frames, &err);
+ 	if (!frame)
+ 		return err;
+ 	entries = frame->entries;
+-	at = frame->at;
++
++	/* XXX nikita: global serialization! */
++	isize = dir->i_size;
+ 
+ 	if (!(bh = ext3_bread(handle,dir, dx_get_block(frame->at), 0, &err)))
+ 		goto cleanup;
+@@ -1456,29 +1475,43 @@
+ 		goto cleanup;
+ 	}
+ 
++	/*
++	 * Tall-tree handling: we might have to split multiple index blocks
++	 * all the way up to tree root. Tricky point here is error handling:
++	 * to avoid complicated undo/rollback we
++	 *
++	 *   - first allocate all necessary blocks
++	 *
++	 *   - insert pointers into them atomically.
++	 *
++	 * XXX nikita: this algorithm is *not* scalable, as it assumes that at
++	 * least nodes in the path are locked.
++	 */
++
+ 	/* Block full, should compress but for now just split */
+ 	dxtrace(printk("using %u of %u node entries\n",
+ 		       dx_get_count(entries), dx_get_limit(entries)));
+-	/* Need to split index? */
+-	if (dx_get_count(entries) == dx_get_limit(entries)) {
+-		u32 newblock;
+-		unsigned icount = dx_get_count(entries);
+-		int levels = frame - frames;
+-		struct dx_entry *entries2;
+-		struct dx_node *node2;
+-		struct buffer_head *bh2;
+ 
+-		if (levels && (dx_get_count(frames->entries) ==
+-			       dx_get_limit(frames->entries))) {
++	/* What levels need split? */
++	for (nr_splet = 0; frame >= frames &&
++	     dx_get_count(frame->entries) == dx_get_limit(frame->entries);
++	     --frame, ++nr_splet) {
++		if (nr_splet == DX_MAX_TREE_HEIGHT) {
+ 			ext3_warning(sb, __FUNCTION__,
+ 				     "Directory index full!\n");
+ 			err = -ENOSPC;
+ 			goto cleanup;
+ 		}
+-		bh2 = ext3_append (handle, dir, &newblock, &err);
+-		if (!(bh2))
++	}
++
++	safe = frame;
++	/* Go back down, allocating blocks, and adding blocks into
++	 * transaction... */
++	for (frame = safe + 1, i = 0; i < nr_splet; ++i, ++frame) {
++		bh_new[i] = ext3_append (handle, dir, &newblock[i], &err);
++		if (!bh_new[i])
+ 			goto cleanup;
+-		node2 = (struct dx_node *)(bh2->b_data);
++		node2 = (struct dx_node *)(bh_new[i]->b_data);
+ 		entries2 = node2->entries;
+ 		node2->fake.rec_len = cpu_to_le16(sb->s_blocksize);
+ 		node2->fake.inode = 0;
+@@ -1486,72 +1519,112 @@
+ 		err = ext3_journal_get_write_access(handle, frame->bh);
+ 		if (err)
+ 			goto journal_error;
+-		if (levels) {
+-			unsigned icount1 = icount/2, icount2 = icount - icount1;
+-			unsigned hash2 = dx_get_hash(entries + icount1);
+-			dxtrace(printk("Split index %i/%i\n", icount1, icount2));
+-
+-			BUFFER_TRACE(frame->bh, "get_write_access"); /* index root */
+-			err = ext3_journal_get_write_access(handle,
+-							     frames[0].bh);
++	}
++	/* Add "safe" node to transaction too */
++	if (safe + 1 != frames) {
++		err = ext3_journal_get_write_access(handle, safe->bh);
++		if (err)
++			goto journal_error;
++	}
++
++	/* Go through nodes once more, inserting pointers */
++	for (frame = safe + 1, i = 0; i < nr_splet; ++i, ++frame) {
++		unsigned count;
++		int idx;
++		struct buffer_head *bh2;
++
++		entries = frame->entries;
++		count = dx_get_count(entries);
++		idx = frame->at - entries;
++
++		bh2 = bh_new[i];
++		node2 = (struct dx_node *)(bh2->b_data);
++		entries2 = node2->entries;
++
++		if (frame == frames) {
++			/* splitting root node. Tricky point:
++			 *
++			 * In the "normal" B-tree we'd split root *and* add
++			 * new root to the tree with pointers to the old root
++			 * and its sibling (thus introducing two new nodes).
++			 *
++			 * In htree it's enough to add one node, because
++			 * capacity of the root node is smaller than that of
++			 * non-root one.
++			 */
++			struct dx_root *root;
++			u8 indirects;
++
++			root = (struct dx_root *) frames->bh->b_data;
++			indirects = root->info.indirect_levels;
++			dxtrace(printk("Creating new root %d\n", indirects));
++			memcpy((char *) entries2, (char *) entries,
++			       count * sizeof(struct dx_entry));
++			dx_set_limit(entries2, dx_node_limit(dir));
++
++			/* Set up root */
++			dx_set_count(entries, 1);
++			dx_set_block(entries + 0, newblock[i]);
++			root->info.indirect_levels = indirects + 1;
++
++			/* Shift frames in the path */
++			memmove(frames + 2, frames + 1,
++				(sizeof frames) - 2 * sizeof frames[0]);
++			/* Add new access path frame */
++			frames[1].at = entries2 + idx;
++			frames[1].entries = entries = entries2;
++			frames[1].bh = bh2;
++			++ frame;
++			bh_new[i] = NULL; /* buffer head is "consumed" */
++			err = ext3_journal_get_write_access(handle, bh2);
+ 			if (err)
+ 				goto journal_error;
+-
+-			memcpy ((char *) entries2, (char *) (entries + icount1),
+-				icount2 * sizeof(struct dx_entry));
+-			dx_set_count (entries, icount1);
+-			dx_set_count (entries2, icount2);
++		} else {
++			/* splitting non-root index node. */
++			unsigned count1 = count/2, count2 = count - count1;
++			unsigned hash2 = dx_get_hash(entries + count1);
++			dxtrace(printk("Split index %i/%i\n", count1, count2));
++
++			memcpy ((char *) entries2, (char *) (entries + count1),
++				count2 * sizeof(struct dx_entry));
++			dx_set_count (entries, count1);
++			dx_set_count (entries2, count2);
+ 			dx_set_limit (entries2, dx_node_limit(dir));
+ 
+ 			/* Which index block gets the new entry? */
+-			if (at - entries >= icount1) {
+-				frame->at = at = at - entries - icount1 + entries2;
++			if (idx >= count1) {
++				frame->at = entries2 + idx - count1;
+ 				frame->entries = entries = entries2;
+ 				swap(frame->bh, bh2);
++				bh_new[i] = bh2;
+ 			}
+-			dx_insert_block (frames + 0, hash2, newblock);
+-			dxtrace(dx_show_index ("node", frames[1].entries));
++			dx_insert_block (frame - 1, hash2, newblock[i]);
++			dxtrace(dx_show_index ("node", frame->entries));
+ 			dxtrace(dx_show_index ("node",
+ 			       ((struct dx_node *) bh2->b_data)->entries));
+ 			err = ext3_journal_dirty_metadata(handle, bh2);
+ 			if (err)
+ 				goto journal_error;
+-			brelse (bh2);
+-		} else {
+-			dxtrace(printk("Creating second level index...\n"));
+-			memcpy((char *) entries2, (char *) entries,
+-			       icount * sizeof(struct dx_entry));
+-			dx_set_limit(entries2, dx_node_limit(dir));
+-
+-			/* Set up root */
+-			dx_set_count(entries, 1);
+-			dx_set_block(entries + 0, newblock);
+-			((struct dx_root *) frames[0].bh->b_data)->info.indirect_levels = 1;
+-
+-			/* Add new access path frame */
+-			frame = frames + 1;
+-			frame->at = at = at - entries + entries2;
+-			frame->entries = entries = entries2;
+-			frame->bh = bh2;
+-			err = ext3_journal_get_write_access(handle,
+-							     frame->bh);
+-			if (err)
+-				goto journal_error;
+ 		}
+-		ext3_journal_dirty_metadata(handle, frames[0].bh);
+ 	}
+-	de = do_split(handle, dir, &bh, frame, &hinfo, &err);
++	de = do_split(handle, dir, &bh, --frame, &hinfo, &err);
+ 	if (!de)
+ 		goto cleanup;
+ 	err = add_dirent_to_buf(handle, dentry, inode, de, bh);
+-	bh = NULL;
+-	goto cleanup;
++	goto cleanup2;
+ 
+ journal_error:
+ 	ext3_std_error(dir->i_sb, err);
+ cleanup:
+ 	if (bh)
+ 		brelse(bh);
++cleanup2:
++	for (i = 0; i < ARRAY_SIZE(bh_new); ++i) {
++		if (bh_new[i] != NULL)
++			brelse(bh_new[i]);
++	}
++	if (err)
++		inode->i_size = isize;
+ 	dx_release(frames);
+ 	return err;
+ }
+@@ -1561,7 +1634,7 @@
+  * ext3_delete_entry deletes a directory entry by merging it with the
+  * previous entry
+  */
+-static int ext3_delete_entry (handle_t *handle, 
++static int ext3_delete_entry (handle_t *handle,
+ 			      struct inode * dir,
+ 			      struct ext3_dir_entry_2 * de_del,
+ 			      struct buffer_head * bh)
+@@ -1821,7 +1894,7 @@
+ 	de1 = (struct ext3_dir_entry_2 *)
+ 			((char *) de + le16_to_cpu(de->rec_len));
+ 	if (le32_to_cpu(de->inode) != inode->i_ino ||
+-			!le32_to_cpu(de1->inode) || 
++			!le32_to_cpu(de1->inode) ||
+ 			strcmp (".", de->name) ||
+ 			strcmp ("..", de1->name)) {
+ 	    	ext3_warning (inode->i_sb, "empty_dir",
+@@ -1891,7 +1964,7 @@
+ 	 * being truncated, or files being unlinked. */
+ 
+ 	/* @@@ FIXME: Observation from aviro:
+-	 * I think I can trigger J_ASSERT in ext3_orphan_add().  We block 
++	 * I think I can trigger J_ASSERT in ext3_orphan_add().  We block
+ 	 * here (on lock_super()), so race with ext3_link() which might bump
+ 	 * ->i_nlink. For, say it, character device. Not a regular file,
+ 	 * not a directory, not a symlink and ->i_nlink > 0.
+@@ -2415,4 +2488,4 @@
+ 	.removexattr	= generic_removexattr,
+ #endif
+ 	.permission	= ext3_permission,
+-}; 
++};

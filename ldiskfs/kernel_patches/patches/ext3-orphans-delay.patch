@@ -1,0 +1,42 @@
+Index: linux-stage/fs/ext3/super.c
+===================================================================
+--- linux-stage.orig/fs/ext3/super.c	2007-06-15 11:56:38.000000000 +0800
++++ linux-stage/fs/ext3/super.c	2007-06-15 12:00:50.000000000 +0800
+@@ -148,6 +148,8 @@
+ 	EXT3_SB(sb)->s_mount_state |= EXT3_ERROR_FS;
+ 	es->s_state |= cpu_to_le16(EXT3_ERROR_FS);
+ 
++	dump_stack();
++
+ 	if (sb->s_flags & MS_RDONLY)
+ 		return;
+ 
+@@ -1262,7 +1264,7 @@
+  * e2fsck was run on this filesystem, and it must have already done the orphan
+  * inode cleanup for us, so we can safely abort without any further action.
+  */
+-static void ext3_orphan_cleanup (struct super_block * sb,
++void ext3_orphan_cleanup (struct super_block * sb,
+ 				 struct ext3_super_block * es)
+ {
+ 	unsigned int s_flags = sb->s_flags;
+@@ -1350,7 +1352,9 @@
+ 	}
+ #endif
+ 	sb->s_flags = s_flags; /* Restore MS_RDONLY status */
++        EXT3_SB(sb)->s_mount_state &= ~EXT3_ORPHAN_FS;
+ }
++EXPORT_SYMBOL(ext3_orphan_cleanup);
+ 
+ #define log2(n) ffz(~(n))
+ 
+@@ -1804,8 +1808,7 @@
+ 	 * superblock lock.
+ 	 */
+ 	EXT3_SB(sb)->s_mount_state |= EXT3_ORPHAN_FS;
+-	ext3_orphan_cleanup(sb, es);
+-	EXT3_SB(sb)->s_mount_state &= ~EXT3_ORPHAN_FS;
++
+ 	if (needs_recovery)
+ 		printk (KERN_INFO "EXT3-fs: recovery complete.\n");
+ 	ext3_mark_recovery_complete(sb, es);
