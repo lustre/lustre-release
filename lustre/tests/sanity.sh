@@ -210,28 +210,6 @@ run_test() {
 
 [ "$SANITYLOG" ] && rm -f $SANITYLOG || true
 
-error() { 
-	sysctl -w lustre.fail_loc=0
-	log "$0: FAIL: $TESTNAME $@"
-	$LCTL dk $TMP/lustre-log-$TESTNAME.log
-	if [ "$SANITYLOG" ]; then
-		echo "$0: FAIL: $TESTNAME $@" >> $SANITYLOG
-	else
-		exit 1
-	fi
-	sysctl -w lustre.fail_loc=0
-}
-
-pass() { 
-	echo PASS $@
-}
-
-skip () {
-	log "$0: SKIP: $TESTNAME $@"
-	[ "$SANITYLOG" ] && echo "$0: SKIP: $TESTNAME $@" >> $SANITYLOG
-
-}
-
 mounted_lustre_filesystems() {
 	awk '($3 ~ "lustre" && $1 ~ ":") { print $2 }' /proc/mounts
 }
@@ -1188,7 +1166,9 @@ test_27x() { # bug 10997
 run_test 27x "check lfs setstripe -c -s -i options ============="
 
 test_27u() { # bug 4900
-        [ "$OSTCOUNT" -lt "2" -o -z "$MDS" ] && echo "skip $TESTNAME" && return
+	[ "$OSTCOUNT" -lt "2" ] && skip "too few OSTs" && return
+	remote_mds && skip "remote MDS" && return
+
         #define OBD_FAIL_MDS_OSC_PRECREATE      0x13d
 
         sysctl -w lustre.fail_loc=0x13d
@@ -1205,7 +1185,9 @@ test_27u() { # bug 4900
 run_test 27u "skip object creation on OSC w/o objects =========="
 
 test_27v() { # bug 4900
-        [ "$OSTCOUNT" -lt "2" -o -z "$MDS" ] && echo "skip $TESTNAME" && return
+	[ "$OSTCOUNT" -lt "2" ] && skip "too few OSTs" && return
+	remote_mds && skip "remote MDS" && return
+
         exhaust_all_precreations
 
         mkdir -p $DIR/$tdir
@@ -2582,7 +2564,6 @@ test_57a() {
 	# note test will not do anything if MDS is not local
 	remote_mds && skip "remote MDS" && return
 
-	[ -z "$MDS" ] && skip "skipping test for remote MDS" && return
 	for DEV in `cat $LPROC/mds/*/mntdev`; do
 		dumpe2fs -h $DEV > $TMP/t57a.dump || error "can't access $DEV"
 		DEVISIZE=`awk '/Inode size:/ { print $3 }' $TMP/t57a.dump`
