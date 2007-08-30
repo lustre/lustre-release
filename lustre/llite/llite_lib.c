@@ -86,11 +86,15 @@ static struct ll_sb_info *ll_init_sbi(void)
         list_add_tail(&sbi->ll_list, &ll_super_blocks);
         spin_unlock(&ll_sb_lock);
 
+#ifdef ENABLE_CHECKSUM
+        sbi->ll_flags |= LL_SBI_CHECKSUM;
+#endif
+
 #ifdef HAVE_EXPORT___IGET
         INIT_LIST_HEAD(&sbi->ll_deathrow);
         spin_lock_init(&sbi->ll_deathrow_lock);
 #endif
-        for (i = 0; i <= LL_PROCESS_HIST_MAX; i++) { 
+        for (i = 0; i <= LL_PROCESS_HIST_MAX; i++) {
                 spin_lock_init(&sbi->ll_rw_extents_info.pp_extents[i].pp_r_hist.oh_lock);
                 spin_lock_init(&sbi->ll_rw_extents_info.pp_extents[i].pp_w_hist.oh_lock);
         }
@@ -131,7 +135,7 @@ static int client_common_fill_super(struct super_block *sb,
         struct lustre_handle mdc_conn = {0, };
         struct lustre_md md;
         struct obd_connect_data *data = NULL;
-        int err;
+        int err, checksum;
         ENTRY;
 
         obd = class_name2obd(mdc);
@@ -350,6 +354,10 @@ static int client_common_fill_super(struct super_block *sb,
                 CERROR("cannot start close thread: rc %d\n", err);
                 GOTO(out_root, err);
         }
+
+        checksum = sbi->ll_flags & LL_SBI_CHECKSUM;
+        err = obd_set_info_async(sbi->ll_osc_exp, strlen("checksum"),"checksum",
+                                 sizeof(checksum), &checksum, NULL);
 
         /* making vm readahead 0 for 2.4.x. In the case of 2.6.x,
            backing dev info assigned to inode mapping is used for
@@ -666,6 +674,17 @@ static int ll_options(char *options, int *flags)
                 }
                 tmp = ll_set_opt("noacl", s1, LL_SBI_ACL);
                 if (tmp) {
+                        goto next;
+                }
+
+                tmp = ll_set_opt("checksum", s1, LL_SBI_CHECKSUM);
+                if (tmp) {
+                        *flags |= tmp;
+                        goto next;
+                }
+                tmp = ll_set_opt("nochecksum", s1, LL_SBI_CHECKSUM);
+                if (tmp) {
+                        *flags &= ~tmp;
                         goto next;
                 }
 
@@ -1632,7 +1651,7 @@ void ll_update_inode(struct inode *inode, struct lustre_md *md)
                 inode->i_rdev = old_decode_dev(body->rdev);
 #endif
         if (body->valid & OBD_MD_FLSIZE)
-                inode->i_size = body->size;
+                i_size_write(inode, body->size);
         if (body->valid & OBD_MD_FLBLOCKS)
                 inode->i_blocks = body->blocks;
 

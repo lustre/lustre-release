@@ -265,6 +265,9 @@ int client_obd_setup(struct obd_device *obddev, obd_count len, void *buf)
         spin_lock_init(&cli->cl_write_page_hist.oh_lock);
         spin_lock_init(&cli->cl_read_offset_hist.oh_lock);
         spin_lock_init(&cli->cl_write_offset_hist.oh_lock);
+#ifdef ENABLE_CHECKSUM
+        cli->cl_checksum = 1;
+#endif
 
         /* This value may be changed at connect time in
            ptlrpc_connect_interpret. */

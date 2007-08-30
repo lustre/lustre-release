@@ -352,6 +352,23 @@ fi
 ])
 
 #
+# LC_CONFIG_CHECKSUM
+#
+# do checksum of bulk data between client and OST
+#
+AC_DEFUN([LC_CONFIG_CHECKSUM],
+[AC_MSG_CHECKING([whether to enable data checksum support])
+AC_ARG_ENABLE([checksum],
+       AC_HELP_STRING([--disable-checksum],
+                       [disable data checksum support]),
+       [],[enable_checksum='yes'])
+AC_MSG_RESULT([$enable_checksum])
+if test x$enable_checksum != xno ; then
+  AC_DEFINE(ENABLE_CHECKSUM, 1, do data checksums)
+fi
+])
+
+#
 # LC_CONFIG_HEALTH_CHECK_WRITE
 #
 # Turn on the actual write to the disk
@@ -1133,6 +1150,7 @@ if test x$enable_server = xyes ; then
         LC_CONFIG_BACKINGFS
 fi
 LC_CONFIG_PINGER
+LC_CONFIG_CHECKSUM
 LC_CONFIG_LIBLUSTRE_RECOVERY
 LC_CONFIG_QUOTA
 LC_CONFIG_HEALTH_CHECK_WRITE

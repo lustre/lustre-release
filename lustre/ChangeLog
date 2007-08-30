@@ -122,6 +122,12 @@ Details    : with NFS, the anon dentry's parent was set to itself in
              d_alloc_anon(), so in MDS, we use rec->ur_fid1 to find the
 	     corresponding dentry other than use rec->ur_name.
 
+Severity   : normal
+Bugzilla   : 12398
+Description: testing performance impact of enabling checksumming
+Details    : enable checksum by default, allow --disable-checksum 
+             configure option and "-o nochecksum" mount option 
+
 --------------------------------------------------------------------------------
 
 2007-08-27         Cluster File Systems, Inc. <info@clusterfs.com>
