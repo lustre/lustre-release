@@ -190,6 +190,12 @@ Bugzilla   : 12786
 Description: lfs setstripe enhancement
 Details    : Make lfs setstripe understand 'k', 'm' and 'g' for stripe size.
 
+Severity   : normal
+Bugzilla   : 12398
+Description: testing performance impact of enabling checksumming
+Details    : enable checksum by default, allow --disable-checksum 
+             configure option and "-o nochecksum" mount option 
+
 --------------------------------------------------------------------------------
 
 2007-08-10         Cluster File Systems, Inc. <info@clusterfs.com>

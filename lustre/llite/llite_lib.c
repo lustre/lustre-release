@@ -87,11 +87,15 @@ static struct ll_sb_info *ll_init_sbi(void)
         list_add_tail(&sbi->ll_list, &ll_super_blocks);
         spin_unlock(&ll_sb_lock);
 
+#ifdef ENABLE_CHECKSUM
+        sbi->ll_flags |= LL_SBI_CHECKSUM;
+#endif
+
 #ifdef HAVE_EXPORT___IGET
         INIT_LIST_HEAD(&sbi->ll_deathrow);
         spin_lock_init(&sbi->ll_deathrow_lock);
 #endif
-        for (i = 0; i <= LL_PROCESS_HIST_MAX; i++) { 
+        for (i = 0; i <= LL_PROCESS_HIST_MAX; i++) {
                 spin_lock_init(&sbi->ll_rw_extents_info.pp_extents[i].pp_r_hist.oh_lock);
                 spin_lock_init(&sbi->ll_rw_extents_info.pp_extents[i].pp_w_hist.oh_lock);
         }
@@ -168,7 +172,7 @@ static int client_common_fill_super(struct super_block *sb, char *md, char *dt,
         struct obd_connect_data *data = NULL;
         struct lustre_md lmd;
         obd_valid valid;
-        int size, err;
+        int size, err, checksum;
         ENTRY;
 
         obd = class_name2obd(md);
@@ -472,6 +476,10 @@ static int client_common_fill_super(struct super_block *sb, char *md, char *dt,
                 CERROR("cannot start close thread: rc %d\n", err);
                 GOTO(out_root, err);
         }
+
+        checksum = sbi->ll_flags & LL_SBI_CHECKSUM;
+        err = obd_set_info_async(sbi->ll_dt_exp, strlen("checksum"),"checksum",
+                                 sizeof(checksum), &checksum, NULL);
 
         /* making vm readahead 0 for 2.4.x. In the case of 2.6.x,
            backing dev info assigned to inode mapping is used for
@@ -800,6 +808,17 @@ static int ll_options(char *options, int *flags)
                 tmp = ll_set_opt("remote_client", s1, LL_SBI_RMT_CLIENT);
                 if (tmp) {
                         *flags |= tmp;
+                        goto next;
+                }
+
+                tmp = ll_set_opt("checksum", s1, LL_SBI_CHECKSUM);
+                if (tmp) {
+                        *flags |= tmp;
+                        goto next;
+                }
+                tmp = ll_set_opt("nochecksum", s1, LL_SBI_CHECKSUM);
+                if (tmp) {
+                        *flags &= ~tmp;
                         goto next;
                 }
 
