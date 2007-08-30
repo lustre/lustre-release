@@ -196,6 +196,11 @@ Description: testing performance impact of enabling checksumming
 Details    : enable checksum by default, allow --disable-checksum 
              configure option and "-o nochecksum" mount option 
 
+Severity   : normal
+Bugzilla   : 11802
+Description: lustre support for RHEL5
+Details    : Add support for RHEL5.
+
 --------------------------------------------------------------------------------
 
 2007-08-10         Cluster File Systems, Inc. <info@clusterfs.com>

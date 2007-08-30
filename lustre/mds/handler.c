@@ -1211,16 +1211,16 @@ static int mds_readpage(struct ptlrpc_request *req, int offset)
                 GOTO(out_pop, rc = PTR_ERR(file));
 
         /* body->size is actually the offset -eeb */
-        if ((body->size & (de->d_inode->i_blksize - 1)) != 0) {
+        if ((body->size & (de->d_inode->i_sb->s_blocksize - 1)) != 0) {
                 CERROR("offset "LPU64" not on a block boundary of %lu\n",
-                       body->size, de->d_inode->i_blksize);
+                       body->size, de->d_inode->i_sb->s_blocksize);
                 GOTO(out_file, rc = -EFAULT);
         }
 
         /* body->nlink is actually the #bytes to read -eeb */
-        if (body->nlink & (de->d_inode->i_blksize - 1)) {
+        if (body->nlink & (de->d_inode->i_sb->s_blocksize - 1)) {
                 CERROR("size %u is not multiple of blocksize %lu\n",
-                       body->nlink, de->d_inode->i_blksize);
+                       body->nlink, de->d_inode->i_sb->s_blocksize);
                 GOTO(out_file, rc = -EFAULT);
         }
 
