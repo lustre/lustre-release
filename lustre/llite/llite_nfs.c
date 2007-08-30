@@ -63,15 +63,16 @@ static struct inode * search_inode_for_lustre(struct super_block *sb,
         int eadatalen = 0, rc;
         struct inode *inode = NULL;
         struct ll_fid iid = { .id = ino, .generation = generation };
+        ENTRY;
 
         inode = ILOOKUP(sb, ino, ll_nfs_test_inode, &iid);
 
         if (inode)
-                return inode;
+                RETURN(inode);
         if (S_ISREG(mode)) {
                 rc = ll_get_max_mdsize(sbi, &eadatalen);
                 if (rc) 
-                        return ERR_PTR(rc); 
+                        RETURN(ERR_PTR(rc));
                 valid |= OBD_MD_FLEASIZE;
         }
         fid.id = (__u64)ino;
@@ -81,17 +82,17 @@ static struct inode * search_inode_for_lustre(struct super_block *sb,
         rc = mdc_getattr(sbi->ll_mdc_exp, &fid, valid, eadatalen, &req);
         if (rc) {
                 CERROR("failure %d inode %lu\n", rc, ino);
-                return ERR_PTR(rc);
+                RETURN(ERR_PTR(rc));
         }
 
         rc = ll_prep_inode(sbi->ll_osc_exp, &inode, req, REPLY_REC_OFF, sb);
         if (rc) {
                 ptlrpc_req_finished(req);
-                return ERR_PTR(rc);
+                RETURN(ERR_PTR(rc));
         }
         ptlrpc_req_finished(req);
 
-        return inode;
+        RETURN(inode);
 }
 
 extern struct dentry_operations ll_d_ops;
@@ -104,13 +105,14 @@ static struct dentry *ll_iget_for_nfs(struct super_block *sb, unsigned long ino,
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
         struct list_head *lp;
 #endif
+        ENTRY;
 
         if (ino == 0)
-                return ERR_PTR(-ESTALE);
+                RETURN(ERR_PTR(-ESTALE));
 
         inode = search_inode_for_lustre(sb, ino, generation, mode);
         if (IS_ERR(inode)) {
-                return ERR_PTR(PTR_ERR(inode));
+                RETURN(ERR_PTR(PTR_ERR(inode)));
         }
         if (is_bad_inode(inode) ||
             (generation && inode->i_generation != generation)){
@@ -120,14 +122,14 @@ static struct dentry *ll_iget_for_nfs(struct super_block *sb, unsigned long ino,
                        atomic_read(&inode->i_count), inode->i_generation,
                        generation);
                 iput(inode);
-                return ERR_PTR(-ESTALE);
+                RETURN(ERR_PTR(-ESTALE));
         }
 
 #if (LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))
         result = d_alloc_anon(inode);
         if (!result) {
                 iput(inode);
-                return ERR_PTR(-ENOMEM);
+                RETURN(ERR_PTR(-ENOMEM));
         }
 #else
         /* now to find a dentry.
@@ -143,7 +145,7 @@ static struct dentry *ll_iget_for_nfs(struct super_block *sb, unsigned long ino,
                         unlock_dentry(result);
                         spin_unlock(&dcache_lock);
                         iput(inode);
-                        return result;
+                        RETURN(result);
                 }
                 unlock_dentry(result);
         }
@@ -151,14 +153,14 @@ static struct dentry *ll_iget_for_nfs(struct super_block *sb, unsigned long ino,
         result = d_alloc_root(inode);
         if (result == NULL) {
                 iput(inode);
-                return ERR_PTR(-ENOMEM);
+                RETURN(ERR_PTR(-ENOMEM));
         }
         result->d_flags |= DCACHE_DISCONNECTED;
 
 #endif
         ll_set_dd(result);
         result->d_op = &ll_d_ops;
-        return result;
+        RETURN(result);
 }
 
 struct dentry *ll_fh_to_dentry(struct super_block *sb, __u32 *data, int len,

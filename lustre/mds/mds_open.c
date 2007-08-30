@@ -982,7 +982,20 @@ int mds_open(struct mds_update_record *rec, int offset,
         }
 
         /* Step 2: Lookup the child */
-        dchild = ll_lookup_one_len(rec->ur_name, dparent, rec->ur_namelen - 1);
+      
+        if (!(lustre_msg_get_flags(req->rq_reqmsg) & MSG_REPLAY) &&
+            (rec->ur_flags & MDS_OPEN_LOCK) && (rec->ur_namelen == 1)) {
+                /* hack for nfsd with no_subtree_check, it will use anon
+                 * dentry w/o filename to open the file. the anon dentry's
+                 * parent was set to itself, so rec->ur_fid1 is the file.
+                 * And in MDC it cannot derive the dentry's parent dentry,
+                 * hence the file's name, so we hack here in MDS, 
+                 * refer to bug 13030. */
+                dchild = mds_fid2dentry(mds, rec->ur_fid1, NULL);
+        } else {
+                dchild = ll_lookup_one_len(rec->ur_name, dparent,
+                                           rec->ur_namelen - 1);
+        }
         if (IS_ERR(dchild)) {
                 rc = PTR_ERR(dchild);
                 dchild = NULL; /* don't confuse mds_finish_transno() below */
