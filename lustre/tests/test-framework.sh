@@ -953,6 +953,11 @@ trace() {
 	return 1
 }
 
+skip () {
+        log "$0: SKIP: $TESTNAME $@"
+        [ "$SANITYLOG" ] && echo "$0: SKIP: $TESTNAME $@" >> $SANITYLOG
+} 
+
 pass() {
     echo PASS $@
 }
