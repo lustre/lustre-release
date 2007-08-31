@@ -1147,24 +1147,6 @@ test_27t() { # bug 10864
 }
 run_test 27t "check that utils parse path correctly"
 
-test_27x() { # bug 10997
-        mkdir -p $DIR/d27w || error "mkdir failed"
-        $LSTRIPE $DIR/d27w/f0 -s 65536 || error "lstripe failed"
-        size=`$LSTRIPEINFO $DIR/d27w/f0 | awk {'print $1'}`
-        [ $size -ne 65536 ] && error "stripe size $size != 65536" || true
-
-        [ "$OSTCOUNT" -lt "2" ] && skip "skipping multiple stripe count/offset test" && return
-        for i in `seq 1 $OSTCOUNT`; do
-                offset=$(($i-1))
-                $LSTRIPE $DIR/d27w/f$i -c $i -i $offset || error "lstripe -c $i -i $offset failed"
-                count=`$LSTRIPEINFO $DIR/d27w/f$i | awk {'print $2'}`
-                index=`$LSTRIPEINFO $DIR/d27w/f$i | awk {'print $3'}`
-                [ $count -ne $i ] && error "stripe count $count != $i" || true
-                [ $index -ne $offset ] && error "stripe offset $index != $offset" || true
-        done
-}
-run_test 27x "check lfs setstripe -c -s -i options ============="
-
 test_27u() { # bug 4900
 	[ "$OSTCOUNT" -lt "2" ] && skip "too few OSTs" && return
 	remote_mds && skip "remote MDS" && return
@@ -1210,6 +1192,24 @@ test_27v() { # bug 4900
         reset_enospc
 }
 run_test 27v "skip object creation on slow OST ================="
+
+test_27w() { # bug 10997
+        mkdir -p $DIR/d27w || error "mkdir failed"
+        $LSTRIPE $DIR/d27w/f0 -s 65536 || error "lstripe failed"
+        size=`$LSTRIPEINFO $DIR/d27w/f0 | awk {'print $1'}`
+        [ $size -ne 65536 ] && error "stripe size $size != 65536" || true
+
+        [ "$OSTCOUNT" -lt "2" ] && skip "skipping multiple stripe count/offset test" && return
+        for i in `seq 1 $OSTCOUNT`; do
+                offset=$(($i-1))
+                $LSTRIPE $DIR/d27w/f$i -c $i -i $offset || error "lstripe -c $i -i $offset failed"
+                count=`$LSTRIPEINFO $DIR/d27w/f$i | awk {'print $2'}`
+                index=`$LSTRIPEINFO $DIR/d27w/f$i | awk {'print $3'}`
+                [ $count -ne $i ] && error "stripe count $count != $i" || true
+                [ $index -ne $offset ] && error "stripe offset $index != $offset" || true
+        done
+}
+run_test 27w "check lfs setstripe -c -s -i options ============="
 
 test_28() {
 	mkdir $DIR/d28
@@ -3330,6 +3330,38 @@ test_78() { # bug 10901
 	rm -f $DIR/$tfile
 }
 run_test 78 "handle large O_DIRECT writes correctly ============"
+
+test_79() { # bug 12743
+	[ $(grep -c obdfilter $LPROC/devices) -eq 0 ] &&
+		skip "skipping test for remote OST" && return
+        BKTOTAL=`awk 'BEGIN{total=0}; {total+=$1}; END{print total}' \
+                 $LPROC/obdfilter/*/kbytestotal`
+        BKFREE=`awk 'BEGIN{free=0}; {free+=$1}; END{print free}' \
+                $LPROC/obdfilter/*/kbytesfree`
+        BKAVAIL=`awk 'BEGIN{avail=0}; {avail+=$1}; END{print avail}' \
+                 $LPROC/obdfilter/*/kbytesavail`
+        STRING=`df -P $MOUNT | tail -n 1 | awk '{print $2","$3","$4}'`
+        DFTOTAL=`echo $STRING | cut -d, -f1`
+        DFUSED=`echo $STRING  | cut -d, -f2`
+        DFAVAIL=`echo $STRING | cut -d, -f3`
+        DFFREE=$(($DFTOTAL - $DFUSED))
+
+        ALLOWANCE=$((64 * $OSTCOUNT))
+
+        if [ $DFTOTAL -lt $(($BKTOTAL - $ALLOWANCE)) ] ||  
+           [ $DFTOTAL -gt $(($BKTOTAL + $ALLOWANCE)) ] ; then
+                error "df total($DFTOTAL) mismatch OST total($BKTOTAL)"
+        fi
+        if [ $DFFREE -lt $(($BKFREE - $ALLOWANCE)) ] || 
+           [ $DFFREE -gt $(($BKFREE + $ALLOWANCE)) ] ; then
+                error "df free($DFFREE) mismatch OST free($BKFREE)"
+        fi
+        if [ $DFAVAIL -lt $(($BKAVAIL - $ALLOWANCE)) ] || 
+           [ $DFAVAIL -gt $(($BKAVAIL + $ALLOWANCE)) ] ; then
+                error "df avail($DFAVAIL) mismatch OST avail($BKAVAIL)"
+        fi
+}
+run_test 79 "df report consistency check ======================="
 
 # on the LLNL clusters, runas will still pick up root's $TMP settings,
 # which will not be writable for the runas user, and then you get a CVS
