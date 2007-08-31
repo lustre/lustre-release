@@ -31,3 +31,10 @@ Details    : The journal checksum feature adds two new flags i.e
     	     blocks to be written to disk. This behavior is controlled
      	     using JBD2_FEATURE_ASYNC_COMMIT flag.
 
+Severity   : enhancement
+Bugzilla   : 10555
+Description: Add a FIEMAP(FIle Extent MAP) ioctl for ldiskfs
+Details    : FIEMAP ioctl will allow an application to efficiently fetch the
+             extent information of a file. It can be used to map logical blocks
+             in a file to physical blocks in the block device.
+
