@@ -90,6 +90,7 @@ kptllnd_get_peer_info(int index,
 void
 kptllnd_peer_add_peertable_locked (kptl_peer_t *peer)
 {
+        LASSERT (!kptllnd_data.kptl_shutdown);
         LASSERT (kptllnd_data.kptl_n_active_peers <
                  kptllnd_data.kptl_expected_peers);
 
@@ -1065,7 +1066,19 @@ kptllnd_peer_handle_hello (ptl_process_id_t  initiator,
         }
 
         write_lock_irqsave(g_lock, flags);
+
  again:
+        if (kptllnd_data.kptl_shutdown) {
+                write_unlock_irqrestore(g_lock, flags);
+
+                CERROR ("Shutdown started, refusing connection from %s\n",
+                        libcfs_id2str(lpid));
+                kptllnd_peer_unreserve_buffers();
+                kptllnd_peer_decref(new_peer);
+                kptllnd_tx_decref(hello_tx);
+                return NULL;
+        }
+
         peer = kptllnd_id2peer_locked(lpid);
         if (peer != NULL) {
                 if (peer->peer_state == PEER_STATE_WAITING_HELLO) {
@@ -1211,6 +1224,12 @@ kptllnd_find_target(kptl_peer_t **peerp, lnet_process_id_t target)
 
         write_lock_irqsave(g_lock, flags);
  again:
+        if (kptllnd_data.kptl_shutdown) {
+                write_unlock_irqrestore(g_lock, flags);
+                rc = -ESHUTDOWN;
+                goto unwind_2;
+        }
+
         *peerp = kptllnd_id2peer_locked(target);
         if (*peerp != NULL) {
                 write_unlock_irqrestore(g_lock, flags);

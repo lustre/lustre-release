@@ -456,6 +456,9 @@ ksocknal_add_peer (lnet_ni_t *ni, lnet_process_id_t id, __u32 ipaddr, int port)
 
         write_lock_bh (&ksocknal_data.ksnd_global_lock);
 
+        /* always called with a ref on ni, so shutdown can't have started */
+        LASSERT (((ksock_net_t *) ni->ni_data)->ksnn_shutdown == 0);
+
         peer2 = ksocknal_find_peer_locked (ni, id);
         if (peer2 != NULL) {
                 ksocknal_peer_decref(peer);
@@ -1114,6 +1117,9 @@ ksocknal_create_conn (lnet_ni_t *ni, ksock_route_t *route,
                         goto failed_1;
 
                 write_lock_bh (global_lock);
+
+                /* called with a ref on ni, so shutdown can't have started */
+                LASSERT (((ksock_net_t *) ni->ni_data)->ksnn_shutdown == 0);
 
                 peer2 = ksocknal_find_peer_locked(ni, peerid);
                 if (peer2 == NULL) {
@@ -2306,6 +2312,60 @@ ksocknal_base_startup (void)
 }
 
 void
+ksocknal_debug_peerhash (lnet_ni_t *ni)
+{
+        ksock_peer_t     *peer = NULL;
+        struct list_head *tmp;
+        int               i;
+
+        read_lock (&ksocknal_data.ksnd_global_lock);
+
+        for (i = 0; i < ksocknal_data.ksnd_peer_hash_size; i++) {
+                list_for_each (tmp, &ksocknal_data.ksnd_peers[i]) {
+                        peer = list_entry (tmp, ksock_peer_t, ksnp_list);
+
+                        if (peer->ksnp_ni == ni) break;
+
+                        peer = NULL;
+                }
+        }
+
+        if (peer != NULL) {
+                ksock_route_t *route;
+                ksock_conn_t  *conn;
+
+                CWARN ("Active peer on shutdown: %s, ref %d, scnt %d, "
+                       "closing %d, accepting %d, err %d, zcookie "LPU64", "
+                       "txq %d, zc_req %d\n", libcfs_id2str(peer->ksnp_id),
+                       atomic_read(&peer->ksnp_refcount),
+                       peer->ksnp_sharecount, peer->ksnp_closing,
+                       peer->ksnp_accepting, peer->ksnp_error,
+                       peer->ksnp_zc_next_cookie,
+                       !list_empty(&peer->ksnp_tx_queue),
+                       !list_empty(&peer->ksnp_zc_req_list));
+
+                list_for_each (tmp, &peer->ksnp_routes) {
+                        route = list_entry(tmp, ksock_route_t, ksnr_list);
+                        CWARN ("Route: ref %d, schd %d, conn %d, cnted %d, "
+                               "del %d\n", atomic_read(&route->ksnr_refcount),
+                               route->ksnr_scheduled, route->ksnr_connecting,
+                               route->ksnr_connected, route->ksnr_deleted);
+                }
+
+                list_for_each (tmp, &peer->ksnp_conns) {
+                        conn = list_entry(tmp, ksock_conn_t, ksnc_list);
+                        CWARN ("Conn: ref %d, sref %d, t %d, c %d\n",
+                               atomic_read(&conn->ksnc_conn_refcount),
+                               atomic_read(&conn->ksnc_sock_refcount),
+                               conn->ksnc_type, conn->ksnc_closing);
+                }
+        }
+
+        read_unlock (&ksocknal_data.ksnd_global_lock);
+        return;
+}
+
+void
 ksocknal_shutdown (lnet_ni_t *ni)
 {
         ksock_net_t      *net = ni->ni_data;
@@ -2334,6 +2394,8 @@ ksocknal_shutdown (lnet_ni_t *ni)
                        "waiting for %d peers to disconnect\n",
                        net->ksnn_npeers);
                 cfs_pause(cfs_time_seconds(1));
+
+                ksocknal_debug_peerhash(ni);
 
                 spin_lock_bh (&net->ksnn_lock);
         }

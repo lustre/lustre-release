@@ -847,6 +847,10 @@ kibnal_add_persistent_peer (lnet_nid_t nid)
 
         write_lock_irqsave (&kibnal_data.kib_global_lock, flags);
 
+        /* I'm always called with a reference on kibnal_data.kib_ni
+         * so shutdown can't have started */
+        LASSERT (kibnal_data.kib_listener_cep != NULL);
+
         peer2 = kibnal_find_peer_locked (nid);
         if (peer2 != NULL) {
                 kibnal_peer_decref (peer);

@@ -2507,6 +2507,15 @@ kibnal_accept (kib_conn_t **connp, IB_HANDLE cep, kib_msg_t *msg, int nob)
         
         write_lock_irqsave (&kibnal_data.kib_global_lock, flags);
 
+        if (kibnal_data.kib_listener_cep == NULL) { /* shutdown started */
+                write_unlock_irqrestore(&kibnal_data.kib_global_lock, flags);
+
+                kibnal_peer_decref(peer);
+                kibnal_conn_decref(conn);
+                kibnal_reject(nid, cep, IBNAL_REJECT_NO_RESOURCES);
+                return -ESHUTDOWN;
+        }
+
         peer2 = kibnal_find_peer_locked(nid);
         if (peer2 == NULL) {
                 /* peer table takes my ref on peer */

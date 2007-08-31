@@ -855,6 +855,8 @@ lnet_new_rtrbuf(lnet_rtrbufpool_t *rbp)
         int            i;
 
         LIBCFS_ALLOC(rb, sz);
+        if (rb == NULL)
+                return NULL;
 
         rb->rb_pool = rbp;
 

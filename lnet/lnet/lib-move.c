@@ -485,7 +485,7 @@ lnet_copy_kiov2kiov (unsigned int ndiov, lnet_kiov_t *diov, unsigned int doffset
         LASSERT (!in_interrupt ());
 
         LASSERT (ndiov > 0);
-        while (doffset > diov->kiov_len) {
+        while (doffset >= diov->kiov_len) {
                 doffset -= diov->kiov_len;
                 diov++;
                 ndiov--;
@@ -493,7 +493,7 @@ lnet_copy_kiov2kiov (unsigned int ndiov, lnet_kiov_t *diov, unsigned int doffset
         }
 
         LASSERT (nsiov > 0);
-        while (soffset > siov->kiov_len) {
+        while (soffset >= siov->kiov_len) {
                 soffset -= siov->kiov_len;
                 siov++;
                 nsiov--;
@@ -565,7 +565,7 @@ lnet_copy_kiov2iov (unsigned int niov, struct iovec *iov, unsigned int iovoffset
         LASSERT (!in_interrupt ());
 
         LASSERT (niov > 0);
-        while (iovoffset > iov->iov_len) {
+        while (iovoffset >= iov->iov_len) {
                 iovoffset -= iov->iov_len;
                 iov++;
                 niov--;
@@ -573,7 +573,7 @@ lnet_copy_kiov2iov (unsigned int niov, struct iovec *iov, unsigned int iovoffset
         }
 
         LASSERT (nkiov > 0);
-        while (kiovoffset > kiov->kiov_len) {
+        while (kiovoffset >= kiov->kiov_len) {
                 kiovoffset -= kiov->kiov_len;
                 kiov++;
                 nkiov--;
@@ -634,7 +634,7 @@ lnet_copy_iov2kiov (unsigned int nkiov, lnet_kiov_t *kiov, unsigned int kiovoffs
         LASSERT (!in_interrupt ());
 
         LASSERT (nkiov > 0);
-        while (kiovoffset > kiov->kiov_len) {
+        while (kiovoffset >= kiov->kiov_len) {
                 kiovoffset -= kiov->kiov_len;
                 kiov++;
                 nkiov--;
@@ -642,7 +642,7 @@ lnet_copy_iov2kiov (unsigned int nkiov, lnet_kiov_t *kiov, unsigned int kiovoffs
         }
 
         LASSERT (niov > 0);
-        while (iovoffset > iov->iov_len) {
+        while (iovoffset >= iov->iov_len) {
                 iovoffset -= iov->iov_len;
                 iov++;
                 niov--;

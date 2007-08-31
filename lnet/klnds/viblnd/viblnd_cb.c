@@ -2188,7 +2188,7 @@ kibnal_connreq_done(kib_conn_t *conn, int active, int status)
                         break;
                 }
 
-                kibnal_peer_connect_failed(conn->ibc_peer, active, status);
+                kibnal_peer_connect_failed(peer, active, status);
                 kibnal_conn_disconnected(conn);
                 return;
         }
@@ -2210,8 +2210,7 @@ kibnal_connreq_done(kib_conn_t *conn, int active, int status)
          * peer instance... */
         kibnal_conn_addref(conn);               /* +1 ref for ibc_list */
         list_add(&conn->ibc_list, &peer->ibp_conns);
-        kibnal_close_stale_conns_locked (conn->ibc_peer,
-                                         conn->ibc_incarnation);
+        kibnal_close_stale_conns_locked (peer, conn->ibc_incarnation);
 
         if (!kibnal_peer_active(peer) ||        /* peer has been deleted */
             conn->ibc_comms_error != 0 ||       /* comms error */
@@ -2461,6 +2460,16 @@ kibnal_recv_connreq(cm_cep_handle_t *cep, cm_request_data_t *cmreq)
         }
 
         write_lock_irqsave(g_lock, flags);
+
+        if (kibnal_data.kib_listen_handle == NULL) {
+                write_unlock_irqrestore(g_lock, flags);
+
+                CWARN ("Shutdown has started, rejecting connreq from %s\n",
+                       libcfs_nid2str(rxmsg.ibm_srcnid));
+                kibnal_peer_decref(peer);
+                reason = IBNAL_REJECT_FATAL;
+                goto reject;
+        }
 
         peer2 = kibnal_find_peer_locked(rxmsg.ibm_srcnid);
         if (peer2 != NULL) {

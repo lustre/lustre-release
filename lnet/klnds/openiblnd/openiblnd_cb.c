@@ -1786,6 +1786,16 @@ kibnal_accept_connreq (kib_conn_t **connp, tTS_IB_CM_COMM_ID cid,
         
         write_lock_irqsave (&kibnal_data.kib_global_lock, flags);
 
+        if (kibnal_data.kib_nonewpeers) {
+                write_unlock_irqrestore (&kibnal_data.kib_global_lock, flags);
+                
+                CERROR ("Shutdown has started, drop connreq from %s\n",
+                        libcfs_nid2str(msg->ibm_srcnid));
+                kibnal_conn_decref(conn);
+                kibnal_peer_decref(peer);
+                return -ESHUTDOWN;
+        }
+
         /* Check I'm the same instance that gave the connection parameters.  
          * NB If my incarnation changes after this, the peer will get nuked and
          * we'll spot that when the connection is finally added into the peer's

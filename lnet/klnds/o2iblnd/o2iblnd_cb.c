@@ -1458,6 +1458,9 @@ kiblnd_launch_tx (lnet_ni_t *ni, kib_tx_t *tx, lnet_nid_t nid)
         LASSERT (peer->ibp_connecting == 0);
         peer->ibp_connecting = 1;
 
+        /* always called with a ref on ni, which prevents ni being shutdown */
+        LASSERT (((kib_net_t *)ni->ni_data)->ibn_shutdown == 0);
+
         list_add_tail(&tx->tx_list, &peer->ibp_tx_queue);
 
         kiblnd_peer_addref(peer);
@@ -2301,6 +2304,9 @@ kiblnd_passive_connect (struct rdma_cm_id *cmid, void *priv, int priv_nob)
                 /* Brand new peer */
                 LASSERT (peer->ibp_accepting == 0);
                 peer->ibp_accepting = 1;
+
+                /* I have a ref on ni that prevents it being shutdown */
+                LASSERT (((kib_net_t *)ni->ni_data)->ibn_shutdown == 0);
 
                 kiblnd_peer_addref(peer);
                 list_add_tail(&peer->ibp_list, kiblnd_nid2peerlist(nid));

@@ -13,6 +13,12 @@
 	ptllnd    - Portals 3.3 / UNICOS/lc 1.5.x, 2.0.x
 
 Severity   : normal
+Bugzilla   : 10778
+Description: kibnal_shutdown() doesn't finish; lconf --cleanup hangs
+Details    : races between lnd_shutdown and peer creation prevent 
+             lnd_shutdown from finishing.
+
+Severity   : normal
 Bugzilla   : 13279
 Description: open files rlimit 1024 reached while liblustre testing
 Details    : ulnds/socklnd must close open socket after unsuccessful
