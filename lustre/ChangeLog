@@ -23,13 +23,13 @@ Severity   : normal
 Bugzilla   : 12584
 Description: sanity.sh failed test 103
 Details    : RHEL mis-interpret setfacl "-X" param, so we won't test setfacl
-             with param "-X".
+	     with param "-X".
 
 Severity   : normal
 Bugzilla   : 12192
 Description: llapi_file_create() does not allow some changes
 Details    : add llapi_file_open() that allows specifying the mode and 
-             open flags, and also returns an open file handle.
+	     open flags, and also returns an open file handle.
 
 Severity   : normal
 Bugzilla   : 12743
