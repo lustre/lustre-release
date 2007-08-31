@@ -3106,7 +3106,7 @@ static command_t lst_cmdlist[] = {
          "Usage: lst stat [--bw] [--rate] [--read] [--write] [--max] [--min] [--avg] "
          " [--timeout #] [--delay #] GROUP [GROUP]"                                     },
         {"show_error",          jt_lst_show_error,      NULL,
-         "Usage: lst show_error [--group NAME] | [--nodes IDS]"                         },
+         "Usage: lst show_error NAME | IDS ..."                                         },
         {"add_batch",           jt_lst_add_batch,       NULL,
          "Usage: lst add_batch NAME"                                                    },
         {"run",                 jt_lst_start_batch,     NULL,
