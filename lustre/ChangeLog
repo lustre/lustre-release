@@ -201,6 +201,13 @@ Bugzilla   : 11802
 Description: lustre support for RHEL5
 Details    : Add support for RHEL5.
 
+Severity   : normal
+Bugzilla   : 12459
+Description: Client eviction due to failover config
+Details    : after a connection loss, the lustre client should attempt to
+	     reconnect to the last active server first before trying the
+	     other potential connections.
+
 --------------------------------------------------------------------------------
 
 2007-08-10         Cluster File Systems, Inc. <info@clusterfs.com>

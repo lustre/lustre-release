@@ -290,7 +290,7 @@ static int import_select_connection(struct obd_import *imp)
                                        cfs_time_current_64())) {
                         /* If we have never tried this connection since the
                            the last successful attempt, go with this one */
-                        if (cfs_time_before_64(conn->oic_last_attempt,
+                        if (cfs_time_beforeq_64(conn->oic_last_attempt,
                                                imp->imp_last_success_conn)) {
                                 imp_conn = conn;
                                 break;
