@@ -169,6 +169,11 @@ case "$lustretag" in
         lnettag="b_uoss"
         ldiskfstag="b1_8_iam"
         ;;
+
+    # client io stack cleanup
+    b_client_io_layering)
+        ldiskfstag="b1_8_iam"
+        ;;
     
     # v1.0-v1.3, v1.4.0-v1.4.2
     v1_[0-3]_*|v1_4_[0-2]|v1_4_[0-2]_*)
