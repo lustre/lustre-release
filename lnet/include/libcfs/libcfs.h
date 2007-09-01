@@ -44,7 +44,13 @@
 #define container_of0(ptr, type, member)                        \
 ({                                                              \
         typeof(ptr) __ptr = (ptr);                              \
-        __ptr ? container_of(__ptr, type, member) : NULL;       \
+        type       *__res;                                      \
+                                                                \
+        if (unlikely(IS_ERR(__ptr) || __ptr == NULL))           \
+                __res = (type *)__ptr;                          \
+        else                                                    \
+                __res = container_of(__ptr, type, member);      \
+        __res;                                                  \
 })
 
 /*
@@ -225,8 +231,8 @@ do {                                                                    \
 
 #endif /* !__KERNEL__ */
 
-/* 
- * Lustre Error Checksum: calculates checksum 
+/*
+ * Lustre Error Checksum: calculates checksum
  * of Hex number by XORing each bit.
  */
 #define LERRCHKSUM(hexnum) (((hexnum) & 0xf) ^ ((hexnum) >> 4 & 0xf) ^ \
