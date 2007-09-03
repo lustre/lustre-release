@@ -1251,7 +1251,7 @@ static int ptlrpc_main(void *arg)
          */
         cfs_waitq_signal(&thread->t_ctl_waitq);
 
-        watchdog = lc_watchdog_add((AT_OFF ? obd_timeout : 
+        watchdog = lc_watchdog_add(max_t(int, obd_timeout, AT_OFF ? 0 : 
                                    at_get(&svc->srv_at_estimate)) * 
                                    svc->srv_watchdog_factor, NULL, NULL);
 
@@ -1289,7 +1289,8 @@ static int ptlrpc_main(void *arg)
                               svc->srv_at_check,
                               &lwi);
 
-                lc_watchdog_touch_ms(watchdog, (AT_OFF ? obd_timeout : 
+                lc_watchdog_touch_ms(watchdog, max_t(int, obd_timeout,
+                                     AT_OFF ? 0 : 
                                      at_get(&svc->srv_at_estimate)) * 
                                      svc->srv_watchdog_factor);
 
