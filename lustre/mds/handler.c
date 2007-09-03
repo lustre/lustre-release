@@ -79,6 +79,7 @@ static int mds_sendpage(struct ptlrpc_request *req, struct file *file,
         struct ptlrpc_bulk_desc *desc;
         struct l_wait_info lwi;
         struct page **pages;
+        int timeout;
         int rc = 0, npages, i, tmpcount, tmpsize = 0;
         ENTRY;
 
@@ -130,7 +131,12 @@ static int mds_sendpage(struct ptlrpc_request *req, struct file *file,
                 GOTO(abort_bulk, rc);
         }
 
-        lwi = LWI_TIMEOUT(obd_timeout * HZ / 4, NULL, NULL);
+        timeout = (int)req->rq_deadline - (int)cfs_time_current_sec();
+        if (timeout < 0) {
+                CERROR("Req deadline already passed %lu (now: %lu)\n",
+                       req->rq_deadline, cfs_time_current_sec());
+        }
+        lwi = LWI_TIMEOUT(max(timeout, 1) * HZ, NULL, NULL);
         rc = l_wait_event(desc->bd_waitq, !ptlrpc_bulk_active(desc), &lwi);
         LASSERT (rc == 0 || rc == -ETIMEDOUT);
 
@@ -1022,7 +1028,7 @@ static int mds_getattr_lock(struct ptlrpc_request *req, int offset,
                 pop_ctxt(&saved, &obd->obd_lvfs_ctxt, &uc);
         default:
                 mds_exit_ucred(&uc, mds);
-                if (req->rq_reply_state == NULL) {
+                if (!lustre_packed_reply(req)) {
                         req->rq_status = rc;
                         lustre_pack_reply(req, 1, NULL, NULL);
                 }
@@ -1072,7 +1078,7 @@ static int mds_getattr(struct ptlrpc_request *req, int offset)
 out_pop:
         pop_ctxt(&saved, &obd->obd_lvfs_ctxt, &uc);
 out_ucred:
-        if (req->rq_reply_state == NULL) {
+        if (!lustre_packed_reply(req)) {
                 req->rq_status = rc;
                 lustre_pack_reply(req, 1, NULL, NULL);
         }
@@ -1097,13 +1103,15 @@ static int mds_obd_statfs(struct obd_device *obd, struct obd_statfs *osfs,
 static int mds_statfs(struct ptlrpc_request *req)
 {
         struct obd_device *obd = req->rq_export->exp_obd;
+        struct ptlrpc_service *svc = req->rq_rqbd->rqbd_service;
         int rc, size[2] = { sizeof(struct ptlrpc_body),
                             sizeof(struct obd_statfs) };
         ENTRY;
 
         /* This will trigger a watchdog timeout */
         OBD_FAIL_TIMEOUT(OBD_FAIL_MDS_STATFS_LCW_SLEEP,
-                         (MDS_SERVICE_WATCHDOG_TIMEOUT / 1000) + 1);
+                         (MDS_SERVICE_WATCHDOG_FACTOR * 
+                          at_get(&svc->srv_at_estimate) / 1000) + 1);
         OBD_COUNTER_INCREMENT(obd, statfs);
 
         rc = lustre_pack_reply(req, 2, size, NULL);
@@ -2018,8 +2026,8 @@ static int mds_setup(struct obd_device *obd, obd_count len, void *buf)
                               obd->obd_recoverable_clients,
                               (obd->obd_recoverable_clients == 1) ?
                               "client" : "clients",
-                              (int)(OBD_RECOVERY_TIMEOUT) / 60,
-                              (int)(OBD_RECOVERY_TIMEOUT) % 60,
+                              obd->obd_recovery_timeout / 60,
+                              obd->obd_recovery_timeout % 60,
                               obd->obd_name);
         } else {
                 LCONSOLE_INFO("MDT %s now serving %s (%s%s%s) with recovery "
@@ -2539,7 +2547,7 @@ static int mdt_setup(struct obd_device *obd, obd_count len, void *buf)
         mds->mds_service =
                 ptlrpc_init_svc(MDS_NBUFS, MDS_BUFSIZE, MDS_MAXREQSIZE,
                                 MDS_MAXREPSIZE, MDS_REQUEST_PORTAL,
-                                MDC_REPLY_PORTAL, MDS_SERVICE_WATCHDOG_TIMEOUT,
+                                MDC_REPLY_PORTAL, MDS_SERVICE_WATCHDOG_FACTOR,
                                 mds_handle, LUSTRE_MDS_NAME,
                                 obd->obd_proc_entry, NULL, 
                                 mds_min_threads, mds_max_threads, "ll_mdt");
@@ -2556,7 +2564,7 @@ static int mdt_setup(struct obd_device *obd, obd_count len, void *buf)
         mds->mds_setattr_service =
                 ptlrpc_init_svc(MDS_NBUFS, MDS_BUFSIZE, MDS_MAXREQSIZE,
                                 MDS_MAXREPSIZE, MDS_SETATTR_PORTAL,
-                                MDC_REPLY_PORTAL, MDS_SERVICE_WATCHDOG_TIMEOUT,
+                                MDC_REPLY_PORTAL, MDS_SERVICE_WATCHDOG_FACTOR,
                                 mds_handle, "mds_setattr",
                                 obd->obd_proc_entry, NULL,
                                 mds_min_threads, mds_max_threads,
@@ -2573,7 +2581,7 @@ static int mdt_setup(struct obd_device *obd, obd_count len, void *buf)
         mds->mds_readpage_service =
                 ptlrpc_init_svc(MDS_NBUFS, MDS_BUFSIZE, MDS_MAXREQSIZE,
                                 MDS_MAXREPSIZE, MDS_READPAGE_PORTAL,
-                                MDC_REPLY_PORTAL, MDS_SERVICE_WATCHDOG_TIMEOUT,
+                                MDC_REPLY_PORTAL, MDS_SERVICE_WATCHDOG_FACTOR,
                                 mds_handle, "mds_readpage",
                                 obd->obd_proc_entry, NULL, 
                                 MDS_THREADS_MIN_READPAGE, mds_max_threads,

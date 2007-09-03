@@ -65,9 +65,12 @@ int ptlrpc_ping(struct obd_import *imp)
 
 static void ptlrpc_update_next_ping(struct obd_import *imp)
 {
-        imp->imp_next_ping = cfs_time_shift(
-                                (imp->imp_state == LUSTRE_IMP_DISCON ?
-                                 RECONNECT_INTERVAL : PING_INTERVAL));
+        int time = (imp->imp_state != LUSTRE_IMP_DISCON) ? PING_INTERVAL :
+                /* FIXME should this be limited to LND_TIMEOUT so we don't
+                   build up pings in LND output queues? */
+                max_t(int, CONNECTION_SWITCH_MIN, 
+                      at_get(&imp->imp_at.iat_net_latency));
+        imp->imp_next_ping = cfs_time_shift(time);
 }
 
 void ptlrpc_ping_import_soon(struct obd_import *imp)
@@ -364,7 +367,7 @@ static int ping_evictor_main(void *arg)
                 obd = pet_exp->exp_obd;
                 spin_unlock(&pet_lock);
 
-                expire_time = CURRENT_SECONDS - (3 * obd_timeout / 2);
+                expire_time = cfs_time_current_sec() - PING_EVICT_TIMEOUT;
 
                 CDEBUG(D_HA, "evicting all exports of obd %s older than %ld\n",
                        obd->obd_name, expire_time);
@@ -386,7 +389,7 @@ static int ping_evictor_main(void *arg)
                                               " it.\n", obd->obd_name,
                                               obd_uuid2str(&exp->exp_client_uuid),
                                               obd_export_nid2str(exp),
-                                              (long)(CURRENT_SECONDS -
+                                              (long)(cfs_time_current_sec() -
                                                      exp->exp_last_request_time));
                                 CDEBUG(D_HA, "Last request was at %ld\n",
                                        exp->exp_last_request_time);

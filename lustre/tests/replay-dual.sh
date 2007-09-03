@@ -204,7 +204,7 @@ test_12() {
 #define OBD_FAIL_LDLM_ENQUEUE            0x302
     do_facet mds sysctl -w lustre.fail_loc=0x80000302
     facet_failover mds
-    df $MOUNT || return 1
+    df $MOUNT || { kill -USR1 $MULTIPID  && return 1; }
     do_facet mds sysctl -w lustre.fail_loc=0
 
     ls $DIR/$tfile

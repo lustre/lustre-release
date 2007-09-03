@@ -446,9 +446,9 @@ static int mds_init_server_data(struct obd_device *obd, struct file *file)
                 obd->obd_next_recovery_transno = obd->obd_last_committed + 1;
                 obd->obd_recovering = 1;
                 obd->obd_recovery_start = CURRENT_SECONDS;
-                /* Only used for lprocfs_status */
+                obd->obd_recovery_timeout = OBD_RECOVERY_TIMEOUT;
                 obd->obd_recovery_end = obd->obd_recovery_start +
-                        OBD_RECOVERY_TIMEOUT;
+                        obd->obd_recovery_timeout;
         }
 
         mds->mds_mount_count = mount_count + 1;

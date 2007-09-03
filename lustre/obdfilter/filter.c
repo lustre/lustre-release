@@ -548,7 +548,7 @@ static int filter_init_export(struct obd_export *exp)
 {
         spin_lock_init(&exp->exp_filter_data.fed_lock);
         INIT_LIST_HEAD(&exp->exp_filter_data.fed_mod_list);
-	
+        
         spin_lock(&exp->exp_lock);
         exp->exp_connecting = 1;
         spin_unlock(&exp->exp_lock);
@@ -805,9 +805,9 @@ static int filter_init_server_data(struct obd_device *obd, struct file * filp)
                 obd->obd_next_recovery_transno = obd->obd_last_committed + 1;
                 obd->obd_recovering = 1;
                 obd->obd_recovery_start = CURRENT_SECONDS;
-                /* Only used for lprocfs_status */
+                obd->obd_recovery_timeout = OBD_RECOVERY_TIMEOUT;
                 obd->obd_recovery_end = obd->obd_recovery_start +
-                        OBD_RECOVERY_TIMEOUT;
+                        obd->obd_recovery_timeout;
         }
 
 out:
@@ -1156,7 +1156,7 @@ struct dentry *filter_parent_lock(struct obd_device *obd, obd_gr group,
                 return dparent;
 
         rc = filter_lock_dentry(obd, dparent);
-        fsfilt_check_slow(obd, now, obd_timeout, "parent lock");
+        fsfilt_check_slow(obd, now, "parent lock");
         return rc ? ERR_PTR(rc) : dparent;
 }
 
@@ -1742,8 +1742,8 @@ int filter_common_setup(struct obd_device *obd, obd_count len, void *buf,
                               obd->obd_recoverable_clients,
                               (obd->obd_recoverable_clients == 1)
                               ? "client" : "clients",
-                              (int)(OBD_RECOVERY_TIMEOUT) / 60,
-                              (int)(OBD_RECOVERY_TIMEOUT) % 60,
+                              obd->obd_recovery_timeout / 60,
+                              obd->obd_recovery_timeout % 60,
                               obd->obd_name);
         } else {
                 LCONSOLE_INFO("OST %s now serving %s (%s%s%s) with recovery "
@@ -2821,7 +2821,7 @@ static int filter_precreate(struct obd_device *obd, struct obdo *oa,
         struct dentry *dchild = NULL, *dparent = NULL;
         struct filter_obd *filter;
         int err = 0, rc = 0, recreate_obj = 0, i;
-        unsigned long enough_time = jiffies + min(obd_timeout * HZ / 4, 10U*HZ);
+        cfs_time_t enough_time = cfs_time_shift(DISK_TIMEOUT/2);
         obd_id next_id;
         void *handle = NULL;
         ENTRY;
@@ -2952,7 +2952,7 @@ static int filter_precreate(struct obd_device *obd, struct obdo *oa,
 
                 if (rc)
                         break;
-                if (time_after(jiffies, enough_time)) {
+                if (cfs_time_after(cfs_time_current(), enough_time)) {
                         CDEBUG(D_RPCTRACE,
                                "%s: precreate slow - want %d got %d \n",
                                obd->obd_name, *num, i);
@@ -3441,8 +3441,8 @@ int filter_iocontrol(unsigned int cmd, struct obd_export *exp,
                 struct super_block *sb = obd->u.obt.obt_sb;
                 struct inode *inode = sb->s_root->d_inode;
                 BDEVNAME_DECLARE_STORAGE(tmp);
-                CERROR("*** setting device %s read-only ***\n",
-                       ll_bdevname(sb, tmp));
+                LCONSOLE_WARN("*** setting obd %s device '%s' read-only ***\n",
+                              obd->obd_name, ll_bdevname(sb, tmp));
 
                 handle = fsfilt_start(obd, inode, FSFILT_OP_MKNOD, NULL);
                 if (!IS_ERR(handle))

@@ -83,6 +83,15 @@ int lustre_msg_check_version(struct lustre_msg *msg, __u32 version)
         }
 }
 
+/* early reply size */
+int lustre_msg_early_size() {
+        static int size = 0;
+        if (!size) 
+                size = lustre_msg_size(LUSTRE_MSG_MAGIC_V2, 1, NULL);
+        return size;
+}
+EXPORT_SYMBOL(lustre_msg_early_size);
+
 static inline int lustre_msg_size_v1(int count, int *lengths)
 {
         int size;
@@ -244,6 +253,7 @@ static int lustre_pack_request_v2(struct ptlrpc_request *req,
         lustre_init_msg_v2(req->rq_reqmsg, count, lens, bufs);
         lustre_msg_add_version(req->rq_reqmsg, PTLRPC_MSG_VERSION);
         lustre_set_req_swabbed(req, MSG_PTLRPC_BODY_OFF);
+
         return 0;
 }
 
@@ -329,22 +339,31 @@ out:
 }
 
 static int lustre_pack_reply_v1(struct ptlrpc_request *req, int count,
-                                int *lens, char **bufs)
+                                int *lens, char **bufs, int flags)
 {
         struct ptlrpc_reply_state *rs;
         int                        msg_len;
         int                        size;
         ENTRY;
 
-        LASSERT (req->rq_reply_state == NULL);
+        /* Insure only 1 reply at a time: hold sem until ptlrpc_req_drop_rs */
+        down(&req->rq_rs_sem);
+        LASSERT(req->rq_reply_state == NULL);
+        if (req->rq_final && (flags & LPRFL_EARLY_REPLY)) {
+                /* Already packed final, no more early */
+                up(&req->rq_rs_sem); 
+                RETURN(-EALREADY);
+        }
 
         msg_len = lustre_msg_size_v1(count, lens);
         size = sizeof(struct ptlrpc_reply_state) + msg_len;
         OBD_ALLOC(rs, size);
         if (unlikely(rs == NULL)) {
                 rs = lustre_get_emerg_rs(req->rq_rqbd->rqbd_service, size);
-                if (!rs)
+                if (!rs) {
+                        up(&req->rq_rs_sem);
                         RETURN (-ENOMEM);
+                }
         }
         atomic_set(&rs->rs_refcount, 1);        /* 1 ref for rq_reply_state */
         rs->rs_cb_id.cbid_fn = reply_out_callback;
@@ -358,6 +377,9 @@ static int lustre_pack_reply_v1(struct ptlrpc_request *req, int count,
         req->rq_replen = msg_len;
         req->rq_reply_state = rs;
         req->rq_repmsg = rs->rs_msg;
+        if (!flags)
+                req->rq_final = 1; /* checked in lustre_packed_reply */
+
         lustre_init_msg_v1(rs->rs_msg, count, lens, bufs);
 
         PTLRPC_RS_DEBUG_LRU_ADD(rs);
@@ -366,22 +388,31 @@ static int lustre_pack_reply_v1(struct ptlrpc_request *req, int count,
 }
 
 static int lustre_pack_reply_v2(struct ptlrpc_request *req, int count,
-                                int *lens, char **bufs)
+                                int *lens, char **bufs, int flags)
 {
         struct ptlrpc_reply_state *rs;
         int                        msg_len;
         int                        size;
         ENTRY;
 
+        /* Insure only 1 reply at a time: hold sem until ptlrpc_req_drop_rs */
+        down(&req->rq_rs_sem); 
         LASSERT(req->rq_reply_state == NULL);
+        if (req->rq_final && (flags & LPRFL_EARLY_REPLY)) {
+                /* Already packed final, no more early */
+                up(&req->rq_rs_sem); 
+                RETURN(-EALREADY);
+        }
 
         msg_len = lustre_msg_size_v2(count, lens);
         size = sizeof(struct ptlrpc_reply_state) + msg_len;
         OBD_ALLOC(rs, size);
         if (unlikely(rs == NULL)) {
                 rs = lustre_get_emerg_rs(req->rq_rqbd->rqbd_service, size);
-                if (!rs)
+                if (!rs) {
+                        up(&req->rq_rs_sem);
                         RETURN (-ENOMEM);
+                }
         }
         atomic_set(&rs->rs_refcount, 1);        /* 1 ref for rq_reply_state */
         rs->rs_cb_id.cbid_fn = reply_out_callback;
@@ -395,6 +426,10 @@ static int lustre_pack_reply_v2(struct ptlrpc_request *req, int count,
         req->rq_replen = msg_len;
         req->rq_reply_state = rs;
         req->rq_repmsg = rs->rs_msg;
+        if (!(flags & LPRFL_EARLY_REPLY))
+                req->rq_final = 1; /* checked in lustre_packed_reply */
+
+        /* server side, no rq_repbuf */
         lustre_init_msg_v2(rs->rs_msg, count, lens, bufs);
         lustre_msg_add_version(rs->rs_msg, PTLRPC_MSG_VERSION);
         lustre_set_rep_swabbed(req, MSG_PTLRPC_BODY_OFF);
@@ -404,8 +439,8 @@ static int lustre_pack_reply_v2(struct ptlrpc_request *req, int count,
         RETURN(0);
 }
 
-int lustre_pack_reply(struct ptlrpc_request *req, int count, int *lens,
-                      char **bufs)
+int lustre_pack_reply_flags(struct ptlrpc_request *req, int count, int *lens,
+                            char **bufs, int flags)
 {
         int size[] = { sizeof(struct ptlrpc_body) };
 
@@ -421,16 +456,23 @@ int lustre_pack_reply(struct ptlrpc_request *req, int count, int *lens,
         case LUSTRE_MSG_MAGIC_V1:
         case LUSTRE_MSG_MAGIC_V1_SWABBED:
                 return lustre_pack_reply_v1(req, count - 1, lens + 1,
-                                            bufs ? bufs + 1 : NULL);
+                                            bufs ? bufs + 1 : NULL, flags);
         case LUSTRE_MSG_MAGIC_V2:
         case LUSTRE_MSG_MAGIC_V2_SWABBED:
-                return lustre_pack_reply_v2(req, count, lens, bufs);
+                return lustre_pack_reply_v2(req, count, lens, bufs, flags);
         default:
                 LASSERTF(0, "incorrect message magic: %08x\n",
                          req->rq_reqmsg->lm_magic);
                 return -EINVAL;
         }
 }
+
+int lustre_pack_reply(struct ptlrpc_request *req, int count, int *lens,
+                      char **bufs)
+{
+        return lustre_pack_reply_flags(req, count, lens, bufs, 0);
+}
+
 
 void *lustre_msg_buf_v1(void *msg, int n, int min_size)
 {
@@ -717,7 +759,7 @@ static int lustre_unpack_msg_v2(struct lustre_msg_v2 *m, int len)
                 __swab32s(&m->lm_bufcount);
                 __swab32s(&m->lm_secflvr);
                 __swab32s(&m->lm_repsize);
-                __swab32s(&m->lm_timeout);
+                __swab32s(&m->lm_cksum);
                 CLASSERT(offsetof(typeof(*m), lm_padding_1) != 0);
                 CLASSERT(offsetof(typeof(*m), lm_padding_2) != 0);
                 CLASSERT(offsetof(typeof(*m), lm_padding_3) != 0);
@@ -1406,6 +1448,17 @@ __u32 lustre_msg_get_conn_cnt(struct lustre_msg *msg)
         }
 }
 
+int lustre_msg_is_v1(struct lustre_msg *msg)
+{
+        switch (msg->lm_magic) {
+        case LUSTRE_MSG_MAGIC_V1:
+        case LUSTRE_MSG_MAGIC_V1_SWABBED:
+                return 1;
+        default:
+                return 0;
+        }
+}
+
 __u32 lustre_msg_get_magic(struct lustre_msg *msg)
 {
         switch (msg->lm_magic) {
@@ -1414,6 +1467,88 @@ __u32 lustre_msg_get_magic(struct lustre_msg *msg)
         case LUSTRE_MSG_MAGIC_V2:
         case LUSTRE_MSG_MAGIC_V2_SWABBED:
                 return msg->lm_magic;
+        default:
+                CERROR("incorrect message magic: %08x\n", msg->lm_magic);
+                return 0;
+        }
+}
+
+__u32 lustre_msg_get_timeout(struct lustre_msg *msg)
+{
+        switch (msg->lm_magic) {
+        case LUSTRE_MSG_MAGIC_V1:
+        case LUSTRE_MSG_MAGIC_V1_SWABBED:
+                return 0;
+        case LUSTRE_MSG_MAGIC_V2:
+        case LUSTRE_MSG_MAGIC_V2_SWABBED: {
+                struct ptlrpc_body *pb;
+                
+                pb = lustre_msg_buf(msg, MSG_PTLRPC_BODY_OFF, sizeof(*pb));
+                if (!pb) {
+                        CERROR("invalid msg %p: no ptlrpc body!\n", msg);
+                        return 0;
+                        
+                }
+                return pb->pb_timeout;
+        }
+        default:
+                CERROR("incorrect message magic: %08x\n", msg->lm_magic);
+                return 0;
+        }
+}
+
+__u32 lustre_msg_get_service_time(struct lustre_msg *msg)
+{
+        switch (msg->lm_magic) {
+        case LUSTRE_MSG_MAGIC_V1:
+        case LUSTRE_MSG_MAGIC_V1_SWABBED:
+                return 0;
+        case LUSTRE_MSG_MAGIC_V2:
+        case LUSTRE_MSG_MAGIC_V2_SWABBED: {
+                struct ptlrpc_body *pb;
+        
+                pb = lustre_msg_buf(msg, MSG_PTLRPC_BODY_OFF, sizeof(*pb));
+                if (!pb) {
+                        CERROR("invalid msg %p: no ptlrpc body!\n", msg);
+                        return 0;
+                        
+                }
+                return pb->pb_service_time;
+        }
+        default:
+                CERROR("incorrect message magic: %08x\n", msg->lm_magic);
+                return 0;
+        }
+}
+
+__u32 lustre_msg_get_cksum(struct lustre_msg *msg)
+{
+        switch (msg->lm_magic) {
+        case LUSTRE_MSG_MAGIC_V1:
+        case LUSTRE_MSG_MAGIC_V1_SWABBED:
+                return 0;
+        case LUSTRE_MSG_MAGIC_V2:
+        case LUSTRE_MSG_MAGIC_V2_SWABBED:
+                return msg->lm_cksum;
+        default:
+                CERROR("incorrect message magic: %08x\n", msg->lm_magic);
+                return 0;
+        }
+}
+
+__u32 lustre_msg_calc_cksum(struct lustre_msg *msg)
+{
+        switch (msg->lm_magic) {
+        case LUSTRE_MSG_MAGIC_V1:
+        case LUSTRE_MSG_MAGIC_V1_SWABBED:
+                return 0;
+        case LUSTRE_MSG_MAGIC_V2:
+        case LUSTRE_MSG_MAGIC_V2_SWABBED: {
+                struct ptlrpc_body *pb;
+                pb = lustre_msg_buf_v2(msg, MSG_PTLRPC_BODY_OFF, sizeof(*pb));
+                LASSERTF(pb, "invalid msg %p: no ptlrpc body!\n", msg);
+                return crc32_le(~(__u32)0, (char *)pb, sizeof(*pb));
+        }
         default:
                 CERROR("incorrect message magic: %08x\n", msg->lm_magic);
                 return 0;
@@ -1572,6 +1707,56 @@ void lustre_msg_set_conn_cnt(struct lustre_msg *msg, __u32 conn_cnt)
         }
 }
 
+void lustre_msg_set_timeout(struct lustre_msg *msg, __u32 timeout)
+{
+        switch (msg->lm_magic) {
+        case LUSTRE_MSG_MAGIC_V1:
+                return;
+        case LUSTRE_MSG_MAGIC_V2: {
+                struct ptlrpc_body *pb;
+                
+                pb = lustre_msg_buf_v2(msg, MSG_PTLRPC_BODY_OFF, sizeof(*pb));
+                LASSERTF(pb, "invalid msg %p: no ptlrpc body!\n", msg);
+                pb->pb_timeout = timeout;
+                return;
+        }
+        default:
+                LASSERTF(0, "incorrect message magic: %08x\n", msg->lm_magic);
+        }
+}
+
+void lustre_msg_set_service_time(struct lustre_msg *msg, __u32 service_time)
+{
+        switch (msg->lm_magic) {
+        case LUSTRE_MSG_MAGIC_V1:
+                return;
+        case LUSTRE_MSG_MAGIC_V2: {
+                struct ptlrpc_body *pb;
+
+                pb = lustre_msg_buf_v2(msg, MSG_PTLRPC_BODY_OFF, sizeof(*pb));
+                LASSERTF(pb, "invalid msg %p: no ptlrpc body!\n", msg);
+                pb->pb_service_time = service_time;
+                return;
+        }
+        default:
+                LASSERTF(0, "incorrect message magic: %08x\n", msg->lm_magic);
+        }
+}
+
+void lustre_msg_set_cksum(struct lustre_msg *msg, __u32 cksum)
+{
+        switch (msg->lm_magic) {
+        case LUSTRE_MSG_MAGIC_V1:
+                return;
+        case LUSTRE_MSG_MAGIC_V2:
+                msg->lm_cksum = cksum;
+                return;
+        default:
+                LASSERTF(0, "incorrect message magic: %08x\n", msg->lm_magic);
+        }
+}
+
+
 /* byte flipping routines for all wire types declared in
  * lustre_idl.h implemented here.
  */
@@ -1588,11 +1773,11 @@ void lustre_swab_ptlrpc_body(struct ptlrpc_body *b)
         __swab32s (&b->pb_flags);
         __swab32s (&b->pb_op_flags);
         __swab32s (&b->pb_conn_cnt);
+        __swab32s (&b->pb_timeout);
+        __swab32s (&b->pb_service_time);
         CLASSERT(offsetof(typeof(*b), pb_padding_1) != 0);
         CLASSERT(offsetof(typeof(*b), pb_padding_2) != 0);
         CLASSERT(offsetof(typeof(*b), pb_padding_3) != 0);
-        CLASSERT(offsetof(typeof(*b), pb_padding_4) != 0);
-        CLASSERT(offsetof(typeof(*b), pb_padding_5) != 0);
 }
 
 void lustre_swab_connect(struct obd_connect_data *ocd)
@@ -2134,8 +2319,8 @@ void _debug_req(struct ptlrpc_request *req, __u32 mask,
         va_start(args, fmt);
         libcfs_debug_vmsg2(data->msg_cdls, data->msg_subsys, mask, data->msg_file,
                            data->msg_fn, data->msg_line, fmt, args,
-                           " req@%p x"LPD64"/t"LPD64" o%d->%s@%s:%d lens %d/%d ref %d fl "
-                           REQ_FLAGS_FMT"/%x/%x rc %d/%d\n",
+                           " req@%p x"LPD64"/t"LPD64" o%d->%s@%s:%d lens %d/%d "
+                           "e %d ref %d fl "REQ_FLAGS_FMT"/%x/%x rc %d/%d\n",
                            req, req->rq_xid, req->rq_transno,
                            req->rq_reqmsg ? lustre_msg_get_opc(req->rq_reqmsg) : -1,
                            req->rq_import ? obd2cli_tgt(req->rq_import->imp_obd) :
@@ -2147,8 +2332,8 @@ void _debug_req(struct ptlrpc_request *req, __u32 mask,
                                 (char *)req->rq_export->exp_connection->c_remote_uuid.uuid : "<?>",
                            (req->rq_import && req->rq_import->imp_client) ?
                                 req->rq_import->imp_client->cli_request_portal : -1,
-                           req->rq_reqlen, req->rq_replen, atomic_read(&req->rq_refcount),
-                           DEBUG_REQ_FLAGS(req),
+                           req->rq_reqlen, req->rq_replen, req->rq_early_count,
+                           atomic_read(&req->rq_refcount), DEBUG_REQ_FLAGS(req),
                            req->rq_reqmsg ? lustre_msg_get_flags(req->rq_reqmsg) : 0,
                            req->rq_repmsg ? lustre_msg_get_flags(req->rq_repmsg) : 0,
                            req->rq_status,

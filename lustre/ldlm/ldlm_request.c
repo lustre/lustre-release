@@ -61,7 +61,8 @@ int ldlm_expired_completion_wait(void *data)
                 LDLM_ERROR(lock, "lock timed out (enqueued at %lu, %lus ago); "
                            "not entering recovery in server code, just going "
                            "back to sleep", lock->l_enqueued_time.tv_sec,
-                           CURRENT_SECONDS - lock->l_enqueued_time.tv_sec);
+                           cfs_time_current_sec() -
+                           lock->l_enqueued_time.tv_sec);
                 if (cfs_time_after(cfs_time_current(), next_dump)) {
                         last_dump = next_dump;
                         next_dump = cfs_time_shift(300);
@@ -91,6 +92,7 @@ int ldlm_completion_ast(struct ldlm_lock *lock, int flags, void *data)
         struct obd_device *obd;
         struct obd_import *imp = NULL;
         struct l_wait_info lwi;
+        __u32 timeout = obd_timeout; /* Non-AT value */
         int rc = 0;
         ENTRY;
 
@@ -115,8 +117,10 @@ noreproc:
         obd = class_exp2obd(lock->l_conn_export);
 
         /* if this is a local lock, then there is no import */
-        if (obd != NULL)
+        if (obd != NULL) {
                 imp = obd->u.cli.cl_import;
+                timeout = import_at_get_ldlm(imp);
+        }
 
         lwd.lwd_lock = lock;
 
@@ -124,7 +128,7 @@ noreproc:
                 LDLM_DEBUG(lock, "waiting indefinitely because of NO_TIMEOUT");
                 lwi = LWI_INTR(interrupted_completion_wait, &lwd);
         } else {
-                lwi = LWI_TIMEOUT_INTR(cfs_time_seconds(obd_timeout),
+                lwi = LWI_TIMEOUT_INTR(cfs_time_seconds(timeout),
                                        ldlm_expired_completion_wait,
                                        interrupted_completion_wait, &lwd);
         }

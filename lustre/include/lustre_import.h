@@ -8,6 +8,26 @@
 #include <lustre_handles.h>
 #include <lustre/lustre_idl.h>
 
+
+/* Adaptive Timeout stuff */
+#define D_ADAPTTO D_OTHER
+#define AT_BINS 4                  /* "bin" means "N seconds of history" */
+#define AT_TIMEBASE_DEFAULT 600    /* remembered history (sec) (should be
+                                      evenly divisible by AT_BINS) */
+#define AT_FLG_NOHIST 0x1          /* use last reported value only */
+#define AT_FLG_MIN    0x2          /* use a minimum limit */
+
+struct adaptive_timeout {
+        time_t       at_binstart;         /* bin start time */
+        time_t       at_binlimit;         /* bin time limit */
+        unsigned int at_hist[AT_BINS];    /* timeout history bins */
+        unsigned int at_flags;
+        unsigned int at_current;          /* current timeout value */
+        unsigned int at_worst_ever;       /* worst-ever timeout value */
+        time_t       at_worst_time;       /* worst-ever timeout timestamp */
+        spinlock_t   at_lock;
+};
+
 enum lustre_imp_state {
         LUSTRE_IMP_CLOSED     = 1,
         LUSTRE_IMP_NEW        = 2,
@@ -46,6 +66,14 @@ struct obd_import_conn {
         struct ptlrpc_connection *oic_conn;
         struct obd_uuid           oic_uuid;
         __u64                     oic_last_attempt; /* jiffies, 64-bit */
+};
+
+#define IMP_AT_MAX_PORTALS 4
+struct imp_at {
+        int                     iat_portal[IMP_AT_MAX_PORTALS];
+        struct adaptive_timeout iat_net_latency;
+        struct adaptive_timeout iat_service_estimate[IMP_AT_MAX_PORTALS];
+        time_t                  iat_drain; /* hack to slow reconnect reqs */
 };
 
 struct obd_import {
@@ -106,25 +134,35 @@ struct obd_import {
         __u64                     imp_connect_flags_orig;
 
         __u32                     imp_msg_magic;
+        __u32                     imp_msg_flags;          /* adjusted based on server capability */
 
-        struct ptlrpc_request_pool *imp_rq_pool; /* emergency request pool */
+        struct ptlrpc_request_pool *imp_rq_pool;          /* emergency request pool */
+
+        struct imp_at             imp_at;                 /* adaptive timeout data */
+        time_t                    imp_last_reply_time;    /* for health check */
 };
 
-typedef void (*obd_import_callback)(struct obd_import *imp, void *closure,
-                                    int event, void *event_arg, void *cb_data);
-
-struct obd_import_observer {
-        struct list_head     oio_chain;
-        obd_import_callback  oio_cb;
-        void                *oio_cb_data;
-};
-
-void class_observe_import(struct obd_import *imp, obd_import_callback cb,
-                          void *cb_data);
-void class_unobserve_import(struct obd_import *imp, obd_import_callback cb,
-                            void *cb_data);
-void class_notify_import_observers(struct obd_import *imp, int event,
-                                   void *event_arg);
+/* import.c */
+static inline void at_init(struct adaptive_timeout *at, int val, int timebase,
+                           int flags) {
+        memset(at, 0, sizeof(*at));
+        at->at_binlimit = timebase / AT_BINS;
+        at->at_current = val;
+        at->at_worst_ever = val;
+        at->at_worst_time = cfs_time_current_sec();
+        at->at_flags = flags;
+        spin_lock_init(&at->at_lock);
+}
+static inline int at_get(struct adaptive_timeout *at) {
+        extern unsigned int adaptive_timeout_max;
+        if (adaptive_timeout_max)
+                return min(at->at_current, adaptive_timeout_max);
+        return at->at_current;
+}
+void at_add(struct adaptive_timeout *at, unsigned int val);
+int import_at_get_index(struct obd_import *imp, int portal);
+int import_at_get_ldlm(struct obd_import *imp);
+#define AT_OFF (adaptive_timeout_max == 0)
 
 /* genops.c */
 struct obd_export;

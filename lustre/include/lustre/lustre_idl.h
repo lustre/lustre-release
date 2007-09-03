@@ -188,7 +188,7 @@ struct lustre_msg_v2 {
         __u32 lm_secflvr;
         __u32 lm_magic;
         __u32 lm_repsize;
-        __u32 lm_timeout;
+        __u32 lm_cksum;
         __u32 lm_padding_1;
         __u32 lm_padding_2;
         __u32 lm_padding_3;
@@ -209,11 +209,11 @@ struct ptlrpc_body {
         __u32 pb_flags;
         __u32 pb_op_flags;
         __u32 pb_conn_cnt;
+        __u32 pb_timeout;  /* for req, the deadline, for rep, the service est */
+        __u32 pb_service_time; /* for rep, actual service time */
         __u32 pb_padding_1;
         __u32 pb_padding_2;
         __u32 pb_padding_3;
-        __u32 pb_padding_4;
-        __u32 pb_padding_5;
 };
 
 extern void lustre_swab_ptlrpc_body(struct ptlrpc_body *pb);
@@ -247,6 +247,7 @@ extern void lustre_swab_ptlrpc_body(struct ptlrpc_body *pb);
 #define MSG_LAST_REPLAY        1
 #define MSG_RESENT             2
 #define MSG_REPLAY             4
+#define MSG_AT_SUPPORT         8
 
 /*
  * Flags for all connect opcodes (MDS_CONNECT, OST_CONNECT)
@@ -293,14 +294,14 @@ extern void lustre_swab_ptlrpc_body(struct ptlrpc_body *pb);
                                 OBD_CONNECT_ACL | OBD_CONNECT_XATTR | \
                                 OBD_CONNECT_IBITS | OBD_CONNECT_JOIN | \
                                 OBD_CONNECT_NODEVOH | OBD_CONNECT_ATTRFID | \
-                                OBD_CONNECT_CANCELSET)
+                                OBD_CONNECT_CANCELSET | OBD_CONNECT_AT)
 #define OST_CONNECT_SUPPORTED  (OBD_CONNECT_SRVLOCK | OBD_CONNECT_GRANT | \
                                 OBD_CONNECT_REQPORTAL | OBD_CONNECT_VERSION | \
                                 OBD_CONNECT_TRUNCLOCK | OBD_CONNECT_INDEX | \
                                 OBD_CONNECT_BRW_SIZE | OBD_CONNECT_QUOTA64 | \
-                                OBD_CONNECT_CANCELSET)
+                                OBD_CONNECT_CANCELSET | OBD_CONNECT_AT)
 #define ECHO_CONNECT_SUPPORTED (0)
-#define MGS_CONNECT_SUPPORTED  (OBD_CONNECT_VERSION)
+#define MGS_CONNECT_SUPPORTED  (OBD_CONNECT_VERSION | OBD_CONNECT_AT)
 
 #define MAX_QUOTA_COUNT32 ((0xffffffffULL >> QUOTABLOCK_BITS) << QUOTABLOCK_BITS)
 

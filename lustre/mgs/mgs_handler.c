@@ -173,7 +173,7 @@ static int mgs_setup(struct obd_device *obd, obd_count len, void *buf)
         mgs->mgs_service =
                 ptlrpc_init_svc(MGS_NBUFS, MGS_BUFSIZE, MGS_MAXREQSIZE,
                                 MGS_MAXREPSIZE, MGS_REQUEST_PORTAL,
-                                MGC_REPLY_PORTAL, MGS_SERVICE_WATCHDOG_TIMEOUT,
+                                MGC_REPLY_PORTAL, 2000,
                                 mgs_handle, LUSTRE_MGS_NAME,
                                 obd->obd_proc_entry, NULL,
                                 MGS_THREADS_AUTO_MIN, MGS_THREADS_AUTO_MAX,
@@ -379,7 +379,7 @@ static int mgs_handle_target_reg(struct ptlrpc_request *req)
                                    obd->obd_name, lockrc);
         }
 
-        OBD_FAIL_TIMEOUT(OBD_FAIL_MGS_SLOW_TARGET_REG, 10);
+        OBD_FAIL_TIMEOUT(OBD_FAIL_MGS_PAUSE_TARGET_REG, 10);
 
         /* Log writing contention is handled by the fsdb_sem */
 
@@ -457,8 +457,8 @@ int mgs_handle(struct ptlrpc_request *req)
         int opc, rc = 0;
         ENTRY;
 
-        OBD_FAIL_TIMEOUT(OBD_FAIL_MGS_SLOW_REQUEST_NET, 2);
-        OBD_FAIL_RETURN(OBD_FAIL_MGS_ALL_REQUEST_NET | OBD_FAIL_ONCE, 0);
+        OBD_FAIL_TIMEOUT_MS(OBD_FAIL_MGS_PAUSE_REQ, obd_fail_val);
+        OBD_FAIL_RETURN(OBD_FAIL_MGS_ALL_REQUEST_NET, 0);
 
         LASSERT(current->journal_info == NULL);
         opc = lustre_msg_get_opc(req->rq_reqmsg);

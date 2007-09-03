@@ -337,7 +337,7 @@ int mds_lov_connect(struct obd_device *obd, char * lov_name)
         if (data == NULL)
                 RETURN(-ENOMEM);
         data->ocd_connect_flags = OBD_CONNECT_VERSION | OBD_CONNECT_INDEX |
-                                  OBD_CONNECT_REQPORTAL | OBD_CONNECT_QUOTA64;
+                OBD_CONNECT_REQPORTAL | OBD_CONNECT_QUOTA64 | OBD_CONNECT_AT;
         data->ocd_version = LUSTRE_VERSION_CODE;
         /* NB: lov_connect() needs to fill in .ocd_index for each OST */
         rc = obd_connect(&conn, mds->mds_osc_obd, &obd->obd_uuid, data);
@@ -575,8 +575,8 @@ int mds_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
                 void *handle;
                 struct inode *inode = obd->u.obt.obt_sb->s_root->d_inode;
                 BDEVNAME_DECLARE_STORAGE(tmp);
-                CERROR("*** setting device %s read-only ***\n",
-                       ll_bdevname(obd->u.obt.obt_sb, tmp));
+                LCONSOLE_WARN("*** setting obd %s device '%s' read-only ***\n",
+                       obd->obd_name, ll_bdevname(obd->u.obt.obt_sb, tmp));
 
                 handle = fsfilt_start(obd, inode, FSFILT_OP_MKNOD, NULL);
                 if (!IS_ERR(handle))

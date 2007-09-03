@@ -153,6 +153,8 @@ void ptlrpc_lprocfs_register(struct proc_dir_entry *root, char *dir,
                              svc_counter_config, "req_qdepth", "reqs");
         lprocfs_counter_init(svc_stats, PTLRPC_REQACTIVE_CNTR,
                              svc_counter_config, "req_active", "reqs");
+        lprocfs_counter_init(svc_stats, PTLRPC_TIMEOUT,
+                             svc_counter_config, "adaptive_timeout", "sec");
         lprocfs_counter_init(svc_stats, PTLRPC_REQBUF_AVAIL_CNTR,
                              svc_counter_config, "reqbuf_avail", "bufs");
         for (i = 0; i < LUSTRE_MAX_OPCODES; i++) {
@@ -385,6 +387,56 @@ ptlrpc_lprocfs_svc_req_history_open(struct inode *inode, struct file *file)
         return 0;
 }
 
+/* See also lprocfs_rd_timeouts */
+static int ptlrpc_lprocfs_rd_timeouts(char *page, char **start, off_t off,
+                                      int count, int *eof, void *data)
+{
+        struct ptlrpc_service *svc = data;
+        unsigned int cur, worst;
+        time_t worstt;
+        struct dhms ts;
+        int rc = 0;
+
+        *eof = 1;
+        cur = at_get(&svc->srv_at_estimate);
+        worst = svc->srv_at_estimate.at_worst_ever;
+        worstt = svc->srv_at_estimate.at_worst_time;
+        s2dhms(&ts, cfs_time_current_sec() - worstt);
+        if (AT_OFF)
+                rc += snprintf(page + rc, count - rc,
+                              "adaptive timeouts off, using obd_timeout %u\n",
+                              obd_timeout);
+        rc += snprintf(page + rc, count - rc, 
+                       "%10s : %ld sec\n", "timebase",
+                       svc->srv_at_estimate.at_binlimit * AT_BINS);
+        rc += snprintf(page + rc, count - rc, 
+                       "%10s : cur %3u  worst %3u (at %ld, "DHMS_FMT" ago) ",
+                       "service", cur, worst, worstt, 
+                       DHMS_VARS(&ts));
+        rc = lprocfs_at_hist_helper(page, count, rc,
+                                    &svc->srv_at_estimate);
+        return rc;
+}               
+
+static int ptlrpc_lprocfs_wr_timeouts(struct file *file, const char *buffer,
+                                      unsigned long count, void *data)
+{
+        struct ptlrpc_service *svc = data;
+        int val, rc;
+         
+        rc = lprocfs_write_helper(buffer, count, &val);
+        if (rc < 0)
+                return rc;
+        if (val <= 0)
+                return -ERANGE;
+
+        spin_lock(&svc->srv_at_estimate.at_lock);
+        svc->srv_at_estimate.at_binlimit = max(1, val / AT_BINS);
+        spin_unlock(&svc->srv_at_estimate.at_lock);
+
+        return count;
+}
+
 void ptlrpc_lprocfs_register_service(struct proc_dir_entry *entry,
                                      struct ptlrpc_service *svc)
 {
@@ -396,6 +448,10 @@ void ptlrpc_lprocfs_register_service(struct proc_dir_entry *entry,
                 {.name       = "req_buffer_history_max",
                  .write_fptr = ptlrpc_lprocfs_write_req_history_max,
                  .read_fptr  = ptlrpc_lprocfs_read_req_history_max,
+                 .data       = svc},
+                {.name       = "timeouts",
+                 .write_fptr = ptlrpc_lprocfs_wr_timeouts,
+                 .read_fptr  = ptlrpc_lprocfs_rd_timeouts,
                  .data       = svc},
                 {NULL}
         };

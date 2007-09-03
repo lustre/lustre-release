@@ -58,10 +58,10 @@ inline cfs_time_t round_timeout(cfs_time_t timeout)
         return cfs_time_seconds((int)cfs_duration_sec(cfs_time_sub(timeout, 0)) + 1);
 }
 
-/* timeout for initial callback (AST) reply */
-static inline unsigned int ldlm_get_rq_timeout(unsigned int ldlm_timeout,
-                                               unsigned int obd_timeout)
+/* timeout for initial callback (AST) reply (bz10399) */
+static inline unsigned int ldlm_get_rq_timeout(void)
 {
+        /* Non-AT value */
         unsigned int timeout = min(ldlm_timeout, obd_timeout / 3);
 
         return timeout < 1 ? 1 : timeout;
@@ -204,15 +204,15 @@ static void waiting_locks_callback(unsigned long unused)
                 lock = list_entry(waiting_locks_list.next, struct ldlm_lock,
                                   l_pending_chain);
 
-                if (cfs_time_after(lock->l_callback_timeout, cfs_time_current()) ||
-                    (lock->l_req_mode == LCK_GROUP))
+                if (cfs_time_after(lock->l_callback_timeout, cfs_time_current())
+                    || (lock->l_req_mode == LCK_GROUP))
                         break;
 
-                LDLM_ERROR(lock, "lock callback timer expired: evicting client "
-                           "%s@%s nid %s ",lock->l_export->exp_client_uuid.uuid,
-                           lock->l_export->exp_connection->c_remote_uuid.uuid,
-                           libcfs_nid2str(lock->l_export->exp_connection->c_peer.nid));
-
+                LDLM_ERROR(lock, "lock callback timer expired after %lds: "
+                           "evicting client at %s ",
+                           cfs_time_current_sec()- lock->l_enqueued_time.tv_sec,
+                           libcfs_nid2str(
+                                   lock->l_export->exp_connection->c_peer.nid));
                 if (lock == last) {
                         LDLM_ERROR(lock, "waiting on lock multiple times");
                         CERROR("wll %p n/p %p/%p, l_pending %p n/p %p/%p\n",
@@ -270,20 +270,23 @@ static void waiting_locks_callback(unsigned long unused)
  */
 static int __ldlm_add_waiting_lock(struct ldlm_lock *lock)
 {
+        int timeout = obd_timeout / 2;  /* Non-AT value */
         cfs_time_t timeout_rounded;
 
         if (!list_empty(&lock->l_pending_chain))
                 return 0;
 
-        lock->l_callback_timeout =cfs_time_add(cfs_time_current(),
-                                               cfs_time_seconds(obd_timeout)/2);
+        if (lock->l_export && !AT_OFF) 
+                timeout = import_at_get_ldlm(lock->l_export->exp_imp_reverse);
+
+        lock->l_callback_timeout = cfs_time_shift(timeout);
 
         timeout_rounded = round_timeout(lock->l_callback_timeout);
 
-        if (cfs_time_before(timeout_rounded, cfs_timer_deadline(&waiting_locks_timer)) ||
+        if (cfs_time_before(timeout_rounded, 
+                            cfs_timer_deadline(&waiting_locks_timer)) ||
             !cfs_timer_is_armed(&waiting_locks_timer)) {
                 cfs_timer_arm(&waiting_locks_timer, timeout_rounded);
-
         }
         list_add_tail(&lock->l_pending_chain, &waiting_locks_list); /* FIFO */
         return 1;
@@ -614,7 +617,9 @@ int ldlm_server_blocking_ast(struct ldlm_lock *lock,
         }
 
         req->rq_send_state = LUSTRE_IMP_FULL;
-        req->rq_timeout = ldlm_get_rq_timeout(ldlm_timeout, obd_timeout);
+        /* ptlrpc_prep_req already set timeout */
+        if (AT_OFF)
+                req->rq_timeout = ldlm_get_rq_timeout();
 
         if (lock->l_export && lock->l_export->exp_ldlm_stats)
                 lprocfs_counter_incr(lock->l_export->exp_ldlm_stats,
@@ -644,7 +649,8 @@ int ldlm_server_completion_ast(struct ldlm_lock *lock, int flags, void *data)
         total_enqueue_wait = cfs_timeval_sub(&granted_time,
                                              &lock->l_enqueued_time, NULL);
 
-        if (total_enqueue_wait / 1000000 > obd_timeout)
+        if (total_enqueue_wait / ONE_MILLION > obd_timeout)
+                /* non-fatal with AT - change to LDLM_DEBUG? */
                 LDLM_ERROR(lock, "enqueue wait took %luus from %lu",
                            total_enqueue_wait, lock->l_enqueued_time.tv_sec);
 
@@ -687,7 +693,9 @@ int ldlm_server_completion_ast(struct ldlm_lock *lock, int flags, void *data)
         ptlrpc_req_set_repsize(req, 1, NULL);
 
         req->rq_send_state = LUSTRE_IMP_FULL;
-        req->rq_timeout = ldlm_get_rq_timeout(ldlm_timeout, obd_timeout);
+        /* ptlrpc_prep_req already set timeout */
+        if (AT_OFF)
+                req->rq_timeout = ldlm_get_rq_timeout();
 
         /* We only send real blocking ASTs after the lock is granted */
         lock_res_and_lock(lock);
@@ -750,7 +758,9 @@ int ldlm_server_glimpse_ast(struct ldlm_lock *lock, void *data)
         ptlrpc_req_set_repsize(req, 2, size);
 
         req->rq_send_state = LUSTRE_IMP_FULL;
-        req->rq_timeout = ldlm_get_rq_timeout(ldlm_timeout, obd_timeout);
+        /* ptlrpc_prep_req already set timeout */
+        if (AT_OFF)
+                req->rq_timeout = ldlm_get_rq_timeout();
 
         if (lock->l_export && lock->l_export->exp_ldlm_stats)
                 lprocfs_counter_incr(lock->l_export->exp_ldlm_stats,
@@ -1010,7 +1020,7 @@ existing_lock:
         EXIT;
  out:
         req->rq_status = rc ?: err;  /* return either error - bug 11190 */
-        if (req->rq_reply_state == NULL) {
+        if (!lustre_packed_reply(req)) {
                 err = lustre_pack_reply(req, 1, NULL, NULL);
                 if (rc == 0)
                         rc = err;
@@ -1340,7 +1350,7 @@ static void ldlm_handle_gl_callback(struct ptlrpc_request *req,
 static int ldlm_callback_reply(struct ptlrpc_request *req, int rc)
 {
         req->rq_status = rc;
-        if (req->rq_reply_state == NULL) {
+        if (!lustre_packed_reply(req)) {
                 rc = lustre_pack_reply(req, 1, NULL, NULL);
                 if (rc)
                         return rc;
@@ -1727,7 +1737,7 @@ static int ldlm_setup(void)
         ldlm_state->ldlm_cb_service =
                 ptlrpc_init_svc(LDLM_NBUFS, LDLM_BUFSIZE, LDLM_MAXREQSIZE,
                                 LDLM_MAXREPSIZE, LDLM_CB_REQUEST_PORTAL,
-                                LDLM_CB_REPLY_PORTAL, ldlm_timeout * 900,
+                                LDLM_CB_REPLY_PORTAL, 1800,
                                 ldlm_callback_handler, "ldlm_cbd",
                                 ldlm_svc_proc_dir, NULL,
                                 LDLM_THREADS_AUTO_MIN, LDLM_THREADS_AUTO_MAX,
@@ -1741,7 +1751,7 @@ static int ldlm_setup(void)
         ldlm_state->ldlm_cancel_service =
                 ptlrpc_init_svc(LDLM_NBUFS, LDLM_BUFSIZE, LDLM_MAXREQSIZE,
                                 LDLM_MAXREPSIZE, LDLM_CANCEL_REQUEST_PORTAL,
-                                LDLM_CANCEL_REPLY_PORTAL, ldlm_timeout * 6000,
+                                LDLM_CANCEL_REPLY_PORTAL, 6000,
                                 ldlm_cancel_handler, "ldlm_canceld",
                                 ldlm_svc_proc_dir, NULL,
                                 LDLM_THREADS_AUTO_MIN, LDLM_THREADS_AUTO_MAX,

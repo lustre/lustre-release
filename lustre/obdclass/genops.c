@@ -670,7 +670,7 @@ struct obd_export *class_new_export(struct obd_device *obd,
 
         CFS_INIT_LIST_HEAD(&export->exp_handle.h_link);
         class_handle_hash(&export->exp_handle, export_handle_addref);
-        export->exp_last_request_time = CURRENT_SECONDS;
+        export->exp_last_request_time = cfs_time_current_sec();
         spin_lock_init(&export->exp_lock);
         INIT_HLIST_NODE(&export->exp_uuid_hash);
         INIT_HLIST_NODE(&export->exp_nid_hash);
@@ -791,6 +791,24 @@ void class_import_destroy(struct obd_import *import)
 }
 EXPORT_SYMBOL(class_import_put);
 
+static void init_imp_at(struct imp_at *at) {
+        int i;
+        /* We need enough time to get an early response on a slow network.
+           Since we can't say for sure how slow a network might be, we use
+           a user-defined max expected network latency. We will adapt to slow
+           increases, but a sudden jump can still kill us. */
+        at_init(&at->iat_net_latency, adaptive_timeout_min, AT_TIMEBASE_DEFAULT, 
+                AT_FLG_MIN);
+        for (i = 0; i < IMP_AT_MAX_PORTALS; i++) {
+                /* max service estimates are tracked on the server side, so
+                   don't use the AT history here, just use the last reported
+                   val. (But keep hist for proc histogram, worst_ever) */
+                at_init(&at->iat_service_estimate[i], INITIAL_CONNECT_TIMEOUT,
+                        AT_TIMEBASE_DEFAULT, AT_FLG_NOHIST);
+        }
+        at->iat_drain = 0;
+}
+
 struct obd_import *class_new_import(struct obd_device *obd)
 {
         struct obd_import *imp;
@@ -816,6 +834,7 @@ struct obd_import *class_new_import(struct obd_device *obd)
         CFS_INIT_LIST_HEAD(&imp->imp_conn_list);
         CFS_INIT_LIST_HEAD(&imp->imp_handle.h_link);
         class_handle_hash(&imp->imp_handle, import_handle_addref);
+        init_imp_at(&imp->imp_at);
 
         /* the default magic is V1, will be used in connect RPC, and
          * then adjusted according to the flags in request/reply. */
@@ -946,9 +965,9 @@ static void class_disconnect_export_list(struct list_head *list, int flags)
                 spin_unlock(&fake_exp->exp_lock);
 
                 rc = obd_disconnect(fake_exp);
+                CDEBUG(D_HA, "disconnected export at %s (%p): rc %d\n",
+                       obd_export_nid2str(exp), exp, rc);
                 class_export_put(exp);
-                CDEBUG(D_HA, "disconnecting export %s (%p): rc %d\n",
-                       exp->exp_client_uuid.uuid, exp, rc);
         }
         EXIT;
 }

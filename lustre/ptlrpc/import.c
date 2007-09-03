@@ -185,8 +185,11 @@ void ptlrpc_deactivate_import(struct obd_import *imp)
  */
 void ptlrpc_invalidate_import(struct obd_import *imp)
 {
+        struct list_head *tmp, *n;
+        struct ptlrpc_request *req;
         struct l_wait_info lwi;
-        int rc;
+        time_t last = 0;
+        int timeout, rc = 0;
 
         atomic_inc(&imp->imp_inval_count);
 
@@ -196,16 +199,41 @@ void ptlrpc_invalidate_import(struct obd_import *imp)
         LASSERT(imp->imp_invalid);
 
         /* wait for all requests to error out and call completion callbacks */
-        lwi = LWI_TIMEOUT_INTERVAL(cfs_timeout_cap(cfs_time_seconds(obd_timeout)), 
-                                   HZ, NULL, NULL);
-        rc = l_wait_event(imp->imp_recovery_waitq,
-                          (atomic_read(&imp->imp_inflight) == 0),
-                          &lwi);
+        spin_lock(&imp->imp_lock);
+        list_for_each_safe(tmp, n, &imp->imp_sending_list) {
+                req = list_entry(tmp, struct ptlrpc_request, rq_list);
+                last = max(last, req->rq_deadline);
+        }
+        list_for_each_safe(tmp, n, &imp->imp_delayed_list) {
+                req = list_entry(tmp, struct ptlrpc_request, rq_list);
+                last = max(last, req->rq_deadline);
+        }
+        spin_unlock(&imp->imp_lock);
 
-        if (rc)
-                CDEBUG(D_HA, "%s: rc = %d waiting for callback (%d != 0)\n",
+        timeout = (int)(last - cfs_time_current_sec());
+        if (timeout > 0) {
+                lwi = LWI_TIMEOUT_INTERVAL(cfs_time_seconds(timeout),
+                                           HZ, NULL, NULL);
+                rc = l_wait_event(imp->imp_recovery_waitq,
+                                  (atomic_read(&imp->imp_inflight) == 0),
+                                  &lwi);
+        }
+
+        if (atomic_read(&imp->imp_inflight)) {
+                CERROR("%s: rc = %d waiting for callback (%d != 0)\n",
                        obd2cli_tgt(imp->imp_obd), rc,
                        atomic_read(&imp->imp_inflight));
+                spin_lock(&imp->imp_lock);
+                list_for_each_safe(tmp, n, &imp->imp_sending_list) {
+                        req = list_entry(tmp, struct ptlrpc_request, rq_list);
+                        DEBUG_REQ(D_ERROR, req, "still on sending list");
+                }
+                list_for_each_safe(tmp, n, &imp->imp_delayed_list) {
+                        req = list_entry(tmp, struct ptlrpc_request, rq_list);
+                        DEBUG_REQ(D_ERROR, req, "still on delayed list");
+                }
+                spin_unlock(&imp->imp_lock);
+        }
 
         obd_import_event(imp->imp_obd, imp, IMP_EVENT_INVALIDATE);
 
@@ -257,6 +285,7 @@ static int import_select_connection(struct obd_import *imp)
 {
         struct obd_import_conn *imp_conn = NULL, *conn;
         struct obd_export *dlmexp;
+        int tried_all = 1;
         ENTRY;
 
         spin_lock(&imp->imp_lock);
@@ -273,43 +302,56 @@ static int import_select_connection(struct obd_import *imp)
                        imp->imp_obd->obd_name,
                        libcfs_nid2str(conn->oic_conn->c_peer.nid),
                        conn->oic_last_attempt);
-                /* Throttle the reconnect rate to once per RECONNECT_INTERVAL */
-                if (cfs_time_before_64(conn->oic_last_attempt + 
-                                       RECONNECT_INTERVAL * HZ,
-                                       cfs_time_current_64())) {
-                        /* If we have never tried this connection since the
-                           the last successful attempt, go with this one */
-                        if (cfs_time_beforeq_64(conn->oic_last_attempt,
-                                               imp->imp_last_success_conn)) {
-                                imp_conn = conn;
-                                break;
-                        }
-
-                        /* Both of these connections have already been tried
-                           since the last successful connection; just choose the
-                           least recently used */
-                        if (!imp_conn)
-                                imp_conn = conn;
-                        else if (cfs_time_before_64(conn->oic_last_attempt,
-                                                    imp_conn->oic_last_attempt))
-                                imp_conn = conn;
-                } else {
-                        /* Exceptionally unlikely case caused by the node
-                         * booting and attempting to mount lustre faster than
-                         * than RECONNECT_INTERVAL seconds. */
-                        if (unlikely(conn->oic_last_attempt == 0)) {
-                                imp_conn = conn;
-                                break;
-                        }
+                
+                /* Don't thrash connections */
+                if (cfs_time_before_64(cfs_time_current_64(),
+                                     conn->oic_last_attempt + 
+                                     cfs_time_seconds(CONNECTION_SWITCH_MIN))) {
+                        continue;
                 }
+
+                /* If we have not tried this connection since the
+                   the last successful attempt, go with this one */
+                if ((conn->oic_last_attempt == 0) ||
+                    cfs_time_beforeq_64(conn->oic_last_attempt,
+                                       imp->imp_last_success_conn)) {
+                        imp_conn = conn;
+                        tried_all = 0;
+                        break;
+                }
+
+                /* If all of the connections have already been tried
+                   since the last successful connection; just choose the
+                   least recently used */
+                if (!imp_conn)
+                        imp_conn = conn;
+                else if (cfs_time_before_64(conn->oic_last_attempt,
+                                            imp_conn->oic_last_attempt))
+                        imp_conn = conn;
         }
 
         /* if not found, simply choose the current one */
         if (!imp_conn) {
                 LASSERT(imp->imp_conn_current);
                 imp_conn = imp->imp_conn_current;
+                tried_all = 0;
         }
         LASSERT(imp_conn->oic_conn);
+
+        /* If we've tried everything, and we're back to the beginning of the
+           list, wait for LND_TIMEOUT to give the queues a chance to drain. */
+        if (tried_all && (imp->imp_conn_list.next == &imp_conn->oic_item)) {
+                int must_wait;
+                LASSERT(imp_conn->oic_last_attempt);
+                must_wait = LND_TIMEOUT -
+                        (int)cfs_duration_sec(cfs_time_current_64() - 
+                                              imp_conn->oic_last_attempt);
+                imp->imp_at.iat_drain = max(0, must_wait);
+                CWARN("Tried all connections, %lus drain time\n",
+                      imp->imp_at.iat_drain);
+        } else {
+                imp->imp_at.iat_drain = 0;
+        }
 
         imp_conn->oic_last_attempt = cfs_time_current_64();
 
@@ -455,21 +497,19 @@ int ptlrpc_connect_import(struct obd_import *imp, char *new_uuid)
 
         aa->pcaa_peer_committed = committed_before_reconnect;
         aa->pcaa_initial_connect = initial_connect;
-
         if (aa->pcaa_initial_connect) {
                 spin_lock(&imp->imp_lock);
                 imp->imp_replayable = 1;
                 spin_unlock(&imp->imp_lock);
-                /* On an initial connect, we don't know which one of a
-                   failover server pair is up.  Don't wait long. */
-#ifdef CRAY_XT3
-                request->rq_timeout = max((int)(obd_timeout / 2), 5);
-#else
-                request->rq_timeout = max((int)(obd_timeout / 20), 5);
-#endif
+                if (AT_OFF)
+                        /* AT will use INITIAL_CONNECT_TIMEOUT the first
+                           time, adaptive after that. */
+                        request->rq_timeout = INITIAL_CONNECT_TIMEOUT;
         }
 
-        DEBUG_REQ(D_RPCTRACE, request, "(re)connect request");
+        DEBUG_REQ(D_RPCTRACE, request, "%sconnect request %d",
+                  aa->pcaa_initial_connect ? "initial " : "re", 
+                  imp->imp_conn_cnt);
         ptlrpcd_add_req(request);
         rc = 0;
 out:
@@ -528,6 +568,7 @@ static int ptlrpc_connect_interpret(struct ptlrpc_request *request,
         ENTRY;
 
         spin_lock(&imp->imp_lock);
+        imp->imp_at.iat_drain = 0;
         if (imp->imp_state == LUSTRE_IMP_CLOSED) {
                 spin_unlock(&imp->imp_lock);
                 RETURN(0);
@@ -633,6 +674,7 @@ static int ptlrpc_connect_interpret(struct ptlrpc_request *request,
                 imp->imp_last_replay_transno = 0;
                 IMPORT_SET_STATE(imp, LUSTRE_IMP_REPLAY);
         } else {
+                DEBUG_REQ(D_HA, request, "evicting, flags=%x", msg_flags);
                 imp->imp_remote_handle =
                                 *lustre_msg_get_handle(request->rq_repmsg);
                 IMPORT_SET_STATE(imp, LUSTRE_IMP_EVICTED);
@@ -744,6 +786,20 @@ finish:
                         cli->cl_max_pages_per_rpc = 
                                 ocd->ocd_brw_size >> CFS_PAGE_SHIFT;
                 }
+
+                if ((ocd->ocd_connect_flags & OBD_CONNECT_AT) &&
+                    (imp->imp_msg_magic == LUSTRE_MSG_MAGIC_V2))
+                        /* We need a per-message support flag, because 
+                           a. we don't know if the incoming connect reply
+                              supports AT or not (in reply_in_callback)
+                              until we unpack it.
+                           b. failovered server means export and flags are gone
+                              (in ptlrpc_send_reply).
+                           Can only be set when we know AT is supported at 
+                           both ends */
+                        imp->imp_msg_flags |= MSG_AT_SUPPORT;
+                else
+                        imp->imp_msg_flags &= ~MSG_AT_SUPPORT;
 
                 LASSERT((cli->cl_max_pages_per_rpc <= PTLRPC_MAX_BRW_PAGES) &&
                         (cli->cl_max_pages_per_rpc > 0));
@@ -991,13 +1047,19 @@ int ptlrpc_disconnect_import(struct obd_import *imp, int noclose)
 
         if (ptlrpc_import_in_recovery(imp)) {
                 struct l_wait_info lwi;
-                cfs_duration_t timeout = cfs_time_seconds(obd_timeout);
+                cfs_duration_t timeout;
+                int idx;
 
+                if (AT_OFF || (idx = import_at_get_index(imp, 
+                                      imp->imp_client->cli_request_portal)) < 0)
+                        timeout = cfs_time_seconds(obd_timeout);
+                else
+                        timeout = cfs_time_seconds(
+                                at_get(&imp->imp_at.iat_service_estimate[idx]));
                 lwi = LWI_TIMEOUT_INTR(cfs_timeout_cap(timeout), 
                                        back_to_sleep, LWI_ON_SIGNAL_NOOP, NULL);
                 rc = l_wait_event(imp->imp_recovery_waitq,
                                   !ptlrpc_import_in_recovery(imp), &lwi);
-
         }
 
         spin_lock(&imp->imp_lock);
@@ -1012,11 +1074,18 @@ int ptlrpc_disconnect_import(struct obd_import *imp, int noclose)
                  * it fails.  We can get through the above with a down server
                  * if the client doesn't know the server is gone yet. */
                 req->rq_no_resend = 1;
-#ifdef CRAY_XT3
-                req->rq_timeout = obd_timeout / 3;
+                
+#ifndef CRAY_XT3
+                /* We want client umounts to happen quickly, no matter the 
+                   server state... */
+                req->rq_timeout = min(req->rq_timeout, INITIAL_CONNECT_TIMEOUT);
 #else
-                req->rq_timeout = 5;
+                /* ... but we always want liblustre clients to nicely 
+                   disconnect, so only use the adaptive value. */
+                if (AT_OFF)
+                        req->rq_timeout = obd_timeout / 3;
 #endif
+
                 IMPORT_SET_STATE(imp, LUSTRE_IMP_CONNECTING);
                 req->rq_send_state =  LUSTRE_IMP_CONNECTING;
                 ptlrpc_req_set_repsize(req, 1, NULL);
@@ -1031,6 +1100,8 @@ out:
         else
                 IMPORT_SET_STATE_NOLOCK(imp, LUSTRE_IMP_CLOSED);
         memset(&imp->imp_remote_handle, 0, sizeof(imp->imp_remote_handle));
+        /* Try all connections in the future - bz 12758 */ 
+        imp->imp_last_recon = 0;
         spin_unlock(&imp->imp_lock);
 
         RETURN(rc);
@@ -1042,5 +1113,144 @@ out:
 void ptlrpc_import_setasync(struct obd_import *imp, int count)
 {
         LNetSetAsync(imp->imp_connection->c_peer, count);
+}
+
+
+/* Adaptive Timeout utils */
+
+/* Bin into timeslices using AT_BINS bins.
+   This gives us a max of the last binlimit*AT_BINS secs without the storage,
+   but still smoothing out a return to normalcy from a slow response.
+   (E.g. remember the maximum latency in each minute of the last 4 minutes.) */
+void at_add(struct adaptive_timeout *at, unsigned int val) {
+        /*unsigned int old = at->at_current;*/
+        time_t now = cfs_time_current_sec();
+
+        LASSERT(at);
+#if 0
+        CDEBUG(D_INFO, "add %u to %p time=%lu tb=%lu v=%u (%u %u %u %u)\n", 
+               val, at, now - at->at_binstart, at->at_binlimit, at->at_current,
+               at->at_hist[0], at->at_hist[1], at->at_hist[2], at->at_hist[3]);
+#endif
+        if (val == 0) 
+                /* 0's don't count, because we never want our timeout to 
+                   drop to 0, and because 0 could mean an error */
+                return;
+
+        spin_lock(&at->at_lock);
+
+        if (unlikely(at->at_binstart == 0)) {
+                /* Special case to remove default from history */
+                at->at_current = val;
+                at->at_worst_ever = val;
+                at->at_worst_time = now;
+                at->at_hist[0] = val;
+                at->at_binstart = now;
+        } else if (now - at->at_binstart < at->at_binlimit ) {
+                /* in bin 0 */
+                at->at_hist[0] = max(val, at->at_hist[0]);
+                at->at_current = max(val, at->at_current);
+        } else {
+                int i, shift;
+                unsigned int maxv = val;
+                /* move bins over */
+                shift = (now - at->at_binstart) / at->at_binlimit;
+                LASSERT(shift > 0);
+                for(i = AT_BINS - 1; i >= 0; i--) {
+                        if (i >= shift) {
+                                at->at_hist[i] = at->at_hist[i - shift];
+                                maxv = max(maxv, at->at_hist[i]);
+                        } else {
+                                at->at_hist[i] = 0;
+                        }
+                }
+                at->at_hist[0] = val;
+                at->at_current = maxv;
+                at->at_binstart += shift * at->at_binlimit;
+        }
+
+        if ((at->at_flags & AT_FLG_MIN) && 
+            (at->at_current < adaptive_timeout_min))
+                at->at_current = adaptive_timeout_min;
+
+        if (at->at_current > at->at_worst_ever) {
+                at->at_worst_ever = at->at_current;
+                at->at_worst_time = now;
+        }
+
+        if (at->at_flags & AT_FLG_NOHIST)
+                /* Only keep last reported val; keeping the rest of the history
+                   for proc only */
+                at->at_current = val;
+
+#if 0
+        if (at->at_current != old)
+                CDEBUG(D_ADAPTTO, "AT change: old=%u new=%u delta=%d (val=%u) "
+                       "hist %u %u %u %u\n",
+                       old, at->at_current, at->at_current - old, val,
+                       at->at_hist[0], at->at_hist[1], at->at_hist[2],
+                       at->at_hist[3]);
+#endif
+        spin_unlock(&at->at_lock);
+}
+
+/* Find the imp_at index for a given portal; assign if space available */
+int import_at_get_index(struct obd_import *imp, int portal) {
+        struct imp_at *at = &imp->imp_at;
+        int i;
+
+        for (i = 0; i < IMP_AT_MAX_PORTALS; i++) {
+                if (at->iat_portal[i] == portal) 
+                        return i;
+                if (at->iat_portal[i] == 0)
+                        /* unused */
+                        break;
+        }
+
+        /* Not found in list, add it under a lock */
+        spin_lock(&imp->imp_lock);
+
+        /* Check unused under lock */
+        for (; i < IMP_AT_MAX_PORTALS; i++) {
+                if (at->iat_portal[i] == portal) 
+                        goto out;
+                if (at->iat_portal[i] == 0)
+                        /* unused */
+                        break;
+        }
+
+        if (i >= IMP_AT_MAX_PORTALS) {
+                CERROR("Tried to use more than %d portals, not enough room "
+                       "in adaptive timeout stats.\n", IMP_AT_MAX_PORTALS);
+                i = -1;
+                goto out;
+        }
+        at->iat_portal[i] = portal;
+
+out:
+        spin_unlock(&imp->imp_lock);
+        return i;
+}
+
+/* Get total expected lock callback time (net + service).
+   Since any early reply will only affect the RPC wait time, and not
+   any local lock timer we set based on the return value here,
+   we should be conservative. */
+int import_at_get_ldlm(struct obd_import *imp) {
+        int idx, tot;
+        
+        if (!imp || !imp->imp_client || AT_OFF)
+                return obd_timeout;
+        
+        tot = at_get(&imp->imp_at.iat_net_latency);
+        idx = import_at_get_index(imp, imp->imp_client->cli_request_portal);
+        if (idx < 0)
+                tot += obd_timeout;
+        else
+                tot += at_get(&imp->imp_at.iat_service_estimate[idx]);
+
+        /* add an arbitrary minimum: 150% + 10 sec */
+        tot += (tot >> 1) + 10;
+        return tot;
 }
 

@@ -16,9 +16,6 @@
 #include <lustre_export.h>
 
 
-/* in ms */
-#define MGS_SERVICE_WATCHDOG_TIMEOUT (obd_timeout * 1000)
-
 /* mgs_llog.c */
 int class_dentry_readdir(struct obd_device *obd, struct dentry *dir,
                          struct vfsmount *inmnt, 

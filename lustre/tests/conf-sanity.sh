@@ -15,8 +15,8 @@ ONLY=${ONLY:-"$*"}
 #              xml xml xml xml xml xml dumb FIXME
 MOUNTCONFSKIP="10  11  12  13  13b 14  15   18"
 
-# bug number for skipped test:
-ALWAYS_EXCEPT=" $CONF_SANITY_EXCEPT $MOUNTCONFSKIP"
+# bug number for skipped test:                     13369
+ALWAYS_EXCEPT=" $CONF_SANITY_EXCEPT $MOUNTCONFSKIP 34a"
 # UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
 
 SRCDIR=`dirname $0`
@@ -1066,7 +1066,7 @@ test_31() { # bug 10734
         mount -t lustre 4.3.2.1@tcp:/lustre $MOUNT || true
 	cleanup
 }
-run_test 31 "Connect to non-existent node (shouldn't crash)"
+run_test 31 "Connect to non-existent node (returns errors, should not crash)"
 
 test_32a() {
         # XXX - make this run on client-only systems with real hardware on
@@ -1108,6 +1108,7 @@ test_32a() {
 	load_modules
 
         # mount a second time to make sure we didnt leave upgrade flag on
+	load_modules
         $TUNEFS --dryrun $TMP/$tdir/mds || error "tunefs failed"
 	load_modules
         start mds $TMP/$tdir/mds "-o loop,exclude=lustre-OST0000" || return 12
@@ -1128,32 +1129,36 @@ test_32b() {
 	unzip -o -j -d $TMP/$tdir disk1_4.zip || { skip "Cant unzip disk1_4, skipping" && return ; }
 	load_modules
 	sysctl lnet.debug=$PTLDEBUG
+	NEWNAME=sofia
 
 	# writeconf will cause servers to register with their current nids
-	$TUNEFS --writeconf $TMP/$tdir/mds || error "tunefs failed"
+	$TUNEFS --writeconf --fsname=$NEWNAME $TMP/$tdir/mds || error "tunefs failed"
 	start mds $TMP/$tdir/mds "-o loop" || return 3
-        local UUID=$(cat $LPROC/mds/lustre-MDT0000/uuid)
+        local UUID=$(cat $LPROC/mds/${NEWNAME}-MDT0000/uuid)
 	echo MDS uuid $UUID
 	[ "$UUID" == "mdsA_UUID" ] || error "UUID is wrong: $UUID" 
 
-	$TUNEFS --mgsnode=`hostname` $TMP/$tdir/ost1 || error "tunefs failed"
+	$TUNEFS --mgsnode=`hostname` --fsname=$NEWNAME --writeconf $TMP/$tdir/ost1 || error "tunefs failed"
 	start ost1 $TMP/$tdir/ost1 "-o loop" || return 5
-        UUID=$(cat $LPROC/obdfilter/lustre-OST0000/uuid)
+        UUID=$(cat $LPROC/obdfilter/${NEWNAME}-OST0000/uuid)
 	echo OST uuid $UUID
-	[ "$UUID" == "ost1_UUID" ] || error "UUID is wrong: $UUID" 
+	[ "$UUID" == "ost1_UUID" ] || error "UUID is wrong: $UUID"
 
 	echo "OSC changes should succeed:" 
-	$LCTL conf_param lustre-OST0000.osc.max_dirty_mb=15 || return 7
-	$LCTL conf_param lustre-OST0000.failover.node=$NID || return 8
+	$LCTL conf_param ${NEWNAME}-OST0000.osc.max_dirty_mb=15 || return 7
+	$LCTL conf_param ${NEWNAME}-OST0000.failover.node=$NID || return 8
 	echo "ok."
 	echo "MDC changes should succeed:" 
-	$LCTL conf_param lustre-MDT0000.mdc.max_rpcs_in_flight=9 || return 9
+	$LCTL conf_param ${NEWNAME}-MDT0000.mdc.max_rpcs_in_flight=9 || return 9
 	echo "ok."
 
 	# MDT and OST should have registered with new nids, so we should have
 	# a fully-functioning client
 	echo "Check client and old fs contents"
+	OLDFS=$FSNAME
+	FSNAME=$NEWNAME
 	mount_client $MOUNT
+	FSNAME=$OLDFS
 	set_and_check client "cat $LPROC/mdc/*/max_rpcs_in_flight" "lustre-MDT0000.mdc.max_rpcs_in_flight" || return 11
 	[ "$(cksum $MOUNT/passwd | cut -d' ' -f 1,2)" == "2479747619 779" ] || return 12  
 	echo "ok."

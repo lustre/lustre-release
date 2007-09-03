@@ -613,7 +613,7 @@ static inline void oti_init(struct obd_trans_info *oti,
 
         oti->oti_xid = req->rq_xid;
 
-        if (req->rq_repmsg && req->rq_reqmsg != 0)
+        if (req->rq_reqmsg && req->rq_repmsg && req->rq_reply_state)
                 oti->oti_transno = lustre_msg_get_transno(req->rq_repmsg);
         oti->oti_thread_id = req->rq_svc_thread ? req->rq_svc_thread->t_id : -1;
         oti->oti_conn_cnt = lustre_msg_get_conn_cnt(req->rq_reqmsg);
@@ -767,7 +767,8 @@ struct obd_device {
         struct list_head                 obd_recovery_queue;
         struct list_head                 obd_delayed_reply_queue;
         time_t                           obd_recovery_start;
-        time_t                           obd_recovery_end;
+        time_t                           obd_recovery_end; /* for lprocfs_status */
+        int                              obd_recovery_timeout;
 
         union {
                 struct obd_device_target obt;

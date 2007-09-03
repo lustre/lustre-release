@@ -225,8 +225,8 @@ start() {
     do_facet ${facet} mount -t lustre $@ ${device} ${MOUNT%/*}/${facet} 
     RC=${PIPESTATUS[0]}
     if [ $RC -ne 0 ]; then
-        echo mount -t lustre $@ ${device} ${MOUNT%/*}/${facet} 
-        echo Start of ${device} on ${facet} failed ${RC}
+        echo "mount -t lustre $@ ${device} ${MOUNT%/*}/${facet}" 
+        echo "Start of ${device} on ${facet} failed ${RC}"
     else 
         do_facet ${facet} sync
         label=$(do_facet ${facet} "e2label ${device}")
@@ -586,7 +586,7 @@ do_facet() {
     shift
     HOST=`facet_active_host $facet`
     [ -z $HOST ] && echo No host defined for facet ${facet} && exit 1
-    do_node $HOST $@
+    do_node $HOST "$@"
 }
 
 add() {

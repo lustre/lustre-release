@@ -188,8 +188,10 @@ int server_put_mount(char *name, struct vfsmount *mnt)
                 CERROR("Can't find mount for %s\n", name);
                 RETURN(-ENOENT);
         }
-        lsi = s2lsi(lmi->lmi_sb);
         LASSERT(lmi->lmi_mnt == mnt);
+        /* Note if lsi is poisoned, it's probably because server_wait_finished
+           didn't wait long enough and the sb was freed at the umount. */
+        lsi = s2lsi(lmi->lmi_sb);
 
         CDEBUG(D_MOUNT, "put_mnt %p from %s, refs=%d, vfscount=%d\n",
                lmi->lmi_mnt, name, atomic_read(&lsi->lsi_mounts), count);
@@ -518,7 +520,7 @@ DECLARE_MUTEX(mgc_start_lock);
 static int lustre_start_mgc(struct super_block *sb)
 {
         struct lustre_handle mgc_conn = {0, };
-        struct obd_connect_data ocd = { 0 };
+        struct obd_connect_data *data = NULL;
         struct lustre_sb_info *lsi = s2lsi(sb);
         struct obd_device *obd;
         struct obd_export *exp;
@@ -698,8 +700,14 @@ static int lustre_start_mgc(struct super_block *sb)
                 /* nonfatal */
                 CERROR("can't set %s %d\n", KEY_INIT_RECOV_BACKUP, rc);
 
+        OBD_ALLOC_PTR(data);
+        if (data == NULL)
+                GOTO(out, rc = -ENOMEM);
+        data->ocd_connect_flags = OBD_CONNECT_VERSION | OBD_CONNECT_AT;
+        data->ocd_version = LUSTRE_VERSION_CODE;
         /* We connect to the MGS at setup, and don't disconnect until cleanup */
-        rc = obd_connect(&mgc_conn, obd, &(obd->obd_uuid), &ocd);
+        rc = obd_connect(&mgc_conn, obd, &(obd->obd_uuid), data);
+        OBD_FREE_PTR(data);
         if (rc) {
                 CERROR("connect failed %d\n", rc);
                 GOTO(out, rc);
@@ -1296,7 +1304,7 @@ out_free:
         RETURN(ERR_PTR(rc));
 }
 
-/* We have to wait for everything to finish, including lnet lnd expires,
+/* We have to wait for everything to finish, including lnet lnd expires, 
    before it is safe to free the sb */
 static void server_wait_finished(struct vfsmount *mnt)
 {
@@ -1307,9 +1315,9 @@ static void server_wait_finished(struct vfsmount *mnt)
         init_waitqueue_head(&waitq);
 
         while (atomic_read(&mnt->mnt_count) > 1) {
-                if (waited && (waited % 30 == 0)) 
+                if (waited && (waited % 30 == 0))
                         LCONSOLE_WARN("Mount still busy with %d refs after "
-                                      "%d secs\n", atomic_read(&mnt->mnt_count), 
+                                      "%d secs\n", atomic_read(&mnt->mnt_count),
                                       waited);
                 /* Wait for a bit */
                 waited += 3;

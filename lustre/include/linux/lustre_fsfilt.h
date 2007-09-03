@@ -164,14 +164,14 @@ static inline lvfs_sbdev_type fsfilt_journal_sbdev(struct obd_device *obd,
 #define FSFILT_OP_JOIN          11
 #define FSFILT_OP_NOOP          15
 
-#define fsfilt_check_slow(obd, start, timeout, msg)                     \
+#define fsfilt_check_slow(obd, start, msg)                              \
 do {                                                                    \
         if (time_before(jiffies, start + 15 * HZ))                      \
                 break;                                                  \
         else if (time_before(jiffies, start + 30 * HZ))                 \
                 CDEBUG(D_VFSTRACE, "%s: slow %s %lus\n", obd->obd_name, \
                        msg, (jiffies-start) / HZ);                      \
-        else if (time_before(jiffies, start + timeout / 2 * HZ))        \
+        else if (time_before(jiffies, start + DISK_TIMEOUT * HZ))       \
                 CWARN("%s: slow %s %lus\n", obd->obd_name, msg,         \
                       (jiffies - start) / HZ);                          \
         else                                                            \
@@ -202,7 +202,7 @@ static inline void *fsfilt_start_log(struct obd_device *obd,
                         LBUG();
                 }
         }
-        fsfilt_check_slow(obd, now, obd_timeout, "journal start");
+        fsfilt_check_slow(obd, now, "journal start");
         return handle;
 }
 
@@ -237,7 +237,7 @@ static inline void *fsfilt_brw_start_log(struct obd_device *obd, int objcount,
                         LBUG();
                 }
         }
-        fsfilt_check_slow(obd, now, obd_timeout, "journal start");
+        fsfilt_check_slow(obd, now, "journal start");
 
         return handle;
 }
@@ -257,7 +257,7 @@ static inline int fsfilt_extend(struct obd_device *obd, struct inode *inode,
         int rc = obd->obd_fsops->fs_extend(inode, nblocks, handle);
         CDEBUG(D_INFO, "extending handle %p with %u blocks\n", handle, nblocks);
 
-        fsfilt_check_slow(obd, now, obd_timeout, "journal extend");
+        fsfilt_check_slow(obd, now, "journal extend");
 
         return rc;
 }
@@ -269,7 +269,7 @@ static inline int fsfilt_commit(struct obd_device *obd, struct inode *inode,
         int rc = obd->obd_fsops->fs_commit(inode, handle, force_sync);
         CDEBUG(D_INFO, "committing handle %p\n", handle);
 
-        fsfilt_check_slow(obd, now, obd_timeout, "journal start");
+        fsfilt_check_slow(obd, now, "journal start");
 
         return rc;
 }
@@ -282,7 +282,7 @@ static inline int fsfilt_commit_async(struct obd_device *obd,
         int rc = obd->obd_fsops->fs_commit_async(inode, handle, wait_handle);
 
         CDEBUG(D_INFO, "committing handle %p (async)\n", *wait_handle);
-        fsfilt_check_slow(obd, now, obd_timeout, "journal start");
+        fsfilt_check_slow(obd, now, "journal start");
 
         return rc;
 }
@@ -293,7 +293,7 @@ static inline int fsfilt_commit_wait(struct obd_device *obd,
         unsigned long now = jiffies;
         int rc = obd->obd_fsops->fs_commit_wait(inode, handle);
         CDEBUG(D_INFO, "waiting for completion %p\n", handle);
-        fsfilt_check_slow(obd, now, obd_timeout, "journal start");
+        fsfilt_check_slow(obd, now, "journal start");
         return rc;
 }
 
@@ -303,7 +303,7 @@ static inline int fsfilt_setattr(struct obd_device *obd, struct dentry *dentry,
         unsigned long now = jiffies;
         int rc;
         rc = obd->obd_fsops->fs_setattr(dentry, handle, iattr, do_trunc);
-        fsfilt_check_slow(obd, now, obd_timeout, "setattr");
+        fsfilt_check_slow(obd, now, "setattr");
         return rc;
 }
 

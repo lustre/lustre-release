@@ -916,13 +916,19 @@ run_test 43 "mds osc import failure during recovery; don't LBUG"
 test_44() {
     mdcdev=`awk '/-mdc-/ {print $1}' $LPROC/devices`
     [ "$mdcdev" ] || exit 2
+    # adaptive timeouts slow this way down
+    MDS_AT_MAX=$(do_facet mds "sysctl -n lustre.adaptive_max")
+    do_facet mds "sysctl -w lustre.adaptive_max=40"
     for i in `seq 1 10`; do
+	echo "$i of 10 ($(date +%s))"
+	do_facet mds "grep service $LPROC/mdt/MDS/mds/timeouts"
 	#define OBD_FAIL_TGT_CONN_RACE     0x701
 	do_facet mds "sysctl -w lustre.fail_loc=0x80000701"
 	$LCTL --device $mdcdev recover
 	df $MOUNT
     done
     do_facet mds "sysctl -w lustre.fail_loc=0"
+    do_facet mds "sysctl -w lustre.adaptive_max=$MDS_AT_MAX"
     return 0
 }
 run_test 44 "race in target handle connect"
@@ -931,6 +937,8 @@ test_44b() {
     mdcdev=`awk '/-mdc-/ {print $1}' $LPROC/devices`
     [ "$mdcdev" ] || exit 2
     for i in `seq 1 10`; do
+	echo "$i of 10 ($(date +%s))"
+	do_facet mds "grep service $LPROC/mdt/MDS/mds/timeouts"
 	#define OBD_FAIL_TGT_DELAY_RECONNECT 0x704
 	do_facet mds "sysctl -w lustre.fail_loc=0x80000704"
 	$LCTL --device $mdcdev recover
@@ -1130,7 +1138,7 @@ test_60() {
 run_test 60 "test llog post recovery init vs llog unlink"
 
 #test race  llog recovery thread vs llog cleanup
-test_61() {
+test_61a() {
     mkdir $DIR/$tdir
     createmany -o $DIR/$tdir/$tfile-%d 800
     replay_barrier ost1 
@@ -1145,7 +1153,7 @@ test_61() {
     $CHECKSTAT -t file $DIR/$tdir/$tfile-* && return 1
     rmdir $DIR/$tdir
 }
-run_test 61 "test race llog recovery vs llog cleanup"
+run_test 61a "test race llog recovery vs llog cleanup"
 
 #test race  mds llog sync vs llog cleanup
 test_61b() {
@@ -1168,6 +1176,138 @@ test_61c() {
     fail ost1
 }
 run_test 61c "test race mds llog sync vs llog cleanup"
+
+
+at_start() #bug 3055
+{
+    if [ -z "$ATOLDBASE" ]; then
+	ATOLDBASE=$(do_facet mds "grep timebase $LPROC/mdt/MDS/mds/timeouts" | awk '{print $3}' )
+        # speed up the timebase so we can check decreasing AT
+	do_facet mds "echo 8 >> $LPROC/mdt/MDS/mds/timeouts"
+	do_facet mds "echo 8 >> $LPROC/mdt/MDS/mds_readpage/timeouts"
+	do_facet mds "echo 8 >> $LPROC/mdt/MDS/mds_setattr/timeouts"
+	do_facet ost1 "echo 8 >> $LPROC/ost/OSS/ost/timeouts"
+    fi
+}
+
+test_65() #bug 3055
+{
+    at_start
+    $LCTL dk > /dev/null
+    # slow down a request
+    sysctl -w lustre.fail_val=30000
+#define OBD_FAIL_PTLRPC_PAUSE_REQ        0x50a
+    sysctl -w lustre.fail_loc=0x8000050a
+    createmany -o $DIR/$tfile 10 > /dev/null
+    unlinkmany $DIR/$tfile 10 > /dev/null
+    # check for log message
+    $LCTL dk | grep "Early reply #" || error "No early reply" 
+    # client should show 30s timeouts
+    grep portal $LPROC/mdc/${FSNAME}-MDT0000-mdc-*/timeouts
+    sleep 9
+    grep portal $LPROC/mdc/${FSNAME}-MDT0000-mdc-*/timeouts
+}
+run_test 65 "AT: verify early replies"
+
+test_66a() #bug 3055
+{
+    at_start
+    grep "portal 12" $LPROC/mdc/${FSNAME}-MDT0000-mdc-*/timeouts
+    # adjust 5s at a time so no early reply is sent (within deadline)
+    do_facet mds "sysctl -w lustre.fail_val=5000"
+#define OBD_FAIL_PTLRPC_PAUSE_REQ        0x50a
+    do_facet mds "sysctl -w lustre.fail_loc=0x8000050a"
+    createmany -o $DIR/$tfile 20 > /dev/null
+    unlinkmany $DIR/$tfile 20 > /dev/null
+    grep "portal 12" $LPROC/mdc/${FSNAME}-MDT0000-mdc-*/timeouts
+    do_facet mds "sysctl -w lustre.fail_val=10000"
+    do_facet mds "sysctl -w lustre.fail_loc=0x8000050a"
+    createmany -o $DIR/$tfile 20 > /dev/null
+    unlinkmany $DIR/$tfile 20 > /dev/null
+    grep "portal 12" $LPROC/mdc/${FSNAME}-MDT0000-mdc-*/timeouts
+    do_facet mds "sysctl -w lustre.fail_loc=0"
+    sleep 9
+    createmany -o $DIR/$tfile 20 > /dev/null
+    unlinkmany $DIR/$tfile 20 > /dev/null
+    grep portal $LPROC/mdc/${FSNAME}-MDT0000-mdc-*/timeouts | grep "portal 12"
+    CUR=$(awk '/portal 12/ {print $5}' $LPROC/mdc/${FSNAME}-MDT0000-mdc-*/timeouts)
+    WORST=$(awk '/portal 12/ {print $7}' $LPROC/mdc/${FSNAME}-MDT0000-mdc-*/timeouts)
+    echo "Current MDT timeout $CUR, worst $WORST"
+    [ $CUR -lt $WORST ] || error "Current $CUR should be less than worst $WORST" 
+}
+run_test 66a "AT: verify MDT service time adjusts with no early replies"
+
+test_66b() #bug 3055
+{
+    at_start
+    ORIG=$(awk '/network/ {print $4}' $LPROC/mdc/lustre-*/timeouts)
+    sysctl -w lustre.fail_val=$(($ORIG + 5))
+#define OBD_FAIL_PTLRPC_PAUSE_REP      0x50c
+    sysctl -w lustre.fail_loc=0x50c
+    ls $DIR/$tfile > /dev/null 2>&1
+    sysctl -w lustre.fail_loc=0
+    CUR=$(awk '/network/ {print $4}' $LPROC/mdc/${FSNAME}-*/timeouts)
+    WORST=$(awk '/network/ {print $6}' $LPROC/mdc/${FSNAME}-*/timeouts)
+    echo "network timeout orig $ORIG, cur $CUR, worst $WORST"
+    [ $WORST -gt $ORIG ] || error "Worst $WORST should be worse than orig $ORIG" 
+}
+run_test 66b "AT: verify net latency adjusts"
+
+test_67a() #bug 3055
+{
+    at_start
+    CONN1=$(awk '/_connect/ {total+=$2} END {print total}' $LPROC/osc/*/stats)
+    # sleeping threads may drive values above this
+    do_facet ost1 "sysctl -w lustre.fail_val=400"
+#define OBD_FAIL_PTLRPC_PAUSE_REQ    0x50a
+    do_facet ost1 "sysctl -w lustre.fail_loc=0x50a"
+    createmany -o $DIR/$tfile 20 > /dev/null
+    unlinkmany $DIR/$tfile 20 > /dev/null
+    do_facet ost1 "sysctl -w lustre.fail_loc=0"
+    CONN2=$(awk '/_connect/ {total+=$2} END {print total}' $LPROC/osc/*/stats)
+    ATTEMPTS=$(($CONN2 - $CONN1))
+    echo "$ATTEMPTS osc reconnect attemps on gradual slow"
+    [ $ATTEMPTS -gt 0 ] && error "AT should have prevented reconnect"
+    return 0
+}
+run_test 67a "AT: verify slow request processing doesn't induce reconnects"
+
+test_67b() #bug 3055
+{
+    at_start
+    CONN1=$(awk '/_connect/ {total+=$2} END {print total}' $LPROC/osc/*/stats)
+#define OBD_FAIL_OST_PAUSE_CREATE        0x223
+    do_facet ost1 "sysctl -w lustre.fail_val=20000"
+    do_facet ost1 "sysctl -w lustre.fail_loc=0x80000223"
+    cp /etc/profile $DIR/$tfile || error "cp failed"
+    client_reconnect
+    cat $LPROC/ost/OSS/ost_create/timeouts
+    log "phase 2"
+    CONN2=$(awk '/_connect/ {total+=$2} END {print total}' $LPROC/osc/*/stats)
+    ATTEMPTS=$(($CONN2 - $CONN1))
+    echo "$ATTEMPTS osc reconnect attemps on instant slow"
+    # do it again; should not timeout
+    do_facet ost1 "sysctl -w lustre.fail_loc=0x80000223"
+    cp /etc/profile $DIR/$tfile || error "cp failed"
+    do_facet ost1 "sysctl -w lustre.fail_loc=0"
+    client_reconnect
+    cat $LPROC/ost/OSS/ost_create/timeouts
+    CONN3=$(awk '/_connect/ {total+=$2} END {print total}' $LPROC/osc/*/stats)
+    ATTEMPTS=$(($CONN3 - $CONN2))
+    echo "$ATTEMPTS osc reconnect attemps on 2nd slow"
+    [ $ATTEMPTS -gt 0 ] && error "AT should have prevented reconnect"
+    return 0
+}
+run_test 67b "AT: verify instant slowdown doesn't induce reconnects"
+
+if [ -n "$ATOLDBASE" ]; then
+    do_facet mds "echo $ATOLDBASE >> $LPROC/mdt/MDS/mds/timeouts" 
+    do_facet mds "echo $ATOLDBASE >> $LPROC/mdt/MDS/mds_readpage/timeouts"
+    do_facet mds "echo $ATOLDBASE >> $LPROC/mdt/MDS/mds_setattr/timeouts"
+    do_facet ost1 "echo $ATOLDBASE >> $LPROC/ost/OSS/ost/timeouts"
+fi
+# end of AT tests includes above lines
+
 
 equals_msg `basename $0`: test complete, cleaning up
 check_and_cleanup_lustre

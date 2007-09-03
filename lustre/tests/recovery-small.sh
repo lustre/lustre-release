@@ -5,7 +5,7 @@ set -e
 #         bug  5493
 ALWAYS_EXCEPT="52 $RECOVERY_SMALL_EXCEPT"
 
-PTLDEBUG=${PTLDEBUG:--1}
+#PTLDEBUG=${PTLDEBUG:--1}
 LUSTRE=${LUSTRE:-`dirname $0`/..}
 . $LUSTRE/tests/test-framework.sh
 init_test_env $@
@@ -253,8 +253,9 @@ test_18b() {
     do_facet client cp $SAMPLE_FILE $f
     sync
     ost_evict_client
-    # allow recovery to complete
-    sleep $((TIMEOUT + 2))
+    # force reconnect
+    df $MOUNT > /dev/null 2>&1
+    sleep 2
     # my understanding is that there should be nothing in the page
     # cache after the client reconnects?     
     rc=0
@@ -593,12 +594,13 @@ test_26b() {      # bug 10140 - evict dead exports by pinger
 	OST_FILE=$LPROC/obdfilter/${ost1_svc}/num_exports
         OST_NEXP1="`do_facet ost1 cat $OST_FILE | cut -d' ' -f2`"
 	echo starting with $OST_NEXP1 OST and $MDS_NEXP1 MDS exports
+	#force umount a client; exports should get evicted
 	zconf_umount `hostname` $MOUNT2 -f
-	# evictor takes up to 2.25x to evict.  But if there's a 
-	# race to start the evictor from various obds, the loser
-	# might have to wait for the next ping.
-	echo Waiting for $(($TIMEOUT * 4)) secs
-	sleep $(($TIMEOUT * 4))
+	# evictor takes PING_EVICT_TIMEOUT + 3 * PING_INTERVAL to evict.  
+        # But if there's a race to start the evictor from various obds, 
+        # the loser might have to wait for the next ping.
+	echo Waiting for $(($TIMEOUT * 8)) secs
+	sleep $(($TIMEOUT * 8))
         OST_NEXP2="`do_facet ost1 cat $OST_FILE | cut -d' ' -f2`"
         MDS_NEXP2="`do_facet mds cat $MDS_FILE | cut -d' ' -f2`"
 	echo ending with $OST_NEXP2 OST and $MDS_NEXP2 MDS exports
@@ -646,25 +648,38 @@ run_test 28 "handle error adding new clients (bug 6086)"
 
 test_50() {
 	mkdir -p $DIR/$tdir
+	debugsave
+	sysctl -w lnet.debug="-dlmtrace -ha"
 	# put a load of file creates/writes/deletes
-	writemany -q $DIR/$tdir/$tfile 0 5 &
+	writemany -a -q $DIR/$tdir/$tfile 0 5 &
 	CLIENT_PID=$!
 	echo writemany pid $CLIENT_PID
 	sleep 10
+	ps $CLIENT_PID > /dev/null || error "Writemany died 1.1"
 	FAILURE_MODE="SOFT"
+	$LCTL mark "$TESTNAME fail mds 1"
 	fail mds
+	ps $CLIENT_PID > /dev/null || error "Writemany died 2.1"
 	# wait for client to reconnect to MDS
 	sleep 60
+	ps $CLIENT_PID > /dev/null || error "Writemany died 2.2"
+	$LCTL mark "$TESTNAME fail mds 2"
 	fail mds
+	ps $CLIENT_PID > /dev/null || error "Writemany died 3.1"
 	sleep 60
+	ps $CLIENT_PID > /dev/null || error "Writemany died 3.2"
+	$LCTL mark "$TESTNAME fail mds 3"
 	fail mds
 	# client process should see no problems even though MDS went down
+	ps $CLIENT_PID > /dev/null || error "Writemany died 4.1"
 	sleep $TIMEOUT
+	ps $CLIENT_PID > /dev/null || error "Writemany died 4.2"
         kill -USR1 $CLIENT_PID
 	wait $CLIENT_PID 
 	rc=$?
 	echo writemany returned $rc
 	#these may fail because of eviction due to slow AST response.
+	debugrestore
 	return $rc
 }
 run_test 50 "failover MDS under load"
@@ -672,7 +687,7 @@ run_test 50 "failover MDS under load"
 test_51() {
 	mkdir -p $DIR/$tdir
 	# put a load of file creates/writes/deletes
-	writemany -q $DIR/$tdir/$tfile 0 5 &
+	writemany -a -q $DIR/$tdir/$tfile 0 5 &
 	CLIENT_PID=$!
 	sleep 1
 	FAILURE_MODE="SOFT"
@@ -683,7 +698,10 @@ test_51() {
         for i in $SEQ
           do
           echo failover in $i sec
+	  ps $CLIENT_PID > /dev/null || error "Writemany died $i.1"
           sleep $i
+	  ps $CLIENT_PID > /dev/null || error "Writemany died $i.1"
+	  $LCTL mark "$TESTNAME fail mds $i"
           facet_failover mds
         done
 	# client process should see no problems even though MDS went down
@@ -703,6 +721,7 @@ test_52_guts() {
 	echo writemany pid $CLIENT_PID
 	sleep 10
 	FAILURE_MODE="SOFT"
+	$LCTL mark "$TESTNAME fail ost $1"
 	fail ost1
 	rc=0
 	wait $CLIENT_PID || rc=$?
@@ -716,16 +735,16 @@ test_52_guts() {
 
 test_52() {
 	mkdir -p $DIR/$tdir
-	test_52_guts
+	test_52_guts 1
 	rc=$?
 	[ $rc -ne 0 ] && { return $rc; }
 	# wait for client to reconnect to OST
 	sleep 30
-	test_52_guts
+	test_52_guts 2
 	rc=$?
 	[ $rc -ne 0 ] && { return $rc; }
 	sleep 30
-	test_52_guts
+	test_52_guts 3
 	rc=$?
 	client_reconnect
 	#return $rc

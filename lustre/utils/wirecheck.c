@@ -109,7 +109,7 @@ check_lustre_msg_v2(void)
         CHECK_MEMBER(lustre_msg_v2, lm_secflvr);
         CHECK_MEMBER(lustre_msg_v2, lm_magic);
         CHECK_MEMBER(lustre_msg_v2, lm_repsize);
-        CHECK_MEMBER(lustre_msg_v2, lm_timeout);
+        CHECK_MEMBER(lustre_msg_v2, lm_cksum);
         CHECK_MEMBER(lustre_msg_v2, lm_padding_1);
         CHECK_MEMBER(lustre_msg_v2, lm_padding_2);
         CHECK_MEMBER(lustre_msg_v2, lm_padding_3);
@@ -133,11 +133,11 @@ check_ptlrpc_body(void)
         CHECK_MEMBER(ptlrpc_body, pb_flags);
         CHECK_MEMBER(ptlrpc_body, pb_op_flags);
         CHECK_MEMBER(ptlrpc_body, pb_conn_cnt);
+        CHECK_MEMBER(ptlrpc_body, pb_timeout);
+        CHECK_MEMBER(ptlrpc_body, pb_service_time);
         CHECK_MEMBER(ptlrpc_body, pb_padding_1);
         CHECK_MEMBER(ptlrpc_body, pb_padding_2);
         CHECK_MEMBER(ptlrpc_body, pb_padding_3);
-        CHECK_MEMBER(ptlrpc_body, pb_padding_4);
-        CHECK_MEMBER(ptlrpc_body, pb_padding_5);
 }
 
 static void check_obd_connect_data(void)
@@ -1069,6 +1069,7 @@ main(int argc, char **argv)
         CHECK_VALUE(MSG_LAST_REPLAY);
         CHECK_VALUE(MSG_RESENT);
         CHECK_VALUE(MSG_REPLAY);
+        CHECK_VALUE(MSG_AT_SUPPORT);
 
         CHECK_VALUE(MSG_CONNECT_RECOVERING);
         CHECK_VALUE(MSG_CONNECT_RECONNECT);

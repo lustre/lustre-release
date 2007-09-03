@@ -155,7 +155,7 @@ int liblustre_process_log(struct config_llog_instance *cfg,
         if (ocd == NULL)
                 GOTO(out_cleanup, rc = -ENOMEM);
 
-        ocd->ocd_connect_flags = OBD_CONNECT_VERSION;
+        ocd->ocd_connect_flags = OBD_CONNECT_VERSION | OBD_CONNECT_AT;
         ocd->ocd_version = LUSTRE_VERSION_CODE;
 
         rc = obd_connect(&mgc_conn, obd, &mgc_uuid, ocd);
@@ -286,7 +286,7 @@ int _sysio_lustre_init(void)
                         obd_timeout);
         }
 
-	/* debug peer on timeout? */
+        /* debug peer on timeout? */
         envstr = getenv("LIBLUSTRE_DEBUG_PEER_ON_TIMEOUT");
         if (envstr != NULL) {
                 obd_debug_peer_on_timeout = 

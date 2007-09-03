@@ -783,7 +783,7 @@ test_27a() {
 	$SETSTRIPE $DIR/d27/f0 65536 0 1 || error "lstripe failed"
 	$CHECKSTAT -t file $DIR/d27/f0 || error "checkstat failed"
 	pass
-	log "== test_27b: write to one stripe file ========================="
+	log "== test 27b: write to one stripe file ========================="
 	cp /etc/hosts $DIR/d27/f0 || error
 }
 run_test 27a "one stripe file =================================="
@@ -795,7 +795,7 @@ test_27c() {
 	[ `$GETSTRIPE $DIR/d27/f01 | grep -A 10 obdidx | wc -l` -eq 4 ] ||
 		error "two-stripe file doesn't have two stripes"
 	pass
-	log "== test_27d: write to two stripe file file f01 ================"
+	log "== test 27d: write to two stripe file file f01 ================"
 	dd if=/dev/zero of=$DIR/d27/f01 bs=4k count=4 || error "dd failed"
 }
 run_test 27c "create two stripe file f01 ======================="
@@ -3211,7 +3211,7 @@ test_99b() {
 	TOIGNORE=$(find . -type l -printf '-I %f\n' -o \
 			! -perm +4 -printf '-I %f\n')
 	$RUNAS cvs -d $DIR/d99cvsroot import -m "nomesg" $TOIGNORE \
-		d99reposname vtag rtag || error "cvs import failed"
+		d99reposname vtag rtag > /dev/null || error "cvs import failed"
 }
 run_test 99b "cvs import ======================================="
 
@@ -3221,7 +3221,7 @@ test_99c() {
 	mkdir -p $DIR/d99reposname || error "mkdir $DIR/d99reposname failed"
 	chown $RUNAS_ID $DIR/d99reposname || \
 		error "chown $DIR/d99reposname failed"
-	$RUNAS cvs -d $DIR/d99cvsroot co d99reposname || \
+	$RUNAS cvs -d $DIR/d99cvsroot co d99reposname > /dev/null || \
 		error "cvs co d99reposname failed"
 }
 run_test 99c "cvs checkout ====================================="
@@ -3622,20 +3622,20 @@ test_103 () {
     echo "performing cp ..."
     run_acl_subtest cp || error
     echo "performing getfacl-noacl..."
-    run_acl_subtest getfacl-noacl || error
+    run_acl_subtest getfacl-noacl > /dev/null || error
     echo "performing misc..."
-    run_acl_subtest misc || error
+    run_acl_subtest misc > /dev/null || error
 #    XXX add back permission test when we support supplementary groups.
 #    echo "performing permissions..."
 #    run_acl_subtest permissions || error
     echo "performing setfacl..."
-    run_acl_subtest setfacl || error
+    run_acl_subtest setfacl > /dev/null || error
 
     # inheritance test got from HP
     echo "performing inheritance..."
     cp $SAVE_PWD/acl/make-tree . || error
     chmod +x make-tree || error
-    run_acl_subtest inheritance || error
+    run_acl_subtest inheritance > /dev/null || error
     rm -f make-tree
 
     cd $SAVE_PWD

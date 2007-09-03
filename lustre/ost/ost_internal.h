@@ -11,6 +11,8 @@ extern void ost_print_req(void *seq_file, struct ptlrpc_request *req);
 # define ost_print_req NULL
 #endif
 
+#define OSS_SERVICE_WATCHDOG_FACTOR 2000
+
 /*
  * tunables for per-thread page pool (bug 5137)
  */
@@ -37,7 +39,7 @@ struct ost_thread_local_cache {
 
 struct ost_thread_local_cache *ost_tls(struct ptlrpc_request *r);
 
-#define OSS_DEF_CREATE_THREADS  1UL
+#define OSS_DEF_CREATE_THREADS  2UL
 #define OSS_MAX_CREATE_THREADS 16UL
 
 /* Quota stuff */

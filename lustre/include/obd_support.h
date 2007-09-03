@@ -34,11 +34,12 @@ extern unsigned int obd_fail_val;
 extern unsigned int obd_debug_peer_on_timeout;
 extern unsigned int obd_dump_on_timeout;
 extern unsigned int obd_dump_on_eviction;
+/* obd_timeout should only be used for recovery, not for 
+   networking / disk / timings affected by load (use Adaptive Timeouts) */
 extern unsigned int obd_timeout;          /* seconds */
-#define PING_INTERVAL max(obd_timeout / 4, 1U)
-#define RECONNECT_INTERVAL max(obd_timeout / 10, 10U)
-extern unsigned int ldlm_timeout;
-extern unsigned int obd_health_check_timeout;
+extern unsigned int ldlm_timeout;         /* seconds */
+extern unsigned int adaptive_timeout_min; /* seconds */
+extern unsigned int adaptive_timeout_max; /* seconds */
 extern unsigned int obd_sync_filter;
 extern unsigned int obd_max_dirty_pages;
 extern atomic_t obd_dirty_pages;
@@ -47,11 +48,31 @@ extern int obd_race_state;
 extern unsigned int obd_alloc_fail_rate;
 
 /* Timeout definitions */
-#define LDLM_TIMEOUT_DEFAULT 20
 #define OBD_TIMEOUT_DEFAULT 100
-#define HEALTH_CHECK_COEF 3 / 2
-#define HEALTH_CHECK_TIMEOUT_DEFAULT (OBD_TIMEOUT_DEFAULT * HEALTH_CHECK_COEF)
-#define HEALTH_CHECK_TIMEOUT (obd_timeout * HEALTH_CHECK_COEF)
+#define LDLM_TIMEOUT_DEFAULT 20
+/* Time to wait for all clients to reconnect during recovery */
+/* Should be very conservative; must catch the first reconnect after reboot */
+#define OBD_RECOVERY_TIMEOUT (obd_timeout * 5 / 2)
+/* Change recovery-small 26b time if you change this */
+#define PING_INTERVAL max(obd_timeout / 4, 1U)
+/* Client may skip 1 ping; wait for 2.5 */
+#define PING_EVICT_TIMEOUT (PING_INTERVAL * 5 / 2)
+#define DISK_TIMEOUT 50          /* Beyond this we warn about disk speed */
+#define CONNECTION_SWITCH_MIN 5  /* Connection switching rate limiter */
+#ifndef CRAY_XT3
+/* In general this should be low to have quick detection of a system 
+   running on a backup server. */
+#define INITIAL_CONNECT_TIMEOUT max_t(int,CONNECTION_SWITCH_MIN,obd_timeout/20)
+#else
+/* ...but for very large systems (e.g. CRAY) we need to keep the initial 
+   connect t.o. high (bz 10803), because they will nearly ALWAYS be doing the
+   connects for the first time (clients "reboot" after every process, so no
+   chance to generate adaptive timeout data. */
+#define INITIAL_CONNECT_TIMEOUT max_t(int,CONNECTION_SWITCH_MIN,obd_timeout/2)
+#endif
+#define LND_TIMEOUT 50           /* LNET LND-level RPC timeout */
+#define FOREVER 300              /* Something taking this long is broken */
+
 
 #define OBD_FAIL_MDS                     0x100
 #define OBD_FAIL_MDS_HANDLE_UNPACK       0x101
@@ -131,7 +152,7 @@ extern unsigned int obd_alloc_fail_rate;
 #define OBD_FAIL_OST_BRW_READ_BULK       0x20f
 #define OBD_FAIL_OST_SYNC_NET            0x210
 #define OBD_FAIL_OST_ALL_REPLY_NET       0x211
-#define OBD_FAIL_OST_ALL_REQUESTS_NET    0x212
+#define OBD_FAIL_OST_ALL_REQUEST_NET     0x212
 #define OBD_FAIL_OST_LDLM_REPLY_NET      0x213
 #define OBD_FAIL_OST_BRW_PAUSE_BULK      0x214
 #define OBD_FAIL_OST_ENOSPC              0x215
@@ -147,6 +168,7 @@ extern unsigned int obd_alloc_fail_rate;
 #define OBD_FAIL_OST_HOLD_WRITE_RPC      0x21f
 #define OBD_FAIL_OST_LLOG_RECOVERY_TIMEOUT 0x221
 #define OBD_FAIL_OST_CANCEL_COOKIE_TIMEOUT 0x222
+#define OBD_FAIL_OST_PAUSE_CREATE        0x223
 
 #define OBD_FAIL_LDLM                    0x300
 #define OBD_FAIL_LDLM_NAMESPACE_NEW      0x301
@@ -187,6 +209,8 @@ extern unsigned int obd_alloc_fail_rate;
 #define OBD_FAIL_PTLRPC_DELAY_SEND       0x506
 #define OBD_FAIL_PTLRPC_DELAY_RECOV      0x507
 #define OBD_FAIL_PTLRPC_CLIENT_BULK_CB   0x508
+#define OBD_FAIL_PTLRPC_PAUSE_REQ        0x50a
+#define OBD_FAIL_PTLRPC_PAUSE_REP        0x50c
 
 #define OBD_FAIL_OBD_PING_NET            0x600
 #define OBD_FAIL_OBD_LOG_CANCEL_NET      0x601
@@ -208,9 +232,9 @@ extern unsigned int obd_alloc_fail_rate;
 #define OBD_FAIL_MGS                     0x900
 #define OBD_FAIL_MGS_ALL_REQUEST_NET     0x901
 #define OBD_FAIL_MGS_ALL_REPLY_NET       0x902
-#define OBD_FAIL_MGC_PROCESS_LOG         0x903
-#define OBD_FAIL_MGS_SLOW_REQUEST_NET    0x904
-#define OBD_FAIL_MGS_SLOW_TARGET_REG     0x905
+#define OBD_FAIL_MGC_PAUSE_PROCESS_LOG   0x903
+#define OBD_FAIL_MGS_PAUSE_REQ           0x904
+#define OBD_FAIL_MGS_PAUSE_TARGET_REG    0x905
 
 #define OBD_FAIL_QUOTA_QD_COUNT_32BIT    0xA00
 

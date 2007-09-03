@@ -26,7 +26,7 @@ struct mds_client_data {
         __u8 mcd_padding[LR_CLIENT_SIZE - 88];
 };
 
-#define MDS_SERVICE_WATCHDOG_TIMEOUT (obd_timeout * 1000)
+#define MDS_SERVICE_WATCHDOG_FACTOR 2000
 
 #define MAX_ATIME_DIFF 60
 

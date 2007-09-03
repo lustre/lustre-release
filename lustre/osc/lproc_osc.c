@@ -329,6 +329,7 @@ static struct lprocfs_vars lprocfs_obd_vars[] = {
         { "prealloc_next_id", osc_rd_prealloc_next_id, 0, 0 },
         { "prealloc_last_id", osc_rd_prealloc_last_id, 0, 0 },
         { "checksums",       osc_rd_checksum, osc_wr_checksum, 0 },
+        { "timeouts",        lprocfs_rd_timeouts, lprocfs_wr_timeouts, 0 },
         { 0 }
 };
 

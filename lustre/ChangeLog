@@ -14,6 +14,12 @@
        * Recommended e2fsprogs version: 1.40.2-cfs1
        * Note that reiserfs quotas are disabled on SLES 10 in this kernel.
 
+Severity   : enhancement
+Bugzilla   : 3055
+Description: Adaptive timeouts
+Details    : RPC timeouts adapt to changing server load and network
+	     conditions to reduce resend attempts and improve recovery time.
+
 Severity   : major
 Bugzilla   : 12932
 Description: obd_health_check_timeout too short
@@ -923,6 +929,7 @@ Bugzilla   : 12860
 Description: mds_lov_synchronize race leads to various problems
 Details    : simultaneous MDT->OST connections at startup can cause the 
 	     sync to abort, leaving the OSC in a bad state.
+
 Severity   : normal
 Bugzilla   : 12975
 Frequency  : rare
