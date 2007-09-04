@@ -235,6 +235,9 @@ int ll_file_release(struct inode *inode, struct file *file)
         CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu/%u(%p)\n", inode->i_ino,
                inode->i_generation, inode);
 
+        if (S_ISDIR(inode->i_mode))
+                ll_stop_statahead(inode);
+
         /* don't do anything for / */
         if (inode->i_sb->s_root == file->f_dentry)
                 RETURN(0);
@@ -262,6 +265,7 @@ static int ll_intent_file_open(struct file *file, void *lmm,
         struct inode *inode = file->f_dentry->d_inode;
         struct ptlrpc_request *req;
         int rc;
+        ENTRY;
 
         if (!parent)
                 RETURN(-ENOENT);
@@ -385,6 +389,9 @@ int ll_file_open(struct inode *inode, struct file *file)
         CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu/%u(%p), flags %o\n", inode->i_ino,
                inode->i_generation, inode, file->f_flags);
 
+        if (S_ISDIR(inode->i_mode) && lli->lli_opendir_pid == 0)
+                lli->lli_opendir_pid = current->pid;
+
         /* don't do anything for / */
         if (inode->i_sb->s_root == file->f_dentry)
                 RETURN(0);
@@ -397,9 +404,10 @@ int ll_file_open(struct inode *inode, struct file *file)
 #endif
 
         fd = ll_file_data_get();
-        if (fd == NULL)
+        if (fd == NULL) {
+                lli->lli_opendir_pid = 0;
                 RETURN(-ENOMEM);
-
+        }
         if (!it || !it->d.lustre.it_disposition) {
                 /* Convert f_flags into access mode. We cannot use file->f_mode,
                  * because everything but O_ACCMODE mask was stripped from it */
@@ -528,6 +536,7 @@ out_och_free:
                         (*och_usecount)--;
                 }
                 up(&lli->lli_och_sem);
+                lli->lli_opendir_pid = 0;
         }
         return rc;
 }

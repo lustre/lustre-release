@@ -90,6 +90,7 @@ FAIL_ON_ERROR=false
 
 cleanup() {
 	echo -n "cln.."
+	pgrep ll_sa > /dev/null && { echo "There are ll_sa thread not exit!"; exit 20; }
 	cleanupall ${FORCE} $* || { echo "FAILed to clean up"; exit 20; }
 }
 setup() {
@@ -4045,6 +4046,63 @@ test_122() { #bug #11544
         sysctl -w lustre.fail_loc=0
 }
 run_test 122 "fail client bulk callback (shouldn't LBUG) ======="
+
+test_123() # statahead(bug 11401)
+{
+        if [ -z "$(grep "processor.*: 1" /proc/cpuinfo)" ]; then
+                log "testing on UP system. Performance may be not as good as expected."
+        fi
+
+        mkdir -p $DIR/$tdir
+
+        for ((i=1, j=0; i<=10000; j=$i, i=$((i * 10)) )); do
+                createmany -o $DIR/$tdir/$tfile $j $((i - j))
+
+                grep '[0-9]' $LPROC/llite/*/statahead_max
+                cancel_lru_locks mdc
+                stime=`date +%s`
+                ls -l $DIR/$tdir > /dev/null
+                etime=`date +%s`
+                delta_sa=$((etime - stime))
+                log "ls $i files with statahead:    $delta_sa sec"
+
+                for client in $LPROC/llite/*; do
+                        max=`cat $client/statahead_max`
+                        cat $client/statahead_stats
+                        echo 0 > $client/statahead_max
+                done
+
+                grep '[0-9]' $LPROC/llite/*/statahead_max
+                cancel_lru_locks mdc
+                stime=`date +%s`
+                ls -l $DIR/$tdir > /dev/null
+                etime=`date +%s`
+                delta=$((etime - stime))
+                log "ls $i files without statahead: $delta sec"
+
+                for client in /proc/fs/lustre/llite/*; do
+                        cat $client/statahead_stats
+                        echo $max > $client/statahead_max
+                done
+
+                if [ $delta_sa -gt $delta ]; then
+                        log "ls $i files is slower with statahead!"
+                fi
+        done
+        log "ls done"
+
+        stime=`date +%s`
+        rm -r $DIR/$tdir
+        sync
+        etime=`date +%s`
+        delta=$((etime - stime))
+        log "rm -r $DIR/$tdir/: $delta seconds"
+        log "rm done"
+        cat /proc/fs/lustre/llite/*/statahead_stats
+        # wait for commitment of removal
+        sleep 2
+}
+run_test 123 "verify statahead work"
 
 TMPDIR=$OLDTMPDIR
 TMP=$OLDTMP

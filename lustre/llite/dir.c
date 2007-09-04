@@ -27,7 +27,6 @@
  */
 
 #include <linux/fs.h>
-#include <linux/ext2_fs.h>
 #include <linux/pagemap.h>
 #include <linux/mm.h>
 #include <linux/version.h>
@@ -48,8 +47,6 @@
 #include <lustre_lite.h>
 #include <lustre_dlm.h>
 #include "llite_internal.h"
-
-typedef struct ext2_dir_entry_2 ext2_dirent;
 
 #ifdef HAVE_PG_FS_MISC
 #define PageChecked(page)        test_bit(PG_fs_misc, &(page)->flags)
@@ -104,18 +101,6 @@ static inline unsigned ext2_chunk_size(struct inode *inode)
 {
         return inode->i_sb->s_blocksize;
 }
-
-static inline void ext2_put_page(struct page *page)
-{
-        kunmap(page);
-        page_cache_release(page);
-}
-
-static inline unsigned long dir_pages(struct inode *inode)
-{
-        return (inode->i_size+CFS_PAGE_SIZE-1) >> CFS_PAGE_SHIFT;
-}
-
 
 static void ext2_check_page(struct inode *dir, struct page *page)
 {
@@ -205,7 +190,7 @@ fail:
         SetPageError(page);
 }
 
-static struct page *ll_get_dir_page(struct inode *dir, unsigned long n)
+struct page *ll_get_dir_page(struct inode *dir, unsigned long n)
 {
         struct ldlm_res_id res_id =
                 { .name = { dir->i_ino, (__u64)dir->i_generation} };
@@ -262,24 +247,6 @@ fail:
         ext2_put_page(page);
         page = ERR_PTR(-EIO);
         goto out_unlock;
-}
-
-/*
- * p is at least 6 bytes before the end of page
- */
-static inline ext2_dirent *ext2_next_entry(ext2_dirent *p)
-{
-        return (ext2_dirent *)((char*)p + le16_to_cpu(p->rec_len));
-}
-
-static inline unsigned
-ext2_validate_entry(char *base, unsigned offset, unsigned mask)
-{
-        ext2_dirent *de = (ext2_dirent*)(base + offset);
-        ext2_dirent *p = (ext2_dirent*)(base + (offset&mask));
-        while ((char*)p < (char*)de)
-                p = ext2_next_entry(p);
-        return (char *)p - base;
 }
 
 static unsigned char ext2_filetype_table[EXT2_FT_MAX] = {

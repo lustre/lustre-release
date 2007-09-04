@@ -99,6 +99,9 @@ static struct ll_sb_info *ll_init_sbi(void)
                 spin_lock_init(&sbi->ll_rw_extents_info.pp_extents[i].pp_w_hist.oh_lock);
         }
 
+        /* metadata statahead is enabled by default */
+        sbi->ll_sa_max = LL_STATAHEAD_DEF;
+
         RETURN(sbi);
 }
 
@@ -1142,6 +1145,12 @@ void ll_clear_inode(struct inode *inode)
 
         CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu/%u(%p)\n", inode->i_ino,
                inode->i_generation, inode);
+
+        if (S_ISDIR(inode->i_mode)) {
+                /* these should have been cleared in ll_file_release */
+                LASSERT(lli->lli_sai == NULL);
+                LASSERT(lli->lli_opendir_pid == 0);
+        }
 
         ll_inode2fid(&fid, inode);
         clear_bit(LLI_F_HAVE_MDS_SIZE_LOCK, &lli->lli_flags);

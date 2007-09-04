@@ -457,6 +457,59 @@ static int ll_wr_contention_time(struct file *file, const char *buffer,
                 count;
 }
 
+static int ll_rd_statahead_count(char *page, char **start, off_t off,
+                                 int count, int *eof, void *data)
+{
+        struct super_block *sb = data;
+        struct ll_sb_info *sbi = ll_s2sbi(sb);
+
+        return snprintf(page, count, "%u\n", sbi->ll_sa_count);
+}
+
+static int ll_rd_statahead_max(char *page, char **start, off_t off,
+                               int count, int *eof, void *data)
+{
+        struct super_block *sb = data;
+        struct ll_sb_info *sbi = ll_s2sbi(sb);
+
+        return snprintf(page, count, "%u\n", sbi->ll_sa_max);
+}
+
+static int ll_wr_statahead_max(struct file *file, const char *buffer,
+                               unsigned long count, void *data)
+{
+        struct super_block *sb = data;
+        struct ll_sb_info *sbi = ll_s2sbi(sb);
+        int val, rc;
+
+        rc = lprocfs_write_helper(buffer, count, &val);
+        if (rc)
+                return rc;
+        if (val >= 0 && val <= LL_STATAHEAD_MAX)
+                sbi->ll_sa_max = val;
+        else
+                CERROR("Bad statahead_max value %d. Valid values are in the "
+                       "range [0, %d]\n", val, LL_STATAHEAD_MAX);
+
+        return count;
+}
+
+static int ll_rd_statahead_stats(char *page, char **start, off_t off,
+                                 int count, int *eof, void *data)
+{
+        struct super_block *sb = data;
+        struct ll_sb_info *sbi = ll_s2sbi(sb);
+
+        return snprintf(page, count,
+                        "statahead wrong: %u\n"
+                        "statahead total: %u\n"
+                        "ls blocked:      %llu\n"
+                        "ls total:        %llu\n",
+                        sbi->ll_sa_wrong, sbi->ll_sa_total,
+                        sbi->ll_sa_blocked,
+                        sbi->ll_sa_blocked + sbi->ll_sa_cached);
+}
+
 static struct lprocfs_vars lprocfs_obd_vars[] = {
         { "uuid",         ll_rd_sb_uuid,          0, 0 },
         //{ "mntpt_path",   ll_rd_path,             0, 0 },
@@ -479,6 +532,9 @@ static struct lprocfs_vars lprocfs_obd_vars[] = {
         { "stats_track_ppid", ll_rd_track_ppid, ll_wr_track_ppid, 0 },
         { "stats_track_gid",  ll_rd_track_gid, ll_wr_track_gid, 0 },
         { "contention_seconds", ll_rd_contention_time, ll_wr_contention_time, 0},
+        { "statahead_count", ll_rd_statahead_count, 0, 0 },
+        { "statahead_max",   ll_rd_statahead_max, ll_wr_statahead_max, 0 },
+        { "statahead_stats", ll_rd_statahead_stats, 0, 0 },
         { 0 }
 };
 

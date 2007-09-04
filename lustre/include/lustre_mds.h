@@ -113,6 +113,8 @@ int mds_reint_rec(struct mds_update_record *r, int offset,
 /* mds/mds_lov.c */
 
 /* mdc/mdc_locks.c */
+struct md_enqueue_info;
+
 int it_disposition(struct lookup_intent *it, int flag);
 void it_set_disposition(struct lookup_intent *it, int flag);
 void it_clear_disposition(struct lookup_intent *it, int flag);
@@ -120,6 +122,9 @@ int it_open_error(int phase, struct lookup_intent *it);
 void mdc_set_lock_data(__u64 *lockh, void *data);
 int mdc_change_cbdata(struct obd_export *exp, struct ll_fid *fid,
                       ldlm_iterator_t it, void *data);
+int mdc_revalidate_lock(struct obd_export *exp,
+                        struct lookup_intent *it,
+                        struct ll_fid *fid);
 int mdc_intent_lock(struct obd_export *exp,
                     struct mdc_op_data *,
                     void *lmm, int lmmsize,
@@ -130,6 +135,9 @@ int mdc_enqueue(struct obd_export *exp, struct ldlm_enqueue_info *einfo,
                 struct lookup_intent *it, struct mdc_op_data *data,
                 struct lustre_handle *lockh, void *lmm, int lmmlen,
                 int extra_lock_flags);
+int mdc_intent_getattr_async(struct obd_export *exp,
+                             struct md_enqueue_info *minfo,
+                             struct ldlm_enqueue_info *einfo);
 
 /* mdc/mdc_request.c */
 int mdc_init_ea_size(struct obd_export *mdc_exp, struct obd_export *lov_exp);
@@ -197,6 +205,18 @@ static inline void mdc_pack_fid(struct ll_fid *fid, obd_id ino, __u32 gen,
         fid->f_type = type;
 }
 
+static inline int it_to_lock_mode(struct lookup_intent *it)
+{
+        /* CREAT needs to be tested before open (both could be set) */
+        if (it->it_op & IT_CREAT)
+                return LCK_CW;
+        else if (it->it_op & (IT_READDIR | IT_GETATTR | IT_OPEN | IT_LOOKUP))
+                return LCK_CR;
+
+        LBUG();
+        return -EINVAL;
+}
+
 /* ioctls for trying requests */
 #define IOC_REQUEST_TYPE                   'f'
 #define IOC_REQUEST_MIN_NR                 30
@@ -208,5 +228,26 @@ static inline void mdc_pack_fid(struct ll_fid *fid, obd_id ino, __u32 gen,
 #define IOC_REQUEST_OPEN                _IOWR('f', 34, long)
 #define IOC_REQUEST_CLOSE               _IOWR('f', 35, long)
 #define IOC_REQUEST_MAX_NR               35
+
+/* metadata stat-ahead */
+typedef int (* md_enqueue_cb_t)(struct obd_export *exp,
+                                struct ptlrpc_request *req,
+                                struct md_enqueue_info *minfo,
+                                int rc);
+
+struct md_enqueue_info {
+        struct obd_export      *mi_exp;
+        struct mdc_op_data      mi_data;
+        struct lookup_intent    mi_it;
+        struct lustre_handle    mi_lockh;
+        struct dentry          *mi_dentry;
+        md_enqueue_cb_t         mi_cb;
+        void                   *mi_cbdata;
+};
+
+struct mdc_enqueue_args {
+        struct md_enqueue_info   *ma_mi;
+        struct ldlm_enqueue_info *ma_ei;
+};
 
 #endif

@@ -5,6 +5,7 @@
 #ifndef LLITE_INTERNAL_H
 #define LLITE_INTERNAL_H
 
+#include <linux/ext2_fs.h>
 #ifdef CONFIG_FS_POSIX_ACL
 # include <linux/fs.h>
 #ifdef HAVE_XATTR_ACL
@@ -110,6 +111,10 @@ struct ll_inode_info {
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0))
         struct inode            lli_vfs_inode;
 #endif
+
+        /* metadata stat-ahead */
+        pid_t                   lli_opendir_pid;
+        struct ll_statahead_info *lli_sai;
 };
 
 /*
@@ -265,9 +270,19 @@ struct ll_sb_info {
         enum stats_track_type     ll_stats_track_type;
         int                       ll_stats_track_id;
         int                       ll_rw_stats_on;
-
         dev_t                     ll_sdev_orig; /* save s_dev before assign for
                                                  * clustred nfs */
+
+        /* metadata stat-ahead */
+        unsigned int              ll_sa_count; /* current statahead RPCs */
+        unsigned int              ll_sa_max;   /* max statahead RPCs */
+        unsigned int              ll_sa_wrong; /* statahead thread stopped for
+                                                * low hit ratio */
+        unsigned int              ll_sa_total; /* statahead thread started
+                                                * count */
+        unsigned long long        ll_sa_blocked; /* ls count waiting for
+                                                  * statahead */
+        unsigned long long        ll_sa_cached;  /* ls count got in cache */
 };
 
 #define LL_DEFAULT_MAX_RW_CHUNK         (32 * 1024 * 1024)
@@ -443,6 +458,38 @@ static void ll_stats_ops_tally(struct ll_sb_info *sbi, int op, int count) {}
 extern struct file_operations ll_dir_operations;
 extern struct inode_operations ll_dir_inode_operations;
 
+struct page *ll_get_dir_page(struct inode *dir, unsigned long n);
+/*
+ * p is at least 6 bytes before the end of page
+ */
+typedef struct ext2_dir_entry_2 ext2_dirent;
+
+static inline ext2_dirent *ext2_next_entry(ext2_dirent *p)
+{
+        return (ext2_dirent *)((char*)p + le16_to_cpu(p->rec_len));
+}
+
+static inline unsigned
+ext2_validate_entry(char *base, unsigned offset, unsigned mask)
+{
+        ext2_dirent *de = (ext2_dirent*)(base + offset);
+        ext2_dirent *p = (ext2_dirent*)(base + (offset&mask));
+        while ((char*)p < (char*)de)
+                p = ext2_next_entry(p);
+        return (char *)p - base;
+}
+
+static inline void ext2_put_page(struct page *page)
+{
+        kunmap(page);
+        page_cache_release(page);
+}
+
+static inline unsigned long dir_pages(struct inode *inode)
+{
+        return (inode->i_size + CFS_PAGE_SIZE - 1) >> CFS_PAGE_SHIFT;
+}
+
 /* llite/namei.c */
 int ll_objects_destroy(struct ptlrpc_request *request, struct inode *dir);
 struct inode *ll_iget(struct super_block *sb, ino_t hash,
@@ -458,6 +505,9 @@ int ll_prepare_mdc_op_data(struct mdc_op_data *,
 struct lookup_intent *ll_convert_intent(struct open_intent *oit,
                                         int lookup_flags);
 #endif
+int lookup_it_finish(struct ptlrpc_request *request, int offset,
+                     struct lookup_intent *it, void *data);
+void ll_lookup_finish_locks(struct lookup_intent *it, struct dentry *dentry);
 
 /* llite/rw.c */
 int ll_prepare_write(struct file *, struct page *, unsigned from, unsigned to);
@@ -722,5 +772,36 @@ ssize_t ll_getxattr(struct dentry *dentry, const char *name,
                     void *buffer, size_t size);
 ssize_t ll_listxattr(struct dentry *dentry, char *buffer, size_t size);
 int ll_removexattr(struct dentry *dentry, const char *name);
+
+/* statahead.c */
+
+#define LL_STATAHEAD_MIN  1
+#define LL_STATAHEAD_DEF  32
+#define LL_STATAHEAD_MAX  10000
+
+/* per inode struct, for dir only */
+struct ll_statahead_info {
+        struct inode           *sai_inode;
+        atomic_t                sai_refc;       /* when access this struct, hold
+                                                 * refcount */
+        unsigned int            sai_max;        /* max ahead of lookup */
+        unsigned int            sai_sent;       /* stat requests sent count */
+        unsigned int            sai_replied;    /* stat requests which received
+                                                 * reply */
+        unsigned int            sai_cached;     /* UPDATE lock cached locally
+                                                 * already */
+        unsigned int            sai_hit;        /* hit count */
+        unsigned int            sai_miss;       /* miss count */
+        unsigned int            sai_consecutive_miss; /* consecutive miss */
+        unsigned                sai_ls_all:1;   /* ls -al, do stat-ahead for
+                                                 * hidden entries */
+        struct ptlrpc_thread    sai_thread;     /* stat-ahead thread */
+        struct list_head        sai_entries;    /* stat-ahead entries */
+        unsigned int            sai_entries_nr; /* stat-ahead entries count */
+};
+
+int ll_statahead_enter(struct inode *dir, struct dentry **dentry, int lookup);
+void ll_statahead_exit(struct dentry *dentry, int result);
+void ll_stop_statahead(struct inode *inode);
 
 #endif /* LLITE_INTERNAL_H */
