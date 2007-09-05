@@ -50,7 +50,7 @@ init_test_env() {
     [ ! -f "$MKFS" ] && export MKFS=$(which mkfs.lustre) 
     export TUNEFS=${TUNEFS:-"$LUSTRE/utils/tunefs.lustre"}
     [ ! -f "$TUNEFS" ] && export TUNEFS=$(which tunefs.lustre) 
-    export CHECKSTAT="${CHECKSTAT:-checkstat} "
+    export CHECKSTAT="${CHECKSTAT:-"checkstat -v"} "
     export FSYTPE=${FSTYPE:-"ldiskfs"}
     export NAME=${NAME:-local}
     export LPROC=/proc/fs/lustre
