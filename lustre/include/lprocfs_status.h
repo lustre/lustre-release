@@ -44,6 +44,7 @@ struct lprocfs_vars {
         cfs_read_proc_t *read_fptr;
         cfs_write_proc_t *write_fptr;
         void *data;
+        struct file_operations *fops;
 };
 
 struct lprocfs_static_vars {
@@ -258,6 +259,7 @@ extern cfs_proc_dir_entry_t *lprocfs_srch(cfs_proc_dir_entry_t *root,
 
 extern int lprocfs_obd_setup(struct obd_device *obd, struct lprocfs_vars *list);
 extern int lprocfs_obd_cleanup(struct obd_device *obd);
+extern struct file_operations lprocfs_evict_client_fops;
 
 extern int lprocfs_seq_create(cfs_proc_dir_entry_t *parent, char *name, 
                               mode_t mode, struct file_operations *seq_fops,

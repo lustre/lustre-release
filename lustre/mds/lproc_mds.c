@@ -46,6 +46,31 @@ static int lprocfs_mds_rd_mntdev(char *page, char **start, off_t off, int count,
         return snprintf(page, count, "%s\n",obd->u.mds.mds_vfsmnt->mnt_devname);
 }
 
+static int lprocfs_mds_rd_evictostnids(char *page, char **start, off_t off,
+                                       int count, int *eof, void *data)
+{
+        struct obd_device* obd = (struct obd_device *)data;
+
+        LASSERT(obd != NULL);
+
+        return snprintf(page, count, "%d\n", obd->u.mds.mds_evict_ost_nids);
+}
+
+static int lprocfs_mds_wr_evictostnids(struct file *file, const char *buffer,
+                                       unsigned long count, void *data)
+{
+        struct obd_device *obd = data;
+        int val, rc;
+
+        rc = lprocfs_write_helper(buffer, count, &val);
+        if (rc)
+                return rc;
+
+        obd->u.mds.mds_evict_ost_nids = !!val;
+
+        return count;
+}
+
 static int lprocfs_mds_wr_evict_client(struct file *file, const char *buffer,
                                        unsigned long count, void *data)
 {
@@ -64,14 +89,15 @@ static int lprocfs_mds_wr_evict_client(struct file *file, const char *buffer,
         if (!set)
                 return -ENOMEM;
 
-        rc = obd_set_info_async(mds->mds_osc_exp, strlen("evict_by_nid"),
-                                "evict_by_nid", strlen(tmpbuf + 4) + 1,
-                                 tmpbuf + 4, set);
-        if (rc)
-                CERROR("Failed to evict nid %s from OSTs: rc %d\n", tmpbuf + 4,
-                       rc);
-
-        ptlrpc_check_set(set);
+        if (obd->u.mds.mds_evict_ost_nids) {
+                rc = obd_set_info_async(mds->mds_osc_exp,strlen("evict_by_nid"),
+                                        "evict_by_nid", strlen(tmpbuf + 4) + 1,
+                                        tmpbuf + 4, set);
+                if (rc)
+                        CERROR("Failed to evict nid %s from OSTs: rc %d\n",
+                               tmpbuf + 4, rc);
+                ptlrpc_check_set(set);
+        }
 
         /* See the comments in function lprocfs_wr_evict_client() 
          * in ptlrpc/lproc_ptlrpc.c for details. - jay */
@@ -291,6 +317,8 @@ struct lprocfs_vars lprocfs_mds_obd_vars[] = {
         { "mntdev",          lprocfs_mds_rd_mntdev,  0, 0 },
         { "recovery_status", lprocfs_obd_rd_recovery_status, 0, 0 },
         { "evict_client",    0,                lprocfs_mds_wr_evict_client, 0 },
+        { "evict_ost_nids",  lprocfs_mds_rd_evictostnids,
+                                               lprocfs_mds_wr_evictostnids, 0 },
         { "num_exports",     lprocfs_rd_num_exports, 0, 0 },
 #ifdef HAVE_QUOTA_SUPPORT
         { "quota_bunit_sz",  lprocfs_rd_bunit, lprocfs_wr_bunit, 0 },

@@ -462,7 +462,8 @@ struct mds_obd {
                                          mds_fl_user_xattr:1,
                                          mds_fl_acl:1,
                                          mds_fl_cfglog:1,
-                                         mds_fl_synced:1;
+                                         mds_fl_synced:1,
+                                         mds_evict_ost_nids:1;
 };
 
 struct echo_obd {
@@ -789,6 +790,8 @@ struct obd_device {
         struct lprocfs_stats  *obd_svc_stats;
         unsigned int           obd_cntr_base;
         struct semaphore       obd_proc_exp_sem;
+        atomic_t               obd_evict_inprogress;
+        cfs_waitq_t            obd_evict_inprogress_waitq;
 };
 
 #define OBD_OPT_FORCE           0x0001

@@ -159,6 +159,11 @@ Description: when mds and osts use different quota unit(32bit and 64bit),
 	     quota will be released repeatly.
 Details    : void sending multiple quota reqs to mds, which will keep the status 
 	     between the reqs.
+
+Severity   : major
+Bugzilla   : 12418
+Description: evictions taking too long
+
 --------------------------------------------------------------------------------
 
 2007-08-27         Cluster File Systems, Inc. <info@clusterfs.com>

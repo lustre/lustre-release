@@ -181,6 +181,35 @@ static struct file_operations lprocfs_generic_fops = {
         .write = lprocfs_fops_write,
 };
 
+int lprocfs_evict_client_open(struct inode *inode, struct file *f)
+{
+        struct proc_dir_entry *dp = PDE(f->f_dentry->d_inode);
+        struct obd_device *obd = dp->data;
+
+        atomic_inc(&obd->obd_evict_inprogress);
+
+        return 0;
+}
+
+int lprocfs_evict_client_release(struct inode *inode, struct file *f)
+{
+        struct proc_dir_entry *dp = PDE(f->f_dentry->d_inode);
+        struct obd_device *obd = dp->data;
+
+        atomic_dec(&obd->obd_evict_inprogress);
+        wake_up(&obd->obd_evict_inprogress_waitq);
+
+        return 0;
+}
+
+struct file_operations lprocfs_evict_client_fops = {
+        .owner = THIS_MODULE,
+        .read = lprocfs_fops_read,
+        .write = lprocfs_fops_write,
+        .open = lprocfs_evict_client_open,
+        .release = lprocfs_evict_client_release,
+};
+EXPORT_SYMBOL(lprocfs_evict_client_fops);
 
 int lprocfs_add_vars(struct proc_dir_entry *root, struct lprocfs_vars *list,
                      void *data)
@@ -238,7 +267,10 @@ int lprocfs_add_vars(struct proc_dir_entry *root, struct lprocfs_vars *list,
                         return -ENOMEM;
                 }
 
-                proc->proc_fops = &lprocfs_generic_fops;
+                if (list->fops)
+                        proc->proc_fops = list->fops;
+                else
+                        proc->proc_fops = &lprocfs_generic_fops;
                 proc->read_proc = list->read_fptr;
                 proc->write_proc = list->write_fptr;
                 proc->data = (list->data ? list->data : data);
