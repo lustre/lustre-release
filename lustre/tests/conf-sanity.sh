@@ -919,7 +919,7 @@ set_and_check() {
 	    FINAL=$(($ORIG + 5))
 	fi
 	echo "Setting $PARAM from $ORIG to $FINAL"
-	$LCTL conf_param $PARAM=$FINAL
+	do_facet mds "$LCTL conf_param $PARAM=$FINAL" || error conf_param failed
 	local RESULT
 	local MAX=20
 	local WAIT=0
@@ -1007,14 +1007,23 @@ test_29() {
 
 	# check MDT too 
 	local MPROC="$LPROC/osc/$FSNAME-OST0001-osc-[M]*/active"
-        RESULT=`do_facet mds " [ -r $MPROC ] && cat $MPROC"`
-        [ ${PIPESTATUS[0]} = 0 ] || error "Can't read $MPROC"
-        if [ $RESULT -ne $DEAC ]; then
-            echo "MDT not deactivated: $RESULT"
-            return 4
-        else
-	    echo "MDT deactivated also"
-	fi
+	local MAX=30
+	local WAIT=0
+	while [ 1 ]; do
+	    sleep 5
+	    RESULT=`do_facet mds " [ -r $MPROC ] && cat $MPROC"`
+	    [ ${PIPESTATUS[0]} = 0 ] || error "Can't read $MPROC"
+	    if [ $RESULT -eq $DEAC ]; then
+		echo "MDT deactivated also after $WAIT sec (got $RESULT)"
+		break
+	    fi
+	    WAIT=$((WAIT + 5))
+	    if [ $WAIT -eq $MAX ]; then
+		echo "MDT not deactivated: wanted $DEAC got $RESULT"
+		return 4
+	    fi
+	    echo "Waiting $(($MAX - $WAIT)) secs for MDT deactivated"
+	done
 
         # test new client starts deactivated
  	umount_client $MOUNT || return 200
