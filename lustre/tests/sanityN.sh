@@ -687,15 +687,15 @@ test_25() {
 	touch $DIR1/$tdir/f1 || error "touch $DIR1/$tdir/f1"
 	chmod 0755 $DIR1/$tdir/f1 || error "chmod 0755 $DIR1/$tdir/f1"
 
-	$RUNAS checkstat $DIR2/$tdir/f1 || error "checkstat $DIR2/$tdir/f1 #1"
+	$RUNAS $CHECKSTAT $DIR2/$tdir/f1 || error "checkstat $DIR2/$tdir/f1 #1"
 	setfacl -m u:$RUNAS_ID:--- $DIR1/$tdir || error "setfacl $DIR2/$tdir #1"
-	$RUNAS checkstat $DIR2/$tdir/f1 && error "checkstat $DIR2/$tdir/f1 #2"
+	$RUNAS $CHECKSTAT $DIR2/$tdir/f1 && error "checkstat $DIR2/$tdir/f1 #2"
 	setfacl -m u:$RUNAS_ID:r-x $DIR1/$tdir || error "setfacl $DIR2/$tdir #2"
-	$RUNAS checkstat $DIR2/$tdir/f1 || error "checkstat $DIR2/$tdir/f1 #3"
+	$RUNAS $CHECKSTAT $DIR2/$tdir/f1 || error "checkstat $DIR2/$tdir/f1 #3"
 	setfacl -m u:$RUNAS_ID:--- $DIR1/$tdir || error "setfacl $DIR2/$tdir #3"
-	$RUNAS checkstat $DIR2/$tdir/f1 && error "checkstat $DIR2/$tdir/f1 #4"
+	$RUNAS $CHECKSTAT $DIR2/$tdir/f1 && error "checkstat $DIR2/$tdir/f1 #4"
 	setfacl -x u:$RUNAS_ID: $DIR1/$tdir || error "setfacl $DIR2/$tdir #4"
-	$RUNAS checkstat $DIR2/$tdir/f1 || error "checkstat $DIR2/$tdir/f1 #5"
+	$RUNAS $CHECKSTAT $DIR2/$tdir/f1 || error "checkstat $DIR2/$tdir/f1 #5"
 
 	rm -rf $DIR1/$tdir
 }
