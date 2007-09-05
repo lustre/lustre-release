@@ -955,14 +955,14 @@ Index: linux-stage/fs/ext3/namei.c
  	if (err)
  		goto cleanup;	
  
-@@ -1742,6 +2208,7 @@
- journal_error:
- 	ext3_std_error(dir->i_sb, err);
- cleanup:
-+	dx_unlock_htree(dir, dummy);
+@@ -1745,6 +2211,7 @@
  	if (bh)
  		brelse(bh);
  cleanup2:
++	dx_unlock_htree(dir, dummy);
+ 	if (err)
+ 		inode->i_size = isize;
+ 	iam_path_fini(path);
 Index: linux-stage/fs/ext3/super.c
 ===================================================================
 --- linux-stage.orig/fs/ext3/super.c	2007-06-15 13:47:33.000000000 +0800
