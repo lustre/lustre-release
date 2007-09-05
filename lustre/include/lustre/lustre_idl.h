@@ -303,7 +303,7 @@ extern void lustre_swab_ptlrpc_body(struct ptlrpc_body *pb);
 #define ECHO_CONNECT_SUPPORTED (0)
 #define MGS_CONNECT_SUPPORTED  (OBD_CONNECT_VERSION | OBD_CONNECT_AT)
 
-#define MAX_QUOTA_COUNT32 ((0xffffffffULL >> QUOTABLOCK_BITS) << QUOTABLOCK_BITS)
+#define MAX_QUOTA_COUNT32 (0xffffffffULL)
 
 #define OBD_OCD_VERSION(major,minor,patch,fix) (((major)<<24) + ((minor)<<16) +\
                                                 ((patch)<<8) + (fix))

@@ -152,6 +152,13 @@ Bugzilla   : 11401
 Description: client-side metadata stat-ahead during readdir(directory readahead)
 Details    : perform client-side metadata stat-ahead when the client detects
              readdir and sequential stat of dir entries therein
+
+Severity   : minor
+Bugzilla   : 12588
+Description: when mds and osts use different quota unit(32bit and 64bit),
+	     quota will be released repeatly.
+Details    : void sending multiple quota reqs to mds, which will keep the status 
+	     between the reqs.
 --------------------------------------------------------------------------------
 
 2007-08-27         Cluster File Systems, Inc. <info@clusterfs.com>

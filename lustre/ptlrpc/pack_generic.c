@@ -2263,7 +2263,6 @@ struct qunit_data_old *lustre_quota_new_to_old(struct qunit_data *d)
         if (!d)
                 return NULL;
 
-        LASSERT(d->qd_count <= MAX_QUOTA_COUNT32);
         tmp = *d;
         ret = (struct qunit_data_old *)d;
         ret->qd_id = tmp.qd_id;

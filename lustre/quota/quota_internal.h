@@ -45,7 +45,7 @@
                qinfo->qi_info[1].dqi_free_entry, ## arg);
 
 #define QDATA_DEBUG(qd, fmt, arg...)                                          \
-        CDEBUG(D_QUOTA, "id(%u) type(%lu) count(%llu) isblk(%lu):"            \
+        CDEBUG(D_QUOTA, "id(%u) type(%lu) count("LPU64") isblk(%lu):"         \
                fmt, qd->qd_id, qd->qd_flags & QUOTA_IS_GRP, qd->qd_count,     \
                (qd->qd_flags & QUOTA_IS_BLOCK) >> 1,       \
                ## arg);

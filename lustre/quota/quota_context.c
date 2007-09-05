@@ -359,27 +359,31 @@ schedule_dqacq(struct obd_device *obd, struct lustre_quota_ctxt *qctxt,
 static int split_before_schedule_dqacq(struct obd_device *obd, struct lustre_quota_ctxt *qctxt,
                                        struct qunit_data *qdata, int opc, int wait)
 {
-        int rc = 0, ret;
+        int rc = 0;
+        unsigned long factor;
         struct qunit_data tmp_qdata;
         ENTRY;
 
-        LASSERT(qdata);
-        if (qctxt->lqc_import)
-                while (should_translate_quota(qctxt->lqc_import) &&
-                       qdata->qd_count > MAX_QUOTA_COUNT32) {
+        LASSERT(qdata && qdata->qd_count);
+        QDATA_DEBUG(qdata, "%s quota split.\n",
+                    (qdata->qd_flags & QUOTA_IS_BLOCK) ? "block" : "inode");
+        if (qdata->qd_flags & QUOTA_IS_BLOCK)
+                factor = MAX_QUOTA_COUNT32 / qctxt->lqc_bunit_sz * 
+                        qctxt->lqc_bunit_sz;
+        else
+                factor = MAX_QUOTA_COUNT32 / qctxt->lqc_iunit_sz * 
+                        qctxt->lqc_iunit_sz;
 
+        if (qctxt->lqc_import && should_translate_quota(qctxt->lqc_import) &&
+            qdata->qd_count > factor) {
                         tmp_qdata = *qdata;
-                        tmp_qdata.qd_count = MAX_QUOTA_COUNT32;
+                tmp_qdata.qd_count = factor;
                         qdata->qd_count -= tmp_qdata.qd_count;
-                        ret = schedule_dqacq(obd, qctxt, &tmp_qdata, opc, wait);
-                        if (!rc)
-                                rc = ret;
-                }
-
-        if (qdata->qd_count){
-                ret = schedule_dqacq(obd, qctxt, qdata, opc, wait);
-                if (!rc)
-                        rc = ret;
+                QDATA_DEBUG((&tmp_qdata), "be split.\n");
+                rc = schedule_dqacq(obd, qctxt, &tmp_qdata, opc, wait);
+        } else{
+                QDATA_DEBUG(qdata, "don't be split.\n");
+                rc = schedule_dqacq(obd, qctxt, qdata, opc, wait);
         }
 
         RETURN(rc);
@@ -404,7 +408,8 @@ dqacq_completion(struct obd_device *obd,
         LASSERT(qdata);
         qunit_sz = is_blk ? qctxt->lqc_bunit_sz : qctxt->lqc_iunit_sz;
         div_r = do_div(qd_tmp, qunit_sz);
-        LASSERT(!div_r);
+        LASSERTF(!div_r, "qunit_sz: %lu, return qunit_sz: "LPU64"\n",
+                 qunit_sz, qd_tmp);
 
         /* update local operational quota file */
         if (rc == 0) {
@@ -438,10 +443,18 @@ dqacq_completion(struct obd_device *obd,
 
                 switch (opc) {
                 case QUOTA_DQACQ:
+                        CDEBUG(D_QUOTA, "%s(acq):count: %d, hardlimt: "LPU64 
+                               ",type: %s.\n", obd->obd_name, count, *hardlimit, 
+                               qdata_type ? "grp": "usr");
                         INC_QLIMIT(*hardlimit, count);
                         break;
                 case QUOTA_DQREL:
-                        LASSERT(count < *hardlimit);
+                        CDEBUG(D_QUOTA, "%s(rel):count: %d, hardlimt: "LPU64 
+                               ",type: %s.\n", obd->obd_name, count, *hardlimit, 
+                               qdata_type ? "grp": "usr");
+                        LASSERTF(count < *hardlimit, 
+                                 "count: %d, hardlimit: "LPU64".\n", 
+                                 count, *hardlimit);
                         *hardlimit -= count;
                         break;
                 default:
@@ -584,6 +597,7 @@ schedule_dqacq(struct obd_device *obd,
         struct dqacq_async_args *aa;
         int size[2] = { sizeof(struct ptlrpc_body), sizeof(*reqdata) };
         struct obd_import *imp = NULL;
+        unsigned long factor;
         int rc = 0;
         ENTRY;
 
@@ -650,8 +664,15 @@ schedule_dqacq(struct obd_device *obd,
                 RETURN(-ENOMEM);
         }
 
+        if (qdata->qd_flags & QUOTA_IS_BLOCK)
+                factor = MAX_QUOTA_COUNT32 / qctxt->lqc_bunit_sz * 
+                        qctxt->lqc_bunit_sz;
+        else
+                factor = MAX_QUOTA_COUNT32 / qctxt->lqc_iunit_sz * 
+                        qctxt->lqc_iunit_sz;
+
         LASSERTF(!should_translate_quota(imp) ||
-                 qdata->qd_count <= MAX_QUOTA_COUNT32,
+                 qdata->qd_count <= factor,
                  "qd_count: "LPU64"; should_translate_quota: %d.\n",
                  qdata->qd_count, should_translate_quota(imp));
         if (should_translate_quota(imp))
