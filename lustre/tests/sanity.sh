@@ -7,8 +7,8 @@
 set -e
 
 ONLY=${ONLY:-"$*"}
-# bug number for skipped test: 4900 4900 2108 9789 3637 9789 3561 5188/5749 10764
-ALWAYS_EXCEPT=${ALWAYS_EXCEPT:-"27o 27q  42a  42b  42c  42d  45   68        75"}
+# bug number for skipped test: 4900 4900 2108 9789 3637 9789 3561 5188/5749 13310 10764
+ALWAYS_EXCEPT=${ALWAYS_EXCEPT:-"27o 27q  42a  42b  42c  42d  45   68        74b   75"}
 # bug number for skipped test: 2108 9789 3637 9789 3561 5188/5749 1443
 #ALWAYS_EXCEPT=${ALWAYS_EXCEPT:-"27m 42a 42b 42c 42d 45 68 76"}
 # UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
@@ -3033,18 +3033,32 @@ test_73() {
 }
 run_test 73 "multiple MDC requests (should not deadlock)"
 
-test_74() { # bug 6149, 6184
+test_74a() { # bug 6149, 6184
+	#define OBD_FAIL_LDLM_ENQUEUE_OLD_EXPORT 0x30e
+	#
+	# very important to OR with OBD_FAIL_ONCE (0x80000000) -- otherwise it
+	# will spin in a tight reconnection loop
+	touch $DIR/f74a
+	sysctl -w lustre.fail_loc=0x8000030e
+	# get any lock that won't be difficult - lookup works.
+	ls $DIR/f74a
+	sysctl -w lustre.fail_loc=0
+	true
+}
+run_test 74a "ldlm_enqueue freed-export error path, ls (shouldn't LBUG)"
+
+test_74b() { # bug 13310
 	#define OBD_FAIL_LDLM_ENQUEUE_OLD_EXPORT 0x30e
 	#
 	# very important to OR with OBD_FAIL_ONCE (0x80000000) -- otherwise it
 	# will spin in a tight reconnection loop
 	sysctl -w lustre.fail_loc=0x8000030e
-	# get any lock
-	touch $DIR/f74
+	# get a "difficult" lock
+	touch $DIR/f74b
 	sysctl -w lustre.fail_loc=0
 	true
 }
-run_test 74 "ldlm_enqueue freed-export error path (shouldn't LBUG)"
+run_test 74b "ldlm_enqueue freed-export error path, touch (shouldn't LBUG)"
 
 JOIN=${JOIN:-"lfs join"}
 F75=$DIR/f75
