@@ -16,14 +16,6 @@ fi
 SRCDIR=`dirname $0`
 export PATH=$PWD/$SRCDIR:$SRCDIR:$PWD/$SRCDIR/../utils:$PATH:/sbin
 
-if [ "$1" == "9_10" ]; then
-        echo "only run for test9 and test10"
-	shift
-	TEST_9_10=1
-	ONLY="9 10"
-else
-        TEST_9_10=0
-fi
 ONLY=${ONLY:-"$*"}
 ALWAYS_EXCEPT=${ALWAYS_EXCEPT:-""}
 # UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
@@ -147,9 +139,7 @@ MOUNT_HINT=$MOUNT
 MOUNT_HINT2=$MOUNT_2
 MOUNT="`mounted_lustre_filesystems 1`"
 MOUNT_2="`mounted_lustre_filesystems 2`"
-if [ $TEST_9_10 -eq 1 -a "$MOUNT" ]; then
-        echo "test9 and test10 will run on $MOUNT"
-elif [ "$MOUNT" -a "$MOUNT_2" ]; then
+if [ "$MOUNT" -a "$MOUNT_2" ]; then
 	echo "testing on $MOUNT and $MOUNT_2"
 elif [ "$MOUNT" -o "$MOUNT_2" ]; then
         error "test needs two mounts, only found $MOUNT $MOUNT_2!"
@@ -174,11 +164,7 @@ DIR2=${DIR2:-$MOUNT_2}
 
 LPROC=/proc/fs/lustre
 LOVNAME=`cat $LPROC/llite/*/lov/common_name | tail -n 1`
-if [ $TEST_9_10 -eq 1 ]; then
-    OSTCOUNT=2
-else
-    OSTCOUNT=`cat $LPROC/lov/$LOVNAME/numobd`
-fi 
+OSTCOUNT=`cat $LPROC/lov/$LOVNAME/numobd`
 STRIPECOUNT=`cat $LPROC/lov/$LOVNAME/stripecount`
 STRIPESIZE=`cat $LPROC/lov/$LOVNAME/stripesize`
 ORIGFREE=`cat $LPROC/lov/$LOVNAME/kbytesavail`
@@ -252,9 +238,7 @@ pre_test() {
 		set_file_unitsz $IUNIT_SZ
 	fi
 }
-if [ $TEST_9_10 -eq 0 ]; then
-    pre_test
-fi
+pre_test
 
 post_test() {
 	if [ -z "$NOSETUP" ]; then
@@ -750,19 +734,21 @@ test_9() {
 	    return 0;
         fi
 
+        set_blk_unitsz $((1024 * 100))
+        set_blk_tunesz $((1024 * 50))
+
         # set the D_QUOTA flag
 	DBG_SAVE="`sysctl -n lnet.debug`"
 	sysctl -w lnet.debug="$DBG_SAVE quota"
 
         TESTFILE="$TSTDIR/quota_tst90"
 
-        echo "  Set block limit $LIMIT kbytes to $TSTUSR.$TSTUSR"
         BLK_LIMIT=$((100 * 1024 * 1024)) # 100G
         FILE_LIMIT=1000000
 
-        echo "  Set enough high limit for user: $TSTUSR"
+	echo "  Set enough high limit(block:$BLK_LIMIT; file: $FILE_LIMIT) for user: $TSTUSR"
         $LFS setquota -u $TSTUSR 0 $BLK_LIMIT 0 $FILE_LIMIT $MOUNT
-        echo "  Set enough high limit for group: $TSTUSR"
+	echo "  Set enough high limit(block:$BLK_LIMIT; file: $FILE_LIMIT) for group: $TSTUSR"
         $LFS setquota -g $TSTUSR 0 $BLK_LIMIT 0 $FILE_LIMIT $MOUNT
 
         echo "  Set stripe"
@@ -770,11 +756,20 @@ test_9() {
         touch $TESTFILE
         chown $TSTUSR.$TSTUSR $TESTFILE
 
+        $SHOW_QUOTA_USER
+        $SHOW_QUOTA_GROUP
+
         echo "    Write the big file of $(($OSTCOUNT * 9 / 2 ))G ..."
         $RUNAS dd if=/dev/zero of=$TESTFILE  bs=$BLK_SZ count=$size_file || error "(usr) write $((9 / 2 * $OSTCOUNT))G file failure, but expect success"
 	
+        $SHOW_QUOTA_USER
+        $SHOW_QUOTA_GROUP
+
 	echo "    delete the big file of $(($OSTCOUNT * 9 / 2))G..." 
         $RUNAS rm -f $TESTFILE
+
+        $SHOW_QUOTA_USER
+        $SHOW_QUOTA_GROUP
 
         echo "    write the big file of 2G..."
         $RUNAS dd if=/dev/zero of=$TESTFILE  bs=$BLK_SZ count=$((1024 * 1024 * 2)) || error "(usr) write $((9 / 2 * $OSTCOUNT))G file failure, but expect seccess"
@@ -782,6 +777,9 @@ test_9() {
         echo "    delete the big file of 2G..."
         $RUNAS rm -f $TESTFILE 
         RC=$?
+
+        set_blk_tunesz $BTUNE_SZ
+        set_blk_unitsz $BUNIT_SZ
 
 	sysctl -w lnet.debug="$DBG_SAVE"
         return $RC
@@ -805,6 +803,9 @@ test_10() {
 
 	sync; sleep 10; sync;
 
+	set_blk_unitsz $((1024 * 100))
+	set_blk_tunesz $((1024 * 50))
+
 	# set the D_QUOTA flag
 	set_flag=0
 	if [ -z "`sysctl lnet.debug | grep quota`" ]; then
@@ -817,13 +818,12 @@ test_10() {
 
 	TESTFILE="$TSTDIR/quota_tst100"
 
-	echo "  Set block limit $LIMIT kbytes to $TSTUSR.$TSTUSR"
 	BLK_LIMIT=$((100 * 1024 * 1024)) # 100G
 	FILE_LIMIT=1000000
 
-	echo "  Set enough high limit for user: $TSTUSR"
+	echo "  Set enough high limit(block:$BLK_LIMIT; file: $FILE_LIMIT) for user: $TSTUSR"
 	$LFS setquota -u $TSTUSR 0 $BLK_LIMIT 0 $FILE_LIMIT $MOUNT
-	echo "  Set enough high limit for group: $TSTUSR"
+	echo "  Set enough high limit(block:$BLK_LIMIT; file: $FILE_LIMIT) for group: $TSTUSR"
 	$LFS setquota -g $TSTUSR 0 $BLK_LIMIT 0 $FILE_LIMIT $MOUNT
        
 	echo "  Set stripe"
@@ -831,11 +831,20 @@ test_10() {
 	touch $TESTFILE
 	chown $TSTUSR.$TSTUSR $TESTFILE
 
+        $SHOW_QUOTA_USER
+        $SHOW_QUOTA_GROUP
+
 	echo "    Write the big file of $(($OSTCOUNT * 9 / 2 ))G ..."
 	$RUNAS dd if=/dev/zero of=$TESTFILE  bs=$BLK_SZ count=$size_file || error "(usr) write $((9 / 2 * $OSTCOUNT))G file failure, but expect success"
 
+        $SHOW_QUOTA_USER
+        $SHOW_QUOTA_GROUP
+
 	echo "    delete the big file of $(($OSTCOUNT * 9 / 2))G..."
 	$RUNAS rm -f $TESTFILE 
+
+        $SHOW_QUOTA_USER
+        $SHOW_QUOTA_GROUP
 
 	echo "    write the big file of 2G..."
 	$RUNAS dd if=/dev/zero of=$TESTFILE  bs=$BLK_SZ count=$((1024 * 1024 * 2)) || error "(usr) write $((9 / 2 * $OSTCOUNT))G file failure, but expect success" 
@@ -852,6 +861,9 @@ test_10() {
 
 	# make qd_count 64 bit
 	sysctl -w lustre.fail_loc=0
+
+	set_blk_tunesz $BTUNE_SZ
+	set_blk_unitsz $BUNIT_SZ
 
 	return $RC
 }
@@ -1098,9 +1110,7 @@ run_test 99 "Quota off ==============================="
 log "cleanup: ======================================================"
 if [ "`mount | grep ^$NAME`" ]; then
 	rm -fr $TSTDIR
-	if [ $TEST_9_10 -eq 0 ]; then
 	    post_test
-	fi
 	# delete test user and group
 	userdel "$TSTUSR"
 	userdel "$TSTUSR2"

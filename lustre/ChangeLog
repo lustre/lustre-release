@@ -208,6 +208,12 @@ Details    : after a connection loss, the lustre client should attempt to
 	     reconnect to the last active server first before trying the
 	     other potential connections.
 
+Severity   : minor
+Bugzilla   : 12588
+Description: when mds and osts use different quota unit(32bit and 64bit),
+             quota will be released repeatly.
+Details    : void sending multiple quota reqs to mds, which will keep the status 
+             between the reqs.
 --------------------------------------------------------------------------------
 
 2007-08-10         Cluster File Systems, Inc. <info@clusterfs.com>
