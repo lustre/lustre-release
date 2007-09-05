@@ -21,42 +21,38 @@ Details    : RPC timeouts adapt to changing server load and network
 	     conditions to reduce resend attempts and improve recovery time.
 
 Severity   : major
+Frequency  : Heavily loaded servers
 Bugzilla   : 12932
 Description: obd_health_check_timeout too short
 Details    : set obd_health_check_timeout as 1.5x of obd_timeout
 
-Severity   : normal
-Bugzilla   : 12584
-Description: sanity.sh failed test 103
-Details    : RHEL mis-interpret setfacl "-X" param, so we won't test setfacl
-	     with param "-X".
-
-Severity   : normal
+Severity   : enhancement
 Bugzilla   : 12192
 Description: llapi_file_create() does not allow some changes
-Details    : add llapi_file_open() that allows specifying the mode and 
-	     open flags, and also returns an open file handle.
+Details    : add llapi_file_open() that allows specifying the file creation
+	     mode and open flags, and also returns an open file handle.
 
-Severity   : normal
+Severity   : enhancement
 Bugzilla   : 12743
 Description: df doesn't work properly if diskfs blocksize != 4K
 Details    : Choose biggest blocksize of OST's as the LOV's blocksize.
 
 Severity   : normal
+Frequency  : always on directories with default striping set
 Bugzilla   : 12836
 Description: lfs find on -1 stripe looping in lsm_lmm_verify_common()
 Details    : Avoid lov_verify_lmm_common() on directory with -1 stripe count.
 
-Severity   : normal
+Severity   : enhancement
 Bugzilla   : 11248
 Description: merge and cleanup kernel patches.
 Details    : Remove mnt_lustre_list in vfs_intent-2.6-rhel4.patch.
 
-Severity   : normal
+Severity   : enhancement
 Bugzilla   : 10657
 Description: Add journal checksum support.(Kernel part)
 Details    : The journal checksum feature adds two new flags i.e 
-             JBD2_FEATURE_INCOMPAT_ASYNC_COMMIT and 
+	     JBD2_FEATURE_INCOMPAT_ASYNC_COMMIT and 
 	     JBD2_FEATURE_COMPAT_CHECKSUM. JBD2_FEATURE_CHECKSUM flag 
 	     indicates that the commit block contains the checksum for
 	     the blocks described by the descriptor blocks. Now commit
@@ -64,77 +60,65 @@ Details    : The journal checksum feature adds two new flags i.e
 	     blocks to be written to disk. This behavior is controlled
 	     using JBD2_FEATURE_ASYNC_COMMIT flag.
 
-Severity   : normal
+Severity   : enhancement
 Bugzilla   : 13039
 Description: RedHat Update kernel for RHEL5
 Details    : Kernel config file for RHEL5.
 
-Severity   : minor
+Severity   : enhancement
 Bugzilla   : 12446
 Description: OSS needs mutliple precreate threads
 Details    : Add ability to start more than one create thread per OSS.
 
-Severity   : normal
-Bugzilla   : 13362
-Description: Sanity.sh test_65k failed: setstripe should have succeeded
-Details    : execute lfs setstripe on client
-
 Severity   : major
+Frequency  : only with quota on the root user
 Bugzilla   : 12223
 Description: mds_obd_create error creating tmp object
 Details    : When the user sets quota on root, llog will be affected and can't 
-             create files and write files.
+	     create files and write files.
 
 Severity   : normal
 Frequency  : Always on ia64 patchless client, and possibly others.
 Bugzilla   : 12826
 Description: Add EXPORT_SYMBOL check for node_to_cpumask symbol.
 Details    : This allows the patchless client to be loaded on architectures
-             without this export.
-
-Severity   : normal
-Bugzilla   : 12599
-Description: move common funcs to test-frame.sh
-Details    : cleanup those test-scripts and move some common funcs to
-             test-frame.sh 
+	     without this export.
 
 Severity   : normal
 Frequency  : rare 
 Bugzilla   : 13142
 Description: disorder of journal start and llog_add cause deadlock.
 Details    : in llog_origin_connect, journal start should happen before 
-             llog_add keep the same order as other functions to avoid 
+	     llog_add keep the same order as other functions to avoid 
 	     the deadlock. 
 
-Severity   : normal
+Severity   : enhancement
 Bugzilla   : 13039
 Description: RedHat Update kernel for RHEL5
 Details    : Modify the kernel config file more closer RHEL5.
 
-Severity   : normal
+Severity   : enhancement
 Bugzilla   : 13360
 Description: Build failure against Centos5 (RHEL5)
 Details    : Define PAGE_SIZE when it isn't present.
 
-Severity   : minor
-Bugzilla   : 13363
-Description: test_7 on sanity-quota.sh can't be used on separate machines
-Details    : add facet to handle it
-
 Severity   : normal
+Frequency  : occasionally when using NFS
 Bugzilla   : 13030
 Description: "ll_intent_file_open()) lock enqueue: err: -13" with nfs
 Details    : with NFS, the anon dentry's parent was set to itself in
-             d_alloc_anon(), so in MDS, we use rec->ur_fid1 to find the
+	     d_alloc_anon(), so in MDS, we use rec->ur_fid1 to find the
 	     corresponding dentry other than use rec->ur_name.
 
-Severity   : normal
+Severity   : enhancement
 Bugzilla   : 12398
-Description: testing performance impact of enabling checksumming
+Description: enable data checksumming by default
 Details    : enable checksum by default, allow --disable-checksum 
-             configure option and "-o nochecksum" mount option 
+	     configure option and "-o nochecksum" mount option.  Checksums
+	     can also be disabled at runtime via $LPROC/llite/*/checksum_pages.
 
 Severity   : normal
+Frequency  : Occasionally with failover
 Bugzilla   : 12459
 Description: Client eviction due to failover config
 Details    : after a connection loss, the lustre client should attempt to
@@ -145,24 +129,27 @@ Severity   : enhancement
 Bugzilla   : 11270
 Description: eliminate client locks in face of contention
 Details    : file contention detection and lockless i/o implementation
-             for contended files.
+	     for contended files.
 
 Severity   : enhancement
 Bugzilla   : 11401
 Description: client-side metadata stat-ahead during readdir(directory readahead)
 Details    : perform client-side metadata stat-ahead when the client detects
-             readdir and sequential stat of dir entries therein
+	     readdir and sequential stat of dir entries therein
 
 Severity   : minor
+Frequency  : rare
 Bugzilla   : 12588
 Description: when mds and osts use different quota unit(32bit and 64bit),
 	     quota will be released repeatly.
-Details    : void sending multiple quota reqs to mds, which will keep the status 
-	     between the reqs.
+Details    : void sending multiple quota reqs to mds, which will keep the
+	     status  between the reqs.
 
-Severity   : major
+Severity   : normal
+Frequency  : only with liblustre clients on XT3
 Bugzilla   : 12418
 Description: evictions taking too long
+Details    : allow llrd to evict clients directly on OSTs
 
 --------------------------------------------------------------------------------
 
@@ -183,6 +170,7 @@ Description: evictions taking too long
        * Note that reiserfs quotas are disabled on SLES 10 in this kernel.
 
 Severity   : minor
+Frequency  : rare
 Bugzilla   : 13147
 Description: block reactivating mgc import until all deactivates complete
 Details    : Fix race when failing back MDT/MGS to itself (testing)
@@ -219,37 +207,38 @@ Details    : fix set/restore device id for avoid EMFILE error and mark lustre fs
 	     as FS_REQUIRES_DEV for avoid problems with generate fsid.
 
 Severity   : major
+Frequency  : after network failures
 Bugzilla   : 12769
 Description: Add sync option to mount_lustre.c
 Details    : Client loses data written to lustre after a network interruption.
 
-Severity   : normal
+Severity   : enhancement
 Bugzilla   : 10595
 Description: Error message improvement.
 Details    : Merging of two LCONSOLE_ERROR_MSG into one.
 
-Severity   : normal
+Severity   : enhancement
 Bugzilla   : 12606
 Description: don't use GFP_* in generic Lustre code.
 Details    : Use cfs_alloc_* functions and CFS_* flags for code portability.
 
-Severity   : normal
+Severity   : enhancement
 Bugzilla   : 12333
 Description: obdclass is limited by single OBD_ALLOC(idarray)
 Details    : replace OBD_ALLOC/OBD_FREE with OBD_VMALLOC/OBD_VFREE
 
-Severity   : normal
+Severity   : enhancement
 Bugzilla   : 12415
 Description: updated patchess for new RHEL4 kernel
 Details    : Fixed ext3-unlink-race.patch per Kalpak's comment.
 
-Severity   : normal
+Severity   : enhancement
 Bugzilla   : 13006
 Description: warnings with build patchless client with vanila 2.6.19 and up
 Details    : change old ctl_table style and replace ctl_table/ctl_table_header 
 	     with cfs_sysctl_table_t/cfs_sysctl_table_header_t
 
-Severity   : major
+Severity   : enhancement
 Bugzilla   : 13093
 Description: O_DIRECT bypasses client statistics.
 Details    : When running with O_DIRECT I/O, neither the client rpc_stats nor 
@@ -257,20 +246,20 @@ Details    : When running with O_DIRECT I/O, neither the client rpc_stats nor
 	     osc_send_oap_rpc() into async_internal().
 
 Severity   : minor
-Bugzilla   : 11706
 Frequency  : only for Cray XT3
+Bugzilla   : 11706
 Description: peer credits not enough on many OST per OSS systems.
 Details    : Use new lnet way to add credits as we need those for pings and ASTs
 
 Severity   : minor
-Bugzilla   : 12790
 Frequency  : only with liblustre
+Bugzilla   : 12790
 Description: Liblustre is not releasing flock locks on file close.
 Details    : Release flock locks on file close.
 
 Severity   : minor
-Bugzilla   : 12839
 Frequency  : only for RHEL4
+Bugzilla   : 12839
 Description: Update kernel patches for kernel-2.6.9-55.0.2.EL
 Details    : Remove inode-nr_unused-2.6.9-rhel4.patch from 2.6-rhel4.series
 	     Update target file and kernel config.
@@ -289,85 +278,67 @@ Details    : Assetion hit is result of rare race between disconnect and connet
 	     tried to reconnect, but can't find export for this cockie.
 
 Severity   : normal
-Bugzilla   : 11756
 Frequency  : rare
+Bugzilla   : 11756
 Description: umount blocks forever on error
 Details    : In result of wrong using obd_no_recov and obd_force flags client
 	     can hand if cancel or some other requests is lost.
 
 Severity   : normal
-Bugzilla   : 13177
 Frequency  : Only for SLES
+Bugzilla   : 13177
 Description: sanity_quota fail test_1
 Details    : There are multiple occurences of $TSTUSR in SLES's /etc/group
 	     file, which makes TSTID[2] inunique.
 
-Severity   : normal
+Severity   : enhancement
 Bugzilla   : 13249
-Frequency  : Only for SLES9
 Description: Kernel patches for SLES9 2.6.5-7.286 kernel
 Details    : Update target/ChangeLog/which_patch .
 
-Severity   : normal
-Bugzilla   : 13170
-Frequency  : Only for test_10 in sanity-quota.sh
-Description: a bug in quota test code
-Details    : checking a test flag in a wrong place
-
-Severity   : normal
-Bugzilla   : 13171
-Frequency  : Only for test_13 in sanity-quota.sh
-Description: a bug in quota test script
-Details    : shouldn't check overfull allocated quota
-
-Severity   : normal
+Severity   : enhancement
 Bugzilla   : 12955
 Description: jbd statistics
 Details    : Port older jbd statistics patch for sles10
 
 Severity   : normal
-Bugzilla   : 9977
 Frequency  : rare
+Bugzilla   : 9977
 Description: lvbo_init failed for resource with missing objects.
 Details    : Fix returning error if we do stat for file with missing/corrupted
-             objects and i_size set to all sum of size of all avaible objects.
+	     objects and i_size set to all sum of size of all avaible objects.
 	     if we to truncate/write to missing object - it is recreated.
 
 Severity   : minor
-Bugzilla   : 13276
 Frequency  : rare
+Bugzilla   : 13276
 Description: Oops in read and write path when failing to allocate lock.
 Details    : Check if lock allocation failed and return error back.
 
 Severity   : normal
-Bugzilla   : 13103
 Frequency  : When flocks are used.
+Bugzilla   : 13103
 Description: assertion failure in ldlm_cli_enquque_fini for non NULL lock.
 Details    : Flock locks might destroy just granted lock if it could be merged
-             with another existing flock, this is done in completion handler,
+	     with another existing flock, this is done in completion handler,
 	     so teach ldlm_cli_enquque_fini that this is a valid case for
 	     flock locks.
 
 Severity   : normal
-Bugzilla   : 11974
 Frequency  : Rare
+Bugzilla   : 11974
 Description: reply_lock_interpret crash due to race with it and lock cancel.
 Details    : Do not replay locks that are being cancelled. Do not reference
-             locks by their address during replay, just by their handle.
+	     locks by their address during replay, just by their handle.
 
 Severity   : normal 
+Frequency  : only with deactivated OSTs
 Bugzilla   : 11679
 Description: lstripe command fails for valid OST index
 Details    : The stripe offset is compared to 'lov->desc.ld_tgt_count' 
 	     instead of lov->desc.ld_active_tgt_count.
 
-Severity   : normal
-Bugzilla   : 12584
-Description: sanity.sh failed test 103
-Details    : RHEL mis-interpret setfacl "-X" param, so we won't test setfacl
-             with param "-X".
-
-Severity   : normal
+Severity   : enhancement
 Bugzilla   : 13360
 Description: Build failure against Centos5 (RHEL5)
 Details    : Use getpagesize() instead of PAGE_SIZE.
@@ -436,6 +407,7 @@ Details    : OSTs are not remounted read-only when the journal commit threads
 	     instead of the ext3 wrappers.
 
 Severity   : minor
+Frequency  : only with 10000 clients or more
 Bugzilla   : 12364
 Description: poor connect scaling with increasing client count
 Details    : Don't run filter_grant_sanity_check for more than 100 exports
