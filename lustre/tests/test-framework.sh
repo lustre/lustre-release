@@ -42,6 +42,7 @@ init_test_env() {
 
     export PATH=:$PATH:$LUSTRE/utils:$LUSTRE/utils/gss:$LUSTRE/tests
     export LCTL=${LCTL:-"$LUSTRE/utils/lctl"}
+    export LFS=${LFS:-"$LUSTRE/utils/lfs"}
     [ ! -f "$LCTL" ] && export LCTL=$(which lctl) 
     export MKFS=${MKFS:-"$LUSTRE/utils/mkfs.lustre"}
     [ ! -f "$MKFS" ] && export MKFS=$(which mkfs.lustre) 
@@ -69,6 +70,7 @@ init_test_env() {
     # Paths on remote nodes, if different 
     export RLUSTRE=${RLUSTRE:-$LUSTRE}
     export RPWD=${RPWD:-$PWD}
+    export I_MOUNTED=${I_MOUNTED:-"no"}
 
     # command line
     
@@ -808,6 +810,44 @@ setupall() {
     sleep 5
 }
 
+mounted_lustre_filesystems() {
+	awk '($3 ~ "lustre" && $1 ~ ":") { print $2 }' /proc/mounts
+}
+
+check_and_setup_lustre() {
+    MOUNTED="`mounted_lustre_filesystems`"
+    if [ -z "$MOUNTED" ]; then
+        [ "$REFORMAT" ] && formatall
+        setupall
+        MOUNTED="`mounted_lustre_filesystems`"
+        [ -z "$MOUNTED" ] && error "NAME=$NAME not mounted"
+        export I_MOUNTED=yes
+    fi
+    if [ "$ONLY" == "setup" ]; then
+        exit 0
+    fi
+}
+
+cleanup_and_setup_lustre() {
+    if [ "$ONLY" == "cleanup" -o "`mount | grep $MOUNT`" ]; then
+        sysctl -w lnet.debug=0 || true
+        cleanupall
+        if [ "$ONLY" == "cleanup" ]; then 
+    	    exit 0
+        fi
+    fi
+    check_and_setup_lustre
+}
+
+check_and_cleanup_lustre() {
+    if [ "`mount | grep $MOUNT`" ]; then
+        rm -rf $DIR/[Rdfs][1-9]*
+    fi
+    if [ "$I_MOUNTED" = "yes" ]; then
+        cleanupall -f || error "cleanup failed"
+    fi
+    unset I_MOUNTED
+}
 
 ####### 
 # General functions
@@ -983,6 +1023,9 @@ build_test_filter() {
     for E in $EXCEPT $ALWAYS_EXCEPT; do
         eval EXCEPT_${E}=true
     done
+    for G in $GRANT_CHECK_LIST; do
+        eval GCHECK_ONLY_${G}=true
+   	done
 }
 
 _basetest() {
@@ -1039,6 +1082,14 @@ log() {
     $LCTL mark "$*" 2> /dev/null || true
 }
 
+trace() {
+	log "STARTING: $*"
+	strace -o $TMP/$1.strace -ttt $*
+	RC=$?
+	log "FINISHED: $*: rc $RC"
+	return 1
+}
+
 pass() {
     echo PASS $@
 }
@@ -1055,23 +1106,72 @@ run_one() {
     tfile=f${testnum}
     tdir=d${base}
 
-    # Pretty tests run faster.
-    equals_msg $testnum: $message
-
     BEFORE=`date +%s`
     log "== test $testnum: $message ============ `date +%H:%M:%S` ($BEFORE)"
     #check_mds
     export TESTNAME=test_$testnum
     test_${testnum} || error "test_$testnum failed with $?"
     #check_mds
+    check_grant ${testnum} || error "check_grant $testnum failed with $?"
     [ -f $CATASTROPHE ] && [ `cat $CATASTROPHE` -ne 0 ] && \
         error "LBUG/LASSERT detected"
     pass "($((`date +%s` - $BEFORE))s)"
     unset TESTNAME
+    cd $SAVE_PWD
+    $CLEANUP
 }
 
 canonical_path() {
     (cd `dirname $1`; echo $PWD/`basename $1`)
+}
+
+sync_clients() {
+    [ -d $DIR1 ] && cd $DIR1 && sync; sleep 1; sync 
+    [ -d $DIR2 ] && cd $DIR2 && sync; sleep 1; sync 
+	cd $SAVE_PWD
+}
+
+check_grant() {
+    export base=`basetest $1`
+    [ "$CHECK_GRANT" == "no" ] && return 0
+
+	testname=GCHECK_ONLY_${base}
+        [ ${!testname}x == x ] && return 0
+
+	echo -n "checking grant......"
+	cd $SAVE_PWD
+	# write some data to sync client lost_grant
+	rm -f $DIR1/${tfile}_check_grant_* 2>&1
+	for i in `seq $OSTCOUNT`; do
+		$LFS setstripe $DIR1/${tfile}_check_grant_$i 0 $(($i -1)) 1
+		dd if=/dev/zero of=$DIR1/${tfile}_check_grant_$i bs=4k \
+					      count=1 > /dev/null 2>&1 
+	done
+	# sync all the data and make sure no pending data on server
+	sync_clients
+	
+	#get client grant and server grant 
+	client_grant=0
+    for d in ${LPROC}/osc/*/cur_grant_bytes; do 
+		client_grant=$((client_grant + `cat $d`))
+	done
+	server_grant=0
+	for d in ${LPROC}/obdfilter/*/tot_granted; do
+		server_grant=$((server_grant + `cat $d`))
+	done
+
+	# cleanup the check_grant file
+	for i in `seq $OSTCOUNT`; do
+	        rm $DIR1/${tfile}_check_grant_$i
+	done
+
+	#check whether client grant == server grant 
+	if [ $client_grant != $server_grant ]; then
+		echo "failed: client:${client_grant} server: ${server_grant}"
+		return 1
+	else
+		echo "pass"
+	fi
 }
 
 ########################

@@ -48,85 +48,14 @@ ITUNE_SZ=${ITUNE_SZ:-5}		# default 50% of IUNIT_SZ
 MAX_DQ_TIME=604800
 MAX_IQ_TIME=604800
 
+TRACE=${TRACE:-""}
+LUSTRE=${LUSTRE:-`dirname $0`/..}
+. $LUSTRE/tests/test-framework.sh
+init_test_env $@
+. ${CONFIG:=$LUSTRE/tests/cfg/$NAME.sh}
+
 QUOTALOG=${TESTSUITELOG:-$TMP/$(basename $0 .sh).log}
 FAIL_ON_ERROR=false
-
-log() {
-	echo "$*"
-	$LCTL mark "$*" 2> /dev/null || true
-}
-
-trace() {
-	log "STARTING: $*"
-	strace -o $TMP/$1.strace -ttt $*
-	RC=$?
-	log "FINISHED: $*: rc $RC"
-	return 1
-}
-TRACE=${TRACE:-""}
-
-run_one() {
-	BEFORE=`date +%s`
-	log "== test $1: $2= `date +%H:%M:%S` ($BEFORE)"
-	export TESTNAME=test_$1
-	test_$1 || error "exit with rc=$?"
-	unset TESTNAME
-	pass "($((`date +%s` - $BEFORE))s)"
-	cd $SAVE_PWD
-}
-
-build_test_filter() {
-	[ "$ALWAYS_EXCEPT$EXCEPT$SANITY_EXCEPT" ] && \
-	    echo "Skipping tests: `echo $ALWAYS_EXCEPT $EXCEPT $SANITY_QUOTA_EXCEPT`"
-
-        for O in $ONLY; do
-            eval ONLY_${O}=true
-        done
-        for E in $EXCEPT $ALWAYS_EXCEPT $SANITY_QUOTA_EXCEPT; do
-            eval EXCEPT_${E}=true
-        done
-	# turn on/off quota tests must be included
-	eval ONLY_0=true
-	eval ONLY_99=true
-}
-
-_basetest() {
-	echo $*
-}
-
-basetest() {
-	IFS=abcdefghijklmnopqrstuvwxyz _basetest $1
-}
-
-run_test() {
-         base=`basetest $1`
-         if [ "$ONLY" ]; then
-                 testname=ONLY_$1
-                 if [ ${!testname}x != x ]; then
- 			run_one $1 "$2"
- 			return $?
-                 fi
-                 testname=ONLY_$base
-                 if [ ${!testname}x != x ]; then
-                         run_one $1 "$2"
-                         return $?
-                 fi
-                 echo -n "."
-                 return 0
- 	fi
-        testname=EXCEPT_$1
-        if [ ${!testname}x != x ]; then
-                 TESTNAME=test_$1 skip "skipping excluded test $1"
-                 return 0
-        fi
-        testname=EXCEPT_$base
-        if [ ${!testname}x != x ]; then
-                 TESTNAME=test_$1 skip "skipping excluded test $1 (base $base)"
-                 return 0
-        fi
-        run_one $1 "$2"
- 	return $?
-}
 
 [ "$QUOTALOG" ] && rm -f $QUOTALOG || true
 
@@ -162,7 +91,6 @@ DIR=${DIR:-$MOUNT}
 [ -z "`echo $DIR | grep $MOUNT`" ] && echo "$DIR not in $MOUNT" && exit 99
 DIR2=${DIR2:-$MOUNT_2}
 
-LPROC=/proc/fs/lustre
 LOVNAME=`cat $LPROC/llite/*/lov/common_name | tail -n 1`
 OSTCOUNT=`cat $LPROC/lov/$LOVNAME/numobd`
 STRIPECOUNT=`cat $LPROC/lov/$LOVNAME/stripecount`
@@ -178,6 +106,8 @@ SHOW_QUOTA_INFO="$LFS quota -t $MOUNT"
 
 build_test_filter
 
+eval ONLY_0=true
+eval ONLY_99=true
 
 # set_blk_tunables(btune_sz)
 set_blk_tunesz() {

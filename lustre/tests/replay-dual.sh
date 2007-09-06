@@ -5,37 +5,23 @@ set -e
 # bug number:  6088 10124 10800
 ALWAYS_EXCEPT="8    15c   17    $REPLAY_DUAL_EXCEPT"
 
+SAVE_PWD=$PWD
 PTLDEBUG=${PTLDEBUG:--1}
 LUSTRE=${LUSTRE:-`dirname $0`/..}
+SETUP=${SETUP:-""}
+CLEANUP=${CLEANUP:-""}
+MOUNT_2=${MOUNT_2:-"yes"}
 . $LUSTRE/tests/test-framework.sh
 
 init_test_env $@
 
 . ${CONFIG:=$LUSTRE/tests/cfg/$NAME.sh}
 
-SETUP=${SETUP:-"setup"}
-CLEANUP=${CLEANUP:-"cleanup"}
 
 build_test_filter
 
-cleanup() {
-    stopall
-}
+cleanup_and_setup_lustre
 
-if [ "$ONLY" == "cleanup" ]; then
-    sysctl -w lnet.debug=0
-    cleanup
-    exit
-fi
-
-setup() {
-    cleanup
-    [ "$REFORMAT" ] && formatall
-    setupall
-    mount_client $MOUNT2
-}
-
-$SETUP
 [ "$DAEMONFILE" ] && $LCTL debug_daemon start $DAEMONFILE $DAEMONSIZE
 
 test_1() {
@@ -444,11 +430,9 @@ test_19() { # Bug 10991 - resend of open request does not fail assertion.
 }
 run_test 19 "resend of open request"
 
-if [ "$ONLY" != "setup" ]; then
-   equals_msg `basename $0`: test complete, cleaning up
-   SLEEP=$((`date +%s` - $NOW))
-   [ $SLEEP -lt $TIMEOUT ] && sleep $SLEEP
-   $CLEANUP
-fi
+equals_msg `basename $0`: test complete, cleaning up
+SLEEP=$((`date +%s` - $NOW))
+[ $SLEEP -lt $TIMEOUT ] && sleep $SLEEP
+check_and_cleanup_lustre
 [ -f "$TESTSUITELOG" ] && cat $TESTSUITELOG || true
 

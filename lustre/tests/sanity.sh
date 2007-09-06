@@ -60,6 +60,8 @@ DIRECTIO=${DIRECTIO:-directio}
 ACCEPTOR_PORT=${ACCEPTOR_PORT:-988}
 UMOUNT=${UMOUNT:-"umount -d"}
 STRIPES_PER_OBJ=-1
+CHECK_GRANT=${CHECK_GRANT:-"yes"}
+GRANT_CHECK_LIST=${GRANT_CHECK_LIST:-""}
 
 if [ $UID -ne 0 ]; then
 	echo "Warning: running as non-root uid $UID"
@@ -80,6 +82,9 @@ export NAME=${NAME:-local}
 
 SAVE_PWD=$PWD
 
+CLEANUP=${CLEANUP:-:}
+SETUP=${SETUP:-:}
+TRACE=${TRACE:-""}
 LUSTRE=${LUSTRE:-`dirname $0`/..}
 . $LUSTRE/tests/test-framework.sh
 init_test_env $@
@@ -97,29 +102,12 @@ cleanup() {
 	echo -n "cln.."
 	cleanupall ${FORCE} $* || { echo "FAILed to clean up"; exit 20; }
 }
-CLEANUP=${CLEANUP:-:}
-
 setup() {
 	echo -n "mnt.."
         load_modules
 	setupall || exit 10
 	echo "done"
 }
-SETUP=${SETUP:-:}
-
-log() {
-	echo "$*"
-	$LCTL mark "$*" 2> /dev/null || true
-}
-
-trace() {
-	log "STARTING: $*"
-	strace -o $TMP/$1.strace -ttt $*
-	RC=$?
-	log "FINISHED: $*: rc $RC"
-	return 1
-}
-TRACE=${TRACE:-""}
 
 check_kernel_version() {
 	VERSION_FILE=$LPROC/version
@@ -132,96 +120,14 @@ check_kernel_version() {
 	return 1
 }
 
-_basetest() {
-    echo $*
-}
-
-basetest() {
-    IFS=abcdefghijklmnopqrstuvwxyz _basetest $1
-}
-
-run_one() {
-	if ! grep -q $DIR /proc/mounts; then
-		$SETUP
-	fi
-	testnum=$1
-	message=$2
-	BEFORE=`date +%s`
-	log "== test $testnum: $message= `date +%H:%M:%S` ($BEFORE)"
-	export TESTNAME=test_$testnum
-	export tfile=f${testnum}
-	export tdir=d${base}
-	test_${testnum} || error "exit with rc=$?"
-	unset TESTNAME
-	pass "($((`date +%s` - $BEFORE))s)"
-	cd $SAVE_PWD
-	$CLEANUP
-}
-
-build_test_filter() {
-	[ "$ALWAYS_EXCEPT$EXCEPT$SANITY_EXCEPT" ] && \
-	    echo "Skipping tests: `echo $ALWAYS_EXCEPT $EXCEPT $SANITY_EXCEPT`"
-
-        for O in $ONLY; do
-            eval ONLY_${O}=true
-        done
-        for E in $EXCEPT $ALWAYS_EXCEPT $SANITY_EXCEPT; do
-            eval EXCEPT_${E}=true
-        done
-}
-
-_basetest() {
-	echo $*
-}
-
-basetest() {
-	IFS=abcdefghijklmnopqrstuvwxyz _basetest $1
-}
-
-run_test() {
-         export base=`basetest $1`
-         if [ "$ONLY" ]; then
-                 testname=ONLY_$1
-                 if [ ${!testname}x != x ]; then
- 			run_one $1 "$2"
- 			return $?
-                 fi
-                 testname=ONLY_$base
-                 if [ ${!testname}x != x ]; then
-                         run_one $1 "$2"
-                         return $?
-                 fi
-                 echo -n "."
-                 return 0
- 	fi
-        testname=EXCEPT_$1
-        if [ ${!testname}x != x ]; then
-                 TESTNAME=test_$1 skip "skipping excluded test $1"
-                 return 0
-        fi
-        testname=EXCEPT_$base
-        if [ ${!testname}x != x ]; then
-                 TESTNAME=test_$1 skip "skipping excluded test $1 (base $base)"
-                 return 0
-        fi
-        run_one $1 "$2"
- 	return $?
-}
+if [ "$ONLY" == "cleanup" ]; then
+       sh llmountcleanup.sh
+       exit 0
+fi
 
 [ "$SANITYLOG" ] && rm -f $SANITYLOG || true
 
-mounted_lustre_filesystems() {
-	awk '($3 ~ "lustre" && $1 ~ ":") { print $2 }' /proc/mounts
-}
-
-MOUNTED="`mounted_lustre_filesystems`"
-if [ -z "$MOUNTED" ]; then
-        formatall
-	setupall
-	MOUNTED="`mounted_lustre_filesystems`"
-	[ -z "$MOUNTED" ] && error "NAME=$NAME not mounted"
-	I_MOUNTED=yes
-fi
+check_and_setup_lustre
 
 DIR=${DIR:-$MOUNT}
 [ -z "`echo $DIR | grep $MOUNT`" ] && echo "$DIR not in $MOUNT" && exit 99
@@ -4235,13 +4141,10 @@ TMP=$OLDTMP
 HOME=$OLDHOME
 
 log "cleanup: ======================================================"
-if [ "`mount | grep $MOUNT`" ]; then
-    rm -rf $DIR/[Rdfs][1-9]*
+check_and_cleanup_lustre
+if [ "$I_MOUNTED" != "yes" ]; then
+	sysctl -w lnet.debug="$OLDDEBUG" 2> /dev/null || true
 fi
-if [ "$I_MOUNTED" = "yes" ]; then
-    cleanupall -f || error "cleanup failed"
-fi
-
 
 echo '=========================== finished ==============================='
 [ -f "$SANITYLOG" ] && cat $SANITYLOG && grep -q FAIL $SANITYLOG && exit 1 || true
