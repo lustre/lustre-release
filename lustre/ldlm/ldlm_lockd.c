@@ -1507,8 +1507,8 @@ static int ldlm_callback_handler(struct ptlrpc_request *req)
                         LDLM_DEBUG(lock, "callback on lock "
                                    LPX64" - lock disappeared\n",
                                    dlm_req->lock_handle[0].cookie);
-                        LDLM_LOCK_PUT(lock);
                         unlock_res_and_lock(lock);
+                        LDLM_LOCK_PUT(lock);
                         ldlm_callback_reply(req, -EINVAL);
                         RETURN(0);
                 }
