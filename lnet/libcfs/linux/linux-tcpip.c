@@ -94,8 +94,7 @@ libcfs_ipif_query (char *name, int *up, __u32 *ip, __u32 *mask)
         nob = strnlen(name, IFNAMSIZ);
         if (nob == IFNAMSIZ) {
                 CERROR("Interface name %s too long\n", name);
-                rc = -EINVAL;
-                goto out;
+                return -EINVAL;
         }
 
         CLASSERT (sizeof(ifr.ifr_name) >= IFNAMSIZ);
@@ -105,14 +104,14 @@ libcfs_ipif_query (char *name, int *up, __u32 *ip, __u32 *mask)
 
         if (rc != 0) {
                 CERROR("Can't get flags for interface %s\n", name);
-                goto out;
+                return rc;
         }
 
         if ((ifr.ifr_flags & IFF_UP) == 0) {
                 CDEBUG(D_NET, "Interface %s down\n", name);
                 *up = 0;
                 *ip = *mask = 0;
-                goto out;
+                return 0;
         }
 
         *up = 1;
@@ -123,7 +122,7 @@ libcfs_ipif_query (char *name, int *up, __u32 *ip, __u32 *mask)
 
         if (rc != 0) {
                 CERROR("Can't get IP address for interface %s\n", name);
-                goto out;
+                return rc;
         }
 
         val = ((struct sockaddr_in *)&ifr.ifr_addr)->sin_addr.s_addr;
@@ -135,14 +134,13 @@ libcfs_ipif_query (char *name, int *up, __u32 *ip, __u32 *mask)
 
         if (rc != 0) {
                 CERROR("Can't get netmask for interface %s\n", name);
-                goto out;
+                return rc;
         }
 
         val = ((struct sockaddr_in *)&ifr.ifr_netmask)->sin_addr.s_addr;
         *mask = ntohl(val);
 
- out:
-        return rc;
+        return 0;
 }
 
 EXPORT_SYMBOL(libcfs_ipif_query);
@@ -571,18 +569,16 @@ EXPORT_SYMBOL(libcfs_sock_listen);
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,12)
 int sock_create_lite(int family, int type, int protocol, struct socket **res)
 {
-        int err = 0;
         struct socket *sock;
 
         sock = sock_alloc();
-        if (!sock) {
-                err = -ENOMEM;
-                goto out;
-        }
+        if (sock == NULL) 
+                return -ENOMEM;
+
         sock->type = type;
-out:
         *res = sock;
-        return err;
+
+        return 0;
 }
 #endif
 

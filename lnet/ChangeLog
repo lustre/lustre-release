@@ -12,6 +12,12 @@
 	mxlnd     - MX 1.2.1 or later,
 	ptllnd    - Portals 3.3 / UNICOS/lc 1.5.x, 2.0.x
 
+Severity   : major
+Bugzilla   : 13236
+Description: TOE Kernel panic by ksocklnd
+Details    : offloaded sockets provide their own implementation of sendpage,
+             can't call tcp_sendpage() directly
+
 Severity   : normal
 Bugzilla   : 10778
 Description: kibnal_shutdown() doesn't finish; lconf --cleanup hangs

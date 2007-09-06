@@ -191,8 +191,10 @@ ksocknal_lib_tunables_init ()
                 .proc_handler = &proc_dointvec
         };
 #endif
-        LASSERT (j == i+1);
-        LASSERT (i < sizeof(ksocknal_ctl_table)/sizeof(ksocknal_ctl_table[0]));
+        ksocknal_ctl_table[i++] =  (cfs_sysctl_table_t) { 0 };
+
+        LASSERT (j == i);
+        LASSERT (i <= sizeof(ksocknal_ctl_table)/sizeof(ksocknal_ctl_table[0]));
 
         ksocknal_tunables.ksnd_sysctl =
                 cfs_register_sysctl_table(ksocknal_top_ctl_table, 0);
@@ -398,6 +400,7 @@ ksocknal_lib_send_kiov (ksock_conn_t *conn, ksock_tx_t *tx)
         if (kiov->kiov_len >= *ksocknal_tunables.ksnd_zc_min_frag &&
             tx->tx_msg.ksm_zc_req_cookie != 0) {
                 /* Zero copy is enabled */
+                struct sock   *sk = sock->sk;
                 struct page   *page = kiov->kiov_page;
                 int            offset = kiov->kiov_offset;
                 int            fragsize = kiov->kiov_len;
@@ -410,7 +413,12 @@ ksocknal_lib_send_kiov (ksock_conn_t *conn, ksock_tx_t *tx)
                     fragsize < tx->tx_resid)
                         msgflg |= MSG_MORE;
 
-                rc = tcp_sendpage(sock, page, offset, fragsize, msgflg);
+                if (sk->sk_prot->sendpage != NULL) {
+                        rc = sk->sk_prot->sendpage(sk, page,
+                                                   offset, fragsize, msgflg);
+                } else {
+                        rc = tcp_sendpage(sock, page, offset, fragsize, msgflg);
+                }
         } else {
 #if SOCKNAL_SINGLE_FRAG_TX || !SOCKNAL_RISK_KMAP_DEADLOCK
                 struct iovec  scratch;
@@ -611,7 +619,8 @@ ksocknal_lib_recv_kiov (ksock_conn_t *conn)
         return (rc);
 }
 
-void ksocknal_lib_csum_tx(ksock_tx_t *tx)
+void
+ksocknal_lib_csum_tx(ksock_tx_t *tx)
 {
         int          i;
         __u32        csum;
