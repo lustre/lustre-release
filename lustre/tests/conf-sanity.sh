@@ -1315,5 +1315,74 @@ test_35() { # bug 12459
 }
 run_test 35 "Reconnect to the last active server first"
 
+test_36() { # 12743
+        local rc
+        local FSNAME2=test1234
+        local fs2mds_HOST=$mds_HOST
+        local fs2ost_HOST=$ost_HOST
+        local fs3ost_HOST=$ost_HOST
+        rc=0
+
+        [ -z "$fs2ost_DEV" -o -z "$fs2mds_DEV" ] && [ -b "$MDSDEV" ] && \
+            log "mixed loopback and real device not working" && return
+
+        [ $OSTCOUNT -lt 2 ] && skip "skipping test for single OST" && return
+
+        local fs2mdsdev=${fs2mds_DEV:-${MDSDEV}_2}
+        local fs2ostdev=${fs2ost_DEV:-$(ostdevname 1)_2}
+        local fs3ostdev=${fs3ost_DEV:-$(ostdevname 2)_2}
+        add fs2mds $MDS_MKFS_OPTS --fsname=${FSNAME2} --reformat $fs2mdsdev || exit 10
+        add fs2ost $OST_MKFS_OPTS --mkfsoptions='-b1024' --fsname=${FSNAME2} --mgsnode=`hostname`@tcp --reformat $fs2ostdev || exit 10
+        add fs3ost $OST_MKFS_OPTS --mkfsoptions='-b4096' --fsname=${FSNAME2} --mgsnode=`hostname`@tcp --reformat $fs3ostdev || exit 10
+
+        start fs2mds $fs2mdsdev $MDS_MOUNT_OPTS
+        start fs2ost $fs2ostdev $OST_MOUNT_OPTS
+        start fs3ost $fs3ostdev $OST_MOUNT_OPTS
+        mkdir -p $MOUNT2
+        mount -t lustre $MGSNID:/${FSNAME2} $MOUNT2 || return 1
+
+        dd if=/dev/zero of=$MOUNT2/$tfile bs=1M count=7 || return 2
+        [ $(grep -c obdfilter $LPROC/devices) -eq 0 ] &&
+                skip "skipping test for remote OST" && return
+        BKTOTAL=`awk 'BEGIN{total=0}; {total+=$1}; END{print total}' \
+                $LPROC/obdfilter/*/kbytestotal`
+        BKFREE=`awk 'BEGIN{free=0}; {free+=$1}; END{print free}' \
+               $LPROC/obdfilter/*/kbytesfree`
+        BKAVAIL=`awk 'BEGIN{avail=0}; {avail+=$1}; END{print avail}' \
+                $LPROC/obdfilter/*/kbytesavail`
+        STRING=`df -P $MOUNT2 | tail -n 1 | awk '{print $2","$3","$4}'`
+        DFTOTAL=`echo $STRING | cut -d, -f1`
+        DFUSED=`echo $STRING  | cut -d, -f2`
+        DFAVAIL=`echo $STRING | cut -d, -f3`
+        DFFREE=$(($DFTOTAL - $DFUSED))
+
+        ALLOWANCE=$((64 * $OSTCOUNT))
+
+        if [ $DFTOTAL -lt $(($BKTOTAL - $ALLOWANCE)) ] ||  
+           [ $DFTOTAL -gt $(($BKTOTAL + $ALLOWANCE)) ] ; then
+                echo "**** FAIL: df total($DFTOTAL) mismatch OST total($BKTOTAL)"
+                rc=1
+        fi
+        if [ $DFFREE -lt $(($BKFREE - $ALLOWANCE)) ] || 
+           [ $DFFREE -gt $(($BKFREE + $ALLOWANCE)) ] ; then
+                echo "**** FAIL: df free($DFFREE) mismatch OST free($BKFREE)"
+                rc=2
+        fi
+        if [ $DFAVAIL -lt $(($BKAVAIL - $ALLOWANCE)) ] || 
+           [ $DFAVAIL -gt $(($BKAVAIL + $ALLOWANCE)) ] ; then
+                echo "**** FAIL: df avail($DFAVAIL) mismatch OST avail($BKAVAIL)"
+                rc=3
+       fi
+
+        umount -d $MOUNT2
+        stop fs3ost -f || return 200
+        stop fs2ost -f || return 201
+        stop fs2mds -f || return 202
+        rm -rf $MOUNT2 $fs2mdsdev $fs2ostdev $fs3ostdev
+        unload_modules || return 203
+        return $rc
+}
+run_test 36 "df report consistency on OSTs with different block size"
+
 equals_msg `basename $0`: test complete
 [ -f "$TESTSUITELOG" ] && cat $TESTSUITELOG || true
