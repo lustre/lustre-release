@@ -51,9 +51,9 @@ Details    : Remove mnt_lustre_list in vfs_intent-2.6-rhel4.patch.
 Severity   : enhancement
 Bugzilla   : 10657
 Description: Add journal checksum support.(Kernel part)
-Details    : The journal checksum feature adds two new flags i.e 
-	     JBD2_FEATURE_INCOMPAT_ASYNC_COMMIT and 
-	     JBD2_FEATURE_COMPAT_CHECKSUM. JBD2_FEATURE_CHECKSUM flag 
+Details    : The journal checksum feature adds two new flags i.e
+	     JBD2_FEATURE_INCOMPAT_ASYNC_COMMIT and
+	     JBD2_FEATURE_COMPAT_CHECKSUM. JBD2_FEATURE_CHECKSUM flag
 	     indicates that the commit block contains the checksum for
 	     the blocks described by the descriptor blocks. Now commit
 	     record can be sent to disk without waiting for descriptor
@@ -74,7 +74,7 @@ Severity   : major
 Frequency  : only with quota on the root user
 Bugzilla   : 12223
 Description: mds_obd_create error creating tmp object
-Details    : When the user sets quota on root, llog will be affected and can't 
+Details    : When the user sets quota on root, llog will be affected and can't
 	     create files and write files.
 
 Severity   : normal
@@ -85,12 +85,12 @@ Details    : This allows the patchless client to be loaded on architectures
 	     without this export.
 
 Severity   : normal
-Frequency  : rare 
+Frequency  : rare
 Bugzilla   : 13142
 Description: disorder of journal start and llog_add cause deadlock.
-Details    : in llog_origin_connect, journal start should happen before 
-	     llog_add keep the same order as other functions to avoid 
-	     the deadlock. 
+Details    : in llog_origin_connect, journal start should happen before
+	     llog_add keep the same order as other functions to avoid
+	     the deadlock.
 
 Severity   : enhancement
 Bugzilla   : 13039
@@ -113,7 +113,7 @@ Details    : with NFS, the anon dentry's parent was set to itself in
 Severity   : enhancement
 Bugzilla   : 12398
 Description: enable data checksumming by default
-Details    : enable checksum by default, allow --disable-checksum 
+Details    : enable checksum by default, allow --disable-checksum
 	     configure option and "-o nochecksum" mount option.  Checksums
 	     can also be disabled at runtime via $LPROC/llite/*/checksum_pages.
 
@@ -151,10 +151,10 @@ Bugzilla   : 12418
 Description: evictions taking too long
 Details    : allow llrd to evict clients directly on OSTs
 
-Severity   : normal 
+Severity   : normal
 Bugzilla   : 13125
 Description: osts not allocated evenly to files
-Details    : change the condition to increase offset_idx 
+Details    : change the condition to increase offset_idx
 
 --------------------------------------------------------------------------------
 
@@ -186,9 +186,9 @@ Description: lfs setstripe enhancement
 Details    : Make lfs setstripe understand 'k', 'm' and 'g' for stripe size.
 
 Severity   : normal
-Frequency  : mds/oss recovery 
+Frequency  : mds/oss recovery
 Bugzilla   : 10800
-Description: llog ctxt is refrenced after it has been freed. 
+Description: llog ctxt is refrenced after it has been freed.
 Details    : llog ctxt refcount was added to avoide the race between ctxt free
 	     and llog recovery process. Each llog user must hold ctxt refcount
 	     before it access the llog. And the llog ctxt can only be freed
@@ -240,14 +240,14 @@ Details    : Fixed ext3-unlink-race.patch per Kalpak's comment.
 Severity   : enhancement
 Bugzilla   : 13006
 Description: warnings with build patchless client with vanila 2.6.19 and up
-Details    : change old ctl_table style and replace ctl_table/ctl_table_header 
+Details    : change old ctl_table style and replace ctl_table/ctl_table_header
 	     with cfs_sysctl_table_t/cfs_sysctl_table_header_t
 
 Severity   : enhancement
 Bugzilla   : 13093
 Description: O_DIRECT bypasses client statistics.
-Details    : When running with O_DIRECT I/O, neither the client rpc_stats nor 
-	     read_ahead_stats were updated. Copied stats section from 
+Details    : When running with O_DIRECT I/O, neither the client rpc_stats nor
+	     read_ahead_stats were updated. Copied stats section from
 	     osc_send_oap_rpc() into async_internal().
 
 Severity   : minor
@@ -336,11 +336,11 @@ Description: reply_lock_interpret crash due to race with it and lock cancel.
 Details    : Do not replay locks that are being cancelled. Do not reference
 	     locks by their address during replay, just by their handle.
 
-Severity   : normal 
+Severity   : normal
 Frequency  : only with deactivated OSTs
 Bugzilla   : 11679
 Description: lstripe command fails for valid OST index
-Details    : The stripe offset is compared to 'lov->desc.ld_tgt_count' 
+Details    : The stripe offset is compared to 'lov->desc.ld_tgt_count'
 	     instead of lov->desc.ld_active_tgt_count.
 
 Severity   : enhancement
@@ -541,7 +541,7 @@ Details    : When osc reconnect ost, OST(filter) should check whether it
 	     to update the client grant space info.
 
 Severity   : normal
-Frequency  : when client reconnects to OST 
+Frequency  : when client reconnects to OST
 Bugzilla   : 11662
 Description: Grant leak when OSC does a resend and replays bulk write
 Details	   : When osc reconnect to OST, OST(filter) should clear grant info of
@@ -550,33 +550,33 @@ Details	   : When osc reconnect to OST, OST(filter) should clear grant info of
 	     these of resend/replay write req.
 
 Severity   : normal
-Frequency  : rare 
+Frequency  : rare
 Bugzilla   : 11662
 Description: Grant space more than avaiable space sometimes.
 Details	   : When then OST is about to be full, if two bulk writing from
 	     different clients came to OST. Accord the avaliable space of the
 	     OST, the first req should be permitted, and the second one
-	     should be denied by ENOSPC. But if the seconde arrived before 
+	     should be denied by ENOSPC. But if the seconde arrived before
 	     the first one is commited. The OST might wrongly permit second
 	     writing, which will cause grant space > avaiable space.
 
 Severity   : normal
-Frequency  : when client is evicted 
+Frequency  : when client is evicted
 Bugzilla   : 12371
 Description: Grant might be wrongly erased when osc is evicted by OST
-Details    : when the import is evicted by server, it will fork another 
-	     thread ptlrpc_invalidate_import_thread to invalidate the 
-	     import, where the grant will be set to 0.  While the original 
-	     thread will update the grant it got when connecting. So if 
-	     the former happened latter, the grant will be wrongly errased 
+Details    : when the import is evicted by server, it will fork another
+	     thread ptlrpc_invalidate_import_thread to invalidate the
+	     import, where the grant will be set to 0.  While the original
+	     thread will update the grant it got when connecting. So if
+	     the former happened latter, the grant will be wrongly errased
 	     because of this race.
 
 Severity   : normal
-Frequency  : rare 
+Frequency  : rare
 Bugzilla   : 12401
-Description: Checking Stale with correct fid 
-Details    : ll_revalidate_it should uses de_inode instead of op_data.fid2 
-	     to check whether it is stale, because sometimes, we want the 
+Description: Checking Stale with correct fid
+Details    : ll_revalidate_it should uses de_inode instead of op_data.fid2
+	     to check whether it is stale, because sometimes, we want the
 	     enqueue happened anyway, and op_data.fid2 will not be initialized.
 
 Severity   : enhancement
@@ -592,29 +592,29 @@ Details    : size of struct ll_inode_info is to big for union inode.u and this
 	     can be cause of random memory corruption.
 
 Severity   : normal
-Frequency  : rare 
+Frequency  : rare
 Bugzilla   : 10818
 Description: Memory leak in recovery
 Details    : Lov_mds_md was not free in an error handler in mds_create_object.
-	     It should also check obd_fail before fsfilt_start, otherwise if 
+	     It should also check obd_fail before fsfilt_start, otherwise if
 	     fsfilt_start return -EROFS,(failover mds during mds recovery).
-	     then the req will return with repmsg->transno = 0 and rc = EROFS. 
+	     then the req will return with repmsg->transno = 0 and rc = EROFS.
 	     and we met hit the assert LASSERT(req->rq_reqmsg->transno ==
-	     req->rq_repmsg->transno) in ptlrpc_replay_interpret.  Fcc should 
+	     req->rq_repmsg->transno) in ptlrpc_replay_interpret.  Fcc should
 	     be freed no matter whether fsfilt_commit success or not.
 
 Severity   : minor
 Frequency  : only with huge numbers of clients
 Bugzilla   : 11817
-Description: Prevents from taking the superblock lock in llap_from_page for 
+Description: Prevents from taking the superblock lock in llap_from_page for
 	     a soon died page.
-Details    : using LL_ORIGIN_REMOVEPAGE origin flag instead of LL_ORIGIN_UNKNOW 
+Details    : using LL_ORIGIN_REMOVEPAGE origin flag instead of LL_ORIGIN_UNKNOW
 	     for llap_from_page call in ll_removepage() prevents from taking
 	     the superblock lock for a soon died page.
 
 Severity   : normal
 Frequency  : rare
-Bugzilla   : 11935 
+Bugzilla   : 11935
 Description: Not check open intent error before release open handle
 Details    : in some rare cases, the open intent error is not checked before
 	     release open handle, which may cause
@@ -623,9 +623,9 @@ Details    : in some rare cases, the open intent error is not checked before
 
 Severity   : normal
 Frequency  : rare
-Bugzilla   : 12556 
-Description: Set cat log bitmap only after create log success. 
-Details    : in some rare cases, the cat log bitmap is set too early. and it 
+Bugzilla   : 12556
+Description: Set cat log bitmap only after create log success.
+Details    : in some rare cases, the cat log bitmap is set too early. and it
 	     should be set only after create log success.
 
 Severity   : major
@@ -642,11 +642,11 @@ Details    : Insert cond_resched to give other threads a chance to use some CPU
 
 Severity   : normal
 Frequency  : rare
-Bugzilla   : 12086 
-Description: the cat log was not initialized in recovery 
+Bugzilla   : 12086
+Description: the cat log was not initialized in recovery
 Details    : When mds(mgs) do recovery, the tgt_count might be zero, so the
 	     unlink log on mds will not be initialized until mds post
-	     recovery. And also in mds post recovery, the unlink log will 
+	     recovery. And also in mds post recovery, the unlink log will
 	     initialization will be done asynchronausly, so there will be race
 	     between add unlink log and unlink log initialization.
 
@@ -667,7 +667,7 @@ Details    : imp_lock should be held while iterating over imp_sending_list for
 Severity   : normal
 Bugzilla   : 12689
 Description: replay-single.sh test 52 fails
-Details    : A lock's skiplist need to be cleanup when it being unlinked 
+Details    : A lock's skiplist need to be cleanup when it being unlinked
 	     from its resource list.
 
 Severity   : normal
@@ -702,7 +702,7 @@ Severity   : minor
 Bugzilla   : 12747
 Frequency  : always
 Description: fix mal-formatted messages
-Details    : fix some mal-formatted DEBUG_REQ and LCONSOLE_ERROR_MSG messages 
+Details    : fix some mal-formatted DEBUG_REQ and LCONSOLE_ERROR_MSG messages
 
 Severity   : minor
 Bugzilla   : 11737
@@ -733,12 +733,12 @@ Details    : test_77h uses a file which was messed by other test case.
 Severity   : normal
 Bugzilla   : 12576
 Description: Not Check whether lov_tgts is NULL in some lov functions
-Details    : Checking whether lov_tgts is NULL in some functions. 
+Details    : Checking whether lov_tgts is NULL in some functions.
 
 Severity   : normal
 Bugzilla   : 11815
 Description: replace obdo_alloc() with OBDO_ALLOC macro
-Details    : nothing special is done in obdo_alloc() function, and for 
+Details    : nothing special is done in obdo_alloc() function, and for
 	     debugging purpose, it needs to be replaced with macros.
 
 Severity   : normal
@@ -809,7 +809,7 @@ Frequency  : when qunit size is too small(less than 20M)
 Bugzilla   : 12588
 Description: write is stopped by improper -EDQUOT
 Details    : If the master is busy and qunit size is small enough(let's say 1M),
-	     the slave can not get quota from master on time, which will lead 
+	     the slave can not get quota from master on time, which will lead
 	     slave to trigger a -EQUOTA to client.
 
 Severity   : normal
@@ -886,9 +886,9 @@ Bugzilla   : 11190
 Description: Sometimes, when the server evict a client, and the client will
 	     not be evicted as soon as possible.
 Details    : In enqueue req, the error was returned by intent, instead of
-	     rq_status which make ptlrpc layer not detect this error, and 
+	     rq_status which make ptlrpc layer not detect this error, and
 	     does not evict the client. So enqueue error should be returned
-	     by rq_status. 
+	     by rq_status.
 
 Severity   : minor
 Frequency  : only at startup
@@ -896,7 +896,7 @@ Bugzilla   : 11778
 Description: Delay client connections to MDT until fist MDT->OST connect
 Details    : If a client tried to create a new file before the MDT had
 	     connected to any OSTs, the create would return EIO.  Now
-	     the client will simply block until the MDT connects to the 
+	     the client will simply block until the MDT connects to the
 	     first OST and the create can succeed.
 	
 Severity   : normal
@@ -921,7 +921,7 @@ Severity   : minor
 Frequency  : at statup only
 Bugzilla   : 12860
 Description: mds_lov_synchronize race leads to various problems
-Details    : simultaneous MDT->OST connections at startup can cause the 
+Details    : simultaneous MDT->OST connections at startup can cause the
 	     sync to abort, leaving the OSC in a bad state.
 
 Severity   : normal
@@ -944,7 +944,7 @@ Severity   : normal
 Bugzilla   : 13148
 Frequency  : only in recovery
 Description: Mark OST as early accessible if his start SYNC.
-Details    : osc_precreate return flag early accessible if oscc marked as 
+Details    : osc_precreate return flag early accessible if oscc marked as
 	     OSCC_FLAG_SYNC_IN_PROGRESS.
 
 Severity   : normal
@@ -955,13 +955,13 @@ Details    : Wrong protected or not not restored variables aftre precreate loop
 	     can produce creation object on wrong ost.
 	
 Severity   : normal
-Frequency  : oss recovery 
+Frequency  : oss recovery
 Bugzilla   : 10800
 Description: llog_commit_thread cleanup should sync with llog_commit_thread
 	     start
 Details    : llog_commit_thread_count should be synced between llog_commit
-	     start and cleanup, so new llog_commit thread should not be started 
-	     when llog_commit threads being stopped to avoid accessing some 
+	     start and cleanup, so new llog_commit thread should not be started
+	     when llog_commit threads being stopped to avoid accessing some
 	     freed stuff.
 
 Severity   : enhancement
