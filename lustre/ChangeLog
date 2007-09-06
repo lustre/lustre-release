@@ -214,6 +214,12 @@ Description: when mds and osts use different quota unit(32bit and 64bit),
              quota will be released repeatly.
 Details    : void sending multiple quota reqs to mds, which will keep the status 
              between the reqs.
+
+Severity   : normal 
+Bugzilla   : 13125
+Description: osts not allocated evenly to files
+Details    : change the condition to increase offset_idx 
+
 --------------------------------------------------------------------------------
 
 2007-08-10         Cluster File Systems, Inc. <info@clusterfs.com>
