@@ -44,6 +44,8 @@ init_test_env() {
     export LCTL=${LCTL:-"$LUSTRE/utils/lctl"}
     export LFS=${LFS:-"$LUSTRE/utils/lfs"}
     [ ! -f "$LCTL" ] && export LCTL=$(which lctl) 
+    export LFS=${LFS:-"$LUSTRE/utils/lfs"}
+    [ ! -f "$LFS" ] && export LFS=$(which lfs) 
     export MKFS=${MKFS:-"$LUSTRE/utils/mkfs.lustre"}
     [ ! -f "$MKFS" ] && export MKFS=$(which mkfs.lustre) 
     export TUNEFS=${TUNEFS:-"$LUSTRE/utils/tunefs.lustre"}
@@ -986,6 +988,15 @@ pgcache_empty() {
         fi
     done
     return 0
+}
+
+debugsave() {
+    DEBUGSAVE="$(sysctl -n lnet.debug)"
+}
+
+debugrestore() {
+    [ -n "$DEBUGSAVE" ] && sysctl -w lnet.debug="${DEBUGSAVE}"
+    DEBUGSAVE=""
 }
 
 FAIL_ON_ERROR=true
