@@ -83,12 +83,9 @@ is_release()
 
 list_targets()
 {
-    echo -n "Available targets:"
-    for target in $TOPDIR/lustre/lustre/kernel_patches/targets/*.target ; do
-        target_file=${target##*/}
-        echo -n " ${target_file%%.target}"
+    for target in $TOPDIR/lustre/kernel_patches/targets/*.target.in ; do
+        echo -n "$(basename $target .target.in) "
     done
-    echo
 }
 
 usage()
@@ -147,9 +144,9 @@ Usage: ${0##*/} [OPTION]... [-- <lustre configure options>]
     A CVS branch/tag name to build from when pulling from CVS.
 
   --target=TARGET
-    The name of the target to build.  The available targets are listed
-    below.
-
+    The name of the target to build.  
+    One of: $(list_targets)
+    
   --target-archs=TARGET_ARCHS
     A (space delimited) list of architectures to build.  By default,
     all of the archs supported by the TARGET will be built, in
@@ -166,8 +163,6 @@ Usage: ${0##*/} [OPTION]... [-- <lustre configure options>]
     using lbuild with tinderbox.
 
 EOF
-
-#   list_targets
 
     fatal "$1" "$2"
 }
