@@ -4,6 +4,7 @@ set -e
 
 PTLDEBUG=${PTLDEBUG:--1}
 LUSTRE=${LUSTRE:-`dirname $0`/..}
+CLEANUP=${CLEANUP:-""}
 . $LUSTRE/tests/test-framework.sh
 init_test_env $@
 . ${CONFIG:=$LUSTRE/tests/cfg/$NAME.sh}
@@ -38,7 +39,6 @@ fi
 build_test_filter
 
 SETUP=${SETUP:-"setup"}
-CLEANUP=${CLEANUP:-"cleanup"}
 
 test_0a() {
     # needs to run during initial client->OST connection
@@ -202,5 +202,5 @@ test_7() {
 run_test 7 "Fail OST before obd_destroy"
 
 equals_msg `basename $0`: test complete, cleaning up
-$CLEANUP
+check_and_cleanup_lustre
 [ -f "$TESTSUITELOG" ] && cat $TESTSUITELOG || true
