@@ -4,7 +4,7 @@ AM_CFLAGS = $(LLCFLAGS)
 # LDADD = -lldap
 # LDADD := -lreadline -ltermcap # -lefence
 
-noinst_DATA =
+noinst_DATA = disk1_4.zip
 noinst_SCRIPTS = leak_finder.pl llecho.sh llmount.sh llmountcleanup.sh test-framework.sh
 noinst_SCRIPTS += runvmstat runiozone runtests
 noinst_SCRIPTS += sanity.sh rundbench test-framework.sh
