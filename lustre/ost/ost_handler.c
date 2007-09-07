@@ -652,7 +652,7 @@ static int ost_brw_read(struct ptlrpc_request *req, struct obd_trans_info *oti)
         struct l_wait_info lwi;
         struct lustre_handle lockh = { 0 };
         int size[2] = { sizeof(struct ptlrpc_body), sizeof(*body) };
-        int comms_error = 0, niocount, npages, nob = 0, rc, i;
+        int niocount, npages, nob = 0, rc, i;
         int no_reply = 0;
         ENTRY;
 
@@ -748,7 +748,7 @@ static int ost_brw_read(struct ptlrpc_request *req, struct obd_trans_info *oti)
                        libcfs_id2str(req->rq_peer), ioo->ioo_id,
                        cfs_time_current_sec() - req->rq_arrival_time.tv_sec,
                        req->rq_deadline - req->rq_arrival_time.tv_sec);
-                goto out_lock;
+                GOTO(out_lock, rc = -ETIMEDOUT);
         }
 
         rc = obd_preprw(OBD_BRW_READ, exp, &body->oa, 1,
@@ -850,7 +850,7 @@ static int ost_brw_read(struct ptlrpc_request *req, struct obd_trans_info *oti)
                 } else {
                         DEBUG_REQ(D_ERROR, req, "bulk PUT failed: rc %d", rc);
                 }
-                comms_error = rc != 0;
+                no_reply = rc != 0;
         }
 
         /* Must commit after prep above in all cases */
@@ -869,15 +869,13 @@ static int ost_brw_read(struct ptlrpc_request *req, struct obd_trans_info *oti)
         ost_brw_lock_put(LCK_PR, ioo, pp_rnb, &lockh);
  out_bulk:
         ptlrpc_free_bulk(desc);
-        if (no_reply)
-                RETURN(rc);
  out:
         LASSERT(rc <= 0);
         if (rc == 0) {
                 req->rq_status = nob;
                 target_committed_to_req(req);
                 ptlrpc_reply(req);
-        } else if (!comms_error) {
+        } else if (!no_reply) {
                 /* Only reply if there was no comms problem with bulk */
                 target_committed_to_req(req);
                 req->rq_status = rc;
@@ -909,7 +907,7 @@ static int ost_brw_write(struct ptlrpc_request *req, struct obd_trans_info *oti)
         struct lustre_handle     lockh = {0};
         __u32                   *rcs;
         int size[3] = { sizeof(struct ptlrpc_body), sizeof(*body) };
-        int objcount, niocount, npages, comms_error = 0;
+        int objcount, niocount, npages;
         int rc, swab, i, j;
         obd_count                client_cksum, server_cksum = 0;
         int                      no_reply = 0; 
@@ -1029,7 +1027,7 @@ static int ost_brw_write(struct ptlrpc_request *req, struct obd_trans_info *oti)
                        libcfs_id2str(req->rq_peer), ioo->ioo_id,
                        cfs_time_current_sec() - req->rq_arrival_time.tv_sec,
                        req->rq_deadline - req->rq_arrival_time.tv_sec);
-                goto out_lock;
+                GOTO(out_lock, rc = -ETIMEDOUT);
         }
 
         ost_prolong_locks(exp, ioo, pp_rnb, LCK_PW);
@@ -1098,7 +1096,7 @@ static int ost_brw_write(struct ptlrpc_request *req, struct obd_trans_info *oti)
         } else {
                 DEBUG_REQ(D_ERROR, req, "ptlrpc_bulk_get failed: rc %d", rc);
         }
-        comms_error = rc != 0;
+        no_reply = rc != 0;
 
         repbody = lustre_msg_buf(req->rq_repmsg, REPLY_REC_OFF,
                                  sizeof(*repbody));
@@ -1202,14 +1200,12 @@ static int ost_brw_write(struct ptlrpc_request *req, struct obd_trans_info *oti)
         ost_brw_lock_put(LCK_PW, ioo, pp_rnb, &lockh);
  out_bulk:
         ptlrpc_free_bulk(desc);
-        if (no_reply)
-                RETURN(rc);
  out:
         if (rc == 0) {
                 oti_to_request(oti, req);
                 target_committed_to_req(req);
                 rc = ptlrpc_reply(req);
-        } else if (!comms_error) {
+        } else if (!no_reply) {
                 /* Only reply if there was no comms problem with bulk */
                 target_committed_to_req(req);
                 req->rq_status = rc;
