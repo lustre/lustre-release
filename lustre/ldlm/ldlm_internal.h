@@ -2,6 +2,8 @@
  * vim:expandtab:shiftwidth=8:tabstop=8:
  */
 
+#define MAX_STRING_SIZE 128
+
 /* ldlm_request.c */
 typedef enum {
         LDLM_ASYNC,
@@ -11,7 +13,7 @@ typedef enum {
 /* Cancel lru flag, it indicates we cancel aged locks. */
 #define LDLM_CANCEL_AGED 0x00000001
 
-int ldlm_cancel_lru(struct ldlm_namespace *ns, ldlm_sync_t sync);
+int ldlm_cancel_lru(struct ldlm_namespace *ns, int nr, ldlm_sync_t sync);
 int ldlm_cancel_lru_local(struct ldlm_namespace *ns, struct list_head *cancels,
                           int count, int max, int flags);
 
@@ -83,6 +85,7 @@ void l_check_ns_lock(struct ldlm_namespace *ns);
 void l_check_no_ns_lock(struct ldlm_namespace *ns);
 
 extern cfs_proc_dir_entry_t *ldlm_svc_proc_dir;
+extern cfs_proc_dir_entry_t *ldlm_type_proc_dir;
 
 struct ldlm_state {
         struct ptlrpc_service *ldlm_cb_service;
@@ -94,4 +97,3 @@ struct ldlm_state {
 
 int ldlm_init(void);
 void ldlm_exit(void);
-

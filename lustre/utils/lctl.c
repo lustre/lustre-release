@@ -23,8 +23,6 @@
  *
  */
 
-
-
 #include <stdlib.h>
 #include <stdio.h>
 #include <lnet/lnetctl.h>

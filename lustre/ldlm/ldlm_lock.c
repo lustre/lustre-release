@@ -562,6 +562,7 @@ void ldlm_lock_decref_internal_nolock(struct ldlm_lock *lock, __u32 mode)
 
         LDLM_LOCK_PUT(lock);    /* matches the ldlm_lock_get in addref */
 }
+
 void ldlm_lock_decref_internal(struct ldlm_lock *lock, __u32 mode)
 {
         struct ldlm_namespace *ns;
@@ -595,7 +596,7 @@ void ldlm_lock_decref_internal(struct ldlm_lock *lock, __u32 mode)
                 ldlm_lock_remove_from_lru(lock);
                 unlock_res_and_lock(lock);
                 if ((lock->l_flags & LDLM_FL_ATOMIC_CB) ||
-                                ldlm_bl_to_thread(ns, NULL, lock, 0) != 0)
+                    ldlm_bl_to_thread(ns, NULL, lock, 0) != 0)
                         ldlm_handle_bl_callback(ns, NULL, lock);
         } else if (ns->ns_client == LDLM_NAMESPACE_CLIENT &&
                    !lock->l_readers && !lock->l_writers &&
@@ -613,7 +614,7 @@ void ldlm_lock_decref_internal(struct ldlm_lock *lock, __u32 mode)
                 /* Call ldlm_cancel_lru() only if EARLY_CANCEL is not supported
                  * by the server, otherwise, it is done on enqueue. */
                 if (!exp_connect_cancelset(lock->l_conn_export))
-                        ldlm_cancel_lru(ns, LDLM_ASYNC);
+                        ldlm_cancel_lru(ns, 0, LDLM_ASYNC);
         } else {
                 unlock_res_and_lock(lock);
         }
@@ -864,6 +865,7 @@ void ldlm_grant_lock(struct ldlm_lock *lock, struct list_head *work_list)
         if (work_list && lock->l_completion_ast != NULL)
                 ldlm_add_ast_work_item(lock, NULL, work_list);
 
+        ldlm_pool_add(&res->lr_namespace->ns_pool, lock);
         EXIT;
 }
 
@@ -1522,6 +1524,13 @@ void ldlm_lock_cancel(struct ldlm_lock *lock)
         ldlm_del_waiting_lock(lock); 
         ldlm_resource_unlink_lock(lock);
         ldlm_lock_destroy_nolock(lock);
+
+        if (lock->l_granted_mode == lock->l_req_mode)
+                ldlm_pool_del(&ns->ns_pool, lock);
+
+        /* Make sure we will not be called again for same lock what is possible
+         * if not to zero out lock->l_granted_mode */
+        lock->l_granted_mode = 0;
         unlock_res_and_lock(lock);
 
         EXIT;

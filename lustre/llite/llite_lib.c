@@ -162,6 +162,9 @@ static int client_common_fill_super(struct super_block *sb,
         data->ocd_connect_flags = OBD_CONNECT_VERSION | OBD_CONNECT_IBITS |
                 OBD_CONNECT_JOIN | OBD_CONNECT_ATTRFID | OBD_CONNECT_NODEVOH |
                 OBD_CONNECT_CANCELSET | OBD_CONNECT_AT;
+#ifdef HAVE_LRU_RESIZE_SUPPORT
+        data->ocd_connect_flags |= OBD_CONNECT_LRU_RESIZE;
+#endif
 #ifdef CONFIG_FS_POSIX_ACL
         data->ocd_connect_flags |= OBD_CONNECT_ACL;
 #endif
@@ -262,6 +265,10 @@ static int client_common_fill_super(struct super_block *sb,
         data->ocd_connect_flags = OBD_CONNECT_VERSION | OBD_CONNECT_GRANT |
                 OBD_CONNECT_REQPORTAL | OBD_CONNECT_BRW_SIZE | 
                 OBD_CONNECT_SRVLOCK | OBD_CONNECT_CANCELSET | OBD_CONNECT_AT;
+
+#ifdef HAVE_LRU_RESIZE_SUPPORT
+        data->ocd_connect_flags |= OBD_CONNECT_LRU_RESIZE;
+#endif
 
         CDEBUG(D_RPCTRACE, "ocd_connect_flags: "LPX64" ocd_version: %d "
                "ocd_grant: %d\n", data->ocd_connect_flags,

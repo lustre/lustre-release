@@ -1425,6 +1425,102 @@ int lustre_msg_get_status(struct lustre_msg *msg)
         }
 }
 
+__u64 lustre_msg_get_slv(struct lustre_msg *msg)
+{
+        switch (msg->lm_magic) {
+        case LUSTRE_MSG_MAGIC_V1:
+        case LUSTRE_MSG_MAGIC_V1_SWABBED:
+                return 1;
+        case LUSTRE_MSG_MAGIC_V2:
+        case LUSTRE_MSG_MAGIC_V2_SWABBED: {
+                struct ptlrpc_body *pb;
+
+                pb = lustre_msg_buf_v2(msg, MSG_PTLRPC_BODY_OFF, sizeof(*pb));
+                if (!pb) {
+                        CERROR("invalid msg %p: no ptlrpc body!\n", msg);
+                        return -EINVAL;
+                }
+                return pb->pb_slv;
+        }
+        default:
+                CERROR("invalid msg magic %x\n", msg->lm_magic);
+                return -EINVAL;
+        }
+}
+
+
+void lustre_msg_set_slv(struct lustre_msg *msg, __u64 slv)
+{
+        switch (msg->lm_magic) {
+        case LUSTRE_MSG_MAGIC_V1:
+        case LUSTRE_MSG_MAGIC_V1_SWABBED:
+                return;
+        case LUSTRE_MSG_MAGIC_V2:
+        case LUSTRE_MSG_MAGIC_V2_SWABBED: {
+                struct ptlrpc_body *pb;
+
+                pb = lustre_msg_buf_v2(msg, MSG_PTLRPC_BODY_OFF, sizeof(*pb));
+                if (!pb) {
+                        CERROR("invalid msg %p: no ptlrpc body!\n", msg);
+                        return;
+                }
+                pb->pb_slv = slv;
+                return;
+        }
+        default:
+                CERROR("invalid msg magic %x\n", msg->lm_magic);
+                return;
+        }
+}
+
+__u32 lustre_msg_get_limit(struct lustre_msg *msg)
+{
+        switch (msg->lm_magic) {
+        case LUSTRE_MSG_MAGIC_V1:
+        case LUSTRE_MSG_MAGIC_V1_SWABBED:
+                return 1;
+        case LUSTRE_MSG_MAGIC_V2:
+        case LUSTRE_MSG_MAGIC_V2_SWABBED: {
+                struct ptlrpc_body *pb;
+
+                pb = lustre_msg_buf_v2(msg, MSG_PTLRPC_BODY_OFF, sizeof(*pb));
+                if (!pb) {
+                        CERROR("invalid msg %p: no ptlrpc body!\n", msg);
+                        return -EINVAL;
+                }
+                return pb->pb_limit;
+        }
+        default:
+                CERROR("invalid msg magic %x\n", msg->lm_magic);
+                return -EINVAL;
+        }
+}
+
+
+void lustre_msg_set_limit(struct lustre_msg *msg, __u64 limit)
+{
+        switch (msg->lm_magic) {
+        case LUSTRE_MSG_MAGIC_V1:
+        case LUSTRE_MSG_MAGIC_V1_SWABBED:
+                return;
+        case LUSTRE_MSG_MAGIC_V2:
+        case LUSTRE_MSG_MAGIC_V2_SWABBED: {
+                struct ptlrpc_body *pb;
+
+                pb = lustre_msg_buf_v2(msg, MSG_PTLRPC_BODY_OFF, sizeof(*pb));
+                if (!pb) {
+                        CERROR("invalid msg %p: no ptlrpc body!\n", msg);
+                        return;
+                }
+                pb->pb_limit = limit;
+                return;
+        }
+        default:
+                CERROR("invalid msg magic %x\n", msg->lm_magic);
+                return;
+        }
+}
+
 __u32 lustre_msg_get_conn_cnt(struct lustre_msg *msg)
 {
         switch (msg->lm_magic) {
@@ -1775,9 +1871,8 @@ void lustre_swab_ptlrpc_body(struct ptlrpc_body *b)
         __swab32s (&b->pb_conn_cnt);
         __swab32s (&b->pb_timeout);
         __swab32s (&b->pb_service_time);
-        CLASSERT(offsetof(typeof(*b), pb_padding_1) != 0);
-        CLASSERT(offsetof(typeof(*b), pb_padding_2) != 0);
-        CLASSERT(offsetof(typeof(*b), pb_padding_3) != 0);
+        __swab64s (&b->pb_slv);
+        __swab32s (&b->pb_limit);
 }
 
 void lustre_swab_connect(struct obd_connect_data *ocd)

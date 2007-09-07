@@ -45,7 +45,8 @@ int ptlrpc_ping(struct obd_import *imp)
         int rc = 0;
         ENTRY;
 
-        req = ptlrpc_prep_req(imp, LUSTRE_OBD_VERSION, OBD_PING, 1, NULL, NULL);
+        req = ptlrpc_prep_req(imp, LUSTRE_OBD_VERSION, OBD_PING, 
+                              1, NULL, NULL);
         if (req) {
                 DEBUG_REQ(D_INFO, req, "pinging %s->%s",
                           imp->imp_obd->obd_uuid.uuid,

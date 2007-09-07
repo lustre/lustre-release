@@ -1154,6 +1154,7 @@ LC_CONFIG_CHECKSUM
 LC_CONFIG_LIBLUSTRE_RECOVERY
 LC_CONFIG_QUOTA
 LC_CONFIG_HEALTH_CHECK_WRITE
+LC_CONFIG_LRU_RESIZE
 
 LC_TASK_PPTR
 # RHEL4 patches
@@ -1280,6 +1281,18 @@ ac_configure_args="$ac_configure_args --with-lustre-hack --with-sockets"
 
 LC_CONFIG_PINGER
 LC_CONFIG_LIBLUSTRE_RECOVERY
+])
+
+AC_DEFUN([LC_CONFIG_LRU_RESIZE],
+[AC_MSG_CHECKING([whether to enable lru self-adjusting])
+AC_ARG_ENABLE([lru_resize], 
+	AC_HELP_STRING([--enable-lru-resize],
+			[enable lru resize support]),
+	[],[enable_lru_resize='yes'])
+AC_MSG_RESULT([$enable_lru_resize])
+if test x$enable_lru_resize != xno; then
+   AC_DEFINE(HAVE_LRU_RESIZE_SUPPORT, 1, [Enable lru resize support])
+fi
 ])
 
 #

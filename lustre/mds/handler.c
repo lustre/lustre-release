@@ -1943,7 +1943,8 @@ static int mds_setup(struct obd_device *obd, obd_count len, void *buf)
         mds->mds_evict_ost_nids = 1;
 
         sprintf(ns_name, "mds-%s", obd->obd_uuid.uuid);
-        obd->obd_namespace = ldlm_namespace_new(ns_name, LDLM_NAMESPACE_SERVER);
+        obd->obd_namespace = ldlm_namespace_new(ns_name, LDLM_NAMESPACE_SERVER,
+                                                LDLM_NAMESPACE_GREEDY);
         if (obd->obd_namespace == NULL) {
                 mds_cleanup(obd);
                 GOTO(err_ops, rc = -ENOMEM);

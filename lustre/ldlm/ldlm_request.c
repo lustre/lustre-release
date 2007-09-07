@@ -501,14 +501,16 @@ struct ptlrpc_request *ldlm_prep_enqueue_req(struct obd_export *exp,
                 /* Estimate the amount of free space in the request. */
                 int avail = ldlm_req_handles_avail(exp, size, bufcount,
                                                    LDLM_ENQUEUE_CANCEL_OFF);
+                
                 LASSERT(avail >= count);
 
                 /* Cancel lru locks here _only_ if the server supports 
                  * EARLY_CANCEL. Otherwise we have to send extra CANCEL
                  * rpc right on enqueue, what will make it slower, vs. 
                  * asynchronous rpc in blocking thread. */
-                count += ldlm_cancel_lru_local(ns, cancels, 1, avail - count,
-                                               LDLM_CANCEL_AGED);
+                count += ldlm_cancel_lru_local(ns, cancels, 
+                                               exp_connect_lru_resize(exp) ? 0 : 1,
+                                               avail - count, LDLM_CANCEL_AGED);
                 size[DLM_LOCKREQ_OFF] =
                         ldlm_request_bufsize(count, LDLM_ENQUEUE);
         }
@@ -921,10 +923,54 @@ out:
         return sent ? sent : rc;
 }
 
+static inline struct ldlm_pool *ldlm_imp2pl(struct obd_import *imp)
+{
+        LASSERT(imp != NULL);
+        return &imp->imp_obd->obd_namespace->ns_pool;
+}
+
+int ldlm_cli_update_pool(struct ptlrpc_request *req)
+{
+        struct ldlm_pool *pl;
+        ENTRY;
+    
+        if (!imp_connect_lru_resize(req->rq_import))
+                RETURN(0);
+
+        pl = ldlm_imp2pl(req->rq_import);
+        
+        spin_lock(&pl->pl_lock);
+#ifdef __KERNEL__
+        {
+                __u64 old_slv, fast_slv_change;
+
+                old_slv = ldlm_pool_get_slv(pl);
+                fast_slv_change = old_slv * LDLM_POOLS_FAST_SLV_CHANGE;
+                do_div(fast_slv_change, 100);
+#endif
+                pl->pl_update_time = cfs_time_current();
+                ldlm_pool_set_slv(pl, lustre_msg_get_slv(req->rq_repmsg));
+                ldlm_pool_set_limit(pl, lustre_msg_get_limit(req->rq_repmsg));
+#ifdef __KERNEL__
+                /* Wake up pools thread only if SLV has changed more than 
+                 * 5% since last update. In this case we want to react asap. 
+                 * Otherwise it is no sense to wake up pools as they are 
+                 * re-calculated every 1s anyways. */
+                if (old_slv > ldlm_pool_get_slv(pl) && 
+                    old_slv - ldlm_pool_get_slv(pl) > fast_slv_change)
+                        ldlm_pools_wakeup();
+        }
+#endif
+        spin_unlock(&pl->pl_lock);
+
+        RETURN(0);
+}
+EXPORT_SYMBOL(ldlm_cli_update_pool);
+
 int ldlm_cli_cancel(struct lustre_handle *lockh)
 {
         struct ldlm_lock *lock;
-        CFS_LIST_HEAD(head);
+        CFS_LIST_HEAD(cancels);
         int rc = 0;
         ENTRY;
 
@@ -939,8 +985,8 @@ int ldlm_cli_cancel(struct lustre_handle *lockh)
         if (rc < 0 || rc == LDLM_FL_LOCAL_ONLY)
                 GOTO(out, rc);
 
-        list_add(&lock->l_bl_ast, &head);
-        rc = ldlm_cli_cancel_req(lock->l_conn_export, &head, 1);
+        list_add(&lock->l_bl_ast, &cancels);
+        rc = ldlm_cli_cancel_req(lock->l_conn_export, &cancels, 1);
         EXIT;
  out:
         LDLM_LOCK_PUT(lock);
@@ -962,14 +1008,21 @@ int ldlm_cli_cancel(struct lustre_handle *lockh)
 int ldlm_cancel_lru_local(struct ldlm_namespace *ns, struct list_head *cancels,
                           int count, int max, int flags)
 {
+        int rc, added = 0, left, unused;
         cfs_time_t cur = cfs_time_current();
         struct ldlm_lock *lock, *next;
-        int rc, added = 0, left;
         ENTRY;
 
         spin_lock(&ns->ns_unused_lock);
-        count += ns->ns_nr_unused - ns->ns_max_unused;
+        unused = ns->ns_nr_unused;
+        
+        if (!ns_connect_lru_resize(ns))
+                count += unused - ns->ns_max_unused;
+                
         while (!list_empty(&ns->ns_unused_list)) {
+                struct ldlm_pool *pl;
+                __u64 slv, lvf, lv;
+
                 if (max && added >= max)
                         break;
 
@@ -983,12 +1036,41 @@ int ldlm_cancel_lru_local(struct ldlm_namespace *ns, struct list_head *cancels,
                 if (&lock->l_lru == &ns->ns_unused_list)
                         break;
 
-                if ((added >= count) && 
-                    (!(flags & LDLM_CANCEL_AGED) ||
-                     cfs_time_before_64(cur, (__u64)ns->ns_max_age +
-                                        lock->l_last_used)))
-                        break;
+                pl = &ns->ns_pool;
+                
+                if (ns_connect_lru_resize(ns)) {
+                        cfs_time_t la;
 
+                        /* Do not pay attention to slv in case we are asked 
+                         * to cancel particular number of locks (via proc) or
+                         * we already scheduled @added locks for canceling. */            
+                        if (count != 0 && added > count)
+                                break;
+
+                        /* Calculate lv for every lock. */
+                        spin_lock(&pl->pl_lock);
+                        slv = ldlm_pool_get_slv(pl);
+                        lvf = atomic_read(&pl->pl_lock_volume_factor);
+                        spin_unlock(&pl->pl_lock);
+
+                        la = cfs_duration_sec(cfs_time_sub(cur, 
+                                                           lock->l_last_used));
+                        if (la == 0)
+                                la = 1;
+                                
+                        /* Stop when slv is not yet come from server or lv is 
+                         * smaller than it is. */
+                        lv = lvf * la * unused;
+                        if (slv == 1 || lv < slv)
+                                break;
+                } else {
+                        if ((added >= count) && 
+                            (!(flags & LDLM_CANCEL_AGED) ||
+                             cfs_time_before_64(cur, (__u64)ns->ns_max_age +
+                                                lock->l_last_used)))
+                                break;
+                }
+                
                 LDLM_LOCK_GET(lock); /* dropped by bl thread */
                 spin_unlock(&ns->ns_unused_lock);
 
@@ -1032,6 +1114,7 @@ int ldlm_cancel_lru_local(struct ldlm_namespace *ns, struct list_head *cancels,
                 unlock_res_and_lock(lock);
                 spin_lock(&ns->ns_unused_lock);
                 added++;
+                unused--;
         }
         spin_unlock(&ns->ns_unused_lock);
 
@@ -1057,7 +1140,6 @@ int ldlm_cancel_lru_local(struct ldlm_namespace *ns, struct list_head *cancels,
                         LDLM_LOCK_PUT(lock);
                         added--;
                 }
-
         } 
         RETURN(added);
 }
@@ -1066,7 +1148,7 @@ int ldlm_cancel_lru_local(struct ldlm_namespace *ns, struct list_head *cancels,
  * in a thread and this function will return after the thread has been
  * asked to call the callback.  when called with LDLM_SYNC the blocking
  * callback will be performed in this function. */
-int ldlm_cancel_lru(struct ldlm_namespace *ns, ldlm_sync_t sync)
+int ldlm_cancel_lru(struct ldlm_namespace *ns, int nr, ldlm_sync_t sync)
 {
         CFS_LIST_HEAD(cancels);
         int count, rc;
@@ -1075,7 +1157,7 @@ int ldlm_cancel_lru(struct ldlm_namespace *ns, ldlm_sync_t sync)
 #ifndef __KERNEL__
         sync = LDLM_SYNC; /* force to be sync in user space */
 #endif
-        count = ldlm_cancel_lru_local(ns, &cancels, 0, 0, 0);
+        count = ldlm_cancel_lru_local(ns, &cancels, nr, 0, 0);
         if (sync == LDLM_ASYNC) {
                 struct ldlm_lock *lock, *next;
                 list_for_each_entry_safe(lock, next, &cancels, l_bl_ast) {
@@ -1092,7 +1174,7 @@ int ldlm_cancel_lru(struct ldlm_namespace *ns, ldlm_sync_t sync)
         /* If some locks are left in the list in ASYNC mode, or
          * this is SYNC mode, cancel the list. */
         ldlm_cli_cancel_list(&cancels, count, NULL, DLM_LOCKREQ_OFF);
-        RETURN(0);
+        RETURN(count);
 }
 
 /* Find and cancel locally unused locks found on resource, matched to the
@@ -1220,7 +1302,7 @@ int ldlm_cli_cancel_list(struct list_head *cancels, int count,
                         CERROR("ldlm_cli_cancel_list: %d\n", res);
                         res = count;
                 }
-                
+
                 count -= res;
                 ldlm_lock_list_put(cancels, l_bl_ast, res);
         }

@@ -138,11 +138,10 @@ static int mgs_setup(struct obd_device *obd, obd_count len, void *buf)
                 GOTO(err_put, rc = PTR_ERR(obd->obd_fsops));
 
         /* namespace for mgs llog */
-        obd->obd_namespace = ldlm_namespace_new("MGS", LDLM_NAMESPACE_SERVER);
-        if (obd->obd_namespace == NULL) {
-                mgs_cleanup(obd);
+        obd->obd_namespace = ldlm_namespace_new("MGS", LDLM_NAMESPACE_SERVER, 
+                                                LDLM_NAMESPACE_MODEST);
+        if (obd->obd_namespace == NULL)
                 GOTO(err_ops, rc = -ENOMEM);
-        }
 
         /* ldlm setup */
         ptlrpc_init_client(LDLM_CB_REQUEST_PORTAL, LDLM_CB_REPLY_PORTAL,
@@ -251,11 +250,11 @@ static int mgs_cleanup(struct obd_device *obd)
         struct mgs_obd *mgs = &obd->u.mgs;
         ENTRY;
 
-        ping_evictor_stop();
-
         if (mgs->mgs_sb == NULL)
                 RETURN(0);
         
+        ping_evictor_stop();
+
         ptlrpc_unregister_service(mgs->mgs_service);
 
         mgs_cleanup_fsdb_list(obd);

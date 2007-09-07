@@ -156,6 +156,14 @@ Bugzilla   : 13125
 Description: osts not allocated evenly to files
 Details    : change the condition to increase offset_idx
 
+Severity   : enhancement
+Bugzilla   : 2262
+Description: self-adjustable client's lru lists
+Details    : use adaptive algorithm for managing client cached locks lru 
+             lists according to current server load, other client's work
+             pattern, memory activities, etc. Both, server and client 
+             side namespaces provide number of proc tunables for controlling 
+             things
 --------------------------------------------------------------------------------
 
 2007-08-27         Cluster File Systems, Inc. <info@clusterfs.com>

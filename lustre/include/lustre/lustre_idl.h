@@ -211,9 +211,8 @@ struct ptlrpc_body {
         __u32 pb_conn_cnt;
         __u32 pb_timeout;  /* for req, the deadline, for rep, the service est */
         __u32 pb_service_time; /* for rep, actual service time */
-        __u32 pb_padding_1;
-        __u32 pb_padding_2;
-        __u32 pb_padding_3;
+        __u32 pb_limit;
+        __u64 pb_slv;
 };
 
 extern void lustre_swab_ptlrpc_body(struct ptlrpc_body *pb);
@@ -287,6 +286,7 @@ extern void lustre_swab_ptlrpc_body(struct ptlrpc_body *pb);
 #define OBD_CONNECT_CANCELSET 0x400000ULL /* Early batched cancels. */
 #define OBD_CONNECT_SOM     0x00800000ULL /* Size on MDS */
 #define OBD_CONNECT_AT      0x01000000ULL /* client uses adaptive timeouts */
+#define OBD_CONNECT_LRU_RESIZE 0x02000000ULL /* Lru resize feature. */
 /* also update obd_connect_names[] for lprocfs_rd_connect_flags()
  * and lustre/utils/wirecheck.c */
 
@@ -294,12 +294,14 @@ extern void lustre_swab_ptlrpc_body(struct ptlrpc_body *pb);
                                 OBD_CONNECT_ACL | OBD_CONNECT_XATTR | \
                                 OBD_CONNECT_IBITS | OBD_CONNECT_JOIN | \
                                 OBD_CONNECT_NODEVOH | OBD_CONNECT_ATTRFID | \
-                                OBD_CONNECT_CANCELSET | OBD_CONNECT_AT)
+                                OBD_CONNECT_CANCELSET | OBD_CONNECT_AT | \
+                                OBD_CONNECT_LRU_RESIZE)
 #define OST_CONNECT_SUPPORTED  (OBD_CONNECT_SRVLOCK | OBD_CONNECT_GRANT | \
                                 OBD_CONNECT_REQPORTAL | OBD_CONNECT_VERSION | \
                                 OBD_CONNECT_TRUNCLOCK | OBD_CONNECT_INDEX | \
                                 OBD_CONNECT_BRW_SIZE | OBD_CONNECT_QUOTA64 | \
-                                OBD_CONNECT_CANCELSET | OBD_CONNECT_AT)
+                                OBD_CONNECT_CANCELSET | OBD_CONNECT_AT | \
+                                OBD_CONNECT_LRU_RESIZE)
 #define ECHO_CONNECT_SUPPORTED (0)
 #define MGS_CONNECT_SUPPORTED  (OBD_CONNECT_VERSION | OBD_CONNECT_AT)
 
@@ -311,9 +313,6 @@ extern void lustre_swab_ptlrpc_body(struct ptlrpc_body *pb);
 #define OBD_OCD_VERSION_MINOR(version) ((int)((version)>>16)&255)
 #define OBD_OCD_VERSION_PATCH(version) ((int)((version)>>8)&255)
 #define OBD_OCD_VERSION_FIX(version)   ((int)(version)&255)
-
-#define exp_connect_cancelset(exp) \
-        ((exp) ? (exp)->exp_connect_flags & OBD_CONNECT_CANCELSET : 0)
 
 /* This structure is used for both request and reply.
  *

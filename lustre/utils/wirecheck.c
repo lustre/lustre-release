@@ -135,9 +135,8 @@ check_ptlrpc_body(void)
         CHECK_MEMBER(ptlrpc_body, pb_conn_cnt);
         CHECK_MEMBER(ptlrpc_body, pb_timeout);
         CHECK_MEMBER(ptlrpc_body, pb_service_time);
-        CHECK_MEMBER(ptlrpc_body, pb_padding_1);
-        CHECK_MEMBER(ptlrpc_body, pb_padding_2);
-        CHECK_MEMBER(ptlrpc_body, pb_padding_3);
+        CHECK_MEMBER(ptlrpc_body, pb_slv);
+        CHECK_MEMBER(ptlrpc_body, pb_limit);
 }
 
 static void check_obd_connect_data(void)
@@ -181,6 +180,7 @@ static void check_obd_connect_data(void)
         CHECK_CDEFINE(OBD_CONNECT_CANCELSET);
         CHECK_CDEFINE(OBD_CONNECT_SOM);
         CHECK_CDEFINE(OBD_CONNECT_AT);
+        CHECK_CDEFINE(OBD_CONNECT_LRU_RESIZE);
 }
 
 static void

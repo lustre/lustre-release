@@ -273,7 +273,13 @@ extern int lprocfs_obd_seq_create(struct obd_device *dev, char *name,
 extern int lprocfs_rd_u64(char *page, char **start, off_t off,
                           int count, int *eof, void *data);
 extern int lprocfs_rd_atomic(char *page, char **start, off_t off,
-                          int count, int *eof, void *data);
+                             int count, int *eof, void *data);
+extern int lprocfs_wr_atomic(struct file *file, const char *buffer,
+                             unsigned long count, void *data);
+extern int lprocfs_rd_uint(char *page, char **start, off_t off,
+                           int count, int *eof, void *data);
+extern int lprocfs_wr_uint(struct file *file, const char *buffer,
+                           unsigned long count, void *data);
 extern int lprocfs_rd_uuid(char *page, char **start, off_t off,
                            int count, int *eof, void *data);
 extern int lprocfs_rd_name(char *page, char **start, off_t off,

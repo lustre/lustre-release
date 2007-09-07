@@ -807,19 +807,27 @@ static int after_reply(struct ptlrpc_request *req)
         }
 
         rc = ptlrpc_check_status(req);
-
-        /* Either we've been evicted, or the server has failed for
-         * some reason. Try to reconnect, and if that fails, punt to the
-         * upcall. */
-        if ((rc == -ENOTCONN) || (rc == -ENODEV)) {
-                if (req->rq_send_state != LUSTRE_IMP_FULL ||
-                    imp->imp_obd->obd_no_recov || imp->imp_dlm_fake) {
-                        RETURN(-ENOTCONN);
+        if (rc) {
+                /* Either we've been evicted, or the server has failed for
+                 * some reason. Try to reconnect, and if that fails, punt to
+                 * the upcall. */
+                if (rc == -ENOTCONN || rc == -ENODEV) {
+                        if (req->rq_send_state != LUSTRE_IMP_FULL ||
+                            imp->imp_obd->obd_no_recov || imp->imp_dlm_fake) {
+                                RETURN(-ENOTCONN);
+                        }
+                        ptlrpc_request_handle_notconn(req);
+                        RETURN(rc);
                 }
-
-                ptlrpc_request_handle_notconn(req);
-
-                RETURN(rc);
+        } else {
+                /* Let's look if server send slv. Do it only for RPC with 
+                 * rc == 0. */
+                if (imp->imp_obd->obd_namespace) {
+                        /* Disconnect rpc is sent when namespace is already 
+                         * destroyed. Let's check this and will not try update
+                         * pool. */
+                        ldlm_cli_update_pool(req);
+                }
         }
 
         /* Store transno in reqmsg for replay. */
