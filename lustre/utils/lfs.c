@@ -330,12 +330,8 @@ static int lfs_find(int argc, char **argv)
 {
         int new_fashion = 1;
         int c, ret;
-        int zeroend;
         time_t t;
-        unsigned int depth;
-        int quiet, verbose, recursive;
-        struct find_param param;
-        struct obd_uuid *obduuid = NULL;
+        struct find_param param = { .maxdepth = -1 };
         char timestr[1024];
         struct option long_opts[] = {
                 /* New find options. */
@@ -363,15 +359,9 @@ static int lfs_find(int argc, char **argv)
         int isoption;
 
         time(&t);
-        zeroend = 0;
-        depth = -1;
-        quiet = verbose = recursive = 0;
-
-        memset(&param, 0, sizeof(param));
 
         while ((c = getopt_long_only(argc, argv, "-A:C:D:M:n:PpO:qrv",
-                                     long_opts, NULL)) >= 0)
-        {
+                                     long_opts, NULL)) >= 0) {
                 xtime = NULL;
                 xsign = NULL;
                 if (neg_opt)
@@ -434,7 +424,7 @@ static int lfs_find(int argc, char **argv)
                                 *xsign = ret;
                         break;
                 case 'D':
-                        depth = strtol(optarg, 0, 0);
+                        param.maxdepth = strtol(optarg, 0, 0);
                         break;
                 case 'n':
                         new_fashion = 1;
@@ -445,32 +435,32 @@ static int lfs_find(int argc, char **argv)
                                 param.exclude_pattern = 0;
                         break;
                 case 'O':
-                        if (obduuid) {
+                        if (param.obduuid) {
                                 fprintf(stderr,
                                         "error: %s: only one obduuid allowed",
                                         argv[0]);
                                 return CMD_HELP;
                         }
-                        obduuid = (struct obd_uuid *)optarg;
+                        param.obduuid = (struct obd_uuid *)optarg;
                         break;
                 case 'p':
-                        zeroend = 1;
+                        param.zeroend = 1;
                         break;
                 case 'P':
                         break;
                 case 'q':
                         new_fashion = 0;
-                        quiet++;
-                        verbose = 0;
+                        param.quiet++;
+                        param.verbose = 0;
                         break;
                 case 'r':
                         new_fashion = 0;
-                        recursive = 1;
+                        param.recursive = 1;
                         break;
                 case 'v':
                         new_fashion = 0;
-                        verbose++;
-                        quiet = 0;
+                        param.verbose++;
+                        param.quiet = 0;
                         break;
                 case '?':
                         return CMD_HELP;
@@ -490,16 +480,11 @@ static int lfs_find(int argc, char **argv)
                 pathend = argc;
         }
 
-        param.obduuid = obduuid;
         if (new_fashion) {
-                param.maxdepth = depth;
-                param.zeroend = zeroend;
                 param.quiet = 1;
         } else {
-                param.recursive = recursive;
-                param.verbose = verbose;
-                param.quiet = quiet;
-                param.maxdepth = recursive ? -1 : 1;
+                if (!param.recursive && param.maxdepth == -1)
+                        param.maxdepth = 1;
         }
         
         do {
@@ -525,34 +510,32 @@ static int lfs_getstripe(int argc, char **argv)
                 {0, 0, 0, 0}
         };
         char short_opts[] = "hO:qrv";
-        int quiet, verbose, recursive, c, rc;
-        struct obd_uuid *obduuid = NULL;
-        struct find_param param;
+        int c, rc;
+        struct find_param param = { 0 };
 
         optind = 0;
-        quiet = verbose = recursive = 0;
         while ((c = getopt_long(argc, argv, short_opts,
                                 long_opts, NULL)) != -1) {
                 switch (c) {
                 case 'O':
-                        if (obduuid) {
+                        if (param.obduuid) {
                                 fprintf(stderr,
                                         "error: %s: only one obduuid allowed",
                                         argv[0]);
                                 return CMD_HELP;
                         }
-                        obduuid = (struct obd_uuid *)optarg;
+                        param.obduuid = (struct obd_uuid *)optarg;
                         break;
                 case 'q':
-                        quiet++;
-                        verbose = 0;
+                        param.quiet++;
+                        param.verbose = 0;
                         break;
                 case 'r':
-                        recursive = 1;
+                        param.recursive = 1;
                         break;
                 case 'v':
-                        verbose++;
-                        quiet = 0;
+                        param.verbose++;
+                        param.quiet = 0;
                         break;
                 case '?':
                         return CMD_HELP;
@@ -566,12 +549,7 @@ static int lfs_getstripe(int argc, char **argv)
         if (optind >= argc)
                 return CMD_HELP;
 
-        memset(&param, 0, sizeof(param));
-        param.recursive = recursive;
-        param.verbose = verbose;
-        param.quiet = quiet;
-        param.obduuid = obduuid;
-        param.maxdepth = recursive ? -1 : 1;
+        param.maxdepth = param.recursive ? -1 : 1;
 
         do {
                 rc = llapi_getstripe(argv[optind], &param);
