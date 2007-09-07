@@ -1,28 +1,27 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- * Copyright (C) 1992, 1993, 1994, 1995
- * Remy Card (card@masi.ibp.fr)
- * Laboratoire MASI - Institut Blaise Pascal
- * Universite Pierre et Marie Curie (Paris VI)
+ * Directory code for lustre client.
  *
- *  from
+ *  Copyright (C) 2002--2007 Cluster File Systems, Inc.
  *
- *  linux/fs/minix/dir.c
- *  linux/fs/ext2/dir.c
+ *   This file is part of the Lustre file system, http://www.lustre.org
+ *   Lustre is a trademark of Cluster File Systems, Inc.
  *
- *  Copyright (C) 1991, 1992  Linus Torvalds
+ *   You may have signed or agreed to another license before downloading
+ *   this software.  If so, you are bound by the terms and conditions
+ *   of that agreement, and the following does not apply to you.  See the
+ *   LICENSE file included with this distribution for more information.
  *
- *  ext2 directory handling functions
+ *   If you did not agree to a different license, then this copy of Lustre
+ *   is open source software; you can redistribute it and/or modify it
+ *   under the terms of version 2 of the GNU General Public License as
+ *   published by the Free Software Foundation.
  *
- *  Big-endian to little-endian byte-swapping/bitmaps by
- *        David S. Miller (davem@caip.rutgers.edu), 1995
- *
- *  All code that works with directory layout had been switched to pagecache
- *  and moved here. AV
- *
- *  Adapted for Lustre Light
- *  Copyright (C) 2002-2003, Cluster File Systems, Inc.
+ *   In either case, Lustre is distributed in the hope that it will be
+ *   useful, but WITHOUT ANY WARRANTY; without even the implied warranty
+ *   of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *   license text for more details.
  *
  */
 
@@ -47,6 +46,33 @@
 #include <lustre_lite.h>
 #include <lustre_dlm.h>
 #include "llite_internal.h"
+
+/*
+ * Directory entries are currently in the same format as ext2/ext3, but will
+ * be changed in the future to accomodate FIDs
+ */
+#define LL_DIR_NAME_LEN (255)
+
+static const int LL_DIR_PAD = 4;
+
+struct ll_dir_entry {
+        /* number of inode, referenced by this entry */
+	__le32	lde_inode;
+        /* total record length, multiple of LL_DIR_PAD */
+	__le16	lde_rec_len;
+        /* length of name */
+	__u8	lde_name_len;
+        /* file type: regular, directory, device, etc. */
+	__u8	lde_file_type;
+        /* name. NOT NUL-terminated */
+	char	lde_name[LL_DIR_NAME_LEN];
+};
+
+static inline unsigned ll_dir_rec_len(unsigned name_len)
+{
+        return (name_len + 8 + LL_DIR_PAD - 1) & ~(LL_DIR_PAD - 1);
+}
+
 
 #ifdef HAVE_PG_FS_MISC
 #define PageChecked(page)        test_bit(PG_fs_misc, &(page)->flags)
@@ -93,101 +119,106 @@ struct address_space_operations ll_dir_aops = {
         .readpage  = ll_dir_readpage,
 };
 
-/*
- * ext2 uses block-sized chunks. Arguably, sector-sized ones would be
- * more robust, but we have what we have
- */
-static inline unsigned ext2_chunk_size(struct inode *inode)
+static inline unsigned ll_dir_page_mask(struct inode *inode)
 {
-        return inode->i_sb->s_blocksize;
+        return ~(inode->i_sb->s_blocksize - 1);
 }
 
-static void ext2_check_page(struct inode *dir, struct page *page)
+/*
+ * Check consistency of a single entry.
+ */
+static int ll_dir_check_entry(struct inode *dir, struct ll_dir_entry *ent,
+                              unsigned offset, unsigned rec_len, pgoff_t index)
 {
-        unsigned chunk_size = ext2_chunk_size(dir);
-        char *kaddr = page_address(page);
-        //      u32 max_inumber = le32_to_cpu(sb->u.ext2_sb.s_es->s_inodes_count);
-        unsigned rec_len;
-        __u64 offs, limit = CFS_PAGE_SIZE;
-        ext2_dirent *p;
-        char *error;
+        const char *msg;
 
-        if ((dir->i_size >> CFS_PAGE_SHIFT) == (__u64)page->index) {
-                limit = dir->i_size & ~CFS_PAGE_MASK;
-                if (limit & (chunk_size - 1)) {
-                        CERROR("limit "LPU64" dir size %lld index "LPU64"\n",
-                               limit, dir->i_size, (__u64)page->index);
-                        goto Ebadsize;
-                }
-                for (offs = limit; offs < CFS_PAGE_SIZE; offs += chunk_size) {
-                        ext2_dirent *p = (ext2_dirent*)(kaddr + offs);
-                        p->rec_len = cpu_to_le16(chunk_size);
-                        p->name_len = 0;
-                        p->inode = 0;
-                }
-                if (!limit)
-                        goto out;
-        }
-        for (offs = 0; offs <= limit - EXT2_DIR_REC_LEN(1); offs += rec_len) {
-                p = (ext2_dirent *)(kaddr + offs);
-                rec_len = le16_to_cpu(p->rec_len);
+        /*
+         * Consider adding more checks.
+         */
 
-                if (rec_len < EXT2_DIR_REC_LEN(1))
-                        goto Eshort;
-                if (rec_len & 3)
-                        goto Ealign;
-                if (rec_len < EXT2_DIR_REC_LEN(p->name_len))
-                        goto Enamelen;
-                if (((offs + rec_len - 1) ^ offs) & ~(chunk_size-1))
-                        goto Espan;
-                //              if (le32_to_cpu(p->inode) > max_inumber)
-                //goto Einumber;
-        }
-        if (offs != limit)
-                goto Eend;
-out:
-        SetPageChecked(page);
-        return;
-
-        /* Too bad, we had an error */
-
-Ebadsize:
-        CERROR("%s: directory %lu/%u size %llu is not a multiple of %u\n",
-               ll_i2mdcexp(dir)->exp_obd->obd_name, dir->i_ino,
-               dir->i_generation, dir->i_size, chunk_size);
-        goto fail;
-Eshort:
-        error = "rec_len is smaller than minimal";
-        goto bad_entry;
-Ealign:
-        error = "unaligned directory entry";
-        goto bad_entry;
-Enamelen:
-        error = "rec_len is too small for name_len";
-        goto bad_entry;
-Espan:
-        error = "directory entry across blocks";
-        goto bad_entry;
-        //Einumber:
-        // error = "inode out of bounds";
-bad_entry:
+        if (unlikely(rec_len < ll_dir_rec_len(1)))
+                msg = "entry is too short";
+        else if (unlikely(rec_len & 3))
+                msg = "wrong alignment";
+        else if (unlikely(rec_len < ll_dir_rec_len(ent->lde_name_len)))
+                msg = "rec_len doesn't match name_len";
+        else if (unlikely(((offset + rec_len - 1) ^ offset) &
+                          ll_dir_page_mask(dir)))
+                msg = "directory entry across blocks";
+        else
+                return 0;
         CERROR("%s: bad entry in directory %lu/%u: %s - "
-               "offset="LPU64"+"LPU64", inode=%lu, rec_len=%d, name_len=%d\n",
-               ll_i2mdcexp(dir)->exp_obd->obd_name, dir->i_ino,
-               dir->i_generation, error, (__u64)page->index << CFS_PAGE_SHIFT,
-               offs, (unsigned long)le32_to_cpu(p->inode),
-               rec_len, p->name_len);
-        goto fail;
-Eend:
-        p = (ext2_dirent *)(kaddr + offs);
-        CERROR("%s: entry in directory %lu/%u spans the page boundary "
-               "offset="LPU64"+"LPU64", inode=%lu\n",ll_i2mdcexp(dir)->exp_obd->obd_name,
-               dir->i_ino, dir->i_generation,
-               (__u64)page->index << CFS_PAGE_SHIFT,
-               offs, (unsigned long)le32_to_cpu(p->inode));
-fail:
+               "offset=%lu+%u, inode=%lu, rec_len=%d,"
+               " name_len=%d\n", ll_i2mdcexp(dir)->exp_obd->obd_name,
+               dir->i_ino, dir->i_generation, msg,
+               index << CFS_PAGE_SHIFT,
+               offset, (unsigned long)le32_to_cpu(ent->lde_inode),
+               rec_len, ent->lde_name_len);
+        return -EIO;
+}
+
+static inline struct ll_dir_entry *ll_entry_at(void *base, unsigned offset)
+{
+        return (struct ll_dir_entry *)(base + offset);
+}
+
+static void ll_dir_check_page(struct inode *dir, struct page *page)
+{
+        int      err;
+        unsigned size = dir->i_sb->s_blocksize;
+        char    *addr = page_address(page);
+        unsigned off;
+        unsigned limit;
+        unsigned reclen;
+
+        struct ll_dir_entry *ent;
+
+        err = 0;
+        if ((dir->i_size >> CFS_PAGE_SHIFT) == (__u64)page->index) {
+                /*
+                 * Last page.
+                 */
+                limit = dir->i_size & ~CFS_PAGE_MASK;
+                if (limit & (size - 1)) {
+                        CERROR("%s: dir %lu/%u size %llu doesn't match %u\n",
+                               ll_i2mdcexp(dir)->exp_obd->obd_name, dir->i_ino,
+                               dir->i_generation, dir->i_size, size);
+                        err++;
+                } else {
+                        /*
+                         * Place dummy forwarding entries to streamline
+                         * ll_readdir().
+                         */
+                        for (off = limit; off < CFS_PAGE_SIZE; off += size) {
+                                ent = ll_entry_at(addr, off);
+                                ent->lde_rec_len = cpu_to_le16(size);
+                                ent->lde_name_len = 0;
+                                ent->lde_inode = 0;
+                        }
+                }
+        } else
+                limit = CFS_PAGE_SIZE;
+
+        for (off = 0;
+             !err && off <= limit - ll_dir_rec_len(1); off += reclen) {
+                ent    = ll_entry_at(addr, off);
+                reclen = le16_to_cpu(ent->lde_rec_len);
+                err    = ll_dir_check_entry(dir, ent, off, reclen, page->index);
+        }
+
+        if (!err && off != limit) {
+                ent = ll_entry_at(addr, off);
+                CERROR("%s: entry in directory %lu/%u spans the page boundary "
+                       "offset="LPU64"+%u, inode=%lu\n",
+                       ll_i2mdcexp(dir)->exp_obd->obd_name,
+                       dir->i_ino, dir->i_generation,
+                       (__u64)page->index << CFS_PAGE_SHIFT,
+                       off, (unsigned long)le32_to_cpu(ent->lde_inode));
+                err++;
+        }
+        if (err)
+                SetPageError(page);
         SetPageChecked(page);
-        SetPageError(page);
 }
 
 struct page *ll_get_dir_page(struct inode *dir, unsigned long n)
@@ -235,7 +266,7 @@ struct page *ll_get_dir_page(struct inode *dir, unsigned long n)
         if (!PageUptodate(page))
                 goto fail;
         if (!PageChecked(page))
-                ext2_check_page(dir, page);
+                ll_dir_check_page(dir, page);
         if (PageError(page))
                 goto fail;
 
@@ -244,95 +275,167 @@ out_unlock:
         return page;
 
 fail:
-        ext2_put_page(page);
+        kunmap(page);
+        page_cache_release(page);
         page = ERR_PTR(-EIO);
         goto out_unlock;
 }
 
-static unsigned char ext2_filetype_table[EXT2_FT_MAX] = {
-        [EXT2_FT_UNKNOWN]       DT_UNKNOWN,
-        [EXT2_FT_REG_FILE]      DT_REG,
-        [EXT2_FT_DIR]           DT_DIR,
-        [EXT2_FT_CHRDEV]        DT_CHR,
-        [EXT2_FT_BLKDEV]        DT_BLK,
-        [EXT2_FT_FIFO]          DT_FIFO,
-        [EXT2_FT_SOCK]          DT_SOCK,
-        [EXT2_FT_SYMLINK]       DT_LNK,
+/*
+ * p is at least 6 bytes before the end of page
+ */
+static inline struct ll_dir_entry *ll_dir_next_entry(struct ll_dir_entry *p)
+{
+        return ll_entry_at(p, le16_to_cpu(p->lde_rec_len));
+}
+
+static inline unsigned ll_dir_validate_entry(char *base, unsigned offset,
+                                             unsigned mask)
+{
+        struct ll_dir_entry *de = ll_entry_at(base, offset);
+        struct ll_dir_entry *p  = ll_entry_at(base, offset & mask);
+        while (p < de && p->lde_rec_len > 0)
+                p = ll_dir_next_entry(p);
+        return (char *)p - base;
+}
+
+/*
+ * File type constants. The same as in ext2 for compatibility.
+ */
+
+enum {
+        LL_DIR_FT_UNKNOWN,
+        LL_DIR_FT_REG_FILE,
+        LL_DIR_FT_DIR,
+        LL_DIR_FT_CHRDEV,
+        LL_DIR_FT_BLKDEV,
+        LL_DIR_FT_FIFO,
+        LL_DIR_FT_SOCK,
+        LL_DIR_FT_SYMLINK,
+        LL_DIR_FT_MAX
 };
 
+static unsigned char ll_dir_filetype_table[LL_DIR_FT_MAX] = {
+        [LL_DIR_FT_UNKNOWN]  = DT_UNKNOWN,
+        [LL_DIR_FT_REG_FILE] = DT_REG,
+        [LL_DIR_FT_DIR]      = DT_DIR,
+        [LL_DIR_FT_CHRDEV]   = DT_CHR,
+        [LL_DIR_FT_BLKDEV]   = DT_BLK,
+        [LL_DIR_FT_FIFO]     = DT_FIFO,
+        [LL_DIR_FT_SOCK]     = DT_SOCK,
+        [LL_DIR_FT_SYMLINK]  = DT_LNK,
+};
+
+/*
+ * Process one page. Returns:
+ *
+ *     -ve: filldir commands readdir to stop.
+ *     +ve: number of entries submitted to filldir.
+ *       0: no live entries on this page.
+ */
+
+int ll_readdir_page(char *addr, __u64 base, unsigned *offset,
+                    filldir_t filldir, void *cookie)
+{
+        struct ll_dir_entry *de;
+        char *end;
+        int nr;
+
+        de = ll_entry_at(addr, *offset);
+        end = addr + CFS_PAGE_SIZE - ll_dir_rec_len(1);
+        for (nr = 0 ;(char*)de <= end; de = ll_dir_next_entry(de)) {
+                if (de->lde_inode != 0) {
+                        nr++;
+                        *offset = (char *)de - addr;
+                        if (filldir(cookie, de->lde_name, de->lde_name_len,
+                                    base | *offset, le32_to_cpu(de->lde_inode),
+                                    ll_dir_filetype_table[de->lde_file_type &
+                                                          (LL_DIR_FT_MAX - 1)]))
+                                return -1;
+                }
+        }
+        return nr;
+}
 
 int ll_readdir(struct file *filp, void *dirent, filldir_t filldir)
 {
         struct inode *inode = filp->f_dentry->d_inode;
-        loff_t pos = filp->f_pos;
-        // XXX struct super_block *sb = inode->i_sb;
-        __u64 offset = pos & ~CFS_PAGE_MASK;
-        __u64 n = pos >> CFS_PAGE_SHIFT;
-        unsigned long npages = dir_pages(inode);
-        unsigned chunk_mask = ~(ext2_chunk_size(inode)-1);
-        unsigned char *types = ext2_filetype_table;
+        loff_t pos          = filp->f_pos;
+        unsigned offset     = pos & ~CFS_PAGE_MASK;
+        pgoff_t idx         = pos >> CFS_PAGE_SHIFT;
+        pgoff_t npages      = dir_pages(inode);
+        unsigned chunk_mask = ll_dir_page_mask(inode);
         int need_revalidate = (filp->f_version != inode->i_version);
-        int rc = 0;
+        int rc              = 0;
+        int done; /* when this becomes negative --- stop iterating */
+
         ENTRY;
 
         CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu/%u(%p) pos %llu/%llu\n",
                inode->i_ino, inode->i_generation, inode, pos, inode->i_size);
 
-        if (pos > inode->i_size - EXT2_DIR_REC_LEN(1))
+        /*
+         * Checking ->i_size without the lock. Should be harmless, as server
+         * re-checks.
+         */
+        if (pos > inode->i_size - ll_dir_rec_len(1))
                 RETURN(0);
 
-        for ( ; n < npages; n++, offset = 0) {
-                char *kaddr, *limit;
-                ext2_dirent *de;
+        for (done = 0; idx < npages; idx++, offset = 0) {
+                /*
+                 * We can assume that all blocks on this page are filled with
+                 * entries, because ll_dir_check_page() placed special dummy
+                 * entries for us.
+                 */
+
+                char *kaddr;
                 struct page *page;
 
-                CDEBUG(D_EXT2,"read %lu of dir %lu/%u page "LPU64"/%lu "
+                CDEBUG(D_EXT2,"read %lu of dir %lu/%u page %lu/%lu "
                        "size %llu\n",
                        CFS_PAGE_SIZE, inode->i_ino, inode->i_generation,
-                       n, npages, inode->i_size);
-                page = ll_get_dir_page(inode, n);
+                       idx, npages, inode->i_size);
+                page = ll_get_dir_page(inode, idx);
 
                 /* size might have been updated by mdc_readpage */
                 npages = dir_pages(inode);
 
                 if (IS_ERR(page)) {
                         rc = PTR_ERR(page);
-                        CERROR("error reading dir %lu/%u page "LPU64": rc %d\n",
-                               inode->i_ino, inode->i_generation, n, rc);
+                        CERROR("error reading dir %lu/%u page %lu: rc %d\n",
+                               inode->i_ino, inode->i_generation, idx, rc);
                         continue;
                 }
 
                 kaddr = page_address(page);
                 if (need_revalidate) {
-                        /* page already checked from ll_get_dir_page() */
-                        offset = ext2_validate_entry(kaddr, offset, chunk_mask);
+                        /*
+                         * File offset was changed by lseek() and possibly
+                         * points in the middle of an entry. Re-scan from the
+                         * beginning of the chunk.
+                         */
+                        offset = ll_dir_validate_entry(kaddr, offset,
+                                                       chunk_mask);
                         need_revalidate = 0;
                 }
-                de = (ext2_dirent *)(kaddr+offset);
-                limit = kaddr + CFS_PAGE_SIZE - EXT2_DIR_REC_LEN(1);
-                for ( ;(char*)de <= limit; de = ext2_next_entry(de)) {
-                        if (de->inode) {
-                                int over;
-
-                                rc = 0; /* no error if we return something */
-
-                                offset = (char *)de - kaddr;
-                                over = filldir(dirent, de->name, de->name_len,
-                                               (n << CFS_PAGE_SHIFT) | offset,
-                                               le32_to_cpu(de->inode),
-                                               types[de->file_type &
-                                                     (EXT2_FT_MAX - 1)]);
-                                if (over) {
-                                        ext2_put_page(page);
-                                        GOTO(done, rc);
-                                }
-                        }
-                }
-                ext2_put_page(page);
+                done = ll_readdir_page(kaddr, idx << CFS_PAGE_SHIFT,
+                                       &offset, filldir, dirent);
+                kunmap(page);
+                page_cache_release(page);
+                if (done > 0)
+                        /*
+                         * Some entries were sent to the user space, return
+                         * success.
+                         */
+                        rc = 0;
+                else if (done < 0)
+                        /*
+                         * filldir is satisfied.
+                         */
+                        break;
         }
 
-done:
-        filp->f_pos = (n << CFS_PAGE_SHIFT) | offset;
+        filp->f_pos = (idx << CFS_PAGE_SHIFT) | offset;
         filp->f_version = inode->i_version;
         touch_atime(filp->f_vfsmnt, filp->f_dentry);
 
@@ -386,8 +489,8 @@ int ll_dir_setstripe(struct inode *inode, struct lov_user_md *lump)
 
 }
 
-int ll_dir_getstripe(struct inode *inode, struct lov_mds_md **lmmp, 
-                     int *lmm_size, struct ptlrpc_request **request) 
+int ll_dir_getstripe(struct inode *inode, struct lov_mds_md **lmmp,
+                     int *lmm_size, struct ptlrpc_request **request)
 {
         struct ll_sb_info *sbi = ll_i2sbi(inode);
         struct ll_fid     fid;
@@ -541,7 +644,7 @@ static int ll_dir_ioctl(struct inode *inode, struct file *file,
                         if (IS_ERR(filename))
                                 RETURN(PTR_ERR(filename));
 
-                        rc = ll_lov_getstripe_ea_info(inode, filename, &lmm, 
+                        rc = ll_lov_getstripe_ea_info(inode, filename, &lmm,
                                                       &lmmsize, &request);
                 } else {
                         rc = ll_dir_getstripe(inode, &lmm, &lmmsize, &request);
@@ -558,7 +661,7 @@ static int ll_dir_ioctl(struct inode *inode, struct file *file,
                 }
 
                 if (rc < 0) {
-                        if (rc == -ENODATA && (cmd == IOC_MDC_GETFILEINFO || 
+                        if (rc == -ENODATA && (cmd == IOC_MDC_GETFILEINFO ||
                                                cmd == LL_IOC_MDC_GETINFO))
                                 GOTO(skip_lmm, rc = 0);
                         else
@@ -888,21 +991,9 @@ static int ll_dir_ioctl(struct inode *inode, struct file *file,
         }
 }
 
-int ll_dir_open(struct inode *inode, struct file *file)
-{
-        ENTRY;
-        RETURN(ll_file_open(inode, file));
-}
-
-int ll_dir_release(struct inode *inode, struct file *file)
-{
-        ENTRY;
-        RETURN(ll_file_release(inode, file));
-}
-
 struct file_operations ll_dir_operations = {
-        .open     = ll_dir_open,
-        .release  = ll_dir_release,
+        .open     = ll_file_open,
+        .release  = ll_file_release,
         .read     = generic_read_dir,
         .readdir  = ll_readdir,
         .ioctl    = ll_dir_ioctl

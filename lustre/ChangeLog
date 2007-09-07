@@ -164,6 +164,12 @@ Details    : use adaptive algorithm for managing client cached locks lru
              pattern, memory activities, etc. Both, server and client 
              side namespaces provide number of proc tunables for controlling 
              things
+
+Severity   : cleanup
+Bugzilla   : 13532
+Description: rewrite ext2-derived code in llite/dir.c and obdclass/uuid.c
+Details    : rewrite inherited code (uuid parsing code from ext2 utils and
+             readdir code from ext3) from scratch preserving functionality.
 --------------------------------------------------------------------------------
 
 2007-08-27         Cluster File Systems, Inc. <info@clusterfs.com>

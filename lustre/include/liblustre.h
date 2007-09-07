@@ -84,6 +84,10 @@ typedef unsigned short umode_t;
 # define CURRENT_SECONDS time(0)
 #endif
 
+#ifndef ARRAY_SIZE
+#define ARRAY_SIZE(a) ((sizeof (a))/(sizeof ((a)[0])))
+#endif
+
 /* This is because lprocfs_status.h gets included here indirectly.  It would
  * be much better to just avoid lprocfs being included into liblustre entirely
  * but that requires more header surgery than I can handle right now.
@@ -789,7 +793,7 @@ void *liblustre_register_wait_callback(const char *name,
 void liblustre_deregister_wait_callback(void *notifier);
 int liblustre_wait_event(int timeout);
 
-void *liblustre_register_idle_callback(const char *name, 
+void *liblustre_register_idle_callback(const char *name,
                                        int (*fn)(void *arg), void *arg);
 void liblustre_deregister_idle_callback(void *notifier);
 void liblustre_wait_idle(void);
@@ -822,7 +826,7 @@ typedef struct file_lock {
         unsigned long fl_break_time;    /* for nonblocking lease breaks */
 
         union {
-                struct nfs_lock_info    nfs_fl;       
+                struct nfs_lock_info    nfs_fl;
         } fl_u;
 } cfs_flock_t;
 
