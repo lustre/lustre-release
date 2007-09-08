@@ -3986,7 +3986,7 @@ run_test 120a "Early Lock Cancel: mkdir test ==================="
 test_120b() {
         disable_pool_recalc mdc
         disable_pool_shrink mdc
-        disable_pool_shrink mds-lustre
+        disable_pool_shrink "mds-$FSNAME"
         mkdir $DIR/$tdir
         cancel_lru_locks mdc
         stat $DIR/$tdir > /dev/null
