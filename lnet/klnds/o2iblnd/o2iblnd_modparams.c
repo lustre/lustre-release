@@ -109,7 +109,7 @@ kib_tunables_t kiblnd_tunables = {
 #endif
 };
 
-#if CONFIG_SYSCTL && !CFS_SYSFS_MODULE_PARM
+#if defined(CONFIG_SYSCTL) && !CFS_SYSFS_MODULE_PARM
 
 static char ipif_basename_space[32];
 

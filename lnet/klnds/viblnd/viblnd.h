@@ -170,7 +170,7 @@ typedef struct
 #if IBNAL_USE_FMR
         int              *kib_fmr_remaps;       /* # FMR maps before unmap required */
 #endif
-#if CONFIG_SYSCTL && !CFS_SYSFS_MODULE_PARM
+#if defined(CONFIG_SYSCTL) && !CFS_SYSFS_MODULE_PARM
         cfs_sysctl_table_header_t *kib_sysctl;  /* sysctl interface */
 #endif
 } kib_tunables_t;
@@ -565,11 +565,11 @@ kibnal_send_keepalive(kib_conn_t *conn)
 #endif
 
 #if IBNAL_VOIDSTAR_SGADDR
-# if CONFIG_HIGHMEM
-#  if CONFIG_X86 && CONFIG_HIGHMEM4G
+# if defined(CONFIG_HIGHMEM)
+#  if defined(CONFIG_X86) && defined(CONFIG_HIGHMEM4G)
    /* truncation to void* doesn't matter if 0 <= physmem < 4G
     * so allow x86 with 32 bit phys addrs */
-#  elif CONFIG_IA64
+#  elif defined(CONFIG_IA64)
    /* OK anyway on 64-bit arch */
 #  else
 #   error "Can't support HIGHMEM when vv_scatgat_t::v_address is void *"

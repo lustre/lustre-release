@@ -67,7 +67,7 @@ ksocknal_lib_tunables_init ()
         ksocknal_ctl_table[i++] = (ctl_table)
 		{j++, "nagle", ksocknal_tunables.ksnd_nagle, 
 		 sizeof(int), 0644, NULL, &proc_dointvec};
-#if CPU_AFFINITY
+#ifdef CPU_AFFINITY
         ksocknal_ctl_table[i++] = (ctl_table)
 		{j++, "irq_affinity", ksocknal_tunables.ksnd_irq_affinity, 
 		 sizeof(int), 0644, NULL, &proc_dointvec};
@@ -157,7 +157,7 @@ ksocknal_kvaddr_to_page (unsigned long vaddr)
         if (vaddr >= VMALLOC_START &&
             vaddr < VMALLOC_END)
                 page = vmalloc_to_page ((void *)vaddr);
-#if CONFIG_HIGHMEM
+#ifdef CONFIG_HIGHMEM
         else if (vaddr >= PKMAP_BASE &&
                  vaddr < (PKMAP_BASE + LAST_PKMAP * PAGE_SIZE))
                 page = vmalloc_to_page ((void *)vaddr);

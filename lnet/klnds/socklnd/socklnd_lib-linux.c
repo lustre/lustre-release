@@ -4,7 +4,7 @@
 
 #include "socklnd.h"
 
-# if CONFIG_SYSCTL && !CFS_SYSFS_MODULE_PARM
+# if defined(CONFIG_SYSCTL) && !CFS_SYSFS_MODULE_PARM
 static cfs_sysctl_table_t ksocknal_ctl_table[21];
 
 cfs_sysctl_table_t ksocknal_top_ctl_table[] = {
@@ -129,7 +129,7 @@ ksocknal_lib_tunables_init ()
                 .mode     = 0644,
                 .proc_handler = &proc_dointvec
         };
-#if CPU_AFFINITY
+#ifdef CPU_AFFINITY
         ksocknal_ctl_table[i++] = (cfs_sysctl_table_t) {
                 .ctl_name = j++,
                 .procname = "irq_affinity",
@@ -227,7 +227,7 @@ ksocknal_lib_tunables_fini ()
 void
 ksocknal_lib_bind_irq (unsigned int irq)
 {
-#if (defined(CONFIG_SMP) && CPU_AFFINITY)
+#if (defined(CONFIG_SMP) && defined(CPU_AFFINITY))
         int              bind;
         int              cpu;
         char             cmdline[64];
@@ -300,7 +300,7 @@ unsigned int
 ksocknal_lib_sock_irq (struct socket *sock)
 {
         int                irq = 0;
-#if CPU_AFFINITY
+#ifdef CPU_AFFINITY
         struct dst_entry  *dst;
 
         if (!*ksocknal_tunables.ksnd_irq_affinity)

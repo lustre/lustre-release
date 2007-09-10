@@ -126,7 +126,7 @@ typedef struct
         int              *kib_fmr_flush_trigger; /* When to trigger FMR flush */
         int              *kib_fmr_cache;        /* enable FMR pool cache? */
 #endif
-#if CONFIG_SYSCTL && !CFS_SYSFS_MODULE_PARM
+#if defined(CONFIG_SYSCTL) && !CFS_SYSFS_MODULE_PARM
         cfs_sysctl_table_header_t *kib_sysctl;  /* sysctl interface */
 #endif
 } kib_tunables_t;

@@ -121,7 +121,7 @@ kptl_tunables_t kptllnd_tunables = {
 };
 
 
-#if CONFIG_SYSCTL && !CFS_SYSFS_MODULE_PARM
+#if defined(CONFIG_SYSCTL) && !CFS_SYSFS_MODULE_PARM
 #ifdef CRAY_XT3
 static char ptltrace_basename_space[1024];
 

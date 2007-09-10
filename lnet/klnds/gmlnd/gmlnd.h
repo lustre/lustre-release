@@ -200,7 +200,7 @@ typedef struct {
         int              *gm_nrx_small;
         int              *gm_nrx_large;
 
-#if CONFIG_SYSCTL && !CFS_SYSFS_MODULE_PARM
+#if defined(CONFIG_SYSCTL) && !CFS_SYSFS_MODULE_PARM
         cfs_sysctl_table_header_t *gm_sysctl;   /* sysctl interface */
 #endif
 } gmnal_tunables_t;

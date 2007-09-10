@@ -96,7 +96,7 @@ kib_tunables_t kibnal_tunables = {
         .kib_concurrent_sends       = &concurrent_sends,
 };
 
-#if CONFIG_SYSCTL && !CFS_SYSFS_MODULE_PARM
+#if defined(CONFIG_SYSCTL) && !CFS_SYSFS_MODULE_PARM
 
 /* NB max_size specified for proc_dostring entries only needs to be big enough
  * not to truncate the printout; it only needs to be the actual size of the

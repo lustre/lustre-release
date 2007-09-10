@@ -624,8 +624,7 @@ srpc_finish_service (srpc_service_t *sv)
 void
 srpc_service_recycle_buffer (srpc_service_t *sv, srpc_buffer_t *buf)
 {
-        if (sv->sv_shuttingdown)
-                goto free;
+        if (sv->sv_shuttingdown) goto free;
 
         if (sv->sv_nprune == 0) {
                 if (srpc_service_post_buffer(sv, buf) != 0)
@@ -1548,8 +1547,7 @@ srpc_check_event (int timeout)
 
         rc = LNetEQPoll(&srpc_data.rpc_lnet_eq, 1,
                         timeout * 1000, &ev, &i);
-        if (rc == 0)
-                return 0;
+        if (rc == 0) return 0;
         
         LASSERT (rc == -EOVERFLOW || rc == 1);
         
@@ -1559,7 +1557,9 @@ srpc_check_event (int timeout)
                 abort();
         }
                 
+        LNET_LOCK();
         srpc_lnet_ev_handler(&ev);
+        LNET_UNLOCK();
         return 1;
 }
 

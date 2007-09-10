@@ -100,7 +100,7 @@ typedef struct
         int             *kptl_simulation_bitmap;/* simulation bitmap */
 #endif
 
-#if CONFIG_SYSCTL && !CFS_SYSFS_MODULE_PARM
+#if defined(CONFIG_SYSCTL) && !CFS_SYSFS_MODULE_PARM
         cfs_sysctl_table_header_t *kptl_sysctl; /* sysctl interface */
 #endif
 } kptl_tunables_t;

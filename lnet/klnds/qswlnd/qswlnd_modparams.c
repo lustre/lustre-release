@@ -83,7 +83,7 @@ kqswnal_tunables_t kqswnal_tunables = {
 #endif
 };
 
-#if CONFIG_SYSCTL && !CFS_SYSFS_MODULE_PARM
+#if defined(CONFIG_SYSCTL) && !CFS_SYSFS_MODULE_PARM
 static cfs_sysctl_table_t kqswnal_ctl_table[] = {
         {
                 .ctl_name = 1,

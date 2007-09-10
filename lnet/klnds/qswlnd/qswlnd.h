@@ -242,7 +242,7 @@ typedef struct
         int               *kqn_inject_csum_error; /* # csum errors to inject */
 #endif
 
-#if CONFIG_SYSCTL && !CFS_SYSFS_MODULE_PARM
+#if defined(CONFIG_SYSCTL) && !CFS_SYSFS_MODULE_PARM
         cfs_sysctl_table_header_t *kqn_sysctl;  /* sysctl interface */
 #endif
 } kqswnal_tunables_t;

@@ -61,7 +61,7 @@ gmnal_tunables_t gmnal_tunables = {
         .gm_nrx_large       = &nrx_large,
 };
 
-#if CONFIG_SYSCTL && !CFS_SYSFS_MODULE_PARM
+#if defined(CONFIG_SYSCTL) && !CFS_SYSFS_MODULE_PARM
 static cfs_sysctl_table_t gmnal_ctl_table[] = {
         {
                 .ctl_name = 1,
@@ -141,7 +141,7 @@ gmnal_load(void)
         int     status;
         CDEBUG(D_TRACE, "This is the gmnal module initialisation routine\n");
 
-#if CONFIG_SYSCTL && !CFS_SYSFS_MODULE_PARM
+#if defined(CONFIG_SYSCTL) && !CFS_SYSFS_MODULE_PARM
         gmnal_tunables.gm_sysctl =
                 cfs_register_sysctl_table(gmnal_top_ctl_table, 0);
 
@@ -166,7 +166,7 @@ static void __exit
 gmnal_unload(void)
 {
         gmnal_fini();
-#if CONFIG_SYSCTL && !CFS_SYSFS_MODULE_PARM
+#if defined(CONFIG_SYSCTL) && !CFS_SYSFS_MODULE_PARM
         if (gmnal_tunables.gm_sysctl != NULL)
                 cfs_unregister_sysctl_table(gmnal_tunables.gm_sysctl);
 #endif

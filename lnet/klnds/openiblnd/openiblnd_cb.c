@@ -427,7 +427,7 @@ kibnal_kvaddr_to_phys (unsigned long vaddr, __u64 *physp)
         if (vaddr >= VMALLOC_START &&
             vaddr < VMALLOC_END)
                 page = vmalloc_to_page ((void *)vaddr);
-#if CONFIG_HIGHMEM
+#ifdef CONFIG_HIGHMEM
         else if (vaddr >= PKMAP_BASE &&
                  vaddr < (PKMAP_BASE + LAST_PKMAP * PAGE_SIZE))
                 page = vmalloc_to_page ((void *)vaddr);

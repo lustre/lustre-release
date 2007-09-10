@@ -81,7 +81,7 @@ kib_tunables_t kibnal_tunables = {
         .kib_keepalive              = &keepalive,
 };
 
-#if CONFIG_SYSCTL && !CFS_SYSFS_MODULE_PARM
+#if defined(CONFIG_SYSCTL) && !CFS_SYSFS_MODULE_PARM
 
 static cfs_sysctl_table_t kibnal_ctl_table[] = {
         {
