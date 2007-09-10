@@ -1041,12 +1041,6 @@ int ldlm_cancel_lru_local(struct ldlm_namespace *ns, struct list_head *cancels,
                 if (ns_connect_lru_resize(ns)) {
                         cfs_time_t la;
 
-                        /* Do not pay attention to slv in case we are asked 
-                         * to cancel particular number of locks (via proc) or
-                         * we already scheduled @added locks for canceling. */            
-                        if (count != 0 && added > count)
-                                break;
-
                         /* Cancel locks by lru only in the case of count == 0. */
                         if (count == 0) {
                                 /* Calculate lv for every lock. */
@@ -1064,6 +1058,9 @@ int ldlm_cancel_lru_local(struct ldlm_namespace *ns, struct list_head *cancels,
                                  * lv is smaller than it is. */
                                 lv = lvf * la * unused;
                                 if (slv == 1 || lv < slv)
+                                        break;
+                        } else {
+                                if (added > count)
                                         break;
                         }
                 } else {
