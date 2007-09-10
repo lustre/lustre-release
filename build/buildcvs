@@ -158,6 +158,12 @@ case "$lustretag" in
 	lustretag="b1_6_usocklnd"
 	;;
 
+    b_uo2iblnd)
+        # lnet u-o2iblnd development branch
+        lnettag="b_uo2iblnd"
+        lustretag="HEAD"
+        ;;
+
     # CMD3
     HEAD|b_post_cmd3|b1_8_gssfix|b_new_cmd_sles10|b1_6_head_sync)
         # Update b1_8 above when changing this.
