@@ -162,6 +162,7 @@ fi # LFSCK_SETUP
 set +e
 
 echo "e2fsck -d -v -fn --mdsdb $MDSDB $MDSDEV"
+df > /dev/null	# update statfs data on disk
 e2fsck -d -v -fn --mdsdb $MDSDB $MDSDEV
 RET=$?
 [ $RET -gt $MAX_ERR ] && echo "e2fsck returned $RET" && exit 90 || true
@@ -169,6 +170,7 @@ RET=$?
 export OSTDB_LIST=""
 i=0
 for OSTDEV in $OSTDEVS; do
+	df > /dev/null	# update statfs data on disk
 	e2fsck -d -v -fn --mdsdb $MDSDB --ostdb $OSTDB-$i $OSTDEV
 	RET=$?
 	[ $RET -gt $MAX_ERR ] && echo "e2fsck returned $RET" && exit 100
@@ -194,6 +196,7 @@ sync; sleep 2; sync
 
 echo "LFSCK TEST 2"
 echo "e2fsck -d -v -fn --mdsdb $MDSDB $MDSDEV"
+df > /dev/null	# update statfs data on disk
 e2fsck -d -v -fn --mdsdb $MDSDB $MDSDEV
 RET=$?
 [ $RET -gt $MAX_ERR ] && echo "e2fsck returned $RET" && exit 123 || true
@@ -201,6 +204,7 @@ RET=$?
 i=0
 export OSTDB_LIST=""
 for OSTDEV in $OSTDEVS; do
+	df > /dev/null	# update statfs data on disk
 	e2fsck -d -v -fn --mdsdb $MDSDB --ostdb $OSTDB-$i $OSTDEV
 	RET=$?
 	[ $RET -gt $MAX_ERR ] && echo "e2fsck returned $RET" && exit 124
