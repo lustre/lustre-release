@@ -338,6 +338,9 @@ int mds_lov_connect(struct obd_device *obd, char * lov_name)
                 RETURN(-ENOMEM);
         data->ocd_connect_flags = OBD_CONNECT_VERSION | OBD_CONNECT_INDEX |
                 OBD_CONNECT_REQPORTAL | OBD_CONNECT_QUOTA64 | OBD_CONNECT_AT;
+#ifdef HAVE_LRU_RESIZE_SUPPORT
+        data->ocd_connect_flags |= OBD_CONNECT_LRU_RESIZE;
+#endif
         data->ocd_version = LUSTRE_VERSION_CODE;
         /* NB: lov_connect() needs to fill in .ocd_index for each OST */
         rc = obd_connect(&conn, mds->mds_osc_obd, &obd->obd_uuid, data);
