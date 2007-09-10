@@ -1047,22 +1047,25 @@ int ldlm_cancel_lru_local(struct ldlm_namespace *ns, struct list_head *cancels,
                         if (count != 0 && added > count)
                                 break;
 
-                        /* Calculate lv for every lock. */
-                        spin_lock(&pl->pl_lock);
-                        slv = ldlm_pool_get_slv(pl);
-                        lvf = atomic_read(&pl->pl_lock_volume_factor);
-                        spin_unlock(&pl->pl_lock);
+                        /* Cancel locks by lru only in the case of count == 0. */
+                        if (count == 0) {
+                                /* Calculate lv for every lock. */
+                                spin_lock(&pl->pl_lock);
+                                slv = ldlm_pool_get_slv(pl);
+                                lvf = atomic_read(&pl->pl_lock_volume_factor);
+                                spin_unlock(&pl->pl_lock);
 
-                        la = cfs_duration_sec(cfs_time_sub(cur, 
-                                                           lock->l_last_used));
-                        if (la == 0)
-                                la = 1;
+                                la = cfs_duration_sec(cfs_time_sub(cur, 
+                                                      lock->l_last_used));
+                                if (la == 0)
+                                        la = 1;
                                 
-                        /* Stop when slv is not yet come from server or lv is 
-                         * smaller than it is. */
-                        lv = lvf * la * unused;
-                        if (slv == 1 || lv < slv)
-                                break;
+                                /* Stop when slv is not yet come from server or 
+                                 * lv is smaller than it is. */
+                                lv = lvf * la * unused;
+                                if (slv == 1 || lv < slv)
+                                        break;
+                        }
                 } else {
                         if ((added >= count) && 
                             (!(flags & LDLM_CANCEL_AGED) ||
