@@ -2333,6 +2333,9 @@ void intent_set_disposition(struct ldlm_reply *rep, int flag)
         rep->lock_policy_res1 |= flag;
 }
 
+#define IS_CLIENT_DISCONNECT_ERROR(error) \
+                (error == -ENOTCONN || error == -ENODEV)
+
 static int mds_intent_policy(struct ldlm_namespace *ns,
                              struct ldlm_lock **lockp, void *req_cookie,
                              ldlm_mode_t mode, int flags, void *data)
@@ -2407,10 +2410,18 @@ static int mds_intent_policy(struct ldlm_namespace *ns,
 
                 /* If there was an error of some sort or if we are not
                  * returning any locks */
-                if (rep->lock_policy_res2)
-                        RETURN(rep->lock_policy_res2);
-                if (!intent_disposition(rep, DISP_OPEN_LOCK))
-                        RETURN(ELDLM_LOCK_ABORTED);
+                 if (rep->lock_policy_res2 ||
+                     !intent_disposition(rep, DISP_OPEN_LOCK)) {
+                        /* If it is the disconnect error (ENODEV & ENOCONN)
+                         * ptlrpc layer should know this imediately, it should
+                         * be replied by rq_stats, otherwise, return it by 
+                         * intent here
+                         */
+                        if (IS_CLIENT_DISCONNECT_ERROR(rep->lock_policy_res2))
+                                RETURN(rep->lock_policy_res2);
+                        else
+                                RETURN(ELDLM_LOCK_ABORTED);
+                 }
                 break;
         case IT_LOOKUP:
                         getattr_part = MDS_INODELOCK_LOOKUP;

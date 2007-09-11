@@ -170,6 +170,15 @@ Bugzilla   : 13532
 Description: rewrite ext2-derived code in llite/dir.c and obdclass/uuid.c
 Details    : rewrite inherited code (uuid parsing code from ext2 utils and
              readdir code from ext3) from scratch preserving functionality.
+
+Severity   : normal 
+Bugzilla   : 13436
+Description: Only those disconnect error should be returned by rq_status.
+Details    : In open/enqueue processs, Some errors, which will cause client 
+	     disconnected, should be returned by rq_status, while other 
+	     errors should still be returned by intent, then mdc or llite will
+	     detect them.
+
 --------------------------------------------------------------------------------
 
 2007-08-27         Cluster File Systems, Inc. <info@clusterfs.com>
