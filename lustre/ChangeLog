@@ -1,3 +1,19 @@
+tbd         Cluster File Systems, Inc. <info@clusterfs.com>
+       * version 1.6.4
+       * Support for kernels:
+        2.6.5-7.286 (SLES 9),
+        2.6.9-55.0.2.EL (RHEL 4),
+        2.6.16.46-0.14 (SLES 10),
+        2.6.18-8.1.8.el5 (RHEL 5),
+        2.6.18.8 vanilla (kernel.org)
+       * Client support for unpatched kernels:
+        (see http://wiki.lustre.org/index.php?title=Patchless_Client)
+        2.6.16 - 2.6.22 vanilla (kernel.org)
+       * Due to recently discovered recovery problems, we do not recommend
+        using patchless RHEL 4 clients with this or any earlier release.
+       * Recommended e2fsprogs version: 1.40.2-cfs1
+       * Note that reiserfs quotas are disabled on SLES 10 in this kernel.
+
 2007-09-27         Cluster File Systems, Inc. <info@clusterfs.com>
        * version 1.6.3
        * Support for kernels:
