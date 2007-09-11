@@ -13,4 +13,3 @@ sd_iostats-2.6-rhel4.patch
 export_symbol_numa-2.6.18.patch 
 jbd-16tb-overflow-fixes.patch
 jbd-check-for-unmapped-buffer.patch
-#jbd-journal-chksum-2.6.18-vanilla.patch
