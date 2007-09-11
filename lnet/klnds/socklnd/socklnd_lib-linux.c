@@ -186,7 +186,7 @@ ksocknal_lib_tunables_init ()
                 .ctl_name = j++,
                 .procname = "protocol",
                 .data     = ksocknal_tunables.ksnd_protocol,
-                .maxlin   = sizeof(int),
+                .maxlen   = sizeof(int),
                 .mode     = 0644,
                 .proc_handler = &proc_dointvec
         };
