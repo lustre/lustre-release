@@ -56,13 +56,13 @@ static int lsm_lmm_verify_common(struct lov_mds_md *lmm, int lmm_bytes,
                 lov_dump_lmm_v1(D_WARNING, lmm);
                 return -EINVAL;
         }
-        
+
         if (lmm->lmm_object_id == 0) {
                 CERROR("zero object id\n");
                 lov_dump_lmm_v1(D_WARNING, lmm);
                 return -EINVAL;
         }
-        
+
         if (lmm->lmm_pattern != cpu_to_le32(LOV_PATTERN_RAID0)) {
                 CERROR("bad striping pattern\n");
                 lov_dump_lmm_v1(D_WARNING, lmm);
@@ -470,7 +470,7 @@ static int lsm_revalidate_join(struct lov_stripe_md *lsm,
         LASSERT(ctxt);
 
         if (lsm->lsm_array && lsm->lsm_array->lai_ext_array)
-                RETURN(0);
+                GOTO(release_ctxt, rc = 0);
 
         CDEBUG(D_INFO, "get lsm logid: "LPU64":"LPU64"\n",
                lsm->lsm_array->lai_array_id.lgl_oid,
@@ -478,7 +478,7 @@ static int lsm_revalidate_join(struct lov_stripe_md *lsm,
         OBD_ALLOC(lsm->lsm_array->lai_ext_array,lsm->lsm_array->lai_ext_count *
                                                 sizeof (struct lov_extent));
         if (!lsm->lsm_array->lai_ext_array)
-                RETURN(-ENOMEM);
+                GOTO(release_ctxt, rc = -ENOMEM);        
 
         CDEBUG(D_INFO, "get lsm logid: "LPU64":"LPU64"\n",
                lsm->lsm_array->lai_array_id.lgl_oid,
@@ -499,6 +499,8 @@ static int lsm_revalidate_join(struct lov_stripe_md *lsm,
 out:
         if (rc)
                 lovea_free_array_info(lsm);
+release_ctxt:
+        llog_ctxt_put(ctxt);
         RETURN(rc);
 }
 
@@ -511,16 +513,15 @@ int lsm_destroy_join(struct lov_stripe_md *lsm, struct obdo *oa,
         ENTRY;
 
         LASSERT(md_exp != NULL);
-        ctxt = llog_get_context(md_exp->exp_obd, LLOG_LOVEA_REPL_CTXT);
-        if (!ctxt)
-                GOTO(out, rc = -EINVAL);
-
-        LASSERT(lsm->lsm_array != NULL);
         /*for those orphan inode, we should keep array id*/
         if (!(oa->o_valid & OBD_MD_FLCOOKIE))
-                RETURN(0);
+                RETURN(rc);
 
-        LASSERT(ctxt != NULL);
+        ctxt = llog_get_context(md_exp->exp_obd, LLOG_LOVEA_REPL_CTXT);
+        if (!ctxt)
+                RETURN(-EINVAL);
+
+        LASSERT(lsm->lsm_array != NULL);
         rc = llog_create(ctxt, &llh, &lsm->lsm_array->lai_array_id,
                          NULL);
         if (rc)
@@ -532,6 +533,7 @@ int lsm_destroy_join(struct lov_stripe_md *lsm, struct obdo *oa,
         }
         llog_free_handle(llh);
 out:
+        llog_ctxt_put(ctxt);
         RETURN(rc);
 }
 

@@ -109,7 +109,7 @@ check_lustre_msg_v2(void)
         CHECK_MEMBER(lustre_msg_v2, lm_secflvr);
         CHECK_MEMBER(lustre_msg_v2, lm_magic);
         CHECK_MEMBER(lustre_msg_v2, lm_repsize);
-        CHECK_MEMBER(lustre_msg_v2, lm_timeout);
+        CHECK_MEMBER(lustre_msg_v2, lm_cksum);
         CHECK_MEMBER(lustre_msg_v2, lm_padding_1);
         CHECK_MEMBER(lustre_msg_v2, lm_padding_2);
         CHECK_MEMBER(lustre_msg_v2, lm_padding_3);
@@ -133,11 +133,10 @@ check_ptlrpc_body(void)
         CHECK_MEMBER(ptlrpc_body, pb_flags);
         CHECK_MEMBER(ptlrpc_body, pb_op_flags);
         CHECK_MEMBER(ptlrpc_body, pb_conn_cnt);
-        CHECK_MEMBER(ptlrpc_body, pb_padding_1);
-        CHECK_MEMBER(ptlrpc_body, pb_padding_2);
-        CHECK_MEMBER(ptlrpc_body, pb_padding_3);
-        CHECK_MEMBER(ptlrpc_body, pb_padding_4);
-        CHECK_MEMBER(ptlrpc_body, pb_padding_5);
+        CHECK_MEMBER(ptlrpc_body, pb_timeout);
+        CHECK_MEMBER(ptlrpc_body, pb_service_time);
+        CHECK_MEMBER(ptlrpc_body, pb_slv);
+        CHECK_MEMBER(ptlrpc_body, pb_limit);
 }
 
 static void check_obd_connect_data(void)
@@ -152,11 +151,10 @@ static void check_obd_connect_data(void)
         CHECK_MEMBER(obd_connect_data, ocd_ibits_known);
         CHECK_MEMBER(obd_connect_data, ocd_nllu);
         CHECK_MEMBER(obd_connect_data, ocd_nllg);
-        CHECK_MEMBER(obd_connect_data, ocd_transno);
-        CHECK_MEMBER(obd_connect_data, ocd_group);
         CHECK_MEMBER(obd_connect_data, padding1);
         CHECK_MEMBER(obd_connect_data, padding2);
         CHECK_MEMBER(obd_connect_data, padding3);
+        CHECK_MEMBER(obd_connect_data, padding4);
 
         CHECK_CDEFINE(OBD_CONNECT_RDONLY);
         CHECK_CDEFINE(OBD_CONNECT_INDEX);
@@ -166,8 +164,9 @@ static void check_obd_connect_data(void)
         CHECK_CDEFINE(OBD_CONNECT_REQPORTAL);
         CHECK_CDEFINE(OBD_CONNECT_ACL);
         CHECK_CDEFINE(OBD_CONNECT_XATTR);
-        CHECK_CDEFINE(OBD_CONNECT_REAL);
+        CHECK_CDEFINE(OBD_CONNECT_CROW);
         CHECK_CDEFINE(OBD_CONNECT_TRUNCLOCK);
+        CHECK_CDEFINE(OBD_CONNECT_TRANSNO);
         CHECK_CDEFINE(OBD_CONNECT_IBITS);
         CHECK_CDEFINE(OBD_CONNECT_JOIN);
         CHECK_CDEFINE(OBD_CONNECT_ATTRFID);
@@ -176,11 +175,12 @@ static void check_obd_connect_data(void)
         CHECK_CDEFINE(OBD_CONNECT_RMT_CLIENT);
         CHECK_CDEFINE(OBD_CONNECT_BRW_SIZE);
         CHECK_CDEFINE(OBD_CONNECT_QUOTA64);
-        CHECK_CDEFINE(OBD_CONNECT_MDS_CAPA);
+        CHECK_CDEFINE(OBD_CONNECT_FID_CAPA);
         CHECK_CDEFINE(OBD_CONNECT_OSS_CAPA);
-        CHECK_CDEFINE(OBD_CONNECT_MDS_MDS);
-        CHECK_CDEFINE(OBD_CONNECT_SOM);
         CHECK_CDEFINE(OBD_CONNECT_CANCELSET);
+        CHECK_CDEFINE(OBD_CONNECT_SOM);
+        CHECK_CDEFINE(OBD_CONNECT_AT);
+        CHECK_CDEFINE(OBD_CONNECT_LRU_RESIZE);
 }
 
 static void
@@ -260,6 +260,7 @@ check_obdo(void)
         CHECK_CDEFINE(OBD_FL_DEBUG_CHECK);
         CHECK_CDEFINE(OBD_FL_NO_USRQUOTA);
         CHECK_CDEFINE(OBD_FL_NO_GRPQUOTA);
+        CHECK_CDEFINE(OBD_FL_CREATE_CROW);
 }
 
 static void
@@ -820,7 +821,7 @@ check_llog_size_change_rec(void)
         CHECK_STRUCT(llog_size_change_rec);
         CHECK_MEMBER(llog_size_change_rec, lsc_hdr);
         CHECK_MEMBER(llog_size_change_rec, lsc_fid);
-        CHECK_MEMBER(llog_size_change_rec, lsc_ioepoch);
+        CHECK_MEMBER(llog_size_change_rec, lsc_io_epoch);
         CHECK_MEMBER(llog_size_change_rec, padding);
         CHECK_MEMBER(llog_size_change_rec, lsc_tail);
 }
@@ -1068,6 +1069,7 @@ main(int argc, char **argv)
         CHECK_VALUE(MSG_LAST_REPLAY);
         CHECK_VALUE(MSG_RESENT);
         CHECK_VALUE(MSG_REPLAY);
+        CHECK_VALUE(MSG_AT_SUPPORT);
 
         CHECK_VALUE(MSG_CONNECT_RECOVERING);
         CHECK_VALUE(MSG_CONNECT_RECONNECT);

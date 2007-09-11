@@ -85,8 +85,9 @@ static void print_inode(struct inode *inode)
             S_ISLNK(inode->i_mode))
                 size = inode_get_bytes(inode);
 
-         CERROR("%lu: uid: %u, size: %llu, blocks: %lu, real size: %llu\n",
-               inode->i_ino, inode->i_uid, inode->i_size, inode->i_blocks, size);
+         CERROR("%lu: uid: %u, size: %llu, blocks: %llu, real size: %llu\n",
+               inode->i_ino, inode->i_uid, inode->i_size,
+               (long long)inode->i_blocks, size);
 }
 
 /* Test quotaon */
@@ -153,9 +154,10 @@ static int quotacheck_test_cleanup(struct obd_device *obd)
         return 0;
 }
 
-static int quotacheck_test_setup(struct obd_device *obd, struct lustre_cfg* lcfg)
+static int quotacheck_test_setup(struct obd_device *obd, obd_count len, void *buf)
 {
         struct lprocfs_static_vars lvars;
+        struct lustre_cfg *lcfg = buf;
         struct obd_device *tgt;
         int rc;
         ENTRY;
@@ -199,8 +201,8 @@ static int __init quotacheck_test_init(void)
         struct lprocfs_static_vars lvars;
 
         lprocfs_init_vars(quotacheck_test, &lvars);
-        return class_register_type(&quotacheck_obd_ops, NULL, lvars.module_vars,
-                                   "quotacheck_test", NULL);
+        return class_register_type(&quotacheck_obd_ops, lvars.module_vars,
+                                   "quotacheck_test");
 }
 
 static void __exit quotacheck_test_exit(void)

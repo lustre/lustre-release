@@ -1,41 +1,35 @@
 # Administration utilities Makefile
 
-if GSS
-SUBDIRS = gss
-endif
-
 AM_CFLAGS=$(LLCFLAGS)
 AM_CPPFLAGS=$(LLCPPFLAGS) -DLUSTRE_UTILS=1
 AM_LDFLAGS := -L$(top_builddir)/lnet/utils
 
 LIBPTLCTL := $(top_builddir)/lnet/utils/libptlctl.a
 
-sbin_scripts = lrun
-bin_scripts = llstat llobdstat plot-llstat 
+sbin_scripts = lrun 
+bin_scripts = llstat llobdstat plot-llstat
 
 if UTILS
 noinst_PROGRAMS = wirecheck wiretest obdio obdbarrier
-
 # mount only finds helpers in /sbin
 rootsbin_PROGRAMS = mount.lustre
 sbin_PROGRAMS = mkfs.lustre tunefs.lustre lctl \
-	l_getidentity l_facl llverfs llverdev \
-	llog_reader lr_reader
+	l_getgroups llverfs llverdev llog_reader lr_reader ltrack_stats
 if LIBPTHREAD
 sbin_PROGRAMS += loadgen
 endif
-bin_PROGRAMS = lfs req_layout
+bin_PROGRAMS = lfs
 bin_SCRIPTS = $(bin_scripts)
 sbin_SCRIPTS = $(sbin_scripts)
 endif # UTILS
 
-lib_LIBRARIES = liblustreapi.a libiam.a
+lib_LIBRARIES = liblustreapi.a
 
 lctl_SOURCES = parser.c obd.c lustre_cfg.c lctl.c parser.h obdctl.h platform.h
 lctl_LDADD := $(LIBREADLINE) $(LIBPTLCTL)
 lctl_DEPENDENCIES := $(LIBPTLCTL)
 
-lfs_SOURCES = lfs.c parser.c obd.c lustre_cfg.c
+lfs_SOURCES = lfs.c parser.c lustre_cfg.c obd.c
 lfs_LDADD := $(LIBREADLINE) liblustreapi.a $(LIBPTLCTL)
 lfs_DEPENDENCIES := $(LIBPTLCTL) liblustreapi.a 
 
@@ -62,7 +56,6 @@ llverfs_LDADD := $(EXT2FSLIB) $(E2PLIB)
 llverdev_LDADD := $(EXT2FSLIB) $(BLKIDLIB)
 
 liblustreapi_a_SOURCES = liblustreapi.c
-libiam_a_SOURCES = libiam.c
 
 wirecheck_SOURCES = wirecheck.c
 wirecheck_CPPFLAGS = -DCC="\"$(CC)\""
@@ -71,7 +64,6 @@ wiretest_SOURCES = wiretest.c
 
 obdio_SOURCES = obdio.c obdiolib.c obdiolib.h
 obdbarrier_SOURCES = obdbarrier.c obdiolib.c obdiolib.h
-req_layout_SOURCES = req-layout.c
 
 llog_reader_SOURCES = llog_reader.c
 llog_reader_LDADD := $(LIBPTLCTL)
@@ -85,21 +77,15 @@ mount_lustre_DEPENDENCIES := $(LIBPTLCTL)
 
 mkfs_lustre_SOURCES = mkfs_lustre.c
 mkfs_lustre_CPPFLAGS = -UTUNEFS $(AM_CPPFLAGS)
-mkfs_lustre_LDADD := libiam.a $(LIBPTLCTL)
-mkfs_lustre_DEPENDENCIES := $(LIBPTLCTL) libiam.a
+mkfs_lustre_LDADD := $(LIBPTLCTL)
+mkfs_lustre_DEPENDENCIES := $(LIBPTLCTL)
 
 tunefs_lustre_SOURCES = $(mkfs_lustre_SOURCES)
 tunefs_lustre_CPPFLAGS = -DTUNEFS $(AM_CPPFLAGS)
 tunefs_lustre_LDADD := $(mkfs_lustre_LDADD)
 tunefs_lustre_DEPENDENCIES := $(mkfs_lustre_DEPENDENCIES)
 
-l_getidentity_SOURCES = l_getidentity.c
-l_getidentity_LDADD := $(LIBPTLCTL)
-l_getidentity_DEPENDENCIES := $(LIBPTLCTL)
-
-l_facl_SOURCES = l_facl.c
-l_facl_LDADD := liblustreapi.a
-l_facl_DEPENDENCIES := liblustreapi.a
+ltrack_stats_SOURCES = ltrack_stats.c
 
 EXTRA_DIST = $(sbin_scripts) $(bin_scripts)
 

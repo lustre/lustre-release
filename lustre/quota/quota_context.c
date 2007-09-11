@@ -35,6 +35,7 @@ unsigned long default_bunit_sz = 100 * 1024 * 1024;       /* 100M bytes */
 unsigned long default_btune_ratio = 50;                   /* 50 percentage */
 unsigned long default_iunit_sz = 5000;       /* 5000 inodes */
 unsigned long default_itune_ratio = 50;      /* 50 percentage */
+unsigned long default_limit_sz = 20 * 1024 * 1024;
 
 cfs_mem_cache_t *qunit_cachep = NULL;
 struct list_head qunit_hash[NR_DQHASH];
@@ -87,8 +88,8 @@ int qunit_cache_init(void)
 
         LASSERT(qunit_cachep == NULL);
         qunit_cachep = cfs_mem_cache_create("ll_qunit_cache",
-                                         sizeof(struct lustre_qunit),
-                                         0, 0);
+                                            sizeof(struct lustre_qunit),
+                                            0, 0);
         if (!qunit_cachep)
                 RETURN(-ENOMEM);
 
@@ -112,59 +113,6 @@ qunit_hashfn(struct lustre_quota_ctxt *qctxt, struct qunit_data *qdata)
         unsigned long tmp = ((unsigned long)qctxt >> L1_CACHE_SHIFT) ^ id;
         tmp = (tmp * (MAXQUOTAS - type)) % NR_DQHASH;
         return tmp;
-}
-
-/* compute the remaining quota for certain gid or uid b=11693 */
-int compute_remquota(struct obd_device *obd,
-                     struct lustre_quota_ctxt *qctxt, struct qunit_data *qdata)
-{
-        struct super_block *sb = qctxt->lqc_sb;
-        __u64 usage, limit;
-        struct obd_quotactl *qctl;
-        int ret = QUOTA_RET_OK;
-        __u32 qdata_type = qdata->qd_flags & QUOTA_IS_GRP;
-        ENTRY;
-
-        if (!sb_any_quota_enabled(sb))
-                RETURN(QUOTA_RET_NOQUOTA);
-
-        /* ignore root user */
-        if (qdata->qd_id == 0 && qdata_type == USRQUOTA)
-                RETURN(QUOTA_RET_NOLIMIT);
-
-        OBD_ALLOC_PTR(qctl);
-        if (qctl == NULL) 
-                RETURN(-ENOMEM);
-
-        /* get fs quota usage & limit */
-        qctl->qc_cmd = Q_GETQUOTA;
-        qctl->qc_id = qdata->qd_id;
-        qctl->qc_type = qdata_type;
-        ret = fsfilt_quotactl(obd, sb, qctl);
-        if (ret) {
-                if (ret == -ESRCH)      /* no limit */
-                        ret = QUOTA_RET_NOLIMIT;
-                else
-                        CDEBUG(D_QUOTA, "can't get fs quota usage! (rc:%d)", 
-                               ret);
-                GOTO(out, ret);
-        }
-
-        usage = qctl->qc_dqblk.dqb_curspace;
-        limit = qctl->qc_dqblk.dqb_bhardlimit << QUOTABLOCK_BITS;
-        if (!limit){            /* no limit */
-                ret = QUOTA_RET_NOLIMIT;
-                GOTO(out, ret);
-        }
-
-        if (limit >= usage)
-                qdata->qd_count = limit - usage;
-        else
-                qdata->qd_count = 0;
-        EXIT;
-out:
-        OBD_FREE_PTR(qctl);
-        return ret;
 }
 
 /* caller must hold qunit_hash_lock */
@@ -267,6 +215,59 @@ out:
         return ret;
 }
 
+/* compute the remaining quota for certain gid or uid b=11693 */
+int compute_remquota(struct obd_device *obd,
+                     struct lustre_quota_ctxt *qctxt, struct qunit_data *qdata)
+{
+        struct super_block *sb = qctxt->lqc_sb;
+        __u64 usage, limit;
+        struct obd_quotactl *qctl;
+        int ret = QUOTA_RET_OK;
+        __u32 qdata_type = qdata->qd_flags & QUOTA_IS_GRP;
+        ENTRY;
+
+        if (!sb_any_quota_enabled(sb))
+                RETURN(QUOTA_RET_NOQUOTA);
+
+        /* ignore root user */
+        if (qdata->qd_id == 0 && qdata_type == USRQUOTA)
+                RETURN(QUOTA_RET_NOLIMIT);
+
+        OBD_ALLOC_PTR(qctl);
+        if (qctl == NULL) 
+                RETURN(-ENOMEM);
+
+        /* get fs quota usage & limit */
+        qctl->qc_cmd = Q_GETQUOTA;
+        qctl->qc_id = qdata->qd_id;
+        qctl->qc_type = qdata_type;
+        ret = fsfilt_quotactl(obd, sb, qctl);
+        if (ret) {
+                if (ret == -ESRCH)      /* no limit */
+                        ret = QUOTA_RET_NOLIMIT;
+                else
+                        CDEBUG(D_QUOTA, "can't get fs quota usage! (rc:%d)", 
+                               ret);
+                GOTO(out, ret);
+        }
+
+        usage = qctl->qc_dqblk.dqb_curspace;
+        limit = qctl->qc_dqblk.dqb_bhardlimit << QUOTABLOCK_BITS;
+        if (!limit){            /* no limit */
+                ret = QUOTA_RET_NOLIMIT;
+                GOTO(out, ret);
+        }
+
+        if (limit >= usage)
+                qdata->qd_count = limit - usage;
+        else
+                qdata->qd_count = 0;
+        EXIT;
+out:
+        OBD_FREE_PTR(qctl);
+        return ret;
+}
+
 /* caller must hold qunit_hash_lock */
 static struct lustre_qunit *dqacq_in_flight(struct lustre_quota_ctxt *qctxt,
                                             struct qunit_data *qdata)
@@ -344,14 +345,14 @@ struct qunit_waiter {
 
 
 /* FIXME check if this mds is the master of specified id */
-static int
-is_master(struct obd_device *obd, struct lustre_quota_ctxt *qctxt,
+static int 
+is_master(struct obd_device *obd, struct lustre_quota_ctxt *qctxt, 
           unsigned int id, int type)
 {
         return qctxt->lqc_handler ? 1 : 0;
 }
 
-static int
+static int 
 schedule_dqacq(struct obd_device *obd, struct lustre_quota_ctxt *qctxt,
                struct qunit_data *qdata, int opc, int wait);
 
@@ -595,7 +596,8 @@ schedule_dqacq(struct obd_device *obd,
         struct qunit_data *reqdata;
         struct dqacq_async_args *aa;
         int size[2] = { sizeof(struct ptlrpc_body), sizeof(*reqdata) };
-	unsigned long factor;	
+        struct obd_import *imp = NULL;
+        unsigned long factor;
         int rc = 0;
         ENTRY;
 
@@ -605,18 +607,18 @@ schedule_dqacq(struct obd_device *obd,
 
         if ((empty = alloc_qunit(qctxt, qdata, opc)) == NULL)
                 RETURN(-ENOMEM);
-
+        
         spin_lock(&qunit_hash_lock);
 
         qunit = dqacq_in_flight(qctxt, qdata);
         if (qunit) {
-                if (wait)
+                if (wait) 
                         list_add_tail(&qw.qw_entry, &qunit->lq_waiters);
                 spin_unlock(&qunit_hash_lock);
-
+                
                 free_qunit(empty);
                 goto wait_completion;
-        }
+        } 
         qunit = empty;
         insert_qunit_nolock(qctxt, qunit);
         if (wait)
@@ -635,25 +637,45 @@ schedule_dqacq(struct obd_device *obd,
                 RETURN((rc && rc != -EDQUOT) ? rc : rc2);
         }
 
+        spin_lock(&qctxt->lqc_lock);
+        if (!qctxt->lqc_import) {
+                spin_unlock(&qctxt->lqc_lock);
+                QDATA_DEBUG(qdata, "lqc_import is invalid.\n");
+                spin_lock(&qunit_hash_lock);
+                if (wait)
+                        list_del_init(&qw.qw_entry);
+                remove_qunit_nolock(qunit);
+                free_qunit(empty);
+                qunit = NULL;
+                spin_unlock(&qunit_hash_lock);
+                RETURN(-EAGAIN);
+        } else {
+                imp = class_import_get(qctxt->lqc_import);
+        }
+        spin_unlock(&qctxt->lqc_lock);
+
         /* build dqacq/dqrel request */
-        LASSERT(qctxt->lqc_import);
-        req = ptlrpc_prep_req(qctxt->lqc_import, LUSTRE_MDS_VERSION, opc, 2,
+        LASSERT(imp);
+        req = ptlrpc_prep_req(imp, LUSTRE_MDS_VERSION, opc, 2,
                               size, NULL);
         if (!req) {
                 dqacq_completion(obd, qctxt, qdata, -ENOMEM, opc);
+                class_import_put(imp);
                 RETURN(-ENOMEM);
         }
 
-	if (qdata->qd_flags & QUOTA_IS_BLOCK)
-	        factor = MAX_QUOTA_COUNT32 / qctxt->lqc_bunit_sz * 
-                         qctxt->lqc_bunit_sz;
+        if (qdata->qd_flags & QUOTA_IS_BLOCK)
+                factor = MAX_QUOTA_COUNT32 / qctxt->lqc_bunit_sz * 
+                        qctxt->lqc_bunit_sz;
         else
                 factor = MAX_QUOTA_COUNT32 / qctxt->lqc_iunit_sz * 
-                         qctxt->lqc_iunit_sz;
+                        qctxt->lqc_iunit_sz;
 
-        LASSERT(!should_translate_quota(qctxt->lqc_import) || 
-                qdata->qd_count <= factor);
-        if (should_translate_quota(qctxt->lqc_import))
+        LASSERTF(!should_translate_quota(imp) ||
+                 qdata->qd_count <= factor,
+                 "qd_count: "LPU64"; should_translate_quota: %d.\n",
+                 qdata->qd_count, should_translate_quota(imp));
+        if (should_translate_quota(imp))
         {
                 struct qunit_data_old *reqdata_old, *tmp;
                         
@@ -671,6 +693,7 @@ schedule_dqacq(struct obd_device *obd,
                 CDEBUG(D_QUOTA, "qd_count is 64bit!\n");
         }
         ptlrpc_req_set_repsize(req, 2, size);
+        class_import_put(imp);
 
         CLASSERT(sizeof(*aa) <= sizeof(req->rq_async_args));
         aa = (struct dqacq_async_args *)&req->rq_async_args;
@@ -680,7 +703,7 @@ schedule_dqacq(struct obd_device *obd,
         req->rq_interpret_reply = dqacq_interpret;
         ptlrpcd_add_req(req);
 
-        QDATA_DEBUG(qdata, "%s scheduled.\n",
+        QDATA_DEBUG(qdata, "%s scheduled.\n", 
                     opc == QUOTA_DQACQ ? "DQACQ" : "DQREL");
 wait_completion:
         if (wait && qunit) {
@@ -731,7 +754,7 @@ qctxt_adjust_qunit(struct obd_device *obd, struct lustre_quota_ctxt *qctxt,
         RETURN(rc);
 }
 
-int
+int 
 qctxt_wait_pending_dqacq(struct lustre_quota_ctxt *qctxt, unsigned int id,
                          unsigned short type, int isblk)
 {
@@ -779,6 +802,8 @@ qctxt_init(struct lustre_quota_ctxt *qctxt, struct super_block *sb,
         if (rc)
                 RETURN(rc);
 
+        spin_lock_init(&qctxt->lqc_lock);
+        spin_lock(&qctxt->lqc_lock);
         qctxt->lqc_handler = handler;
         qctxt->lqc_sb = sb;
         qctxt->lqc_import = NULL;
@@ -789,6 +814,8 @@ qctxt_init(struct lustre_quota_ctxt *qctxt, struct super_block *sb,
         qctxt->lqc_btune_sz = default_bunit_sz / 100 * default_btune_ratio;
         qctxt->lqc_iunit_sz = default_iunit_sz;
         qctxt->lqc_itune_sz = default_iunit_sz * default_itune_ratio / 100;
+        qctxt->lqc_limit_sz = default_limit_sz;
+        spin_unlock(&qctxt->lqc_lock);
 
         RETURN(0);
 }
@@ -809,7 +836,7 @@ void qctxt_cleanup(struct lustre_quota_ctxt *qctxt, int force)
 
                         remove_qunit_nolock(qunit);
                         /* wake up all waiters */
-                        list_for_each_entry_safe(qw, tmp2, &qunit->lq_waiters,
+                        list_for_each_entry_safe(qw, tmp2, &qunit->lq_waiters, 
                                                  qw_entry) {
                                 list_del_init(&qw->qw_entry);
                                 qw->qw_rc = 0;
@@ -838,7 +865,7 @@ static int qslave_recovery_main(void *arg)
         struct qslave_recov_thread_data *data = arg;
         struct obd_device *obd = data->obd;
         struct lustre_quota_ctxt *qctxt = data->qctxt;
-        unsigned int type;
+        unsigned int type; 
         int rc = 0;
         ENTRY;
 
@@ -897,7 +924,7 @@ static int qslave_recovery_main(void *arg)
                                 rc = 0;
 
                         if (rc)
-                                CDEBUG(rc == -EBUSY ? D_QUOTA : D_ERROR,
+                                CDEBUG(rc == -EBUSY ? D_QUOTA : D_ERROR, 
                                        "qslave recovery failed! (id:%d type:%d "
                                        " rc:%d)\n", dqid->di_id, type, rc);
 free:
@@ -909,7 +936,7 @@ free:
         RETURN(rc);
 }
 
-void
+void 
 qslave_start_recovery(struct obd_device *obd, struct lustre_quota_ctxt *qctxt)
 {
         struct qslave_recov_thread_data data;

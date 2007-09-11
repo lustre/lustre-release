@@ -52,7 +52,16 @@ static struct handle_bucket {
 
 static atomic_t handle_count = ATOMIC_INIT(0);
 
+#ifdef __arch_um__
+/* For unknown reason, UML uses kmalloc rather than vmalloc to allocate
+ * memory(OBD_VMALLOC). Therefore, we have to redefine the
+ * HANDLE_HASH_SIZE to make the hash heads don't exceed 128K.
+ */
+#define HANDLE_HASH_SIZE 4096
+#else
 #define HANDLE_HASH_SIZE (1 << 14)
+#endif /* ifdef __arch_um__ */
+
 #define HANDLE_HASH_MASK (HANDLE_HASH_SIZE - 1)
 
 /*
@@ -85,7 +94,7 @@ void class_handle_hash(struct portals_handle *h, portals_handle_addref_cb cb)
                 handle_base += HANDLE_INCR;
         }
         spin_unlock(&handle_base_lock);
- 
+
         atomic_inc(&handle_count);
         h->h_addref = cb;
         spin_lock_init(&h->h_lock);
@@ -133,21 +142,6 @@ void class_handle_unhash(struct portals_handle *h)
         atomic_dec(&handle_count);
 }
 
-void class_handle_hash_back(struct portals_handle *h)
-{
-        struct handle_bucket *bucket;
-        ENTRY;
-
-        bucket = handle_hash + (h->h_cookie & HANDLE_HASH_MASK);
-
-        atomic_inc(&handle_count);
-        spin_lock(&bucket->lock);
-        list_add_rcu(&h->h_link, &bucket->head);
-        spin_unlock(&bucket->lock);
-
-        EXIT;
-}
-
 void *class_handle2object(__u64 cookie)
 {
         struct handle_bucket *bucket;
@@ -193,6 +187,7 @@ void class_handle_free_cb(struct rcu_head *rcu)
         }
 }
 
+
 int class_handle_init(void)
 {
         struct handle_bucket *bucket;
@@ -209,6 +204,7 @@ int class_handle_init(void)
                 CFS_INIT_LIST_HEAD(&bucket->head);
                 spin_lock_init(&bucket->lock);
         }
+
         ll_get_random_bytes(&handle_base, sizeof(handle_base));
         LASSERT(handle_base != 0ULL);
 

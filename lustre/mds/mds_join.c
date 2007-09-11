@@ -221,7 +221,7 @@ static void mds_finish_join(struct mds_obd *mds, struct ptlrpc_request *req,
         CDEBUG(D_INFO, "change the max md size from %d to "LPSZ"\n",
                mds->mds_max_mdsize, sizeof(*lmmj));
 
-        if (mds->mds_max_mdsize < max_easize ||
+        if (mds->mds_max_mdsize < max_easize || 
             mds->mds_max_cookiesize < max_cookiesize) {
                 body->max_mdsize = mds->mds_max_mdsize > max_easize ?
                                    mds->mds_max_mdsize : max_easize;
@@ -233,7 +233,7 @@ static void mds_finish_join(struct mds_obd *mds, struct ptlrpc_request *req,
         }
 
         if (body->valid & OBD_MD_FLMODEASIZE)
-                CDEBUG(D_HA, "updating max_mdsize/max_cookiesize: %d/%d\n",
+                CDEBUG(D_INODE, "updating max_mdsize/max_cookiesize: %d/%d\n",
                        mds->mds_max_mdsize, mds->mds_max_cookiesize);
 
         mds_pack_inode2fid(&body->fid1, inode);
@@ -260,10 +260,8 @@ static int mds_join_unlink_tail_inode(struct mds_update_record *rec,
                 ldlm_lock_decref(lockh, LCK_EX);
 
         head_inode = dchild->d_inode;
-
-        head_fid.id = head_inode->i_ino;
-        head_fid.generation = head_inode->i_generation;
-        head_fid.f_type = head_inode->i_mode & S_IFMT;
+        mdc_pack_fid(&head_fid, head_inode->i_ino, head_inode->i_generation,
+                      head_inode->i_mode & S_IFMT);
 
         rc = mds_get_parents_children_locked(obd, mds, &join_rec->jr_fid,
                                              &de_tailparent, &head_fid,
@@ -345,7 +343,7 @@ int mds_join_file(struct mds_update_record *rec, struct ptlrpc_request *req,
         struct lov_mds_md_join *head_lmmj = NULL, *tail_lmmj = NULL;
         int lmm_size, rc = 0, cleanup_phase = 0, size;
         struct llog_handle *llh_head = NULL, *llh_tail = NULL;
-        struct llog_ctxt *ctxt;
+        struct llog_ctxt *ctxt = NULL;
         struct mds_rec_join *join_rec;
         ENTRY;
 
@@ -394,6 +392,7 @@ int mds_join_file(struct mds_update_record *rec, struct ptlrpc_request *req,
 
         push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
         ctxt = llog_get_context(obd, LLOG_LOVEA_ORIG_CTXT);
+        LASSERT(ctxt != NULL);
         cleanup_phase = 2;
         if (le32_to_cpu(head_lmm->lmm_magic) == LOV_MAGIC) { /*simple file */
                 struct llog_logid *llog_array;
@@ -484,6 +483,7 @@ cleanup:
         case 3:
                 llog_close(llh_head);
         case 2:
+                llog_ctxt_put(ctxt);
                 if (head_lmmj && ((void*)head_lmmj != (void*)head_lmm))
                         OBD_FREE_PTR(head_lmmj);
 

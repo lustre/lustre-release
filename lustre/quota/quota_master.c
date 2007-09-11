@@ -48,8 +48,8 @@ int lustre_dquot_init(void)
 
         LASSERT(lustre_dquot_cachep == NULL);
         lustre_dquot_cachep = cfs_mem_cache_create("lustre_dquot_cache",
-                                                sizeof(struct lustre_dquot),
-                                                0, 0);
+                                                   sizeof(struct lustre_dquot),
+                                                   0, 0);
         if (!lustre_dquot_cachep)
                 return (-ENOMEM);
 
@@ -298,7 +298,7 @@ int mds_quota_adjust(struct obd_device *obd, unsigned int qcids[],
         int rc2 = 0;
         ENTRY;
 
-        if (rc && rc != -EDQUOT)
+        if (rc && rc != -EDQUOT && rc != ENOLCK)
                 RETURN(0);
 
         switch (opc) {
@@ -335,7 +335,7 @@ int filter_quota_adjust(struct obd_device *obd, unsigned int qcids[],
         int rc2 = 0;
         ENTRY;
 
-        if (rc && rc != -EDQUOT && rc != ENOLCK)
+        if (rc && rc != -EDQUOT)
                 RETURN(0);
 
         switch (opc) {

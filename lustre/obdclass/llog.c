@@ -85,7 +85,7 @@ int llog_cancel_rec(struct llog_handle *loghandle, int index)
         int rc = 0;
         ENTRY;
 
-        CDEBUG(D_HA, "canceling %d in log "LPX64"\n",
+        CDEBUG(D_RPCTRACE, "canceling %d in log "LPX64"\n",
                index, loghandle->lgh_id.lgl_oid);
 
         if (index == 0) {
@@ -94,7 +94,7 @@ int llog_cancel_rec(struct llog_handle *loghandle, int index)
         }
 
         if (!ext2_clear_bit(index, llh->llh_bitmap)) {
-                CDEBUG(D_HA, "catalog index %u already clear?\n", index);
+                CDEBUG(D_RPCTRACE, "catalog index %u already clear?\n", index);
                 RETURN(-EINVAL);
         }
 
@@ -246,7 +246,6 @@ int llog_process(struct llog_handle *loghandle, llog_cb_t cb,
                        index, last_index);
 
                 /* get the buf with our target record; avoid old garbage */
-                memset(buf, 0, LLOG_CHUNK_SIZE);
                 last_offset = cur_offset;
                 rc = llog_next_block(loghandle, &saved_index, index,
                                      &cur_offset, buf, LLOG_CHUNK_SIZE);
@@ -268,7 +267,7 @@ int llog_process(struct llog_handle *loghandle, llog_cb_t cb,
 
                         CDEBUG(D_OTHER, "after swabbing, type=%#x idx=%d\n",
                                rec->lrh_type, rec->lrh_index);
- 
+                        
                         if (rec->lrh_index == 0)
                                 GOTO(out, 0); /* no more records */
 
@@ -285,7 +284,7 @@ int llog_process(struct llog_handle *loghandle, llog_cb_t cb,
                                 continue;
                         }
 
-                        CDEBUG(D_OTHER,
+                        CDEBUG(D_OTHER, 
                                "lrh_index: %d lrh_len: %d (%d remains)\n",
                                rec->lrh_index, rec->lrh_len,
                                (int)(buf + LLOG_CHUNK_SIZE - (char *)rec));
@@ -380,7 +379,7 @@ int llog_reverse_process(struct llog_handle *loghandle, llog_cb_t cb,
                 rec = buf;
                 idx = le32_to_cpu(rec->lrh_index);
                 if (idx < index)
-                        CDEBUG(D_HA, "index %u : idx %u\n", index, idx);
+                        CDEBUG(D_RPCTRACE, "index %u : idx %u\n", index, idx);
                 while (idx < index) {
                         rec = ((void *)rec + le32_to_cpu(rec->lrh_len));
                         idx ++;

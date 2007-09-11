@@ -36,7 +36,7 @@ struct lov_request {
 };
 
 struct lov_request_set {
-        struct obd_enqueue_info *set_ei;
+        struct ldlm_enqueue_info*set_ei;
         struct obd_info         *set_oi;
         atomic_t                 set_refcount;
         struct obd_export       *set_exp;
@@ -62,7 +62,6 @@ struct lov_async_page {
         int                             lap_stripe;
         obd_off                         lap_sub_offset;
         obd_id                          lap_loi_id;
-        obd_gr                          lap_loi_gr;
         void                            *lap_sub_cookie;
         struct obd_async_page_ops       *lap_caller_ops;
         void                            *lap_caller_data;
@@ -112,14 +111,12 @@ static inline void lov_llh_put(struct lov_lock_handles *llh)
                 atomic_read(&llh->llh_refcount) < 0x5a5a);
         if (atomic_dec_and_test(&llh->llh_refcount)) {
                 class_handle_unhash(&llh->llh_handle);
-                /* The structure may be held by other threads because RCU. 
-                 *   -jxiong */
+                /* The structure may be held by other threads because RCU. -jxiong */
                 if (atomic_read(&llh->llh_refcount))
                         return;
 
                 OBD_FREE_RCU(llh, sizeof *llh +
-                             sizeof(*llh->llh_handles) * llh->llh_stripe_count,
-                             &llh->llh_handle);
+                         sizeof(*llh->llh_handles) * llh->llh_stripe_count, &llh->llh_handle);
         }
 }
 
@@ -200,9 +197,10 @@ int lov_prep_sync_set(struct obd_export *exp, struct obd_info *obd_info,
                       obd_off end, struct lov_request_set **reqset);
 int lov_fini_sync_set(struct lov_request_set *set);
 int lov_prep_enqueue_set(struct obd_export *exp, struct obd_info *oinfo,
-                         struct obd_enqueue_info *einfo,
+                         struct ldlm_enqueue_info *einfo,
                          struct lov_request_set **reqset);
-int lov_fini_enqueue_set(struct lov_request_set *set, __u32 mode, int rc);
+int lov_fini_enqueue_set(struct lov_request_set *set, __u32 mode, int rc,
+                         struct ptlrpc_request_set *rqset);
 int lov_prep_match_set(struct obd_export *exp, struct obd_info *oinfo,
                        struct lov_stripe_md *lsm,
                        ldlm_policy_data_t *policy, __u32 mode,
@@ -231,9 +229,8 @@ void lov_getref(struct obd_device *obd);
 void lov_putref(struct obd_device *obd);
 
 /* lov_log.c */
-int lov_llog_init(struct obd_device *obd, struct obd_llogs *llogs, 
-                  struct obd_device *tgt, int count, struct llog_catid *logid, 
-                  struct obd_uuid *uuid);
+int lov_llog_init(struct obd_device *obd, struct obd_device *tgt,
+                  int count, struct llog_catid *logid, struct obd_uuid *uuid);
 int lov_llog_finish(struct obd_device *obd, int count);
 
 /* lov_pack.c */

@@ -75,19 +75,16 @@ static inline __u32 crc32_le(__u32 crc, unsigned char const *p, size_t len)
 # include <linux/blkdev.h>
 # include <lvfs.h>
 
-static inline void OBD_FAIL_WRITE(int id, struct super_block *sb)
-{
-        if (OBD_FAIL_CHECK(id)) {
-#ifdef LIBCFS_DEBUG
-                BDEVNAME_DECLARE_STORAGE(tmp);
-                CERROR("obd_fail_loc=%x, fail write operation on %s\n",
-                       id, ll_bdevname(sb, tmp));
-#endif
-                /* TODO-CMD: fix getting jdev */
-                __lvfs_set_rdonly(lvfs_sbdev(sb), (lvfs_sbdev_type)0);
-                /* We set FAIL_ONCE because we never "un-fail" a device */
-                obd_fail_loc |= OBD_FAILED | OBD_FAIL_ONCE;
-        }
+#define OBD_FAIL_WRITE(obd, id, sb)                                          \
+{                                                                            \
+        if (OBD_FAIL_CHECK(id)) {                                            \
+                BDEVNAME_DECLARE_STORAGE(tmp);                               \
+                CERROR("obd_fail_loc=%x, fail write operation on %s\n",      \
+                       id, ll_bdevname(sb, tmp));                            \
+                lvfs_set_rdonly(obd, sb);                                    \
+                /* We set FAIL_ONCE because we never "un-fail" a device */   \
+                obd_fail_loc |= OBD_FAILED | OBD_FAIL_ONCE;                  \
+        }                                                                    \
 }
 
 #define OBD_SLEEP_ON(wq, state)  wait_event_interruptible(wq, state)

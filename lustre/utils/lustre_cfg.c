@@ -488,6 +488,7 @@ int jt_lcfg_mgsparam(int argc, char **argv)
                 return CMD_HELP;
 
         lustre_cfg_bufs_reset(&bufs, NULL);
+
         for (i = 1; i < argc; i++) {
                 lustre_cfg_bufs_set_string(&bufs, i, argv[i]);
         }

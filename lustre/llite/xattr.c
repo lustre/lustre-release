@@ -29,9 +29,20 @@
 #include <obd_support.h>
 #include <lustre_lite.h>
 #include <lustre_dlm.h>
-#include <lustre_ver.h>
-//#include <lustre_mdc.h>
-#include <linux/lustre_acl.h>
+#include <linux/lustre_version.h>
+
+#ifndef POSIX_ACL_XATTR_ACCESS
+#ifndef XATTR_NAME_ACL_ACCESS
+#define XATTR_NAME_ACL_ACCESS   "system.posix_acl_access"
+#endif
+#define POSIX_ACL_XATTR_ACCESS XATTR_NAME_ACL_ACCESS
+#endif
+#ifndef POSIX_ACL_XATTR_DEFAULT
+#ifndef XATTR_NAME_ACL_DEFAULT
+#define XATTR_NAME_ACL_DEFAULT  "system.posix_acl_default"
+#endif
+#define POSIX_ACL_XATTR_DEFAULT XATTR_NAME_ACL_DEFAULT
+#endif
 
 #include "llite_internal.h"
 
@@ -73,10 +84,9 @@ int get_xattr_type(const char *name)
 static
 int xattr_type_filter(struct ll_sb_info *sbi, int xattr_type)
 {
-        if (((xattr_type == XATTR_ACL_ACCESS_T) ||
-            (xattr_type == XATTR_ACL_DEFAULT_T)) &&
-            (!(sbi->ll_flags & LL_SBI_ACL) ||
-            (sbi->ll_flags & LL_SBI_RMT_CLIENT)))
+        if ((xattr_type == XATTR_ACL_ACCESS_T ||
+             xattr_type == XATTR_ACL_DEFAULT_T) &&
+            !(sbi->ll_flags & LL_SBI_ACL))
                 return -EOPNOTSUPP;
 
         if (xattr_type == XATTR_USER_T && !(sbi->ll_flags & LL_SBI_USER_XATTR))
@@ -96,9 +106,10 @@ int ll_setxattr_common(struct inode *inode, const char *name,
 {
         struct ll_sb_info *sbi = ll_i2sbi(inode);
         struct ptlrpc_request *req;
+        struct ll_fid fid;
         int xattr_type, rc;
-        struct obd_capa *oc;
         ENTRY;
+
 
         xattr_type = get_xattr_type(name);
         rc = xattr_type_filter(sbi, xattr_type);
@@ -109,10 +120,9 @@ int ll_setxattr_common(struct inode *inode, const char *name,
         if (xattr_type == XATTR_TRUSTED_T && strcmp(name, "trusted.lov") == 0)
                 RETURN(0);
 
-        oc = ll_mdscapa_get(inode);
-        rc = md_setxattr(sbi->ll_md_exp, ll_inode2fid(inode), oc, valid, name,
-                         value, size, 0, flags, &req);
-        capa_put(oc);
+        ll_inode2fid(&fid, inode);
+        rc = mdc_setxattr(sbi->ll_mdc_exp, &fid, valid,
+                          name, value, size, 0, flags, &req);
         if (rc) {
                 if (rc == -EOPNOTSUPP && xattr_type == XATTR_USER_T) {
                         LCONSOLE_INFO("Disabling user_xattr feature because "
@@ -185,14 +195,15 @@ int ll_getxattr_common(struct inode *inode, const char *name,
 {
         struct ll_sb_info *sbi = ll_i2sbi(inode);
         struct ptlrpc_request *req = NULL;
-        struct mdt_body *body;
-        int xattr_type, rc;
+        struct mds_body *body;
+        struct ll_fid fid;
         void *xdata;
-        struct obd_capa *oc;
+        int xattr_type, rc;
         ENTRY;
 
         CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu/%u(%p)\n",
                inode->i_ino, inode->i_generation, inode);
+
 
         /* listxattr have slightly different behavior from of ext3:
          * without 'user_xattr' ext3 will list all xattr names but
@@ -228,13 +239,14 @@ int ll_getxattr_common(struct inode *inode, const char *name,
                 posix_acl_release(acl);
                 RETURN(rc);
         }
+        if (xattr_type == XATTR_ACL_DEFAULT_T && !S_ISDIR(inode->i_mode))
+                RETURN(-ENODATA);
 #endif
 
 do_getxattr:
-        oc = ll_mdscapa_get(inode);
-        rc = md_getxattr(sbi->ll_md_exp, ll_inode2fid(inode), oc, valid, name,
-                         NULL, 0, size, 0, &req);
-        capa_put(oc);
+        ll_inode2fid(&fid, inode);
+        rc = mdc_getxattr(sbi->ll_mdc_exp, &fid, valid, name, NULL, 0, size,
+                          &req);
         if (rc) {
                 if (rc == -EOPNOTSUPP && xattr_type == XATTR_USER_T) {
                         LCONSOLE_INFO("Disabling user_xattr feature because "
@@ -337,7 +349,7 @@ ssize_t ll_listxattr(struct dentry *dentry, char *buffer, size_t size)
 {
         struct inode *inode = dentry->d_inode;
         int rc = 0, rc2 = 0;
-        
+
         LASSERT(inode);
 
         CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu/%u(%p)\n",
@@ -365,7 +377,7 @@ ssize_t ll_listxattr(struct dentry *dentry, char *buffer, size_t size)
                 if (rc2 < 0) {
                         GOTO(out, rc2 = 0);
                 } else {
-                        const int prefix_len = sizeof(XATTR_TRUSTED_PREFIX) - 1;
+                        const int prefix_len = sizeof(XATTR_TRUSTED_PREFIX)-1;
                         const size_t name_len   = sizeof("lov") - 1;
                         const size_t total_len  = prefix_len + name_len + 1;
 

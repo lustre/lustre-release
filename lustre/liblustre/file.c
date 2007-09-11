@@ -71,38 +71,33 @@ void ll_i2gids(__u32 *suppgids, struct inode *i1, struct inode *i2)
         }
 }
 
-void llu_prep_md_op_data(struct md_op_data *op_data, struct inode *i1,
-                         struct inode *i2, const char *name, int namelen,
-                         int mode, __u32 opc)
+void llu_prepare_mdc_op_data(struct mdc_op_data *data,
+                             struct inode *i1,
+                             struct inode *i2,
+                             const char *name,
+                             int namelen,
+                             int mode)
 {
         LASSERT(i1 != NULL || i2 != NULL);
-        LASSERT(op_data);
-        memset(op_data, 0, sizeof(*op_data));
 
         if (i1) {
-                ll_i2gids(op_data->op_suppgids, i1, i2);
-                op_data->op_fid1 = *ll_inode2fid(i1);
+                ll_i2gids(data->suppgids, i1, i2);
+                ll_inode2fid(&data->fid1, i1);
         }else {
-                ll_i2gids(op_data->op_suppgids, i2, i1);
-                op_data->op_fid1 = *ll_inode2fid(i2);
+                ll_i2gids(data->suppgids, i2, i1);
+                ll_inode2fid(&data->fid1, i2);
         }
 
         if (i2)
-                op_data->op_fid2 = *ll_inode2fid(i2);
+                ll_inode2fid(&data->fid2, i2);
         else
-                fid_zero(&op_data->op_fid2);
+                memset(&data->fid2, 0, sizeof(data->fid2));
 
-        op_data->op_opc = opc;
-        op_data->op_name = name;
-        op_data->op_mode = mode;
-        op_data->op_namelen = namelen;
-        op_data->op_mod_time = CURRENT_TIME;
-        op_data->op_data = NULL;
-}
-
-void llu_finish_md_op_data(struct md_op_data *op_data)
-{
-        OBD_FREE_PTR(op_data);
+        data->name = name;
+        data->namelen = namelen;
+        data->create_mode = mode;
+        data->mod_time = CURRENT_TIME;
+        data->data = NULL;
 }
 
 void obdo_refresh_inode(struct inode *dst,
@@ -144,7 +139,7 @@ int llu_local_open(struct llu_inode_info *lli, struct lookup_intent *it)
 {
         struct ptlrpc_request *req = it->d.lustre.it_data;
         struct ll_file_data *fd;
-        struct mdt_body *body;
+        struct mds_body *body;
         ENTRY;
 
         body = lustre_msg_buf(req->rq_repmsg, DLM_REPLY_REC_OFF, sizeof(*body));
@@ -159,16 +154,14 @@ int llu_local_open(struct llu_inode_info *lli, struct lookup_intent *it)
 
         OBD_ALLOC(fd, sizeof(*fd));
         /* We can't handle this well without reorganizing ll_file_open and
-         * ll_md_close, so don't even try right now. */
+         * ll_mdc_close, so don't even try right now. */
         LASSERT(fd != NULL);
 
         memcpy(&fd->fd_mds_och.och_fh, &body->handle, sizeof(body->handle));
         fd->fd_mds_och.och_magic = OBD_CLIENT_HANDLE_MAGIC;
-        fd->fd_mds_och.och_fid   = lli->lli_fid;
         lli->lli_file_data = fd;
 
-        md_set_open_replay_data(lli->lli_sbi->ll_md_exp,
-                                &fd->fd_mds_och, it->d.lustre.it_data);
+        mdc_set_open_replay_data(&fd->fd_mds_och, it->d.lustre.it_data);
 
         RETURN(0);
 }
@@ -248,7 +241,7 @@ int llu_iop_open(struct pnode *pnode, int flags, mode_t mode)
 
 int llu_objects_destroy(struct ptlrpc_request *request, struct inode *dir)
 {
-        struct mdt_body *body;
+        struct mds_body *body;
         struct lov_mds_md *eadata;
         struct lov_stripe_md *lsm = NULL;
         struct obd_trans_info oti = { 0 };
@@ -291,9 +284,8 @@ int llu_objects_destroy(struct ptlrpc_request *request, struct inode *dir)
                 GOTO(out_free_memmd, rc = -ENOMEM);
 
         oa->o_id = lsm->lsm_object_id;
-        oa->o_gr = lsm->lsm_object_gr;
         oa->o_mode = body->mode & S_IFMT;
-        oa->o_valid = OBD_MD_FLID | OBD_MD_FLTYPE | OBD_MD_FLGROUP;
+        oa->o_valid = OBD_MD_FLID | OBD_MD_FLTYPE;
 
         if (body->valid & OBD_MD_FLCOOKIE) {
                 oa->o_valid |= OBD_MD_FLCOOKIE;
@@ -318,46 +310,15 @@ int llu_objects_destroy(struct ptlrpc_request *request, struct inode *dir)
         return rc;
 }
 
-int llu_sizeonmds_update(struct inode *inode, struct lustre_handle *fh,
-                         __u64 ioepoch)
+int llu_mdc_close(struct obd_export *mdc_exp, struct inode *inode)
 {
         struct llu_inode_info *lli = llu_i2info(inode);
-        struct llu_sb_info *sbi = llu_i2sbi(inode);
-        struct md_op_data op_data;
-        struct obdo oa;
-        int rc;
-        ENTRY;
-        
-        LASSERT(!(lli->lli_flags & LLIF_MDS_SIZE_LOCK));
-        LASSERT(sbi->ll_lco.lco_flags & OBD_CONNECT_SOM);
-        
-        rc = llu_inode_getattr(inode, &oa);
-        if (rc) {
-                CERROR("inode_getattr failed (%d): unable to send a "
-                       "Size-on-MDS attribute update for inode %llu/%lu\n",
-                       rc, (long long)llu_i2stat(inode)->st_ino,
-                       lli->lli_st_generation);
-                RETURN(rc);
-        }
-        
-        md_from_obdo(&op_data, &oa, oa.o_valid);
-        memcpy(&op_data.op_handle, fh, sizeof(*fh));
-        op_data.op_ioepoch = ioepoch;
-        op_data.op_flags |= MF_SOM_CHANGE;
-
-        rc = llu_md_setattr(inode, &op_data);
-        RETURN(rc);
-}
-
-int llu_md_close(struct obd_export *md_exp, struct inode *inode)
-{
-        struct llu_inode_info *lli = llu_i2info(inode);
+        struct intnl_stat *st = llu_i2stat(inode);
         struct ll_file_data *fd = lli->lli_file_data;
         struct ptlrpc_request *req = NULL;
         struct obd_client_handle *och = &fd->fd_mds_och;
-        struct intnl_stat *st = llu_i2stat(inode);
-        struct md_op_data op_data = { { 0 } };
-        int rc;
+        struct obdo obdo;
+        int rc, valid;
         ENTRY;
 
         /* clear group lock, if present */
@@ -368,51 +329,25 @@ int llu_md_close(struct obd_export *md_exp, struct inode *inode)
                                        &fd->fd_cwlockh);
         }
 
-        op_data.op_attr.ia_valid = ATTR_MODE | ATTR_ATIME_SET |
-                                ATTR_MTIME_SET | ATTR_CTIME_SET;
-        
-        if (fd->fd_flags & FMODE_WRITE) {
-                struct llu_sb_info *sbi = llu_i2sbi(inode);
-                if (!(sbi->ll_lco.lco_flags & OBD_CONNECT_SOM) ||
-                    !S_ISREG(llu_i2stat(inode)->st_mode)) {
-                        op_data.op_attr.ia_valid |= ATTR_SIZE | ATTR_BLOCKS;
-                } else {
-                        /* Inode cannot be dirty. Close the epoch. */
-                        op_data.op_flags |= MF_EPOCH_CLOSE;
-                        /* XXX: Send CHANGE flag only if Size-on-MDS inode attributes
-                         * are really changed.  */
-                        op_data.op_flags |= MF_SOM_CHANGE;
+        obdo.o_id = st->st_ino;
+        obdo.o_valid = OBD_MD_FLID;
+        valid = OBD_MD_FLTYPE | OBD_MD_FLMODE | OBD_MD_FLSIZE |OBD_MD_FLBLOCKS |
+                OBD_MD_FLATIME | OBD_MD_FLMTIME | OBD_MD_FLCTIME;
+        if (test_bit(LLI_F_HAVE_OST_SIZE_LOCK, &lli->lli_flags))
+                valid |= OBD_MD_FLSIZE | OBD_MD_FLBLOCKS;
 
-                        /* Pack Size-on-MDS attributes if we are in IO epoch and 
-                         * attributes are valid. */
-                        LASSERT(!(lli->lli_flags & LLIF_MDS_SIZE_LOCK));
-                        if (!llu_local_size(inode))
-                                op_data.op_attr.ia_valid |= 
-                                        OBD_MD_FLSIZE | OBD_MD_FLBLOCKS;
-                }
+        obdo_from_inode(&obdo, inode, valid);
+
+        if (0 /* ll_is_inode_dirty(inode) */) {
+                obdo.o_flags = MDS_BFLAG_UNCOMMITTED_WRITES;
+                obdo.o_valid |= OBD_MD_FLFLAGS;
         }
-        op_data.op_fid1 = lli->lli_fid;
-        op_data.op_attr.ia_atime = st->st_atime;
-        op_data.op_attr.ia_mtime = st->st_mtime;
-        op_data.op_attr.ia_ctime = st->st_ctime;
-        op_data.op_attr.ia_size = st->st_size;
-        op_data.op_attr_blocks = st->st_blocks;
-        op_data.op_attr.ia_attr_flags = lli->lli_st_flags;
-        op_data.op_ioepoch = lli->lli_ioepoch;
-        memcpy(&op_data.op_handle, &och->och_fh, sizeof(op_data.op_handle));
-
-        rc = md_close(md_exp, &op_data, och, &req);
-        if (rc == -EAGAIN) {
+        rc = mdc_close(mdc_exp, &obdo, och, &req);
+        if (rc == EAGAIN) {
                 /* We are the last writer, so the MDS has instructed us to get
                  * the file size and any write cookies, then close again. */
-                LASSERT(fd->fd_flags & FMODE_WRITE);
-                rc = llu_sizeonmds_update(inode, &och->och_fh,
-                                          op_data.op_ioepoch);
-                if (rc) {
-                        CERROR("inode %llu mdc Size-on-MDS update failed: "
-                               "rc = %d\n", (long long)st->st_ino, rc);
-                        rc = 0;
-                }
+                //ll_queue_done_writing(inode);
+                rc = 0;
         } else if (rc) {
                 CERROR("inode %llu close failed: rc %d\n",
                        (long long)st->st_ino, rc);
@@ -423,7 +358,7 @@ int llu_md_close(struct obd_export *md_exp, struct inode *inode)
                                (long long)st->st_ino, rc);
         }
 
-        md_clear_open_replay_data(md_exp, och);
+        mdc_clear_open_replay_data(och);
         ptlrpc_req_finished(req);
         och->och_fh.cookie = DEAD_HANDLE_MAGIC;
         lli->lli_file_data = NULL;
@@ -454,7 +389,7 @@ int llu_file_release(struct inode *inode)
         if (!fd) /* no process opened the file after an mcreate */
                 RETURN(0);
 
-        rc2 = llu_md_close(sbi->ll_md_exp, inode);
+        rc2 = llu_mdc_close(sbi->ll_mdc_exp, inode);
         if (rc2 && !rc)
                 rc = rc2;
 
@@ -467,8 +402,32 @@ int llu_file_release(struct inode *inode)
 int llu_iop_close(struct inode *inode)
 {
         int rc;
+        struct ldlm_res_id res_id =
+                { .name = {llu_i2stat(inode)->st_ino,
+                 (__u64)llu_i2info(inode)->lli_st_generation, LDLM_FLOCK} };
+        struct lustre_handle lockh = {0};
 
         liblustre_wait_event(0);
+
+        /* If we have posix locks on this file - clear all of those */
+        if (ldlm_lock_match(
+                      class_exp2obd(llu_i2mdcexp(inode))->obd_namespace,
+                      LDLM_FL_BLOCK_GRANTED|LDLM_FL_TEST_LOCK|LDLM_FL_CBPENDING,
+                      &res_id, LDLM_FLOCK, NULL, LCK_PR|LCK_PW, &lockh)) {
+                struct file_lock lock;
+                lock.fl_type = F_UNLCK;
+                lock.fl_flags = FL_POSIX;
+                lock.fl_start = 0;
+                lock.fl_end = OFFSET_MAX;
+                lock.fl_pid = getpid();
+                lock.fl_notify = NULL;
+                lock.fl_insert = NULL;
+                lock.fl_remove = NULL;
+                lock.fl_owner = NULL;
+                lock.fl_file = NULL;
+
+                llu_file_flock(inode, F_SETLK, &lock);
+        }
 
         rc = llu_file_release(inode);
         if (rc) {

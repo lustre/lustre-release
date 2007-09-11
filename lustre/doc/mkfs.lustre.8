@@ -43,6 +43,9 @@ Set user comment about this disk, ignored by Lustre.
 .BI \--device-size= KB
 Set device size for loop devices
 .TP
+.BI \--dryrun
+Only print what would be done; does not affect the disk
+.TP
 .BI \--failnode= nid,...  
 Set the NID(s) of a failover partner. This option can be repeated as desired.
 .TP
@@ -61,9 +64,6 @@ Set permanent mount options, equivalent to setting in /etc/fstab
 .BI \--mgsnode= nid,...  
 Set the NID(s) of the MGS node, required for all targets other than the MGS.
 .TP
-.BI \--noformat 
-Only print what would be done; does not affect the disk
-.TP
 .BI \--param " key=value"
 Set permanent parameter 
 .I key 
@@ -71,15 +71,15 @@ to value
 .I value.
 This option can be repeated as desired.  Typical options might include:
 .RS
-.I \--param sys.timeout=40 
+.I \--param sys.timeout=40
 .RS
 System obd timeout
 .RE
-.I \--param lov.stripe.size=2097152
+.I \--param lov.stripesize=2M
 .RS
 Default stripe size
 .RE
-.I \--param lov.stripe.count=2       
+.I \--param lov.stripecount=2       
 .RS
 Default stripe count
 .RE

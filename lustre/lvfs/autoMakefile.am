@@ -4,7 +4,7 @@
 # See the file COPYING in this distribution
 if LIBLUSTRE
 noinst_LIBRARIES = liblvfs.a
-liblvfs_a_SOURCES = lvfs_userfs.c
+liblvfs_a_SOURCES = lvfs_userfs.c prng.c lvfs_lib.c
 liblvfs_a_CFLAGS = $(LLCFLAGS)
 liblvfs_a_CPPFLAGS = $(LLCPPFLAGS)
 
@@ -28,7 +28,7 @@ sources: fsfilt_$(BACKINGFS).c
 else #SERVER
 sources:
 
-endif
+endif #SERVER
 
 fsfilt_extN.c: fsfilt_ext3.c
 	sed -e "s/EXT3/EXTN/g" -e "s/ext3/extN/g" $< > $@
@@ -74,7 +74,7 @@ install-data-hook: $(install_data_hook)
 
 DIST_SOURCES = fsfilt.c fsfilt_ext3.c fsfilt_reiserfs.c lvfs_common.c \
 	lvfs_internal.h lvfs_linux.c lvfs_userfs.c \
-	upcall_cache.c \
+	upcall_cache.c prng.c lvfs_lib.c\
 	lustre_quota_fmt.c lustre_quota_fmt.h quotafmt_test.c \
         # quotacheck_test.c quotactl_test.c fsfilt_ext3_quota.h
 

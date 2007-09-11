@@ -20,7 +20,6 @@
  *   along with Lustre; if not, write to the Free Software
  *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
-
 #ifndef AUTOCONF_INCLUDED
 #include <linux/config.h>
 #endif
@@ -48,7 +47,6 @@
 
 #define DEBUG_SUBSYSTEM S_LLITE
 
-//#include <lustre_mdc.h>
 #include <lustre_lite.h>
 #include "llite_internal.h"
 #include <linux/lustre_compat25.h>
@@ -73,28 +71,18 @@ static int ll_invalidatepage(struct page *page, unsigned long offset)
 #else
 static void ll_invalidatepage(struct page *page, unsigned long offset)
 {
-        if (offset == 0 && PagePrivate(page))
+        if (offset)
+                return;
+        if (PagePrivate(page))
                 ll_removepage(page);
 }
 #endif
-static int ll_releasepage(struct page *page, int gfp_mask)
+
+static int ll_releasepage(struct page *page, gfp_t gfp_mask)
 {
         if (PagePrivate(page))
                 ll_removepage(page);
         return 1;
-}
-
-static int ll_set_page_dirty(struct page *page)
-{
-        struct ll_async_page *llap;
-        ENTRY;
-        
-        llap = llap_from_page(page, LLAP_ORIGIN_UNKNOWN);
-        if (IS_ERR(llap))
-                RETURN(PTR_ERR(llap));
-        
-        llap_write_pending(page->mapping->host, llap);
-        RETURN(__set_page_dirty_nobuffers(page));
 }
 
 #define MAX_DIRECTIO_SIZE 2*1024*1024*1024UL
@@ -111,8 +99,8 @@ static inline int ll_get_user_pages(int rw, unsigned long user_addr,
                 return -EFBIG;
         }
 
-        page_count = (user_addr + size + CFS_PAGE_SIZE - 1) >> CFS_PAGE_SHIFT;
-        page_count -= user_addr >> CFS_PAGE_SHIFT;
+        page_count = ((user_addr + size + CFS_PAGE_SIZE - 1) >> CFS_PAGE_SHIFT)-
+                      (user_addr >> CFS_PAGE_SHIFT);
 
         OBD_ALLOC_WAIT(*pages, page_count * sizeof(**pages));
         if (*pages) {
@@ -151,16 +139,15 @@ static ssize_t ll_direct_IO_26_seg(int rw, struct inode *inode,
 {
         struct brw_page *pga;
         struct obdo oa;
-        int opc, i, rc = 0;
+        int i, rc = 0;
         size_t length;
-        struct obd_capa *ocapa;
         loff_t file_offset_orig = file_offset;
         ENTRY;
 
         OBD_ALLOC(pga, sizeof(*pga) * page_count);
         if (!pga) {
                 CDEBUG(D_VFSTRACE, "sizeof(*pga) = %u page_count = %u\n",
-                       (int)sizeof(*pga), page_count);
+                      (int)sizeof(*pga), page_count);
                 RETURN(-ENOMEM);
         }
 
@@ -169,8 +156,7 @@ static ssize_t ll_direct_IO_26_seg(int rw, struct inode *inode,
                 pga[i].pg = pages[i];
                 pga[i].off = file_offset;
                 /* To the end of the page, or the length, whatever is less */
-                pga[i].count = min_t(int, CFS_PAGE_SIZE - 
-                                          (file_offset & ~CFS_PAGE_MASK),
+                pga[i].count = min_t(int, CFS_PAGE_SIZE -(file_offset & ~CFS_PAGE_MASK),
                                      length);
                 pga[i].flag = 0;
                 if (rw == READ)
@@ -179,24 +165,11 @@ static ssize_t ll_direct_IO_26_seg(int rw, struct inode *inode,
 
         ll_inode_fill_obdo(inode, rw, &oa);
 
-        if (rw == WRITE) {
-                lprocfs_counter_add(ll_i2sbi(inode)->ll_stats,
-                                    LPROC_LL_DIRECT_WRITE, size);
-                opc = CAPA_OPC_OSS_WRITE;
-                llap_write_pending(inode, NULL);
-        } else {
-                lprocfs_counter_add(ll_i2sbi(inode)->ll_stats,
-                                    LPROC_LL_DIRECT_READ, size);
-                opc = CAPA_OPC_OSS_RW;
-        }
-        ocapa = ll_osscapa_get(inode, current->fsuid, opc);
         rc = obd_brw_rqset(rw == WRITE ? OBD_BRW_WRITE : OBD_BRW_READ,
-                           ll_i2dtexp(inode), &oa, lsm, page_count, pga, NULL,
-                           ocapa);
-        capa_put(ocapa);
+                           ll_i2obdexp(inode), &oa, lsm, page_count, pga, NULL);
         if ((rc > 0) && (rw == WRITE)) {
                 lov_stripe_lock(lsm);
-                obd_adjust_kms(ll_i2dtexp(inode), lsm, file_offset_orig + rc, 0);
+                obd_adjust_kms(ll_i2obdexp(inode), lsm, file_offset_orig + rc, 0);
                 lov_stripe_unlock(lsm);
         }
 
@@ -218,15 +191,15 @@ static ssize_t ll_direct_IO_26(int rw, struct kiocb *iocb,
         struct inode *inode = file->f_mapping->host;
         ssize_t count = iov_length(iov, nr_segs), tot_bytes = 0;
         struct ll_inode_info *lli = ll_i2info(inode);
-        unsigned long seg = 0;
+        unsigned long seg;
         size_t size = MAX_DIO_SIZE;
         ENTRY;
 
         if (!lli->lli_smd || !lli->lli_smd->lsm_object_id)
                 RETURN(-EBADF);
 
-        /* FIXME: io smaller than PAGE_SIZE is broken on ia64 ??? */
-        if ((file_offset & ~CFS_PAGE_MASK) || (count & ~CFS_PAGE_MASK))
+        /* FIXME: io smaller than CFS_PAGE_SIZE is broken on ia64 ??? */
+        if ((file_offset & (~CFS_PAGE_MASK)) || (count & ~CFS_PAGE_MASK))
                 RETURN(-EINVAL);
 
         CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu/%u(%p), size="LPSZ" (max %lu), "
@@ -287,7 +260,6 @@ static ssize_t ll_direct_IO_26(int rw, struct kiocb *iocb,
                                                (int)size);
                                         continue;
                                 }
-
                                 if (tot_bytes > 0)
                                         RETURN(tot_bytes);
                                 RETURN(page_count < 0 ? page_count : result);
@@ -308,7 +280,7 @@ struct address_space_operations ll_aops = {
         .direct_IO      = ll_direct_IO_26,
         .writepage      = ll_writepage_26,
         .writepages     = generic_writepages,
-        .set_page_dirty = ll_set_page_dirty,
+        .set_page_dirty = __set_page_dirty_nobuffers,
         .sync_page      = NULL,
         .prepare_write  = ll_prepare_write,
         .commit_write   = ll_commit_write,

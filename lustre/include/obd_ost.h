@@ -14,14 +14,14 @@
 #include <obd_class.h>
 
 struct osc_brw_async_args {
-        struct obdo       *aa_oa;
-        int                aa_requested_nob;
-        int                aa_nio_count;
-        obd_count          aa_page_count;
-        int                aa_retries;
-        struct brw_page  **aa_ppga;
+        struct obdo     *aa_oa;
+        int              aa_requested_nob;
+        int              aa_nio_count;
+        obd_count        aa_page_count;
+        int              aa_retries;
+        struct brw_page **aa_ppga;
         struct client_obd *aa_cli;
-        struct list_head   aa_oaps;
+        struct list_head aa_oaps;
 };
 
 struct osc_async_args {
@@ -31,7 +31,7 @@ struct osc_async_args {
 struct osc_enqueue_args {
         struct obd_export       *oa_exp;
         struct obd_info         *oa_oi;
-        struct obd_enqueue_info *oa_ei;
+        struct ldlm_enqueue_info*oa_ei;
 };
 
 #endif

@@ -69,7 +69,6 @@ ldlm_plain_compat_queue(struct list_head *queue, struct ldlm_lock *req,
                 compat = 0;
                 if (lock->l_blocking_ast)
                         ldlm_add_ast_work_item(lock, req, work_list);
-
                 if (LDLM_SL_HEAD(&lock->l_sl_mode)) {
                         /* add all members of the mode group */
                         do {

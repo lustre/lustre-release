@@ -46,24 +46,24 @@
 /* Look up an entry by inode number. */
 /* this function ONLY returns valid dget'd dentries with an initialized inode
    or errors */
-static struct dentry *mgs_fid2dentry(struct mgs_obd *mgs,
-                                     __u64 ino, __u32 gen)
+static struct dentry *mgs_fid2dentry(struct mgs_obd *mgs, struct ll_fid *fid)
 {
         char fid_name[32];
+        unsigned long ino = fid->id;
+        __u32 generation = fid->generation;
         struct inode *inode;
         struct dentry *result;
-        ENTRY;
 
         CDEBUG(D_DENTRY, "--> mgs_fid2dentry: ino/gen %lu/%u, sb %p\n",
-               (unsigned long)ino, gen, mgs->mgs_sb);
+               ino, generation, mgs->mgs_sb);
 
         if (ino == 0)
                 RETURN(ERR_PTR(-ESTALE));
         
-        snprintf(fid_name, sizeof(fid_name), "0x%lx", (unsigned long)ino);
+        snprintf(fid_name, sizeof(fid_name), "0x%lx", ino);
         
-        /* under ext3 this is neither supposed to return bad inodes nor NULL
-           inodes. */
+        /* under ext3 this is neither supposed to return bad inodes
+           nor NULL inodes. */
         result = ll_lookup_one_len(fid_name, mgs->mgs_fid_de, strlen(fid_name));
         if (IS_ERR(result))
                 RETURN(result);
@@ -82,12 +82,13 @@ static struct dentry *mgs_fid2dentry(struct mgs_obd *mgs,
                 RETURN(ERR_PTR(-ENOENT));
         }
 
-        if (gen && inode->i_generation != gen) {
+        if (generation && inode->i_generation != generation) {
                 /* we didn't find the right inode.. */
                 CDEBUG(D_INODE, "found wrong generation: inode %lu, link: %lu, "
                        "count: %d, generation %u/%u\n", inode->i_ino,
-                       (unsigned long)inode->i_nlink, atomic_read(&inode->i_count),
-                       inode->i_generation, gen);
+                       (unsigned long)inode->i_nlink,
+                       atomic_read(&inode->i_count), inode->i_generation,
+                       generation);
                 l_dput(result);
                 RETURN(ERR_PTR(-ENOENT));
         }
@@ -95,11 +96,14 @@ static struct dentry *mgs_fid2dentry(struct mgs_obd *mgs,
         RETURN(result);
 }
 
-static struct dentry *mgs_lvfs_fid2dentry(__u64 id, __u32 gen,
-                                          __u64 gr, void *data)
+static struct dentry *mgs_lvfs_fid2dentry(__u64 id, __u32 gen, __u64 gr,
+                                          void *data)
 {
         struct obd_device *obd = data;
-        return mgs_fid2dentry(&obd->u.mgs, id, gen);
+        struct ll_fid fid;
+        fid.id = id;
+        fid.generation = gen;
+        return mgs_fid2dentry(&obd->u.mgs, &fid);
 }
 
 struct lvfs_callback_ops mgs_lvfs_ops = {

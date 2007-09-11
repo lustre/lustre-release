@@ -48,11 +48,12 @@ struct llog_commit_daemon {
         struct list_head           lcd_lcm_list;  /* list of daemon threads */
         struct list_head           lcd_llcd_list; /* list of pending RPCs */
         struct llog_commit_master *lcd_lcm;       /* pointer back to parent */
+        int                        lcd_index;     /* the index of the llog daemon */
 };
 
 /* ptlrpc/recov_thread.c */
-int llog_start_commit_thread(void);
-struct llog_canceld_ctxt *llcd_grab(void);
-void llcd_send(struct llog_canceld_ctxt *llcd);
+int llog_start_commit_thread(struct llog_commit_master *);
 
+int llog_init_commit_master(struct llog_commit_master *);
+int llog_cleanup_commit_master(struct llog_commit_master *lcm, int force);
 #endif /* _LUSTRE_COMMIT_CONFD_H */

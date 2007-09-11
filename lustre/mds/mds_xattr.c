@@ -170,7 +170,7 @@ int mds_getxattr(struct ptlrpc_request *req)
         struct lvfs_run_ctxt saved;
         struct dentry *de;
         struct mds_body *body;
-        struct lvfs_ucred uc = {0,};
+        struct lvfs_ucred uc = { NULL, };
         int rc = 0;
         ENTRY;
 
@@ -261,14 +261,14 @@ int mds_setxattr_internal(struct ptlrpc_request *req, struct mds_body *body)
                 lockpart |= MDS_INODELOCK_LOOKUP;
 
         de = mds_fid2locked_dentry(obd, &body->fid1, NULL, LCK_EX,
-                                   &lockh, lockpart);
+                                   &lockh, NULL, 0, lockpart);
         if (IS_ERR(de))
                 GOTO(out, rc = PTR_ERR(de));
 
         inode = de->d_inode;
         LASSERT(inode);
 
-        OBD_FAIL_WRITE(OBD_FAIL_MDS_SETXATTR_WRITE, inode->i_sb);
+        OBD_FAIL_WRITE(obd, OBD_FAIL_MDS_SETXATTR_WRITE, inode->i_sb);
 
         /* filter_op simply use setattr one */
         handle = fsfilt_start(obd, inode, FSFILT_OP_SETATTR, NULL);
@@ -332,7 +332,7 @@ int mds_setxattr(struct ptlrpc_request *req)
         struct obd_device *obd = req->rq_export->exp_obd;
         struct lvfs_run_ctxt saved;
         struct mds_body *body;
-        struct lvfs_ucred uc = {0,};
+        struct lvfs_ucred uc = { NULL, };
         int rc;
         ENTRY;
 

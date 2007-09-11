@@ -54,8 +54,8 @@
 #include <liblustre.h>
 #include <obd.h>
 #include <lustre_lib.h>
-#include <obd_lov.h>
 #include <lustre/liblustreapi.h>
+#include <obd_lov.h>
 
 static void err_msg(char *fmt, ...)
 {
@@ -261,7 +261,7 @@ static int setup_obd_uuids(DIR *dir, char *dname, struct find_param *param)
                         break;
 
                 if (param->obduuid) {
-                        if (strncmp(param->obduuid->uuid, uuid,
+                        if (strncmp((char *)param->obduuid->uuid, uuid,
                                     sizeof(uuid)) == 0) {
                                 param->obdindex = index;
                                 break;
@@ -819,28 +819,6 @@ static int cb_find_init(char *path, DIR *parent, DIR *dir, void *data)
            'glimpse-size-ioctl'. */
         if (!decision && param->lmd->lmd_lmm.lmm_stripe_count &&
             S_ISREG(st->st_mode)) {
-                if (param->obdindex != OBD_NOT_FOUND) {
-                        /* Check whether the obd is active or not, if it is
-                         * not active, just print the object affected by this
-                         * failed ost 
-                         * */
-                        struct obd_statfs stat_buf;
-                        struct obd_uuid uuid_buf;
-
-                        memset(&stat_buf, 0, sizeof(struct obd_statfs));
-                        memset(&uuid_buf, 0, sizeof(struct obd_uuid));
-                        ret = llapi_obd_statfs(path, LL_STATFS_LOV,
-                                               param->obdindex, &stat_buf, 
-                                               &uuid_buf);
-                        if (ret) {
-                                if (ret == -ENODATA || ret == -ENODEV 
-                                    || ret == -EIO)
-                                        errno = EIO;
-                                printf("obd_uuid: %s failed %s ",
-                                        param->obduuid->uuid, strerror(errno));
-                                goto print_path;
-                        }
-                }
                 if (dir) {
                         ret = ioctl(dirfd(dir), IOC_LOV_GETINFO,
                                     (void *)param->lmd);
@@ -860,7 +838,6 @@ static int cb_find_init(char *path, DIR *parent, DIR *dir, void *data)
                         decision = find_time_check(st, param, 0);
         }
 
-print_path:
         if (decision != -1) {
                 printf("%s", path);
                 if (param->zeroend)
@@ -1267,7 +1244,7 @@ static int cb_quotachown(char *path, DIR *parent, DIR *d, void *data)
          * invoke syscall directly. */
         rc = syscall(SYS_chown, path, -1, -1);
         if (rc)
-                err_msg("error: chown %s (%u,%u)", path);
+                err_msg("error: chown %s", path);
 
         rc = chmod(path, st->st_mode);
         if (rc)
@@ -1295,69 +1272,4 @@ int llapi_quotachown(char *path, int flag)
 out:
         find_param_fini(&param);
         return ret;
-}
-
-int llapi_getfacl(char *fname, char *cmd)
-{
-        struct rmtacl_ioctl_data data;
-        char out[RMTACL_SIZE_MAX] = "";
-        int fd, rc;
-
-        data.cmd = cmd;
-        data.cmd_len = strlen(cmd) + 1;
-        data.res = out;
-        data.res_len = sizeof(out);
-
-        fd = open(fname, 0);
-        if (fd == -1) {
-                err_msg("open %s failed", fname);
-                return -1;
-        }
-
-        rc = ioctl(fd, LL_IOC_GETFACL, &data);
-        close(fd);
-        if (errno == EBADE) {
-                fprintf(stderr, "Please use getfacl directly!\n");
-                rc = 1;
-        } else if (rc) {
-                err_msg("getfacl %s failed", fname);
-        } else {
-                printf("%s", out);
-        }
-
-        return rc;
-}
-
-int llapi_setfacl(char *fname, char *cmd)
-{
-        struct rmtacl_ioctl_data data;
-        char out[RMTACL_SIZE_MAX] = "";
-        int fd, rc;
-
-        data.cmd = cmd;
-        data.cmd_len = strlen(cmd) + 1;
-        data.res = out;
-        data.res_len = sizeof(out);
-
-        fd = open(fname, 0);
-        if (fd == -1) {
-                err_msg("open %s failed", fname);
-                return -1;
-        }
-
-        rc = ioctl(fd, LL_IOC_SETFACL, &data);
-        close(fd);
-        if (errno == EBADE) {
-                fprintf(stderr, "Please use setfacl directly!\n");
-                rc = 1;
-        } else if (errno == EOPNOTSUPP) {
-                fprintf(stderr, "setfacl: %s: %s\n", fname, strerror(errno));
-                rc = 1;
-        } else if (rc) {
-                err_msg("setfacl %s failed", fname);
-        } else {
-                printf("%s", out);
-        }
-
-        return rc;
 }

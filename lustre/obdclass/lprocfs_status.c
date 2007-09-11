@@ -38,6 +38,8 @@
 
 #if defined(LPROCFS)
 
+#define MAX_STRING_SIZE 128
+
 /* for bug 10866, global variable */
 DECLARE_RWSEM(_lprocfs_lock);
 EXPORT_SYMBOL(_lprocfs_lock);
@@ -114,14 +116,14 @@ int lprocfs_add_simple(struct proc_dir_entry *root, char *name,
         return 0;
 }
 
-static ssize_t lprocfs_fops_read(struct file *f, char __user *buf,
-                                 size_t size, loff_t *ppos)
+
+static ssize_t lprocfs_fops_read(struct file *f, char __user *buf, size_t size, loff_t *ppos)
 {
         struct proc_dir_entry *dp = PDE(f->f_dentry->d_inode);
         char *page, *start = NULL;
         int rc = 0, eof = 1, count;
 
-        if (*ppos >= CFS_PAGE_SIZE)
+        if (*ppos >= PAGE_SIZE)
                 return 0;
 
         page = (char *)__get_free_page(GFP_KERNEL);
@@ -131,7 +133,7 @@ static ssize_t lprocfs_fops_read(struct file *f, char __user *buf,
         LPROCFS_ENTRY();
         OBD_FAIL_TIMEOUT(OBD_FAIL_LPROC_REMOVE, 10);
         if (!dp->deleted && dp->read_proc)
-                rc = dp->read_proc(page, &start, *ppos, CFS_PAGE_SIZE, 
+                rc = dp->read_proc(page, &start, *ppos, PAGE_SIZE, 
                         &eof, dp->data);
         LPROCFS_EXIT();
         if (rc <= 0)
@@ -180,6 +182,36 @@ static struct file_operations lprocfs_generic_fops = {
         .read = lprocfs_fops_read,
         .write = lprocfs_fops_write,
 };
+
+int lprocfs_evict_client_open(struct inode *inode, struct file *f)
+{
+        struct proc_dir_entry *dp = PDE(f->f_dentry->d_inode);
+        struct obd_device *obd = dp->data;
+
+        atomic_inc(&obd->obd_evict_inprogress);
+
+        return 0;
+}
+
+int lprocfs_evict_client_release(struct inode *inode, struct file *f)
+{
+        struct proc_dir_entry *dp = PDE(f->f_dentry->d_inode);
+        struct obd_device *obd = dp->data;
+
+        atomic_dec(&obd->obd_evict_inprogress);
+        wake_up(&obd->obd_evict_inprogress_waitq);
+
+        return 0;
+}
+
+struct file_operations lprocfs_evict_client_fops = {
+        .owner = THIS_MODULE,
+        .read = lprocfs_fops_read,
+        .write = lprocfs_fops_write,
+        .open = lprocfs_evict_client_open,
+        .release = lprocfs_evict_client_release,
+};
+EXPORT_SYMBOL(lprocfs_evict_client_fops);
 
 int lprocfs_add_vars(struct proc_dir_entry *root, struct lprocfs_vars *list,
                      void *data)
@@ -237,7 +269,10 @@ int lprocfs_add_vars(struct proc_dir_entry *root, struct lprocfs_vars *list,
                         return -ENOMEM;
                 }
 
-                proc->proc_fops = &lprocfs_generic_fops;
+                if (list->fops)
+                        proc->proc_fops = list->fops;
+                else
+                        proc->proc_fops = &lprocfs_generic_fops;
                 proc->read_proc = list->read_fptr;
                 proc->write_proc = list->write_fptr;
                 proc->data = (list->data ? list->data : data);
@@ -309,6 +344,31 @@ struct proc_dir_entry *lprocfs_register(const char *name,
 }
 
 /* Generic callbacks */
+int lprocfs_rd_uint(char *page, char **start, off_t off,
+                    int count, int *eof, void *data)
+{
+        unsigned int *temp = (unsigned int *)data;
+        return snprintf(page, count, "%u\n", *temp);
+}
+
+int lprocfs_wr_uint(struct file *file, const char *buffer,
+                    unsigned long count, void *data)
+{
+        unsigned *p = data;
+        char dummy[MAX_STRING_SIZE + 1], *end;
+        unsigned long tmp;
+
+        dummy[MAX_STRING_SIZE] = '\0';
+        if (copy_from_user(dummy, buffer, MAX_STRING_SIZE))
+                return -EFAULT;
+
+        tmp = simple_strtoul(dummy, &end, 0);
+        if (dummy == end)
+                return -EINVAL;
+
+        *p = (unsigned int)tmp;
+        return count;
+}
 
 int lprocfs_rd_u64(char *page, char **start, off_t off,
                    int count, int *eof, void *data)
@@ -325,6 +385,24 @@ int lprocfs_rd_atomic(char *page, char **start, off_t off,
         LASSERT(atom != NULL);
         *eof = 1;
         return snprintf(page, count, "%d\n", atomic_read(atom));
+}
+
+int lprocfs_wr_atomic(struct file *file, const char *buffer,
+                      unsigned long count, void *data)
+{
+        atomic_t *atm = data;
+        int val = 0;
+        int rc;
+        
+        rc = lprocfs_write_helper(buffer, count, &val);
+        if (rc < 0)
+                return rc;
+
+        if (val <= 0)
+                return -ERANGE;
+                
+        atomic_set(atm, val);
+        return count;
 }
 
 int lprocfs_rd_uuid(char *page, char **start, off_t off, int count,
@@ -464,8 +542,8 @@ int lprocfs_rd_server_uuid(char *page, char **start, off_t off, int count,
         imp_state_name = ptlrpc_import_state_name(imp->imp_state);
         *eof = 1;
         rc = snprintf(page, count, "%s\t%s%s\n",
-                      obd2cli_tgt(obd), imp_state_name,
-                      imp->imp_deactive ? "\tDEACTIVATED" : "");
+                        obd2cli_tgt(obd), imp_state_name,
+                        imp->imp_deactive ? "\tDEACTIVATED" : "");
 
         LPROCFS_CLIMP_EXIT(obd);
         return rc;
@@ -478,21 +556,120 @@ int lprocfs_rd_conn_uuid(char *page, char **start, off_t off, int count,
         struct ptlrpc_connection *conn;
         int rc = 0;
 
-        LASSERT(obd != NULL);
-
+        LASSERT(obd != NULL); 
         LPROCFS_CLIMP_CHECK(obd);
         conn = obd->u.cli.cl_import->imp_connection;
         LASSERT(conn != NULL);
         *eof = 1;
-        if (obd->u.cli.cl_import) {
-                rc = snprintf(page, count, "%s\n",
-                              conn->c_remote_uuid.uuid);
-        } else {
-                rc = snprintf(page, count, "%s\n", "<none>");
+        rc = snprintf(page, count, "%s\n", conn->c_remote_uuid.uuid);
+
+        LPROCFS_CLIMP_EXIT(obd);
+        return rc;
+}
+
+int lprocfs_at_hist_helper(char *page, int count, int rc, 
+                           struct adaptive_timeout *at)
+{
+        int i;
+        for (i = 0; i < AT_BINS; i++)
+                rc += snprintf(page + rc, count - rc, "%3u ", at->at_hist[i]); 
+        rc += snprintf(page + rc, count - rc, "\n");
+        return rc;
+}
+
+/* See also ptlrpc_lprocfs_rd_timeouts */
+int lprocfs_rd_timeouts(char *page, char **start, off_t off, int count,
+                        int *eof, void *data)
+{
+        struct obd_device *obd = (struct obd_device *)data;
+        struct obd_import *imp;
+        unsigned int cur, worst;
+        time_t now, worstt;
+        struct dhms ts;
+        int i, rc = 0;
+
+        LASSERT(obd != NULL);
+        LPROCFS_CLIMP_CHECK(obd);
+        imp = obd->u.cli.cl_import;
+        *eof = 1;
+
+        if (AT_OFF)
+                rc += snprintf(page + rc, count - rc,
+                              "adaptive timeouts off, using obd_timeout %u\n",
+                              obd_timeout);
+        
+        rc += snprintf(page + rc, count - rc, 
+                       "%-10s : %ld sec\n", "timebase",
+                       imp->imp_at.iat_net_latency.at_binlimit * AT_BINS);
+        
+        now = cfs_time_current_sec();
+
+        /* Some network health info for kicks */
+        s2dhms(&ts, now - imp->imp_last_reply_time);
+        rc += snprintf(page + rc, count - rc, 
+                       "%-10s : %ld, "DHMS_FMT" ago\n",
+                       "last reply", imp->imp_last_reply_time, DHMS_VARS(&ts));
+
+
+        cur = at_get(&imp->imp_at.iat_net_latency);
+        worst = imp->imp_at.iat_net_latency.at_worst_ever;
+        worstt = imp->imp_at.iat_net_latency.at_worst_time;
+        s2dhms(&ts, now - worstt);
+        rc += snprintf(page + rc, count - rc, 
+                       "%-10s : cur %3u  worst %3u (at %ld, "DHMS_FMT" ago) ",
+                       "network", cur, worst, worstt, DHMS_VARS(&ts)); 
+        rc = lprocfs_at_hist_helper(page, count, rc,
+                                    &imp->imp_at.iat_net_latency); 
+
+        for(i = 0; i < IMP_AT_MAX_PORTALS; i++) {
+                if (imp->imp_at.iat_portal[i] == 0)
+                        break;
+                cur = at_get(&imp->imp_at.iat_service_estimate[i]);
+                worst = imp->imp_at.iat_service_estimate[i].at_worst_ever;
+                worstt = imp->imp_at.iat_service_estimate[i].at_worst_time;
+                s2dhms(&ts, now - worstt);
+                rc += snprintf(page + rc, count - rc,
+                               "portal %-2d  : cur %3u  worst %3u (at %ld, "
+                               DHMS_FMT" ago) ", imp->imp_at.iat_portal[i], 
+                               cur, worst, worstt, DHMS_VARS(&ts));
+                rc = lprocfs_at_hist_helper(page, count, rc,
+                                          &imp->imp_at.iat_service_estimate[i]);
         }
 
         LPROCFS_CLIMP_EXIT(obd);
         return rc;
+}
+
+int lprocfs_wr_timeouts(struct file *file, const char *buffer,
+                        unsigned long count, void *data)
+{
+        struct obd_device *obd = (struct obd_device *)data;
+        struct obd_import *imp;
+        time_t bval;
+        int val, i, rc;
+
+        LASSERT(obd != NULL);
+        LPROCFS_CLIMP_CHECK(obd);
+        imp = obd->u.cli.cl_import;
+         
+        rc = lprocfs_write_helper(buffer, count, &val);
+        if (rc < 0)
+                return rc;
+        if (val <= 0)
+                return -ERANGE;
+
+        bval = max(1, val / AT_BINS);
+        spin_lock(&imp->imp_at.iat_net_latency.at_lock);
+        imp->imp_at.iat_net_latency.at_binlimit = bval;
+        spin_unlock(&imp->imp_at.iat_net_latency.at_lock);
+        for(i = 0; i < IMP_AT_MAX_PORTALS; i++) {
+                spin_lock(&imp->imp_at.iat_service_estimate[i].at_lock);
+                imp->imp_at.iat_service_estimate[i].at_binlimit = bval;
+                spin_unlock(&imp->imp_at.iat_service_estimate[i].at_lock);
+        }
+        
+        LPROCFS_CLIMP_EXIT(obd);
+        return count;
 }
 
 static const char *obd_connect_names[] = {
@@ -505,21 +682,23 @@ static const char *obd_connect_names[] = {
         "request_portal",
         "acl",
         "xattr",
-        "real_conn",
+        "create_on_write",
         "truncate_lock",
-        "obsoleted",
+        "initial_transno",
         "inode_bit_locks",
         "join_file",
         "getattr_by_fid",
         "no_oh_for_devices",
-        "local_client",
-        "remote_client",
+        "local_1.8_client",
+        "remote_1.8_client",
         "max_byte_per_rpc",
         "64bit_qdata",
-        "mds_capability",
+        "fid_capability",
         "oss_capability",
-        "mds_mds_connection",
+        "early_lock_cancel",
         "size_on_mds",
+        "adaptive_timeout",
+        "lru_resize",
         NULL
 };
 
@@ -633,8 +812,8 @@ struct lprocfs_stats *lprocfs_alloc_stats(unsigned int num)
 void lprocfs_free_stats(struct lprocfs_stats **statsh)
 {
         struct lprocfs_stats *stats = *statsh;
-
-        if (stats == NULL || stats->ls_num == 0)
+        
+        if (!stats || (stats->ls_num == 0))
                 return;
         *statsh = NULL;
 
@@ -698,7 +877,7 @@ static int lprocfs_stats_seq_show(struct seq_file *p, void *v)
        struct lprocfs_stats *stats = p->private;
        struct lprocfs_counter  *cntr = v;
        struct lprocfs_counter  t, ret = { .lc_min = ~(__u64)0 };
-       int i, idx, rc;
+       int i, idx, rc = 0;
 
        if (cntr == &(stats->ls_percpu[0])->lp_cntr[0]) {
                struct timeval now;
@@ -732,6 +911,9 @@ static int lprocfs_stats_seq_show(struct seq_file *p, void *v)
                        ret.lc_max = t.lc_max;
                ret.lc_sumsquare += t.lc_sumsquare;
        }
+
+       if (ret.lc_count == 0)
+               goto out;
 
        rc = seq_printf(p, "%-25s "LPU64" samples [%s]", cntr->lc_name,
                        ret.lc_count, cntr->lc_units);
@@ -772,6 +954,7 @@ static int lprocfs_stats_seq_open(struct inode *inode, struct file *file)
                 LPROCFS_EXIT();
                 return rc;
         }
+
         seq = file->private_data;
         seq->private = dp->data;
         return 0;
@@ -844,10 +1027,6 @@ void lprocfs_init_ops_stats(int num_private_stats, struct lprocfs_stats *stats)
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, connect);
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, reconnect);
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, disconnect);
-        LPROCFS_OBD_OP_INIT(num_private_stats, stats, fid_init);
-        LPROCFS_OBD_OP_INIT(num_private_stats, stats, fid_fini);
-        LPROCFS_OBD_OP_INIT(num_private_stats, stats, fid_alloc);
-        LPROCFS_OBD_OP_INIT(num_private_stats, stats, fid_delete);
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, statfs);
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, statfs_async);
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, packmd);
@@ -888,7 +1067,6 @@ void lprocfs_init_ops_stats(int num_private_stats, struct lprocfs_stats *stats)
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, destroy_export);
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, extent_calc);
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, llog_init);
-        LPROCFS_OBD_OP_INIT(num_private_stats, stats, llog_connect);
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, llog_finish);
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, pin);
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, unpin);
@@ -910,7 +1088,7 @@ int lprocfs_alloc_obd_stats(struct obd_device *obd, unsigned num_private_stats)
         LASSERT(obd->obd_proc_entry != NULL);
         LASSERT(obd->obd_cntr_base == 0);
 
-        num_stats = ((int)sizeof(*obd->obd_type->typ_dt_ops) / sizeof(void *)) +
+        num_stats = ((int)sizeof(*obd->obd_type->typ_ops) / sizeof(void *)) +
                 num_private_stats - 1 /* o_owner */;
         stats = lprocfs_alloc_stats(num_stats);
         if (stats == NULL)
@@ -944,87 +1122,6 @@ void lprocfs_free_obd_stats(struct obd_device *obd)
                 lprocfs_free_stats(&obd->obd_stats);
 }
 
-#define LPROCFS_MD_OP_INIT(base, stats, op)                             \
-do {                                                                    \
-        unsigned int coffset = base + MD_COUNTER_OFFSET(op);            \
-        LASSERT(coffset < stats->ls_num);                               \
-        lprocfs_counter_init(stats, coffset, 0, #op, "reqs");           \
-} while (0)
-
-int lprocfs_alloc_md_stats(struct obd_device *obd,
-                           unsigned num_private_stats)
-{
-        struct lprocfs_stats *stats;
-        unsigned int num_stats;
-        int rc, i;
-
-        LASSERT(obd->md_stats == NULL);
-        LASSERT(obd->obd_proc_entry != NULL);
-        LASSERT(obd->md_cntr_base == 0);
-
-        num_stats = 1 + MD_COUNTER_OFFSET(get_remote_perm) +
-                    num_private_stats;
-        stats = lprocfs_alloc_stats(num_stats);
-        if (stats == NULL)
-                return -ENOMEM;
-
-        LPROCFS_MD_OP_INIT(num_private_stats, stats, getstatus);
-        LPROCFS_MD_OP_INIT(num_private_stats, stats, change_cbdata);
-        LPROCFS_MD_OP_INIT(num_private_stats, stats, close);
-        LPROCFS_MD_OP_INIT(num_private_stats, stats, create);
-        LPROCFS_MD_OP_INIT(num_private_stats, stats, done_writing);
-        LPROCFS_MD_OP_INIT(num_private_stats, stats, enqueue);
-        LPROCFS_MD_OP_INIT(num_private_stats, stats, getattr);
-        LPROCFS_MD_OP_INIT(num_private_stats, stats, getattr_name);
-        LPROCFS_MD_OP_INIT(num_private_stats, stats, intent_lock);
-        LPROCFS_MD_OP_INIT(num_private_stats, stats, link);
-        LPROCFS_MD_OP_INIT(num_private_stats, stats, rename);
-        LPROCFS_MD_OP_INIT(num_private_stats, stats, is_subdir);
-        LPROCFS_MD_OP_INIT(num_private_stats, stats, setattr);
-        LPROCFS_MD_OP_INIT(num_private_stats, stats, sync);
-        LPROCFS_MD_OP_INIT(num_private_stats, stats, readpage);
-        LPROCFS_MD_OP_INIT(num_private_stats, stats, unlink);
-        LPROCFS_MD_OP_INIT(num_private_stats, stats, setxattr);
-        LPROCFS_MD_OP_INIT(num_private_stats, stats, getxattr);
-        LPROCFS_MD_OP_INIT(num_private_stats, stats, init_ea_size);
-        LPROCFS_MD_OP_INIT(num_private_stats, stats, get_lustre_md);
-        LPROCFS_MD_OP_INIT(num_private_stats, stats, free_lustre_md);
-        LPROCFS_MD_OP_INIT(num_private_stats, stats, set_open_replay_data);
-        LPROCFS_MD_OP_INIT(num_private_stats, stats, clear_open_replay_data);
-        LPROCFS_MD_OP_INIT(num_private_stats, stats, set_lock_data);
-        LPROCFS_MD_OP_INIT(num_private_stats, stats, lock_match);
-        LPROCFS_MD_OP_INIT(num_private_stats, stats, cancel_unused);
-        LPROCFS_MD_OP_INIT(num_private_stats, stats, renew_capa);
-        LPROCFS_MD_OP_INIT(num_private_stats, stats, get_remote_perm);
-
-        for (i = num_private_stats; i < num_stats; i++) {
-                if (stats->ls_percpu[0]->lp_cntr[i].lc_name == NULL) {
-                        CERROR("Missing md_stat initializer md_op "
-                               "operation at offset %d. Aborting.\n",
-                               i - num_private_stats);
-                        LBUG();
-                }
-        }
-        rc = lprocfs_register_stats(obd->obd_proc_entry, "stats", stats);
-        if (rc < 0) {
-                lprocfs_free_stats(&stats);
-        } else {
-                obd->md_stats  = stats;
-                obd->md_cntr_base = num_private_stats;
-        }
-        return rc;
-}
-
-void lprocfs_free_md_stats(struct obd_device *obd)
-{
-        struct lprocfs_stats *stats = obd->md_stats;
-
-        if (stats != NULL) {
-                obd->md_stats = NULL;
-                lprocfs_free_stats(&stats);
-        }
-}
-
 int lprocfs_exp_rd_nid(char *page, char **start, off_t off, int count,
                          int *eof,  void *data)
 {
@@ -1043,14 +1140,16 @@ int lprocfs_exp_rd_uuid(char *page, char **start, off_t off, int count,
         return snprintf(page, count, "%s\n", 
                         obd_uuid2str(&exp->exp_client_uuid));
 }
-        
+
 int lprocfs_exp_setup(struct obd_export *exp)
 {
         char name[sizeof (exp->exp_client_uuid.uuid) + 3];
         int i = 1, rc;
         ENTRY;
+
         if (!exp || !exp->exp_obd || !exp->exp_obd->obd_proc_exports)
                 RETURN(-EINVAL);
+
         mutex_down(&exp->exp_obd->obd_proc_exp_sem);
         sprintf(name, "%s", (char *)exp->exp_client_uuid.uuid);
         while (lprocfs_srch(exp->exp_obd->obd_proc_exports, name)) {
@@ -1078,6 +1177,7 @@ int lprocfs_exp_setup(struct obd_export *exp)
                                 lprocfs_exp_rd_uuid, NULL, exp);
         if (rc)
                 GOTO(out, rc);
+
         /* Always add ldlm stats */
         exp->exp_ldlm_stats = lprocfs_alloc_stats(LDLM_LAST_OPC 
                                                   - LDLM_FIRST_OPC);
@@ -1277,7 +1377,7 @@ int lprocfs_write_frac_u64_helper(const char *buffer, unsigned long count,
                 units <<= 10;
         }
         /* Specified units override the multiplier */
-        if (units) 
+        if (units)
                 mult = mult < 0 ? -units : units;
 
         frac *= mult;
@@ -1474,6 +1574,9 @@ EXPORT_SYMBOL(lprocfs_exp_cleanup);
 
 EXPORT_SYMBOL(lprocfs_rd_u64);
 EXPORT_SYMBOL(lprocfs_rd_atomic);
+EXPORT_SYMBOL(lprocfs_wr_atomic);
+EXPORT_SYMBOL(lprocfs_rd_uint);
+EXPORT_SYMBOL(lprocfs_wr_uint);
 EXPORT_SYMBOL(lprocfs_rd_uuid);
 EXPORT_SYMBOL(lprocfs_rd_name);
 EXPORT_SYMBOL(lprocfs_rd_fstype);
@@ -1481,7 +1584,9 @@ EXPORT_SYMBOL(lprocfs_rd_server_uuid);
 EXPORT_SYMBOL(lprocfs_rd_conn_uuid);
 EXPORT_SYMBOL(lprocfs_rd_num_exports);
 EXPORT_SYMBOL(lprocfs_rd_numrefs);
-
+EXPORT_SYMBOL(lprocfs_at_hist_helper);
+EXPORT_SYMBOL(lprocfs_rd_timeouts);
+EXPORT_SYMBOL(lprocfs_wr_timeouts);
 EXPORT_SYMBOL(lprocfs_rd_blksize);
 EXPORT_SYMBOL(lprocfs_rd_kbytestotal);
 EXPORT_SYMBOL(lprocfs_rd_kbytesfree);

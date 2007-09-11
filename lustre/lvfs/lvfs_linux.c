@@ -39,7 +39,6 @@
 #include <libcfs/kp30.h>
 #include <lustre_fsfilt.h>
 #include <obd.h>
-#include <obd_class.h>
 #include <linux/module.h>
 #include <linux/init.h>
 #include <linux/lustre_compat25.h>
@@ -52,6 +51,9 @@
 
 atomic_t obd_memory;
 int obd_memmax;
+unsigned int obd_fail_val;
+unsigned int obd_fail_loc;
+unsigned int obd_alloc_fail_rate = 0;
 
 /* Debugging check only needed during development */
 #ifdef OBD_CTXT_DEBUG
@@ -66,8 +68,10 @@ int obd_memmax;
 #endif
 
 static void push_group_info(struct lvfs_run_ctxt *save,
-                            struct group_info *ginfo)
+                            struct upcall_cache_entry *uce)
 {
+        struct group_info *ginfo = uce ? uce->ue_group_info : NULL;
+
         if (!ginfo) {
                 save->ngroups = current_ngroups;
                 current_ngroups = 0;
@@ -95,8 +99,10 @@ static void push_group_info(struct lvfs_run_ctxt *save,
 }
 
 static void pop_group_info(struct lvfs_run_ctxt *save,
-                           struct group_info *ginfo)
+                           struct upcall_cache_entry *uce)
 {
+        struct group_info *ginfo = uce ? uce->ue_group_info : NULL;
+
         if (!ginfo) {
                 current_ngroups = save->ngroups;
         } else {
@@ -138,7 +144,6 @@ void push_ctxt(struct lvfs_run_ctxt *save, struct lvfs_run_ctxt *new_ctx,
         save->pwd = dget(current->fs->pwd);
         save->pwdmnt = mntget(current->fs->pwdmnt);
         save->luc.luc_umask = current->fs->umask;
-        save->ngroups = current->group_info->ngroups;
 
         LASSERT(save->pwd);
         LASSERT(save->pwdmnt);
@@ -146,22 +151,14 @@ void push_ctxt(struct lvfs_run_ctxt *save, struct lvfs_run_ctxt *new_ctx,
         LASSERT(new_ctx->pwdmnt);
 
         if (uc) {
-                save->luc.luc_uid = current->uid;
-                save->luc.luc_gid = current->gid;
                 save->luc.luc_fsuid = current->fsuid;
                 save->luc.luc_fsgid = current->fsgid;
                 save->luc.luc_cap = current->cap_effective;
 
-                current->uid = uc->luc_uid;
-                current->gid = uc->luc_gid;
                 current->fsuid = uc->luc_fsuid;
                 current->fsgid = uc->luc_fsgid;
                 current->cap_effective = uc->luc_cap;
-
-                push_group_info(save,
-                                uc->luc_ginfo ?:
-                                uc->luc_identity ? uc->luc_identity->mi_ginfo :
-                                                   NULL);
+                push_group_info(save, uc->luc_uce);
         }
         current->fs->umask = 0; /* umask already applied on client */
         set_fs(new_ctx->fs);
@@ -211,15 +208,10 @@ void pop_ctxt(struct lvfs_run_ctxt *saved, struct lvfs_run_ctxt *new_ctx,
         mntput(saved->pwdmnt);
         current->fs->umask = saved->luc.luc_umask;
         if (uc) {
-                current->uid = saved->luc.luc_uid;
-                current->gid = saved->luc.luc_gid;
                 current->fsuid = saved->luc.luc_fsuid;
                 current->fsgid = saved->luc.luc_fsgid;
                 current->cap_effective = saved->luc.luc_cap;
-                pop_group_info(saved,
-                               uc->luc_ginfo ?:
-                               uc->luc_identity ? uc->luc_identity->mi_ginfo :
-                                                  NULL);
+                pop_group_info(saved, uc->luc_uce);
         }
 
         /*
@@ -242,7 +234,7 @@ struct dentry *simple_mknod(struct dentry *dir, char *name, int mode, int fix)
         int err = 0;
         ENTRY;
 
-        // ASSERT_KERNEL_CTXT("kernel doing mknod outside kernel context\n");
+        ASSERT_KERNEL_CTXT("kernel doing mknod outside kernel context\n");
         CDEBUG(D_INODE, "creating file %.*s\n", (int)strlen(name), name);
 
         dchild = ll_lookup_one_len(name, dir, strlen(name));
@@ -287,7 +279,7 @@ struct dentry *simple_mkdir(struct dentry *dir, char *name, int mode, int fix)
         int err = 0;
         ENTRY;
 
-        // ASSERT_KERNEL_CTXT("kernel doing mkdir outside kernel context\n");
+        ASSERT_KERNEL_CTXT("kernel doing mkdir outside kernel context\n");
         CDEBUG(D_INODE, "creating directory %.*s\n", (int)strlen(name), name);
         dchild = ll_lookup_one_len(name, dir, strlen(name));
         if (IS_ERR(dchild))
@@ -455,7 +447,7 @@ long l_readdir(struct file *file, struct list_head *dentry_list)
         int error;
 
         buf.lrc_dirent = NULL;
-        buf.lrc_list = dentry_list;
+        buf.lrc_list = dentry_list; 
 
         error = vfs_readdir(file, l_filldir, &buf);
         if (error < 0)
@@ -465,206 +457,17 @@ long l_readdir(struct file *file, struct list_head *dentry_list)
         if (lastdirent)
                 lastdirent->lld_off = file->f_pos;
 
-        return 0;
+        return 0; 
 }
 EXPORT_SYMBOL(l_readdir);
 EXPORT_SYMBOL(obd_memory);
 EXPORT_SYMBOL(obd_memmax);
 
-#if defined (CONFIG_DEBUG_MEMORY) && defined(__KERNEL__)
-static spinlock_t obd_memlist_lock = SPIN_LOCK_UNLOCKED;
-static struct hlist_head *obd_memtable = NULL;
-static unsigned long obd_memtable_size = 0;
-
-static int lvfs_memdbg_init(int size)
-{
-        struct hlist_head *head;
-        int i;
-
-        LASSERT(size > sizeof(sizeof(struct hlist_head)));
-        obd_memtable_size = size / sizeof(struct hlist_head);
-
-        CWARN("Allocating %lu memdbg entries.\n",
-              (unsigned long)obd_memtable_size);
-
-        LASSERT(obd_memtable == NULL);
-        obd_memtable = kmalloc(size, GFP_KERNEL);
-        if (!obd_memtable)
-                return -ENOMEM;
-
-        i = obd_memtable_size;
-        head = obd_memtable;
-        do {
-                INIT_HLIST_HEAD(head);
-                head++;
-                i--;
-        } while(i);
-
-        return 0;
-}
-
-static int lvfs_memdbg_cleanup(void)
-{
-        struct hlist_node *node = NULL, *tmp = NULL;
-        struct hlist_head *head;
-        struct obd_mem_track *mt;
-        int i;
-
-        spin_lock(&obd_memlist_lock);
-        for (i = 0, head = obd_memtable; i < obd_memtable_size; i++, head++) {
-                hlist_for_each_safe(node, tmp, head) {
-                        mt = hlist_entry(node, struct obd_mem_track, mt_hash);
-                        hlist_del_init(&mt->mt_hash);
-                        kfree(mt);
-                }
-        }
-        spin_unlock(&obd_memlist_lock);
-        kfree(obd_memtable);
-        return 0;
-}
-
-static inline unsigned long const hashfn(void *ptr)
-{
-        return (unsigned long)ptr &
-                (obd_memtable_size - 1);
-}
-
-static void __lvfs_memdbg_insert(struct obd_mem_track *mt)
-{
-        struct hlist_head *head = obd_memtable +
-                hashfn(mt->mt_ptr);
-        hlist_add_head(&mt->mt_hash, head);
-}
-
-void lvfs_memdbg_insert(struct obd_mem_track *mt)
-{
-        spin_lock(&obd_memlist_lock);
-        __lvfs_memdbg_insert(mt);
-        spin_unlock(&obd_memlist_lock);
-}
-EXPORT_SYMBOL(lvfs_memdbg_insert);
-
-static void __lvfs_memdbg_remove(struct obd_mem_track *mt)
-{
-        hlist_del_init(&mt->mt_hash);
-}
-
-void lvfs_memdbg_remove(struct obd_mem_track *mt)
-{
-        spin_lock(&obd_memlist_lock);
-        __lvfs_memdbg_remove(mt);
-        spin_unlock(&obd_memlist_lock);
-}
-EXPORT_SYMBOL(lvfs_memdbg_remove);
-
-static struct obd_mem_track *__lvfs_memdbg_find(void *ptr)
-{
-        struct hlist_node *node = NULL;
-        struct obd_mem_track *mt = NULL;
-        struct hlist_head *head;
-
-        head = obd_memtable + hashfn(ptr);
-
-        hlist_for_each(node, head) {
-                mt = hlist_entry(node, struct obd_mem_track, mt_hash);
-                if ((unsigned long)mt->mt_ptr == (unsigned long)ptr)
-                        break;
-                mt = NULL;
-        }
-        return mt;
-}
-
-struct obd_mem_track *lvfs_memdbg_find(void *ptr)
-{
-        struct obd_mem_track *mt;
-
-        spin_lock(&obd_memlist_lock);
-        mt = __lvfs_memdbg_find(ptr);
-        spin_unlock(&obd_memlist_lock);
-        
-        return mt;
-}
-EXPORT_SYMBOL(lvfs_memdbg_find);
-
-int lvfs_memdbg_check_insert(struct obd_mem_track *mt)
-{
-        struct obd_mem_track *tmp;
-        
-        spin_lock(&obd_memlist_lock);
-        tmp = __lvfs_memdbg_find(mt->mt_ptr);
-        if (tmp == NULL) {
-                __lvfs_memdbg_insert(mt);
-                spin_unlock(&obd_memlist_lock);
-                return 1;
-        }
-        spin_unlock(&obd_memlist_lock);
-        return 0;
-}
-EXPORT_SYMBOL(lvfs_memdbg_check_insert);
-
-struct obd_mem_track *
-lvfs_memdbg_check_remove(void *ptr)
-{
-        struct obd_mem_track *mt;
-
-        spin_lock(&obd_memlist_lock);
-        mt = __lvfs_memdbg_find(ptr);
-        if (mt) {
-                __lvfs_memdbg_remove(mt);
-                spin_unlock(&obd_memlist_lock);
-                return mt;
-        }
-        spin_unlock(&obd_memlist_lock);
-        return NULL;
-}
-EXPORT_SYMBOL(lvfs_memdbg_check_remove);
-#endif
-
-void lvfs_memdbg_show(void)
-{
-#if defined (CONFIG_DEBUG_MEMORY) && defined(__KERNEL__)
-        struct hlist_node *node = NULL;
-        struct hlist_head *head;
-        struct obd_mem_track *mt;
-        int header = 0;
-#endif
-        int leaked;
-	
-#if defined (CONFIG_DEBUG_MEMORY) && defined(__KERNEL__)
-	int i;
-#endif
-
-        leaked = atomic_read(&obd_memory);
-
-        if (leaked > 0) {
-                CWARN("Memory leaks detected (max %d, leaked %d)\n",
-                      obd_memmax, leaked);
-        }
-        
-#if defined (CONFIG_DEBUG_MEMORY) && defined(__KERNEL__)
-        spin_lock(&obd_memlist_lock);
-        for (i = 0, head = obd_memtable; i < obd_memtable_size; i++, head++) {
-                hlist_for_each(node, head) {
-                        if (header == 0) {
-                                CWARN("Abnormal memory activities:\n");
-                                header = 1;
-                        }
-                        mt = hlist_entry(node, struct obd_mem_track, mt_hash);
-                        CWARN("  [%s] ptr: 0x%p, size: %d, src at %s\n",
-                              ((mt->mt_flags & OBD_MT_WRONG_SIZE) ?
-                               "wrong size" : "leaked memory"),
-                              mt->mt_ptr, mt->mt_size, mt->mt_loc);
-                }
-        }
-        spin_unlock(&obd_memlist_lock);
-#endif
-}
-EXPORT_SYMBOL(lvfs_memdbg_show);
-
 #ifdef LUSTRE_KERNEL_VERSION
 #ifndef HAVE_CLEAR_RDONLY_ON_PUT
 #error rdonly patchset must be updated [cfs bz11248]
 #endif
+
 void dev_set_rdonly(lvfs_sbdev_type dev);
 int dev_check_rdonly(lvfs_sbdev_type dev);
 
@@ -687,6 +490,7 @@ int lvfs_check_rdonly(lvfs_sbdev_type dev)
 
 EXPORT_SYMBOL(__lvfs_set_rdonly);
 EXPORT_SYMBOL(lvfs_check_rdonly);
+#endif /* LUSTRE_KERNEL_VERSION */
 
 int lvfs_check_io_health(struct obd_device *obd, struct file *file)
 {
@@ -698,37 +502,37 @@ int lvfs_check_io_health(struct obd_device *obd, struct file *file)
         OBD_ALLOC(write_page, CFS_PAGE_SIZE);
         if (!write_page)
                 RETURN(-ENOMEM);
-
+        
         rc = fsfilt_write_record(obd, file, write_page, CFS_PAGE_SIZE, &offset, 1);
-
+       
         OBD_FREE(write_page, CFS_PAGE_SIZE);
 
         CDEBUG(D_INFO, "write 1 page synchronously for checking io rc %d\n",rc);
-        RETURN(rc);
+        RETURN(rc); 
 }
 EXPORT_SYMBOL(lvfs_check_io_health);
-#endif /* LUSTRE_KERNEL_VERSION */
 
 static int __init lvfs_linux_init(void)
 {
-        ENTRY;
-#if defined (CONFIG_DEBUG_MEMORY) && defined(__KERNEL__)
-        lvfs_memdbg_init(PAGE_SIZE);
-#endif
         RETURN(0);
 }
 
 static void __exit lvfs_linux_exit(void)
 {
+        int leaked;
         ENTRY;
 
-        lvfs_memdbg_show();
-        
-#if defined (CONFIG_DEBUG_MEMORY) && defined(__KERNEL__)
-        lvfs_memdbg_cleanup();
-#endif
+        leaked = atomic_read(&obd_memory);
+        CDEBUG(leaked ? D_ERROR : D_INFO,
+               "obd mem max: %d leaked: %d\n", obd_memmax, leaked);
+
         EXIT;
+        return;
 }
+
+EXPORT_SYMBOL(obd_fail_loc);
+EXPORT_SYMBOL(obd_alloc_fail_rate);
+EXPORT_SYMBOL(obd_fail_val);
 
 MODULE_AUTHOR("Cluster File Systems, Inc. <info@clusterfs.com>");
 MODULE_DESCRIPTION("Lustre VFS Filesystem Helper v0.1");

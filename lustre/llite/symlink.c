@@ -34,9 +34,9 @@ static int ll_readlink_internal(struct inode *inode,
 {
         struct ll_inode_info *lli = ll_i2info(inode);
         struct ll_sb_info *sbi = ll_i2sbi(inode);
+        struct ll_fid fid;
+        struct mds_body *body;
         int rc, symlen = inode->i_size + 1;
-        struct mdt_body *body;
-        struct obd_capa *oc;
         ENTRY;
 
         *request = NULL;
@@ -47,10 +47,9 @@ static int ll_readlink_internal(struct inode *inode,
                 RETURN(0);
         }
 
-        oc = ll_mdscapa_get(inode);
-        rc = md_getattr(sbi->ll_md_exp, ll_inode2fid(inode), oc,
-                        OBD_MD_LINKNAME, symlen, request);
-        capa_put(oc);
+        ll_inode2fid(&fid, inode);
+        rc = mdc_getattr(sbi->ll_mdc_exp, &fid,
+                         OBD_MD_LINKNAME, symlen, request);
         if (rc) {
                 if (rc != -ENOENT)
                         CERROR("inode %lu: rc = %d\n", inode->i_ino, rc);
@@ -129,12 +128,11 @@ static int ll_readlink(struct dentry *dentry, char *buffer, int buflen)
 # define LL_FOLLOW_LINK_RETURN_TYPE int
 #endif
 
-static LL_FOLLOW_LINK_RETURN_TYPE ll_follow_link(struct dentry *dentry,
-                                                 struct nameidata *nd)
+static LL_FOLLOW_LINK_RETURN_TYPE ll_follow_link(struct dentry *dentry, struct nameidata *nd)
 {
         struct inode *inode = dentry->d_inode;
         struct ll_inode_info *lli = ll_i2info(inode);
-#ifdef LUSTRE_KERNEL_VERSION
+#ifdef HAVE_VFS_INTENT_PATCHES
         struct lookup_intent *it = ll_nd2it(nd);
 #endif
         struct ptlrpc_request *request;
@@ -142,7 +140,7 @@ static LL_FOLLOW_LINK_RETURN_TYPE ll_follow_link(struct dentry *dentry,
         char *symname;
         ENTRY;
 
-#ifdef LUSTRE_KERNEL_VERSION
+#ifdef HAVE_VFS_INTENT_PATCHES
         if (it != NULL) {
                 int op = it->it_op;
                 int mode = it->it_create_mode;
@@ -166,21 +164,21 @@ static LL_FOLLOW_LINK_RETURN_TYPE ll_follow_link(struct dentry *dentry,
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,6,8))
         rc = vfs_follow_link(nd, symname);
 #else
-#ifdef HAVE_COOKIE_FOLLOW_LINK
+# ifdef HAVE_COOKIE_FOLLOW_LINK
         nd_set_link(nd, symname);
         /* @symname may contain a pointer to the request message buffer,
            we delay request releasing until ll_put_link then. */
         RETURN(request);
-#else
+# else
         if (request != NULL) {
                 /* falling back to recursive follow link if the request
                  * needs to be cleaned up still. */
-        rc = vfs_follow_link(nd, symname);
+                rc = vfs_follow_link(nd, symname);
                 GOTO(out, rc);
         }
         nd_set_link(nd, symname);
         RETURN(0);
-#endif
+# endif
 #endif
 out:
         ptlrpc_req_finished(request);
@@ -201,7 +199,7 @@ static void ll_put_link(struct dentry *dentry, struct nameidata *nd, void *cooki
 struct inode_operations ll_fast_symlink_inode_operations = {
         .readlink       = ll_readlink,
         .setattr        = ll_setattr,
-#ifdef LUSTRE_KERNEL_VERSION
+#ifdef HAVE_VFS_INTENT_PATCHES
         .setattr_raw    = ll_setattr_raw,
 #endif
         .follow_link    = ll_follow_link,

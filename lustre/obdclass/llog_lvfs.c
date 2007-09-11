@@ -89,7 +89,6 @@ static int llog_lvfs_write_blob(struct obd_device *obd, struct l_file *file,
         struct llog_rec_tail end;
         loff_t saved_off = file->f_pos;
         int buflen = rec->lrh_len;
-
         ENTRY;
 
         file->f_pos = off;
@@ -162,7 +161,7 @@ static int llog_lvfs_read_header(struct llog_handle *handle)
         obd = handle->lgh_ctxt->loc_exp->exp_obd;
 
         if (handle->lgh_file->f_dentry->d_inode->i_size == 0) {
-                CDEBUG(D_HA, "not reading header from 0-byte log\n");
+                CDEBUG(D_RPCTRACE, "not reading header from 0-byte log\n");
                 RETURN(LLOG_EEMPTY);
         }
 
@@ -232,7 +231,7 @@ static int llog_lvfs_write_rec(struct llog_handle *loghandle,
         if (buf)
                 /* write_blob adds header and tail to lrh_len. */ 
                 reclen = sizeof(*rec) + rec->lrh_len + 
-                         sizeof(struct llog_rec_tail);
+                        sizeof(struct llog_rec_tail);
 
         if (idx != -1) {
                 loff_t saved_offset;
@@ -242,7 +241,7 @@ static int llog_lvfs_write_rec(struct llog_handle *loghandle,
                         CERROR("idx != -1 in empty log\n");
                         LBUG();
                 }
-
+                
                 if (idx && llh->llh_size && llh->llh_size != rec->lrh_len)
                         RETURN(-EINVAL);
 
@@ -344,7 +343,7 @@ static int llog_lvfs_write_rec(struct llog_handle *loghandle,
         if (rc)
                 RETURN(rc);
 
-        CDEBUG(D_HA, "added record "LPX64": idx: %u, %u bytes\n",
+        CDEBUG(D_RPCTRACE, "added record "LPX64": idx: %u, %u bytes\n",
                loghandle->lgh_id.lgl_oid, index, rec->lrh_len);
         if (rc == 0 && reccookie) {
                 reccookie->lgc_lgl = loghandle->lgh_id;
@@ -422,7 +421,7 @@ static int llog_lvfs_next_block(struct llog_handle *loghandle, int *cur_idx,
                 /* put number of bytes read into rc to make code simpler */
                 rc = ppos - *cur_offset;
                 *cur_offset = ppos;
-
+                
                 if (rc < len) {
                         /* signal the end of the valid buffer to llog_process */
                         memset(buf + rc, 0, len - rc);
@@ -480,7 +479,7 @@ static int llog_lvfs_prev_block(struct llog_handle *loghandle,
         if (len == 0 || len & (LLOG_CHUNK_SIZE - 1))
                 RETURN(-EINVAL);
 
-        CDEBUG(D_OTHER, "looking for log index %u n", prev_idx);
+        CDEBUG(D_OTHER, "looking for log index %u\n", prev_idx);
 
         cur_offset = LLOG_CHUNK_SIZE;
         llog_skip_over(&cur_offset, 0, prev_idx);

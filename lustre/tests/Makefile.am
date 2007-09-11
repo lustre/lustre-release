@@ -5,24 +5,26 @@ AM_CFLAGS = $(LLCFLAGS)
 # LDADD := -lreadline -ltermcap # -lefence
 
 noinst_DATA = disk1_4.zip
-noinst_SCRIPTS = leak_finder.pl llecho.sh llmount.sh llmountcleanup.sh 
+noinst_SCRIPTS = leak_finder.pl llecho.sh llmount.sh llmountcleanup.sh test-framework.sh
+noinst_SCRIPTS += runvmstat runiozone runtests
 noinst_SCRIPTS += sanity.sh rundbench test-framework.sh
-noinst_SCRIPTS += acceptance-small.sh compile.sh conf-sanity.sh 
-noinst_SCRIPTS += echo.sh insanity.sh lfscktest.sh llechocleanup.sh 
-noinst_SCRIPTS += llog-test.sh lockorder.sh lstiming.sh mount2fs.sh oos2.sh 
-noinst_SCRIPTS += oos.sh recovery-cleanup.sh recovery-small.sh replay-dual.sh 
-noinst_SCRIPTS += replay-ost-single.sh replay-single.sh routed.sh run-llog.sh 
-noinst_SCRIPTS += run-quotacheck.sh run-quotactl.sh run-quotafmt.sh 
+noinst_SCRIPTS += acceptance-small.sh compile.sh compile.sh conf-sanity.sh
+noinst_SCRIPTS += echo.sh insanity.sh lfscktest.sh llechocleanup.sh
+noinst_SCRIPTS += llog-test.sh lockorder.sh lstiming.sh mount2fs.sh oos2.sh
+noinst_SCRIPTS += oos.sh recovery-cleanup.sh recovery-small.sh replay-dual.sh
+noinst_SCRIPTS += replay-ost-single.sh replay-single.sh routed.sh run-llog.sh
+noinst_SCRIPTS += run-quotacheck.sh run-quotactl.sh run-quotafmt.sh
 noinst_SCRIPTS += sanity-buffalo.sh sanityN.sh sanity-quota.sh tmpfs-sanity.sh
-noinst_SCRIPTS += kbuild lkcdmap rundbench runiozone runvmstat runslabinfo 
-noinst_SCRIPTS += runtests socketclient socketserver sanity-sec.sh
-nobase_noinst_SCRIPTS = cfg/insanity-local.sh cfg/insanity-ltest.sh 
+noinst_SCRIPTS += kbuild lkcdmap rundbench runiozone runslabinfo
+noinst_SCRIPTS += socketclient socketserver
+nobase_noinst_SCRIPTS = cfg/insanity-local.sh cfg/insanity-ltest.sh
 nobase_noinst_SCRIPTS += cfg/local.sh acl/make-tree acl/run
-nobase_noinst_DATA = acl/cp.test acl/getfacl-noacl.test acl/inheritance.test 
+nobase_noinst_DATA = acl/cp.test acl/getfacl-noacl.test acl/inheritance.test
 nobase_noinst_DATA += acl/misc.test acl/permissions.test acl/setfacl.test
 
 EXTRA_DIST = $(noinst_SCRIPTS) $(noinst_DATA) \
-             $(nobase_noinst_SCRIPTS) $(nobase_noinst_DATA)
+             $(nobase_noinst_SCRIPTS) $(nobase_noinst_DATA) \
+             sanity.sh rundbench
 
 if TESTS
 noinst_PROGRAMS = openunlink truncate directio openme writeme
@@ -37,7 +39,6 @@ noinst_PROGRAMS += mmap_sanity flock_test writemany random-reads flocks_test
 noinst_PROGRAMS += ll_getstripe_info
 if MPITESTS
 noinst_PROGRAMS += parallel_grouplock write_append_truncate createmany_mpi
-noinst_PROGRAMS += iam_ut
 endif
 # noinst_PROGRAMS += ldaptest copy_attr mkdirdeep 
 bin_PROGRAMS = mcreate munlink

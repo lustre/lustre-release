@@ -36,9 +36,8 @@
 static int lprocfs_filter_rd_groups(char *page, char **start, off_t off,
                                     int count, int *eof, void *data)
 {
-        struct obd_device *obd = (struct obd_device *)data;
         *eof = 1;
-        return snprintf(page, count, "%u\n", obd->u.filter.fo_group_count);
+        return snprintf(page, count, "%u\n", FILTER_GROUPS);
 }
 
 static int lprocfs_filter_rd_tot_dirty(char *page, char **start, off_t off,
@@ -87,23 +86,12 @@ static int lprocfs_filter_rd_last_id(char *page, char **start, off_t off,
                                      int count, int *eof, void *data)
 {
         struct obd_device *obd = data;
-        struct filter_obd *filter = &obd->u.filter;
-        int retval = 0, rc, i;
 
         if (obd == NULL)
                 return 0;
 
-        for (i = FILTER_GROUP_MDS0; i < filter->fo_group_count; i++) {
-                rc = snprintf(page, count, LPU64"\n",filter_last_id(filter, i));
-                if (rc < 0) {
-                        retval = rc;
-                        break;
-                }
-                page += rc;
-                count -= rc;
-                retval += rc;
-        }
-        return retval;
+        return snprintf(page, count, LPU64"\n",
+                        filter_last_id(&obd->u.filter, 0));
 }
 
 int lprocfs_filter_rd_readcache(char *page, char **start, off_t off, int count,
@@ -131,7 +119,6 @@ int lprocfs_filter_wr_readcache(struct file *file, const char *buffer,
         obd->u.filter.fo_readcache_max_filesize = val;
         return count;
 }
-
 
 int lprocfs_filter_rd_fmd_max_num(char *page, char **start, off_t off,
                                   int count, int *eof, void *data)
@@ -189,83 +176,6 @@ int lprocfs_filter_wr_fmd_max_age(struct file *file, const char *buffer,
         return count;
 }
 
-static int lprocfs_filter_rd_capa(char *page, char **start, off_t off,
-                                  int count, int *eof, void *data)
-{
-        struct obd_device *obd = data;
-        int rc;
-
-        rc = snprintf(page, count, "capability on: %s\n",
-                      obd->u.filter.fo_fl_oss_capa ? "oss" : "");
-        return rc;
-}
-
-static int lprocfs_filter_wr_capa(struct file *file, const char *buffer,
-                                  unsigned long count, void *data)
-{
-        struct obd_device *obd = data;
-        int val, rc;
-
-        rc = lprocfs_write_helper(buffer, count, &val);
-        if (rc)
-                return rc;
-
-        if (val & ~0x1) {
-                CERROR("invalid capability mode, only 0/1 are accepted.\n"
-                       " 1: enable oss fid capability\n"
-                       " 0: disable oss fid capability\n");
-                return -EINVAL;
-        }
-
-        obd->u.filter.fo_fl_oss_capa = val;
-        LCONSOLE_INFO("OSS %s %s fid capability.\n", obd->obd_name,
-                      val ? "enabled" : "disabled");
-        return count;
-}
-
-static int lprocfs_filter_rd_capa_count(char *page, char **start, off_t off,
-                                        int count, int *eof, void *data)
-{
-        return snprintf(page, count, "%d %d\n",
-                        capa_count[CAPA_SITE_CLIENT],
-                        capa_count[CAPA_SITE_SERVER]);
-}
-
-static
-int lprocfs_filter_rd_blacklist(char *page, char **start, off_t off, int count,
-                                int *eof, void *data)
-{
-        int rc;
-
-        rc = blacklist_display(page, count);
-        *eof = 1;
-        return rc;
-}
-
-static
-int lprocfs_filter_wr_blacklist(struct file *file, const char *buffer,
-                                unsigned long count, void *data)
-{
-        int add;
-        uid_t uid = -1;
-
-        if (count < 2)
-                return count;
-        if (buffer[0] == '+')
-                add = 1;
-        else if (buffer[0] == '-')
-                add = 0;
-        else
-                return count;
-
-        sscanf(buffer + 1, "%u", &uid);
-        if (add)
-                blacklist_add(uid);
-        else
-                blacklist_del(uid);
-        return count;
-}
-
 static struct lprocfs_vars lprocfs_obd_vars[] = {
         { "uuid",         lprocfs_rd_uuid,          0, 0 },
         { "blocksize",    lprocfs_rd_blksize,       0, 0 },
@@ -282,7 +192,8 @@ static struct lprocfs_vars lprocfs_obd_vars[] = {
         { "tot_pending",  lprocfs_filter_rd_tot_pending, 0, 0 },
         { "tot_granted",  lprocfs_filter_rd_tot_granted, 0, 0 },
         { "recovery_status", lprocfs_obd_rd_recovery_status, 0, 0 },
-        { "evict_client", 0, lprocfs_wr_evict_client, 0 },
+        { "evict_client", 0, lprocfs_wr_evict_client, 0,
+                                &lprocfs_evict_client_fops},
         { "num_exports",  lprocfs_rd_num_exports,   0, 0 },
         { "readcache_max_filesize",
                           lprocfs_filter_rd_readcache,
@@ -293,16 +204,13 @@ static struct lprocfs_vars lprocfs_obd_vars[] = {
         { "quota_iunit_sz", lprocfs_rd_iunit, lprocfs_wr_iunit, 0},
         { "quota_itune_sz", lprocfs_rd_itune, lprocfs_wr_itune, 0},
         { "quota_type",     lprocfs_rd_type, lprocfs_wr_type, 0},
+        { "quota_limit_sz", lprocfs_filter_rd_limit,
+                            lprocfs_filter_wr_limit, 0},
 #endif
         { "client_cache_count", lprocfs_filter_rd_fmd_max_num,
                           lprocfs_filter_wr_fmd_max_num, 0 },
         { "client_cache_seconds", lprocfs_filter_rd_fmd_max_age,
                           lprocfs_filter_wr_fmd_max_age, 0 },
-        { "capa",         lprocfs_filter_rd_capa,
-                          lprocfs_filter_wr_capa, 0 },
-        { "capa_count",   lprocfs_filter_rd_capa_count, 0, 0 },
-        { "blacklist",    lprocfs_filter_rd_blacklist,
-                          lprocfs_filter_wr_blacklist, 0 },
         { 0 }
 };
 

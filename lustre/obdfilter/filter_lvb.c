@@ -71,8 +71,7 @@ static int filter_lvbo_init(struct ldlm_resource *res)
         obd = res->lr_namespace->ns_lvbp;
         LASSERT(obd != NULL);
 
-        dentry = filter_fid2dentry(obd, NULL, res->lr_name.name[2], 
-                                              res->lr_name.name[0]);
+        dentry = filter_fid2dentry(obd, NULL, 0, res->lr_name.name[0]);
         if (IS_ERR(dentry)) {
                 rc = PTR_ERR(dentry);
                 CERROR("%s: bad object "LPU64"/"LPU64": rc %d\n", obd->obd_name,
@@ -95,6 +94,8 @@ static int filter_lvbo_init(struct ldlm_resource *res)
 out_dentry:
         f_dput(dentry);
 
+        if (rc)
+                OST_LVB_SET_ERR(lvb->lvb_blocks, rc);
         /* Don't free lvb data on lookup error */
         return rc;
 }
@@ -169,9 +170,8 @@ static int filter_lvbo_update(struct ldlm_resource *res, struct lustre_msg *m,
         /* Update the LVB from the disk inode */
         obd = res->lr_namespace->ns_lvbp;
         LASSERT(obd);
-        
-        dentry = filter_fid2dentry(obd, NULL, res->lr_name.name[2], 
-                                              res->lr_name.name[0]);
+
+        dentry = filter_fid2dentry(obd, NULL, 0, res->lr_name.name[0]);
         if (IS_ERR(dentry))
                 GOTO(out, rc = PTR_ERR(dentry));
 

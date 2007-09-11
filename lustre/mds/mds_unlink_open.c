@@ -47,11 +47,11 @@
 #include "mds_internal.h"
 
 int mds_osc_destroy_orphan(struct obd_device *obd,
-                                  umode_t mode,
-                                  struct lov_mds_md *lmm,
-                                  int lmm_size,
-                                  struct llog_cookie *logcookies,
-                                  int log_unlink)
+                           umode_t mode,
+                           struct lov_mds_md *lmm,
+                           int lmm_size,
+                           struct llog_cookie *logcookies,
+                           int log_unlink)
 {
         struct mds_obd *mds = &obd->u.mds;
         struct lov_stripe_md *lsm = NULL;
@@ -80,9 +80,8 @@ int mds_osc_destroy_orphan(struct obd_device *obd,
         if (oa == NULL)
                 GOTO(out_free_memmd, rc = -ENOMEM);
         oa->o_id = lsm->lsm_object_id;
-        oa->o_gr = lsm->lsm_object_gr;
         oa->o_mode = mode & S_IFMT;
-        oa->o_valid = OBD_MD_FLID | OBD_MD_FLTYPE | OBD_MD_FLGROUP;
+        oa->o_valid = OBD_MD_FLID | OBD_MD_FLTYPE;
 
         if (log_unlink && logcookies) {
                 oa->o_valid |= OBD_MD_FLCOOKIE;
@@ -258,15 +257,12 @@ int mds_cleanup_pending(struct obd_device *obd)
                 MDS_UP_READ_ORPHAN_SEM(child_inode);
 
                 rc = mds_unlink_orphan(obd, dchild, child_inode, pending_dir);
-                if (rc == 0) {
-                        item ++;
-                        CDEBUG(D_HA, "%s: removed orphan %s\n",
-                               obd->obd_name, d_name);
-                } else {
-                        CDEBUG(D_INODE, "%s: removed orphan %s failed,"
-                               " rc = %d\n", obd->obd_name, d_name, rc);
+                CDEBUG(D_INODE, "%s: removed orphan %s: rc %d\n",
+                       obd->obd_name, d_name, rc);
+                if (rc == 0)
+                        item++;
+                else
                         rc = 0;
-                }
 next:
                 l_dput(dchild);
                 UNLOCK_INODE_MUTEX(pending_dir);

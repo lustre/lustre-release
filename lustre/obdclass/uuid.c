@@ -1,69 +1,53 @@
 /*
  * Public include file for the UUID library
- * 
- * Copyright (C) 1996, 1997, 1998 Theodore Ts'o.
- * Copyright (C) 2002 Cluster File System
- * - changed for use in lustre
  *
- * %Begin-Header%
- * This file may be redistributed under the terms of the GNU 
- * Library General Public License.
- * %End-Header%
+ * Copyright (C) 2007 Cluster File System
  */
+
 #define DEBUG_SUBSYSTEM S_CLASS
 
 #ifndef __KERNEL__
 # include <liblustre.h>
+#else
+# include <libcfs/kp30.h>
 #endif
 
 #include <obd_support.h>
 #include <obd_class.h>
 
-struct uuid {
-        __u32   time_low;
-        __u16   time_mid;
-        __u16   time_hi_and_version;
-        __u16   clock_seq;
-        __u8    node[6];
-};
 
-static void uuid_unpack(class_uuid_t in, struct uuid *uu)
+static inline __u32 consume(int nob, __u8 **ptr)
 {
-        __u8    *ptr = in;
-        __u32   tmp;
+	__u32 value;
 
-        tmp = *ptr++;
-        tmp = (tmp << 8) | *ptr++;
-        tmp = (tmp << 8) | *ptr++;
-        tmp = (tmp << 8) | *ptr++;
-        uu->time_low = tmp;
+	LASSERT(nob <= sizeof value);
 
-        tmp = *ptr++;
-        tmp = (tmp << 8) | *ptr++;
-        uu->time_mid = tmp;
-
-        tmp = *ptr++;
-        tmp = (tmp << 8) | *ptr++;
-        uu->time_hi_and_version = tmp;
-
-        tmp = *ptr++;
-        tmp = (tmp << 8) | *ptr++;
-        uu->clock_seq = tmp;
-
-        memcpy(uu->node, ptr, 6);
+	for (value = 0; nob > 0; --nob)
+		value = (value << 8) | *((*ptr)++);
+	return value;
 }
 
-void generate_random_uuid(unsigned char uuid_out[16]);
+#define CONSUME(val, ptr) (val) = consume(sizeof(val), (ptr))
+
+static void uuid_unpack(class_uuid_t in, __u16 *uu, int nr)
+{
+        __u8 *ptr = in;
+
+	LASSERT(nr * sizeof *uu == sizeof(class_uuid_t));
+
+	while (nr-- > 0)
+		CONSUME(uu[nr], &ptr);
+}
 
 void class_uuid_unparse(class_uuid_t uu, struct obd_uuid *out)
 {
-        struct uuid uuid;
+	/* uu as an array of __u16's */
+        __u16 uuid[sizeof(class_uuid_t) / sizeof(__u16)];
 
-        uuid_unpack(uu, &uuid);
-        sprintf(out->uuid,
-                "%08x-%04x-%04x-%02x%02x-%02x%02x%02x%02x%02x%02x",
-                uuid.time_low, uuid.time_mid, uuid.time_hi_and_version,
-                uuid.clock_seq >> 8, uuid.clock_seq & 0xFF,
-                uuid.node[0], uuid.node[1], uuid.node[2],
-                uuid.node[3], uuid.node[4], uuid.node[5]);
+	CLASSERT(ARRAY_SIZE(uuid) == 8);
+
+        uuid_unpack(uu, uuid, ARRAY_SIZE(uuid));
+        sprintf(out->uuid, "%04x%04x-%04x-%04x-%04x-%04x%04x%04x",
+		uuid[0], uuid[1], uuid[2], uuid[3],
+		uuid[4], uuid[5], uuid[6], uuid[7]);
 }

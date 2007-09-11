@@ -46,6 +46,31 @@ static int lprocfs_mds_rd_mntdev(char *page, char **start, off_t off, int count,
         return snprintf(page, count, "%s\n",obd->u.mds.mds_vfsmnt->mnt_devname);
 }
 
+static int lprocfs_mds_rd_evictostnids(char *page, char **start, off_t off,
+                                       int count, int *eof, void *data)
+{
+        struct obd_device* obd = (struct obd_device *)data;
+
+        LASSERT(obd != NULL);
+
+        return snprintf(page, count, "%d\n", obd->u.mds.mds_evict_ost_nids);
+}
+
+static int lprocfs_mds_wr_evictostnids(struct file *file, const char *buffer,
+                                       unsigned long count, void *data)
+{
+        struct obd_device *obd = data;
+        int val, rc;
+
+        rc = lprocfs_write_helper(buffer, count, &val);
+        if (rc)
+                return rc;
+
+        obd->u.mds.mds_evict_ost_nids = !!val;
+
+        return count;
+}
+
 static int lprocfs_mds_wr_evict_client(struct file *file, const char *buffer,
                                        unsigned long count, void *data)
 {
@@ -64,14 +89,15 @@ static int lprocfs_mds_wr_evict_client(struct file *file, const char *buffer,
         if (!set)
                 return -ENOMEM;
 
-        rc = obd_set_info_async(mds->mds_osc_exp, strlen("evict_by_nid"),
-                                "evict_by_nid", strlen(tmpbuf + 4) + 1,
-                                 tmpbuf + 4, set);
-        if (rc)
-                CERROR("Failed to evict nid %s from OSTs: rc %d\n", tmpbuf + 4,
-                       rc);
-
-        ptlrpc_check_set(set);
+        if (obd->u.mds.mds_evict_ost_nids) {
+                rc = obd_set_info_async(mds->mds_osc_exp,strlen("evict_by_nid"),
+                                        "evict_by_nid", strlen(tmpbuf + 4) + 1,
+                                        tmpbuf + 4, set);
+                if (rc)
+                        CERROR("Failed to evict nid %s from OSTs: rc %d\n",
+                               tmpbuf + 4, rc);
+                ptlrpc_check_set(set);
+        }
 
         /* See the comments in function lprocfs_wr_evict_client() 
          * in ptlrpc/lproc_ptlrpc.c for details. - jay */
@@ -91,7 +117,6 @@ static int lprocfs_mds_wr_evict_client(struct file *file, const char *buffer,
         return count;
 }
 
-#if 0
 static int lprocfs_wr_group_info(struct file *file, const char *buffer,
                                  unsigned long count, void *data)
 {
@@ -245,7 +270,6 @@ static int lprocfs_wr_group_flush(struct file *file, const char *buffer,
         upcall_cache_flush_idle(obd->u.mds.mds_group_hash);
         return count;
 }
-#endif
 
 static int lprocfs_wr_atime_diff(struct file *file, const char *buffer,
                                  unsigned long count, void *data)
@@ -293,6 +317,8 @@ struct lprocfs_vars lprocfs_mds_obd_vars[] = {
         { "mntdev",          lprocfs_mds_rd_mntdev,  0, 0 },
         { "recovery_status", lprocfs_obd_rd_recovery_status, 0, 0 },
         { "evict_client",    0,                lprocfs_mds_wr_evict_client, 0 },
+        { "evict_ost_nids",  lprocfs_mds_rd_evictostnids,
+                                               lprocfs_mds_wr_evictostnids, 0 },
         { "num_exports",     lprocfs_rd_num_exports, 0, 0 },
 #ifdef HAVE_QUOTA_SUPPORT
         { "quota_bunit_sz",  lprocfs_rd_bunit, lprocfs_wr_bunit, 0 },
@@ -301,7 +327,6 @@ struct lprocfs_vars lprocfs_mds_obd_vars[] = {
         { "quota_itune_sz",  lprocfs_rd_itune, lprocfs_wr_itune, 0 },
         { "quota_type",      lprocfs_rd_type, lprocfs_wr_type, 0 },
 #endif
-#if 0
         { "group_expire_interval", lprocfs_rd_group_expire,
                              lprocfs_wr_group_expire, 0},
         { "group_acquire_expire", lprocfs_rd_group_acquire_expire,
@@ -310,7 +335,6 @@ struct lprocfs_vars lprocfs_mds_obd_vars[] = {
                              lprocfs_wr_group_upcall, 0},
         { "group_flush",     0, lprocfs_wr_group_flush, 0},
         { "group_info",      0, lprocfs_wr_group_info, 0 },
-#endif
         { "atime_diff",      lprocfs_rd_atime_diff, lprocfs_wr_atime_diff, 0 },
         { 0 }
 };

@@ -68,8 +68,7 @@ static void record_start_io(struct filter_iobuf *iobuf, int rw, int size,
                 atomic_inc(&filter->fo_r_in_flight);
                 lprocfs_oh_tally(&filter->fo_filter_stats.hist[BRW_R_RPC_HIST],
                                  atomic_read(&filter->fo_r_in_flight));
-                lprocfs_oh_tally_log2(&filter->fo_filter_stats.hist[BRW_R_DISK_IOSIZE],
-                                      size);
+                lprocfs_oh_tally_log2(&filter->fo_filter_stats.hist[BRW_R_DISK_IOSIZE], size);
                 lprocfs_oh_tally(&exp->exp_filter_data.fed_brw_stats.hist[BRW_R_RPC_HIST],
                                  atomic_read(&filter->fo_r_in_flight));
                 lprocfs_oh_tally_log2(&exp->exp_filter_data.fed_brw_stats.hist[BRW_R_DISK_IOSIZE], size);
@@ -77,8 +76,7 @@ static void record_start_io(struct filter_iobuf *iobuf, int rw, int size,
                 atomic_inc(&filter->fo_w_in_flight);
                 lprocfs_oh_tally(&filter->fo_filter_stats.hist[BRW_W_RPC_HIST],
                                  atomic_read(&filter->fo_w_in_flight));
-                lprocfs_oh_tally_log2(&filter->fo_filter_stats.hist[BRW_W_DISK_IOSIZE],
-                                      size);
+                lprocfs_oh_tally_log2(&filter->fo_filter_stats.hist[BRW_W_DISK_IOSIZE], size);
                 lprocfs_oh_tally(&exp->exp_filter_data.fed_brw_stats.hist[BRW_W_RPC_HIST],
                                  atomic_read(&filter->fo_w_in_flight));
                 lprocfs_oh_tally_log2(&exp->exp_filter_data.fed_brw_stats.hist[BRW_W_DISK_IOSIZE], size);
@@ -106,6 +104,11 @@ static int dio_complete_routine(struct bio *bio, unsigned int done, int error)
         struct filter_iobuf *iobuf = bio->bi_private;
         unsigned long        flags;
 
+#ifdef HAVE_PAGE_CONSTANT
+        struct bio_vec *bvl;
+        int i;
+#endif
+
         /* CAVEAT EMPTOR: possibly in IRQ context 
          * DO NOT record procfs stats here!!! */
 
@@ -129,6 +132,11 @@ static int dio_complete_routine(struct bio *bio, unsigned int done, int error)
                        bio->bi_private);
                 return 0;
         }
+
+#ifdef HAVE_PAGE_CONSTANT
+        bio_for_each_segment(bvl, bio, i)
+                ClearPageConstant(bvl->bv_page);
+#endif
 
         spin_lock_irqsave(&iobuf->dr_lock, flags);
         if (iobuf->dr_error == 0)
@@ -297,6 +305,18 @@ int filter_do_bio(struct obd_export *exp, struct inode *inode,
                                (blocks[block_idx + i + nblocks] << sector_bits))
                                 nblocks++;
 
+#ifdef HAVE_PAGE_CONSTANT
+                        /* I only set the page to be constant only if it 
+                         * is mapped to a contiguous underlying disk block(s). 
+                         * It will then make sure the corresponding device 
+                         * cache of raid5 will be overwritten by this page. 
+                         * - jay */
+                        if ((rw == OBD_BRW_WRITE) && 
+                            (nblocks == blocks_per_page) && 
+                            mapping_cap_page_constant_write(inode->i_mapping))
+                                SetPageConstant(page);
+#endif
+
                         if (bio != NULL &&
                             can_be_merged(bio, sector) &&
                             bio_add_page(bio, page,
@@ -366,21 +386,21 @@ int filter_do_bio(struct obd_export *exp, struct inode *inode,
         wait_event(iobuf->dr_wait, atomic_read(&iobuf->dr_numreqs) == 0);
 
         if (rw == OBD_BRW_READ) {
-                lprocfs_oh_tally(&obd->u.filter.fo_filter_stats.hist[BRW_R_DIO_FRAGS],
-                                 frags);
+                lprocfs_oh_tally(&obd->u.filter.fo_filter_stats.hist[BRW_R_DIO_FRAGS], frags);
                 lprocfs_oh_tally(&exp->exp_filter_data.fed_brw_stats.hist[BRW_R_DIO_FRAGS],
                                  frags);
                 lprocfs_oh_tally_log2(&obd->u.filter.fo_filter_stats.hist[BRW_R_IO_TIME],
                                       jiffies - start_time);
-                lprocfs_oh_tally_log2(&exp->exp_filter_data.fed_brw_stats.hist[BRW_R_IO_TIME], jiffies - start_time);
+                lprocfs_oh_tally_log2(&exp->exp_filter_data.fed_brw_stats.hist[BRW_R_IO_TIME],
+                                 jiffies - start_time);
         } else {
-                lprocfs_oh_tally(&obd->u.filter.fo_filter_stats.hist[BRW_W_DIO_FRAGS],
-                                 frags);
+                lprocfs_oh_tally(&obd->u.filter.fo_filter_stats.hist[BRW_W_DIO_FRAGS], frags);
                 lprocfs_oh_tally(&exp->exp_filter_data.fed_brw_stats.hist[BRW_W_DIO_FRAGS],
                                  frags);
                 lprocfs_oh_tally_log2(&obd->u.filter.fo_filter_stats.hist[BRW_W_IO_TIME],
                                       jiffies - start_time);
-                lprocfs_oh_tally_log2(&exp->exp_filter_data.fed_brw_stats.hist[BRW_W_IO_TIME], jiffies - start_time);
+                lprocfs_oh_tally_log2(&exp->exp_filter_data.fed_brw_stats.hist[BRW_W_IO_TIME],
+                                 jiffies - start_time);
         }
 
         if (rc == 0)
@@ -426,6 +446,7 @@ static int filter_sync_inode_data(struct inode *inode, int locked)
 
         return rc;
 }
+
 /* Clear pages from the mapping before we do direct IO to that offset.
  * Now that the only source of such pages in the truncate path flushes
  * these pages to disk and then discards them, this is error condition.
@@ -518,7 +539,8 @@ int filter_direct_io(int rw, struct dentry *dchild, struct filter_iobuf *iobuf,
                 create = 1;
                 sem = &obd->u.filter.fo_alloc_lock;
 
-                lquota_enforce(filter_quota_interface_ref, obd, iobuf->dr_ignore_quota);
+                lquota_enforce(filter_quota_interface_ref, obd,
+                               iobuf->dr_ignore_quota);
         }
 
         rc = fsfilt_map_inode_pages(obd, inode, iobuf->dr_pages,
@@ -545,8 +567,7 @@ int filter_direct_io(int rw, struct dentry *dchild, struct filter_iobuf *iobuf,
                                 rc = rc2;
                 }
 
-                rc2 = fsfilt_commit_async(obd,inode,oti->oti_handle,
-                                          wait_handle);
+                rc2 =fsfilt_commit_async(obd,inode,oti->oti_handle,wait_handle);
                 if (rc == 0)
                         rc = rc2;
                 if (rc != 0)
@@ -673,7 +694,7 @@ int filter_commitrw_write(struct obd_export *exp, struct obdo *oa,
         DQUOT_INIT(inode);
 
         LOCK_INODE_MUTEX(inode);
-        fsfilt_check_slow(obd, now, obd_timeout, "i_mutex");
+        fsfilt_check_slow(obd, now, "i_mutex");
         oti->oti_handle = fsfilt_brw_start(obd, objcount, &fso, niocount, res,
                                            oti);
         if (IS_ERR(oti->oti_handle)) {
@@ -686,7 +707,7 @@ int filter_commitrw_write(struct obd_export *exp, struct obdo *oa,
         }
         /* have to call fsfilt_commit() from this point on */
 
-        fsfilt_check_slow(obd, now, obd_timeout, "brw_start");
+        fsfilt_check_slow(obd, now, "brw_start");
 
         i = OBD_MD_FLATIME | OBD_MD_FLMTIME | OBD_MD_FLCTIME;
 
@@ -738,7 +759,7 @@ int filter_commitrw_write(struct obd_export *exp, struct obdo *oa,
 
         lquota_getflag(filter_quota_interface_ref, obd, oa);
 
-        fsfilt_check_slow(obd, now, obd_timeout, "direct_io");
+        fsfilt_check_slow(obd, now, "direct_io");
 
         err = fsfilt_commit_wait(obd, inode, wait_handle);
         if (err) {
@@ -751,7 +772,7 @@ int filter_commitrw_write(struct obd_export *exp, struct obdo *oa,
                          "oti_transno "LPU64" last_committed "LPU64"\n",
                          oti->oti_transno, obd->obd_last_committed);
 
-        fsfilt_check_slow(obd, now, obd_timeout, "commitrw commit");
+        fsfilt_check_slow(obd, now, "commitrw commit");
 
 cleanup:
         filter_grant_commit(exp, niocount, res);

@@ -1,0 +1,17 @@
+lnxmaj=2.4.20
+lnxrel=hp_pnnl
+
+KERNEL=linux-$lnxmaj-$lnxrel.tar.gz
+SERIES=hp-pnnl-2.4.20
+VERSION=$lnxmaj
+EXTRA_VERSION=$lnxrel_lustre.@VERSION@
+LUSTRE_VERSION=@VERSION@
+RHBUILD=0
+
+BASE_ARCHS="ia64"
+BIGMEM_ARCHS=""
+BOOT_ARCHS=""
+JENSEN_ARCHS=""
+SMP_ARCHS="ia64"
+UP_ARCHS=""
+SRC_ARCHS="ia64"

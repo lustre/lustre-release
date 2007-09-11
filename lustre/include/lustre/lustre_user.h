@@ -58,9 +58,6 @@ struct obd_statfs;
 #define LL_IOC_JOIN                     _IOW ('f', 163, long)
 #define IOC_OBD_STATFS                  _IOWR('f', 164, struct obd_statfs *)
 #define IOC_LOV_GETINFO                 _IOWR('f', 165, struct lov_user_mds_data *)
-#define LL_IOC_FLUSHCTX                 _IOW ('f', 166, long)
-#define LL_IOC_GETFACL                  _IOWR('f', 167, struct rmtacl_ioctl_data *)
-#define LL_IOC_SETFACL                  _IOWR('f', 168, struct rmtacl_ioctl_data *)
 
 #define LL_STATFS_MDC           1
 #define LL_STATFS_LOV           2
@@ -75,9 +72,6 @@ struct obd_statfs;
 #define LL_IOC_OBD_STATFS       IOC_OBD_STATFS
 #define IOC_MDC_GETSTRIPE       IOC_MDC_GETFILESTRIPE
 
-/* Do not define O_CHECK_STALE as 0200000000,
- * which is conflict with MDS_OPEN_OWNEROVERRIDE */
-#define O_CHECK_STALE       020000000  /* hopefully this does not conflict */
 #define O_LOV_DELAY_CREATE 0100000000  /* hopefully this does not conflict */
 #define O_JOIN_FILE        0400000000  /* hopefully this does not conflict */
 
@@ -127,7 +121,6 @@ struct lov_user_mds_data_v1 {
 
 struct ll_recreate_obj {
         __u64 lrc_id;
-        __u64 lrc_group;
         __u32 lrc_ost_idx;
 };
 
@@ -145,7 +138,7 @@ static inline int obd_uuid_empty(struct obd_uuid *uuid)
         return uuid->uuid[0] == '\0';
 }
 
-static inline void obd_str2uuid(struct obd_uuid *uuid, const char *tmp)
+static inline void obd_str2uuid(struct obd_uuid *uuid, char *tmp)
 {
         strncpy((char *)uuid->uuid, tmp, sizeof(*uuid));
         uuid->uuid[sizeof(*uuid) - 1] = '\0';
@@ -181,37 +174,15 @@ struct if_quotacheck {
         struct obd_uuid         obd_uuid;
 };
 
-#define IDENTITY_DOWNCALL_MAGIC 0x6d6dd620
+#define MDS_GRP_DOWNCALL_MAGIC 0x6d6dd620
 
-/* setxid permission */
-#define N_SETXID_PERMS_MAX      64
-
-struct setxid_perm_downcall_data {
-        __u64 pdd_nid;
-        __u32 pdd_perm;
-};
-
-struct identity_downcall_data {
-        __u32                            idd_magic;
-        __u32                            idd_err;
-        __u32                            idd_uid;
-        __u32                            idd_gid;
-        __u32                            idd_nperms;
-        struct setxid_perm_downcall_data idd_perms[N_SETXID_PERMS_MAX];
-        __u32                            idd_ngroups;
-        __u32                            idd_groups[0];
-};
-
-#define RMTACL_DOWNCALL_MAGIC 0x6d6dd620
-#define RMTACL_SIZE_MAX     (4096)
-
-struct rmtacl_downcall_data {
-        __u32           add_magic;
-        __u32           add_handle;
-        __u64           add_key;
-        __u32           add_buflen;
-        __u32           add_padding;
-        __u8            add_buf[0];
+struct mds_grp_downcall_data {
+        __u32           mgd_magic;
+        __u32           mgd_err;
+        __u32           mgd_uid;
+        __u32           mgd_gid;
+        __u32           mgd_ngroups;
+        __u32           mgd_groups[0];
 };
 
 #ifdef NEED_QUOTA_DEFS
@@ -278,13 +249,5 @@ struct if_quotactl {
 #ifndef offsetof
 # define offsetof(typ,memb)     ((unsigned long)((char *)&(((typ *)0)->memb)))
 #endif
-
-/* remote acl ioctl */
-struct rmtacl_ioctl_data {
-        char           *cmd;            /* IN */
-        unsigned long   cmd_len;
-        char           *res;            /* OUT */
-        unsigned long   res_len;
-};
 
 #endif /* _LUSTRE_USER_H */

@@ -44,6 +44,7 @@ struct lprocfs_vars {
         cfs_read_proc_t *read_fptr;
         cfs_write_proc_t *write_fptr;
         void *data;
+        struct file_operations *fops;
 };
 
 struct lprocfs_static_vars {
@@ -150,6 +151,23 @@ struct obd_device;
 struct file;
 struct obd_histogram;
 
+/* Days / hours / mins / seconds format */
+struct dhms {
+        int d,h,m,s;
+};
+static inline void s2dhms(struct dhms *ts, time_t secs)
+{
+        ts->d = secs / 86400;
+        secs = secs % 86400;
+        ts->h = secs / 3600;
+        secs = secs % 3600;
+        ts->m = secs / 60;
+        ts->s = secs % 60;
+}
+#define DHMS_FMT "%dd%dh%02dm%02ds"
+#define DHMS_VARS(x) (x)->d, (x)->h, (x)->m, (x)->s
+
+
 #ifdef LPROCFS
 
 /* Two optimized LPROCFS counter increment functions are provided:
@@ -164,7 +182,7 @@ static inline void lprocfs_counter_add(struct lprocfs_stats *stats, int idx,
 {
         struct lprocfs_counter *percpu_cntr;
 
-        if (stats == NULL)
+        if (!stats)
                 return;
         percpu_cntr = &(stats->ls_percpu[smp_processor_id()]->lp_cntr[idx]);
         atomic_inc(&percpu_cntr->lc_cntl.la_entry);
@@ -186,7 +204,7 @@ static inline void lprocfs_counter_incr(struct lprocfs_stats *stats, int idx)
 {
         struct lprocfs_counter *percpu_cntr;
 
-        if (stats == NULL)
+        if (!stats)
                 return;
         percpu_cntr = &(stats->ls_percpu[smp_processor_id()]->lp_cntr[idx]);
         atomic_inc(&percpu_cntr->lc_cntl.la_entry);
@@ -241,6 +259,7 @@ extern cfs_proc_dir_entry_t *lprocfs_srch(cfs_proc_dir_entry_t *root,
 
 extern int lprocfs_obd_setup(struct obd_device *obd, struct lprocfs_vars *list);
 extern int lprocfs_obd_cleanup(struct obd_device *obd);
+extern struct file_operations lprocfs_evict_client_fops;
 
 extern int lprocfs_seq_create(cfs_proc_dir_entry_t *parent, char *name, 
                               mode_t mode, struct file_operations *seq_fops,
@@ -254,7 +273,13 @@ extern int lprocfs_obd_seq_create(struct obd_device *dev, char *name,
 extern int lprocfs_rd_u64(char *page, char **start, off_t off,
                           int count, int *eof, void *data);
 extern int lprocfs_rd_atomic(char *page, char **start, off_t off,
-                          int count, int *eof, void *data);
+                             int count, int *eof, void *data);
+extern int lprocfs_wr_atomic(struct file *file, const char *buffer,
+                             unsigned long count, void *data);
+extern int lprocfs_rd_uint(char *page, char **start, off_t off,
+                           int count, int *eof, void *data);
+extern int lprocfs_wr_uint(struct file *file, const char *buffer,
+                           unsigned long count, void *data);
 extern int lprocfs_rd_uuid(char *page, char **start, off_t off,
                            int count, int *eof, void *data);
 extern int lprocfs_rd_name(char *page, char **start, off_t off,
@@ -271,6 +296,13 @@ extern int lprocfs_rd_num_exports(char *page, char **start, off_t off,
                                   int count, int *eof, void *data);
 extern int lprocfs_rd_numrefs(char *page, char **start, off_t off,
                               int count, int *eof, void *data);
+struct adaptive_timeout;
+extern int lprocfs_at_hist_helper(char *page, int count, int rc, 
+                                  struct adaptive_timeout *at);
+extern int lprocfs_rd_timeouts(char *page, char **start, off_t off,
+                               int count, int *eof, void *data);
+extern int lprocfs_wr_timeouts(struct file *file, const char *buffer,
+                               unsigned long count, void *data);
 extern int lprocfs_wr_evict_client(struct file *file, const char *buffer,
                                    unsigned long count, void *data);
 extern int lprocfs_wr_ping(struct file *file, const char *buffer,
@@ -403,7 +435,7 @@ static inline void lprocfs_init_ops_stats(int num_private_stats,
                                           struct lprocfs_stats *stats)
 { return; }
 static inline int lprocfs_alloc_obd_stats(struct obd_device *obddev,
-                                             unsigned int num_private_stats)
+                                          unsigned int num_private_stats)
 { return 0; }
 static inline void lprocfs_free_obd_stats(struct obd_device *obddev)
 { return; }
@@ -448,6 +480,16 @@ static inline int lprocfs_rd_num_exports(char *page, char **start, off_t off,
 { return 0; }
 static inline int lprocfs_rd_numrefs(char *page, char **start, off_t off,
                                      int count, int *eof, void *data)
+{ return 0; }
+struct adaptive_timeout;
+static inline int lprocfs_at_hist_helper(char *page, int count, int rc, 
+                                         struct adaptive_timeout *at)
+{ return 0; }
+static inline int lprocfs_rd_timeouts(char *page, char **start, off_t off,
+                                      int count, int *eof, void *data)
+{ return 0; }
+static inline int lprocfs_wr_timeouts(struct file *file, const char *buffer,
+                                      unsigned long count, void *data)
 { return 0; }
 static inline int lprocfs_wr_evict_client(struct file *file, const char *buffer,
                                           unsigned long count, void *data)

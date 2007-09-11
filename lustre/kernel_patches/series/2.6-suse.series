@@ -2,7 +2,6 @@ lustre_version.patch
 vfs_intent-2.6-suse.patch
 vfs_nointent-2.6-suse.patch
 vfs_races-2.6-suse.patch
-ext3-wantedi-misc-2.6-suse.patch
 nfs-cifs-intent-2.6-suse.patch
 iopen-misc-2.6-suse.patch
 export-truncate-2.6-suse.patch

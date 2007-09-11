@@ -12,20 +12,18 @@ set -e
 ONLY=${ONLY:-"$*"}
 
 # These tests don't apply to mountconf
-MOUNTCONFSKIP="9 10 11 12 13 13b 14 15 18"
+#              xml xml xml xml xml xml dumb FIXME
+MOUNTCONFSKIP="10  11  12  13  13b 14  15   18"
 
-# bug number for skipped test:
-ALWAYS_EXCEPT=" $CONF_SANITY_EXCEPT $MOUNTCONFSKIP 16 23"
+# bug number for skipped test:                     13369
+ALWAYS_EXCEPT=" $CONF_SANITY_EXCEPT $MOUNTCONFSKIP 34a"
 # UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
 
 SRCDIR=`dirname $0`
 PATH=$PWD/$SRCDIR:$SRCDIR:$SRCDIR/../utils:$PATH
 
-PTLDEBUG=${PTLDEBUG:--1}
 LUSTRE=${LUSTRE:-`dirname $0`/..}
 RLUSTRE=${RLUSTRE:-$LUSTRE}
-MOUNTLUSTRE=${MOUNTLUSTRE:-/sbin/mount.lustre}
-MKFSLUSTRE=${MKFSLUSTRE:-/usr/sbin/mkfs.lustre}
 HOSTNAME=`hostname`
 
 . $LUSTRE/tests/test-framework.sh
@@ -33,7 +31,7 @@ init_test_env $@
 # use small MDS + OST size to speed formatting time
 MDSSIZE=40000
 OSTSIZE=40000
-. ${CONFIG:=$LUSTRE/tests/cfg/local.sh}
+. ${CONFIG:=$LUSTRE/tests/cfg/$NAME.sh}
 
 reformat() {
         formatall
@@ -92,6 +90,16 @@ stop_ost2() {
 	stop ost2 -f  || return 93
 }
 
+start_client() {
+	echo "start client on `facet_active_host client`"
+	start client || return 99 
+}
+
+stop_client() {
+	echo "stop client on `facet_active_host client`"
+	stop client || return 100 
+}
+
 mount_client() {
 	local MOUNTPATH=$1
 	echo "mount $FSNAME on ${MOUNTPATH}....."
@@ -114,8 +122,12 @@ umount_client() {
 }
 
 manual_umount_client(){
+	local rc
+	local FORCE=$1
 	echo "manual umount lustre on ${MOUNT}...."
-	do_facet client "umount -d $MOUNT"
+	do_facet client "umount -d ${FORCE} $MOUNT"
+	rc=$?
+	return $rc
 }
 
 setup() {
@@ -168,7 +180,6 @@ fi
 
 gen_config
 
-init_krb5_env
 
 test_0() {
         setup
@@ -223,6 +234,8 @@ run_test 4 "force cleanup ost, then cleanup"
 test_5() {
 	setup
 	touch $DIR/$tfile || return 1
+	fuser -m -v $MOUNT && echo "$MOUNT is in use by user space process."
+
 	stop_mds -f || return 2
 
 	# cleanup may return an error from the failed
@@ -235,8 +248,8 @@ test_5() {
 	kill -TERM $UMOUNT_PID
 	echo "waiting for umount to finish"
 	wait $UMOUNT_PID
-	if grep " $MOUNT " /etc/mtab; then
-		echo "test 5: mtab after failed umount"
+	if grep " $MOUNT " /proc/mounts; then
+		echo "test 5: /proc/mounts after failed umount"
 		umount $MOUNT &
 		UMOUNT_PID=$!
 		sleep 2
@@ -244,7 +257,7 @@ test_5() {
 		kill -TERM $UMOUNT_PID
 		echo "waiting for umount to finish"
 		wait $UMOUNT_PID
-		grep " $MOUNT " /etc/mtab && echo "test 5: mtab after second umount" && return 11
+		grep " $MOUNT " /proc/mounts && echo "test 5: /proc/mounts after second umount" && return 11
 	fi
 
 	manual_umount_client
@@ -298,8 +311,6 @@ run_test 5d "mount with ost down"
 test_5e() {
 	start_ost
 	start_mds
-        # give MDS a chance to connect to OSTs (bz 10476)
-	sleep 5	
 
 #define OBD_FAIL_PTLRPC_DELAY_SEND       0x506
 	do_facet client "sysctl -w lustre.fail_loc=0x80000506"
@@ -619,7 +630,7 @@ test_16() {
 
         if [ ! -e "$MDSDEV" ]; then
             log "no $MDSDEV existing, so mount Lustre to create one"
-	    setup
+            setup
             check_mount || return 41
             cleanup || return $?
         fi
@@ -769,24 +780,19 @@ test_22() {
         #reformat to remove all logs
         reformat
 	start_mds
-	echo Client mount before any osts are in the logs
-	mount_client $MOUNT
-	check_mount && return 41
-	pass
-
-	echo Client mount with ost in logs, but none running
-	start_ost
-	stop_ost
-	mount_client $MOUNT
-	# check_mount will block trying to contact ost
-	umount_client $MOUNT
-	pass
 
 	echo Client mount with a running ost
 	start_ost
 	mount_client $MOUNT
-	sleep 5	#bz10476
 	check_mount || return 41
+	umount_client $MOUNT
+	pass
+
+	echo Client mount with ost in logs, but none running
+	stop_ost
+	mount_client $MOUNT
+	# check_mount will block trying to contact ost
+	umount_client $MOUNT
 	pass
 
 	cleanup
@@ -849,7 +855,6 @@ test_24a() {
 	sleep 10
 	[ -e $MOUNT2/$tfile ] && error "File bleed" && return 7
 	# 2 should work
-	sleep 5
 	cp /etc/passwd $MOUNT2/b || return 3
 	rm $MOUNT2/b || return 4
 	# 2 is actually mounted
@@ -861,8 +866,8 @@ test_24a() {
  	umount_client $MOUNT 
 	# the MDS must remain up until last MDT
 	stop_mds
-	MDS=$(do_facet mds "cat $LPROC/devices" | awk '($3 ~ "mdt" && $4 ~ "MDT") { print $4 }')
-	[ -z "$MDS" ] && error "No MDT" && return 8
+	MDS=$(do_facet mds "cat $LPROC/devices" | awk '($3 ~ "mdt" && $4 ~ "MDS") { print $4 }')
+	[ -z "$MDS" ] && error "No MDS" && return 8
 	umount $MOUNT2
 	stop fs2mds -f
 	stop fs2ost -f
@@ -921,7 +926,7 @@ set_and_check() {
 	echo "Setting $PARAM from $ORIG to $FINAL"
 	do_facet mds "$LCTL conf_param $PARAM=$FINAL" || error conf_param failed
 	local RESULT
-	local MAX=20
+	local MAX=30
 	local WAIT=0
 	while [ 1 ]; do
 	    sleep 5
@@ -952,8 +957,8 @@ run_test 27a "Reacquire MGS lock if OST started first"
 test_27b() {
         setup
 	facet_failover mds
-	set_and_check mds "cat $LPROC/mdt/$FSNAME-MDT0000/identity_acquire_expire" "$FSNAME-MDT0000.mdt.identity_acquire_expire" || return 3
-	set_and_check client "cat $LPROC/mdc/$FSNAME-MDT0000-mdc-*/max_rpcs_in_flight" "$FSNAME-MDT0000.mdc.max_rpcs_in_flight" || return 4
+	set_and_check mds "cat $LPROC/mds/$FSNAME-MDT0000/group_acquire_expire" "$FSNAME-MDT0000.mdt.group_acquire_expire" || return 3 
+	set_and_check client "cat $LPROC/mdc/$FSNAME-MDT0000-mdc-*/max_rpcs_in_flight" "$FSNAME-MDT0000.mdc.max_rpcs_in_flight" || return 4 
 	cleanup
 }
 run_test 27b "Reacquire MGS lock after failover"
@@ -986,8 +991,8 @@ test_29() {
 	sleep 10
 
 	local PARAM="$FSNAME-OST0001.osc.active"
-	local PROC_ACT="$LPROC/osc/$FSNAME-OST0001-osc-[^M]*/active"
-	local PROC_UUID="$LPROC/osc/$FSNAME-OST0001-osc-[^M]*/ost_server_uuid"
+	local PROC_ACT="$LPROC/osc/$FSNAME-OST0001-osc-*/active"
+	local PROC_UUID="$LPROC/osc/$FSNAME-OST0001-osc-*/ost_server_uuid"
 	if [ ! -r $PROC_ACT ]; then
 	    echo "Can't read $PROC_ACT"
 	    ls $LPROC/osc/$FSNAME-*
@@ -1006,7 +1011,7 @@ test_29() {
 	fi
 
 	# check MDT too 
-	local MPROC="$LPROC/osc/$FSNAME-OST0001-osc-[M]*/active"
+	local MPROC="$LPROC/osc/$FSNAME-OST0001-osc/active"
 	local MAX=30
 	local WAIT=0
 	while [ 1 ]; do
@@ -1071,7 +1076,7 @@ test_31() { # bug 10734
         mount -t lustre 4.3.2.1@tcp:/lustre $MOUNT || true
 	cleanup
 }
-run_test 31 "Connect to non-existent node (shouldn't crash)"
+run_test 31 "Connect to non-existent node (returns errors, should not crash)"
 
 test_32a() {
         # XXX - make this run on client-only systems with real hardware on
@@ -1109,19 +1114,13 @@ test_32a() {
 	$LCTL conf_param lustre-MDT0000.failover.node=$NID || return 10
 	echo "ok."
 
-	# With a new good MDT failover nid, we should be able to mount a client
-	# (but it cant talk to OST)
-        local OLDMOUNTOPT=$MOUNTOPT
-        MOUNTOPT="exclude=lustre-OST0000"
-	mount_client $MOUNT
-        MOUNTOPT=$OLDMOUNTOPT
-	set_and_check client "cat $LPROC/mdc/*/max_rpcs_in_flight" "lustre-MDT0000.mdc.max_rpcs_in_flight" || return 11
-
-	zconf_umount `hostname` $MOUNT -f
 	cleanup_nocli
+	load_modules
 
         # mount a second time to make sure we didnt leave upgrade flag on
+	load_modules
         $TUNEFS --dryrun $TMP/$tdir/mds || error "tunefs failed"
+	load_modules
         start mds $TMP/$tdir/mds "-o loop,exclude=lustre-OST0000" || return 12
         cleanup_nocli
 
@@ -1140,32 +1139,36 @@ test_32b() {
 	unzip -o -j -d $TMP/$tdir disk1_4.zip || { skip "Cant unzip disk1_4, skipping" && return ; }
 	load_modules
 	sysctl lnet.debug=$PTLDEBUG
+	NEWNAME=sofia
 
 	# writeconf will cause servers to register with their current nids
-	$TUNEFS --writeconf $TMP/$tdir/mds || error "tunefs failed"
+	$TUNEFS --writeconf --fsname=$NEWNAME $TMP/$tdir/mds || error "tunefs failed"
 	start mds $TMP/$tdir/mds "-o loop" || return 3
-        local UUID=$(cat $LPROC/mds/lustre-MDT0000/uuid)
+        local UUID=$(cat $LPROC/mds/${NEWNAME}-MDT0000/uuid)
 	echo MDS uuid $UUID
 	[ "$UUID" == "mdsA_UUID" ] || error "UUID is wrong: $UUID" 
 
-	$TUNEFS --mgsnode=`hostname` $TMP/$tdir/ost1 || error "tunefs failed"
+	$TUNEFS --mgsnode=`hostname` --fsname=$NEWNAME --writeconf $TMP/$tdir/ost1 || error "tunefs failed"
 	start ost1 $TMP/$tdir/ost1 "-o loop" || return 5
-        UUID=$(cat $LPROC/obdfilter/lustre-OST0000/uuid)
+        UUID=$(cat $LPROC/obdfilter/${NEWNAME}-OST0000/uuid)
 	echo OST uuid $UUID
-	[ "$UUID" == "ost1_UUID" ] || error "UUID is wrong: $UUID" 
+	[ "$UUID" == "ost1_UUID" ] || error "UUID is wrong: $UUID"
 
 	echo "OSC changes should succeed:" 
-	$LCTL conf_param lustre-OST0000.osc.max_dirty_mb=15 || return 7
-	$LCTL conf_param lustre-OST0000.failover.node=$NID || return 8
+	$LCTL conf_param ${NEWNAME}-OST0000.osc.max_dirty_mb=15 || return 7
+	$LCTL conf_param ${NEWNAME}-OST0000.failover.node=$NID || return 8
 	echo "ok."
 	echo "MDC changes should succeed:" 
-	$LCTL conf_param lustre-MDT0000.mdc.max_rpcs_in_flight=9 || return 9
+	$LCTL conf_param ${NEWNAME}-MDT0000.mdc.max_rpcs_in_flight=9 || return 9
 	echo "ok."
 
 	# MDT and OST should have registered with new nids, so we should have
 	# a fully-functioning client
 	echo "Check client and old fs contents"
+	OLDFS=$FSNAME
+	FSNAME=$NEWNAME
 	mount_client $MOUNT
+	FSNAME=$OLDFS
 	set_and_check client "cat $LPROC/mdc/*/max_rpcs_in_flight" "lustre-MDT0000.mdc.max_rpcs_in_flight" || return 11
 	[ "$(cksum $MOUNT/passwd | cut -d' ' -f 1,2)" == "2479747619 779" ] || return 12  
 	echo "ok."
@@ -1202,10 +1205,74 @@ test_33() { # bug 12333
 }
 run_test 33 "Mount ost with a large index number"
 
+umount_client $MOUNT	
+cleanup_nocli
+
+test_33a() {
+        setup
+
+        do_facet client dd if=/dev/zero of=$MOUNT/24 bs=1024k count=1
+        # Drop lock cancelation reply during umount
+	#define OBD_FAIL_LDLM_CANCEL             0x304
+        do_facet client sysctl -w lustre.fail_loc=0x80000304
+        #sysctl -w lnet.debug=-1
+        umount_client $MOUNT
+        cleanup
+}
+run_test 33a "Drop cancel during umount"
+
+test_34a() {
+        setup
+	do_facet client multiop $DIR/file O_c &
+
+	manual_umount_client
+	rc=$?
+	do_facet client killall -USR1 multiop
+	if [ $rc -eq 0 ]; then
+		error "umount not fail!"
+	fi
+	sleep 1
+        cleanup
+}
+run_test 34a "umount with opened file should be fail"
+
+
+test_34b() {
+	setup
+	touch $DIR/$tfile || return 1
+	stop_mds --force || return 2
+
+ 	manual_umount_client --force
+	rc=$?
+	if [ $rc -ne 0 ]; then
+		error "mtab after failed umount - rc $rc"
+	fi
+
+	cleanup
+	return 0	
+}
+run_test 34b "force umount with failed mds should be normal"
+
+test_34c() {
+	setup
+	touch $DIR/$tfile || return 1
+	stop_ost --force || return 2
+
+ 	manual_umount_client --force
+	rc=$?
+	if [ $rc -ne 0 ]; then
+		error "mtab after failed umount - rc $rc"
+	fi
+
+	cleanup
+	return 0	
+}
+run_test 34c "force umount with failed mds should be normal"
+
 test_35() { # bug 12459
 	setup
 
-	DBG_SAVE="`sysctl -n lnet.debug`"
+	debugsave
 	sysctl -w lnet.debug="ha"
 
 	log "Set up a fake failnode for the MDS"
@@ -1228,7 +1295,7 @@ test_35() { # bug 12459
 	log "Wait for df ($DFPID) ... "
 	wait $DFPID
 	log "done"
-	sysctl -w lnet.debug="$DBG_SAVE"
+	debugrestore
 
 	# retrieve from the log the first server that the client tried to
 	# contact after the connection loss
@@ -1316,10 +1383,6 @@ test_36() { # 12743
         return $rc
 }
 run_test 36 "df report consistency on OSTs with different block size"
-
-umount_client $MOUNT	
-cleanup_nocli
-cleanup_krb5_env
 
 equals_msg `basename $0`: test complete
 [ -f "$TESTSUITELOG" ] && cat $TESTSUITELOG || true

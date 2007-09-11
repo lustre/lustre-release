@@ -45,8 +45,9 @@ extern void (*obd_zombie_impexp_notify)(void);
 
 /* obdo.c */
 #ifdef __KERNEL__
+void obdo_from_iattr(struct obdo *oa, struct iattr *attr, unsigned ia_valid);
+void iattr_from_obdo(struct iattr *attr, struct obdo *oa, obd_flag valid);
 void obdo_from_inode(struct obdo *dst, struct inode *src, obd_flag valid);
-void obdo_from_la(struct obdo *dst, struct lu_attr *la, obd_flag valid);
 void obdo_refresh_inode(struct inode *dst, struct obdo *src, obd_flag valid);
 void obdo_to_inode(struct inode *dst, struct obdo *src, obd_flag valid);
 #endif
