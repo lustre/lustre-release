@@ -1,4 +1,4 @@
-2007-09-24         Cluster File Systems, Inc. <info@clusterfs.com>
+2007-09-27         Cluster File Systems, Inc. <info@clusterfs.com>
        * version 1.6.3
        * Support for networks:
 	socklnd   - any kernel supported by Lustre,

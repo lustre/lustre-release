@@ -1,4 +1,10 @@
-tbd         Cluster File Systems, Inc. <info@clusterfs.com>
+2007-09-27         Cluster File Systems, Inc. <info@clusterfs.com>
+       * version 3.0.2
+
+2007-08-29         Cluster File Systems, Inc. <info@clusterfs.com>
+       * version 3.0.1
+
+2007-08-10         Cluster File Systems, Inc. <info@clusterfs.com>
        * version 3.0.0
        * Initial release of ldiskfs as a separate package.
 
