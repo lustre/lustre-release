@@ -9,4 +9,4 @@ export-2.6.18-vanilla.patch
 export-show_task-2.6.18-vanilla.patch
 sd_iostats-2.6-rhel4.patch
 export_symbol_numa-2.6-fc5.patch
-jbd-journal-chksum-2.6.18-vanilla.patch
+#jbd-journal-chksum-2.6.18-vanilla.patch
