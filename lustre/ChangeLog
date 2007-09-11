@@ -1,4 +1,3 @@
-tbd         Cluster File Systems, Inc. <info@clusterfs.com>
        * version 1.8.0
        * Support for kernels:
         2.6.5-7.286 (SLES 9),
@@ -34,7 +33,7 @@ Bugzilla   : 13177
 Frequency  : Only for SLES
 Description: sanity_quota fail test_1
 Details    : There are multiple occurences of $TSTUSR in SLES's /etc/group
-             file, which makes TSTID[2] inunique.
+	     file, which makes TSTID[2] inunique.
 
 Severity   : normal
 Bugzilla   : 13249
@@ -68,14 +67,14 @@ Bugzilla   : 11974
 Frequency  : Rare
 Description: reply_lock_interpret crash due to race with it and lock cancel.
 Details    : Do not replay locks that are being cancelled. Do not reference
-             locks by their address during replay, just by their handle.
+	     locks by their address during replay, just by their handle.
 
 Severity   : normal
 Bugzilla   : 13103
 Frequency  : When flocks are used.
 Description: assertion failure in ldlm_cli_enquque_fini for non NULL lock.
 Details    : Flock locks might destroy just granted lock if it could be merged
-             with another existing flock, this is done in completion handler,
+	     with another existing flock, this is done in completion handler,
 	     so teach ldlm_cli_enquque_fini that this is a valid case for
 	     flock locks.
 
@@ -95,7 +94,7 @@ Severity   : normal
 Bugzilla   : 12584
 Description: sanity.sh failed test 103
 Details    : RHEL mis-interpret setfacl "-X" param, so we won't test setfacl
-             with param "-X".
+	     with param "-X".
 
 Severity   : normal
 Bugzilla   : 12743
@@ -127,7 +126,7 @@ Severity   : normal
 Bugzilla   : 10657
 Description: Add journal checksum support.(Kernel part)
 Details    : The journal checksum feature adds two new flags i.e 
-             JBD2_FEATURE_INCOMPAT_ASYNC_COMMIT and 
+	     JBD2_FEATURE_INCOMPAT_ASYNC_COMMIT and 
 	     JBD2_FEATURE_COMPAT_CHECKSUM. JBD2_FEATURE_CHECKSUM flag 
 	     indicates that the commit block contains the checksum for
 	     the blocks described by the descriptor blocks. Now commit
@@ -149,14 +148,14 @@ Severity   : major
 Bugzilla   : 12223
 Description: mds_obd_create error creating tmp object
 Details    : When the user sets quota on root, llog will be affected and can't 
-             create files and write files.
+	     create files and write files.
 
 Severity   : normal
 Frequency  : Always on ia64 patchless client, and possibly others.
 Bugzilla   : 12826
 Description: Add EXPORT_SYMBOL check for node_to_cpumask symbol.
 Details    : This allows the patchless client to be loaded on architectures
-             without this export. 
+	     without this export. 
 
 Severity   : normal
 Bugzilla   : 13039
@@ -182,8 +181,8 @@ Severity   : normal
 Bugzilla   : 13030
 Description: "ll_intent_file_open()) lock enqueue: err: -13" with nfs
 Details    : with NFS, the anon dentry's parent was set to itself in
-             d_alloc_anon(), so in MDS, we use rec->ur_fid1 to find the
-             corresponding dentry other than use rec->ur_name.
+	     d_alloc_anon(), so in MDS, we use rec->ur_fid1 to find the
+	     corresponding dentry other than use rec->ur_name.
 
 Severity   : enhancement
 Bugzilla   : 12786
@@ -194,7 +193,7 @@ Severity   : normal
 Bugzilla   : 12398
 Description: testing performance impact of enabling checksumming
 Details    : enable checksum by default, allow --disable-checksum 
-             configure option and "-o nochecksum" mount option 
+	     configure option and "-o nochecksum" mount option 
 
 Severity   : normal
 Bugzilla   : 11802
@@ -211,9 +210,9 @@ Details    : after a connection loss, the lustre client should attempt to
 Severity   : minor
 Bugzilla   : 12588
 Description: when mds and osts use different quota unit(32bit and 64bit),
-             quota will be released repeatly.
-Details    : void sending multiple quota reqs to mds, which will keep the status 
-             between the reqs.
+	     quota will be released repeatly.
+Details    : void sending multiple quota reqs to mds, which will keep the
+	     status between the reqs.
 
 Severity   : normal 
 Bugzilla   : 13125
