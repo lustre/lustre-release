@@ -3923,53 +3923,72 @@ LDLM_POOL_CTL_RECALC=1
 LDLM_POOL_CTL_SHRINK=2
 
 disable_pool_recalc() {
-	NSDIR=`find $LPROC/ldlm/namespaces | grep $1 | head -1`
-        if test -f $NSDIR/pool/control; then
-                NS=`basename $NSDIR`
-                echo "disable pool recalc for $NS pool"
-                CONTROL=`cat $NSDIR/pool/control`
-                CONTROL=$((CONTROL & ~LDLM_POOL_CTL_RECALC))
-                echo "$CONTROL" > $NSDIR/pool/control
-        fi
+	NSL=`find $LPROC/ldlm/namespaces | grep $1`
+        for NSD in $NSL; do
+                if test -f $NSD/pool/control; then
+                        NS=`basename $NSD`
+                        echo "disable pool recalc for $NS pool"
+                        CONTROL=`cat $NSD/pool/control`
+                        CONTROL=$((CONTROL & ~LDLM_POOL_CTL_RECALC))
+                        echo "$CONTROL" > $NSD/pool/control
+                fi
+        done
 }
 
 enable_pool_recalc() {
-	NSDIR=`find $LPROC/ldlm/namespaces | grep $1 | head -1`
-        if test -f $NSDIR/pool/control; then
-                NS=`basename $NSDIR`
-                echo "enable pool recalc $NS pool"
-                CONTROL=`cat $NSDIR/pool/control`
-                CONTROL=$((CONTROL | LDLM_POOL_CTL_RECALC))
-                echo "$CONTROL" > $NSDIR/pool/control
-        fi
+	NSL=`find $LPROC/ldlm/namespaces | grep $1`
+        for NSD in $NSL; do
+                if test -f $NSD/pool/control; then
+                        NS=`basename $NSD`
+                        echo "enable pool recalc $NS pool"
+                        CONTROL=`cat $NSD/pool/control`
+                        CONTROL=$((CONTROL | LDLM_POOL_CTL_RECALC))
+                        echo "$CONTROL" > $NSD/pool/control
+                fi
+        done
 }
 
 disable_pool_shrink() {
-	NSDIR=`find $LPROC/ldlm/namespaces | grep $1 | head -1`
-        if test -f $NSDIR/pool/control; then
-                NS=`basename $NSDIR`
-                echo "disable pool shrink for $NS pool"
-                CONTROL=`cat $NSDIR/pool/control`
-                CONTROL=$((CONTROL & ~LDLM_POOL_CTL_SHRINK))
-                echo "$CONTROL" > $NSDIR/pool/control
-        fi
+	NSL=`find $LPROC/ldlm/namespaces | grep $1`
+        for NSD in $NSL; do
+                if test -f $NSD/pool/control; then
+                        NS=`basename $NSD`
+                        echo "disable pool shrink for $NS pool"
+                        CONTROL=`cat $NSD/pool/control`
+                        CONTROL=$((CONTROL & ~LDLM_POOL_CTL_SHRINK))
+                        echo "$CONTROL" > $NSD/pool/control
+                fi
+        done
 }
 
 enable_pool_shrink() {
-	NSDIR=`find $LPROC/ldlm/namespaces | grep $1 | head -1`
-        if test -f $NSDIR/pool/control; then
-                NS=`basename $NSDIR`
-                echo "enable pool shrink for $NS pool"
-                CONTROL=`cat $NSDIR/pool/control`
-                CONTROL=$((CONTROL | LDLM_POOL_CTL_SHRINK))
-                echo "$CONTROL" > $NSDIR/pool/control
-        fi
+	NSL=`find $LPROC/ldlm/namespaces | grep $1`
+        for NSD in $NSL; do
+                if test -f $NSD/pool/control; then
+                        NS=`basename $NSD`
+                        echo "enable pool shrink for $NS pool"
+                        CONTROL=`cat $NSD/pool/control`
+                        CONTROL=$((CONTROL | LDLM_POOL_CTL_SHRINK))
+                        echo "$CONTROL" > $NSD/pool/control
+                fi
+        done
+}
+
+disable_pool() {
+        disable_pool_shrink $1
+        disable_pool_recalc $1
+}
+
+enable_pool() {
+        enable_pool_shrink $1
+        enable_pool_recalc $1
 }
 
 test_120a() {
-        disable_pool_recalc mdc
-        disable_pool_shrink mdc
-        disable_pool_shrink "mds-$FSNAME"
+        disable_pool mdc
+        disable_pool "mds-$FSNAME"
+        disable_pool osc
+        disable_pool "filter-$FSNAME"
         mkdir $DIR/$tdir
         cancel_lru_locks mdc
         stat $DIR/$tdir > /dev/null
@@ -3984,9 +4003,10 @@ test_120a() {
 run_test 120a "Early Lock Cancel: mkdir test ==================="
 
 test_120b() {
-        disable_pool_recalc mdc
-        disable_pool_shrink mdc
-        disable_pool_shrink "mds-$FSNAME"
+        disable_pool mdc
+        disable_pool "mds-$FSNAME"
+        disable_pool osc
+        disable_pool "filter-$FSNAME"
         mkdir $DIR/$tdir
         cancel_lru_locks mdc
         stat $DIR/$tdir > /dev/null
@@ -4001,9 +4021,10 @@ test_120b() {
 run_test 120b "Early Lock Cancel: create test =================="
 
 test_120c() {
-        disable_pool_recalc mdc
-        disable_pool_shrink mdc
-        disable_pool_shrink "mds-$FSNAME"
+        disable_pool mdc
+        disable_pool "mds-$FSNAME"
+        disable_pool osc
+        disable_pool "filter-$FSNAME"
         mkdir -p $DIR/$tdir/d1 $DIR/$tdir/d2
         touch $DIR/$tdir/d1/f1
         cancel_lru_locks mdc
@@ -4019,9 +4040,10 @@ test_120c() {
 run_test 120c "Early Lock Cancel: link test ===================="
 
 test_120d() {
-        disable_pool_recalc mdc
-        disable_pool_shrink mdc
-        disable_pool_shrink "mds-$FSNAME"
+        disable_pool mdc
+        disable_pool "mds-$FSNAME"
+        disable_pool osc
+        disable_pool "filter-$FSNAME"
         touch $DIR/$tdir
         cancel_lru_locks mdc
         stat $DIR/$tdir > /dev/null
@@ -4036,9 +4058,10 @@ test_120d() {
 run_test 120d "Early Lock Cancel: setattr test ================="
 
 test_120e() {
-        disable_pool_recalc mdc
-        disable_pool_shrink mdc
-        disable_pool_shrink "mds-$FSNAME"
+        disable_pool mdc
+        disable_pool "mds-$FSNAME"
+        disable_pool osc
+        disable_pool "filter-$FSNAME"
         mkdir $DIR/$tdir
         dd if=/dev/zero of=$DIR/$tdir/f1 count=1
         cancel_lru_locks mdc
@@ -4056,9 +4079,10 @@ test_120e() {
 run_test 120e "Early Lock Cancel: unlink test =================="
 
 test_120f() {
-        disable_pool_recalc mdc
-        disable_pool_shrink mdc
-        disable_pool_shrink "mds-$FSNAME"
+        disable_pool mdc
+        disable_pool "mds-$FSNAME"
+        disable_pool osc
+        disable_pool "filter-$FSNAME"
         mkdir -p $DIR/$tdir/d1 $DIR/$tdir/d2
         dd if=/dev/zero of=$DIR/$tdir/d1/f1 count=1
         dd if=/dev/zero of=$DIR/$tdir/d2/f2 count=1
@@ -4078,9 +4102,10 @@ test_120f() {
 run_test 120f "Early Lock Cancel: rename test =================="
 
 test_120g() {
-        disable_pool_recalc mdc
-        disable_pool_shrink mdc
-        disable_pool_shrink "mds-$FSNAME"
+        disable_pool mdc
+        disable_pool "mds-$FSNAME"
+        disable_pool osc
+        disable_pool "filter-$FSNAME"
         count=10000
         echo create $count files
         mkdir  $DIR/$tdir
@@ -4194,40 +4219,60 @@ test_124() {
                 return
         fi
 
-        enable_pool_recalc mdc
+        # enable all after ELC tests
+        enable_pool osc
+        enable_pool "filter-$FSNAME"
+        enable_pool mdc
+        enable_pool "mds-$FSNAME"
+
+        # we want to test main pool functionality, that is cancel based on SLV
+        # this is why shrinkers are disabled
         disable_pool_shrink "mds-$FSNAME"
         disable_pool_shrink mdc
 
-        LIMIT=`cat $NSDIR/pool/limit`
-        LIMIT=$(($LIMIT+$LIMIT*5/100))
+        NR=1000
         mkdir $DIR/$tdir
-        log "create $LIMIT files at $DIR/$tdir"
-        createmany -o $DIR/$tdir/f $LIMIT
-        ls -la $DIR/$tdir
+        
+        # use touch to produce $NR new locks
+        log "create $NR files at $DIR/$tdir"
+        for ((i=0;i<$NR;i++)); do touch $DIR/$tdir/f$i; done
 
         LRU_SIZE_B=`cat $NSDIR/lru_size`
         log "created $LRU_SIZE_B locks"
 
-        # locks should live 10h on clients at max. Thus, to make them expire in 2 min
-        # we made lock_volume_factor = (10h * 60m) / 2m == 300, so that, to have all
-        # locks expired in 2 min we need to speed things up by factor 300
-        log "make client drop locks 300 times faster so that 2m wait is enough"
-        echo "300" > $NSDIR/pool/lock_volume_factor
-        log "sleep for 2m"
-        sleep 2m
+        # we want to sleep 2m to not make test too long
+        SLEEP=120
+        
+        # we allow one client to hold $LIMIT locks for 10h
+        MAX_HRS=10
+        
+        # get the pool limit
+        LIMIT=`cat $NSDIR/pool/limit`
+        
+        # calculate lock volume factor taking into account sleep and data set
+        # use $LRU_SIZE_B here to take into account real number of locks created
+        # in the case of CMD, LRU_SIZE_B != $NR in most of cases
+        LVF=$(($LIMIT * $MAX_HRS * 60 * 60 / $LRU_SIZE_B / $SLEEP))
+        
+        log "make client drop locks $LVF times faster so that ${SLEEP}s is \
+enough to cancel $LRU_SIZE_B locks"
+        OLD_LVF=`cat $NSDIR/pool/lock_volume_factor`
+        echo "$LVF" > $NSDIR/pool/lock_volume_factor
+        log "sleep for ${SLEEP}s"
+        sleep $SLEEP
         LRU_SIZE_A=`cat $NSDIR/lru_size`
-        echo "1" > $NSDIR/pool/lock_volume_factor
+        echo "$OLD_LVF" > $NSDIR/pool/lock_volume_factor
 
         [ $LRU_SIZE_B -gt $LRU_SIZE_A ] || {
-                error "No locks dropped in 2m. LRU size: $LRU_SIZE_A"
+                error "No locks dropped in ${SLEEP}s. LRU size: $LRU_SIZE_A"
                 enable_pool_shrink mdc
                 return
         }
         
-        log "Dropped "$((LRU_SIZE_B-LRU_SIZE_A))" locks in 2m"
+        log "Dropped "$((LRU_SIZE_B-LRU_SIZE_A))" locks in ${SLEEP}s"
         enable_pool_shrink mdc
-        log "unlink $LIMIT files at $DIR/$tdir"
-        unlinkmany $DIR/$tdir/f $LIMIT > /dev/null 2>&1
+        log "unlink $NR files at $DIR/$tdir"
+        unlinkmany $DIR/$tdir/f $NR > /dev/null 2>&1
 }
 run_test 124 "lru resize ======================================="
 
