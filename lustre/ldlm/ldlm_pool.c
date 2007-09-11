@@ -279,6 +279,11 @@ static int ldlm_cli_pool_recalc(struct ldlm_pool *pl)
         grant_rate = atomic_read(&pl->pl_grant_rate);
         cancel_rate = atomic_read(&pl->pl_cancel_rate);
 
+        /* Zero out grant/cancel rates and speed for this T. */
+        atomic_set(&pl->pl_grant_rate, 0);
+        atomic_set(&pl->pl_cancel_rate, 0);
+        atomic_set(&pl->pl_grant_speed, 0);
+
         recalc_interval_sec = cfs_duration_sec(cfs_time_current() -
                                                pl->pl_update_time);
         if (recalc_interval_sec == 0)
