@@ -15,6 +15,11 @@ tbd         Cluster File Systems, Inc. <info@clusterfs.com>
        * Note that reiserfs quotas are disabled on SLES 10 in this kernel.
 
 Severity   : normal
+Bugzilla   : 12186
+Description: Fix errors in lfs documentation
+Details    : Fixes man pages
+
+Severity   : normal
 Bugzilla   : 11230
 Description: Tune the kernel for good SCSI performance. 
 Details    : Set the value of /sys/block/{dev}/queue/max_sectors_kb
