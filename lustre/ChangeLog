@@ -219,6 +219,13 @@ Bugzilla   : 13125
 Description: osts not allocated evenly to files
 Details    : change the condition to increase offset_idx 
 
+Severity   : normal
+Bugzilla   : 11230
+Description: Tune the kernel for good SCSI performance. 
+Details    : Set the value of /sys/block/{dev}/queue/max_sectors_kb
+             to the value of /sys/block/{dev}/queue/max_hw_sectors_kb
+             in mount_lustre.
+
 --------------------------------------------------------------------------------
 
 2007-08-10         Cluster File Systems, Inc. <info@clusterfs.com>

@@ -36,6 +36,10 @@
 #include <sys/utsname.h>
 #include "obdctl.h"
 #include <lustre_ver.h>
+#include <glob.h>
+
+#define MAX_HW_SECTORS_KB_PATH  "queue/max_hw_sectors_kb"
+#define MAX_SECTORS_KB_PATH     "queue/max_sectors_kb"
 
 int          verbose = 0;
 int          nomtab = 0;
@@ -241,6 +245,141 @@ int parse_options(char *orig_options, int *flagp)
 }
 
 
+int read_file(char *path, char *buf, int size)
+{
+        FILE *fd;
+
+        fd = fopen(path, "r");
+        if (fd == NULL)
+                return errno;
+
+        fgets(buf, size, fd);
+        fclose(fd);
+        return 0;
+}
+
+int write_file(char *path, char *buf)
+{
+        FILE *fd;
+
+        fd = fopen(path, "w");
+        if (fd == NULL)
+                return errno;
+
+        fputs(buf, fd);
+        fclose(fd);
+        return 0;
+}
+
+/* This is to tune the kernel for good SCSI performance.
+ * For that we set the value of /sys/block/{dev}/queue/max_sectors_kb
+ * to the value of /sys/block/{dev}/queue/max_hw_sectors_kb */
+int set_tunables(char *source, int src_len)
+{
+        glob_t glob_info;
+        struct stat stat_buf;
+        char *chk_major, *chk_minor;
+        char *savept, *dev, *s2 = 0;
+        char buf[PATH_MAX], path[PATH_MAX];
+        int i, rc = 0;
+        int major, minor;
+
+        if (!source)
+                return -EINVAL;
+
+        if (strncmp(source, "/dev/loop", 9) == 0)
+                return 0;
+
+        if ((*source != '/') && ((s2 = strpbrk(source, ",:")) != NULL))
+                return 0;
+
+        dev = source + src_len - 1;
+        while (dev > source && (*dev != '/')) {
+                if (isdigit(*dev))
+                        *dev = 0;
+                dev--;
+        }
+        snprintf(path, sizeof(path), "/sys/block%s/%s", dev,
+                 MAX_HW_SECTORS_KB_PATH);
+        rc = read_file(path, buf, sizeof(buf));
+        if (!rc && (strlen(buf)-1)) {
+                snprintf(path, sizeof(path), "/sys/block%s/%s", dev,
+                         MAX_SECTORS_KB_PATH);
+                rc = write_file(path, buf);
+                if (rc) {
+                        fprintf(stderr, "warning: opening %s: %s\n",
+                                path, strerror(errno));
+                        return rc;
+                }
+        } else if (rc == ENOENT) {
+                /* The name of the device say 'X' specified in /dev/X may not match
+                 * any entry under /sys/block/. In that case we need to match
+                 * the major/minor number to find the entry under sys/block
+                 * corresponding to /dev/X */
+
+                dev = source + src_len - 1;
+                while (dev > source) {
+                        if (isdigit(*dev))
+                                *dev = 0;
+                        dev--;
+                }
+
+                rc = stat(dev, &stat_buf);
+                if (rc) {
+                        fprintf(stderr, "warning: %s, Stat failed for device %s\n",
+                                strerror(errno), dev);
+                        return rc;
+                }
+                major = major(stat_buf.st_rdev);
+                minor = minor(stat_buf.st_rdev);
+                rc = glob("/sys/block/*", GLOB_NOSORT, NULL, &glob_info);
+                if (rc) {
+                        fprintf(stderr, "warning: failed to read entries under /sys/block\n");
+                        return rc;
+                }
+
+                for (i = 0; i < glob_info.gl_pathc; i++){
+                        snprintf(path, sizeof(path), "%s/dev", glob_info.gl_pathv[i]);
+
+                        rc = read_file(path, buf, sizeof(buf));
+                        if (rc)
+                                continue;
+
+                        if (buf[strlen(buf)-1] == '\n')
+                                buf[strlen(buf)-1] = '\0';
+
+                        chk_major = strtok_r(buf, ":", &savept);
+                        chk_minor = savept;
+                        if (major == atoi(chk_major) && minor == atoi(chk_minor))
+                                break;
+                }
+
+                if (i == glob_info.gl_pathc) {
+                        fprintf(stderr,"warning: the device %s, does not match any"
+                                       "of /sys/block entries\n", source);
+                        return -EINVAL;
+                }
+
+                snprintf(path, sizeof(path), "%s/%s", glob_info.gl_pathv[i],
+                         MAX_HW_SECTORS_KB_PATH);
+                rc = read_file(path, buf, sizeof(buf));
+                if (rc)
+                        fprintf(stderr, "warning: opening %s: %s\n",
+                                path, strerror(errno));
+                if (!rc && ((strlen(buf)-1) > 0)) {
+                        snprintf(path, sizeof(path), "%s/%s",
+                                 glob_info.gl_pathv[i], MAX_SECTORS_KB_PATH);
+                        rc = write_file(path, buf);
+                        if (rc) {
+                                fprintf(stderr, "warning: opening %s: %s\n",
+                                        path, strerror(errno));
+                                return rc;
+                        }
+                }
+        }
+        return rc;
+}
+
 int main(int argc, char *const argv[])
 {
         char default_options[] = "";
@@ -370,7 +509,12 @@ int main(int argc, char *const argv[])
         if (verbose) 
                 printf("mounting device %s at %s, flags=%#x options=%s\n",
                        source, target, flags, optcopy);
-        
+
+        if (set_tunables(source, strlen(source)))
+                fprintf(stderr, "%s: unable to set tunables for %s"
+                                " (may cause reduced IO performance)",
+                                argv[0], source);
+
         if (!fake)
                 /* flags and target get to lustre_get_sb, but not 
                    lustre_fill_super.  Lustre ignores the flags, but mount 
