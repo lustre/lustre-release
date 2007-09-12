@@ -1177,16 +1177,14 @@ test_61c() {
 }
 run_test 61c "test race mds llog sync vs llog cleanup"
 
-
+#Adaptive Timeouts
 at_start() #bug 3055
 {
     if [ -z "$ATOLDBASE" ]; then
-	ATOLDBASE=$(do_facet mds "grep timebase $LPROC/mdt/MDS/mds/timeouts" | awk '{print $3}' )
+	ATOLDBASE=$(do_facet mds "sysctl -n lustre.adaptive_history")
         # speed up the timebase so we can check decreasing AT
-	do_facet mds "echo 8 >> $LPROC/mdt/MDS/mds/timeouts"
-	do_facet mds "echo 8 >> $LPROC/mdt/MDS/mds_readpage/timeouts"
-	do_facet mds "echo 8 >> $LPROC/mdt/MDS/mds_setattr/timeouts"
-	do_facet ost1 "echo 8 >> $LPROC/ost/OSS/ost/timeouts"
+	do_facet mds "sysctl -w lustre.adaptive_history=8"
+	do_facet ost1 "sysctl -w lustre.adaptive_history=8"
     fi
 }
 
@@ -1195,9 +1193,9 @@ test_65() #bug 3055
     at_start
     $LCTL dk > /dev/null
     # slow down a request
-    sysctl -w lustre.fail_val=30000
+    do_facet mds sysctl -w lustre.fail_val=30000
 #define OBD_FAIL_PTLRPC_PAUSE_REQ        0x50a
-    sysctl -w lustre.fail_loc=0x8000050a
+    do_facet mds sysctl -w lustre.fail_loc=0x8000050a
     createmany -o $DIR/$tfile 10 > /dev/null
     unlinkmany $DIR/$tfile 10 > /dev/null
     # check for log message
@@ -1301,10 +1299,8 @@ test_67b() #bug 3055
 run_test 67b "AT: verify instant slowdown doesn't induce reconnects"
 
 if [ -n "$ATOLDBASE" ]; then
-    do_facet mds "echo $ATOLDBASE >> $LPROC/mdt/MDS/mds/timeouts" 
-    do_facet mds "echo $ATOLDBASE >> $LPROC/mdt/MDS/mds_readpage/timeouts"
-    do_facet mds "echo $ATOLDBASE >> $LPROC/mdt/MDS/mds_setattr/timeouts"
-    do_facet ost1 "echo $ATOLDBASE >> $LPROC/ost/OSS/ost/timeouts"
+    do_facet mds "sysctl -w lustre.adaptive_history=$ATOLDBASE"
+    do_facet ost1 "sysctl -w lustre.adaptive_history=$ATOLDBASE"
 fi
 # end of AT tests includes above lines
 

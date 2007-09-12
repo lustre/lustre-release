@@ -598,10 +598,6 @@ int lprocfs_rd_timeouts(char *page, char **start, off_t off, int count,
                               "adaptive timeouts off, using obd_timeout %u\n",
                               obd_timeout);
         
-        rc += snprintf(page + rc, count - rc, 
-                       "%-10s : %ld sec\n", "timebase",
-                       imp->imp_at.iat_net_latency.at_binlimit * AT_BINS);
-        
         now = cfs_time_current_sec();
 
         /* Some network health info for kicks */
@@ -638,38 +634,6 @@ int lprocfs_rd_timeouts(char *page, char **start, off_t off, int count,
 
         LPROCFS_CLIMP_EXIT(obd);
         return rc;
-}
-
-int lprocfs_wr_timeouts(struct file *file, const char *buffer,
-                        unsigned long count, void *data)
-{
-        struct obd_device *obd = (struct obd_device *)data;
-        struct obd_import *imp;
-        time_t bval;
-        int val, i, rc;
-
-        LASSERT(obd != NULL);
-        LPROCFS_CLIMP_CHECK(obd);
-        imp = obd->u.cli.cl_import;
-         
-        rc = lprocfs_write_helper(buffer, count, &val);
-        if (rc < 0)
-                return rc;
-        if (val <= 0)
-                return -ERANGE;
-
-        bval = max(1, val / AT_BINS);
-        spin_lock(&imp->imp_at.iat_net_latency.at_lock);
-        imp->imp_at.iat_net_latency.at_binlimit = bval;
-        spin_unlock(&imp->imp_at.iat_net_latency.at_lock);
-        for(i = 0; i < IMP_AT_MAX_PORTALS; i++) {
-                spin_lock(&imp->imp_at.iat_service_estimate[i].at_lock);
-                imp->imp_at.iat_service_estimate[i].at_binlimit = bval;
-                spin_unlock(&imp->imp_at.iat_service_estimate[i].at_lock);
-        }
-        
-        LPROCFS_CLIMP_EXIT(obd);
-        return count;
 }
 
 static const char *obd_connect_names[] = {
@@ -1586,7 +1550,6 @@ EXPORT_SYMBOL(lprocfs_rd_num_exports);
 EXPORT_SYMBOL(lprocfs_rd_numrefs);
 EXPORT_SYMBOL(lprocfs_at_hist_helper);
 EXPORT_SYMBOL(lprocfs_rd_timeouts);
-EXPORT_SYMBOL(lprocfs_wr_timeouts);
 EXPORT_SYMBOL(lprocfs_rd_blksize);
 EXPORT_SYMBOL(lprocfs_rd_kbytestotal);
 EXPORT_SYMBOL(lprocfs_rd_kbytesfree);

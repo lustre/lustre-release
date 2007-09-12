@@ -1329,32 +1329,34 @@ struct obd_device * target_req2obd(struct ptlrpc_request *req)
         return req->rq_export->exp_obd;
 }
 
-int target_queue_final_reply(struct ptlrpc_request *req, int rc)
+int target_queue_last_replay_reply(struct ptlrpc_request *req, int rc)
 {
         struct obd_device *obd = target_req2obd(req);
         struct ptlrpc_request *saved_req;
         struct lustre_msg *reqmsg;
         int recovery_done = 0;
 
-        LASSERT ((rc == 0) == lustre_packed_reply(req));
+        LASSERT ((rc == 0) == req->rq_packed_final);
 
-        if (!lustre_packed_reply(req)) {
+        if (!req->rq_packed_final) {
                 /* Just like ptlrpc_error, but without the sending. */
                 rc = lustre_pack_reply(req, 1, NULL, NULL);
                 if (rc)
-                        CERROR("pack error %d\n", rc);
+                        return rc;
                 req->rq_type = PTL_RPC_MSG_ERR;
         }
 
-        LASSERT (!req->rq_reply_state->rs_difficult);
+        LASSERT(!req->rq_reply_state->rs_difficult);
         LASSERT(list_empty(&req->rq_list));
         /* XXX a bit like the request-dup code in queue_recovery_request */
         OBD_ALLOC(saved_req, sizeof *saved_req);
         if (!saved_req)
-                LBUG();
+                return -ENOMEM;
         OBD_ALLOC(reqmsg, req->rq_reqlen);
-        if (!reqmsg)
-                LBUG();
+        if (!reqmsg) {
+                OBD_FREE(saved_req, sizeof *req);
+                return -ENOMEM;
+        }
         *saved_req = *req;
         memcpy(reqmsg, req->rq_reqmsg, req->rq_reqlen);
 

@@ -1018,7 +1018,7 @@ existing_lock:
         EXIT;
  out:
         req->rq_status = rc ?: err;  /* return either error - bug 11190 */
-        if (!lustre_packed_reply(req)) {
+        if (!req->rq_packed_final) {
                 err = lustre_pack_reply(req, 1, NULL, NULL);
                 if (rc == 0)
                         rc = err;
@@ -1348,7 +1348,7 @@ static void ldlm_handle_gl_callback(struct ptlrpc_request *req,
 static int ldlm_callback_reply(struct ptlrpc_request *req, int rc)
 {
         req->rq_status = rc;
-        if (!lustre_packed_reply(req)) {
+        if (!req->rq_packed_final) {
                 rc = lustre_pack_reply(req, 1, NULL, NULL);
                 if (rc)
                         return rc;
@@ -2008,7 +2008,7 @@ EXPORT_SYMBOL(target_queue_recovery_request);
 EXPORT_SYMBOL(target_handle_ping);
 EXPORT_SYMBOL(target_pack_pool_reply);
 EXPORT_SYMBOL(target_handle_disconnect);
-EXPORT_SYMBOL(target_queue_final_reply);
+EXPORT_SYMBOL(target_queue_last_replay_reply);
 
 /* l_lock.c */
 EXPORT_SYMBOL(lock_res_and_lock);

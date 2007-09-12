@@ -40,6 +40,7 @@ extern unsigned int obd_timeout;          /* seconds */
 extern unsigned int ldlm_timeout;         /* seconds */
 extern unsigned int adaptive_timeout_min; /* seconds */
 extern unsigned int adaptive_timeout_max; /* seconds */
+extern unsigned int adaptive_timeout_history; /* seconds */
 extern unsigned int obd_sync_filter;
 extern unsigned int obd_max_dirty_pages;
 extern atomic_t obd_dirty_pages;
@@ -71,7 +72,7 @@ extern unsigned int obd_alloc_fail_rate;
 #define INITIAL_CONNECT_TIMEOUT max_t(int,CONNECTION_SWITCH_MIN,obd_timeout/2)
 #endif
 #define LND_TIMEOUT 50           /* LNET LND-level RPC timeout */
-#define FOREVER 300              /* Something taking this long is broken */
+#define LONG_UNLINK 300          /* Unlink should happen before now */
 
 
 #define OBD_FAIL_MDS                     0x100

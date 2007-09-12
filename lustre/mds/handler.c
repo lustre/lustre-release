@@ -1027,7 +1027,7 @@ static int mds_getattr_lock(struct ptlrpc_request *req, int offset,
                 pop_ctxt(&saved, &obd->obd_lvfs_ctxt, &uc);
         default:
                 mds_exit_ucred(&uc, mds);
-                if (!lustre_packed_reply(req)) {
+                if (!req->rq_packed_final) {
                         req->rq_status = rc;
                         lustre_pack_reply(req, 1, NULL, NULL);
                 }
@@ -1077,7 +1077,7 @@ static int mds_getattr(struct ptlrpc_request *req, int offset)
 out_pop:
         pop_ctxt(&saved, &obd->obd_lvfs_ctxt, &uc);
 out_ucred:
-        if (!lustre_packed_reply(req)) {
+        if (!req->rq_packed_final) {
                 req->rq_status = rc;
                 lustre_pack_reply(req, 1, NULL, NULL);
         }
@@ -1798,7 +1798,7 @@ int mds_handle(struct ptlrpc_request *req)
         if (lustre_msg_get_flags(req->rq_reqmsg) & MSG_LAST_REPLAY) {
                 if (obd && obd->obd_recovering) {
                         DEBUG_REQ(D_HA, req, "LAST_REPLAY, queuing reply");
-                        return target_queue_final_reply(req, rc);
+                        return target_queue_last_replay_reply(req, rc);
                 }
                 /* Lost a race with recovery; let the error path DTRT. */
                 rc = req->rq_status = -ENOTCONN;

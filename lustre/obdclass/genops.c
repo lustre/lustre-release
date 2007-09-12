@@ -797,14 +797,13 @@ static void init_imp_at(struct imp_at *at) {
            Since we can't say for sure how slow a network might be, we use
            a user-defined max expected network latency. We will adapt to slow
            increases, but a sudden jump can still kill us. */
-        at_init(&at->iat_net_latency, adaptive_timeout_min, AT_TIMEBASE_DEFAULT, 
-                AT_FLG_MIN);
+        at_init(&at->iat_net_latency, adaptive_timeout_min, AT_FLG_MIN);
         for (i = 0; i < IMP_AT_MAX_PORTALS; i++) {
                 /* max service estimates are tracked on the server side, so
                    don't use the AT history here, just use the last reported
                    val. (But keep hist for proc histogram, worst_ever) */
                 at_init(&at->iat_service_estimate[i], INITIAL_CONNECT_TIMEOUT,
-                        AT_TIMEBASE_DEFAULT, AT_FLG_NOHIST);
+                        AT_FLG_NOHIST);
         }
         at->iat_drain = 0;
 }

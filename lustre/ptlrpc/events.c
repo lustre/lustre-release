@@ -88,6 +88,9 @@ void reply_in_callback(lnet_event_t *ev)
         LASSERT(ev->type == LNET_EVENT_PUT || ev->type == LNET_EVENT_UNLINK);
         LASSERT(ev->md.start == req->rq_repbuf);
         LASSERT(ev->mlength <= req->rq_replen);
+        /* We've set LNET_MD_MANAGE_REMOTE for all outgoing requests
+           for adaptive timeouts' early reply. */
+        LASSERT((ev->md.options & LNET_MD_MANAGE_REMOTE) != 0);
 
         spin_lock(&req->rq_lock);
 
@@ -102,12 +105,8 @@ void reply_in_callback(lnet_event_t *ev)
                 goto out_wake;
         }
 
-        /* We've set LNET_MD_MANAGE_REMOTE for all outgoing requests
-           for adaptive timeouts' early reply. */
-        LASSERT(ev->md.options & LNET_MD_MANAGE_REMOTE);
-
         if ((ev->offset == 0) && 
-            lustre_msg_get_flags(req->rq_reqmsg) & MSG_AT_SUPPORT) {
+            ((lustre_msg_get_flags(req->rq_reqmsg) & MSG_AT_SUPPORT) != 0)) {
                 /* Early reply */
                 DEBUG_REQ(D_ADAPTTO, req,
                           "Early reply received: mlen=%u offset=%d replen=%d "
@@ -254,7 +253,6 @@ void request_in_callback(lnet_event_t *ev)
         req->rq_uid = ev->uid;
 #endif
         spin_lock_init(&req->rq_lock);
-        sema_init(&req->rq_rs_sem, 1);
         CFS_INIT_LIST_HEAD(&req->rq_timed_list);
         atomic_set(&req->rq_refcount, 1);
         if (ev->type == LNET_EVENT_PUT)

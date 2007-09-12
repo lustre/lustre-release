@@ -614,7 +614,7 @@ static inline void oti_init(struct obd_trans_info *oti,
 
         oti->oti_xid = req->rq_xid;
 
-        if (req->rq_reqmsg && req->rq_repmsg && req->rq_reply_state)
+        if ((req->rq_reqmsg != NULL) && (req->rq_repmsg != NULL))
                 oti->oti_transno = lustre_msg_get_transno(req->rq_repmsg);
         oti->oti_thread_id = req->rq_svc_thread ? req->rq_svc_thread->t_id : -1;
         oti->oti_conn_cnt = lustre_msg_get_conn_cnt(req->rq_reqmsg);

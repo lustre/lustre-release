@@ -12,14 +12,11 @@
 /* Adaptive Timeout stuff */
 #define D_ADAPTTO D_OTHER
 #define AT_BINS 4                  /* "bin" means "N seconds of history" */
-#define AT_TIMEBASE_DEFAULT 600    /* remembered history (sec) (should be
-                                      evenly divisible by AT_BINS) */
 #define AT_FLG_NOHIST 0x1          /* use last reported value only */
 #define AT_FLG_MIN    0x2          /* use a minimum limit */
 
 struct adaptive_timeout {
         time_t       at_binstart;         /* bin start time */
-        time_t       at_binlimit;         /* bin time limit */
         unsigned int at_hist[AT_BINS];    /* timeout history bins */
         unsigned int at_flags;
         unsigned int at_current;          /* current timeout value */
@@ -143,10 +140,8 @@ struct obd_import {
 };
 
 /* import.c */
-static inline void at_init(struct adaptive_timeout *at, int val, int timebase,
-                           int flags) {
+static inline void at_init(struct adaptive_timeout *at, int val, int flags) {
         memset(at, 0, sizeof(*at));
-        at->at_binlimit = timebase / AT_BINS;
         at->at_current = val;
         at->at_worst_ever = val;
         at->at_worst_time = cfs_time_current_sec();
@@ -159,7 +154,7 @@ static inline int at_get(struct adaptive_timeout *at) {
                 return min(at->at_current, adaptive_timeout_max);
         return at->at_current;
 }
-void at_add(struct adaptive_timeout *at, unsigned int val);
+int at_add(struct adaptive_timeout *at, unsigned int val);
 int import_at_get_index(struct obd_import *imp, int portal);
 int import_at_get_ldlm(struct obd_import *imp);
 #define AT_OFF (adaptive_timeout_max == 0)

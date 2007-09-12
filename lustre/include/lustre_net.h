@@ -260,7 +260,7 @@ struct ptlrpc_request {
         __u64            rq_history_seq;        /* history sequence # */
         int rq_status;
         spinlock_t rq_lock;
-        /* client-side flags. */
+        /* client-side flags are serialized by rq_lock */
         unsigned int rq_intr:1, rq_replied:1, rq_err:1,
                 rq_timedout:1, rq_resend:1, rq_restart:1,
                 /*
@@ -275,8 +275,8 @@ struct ptlrpc_request {
                 rq_replay:1,
                 rq_no_resend:1, rq_waiting:1, rq_receiving_reply:1,
                 rq_no_delay:1, rq_net_err:1, rq_early:1, rq_must_unlink:1,
-                /* server-side: */
-                rq_final:1;  /* packed final reply */
+                /* server-side flags */
+                rq_packed_final:1;  /* packed final reply */
         enum rq_phase rq_phase; /* one of RQ_PHASE_* */
         atomic_t rq_refcount;   /* client-side refcount for SENT race,
                                    server-side refcounf for multiple replies */
@@ -313,7 +313,6 @@ struct ptlrpc_request {
         /* server-side... */
         struct timeval       rq_arrival_time;       /* request arrival time */
         struct ptlrpc_reply_state *rq_reply_state;  /* separated reply state */
-        struct semaphore     rq_rs_sem;             /* one reply at a time */
         struct ptlrpc_request_buffer_desc *rq_rqbd; /* incoming request buffer*/
 #ifdef CRAY_XT3
         __u32                rq_uid;            /* peer uid, used in MDS only */
@@ -337,7 +336,9 @@ struct ptlrpc_request {
 
         /* client outgoing req */
         time_t rq_sent;                  /* when request/reply sent (secs) */
-        time_t rq_deadline;              /* when request must finish */
+        volatile time_t rq_deadline;     /* when request must finish. volatile
+               so that servers' early reply updates to the deadline aren't 
+               kept in per-cpu cache */
         int    rq_timeout;               /* service time estimate (secs) */
 
         /* Multi-rpc bits */
@@ -660,34 +661,12 @@ void ptlrpc_cleanup_client(struct obd_import *imp);
 struct ptlrpc_connection *ptlrpc_uuid_to_connection(struct obd_uuid *uuid);
 
 static inline int
-ptlrpc_client_receiving_reply (struct ptlrpc_request *req)
+ptlrpc_client_recv_or_unlink (struct ptlrpc_request *req)
 {
         int           rc;
 
         spin_lock(&req->rq_lock);
-        rc = req->rq_receiving_reply;
-        spin_unlock(&req->rq_lock);
-        return (rc);
-}
-
-static inline int
-ptlrpc_client_must_unlink (struct ptlrpc_request *req)
-{
-        int           rc;
-
-        spin_lock(&req->rq_lock);
-        rc = req->rq_must_unlink;
-        spin_unlock(&req->rq_lock);
-        return (rc);
-}
-
-static inline int
-ptlrpc_client_replied (struct ptlrpc_request *req)
-{
-        int           rc;
-
-        spin_lock(&req->rq_lock);
-        rc = req->rq_replied;
+        rc = req->rq_receiving_reply || req->rq_must_unlink;
         spin_unlock(&req->rq_lock);
         return (rc);
 }
@@ -873,14 +852,6 @@ static inline void ptlrpc_req_drop_rs(struct ptlrpc_request *req)
         ptlrpc_rs_decref(req->rq_reply_state);
         req->rq_reply_state = NULL;
         req->rq_repmsg = NULL;
-        up(&req->rq_rs_sem); /* held since lustre_pack_reply */
-}
-
-/* Check if we already packed a normal (non-early) reply.
-   Single thread only! */
-static inline int lustre_packed_reply(struct ptlrpc_request *req)
-{
-        return req->rq_final;
 }
 
 static inline __u32 lustre_request_magic(struct ptlrpc_request *req)
@@ -907,6 +878,7 @@ static inline void
 ptlrpc_req_set_repsize(struct ptlrpc_request *req, int count, int *lens)
 {
         int size = lustre_msg_size(req->rq_reqmsg->lm_magic, count, lens);
+        
         req->rq_replen = size + lustre_msg_early_size();
         if (req->rq_reqmsg->lm_magic == LUSTRE_MSG_MAGIC_V2)
                 req->rq_reqmsg->lm_repsize = size;
