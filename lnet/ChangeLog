@@ -12,6 +12,8 @@ tbd         Cluster File Systems, Inc. <info@clusterfs.com>
 	mxlnd     - MX 1.2.1 or later,
 	ptllnd    - Portals 3.3 / UNICOS/lc 1.5.x, 2.0.x
 
+--------------------------------------------------------------------------------
+
 2007-09-27         Cluster File Systems, Inc. <info@clusterfs.com>
        * version 1.6.3
        * Support for networks:
