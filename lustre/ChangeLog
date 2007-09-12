@@ -226,6 +226,11 @@ Details    : Set the value of /sys/block/{dev}/queue/max_sectors_kb
              to the value of /sys/block/{dev}/queue/max_hw_sectors_kb
              in mount_lustre.
 
+Severity   : cleanup
+Bugzilla   : 13532
+Description: rewrite ext2-derived code in obdclass/uuid.c
+Details    : rewrite inherited code (uuid parsing code from ext2 utils)
+	     from scratch preserving functionality.
 --------------------------------------------------------------------------------
 
 2007-08-10         Cluster File Systems, Inc. <info@clusterfs.com>
