@@ -3923,11 +3923,8 @@ LDLM_POOL_CTL_RECALC=1
 LDLM_POOL_CTL_SHRINK=2
 
 disable_pool_recalc() {
-	NSL=`find $LPROC/ldlm/namespaces | grep $1`
-        for NSD in $NSL; do
+	for NSD in $LPROC/ldlm/namespaces/*$1*; do
                 if test -f $NSD/pool/control; then
-                        NS=`basename $NSD`
-                        echo "disable pool recalc for $NS pool"
                         CONTROL=`cat $NSD/pool/control`
                         CONTROL=$((CONTROL & ~LDLM_POOL_CTL_RECALC))
                         echo "$CONTROL" > $NSD/pool/control
@@ -3936,11 +3933,8 @@ disable_pool_recalc() {
 }
 
 enable_pool_recalc() {
-	NSL=`find $LPROC/ldlm/namespaces | grep $1`
-        for NSD in $NSL; do
+	for NSD in $LPROC/ldlm/namespaces/*$1*; do
                 if test -f $NSD/pool/control; then
-                        NS=`basename $NSD`
-                        echo "enable pool recalc $NS pool"
                         CONTROL=`cat $NSD/pool/control`
                         CONTROL=$((CONTROL | LDLM_POOL_CTL_RECALC))
                         echo "$CONTROL" > $NSD/pool/control
@@ -3949,11 +3943,8 @@ enable_pool_recalc() {
 }
 
 disable_pool_shrink() {
-	NSL=`find $LPROC/ldlm/namespaces | grep $1`
-        for NSD in $NSL; do
+	for NSD in $LPROC/ldlm/namespaces/*$1*; do
                 if test -f $NSD/pool/control; then
-                        NS=`basename $NSD`
-                        echo "disable pool shrink for $NS pool"
                         CONTROL=`cat $NSD/pool/control`
                         CONTROL=$((CONTROL & ~LDLM_POOL_CTL_SHRINK))
                         echo "$CONTROL" > $NSD/pool/control
@@ -3962,11 +3953,8 @@ disable_pool_shrink() {
 }
 
 enable_pool_shrink() {
-	NSL=`find $LPROC/ldlm/namespaces | grep $1`
-        for NSD in $NSL; do
+	for NSD in $LPROC/ldlm/namespaces/*$1*; do
                 if test -f $NSD/pool/control; then
-                        NS=`basename $NSD`
-                        echo "enable pool shrink for $NS pool"
                         CONTROL=`cat $NSD/pool/control`
                         CONTROL=$((CONTROL | LDLM_POOL_CTL_SHRINK))
                         echo "$CONTROL" > $NSD/pool/control
@@ -3984,11 +3972,19 @@ enable_pool() {
         enable_pool_recalc $1
 }
 
-test_120a() {
+elc_test_init()
+{
+	[ -z "`grep early_lock_cancel $LPROC/mdc/*/connect_flags`" ] && \
+               skip "no early lock cancel on server" && return 1
         disable_pool mdc
         disable_pool "mds-$FSNAME"
         disable_pool osc
         disable_pool "filter-$FSNAME"
+	return 0
+}
+
+test_120a() {
+	elc_test_init || return 0
         mkdir $DIR/$tdir
         cancel_lru_locks mdc
         stat $DIR/$tdir > /dev/null
@@ -4003,10 +3999,7 @@ test_120a() {
 run_test 120a "Early Lock Cancel: mkdir test ==================="
 
 test_120b() {
-        disable_pool mdc
-        disable_pool "mds-$FSNAME"
-        disable_pool osc
-        disable_pool "filter-$FSNAME"
+	elc_test_init || return 0
         mkdir $DIR/$tdir
         cancel_lru_locks mdc
         stat $DIR/$tdir > /dev/null
@@ -4021,10 +4014,7 @@ test_120b() {
 run_test 120b "Early Lock Cancel: create test =================="
 
 test_120c() {
-        disable_pool mdc
-        disable_pool "mds-$FSNAME"
-        disable_pool osc
-        disable_pool "filter-$FSNAME"
+	elc_test_init || return 0
         mkdir -p $DIR/$tdir/d1 $DIR/$tdir/d2
         touch $DIR/$tdir/d1/f1
         cancel_lru_locks mdc
@@ -4040,10 +4030,7 @@ test_120c() {
 run_test 120c "Early Lock Cancel: link test ===================="
 
 test_120d() {
-        disable_pool mdc
-        disable_pool "mds-$FSNAME"
-        disable_pool osc
-        disable_pool "filter-$FSNAME"
+	elc_test_init || return 0
         touch $DIR/$tdir
         cancel_lru_locks mdc
         stat $DIR/$tdir > /dev/null
@@ -4058,10 +4045,7 @@ test_120d() {
 run_test 120d "Early Lock Cancel: setattr test ================="
 
 test_120e() {
-        disable_pool mdc
-        disable_pool "mds-$FSNAME"
-        disable_pool osc
-        disable_pool "filter-$FSNAME"
+	elc_test_init || return 0
         mkdir $DIR/$tdir
         dd if=/dev/zero of=$DIR/$tdir/f1 count=1
         cancel_lru_locks mdc
@@ -4079,10 +4063,7 @@ test_120e() {
 run_test 120e "Early Lock Cancel: unlink test =================="
 
 test_120f() {
-        disable_pool mdc
-        disable_pool "mds-$FSNAME"
-        disable_pool osc
-        disable_pool "filter-$FSNAME"
+	elc_test_init || return 0
         mkdir -p $DIR/$tdir/d1 $DIR/$tdir/d2
         dd if=/dev/zero of=$DIR/$tdir/d1/f1 count=1
         dd if=/dev/zero of=$DIR/$tdir/d2/f2 count=1
@@ -4102,10 +4083,7 @@ test_120f() {
 run_test 120f "Early Lock Cancel: rename test =================="
 
 test_120g() {
-        disable_pool mdc
-        disable_pool "mds-$FSNAME"
-        disable_pool osc
-        disable_pool "filter-$FSNAME"
+	elc_test_init || return 0
         count=10000
         echo create $count files
         mkdir  $DIR/$tdir
@@ -4211,19 +4189,20 @@ test_123() # statahead(bug 11401)
 }
 run_test 123 "verify statahead work"
 
-test_124() {
-        NSDIR=`find $LPROC/ldlm/namespaces | grep mdc | head -1`
-
-        if ! test -f $NSDIR/pool/stats; then
-                skip "lru resize is not enabled!"
-                return
-        fi
-
-        # enable all after ELC tests
+lru_resize_test_init()
+{
+	[ -z "`grep lru_resize $LPROC/mdc/*/connect_flags`" ] && \
+               skip "no lru resize on server" && return 1
         enable_pool osc
         enable_pool "filter-$FSNAME"
         enable_pool mdc
         enable_pool "mds-$FSNAME"
+	return 0
+}
+
+test_124() {
+        lru_resize_test_init || return 0
+	NSDIR=`find $LPROC/ldlm/namespaces | grep mdc | head -1`
 
         # we want to test main pool functionality, that is cancel based on SLV
         # this is why shrinkers are disabled
@@ -4240,10 +4219,10 @@ test_124() {
         LRU_SIZE_B=`cat $NSDIR/lru_size`
         log "created $LRU_SIZE_B locks"
 
-        # we want to sleep 2m to not make test too long
-        SLEEP=120
+        # we want to sleep 30s to not make test too long
+        SLEEP=30
         
-        # we allow one client to hold $LIMIT locks for 10h
+        # we know that lru resize allows one client to hold $LIMIT locks for 10h
         MAX_HRS=10
         
         # get the pool limit
