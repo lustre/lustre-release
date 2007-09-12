@@ -14,12 +14,12 @@ tbd         Cluster File Systems, Inc. <info@clusterfs.com>
        * Recommended e2fsprogs version: 1.40.2-cfs1
        * Note that reiserfs quotas are disabled on SLES 10 in this kernel.
 
-Severity   : normal
+Severity   : minor
 Bugzilla   : 12186
 Description: Fix errors in lfs documentation
 Details    : Fixes man pages
 
-Severity   : normal
+Severity   : enhancement
 Bugzilla   : 11230
 Description: Tune the kernel for good SCSI performance. 
 Details    : Set the value of /sys/block/{dev}/queue/max_sectors_kb
@@ -208,6 +208,17 @@ Details    : In open/enqueue processs, Some errors, which will cause client
 	     disconnected, should be returned by rq_status, while other 
 	     errors should still be returned by intent, then mdc or llite will
 	     detect them.
+
+Severity   : critical
+Frequency  : Always for filesystems larger than 2TB on 32-bit systems.
+Bugzilla   : 13547
+Description: Data corruption for OSTs that are formatted larger than 2TB
+             on 32-bit servers.
+Details    : When generating the bio request for lustre file writes the
+	     sector number would overflow a temporary variable before being
+	     used for the IO.  The data reads correctly from Lustre (which
+	     will overflow in a similar manner) but other file data or
+	     filesystem metadata may be corrupted in some cases.
 
 --------------------------------------------------------------------------------
 
