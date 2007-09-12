@@ -523,8 +523,8 @@ granted:
                         cfs_flock_set_type(getlk, F_UNLCK);
                 }
                 cfs_flock_set_pid(getlk, (pid_t)lock->l_policy_data.l_flock.pid);
-                cfs_flock_set_start(getlk, (off_t)lock->l_policy_data.l_flock.start);
-                cfs_flock_set_end(getlk, (off_t)lock->l_policy_data.l_flock.end);
+                cfs_flock_set_start(getlk, (loff_t)lock->l_policy_data.l_flock.start);
+                cfs_flock_set_end(getlk, (loff_t)lock->l_policy_data.l_flock.end);
         } else {
                 int noreproc = LDLM_FL_WAIT_NOREPROC;
 
