@@ -37,6 +37,7 @@
 #include "obdctl.h"
 #include <lustre_ver.h>
 #include <glob.h>
+#include <ctype.h>
 
 #define MAX_HW_SECTORS_KB_PATH  "queue/max_hw_sectors_kb"
 #define MAX_SECTORS_KB_PATH     "queue/max_sectors_kb"
