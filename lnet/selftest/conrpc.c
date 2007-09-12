@@ -419,7 +419,7 @@ lstcon_rpc_trans_stat(lstcon_rpc_trans_t *trans, lstcon_trans_stat_t *stat)
                                       crpc->crp_node, stat);
         }
 
-        CDEBUG(D_NET, "transaction %s success, %d failure, %d total %d, "
+        CDEBUG(D_NET, "transaction %s : success %d, failure %d, total %d, "
                       "RPC error(%d), Framework error(%d)\n",
                lstcon_rpc_trans_name(trans->tas_opc),
                lstcon_rpc_stat_success(stat, 0),
