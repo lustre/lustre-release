@@ -926,7 +926,7 @@ set_and_check() {
 	echo "Setting $PARAM from $ORIG to $FINAL"
 	do_facet mds "$LCTL conf_param $PARAM=$FINAL" || error conf_param failed
 	local RESULT
-	local MAX=30
+	local MAX=90
 	local WAIT=0
 	while [ 1 ]; do
 	    sleep 5
