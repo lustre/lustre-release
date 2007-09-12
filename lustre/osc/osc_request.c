@@ -1205,6 +1205,8 @@ static int osc_brw_fini_request(struct ptlrpc_request *req, int rc)
         if (rc < aa->aa_requested_nob)
                 handle_short_read(rc, aa->aa_page_count, aa->aa_ppga);
 
+        sptlrpc_cli_unwrap_bulk_read(req, rc, aa->aa_page_count, aa->aa_ppga);
+
         if (unlikely(body->oa.o_valid & OBD_MD_FLCKSUM)) {
                 static int cksum_counter;
                 __u32      server_cksum = body->oa.o_cksum;
@@ -1268,8 +1270,6 @@ static int osc_brw_fini_request(struct ptlrpc_request *req, int rc)
 out:
         if (rc >= 0)
                 *aa->aa_oa = body->oa;
-
-        sptlrpc_cli_unwrap_bulk_read(req, rc, aa->aa_page_count, aa->aa_ppga);
 
         RETURN(rc);
 }
