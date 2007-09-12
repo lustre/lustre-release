@@ -15,8 +15,8 @@ ONLY=${ONLY:-"$*"}
 #              xml xml xml xml xml xml dumb FIXME
 MOUNTCONFSKIP="10  11  12  13  13b 14  15   18"
 
-# bug number for skipped test:                     13369
-ALWAYS_EXCEPT=" $CONF_SANITY_EXCEPT $MOUNTCONFSKIP 34a"
+# bug number for skipped test:                     13369 12743
+ALWAYS_EXCEPT=" $CONF_SANITY_EXCEPT $MOUNTCONFSKIP 34a   36"
 # UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
 
 SRCDIR=`dirname $0`
