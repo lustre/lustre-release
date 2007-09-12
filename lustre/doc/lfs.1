@@ -58,20 +58,20 @@ To list the striping info for given filename or files in a directory or recursiv
 .B quotachown
 To change files' owner and group on OSTs of the specified filesystem
 .TP
-.B quotacheck
-To scan the specified filesystem for disk usage, and create or update quota files
+.B quotacheck [-ugf] <filesystem>
+To scan the specified filesystem for disk usage, and create or update quota files. Options specify quota for users (-u) groups (-g) and force (-f)
 .TP
-.B quotaon
-To turn filesystem quotas on
+.B quotaon [-ugf] <filesystem>
+To turn filesystem quotas on. Options specify quota for users (-u) groups (-g) and force (-f)
 .TP
-.B quotaoff
-To turn filesystem quotas off
+.B quotaoff [-ugf] <filesystem>
+To turn filesystem quotas off.  Options specify quota for users (-u) groups (-g) and force (-f)
 .TP
-.B setquota
-To set filesystem quotas
+.B setquota  [-u|-g] <name> <block-softlimit> <block-hardlimit> <inode-softlimit> <inode-hardlimit> <filesystem>
+To set filesystem quotas for users or groups. Limits are specific as blocks and inodes, see EXAMPLES
 .TP
-.B quota
-To display disk usage and limits
+.B quota [-o obd_uuid] [-u|-g] <name> <filesystem>
+To display disk usage and limits, either for the full filesystem, or for objects on a specific obd. A user or group name must be specified.
 .TP
 .B check 
 Display the status of MDS or OSTs (as specified in the command) or all the servers (MDS and OSTs)
@@ -111,7 +111,7 @@ Recursively list all files in a given directory that have objects on OST2-UUID.
 Change file owner and group
 .TP
 .B $ lfs quotacheck -ug /mnt/lustre
-Quotacheck for user and group
+Quotacheck for user and group - will turn on quotas after making the check.
 .TP
 .B $ lfs quotaon -ug /mnt/lustre
 Turn quotas of user and group on

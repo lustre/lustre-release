@@ -13,6 +13,11 @@
        * Note that reiserfs quotas are disabled on SLES 10 in this kernel.
 
 Severity   : normal
+Bugzilla   : 12186
+Description: Fix errors in lfs documentation
+Details    : Fixes man pages
+
+Severity   : normal
 Bugzilla   : 12606
 Description: don't use GFP_* in generic Lustre code.
 Details    : Use cfs_alloc_* functions and CFS_* flags for code portability.
