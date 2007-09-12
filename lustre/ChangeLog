@@ -21,6 +21,8 @@ Details    : Set the value of /sys/block/{dev}/queue/max_sectors_kb
              to the value of /sys/block/{dev}/queue/max_hw_sectors_kb
              in mount_lustre.
 
+--------------------------------------------------------------------------------
+
 2007-09-27         Cluster File Systems, Inc. <info@clusterfs.com>
        * version 1.6.3
        * Support for kernels:
