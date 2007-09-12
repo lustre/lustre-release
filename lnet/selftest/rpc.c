@@ -1371,7 +1371,7 @@ srpc_send_reply (srpc_server_rpc_t *rpc)
         return rc;
 }
 
-/* always called with LNET_LOCK() held, and in thread context */
+/* when in kernel always called with LNET_LOCK() held, and in thread context */
 void 
 srpc_lnet_ev_handler (lnet_event_t *ev)
 {
@@ -1557,9 +1557,7 @@ srpc_check_event (int timeout)
                 abort();
         }
                 
-        LNET_LOCK();
         srpc_lnet_ev_handler(&ev);
-        LNET_UNLOCK();
         return 1;
 }
 
