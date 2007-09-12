@@ -93,11 +93,14 @@ unsigned int key_from_int(int i)
  */
 unsigned int key_from_string(char *s)
 {
-    unsigned int result=0;
+    unsigned int result=0, i;
     unsigned char *n;
-    int i;
-    if (!s) return(1);
-    for (n=s,i=0;*n;n++,i++) result^=(*n*57)^*n*i;
+
+    if (!s)
+            return(1);
+    for (n = (unsigned char *)s, i = 0; *n; n++, i++)
+            result ^= (*n * 57) ^ *n * i;
+
     return(result);
 }
 
