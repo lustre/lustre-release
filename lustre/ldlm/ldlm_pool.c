@@ -352,17 +352,29 @@ static int lprocfs_rd_pool_state(char *page, char **start, off_t off,
         int nr = 0, granted, grant_rate, cancel_rate;
         int grant_speed, grant_plan, grant_step;
         struct ldlm_pool *pl = data;
+        time_t recalc_interval_sec;
         __u32 limit;
         __u64 slv;
+
+        recalc_interval_sec = cfs_duration_sec(cfs_time_current() -
+                                               pl->pl_update_time);
+        if (recalc_interval_sec == 0)
+                recalc_interval_sec = 1;
 
         spin_lock(&pl->pl_lock);
         slv = pl->pl_server_lock_volume;
         limit = ldlm_pool_get_limit(pl);
         granted = atomic_read(&pl->pl_granted);
-        grant_rate = atomic_read(&pl->pl_grant_rate);
-        cancel_rate = atomic_read(&pl->pl_cancel_rate);
-        grant_speed = atomic_read(&pl->pl_grant_speed);
+        grant_rate = atomic_read(&pl->pl_grant_rate) / 
+                recalc_interval_sec;
+        cancel_rate = atomic_read(&pl->pl_cancel_rate) / 
+                recalc_interval_sec;
+        grant_speed = atomic_read(&pl->pl_grant_speed) / 
+                recalc_interval_sec;
         grant_plan = atomic_read(&pl->pl_grant_plan);
+        grant_plan += atomic_read(&pl->pl_grant_speed) - 
+                (atomic_read(&pl->pl_grant_speed) / 
+                 recalc_interval_sec);
         grant_step = atomic_read(&pl->pl_grant_step);
         spin_unlock(&pl->pl_lock);
 
