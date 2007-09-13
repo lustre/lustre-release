@@ -1389,6 +1389,7 @@ void ldlm_cancel_callback(struct ldlm_lock *lock)
                         LDLM_DEBUG(lock, "no blocking ast");
                 }
         }
+        lock->l_flags |= LDLM_FL_BL_DONE;
 }
 
 void ldlm_unlink_lock_skiplist(struct ldlm_lock *req)
@@ -1504,6 +1505,8 @@ void ldlm_cancel_locks_for_export(struct obd_export *exp)
                 spin_unlock(&exp->exp_ldlm_data.led_lock);
 
                 LDLM_DEBUG(lock, "export %p", exp);
+                ldlm_res_lvbo_update(res, NULL, 0, 1);
+
                 ldlm_lock_cancel(lock);
                 ldlm_reprocess_all(res);
 

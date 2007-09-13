@@ -161,7 +161,7 @@ int lov_update_enqueue_set(struct lov_request *req, __u32 mode, int rc)
                 ldlm_lock_allow_match(lock);
                 LDLM_LOCK_PUT(lock);
         } else if ((rc == ELDLM_LOCK_ABORTED) &&
-                   (set->set_ei->ei_flags & LDLM_FL_HAS_INTENT)) {
+                   (set->set_oi->oi_flags & LDLM_FL_HAS_INTENT)) {
                 memset(lov_lockhp, 0, sizeof(*lov_lockhp));
                 lov_stripe_lock(set->set_oi->oi_md);
                 loi->loi_lvb = req->rq_oi.oi_md->lsm_oinfo[0]->loi_lvb;
@@ -192,7 +192,7 @@ int lov_update_enqueue_set(struct lov_request *req, __u32 mode, int rc)
 /* The callback for osc_enqueue that updates lov info for every OSC request. */
 static int cb_update_enqueue(struct obd_info *oinfo, int rc)
 {
-        struct obd_enqueue_info *einfo;
+        struct ldlm_enqueue_info *einfo;
         struct lov_request *lovreq;
 
         lovreq = container_of(oinfo, struct lov_request, rq_oi);
@@ -237,7 +237,8 @@ static int enqueue_done(struct lov_request_set *set, __u32 mode)
         RETURN(rc);
 }
 
-int lov_fini_enqueue_set(struct lov_request_set *set, __u32 mode, int rc)
+int lov_fini_enqueue_set(struct lov_request_set *set, __u32 mode, int rc,
+                         struct ptlrpc_request_set *rqset)
 {
         int ret = 0;
         ENTRY;
@@ -247,7 +248,7 @@ int lov_fini_enqueue_set(struct lov_request_set *set, __u32 mode, int rc)
         LASSERT(set->set_exp);
         /* Do enqueue_done only for sync requests and if any request
          * succeeded. */
-        if (!set->set_ei->ei_rqset) {
+        if (!rqset) {
                 if (rc)
                         set->set_completes = 0;
                 ret = enqueue_done(set, mode);
@@ -261,7 +262,7 @@ int lov_fini_enqueue_set(struct lov_request_set *set, __u32 mode, int rc)
 }
 
 int lov_prep_enqueue_set(struct obd_export *exp, struct obd_info *oinfo,
-                         struct obd_enqueue_info *einfo,
+                         struct ldlm_enqueue_info *einfo,
                          struct lov_request_set **reqset)
 {
         struct lov_obd *lov = &exp->exp_obd->u.lov;
@@ -321,6 +322,7 @@ int lov_prep_enqueue_set(struct obd_export *exp, struct obd_info *oinfo,
                 /* Set lov request specific parameters. */
                 req->rq_oi.oi_lockh = set->set_lockh->llh_handles + i;
                 req->rq_oi.oi_cb_up = cb_update_enqueue;
+                req->rq_oi.oi_flags = oinfo->oi_flags;
 
                 LASSERT(req->rq_oi.oi_lockh);
 
@@ -348,7 +350,7 @@ int lov_prep_enqueue_set(struct obd_export *exp, struct obd_info *oinfo,
         *reqset = set;
         RETURN(0);
 out_set:
-        lov_fini_enqueue_set(set, einfo->ei_mode, rc);
+        lov_fini_enqueue_set(set, einfo->ei_mode, rc, NULL);
         RETURN(rc);
 }
 

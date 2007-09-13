@@ -246,17 +246,10 @@ static void mdc_realloc_openmsg(struct ptlrpc_request *req,
 
 /* We always reserve enough space in the reply packet for a stripe MD, because
  * we don't know in advance the file type. */
-int mdc_enqueue(struct obd_export *exp,
-                int lock_type,
-                struct lookup_intent *it,
-                int lock_mode,
-                struct md_op_data *op_data,
-                struct lustre_handle *lockh,
-                void *lmm,
-                int lmmsize,
-                ldlm_completion_callback cb_completion,
-                ldlm_blocking_callback cb_blocking,
-                void *cb_data, int extra_lock_flags)
+int mdc_enqueue(struct obd_export *exp, struct ldlm_enqueue_info *einfo,
+                struct lookup_intent *it, struct md_op_data *op_data,
+                struct lustre_handle *lockh, void *lmm, int lmmsize,
+                int extra_lock_flags)
 {
         struct ptlrpc_request *req;
         struct obd_device *obddev = class_exp2obd(exp);
@@ -276,14 +269,13 @@ int mdc_enqueue(struct obd_export *exp,
                            [DLM_LOCKREPLY_OFF]   = sizeof(*lockrep),
                            [DLM_REPLY_REC_OFF]   = sizeof(struct mdt_body),
                            [DLM_REPLY_REC_OFF+1] = obddev->u.cli.
-                                                   cl_max_mds_easize };
+                                                   cl_max_mds_easize,
+                           0, 0, 0 };
         int flags = extra_lock_flags | LDLM_FL_HAS_INTENT;
         int repbufcnt = 4, rc;
         ENTRY;
 
-        LASSERTF(lock_type == LDLM_IBITS, "lock type %d\n", lock_type);
-//        LDLM_DEBUG_NOLOCK("mdsintent=%s,name=%s,dir=%lu",
-//                          ldlm_it2str(it->it_op), it_name, it_inode->i_ino);
+        LASSERTF(einfo->ei_type == LDLM_IBITS,"lock type %d\n", einfo->ei_type);
 
         if (it->it_op & IT_OPEN) {
                 int do_join = !!(it->it_flags & O_JOIN_FILE);
@@ -438,9 +430,8 @@ int mdc_enqueue(struct obd_export *exp,
           * rpcs in flight counter */
         mdc_get_rpc_lock(obddev->u.cli.cl_rpc_lock, it);
         mdc_enter_request(&obddev->u.cli);
-        rc = ldlm_cli_enqueue(exp, &req, &res_id, lock_type, &policy,
-                              lock_mode, &flags, cb_blocking, cb_completion,
-                              NULL, cb_data, NULL, 0, NULL, lockh, 0);
+        rc = ldlm_cli_enqueue(exp, &req, einfo, &res_id, &policy, &flags, NULL,
+                              0, NULL, lockh, 0);
         mdc_exit_request(&obddev->u.cli);
         mdc_put_rpc_lock(obddev->u.cli.cl_rpc_lock, it);
 
@@ -455,7 +446,7 @@ int mdc_enqueue(struct obd_export *exp,
         /* This can go when we're sure that this can never happen */
         LASSERT(rc != -ENOENT);
         if (rc == ELDLM_LOCK_ABORTED) {
-                lock_mode = 0;
+                einfo->ei_mode = 0;
                 memset(lockh, 0, sizeof(*lockh));
                 rc = 0;
         } else if (rc != 0) {
@@ -470,10 +461,10 @@ int mdc_enqueue(struct obd_export *exp,
 
                 /* If the server gave us back a different lock mode, we should
                  * fix up our variables. */
-                if (lock->l_req_mode != lock_mode) {
+                if (lock->l_req_mode != einfo->ei_mode) {
                         ldlm_lock_addref(lockh, lock->l_req_mode);
-                        ldlm_lock_decref(lockh, lock_mode);
-                        lock_mode = lock->l_req_mode;
+                        ldlm_lock_decref(lockh, einfo->ei_mode);
+                        einfo->ei_mode = lock->l_req_mode;
                 }
                 LDLM_LOCK_PUT(lock);
         }
@@ -485,7 +476,7 @@ int mdc_enqueue(struct obd_export *exp,
 
         it->d.lustre.it_disposition = (int)lockrep->lock_policy_res1;
         it->d.lustre.it_status = (int)lockrep->lock_policy_res2;
-        it->d.lustre.it_lock_mode = lock_mode;
+        it->d.lustre.it_lock_mode = einfo->ei_mode;
         it->d.lustre.it_data = req;
 
         if (it->d.lustre.it_status < 0 && req->rq_replay)
@@ -740,6 +731,10 @@ int mdc_intent_lock(struct obd_export *exp, struct md_op_data *op_data,
          * this and use the request from revalidate.  In this case, revalidate
          * never dropped its reference, so the refcounts are all OK */
         if (!it_disposition(it, DISP_ENQ_COMPLETE)) {
+                struct ldlm_enqueue_info einfo =
+                        { LDLM_IBITS, it_to_lock_mode(it), cb_blocking,
+                          ldlm_completion_ast, NULL, NULL };
+
                 /* For case if upper layer did not alloc fid, do it now. */
                 if (!fid_is_sane(&op_data->op_fid2) && it->it_op & IT_CREAT) {
                         rc = mdc_fid_alloc(exp, &op_data->op_fid2, op_data);
@@ -748,11 +743,8 @@ int mdc_intent_lock(struct obd_export *exp, struct md_op_data *op_data,
                                 RETURN(rc);
                         }
                 }
-                
-                rc = mdc_enqueue(exp, LDLM_IBITS, it, it_to_lock_mode(it),
-                                 op_data, &lockh, lmm, lmmsize,
-                                 ldlm_completion_ast, cb_blocking, NULL,
-                                 extra_lock_flags);
+                rc = mdc_enqueue(exp, &einfo, it, op_data, &lockh,
+                                 lmm, lmmsize, extra_lock_flags);
                 if (rc < 0)
                         RETURN(rc);
                 memcpy(&it->d.lustre.it_lock_handle, &lockh, sizeof(lockh));

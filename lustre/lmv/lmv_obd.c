@@ -1432,11 +1432,9 @@ static int lmv_done_writing(struct obd_export *exp,
 }
 
 static int
-lmv_enqueue_slaves(struct obd_export *exp, int locktype,
-                   struct lookup_intent *it, int lockmode,
-                   struct md_op_data *op_data, struct lustre_handle *lockh,
-                   void *lmm, int lmmsize, ldlm_completion_callback cb_compl,
-                   ldlm_blocking_callback cb_blocking, void *cb_data)
+lmv_enqueue_slaves(struct obd_export *exp, struct ldlm_enqueue_info *einfo,
+                   struct lookup_intent *it, struct md_op_data *op_data,
+                   struct lustre_handle *lockh, void *lmm, int lmmsize)
 {
         struct obd_device *obd = exp->exp_obd;
         struct lmv_obd *lmv = &obd->u.lmv;
@@ -1463,9 +1461,8 @@ lmv_enqueue_slaves(struct obd_export *exp, int locktype,
                 if (tgt_exp == NULL)
                         continue;
 
-                rc = md_enqueue(tgt_exp, locktype, it, lockmode, op_data2,
-                                lockh + i, lmm, lmmsize, cb_compl, cb_blocking,
-                                cb_data, 0);
+                rc = md_enqueue(tgt_exp, einfo, it, op_data2,
+                                lockh + i, lmm, lmmsize, 0);
 
                 CDEBUG(D_OTHER, "take lock on slave "DFID" -> %d/%d\n",
                        PFID(&mea->mea_ids[i]), rc, it->d.lustre.it_status);
@@ -1491,7 +1488,7 @@ cleanup:
                 /* drop all taken locks */
                 while (--i >= 0) {
                         if (lockh[i].cookie)
-                                ldlm_lock_decref(lockh + i, lockmode);
+                                ldlm_lock_decref(lockh + i, einfo->ei_mode);
                         lockh[i].cookie = 0;
                 }
         }
@@ -1499,11 +1496,9 @@ cleanup:
 }
 
 static int
-lmv_enqueue_remote(struct obd_export *exp, int lock_type,
-                   struct lookup_intent *it, int lock_mode,
-                   struct md_op_data *op_data, struct lustre_handle *lockh,
-                   void *lmm, int lmmsize, ldlm_completion_callback cb_compl,
-                   ldlm_blocking_callback cb_blocking, void *cb_data,
+lmv_enqueue_remote(struct obd_export *exp, struct ldlm_enqueue_info *einfo,
+                   struct lookup_intent *it, struct md_op_data *op_data,
+                   struct lustre_handle *lockh, void *lmm, int lmmsize,
                    int extra_lock_flags)
 {
         struct ptlrpc_request *req = it->d.lustre.it_data;
@@ -1550,9 +1545,8 @@ lmv_enqueue_remote(struct obd_export *exp, int lock_type,
         rdata->op_fid1 = fid_copy;
         rdata->op_bias = MDS_CROSS_REF;
 
-        rc = md_enqueue(tgt_exp, lock_type, it, lock_mode, rdata,
-                        lockh, lmm, lmmsize, cb_compl, cb_blocking,
-                        cb_data, extra_lock_flags);
+        rc = md_enqueue(tgt_exp, einfo, it, rdata, lockh,
+                        lmm, lmmsize, extra_lock_flags);
         OBD_FREE_PTR(rdata);
         EXIT;
 out:
@@ -1561,11 +1555,9 @@ out:
 }
 
 static int
-lmv_enqueue(struct obd_export *exp, int lock_type,
-            struct lookup_intent *it, int lock_mode,
-            struct md_op_data *op_data, struct lustre_handle *lockh,
-            void *lmm, int lmmsize, ldlm_completion_callback cb_compl,
-            ldlm_blocking_callback cb_blocking, void *cb_data,
+lmv_enqueue(struct obd_export *exp, struct ldlm_enqueue_info *einfo,
+            struct lookup_intent *it, struct md_op_data *op_data,
+            struct lustre_handle *lockh, void *lmm, int lmmsize,
             int extra_lock_flags)
 {
         struct obd_device *obd = exp->exp_obd;
@@ -1580,9 +1572,8 @@ lmv_enqueue(struct obd_export *exp, int lock_type,
                 RETURN(rc);
 
         if (op_data->op_mea1 && it->it_op == IT_UNLINK) {
-                rc = lmv_enqueue_slaves(exp, lock_type, it, lock_mode,
-                                        op_data, lockh, lmm, lmmsize,
-                                        cb_compl, cb_blocking, cb_data);
+                rc = lmv_enqueue_slaves(exp, einfo, it, op_data,
+                                        lockh, lmm, lmmsize);
                 RETURN(rc);
         }
 
@@ -1611,15 +1602,12 @@ lmv_enqueue(struct obd_export *exp, int lock_type,
         CDEBUG(D_OTHER, "ENQUEUE '%s' on "DFID"\n", LL_IT2STR(it),
                PFID(&op_data->op_fid1));
 
-        rc = md_enqueue(tgt_exp, lock_type, it, lock_mode, op_data, lockh,
-                        lmm, lmmsize, cb_compl, cb_blocking, cb_data,
-                        extra_lock_flags);
+        rc = md_enqueue(tgt_exp, einfo, it, op_data, lockh,
+                        lmm, lmmsize, extra_lock_flags);
 
         if (rc == 0 && it->it_op == IT_OPEN)
-                rc = lmv_enqueue_remote(exp, lock_type, it, lock_mode,
-                                        op_data, lockh, lmm, lmmsize,
-                                        cb_compl, cb_blocking, cb_data,
-                                        extra_lock_flags);
+                rc = lmv_enqueue_remote(exp, einfo, it, op_data, lockh,
+                                        lmm, lmmsize, extra_lock_flags);
         RETURN(rc);
 }
 
@@ -1782,7 +1770,8 @@ static int lmv_early_cancel_stripes(struct obd_export *exp,
                         st_fid = &obj->lo_inodes[i].li_fid;
                         if (tgt_exp != st_exp) {
                                 rc = md_cancel_unused(st_exp, st_fid, &policy,
-                                                      mode, 0, NULL);
+                                                      mode, LDLM_FL_ASYNC,
+                                                      NULL);
                                 if (rc)
                                         break;
                         } else {

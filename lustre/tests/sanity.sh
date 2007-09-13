@@ -4019,7 +4019,7 @@ test_119b() # bug 11737
 }
 run_test 119b "Sparse directIO read must return actual read amount"
 
-test_119a() {
+test_120a() {
         mkdir $DIR/$tdir
         cancel_lru_locks mdc
         stat $DIR/$tdir > /dev/null
@@ -4031,9 +4031,9 @@ test_119a() {
         [ $can1 -eq $can2 ] || error $((can2-can1)) "cancel RPC occured."
         [ $blk1 -eq $blk2 ] || error $((blk2-blk1)) "blocking RPC occured."
 }
-run_test 119a "Early Lock Cancel: mkdir test"
+run_test 120a "Early Lock Cancel: mkdir test"
 
-test_119b() {
+test_120b() {
         mkdir $DIR/$tdir
         cancel_lru_locks mdc
         stat $DIR/$tdir > /dev/null
@@ -4045,9 +4045,9 @@ test_119b() {
         [ $can1 -eq $can2 ] || error $((can2-can1)) "cancel RPC occured."
         [ $blk1 -eq $blk2 ] || error $((blk2-blk1)) "blocking RPC occured."
 }
-run_test 119b "Early Lock Cancel: create test"
+run_test 120b "Early Lock Cancel: create test"
 
-test_119c() {
+test_120c() {
         mkdir -p $DIR/$tdir/d1 $DIR/$tdir/d2
         touch $DIR/$tdir/d1/f1
         cancel_lru_locks mdc
@@ -4060,9 +4060,9 @@ test_119c() {
         [ $can1 -eq $can2 ] || error $((can2-can1)) "cancel RPC occured."
         [ $blk1 -eq $blk2 ] || error $((blk2-blk1)) "blocking RPC occured."
 }
-run_test 119c "Early Lock Cancel: link test"
+run_test 120c "Early Lock Cancel: link test"
 
-test_119d() {
+test_120d() {
         touch $DIR/$tdir
         cancel_lru_locks mdc
         stat $DIR/$tdir > /dev/null
@@ -4074,9 +4074,9 @@ test_119d() {
         [ $can1 -eq $can2 ] || error $((can2-can1)) "cancel RPC occured."
         [ $blk1 -eq $blk2 ] || error $((blk2-blk1)) "blocking RPC occured."
 }
-run_test 119d "Early Lock Cancel: setattr test"
+run_test 120d "Early Lock Cancel: setattr test"
 
-test_119e() {
+test_120e() {
         mkdir $DIR/$tdir
         dd if=/dev/zero of=$DIR/$tdir/f1 count=1
         cancel_lru_locks mdc
@@ -4091,9 +4091,9 @@ test_119e() {
         [ $can1 -eq $can2 ] || error $((can2-can1)) "cancel RPC occured."
         [ $blk1 -eq $blk2 ] || error $((blk2-blk1)) "blocking RPC occured."
 }
-run_test 119e "Early Lock Cancel: unlink test"
+run_test 120e "Early Lock Cancel: unlink test"
 
-test_119f() {
+test_120f() {
         mkdir -p $DIR/$tdir/d1 $DIR/$tdir/d2
         dd if=/dev/zero of=$DIR/$tdir/d1/f1 count=1
         dd if=/dev/zero of=$DIR/$tdir/d2/f2 count=1
@@ -4110,9 +4110,9 @@ test_119f() {
         [ $can1 -eq $can2 ] || error $((can2-can1)) "cancel RPC occured."
         [ $blk1 -eq $blk2 ] || error $((blk2-blk1)) "blocking RPC occured."
 }
-run_test 119f "Early Lock Cancel: rename test"
+run_test 120f "Early Lock Cancel: rename test"
 
-test_119g() {
+test_120g() {
         count=10000
         echo create $count files
         mkdir  $DIR/$tdir
@@ -4139,7 +4139,20 @@ test_119g() {
         sleep 2
         # wait for commitment of removal
 }
-run_test 119g "Early Lock Cancel: performance test"
+run_test 120g "Early Lock Cancel: performance test"
+
+test_121() { #bug #10589
+	rm -rf $DIR/$tfile
+	writes=`dd if=/dev/zero of=$DIR/$tfile count=1 2>&1 | awk 'BEGIN { FS="+" } /out/ {print $1}'`
+#define OBD_FAIL_LDLM_CANCEL_RACE        0x310
+	sysctl -w lustre.fail_loc=0x310
+	cancel_lru_locks osc > /dev/null
+	reads=`dd if=$DIR/$tfile of=/dev/null 2>&1 | awk 'BEGIN { FS="+" } /in/ {print $1}'`
+	sysctl -w lustre.fail_loc=0
+	[ $reads -eq $writes ] || error "read" $reads "blocks, must be" $writes
+}
+run_test 121 "read cancel race ========="
+
 
 TMPDIR=$OLDTMPDIR
 TMP=$OLDTMP

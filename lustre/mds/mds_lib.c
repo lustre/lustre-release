@@ -122,21 +122,25 @@ static int mds_setattr_unpack(struct ptlrpc_request *req, int offset,
         r->ur_flags = rec->sa_attr_flags;
 
         LASSERT_REQSWAB (req, offset + 1);
-        if (lustre_msg_bufcount(req->rq_reqmsg) > offset + 1) {
+        r->ur_eadatalen = lustre_msg_buflen(req->rq_reqmsg, offset + 1);
+        if (r->ur_eadatalen) {
                 r->ur_eadata = lustre_msg_buf(req->rq_reqmsg, offset + 1, 0);
                 if (r->ur_eadata == NULL)
                         RETURN(-EFAULT);
-                r->ur_eadatalen = lustre_msg_buflen(req->rq_reqmsg, offset + 1);
         }
-
-        if (lustre_msg_bufcount(req->rq_reqmsg) > offset + 2) {
+        r->ur_cookielen = lustre_msg_buflen(req->rq_reqmsg, offset + 2);
+        if (r->ur_cookielen) {
                 r->ur_logcookies = lustre_msg_buf(req->rq_reqmsg, offset + 2,0);
                 if (r->ur_eadata == NULL)
                         RETURN (-EFAULT);
-
-                r->ur_cookielen = lustre_msg_buflen(req->rq_reqmsg, offset + 2);
         }
-
+        if (lustre_msg_buflen(req->rq_reqmsg, offset + 3)) {
+                r->ur_dlm = lustre_swab_reqbuf(req, offset + 3,
+                                               sizeof(*r->ur_dlm),
+                                               lustre_swab_ldlm_request); 
+                if (r->ur_dlm == NULL)
+                        RETURN (-EFAULT);
+        }
         RETURN(0);
 }
 
@@ -172,7 +176,8 @@ static int mds_create_unpack(struct ptlrpc_request *req, int offset,
         r->ur_namelen = lustre_msg_buflen(req->rq_reqmsg, offset + 1);
 
         LASSERT_REQSWAB(req, offset + 2);
-        if (lustre_msg_bufcount(req->rq_reqmsg) > offset + 2) {
+        r->ur_tgtlen = lustre_msg_buflen(req->rq_reqmsg, offset + 2);
+        if (r->ur_tgtlen) {
                 /* NB for now, we only seem to pass NULL terminated symlink
                  * target strings here.  If this ever changes, we'll have
                  * to stop checking for a buffer filled completely with a
@@ -183,7 +188,13 @@ static int mds_create_unpack(struct ptlrpc_request *req, int offset,
                 r->ur_tgt = lustre_msg_string(req->rq_reqmsg, offset + 2, 0);
                 if (r->ur_tgt == NULL)
                         RETURN (-EFAULT);
-                r->ur_tgtlen = lustre_msg_buflen(req->rq_reqmsg, offset + 2);
+        }
+        if (lustre_msg_buflen(req->rq_reqmsg, offset + 3)) {
+                r->ur_dlm = lustre_swab_reqbuf(req, offset + 3,
+                                               sizeof(*r->ur_dlm),
+                                               lustre_swab_ldlm_request); 
+                if (r->ur_dlm == NULL)
+                        RETURN (-EFAULT);
         }
         RETURN(0);
 }
@@ -215,6 +226,13 @@ static int mds_link_unpack(struct ptlrpc_request *req, int offset,
         if (r->ur_name == NULL)
                 RETURN (-EFAULT);
         r->ur_namelen = lustre_msg_buflen(req->rq_reqmsg, offset + 1);
+        if (lustre_msg_buflen(req->rq_reqmsg, offset + 2)) {
+                r->ur_dlm = lustre_swab_reqbuf(req, offset + 2,
+                                               sizeof(*r->ur_dlm),
+                                               lustre_swab_ldlm_request); 
+                if (r->ur_dlm == NULL)
+                        RETURN (-EFAULT);
+        }
         RETURN(0);
 }
 
@@ -246,6 +264,14 @@ static int mds_unlink_unpack(struct ptlrpc_request *req, int offset,
         if (r->ur_name == NULL)
                 RETURN(-EFAULT);
         r->ur_namelen = lustre_msg_buflen(req->rq_reqmsg, offset + 1);
+        
+        if (lustre_msg_buflen(req->rq_reqmsg, offset + 2)) {
+                r->ur_dlm = lustre_swab_reqbuf(req, offset + 2,
+                                               sizeof(*r->ur_dlm),
+                                               lustre_swab_ldlm_request); 
+                if (r->ur_dlm == NULL)
+                        RETURN (-EFAULT);
+        }
         RETURN(0);
 }
 
@@ -282,6 +308,13 @@ static int mds_rename_unpack(struct ptlrpc_request *req, int offset,
         if (r->ur_tgt == NULL)
                 RETURN(-EFAULT);
         r->ur_tgtlen = lustre_msg_buflen(req->rq_reqmsg, offset + 2);
+        if (lustre_msg_buflen(req->rq_reqmsg, offset + 3)) {
+                r->ur_dlm = lustre_swab_reqbuf(req, offset + 3,
+                                               sizeof(*r->ur_dlm),
+                                               lustre_swab_ldlm_request); 
+                if (r->ur_dlm == NULL)
+                        RETURN (-EFAULT);
+        }
         RETURN(0);
 }
 
@@ -317,11 +350,11 @@ static int mds_open_unpack(struct ptlrpc_request *req, int offset,
         r->ur_namelen = lustre_msg_buflen(req->rq_reqmsg, offset + 1);
 
         LASSERT_REQSWAB(req, offset + 2);
-        if (lustre_msg_bufcount(req->rq_reqmsg) > offset + 2) {
+        r->ur_eadatalen = lustre_msg_buflen(req->rq_reqmsg, offset + 2);
+        if (r->ur_eadatalen) {
                 r->ur_eadata = lustre_msg_buf(req->rq_reqmsg, offset + 2, 0);
                 if (r->ur_eadata == NULL)
                         RETURN (-EFAULT);
-                r->ur_eadatalen = lustre_msg_buflen(req->rq_reqmsg, offset + 2);
         }
         RETURN(0);
 }

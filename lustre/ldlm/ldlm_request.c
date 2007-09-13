@@ -487,7 +487,7 @@ cleanup:
 })
 
 /* Cancel lru locks and pack them into the enqueue request. Pack there the given
- * @count locks in @cancel. */
+ * @count locks in @cancels. */
 struct ptlrpc_request *ldlm_prep_enqueue_req(struct obd_export *exp,
                                              int bufcount, int *size,
                                              struct list_head *cancels,
@@ -539,13 +539,10 @@ struct ptlrpc_request *ldlm_prep_enqueue_req(struct obd_export *exp,
  * request was created in ldlm_cli_enqueue and it is the async request,
  * pass it to the caller in @reqp. */
 int ldlm_cli_enqueue(struct obd_export *exp, struct ptlrpc_request **reqp,
+                     struct ldlm_enqueue_info *einfo,
                      const struct ldlm_res_id *res_id,
-                     ldlm_type_t type, ldlm_policy_data_t *policy,
-                     ldlm_mode_t mode, int *flags,
-                     ldlm_blocking_callback blocking,
-                     ldlm_completion_callback completion,
-                     ldlm_glimpse_callback glimpse,
-                     void *data, void *lvb, __u32 lvb_len, void *lvb_swabber,
+                     ldlm_policy_data_t *policy, int *flags,
+                     void *lvb, __u32 lvb_len, void *lvb_swabber,
                      struct lustre_handle *lockh, int async)
 {
         struct ldlm_namespace *ns = exp->exp_obd->obd_namespace;
@@ -570,12 +567,14 @@ int ldlm_cli_enqueue(struct obd_export *exp, struct ptlrpc_request **reqp,
                 LDLM_DEBUG(lock, "client-side enqueue START");
                 LASSERT(exp == lock->l_conn_export);
         } else {
-                lock = ldlm_lock_create(ns, res_id, type, mode, blocking,
-                                        completion, glimpse, data, lvb_len);
+                lock = ldlm_lock_create(ns, res_id, einfo->ei_type,
+                                        einfo->ei_mode, einfo->ei_cb_bl,
+                                        einfo->ei_cb_cp, einfo->ei_cb_gl,
+                                        einfo->ei_cbdata, lvb_len);
                 if (lock == NULL)
                         RETURN(-ENOMEM);
                 /* for the local lock, add the reference */
-                ldlm_lock_addref_internal(lock, mode);
+                ldlm_lock_addref_internal(lock, einfo->ei_mode);
                 ldlm_lock2handle(lock, lockh);
                 lock->l_lvb_swabber = lvb_swabber;
                 if (policy != NULL) {
@@ -584,8 +583,8 @@ int ldlm_cli_enqueue(struct obd_export *exp, struct ptlrpc_request **reqp,
                          * descriptor (ldlm_lock2desc() below) but use an
                          * inodebits lock internally with both bits set.
                          */
-                        if (type == LDLM_IBITS && !(exp->exp_connect_flags &
-                                                    OBD_CONNECT_IBITS))
+                        if (einfo->ei_type == LDLM_IBITS &&
+                            !(exp->exp_connect_flags & OBD_CONNECT_IBITS))
                                 lock->l_policy_data.l_inodebits.bits =
                                         MDS_INODELOCK_LOOKUP |
                                         MDS_INODELOCK_UPDATE;
@@ -593,7 +592,7 @@ int ldlm_cli_enqueue(struct obd_export *exp, struct ptlrpc_request **reqp,
                                 lock->l_policy_data = *policy;
                 }
 
-                if (type == LDLM_EXTENT)
+                if (einfo->ei_type == LDLM_EXTENT)
                         lock->l_req_extent = policy->l_extent;
                 LDLM_DEBUG(lock, "client-side enqueue START");
         }
@@ -603,7 +602,7 @@ int ldlm_cli_enqueue(struct obd_export *exp, struct ptlrpc_request **reqp,
         if (reqp == NULL || *reqp == NULL) {
                 req = ldlm_prep_enqueue_req(exp, 2, size, NULL, 0);
                 if (req == NULL) {
-                        failed_lock_cleanup(ns, lock, lockh, mode);
+                        failed_lock_cleanup(ns, lock, lockh, einfo->ei_mode);
                         LDLM_LOCK_PUT(lock);
                         RETURN(-ENOMEM);
                 }
@@ -621,7 +620,7 @@ int ldlm_cli_enqueue(struct obd_export *exp, struct ptlrpc_request **reqp,
 
         lock->l_conn_export = exp;
         lock->l_export = NULL;
-        lock->l_blocking_ast = blocking;
+        lock->l_blocking_ast = einfo->ei_cb_bl;
 
         /* Dump lock data into the request buffer */
         body = lustre_msg_buf(req->rq_reqmsg, DLM_LOCKREQ_OFF, sizeof(*body));
@@ -640,7 +639,7 @@ int ldlm_cli_enqueue(struct obd_export *exp, struct ptlrpc_request **reqp,
          * where [0, OBD_OBJECT_EOF] lock is taken, or truncate, where
          * [i_size, OBD_OBJECT_EOF] lock is taken.
          */
-        LASSERT(ergo(LIBLUSTRE_CLIENT, type != LDLM_EXTENT ||
+        LASSERT(ergo(LIBLUSTRE_CLIENT, einfo->ei_type != LDLM_EXTENT ||
                      policy->l_extent.end == OBD_OBJECT_EOF));
 
         if (async) {
@@ -650,9 +649,9 @@ int ldlm_cli_enqueue(struct obd_export *exp, struct ptlrpc_request **reqp,
 
         LDLM_DEBUG(lock, "sending request");
         rc = ptlrpc_queue_wait(req);
-        err = ldlm_cli_enqueue_fini(exp, req, type, policy ? 1 : 0,
-                                    mode, flags, lvb, lvb_len, lvb_swabber,
-                                    lockh, rc);
+        err = ldlm_cli_enqueue_fini(exp, req, einfo->ei_type, policy ? 1 : 0,
+                                    einfo->ei_mode, flags, lvb, lvb_len,
+                                    lvb_swabber, lockh, rc);
 
         /* If ldlm_cli_enqueue_fini did not find the lock, we need to free
          * one reference that we took */
@@ -772,10 +771,13 @@ int ldlm_cli_convert(struct lustre_handle *lockh, int new_mode, int *flags)
 }
 
 /* Cancel locks locally.
- * Returns: 1 if there is a need to send a cancel RPC to server. 0 otherwise. */
+ * Returns:
+ * LDLM_FL_LOCAL_ONLY if tere is no need in a CANCEL rpc to the server;
+ * LDLM_FL_CANCELING otherwise;
+ * LDLM_FL_BL_AST if there is a need in a separate CANCEL rpc. */
 static int ldlm_cli_cancel_local(struct ldlm_lock *lock)
 {
-        int rc = 0;
+        int rc = LDLM_FL_LOCAL_ONLY;
         ENTRY;
         
         if (lock->l_conn_export) {
@@ -788,14 +790,15 @@ static int ldlm_cli_cancel_local(struct ldlm_lock *lock)
                 local_only = (lock->l_flags &
                               (LDLM_FL_LOCAL_ONLY|LDLM_FL_CANCEL_ON_BLOCK));
                 ldlm_cancel_callback(lock);
+                rc = (lock->l_flags & LDLM_FL_BL_AST) ?
+                        LDLM_FL_BL_AST : LDLM_FL_CANCELING;
                 unlock_res_and_lock(lock);
 
-                if (local_only)
-                        CDEBUG(D_INFO, "not sending request (at caller's "
+                if (local_only) {
+                        CDEBUG(D_DLMTRACE, "not sending request (at caller's "
                                "instruction)\n");
-                else
-                        rc = 1;
-
+                        rc = LDLM_FL_LOCAL_ONLY;
+                }
                 ldlm_lock_cancel(lock);
         } else {
                 if (lock->l_resource->lr_namespace->ns_client) {
@@ -818,7 +821,7 @@ static void ldlm_cancel_pack(struct ptlrpc_request *req, int off,
 {
         struct ldlm_request *dlm;
         struct ldlm_lock *lock;
-        int max;
+        int max, packed = 0;
         ENTRY;
 
         dlm = lustre_msg_buf(req->rq_reqmsg, off, sizeof(*dlm));
@@ -837,22 +840,13 @@ static void ldlm_cancel_pack(struct ptlrpc_request *req, int off,
         list_for_each_entry(lock, head, l_bl_ast) {
                 if (!count--)
                         break;
-                /* Pack the lock handle to the given request buffer. */
                 LASSERT(lock->l_conn_export);
-                /* Cannot be set on a lock in a resource granted list.*/
-                LASSERT(!(lock->l_flags &
-                          (LDLM_FL_LOCAL_ONLY|LDLM_FL_CANCEL_ON_BLOCK)));
-                /* If @lock is marked CANCEL_ON_BLOCK, cancel
-                 * will not be sent in ldlm_cli_cancel(). It 
-                 * is used for liblustre clients, no cancel on 
-                 * block requests. However, even for liblustre 
-                 * clients, when the flag is set, batched cancel
-                 * should be sent (what if no block rpc has
-                 * come). To not send another separated rpc in
-                 * this case, the caller pass CANCEL_ON_BLOCK
-                 * flag to ldlm_cli_cancel_unused_resource(). */
+                /* Pack the lock handle to the given request buffer. */
+                LDLM_DEBUG(lock, "packing");
                 dlm->lock_handle[dlm->lock_count++] = lock->l_remote_handle;
+                packed++;
         }
+        CDEBUG(D_DLMTRACE, "%d locks packed\n", packed);
         EXIT;
 }
 
@@ -872,6 +866,9 @@ int ldlm_cli_cancel_req(struct obd_export *exp, struct list_head *cancels,
 
         LASSERT(exp != NULL);
         LASSERT(count > 0);
+
+        if (OBD_FAIL_CHECK(OBD_FAIL_LDLM_CANCEL_RACE))
+                RETURN(count);
 
         free = ldlm_req_handles_avail(exp, size, 2, 0);
         if (count > free)
@@ -943,11 +940,13 @@ int ldlm_cli_cancel(struct lustre_handle *lockh)
 
         /* concurrent cancels on the same handle can happen */
         lock = __ldlm_handle2lock(lockh, LDLM_FL_CANCELING);
-        if (lock == NULL)
+        if (lock == NULL) {
+                LDLM_DEBUG_NOLOCK("lock is already being destroyed\n");
                 RETURN(0);
-
+        }
+        
         rc = ldlm_cli_cancel_local(lock);
-        if (rc <= 0)
+        if (rc < 0 || rc == LDLM_FL_LOCAL_ONLY)
                 GOTO(out, rc);
 
         list_add(&lock->l_bl_ast, &head);
@@ -981,15 +980,22 @@ int ldlm_cancel_lru_local(struct ldlm_namespace *ns, struct list_head *cancels,
         spin_lock(&ns->ns_unused_lock);
         count += ns->ns_nr_unused - ns->ns_max_unused;
         while (!list_empty(&ns->ns_unused_list)) {
-                struct list_head *tmp = ns->ns_unused_list.next;
-                lock = list_entry(tmp, struct ldlm_lock, l_lru);
-
                 if (max && added >= max)
+                        break;
+
+                list_for_each_entry(lock, &ns->ns_unused_list, l_lru) {
+                        /* somebody is already doing CANCEL or there is a
+                         * blocking request will send cancel. */
+                        if (!(lock->l_flags & LDLM_FL_CANCELING) &&
+                            !(lock->l_flags & LDLM_FL_BL_AST))
+                                break;
+                }
+                if (&lock->l_lru == &ns->ns_unused_list)
                         break;
 
                 if ((added >= count) && 
                     (!(flags & LDLM_CANCEL_AGED) ||
-                     cfs_time_before_64(cur, ns->ns_max_age +
+                     cfs_time_before_64(cur, (__u64)ns->ns_max_age +
                                         lock->l_last_used)))
                         break;
 
@@ -997,10 +1003,14 @@ int ldlm_cancel_lru_local(struct ldlm_namespace *ns, struct list_head *cancels,
                 spin_unlock(&ns->ns_unused_lock);
 
                 lock_res_and_lock(lock);
-                if ((ldlm_lock_remove_from_lru(lock) == 0) ||
-                    (lock->l_flags & LDLM_FL_CANCELING)) {
+                /* Check flags again under the lock. */
+                if ((lock->l_flags & LDLM_FL_CANCELING) ||
+                    (lock->l_flags & LDLM_FL_BL_AST) ||
+                    (ldlm_lock_remove_from_lru(lock) == 0)) {
                         /* other thread is removing lock from lru or
-                         * somebody is already doing CANCEL. */
+                         * somebody is already doing CANCEL or
+                         * there is a blocking request which will send
+                         * cancel by itseft. */
                         unlock_res_and_lock(lock);
                         LDLM_LOCK_PUT(lock);
                         spin_lock(&ns->ns_unused_lock);
@@ -1040,13 +1050,24 @@ int ldlm_cancel_lru_local(struct ldlm_namespace *ns, struct list_head *cancels,
         list_for_each_entry_safe(lock, next, cancels, l_bl_ast) {
                 if (left-- == 0)
                         break;
+
                 rc = ldlm_cli_cancel_local(lock);
-                if (rc == 0) {
+                if (rc == LDLM_FL_BL_AST) {
+                        CFS_LIST_HEAD(head);
+
+                        LDLM_DEBUG(lock, "Cancel lock separately");
+                        list_del_init(&lock->l_bl_ast);
+                        list_add(&lock->l_bl_ast, &head);
+                        ldlm_cli_cancel_req(lock->l_conn_export, &head, 1, 0);
+                        rc = LDLM_FL_LOCAL_ONLY;
+                }
+                if (rc == LDLM_FL_LOCAL_ONLY) {
                         /* CANCEL RPC should not be sent to server. */
                         list_del_init(&lock->l_bl_ast);
                         LDLM_LOCK_PUT(lock);
                         added--;
                 }
+
         } 
         RETURN(added);
 }
@@ -1114,6 +1135,12 @@ int ldlm_cancel_resource_local(struct ldlm_resource *res,
                         continue;
                 }
 
+                /* If somebody is already doing CANCEL, or blocking ast came,
+                 * skip this lock. */
+                if (lock->l_flags & LDLM_FL_BL_AST || 
+                    lock->l_flags & LDLM_FL_CANCELING)
+                        continue;
+
                 if (lockmode_compat(lock->l_granted_mode, mode))
                         continue;
 
@@ -1124,10 +1151,6 @@ int ldlm_cancel_resource_local(struct ldlm_resource *res,
                       policy->l_inodebits.bits))
                         continue;
 
-                /* If somebody is already doing CANCEL, skip it. */
-                if (lock->l_flags & LDLM_FL_CANCELING)
-                        continue;
-                
                 /* See CBPENDING comment in ldlm_cancel_lru */
                 lock->l_flags |= LDLM_FL_CBPENDING | LDLM_FL_CANCELING |
                         lock_flags;
@@ -1142,7 +1165,7 @@ int ldlm_cancel_resource_local(struct ldlm_resource *res,
         /* Handle only @count inserted locks. */
         left = count;
         list_for_each_entry_safe(lock, next, cancels, l_bl_ast) {
-                int rc = 0;
+                int rc = LDLM_FL_LOCAL_ONLY;
 
                 if (left-- == 0)
                         break;
@@ -1151,7 +1174,16 @@ int ldlm_cancel_resource_local(struct ldlm_resource *res,
                 else
                         rc = ldlm_cli_cancel_local(lock);
 
-                if (rc == 0) {
+                if (rc == LDLM_FL_BL_AST) {
+                        CFS_LIST_HEAD(head);
+
+                        LDLM_DEBUG(lock, "Cancel lock separately");
+                        list_del_init(&lock->l_bl_ast);
+                        list_add(&lock->l_bl_ast, &head);
+                        ldlm_cli_cancel_req(lock->l_conn_export, &head, 1, 0);
+                        rc = LDLM_FL_LOCAL_ONLY;
+                }
+                if (rc == LDLM_FL_LOCAL_ONLY) {
                         /* CANCEL RPC should not be sent to server. */
                         list_del_init(&lock->l_bl_ast);
                         LDLM_LOCK_PUT(lock);
@@ -1215,7 +1247,7 @@ int ldlm_cli_cancel_list(struct list_head *cancels, int count,
 int ldlm_cli_cancel_unused_resource(struct ldlm_namespace *ns,
                                     const struct ldlm_res_id *res_id,
                                     ldlm_policy_data_t *policy,
-                                    int mode, int flags, void *opaque)
+                                    ldlm_mode_t mode, int flags, void *opaque)
 {
         struct ldlm_resource *res;
         CFS_LIST_HEAD(cancels);

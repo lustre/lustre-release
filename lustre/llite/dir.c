@@ -297,6 +297,8 @@ static struct page *ll_get_dir_page(struct inode *dir, __u32 hash, int exact,
         rc = md_lock_match(ll_i2sbi(dir)->ll_md_exp, LDLM_FL_BLOCK_GRANTED,
                            ll_inode2fid(dir), LDLM_IBITS, &policy, mode, &lockh);
         if (!rc) {
+                struct ldlm_enqueue_info einfo = { LDLM_IBITS, mode,
+                       ll_md_blocking_ast, ldlm_completion_ast, NULL, dir };
                 struct lookup_intent it = { .it_op = IT_READDIR };
                 struct ptlrpc_request *request;
                 struct md_op_data *op_data;
@@ -306,10 +308,8 @@ static struct page *ll_get_dir_page(struct inode *dir, __u32 hash, int exact,
                 if (IS_ERR(op_data))
                         return (void *)op_data;
 
-                rc = md_enqueue(ll_i2sbi(dir)->ll_md_exp, LDLM_IBITS, &it,
-                                mode, op_data, &lockh, NULL, 0,
-                                ldlm_completion_ast, ll_md_blocking_ast, dir,
-                                0);
+                rc = md_enqueue(ll_i2sbi(dir)->ll_md_exp, &einfo, &it,
+                                op_data, &lockh, NULL, 0, 0);
 
                 ll_finish_md_op_data(op_data);
 

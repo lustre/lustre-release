@@ -596,6 +596,9 @@ static int mgc_enqueue(struct obd_export *exp, struct lov_stripe_md *lsm,
                        struct lustre_handle *lockh)
 {
         struct config_llog_data *cld = (struct config_llog_data *)data;
+        struct ldlm_enqueue_info einfo = { type, mode, mgc_blocking_ast,
+                ldlm_completion_ast, NULL, data};
+
         int rc;
         ENTRY;
 
@@ -609,10 +612,8 @@ static int mgc_enqueue(struct obd_export *exp, struct lov_stripe_md *lsm,
         /* We need a callback for every lockholder, so don't try to
            ldlm_lock_match (see rev 1.1.2.11.2.47) */
 
-        rc = ldlm_cli_enqueue(exp, NULL, &cld->cld_resid,
-                              type, NULL, mode, flags,
-                              mgc_blocking_ast, ldlm_completion_ast, NULL,
-                              data, NULL, 0, NULL, lockh, 0);
+        rc = ldlm_cli_enqueue(exp, NULL, &einfo, &cld->cld_resid,
+                              NULL, flags, NULL, 0, NULL, lockh, 0);
         /* A failed enqueue should still call the mgc_blocking_ast, 
            where it will be requeued if needed ("grant failed"). */ 
 

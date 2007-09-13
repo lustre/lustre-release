@@ -520,9 +520,10 @@ extern void lustre_swab_ptlrpc_body(struct ptlrpc_body *pb);
 #define OBD_CONNECT_QUOTA64    0x00080000ULL /* 64bit qunit_data.qd_count b=10707*/
 #define OBD_CONNECT_MDS_CAPA   0x00100000ULL /* MDS capability */
 #define OBD_CONNECT_OSS_CAPA   0x00200000ULL /* OSS capability */
-#define OBD_CONNECT_MDS_MDS    0x00400000ULL /* MDS-MDS connection*/
+#define OBD_CONNECT_CANCELSET  0x00400000ULL /* Early batched cancels. */
 #define OBD_CONNECT_SOM        0x00800000ULL /* SOM feature */
-#define OBD_CONNECT_CANCELSET  0x01000000ULL /* Early batched cancels. */
+#define OBD_CONNECT_AT         0x01000000ULL /* client uses adaptive timeouts */
+#define OBD_CONNECT_MDS_MDS    0x02000000ULL /* MDS-MDS connection*/
 #define OBD_CONNECT_REAL       0x00000200ULL /* real connection */
 /* also update obd_connect_names[] for lprocfs_rd_connect_flags()
  * and lustre/utils/wirecheck.c */

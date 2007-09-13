@@ -85,13 +85,15 @@ static int llu_dir_do_readpage(struct inode *inode, struct page *page)
         rc = ldlm_lock_match(obddev->obd_namespace, LDLM_FL_BLOCK_GRANTED,
                              &res_id, LDLM_IBITS, &policy, LCK_CR, &lockh);
         if (!rc) {
+                struct ldlm_enqueue_info einfo = {LDLM_IBITS, LCK_CR,
+                        llu_md_blocking_ast, ldlm_completion_ast, NULL, inode};
+
                 llu_prep_md_op_data(&op_data, inode, NULL, NULL, 0, 0,
                                     LUSTRE_OPC_ANY);
 
-                rc = md_enqueue(sbi->ll_md_exp, LDLM_IBITS, &it, LCK_CR,
+                rc = md_enqueue(sbi->ll_md_exp, &einfo, &it,
                                 &op_data, &lockh, NULL, 0,
-                                ldlm_completion_ast, llu_md_blocking_ast,
-                                inode, LDLM_FL_CANCEL_ON_BLOCK);
+                                LDLM_FL_CANCEL_ON_BLOCK);
                 request = (struct ptlrpc_request *)it.d.lustre.it_data;
                 if (request)
                         ptlrpc_req_finished(request);

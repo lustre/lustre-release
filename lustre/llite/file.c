@@ -1101,7 +1101,7 @@ int ll_glimpse_ioctl(struct ll_sb_info *sbi, struct lov_stripe_md *lsm,
                      lstat_t *st)
 {
         struct lustre_handle lockh = { 0 };
-        struct obd_enqueue_info einfo = { 0 };
+        struct ldlm_enqueue_info einfo = { 0 };
         struct obd_info oinfo = { { { 0 } } };
         struct ost_lvb lvb;
         int rc;
@@ -1110,7 +1110,6 @@ int ll_glimpse_ioctl(struct ll_sb_info *sbi, struct lov_stripe_md *lsm,
 
         einfo.ei_type = LDLM_EXTENT;
         einfo.ei_mode = LCK_PR;
-        einfo.ei_flags = LDLM_FL_HAS_INTENT;
         einfo.ei_cb_bl = ll_extent_lock_callback;
         einfo.ei_cb_cp = ldlm_completion_ast;
         einfo.ei_cb_gl = ll_glimpse_callback;
@@ -1119,6 +1118,7 @@ int ll_glimpse_ioctl(struct ll_sb_info *sbi, struct lov_stripe_md *lsm,
         oinfo.oi_policy.l_extent.end = OBD_OBJECT_EOF;
         oinfo.oi_lockh = &lockh;
         oinfo.oi_md = lsm;
+        oinfo.oi_flags = LDLM_FL_HAS_INTENT;
 
         rc = obd_enqueue_rqset(sbi->ll_dt_exp, &oinfo, &einfo);
         if (rc == -ENOENT)
@@ -1149,7 +1149,7 @@ int ll_glimpse_size(struct inode *inode, int ast_flags)
         struct ll_inode_info *lli = ll_i2info(inode);
         struct ll_sb_info *sbi = ll_i2sbi(inode);
         struct lustre_handle lockh = { 0 };
-        struct obd_enqueue_info einfo = { 0 };
+        struct ldlm_enqueue_info einfo = { 0 };
         struct obd_info oinfo = { { { 0 } } };
         int rc;
         ENTRY;
@@ -1173,7 +1173,6 @@ int ll_glimpse_size(struct inode *inode, int ast_flags)
          *       acquired only if there were no conflicting locks. */
         einfo.ei_type = LDLM_EXTENT;
         einfo.ei_mode = LCK_PR;
-        einfo.ei_flags = ast_flags | LDLM_FL_HAS_INTENT;
         einfo.ei_cb_bl = ll_extent_lock_callback;
         einfo.ei_cb_cp = ldlm_completion_ast;
         einfo.ei_cb_gl = ll_glimpse_callback;
@@ -1182,6 +1181,7 @@ int ll_glimpse_size(struct inode *inode, int ast_flags)
         oinfo.oi_policy.l_extent.end = OBD_OBJECT_EOF;
         oinfo.oi_lockh = &lockh;
         oinfo.oi_md = lli->lli_smd;
+        oinfo.oi_flags = ast_flags | LDLM_FL_HAS_INTENT;
 
         rc = obd_enqueue_rqset(sbi->ll_dt_exp, &oinfo, &einfo);
         if (rc == -ENOENT)
@@ -1206,7 +1206,7 @@ int ll_extent_lock(struct ll_file_data *fd, struct inode *inode,
 {
         struct ll_sb_info *sbi = ll_i2sbi(inode);
         struct ost_lvb lvb;
-        struct obd_enqueue_info einfo = { 0 };
+        struct ldlm_enqueue_info einfo = { 0 };
         struct obd_info oinfo = { { { 0 } } };
         int rc;
         ENTRY;
@@ -1228,7 +1228,6 @@ int ll_extent_lock(struct ll_file_data *fd, struct inode *inode,
 
         einfo.ei_type = LDLM_EXTENT;
         einfo.ei_mode = mode;
-        einfo.ei_flags = ast_flags;
         einfo.ei_cb_bl = ll_extent_lock_callback;
         einfo.ei_cb_cp = ldlm_completion_ast;
         einfo.ei_cb_gl = ll_glimpse_callback;
@@ -1237,8 +1236,9 @@ int ll_extent_lock(struct ll_file_data *fd, struct inode *inode,
         oinfo.oi_policy = *policy;
         oinfo.oi_lockh = lockh;
         oinfo.oi_md = lsm;
+        oinfo.oi_flags = ast_flags;
 
-        rc = obd_enqueue(sbi->ll_dt_exp, &oinfo, &einfo);
+        rc = obd_enqueue(sbi->ll_dt_exp, &oinfo, &einfo, NULL);
         *policy = oinfo.oi_policy;
         if (rc > 0)
                 rc = -EIO;
@@ -2029,6 +2029,9 @@ static int join_file(struct inode *head_inode, struct file *head_filp,
         struct dentry *tail_dentry = tail_filp->f_dentry;
         struct lookup_intent oit = {.it_op = IT_OPEN,
                                    .it_flags = head_filp->f_flags|O_JOIN_FILE};
+        struct ldlm_enqueue_info einfo = { LDLM_IBITS, LCK_CW,
+                ll_md_blocking_ast, ldlm_completion_ast, NULL, NULL };
+
         struct lustre_handle lockh;
         struct md_op_data *op_data;
         int    rc;
@@ -2046,9 +2049,8 @@ static int join_file(struct inode *head_inode, struct file *head_filp,
         if (IS_ERR(op_data))
                 RETURN(PTR_ERR(op_data));
 
-        rc = md_enqueue(ll_i2mdexp(head_inode), LDLM_IBITS, &oit, LCK_CW,
-                        op_data, &lockh, NULL, 0, ldlm_completion_ast,
-                        ll_md_blocking_ast, NULL, 0);
+        rc = md_enqueue(ll_i2mdexp(head_inode), &einfo, &oit, 
+                         op_data, &lockh, NULL, 0, 0);
 
         ll_finish_md_op_data(op_data);
         if (rc < 0)
@@ -2426,9 +2428,10 @@ int ll_file_flock(struct file *file, int cmd, struct file_lock *file_lock)
                             fid_oid(ll_inode2fid(inode)),
                             fid_ver(ll_inode2fid(inode)),
                             LDLM_FLOCK} };
+        struct ldlm_enqueue_info einfo = { LDLM_FLOCK, 0, NULL,
+                ldlm_flock_completion_ast, NULL, file_lock };
         struct lustre_handle lockh = {0};
         ldlm_policy_data_t flock;
-        ldlm_mode_t mode = 0;
         int flags = 0;
         int rc;
         ENTRY;
@@ -2450,7 +2453,7 @@ int ll_file_flock(struct file *file, int cmd, struct file_lock *file_lock)
 
         switch (file_lock->fl_type) {
         case F_RDLCK:
-                mode = LCK_PR;
+                einfo.ei_mode = LCK_PR;
                 break;
         case F_UNLCK:
                 /* An unlock request may or may not have any relation to
@@ -2461,10 +2464,10 @@ int ll_file_flock(struct file *file, int cmd, struct file_lock *file_lock)
                  * information that is given with a normal read or write record
                  * lock request. To avoid creating another ldlm unlock (cancel)
                  * message we'll treat a LCK_NL flock request as an unlock. */
-                mode = LCK_NL;
+                einfo.ei_mode = LCK_NL;
                 break;
         case F_WRLCK:
-                mode = LCK_PW;
+                einfo.ei_mode = LCK_PW;
                 break;
         default:
                 CERROR("unknown fcntl lock type: %d\n", file_lock->fl_type);
@@ -2491,7 +2494,7 @@ int ll_file_flock(struct file *file, int cmd, struct file_lock *file_lock)
                 flags = LDLM_FL_TEST_LOCK;
                 /* Save the old mode so that if the mode in the lock changes we
                  * can decrement the appropriate reader or writer refcount. */
-                file_lock->fl_type = mode;
+                file_lock->fl_type = einfo.ei_mode;
                 break;
         default:
                 CERROR("unknown fcntl lock command: %d\n", cmd);
@@ -2500,12 +2503,10 @@ int ll_file_flock(struct file *file, int cmd, struct file_lock *file_lock)
 
         CDEBUG(D_DLMTRACE, "inode=%lu, pid=%u, flags=%#x, mode=%u, "
                "start="LPU64", end="LPU64"\n", inode->i_ino, flock.l_flock.pid,
-               flags, mode, flock.l_flock.start, flock.l_flock.end);
+               flags, einfo.ei_mode, flock.l_flock.start, flock.l_flock.end);
 
-        rc = ldlm_cli_enqueue(sbi->ll_md_exp, NULL, &res_id,
-                              LDLM_FLOCK, &flock, mode, &flags, NULL,
-                              ldlm_flock_completion_ast, NULL, file_lock,
-                              NULL, 0, NULL, &lockh, 0);
+        rc = ldlm_cli_enqueue(sbi->ll_md_exp, NULL, &einfo, &res_id,
+                              &flock, &flags, NULL, 0, NULL, &lockh, 0);
         if ((file_lock->fl_flags & FL_FLOCK) && (rc == 0))
                 ll_flock_lock_file_wait(file, file_lock, (cmd == F_SETLKW));
 #ifdef HAVE_F_OP_FLOCK

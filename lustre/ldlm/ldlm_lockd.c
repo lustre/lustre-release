@@ -582,9 +582,14 @@ int ldlm_server_blocking_ast(struct ldlm_lock *lock,
                 rc = ptlrpc_queue_wait(req);
                 OBD_FAIL_TIMEOUT(OBD_FAIL_LDLM_GLIMPSE, 2);
         }
-
-        if (rc != 0)
+        if (rc != 0) {
+                /* If client canceled the lock but the cancel has not been
+                 * recieved yet, we need to update lvbo to have the proper
+                 * attributes cached. */
+                if (rc == -EINVAL)
+                        ldlm_res_lvbo_update(lock->l_resource, NULL, 0, 1);
                 rc = ldlm_handle_ast_error(lock, req, rc, "blocking");
+        }
 
         ptlrpc_req_finished(req);
 
@@ -734,8 +739,8 @@ int ldlm_server_glimpse_ast(struct ldlm_lock *lock, void *data)
         else if (rc != 0)
                 rc = ldlm_handle_ast_error(lock, req, rc, "glimpse");
         else
-                rc = res->lr_namespace->ns_lvbo->lvbo_update
-                        (res, req->rq_repmsg, REPLY_REC_OFF, 1);
+                rc = ldlm_res_lvbo_update(res, req->rq_repmsg,
+                                          REPLY_REC_OFF, 1);
         ptlrpc_req_finished(req);
         RETURN(rc);
 }
@@ -996,8 +1001,8 @@ existing_lock:
                 LDLM_DEBUG(lock, "server-side enqueue handler, sending reply"
                            "(err=%d, rc=%d)", err, rc);
 
+                lock_res_and_lock(lock);
                 if (rc == 0) {
-                        lock_res_and_lock(lock);
                         size[DLM_REPLY_REC_OFF] = lock->l_resource->lr_lvb_len;
                         if (size[DLM_REPLY_REC_OFF] > 0) {
                                 void *lvb = lustre_msg_buf(req->rq_repmsg,
@@ -1009,13 +1014,11 @@ existing_lock:
                                 memcpy(lvb, lock->l_resource->lr_lvb_data,
                                        size[DLM_REPLY_REC_OFF]);
                         }
-                        unlock_res_and_lock(lock);
                 } else {
-                        lock_res_and_lock(lock);
                         ldlm_resource_unlink_lock(lock);
                         ldlm_lock_destroy_nolock(lock);
-                        unlock_res_and_lock(lock);
                 }
+                unlock_res_and_lock(lock);
 
                 if (!err && dlm_req->lock_desc.l_resource.lr_type != LDLM_FLOCK)
                         ldlm_reprocess_all(lock->l_resource);
@@ -1134,6 +1137,8 @@ int ldlm_request_cancel(struct ptlrpc_request *req,
         int i, count, done = 0;
         ENTRY;
 
+        LDLM_DEBUG_NOLOCK("server-side cancel handler START: %d locks, "
+                          "starting at %d", dlm_req->lock_count, first);
         count = dlm_req->lock_count ? dlm_req->lock_count : 1;
         if (first >= count)
                 RETURN(0);
@@ -1143,8 +1148,6 @@ int ldlm_request_cancel(struct ptlrpc_request *req,
         if (lustre_msg_get_flags(req->rq_reqmsg) & MSG_REPLAY)
                 RETURN(0);
 
-        LDLM_DEBUG_NOLOCK("server-side cancel handler START: %d locks",
-                          count - first);
         for (i = first; i < count; i++) {
                 lock = ldlm_handle2lock(&dlm_req->lock_handle[i]);
                 if (!lock) {
@@ -1156,32 +1159,22 @@ int ldlm_request_cancel(struct ptlrpc_request *req,
 
                 res = lock->l_resource;
                 done++;
-                ldlm_lock_cancel(lock);
-                if (ldlm_del_waiting_lock(lock))
-                        CDEBUG(D_DLMTRACE, "cancelled waiting lock %p\n", lock);
 
                 if (res != pres) {
                         if (pres != NULL) {
-                                if (pres->lr_namespace->ns_lvbo &&
-                                    pres->lr_namespace->ns_lvbo->lvbo_update) {
-                                        (void)pres->lr_namespace->ns_lvbo->
-                                                lvbo_update(pres, NULL, 0, 1);
-                                }
                                 ldlm_reprocess_all(pres);
                                 ldlm_resource_putref(pres);
                         }
-                        if (res != NULL)
+                        if (res != NULL) {
                                 ldlm_resource_getref(res);
+                                ldlm_res_lvbo_update(res, NULL, 0, 1);
+                        }
                         pres = res;
                 }
+                ldlm_lock_cancel(lock);
                 LDLM_LOCK_PUT(lock);
         }
         if (pres != NULL) {
-                if (pres->lr_namespace->ns_lvbo &&
-                    pres->lr_namespace->ns_lvbo->lvbo_update) {
-                        (void)pres->lr_namespace->ns_lvbo->
-                                lvbo_update(pres, NULL, 0, 1);
-                }
                 ldlm_reprocess_all(pres);
                 ldlm_resource_putref(pres);
         }
@@ -1500,8 +1493,8 @@ static int ldlm_callback_handler(struct ptlrpc_request *req)
 
         lock = ldlm_handle2lock_ns(ns, &dlm_req->lock_handle[0]);
         if (!lock) {
-                CDEBUG(D_INODE, "callback on lock "LPX64" - lock disappeared\n",
-                       dlm_req->lock_handle[0].cookie);
+                CDEBUG(D_DLMTRACE, "callback on lock "LPX64" - lock "
+                       "disappeared\n", dlm_req->lock_handle[0].cookie);
                 ldlm_callback_reply(req, -EINVAL);
                 RETURN(0);
         }
@@ -1509,6 +1502,22 @@ static int ldlm_callback_handler(struct ptlrpc_request *req)
         /* Copy hints/flags (e.g. LDLM_FL_DISCARD_DATA) from AST. */
         lock_res_and_lock(lock);
         lock->l_flags |= (dlm_req->lock_flags & LDLM_AST_FLAGS);
+        if (lustre_msg_get_opc(req->rq_reqmsg) == LDLM_BL_CALLBACK) {
+                /* If somebody cancels locks and cache is already droped,
+                 * we can tell the server we have no lock. Otherwise, we
+                 * should send cancel after dropping the cache. */
+                if ((lock->l_flags & LDLM_FL_CANCELING) &&
+                    (lock->l_flags & LDLM_FL_BL_DONE)) {
+                        LDLM_DEBUG(lock, "callback on lock "
+                                   LPX64" - lock disappeared\n",
+                                   dlm_req->lock_handle[0].cookie);
+                        unlock_res_and_lock(lock);
+                        LDLM_LOCK_PUT(lock);
+                        ldlm_callback_reply(req, -EINVAL);
+                        RETURN(0);
+                }
+                lock->l_flags |= LDLM_FL_BL_AST;
+        }
         unlock_res_and_lock(lock);
 
         /* We want the ost thread to get this reply so that it can respond

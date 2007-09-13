@@ -1838,12 +1838,13 @@ static int lov_enqueue_interpret(struct ptlrpc_request_set *rqset,
 {
         struct lov_request_set *lovset = (struct lov_request_set *)data;
         ENTRY;
-        rc = lov_fini_enqueue_set(lovset, lovset->set_ei->ei_mode, rc);
+        rc = lov_fini_enqueue_set(lovset, lovset->set_ei->ei_mode, rc, rqset);
         RETURN(rc);
 }
 
 static int lov_enqueue(struct obd_export *exp, struct obd_info *oinfo,
-                       struct obd_enqueue_info *einfo)
+                       struct ldlm_enqueue_info *einfo,
+                       struct ptlrpc_request_set *rqset)
 {
         struct lov_request_set *set;
         struct lov_request *req;
@@ -1856,7 +1857,7 @@ static int lov_enqueue(struct obd_export *exp, struct obd_info *oinfo,
         ASSERT_LSM_MAGIC(oinfo->oi_md);
 
         /* we should never be asked to replay a lock this way. */
-        LASSERT((einfo->ei_flags & LDLM_FL_REPLAY) == 0);
+        LASSERT((oinfo->oi_flags & LDLM_FL_REPLAY) == 0);
 
         if (!exp || !exp->exp_obd)
                 RETURN(-ENODEV);
@@ -1870,20 +1871,20 @@ static int lov_enqueue(struct obd_export *exp, struct obd_info *oinfo,
                 req = list_entry(pos, struct lov_request, rq_link);
 
                 rc = obd_enqueue(lov->lov_tgts[req->rq_idx]->ltd_exp,
-                                 &req->rq_oi, einfo);
+                                 &req->rq_oi, einfo, rqset);
                 if (rc != ELDLM_OK)
                         GOTO(out, rc);
         }
 
-        if (einfo->ei_rqset && !list_empty(&einfo->ei_rqset->set_requests)) {
+        if (rqset && !list_empty(&rqset->set_requests)) {
                 LASSERT(rc == 0);
-                LASSERT(einfo->ei_rqset->set_interpret == NULL);
-                einfo->ei_rqset->set_interpret = lov_enqueue_interpret;
-                einfo->ei_rqset->set_arg = (void *)set;
+                LASSERT(rqset->set_interpret == NULL);
+                rqset->set_interpret = lov_enqueue_interpret;
+                rqset->set_arg = (void *)set;
                 RETURN(rc);
         }
 out:
-        rc = lov_fini_enqueue_set(set, einfo->ei_mode, rc);
+        rc = lov_fini_enqueue_set(set, einfo->ei_mode, rc, rqset);
         RETURN(rc);
 }
 

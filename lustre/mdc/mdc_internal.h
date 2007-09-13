@@ -105,17 +105,11 @@ int mdc_intent_lock(struct obd_export *exp,
                     struct lookup_intent *, int,
                     struct ptlrpc_request **reqp,
                     ldlm_blocking_callback cb_blocking, int extra_lock_flags);
-int mdc_enqueue(struct obd_export *exp,
-                int lock_type,
-                struct lookup_intent *it,
-                int lock_mode,
-                struct md_op_data *op_data,
-                struct lustre_handle *lockh,
-                void *lmm,
-                int lmmlen,
-                ldlm_completion_callback cb_completion,
-                ldlm_blocking_callback cb_blocking,
-                void *cb_data, int extra_lock_flags);
+int mdc_enqueue(struct obd_export *exp, struct ldlm_enqueue_info *einfo,
+                struct lookup_intent *it, struct md_op_data *op_data,
+                struct lustre_handle *lockh, void *lmm, int lmmlen,
+                int extra_lock_flags);
+
 int mdc_resource_get_unused(struct obd_export *exp, struct lu_fid *fid,
                             struct list_head *cancels, ldlm_mode_t mode,
                             __u64 bits);

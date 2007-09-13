@@ -56,6 +56,7 @@ struct mds_update_record {
         __u32 ur_mode;
         __u32 ur_flags;
         struct lvfs_grp_hash_entry *ur_grp_entry;
+        struct ldlm_request *ur_dlm;
 };
 
 /* file data for open files on MDS */

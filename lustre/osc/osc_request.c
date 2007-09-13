@@ -2779,7 +2779,7 @@ static int osc_enqueue_fini(struct ptlrpc_request *req, struct obd_info *oinfo,
 static int osc_enqueue_interpret(struct ptlrpc_request *req,
                                  struct osc_enqueue_args *aa, int rc)
 {
-        int intent = aa->oa_ei->ei_flags & LDLM_FL_HAS_INTENT;
+        int intent = aa->oa_oi->oi_flags & LDLM_FL_HAS_INTENT;
         struct lov_stripe_md *lsm = aa->oa_oi->oi_md;
         struct ldlm_lock *lock;
 
@@ -2790,7 +2790,7 @@ static int osc_enqueue_interpret(struct ptlrpc_request *req,
         /* Complete obtaining the lock procedure. */
         rc = ldlm_cli_enqueue_fini(aa->oa_exp, req, aa->oa_ei->ei_type, 1,
                                    aa->oa_ei->ei_mode,
-                                   &aa->oa_ei->ei_flags,
+                                   &aa->oa_oi->oi_flags,
                                    &lsm->lsm_oinfo[0]->loi_lvb,
                                    sizeof(lsm->lsm_oinfo[0]->loi_lvb),
                                    lustre_swab_ost_lvb,
@@ -2817,13 +2817,14 @@ static int osc_enqueue_interpret(struct ptlrpc_request *req,
  * is excluded from the cluster -- such scenarious make the life difficult, so
  * release locks just after they are obtained. */
 static int osc_enqueue(struct obd_export *exp, struct obd_info *oinfo,
-                       struct obd_enqueue_info *einfo)
+                       struct ldlm_enqueue_info *einfo,
+                       struct ptlrpc_request_set *rqset)
 {
         struct ldlm_res_id res_id = { .name = {0} };
         struct obd_device *obd = exp->exp_obd;
         struct ldlm_reply *rep;
         struct ptlrpc_request *req = NULL;
-        int intent = einfo->ei_flags & LDLM_FL_HAS_INTENT;
+        int intent = oinfo->oi_flags & LDLM_FL_HAS_INTENT;
         int rc;
         ENTRY;
 
@@ -2841,12 +2842,12 @@ static int osc_enqueue(struct obd_export *exp, struct obd_info *oinfo,
 
         /* Next, search for already existing extent locks that will cover us */
         rc = ldlm_lock_match(obd->obd_namespace,
-                             einfo->ei_flags | LDLM_FL_LVB_READY, &res_id,
+                             oinfo->oi_flags | LDLM_FL_LVB_READY, &res_id,
                              einfo->ei_type, &oinfo->oi_policy, einfo->ei_mode,
                              oinfo->oi_lockh);
         if (rc == 1) {
                 osc_set_data_with_check(oinfo->oi_lockh, einfo->ei_cbdata,
-                                        einfo->ei_flags);
+                                        oinfo->oi_flags);
                 if (intent) {
                         /* I would like to be able to ASSERT here that rss <=
                          * kms, but I can't, for reasons which are explained in
@@ -2857,7 +2858,7 @@ static int osc_enqueue(struct obd_export *exp, struct obd_info *oinfo,
                 oinfo->oi_cb_up(oinfo, ELDLM_OK);
 
                 /* For async requests, decref the lock. */
-                if (einfo->ei_rqset)
+                if (rqset)
                         ldlm_lock_decref(oinfo->oi_lockh, einfo->ei_mode);
 
                 RETURN(ELDLM_OK);
@@ -2877,7 +2878,7 @@ static int osc_enqueue(struct obd_export *exp, struct obd_info *oinfo,
 
         if (einfo->ei_mode == LCK_PR) {
                 rc = ldlm_lock_match(obd->obd_namespace,
-                                     einfo->ei_flags | LDLM_FL_LVB_READY,
+                                     oinfo->oi_flags | LDLM_FL_LVB_READY,
                                      &res_id, einfo->ei_type, &oinfo->oi_policy,
                                      LCK_PW, oinfo->oi_lockh);
                 if (rc == 1) {
@@ -2885,11 +2886,11 @@ static int osc_enqueue(struct obd_export *exp, struct obd_info *oinfo,
                          * be more elegant than adding another parameter to
                          * lock_match.  I want a second opinion. */
                         /* addref the lock only if not async requests. */
-                        if (!einfo->ei_rqset)
+                        if (!rqset)
                                 ldlm_lock_addref(oinfo->oi_lockh, LCK_PR);
                         osc_set_data_with_check(oinfo->oi_lockh,
                                                 einfo->ei_cbdata,
-                                                einfo->ei_flags);
+                                                oinfo->oi_flags);
                         oinfo->oi_cb_up(oinfo, ELDLM_OK);
                         ldlm_lock_decref(oinfo->oi_lockh, LCK_PW);
                         RETURN(ELDLM_OK);
@@ -2914,18 +2915,15 @@ static int osc_enqueue(struct obd_export *exp, struct obd_info *oinfo,
         }
 
         /* users of osc_enqueue() can pass this flag for ldlm_lock_match() */
-        einfo->ei_flags &= ~LDLM_FL_BLOCK_GRANTED;
+        oinfo->oi_flags &= ~LDLM_FL_BLOCK_GRANTED;
 
-        rc = ldlm_cli_enqueue(exp, &req, &res_id, einfo->ei_type,
-                              &oinfo->oi_policy, einfo->ei_mode,
-                              &einfo->ei_flags, einfo->ei_cb_bl,
-                              einfo->ei_cb_cp, einfo->ei_cb_gl,
-                              einfo->ei_cbdata,
+        rc = ldlm_cli_enqueue(exp, &req, einfo, &res_id,
+                              &oinfo->oi_policy, &oinfo->oi_flags,
                               &oinfo->oi_md->lsm_oinfo[0]->loi_lvb,
                               sizeof(oinfo->oi_md->lsm_oinfo[0]->loi_lvb),
                               lustre_swab_ost_lvb, oinfo->oi_lockh,
-                              einfo->ei_rqset ? 1 : 0);
-        if (einfo->ei_rqset) {
+                              rqset ? 1 : 0);
+        if (rqset) {
                 if (!rc) {
                         struct osc_enqueue_args *aa;
                         CLASSERT (sizeof(*aa) <= sizeof(req->rq_async_args));
@@ -2935,7 +2933,7 @@ static int osc_enqueue(struct obd_export *exp, struct obd_info *oinfo,
                         aa->oa_exp = exp;
 
                         req->rq_interpret_reply = osc_enqueue_interpret;
-                        ptlrpc_set_add_req(einfo->ei_rqset, req);
+                        ptlrpc_set_add_req(rqset, req);
                 } else if (intent) {
                         ptlrpc_req_finished(req);
                 }

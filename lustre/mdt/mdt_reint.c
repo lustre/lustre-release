@@ -741,16 +741,16 @@ static int mdt_rename_lock(struct mdt_thread_info *info,
                                             ldlm_completion_ast, NULL, NULL, 0,
                                             NULL, lh);
         } else {
+                struct ldlm_enqueue_info einfo = { LDLM_IBITS, LCK_EX,
+                        ldlm_blocking_ast, ldlm_completion_ast, NULL, NULL };
                 int flags = 0;
 
                 /*
                  * This is the case mdt0 is remote node, issue DLM lock like
                  * other clients.
                  */
-                rc = ldlm_cli_enqueue(ls->ls_control_exp, NULL, res_id,
-                                      LDLM_IBITS, policy, LCK_EX, &flags,
-                                      ldlm_blocking_ast, ldlm_completion_ast,
-                                      NULL, NULL, NULL, 0, NULL, lh, 0);
+                rc = ldlm_cli_enqueue(ls->ls_control_exp, NULL, &einfo, res_id,
+                                      policy, &flags, NULL, 0, NULL, lh, 0);
         }
 
         RETURN(rc);

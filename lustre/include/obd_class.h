@@ -1357,30 +1357,30 @@ static inline int obd_iocontrol(unsigned int cmd, struct obd_export *exp,
 
 static inline int obd_enqueue_rqset(struct obd_export *exp,
                                     struct obd_info *oinfo,
-                                    struct obd_enqueue_info *einfo)
+                                    struct ldlm_enqueue_info *einfo)
 {
+        struct ptlrpc_request_set *set = NULL;
         int rc;
         ENTRY;
 
         EXP_CHECK_DT_OP(exp, enqueue);
         EXP_COUNTER_INCREMENT(exp, enqueue);
 
-        einfo->ei_rqset =  ptlrpc_prep_set();
-        if (einfo->ei_rqset == NULL)
+        set =  ptlrpc_prep_set();
+        if (set == NULL)
                 RETURN(-ENOMEM);
 
-        rc = OBP(exp->exp_obd, enqueue)(exp, oinfo, einfo);
+        rc = OBP(exp->exp_obd, enqueue)(exp, oinfo, einfo, set);
         if (rc == 0)
-                rc = ptlrpc_set_wait(einfo->ei_rqset);
-        ptlrpc_set_destroy(einfo->ei_rqset);
-        einfo->ei_rqset = NULL;
-
+                rc = ptlrpc_set_wait(set);
+        ptlrpc_set_destroy(set);
         RETURN(rc);
 }
 
 static inline int obd_enqueue(struct obd_export *exp,
                               struct obd_info *oinfo,
-                              struct obd_enqueue_info *einfo)
+                              struct ldlm_enqueue_info *einfo,
+                              struct ptlrpc_request_set *set)
 {
         int rc;
         ENTRY;
@@ -1388,7 +1388,7 @@ static inline int obd_enqueue(struct obd_export *exp,
         EXP_CHECK_DT_OP(exp, enqueue);
         EXP_COUNTER_INCREMENT(exp, enqueue);
 
-        rc = OBP(exp->exp_obd, enqueue)(exp, oinfo, einfo);
+        rc = OBP(exp->exp_obd, enqueue)(exp, oinfo, einfo, set);
         RETURN(rc);
 }
 
@@ -1714,23 +1714,20 @@ static inline int md_done_writing(struct obd_export *exp,
         RETURN(rc);
 }
 
-static inline int md_enqueue(struct obd_export *exp, int lock_type,
-                             struct lookup_intent *it, int lock_mode,
+static inline int md_enqueue(struct obd_export *exp,
+                             struct ldlm_enqueue_info *einfo,
+                             struct lookup_intent *it,
                              struct md_op_data *op_data,
                              struct lustre_handle *lockh,
                              void *lmm, int lmmsize,
-                             ldlm_completion_callback cb_completion,
-                             ldlm_blocking_callback cb_blocking,
-                             void *cb_data, int extra_lock_flags)
+                             int extra_lock_flags)
 {
         int rc;
         ENTRY;
         EXP_CHECK_MD_OP(exp, enqueue);
         EXP_MD_COUNTER_INCREMENT(exp, enqueue);
-        rc = MDP(exp->exp_obd, enqueue)(exp, lock_type, it, lock_mode,
-                                        op_data, lockh, lmm, lmmsize,
-                                        cb_completion, cb_blocking,
-                                        cb_data, extra_lock_flags);
+        rc = MDP(exp->exp_obd, enqueue)(exp, einfo, it, op_data, lockh,
+                                        lmm, lmmsize, extra_lock_flags);
         RETURN(rc);
 }
 

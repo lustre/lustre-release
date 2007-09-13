@@ -1338,9 +1338,11 @@ static int llu_file_flock(struct inode *ino,
                            fid_oid(&lli->lli_fid),
                            fid_ver(&lli->lli_fid),
                            LDLM_FLOCK} };
+        struct ldlm_enqueue_info einfo = { LDLM_FLOCK, 0, NULL,
+                ldlm_flock_completion_ast, NULL, file_lock };
+
         struct lustre_handle lockh = {0};
         ldlm_policy_data_t flock;
-        ldlm_mode_t mode = 0;
         int flags = 0;
         int rc;
 
@@ -1353,13 +1355,13 @@ static int llu_file_flock(struct inode *ino,
 
         switch (file_lock->fl_type) {
         case F_RDLCK:
-                mode = LCK_PR;
+                einfo.ei_mode = LCK_PR;
                 break;
         case F_UNLCK:
-                mode = LCK_NL;
+                einfo.ei_mode = LCK_NL;
                 break;
         case F_WRLCK:
-                mode = LCK_PW;
+                einfo.ei_mode = LCK_PW;
                 break;
         default:
                 CERROR("unknown fcntl lock type: %d\n", file_lock->fl_type);
@@ -1390,7 +1392,7 @@ static int llu_file_flock(struct inode *ino,
 #endif
 #endif
                 flags = LDLM_FL_TEST_LOCK;
-                file_lock->fl_type = mode;
+                file_lock->fl_type = einfo.ei_mode;
                 break;
         default:
                 CERROR("unknown fcntl cmd: %d\n", cmd);
@@ -1399,13 +1401,11 @@ static int llu_file_flock(struct inode *ino,
 
         CDEBUG(D_DLMTRACE, "inode=%llu, pid=%u, flags=%#x, mode=%u, "
                "start="LPU64", end="LPU64"\n", (unsigned long long)st->st_ino,
-               flock.l_flock.pid, flags, mode, flock.l_flock.start,
+               flock.l_flock.pid, flags, einfo.ei_mode, flock.l_flock.start,
                flock.l_flock.end);
 
-        rc = ldlm_cli_enqueue(llu_i2mdcexp(ino), NULL, &res_id,
-                              LDLM_FLOCK, &flock, mode, &flags, NULL,
-                              ldlm_flock_completion_ast, NULL,
-                              file_lock, NULL, 0, NULL, &lockh, 0);
+        rc = ldlm_cli_enqueue(llu_i2mdcexp(ino), NULL, &einfo, &res_id, 
+                              &flock, &flags, NULL, 0, NULL, &lockh, 0);
         RETURN(rc);
 }
 
@@ -1691,6 +1691,9 @@ static int llu_lov_setstripe_ea_info(struct inode *ino, int flags,
         struct llu_inode_info *lli2 = NULL;
         struct lov_stripe_md *lsm;
         struct lookup_intent oit = {.it_op = IT_OPEN, .it_flags = flags};
+        struct ldlm_enqueue_info einfo = { LDLM_IBITS, LCK_CR,
+                llu_md_blocking_ast, ldlm_completion_ast, NULL, NULL };
+
         struct ptlrpc_request *req = NULL;
         struct lustre_md md;
         struct md_op_data data;
@@ -1720,9 +1723,8 @@ static int llu_lov_setstripe_ea_info(struct inode *ino, int flags,
         llu_prep_md_op_data(&data, NULL, ino, NULL, 0, O_RDWR, 
                             LUSTRE_OPC_ANY);
 
-        rc = md_enqueue(sbi->ll_md_exp, LDLM_IBITS, &oit, LCK_CR, &data,
-                        &lockh, lum, lum_size, ldlm_completion_ast,
-                        llu_md_blocking_ast, NULL, LDLM_FL_INTENT_ONLY);
+        rc = md_enqueue(sbi->ll_md_exp, &einfo, &oit, &data,
+                        &lockh, lum, lum_size, LDLM_FL_INTENT_ONLY);
         if (rc)
                 GOTO(out, rc);
 
