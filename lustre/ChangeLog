@@ -32,6 +32,11 @@ Description: Remove client patches from SLES 10 kernel.
 Details    : This causes SLES 10 clients to behave as patchless clients
              even on a Lustre-patched (server) kernel.
 
+Severity   : minor
+Bugzilla   : 2369 
+Description: use i_size_read and i_size_write in 2.6 port
+Details    : replace inode->i_size access with i_size_read/write()
+
 --------------------------------------------------------------------------------
 
 2007-09-27         Cluster File Systems, Inc. <info@clusterfs.com>

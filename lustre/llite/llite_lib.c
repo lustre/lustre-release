@@ -1696,7 +1696,7 @@ void ll_update_inode(struct inode *inode, struct lustre_md *md)
                 inode->i_rdev = old_decode_dev(body->rdev);
 #endif
         if (body->valid & OBD_MD_FLSIZE)
-                inode->i_size = body->size;
+                i_size_write(inode, body->size);
         if (body->valid & OBD_MD_FLBLOCKS)
                 inode->i_blocks = body->blocks;
 

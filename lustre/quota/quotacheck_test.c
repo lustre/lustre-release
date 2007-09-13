@@ -86,7 +86,7 @@ static void print_inode(struct inode *inode)
                 size = inode_get_bytes(inode);
 
          CERROR("%lu: uid: %u, size: %llu, blocks: %llu, real size: %llu\n",
-               inode->i_ino, inode->i_uid, inode->i_size,
+               inode->i_ino, inode->i_uid, i_size_read(inode),
                (long long)inode->i_blocks, size);
 }
 

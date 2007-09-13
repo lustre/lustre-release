@@ -420,10 +420,10 @@ struct page *ll_nopage(struct vm_area_struct *vma, unsigned long address,
                  * the kms size is _correct_, it is only the _minimum_ size.
                  * If someone does a stat they will get the correct size which
                  * will always be >= the kms value here.  b=11081 */
-                if (inode->i_size < kms) {
-                        inode->i_size = kms;
+                if (i_size_read(inode) < kms) {
+                        i_size_write(inode, kms);
 			 CDEBUG(D_INODE, "ino=%lu, updating i_size %llu\n",
-                               inode->i_ino, inode->i_size);
+                               inode->i_ino, i_size_read(inode));
                 }
                 lov_stripe_unlock(lsm);
         }
@@ -435,8 +435,8 @@ struct page *ll_nopage(struct vm_area_struct *vma, unsigned long address,
         lov_stripe_lock(lsm);
         if (mode == LCK_PW)
                 obd_adjust_kms(ll_i2obdexp(inode), lsm,
-                               min_t(loff_t, policy.l_extent.end,inode->i_size),
-                               0);
+                               min_t(loff_t, policy.l_extent.end,
+                               i_size_read(inode)), 0);
         lov_stripe_unlock(lsm);
 
         /* disable VM_SEQ_READ and use VM_RAND_READ to make sure that

@@ -105,7 +105,7 @@ static int ll_dir_readpage(struct file *file, struct page *page)
                 /* swabbed by mdc_readpage() */
                 LASSERT_REPSWABBED(request, REPLY_REC_OFF);
 
-                inode->i_size = body->size;
+                i_size_write(inode, body->size);
                 SetPageUptodate(page);
         }
         ptlrpc_req_finished(request);
@@ -174,15 +174,15 @@ static void ll_dir_check_page(struct inode *dir, struct page *page)
         struct ll_dir_entry *ent;
 
         err = 0;
-        if ((dir->i_size >> CFS_PAGE_SHIFT) == (__u64)page->index) {
+        if ((i_size_read(dir) >> CFS_PAGE_SHIFT) == (__u64)page->index) {
                 /*
                  * Last page.
                  */
-                limit = dir->i_size & ~CFS_PAGE_MASK;
+                limit = i_size_read(dir) & ~CFS_PAGE_MASK;
                 if (limit & (size - 1)) {
                         CERROR("%s: dir %lu/%u size %llu doesn't match %u\n",
                                ll_i2mdcexp(dir)->exp_obd->obd_name, dir->i_ino,
-                               dir->i_generation, dir->i_size, size);
+                               dir->i_generation, i_size_read(dir), size);
                         err++;
                 } else {
                         /*
@@ -372,13 +372,14 @@ int ll_readdir(struct file *filp, void *dirent, filldir_t filldir)
         ENTRY;
 
         CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu/%u(%p) pos %llu/%llu\n",
-               inode->i_ino, inode->i_generation, inode, pos, inode->i_size);
+               inode->i_ino, inode->i_generation, inode,
+               pos, i_size_read(inode));
 
         /*
          * Checking ->i_size without the lock. Should be harmless, as server
          * re-checks.
          */
-        if (pos > inode->i_size - ll_dir_rec_len(1))
+        if (pos > i_size_read(inode) - ll_dir_rec_len(1))
                 RETURN(0);
 
         for (done = 0; idx < npages; idx++, offset = 0) {
@@ -394,7 +395,7 @@ int ll_readdir(struct file *filp, void *dirent, filldir_t filldir)
                 CDEBUG(D_EXT2,"read %lu of dir %lu/%u page %lu/%lu "
                        "size %llu\n",
                        CFS_PAGE_SIZE, inode->i_ino, inode->i_generation,
-                       idx, npages, inode->i_size);
+                       idx, npages, i_size_read(inode));
                 page = ll_get_dir_page(inode, idx);
 
                 /* size might have been updated by mdc_readpage */

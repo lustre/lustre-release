@@ -320,15 +320,15 @@ static int filter_preprw_read(int cmd, struct obd_export *exp, struct obdo *oa,
                  */
                 LASSERT(lnb->page != NULL);
 
-                if (inode->i_size <= rnb->offset)
+                if (i_size_read(inode) <= rnb->offset)
                         /* If there's no more data, abort early.  lnb->rc == 0,
                          * so it's easy to detect later. */
                         break;
                 else
                         filter_alloc_dio_page(obd, inode, lnb);
 
-                if (inode->i_size < lnb->offset + lnb->len - 1)
-                        lnb->rc = inode->i_size - lnb->offset;
+                if (i_size_read(inode) < lnb->offset + lnb->len - 1)
+                        lnb->rc = i_size_read(inode) - lnb->offset;
                 else
                         lnb->rc = lnb->len;
 
@@ -631,13 +631,13 @@ static int filter_preprw_write(int cmd, struct obd_export *exp, struct obdo *oa,
                 if (lnb->len != CFS_PAGE_SIZE) {
                         __s64 maxidx;
 
-                        maxidx = ((dentry->d_inode->i_size + CFS_PAGE_SIZE - 1) >>
-                                 CFS_PAGE_SHIFT) - 1;
+                        maxidx = ((i_size_read(dentry->d_inode) +
+                                   CFS_PAGE_SIZE - 1) >> CFS_PAGE_SHIFT) - 1;
                         if (maxidx >= lnb->page->index) {
                                 LL_CDEBUG_PAGE(D_PAGE, lnb->page, "write %u @ "
                                                LPU64" flg %x before EOF %llu\n",
                                                lnb->len, lnb->offset,lnb->flags,
-                                               dentry->d_inode->i_size);
+                                               i_size_read(dentry->d_inode));
                                 filter_iobuf_add_page(exp->exp_obd, iobuf,
                                                       dentry->d_inode,
                                                       lnb->page);
@@ -713,7 +713,7 @@ void filter_release_read_page(struct filter_obd *filter, struct inode *inode,
         int drop = 0;
 
         if (inode != NULL &&
-            (inode->i_size > filter->fo_readcache_max_filesize))
+            (i_size_read(inode) > filter->fo_readcache_max_filesize))
                 drop = 1;
 
         /* drop from cache like truncate_list_pages() */

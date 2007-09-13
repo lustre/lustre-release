@@ -78,7 +78,7 @@ void mds_pack_inode2body(struct mds_body *b, struct inode *inode)
         b->mtime = LTIME_S(inode->i_mtime);
         b->ctime = LTIME_S(inode->i_ctime);
         b->mode = inode->i_mode;
-        b->size = inode->i_size;
+        b->size = i_size_read(inode);
         b->blocks = inode->i_blocks;
         b->uid = inode->i_uid;
         b->gid = inode->i_gid;

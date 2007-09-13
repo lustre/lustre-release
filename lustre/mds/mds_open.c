@@ -432,10 +432,10 @@ static int mds_create_objects(struct ptlrpc_request *req, int offset,
                 }
                 oinfo.oi_md->lsm_object_id = oinfo.oi_oa->o_id;
         }
-        if (inode->i_size) {
-                oinfo.oi_oa->o_size = inode->i_size;
-                obdo_from_inode(oinfo.oi_oa, inode, OBD_MD_FLTYPE | 
-                                OBD_MD_FLATIME | OBD_MD_FLMTIME | 
+        if (i_size_read(inode)) {
+                oinfo.oi_oa->o_size = i_size_read(inode);
+                obdo_from_inode(oinfo.oi_oa, inode, OBD_MD_FLTYPE |
+                                OBD_MD_FLATIME | OBD_MD_FLMTIME |
                                 OBD_MD_FLCTIME | OBD_MD_FLSIZE);
 
                 /* pack lustre id to OST */

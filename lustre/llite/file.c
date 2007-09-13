@@ -652,7 +652,7 @@ void ll_pgcache_remove_extent(struct inode *inode, struct lov_stripe_md *lsm,
         memcpy(&tmpex, &lock->l_policy_data, sizeof(tmpex));
         CDEBUG(D_INODE|D_PAGE, "inode %lu(%p) ["LPU64"->"LPU64"] size: %llu\n",
                inode->i_ino, inode, tmpex.l_extent.start, tmpex.l_extent.end,
-               inode->i_size);
+               i_size_read(inode));
 
         /* our locks are page granular thanks to osc_enqueue, we invalidate the
          * whole page. */
@@ -676,7 +676,7 @@ void ll_pgcache_remove_extent(struct inode *inode, struct lov_stripe_md *lsm,
         if (end < tmpex.l_extent.end >> CFS_PAGE_SHIFT)
                 end = ~0;
 
-        i = inode->i_size ? (inode->i_size - 1) >> CFS_PAGE_SHIFT : 0;
+        i = i_size_read(inode) ? (i_size_read(inode) - 1) >> CFS_PAGE_SHIFT : 0;
         if (i < end)
                 end = i;
 
@@ -934,7 +934,7 @@ static int ll_glimpse_callback(struct ldlm_lock *lock, void *reqp)
 
         LDLM_DEBUG(lock, "i_size: %llu -> stripe number %u -> kms "LPU64
                    " atime "LPU64", mtime "LPU64", ctime "LPU64,
-                   inode->i_size, stripe, lvb->lvb_size, lvb->lvb_mtime,
+                   i_size_read(inode), stripe, lvb->lvb_size, lvb->lvb_mtime,
                    lvb->lvb_atime, lvb->lvb_ctime);
  iput:
         iput(inode);
@@ -1044,7 +1044,7 @@ int ll_glimpse_size(struct inode *inode, int ast_flags)
         ll_inode_size_lock(inode, 1);
         inode_init_lvb(inode, &lvb);
         rc = obd_merge_lvb(sbi->ll_osc_exp, lli->lli_smd, &lvb, 0);
-        inode->i_size = lvb.lvb_size;
+        i_size_write(inode, lvb.lvb_size);
         inode->i_blocks = lvb.lvb_blocks;
         LTIME_S(inode->i_mtime) = lvb.lvb_mtime;
         LTIME_S(inode->i_atime) = lvb.lvb_atime;
@@ -1052,7 +1052,7 @@ int ll_glimpse_size(struct inode *inode, int ast_flags)
         ll_inode_size_unlock(inode, 1);
 
         CDEBUG(D_DLMTRACE, "glimpse: size: %llu, blocks: %llu\n",
-               inode->i_size, (long long)inode->i_blocks);
+               i_size_read(inode), (long long)inode->i_blocks);
 
         RETURN(rc);
 }
@@ -1117,9 +1117,9 @@ int ll_extent_lock(struct ll_file_data *fd, struct inode *inode,
                  * cancel the result of the truncate.  Getting the
                  * ll_inode_size_lock() after the enqueue maintains the DLM
                  * -> ll_inode_size_lock() acquiring order. */
-                inode->i_size = lvb.lvb_size;
+                i_size_write(inode, lvb.lvb_size);
                 CDEBUG(D_INODE, "inode=%lu, updating i_size %llu\n",
-                       inode->i_ino, inode->i_size);
+                       inode->i_ino, i_size_read(inode));
         }
 
         if (rc == 0) {
@@ -1272,11 +1272,11 @@ static ssize_t ll_file_read(struct file *file, char *buf, size_t count,
                  * unguarded */
 
                 /* Read beyond end of file */
-                if (*ppos >= inode->i_size)
+                if (*ppos >= i_size_read(inode))
                         RETURN(0);
 
-                if (count > inode->i_size - *ppos)
-                        count = inode->i_size - *ppos;
+                if (count > i_size_read(inode) - *ppos)
+                        count = i_size_read(inode) - *ppos;
                 /* Make sure to correctly adjust the file pos pointer for
                  * EFAULT case */
                 notzeroed = clear_user(buf, count);
@@ -1348,14 +1348,14 @@ repeat:
                  * the kms size is _correct_, it is only the _minimum_ size.
                  * If someone does a stat they will get the correct size which
                  * will always be >= the kms value here.  b=11081 */
-                if (inode->i_size < kms)
-                        inode->i_size = kms;
+                if (i_size_read(inode) < kms)
+                        i_size_write(inode, kms);
                 ll_inode_size_unlock(inode, 1);
         }
 
         chunk = end - *ppos + 1;
         CDEBUG(D_INODE,"Read ino %lu, "LPSZ" bytes, offset %lld, i_size %llu\n",
-               inode->i_ino, chunk, *ppos, inode->i_size);
+               inode->i_ino, chunk, *ppos, i_size_read(inode));
 
         /* turn off the kernel's read-ahead */
         if (tree_locked) {
@@ -1467,7 +1467,7 @@ repeat:
          * The i_size value gets updated in ll_extent_lock() as a consequence
          * of the [0,EOF] extent lock we requested above. */
         if (file->f_flags & O_APPEND) {
-                *ppos = inode->i_size;
+                *ppos = i_size_read(inode);
                 end = *ppos + count - 1;
         }
 
@@ -1587,12 +1587,12 @@ static ssize_t ll_file_sendfile(struct file *in_file, loff_t *ppos,size_t count,
                         goto out;
         } else {
                 /* region is within kms and, hence, within real file size (A) */
-                inode->i_size = kms;
+                i_size_write(inode, kms);
                 ll_inode_size_unlock(inode, 1);
         }
 
         CDEBUG(D_INFO, "Send ino %lu, "LPSZ" bytes, offset %lld, i_size %llu\n",
-               inode->i_ino, count, *ppos, inode->i_size);
+               inode->i_ino, count, *ppos, i_size_read(inode));
 
         bead.lrr_start = *ppos >> CFS_PAGE_SHIFT;
         bead.lrr_count = (count + CFS_PAGE_SIZE - 1) >> CFS_PAGE_SHIFT;
@@ -1956,8 +1956,8 @@ static int join_sanity_check(struct inode *head, struct inode *tail)
                 CERROR("file %lu can not be joined to itself \n", head->i_ino);
                 RETURN(-EINVAL);
         }
-        if (head->i_size % JOIN_FILE_ALIGN) {
-                CERROR("hsize %llu must be times of 64K\n", head->i_size);
+        if (i_size_read(head) % JOIN_FILE_ALIGN) {
+                CERROR("hsize %llu must be times of 64K\n", i_size_read(head));
                 RETURN(-EINVAL);
         }
         RETURN(0);
@@ -1966,7 +1966,6 @@ static int join_sanity_check(struct inode *head, struct inode *tail)
 static int join_file(struct inode *head_inode, struct file *head_filp,
                      struct file *tail_filp)
 {
-        struct inode *tail_inode, *tail_parent;
         struct dentry *tail_dentry = tail_filp->f_dentry;
         struct lookup_intent oit = {.it_op = IT_OPEN,
                                    .it_flags = head_filp->f_flags|O_JOIN_FILE};
@@ -1976,21 +1975,22 @@ static int join_file(struct inode *head_inode, struct file *head_filp,
         struct lustre_handle lockh;
         struct mdc_op_data *op_data;
         int    rc;
+        loff_t data;
         ENTRY;
 
         tail_dentry = tail_filp->f_dentry;
-        tail_inode = tail_dentry->d_inode;
-        tail_parent = tail_dentry->d_parent->d_inode;
 
         OBD_ALLOC_PTR(op_data);
         if (op_data == NULL) {
                 RETURN(-ENOMEM);
         }
 
-        ll_prepare_mdc_op_data(op_data, head_inode, tail_parent,
+        data = i_size_read(head_inode);
+        ll_prepare_mdc_op_data(op_data, head_inode,
+                               tail_dentry->d_parent->d_inode,
                                tail_dentry->d_name.name,
-                               tail_dentry->d_name.len, 0, &head_inode->i_size);
-        rc = mdc_enqueue(ll_i2mdcexp(head_inode), &einfo, &oit, 
+                               tail_dentry->d_name.len, 0, &data);
+        rc = mdc_enqueue(ll_i2mdcexp(head_inode), &einfo, &oit,
                          op_data, &lockh, NULL, 0, 0);
 
         if (rc < 0)
@@ -2249,13 +2249,13 @@ loff_t ll_file_seek(struct file *file, loff_t offset, int origin)
         struct lov_stripe_md *lsm = lli->lli_smd;
         loff_t retval;
         ENTRY;
-        retval = offset + ((origin == 2) ? inode->i_size :
+        retval = offset + ((origin == 2) ? i_size_read(inode) :
                            (origin == 1) ? file->f_pos : 0);
         CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu/%u(%p), to=%Lu=%#Lx(%s)\n",
                inode->i_ino, inode->i_generation, inode, retval, retval,
                origin == 2 ? "SEEK_END": origin == 1 ? "SEEK_CUR" : "SEEK_SET");
         ll_stats_ops_tally(ll_i2sbi(inode), LPROC_LL_LLSEEK, 1);
-        
+
         if (origin == 2) { /* SEEK_END */
                 int nonblock = 0, rc;
 
@@ -2269,7 +2269,7 @@ loff_t ll_file_seek(struct file *file, loff_t offset, int origin)
                 }
 
                 ll_inode_size_lock(inode, 0);
-                offset += inode->i_size;
+                offset += i_size_read(inode);
                 ll_inode_size_unlock(inode, 0);
         } else if (origin == 1) { /* SEEK_CUR */
                 offset += file->f_pos;
@@ -2621,7 +2621,7 @@ int ll_getattr_it(struct vfsmount *mnt, struct dentry *de,
 #endif
 
         ll_inode_size_lock(inode, 0);
-        stat->size = inode->i_size;
+        stat->size = i_size_read(inode);
         stat->blocks = inode->i_blocks;
         ll_inode_size_unlock(inode, 0);
 

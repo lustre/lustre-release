@@ -530,7 +530,8 @@ static int fsfilt_ext3_setattr(struct dentry *dentry, void *handle,
         if (iattr->ia_valid & ATTR_SIZE && !do_trunc) {
                 /* ATTR_SIZE would invoke truncate: clear it */
                 iattr->ia_valid &= ~ATTR_SIZE;
-                EXT3_I(inode)->i_disksize = inode->i_size = iattr->ia_size;
+                EXT3_I(inode)->i_disksize = iattr->ia_size;
+                i_size_write(inode, iattr->ia_size);
 
                 if (iattr->ia_valid & ATTR_UID)
                         inode->i_uid = iattr->ia_uid;
@@ -699,7 +700,7 @@ static ssize_t fsfilt_ext3_readpage(struct file *file, char *buf, size_t count,
                         struct buffer_head *bh;
 
                         bh = NULL;
-                        if (*off < inode->i_size) {
+                        if (*off < i_size_read(inode)) {
                                 int err = 0;
 
                                 bh = ext3_bread(NULL, inode, *off >> blkbits,
@@ -1251,12 +1252,12 @@ static int fsfilt_ext3_read_record(struct file * file, void *buf,
 
         /* prevent reading after eof */
         lock_kernel();
-        if (inode->i_size < *offs + size) {
-                size = inode->i_size - *offs;
+        if (i_size_read(inode) < *offs + size) {
+                size = i_size_read(inode) - *offs;
                 unlock_kernel();
                 if (size < 0) {
                         CERROR("size %llu is too short for read %u@%llu\n",
-                               inode->i_size, size, *offs);
+                               i_size_read(inode), size, *offs);
                         return -EIO;
                 } else if (size == 0) {
                         return 0;
@@ -1293,8 +1294,8 @@ static int fsfilt_ext3_write_record(struct file *file, void *buf, int bufsize,
         struct buffer_head *bh = NULL;
         unsigned long block;
         struct inode *inode = file->f_dentry->d_inode;
-        loff_t old_size = inode->i_size, offset = *offs;
-        loff_t new_size = inode->i_size;
+        loff_t old_size = i_size_read(inode), offset = *offs;
+        loff_t new_size = i_size_read(inode);
         handle_t *handle;
         int err = 0, block_count = 0, blocksize, size, boffs;
 
@@ -1354,13 +1355,13 @@ out:
                 brelse(bh);
 
         /* correct in-core and on-disk sizes */
-        if (new_size > inode->i_size) {
+        if (new_size > i_size_read(inode)) {
                 lock_kernel();
-                if (new_size > inode->i_size)
-                        inode->i_size = new_size;
-                if (inode->i_size > EXT3_I(inode)->i_disksize)
-                        EXT3_I(inode)->i_disksize = inode->i_size;
-                if (inode->i_size > old_size)
+                if (new_size > i_size_read(inode))
+                        i_size_write(inode, new_size);
+                if (i_size_read(inode) > EXT3_I(inode)->i_disksize)
+                        EXT3_I(inode)->i_disksize = i_size_read(inode);
+                if (i_size_read(inode) > old_size)
                         mark_inode_dirty(inode);
                 unlock_kernel();
         }
