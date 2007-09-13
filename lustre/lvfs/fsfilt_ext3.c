@@ -972,7 +972,7 @@ static unsigned long new_blocks(handle_t *handle, struct ext3_ext_base *base,
 static int ext3_ext_new_extent_cb(struct ext3_ext_base *base,
                                   struct ext3_ext_path *path,
                                   struct ext3_ext_cache *cex,
-                                  struct ext3_extents *ex,
+                                  struct ext3_extent *ex,
                                   void *cbdata)
 {
         struct bpointers *bp = cbdata;
