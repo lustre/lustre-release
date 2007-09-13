@@ -152,7 +152,7 @@ static cfs_sysctl_table_t lnet_table[] = {
                 .procname = "panic_on_lbug",
                 .data     = &libcfs_panic_on_lbug,
                 .maxlen   = sizeof(int),
-                .mode     = 0444,
+                .mode     = 0644,
                 .proc_handler = &proc_dointvec
         },
         {0}
