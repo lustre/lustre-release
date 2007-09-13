@@ -37,6 +37,13 @@ Bugzilla   : 2369
 Description: use i_size_read and i_size_write in 2.6 port
 Details    : replace inode->i_size access with i_size_read/write()
 
+Severity   : normal
+Bugzilla   : 13600
+Description: "lfs find -obd UUID" prints directories
+Details    : "lfs find -obd UUID" will return all directory names instead
+             of just file names. It is incorrect because the directories
+             do not reside on the OSTs.
+
 --------------------------------------------------------------------------------
 
 2007-09-27         Cluster File Systems, Inc. <info@clusterfs.com>

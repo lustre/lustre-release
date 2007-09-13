@@ -133,7 +133,6 @@ int llapi_file_open(const char *name, int flags, int mode,
                 if (errno != EEXIST && errno != EALREADY)
                         errmsg = strerror(errno);
 
-                rc = -errno;
                 fprintf(stderr, "error on ioctl "LPX64" for '%s' (%d): %s\n",
                         (__u64)LL_IOC_LOV_SETSTRIPE, name, fd, errmsg);
         }
@@ -784,10 +783,12 @@ static int cb_find_init(char *path, DIR *parent, DIR *dir, void *data)
                 decision = -1;
 
         /* If a OST UUID is given, and some OST matches, check it here. */
-        if (decision != -1 && param->obdindex != OBD_NOT_FOUND &&
-            S_ISREG(st->st_mode)) {
-                /* Only those files should be accepted, which have a strip on
-                 * the specified OST. */
+        if (decision != -1 && param->obdindex != OBD_NOT_FOUND) {
+                if (!S_ISREG(st->st_mode))
+                        goto decided;
+
+                /* Only those files should be accepted, which have a
+                 * stripe on the specified OST. */
                 if (!param->lmd->lmd_lmm.lmm_stripe_count) {
                         decision = -1;
                 } else {
@@ -846,6 +847,7 @@ static int cb_find_init(char *path, DIR *parent, DIR *dir, void *data)
                         printf("\n");
         }
 
+decided:
         /* Do not get down anymore? */
         if (param->depth == param->maxdepth)
                 return 1;
