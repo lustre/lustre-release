@@ -2467,6 +2467,7 @@ test_56h() {
 run_test 56h "check lfs find ! -name ============================="
 
 test_56i() {
+       tdir=${tdir}i
        mkdir -p $DIR/$tdir
        UUID=`$GETSTRIPE $DIR/$tdir | awk '/0: / { print $2 }'`
        OUT="`$LFIND -ost $UUID $DIR/$tdir`"
