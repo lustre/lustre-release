@@ -236,6 +236,14 @@ Bugzilla   : 13532
 Description: rewrite ext2-derived code in obdclass/uuid.c
 Details    : rewrite inherited code (uuid parsing code from ext2 utils)
 	     from scratch preserving functionality.
+
+Severity   : normal
+Bugzilla   : 13600
+Description: "lfs find -obd UUID" prints directories
+Details    : "lfs find -obd UUID" will return all directory names instead
+             of just file names. It is incorrect because the directories
+             do not reside on the OSTs.
+
 --------------------------------------------------------------------------------
 
 2007-08-10         Cluster File Systems, Inc. <info@clusterfs.com>

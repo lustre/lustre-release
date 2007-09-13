@@ -2466,6 +2466,14 @@ test_56h() {
 }
 run_test 56h "check lfs find ! -name ============================="
 
+test_56i() {
+       mkdir -p $DIR/$tdir
+       UUID=`$GETSTRIPE $DIR/$tdir | awk '/0: / { print $2 }'`
+       OUT="`$LFIND -ost $UUID $DIR/$tdir`"
+       [ "$OUT" ] && error "$LFIND returned directory '$OUT'" || true
+}
+run_test 56i "check 'lfs find -ost UUID' skips directories ======="
+
 test_57a() {
 	# note test will not do anything if MDS is not local
 	remote_mds && skip "remote MDS" && return
