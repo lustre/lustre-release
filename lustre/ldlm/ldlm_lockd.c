@@ -567,6 +567,7 @@ int ldlm_server_blocking_ast(struct ldlm_lock *lock,
         req->rq_async_args.pointer_arg[0] = arg;
         req->rq_async_args.pointer_arg[1] = lock;
         req->rq_interpret_reply = ldlm_cb_interpret;
+        req->rq_no_resend = 1;
 
         lock_res(lock->l_resource);
         if (lock->l_granted_mode != lock->l_req_mode) {
@@ -668,6 +669,7 @@ int ldlm_server_completion_ast(struct ldlm_lock *lock, int flags, void *data)
         req->rq_async_args.pointer_arg[0] = arg;
         req->rq_async_args.pointer_arg[1] = lock;
         req->rq_interpret_reply = ldlm_cb_interpret;
+        req->rq_no_resend = 1;
 
         body = lustre_msg_buf(req->rq_reqmsg, DLM_LOCKREQ_OFF, sizeof(*body));
         body->lock_handle[0] = lock->l_remote_handle;

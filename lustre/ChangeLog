@@ -44,6 +44,11 @@ Details    : "lfs find -obd UUID" will return all directory names instead
              of just file names. It is incorrect because the directories
              do not reside on the OSTs.
 
+Severity   : normal
+Bugzilla   : 13596
+Description: MDS hang after unclean shutdown of lots of clients
+Details    : Never resend AST requests.
+
 --------------------------------------------------------------------------------
 
 2007-09-27         Cluster File Systems, Inc. <info@clusterfs.com>
