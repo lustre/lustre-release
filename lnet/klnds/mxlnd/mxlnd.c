@@ -446,7 +446,7 @@ mxlnd_parse_hosts(char *filename)
                 return -1;
         }
 
-        size = (s32) filp->f_dentry->d_inode->i_size;
+        size = (s32) cfs_filp_size(filp);
         if (size < MXLND_BUFSIZE) bufsize = size;
         allocd = bufsize;
         MXLND_ALLOC(buf, allocd + 1);
