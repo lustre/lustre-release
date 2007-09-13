@@ -174,7 +174,7 @@ typedef struct {
 /* Controlled via configure key */
 /* #define CDEBUG_ENABLED */
 
-#ifdef __KERNEL__
+#if defined(__KERNEL__) || (defined(__arch_lib__) && !defined(LUSTRE_UTILS))
 
 #ifdef CDEBUG_ENABLED
 #define __CDEBUG(cdls, mask, format, a...)                              \
@@ -203,20 +203,6 @@ do {                                            \
 #define CDEBUG_LIMIT(mask, format, a...) (void)(0)
 #warning "CDEBUG IS DISABLED. THIS SHOULD NEVER BE DONE FOR PRODUCTION!"
 #endif
-
-#elif defined(__arch_lib__) && !defined(LUSTRE_UTILS)
-
-#define CDEBUG(mask, format, a...)                                      \
-do {                                                                    \
-        if (((mask) & D_CANTMASK) != 0 ||                               \
-            ((libcfs_debug & (mask)) != 0 &&                            \
-             (libcfs_subsystem_debug & DEBUG_SUBSYSTEM) != 0))          \
-                libcfs_debug_msg(NULL, DEBUG_SUBSYSTEM, mask,           \
-                                 __FILE__, __FUNCTION__, __LINE__,      \
-                                 format, ## a);                         \
-} while (0)
-
-#define CDEBUG_LIMIT CDEBUG
 
 #else
 
