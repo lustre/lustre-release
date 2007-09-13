@@ -1174,7 +1174,7 @@ int ll_md_setattr(struct inode *inode, struct md_op_data *op_data)
         /* Extract epoch data if obtained. */
         memcpy(&op_data->op_handle, &md.body->handle, sizeof(op_data->op_handle));
         op_data->op_ioepoch = md.body->ioepoch;
-        
+
         ll_update_inode(inode, &md);
         ptlrpc_req_finished(request);
 
@@ -1296,7 +1296,7 @@ int ll_setattr_raw(struct inode *inode, struct iattr *attr)
                 RETURN(-ENOMEM);
         
         memcpy(&op_data->op_attr, attr, sizeof(*attr));
-        
+
         /* Open epoch for truncate. */
         if (ia_valid & ATTR_SIZE)
                 op_data->op_flags = MF_EPOCH_OPEN;
@@ -1304,7 +1304,7 @@ int ll_setattr_raw(struct inode *inode, struct iattr *attr)
         rc = ll_md_setattr(inode, op_data);
         if (rc)
                 GOTO(out, rc);
-        
+
         if (op_data->op_ioepoch)
                 CDEBUG(D_INODE, "Epoch "LPU64" opened on "DFID" for "
                        "truncate\n", op_data->op_ioepoch, PFID(&lli->lli_fid));
@@ -1668,11 +1668,11 @@ void ll_update_inode(struct inode *inode, struct lustre_md *md)
                                 "do not trust the size got from MDS\n", 
                                 inode->i_ino, lli->lli_flags);
                         else {
-                                inode->i_size = body->size;
+                                i_size_write(inode, body->size);
                                 lli->lli_flags |= LLIF_MDS_SIZE_LOCK;
                         }
                 } else {
-                        inode->i_size = body->size;
+                        i_size_write(inode, body->size);
                 }
 
                 if (body->valid & OBD_MD_FLBLOCKS)

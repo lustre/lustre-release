@@ -108,7 +108,7 @@ static int mds_sendpage(struct ptlrpc_request *req, struct file *file,
                 tmpsize = tmpcount > CFS_PAGE_SIZE ? CFS_PAGE_SIZE : tmpcount;
                 CDEBUG(D_EXT2, "reading %u@%llu from dir %lu (size %llu)\n",
                        tmpsize, offset, file->f_dentry->d_inode->i_ino,
-                       file->f_dentry->d_inode->i_size);
+                       i_size_read(file->f_dentry->d_inode));
 
                 rc = fsfilt_readpage(req->rq_export->exp_obd, file,
                                      kmap(pages[i]), tmpsize, &offset);
@@ -797,13 +797,14 @@ static int mds_getattr_pack_msg(struct ptlrpc_request *req, struct inode *inode,
                 }
                 bufcount++;
         } else if (S_ISLNK(inode->i_mode) && (body->valid & OBD_MD_LINKNAME)) {
-                if (inode->i_size + 1 != body->eadatasize)
+                if (i_size_read(inode) + 1 != body->eadatasize)
                         CERROR("symlink size: %Lu, reply space: %d\n",
-                               inode->i_size + 1, body->eadatasize);
-                size[bufcount] = min_t(int, inode->i_size+1, body->eadatasize);
+                               i_size_read(inode) + 1, body->eadatasize);
+                size[bufcount] = min_t(int, i_size_read(inode) + 1,
+                                       body->eadatasize);
                 bufcount++;
                 CDEBUG(D_INODE, "symlink size: %Lu, reply space: %d\n",
-                       inode->i_size + 1, body->eadatasize);
+                       i_size_read(inode) + 1, body->eadatasize);
         }
 
 #ifdef CONFIG_FS_POSIX_ACL
@@ -1225,7 +1226,7 @@ static int mds_readpage(struct ptlrpc_request *req, int offset)
 
         repbody = lustre_msg_buf(req->rq_repmsg, REPLY_REC_OFF,
                                  sizeof(*repbody));
-        repbody->size = file->f_dentry->d_inode->i_size;
+        repbody->size = i_size_read(file->f_dentry->d_inode);
         repbody->valid = OBD_MD_FLSIZE;
 
         /* to make this asynchronous make sure that the handling function

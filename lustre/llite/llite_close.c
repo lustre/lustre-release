@@ -33,7 +33,7 @@
 void llap_write_pending(struct inode *inode, struct ll_async_page *llap)
 {
         struct ll_inode_info *lli = ll_i2info(inode);
-        
+
         ENTRY;
         spin_lock(&lli->lli_lock);
         lli->lli_flags |= LLIF_SOM_DIRTY;
@@ -199,7 +199,7 @@ int ll_sizeonmds_update(struct inode *inode, struct lustre_handle *fh,
                 CWARN("ino %lu/%u(flags %lu) som valid it just after "
                       "recovery\n", inode->i_ino, inode->i_generation,
                       lli->lli_flags);
-        
+
         OBDO_ALLOC(oa);
         OBD_ALLOC_PTR(op_data);
         if (!oa || !op_data) {
@@ -214,13 +214,13 @@ int ll_sizeonmds_update(struct inode *inode, struct lustre_handle *fh,
                 GOTO(out, rc);
         }
         CDEBUG(D_INODE, "Size-on-MDS update on "DFID"\n", PFID(&lli->lli_fid));
-        
+
         md_from_obdo(op_data, oa, oa->o_valid);
         memcpy(&op_data->op_handle, fh, sizeof(*fh));
-        
+
         op_data->op_ioepoch = ioepoch;
         op_data->op_flags |= MF_SOM_CHANGE;
-        
+
         rc = ll_md_setattr(inode, op_data);
         EXIT;
 out:

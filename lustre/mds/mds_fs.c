@@ -256,7 +256,7 @@ static int mds_init_server_data(struct obd_device *obd, struct file *file)
         struct lr_server_data *lsd;
         struct mds_client_data *mcd = NULL;
         loff_t off = 0;
-        unsigned long last_rcvd_size = file->f_dentry->d_inode->i_size;
+        unsigned long last_rcvd_size = i_size_read(file->f_dentry->d_inode);
         __u64 mount_count;
         int cl_idx, rc = 0;
         ENTRY;

@@ -86,7 +86,8 @@ static void print_inode(struct inode *inode)
                 size = inode_get_bytes(inode);
 
          CERROR("%lu: uid: %u, size: %llu, blocks: %lu, real size: %llu\n",
-               inode->i_ino, inode->i_uid, inode->i_size, inode->i_blocks, size);
+                inode->i_ino, inode->i_uid, i_size_read(inode),
+                inode->i_blocks, size);
 }
 
 /* Test quotaon */

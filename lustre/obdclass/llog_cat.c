@@ -507,7 +507,7 @@ int llog_cat_init(struct llog_handle *cathandle, struct obd_uuid *tgtuuid)
         down(&cathandle->lgh_lock);
         llh = cathandle->lgh_hdr;
 
-        if (cathandle->lgh_file->f_dentry->d_inode->i_size == 0) {
+        if (i_size_read(cathandle->lgh_file->f_dentry->d_inode) == 0) {
                 llog_write_rec(cathandle, &llh->llh_hdr, NULL, 0, NULL, 0);
 
 write_hdr:

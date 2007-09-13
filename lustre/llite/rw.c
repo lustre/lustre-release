@@ -73,8 +73,8 @@ static int ll_brw(int cmd, struct inode *inode, struct obdo *oa,
         pg.pg = page;
         pg.off = ((obd_off)page->index) << CFS_PAGE_SHIFT;
 
-        if ((cmd & OBD_BRW_WRITE) && (pg.off + CFS_PAGE_SIZE > inode->i_size))
-                pg.count = inode->i_size % CFS_PAGE_SIZE;
+        if ((cmd & OBD_BRW_WRITE) && (pg.off+CFS_PAGE_SIZE>i_size_read(inode)))
+                pg.count = i_size_read(inode) % CFS_PAGE_SIZE;
         else
                 pg.count = CFS_PAGE_SIZE;
 
@@ -83,9 +83,9 @@ static int ll_brw(int cmd, struct inode *inode, struct obdo *oa,
                        inode->i_ino, pg.off, pg.off);
         if (pg.count == 0) {
                 CERROR("ZERO COUNT: ino %lu: size %p:%Lu(%p:%Lu) idx %lu off "
-                       LPU64"\n",
-                       inode->i_ino, inode, inode->i_size, page->mapping->host,
-                       page->mapping->host->i_size, page->index, pg.off);
+                       LPU64"\n", inode->i_ino, inode, i_size_read(inode),
+                       page->mapping->host, i_size_read(page->mapping->host),
+                       page->index, pg.off);
         }
 
         pg.flag = flags;
@@ -125,7 +125,8 @@ void ll_truncate(struct inode *inode)
         int rc;
         ENTRY;
         CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu/%u(%p) to %Lu=%#Lx\n",inode->i_ino,
-               inode->i_generation, inode, inode->i_size, inode->i_size);
+               inode->i_generation, inode, i_size_read(inode),
+               i_size_read(inode));
 
         ll_stats_ops_tally(ll_i2sbi(inode), LPROC_LL_TRUNC, 1);
         if (lli->lli_size_sem_owner != current) {
@@ -146,22 +147,24 @@ void ll_truncate(struct inode *inode)
         lov_stripe_lock(lli->lli_smd);
         inode_init_lvb(inode, &lvb);
         obd_merge_lvb(ll_i2dtexp(inode), lli->lli_smd, &lvb, 0);
-        if (lvb.lvb_size == inode->i_size) {
+        if (lvb.lvb_size == i_size_read(inode)) {
                 CDEBUG(D_VFSTRACE, "skipping punch for obj "LPX64", %Lu=%#Lx\n",
-                       lli->lli_smd->lsm_object_id, inode->i_size, inode->i_size);
+                       lli->lli_smd->lsm_object_id, i_size_read(inode),
+                       i_size_read(inode));
                 lov_stripe_unlock(lli->lli_smd);
                 GOTO(out_unlock, 0);
         }
 
-        obd_adjust_kms(ll_i2dtexp(inode), lli->lli_smd, inode->i_size, 1);
+        obd_adjust_kms(ll_i2dtexp(inode), lli->lli_smd, i_size_read(inode), 1);
         lov_stripe_unlock(lli->lli_smd);
 
         if (unlikely((ll_i2sbi(inode)->ll_flags & LL_SBI_CHECKSUM) &&
-                     (inode->i_size & ~CFS_PAGE_MASK))) {
+                     (i_size_read(inode) & ~CFS_PAGE_MASK))) {
                 /* If the truncate leaves behind a partial page, update its
                  * checksum. */
                 struct page *page = find_get_page(inode->i_mapping,
-                                                  inode->i_size >> CFS_PAGE_SHIFT);
+                                                  i_size_read(inode) >>
+                                                  CFS_PAGE_SHIFT);
                 if (page != NULL) {
                         struct ll_async_page *llap = llap_cast_private(page);
                         if (llap != NULL) {
@@ -174,10 +177,10 @@ void ll_truncate(struct inode *inode)
         }
 
         CDEBUG(D_INFO, "calling punch for "LPX64" (new size %Lu=%#Lx)\n",
-               lli->lli_smd->lsm_object_id, inode->i_size, inode->i_size);
+               lli->lli_smd->lsm_object_id, i_size_read(inode), i_size_read(inode));
 
         oinfo.oi_md = lli->lli_smd;
-        oinfo.oi_policy.l_extent.start = inode->i_size;
+        oinfo.oi_policy.l_extent.start = i_size_read(inode);
         oinfo.oi_policy.l_extent.end = OBD_OBJECT_EOF;
         oinfo.oi_oa = &oa;
         oa.o_id = lli->lli_smd->lsm_object_id;
@@ -673,7 +676,7 @@ static int queue_or_sync_write(struct obd_export *exp, struct inode *inode,
                                struct ll_async_page *llap,
                                unsigned to, obd_flag async_flags)
 {
-        unsigned long size_index = inode->i_size >> CFS_PAGE_SHIFT;
+        unsigned long size_index = i_size_read(inode) >> CFS_PAGE_SHIFT;
         struct obd_io_group *oig;
         struct ll_sb_info *sbi = ll_i2sbi(inode);
         int rc, noquot = llap->llap_ignore_quota ? OBD_BRW_NOQUOTA : 0;
@@ -704,7 +707,7 @@ static int queue_or_sync_write(struct obd_export *exp, struct inode *inode,
                                size_index, to);
                 to = CFS_PAGE_SIZE;
         } else if (to != CFS_PAGE_SIZE && llap->llap_page->index == size_index) {
-                int size_to = inode->i_size & ~CFS_PAGE_MASK;
+                int size_to = i_size_read(inode) & ~CFS_PAGE_MASK;
                 LL_CDEBUG_PAGE(D_PAGE, llap->llap_page,
                                "sync write at EOF: size_index %lu, to %d/%d\n",
                                size_index, to, size_to);
@@ -836,10 +839,10 @@ out:
                 lov_stripe_lock(lsm);
                 obd_adjust_kms(exp, lsm, size, 0);
                 lov_stripe_unlock(lsm);
-                if (size > inode->i_size)
-                        inode->i_size = size;
+                if (size > i_size_read(inode))
+                        i_size_write(inode, size);
                 SetPageUptodate(page);
-        } else if (size > inode->i_size) {
+        } else if (size > i_size_read(inode)) {
                 /* this page beyond the pales of i_size, so it can't be
                  * truncated in ll_p_r_e during lock revoking. we must
                  * teardown our book-keeping here. */
@@ -1341,7 +1344,8 @@ static void ras_update(struct ll_sb_info *sbi, struct inode *inode,
         if (ras->ras_requests == 2 && !ras->ras_request_index) {
                 __u64 kms_pages;
 
-                kms_pages = (inode->i_size + CFS_PAGE_SIZE - 1) >> CFS_PAGE_SHIFT;
+                kms_pages = (i_size_read(inode) + CFS_PAGE_SIZE - 1) >>
+                            CFS_PAGE_SHIFT;
 
                 CDEBUG(D_READA, "kmsp "LPU64" mwp %lu mp %lu\n", kms_pages,
                        ra->ra_max_read_ahead_whole_pages, ra->ra_max_pages);

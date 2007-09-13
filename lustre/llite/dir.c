@@ -171,7 +171,7 @@ static int ll_dir_readpage(struct file *file, struct page *page)
                 LASSERT_REPSWABBED(request, REPLY_REC_OFF);
 
                 if (body->valid & OBD_MD_FLSIZE)
-                        inode->i_size = body->size;
+                        i_size_write(inode, body->size);
                 SetPageUptodate(page);
         }
         ptlrpc_req_finished(request);
@@ -187,7 +187,7 @@ struct address_space_operations ll_dir_aops = {
 
 static inline unsigned long dir_pages(struct inode *inode)
 {
-        return (inode->i_size + CFS_PAGE_SIZE - 1) >> CFS_PAGE_SHIFT;
+        return (i_size_read(inode) + CFS_PAGE_SIZE - 1) >> CFS_PAGE_SHIFT;
 }
 
 static inline unsigned ll_chunk_size(struct inode *inode)
@@ -416,7 +416,7 @@ int ll_readdir(struct file *filp, void *cookie, filldir_t filldir)
 
         CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu/%u(%p) pos %lu/%llu\n",
                inode->i_ino, inode->i_generation, inode,
-               (unsigned long)pos, inode->i_size);
+               (unsigned long)pos, i_size_read(inode));
 
         if (pos == DIR_END_OFF)
                 /*
@@ -440,7 +440,7 @@ int ll_readdir(struct file *filp, void *cookie, filldir_t filldir)
                          * If page is empty (end of directoryis reached),
                          * use this value. 
                          */
-                        __u32 hash = DIR_END_OFF; 
+                        __u32 hash = DIR_END_OFF;
                         __u32 next;
 
                         dp = page_address(page);

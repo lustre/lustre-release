@@ -1063,8 +1063,10 @@ static void osd_inode_setattr(const struct lu_env *env,
                 inode->i_ctime  = *osd_inode_time(env, inode, attr->la_ctime);
         if (bits & LA_MTIME)
                 inode->i_mtime  = *osd_inode_time(env, inode, attr->la_mtime);
-        if (bits & LA_SIZE)
-                LDISKFS_I(inode)->i_disksize = inode->i_size = attr->la_size;
+        if (bits & LA_SIZE) {
+                LDISKFS_I(inode)->i_disksize = attr->la_size;
+                i_size_write(inode, attr->la_size);
+        }
         if (bits & LA_BLOCKS)
                 inode->i_blocks = attr->la_blocks;
         if (bits & LA_MODE)
@@ -2487,7 +2489,7 @@ static void osd_inode_getattr(const struct lu_env *env,
         attr->la_mtime      = LTIME_S(inode->i_mtime);
         attr->la_ctime      = LTIME_S(inode->i_ctime);
         attr->la_mode       = inode->i_mode;
-        attr->la_size       = inode->i_size;
+        attr->la_size       = i_size_read(inode);
         attr->la_blocks     = inode->i_blocks;
         attr->la_uid        = inode->i_uid;
         attr->la_gid        = inode->i_gid;

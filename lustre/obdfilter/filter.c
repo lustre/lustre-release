@@ -623,7 +623,7 @@ static int filter_init_server_data(struct obd_device *obd, struct file * filp)
         struct lr_server_data *fsd;
         struct filter_client_data *fcd = NULL;
         struct inode *inode = filp->f_dentry->d_inode;
-        unsigned long last_rcvd_size = inode->i_size;
+        unsigned long last_rcvd_size = i_size_read(inode);
         __u64 mount_count;
         int cl_idx;
         loff_t off = 0;
@@ -1040,7 +1040,7 @@ static int filter_read_group_internal(struct obd_device *obd, int group,
 
         filter_update_last_group(obd, group);
 
-        if (filp->f_dentry->d_inode->i_size == 0) {
+        if (i_size_read(filp->f_dentry->d_inode) == 0) {
                 filter->fo_last_objids[group] = FILTER_INIT_OBJID;
                 rc = filter_update_last_objid(obd, group, 1);
                 RETURN(rc);

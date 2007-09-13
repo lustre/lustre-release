@@ -79,7 +79,7 @@ static inline sigset_t l_w_e_set_sigs(int sigs)
 /* initialize ost_lvb according to inode */
 static inline void inode_init_lvb(struct inode *inode, struct ost_lvb *lvb)
 {
-        lvb->lvb_size = inode->i_size;
+        lvb->lvb_size = i_size_read(inode);
         lvb->lvb_blocks = inode->i_blocks;
         lvb->lvb_mtime = LTIME_S(inode->i_mtime);
         lvb->lvb_atime = LTIME_S(inode->i_atime);

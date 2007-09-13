@@ -96,7 +96,7 @@ static int fsfilt_reiserfs_setattr(struct dentry *dentry, void *handle,
         if (iattr->ia_valid & ATTR_SIZE && !do_trunc) {
                 /* ATTR_SIZE would invoke truncate: clear it */
                 iattr->ia_valid &= ~ATTR_SIZE;
-                inode->i_size = iattr->ia_size;
+                i_size_write(inode, iattr->ia_size);
 
                 /* make sure _something_ gets set - so new inode
                  * goes to disk (probably won't work over XFS
@@ -137,7 +137,7 @@ static int fsfilt_reiserfs_get_md(struct inode *inode, void *lmm, int lmm_size,
                                   const char *name)
 {
         if (lmm == NULL)
-                return inode->i_size;
+                return i_size_read(inode);
 
         CERROR("not implemented yet\n");
         return -ENOSYS;

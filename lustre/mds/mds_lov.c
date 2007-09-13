@@ -72,7 +72,7 @@ static int mds_lov_read_objids(struct obd_device *obd)
         /* Read everything in the file, even if our current lov desc
            has fewer targets. Old targets not in the lov descriptor
            during mds setup may still have valid objids. */
-        size = mds->mds_lov_objid_filp->f_dentry->d_inode->i_size;
+        size = i_size_read(mds->mds_lov_objid_filp->f_dentry->d_inode);
         if (size == 0)
                 RETURN(0);
 

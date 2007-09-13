@@ -468,7 +468,7 @@ int filter_clear_truncated_page(struct inode *inode)
         int rc;
 
         /* Truncate on page boundary, so nothing to flush? */
-        if (!(inode->i_size & ~CFS_PAGE_MASK))
+        if (!(i_size_read(inode) & ~CFS_PAGE_MASK))
                 return 0;
 
         rc = filter_sync_inode_data(inode, 1);
@@ -478,7 +478,7 @@ int filter_clear_truncated_page(struct inode *inode)
         /* be careful to call this after fsync_inode_data_buffers has waited
          * for IO to complete before we evict it from the cache */
         page = find_lock_page(inode->i_mapping,
-                              inode->i_size >> CFS_PAGE_SHIFT);
+                              i_size_read(inode) >> CFS_PAGE_SHIFT);
         if (page) {
                 if (page->mapping != NULL) {
                         wait_on_page_writeback(page);
@@ -530,7 +530,7 @@ int filter_direct_io(int rw, struct dentry *dchild, struct filter_iobuf *iobuf,
                         filter_tally(exp, iobuf->dr_pages,
                                      iobuf->dr_npages, iobuf->dr_blocks,
                                      blocks_per_page, 1);
-                        if (attr->ia_size > inode->i_size)
+                        if (attr->ia_size > i_size_read(inode))
                                 attr->ia_valid |= ATTR_SIZE;
                         rc = fsfilt_setattr(obd, dchild,
                                             oti->oti_handle, attr, 0);
