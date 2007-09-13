@@ -26,6 +26,12 @@ Details    : Set the value of /sys/block/{dev}/queue/max_sectors_kb
              to the value of /sys/block/{dev}/queue/max_hw_sectors_kb
              in mount_lustre.
 
+Severity   : normal
+Bugzilla   : 12411
+Description: Remove client patches from SLES 10 kernel.
+Details    : This causes SLES 10 clients to behave as patchless clients
+             even on a Lustre-patched (server) kernel.
+
 --------------------------------------------------------------------------------
 
 2007-09-27         Cluster File Systems, Inc. <info@clusterfs.com>
