@@ -49,6 +49,14 @@ Bugzilla   : 13596
 Description: MDS hang after unclean shutdown of lots of clients
 Details    : Never resend AST requests.
 
+Severity   : normal
+Frequency  : when removing large files
+Bugzilla   : 13181
+Description: scheduling issue during removal of large Lustre files
+Details    : Don't take the BKL in fsfilt_ext3_setattr() for 2.6 kernels.
+	     It causes scheduling issues when removing large files (17TB in the
+	     present case).
+
 --------------------------------------------------------------------------------
 
 2007-09-27         Cluster File Systems, Inc. <info@clusterfs.com>
