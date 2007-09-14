@@ -40,6 +40,7 @@
 #include <lustre_param.h>
 
 static int (*client_fill_super)(struct super_block *sb) = NULL;
+static void (*kill_super_cb)(struct super_block *sb) = NULL;
 
 /*********** mount lookup *********/
 
@@ -1944,6 +1945,11 @@ void lustre_register_client_fill_super(int (*cfs)(struct super_block *sb))
         client_fill_super = cfs;
 }
 
+void lustre_register_kill_super_cb(void (*cfs)(struct super_block *sb))
+{
+        kill_super_cb = cfs;
+}
+
 /***************** FS registration ******************/
 
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0))
@@ -1969,11 +1975,21 @@ int lustre_get_sb(struct file_system_type *fs_type,
 }
 #endif
 
+void lustre_kill_super(struct super_block *sb)
+{
+        struct lustre_sb_info *lsi = s2lsi(sb);
+
+        if (kill_super_cb && !(lsi->lsi_flags & LSI_SERVER))
+                (*kill_super_cb)(sb);
+
+        kill_anon_super(sb);
+}
+
 struct file_system_type lustre_fs_type = {
         .owner        = THIS_MODULE,
         .name         = "lustre",
         .get_sb       = lustre_get_sb,
-        .kill_sb      = kill_anon_super,
+        .kill_sb      = lustre_kill_super,
         .fs_flags     = FS_BINARY_MOUNTDATA | FS_REQUIRES_DEV,
 };
 
@@ -2010,6 +2026,7 @@ int lustre_unregister_fs(void)
 }
 
 EXPORT_SYMBOL(lustre_register_client_fill_super);
+EXPORT_SYMBOL(lustre_register_kill_super_cb);
 EXPORT_SYMBOL(lustre_common_put_super);
 EXPORT_SYMBOL(lustre_process_log);
 EXPORT_SYMBOL(lustre_end_log);

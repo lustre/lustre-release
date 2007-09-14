@@ -243,6 +243,14 @@ Details    : When generating the bio request for lustre file writes the
 	     will overflow in a similar manner) but other file data or
 	     filesystem metadata may be corrupted in some cases.
 
+Severity   : normal
+Bugzilla   : 13304
+Frequency  : Always, for kernels after 2.6.16
+Description: Fix warning idr_remove called for id=.. which is not
+             allocated.
+Details    : Last kernels save old s_dev before kill super and not allow 
+             to restore from callback - restore it before call kill_anon_super.
+
 --------------------------------------------------------------------------------
 
 2007-08-27         Cluster File Systems, Inc. <info@clusterfs.com>

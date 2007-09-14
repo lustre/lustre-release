@@ -592,9 +592,26 @@ void client_common_put_super(struct super_block *sb)
         sbi->ll_mdc_exp = NULL;
 
         lustre_throw_orphan_dentries(sb);
-        /* restore s_dev from changed for clustred NFS*/
-        sb->s_dev = sbi->ll_sdev_orig;
 
+        EXIT;
+}
+
+void ll_kill_super(struct super_block *sb)
+{
+        struct ll_sb_info *sbi;
+
+        ENTRY;
+
+        /* not init sb ?*/
+        if (!(sb->s_flags & MS_ACTIVE))
+                return;
+
+        sbi = ll_s2sbi(sb);
+        /* we need restore s_dev from changed for clustred NFS before put_super
+         * because new kernels have cached s_dev and change sb->s_dev in 
+         * put_super not affected real removing devices */
+        if (sbi)
+                sb->s_dev = sbi->ll_sdev_orig;
         EXIT;
 }
 

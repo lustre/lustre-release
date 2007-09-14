@@ -595,6 +595,7 @@ char *ll_read_opt(const char *opt, char *data);
 void ll_lli_init(struct ll_inode_info *lli);
 int ll_fill_super(struct super_block *sb);
 void ll_put_super(struct super_block *sb);
+void ll_kill_super(struct super_block *sb);
 struct inode *ll_inode_from_lock(struct ldlm_lock *lock);
 void ll_clear_inode(struct inode *inode);
 int ll_setattr_raw(struct inode *inode, struct iattr *attr);
