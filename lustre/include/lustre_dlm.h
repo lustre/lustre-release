@@ -760,6 +760,7 @@ void unlock_res_and_lock(struct ldlm_lock *lock);
 int ldlm_pools_init(ldlm_side_t client);
 void ldlm_pools_fini(void);
 void ldlm_pools_wakeup(void);
+void ldlm_pools_recalc(void);
 int ldlm_pools_shrink(int nr, unsigned int gfp_mask);
 
 int ldlm_pool_init(struct ldlm_pool *pl, struct ldlm_namespace *ns, 
