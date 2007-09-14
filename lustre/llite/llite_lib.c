@@ -86,7 +86,7 @@ static struct ll_sb_info *ll_init_sbi(void)
         list_add_tail(&sbi->ll_list, &ll_super_blocks);
         spin_unlock(&ll_sb_lock);
 
-#ifdef ENABLE_CHECKSUM
+#ifdef ENABLE_LLITE_CHECKSUM
         sbi->ll_flags |= LL_SBI_CHECKSUM;
 #endif
 
@@ -125,7 +125,7 @@ static struct dentry_operations ll_d_root_ops = {
 #endif
 };
 
-static int client_common_fill_super(struct super_block *sb, 
+static int client_common_fill_super(struct super_block *sb,
                                     char *mdc, char *osc)
 {
         struct inode *root = 0;
@@ -180,7 +180,7 @@ static int client_common_fill_super(struct super_block *sb,
         /* force vfs to use lustre handler for flock() calls - bug 10743 */
         sb->s_flags |= MS_FLOCK_LOCK;
 #endif
-        
+
         if (sbi->ll_flags & LL_SBI_FLOCK)
                 sbi->ll_fop = &ll_file_operations_flock;
         else if (sbi->ll_flags & LL_SBI_LOCALFLOCK)
@@ -280,7 +280,7 @@ static int client_common_fill_super(struct super_block *sb,
 
 
         err = obd_connect(&osc_conn, obd, &sbi->ll_sb_uuid, data);
-        if (err == -EBUSY) {                                                
+        if (err == -EBUSY) {
                 LCONSOLE_ERROR_MSG(0x150, "An OST (osc %s) is performing "
                                    "recovery, of which this client is not a "
                                    "part.  Please wait for recovery to "
@@ -654,7 +654,7 @@ static int ll_options(char *options, int *flags)
         char *s1 = options, *s2;
         ENTRY;
 
-        if (!options) 
+        if (!options)
                 RETURN(0);
 
         CDEBUG(D_CONFIG, "Parsing opts %s\n", options);
@@ -721,7 +721,7 @@ static int ll_options(char *options, int *flags)
 next:
                 /* Find next opt */
                 s2 = strchr(s1, ',');
-                if (s2 == NULL) 
+                if (s2 == NULL)
                         break;
                 s1 = s2 + 1;
         }
@@ -769,7 +769,7 @@ static int old_lustre_process_log(struct super_block *sb, char *newprofile,
         ll_generate_random_uuid(uuid);
         class_uuid_unparse(uuid, &mdc_uuid);
         CDEBUG(D_HA, "generated uuid: %s\n", mdc_uuid.uuid);
-        
+
         /* Figure out the old mdt and profile name from new-style profile
            ("lustre" from "mds/lustre-client") */
         mdt = newprofile;
@@ -797,7 +797,7 @@ static int old_lustre_process_log(struct super_block *sb, char *newprofile,
                 rc = do_lcfg(MDCDEV, nid, LCFG_ADD_UUID, niduuid, 0,0,0);
                 i++;
                 /* Stop at the first failover nid */
-                if (*ptr == ':') 
+                if (*ptr == ':')
                         break;
         }
         if (i == 0) {
@@ -831,15 +831,15 @@ static int old_lustre_process_log(struct super_block *sb, char *newprofile,
                         i++;
                         rc = do_lcfg(MDCDEV, nid, LCFG_ADD_UUID, niduuid,0,0,0);
                         if (rc)
-                                CERROR("Add uuid for %s failed %d\n", 
+                                CERROR("Add uuid for %s failed %d\n",
                                        libcfs_nid2str(nid), rc);
-                        if (*ptr == ':') 
+                        if (*ptr == ':')
                                 break;
                 }
                 if (i > 0) {
                         rc = do_lcfg(MDCDEV, 0, LCFG_ADD_CONN, niduuid, 0, 0,0);
-                        if (rc) 
-                                CERROR("Add conn for %s failed %d\n", 
+                        if (rc)
+                                CERROR("Add conn for %s failed %d\n",
                                        libcfs_nid2str(nid), rc);
                         failnodes++;
                 } else {
@@ -867,7 +867,7 @@ static int old_lustre_process_log(struct super_block *sb, char *newprofile,
         exp = class_conn2export(&mdc_conn);
 
         ctxt = llog_get_context(exp->exp_obd, LLOG_CONFIG_REPL_CTXT);
-        
+
         cfg->cfg_flags |= CFG_F_COMPAT146;
 
 #if 1
@@ -895,9 +895,9 @@ static int old_lustre_process_log(struct super_block *sb, char *newprofile,
         default:
                 LCONSOLE_ERROR_MSG(0x155, "%s: The configuration '%s' could not"
                                    " be read from the MDT '%s'.  This may be "
-                                   "the result of communication errors between " 
+                                   "the result of communication errors between "
                                    "the client and the MDT, or if the MDT is "
-                                   "not running.\n", obd->obd_name, profile, 
+                                   "not running.\n", obd->obd_name, profile,
                                    mdt);
                 break;
         }
@@ -949,11 +949,11 @@ int ll_fill_super(struct super_block *sb)
         }
 
         err = ll_options(lsi->lsi_lmd->lmd_opts, &sbi->ll_flags);
-        if (err) 
+        if (err)
                 GOTO(out_free, err);
 
         /* Generate a string unique to this super, in case some joker tries
-           to mount the same fs at two mount points. 
+           to mount the same fs at two mount points.
            Use the address of the super itself.*/
         sprintf(ll_instance, "%p", sb);
         cfg.cfg_instance = ll_instance;
@@ -972,22 +972,22 @@ int ll_fill_super(struct super_block *sb)
                 /* Temp storage for 1.4.6 profile name */
                 OBD_ALLOC(oldname, oldnamelen);
                 if (oldname) {
-                        memcpy(oldname, profilenm, oldnamelen); 
+                        memcpy(oldname, profilenm, oldnamelen);
                         rc = old_lustre_process_log(sb, oldname, &cfg);
                         if (rc >= 0) {
-                                /* That worked - update the profile name 
+                                /* That worked - update the profile name
                                    permanently */
                                 err = rc;
-                                OBD_FREE(lsi->lsi_lmd->lmd_profile, 
+                                OBD_FREE(lsi->lsi_lmd->lmd_profile,
                                          strlen(lsi->lsi_lmd->lmd_profile) + 1);
-                                OBD_ALLOC(lsi->lsi_lmd->lmd_profile, 
+                                OBD_ALLOC(lsi->lsi_lmd->lmd_profile,
                                          strlen(oldname) + 1);
                                 if (!lsi->lsi_lmd->lmd_profile) {
                                         OBD_FREE(oldname, oldnamelen);
                                         GOTO(out_free, err = -ENOMEM);
                                 }
                                 memcpy(lsi->lsi_lmd->lmd_profile, oldname,
-                                       strlen(oldname) + 1); 
+                                       strlen(oldname) + 1);
                                 profilenm = get_profile_name(sb);
                                 /* Don't ever try to recover the MGS */
                                 rc = ptlrpc_set_import_active(
@@ -1009,33 +1009,33 @@ int ll_fill_super(struct super_block *sb)
                                    "exist?\n", profilenm);
                 GOTO(out_free, err = -EINVAL);
         }
-        CDEBUG(D_CONFIG, "Found profile %s: mdc=%s osc=%s\n", profilenm, 
+        CDEBUG(D_CONFIG, "Found profile %s: mdc=%s osc=%s\n", profilenm,
                lprof->lp_mdc, lprof->lp_osc);
 
         OBD_ALLOC(osc, strlen(lprof->lp_osc) +
                   strlen(ll_instance) + 2);
-        if (!osc) 
+        if (!osc)
                 GOTO(out_free, err = -ENOMEM);
         sprintf(osc, "%s-%s", lprof->lp_osc, ll_instance);
 
         OBD_ALLOC(mdc, strlen(lprof->lp_mdc) +
                   strlen(ll_instance) + 2);
-        if (!mdc) 
+        if (!mdc)
                 GOTO(out_free, err = -ENOMEM);
         sprintf(mdc, "%s-%s", lprof->lp_mdc, ll_instance);
-  
+
         /* connections, registrations, sb setup */
         err = client_common_fill_super(sb, mdc, osc);
-  
+
 out_free:
         if (mdc)
                 OBD_FREE(mdc, strlen(mdc) + 1);
         if (osc)
                 OBD_FREE(osc, strlen(osc) + 1);
-        if (err) 
+        if (err)
                 ll_put_super(sb);
         else
-                LCONSOLE_WARN("Client %s has started\n", profilenm);        
+                LCONSOLE_WARN("Client %s has started\n", profilenm);
 
         RETURN(err);
 } /* ll_fill_super */
@@ -1053,18 +1053,18 @@ void ll_put_super(struct super_block *sb)
         ENTRY;
 
         CDEBUG(D_VFSTRACE, "VFS Op: sb %p - %s\n", sb, profilenm);
-        
+
         sprintf(ll_instance, "%p", sb);
         cfg.cfg_instance = ll_instance;
         lustre_end_log(sb, NULL, &cfg);
-        
+
         if (sbi->ll_mdc_exp) {
                 obd = class_exp2obd(sbi->ll_mdc_exp);
                 if (obd) 
                         force = obd->obd_force;
         }
-        
-        /* We need to set force before the lov_disconnect in 
+
+        /* We need to set force before the lov_disconnect in
            lustre_common_put_super, since l_d cleans up osc's as well. */
         if (force) {
                 next = 0;
@@ -1072,19 +1072,19 @@ void ll_put_super(struct super_block *sb)
                                                      &next)) != NULL) {
                         obd->obd_force = force;
                 }
-        }                       
+        }
 
         if (sbi->ll_lcq) {
                 /* Only if client_common_fill_super succeeded */
                 client_common_put_super(sb);
         }
-                
+
         next = 0;
         while ((obd = class_devices_in_group(&sbi->ll_sb_uuid, &next)) !=NULL) {
                 class_manual_cleanup(obd);
-        }                       
-        
-        if (profilenm) 
+        }
+
+        if (profilenm)
                 class_del_profile(profilenm);
 
         ll_free_sbi(sb);
@@ -1093,7 +1093,7 @@ void ll_put_super(struct super_block *sb)
         lustre_common_put_super(sb);
 
         LCONSOLE_WARN("client %s umount complete\n", ll_instance);
-        
+
         cfs_module_put();
 
         EXIT;
@@ -1288,7 +1288,7 @@ int ll_setattr_raw(struct inode *inode, struct iattr *attr)
                 attr->ia_valid |= ATTR_MTIME_SET;
         }
         if ((attr->ia_valid & ATTR_CTIME) && !(attr->ia_valid & ATTR_MTIME)) {
-                /* To avoid stale mtime on mds, obtain it from ost and send 
+                /* To avoid stale mtime on mds, obtain it from ost and send
                    to mds. */
                 rc = ll_glimpse_size(inode, 0);
                 if (rc)
@@ -1669,17 +1669,17 @@ void ll_update_inode(struct inode *inode, struct lustre_md *md)
         if (body->valid & OBD_MD_FLATIME &&
             body->atime > LTIME_S(inode->i_atime))
                 LTIME_S(inode->i_atime) = body->atime;
-        
+
         /* mtime is always updated with ctime, but can be set in past.
            As write and utime(2) may happen within 1 second, and utime's
-           mtime has a priority over write's one, so take mtime from mds 
+           mtime has a priority over write's one, so take mtime from mds
            for the same ctimes. */
         if (body->valid & OBD_MD_FLCTIME &&
             body->ctime >= LTIME_S(inode->i_ctime)) {
                 LTIME_S(inode->i_ctime) = body->ctime;
                 if (body->valid & OBD_MD_FLMTIME) {
                         CDEBUG(D_INODE, "setting ino %lu mtime "
-                               "from %lu to "LPU64"\n", inode->i_ino, 
+                               "from %lu to "LPU64"\n", inode->i_ino,
                                LTIME_S(inode->i_mtime), body->mtime);
                         LTIME_S(inode->i_mtime) = body->mtime;
                 }
@@ -1813,7 +1813,7 @@ int ll_iocontrol(struct inode *inode, struct file *file,
                 /* We want to return EXT3_*_FL flags to the caller via this
                  * ioctl.  An older MDS may be sending S_* flags, fix it up. */
                 flags = ll_inode_to_ext_flags(body->flags,
-                                              body->flags & MDS_BFLAG_EXT_FLAGS);
+                                              body->flags &MDS_BFLAG_EXT_FLAGS);
                 ptlrpc_req_finished (req);
 
                 RETURN(put_user(flags, (int *)arg));
@@ -1936,7 +1936,7 @@ int ll_remount_fs(struct super_block *sb, int *flags, char *data)
         struct ll_sb_info *sbi = ll_s2sbi(sb);
         int err;
         __u32 read_only;
- 
+
         if ((*flags & MS_RDONLY) != (sb->s_flags & MS_RDONLY)) {
                 read_only = *flags & MS_RDONLY;
                 err = obd_set_info_async(sbi->ll_mdc_exp, strlen("read-only"),
@@ -1947,7 +1947,7 @@ int ll_remount_fs(struct super_block *sb, int *flags, char *data)
                                "remount: %d\n", err);
                         return err;
                 }
- 
+
                 if (read_only)
                         sb->s_flags |= MS_RDONLY;
                 else
@@ -2054,7 +2054,7 @@ int ll_obd_statfs(struct inode *inode, void *arg)
 
                 if (index >= lov->desc.ld_tgt_count)
                         GOTO(out_statfs, rc = -ENODEV);
-                
+
                 if (!lov->lov_tgts[index])
                         /* Try again with the next index */
                         GOTO(out_statfs, rc = -EAGAIN);
@@ -2090,14 +2090,14 @@ int ll_process_config(struct lustre_cfg *lcfg)
         char *ptr;
         void *sb;
         struct lprocfs_static_vars lvars;
-        unsigned long x; 
+        unsigned long x;
         int rc = 0;
 
         lprocfs_init_vars(llite, &lvars);
 
         /* The instance name contains the sb: lustre-client-aacfe000 */
         ptr = strrchr(lustre_cfg_string(lcfg, 0), '-');
-        if (!ptr || !*(++ptr)) 
+        if (!ptr || !*(++ptr))
                 return -EINVAL;
         if (sscanf(ptr, "%lx", &x) != 1)
                 return -EINVAL;
@@ -2105,7 +2105,7 @@ int ll_process_config(struct lustre_cfg *lcfg)
         /* This better be a real Lustre superblock! */
         LASSERT(s2lsi((struct super_block *)sb)->lsi_lmd->lmd_magic == LMD_MAGIC);
 
-        /* Note we have not called client_common_fill_super yet, so 
+        /* Note we have not called client_common_fill_super yet, so
            proc fns must be able to handle that! */
         rc = class_process_proc_param(PARAM_LLITE, lvars.obd_vars,
                                       lcfg, sb);
