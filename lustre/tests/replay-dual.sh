@@ -179,10 +179,12 @@ test_11() {
     mcreate $MOUNT1/$tfile-5
     # drop all reint replies for a while
     do_facet mds sysctl -w lustre.fail_loc=0x0119
+    # note that with this fail_loc set, facet_failover df will fail
     facet_failover mds
     #sleep for while, let both clients reconnect and timeout
     sleep $((TIMEOUT * 2))
     do_facet mds sysctl -w lustre.fail_loc=0
+    client_df
     while [ -z "$(ls $MOUNT1/$tfile-[1-5] 2>/dev/null)" ]; do
 	sleep 5
 	echo -n "."
@@ -204,8 +206,8 @@ test_12() {
 #define OBD_FAIL_LDLM_ENQUEUE            0x302
     do_facet mds sysctl -w lustre.fail_loc=0x80000302
     facet_failover mds
-    df $MOUNT || { kill -USR1 $MULTIPID  && return 1; }
     do_facet mds sysctl -w lustre.fail_loc=0
+    df $MOUNT || { kill -USR1 $MULTIPID  && return 1; }
 
     ls $DIR/$tfile
     kill -USR1 $MULTIPID || return 3
@@ -230,8 +232,8 @@ test_13() {
     # drop close 
     do_facet mds sysctl -w lustre.fail_loc=0x80000115
     facet_failover mds
-    df $MOUNT || return 1
     do_facet mds sysctl -w lustre.fail_loc=0
+    df $MOUNT || return 1
 
     ls $DIR/$tfile
     $CHECKSTAT -t file $DIR/$tfile || return 2
@@ -249,7 +251,7 @@ test_14() {
     umount $MOUNT2
 
     facet_failover mds
-    # expect failover to fail
+    # expect recovery to fail due to missing client 2
     df $MOUNT && return 1
     sleep 1
 
