@@ -104,7 +104,7 @@ test_2a() {
 run_test 2a "touch"
 
 test_2b() {
-    ./mcreate $DIR/$tfile
+    mcreate $DIR/$tfile
     replay_barrier mds
     touch $DIR/$tfile
     fail mds
