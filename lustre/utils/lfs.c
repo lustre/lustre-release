@@ -142,7 +142,7 @@ command_t cmdlist[] = {
          "usage: setquota [ -u | -g ] <name> <block-softlimit> <block-hardlimit> <inode-softlimit> <inode-hardlimit> <filesystem>\n"
          "       setquota -t [ -u | -g ] <block-grace> <inode-grace> <filesystem>"},
         {"quota", lfs_quota, 0, "Display disk usage and limits.\n"
-         "usage: quota [ -o obd_uuid ] [ -u | -g ] [name] <filesystem>"},
+         "usage: quota [ -o obd_uuid ] [{-u|-g  <name>}|-t] <filesystem>"},
 #endif
         {"flushctx", lfs_flushctx, 0, "Flush security context for current user.\n"
          "usage: flushctx [-k] [mountpoint...]"},
@@ -1393,7 +1393,7 @@ static void print_quota_title(char *name, struct if_quotactl *qctl)
                *type2name(qctl->qc_type), qctl->qc_id);
         printf("%15s%8s %7s%8s%8s%8s %7s%8s%8s\n",
                "Filesystem",
-               "blocks", "quota", "limit", "grace",
+               "kbytes", "quota", "limit", "grace",
                "files", "quota", "limit", "grace");
 }
 
@@ -1536,22 +1536,20 @@ static int lfs_quota(int argc, char **argv)
 {
         int c;
         char *name = NULL, *mnt;
-        struct if_quotactl qctl;
+        struct if_quotactl qctl = { .qc_cmd = LUSTRE_Q_GETQUOTA,
+                                    .qc_type = 0x01 };
         char *obd_type = qctl.obd_type;
         char *obd_uuid = qctl.obd_uuid.uuid;
         int rc;
-
-        memset(&qctl, 0, sizeof(qctl));
-        qctl.qc_cmd = LUSTRE_Q_GETQUOTA;
 
         optind = 0;
         while ((c = getopt(argc, argv, "ugto:")) != -1) {
                 switch (c) {
                 case 'u':
-                        qctl.qc_type |= 0x01;
+                        qctl.qc_type = 0x01;
                         break;
                 case 'g':
-                        qctl.qc_type |= 0x02;
+                        qctl.qc_type = 0x02;
                         break;
                 case 't':
                         qctl.qc_cmd = LUSTRE_Q_GETINFO;
@@ -1569,25 +1567,23 @@ static int lfs_quota(int argc, char **argv)
         if (qctl.qc_type)
                 qctl.qc_type--;
 
-        if (qctl.qc_type == UGQUOTA) {
-                fprintf(stderr, "error: user or group can't be specified"
-                                "both\n");
-                return CMD_HELP;
-        }
 
         if (qctl.qc_cmd == LUSTRE_Q_GETQUOTA) {
-                if (optind + 2 != argc)
+                if (optind + 2 != argc) {
+                        fprintf(stderr, "error: missing quota argument(s)\n");
                         return CMD_HELP;
+                }
 
                 name = argv[optind++];
                 rc = name2id(&qctl.qc_id, name, qctl.qc_type);
                 if (rc) {
-                        fprintf(stderr, "error: find id for name %s failed: %s\n",
+                        fprintf(stderr,"error: can't find id for name %s: %s\n",
                                 name, strerror(errno));
                         return CMD_HELP;
                 }
                 print_quota_title(name, &qctl);
         } else if (optind + 1 != argc) {
+                fprintf(stderr, "error: missing quota info argument(s)\n");
                 return CMD_HELP;
         }
 
