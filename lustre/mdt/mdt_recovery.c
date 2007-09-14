@@ -177,42 +177,34 @@ static inline void mcd_cpu_to_le(struct mdt_client_data *mcd,
         buf->mcd_last_close_result  = cpu_to_le32(mcd->mcd_last_close_result);
 }
 
-static int mdt_last_rcvd_header_read(const struct lu_env *env,
-                                     struct mdt_device *mdt,
-                                     struct mdt_server_data *msd)
+static inline int mdt_last_rcvd_header_read(const struct lu_env *env,
+                                            struct mdt_device *mdt)
 {
         struct mdt_thread_info *mti;
-        struct mdt_server_data *tmp;
-        loff_t *off;
         int rc;
 
         mti = lu_context_key_get(&env->le_ctx, &mdt_thread_key);
-        /* temporary stuff for read */
-        tmp = &mti->mti_msd;
-        off = &mti->mti_off;
-        *off = 0;
+
+        mti->mti_off = 0;
         rc = mdt_record_read(env, mdt->mdt_last_rcvd,
-                             mdt_buf(env, tmp, sizeof(*tmp)), off);
+                             mdt_buf(env, &mti->mti_msd, sizeof(mti->mti_msd)),
+                             &mti->mti_off);
         if (rc == 0)
-                msd_le_to_cpu(tmp, msd);
+                msd_le_to_cpu(&mti->mti_msd, &mdt->mdt_msd);
 
         CDEBUG(D_INFO, "read last_rcvd header rc = %d:\n"
                        "uuid = %s\n"
                        "last_transno = "LPU64"\n",
-                        rc,
-                        msd->msd_uuid,
-                        msd->msd_last_transno);
+                        rc, mdt->mdt_msd.msd_uuid,
+                        mdt->mdt_msd.msd_last_transno);
         return rc;
 }
 
-static int mdt_last_rcvd_header_write(const struct lu_env *env,
-                                      struct mdt_device *mdt,
-                                      struct mdt_server_data *msd)
+static inline int mdt_last_rcvd_header_write(const struct lu_env *env,
+                                             struct mdt_device *mdt)
 {
         struct mdt_thread_info *mti;
-        struct mdt_server_data *tmp;
         struct thandle *th;
-        loff_t *off;
         int rc;
         ENTRY;
 
@@ -222,21 +214,18 @@ static int mdt_last_rcvd_header_write(const struct lu_env *env,
         if (IS_ERR(th))
                 RETURN(PTR_ERR(th));
 
-        /* temporary stuff for read */
-        tmp = &mti->mti_msd;
-        off = &mti->mti_off;
-        *off = 0;
-
-        msd_cpu_to_le(msd, tmp);
+        mti->mti_off = 0;        
+        msd_cpu_to_le(&mdt->mdt_msd, &mti->mti_msd);
 
         rc = mdt_record_write(env, mdt->mdt_last_rcvd,
-                              mdt_buf_const(env, tmp, sizeof(*tmp)), off, th);
+                              mdt_buf_const(env, &mti->mti_msd, sizeof(mti->mti_msd)),
+                              &mti->mti_off, th);
 
         mdt_trans_stop(env, mdt, th);
 
         CDEBUG(D_INFO, "write last_rcvd header rc = %d:\n"
                "uuid = %s\nlast_transno = "LPU64"\n",
-               rc, msd->msd_uuid, msd->msd_last_transno);
+               rc, mdt->mdt_msd.msd_uuid, mdt->mdt_msd.msd_last_transno);
         
         RETURN(rc);
 }
@@ -460,7 +449,7 @@ static int mdt_server_data_init(const struct lu_env *env,
                                                        OBD_INCOMPAT_COMMON_LR;
         } else {
                 LCONSOLE_WARN("%s: used disk, loading\n", obd->obd_name);
-                rc = mdt_last_rcvd_header_read(env, mdt, msd);
+                rc = mdt_last_rcvd_header_read(env, mdt);
                 if (rc) {
                         CERROR("error reading MDS %s: rc %d\n", LAST_RCVD, rc);
                         GOTO(out, rc);
@@ -535,7 +524,6 @@ out:
 static int mdt_server_data_update(const struct lu_env *env,
                                   struct mdt_device *mdt)
 {
-        struct mdt_server_data *msd = &mdt->mdt_msd;
         int rc = 0;
         ENTRY;
 
@@ -543,7 +531,7 @@ static int mdt_server_data_update(const struct lu_env *env,
                mdt->mdt_mount_count, mdt->mdt_last_transno);
 
         spin_lock(&mdt->mdt_transno_lock);
-        msd->msd_last_transno = mdt->mdt_last_transno;
+        mdt->mdt_msd.msd_last_transno = mdt->mdt_last_transno;
         spin_unlock(&mdt->mdt_transno_lock);
 
         /*
@@ -551,7 +539,7 @@ static int mdt_server_data_update(const struct lu_env *env,
          * mdt->mdt_last_rcvd may be NULL that time.
          */
         if (mdt->mdt_last_rcvd != NULL)
-                rc = mdt_last_rcvd_header_write(env, mdt, msd);
+                rc = mdt_last_rcvd_header_write(env, mdt);
         RETURN(rc);
 }
 
