@@ -47,18 +47,20 @@ sub write_scr_file() {
 	
 	if ($opt_rdtitle || $opt_wrtitle) {
 		if ($op eq "rd") {
-			print SCRFILE "set title \"@GraphTitle\\n$rwlabel, Rsize = $rsz, $opt_rdtitle\"\n";
+			print SCRFILE "set title \"@GraphTitle\\n$rwlabel, Rsize = $rsz KBytes, $opt_rdtitle\"\n";
 		}
 		if ($op eq "wr") {
-			print SCRFILE "set title \"@GraphTitle\\n$rwlabel, Rsize = $rsz, $opt_wrtitle\"\n";
+			print SCRFILE "set title \"@GraphTitle\\n$rwlabel, Rsize = $rsz KBytes, $opt_wrtitle\"\n";
 		}
 	} else {
-		print SCRFILE "set title \"@GraphTitle\\n$rwlabel, Rsize = $rsz\"\n";
+		print SCRFILE "set title \"@GraphTitle\\n$rwlabel, Rsize = $rsz KBytes\"\n";
 	}
 	print SCRFILE "set xlabel \"Threads\"\n";
 	print SCRFILE "set ylabel \"Speeds(MB/s)\"\n";
 	print SCRFILE "set logscale x\n";
 	print SCRFILE "set grid\n";
+        print SCRFILE "set terminal png\n";
+        print SCRFILE "set output \"/dev/null\"\n";
 	if ($opt_y != 0) {
 		print SCRFILE "set yrange [ 0:$opt_y ]\n";
 	} else {
@@ -71,15 +73,14 @@ sub write_scr_file() {
 	# generate instructions for gnuplot, with adjusting X-axes ranges
 	for ($j = 1; $j <= $thread ; $j = $j + $j) {
 		if ($op eq "wr") {
-			printf SCRFILE "$plot \"$file-$rsz-$op.dat\" using 1:$i axes x%dy1 title \"write$j\" with line\n", $xrange;
+			printf SCRFILE "$plot \"$file-$rsz-$op.dat\" using 1:$i axes x%dy1 title \"write-obj$j\" with line\n", $xrange;
 		}
 		if ($op eq "rd") {
-			printf SCRFILE "$plot \"$file-$rsz-$op.dat\" using 1:$i axes x%dy1 title \"read$j\" with line\n", $xrange;
+			printf SCRFILE "$plot \"$file-$rsz-$op.dat\" using 1:$i axes x%dy1 title \"read-obj$j\" with line\n", $xrange;
 		}
 		$i++;
 		$plot = "replot";
 	}
-	print SCRFILE "set terminal png\n";
 	print SCRFILE "set output \"$file-$rsz-$op.png\"\n";
 	print SCRFILE "replot\n";
 	close SCRFILE;

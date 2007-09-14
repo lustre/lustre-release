@@ -54,11 +54,11 @@ make install DESTDIR=$RPM_BUILD_ROOT
 /usr/bin/parse-ior
 /usr/bin/libecho
 /usr/bin/obdfilter-survey
-/usr/bin/obparse
+/usr/bin/plot-obdfilter
 /usr/bin/plot-ost
 /usr/bin/ost-survey
 /usr/bin/sgpdd-survey
-/usr/bin/parse-sgpdd
+/usr/bin/plot-sgpdd
 /usr/bin/lstats.sh
 /usr/bin/gather_stats_everywhere.sh
 /usr/bin/config.sh

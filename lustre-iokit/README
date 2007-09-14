@@ -21,4 +21,6 @@ Requires Lustre
 ior-survey:
 A script to run the IOR benchmark. Version 2.8.6 of IOR is included
 
-
+ost-survey:
+This is OST performance survey, designed to test the client-to-disk 
+performance of the individual OSTs in a Lustre filesystem.
