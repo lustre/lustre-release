@@ -43,8 +43,6 @@
 extern cfs_mem_cache_t *ldlm_resource_slab;
 extern cfs_mem_cache_t *ldlm_lock_slab;
 extern struct lustre_lock ldlm_handle_lock;
-extern struct list_head ldlm_namespace_list;
-extern struct semaphore ldlm_namespace_lock;
 
 static struct semaphore ldlm_ref_sem;
 static int ldlm_refcount;
@@ -1334,7 +1332,8 @@ static void ldlm_handle_gl_callback(struct ptlrpc_request *req,
         if (lock->l_granted_mode == LCK_PW &&
             !lock->l_readers && !lock->l_writers &&
             cfs_time_after(cfs_time_current(),
-                           cfs_time_add(lock->l_last_used, cfs_time_seconds(10)))) {
+                           cfs_time_add(lock->l_last_used, 
+                                        cfs_time_seconds(10)))) {
                 unlock_res_and_lock(lock);
                 if (ldlm_bl_to_thread(ns, NULL, lock, 0))
                         ldlm_handle_bl_callback(ns, NULL, lock);
@@ -1845,9 +1844,11 @@ static int ldlm_cleanup(ldlm_side_t client, int force)
 #endif
         ENTRY;
 
-        if (!list_empty(&ldlm_namespace_list)) {
+        if (!list_empty(ldlm_namespace_list(LDLM_NAMESPACE_SERVER)) || 
+            !list_empty(ldlm_namespace_list(LDLM_NAMESPACE_CLIENT))) {
                 CERROR("ldlm still has namespaces; clean these up first.\n");
-                ldlm_dump_all_namespaces(D_DLMTRACE);
+                ldlm_dump_all_namespaces(LDLM_NAMESPACE_SERVER, D_DLMTRACE);
+                ldlm_dump_all_namespaces(LDLM_NAMESPACE_CLIENT, D_DLMTRACE);
                 RETURN(-EBUSY);
         }
 
@@ -1892,7 +1893,8 @@ static int ldlm_cleanup(ldlm_side_t client, int force)
 int __init ldlm_init(void)
 {
         init_mutex(&ldlm_ref_sem);
-        init_mutex(&ldlm_namespace_lock);
+        init_mutex(ldlm_namespace_lock(LDLM_NAMESPACE_SERVER));
+        init_mutex(ldlm_namespace_lock(LDLM_NAMESPACE_CLIENT));
         ldlm_resource_slab = cfs_mem_cache_create("ldlm_resources",
                                                sizeof(struct ldlm_resource), 0,
                                                SLAB_HWCACHE_ALIGN);

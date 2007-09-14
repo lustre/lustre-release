@@ -1421,12 +1421,7 @@ int ldlm_cli_join_lru(struct ldlm_namespace *ns,
                     !lock->l_readers && !lock->l_writers &&
                     !(lock->l_flags & LDLM_FL_LOCAL) &&
                     !(lock->l_flags & LDLM_FL_CBPENDING)) {
-                        lock->l_last_used = cfs_time_current();
-                        spin_lock(&ns->ns_unused_lock);
-                        LASSERT(ns->ns_nr_unused >= 0);
-                        list_add_tail(&lock->l_lru, &ns->ns_unused_list);
-                        ns->ns_nr_unused++;
-                        spin_unlock(&ns->ns_unused_lock);
+                        ldlm_lock_add_to_lru(lock);
                         lock->l_flags &= ~LDLM_FL_NO_LRU;
                         LDLM_DEBUG(lock, "join lock to lru");
                         count++;

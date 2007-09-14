@@ -4,6 +4,31 @@
 
 #define MAX_STRING_SIZE 128
 
+extern atomic_t ldlm_srv_namespace_nr;
+extern atomic_t ldlm_cli_namespace_nr;
+extern struct semaphore ldlm_srv_namespace_lock;
+extern struct list_head ldlm_srv_namespace_list;
+extern struct semaphore ldlm_cli_namespace_lock;
+extern struct list_head ldlm_cli_namespace_list;
+
+static inline atomic_t *ldlm_namespace_nr(ldlm_side_t client)
+{
+        return client == LDLM_NAMESPACE_SERVER ? 
+                &ldlm_srv_namespace_nr : &ldlm_cli_namespace_nr;
+}
+
+static inline struct list_head *ldlm_namespace_list(ldlm_side_t client)
+{
+        return client == LDLM_NAMESPACE_SERVER ? 
+                &ldlm_srv_namespace_list : &ldlm_cli_namespace_list;
+}
+
+static inline struct semaphore *ldlm_namespace_lock(ldlm_side_t client)
+{
+        return client == LDLM_NAMESPACE_SERVER ? 
+                &ldlm_srv_namespace_lock : &ldlm_cli_namespace_lock;
+}
+
 /* ldlm_request.c */
 typedef enum {
         LDLM_ASYNC,
@@ -54,7 +79,11 @@ int ldlm_reprocess_queue(struct ldlm_resource *res, struct list_head *queue,
                          struct list_head *work_list);
 int ldlm_run_bl_ast_work(struct list_head *rpc_list);
 int ldlm_run_cp_ast_work(struct list_head *rpc_list);
+int ldlm_lock_remove_from_lru(struct ldlm_lock *lock);
 int ldlm_lock_remove_from_lru_nolock(struct ldlm_lock *lock);
+void ldlm_lock_add_to_lru_nolock(struct ldlm_lock *lock);
+void ldlm_lock_add_to_lru(struct ldlm_lock *lock);
+void ldlm_lock_touch_in_lru(struct ldlm_lock *lock);
 void ldlm_lock_destroy_nolock(struct ldlm_lock *lock);
 
 /* ldlm_lockd.c */

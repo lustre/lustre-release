@@ -38,8 +38,15 @@ cfs_mem_cache_t *ldlm_resource_slab, *ldlm_lock_slab;
 
 atomic_t ldlm_srv_namespace_nr = ATOMIC_INIT(0);
 atomic_t ldlm_cli_namespace_nr = ATOMIC_INIT(0);
-struct semaphore ldlm_namespace_lock;
-struct list_head ldlm_namespace_list = CFS_LIST_HEAD_INIT(ldlm_namespace_list);
+
+struct semaphore ldlm_srv_namespace_lock;
+struct list_head ldlm_srv_namespace_list = 
+        CFS_LIST_HEAD_INIT(ldlm_srv_namespace_list);
+
+struct semaphore ldlm_cli_namespace_lock;
+struct list_head ldlm_cli_namespace_list = 
+        CFS_LIST_HEAD_INIT(ldlm_cli_namespace_list);
+
 cfs_proc_dir_entry_t *ldlm_type_proc_dir = NULL;
 cfs_proc_dir_entry_t *ldlm_ns_proc_dir = NULL;
 cfs_proc_dir_entry_t *ldlm_svc_proc_dir = NULL;
@@ -48,7 +55,8 @@ cfs_proc_dir_entry_t *ldlm_svc_proc_dir = NULL;
 static int ldlm_proc_dump_ns(struct file *file, const char *buffer,
                              unsigned long count, void *data)
 {
-        ldlm_dump_all_namespaces(D_DLMTRACE);
+        ldlm_dump_all_namespaces(LDLM_NAMESPACE_SERVER, D_DLMTRACE);
+        ldlm_dump_all_namespaces(LDLM_NAMESPACE_CLIENT, D_DLMTRACE);
         RETURN(count);
 }
 
@@ -253,12 +261,6 @@ void ldlm_proc_namespace(struct ldlm_namespace *ns)
 #define ldlm_proc_namespace(ns) do {} while (0)
 #endif /* LPROCFS */
 
-static atomic_t *ldlm_namespace_nr(ldlm_side_t client)
-{
-        return client == LDLM_NAMESPACE_SERVER ? 
-                &ldlm_srv_namespace_nr : &ldlm_cli_namespace_nr;
-}
-
 struct ldlm_namespace *ldlm_namespace_new(char *name, ldlm_side_t client, 
                                           ldlm_appetite_t apt)
 {
@@ -310,11 +312,11 @@ struct ldlm_namespace *ldlm_namespace_new(char *name, ldlm_side_t client,
         spin_lock_init(&ns->ns_unused_lock);
 
         ns->ns_connect_flags = 0;
-        mutex_down(&ldlm_namespace_lock);
-        list_add(&ns->ns_list_chain, &ldlm_namespace_list);
+        mutex_down(ldlm_namespace_lock(client));
+        list_add(&ns->ns_list_chain, ldlm_namespace_list(client));
         idx = atomic_read(ldlm_namespace_nr(client));
         atomic_inc(ldlm_namespace_nr(client));
-        mutex_up(&ldlm_namespace_lock);
+        mutex_up(ldlm_namespace_lock(client));
         
         ldlm_proc_namespace(ns);
         
@@ -326,10 +328,10 @@ struct ldlm_namespace *ldlm_namespace_new(char *name, ldlm_side_t client,
         RETURN(ns);
 
 out_del:
-        mutex_down(&ldlm_namespace_lock);
+        mutex_down(ldlm_namespace_lock(client));
         list_del(&ns->ns_list_chain);
         atomic_dec(ldlm_namespace_nr(client));
-        mutex_up(&ldlm_namespace_lock);
+        mutex_up(ldlm_namespace_lock(client));
 out_hash:
         POISON(ns->ns_hash, 0x5a, sizeof(*ns->ns_hash) * RES_HASH_SIZE);
         OBD_VFREE(ns->ns_hash, sizeof(*ns->ns_hash) * RES_HASH_SIZE);
@@ -471,11 +473,11 @@ int ldlm_namespace_free_prior(struct ldlm_namespace *ns)
         if (!ns)
                 RETURN(ELDLM_OK);
 
-        mutex_down(&ldlm_namespace_lock);
+        mutex_down(ldlm_namespace_lock(ns->ns_client));
         list_del(&ns->ns_list_chain);
         atomic_dec(ldlm_namespace_nr(ns->ns_client));
         ldlm_pool_fini(&ns->ns_pool);
-        mutex_up(&ldlm_namespace_lock);
+        mutex_up(ldlm_namespace_lock(ns->ns_client));
 
         /* At shutdown time, don't call the cancellation callback */
         ldlm_namespace_cleanup(ns, 0);
@@ -862,22 +864,22 @@ void ldlm_res2desc(struct ldlm_resource *res, struct ldlm_resource_desc *desc)
         desc->lr_name = res->lr_name;
 }
 
-void ldlm_dump_all_namespaces(int level)
+void ldlm_dump_all_namespaces(int level, ldlm_side_t client)
 {
         struct list_head *tmp;
 
         if (!((libcfs_debug | D_ERROR) & level))
                 return;
 
-        mutex_down(&ldlm_namespace_lock);
+        mutex_down(ldlm_namespace_lock(client));
 
-        list_for_each(tmp, &ldlm_namespace_list) {
+        list_for_each(tmp, ldlm_namespace_list(client)) {
                 struct ldlm_namespace *ns;
                 ns = list_entry(tmp, struct ldlm_namespace, ns_list_chain);
                 ldlm_namespace_dump(level, ns);
         }
 
-        mutex_up(&ldlm_namespace_lock);
+        mutex_up(ldlm_namespace_lock(client));
 }
 
 void ldlm_namespace_dump(int level, struct ldlm_namespace *ns)

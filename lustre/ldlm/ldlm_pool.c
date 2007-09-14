@@ -114,11 +114,6 @@
 extern cfs_proc_dir_entry_t *ldlm_ns_proc_dir;
 #endif
 
-extern atomic_t ldlm_srv_namespace_nr;
-extern atomic_t ldlm_cli_namespace_nr;
-extern struct list_head ldlm_namespace_list;
-extern struct semaphore ldlm_namespace_lock;
-
 #define avg(src, add) \
         ((src) = ((src) + (add)) / 2)
 
@@ -707,7 +702,8 @@ static int ldlm_pool_granted(struct ldlm_pool *pl)
 }
 
 static struct ptlrpc_thread *ldlm_pools_thread;
-static struct shrinker *ldlm_pools_shrinker;
+static struct shrinker *ldlm_pools_srv_shrinker;
+static struct shrinker *ldlm_pools_cli_shrinker;
 static struct completion ldlm_pools_comp;
 
 void ldlm_pools_wakeup(void)
@@ -724,7 +720,8 @@ EXPORT_SYMBOL(ldlm_pools_wakeup);
 /* Cancel @nr locks from all namespaces (if possible). Returns number of
  * cached locks after shrink is finished. All namespaces are asked to
  * cancel approximately equal amount of locks. */
-int ldlm_pools_shrink(int nr, unsigned int gfp_mask)
+static int ldlm_pools_shrink(ldlm_side_t client, int nr, 
+                             unsigned int gfp_mask)
 {
         struct ldlm_namespace *ns;
         int total = 0, cached = 0;
@@ -732,45 +729,57 @@ int ldlm_pools_shrink(int nr, unsigned int gfp_mask)
         if (nr != 0 && !(gfp_mask & __GFP_FS))
                 return -1;
 
-        CDEBUG(D_DLMTRACE, "request to shrink %d locks from all pools\n",
-               nr);
-        mutex_down(&ldlm_namespace_lock);
-        list_for_each_entry(ns, &ldlm_namespace_list, ns_list_chain)
+        CDEBUG(D_DLMTRACE, "request to shrink %d %s locks from all pools\n",
+               nr, client == LDLM_NAMESPACE_CLIENT ? "client" : "server");
+
+        if (down_trylock(ldlm_namespace_lock(client)))
+                return nr != 0 ? -1 : 0;
+
+        list_for_each_entry(ns, ldlm_namespace_list(client), ns_list_chain)
                 total += ldlm_pool_granted(&ns->ns_pool);
 
         if (nr == 0) {
-                mutex_up(&ldlm_namespace_lock);
+                mutex_up(ldlm_namespace_lock(client));
                 return total;
         }
 
         /* Check all namespaces. */
-        list_for_each_entry(ns, &ldlm_namespace_list, ns_list_chain) {
+        list_for_each_entry(ns, ldlm_namespace_list(client), ns_list_chain) {
                 struct ldlm_pool *pl = &ns->ns_pool;
                 int cancel, nr_locks;
 
                 nr_locks = ldlm_pool_granted(&ns->ns_pool);
                 cancel = 1 + nr_locks * nr / total;
-                cancel = ldlm_pool_shrink(pl, cancel, gfp_mask);
+                ldlm_pool_shrink(pl, cancel, gfp_mask);
                 cached += ldlm_pool_granted(&ns->ns_pool);
         }
-        mutex_up(&ldlm_namespace_lock);
+        mutex_up(ldlm_namespace_lock(client));
         return cached;
 }
-EXPORT_SYMBOL(ldlm_pools_shrink);
 
-void ldlm_pools_recalc(void)
+static int ldlm_pools_srv_shrink(int nr, unsigned int gfp_mask)
+{
+        return ldlm_pools_shrink(LDLM_NAMESPACE_SERVER, nr, gfp_mask);
+}
+
+static int ldlm_pools_cli_shrink(int nr, unsigned int gfp_mask)
+{
+        return ldlm_pools_shrink(LDLM_NAMESPACE_CLIENT, nr, gfp_mask);
+}
+
+void ldlm_pools_recalc(ldlm_side_t client)
 {
         __u32 nr_l = 0, nr_p = 0, l;
         struct ldlm_namespace *ns;
         int rc, equal = 0;
 
         /* Check all modest namespaces. */
-        mutex_down(&ldlm_namespace_lock);
-        list_for_each_entry(ns, &ldlm_namespace_list, ns_list_chain) {
+        mutex_down(ldlm_namespace_lock(client));
+        list_for_each_entry(ns, ldlm_namespace_list(client), ns_list_chain) {
                 if (ns->ns_appetite != LDLM_NAMESPACE_MODEST)
                         continue;
 
-                if (ns->ns_client == LDLM_NAMESPACE_SERVER) {
+                if (client == LDLM_NAMESPACE_SERVER) {
                         l = ldlm_pool_granted(&ns->ns_pool);
                         if (l == 0)
                                 l = 1;
@@ -798,22 +807,22 @@ void ldlm_pools_recalc(void)
         }
 
         /* The rest is given to greedy namespaces. */
-        list_for_each_entry(ns, &ldlm_namespace_list, ns_list_chain) {
+        list_for_each_entry(ns, ldlm_namespace_list(client), ns_list_chain) {
                 if (!equal && ns->ns_appetite != LDLM_NAMESPACE_GREEDY)
                         continue;
 
-                if (ns->ns_client == LDLM_NAMESPACE_SERVER) {
+                if (client == LDLM_NAMESPACE_SERVER) {
                         if (equal) {
                                 /* In the case 2/3 locks are eaten out by
                                  * modest pools, we re-setup equal limit
                                  * for _all_ pools. */
                                 l = LDLM_POOL_HOST_L /
-                                        atomic_read(&ldlm_srv_namespace_nr);
+                                        atomic_read(ldlm_namespace_nr(client));
                         } else {
                                 /* All the rest of greedy pools will have
                                  * all locks in equal parts.*/
                                 l = (LDLM_POOL_HOST_L - nr_l) /
-                                        (atomic_read(&ldlm_srv_namespace_nr) -
+                                        (atomic_read(ldlm_namespace_nr(client)) -
                                          nr_p);
                         }
                         ldlm_pool_setup(&ns->ns_pool, l);
@@ -825,7 +834,7 @@ void ldlm_pools_recalc(void)
                         CERROR("%s: pool recalculation error "
                                "%d\n", ns->ns_pool.pl_name, rc);
         }
-        mutex_up(&ldlm_namespace_lock);
+        mutex_up(ldlm_namespace_lock(client));
 }
 EXPORT_SYMBOL(ldlm_pools_recalc);
 
@@ -846,7 +855,8 @@ static int ldlm_pools_thread_main(void *arg)
                 struct l_wait_info lwi;
 
                 /* Recal all pools on this tick. */
-                ldlm_pools_recalc();
+                ldlm_pools_recalc(LDLM_NAMESPACE_CLIENT);
+                ldlm_pools_recalc(LDLM_NAMESPACE_SERVER);
                 
                 /* Wait until the next check time, or until we're
                  * stopped. */
@@ -933,18 +943,25 @@ int ldlm_pools_init(ldlm_side_t client)
         ENTRY;
 
         rc = ldlm_pools_thread_start(client);
-        if (rc == 0)
-                ldlm_pools_shrinker = set_shrinker(DEFAULT_SEEKS,
-                                                   ldlm_pools_shrink);
+        if (rc == 0) {
+                ldlm_pools_srv_shrinker = set_shrinker(DEFAULT_SEEKS,
+                                                       ldlm_pools_srv_shrink);
+                ldlm_pools_cli_shrinker = set_shrinker(DEFAULT_SEEKS,
+                                                       ldlm_pools_cli_shrink);
+        }
         RETURN(rc);
 }
 EXPORT_SYMBOL(ldlm_pools_init);
 
 void ldlm_pools_fini(void)
 {
-        if (ldlm_pools_shrinker != NULL) {
-                remove_shrinker(ldlm_pools_shrinker);
-                ldlm_pools_shrinker = NULL;
+        if (ldlm_pools_srv_shrinker != NULL) {
+                remove_shrinker(ldlm_pools_srv_shrinker);
+                ldlm_pools_srv_shrinker = NULL;
+        }
+        if (ldlm_pools_cli_shrinker != NULL) {
+                remove_shrinker(ldlm_pools_cli_shrinker);
+                ldlm_pools_cli_shrinker = NULL;
         }
         ldlm_pools_thread_stop();
 }
@@ -1038,7 +1055,7 @@ void ldlm_pools_wakeup(void)
 }
 EXPORT_SYMBOL(ldlm_pools_wakeup);
 
-void ldlm_pools_recalc(void)
+void ldlm_pools_recalc(ldlm_side_t client)
 {
         return;
 }

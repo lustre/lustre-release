@@ -672,7 +672,7 @@ void ldlm_resource_add_lock(struct ldlm_resource *res, struct list_head *head,
                             struct ldlm_lock *lock);
 void ldlm_resource_unlink_lock(struct ldlm_lock *lock);
 void ldlm_res2desc(struct ldlm_resource *res, struct ldlm_resource_desc *desc);
-void ldlm_dump_all_namespaces(int level);
+void ldlm_dump_all_namespaces(int level, ldlm_side_t client);
 void ldlm_namespace_dump(int level, struct ldlm_namespace *);
 void ldlm_resource_dump(int level, struct ldlm_resource *);
 int ldlm_lock_change_resource(struct ldlm_namespace *, struct ldlm_lock *,
@@ -758,10 +758,9 @@ void unlock_res_and_lock(struct ldlm_lock *lock);
 
 /* ldlm_pool.c */
 int ldlm_pools_init(ldlm_side_t client);
+void ldlm_pools_recalc(ldlm_side_t client);
 void ldlm_pools_fini(void);
 void ldlm_pools_wakeup(void);
-void ldlm_pools_recalc(void);
-int ldlm_pools_shrink(int nr, unsigned int gfp_mask);
 
 int ldlm_pool_init(struct ldlm_pool *pl, struct ldlm_namespace *ns, 
                    int idx, ldlm_side_t client);
