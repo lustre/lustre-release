@@ -94,7 +94,8 @@ struct ldlm_bl_work_item {
         struct ldlm_namespace   *blwi_ns;
         struct ldlm_lock_desc   blwi_ld;
         struct ldlm_lock        *blwi_lock;
-        int                     blwi_flags;
+        struct list_head        blwi_head;
+        int                     blwi_count;
 };
 
 #ifdef __KERNEL__
@@ -1335,7 +1336,7 @@ static void ldlm_handle_gl_callback(struct ptlrpc_request *req,
                            cfs_time_add(lock->l_last_used, 
                                         cfs_time_seconds(10)))) {
                 unlock_res_and_lock(lock);
-                if (ldlm_bl_to_thread(ns, NULL, lock, 0))
+                if (ldlm_bl_to_thread_lock(ns, NULL, lock))
                         ldlm_handle_bl_callback(ns, NULL, lock);
 
                 EXIT;
@@ -1357,13 +1358,17 @@ static int ldlm_callback_reply(struct ptlrpc_request *req, int rc)
         return ptlrpc_reply(req);
 }
 
-int ldlm_bl_to_thread(struct ldlm_namespace *ns, struct ldlm_lock_desc *ld,
-                      struct ldlm_lock *lock, int flags)
-{
 #ifdef __KERNEL__
+static int ldlm_bl_to_thread(struct ldlm_namespace *ns,
+                             struct ldlm_lock_desc *ld, struct ldlm_lock *lock,
+                             struct list_head *cancels, int count)
+{
         struct ldlm_bl_pool *blp = ldlm_state->ldlm_bl_pool;
         struct ldlm_bl_work_item *blwi;
         ENTRY;
+
+        if (cancels && count == 0)
+                RETURN(0);
 
         OBD_ALLOC(blwi, sizeof(*blwi));
         if (blwi == NULL)
@@ -1372,15 +1377,37 @@ int ldlm_bl_to_thread(struct ldlm_namespace *ns, struct ldlm_lock_desc *ld,
         blwi->blwi_ns = ns;
         if (ld != NULL)
                 blwi->blwi_ld = *ld;
-        blwi->blwi_lock = lock;
-        blwi->blwi_flags = flags;
-
+        if (count) {
+                list_add(&blwi->blwi_head, cancels);
+                list_del_init(cancels);
+                blwi->blwi_count = count;
+        } else {
+                blwi->blwi_lock = lock;
+        }
         spin_lock(&blp->blp_lock);
         list_add_tail(&blwi->blwi_entry, &blp->blp_list);
         cfs_waitq_signal(&blp->blp_waitq);
         spin_unlock(&blp->blp_lock);
 
         RETURN(0);
+}
+#endif
+
+int ldlm_bl_to_thread_lock(struct ldlm_namespace *ns, struct ldlm_lock_desc *ld,
+                           struct ldlm_lock *lock)
+{
+#ifdef __KERNEL__
+        RETURN(ldlm_bl_to_thread(ns, ld, lock, NULL, 0));
+#else
+        RETURN(-ENOSYS);
+#endif
+}
+
+int ldlm_bl_to_thread_list(struct ldlm_namespace *ns, struct ldlm_lock_desc *ld,
+                           struct list_head *cancels, int count)
+{
+#ifdef __KERNEL__
+        RETURN(ldlm_bl_to_thread(ns, ld, NULL, cancels, count));
 #else
         RETURN(-ENOSYS);
 #endif
@@ -1529,7 +1556,7 @@ static int ldlm_callback_handler(struct ptlrpc_request *req)
                 CDEBUG(D_INODE, "blocking ast\n");
                 if (!(lock->l_flags & LDLM_FL_CANCEL_ON_BLOCK))
                         ldlm_callback_reply(req, 0);
-                if (ldlm_bl_to_thread(ns, &dlm_req->lock_desc, lock, 0))
+                if (ldlm_bl_to_thread_lock(ns, &dlm_req->lock_desc, lock))
                         ldlm_handle_bl_callback(ns, &dlm_req->lock_desc, lock);
                 break;
         case LDLM_CP_CALLBACK:
@@ -1649,18 +1676,13 @@ static int ldlm_bl_thread_main(void *arg)
                 if (blwi->blwi_ns == NULL)
                         break;
 
-                if (blwi->blwi_flags == LDLM_FL_CANCELING) {
+                if (blwi->blwi_count) {
                         /* The special case when we cancel locks in lru
-                         * asynchronously, then we first remove the lock from
-                         * l_bl_ast explicitely in ldlm_cancel_lru before
-                         * sending it to this thread. Thus lock is marked
-                         * LDLM_FL_CANCELING, and already cancelled locally. */
-                        CFS_LIST_HEAD(head);
-                        LASSERT(list_empty(&blwi->blwi_lock->l_bl_ast));
-                        list_add(&blwi->blwi_lock->l_bl_ast, &head);
-                        ldlm_cli_cancel_req(blwi->blwi_lock->l_conn_export,
-                                            &head, 1);
-                        LDLM_LOCK_PUT(blwi->blwi_lock);
+                         * asynchronously, we pass the list of locks here.
+                         * Thus lock is marked LDLM_FL_CANCELING, and already
+                         * canceled locally. */
+                        ldlm_cli_cancel_list(&blwi->blwi_head,
+                                             blwi->blwi_count, NULL, 0);
                 } else {
                         ldlm_handle_bl_callback(blwi->blwi_ns, &blwi->blwi_ld,
                                                 blwi->blwi_lock);
