@@ -447,6 +447,11 @@ int mdc_req2lustre_md(struct ptlrpc_request *req, int offset,
                 offset++;
         }
 
+        if (md->body->valid & OBD_MD_FLDIREA) {
+                LASSERT(S_ISDIR(md->body->mode));
+                offset++;
+        }
+
         /* for ACL, it's possible that FLACL is set but aclsize is zero.
          * only when aclsize != 0 there's an actual segment for ACL in
          * reply buffer.

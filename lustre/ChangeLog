@@ -57,6 +57,12 @@ Details    : Don't take the BKL in fsfilt_ext3_setattr() for 2.6 kernels.
 	     It causes scheduling issues when removing large files (17TB in the
 	     present case).
 
+Severity   : normal
+Bugzilla   : 13358
+Description: 1.4.11 Can't handle directories with stripe set and extended acls
+Details    : Impossible (EPROTO is returned) to access a directory that has a
+	     non-default striping and ACLs.
+
 --------------------------------------------------------------------------------
 
 2007-09-27         Cluster File Systems, Inc. <info@clusterfs.com>
