@@ -249,6 +249,14 @@ Bugzilla   : 2369
 Description: use i_size_read and i_size_write in 2.6 port
 Details    : replace inode->i_size access with i_size_read/write()
 
+Severity   : normal
+Frequency  : when removing large files
+Bugzilla   : 13181
+Description: scheduling issue during removal of large Lustre files
+Details    : Don't take the BKL in fsfilt_ext3_setattr() for 2.6 kernels.
+	     It causes scheduling issues when removing large files (17TB in the
+	     present case).
+
 --------------------------------------------------------------------------------
 
 2007-08-10         Cluster File Systems, Inc. <info@clusterfs.com>
