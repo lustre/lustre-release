@@ -473,18 +473,28 @@ cleanup:
 /* PAGE_SIZE-512 is to allow TCP/IP and LNET headers to fit into
  * a single page on the send/receive side. XXX: 512 should be changed
  * to more adequate value. */
-#define ldlm_req_handles_avail(exp, size, bufcount, off)                \
-({                                                                      \
-        int _avail = min_t(int, LDLM_MAXREQSIZE, PAGE_SIZE - 512);      \
-        int _s = size[DLM_LOCKREQ_OFF];                                 \
-        size[DLM_LOCKREQ_OFF] = sizeof(struct ldlm_request);            \
-        _avail -= lustre_msg_size(class_exp2cliimp(exp)->imp_msg_magic, \
-                                bufcount, size);                        \
-        _avail /= sizeof(struct lustre_handle);                         \
-        _avail += LDLM_LOCKREQ_HANDLES - off;                           \
-        size[DLM_LOCKREQ_OFF] = _s;                                     \
-        _avail;                                                         \
-})
+static inline int ldlm_req_handles_avail(struct obd_export *exp,
+                                         int *size, int bufcount, int off)
+{
+        int avail = min_t(int, LDLM_MAXREQSIZE, PAGE_SIZE - 512);
+        int old_size = size[DLM_LOCKREQ_OFF];
+
+        size[DLM_LOCKREQ_OFF] = sizeof(struct ldlm_request);
+        avail -= lustre_msg_size(class_exp2cliimp(exp)->imp_msg_magic,
+                                 bufcount, size);
+        avail /= sizeof(struct lustre_handle);
+        avail += LDLM_LOCKREQ_HANDLES - off;
+        size[DLM_LOCKREQ_OFF] = old_size;
+
+        return avail;
+}
+
+static inline int ldlm_cancel_handles_avail(struct obd_export *exp)
+{
+        int size[2] = { sizeof(struct ptlrpc_body),
+                        sizeof(struct ldlm_request) };
+        return ldlm_req_handles_avail(exp, size, 2, 0);
+}
 
 /* Cancel lru locks and pack them into the enqueue request. Pack there the given
  * @count locks in @cancels. */
@@ -912,6 +922,7 @@ int ldlm_cli_cancel_req(struct obd_export *exp, struct list_head *cancels,
                                "out of sync -- not fatal\n",
                                libcfs_nid2str(req->rq_import->
                                               imp_connection->c_peer.nid));
+                        rc = 0;
                 } else if (rc == -ETIMEDOUT && /* check there was no reconnect*/
                            req->rq_import_generation == imp->imp_generation) {
                         ptlrpc_req_finished(req);
@@ -934,7 +945,7 @@ out:
 int ldlm_cli_cancel(struct lustre_handle *lockh)
 {
         struct ldlm_lock *lock;
-        CFS_LIST_HEAD(head);
+        CFS_LIST_HEAD(cancels);
         int rc = 0;
         ENTRY;
 
@@ -946,15 +957,22 @@ int ldlm_cli_cancel(struct lustre_handle *lockh)
         }
         
         rc = ldlm_cli_cancel_local(lock);
-        if (rc < 0 || rc == LDLM_FL_LOCAL_ONLY)
-                GOTO(out, rc);
+        list_add(&lock->l_bl_ast, &cancels);
 
-        list_add(&lock->l_bl_ast, &head);
-        rc = ldlm_cli_cancel_req(lock->l_conn_export, &head, 1, 0);
-        EXIT;
-out:
-        LDLM_LOCK_PUT(lock);
-        return rc < 0 ? rc : 0;
+        if (rc == LDLM_FL_BL_AST) {
+                rc = ldlm_cli_cancel_req(lock->l_conn_export, &cancels, 1, 0);
+        } else if (rc == LDLM_FL_CANCELING) {
+                int avail = ldlm_cancel_handles_avail(lock->l_conn_export);
+                int count = 1;
+                LASSERT(avail > 0);
+                count += ldlm_cancel_lru_local(lock->l_resource->lr_namespace,
+                                               &cancels, 0, avail - 1,
+                                               LDLM_CANCEL_AGED);
+                ldlm_cli_cancel_list(&cancels, count, NULL, 0, 0);
+        }
+        if (rc != LDLM_FL_CANCELING)
+                LDLM_LOCK_PUT(lock);
+        RETURN(rc < 0 ? rc : 0);
 }
 
 /* - Free space in lru for @count new locks,
@@ -1087,21 +1105,14 @@ int ldlm_cancel_lru(struct ldlm_namespace *ns, ldlm_sync_t sync)
 #endif
         count = ldlm_cancel_lru_local(ns, &cancels, 0, 0, 0);
         if (sync == LDLM_ASYNC) {
-                struct ldlm_lock *lock, *next;
-                list_for_each_entry_safe(lock, next, &cancels, l_bl_ast) {
-                        /* Remove from the list to allow blocking thread to
-                         * re-use l_bl_ast. */
-                        list_del_init(&lock->l_bl_ast);
-                        rc = ldlm_bl_to_thread(ns, NULL, lock,
-                                               LDLM_FL_CANCELING);
-                        if (rc)
-                                list_add_tail(&lock->l_bl_ast, &next->l_bl_ast);
-                }
+                rc = ldlm_bl_to_thread_list(ns, NULL, &cancels, count);
+                if (rc == 0)
+                        RETURN(count);
         }
 
-        /* If some locks are left in the list in ASYNC mode, or
+        /* If an error occured in ASYNC mode, or
          * this is SYNC mode, cancel the list. */
-        ldlm_cli_cancel_list(&cancels, count, NULL, DLM_LOCKREQ_OFF, 0);
+        ldlm_cli_cancel_list(&cancels, count, NULL, 0, 0);
         RETURN(0);
 }
 
@@ -1264,8 +1275,7 @@ int ldlm_cli_cancel_unused_resource(struct ldlm_namespace *ns,
 
         count = ldlm_cancel_resource_local(res, &cancels, policy, mode,
                                            0, flags, opaque);
-        rc = ldlm_cli_cancel_list(&cancels, count, NULL,
-                                  DLM_LOCKREQ_OFF, flags);
+        rc = ldlm_cli_cancel_list(&cancels, count, NULL, 0, flags);
         if (rc != ELDLM_OK)
                 CERROR("ldlm_cli_cancel_unused_resource: %d\n", rc);
 
