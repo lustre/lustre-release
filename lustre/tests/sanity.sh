@@ -1951,7 +1951,7 @@ test_48b() { # bug 2399
 	fi
 	ls . > /dev/null && error "'ls .' worked after removing cwd"
 	ls .. > /dev/null || error "'ls ..' failed after removing cwd"
-	cd . && error "'cd .' worked after removing cwd"
+	is_patchless || ( cd . && error "'cd .' worked after removing cwd" )
 	mkdir . && error "'mkdir .' worked after removing cwd"
 	rmdir . && error "'rmdir .' worked after removing cwd"
 	ln -s . foo && error "'ln -s .' worked after removing cwd"
@@ -1974,7 +1974,7 @@ test_48c() { # bug 2350
 	fi
 	$TRACE ls . && error "'ls .' worked after removing cwd"
 	$TRACE ls .. || error "'ls ..' failed after removing cwd"
-	$TRACE cd . && error "'cd .' worked after removing cwd"
+	is_patchless || ( $TRACE cd . && error "'cd .' worked after removing cwd" )
 	$TRACE mkdir . && error "'mkdir .' worked after removing cwd"
 	$TRACE rmdir . && error "'rmdir .' worked after removing cwd"
 	$TRACE ln -s . foo && error "'ln -s .' worked after removing cwd"
@@ -1998,11 +1998,11 @@ test_48d() { # bug 2350
 	fi
 	$TRACE ls . && error "'ls .' worked after removing parent"
 	$TRACE ls .. && error "'ls ..' worked after removing parent"
-	$TRACE cd . && error "'cd .' worked after recreate parent"
+	is_patchless || ( $TRACE cd . && error "'cd .' worked after recreate parent" )
 	$TRACE mkdir . && error "'mkdir .' worked after removing parent"
 	$TRACE rmdir . && error "'rmdir .' worked after removing parent"
 	$TRACE ln -s . foo && error "'ln -s .' worked after removing parent"
-	$TRACE cd .. && error "'cd ..' worked after removing parent" || true
+	is_patchless || ( $TRACE cd .. && error "'cd ..' worked after removing parent" || true )
 }
 run_test 48d "Access removed parent subdir (should return errors)"
 
