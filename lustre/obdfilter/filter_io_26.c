@@ -289,12 +289,13 @@ int filter_do_bio(struct obd_export *exp, struct inode *inode,
                                 continue;
                         }
 
-                        sector = blocks[block_idx + i] << sector_bits;
+                        sector = (sector_t)blocks[block_idx + i] << sector_bits;
 
                         /* Additional contiguous file blocks? */
                         while (i + nblocks < blocks_per_page &&
-                               (sector + nblocks*(blocksize>>9)) ==
-                               (blocks[block_idx + i + nblocks] << sector_bits))
+                               (sector + (nblocks << sector_bits)) ==
+                               ((sector_t)blocks[block_idx + i + nblocks] <<
+                                sector_bits))
                                 nblocks++;
 
                         if (bio != NULL &&

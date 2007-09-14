@@ -224,12 +224,23 @@ Bugzilla   : 13125
 Description: osts not allocated evenly to files
 Details    : change the condition to increase offset_idx 
 
+Severity   : critical
+Frequency  : Always for filesystems larger than 2TB on 32-bit systems.
+Bugzilla   : 13547
+Description: Data corruption for OSTs that are formatted larger than 2TB
+	     on 32-bit servers.
+Details    : When generating the bio request for lustre file writes the
+	     sector number would overflow a temporary variable before being
+	     used for the IO.  The data reads correctly from Lustre (which
+	     will overflow in a similar manner) but other file data or
+	     filesystem metadata may be corrupted in some cases.
+
 Severity   : normal
 Bugzilla   : 11230
 Description: Tune the kernel for good SCSI performance. 
 Details    : Set the value of /sys/block/{dev}/queue/max_sectors_kb
-             to the value of /sys/block/{dev}/queue/max_hw_sectors_kb
-             in mount_lustre.
+	     to the value of /sys/block/{dev}/queue/max_hw_sectors_kb
+	     in mount_lustre.
 
 Severity   : cleanup
 Bugzilla   : 13532
@@ -241,8 +252,8 @@ Severity   : normal
 Bugzilla   : 13600
 Description: "lfs find -obd UUID" prints directories
 Details    : "lfs find -obd UUID" will return all directory names instead
-             of just file names. It is incorrect because the directories
-             do not reside on the OSTs.
+	     of just file names. It is incorrect because the directories
+	     do not reside on the OSTs.
 
 Severity   : minor
 Bugzilla   : 2369
