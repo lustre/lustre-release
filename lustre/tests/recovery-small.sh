@@ -728,7 +728,7 @@ run_test 52 "failover OST under load"
 # test of open reconstruct
 test_53() {
 	touch $DIR/$tfile
-	drop_ldlm_reply "./openfile -f O_RDWR:O_CREAT -m 0755 $DIR/$tfile" ||\
+	drop_ldlm_reply "openfile -f O_RDWR:O_CREAT -m 0755 $DIR/$tfile" ||\
 		return 2
 }
 run_test 53 "touch: drop rep"
