@@ -1979,7 +1979,7 @@ void lustre_kill_super(struct super_block *sb)
 {
         struct lustre_sb_info *lsi = s2lsi(sb);
 
-        if (kill_super_cb && !(lsi->lsi_flags & LSI_SERVER))
+        if (kill_super_cb && lsi && !(lsi->lsi_flags & LSI_SERVER))
                 (*kill_super_cb)(sb);
 
         kill_anon_super(sb);
