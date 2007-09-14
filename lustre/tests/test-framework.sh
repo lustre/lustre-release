@@ -1207,3 +1207,8 @@ remote_ost ()
 {
     [ $(grep -c obdfilter $LPROC/devices) -eq 0 ]
 }
+
+is_patchless ()
+{
+    grep -q patchless $LPROC/version
+}
