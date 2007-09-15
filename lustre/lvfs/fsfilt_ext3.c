@@ -981,9 +981,9 @@ static int ext3_ext_new_extent_cb(struct ext3_ext_base *base,
 #else
 static int ext3_ext_new_extent_cb(struct ext3_ext_base *base,
                                   struct ext3_ext_path *path,
-                                  struct ext3_ext_cache *cex,
+                                  struct ext3_ext_cache *cex
 #ifdef HAVE_EXT_PREPARE_CB_EXTENT
-                                  struct ext3_extent *ex
+                                  , struct ext3_extent *ex
 #endif
                                  )
 {
