@@ -864,7 +864,7 @@ void ldlm_res2desc(struct ldlm_resource *res, struct ldlm_resource_desc *desc)
         desc->lr_name = res->lr_name;
 }
 
-void ldlm_dump_all_namespaces(int level, ldlm_side_t client)
+void ldlm_dump_all_namespaces(ldlm_side_t client, int level)
 {
         struct list_head *tmp;
 
