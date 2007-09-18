@@ -168,12 +168,6 @@ static inline struct posix_acl * posix_acl_dup(struct posix_acl *acl)
         return acl;
 }
 
-/*
- * portable UNIX device file identification.
- */
-
-typedef dev_t cfs_rdev_t;
-
 #else	/* !__KERNEL__ */
 
 typedef struct file cfs_file_t;

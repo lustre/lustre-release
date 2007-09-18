@@ -220,29 +220,6 @@ void cfs_mem_cache_free(cfs_mem_cache_t *c, void *addr)
 #include <linux/kdev_t.h>
 #endif
 
-#ifndef MKDEV
-
-#define MAJOR(dev)      ((dev)>>8)
-#define MINOR(dev)      ((dev) & 0xff)
-#define MKDEV(ma,mi)    ((ma)<<8 | (mi))
-
-#endif
-
-cfs_rdev_t cfs_rdev_build(cfs_major_nr_t major, cfs_minor_nr_t minor)
-{
-        return MKDEV(major, minor);
-}
-
-cfs_major_nr_t cfs_rdev_major(cfs_rdev_t rdev)
-{
-        return MAJOR(rdev);
-}
-
-cfs_minor_nr_t cfs_rdev_minor(cfs_rdev_t rdev)
-{
-        return MINOR(rdev);
-}
-
 void cfs_enter_debugger(void)
 {
         /*

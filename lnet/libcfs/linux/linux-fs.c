@@ -51,21 +51,6 @@ cfs_user_write (cfs_file_t *filp, const char *buf, size_t count, loff_t *offset)
 	return size;
 }
 
-cfs_rdev_t cfs_rdev_build(cfs_major_nr_t major, cfs_minor_nr_t minor)
-{
-        return MKDEV(major, minor);
-}
-
-cfs_major_nr_t cfs_rdev_major(cfs_rdev_t rdev)
-{
-        return MAJOR(rdev);
-}
-
-cfs_minor_nr_t cfs_rdev_minor(cfs_rdev_t rdev)
-{
-        return MINOR(rdev);
-}
-
 #if !(CFS_O_CREAT == O_CREAT && CFS_O_EXCL == O_EXCL &&	\
      CFS_O_TRUNC == O_TRUNC && CFS_O_APPEND == O_APPEND &&\
      CFS_O_NONBLOCK == O_NONBLOCK && CFS_O_NDELAY == O_NDELAY &&\
