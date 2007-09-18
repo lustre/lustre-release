@@ -57,6 +57,7 @@ init_test_env() {
     export LGSSD=${LGSSD:-"$LUSTRE/utils/gss/lgssd"}
     export LSVCGSSD=${LSVCGSSD:-"$LUSTRE/utils/gss/lsvcgssd"}
     export KRB5DIR=${KRB5DIR:-"/usr/kerberos"}
+    export DIR2
 
     if [ "$ACCEPTOR_PORT" ]; then
         export PORT_OPT="--port $ACCEPTOR_PORT"
@@ -1115,7 +1116,7 @@ run_one() {
     testnum=$1
     message=$2
     tfile=f${testnum}
-    tdir=d${base}
+    export tdir=d${base}
 
     BEFORE=`date +%s`
     log "== test $testnum: $message ============ `date +%H:%M:%S` ($BEFORE)"
@@ -1128,6 +1129,7 @@ run_one() {
         error "LBUG/LASSERT detected"
     pass "($((`date +%s` - $BEFORE))s)"
     unset TESTNAME
+    unset tdir
     cd $SAVE_PWD
     $CLEANUP
 }
