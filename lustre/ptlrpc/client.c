@@ -405,7 +405,7 @@ ptlrpc_prep_req_pool(struct obd_import *imp, __u32 version, int opcode,
 
         RETURN(request);
 out_ctx:
-        sptlrpc_req_put_ctx(request);
+        sptlrpc_req_put_ctx(request, 1);
 out_free:
         class_import_put(imp);
         if (request->rq_pool)
@@ -1294,7 +1294,7 @@ static void __ptlrpc_free_req(struct ptlrpc_request *request, int locked)
         if (request->rq_reqbuf != NULL || request->rq_clrbuf != NULL)
                 sptlrpc_cli_free_reqbuf(request);
 
-        sptlrpc_req_put_ctx(request);
+        sptlrpc_req_put_ctx(request, !locked);
 
         if (request->rq_pool)
                 __ptlrpc_free_req_to_pool(request);

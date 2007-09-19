@@ -65,7 +65,7 @@ svcgssd_run()
 	struct pollfd		pollfd;
 	struct timespec		halfsec = { .tv_sec = 0, .tv_nsec = 500000000 };
 
-#define NULLRPC_FILE "/proc/net/rpc/auth.ptlrpcs.init/channel"
+#define NULLRPC_FILE "/proc/net/rpc/auth.sptlrpc.init/channel"
 
 	while (1) {
 		int save_err;

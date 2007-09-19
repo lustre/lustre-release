@@ -2,6 +2,7 @@
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
  * Copyright (C) 2007 Cluster File Systems, Inc.
+ *   Author: Eric Mei <ericm@clusterfs.com>
  *
  *   This file is part of Lustre, http://www.lustre.org.
  *
@@ -38,15 +39,18 @@
 #ifdef __KERNEL__
 
 static DECLARE_MUTEX(sec_gc_mutex);
-static LIST_HEAD(sec_gc_list);
+static CFS_LIST_HEAD(sec_gc_list);
 static spinlock_t sec_gc_list_lock = SPIN_LOCK_UNLOCKED;
+
+static CFS_LIST_HEAD(sec_gc_ctx_list);
+static spinlock_t sec_gc_ctx_list_lock = SPIN_LOCK_UNLOCKED;
 
 static struct ptlrpc_thread sec_gc_thread;
 static atomic_t sec_gc_wait_del = ATOMIC_INIT(0);
 
+
 void sptlrpc_gc_add_sec(struct ptlrpc_sec *sec)
 {
-        CWARN("add sec %p(%s)\n", sec, sec->ps_policy->sp_name);
         if (!list_empty(&sec->ps_gc_list)) {
                 CERROR("sec %p(%s) already in gc list\n",
                        sec, sec->ps_policy->sp_name);
@@ -56,11 +60,13 @@ void sptlrpc_gc_add_sec(struct ptlrpc_sec *sec)
         spin_lock(&sec_gc_list_lock);
         list_add_tail(&sec_gc_list, &sec->ps_gc_list);
         spin_unlock(&sec_gc_list_lock);
+
+        CDEBUG(D_SEC, "added sec %p(%s)\n", sec, sec->ps_policy->sp_name);
 }
+EXPORT_SYMBOL(sptlrpc_gc_add_sec);
 
 void sptlrpc_gc_del_sec(struct ptlrpc_sec *sec)
 {
-        CWARN("del sec %p(%s)\n", sec, sec->ps_policy->sp_name);
         if (list_empty(&sec->ps_gc_list))
                 return;
 
@@ -75,6 +81,47 @@ void sptlrpc_gc_del_sec(struct ptlrpc_sec *sec)
         mutex_down(&sec_gc_mutex);
         mutex_up(&sec_gc_mutex);
         atomic_dec(&sec_gc_wait_del);
+
+        CDEBUG(D_SEC, "del sec %p(%s)\n", sec, sec->ps_policy->sp_name);
+}
+EXPORT_SYMBOL(sptlrpc_gc_del_sec);
+
+void sptlrpc_gc_add_ctx(struct ptlrpc_cli_ctx *ctx)
+{
+        LASSERT(list_empty(&ctx->cc_gc_chain));
+
+        CDEBUG(D_SEC, "hand over ctx %p(%u->%s)\n",
+               ctx, ctx->cc_vcred.vc_uid, sec2target_str(ctx->cc_sec));
+        spin_lock(&sec_gc_ctx_list_lock);
+        list_add(&ctx->cc_gc_chain, &sec_gc_ctx_list);
+        spin_unlock(&sec_gc_ctx_list_lock);
+
+        sec_gc_thread.t_flags |= SVC_SIGNAL;
+        cfs_waitq_signal(&sec_gc_thread.t_ctl_waitq);
+}
+EXPORT_SYMBOL(sptlrpc_gc_add_ctx);
+
+static void sec_process_ctx_list(void)
+{
+        struct ptlrpc_cli_ctx *ctx;
+
+again:
+        spin_lock(&sec_gc_ctx_list_lock);
+        if (!list_empty(&sec_gc_ctx_list)) {
+                ctx = list_entry(sec_gc_ctx_list.next,
+                                 struct ptlrpc_cli_ctx, cc_gc_chain);
+                list_del_init(&ctx->cc_gc_chain);
+                spin_unlock(&sec_gc_ctx_list_lock);
+
+                LASSERT(ctx->cc_sec);
+                LASSERT(atomic_read(&ctx->cc_refcount) == 1);
+                CDEBUG(D_SEC, "gc pick up ctx %p(%u->%s)\n",
+                       ctx, ctx->cc_vcred.vc_uid, sec2target_str(ctx->cc_sec));
+                sptlrpc_cli_ctx_put(ctx, 1);
+
+                goto again;
+        }
+        spin_unlock(&sec_gc_ctx_list_lock);
 }
 
 static void sec_do_gc(struct ptlrpc_sec *sec)
@@ -93,7 +140,8 @@ static void sec_do_gc(struct ptlrpc_sec *sec)
                 return;
         }
 
-        CWARN("check on sec %p(%s)\n", sec, sec->ps_policy->sp_name);
+        CDEBUG(D_SEC, "check on sec %p(%s)\n", sec, sec->ps_policy->sp_name);
+
         if (time_after(sec->ps_gc_next, now))
                 return;
 
@@ -115,6 +163,8 @@ static int sec_gc_main(void *arg)
         while (1) {
                 struct ptlrpc_sec *sec, *next;
 
+                thread->t_flags &= ~SVC_SIGNAL;
+                sec_process_ctx_list();
 again:
                 mutex_down(&sec_gc_mutex);
                 list_for_each_entry_safe(sec, next, &sec_gc_list, ps_gc_list) {
@@ -134,7 +184,7 @@ again:
 
                 lwi = LWI_TIMEOUT(SEC_GC_INTERVAL * HZ, NULL, NULL);
                 l_wait_event(thread->t_ctl_waitq,
-                             thread->t_flags & SVC_STOPPING,
+                             thread->t_flags & (SVC_STOPPING | SVC_SIGNAL),
                              &lwi);
 
                 if (thread->t_flags & SVC_STOPPING) {

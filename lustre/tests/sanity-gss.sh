@@ -61,22 +61,23 @@ export NAME=${NAME:-local}
 
 SAVE_PWD=$PWD
 
-#
-# check pre-set $SEC
-#
-if [ ! -z $SEC ]; then
-    if [ "$SEC" != "krb5i" -a "$SEC" != "krb5p" ]; then
-        echo "SEC=$SEC is invalid, this script only run in gss mode (krb5i/krb5p)"
-        exit 1
-    fi
-fi
-
 export SEC=${SEC:-krb5p}
 export KRB5_CCACHE_DIR=/tmp
 export KRB5_CRED=$KRB5_CCACHE_DIR/krb5cc_$RUNAS_ID
 export KRB5_CRED_SAVE=$KRB5_CCACHE_DIR/krb5cc.sanity.save
 
-echo "Using security flavor $SEC"
+#
+# check pre-set $SEC
+#
+case "x$SEC" in
+    xkrb5*)
+        echo "Using ptlrpc security flavor $SEC"
+        ;;
+    *)
+        echo "SEC=$SEC is invalid, it has to be gss/krb5 flavor"
+        exit 1
+        ;;
+esac
 
 LUSTRE=${LUSTRE:-`dirname $0`/..}
 . $LUSTRE/tests/test-framework.sh
@@ -164,7 +165,7 @@ test_2() {
 
     # cleanup all cred/ctx and touch
     $RUNAS kdestroy
-    $RUNAS $LFS flushctx
+    $RUNAS $LFS flushctx || error "can't flush ctx"
     $RUNAS touch $MOUNT/f2_2 && error "unexpected success"
 
     # restore and touch
@@ -247,7 +248,7 @@ run_test 4 "lgssd dead, operations should wait timeout and fail"
 test_5() {
     local file1=$MOUNT/f5_1
     local file2=$MOUNT/f5_2
-    local wait_time=120
+    local wait_time=`expr $TIMEOUT + $TIMEOUT`
 
     # current access should be ok
     $RUNAS touch $file1 || error "can't touch $file1"

@@ -81,7 +81,6 @@ struct obd_import {
         struct lustre_handle      imp_remote_handle;
         cfs_time_t                imp_next_ping;   /* jiffies */
         __u64                     imp_last_success_conn;   /* jiffies, 64-bit */
-        cfs_time_t                imp_next_reconnect;      /* seconds */
 
         /* all available obd_import_conn linked here */
         struct list_head          imp_conn_list;

@@ -53,8 +53,8 @@
 #include "lsupport.h"
 
 extern char * mech2file(gss_OID mech);
-#define SVCGSSD_CONTEXT_CHANNEL "/proc/net/rpc/auth.ptlrpcs.context/channel"
-#define SVCGSSD_INIT_CHANNEL    "/proc/net/rpc/auth.ptlrpcs.init/channel"
+#define SVCGSSD_CONTEXT_CHANNEL "/proc/net/rpc/auth.sptlrpc.context/channel"
+#define SVCGSSD_INIT_CHANNEL    "/proc/net/rpc/auth.sptlrpc.init/channel"
 
 #define TOKEN_BUF_SIZE		8192
 
@@ -323,7 +323,8 @@ get_ids(gss_name_t client_name, gss_OID mech, struct svc_cred *cred,
 		return -1;
 	}
 	memcpy(sname, name.value, name.length);
-	printerr(1, "authenticated %s from %016llx\n", sname, nid);
+	printerr(1, "%s: authenticated %s from %016llx\n",
+		 lustre_svc_name[lustre_svc], sname, nid);
 	gss_release_buffer(&min_stat, &name);
 
 	if (lustre_svc == LUSTRE_GSS_SVC_MDS)
@@ -446,7 +447,7 @@ handle_nullreq(FILE *f) {
 	qword_get(&cp, (char *) &lustre_svc, sizeof(lustre_svc));
 	qword_get(&cp, (char *) &nid, sizeof(nid));
 	qword_get(&cp, (char *) &handle_seq, sizeof(handle_seq));
-	printerr(1, "handling req: svc %u, nid %016llx, idx %llx\n",
+	printerr(2, "handling req: svc %u, nid %016llx, idx %llx\n",
 		 lustre_svc, nid, handle_seq);
 
 	in_handle.length = (size_t) qword_get(&cp, in_handle.value,

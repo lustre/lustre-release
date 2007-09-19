@@ -340,7 +340,9 @@ struct ptlrpc_request {
                                  rq_auth_gss:1,      /* authenticated by gss */
                                  rq_auth_remote:1,   /* authed as remote user */
                                  rq_auth_usr_root:1, /* authed as root */
-                                 rq_auth_usr_mdt:1;  /* authed as mdt */
+                                 rq_auth_usr_mdt:1,  /* authed as mdt */
+                                 /* doesn't expect reply FIXME */
+                                 rq_no_reply:1;
 
         uid_t                    rq_auth_uid;        /* authed uid */
         uid_t                    rq_auth_mapped_uid; /* authed uid mapped to */

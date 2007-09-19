@@ -1111,6 +1111,11 @@ static int ost_brw_write(struct ptlrpc_request *req, struct obd_trans_info *oti)
         }
         no_reply = rc != 0;
 
+        if (rc == 0) {
+                /* let client retry if unwrap failed */
+                rc = sptlrpc_svc_unwrap_bulk(req, desc);
+        }
+
         repbody = lustre_msg_buf(req->rq_repmsg, REPLY_REC_OFF,
                                  sizeof(*repbody));
         memcpy(&repbody->oa, &body->oa, sizeof(repbody->oa));
@@ -1131,19 +1136,6 @@ static int ost_brw_write(struct ptlrpc_request *req, struct obd_trans_info *oti)
                                server_cksum);
                 }
         }
-
-        sptlrpc_svc_unwrap_bulk(req, desc);
-
-        /* Check if there is eviction in progress, and if so, wait for
-         * it to finish */
-        if (unlikely(atomic_read(&exp->exp_obd->obd_evict_inprogress))) {
-                lwi = LWI_INTR(NULL, NULL);
-                rc = l_wait_event(exp->exp_obd->obd_evict_inprogress_waitq,
-                        !atomic_read(&exp->exp_obd->obd_evict_inprogress),
-                        &lwi);
-        }
-        if (rc == 0 && exp->exp_failed)
-                rc = -ENOTCONN;
 
         /* Must commit after prep above in all cases */
         rc = obd_commitrw(OBD_BRW_WRITE, exp, &repbody->oa,

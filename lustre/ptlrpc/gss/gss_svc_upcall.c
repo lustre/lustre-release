@@ -316,7 +316,7 @@ out:
 static struct cache_detail rsi_cache = {
         .hash_size      = RSI_HASHMAX,
         .hash_table     = rsi_table,
-        .name           = "auth.ptlrpcs.init",
+        .name           = "auth.sptlrpc.init",
         .cache_put      = rsi_put,
         .cache_request  = rsi_request,
         .cache_parse    = rsi_parse,
@@ -597,7 +597,7 @@ EXPORT_SYMBOL(gss_secsvc_flush);
 static struct cache_detail rsc_cache = {
         .hash_size      = RSC_HASHMAX,
         .hash_table     = rsc_table,
-        .name           = "auth.ptlrpcs.context",
+        .name           = "auth.sptlrpc.context",
         .cache_put      = rsc_put,
         .cache_parse    = rsc_parse,
 };
@@ -662,73 +662,11 @@ int gss_svc_upcall_install_rvs_ctx(struct obd_import *imp,
         if (rscp)
                 rsc_put(&rscp->h, &rsc_cache);
 
-        CWARN("client installed reverse svc ctx to %s: idx "LPX64"\n",
-              imp->imp_obd->u.cli.cl_target_uuid.uuid,
-              gsec->gs_rvs_hdl);
-
-        imp->imp_next_reconnect = gss_round_imp_reconnect(ctx_expiry);
-        CWARN("import(%s) to %s: set force reconnect at %lu(%lds valid time)\n",
-              ptlrpc_import_state_name(imp->imp_state),
-              imp->imp_obd->u.cli.cl_target_uuid.uuid,
-              imp->imp_next_reconnect,
-              (long) (imp->imp_next_reconnect - get_seconds()));
+        CDEBUG(D_SEC, "client installed reverse svc ctx to %s: idx "LPX64"\n",
+               imp->imp_obd->u.cli.cl_target_uuid.uuid, gsec->gs_rvs_hdl);
 
         RETURN(0);
 }
-
-#if 0
-static int
-gss_svc_unseal_request(struct ptlrpc_request *req,
-                       struct rsc *rsci,
-                       struct gss_wire_cred *gc,
-                       __u32 *vp, __u32 vlen)
-{
-        struct ptlrpcs_wire_hdr *sec_hdr;
-        struct gss_ctx *ctx = rsci->mechctx;
-        rawobj_t cipher_text, plain_text;
-        __u32 major;
-        ENTRY;
-
-        sec_hdr = (struct ptlrpcs_wire_hdr *) req->rq_reqbuf;
-
-        if (vlen < 4) {
-                CERROR("vlen only %u\n", vlen);
-                RETURN(GSS_S_CALL_BAD_STRUCTURE);
-        }
-
-        cipher_text.len = le32_to_cpu(*vp++);
-        cipher_text.data = (__u8 *) vp;
-        vlen -= 4;
-        
-        if (cipher_text.len > vlen) {
-                CERROR("cipher claimed %u while buf only %u\n",
-                        cipher_text.len, vlen);
-                RETURN(GSS_S_CALL_BAD_STRUCTURE);
-        }
-
-        plain_text = cipher_text;
-
-        major = lgss_unwrap(ctx, GSS_C_QOP_DEFAULT, &cipher_text, &plain_text);
-        if (major) {
-                CERROR("unwrap error 0x%x\n", major);
-                RETURN(major);
-        }
-
-        if (gss_check_seq_num(&rsci->seqdata, gc->gc_seq)) {
-                CERROR("discard replayed request %p(o%u,x"LPU64",t"LPU64")\n",
-                        req, req->rq_reqmsg->opc, req->rq_xid,
-                        req->rq_reqmsg->transno);
-                RETURN(GSS_S_DUPLICATE_TOKEN);
-        }
-
-        req->rq_reqmsg = (struct lustre_msg *) (vp);
-        req->rq_reqlen = plain_text.len;
-
-        CDEBUG(D_SEC, "msg len %d\n", req->rq_reqlen);
-
-        RETURN(GSS_S_COMPLETE);
-}
-#endif
 
 static
 struct cache_deferred_req* cache_upcall_defer(struct cache_req *req)
@@ -855,8 +793,8 @@ cache_check:
 
         rsci->target = target;
 
-        CWARN("server create rsc %p(%u->%s)\n",
-              rsci, rsci->ctx.gsc_uid, libcfs_nid2str(req->rq_peer.nid));
+        CDEBUG(D_SEC, "server create rsc %p(%u->%s)\n",
+               rsci, rsci->ctx.gsc_uid, libcfs_nid2str(req->rq_peer.nid));
 
         if (rsip->out_handle.len > PTLRPC_GSS_MAX_HANDLE_SIZE) {
                 CERROR("handle size %u too large\n", rsip->out_handle.len);
@@ -894,10 +832,6 @@ cache_check:
 
         rs->rs_repdata_len = lustre_shrink_msg(rs->rs_repbuf, 2,
                                                rsip->out_token.len, 0);
-
-        if (rsci->ctx.gsc_usr_mds)
-                CWARN("user from %s authenticated as mds\n",
-                      libcfs_nid2str(req->rq_peer.nid));
 
         rc = SECSVC_OK;
 

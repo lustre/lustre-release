@@ -2,6 +2,7 @@
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
  * Copyright (C) 2006 Cluster File Systems, Inc.
+ *   Author: Eric Mei <ericm@clusterfs.com>
  *
  *   This file is part of Lustre, http://www.lustre.org.
  *
@@ -141,7 +142,13 @@ int gss_cli_ctx_wrap_bulk(struct ptlrpc_cli_ctx *ctx,
         LASSERT(req->rq_bulk_read || req->rq_bulk_write);
 
         switch (SEC_FLAVOR_SVC(req->rq_sec_flavor)) {
+        case SPTLRPC_SVC_NULL:
+                LASSERT(req->rq_reqbuf->lm_bufcount >= 3);
+                msg = req->rq_reqbuf;
+                offset = msg->lm_bufcount - 1;
+                break;
         case SPTLRPC_SVC_AUTH:
+        case SPTLRPC_SVC_INTG:
                 LASSERT(req->rq_reqbuf->lm_bufcount >= 4);
                 msg = req->rq_reqbuf;
                 offset = msg->lm_bufcount - 2;
@@ -208,7 +215,17 @@ int gss_cli_ctx_unwrap_bulk(struct ptlrpc_cli_ctx *ctx,
         LASSERT(req->rq_bulk_read || req->rq_bulk_write);
 
         switch (SEC_FLAVOR_SVC(req->rq_sec_flavor)) {
+        case SPTLRPC_SVC_NULL:
+                vmsg = req->rq_repbuf;
+                voff = vmsg->lm_bufcount - 1;
+                LASSERT(vmsg && vmsg->lm_bufcount >= 3);
+
+                rmsg = req->rq_reqbuf;
+                roff = rmsg->lm_bufcount - 1; /* last segment */
+                LASSERT(rmsg && rmsg->lm_bufcount >= 3);
+                break;
         case SPTLRPC_SVC_AUTH:
+        case SPTLRPC_SVC_INTG:
                 vmsg = req->rq_repbuf;
                 voff = vmsg->lm_bufcount - 2;
                 LASSERT(vmsg && vmsg->lm_bufcount >= 4);
@@ -264,43 +281,35 @@ verify_csum:
 int gss_svc_unwrap_bulk(struct ptlrpc_request *req,
                         struct ptlrpc_bulk_desc *desc)
 {
-        struct ptlrpc_reply_state    *rs = req->rq_reply_state;
         struct gss_svc_reqctx        *grctx;
-        struct ptlrpc_bulk_sec_desc  *bsdv;
-        int                           voff, roff, rc;
+        int                           rc;
         ENTRY;
 
-        LASSERT(rs);
+        LASSERT(req->rq_svc_ctx);
         LASSERT(req->rq_bulk_write);
 
-        if (SEC_FLAVOR_SVC(req->rq_sec_flavor) == SPTLRPC_SVC_PRIV) {
-                LASSERT(req->rq_reqbuf->lm_bufcount >= 2);
-                LASSERT(rs->rs_repbuf->lm_bufcount >= 2);
-                voff = req->rq_reqbuf->lm_bufcount - 1;
-                roff = rs->rs_repbuf->lm_bufcount - 1;
-        } else {
-                LASSERT(req->rq_reqbuf->lm_bufcount >= 4);
-                LASSERT(rs->rs_repbuf->lm_bufcount >= 4);
-                voff = req->rq_reqbuf->lm_bufcount - 2;
-                roff = rs->rs_repbuf->lm_bufcount - 2;
-        }
+        grctx = gss_svc_ctx2reqctx(req->rq_svc_ctx);
 
-        bsdv = lustre_msg_buf(req->rq_reqbuf, voff, sizeof(*bsdv));
-        if (bsdv->bsd_priv_alg != BULK_PRIV_ALG_NULL) {
-                grctx = gss_svc_ctx2reqctx(req->rq_svc_ctx);
-                LASSERT(grctx->src_ctx);
-                LASSERT(grctx->src_ctx->gsc_mechctx);
+        LASSERT(grctx->src_reqbsd);
+        LASSERT(grctx->src_repbsd);
+        LASSERT(grctx->src_ctx);
+        LASSERT(grctx->src_ctx->gsc_mechctx);
 
+        /* decrypt bulk data if it's encrypted */
+        if (grctx->src_reqbsd->bsd_priv_alg != BULK_PRIV_ALG_NULL) {
                 rc = do_bulk_privacy(grctx->src_ctx->gsc_mechctx, desc, 0,
-                                     bsdv->bsd_priv_alg, bsdv);
+                                     grctx->src_reqbsd->bsd_priv_alg,
+                                     grctx->src_reqbsd);
                 if (rc) {
                         CERROR("bulk write: server failed to decrypt data\n");
                         RETURN(rc);
                 }
         }
 
+        /* verify bulk data checksum */
         rc = bulk_csum_svc(desc, req->rq_bulk_read,
-                           req->rq_reqbuf, voff, rs->rs_repbuf, roff);
+                           grctx->src_reqbsd, grctx->src_reqbsd_size,
+                           grctx->src_repbsd, grctx->src_repbsd_size);
 
         RETURN(rc);
 }
@@ -308,40 +317,35 @@ int gss_svc_unwrap_bulk(struct ptlrpc_request *req,
 int gss_svc_wrap_bulk(struct ptlrpc_request *req,
                       struct ptlrpc_bulk_desc *desc)
 {
-        struct ptlrpc_reply_state    *rs = req->rq_reply_state;
         struct gss_svc_reqctx        *grctx;
-        struct ptlrpc_bulk_sec_desc  *bsdv, *bsdr;
-        int                           voff, roff, rc;
+        int                           rc;
         ENTRY;
 
-        LASSERT(rs);
+        LASSERT(req->rq_svc_ctx);
         LASSERT(req->rq_bulk_read);
 
-        if (SEC_FLAVOR_SVC(req->rq_sec_flavor) == SPTLRPC_SVC_PRIV) {
-                voff = req->rq_reqbuf->lm_bufcount - 1;
-                roff = rs->rs_repbuf->lm_bufcount - 1;
-        } else {
-                voff = req->rq_reqbuf->lm_bufcount - 2;
-                roff = rs->rs_repbuf->lm_bufcount - 2;
-        }
+        grctx = gss_svc_ctx2reqctx(req->rq_svc_ctx);
 
+        LASSERT(grctx->src_reqbsd);
+        LASSERT(grctx->src_repbsd);
+        LASSERT(grctx->src_ctx);
+        LASSERT(grctx->src_ctx->gsc_mechctx);
+
+        /* generate bulk data checksum */
         rc = bulk_csum_svc(desc, req->rq_bulk_read,
-                           req->rq_reqbuf, voff, rs->rs_repbuf, roff);
+                           grctx->src_reqbsd, grctx->src_reqbsd_size,
+                           grctx->src_repbsd, grctx->src_repbsd_size);
         if (rc)
                 RETURN(rc);
 
-        bsdv = lustre_msg_buf(req->rq_reqbuf, voff, sizeof(*bsdv));
-        if (bsdv->bsd_priv_alg != BULK_PRIV_ALG_NULL) {
-                grctx = gss_svc_ctx2reqctx(req->rq_svc_ctx);
-                LASSERT(grctx->src_ctx);
-                LASSERT(grctx->src_ctx->gsc_mechctx);
-
-                bsdr = lustre_msg_buf(rs->rs_repbuf, roff, sizeof(*bsdr));
-
+        /* encrypt bulk data if required */
+        if (grctx->src_reqbsd->bsd_priv_alg != BULK_PRIV_ALG_NULL) {
                 rc = do_bulk_privacy(grctx->src_ctx->gsc_mechctx, desc, 1,
-                                     bsdv->bsd_priv_alg, bsdr);
+                                     grctx->src_reqbsd->bsd_priv_alg,
+                                     grctx->src_repbsd);
                 if (rc)
-                        CERROR("bulk read: server failed to encrypt data\n");
+                        CERROR("bulk read: server failed to encrypt data: "
+                               "rc %d\n", rc);
         }
 
         RETURN(rc);

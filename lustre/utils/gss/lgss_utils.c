@@ -221,7 +221,7 @@ gss_OID_desc spkm3oid =
  * log facilities                       *
  ****************************************/
 
-loglevel_t g_log_level = LL_INFO;
+loglevel_t g_log_level = LL_WARN;
 
 static const char *log_prefix[] = {
         [LL_ERR]        = "ERROR",

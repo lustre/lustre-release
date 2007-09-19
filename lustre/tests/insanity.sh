@@ -265,6 +265,7 @@ test_3() {
     reintegrate_clients || return 1
 
     client_df || return 3
+    sleep 2 # give it a little time for fully recovered before next test
 }
 run_test 3  "Thirdb Failure Mode: MDS/CLIENT `date`"
 ###################################################

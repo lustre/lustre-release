@@ -2,6 +2,7 @@
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
  * Copyright (C) 2006 Cluster File Systems, Inc.
+ *   Author: Eric Mei <ericm@clusterfs.com>
  *
  *   This file is part of Lustre, http://www.lustre.org.
  *
@@ -34,9 +35,14 @@
 #include <lustre_sec.h>
 
 static struct ptlrpc_sec_policy plain_policy;
+static struct ptlrpc_ctx_ops    plain_ctx_ops;
 static struct ptlrpc_sec        plain_sec;
 static struct ptlrpc_cli_ctx    plain_cli_ctx;
 static struct ptlrpc_svc_ctx    plain_svc_ctx;
+
+/****************************************
+ * cli_ctx apis                         *
+ ****************************************/
 
 static
 int plain_ctx_refresh(struct ptlrpc_cli_ctx *ctx)
@@ -116,18 +122,9 @@ int plain_cli_unwrap_bulk(struct ptlrpc_cli_ctx *ctx,
                                    req->rq_repbuf->lm_bufcount - 1);
 }
 
-static struct ptlrpc_ctx_ops plain_ctx_ops = {
-        .refresh        = plain_ctx_refresh,
-        .sign           = plain_ctx_sign,
-        .verify         = plain_ctx_verify,
-        .wrap_bulk      = plain_cli_wrap_bulk,
-        .unwrap_bulk    = plain_cli_unwrap_bulk,
-};
-
-static struct ptlrpc_svc_ctx plain_svc_ctx = {
-        .sc_refcount    = ATOMIC_INIT(1),
-        .sc_policy      = &plain_policy,
-};
+/****************************************
+ * sec apis                             *
+ ****************************************/
 
 static
 struct ptlrpc_sec* plain_create_sec(struct obd_import *imp,
@@ -322,6 +319,15 @@ int plain_enlarge_reqbuf(struct ptlrpc_sec *sec,
         RETURN(0);
 }
 
+/****************************************
+ * service apis                         *
+ ****************************************/
+
+static struct ptlrpc_svc_ctx plain_svc_ctx = {
+        .sc_refcount    = ATOMIC_INIT(1),
+        .sc_policy      = &plain_policy,
+};
+
 static
 int plain_accept(struct ptlrpc_request *req)
 {
@@ -460,27 +466,47 @@ static
 int plain_svc_unwrap_bulk(struct ptlrpc_request *req,
                           struct ptlrpc_bulk_desc *desc)
 {
-        struct ptlrpc_reply_state *rs = req->rq_reply_state;
+        struct ptlrpc_reply_state      *rs = req->rq_reply_state;
+        int                             voff, roff;
 
         LASSERT(rs);
 
+        voff = req->rq_reqbuf->lm_bufcount - 1;
+        roff = rs->rs_repbuf->lm_bufcount - 1;
+
         return bulk_csum_svc(desc, req->rq_bulk_read,
-                             req->rq_reqbuf, req->rq_reqbuf->lm_bufcount - 1,
-                             rs->rs_repbuf, rs->rs_repbuf->lm_bufcount - 1);
+                             lustre_msg_buf(req->rq_reqbuf, voff, 0),
+                             lustre_msg_buflen(req->rq_reqbuf, voff),
+                             lustre_msg_buf(rs->rs_repbuf, roff, 0),
+                             lustre_msg_buflen(rs->rs_repbuf, roff));
 }
 
 static
 int plain_svc_wrap_bulk(struct ptlrpc_request *req,
                         struct ptlrpc_bulk_desc *desc)
 {
-        struct ptlrpc_reply_state *rs = req->rq_reply_state;
+        struct ptlrpc_reply_state      *rs = req->rq_reply_state;
+        int                             voff, roff;
 
         LASSERT(rs);
 
+        voff = req->rq_reqbuf->lm_bufcount - 1;
+        roff = rs->rs_repbuf->lm_bufcount - 1;
+
         return bulk_csum_svc(desc, req->rq_bulk_read,
-                             req->rq_reqbuf, req->rq_reqbuf->lm_bufcount - 1,
-                             rs->rs_repbuf, rs->rs_repbuf->lm_bufcount - 1);
+                             lustre_msg_buf(req->rq_reqbuf, voff, 0),
+                             lustre_msg_buflen(req->rq_reqbuf, voff),
+                             lustre_msg_buf(rs->rs_repbuf, roff, 0),
+                             lustre_msg_buflen(rs->rs_repbuf, roff));
 }
+
+static struct ptlrpc_ctx_ops plain_ctx_ops = {
+        .refresh                = plain_ctx_refresh,
+        .sign                   = plain_ctx_sign,
+        .verify                 = plain_ctx_verify,
+        .wrap_bulk              = plain_cli_wrap_bulk,
+        .unwrap_bulk            = plain_cli_unwrap_bulk,
+};
 
 static struct ptlrpc_sec_cops plain_sec_cops = {
         .create_sec             = plain_create_sec,
@@ -523,11 +549,11 @@ void plain_init_internal(void)
         plain_sec.ps_flags = 0;
         spin_lock_init(&plain_sec.ps_lock);
         atomic_set(&plain_sec.ps_busy, 1);         /* for "plain_cli_ctx" */
-        INIT_LIST_HEAD(&plain_sec.ps_gc_list);
+        CFS_INIT_LIST_HEAD(&plain_sec.ps_gc_list);
         plain_sec.ps_gc_interval = 0;
         plain_sec.ps_gc_next = 0;
 
-        hlist_add_head(&plain_cli_ctx.cc_hash, &__list);
+        hlist_add_head(&plain_cli_ctx.cc_cache, &__list);
         atomic_set(&plain_cli_ctx.cc_refcount, 1);    /* for hash */
         plain_cli_ctx.cc_sec = &plain_sec;
         plain_cli_ctx.cc_ops = &plain_ctx_ops;
@@ -536,7 +562,8 @@ void plain_init_internal(void)
                                  PTLRPC_CTX_UPTODATE;
         plain_cli_ctx.cc_vcred.vc_uid = 0;
         spin_lock_init(&plain_cli_ctx.cc_lock);
-        INIT_LIST_HEAD(&plain_cli_ctx.cc_req_list);
+        CFS_INIT_LIST_HEAD(&plain_cli_ctx.cc_req_list);
+        CFS_INIT_LIST_HEAD(&plain_cli_ctx.cc_gc_chain);
 }
 
 int sptlrpc_plain_init(void)

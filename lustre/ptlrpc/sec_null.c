@@ -2,6 +2,7 @@
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
  * Copyright (C) 2004-2006 Cluster File Systems, Inc.
+ *   Author: Eric Mei <ericm@clusterfs.com>
  *
  *   This file is part of Lustre, http://www.lustre.org.
  *
@@ -335,7 +336,7 @@ void null_init_internal(void)
         null_sec.ps_gc_interval = 0;
         null_sec.ps_gc_next = 0;
 
-        hlist_add_head(&null_cli_ctx.cc_hash, &__list);
+        hlist_add_head(&null_cli_ctx.cc_cache, &__list);
         atomic_set(&null_cli_ctx.cc_refcount, 1);    /* for hash */
         null_cli_ctx.cc_sec = &null_sec;
         null_cli_ctx.cc_ops = &null_ctx_ops;
@@ -345,6 +346,7 @@ void null_init_internal(void)
         null_cli_ctx.cc_vcred.vc_uid = 0;
         spin_lock_init(&null_cli_ctx.cc_lock);
         INIT_LIST_HEAD(&null_cli_ctx.cc_req_list);
+        INIT_LIST_HEAD(&null_cli_ctx.cc_gc_chain);
 }
 
 int sptlrpc_null_init(void)

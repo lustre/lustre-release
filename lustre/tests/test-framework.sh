@@ -10,6 +10,9 @@ export REFORMAT=${REFORMAT:-""}
 export VERBOSE=false
 export GMNALNID=${GMNALNID:-/usr/sbin/gmlndnid}
 export CATASTROPHE=${CATASTROPHE:-/proc/sys/lnet/catastrophe}
+export GSS=false
+export GSS_KRB5=false
+export GSS_PIPEFS=false
 #export PDSH="pdsh -S -Rssh -w"
 
 # eg, assert_env LUSTRE MDSNODES OSTNODES CLIENTS
@@ -66,7 +69,8 @@ init_test_env() {
     case "x$SEC" in
         xkrb5*)
             echo "Using GSS/krb5 ptlrpc security flavor"
-            export USING_KRB5="y"
+            GSS=true
+            GSS_KRB5=true
             ;;
     esac
 
@@ -105,7 +109,7 @@ load_module() {
         # must be testing a "make install" or "rpm" installation
         # note failed to load ptlrpc_gss is considered not fatal
         if [ "$BASE" == "ptlrpc_gss" ]; then
-            modprobe $BASE $@ || echo "gss/krb5 is not supported"
+            modprobe $BASE $@ 2>/dev/null || echo "gss/krb5 is not supported"
         else
             modprobe $BASE $@
         fi
@@ -250,7 +254,7 @@ start_gss_daemons() {
     # starting on MDT
     for num in `seq $MDSCOUNT`; do
         do_facet mds$num "$LSVCGSSD -v"
-        if [ "x$GSS_PIPEFS" == "xy" ]; then
+        if $GSS_PIPEFS; then
             do_facet mds$num "$LGSSD -v"
         fi
     done
@@ -260,7 +264,7 @@ start_gss_daemons() {
     done
     # starting on client
     # FIXME: is "client" the right facet name?
-    if [ "x$GSS_PIPEFS" == "xy" ]; then
+    if $GSS_PIPEFS; then
         do_facet client "$LGSSD -v"
     fi
 
@@ -272,14 +276,14 @@ start_gss_daemons() {
     #
     for num in `seq $MDSCOUNT`; do
         check_gss_daemon_facet mds$num lsvcgssd
-        if [ "x$GSS_PIPEFS" == "xy" ]; then
+        if $GSS_PIPEFS; then
             check_gss_daemon_facet mds$num lgssd
         fi
     done
     for num in `seq $OSTCOUNT`; do
         check_gss_daemon_facet ost$num lsvcgssd
     done
-    if [ "x$GSS_PIPEFS" == "xy" ]; then
+    if $GSS_PIPEFS; then
         check_gss_daemon_facet client lgssd
     fi
 }
@@ -300,13 +304,13 @@ init_krb5_env() {
         OST_MOUNT_OPTS=$OST_MOUNT_OPTS,sec=$SEC
     fi
 
-    if [ ! -z $USING_KRB5 ]; then
+    if $GSS; then
         start_gss_daemons
     fi
 }
 
 cleanup_krb5_env() {
-    if [ ! -z $USING_KRB5 ]; then
+    if $GSS; then
         stop_gss_daemons
         # maybe cleanup credential cache?
     fi

@@ -1,6 +1,6 @@
 diff -Nrup nfs-utils-1.0.11/configure.in nfs-utils-1.0.11.lustre/configure.in
 --- nfs-utils-1.0.11/configure.in	2007-02-21 21:50:03.000000000 -0700
-+++ nfs-utils-1.0.11.lustre/configure.in	2007-05-23 14:35:45.000000000 -0600
++++ nfs-utils-1.0.11.lustre/configure.in	2007-06-29 12:29:20.000000000 -0600
 @@ -18,61 +18,14 @@ AC_ARG_WITH(release,
  	RELEASE=$withval,
  	RELEASE=1)
@@ -193,7 +193,7 @@ diff -Nrup nfs-utils-1.0.11/configure.in nfs-utils-1.0.11.lustre/configure.in
  
 diff -Nrup nfs-utils-1.0.11/Makefile.am nfs-utils-1.0.11.lustre/Makefile.am
 --- nfs-utils-1.0.11/Makefile.am	2007-02-21 21:50:03.000000000 -0700
-+++ nfs-utils-1.0.11.lustre/Makefile.am	2007-05-23 14:35:45.000000000 -0600
++++ nfs-utils-1.0.11.lustre/Makefile.am	2007-06-29 12:29:20.000000000 -0600
 @@ -1,6 +1,6 @@
  ## Process this file with automake to produce Makefile.in
  
@@ -204,7 +204,7 @@ diff -Nrup nfs-utils-1.0.11/Makefile.am nfs-utils-1.0.11.lustre/Makefile.am
  
 diff -Nrup nfs-utils-1.0.11/utils/gssd/cacheio.c nfs-utils-1.0.11.lustre/utils/gssd/cacheio.c
 --- nfs-utils-1.0.11/utils/gssd/cacheio.c	2007-02-21 21:50:03.000000000 -0700
-+++ nfs-utils-1.0.11.lustre/utils/gssd/cacheio.c	2007-05-23 14:36:28.000000000 -0600
++++ nfs-utils-1.0.11.lustre/utils/gssd/cacheio.c	2007-06-29 12:32:27.000000000 -0600
 @@ -240,7 +240,8 @@ int qword_get(char **bpp, char *dest, in
  		return -1;
  	while (*bp == ' ') bp++;
@@ -217,7 +217,7 @@ diff -Nrup nfs-utils-1.0.11/utils/gssd/cacheio.c nfs-utils-1.0.11.lustre/utils/g
  
 diff -Nrup nfs-utils-1.0.11/utils/gssd/context.c nfs-utils-1.0.11.lustre/utils/gssd/context.c
 --- nfs-utils-1.0.11/utils/gssd/context.c	2007-02-21 21:50:03.000000000 -0700
-+++ nfs-utils-1.0.11.lustre/utils/gssd/context.c	2007-05-23 14:36:29.000000000 -0600
++++ nfs-utils-1.0.11.lustre/utils/gssd/context.c	2007-06-29 12:32:28.000000000 -0600
 @@ -33,11 +33,14 @@
  #include <syslog.h>
  #include <string.h>
@@ -239,8 +239,8 @@ diff -Nrup nfs-utils-1.0.11/utils/gssd/context.c nfs-utils-1.0.11.lustre/utils/g
  
  int
 diff -Nrup nfs-utils-1.0.11/utils/gssd/context.h nfs-utils-1.0.11.lustre/utils/gssd/context.h
---- nfs-utils-1.0.11/utils/gssd/context.h	2007-05-23 14:35:21.000000000 -0600
-+++ nfs-utils-1.0.11.lustre/utils/gssd/context.h	2007-05-23 14:36:30.000000000 -0600
+--- nfs-utils-1.0.11/utils/gssd/context.h	2007-06-29 12:28:01.000000000 -0600
++++ nfs-utils-1.0.11.lustre/utils/gssd/context.h	2007-06-29 12:32:29.000000000 -0600
 @@ -31,8 +31,6 @@
  #ifndef _CONTEXT_H_
  #define _CONTEXT_H_
@@ -252,7 +252,7 @@ diff -Nrup nfs-utils-1.0.11/utils/gssd/context.h nfs-utils-1.0.11.lustre/utils/g
  
 diff -Nrup nfs-utils-1.0.11/utils/gssd/context_heimdal.c nfs-utils-1.0.11.lustre/utils/gssd/context_heimdal.c
 --- nfs-utils-1.0.11/utils/gssd/context_heimdal.c	2007-02-21 21:50:03.000000000 -0700
-+++ nfs-utils-1.0.11.lustre/utils/gssd/context_heimdal.c	2007-05-23 14:36:30.000000000 -0600
++++ nfs-utils-1.0.11.lustre/utils/gssd/context_heimdal.c	2007-06-29 12:32:29.000000000 -0600
 @@ -43,8 +43,13 @@
  #ifdef HAVE_COM_ERR_H
  #include <com_err.h>
@@ -270,8 +270,8 @@ diff -Nrup nfs-utils-1.0.11/utils/gssd/context_heimdal.c nfs-utils-1.0.11.lustre
  
  int write_heimdal_keyblock(char **p, char *end, krb5_keyblock *key)
 diff -Nrup nfs-utils-1.0.11/utils/gssd/context_lucid.c nfs-utils-1.0.11.lustre/utils/gssd/context_lucid.c
---- nfs-utils-1.0.11/utils/gssd/context_lucid.c	2007-05-23 14:35:21.000000000 -0600
-+++ nfs-utils-1.0.11.lustre/utils/gssd/context_lucid.c	2007-05-23 14:36:31.000000000 -0600
+--- nfs-utils-1.0.11/utils/gssd/context_lucid.c	2007-06-29 12:28:01.000000000 -0600
++++ nfs-utils-1.0.11.lustre/utils/gssd/context_lucid.c	2007-06-29 12:32:30.000000000 -0600
 @@ -41,11 +41,7 @@
  #include <syslog.h>
  #include <string.h>
@@ -411,8 +411,8 @@ diff -Nrup nfs-utils-1.0.11/utils/gssd/context_lucid.c nfs-utils-1.0.11.lustre/u
  						1, &return_ctx);
  	if (maj_stat != GSS_S_COMPLETE) {
 diff -Nrup nfs-utils-1.0.11/utils/gssd/context_mit.c nfs-utils-1.0.11.lustre/utils/gssd/context_mit.c
---- nfs-utils-1.0.11/utils/gssd/context_mit.c	2007-05-23 14:35:21.000000000 -0600
-+++ nfs-utils-1.0.11.lustre/utils/gssd/context_mit.c	2007-05-23 14:36:32.000000000 -0600
+--- nfs-utils-1.0.11/utils/gssd/context_mit.c	2007-06-29 12:28:01.000000000 -0600
++++ nfs-utils-1.0.11.lustre/utils/gssd/context_mit.c	2007-06-29 12:32:30.000000000 -0600
 @@ -39,10 +39,14 @@
  #include <errno.h>
  #include <gssapi/gssapi.h>
@@ -448,7 +448,7 @@ diff -Nrup nfs-utils-1.0.11/utils/gssd/context_mit.c nfs-utils-1.0.11.lustre/uti
  		/* Only applicable flag for this is initiator */
 diff -Nrup nfs-utils-1.0.11/utils/gssd/context_spkm3.c nfs-utils-1.0.11.lustre/utils/gssd/context_spkm3.c
 --- nfs-utils-1.0.11/utils/gssd/context_spkm3.c	2007-02-21 21:50:03.000000000 -0700
-+++ nfs-utils-1.0.11.lustre/utils/gssd/context_spkm3.c	2007-05-23 14:36:32.000000000 -0600
++++ nfs-utils-1.0.11.lustre/utils/gssd/context_spkm3.c	2007-06-29 12:32:31.000000000 -0600
 @@ -33,8 +33,6 @@
  #include <syslog.h>
  #include <string.h>
@@ -460,7 +460,7 @@ diff -Nrup nfs-utils-1.0.11/utils/gssd/context_spkm3.c nfs-utils-1.0.11.lustre/u
  #include "err_util.h"
 diff -Nrup nfs-utils-1.0.11/utils/gssd/err_util.c nfs-utils-1.0.11.lustre/utils/gssd/err_util.c
 --- nfs-utils-1.0.11/utils/gssd/err_util.c	2007-02-21 21:50:03.000000000 -0700
-+++ nfs-utils-1.0.11.lustre/utils/gssd/err_util.c	2007-05-23 14:36:33.000000000 -0600
++++ nfs-utils-1.0.11.lustre/utils/gssd/err_util.c	2007-06-29 12:32:31.000000000 -0600
 @@ -32,6 +32,8 @@
  #include <stdarg.h>
  #include <syslog.h>
@@ -513,7 +513,7 @@ diff -Nrup nfs-utils-1.0.11/utils/gssd/err_util.c nfs-utils-1.0.11.lustre/utils/
 +
 diff -Nrup nfs-utils-1.0.11/utils/gssd/err_util.h nfs-utils-1.0.11.lustre/utils/gssd/err_util.h
 --- nfs-utils-1.0.11/utils/gssd/err_util.h	2007-02-21 21:50:03.000000000 -0700
-+++ nfs-utils-1.0.11.lustre/utils/gssd/err_util.h	2007-05-23 14:36:33.000000000 -0600
++++ nfs-utils-1.0.11.lustre/utils/gssd/err_util.h	2007-06-29 12:32:32.000000000 -0600
 @@ -33,5 +33,6 @@
  
  void initerr(char *progname, int verbosity, int fg);
@@ -523,7 +523,7 @@ diff -Nrup nfs-utils-1.0.11/utils/gssd/err_util.h nfs-utils-1.0.11.lustre/utils/
  #endif /* _ERR_UTIL_H_ */
 diff -Nrup nfs-utils-1.0.11/utils/gssd/gss_clnt_send_err.c nfs-utils-1.0.11.lustre/utils/gssd/gss_clnt_send_err.c
 --- nfs-utils-1.0.11/utils/gssd/gss_clnt_send_err.c	2007-02-21 21:50:03.000000000 -0700
-+++ nfs-utils-1.0.11.lustre/utils/gssd/gss_clnt_send_err.c	2007-05-23 14:35:45.000000000 -0600
++++ nfs-utils-1.0.11.lustre/utils/gssd/gss_clnt_send_err.c	2007-06-29 12:29:20.000000000 -0600
 @@ -47,6 +47,7 @@
  #include "gssd.h"
  #include "write_bytes.h"
@@ -538,8 +538,8 @@ diff -Nrup nfs-utils-1.0.11/utils/gssd/gss_clnt_send_err.c nfs-utils-1.0.11.lust
  }
 +#endif
 diff -Nrup nfs-utils-1.0.11/utils/gssd/gssd.c nfs-utils-1.0.11.lustre/utils/gssd/gssd.c
---- nfs-utils-1.0.11/utils/gssd/gssd.c	2007-05-23 14:35:21.000000000 -0600
-+++ nfs-utils-1.0.11.lustre/utils/gssd/gssd.c	2007-05-23 14:36:34.000000000 -0600
+--- nfs-utils-1.0.11/utils/gssd/gssd.c	2007-06-29 12:28:01.000000000 -0600
++++ nfs-utils-1.0.11.lustre/utils/gssd/gssd.c	2007-06-29 12:32:36.000000000 -0600
 @@ -38,9 +38,12 @@
  
  #include "config.h"
@@ -767,8 +767,8 @@ diff -Nrup nfs-utils-1.0.11/utils/gssd/gssd.c nfs-utils-1.0.11.lustre/utils/gssd
 +	return 0;
  }
 diff -Nrup nfs-utils-1.0.11/utils/gssd/gssd.h nfs-utils-1.0.11.lustre/utils/gssd/gssd.h
---- nfs-utils-1.0.11/utils/gssd/gssd.h	2007-05-23 14:35:21.000000000 -0600
-+++ nfs-utils-1.0.11.lustre/utils/gssd/gssd.h	2007-05-23 14:36:34.000000000 -0600
+--- nfs-utils-1.0.11/utils/gssd/gssd.h	2007-06-29 12:28:01.000000000 -0600
++++ nfs-utils-1.0.11.lustre/utils/gssd/gssd.h	2007-06-29 12:32:37.000000000 -0600
 @@ -48,8 +48,13 @@
  #define GSSD_DEFAULT_CRED_PREFIX		"krb5cc_"
  #define GSSD_DEFAULT_MACHINE_CRED_SUFFIX	"machine"
@@ -825,8 +825,8 @@ diff -Nrup nfs-utils-1.0.11/utils/gssd/gssd.h nfs-utils-1.0.11.lustre/utils/gssd
  
  #endif /* _RPC_GSSD_H_ */
 diff -Nrup nfs-utils-1.0.11/utils/gssd/gssd_main_loop.c nfs-utils-1.0.11.lustre/utils/gssd/gssd_main_loop.c
---- nfs-utils-1.0.11/utils/gssd/gssd_main_loop.c	2007-05-23 14:35:21.000000000 -0600
-+++ nfs-utils-1.0.11.lustre/utils/gssd/gssd_main_loop.c	2007-05-23 14:36:35.000000000 -0600
+--- nfs-utils-1.0.11/utils/gssd/gssd_main_loop.c	2007-06-29 12:28:01.000000000 -0600
++++ nfs-utils-1.0.11.lustre/utils/gssd/gssd_main_loop.c	2007-06-29 12:32:38.000000000 -0600
 @@ -94,11 +94,13 @@ scan_poll_results(int ret)
  };
  
@@ -897,8 +897,8 @@ diff -Nrup nfs-utils-1.0.11/utils/gssd/gssd_main_loop.c nfs-utils-1.0.11.lustre/
  	return;
  }
 diff -Nrup nfs-utils-1.0.11/utils/gssd/gssd_proc.c nfs-utils-1.0.11.lustre/utils/gssd/gssd_proc.c
---- nfs-utils-1.0.11/utils/gssd/gssd_proc.c	2007-05-23 14:35:21.000000000 -0600
-+++ nfs-utils-1.0.11.lustre/utils/gssd/gssd_proc.c	2007-05-23 14:36:35.000000000 -0600
+--- nfs-utils-1.0.11/utils/gssd/gssd_proc.c	2007-06-29 12:28:01.000000000 -0600
++++ nfs-utils-1.0.11.lustre/utils/gssd/gssd_proc.c	2007-06-29 12:32:38.000000000 -0600
 @@ -43,7 +43,6 @@
  #endif
  #include "config.h"
@@ -1702,7 +1702,7 @@ diff -Nrup nfs-utils-1.0.11/utils/gssd/gssd_proc.c nfs-utils-1.0.11.lustre/utils
  }
 diff -Nrup nfs-utils-1.0.11/utils/gssd/gss_util.c nfs-utils-1.0.11.lustre/utils/gssd/gss_util.c
 --- nfs-utils-1.0.11/utils/gssd/gss_util.c	2007-02-21 21:50:03.000000000 -0700
-+++ nfs-utils-1.0.11.lustre/utils/gssd/gss_util.c	2007-05-23 14:36:37.000000000 -0600
++++ nfs-utils-1.0.11.lustre/utils/gssd/gss_util.c	2007-06-29 12:32:40.000000000 -0600
 @@ -87,9 +87,16 @@
  #ifdef HAVE_COM_ERR_H
  #include <com_err.h>
@@ -1918,7 +1918,7 @@ diff -Nrup nfs-utils-1.0.11/utils/gssd/gss_util.c nfs-utils-1.0.11.lustre/utils/
 +
 diff -Nrup nfs-utils-1.0.11/utils/gssd/gss_util.h nfs-utils-1.0.11.lustre/utils/gssd/gss_util.h
 --- nfs-utils-1.0.11/utils/gssd/gss_util.h	2007-02-21 21:50:03.000000000 -0700
-+++ nfs-utils-1.0.11.lustre/utils/gssd/gss_util.h	2007-05-23 14:36:37.000000000 -0600
++++ nfs-utils-1.0.11.lustre/utils/gssd/gss_util.h	2007-06-29 12:32:41.000000000 -0600
 @@ -32,14 +32,14 @@
  #define _GSS_UTIL_H_
  
@@ -1937,8 +1937,8 @@ diff -Nrup nfs-utils-1.0.11/utils/gssd/gss_util.h nfs-utils-1.0.11.lustre/utils/
  
  #endif /* _GSS_UTIL_H_ */
 diff -Nrup nfs-utils-1.0.11/utils/gssd/krb5_util.c nfs-utils-1.0.11.lustre/utils/gssd/krb5_util.c
---- nfs-utils-1.0.11/utils/gssd/krb5_util.c	2007-05-23 14:35:21.000000000 -0600
-+++ nfs-utils-1.0.11.lustre/utils/gssd/krb5_util.c	2007-05-23 14:36:38.000000000 -0600
+--- nfs-utils-1.0.11/utils/gssd/krb5_util.c	2007-06-29 12:28:01.000000000 -0600
++++ nfs-utils-1.0.11.lustre/utils/gssd/krb5_util.c	2007-06-29 12:32:42.000000000 -0600
 @@ -99,12 +99,15 @@
  #include <rpc/rpc.h>
  #include <sys/types.h>
@@ -2405,8 +2405,8 @@ diff -Nrup nfs-utils-1.0.11/utils/gssd/krb5_util.c nfs-utils-1.0.11.lustre/utils
  }
 +#endif
 diff -Nrup nfs-utils-1.0.11/utils/gssd/krb5_util.h nfs-utils-1.0.11.lustre/utils/gssd/krb5_util.h
---- nfs-utils-1.0.11/utils/gssd/krb5_util.h	2007-05-23 14:35:21.000000000 -0600
-+++ nfs-utils-1.0.11.lustre/utils/gssd/krb5_util.h	2007-05-23 14:36:39.000000000 -0600
+--- nfs-utils-1.0.11/utils/gssd/krb5_util.h	2007-06-29 12:28:01.000000000 -0600
++++ nfs-utils-1.0.11.lustre/utils/gssd/krb5_util.h	2007-06-29 12:32:42.000000000 -0600
 @@ -10,6 +10,8 @@
  struct gssd_k5_kt_princ {
  	struct gssd_k5_kt_princ *next;
@@ -2427,7 +2427,7 @@ diff -Nrup nfs-utils-1.0.11/utils/gssd/krb5_util.h nfs-utils-1.0.11.lustre/utils
  #endif /* KRB5_UTIL_H */
 diff -Nrup nfs-utils-1.0.11/utils/gssd/lsupport.c nfs-utils-1.0.11.lustre/utils/gssd/lsupport.c
 --- nfs-utils-1.0.11/utils/gssd/lsupport.c	1969-12-31 17:00:00.000000000 -0700
-+++ nfs-utils-1.0.11.lustre/utils/gssd/lsupport.c	2007-05-23 14:36:40.000000000 -0600
++++ nfs-utils-1.0.11.lustre/utils/gssd/lsupport.c	2007-06-29 12:32:43.000000000 -0600
 @@ -0,0 +1,787 @@
 +/* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
 + * vim:expandtab:shiftwidth=8:tabstop=8:
@@ -3218,7 +3218,7 @@ diff -Nrup nfs-utils-1.0.11/utils/gssd/lsupport.c nfs-utils-1.0.11.lustre/utils/
 +}
 diff -Nrup nfs-utils-1.0.11/utils/gssd/lsupport.h nfs-utils-1.0.11.lustre/utils/gssd/lsupport.h
 --- nfs-utils-1.0.11/utils/gssd/lsupport.h	1969-12-31 17:00:00.000000000 -0700
-+++ nfs-utils-1.0.11.lustre/utils/gssd/lsupport.h	2007-05-23 14:36:41.000000000 -0600
++++ nfs-utils-1.0.11.lustre/utils/gssd/lsupport.h	2007-06-29 12:32:43.000000000 -0600
 @@ -0,0 +1,89 @@
 +/* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
 + * vim:expandtab:shiftwidth=8:tabstop=8:
@@ -3311,7 +3311,7 @@ diff -Nrup nfs-utils-1.0.11/utils/gssd/lsupport.h nfs-utils-1.0.11.lustre/utils/
 +#endif /* __LIBCFS_H__ */
 diff -Nrup nfs-utils-1.0.11/utils/gssd/Makefile.am nfs-utils-1.0.11.lustre/utils/gssd/Makefile.am
 --- nfs-utils-1.0.11/utils/gssd/Makefile.am	2007-02-21 21:50:03.000000000 -0700
-+++ nfs-utils-1.0.11.lustre/utils/gssd/Makefile.am	2007-05-23 14:35:45.000000000 -0600
++++ nfs-utils-1.0.11.lustre/utils/gssd/Makefile.am	2007-06-29 12:29:20.000000000 -0600
 @@ -1,17 +1,11 @@
  ## Process this file with automake to produce Makefile.in
  
@@ -3419,7 +3419,7 @@ diff -Nrup nfs-utils-1.0.11/utils/gssd/Makefile.am nfs-utils-1.0.11.lustre/utils
 -
 diff -Nrup nfs-utils-1.0.11/utils/gssd/svcgssd.c nfs-utils-1.0.11.lustre/utils/gssd/svcgssd.c
 --- nfs-utils-1.0.11/utils/gssd/svcgssd.c	2007-02-21 21:50:03.000000000 -0700
-+++ nfs-utils-1.0.11.lustre/utils/gssd/svcgssd.c	2007-05-23 14:36:41.000000000 -0600
++++ nfs-utils-1.0.11.lustre/utils/gssd/svcgssd.c	2007-06-29 12:32:44.000000000 -0600
 @@ -43,7 +43,6 @@
  #include <sys/types.h>
  #include <sys/stat.h>
@@ -3470,6 +3470,15 @@ diff -Nrup nfs-utils-1.0.11/utils/gssd/svcgssd.c nfs-utils-1.0.11.lustre/utils/g
  	/* destroy krb5 machine creds */
 +	cleanup_mapping();
  	printerr(1, "exiting on signal %d\n", signal);
+ 	exit(1);
+ }
+@@ -155,7 +177,7 @@ sig_hup(int signal)
+ static void
+ usage(char *progname)
+ {
+-	fprintf(stderr, "usage: %s [-n] [-f] [-v] [-r] [-i]\n",
++	fprintf(stderr, "usage: %s [-n] [-f] [-v] [-r] [-m] [-o]\n",
+ 		progname);
  	exit(1);
  }
 @@ -166,9 +188,8 @@ main(int argc, char *argv[])
@@ -3576,7 +3585,7 @@ diff -Nrup nfs-utils-1.0.11/utils/gssd/svcgssd.c nfs-utils-1.0.11.lustre/utils/g
  }
 diff -Nrup nfs-utils-1.0.11/utils/gssd/svcgssd.h nfs-utils-1.0.11.lustre/utils/gssd/svcgssd.h
 --- nfs-utils-1.0.11/utils/gssd/svcgssd.h	2007-02-21 21:50:03.000000000 -0700
-+++ nfs-utils-1.0.11.lustre/utils/gssd/svcgssd.h	2007-05-23 14:36:42.000000000 -0600
++++ nfs-utils-1.0.11.lustre/utils/gssd/svcgssd.h	2007-06-29 12:32:45.000000000 -0600
 @@ -35,9 +35,20 @@
  #include <sys/queue.h>
  #include <gssapi/gssapi.h>
@@ -3603,7 +3612,7 @@ diff -Nrup nfs-utils-1.0.11/utils/gssd/svcgssd.h nfs-utils-1.0.11.lustre/utils/g
  #endif /* _RPC_SVCGSSD_H_ */
 diff -Nrup nfs-utils-1.0.11/utils/gssd/svcgssd_main_loop.c nfs-utils-1.0.11.lustre/utils/gssd/svcgssd_main_loop.c
 --- nfs-utils-1.0.11/utils/gssd/svcgssd_main_loop.c	2007-02-21 21:50:03.000000000 -0700
-+++ nfs-utils-1.0.11.lustre/utils/gssd/svcgssd_main_loop.c	2007-05-23 14:36:42.000000000 -0600
++++ nfs-utils-1.0.11.lustre/utils/gssd/svcgssd_main_loop.c	2007-06-29 12:32:45.000000000 -0600
 @@ -46,46 +46,66 @@
  #include "svcgssd.h"
  #include "err_util.h"
@@ -3628,7 +3637,7 @@ diff -Nrup nfs-utils-1.0.11/utils/gssd/svcgssd_main_loop.c nfs-utils-1.0.11.lust
 +	struct timespec		halfsec = { .tv_sec = 0, .tv_nsec = 500000000 };
  
 -#define NULLRPC_FILE "/proc/net/rpc/auth.rpcsec.init/channel"
-+#define NULLRPC_FILE "/proc/net/rpc/auth.ptlrpcs.init/channel"
++#define NULLRPC_FILE "/proc/net/rpc/auth.sptlrpc.init/channel"
  
 -	f = fopen(NULLRPC_FILE, "rw");
 -
@@ -3694,7 +3703,7 @@ diff -Nrup nfs-utils-1.0.11/utils/gssd/svcgssd_main_loop.c nfs-utils-1.0.11.lust
  }
 diff -Nrup nfs-utils-1.0.11/utils/gssd/svcgssd_proc.c nfs-utils-1.0.11.lustre/utils/gssd/svcgssd_proc.c
 --- nfs-utils-1.0.11/utils/gssd/svcgssd_proc.c	2007-02-21 21:50:03.000000000 -0700
-+++ nfs-utils-1.0.11.lustre/utils/gssd/svcgssd_proc.c	2007-05-23 14:36:44.000000000 -0600
++++ nfs-utils-1.0.11.lustre/utils/gssd/svcgssd_proc.c	2007-06-29 12:32:46.000000000 -0600
 @@ -35,7 +35,6 @@
  
  #include <sys/param.h>
@@ -3720,8 +3729,8 @@ diff -Nrup nfs-utils-1.0.11/utils/gssd/svcgssd_proc.c nfs-utils-1.0.11.lustre/ut
  extern char * mech2file(gss_OID mech);
 -#define SVCGSSD_CONTEXT_CHANNEL "/proc/net/rpc/auth.rpcsec.context/channel"
 -#define SVCGSSD_INIT_CHANNEL    "/proc/net/rpc/auth.rpcsec.init/channel"
-+#define SVCGSSD_CONTEXT_CHANNEL "/proc/net/rpc/auth.ptlrpcs.context/channel"
-+#define SVCGSSD_INIT_CHANNEL    "/proc/net/rpc/auth.ptlrpcs.init/channel"
++#define SVCGSSD_CONTEXT_CHANNEL "/proc/net/rpc/auth.sptlrpc.context/channel"
++#define SVCGSSD_INIT_CHANNEL    "/proc/net/rpc/auth.sptlrpc.init/channel"
  
  #define TOKEN_BUF_SIZE		8192
  
@@ -4031,7 +4040,7 @@ diff -Nrup nfs-utils-1.0.11/utils/gssd/svcgssd_proc.c nfs-utils-1.0.11.lustre/ut
  	if (ctx != GSS_C_NO_CONTEXT)
 diff -Nrup nfs-utils-1.0.11/utils/Makefile.am nfs-utils-1.0.11.lustre/utils/Makefile.am
 --- nfs-utils-1.0.11/utils/Makefile.am	2007-02-21 21:50:03.000000000 -0700
-+++ nfs-utils-1.0.11.lustre/utils/Makefile.am	2007-05-23 14:35:45.000000000 -0600
++++ nfs-utils-1.0.11.lustre/utils/Makefile.am	2007-06-29 12:29:20.000000000 -0600
 @@ -2,30 +2,6 @@
  
  OPTDIRS =

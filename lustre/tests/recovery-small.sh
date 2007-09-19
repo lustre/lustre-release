@@ -581,6 +581,7 @@ run_test 26 "evict dead exports"
 test_26b() {      # bug 10140 - evict dead exports by pinger
 	client_df
         zconf_mount `hostname` $MOUNT2 || error "Failed to mount $MOUNT2"
+        sleep 1 # wait connections being established
 	MDS_FILE=$LPROC/mdt/${mds1_svc}/num_exports
         MDS_NEXP1="`do_facet $SINGLEMDS cat $MDS_FILE | cut -d' ' -f2`"
 	OST_FILE=$LPROC/obdfilter/${ost1_svc}/num_exports

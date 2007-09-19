@@ -82,27 +82,6 @@ unsigned long gss_round_ctx_expiry(unsigned long expiry,
         return expiry;
 }
 
-/* we try to force reconnect import 20m eariler than real expiry.
- * kerberos 5 usually allow 5m time skew, but which is adjustable,
- * so if we set krb5 to allow > 20m time skew, we have chance that
- * server's reverse ctx expired but client still hasn't start to
- * refresh it -- it's BAD. So here we actually put a limit on the
- * enviroment of krb5 (or other authentication mechanism)
- */
-#define GSS_MAX_TIME_SKEW       (20 * 60)
-
-static inline
-unsigned long gss_round_imp_reconnect(unsigned long expiry)
-{
-        unsigned long now = get_seconds();
-        unsigned long nice = GSS_MAX_TIME_SKEW + __TIMEOUT_DELTA;
-
-        while (nice && (now + nice >= expiry))
-                nice = nice / 2;
-
-        return (expiry - nice);
-}
-
 /*
  * Max encryption element in block cipher algorithms.
  */
@@ -124,15 +103,10 @@ enum ptlrpc_gss_proc {
         PTLRPC_GSS_PROC_ERR             = 4,
 };
 
-enum ptlrpc_gss_svc {
-        PTLRPC_GSS_SVC_NONE             = 1,
-        PTLRPC_GSS_SVC_INTEGRITY        = 2,
-        PTLRPC_GSS_SVC_PRIVACY          = 3,
-};
-
 enum ptlrpc_gss_tgt {
         LUSTRE_GSS_TGT_MDS              = 0,
         LUSTRE_GSS_TGT_OSS              = 1,
+        LUSTRE_GSS_TGT_MGS              = 2,
 };
 
 static inline
@@ -238,13 +212,26 @@ struct gss_svc_ctx {
 };
 
 struct gss_svc_reqctx {
-        struct ptlrpc_svc_ctx   src_base;
-        struct gss_wire_ctx     src_wirectx;
-        struct gss_svc_ctx     *src_ctx;
-        unsigned int            src_init:1,
-                                src_init_continue:1,
-                                src_err_notify:1;
-        int                     src_reserve_len;
+        struct ptlrpc_svc_ctx           src_base;
+        /*
+         * context
+         */
+        struct gss_wire_ctx             src_wirectx;
+        struct gss_svc_ctx             *src_ctx;
+        /*
+         * record place of bulk_sec_desc in request/reply buffer
+         */
+        struct ptlrpc_bulk_sec_desc    *src_reqbsd;
+        int                             src_reqbsd_size;
+        struct ptlrpc_bulk_sec_desc    *src_repbsd;
+        int                             src_repbsd_size;
+        /*
+         * flags
+         */
+        unsigned int                    src_init:1,
+                                        src_init_continue:1,
+                                        src_err_notify:1;
+        int                             src_reserve_len;
 };
 
 struct gss_cli_ctx {
@@ -404,6 +391,8 @@ int gss_cli_ctx_init_common(struct ptlrpc_sec *sec,
                             struct vfs_cred *vcred);
 int gss_cli_ctx_fini_common(struct ptlrpc_sec *sec,
                             struct ptlrpc_cli_ctx *ctx);
+
+void gss_cli_ctx_flags2str(unsigned long flags, char *buf, int bufsize);
 
 /* gss_keyring.c */
 extern struct ptlrpc_sec_policy gss_policy_keyring;

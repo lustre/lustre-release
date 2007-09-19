@@ -1182,7 +1182,8 @@ static int osc_brw_fini_request(struct ptlrpc_request *req, int rc)
                                                   aa->aa_ppga)))
                         RETURN(-EAGAIN);
 
-                sptlrpc_cli_unwrap_bulk_write(req, req->rq_bulk);
+                if (sptlrpc_cli_unwrap_bulk_write(req, req->rq_bulk))
+                        RETURN(-EAGAIN);
 
                 rc = check_write_rcs(req, aa->aa_requested_nob,aa->aa_nio_count,
                                      aa->aa_page_count, aa->aa_ppga);
@@ -1205,7 +1206,9 @@ static int osc_brw_fini_request(struct ptlrpc_request *req, int rc)
         if (rc < aa->aa_requested_nob)
                 handle_short_read(rc, aa->aa_page_count, aa->aa_ppga);
 
-        sptlrpc_cli_unwrap_bulk_read(req, rc, aa->aa_page_count, aa->aa_ppga);
+        if (sptlrpc_cli_unwrap_bulk_read(req, rc, aa->aa_page_count,
+                                         aa->aa_ppga))
+                GOTO(out, rc = -EAGAIN);
 
         if (unlikely(body->oa.o_valid & OBD_MD_FLCKSUM)) {
                 static int cksum_counter;

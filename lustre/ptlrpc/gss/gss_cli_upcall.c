@@ -2,6 +2,7 @@
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
  *  Copyright (C) 2006 Cluster File Systems, Inc.
+ *   Author: Eric Mei <ericm@clusterfs.com>
  *
  *   This file is part of the Lustre file system, http://www.lustre.org
  *   Lustre is a trademark of Cluster File Systems, Inc.
@@ -78,7 +79,7 @@ int ctx_init_pack_request(struct obd_import *imp,
         ghdr->gh_flags = 0;
         ghdr->gh_proc = PTLRPC_GSS_PROC_INIT;
         ghdr->gh_seq = 0;
-        ghdr->gh_svc = PTLRPC_GSS_SVC_NONE;
+        ghdr->gh_svc = SPTLRPC_SVC_NULL;
         ghdr->gh_handle.len = 0;
 
         /* fix the user desc */
@@ -330,35 +331,19 @@ int gss_do_ctx_fini_rpc(struct gss_cli_ctx *gctx)
         int                      rc;
         ENTRY;
 
-        if (ctx->cc_sec->ps_flags & PTLRPC_SEC_FL_REVERSE) {
-                CWARN("ctx %p(%u) is reverse, don't send destroy rpc\n",
-                      ctx, ctx->cc_vcred.vc_uid);
-                RETURN(0);
-        }
-
-        /* FIXME
-         * this could be called when import being tearing down, thus import's
-         * spinlock is held. A more clean solution might be: let gss worker
-         * thread handle the ctx destroying; don't wait reply for fini rpc.
-         */
-        if (imp->imp_invalid) {
-                CWARN("ctx %p(%u): skip because import is invalid\n",
-                      ctx, ctx->cc_vcred.vc_uid);
-                RETURN(0);
-        }
-        RETURN(0); // XXX remove after using gss worker thread
-
-        if (test_bit(PTLRPC_CTX_ERROR_BIT, &ctx->cc_flags) ||
-            !test_bit(PTLRPC_CTX_UPTODATE_BIT, &ctx->cc_flags)) {
-                CWARN("ctx %p(%u->%s) already dead, don't send destroy rpc\n",
-                      ctx, ctx->cc_vcred.vc_uid, sec2target_str(ctx->cc_sec));
+        if (cli_ctx_is_error(ctx) || !cli_ctx_is_uptodate(ctx)) {
+                CDEBUG(D_SEC, "ctx %p(%u->%s) not uptodate, "
+                       "don't send destroy rpc\n", ctx,
+                       ctx->cc_vcred.vc_uid, sec2target_str(ctx->cc_sec));
                 RETURN(0);
         }
 
         might_sleep();
 
-        CWARN("client destroy ctx %p(%u->%s)\n",
-              ctx, ctx->cc_vcred.vc_uid, sec2target_str(ctx->cc_sec));
+        CDEBUG(D_SEC, "%s ctx %p(%u->%s)\n",
+               sec_is_reverse(ctx->cc_sec) ?
+               "server finishing reverse" : "client finishing forward",
+               ctx, ctx->cc_vcred.vc_uid, sec2target_str(ctx->cc_sec));
 
         /* context's refcount could be 0, steal one */
         atomic_inc(&ctx->cc_refcount);
@@ -386,12 +371,12 @@ int gss_do_ctx_fini_rpc(struct gss_cli_ctx *gctx)
                 pud->pud_ngroups = 0;
         }
 
-        req->rq_replen = lustre_msg_size_v2(1, &buflens);
-
-        rc = ptlrpc_queue_wait(req);
+        req->rq_phase = RQ_PHASE_RPC;
+        rc = ptl_send_rpc(req, 1);
         if (rc) {
-                CWARN("ctx %p(%u): rpc error %d, destroy locally\n",
-                      ctx, ctx->cc_vcred.vc_uid, rc);
+                CWARN("ctx %p(%u->%s): rpc error %d, destroy locally\n",
+                      ctx, ctx->cc_vcred.vc_uid, sec2target_str(ctx->cc_sec),
+                      rc);
         }
 
         ptlrpc_req_finished(req);

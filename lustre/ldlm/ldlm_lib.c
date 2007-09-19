@@ -870,13 +870,6 @@ dont_check_exports:
                                                        req->rq_self,
                                                        &remote_uuid);
 
-        if (lustre_msg_get_op_flags(req->rq_repmsg) & MSG_CONNECT_RECONNECT) {
-                LASSERT(export->exp_imp_reverse);
-                sptlrpc_svc_install_rvs_ctx(export->exp_imp_reverse,
-                                            req->rq_svc_ctx);
-                GOTO(out, rc = 0);
-        }
-
         spin_lock_bh(&target->obd_processing_task_lock);
         if (target->obd_recovering && !export->exp_in_recovery) {
                 spin_lock(&export->exp_lock);
@@ -1816,6 +1809,9 @@ void target_send_reply(struct ptlrpc_request *req, int rc, int fail_id)
         struct obd_device         *obd;
         struct obd_export         *exp;
         struct ptlrpc_service     *svc;
+
+        if (req->rq_no_reply)
+                return;
 
         svc = req->rq_rqbd->rqbd_service;
         rs = req->rq_reply_state;

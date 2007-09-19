@@ -21,6 +21,8 @@ void gssd_exit_unique(int type);
 #define LUSTRE_GSS_SVC_MDS      0
 #define LUSTRE_GSS_SVC_OSS      1
 
+extern const char * lustre_svc_name[];
+
 struct lgssd_upcall_data {
         uint32_t        seq;
         uint32_t        uid;

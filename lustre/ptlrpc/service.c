@@ -671,6 +671,14 @@ ptlrpc_server_handle_request(struct ptlrpc_service *svc,
                         ptlrpc_error(request);
                         goto put_conn;
                 }
+
+                rc = sptlrpc_target_export_check(request->rq_export, request);
+                if (unlikely(rc)) {
+                        DEBUG_REQ(D_ERROR, request,
+                                  "DROPPING req with illeagle security flavor");
+                        goto put_conn;
+                }
+
                 ptlrpc_update_export_timer(request->rq_export, timediff/500000);
                 export = class_export_rpc_get(request->rq_export);
         }

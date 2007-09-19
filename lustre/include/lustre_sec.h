@@ -27,6 +27,7 @@
  */
 struct key;
 struct obd_import;
+struct obd_export;
 struct ptlrpc_request;
 struct ptlrpc_reply_state;
 struct ptlrpc_bulk_desc;
@@ -46,7 +47,7 @@ struct ptlrpc_ctx_ops;
 /*
  * flavor constants
  */
-enum sptlrpc_policies {
+enum sptlrpc_policy {
         SPTLRPC_POLICY_NULL             = 0,
         SPTLRPC_POLICY_PLAIN            = 1,
         SPTLRPC_POLICY_GSS              = 2,
@@ -54,26 +55,27 @@ enum sptlrpc_policies {
         SPTLRPC_POLICY_MAX,
 };
 
-enum sptlrpc_subpolicy_null {
-        SPTLRPC_SUBPOLICY_NULL          = 0,
-        SPTLRPC_SUBPOLICY_NULL_MAX,
+enum sptlrpc_mech_null {
+        SPTLRPC_MECH_NULL               = 0,
+        SPTLRPC_MECH_NULL_MAX,
 };
 
-enum sptlrpc_subpolicy_plain {
-        SPTLRPC_SUBPOLICY_PLAIN         = 0,
-        SPTLRPC_SUBPOLICY_PLAIN_MAX,
+enum sptlrpc_mech_plain {
+        SPTLRPC_MECH_PLAIN              = 0,
+        SPTLRPC_MECH_PLAIN_MAX,
 };
 
-enum sptlrpc_subpolicy_gss {
-        SPTLRPC_SUBPOLICY_GSS_NONE      = 0,
-        SPTLRPC_SUBPOLICY_GSS_KRB5      = 1,
-        SPTLRPC_SUBPOLICY_GSS_MAX,
+enum sptlrpc_mech_gss {
+        SPTLRPC_MECH_GSS_NULL           = 0,
+        SPTLRPC_MECH_GSS_KRB5           = 1,
+        SPTLRPC_MECH_GSS_MAX,
 };
 
 enum sptlrpc_service_type {
-        SPTLRPC_SVC_NONE                = 0,    /* no security */
-        SPTLRPC_SVC_AUTH                = 1,    /* authentication */
-        SPTLRPC_SVC_PRIV                = 2,    /* privacy */
+        SPTLRPC_SVC_NULL                = 0,    /* no security */
+        SPTLRPC_SVC_AUTH                = 1,    /* auth only */
+        SPTLRPC_SVC_INTG                = 2,    /* integrity */
+        SPTLRPC_SVC_PRIV                = 3,    /* privacy */
         SPTLRPC_SVC_MAX,
 };
 
@@ -84,61 +86,52 @@ enum sptlrpc_service_type {
 typedef __u32 ptlrpc_sec_flavor_t;
 
 /*
- *  8b (reserved) | 8b (flags) | 6b (policy) | 6b (subpolicy) | 4b (svc)
+ *  8b (reserved)            | 8b (flags)
+ *  4b (reserved) | 4b (svc) | 4b (mech)  | 4b (policy)
  */
+#define SEC_FLAVOR_POLICY_OFFSET        (0)
+#define SEC_FLAVOR_MECH_OFFSET          (4)
+#define SEC_FLAVOR_SVC_OFFSET           (8)
+#define SEC_FLAVOR_RESERVE1_OFFSET      (12)
 #define SEC_FLAVOR_FLAGS_OFFSET         (16)
-#define SEC_FLAVOR_POLICY_OFFSET        (10)
-#define SEC_FLAVOR_SUBPOLICY_OFFSET     (4)
-#define SEC_FLAVOR_SVC_OFFSET           (0)
 
-#define SEC_MAKE_RPC_FLAVOR(policy, subpolicy, svc)                     \
+#define SEC_MAKE_RPC_FLAVOR(policy, mech, svc)                          \
         (((__u32)(policy) << SEC_FLAVOR_POLICY_OFFSET) |                \
-         ((__u32)(subpolicy) << SEC_FLAVOR_SUBPOLICY_OFFSET) |          \
+         ((__u32)(mech) << SEC_FLAVOR_MECH_OFFSET) |                    \
          ((__u32)(svc) << SEC_FLAVOR_SVC_OFFSET))
 
-#define SEC_MAKE_RPC_SUBFLAVOR(subpolicy, svc)                          \
-        (((__u32)(subpolicy) << SEC_FLAVOR_SUBPOLICY_OFFSET) |          \
-         ((__u32)(svc) << SEC_FLAVOR_SVC_OFFSET))
+#define SEC_MAKE_RPC_SUBFLAVOR(mech, svc)                               \
+        ((__u32)(mech) |                                                \
+         ((__u32)(svc) <<                                               \
+                (SEC_FLAVOR_SVC_OFFSET - SEC_FLAVOR_MECH_OFFSET)))
+
+#define SEC_FLAVOR_SUB(flavor)                                          \
+        ((((__u32)(flavor)) >> SEC_FLAVOR_MECH_OFFSET) & 0xFF)
 
 #define SEC_FLAVOR_POLICY(flavor)                                       \
-        ((((__u32)(flavor)) >> SEC_FLAVOR_POLICY_OFFSET) & 0x3F)
-#define SEC_FLAVOR_SUBPOLICY(flavor)                                    \
-        ((((__u32)(flavor)) >> SEC_FLAVOR_SUBPOLICY_OFFSET) & 0x3F)
+        ((((__u32)(flavor)) >> SEC_FLAVOR_POLICY_OFFSET) & 0xF)
+#define SEC_FLAVOR_MECH(flavor)                                         \
+        ((((__u32)(flavor)) >> SEC_FLAVOR_MECH_OFFSET) & 0xF)
 #define SEC_FLAVOR_SVC(flavor)                                          \
         ((((__u32)(flavor)) >> SEC_FLAVOR_SVC_OFFSET) & 0xF)
-#define SEC_FLAVOR_SUB(flavor)                                          \
-        ((((__u32)(flavor)) >> SEC_FLAVOR_SVC_OFFSET) & 0x3FF)
 
 #define SEC_FLAVOR_RPC(f)                                               \
-        (((__u32) f) & ((1 << SEC_FLAVOR_FLAGS_OFFSET) - 1))
-
-/*
- * general gss flavors
- */
-#define SPTLRPC_FLVR_GSS_NONE                                   \
-        SEC_MAKE_RPC_FLAVOR(SPTLRPC_POLICY_GSS,                 \
-                            SPTLRPC_SUBPOLICY_GSS_NONE,         \
-                            SPTLRPC_SVC_NONE)
-#define SPTLRPC_FLVR_GSS_AUTH                                   \
-        SEC_MAKE_RPC_FLAVOR(SPTLRPC_POLICY_GSS,                 \
-                            SPTLRPC_SUBPOLICY_GSS_NONE,         \
-                            SPTLRPC_SVC_AUTH)
-#define SPTLRPC_FLVR_GSS_PRIV                                   \
-        SEC_MAKE_RPC_FLAVOR(SPTLRPC_POLICY_GSS,                 \
-                            SPTLRPC_SUBPOLICY_GSS_NONE,         \
-                            SPTLRPC_SVC_PRIV)
+        (((__u32) (f)) & ((1 << SEC_FLAVOR_RESERVE1_OFFSET) - 1))
 
 /*
  * gss subflavors
  */
-#define SPTLRPC_SUBFLVR_KRB5                                    \
-        SEC_MAKE_RPC_SUBFLAVOR(SPTLRPC_SUBPOLICY_GSS_KRB5,      \
-                               SPTLRPC_SVC_NONE)
-#define SPTLRPC_SUBFLVR_KRB5I                                   \
-        SEC_MAKE_RPC_SUBFLAVOR(SPTLRPC_SUBPOLICY_GSS_KRB5,      \
+#define SPTLRPC_SUBFLVR_KRB5N                                   \
+        SEC_MAKE_RPC_SUBFLAVOR(SPTLRPC_MECH_GSS_KRB5,           \
+                               SPTLRPC_SVC_NULL)
+#define SPTLRPC_SUBFLVR_KRB5A                                   \
+        SEC_MAKE_RPC_SUBFLAVOR(SPTLRPC_MECH_GSS_KRB5,           \
                                SPTLRPC_SVC_AUTH)
+#define SPTLRPC_SUBFLVR_KRB5I                                   \
+        SEC_MAKE_RPC_SUBFLAVOR(SPTLRPC_MECH_GSS_KRB5,           \
+                               SPTLRPC_SVC_INTG)
 #define SPTLRPC_SUBFLVR_KRB5P                                   \
-        SEC_MAKE_RPC_SUBFLAVOR(SPTLRPC_SUBPOLICY_GSS_KRB5,      \
+        SEC_MAKE_RPC_SUBFLAVOR(SPTLRPC_MECH_GSS_KRB5,           \
                                SPTLRPC_SVC_PRIV)
 
 /*
@@ -146,23 +139,27 @@ typedef __u32 ptlrpc_sec_flavor_t;
  */
 #define SPTLRPC_FLVR_NULL                                       \
         SEC_MAKE_RPC_FLAVOR(SPTLRPC_POLICY_NULL,                \
-                            SPTLRPC_SUBPOLICY_NULL,             \
-                            SPTLRPC_SVC_NONE)
+                            SPTLRPC_MECH_NULL,                  \
+                            SPTLRPC_SVC_NULL)
 #define SPTLRPC_FLVR_PLAIN                                      \
         SEC_MAKE_RPC_FLAVOR(SPTLRPC_POLICY_PLAIN,               \
-                            SPTLRPC_SUBPOLICY_PLAIN,            \
-                            SPTLRPC_SVC_NONE)
-#define SPTLRPC_FLVR_KRB5                                       \
+                            SPTLRPC_MECH_PLAIN,                 \
+                            SPTLRPC_SVC_NULL)
+#define SPTLRPC_FLVR_KRB5N                                      \
         SEC_MAKE_RPC_FLAVOR(SPTLRPC_POLICY_GSS,                 \
-                            SPTLRPC_SUBPOLICY_GSS_KRB5,         \
-                            SPTLRPC_SVC_NONE)
+                            SPTLRPC_MECH_GSS_KRB5,              \
+                            SPTLRPC_SVC_NULL)
+#define SPTLRPC_FLVR_KRB5A                                      \
+        SEC_MAKE_RPC_FLAVOR(SPTLRPC_POLICY_GSS,                 \
+                            SPTLRPC_MECH_GSS_KRB5,              \
+                            SPTLRPC_SVC_AUTH)
 #define SPTLRPC_FLVR_KRB5I                                      \
         SEC_MAKE_RPC_FLAVOR(SPTLRPC_POLICY_GSS,                 \
-                            SPTLRPC_SUBPOLICY_GSS_KRB5,         \
-                            SPTLRPC_SVC_AUTH)
+                            SPTLRPC_MECH_GSS_KRB5,              \
+                            SPTLRPC_SVC_INTG)
 #define SPTLRPC_FLVR_KRB5P                                      \
         SEC_MAKE_RPC_FLAVOR(SPTLRPC_POLICY_GSS,                 \
-                            SPTLRPC_SUBPOLICY_GSS_KRB5,         \
+                            SPTLRPC_MECH_GSS_KRB5,              \
                             SPTLRPC_SVC_PRIV)
 
 #define SPTLRPC_FLVR_INVALID            (-1)
@@ -259,15 +256,17 @@ struct ptlrpc_ctx_ops {
                                         PTLRPC_CTX_ERROR)
 
 struct ptlrpc_cli_ctx {
-        struct hlist_node       cc_hash;       /* linked into hash table */
+        struct hlist_node       cc_cache;      /* linked into ctx cache */
         atomic_t                cc_refcount;
         struct ptlrpc_sec      *cc_sec;
         struct ptlrpc_ctx_ops  *cc_ops;
         cfs_time_t              cc_expire;     /* in seconds */
+        unsigned int            cc_early_expire:1;
         unsigned long           cc_flags;
         struct vfs_cred         cc_vcred;
         spinlock_t              cc_lock;
         struct list_head        cc_req_list;   /* waiting reqs linked here */
+        struct list_head        cc_gc_chain;   /* linked to gc chain */
 };
 
 struct ptlrpc_sec_cops {
@@ -376,6 +375,17 @@ struct ptlrpc_sec {
         cfs_time_t                      ps_gc_interval; /* in seconds */
         cfs_time_t                      ps_gc_next;     /* in seconds */
 };
+
+static inline int sec_is_reverse(struct ptlrpc_sec *sec)
+{
+        return (sec->ps_flags & PTLRPC_SEC_FL_REVERSE);
+}
+
+static inline int sec_is_rootonly(struct ptlrpc_sec *sec)
+{
+        return (sec->ps_flags & PTLRPC_SEC_FL_ROOTONLY);
+}
+
 
 struct ptlrpc_svc_ctx {
         atomic_t                        sc_refcount;
@@ -490,7 +500,7 @@ unsigned long cli_ctx_status(struct ptlrpc_cli_ctx *ctx)
 }
 
 static inline
-int cli_ctx_is_uptodate(struct ptlrpc_cli_ctx *ctx)
+int cli_ctx_is_ready(struct ptlrpc_cli_ctx *ctx)
 {
         return (cli_ctx_status(ctx) == PTLRPC_CTX_UPTODATE);
 }
@@ -499,6 +509,18 @@ static inline
 int cli_ctx_is_refreshed(struct ptlrpc_cli_ctx *ctx)
 {
         return (cli_ctx_status(ctx) != 0);
+}
+
+static inline
+int cli_ctx_is_uptodate(struct ptlrpc_cli_ctx *ctx)
+{
+        return ((ctx->cc_flags & PTLRPC_CTX_UPTODATE) != 0);
+}
+
+static inline
+int cli_ctx_is_error(struct ptlrpc_cli_ctx *ctx)
+{
+        return ((ctx->cc_flags & PTLRPC_CTX_ERROR) != 0);
 }
 
 static inline
@@ -551,13 +573,18 @@ void sptlrpc_import_flush_root_ctx(struct obd_import *imp);
 void sptlrpc_import_flush_my_ctx(struct obd_import *imp);
 void sptlrpc_import_flush_all_ctx(struct obd_import *imp);
 int  sptlrpc_req_get_ctx(struct ptlrpc_request *req);
-void sptlrpc_req_put_ctx(struct ptlrpc_request *req);
+void sptlrpc_req_put_ctx(struct ptlrpc_request *req, int sync);
 int  sptlrpc_req_refresh_ctx(struct ptlrpc_request *req, long timeout);
 int  sptlrpc_req_replace_dead_ctx(struct ptlrpc_request *req);
 void sptlrpc_req_set_flavor(struct ptlrpc_request *req, int opcode);
 
 int sptlrpc_parse_flavor(enum lustre_part from, enum lustre_part to,
                          char *str, struct sec_flavor_config *conf);
+
+/* gc */
+void sptlrpc_gc_add_sec(struct ptlrpc_sec *sec);
+void sptlrpc_gc_del_sec(struct ptlrpc_sec *sec);
+void sptlrpc_gc_add_ctx(struct ptlrpc_cli_ctx *ctx);
 
 /* misc */
 const char * sec2target_str(struct ptlrpc_sec *sec);
@@ -573,6 +600,8 @@ enum secsvc_accept_res {
         SECSVC_DROP,
 };
 
+int sptlrpc_target_export_check(struct obd_export *exp,
+                                struct ptlrpc_request *req);
 int  sptlrpc_svc_unwrap_request(struct ptlrpc_request *req);
 int  sptlrpc_svc_alloc_rs(struct ptlrpc_request *req, int msglen);
 int  sptlrpc_svc_wrap_reply(struct ptlrpc_request *req);
@@ -627,8 +656,8 @@ int bulk_csum_cli_reply(struct ptlrpc_bulk_desc *desc, int read,
                         struct lustre_msg *rmsg, int roff,
                         struct lustre_msg *vmsg, int voff);
 int bulk_csum_svc(struct ptlrpc_bulk_desc *desc, int read,
-                  struct lustre_msg *vmsg, int voff,
-                  struct lustre_msg *rmsg, int roff);
+                  struct ptlrpc_bulk_sec_desc *bsdv, int vsize,
+                  struct ptlrpc_bulk_sec_desc *bsdr, int rsize);
 
 
 #endif /* _LUSTRE_SEC_H_ */

@@ -2,6 +2,7 @@
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
  * Copyright (C) 2006 Cluster File Systems, Inc.
+ *   Author: Eric Mei <ericm@clusterfs.com>
  *
  *   This file is part of Lustre, http://www.lustre.org.
  *
@@ -114,28 +115,6 @@ int sptlrpc_lprocfs_rd(char *page, char **start, off_t off, int count,
                 written += sec->ps_policy->sp_cops->display(
                                         sec, page + written, count - written);
         }
-#if 0
-        /*
-         * list contexts
-         */
-        if (sec->ps_policy->sp_policy != SPTLRPC_POLICY_GSS)
-                goto out;
-
-        written += snprintf(page + written, count - written,
-                            "GSS contexts ==>\n");
-
-        spin_lock(&sec->ps_lock);
-        for (i = 0; i < sec->ps_ccache_size; i++) {
-                hlist_for_each_entry_safe(ctx, pos, next,
-                                          &sec->ps_ccache[i], cc_hash) {
-                        if (written >= count)
-                                break;
-                        written += sptlrpc_cli_ctx_display(ctx, page + written,
-                                                           count - written);
-                }
-        }
-        spin_unlock(&sec->ps_lock);
-#endif
 
 out:
         return written;

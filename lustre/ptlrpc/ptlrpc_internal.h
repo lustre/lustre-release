@@ -197,8 +197,6 @@ int  sptlrpc_lproc_init(void);
 void sptlrpc_lproc_fini(void);
 
 /* sec_gc.c */
-void sptlrpc_gc_add_sec(struct ptlrpc_sec *sec);
-void sptlrpc_gc_del_sec(struct ptlrpc_sec *sec);
 int sptlrpc_gc_start_thread(void);
 void sptlrpc_gc_stop_thread(void);
 

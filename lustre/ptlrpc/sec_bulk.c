@@ -2,6 +2,7 @@
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
  * Copyright (C) 2006 Cluster File Systems, Inc.
+ *   Author: Eric Mei <ericm@clusterfs.com>
  *
  *   This file is part of Lustre, http://www.lustre.org.
  *
@@ -959,16 +960,10 @@ int bulk_csum_cli_reply(struct ptlrpc_bulk_desc *desc, int read,
 EXPORT_SYMBOL(bulk_csum_cli_reply);
 
 int bulk_csum_svc(struct ptlrpc_bulk_desc *desc, int read,
-                  struct lustre_msg *vmsg, int voff,
-                  struct lustre_msg *rmsg, int roff)
+                  struct ptlrpc_bulk_sec_desc *bsdv, int vsize,
+                  struct ptlrpc_bulk_sec_desc *bsdr, int rsize)
 {
-        struct ptlrpc_bulk_sec_desc *bsdv, *bsdr;
-        int    vsize, rsize, rc;
-
-        vsize = vmsg->lm_buflens[voff];
-        rsize = rmsg->lm_buflens[roff];
-        bsdv = lustre_msg_buf(vmsg, voff, 0);
-        bsdr = lustre_msg_buf(rmsg, roff, 0);
+        int    rc;
 
         LASSERT(vsize >= sizeof(*bsdv));
         LASSERT(rsize >= sizeof(*bsdr));

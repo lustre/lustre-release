@@ -68,7 +68,7 @@ LUSTRE=${LUSTRE:-`dirname $0`/..}
 init_test_env $@
 . ${CONFIG:=$LUSTRE/tests/cfg/$NAME.sh}
 
-if [ ! -z "$USING_KRB5" ]; then
+if $GSS_KRB5; then
     $RUNAS -u $ID1 krb5_login.sh || exit 1
     $RUNAS -u $ID2 krb5_login.sh || exit 1
 fi

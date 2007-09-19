@@ -1500,6 +1500,9 @@ static int ldlm_callback_handler(struct ptlrpc_request *req)
                 rc = llog_origin_handle_close(req);
                 ldlm_callback_reply(req, rc);
                 RETURN(0);
+        case SEC_CTX_FINI:
+                /* do nothing */
+                RETURN(0);
         default:
                 CERROR("unknown opcode %u\n",
                        lustre_msg_get_opc(req->rq_reqmsg));

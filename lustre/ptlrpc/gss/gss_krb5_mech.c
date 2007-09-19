@@ -481,12 +481,8 @@ __u32 gss_copy_reverse_context_kerberos(struct gss_ctx *gctx,
         knew->kc_cfx = kctx->kc_cfx;
         knew->kc_seed_init = kctx->kc_seed_init;
         knew->kc_have_acceptor_subkey = kctx->kc_have_acceptor_subkey;
-#if 0
         knew->kc_endtime = kctx->kc_endtime;
-#else
-        /* FIXME reverse context don't expire for now */
-        knew->kc_endtime = INT_MAX;
-#endif
+
         memcpy(knew->kc_seed, kctx->kc_seed, sizeof(kctx->kc_seed));
         knew->kc_seq_send = kctx->kc_seq_recv;
         knew->kc_seq_recv = kctx->kc_seq_send;
@@ -1194,10 +1190,8 @@ int gss_display_kerberos(struct gss_ctx        *ctx,
         struct krb5_ctx    *kctx = ctx->internal_ctx_id;
         int                 written;
 
-        written = snprintf(buf, bufsize,
-                        "  mech:        krb5\n"
-                        "  enctype:     %s\n",
-                        enctype2str(kctx->kc_enctype));
+        written = snprintf(buf, bufsize, "mech: krb5 (%s)\n",
+                           enctype2str(kctx->kc_enctype));
         return written;
 }
 
@@ -1216,15 +1210,21 @@ static struct gss_api_ops gss_kerberos_ops = {
 
 static struct subflavor_desc gss_kerberos_sfs[] = {
         {
-                .sf_subflavor   = SPTLRPC_SUBFLVR_KRB5,
+                .sf_subflavor   = SPTLRPC_SUBFLVR_KRB5N,
                 .sf_qop         = 0,
-                .sf_service     = SPTLRPC_SVC_NONE,
-                .sf_name        = "krb5"
+                .sf_service     = SPTLRPC_SVC_NULL,
+                .sf_name        = "krb5n"
+        },
+        {
+                .sf_subflavor   = SPTLRPC_SUBFLVR_KRB5A,
+                .sf_qop         = 0,
+                .sf_service     = SPTLRPC_SVC_AUTH,
+                .sf_name        = "krb5a"
         },
         {
                 .sf_subflavor   = SPTLRPC_SUBFLVR_KRB5I,
                 .sf_qop         = 0,
-                .sf_service     = SPTLRPC_SVC_AUTH,
+                .sf_service     = SPTLRPC_SVC_INTG,
                 .sf_name        = "krb5i"
         },
         {
@@ -1244,7 +1244,7 @@ static struct gss_api_mech gss_kerberos_mech = {
         .gm_oid         = (rawobj_t)
                                 {9, "\052\206\110\206\367\022\001\002\002"},
         .gm_ops         = &gss_kerberos_ops,
-        .gm_sf_num      = 3,
+        .gm_sf_num      = 4,
         .gm_sfs         = gss_kerberos_sfs,
 };
 

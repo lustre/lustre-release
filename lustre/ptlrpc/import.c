@@ -564,10 +564,6 @@ static int ptlrpc_connect_interpret(struct ptlrpc_request *request,
         if (rc)
                 GOTO(out, rc);
 
-        rc = sptlrpc_cli_install_rvs_ctx(imp, request->rq_cli_ctx);
-        if (rc)
-                GOTO(out, rc);
-
         LASSERT(imp->imp_conn_current);
 
         msg_flags = lustre_msg_get_op_flags(request->rq_repmsg);
