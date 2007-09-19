@@ -12,7 +12,7 @@ set -e
 ONLY=${ONLY:-"$*"}
 
 # These tests don't apply to mountconf
-MOUNTCONFSKIP="9 10 11 12 13 13b 14 15 18"
+MOUNTCONFSKIP="9 10 11 12 13 13b 14 15"
 
 # bug number for skipped test:
 ALWAYS_EXCEPT=" $CONF_SANITY_EXCEPT $MOUNTCONFSKIP 16 23"
