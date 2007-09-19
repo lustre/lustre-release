@@ -268,6 +268,12 @@ Details    : Don't take the BKL in fsfilt_ext3_setattr() for 2.6 kernels.
 	     It causes scheduling issues when removing large files (17TB in the
 	     present case).
 
+Severity   : normal
+Frequency  : only with liblustre clients on XT3
+Bugzilla   : 12418
+Description: evictions taking too long
+Details    : allow llrd to evict clients directly on OSTs
+
 --------------------------------------------------------------------------------
 
 2007-08-10         Cluster File Systems, Inc. <info@clusterfs.com>

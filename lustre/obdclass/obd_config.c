@@ -179,6 +179,7 @@ int class_attach(struct lustre_cfg *lcfg)
         cfs_init_timer(&obd->obd_recovery_timer);
         spin_lock_init(&obd->obd_processing_task_lock);
         cfs_waitq_init(&obd->obd_next_transno_waitq);
+        cfs_waitq_init(&obd->obd_evict_inprogress_waitq);
         CFS_INIT_LIST_HEAD(&obd->obd_req_replay_queue);
         CFS_INIT_LIST_HEAD(&obd->obd_lock_replay_queue);
         CFS_INIT_LIST_HEAD(&obd->obd_final_req_queue);

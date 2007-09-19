@@ -535,7 +535,8 @@ struct mds_obd {
         struct semaphore                 mds_health_sem;
         unsigned long                    mds_lov_objids_valid:1,
                                          mds_fl_user_xattr:1,
-                                         mds_fl_acl:1;
+                                         mds_fl_acl:1,
+                                         mds_evict_ost_nids:1;
 
 
         struct upcall_cache             *mds_identity_cache;
@@ -911,6 +912,8 @@ struct obd_device {
         cfs_proc_dir_entry_t  *obd_svc_procroot;
         struct lprocfs_stats  *obd_svc_stats;
         struct semaphore       obd_proc_exp_sem;
+        atomic_t               obd_evict_inprogress;
+        cfs_waitq_t            obd_evict_inprogress_waitq;
 };
 
 #define OBD_OPT_FORCE           0x0001

@@ -501,7 +501,12 @@ int lprocfs_wr_evict_client(struct file *file, const char *buffer,
         LPROCFS_EXIT();
  
         sscanf(buffer, "%40s", tmpbuf);
-        obd_export_evict_by_uuid(obd, tmpbuf);
+        if (strncmp(tmpbuf, "nid:", 4) == 0)
+                obd_export_evict_by_nid(obd, tmpbuf + 4);
+        else if (strncmp(tmpbuf, "uuid:", 5) == 0)
+                obd_export_evict_by_uuid(obd, tmpbuf + 5);
+        else
+                obd_export_evict_by_uuid(obd, tmpbuf);
 
         LPROCFS_ENTRY();
         class_decref(obd);
