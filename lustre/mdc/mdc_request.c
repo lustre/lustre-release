@@ -530,7 +530,7 @@ int mdc_get_lustre_md(struct obd_export *exp, struct ptlrpc_request *req,
                 LASSERT(S_ISDIR(md->body->mode));
 
                 if (md->body->eadatasize == 0) {
-                        CERROR("OBD_MD_FLEASIZE is set, but eadatasize 0\n");
+                        CERROR("OBD_MD_FLDIREA is set, but eadatasize 0\n");
                         RETURN(-EPROTO);
                 }
                 if (md->body->valid & OBD_MD_MEA) {
