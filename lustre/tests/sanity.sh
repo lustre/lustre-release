@@ -4264,6 +4264,14 @@ enough to cancel $LRU_SIZE_B locks"
 }
 run_test 124 "lru resize ======================================="
 
+test_125() { # 13358
+	mkdir -p $DIR/d125 || error "mkdir failed"
+	$SETSTRIPE $DIR/d125 65536 -1 -1 || error "setstripe failed"
+	setfacl -R -m u:bin:rwx $DIR/d125 || error "setfacl $DIR/d125 failes"
+	ls -ld $DIR/d125 || error "cannot access $DIR/d125"
+}
+run_test 125 "don't return EPROTO when a dir has a non-default striping and ACLs"
+
 TMPDIR=$OLDTMPDIR
 TMP=$OLDTMP
 HOME=$OLDHOME
