@@ -95,7 +95,7 @@ static int ll_close_inode_openhandle(struct obd_export *md_exp,
         struct ptlrpc_request *req = NULL;
         struct obd_device *obd = class_exp2obd(exp);
         int epoch_close = 1;
-        int rc;
+        int seq_end = 0, rc;
         ENTRY;
 
         if (obd == NULL) {
@@ -122,7 +122,9 @@ static int ll_close_inode_openhandle(struct obd_export *md_exp,
 
         ll_prepare_close(inode, op_data, och);
         epoch_close = (op_data->op_flags & MF_EPOCH_CLOSE);
-        rc = md_close(md_exp, op_data, och, &req);
+        rc = md_close(md_exp, op_data, och->och_mod, &req);
+        if (rc != -EAGAIN)
+                seq_end = 1;
 
         if (rc == -EAGAIN) {
                 /* This close must have the epoch closed. */
@@ -130,8 +132,8 @@ static int ll_close_inode_openhandle(struct obd_export *md_exp,
                 LASSERT(epoch_close);
                 /* MDS has instructed us to obtain Size-on-MDS attribute from
                  * OSTs and send setattr to back to MDS. */
-                rc = ll_sizeonmds_update(inode, &och->och_fh,
-                                         op_data->op_ioepoch);
+                rc = ll_sizeonmds_update(inode, och->och_mod,
+                                         &och->och_fh, op_data->op_ioepoch);
                 if (rc) {
                         CERROR("inode %lu mdc Size-on-MDS update failed: "
                                "rc = %d\n", inode->i_ino, rc);
@@ -150,7 +152,6 @@ static int ll_close_inode_openhandle(struct obd_export *md_exp,
                                inode->i_ino, rc);
         }
 
-        ptlrpc_req_finished(req); /* This is close request */
         EXIT;
 out:
       
@@ -158,12 +159,15 @@ out:
             S_ISREG(inode->i_mode) && (och->och_flags & FMODE_WRITE)) {
                 ll_queue_done_writing(inode, LLIF_DONE_WRITING);
         } else {
+                if (seq_end)
+                        ptlrpc_close_replay_seq(req);
                 md_clear_open_replay_data(md_exp, och);
                 /* Free @och if it is not waiting for DONE_WRITING. */
                 och->och_fh.cookie = DEAD_HANDLE_MAGIC;
                 OBD_FREE_PTR(och);
         }
-        
+        if (req) /* This is close request */
+                ptlrpc_req_finished(req);
         return rc;
 }
 

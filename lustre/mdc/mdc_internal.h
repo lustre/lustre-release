@@ -64,12 +64,6 @@ void mdc_close_pack(struct ptlrpc_request *req, int offset,
 void mdc_exit_request(struct client_obd *cli);
 void mdc_enter_request(struct client_obd *cli);
 
-struct mdc_open_data {
-        struct obd_client_handle *mod_och;
-        struct ptlrpc_request    *mod_open_req;
-        struct ptlrpc_request    *mod_close_req;
-};
-
 static inline int client_is_remote(struct obd_export *exp)
 {
         struct obd_import *imp = class_exp2cliimp(exp);
@@ -139,6 +133,7 @@ int mdc_set_open_replay_data(struct obd_export *exp,
 
 int mdc_clear_open_replay_data(struct obd_export *exp,
                                struct obd_client_handle *och);
+void mdc_commit_delayed(struct ptlrpc_request *req);
 
 int mdc_create(struct obd_export *exp, struct md_op_data *op_data,
                const void *data, int datalen, int mode, __u32 uid, __u32 gid,
@@ -150,7 +145,7 @@ int mdc_rename(struct obd_export *exp, struct md_op_data *op_data,
                struct ptlrpc_request **request);
 int mdc_setattr(struct obd_export *exp, struct md_op_data *op_data,
                 void *ea, int ealen, void *ea2, int ea2len,
-                struct ptlrpc_request **request);
+                struct ptlrpc_request **request, struct md_open_data **mod);
 int mdc_unlink(struct obd_export *exp, struct md_op_data *op_data,
                struct ptlrpc_request **request);
 int mdc_cancel_unused(struct obd_export *exp, const struct lu_fid *fid,

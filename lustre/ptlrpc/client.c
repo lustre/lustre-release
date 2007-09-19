@@ -393,6 +393,7 @@ ptlrpc_prep_req_pool(struct obd_import *imp, __u32 version, int opcode,
         spin_lock_init(&request->rq_lock);
         CFS_INIT_LIST_HEAD(&request->rq_list);
         CFS_INIT_LIST_HEAD(&request->rq_replay_list);
+        CFS_INIT_LIST_HEAD(&request->rq_mod_list);
         CFS_INIT_LIST_HEAD(&request->rq_ctx_chain);
         CFS_INIT_LIST_HEAD(&request->rq_set_chain);
         cfs_waitq_init(&request->rq_reply_waitq);
@@ -1264,6 +1265,7 @@ static void __ptlrpc_free_req(struct ptlrpc_request *request, int locked)
         if (request->rq_import != NULL) {
                 if (!locked)
                         spin_lock(&request->rq_import->imp_lock);
+                list_del_init(&request->rq_mod_list);
                 list_del_init(&request->rq_replay_list);
                 if (!locked)
                         spin_unlock(&request->rq_import->imp_lock);

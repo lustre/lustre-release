@@ -525,10 +525,11 @@ int ll_md_close(struct obd_export *md_exp, struct inode *inode,
 int ll_md_real_close(struct inode *inode, int flags);
 void ll_epoch_close(struct inode *inode, struct md_op_data *op_data,
                     struct obd_client_handle **och, unsigned long flags);
-int ll_sizeonmds_update(struct inode *inode, struct lustre_handle *fh,
-                        __u64 ioepoch);
+int ll_sizeonmds_update(struct inode *inode, struct md_open_data *data,
+                        struct lustre_handle *fh, __u64 ioepoch);
 int ll_inode_getattr(struct inode *inode, struct obdo *obdo);
-int ll_md_setattr(struct inode *inode, struct md_op_data *op_data);
+int ll_md_setattr(struct inode *inode, struct md_op_data *op_data,
+                  struct md_open_data **mod);
 void ll_pack_inode2opdata(struct inode *inode, struct md_op_data *op_data,
                           struct lustre_handle *fh);
 extern void ll_rw_stats_tally(struct ll_sb_info *sbi, pid_t pid, struct file

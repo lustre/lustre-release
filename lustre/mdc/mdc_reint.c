@@ -98,7 +98,7 @@ int mdc_resource_get_unused(struct obd_export *exp, struct lu_fid *fid,
  * go to the setattr portal. */
 int mdc_setattr(struct obd_export *exp, struct md_op_data *op_data,
                 void *ea, int ealen, void *ea2, int ea2len,
-                struct ptlrpc_request **request)
+                struct ptlrpc_request **request, struct md_open_data **mod)
 {
         CFS_LIST_HEAD(cancels);
         struct ptlrpc_request *req;
@@ -162,12 +162,36 @@ int mdc_setattr(struct obd_export *exp, struct md_op_data *op_data,
         size[REPLY_REC_OFF] = sizeof(struct mdt_body);
         size[REPLY_REC_OFF + 1] = sizeof(struct lustre_capa);
         ptlrpc_req_set_repsize(req, 3, size);
+        if (mod && (op_data->op_flags & MF_EPOCH_OPEN) &&
+            req->rq_import->imp_replayable)
+        {
+                LASSERT(*mod == NULL);
+
+                OBD_ALLOC_PTR(*mod);
+                if (*mod == NULL) {
+                        DEBUG_REQ(D_ERROR, req, "Can't allocate "
+                                  "md_open_data");
+                } else {
+                        CFS_INIT_LIST_HEAD(&(*mod)->mod_replay_list);
+                }
+        }
+        if (mod && *mod) {
+                req->rq_cb_data = *mod;
+                req->rq_commit_cb = mdc_commit_delayed;
+                list_add_tail(&req->rq_mod_list, &(*mod)->mod_replay_list);
+                /* This is not the last request in sequence for truncate. */
+                if (op_data->op_flags & MF_EPOCH_OPEN)
+                        req->rq_replay = 1;
+                else
+                        req->rq_sequence = 1;
+        }
 
         rc = mdc_reint(req, rpc_lock, LUSTRE_IMP_FULL);
         *request = req;
         if (rc == -ERESTARTSYS)
                 rc = 0;
-
+        if (rc && req->rq_commit_cb)
+                req->rq_commit_cb(req);
         RETURN(rc);
 }
 

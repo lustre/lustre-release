@@ -1248,7 +1248,7 @@ static int lmv_change_cbdata(struct obd_export *exp, const struct lu_fid *fid,
 
 static int lmv_close(struct obd_export *exp,
                      struct md_op_data *op_data,
-                     struct obd_client_handle *och,
+                     struct md_open_data *mod,
                      struct ptlrpc_request **request)
 {
         struct obd_device *obd = exp->exp_obd;
@@ -1266,7 +1266,7 @@ static int lmv_close(struct obd_export *exp,
                 RETURN(PTR_ERR(tgt_exp));
 
         CDEBUG(D_OTHER, "CLOSE "DFID"\n", PFID(&op_data->op_fid1));
-        rc = md_close(tgt_exp, op_data, och, request);
+        rc = md_close(tgt_exp, op_data, mod, request);
         RETURN(rc);
 }
 
@@ -1411,7 +1411,7 @@ repeat:
 
 static int lmv_done_writing(struct obd_export *exp,
                             struct md_op_data *op_data,
-                            struct obd_client_handle *och)
+                            struct md_open_data *mod)
 {
         struct obd_device *obd = exp->exp_obd;
         struct lmv_obd *lmv = &obd->u.lmv;
@@ -1427,7 +1427,7 @@ static int lmv_done_writing(struct obd_export *exp,
         if (IS_ERR(tgt_exp))
                 RETURN(PTR_ERR(tgt_exp));
 
-        rc = md_done_writing(tgt_exp, op_data, och);
+        rc = md_done_writing(tgt_exp, op_data, mod);
         RETURN(rc);
 }
 
@@ -2025,7 +2025,8 @@ request:
 
 static int lmv_setattr(struct obd_export *exp, struct md_op_data *op_data,
                        void *ea, int ealen, void *ea2, int ea2len,
-                       struct ptlrpc_request **request)
+                       struct ptlrpc_request **request,
+                       struct md_open_data **mod)
 {
         struct obd_device *obd = exp->exp_obd;
         struct lmv_obd *lmv = &obd->u.lmv;
@@ -2057,7 +2058,7 @@ static int lmv_setattr(struct obd_export *exp, struct md_op_data *op_data,
                         }
 
                         rc = md_setattr(tgt_exp, op_data, ea, ealen,
-                                        ea2, ea2len, &req);
+                                        ea2, ea2len, &req, mod);
 
                         if (lu_fid_eq(&obj->lo_fid, &obj->lo_inodes[i].li_fid)) {
                                 /*
@@ -2079,7 +2080,7 @@ static int lmv_setattr(struct obd_export *exp, struct md_op_data *op_data,
                         RETURN(PTR_ERR(tgt_exp));
 
                 rc = md_setattr(tgt_exp, op_data, ea, ealen, ea2,
-                                ea2len, request);
+                                ea2len, request, mod);
         }
         RETURN(rc);
 }

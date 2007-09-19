@@ -297,11 +297,13 @@ struct ptlrpc_request {
                  * after server commits corresponding transaction. This is
                  * used for operations that require sequence of multiple
                  * requests to be replayed. The only example currently is file
-                 * open/close. When last request in such a sequence is
-                 * committed, ->rq_replay is cleared on all requests in the
+                 * open/close/dw/setattr. When last request in such a sequence
+                 * is committed, ->rq_replay is cleared on all requests in the
                  * sequence.
                  */
                 rq_replay:1,
+                /* this is the last request in the sequence. */
+                rq_sequence:1,
                 rq_no_resend:1, rq_waiting:1, rq_receiving_reply:1,
                 rq_no_delay:1, rq_net_err:1, rq_wait_ctx:1;
         enum rq_phase rq_phase; /* one of RQ_PHASE_* */
@@ -323,6 +325,7 @@ struct ptlrpc_request {
         __u64 rq_transno;
         __u64 rq_xid;
         struct list_head rq_replay_list;
+        struct list_head rq_mod_list;
 
         struct ptlrpc_cli_ctx   *rq_cli_ctx;     /* client's half ctx */
         struct ptlrpc_svc_ctx   *rq_svc_ctx;     /* server's half ctx */
@@ -401,6 +404,14 @@ struct ptlrpc_request {
                                                    preallocated list */
         struct lu_context           rq_session;
 };
+
+static inline void ptlrpc_close_replay_seq(struct ptlrpc_request *req)
+{
+        spin_lock(&req->rq_lock);
+        req->rq_replay = 0;
+        req->rq_sequence = 1;
+        spin_unlock(&req->rq_lock);
+}
 
 static inline void lustre_set_req_swabbed(struct ptlrpc_request *req, int index)
 {

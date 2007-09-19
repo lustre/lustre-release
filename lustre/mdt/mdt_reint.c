@@ -353,16 +353,7 @@ static int mdt_reint_setattr(struct mdt_thread_info *info,
                                         info->mti_epoch->handle.cookie);
                         GOTO(out_put, rc = -ESTALE);
                 }
-                if (mfd->mfd_mode != FMODE_SOM) {
-                        CWARN("mfd_mode %d not right should be in replay\n", 
-                               mfd->mfd_mode);
-                        LASSERT(lustre_msg_get_flags(req->rq_reqmsg) & 
-                                MSG_REPLAY);
-                        LASSERT(mfd->mfd_mode == FMODE_EPOCH);
-                        mfd->mfd_mode = FMODE_SOM;
-                }
-                
-                LASSERT(ma->ma_attr.la_valid & LA_SIZE);
+                LASSERT(mfd->mfd_mode == FMODE_SOM);
                 LASSERT(!(info->mti_epoch->flags & MF_EPOCH_CLOSE));
 
                 class_handle_unhash(&mfd->mfd_handle);

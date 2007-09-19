@@ -1021,8 +1021,8 @@ void mdt_req_from_mcd(struct ptlrpc_request *req,
         mds_steal_ack_locks(req);
 }
 
-static void mdt_reconstruct_generic(struct mdt_thread_info *mti,
-                                    struct mdt_lock_handle *lhc)
+void mdt_reconstruct_generic(struct mdt_thread_info *mti,
+                             struct mdt_lock_handle *lhc)
 {
         struct ptlrpc_request *req = mdt_info_req(mti);
         struct mdt_export_data *med = &req->rq_export->exp_mdt_data;
@@ -1076,17 +1076,24 @@ static void mdt_reconstruct_setattr(struct mdt_thread_info *mti,
         obj = mdt_object_find(mti->mti_env, mdt, mti->mti_rr.rr_fid1);
         LASSERT(!IS_ERR(obj));
         mo_attr_get(mti->mti_env, mdt_object_child(obj), &mti->mti_attr);
-        mdt_pack_attr2body(mti, body, &mti->mti_attr.ma_attr, mdt_object_fid(obj));
+        mdt_pack_attr2body(mti, body, &mti->mti_attr.ma_attr,
+                           mdt_object_fid(obj));
+        if (mti->mti_epoch && (mti->mti_epoch->flags & MF_EPOCH_OPEN)) {
+                struct mdt_file_data *mfd;
+                struct mdt_body *repbody;
 
-        /* Don't return OST-specific attributes if we didn't just set them */
-/*
-        if (rec->ur_iattr.ia_valid & ATTR_SIZE)
-                body->valid |= OBD_MD_FLSIZE | OBD_MD_FLBLOCKS;
-        if (rec->ur_iattr.ia_valid & (ATTR_MTIME | ATTR_MTIME_SET))
-                body->valid |= OBD_MD_FLMTIME;
-        if (rec->ur_iattr.ia_valid & (ATTR_ATIME | ATTR_ATIME_SET))
-                body->valid |= OBD_MD_FLATIME;
-*/
+                repbody = req_capsule_server_get(&mti->mti_pill, &RMF_MDT_BODY);
+                repbody->ioepoch = obj->mot_ioepoch;
+                spin_lock(&med->med_open_lock);
+                list_for_each_entry(mfd, &med->med_open_head, mfd_list) {
+                        if (mfd->mfd_xid == req->rq_xid)
+                                break;
+                }
+                LASSERT(&mfd->mfd_list != &med->med_open_head);
+                spin_unlock(&med->med_open_lock);
+                repbody->handle.cookie = mfd->mfd_handle.h_cookie;
+        }
+
         mdt_object_put(mti->mti_env, obj);
 }
 
@@ -1116,4 +1123,3 @@ void mdt_reconstruct(struct mdt_thread_info *mti,
         reconstructors[mti->mti_rr.rr_opcode](mti, lhc);
         EXIT;
 }
-

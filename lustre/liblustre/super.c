@@ -594,7 +594,8 @@ static int inode_setattr(struct inode * inode, struct iattr * attr)
         return error;
 }
 
-int llu_md_setattr(struct inode *inode, struct md_op_data *op_data)
+int llu_md_setattr(struct inode *inode, struct md_op_data *op_data,
+                   struct md_open_data **mod)
 {
         struct lustre_md md;
         struct llu_sb_info *sbi = llu_i2sbi(inode);
@@ -603,7 +604,8 @@ int llu_md_setattr(struct inode *inode, struct md_op_data *op_data)
         ENTRY;
 
         llu_prep_md_op_data(op_data, inode, NULL, NULL, 0, 0, LUSTRE_OPC_ANY);
-        rc = md_setattr(sbi->ll_md_exp, op_data, NULL, 0, NULL, 0, &request);
+        rc = md_setattr(sbi->ll_md_exp, op_data, NULL, 0, NULL,
+                        0, &request, mod);
 
         if (rc) {
                 ptlrpc_req_finished(request);
@@ -633,7 +635,8 @@ int llu_md_setattr(struct inode *inode, struct md_op_data *op_data)
 
 /* Close IO epoch and send Size-on-MDS attribute update. */
 static int llu_setattr_done_writing(struct inode *inode,
-                                    struct md_op_data *op_data)
+                                    struct md_op_data *op_data,
+                                    struct md_open_data *mod)
 {
         struct llu_inode_info *lli = llu_i2info(inode);
         struct intnl_stat *st = llu_i2stat(inode);
@@ -649,11 +652,11 @@ static int llu_setattr_done_writing(struct inode *inode,
                op_data->op_ioepoch, PFID(&lli->lli_fid));
 
         op_data->op_flags = MF_EPOCH_CLOSE | MF_SOM_CHANGE;
-        rc = md_done_writing(llu_i2sbi(inode)->ll_md_exp, op_data, NULL);
+        rc = md_done_writing(llu_i2sbi(inode)->ll_md_exp, op_data, mod);
         if (rc == -EAGAIN) {
                 /* MDS has instructed us to obtain Size-on-MDS attribute
                  * from OSTs and send setattr to back to MDS. */
-                rc = llu_sizeonmds_update(inode, &op_data->op_handle,
+                rc = llu_sizeonmds_update(inode, mod, &op_data->op_handle,
                                           op_data->op_ioepoch);
         } else if (rc) {
                 CERROR("inode %llu mdc truncate failed: rc = %d\n",
@@ -682,7 +685,8 @@ int llu_setattr_raw(struct inode *inode, struct iattr *attr)
         struct intnl_stat *st = llu_i2stat(inode);
         int ia_valid = attr->ia_valid;
         struct md_op_data op_data = { { 0 } };
-        int rc = 0;
+        struct md_open_data *mod = NULL;
+        int rc = 0, rc1 = 0;
         ENTRY;
 
         CDEBUG(D_VFSTRACE, "VFS Op:inode=%llu\n", (long long)st->st_ino);
@@ -741,15 +745,18 @@ int llu_setattr_raw(struct inode *inode, struct iattr *attr)
                 /* Open epoch for truncate. */
                 if (ia_valid & ATTR_SIZE)
                         op_data.op_flags = MF_EPOCH_OPEN;
-                rc = llu_md_setattr(inode, &op_data);
+                rc = llu_md_setattr(inode, &op_data, &mod);
                 if (rc)
                         RETURN(rc);
 
+                if (op_data.op_ioepoch)
+                        CDEBUG(D_INODE, "Epoch "LPU64" opened on "DFID" for "
+                               "truncate\n", op_data.op_ioepoch,
+                               PFID(&llu_i2info(inode)->lli_fid));
+
                 if (!lsm || !S_ISREG(st->st_mode)) {
                         CDEBUG(D_INODE, "no lsm: not setting attrs on OST\n");
-                        if (op_data.op_ioepoch)
-                                rc = llu_setattr_done_writing(inode, &op_data);
-                        RETURN(rc);
+                        GOTO(out, rc);
                 }
         } else {
                 /* The OST doesn't check permissions, but the alternative is
@@ -810,10 +817,9 @@ int llu_setattr_raw(struct inode *inode, struct iattr *attr)
                                      &lockh, flags);
                 if (rc != ELDLM_OK) {
                         if (rc > 0)
-                                RETURN(-ENOLCK);
-                        RETURN(rc);
+                                GOTO(out, rc = -ENOLCK);
+                        GOTO(out, rc);
                 }
-
                 rc = llu_vmtruncate(inode, attr->ia_size, obd_flags);
 
                 /* unlock now as we don't mind others file lockers racing with
@@ -824,9 +830,6 @@ int llu_setattr_raw(struct inode *inode, struct iattr *attr)
                         if (!rc)
                                 rc = err;
                 }
-
-                if (op_data.op_ioepoch)
-                        rc = llu_setattr_done_writing(inode, &op_data);
         } else if (ia_valid & (ATTR_MTIME | ATTR_MTIME_SET)) {
                 struct obd_info oinfo = { { { 0 } } };
                 struct obdo oa;
@@ -846,7 +849,11 @@ int llu_setattr_raw(struct inode *inode, struct iattr *attr)
                 if (rc)
                         CERROR("obd_setattr_async fails: rc=%d\n", rc);
         }
-        RETURN(rc);
+        EXIT;
+out:
+        if (op_data.op_ioepoch)
+                rc1 = llu_setattr_done_writing(inode, &op_data, mod);
+        return rc ? rc : rc1;
 }
 
 /* here we simply act as a thin layer to glue it with
@@ -1671,7 +1678,7 @@ static int llu_lov_dir_setstripe(struct inode *ino, unsigned long arg)
 
         /* swabbing is done in lov_setstripe() on server side */
         rc = md_setattr(sbi->ll_md_exp, &op_data, &lum,
-                        sizeof(lum), NULL, 0, &request);
+                        sizeof(lum), NULL, 0, &request, NULL);
         if (rc) {
                 ptlrpc_req_finished(request);
                 if (rc != -EPERM && rc != -EACCES)

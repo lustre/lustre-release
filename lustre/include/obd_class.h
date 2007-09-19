@@ -1677,14 +1677,14 @@ static inline int md_change_cbdata(struct obd_export *exp,
 }
 
 static inline int md_close(struct obd_export *exp, struct md_op_data *op_data,
-                           struct obd_client_handle *och,
+                           struct md_open_data *mod,
                            struct ptlrpc_request **request)
 {
         int rc;
         ENTRY;
         EXP_CHECK_MD_OP(exp, close);
         EXP_MD_COUNTER_INCREMENT(exp, close);
-        rc = MDP(exp->exp_obd, close)(exp, op_data, och, request);
+        rc = MDP(exp->exp_obd, close)(exp, op_data, mod, request);
         RETURN(rc);
 }
 
@@ -1704,13 +1704,13 @@ static inline int md_create(struct obd_export *exp, struct md_op_data *op_data,
 
 static inline int md_done_writing(struct obd_export *exp,
                                   struct md_op_data *op_data,
-                                  struct obd_client_handle *och)
+                                  struct md_open_data *mod)
 {
         int rc;
         ENTRY;
         EXP_CHECK_MD_OP(exp, done_writing);
         EXP_MD_COUNTER_INCREMENT(exp, done_writing);
-        rc = MDP(exp->exp_obd, done_writing)(exp, op_data, och);
+        rc = MDP(exp->exp_obd, done_writing)(exp, op_data, mod);
         RETURN(rc);
 }
 
@@ -1802,14 +1802,15 @@ static inline int md_is_subdir(struct obd_export *exp,
 
 static inline int md_setattr(struct obd_export *exp, struct md_op_data *op_data,
                              void *ea, int ealen, void *ea2, int ea2len,
-                             struct ptlrpc_request **request)
+                             struct ptlrpc_request **request,
+                             struct md_open_data **mod)
 {
         int rc;
         ENTRY;
         EXP_CHECK_MD_OP(exp, setattr);
         EXP_MD_COUNTER_INCREMENT(exp, setattr);
         rc = MDP(exp->exp_obd, setattr)(exp, op_data, ea, ealen,
-                                        ea2, ea2len, request);
+                                        ea2, ea2len, request, mod);
         RETURN(rc);
 }
 

@@ -184,8 +184,8 @@ out:
         return;
 }
 
-int ll_sizeonmds_update(struct inode *inode, struct lustre_handle *fh,
-                        __u64 ioepoch)
+int ll_sizeonmds_update(struct inode *inode, struct md_open_data *mod,
+                        struct lustre_handle *fh, __u64 ioepoch)
 {
         struct ll_inode_info *lli = ll_i2info(inode);
         struct md_op_data *op_data;
@@ -207,7 +207,11 @@ int ll_sizeonmds_update(struct inode *inode, struct lustre_handle *fh,
                 RETURN(-ENOMEM);
         }
         rc = ll_inode_getattr(inode, oa);
-        if (rc) {
+        if (rc == -ENOENT) {
+                oa->o_valid = 0;
+                CDEBUG(D_INODE, "objid "LPX64" is already destroyed\n",
+                       lli->lli_smd->lsm_object_id);
+        } else if (rc) {
                 CERROR("inode_getattr failed (%d): unable to send a "
                        "Size-on-MDS attribute update for inode %lu/%u\n",
                        rc, inode->i_ino, inode->i_generation);
@@ -221,7 +225,7 @@ int ll_sizeonmds_update(struct inode *inode, struct lustre_handle *fh,
         op_data->op_ioepoch = ioepoch;
         op_data->op_flags |= MF_SOM_CHANGE;
 
-        rc = ll_md_setattr(inode, op_data);
+        rc = ll_md_setattr(inode, op_data, &mod);
         EXIT;
 out:
         if (oa)
@@ -255,12 +259,12 @@ static void ll_done_writing(struct inode *inode)
         
         ll_pack_inode2opdata(inode, op_data, &och->och_fh);
 
-        rc = md_done_writing(ll_i2sbi(inode)->ll_md_exp, op_data, och);
+        rc = md_done_writing(ll_i2sbi(inode)->ll_md_exp, op_data, och->och_mod);
         if (rc == -EAGAIN) {
                 /* MDS has instructed us to obtain Size-on-MDS attribute from 
                  * OSTs and send setattr to back to MDS. */
-                rc = ll_sizeonmds_update(inode, &och->och_fh,
-                                         op_data->op_ioepoch);
+                rc = ll_sizeonmds_update(inode, och->och_mod,
+                                         &och->och_fh, op_data->op_ioepoch);
         } else if (rc) {
                 CERROR("inode %lu mdc done_writing failed: rc = %d\n",
                        inode->i_ino, rc);

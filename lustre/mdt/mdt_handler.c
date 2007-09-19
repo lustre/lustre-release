@@ -1396,7 +1396,6 @@ static int mdt_reint_internal(struct mdt_thread_info *info,
 {
         struct req_capsule      *pill = &info->mti_pill;
         struct mdt_device       *mdt = info->mti_mdt;
-        struct ptlrpc_request   *req = mdt_info_req(info);
         struct mdt_body         *repbody;
         int                      need_shrink = 0;
         int                      rc;
@@ -1443,21 +1442,12 @@ static int mdt_reint_internal(struct mdt_thread_info *info,
         if (rc != 0)
                 GOTO(out_ucred, rc = err_serious(rc));
 
-        if (lustre_msg_get_flags(req->rq_reqmsg) & MSG_RESENT) {
-                struct mdt_client_data *mcd;
-
-                mcd = req->rq_export->exp_mdt_data.med_mcd;
-                if (req_xid_is_last(req)) {
-                        need_shrink = 0;
-                        mdt_reconstruct(info, lhc);
-                        rc = lustre_msg_get_status(req->rq_repmsg);
-                        GOTO(out_ucred, rc);
-                }
-                DEBUG_REQ(D_HA, req, "no reply for RESENT (xid "LPD64")",
-                          mcd->mcd_last_xid);
-        }
-
         need_shrink = 0;
+        if (mdt_check_resent(info, mdt_reconstruct, lhc)) {
+                rc = lustre_msg_get_status(mdt_info_req(info)->rq_repmsg);
+                GOTO(out_ucred, rc);
+        }
+        
         rc = mdt_reint_rec(info, lhc);
         EXIT;
 out_ucred:

@@ -1150,6 +1150,7 @@ int mdt_close(struct mdt_thread_info *info)
         struct mdt_object      *o;
         struct md_attr         *ma = &info->mti_attr;
         struct mdt_body        *repbody = NULL;
+        struct ptlrpc_request  *req = mdt_info_req(info);
         int rc, ret = 0;
         ENTRY;
 
@@ -1165,6 +1166,9 @@ int mdt_close(struct mdt_thread_info *info)
         req_capsule_set_size(&info->mti_pill, &RMF_LOGCOOKIES, RCL_SERVER,
                              info->mti_mdt->mdt_max_cookiesize);
         rc = req_capsule_pack(&info->mti_pill);
+        if (mdt_check_resent(info, mdt_reconstruct_generic, NULL))
+                RETURN(lustre_msg_get_status(req->rq_repmsg));
+
         /* Continue to close handle even if we can not pack reply */
         if (rc == 0) {
                 repbody = req_capsule_server_get(&info->mti_pill,
@@ -1185,7 +1189,7 @@ int mdt_close(struct mdt_thread_info *info)
         } else
                 rc = err_serious(rc);
 
-        med = &mdt_info_req(info)->rq_export->exp_mdt_data;
+        med = &req->rq_export->exp_mdt_data;
         spin_lock(&med->med_open_lock);
         mfd = mdt_handle2mfd(info, &info->mti_epoch->handle);
         if (mdt_mfd_closed(mfd)) {
@@ -1220,7 +1224,6 @@ int mdt_close(struct mdt_thread_info *info)
 int mdt_done_writing(struct mdt_thread_info *info)
 {
         struct mdt_body         *repbody = NULL;
-        struct ptlrpc_request   *req = mdt_info_req(info);
         struct mdt_export_data  *med;
         struct mdt_file_data    *mfd;
         int rc;
@@ -1240,6 +1243,9 @@ int mdt_done_writing(struct mdt_thread_info *info)
         if (rc)
                 RETURN(err_serious(rc));
 
+        if (mdt_check_resent(info, mdt_reconstruct_generic, NULL))
+                RETURN(lustre_msg_get_status(mdt_info_req(info)->rq_repmsg));
+
         med = &info->mti_exp->exp_mdt_data;
         spin_lock(&med->med_open_lock);
         mfd = mdt_handle2mfd(info, &info->mti_epoch->handle);
@@ -1251,17 +1257,8 @@ int mdt_done_writing(struct mdt_thread_info *info)
                 RETURN(-ESTALE);
         } 
  
-        if (!(mfd->mfd_mode == FMODE_EPOCH ||
-             mfd->mfd_mode == FMODE_EPOCHLCK)) {
-                spin_unlock(&med->med_open_lock);
-                DEBUG_REQ(D_WARNING, req, "req should be resent req");
-                LASSERT(mfd->mfd_mode == FMODE_SOM);
-                LASSERT(lustre_msg_get_flags(req->rq_reqmsg) & 
-                        (MSG_RESENT | MSG_REPLAY));
-                /*Since we did not bond this req with open/close,
-                 *Why we should keep this req as replay req XXX*/
-                GOTO(empty_transno, rc);
-        }
+        LASSERT(mfd->mfd_mode == FMODE_EPOCH ||
+                mfd->mfd_mode == FMODE_EPOCHLCK);
         class_handle_unhash(&mfd->mfd_handle);
         list_del_init(&mfd->mfd_list);
         spin_unlock(&med->med_open_lock);
@@ -1270,7 +1267,6 @@ int mdt_done_writing(struct mdt_thread_info *info)
         info->mti_epoch->flags |= MF_EPOCH_CLOSE;
         info->mti_attr.ma_valid = 0;
         rc = mdt_mfd_close(info, mfd);
-empty_transno:
         mdt_empty_transno(info);
         RETURN(rc);
 }

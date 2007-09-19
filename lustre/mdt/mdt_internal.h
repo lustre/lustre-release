@@ -532,6 +532,8 @@ void mdt_lock_handle_init(struct mdt_lock_handle *lh);
 void mdt_lock_handle_fini(struct mdt_lock_handle *lh);
 
 void mdt_reconstruct(struct mdt_thread_info *, struct mdt_lock_handle *);
+void mdt_reconstruct_generic(struct mdt_thread_info *mti,
+                             struct mdt_lock_handle *lhc);
 
 extern void target_recovery_fini(struct obd_device *obd);
 extern void target_recovery_init(struct obd_device *obd,
@@ -669,6 +671,26 @@ static inline void mdt_fail_write(const struct lu_env *env,
 static inline struct mdt_export_data *mdt_req2med(struct ptlrpc_request *req)
 {
         return &req->rq_export->exp_mdt_data;
+}
+
+typedef void (*mdt_reconstruct_t)(struct mdt_thread_info *mti,
+                                  struct mdt_lock_handle *lhc);
+static inline int mdt_check_resent(struct mdt_thread_info *info,
+                                   mdt_reconstruct_t reconstruct,
+                                   struct mdt_lock_handle *lhc)
+{
+        struct ptlrpc_request *req = mdt_info_req(info);
+        ENTRY;
+
+        if (lustre_msg_get_flags(req->rq_reqmsg) & MSG_RESENT) {
+                if (req_xid_is_last(req)) {
+                        reconstruct(info, lhc);
+                        RETURN(1);
+                }
+                DEBUG_REQ(D_HA, req, "no reply for RESENT req (have "LPD64")",
+                          req->rq_export->exp_mdt_data.med_mcd->mcd_last_xid);
+        }
+        RETURN(0);
 }
 
 #define MDT_FAIL_CHECK(id)                                              \

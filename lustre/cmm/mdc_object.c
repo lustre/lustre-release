@@ -290,7 +290,7 @@ static int mdc_attr_set(const struct lu_env *env, struct md_object *mo,
         }
 
         rc = md_setattr(mc->mc_desc.cl_exp, &mci->mci_opdata,
-                        NULL, 0, NULL, 0, &mci->mci_req);
+                        NULL, 0, NULL, 0, &mci->mci_req, NULL);
 
         ptlrpc_req_finished(mci->mci_req);
 

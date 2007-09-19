@@ -1127,7 +1127,8 @@ void ll_clear_inode(struct inode *inode)
         EXIT;
 }
 
-int ll_md_setattr(struct inode *inode, struct md_op_data *op_data)
+int ll_md_setattr(struct inode *inode, struct md_op_data *op_data,
+                  struct md_open_data **mod)
 {
         struct lustre_md md;
         struct ll_sb_info *sbi = ll_i2sbi(inode);
@@ -1141,7 +1142,7 @@ int ll_md_setattr(struct inode *inode, struct md_op_data *op_data)
                 RETURN(PTR_ERR(op_data));
 
         rc = md_setattr(sbi->ll_md_exp, op_data, NULL, 0, NULL, 0, 
-                        &request);
+                        &request, mod);
         if (rc) {
                 ptlrpc_req_finished(request);
                 if (rc == -ENOENT) {
@@ -1172,7 +1173,7 @@ int ll_md_setattr(struct inode *inode, struct md_op_data *op_data)
         rc = inode_setattr(inode, &op_data->op_attr);
 
         /* Extract epoch data if obtained. */
-        memcpy(&op_data->op_handle, &md.body->handle, sizeof(op_data->op_handle));
+        op_data->op_handle = md.body->handle;
         op_data->op_ioepoch = md.body->ioepoch;
 
         ll_update_inode(inode, &md);
@@ -1183,7 +1184,8 @@ int ll_md_setattr(struct inode *inode, struct md_op_data *op_data)
 
 /* Close IO epoch and send Size-on-MDS attribute update. */
 static int ll_setattr_done_writing(struct inode *inode,
-                                   struct md_op_data *op_data)
+                                   struct md_op_data *op_data,
+                                   struct md_open_data *mod)
 {
         struct ll_inode_info *lli = ll_i2info(inode);
         int rc = 0;
@@ -1197,12 +1199,11 @@ static int ll_setattr_done_writing(struct inode *inode,
                op_data->op_ioepoch, PFID(&lli->lli_fid));
 
         op_data->op_flags = MF_EPOCH_CLOSE | MF_SOM_CHANGE;
-        /* XXX: pass och here for the recovery purpose. */
-        rc = md_done_writing(ll_i2sbi(inode)->ll_md_exp, op_data, NULL);
+        rc = md_done_writing(ll_i2sbi(inode)->ll_md_exp, op_data, mod);
         if (rc == -EAGAIN) {
                 /* MDS has instructed us to obtain Size-on-MDS attribute
                  * from OSTs and send setattr to back to MDS. */
-                rc = ll_sizeonmds_update(inode, &op_data->op_handle,
+                rc = ll_sizeonmds_update(inode, mod, &op_data->op_handle,
                                          op_data->op_ioepoch);
         } else if (rc) {
                 CERROR("inode %lu mdc truncate failed: rc = %d\n",
@@ -1230,6 +1231,7 @@ int ll_setattr_raw(struct inode *inode, struct iattr *attr)
         struct lov_stripe_md *lsm = lli->lli_smd;
         struct ll_sb_info *sbi = ll_i2sbi(inode);
         struct md_op_data *op_data = NULL;
+        struct md_open_data *mod = NULL;
         int ia_valid = attr->ia_valid;
         int rc = 0, rc1 = 0;
         ENTRY;
@@ -1300,8 +1302,8 @@ int ll_setattr_raw(struct inode *inode, struct iattr *attr)
         /* Open epoch for truncate. */
         if (ia_valid & ATTR_SIZE)
                 op_data->op_flags = MF_EPOCH_OPEN;
-
-        rc = ll_md_setattr(inode, op_data);
+        
+        rc = ll_md_setattr(inode, op_data, &mod);
         if (rc)
                 GOTO(out, rc);
 
@@ -1310,8 +1312,8 @@ int ll_setattr_raw(struct inode *inode, struct iattr *attr)
                        "truncate\n", op_data->op_ioepoch, PFID(&lli->lli_fid));
 
         if (!lsm || !S_ISREG(inode->i_mode)) {
-                        CDEBUG(D_INODE, "no lsm: not setting attrs on OST\n");
-                        GOTO(out, rc = 0);
+                CDEBUG(D_INODE, "no lsm: not setting attrs on OST\n");
+                GOTO(out, rc = 0);
         }
 
         /* We really need to get our PW lock before we change inode->i_size.
@@ -1400,9 +1402,8 @@ int ll_setattr_raw(struct inode *inode, struct iattr *attr)
         EXIT;
 out:
         if (op_data) {
-                if (op_data->op_ioepoch) {
-                        rc1 = ll_setattr_done_writing(inode, op_data);
-                }
+                if (op_data->op_ioepoch)
+                        rc1 = ll_setattr_done_writing(inode, op_data, mod);
                 ll_finish_md_op_data(op_data);
         }
         return rc ? rc : rc1;
@@ -1838,7 +1839,7 @@ int ll_iocontrol(struct inode *inode, struct file *file,
                 ((struct ll_iattr *)&op_data->op_attr)->ia_attr_flags = flags;
                 op_data->op_attr.ia_valid |= ATTR_ATTR_FLAG;
                 rc = md_setattr(sbi->ll_md_exp, op_data,
-                                NULL, 0, NULL, 0, &req);
+                                NULL, 0, NULL, 0, &req, NULL);
                 ll_finish_md_op_data(op_data);
                 ptlrpc_req_finished(req);
                 if (rc || lsm == NULL) {

@@ -1214,18 +1214,23 @@ struct lustre_md {
         struct obd_capa         *oss_capa;
 };
 
+struct md_open_data {
+        struct obd_client_handle *mod_och;
+        struct list_head          mod_replay_list;
+};
+
 struct md_ops {
         int (*m_getstatus)(struct obd_export *, struct lu_fid *,
                            struct obd_capa **);
         int (*m_change_cbdata)(struct obd_export *, const struct lu_fid *,
                                ldlm_iterator_t, void *);
         int (*m_close)(struct obd_export *, struct md_op_data *,
-                       struct obd_client_handle *, struct ptlrpc_request **);
+                       struct md_open_data *, struct ptlrpc_request **);
         int (*m_create)(struct obd_export *, struct md_op_data *,
                         const void *, int, int, __u32, __u32, __u32,
                         __u64, struct ptlrpc_request **);
         int (*m_done_writing)(struct obd_export *, struct md_op_data  *,
-                              struct obd_client_handle *);
+                              struct md_open_data *);
         int (*m_enqueue)(struct obd_export *, struct ldlm_enqueue_info *,
                          struct lookup_intent *, struct md_op_data *,
                          struct lustre_handle *, void *, int, int);
@@ -1248,7 +1253,8 @@ struct md_ops {
                            const struct lu_fid *,
                            struct ptlrpc_request **);
         int (*m_setattr)(struct obd_export *, struct md_op_data *, void *,
-                         int , void *, int, struct ptlrpc_request **);
+                         int , void *, int, struct ptlrpc_request **,
+                         struct md_open_data **mod);
         int (*m_sync)(struct obd_export *, const struct lu_fid *,
                       struct obd_capa *, struct ptlrpc_request **);
         int (*m_readpage)(struct obd_export *, const struct lu_fid *,
