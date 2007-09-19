@@ -44,9 +44,12 @@ int rawobj_serialize(rawobj_t *obj, __u32 **buf, __u32 *buflen);
 int rawobj_extract(rawobj_t *obj, __u32 **buf, __u32 *buflen);
 int rawobj_extract_alloc(rawobj_t *obj, __u32 **buf, __u32 *buflen);
 int rawobj_extract_local(rawobj_t *obj, __u32 **buf, __u32 *buflen);
+int rawobj_extract_local_alloc(rawobj_t *obj, __u32 **buf, __u32 *buflen);
 int rawobj_from_netobj(rawobj_t *rawobj, netobj_t *netobj);
 int rawobj_from_netobj_alloc(rawobj_t *obj, netobj_t *netobj);
 
+int buffer_extract_bytes(const void **buf, __u32 *buflen,
+                         void *res, __u32 reslen);
 
 /*
  * several timeout values. client refresh upcall timeout we using
@@ -60,6 +63,11 @@ int rawobj_from_netobj_alloc(rawobj_t *obj, netobj_t *netobj);
 
 #define GSS_SECFINI_RPC_TIMEOUT         (__TIMEOUT_DELTA)
 #define GSS_SECSVC_UPCALL_TIMEOUT       (GSS_SECINIT_RPC_TIMEOUT)
+
+/*
+ * default gc interval
+ */
+#define GSS_GC_INTERVAL                 (60 * 60) /* 60 minutes */
 
 static inline
 unsigned long gss_round_ctx_expiry(unsigned long expiry,
@@ -127,6 +135,19 @@ enum ptlrpc_gss_tgt {
         LUSTRE_GSS_TGT_OSS              = 1,
 };
 
+static inline
+__u32 import_to_gss_svc(struct obd_import *imp)
+{
+        const char *name = imp->imp_obd->obd_type->typ_name;
+
+        if (!strcmp(name, LUSTRE_MDC_NAME))
+                return LUSTRE_GSS_TGT_MDS;
+        if (!strcmp(name, LUSTRE_OSC_NAME))
+                return LUSTRE_GSS_TGT_OSS;
+        LBUG();
+        return 0;
+}
+
 /*
  * following 3 header must have the same size and offset
  */
@@ -182,10 +203,11 @@ struct gss_wire_ctx {
                                          PTLRPC_GSS_MAX_HANDLE_SIZE)
 
 
-#define GSS_SEQ_WIN                     (256)
+#define GSS_SEQ_WIN                     (2048)
 #define GSS_SEQ_WIN_MAIN                GSS_SEQ_WIN
-#define GSS_SEQ_WIN_BACK                (64)
-#define GSS_SEQ_REPACK_THRESHOLD        (GSS_SEQ_WIN_MAIN / 2)
+#define GSS_SEQ_WIN_BACK                (128)
+#define GSS_SEQ_REPACK_THRESHOLD        (GSS_SEQ_WIN_MAIN / 2 + \
+                                         GSS_SEQ_WIN_MAIN / 4)
 
 struct gss_svc_seq_data {
         spinlock_t              ssd_lock;
@@ -235,12 +257,82 @@ struct gss_cli_ctx {
         struct gss_ctx         *gc_mechctx;
 };
 
+struct gss_cli_ctx_keyring {
+        struct gss_cli_ctx      gck_base;
+        struct key             *gck_key;
+        struct timer_list      *gck_timer;
+};
+
 struct gss_sec {
         struct ptlrpc_sec       gs_base;
         struct gss_api_mech    *gs_mech;
         spinlock_t              gs_lock;
         __u64                   gs_rvs_hdl;
 };
+
+struct gss_sec_pipefs {
+        struct gss_sec          gsp_base;
+        int                     gsp_chash_size;  /* must be 2^n */
+        struct hlist_head       gsp_chash[0];
+};
+
+/*
+ * FIXME cleanup the keyring upcall mutexes
+ */
+#define HAVE_KEYRING_UPCALL_SERIALIZED  1
+
+struct gss_sec_keyring {
+        struct gss_sec          gsk_base;
+        /*
+         * unique sec_id.
+         */
+        int                     gsk_id;
+        /*
+         * all contexts listed here. access is protected by sec spinlock.
+         */
+        struct hlist_head       gsk_clist;
+        /*
+         * specially point to root ctx (only one at a time). access is
+         * protected by sec spinlock.
+         */
+        struct ptlrpc_cli_ctx  *gsk_root_ctx;
+        /*
+         * specially serialize upcalls for root context.
+         */
+        struct mutex            gsk_root_uc_lock;
+
+#ifdef HAVE_KEYRING_UPCALL_SERIALIZED
+        struct mutex            gsk_uc_lock;        /* serialize upcalls */
+#endif
+};
+
+static inline struct gss_cli_ctx *ctx2gctx(struct ptlrpc_cli_ctx *ctx)
+{
+        return container_of(ctx, struct gss_cli_ctx, gc_base);
+}
+
+static inline
+struct gss_cli_ctx_keyring *ctx2gctx_keyring(struct ptlrpc_cli_ctx *ctx)
+{
+        return container_of(ctx2gctx(ctx),
+                            struct gss_cli_ctx_keyring, gck_base);
+}
+
+static inline struct gss_sec *sec2gsec(struct ptlrpc_sec *sec)
+{
+        return container_of(sec, struct gss_sec, gs_base);
+}
+
+static inline struct gss_sec_pipefs *sec2gsec_pipefs(struct ptlrpc_sec *sec)
+{
+        return container_of(sec2gsec(sec), struct gss_sec_pipefs, gsp_base);
+}
+
+static inline struct gss_sec_keyring *sec2gsec_keyring(struct ptlrpc_sec *sec)
+{
+        return container_of(sec2gsec(sec), struct gss_sec_keyring, gsk_base);
+}
+
 
 #define GSS_CTX_INIT_MAX_LEN            (1024)
 
@@ -259,12 +351,68 @@ struct gss_svc_reqctx *gss_svc_ctx2reqctx(struct ptlrpc_svc_ctx *ctx)
 }
 
 /* sec_gss.c */
+int gss_cli_ctx_match(struct ptlrpc_cli_ctx *ctx, struct vfs_cred *vcred);
+int gss_cli_ctx_display(struct ptlrpc_cli_ctx *ctx, char *buf, int bufsize);
+int gss_cli_ctx_sign(struct ptlrpc_cli_ctx *ctx, struct ptlrpc_request *req);
+int gss_cli_ctx_verify(struct ptlrpc_cli_ctx *ctx, struct ptlrpc_request *req);
+int gss_cli_ctx_seal(struct ptlrpc_cli_ctx *ctx, struct ptlrpc_request *req);
+int gss_cli_ctx_unseal(struct ptlrpc_cli_ctx *ctx, struct ptlrpc_request *req);
+
+int  gss_sec_install_rctx(struct obd_import *imp, struct ptlrpc_sec *sec,
+                          struct ptlrpc_cli_ctx *ctx);
+int  gss_alloc_reqbuf(struct ptlrpc_sec *sec, struct ptlrpc_request *req,
+                      int msgsize);
+void gss_free_reqbuf(struct ptlrpc_sec *sec, struct ptlrpc_request *req);
+int  gss_alloc_repbuf(struct ptlrpc_sec *sec, struct ptlrpc_request *req,
+                      int msgsize);
+void gss_free_repbuf(struct ptlrpc_sec *sec, struct ptlrpc_request *req);
+int  gss_enlarge_reqbuf(struct ptlrpc_sec *sec, struct ptlrpc_request *req,
+                        int segment, int newsize);
+
+int  gss_svc_accept(struct ptlrpc_sec_policy *policy,
+                    struct ptlrpc_request *req);
+void gss_svc_invalidate_ctx(struct ptlrpc_svc_ctx *svc_ctx);
+int  gss_svc_alloc_rs(struct ptlrpc_request *req, int msglen);
+int  gss_svc_authorize(struct ptlrpc_request *req);
+void gss_svc_free_rs(struct ptlrpc_reply_state *rs);
+void gss_svc_free_ctx(struct ptlrpc_svc_ctx *ctx);
+
+int cli_ctx_expire(struct ptlrpc_cli_ctx *ctx);
+int cli_ctx_check_death(struct ptlrpc_cli_ctx *ctx);
+
+int gss_copy_rvc_cli_ctx(struct ptlrpc_cli_ctx *cli_ctx,
+                         struct ptlrpc_svc_ctx *svc_ctx);
+
 struct gss_header *gss_swab_header(struct lustre_msg *msg, int segment);
 netobj_t *gss_swab_netobj(struct lustre_msg *msg, int segment);
 
 void gss_cli_ctx_uptodate(struct gss_cli_ctx *gctx);
 int gss_pack_err_notify(struct ptlrpc_request *req, __u32 major, __u32 minor);
 int gss_check_seq_num(struct gss_svc_seq_data *sd, __u32 seq_num, int set);
+
+int gss_sec_create_common(struct gss_sec *gsec,
+                          struct ptlrpc_sec_policy *policy,
+                          struct obd_import *imp,
+                          struct ptlrpc_svc_ctx *ctx,
+                          __u32 flavor,
+                          unsigned long flags);
+void gss_sec_destroy_common(struct gss_sec *gsec);
+
+int gss_cli_ctx_init_common(struct ptlrpc_sec *sec,
+                            struct ptlrpc_cli_ctx *ctx,
+                            struct ptlrpc_ctx_ops *ctxops,
+                            struct vfs_cred *vcred);
+int gss_cli_ctx_fini_common(struct ptlrpc_sec *sec,
+                            struct ptlrpc_cli_ctx *ctx);
+
+/* gss_keyring.c */
+extern struct ptlrpc_sec_policy gss_policy_keyring;
+int  __init gss_init_keyring(void);
+void __exit gss_exit_keyring(void);
+
+/* gss_pipefs.c */
+int  __init gss_init_pipefs(void);
+void __exit gss_exit_pipefs(void);
 
 /* gss_bulk.c */
 int gss_cli_ctx_wrap_bulk(struct ptlrpc_cli_ctx *ctx,
@@ -289,14 +437,12 @@ __u32 g_verify_token_header(rawobj_t *mech, int *body_size,
                             unsigned char **buf_in, int toksize);
 
 
-/* gss_upcall.c */
+/* gss_cli_upcall.c */
 int gss_do_ctx_init_rpc(char *buffer, unsigned long count);
 int gss_do_ctx_fini_rpc(struct gss_cli_ctx *gctx);
-int gss_ctx_refresh_pipefs(struct ptlrpc_cli_ctx *ctx);
-int gss_sec_upcall_init(struct gss_sec *gsec);
-void gss_sec_upcall_cleanup(struct gss_sec *gsec);
-int __init gss_init_upcall(void);
-void __exit gss_exit_upcall(void);
+
+int  __init gss_init_cli_upcall(void);
+void __exit gss_exit_cli_upcall(void);
 
 /* gss_svc_upcall.c */
 __u64 gss_get_next_ctx_index(void);
@@ -315,14 +461,15 @@ struct gss_svc_ctx *gss_svc_upcall_get_ctx(struct ptlrpc_request *req,
 void gss_svc_upcall_put_ctx(struct gss_svc_ctx *ctx);
 void gss_svc_upcall_destroy_ctx(struct gss_svc_ctx *ctx);
 
-int  __init gss_svc_init_upcall(void);
-void __exit gss_svc_exit_upcall(void);
+int  __init gss_init_svc_upcall(void);
+void __exit gss_exit_svc_upcall(void);
 
 /* lproc_gss.c */
 void gss_stat_oos_record_cli(int behind);
 void gss_stat_oos_record_svc(int phase, int replay);
-int  gss_init_lproc(void);
-void gss_exit_lproc(void);
+
+int  __init gss_init_lproc(void);
+void __exit gss_exit_lproc(void);
 
 /* gss_krb5_mech.c */
 int __init init_kerberos_module(void);

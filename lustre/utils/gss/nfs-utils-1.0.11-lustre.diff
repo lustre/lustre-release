@@ -1,7 +1,7 @@
-diff -rNup nfs-utils-1.0.10/configure.in nfs-utils-1.0.10.lustre/configure.in
---- nfs-utils-1.0.10/configure.in	2007-05-15 13:02:26.000000000 -0600
-+++ nfs-utils-1.0.10.lustre/configure.in	2007-05-15 13:00:53.000000000 -0600
-@@ -17,61 +17,14 @@ AC_ARG_WITH(release,
+diff -Nrup nfs-utils-1.0.11/configure.in nfs-utils-1.0.11.lustre/configure.in
+--- nfs-utils-1.0.11/configure.in	2007-02-21 21:50:03.000000000 -0700
++++ nfs-utils-1.0.11.lustre/configure.in	2007-05-23 14:35:45.000000000 -0600
+@@ -18,61 +18,14 @@ AC_ARG_WITH(release,
  	RELEASE=$withval,
  	RELEASE=1)
  	AC_SUBST(RELEASE)
@@ -65,7 +65,7 @@ diff -rNup nfs-utils-1.0.10/configure.in nfs-utils-1.0.10.lustre/configure.in
  	else
  		enable_gss=
  		GSSD=
-@@ -81,38 +34,6 @@ AC_ARG_ENABLE(gss,
+@@ -82,38 +35,6 @@ AC_ARG_ENABLE(gss,
  	AC_SUBST(SVCGSSD)
  	AC_SUBST(enable_gss)
  	AM_CONDITIONAL(CONFIG_GSS, [test "$enable_gss" = "yes"])
@@ -104,7 +104,7 @@ diff -rNup nfs-utils-1.0.10/configure.in nfs-utils-1.0.10.lustre/configure.in
  
  # Check whether user wants TCP wrappers support
  AC_TCP_WRAPPERS
-@@ -155,47 +76,17 @@ AC_CHECK_FUNC(connect, , 
+@@ -156,50 +77,15 @@ AC_CHECK_FUNC(connect, ,
                  AC_MSG_ERROR(Function 'socket' not found.), $LIBNSL))
  
  AC_CHECK_LIB(crypt, crypt, [LIBCRYPT="-lcrypt"])
@@ -115,21 +115,25 @@ diff -rNup nfs-utils-1.0.10/configure.in nfs-utils-1.0.10.lustre/configure.in
 -    AC_CHECK_HEADERS(nfsidmap.h, ,AC_MSG_ERROR([libnfsidmap needed for nfsv4 support]))
 -    dnl librpcsecgss already has a dependency on libgssapi,
 -    dnl but we need to make sure we get the right version
-     if test "$enable_gss" = yes; then
+-    if test "$enable_gss" = yes; then
 -     PKG_CHECK_MODULES(RPCSECGSS, librpcsecgss >= 0.10, ,
 -      [AC_MSG_ERROR([Unable to locate information required to use librpcsecgss.  If you have pkgconfig installed, you might try setting environment variable PKG_CONFIG_PATH to /usr/local/lib/pkgconfig])
 -      ]
 -     )
-     PKG_CHECK_MODULES(GSSAPI, libgssapi >= 0.9)
-     fi
- 
+-    PKG_CHECK_MODULES(GSSAPI, libgssapi >= 0.9)
+-    fi
+-
 -fi
 -if test "$knfsd_cv_glibc2" = no; then
 -    AC_CHECK_LIB(bsd, daemon, [LIBBSD="-lbsd"])
 -fi
+-AC_CHECK_LIB(blkid, blkid_get_cache, [LIBBLKID="-lblkid"], AC_MSG_ERROR([libblkid needed]))
+-AC_CHECK_HEADER(blkid/blkid.h, , AC_MSG_ERROR([Cannot file libblkid header file blkid/blkid.h]))
++PKG_CHECK_MODULES(GSSAPI, libgssapi >= 0.9)
  AC_SUBST(LIBSOCKET)
  AC_SUBST(LIBCRYPT)
  AC_SUBST(LIBBSD)
+ AC_SUBST(LIBBLKID)
  
  if test "$enable_gss" = yes; then
 -  dnl 'gss' also depends on nfsidmap.h - at least for svcgssd_proc.c
@@ -152,7 +156,7 @@ diff -rNup nfs-utils-1.0.10/configure.in nfs-utils-1.0.10.lustre/configure.in
  fi
  
  dnl *************************************************************
-@@ -307,35 +198,7 @@ AC_SUBST([ACLOCAL_AMFLAGS], ["-I $ac_mac
+@@ -311,33 +197,7 @@ AC_SUBST([ACLOCAL_AMFLAGS], ["-I $ac_mac
  
  AC_CONFIG_FILES([
  	Makefile
@@ -168,7 +172,6 @@ diff -rNup nfs-utils-1.0.10/configure.in nfs-utils-1.0.10.lustre/configure.in
 -	support/nfs/Makefile
 -	tools/Makefile
 -	tools/getiversion/Makefile
--	tools/getkversion/Makefile
 -	tools/locktest/Makefile
 -	tools/nlmtest/Makefile
 -	tools/rpcdebug/Makefile
@@ -182,16 +185,15 @@ diff -rNup nfs-utils-1.0.10/configure.in nfs-utils-1.0.10.lustre/configure.in
 -	utils/mountd/Makefile
 -	utils/nfsd/Makefile
 -	utils/nfsstat/Makefile
--	utils/nhfsstone/Makefile
 -	utils/rquotad/Makefile
 -	utils/showmount/Makefile
 -	utils/statd/Makefile])
 +	utils/gssd/Makefile])
  AC_OUTPUT
  
-diff -rNup nfs-utils-1.0.10/Makefile.am nfs-utils-1.0.10.lustre/Makefile.am
---- nfs-utils-1.0.10/Makefile.am	2007-05-15 13:02:26.000000000 -0600
-+++ nfs-utils-1.0.10.lustre/Makefile.am	2007-05-15 13:00:53.000000000 -0600
+diff -Nrup nfs-utils-1.0.11/Makefile.am nfs-utils-1.0.11.lustre/Makefile.am
+--- nfs-utils-1.0.11/Makefile.am	2007-02-21 21:50:03.000000000 -0700
++++ nfs-utils-1.0.11.lustre/Makefile.am	2007-05-23 14:35:45.000000000 -0600
 @@ -1,6 +1,6 @@
  ## Process this file with automake to produce Makefile.in
  
@@ -200,10 +202,10 @@ diff -rNup nfs-utils-1.0.10/Makefile.am nfs-utils-1.0.10.lustre/Makefile.am
  
  MAINTAINERCLEANFILES = Makefile.in
  
-diff -rNup nfs-utils-1.0.10/utils/gssd/cacheio.c nfs-utils-1.0.10.lustre/utils/gssd/cacheio.c
---- nfs-utils-1.0.10/utils/gssd/cacheio.c	2006-08-07 00:40:50.000000000 -0600
-+++ nfs-utils-1.0.10.lustre/utils/gssd/cacheio.c	2007-05-15 13:01:35.000000000 -0600
-@@ -227,7 +227,8 @@ int qword_get(char **bpp, char *dest, in
+diff -Nrup nfs-utils-1.0.11/utils/gssd/cacheio.c nfs-utils-1.0.11.lustre/utils/gssd/cacheio.c
+--- nfs-utils-1.0.11/utils/gssd/cacheio.c	2007-02-21 21:50:03.000000000 -0700
++++ nfs-utils-1.0.11.lustre/utils/gssd/cacheio.c	2007-05-23 14:36:28.000000000 -0600
+@@ -240,7 +240,8 @@ int qword_get(char **bpp, char *dest, in
  		return -1;
  	while (*bp == ' ') bp++;
  	*bpp = bp;
@@ -213,21 +215,32 @@ diff -rNup nfs-utils-1.0.10/utils/gssd/cacheio.c nfs-utils-1.0.10.lustre/utils/g
  	return len;
  }
  
-diff -rNup nfs-utils-1.0.10/utils/gssd/context.c nfs-utils-1.0.10.lustre/utils/gssd/context.c
---- nfs-utils-1.0.10/utils/gssd/context.c	2006-08-07 00:40:50.000000000 -0600
-+++ nfs-utils-1.0.10.lustre/utils/gssd/context.c	2007-05-15 13:01:35.000000000 -0600
-@@ -33,8 +33,6 @@
+diff -Nrup nfs-utils-1.0.11/utils/gssd/context.c nfs-utils-1.0.11.lustre/utils/gssd/context.c
+--- nfs-utils-1.0.11/utils/gssd/context.c	2007-02-21 21:50:03.000000000 -0700
++++ nfs-utils-1.0.11.lustre/utils/gssd/context.c	2007-05-23 14:36:29.000000000 -0600
+@@ -33,11 +33,14 @@
  #include <syslog.h>
  #include <string.h>
  #include <gssapi/gssapi.h>
 -#include <rpc/rpc.h>
 -#include <rpc/auth_gss.h>
- #include "gss_util.h"
- #include "gss_oids.h"
- #include "err_util.h"
-diff -rNup nfs-utils-1.0.10/utils/gssd/context.h nfs-utils-1.0.10.lustre/utils/gssd/context.h
---- nfs-utils-1.0.10/utils/gssd/context.h	2007-05-15 13:02:26.000000000 -0600
-+++ nfs-utils-1.0.10.lustre/utils/gssd/context.h	2007-05-15 13:01:35.000000000 -0600
+-#include "gss_util.h"
+-#include "gss_oids.h"
+-#include "err_util.h"
++
++#ifdef _NEW_BUILD_
++# include "lgss_utils.h"
++#else
++# include "gss_util.h"
++# include "gss_oids.h"
++# include "err_util.h"
++#endif
+ #include "context.h"
+ 
+ int
+diff -Nrup nfs-utils-1.0.11/utils/gssd/context.h nfs-utils-1.0.11.lustre/utils/gssd/context.h
+--- nfs-utils-1.0.11/utils/gssd/context.h	2007-05-23 14:35:21.000000000 -0600
++++ nfs-utils-1.0.11.lustre/utils/gssd/context.h	2007-05-23 14:36:30.000000000 -0600
 @@ -31,8 +31,6 @@
  #ifndef _CONTEXT_H_
  #define _CONTEXT_H_
@@ -237,9 +250,28 @@ diff -rNup nfs-utils-1.0.10/utils/gssd/context.h nfs-utils-1.0.10.lustre/utils/g
  /* Hopefully big enough to hold any serialized context */
  #define MAX_CTX_LEN 4096
  
-diff -rNup nfs-utils-1.0.10/utils/gssd/context_lucid.c nfs-utils-1.0.10.lustre/utils/gssd/context_lucid.c
---- nfs-utils-1.0.10/utils/gssd/context_lucid.c	2007-05-15 13:02:26.000000000 -0600
-+++ nfs-utils-1.0.10.lustre/utils/gssd/context_lucid.c	2007-05-15 13:01:35.000000000 -0600
+diff -Nrup nfs-utils-1.0.11/utils/gssd/context_heimdal.c nfs-utils-1.0.11.lustre/utils/gssd/context_heimdal.c
+--- nfs-utils-1.0.11/utils/gssd/context_heimdal.c	2007-02-21 21:50:03.000000000 -0700
++++ nfs-utils-1.0.11.lustre/utils/gssd/context_heimdal.c	2007-05-23 14:36:30.000000000 -0600
+@@ -43,8 +43,13 @@
+ #ifdef HAVE_COM_ERR_H
+ #include <com_err.h>
+ #endif
+-#include "err_util.h"
+-#include "gss_oids.h"
++
++#ifdef _NEW_BUILD_
++# include "lgss_utils.h"
++#else
++# include "err_util.h"
++# include "gss_oids.h"
++#endif
+ #include "write_bytes.h"
+ 
+ int write_heimdal_keyblock(char **p, char *end, krb5_keyblock *key)
+diff -Nrup nfs-utils-1.0.11/utils/gssd/context_lucid.c nfs-utils-1.0.11.lustre/utils/gssd/context_lucid.c
+--- nfs-utils-1.0.11/utils/gssd/context_lucid.c	2007-05-23 14:35:21.000000000 -0600
++++ nfs-utils-1.0.11.lustre/utils/gssd/context_lucid.c	2007-05-23 14:36:31.000000000 -0600
 @@ -41,11 +41,7 @@
  #include <syslog.h>
  #include <string.h>
@@ -253,19 +285,24 @@ diff -rNup nfs-utils-1.0.10/utils/gssd/context_lucid.c nfs-utils-1.0.10.lustre/u
  #include <krb5.h>
  #include <gssapi/gssapi.h>
  #ifndef OM_uint64
-@@ -53,6 +49,11 @@ typedef uint64_t OM_uint64;
+@@ -53,6 +49,16 @@ typedef uint64_t OM_uint64;
  #endif
  #include <gssapi/gssapi_krb5.h>
  
-+#include "gss_util.h"
-+#include "gss_oids.h"
-+#include "err_util.h"
++#ifdef _NEW_BUILD_
++# include "lgss_utils.h"
++#else
++# include "gss_util.h"
++# include "gss_oids.h"
++# include "err_util.h"
++#endif
++#include "write_bytes.h"
 +#include "context.h"
 +
  static int
  write_lucid_keyblock(char **p, char *end, gss_krb5_lucid_key_t *key)
  {
-@@ -354,6 +355,7 @@ static int
+@@ -354,6 +360,7 @@ static int
  prepare_krb5_rfc4121_buffer(gss_krb5_lucid_context_v1_t *lctx,
  			    gss_buffer_desc *buf)
  {
@@ -273,7 +310,7 @@ diff -rNup nfs-utils-1.0.10/utils/gssd/context_lucid.c nfs-utils-1.0.10.lustre/u
  	char *p, *end;
  	uint32_t v2_flags = 0;
  	gss_krb5_lucid_key_t enc_key;
-@@ -372,7 +374,7 @@ prepare_krb5_rfc4121_buffer(gss_krb5_luc
+@@ -372,7 +379,7 @@ prepare_krb5_rfc4121_buffer(gss_krb5_luc
  	end = buf->value + MAX_CTX_LEN;
  
  	/* Version 2 */
@@ -282,7 +319,27 @@ diff -rNup nfs-utils-1.0.10/utils/gssd/context_lucid.c nfs-utils-1.0.10.lustre/u
  	if (WRITE_BYTES(&p, end, lctx->endtime)) goto out_err;
  
  	if (lctx->initiate)
-@@ -434,14 +436,25 @@ prepare_krb5_rfc4121_buffer(gss_krb5_luc
+@@ -387,7 +394,7 @@ prepare_krb5_rfc4121_buffer(gss_krb5_luc
+ 	if (WRITE_BYTES(&p, end, lctx->send_seq)) goto out_err;
+ 
+ 	/* Protocol 0 here implies DES3 or RC4 */
+-	printerr(2, "%s: protocol %d\n", __FUNCTION__, lctx->protocol);
++	printerr(3, "protocol %d\n", lctx->protocol);
+ 	if (lctx->protocol == 0) {
+ 		enctype = lctx->rfc1964_kd.ctx_key.type;
+ #ifdef HAVE_HEIMDAL
+@@ -415,8 +422,8 @@ prepare_krb5_rfc4121_buffer(gss_krb5_luc
+ 		}
+ 		numkeys = 3;
+ 	}
+-	printerr(2, "%s: serializing %d keys with enctype %d and size %d\n",
+-		 __FUNCTION__, numkeys, enctype, keysize);
++	printerr(3, "serializing %d keys with enctype %d and size %d\n",
++		 numkeys, enctype, keysize);
+ 	if (WRITE_BYTES(&p, end, enctype)) goto out_err;
+ 	if (WRITE_BYTES(&p, end, keysize)) goto out_err;
+ 	if (WRITE_BYTES(&p, end, numkeys)) goto out_err;
+@@ -434,14 +441,25 @@ prepare_krb5_rfc4121_buffer(gss_krb5_luc
  			goto out_err;
  
  		/* Kc */
@@ -316,7 +373,7 @@ diff -rNup nfs-utils-1.0.10/utils/gssd/context_lucid.c nfs-utils-1.0.10.lustre/u
  	} else {
  		gss_krb5_lucid_key_t *keyptr;
  		uint32_t sign_usage, seal_usage;
-@@ -451,6 +464,7 @@ prepare_krb5_rfc4121_buffer(gss_krb5_luc
+@@ -451,6 +469,7 @@ prepare_krb5_rfc4121_buffer(gss_krb5_luc
  		else
  			keyptr = &lctx->cfx_kd.ctx_key;
  
@@ -324,7 +381,7 @@ diff -rNup nfs-utils-1.0.10/utils/gssd/context_lucid.c nfs-utils-1.0.10.lustre/u
  		if (lctx->initiate == 1) {
  			sign_usage = KG_USAGE_INITIATOR_SIGN;
  			seal_usage = KG_USAGE_INITIATOR_SEAL;
-@@ -458,6 +472,19 @@ prepare_krb5_rfc4121_buffer(gss_krb5_luc
+@@ -458,6 +477,19 @@ prepare_krb5_rfc4121_buffer(gss_krb5_luc
  			sign_usage = KG_USAGE_ACCEPTOR_SIGN;
  			seal_usage = KG_USAGE_ACCEPTOR_SEAL;
  		}
@@ -344,18 +401,38 @@ diff -rNup nfs-utils-1.0.10/utils/gssd/context_lucid.c nfs-utils-1.0.10.lustre/u
  
  		/* derive and send down: Ke, Ki, and Kc */
  
-diff -rNup nfs-utils-1.0.10/utils/gssd/context_mit.c nfs-utils-1.0.10.lustre/utils/gssd/context_mit.c
---- nfs-utils-1.0.10/utils/gssd/context_mit.c	2007-05-15 13:02:26.000000000 -0600
-+++ nfs-utils-1.0.10.lustre/utils/gssd/context_mit.c	2007-05-15 13:01:35.000000000 -0600
-@@ -39,7 +39,6 @@
+@@ -515,7 +547,7 @@ serialize_krb5_ctx(gss_ctx_id_t ctx, gss
+ 	gss_krb5_lucid_context_v1_t *lctx = 0;
+ 	int retcode = 0;
+ 
+-	printerr(2, "DEBUG: %s: lucid version!\n", __FUNCTION__);
++	printerr(3, "lucid version!\n");
+ 	maj_stat = gss_export_lucid_sec_context(&min_stat, &ctx,
+ 						1, &return_ctx);
+ 	if (maj_stat != GSS_S_COMPLETE) {
+diff -Nrup nfs-utils-1.0.11/utils/gssd/context_mit.c nfs-utils-1.0.11.lustre/utils/gssd/context_mit.c
+--- nfs-utils-1.0.11/utils/gssd/context_mit.c	2007-05-23 14:35:21.000000000 -0600
++++ nfs-utils-1.0.11.lustre/utils/gssd/context_mit.c	2007-05-23 14:36:32.000000000 -0600
+@@ -39,10 +39,14 @@
  #include <errno.h>
  #include <gssapi/gssapi.h>
  #include <rpc/rpc.h>
 -#include <rpc/auth_gss.h>
- #include "gss_util.h"
- #include "gss_oids.h"
- #include "err_util.h"
-@@ -333,12 +332,7 @@ serialize_krb5_ctx(gss_ctx_id_t ctx, gss
+-#include "gss_util.h"
+-#include "gss_oids.h"
+-#include "err_util.h"
++
++#ifdef _NEW_BUILD_
++# include "lgss_utils.h"
++#else
++# include "gss_util.h"
++# include "gss_oids.h"
++# include "err_util.h"
++#endif
+ #include "context.h"
+ 
+ #include <krb5.h>
+@@ -333,12 +337,7 @@ serialize_krb5_ctx(gss_ctx_id_t ctx, gss
  		 * keydata-2;                (  Ki  (Kseq for DES3) )
  		 * keydata-3;                (  Kc (derived checksum key) )
  		 */
@@ -369,9 +446,9 @@ diff -rNup nfs-utils-1.0.10/utils/gssd/context_mit.c nfs-utils-1.0.10.lustre/uti
  		if (WRITE_BYTES(&p, end, kctx->endtime)) goto out_err;
  
  		/* Only applicable flag for this is initiator */
-diff -rNup nfs-utils-1.0.10/utils/gssd/context_spkm3.c nfs-utils-1.0.10.lustre/utils/gssd/context_spkm3.c
---- nfs-utils-1.0.10/utils/gssd/context_spkm3.c	2007-05-15 13:02:26.000000000 -0600
-+++ nfs-utils-1.0.10.lustre/utils/gssd/context_spkm3.c	2007-05-15 13:01:35.000000000 -0600
+diff -Nrup nfs-utils-1.0.11/utils/gssd/context_spkm3.c nfs-utils-1.0.11.lustre/utils/gssd/context_spkm3.c
+--- nfs-utils-1.0.11/utils/gssd/context_spkm3.c	2007-02-21 21:50:03.000000000 -0700
++++ nfs-utils-1.0.11.lustre/utils/gssd/context_spkm3.c	2007-05-23 14:36:32.000000000 -0600
 @@ -33,8 +33,6 @@
  #include <syslog.h>
  #include <string.h>
@@ -381,9 +458,9 @@ diff -rNup nfs-utils-1.0.10/utils/gssd/context_spkm3.c nfs-utils-1.0.10.lustre/u
  #include "gss_util.h"
  #include "gss_oids.h"
  #include "err_util.h"
-diff -rNup nfs-utils-1.0.10/utils/gssd/err_util.c nfs-utils-1.0.10.lustre/utils/gssd/err_util.c
---- nfs-utils-1.0.10/utils/gssd/err_util.c	2006-08-07 00:40:50.000000000 -0600
-+++ nfs-utils-1.0.10.lustre/utils/gssd/err_util.c	2007-05-15 13:01:35.000000000 -0600
+diff -Nrup nfs-utils-1.0.11/utils/gssd/err_util.c nfs-utils-1.0.11.lustre/utils/gssd/err_util.c
+--- nfs-utils-1.0.11/utils/gssd/err_util.c	2007-02-21 21:50:03.000000000 -0700
++++ nfs-utils-1.0.11.lustre/utils/gssd/err_util.c	2007-05-23 14:36:33.000000000 -0600
 @@ -32,6 +32,8 @@
  #include <stdarg.h>
  #include <syslog.h>
@@ -434,9 +511,9 @@ diff -rNup nfs-utils-1.0.10/utils/gssd/err_util.c nfs-utils-1.0.10.lustre/utils/
 +	}
 +}
 +
-diff -rNup nfs-utils-1.0.10/utils/gssd/err_util.h nfs-utils-1.0.10.lustre/utils/gssd/err_util.h
---- nfs-utils-1.0.10/utils/gssd/err_util.h	2006-08-07 00:40:50.000000000 -0600
-+++ nfs-utils-1.0.10.lustre/utils/gssd/err_util.h	2007-05-15 13:01:35.000000000 -0600
+diff -Nrup nfs-utils-1.0.11/utils/gssd/err_util.h nfs-utils-1.0.11.lustre/utils/gssd/err_util.h
+--- nfs-utils-1.0.11/utils/gssd/err_util.h	2007-02-21 21:50:03.000000000 -0700
++++ nfs-utils-1.0.11.lustre/utils/gssd/err_util.h	2007-05-23 14:36:33.000000000 -0600
 @@ -33,5 +33,6 @@
  
  void initerr(char *progname, int verbosity, int fg);
@@ -444,9 +521,9 @@ diff -rNup nfs-utils-1.0.10/utils/gssd/err_util.h nfs-utils-1.0.10.lustre/utils/
 +void print_hexl(int pri, unsigned char *cp, int length);
  
  #endif /* _ERR_UTIL_H_ */
-diff -rNup nfs-utils-1.0.10/utils/gssd/gss_clnt_send_err.c nfs-utils-1.0.10.lustre/utils/gssd/gss_clnt_send_err.c
---- nfs-utils-1.0.10/utils/gssd/gss_clnt_send_err.c	2006-08-07 00:40:50.000000000 -0600
-+++ nfs-utils-1.0.10.lustre/utils/gssd/gss_clnt_send_err.c	2007-05-15 13:00:53.000000000 -0600
+diff -Nrup nfs-utils-1.0.11/utils/gssd/gss_clnt_send_err.c nfs-utils-1.0.11.lustre/utils/gssd/gss_clnt_send_err.c
+--- nfs-utils-1.0.11/utils/gssd/gss_clnt_send_err.c	2007-02-21 21:50:03.000000000 -0700
++++ nfs-utils-1.0.11.lustre/utils/gssd/gss_clnt_send_err.c	2007-05-23 14:35:45.000000000 -0600
 @@ -47,6 +47,7 @@
  #include "gssd.h"
  #include "write_bytes.h"
@@ -460,9 +537,9 @@ diff -rNup nfs-utils-1.0.10/utils/gssd/gss_clnt_send_err.c nfs-utils-1.0.10.lust
  	exit(0);
  }
 +#endif
-diff -rNup nfs-utils-1.0.10/utils/gssd/gssd.c nfs-utils-1.0.10.lustre/utils/gssd/gssd.c
---- nfs-utils-1.0.10/utils/gssd/gssd.c	2007-05-15 13:02:26.000000000 -0600
-+++ nfs-utils-1.0.10.lustre/utils/gssd/gssd.c	2007-05-15 13:01:35.000000000 -0600
+diff -Nrup nfs-utils-1.0.11/utils/gssd/gssd.c nfs-utils-1.0.11.lustre/utils/gssd/gssd.c
+--- nfs-utils-1.0.11/utils/gssd/gssd.c	2007-05-23 14:35:21.000000000 -0600
++++ nfs-utils-1.0.11.lustre/utils/gssd/gssd.c	2007-05-23 14:36:34.000000000 -0600
 @@ -38,9 +38,12 @@
  
  #include "config.h"
@@ -689,9 +766,9 @@ diff -rNup nfs-utils-1.0.10/utils/gssd/gssd.c nfs-utils-1.0.10.lustre/utils/gssd
 +	printerr(0, "lgssd exiting\n");
 +	return 0;
  }
-diff -rNup nfs-utils-1.0.10/utils/gssd/gssd.h nfs-utils-1.0.10.lustre/utils/gssd/gssd.h
---- nfs-utils-1.0.10/utils/gssd/gssd.h	2007-05-15 13:02:26.000000000 -0600
-+++ nfs-utils-1.0.10.lustre/utils/gssd/gssd.h	2007-05-15 13:01:35.000000000 -0600
+diff -Nrup nfs-utils-1.0.11/utils/gssd/gssd.h nfs-utils-1.0.11.lustre/utils/gssd/gssd.h
+--- nfs-utils-1.0.11/utils/gssd/gssd.h	2007-05-23 14:35:21.000000000 -0600
++++ nfs-utils-1.0.11.lustre/utils/gssd/gssd.h	2007-05-23 14:36:34.000000000 -0600
 @@ -48,8 +48,13 @@
  #define GSSD_DEFAULT_CRED_PREFIX		"krb5cc_"
  #define GSSD_DEFAULT_MACHINE_CRED_SUFFIX	"machine"
@@ -747,9 +824,9 @@ diff -rNup nfs-utils-1.0.10/utils/gssd/gssd.h nfs-utils-1.0.10.lustre/utils/gssd
 +void lgssd_mutex_put(int semid);
  
  #endif /* _RPC_GSSD_H_ */
-diff -rNup nfs-utils-1.0.10/utils/gssd/gssd_main_loop.c nfs-utils-1.0.10.lustre/utils/gssd/gssd_main_loop.c
---- nfs-utils-1.0.10/utils/gssd/gssd_main_loop.c	2007-05-15 13:02:26.000000000 -0600
-+++ nfs-utils-1.0.10.lustre/utils/gssd/gssd_main_loop.c	2007-05-15 13:01:35.000000000 -0600
+diff -Nrup nfs-utils-1.0.11/utils/gssd/gssd_main_loop.c nfs-utils-1.0.11.lustre/utils/gssd/gssd_main_loop.c
+--- nfs-utils-1.0.11/utils/gssd/gssd_main_loop.c	2007-05-23 14:35:21.000000000 -0600
++++ nfs-utils-1.0.11.lustre/utils/gssd/gssd_main_loop.c	2007-05-23 14:36:35.000000000 -0600
 @@ -94,11 +94,13 @@ scan_poll_results(int ret)
  };
  
@@ -819,9 +896,9 @@ diff -rNup nfs-utils-1.0.10/utils/gssd/gssd_main_loop.c nfs-utils-1.0.10.lustre/
  	close(fd);
  	return;
  }
-diff -rNup nfs-utils-1.0.10/utils/gssd/gssd_proc.c nfs-utils-1.0.10.lustre/utils/gssd/gssd_proc.c
---- nfs-utils-1.0.10/utils/gssd/gssd_proc.c	2007-05-15 13:02:26.000000000 -0600
-+++ nfs-utils-1.0.10.lustre/utils/gssd/gssd_proc.c	2007-05-15 13:21:06.000000000 -0600
+diff -Nrup nfs-utils-1.0.11/utils/gssd/gssd_proc.c nfs-utils-1.0.11.lustre/utils/gssd/gssd_proc.c
+--- nfs-utils-1.0.11/utils/gssd/gssd_proc.c	2007-05-23 14:35:21.000000000 -0600
++++ nfs-utils-1.0.11.lustre/utils/gssd/gssd_proc.c	2007-05-23 14:36:35.000000000 -0600
 @@ -43,7 +43,6 @@
  #endif
  #include "config.h"
@@ -1623,9 +1700,9 @@ diff -rNup nfs-utils-1.0.10/utils/gssd/gssd_proc.c nfs-utils-1.0.10.lustre/utils
  	goto out;
 +#endif
  }
-diff -rNup nfs-utils-1.0.10/utils/gssd/gss_util.c nfs-utils-1.0.10.lustre/utils/gssd/gss_util.c
---- nfs-utils-1.0.10/utils/gssd/gss_util.c	2006-08-07 00:40:50.000000000 -0600
-+++ nfs-utils-1.0.10.lustre/utils/gssd/gss_util.c	2007-05-15 13:01:35.000000000 -0600
+diff -Nrup nfs-utils-1.0.11/utils/gssd/gss_util.c nfs-utils-1.0.11.lustre/utils/gssd/gss_util.c
+--- nfs-utils-1.0.11/utils/gssd/gss_util.c	2007-02-21 21:50:03.000000000 -0700
++++ nfs-utils-1.0.11.lustre/utils/gssd/gss_util.c	2007-05-23 14:36:37.000000000 -0600
 @@ -87,9 +87,16 @@
  #ifdef HAVE_COM_ERR_H
  #include <com_err.h>
@@ -1839,9 +1916,9 @@ diff -rNup nfs-utils-1.0.10/utils/gssd/gss_util.c nfs-utils-1.0.10.lustre/utils/
 +	return retval;
 +}
 +
-diff -rNup nfs-utils-1.0.10/utils/gssd/gss_util.h nfs-utils-1.0.10.lustre/utils/gssd/gss_util.h
---- nfs-utils-1.0.10/utils/gssd/gss_util.h	2006-08-07 00:40:50.000000000 -0600
-+++ nfs-utils-1.0.10.lustre/utils/gssd/gss_util.h	2007-05-15 13:01:35.000000000 -0600
+diff -Nrup nfs-utils-1.0.11/utils/gssd/gss_util.h nfs-utils-1.0.11.lustre/utils/gssd/gss_util.h
+--- nfs-utils-1.0.11/utils/gssd/gss_util.h	2007-02-21 21:50:03.000000000 -0700
++++ nfs-utils-1.0.11.lustre/utils/gssd/gss_util.h	2007-05-23 14:36:37.000000000 -0600
 @@ -32,14 +32,14 @@
  #define _GSS_UTIL_H_
  
@@ -1859,9 +1936,9 @@ diff -rNup nfs-utils-1.0.10/utils/gssd/gss_util.h nfs-utils-1.0.10.lustre/utils/
 +int gssd_get_local_realm(void);
  
  #endif /* _GSS_UTIL_H_ */
-diff -rNup nfs-utils-1.0.10/utils/gssd/krb5_util.c nfs-utils-1.0.10.lustre/utils/gssd/krb5_util.c
---- nfs-utils-1.0.10/utils/gssd/krb5_util.c	2007-05-15 13:02:26.000000000 -0600
-+++ nfs-utils-1.0.10.lustre/utils/gssd/krb5_util.c	2007-05-15 13:01:35.000000000 -0600
+diff -Nrup nfs-utils-1.0.11/utils/gssd/krb5_util.c nfs-utils-1.0.11.lustre/utils/gssd/krb5_util.c
+--- nfs-utils-1.0.11/utils/gssd/krb5_util.c	2007-05-23 14:35:21.000000000 -0600
++++ nfs-utils-1.0.11.lustre/utils/gssd/krb5_util.c	2007-05-23 14:36:38.000000000 -0600
 @@ -99,12 +99,15 @@
  #include <rpc/rpc.h>
  #include <sys/types.h>
@@ -1953,7 +2030,7 @@ diff -rNup nfs-utils-1.0.10/utils/gssd/krb5_util.c nfs-utils-1.0.10.lustre/utils
   * Called from the scandir function to weed out potential krb5
   * credentials cache files
   *
-@@ -294,7 +343,7 @@ gssd_get_single_krb5_cred(krb5_context c
+@@ -288,7 +337,7 @@ gssd_get_single_krb5_cred(krb5_context c
  
  	memset(&my_creds, 0, sizeof(my_creds));
  
@@ -1962,7 +2039,7 @@ diff -rNup nfs-utils-1.0.10/utils/gssd/krb5_util.c nfs-utils-1.0.10.lustre/utils
  		printerr(2, "INFO: Credentials in CC '%s' are good until %d\n",
  			 ple->ccname, ple->endtime);
  		code = 0;
-@@ -314,6 +363,12 @@ gssd_get_single_krb5_cred(krb5_context c
+@@ -308,6 +357,12 @@ gssd_get_single_krb5_cred(krb5_context c
  	/* set a short lifetime (for debugging only!) */
  	printerr(0, "WARNING: Using (debug) short machine cred lifetime!\n");
  	krb5_get_init_creds_opt_set_tkt_life(&options, 5*60);
@@ -1975,7 +2052,7 @@ diff -rNup nfs-utils-1.0.10/utils/gssd/krb5_util.c nfs-utils-1.0.10.lustre/utils
  #endif
          if ((code = krb5_get_init_creds_keytab(context, &my_creds, ple->princ,
  	                                  kt, 0, NULL, &options))) {
-@@ -325,11 +380,7 @@ gssd_get_single_krb5_cred(krb5_context c
+@@ -319,11 +374,7 @@ gssd_get_single_krb5_cred(krb5_context c
  			    "principal '%s' from keytab '%s'\n",
  			 error_message(code),
  			 pname ? pname : "<unparsable>", kt_name);
@@ -1988,7 +2065,7 @@ diff -rNup nfs-utils-1.0.10/utils/gssd/krb5_util.c nfs-utils-1.0.10.lustre/utils
  		goto out;
  	}
  
-@@ -378,15 +429,7 @@ gssd_get_single_krb5_cred(krb5_context c
+@@ -372,15 +423,7 @@ gssd_get_single_krb5_cred(krb5_context c
  	return (code);
  }
  
@@ -2005,7 +2082,7 @@ diff -rNup nfs-utils-1.0.10/utils/gssd/krb5_util.c nfs-utils-1.0.10.lustre/utils
  {
  	struct gssd_k5_kt_princ *ple;
  #ifdef HAVE_KRB5
-@@ -396,18 +439,76 @@ gssd_have_realm_ple(void *r)
+@@ -390,18 +433,76 @@ gssd_have_realm_ple(void *r)
  #endif
  
  	for (ple = gssd_k5_kt_princ_list; ple; ple = ple->next) {
@@ -2090,7 +2167,7 @@ diff -rNup nfs-utils-1.0.10/utils/gssd/krb5_util.c nfs-utils-1.0.10.lustre/utils
  /*
   * Process the given keytab file and create a list of principals we
   * might use to perform mount operations.
-@@ -451,82 +552,106 @@ gssd_process_krb5_keytab(krb5_context co
+@@ -445,82 +546,106 @@ gssd_process_krb5_keytab(krb5_context co
  		}
  		printerr(2, "Processing keytab entry for principal '%s'\n",
  			 pname);
@@ -2117,22 +2194,7 @@ diff -rNup nfs-utils-1.0.10/utils/gssd/krb5_util.c nfs-utils-1.0.10.lustre/utils
 -#endif
 -				retval = ENOMEM;
 -				goto out;
-+
-+		/* mds service entry:
-+		 *   - hostname and realm should match this node
-+		 *   - replace existing non-mds entry of this realm
-+		 */
-+		if (KEYTAB_ENTRY_MATCH(kte, GSSD_SERVICE_MDS)) {
-+			krb5_principal princ = kte.principal;
-+			krb5_data *princ_host;
-+			struct utsname utsbuf;
-+			struct hostent *host;
-+
-+			if (KRB5_STRCASECMP(krb5_princ_realm(context, princ),
-+					    this_realm) != 0) {
-+				printerr(2, "alien mds service entry, skip\n");
-+				goto next;
- 			}
+-			}
 -			/* These will be filled in later */
 -			ple->next = NULL;
 -			ple->ccname = NULL;
@@ -2155,13 +2217,7 @@ diff -rNup nfs-utils-1.0.10/utils/gssd/krb5_util.c nfs-utils-1.0.10.lustre/utils
 -#endif
 -				retval = ENOMEM;
 -				goto out;
-+
-+			princ_host = krb5_princ_component(context, princ, 1);
-+			if (princ_host == NULL) {
-+				printerr(2, "mds service entry: no hostname in "
-+					 "principal, skip\n");
-+				goto next;
- 			}
+-			}
 -			if ((code = krb5_copy_principal(context,
 -					kte.principal, &ple->princ))) {
 -				printerr(0, "ERROR: %s while copying principal "
@@ -2174,25 +2230,47 @@ diff -rNup nfs-utils-1.0.10/utils/gssd/krb5_util.c nfs-utils-1.0.10.lustre/utils
 -#endif
 -				retval = code;
 -				goto out;
-+
-+			if (uname(&utsbuf)) {
-+				printerr(2, "mds service entry: unable to get "
-+					 "UTS name, skip\n");
-+				goto next;
- 			}
+-			}
 -			if (gssd_k5_kt_princ_list == NULL)
 -				gssd_k5_kt_princ_list = ple;
 -			else {
 -				ple->next = gssd_k5_kt_princ_list;
 -				gssd_k5_kt_princ_list = ple;
++
++		/* mds service entry:
++		 *   - hostname and realm should match this node
++		 *   - replace existing non-mds entry of this realm
++		 */
++		if (KEYTAB_ENTRY_MATCH(kte, GSSD_SERVICE_MDS)) {
++			krb5_principal princ = kte.principal;
++			krb5_data *princ_host;
++			struct utsname utsbuf;
++			struct hostent *host;
++
++			if (KRB5_STRCASECMP(krb5_princ_realm(context, princ),
++					    this_realm) != 0) {
++				printerr(2, "alien mds service entry, skip\n");
++				goto next;
++			}
++
++			princ_host = krb5_princ_component(context, princ, 1);
++			if (princ_host == NULL) {
++				printerr(2, "mds service entry: no hostname in "
++					 "principal, skip\n");
++				goto next;
++			}
++
++			if (uname(&utsbuf)) {
++				printerr(2, "mds service entry: unable to get "
++					 "UTS name, skip\n");
++				goto next;
++			}
 +			host = gethostbyname(utsbuf.nodename);
 +			if (host == NULL) {
 +				printerr(2, "mds service entry: unable to get "
 +					 "local hostname, skip\n");
 +				goto next;
- 			}
--		}
--		else {
++			}
 +
 +			if (KRB5_STRCASECMP(princ_host, host->h_name) != 0) {
 +				printerr(2, "mds service entry: hostname "
@@ -2228,7 +2306,9 @@ diff -rNup nfs-utils-1.0.10/utils/gssd/krb5_util.c nfs-utils-1.0.10.lustre/utils
 +				gssd_remove_ple(context, ple);
 +				printerr(2, "root entry: replace an existed "
 +					 "non-mds non-root one\n");
-+			}
+ 			}
+-		}
+-		else {
 +		} else {
  			printerr(2, "We will NOT use this entry (%s)\n",
  				pname);
@@ -2266,7 +2346,7 @@ diff -rNup nfs-utils-1.0.10/utils/gssd/krb5_util.c nfs-utils-1.0.10.lustre/utils
  	}
  
  	if ((code = krb5_kt_end_seq_get(context, kt, &cursor))) {
-@@ -642,6 +767,7 @@ gssd_setup_krb5_user_gss_ccache(uid_t ui
+@@ -636,6 +761,7 @@ gssd_setup_krb5_user_gss_ccache(uid_t ui
  	printerr(2, "getting credentials for client with uid %u for "
  		    "server %s\n", uid, servername);
  	memset(buf, 0, sizeof(buf));
@@ -2274,7 +2354,7 @@ diff -rNup nfs-utils-1.0.10/utils/gssd/krb5_util.c nfs-utils-1.0.10.lustre/utils
  	if (gssd_find_existing_krb5_ccache(uid, &d)) {
  		snprintf(buf, sizeof(buf), "FILE:%s/%s",
  			ccachedir, d->d_name);
-@@ -702,7 +828,7 @@ gssd_refresh_krb5_machine_creds(void)
+@@ -696,7 +822,7 @@ gssd_refresh_krb5_machine_creds(void)
  		goto out;
  	}
  
@@ -2283,7 +2363,7 @@ diff -rNup nfs-utils-1.0.10/utils/gssd/krb5_util.c nfs-utils-1.0.10.lustre/utils
  
  	if ((code = krb5_kt_resolve(context, keytabfile, &kt))) {
  		printerr(0, "ERROR: %s while resolving keytab '%s'\n",
-@@ -717,12 +843,12 @@ gssd_refresh_krb5_machine_creds(void)
+@@ -711,12 +837,12 @@ gssd_refresh_krb5_machine_creds(void)
  		if (gssd_k5_kt_princ_list == NULL) {
  			printerr(0, "ERROR: No usable keytab entries found in "
  				    "keytab '%s'\n", keytabfile);
@@ -2301,7 +2381,7 @@ diff -rNup nfs-utils-1.0.10/utils/gssd/krb5_util.c nfs-utils-1.0.10.lustre/utils
  		}
  	}
  
-@@ -872,6 +998,7 @@ gssd_destroy_krb5_machine_creds(void)
+@@ -866,6 +992,7 @@ gssd_destroy_krb5_machine_creds(void)
  	krb5_free_context(context);
  }
  
@@ -2309,17 +2389,24 @@ diff -rNup nfs-utils-1.0.10/utils/gssd/krb5_util.c nfs-utils-1.0.10.lustre/utils
  #ifdef HAVE_SET_ALLOWABLE_ENCTYPES
  /*
   * this routine obtains a credentials handle via gss_acquire_cred()
-@@ -927,6 +1054,7 @@ limit_krb5_enctypes(struct rpc_gss_sec *
+@@ -921,7 +1048,9 @@ limit_krb5_enctypes(struct rpc_gss_sec *
  	return 0;
  }
  #endif	/* HAVE_SET_ALLOWABLE_ENCTYPES */
 +#endif
  
++#if 0
  /*
   * Obtain supported enctypes from kernel.
-diff -rNup nfs-utils-1.0.10/utils/gssd/krb5_util.h nfs-utils-1.0.10.lustre/utils/gssd/krb5_util.h
---- nfs-utils-1.0.10/utils/gssd/krb5_util.h	2007-05-15 13:02:26.000000000 -0600
-+++ nfs-utils-1.0.10.lustre/utils/gssd/krb5_util.h	2007-05-15 13:01:35.000000000 -0600
+  * Set defaults if info is not available.
+@@ -988,3 +1117,4 @@ gssd_obtain_kernel_krb5_info(void)
+ 			 code);
+ 	}
+ }
++#endif
+diff -Nrup nfs-utils-1.0.11/utils/gssd/krb5_util.h nfs-utils-1.0.11.lustre/utils/gssd/krb5_util.h
+--- nfs-utils-1.0.11/utils/gssd/krb5_util.h	2007-05-23 14:35:21.000000000 -0600
++++ nfs-utils-1.0.11.lustre/utils/gssd/krb5_util.h	2007-05-23 14:36:39.000000000 -0600
 @@ -10,6 +10,8 @@
  struct gssd_k5_kt_princ {
  	struct gssd_k5_kt_princ *next;
@@ -2338,833 +2425,10 @@ diff -rNup nfs-utils-1.0.10/utils/gssd/krb5_util.h nfs-utils-1.0.10.lustre/utils
 -#endif
 -
  #endif /* KRB5_UTIL_H */
-diff -rNup nfs-utils-1.0.10/utils/gssd/lgss_keyring.c nfs-utils-1.0.10.lustre/utils/gssd/lgss_keyring.c
---- nfs-utils-1.0.10/utils/gssd/lgss_keyring.c	1969-12-31 17:00:00.000000000 -0700
-+++ nfs-utils-1.0.10.lustre/utils/gssd/lgss_keyring.c	2007-05-15 13:01:35.000000000 -0600
-@@ -0,0 +1,778 @@
-+/* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
-+ * vim:expandtab:shiftwidth=8:tabstop=8:
-+ *
-+ *  lucall_keyring.c
-+ *  user-space upcall to create GSS context, using keyring interface to kernel
-+ *
-+ *  Copyright (c) 2007 Cluster File Systems, Inc.
-+ *   Author: Eric Mei <ericm@clusterfs.com>
-+ *
-+ *   This file is part of the Lustre file system, http://www.lustre.org
-+ *   Lustre is a trademark of Cluster File Systems, Inc.
-+ *
-+ *   You may have signed or agreed to another license before downloading
-+ *   this software.  If so, you are bound by the terms and conditions
-+ *   of that agreement, and the following does not apply to you.  See the
-+ *   LICENSE file included with this distribution for more information.
-+ *
-+ *   If you did not agree to a different license, then this copy of Lustre
-+ *   is open source software; you can redistribute it and/or modify it
-+ *   under the terms of version 2 of the GNU General Public License as
-+ *   published by the Free Software Foundation.
-+ *
-+ *   In either case, Lustre is distributed in the hope that it will be
-+ *   useful, but WITHOUT ANY WARRANTY; without even the implied warranty
-+ *   of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-+ *   license text for more details.
-+ */
-+
-+#include <unistd.h>
-+#include <stdlib.h>
-+#include <stdio.h>
-+#include <fcntl.h>
-+#include <string.h>
-+#include <errno.h>
-+#include <stdarg.h>
-+#include <syslog.h>
-+#include <assert.h>
-+#include <pwd.h>
-+#include <keyutils.h>
-+#include <gssapi/gssapi.h>
-+
-+#include <libcfs/libcfs.h>
-+
-+#include "lsupport.h"
-+#include "write_bytes.h"
-+#include "krb5_util.h"
-+#include "gss_oids.h"
-+#include "context.h"
-+
-+/*
-+ * XXX TEMP to satisfy link. should be removed!!!
-+ */
-+char ccachedir[PATH_MAX] = "/tmp";
-+char keytabfile[PATH_MAX] = "/etc/krb5.keytab";
-+int  use_memcache = 0;
-+
-+/****************************************
-+ * log facilities                       *
-+ ****************************************/
-+
-+/*
-+ * log level:
-+ * 0: critical error messages
-+ * 1: warning included
-+ * 2: debugging
-+ * 3: excessive messages
-+ */
-+typedef enum {
-+        LL_ERR          = 0,
-+        LL_WARN         = 1,
-+        LL_INFO         = 2,
-+        LL_TRACE        = 3,
-+} loglevel_t;
-+
-+loglevel_t g_log_level = LL_TRACE;
-+
-+static void logmsg(loglevel_t level, const char *format, ...)
-+{
-+        char    buf[1024];
-+        int     offset;
-+        va_list ap;
-+
-+        if (level > g_log_level)
-+                return;
-+
-+        offset = snprintf(buf, sizeof(buf), "[%d]: ", getpid());
-+
-+        va_start(ap, format);
-+        vsnprintf(buf + offset, sizeof(buf) - offset, format, ap);
-+        va_end(ap);
-+
-+        syslog(LOG_INFO, "%s", buf);
-+}
-+
-+static void logmsg_gss(loglevel_t level, const gss_OID mech,
-+                       u_int32_t major, u_int32_t minor,
-+                       const char *format, ...)
-+{
-+        va_list         ap;
-+        u_int32_t       maj_stat1, min_stat1;
-+        u_int32_t       maj_stat2, min_stat2;
-+        gss_buffer_desc maj_gss_buf = GSS_C_EMPTY_BUFFER;
-+        gss_buffer_desc min_gss_buf = GSS_C_EMPTY_BUFFER;
-+        char            maj_buf[30], min_buf[30];
-+        char           *maj, *min;
-+        uint32_t        msg_ctx = 0;
-+
-+        if (level > g_log_level)
-+                return;
-+
-+        /* Get major status message */
-+        maj_stat1 = gss_display_status(&min_stat1, major,
-+                GSS_C_GSS_CODE, mech, &msg_ctx, &maj_gss_buf);
-+
-+        if (maj_stat1 != GSS_S_COMPLETE) {
-+                snprintf(maj_buf, sizeof(maj_buf), "(0x%08x)", major);
-+                maj = &maj_buf[0];
-+        } else {
-+                maj = maj_gss_buf.value;
-+        }
-+
-+        /* Get minor status message */
-+        maj_stat2 = gss_display_status(&min_stat2, minor,
-+                GSS_C_MECH_CODE, mech, &msg_ctx, &min_gss_buf);
-+
-+        if (maj_stat2 != GSS_S_COMPLETE) {
-+                snprintf(min_buf, sizeof(min_buf), "(0x%08x)", minor);
-+                min = &min_buf[0];
-+        } else {
-+                min = min_gss_buf.value;
-+        }
-+
-+        syslog(LOG_INFO, "GSS-API: %s - %s\n", maj, min);
-+
-+        va_start(ap, format);
-+        vsyslog(LOG_INFO, format, ap);
-+        va_end(ap);
-+
-+        if (maj_gss_buf.length != 0)
-+                (void) gss_release_buffer(&min_stat1, &maj_gss_buf);
-+        if (min_gss_buf.length != 0)
-+                (void) gss_release_buffer(&min_stat2, &min_gss_buf);
-+}
-+
-+#define lassert(exp)                                                    \
-+        {                                                               \
-+                if ((int)(exp) == 0) {                                  \
-+                        logmsg(LL_ERR, "ASSERTION FAILED: #exp");       \
-+                        exit(-1);                                       \
-+                }                                                       \
-+        }
-+
-+/****************************************
-+ * global declaration                   *
-+ ****************************************/
-+
-+typedef enum {
-+        LGSS_SVC_MDS    = 0,
-+        LGSS_SVC_OSS    = 1,
-+        LGSS_SVC_MAX
-+} lgss_svc_t;
-+
-+const char *lgss_svc_name[LGSS_SVC_MAX] = {
-+        [LGSS_SVC_MDS] = "lustre_mds",
-+        [LGSS_SVC_OSS] = "lustre_oss",
-+};
-+
-+typedef enum {
-+        LGSS_AUTH_KRB5,
-+} lgss_auth_t;
-+
-+/*
-+ * all data about negotiation
-+ */
-+struct lgss_nego_data {
-+        uint32_t        lnd_established:1;
-+        uint32_t        lnd_uid;
-+        uint32_t        lnd_lsvc;
-+        char           *lnd_uuid;
-+
-+        gss_OID         lnd_mech;               /* mech OID */
-+        gss_name_t      lnd_svc_name;           /* service name */
-+        u_int           lnd_req_flags;          /* request flags */
-+        gss_cred_id_t   lnd_cred;               /* credential */
-+        gss_ctx_id_t    lnd_ctx;                /* session context */
-+        gss_buffer_desc lnd_rmt_ctx;            /* remote handle of context */
-+        uint32_t        lnd_seq_win;            /* sequence window */
-+
-+        int             lnd_rpc_err;
-+        int             lnd_gss_err;
-+};
-+
-+/*
-+ * context creation response
-+ */
-+struct lgss_init_res {
-+        gss_buffer_desc gr_ctx;         /* context handle */
-+        u_int           gr_major;       /* major status */
-+        u_int           gr_minor;       /* minor status */
-+        u_int           gr_win;         /* sequence window */
-+        gss_buffer_desc gr_token;       /* token */
-+};
-+
-+struct keyring_upcall_param {
-+        uint32_t        kup_ver;
-+        uint32_t        kup_uid;
-+        uint32_t        kup_gid;
-+        uint32_t        kup_svc;
-+        uint64_t        kup_nid;
-+        char            kup_tgt[64];
-+};
-+
-+/*
-+ * gss target string of lustre service we are negotiating for
-+ */
-+char *g_service = NULL;
-+
-+/****************************************
-+ * child process: gss negotiation       *
-+ ****************************************/
-+
-+#define INIT_CHANNEL    "/proc/fs/lustre/sptlrpc/gss/init_channel"
-+
-+int do_nego_rpc(struct lgss_nego_data *lnd,
-+                gss_buffer_desc *gss_token,
-+                struct lgss_init_res *gr)
-+{
-+        struct lgssd_ioctl_param  param;
-+        struct passwd            *pw;
-+        int                       fd, ret, res;
-+        char                      outbuf[8192];
-+        unsigned int             *p;
-+
-+        logmsg(LL_TRACE, "do_nego_rpc: get started\n");
-+
-+        pw = getpwuid(lnd->lnd_uid);
-+        if (!pw) {
-+                logmsg(LL_ERR, "no uid %u in local user database\n",
-+                       lnd->lnd_uid);
-+                return -1;
-+        }
-+
-+        param.version = GSSD_INTERFACE_VERSION;
-+        param.uuid = lnd->lnd_uuid;
-+        param.lustre_svc = lnd->lnd_lsvc;
-+        param.uid = lnd->lnd_uid;
-+        param.gid = pw->pw_gid;
-+        param.send_token_size = gss_token->length;
-+        param.send_token = (char *) gss_token->value;
-+        param.reply_buf_size = sizeof(outbuf);
-+        param.reply_buf = outbuf;
-+
-+        logmsg(LL_TRACE, "to open " INIT_CHANNEL "\n");
-+
-+        fd = open(INIT_CHANNEL, O_WRONLY);
-+        if (fd < 0) {
-+                logmsg(LL_ERR, "can't open " INIT_CHANNEL "\n");
-+                return -1;
-+        }
-+
-+        logmsg(LL_TRACE, "to down-write\n");
-+
-+        ret = write(fd, &param, sizeof(param));
-+        if (ret != sizeof(param)) {
-+                logmsg(LL_ERR, "lustre ioctl err: %d\n", strerror(errno));
-+                close(fd);
-+                return -1;
-+        }
-+        close(fd);
-+
-+        logmsg(LL_TRACE, "do_nego_rpc: to parse reply\n");
-+        if (param.status) {
-+                logmsg(LL_ERR, "status: %d (%s)\n",
-+                       param.status, strerror((int)param.status));
-+
-+                if (param.status == -ETIMEDOUT) {
-+                        /* kernel return -ETIMEDOUT means the rpc timedout,
-+                         * we should notify the caller to reinitiate the
-+                         * gss negotiation, by return -ERESTART
-+                         */
-+                        lnd->lnd_rpc_err = -ERESTART;
-+                        lnd->lnd_gss_err = 0;
-+                } else {
-+                        lnd->lnd_rpc_err = param.status;
-+                        lnd->lnd_gss_err = 0;
-+                }
-+
-+                return -1;
-+        }
-+
-+        p = (unsigned int *)outbuf;
-+        res = *p++;
-+        gr->gr_major = *p++;
-+        gr->gr_minor = *p++;
-+        gr->gr_win = *p++;
-+
-+        gr->gr_ctx.length = *p++;
-+        gr->gr_ctx.value = malloc(gr->gr_ctx.length);
-+        memcpy(gr->gr_ctx.value, p, gr->gr_ctx.length);
-+        p += (((gr->gr_ctx.length + 3) & ~3) / 4);
-+
-+        gr->gr_token.length = *p++;
-+        gr->gr_token.value = malloc(gr->gr_token.length);
-+        memcpy(gr->gr_token.value, p, gr->gr_token.length);
-+        p += (((gr->gr_token.length + 3) & ~3) / 4);
-+
-+        logmsg(LL_INFO, "do_nego_rpc: receive handle len %d, token len %d\n",
-+               gr->gr_ctx.length, gr->gr_token.length);
-+        return 0;
-+}
-+
-+/*
-+ * if return error, the lnd_rpc_err or lnd_gss_err is set.
-+ */
-+int lgssc_negotiation(struct lgss_nego_data *lnd)
-+{
-+        struct lgss_init_res    gr;
-+        gss_buffer_desc        *recv_tokenp, send_token;
-+        OM_uint32               maj_stat, min_stat, ret_flags;
-+        int                     call_stat;
-+
-+        logmsg(LL_TRACE, "start negotiation\n");
-+
-+        /* GSS context establishment loop. */
-+        memset(&gr, 0, sizeof(gr));
-+        recv_tokenp = GSS_C_NO_BUFFER;
-+
-+        for (;;) {
-+#if 0
-+                /* print the token we just received */
-+                if (recv_tokenp != GSS_C_NO_BUFFER) {
-+                        printerr(3, "The received token length %d\n",
-+                                 recv_tokenp->length);
-+                        print_hexl(3, recv_tokenp->value, recv_tokenp->length);
-+                }
-+#endif
-+
-+                maj_stat = gss_init_sec_context(&min_stat,
-+                                                lnd->lnd_cred,
-+                                                &lnd->lnd_ctx,
-+                                                lnd->lnd_svc_name,
-+                                                lnd->lnd_mech,
-+                                                lnd->lnd_req_flags,
-+                                                0,            /* time req */
-+                                                NULL,         /* channel */
-+                                                recv_tokenp,
-+                                                NULL,         /* used mech */
-+                                                &send_token,
-+                                                &ret_flags,
-+                                                NULL);        /* time rec */
-+
-+                if (recv_tokenp != GSS_C_NO_BUFFER) {
-+                        gss_release_buffer(&min_stat, &gr.gr_token);
-+                        recv_tokenp = GSS_C_NO_BUFFER;
-+                }
-+
-+                if (maj_stat != GSS_S_COMPLETE &&
-+                    maj_stat != GSS_S_CONTINUE_NEEDED) {
-+                        lnd->lnd_gss_err = maj_stat;
-+
-+                        logmsg_gss(LL_ERR, lnd->lnd_mech, maj_stat, min_stat,
-+                                   "failed init context\n");
-+                        break;
-+                }
-+
-+                if (send_token.length != 0) {
-+                        memset(&gr, 0, sizeof(gr));
-+#if 0
-+                        /* print the token we are about to send */
-+                        printerr(3, "token being sent length %d\n",
-+                                 send_token.length);
-+                        print_hexl(3, send_token.value, send_token.length);
-+#endif
-+                        call_stat = do_nego_rpc(lnd, &send_token, &gr);
-+                        gss_release_buffer(&min_stat, &send_token);
-+
-+                        if (call_stat != 0 ||
-+                            (gr.gr_major != GSS_S_COMPLETE &&
-+                             gr.gr_major != GSS_S_CONTINUE_NEEDED)) {
-+                                lnd->lnd_rpc_err = call_stat;
-+                                lnd->lnd_gss_err = gr.gr_major;
-+
-+                                logmsg(LL_ERR, "call stat %d, major stat %x\n",
-+                                       call_stat, gr.gr_major);
-+                                return -1;
-+                        }
-+
-+                        if (gr.gr_ctx.length != 0) {
-+                                if (lnd->lnd_rmt_ctx.value)
-+                                        gss_release_buffer(&min_stat,
-+                                                           &lnd->lnd_rmt_ctx);
-+                                lnd->lnd_rmt_ctx = gr.gr_ctx;
-+                        }
-+
-+                        if (gr.gr_token.length != 0) {
-+                                if (maj_stat != GSS_S_CONTINUE_NEEDED)
-+                                        break;
-+                                recv_tokenp = &gr.gr_token;
-+                        }
-+                }
-+
-+                /* GSS_S_COMPLETE => check gss header verifier,
-+                 * usually checked in gss_validate
-+                 */
-+                if (maj_stat == GSS_S_COMPLETE) {
-+                        lnd->lnd_established = 1;
-+                        lnd->lnd_seq_win = gr.gr_win;
-+                        break;
-+                }
-+        }
-+
-+        /* End context negotiation loop. */
-+        if (!lnd->lnd_established) {
-+                if (gr.gr_token.length != 0)
-+                        gss_release_buffer(&min_stat, &gr.gr_token);
-+
-+                if (lnd->lnd_gss_err == GSS_S_COMPLETE)
-+                        lnd->lnd_rpc_err = -EACCES;
-+
-+                logmsg(LL_ERR, "context negotiation failed\n");
-+                return -1;
-+        }
-+
-+        logmsg(LL_INFO, "successfully negotiated context\n");
-+        return 0;
-+}
-+
-+int construct_service(struct keyring_upcall_param *kup)
-+{
-+        const int       max_namelen = 512;
-+        char            namebuf[max_namelen];
-+        int             alloc_size;
-+
-+        lassert(g_service == NULL);
-+
-+        if (kup->kup_svc >= LGSS_SVC_MAX) {
-+                logmsg(LL_ERR, "invalid lgss service %d\n", kup->kup_svc);
-+                return 1;
-+        }
-+
-+        if (lnet_nid2hostname(kup->kup_nid, namebuf, max_namelen))
-+                return 1;
-+
-+        alloc_size = 32 + strlen(namebuf);
-+
-+        g_service = malloc(alloc_size);
-+        if (g_service == NULL) {
-+                logmsg(LL_ERR, "can't malloc %d bytes\n", alloc_size);
-+                return 1;
-+        }
-+
-+        snprintf(g_service, alloc_size, "%s@%s",
-+                 lgss_svc_name[kup->kup_svc], namebuf);
-+
-+        logmsg(LL_INFO, "constructed service: %s\n", g_service);
-+        return 0;
-+}
-+
-+/*
-+ * if return error, the lnd_rpc_err or lnd_gss_err is set.
-+ */
-+int lgssc_init_nego_data(struct lgss_nego_data *lnd,
-+                         struct keyring_upcall_param *kup,
-+                         lgss_auth_t authtype)
-+{
-+        gss_buffer_desc         sname;
-+        OM_uint32               maj_stat, min_stat;
-+
-+        memset(lnd, 0, sizeof(*lnd));
-+
-+        lnd->lnd_uid = kup->kup_uid;
-+        lnd->lnd_lsvc = kup->kup_svc;
-+        lnd->lnd_uuid = kup->kup_tgt;
-+
-+        lnd->lnd_established = 0;
-+        lnd->lnd_svc_name = GSS_C_NO_NAME;
-+        lnd->lnd_cred = GSS_C_NO_CREDENTIAL;
-+        lnd->lnd_ctx = GSS_C_NO_CONTEXT;
-+        lnd->lnd_rmt_ctx = (gss_buffer_desc) GSS_C_EMPTY_BUFFER;
-+        lnd->lnd_seq_win = 0;
-+
-+        switch (authtype) {
-+        case LGSS_AUTH_KRB5:
-+                lnd->lnd_mech = (gss_OID) &krb5oid;
-+                lnd->lnd_req_flags = GSS_C_MUTUAL_FLAG;
-+                break;
-+        default:
-+                logmsg(LL_ERR, "invalid auth type: %d\n", authtype);
-+                lnd->lnd_rpc_err = -EACCES;
-+                return -1;
-+        }
-+
-+        sname.value = g_service;
-+        sname.length = strlen(g_service);
-+
-+        maj_stat = gss_import_name(&min_stat, &sname,
-+                                   (gss_OID) GSS_C_NT_HOSTBASED_SERVICE,
-+                                   &lnd->lnd_svc_name);
-+        if (maj_stat != GSS_S_COMPLETE) {
-+                logmsg_gss(LL_ERR, lnd->lnd_mech, maj_stat, min_stat,
-+                           "can't import svc name\n");
-+                lnd->lnd_gss_err = maj_stat;
-+                return -1;
-+        }
-+
-+        return 0;
-+}
-+
-+void lgssc_fini_nego_data(struct lgss_nego_data *lnd)
-+{
-+        OM_uint32       maj_stat, min_stat;
-+
-+        if (lnd->lnd_svc_name != GSS_C_NO_NAME) {
-+                maj_stat = gss_release_name(&min_stat, &lnd->lnd_svc_name);
-+                if (maj_stat != GSS_S_COMPLETE)
-+                        logmsg_gss(LL_ERR, lnd->lnd_mech, maj_stat, min_stat,
-+                                   "can't release service name\n");
-+        }
-+
-+        if (lnd->lnd_cred != GSS_C_NO_CREDENTIAL) {
-+                maj_stat = gss_release_cred(&min_stat, &lnd->lnd_cred);
-+                if (maj_stat != GSS_S_COMPLETE)
-+                        logmsg_gss(LL_ERR, lnd->lnd_mech, maj_stat, min_stat,
-+                                   "can't release credential\n");
-+        }
-+}
-+
-+static
-+int error_kernel_key(key_serial_t keyid, int rpc_error, int gss_error)
-+{
-+        int      seqwin = 0;
-+        char     buf[32];
-+        char    *p, *end;
-+
-+        logmsg(LL_TRACE, "revoking kernel key 0x%x\n", keyid);
-+
-+        p = buf;
-+        end = buf + sizeof(buf);
-+
-+        WRITE_BYTES(&p, end, seqwin);
-+        WRITE_BYTES(&p, end, rpc_error);
-+        WRITE_BYTES(&p, end, gss_error);
-+
-+again:
-+        if (keyctl_update(keyid, buf, p - buf)) {
-+                if (errno != EAGAIN) {
-+                        logmsg(LL_ERR, "failed to revoke key 0x%x: %s\n",
-+                               keyid, strerror(errno));
-+                        return -1;
-+                }
-+
-+                logmsg(LL_WARN, "revoke key 0x%x too soon, try again\n", keyid);
-+                sleep(2);
-+                goto again;
-+        }
-+
-+        logmsg(LL_INFO, "successfully revoke key 0x%x\n", keyid);
-+        return 0;
-+}
-+
-+static
-+int update_kernel_key(key_serial_t keyid,
-+                      struct lgss_nego_data *lnd,
-+                      gss_buffer_desc *ctx_token)
-+{
-+        char        *buf = NULL, *p = NULL, *end = NULL;
-+        unsigned int buf_size = 0;
-+        int          rc;
-+
-+        logmsg(LL_TRACE, "updating kernel key 0x%x\n", keyid);
-+
-+        buf_size = sizeof(lnd->lnd_seq_win) +
-+                   sizeof(lnd->lnd_rmt_ctx.length) + lnd->lnd_rmt_ctx.length +
-+                   sizeof(ctx_token->length) + ctx_token->length;
-+        buf = malloc(buf_size);
-+        if (buf == NULL) {
-+                logmsg(LL_ERR, "failed to alloc key update buf: size %d\n",
-+                       buf_size);
-+                return 1;
-+        }
-+
-+        p = buf;
-+        end = buf + buf_size;
-+        rc = -1;
-+
-+        if (WRITE_BYTES(&p, end, lnd->lnd_seq_win))
-+                goto out;
-+        if (write_buffer(&p, end, &lnd->lnd_rmt_ctx))
-+                goto out;
-+        if (write_buffer(&p, end, ctx_token))
-+                goto out;
-+
-+again:
-+        if (keyctl_update(keyid, buf, p - buf)) {
-+                if (errno != EAGAIN) {
-+                        logmsg(LL_ERR, "failed to update key 0x%x: %s\n",
-+                               keyid, strerror(errno));
-+                        goto out;
-+                }
-+
-+                logmsg(LL_WARN, "update key 0x%x too soon, try again\n", keyid);
-+                sleep(2);
-+                goto again;
-+        }
-+
-+        rc = 0;
-+        logmsg(LL_INFO, "successfully updated key 0x%x\n", keyid);
-+out:
-+        free(buf);
-+        return rc;
-+}
-+
-+/*
-+ * note we can't assume authority in child process
-+ */
-+int lgssc_kr_negotiate(key_serial_t keyid, struct keyring_upcall_param *kup)
-+{
-+        struct lgss_nego_data   lnd;
-+        gss_buffer_desc         token = GSS_C_EMPTY_BUFFER;
-+        OM_uint32               min_stat;
-+        int                     rc;
-+
-+        logmsg(LL_TRACE, "child start on behalf of key 0x%x\n", keyid);
-+
-+        if (kup->kup_gid != 0 && setregid(kup->kup_gid, kup->kup_gid)) {
-+                logmsg(LL_ERR, "key 0x%x, failed set gids to %u: %s\n",
-+                       keyid, kup->kup_gid, strerror(errno));
-+        }
-+
-+        if (kup->kup_uid != 0 && setreuid(kup->kup_uid, kup->kup_uid)) {
-+                logmsg(LL_ERR, "key 0x%x, failed set uids to %u: %s\n",
-+                       keyid, kup->kup_uid, strerror(errno));
-+        }
-+
-+        /*
-+         * link to session keyring, allow the key to be found.
-+         */
-+        if (keyctl_link(keyid, KEY_SPEC_SESSION_KEYRING)) {
-+                logmsg(LL_ERR, "key 0x%x, failed to link to session "
-+                       "keyring: %s\n", keyid, strerror(errno));
-+                error_kernel_key(keyid, -EACCES, 0);
-+                return -1;
-+        }
-+
-+        rc = -1;
-+        if (construct_service(kup)) {
-+                error_kernel_key(keyid, -EACCES, 0);
-+                goto out_unlink;
-+        }
-+
-+        if (1/* kup->kup_uid == 0 FIXME */) {
-+                gssd_setup_krb5_user_gss_ccache(kup->kup_uid, g_service);
-+        }
-+
-+        if (lgssc_init_nego_data(&lnd, kup, LGSS_AUTH_KRB5)) {
-+                error_kernel_key(keyid, lnd.lnd_rpc_err, lnd.lnd_gss_err);
-+                goto out_unlink;
-+        }
-+
-+        rc = lgssc_negotiation(&lnd);
-+        if (rc) {
-+                error_kernel_key(keyid, lnd.lnd_rpc_err, lnd.lnd_gss_err);
-+                goto out;
-+        }
-+
-+        rc = serialize_context_for_kernel(lnd.lnd_ctx, &token, lnd.lnd_mech);
-+        if (rc) {
-+                error_kernel_key(keyid, rc, lnd.lnd_gss_err);
-+
-+                logmsg(LL_ERR, "failed to export context\n");
-+                goto out;
-+        }
-+
-+        rc = update_kernel_key(keyid,  &lnd, &token);
-+        if (rc)
-+                goto out;
-+
-+        rc = 0;
-+        logmsg(LL_INFO, "key update OK!\n");
-+out:
-+        if (token.length != 0)
-+                gss_release_buffer(&min_stat, &token);
-+
-+        lgssc_fini_nego_data(&lnd);
-+
-+out_unlink:
-+        if (keyctl_unlink(keyid, KEY_SPEC_SESSION_KEYRING)) {
-+                logmsg(LL_ERR, "failed to unlink key %d: %s\n",
-+                       keyid, strerror(errno));
-+        }
-+
-+        return rc;
-+}
-+
-+/****************************************
-+ * main process                         *
-+ ****************************************/
-+
-+int main(int argc, char *argv[])
-+{
-+        struct keyring_upcall_param     uparam;
-+        key_serial_t                    keyid;
-+        key_serial_t                    /*tring, pring, */sring;
-+        key_serial_t                    inst_keyring;
-+        int                             is_root;
-+        pid_t                           child;
-+
-+        if (argc != 10 + 1) {
-+                logmsg(LL_ERR, "Invalid parameter number %d\n", argc);
-+                return 1;
-+        }
-+
-+#if 0
-+        logmsg(LL_TRACE, "OP:       %s\n", argv[1]);
-+        logmsg(LL_TRACE, "KeyID:    %s\n", argv[2]);
-+        logmsg(LL_TRACE, "KeyType:  %s\n", argv[3]);
-+        logmsg(LL_TRACE, "KeyDesc:  %s\n", argv[4]);
-+        logmsg(LL_TRACE, "COInfo:   %s\n", argv[5]);
-+        logmsg(LL_TRACE, "UID:      %s\n", argv[6]);
-+        logmsg(LL_TRACE, "GID:      %s\n", argv[7]);
-+        logmsg(LL_TRACE, "TKeyring: %s\n", argv[8]);
-+        logmsg(LL_TRACE, "PKeyring: %s\n", argv[9]);
-+        logmsg(LL_TRACE, "SKeyring: %s\n", argv[10]);
-+#endif
-+        logmsg(LL_INFO, "[%u/%u]: key %s, desc %s, uid %s, sring %s\n",
-+               getuid(), geteuid(),
-+               argv[2], argv[4], argv[6], argv[10]);
-+
-+        memset(&uparam, 0, sizeof(uparam));
-+
-+        if (strcmp(argv[1], "create") != 0) {
-+                logmsg(LL_ERR, "invalid OP %s\n", argv[1]);
-+                return 1;
-+        }
-+
-+        if (sscanf(argv[2], "%d", &keyid) != 1) {
-+                logmsg(LL_ERR, "can't extract KeyID\n");
-+                return 1;
-+        }
-+
-+        if (sscanf(argv[6], "%d", &uparam.kup_uid) != 1) {
-+                logmsg(LL_ERR, "can't extract uid\n");
-+                return 1;
-+        }
-+
-+        if (sscanf(argv[10], "%d", &sring) != 1) {
-+                logmsg(LL_ERR, "can't extract session keyring\n");
-+                return 1;
-+        }
-+
-+        if (sscanf(argv[5], "%d:%d:%Lx:%s", &is_root, &uparam.kup_svc,
-+                   &uparam.kup_nid, uparam.kup_tgt) != 4) {
-+                logmsg(LL_ERR, "can't extract callout info: %s\n", argv[5]);
-+                return 1;
-+        }
-+        logmsg(LL_INFO, "coinfo: fl %d, svc %d, nid 0x%Lx, tgt %s\n",
-+               is_root, uparam.kup_svc, uparam.kup_nid, uparam.kup_tgt);
-+
-+        if (is_root)
-+                inst_keyring = 0;
-+        else
-+                inst_keyring = KEY_SPEC_SESSION_KEYRING;
-+
-+        if (keyctl_instantiate(keyid, NULL, 0, inst_keyring)) {
-+                logmsg(LL_ERR, "key instantiate: %s\n", strerror(errno));
-+                return 1;
-+        }
-+
-+        child = fork();
-+        if (child == -1) {
-+                logmsg(LL_ERR, "can't create child: %s\n", strerror(errno));
-+                return 1;
-+        } else if (child == 0) {
-+                return lgssc_kr_negotiate(keyid, &uparam);
-+        }
-+
-+        return 0;
-+}
-diff -rNup nfs-utils-1.0.10/utils/gssd/l_idmap.c nfs-utils-1.0.10.lustre/utils/gssd/l_idmap.c
---- nfs-utils-1.0.10/utils/gssd/l_idmap.c	1969-12-31 17:00:00.000000000 -0700
-+++ nfs-utils-1.0.10.lustre/utils/gssd/l_idmap.c	2007-05-15 13:01:35.000000000 -0600
-@@ -0,0 +1,37 @@
-+#include <sys/types.h>
-+#include <stdlib.h>
-+#include <stdio.h>
-+
-+#include "lsupport.h"
-+
-+int main(int argc, char **argv)
-+{
-+	lnet_nid_t nid;
-+	uid_t uid;
-+	int rc;
-+
-+	if (argc < 3) {
-+		printf("Usage:\n"
-+		       "%s <princ> <nid>\n",
-+		       basename(argv[0]));
-+		return 1;
-+	}
-+
-+	nid = libcfs_str2nid(argv[2]);
-+	if (nid == LNET_NID_ANY) {
-+		printf("parse nid %s failed\n", argv[2]);
-+		return 1;
-+	}
-+	rc = lookup_mapping(argv[1], nid, &uid);
-+	if (rc == -1) {
-+		printf("lookup mapping failed\n");
-+		return 1;
-+	}
-+
-+	printf("principal: %s\n"
-+	       "nid:       %#llx\n"
-+	       "uid:       %u\n",
-+	       argv[1], nid, uid);
-+
-+	return 0;
-+}
-diff -rNup nfs-utils-1.0.10/utils/gssd/lsupport.c nfs-utils-1.0.10.lustre/utils/gssd/lsupport.c
---- nfs-utils-1.0.10/utils/gssd/lsupport.c	1969-12-31 17:00:00.000000000 -0700
-+++ nfs-utils-1.0.10.lustre/utils/gssd/lsupport.c	2007-05-15 13:01:35.000000000 -0600
-@@ -0,0 +1,783 @@
+diff -Nrup nfs-utils-1.0.11/utils/gssd/lsupport.c nfs-utils-1.0.11.lustre/utils/gssd/lsupport.c
+--- nfs-utils-1.0.11/utils/gssd/lsupport.c	1969-12-31 17:00:00.000000000 -0700
++++ nfs-utils-1.0.11.lustre/utils/gssd/lsupport.c	2007-05-23 14:36:40.000000000 -0600
+@@ -0,0 +1,787 @@
 +/* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
 + * vim:expandtab:shiftwidth=8:tabstop=8:
 + *
@@ -3215,8 +2479,12 @@ diff -rNup nfs-utils-1.0.10/utils/gssd/lsupport.c nfs-utils-1.0.10.lustre/utils/
 +# include <netdb.h>
 +#endif
 +
-+#include "err_util.h"
-+#include "gssd.h"
++#ifdef _NEW_BUILD_
++# include "lgss_utils.h"
++#else
++# include "err_util.h"
++# include "gssd.h"
++#endif
 +#include "lsupport.h"
 +
 +/****************************************
@@ -3310,8 +2578,8 @@ diff -rNup nfs-utils-1.0.10/utils/gssd/lsupport.c nfs-utils-1.0.10.lustre/utils/
 +
 +/* FIXME what about IPv6? */
 +static
-+int socklnd_nid2hostname(char *lnd, uint32_t net, uint32_t addr,
-+                         char *buf, int buflen)
++int ipv4_nid2hostname(char *lnd, uint32_t net, uint32_t addr,
++                      char *buf, int buflen)
 +{
 +        struct hostent  *ent;
 +
@@ -3362,7 +2630,7 @@ diff -rNup nfs-utils-1.0.10/utils/gssd/lsupport.c nfs-utils-1.0.10.lustre/utils/
 +        }
 +        strcpy(buf, ent->h_name);
 +
-+        printerr(2, "%s: addr 0x%x => %s\n", lnd, addr, buf);
++        printerr(3, "%s: addr 0x%x => %s\n", lnd, addr, buf);
 +        return 0;
 +}
 +
@@ -3436,10 +2704,10 @@ diff -rNup nfs-utils-1.0.10/utils/gssd/lsupport.c nfs-utils-1.0.10.lustre/utils/
 +} converter[LND_ENUM_END_MARKER] = {
 +        {"UNUSED0",     NULL},
 +        [QSWLND]        = { "QSWLND",   external_nid2hostname},
-+        [SOCKLND]       = { "SOCKLND",  socklnd_nid2hostname },
++        [SOCKLND]       = { "SOCKLND",  ipv4_nid2hostname },
 +        [GMLND]         = { "GMLND",    external_nid2hostname},
 +        [PTLLND]        = { "PTLLND",   external_nid2hostname },
-+        [O2IBLND]       = { "O2IBLND",  socklnd_nid2hostname }, /* XXX */
++        [O2IBLND]       = { "O2IBLND",  ipv4_nid2hostname },
 +        [CIBLND]        = { "CIBLND",   external_nid2hostname },
 +        [OPENIBLND]     = { "OPENIBLND",external_nid2hostname },
 +        [IIBLND]        = { "IIBLND",   external_nid2hostname },
@@ -3948,9 +3216,9 @@ diff -rNup nfs-utils-1.0.10/utils/gssd/lsupport.c nfs-utils-1.0.10.lustre/utils/
 +        printerr(2, "no mapping for %s/%#Lx\n", princ, nid);
 +        return -1;
 +}
-diff -rNup nfs-utils-1.0.10/utils/gssd/lsupport.h nfs-utils-1.0.10.lustre/utils/gssd/lsupport.h
---- nfs-utils-1.0.10/utils/gssd/lsupport.h	1969-12-31 17:00:00.000000000 -0700
-+++ nfs-utils-1.0.10.lustre/utils/gssd/lsupport.h	2007-05-15 13:01:35.000000000 -0600
+diff -Nrup nfs-utils-1.0.11/utils/gssd/lsupport.h nfs-utils-1.0.11.lustre/utils/gssd/lsupport.h
+--- nfs-utils-1.0.11/utils/gssd/lsupport.h	1969-12-31 17:00:00.000000000 -0700
++++ nfs-utils-1.0.11.lustre/utils/gssd/lsupport.h	2007-05-23 14:36:41.000000000 -0600
 @@ -0,0 +1,89 @@
 +/* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
 + * vim:expandtab:shiftwidth=8:tabstop=8:
@@ -4041,9 +3309,9 @@ diff -rNup nfs-utils-1.0.10/utils/gssd/lsupport.h nfs-utils-1.0.10.lustre/utils/
 +#define LNET_MKNET(typ,num)    ((((uint32_t)(typ))<<16)|((uint32_t)(num)))
 +
 +#endif /* __LIBCFS_H__ */
-diff -rNup nfs-utils-1.0.10/utils/gssd/Makefile.am nfs-utils-1.0.10.lustre/utils/gssd/Makefile.am
---- nfs-utils-1.0.10/utils/gssd/Makefile.am	2007-05-15 13:02:26.000000000 -0600
-+++ nfs-utils-1.0.10.lustre/utils/gssd/Makefile.am	2007-05-15 13:00:53.000000000 -0600
+diff -Nrup nfs-utils-1.0.11/utils/gssd/Makefile.am nfs-utils-1.0.11.lustre/utils/gssd/Makefile.am
+--- nfs-utils-1.0.11/utils/gssd/Makefile.am	2007-02-21 21:50:03.000000000 -0700
++++ nfs-utils-1.0.11.lustre/utils/gssd/Makefile.am	2007-05-23 14:35:45.000000000 -0600
 @@ -1,17 +1,11 @@
  ## Process this file with automake to produce Makefile.in
  
@@ -4149,9 +3417,9 @@ diff -rNup nfs-utils-1.0.10/utils/gssd/Makefile.am nfs-utils-1.0.10.lustre/utils
 -	    rm -f $(RPCPREFIX)$$inst ; \
 -	  done)
 -
-diff -rNup nfs-utils-1.0.10/utils/gssd/svcgssd.c nfs-utils-1.0.10.lustre/utils/gssd/svcgssd.c
---- nfs-utils-1.0.10/utils/gssd/svcgssd.c	2006-08-07 00:40:50.000000000 -0600
-+++ nfs-utils-1.0.10.lustre/utils/gssd/svcgssd.c	2007-05-15 13:01:35.000000000 -0600
+diff -Nrup nfs-utils-1.0.11/utils/gssd/svcgssd.c nfs-utils-1.0.11.lustre/utils/gssd/svcgssd.c
+--- nfs-utils-1.0.11/utils/gssd/svcgssd.c	2007-02-21 21:50:03.000000000 -0700
++++ nfs-utils-1.0.11.lustre/utils/gssd/svcgssd.c	2007-05-23 14:36:41.000000000 -0600
 @@ -43,7 +43,6 @@
  #include <sys/types.h>
  #include <sys/stat.h>
@@ -4164,13 +3432,14 @@ diff -rNup nfs-utils-1.0.10/utils/gssd/svcgssd.c nfs-utils-1.0.10.lustre/utils/g
  #include <stdlib.h>
  #include <string.h>
  #include <signal.h>
+-#include <nfsidmap.h>
 -#include "nfslib.h"
 +#include <dirent.h>
  #include "svcgssd.h"
  #include "gss_util.h"
  #include "err_util.h"
 +#include "lsupport.h"
- 
++
 +void
 +closeall(int min)
 +{
@@ -4192,10 +3461,10 @@ diff -rNup nfs-utils-1.0.10/utils/gssd/svcgssd.c nfs-utils-1.0.10.lustre/utils/g
 +			(void) close(fd);
 +	}
 +}
+ 
  /*
   * mydaemon creates a pipe between the partent and child
-  * process. The parent process will wait until the
-@@ -139,6 +160,7 @@ void
+@@ -140,6 +161,7 @@ void
  sig_die(int signal)
  {
  	/* destroy krb5 machine creds */
@@ -4203,17 +3472,27 @@ diff -rNup nfs-utils-1.0.10/utils/gssd/svcgssd.c nfs-utils-1.0.10.lustre/utils/g
  	printerr(1, "exiting on signal %d\n", signal);
  	exit(1);
  }
-@@ -165,8 +187,8 @@ main(int argc, char *argv[])
+@@ -166,9 +188,8 @@ main(int argc, char *argv[])
  	int get_creds = 1;
  	int fg = 0;
  	int verbosity = 0;
 -	int rpc_verbosity = 0;
+-	int idmap_verbosity = 0;
  	int opt;
 +	int must_srv_mds = 0, must_srv_oss = 0;
  	extern char *optarg;
  	char *progname;
  
-@@ -181,8 +203,13 @@ main(int argc, char *argv[])
+@@ -177,17 +198,19 @@ main(int argc, char *argv[])
+ 			case 'f':
+ 				fg = 1;
+ 				break;
+-			case 'i':
+-				idmap_verbosity++;
+-				break;
+ 			case 'n':
+ 				get_creds = 0;
+ 				break;
  			case 'v':
  				verbosity++;
  				break;
@@ -4229,7 +3508,7 @@ diff -rNup nfs-utils-1.0.10/utils/gssd/svcgssd.c nfs-utils-1.0.10.lustre/utils/g
  				break;
  			default:
  				usage(argv[0]);
-@@ -196,27 +223,18 @@ main(int argc, char *argv[])
+@@ -201,34 +224,18 @@ main(int argc, char *argv[])
  		progname = argv[0];
  
  	initerr(progname, verbosity, fg);
@@ -4238,6 +3517,13 @@ diff -rNup nfs-utils-1.0.10/utils/gssd/svcgssd.c nfs-utils-1.0.10.lustre/utils/g
 -#else
 -	if (rpc_verbosity > 0)
 -		printerr(0, "Warning: rpcsec_gss library does not "
+-			    "support setting debug level\n");
+-#endif
+-#ifdef HAVE_NFS4_SET_DEBUG
+-        nfs4_set_debug(idmap_verbosity, NULL);
+-#else
+-	if (idmap_verbosity > 0)
+-		printerr(0, "Warning: your nfsidmap library does not "
 -			    "support setting debug level\n");
 -#endif
  
@@ -4252,17 +3538,18 @@ diff -rNup nfs-utils-1.0.10/utils/gssd/svcgssd.c nfs-utils-1.0.10.lustre/utils/g
 -	signal(SIGINT, sig_die);
 -	signal(SIGTERM, sig_die);
 -	signal(SIGHUP, sig_hup);
+-
+-	if (get_creds && !gssd_acquire_cred(GSSD_SERVICE_NAME)) {
 +	if (gssd_get_local_realm()) {
 +		printerr(0, "ERROR: Can't get Local Kerberos realm\n");
 +		exit(1);
 +	}
- 
--	if (get_creds && !gssd_acquire_cred(GSSD_SERVICE_NAME)) {
++  
 +	if (get_creds && gssd_prepare_creds(must_srv_mds, must_srv_oss)) {
                  printerr(0, "unable to obtain root (machine) credentials\n");
                  printerr(0, "do you have a keytab entry for "
  			    "nfs/<your.host>@<YOUR.REALM> in "
-@@ -225,9 +243,23 @@ main(int argc, char *argv[])
+@@ -237,9 +244,23 @@ main(int argc, char *argv[])
  	}
  
  	if (!fg)
@@ -4287,9 +3574,9 @@ diff -rNup nfs-utils-1.0.10/utils/gssd/svcgssd.c nfs-utils-1.0.10.lustre/utils/g
  	printerr(0, "gssd_run returned!\n");
  	abort();
  }
-diff -rNup nfs-utils-1.0.10/utils/gssd/svcgssd.h nfs-utils-1.0.10.lustre/utils/gssd/svcgssd.h
---- nfs-utils-1.0.10/utils/gssd/svcgssd.h	2006-08-07 00:40:50.000000000 -0600
-+++ nfs-utils-1.0.10.lustre/utils/gssd/svcgssd.h	2007-05-15 13:01:35.000000000 -0600
+diff -Nrup nfs-utils-1.0.11/utils/gssd/svcgssd.h nfs-utils-1.0.11.lustre/utils/gssd/svcgssd.h
+--- nfs-utils-1.0.11/utils/gssd/svcgssd.h	2007-02-21 21:50:03.000000000 -0700
++++ nfs-utils-1.0.11.lustre/utils/gssd/svcgssd.h	2007-05-23 14:36:42.000000000 -0600
 @@ -35,9 +35,20 @@
  #include <sys/queue.h>
  #include <gssapi/gssapi.h>
@@ -4314,9 +3601,9 @@ diff -rNup nfs-utils-1.0.10/utils/gssd/svcgssd.h nfs-utils-1.0.10.lustre/utils/g
 +#define LUSTRE_ROOT_NAMELEN			11
  
  #endif /* _RPC_SVCGSSD_H_ */
-diff -rNup nfs-utils-1.0.10/utils/gssd/svcgssd_main_loop.c nfs-utils-1.0.10.lustre/utils/gssd/svcgssd_main_loop.c
---- nfs-utils-1.0.10/utils/gssd/svcgssd_main_loop.c	2006-08-07 00:40:50.000000000 -0600
-+++ nfs-utils-1.0.10.lustre/utils/gssd/svcgssd_main_loop.c	2007-05-15 13:01:35.000000000 -0600
+diff -Nrup nfs-utils-1.0.11/utils/gssd/svcgssd_main_loop.c nfs-utils-1.0.11.lustre/utils/gssd/svcgssd_main_loop.c
+--- nfs-utils-1.0.11/utils/gssd/svcgssd_main_loop.c	2007-02-21 21:50:03.000000000 -0700
++++ nfs-utils-1.0.11.lustre/utils/gssd/svcgssd_main_loop.c	2007-05-23 14:36:42.000000000 -0600
 @@ -46,46 +46,66 @@
  #include "svcgssd.h"
  #include "err_util.h"
@@ -4405,9 +3692,9 @@ diff -rNup nfs-utils-1.0.10/utils/gssd/svcgssd_main_loop.c nfs-utils-1.0.10.lust
  		}
  	}
  }
-diff -rNup nfs-utils-1.0.10/utils/gssd/svcgssd_proc.c nfs-utils-1.0.10.lustre/utils/gssd/svcgssd_proc.c
---- nfs-utils-1.0.10/utils/gssd/svcgssd_proc.c	2006-08-07 00:40:50.000000000 -0600
-+++ nfs-utils-1.0.10.lustre/utils/gssd/svcgssd_proc.c	2007-05-15 13:01:35.000000000 -0600
+diff -Nrup nfs-utils-1.0.11/utils/gssd/svcgssd_proc.c nfs-utils-1.0.11.lustre/utils/gssd/svcgssd_proc.c
+--- nfs-utils-1.0.11/utils/gssd/svcgssd_proc.c	2007-02-21 21:50:03.000000000 -0700
++++ nfs-utils-1.0.11.lustre/utils/gssd/svcgssd_proc.c	2007-05-23 14:36:44.000000000 -0600
 @@ -35,7 +35,6 @@
  
  #include <sys/param.h>
@@ -4452,19 +3739,20 @@ diff -rNup nfs-utils-1.0.10/utils/gssd/svcgssd_proc.c nfs-utils-1.0.10.lustre/ut
  };
  
  static int
-@@ -70,10 +72,9 @@ do_svc_downcall(gss_buffer_desc *out_han
+@@ -70,11 +72,10 @@ do_svc_downcall(gss_buffer_desc *out_han
  		gss_OID mech, gss_buffer_desc *context_token)
  {
  	FILE *f;
 -	int i;
  	char *fname = NULL;
+ 	int err;
  
 -	printerr(1, "doing downcall\n");
 +	printerr(2, "doing downcall\n");
  	if ((fname = mech2file(mech)) == NULL)
  		goto out_err;
  	f = fopen(SVCGSSD_CONTEXT_CHANNEL, "w");
-@@ -86,11 +87,12 @@ do_svc_downcall(gss_buffer_desc *out_han
+@@ -87,11 +88,12 @@ do_svc_downcall(gss_buffer_desc *out_han
  	qword_printhex(f, out_handle->value, out_handle->length);
  	/* XXX are types OK for the rest of this? */
  	qword_printint(f, 0x7fffffff); /*XXX need a better timeout */
@@ -4479,8 +3767,8 @@ diff -rNup nfs-utils-1.0.10/utils/gssd/svcgssd_proc.c nfs-utils-1.0.10.lustre/ut
 -		qword_printint(f, cred->cr_groups[i]);
  	qword_print(f, fname);
  	qword_printhex(f, context_token->value, context_token->length);
- 	qword_eol(f);
-@@ -119,7 +121,7 @@ send_response(FILE *f, gss_buffer_desc *
+ 	err = qword_eol(f);
+@@ -120,7 +122,7 @@ send_response(FILE *f, gss_buffer_desc *
  	/* XXXARG: */
  	int g;
  
@@ -4489,7 +3777,7 @@ diff -rNup nfs-utils-1.0.10/utils/gssd/svcgssd_proc.c nfs-utils-1.0.10.lustre/ut
  
  	qword_addhex(&bp, &blen, in_handle->value, in_handle->length);
  	qword_addhex(&bp, &blen, in_token->value, in_token->length);
-@@ -159,6 +161,7 @@ send_response(FILE *f, gss_buffer_desc *
+@@ -160,6 +162,7 @@ send_response(FILE *f, gss_buffer_desc *
  #define rpcsec_gsserr_credproblem	13
  #define rpcsec_gsserr_ctxproblem	14
  
@@ -4497,7 +3785,7 @@ diff -rNup nfs-utils-1.0.10/utils/gssd/svcgssd_proc.c nfs-utils-1.0.10.lustre/ut
  static void
  add_supplementary_groups(char *secname, char *name, struct svc_cred *cred)
  {
-@@ -182,7 +185,9 @@ add_supplementary_groups(char *secname, 
+@@ -183,7 +186,9 @@ add_supplementary_groups(char *secname, 
  		}
  	}
  }
@@ -4507,7 +3795,7 @@ diff -rNup nfs-utils-1.0.10/utils/gssd/svcgssd_proc.c nfs-utils-1.0.10.lustre/ut
  static int
  get_ids(gss_name_t client_name, gss_OID mech, struct svc_cred *cred)
  {
-@@ -248,7 +253,9 @@ out_free:
+@@ -249,7 +254,9 @@ out_free:
  out:
  	return res;
  }
@@ -4517,7 +3805,7 @@ diff -rNup nfs-utils-1.0.10/utils/gssd/svcgssd_proc.c nfs-utils-1.0.10.lustre/ut
  void
  print_hexl(int pri, unsigned char *cp, int length)
  {
-@@ -285,12 +292,121 @@ print_hexl(int pri, unsigned char *cp, i
+@@ -286,12 +293,121 @@ print_hexl(int pri, unsigned char *cp, i
  		printerr(pri,"\n");
  	}
  }
@@ -4643,7 +3931,7 @@ diff -rNup nfs-utils-1.0.10/utils/gssd/svcgssd_proc.c nfs-utils-1.0.10.lustre/ut
  	char			in_tok_buf[TOKEN_BUF_SIZE];
  	char			in_handle_buf[15];
  	char			out_handle_buf[15];
-@@ -302,10 +418,13 @@ handle_nullreq(FILE *f) {
+@@ -303,10 +419,13 @@ handle_nullreq(FILE *f) {
  				ignore_out_tok = {.value = NULL},
  	/* XXX isn't there a define for this?: */
  				null_token = {.value = NULL};
@@ -4657,7 +3945,7 @@ diff -rNup nfs-utils-1.0.10/utils/gssd/svcgssd_proc.c nfs-utils-1.0.10.lustre/ut
  	u_int32_t		maj_stat = GSS_S_FAILURE, min_stat = 0;
  	u_int32_t		ignore_min_stat;
  	struct svc_cred		cred;
-@@ -313,25 +432,31 @@ handle_nullreq(FILE *f) {
+@@ -314,25 +433,31 @@ handle_nullreq(FILE *f) {
  	static int		lbuflen = 0;
  	static char		*cp;
  
@@ -4695,7 +3983,7 @@ diff -rNup nfs-utils-1.0.10/utils/gssd/svcgssd_proc.c nfs-utils-1.0.10.lustre/ut
  
  	if (in_tok.length < 0) {
  		printerr(0, "WARNING: handle_nullreq: "
-@@ -351,7 +476,13 @@ handle_nullreq(FILE *f) {
+@@ -352,7 +477,13 @@ handle_nullreq(FILE *f) {
  		memcpy(&ctx, in_handle.value, in_handle.length);
  	}
  
@@ -4710,7 +3998,7 @@ diff -rNup nfs-utils-1.0.10/utils/gssd/svcgssd_proc.c nfs-utils-1.0.10.lustre/ut
  			&in_tok, GSS_C_NO_CHANNEL_BINDINGS, &client_name,
  			&mech, &out_tok, &ret_flags, NULL, NULL);
  
-@@ -369,7 +500,8 @@ handle_nullreq(FILE *f) {
+@@ -370,7 +501,8 @@ handle_nullreq(FILE *f) {
  			maj_stat, min_stat, mech);
  		goto out_err;
  	}
@@ -4720,7 +4008,7 @@ diff -rNup nfs-utils-1.0.10/utils/gssd/svcgssd_proc.c nfs-utils-1.0.10.lustre/ut
  		/* get_ids() prints error msg */
  		maj_stat = GSS_S_BAD_NAME; /* XXX ? */
  		gss_release_name(&ignore_min_stat, &client_name);
-@@ -377,10 +509,8 @@ handle_nullreq(FILE *f) {
+@@ -378,10 +510,8 @@ handle_nullreq(FILE *f) {
  	}
  	gss_release_name(&ignore_min_stat, &client_name);
  
@@ -4731,7 +4019,7 @@ diff -rNup nfs-utils-1.0.10/utils/gssd/svcgssd_proc.c nfs-utils-1.0.10.lustre/ut
  	out_handle.length = sizeof(handle_seq);
  	memcpy(out_handle.value, &handle_seq, sizeof(handle_seq));
  
-@@ -404,8 +534,7 @@ out:
+@@ -405,8 +535,7 @@ out:
  		free(ctx_token.value);
  	if (out_tok.value != NULL)
  		gss_release_buffer(&ignore_min_stat, &out_tok);
@@ -4741,10 +4029,10 @@ diff -rNup nfs-utils-1.0.10/utils/gssd/svcgssd_proc.c nfs-utils-1.0.10.lustre/ut
  
  out_err:
  	if (ctx != GSS_C_NO_CONTEXT)
-diff -rNup nfs-utils-1.0.10/utils/Makefile.am nfs-utils-1.0.10.lustre/utils/Makefile.am
---- nfs-utils-1.0.10/utils/Makefile.am	2006-08-07 00:40:50.000000000 -0600
-+++ nfs-utils-1.0.10.lustre/utils/Makefile.am	2007-05-15 13:00:53.000000000 -0600
-@@ -2,31 +2,6 @@
+diff -Nrup nfs-utils-1.0.11/utils/Makefile.am nfs-utils-1.0.11.lustre/utils/Makefile.am
+--- nfs-utils-1.0.11/utils/Makefile.am	2007-02-21 21:50:03.000000000 -0700
++++ nfs-utils-1.0.11.lustre/utils/Makefile.am	2007-05-23 14:35:45.000000000 -0600
+@@ -2,30 +2,6 @@
  
  OPTDIRS =
  
@@ -4770,7 +4058,6 @@ diff -rNup nfs-utils-1.0.10/utils/Makefile.am nfs-utils-1.0.10.lustre/utils/Make
 -	mountd \
 -	nfsd \
 -	nfsstat \
--	nhfsstone \
 -	showmount \
 -	statd \
 -	$(OPTDIRS)

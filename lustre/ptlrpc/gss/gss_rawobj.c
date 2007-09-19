@@ -24,6 +24,8 @@
 #endif
 #define DEBUG_SUBSYSTEM S_SEC
 
+#include <linux/mutex.h>
+
 #include <obd.h>
 #include <obd_class.h>
 #include <obd_support.h>
@@ -170,6 +172,11 @@ int rawobj_extract_local(rawobj_t *obj, __u32 **buf, __u32 *buflen)
         return __rawobj_extract(obj, buf, buflen, 0, 1);
 }
 
+int rawobj_extract_local_alloc(rawobj_t *obj, __u32 **buf, __u32 *buflen)
+{
+        return __rawobj_extract(obj, buf, buflen, 1, 1);
+}
+
 int rawobj_from_netobj(rawobj_t *rawobj, netobj_t *netobj)
 {
         rawobj->len = netobj->len;
@@ -191,5 +198,23 @@ int rawobj_from_netobj_alloc(rawobj_t *rawobj, netobj_t *netobj)
 
         rawobj->len = netobj->len;
         memcpy(rawobj->data, netobj->data, netobj->len);
+        return 0;
+}
+
+/****************************************
+ * misc more                            *
+ ****************************************/
+
+int buffer_extract_bytes(const void **buf, __u32 *buflen,
+                         void *res, __u32 reslen)
+{
+        if (*buflen < reslen) {
+                CERROR("buflen %u < %u\n", *buflen, reslen);
+                return -EINVAL;
+        }
+
+        memcpy(res, *buf, reslen);
+        *buf += reslen;
+        *buflen -= reslen;
         return 0;
 }

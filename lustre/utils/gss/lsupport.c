@@ -48,8 +48,12 @@
 # include <netdb.h>
 #endif
 
-#include "err_util.h"
-#include "gssd.h"
+#ifdef _NEW_BUILD_
+# include "lgss_utils.h"
+#else
+# include "err_util.h"
+# include "gssd.h"
+#endif
 #include "lsupport.h"
 
 /****************************************
@@ -143,8 +147,8 @@ typedef int lnd_nid2hostname_t(char *lnd, uint32_t net, uint32_t addr,
 
 /* FIXME what about IPv6? */
 static
-int socklnd_nid2hostname(char *lnd, uint32_t net, uint32_t addr,
-                         char *buf, int buflen)
+int ipv4_nid2hostname(char *lnd, uint32_t net, uint32_t addr,
+                      char *buf, int buflen)
 {
         struct hostent  *ent;
 
@@ -195,7 +199,7 @@ int lolnd_nid2hostname(char *lnd, uint32_t net, uint32_t addr,
         }
         strcpy(buf, ent->h_name);
 
-        printerr(2, "%s: addr 0x%x => %s\n", lnd, addr, buf);
+        printerr(3, "%s: addr 0x%x => %s\n", lnd, addr, buf);
         return 0;
 }
 
@@ -269,10 +273,10 @@ static struct {
 } converter[LND_ENUM_END_MARKER] = {
         {"UNUSED0",     NULL},
         [QSWLND]        = { "QSWLND",   external_nid2hostname},
-        [SOCKLND]       = { "SOCKLND",  socklnd_nid2hostname },
+        [SOCKLND]       = { "SOCKLND",  ipv4_nid2hostname },
         [GMLND]         = { "GMLND",    external_nid2hostname},
         [PTLLND]        = { "PTLLND",   external_nid2hostname },
-        [O2IBLND]       = { "O2IBLND",  socklnd_nid2hostname }, /* XXX */
+        [O2IBLND]       = { "O2IBLND",  ipv4_nid2hostname },
         [CIBLND]        = { "CIBLND",   external_nid2hostname },
         [OPENIBLND]     = { "OPENIBLND",external_nid2hostname },
         [IIBLND]        = { "IIBLND",   external_nid2hostname },

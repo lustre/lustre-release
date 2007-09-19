@@ -352,7 +352,7 @@ ptlrpc_prep_req_pool(struct obd_import *imp, __u32 version, int opcode,
         request->rq_import = class_import_get(imp);
 
         if (unlikely(ctx))
-                request->rq_cli_ctx = sptlrpc_ctx_get(ctx);
+                request->rq_cli_ctx = sptlrpc_cli_ctx_get(ctx);
         else {
                 rc = sptlrpc_req_get_ctx(request);
                 if (rc)

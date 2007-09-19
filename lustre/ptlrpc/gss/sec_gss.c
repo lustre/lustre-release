@@ -2,7 +2,7 @@
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
  * Modifications for Lustre
- * Copyright 2004 - 2006, Cluster File Systems, Inc.
+ * Copyright 2004 - 2007, Cluster File Systems, Inc.
  * All rights reserved
  * Author: Eric Mei <ericm@clusterfs.com>
  */
@@ -56,6 +56,7 @@
 #include <linux/dcache.h>
 #include <linux/fs.h>
 #include <linux/random.h>
+#include <linux/mutex.h>
 #include <asm/atomic.h>
 #else
 #include <liblustre.h>
@@ -75,12 +76,6 @@
 
 #include <linux/crypto.h>
 
-/* pre-definition */
-static struct ptlrpc_sec_policy gss_policy;
-static struct ptlrpc_cli_ctx * gss_sec_create_ctx(struct ptlrpc_sec *sec,
-                                                  struct vfs_cred *vcred);
-static void gss_sec_destroy_ctx(struct ptlrpc_sec *sec,
-                                struct ptlrpc_cli_ctx *ctx);
 /********************************************
  * wire data swabber                        *
  ********************************************/
@@ -303,6 +298,55 @@ out_free:
  * gss client context manipulation helpers  *
  ********************************************/
 
+int cli_ctx_expire(struct ptlrpc_cli_ctx *ctx)
+{
+        LASSERT(atomic_read(&ctx->cc_refcount));
+
+        if (!test_and_set_bit(PTLRPC_CTX_DEAD_BIT, &ctx->cc_flags)) {
+                cfs_time_t now;
+
+                clear_bit(PTLRPC_CTX_UPTODATE_BIT, &ctx->cc_flags);
+
+                now = cfs_time_current_sec();
+                if (ctx->cc_expire && cfs_time_aftereq(now, ctx->cc_expire))
+                        CWARN("ctx %p(%u->%s): get expired (%lds exceeds)\n",
+                              ctx, ctx->cc_vcred.vc_uid,
+                              sec2target_str(ctx->cc_sec),
+                              cfs_time_sub(now, ctx->cc_expire));
+                else
+                        CWARN("ctx %p(%u->%s): force to die (%lds remains)\n",
+                              ctx, ctx->cc_vcred.vc_uid,
+                              sec2target_str(ctx->cc_sec),
+                              ctx->cc_expire == 0 ? 0 :
+                              cfs_time_sub(ctx->cc_expire, now));
+
+                return 1;
+        }
+        return 0;
+}
+
+/*
+ * return 1 if the context is dead.
+ */
+int cli_ctx_check_death(struct ptlrpc_cli_ctx *ctx)
+{
+        if (unlikely(cli_ctx_is_dead(ctx)))
+                return 1;
+
+        /* expire is 0 means never expire. a newly created gss context
+         * which during upcall may has 0 expiration
+         */
+        if (ctx->cc_expire == 0)
+                return 0;
+
+        /* check real expiration */
+        if (cfs_time_after(ctx->cc_expire, cfs_time_current_sec()))
+                return 0;
+
+        cli_ctx_expire(ctx);
+        return 1;
+}
+
 void gss_cli_ctx_uptodate(struct gss_cli_ctx *gctx)
 {
         struct ptlrpc_cli_ctx *ctx = &gctx->gc_base;
@@ -499,23 +543,6 @@ int gss_cli_payload(struct ptlrpc_cli_ctx *ctx,
         return gss_estimate_payload(NULL, msgsize, privacy);
 }
 
-static
-int gss_cli_ctx_refresh(struct ptlrpc_cli_ctx *ctx)
-{
-        /* if we are refreshing for root, also update the reverse
-         * handle index, do not confuse reverse contexts.
-         */
-        if (ctx->cc_vcred.vc_uid == 0) {
-                struct gss_sec *gsec;
-
-                gsec = container_of(ctx->cc_sec, struct gss_sec, gs_base);
-                gsec->gs_rvs_hdl = gss_get_next_ctx_index();
-        }
-
-        return gss_ctx_refresh_pipefs(ctx);
-}
-
-static
 int gss_cli_ctx_match(struct ptlrpc_cli_ctx *ctx, struct vfs_cred *vcred)
 {
         return (ctx->cc_vcred.vc_uid == vcred->vc_uid);
@@ -532,8 +559,8 @@ void gss_cli_ctx_flags2str(unsigned long flags, char *buf, int bufsize)
                 strncat(buf, "dead,", bufsize);
         if (flags & PTLRPC_CTX_ERROR)
                 strncat(buf, "error,", bufsize);
-        if (flags & PTLRPC_CTX_HASHED)
-                strncat(buf, "hashed,", bufsize);
+        if (flags & PTLRPC_CTX_CACHED)
+                strncat(buf, "cached,", bufsize);
         if (flags & PTLRPC_CTX_ETERNAL)
                 strncat(buf, "eternal,", bufsize);
         if (buf[0] == '\0')
@@ -542,7 +569,6 @@ void gss_cli_ctx_flags2str(unsigned long flags, char *buf, int bufsize)
         buf[strlen(buf) - 1] = '\0';
 }
 
-static
 int gss_cli_ctx_display(struct ptlrpc_cli_ctx *ctx, char *buf, int bufsize)
 {
         struct gss_cli_ctx     *gctx;
@@ -571,7 +597,6 @@ int gss_cli_ctx_display(struct ptlrpc_cli_ctx *ctx, char *buf, int bufsize)
         return written;
 }
 
-static
 int gss_cli_ctx_sign(struct ptlrpc_cli_ctx *ctx,
                      struct ptlrpc_request *req)
 {
@@ -658,7 +683,7 @@ int gss_cli_ctx_handle_err_notify(struct ptlrpc_cli_ctx *ctx,
                       errhdr->gh_major == GSS_S_NO_CONTEXT ?
                       "NO_CONTEXT" : "BAD_SIG");
 
-                sptlrpc_ctx_expire(ctx);
+                sptlrpc_cli_ctx_expire(ctx);
                 /*
                  * we need replace the ctx right here, otherwise during
                  * resent we'll hit the logic in sptlrpc_req_refresh_ctx()
@@ -677,7 +702,6 @@ int gss_cli_ctx_handle_err_notify(struct ptlrpc_cli_ctx *ctx,
         return rc;
 }
 
-static
 int gss_cli_ctx_verify(struct ptlrpc_cli_ctx *ctx,
                        struct ptlrpc_request *req)
 {
@@ -769,7 +793,6 @@ int gss_cli_ctx_verify(struct ptlrpc_cli_ctx *ctx,
         RETURN(rc);
 }
 
-static
 int gss_cli_ctx_seal(struct ptlrpc_cli_ctx *ctx,
                      struct ptlrpc_request *req)
 {
@@ -882,7 +905,6 @@ err_free:
         RETURN(rc);
 }
 
-static
 int gss_cli_ctx_unseal(struct ptlrpc_cli_ctx *ctx,
                        struct ptlrpc_request *req)
 {
@@ -962,72 +984,9 @@ int gss_cli_ctx_unseal(struct ptlrpc_cli_ctx *ctx,
         RETURN(rc);
 }
 
-static struct ptlrpc_ctx_ops gss_ctxops = {
-        .refresh        = gss_cli_ctx_refresh,
-        .match          = gss_cli_ctx_match,
-        .display        = gss_cli_ctx_display,
-        .sign           = gss_cli_ctx_sign,
-        .verify         = gss_cli_ctx_verify,
-        .seal           = gss_cli_ctx_seal,
-        .unseal         = gss_cli_ctx_unseal,
-        .wrap_bulk      = gss_cli_ctx_wrap_bulk,
-        .unwrap_bulk    = gss_cli_ctx_unwrap_bulk,
-};
-
 /*********************************************
  * reverse context installation              *
  *********************************************/
-static
-int gss_install_rvs_cli_ctx(struct gss_sec *gsec,
-                            struct ptlrpc_svc_ctx *svc_ctx)
-{
-        struct vfs_cred          vcred;
-        struct gss_svc_reqctx   *grctx;
-        struct ptlrpc_cli_ctx   *cli_ctx;
-        struct gss_cli_ctx      *cli_gctx;
-        struct gss_ctx          *mechctx = NULL;
-        __u32                    major;
-        int                      rc;
-        ENTRY;
-
-        vcred.vc_uid = 0;
-        vcred.vc_gid = 0;
-
-        cli_ctx = gss_sec_create_ctx(&gsec->gs_base, &vcred);
-        if (!cli_ctx)
-                RETURN(-ENOMEM);
-
-        grctx = container_of(svc_ctx, struct gss_svc_reqctx, src_base);
-        LASSERT(grctx);
-        LASSERT(grctx->src_ctx);
-        LASSERT(grctx->src_ctx->gsc_mechctx);
-
-        major = lgss_copy_reverse_context(grctx->src_ctx->gsc_mechctx, &mechctx);
-        if (major != GSS_S_COMPLETE)
-                GOTO(err_ctx, rc = -ENOMEM);
-
-        cli_gctx = container_of(cli_ctx, struct gss_cli_ctx, gc_base);
-
-        cli_gctx->gc_proc = PTLRPC_GSS_PROC_DATA;
-        cli_gctx->gc_win = GSS_SEQ_WIN;
-        atomic_set(&cli_gctx->gc_seq, 0);
-
-        if (rawobj_dup(&cli_gctx->gc_handle, &grctx->src_ctx->gsc_rvs_hdl))
-                GOTO(err_mechctx, rc = -ENOMEM);
-
-        cli_gctx->gc_mechctx = mechctx;
-        gss_cli_ctx_uptodate(cli_gctx);
-
-        sptlrpc_ctx_replace(&gsec->gs_base, cli_ctx);
-        RETURN(0);
-
-err_mechctx:
-        lgss_delete_sec_context(&mechctx);
-err_ctx:
-        gss_sec_destroy_ctx(cli_ctx->cc_sec, cli_ctx);
-        return rc;
-}
-
 
 static inline
 int gss_install_rvs_svc_ctx(struct obd_import *imp,
@@ -1040,120 +999,42 @@ int gss_install_rvs_svc_ctx(struct obd_import *imp,
 /*********************************************
  * GSS security APIs                         *
  *********************************************/
-
-static
-struct ptlrpc_cli_ctx * gss_sec_create_ctx(struct ptlrpc_sec *sec,
-                                           struct vfs_cred *vcred)
+int gss_sec_create_common(struct gss_sec *gsec,
+                          struct ptlrpc_sec_policy *policy,
+                          struct obd_import *imp,
+                          struct ptlrpc_svc_ctx *ctx,
+                          __u32 flavor,
+                          unsigned long flags)
 {
-        struct gss_cli_ctx    *gctx;
-        struct ptlrpc_cli_ctx *ctx;
-        ENTRY;
-
-        OBD_ALLOC_PTR(gctx);
-        if (!gctx)
-                RETURN(NULL);
-
-        gctx->gc_win = 0;
-        atomic_set(&gctx->gc_seq, 0);
-
-        ctx = &gctx->gc_base;
-        INIT_HLIST_NODE(&ctx->cc_hash);
-        atomic_set(&ctx->cc_refcount, 0);
-        ctx->cc_sec = sec;
-        ctx->cc_ops = &gss_ctxops;
-        ctx->cc_expire = 0;
-        ctx->cc_flags = 0;
-        ctx->cc_vcred = *vcred;
-        spin_lock_init(&ctx->cc_lock);
-        INIT_LIST_HEAD(&ctx->cc_req_list);
-
-        CDEBUG(D_SEC, "create a gss cred at %p(uid %u)\n", ctx, vcred->vc_uid);
-        RETURN(ctx);
-}
-
-static
-void gss_sec_destroy_ctx(struct ptlrpc_sec *sec, struct ptlrpc_cli_ctx *ctx)
-{
-        struct gss_cli_ctx *gctx;
-        ENTRY;
-
-        LASSERT(ctx);
-        LASSERT(atomic_read(&ctx->cc_refcount) == 0);
-
-        gctx = container_of(ctx, struct gss_cli_ctx, gc_base);
-        if (gctx->gc_mechctx) {
-                gss_do_ctx_fini_rpc(gctx);
-                gss_cli_ctx_finalize(gctx);
-        }
-
-        CWARN("%s@%p: destroy ctx %p(%u->%s)\n",
-              ctx->cc_sec->ps_policy->sp_name, ctx->cc_sec,
-              ctx, ctx->cc_vcred.vc_uid, sec2target_str(ctx->cc_sec));
-
-        OBD_FREE_PTR(gctx);
-        EXIT;
-}
-
-#define GSS_CCACHE_SIZE         (32)
-
-static
-struct ptlrpc_sec* gss_sec_create(struct obd_import *imp,
-                                  struct ptlrpc_svc_ctx *ctx,
-                                  __u32 flavor,
-                                  unsigned long flags)
-{
-        struct gss_sec      *gsec;
         struct ptlrpc_sec   *sec;
-        int                  alloc_size, cache_size, i;
-        ENTRY;
 
         LASSERT(imp);
         LASSERT(SEC_FLAVOR_POLICY(flavor) == SPTLRPC_POLICY_GSS);
 
-        if (ctx || flags & (PTLRPC_SEC_FL_ROOTONLY | PTLRPC_SEC_FL_REVERSE))
-                cache_size = 1;
-        else
-                cache_size = GSS_CCACHE_SIZE;
-
-        alloc_size = sizeof(*gsec) + sizeof(struct list_head) * cache_size;
-
-        OBD_ALLOC(gsec, alloc_size);
-        if (!gsec)
-                RETURN(NULL);
-
         gsec->gs_mech = lgss_subflavor_to_mech(SEC_FLAVOR_SUB(flavor));
         if (!gsec->gs_mech) {
                 CERROR("gss backend 0x%x not found\n", SEC_FLAVOR_SUB(flavor));
-                goto err_free;
+                return -EOPNOTSUPP;
         }
 
         spin_lock_init(&gsec->gs_lock);
-        gsec->gs_rvs_hdl = 0ULL; /* will be updated later */
+        gsec->gs_rvs_hdl = 0ULL;
 
+        /* initialize upper ptlrpc_sec */
         sec = &gsec->gs_base;
-        sec->ps_policy = &gss_policy;
+        sec->ps_policy = policy;
         sec->ps_flavor = flavor;
         sec->ps_flags = flags;
         sec->ps_import = class_import_get(imp);
         sec->ps_lock = SPIN_LOCK_UNLOCKED;
-        sec->ps_ccache_size = cache_size;
-        sec->ps_ccache = (struct hlist_head *) (gsec + 1);
         atomic_set(&sec->ps_busy, 0);
-
-        for (i = 0; i < cache_size; i++)
-                INIT_HLIST_HEAD(&sec->ps_ccache[i]);
+        INIT_LIST_HEAD(&sec->ps_gc_list);
 
         if (!ctx) {
-                if (gss_sec_upcall_init(gsec))
-                        goto err_mech;
-
-                sec->ps_gc_interval = 30 * 60; /* 30 minutes */
+                sec->ps_gc_interval = GSS_GC_INTERVAL;
                 sec->ps_gc_next = cfs_time_current_sec() + sec->ps_gc_interval;
         } else {
                 LASSERT(sec->ps_flags & PTLRPC_SEC_FL_REVERSE);
-
-                if (gss_install_rvs_cli_ctx(gsec, ctx))
-                        goto err_mech;
 
                 /* never do gc on reverse sec */
                 sec->ps_gc_interval = 0;
@@ -1165,34 +1046,23 @@ struct ptlrpc_sec* gss_sec_create(struct obd_import *imp,
                 sptlrpc_enc_pool_add_user();
 
         CWARN("create %s%s@%p\n", (ctx ? "reverse " : ""),
-              gss_policy.sp_name, gsec);
-        RETURN(sec);
-
-err_mech:
-        lgss_mech_put(gsec->gs_mech);
-err_free:
-        OBD_FREE(gsec, alloc_size);
-        RETURN(NULL);
+              policy->sp_name, gsec);
+        return 0;
 }
 
-static
-void gss_sec_destroy(struct ptlrpc_sec *sec)
+void gss_sec_destroy_common(struct gss_sec *gsec)
 {
-        struct gss_sec *gsec;
+        struct ptlrpc_sec      *sec = &gsec->gs_base;
         ENTRY;
 
-        gsec = container_of(sec, struct gss_sec, gs_base);
-        CWARN("destroy %s@%p\n", gss_policy.sp_name, gsec);
-
-        LASSERT(gsec->gs_mech);
         LASSERT(sec->ps_import);
-        LASSERT(sec->ps_ccache);
-        LASSERT(sec->ps_ccache_size);
         LASSERT(atomic_read(&sec->ps_refcount) == 0);
         LASSERT(atomic_read(&sec->ps_busy) == 0);
 
-        gss_sec_upcall_cleanup(gsec);
-        lgss_mech_put(gsec->gs_mech);
+        if (gsec->gs_mech) {
+                lgss_mech_put(gsec->gs_mech);
+                gsec->gs_mech = NULL;
+        }
 
         class_import_put(sec->ps_import);
 
@@ -1200,9 +1070,66 @@ void gss_sec_destroy(struct ptlrpc_sec *sec)
             sec->ps_flags & PTLRPC_SEC_FL_BULK)
                 sptlrpc_enc_pool_del_user();
 
-        OBD_FREE(gsec, sizeof(*gsec) +
-                       sizeof(struct list_head) * sec->ps_ccache_size);
         EXIT;
+}
+
+int gss_cli_ctx_init_common(struct ptlrpc_sec *sec,
+                            struct ptlrpc_cli_ctx *ctx,
+                            struct ptlrpc_ctx_ops *ctxops,
+                            struct vfs_cred *vcred)
+{
+        struct gss_cli_ctx    *gctx = ctx2gctx(ctx);
+
+        gctx->gc_win = 0;
+        atomic_set(&gctx->gc_seq, 0);
+
+        INIT_HLIST_NODE(&ctx->cc_hash);
+        atomic_set(&ctx->cc_refcount, 0);
+        ctx->cc_sec = sec;
+        ctx->cc_ops = ctxops;
+        ctx->cc_expire = 0;
+        ctx->cc_flags = PTLRPC_CTX_NEW;
+        ctx->cc_vcred = *vcred;
+        spin_lock_init(&ctx->cc_lock);
+        INIT_LIST_HEAD(&ctx->cc_req_list);
+
+        /* take a ref on belonging sec */
+        atomic_inc(&sec->ps_busy);
+
+        CWARN("%s@%p: create ctx %p(%u->%s)\n",
+              sec->ps_policy->sp_name, ctx->cc_sec,
+              ctx, ctx->cc_vcred.vc_uid, sec2target_str(ctx->cc_sec));
+        return 0;
+}
+
+/*
+ * return 1 if the busy count of the sec dropped to zero, then usually caller
+ * should destroy the sec too; otherwise return 0.
+ */
+int gss_cli_ctx_fini_common(struct ptlrpc_sec *sec,
+                            struct ptlrpc_cli_ctx *ctx)
+{
+        struct gss_cli_ctx *gctx = ctx2gctx(ctx);
+
+        LASSERT(ctx->cc_sec == sec);
+        LASSERT(atomic_read(&ctx->cc_refcount) == 0);
+        LASSERT(atomic_read(&sec->ps_busy) > 0);
+
+        if (gctx->gc_mechctx) {
+                gss_do_ctx_fini_rpc(gctx);
+                gss_cli_ctx_finalize(gctx);
+        }
+
+        CWARN("%s@%p: destroy ctx %p(%u->%s)\n",
+              sec->ps_policy->sp_name, ctx->cc_sec,
+              ctx, ctx->cc_vcred.vc_uid, sec2target_str(ctx->cc_sec));
+
+        if (atomic_dec_and_test(&sec->ps_busy)) {
+                LASSERT(atomic_read(&sec->ps_refcount) == 0);
+                return 1;
+        }
+
+        return 0;
 }
 
 static
@@ -1358,7 +1285,6 @@ int gss_alloc_reqbuf_priv(struct ptlrpc_sec *sec,
  * NOTE: any change of request buffer allocation should also consider
  * changing enlarge_reqbuf() series functions.
  */
-static
 int gss_alloc_reqbuf(struct ptlrpc_sec *sec,
                      struct ptlrpc_request *req,
                      int msgsize)
@@ -1378,7 +1304,6 @@ int gss_alloc_reqbuf(struct ptlrpc_sec *sec,
         return 0;
 }
 
-static
 void gss_free_reqbuf(struct ptlrpc_sec *sec,
                      struct ptlrpc_request *req)
 {
@@ -1415,7 +1340,6 @@ release_reqbuf:
         EXIT;
 }
 
-static
 int gss_alloc_repbuf(struct ptlrpc_sec *sec,
                      struct ptlrpc_request *req,
                      int msgsize)
@@ -1474,7 +1398,6 @@ int gss_alloc_repbuf(struct ptlrpc_sec *sec,
         return 0;
 }
 
-static
 void gss_free_repbuf(struct ptlrpc_sec *sec,
                      struct ptlrpc_request *req)
 {
@@ -1677,7 +1600,6 @@ int gss_enlarge_reqbuf_priv(struct ptlrpc_sec *sec,
         RETURN(0);
 }
 
-static
 int gss_enlarge_reqbuf(struct ptlrpc_sec *sec,
                        struct ptlrpc_request *req,
                        int segment, int newsize)
@@ -1695,7 +1617,6 @@ int gss_enlarge_reqbuf(struct ptlrpc_sec *sec,
         }
 }
 
-static
 int gss_sec_install_rctx(struct obd_import *imp,
                          struct ptlrpc_sec *sec,
                          struct ptlrpc_cli_ctx *ctx)
@@ -1710,19 +1631,6 @@ int gss_sec_install_rctx(struct obd_import *imp,
         rc = gss_install_rvs_svc_ctx(imp, gsec, gctx);
         return rc;
 }
-
-static struct ptlrpc_sec_cops gss_sec_cops = {
-        .create_sec             = gss_sec_create,
-        .destroy_sec            = gss_sec_destroy,
-        .create_ctx             = gss_sec_create_ctx,
-        .destroy_ctx            = gss_sec_destroy_ctx,
-        .install_rctx           = gss_sec_install_rctx,
-        .alloc_reqbuf           = gss_alloc_reqbuf,
-        .free_reqbuf            = gss_free_reqbuf,
-        .alloc_repbuf           = gss_alloc_repbuf,
-        .free_repbuf            = gss_free_repbuf,
-        .enlarge_reqbuf         = gss_enlarge_reqbuf,
-};
 
 /********************************************
  * server side API                          *
@@ -2146,8 +2054,7 @@ int gss_svc_handle_destroy(struct ptlrpc_request *req,
         RETURN(SECSVC_OK);
 }
 
-static
-int gss_svc_accept(struct ptlrpc_request *req)
+int gss_svc_accept(struct ptlrpc_sec_policy *policy, struct ptlrpc_request *req)
 {
         struct gss_header      *ghdr;
         struct gss_svc_reqctx  *grctx;
@@ -2182,7 +2089,7 @@ int gss_svc_accept(struct ptlrpc_request *req)
                 CERROR("fail to alloc svc reqctx\n");
                 RETURN(SECSVC_DROP);
         }
-        grctx->src_base.sc_policy = sptlrpc_policy_get(&gss_policy);
+        grctx->src_base.sc_policy = sptlrpc_policy_get(policy);
         atomic_set(&grctx->src_base.sc_refcount, 1);
         req->rq_svc_ctx = &grctx->src_base;
         gw = &grctx->src_wirectx;
@@ -2236,7 +2143,6 @@ int gss_svc_accept(struct ptlrpc_request *req)
         RETURN(rc);
 }
 
-static
 void gss_svc_invalidate_ctx(struct ptlrpc_svc_ctx *svc_ctx)
 {
         struct gss_svc_reqctx  *grctx;
@@ -2265,7 +2171,6 @@ int gss_svc_payload(struct gss_svc_reqctx *grctx, int msgsize, int privacy)
         return gss_estimate_payload(NULL, msgsize, privacy);
 }
 
-static
 int gss_svc_alloc_rs(struct ptlrpc_request *req, int msglen)
 {
         struct gss_svc_reqctx       *grctx;
@@ -2504,7 +2409,6 @@ out:
         RETURN(rc);
 }
 
-static
 void gss_svc_free_rs(struct ptlrpc_reply_state *rs)
 {
         struct gss_svc_reqctx *grctx;
@@ -2519,44 +2423,44 @@ void gss_svc_free_rs(struct ptlrpc_reply_state *rs)
                 OBD_FREE(rs, rs->rs_size);
 }
 
-static
 void gss_svc_free_ctx(struct ptlrpc_svc_ctx *ctx)
 {
         LASSERT(atomic_read(&ctx->sc_refcount) == 0);
         gss_svc_reqctx_free(gss_svc_ctx2reqctx(ctx));
 }
 
-static
-int gss_svc_install_rctx(struct obd_import *imp, struct ptlrpc_svc_ctx *ctx)
+int gss_copy_rvc_cli_ctx(struct ptlrpc_cli_ctx *cli_ctx,
+                         struct ptlrpc_svc_ctx *svc_ctx)
 {
-        struct gss_sec *gsec;
+        struct gss_cli_ctx     *cli_gctx = ctx2gctx(cli_ctx);
+        struct gss_svc_reqctx  *grctx;
+        struct gss_ctx         *mechctx = NULL;
 
-        LASSERT(imp->imp_sec);
-        LASSERT(ctx);
+        cli_gctx->gc_proc = PTLRPC_GSS_PROC_DATA;
+        cli_gctx->gc_win = GSS_SEQ_WIN;
+        atomic_set(&cli_gctx->gc_seq, 0);
 
-        gsec = container_of(imp->imp_sec, struct gss_sec, gs_base);
-        return gss_install_rvs_cli_ctx(gsec, ctx);
+        grctx = container_of(svc_ctx, struct gss_svc_reqctx, src_base);
+        LASSERT(grctx->src_ctx);
+        LASSERT(grctx->src_ctx->gsc_mechctx);
+
+        if (lgss_copy_reverse_context(grctx->src_ctx->gsc_mechctx, &mechctx) !=
+            GSS_S_COMPLETE) {
+                CERROR("failed to copy mech context\n");
+                return -ENOMEM;
+        }
+
+        if (rawobj_dup(&cli_gctx->gc_handle, &grctx->src_ctx->gsc_rvs_hdl)) {
+                CERROR("failed to dup reverse handle\n");
+                lgss_delete_sec_context(&mechctx);
+                return -ENOMEM;
+        }
+
+        cli_gctx->gc_mechctx = mechctx;
+        gss_cli_ctx_uptodate(cli_gctx);
+
+        return 0;
 }
-
-static struct ptlrpc_sec_sops gss_sec_sops = {
-        .accept                 = gss_svc_accept,
-        .invalidate_ctx         = gss_svc_invalidate_ctx,
-        .alloc_rs               = gss_svc_alloc_rs,
-        .authorize              = gss_svc_authorize,
-        .free_rs                = gss_svc_free_rs,
-        .free_ctx               = gss_svc_free_ctx,
-        .unwrap_bulk            = gss_svc_unwrap_bulk,
-        .wrap_bulk              = gss_svc_wrap_bulk,
-        .install_rctx           = gss_svc_install_rctx,
-};
-
-static struct ptlrpc_sec_policy gss_policy = {
-        .sp_owner               = THIS_MODULE,
-        .sp_name                = "sec.gss",
-        .sp_policy              = SPTLRPC_POLICY_GSS,
-        .sp_cops                = &gss_sec_cops,
-        .sp_sops                = &gss_sec_sops,
-};
 
 int __init sptlrpc_gss_init(void)
 {
@@ -2566,27 +2470,46 @@ int __init sptlrpc_gss_init(void)
         if (rc)
                 return rc;
 
-        rc = gss_init_upcall();
+        rc = gss_init_cli_upcall();
         if (rc)
                 goto out_lproc;
 
+        rc = gss_init_svc_upcall();
+        if (rc)
+                goto out_cli_upcall;
+
         rc = init_kerberos_module();
         if (rc)
-                goto out_upcall;
+                goto out_svc_upcall;
 
         /*
          * register policy after all other stuff be intialized, because it
          * might be in used immediately after the registration.
          */
-        rc = sptlrpc_register_policy(&gss_policy);
+
+        rc = gss_init_keyring();
         if (rc)
                 goto out_kerberos;
 
+#ifdef HAVE_GSS_PIPEFS
+        rc = gss_init_pipefs();
+        if (rc)
+                goto out_keyring;
+#endif
+
         return 0;
+
+#ifdef HAVE_GSS_PIPEFS
+out_keyring:
+        gss_exit_keyring();
+#endif
+
 out_kerberos:
         cleanup_kerberos_module();
-out_upcall:
-        gss_exit_upcall();
+out_svc_upcall:
+        gss_exit_svc_upcall();
+out_cli_upcall:
+        gss_exit_cli_upcall();
 out_lproc:
         gss_exit_lproc();
         return rc;
@@ -2594,9 +2517,13 @@ out_lproc:
 
 static void __exit sptlrpc_gss_exit(void)
 {
-        sptlrpc_unregister_policy(&gss_policy);
+        gss_exit_keyring();
+#ifdef HAVE_GSS_PIPEFS
+        gss_exit_pipefs();
+#endif
         cleanup_kerberos_module();
-        gss_exit_upcall();
+        gss_exit_svc_upcall();
+        gss_exit_cli_upcall();
         gss_exit_lproc();
 }
 

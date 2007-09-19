@@ -70,10 +70,8 @@ int sptlrpc_lprocfs_rd(char *page, char **start, off_t off, int count,
         struct obd_device        *obd = data;
         struct sec_flavor_config *conf = &obd->u.cli.cl_sec_conf;
         struct ptlrpc_sec        *sec = NULL;
-        struct ptlrpc_cli_ctx    *ctx;
-        struct hlist_node        *pos, *next;
         char                      flags_str[32];
-        int                       written, i;
+        int                       written;
 
         if (obd == NULL)
                 return 0;
@@ -99,7 +97,6 @@ int sptlrpc_lprocfs_rd(char *page, char **start, off_t off, int count,
                         "bulk checksum:         %s\n"
                         "bulk encrypt:          %s\n"
                         "flags:                 %s\n"
-                        "ctx cache size         %u\n"
                         "ctx cache busy         %d\n"
                         "gc interval            %lu\n"
                         "gc next                %ld\n",
@@ -107,12 +104,17 @@ int sptlrpc_lprocfs_rd(char *page, char **start, off_t off, int count,
                         sptlrpc_bulk_csum_alg2name(conf->sfc_bulk_csum),
                         sptlrpc_bulk_priv_alg2name(conf->sfc_bulk_priv),
                         flags_str,
-                        sec->ps_ccache_size,
                         atomic_read(&sec->ps_busy),
                         sec->ps_gc_interval,
                         sec->ps_gc_interval ?
                                 sec->ps_gc_next - cfs_time_current_sec() : 0
                           );
+
+        if (sec->ps_policy->sp_cops->display) {
+                written += sec->ps_policy->sp_cops->display(
+                                        sec, page + written, count - written);
+        }
+#if 0
         /*
          * list contexts
          */
@@ -128,11 +130,12 @@ int sptlrpc_lprocfs_rd(char *page, char **start, off_t off, int count,
                                           &sec->ps_ccache[i], cc_hash) {
                         if (written >= count)
                                 break;
-                        written += sptlrpc_ctx_display(ctx, page + written,
-                                                       count - written);
+                        written += sptlrpc_cli_ctx_display(ctx, page + written,
+                                                           count - written);
                 }
         }
         spin_unlock(&sec->ps_lock);
+#endif
 
 out:
         return written;

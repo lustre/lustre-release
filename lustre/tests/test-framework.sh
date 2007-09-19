@@ -250,7 +250,9 @@ start_gss_daemons() {
     # starting on MDT
     for num in `seq $MDSCOUNT`; do
         do_facet mds$num "$LSVCGSSD -v"
-        do_facet mds$num "$LGSSD -v"
+        if [ "x$GSS_PIPEFS" == "xy" ]; then
+            do_facet mds$num "$LGSSD -v"
+        fi
     done
     # starting on OSTs
     for num in `seq $OSTCOUNT`; do
@@ -258,7 +260,9 @@ start_gss_daemons() {
     done
     # starting on client
     # FIXME: is "client" the right facet name?
-    do_facet client "$LGSSD -v"
+    if [ "x$GSS_PIPEFS" == "xy" ]; then
+        do_facet client "$LGSSD -v"
+    fi
 
     # wait daemons entering "stable" status
     sleep 5
@@ -268,12 +272,16 @@ start_gss_daemons() {
     #
     for num in `seq $MDSCOUNT`; do
         check_gss_daemon_facet mds$num lsvcgssd
-        check_gss_daemon_facet mds$num lgssd
+        if [ "x$GSS_PIPEFS" == "xy" ]; then
+            check_gss_daemon_facet mds$num lgssd
+        fi
     done
     for num in `seq $OSTCOUNT`; do
         check_gss_daemon_facet ost$num lsvcgssd
     done
-    check_gss_daemon_facet client lgssd
+    if [ "x$GSS_PIPEFS" == "xy" ]; then
+        check_gss_daemon_facet client lgssd
+    fi
 }
 
 stop_gss_daemons() {

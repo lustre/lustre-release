@@ -8,7 +8,15 @@ AM_LDFLAGS := -L$(top_builddir)/lnet/utils
 
 LIBPTLCTL := $(top_builddir)/lnet/utils/libptlctl.a
 
-sbin_PROGRAMS = lgssd lsvcgssd l_idmap
+sbin_PROGRAMS := lsvcgssd l_idmap
+
+if GSS_KEYRING
+sbin_PROGRAMS += lgss_keyring
+endif
+
+if GSS_PIPEFS
+sbin_PROGRAMS += lgssd
+endif
 
 COMMON_SRCS = \
         context.c \
@@ -25,7 +33,7 @@ COMMON_SRCS = \
         err_util.h \
         gss_oids.h \
         gss_util.h \
-	lsupport.h
+        lsupport.h
 
 lgssd_SOURCES = \
         $(COMMON_SRCS) \
@@ -63,5 +71,23 @@ l_idmap_SOURCES = \
 	err_util.c \
 	\
 	lsupport.h
+
+lgss_keyring_SOURCES = \
+	lgss_keyring.c \
+	context.c \
+	context_lucid.c \
+	context_mit.c \
+	context_heimdal.c \
+	lgss_krb5_utils.c \
+	lgss_utils.c \
+	lsupport.c \
+	\
+	lgss_krb5_utils.h \
+	lgss_utils.h \
+	lsupport.h
+
+lgss_keyring_CFLAGS = $(AM_CFLAGS) $(CFLAGS) $(KRBCFLAGS) -D _NEW_BUILD_
+lgss_keyring_LDADD = -lkeyutils $(GSSAPI_LIBS) $(KRBLIBS)
+lgss_keyring_LDFLAGS = $(KRBLDFLAGS)
 
 EXTRA_DIST =

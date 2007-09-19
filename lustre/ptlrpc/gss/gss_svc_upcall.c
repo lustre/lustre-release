@@ -53,6 +53,7 @@
 #include <linux/module.h>
 #include <linux/slab.h>
 #include <linux/hash.h>
+#include <linux/mutex.h>
 #else
 #include <liblustre.h>
 #endif
@@ -948,7 +949,7 @@ void gss_svc_upcall_destroy_ctx(struct gss_svc_ctx *ctx)
         set_bit(CACHE_NEGATIVE, &rsc->h.flags);
 }
 
-int __init gss_svc_init_upcall(void)
+int __init gss_init_svc_upcall(void)
 {
         int     i;
 
@@ -984,7 +985,7 @@ int __init gss_svc_init_upcall(void)
         return 0;
 }
 
-void __exit gss_svc_exit_upcall(void)
+void __exit gss_exit_svc_upcall(void)
 {
         int rc;
 

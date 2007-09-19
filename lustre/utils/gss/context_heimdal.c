@@ -43,8 +43,13 @@
 #ifdef HAVE_COM_ERR_H
 #include <com_err.h>
 #endif
-#include "err_util.h"
-#include "gss_oids.h"
+
+#ifdef _NEW_BUILD_
+# include "lgss_utils.h"
+#else
+# include "err_util.h"
+# include "gss_oids.h"
+#endif
 #include "write_bytes.h"
 
 int write_heimdal_keyblock(char **p, char *end, krb5_keyblock *key)

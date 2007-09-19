@@ -941,6 +941,18 @@ handle_krb5_upcall(struct clnt_info *clp)
 		return;
 	}
 
+	/* FIXME temporary fix, do this before fork.
+	 * in case of errors could have memory leak!!!
+	 */
+	if (updata.uid == 0) {
+		if (gssd_get_krb5_machine_cred_list(&credlist)) {
+			printerr(0, "ERROR: Failed to obtain machine "
+				    "credentials\n");
+			do_error_downcall(clp->krb5_fd, updata.seq, -EPERM, 0);
+			return;
+		}
+	}
+
 	/* fork child process */
 	pid = fork();
 	if (pid < 0) {
@@ -975,11 +987,13 @@ handle_krb5_upcall(struct clnt_info *clp)
 		 * Get a list of credential cache names and try each
 		 * of them until one works or we've tried them all
 		 */
+/*
 		if (gssd_get_krb5_machine_cred_list(&credlist)) {
 			printerr(0, "ERROR: Failed to obtain machine "
 				    "credentials for %s\n", clp->servicename);
 			goto out_return_error;
 		}
+*/
 		for (ccname = credlist; ccname && *ccname; ccname++) {
 			gssd_setup_krb5_machine_gss_ccache(*ccname);
 			if ((gssd_create_lgd(clp, &lgd, &updata,

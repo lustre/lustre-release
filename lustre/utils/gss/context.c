@@ -33,9 +33,14 @@
 #include <syslog.h>
 #include <string.h>
 #include <gssapi/gssapi.h>
-#include "gss_util.h"
-#include "gss_oids.h"
-#include "err_util.h"
+
+#ifdef _NEW_BUILD_
+# include "lgss_utils.h"
+#else
+# include "gss_util.h"
+# include "gss_oids.h"
+# include "err_util.h"
+#endif
 #include "context.h"
 
 int

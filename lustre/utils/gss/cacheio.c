@@ -132,6 +132,17 @@ void qword_addint(char **bpp, int *lp, int n)
 	*lp -= len;
 }
 
+void qword_adduint(char **bpp, int *lp, unsigned int n)
+{
+	int len;
+
+	len = snprintf(*bpp, *lp, "%u ", n);
+	if (len > *lp)
+		len = *lp;
+	*bpp += len;
+	*lp -= len;
+}
+
 void qword_addeol(char **bpp, int *lp)
 {
 	if (*lp <= 0)
@@ -173,11 +184,13 @@ void qword_printint(FILE *f, int num)
 	printerr(2, "%d ", num);
 }
 
-void qword_eol(FILE *f)
+int qword_eol(FILE *f)
 {
+	int err;
 	fprintf(f,"\n");
-	fflush(f);
+	err = fflush(f);
 	printerr(2, "\n");
+	return err;
 }
 
 

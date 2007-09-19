@@ -1,6 +1,6 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
- */
+
 
 #ifndef _LINUX_LL_H
 #define _LINUX_LL_H

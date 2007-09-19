@@ -150,11 +150,20 @@ void plain_destroy_sec(struct ptlrpc_sec *sec)
 
 static
 struct ptlrpc_cli_ctx *plain_lookup_ctx(struct ptlrpc_sec *sec,
-                                        struct vfs_cred *vcred)
+                                        struct vfs_cred *vcred,
+                                        int create, int remove_dead)
 {
         ENTRY;
         atomic_inc(&plain_cli_ctx.cc_refcount);
         RETURN(&plain_cli_ctx);
+}
+
+static
+int plain_flush_ctx_cache(struct ptlrpc_sec *sec,
+                          uid_t uid,
+                          int grace, int force)
+{
+        return 0;
 }
 
 static
@@ -477,6 +486,7 @@ static struct ptlrpc_sec_cops plain_sec_cops = {
         .create_sec             = plain_create_sec,
         .destroy_sec            = plain_destroy_sec,
         .lookup_ctx             = plain_lookup_ctx,
+        .flush_ctx_cache        = plain_flush_ctx_cache,
         .alloc_reqbuf           = plain_alloc_reqbuf,
         .alloc_repbuf           = plain_alloc_repbuf,
         .free_reqbuf            = plain_free_reqbuf,
@@ -511,19 +521,18 @@ void plain_init_internal(void)
         plain_sec.ps_import = NULL;
         plain_sec.ps_flavor = SPTLRPC_FLVR_PLAIN;
         plain_sec.ps_flags = 0;
+        spin_lock_init(&plain_sec.ps_lock);
+        atomic_set(&plain_sec.ps_busy, 1);         /* for "plain_cli_ctx" */
+        INIT_LIST_HEAD(&plain_sec.ps_gc_list);
         plain_sec.ps_gc_interval = 0;
         plain_sec.ps_gc_next = 0;
-        spin_lock_init(&plain_sec.ps_lock);
-        plain_sec.ps_ccache_size = 1;
-        plain_sec.ps_ccache = &__list;
-        atomic_set(&plain_sec.ps_busy, 1);         /* for "plain_cli_ctx" */
 
         hlist_add_head(&plain_cli_ctx.cc_hash, &__list);
         atomic_set(&plain_cli_ctx.cc_refcount, 1);    /* for hash */
         plain_cli_ctx.cc_sec = &plain_sec;
         plain_cli_ctx.cc_ops = &plain_ctx_ops;
         plain_cli_ctx.cc_expire = 0;
-        plain_cli_ctx.cc_flags = PTLRPC_CTX_HASHED | PTLRPC_CTX_ETERNAL |
+        plain_cli_ctx.cc_flags = PTLRPC_CTX_CACHED | PTLRPC_CTX_ETERNAL |
                                  PTLRPC_CTX_UPTODATE;
         plain_cli_ctx.cc_vcred.vc_uid = 0;
         spin_lock_init(&plain_cli_ctx.cc_lock);

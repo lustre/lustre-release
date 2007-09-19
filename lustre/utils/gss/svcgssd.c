@@ -80,6 +80,7 @@ closeall(int min)
 			(void) close(fd);
 	}
 }
+
 /*
  * mydaemon creates a pipe between the partent and child
  * process. The parent process will wait until the
@@ -176,7 +177,7 @@ sig_hup(int signal)
 static void
 usage(char *progname)
 {
-	fprintf(stderr, "usage: %s [-n] [-f] [-v] [-r]\n",
+	fprintf(stderr, "usage: %s [-n] [-f] [-v] [-r] [-m] [-o]\n",
 		progname);
 	exit(1);
 }
@@ -192,7 +193,7 @@ main(int argc, char *argv[])
 	extern char *optarg;
 	char *progname;
 
-	while ((opt = getopt(argc, argv, "fvrnp:")) != -1) {
+	while ((opt = getopt(argc, argv, "fivrnp:")) != -1) {
 		switch (opt) {
 			case 'f':
 				fg = 1;
@@ -233,7 +234,7 @@ main(int argc, char *argv[])
 		printerr(0, "ERROR: Can't get Local Kerberos realm\n");
 		exit(1);
 	}
-
+  
 	if (get_creds && gssd_prepare_creds(must_srv_mds, must_srv_oss)) {
                 printerr(0, "unable to obtain root (machine) credentials\n");
                 printerr(0, "do you have a keytab entry for "

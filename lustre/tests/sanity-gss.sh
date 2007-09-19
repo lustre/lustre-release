@@ -11,6 +11,9 @@ ONLY=${ONLY:-"$*"}
 # bug number for skipped test:
 ALWAYS_EXCEPT=${ALWAYS_EXCEPT:-""}
 # UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
+if [ "x$GSS_PIPEFS" != "xy" ]; then
+    ALWAYS_EXCEPT="$ALWAYS_EXCEPT 4"
+fi
 
 [ "$SLOW" = "no" ] && EXCEPT="$EXCEPT"
 
@@ -192,6 +195,7 @@ test_3() {
     # because we always use root credential to OSTs
     $RUNAS kdestroy
     $RUNAS $LFS flushctx
+    echo "destroied credentials/contexs for $RUNAS_ID"
     $RUNAS $CHECKSTAT -p 0666 $file && error "checkstat succeed"
     kill -s 10 $OPPID
     wait $OPPID || error "read file data failed"
@@ -199,9 +203,13 @@ test_3() {
 
     # restore and check again
     restore_krb5_cred
+    echo "restored credentials for $RUNAS_ID"
     $RUNAS $CHECKSTAT -p 0666 $file || error "$RUNAS_ID checkstat (2) error"
+    echo "$RUNAS_ID checkstat OK"
     $CHECKSTAT -p 0666 $file || error "$UID checkstat (2) error"
+    echo "$UID checkstat OK"
     $RUNAS cat $file > /dev/null || error "$RUNAS_ID cat (2) error"
+    echo "$RUNAS_ID read file data OK"
 }
 run_test 3 "local cache under DLM lock"
 
@@ -326,23 +334,21 @@ run_test 7 "exercise enlarge_reqbuf()"
 
 check_multiple_gss_daemons() {
     local facet=$1
+    local gssd=$2
+    local gssd_name=`basename $gssd`
 
     for ((i=0;i<10;i++)); do
-        do_facet $facet "$LSVCGSSD -v &"
-    done
-    for ((i=0;i<10;i++)); do
-        do_facet $facet "$LGSSD -v &"
+        do_facet $facet "$gssd -v &"
     done
 
     # wait daemons entering "stable" status
     sleep 5
 
-    numc=`do_facet $facet ps -o cmd -C lgssd | grep lgssd | wc -l`
-    nums=`do_facet $facet ps -o cmd -C lgssd | grep lgssd | wc -l`
-    echo "$numc lgssd and $nums lsvcgssd are running"
+    num=`do_facet $facet ps -o cmd -C $gssd_name | grep $gssd_name | wc -l`
+    echo "$num instance(s) of $gssd_name are running"
 
-    if [ $numc -ne 1 -o $nums -ne 1 ]; then
-        error "lgssd/lsvcgssd not unique"
+    if [ $num -ne 1 ]; then
+        error "$gssd_name not unique"
     fi
 }
 
@@ -356,23 +362,32 @@ test_100() {
     start_gss_daemons
 
     echo "check with someone already running..."
-    check_multiple_gss_daemons $facet
+    check_multiple_gss_daemons $facet $LSVCGSSD
+    if [ "x$GSS_PIPEFS" == "xy" ]; then
+        check_multiple_gss_daemons $facet $LGSSD
+    fi
 
     echo "check with someone run & finished..."
     do_facet $facet killall -q -2 lgssd lsvcgssd || true
     sleep 5 # wait fully exit
-    check_multiple_gss_daemons $facet
+    check_multiple_gss_daemons $facet $LSVCGSSD
+    if [ "x$GSS_PIPEFS" == "xy" ]; then
+        check_multiple_gss_daemons $facet $LGSSD
+    fi
 
     echo "check refresh..."
     do_facet $facet killall -q -2 lgssd lsvcgssd || true
     sleep 5 # wait fully exit
     do_facet $facet ipcrm -S 0x3b92d473
-    do_facet $facet ipcrm -S 0x3a92d473
-    check_multiple_gss_daemons $facet
+    check_multiple_gss_daemons $facet $LSVCGSSD
+    if [ "x$GSS_PIPEFS" == "xy" ]; then
+        do_facet $facet ipcrm -S 0x3a92d473
+        check_multiple_gss_daemons $facet $LGSSD
+    fi
 
     stop_gss_daemons
 }
-run_test 100 "start more multiple gss daemons"
+run_test 100 "start multiple gss daemons"
 
 TMPDIR=$OLDTMPDIR
 TMP=$OLDTMP

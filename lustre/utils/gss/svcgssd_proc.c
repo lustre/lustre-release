@@ -73,6 +73,7 @@ do_svc_downcall(gss_buffer_desc *out_handle, struct svc_cred *cred,
 {
 	FILE *f;
 	char *fname = NULL;
+	int err;
 
 	printerr(2, "doing downcall\n");
 	if ((fname = mech2file(mech)) == NULL)
@@ -95,9 +96,9 @@ do_svc_downcall(gss_buffer_desc *out_handle, struct svc_cred *cred,
 	qword_printint(f, cred->cr_gid);
 	qword_print(f, fname);
 	qword_printhex(f, context_token->value, context_token->length);
-	qword_eol(f);
+	err = qword_eol(f);
 	fclose(f);
-	return 0;
+	return err;
 out_err:
 	printerr(0, "WARNING: downcall failed\n");
 	return -1;
@@ -126,8 +127,8 @@ send_response(FILE *f, gss_buffer_desc *in_handle, gss_buffer_desc *in_token,
 	qword_addhex(&bp, &blen, in_handle->value, in_handle->length);
 	qword_addhex(&bp, &blen, in_token->value, in_token->length);
 	qword_addint(&bp, &blen, 0x7fffffff); /*XXX need a better timeout */
-	qword_addint(&bp, &blen, maj_stat);
-	qword_addint(&bp, &blen, min_stat);
+	qword_adduint(&bp, &blen, maj_stat);
+	qword_adduint(&bp, &blen, min_stat);
 	qword_addhex(&bp, &blen, out_handle->value, out_handle->length);
 	qword_addhex(&bp, &blen, out_token->value, out_token->length);
 	qword_addeol(&bp, &blen);

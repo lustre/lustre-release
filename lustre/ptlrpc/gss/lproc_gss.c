@@ -1,8 +1,8 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- *  Copyright (C) 2001-2003 Cluster File Systems, Inc.
- *   Author Peter Braam <braam@clusterfs.com>
+ *  Copyright (C) 2006 Cluster File Systems, Inc.
+ *   Author Eric Mei <ericm@clusterfs.com>
  *
  *   This file is part of the Lustre file system, http://www.lustre.org
  *   Lustre is a trademark of Cluster File Systems, Inc.
@@ -35,6 +35,7 @@
 #include <linux/dcache.h>
 #include <linux/fs.h>
 #include <linux/random.h>
+#include <linux/mutex.h>
 #else
 #include <liblustre.h>
 #endif
@@ -142,7 +143,9 @@ static struct lprocfs_vars gss_lprocfs_vars[] = {
 
 int gss_init_lproc(void)
 {
-        int rc;
+        struct proc_dir_entry  *ent;
+        int                     rc;
+
         gss_proc_root = lprocfs_register("gss", sptlrpc_proc_root,
                                          gss_lprocfs_vars, NULL);
 
@@ -153,6 +156,17 @@ int gss_init_lproc(void)
                 return rc;
         }
 
+        /* FIXME
+         * here we should hold proc_subdir_lock which is not exported
+         */
+        ent = gss_proc_root->subdir;
+        while (ent != NULL) {
+                if (strcmp(ent->name, "init_channel") == 0) {
+                        ent->mode |= 0222;
+                        break;
+                }
+        }
+        
         return 0;
 }
 

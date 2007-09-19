@@ -57,6 +57,7 @@
 #include <linux/slab.h>
 #include <linux/crypto.h>
 #include <linux/random.h>
+#include <linux/mutex.h>
 #else
 #include <liblustre.h>
 #endif
@@ -103,7 +104,7 @@ static struct krb5_enctype enctypes[] = {
                 0,
         },
         [ENCTYPE_DES3_CBC_RAW] = {              /* des3-hmac-sha1 */
-                "des-hmac-sha1",
+                "des3-hmac-sha1",
                 "des3_ede",
                 "sha1",
                 CRYPTO_TFM_MODE_CBC,

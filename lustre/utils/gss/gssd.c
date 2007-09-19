@@ -203,7 +203,7 @@ main(int argc, char *argv[])
 				break;
 			case 'd':
 				strncpy(ccachedir, optarg, sizeof(ccachedir));
-				if (ccachedir[sizeof(ccachedir-1)] != '\0')
+				if (ccachedir[sizeof(ccachedir)-1] != '\0')
 					errx(1, "ccachedir path name too long");
 				break;
 			default:

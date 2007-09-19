@@ -196,8 +196,14 @@ const char * sptlrpc_bulk_csum_alg2name(__u32 csum_alg);
 int  sptlrpc_lproc_init(void);
 void sptlrpc_lproc_fini(void);
 
+/* sec_gc.c */
+void sptlrpc_gc_add_sec(struct ptlrpc_sec *sec);
+void sptlrpc_gc_del_sec(struct ptlrpc_sec *sec);
+int sptlrpc_gc_start_thread(void);
+void sptlrpc_gc_stop_thread(void);
+
 /* sec.c */
-int  sptlrpc_init(void);
-void sptlrpc_fini(void);
+int  __init sptlrpc_init(void);
+void __exit sptlrpc_fini(void);
 
 #endif /* PTLRPC_INTERNAL_H */

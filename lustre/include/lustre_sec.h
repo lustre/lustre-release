@@ -25,6 +25,7 @@
 /*
  * to avoid include
  */
+struct key;
 struct obd_import;
 struct ptlrpc_request;
 struct ptlrpc_reply_state;
@@ -49,6 +50,7 @@ enum sptlrpc_policies {
         SPTLRPC_POLICY_NULL             = 0,
         SPTLRPC_POLICY_PLAIN            = 1,
         SPTLRPC_POLICY_GSS              = 2,
+        SPTLRPC_POLICY_GSS_PIPEFS       = 3,
         SPTLRPC_POLICY_MAX,
 };
 
@@ -210,6 +212,9 @@ struct ptlrpc_ctx_ops {
         int     (*match)       (struct ptlrpc_cli_ctx *ctx,
                                 struct vfs_cred *vcred);
         int     (*refresh)     (struct ptlrpc_cli_ctx *ctx);
+        int     (*validate)    (struct ptlrpc_cli_ctx *ctx);
+        void    (*die)         (struct ptlrpc_cli_ctx *ctx,
+                                int grace);
         int     (*display)     (struct ptlrpc_cli_ctx *ctx,
                                 char *buf, int bufsize);
         /*
@@ -234,19 +239,22 @@ struct ptlrpc_ctx_ops {
                                 struct ptlrpc_bulk_desc *desc);
 };
 
-#define PTLRPC_CTX_UPTODATE_BIT        (0)  /* uptodate */
-#define PTLRPC_CTX_DEAD_BIT            (1)  /* mark expired gracefully */
-#define PTLRPC_CTX_ERROR_BIT           (2)  /* fatal error (refresh, etc.) */
-#define PTLRPC_CTX_HASHED_BIT          (8)  /* in hash table */
+#define PTLRPC_CTX_NEW_BIT             (0)  /* newly created */
+#define PTLRPC_CTX_UPTODATE_BIT        (1)  /* uptodate */
+#define PTLRPC_CTX_DEAD_BIT            (2)  /* mark expired gracefully */
+#define PTLRPC_CTX_ERROR_BIT           (3)  /* fatal error (refresh, etc.) */
+#define PTLRPC_CTX_CACHED_BIT          (8)  /* in ctx cache (hash etc.) */
 #define PTLRPC_CTX_ETERNAL_BIT         (9)  /* always valid */
 
+#define PTLRPC_CTX_NEW                 (1 << PTLRPC_CTX_NEW_BIT)
 #define PTLRPC_CTX_UPTODATE            (1 << PTLRPC_CTX_UPTODATE_BIT)
 #define PTLRPC_CTX_DEAD                (1 << PTLRPC_CTX_DEAD_BIT)
 #define PTLRPC_CTX_ERROR               (1 << PTLRPC_CTX_ERROR_BIT)
-#define PTLRPC_CTX_HASHED              (1 << PTLRPC_CTX_HASHED_BIT)
+#define PTLRPC_CTX_CACHED              (1 << PTLRPC_CTX_CACHED_BIT)
 #define PTLRPC_CTX_ETERNAL             (1 << PTLRPC_CTX_ETERNAL_BIT)
 
-#define PTLRPC_CTX_STATUS_MASK         (PTLRPC_CTX_UPTODATE   |       \
+#define PTLRPC_CTX_STATUS_MASK         (PTLRPC_CTX_NEW_BIT    |       \
+                                        PTLRPC_CTX_UPTODATE   |       \
                                         PTLRPC_CTX_DEAD       |       \
                                         PTLRPC_CTX_ERROR)
 
@@ -271,24 +279,31 @@ struct ptlrpc_sec_cops {
                                                 __u32 flavor,
                                                 unsigned long flags);
         void                    (*destroy_sec) (struct ptlrpc_sec *sec);
+
         /*
-         * search ctx for a certain user, if this function is missing,
-         * a generic function will be invoked by caller. implement this
-         * for any special need.
+         * context
          */
         struct ptlrpc_cli_ctx * (*lookup_ctx)  (struct ptlrpc_sec *sec,
-                                                struct vfs_cred *vcred);
+                                                struct vfs_cred *vcred,
+                                                int create,
+                                                int remove_dead);
+        void                    (*release_ctx) (struct ptlrpc_sec *sec,
+                                                struct ptlrpc_cli_ctx *ctx,
+                                                int sync);
+        int                     (*flush_ctx_cache)
+                                               (struct ptlrpc_sec *sec,
+                                                uid_t uid,
+                                                int grace,
+                                                int force);
+        void                    (*gc_ctx)      (struct ptlrpc_sec *sec);
+
         /*
-         * ptlrpc_cli_ctx constructor/destructor
+         * reverse context
          */
-        struct ptlrpc_cli_ctx * (*create_ctx)  (struct ptlrpc_sec *sec,
-                                                struct vfs_cred *vcred);
-        void                    (*destroy_ctx) (struct ptlrpc_sec *sec,
-                                                struct ptlrpc_cli_ctx *ctx);
-        /* reverse service */
         int                     (*install_rctx)(struct obd_import *imp,
                                                 struct ptlrpc_sec *sec,
                                                 struct ptlrpc_cli_ctx *ctx);
+
         /*
          * request/reply buffer manipulation
          */
@@ -306,6 +321,11 @@ struct ptlrpc_sec_cops {
                                                (struct ptlrpc_sec *sec,
                                                 struct ptlrpc_request *req,
                                                 int segment, int newsize);
+        /*
+         * misc
+         */
+        int                     (*display)     (struct ptlrpc_sec *sec,
+                                                char *buf, int buflen);
 };
 
 struct ptlrpc_sec_sops {
@@ -338,7 +358,8 @@ struct ptlrpc_sec_policy {
 
 #define PTLRPC_SEC_FL_REVERSE           0x0001 /* reverse sec */
 #define PTLRPC_SEC_FL_ROOTONLY          0x0002 /* treat everyone as root */
-#define PTLRPC_SEC_FL_BULK              0x0004 /* intensive bulk i/o expected */
+#define PTLRPC_SEC_FL_PAG               0x0004 /* PAG mode */
+#define PTLRPC_SEC_FL_BULK              0x0008 /* intensive bulk i/o expected */
 
 struct ptlrpc_sec {
         struct ptlrpc_sec_policy       *ps_policy;
@@ -347,9 +368,11 @@ struct ptlrpc_sec {
         unsigned long                   ps_flags;       /* PTLRPC_SEC_FL_XX */
         struct obd_import              *ps_import;      /* owning import */
         spinlock_t                      ps_lock;        /* protect ccache */
-        int                             ps_ccache_size; /* must be 2^n */
-        struct hlist_head              *ps_ccache;      /* ctx cache hash */
         atomic_t                        ps_busy;        /* busy count */
+        /*
+         * garbage collection
+         */
+        struct list_head                ps_gc_list;
         cfs_time_t                      ps_gc_interval; /* in seconds */
         cfs_time_t                      ps_gc_next;     /* in seconds */
 };
@@ -460,15 +483,52 @@ void sptlrpc_policy_put(struct ptlrpc_sec_policy *policy)
 /*
  * client credential
  */
-struct ptlrpc_cli_ctx *sptlrpc_ctx_get(struct ptlrpc_cli_ctx *ctx);
-void sptlrpc_ctx_put(struct ptlrpc_cli_ctx *ctx, int sync);
-void sptlrpc_ctx_expire(struct ptlrpc_cli_ctx *ctx);
-void sptlrpc_ctx_replace(struct ptlrpc_sec *sec, struct ptlrpc_cli_ctx *new);
-void sptlrpc_ctx_wakeup(struct ptlrpc_cli_ctx *ctx);
-int sptlrpc_ctx_display(struct ptlrpc_cli_ctx *ctx, char *buf, int bufsize);
+static inline
+unsigned long cli_ctx_status(struct ptlrpc_cli_ctx *ctx)
+{
+        return (ctx->cc_flags & PTLRPC_CTX_STATUS_MASK);
+}
+
+static inline
+int cli_ctx_is_uptodate(struct ptlrpc_cli_ctx *ctx)
+{
+        return (cli_ctx_status(ctx) == PTLRPC_CTX_UPTODATE);
+}
+
+static inline
+int cli_ctx_is_refreshed(struct ptlrpc_cli_ctx *ctx)
+{
+        return (cli_ctx_status(ctx) != 0);
+}
+
+static inline
+int cli_ctx_is_dead(struct ptlrpc_cli_ctx *ctx)
+{
+        return ((ctx->cc_flags & (PTLRPC_CTX_DEAD | PTLRPC_CTX_ERROR)) != 0);
+}
+
+static inline
+int cli_ctx_is_eternal(struct ptlrpc_cli_ctx *ctx)
+{
+        return ((ctx->cc_flags & PTLRPC_CTX_ETERNAL) != 0);
+}
 
 /*
- * client wrap/buffers
+ * internal apis which only used by policy impelentation
+ */
+void sptlrpc_sec_destroy(struct ptlrpc_sec *sec);
+
+/*
+ * exported client context api
+ */
+struct ptlrpc_cli_ctx *sptlrpc_cli_ctx_get(struct ptlrpc_cli_ctx *ctx);
+void sptlrpc_cli_ctx_put(struct ptlrpc_cli_ctx *ctx, int sync);
+void sptlrpc_cli_ctx_expire(struct ptlrpc_cli_ctx *ctx);
+void sptlrpc_cli_ctx_wakeup(struct ptlrpc_cli_ctx *ctx);
+int sptlrpc_cli_ctx_display(struct ptlrpc_cli_ctx *ctx, char *buf, int bufsize);
+
+/*
+ * exported client context wrap/buffers
  */
 int sptlrpc_cli_wrap_request(struct ptlrpc_request *req);
 int sptlrpc_cli_unwrap_reply(struct ptlrpc_request *req);
@@ -481,7 +541,7 @@ int sptlrpc_cli_enlarge_reqbuf(struct ptlrpc_request *req,
 void sptlrpc_request_out_callback(struct ptlrpc_request *req);
 
 /*
- * higher interface of import & request
+ * exported higher interface of import & request
  */
 int sptlrpc_import_get_sec(struct obd_import *imp, struct ptlrpc_svc_ctx *svc_ctx,
                            __u32 flavor, unsigned long flags);
@@ -498,6 +558,7 @@ void sptlrpc_req_set_flavor(struct ptlrpc_request *req, int opcode);
 
 int sptlrpc_parse_flavor(enum lustre_part from, enum lustre_part to,
                          char *str, struct sec_flavor_config *conf);
+
 /* misc */
 const char * sec2target_str(struct ptlrpc_sec *sec);
 int sptlrpc_lprocfs_rd(char *page, char **start, off_t off, int count,

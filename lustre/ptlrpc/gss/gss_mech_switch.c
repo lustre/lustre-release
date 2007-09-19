@@ -50,6 +50,7 @@
 #include <linux/init.h>
 #include <linux/module.h>
 #include <linux/slab.h>
+#include <linux/mutex.h>
 #else
 #include <liblustre.h>
 #endif

@@ -92,10 +92,19 @@ void null_destroy_sec(struct ptlrpc_sec *sec)
 
 static
 struct ptlrpc_cli_ctx *null_lookup_ctx(struct ptlrpc_sec *sec,
-                                       struct vfs_cred *vcred)
+                                       struct vfs_cred *vcred,
+                                       int create, int remove_dead)
 {
         atomic_inc(&null_cli_ctx.cc_refcount);
         return &null_cli_ctx;
+}
+
+static
+int null_flush_ctx_cache(struct ptlrpc_sec *sec,
+                         uid_t uid,
+                         int grace, int force)
+{
+        return 0;
 }
 
 static
@@ -287,6 +296,7 @@ static struct ptlrpc_sec_cops null_sec_cops = {
         .create_sec             = null_create_sec,
         .destroy_sec            = null_destroy_sec,
         .lookup_ctx             = null_lookup_ctx,
+        .flush_ctx_cache        = null_flush_ctx_cache,
         .alloc_reqbuf           = null_alloc_reqbuf,
         .alloc_repbuf           = null_alloc_repbuf,
         .free_reqbuf            = null_free_reqbuf,
@@ -319,19 +329,18 @@ void null_init_internal(void)
         null_sec.ps_import = NULL;
         null_sec.ps_flavor = SPTLRPC_FLVR_NULL;
         null_sec.ps_flags = 0;
+        spin_lock_init(&null_sec.ps_lock);
+        atomic_set(&null_sec.ps_busy, 1);         /* for "null_cli_ctx" */
+        INIT_LIST_HEAD(&null_sec.ps_gc_list);
         null_sec.ps_gc_interval = 0;
         null_sec.ps_gc_next = 0;
-        spin_lock_init(&null_sec.ps_lock);
-        null_sec.ps_ccache_size = 1;
-        null_sec.ps_ccache = &__list;
-        atomic_set(&null_sec.ps_busy, 1);         /* for "null_cli_ctx" */
 
         hlist_add_head(&null_cli_ctx.cc_hash, &__list);
         atomic_set(&null_cli_ctx.cc_refcount, 1);    /* for hash */
         null_cli_ctx.cc_sec = &null_sec;
         null_cli_ctx.cc_ops = &null_ctx_ops;
         null_cli_ctx.cc_expire = 0;
-        null_cli_ctx.cc_flags = PTLRPC_CTX_HASHED | PTLRPC_CTX_ETERNAL |
+        null_cli_ctx.cc_flags = PTLRPC_CTX_CACHED | PTLRPC_CTX_ETERNAL |
                                 PTLRPC_CTX_UPTODATE;
         null_cli_ctx.cc_vcred.vc_uid = 0;
         spin_lock_init(&null_cli_ctx.cc_lock);
@@ -346,7 +355,7 @@ int sptlrpc_null_init(void)
 
         rc = sptlrpc_register_policy(&null_policy);
         if (rc)
-                CERROR("failed to register sec.null: %d\n", rc);
+                CERROR("failed to register %s: %d\n", null_policy.sp_name, rc);
 
         return rc;
 }
@@ -357,5 +366,5 @@ void sptlrpc_null_fini(void)
 
         rc = sptlrpc_unregister_policy(&null_policy);
         if (rc)
-                CERROR("cannot unregister sec.null: %d\n", rc);
+                CERROR("failed to unregister %s: %d\n", null_policy.sp_name,rc);
 }
