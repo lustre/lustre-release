@@ -403,7 +403,8 @@ struct ll_async_page {
                          llap_defer_uptodate:1,
                          llap_origin:3,
                          llap_ra_used:1,
-                         llap_ignore_quota:1;
+                         llap_ignore_quota:1,
+                         llap_lockless_io_page:1;
         void            *llap_cookie;
         struct page     *llap_page;
         struct list_head llap_pending_write;

@@ -645,7 +645,8 @@ static struct ll_async_page *llap_from_page(struct page *page, unsigned origin)
                 csum = crc32_le(csum, kmap(page), CFS_PAGE_SIZE);
                 kunmap(page);
                 if (origin == LLAP_ORIGIN_READAHEAD ||
-                    origin == LLAP_ORIGIN_READPAGE) {
+                    origin == LLAP_ORIGIN_READPAGE ||
+                    origin == LLAP_ORIGIN_LOCKLESS_IO) {
                         llap->llap_checksum = 0;
                 } else if (origin == LLAP_ORIGIN_COMMIT_WRITE ||
                            llap->llap_checksum == 0) {
@@ -899,11 +900,7 @@ int ll_ap_completion(void *data, int cmd, struct obdo *oa, int rc)
         RETURN(ret);
 }
 
-/* the kernel calls us here when a page is unhashed from the page cache.
- * the page will be locked and the kernel is holding a spinlock, so
- * we need to be careful.  we're just tearing down our book-keeping
- * here. */
-void ll_removepage(struct page *page)
+static void __ll_put_llap(struct page *page)
 {
         struct inode *inode = page->mapping->host;
         struct obd_export *exp;
@@ -911,17 +908,6 @@ void ll_removepage(struct page *page)
         struct ll_sb_info *sbi = ll_i2sbi(inode);
         int rc;
         ENTRY;
-
-        LASSERT(!in_interrupt());
-
-        /* sync pages or failed read pages can leave pages in the page
-         * cache that don't have our data associated with them anymore */
-        if (page_private(page) == 0) {
-                EXIT;
-                return;
-        }
-
-        LL_CDEBUG_PAGE(D_PAGE, page, "being evicted\n");
 
         exp = ll_i2obdexp(inode);
         if (exp == NULL) {
@@ -955,6 +941,31 @@ void ll_removepage(struct page *page)
         sbi->ll_async_page_count--;
         spin_unlock(&sbi->ll_lock);
         OBD_SLAB_FREE(llap, ll_async_page_slab, ll_async_page_slab_size);
+
+        EXIT;
+}
+
+/* the kernel calls us here when a page is unhashed from the page cache.
+ * the page will be locked and the kernel is holding a spinlock, so
+ * we need to be careful.  we're just tearing down our book-keeping
+ * here. */
+void ll_removepage(struct page *page)
+{
+        ENTRY;
+
+        LASSERT(!in_interrupt());
+
+        /* sync pages or failed read pages can leave pages in the page
+         * cache that don't have our data associated with them anymore */
+        if (page_private(page) == 0) {
+                EXIT;
+                return;
+        }
+
+        LASSERT(!llap_cast_private(page)->llap_lockless_io_page);
+        LL_CDEBUG_PAGE(D_PAGE, page, "being evicted\n");
+        __ll_put_llap(page);
+
         EXIT;
 }
 
@@ -1530,13 +1541,13 @@ static void ll_file_put_pages(struct page **pages, int numpages)
         for (i = 0, pp = pages; i < numpages; i++, pp++) {
                 if (*pp) {
                         LL_CDEBUG_PAGE(D_PAGE, (*pp), "free\n");
-                        ll_removepage(*pp);
+                        __ll_put_llap(*pp);
                         if (page_private(*pp))
                                 CERROR("the llap wasn't freed\n");
                         (*pp)->mapping = NULL;
                         if (page_count(*pp) != 1)
                                 CERROR("page %p, flags %#lx, count %i, private %p\n",
-                                (*pp), (*pp)->flags, page_count(*pp),
+                                (*pp), (unsigned long)(*pp)->flags, page_count(*pp),
                                 (void*)page_private(*pp));
                         __free_pages(*pp, 0);
                 }
@@ -1570,6 +1581,7 @@ static struct page **ll_file_prepare_pages(int numpages, struct inode *inode,
                 llap = llap_from_page(page, LLAP_ORIGIN_LOCKLESS_IO);
                 if (IS_ERR(llap))
                         GOTO(err, rc = PTR_ERR(llap));
+                llap->llap_lockless_io_page = 1;
         }
         RETURN(pages);
 err:
@@ -1578,10 +1590,13 @@ err:
  }
 
 static ssize_t ll_file_copy_pages(struct page **pages, int numpages,
-                                  char *buf, loff_t pos, size_t count, int rw)
+                                  char *buf, loff_t pos, size_t count,
+                                  int rw)
 {
         ssize_t amount = 0;
         int i;
+        int updatechecksum = ll_i2sbi(pages[0]->mapping->host)->ll_flags &
+                             LL_SBI_CHECKSUM;
         ENTRY;
 
         for (i = 0; i < numpages; i++) {
@@ -1595,10 +1610,18 @@ static ssize_t ll_file_copy_pages(struct page **pages, int numpages,
                                "buf = %p, bytes = %u\n",
                                (rw == WRITE) ? "CFU" : "CTU",
                                vaddr + offset, buf, bytes);
-                if (rw == WRITE)
+                if (rw == WRITE) {
                         left = copy_from_user(vaddr + offset, buf, bytes);
-                else
+                        if (updatechecksum) {
+                                struct ll_async_page *llap;
+
+                                llap = llap_cast_private(pages[i]);
+                                llap->llap_checksum = crc32_le(0, vaddr,
+                                                               CFS_PAGE_SIZE);
+                        }
+                } else {
                         left = copy_to_user(buf, vaddr + offset, bytes);
+                }
                 kunmap(pages[i]);
                 amount += bytes;
                 if (left) {

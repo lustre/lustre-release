@@ -1225,7 +1225,7 @@ static int ll_file_get_tree_lock(struct ll_lock_tree *tree, struct file *file,
                 rc = ll_tree_lock(tree, node, buf, count, ast_flags);
                 if (rc == 0)
                         tree_locked = 1;
-                else if (rc == -EBUSY)
+                else if (rc == -EUSERS)
                         ll_set_file_contended(inode);
                 else
                         GOTO(out, rc);

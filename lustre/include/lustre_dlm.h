@@ -143,6 +143,9 @@ typedef enum {
 #define LDLM_FL_BL_AST          0x10000000
 #define LDLM_FL_BL_DONE         0x20000000
 
+/* measure lock contention and return -EUSERS if locking contention is high */
+#define LDLM_FL_DENY_ON_CONTENTION 0x40000000
+
 /* The blocking callback is overloaded to perform two functions.  These flags
  * indicate which operation should be performed. */
 #define LDLM_CB_BLOCKING    1
@@ -294,9 +297,9 @@ typedef enum {
 
 /* default values for the "max_nolock_size", "contention_time"
  * and "contended_locks" namespace tunables */
-#define NS_DEFAULT_MAX_NOLOCK_BYTES 131072
+#define NS_DEFAULT_MAX_NOLOCK_BYTES 0
 #define NS_DEFAULT_CONTENTION_SECONDS 2
-#define NS_DEFAULT_CONTENDED_LOCKS 0
+#define NS_DEFAULT_CONTENDED_LOCKS 32
 
 struct ldlm_namespace {
         char                  *ns_name;
@@ -548,9 +551,6 @@ int ldlm_namespace_foreach_res(struct ldlm_namespace *ns,
 int ldlm_replay_locks(struct obd_import *imp);
 void ldlm_resource_iterate(struct ldlm_namespace *, struct ldlm_res_id *,
                            ldlm_iterator_t iter, void *data);
-
-/* measure lock contention and return -EBUSY if locking contention is high */
-#define LDLM_FL_DENY_ON_CONTENTION 0x10000000
 
 /* ldlm_flock.c */
 int ldlm_flock_completion_ast(struct ldlm_lock *lock, int flags, void *data);
