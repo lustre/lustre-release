@@ -44,7 +44,7 @@ MOUNTOPT=""
 [ "x$MDSISIZE" != "x" ] &&
     MKFSOPT=$MKFSOPT" -i $MDSISIZE"
 [ "x$MKFSOPT" != "x" ] &&
-    MKFSOPT="--mkfsoptions=\"$MKFSOPT\""
+    MKFSOPT="--mkfsoptions=\\\"$MKFSOPT\\\""
 [ "x$MDSCAPA" != "x" ] &&
     MKFSOPT="--param mdt.capa=$MDSCAPA"
 [ "x$mdsfailover_HOST" != "x" ] &&

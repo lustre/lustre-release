@@ -683,11 +683,12 @@ run_test 17 "Verify failed mds_postsetup won't fail assertion (2936) (should ret
 test_18() {
         [ -f $MDSDEV ] && echo "remove $MDSDEV" && rm -f $MDSDEV
         echo "mount mds with large journal..."
-        OLDMDSSIZE=$MDSSIZE
-        MDSSIZE=2000000
-	#FIXME have to change MDS_MKFS_OPTS
-        gen_config
+        local myMDSSIZE=2000000
+        OLD_MDS_MKFS_OPTS=$MDS_MKFS_OPTS
 
+        MDS_MKFS_OPTS="--mgs --mdt --fsname=$FSNAME --device-size=$myMDSSIZE --param sys.timeout=$TIMEOUT $MDSOPT"
+
+        gen_config
         echo "mount lustre system..."
 	setup
         check_mount || return 41
@@ -695,14 +696,14 @@ test_18() {
         echo "check journal size..."
         FOUNDSIZE=`do_facet mds "debugfs -c -R 'stat <8>' $MDSDEV" | awk '/Size: / { print $NF; exit;}'`
         if [ $FOUNDSIZE -gt $((32 * 1024 * 1024)) ]; then
-                log "Success: mkfs creates large journals"
+                log "Success: mkfs creates large journals. Size: $((FOUNDSIZE >> 20))M"
         else
                 error "expected journal size > 32M, found $((FOUNDSIZE >> 20))M"
         fi
 
         cleanup || return $?
 
-        MDSSIZE=$OLDMDSSIZE
+        MDS_MKFS_OPTS=$OLD_MDS_MKFS_OPTS
         gen_config
 }
 run_test 18 "check mkfs creates large journals"
