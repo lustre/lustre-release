@@ -12,8 +12,8 @@ set -e
 ONLY=${ONLY:-"$*"}
 
 # These tests don't apply to mountconf
-#              xml xml xml xml xml xml dumb FIXME
-MOUNTCONFSKIP="10  11  12  13  13b 14  15   18"
+#              xml xml xml xml xml xml dumb
+MOUNTCONFSKIP="10  11  12  13  13b 14  15 "
 
 # bug number for skipped test:                     13369 12743
 ALWAYS_EXCEPT=" $CONF_SANITY_EXCEPT $MOUNTCONFSKIP 34a   36"
