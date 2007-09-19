@@ -22,6 +22,7 @@ ALWAYS_EXCEPT=" $CONF_SANITY_EXCEPT $MOUNTCONFSKIP 34a   36"
 SRCDIR=`dirname $0`
 PATH=$PWD/$SRCDIR:$SRCDIR:$SRCDIR/../utils:$PATH
 
+SAVE_PWD=$PWD
 LUSTRE=${LUSTRE:-`dirname $0`/..}
 RLUSTRE=${RLUSTRE:-$LUSTRE}
 HOSTNAME=`hostname`
@@ -1085,8 +1086,9 @@ test_32a() {
         #       devices
         # or maybe this test is just totally useless on a client-only system
         [ -z "$TUNEFS" ] && skip "No tunefs" && return
-        [ ! -r disk1_4.zip ] && skip "Cant find disk1_4.zip, skipping" && return
-	unzip -o -j -d $TMP/$tdir disk1_4.zip || { skip "Cant unzip disk1_4, skipping" && return ; }
+	local DISK1_4=$LUSTRE/tests/disk1_4.zip
+        [ ! -r $DISK1_4 ] && skip "Cant find $DISK1_4, skipping" && return
+	unzip -o -j -d $TMP/$tdir $DISK1_4 || { skip "Cant unzip $DISK1_4, skipping" && return ; }
 	load_modules
 	sysctl lnet.debug=$PTLDEBUG
 
@@ -1135,8 +1137,9 @@ test_32b() {
         #       devices
         # or maybe this test is just totally useless on a client-only system
         [ -z "$TUNEFS" ] && skip "No tunefs" && return
-        [ ! -r disk1_4.zip ] && skip "Cant find disk1_4.zip, skipping" && return
-	unzip -o -j -d $TMP/$tdir disk1_4.zip || { skip "Cant unzip disk1_4, skipping" && return ; }
+	local DISK1_4=$LUSTRE/tests/disk1_4.zip
+        [ ! -r $DISK1_4 ] && skip "Cant find $DISK1_4, skipping" && return
+	unzip -o -j -d $TMP/$tdir $DISK1_4 || { skip "Cant unzip $DISK1_4, skipping" && return ; }
 	load_modules
 	sysctl lnet.debug=$PTLDEBUG
 	NEWNAME=sofia
@@ -1169,7 +1172,7 @@ test_32b() {
 	FSNAME=$NEWNAME
 	mount_client $MOUNT
 	FSNAME=$OLDFS
-	set_and_check client "cat $LPROC/mdc/*/max_rpcs_in_flight" "lustre-MDT0000.mdc.max_rpcs_in_flight" || return 11
+	set_and_check client "cat $LPROC/mdc/*/max_rpcs_in_flight" "${NEWNAME}-MDT0000.mdc.max_rpcs_in_flight" || return 11
 	[ "$(cksum $MOUNT/passwd | cut -d' ' -f 1,2)" == "2479747619 779" ] || return 12  
 	echo "ok."
 
@@ -1277,7 +1280,7 @@ test_35() { # bug 12459
 
 	log "Set up a fake failnode for the MDS"
 	FAKENID="127.0.0.2"
-	$LCTL conf_param ${FSNAME}-MDT0000.failover.node=$FAKENID || return 4
+	do_facet mds $LCTL conf_param ${FSNAME}-MDT0000.failover.node=$FAKENID || return 4
 
 	log "Wait for RECONNECT_INTERVAL seconds (10s)"
 	sleep 10
