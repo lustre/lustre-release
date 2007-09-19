@@ -38,7 +38,7 @@ MOUNTOPT=""
 [ "x$MDSISIZE" != "x" ] &&
     MKFSOPT=$MKFSOPT" -i $MDSISIZE"
 [ "x$MKFSOPT" != "x" ] &&
-    MKFSOPT="--mkfsoptions=\"$MKFSOPT\""
+    MKFSOPT="--mkfsoptions=\\\"$MKFSOPT\\\""
 [ "x$mdsfailover_HOST" != "x" ] &&
     MOUNTOPT=$MOUNTOPT" --failnode=`h2$NETTYPE $mdsfailover_HOST`"
 [ "x$STRIPE_BYTES" != "x" ] &&
