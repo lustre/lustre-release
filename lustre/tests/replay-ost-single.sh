@@ -114,9 +114,7 @@ test_4() {
     verify=$ROOT/tmp/verify-$$
     dd if=/dev/urandom bs=4096 count=1280 | tee $verify > $DIR/$tfile
     # invalidate cache, so that we're reading over the wire
-    for i in /proc/fs/lustre/ldlm/namespaces/*-osc-*; do
-        echo -n clear > $i/lru_size
-    done
+    cancel_lru_locks osc
     cmp $verify $DIR/$tfile &
     cmppid=$!
     fail ost1
