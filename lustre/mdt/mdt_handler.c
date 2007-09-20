@@ -4357,6 +4357,18 @@ out:
         return rc;
 }
 
+static void mdt_allow_cli(struct mdt_device *m, unsigned int flag)
+{
+        if (flag & CONFIG_LOG)
+                m->mdt_fl_cfglog = 1;
+        if (flag & CONFIG_SYNC)
+                m->mdt_fl_synced = 1;
+
+        if (m->mdt_fl_cfglog && m->mdt_fl_synced)
+                /* Open for clients */
+                m->mdt_md_dev.md_lu_dev.ld_obd->obd_no_conn = 0;
+}
+
 static int mdt_upcall(const struct lu_env *env, struct md_device *md,
                       enum md_upcall_event ev)
 {
@@ -4373,11 +4385,16 @@ static int mdt_upcall(const struct lu_env *env, struct md_device *md,
                                         &m->mdt_max_cookiesize);
                         CDEBUG(D_INFO, "get max mdsize %d max cookiesize %d\n",
                                      m->mdt_max_mdsize, m->mdt_max_cookiesize);
+                        mdt_allow_cli(m, CONFIG_SYNC);
                         break;
                 case MD_NO_TRANS:
                         mti = lu_context_key_get(&env->le_ctx, &mdt_thread_key);
                         mti->mti_no_need_trans = 1;
                         CDEBUG(D_INFO, "disable mdt trans for this thread\n");
+                        break;
+                case MD_LOV_CONFIG:
+                        /* Check that MDT is not yet configured */
+                        LASSERT(!m->mdt_fl_cfglog);
                         break;
                 default:
                         CERROR("invalid event\n");
@@ -4389,15 +4406,16 @@ static int mdt_upcall(const struct lu_env *env, struct md_device *md,
 
 static int mdt_obd_notify(struct obd_device *host,
                           struct obd_device *watched,
-                          enum obd_notify_event ev, void *owner)
+                          enum obd_notify_event ev, void *data)
 {
         ENTRY;
 
         switch (ev) {
         case OBD_NOTIFY_CONFIG:
-                host->obd_no_conn = 0;
+                mdt_allow_cli(mdt_dev(host->obd_lu_dev), (unsigned int)data);
+                break;
         default:
-                CDEBUG(D_INFO, "Notification 0x%x\n", ev);
+                CDEBUG(D_INFO, "Unhandled notification %#x\n", ev);
         }
         RETURN(0);
 }

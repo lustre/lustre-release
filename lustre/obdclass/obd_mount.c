@@ -1193,7 +1193,7 @@ out_mgc:
                 }
 
                 /* log has been fully processed */
-                obd_notify(obd, NULL, OBD_NOTIFY_CONFIG, 0);
+                obd_notify(obd, NULL, OBD_NOTIFY_CONFIG, (void *)CONFIG_LOG);
         }
 
         RETURN(rc);

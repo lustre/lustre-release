@@ -44,17 +44,27 @@
 
 #include "mdd_internal.h"
 
-static int mdd_lov_update(struct obd_device *host,
-                          struct obd_device *watched,
-                          enum obd_notify_event ev, void *owner)
+static int mdd_notify(struct obd_device *host, struct obd_device *watched,
+                      enum obd_notify_event ev, void *owner)
 {
         struct mdd_device *mdd = owner;
         int rc = 0;
         ENTRY;
 
         LASSERT(owner != NULL);
-
-        rc = md_do_upcall(NULL, &mdd->mdd_md_dev, MD_LOV_SYNC);
+        switch (ev)
+        {
+                case OBD_NOTIFY_ACTIVE:
+                case OBD_NOTIFY_SYNC:
+                case OBD_NOTIFY_SYNC_NONBLOCK:
+                        rc = md_do_upcall(NULL, &mdd->mdd_md_dev, MD_LOV_SYNC);
+                        break;
+                case OBD_NOTIFY_CONFIG:
+                        rc = md_do_upcall(NULL, &mdd->mdd_md_dev, MD_LOV_CONFIG);
+                        break;
+                default:
+                        CDEBUG(D_INFO, "Unhandled notification %#x\n", ev);
+        }
 
         RETURN(rc);
 }
@@ -122,7 +132,7 @@ int mdd_init_obd(const struct lu_env *env, struct mdd_device *mdd,
          * Add here for obd notify mechanism, when adding a new ost, the mds
          * will notify this mdd.
          */
-        obd->obd_upcall.onu_upcall = mdd_lov_update;
+        obd->obd_upcall.onu_upcall = mdd_notify;
         obd->obd_upcall.onu_owner = mdd;
         mdd->mdd_obd_dev = obd;
 

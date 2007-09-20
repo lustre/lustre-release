@@ -149,7 +149,9 @@ struct mdt_device {
                                    mo_mds_capa   :1,
                                    mo_oss_capa   :1;
         } mdt_opts;
-
+        /* mdt state flags */
+        __u32                      mdt_fl_cfglog:1,
+                                   mdt_fl_synced:1;
         /* lock to pretect epoch and write count */
         spinlock_t                 mdt_ioepoch_lock;
         __u64                      mdt_ioepoch;

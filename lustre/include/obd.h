@@ -791,6 +791,12 @@ enum obd_notify_event {
         OBD_NOTIFY_CONFIG
 };
 
+/* bit-mask flags for config events */
+enum config_flags {
+        CONFIG_LOG = 0x1,  /* finished processing config log */
+        CONFIG_SYNC = 0x2  /* mdt synced 1 ost */
+};
+
 /*
  * Data structure used to pass obd_notify()-event to non-obd listeners (llite
  * and liblustre being main examples).
