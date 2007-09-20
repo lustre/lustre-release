@@ -41,6 +41,7 @@
 #define LGSS_UTILS_H
 
 #include <stdlib.h>
+#include <stdint.h>
 #include <gssapi/gssapi.h>
 
 #ifndef likely
