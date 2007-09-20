@@ -107,7 +107,9 @@ for NAME in $CONFIGS; do
 	which bonnie++ > /dev/null 2>&1 || BONNIE=no
 	if [ "$BONNIE" != "no" ]; then
 	        title bonnie
-		SPACE=`df -P $MOUNT | tail -n 1 | awk '{ print $4 }'`
+		$LFS setstripe $MOUNT 0 -1 -1
+		MIN=`cat /proc/fs/lustre/osc/*-osc-*/kbytesfree | sort -n | head -n1`
+		SPACE=$(( OSTCOUNT * MIN ))
 		[ $SPACE -lt $SIZE ] && SIZE=$((SPACE * 3 / 4))
 		$DEBUG_OFF
 		bonnie++ -f -r 0 -s $((SIZE / 1024)) -n 10 -u $UID -d $MOUNT
@@ -120,7 +122,8 @@ for NAME in $CONFIGS; do
 	which iozone > /dev/null 2>&1 || IOZONE=no
 	if [ "$IOZONE" != "no" ]; then
 	        title iozone
-		SPACE=`df -P $MOUNT | tail -n 1 | awk '{ print $4 }'`
+		MIN=`cat /proc/fs/lustre/osc/*-osc-*/kbytesfree | sort -n | head -n1`
+		SPACE=$(( OSTCOUNT * MIN ))
 		[ $SPACE -lt $SIZE ] && SIZE=$((SPACE * 3 / 4))
 		IOZONE_OPTS="-i 0 -i 1 -i 2 -e -+d -r $RSIZE -s $SIZE"
 		IOZFILE="$MOUNT/iozone"
