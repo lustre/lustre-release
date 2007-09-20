@@ -371,6 +371,24 @@ wait_for() {
     wait_for_host $HOST
 }
 
+wait_mds_recovery_done () {
+    local timeout=`do_facet mds cat /proc/sys/lustre/timeout`
+#define OBD_RECOVERY_TIMEOUT (obd_timeout * 5 / 2)
+# as we are in process of changing obd_timeout in different ways
+# let's set MAX longer than that
+    MAX=$(( timeout * 4 ))
+    WAIT=0
+    while [ $WAIT -lt $MAX ]; do
+        STATUS=`do_facet mds grep status /proc/fs/lustre/mds/*-MDT*/recovery_status`
+        echo $STATUS | grep COMPLETE && return 0
+        sleep 5
+        WAIT=$((WAIT + 5))
+        echo "Waiting $(($MAX - $WAIT)) secs for MDS recovery done"
+    done
+    echo "MDS recovery not done in $MAX sec"
+    return 1            
+}
+
 client_df() {
     # not every config has many clients
     if [ -n "$CLIENTS" ]; then

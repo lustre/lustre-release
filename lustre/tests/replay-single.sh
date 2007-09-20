@@ -443,7 +443,7 @@ test_20b() { # bug 10480
 
     fail mds                            # start orphan recovery
     df -P $DIR || df -P $DIR || true    # reconnect
-    sleep 2
+    wait_mds_recovery_done || error "MDS recovery not done"
 
     AFTERUSED=`df -P $DIR | tail -1 | awk '{ print $3 }'`
     log "before $BEFOREUSED, after $AFTERUSED"
