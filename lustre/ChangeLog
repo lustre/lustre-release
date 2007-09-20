@@ -63,6 +63,15 @@ Description: 1.4.11 Can't handle directories with stripe set and extended acls
 Details    : Impossible (EPROTO is returned) to access a directory that has a
 	     non-default striping and ACLs.
 
+Severity   : normal
+Frequency  : only on ppc
+Bugzilla   : 12234
+Description: /proc/fs/lustre/devices broken on ppc
+Details    : The patch as applied to 1.6.2 doesn't look correct for all arches.
+	     We should make sure the type of 'index' is loff_t and then cast 
+	     explicitly as needed below. Do not assign an explicitly cast
+	     loff_t to an int.
+
 --------------------------------------------------------------------------------
 
 2007-09-27         Cluster File Systems, Inc. <info@clusterfs.com>
