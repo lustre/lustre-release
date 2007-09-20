@@ -557,6 +557,51 @@ int ldlm_namespace_free(struct ldlm_namespace *ns, int force)
         return ELDLM_OK;
 }
 
+void ldlm_namespace_get_nolock(struct ldlm_namespace *ns)
+{
+        LASSERT(ns->ns_refcount >= 0);
+        ns->ns_refcount++;
+}
+
+void ldlm_namespace_get(struct ldlm_namespace *ns)
+{
+        spin_lock(&ns->ns_hash_lock);
+        ldlm_namespace_get_nolock(ns);
+        spin_unlock(&ns->ns_hash_lock);
+}
+
+void ldlm_namespace_put_nolock(struct ldlm_namespace *ns, int wakeup)
+{
+        LASSERT(ns->ns_refcount > 0);
+        ns->ns_refcount--;
+        if (ns->ns_refcount == 0 && wakeup)
+                wake_up(&ns->ns_waitq);
+}
+
+void ldlm_namespace_put(struct ldlm_namespace *ns, int wakeup)
+{
+        spin_lock(&ns->ns_hash_lock);
+        ldlm_namespace_put_nolock(ns, wakeup);
+        spin_unlock(&ns->ns_hash_lock);
+}
+
+/* Should be called under ldlm_namespace_lock(client) taken */
+void ldlm_namespace_move(struct ldlm_namespace *ns, ldlm_side_t client)
+{
+        LASSERT(!list_empty(&ns->ns_list_chain));
+        LASSERT_SEM_LOCKED(ldlm_namespace_lock(client));
+        list_move_tail(&ns->ns_list_chain, ldlm_namespace_list(client));
+}
+
+/* Should be called under ldlm_namespace_lock(client) taken */
+struct ldlm_namespace *ldlm_namespace_first(ldlm_side_t client)
+{
+        LASSERT_SEM_LOCKED(ldlm_namespace_lock(client));
+        LASSERT(!list_empty(ldlm_namespace_list(client)));
+        return container_of(ldlm_namespace_list(client)->next, 
+                struct ldlm_namespace, ns_list_chain);
+}
+
 static __u32 ldlm_hash_fn(struct ldlm_resource *parent, struct ldlm_res_id name)
 {
         __u32 hash = 0;
@@ -655,7 +700,7 @@ ldlm_resource_add(struct ldlm_namespace *ns, struct ldlm_resource *parent,
         bucket = ns->ns_hash + hash;
         list_add(&res->lr_hash, bucket);
         ns->ns_resources++;
-        ns->ns_refcount++;
+        ldlm_namespace_get_nolock(ns);
 
         if (parent == NULL) {
                 list_add(&res->lr_childof, &ns->ns_root_list);
@@ -752,7 +797,9 @@ void __ldlm_resource_putref_final(struct ldlm_resource *res)
                 LBUG();
         }
 
-        ns->ns_refcount--;
+        /* Pass 0 as second argument to not wake up ->ns_waitq yet, will do it
+         * later. */
+        ldlm_namespace_put_nolock(ns, 0);
         list_del_init(&res->lr_hash);
         list_del_init(&res->lr_childof);
 

@@ -723,8 +723,8 @@ EXPORT_SYMBOL(ldlm_pools_wakeup);
 static int ldlm_pools_shrink(ldlm_side_t client, int nr, 
                              unsigned int gfp_mask)
 {
+        int total = 0, cached = 0, nr_ns;
         struct ldlm_namespace *ns;
-        int total = 0, cached = 0;
 
         if (nr != 0 && !(gfp_mask & __GFP_FS))
                 return -1;
@@ -732,28 +732,42 @@ static int ldlm_pools_shrink(ldlm_side_t client, int nr,
         CDEBUG(D_DLMTRACE, "request to shrink %d %s locks from all pools\n",
                nr, client == LDLM_NAMESPACE_CLIENT ? "client" : "server");
 
-        if (down_trylock(ldlm_namespace_lock(client)))
-                return nr != 0 ? -1 : 0;
-
+        /* Find out how many resources we may release. */
+        mutex_down(ldlm_namespace_lock(client));
         list_for_each_entry(ns, ldlm_namespace_list(client), ns_list_chain)
                 total += ldlm_pool_granted(&ns->ns_pool);
+        mutex_up(ldlm_namespace_lock(client));
 
-        if (nr == 0) {
-                mutex_up(ldlm_namespace_lock(client));
+        if (nr == 0)
                 return total;
-        }
 
-        /* Check all namespaces. */
-        list_for_each_entry(ns, ldlm_namespace_list(client), ns_list_chain) {
-                struct ldlm_pool *pl = &ns->ns_pool;
+        /* Shrink at least ldlm_namespace_nr(client) namespaces. */
+        for (nr_ns = atomic_read(ldlm_namespace_nr(client)); 
+             nr_ns > 0; nr_ns--) 
+        {
                 int cancel, nr_locks;
 
+                /* Do not call shrink under ldlm_namespace_lock(client) */
+                mutex_down(ldlm_namespace_lock(client));
+                if (list_empty(ldlm_namespace_list(client))) {
+                        mutex_up(ldlm_namespace_lock(client));
+                        /* If list is empty, we can't return any @cached > 0,
+                         * that probably would cause needless shrinker
+                         * call. */
+                        cached = 0;
+                        break;
+                }
+                ns = ldlm_namespace_first(client);
+                ldlm_namespace_get(ns);
+                ldlm_namespace_move(ns, client);
+                mutex_up(ldlm_namespace_lock(client));
+                
                 nr_locks = ldlm_pool_granted(&ns->ns_pool);
                 cancel = 1 + nr_locks * nr / total;
-                ldlm_pool_shrink(pl, cancel, gfp_mask);
+                ldlm_pool_shrink(&ns->ns_pool, cancel, gfp_mask);
                 cached += ldlm_pool_granted(&ns->ns_pool);
+                ldlm_namespace_put(ns, 1);
         }
-        mutex_up(ldlm_namespace_lock(client));
         return cached;
 }
 
@@ -771,7 +785,7 @@ void ldlm_pools_recalc(ldlm_side_t client)
 {
         __u32 nr_l = 0, nr_p = 0, l;
         struct ldlm_namespace *ns;
-        int rc, equal = 0;
+        int rc, nr, equal = 0;
 
         /* Check all modest namespaces. */
         mutex_down(ldlm_namespace_lock(client));
@@ -791,15 +805,9 @@ void ldlm_pools_recalc(ldlm_side_t client)
                         nr_l += l;
                         nr_p++;
                 }
-
-                /* After setup is done - recalc the pool. */
-                rc = ldlm_pool_recalc(&ns->ns_pool);
-                if (rc)
-                        CERROR("%s: pool recalculation error "
-                               "%d\n", ns->ns_pool.pl_name, rc);
         }
 
-        /* Make sure that modest namespaces did not eat more that 1/3 of limit */
+        /* Make sure that modest namespaces did not eat more that 2/3 of limit */
         if (nr_l >= 2 * (LDLM_POOL_HOST_L / 3)) {
                 CWARN("Modest pools eat out 2/3 of locks limit. %d of %lu. "
                       "Upgrade server!\n", nr_l, LDLM_POOL_HOST_L);
@@ -827,14 +835,34 @@ void ldlm_pools_recalc(ldlm_side_t client)
                         }
                         ldlm_pool_setup(&ns->ns_pool, l);
                 }
+        }
+        mutex_up(ldlm_namespace_lock(client));
+
+        /* Recalc at least ldlm_namespace_nr(client) namespaces. */
+        for (nr = atomic_read(ldlm_namespace_nr(client)); nr > 0; nr--) {
+                /* Lock the list, get first @ns in the list, getref, move it
+                 * to the tail, unlock and call pool recalc. This way we avoid
+                 * calling recalc under @ns lock what is really good as we get
+                 * rid of potential deadlock on client nodes when canceling
+                 * locks synchronously. */
+                mutex_down(ldlm_namespace_lock(client));
+                if (list_empty(ldlm_namespace_list(client))) {
+                        mutex_up(ldlm_namespace_lock(client));
+                        break;
+                }
+                ns = ldlm_namespace_first(client);
+                ldlm_namespace_get(ns);
+                ldlm_namespace_move(ns, client);
+                mutex_up(ldlm_namespace_lock(client));
 
                 /* After setup is done - recalc the pool. */
                 rc = ldlm_pool_recalc(&ns->ns_pool);
                 if (rc)
                         CERROR("%s: pool recalculation error "
                                "%d\n", ns->ns_pool.pl_name, rc);
+
+                ldlm_namespace_put(ns, 1);
         }
-        mutex_up(ldlm_namespace_lock(client));
 }
 EXPORT_SYMBOL(ldlm_pools_recalc);
 

@@ -654,6 +654,12 @@ struct ldlm_namespace *ldlm_namespace_new(char *name, ldlm_side_t client,
                                           ldlm_appetite_t apt);
 int ldlm_namespace_cleanup(struct ldlm_namespace *ns, int flags);
 int ldlm_namespace_free(struct ldlm_namespace *ns, int force);
+void ldlm_namespace_move(struct ldlm_namespace *ns, ldlm_side_t client);
+struct ldlm_namespace *ldlm_namespace_first(ldlm_side_t client);
+void ldlm_namespace_get(struct ldlm_namespace *ns);
+void ldlm_namespace_put(struct ldlm_namespace *ns, int wakeup);
+void ldlm_namespace_get_nolock(struct ldlm_namespace *ns);
+void ldlm_namespace_put_nolock(struct ldlm_namespace *ns, int wakeup);
 int ldlm_proc_setup(void);
 #ifdef LPROCFS
 void ldlm_proc_cleanup(void);
