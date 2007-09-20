@@ -346,8 +346,8 @@ static void *obd_device_list_seq_next(struct seq_file *p, void *v, loff_t *pos)
 
 static int obd_device_list_seq_show(struct seq_file *p, void *v)
 {
-        int index = *(loff_t *)v;
-        struct obd_device *obd = class_num2obd(index);
+        loff_t index = *(loff_t *)v;
+        struct obd_device *obd = class_num2obd((int)index);
         char *status;
 
         if (obd == NULL)

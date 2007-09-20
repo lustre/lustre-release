@@ -274,6 +274,14 @@ Bugzilla   : 12418
 Description: evictions taking too long
 Details    : allow llrd to evict clients directly on OSTs
 
+Severity   : normal
+Frequency  : only on ppc
+Bugzilla   : 12234
+Description: /proc/fs/lustre/devices broken on ppc
+Details    : The patch as applied to 1.6.2 doesn't look correct for all arches.
+	     We should make sure the type of 'index' is loff_t and then cast 
+	     explicitly as needed below.  Do not assign an explicitly cast 
+	     loff_t to an int.
 --------------------------------------------------------------------------------
 
 2007-08-10         Cluster File Systems, Inc. <info@clusterfs.com>
