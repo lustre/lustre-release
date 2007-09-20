@@ -3932,7 +3932,7 @@ LDLM_POOL_CTL_RECALC=1
 LDLM_POOL_CTL_SHRINK=2
 
 disable_pool_recalc() {
-	for NSD in $LPROC/ldlm/namespaces/*$1*; do
+        for NSD in $LPROC/ldlm/namespaces/*$1*; do
                 if test -f $NSD/pool/control; then
                         CONTROL=`cat $NSD/pool/control`
                         CONTROL=$((CONTROL & ~LDLM_POOL_CTL_RECALC))
@@ -3942,7 +3942,7 @@ disable_pool_recalc() {
 }
 
 enable_pool_recalc() {
-	for NSD in $LPROC/ldlm/namespaces/*$1*; do
+        for NSD in $LPROC/ldlm/namespaces/*$1*; do
                 if test -f $NSD/pool/control; then
                         CONTROL=`cat $NSD/pool/control`
                         CONTROL=$((CONTROL | LDLM_POOL_CTL_RECALC))
@@ -3952,7 +3952,7 @@ enable_pool_recalc() {
 }
 
 disable_pool_shrink() {
-	for NSD in $LPROC/ldlm/namespaces/*$1*; do
+        for NSD in $LPROC/ldlm/namespaces/*$1*; do
                 if test -f $NSD/pool/control; then
                         CONTROL=`cat $NSD/pool/control`
                         CONTROL=$((CONTROL & ~LDLM_POOL_CTL_SHRINK))
@@ -3962,7 +3962,7 @@ disable_pool_shrink() {
 }
 
 enable_pool_shrink() {
-	for NSD in $LPROC/ldlm/namespaces/*$1*; do
+        for NSD in $LPROC/ldlm/namespaces/*$1*; do
                 if test -f $NSD/pool/control; then
                         CONTROL=`cat $NSD/pool/control`
                         CONTROL=$((CONTROL | LDLM_POOL_CTL_SHRINK))
@@ -3981,19 +3981,32 @@ enable_pool() {
         enable_pool_recalc $1
 }
 
-elc_test_init()
+lru_resize_enable()
 {
-	[ -z "`grep early_lock_cancel $LPROC/mdc/*/connect_flags`" ] && \
-               skip "no early lock cancel on server" && return 1
-        disable_pool mdc
-        disable_pool "mds-$FSNAME"
+        enable_pool osc
+        enable_pool "filter-$FSNAME"
+        enable_pool mdc
+        enable_pool "mds-$FSNAME"
+}
+
+lru_resize_disable()
+{
         disable_pool osc
         disable_pool "filter-$FSNAME"
+        disable_pool mdc
+        disable_pool "mds-$FSNAME"
+}
+
+elc_test_init()
+{
+        [ -z "`grep early_lock_cancel $LPROC/mdc/*/connect_flags`" ] && \
+               skip "no early lock cancel on server" && return 1
 	return 0
 }
 
 test_120a() {
-	elc_test_init || return 0
+        elc_test_init || return 0
+        lru_resize_disable
         mkdir $DIR/$tdir
         cancel_lru_locks mdc
         stat $DIR/$tdir > /dev/null
@@ -4004,11 +4017,13 @@ test_120a() {
         blk2=`awk '/ldlm_bl_callback/ {print $2}' $LPROC/ldlm/services/ldlm_cbd/stats`
         [ $can1 -eq $can2 ] || error $((can2-can1)) "cancel RPC occured."
         [ $blk1 -eq $blk2 ] || error $((blk2-blk1)) "blocking RPC occured."
+        lru_resize_enable
 }
 run_test 120a "Early Lock Cancel: mkdir test ==================="
 
 test_120b() {
-	elc_test_init || return 0
+        elc_test_init || return 0
+        lru_resize_disable
         mkdir $DIR/$tdir
         cancel_lru_locks mdc
         stat $DIR/$tdir > /dev/null
@@ -4019,11 +4034,13 @@ test_120b() {
         can2=`awk '/ldlm_cancel/ {print $2}' $LPROC/ldlm/services/ldlm_canceld/stats`
         [ $can1 -eq $can2 ] || error $((can2-can1)) "cancel RPC occured."
         [ $blk1 -eq $blk2 ] || error $((blk2-blk1)) "blocking RPC occured."
+        lru_resize_enable
 }
 run_test 120b "Early Lock Cancel: create test =================="
 
 test_120c() {
-	elc_test_init || return 0
+        elc_test_init || return 0
+        lru_resize_disable
         mkdir -p $DIR/$tdir/d1 $DIR/$tdir/d2
         touch $DIR/$tdir/d1/f1
         cancel_lru_locks mdc
@@ -4035,11 +4052,13 @@ test_120c() {
         blk2=`awk '/ldlm_bl_callback/ {print $2}' $LPROC/ldlm/services/ldlm_cbd/stats`
         [ $can1 -eq $can2 ] || error $((can2-can1)) "cancel RPC occured."
         [ $blk1 -eq $blk2 ] || error $((blk2-blk1)) "blocking RPC occured."
+        lru_resize_enable
 }
 run_test 120c "Early Lock Cancel: link test ===================="
 
 test_120d() {
-	elc_test_init || return 0
+        elc_test_init || return 0
+        lru_resize_disable
         touch $DIR/$tdir
         cancel_lru_locks mdc
         stat $DIR/$tdir > /dev/null
@@ -4050,11 +4069,13 @@ test_120d() {
         blk2=`awk '/ldlm_bl_callback/ {print $2}' $LPROC/ldlm/services/ldlm_cbd/stats`
         [ $can1 -eq $can2 ] || error $((can2-can1)) "cancel RPC occured."
         [ $blk1 -eq $blk2 ] || error $((blk2-blk1)) "blocking RPC occured."
+        lru_resize_enable
 }
 run_test 120d "Early Lock Cancel: setattr test ================="
 
 test_120e() {
-	elc_test_init || return 0
+        elc_test_init || return 0
+        lru_resize_disable
         mkdir $DIR/$tdir
         dd if=/dev/zero of=$DIR/$tdir/f1 count=1
         cancel_lru_locks mdc
@@ -4068,11 +4089,13 @@ test_120e() {
         blk2=`awk '/ldlm_bl_callback/ {print $2}' $LPROC/ldlm/services/ldlm_cbd/stats`
         [ $can1 -eq $can2 ] || error $((can2-can1)) "cancel RPC occured."
         [ $blk1 -eq $blk2 ] || error $((blk2-blk1)) "blocking RPC occured."
+        lru_resize_enable
 }
 run_test 120e "Early Lock Cancel: unlink test =================="
 
 test_120f() {
-	elc_test_init || return 0
+        elc_test_init || return 0
+        lru_resize_disable
         mkdir -p $DIR/$tdir/d1 $DIR/$tdir/d2
         dd if=/dev/zero of=$DIR/$tdir/d1/f1 count=1
         dd if=/dev/zero of=$DIR/$tdir/d2/f2 count=1
@@ -4088,11 +4111,13 @@ test_120f() {
         blk2=`awk '/ldlm_bl_callback/ {print $2}' $LPROC/ldlm/services/ldlm_cbd/stats`
         [ $can1 -eq $can2 ] || error $((can2-can1)) "cancel RPC occured."
         [ $blk1 -eq $blk2 ] || error $((blk2-blk1)) "blocking RPC occured."
+        lru_resize_enable
 }
 run_test 120f "Early Lock Cancel: rename test =================="
 
 test_120g() {
-	elc_test_init || return 0
+        elc_test_init || return 0
+        lru_resize_disable
         count=10000
         echo create $count files
         mkdir  $DIR/$tdir
@@ -4118,6 +4143,7 @@ test_120g() {
         echo total: $((can2-can1)) cancels, $((blk2-blk1)) blockings
         sleep 2
         # wait for commitment of removal
+        lru_resize_enable
 }
 run_test 120g "Early Lock Cancel: performance test ============="
 
@@ -4200,65 +4226,68 @@ run_test 123 "verify statahead work"
 
 lru_resize_test_init()
 {
-	[ -z "`grep lru_resize $LPROC/mdc/*/connect_flags`" ] && \
-               skip "no lru resize on server" && return 1
-        enable_pool osc
-        enable_pool "filter-$FSNAME"
-        enable_pool mdc
-        enable_pool "mds-$FSNAME"
+        [ -z "`grep lru_resize $LPROC/mdc/*/connect_flags`" ] && \
+                skip "no lru resize on server" && return 1
 	return 0
 }
 
 test_124() {
         lru_resize_test_init || return 0
-	NSDIR=`find $LPROC/ldlm/namespaces | grep mdc | head -1`
+        cleanup -f || error "failed to unmount"
+        setup
+        lru_resize_enable
+        NSDIR=`find $LPROC/ldlm/namespaces | grep mdc | head -1`
 
         # we want to test main pool functionality, that is cancel based on SLV
         # this is why shrinkers are disabled
         disable_pool_shrink "mds-$FSNAME"
         disable_pool_shrink mdc
 
-        NR=1000
+        NR=2000
         mkdir $DIR/$tdir
-        
+
+        LRU_SIZE=`cat $NSDIR/lru_size`
+
         # use touch to produce $NR new locks
         log "create $NR files at $DIR/$tdir"
         for ((i=0;i<$NR;i++)); do touch $DIR/$tdir/f$i; done
 
         LRU_SIZE_B=`cat $NSDIR/lru_size`
-        log "created $LRU_SIZE_B locks"
+        LRU_SIZE_B=$((LRU_SIZE_B-LRU_SIZE))
+        log "created $LRU_SIZE_B lock(s)"
 
         # we want to sleep 30s to not make test too long
         SLEEP=30
-        
+        SLEEP_ADD=10
+
         # we know that lru resize allows one client to hold $LIMIT locks for 10h
         MAX_HRS=10
-        
+
         # get the pool limit
         LIMIT=`cat $NSDIR/pool/limit`
-        
+
         # calculate lock volume factor taking into account sleep and data set
         # use $LRU_SIZE_B here to take into account real number of locks created
         # in the case of CMD, LRU_SIZE_B != $NR in most of cases
         LVF=$(($LIMIT * $MAX_HRS * 60 * 60 / $LRU_SIZE_B / $SLEEP))
-        
+
         log "make client drop locks $LVF times faster so that ${SLEEP}s is \
-enough to cancel $LRU_SIZE_B locks"
+enough to cancel $LRU_SIZE_B lock(s)"
         OLD_LVF=`cat $NSDIR/pool/lock_volume_factor`
         echo "$LVF" > $NSDIR/pool/lock_volume_factor
-        log "sleep for ${SLEEP}s"
-        sleep $SLEEP
-        LRU_SIZE_A=`cat $NSDIR/lru_size`
+        log "sleep for "$((SLEEP+SLEEP_ADD))"s"
+        sleep $((SLEEP+SLEEP_ADD))
         echo "$OLD_LVF" > $NSDIR/pool/lock_volume_factor
+        LRU_SIZE_A=`cat $NSDIR/lru_size`
 
-        [ $LRU_SIZE_B -gt $LRU_SIZE_A ] || {
-                error "No locks dropped in ${SLEEP}s. LRU size: $LRU_SIZE_A"
-                enable_pool_shrink mdc
+        [ $LRU_SIZE_B -ge $LRU_SIZE_A ] || {
+                error "No locks dropped in "$((SLEEP+SLEEP_ADD))"s. LRU size: $LRU_SIZE_A"
+                lru_resize_enable
                 return
         }
-        
-        log "Dropped "$((LRU_SIZE_B-LRU_SIZE_A))" locks in ${SLEEP}s"
-        enable_pool_shrink mdc
+
+        log "Dropped "$((LRU_SIZE_B-LRU_SIZE_A))" locks in "$((SLEEP+SLEEP_ADD))"s"
+        lru_resize_enable
         log "unlink $NR files at $DIR/$tdir"
         unlinkmany $DIR/$tdir/f $NR > /dev/null 2>&1
 }
