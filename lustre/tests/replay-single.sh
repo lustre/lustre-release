@@ -1188,7 +1188,7 @@ at_start() #bug 3055
     fi
 }
 
-test_65() #bug 3055
+test_65a() #bug 3055
 {
     at_start
     $LCTL dk > /dev/null
@@ -1200,12 +1200,42 @@ test_65() #bug 3055
     unlinkmany $DIR/$tfile 10 > /dev/null
     # check for log message
     $LCTL dk | grep "Early reply #" || error "No early reply" 
-    # client should show 30s timeouts
+    # client should show 30s estimates
     grep portal $LPROC/mdc/${FSNAME}-MDT0000-mdc-*/timeouts
     sleep 9
     grep portal $LPROC/mdc/${FSNAME}-MDT0000-mdc-*/timeouts
 }
-run_test 65 "AT: verify early replies"
+run_test 65a "AT: verify early replies"
+
+test_65b() #bug 3055
+{
+    at_start
+    # turn on D_ADAPTTO
+    debugsave
+    sysctl -w lnet.debug="+other"
+    $LCTL dk > /dev/null
+    # slow down bulk i/o
+    do_facet ost1 sysctl -w lustre.fail_val=30
+#define OBD_FAIL_OST_BRW_PAUSE_PACK      0x224
+    do_facet ost1 sysctl -w lustre.fail_loc=0x224
+
+    rm -f $DIR/$tfile
+    lfs setstripe $DIR/$tfile --index=0 --count=1
+    # force some real bulk transfer
+    dd if=/dev/urandom of=$TMP/big bs=1M count=4
+    cp $TMP/big $DIR/$tfile
+    echo "append" >> $DIR/$tfile
+    cat $DIR/$tfile >> /dev/null
+    rm $TMP/big
+
+    do_facet ost1 sysctl -w lustre.fail_loc=0
+    # check for log message
+    $LCTL dk | grep "Early reply #" || error "No early reply"
+    debugrestore
+    # client should show 30s estimates
+    grep portal $LPROC/osc/${FSNAME}-OST0000-osc-*/timeouts
+}
+run_test 65b "AT: verify early replies on packed reply / bulk"
 
 test_66a() #bug 3055
 {

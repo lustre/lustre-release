@@ -1052,14 +1052,14 @@ int ptlrpc_check_set(struct ptlrpc_request_set *set)
 
                         spin_lock(&req->rq_lock);
 
-                        /* Still waiting for a reply? */
-                        if (req->rq_receiving_reply) {
+                        if (req->rq_early) {
+                                ptlrpc_at_recv_early_reply(req);
                                 spin_unlock(&req->rq_lock);
                                 continue;
                         }
-                        
-                        if (req->rq_early) {
-                                ptlrpc_at_recv_early_reply(req);
+
+                        /* Still waiting for a reply? */
+                        if (req->rq_receiving_reply) {
                                 spin_unlock(&req->rq_lock);
                                 continue;
                         }

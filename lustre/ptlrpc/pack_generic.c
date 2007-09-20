@@ -347,9 +347,7 @@ static int lustre_pack_reply_v1(struct ptlrpc_request *req, int count,
         ENTRY;
 
         LASSERT(req->rq_reply_state == NULL);
-        if (req->rq_packed_final)
-                /* Already packed final, no more early */
-                RETURN(-EALREADY);
+
         if ((flags & LPRFL_EARLY_REPLY) == 0)
                 req->rq_packed_final = 1;
 
@@ -390,10 +388,7 @@ static int lustre_pack_reply_v2(struct ptlrpc_request *req, int count,
         ENTRY;
 
         LASSERT(req->rq_reply_state == NULL);
-        if (req->rq_packed_final) {
-                /* Already packed final, no more early */
-                RETURN(-EALREADY);
-        }
+
         if ((flags & LPRFL_EARLY_REPLY) == 0)
                 req->rq_packed_final = 1;
 

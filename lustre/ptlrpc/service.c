@@ -262,7 +262,7 @@ ptlrpc_server_post_idle_rqbds (struct ptlrpc_service *svc)
 static void ptlrpc_at_timer(unsigned long castmeharder)
 {
         struct ptlrpc_service *svc = (struct ptlrpc_service *)castmeharder;
-        CDEBUG(D_ADAPTTO, "at timer %s hit at %ld%s\n",
+        CDEBUG(D_INFO, "at timer %s hit at %ld%s\n",
                svc->srv_name, cfs_time_current_sec(), 
                list_empty(&svc->srv_at_list) ? ", empty" : ""); 
         svc->srv_at_check = 1;
@@ -634,7 +634,8 @@ static int ptlrpc_at_send_early_reply(struct ptlrpc_request *req,
         struct ptlrpc_service *svc = req->rq_rqbd->rqbd_service;
         struct ptlrpc_request *reqcopy;
         struct lustre_msg *reqmsg;
-        long deadline = req->rq_deadline - cfs_time_current_sec();
+        long olddl = req->rq_deadline - cfs_time_current_sec();
+        time_t newdl;
         int rc;
         ENTRY;
                             
@@ -643,23 +644,41 @@ static int ptlrpc_at_send_early_reply(struct ptlrpc_request *req,
         DEBUG_REQ(D_ADAPTTO, req, 
                   "%ssending early reply (deadline %+lds, margin %+lds) for "
                   "%d+%d", AT_OFF ? "AT off - not " : "",
-                  deadline, deadline - at_get(&svc->srv_at_estimate), 
+                  olddl, olddl - at_get(&svc->srv_at_estimate),
                   at_get(&svc->srv_at_estimate), extra_time);
 
         if (AT_OFF) 
                 RETURN(0);
         
-        if (deadline < 0) {
-                CERROR("Already past deadline (%+lds), not sending early "
-                       "reply\n", deadline);
+        if (olddl < 0) {
+                CDEBUG(D_ADAPTTO, "x"LPU64": Already past deadline (%+lds), not"
+                       " sending early reply\n", req->rq_xid, olddl);
                 /* Return an error so we're not re-added to the timed list. */
                 RETURN(-ETIMEDOUT);
         }
 
         if ((lustre_msg_get_flags(req->rq_reqmsg) & MSG_AT_SUPPORT) == 0) {
-                CERROR("Wanted to ask client for more time, but no AT "
-                       "support\n");
+                CDEBUG(D_INFO, "Wanted to ask client for more time, but no AT "
+                      "support\n");
                 RETURN(-ENOSYS);
+        }
+
+        if (extra_time) {
+                /* Fake our processing time into the future to ask the
+                   clients for some extra amount of time */
+                extra_time += cfs_time_current_sec() -
+                        req->rq_arrival_time.tv_sec;
+                at_add(&svc->srv_at_estimate, extra_time);
+        }
+
+        newdl = req->rq_arrival_time.tv_sec + at_get(&svc->srv_at_estimate);
+        if (req->rq_deadline >= newdl) {
+                /* We're not adding any time, no need to send an early reply
+                   (e.g. maybe at adaptive_max) */
+                CDEBUG(D_ADAPTTO, "x"LPU64": Couldn't add any time (%ld/%ld), "
+                       "not sending early reply\n", req->rq_xid, olddl,
+                       newdl - cfs_time_current_sec());
+                RETURN(-ETIMEDOUT);
         }
 
         OBD_ALLOC(reqcopy, sizeof *reqcopy);
@@ -672,7 +691,9 @@ static int ptlrpc_at_send_early_reply(struct ptlrpc_request *req,
         }
         
         *reqcopy = *req;
-        /* We need the reqmsg for the magic */
+        reqcopy->rq_reply_state = NULL;
+        reqcopy->rq_rep_swab_mask = 0;
+        /* We only need the reqmsg for the magic */
         reqcopy->rq_reqmsg = reqmsg;
         memcpy(reqmsg, req->rq_reqmsg, req->rq_reqlen);
 
@@ -680,20 +701,11 @@ static int ptlrpc_at_send_early_reply(struct ptlrpc_request *req,
         if (rc) 
                 GOTO(out, rc);
 
-        if (extra_time) {
-                /* Fake our processing time into the future to ask the 
-                   clients for some extra amount of time */
-                extra_time += cfs_time_current_sec() -
-                        reqcopy->rq_arrival_time.tv_sec;
-                at_add(&svc->srv_at_estimate, extra_time);
-        }
-
         rc = ptlrpc_send_reply(reqcopy, PTLRPC_REPLY_EARLY);
 
         if (!rc) {
                 /* Adjust our own deadline to what we told the client */
-                req->rq_deadline = req->rq_arrival_time.tv_sec + 
-                        at_get(&svc->srv_at_estimate);
+                req->rq_deadline = newdl;
                 req->rq_early_count++; /* number sent, server side */
         } else {
                 DEBUG_REQ(D_ERROR, req, "Early reply send failed %d", rc);
@@ -778,8 +790,7 @@ static int ptlrpc_at_check_timed(struct ptlrpc_service *svc)
                    deleted, and is safe to take a ref to keep the req around */
                 atomic_inc(&rq->rq_refcount);
                 spin_unlock(&svc->srv_at_lock);
-                if (!rq->rq_packed_final && 
-                    (ptlrpc_at_send_early_reply(rq, at_extra) == 0)) {
+                if (ptlrpc_at_send_early_reply(rq, at_extra) == 0) {
                         counter++;
                         ptlrpc_at_add_timed(rq);
                 }
