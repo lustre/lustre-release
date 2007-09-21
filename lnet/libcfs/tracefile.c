@@ -33,7 +33,7 @@
 union trace_data_union trace_data[NR_CPUS] __cacheline_aligned;
 
 char tracefile[TRACEFILE_NAME_SIZE];
-int64_t tracefile_size = TRACEFILE_SIZE;
+long long tracefile_size = TRACEFILE_SIZE;
 static struct tracefiled_ctl trace_tctl;
 struct semaphore trace_thread_sem;
 static int thread_running = 0;
