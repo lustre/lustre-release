@@ -119,7 +119,7 @@ typedef unsigned long cpumask_t;
 #define LL_PROC_PROTO(name)                                             \
         name(cfs_sysctl_table_t *table, int write, struct file *filp,   \
              void __user *buffer, size_t *lenp, loff_t *ppos)
-#define DECLARE_LL_PROC_PPOS
+#define DECLARE_LL_PROC_PPOS_DECL
 #endif
 
 #endif /* _PORTALS_COMPAT_H */

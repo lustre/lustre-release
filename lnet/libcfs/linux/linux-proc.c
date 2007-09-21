@@ -103,7 +103,7 @@ proc_call_handler(void *data, int write,
 static int                                              \
 LL_PROC_PROTO(name)                                     \
 {                                                       \
-        DECLARE_LL_PROC_PPOS;                           \
+        DECLARE_LL_PROC_PPOS_DECL;                      \
                                                         \
         return proc_call_handler(table->data, write,    \
                                  ppos, buffer, lenp,    \
