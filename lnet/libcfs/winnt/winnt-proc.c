@@ -1449,6 +1449,55 @@ static struct ctl_table top_table[2] = {
         {0}
 };
 
+
+int trace_write_dump_kernel(struct file *file, const char *buffer,
+                             unsigned long count, void *data)
+{
+        int rc = trace_dump_debug_buffer_usrstr(buffer, count);
+        
+        return (rc < 0) ? rc : count;
+}
+
+int trace_write_daemon_file(struct file *file, const char *buffer,
+                            unsigned long count, void *data)
+{
+        int rc = trace_daemon_command_usrstr(buffer, count);
+
+        return (rc < 0) ? rc : count;
+}
+
+int trace_read_daemon_file(char *page, char **start, off_t off, int count,
+                           int *eof, void *data)
+{
+	int rc;
+
+	tracefile_read_lock();
+
+        rc = trace_copyout_string(page, count, tracefile, "\n");
+
+        tracefile_read_unlock();
+
+	return rc;
+}
+
+int trace_write_debug_mb(struct file *file, const char *buffer,
+                         unsigned long count, void *data)
+{
+        int rc = trace_set_debug_mb_userstr(buffer, count);
+        
+        return (rc < 0) ? rc : count;
+}
+
+int trace_read_debug_mb(char *page, char **start, off_t off, int count,
+                        int *eof, void *data)
+{
+        char   str[32];
+
+        snprintf(str, sizeof(str), "%d\n", trace_get_debug_mb());
+
+        return trace_copyout_string(page, count, str, NULL);
+}
+
 int insert_proc(void)
 {
         cfs_proc_entry_t *ent;
@@ -1458,7 +1507,7 @@ int insert_proc(void)
                 CERROR(("couldn't register dump_kernel\n"));
                 return -1;
         }
-        ent->write_proc = trace_dk;
+        ent->write_proc = trace_write_dump_kernel;
 
         ent = create_proc_entry("sys/lnet/daemon_file", 0, NULL);
         if (ent == NULL) {

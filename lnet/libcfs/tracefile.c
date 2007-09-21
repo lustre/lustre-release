@@ -32,7 +32,7 @@
 /* XXX move things up to the top, comment */
 union trace_data_union trace_data[NR_CPUS] __cacheline_aligned;
 
-char *tracefile = NULL;
+char tracefile[TRACEFILE_NAME_SIZE];
 int64_t tracefile_size = TRACEFILE_SIZE;
 static struct tracefiled_ctl trace_tctl;
 struct semaphore trace_thread_sem;
@@ -718,41 +718,213 @@ void trace_flush_pages(void)
         }
 }
 
-int trace_dk(struct file *file, const char *buffer, unsigned long count,
-             void *data)
+int trace_copyin_string(char *knl_buffer, int knl_buffer_nob,
+                        const char *usr_buffer, int usr_buffer_nob)
 {
-        char *name;
-        unsigned long off;
-        int rc;
+        int    nob;
+        
+        if (usr_buffer_nob > knl_buffer_nob)
+                return -EOVERFLOW;
+        
+        if (copy_from_user((void *)knl_buffer, 
+                           (void *)usr_buffer, usr_buffer_nob))
+                return -EFAULT;
 
-        name = cfs_alloc(count + 1, CFS_ALLOC_STD);
-        if (name == NULL)
-                return -ENOMEM;
+        nob = strnlen(knl_buffer, usr_buffer_nob);
+        while (nob-- >= 0)                      /* strip trailing whitespace */
+                if (!isspace(knl_buffer[nob]))
+                        break;
 
-        if (copy_from_user((void *)name, (void *)buffer, count)) {
-                rc = -EFAULT;
-                goto out;
+        if (nob < 0)                            /* empty string */
+                return -EINVAL;
+
+        if (nob == knl_buffer_nob)              /* no space to terminate */
+                return -EOVERFLOW;
+
+        knl_buffer[nob + 1] = 0;                /* terminate */
+        return 0;
+}
+
+int trace_copyout_string(char *usr_buffer, int usr_buffer_nob,
+                         const char *knl_buffer, char *append)
+{
+        /* NB if 'append' != NULL, it's a single character to append to the
+         * copied out string - usually "\n", for /proc entries and "" (i.e. a
+         * terminating zero byte) for sysctl entries */
+        int   nob = strlen(knl_buffer);
+        
+        if (nob > usr_buffer_nob)
+                nob = usr_buffer_nob;
+        
+        if (copy_to_user(usr_buffer, knl_buffer, nob))
+                return -EFAULT;
+        
+        if (append != NULL && nob < usr_buffer_nob) {
+                if (copy_to_user(usr_buffer + nob, append, 1))
+                        return -EFAULT;
+                
+                nob++;
         }
 
+        return nob;
+}
+
+int trace_allocate_string_buffer(char **str, int nob)
+{
+        if (nob > 2 * CFS_PAGE_SIZE)            /* string must be "sensible" */
+                return -EINVAL;
+        
+        *str = cfs_alloc(nob, CFS_ALLOC_STD | CFS_ALLOC_ZERO);
+        if (*str == NULL)
+                return -ENOMEM;
+
+        return 0;
+}
+
+void trace_free_string_buffer(char *str, int nob)
+{
+        cfs_free(str);
+}
+
+int trace_dump_debug_buffer_usrstr(void *usr_str, int usr_str_nob)
+{
+        char         *str;
+        int           rc;
+
+        rc = trace_allocate_string_buffer(&str, usr_str_nob + 1);
+        if (rc != 0)
+                return rc;
+
+        rc = trace_copyin_string(str, usr_str_nob + 1,
+                                 usr_str, usr_str_nob);
+        if (rc != 0)
+                goto out;
+
 #if !defined(__WINNT__)
-        if (name[0] != '/') {
+        if (str[0] != '/') {
                 rc = -EINVAL;
                 goto out;
         }
 #endif
-
-        /* be nice and strip out trailing '\n' */
-        for (off = count ; off > 2 && isspace(name[off - 1]); off--)
-                ;
-
-        name[off] = '\0';
-        rc = tracefile_dump_all_pages(name);
+        rc = tracefile_dump_all_pages(str);
 out:
-        if (name)
-                cfs_free(name);
-        return count;
+        trace_free_string_buffer(str, usr_str_nob + 1);
+        return rc;
 }
-EXPORT_SYMBOL(trace_dk);
+
+int trace_daemon_command(char *str)
+{
+        int       rc = 0;
+        
+	tracefile_write_lock();
+
+	if (strcmp(str, "stop") == 0) {
+		trace_stop_thread();
+                memset(tracefile, 0, sizeof(tracefile));
+
+	} else if (strncmp(str, "size=", 5) == 0) {
+		tracefile_size = simple_strtoul(str + 5, NULL, 0);
+		if (tracefile_size < 10 || tracefile_size > 20480)
+			tracefile_size = TRACEFILE_SIZE;
+		else
+			tracefile_size <<= 20;
+
+	} else if (strlen(str) >= sizeof(tracefile)) {
+                rc = -ENAMETOOLONG;
+#ifndef __WINNT__
+        } else if (str[0] != '/') {
+                rc = -EINVAL;
+#endif
+        } else {
+                strcpy(tracefile, str);
+
+                printk(KERN_INFO "Lustre: debug daemon will attempt to start writing "
+                       "to %s (%lukB max)\n", tracefile,
+                       (long)(tracefile_size >> 10));
+
+                trace_start_thread();
+        }
+
+	tracefile_write_unlock();
+	return rc;
+}
+
+int trace_daemon_command_usrstr(void *usr_str, int usr_str_nob)
+{
+	char *str;
+	int   rc;
+
+        rc = trace_allocate_string_buffer(&str, usr_str_nob + 1);
+        if (rc != 0)
+                return rc;
+
+        rc = trace_copyin_string(str, usr_str_nob + 1,
+                                 usr_str, usr_str_nob);
+        if (rc == 0)
+                rc = trace_daemon_command(str);
+
+        trace_free_string_buffer(str, usr_str_nob + 1);
+	return rc;
+}
+
+int trace_set_debug_mb(int mb)
+{
+	int i;
+        int limit = trace_max_debug_mb();
+        
+	if (mb <= 0)
+		return -EINVAL;
+
+	if (mb > limit) {
+		printk(KERN_ERR "Lustre: Refusing to set debug buffer size to "
+		       "%dMB - limit is %d\n", mb, limit);
+		return -EINVAL;
+	}
+
+	mb /= smp_num_cpus;
+
+        tracefile_write_lock();
+
+	for (i = 0; i < NR_CPUS; i++) {
+		struct trace_cpu_data *tcd = &trace_data[i].tcd;
+
+		tcd->tcd_max_pages = mb << (20 - CFS_PAGE_SHIFT);
+	}
+
+        tracefile_write_unlock();
+
+	return 0;
+}
+
+int trace_set_debug_mb_usrstr(void *usr_str, int usr_str_nob)
+{
+	char     str[32];
+        int      rc;
+
+        rc = trace_copyin_string(str, sizeof(str), usr_str, usr_str_nob);
+        if (rc < 0)
+                return rc;
+
+	return trace_set_debug_mb(simple_strtoul(str, NULL, 0));
+}
+
+int trace_get_debug_mb(void)
+{
+	int i;
+        int total_pages = 0;
+        
+        tracefile_read_lock();
+
+	for (i = 0; i < NR_CPUS; i++) {
+		struct trace_cpu_data *tcd = &trace_data[i].tcd;
+
+                total_pages += tcd->tcd_max_pages;
+	}
+
+        tracefile_read_unlock();
+
+        return total_pages >> (20 - CFS_PAGE_SHIFT);
+}
 
 static int tracefiled(void *arg)
 {
@@ -793,12 +965,13 @@ static int tracefiled(void *arg)
 
                 filp = NULL;
                 tracefile_read_lock();
-                if (tracefile != NULL) {
+                if (tracefile[0] != 0) {
                         filp = cfs_filp_open(tracefile,
                                              O_CREAT | O_RDWR | O_LARGEFILE,
                                              0600, &rc);
                         if (!(filp))
-                                printk("couldn't open %s: %d\n", tracefile, rc);
+                                printk(KERN_WARNING "couldn't open %s: %d\n",
+                                       tracefile, rc);
                 }
                 tracefile_read_unlock();
                 if (filp == NULL) {
@@ -877,7 +1050,7 @@ void trace_stop_thread(void)
 
         mutex_down(&trace_thread_sem);
         if (thread_running) {
-                printk(KERN_INFO "Shutting down debug daemon thread...\n");
+                printk(KERN_INFO "Lustre: shutting down debug daemon thread...\n");
                 atomic_set(&tctl->tctl_shutdown, 1);
                 wait_for_completion(&tctl->tctl_stop);
                 thread_running = 0;

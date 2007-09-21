@@ -296,10 +296,23 @@ int
 libcfs_debug_str2mask(int *mask, const char *str, int is_subsys)
 {
         int         m = 0;
-        int         matched = 0;
         char        op = 0;
+        int         matched;
         int         n;
         int         t;
+
+        /* Allow a number for backwards compatibility */
+
+        for (n = strlen(str); n > 0; n--)
+                if (!isspace(str[n-1]))
+                        break;
+        matched = n;
+
+        if ((t = sscanf(str, "%i%n", &m, &matched)) >= 1 &&
+            matched == n) {
+                *mask = m;
+                return 0;
+        }
 
         /* <str> must be a list of debug tokens or numbers separated by
          * whitespace and optionally an operator ('+' or '-').  If an operator
@@ -307,6 +320,7 @@ libcfs_debug_str2mask(int *mask, const char *str, int is_subsys)
          * (relative), otherwise 0 is used (absolute).  An operator applies to
          * all following tokens up to the next operator. */
 
+        matched = 0;
         while (*str != 0) {
                 while (isspace(*str)) /* skip whitespace */
                         str++;
