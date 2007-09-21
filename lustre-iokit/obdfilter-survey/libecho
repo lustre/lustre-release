@@ -22,6 +22,7 @@ insmod="/sbin/insmod"
 rmmod="/sbin/rmmod"
 
 declare -a ost_names
+declare -a client_names
 declare -a host_list
 declare -a dev_list
 declare -a unique_hosts
@@ -155,10 +156,44 @@ get_devnos () {
     return 0
 }
 
+# do cleanup for netdisk case.
+cleanup_netdisk () {
+    for osc in $@; do
+        lctl <<EOF
+        cfg_device $osc 
+        cleanup
+        detach
+EOF
+    done
+}
+
+# do cleanup for network case.
+cleanup_network () {
+    local clean_srv_OSS=$1
+    lctl <<EOF
+    cfg_device echotmp 
+    cleanup
+    detach
+EOF
+    remote_shell "root@$server_nid" "lctl << EOF
+        cfg_device echo_srv
+        cleanup
+        detach
+EOF"
+    if [ $clean_srv_OSS ]; then
+        remote_shell "root@$server_nid" "lctl << EOF
+            cfg_device OSS
+            cleanup
+            detach
+EOF"
+    fi
+}
+
 # do cleanup and exit.
 cleanup () {
-    local clean_srv_OSS=$2
-    for ((i = 0; i < ndevs; i++)); do
+    local exit_status=$1
+    shift
+    for ((i = 0; i < $ndevs; i++)); do
     	host=${host_names[$i]}
 	    if [ -n ${do_teardown_ec[$i]} ]; then
         	teardown_ec_devno $host ${client_names[$i]}
@@ -177,26 +212,14 @@ cleanup () {
         fi
     done
     if [ $case == "network" ]; then
-        lctl <<EOF
-        cfg_device osc_testfs
-        cleanup
-        detach
-EOF
-        remote_shell "root@$server_nid" "lctl << EOF
-            cfg_device echo_srv
-            cleanup
-            detach
-EOF"
+        cleanup_network $1 
     fi
-    if [ $clean_srv_OSS ]; then
-        remote_shell "root@$server_nid" "lctl << EOF
-            cfg_device OSS
-            cleanup
-            detach
-EOF"
+    if [ $case == "netdisk" ]; then
+	shift
+        cleanup_netdisk $@
     fi
-    if [ $1 ]; then
-        if [ $1 -ne 0 ]; then
+    if [ $exit_status ]; then
+        if [ $exit_status -ne 0 ]; then
             echo "program exited with error "
         else
             echo "done!"
@@ -204,7 +227,7 @@ EOF"
     else
         echo "Terminated"
     fi
-    exit $1
+    exit $exit_status
 }
 trap cleanup SIGHUP SIGINT SIGTERM
 
@@ -222,7 +245,7 @@ get_ec_devno () {
 	    echo "client and ost name both null" 1>&2
 	    return
 	fi
-	client_name=${ost_name}_echo_client
+        client_name=${ost_name}_ecc
     fi
     ec=`get_devno $host echo_client $client_name`
     if [ -n "$ec" ]; then
@@ -238,13 +261,14 @@ get_ec_devno () {
 	echo "OST $ost_name not setup" 1>&2
 	return
     fi
+    client_name=${ost_name}_ecc
     remote_shell $host "$lctl <<EOF
         attach echo_client $client_name ${client_name}_UUID
 	setup $ost_name
 EOF"
     ec=`get_devno $host echo_client $client_name`
     if [ -z "$ec" ]; then
-	echo "Can't setup echo client" 1>&2
+	echo "Can't setup echo-client" 1>&2
 	return
     fi
     echo $ec $client_name 1
@@ -254,10 +278,9 @@ EOF"
 # It creates echoclients for all osc listed using #lctl device_list command
 ec_using_osc () {
     local osc_name=$1
-    local osc_uuid=$2
     $lctl <<EOF
-        attach echo_client ECHO_$osc_name $osc_uuid
-        cfg_device ECHO_$osc_name
+        attach echo_client ${osc_name}_ecc ${osc_name}_ecc_UUID
+        cfg_device ${osc_name}_ecc
         setup $osc_name
 EOF
 
@@ -268,15 +291,27 @@ ec_using_srv_nid () {
     local server_nid=$1
     local ocsname=$2
     local oscuuid=$3
-    $lctl add_uuid testfs_UUID $server_nid@tcp >/dev/null 2>&1
+    $lctl add_uuid echo_UUID $server_nid@tcp >/dev/null 2>&1
     $lctl <<EOF
         attach osc $ocsname $oscuuid
         cfg_device $ocsname
-        setup echo_srv_UUID testfs_UUID
+        setup echo_srv_UUID echo_UUID
 EOF
     $lctl <<EOF
-        attach echo_client ECHO_$ocsname $oscuuid
+        attach echo_client ${ocsname}_ecc $oscuuid
         setup $ocsname 
+EOF
+}
+
+setup_osc_for_remote_ost () {
+    local ost_nid=$1
+    local obdfilter_name=$2
+    local host_name=host_$3
+    $lctl add_uuid ${host_name}_UUID $ost_nid@tcp >/dev/null 2>&1
+    $lctl <<EOF
+        attach osc ${obdfilter_name}_osc ${obdfilter_name}_osc_UUID
+        cfg_device ${obdfilter_name}_osc 
+        setup ${obdfilter_name}_UUID ${host_name}_UUID
 EOF
 }
 
@@ -363,16 +398,18 @@ check_setup () {
 # added from bugzill req.
 get_targets () {
     if [ -z "$ost_names" ]; then
-        OSTS=$($lctl device_list | awk "{if (\$2 == \"UP\" && \
+        targets=$($lctl device_list | awk "{if (\$2 == \"UP\" && \
             \$3 == \"obdfilter\") {print \$4} }")
     fi
-    if [ -z "$OSTS" ]; then
-        echo "Can't find any OSTs to test.  Please set ost_names=..."
+    if [ -z "$targets" ]; then
+        echo "Can't find any OSTs to test.  Please set targets=..."
         exit 1
     fi
     count=0
-    for name in $OSTS; do
+    for name in $targets; do
         ost_names[$count]=$name
+        str=(`split_hostname $name`)
+        host_names[$count]=${str[0]}
         count=$((count+1))
     done
 }
@@ -380,7 +417,7 @@ get_targets () {
 get_hosts () {
     # split out hostnames from ost names
     for ((i = 0; i < count; i++)); do
-        str=(`split_hostname ${OSTS[$i]}`)
+        str=(`split_hostname ${targets[$i]}`)
         host_list[$i]=${str[0]}
         ost_names[$i]=${str[1]}
     done
