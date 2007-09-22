@@ -124,8 +124,7 @@ typedef struct {
         struct list_head       *ses_ndl_hash;   /* hash table of nodes */
 
         spinlock_t              ses_rpc_lock;   /* serialize */
-        int                     ses_rpc_pending; /* number of pending RPCs */
-        struct list_head        ses_rpc_list;   /* list head of RPCs */
+        atomic_t                ses_rpc_counter;/* # of initialized RPCs */
         struct list_head        ses_rpc_freelist; /* idle console rpc */
 } lstcon_session_t;                             /*** session descriptor */
 
