@@ -597,10 +597,20 @@ void mdt_shrink_reply(struct mdt_thread_info *info)
                 adjust += req_capsule_shrink(pill, &RMF_LOGCOOKIES,
                                             acl_size, adjust, 1);
 
-        if ((req_capsule_has_field(pill, &RMF_CAPA1, RCL_SERVER) &&
-               !(body->valid & OBD_MD_FLMDSCAPA)))
-                adjust += req_capsule_shrink(pill, &RMF_CAPA1, 0, adjust, 1);
+        /* RMF_CAPA1 on server-side maybe for OBD_MD_FLMDSCAPA or
+         * OBD_MD_FLOSSCAPA. If RMF_CAPA2 exist also, RMF_CAPA1 is
+         * for OBD_MD_FLMDSCAPA only. */
+        if (req_capsule_has_field(pill, &RMF_CAPA1, RCL_SERVER)) {
+                if ((req_capsule_has_field(pill, &RMF_CAPA2, RCL_SERVER) &&
+                    !(body->valid & OBD_MD_FLMDSCAPA)) ||
+                    (!req_capsule_has_field(pill, &RMF_CAPA2, RCL_SERVER) &&
+                    !(body->valid & OBD_MD_FLMDSCAPA) &&
+                    !(body->valid & OBD_MD_FLOSSCAPA)))
+                        adjust += req_capsule_shrink(pill, &RMF_CAPA1,
+                                                     0, adjust, 1);
+        }
 
+        /* RMF_CAPA2 on server-side is for OBD_MD_FLOSSCAPA only. */
         if ((req_capsule_has_field(pill, &RMF_CAPA2, RCL_SERVER) &&
                 !(body->valid & OBD_MD_FLOSSCAPA)))
                 adjust += req_capsule_shrink(pill, &RMF_CAPA2, 0, adjust, 0);

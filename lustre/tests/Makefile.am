@@ -34,7 +34,7 @@ noinst_PROGRAMS += small_write multiop sleeptest ll_sparseness_verify cmknod
 noinst_PROGRAMS += ll_sparseness_write mrename ll_dirstripe_verify mkdirmany rmdirmany
 noinst_PROGRAMS += openfilleddirunlink rename_many memhog iopentest1 iopentest2
 noinst_PROGRAMS += mmap_sanity flock_test writemany random-reads flocks_test
-noinst_PROGRAMS += ll_getstripe_info
+noinst_PROGRAMS += ll_getstripe_info write_time_limit
 if MPITESTS
 noinst_PROGRAMS += parallel_grouplock write_append_truncate createmany_mpi
 noinst_PROGRAMS += iam_ut

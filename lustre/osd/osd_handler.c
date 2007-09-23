@@ -1492,7 +1492,7 @@ static int osd_xattr_del(const struct lu_env *env,
 static struct obd_capa *osd_capa_get(const struct lu_env *env,
                                      struct dt_object *dt,
                                      struct lustre_capa *old,
-                                     __u32 uid, __u64 opc)
+                                     __u64 opc)
 {
         struct osd_thread_info *info = osd_oti_get(env);
         const struct lu_fid *fid = lu_object_fid(&dt->do_lu);
@@ -1516,7 +1516,7 @@ static struct obd_capa *osd_capa_get(const struct lu_env *env,
 
         capa->lc_fid = *fid;
         capa->lc_opc = opc;
-        capa->lc_uid = uid;
+        capa->lc_uid = 0;
         capa->lc_flags = dev->od_capa_alg << 24;
         capa->lc_timeout = dev->od_capa_timeout;
         capa->lc_expiry = 0;

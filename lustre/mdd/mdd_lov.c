@@ -518,7 +518,7 @@ int mdd_lov_create(const struct lu_env *env, struct mdd_device *mdd,
                 oa->o_valid |= OBD_MD_FLFID | OBD_MD_FLGENER;
                 oinfo->oi_oa = oa;
                 oinfo->oi_md = lsm;
-                oinfo->oi_capa = mdo_capa_get(env, child, NULL, 0,
+                oinfo->oi_capa = mdo_capa_get(env, child, NULL,
                                               CAPA_OPC_MDS_DEFAULT);
                 if (IS_ERR(oinfo->oi_capa))
                         oinfo->oi_capa = NULL;
@@ -712,7 +712,7 @@ int mdd_lov_setattr_async(const struct lu_env *env, struct mdd_object *obj,
         if (rc)
                 RETURN(rc);
 
-        oc = mdo_capa_get(env, obj, NULL, 0, CAPA_OPC_MDS_DEFAULT);
+        oc = mdo_capa_get(env, obj, NULL, CAPA_OPC_MDS_DEFAULT);
         if (IS_ERR(oc))
                 oc = NULL;
 

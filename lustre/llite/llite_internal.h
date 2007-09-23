@@ -419,8 +419,6 @@ struct ll_async_page {
         struct list_head llap_pglist_item;
         /* checksum for paranoid I/O debugging */
         __u32            llap_checksum;
-        /* uid who operate on this page, used to lookup fid capability only */
-        uid_t            llap_fsuid;
 };
 
 /*
@@ -777,7 +775,7 @@ void ll_capa_open(struct inode *inode);
 void ll_capa_close(struct inode *inode);
 
 struct obd_capa *ll_mdscapa_get(struct inode *inode);
-struct obd_capa *ll_osscapa_get(struct inode *inode, uid_t fsuid, __u64 opc);
+struct obd_capa *ll_osscapa_get(struct inode *inode, __u64 opc);
 
 void ll_truncate_free_capa(struct obd_capa *ocapa);
 void ll_clear_inode_capas(struct inode *inode);

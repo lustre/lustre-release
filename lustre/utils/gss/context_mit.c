@@ -42,6 +42,7 @@
 
 #ifdef _NEW_BUILD_
 # include "lgss_utils.h"
+# include "write_bytes.h"
 #else
 # include "gss_util.h"
 # include "gss_oids.h"

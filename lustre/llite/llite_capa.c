@@ -295,16 +295,13 @@ void ll_capa_thread_stop(void)
                    ll_capa_thread.t_flags & SVC_STOPPED);
 }
 
-static struct obd_capa *do_lookup_oss_capa(struct inode *inode, uid_t uid,
-                                           int opc)
+static struct obd_capa *do_lookup_oss_capa(struct inode *inode, int opc)
 {
         struct ll_inode_info *lli = ll_i2info(inode);
         struct obd_capa *ocapa;
 
         /* inside capa_lock */
         list_for_each_entry(ocapa, &lli->lli_oss_capas, u.cli.lli_list) {
-                if (uid != capa_uid(&ocapa->c_capa))
-                        continue;
                 if ((capa_opc(&ocapa->c_capa) & opc) != opc)
                         continue;
 
@@ -319,8 +316,7 @@ static struct obd_capa *do_lookup_oss_capa(struct inode *inode, uid_t uid,
         return NULL;
 }
 
-/* FIXME: once uid is 0, this is mmaped IO, or fsync, truncate. */
-struct obd_capa *ll_osscapa_get(struct inode *inode, uid_t uid, __u64 opc)
+struct obd_capa *ll_osscapa_get(struct inode *inode, __u64 opc)
 {
         struct ll_inode_info *lli = ll_i2info(inode);
         struct obd_capa *ocapa;
@@ -336,8 +332,6 @@ struct obd_capa *ll_osscapa_get(struct inode *inode, uid_t uid, __u64 opc)
         spin_lock(&capa_lock);
         list_for_each_entry(ocapa, &lli->lli_oss_capas, u.cli.lli_list) {
                 if (capa_is_expired(ocapa))
-                        continue;
-                if (uid != 0 && uid != capa_uid(&ocapa->c_capa))
                         continue;
                 if ((opc & CAPA_OPC_OSS_WRITE) &&
                     capa_opc_supported(&ocapa->c_capa, CAPA_OPC_OSS_WRITE)) {
@@ -452,8 +446,7 @@ static struct obd_capa *do_add_oss_capa(struct inode *inode,
                  inode->i_mode);
 
         /* FIXME: can't replace it so easily with fine-grained opc */
-        old = do_lookup_oss_capa(inode, capa_uid(capa),
-                                 capa_opc(capa) & CAPA_OPC_OSS_ONLY);
+        old = do_lookup_oss_capa(inode, capa_opc(capa) & CAPA_OPC_OSS_ONLY);
         if (!old) {
                 ocapa->u.cli.inode = inode;
                 INIT_LIST_HEAD(&ocapa->u.cli.lli_list);

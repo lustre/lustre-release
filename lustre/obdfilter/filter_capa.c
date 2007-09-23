@@ -34,93 +34,6 @@
 
 #include "filter_internal.h"
 
-/*
- * FIXME
- * keep this as simple as possible. we suppose the blacklist usually
- * be empry or very short (<5), since long term blacklist should be
- * done on MDS side. A more sophisticated blacklist will be implemented
- * later.
- *
- * note blacklist didn't take effect when OSS capability disabled. this
- * looks reasonable to me.
- */
-#define BLACKLIST_MAX   (32)
-static int nblacklist = 0;
-static uid_t blacklist[BLACKLIST_MAX];
-static spinlock_t blacklist_lock = SPIN_LOCK_UNLOCKED;
-
-int blacklist_display(char *buf, int bufsize)
-{
-        char one[16];
-        int i;
-        LASSERT(buf);
-
-        buf[0] = '\0';
-        spin_lock(&blacklist_lock);
-        for (i = 0; i < nblacklist; i++) {
-                snprintf(one, 16, "%u\n", blacklist[i]);
-                strncat(buf, one, bufsize);
-        }
-        spin_unlock(&blacklist_lock);
-        return strnlen(buf, bufsize);
-}
-
-void blacklist_add(uid_t uid)
-{
-        int i;
-
-        spin_lock(&blacklist_lock);
-        if (nblacklist == BLACKLIST_MAX) {
-                CERROR("can't add more in blacklist\n");
-                spin_unlock(&blacklist_lock);
-                return;
-        }
-
-        for (i = 0; i < nblacklist; i++) {
-                if (blacklist[i] == uid) {
-                        spin_unlock(&blacklist_lock);
-                        return;
-                }
-        }
-
-        blacklist[nblacklist++] = uid;
-        spin_unlock(&blacklist_lock);
-}
-
-void blacklist_del(uid_t uid)
-{
-        int i;
-
-        spin_lock(&blacklist_lock);
-        for (i = 0; i < nblacklist; i++) {
-                if (blacklist[i] == uid) {
-                        nblacklist--;
-                        while (i < nblacklist) {
-                                blacklist[i] = blacklist[i+1];
-                                i++;
-                        }
-                        spin_unlock(&blacklist_lock);
-                        return;
-                }
-        }
-        spin_unlock(&blacklist_lock);
-}
-
-static int blacklist_check(uid_t uid)
-{
-        int i, rc = 0;
-
-        spin_lock(&blacklist_lock);
-        for (i = 0; i < nblacklist; i++) {
-                if (blacklist[i] == uid) {
-                        rc = 1;
-                        break;
-                }
-        }
-        spin_unlock(&blacklist_lock);
-        return rc;
-}
-
 static inline __u32 filter_ck_keyid(struct filter_capa_key *key)
 {
         return key->k_key.lk_keyid;
@@ -207,12 +120,6 @@ int filter_auth_capa(struct obd_export *exp, struct lu_fid *fid, __u64 mdsid,
                         CERROR("mdsno/opc "LPU64"/"LPX64
                                ": no capability has been passed\n",
                                mdsid, opc);
-                RETURN(-EACCES);
-        }
-
-        if (blacklist_check(capa->lc_uid)) {
-                DEBUG_CAPA(D_ERROR, capa, "uid %u found in blacklist,",
-                           capa->lc_uid);
                 RETURN(-EACCES);
         }
 

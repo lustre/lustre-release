@@ -2411,7 +2411,7 @@ int ll_fsync(struct file *file, struct dentry *dentry, int data)
                                            OBD_MD_FLMTIME | OBD_MD_FLCTIME |
                                            OBD_MD_FLGROUP);
 
-                oc = ll_osscapa_get(inode, 0, CAPA_OPC_OSS_WRITE);
+                oc = ll_osscapa_get(inode, CAPA_OPC_OSS_WRITE);
                 err = obd_sync(ll_i2sbi(inode)->ll_dt_exp, oa, lsm,
                                0, OBD_OBJECT_EOF, oc);
                 capa_put(oc);

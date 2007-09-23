@@ -641,7 +641,7 @@ int mdd_capa_get(const struct lu_env *env, struct md_object *obj,
         int rc = 0;
         ENTRY;
 
-        oc = mdo_capa_get(env, mdd_obj, renewal ? capa : NULL, capa->lc_uid,
+        oc = mdo_capa_get(env, mdd_obj, renewal ? capa : NULL,
                           capa->lc_opc);
         if (IS_ERR(oc)) {
                 rc = PTR_ERR(oc);

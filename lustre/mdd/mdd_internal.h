@@ -565,11 +565,11 @@ int mdo_create_obj(const struct lu_env *env, struct mdd_object *o,
 static inline struct obd_capa *mdo_capa_get(const struct lu_env *env,
                                             struct mdd_object *obj, 
                                             struct lustre_capa *old,
-                                            __u32 uid, __u64 opc)
+                                            __u64 opc)
 {
         struct dt_object *next = mdd_object_child(obj);
         LASSERT(mdd_object_exists(obj));
-        return next->do_ops->do_capa_get(env, next, old, uid, opc);
+        return next->do_ops->do_capa_get(env, next, old, opc);
 }
 
 #endif

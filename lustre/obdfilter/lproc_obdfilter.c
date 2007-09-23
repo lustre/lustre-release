@@ -231,41 +231,6 @@ static int lprocfs_filter_rd_capa_count(char *page, char **start, off_t off,
                         capa_count[CAPA_SITE_SERVER]);
 }
 
-static
-int lprocfs_filter_rd_blacklist(char *page, char **start, off_t off, int count,
-                                int *eof, void *data)
-{
-        int rc;
-
-        rc = blacklist_display(page, count);
-        *eof = 1;
-        return rc;
-}
-
-static
-int lprocfs_filter_wr_blacklist(struct file *file, const char *buffer,
-                                unsigned long count, void *data)
-{
-        int add;
-        uid_t uid = -1;
-
-        if (count < 2)
-                return count;
-        if (buffer[0] == '+')
-                add = 1;
-        else if (buffer[0] == '-')
-                add = 0;
-        else
-                return count;
-
-        sscanf(buffer + 1, "%u", &uid);
-        if (add)
-                blacklist_add(uid);
-        else
-                blacklist_del(uid);
-        return count;
-}
-
 static struct lprocfs_vars lprocfs_obd_vars[] = {
         { "uuid",         lprocfs_rd_uuid,          0, 0 },
         { "blocksize",    lprocfs_rd_blksize,       0, 0 },
@@ -302,8 +267,6 @@ static struct lprocfs_vars lprocfs_obd_vars[] = {
         { "capa",         lprocfs_filter_rd_capa,
                           lprocfs_filter_wr_capa, 0 },
         { "capa_count",   lprocfs_filter_rd_capa_count, 0, 0 },
-        { "blacklist",    lprocfs_filter_rd_blacklist,
-                          lprocfs_filter_wr_blacklist, 0 },
         { 0 }
 };
 

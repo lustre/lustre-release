@@ -566,12 +566,11 @@ static int mdt_finish_open(struct mdt_thread_info *info,
         if (mdt->mdt_opts.mo_oss_capa &&
             S_ISREG(lu_object_attr(&o->mot_obj.mo_lu))) {
                 struct lustre_capa *capa;
-                struct md_ucred *ucred = mdt_ucred(info);
 
                 capa = req_capsule_server_get(&info->mti_pill, &RMF_CAPA2);
                 LASSERT(capa);
                 capa->lc_opc = CAPA_OPC_OSS_DEFAULT | capa_open_opc(flags);
-                capa->lc_uid = ucred->mu_o_fsuid;
+                capa->lc_uid = 0;
                 rc = mo_capa_get(info->mti_env, mdt_object_child(o), capa, 0);
                 if (rc)
                         RETURN(rc);

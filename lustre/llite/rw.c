@@ -100,7 +100,7 @@ static int ll_brw(int cmd, struct inode *inode, struct obdo *oa,
         oinfo.oi_md = lsm;
         /* NB partial write, so we might not have CAPA_OPC_OSS_READ capa */
         opc = cmd & OBD_BRW_WRITE ? CAPA_OPC_OSS_WRITE : CAPA_OPC_OSS_RW;
-        oinfo.oi_capa = ll_osscapa_get(inode, current->fsuid, opc);
+        oinfo.oi_capa = ll_osscapa_get(inode, opc);
         rc = obd_brw(cmd, ll_i2dtexp(inode), &oinfo, 1, &pg, NULL);
         capa_put(oinfo.oi_capa);
         if (rc == 0)
@@ -193,7 +193,7 @@ void ll_truncate(struct inode *inode)
 
         ll_inode_size_unlock(inode, 0);
 
-        oinfo.oi_capa = ll_osscapa_get(inode, 0, CAPA_OPC_OSS_TRUNC);
+        oinfo.oi_capa = ll_osscapa_get(inode, CAPA_OPC_OSS_TRUNC);
         rc = obd_punch_rqset(ll_i2dtexp(inode), &oinfo, NULL);
         ll_truncate_free_capa(oinfo.oi_capa);
         if (rc)
@@ -433,8 +433,7 @@ static struct obd_capa *ll_ap_lookup_capa(void *data, int cmd)
         struct ll_async_page *llap = LLAP_FROM_COOKIE(data);
         int opc = cmd & OBD_BRW_WRITE ? CAPA_OPC_OSS_WRITE : CAPA_OPC_OSS_RW;
 
-        return ll_osscapa_get(llap->llap_page->mapping->host, llap->llap_fsuid,
-                              opc);
+        return ll_osscapa_get(llap->llap_page->mapping->host, opc);
 }
 
 static struct obd_async_page_ops ll_async_page_ops = {
@@ -1496,8 +1495,6 @@ int ll_readpage(struct file *filp, struct page *page)
         llap = llap_from_page(page, LLAP_ORIGIN_READPAGE);
         if (IS_ERR(llap))
                 GOTO(out, rc = PTR_ERR(llap));
-
-        llap->llap_fsuid = current->fsuid;
 
         if (ll_i2sbi(inode)->ll_ra_info.ra_max_pages)
                 ras_update(ll_i2sbi(inode), inode, &fd->fd_ras, page->index,
