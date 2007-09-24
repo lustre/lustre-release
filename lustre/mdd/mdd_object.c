@@ -1314,7 +1314,9 @@ static int mdd_dir_page_build(const struct lu_env *env, int first,
                 len  = iops->key_size(env, it);
 
                 pack = (struct lu_fid_pack *)iops->rec(env, it);
-                fid_unpack(pack, fid);
+                result = fid_unpack(pack, fid);
+                if (result != 0)
+                        break;
 
                 recsize = (sizeof(*ent) + len + 3) & ~3;
                 hash = iops->store(env, it);

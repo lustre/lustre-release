@@ -290,25 +290,7 @@ void mdc_device_free(const struct lu_env *env, struct lu_device *ld)
 }
 
 /* context key constructor/destructor */
-
-static void *mdc_key_init(const struct lu_context *ctx,
-                          struct lu_context_key *key)
-{
-        struct mdc_thread_info *info;
-
-        CLASSERT(CFS_PAGE_SIZE >= sizeof *info);
-        OBD_ALLOC_PTR(info);
-        if (info == NULL)
-                info = ERR_PTR(-ENOMEM);
-        return info;
-}
-
-static void mdc_key_fini(const struct lu_context *ctx,
-                         struct lu_context_key *key, void *data)
-{
-        struct mdc_thread_info *info = data;
-        OBD_FREE_PTR(info);
-}
+LU_KEY_INIT_FINI(mdc, struct mdc_thread_info);
 
 struct lu_context_key mdc_thread_key = {
         .lct_tags = LCT_MD_THREAD|LCT_CL_THREAD,

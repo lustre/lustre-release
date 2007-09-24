@@ -329,24 +329,7 @@ static struct obd_ops mdd_obd_device_ops = {
         .o_owner = THIS_MODULE
 };
 
-static void *mdd_ucred_key_init(const struct lu_context *ctx,
-                                struct lu_context_key *key)
-{
-        struct md_ucred *uc;
-
-        OBD_ALLOC_PTR(uc);
-        if (uc == NULL)
-                uc = ERR_PTR(-ENOMEM);
-        return uc;
-}
-
-static void mdd_ucred_key_fini(const struct lu_context *ctx,
-                             struct lu_context_key *key, void *data)
-{
-        struct md_ucred *uc = data;
-        if (!IS_ERR(uc))
-                OBD_FREE_PTR(uc);
-}
+LU_KEY_INIT_FINI(mdd_ucred, struct md_ucred);
 
 static struct lu_context_key mdd_ucred_key = {
         .lct_tags = LCT_SESSION,
@@ -361,24 +344,7 @@ struct md_ucred *md_ucred(const struct lu_env *env)
 }
 EXPORT_SYMBOL(md_ucred);
 
-static void *mdd_capainfo_key_init(const struct lu_context *ctx,
-                                   struct lu_context_key *key)
-{
-        struct md_capainfo *ci;
-
-        OBD_ALLOC_PTR(ci);
-        if (ci == NULL)
-                ci = ERR_PTR(-ENOMEM);
-        return ci;
-}
-
-static void mdd_capainfo_key_fini(const struct lu_context *ctx,
-                                  struct lu_context_key *key, void *data)
-{
-        struct md_capainfo *ci = data;
-        if (!IS_ERR(ci))
-                OBD_FREE_PTR(ci);
-}
+LU_KEY_INIT_FINI(mdd_capainfo, struct md_capainfo);
 
 struct lu_context_key mdd_capainfo_key = {
         .lct_tags = LCT_SESSION,
@@ -445,16 +411,7 @@ static struct lu_device_type mdd_device_type = {
         .ldt_ctx_tags = LCT_MD_THREAD
 };
 
-static void *mdd_key_init(const struct lu_context *ctx,
-                          struct lu_context_key *key)
-{
-        struct mdd_thread_info *info;
-
-        OBD_ALLOC_PTR(info);
-        if (info == NULL)
-                info = ERR_PTR(-ENOMEM);
-        return info;
-}
+LU_KEY_INIT(mdd, struct mdd_thread_info);
 
 static void mdd_key_fini(const struct lu_context *ctx,
                          struct lu_context_key *key, void *data)

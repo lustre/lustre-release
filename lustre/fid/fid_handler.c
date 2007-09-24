@@ -356,27 +356,7 @@ static int seq_req_handle(struct ptlrpc_request *req,
         RETURN(rc);
 }
 
-static void *seq_key_init(const struct lu_context *ctx,
-                          struct lu_context_key *key)
-{
-        struct seq_thread_info *info;
-
-        /*
-         * check that no high order allocations are incurred.
-         */
-        CLASSERT(CFS_PAGE_SIZE >= sizeof *info);
-        OBD_ALLOC_PTR(info);
-        if (info == NULL)
-                info = ERR_PTR(-ENOMEM);
-        return info;
-}
-
-static void seq_key_fini(const struct lu_context *ctx,
-                         struct lu_context_key *key, void *data)
-{
-        struct seq_thread_info *info = data;
-        OBD_FREE_PTR(info);
-}
+LU_KEY_INIT_FINI(seq, struct seq_thread_info);
 
 struct lu_context_key seq_thread_key = {
         .lct_tags = LCT_MD_THREAD,

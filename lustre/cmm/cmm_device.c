@@ -383,24 +383,7 @@ static void cmm_device_free(const struct lu_env *env, struct lu_device *d)
 }
 
 /* context key constructor/destructor */
-static void *cmm_key_init(const struct lu_context *ctx,
-                          struct lu_context_key *key)
-{
-        struct cmm_thread_info *info;
-
-        CLASSERT(CFS_PAGE_SIZE >= sizeof *info);
-        OBD_ALLOC_PTR(info);
-        if (info == NULL)
-                info = ERR_PTR(-ENOMEM);
-        return info;
-}
-
-static void cmm_key_fini(const struct lu_context *ctx,
-                         struct lu_context_key *key, void *data)
-{
-        struct cmm_thread_info *info = data;
-        OBD_FREE_PTR(info);
-}
+LU_KEY_INIT_FINI(cmm, struct cmm_thread_info);
 
 static struct lu_context_key cmm_thread_key = {
         .lct_tags = LCT_MD_THREAD,

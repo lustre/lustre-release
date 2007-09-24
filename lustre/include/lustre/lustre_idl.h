@@ -289,7 +289,7 @@ struct lu_fid_pack {
 
 void fid_pack(struct lu_fid_pack *pack, const struct lu_fid *fid,
               struct lu_fid *befider);
-void fid_unpack(const struct lu_fid_pack *pack, struct lu_fid *fid);
+int  fid_unpack(const struct lu_fid_pack *pack, struct lu_fid *fid);
 
 /* __KERNEL__ */
 #endif

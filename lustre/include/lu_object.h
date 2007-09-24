@@ -966,6 +966,37 @@ struct lu_context_key {
         struct module *lct_owner;
 };
 
+#define LU_KEY_INIT(mod, type)                                    \
+        static void* mod##_key_init(const struct lu_context *ctx, \
+                                    struct lu_context_key *key)   \
+        {                                                         \
+                type *value;                                      \
+                                                                  \
+                CLASSERT(CFS_PAGE_SIZE >= sizeof (*value));       \
+                                                                  \
+                OBD_ALLOC_PTR(value);                             \
+                if (value == NULL)                                \
+                        value = ERR_PTR(-ENOMEM);                 \
+                                                                  \
+                return value;                                     \
+        }                                                         \
+	struct __##mod##__dummy_init {;} /* semicolon catcher */
+
+#define LU_KEY_FINI(mod, type)                                              \
+        static void mod##_key_fini(const struct lu_context *ctx,            \
+                                    struct lu_context_key *key, void* data) \
+        {                                                                   \
+		type *info = data;                                          \
+                                                                            \
+		OBD_FREE_PTR(info);                                         \
+	}                                                                   \
+	struct __##mod##__dummy_fini {;} /* semicolon catcher */
+
+#define LU_KEY_INIT_FINI(mod, type)   \
+	LU_KEY_INIT(mod,type);        \
+	LU_KEY_FINI(mod,type);
+
+
 #define LU_CONTEXT_KEY_INIT(key)                        \
 do {                                                    \
         (key)->lct_owner = THIS_MODULE;                 \

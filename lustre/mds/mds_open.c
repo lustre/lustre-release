@@ -320,8 +320,7 @@ static int mds_create_objects(struct ptlrpc_request *req, int offset,
 
         if (!S_ISREG(inode->i_mode))
                 RETURN(0);
-        if (rec->ur_flags & MDS_OPEN_DELAY_CREATE ||
-            !(rec->ur_flags & FMODE_WRITE))
+        if (!md_should_create(rec->ur_flags))
                 RETURN(0);
 
         body = lustre_msg_buf(req->rq_repmsg, DLM_REPLY_REC_OFF, sizeof(*body));

@@ -98,8 +98,7 @@ static int mdt_create_data(struct mdt_thread_info *info,
         int rc;
         ENTRY;
 
-        if ((spec->sp_cr_flags & MDS_OPEN_DELAY_CREATE) ||
-            !(spec->sp_cr_flags & FMODE_WRITE))
+        if (!md_should_create(spec->sp_cr_flags))
                 RETURN(0);
 
         ma->ma_need = MA_INODE | MA_LOV;

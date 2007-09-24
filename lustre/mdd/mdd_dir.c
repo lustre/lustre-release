@@ -979,8 +979,7 @@ static int mdd_create_data(const struct lu_env *env, struct md_object *pobj,
         if (rc)
                 RETURN(rc);
 
-        if (spec->sp_cr_flags & MDS_OPEN_DELAY_CREATE ||
-            !(spec->sp_cr_flags & FMODE_WRITE))
+        if (!md_should_create(spec->sp_cr_flags))
                 RETURN(0);
 
         rc = mdd_lov_create(env, mdd, mdd_pobj, son, &lmm, &lmm_size,
@@ -1064,7 +1063,7 @@ __mdd_lookup(const struct lu_env *env, struct md_object *pobj,
                                                  (struct dt_rec *)pack, key,
                                                  mdd_object_capa(env, mdd_obj));
                 if (rc == 0)
-                        fid_unpack(pack, fid);
+                        rc = fid_unpack(pack, fid);
         } else
                 rc = -ENOTDIR;
 

@@ -48,23 +48,7 @@ struct lu_time_data {
         unsigned long long ltd_timestamp[LU_TIME_DEPTH_MAX];
 };
 
-static void *lu_time_key_init(const struct lu_context *ctx,
-                              struct lu_context_key *key)
-{
-        struct lu_time_data *value;
-
-        OBD_ALLOC_PTR(value);
-        if (value == NULL)
-                value = ERR_PTR(-ENOMEM);
-        return value;
-}
-
-static void lu_time_key_fini(const struct lu_context *ctx,
-                             struct lu_context_key *key, void *data)
-{
-        struct lu_time_data *value = data;
-        OBD_FREE_PTR(value);
-}
+LU_KEY_INIT_FINI(lu_time, struct lu_time_data);
 
 void lu_time_key_exit(const struct lu_context *ctx,
                       struct lu_context_key *key, void *data)

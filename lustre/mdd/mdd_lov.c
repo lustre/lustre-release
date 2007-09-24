@@ -409,8 +409,7 @@ int mdd_lov_create(const struct lu_env *env, struct mdd_device *mdd,
         int                    rc = 0;
         ENTRY;
 
-        if (create_flags & MDS_OPEN_DELAY_CREATE ||
-            !(create_flags & FMODE_WRITE))
+        if (!md_should_create(create_flags))
                 RETURN(0);
 
         oti_init(oti, NULL);

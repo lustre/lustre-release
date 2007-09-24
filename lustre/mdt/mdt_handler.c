@@ -4542,27 +4542,7 @@ static struct lu_device *mdt_device_alloc(const struct lu_env *env,
 /*
  * context key constructor/destructor
  */
-static void *mdt_key_init(const struct lu_context *ctx,
-                          struct lu_context_key *key)
-{
-        struct mdt_thread_info *info;
-
-        /*
-         * check that no high order allocations are incurred.
-         */
-        CLASSERT(CFS_PAGE_SIZE >= sizeof *info);
-        OBD_ALLOC_PTR(info);
-        if (info == NULL)
-                info = ERR_PTR(-ENOMEM);
-        return info;
-}
-
-static void mdt_key_fini(const struct lu_context *ctx,
-                         struct lu_context_key *key, void *data)
-{
-        struct mdt_thread_info *info = data;
-        OBD_FREE_PTR(info);
-}
+LU_KEY_INIT_FINI(mdt, struct mdt_thread_info);
 
 struct lu_context_key mdt_thread_key = {
         .lct_tags = LCT_MD_THREAD,
@@ -4570,28 +4550,7 @@ struct lu_context_key mdt_thread_key = {
         .lct_fini = mdt_key_fini
 };
 
-static void *mdt_txn_key_init(const struct lu_context *ctx,
-                              struct lu_context_key *key)
-{
-        struct mdt_txn_info *txi;
-
-        /*
-         * check that no high order allocations are incurred.
-         */
-        CLASSERT(CFS_PAGE_SIZE >= sizeof *txi);
-        OBD_ALLOC_PTR(txi);
-        if (txi == NULL)
-                txi = ERR_PTR(-ENOMEM);
-        memset(txi, 0, sizeof(*txi));
-        return txi;
-}
-
-static void mdt_txn_key_fini(const struct lu_context *ctx,
-                             struct lu_context_key *key, void *data)
-{
-        struct mdt_txn_info *txi = data;
-        OBD_FREE_PTR(txi);
-}
+LU_KEY_INIT_FINI(mdt_txn, struct mdt_txn_info);
 
 struct lu_context_key mdt_txn_key = {
         .lct_tags = LCT_TX_HANDLE,

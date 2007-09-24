@@ -157,7 +157,8 @@ static int dt_lookup(const struct lu_env *env, struct dt_object *dir,
         if (dt_try_as_dir(env, dir)) {
                 result = dir->do_index_ops->dio_lookup(env, dir, rec, key,
                                                        BYPASS_CAPA);
-                fid_unpack(pack, fid);
+                if (result == 0)
+                        result = fid_unpack(pack, fid);
         } else
                 result = -ENOTDIR;
         return result;

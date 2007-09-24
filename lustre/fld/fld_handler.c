@@ -52,26 +52,8 @@
 #include "fld_internal.h"
 
 #ifdef __KERNEL__
-static void *fld_key_init(const struct lu_context *ctx,
-                          struct lu_context_key *key)
-{
-        struct fld_thread_info *info;
-        ENTRY;
 
-        OBD_ALLOC_PTR(info);
-        if (info == NULL)
-                info = ERR_PTR(-ENOMEM);
-        RETURN(info);
-}
-
-static void fld_key_fini(const struct lu_context *ctx,
-                         struct lu_context_key *key, void *data)
-{
-        struct fld_thread_info *info = data;
-        ENTRY;
-        OBD_FREE_PTR(info);
-        EXIT;
-}
+LU_KEY_INIT_FINI(fld, struct fld_thread_info);
 
 struct lu_context_key fld_thread_key = {
         .lct_tags = LCT_MD_THREAD|LCT_DT_THREAD,

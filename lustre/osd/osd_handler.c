@@ -2166,7 +2166,10 @@ static int osd_index_compat_insert(const struct lu_env *env,
         if (osd_object_auth(env, dt, capa, CAPA_OPC_INDEX_INSERT))
                 return -EACCES;
 
-        fid_unpack(pack, fid);
+        result = fid_unpack(pack, fid);
+        if (result != 0)
+                return result;
+
         luch = lu_object_find(env, ludev->ld_site, fid);
         if (!IS_ERR(luch)) {
                 if (lu_object_exists(luch)) {
@@ -2235,12 +2238,7 @@ static void *osd_key_init(const struct lu_context *ctx,
         return info;
 }
 
-static void osd_key_fini(const struct lu_context *ctx,
-                         struct lu_context_key *key, void *data)
-{
-        struct osd_thread_info *info = data;
-        OBD_FREE_PTR(info);
-}
+LU_KEY_FINI(osd, struct osd_thread_info);
 
 static void osd_key_exit(const struct lu_context *ctx,
                          struct lu_context_key *key, void *data)

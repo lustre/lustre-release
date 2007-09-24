@@ -115,4 +115,10 @@ void mds_objids_from_lmm(obd_id *, struct lov_mds_md *, struct lov_desc *);
 #define MDD_OBD_TYPE    "mds"
 #define MDD_OBD_PROFILE "lustre-MDT0000"
 
+static inline int md_should_create(__u32 flags)
+{
+	return !(flags & MDS_OPEN_DELAY_CREATE ||
+		!(flags & FMODE_WRITE));
+}
+
 #endif

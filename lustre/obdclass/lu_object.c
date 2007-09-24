@@ -290,23 +290,7 @@ struct lu_cdebug_data {
         struct lu_fid_pack lck_pack;
 };
 
-static void *lu_global_key_init(const struct lu_context *ctx,
-                                struct lu_context_key *key)
-{
-        struct lu_cdebug_data *value;
-
-        OBD_ALLOC_PTR(value);
-        if (value == NULL)
-                value = ERR_PTR(-ENOMEM);
-        return value;
-}
-
-static void lu_global_key_fini(const struct lu_context *ctx,
-                               struct lu_context_key *key, void *data)
-{
-        struct lu_cdebug_data *value = data;
-        OBD_FREE_PTR(value);
-}
+LU_KEY_INIT_FINI(lu_global, struct lu_cdebug_data);
 
 /*
  * Key, holding temporary buffer. This key is registered very early by
@@ -1183,8 +1167,11 @@ void fid_pack(struct lu_fid_pack *pack, const struct lu_fid *fid,
 }
 EXPORT_SYMBOL(fid_pack);
 
-void fid_unpack(const struct lu_fid_pack *pack, struct lu_fid *fid)
+int fid_unpack(const struct lu_fid_pack *pack, struct lu_fid *fid)
 {
+        int result;
+
+        result = 0;
         switch (pack->fp_len) {
         case sizeof *fid + 1:
                 memcpy(fid, pack->fp_area, sizeof *fid);
@@ -1201,8 +1188,9 @@ void fid_unpack(const struct lu_fid_pack *pack, struct lu_fid *fid)
         }
         default:
                 CERROR("Unexpected packed fid size: %d\n", pack->fp_len);
-                LBUG();
+                result = -EIO;
         }
+        return result;
 }
 EXPORT_SYMBOL(fid_unpack);
 
