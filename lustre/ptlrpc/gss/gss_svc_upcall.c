@@ -497,8 +497,7 @@ int rsc_parse(struct cache_detail *cd, char *mesg, int mlen)
                 }
 
                 /* currently the expiry time passed down from user-space
-                 * is invalid, here we retrive it from mech.
-                 */
+                 * is invalid, here we retrive it from mech. */
                 if (lgss_inquire_context(rsci.ctx.gsc_mechctx, &ctx_expiry)) {
                         CERROR("unable to get expire time, drop it\n");
                         lgss_mech_put(gm);
@@ -728,8 +727,7 @@ int gss_svc_upcall_handle_init(struct ptlrpc_request *req,
 cache_check:
         /* Note each time cache_check() will drop a reference if return
          * non-zero. We hold an extra reference on initial rsip, but must
-         * take care of following calls.
-         */
+         * take care of following calls. */
         rc = cache_check(&rsi_cache, &rsip->h, &cache_upcall_chandle);
         switch (rc) {
         case -EAGAIN: {
@@ -758,8 +756,7 @@ cache_check:
                 break;
         case 0:
                 /* if not the first check, we have to release the extra
-                 * reference we just added on it.
-                 */
+                 * reference we just added on it. */
                 if (!first_check)
                         cache_put(&rsip->h, &rsi_cache);
                 CDEBUG(D_SEC, "cache_check is good\n");
@@ -837,8 +834,7 @@ cache_check:
 
 out:
         /* it looks like here we should put rsip also, but this mess up
-         * with NFS cache mgmt code... FIXME
-         */
+         * with NFS cache mgmt code... FIXME */
 #if 0
         if (rsip)
                 rsi_put(&rsip->h, &rsi_cache);
@@ -894,8 +890,7 @@ int __init gss_init_svc_upcall(void)
          * the init upcall channel, otherwise there's big chance that the first
          * upcall issued before the channel be opened thus nfsv4 cache code will
          * drop the request direclty, thus lead to unnecessary recovery time.
-         * here we wait at miximum 1.5 seconds.
-         */
+         * here we wait at miximum 1.5 seconds. */
         for (i = 0; i < 6; i++) {
                 if (atomic_read(&rsi_cache.readers) > 0)
                         break;
@@ -908,12 +903,10 @@ int __init gss_init_svc_upcall(void)
                 CWARN("Init channel is not opened by lsvcgssd, following "
                       "request might be dropped until lsvcgssd is active\n");
 
-        /*
-         * this helps reducing context index confliction. after server reboot,
+        /* this helps reducing context index confliction. after server reboot,
          * conflicting request from clients might be filtered out by initial
          * sequence number checking, thus no chance to sent error notification
-         * back to clients.
-         */
+         * back to clients. */
         get_random_bytes(&__ctx_index, sizeof(__ctx_index));
 
         return 0;

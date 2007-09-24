@@ -157,8 +157,7 @@ int gss_estimate_payload(struct gss_ctx *mechctx, int msgsize, int privacy)
 {
         if (privacy) {
                 /* we suppose max cipher block size is 16 bytes. here we
-                 * add 16 for confounder and 16 for padding.
-                 */
+                 * add 16 for confounder and 16 for padding. */
                 return GSS_KRB5_INTEG_MAX_PAYLOAD + msgsize + 16 + 16 + 16;
         } else {
                 return GSS_KRB5_INTEG_MAX_PAYLOAD;
@@ -362,8 +361,7 @@ int cli_ctx_check_death(struct ptlrpc_cli_ctx *ctx)
                 return 1;
 
         /* expire is 0 means never expire. a newly created gss context
-         * which during upcall may has 0 expiration
-         */
+         * which during upcall may has 0 expiration */
         if (ctx->cc_expire == 0)
                 return 0;
 
@@ -392,8 +390,7 @@ void gss_cli_ctx_uptodate(struct gss_cli_ctx *gctx)
         /* At this point this ctx might have been marked as dead by
          * someone else, in which case nobody will make further use
          * of it. we don't care, and mark it UPTODATE will help
-         * destroying server side context when it be destroied.
-         */
+         * destroying server side context when it be destroied. */
         set_bit(PTLRPC_CTX_UPTODATE_BIT, &ctx->cc_flags);
 
         if (sec_is_reverse(ctx->cc_sec))
@@ -407,10 +404,8 @@ void gss_cli_ctx_uptodate(struct gss_cli_ctx *gctx)
                       sec2target_str(ctx->cc_sec), ctx->cc_expire,
                       ctx->cc_expire - cfs_time_current_sec());
 
-        /*
-         * install reverse svc ctx, but only for forward connection
-         * and root context
-         */
+        /* install reverse svc ctx, but only for forward connection
+         * and root context */
         if (!sec_is_reverse(ctx->cc_sec) && ctx->cc_vcred.vc_uid == 0) {
                 gss_sec_install_rctx(ctx->cc_sec->ps_import,
                                      ctx->cc_sec, ctx);
@@ -645,8 +640,7 @@ redo:
          * lead to the sequence number fall behind the window on server and
          * be dropped. also applies to gss_cli_ctx_seal().
          *
-         * Note: null mode dosen't check sequence number.
-         */
+         * Note: null mode dosen't check sequence number. */
         if (svc != SPTLRPC_SVC_NULL &&
             atomic_read(&gctx->gc_seq) - seq > GSS_SEQ_REPACK_THRESHOLD) {
                 int behind = atomic_read(&gctx->gc_seq) - seq;
@@ -684,8 +678,7 @@ int gss_cli_ctx_handle_err_notify(struct ptlrpc_cli_ctx *ctx,
          * returned in this case.
          *
          * but in any cases, don't resend ctx destroying rpc, don't resend
-         * reverse rpc.
-         */
+         * reverse rpc. */
         if (req->rq_ctx_fini) {
                 CWARN("server respond error (%08x/%08x) for ctx fini\n",
                       errhdr->gh_major, errhdr->gh_minor);
@@ -704,12 +697,11 @@ int gss_cli_ctx_handle_err_notify(struct ptlrpc_cli_ctx *ctx,
                       "NO_CONTEXT" : "BAD_SIG");
 
                 sptlrpc_cli_ctx_expire(ctx);
-                /*
-                 * we need replace the ctx right here, otherwise during
+
+                /* we need replace the ctx right here, otherwise during
                  * resent we'll hit the logic in sptlrpc_req_refresh_ctx()
                  * which keep the ctx with RESEND flag, thus we'll never
-                 * get rid of this ctx.
-                 */
+                 * get rid of this ctx. */
                 rc = sptlrpc_req_replace_dead_ctx(req);
                 if (rc == 0)
                         req->rq_resend = 1;
@@ -739,8 +731,7 @@ int gss_cli_ctx_verify(struct ptlrpc_cli_ctx *ctx,
         gctx = container_of(ctx, struct gss_cli_ctx, gc_base);
 
         /* special case for context negotiation, rq_repmsg/rq_replen actually
-         * are not used currently.
-         */
+         * are not used currently. */
         if (req->rq_ctx_init) {
                 req->rq_repmsg = lustre_msg_buf(msg, 1, 0);
                 req->rq_replen = msg->lm_buflens[1];
@@ -1293,8 +1284,7 @@ int gss_alloc_reqbuf_priv(struct ptlrpc_sec *sec,
                 memset(req->rq_reqbuf, 0, req->rq_reqbuf_len);
 
                 /* if the pre-allocated buffer is big enough, we just pack
-                 * both clear buf & request buf in it, to avoid more alloc.
-                 */
+                 * both clear buf & request buf in it, to avoid more alloc. */
                 if (clearsize + wiresize <= req->rq_reqbuf_len) {
                         req->rq_clrbuf =
                                 (void *) (((char *) req->rq_reqbuf) + wiresize);
@@ -1664,18 +1654,14 @@ int gss_enlarge_reqbuf_priv(struct ptlrpc_sec *sec,
         buflens[2] = gss_cli_payload(req->rq_cli_ctx, newclrbuf_size, 1);
         newcipbuf_size = lustre_msg_size_v2(3, buflens);
 
-        /*
-         * handle the case that we put both clear buf and cipher buf into
-         * pre-allocated single buffer.
-         */
+        /* handle the case that we put both clear buf and cipher buf into
+         * pre-allocated single buffer. */
         if (unlikely(req->rq_pool) &&
             req->rq_clrbuf >= req->rq_reqbuf &&
             (char *) req->rq_clrbuf <
             (char *) req->rq_reqbuf + req->rq_reqbuf_len) {
-                /*
-                 * it couldn't be better we still fit into the
-                 * pre-allocated buffer.
-                 */
+                /* it couldn't be better we still fit into the
+                 * pre-allocated buffer. */
                 if (newclrbuf_size + newcipbuf_size <= req->rq_reqbuf_len) {
                         void *src, *dst;
 
@@ -1689,9 +1675,7 @@ int gss_enlarge_reqbuf_priv(struct ptlrpc_sec *sec,
                         req->rq_clrbuf_len = newclrbuf_size;
                         req->rq_reqmsg = lustre_msg_buf(req->rq_clrbuf, 0, 0);
                 } else {
-                        /*
-                         * sadly we have to split out the clear buffer
-                         */
+                        /* sadly we have to split out the clear buffer */
                         LASSERT(req->rq_reqbuf_len >= newcipbuf_size);
                         LASSERT(req->rq_clrbuf_len < newclrbuf_size);
                 }
@@ -1907,8 +1891,7 @@ int gss_svc_handle_init(struct ptlrpc_request *req,
         seclen -= 4;
 
         /* extract target uuid, note this code is somewhat fragile
-         * because touched internal structure of obd_uuid
-         */
+         * because touched internal structure of obd_uuid */
         if (rawobj_extract(&uuid_obj, &secdata, &seclen)) {
                 CERROR("failed to extract target uuid\n");
                 RETURN(SECSVC_DROP);
@@ -2151,10 +2134,8 @@ int gss_svc_handle_data(struct ptlrpc_request *req,
                gw->gw_svc, major, grctx->src_ctx, grctx->src_ctx->gsc_uid,
                libcfs_nid2str(req->rq_peer.nid));
 error:
-        /*
-         * we only notify client in case of NO_CONTEXT/BAD_SIG, which
-         * might happen after server reboot, to allow recovery.
-         */
+        /* we only notify client in case of NO_CONTEXT/BAD_SIG, which
+         * might happen after server reboot, to allow recovery. */
         if ((major == GSS_S_NO_CONTEXT || major == GSS_S_BAD_SIG) &&
             gss_pack_err_notify(req, major, 0) == 0)
                 RETURN(SECSVC_COMPLETE);
@@ -2485,10 +2466,8 @@ int gss_svc_seal(struct ptlrpc_request *req,
         }
         LASSERT(cipher_obj.len <= cipher_buflen);
 
-        /*
-         * we are about to override data at rs->rs_repbuf, nullify pointers
-         * to which to catch further illegal usage.
-         */
+        /* we are about to override data at rs->rs_repbuf, nullify pointers
+         * to which to catch further illegal usage. */
         grctx->src_repbsd = NULL;
         grctx->src_repbsd_size = 0;
 
@@ -2657,10 +2636,8 @@ int __init sptlrpc_gss_init(void)
         if (rc)
                 goto out_svc_upcall;
 
-        /*
-         * register policy after all other stuff be intialized, because it
-         * might be in used immediately after the registration.
-         */
+        /* register policy after all other stuff be intialized, because it
+         * might be in used immediately after the registration. */
 
         rc = gss_init_keyring();
         if (rc)

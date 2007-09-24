@@ -303,15 +303,11 @@ int ctx_unlist_kr(struct ptlrpc_cli_ctx *ctx, int locked)
         struct ptlrpc_sec       *sec = ctx->cc_sec;
         struct gss_sec_keyring  *gsec_kr = sec2gsec_keyring(sec);
 
-        /*
-         * if hashed bit has gone, leave the job to somebody who is doing it
-         */
+        /* if hashed bit has gone, leave the job to somebody who is doing it */
         if (test_and_clear_bit(PTLRPC_CTX_CACHED_BIT, &ctx->cc_flags) == 0)
                 return 0;
 
-        /*
-         * drop ref inside spin lock to prevent race with other operations
-         */
+        /* drop ref inside spin lock to prevent race with other operations */
         spin_lock_if(&sec->ps_lock, !locked);
 
         if (gsec_kr->gsk_root_ctx == ctx)
@@ -335,9 +331,8 @@ void bind_key_ctx(struct key *key, struct ptlrpc_cli_ctx *ctx)
         LASSERT(atomic_read(&key->usage) > 0);
         LASSERT(ctx2gctx_keyring(ctx)->gck_key == NULL);
         LASSERT(key->payload.data == NULL);
-        /*
-         * at this time context may or may not in list.
-         */
+
+        /* at this time context may or may not in list. */
         key_get(key);
         atomic_inc(&ctx->cc_refcount);
         ctx2gctx_keyring(ctx)->gck_key = key;
@@ -431,11 +426,9 @@ static void dispose_ctx_list_kr(struct hlist_head *freelist)
         hlist_for_each_entry_safe(ctx, pos, next, freelist, cc_cache) {
                 hlist_del_init(&ctx->cc_cache);
 
-                /*
-                 * we need to wakeup waiting reqs here. the context might
+                /* we need to wakeup waiting reqs here. the context might
                  * be forced released before upcall finished, then the
-                 * late-arrived downcall can't find the ctx even.
-                 */
+                 * late-arrived downcall can't find the ctx even. */
                 sptlrpc_cli_ctx_wakeup(ctx);
 
                 unbind_ctx_kr(ctx);
@@ -460,11 +453,10 @@ struct ptlrpc_cli_ctx * sec_lookup_root_ctx_kr(struct ptlrpc_sec *sec)
         if (ctx == NULL && unlikely(sec_is_reverse(sec))) {
                 struct hlist_node      *node;
                 struct ptlrpc_cli_ctx  *tmp;
-                /*
-                 * reverse ctx, search root ctx in list, choose the one
+
+                /* reverse ctx, search root ctx in list, choose the one
                  * with shortest expire time, which is most possibly have
-                 * an established peer ctx at client side.
-                 */
+                 * an established peer ctx at client side. */
                 hlist_for_each_entry(tmp, node, &gsec_kr->gsk_clist, cc_cache) {
                         if (ctx == NULL || ctx->cc_expire == 0 ||
                             ctx->cc_expire > tmp->cc_expire) {
@@ -516,8 +508,7 @@ void rvs_sec_install_root_ctx_kr(struct ptlrpc_sec *sec,
         /* if there's root_ctx there, instead obsolete the current
          * immediately, we leave it continue operating for a little while.
          * hopefully when the first backward rpc with newest ctx send out,
-         * the client side already have the peer ctx well established.
-         */
+         * the client side already have the peer ctx well established. */
         ctx_enlist_kr(new_ctx, gsec_kr->gsk_root_ctx ? 0 : 1, 1);
 
         if (key)
@@ -602,8 +593,7 @@ int user_is_root(struct ptlrpc_sec *sec, struct vfs_cred *vcred)
 
         /* FIXME
          * more precisely deal with setuid. maybe add more infomation
-         * into vfs_cred ??
-         */
+         * into vfs_cred ?? */
         return (vcred->vc_uid == 0);
 }
 
@@ -670,9 +660,7 @@ struct ptlrpc_cli_ctx * gss_sec_lookup_ctx_kr(struct ptlrpc_sec *sec,
 
         is_root = user_is_root(sec, vcred);
 
-        /*
-         * a little bit optimization for root context
-         */
+        /* a little bit optimization for root context */
         if (is_root) {
                 ctx = sec_lookup_root_ctx_kr(sec);
                 /*
@@ -685,11 +673,9 @@ struct ptlrpc_cli_ctx * gss_sec_lookup_ctx_kr(struct ptlrpc_sec *sec,
 
         LASSERT(create != 0);
 
-        /*
-         * for root context, obtain lock and check again, this time hold
+        /* for root context, obtain lock and check again, this time hold
          * the root upcall lock, make sure nobody else populated new root
-         * context after last check.
-         */
+         * context after last check. */
         if (is_root) {
                 mutex_lock(&gsec_kr->gsk_root_uc_lock);
 
@@ -705,9 +691,7 @@ struct ptlrpc_cli_ctx * gss_sec_lookup_ctx_kr(struct ptlrpc_sec *sec,
 
         construct_key_desc(desc, sizeof(desc), sec, vcred->vc_uid);
 
-        /*
-         * callout info: mech:flags:svc_type:peer_nid:target_uuid
-         */
+        /* callout info: mech:flags:svc_type:peer_nid:target_uuid */
         OBD_ALLOC(coinfo, coinfo_size);
         if (coinfo == NULL)
                 goto out;
@@ -728,12 +712,10 @@ struct ptlrpc_cli_ctx * gss_sec_lookup_ctx_kr(struct ptlrpc_sec *sec,
                 goto out;
         }
 
-        /*
-         * once payload.data was pointed to a ctx, it never changes until
+        /* once payload.data was pointed to a ctx, it never changes until
          * we de-associate them; but parallel request_key() may return
          * a key with payload.data == NULL at the same time. so we still
-         * need wirtelock of key->sem to serialize them.
-         */
+         * need wirtelock of key->sem to serialize them. */
         down_write(&key->sem);
 
         if (likely(key->payload.data != NULL)) {
@@ -744,13 +726,12 @@ struct ptlrpc_cli_ctx * gss_sec_lookup_ctx_kr(struct ptlrpc_sec *sec,
                 LASSERT(atomic_read(&key->usage) >= 2);
 
                 /* simply take a ref and return. it's upper layer's
-                 * responsibility to detect & replace dead ctx.
-                 */
+                 * responsibility to detect & replace dead ctx. */
                 atomic_inc(&ctx->cc_refcount);
         } else {
                 /* pre initialization with a cli_ctx. this can't be done in
-                 * key_instantiate() because we'v no enough information there.
-                 */
+                 * key_instantiate() because we'v no enough information
+                 * there. */
                 ctx = ctx_create_kr(sec, vcred);
                 if (ctx != NULL) {
                         ctx_enlist_kr(ctx, is_root, 0);
@@ -761,10 +742,8 @@ struct ptlrpc_cli_ctx * gss_sec_lookup_ctx_kr(struct ptlrpc_sec *sec,
                         CDEBUG(D_SEC, "installed key %p <-> ctx %p (sec %p)\n",
                                key, ctx, sec);
                 } else {
-                        /*
-                         * we'd prefer to call key_revoke(), but we more like
-                         * to revoke it within this key->sem locked period.
-                         */
+                        /* we'd prefer to call key_revoke(), but we more like
+                         * to revoke it within this key->sem locked period. */
                         key_revoke_locked(key);
                 }
 
@@ -790,9 +769,9 @@ void gss_sec_release_ctx_kr(struct ptlrpc_sec *sec,
 {
         LASSERT(atomic_read(&ctx->cc_refcount) == 0);
 
-        if (sync)
+        if (sync) {
                 ctx_destroy_kr(ctx);
-        else {
+        } else {
                 atomic_inc(&ctx->cc_refcount);
                 sptlrpc_gc_add_ctx(ctx);
         }
@@ -820,8 +799,7 @@ void flush_user_ctx_cache_kr(struct ptlrpc_sec *sec,
         construct_key_desc(desc, sizeof(desc), sec, uid);
 
         /* there should be only one valid key, but we put it in the
-         * loop in case of any weird cases
-         */
+         * loop in case of any weird cases */
         for (;;) {
                 key = request_key(&gss_key_type, desc, NULL);
                 if (IS_ERR(key)) {
@@ -835,8 +813,7 @@ void flush_user_ctx_cache_kr(struct ptlrpc_sec *sec,
 
                 /* kill_key_locked() should usually revoke the key, but we
                  * revoke it again to make sure, e.g. some case the key may
-                 * not well coupled with a context.
-                 */
+                 * not well coupled with a context. */
                 key_revoke_locked(key);
 
                 up_write(&key->sem);
@@ -870,8 +847,7 @@ void flush_spec_ctx_cache_kr(struct ptlrpc_sec *sec,
                         continue;
 
                 /* at this moment there's at least 2 base reference:
-                 * key association and in-list.
-                 */
+                 * key association and in-list. */
                 if (atomic_read(&ctx->cc_refcount) > 2) {
                         if (!force)
                                 continue;
@@ -1227,13 +1203,11 @@ int gss_kt_update(struct key *key, const void *data, size_t datalen)
                 RETURN(-EINVAL);
         }
 
-        /*
-         * there's a race between userspace parent - child processes. if
+        /* there's a race between userspace parent - child processes. if
          * child finish negotiation too fast and call kt_update(), the ctx
          * might be still NULL. but the key will finally be associate
          * with a context, or be revoked. if key status is fine, return
-         * -EAGAIN to allow userspace sleep a while and call again.
-         */
+         * -EAGAIN to allow userspace sleep a while and call again. */
         if (ctx == NULL) {
                 CWARN("race in userspace. key %p(%x) flags %lx\n",
                       key, key->serial, key->flags);
@@ -1259,10 +1233,10 @@ int gss_kt_update(struct key *key, const void *data, size_t datalen)
 
         sptlrpc_cli_ctx_get(ctx);
         gctx = ctx2gctx(ctx);
-        rc = -EFAULT;
 
-        if (buffer_extract_bytes(&data, &datalen,
-                                 &gctx->gc_win, sizeof(gctx->gc_win))) {
+        rc = buffer_extract_bytes(&data, &datalen, &gctx->gc_win,
+                                  sizeof(gctx->gc_win));
+        if (rc) {
                 CERROR("failed extract seq_win\n");
                 goto out;
         }
@@ -1270,14 +1244,16 @@ int gss_kt_update(struct key *key, const void *data, size_t datalen)
         if (gctx->gc_win == 0) {
                 __u32   nego_rpc_err, nego_gss_err;
 
-                if (buffer_extract_bytes(&data, &datalen,
-                                         &nego_rpc_err, sizeof(nego_rpc_err))) {
+                rc = buffer_extract_bytes(&data, &datalen, &nego_rpc_err,
+                                          sizeof(nego_rpc_err));
+                if (rc) {
                         CERROR("failed to extrace rpc rc\n");
                         goto out;
                 }
 
-                if (buffer_extract_bytes(&data, &datalen,
-                                         &nego_gss_err, sizeof(nego_gss_err))) {
+                rc = buffer_extract_bytes(&data, &datalen, &nego_gss_err,
+                                          sizeof(nego_gss_err));
+                if (rc) {
                         CERROR("failed to extrace gss rc\n");
                         goto out;
                 }
@@ -1285,42 +1261,38 @@ int gss_kt_update(struct key *key, const void *data, size_t datalen)
                 CERROR("negotiation: rpc err %d, gss err %x\n",
                        nego_rpc_err, nego_gss_err);
 
-                if (nego_rpc_err)
-                        rc = nego_rpc_err;
+                rc = nego_rpc_err ? nego_rpc_err : -EACCES;
         } else {
-                if (rawobj_extract_local_alloc(&gctx->gc_handle,
-                                               (__u32 **)&data, &datalen)) {
+                rc = rawobj_extract_local_alloc(&gctx->gc_handle,
+                                                (__u32 **) &data, &datalen);
+                if (rc) {
                         CERROR("failed extract handle\n");
                         goto out;
                 }
 
-                if (rawobj_extract_local(&tmpobj, (__u32 **)&data, &datalen)) {
+                rc = rawobj_extract_local(&tmpobj, (__u32 **) &data, &datalen);
+                if (rc) {
                         CERROR("failed extract mech\n");
                         goto out;
                 }
 
-                if (lgss_import_sec_context(&tmpobj,
-                                            sec2gsec(ctx->cc_sec)->gs_mech,
-                                            &gctx->gc_mechctx) !=
-                    GSS_S_COMPLETE) {
+                rc = lgss_import_sec_context(&tmpobj,
+                                             sec2gsec(ctx->cc_sec)->gs_mech,
+                                             &gctx->gc_mechctx);
+                if (rc != GSS_S_COMPLETE)
                         CERROR("failed import context\n");
-                        goto out;
-                }
-
-                rc = 0;
+                else
+                        rc = 0;
         }
 out:
         /* we don't care what current status of this ctx, even someone else
          * is operating on the ctx at the same time. we just add up our own
-         * opinions here.
-         */
+         * opinions here. */
         if (rc == 0) {
                 gss_cli_ctx_uptodate(gctx);
         } else {
-                /*
-                 * this will also revoke the key. has to be done before
-                 * wakeup waiters otherwise they can find the stale key
-                 */
+                /* this will also revoke the key. has to be done before
+                 * wakeup waiters otherwise they can find the stale key */
                 kill_key_locked(key);
 
                 cli_ctx_expire(ctx);

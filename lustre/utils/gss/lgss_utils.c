@@ -118,52 +118,64 @@ static struct lgss_mutex_s {
         [LGSS_MUTEX_KRB5]       = { "keyring",  0x4292d473, 0 },
 };
 
+static int lgss_mutex_get(struct lgss_mutex_s *mutex)
+{
+        mutex->sem_id = semget(mutex->sem_key, 1, IPC_CREAT | IPC_EXCL | 0700);
+        if (mutex->sem_id != -1) {
+                if (semctl(mutex->sem_id, 0, SETVAL, 1) == -1) {
+                        logmsg(LL_ERR, "initialize sem %x: %s\n",
+                               mutex->sem_key, strerror(errno));
+                        return -1;
+                }
+
+                logmsg(LL_DEBUG, "created & initialized sem %x id %d for %s\n",
+                       mutex->sem_key, mutex->sem_id, mutex->sem_name);
+        } else {
+                if (errno != EEXIST) {
+                        logmsg(LL_ERR, "create sem %x: %s\n",
+                               mutex->sem_key, strerror(errno));
+                        return -1;
+                }
+
+                /* already created by someone else, simply get it.
+                 * Note there's still a small window of racing between create
+                 * and initialize, a flaw in semaphore semantics */
+                mutex->sem_id = semget(mutex->sem_key, 0, 0700);
+                if (mutex->sem_id == -1) {
+                        if (errno == ENOENT) {
+                                logmsg(LL_WARN, "sem %x just disappeared "
+                                       "under us, try again\n", mutex->sem_key);
+                                return 1;
+                        }
+
+                        logmsg(LL_ERR, "get sem %x: %s\n", mutex->sem_key,
+                               strerror(errno));
+                        return -1;
+                }
+
+                logmsg(LL_TRACE, "got sem %x id %d for %s\n",
+                       mutex->sem_key, mutex->sem_id, mutex->sem_name);
+        }
+
+        return 0;
+}
+
 int lgss_mutex_lock(lgss_mutex_id_t mid)
 {
         struct lgss_mutex_s     *sem = &lgss_mutexes[mid];
         struct sembuf            sembuf;
+        int                      rc;
 
         lassert(mid < LGSS_MUTEX_MAX);
 
         logmsg(LL_TRACE, "locking mutex %x for %s\n",
                sem->sem_key, sem->sem_name);
-again:
-        sem->sem_id = semget(sem->sem_key, 1, IPC_CREAT | IPC_EXCL | 0700);
-        if (sem->sem_id == -1) {
-                if (errno != EEXIST) {
-                        logmsg(LL_ERR, "create sem %x: %s\n",
-                               sem->sem_key, strerror(errno));
-                        return -1;
-                }
 
-                /* already exist. Note there's still a small window of racing
-                 * with other processes, due to the stupid semaphore semantics.
-                 */
-                sem->sem_id = semget(sem->sem_key, 0, 0700);
-                if (sem->sem_id == -1) {
-                        if (errno == ENOENT) {
-                                logmsg(LL_WARN, "sem %x just disappeared "
-                                       "under us, try again\n", sem->sem_key);
-                                goto again;
-                        }
-
-                        logmsg(LL_ERR, "get sem %x: %s\n", sem->sem_key,
-                               strerror(errno));
-                        return -1;
-                }
-        } else {
-                int val = 1;
-
-                logmsg(LL_DEBUG, "created sem %x for %s, initialize to 1\n",
-                       sem->sem_key, sem->sem_name);
-                if (semctl(sem->sem_id, 0, SETVAL, val) == -1) {
-                        logmsg(LL_ERR, "initialize sem %x: %s\n",
-                               sem->sem_key, strerror(errno));
-                        return -1;
-                }
-        }
-        logmsg(LL_TRACE, "got sem %x id %d for %s\n",
-               sem->sem_key, sem->sem_id, sem->sem_name);
+        do {
+                rc = lgss_mutex_get(sem);
+                if (rc < 0)
+                        return rc;
+        } while (rc);
 
         sembuf.sem_num = 0;
         sembuf.sem_op = -1;

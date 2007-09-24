@@ -902,8 +902,7 @@ __u32 gss_wrap_kerberos(struct gss_ctx *gctx,
         get_random_bytes(conf, ke->ke_conf_size);
 
         /* get encryption blocksize. note kc_keye might not associated with
-         * a tfm, currently only for arcfour-hmac
-         */
+         * a tfm, currently only for arcfour-hmac */
         if (kctx->kc_enctype == ENCTYPE_ARCFOUR_HMAC) {
                 LASSERT(kctx->kc_keye.kb_tfm == NULL);
                 blocksize = 1;

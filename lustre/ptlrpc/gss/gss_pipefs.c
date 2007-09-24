@@ -100,13 +100,15 @@ struct ptlrpc_cli_ctx *ctx_create_pf(struct ptlrpc_sec *sec,
                                      struct vfs_cred *vcred)
 {
         struct gss_cli_ctx *gctx;
+        int                 rc;
 
         OBD_ALLOC_PTR(gctx);
         if (gctx == NULL)
                 return NULL;
 
-        if (gss_cli_ctx_init_common(sec, &gctx->gc_base, &gss_pipefs_ctxops,
-                                    vcred)) {
+        rc = gss_cli_ctx_init_common(sec, &gctx->gc_base,
+                                     &gss_pipefs_ctxops, vcred);
+        if (rc) {
                 OBD_FREE_PTR(gctx);
                 return NULL;
         }
@@ -154,8 +156,9 @@ void ctx_unhash_pf(struct ptlrpc_cli_ctx *ctx, struct hlist_head *freelist)
         if (atomic_dec_and_test(&ctx->cc_refcount)) {
                 __hlist_del(&ctx->cc_cache);
                 hlist_add_head(&ctx->cc_cache, freelist);
-        } else
+        } else {
                 hlist_del_init(&ctx->cc_cache);
+        }
 }
 
 /*
@@ -519,8 +522,7 @@ void gss_sec_release_ctx_pf(struct ptlrpc_sec *sec,
         LASSERT(hlist_unhashed(&ctx->cc_cache));
 
         /* if required async, we must clear the UPTODATE bit to prevent extra
-         * rpcs during destroy procedure.
-         */
+         * rpcs during destroy procedure. */
         if (!sync)
                 clear_bit(PTLRPC_CTX_UPTODATE_BIT, &ctx->cc_flags);
 
@@ -939,8 +941,7 @@ out_free:
         OBD_FREE(buf, mlen);
         /* FIXME
          * hack pipefs: always return asked length unless all following
-         * downcalls might be messed up.
-         */
+         * downcalls might be messed up. */
         rc = mlen;
         RETURN(rc);
 }
@@ -1085,8 +1086,7 @@ int gss_ctx_refresh_pf(struct ptlrpc_cli_ctx *ctx)
                 sizeof(gmsg->gum_data.gum_obd));
 
         /* This only could happen when sysadmin set it dead/expired
-         * using lctl by force.
-         */
+         * using lctl by force. */
         if (ctx->cc_flags & PTLRPC_CTX_STATUS_MASK) {
                 CWARN("ctx %p(%u->%s) was set flags %lx unexpectedly\n",
                       ctx, ctx->cc_vcred.vc_uid, sec2target_str(ctx->cc_sec),
@@ -1120,8 +1120,7 @@ static
 int gss_cli_ctx_refresh_pf(struct ptlrpc_cli_ctx *ctx)
 {
         /* if we are refreshing for root, also update the reverse
-         * handle index, do not confuse reverse contexts.
-         */
+         * handle index, do not confuse reverse contexts. */
         if (ctx->cc_vcred.vc_uid == 0) {
                 struct gss_sec *gsec;
 
@@ -1194,11 +1193,9 @@ int __init gss_init_pipefs_upcall(void)
                 CERROR("Failed to create gss pipe dir: %ld\n", PTR_ERR(de));
                 return PTR_ERR(de);
         }
-        /* FIXME
-         * hack pipefs: dput will sometimes cause oops during module unload
-         * and lgssd close the pipe fds.
-         */
-        //dput(de);
+
+        /* FIXME hack pipefs: dput will sometimes cause oops during module
+         * unload and lgssd close the pipe fds. */
 
         /* krb5 mechanism */
         de = rpc_mkpipe(LUSTRE_PIPE_KRB5, (void *) MECH_KRB5, &gss_upcall_ops,
@@ -1224,10 +1221,8 @@ void __exit gss_exit_pipefs_upcall(void)
 
         for (i = 0; i < MECH_MAX; i++) {
                 LASSERT(list_empty(&upcall_lists[i]));
-                /*
-                 * dput pipe dentry here might cause lgssd oops.
-                 */
-                //dput(de_pipes[i]);
+
+                /* dput pipe dentry here might cause lgssd oops. */
                 de_pipes[i] = NULL;
         }
 

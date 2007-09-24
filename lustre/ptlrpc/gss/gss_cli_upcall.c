@@ -109,8 +109,7 @@ int ctx_init_pack_request(struct obd_import *imp,
                 LBUG();
 
         /* 3. reverse context handle. actually only needed by root user,
-         *    but we send it anyway.
-         */
+         *    but we send it anyway. */
         gsec = container_of(imp->imp_sec, struct gss_sec, gs_base);
         obj.len = sizeof(gsec->gs_rvs_hdl);
         obj.data = (__u8 *) &gsec->gs_rvs_hdl;
@@ -292,8 +291,7 @@ int gss_do_ctx_init_rpc(__user char *buffer, unsigned long count)
                  * leave recovery decisions to general ptlrpc layer.
                  *
                  * FIXME maybe some other error code shouldn't be treated
-                 * as timeout.
-                 */
+                 * as timeout. */
                 param.status = rc;
                 if (rc != -EACCES)
                         param.status = -ETIMEDOUT;
@@ -361,8 +359,7 @@ int gss_do_ctx_fini_rpc(struct gss_cli_ctx *gctx)
         /* fix the user desc */
         if (SEC_FLAVOR_HAS_USER(req->rq_sec_flavor)) {
                 /* we rely the fact that this request is in AUTH mode,
-                 * and user_desc at offset 2.
-                 */
+                 * and user_desc at offset 2. */
                 pud = lustre_msg_buf(req->rq_reqbuf, 2, sizeof(*pud));
                 LASSERT(pud);
                 pud->pud_uid = pud->pud_fsuid = ctx->cc_vcred.vc_uid;

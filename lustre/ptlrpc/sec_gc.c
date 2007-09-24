@@ -105,9 +105,9 @@ static void sec_process_ctx_list(void)
 {
         struct ptlrpc_cli_ctx *ctx;
 
-again:
         spin_lock(&sec_gc_ctx_list_lock);
-        if (!list_empty(&sec_gc_ctx_list)) {
+
+        while (!list_empty(&sec_gc_ctx_list)) {
                 ctx = list_entry(sec_gc_ctx_list.next,
                                  struct ptlrpc_cli_ctx, cc_gc_chain);
                 list_del_init(&ctx->cc_gc_chain);
@@ -119,8 +119,9 @@ again:
                        ctx, ctx->cc_vcred.vc_uid, sec2target_str(ctx->cc_sec));
                 sptlrpc_cli_ctx_put(ctx, 1);
 
-                goto again;
+                spin_lock(&sec_gc_ctx_list_lock);
         }
+
         spin_unlock(&sec_gc_ctx_list_lock);
 }
 
@@ -168,10 +169,8 @@ static int sec_gc_main(void *arg)
 again:
                 mutex_down(&sec_gc_mutex);
                 list_for_each_entry_safe(sec, next, &sec_gc_list, ps_gc_list) {
-                        /*
-                         * if someone is waiting to be deleted, let it
-                         * proceed as soon as possible.
-                         */
+                        /* if someone is waiting to be deleted, let it
+                         * proceed as soon as possible. */
                         if (atomic_read(&sec_gc_wait_del)) {
                                 CWARN("deletion pending, retry\n");
                                 mutex_up(&sec_gc_mutex);

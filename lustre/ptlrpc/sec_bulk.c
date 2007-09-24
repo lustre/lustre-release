@@ -195,10 +195,8 @@ static void enc_insert_pool(cfs_page_t ***pools, int npools, int npages)
         /*
          * (1) fill all the free slots of current pools.
          */
-        /*
-         * free slots are those left by rent pages, and the extra ones with
-         * index >= eep_total_pages, locate at the tail of last pool.
-         */
+        /* free slots are those left by rent pages, and the extra ones with
+         * index >= eep_total_pages, locate at the tail of last pool. */
         freeslot = page_pools.epp_total_pages % PAGES_PER_POOL;
         if (freeslot != 0)
                 freeslot = PAGES_PER_POOL - freeslot;
@@ -394,14 +392,13 @@ again:
 
                 if (++page_pools.epp_waitqlen > page_pools.epp_st_max_wqlen)
                         page_pools.epp_st_max_wqlen = page_pools.epp_waitqlen;
-                /*
-                 * we just wait if someone else is adding more pages, or
+
+                /* we just wait if someone else is adding more pages, or
                  * wait queue length is not deep enough. otherwise try to
                  * add more pages in the pools.
                  *
                  * FIXME the policy of detecting resource tight & growing pool
-                 * need to be reconsidered.
-                 */
+                 * need to be reconsidered. */
                 if (page_pools.epp_adding || page_pools.epp_waitqlen < 2 ||
                     page_pools.epp_full) {
                         set_current_state(TASK_UNINTERRUPTIBLE);
@@ -428,17 +425,15 @@ again:
 
                 goto again;
         }
-        /*
-         * record max wait time
-         */
+
+        /* record max wait time */
         if (unlikely(tick1 != 0)) {
                 tick2 = cfs_time_current();
                 if (tick2 - tick1 > page_pools.epp_st_max_wait)
                         page_pools.epp_st_max_wait = tick2 - tick1;
         }
-        /*
-         * proceed with rest of allocation
-         */
+
+        /* proceed with rest of allocation */
         page_pools.epp_free_pages -= desc->bd_max_iov;
 
         p_idx = page_pools.epp_free_pages / PAGES_PER_POOL;
@@ -929,8 +924,7 @@ int bulk_csum_cli_reply(struct ptlrpc_bulk_desc *desc, int read,
                 }
 
                 /* checksum mismatch, re-compute a new one and compare with
-                 * others, give out proper warnings.
-                 */
+                 * others, give out proper warnings. */
                 OBD_ALLOC(new, csum_size);
                 if (new == NULL)
                         return -ENOMEM;

@@ -12,6 +12,18 @@
        * Recommended e2fsprogs version: 1.40.2-cfs1
        * Note that reiserfs quotas are disabled on SLES 10 in this kernel.
 
+Severity   : enhancement
+Bugzilla   : 13641
+Description: light-weight GSS support
+Details    : Support krb5n and krb5a mode, which keep Kerberos 5 authentication
+	     and reduce performance overhead.
+
+Severity   : enhancement
+Bugzilla   : 11832
+Description: Linux keyring support
+Details    : Support using service of Linux keyring for Lustre GSS internal
+	     context refresh/cache mechanism.
+
 Severity   : normal
 Bugzilla   : 12186
 Description: Fix errors in lfs documentation
