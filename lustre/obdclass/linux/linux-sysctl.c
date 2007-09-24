@@ -62,7 +62,6 @@ enum {
         OBD_DUMP_ON_EVICTION,   /* dump kernel debug log upon eviction */
         OBD_DEBUG_PEER_ON_TIMEOUT, /* dump peer debug when RPC times out */
         OBD_ALLOC_FAIL_RATE,    /* memory allocation random failure rate */
-        ADAPTIVE_MIN,           /* Adaptive timeout lower limit */
         ADAPTIVE_MAX,           /* Adaptive timeout upper limit */
         ADAPTIVE_HISTORY,       /* Adaptive timeout timebase */
 };
@@ -198,14 +197,6 @@ static cfs_sysctl_table_t obd_table[] = {
                 .proc_handler = &proc_alloc_fail_rate
         },
 #endif
-        {
-                .ctl_name = ADAPTIVE_MIN,
-                .procname = "adaptive_min",
-                .data     = &adaptive_timeout_min,
-                .maxlen   = sizeof(int),
-                .mode     = 0644,
-                .proc_handler = &proc_dointvec
-        },
         {
                 .ctl_name = ADAPTIVE_MAX,
                 .procname = "adaptive_max",

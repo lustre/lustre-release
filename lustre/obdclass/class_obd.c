@@ -65,8 +65,6 @@ unsigned int obd_dump_on_timeout;
 unsigned int obd_dump_on_eviction;
 unsigned int obd_timeout = OBD_TIMEOUT_DEFAULT;   /* seconds */
 unsigned int ldlm_timeout = LDLM_TIMEOUT_DEFAULT; /* seconds */
-/* Covers the maximum expected network latency */
-unsigned int adaptive_timeout_min = 10;           /* seconds */
 unsigned int adaptive_timeout_max = 600;          /* seconds */
 /* We remember the slowest event that took place within history */
 unsigned int adaptive_timeout_history = 600;      /* seconds */
@@ -388,7 +386,6 @@ EXPORT_SYMBOL(obd_dump_on_timeout);
 EXPORT_SYMBOL(obd_dump_on_eviction);
 EXPORT_SYMBOL(obd_timeout);
 EXPORT_SYMBOL(ldlm_timeout);
-EXPORT_SYMBOL(adaptive_timeout_min);
 EXPORT_SYMBOL(adaptive_timeout_max);
 EXPORT_SYMBOL(adaptive_timeout_history);
 EXPORT_SYMBOL(obd_max_dirty_pages);

@@ -13,7 +13,6 @@
 #define D_ADAPTTO D_OTHER
 #define AT_BINS 4                  /* "bin" means "N seconds of history" */
 #define AT_FLG_NOHIST 0x1          /* use last reported value only */
-#define AT_FLG_MIN    0x2          /* use a minimum limit */
 
 struct adaptive_timeout {
         time_t       at_binstart;         /* bin start time */
@@ -70,7 +69,6 @@ struct imp_at {
         int                     iat_portal[IMP_AT_MAX_PORTALS];
         struct adaptive_timeout iat_net_latency;
         struct adaptive_timeout iat_service_estimate[IMP_AT_MAX_PORTALS];
-        time_t                  iat_drain; /* hack to slow reconnect reqs */
 };
 
 struct obd_import {

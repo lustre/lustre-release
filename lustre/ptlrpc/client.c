@@ -215,14 +215,6 @@ static void ptlrpc_at_set_req_timeout(struct ptlrpc_request *req)
         /* We could get even fancier here, using history to predict increased
            loading... */
              
-        if (at->iat_drain > req->rq_timeout) {
-                /* If we're trying to drain the network queues, give this 
-                   req a long timeout */
-                req->rq_timeout = at->iat_drain;
-                CDEBUG(D_ADAPTTO, "waiting %ds to let queues drain\n",
-                       req->rq_timeout);
-        }
-
         /* Let the server know what this RPC timeout is by putting it in the 
            reqmsg*/
         lustre_msg_set_timeout(req->rq_reqmsg, req->rq_timeout);
@@ -271,7 +263,7 @@ static void ptlrpc_at_adj_net_latency(struct ptlrpc_request *req)
         
         /* Network latency is total time less server processing time */
         nl = max_t(int, now - req->rq_sent - st, 0) + 1/*st rounding*/;
-        if (st > now - req->rq_sent + 1 /* rounding */) 
+        if (st > now - req->rq_sent + 2 /* rounding */)
                 CERROR("Reported service time %u > total measured time %ld\n",
                        st, now - req->rq_sent);
 
