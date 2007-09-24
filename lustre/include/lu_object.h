@@ -980,21 +980,21 @@ struct lu_context_key {
                                                                   \
                 return value;                                     \
         }                                                         \
-	struct __##mod##__dummy_init {;} /* semicolon catcher */
+        struct __##mod##__dummy_init {;} /* semicolon catcher */
 
 #define LU_KEY_FINI(mod, type)                                              \
         static void mod##_key_fini(const struct lu_context *ctx,            \
                                     struct lu_context_key *key, void* data) \
         {                                                                   \
-		type *info = data;                                          \
+                type *info = data;                                          \
                                                                             \
-		OBD_FREE_PTR(info);                                         \
-	}                                                                   \
-	struct __##mod##__dummy_fini {;} /* semicolon catcher */
+                OBD_FREE_PTR(info);                                         \
+        }                                                                   \
+        struct __##mod##__dummy_fini {;} /* semicolon catcher */
 
 #define LU_KEY_INIT_FINI(mod, type)   \
-	LU_KEY_INIT(mod,type);        \
-	LU_KEY_FINI(mod,type);
+        LU_KEY_INIT(mod,type);        \
+        LU_KEY_FINI(mod,type)
 
 
 #define LU_CONTEXT_KEY_INIT(key)                        \
