@@ -927,14 +927,42 @@ static inline void badopt(const char *opt, char *type)
         usage(stderr);
 }
 
+static int clean_param(char *buf, char *key)
+{
+        char *sub, *next;
+
+        if (!buf)
+                return 1;
+        if ((sub = strstr(buf, key)) != NULL) {
+                if ((next = strchr(sub, ' ')) != NULL) {
+                        next++;
+                        memmove(sub, next, strlen(next) + 1);
+                } else {
+                        *sub = '\0';
+                }
+        }
+        return 0;
+} 
+
 static int add_param(char *buf, char *key, char *val)
 {
         int end = sizeof(((struct lustre_disk_data *)0)->ldd_params);
-        int start = strlen(buf);
+        int start;
         int keylen = 0;
+        char *ptr;
 
-        if (key)
+        if (key) {
                 keylen = strlen(key);
+                clean_param(buf, key);
+        } else {
+                if((ptr = strchr(val, '=')) == NULL)
+                        return 1;
+                *ptr = '\0';
+                clean_param(buf, val);
+                *ptr = '=';
+        }
+                
+        start = strlen(buf);
         if (start + 1 + keylen + strlen(val) >= end) {
                 fprintf(stderr, "%s: params are too long-\n%s %s%s\n",
                         progname, buf, key ? key : "", val);
@@ -1021,6 +1049,8 @@ int parse_opts(int argc, char *const argv[], struct mkfs_opts *mop,
         char *optstring = "b:c:C:d:ef:Ghi:k:L:m:MnNo:Op:Pqru:vw";
         int opt;
         int rc, longidx;
+        int upcall = 0;
+        const size_t prefix_len = sizeof(PARAM_MDT_UPCALL) - 1;
 
         while ((opt = getopt_long(argc, argv, optstring, long_opt, &longidx)) !=
                EOF) {
@@ -1159,6 +1189,18 @@ int parse_opts(int argc, char *const argv[], struct mkfs_opts *mop,
                         mop->mo_ldd.ldd_flags |= LDD_F_SV_TYPE_OST;
                         break;
                 case 'p':
+                        /* Test if the param is valid for mdt.group_upcall */
+                        if (!strncmp(optarg, PARAM_MDT_UPCALL, prefix_len)) {
+                                upcall++;
+                                if(strcmp(optarg + prefix_len, "NONE") &&
+                                   access(optarg + prefix_len, R_OK | X_OK))
+                                        fprintf(stderr, "WARNING: group upcall "
+                                                "parameter not executable: %s\n"
+                                                "NOTE: you can change the path "
+                                                "to the group upcall through "
+                                                "tunefs.lustre(8)\n", optarg + 
+                                                prefix_len);
+                        }
                         rc = add_param(mop->mo_ldd.ldd_params, NULL, optarg);
                         if (rc)
                                 return rc;
@@ -1196,7 +1238,23 @@ int parse_opts(int argc, char *const argv[], struct mkfs_opts *mop,
                 fprintf(stderr, "Bad argument: %s\n", argv[optind]);
                 return EINVAL;
         }
-
+        
+#ifndef TUNEFS
+        if (mop->mo_ldd.ldd_flags & LDD_F_SV_TYPE_MDT && 0 == upcall) {
+                if(access("/usr/sbin/l_getgroups", R_OK | X_OK))
+                        fprintf(stderr, "WARNING: MDS group upcall is not set, "
+                                "use 'NONE'\n");
+                else {
+                        rc = add_param(mop->mo_ldd.ldd_params, PARAM_MDT_UPCALL,
+                                       "/usr/sbin/l_getgroups");
+                        if (rc)
+                                return rc;
+                        /* Must update the mgs logs */
+                        mop->mo_ldd.ldd_flags |= LDD_F_UPDATE;
+                }
+        }
+#endif
+ 
         return 0;
 }
 

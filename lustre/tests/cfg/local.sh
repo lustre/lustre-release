@@ -45,6 +45,8 @@ MOUNTOPT=""
     MOUNTOPT=$MOUNTOPT" --param lov.stripesize=$STRIPE_BYTES"
 [ "x$STRIPES_PER_OBJ" != "x" ] &&
     MOUNTOPT=$MOUNTOPT" --param lov.stripecount=$STRIPES_PER_OBJ"
+[ "x$LUSTRE" != "x" ] &&
+    MOUNTOPT=$MOUNTOPT" --param mdt.group_upcall=$LUSTRE/utils/l_getgroups"
 MDS_MKFS_OPTS="--mgs --mdt --fsname=$FSNAME --device-size=$MDSSIZE --param sys.timeout=$TIMEOUT $MKFSOPT $MOUNTOPT $MDSOPT"
 
 MKFSOPT=""
