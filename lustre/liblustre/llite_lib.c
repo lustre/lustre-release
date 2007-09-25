@@ -44,6 +44,7 @@
  * of 'LIST_HEAD'. undef it to suppress warnings
  */
 #undef LIST_HEAD
+#include <liblustre.h>
 #include <lnet/lnetctl.h>     /* needed for parse_dump */
 
 #include "lutil.h"

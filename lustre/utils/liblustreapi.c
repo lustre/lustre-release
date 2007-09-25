@@ -49,9 +49,8 @@
 #include <unistd.h>
 #endif
 
-#include <lnet/lnetctl.h>
-
 #include <liblustre.h>
+#include <lnet/lnetctl.h>
 #include <obd.h>
 #include <lustre_lib.h>
 #include <lustre/liblustreapi.h>
