@@ -207,8 +207,7 @@ if [ -n "$tests_str" ]; then
     done
 else
     #tests=(write rewrite read reread rewrite_again)
-    #tests=(write rewrite read)
-    tests=(write)
+    tests=(write rewrite read)
 fi
 
 # restart from here iff all are defined
