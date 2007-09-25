@@ -64,11 +64,13 @@ int ptlrpc_ping(struct obd_import *imp)
         RETURN(rc);
 }
 
-static void ptlrpc_update_next_ping(struct obd_import *imp)
+void ptlrpc_update_next_ping(struct obd_import *imp)
 {
+#ifdef ENABLE_PINGER
         imp->imp_next_ping = cfs_time_shift(
                                 (imp->imp_state == LUSTRE_IMP_DISCON ?
                                  RECONNECT_INTERVAL : PING_INTERVAL));
+#endif /* ENABLE_PINGER */
 }
 
 void ptlrpc_ping_import_soon(struct obd_import *imp)

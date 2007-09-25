@@ -63,24 +63,24 @@ enum lcfg_command_type {
 
 struct lustre_cfg_bufs {
         void    *lcfg_buf[LUSTRE_CFG_MAX_BUFCOUNT];
-        uint32_t lcfg_buflen[LUSTRE_CFG_MAX_BUFCOUNT];
-        uint32_t lcfg_bufcount;
+        __u32    lcfg_buflen[LUSTRE_CFG_MAX_BUFCOUNT];
+        __u32    lcfg_bufcount;
 };
 
 /* Mountconf transitional hack, should go away after 1.6 */
 #define LCFG_FLG_MOUNTCONF 0x400
 
 struct lustre_cfg {
-        uint32_t lcfg_version;
-        uint32_t lcfg_command;
+        __u32 lcfg_version;
+        __u32 lcfg_command;
 
-        uint32_t lcfg_num; 
-        uint32_t lcfg_flags;
-        uint64_t lcfg_nid;
-        uint32_t lcfg_nal;                      /* not used any more */
+        __u32 lcfg_num; 
+        __u32 lcfg_flags;
+        __u64 lcfg_nid;
+        __u32 lcfg_nal;                      /* not used any more */
 
-        uint32_t lcfg_bufcount;
-        uint32_t lcfg_buflens[0];
+        __u32 lcfg_bufcount;
+        __u32 lcfg_buflens[0];
 };
 
 #define LUSTRE_CFG_BUFLEN(lcfg, idx)            \
@@ -89,9 +89,9 @@ struct lustre_cfg {
          : (lcfg)->lcfg_buflens[(idx)])
 
 static inline void lustre_cfg_bufs_set(struct lustre_cfg_bufs *bufs,
-                                       uint32_t                index,
+                                       __u32                   index,
                                        void                   *buf,
-                                       uint32_t                buflen)
+                                       __u32                   buflen)
 {
         if (index >= LUSTRE_CFG_MAX_BUFCOUNT)
                 return;
@@ -106,7 +106,7 @@ static inline void lustre_cfg_bufs_set(struct lustre_cfg_bufs *bufs,
 }
 
 static inline void lustre_cfg_bufs_set_string(struct lustre_cfg_bufs *bufs,
-                                              uint32_t index,
+                                              __u32 index,
                                               char *str)
 {
         lustre_cfg_bufs_set(bufs, index, str, str ? strlen(str) + 1 : 0);
@@ -175,7 +175,7 @@ static inline char *lustre_cfg_string(struct lustre_cfg *lcfg, int index)
         return s;
 }
 
-static inline int lustre_cfg_len(uint32_t bufcount, uint32_t *buflens)
+static inline int lustre_cfg_len(__u32 bufcount, __u32 *buflens)
 {
         int i;
         int len;
