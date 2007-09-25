@@ -198,7 +198,7 @@ int lgss_mutex_unlock(lgss_mutex_id_t mid)
         struct sembuf            sembuf;
 
         lassert(mid < LGSS_MUTEX_MAX);
-        lassert(sem->sem_id != 0);
+        lassert(sem->sem_id >= 0);
 
         logmsg(LL_TRACE, "unlocking mutex %x for %s\n",
                sem->sem_key, sem->sem_name);
