@@ -197,7 +197,7 @@ static int ll_statahead_interpret(struct obd_export *exp,
 
         CDEBUG(D_READA, "interpret statahead %.*s rc %d\n",
                dentry->d_name.len, dentry->d_name.name, rc);
-        if (rc)
+        if (rc || dir == NULL)
                 GOTO(out, rc);
 
         if (dentry->d_inode == NULL) {
@@ -210,7 +210,11 @@ static int ll_statahead_interpret(struct obd_export *exp,
 
                 rc = lookup_it_finish(req, DLM_REPLY_REC_OFF, it, &icbd);
                 if (!rc) {
-                        LASSERT(dentry->d_inode);
+                        /* 
+                         * Here dentry->d_inode might be NULL,
+                         * because the entry may have been removed before
+                         * we start doing stat ahead.
+                         */
                         if (dentry != save)
                                 dput(save);
                         ll_lookup_finish_locks(it, dentry);
