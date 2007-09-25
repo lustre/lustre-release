@@ -381,7 +381,7 @@ Index: linux-2.6.5-7.283-full/fs/ext3/ialloc.c
 +	if (EXT3_HAS_RO_COMPAT_FEATURE(sb, EXT4_FEATURE_RO_COMPAT_GDT_CSUM)) {
 +		if (gdp->bg_flags & cpu_to_le16(EXT3_BG_INODE_UNINIT)) {
 +			gdp->bg_flags &= cpu_to_le16(~EXT3_BG_INODE_UNINIT);
-+			free = EXT3_INODES_PER_GROUP(sb);
++			free = 0;
 +		} else {
 +			free = EXT3_INODES_PER_GROUP(sb) -
 +				le16_to_cpu(gdp->bg_itable_unused);
