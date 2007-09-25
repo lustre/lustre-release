@@ -1228,7 +1228,7 @@ run_test 33a "Drop cancel during umount"
 test_34a() {
         setup
 	do_facet client multiop $DIR/file O_c &
-
+	sleep 0.500s
 	manual_umount_client
 	rc=$?
 	do_facet client killall -USR1 multiop
