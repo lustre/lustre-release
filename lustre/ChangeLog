@@ -78,6 +78,15 @@ Bugzilla   : 13616
 Description: Kernel patches update for RHEL5 2.6.18-8.1.10.el5.
 Details    : Modify the target file & which_kernel.
 
+Severity   : normal
+Frequency  : if the uninit_groups feature is enabled on ldiskfs
+Bugzilla   : 13706
+Description: e2fsck reports "invalid unused inodes count"
+Details    : If a new ldiskfs filesystem is created with the "uninit_groups"
+	     feature and only a single inode is created in a group then the
+	     "bg_unused_inodes" count is incorrectly updated.  Creating a
+	     second inode in that group would update it correctly.
+
 --------------------------------------------------------------------------------
 
 2007-09-27         Cluster File Systems, Inc. <info@clusterfs.com>
