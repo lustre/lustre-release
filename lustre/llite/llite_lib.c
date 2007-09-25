@@ -337,13 +337,14 @@ static int client_common_fill_super(struct super_block *sb, char *md, char *dt,
                 sbi->ll_flags |= LL_SBI_OSS_CAPA;
         }
 
+        sbi->ll_sdev_orig = sb->s_dev;
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,6,0))
         /* We set sb->s_dev equal on all lustre clients in order to support
          * NFS export clustering.  NFSD requires that the FSID be the same
          * on all clients. */
         /* s_dev is also used in lt_compare() to compare two fs, but that is
          * only a node-local comparison. */
-        
+
         /* XXX: this will not work with LMV */
         sb->s_dev = get_uuid2int(sbi2mdc(sbi)->cl_target_uuid.uuid,
                                  strlen(sbi2mdc(sbi)->cl_target_uuid.uuid));
@@ -703,7 +704,7 @@ void client_common_put_super(struct super_block *sb)
         prune_deathrow(sbi, 0);
 
         list_del(&sbi->ll_conn_chain);
-        
+
         obd_fid_fini(sbi->ll_dt_exp);
         obd_disconnect(sbi->ll_dt_exp);
         sbi->ll_dt_exp = NULL;
@@ -715,6 +716,26 @@ void client_common_put_super(struct super_block *sb)
         sbi->ll_md_exp = NULL;
 
         lustre_throw_orphan_dentries(sb);
+
+        EXIT;
+}
+
+void ll_kill_super(struct super_block *sb)
+{
+        struct ll_sb_info *sbi;
+
+        ENTRY;
+
+        /* not init sb ?*/
+        if (!(sb->s_flags & MS_ACTIVE))
+                return;
+
+        sbi = ll_s2sbi(sb);
+        /* we need restore s_dev from changed for clustred NFS before put_super
+         * because new kernels have cached s_dev and change sb->s_dev in
+         * put_super not affected real removing devices */
+        if (sbi)
+                sb->s_dev = sbi->ll_sdev_orig;
         EXIT;
 }
 
