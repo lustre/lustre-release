@@ -683,7 +683,7 @@ static int record_base(struct obd_device *obd, struct llog_handle *llh,
 
 static inline int record_add_uuid(struct obd_device *obd, 
                                   struct llog_handle *llh, 
-                                  uint64_t nid, char *uuid)
+                                  __u64 nid, char *uuid)
 {
         return record_base(obd,llh,NULL,nid,LCFG_ADD_UUID,uuid,0,0,0);
 
