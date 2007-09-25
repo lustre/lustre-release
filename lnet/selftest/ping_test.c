@@ -7,7 +7,7 @@
  *
  * Test client & Server
  */
-#include <libcfs/kp30.h>
+
 #include "selftest.h"
 
 #define LST_PING_TEST_MAGIC     0xbabeface

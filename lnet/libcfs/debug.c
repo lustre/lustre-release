@@ -26,6 +26,7 @@
 
 # define DEBUG_SUBSYSTEM S_LNET
 
+#include <stdarg.h>
 #include <libcfs/kp30.h>
 #include <libcfs/libcfs.h>
 #include "tracefile.h"
@@ -469,10 +470,6 @@ EXPORT_SYMBOL(libcfs_debug_set_level);
 #else /* !__KERNEL__ */
 
 #include <libcfs/libcfs.h>
-
-#ifdef HAVE_SYS_USER_H
-# include <sys/user.h>
-#endif
 
 #ifdef HAVE_CATAMOUNT_DATA_H
 #include <catamount/data.h>
