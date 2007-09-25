@@ -52,7 +52,6 @@ int do_lcfg(char *cfgname, lnet_nid_t nid, int cmd,
 #define PARAM_FAILNODE             "failover.node="    /* llog generation */
 #define PARAM_FAILMODE             "failover.mode="    /* llog generation */
 #define PARAM_ACTIVE               "active="           /* llog generation */
-#define PARAM_MDT_UPCALL           "mdt.group_upcall=" /* mds group upcall */
 
 /* Prefixes for parameters handled by obd's proc methods (XXX_process_config) */
 #define PARAM_OST                  "ost."

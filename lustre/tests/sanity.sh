@@ -143,8 +143,6 @@ MAXFREE=${MAXFREE:-$((200000 * $OSTCOUNT))}
 [ -f $DIR/d52b/foo ] && chattr -i $DIR/d52b/foo
 rm -rf $DIR/[Rdfs][1-9]*
 
-$RUNAS ls $DIR >/dev/null 2>&1 || { echo "Error: uid $RUNAS_ID doesn't exist on MDS!"; exit 1; }
-
 build_test_filter
 
 if [ "${ONLY}" = "MOUNT" ] ; then 
@@ -2905,7 +2903,7 @@ test_72() { # bug 5695 - Test that on 2.6 remove_suid works properly
 	touch $DIR/f72
 	chmod 777 $DIR/f72
 	chmod ug+s $DIR/f72
-	$RUNAS dd if=/dev/zero of=$DIR/f72 bs=512 count=1 || error
+	$RUNAS -u $(($RUNAS_ID + 1)) dd if=/dev/zero of=$DIR/f72 bs=512 count=1 || error
 	# See if we are still setuid/sgid
 	test -u $DIR/f72 -o -g $DIR/f72 && error "S/gid is not dropped on write"
 	# Now test that MDS is updated too
