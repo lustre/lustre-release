@@ -58,21 +58,6 @@ UMOUNT=${UMOUNT:-"umount -d"}
 CHECK_GRANT=${CHECK_GRANT:-"yes"}
 GRANT_CHECK_LIST=${GRANT_CHECK_LIST:-""}
 
-if [ $UID -ne 0 ]; then
-	echo "Warning: running as non-root uid $UID"
-	RUNAS_ID="$UID"
-	RUNAS=""
-else
-	RUNAS_ID=${RUNAS_ID:-500}
-	RUNAS=${RUNAS:-"runas -u $RUNAS_ID"}
-
-	# $RUNAS_ID may get set incorrectly somewhere else
-	if [ $RUNAS_ID -eq 0 ]; then
-		echo "Error: \$RUNAS_ID set to 0, but \$UID is also 0!"
-		exit 1
-	fi
-fi
-
 export NAME=${NAME:-local}
 
 SAVE_PWD=$PWD
@@ -135,7 +120,19 @@ MAXFREE=${MAXFREE:-$((200000 * $OSTCOUNT))}
 [ -f $DIR/d52b/foo ] && chattr -i $DIR/d52b/foo
 rm -rf $DIR/[Rdfs][1-9]*
 
-$RUNAS ls $DIR >/dev/null 2>&1 || { echo "Error: uid $RUNAS_ID doesn't exist on MDS!"; exit 1; }
+if [ $UID -ne 0 ]; then
+	log "running as non-root uid $UID"
+	RUNAS_ID="$UID"
+	RUNAS=""
+else
+	RUNAS_ID=${RUNAS_ID:-500}
+	RUNAS=${RUNAS:-"runas -u $RUNAS_ID"}
+
+	# $RUNAS_ID may get set incorrectly somewhere else
+	[ $RUNAS_ID -eq 0 ] && error "\$RUNAS_ID set to 0, but \$UID is also 0!"
+fi
+
+$RUNAS ls $DIR >/dev/null || error "uid $RUNAS_ID doesn't exist on MDS!"
 
 build_test_filter
 
@@ -1040,7 +1037,7 @@ test_27u() { # bug 4900
         sysctl -w lustre.fail_loc=0
 
         $LFS getstripe $DIR/d27u > $TMP/files
-        OBJS=`cat $TMP/files | awk -vobjs=0 '($1 == 0) { objs += 1 } END { print objs;}'`
+        OBJS=`awk -vobj=0 '($1 == 0) { obj += 1 } END { print obj;}' $TMP/files`
         unlinkmany $DIR/d27u/t- 1000
         [ $OBJS -gt 0 ] && \
                 error "Found $OBJS objects were created on OST-0" || pass
@@ -4122,7 +4119,7 @@ test_120g() {
         lru_resize_disable
         count=10000
         echo create $count files
-        mkdir  $DIR/$tdir
+        mkdir -p $DIR/$tdir
         cancel_lru_locks mdc
         cancel_lru_locks osc
         t0=`date +%s`
@@ -4149,8 +4146,7 @@ test_120g() {
 }
 run_test 120g "Early Lock Cancel: performance test ============="
 
-test_121() { #bug #10589
-	rm -rf $DIR/$tfile
+test_121() { #bug 10589
 	writes=`dd if=/dev/zero of=$DIR/$tfile count=1 2>&1 | awk 'BEGIN { FS="+" } /out/ {print $1}'`
 	sysctl -w lustre.fail_loc=0x310
 	cancel_lru_locks osc > /dev/null
@@ -4160,7 +4156,7 @@ test_121() { #bug #10589
 }
 run_test 121 "read cancel race ================================="
 
-test_122() { #bug #11544
+test_122() { #bug 11544
         #define OBD_FAIL_PTLRPC_CLIENT_BULK_CB   0x508
         sysctl -w lustre.fail_loc=0x508
         dd if=/dev/zero of=$DIR/$tfile count=1
@@ -4220,7 +4216,7 @@ test_123() # statahead(bug 11401)
         delta=$((etime - stime))
         log "rm -r $DIR/$tdir/: $delta seconds"
         log "rm done"
-        cat /proc/fs/lustre/llite/*/statahead_stats
+        cat $LPROC/llite/*/statahead_stats
         # wait for commitment of removal
         sleep 2
 }
