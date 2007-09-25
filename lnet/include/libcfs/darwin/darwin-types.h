@@ -69,8 +69,8 @@ typedef struct { volatile uint32_t counter; }	atomic_t;
 #define atomic_inc(a)			OSIncrementAtomic((SInt32 *)&((a)->counter))
 #define atomic_dec(a)			OSDecrementAtomic((SInt32 *)&((a)->counter))
 #else /* !__DARWIN8__ */
-#define atomic_add(v, a)		hw_atomic_add((uint32_t *)&((a)->counter), v)
-#define atomic_sub(v, a)		hw_atomic_sub((uint32_t *)&((a)->counter), v)
+#define atomic_add(v, a)		hw_atomic_add((__u32 *)&((a)->counter), v)
+#define atomic_sub(v, a)		hw_atomic_sub((__u32 *)&((a)->counter), v)
 #define atomic_inc(a)			atomic_add(1, a)
 #define atomic_dec(a)			atomic_sub(1, a)
 #endif /* !__DARWIN8__ */

@@ -59,7 +59,7 @@
  *
  *********************************************************************/
 
-char *get_file_list(const char *dirname, int file_type, uint32_t *count)
+char *get_file_list(const char *dirname, int file_type, __u32 *count)
 {
 
     DIR           *pdir = NULL;
@@ -570,7 +570,7 @@ var_genericTable(struct variable *vp,
             struct oid_table *ptable)
 {
     char *dir_list;
-    uint32_t num;
+    __u32 num;
     int  deviceindex;
     unsigned char *ret_val = NULL;
     int i=0;

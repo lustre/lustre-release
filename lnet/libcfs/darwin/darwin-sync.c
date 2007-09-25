@@ -773,7 +773,7 @@ void ksleep_wait(struct ksleep_chan *chan, cfs_task_state_t state)
  */
 int64_t ksleep_timedwait(struct ksleep_chan *chan, 
                          cfs_task_state_t state,
-                         uint64_t timeout)
+                         __u64 timeout)
 {
 	event_t event;
 
@@ -787,7 +787,7 @@ int64_t ksleep_timedwait(struct ksleep_chan *chan,
 	kspin_lock(&chan->guard);
 	if (!has_hits(chan, event)) {
                 int      result;
-                uint64_t expire;
+                __u64 expire;
 		result = assert_wait(event, state);
 		if (timeout > 0) {
 			/*
@@ -807,7 +807,7 @@ int64_t ksleep_timedwait(struct ksleep_chan *chan,
 		if (result == THREAD_TIMED_OUT)
                         timeout = 0;
 		else {
-                        uint64_t now;
+                        __u64 now;
                         clock_get_uptime(&now);
                         if (expire > now)
 			        absolutetime_to_nanoseconds(expire - now, &timeout);
@@ -928,7 +928,7 @@ static void ktimer_actor(void *arg0, void *arg1)
 }
 
 extern boolean_t thread_call_func_cancel(thread_call_func_t, thread_call_param_t, boolean_t);
-extern void thread_call_func_delayed(thread_call_func_t, thread_call_param_t, uint64_t);
+extern void thread_call_func_delayed(thread_call_func_t, thread_call_param_t, __u64);
 
 static void ktimer_disarm_locked(struct ktimer *t)
 {

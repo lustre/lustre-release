@@ -1928,7 +1928,7 @@ kibnal_startup (lnet_ni_t *ni)
         /*****************************************************/
 
         {
-                uint32_t nentries;
+                __u32 nentries;
 
                 vvrc = vv_cq_create(kibnal_data.kib_hca, IBNAL_CQ_ENTRIES(),
                                     kibnal_cq_callback, 

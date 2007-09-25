@@ -154,7 +154,7 @@ typedef enum {
 } lustre_sysstatus;
 
 /* File operation related functions */
-char *get_file_list(const char *dirname, int file_type, uint32_t *count);
+char *get_file_list(const char *dirname, int file_type, __u32 *count);
 extern int  is_directory(const char *filename);
 extern int  read_string(const char *filepath, char *lustre_var,size_t var_size);
 int read_counter64(const char *file_path, counter64 *c64,int factor);

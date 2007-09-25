@@ -282,7 +282,7 @@ void ksleep_add(struct ksleep_chan *chan, struct ksleep_link *link);
 void ksleep_del(struct ksleep_chan *chan, struct ksleep_link *link);
 
 void ksleep_wait(struct ksleep_chan *chan, int state);
-int64_t  ksleep_timedwait(struct ksleep_chan *chan, int state, uint64_t timeout);
+int64_t  ksleep_timedwait(struct ksleep_chan *chan, int state, __u64 timeout);
 
 void ksleep_wake(struct ksleep_chan *chan);
 void ksleep_wake_all(struct ksleep_chan *chan);
