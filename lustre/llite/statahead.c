@@ -77,7 +77,6 @@ static void ll_sai_put(struct ll_statahead_info *sai)
         if (atomic_dec_and_lock(&sai->sai_refc, &lli->lli_lock)) {
                 struct ll_sai_entry  *entry, *next;
 
-                LASSERT(sai->sai_thread.t_flags & SVC_STOPPED);
                 list_for_each_entry_safe(entry, next, &sai->sai_entries,
                                          se_list) {
                         list_del(&entry->se_list);
@@ -118,6 +117,7 @@ static struct ll_sai_entry *ll_sai_entry_get(struct ll_statahead_info *sai,
         RETURN(entry);
 }
 
+/* inside lli_lock */
 static void ll_sai_entry_set(struct ll_statahead_info *sai, int index,
                              int stat)
 {
@@ -591,9 +591,12 @@ static int ll_statahead_thread(void *arg)
         }
         EXIT;
 out:
+        spin_lock(&lli->lli_lock);
         thread->t_flags = SVC_STOPPED;
         cfs_waitq_signal(&thread->t_ctl_waitq);
         lli->lli_opendir_pid = 0; /* avoid statahead again */
+        spin_unlock(&lli->lli_lock);
+
         ll_sai_put(sai);
         dput(parent);
         CDEBUG(D_READA, "stopped statahead thread, pid %d for %s\n",
@@ -607,21 +610,21 @@ void ll_stop_statahead(struct inode *inode)
         struct ll_inode_info *lli = ll_i2info(inode);
         struct ptlrpc_thread *thread;
 
+        spin_lock(&lli->lli_lock);
         /* don't check pid here. upon fork, if parent closedir before child,
          * child will not have chance to stop this thread. */
         lli->lli_opendir_pid = 0;
 
-        spin_lock(&lli->lli_lock);
-        if (lli->lli_sai) {
+        if (lli->lli_sai && (lli->lli_sai->sai_thread.t_flags & SVC_RUNNING)) {
                 struct l_wait_info lwi = { 0 };
                 ll_sai_get(lli->lli_sai);
+                thread = &lli->lli_sai->sai_thread;
+                thread->t_flags = SVC_STOPPING;
+                cfs_waitq_signal(&thread->t_ctl_waitq);
                 spin_unlock(&lli->lli_lock);
 
                 CDEBUG(D_READA, "stopping statahead thread, pid %d\n",
                        current->pid);
-                thread = &lli->lli_sai->sai_thread;
-                thread->t_flags = SVC_STOPPING;
-                cfs_waitq_signal(&thread->t_ctl_waitq);
                 l_wait_event(thread->t_ctl_waitq, thread->t_flags & SVC_STOPPED,
                              &lwi);
                 ll_sai_put(lli->lli_sai);
