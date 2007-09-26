@@ -506,28 +506,44 @@ int mdc_get_lustre_md(struct obd_export *exp, struct ptlrpc_request *req,
                 int lmmsize;
                 struct lov_mds_md *lmm;
 
-                LASSERT(S_ISREG(md->body->mode));
+                if (!S_ISREG(md->body->mode)) {
+                        CERROR("OBD_MD_FLEASIZE set, should be a regular file, "
+                               "but is not\n");
+                        GOTO(out, rc = -EPROTO);
+                }
 
                 if (md->body->eadatasize == 0) {
                         CERROR("OBD_MD_FLEASIZE set, but eadatasize 0\n");
-                        RETURN(-EPROTO);
+                        GOTO(out, rc = -EPROTO);
                 }
                 lmmsize = md->body->eadatasize;
                 lmm = lustre_msg_buf(req->rq_repmsg, offset, lmmsize);
-                LASSERT (lmm != NULL);
+                if (!lmm) {
+                        CERROR ("incorrect message: lmm == 0\n");
+                        GOTO(out, rc = -EPROTO);
+                }
                 LASSERT_REPSWABBED(req, offset);
 
                 rc = obd_unpackmd(dt_exp, &md->lsm, lmm, lmmsize);
                 if (rc < 0)
-                        RETURN(rc);
+                        GOTO(out, rc);
 
-                LASSERT (rc >= sizeof (*md->lsm));
+                if (rc < sizeof(*md->lsm)) {
+                        CERROR ("lsm size too small:  rc < sizeof (*md->lsm) "
+                                "(%d < %d)\n", rc, sizeof(*md->lsm));
+                        GOTO(out, rc = -EPROTO);
+                }
+
                 offset++;
         } else if (md->body->valid & OBD_MD_FLDIREA) {
                 int lmvsize;
                 struct lov_mds_md *lmv;
-                
-                LASSERT(S_ISDIR(md->body->mode));
+
+                if(!S_ISDIR(md->body->mode)) {
+                        CERROR("OBD_MD_FLDIREA set, should be a directory, but "
+                               "is not\n");
+                        GOTO(out, rc = -EPROTO);
+                }
 
                 if (md->body->eadatasize == 0) {
                         CERROR("OBD_MD_FLDIREA is set, but eadatasize 0\n");
@@ -536,15 +552,23 @@ int mdc_get_lustre_md(struct obd_export *exp, struct ptlrpc_request *req,
                 if (md->body->valid & OBD_MD_MEA) {
                         lmvsize = md->body->eadatasize;
                         lmv = lustre_msg_buf(req->rq_repmsg, offset, lmvsize);
-                        LASSERT (lmv != NULL);
+                        if (!lmv) {
+                                CERROR ("incorrect message: lmv == 0\n");
+                                GOTO(out, rc = -EPROTO);
+                        }
+
                         LASSERT_REPSWABBED(req, offset);
 
                         rc = obd_unpackmd(md_exp, (void *)&md->mea, lmv,
                                           lmvsize);
                         if (rc < 0)
-                                RETURN(rc);
+                                GOTO(out, rc);
 
-                        LASSERT (rc >= sizeof (*md->mea));
+                        if (rc < sizeof(*md->mea)) {
+                                CERROR ("size too small:  rc < sizeof(*md->mea) "
+                                        "(%d < %d)\n", rc, sizeof(*md->mea));
+                                GOTO(out, rc = -EPROTO);
+                        }
                 }
                 offset++;
         }
@@ -554,7 +578,10 @@ int mdc_get_lustre_md(struct obd_export *exp, struct ptlrpc_request *req,
         if (md->body->valid & OBD_MD_FLRMTPERM) {
                 md->remote_perm = lustre_msg_buf(req->rq_repmsg, offset++,
                                                 sizeof(struct mdt_remote_perm));
-                LASSERT(md->remote_perm);
+                if (!md->remote_perm) {
+                        CERROR ("incorrect message: remote_perm == 0\n");
+                        GOTO(out, rc = -EPROTO);
+                }
         }
 
         /* for ACL, it's possible that FLACL is set but aclsize is zero.  only
