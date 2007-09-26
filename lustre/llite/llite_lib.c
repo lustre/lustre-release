@@ -1244,6 +1244,82 @@ void ll_clear_inode(struct inode *inode)
 
         EXIT;
 }
+static int ll_setattr_do_truncate(struct inode *inode, loff_t new_size)
+{
+        struct ll_sb_info *sbi = ll_i2sbi(inode);
+        struct ll_inode_info *lli = ll_i2info(inode);
+        struct lov_stripe_md *lsm = lli->lli_smd;
+        int rc;
+        ldlm_policy_data_t policy = { .l_extent = {new_size,
+                                                   OBD_OBJECT_EOF } };
+        struct lustre_handle lockh = { 0 };
+        int local_lock = 0; /* 0 - no local lock;
+                             * 1 - lock taken by lock_extent;
+                             * 2 - by obd_match*/
+        int ast_flags;
+        int err;
+        ENTRY;
+
+        UNLOCK_INODE_MUTEX(inode);
+        UP_WRITE_I_ALLOC_SEM(inode);
+
+        if (sbi->ll_lco.lco_flags & OBD_CONNECT_TRUNCLOCK) {
+                ast_flags = LDLM_FL_BLOCK_GRANTED;
+                rc = obd_match(sbi->ll_osc_exp, lsm, LDLM_EXTENT,
+                               &policy, LCK_PW, &ast_flags, inode, &lockh);
+                if (rc == 1) {
+                        local_lock = 2;
+                        rc = 0;
+                } else if (rc == 0) {
+                        rc = ll_file_punch(inode, new_size, 1);
+                }
+        } else {
+                /* XXX when we fix the AST intents to pass the discard-range
+                 * XXX extent, make ast_flags always LDLM_AST_DISCARD_DATA
+                 * XXX here. */
+                ast_flags = (new_size == 0) ? LDLM_AST_DISCARD_DATA : 0;
+                rc = ll_extent_lock(NULL, inode, lsm, LCK_PW, &policy,
+                                    &lockh, ast_flags);
+                if (likely(rc == 0))
+                        local_lock = 1;
+        }
+
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
+        DOWN_WRITE_I_ALLOC_SEM(inode);
+        LOCK_INODE_MUTEX(inode);
+#else
+        LOCK_INODE_MUTEX(inode);
+        DOWN_WRITE_I_ALLOC_SEM(inode);
+#endif
+        if (likely(rc == 0)) {
+                /* Only ll_inode_size_lock is taken at this level.
+                 * lov_stripe_lock() is grabbed by ll_truncate() only over
+                 * call to obd_adjust_kms().  If vmtruncate returns 0, then
+                 * ll_truncate dropped ll_inode_size_lock() */
+                ll_inode_size_lock(inode, 0);
+                if (!local_lock)
+                        set_bit(LLI_F_SRVLOCK, &lli->lli_flags);
+                rc = vmtruncate(inode, new_size);
+                clear_bit(LLI_F_SRVLOCK, &lli->lli_flags);
+                if (rc != 0) {
+                        LASSERT(atomic_read(&lli->lli_size_sem.count) <= 0);
+                        ll_inode_size_unlock(inode, 0);
+                }
+        }
+        if (local_lock) {
+                if (local_lock == 2)
+                        err = obd_cancel(sbi->ll_osc_exp, lsm, LCK_PW, &lockh);
+                else
+                        err = ll_extent_unlock(NULL, inode, lsm, LCK_PW, &lockh);
+                if (unlikely(err != 0)){
+                        CERROR("extent unlock failed: err=%d,"
+                               " unlock method =%d\n", err, local_lock);
+                        if (rc == 0)
+                                rc = err;
+                }
+        }
+        RETURN(rc);
+}
 
 /* If this inode has objects allocated to it (lsm != NULL), then the OST
  * object(s) determine the file size and mtime.  Otherwise, the MDS will
@@ -1372,77 +1448,7 @@ int ll_setattr_raw(struct inode *inode, struct iattr *attr)
          * last one is especially bad for racing o_append users on other
          * nodes. */
         if (ia_valid & ATTR_SIZE) {
-                int srvlock = !!(sbi->ll_lco.lco_flags & OBD_CONNECT_TRUNCLOCK);
-                ldlm_policy_data_t policy = { .l_extent = {attr->ia_size,
-                                                           OBD_OBJECT_EOF } };
-                struct lustre_handle lockh = { 0 };
-                int err;
-
-                if (srvlock) {
-                        int flags = LDLM_FL_BLOCK_GRANTED;
-
-                        rc = obd_match(ll_i2sbi(inode)->ll_osc_exp,
-                                       lsm, LDLM_EXTENT,
-                                       &policy, LCK_PW, &flags, inode,
-                                       &lockh);
-                        if (rc < 0)
-                                RETURN(rc);
-                        if (rc == 1)
-                                srvlock = 0;
-                }
-
-                UNLOCK_INODE_MUTEX(inode);
-                UP_WRITE_I_ALLOC_SEM(inode);
-
-                if (srvlock) {
-                        rc = ll_file_punch(inode, attr->ia_size, 1);
-                        if (rc)
-                                RETURN(rc);
-                } else {
-                        int ast_flags = 0;
-
-                        /* XXX when we fix the AST intents to pass the discard-range
-                         * XXX extent, make ast_flags always LDLM_AST_DISCARD_DATA
-                         * XXX here. */
-                        if (attr->ia_size == 0)
-                                ast_flags = LDLM_AST_DISCARD_DATA;
-
-                        rc = ll_extent_lock(NULL, inode, lsm, LCK_PW, &policy,
-                                            &lockh, ast_flags);
-                        if (rc != 0)
-                                RETURN(rc);
-                }
-
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
-                DOWN_WRITE_I_ALLOC_SEM(inode);
-                LOCK_INODE_MUTEX(inode);
-#else
-                LOCK_INODE_MUTEX(inode);
-                DOWN_WRITE_I_ALLOC_SEM(inode);
-#endif
-                /* Only ll_inode_size_lock is taken at this level.
-                 * lov_stripe_lock() is grabbed by ll_truncate() only over
-                 * call to obd_adjust_kms().  If vmtruncate returns 0, then
-                 * ll_truncate dropped ll_inode_size_lock() */
-                ll_inode_size_lock(inode, 0);
-                if (srvlock)
-                        set_bit(LLI_F_SRVLOCK, &lli->lli_flags);
-                rc = vmtruncate(inode, attr->ia_size);
-                clear_bit(LLI_F_SRVLOCK, &lli->lli_flags);
-                if (rc != 0) {
-                        LASSERT(atomic_read(&lli->lli_size_sem.count) <= 0);
-                        ll_inode_size_unlock(inode, 0);
-                }
-
-                if (!srvlock) {
-                        err = ll_extent_unlock(NULL, inode, lsm,
-                                               LCK_PW, &lockh);
-                        if (err) {
-                                CERROR("ll_extent_unlock failed: %d\n", err);
-                                if (!rc)
-                                        rc = err;
-                        }
-                }
+                rc = ll_setattr_do_truncate(inode, attr->ia_size);
         } else if (ia_valid & (ATTR_MTIME | ATTR_MTIME_SET)) {
                 obd_flag flags;
                 struct obd_info oinfo = { { { 0 } } };
