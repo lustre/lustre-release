@@ -1077,7 +1077,7 @@ int ldlm_cancel_lru_local(struct ldlm_namespace *ns, struct list_head *cancels,
                                 if (slv == 1 || lv < slv)
                                         break;
                         } else {
-                                if (added > count)
+                                if (added >= count)
                                         break;
                         }
                 } else {

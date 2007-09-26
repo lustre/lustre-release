@@ -683,7 +683,7 @@ static int ldlm_pools_shrink(ldlm_side_t client, int nr,
                 total += ldlm_pool_granted(&ns->ns_pool);
         mutex_up(ldlm_namespace_lock(client));
 
-        if (nr == 0)
+        if (nr == 0 || total == 0)
                 return total;
 
         /* Shrink at least ldlm_namespace_nr(client) namespaces. */
