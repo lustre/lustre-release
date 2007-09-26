@@ -215,6 +215,7 @@ enum stats_track_type {
 #define LL_SBI_ACL              0x10 /* support ACL */
 #define LL_SBI_JOIN             0x20 /* support JOIN */
 #define LL_SBI_LOCALFLOCK       0x40 /* Local flocks support by kernel */
+#define LL_SBI_LRU_RESIZE       0x80 /* support lru resize */
 
 /* default value for ll_sb_info->contention_time */
 #define SBI_DEFAULT_CONTENTION_SECONDS     60

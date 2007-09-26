@@ -90,6 +90,10 @@ static struct ll_sb_info *ll_init_sbi(void)
         sbi->ll_flags |= LL_SBI_CHECKSUM;
 #endif
 
+#ifdef HAVE_LRU_RESIZE_SUPPORT
+        sbi->ll_flags |= LL_SBI_LRU_RESIZE;
+#endif
+
 #ifdef HAVE_EXPORT___IGET
         INIT_LIST_HEAD(&sbi->ll_deathrow);
         spin_lock_init(&sbi->ll_deathrow_lock);
@@ -163,7 +167,8 @@ static int client_common_fill_super(struct super_block *sb,
                 OBD_CONNECT_JOIN | OBD_CONNECT_ATTRFID | OBD_CONNECT_NODEVOH |
                 OBD_CONNECT_CANCELSET | OBD_CONNECT_AT;
 #ifdef HAVE_LRU_RESIZE_SUPPORT
-        data->ocd_connect_flags |= OBD_CONNECT_LRU_RESIZE;
+        if (sbi->ll_flags & LL_SBI_LRU_RESIZE)
+                data->ocd_connect_flags |= OBD_CONNECT_LRU_RESIZE;
 #endif
 #ifdef CONFIG_FS_POSIX_ACL
         data->ocd_connect_flags |= OBD_CONNECT_ACL;
@@ -267,7 +272,8 @@ static int client_common_fill_super(struct super_block *sb,
                 OBD_CONNECT_SRVLOCK | OBD_CONNECT_CANCELSET | OBD_CONNECT_AT;
 
 #ifdef HAVE_LRU_RESIZE_SUPPORT
-        data->ocd_connect_flags |= OBD_CONNECT_LRU_RESIZE;
+        if (sbi->ll_flags & LL_SBI_LRU_RESIZE)
+                data->ocd_connect_flags |= OBD_CONNECT_LRU_RESIZE;
 #endif
 
         CDEBUG(D_RPCTRACE, "ocd_connect_flags: "LPX64" ocd_version: %d "
@@ -714,6 +720,16 @@ static int ll_options(char *options, int *flags)
                         goto next;
                 }
 
+                tmp = ll_set_opt("lruresize", s1, LL_SBI_LRU_RESIZE);
+                if (tmp) {
+                        *flags |= tmp;
+                        goto next;
+                }
+                tmp = ll_set_opt("nolruresize", s1, LL_SBI_LRU_RESIZE);
+                if (tmp) {
+                        *flags &= ~tmp;
+                        goto next;
+                }
                 LCONSOLE_ERROR_MSG(0x152, "Unknown option '%s', won't mount.\n",
                                    s1);
                 RETURN(-EINVAL);

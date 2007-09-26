@@ -3995,15 +3995,9 @@ lru_resize_disable()
         disable_pool "mds-$FSNAME"
 }
 
-elc_test_init()
-{
-        [ -z "`grep early_lock_cancel $LPROC/mdc/*/connect_flags`" ] && \
-               skip "no early lock cancel on server" && return 1
-	return 0
-}
-
 test_120a() {
-        elc_test_init || return 0
+        [ -z "`grep early_lock_cancel $LPROC/mdc/*/connect_flags`" ] && \
+               skip "no early lock cancel on server" && return 9
         lru_resize_disable
         mkdir $DIR/$tdir
         cancel_lru_locks mdc
@@ -4020,7 +4014,8 @@ test_120a() {
 run_test 120a "Early Lock Cancel: mkdir test ==================="
 
 test_120b() {
-        elc_test_init || return 0
+        [ -z "`grep early_lock_cancel $LPROC/mdc/*/connect_flags`" ] && \
+               skip "no early lock cancel on server" && return 9
         lru_resize_disable
         mkdir $DIR/$tdir
         cancel_lru_locks mdc
@@ -4037,7 +4032,8 @@ test_120b() {
 run_test 120b "Early Lock Cancel: create test =================="
 
 test_120c() {
-        elc_test_init || return 0
+        [ -z "`grep early_lock_cancel $LPROC/mdc/*/connect_flags`" ] && \
+               skip "no early lock cancel on server" && return 9
         lru_resize_disable
         mkdir -p $DIR/$tdir/d1 $DIR/$tdir/d2
         touch $DIR/$tdir/d1/f1
@@ -4055,7 +4051,8 @@ test_120c() {
 run_test 120c "Early Lock Cancel: link test ===================="
 
 test_120d() {
-        elc_test_init || return 0
+        [ -z "`grep early_lock_cancel $LPROC/mdc/*/connect_flags`" ] && \
+               skip "no early lock cancel on server" && return 9
         lru_resize_disable
         touch $DIR/$tdir
         cancel_lru_locks mdc
@@ -4072,7 +4069,8 @@ test_120d() {
 run_test 120d "Early Lock Cancel: setattr test ================="
 
 test_120e() {
-        elc_test_init || return 0
+        [ -z "`grep early_lock_cancel $LPROC/mdc/*/connect_flags`" ] && \
+               skip "no early lock cancel on server" && return 9
         lru_resize_disable
         mkdir $DIR/$tdir
         dd if=/dev/zero of=$DIR/$tdir/f1 count=1
@@ -4092,7 +4090,8 @@ test_120e() {
 run_test 120e "Early Lock Cancel: unlink test =================="
 
 test_120f() {
-        elc_test_init || return 0
+        [ -z "`grep early_lock_cancel $LPROC/mdc/*/connect_flags`" ] && \
+               skip "no early lock cancel on server" && return 9
         lru_resize_disable
         mkdir -p $DIR/$tdir/d1 $DIR/$tdir/d2
         dd if=/dev/zero of=$DIR/$tdir/d1/f1 count=1
@@ -4114,7 +4113,8 @@ test_120f() {
 run_test 120f "Early Lock Cancel: rename test =================="
 
 test_120g() {
-        elc_test_init || return 0
+        [ -z "`grep early_lock_cancel $LPROC/mdc/*/connect_flags`" ] && \
+               skip "no early lock cancel on server" && return 9
         lru_resize_disable
         count=10000
         echo create $count files
@@ -4221,17 +4221,10 @@ test_123() # statahead(bug 11401)
 }
 run_test 123 "verify statahead work"
 
-lru_resize_test_init()
-{
-        [ -z "`grep lru_resize $LPROC/mdc/*/connect_flags`" ] && \
-                skip "no lru resize on server" && return 1
-	return 0
-}
-
-test_124() {
-        lru_resize_test_init || return 0
-        cleanup -f || error "failed to unmount"
-        setup
+test_124a() {
+	[ -z "`grep lru_resize $LPROC/mdc/*/connect_flags`" ] && \
+               skip "no lru resize on server" && return 0
+        cancel_lru_locks mdc
         lru_resize_enable
         NSDIR=`find $LPROC/ldlm/namespaces | grep mdc | head -1`
 
@@ -4241,7 +4234,7 @@ test_124() {
         disable_pool_shrink mdc
 
         NR=2000
-        mkdir $DIR/$tdir
+        mkdir -p $DIR/$tdir || error "failed to create $DIR/$tdir"
 
         LRU_SIZE=`cat $NSDIR/lru_size`
 
@@ -4250,6 +4243,11 @@ test_124() {
         for ((i=0;i<$NR;i++)); do touch $DIR/$tdir/f$i; done
 
         LRU_SIZE_B=`cat $NSDIR/lru_size`
+        if test $LRU_SIZE -ge $LRU_SIZE_B; then
+                skip "No cached locks created!"
+                cat $NSDIR/pool/state
+                return 0
+        fi
         LRU_SIZE_B=$((LRU_SIZE_B-LRU_SIZE))
         log "created $LRU_SIZE_B lock(s)"
 
@@ -4268,8 +4266,7 @@ test_124() {
         # in the case of CMD, LRU_SIZE_B != $NR in most of cases
         LVF=$(($LIMIT * $MAX_HRS * 60 * 60 / $LRU_SIZE_B / $SLEEP))
 
-        log "make client drop locks $LVF times faster so that ${SLEEP}s is \
-enough to cancel $LRU_SIZE_B lock(s)"
+        log "make client drop locks $LVF times faster so that ${SLEEP}s is enough to cancel $LRU_SIZE_B lock(s)"
         OLD_LVF=`cat $NSDIR/pool/lock_volume_factor`
         echo "$LVF" > $NSDIR/pool/lock_volume_factor
         log "sleep for "$((SLEEP+SLEEP_ADD))"s"
@@ -4280,15 +4277,62 @@ enough to cancel $LRU_SIZE_B lock(s)"
         [ $LRU_SIZE_B -ge $LRU_SIZE_A ] || {
                 error "No locks dropped in "$((SLEEP+SLEEP_ADD))"s. LRU size: $LRU_SIZE_A"
                 lru_resize_enable
+                unlinkmany $DIR/$tdir/f $NR
                 return
         }
 
         log "Dropped "$((LRU_SIZE_B-LRU_SIZE_A))" locks in "$((SLEEP+SLEEP_ADD))"s"
         lru_resize_enable
         log "unlink $NR files at $DIR/$tdir"
-        unlinkmany $DIR/$tdir/f $NR > /dev/null 2>&1
+        unlinkmany $DIR/$tdir/f $NR
 }
-run_test 124 "lru resize ======================================="
+run_test 124a "lru resize ======================================="
+
+test_124b() {
+	[ -z "`grep lru_resize $LPROC/mdc/*/connect_flags`" ] && \
+               skip "no lru resize on server" && return 0
+        cleanup -f || error "failed to unmount"
+        MOUNTOPT="$MOUNTOPT,nolruresize"
+        setup
+
+        NR=3000
+        mkdir -p $DIR/$tdir || error "failed to create $DIR/$tdir"
+
+        createmany -o $DIR/$tdir/f $NR
+        log "doing ls -la $DIR/$tdir 3 times (lru resize disabled)"
+        stime=`date +%s`
+        ls -la $DIR/$tdir > /dev/null
+        ls -la $DIR/$tdir > /dev/null
+        ls -la $DIR/$tdir > /dev/null
+        etime=`date +%s`
+        nolruresize_delta=$((etime-stime))
+        log "ls -la time: $nolruresize_delta seconds"
+
+        cleanup -f || error "failed to unmount"
+        MOUNTOPT=`echo $MOUNTOPT | sed "s/nolruresize/lruresize/"`
+        setup
+
+        createmany -o $DIR/$tdir/f $NR
+        log "doing ls -la $DIR/$tdir 3 times (lru resize enabled)"
+        stime=`date +%s`
+        ls -la $DIR/$tdir > /dev/null
+        ls -la $DIR/$tdir > /dev/null
+        ls -la $DIR/$tdir > /dev/null
+        etime=`date +%s`
+        lruresize_delta=$((etime-stime))
+        log "ls -la time: $lruresize_delta seconds"
+
+        if test $lruresize_delta -gt $nolruresize_delta; then
+                log "ls -la is $((lruresize_delta - $nolruresize_delta))s slower with lru resize enabled"
+        elif test $nolruresize_delta -gt $lruresize_delta; then
+                log "ls -la is $((nolruresize_delta - $lruresize_delta))s faster with lru resize enabled"
+        else
+                log "lru resize performs the same with no lru resize"
+        fi
+
+        unlinkmany $DIR/$tdir/f $NR
+}
+run_test 124b "lru resize (performance test) ======================="
 
 test_125() { # 13358
 	mkdir -p $DIR/d125 || error "mkdir failed"
