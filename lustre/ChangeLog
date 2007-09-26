@@ -14,17 +14,11 @@ tbd         Cluster File Systems, Inc. <info@clusterfs.com>
        * Recommended e2fsprogs version: 1.40.2-cfs1
        * Note that reiserfs quotas are disabled on SLES 10 in this kernel.
 
-Severity   : minor
-Bugzilla   : 12186
-Description: Fix errors in lfs documentation
-Details    : Fixes man pages
-
 Severity   : enhancement
-Bugzilla   : 11230
-Description: Tune the kernel for good SCSI performance. 
-Details    : Set the value of /sys/block/{dev}/queue/max_sectors_kb
-	     to the value of /sys/block/{dev}/queue/max_hw_sectors_kb
-	     in mount_lustre.
+Bugzilla   : 11270
+Description: eliminate client locks in face of contention
+Details    : file contention detection and lockless i/o implementation
+	     for contended files.
 
 Severity   : normal
 Bugzilla   : 12411
@@ -36,18 +30,6 @@ Severity   : minor
 Bugzilla   : 2369 
 Description: use i_size_read and i_size_write in 2.6 port
 Details    : replace inode->i_size access with i_size_read/write()
-
-Severity   : normal
-Bugzilla   : 13600
-Description: "lfs find -obd UUID" prints directories
-Details    : "lfs find -obd UUID" will return all directory names instead
-	     of just file names. It is incorrect because the directories
-	     do not reside on the OSTs.
-
-Severity   : normal
-Bugzilla   : 13596
-Description: MDS hang after unclean shutdown of lots of clients
-Details    : Never resend AST requests.
 
 Severity   : normal
 Frequency  : when removing large files
@@ -105,17 +87,16 @@ Details    : If a new ldiskfs filesystem is created with the "uninit_groups"
        * Recommended e2fsprogs version: 1.40.2-cfs1
        * Note that reiserfs quotas are disabled on SLES 10 in this kernel.
 
+Severity   : minor
+Bugzilla   : 12186
+Description: Fix errors in lfs documentation
+Details    : Fixes man pages
+
 Severity   : enhancement
 Bugzilla   : 3055
 Description: Adaptive timeouts
 Details    : RPC timeouts adapt to changing server load and network
 	     conditions to reduce resend attempts and improve recovery time.
-
-Severity   : major
-Frequency  : Heavily loaded servers
-Bugzilla   : 12932
-Description: obd_health_check_timeout too short
-Details    : set obd_health_check_timeout as 1.5x of obd_timeout
 
 Severity   : enhancement
 Bugzilla   : 12192
@@ -138,18 +119,6 @@ Severity   : enhancement
 Bugzilla   : 11248
 Description: merge and cleanup kernel patches.
 Details    : Remove mnt_lustre_list in vfs_intent-2.6-rhel4.patch.
-
-Severity   : enhancement
-Bugzilla   : 10657
-Description: Add journal checksum support.(Kernel part)
-Details    : The journal checksum feature adds two new flags i.e
-	     JBD2_FEATURE_INCOMPAT_ASYNC_COMMIT and
-	     JBD2_FEATURE_COMPAT_CHECKSUM. JBD2_FEATURE_CHECKSUM flag
-	     indicates that the commit block contains the checksum for
-	     the blocks described by the descriptor blocks. Now commit
-	     record can be sent to disk without waiting for descriptor
-	     blocks to be written to disk. This behavior is controlled
-	     using JBD2_FEATURE_ASYNC_COMMIT flag.
 
 Severity   : enhancement
 Bugzilla   : 13039
@@ -217,12 +186,6 @@ Details    : after a connection loss, the lustre client should attempt to
 	     other potential connections.
 
 Severity   : enhancement
-Bugzilla   : 11270
-Description: eliminate client locks in face of contention
-Details    : file contention detection and lockless i/o implementation
-	     for contended files.
-
-Severity   : enhancement
 Bugzilla   : 11401
 Description: client-side metadata stat-ahead during readdir(directory readahead)
 Details    : perform client-side metadata stat-ahead when the client detects
@@ -270,6 +233,13 @@ Details    : In open/enqueue processs, Some errors, which will cause client
 	     errors should still be returned by intent, then mdc or llite will
 	     detect them.
 
+Severity   : enhancement
+Bugzilla   : 11230
+Description: Tune the kernel for good SCSI performance. 
+Details    : Set the value of /sys/block/{dev}/queue/max_sectors_kb
+	     to the value of /sys/block/{dev}/queue/max_hw_sectors_kb
+	     in mount_lustre.
+
 Severity   : critical
 Frequency  : Always for filesystems larger than 2TB on 32-bit systems.
 Bugzilla   : 13547, 13627
@@ -280,6 +250,18 @@ Details    : When generating the bio request for lustre file writes the
 	     used for the IO.  The data reads correctly from Lustre (which
 	     will overflow in a similar manner) but other file data or
 	     filesystem metadata may be corrupted in some cases.
+
+Severity   : normal
+Bugzilla   : 13600
+Description: "lfs find -obd UUID" prints directories
+Details    : "lfs find -obd UUID" will return all directory names instead
+	     of just file names. It is incorrect because the directories
+	     do not reside on the OSTs.
+
+Severity   : normal
+Bugzilla   : 13596
+Description: MDS hang after unclean shutdown of lots of clients
+Details    : Never resend AST requests.
 
 Severity   : normal
 Bugzilla   : 13304
