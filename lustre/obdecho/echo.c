@@ -466,7 +466,8 @@ static int echo_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
         obd->u.echo.eo_lastino = ECHO_INIT_OBJID;
 
         obd->obd_namespace = ldlm_namespace_new("echo-tgt",
-                                                LDLM_NAMESPACE_SERVER);
+                                                LDLM_NAMESPACE_SERVER,
+                                                LDLM_NAMESPACE_MODEST);
         if (obd->obd_namespace == NULL) {
                 LBUG();
                 RETURN(-ENOMEM);

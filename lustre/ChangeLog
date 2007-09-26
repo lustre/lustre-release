@@ -13,6 +13,15 @@
        * Note that reiserfs quotas are disabled on SLES 10 in this kernel.
 
 Severity   : enhancement
+Bugzilla   : 2262
+Description: self-adjustable client's lru lists
+Details    : use adaptive algorithm for managing client cached locks lru 
+             lists according to current server load, other client's work
+             pattern, memory activities, etc. Both, server and client 
+             side namespaces provide number of proc tunables for controlling 
+             things
+
+Severity   : enhancement
 Bugzilla   : 13641
 Description: light-weight GSS support
 Details    : Support krb5n and krb5a mode, which keep Kerberos 5 authentication

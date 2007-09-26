@@ -295,7 +295,7 @@ int client_obd_setup(struct obd_device *obddev, struct lustre_cfg *lcfg)
                 cli->cl_max_rpcs_in_flight = OSC_MAX_RIF_DEFAULT;
         }
 
-        rc = ldlm_get_ref();
+        rc = ldlm_get_ref(LDLM_NAMESPACE_CLIENT);
         if (rc) {
                 CERROR("ldlm_get_ref failed: %d\n", rc);
                 GOTO(err, rc);
@@ -345,7 +345,7 @@ int client_obd_setup(struct obd_device *obddev, struct lustre_cfg *lcfg)
 err_import:
         class_destroy_import(imp);
 err_ldlm:
-        ldlm_put_ref(0);
+        ldlm_put_ref(LDLM_NAMESPACE_CLIENT, 0);
 err:
         RETURN(rc);
 
@@ -354,8 +354,7 @@ err:
 int client_obd_cleanup(struct obd_device *obddev)
 {
         ENTRY;
-        ldlm_put_ref(obddev->obd_force);
-
+        ldlm_put_ref(LDLM_NAMESPACE_CLIENT, obddev->obd_force);
         RETURN(0);
 }
 
@@ -385,7 +384,8 @@ int client_connect_import(const struct lu_env *env,
         if (obd->obd_namespace != NULL)
                 CERROR("already have namespace!\n");
         obd->obd_namespace = ldlm_namespace_new(obd->obd_name,
-                                                LDLM_NAMESPACE_CLIENT);
+                                                LDLM_NAMESPACE_CLIENT,
+                                                LDLM_NAMESPACE_GREEDY);
         if (obd->obd_namespace == NULL)
                 GOTO(out_disco, rc = -ENOMEM);
 
@@ -1783,6 +1783,30 @@ struct obd_device * target_req2obd(struct ptlrpc_request *req)
         return req->rq_export->exp_obd;
 }
 
+static inline struct ldlm_pool *ldlm_exp2pl(struct obd_export *exp)
+{
+        LASSERT(exp != NULL);
+        return &exp->exp_obd->obd_namespace->ns_pool;
+}
+
+int target_pack_pool_reply(struct ptlrpc_request *req)
+{
+        struct ldlm_pool *pl;
+        ENTRY;
+    
+        if (!exp_connect_lru_resize(req->rq_export))
+                RETURN(0);
+        
+        pl = ldlm_exp2pl(req->rq_export);
+
+        spin_lock(&pl->pl_lock);
+        lustre_msg_set_slv(req->rq_repmsg, ldlm_pool_get_slv(pl));
+        lustre_msg_set_limit(req->rq_repmsg, ldlm_pool_get_limit(pl));
+        spin_unlock(&pl->pl_lock);
+
+        RETURN(0);
+}
+
 int target_send_reply_msg(struct ptlrpc_request *req, int rc, int fail_id)
 {
         if (OBD_FAIL_CHECK(fail_id | OBD_FAIL_ONCE)) {
@@ -1799,6 +1823,7 @@ int target_send_reply_msg(struct ptlrpc_request *req, int rc, int fail_id)
                 DEBUG_REQ(D_NET, req, "sending reply");
         }
 
+        target_pack_pool_reply(req);
         return (ptlrpc_send_reply(req, 1));
 }
 

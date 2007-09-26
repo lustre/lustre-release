@@ -38,6 +38,8 @@
 
 #if defined(LPROCFS)
 
+#define MAX_STRING_SIZE 128
+
 /* for bug 10866, global variable */
 DECLARE_RWSEM(_lprocfs_lock);
 EXPORT_SYMBOL(_lprocfs_lock);
@@ -342,6 +344,31 @@ struct proc_dir_entry *lprocfs_register(const char *name,
 }
 
 /* Generic callbacks */
+int lprocfs_rd_uint(char *page, char **start, off_t off,
+                    int count, int *eof, void *data)
+{
+        unsigned int *temp = (unsigned int *)data;
+        return snprintf(page, count, "%u\n", *temp);
+}
+
+int lprocfs_wr_uint(struct file *file, const char *buffer,
+                    unsigned long count, void *data)
+{
+        unsigned *p = data;
+        char dummy[MAX_STRING_SIZE + 1], *end;
+        unsigned long tmp;
+
+        dummy[MAX_STRING_SIZE] = '\0';
+        if (copy_from_user(dummy, buffer, MAX_STRING_SIZE))
+                return -EFAULT;
+
+        tmp = simple_strtoul(dummy, &end, 0);
+        if (dummy == end)
+                return -EINVAL;
+
+        *p = (unsigned int)tmp;
+        return count;
+}
 
 int lprocfs_rd_u64(char *page, char **start, off_t off,
                    int count, int *eof, void *data)
@@ -358,6 +385,24 @@ int lprocfs_rd_atomic(char *page, char **start, off_t off,
         LASSERT(atom != NULL);
         *eof = 1;
         return snprintf(page, count, "%d\n", atomic_read(atom));
+}
+
+int lprocfs_wr_atomic(struct file *file, const char *buffer,
+                      unsigned long count, void *data)
+{
+        atomic_t *atm = data;
+        int val = 0;
+        int rc;
+        
+        rc = lprocfs_write_helper(buffer, count, &val);
+        if (rc < 0)
+                return rc;
+
+        if (val <= 0)
+                return -ERANGE;
+                
+        atomic_set(atm, val);
+        return count;
 }
 
 int lprocfs_rd_uuid(char *page, char **start, off_t off, int count,
@@ -538,9 +583,7 @@ static const char *obd_connect_names[] = {
         "request_portal",
         "acl",
         "xattr",
-        "real_conn",
         "truncate_lock",
-        "obsoleted",
         "inode_bit_locks",
         "join_file",
         "getattr_by_fid",
@@ -551,8 +594,12 @@ static const char *obd_connect_names[] = {
         "64bit_qdata",
         "mds_capability",
         "oss_capability",
-        "mds_mds_connection",
+        "early_cancel",
         "size_on_mds",
+        "adaptive_timeouts"
+        "lru_resize",
+        "mds_mds_connection",
+        "real_conn",
         NULL
 };
 
@@ -1507,6 +1554,9 @@ EXPORT_SYMBOL(lprocfs_exp_cleanup);
 
 EXPORT_SYMBOL(lprocfs_rd_u64);
 EXPORT_SYMBOL(lprocfs_rd_atomic);
+EXPORT_SYMBOL(lprocfs_wr_atomic);
+EXPORT_SYMBOL(lprocfs_rd_uint);
+EXPORT_SYMBOL(lprocfs_wr_uint);
 EXPORT_SYMBOL(lprocfs_rd_uuid);
 EXPORT_SYMBOL(lprocfs_rd_name);
 EXPORT_SYMBOL(lprocfs_rd_fstype);

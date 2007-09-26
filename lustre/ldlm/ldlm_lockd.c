@@ -42,9 +42,6 @@
 
 extern cfs_mem_cache_t *ldlm_resource_slab;
 extern cfs_mem_cache_t *ldlm_lock_slab;
-extern struct list_head ldlm_namespace_list;
-
-extern struct semaphore ldlm_namespace_lock;
 static struct semaphore ldlm_ref_sem;
 static int ldlm_refcount;
 
@@ -1138,8 +1135,6 @@ int ldlm_request_cancel(struct ptlrpc_request *req,
         int i, count, done = 0;
         ENTRY;
 
-        LDLM_DEBUG_NOLOCK("server-side cancel handler START: %d locks, "
-                          "starting at %d", dlm_req->lock_count, first);
         count = dlm_req->lock_count ? dlm_req->lock_count : 1;
         if (first >= count)
                 RETURN(0);
@@ -1148,6 +1143,9 @@ int ldlm_request_cancel(struct ptlrpc_request *req,
          * skip lock cancelling to make replay tests to pass. */
         if (lustre_msg_get_flags(req->rq_reqmsg) & MSG_REPLAY)
                 RETURN(0);
+
+        LDLM_DEBUG_NOLOCK("server-side cancel handler START: %d locks, "
+                          "starting at %d", count, first);
 
         for (i = first; i < count; i++) {
                 lock = ldlm_handle2lock(&dlm_req->lock_handle[i]);
@@ -1763,16 +1761,16 @@ static int ldlm_bl_thread_main(void *arg)
 
 #endif
 
-static int ldlm_setup(void);
-static int ldlm_cleanup(int force);
+static int ldlm_setup(ldlm_side_t client);
+static int ldlm_cleanup(ldlm_side_t client, int force);
 
-int ldlm_get_ref(void)
+int ldlm_get_ref(ldlm_side_t client)
 {
         int rc = 0;
         ENTRY;
         mutex_down(&ldlm_ref_sem);
         if (++ldlm_refcount == 1) {
-                rc = ldlm_setup();
+                rc = ldlm_setup(client);
                 if (rc)
                         ldlm_refcount--;
         }
@@ -1781,12 +1779,12 @@ int ldlm_get_ref(void)
         RETURN(rc);
 }
 
-void ldlm_put_ref(int force)
+void ldlm_put_ref(ldlm_side_t client, int force)
 {
         ENTRY;
         mutex_down(&ldlm_ref_sem);
         if (ldlm_refcount == 1) {
-                int rc = ldlm_cleanup(force);
+                int rc = ldlm_cleanup(client, force);
                 if (rc)
                         CERROR("ldlm_cleanup failed: %d\n", rc);
                 else
@@ -1799,7 +1797,7 @@ void ldlm_put_ref(int force)
         EXIT;
 }
 
-static int ldlm_setup(void)
+static int ldlm_setup(ldlm_side_t client)
 {
         struct ldlm_bl_pool *blp;
         int rc = 0;
@@ -1903,6 +1901,11 @@ static int ldlm_setup(void)
                    expired_lock_thread.elt_state == ELT_READY);
 #endif
 
+#ifdef __KERNEL__
+        rc = ldlm_pools_init(client);
+        if (rc)
+                GOTO(out_thread, rc);
+#endif
         RETURN(0);
 
 #ifdef __KERNEL__
@@ -1921,18 +1924,24 @@ static int ldlm_setup(void)
         return rc;
 }
 
-static int ldlm_cleanup(int force)
+static int ldlm_cleanup(ldlm_side_t client, int force)
 {
 #ifdef __KERNEL__
         struct ldlm_bl_pool *blp = ldlm_state->ldlm_bl_pool;
 #endif
         ENTRY;
 
-        if (!list_empty(&ldlm_namespace_list)) {
+        if (!list_empty(ldlm_namespace_list(LDLM_NAMESPACE_SERVER)) || 
+            !list_empty(ldlm_namespace_list(LDLM_NAMESPACE_CLIENT))) {
                 CERROR("ldlm still has namespaces; clean these up first.\n");
-                ldlm_dump_all_namespaces(D_DLMTRACE);
+                ldlm_dump_all_namespaces(LDLM_NAMESPACE_SERVER, D_DLMTRACE);
+                ldlm_dump_all_namespaces(LDLM_NAMESPACE_CLIENT, D_DLMTRACE);
                 RETURN(-EBUSY);
         }
+
+#ifdef __KERNEL__
+        ldlm_pools_fini();
+#endif
 
 #ifdef __KERNEL__
         while (atomic_read(&blp->blp_num_threads) > 0) {
@@ -1971,7 +1980,8 @@ static int ldlm_cleanup(int force)
 int __init ldlm_init(void)
 {
         init_mutex(&ldlm_ref_sem);
-        init_mutex(&ldlm_namespace_lock);
+        init_mutex(ldlm_namespace_lock(LDLM_NAMESPACE_SERVER));
+        init_mutex(ldlm_namespace_lock(LDLM_NAMESPACE_CLIENT));
         ldlm_resource_slab = cfs_mem_cache_create("ldlm_resources",
                                                sizeof(struct ldlm_resource), 0,
                                                SLAB_HWCACHE_ALIGN);
@@ -2092,6 +2102,7 @@ EXPORT_SYMBOL(target_cancel_recovery_timer);
 EXPORT_SYMBOL(target_send_reply);
 EXPORT_SYMBOL(target_queue_recovery_request);
 EXPORT_SYMBOL(target_handle_ping);
+EXPORT_SYMBOL(target_pack_pool_reply);
 EXPORT_SYMBOL(target_handle_disconnect);
 
 /* l_lock.c */

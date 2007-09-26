@@ -171,10 +171,11 @@ int ldlm_lock_remove_from_lru_nolock(struct ldlm_lock *lock)
 {
         int rc = 0;
         if (!list_empty(&lock->l_lru)) {
+                struct ldlm_namespace *ns = lock->l_resource->lr_namespace;
                 LASSERT(lock->l_resource->lr_type != LDLM_FLOCK);
                 list_del_init(&lock->l_lru);
-                lock->l_resource->lr_namespace->ns_nr_unused--;
-                LASSERT(lock->l_resource->lr_namespace->ns_nr_unused >= 0);
+                ns->ns_nr_unused--;
+                LASSERT(ns->ns_nr_unused >= 0);
                 rc = 1;
         }
         return rc;
@@ -182,13 +183,47 @@ int ldlm_lock_remove_from_lru_nolock(struct ldlm_lock *lock)
 
 int ldlm_lock_remove_from_lru(struct ldlm_lock *lock)
 {
+        struct ldlm_namespace *ns = lock->l_resource->lr_namespace;
         int rc;
         ENTRY;
-        spin_lock(&lock->l_resource->lr_namespace->ns_unused_lock);
+        spin_lock(&ns->ns_unused_lock);
         rc = ldlm_lock_remove_from_lru_nolock(lock);
-        spin_unlock(&lock->l_resource->lr_namespace->ns_unused_lock);
+        spin_unlock(&ns->ns_unused_lock);
         EXIT;
         return rc;
+}
+
+void ldlm_lock_add_to_lru_nolock(struct ldlm_lock *lock)
+{
+        struct ldlm_namespace *ns = lock->l_resource->lr_namespace;
+        lock->l_last_used = cfs_time_current();
+        LASSERT(list_empty(&lock->l_lru));
+        list_add_tail(&lock->l_lru, &ns->ns_unused_list);
+        LASSERT(ns->ns_nr_unused >= 0);
+        ns->ns_nr_unused++;
+}
+
+void ldlm_lock_add_to_lru(struct ldlm_lock *lock)
+{
+        struct ldlm_namespace *ns = lock->l_resource->lr_namespace;
+        ENTRY;
+        spin_lock(&ns->ns_unused_lock);
+        ldlm_lock_add_to_lru_nolock(lock);
+        spin_unlock(&ns->ns_unused_lock);
+        EXIT;
+}
+
+void ldlm_lock_touch_in_lru(struct ldlm_lock *lock)
+{
+        struct ldlm_namespace *ns = lock->l_resource->lr_namespace;
+        ENTRY;
+        spin_lock(&ns->ns_unused_lock);
+        if (!list_empty(&lock->l_lru)) {
+                ldlm_lock_remove_from_lru_nolock(lock);
+                ldlm_lock_add_to_lru_nolock(lock);
+        }
+        spin_unlock(&ns->ns_unused_lock);
+        EXIT;
 }
 
 /* This used to have a 'strict' flag, which recovery would use to mark an
@@ -531,7 +566,6 @@ void ldlm_lock_addref_internal_nolock(struct ldlm_lock *lock, __u32 mode)
                 lock->l_readers++;
         if (mode & (LCK_EX | LCK_CW | LCK_PW | LCK_GROUP))
                 lock->l_writers++;
-        lock->l_last_used = cfs_time_current();
         LDLM_LOCK_GET(lock);
         LDLM_DEBUG(lock, "ldlm_lock_addref(%s)", ldlm_lockname[mode]);
 }
@@ -592,18 +626,14 @@ void ldlm_lock_decref_internal(struct ldlm_lock *lock, __u32 mode)
                    !(lock->l_flags & LDLM_FL_NO_LRU)) {
                 /* If this is a client-side namespace and this was the last
                  * reference, put it on the LRU. */
-                LASSERT(list_empty(&lock->l_lru));
-                LASSERT(ns->ns_nr_unused >= 0);
-                lock->l_last_used = cfs_time_current();
-                spin_lock(&ns->ns_unused_lock);
-                list_add_tail(&lock->l_lru, &ns->ns_unused_list);
-                ns->ns_nr_unused++;
-                spin_unlock(&ns->ns_unused_lock);
+                ldlm_lock_add_to_lru(lock);
                 unlock_res_and_lock(lock);
-                /* Call ldlm_cancel_lru() only if EARLY_CANCEL is not supported
-                 * by the server, otherwise, it is done on enqueue. */
-                if (!exp_connect_cancelset(lock->l_conn_export))
-                        ldlm_cancel_lru(ns, LDLM_ASYNC);
+                /* Call ldlm_cancel_lru() only if EARLY_CANCEL and LRU RESIZE 
+                 * are not supported by the server, otherwise, it is done on 
+                 * enqueue. */
+                if (!exp_connect_cancelset(lock->l_conn_export) && 
+                    !exp_connect_lru_resize(lock->l_conn_export))
+                        ldlm_cancel_lru(ns, 0, LDLM_ASYNC);
         } else {
                 unlock_res_and_lock(lock);
         }
@@ -856,6 +886,7 @@ void ldlm_grant_lock(struct ldlm_lock *lock, struct list_head *work_list)
         if (work_list && lock->l_completion_ast != NULL)
                 ldlm_add_ast_work_item(lock, NULL, work_list);
 
+        ldlm_pool_add(&res->lr_namespace->ns_pool, lock);
         EXIT;
 }
 
@@ -916,10 +947,12 @@ static struct ldlm_lock *search_queue(struct list_head *queue, ldlm_mode_t mode,
                     !(lock->l_flags & LDLM_FL_LOCAL))
                         continue;
 
-                if (flags & LDLM_FL_TEST_LOCK)
+                if (flags & LDLM_FL_TEST_LOCK) {
                         LDLM_LOCK_GET(lock);
-                else
+                        ldlm_lock_touch_in_lru(lock);
+                } else {
                         ldlm_lock_addref_internal_nolock(lock, mode);
+                }
                 return lock;
         }
 
@@ -1473,6 +1506,13 @@ void ldlm_lock_cancel(struct ldlm_lock *lock)
         ldlm_del_waiting_lock(lock); 
         ldlm_resource_unlink_lock(lock);
         ldlm_lock_destroy_nolock(lock);
+
+        if (lock->l_granted_mode == lock->l_req_mode)
+                ldlm_pool_del(&ns->ns_pool, lock);
+
+        /* Make sure we will not be called again for same lock what is possible
+         * if not to zero out lock->l_granted_mode */
+        lock->l_granted_mode = 0;
         unlock_res_and_lock(lock);
 
         EXIT;

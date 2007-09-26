@@ -731,6 +731,7 @@ finish:
                         GOTO(out, rc = -ENODEV);
                 }
                 exp->exp_connect_flags = ocd->ocd_connect_flags;
+                imp->imp_obd->obd_self_export->exp_connect_flags = ocd->ocd_connect_flags;
                 class_export_put(exp);
 
                 obd_import_event(imp->imp_obd, imp, IMP_EVENT_OCD);
@@ -771,6 +772,8 @@ finish:
                         cli->cl_max_pages_per_rpc = 
                                 ocd->ocd_brw_size >> CFS_PAGE_SHIFT;
                 }
+
+                imp->imp_obd->obd_namespace->ns_connect_flags = ocd->ocd_connect_flags;
 
                 LASSERT((cli->cl_max_pages_per_rpc <= PTLRPC_MAX_BRW_PAGES) &&
                         (cli->cl_max_pages_per_rpc > 0));
