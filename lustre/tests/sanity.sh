@@ -2570,15 +2570,14 @@ test_65c() {
 }
 run_test 65c "directory setstripe $(($STRIPESIZE * 4)) 1 $(($OSTCOUNT - 1))"
 
-[ $STRIPECOUNT -eq 0 ] && sc=1 || sc=$(($STRIPECOUNT - 1))
-
 test_65d() {
 	mkdir -p $DIR/d65
+	[ $STRIPECOUNT -le 0 ] && sc=1 || sc=$(($STRIPECOUNT - 1))
 	$SETSTRIPE $DIR/d65 $STRIPESIZE -1 $sc || error "setstripe"
 	touch $DIR/d65/f4 $DIR/d65/f5
 	$LVERIFY $DIR/d65 $DIR/d65/f4 $DIR/d65/f5 || error "lverify failed"
 }
-run_test 65d "directory setstripe $STRIPESIZE -1 $sc =============="
+run_test 65d "directory setstripe $STRIPESIZE -1 stripe_count =============="
 
 test_65e() {
 	mkdir -p $DIR/d65
