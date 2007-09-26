@@ -697,9 +697,20 @@ static int ptlrpc_at_send_early_reply(struct ptlrpc_request *req,
         reqcopy->rq_reqmsg = reqmsg;
         memcpy(reqmsg, req->rq_reqmsg, req->rq_reqlen);
 
+        /* Connection ref */
+        reqcopy->rq_export = class_conn2export(
+                                     lustre_msg_get_handle(reqcopy->rq_reqmsg));
+        if (reqcopy->rq_export == NULL)
+                GOTO(out, rc = -ENODEV);
+
+        /* RPC ref */
+        class_export_rpc_get(reqcopy->rq_export);
+        if (req->rq_export->exp_obd && req->rq_export->exp_obd->obd_fail)
+                GOTO(out_put, rc = -ENODEV);
+
         rc = lustre_pack_reply_flags(reqcopy, 1, NULL, NULL, LPRFL_EARLY_REPLY);
         if (rc) 
-                GOTO(out, rc);
+                GOTO(out_put, rc);
 
         rc = ptlrpc_send_reply(reqcopy, PTLRPC_REPLY_EARLY);
 
@@ -714,7 +725,11 @@ static int ptlrpc_at_send_early_reply(struct ptlrpc_request *req,
         /* Free the (early) reply state from lustre_pack_reply. 
            (ptlrpc_send_reply takes it's own rs ref, so this is safe here) */
         ptlrpc_req_drop_rs(reqcopy);
-out:        
+
+out_put:
+        class_export_rpc_put(reqcopy->rq_export);
+        class_export_put(reqcopy->rq_export);
+out:
         OBD_FREE(reqmsg, req->rq_reqlen);
         OBD_FREE(reqcopy, sizeof *reqcopy);
         RETURN(rc);
@@ -867,6 +882,7 @@ ptlrpc_server_handle_req_in(struct ptlrpc_service *svc)
         if (req->rq_export) {
                 rc = ptlrpc_check_req(req);
                 class_export_put(req->rq_export);
+                req->rq_export = NULL;
                 if (rc) 
                         goto err_req;
         }
