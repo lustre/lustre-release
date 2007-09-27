@@ -49,13 +49,15 @@
 #define XATTR_USER_PREFIX       "user."
 #define XATTR_TRUSTED_PREFIX    "trusted."
 #define XATTR_SECURITY_PREFIX   "security."
+#define XATTR_LUSTRE_PREFIX     "lustre."
 
 #define XATTR_USER_T            (1)
 #define XATTR_TRUSTED_T         (2)
 #define XATTR_SECURITY_T        (3)
 #define XATTR_ACL_ACCESS_T      (4)
 #define XATTR_ACL_DEFAULT_T     (5)
-#define XATTR_OTHER_T           (6)
+#define XATTR_LUSTRE_T          (6)
+#define XATTR_OTHER_T           (7)
 
 static
 int get_xattr_type(const char *name)
@@ -77,6 +79,10 @@ int get_xattr_type(const char *name)
         if (!strncmp(name, XATTR_SECURITY_PREFIX,
                      sizeof(XATTR_SECURITY_PREFIX) - 1))
                 return XATTR_SECURITY_T;
+
+        if (!strncmp(name, XATTR_LUSTRE_PREFIX,
+                     sizeof(XATTR_LUSTRE_PREFIX) - 1))
+                return XATTR_LUSTRE_T;
 
         return XATTR_OTHER_T;
 }
@@ -117,7 +123,8 @@ int ll_setxattr_common(struct inode *inode, const char *name,
                 RETURN(rc);
 
         /* b10667: ignore lustre special xattr for now */
-        if (xattr_type == XATTR_TRUSTED_T && strcmp(name, "trusted.lov") == 0)
+        if (xattr_type == XATTR_TRUSTED_T && strcmp(name, "trusted.lov") == 0 ||
+            xattr_type == XATTR_LUSTRE_T && strcmp(name, "lustre.lov") == 0)
                 RETURN(0);
 
         ll_inode2fid(&fid, inode);
@@ -149,8 +156,12 @@ int ll_setxattr(struct dentry *dentry, const char *name,
 
         ll_stats_ops_tally(ll_i2sbi(inode), LPROC_LL_SETXATTR, 1);
 
-        if (strncmp(name, XATTR_TRUSTED_PREFIX, 8) == 0 &&
-            strcmp(name + 8, "lov") == 0) {
+        if (strncmp(name, XATTR_TRUSTED_PREFIX, 
+                    sizeof(XATTR_TRUSTED_PREFIX) - 1) == 0 &&
+            strcmp(name + sizeof(XATTR_TRUSTED_PREFIX) - 1, "lov") == 0 ||
+            strncmp(name, XATTR_LUSTRE_PREFIX, 
+                    sizeof(XATTR_LUSTRE_PREFIX) - 1) == 0 &&
+            strcmp(name + sizeof(XATTR_LUSTRE_PREFIX) - 1, "lov") == 0) {
                 struct lov_user_md *lump = (struct lov_user_md *)value;
                 int rc = 0;
 
@@ -307,39 +318,43 @@ ssize_t ll_getxattr(struct dentry *dentry, const char *name,
 
         ll_stats_ops_tally(ll_i2sbi(inode), LPROC_LL_GETXATTR, 1);
 
-         if (strncmp(name, XATTR_TRUSTED_PREFIX, 8) == 0 &&
-             strcmp(name + 8, "lov") == 0) {
-                 struct lov_user_md *lump;
-                 struct lov_mds_md *lmm = NULL;
-                 struct ptlrpc_request *request = NULL;
-                 int rc = 0, lmmsize;
+        if (strncmp(name, XATTR_TRUSTED_PREFIX, 
+                    sizeof(XATTR_TRUSTED_PREFIX) - 1) == 0 &&
+            strcmp(name + sizeof(XATTR_TRUSTED_PREFIX) - 1, "lov") == 0 ||
+            strncmp(name, XATTR_LUSTRE_PREFIX, 
+                    sizeof(XATTR_LUSTRE_PREFIX) - 1) == 0 &&
+            strcmp(name + sizeof(XATTR_LUSTRE_PREFIX) - 1, "lov") == 0) {
+                struct lov_user_md *lump;
+                struct lov_mds_md *lmm = NULL;
+                struct ptlrpc_request *request = NULL;
+                int rc = 0, lmmsize;
 
-                 if (S_ISREG(inode->i_mode)) {
-                         rc = ll_lov_getstripe_ea_info(dentry->d_parent->d_inode, 
-                                                       dentry->d_name.name, &lmm, 
-                                                       &lmmsize, &request);
-                 } else if (S_ISDIR(inode->i_mode)) {
-                         rc = ll_dir_getstripe(inode, &lmm, &lmmsize, &request);
-                 }
+                if (S_ISREG(inode->i_mode)) {
+                        rc = ll_lov_getstripe_ea_info(dentry->d_parent->d_inode, 
+                                                      dentry->d_name.name, &lmm, 
+                                                      &lmmsize, &request);
+                } else if (S_ISDIR(inode->i_mode)) {
+                        rc = ll_dir_getstripe(inode, &lmm, &lmmsize, &request);
+                }
 
-                 if (rc < 0)
-                        GOTO(out, rc);
-                 if (size == 0)
-                        GOTO(out, rc = lmmsize);
+                if (rc < 0)
+                       GOTO(out, rc);
+                if (size == 0)
+                       GOTO(out, rc = lmmsize);
 
-                 if (size < lmmsize) {
-                         CERROR("server bug: replied size %u > %u\n",
-                                lmmsize, (int)size);
-                         GOTO(out, rc = -ERANGE);
-                 }
+                if (size < lmmsize) {
+                        CERROR("server bug: replied size %u > %u\n",
+                               lmmsize, (int)size);
+                        GOTO(out, rc = -ERANGE);
+                }
 
-                 lump = (struct lov_user_md *)buffer;
-                 memcpy(lump, lmm, lmmsize);
+                lump = (struct lov_user_md *)buffer;
+                memcpy(lump, lmm, lmmsize);
 
-                 rc = lmmsize;
+                rc = lmmsize;
 out:
-                 ptlrpc_req_finished(request);
-                 return(rc);
+                ptlrpc_req_finished(request);
+                return(rc);
         }
 
         return ll_getxattr_common(inode, name, buffer, size, OBD_MD_FLXATTR);
@@ -349,6 +364,9 @@ ssize_t ll_listxattr(struct dentry *dentry, char *buffer, size_t size)
 {
         struct inode *inode = dentry->d_inode;
         int rc = 0, rc2 = 0;
+        struct lov_mds_md *lmm = NULL;
+        struct ptlrpc_request *request = NULL;
+        int lmmsize;
 
         LASSERT(inode);
 
@@ -359,40 +377,34 @@ ssize_t ll_listxattr(struct dentry *dentry, char *buffer, size_t size)
 
         rc = ll_getxattr_common(inode, NULL, buffer, size, OBD_MD_FLXATTRLS);
 
-        if (!capable(CAP_SYS_ADMIN)) {
-                struct lov_mds_md *lmm = NULL;
-                struct ptlrpc_request *request = NULL;
-                int lmmsize;
-
-                if (S_ISREG(inode->i_mode)) {
-                        struct ll_inode_info *lli = ll_i2info(inode);
-                        struct lov_stripe_md *lsm = NULL;
-                        lsm = lli->lli_smd;
-                        if (lsm == NULL)
-                                rc2 = -1; 
-                } else if (S_ISDIR(inode->i_mode)) {
-                        rc2 = ll_dir_getstripe(inode, &lmm, &lmmsize, &request);
-                }
-
-                if (rc2 < 0) {
-                        GOTO(out, rc2 = 0);
-                } else {
-                        const int prefix_len = sizeof(XATTR_TRUSTED_PREFIX)-1;
-                        const size_t name_len   = sizeof("lov") - 1;
-                        const size_t total_len  = prefix_len + name_len + 1;
-
-                        if (buffer && (rc + total_len) <= size) {
-                                buffer += rc;
-                                memcpy(buffer,XATTR_TRUSTED_PREFIX, prefix_len);
-                                memcpy(buffer+prefix_len, "lov", name_len);
-                                buffer[prefix_len + name_len] = '\0';
-                        }
-                        rc2 = total_len;
-                }
-out:
-                ptlrpc_req_finished(request);
-                rc = rc + rc2;
+        if (S_ISREG(inode->i_mode)) {
+                struct ll_inode_info *lli = ll_i2info(inode);
+                struct lov_stripe_md *lsm = NULL;
+                lsm = lli->lli_smd;
+                if (lsm == NULL)
+                        rc2 = -1; 
+        } else if (S_ISDIR(inode->i_mode)) {
+                rc2 = ll_dir_getstripe(inode, &lmm, &lmmsize, &request);
         }
+
+        if (rc2 < 0) {
+                GOTO(out, rc2 = 0);
+        } else {
+                const int prefix_len = sizeof(XATTR_LUSTRE_PREFIX)-1;
+                const size_t name_len   = sizeof("lov") - 1;
+                const size_t total_len  = prefix_len + name_len + 1;
+
+                if (buffer && (rc + total_len) <= size) {
+                        buffer += rc;
+                        memcpy(buffer,XATTR_LUSTRE_PREFIX, prefix_len);
+                        memcpy(buffer+prefix_len, "lov", name_len);
+                        buffer[prefix_len + name_len] = '\0';
+                }
+                rc2 = total_len;
+        }
+out:
+        ptlrpc_req_finished(request);
+        rc = rc + rc2;
         
         return rc;
 }

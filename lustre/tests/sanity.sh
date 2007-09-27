@@ -3469,22 +3469,22 @@ test_102b() {
 run_test 102b "getfattr/setfattr for trusted.lov EAs ============"
 
 test_102c() {
-	# b10930: get/set/list trusted.lov xattr
-	echo "get/set/list trusted.lov xattr ..."
+	# b10930: get/set/list lustre.lov xattr
+	echo "get/set/list lustre.lov xattr ..."
 	[ "$OSTCOUNT" -lt "2" ] && skip "skipping 2-stripe test" && return
 	mkdir -p $DIR/$tdir
 	chown $RUNAS_ID $DIR/$tdir
 	local testfile=$DIR/$tdir/$tfile
 	$RUNAS $SETSTRIPE $testfile 65536 1 2
-	$RUNAS getfattr -d -m "^trusted" $testfile 2> /dev/null | \
-	grep "trusted.lov" || error "can't get trusted.lov from $testfile"
+	$RUNAS getfattr -d -m "^lustre" $testfile 2> /dev/null | \
+	grep "lustre.lov" || error "can't get lustre.lov from $testfile"
 
 	local testfile2=${testfile}2
-	local value=`getfattr -n trusted.lov $testfile 2> /dev/null | \
-		     grep "trusted.lov" |sed -e 's/[^=]\+=//'  `
+	local value=`getfattr -n lustre.lov $testfile 2> /dev/null | \
+		     grep "lustre.lov" |sed -e 's/[^=]\+=//'  `
 	
 	$RUNAS $MCREATE $testfile2
-	$RUNAS setfattr -n trusted.lov -v $value $testfile2 	
+	$RUNAS setfattr -n lustre.lov -v $value $testfile2 	
 	local tmp_file=${testfile}3
 	$RUNAS $GETSTRIPE -v $testfile2 > $tmp_file
 	local stripe_size=`grep "size"  $tmp_file| awk '{print $2}'`
@@ -3492,7 +3492,7 @@ test_102c() {
 	[ $stripe_size -eq 65536 ] || error "stripe size $stripe_size != 65536"
 	[ $stripe_count -eq 2 ] || error "stripe count $stripe_count != 2"
 }
-run_test 102c "non-root getfattr/setfattr for trusted.lov EAs ==========="
+run_test 102c "non-root getfattr/setfattr for lustre.lov EAs ==========="
 
 get_stripe_info() {
 	stripe_size=0
