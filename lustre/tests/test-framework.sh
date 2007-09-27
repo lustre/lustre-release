@@ -141,6 +141,7 @@ load_modules() {
     fi
 
     load_module llite/lustre
+    load_module llite/llite_lloop
     rm -f $TMP/ogdb-`hostname`
     OGDB=$TMP
     [ -d /r ] && OGDB="/r/tmp"

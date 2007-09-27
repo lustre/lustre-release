@@ -7,8 +7,8 @@
 set -e
 
 ONLY=${ONLY:-"$*"}
-# bug number for skipped test: 4900 4900 2108 9789 3637 9789 3561 5188/5749 13310 10764
-ALWAYS_EXCEPT="                 27o 27q  42a  42b  42c  42d  45   68        74b   75 $SANITY_EXCEPT"
+# bug number for skipped test: 4900 4900 2108 9789 3637 9789 3561 13310 10764
+ALWAYS_EXCEPT=${ALWAYS_EXCEPT:-"27o 27q  42a  42b  42c  42d  45   74b   75"}
 # UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
 
 [ "$SLOW" = "no" ] && EXCEPT="$EXCEPT 24o 27m 36f 36g 51b 51c 60c 63 64b 71 73 101 103 115 120g"
@@ -2721,12 +2721,14 @@ test_67b() { # bug 3285 - supplementary group fails on MDS, passes on client
 }
 run_test 67b "supplementary group test ========================="
 
+LLOOP=
 cleanup_68() {
 	trap 0
-	if [ "$LOOPDEV" ]; then
-		swapoff $LOOPDEV || error "swapoff failed"
-		losetup -d $LOOPDEV || error "losetup -d failed"
-		unset LOOPDEV LOOPNUM
+	if [ ! -z "$LLOOP" ]; then
+		swapoff $LLOOP || error "swapoff failed"
+		$LCTL blockdev_detach $LLOOP || error "detach failed"
+		rm -f $LLOOP
+		unset LLOOP
 	fi
 	rm -f $DIR/f68
 }
@@ -2739,6 +2741,7 @@ swap_used() {
 	swapon -s | awk '($1 == "'$1'") { print $4 }'
 }
 
+
 # excercise swapping to lustre by adding a high priority swapfile entry
 # and then consuming memory until it is used.
 test_68() {
@@ -2746,20 +2749,24 @@ test_68() {
 	grep -q obdfilter $LPROC/devices && \
 		skip "local OST" && return
 
-	find_loop_dev
-	dd if=/dev/zero of=$DIR/f68 bs=64k count=1024
+	grep -q llite_lloop /proc/modules
+	[ $? -ne 0 ] && skip "can't find module llite_lloop" && return
+
+	LLOOP=$TMP/lloop.`date +%s`.`date +%N`
+	dd if=/dev/zero of=$DIR/f68 bs=64k seek=2047 count=1
+	mkswap $DIR/f68
+
+	$LCTL blockdev_attach $DIR/f68 $LLOOP || error "attach failed"
 
 	trap cleanup_68 EXIT
 
-	losetup $LOOPDEV $DIR/f68 || error "losetup $LOOPDEV failed"
-	mkswap $LOOPDEV
-	swapon -p 32767 $LOOPDEV || error "swapon $LOOPDEV failed"
+	swapon -p 32767 $LLOOP || error "swapon $LLOOP failed"
 
-	echo "before: `swapon -s | grep $LOOPDEV`"
-	KBFREE=`meminfo MemTotal`
-	$MEMHOG $KBFREE || error "error allocating $KBFREE kB"
-	echo "after: `swapon -s | grep $LOOPDEV`"
-	SWAPUSED=`swap_used $LOOPDEV`
+	echo "before: `swapon -s | grep $LLOOP`"
+	MEMTOTAL=`meminfo MemTotal`
+	$MEMHOG $MEMTOTAL || error "error allocating $MEMTOTAL kB"
+	echo "after: `swapon -s | grep $LLOOP`"
+	SWAPUSED=`swap_used $LLOOP`
 
 	cleanup_68
 
