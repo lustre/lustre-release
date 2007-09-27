@@ -525,7 +525,7 @@ static DIR *opendir_parent(char *path)
         return parent;
 }
 
-static int llapi_semantic_traverse(char *path, DIR *parent,
+static int llapi_semantic_traverse(char *path, int size, DIR *parent,
                                    semantic_func_t sem_init,
                                    semantic_func_t sem_fini, void *data)
 {
@@ -559,6 +559,12 @@ static int llapi_semantic_traverse(char *path, DIR *parent,
                         continue;
 
                 path[len] = 0;
+                if ((len + dent->d_reclen + 2) > size) {
+                        fprintf(stderr,
+                                "error: %s: string buffer is too small\n",
+                                __FUNCTION__);
+                        break;
+                }
                 strcat(path, "/");
                 strcat(path, dent->d_name);
 
@@ -575,7 +581,7 @@ static int llapi_semantic_traverse(char *path, DIR *parent,
                          * tool only makes sense for lustre filesystems. */
                         break;
                 case DT_DIR:
-                        ret = llapi_semantic_traverse(path, d, sem_init,
+                        ret = llapi_semantic_traverse(path, size, d, sem_init,
                                                       sem_fini, data);
                         if (ret < 0)
                                 goto out;
@@ -887,21 +893,33 @@ static int cb_common_fini(char *path, DIR *parent, DIR *d, void *data)
 
 int llapi_find(char *path, struct find_param *param)
 {
-        char buf[PATH_MAX + 1];
-        int ret;
+        char *buf;
+        int ret, len = strlen(path);
+
+        if (len > PATH_MAX) {
+                fprintf(stderr, "%s: Path name '%s' is too long.\n",
+                        __FUNCTION__, path);
+                return -EINVAL;
+        }
+
+        buf = (char *)malloc(PATH_MAX + 1);
+        if (!buf)
+                return -ENOMEM;
 
         ret = common_param_init(param);
-        if (ret)
+        if (ret) {
+                free(buf);
                 return ret;
+        }
 
         param->depth = 0;
-        strncpy(buf, path, strlen(path));
-        buf[strlen(path)] = '\0';
 
-        ret = llapi_semantic_traverse(buf, NULL, cb_find_init,
+        strncpy(buf, path, PATH_MAX + 1);
+        ret = llapi_semantic_traverse(buf, PATH_MAX + 1, NULL, cb_find_init,
                                       cb_common_fini, param);
 
         find_param_fini(param);
+        free(buf);
         return ret < 0 ? ret : 0;
 }
 
@@ -960,16 +978,32 @@ out:
 
 int llapi_getstripe(char *path, struct find_param *param)
 {
-        int ret = 0;
+        char *buf;
+        int ret = 0, len = strlen(path);
+
+        if (len > PATH_MAX) {
+                fprintf(stderr, "%s: Path name '%s' is too long.\n",
+                        __FUNCTION__, path);
+                return -EINVAL;
+        }
+
+        buf = (char *)malloc(PATH_MAX + 1);
+        if (!buf)
+                return -ENOMEM;
 
         ret = common_param_init(param);
-        if (ret)
+        if (ret) {
+                free(buf);
                 return ret;
+        }
 
         param->depth = 0;
-        ret = llapi_semantic_traverse(path, NULL, cb_getstripe,
+
+        strncpy(buf, path, PATH_MAX + 1);
+        ret = llapi_semantic_traverse(buf, PATH_MAX + 1, NULL, cb_getstripe,
                                       cb_common_fini, param);
         find_param_fini(param);
+        free(buf);
         return ret < 0 ? ret : 0;
 }
 
@@ -1280,7 +1314,18 @@ static int cb_quotachown(char *path, DIR *parent, DIR *d, void *data)
 int llapi_quotachown(char *path, int flag)
 {
         struct find_param param;
-        int ret = 0;
+        char *buf;
+        int ret = 0, len = strlen(path);
+
+        if (len > PATH_MAX) {
+                fprintf(stderr, "%s: Path name '%s' is too long.\n",
+                        __FUNCTION__, path);
+                return -EINVAL;
+        }
+
+        buf = (char *)malloc(PATH_MAX + 1);
+        if (!buf)
+                return -ENOMEM;
 
         memset(&param, 0, sizeof(param));
         param.recursive = 1;
@@ -1291,10 +1336,12 @@ int llapi_quotachown(char *path, int flag)
         if (ret)
                 goto out;
 
-        ret = llapi_semantic_traverse(path, NULL, cb_quotachown,
+        strncpy(buf, path, PATH_MAX + 1);
+        ret = llapi_semantic_traverse(buf, PATH_MAX + 1, NULL, cb_quotachown,
                                       NULL, &param);
 out:
         find_param_fini(&param);
+        free(buf);
         return ret;
 }
 

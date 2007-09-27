@@ -324,6 +324,13 @@ Description: Fix warning idr_remove called for id=.. which is not
 Details    : Last kernels save old s_dev before kill super and not allow 
              to restore from callback - restore it before call kill_anon_super.
 
+Severity   : minor
+Bugzilla   : 12948
+Description: buffer overruns could theoretically occur
+Details    : llapi_semantic_traverse() modifies the "path" argument by
+             appending values to the end of the origin string, and a 
+             overrun may occur. Adding buffer overrun check in liblustreapi.
+
 --------------------------------------------------------------------------------
 
 2007-08-10         Cluster File Systems, Inc. <info@clusterfs.com>
