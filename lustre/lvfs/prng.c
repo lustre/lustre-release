@@ -16,11 +16,9 @@
 #ifndef __KERNEL__
 #include <liblustre.h>
 #define get_random_bytes(val, size)     (*val) = 0
-#else /* __KERNEL__ */
-#include <linux/random.h>
-#endif /* __KERNEL__ */
-
+#endif
 #include <obd_class.h>
+#include <linux/random.h>
 
 /*
 From: George Marsaglia <geo@stat.fsu.edu>
