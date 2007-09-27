@@ -705,7 +705,8 @@ static int ptlrpc_at_send_early_reply(struct ptlrpc_request *req,
 
         /* RPC ref */
         class_export_rpc_get(reqcopy->rq_export);
-        if (req->rq_export->exp_obd && req->rq_export->exp_obd->obd_fail)
+        if (reqcopy->rq_export->exp_obd && 
+            reqcopy->rq_export->exp_obd->obd_fail)
                 GOTO(out_put, rc = -ENODEV);
 
         rc = lustre_pack_reply_flags(reqcopy, 1, NULL, NULL, LPRFL_EARLY_REPLY);
