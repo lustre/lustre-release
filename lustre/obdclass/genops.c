@@ -1243,6 +1243,10 @@ int obd_export_evict_by_uuid(struct obd_device *obd, char *uuid)
         int exports_evicted = 0;
 
         obd_str2uuid(&doomed, uuid);
+        if(obd_uuid_equals(&doomed, &obd->obd_uuid)) {
+                CERROR("%s: can't evict myself\n", obd->obd_name);
+                return exports_evicted;
+        }
 
         doomed_exp = lustre_hash_get_object_by_key(obd->obd_uuid_hash_body, 
                                                    &doomed);
