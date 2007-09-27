@@ -2670,22 +2670,21 @@ test_65c() {
 }
 run_test 65c "directory setstripe $(($STRIPESIZE * 4)) 1 $(($OSTCOUNT - 1))"
 
-if [ $STRIPECOUNT -eq 0 ]; then
-	sc=1
-elif [ $STRIPECOUNT -gt 160 ]; then
-#LOV_MAX_STRIPE_COUNT is 160, 4294967295(-1) is included.
-	[ $OSTCOUNT -gt 160 ] && sc=160 || sc=$(($OSTCOUNT - 1))
-else
-	sc=$(($STRIPECOUNT - 1))
-fi
-
 test_65d() {
 	mkdir -p $DIR/d65
+	if [ $STRIPECOUNT -le 0 ]; then
+        	sc=1
+	elif [ $STRIPECOUNT -gt 160 ]; then
+#LOV_MAX_STRIPE_COUNT is 160
+        	[ $OSTCOUNT -gt 160 ] && sc=160 || sc=$(($OSTCOUNT - 1))
+	else
+        	sc=$(($STRIPECOUNT - 1))
+	fi
 	$SETSTRIPE $DIR/d65 $STRIPESIZE -1 $sc || error "setstripe"
 	touch $DIR/d65/f4 $DIR/d65/f5
 	$LVERIFY $DIR/d65 $DIR/d65/f4 $DIR/d65/f5 || error "lverify failed"
 }
-run_test 65d "directory setstripe $STRIPESIZE -1 $sc =============="
+run_test 65d "directory setstripe $STRIPESIZE -1 stripe_count =============="
 
 test_65e() {
 	mkdir -p $DIR/d65
