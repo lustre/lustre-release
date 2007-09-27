@@ -53,9 +53,9 @@ void usage(FILE *out)
         fprintf(out, "%s v"LUSTRE_VERSION_STRING"\n", progname);
         fprintf(out, "\nThis mount helper should only be invoked via the "
                 "mount (8) command,\ne.g. mount -t lustre dev dir\n\n");
-        fprintf(out, "usage: %s [-fhnv] [-o <mntopt>] <device> <mountpt>\n", 
+        fprintf(out, "usage: %s [-fhnv] [-o <mntopt>] <device> <mountpt>\n",
                 progname);
-        fprintf(out, 
+        fprintf(out,
                 "\t<device>: the disk device, or for a client:\n"
                 "\t\t<mgmtnid>[:<altmgtnid>...]:/<filesystem>-client\n"
                 "\t<filesystem>: name of the Lustre filesystem (e.g. lustre1)\n"
@@ -88,7 +88,7 @@ static int check_mtab_entry(char *spec, char *mtpt, char *type)
                         strcmp(mnt->mnt_dir, mtpt) == 0 &&
                         strcmp(mnt->mnt_type, type) == 0) {
                         endmntent(fp);
-                        return(EEXIST); 
+                        return(EEXIST);
                 }
         }
         endmntent(fp);
@@ -136,7 +136,7 @@ static char *convert_hostnames(char *s1)
         char sep;
         int left = MAXNIDSTR;
         lnet_nid_t nid;
-        
+
         converted = malloc(left);
         c = converted;
         while ((left > 0) && (*s1 != '/')) {
@@ -144,7 +144,7 @@ static char *convert_hostnames(char *s1)
                 if (!s2)
                         goto out_free;
                 sep = *s2;
-                *s2 = '\0';     
+                *s2 = '\0';
                 nid = libcfs_str2nid(s1);
                 *s2 = sep;                      /* back to original string */
                 if (nid == LNET_NID_ANY)
@@ -231,7 +231,7 @@ int parse_options(char *orig_options, int *flagp)
         *flagp = 0;
         nextopt = orig_options;
         while ((opt = strsep(&nextopt, ","))) {
-                if (!*opt) 
+                if (!*opt)
                         /* empty option */
                         continue;
                 if (parse_one_option(opt, flagp) == 0) {
@@ -304,80 +304,88 @@ int set_tunables(char *source, int src_len)
         snprintf(path, sizeof(path), "/sys/block%s/%s", dev,
                  MAX_HW_SECTORS_KB_PATH);
         rc = read_file(path, buf, sizeof(buf));
-        if (!rc && (strlen(buf)-1)) {
+        if (rc == 0 && (strlen(buf) - 1) > 0) {
                 snprintf(path, sizeof(path), "/sys/block%s/%s", dev,
                          MAX_SECTORS_KB_PATH);
                 rc = write_file(path, buf);
-                if (rc) {
+                if (rc && verbose)
                         fprintf(stderr, "warning: opening %s: %s\n",
                                 path, strerror(errno));
-                        return rc;
-                }
-        } else if (rc == ENOENT) {
-                /* The name of the device say 'X' specified in /dev/X may not match
-                 * any entry under /sys/block/. In that case we need to match
-                 * the major/minor number to find the entry under sys/block
-                 * corresponding to /dev/X */
+                return rc;
+        }
 
-                dev = source + src_len - 1;
-                while (dev > source) {
-                        if (isdigit(*dev))
-                                *dev = 0;
-                        dev--;
-                }
+        if (rc != ENOENT)
+                return rc;
 
-                rc = stat(dev, &stat_buf);
-                if (rc) {
-                        fprintf(stderr, "warning: %s, Stat failed for device %s\n",
+        /* The name of the device say 'X' specified in /dev/X may not
+         * match any entry under /sys/block/. In that case we need to
+         * match the major/minor number to find the entry under
+         * sys/block corresponding to /dev/X */
+        dev = source + src_len - 1;
+        while (dev > source) {
+                if (isdigit(*dev))
+                        *dev = 0;
+                dev--;
+        }
+
+        rc = stat(dev, &stat_buf);
+        if (rc) {
+                if (verbose)
+                        fprintf(stderr, "warning: %s, device %s stat failed\n",
                                 strerror(errno), dev);
-                        return rc;
-                }
-                major = major(stat_buf.st_rdev);
-                minor = minor(stat_buf.st_rdev);
-                rc = glob("/sys/block/*", GLOB_NOSORT, NULL, &glob_info);
-                if (rc) {
-                        fprintf(stderr, "warning: failed to read entries under /sys/block\n");
-                        return rc;
-                }
+                return rc;
+        }
 
-                for (i = 0; i < glob_info.gl_pathc; i++){
-                        snprintf(path, sizeof(path), "%s/dev", glob_info.gl_pathv[i]);
+        major = major(stat_buf.st_rdev);
+        minor = minor(stat_buf.st_rdev);
+        rc = glob("/sys/block/*", GLOB_NOSORT, NULL, &glob_info);
+        if (rc) {
+                if (verbose)
+                        fprintf(stderr, "warning: failed to read entries under "
+                                "/sys/block\n");
+                return rc;
+        }
 
-                        rc = read_file(path, buf, sizeof(buf));
-                        if (rc)
-                                continue;
+        for (i = 0; i < glob_info.gl_pathc; i++){
+                snprintf(path, sizeof(path), "%s/dev", glob_info.gl_pathv[i]);
 
-                        if (buf[strlen(buf)-1] == '\n')
-                                buf[strlen(buf)-1] = '\0';
-
-                        chk_major = strtok_r(buf, ":", &savept);
-                        chk_minor = savept;
-                        if (major == atoi(chk_major) && minor == atoi(chk_minor))
-                                break;
-                }
-
-                if (i == glob_info.gl_pathc) {
-                        fprintf(stderr,"warning: the device %s, does not match any"
-                                       "of /sys/block entries\n", source);
-                        return -EINVAL;
-                }
-
-                snprintf(path, sizeof(path), "%s/%s", glob_info.gl_pathv[i],
-                         MAX_HW_SECTORS_KB_PATH);
                 rc = read_file(path, buf, sizeof(buf));
                 if (rc)
+                        continue;
+
+                if (buf[strlen(buf) - 1] == '\n')
+                        buf[strlen(buf) - 1] = '\0';
+
+                chk_major = strtok_r(buf, ":", &savept);
+                chk_minor = savept;
+                if (major == atoi(chk_major) &&minor == atoi(chk_minor))
+                        break;
+        }
+
+        if (i == glob_info.gl_pathc) {
+                if (verbose)
+                        fprintf(stderr,"warning: device %s does not match any "
+                                "entry under /sys/block\n", source);
+                return -EINVAL;
+        }
+
+        snprintf(path, sizeof(path), "%s/%s", glob_info.gl_pathv[i],
+                 MAX_HW_SECTORS_KB_PATH);
+        rc = read_file(path, buf, sizeof(buf));
+        if (rc) {
+                if (verbose)
                         fprintf(stderr, "warning: opening %s: %s\n",
                                 path, strerror(errno));
-                if (!rc && ((strlen(buf)-1) > 0)) {
-                        snprintf(path, sizeof(path), "%s/%s",
-                                 glob_info.gl_pathv[i], MAX_SECTORS_KB_PATH);
-                        rc = write_file(path, buf);
-                        if (rc) {
-                                fprintf(stderr, "warning: opening %s: %s\n",
-                                        path, strerror(errno));
-                                return rc;
-                        }
-                }
+                return rc;
+        }
+
+        if (strlen(buf) - 1 > 0) {
+                snprintf(path, sizeof(path), "%s/%s",
+                         glob_info.gl_pathv[i], MAX_SECTORS_KB_PATH);
+                rc = write_file(path, buf);
+                if (rc && verbose)
+                        fprintf(stderr, "warning: writing to %s: %s\n",
+                                path, strerror(errno));
         }
         return rc;
 }
@@ -465,7 +473,7 @@ int main(int argc, char *const argv[])
 
         options = malloc(strlen(orig_options) + 1);
         strcpy(options, orig_options);
-        rc = parse_options(options, &flags); 
+        rc = parse_options(options, &flags);
         if (rc) {
                 fprintf(stderr, "%s: can't parse options: %s\n",
                         progname, options);
@@ -487,7 +495,7 @@ int main(int argc, char *const argv[])
                         return(ENOENT);
                 }
         }
-        if (flags & MS_REMOUNT) 
+        if (flags & MS_REMOUNT)
                 nomtab++;
 
         rc = access(target, F_OK);
@@ -508,18 +516,18 @@ int main(int argc, char *const argv[])
         strcat(optcopy, "device=");
         strcat(optcopy, source);
 
-        if (verbose) 
+        if (verbose)
                 printf("mounting device %s at %s, flags=%#x options=%s\n",
                        source, target, flags, optcopy);
 
-        if (set_tunables(source, strlen(source)))
+        if (set_tunables(source, strlen(source)) && verbose)
                 fprintf(stderr, "%s: unable to set tunables for %s"
                                 " (may cause reduced IO performance)",
                                 argv[0], source);
 
         if (!fake)
-                /* flags and target get to lustre_get_sb, but not 
-                   lustre_fill_super.  Lustre ignores the flags, but mount 
+                /* flags and target get to lustre_get_sb, but not
+                   lustre_fill_super.  Lustre ignores the flags, but mount
                    does not. */
                 rc = mount(source, target, "lustre", flags, (void *)optcopy);
 
@@ -529,12 +537,12 @@ int main(int argc, char *const argv[])
                 rc = errno;
 
                 cli = strrchr(usource, ':');
-                if (cli && (strlen(cli) > 2)) 
+                if (cli && (strlen(cli) > 2))
                         cli += 2;
                 else
                         cli = NULL;
 
-                fprintf(stderr, "%s: mount %s at %s failed: %s\n", progname, 
+                fprintf(stderr, "%s: mount %s at %s failed: %s\n", progname,
                         usource, target, strerror(errno));
                 if (errno == ENODEV)
                         fprintf(stderr, "Are the lustre modules loaded?\n"
@@ -544,7 +552,7 @@ int main(int argc, char *const argv[])
                 if (errno == ENOTBLK)
                         fprintf(stderr, "Do you need -o loop?\n");
                 if (errno == ENOMEDIUM)
-                        fprintf(stderr, 
+                        fprintf(stderr,
                                 "This filesystem needs at least 1 OST\n");
                 if (errno == ENOENT) {
                         fprintf(stderr, "Is the MGS specification correct?\n");
@@ -566,7 +574,7 @@ int main(int argc, char *const argv[])
                                 "in use. (%s)\n", usource);
                 if (errno == EINVAL) {
                         fprintf(stderr, "This may have multiple causes.\n");
-                        if (cli) 
+                        if (cli)
                                 fprintf(stderr, "Is '%s' the correct filesystem"
                                         " name?\n", cli);
                         fprintf(stderr, "Are the mount options correct?\n");
