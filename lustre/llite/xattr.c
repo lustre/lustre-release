@@ -123,8 +123,8 @@ int ll_setxattr_common(struct inode *inode, const char *name,
                 RETURN(rc);
 
         /* b10667: ignore lustre special xattr for now */
-        if (xattr_type == XATTR_TRUSTED_T && strcmp(name, "trusted.lov") == 0 ||
-            xattr_type == XATTR_LUSTRE_T && strcmp(name, "lustre.lov") == 0)
+        if ((xattr_type == XATTR_TRUSTED_T && strcmp(name, "trusted.lov") == 0) ||
+            (xattr_type == XATTR_LUSTRE_T && strcmp(name, "lustre.lov") == 0))
                 RETURN(0);
 
         ll_inode2fid(&fid, inode);
@@ -156,12 +156,12 @@ int ll_setxattr(struct dentry *dentry, const char *name,
 
         ll_stats_ops_tally(ll_i2sbi(inode), LPROC_LL_SETXATTR, 1);
 
-        if (strncmp(name, XATTR_TRUSTED_PREFIX, 
+        if ((strncmp(name, XATTR_TRUSTED_PREFIX, 
                     sizeof(XATTR_TRUSTED_PREFIX) - 1) == 0 &&
-            strcmp(name + sizeof(XATTR_TRUSTED_PREFIX) - 1, "lov") == 0 ||
-            strncmp(name, XATTR_LUSTRE_PREFIX, 
+             strcmp(name + sizeof(XATTR_TRUSTED_PREFIX) - 1, "lov") == 0) ||
+            (strncmp(name, XATTR_LUSTRE_PREFIX, 
                     sizeof(XATTR_LUSTRE_PREFIX) - 1) == 0 &&
-            strcmp(name + sizeof(XATTR_LUSTRE_PREFIX) - 1, "lov") == 0) {
+             strcmp(name + sizeof(XATTR_LUSTRE_PREFIX) - 1, "lov") == 0)) {
                 struct lov_user_md *lump = (struct lov_user_md *)value;
                 int rc = 0;
 
@@ -318,12 +318,12 @@ ssize_t ll_getxattr(struct dentry *dentry, const char *name,
 
         ll_stats_ops_tally(ll_i2sbi(inode), LPROC_LL_GETXATTR, 1);
 
-        if (strncmp(name, XATTR_TRUSTED_PREFIX, 
+        if ((strncmp(name, XATTR_TRUSTED_PREFIX, 
                     sizeof(XATTR_TRUSTED_PREFIX) - 1) == 0 &&
-            strcmp(name + sizeof(XATTR_TRUSTED_PREFIX) - 1, "lov") == 0 ||
-            strncmp(name, XATTR_LUSTRE_PREFIX, 
+             strcmp(name + sizeof(XATTR_TRUSTED_PREFIX) - 1, "lov") == 0) ||
+            (strncmp(name, XATTR_LUSTRE_PREFIX, 
                     sizeof(XATTR_LUSTRE_PREFIX) - 1) == 0 &&
-            strcmp(name + sizeof(XATTR_LUSTRE_PREFIX) - 1, "lov") == 0) {
+             strcmp(name + sizeof(XATTR_LUSTRE_PREFIX) - 1, "lov") == 0)) {
                 struct lov_user_md *lump;
                 struct lov_mds_md *lmm = NULL;
                 struct ptlrpc_request *request = NULL;
@@ -390,7 +390,7 @@ ssize_t ll_listxattr(struct dentry *dentry, char *buffer, size_t size)
         if (rc2 < 0) {
                 GOTO(out, rc2 = 0);
         } else {
-                const int prefix_len = sizeof(XATTR_LUSTRE_PREFIX)-1;
+                const int prefix_len = sizeof(XATTR_LUSTRE_PREFIX) - 1;
                 const size_t name_len   = sizeof("lov") - 1;
                 const size_t total_len  = prefix_len + name_len + 1;
 
