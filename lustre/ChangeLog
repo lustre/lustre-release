@@ -277,6 +277,11 @@ Description: Fix warning idr_remove called for id=.. which is not allocated.
 Details    : Last kernels save old s_dev before kill super and not allow 
 	      to restore from callback - restore it before call kill_anon_super.
 
+Severity   : normal
+Bugzilla   : 13730
+Description: client sometimes tried revalidate root dentry.
+Details    : not revalidate dentry if it root dentry.
+
 --------------------------------------------------------------------------------
 
 2007-08-27         Cluster File Systems, Inc. <info@clusterfs.com>
