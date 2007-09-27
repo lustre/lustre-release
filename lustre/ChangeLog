@@ -69,6 +69,13 @@ Details    : If a new ldiskfs filesystem is created with the "uninit_groups"
 	     "bg_unused_inodes" count is incorrectly updated.  Creating a
 	     second inode in that group would update it correctly.
 
+Severity   : minor
+Bugzilla   : 12948
+Description: buffer overruns could theoretically occur
+Details    : llapi_semantic_traverse() modifies the "path" argument by
+             appending values to the end of the origin string, and a buffer
+	     overrun may occur. Adding buffer overrun check in liblustreapi.
+
 --------------------------------------------------------------------------------
 
 2007-09-27         Cluster File Systems, Inc. <info@clusterfs.com>
