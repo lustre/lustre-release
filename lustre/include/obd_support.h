@@ -58,22 +58,23 @@ extern unsigned int obd_alloc_fail_rate;
 /* Client may skip 1 ping; wait for 2.5 */
 #define PING_EVICT_TIMEOUT (PING_INTERVAL * 5 / 2)
 #define DISK_TIMEOUT 50          /* Beyond this we warn about disk speed */
-#define CONNECTION_SWITCH_MIN 5  /* Connection switching rate limiter */
-#define CONNECTION_SWITCH_MAX 50 /* Max connect interval for nonresponsive
-                                    servers; keep this within the recovery
-                                    period */
+#define CONNECTION_SWITCH_MIN 5U /* Connection switching rate limiter */
+ /* Max connect interval for nonresponsive servers; ~50s to avoid building up
+    connect requests in the LND queues, but within obd_timeout so we don't
+    miss the recovery window */
+#define CONNECTION_SWITCH_MAX min(50U, max(CONNECTION_SWITCH_MIN,obd_timeout))
 #define CONNECTION_SWITCH_INC 5  /* Connection timeout backoff */
 #ifndef CRAY_XT3
 /* In general this should be low to have quick detection of a system 
    running on a backup server. (If it's too low, import_select_connection
    will increase the timeout anyhow.)  */
-#define INITIAL_CONNECT_TIMEOUT max_t(int,CONNECTION_SWITCH_MIN,obd_timeout/20)
+#define INITIAL_CONNECT_TIMEOUT max(CONNECTION_SWITCH_MIN,obd_timeout/20)
 #else
 /* ...but for very large systems (e.g. CRAY) we need to keep the initial 
    connect t.o. high (bz 10803), because they will nearly ALWAYS be doing the
    connects for the first time (clients "reboot" after every process, so no
    chance to generate adaptive timeout data. */
-#define INITIAL_CONNECT_TIMEOUT max_t(int,CONNECTION_SWITCH_MIN,obd_timeout/2)
+#define INITIAL_CONNECT_TIMEOUT max(CONNECTION_SWITCH_MIN,obd_timeout/2)
 #endif
 #define LONG_UNLINK 300          /* Unlink should happen before now */
 

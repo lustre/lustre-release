@@ -1997,6 +1997,8 @@ int ptlrpc_replay_req(struct ptlrpc_request *req)
                 aa->praa_old_status = lustre_msg_get_status(req->rq_repmsg);
         req->rq_status = 0;
         req->rq_interpret_reply = ptlrpc_replay_interpret;
+        /* Readjust the timeout for current conditions */
+        ptlrpc_at_set_req_timeout(req);
 
         atomic_inc(&req->rq_import->imp_replay_inflight);
         ptlrpc_request_addref(req); /* ptlrpcd needs a ref */

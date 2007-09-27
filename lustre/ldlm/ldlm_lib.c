@@ -1082,7 +1082,7 @@ void target_cancel_recovery_timer(struct obd_device *obd)
 }
 
 static void reset_recovery_timer(struct obd_device *obd,
-                                 struct ptlrpc_request *req, int first)
+                                 struct ptlrpc_request *req)
 {
         spin_lock_bh(&obd->obd_processing_task_lock);
         if (!obd->obd_recovering) {
@@ -1090,10 +1090,10 @@ static void reset_recovery_timer(struct obd_device *obd,
                 return;
         }
         /* Track the client's largest expected replay time */
-        obd->obd_recovery_timeout = 
-                max((first ? (int)OBD_RECOVERY_TIMEOUT : 
-                     obd->obd_recovery_timeout),
-                    (int)lustre_msg_get_timeout(req->rq_reqmsg));
+        if (lustre_msg_get_timeout(req->rq_reqmsg) > obd->obd_recovery_timeout)
+                obd->obd_recovery_timeout =
+                        lustre_msg_get_timeout(req->rq_reqmsg);
+        LASSERT(obd->obd_recovery_timeout >= OBD_RECOVERY_TIMEOUT);
         cfs_timer_arm(&obd->obd_recovery_timer, 
                       cfs_time_shift(obd->obd_recovery_timeout));
         spin_unlock_bh(&obd->obd_processing_task_lock);
@@ -1118,7 +1118,7 @@ void target_start_recovery_timer(struct obd_device *obd, svc_handler_t handler,
         cfs_timer_init(&obd->obd_recovery_timer, target_recovery_expired, obd);
         spin_unlock_bh(&obd->obd_processing_task_lock);
 
-        reset_recovery_timer(obd, req, 1);
+        reset_recovery_timer(obd, req);
 }
 
 static int check_for_next_transno(struct obd_device *obd)
@@ -1200,7 +1200,7 @@ static void process_recovery_queue(struct obd_device *obd)
                 DEBUG_REQ(D_HA, req, "processing: ");
                 (void)obd->obd_recovery_handler(req);
                 obd->obd_replayed_requests++;
-                reset_recovery_timer(obd, req, 0);
+                reset_recovery_timer(obd, req);
                 /* bug 1580: decide how to properly sync() in recovery */
                 //mds_fsync_super(obd->u.obt.obt_sb);
                 class_export_put(req->rq_export);
