@@ -51,6 +51,11 @@ Description: open files rlimit 1024 reached while liblustre testing
 Details    : ulnds/socklnd must close open socket after unsuccessful
              'say hello' attempt.
 
+Severity   : major 
+Bugzilla   : 13482
+Description: build error
+Details    : fix typos in gmlnd, ptllnd and viblnd
+
 ------------------------------------------------------------------------------
 
 2007-07-30  Cluster File Systems, Inc. <info@clusterfs.com>

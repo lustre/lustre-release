@@ -153,7 +153,7 @@ static cfs_sysctl_table_t kptllnd_ctl_table[] = {
         },
         {
                 .ctl_name = 3,
-                .procnmae = "max_procs_per_node",
+                .procname = "max_procs_per_node",
                 .data     = &max_procs_per_node,
                 .maxlen   = sizeof(int),
                 .mode     = 0444,
