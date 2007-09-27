@@ -76,6 +76,11 @@ Details    : llapi_semantic_traverse() modifies the "path" argument by
              appending values to the end of the origin string, and a buffer
 	     overrun may occur. Adding buffer overrun check in liblustreapi.
 
+Severity   : normal
+Bugzilla   : 13454
+Description: Add jbd statistics patch for RHEL5 and 2.6.18-vanilla
+
+
 --------------------------------------------------------------------------------
 
 2007-09-27         Cluster File Systems, Inc. <info@clusterfs.com>
