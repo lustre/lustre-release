@@ -272,7 +272,7 @@ restart:
 
                         continue;
                 }
-                
+
                 if (ll_drop_dentry(dentry))
                           goto restart;
         }
@@ -389,7 +389,7 @@ int ll_revalidate_it(struct dentry *de, int lookup_flags,
 
         /* Root of the lustre tree. Always valid.
          * Attributes will be fixed up in ll_inode_revalidate_it */
-        if (de->d_name.name[0] == '/' && de->d_name.len == 1)
+        if (de == de->d_sb->s_root)
                 RETURN(1);
 
         OBD_FAIL_TIMEOUT(OBD_FAIL_MDC_REVALIDATE_PAUSE, 5);

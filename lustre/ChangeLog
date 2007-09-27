@@ -331,6 +331,11 @@ Details    : llapi_semantic_traverse() modifies the "path" argument by
              appending values to the end of the origin string, and a 
              overrun may occur. Adding buffer overrun check in liblustreapi.
 
+Severity   : normal
+Bugzilla   : 13730
+Description: client sometimes tried revalidate root dentry.
+Details    : not revalidate dentry if it root dentry.
+
 --------------------------------------------------------------------------------
 
 2007-08-10         Cluster File Systems, Inc. <info@clusterfs.com>
