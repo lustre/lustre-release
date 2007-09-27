@@ -80,6 +80,14 @@ Severity   : normal
 Bugzilla   : 13454
 Description: Add jbd statistics patch for RHEL5 and 2.6.18-vanilla
 
+Severity   : normal
+Bugzilla   : 11673
+Description: handle "serious error: objid * already exists" more gracefully
+Details    : If LAST_ID value on disk is smaller than the objects existing in
+	     the O/0/d* directories, it indicates disk corruption and causes an
+	     LBUG(). If the object is 0-length, then we should use the existing
+	     object. This will help to avoid a full fsck in most cases.
+
 
 --------------------------------------------------------------------------------
 
