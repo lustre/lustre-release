@@ -57,6 +57,10 @@ typedef struct socket   cfs_socket_t;
 #define SOCK_ERROR(so)          ((so)->sk->sk_err)
 #define SOCK_TEST_NOSPACE(so)   test_bit(SOCK_NOSPACE, &(so)->flags)
 
-#endif
+#else   /* !__KERNEL__ */
+
+#include "../user-tcpip.h"
+
+#endif /* __KERNEL__ */
 
 #endif

@@ -1587,7 +1587,7 @@ srpc_startup (void)
 #ifdef __KERNEL__
         rc = LNetNIInit(LUSTRE_SRV_LNET_PID);
 #else
-        rc = LNetNIInit(getpid());
+        rc = LNetNIInit(getpid() | LNET_PID_USERFLAG);
 #endif
         if (rc < 0) {
                 CERROR ("LNetNIInit() has failed: %d\n", rc);

@@ -50,4 +50,8 @@ typedef struct {
 #define KSOCK_MSG_NOOP          0xc0            /* ksm_u empty */ 
 #define KSOCK_MSG_LNET          0xc1            /* lnet msg */
 
+/* We need to know this number to parse hello msg from ksocklnd in
+ * other LND (usocklnd, for example) */ 
+#define KSOCK_PROTO_V2          2
+
 #endif

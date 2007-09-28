@@ -615,6 +615,17 @@ lnet_fini_finalizers(void)
         LASSERT (list_empty(&the_lnet.ln_finalizeq));
 }
 
+#ifndef __KERNEL__
+/* Temporary workaround to allow uOSS and test programs force server
+ * mode in userspace. See comments near ln_server_mode_flag in
+ * lnet/lib-types.h */
+
+void
+lnet_server_mode() {
+        the_lnet.ln_server_mode_flag = 1;
+}
+#endif        
+
 int
 lnet_prepare(lnet_pid_t requested_pid)
 {
@@ -630,8 +641,18 @@ lnet_prepare(lnet_pid_t requested_pid)
         LASSERT ((requested_pid & LNET_PID_USERFLAG) == 0);
         the_lnet.ln_pid = requested_pid;
 #else
-        /* My PID must be unique on this node and flag I'm userspace */
-        the_lnet.ln_pid = getpid() | LNET_PID_USERFLAG;
+        if (the_lnet.ln_server_mode_flag) {/* server case (uOSS) */
+                LASSERT ((requested_pid & LNET_PID_USERFLAG) == 0);
+                
+                if (cfs_curproc_uid())/* Only root can run user-space server */
+                        return -EPERM;
+                the_lnet.ln_pid = requested_pid;
+
+        } else {/* client case (liblustre) */
+
+                /* My PID must be unique on this node and flag I'm userspace */
+                the_lnet.ln_pid = getpid() | LNET_PID_USERFLAG;
+        }        
 #endif
 
         rc = lnet_descriptor_setup();
@@ -837,7 +858,6 @@ lnet_count_acceptor_nis (lnet_ni_t **first_ni)
          * *first_ni so the acceptor can pass it connections "blind" to retain
          * binary compatibility. */
         int                count = 0;
-#ifdef __KERNEL__
         struct list_head  *tmp;
         lnet_ni_t         *ni;
 
@@ -856,7 +876,6 @@ lnet_count_acceptor_nis (lnet_ni_t **first_ni)
         }
         
         LNET_UNLOCK();
-#endif
         return count;
 }
 

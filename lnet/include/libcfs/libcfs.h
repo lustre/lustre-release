@@ -321,9 +321,6 @@ int libcfs_register_ioctl(struct libcfs_ioctl_handler *hand);
 int libcfs_deregister_ioctl(struct libcfs_ioctl_handler *hand);
 
 /* libcfs tcpip */
-#define LNET_ACCEPTOR_MIN_RESERVED_PORT    512
-#define LNET_ACCEPTOR_MAX_RESERVED_PORT    1023
-
 int libcfs_ipif_query(char *name, int *up, __u32 *ip, __u32 *mask);
 int libcfs_ipif_enumerate(char ***names);
 void libcfs_ipif_free_enumeration(char **names, int n);
@@ -364,6 +361,10 @@ void lc_watchdog_dumplog(pid_t pid, void *data);
 
 /* __KERNEL__ */
 #endif
+
+/* need both kernel and user-land acceptor */
+#define LNET_ACCEPTOR_MIN_RESERVED_PORT    512
+#define LNET_ACCEPTOR_MAX_RESERVED_PORT    1023
 
 /*
  * libcfs pseudo device operations

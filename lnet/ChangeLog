@@ -12,6 +12,12 @@ tbd         Cluster File Systems, Inc. <info@clusterfs.com>
 	mxlnd     - MX 1.2.1 or later,
 	ptllnd    - Portals 3.3 / UNICOS/lc 1.5.x, 2.0.x
 
+Severity   : normal
+Bugzilla   : 12302
+Description: new userspace socklnd
+Details    : Old userspace tcpnal that resided in lnet/ulnds/socklnd replaced
+             with new one - usocklnd.
+
 --------------------------------------------------------------------------------
 
 2007-09-27         Cluster File Systems, Inc. <info@clusterfs.com>

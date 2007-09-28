@@ -8,6 +8,12 @@
 #error Do not #include this file directly. #include <libcfs/libcfs.h> instead
 #endif
 
+#ifdef HAVE_ASM_TYPES_H
+#include <asm/types.h>
+#else
+#include <libcfs/types.h>
+#endif
+
 #include <stdarg.h>
 #include <libcfs/linux/linux-mem.h>
 #include <libcfs/linux/linux-time.h>
@@ -15,12 +21,6 @@
 #include <libcfs/linux/linux-lock.h>
 #include <libcfs/linux/linux-fs.h>
 #include <libcfs/linux/linux-tcpip.h>
-
-#ifdef HAVE_ASM_TYPES_H
-#include <asm/types.h>
-#else
-#include <libcfs/types.h>
-#endif
 
 
 #ifdef __KERNEL__
