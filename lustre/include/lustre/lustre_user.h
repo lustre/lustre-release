@@ -62,6 +62,11 @@ struct obd_statfs;
 #define LL_IOC_GETFACL                  _IOWR('f', 167, struct rmtacl_ioctl_data *)
 #define LL_IOC_SETFACL                  _IOWR('f', 168, struct rmtacl_ioctl_data *)
 
+#define LL_IOC_LLOOP_ATTACH             _IOWR('f', 169, long)
+#define LL_IOC_LLOOP_DETACH             _IOWR('f', 170, long)
+#define LL_IOC_LLOOP_INFO               _IOWR('f', 171, long)
+#define LL_IOC_LLOOP_DETACH_BYDEV       _IOWR('f', 172, long)
+
 #define LL_STATFS_MDC           1
 #define LL_STATFS_LOV           2
 

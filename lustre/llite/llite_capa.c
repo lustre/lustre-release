@@ -367,6 +367,7 @@ struct obd_capa *ll_osscapa_get(struct inode *inode, __u64 opc)
 
         RETURN(ocapa);
 }
+EXPORT_SYMBOL(ll_osscapa_get);
 
 struct obd_capa *ll_mdscapa_get(struct inode *inode)
 {

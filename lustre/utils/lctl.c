@@ -229,6 +229,17 @@ command_t cmdlist[] = {
          "memory pressure testing\n"
          "usage: memhog <page count> [<gfp flags>]"},
 
+        /* ============ virtual block operations =================*/
+        {"blockdev_attach", jt_blockdev_attach, 0,
+         "attach a lustre regular file to a virtual block device\n"
+         "usage: blockdev_attach <file_name> <device_name>"},
+        {"blockdev_detach", jt_blockdev_detach, 0,
+         "detach a lustre regular file from a virtual block device\n"
+         "usage: blockdev_detach <device_name>"},
+        {"blockdev_info", jt_blockdev_info, 0,
+         "get the device info of a attached file\n"
+         "usage: blockdev_info <device_name>"},
+
         {"== obsolete (DANGEROUS) ==", jt_noop, 0, "obsolete (DANGEROUS)"},
         /* some test scripts still use these */
         {"cfg_device", jt_obd_device, 0,

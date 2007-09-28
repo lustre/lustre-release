@@ -552,6 +552,7 @@ void ll_stats_ops_tally(struct ll_sb_info *sbi, int op, int count)
                  sbi->ll_stats_track_id == current->gid)
                 lprocfs_counter_add(sbi->ll_stats, op, count);
 }
+EXPORT_SYMBOL(ll_stats_ops_tally);
 
 int lprocfs_register_mountpoint(struct proc_dir_entry *parent,
                                 struct super_block *sb, char *osc, char *mdc)

@@ -83,4 +83,8 @@ int jt_lcfg_mgsparam(int argc, char **argv);
 
 int obd_add_uuid(char *uuid, lnet_nid_t nid);
 
+int jt_blockdev_attach(int argc, char **argv);
+int jt_blockdev_detach(int argc, char **argv);
+int jt_blockdev_info(int argc, char **argv);
+
 #endif

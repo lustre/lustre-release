@@ -2305,9 +2305,16 @@ int ll_file_ioctl(struct inode *inode, struct file *file, unsigned int cmd,
 
                 RETURN(ll_ioctl_setfacl(inode, &ioc));
         }
-        default:
+        default: {
+                int err;
+
+                if (LLIOC_STOP == 
+                    ll_iocontrol_call(inode, file, cmd, arg, &err))
+                        RETURN(err);
+
                 RETURN(obd_iocontrol(cmd, ll_i2dtexp(inode), 0, NULL,
                                      (void *)arg));
+        }
         }
 }
 
@@ -2887,3 +2894,102 @@ struct inode_operations ll_file_inode_operations = {
         .removexattr    = ll_removexattr,
 };
 
+/* dynamic ioctl number support routins */
+static struct llioc_ctl_data {
+        struct rw_semaphore ioc_sem;
+        struct list_head    ioc_head;
+} llioc = { 
+        __RWSEM_INITIALIZER(llioc.ioc_sem), 
+        CFS_LIST_HEAD_INIT(llioc.ioc_head)
+};
+
+
+struct llioc_data {
+        struct list_head        iocd_list;
+        unsigned int            iocd_size;
+        llioc_callback_t        iocd_cb;
+        unsigned int            iocd_count;
+        unsigned int            iocd_cmd[0];
+};
+
+void *ll_iocontrol_register(llioc_callback_t cb, int count, unsigned int *cmd)
+{
+        unsigned int size;
+        struct llioc_data *in_data = NULL;
+        ENTRY;
+
+        if (cb == NULL || cmd == NULL ||
+            count > LLIOC_MAX_CMD || count < 0)
+                RETURN(NULL);
+
+        size = sizeof(*in_data) + count * sizeof(unsigned int);
+        OBD_ALLOC(in_data, size);
+        if (in_data == NULL)
+                RETURN(NULL);
+
+        memset(in_data, 0, sizeof(*in_data));
+        in_data->iocd_size = size;
+        in_data->iocd_cb = cb;
+        in_data->iocd_count = count;
+        memcpy(in_data->iocd_cmd, cmd, sizeof(unsigned int) * count);
+
+        down_write(&llioc.ioc_sem);
+        list_add_tail(&in_data->iocd_list, &llioc.ioc_head);
+        up_write(&llioc.ioc_sem);
+
+        RETURN(in_data);
+}
+
+void ll_iocontrol_unregister(void *magic)
+{
+        struct llioc_data *tmp;
+
+        if (magic == NULL)
+                return;
+
+        down_write(&llioc.ioc_sem);
+        list_for_each_entry(tmp, &llioc.ioc_head, iocd_list) {
+                if (tmp == magic) {
+                        unsigned int size = tmp->iocd_size;
+
+                        list_del(&tmp->iocd_list);
+                        up_write(&llioc.ioc_sem);
+
+                        OBD_FREE(tmp, size);
+                        return;
+                }
+        }
+        up_write(&llioc.ioc_sem);
+
+        CWARN("didn't find iocontrol register block with magic: %p\n", magic);
+}
+
+EXPORT_SYMBOL(ll_iocontrol_register);
+EXPORT_SYMBOL(ll_iocontrol_unregister);
+
+enum llioc_iter ll_iocontrol_call(struct inode *inode, struct file *file, 
+                        unsigned int cmd, unsigned long arg, int *rcp)
+{
+        enum llioc_iter ret = LLIOC_CONT;
+        struct llioc_data *data;
+        int rc = -EINVAL, i;
+
+        down_read(&llioc.ioc_sem);
+        list_for_each_entry(data, &llioc.ioc_head, iocd_list) {
+                for (i = 0; i < data->iocd_count; i++) {
+                        if (cmd != data->iocd_cmd[i]) 
+                                continue;
+
+                        ret = data->iocd_cb(inode, file, cmd, arg, data, &rc);
+                        break;
+                }
+
+                if (ret == LLIOC_STOP)
+                        break;
+        }
+        up_read(&llioc.ioc_sem);
+
+        if (rcp)
+                *rcp = rc;
+        return ret;
+}

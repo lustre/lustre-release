@@ -160,6 +160,7 @@ load_modules() {
     load_module ost/ost
     load_module obdfilter/obdfilter
     load_module llite/lustre
+    load_module llite/llite_lloop
     load_module mgc/mgc
     load_module mgs/mgs
     rm -f $TMP/ogdb-`hostname`
