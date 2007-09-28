@@ -2,7 +2,7 @@ tbd         Cluster File Systems, Inc. <info@clusterfs.com>
        * version 1.6.4
        * Support for kernels:
         2.6.5-7.286 (SLES 9),
-        2.6.9-55.0.2.EL (RHEL 4),
+        2.6.9-55.0.6.EL (RHEL 4),
         2.6.16.46-0.14 (SLES 10),
         2.6.18-8.1.10.el5 (RHEL 5),
         2.6.18.8 vanilla (kernel.org)
@@ -88,6 +88,10 @@ Details    : If LAST_ID value on disk is smaller than the objects existing in
 	     LBUG(). If the object is 0-length, then we should use the existing
 	     object. This will help to avoid a full fsck in most cases.
 
+Severity   : normal
+Bugzilla   : 13518
+Description: Kernel patches update for RHEL4 2.6.9-55.0.6.
+Details    : Modify vm-tunables-rhel4.patch.
 
 --------------------------------------------------------------------------------
 
