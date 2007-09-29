@@ -1,7 +1,7 @@
        * version 1.8.0
        * Support for kernels:
         2.6.5-7.286 (SLES 9),
-        2.6.9-55.EL (RHEL 4),
+        2.6.9-55.0.6.EL (RHEL 4),
         2.6.16.46-0.14 (SLES 10),
         2.6.18-8.1.10.EL5 (RHEL 5).
         2.6.18.8 vanilla (kernel.org)
@@ -335,6 +335,11 @@ Severity   : normal
 Bugzilla   : 13730
 Description: client sometimes tried revalidate root dentry.
 Details    : not revalidate dentry if it root dentry.
+
+Severity   : normal
+Bugzilla   : 13518
+Description: Kernel patches update for RHEL4 2.6.9-55.0.6.
+Details    : Modify vm-tunables-rhel4.patch.
 
 --------------------------------------------------------------------------------
 
