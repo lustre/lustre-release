@@ -93,6 +93,15 @@ Bugzilla   : 13518
 Description: Kernel patches update for RHEL4 2.6.9-55.0.6.
 Details    : Modify vm-tunables-rhel4.patch.
 
+Severity   : normal
+Bugzilla   : 13452
+Description: Kernel config for 2.6.18-vanilla.
+Details    : Modify targets/2.6-vanilla.target.in.
+             Add config file kernel-2.6.18-2.6-vanilla-i686.config.
+             Add config file kernel-2.6.18-2.6-vanilla-i686-smp.config.
+             Add config file kernel-2.6.18-2.6-vanilla-x86_64.config.
+             Add config file kernel-2.6.18-2.6-vanilla-x86_64-smp.config.
+
 --------------------------------------------------------------------------------
 
 2007-09-27         Cluster File Systems, Inc. <info@clusterfs.com>
