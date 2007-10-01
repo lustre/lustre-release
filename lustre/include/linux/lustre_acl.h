@@ -20,20 +20,27 @@
 
 /* ACL */
 #ifdef CONFIG_FS_POSIX_ACL
-#ifdef HAVE_XATTR_ACL
+# ifdef HAVE_XATTR_ACL
 #  define MDS_XATTR_NAME_ACL_ACCESS XATTR_NAME_ACL_ACCESS
 #  define mds_xattr_acl_size(entry) xattr_acl_size(entry)
-# else
+# else /* HAVE_XATTR_ACL */
 #  define MDS_XATTR_NAME_ACL_ACCESS POSIX_ACL_XATTR_ACCESS
 #  define mds_xattr_acl_size(entry) posix_acl_xattr_size(entry)
-# endif
+# endif /* HAVE_XATTR_ACL */
+
 # define LUSTRE_POSIX_ACL_MAX_ENTRIES   (32)
+
+# ifdef __KERNEL__
 # define LUSTRE_POSIX_ACL_MAX_SIZE              \
                 (sizeof(xattr_acl_header) +     \
                 LUSTRE_POSIX_ACL_MAX_ENTRIES *  \
                 sizeof(xattr_acl_entry))
-#else
-# define LUSTRE_POSIX_ACL_MAX_SIZE      0
-#endif
+# else /* __KERNEL__ */
+#  define LUSTRE_POSIX_ACL_MAX_SIZE      0
+# endif /* __KERNEL__ */
 
-#endif
+#else /* CONFIG_FS_POSIX_ACL */
+# define LUSTRE_POSIX_ACL_MAX_SIZE      0
+#endif /* CONFIG_FS_POSIX_ACL */
+
+#endif /* _LUSTRE_ACL_H */
