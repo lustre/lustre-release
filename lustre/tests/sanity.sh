@@ -4216,7 +4216,7 @@ test_120g() {
         lru_resize_disable
         count=10000
         echo create $count files
-        mkdir  $DIR/$tdir
+        mkdir -p $DIR/$tdir
         cancel_lru_locks mdc
         cancel_lru_locks osc
         t0=`date +%s`
