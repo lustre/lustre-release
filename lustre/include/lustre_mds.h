@@ -92,19 +92,26 @@ struct mds_file_data {
 
 /* ACL */
 #ifdef CONFIG_FS_POSIX_ACL
-#ifdef HAVE_XATTR_ACL
+# ifdef HAVE_XATTR_ACL
 #  define MDS_XATTR_NAME_ACL_ACCESS XATTR_NAME_ACL_ACCESS
 #  define mds_xattr_acl_size(entry) xattr_acl_size(entry)
-# else
+# else /* HAVE_XATTR_ACL */
 #  define MDS_XATTR_NAME_ACL_ACCESS POSIX_ACL_XATTR_ACCESS
 #  define mds_xattr_acl_size(entry) posix_acl_xattr_size(entry)
-# endif
+# endif /* HAVE_XATTR_ACL */
+
 # define LUSTRE_POSIX_ACL_MAX_ENTRIES   (32)
-# define LUSTRE_POSIX_ACL_MAX_SIZE      \
+
+# ifdef __KERNEL__
+#  define LUSTRE_POSIX_ACL_MAX_SIZE      \
                 (mds_xattr_acl_size(LUSTRE_POSIX_ACL_MAX_ENTRIES))
-#else
+# else /* __KERNEL__ */
+#  define LUSTRE_POSIX_ACL_MAX_SIZE	0
+# endif /* __KERNEL__ */
+
+#else /* CONFIG_FS_POSIX_ACL */
 # define LUSTRE_POSIX_ACL_MAX_SIZE      0
-#endif
+#endif /* CONFIG_FS_POSIX_ACL */
 
 /* mds/mds_reint.c */
 int mds_reint_rec(struct mds_update_record *r, int offset,
