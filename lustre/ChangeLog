@@ -350,6 +350,13 @@ Details    : Modify targets/2.6-vanilla.target.in.
              Add config file kernel-2.6.18-2.6-vanilla-x86_64.config.
              Add config file kernel-2.6.18-2.6-vanilla-x86_64-smp.config.
 
+Severity   : major
+Bugzilla   : 11710
+Description: improve handling recoverable errors
+Details    : if request processig with error which can be recoverable on server
+             request should be resend, otherwise page released from cache and
+             marked as error.
+
 --------------------------------------------------------------------------------
 
 2007-08-10         Cluster File Systems, Inc. <info@clusterfs.com>

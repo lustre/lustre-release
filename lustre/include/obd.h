@@ -376,6 +376,7 @@ struct filter_obd {
 #define OSC_MAX_RIF_MAX         256
 #define OSC_MAX_DIRTY_DEFAULT  (OSC_MAX_RIF_DEFAULT * 4)
 #define OSC_MAX_DIRTY_MB_MAX   2048     /* arbitrary, but < MAX_LONG bytes */
+#define OSC_DEFAULT_RESENDS      10
 
 #define MDC_MAX_RIF_DEFAULT       8
 #define MDC_MAX_RIF_MAX         512
@@ -465,6 +466,8 @@ struct client_obd {
 
         /* sequence manager */
         struct lu_client_seq    *cl_seq;
+
+        atomic_t                 cl_resends; /* resend count */
 };
 #define obd2cli_tgt(obd) ((char *)(obd)->u.cli.cl_target_uuid.uuid)
 

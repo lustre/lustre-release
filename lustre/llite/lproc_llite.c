@@ -736,7 +736,7 @@ static int llite_dump_pgcache_seq_show(struct seq_file *seq, void *v)
         /* 2.4 doesn't seem to have SEQ_START_TOKEN, so we implement
          * it in our own state */
         if (dummy_llap->llap_magic == 0) {
-                seq_printf(seq, "gener |  llap  cookie  origin wq du | page "
+                seq_printf(seq, "gener |  llap  cookie  origin wq du wb | page "
                                 "inode index count [ page flags ]\n");
                 return 0;
         }
@@ -751,13 +751,17 @@ static int llite_dump_pgcache_seq_show(struct seq_file *seq, void *v)
                 LASSERTF(llap->llap_origin < LLAP__ORIGIN_MAX, "%u\n",
                          llap->llap_origin);
 
-                seq_printf(seq, "%5lu | %p %p %s %s %s | %p %p %lu %u [",
+                seq_printf(seq," %5lu | %p %p %s %s %s %s | %p %lu/%u(%p) "
+                           "%lu %u [",
                            sbi->ll_pglist_gen,
                            llap, llap->llap_cookie,
                            llap_origins[llap->llap_origin],
                            llap->llap_write_queued ? "wq" : "- ",
                            llap->llap_defer_uptodate ? "du" : "- ",
-                           page, page->mapping->host, page->index,
+                           PageWriteback(page) ? "wb" : "-",
+                           page, page->mapping->host->i_ino,
+                           page->mapping->host->i_generation,
+                           page->mapping->host, page->index,
                            page_count(page));
                 seq_page_flag(seq, page, locked, has_flags);
                 seq_page_flag(seq, page, error, has_flags);
@@ -767,9 +771,10 @@ static int llite_dump_pgcache_seq_show(struct seq_file *seq, void *v)
 #if (LINUX_VERSION_CODE <= KERNEL_VERSION(2,6,12))
                 seq_page_flag(seq, page, highmem, has_flags);
 #endif
+                seq_page_flag(seq, page, writeback, has_flags);
                 if (!has_flags)
                         seq_puts(seq, "-]\n");
-                else 
+                else
                         seq_puts(seq, "]\n");
         }
 

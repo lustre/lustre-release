@@ -394,8 +394,9 @@ struct ptlrpc_request {
         void  *rq_cb_data;
 
         struct ptlrpc_bulk_desc *rq_bulk;       /* client side bulk */
-        time_t rq_sent;                         /* when request sent, seconds */
-
+        time_t rq_sent;                         /* when request sent, seconds,
+                                                 * or time when request should
+                                                 * be sent */
         /* Multi-rpc bits */
         struct list_head rq_set_chain;
         struct ptlrpc_request_set *rq_set;

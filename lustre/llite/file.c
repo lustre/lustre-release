@@ -751,9 +751,10 @@ void ll_pgcache_remove_extent(struct inode *inode, struct lov_stripe_md *lsm,
         struct page *page;
         int rc, rc2, discard = lock->l_flags & LDLM_FL_DISCARD_DATA;
         struct lustre_handle lockh;
-        ENTRY;
+        struct address_space *mapping = inode->i_mapping;
 
-        memcpy(&tmpex, &lock->l_policy_data, sizeof(tmpex));
+        ENTRY;
+        tmpex = lock->l_policy_data;
         CDEBUG(D_INODE|D_PAGE, "inode %lu(%p) ["LPU64"->"LPU64"] size: %llu\n",
                inode->i_ino, inode, tmpex.l_extent.start, tmpex.l_extent.end,
                i_size_read(inode));
@@ -798,8 +799,8 @@ void ll_pgcache_remove_extent(struct inode *inode, struct lov_stripe_md *lsm,
         for (i = start; i <= end; i += (j + skip)) {
                 j = min(count - (i % count), end - i + 1);
                 LASSERT(j > 0);
-                LASSERT(inode->i_mapping);
-                if (ll_teardown_mmaps(inode->i_mapping,
+                LASSERT(mapping);
+                if (ll_teardown_mmaps(mapping,
                                       (__u64)i << CFS_PAGE_SHIFT,
                                       ((__u64)(i+j) << CFS_PAGE_SHIFT) - 1) )
                         break;
@@ -824,14 +825,14 @@ void ll_pgcache_remove_extent(struct inode *inode, struct lov_stripe_md *lsm,
                          tmpex.l_extent.start, lock->l_policy_data.l_extent.end,
                          start, i, end);
 
-                if (!mapping_has_pages(inode->i_mapping)) {
+                if (!mapping_has_pages(mapping)) {
                         CDEBUG(D_INODE|D_PAGE, "nothing left\n");
                         break;
                 }
 
                 cond_resched();
 
-                page = find_get_page(inode->i_mapping, i);
+                page = find_get_page(mapping, i);
                 if (page == NULL)
                         continue;
                 LL_CDEBUG_PAGE(D_PAGE, page, "lock page idx %lu ext "LPU64"\n",
@@ -841,13 +842,19 @@ void ll_pgcache_remove_extent(struct inode *inode, struct lov_stripe_md *lsm,
                 /* page->mapping to check with racing against teardown */
                 if (!discard && clear_page_dirty_for_io(page)) {
                         rc = ll_call_writepage(inode, page);
-                        if (rc != 0)
-                                CERROR("writepage inode %lu(%p) of page %p "
-                                       "failed: %d\n", inode->i_ino, inode,
-                                       page, rc);
                         /* either waiting for io to complete or reacquiring
                          * the lock that the failed writepage released */
                         lock_page(page);
+                        wait_on_page_writeback(page);
+                        if (rc != 0) {
+                                CERROR("writepage inode %lu(%p) of page %p "
+                                       "failed: %d\n", inode->i_ino, inode,
+                                       page, rc);
+                                if (rc == -ENOSPC)
+                                        set_bit(AS_ENOSPC, &mapping->flags);
+                                else
+                                        set_bit(AS_EIO, &mapping->flags);
+                        }
                 }
 
                 tmpex.l_extent.end = tmpex.l_extent.start + CFS_PAGE_SIZE - 1;
@@ -864,7 +871,7 @@ void ll_pgcache_remove_extent(struct inode *inode, struct lov_stripe_md *lsm,
                          * lock_page() */
                         LL_CDEBUG_PAGE(D_PAGE, page, "truncating\n");
                         if (llap)
-                                ll_ra_accounting(llap, inode->i_mapping);
+                                ll_ra_accounting(llap, mapping);
                         ll_truncate_complete_page(page);
                 }
                 unlock_page(page);

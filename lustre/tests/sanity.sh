@@ -3986,15 +3986,306 @@ test_117() # bug 10891
 }
 run_test 117 "verify fsfilt_extend =========="
 
-test_118() #bug 11710
-{
-	sync; sleep 1; sync
-	multiop $DIR/$tfile oO_CREAT:O_RDWR:O_SYNC:w4096c;
-	dirty=$(grep -c dirty $LPROC/llite/*/dump_page_cache)
-	
-	return $dirty
+# Reset async IO behavior after error case
+reset_async() {
+	FILE=$DIR/reset_async
+
+	# Ensure all OSCs are cleared
+	$LSTRIPE $FILE 0 -1 -1
+        dd if=/dev/zero of=$FILE bs=64k count=$OSTCOUNT
+	sync
+        rm $FILE
 }
-run_test 118 "verify O_SYNC work"
+
+test_118a() #bug 11710
+{
+	reset_async
+	
+ 	multiop $DIR/$tfile oO_CREAT:O_RDWR:O_SYNC:w4096c
+	DIRTY=$(grep -c dirty $LPROC/llite/*/dump_page_cache)
+        WRITEBACK=$(grep -c writeback $LPROC/llite/*/dump_page_cache)
+
+	if [[ $DIRTY -ne 0 || $WRITEBACK -ne 0 ]]; then
+		error "Dirty pages not flushed to disk, dirty=$DIRTY, writeback=$WRITEBACK"
+		return 1;
+        fi
+}
+run_test 118a "verify O_SYNC works =========="
+
+test_118b()
+{
+	reset_async
+
+	#define OBD_FAIL_OST_ENOENT 0x217
+	sysctl -w lustre.fail_loc=0x217
+	multiop $DIR/$tfile oO_CREAT:O_RDWR:O_SYNC:w4096c
+	RC=$?
+	sysctl -w lustre.fail_loc=0
+        DIRTY=$(grep -c dirty $LPROC/llite/*/dump_page_cache)
+        WRITEBACK=$(grep -c writeback $LPROC/llite/*/dump_page_cache)
+
+	if [[ $RC -eq 0 ]]; then
+		error "Must return error due to dropped pages, rc=$RC"
+		return 1;
+	fi
+
+	if [[ $DIRTY -ne 0 || $WRITEBACK -ne 0 ]]; then
+		error "Dirty pages not flushed to disk, dirty=$DIRTY, writeback=$WRITEBACK"
+		return 1;
+	fi
+
+	echo "Dirty pages not leaked on ENOENT"
+
+	# Due to the above error the OSC will issue all RPCs syncronously
+	# until a subsequent RPC completes successfully without error.
+	multiop $DIR/$tfile Ow4096yc
+	rm -f $DIR/$tfile
+	
+	return 0
+}
+run_test 118b "Reclaim dirty pages on fatal error =========="
+
+test_118c()
+{
+	reset_async
+
+	#define OBD_FAIL_OST_EROFS               0x216
+	sysctl -w lustre.fail_loc=0x216
+
+	# multiop should block due to fsync until pages are written
+	multiop $DIR/$tfile oO_CREAT:O_RDWR:O_SYNC:w4096c &
+	MULTIPID=$!
+	sleep 1
+
+	if [[ `ps h -o comm -p $MULTIPID` != "multiop" ]]; then
+		error "Multiop failed to block on fsync, pid=$MULTIPID"
+	fi
+
+        WRITEBACK=$(grep -c writeback $LPROC/llite/*/dump_page_cache)
+	if [[ $WRITEBACK -eq 0 ]]; then
+		error "No page in writeback, writeback=$WRITEBACK"
+	fi
+
+	sysctl -w lustre.fail_loc=0
+        wait $MULTIPID
+	RC=$?
+	if [[ $RC -ne 0 ]]; then
+		error "Multiop fsync failed, rc=$RC"
+	fi
+
+        DIRTY=$(grep -c dirty $LPROC/llite/*/dump_page_cache)
+        WRITEBACK=$(grep -c writeback $LPROC/llite/*/dump_page_cache)
+	if [[ $DIRTY -ne 0 || $WRITEBACK -ne 0 ]]; then
+		error "Dirty pages not flushed to disk, dirty=$DIRTY, writeback=$WRITEBACK"
+	fi
+	
+	rm -f $DIR/$tfile
+	echo "Dirty pages flushed via fsync on EROFS"
+	return 0
+}
+run_test 118c "Fsync blocks on EROFS until dirty pages are flushed =========="
+
+test_118d()
+{
+	reset_async
+
+	#define OBD_FAIL_OST_BRW_PAUSE_BULK
+	sysctl -w lustre.fail_loc=0x214
+	# multiop should block due to fsync until pages are written
+	multiop $DIR/$tfile oO_CREAT:O_RDWR:O_SYNC:w4096c &	
+	MULTIPID=$!
+	sleep 1
+
+	if [[ `ps h -o comm -p $MULTIPID` != "multiop" ]]; then
+		error "Multiop failed to block on fsync, pid=$MULTIPID"
+	fi
+
+        WRITEBACK=$(grep -c writeback $LPROC/llite/*/dump_page_cache)
+	if [[ $WRITEBACK -eq 0 ]]; then
+		error "No page in writeback, writeback=$WRITEBACK"
+	fi
+
+        wait $MULTIPID || error "Multiop fsync failed, rc=$?"
+
+        DIRTY=$(grep -c dirty $LPROC/llite/*/dump_page_cache)
+        WRITEBACK=$(grep -c writeback $LPROC/llite/*/dump_page_cache)	
+	if [[ $DIRTY -ne 0 || $WRITEBACK -ne 0 ]]; then
+		error "Dirty pages not flushed to disk, dirty=$DIRTY, writeback=$WRITEBACK"
+	fi
+
+	rm -f $DIR/$tfile
+	echo "Dirty pages gaurenteed flushed via fsync"
+	return 0
+}
+run_test 118d "Fsync validation inject a delay of the bulk =========="
+
+test_118f() {
+        reset_async
+
+        #define OBD_FAIL_OSC_BRW_PREP_REQ2        0x40a
+        sysctl -w lustre.fail_loc=0x8000040a
+
+	# Should simulate EINVAL error which is fatal
+        multiop $DIR/$tfile oO_CREAT:O_RDWR:O_SYNC:w4096c
+        RC=$?
+
+	if [[ $RC -eq 0 ]]; then
+		error "Must return error due to dropped pages, rc=$RC"
+	fi
+
+        LOCKED=$(grep -c locked $LPROC/llite/*/dump_page_cache)
+        DIRTY=$(grep -c dirty $LPROC/llite/*/dump_page_cache)
+        WRITEBACK=$(grep -c writeback $LPROC/llite/*/dump_page_cache)
+	if [[ $LOCKED -ne 0 ]]; then
+		error "Locked pages remain in cache, locked=$LOCKED"
+	fi
+
+	if [[ $DIRTY -ne 0 || $WRITEBACK -ne 0 ]]; then
+		error "Dirty pages not flushed to disk, dirty=$DIRTY, writeback=$WRITEBACK"
+	fi
+
+	rm -f $DIR/$tfile
+	echo "No pages locked after fsync"
+
+        reset_async
+	return 0
+}
+run_test 118f "Simulate unrecoverable OSC side error =========="
+
+test_118g() {
+        reset_async
+
+	#define OBD_FAIL_OSC_BRW_PREP_REQ        0x406
+        sysctl -w lustre.fail_loc=0x406
+
+	# simulate local -ENOMEM
+        multiop $DIR/$tfile oO_CREAT:O_RDWR:O_SYNC:w4096c
+        RC=$?
+	
+        sysctl -w lustre.fail_loc=0
+	if [[ $RC -eq 0 ]]; then
+		error "Must return error due to dropped pages, rc=$RC"
+	fi
+
+        LOCKED=$(grep -c locked $LPROC/llite/*/dump_page_cache)
+        DIRTY=$(grep -c dirty $LPROC/llite/*/dump_page_cache)
+        WRITEBACK=$(grep -c writeback $LPROC/llite/*/dump_page_cache)
+	if [[ $LOCKED -ne 0 ]]; then
+		error "Locked pages remain in cache, locked=$LOCKED"
+	fi
+	
+	if [[ $DIRTY -ne 0 || $WRITEBACK -ne 0 ]]; then
+		error "Dirty pages not flushed to disk, dirty=$DIRTY, writeback=$WRITEBACK"
+	fi
+
+	rm -f $DIR/$tfile
+	echo "No pages locked after fsync"
+
+        reset_async
+	return 0
+}
+run_test 118g "Don't stay in wait if we got local -ENOMEM  =========="
+
+test_118h() {
+        reset_async
+
+	#define OBD_FAIL_OST_BRW_WRITE_BULK      0x20e
+        sysctl -w lustre.fail_loc=0x20e
+	# Should simulate ENOMEM error which is recoverable and should be handled by timeout
+        multiop $DIR/$tfile oO_CREAT:O_RDWR:O_SYNC:w4096c
+        RC=$?
+	
+        sysctl -w lustre.fail_loc=0
+	if [[ $RC -eq 0 ]]; then
+		error "Must return error due to dropped pages, rc=$RC"
+	fi
+
+        LOCKED=$(grep -c locked $LPROC/llite/*/dump_page_cache)
+        DIRTY=$(grep -c dirty $LPROC/llite/*/dump_page_cache)
+        WRITEBACK=$(grep -c writeback $LPROC/llite/*/dump_page_cache)
+	if [[ $LOCKED -ne 0 ]]; then
+		error "Locked pages remain in cache, locked=$LOCKED"
+	fi
+	
+	if [[ $DIRTY -ne 0 || $WRITEBACK -ne 0 ]]; then
+		error "Dirty pages not flushed to disk, dirty=$DIRTY, writeback=$WRITEBACK"
+	fi
+
+	rm -f $DIR/$tfile
+	echo "No pages locked after fsync"
+
+	return 0
+}
+run_test 118h "Verify timeout in handling recoverables errors  =========="
+
+test_118i() {
+        reset_async
+
+	#define OBD_FAIL_OST_BRW_WRITE_BULK      0x20e
+        sysctl -w lustre.fail_loc=0x20e
+	
+	# Should simulate ENOMEM error which is recoverable and should be handled by timeout
+        multiop $DIR/$tfile oO_CREAT:O_RDWR:O_SYNC:w4096c &
+	PID=$!
+	sleep 5
+	sysctl -w lustre.fail_loc=0
+	
+	wait $PID
+        RC=$?
+	if [[ $RC -ne 0 ]]; then
+		error "got error, but should be not, rc=$RC"
+	fi
+
+        LOCKED=$(grep -c locked $LPROC/llite/*/dump_page_cache)
+        DIRTY=$(grep -c dirty $LPROC/llite/*/dump_page_cache)
+        WRITEBACK=$(grep -c writeback $LPROC/llite/*/dump_page_cache)
+	if [[ $LOCKED -ne 0 ]]; then
+		error "Locked pages remain in cache, locked=$LOCKED"
+	fi
+	
+	if [[ $DIRTY -ne 0 || $WRITEBACK -ne 0 ]]; then
+		error "Dirty pages not flushed to disk, dirty=$DIRTY, writeback=$WRITEBACK"
+	fi
+
+	rm -f $DIR/$tfile
+	echo "No pages locked after fsync"
+
+	return 0
+}
+run_test 118i "Fix error before timeout in recoverable error  =========="
+
+test_118j() {
+        reset_async
+
+	#define OBD_FAIL_OST_BRW_WRITE_BULK2     0x220
+        sysctl -w lustre.fail_loc=0x220
+
+	# return -EIO from OST
+        multiop $DIR/$tfile oO_CREAT:O_RDWR:O_SYNC:w4096c
+        RC=$?
+        sysctl -w lustre.fail_loc=0x0
+	if [[ $RC -eq 0 ]]; then
+		error "Must return error due to dropped pages, rc=$RC"
+	fi
+
+        LOCKED=$(grep -c locked $LPROC/llite/*/dump_page_cache)
+        DIRTY=$(grep -c dirty $LPROC/llite/*/dump_page_cache)
+        WRITEBACK=$(grep -c writeback $LPROC/llite/*/dump_page_cache)
+	if [[ $LOCKED -ne 0 ]]; then
+		error "Locked pages remain in cache, locked=$LOCKED"
+	fi
+	
+	# in recoverable error on OST we want resend and stay until it finished
+	if [[ $DIRTY -ne 0 || $WRITEBACK -ne 0 ]]; then
+		error "Dirty pages not flushed to disk, dirty=$DIRTY, writeback=$WRITEBACK"
+	fi
+
+	rm -f $DIR/$tfile
+	echo "No pages locked after fsync"
+
+ 	return 0
+}
+run_test 118j "Simulate unrecoverable OST side error =========="
 
 test_119a() # bug 11737
 {
