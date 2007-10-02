@@ -777,6 +777,9 @@ void __ldlm_resource_putref_final(struct ldlm_resource *res)
 
         LASSERT_SPIN_LOCKED(&ns->ns_hash_lock);
 
+	printk("destroy res %p\n", res);
+	WARN_ON(1);
+	
         if (!list_empty(&res->lr_granted)) {
                 ldlm_resource_dump(D_ERROR, res);
                 LBUG();

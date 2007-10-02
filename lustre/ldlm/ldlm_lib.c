@@ -268,6 +268,7 @@ int client_obd_setup(struct obd_device *obddev, obd_count len, void *buf)
 #ifdef ENABLE_CHECKSUM
         cli->cl_checksum = 1;
 #endif
+        atomic_set(&cli->cl_resends, OSC_DEFAULT_RESENDS);
 
         /* This value may be changed at connect time in
            ptlrpc_connect_interpret. */

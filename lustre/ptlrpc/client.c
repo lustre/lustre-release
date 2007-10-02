@@ -804,10 +804,10 @@ static int after_reply(struct ptlrpc_request *req)
                 /* Either we've been evicted, or the server has failed for
                  * some reason. Try to reconnect, and if that fails, punt to
                  * the upcall. */
-                if (rc == -ENOTCONN || rc == -ENODEV) {
+                if (ll_rpc_recoverable_error(rc)) {
                         if (req->rq_send_state != LUSTRE_IMP_FULL ||
                             imp->imp_obd->obd_no_recov || imp->imp_dlm_fake) {
-                                RETURN(-ENOTCONN);
+                                RETURN(rc);
                         }
                         ptlrpc_request_handle_notconn(req);
                         RETURN(rc);
@@ -860,6 +860,9 @@ static int ptlrpc_send_new_req(struct ptlrpc_request *req)
         ENTRY;
 
         LASSERT(req->rq_phase == RQ_PHASE_NEW);
+        if (req->rq_sent && (req->rq_sent > CURRENT_SECONDS))
+                RETURN (0);
+        
         req->rq_phase = RQ_PHASE_RPC;
 
         imp = req->rq_import;
@@ -933,6 +936,9 @@ int ptlrpc_check_set(struct ptlrpc_request_set *set)
                     ptlrpc_send_new_req(req)) {
                         force_timer_recalc = 1;
                 }
+                /* delayed send - skip */
+                if (req->rq_phase == RQ_PHASE_NEW && req->rq_sent)
+                        continue;
 
                 if (!(req->rq_phase == RQ_PHASE_RPC ||
                       req->rq_phase == RQ_PHASE_BULK ||
@@ -1282,6 +1288,7 @@ int ptlrpc_set_next_timeout(struct ptlrpc_request_set *set)
         time_t                 now = cfs_time_current_sec();
         int                    timeout = 0;
         struct ptlrpc_request *req;
+        int                    deadline;
         ENTRY;
 
         SIGNAL_MASK_ASSERT(); /* XXX BUG 1511 */
@@ -1291,19 +1298,23 @@ int ptlrpc_set_next_timeout(struct ptlrpc_request_set *set)
 
                 /* request in-flight? */
                 if (!(((req->rq_phase == RQ_PHASE_RPC) && !req->rq_waiting) ||
-                      (req->rq_phase == RQ_PHASE_BULK)))
-                        continue;
+                      (req->rq_phase == RQ_PHASE_BULK) || 
+                      (req->rq_phase == RQ_PHASE_NEW)))
 
                 if (req->rq_timedout)   /* already timed out */
                         continue;
 
-                if (req->rq_deadline <= now) {  /* actually expired already */
+                if (req->rq_phase == RQ_PHASE_NEW)
+                        deadline = req->rq_sent;        /* delayed send */
+                else
+                        deadline = req->rq_deadline;
+
+                if (deadline <= now) {  /* actually expired already */
                         timeout = 1;    /* ASAP */
                         break;
-                }
-                
-                if ((timeout == 0) || (timeout > (req->rq_deadline - now))) {
-                        timeout = req->rq_deadline - now;
+                } 
+                if ((timeout == 0) || (timeout > (deadline - now))) {
+                        timeout = deadline - now;
                 }
         }
         RETURN(timeout);

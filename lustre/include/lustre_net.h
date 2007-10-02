@@ -333,9 +333,10 @@ struct ptlrpc_request {
         void  *rq_cb_data;
 
         struct ptlrpc_bulk_desc *rq_bulk;       /* client side bulk */
-
         /* client outgoing req */
-        time_t rq_sent;                  /* when request/reply sent (secs) */
+        time_t rq_sent;                         /* when request sent, seconds, 
+                                                 * or time when request should
+                                                 * be sent */
         volatile time_t rq_deadline;     /* when request must finish. volatile
                so that servers' early reply updates to the deadline aren't 
                kept in per-cpu cache */
