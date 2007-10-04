@@ -2247,7 +2247,7 @@ static int mds_cleanup(struct obd_device *obd)
 
         mds_update_server_data(obd, 1);
         if (mds->mds_lov_objids != NULL)
-                OBD_FREE(mds->mds_lov_objids, mds->mds_lov_objids_size);
+                OBD_FREE(mds->mds_lov_objids, mds_lov_objids_size(mds));
         mds_fs_cleanup(obd);
 
 #if 0
@@ -2846,12 +2846,15 @@ static int mds_cmd_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
                 CERROR("cannot open/create %s file: rc = %d\n", LOV_OBJID, rc);
                 GOTO(err_fid, rc = PTR_ERR(file));
         }
-        mds->mds_lov_objid_filp = file;
         if (!S_ISREG(file->f_dentry->d_inode->i_mode)) {
                 CERROR("%s is not a regular file!: mode = %o\n", LOV_OBJID,
                        file->f_dentry->d_inode->i_mode);
                 GOTO(err_lov_objid, rc = -ENOENT);
         }
+        init_rwsem(&mds->mds_lov_objids_sem);
+        spin_lock_init(&mds->mds_lov_objids_lock);
+        cfs_waitq_init(&mds->mds_lov_objids_wait);
+        mds->mds_lov_objid_filp = file;
 
         rc = mds_lov_presetup(mds, lcfg);
         if (rc < 0)
@@ -2911,7 +2914,7 @@ static int mds_cmd_cleanup(struct obd_device *obd)
         }
 
         if (mds->mds_lov_objids != NULL)
-                OBD_FREE(mds->mds_lov_objids, mds->mds_lov_objids_size);
+                OBD_FREE(mds->mds_lov_objids, mds_lov_objids_size(mds));
 
         shrink_dcache_parent(mds->mds_fid_de);
         dput(mds->mds_fid_de);
