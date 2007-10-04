@@ -1206,6 +1206,67 @@ test_33() { # bug 12333
 }
 run_test 33 "Mount ost with a large index number"
 
+test_34() {
+        setup
+
+        do_facet client dd if=/dev/zero of=$MOUNT/24 bs=1024k count=1
+        # Drop lock cancelation reply during umount
+	#define OBD_FAIL_LDLM_CANCEL             0x304
+        do_facet client sysctl -w lustre.fail_loc=0x80000304
+        #sysctl -w lnet.debug=-1
+        umount_client $MOUNT
+        cleanup
+}
+run_test 34 "Drop cancel during umount"
+
+test_34a() {
+        setup
+	do_facet client multiop $DIR/file O_c &
+	sleep 0.500s
+	manual_umount_client
+	rc=$?
+	do_facet client killall -USR1 multiop
+	if [ $rc -eq 0 ]; then
+		error "umount not fail!"
+	fi
+	sleep 1
+        cleanup
+}
+run_test 34a "umount with opened file should be fail"
+
+
+test_34b() {
+	setup
+	touch $DIR/$tfile || return 1
+	stop_mds --force || return 2
+
+ 	manual_umount_client --force
+	rc=$?
+	if [ $rc -ne 0 ]; then
+		error "mtab after failed umount - rc $rc"
+	fi
+
+	cleanup
+	return 0	
+}
+run_test 34b "force umount with failed mds should be normal"
+
+test_34c() {
+	setup
+	touch $DIR/$tfile || return 1
+	stop_ost --force || return 2
+
+ 	manual_umount_client --force
+	rc=$?
+	if [ $rc -ne 0 ]; then
+		error "mtab after failed umount - rc $rc"
+	fi
+
+	cleanup
+	return 0	
+}
+run_test 34c "force umount with failed mds should be normal"
+
 test_35() { # bug 12459
 	setup
 
