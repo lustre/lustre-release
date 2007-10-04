@@ -188,7 +188,8 @@ static int filter_export_stats_init(struct obd_device *obd,
         /* Create a per export proc entry for ops stats */
         num_stats = (sizeof(*obd->obd_type->typ_ops) / sizeof(void *)) +
                      LPROC_FILTER_LAST - 1;
-        exp->exp_ops_stats = lprocfs_alloc_stats(num_stats);
+        exp->exp_ops_stats = lprocfs_alloc_stats(num_stats,
+                                                 LPROCFS_STATS_FLAG_NOPERCPU);
         if (exp->exp_ops_stats == NULL)
               RETURN(-ENOMEM);
         lprocfs_init_ops_stats(LPROC_FILTER_LAST, exp->exp_ops_stats);

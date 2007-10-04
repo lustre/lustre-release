@@ -486,7 +486,7 @@ static int ldlm_pool_proc_init(struct ldlm_pool *pl)
         lprocfs_add_vars(pl->pl_proc_dir, pool_vars, 0);
 
         pl->pl_stats = lprocfs_alloc_stats(LDLM_POOL_LAST_STAT -
-                                           LDLM_POOL_GRANTED_STAT);
+                                           LDLM_POOL_GRANTED_STAT, 0);
         if (!pl->pl_stats)
                 GOTO(out_free_name, rc = -ENOMEM);
 
