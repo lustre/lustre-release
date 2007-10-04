@@ -435,7 +435,7 @@ struct page *ll_nopage(struct vm_area_struct *vma, unsigned long address,
         lov_stripe_lock(lsm);
         if (mode == LCK_PW)
                 obd_adjust_kms(ll_i2obdexp(inode), lsm,
-                               min_t(loff_t, policy.l_extent.end,
+                               min_t(loff_t, policy.l_extent.end + 1,
                                i_size_read(inode)), 0);
         lov_stripe_unlock(lsm);
 
