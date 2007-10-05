@@ -3713,7 +3713,7 @@ run_test 102g "star copy files, keep osts ==========="
 
 run_acl_subtest()
 {
-    $SAVE_PWD/acl/run $SAVE_PWD/acl/$1.test
+    $LUSTRE/tests/acl/run $LUSTRE/tests/acl/$1.test
     return $?
 }
 
@@ -3741,7 +3741,7 @@ test_103 () {
 
     # inheritance test got from HP
     echo "performing inheritance..."
-    cp $SAVE_PWD/acl/make-tree . || error
+    cp $LUSTRE/tests/acl/make-tree . || error
     chmod +x make-tree || error
     run_acl_subtest inheritance || error
     rm -f make-tree
