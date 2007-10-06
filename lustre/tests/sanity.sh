@@ -4542,7 +4542,7 @@ test_121() { #bug #10589
 	cancel_lru_locks osc > /dev/null
 	reads=`dd if=$DIR/$tfile of=/dev/null 2>&1 | awk 'BEGIN { FS="+" } /in/ {print $1}'`
 	sysctl -w lustre.fail_loc=0
-	[ $reads -eq $writes ] || error "read" $reads "blocks, must be" $writes
+	[ "$reads" -eq "$writes" ] || error "read" $reads "blocks, must be" $writes
 }
 run_test 121 "read cancel race ========="
 
