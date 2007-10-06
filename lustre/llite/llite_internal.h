@@ -209,13 +209,14 @@ enum stats_track_type {
 
 /* flags for sbi->ll_flags */
 #define LL_SBI_NOLCK            0x01 /* DLM locking disabled (directio-only) */
-#define LL_SBI_CHECKSUM         0x02 /* checksum each page as it's written */
+#define LL_SBI_DATA_CHECKSUM    0x02 /* checksum each page on the wire */
 #define LL_SBI_FLOCK            0x04
 #define LL_SBI_USER_XATTR       0x08 /* support user xattr */
 #define LL_SBI_ACL              0x10 /* support ACL */
 #define LL_SBI_JOIN             0x20 /* support JOIN */
 #define LL_SBI_LOCALFLOCK       0x40 /* Local flocks support by kernel */
 #define LL_SBI_LRU_RESIZE       0x80 /* support lru resize */
+#define LL_SBI_LLITE_CHECKSUM  0x100 /* checksum each page in memory */
 
 /* default value for ll_sb_info->contention_time */
 #define SBI_DEFAULT_CONTENTION_SECONDS     60

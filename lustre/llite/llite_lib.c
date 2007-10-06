@@ -86,8 +86,11 @@ static struct ll_sb_info *ll_init_sbi(void)
         list_add_tail(&sbi->ll_list, &ll_super_blocks);
         spin_unlock(&ll_sb_lock);
 
+#ifdef ENABLE_CHECKSUM
+        sbi->ll_flags |= LL_SBI_DATA_CHECKSUM;
+#endif
 #ifdef ENABLE_LLITE_CHECKSUM
-        sbi->ll_flags |= LL_SBI_CHECKSUM;
+        sbi->ll_flags |= LL_SBI_LLITE_CHECKSUM;
 #endif
 
 #ifdef HAVE_LRU_RESIZE_SUPPORT
@@ -370,9 +373,10 @@ static int client_common_fill_super(struct super_block *sb,
                 GOTO(out_root, err);
         }
 
-        checksum = sbi->ll_flags & LL_SBI_CHECKSUM;
-        err = obd_set_info_async(sbi->ll_osc_exp, strlen("checksum"),"checksum",
-                                 sizeof(checksum), &checksum, NULL);
+        checksum = sbi->ll_flags & LL_SBI_DATA_CHECKSUM;
+        err = obd_set_info_async(sbi->ll_osc_exp, strlen("checksum"),
+                                 "checksum", sizeof(checksum),
+                                 &checksum, NULL);
 
         /* making vm readahead 0 for 2.4.x. In the case of 2.6.x,
            backing dev info assigned to inode mapping is used for
@@ -709,12 +713,12 @@ static int ll_options(char *options, int *flags)
                         goto next;
                 }
 
-                tmp = ll_set_opt("checksum", s1, LL_SBI_CHECKSUM);
+                tmp = ll_set_opt("checksum", s1, LL_SBI_DATA_CHECKSUM);
                 if (tmp) {
                         *flags |= tmp;
                         goto next;
                 }
-                tmp = ll_set_opt("nochecksum", s1, LL_SBI_CHECKSUM);
+                tmp = ll_set_opt("nochecksum", s1, LL_SBI_DATA_CHECKSUM);
                 if (tmp) {
                         *flags &= ~tmp;
                         goto next;

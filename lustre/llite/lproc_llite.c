@@ -316,7 +316,7 @@ static int ll_rd_checksum(char *page, char **start, off_t off,
         struct ll_sb_info *sbi = ll_s2sbi(sb);
 
         return snprintf(page, count, "%u\n",
-                        (sbi->ll_flags & LL_SBI_CHECKSUM) ? 1 : 0);
+                        (sbi->ll_flags & LL_SBI_LLITE_CHECKSUM) ? 1 : 0);
 }
 
 static int ll_wr_checksum(struct file *file, const char *buffer,
@@ -334,9 +334,9 @@ static int ll_wr_checksum(struct file *file, const char *buffer,
         if (rc)
                 return rc;
         if (val)
-                sbi->ll_flags |= LL_SBI_CHECKSUM;
+                sbi->ll_flags |=  (LL_SBI_LLITE_CHECKSUM|LL_SBI_DATA_CHECKSUM);
         else
-                sbi->ll_flags &= ~LL_SBI_CHECKSUM;
+                sbi->ll_flags &= ~(LL_SBI_LLITE_CHECKSUM|LL_SBI_DATA_CHECKSUM);
 
         rc = obd_set_info_async(sbi->ll_osc_exp, strlen("checksum"), "checksum",
                                 sizeof(val), &val, NULL);

@@ -3041,8 +3041,8 @@ run_test 76 "destroy duplicate inodes in client inode cache ===="
 export ORIG_CSUM=""
 set_checksums()
 {
-	[ "$ORIG_CSUM" ]||ORIG_CSUM=`cat $LPROC/llite/*/checksum_pages|head -n1`
-	for f in $LPROC/llite/*/checksum_pages; do
+	[ "$ORIG_CSUM" ] || ORIG_CSUM=`cat $LPROC/osc/*/checksums | head -n1`
+	for f in $LPROC/osc/*/checksums; do
 		echo $1 >> $f
 	done
 
@@ -4297,12 +4297,12 @@ test_120a() {
         [ -z "`grep early_lock_cancel $LPROC/mdc/*/connect_flags`" ] && \
                skip "no early lock cancel on server" && return 9
         lru_resize_disable
-        mkdir $DIR/$tdir
+        mkdir -p $DIR/$tdir
         cancel_lru_locks mdc
         stat $DIR/$tdir > /dev/null
         can1=`awk '/ldlm_cancel/ {print $2}' $LPROC/ldlm/services/ldlm_canceld/stats`
         blk1=`awk '/ldlm_bl_callback/ {print $2}' $LPROC/ldlm/services/ldlm_cbd/stats`
-        mkdir $DIR/$tdir/d1
+        mkdir -p $DIR/$tdir/d1
         can2=`awk '/ldlm_cancel/ {print $2}' $LPROC/ldlm/services/ldlm_canceld/stats`
         blk2=`awk '/ldlm_bl_callback/ {print $2}' $LPROC/ldlm/services/ldlm_cbd/stats`
         [ $can1 -eq $can2 ] || error $((can2-can1)) "cancel RPC occured."
@@ -4315,7 +4315,7 @@ test_120b() {
         [ -z "`grep early_lock_cancel $LPROC/mdc/*/connect_flags`" ] && \
                skip "no early lock cancel on server" && return 9
         lru_resize_disable
-        mkdir $DIR/$tdir
+        mkdir -p $DIR/$tdir
         cancel_lru_locks mdc
         stat $DIR/$tdir > /dev/null
         can1=`awk '/ldlm_cancel/ {print $2}' $LPROC/ldlm/services/ldlm_canceld/stats`
@@ -4370,7 +4370,7 @@ test_120e() {
         [ -z "`grep early_lock_cancel $LPROC/mdc/*/connect_flags`" ] && \
                skip "no early lock cancel on server" && return 9
         lru_resize_disable
-        mkdir $DIR/$tdir
+        mkdir -p $DIR/$tdir
         dd if=/dev/zero of=$DIR/$tdir/f1 count=1
         cancel_lru_locks mdc
         cancel_lru_locks osc
@@ -4524,7 +4524,7 @@ test_124a() {
                skip "no lru resize on server" && return 0
         cancel_lru_locks mdc
         lru_resize_enable
-        NSDIR=`find $LPROC/ldlm/namespaces | grep mdc | head -1`
+        NSDIR=`find $LPROC/ldlm/namespaces | grep -i mdc | head -1`
 
         # we want to test main pool functionality, that is cancel based on SLV
         # this is why shrinkers are disabled
@@ -4591,7 +4591,7 @@ test_124b() {
                skip "no lru resize on server" && return 0
         cleanup -f || error "failed to unmount"
         MOUNTOPT="$MOUNTOPT,nolruresize"
-        setup
+        setup || error "setup failed"
 
         NR=3000
         mkdir -p $DIR/$tdir || error "failed to create $DIR/$tdir"
@@ -4608,7 +4608,7 @@ test_124b() {
 
         cleanup -f || error "failed to unmount"
         MOUNTOPT=`echo $MOUNTOPT | sed "s/nolruresize/lruresize/"`
-        setup
+        setup || error "setup failed"
 
         createmany -o $DIR/$tdir/f $NR
         log "doing ls -la $DIR/$tdir 3 times (lru resize enabled)"

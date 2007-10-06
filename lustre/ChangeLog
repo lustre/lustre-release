@@ -73,7 +73,7 @@ Severity   : minor
 Bugzilla   : 12948
 Description: buffer overruns could theoretically occur
 Details    : llapi_semantic_traverse() modifies the "path" argument by
-             appending values to the end of the origin string, and a buffer
+	     appending values to the end of the origin string, and a buffer
 	     overrun may occur. Adding buffer overrun check in liblustreapi.
 
 Severity   : normal
@@ -97,10 +97,10 @@ Severity   : normal
 Bugzilla   : 13452
 Description: Kernel config for 2.6.18-vanilla.
 Details    : Modify targets/2.6-vanilla.target.in.
-             Add config file kernel-2.6.18-2.6-vanilla-i686.config.
-             Add config file kernel-2.6.18-2.6-vanilla-i686-smp.config.
-             Add config file kernel-2.6.18-2.6-vanilla-x86_64.config.
-             Add config file kernel-2.6.18-2.6-vanilla-x86_64-smp.config.
+	     Add config file kernel-2.6.18-2.6-vanilla-i686.config.
+	     Add config file kernel-2.6.18-2.6-vanilla-i686-smp.config.
+	     Add config file kernel-2.6.18-2.6-vanilla-x86_64.config.
+	     Add config file kernel-2.6.18-2.6-vanilla-x86_64-smp.config.
 
 Severity   : major
 Bugzilla   : 11710
@@ -215,7 +215,7 @@ Bugzilla   : 12398
 Description: enable data checksumming by default
 Details    : enable checksum by default, allow --disable-checksum
 	     configure option and "-o nochecksum" mount option.  Checksums
-	     can also be disabled at runtime via $LPROC/llite/*/checksum_pages.
+	     can also be disabled at runtime via $LPROC/osc/*/checksum_pages.
 
 Severity   : normal
 Frequency  : Occasionally with failover
