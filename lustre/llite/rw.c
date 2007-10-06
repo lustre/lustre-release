@@ -182,16 +182,17 @@ void ll_truncate(struct inode *inode)
                         GOTO(out_unlock, 0);
                 }
 
-                obd_adjust_kms(ll_i2obdexp(inode), lli->lli_smd, i_size_read(inode), 1);
+                obd_adjust_kms(ll_i2obdexp(inode), lli->lli_smd,
+                               i_size_read(inode), 1);
                 lov_stripe_unlock(lli->lli_smd);
         }
 
-        if (unlikely((ll_i2sbi(inode)->ll_flags & LL_SBI_CHECKSUM) &&
+        if (unlikely((ll_i2sbi(inode)->ll_flags & LL_SBI_LLITE_CHECKSUM) &&
                      (i_size_read(inode) & ~CFS_PAGE_MASK))) {
-                /* If the truncate leaves behind a partial page, update its
-                 * checksum. */
+                /* If the truncate leaves a partial page, update its checksum */
                 struct page *page = find_get_page(inode->i_mapping,
-                                                  i_size_read(inode) >> CFS_PAGE_SHIFT);
+                                                  i_size_read(inode) >>
+                                                  CFS_PAGE_SHIFT);
                 if (page != NULL) {
                         struct ll_async_page *llap = llap_cast_private(page);
                         if (llap != NULL) {
@@ -638,7 +639,7 @@ static struct ll_async_page *llap_from_page(struct page *page, unsigned origin)
         spin_unlock(&sbi->ll_lock);
 
  out:
-        if (unlikely(sbi->ll_flags & LL_SBI_CHECKSUM)) {
+        if (unlikely(sbi->ll_flags & LL_SBI_LLITE_CHECKSUM)) {
                 __u32 csum = 0;
                 csum = crc32_le(csum, kmap(page), CFS_PAGE_SIZE);
                 kunmap(page);
@@ -698,7 +699,7 @@ static int queue_or_sync_write(struct obd_export *exp, struct inode *inode,
                                "sync write before EOF: size_index %lu, to %d\n",
                                size_index, to);
                 to = CFS_PAGE_SIZE;
-        } else if (to != CFS_PAGE_SIZE && llap->llap_page->index == size_index) {
+        } else if (to != CFS_PAGE_SIZE && llap->llap_page->index == size_index){
                 int size_to = i_size_read(inode) & ~CFS_PAGE_MASK;
                 LL_CDEBUG_PAGE(D_PAGE, llap->llap_page,
                                "sync write at EOF: size_index %lu, to %d/%d\n",
@@ -708,7 +709,7 @@ static int queue_or_sync_write(struct obd_export *exp, struct inode *inode,
         }
 
         /* compare the checksum once before the page leaves llite */
-        if (unlikely((sbi->ll_flags & LL_SBI_CHECKSUM) &&
+        if (unlikely((sbi->ll_flags & LL_SBI_LLITE_CHECKSUM) &&
                      llap->llap_checksum != 0)) {
                 __u32 csum = 0;
                 struct page *page = llap->llap_page;
@@ -1601,7 +1602,7 @@ static ssize_t ll_file_copy_pages(struct page **pages, int numpages,
         ssize_t amount = 0;
         int i;
         int updatechecksum = ll_i2sbi(pages[0]->mapping->host)->ll_flags &
-                             LL_SBI_CHECKSUM;
+                             LL_SBI_LLITE_CHECKSUM;
         ENTRY;
 
         for (i = 0; i < numpages; i++) {
