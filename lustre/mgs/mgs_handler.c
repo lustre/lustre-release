@@ -389,13 +389,15 @@ static int mgs_handle_target_reg(struct ptlrpc_request *req)
         /* Log writing contention is handled by the fsdb_sem */
 
         if (mti->mti_flags & LDD_F_WRITECONF) {
-                if (mti->mti_flags & LDD_F_SV_TYPE_MDT) {
+                if (mti->mti_flags & LDD_F_SV_TYPE_MDT &&
+                    mti->mti_stripe_index == 0) {
                         rc = mgs_erase_logs(obd, mti->mti_fsname);
                         LCONSOLE_WARN("%s: Logs for fs %s were removed by user "
                                       "request.  All servers must be restarted "
                                       "in order to regenerate the logs."
                                       "\n", obd->obd_name, mti->mti_fsname);
-                } else if (mti->mti_flags & LDD_F_SV_TYPE_OST) {
+                } else if (mti->mti_flags &
+                           (LDD_F_SV_TYPE_OST | LDD_F_SV_TYPE_MDT)) {
                         rc = mgs_erase_log(obd, mti->mti_svname);
                         LCONSOLE_WARN("%s: Regenerating %s log by user "
                                       "request.\n",
