@@ -64,10 +64,10 @@ command_t cmdlist[] = {
          "usage: lustre_build_version"},
         {"exit", jt_quit, 0, "quit"},
         {"quit", jt_quit, 0, "quit"},
-        
+
         /* Network configuration commands */
         {"===== network config =====", jt_noop, 0, "network config"},
-        {"--net", jt_opt_net, 0, "run <command> after setting network to <net>\n"
+        {"--net", jt_opt_net, 0,"run <command> after setting network to <net>\n"
          "usage: --net <tcp/elan/gm/...> <command>"},
         {"network", jt_ptl_network, 0, "configure LNET"
          "usage: network up|down"},
@@ -81,7 +81,8 @@ command_t cmdlist[] = {
          "usage: interface_list"},
         {"peer_list", jt_ptl_print_peers, 0, "print peer entries\n"
          "usage: peer_list"},
-        {"conn_list", jt_ptl_print_connections, 0, "print all the connected remote nid\n"
+        {"conn_list", jt_ptl_print_connections, 0,
+         "print all the connected remote nid\n"
          "usage: conn_list"},
         {"active_tx", jt_ptl_print_active_txs, 0, "print active transmits\n"
          "usage: active_tx"},
@@ -95,7 +96,7 @@ command_t cmdlist[] = {
          "usage: ping nid [timeout] [pid]"},
 
         /* Device selection commands */
-        {"==== device selection ====", jt_noop, 0, "device selection"},
+        {"==== obd device selection ====", jt_noop, 0, "device selection"},
         {"device", jt_obd_device, 0,
          "set current device to <name|devno>\n"
          "usage: device <%name|$name|devno>"},
@@ -105,7 +106,7 @@ command_t cmdlist[] = {
          "usage: dl"},
 
         /* Device operations */
-        {"==== device operations ===", jt_noop, 0, "device operations"},
+        {"==== obd device operations ====", jt_noop, 0, "device operations"},
         {"activate", jt_obd_activate, 0, "activate an import\n"},
         {"deactivate", jt_obd_deactivate, 0, "deactivate an import. "
          "This command should be used on failed OSC devices in an MDT LOV.\n"},
@@ -118,9 +119,9 @@ command_t cmdlist[] = {
          "usage: conf_param <target.keyword=val> ...\n"},
         {"local_param", jt_lcfg_param, 0, "set a temporary, local param\n"
          "usage: local_param <target.keyword=val> ...\n"},
-       
+
         /* Debug commands */
-        {"==== debugging control ===", jt_noop, 0, "debug"},
+        {"==== debugging control ====", jt_noop, 0, "debug"},
         {"debug_daemon", jt_dbg_debug_daemon, 0,
          "debug daemon control and dump to a file\n"
          "usage: debug_daemon {start file [#MB]|stop}"},
@@ -138,7 +139,8 @@ command_t cmdlist[] = {
          "usage: df <input> [output]"},
         {"clear", jt_dbg_clear_debug_buf, 0, "clear kernel debug buffer\n"
          "usage: clear"},
-        {"mark", jt_dbg_mark_debug_buf, 0,"insert marker text in kernel debug buffer\n"
+        {"mark", jt_dbg_mark_debug_buf, 0,
+         "insert marker text in kernel debug buffer\n"
          "usage: mark <text>"},
         {"filter", jt_dbg_filter, 0, "filter message type\n"
          "usage: filter <subsystem id/debug mask>"},
@@ -164,11 +166,24 @@ command_t cmdlist[] = {
          "usage: setup <args...>"},
         {"cleanup", jt_obd_cleanup, 0, "cleanup previously setup device\n"
          "usage: cleanup [force | failover]"},
-        {"dump_cfg", jt_cfg_dump_log, 0, "print log of recorded commands for this config to kernel debug log\n"
+        {"dump_cfg", jt_cfg_dump_log, 0,
+         "print log of recorded commands for this config to kernel debug log\n"
          "usage: dump_cfg config-uuid-name"},
-        
+
+        /* virtual block operations */
+        {"==== virtual block device ====", jt_noop, 0, "virtual block device"},
+        {"blockdev_attach", jt_blockdev_attach, 0,
+         "attach a lustre regular file to a virtual block device\n"
+         "usage: blockdev_attach <file_name> <device_name>"},
+        {"blockdev_detach", jt_blockdev_detach, 0,
+         "detach a lustre regular file from a virtual block device\n"
+         "usage: blockdev_detach <device_name>"},
+        {"blockdev_info", jt_blockdev_info, 0,
+         "get the device info of a attached file\n"
+         "usage: blockdev_info <device_name>"},
+
         /* Test only commands */
-        {"=== testing (DANGEROUS) ==", jt_noop, 0, "testing (DANGEROUS)"},
+        {"==== testing (DANGEROUS) ====", jt_noop, 0, "testing (DANGEROUS)"},
         {"--threads", jt_opt_threads, 0,
          "run <threads> separate instances of <command> on device <devno>\n"
          "--threads <threads> <verbose> <devno> <command [args ...]>"},
@@ -229,31 +244,20 @@ command_t cmdlist[] = {
          "memory pressure testing\n"
          "usage: memhog <page count> [<gfp flags>]"},
 
-        /* ============ virtual block operations =================*/
-        {"blockdev_attach", jt_blockdev_attach, 0,
-         "attach a lustre regular file to a virtual block device\n"
-         "usage: blockdev_attach <file_name> <device_name>"},
-        {"blockdev_detach", jt_blockdev_detach, 0,
-         "detach a lustre regular file from a virtual block device\n"
-         "usage: blockdev_detach <device_name>"},
-        {"blockdev_info", jt_blockdev_info, 0,
-         "get the device info of a attached file\n"
-         "usage: blockdev_info <device_name>"},
-
-        {"== obsolete (DANGEROUS) ==", jt_noop, 0, "obsolete (DANGEROUS)"},
+        {"==== obsolete (DANGEROUS) ====", jt_noop, 0, "obsolete (DANGEROUS)"},
         /* some test scripts still use these */
         {"cfg_device", jt_obd_device, 0,
          "set current device to <name>\n"
          "usage: device <name>"},
-        {"recover", jt_obd_recover, 0, 
+        {"recover", jt_obd_recover, 0,
          "try to restore a lost connection immediately\n"
          "usage: recover [MDC/OSC device]"},
         /* saving for sanity 44a */
         {"lov_getconfig", jt_obd_lov_getconfig, 0,
          "read lov configuration from an mds device\n"
          "usage: lov_getconfig <mountpoint>"},
-        /* Llog operations */ 
-        {"llog_catlist", jt_llog_catlist, 0, 
+        /* Llog operations */
+        {"llog_catlist", jt_llog_catlist, 0,
          "list all catalog logs on current device.\n"
          "usage: llog_catlist"},
         {"llog_info", jt_llog_info, 0,
