@@ -205,7 +205,7 @@ static int llu_glimpse_callback(struct ldlm_lock *lock, void *reqp)
         lvb->lvb_size = lli->lli_smd->lsm_oinfo[stripe]->loi_kms;
 
         LDLM_DEBUG(lock, "i_size: %llu -> stripe number %u -> kms "LPU64,
-                   (long long)llu_i2stat(inode)->st_size, stripe,lvb->lvb_size);
+                   (__u64)llu_i2stat(inode)->st_size, stripe,lvb->lvb_size);
  iput:
         I_RELE(inode);
  out:
@@ -278,11 +278,11 @@ int llu_glimpse_size(struct inode *inode)
         if (lli->lli_flags & LLIF_MDS_SIZE_LOCK)
                 RETURN(0);
 
-        CDEBUG(D_DLMTRACE, "Glimpsing inode %llu\n", (long long)st->st_ino);
+        CDEBUG(D_DLMTRACE, "Glimpsing inode "LPU64"\n", (__u64)st->st_ino);
 
         if (!lli->lli_smd) {
-                CDEBUG(D_DLMTRACE, "No objects for inode %llu\n", 
-                       (long long)st->st_ino);
+                CDEBUG(D_DLMTRACE, "No objects for inode "LPU64"\n", 
+                       (__u64)st->st_ino);
                 RETURN(0);
         }
 
@@ -305,8 +305,8 @@ int llu_glimpse_size(struct inode *inode)
         }
 
         llu_merge_lvb(inode);
-        CDEBUG(D_DLMTRACE, "glimpse: size: %llu, blocks: %llu\n",
-               (long long)st->st_size, (long long)st->st_blocks);
+        CDEBUG(D_DLMTRACE, "glimpse: size: "LPU64", blocks: "LPU64"\n",
+               (__u64)st->st_size, (__u64)st->st_blocks);
 
         RETURN(rc);
 }
@@ -333,7 +333,7 @@ int llu_extent_lock(struct ll_file_data *fd, struct inode *inode,
                 RETURN(0);
 
         CDEBUG(D_DLMTRACE, "Locking inode %llu, start "LPU64" end "LPU64"\n",
-               (long long)st->st_ino, policy->l_extent.start,
+               (__u64)st->st_ino, policy->l_extent.start,
                policy->l_extent.end);
 
         einfo.ei_type = LDLM_EXTENT;
