@@ -3541,8 +3541,8 @@ test_102b() {
 	$GETSTRIPE -v $testfile2 > $tmp_file
 	local stripe_size=`grep "size"  $tmp_file| awk '{print $2}'`
 	local stripe_count=`grep "count"  $tmp_file| awk '{print $2}'`
-	[ $stripe_size -eq 65536 ] || error "stripe size $stripe_size != 65536"
-	[ $stripe_count -eq 2 ] || error "stripe count $stripe_count != 2"
+	[ "$stripe_size" -eq 65536 ] || error "stripe size $stripe_size != 65536"
+	[ "$stripe_count" -eq 2 ] || error "stripe count $stripe_count != 2"
 }
 run_test 102b "getfattr/setfattr for trusted.lov EAs ============"
 
