@@ -957,6 +957,10 @@ int ldlm_cli_update_pool(struct ptlrpc_request *req)
         if (!imp_connect_lru_resize(req->rq_import))
                 RETURN(0);
 
+        if (lustre_msg_get_slv(req->rq_repmsg) == 0 ||
+            lustre_msg_get_limit(req->rq_repmsg) == 0)
+                RETURN(0);
+
         pl = ldlm_imp2pl(req->rq_import);
         
         spin_lock(&pl->pl_lock);
