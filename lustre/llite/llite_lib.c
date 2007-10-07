@@ -91,6 +91,10 @@ static struct ll_sb_info *ll_init_sbi(void)
         sbi->ll_flags |= LL_SBI_CHECKSUM;
 #endif
 
+#ifdef HAVE_LRU_RESIZE_SUPPORT
+        sbi->ll_flags |= LL_SBI_LRU_RESIZE;
+#endif
+
 #ifdef HAVE_EXPORT___IGET
         INIT_LIST_HEAD(&sbi->ll_deathrow);
         spin_lock_init(&sbi->ll_deathrow_lock);
@@ -199,7 +203,8 @@ static int client_common_fill_super(struct super_block *sb, char *md, char *dt,
                                   OBD_CONNECT_MDS_CAPA | OBD_CONNECT_OSS_CAPA |
                                   OBD_CONNECT_CANCELSET;
 #ifdef HAVE_LRU_RESIZE_SUPPORT
-        data->ocd_connect_flags |= OBD_CONNECT_LRU_RESIZE;
+        if (sbi->ll_flags & LL_SBI_LRU_RESIZE)
+                data->ocd_connect_flags |= OBD_CONNECT_LRU_RESIZE;
 #endif
 #ifdef CONFIG_FS_POSIX_ACL
         data->ocd_connect_flags |= OBD_CONNECT_ACL;
@@ -844,6 +849,16 @@ static int ll_options(char *options, int *flags)
                         goto next;
                 }
                 tmp = ll_set_opt("nochecksum", s1, LL_SBI_CHECKSUM);
+                if (tmp) {
+                        *flags &= ~tmp;
+                        goto next;
+                }
+                tmp = ll_set_opt("lruresize", s1, LL_SBI_LRU_RESIZE);
+                if (tmp) {
+                        *flags |= tmp;
+                        goto next;
+                }
+                tmp = ll_set_opt("nolruresize", s1, LL_SBI_LRU_RESIZE);
                 if (tmp) {
                         *flags &= ~tmp;
                         goto next;

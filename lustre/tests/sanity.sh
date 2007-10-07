@@ -4546,7 +4546,7 @@ test_121() { #bug #10589
 }
 run_test 121 "read cancel race ========="
 
-test_124() {
+test_124a() {
 	[ -z "`grep lru_resize $LPROC/mdc/*/connect_flags`" ] && \
                skip "no lru resize on server" && return 0
         cancel_lru_locks mdc
@@ -4611,7 +4611,53 @@ test_124() {
         log "unlink $NR files at $DIR/$tdir"
         unlinkmany $DIR/$tdir/f $NR
 }
-run_test 124 "lru resize ======================================="
+run_test 124a "lru resize ======================================="
+
+test_124b() {
+	[ -z "`grep lru_resize $LPROC/mdc/*/connect_flags`" ] && \
+               skip "no lru resize on server" && return 0
+        cleanup -f || error "failed to unmount"
+        MOUNTOPT="$MOUNTOPT,nolruresize"
+        setup
+
+        NR=3000
+        mkdir -p $DIR/$tdir || error "failed to create $DIR/$tdir"
+
+        createmany -o $DIR/$tdir/f $NR
+        log "doing ls -la $DIR/$tdir 3 times (lru resize disabled)"
+        stime=`date +%s`
+        ls -la $DIR/$tdir > /dev/null
+        ls -la $DIR/$tdir > /dev/null
+        ls -la $DIR/$tdir > /dev/null
+        etime=`date +%s`
+        nolruresize_delta=$((etime-stime))
+        log "ls -la time: $nolruresize_delta seconds"
+
+        cleanup -f || error "failed to unmount"
+        MOUNTOPT=`echo $MOUNTOPT | sed "s/nolruresize/lruresize/"`
+        setup
+
+        createmany -o $DIR/$tdir/f $NR
+        log "doing ls -la $DIR/$tdir 3 times (lru resize enabled)"
+        stime=`date +%s`
+        ls -la $DIR/$tdir > /dev/null
+        ls -la $DIR/$tdir > /dev/null
+        ls -la $DIR/$tdir > /dev/null
+        etime=`date +%s`
+        lruresize_delta=$((etime-stime))
+        log "ls -la time: $lruresize_delta seconds"
+
+        if test $lruresize_delta -gt $nolruresize_delta; then
+                log "ls -la is $((lruresize_delta - $nolruresize_delta))s slower with lru resize enabled"
+        elif test $nolruresize_delta -gt $lruresize_delta; then
+                log "ls -la is $((nolruresize_delta - $lruresize_delta))s faster with lru resize enabled"
+        else
+                log "lru resize performs the same with no lru resize"
+        fi
+
+        unlinkmany $DIR/$tdir/f $NR
+}
+run_test 124b "lru resize (performance test) ======================="
 
 test_125() { # 13358
 	mkdir -p $DIR/d125 || error "mkdir failed"

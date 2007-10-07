@@ -238,6 +238,7 @@ enum stats_track_type {
 #define LL_SBI_MDS_CAPA          0x80 /* support mds capa */
 #define LL_SBI_OSS_CAPA         0x100 /* support oss capa */
 #define LL_SBI_LOCALFLOCK       0x200 /* Local flocks support by kernel */
+#define LL_SBI_LRU_RESIZE       0x400 /* lru resize support */
 
 struct ll_sb_info {
         struct list_head          ll_list;
