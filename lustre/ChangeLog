@@ -120,6 +120,13 @@ Details    : Modify target file & which_patch.
              could exploit this flaw to run code in the kernel 
              (ie a root privilege escalation). (CVE-2007-4573). 
 
+Severity   : enhancement
+Bugzilla   : 11686
+Description: Console message flood
+Details    : Make cdls ratelimiting more tunable by adding several tunable in
+	     procfs /proc/sys/lnet/console_{min,max}_delay_centisecs and
+	     /proc/sys/lnet/console_backoff.
+
 --------------------------------------------------------------------------------
 
 2007-09-27         Cluster File Systems, Inc. <info@clusterfs.com>
