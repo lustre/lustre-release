@@ -465,7 +465,7 @@ panic_collect_pages(struct page_collection *pc)
 
         CFS_INIT_LIST_HEAD(&pc->pc_pages);
 
-        for (i = 0; i < NR_CPUS; i++) {
+        for (i = 0; i < num_possible_cpus(); i++) {
                 tcd = &trace_data[i].tcd;
 
                 list_splice(&tcd->tcd_pages, &pc->pc_pages);
@@ -881,11 +881,11 @@ int trace_set_debug_mb(int mb)
 		return -EINVAL;
 	}
 
-	mb /= smp_num_cpus;
+	mb /= num_possible_cpus();
 
         tracefile_write_lock();
 
-	for (i = 0; i < NR_CPUS; i++) {
+	for (i = 0; i < num_possible_cpus(); i++) {
 		struct trace_cpu_data *tcd = &trace_data[i].tcd;
 
 		tcd->tcd_max_pages = mb << (20 - CFS_PAGE_SHIFT);
@@ -915,7 +915,7 @@ int trace_get_debug_mb(void)
         
         tracefile_read_lock();
 
-	for (i = 0; i < NR_CPUS; i++) {
+	for (i = 0; i < num_possible_cpus(); i++) {
 		struct trace_cpu_data *tcd = &trace_data[i].tcd;
 
                 total_pages += tcd->tcd_max_pages;
@@ -1068,7 +1068,7 @@ int tracefile_init(void)
         if (rc != 0)
                 return rc;
 
-        for (i = 0; i < NR_CPUS; i++) {
+        for (i = 0; i < num_possible_cpus(); i++) {
                 tcd = &trace_data[i].tcd;
                 CFS_INIT_LIST_HEAD(&tcd->tcd_pages);
                 CFS_INIT_LIST_HEAD(&tcd->tcd_stock_pages);

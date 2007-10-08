@@ -23,7 +23,7 @@ int tracefile_init_arch()
 
 	init_rwsem(&tracefile_sem);
 
-	for (i = 0; i < NR_CPUS; i++)
+	for (i = 0; i < num_possible_cpus(); i++)
 		for (j = 0; j < 3; j++) {
 			trace_console_buffers[i][j] =
 				kmalloc(TRACE_CONSOLE_BUFFER_SIZE,
@@ -46,7 +46,7 @@ void tracefile_fini_arch()
 	int    i;
 	int    j;
 
-	for (i = 0; i < NR_CPUS; i++)
+	for (i = 0; i < num_possible_cpus(); i++)
 		for (j = 0; j < 3; j++)
 			if (trace_console_buffers[i][j] != NULL) {
 				kfree(trace_console_buffers[i][j]);
@@ -195,7 +195,7 @@ trace_call_on_all_cpus(void (*fn)(void *arg), void *arg)
         int       cpu;
 
 	/* Run the given routine on every CPU in thread context */
-        for (cpu = 0; cpu < NR_CPUS; cpu++) {
+        for (cpu = 0; cpu < num_possible_cpus(); cpu++) {
                 if (!cpu_online(cpu))
 			continue;
 
