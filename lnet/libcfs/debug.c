@@ -47,6 +47,15 @@ EXPORT_SYMBOL(libcfs_printk);
 unsigned int libcfs_console_ratelimit = 1;
 EXPORT_SYMBOL(libcfs_console_ratelimit);
 
+cfs_duration_t libcfs_console_max_delay;
+EXPORT_SYMBOL(libcfs_console_max_delay);
+
+cfs_duration_t libcfs_console_min_delay;
+EXPORT_SYMBOL(libcfs_console_min_delay);
+
+unsigned int libcfs_console_backoff = CDEBUG_DEFAULT_BACKOFF;
+EXPORT_SYMBOL(libcfs_console_backoff);
+
 unsigned int libcfs_debug_binary = 1;
 EXPORT_SYMBOL(libcfs_debug_binary);
 
@@ -420,6 +429,8 @@ int libcfs_debug_init(unsigned long bufsize)
         int    rc;
 
         cfs_waitq_init(&debug_ctlwq);
+        libcfs_console_max_delay = CDEBUG_DEFAULT_MAX_DELAY;
+        libcfs_console_min_delay = CDEBUG_DEFAULT_MIN_DELAY;
         rc = tracefile_init();
 
         if (rc == 0)
@@ -479,6 +490,9 @@ static char source_nid[16];
 /* 0 indicates no messages to console, 1 is errors, > 1 is all debug messages */
 static int toconsole = 1;
 unsigned int libcfs_console_ratelimit = 1;
+cfs_duration_t libcfs_console_max_delay;
+cfs_duration_t libcfs_console_min_delay;
+unsigned int libcfs_console_backoff = CDEBUG_DEFAULT_BACKOFF;
 #else /* !HAVE_CATAMOUNT_DATA_H */
 #ifdef HAVE_NETDB_H
 #include <sys/utsname.h>
@@ -520,6 +534,12 @@ int libcfs_debug_init(unsigned long bufsize)
 #ifdef HAVE_CATAMOUNT_DATA_H
         char *debug_console = NULL;
         char *debug_ratelimit = NULL;
+        char *debug_max_delay = NULL;
+        char *debug_min_delay = NULL;
+        char *debug_backoff = NULL;
+
+        libcfs_console_max_delay = CDEBUG_DEFAULT_MAX_DELAY;
+        libcfs_console_min_delay = CDEBUG_DEFAULT_MIN_DELAY;
 
         snprintf(source_nid, sizeof(source_nid) - 1, "%u", _my_pnid);
         source_pid = _my_pid;
@@ -532,7 +552,47 @@ int libcfs_debug_init(unsigned long bufsize)
         debug_ratelimit = getenv("LIBLUSTRE_DEBUG_CONSOLE_RATELIMIT");
         if (debug_ratelimit != NULL) {
                 libcfs_console_ratelimit = strtoul(debug_ratelimit, NULL, 0);
-                CDEBUG(D_INFO, "set liblustre console ratelimit to %u\n", libcfs_console_ratelimit);
+                CDEBUG(D_INFO, "set liblustre console ratelimit to %u\n",
+                                libcfs_console_ratelimit);
+        }
+        debug_max_delay = getenv("LIBLUSTRE_DEBUG_CONSOLE_MAX_DELAY");
+        if (debug_max_delay != NULL)
+                libcfs_console_max_delay =
+                            cfs_time_seconds(strtoul(debug_max_delay, NULL, 0));
+        debug_min_delay = getenv("LIBLUSTRE_DEBUG_CONSOLE_MIN_DELAY");
+        if (debug_min_delay != NULL)
+                libcfs_console_min_delay =
+                            cfs_time_seconds(strtoul(debug_min_delay, NULL, 0));
+        if (debug_min_delay || debug_max_delay) {
+                if (!libcfs_console_max_delay || !libcfs_console_min_delay ||
+                    libcfs_console_max_delay < libcfs_console_min_delay) {
+                        libcfs_console_max_delay = CDEBUG_DEFAULT_MAX_DELAY;
+                        libcfs_console_min_delay = CDEBUG_DEFAULT_MIN_DELAY;
+                        CDEBUG(D_INFO, "LIBLUSTRE_DEBUG_CONSOLE_MAX_DELAY "
+                                       "should be greater than "
+                                       "LIBLUSTRE_DEBUG_CONSOLE_MIN_DELAY "
+                                       "and both parameters should be non-null"
+                                       ": restore default values\n");
+                } else {
+                        CDEBUG(D_INFO, "set liblustre console max delay to %lus"
+                                       " and min delay to %lus\n",
+                               (cfs_duration_t)
+                                     cfs_duration_sec(libcfs_console_max_delay),
+                               (cfs_duration_t)
+                                    cfs_duration_sec(libcfs_console_min_delay));
+                }
+        }
+        debug_backoff = getenv("LIBLUSTRE_DEBUG_CONSOLE_BACKOFF");
+        if (debug_backoff != NULL) {
+                libcfs_console_backoff = strtoul(debug_backoff, NULL, 0);
+                if (libcfs_console_backoff <= 0) {
+                        libcfs_console_backoff = CDEBUG_DEFAULT_BACKOFF;
+                        CDEBUG(D_INFO, "LIBLUSTRE_DEBUG_CONSOLE_BACKOFF <= 0: "
+                                       "restore default value\n");
+                } else {
+                        CDEBUG(D_INFO, "set liblustre console backoff to %u\n",
+                               libcfs_console_backoff);
+                }
         }
 #else
         struct utsname myname;
@@ -670,10 +730,6 @@ libcfs_debug_vmsg2(cfs_debug_limit_state_t *cdls,
         if (console) {
                 /* check rate limit for console */
                 if (cdls != NULL) {
-                        cfs_time_t t = cdls->cdls_next +
-                                       cfs_time_seconds(CDEBUG_MAX_LIMIT + 10);
-                        cfs_duration_t  dmax = cfs_time_seconds(CDEBUG_MAX_LIMIT);
-
                         if (libcfs_console_ratelimit &&
                                 cdls->cdls_next != 0 &&     /* not first time ever */
                                 !cfs_time_after(cfs_time_current(), cdls->cdls_next)) {
@@ -683,16 +739,22 @@ libcfs_debug_vmsg2(cfs_debug_limit_state_t *cdls,
                                 goto out_file;
                         }
 
-                        if (cfs_time_after(cfs_time_current(), t)) {
+                        if (cfs_time_after(cfs_time_current(), cdls->cdls_next +
+                                           libcfs_console_max_delay +
+                                           cfs_time_seconds(10))) {
                                 /* last timeout was a long time ago */
-                                cdls->cdls_delay /= 8;
+                                cdls->cdls_delay /= libcfs_console_backoff * 4;
                         } else {
-                                cdls->cdls_delay *= 2;
+                                cdls->cdls_delay *= libcfs_console_backoff;
 
-                                if (cdls->cdls_delay < CFS_TICK)
-                                        cdls->cdls_delay = CFS_TICK;
-                                else if (cdls->cdls_delay > dmax)
-                                        cdls->cdls_delay = dmax;
+                                if (cdls->cdls_delay <
+                                                libcfs_console_min_delay)
+                                        cdls->cdls_delay =
+                                                libcfs_console_min_delay;
+                                else if (cdls->cdls_delay >
+                                                libcfs_console_max_delay)
+                                        cdls->cdls_delay =
+                                                libcfs_console_max_delay;
                         }
 
                         /* ensure cdls_next is never zero after it's been seen */

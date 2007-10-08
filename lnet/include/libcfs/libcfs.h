@@ -74,6 +74,9 @@ extern unsigned int libcfs_stack;
 extern unsigned int libcfs_debug;
 extern unsigned int libcfs_printk;
 extern unsigned int libcfs_console_ratelimit;
+extern cfs_duration_t libcfs_console_max_delay;
+extern cfs_duration_t libcfs_console_min_delay;
+extern unsigned int libcfs_console_backoff;
 extern unsigned int libcfs_debug_binary;
 extern char debug_file_path[1024];
 
@@ -164,7 +167,9 @@ extern unsigned int libcfs_panic_on_lbug;
 # define DEBUG_SUBSYSTEM S_UNDEFINED
 #endif
 
-#define CDEBUG_MAX_LIMIT 600
+#define CDEBUG_DEFAULT_MAX_DELAY (cfs_time_seconds(600))         /* jiffies */
+#define CDEBUG_DEFAULT_MIN_DELAY ((cfs_time_seconds(1) + 1) / 2) /* jiffies */
+#define CDEBUG_DEFAULT_BACKOFF   2
 typedef struct {
         cfs_time_t      cdls_next;
         int             cdls_count;

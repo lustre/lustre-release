@@ -68,6 +68,9 @@ enum {
         PSDEV_SUBSYSTEM_DEBUG,    /* control debugging */
         PSDEV_PRINTK,             /* force all messages to console */
         PSDEV_CONSOLE_RATELIMIT,  /* ratelimit console messages */
+        PSDEV_CONSOLE_MAX_DELAY_CS, /* maximum delay over which we skip messages */
+        PSDEV_CONSOLE_MIN_DELAY_CS, /* initial delay over which we skip messages */
+        PSDEV_CONSOLE_BACKOFF,    /* delay increase factor */
         PSDEV_DEBUG_PATH,         /* crashdump log location */
         PSDEV_DEBUG_DUMP_PATH,    /* crashdump tracelog location */
         PSDEV_LNET_UPCALL,        /* User mode upcall script  */
@@ -195,6 +198,95 @@ static int __proc_debug_mb(void *data, int write,
 
 DECLARE_PROC_HANDLER(proc_debug_mb)
 
+int LL_PROC_PROTO(proc_console_max_delay_cs)
+{
+        int rc, max_delay_cs;
+        cfs_sysctl_table_t dummy = *table;
+        cfs_duration_t d;
+
+        dummy.data = &max_delay_cs;
+        dummy.proc_handler = &proc_dointvec;
+
+        if (!write) { /* read */
+                max_delay_cs = cfs_duration_sec(libcfs_console_max_delay * 100);
+                rc = ll_proc_dointvec(&dummy, write, filp, buffer, lenp, ppos);
+                return rc;
+        }
+
+        /* write */
+        max_delay_cs = 0;
+        rc = ll_proc_dointvec(&dummy, write, filp, buffer, lenp, ppos);
+        if (rc < 0)
+                return rc;
+        if (max_delay_cs <= 0)
+                return -EINVAL;
+
+        d = cfs_time_seconds(max_delay_cs) / 100;
+        if (d == 0 || d < libcfs_console_min_delay)
+                return -EINVAL;
+        libcfs_console_max_delay = d;
+
+        return rc;
+}
+
+int LL_PROC_PROTO(proc_console_min_delay_cs)
+{
+        int rc, min_delay_cs;
+        cfs_sysctl_table_t dummy = *table;
+        cfs_duration_t d;
+
+        dummy.data = &min_delay_cs;
+        dummy.proc_handler = &proc_dointvec;
+
+        if (!write) { /* read */
+                min_delay_cs = cfs_duration_sec(libcfs_console_min_delay * 100);
+                rc = ll_proc_dointvec(&dummy, write, filp, buffer, lenp, ppos);
+                return rc;
+        }
+
+        /* write */
+        min_delay_cs = 0;
+        rc = ll_proc_dointvec(&dummy, write, filp, buffer, lenp, ppos);
+        if (rc < 0)
+                return rc;
+        if (min_delay_cs <= 0)
+                return -EINVAL;
+
+        d = cfs_time_seconds(min_delay_cs) / 100;
+        if (d == 0 || d > libcfs_console_max_delay)
+                return -EINVAL;
+        libcfs_console_min_delay = d;
+
+        return rc;
+}
+
+int LL_PROC_PROTO(proc_console_backoff)
+{
+        int rc, backoff;
+        cfs_sysctl_table_t dummy = *table;
+
+        dummy.data = &backoff;
+        dummy.proc_handler = &proc_dointvec;
+
+        if (!write) { /* read */
+                backoff= libcfs_console_backoff;
+                rc = ll_proc_dointvec(&dummy, write, filp, buffer, lenp, ppos);
+                return rc;
+        }
+
+        /* write */
+        backoff = 0;
+        rc = ll_proc_dointvec(&dummy, write, filp, buffer, lenp, ppos);
+        if (rc < 0)
+                return rc;
+        if (backoff <= 0)
+                return -EINVAL;
+
+        libcfs_console_backoff = backoff;
+
+        return rc;
+}
+
 static cfs_sysctl_table_t lnet_table[] = {
         /*
          * NB No .strategy entries have been provided since sysctl(8) prefers
@@ -231,6 +323,27 @@ static cfs_sysctl_table_t lnet_table[] = {
                 .maxlen   = sizeof(int),
                 .mode     = 0644,
                 .proc_handler = &proc_dointvec
+        },
+        {
+                .ctl_name = PSDEV_CONSOLE_MAX_DELAY_CS,
+                .procname = "console_max_delay_centisecs",
+                .maxlen   = sizeof(int),
+                .mode     = 0644,
+                .proc_handler = &proc_console_max_delay_cs
+        },
+        {
+                .ctl_name = PSDEV_CONSOLE_MIN_DELAY_CS,
+                .procname = "console_min_delay_centisecs",
+                .maxlen   = sizeof(int),
+                .mode     = 0644,
+                .proc_handler = &proc_console_min_delay_cs
+        },
+        {
+                .ctl_name = PSDEV_CONSOLE_BACKOFF,
+                .procname = "console_backoff",
+                .maxlen   = sizeof(int),
+                .mode     = 0644,
+                .proc_handler = &proc_console_backoff
         },
 
         {

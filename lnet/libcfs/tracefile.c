@@ -350,10 +350,6 @@ console:
         }
 
         if (cdls != NULL) {
-                cfs_time_t      t = cdls->cdls_next +
-                                    cfs_time_seconds(CDEBUG_MAX_LIMIT + 10);
-                cfs_duration_t  dmax = cfs_time_seconds(CDEBUG_MAX_LIMIT);
-
                 if (libcfs_console_ratelimit &&
                     cdls->cdls_next != 0 &&     /* not first time ever */
                     !cfs_time_after(cfs_time_current(), cdls->cdls_next)) {
@@ -364,16 +360,18 @@ console:
                         return 1;
                 }
 
-                if (cfs_time_after(cfs_time_current(), t)) {
+                if (cfs_time_after(cfs_time_current(), cdls->cdls_next +
+                                                       libcfs_console_max_delay
+                                                       + cfs_time_seconds(10))) {
                         /* last timeout was a long time ago */
-                        cdls->cdls_delay /= 8;
+                        cdls->cdls_delay /= libcfs_console_backoff * 4;
                 } else {
-                        cdls->cdls_delay *= 2;
+                        cdls->cdls_delay *= libcfs_console_backoff;
 
-                        if (cdls->cdls_delay < CFS_TICK)
-                                cdls->cdls_delay = CFS_TICK;
-                        else if (cdls->cdls_delay > dmax)
-                                cdls->cdls_delay = dmax;
+                        if (cdls->cdls_delay < libcfs_console_min_delay)
+                                cdls->cdls_delay = libcfs_console_min_delay;
+                        else if (cdls->cdls_delay > libcfs_console_max_delay)
+                                cdls->cdls_delay = libcfs_console_max_delay;
                 }
 
                 /* ensure cdls_next is never zero after it's been seen */
