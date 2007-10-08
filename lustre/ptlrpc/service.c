@@ -1271,7 +1271,7 @@ static int ptlrpc_main(void *arg)
         if (svc->srv_cpu_affinity) {
                 int cpu, num_cpu;
 
-                for (cpu = 0, num_cpu = 0; cpu < NR_CPUS; cpu++) {
+                for (cpu = 0, num_cpu = 0; cpu < num_possible_cpus(); cpu++) {
                         if (!cpu_online(cpu))
                                 continue;
                         if (num_cpu == thread->t_id % num_online_cpus())
