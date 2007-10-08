@@ -575,7 +575,8 @@ int ll_lov_setstripe_ea_info(struct inode *inode, struct file *file,
 int ll_lov_getstripe_ea_info(struct inode *inode, const char *filename,
                              struct lov_mds_md **lmm, int *lmm_size,
                              struct ptlrpc_request **request);
-int ll_dir_setstripe(struct inode *inode, struct lov_user_md *lump);
+int ll_dir_setstripe(struct inode *inode, struct lov_user_md *lump,
+                     int set_default);
 int ll_dir_getstripe(struct inode *inode, struct lov_mds_md **lmm, 
                      int *lmm_size, struct ptlrpc_request **request);
 

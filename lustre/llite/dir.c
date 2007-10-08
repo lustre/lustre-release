@@ -453,11 +453,51 @@ do {                                    \
         Q_COPY(out, in, qc_dqblk);      \
 } while (0)
 
-int ll_dir_setstripe(struct inode *inode, struct lov_user_md *lump)
+int ll_send_mgc_param(struct obd_export *mgc, char *string)
+{
+        struct mgs_send_param *msp;
+        int rc = 0;
+
+        OBD_ALLOC_PTR(msp);
+        if (!msp)
+                return -ENOMEM;
+
+        strncpy(msp->mgs_param, string, MGS_PARAM_MAXLEN);
+        rc = obd_set_info_async(mgc, strlen(KEY_SET_INFO), KEY_SET_INFO,
+                                sizeof(struct mgs_send_param), msp, NULL);
+        if (rc)
+                CERROR("Failed to set parameter: %d\n", rc);
+
+        OBD_FREE_PTR(msp);
+        return rc;
+}
+
+char *ll_get_fsname(struct inode *inode)
+{
+        struct lustre_sb_info *lsi = s2lsi(inode->i_sb);
+        char *ptr, *fsname;
+        int len;
+
+        OBD_ALLOC(fsname, MGS_PARAM_MAXLEN);
+        len = strlen(lsi->lsi_lmd->lmd_profile);
+        ptr = strrchr(lsi->lsi_lmd->lmd_profile, '-');
+        if (ptr && (strcmp(ptr, "-client") == 0))
+                len -= 7;
+        strncpy(fsname, lsi->lsi_lmd->lmd_profile, len);
+        fsname[len] = '\0';
+
+        return fsname;
+}
+
+int ll_dir_setstripe(struct inode *inode, struct lov_user_md *lump,
+                     int set_default)
 {
         struct ll_sb_info *sbi = ll_i2sbi(inode);
         struct mdc_op_data data;
         struct ptlrpc_request *req = NULL;
+        struct lustre_sb_info *lsi = s2lsi(inode->i_sb);
+        struct obd_device *mgc = lsi->lsi_mgc;
+        char *fsname = NULL, *param = NULL;
 
         struct iattr attr = { 0 };
         int rc = 0;
@@ -486,8 +526,38 @@ int ll_dir_setstripe(struct inode *inode, struct lov_user_md *lump)
         }
         ptlrpc_req_finished(req);
 
-        return rc;
+        if (set_default && mgc->u.cli.cl_mgc_mgsexp) {
+                OBD_ALLOC(param, MGS_PARAM_MAXLEN);
 
+                /* Get fsname and assume devname to be -MDT0000. */
+                fsname = ll_get_fsname(inode);
+                /* Set root stripesize */
+                sprintf(param, "%s-MDT0000.lov.stripesize=%u", fsname,
+                        lump->lmm_stripe_size);
+                rc = ll_send_mgc_param(mgc->u.cli.cl_mgc_mgsexp, param);
+                if (rc)
+                        goto end;
+
+                /* Set root stripecount */
+                sprintf(param, "%s-MDT0000.lov.stripecount=%u", fsname,
+                        lump->lmm_stripe_count);
+                rc = ll_send_mgc_param(mgc->u.cli.cl_mgc_mgsexp, param);
+                if (rc)
+                        goto end;
+
+                /* Set root stripeoffset */
+                sprintf(param, "%s-MDT0000.lov.stripeoffset=%u", fsname,
+                        lump->lmm_stripe_offset);
+                rc = ll_send_mgc_param(mgc->u.cli.cl_mgc_mgsexp, param);
+                if (rc)
+                        goto end;
+end:
+                if (fsname)
+                        OBD_FREE(fsname, MGS_PARAM_MAXLEN);
+                if (param)
+                        OBD_FREE(param, MGS_PARAM_MAXLEN);
+        }
+        return rc;
 }
 
 int ll_dir_getstripe(struct inode *inode, struct lov_mds_md **lmmp,
@@ -614,6 +684,7 @@ static int ll_dir_ioctl(struct inode *inode, struct file *file,
         case LL_IOC_LOV_SETSTRIPE: {
                 struct lov_user_md lum, *lump = (struct lov_user_md *)arg;
                 int rc = 0;
+                int set_default = 0;
 
                 LASSERT(sizeof(lum) == sizeof(*lump));
                 LASSERT(sizeof(lum.lmm_objects[0]) ==
@@ -622,7 +693,10 @@ static int ll_dir_ioctl(struct inode *inode, struct file *file,
                 if (rc)
                         return(-EFAULT);
 
-                rc = ll_dir_setstripe(inode, &lum);
+                if (inode->i_sb->s_root == file->f_dentry)
+                        set_default = 1;
+
+                rc = ll_dir_setstripe(inode, &lum, set_default);
 
                 return rc;
         }

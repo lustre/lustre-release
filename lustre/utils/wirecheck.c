@@ -1129,6 +1129,7 @@ main(int argc, char **argv)
         CHECK_VALUE(MGS_EXCEPTION);
         CHECK_VALUE(MGS_TARGET_REG);
         CHECK_VALUE(MGS_TARGET_DEL);
+        CHECK_VALUE(MGS_SET_INFO);
 
         CHECK_VALUE(DISP_IT_EXECD);
         CHECK_VALUE(DISP_LOOKUP_EXECD);
@@ -1175,6 +1176,7 @@ main(int argc, char **argv)
         CHECK_VALUE(MGS_EXCEPTION);   
         CHECK_VALUE(MGS_TARGET_REG);
         CHECK_VALUE(MGS_TARGET_DEL);
+        CHECK_VALUE(MGS_SET_INFO);
 
         COMMENT("Sizes and Offsets");
         BLANK_LINE();

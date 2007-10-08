@@ -139,6 +139,8 @@ void lustre_assert_wire_constants(void)
                  (long long)MGS_TARGET_REG);
         LASSERTF(MGS_TARGET_DEL == 254, " found %lld\n",
                  (long long)MGS_TARGET_DEL);
+        LASSERTF(MGS_SET_INFO == 255, " found %lld\n",
+                 (long long)MGS_SET_INFO);
         LASSERTF(DISP_IT_EXECD == 1, " found %lld\n",
                  (long long)DISP_IT_EXECD);
         LASSERTF(DISP_LOOKUP_EXECD == 2, " found %lld\n",
@@ -211,6 +213,8 @@ void lustre_assert_wire_constants(void)
                  (long long)MGS_TARGET_REG);
         LASSERTF(MGS_TARGET_DEL == 254, " found %lld\n",
                  (long long)MGS_TARGET_DEL);
+        LASSERTF(MGS_SET_INFO == 255, " found %lld\n",
+                 (long long)MGS_SET_INFO);
         /* Sizes and Offsets */
 
         /* Checks for struct obd_uuid */
