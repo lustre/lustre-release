@@ -204,7 +204,7 @@ var_clusterFileSystems(struct variable *vp,
   static u_long ulong_ret;
   static unsigned char string[SPRINT_MAX_LEN];
   char file_path[MAX_PATH_SIZE];
-  __u32 num;
+  uint32_t num;
   char *dir_list;
 
   if (header_generic(vp,name,length,exact,var_len,write_method)
