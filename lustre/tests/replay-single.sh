@@ -1192,6 +1192,8 @@ test_65a() #bug 3055
 {
     at_start
     $LCTL dk > /dev/null
+    debugsave
+    sysctl -w lnet.debug="+other"
     # slow down a request
     do_facet mds sysctl -w lustre.fail_val=30000
 #define OBD_FAIL_PTLRPC_PAUSE_REQ        0x50a
