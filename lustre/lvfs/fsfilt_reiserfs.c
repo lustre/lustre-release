@@ -37,10 +37,8 @@
 #include <linux/pagemap.h>
 #include <linux/quotaops.h>
 #include <linux/version.h>
-#if (LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))
 #include <linux/init.h>
 #include <asm/statfs.h>
-#endif
 #include <libcfs/kp30.h>
 #include <lustre_fsfilt.h>
 #include <obd.h>

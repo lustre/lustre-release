@@ -375,7 +375,8 @@ Details    : Remove 2.5.0 check from quota_check.c, quota_ctl.c,
              quota_interface.c in quota subsystem.
 	     Remove 2.4 kernel check from obd_mount.c, linux/linux-sysctl.c in
              obdclass subsystem.
-
+             Remove lock_24kernel from fsfilt_ext3.c fsfilt_reiserfs.c 
+             lvfs_linux.c upcall_cache.c in lvfs subsystem.
 
 
 --------------------------------------------------------------------------------

@@ -48,34 +48,6 @@
 #include <obd_support.h>
 #include <lustre_lib.h>
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,4)
-struct group_info *groups_alloc(int ngroups)
-{
-        struct group_info *ginfo;
-
-        LASSERT(ngroups <= NGROUPS_SMALL);
-
-        OBD_ALLOC(ginfo, sizeof(*ginfo) + 1 * sizeof(gid_t *));
-        if (!ginfo)
-                return NULL;
-        ginfo->ngroups = ngroups;
-        ginfo->nblocks = 1;
-        ginfo->blocks[0] = ginfo->small_block;
-        atomic_set(&ginfo->usage, 1);
-
-        return ginfo;
-}
-
-void groups_free(struct group_info *ginfo)
-{
-        LASSERT(ginfo->ngroups <= NGROUPS_SMALL);
-        LASSERT(ginfo->nblocks == 1);
-        LASSERT(ginfo->blocks[0] == ginfo->small_block);
-
-        OBD_FREE(ginfo, sizeof(*ginfo) + 1 * sizeof(gid_t *));
-}
-#endif
-
 static struct upcall_cache_entry *alloc_entry(struct upcall_cache *cache,
                                               __u64 key, void *args)
 {

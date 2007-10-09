@@ -72,25 +72,10 @@ static void push_group_info(struct lvfs_run_ctxt *save,
                 save->ngroups = current_ngroups;
                 current_ngroups = 0;
         } else {
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,4)
                 task_lock(current);
                 save->group_info = current->group_info;
                 current->group_info = ginfo;
                 task_unlock(current);
-#else
-                LASSERT(ginfo->ngroups <= NGROUPS);
-                LASSERT(current->ngroups <= NGROUPS_SMALL);
-                /* save old */
-                save->group_info.ngroups = current->ngroups;
-                if (current->ngroups)
-                        memcpy(save->group_info.small_block, current->groups,
-                               current->ngroups * sizeof(gid_t));
-                /* push new */
-                current->ngroups = ginfo->ngroups;
-                if (ginfo->ngroups)
-                        memcpy(current->groups, ginfo->small_block,
-                               current->ngroups * sizeof(gid_t));
-#endif
         }
 }
 
@@ -100,16 +85,9 @@ static void pop_group_info(struct lvfs_run_ctxt *save,
         if (!ginfo) {
                 current_ngroups = save->ngroups;
         } else {
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,4)
                 task_lock(current);
                 current->group_info = save->group_info;
                 task_unlock(current);
-#else
-                current->ngroups = save->group_info.ngroups;
-                if (current->ngroups)
-                        memcpy(current->groups, save->group_info.small_block,
-                               current->ngroups * sizeof(gid_t));
-#endif
         }
 }
 
