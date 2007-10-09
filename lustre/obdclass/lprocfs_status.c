@@ -663,6 +663,8 @@ static const char *obd_connect_names[] = {
         "size_on_mds",
         "adaptive_timeout",
         "lru_resize",
+        "mds_mds_connection",
+        "real_conn",
         NULL
 };
 
