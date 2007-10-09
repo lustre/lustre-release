@@ -1321,25 +1321,10 @@ static struct vfsmount *server_kernel_mount(struct super_block *sb)
         mnt = ll_kern_mount("ldiskfs", s_flags, lmd->lmd_dev, 0);
         if (IS_ERR(mnt)) {
                 rc = PTR_ERR(mnt);
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0))
-                /* 2.6 kernels: if ldiskfs fails, try ldiskfs2 */
-                mnt = ll_kern_mount("ldiskfs2", s_flags, lmd->lmd_dev, 0);
-                if (IS_ERR(mnt)) {
-                        int rc2 = PTR_ERR(mnt);
-                        CERROR("premount %s:%#lx ldiskfs failed: %d, ldiskfs2 "
-                               "failed: %d.  Is the ldiskfs module available?\n",
-                               lmd->lmd_dev, s_flags, rc, rc2);
-                        GOTO(out_free, rc);
-                }
-#else
-                /* 2.4 kernels: if ldiskfs fails, try ext3 */
-                mnt = ll_kern_mount("ext3", s_flags, lmd->lmd_dev, 0);
-                if (IS_ERR(mnt)) {
-                        rc = PTR_ERR(mnt);
-                        CERROR("premount ext3 failed: rc = %d\n", rc);
-                        GOTO(out_free, rc);
-                }
-#endif
+                CERROR("premount %s:%#lx ldiskfs failed: %d "
+                        "Is the ldiskfs module available?\n",
+                        lmd->lmd_dev, s_flags, rc );
+                GOTO(out_free, rc);
         }
 
         OBD_SET_CTXT_MAGIC(&mount_ctxt);
@@ -2121,8 +2106,6 @@ void lustre_register_kill_super_cb(void (*cfs)(struct super_block *sb))
 
 /***************** FS registration ******************/
 
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0))
-/* 2.5 and later */
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,6,18))
 struct super_block * lustre_get_sb(struct file_system_type *fs_type,
                                int flags, const char *devname, void * data)
@@ -2161,28 +2144,6 @@ struct file_system_type lustre_fs_type = {
         .kill_sb      = lustre_kill_super,
         .fs_flags     = FS_BINARY_MOUNTDATA | FS_REQUIRES_DEV,
 };
-
-#else
-/* 2.4 */
-static struct super_block *lustre_read_super(struct super_block *sb,
-                                             void *data, int silent)
-{
-        int rc;
-        ENTRY;
-
-        rc = lustre_fill_super(sb, data, silent);
-        if (rc)
-                RETURN(NULL);
-        RETURN(sb);
-}
-
-static struct file_system_type lustre_fs_type = {
-        .owner          = THIS_MODULE,
-        .name           = "lustre",
-        .fs_flags       = FS_NFSEXP_FSID,
-        .read_super     = lustre_read_super,
-};
-#endif
 
 int lustre_register_fs(void)
 {
