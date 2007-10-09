@@ -368,6 +368,12 @@ Details    : Modify target file & which_patch.
              could exploit this flaw to run code in the kernel 
              (ie a root privilege escalation). (CVE-2007-4573). 
 
+Severity   : normal
+Bugzilla   : 13568
+Description: Remove 2.4 kernel checks lustre 1.8
+Details    : Remove 2.5.0 check from quota_check.c, quota_ctl.c,
+             quota_interface.c in quota subsystem.
+
 --------------------------------------------------------------------------------
 
 2007-08-10         Cluster File Systems, Inc. <info@clusterfs.com>

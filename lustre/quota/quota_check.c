@@ -22,14 +22,10 @@
 # include <linux/fs.h>
 # include <linux/jbd.h>
 # include <linux/ext3_fs.h>
-# if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0))
-#  include <linux/smp_lock.h>
-#  include <linux/buffer_head.h>
-#  include <linux/workqueue.h>
-#  include <linux/mount.h>
-# else
-#  include <linux/locks.h>
-# endif
+# include <linux/smp_lock.h>
+# include <linux/buffer_head.h>
+# include <linux/workqueue.h>
+# include <linux/mount.h>
 #else /* __KERNEL__ */
 # include <liblustre.h>
 #endif
