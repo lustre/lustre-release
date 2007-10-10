@@ -1419,10 +1419,14 @@ static int brw_interpret(struct ptlrpc_request *req, void *data, int rc)
         if ((rc >= 0) && req->rq_set && req->rq_set->set_countp)
                 atomic_add(nob, (atomic_t *)req->rq_set->set_countp);
 
-        spin_lock(&aa->aa_cli->cl_loi_list_lock);
+        client_obd_list_lock(&aa->aa_cli->cl_loi_list_lock);
+        if (lustre_msg_get_opc(req->rq_reqmsg) == OST_WRITE)
+                aa->aa_cli->cl_w_in_flight--;
+        else
+                aa->aa_cli->cl_r_in_flight--;
         for (i = 0; i < aa->aa_page_count; i++)
                 osc_release_write_grant(aa->aa_cli, aa->aa_ppga[i], 1);
-        spin_unlock(&aa->aa_cli->cl_loi_list_lock);
+        client_obd_list_unlock(&aa->aa_cli->cl_loi_list_lock);
 
         osc_release_ppga(aa->aa_ppga, aa->aa_page_count);
 
@@ -1437,6 +1441,7 @@ static int async_internal(int cmd, struct obd_export *exp, struct obdo *oa,
         struct ptlrpc_request     *req;
         struct client_obd         *cli = &exp->exp_obd->u.cli;
         int                        rc, i;
+        struct osc_brw_async_args *aa;
         ENTRY;
 
         /* Consume write credits even if doing a sync write -
@@ -1452,14 +1457,33 @@ static int async_internal(int cmd, struct obd_export *exp, struct obdo *oa,
 
         rc = osc_brw_prep_request(cmd, cli, oa, lsm, page_count, pga,
                                   &req, ocapa);
+
+        aa = (struct osc_brw_async_args *)&req->rq_async_args;
+        if (cmd == OBD_BRW_READ) {
+                lprocfs_oh_tally_log2(&cli->cl_read_page_hist, page_count);
+                lprocfs_oh_tally(&cli->cl_read_rpc_hist, cli->cl_r_in_flight);
+                ptlrpc_lprocfs_brw(req, OST_READ, aa->aa_requested_nob);
+        } else {
+                 lprocfs_oh_tally_log2(&cli->cl_write_page_hist, page_count);
+                lprocfs_oh_tally(&cli->cl_write_rpc_hist,
+                                 cli->cl_w_in_flight);
+                ptlrpc_lprocfs_brw(req, OST_WRITE, aa->aa_requested_nob);
+        }
+
         if (rc == 0) {
                 req->rq_interpret_reply = brw_interpret;
                 ptlrpc_set_add_req(set, req);
+                client_obd_list_lock(&cli->cl_loi_list_lock);
+                if (cmd == OBD_BRW_READ)
+                        cli->cl_r_in_flight++;
+                else
+                        cli->cl_w_in_flight++;
+                client_obd_list_unlock(&cli->cl_loi_list_lock);
         } else if (cmd == OBD_BRW_WRITE) {
-                spin_lock(&cli->cl_loi_list_lock);
+                client_obd_list_lock(&cli->cl_loi_list_lock);
                 for (i = 0; i < page_count; i++)
                         osc_release_write_grant(cli, pga[i], 0);
-                spin_unlock(&cli->cl_loi_list_lock);
+                client_obd_list_unlock(&cli->cl_loi_list_lock);
         }
         RETURN (rc);
 }

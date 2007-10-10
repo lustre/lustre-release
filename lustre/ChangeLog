@@ -378,6 +378,13 @@ Details    : Remove 2.5.0 check from quota_check.c, quota_ctl.c,
              Remove lock_24kernel from fsfilt_ext3.c fsfilt_reiserfs.c 
              lvfs_linux.c upcall_cache.c in lvfs subsystem.
 
+Severity   : major
+Bugzilla   : 13093
+Description: O_DIRECT bypasses client statistics.
+Details    : When running with O_DIRECT I/O, neither the client rpc_stats nor
+             read_ahead_stats were updated. copied the stats section from
+             osc_send_oap_rpc() into async_internal().
+
 
 --------------------------------------------------------------------------------
 
