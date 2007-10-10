@@ -9,6 +9,4 @@ else
 lustre-objs += rw26.o super25.o
 endif
 
-EXTRA_DIST := $(llite_lloop-objs:.o=.c)
-
 @INCLUDE_RULES@
