@@ -6,6 +6,4 @@ lustre-objs += rw26.o super25.o
 
 llite_lloop-objs := lloop.o
 
-EXTRA_DIST := $(llite_lloop-objs:.o=.c)
-
 @INCLUDE_RULES@
