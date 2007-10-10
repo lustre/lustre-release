@@ -588,6 +588,40 @@ static int mgc_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock_desc *desc,
         RETURN(rc);
 }
 
+/* Send parameter to MGS*/
+static int mgc_set_mgs_param(struct obd_export *exp,
+                             struct mgs_send_param *msp)
+{
+        struct ptlrpc_request *req;
+        struct mgs_send_param *req_msp, *rep_msp;
+        int size[] = { sizeof(struct ptlrpc_body), sizeof(*req_msp) };
+        int rep_size[] = { sizeof(struct ptlrpc_body), sizeof(*msp) };
+        int rc;
+        ENTRY;
+
+        req = ptlrpc_prep_req(class_exp2cliimp(exp), LUSTRE_MGS_VERSION,
+                              MGS_SET_INFO, 2, size, NULL);
+        if (!req)
+                RETURN(-ENOMEM);
+
+        req_msp = lustre_msg_buf(req->rq_reqmsg, REQ_REC_OFF, sizeof(*req_msp));
+        if (!req_msp)
+                RETURN(-ENOMEM);
+
+        memcpy(req_msp, msp, sizeof(*req_msp));
+        ptlrpc_req_set_repsize(req, 2, rep_size);
+        rc = ptlrpc_queue_wait(req);
+        if (!rc) {
+                rep_msp = lustre_swab_repbuf(req, REPLY_REC_OFF,
+                                             sizeof(*rep_msp), NULL);
+                memcpy(msp, rep_msp, sizeof(*rep_msp));
+        }
+
+        ptlrpc_req_finished(req);
+
+        RETURN(rc);
+}
+
 /* Take a config lock so we can get cancel notifications */
 static int mgc_enqueue(struct obd_export *exp, struct lov_stripe_md *lsm,
                        __u32 type, ldlm_policy_data_t *policy, __u32 mode,
@@ -829,6 +863,13 @@ int mgc_set_info_async(struct obd_export *exp, obd_count keylen,
                 if (rc) {
                         CERROR("clear_fs got %d\n", rc);
                 }
+                RETURN(rc);
+        }
+        if (KEY_IS(KEY_SET_INFO)) {
+                struct mgs_send_param *msp;
+
+                msp = (struct mgs_send_param *)val;
+                rc =  mgc_set_mgs_param(exp, msp);
                 RETURN(rc);
         }
 

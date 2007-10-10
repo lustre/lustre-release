@@ -165,7 +165,7 @@ int ll_setxattr(struct dentry *dentry, const char *name,
                         /* b10667: rc always be 0 here for now */
                         rc = 0;
                 } else if (S_ISDIR(inode->i_mode)) {
-                        rc = ll_dir_setstripe(inode, lump);
+                        rc = ll_dir_setstripe(inode, lump, 0);
                 }
                 
                 return rc;

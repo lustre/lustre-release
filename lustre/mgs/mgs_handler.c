@@ -458,6 +458,54 @@ out_nolock:
         RETURN(rc);
 }
 
+static int mgs_set_info_rpc(struct ptlrpc_request *req)
+{
+        struct obd_device *obd = req->rq_export->exp_obd;
+        struct mgs_send_param *msp, *rep_msp;
+        struct lustre_handle lockh;
+        int rep_size[] = { sizeof(struct ptlrpc_body), sizeof(*msp) };
+        int lockrc, rc;
+        struct lustre_cfg_bufs bufs;
+        struct lustre_cfg *lcfg;
+        char fsname[MTI_NAME_MAXLEN];
+        ENTRY;
+
+        msp = lustre_swab_reqbuf(req, REQ_REC_OFF, sizeof(*msp), NULL);
+
+        /* Construct lustre_cfg structure to pass to function mgs_setparam */
+        lustre_cfg_bufs_reset(&bufs, NULL);
+        lustre_cfg_bufs_set_string(&bufs, 1, msp->mgs_param);
+        lcfg = lustre_cfg_new(LCFG_PARAM, &bufs);
+        rc = mgs_setparam(obd, lcfg, fsname);
+        if (rc) {
+                CERROR("Error %d in setting the parameter %s for fs %s\n",
+                       rc, msp->mgs_param, fsname);
+                RETURN(rc);
+        }
+
+        /* Revoke lock so everyone updates.  Should be alright if
+         * someone was already reading while we were updating the logs,
+         * so we don't really need to hold the lock while we're
+         * writing.
+         */
+        if (fsname[0]) {
+                lockrc = mgs_get_cfg_lock(obd, fsname, &lockh);
+                if (lockrc != ELDLM_OK)
+                        CERROR("lock error %d for fs %s\n", lockrc,
+                               fsname);
+                else
+                        mgs_put_cfg_lock(&lockh);
+        }
+        lustre_cfg_free(lcfg);
+
+        lustre_pack_reply(req, 2, rep_size, NULL);
+        rep_msp = lustre_msg_buf(req->rq_repmsg, REPLY_REC_OFF,
+                                 sizeof(*rep_msp));
+        memcpy(rep_msp, msp, sizeof(*rep_msp));
+
+        RETURN(rc);
+}
+
 int mgs_handle(struct ptlrpc_request *req)
 {
         int fail = OBD_FAIL_MGS_ALL_REPLY_NET;
@@ -499,6 +547,9 @@ int mgs_handle(struct ptlrpc_request *req)
         case MGS_TARGET_DEL:
                 DEBUG_REQ(D_MGS, req, "target del");
                 //rc = mgs_handle_target_del(req);
+                break;
+        case MGS_SET_INFO:
+                rc = mgs_set_info_rpc(req);
                 break;
 
         case LDLM_ENQUEUE:

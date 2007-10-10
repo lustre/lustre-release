@@ -1614,9 +1614,17 @@ typedef enum {
         MGS_EXCEPTION,         /* node died, etc. */
         MGS_TARGET_REG,        /* whenever target starts up */
         MGS_TARGET_DEL,
+        MGS_SET_INFO,
         MGS_LAST_OPC
 } mgs_cmd_t;
 #define MGS_FIRST_OPC MGS_CONNECT
+
+#define MGS_PARAM_MAXLEN 1024
+#define KEY_SET_INFO "set_info"
+
+struct mgs_send_param {
+        char             mgs_param[MGS_PARAM_MAXLEN];
+};
 
 /* We pass this info to the MGS so it can write config logs */
 #define MTI_NAME_MAXLEN 64
