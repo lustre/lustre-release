@@ -92,7 +92,7 @@ int lu_time_named_init(struct lprocfs_stats **stats, const char *name,
         if (nr == 0)
                 RETURN(0);
 
-        *stats = lprocfs_alloc_stats(nr);
+        *stats = lprocfs_alloc_stats(nr, 0);
         if (*stats != NULL) {
                 result = lprocfs_register_stats(entry, name, *stats);
                 if (result == 0) {

@@ -141,7 +141,7 @@ void ptlrpc_lprocfs_register(struct proc_dir_entry *root, char *dir,
         LASSERT(*procroot_ret == NULL);
         LASSERT(*stats_ret == NULL);
 
-        svc_stats = lprocfs_alloc_stats(PTLRPC_LAST_CNTR + LUSTRE_MAX_OPCODES);
+        svc_stats = lprocfs_alloc_stats(PTLRPC_LAST_CNTR + LUSTRE_MAX_OPCODES, 0);
         if (svc_stats == NULL)
                 return;
 
