@@ -485,9 +485,10 @@ test_20b() { # bug 10480
 run_test 20b "write, unlink, eviction, replay, (test mds_cleanup_orphans)"
 
 test_20c() { # bug 10480
-    dd if=/dev/zero of=$DIR/$tfile bs=4k count=10000
-
-    exec 100< $DIR/$tfile
+    multiop $DIR/$tfile Ow_c &
+    pid=$!
+    # give multiop a chance to open
+    sleep 1
 
     ls -la $DIR/$tfile
 
@@ -495,8 +496,7 @@ test_20c() { # bug 10480
 
     df -P $DIR || df -P $DIR || true    # reconnect
 
-    exec 100<&-
-
+    kill -USR1 $pid
     test -s $DIR/$tfile || error "File was truncated"
 
     return 0
