@@ -2024,7 +2024,7 @@ static int mdt_req_handle(struct mdt_thread_info *info,
         LASSERT(current->journal_info == NULL);
 
         /*
-         * Do not use *_FAIL_CHECK_ONCE() macros, because they will stop
+         * Mask out OBD_FAIL_ONCE, because that will stop
          * correct handling of failed req later in ldlm due to doing
          * obd_fail_loc |= OBD_FAIL_ONCE | OBD_FAILED without actually
          * correct actions like it is done in target_send_reply_msg().
@@ -2034,7 +2034,7 @@ static int mdt_req_handle(struct mdt_thread_info *info,
                  * Set to info->mti_fail_id to handler fail_id, it will be used
                  * later, and better than use default fail_id.
                  */
-                if (OBD_FAIL_CHECK(h->mh_fail_id)) {
+                if (OBD_FAIL_CHECK(h->mh_fail_id && OBD_FAIL_MASK_LOC)) {
                         info->mti_fail_id = h->mh_fail_id;
                         RETURN(0);
                 }

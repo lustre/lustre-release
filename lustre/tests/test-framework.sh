@@ -227,6 +227,7 @@ unload_modules() {
         echo "$LEAK_PORTALS" 1>&2
         mv $TMP/debug $TMP/debug-leak.`date +%s` || true
         echo "Memory leaks detected"
+	[ -n "$IGNORE_LEAK" ] && echo "ignoring leaks" && return 0
         return 254
     fi
     echo "modules unloaded."

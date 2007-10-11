@@ -37,6 +37,7 @@
 #include "obdctl.h"
 #include <lustre_ver.h>
 #include <glob.h>
+#include <ctype.h>
 
 #define MAX_HW_SECTORS_KB_PATH  "queue/max_hw_sectors_kb"
 #define MAX_SECTORS_KB_PATH     "queue/max_sectors_kb"
@@ -186,6 +187,7 @@ static const struct opt_map opt_map[] = {
   { "nosuid",   0, MS_NOSUID },      /* don't honor suid executables */
   { "dev",      1, MS_NODEV  },      /* interpret device files  */
   { "nodev",    0, MS_NODEV  },      /* don't interpret devices */
+  { "sync",     0, MS_SYNCHRONOUS},  /* synchronous I/O */
   { "async",    1, MS_SYNCHRONOUS},  /* asynchronous I/O */
   { "auto",     0, 0         },      /* Can be mounted using -a */
   { "noauto",   0, 0         },      /* Can only be mounted explicitly */
@@ -328,8 +330,9 @@ int set_tunables(char *source, int src_len)
 
         rc = stat(dev, &stat_buf);
         if (rc) {
-                fprintf(stderr, "warning: %s, device %s stat failed\n",
-                        strerror(errno), dev);
+                if (verbose)
+                        fprintf(stderr, "warning: %s, device %s stat failed\n",
+                                strerror(errno), dev);
                 return rc;
         }
 
@@ -337,8 +340,9 @@ int set_tunables(char *source, int src_len)
         minor = minor(stat_buf.st_rdev);
         rc = glob("/sys/block/*", GLOB_NOSORT, NULL, &glob_info);
         if (rc) {
-                fprintf(stderr, "warning: failed to read entries under "
-                        "/sys/block\n");
+                if (verbose)
+                        fprintf(stderr, "warning: failed to read entries under "
+                                "/sys/block\n");
                 return rc;
         }
 

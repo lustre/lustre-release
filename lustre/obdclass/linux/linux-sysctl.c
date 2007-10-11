@@ -49,6 +49,7 @@ cfs_sysctl_table_header_t *obd_table_header = NULL;
 
 enum {
         OBD_FAIL_LOC = 1,       /* control test failures instrumentation */
+        OBD_FAIL_VAL,           /* userdata for fail loc */
         OBD_TIMEOUT,            /* RPC timeout before recovery/intr */
         OBD_DUMP_ON_TIMEOUT,    /* dump kernel debug log upon eviction */
         OBD_MEMUSED,            /* bytes currently OBD_ALLOCated */
@@ -87,6 +88,14 @@ static cfs_sysctl_table_t obd_table[] = {
                 .maxlen   = sizeof(int),
                 .mode     = 0644,
                 .proc_handler = &proc_fail_loc
+        },
+        {
+                .ctl_name = OBD_FAIL_VAL,
+                .procname = "fail_val",
+                .data     = &obd_fail_val,
+                .maxlen   = sizeof(int),
+                .mode     = 0644,
+                .proc_handler = &proc_dointvec
         },
         {
                 .ctl_name = OBD_TIMEOUT,
