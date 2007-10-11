@@ -385,11 +385,7 @@ static void cmm_device_free(const struct lu_env *env, struct lu_device *d)
 /* context key constructor/destructor */
 LU_KEY_INIT_FINI(cmm, struct cmm_thread_info);
 
-static struct lu_context_key cmm_thread_key = {
-        .lct_tags = LCT_MD_THREAD,
-        .lct_init = cmm_key_init,
-        .lct_fini = cmm_key_fini
-};
+LU_CONTEXT_KEY_DEFINE(cmm, LCT_MD_THREAD);
 
 struct cmm_thread_info *cmm_env_info(const struct lu_env *env)
 {
@@ -400,16 +396,7 @@ struct cmm_thread_info *cmm_env_info(const struct lu_env *env)
         return info;
 }
 
-static int cmm_type_init(struct lu_device_type *t)
-{
-        LU_CONTEXT_KEY_INIT(&cmm_thread_key);
-        return lu_context_key_register(&cmm_thread_key);
-}
-
-static void cmm_type_fini(struct lu_device_type *t)
-{
-        lu_context_key_degister(&cmm_thread_key);
-}
+LU_TYPE_INIT_FINI(cmm, &cmm_thread_key);
 
 static int cmm_device_init(const struct lu_env *env, struct lu_device *d,
                            const char *name, struct lu_device *next)

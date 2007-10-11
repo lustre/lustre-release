@@ -4545,11 +4545,7 @@ static struct lu_device *mdt_device_alloc(const struct lu_env *env,
  */
 LU_KEY_INIT_FINI(mdt, struct mdt_thread_info);
 
-struct lu_context_key mdt_thread_key = {
-        .lct_tags = LCT_MD_THREAD,
-        .lct_init = mdt_key_init,
-        .lct_fini = mdt_key_fini
-};
+LU_CONTEXT_KEY_DEFINE(mdt, LCT_MD_THREAD);
 
 LU_KEY_INIT_FINI(mdt_txn, struct mdt_txn_info);
 
@@ -4564,24 +4560,7 @@ struct md_ucred *mdt_ucred(const struct mdt_thread_info *info)
         return md_ucred(info->mti_env);
 }
 
-static int mdt_type_init(struct lu_device_type *t)
-{
-        int rc;
-
-        LU_CONTEXT_KEY_INIT(&mdt_thread_key);
-        rc = lu_context_key_register(&mdt_thread_key);
-        if (rc == 0) {
-                LU_CONTEXT_KEY_INIT(&mdt_txn_key);
-                rc = lu_context_key_register(&mdt_txn_key);
-        }
-        return rc;
-}
-
-static void mdt_type_fini(struct lu_device_type *t)
-{
-        lu_context_key_degister(&mdt_thread_key);
-        lu_context_key_degister(&mdt_txn_key);
-}
+LU_TYPE_INIT_FINI(mdt, &mdt_thread_key, &mdt_txn_key);
 
 static struct lu_device_type_operations mdt_device_type_ops = {
         .ldto_init = mdt_type_init,

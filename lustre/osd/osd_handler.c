@@ -2207,16 +2207,8 @@ static struct dt_index_operations osd_index_compat_ops = {
 /*
  * OSD device type methods
  */
-static int osd_type_init(struct lu_device_type *t)
-{
-        LU_CONTEXT_KEY_INIT(&osd_key);
-        return lu_context_key_register(&osd_key);
-}
-
-static void osd_type_fini(struct lu_device_type *t)
-{
-        lu_context_key_degister(&osd_key);
-}
+ 
+LU_TYPE_INIT_FINI(osd, &osd_key);
 
 static struct lu_context_key osd_key = {
         .lct_tags = LCT_DT_THREAD | LCT_MD_THREAD,

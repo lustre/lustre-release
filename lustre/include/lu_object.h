@@ -23,6 +23,8 @@
 #ifndef __LUSTRE_LU_OBJECT_H
 #define __LUSTRE_LU_OBJECT_H
 
+#include <stdarg.h>
+
 /*
  * struct lu_fid
  */
@@ -996,11 +998,18 @@ struct lu_context_key {
         LU_KEY_INIT(mod,type);        \
         LU_KEY_FINI(mod,type)
 
+#define LU_CONTEXT_KEY_DEFINE(mod, tags)                \
+        struct lu_context_key mod##_thread_key = {      \
+                .lct_tags = tags,                       \
+                .lct_init = mod##_key_init,             \
+                .lct_fini = mod##_key_fini              \
+        }
 
 #define LU_CONTEXT_KEY_INIT(key)                        \
 do {                                                    \
         (key)->lct_owner = THIS_MODULE;                 \
 } while (0)
+
 
 /*
  * Register new key.
@@ -1010,6 +1019,73 @@ int   lu_context_key_register(struct lu_context_key *key);
  * Deregister key.
  */
 void  lu_context_key_degister(struct lu_context_key *key);
+
+#define LU_KEY_REGISTER_GENERIC(mod)                                             \
+        static int mod##_key_register_generic(struct lu_context_key *k, ...)     \
+        {                                                                        \
+                struct lu_context_key* key = k;                                  \
+                va_list args;                                                    \
+                int result;                                                      \
+                                                                                 \
+                va_start(args, k);                                               \
+                                                                                 \
+                do {                                                             \
+                        LU_CONTEXT_KEY_INIT(key);                                \
+                        result = lu_context_key_register(key);                   \
+                        if (result)                                              \
+                                break;                                           \
+                        key = va_arg(args, struct lu_context_key*);              \
+                } while (key != NULL);                                           \
+                                                                                 \
+                va_end(args);                                                    \
+                                                                                 \
+                if (result) {                                                    \
+                        va_start(args, k);                                       \
+                        while (k != key) {                                       \
+                                lu_context_key_degister(k);                      \
+                                k = va_arg(args, struct lu_context_key*);        \
+                        }                                                        \
+                        va_end(args);                                            \
+                }                                                                \
+                                                                                 \
+                return result;                                                   \
+        }
+
+#define LU_KEY_DEGISTER_GENERIC(mod)                                             \
+        static void mod##_key_degister_generic(struct lu_context_key *k, ...)    \
+        {                                                                        \
+                va_list args;                                                    \
+                                                                                 \
+                va_start(args, k);                                               \
+                                                                                 \
+                do {                                                             \
+                        lu_context_key_degister(k);                              \
+                        k = va_arg(args, struct lu_context_key*);                \
+                } while (k != NULL);                                             \
+                                                                                 \
+                va_end(args);                                                    \
+        }
+
+#define LU_TYPE_INIT(mod, ...)                                         \
+        LU_KEY_REGISTER_GENERIC(mod)                                   \
+        static int mod##_type_init(struct lu_device_type *t)           \
+        {                                                              \
+                return mod##_key_register_generic(__VA_ARGS__, NULL);  \
+        }                                                              \
+        struct __##mod##_dummy_type_init {;}
+
+#define LU_TYPE_FINI(mod, ...)                                         \
+        LU_KEY_DEGISTER_GENERIC(mod)                                   \
+        static void mod##_type_fini(struct lu_device_type *t)          \
+        {                                                              \
+                mod##_key_degister_generic(__VA_ARGS__, NULL);         \
+        }                                                              \
+        struct __##mod##_dummy_type_fini {;}
+
+#define LU_TYPE_INIT_FINI(mod, ...)                                 \
+        LU_TYPE_INIT(mod, __VA_ARGS__);                             \
+        LU_TYPE_FINI(mod, __VA_ARGS__)
+
 /*
  * Return value associated with key @key in context @ctx.
  */

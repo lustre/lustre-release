@@ -55,11 +55,7 @@
 
 LU_KEY_INIT_FINI(fld, struct fld_thread_info);
 
-struct lu_context_key fld_thread_key = {
-        .lct_tags = LCT_MD_THREAD|LCT_DT_THREAD,
-        .lct_init = fld_key_init,
-        .lct_fini = fld_key_fini
-};
+LU_CONTEXT_KEY_DEFINE(fld, LCT_MD_THREAD|LCT_DT_THREAD);
 
 cfs_proc_dir_entry_t *fld_type_proc_dir = NULL;
 

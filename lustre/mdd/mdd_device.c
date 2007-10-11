@@ -361,29 +361,7 @@ struct md_capainfo *md_capainfo(const struct lu_env *env)
 }
 EXPORT_SYMBOL(md_capainfo);
 
-static int mdd_type_init(struct lu_device_type *t)
-{
-        int result;
-
-        LU_CONTEXT_KEY_INIT(&mdd_thread_key);
-        result = lu_context_key_register(&mdd_thread_key);
-        if (result == 0) {
-                LU_CONTEXT_KEY_INIT(&mdd_ucred_key);
-                result = lu_context_key_register(&mdd_ucred_key);
-        }
-        if (result == 0) {
-                LU_CONTEXT_KEY_INIT(&mdd_capainfo_key);
-                result = lu_context_key_register(&mdd_capainfo_key);
-        }
-        return result;
-}
-
-static void mdd_type_fini(struct lu_device_type *t)
-{
-        lu_context_key_degister(&mdd_capainfo_key);
-        lu_context_key_degister(&mdd_ucred_key);
-        lu_context_key_degister(&mdd_thread_key);
-}
+LU_TYPE_INIT_FINI(mdd, &mdd_thread_key, &mdd_ucred_key, &mdd_capainfo_key);
 
 struct md_device_operations mdd_ops = {
         .mdo_statfs         = mdd_statfs,
@@ -424,11 +402,7 @@ static void mdd_key_fini(const struct lu_context *ctx,
         OBD_FREE_PTR(info);
 }
 
-struct lu_context_key mdd_thread_key = {
-        .lct_tags = LCT_MD_THREAD,
-        .lct_init = mdd_key_init,
-        .lct_fini = mdd_key_fini
-};
+LU_CONTEXT_KEY_DEFINE(mdd, LCT_MD_THREAD);
 
 struct lprocfs_vars lprocfs_mdd_obd_vars[] = {
         { 0 }

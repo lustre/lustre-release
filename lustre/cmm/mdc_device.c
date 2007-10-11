@@ -292,22 +292,9 @@ void mdc_device_free(const struct lu_env *env, struct lu_device *ld)
 /* context key constructor/destructor */
 LU_KEY_INIT_FINI(mdc, struct mdc_thread_info);
 
-struct lu_context_key mdc_thread_key = {
-        .lct_tags = LCT_MD_THREAD|LCT_CL_THREAD,
-        .lct_init = mdc_key_init,
-        .lct_fini = mdc_key_fini
-};
+LU_CONTEXT_KEY_DEFINE(mdc, LCT_MD_THREAD|LCT_CL_THREAD);
 
-int mdc_type_init(struct lu_device_type *ldt)
-{
-        LU_CONTEXT_KEY_INIT(&mdc_thread_key);
-        return lu_context_key_register(&mdc_thread_key);
-}
-
-void mdc_type_fini(struct lu_device_type *ldt)
-{
-        lu_context_key_degister(&mdc_thread_key);
-}
+LU_TYPE_INIT_FINI(mdc, &mdc_thread_key);
 
 static struct lu_device_type_operations mdc_device_type_ops = {
         .ldto_init = mdc_type_init,

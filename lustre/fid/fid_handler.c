@@ -358,11 +358,7 @@ static int seq_req_handle(struct ptlrpc_request *req,
 
 LU_KEY_INIT_FINI(seq, struct seq_thread_info);
 
-struct lu_context_key seq_thread_key = {
-        .lct_tags = LCT_MD_THREAD,
-        .lct_init = seq_key_init,
-        .lct_fini = seq_key_fini
-};
+LU_CONTEXT_KEY_DEFINE(seq, LCT_MD_THREAD);
 
 static void seq_thread_info_init(struct ptlrpc_request *req,
                                  struct seq_thread_info *info)
