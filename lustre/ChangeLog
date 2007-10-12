@@ -12,6 +12,11 @@
        * Recommended e2fsprogs version: 1.40.2-cfs1
        * Note that reiserfs quotas are disabled on SLES 10 in this kernel.
 
+Bugzilla   : 12411
+Description: Remove client patches from SLES 10 kernel.
+Details    : This causes SLES 10 clients to behave as patchless clients
+             even on a Lustre-patched (server) kernel.
+
 Severity   : enhancement
 Bugzilla   : 2262
 Description: self-adjustable client's lru lists
