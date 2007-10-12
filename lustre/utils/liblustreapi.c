@@ -158,7 +158,8 @@ int llapi_file_create(const char *name, unsigned long stripe_size,
         return 0;
 }
 
-typedef int (semantic_func_t)(char *path, DIR *parent, DIR *d, void *data);
+typedef int (semantic_func_t)(char *path, DIR *parent, DIR *d,
+                              void *data, struct dirent64 *de);
 
 #define MAX_LOV_UUID_COUNT      max(LOV_MAX_STRIPE_COUNT, 1000)
 #define OBD_NOT_FOUND           (-1)
@@ -527,7 +528,8 @@ static DIR *opendir_parent(char *path)
 
 static int llapi_semantic_traverse(char *path, int size, DIR *parent,
                                    semantic_func_t sem_init,
-                                   semantic_func_t sem_fini, void *data)
+                                   semantic_func_t sem_fini, void *data,
+                                   struct dirent64 *de)
 {
         struct dirent64 *dent;
         int len, ret;
@@ -548,7 +550,7 @@ static int llapi_semantic_traverse(char *path, int size, DIR *parent,
                         GOTO(out, ret = -EINVAL);
         }
 
-        if (sem_init && (ret = sem_init(path, parent ?: p, d, data)))
+        if (sem_init && (ret = sem_init(path, parent ?: p, d, data, de)))
                 goto err;
 
         if (!d)
@@ -582,19 +584,19 @@ static int llapi_semantic_traverse(char *path, int size, DIR *parent,
                         break;
                 case DT_DIR:
                         ret = llapi_semantic_traverse(path, size, d, sem_init,
-                                                      sem_fini, data);
+                                                      sem_fini, data, dent);
                         if (ret < 0)
                                 goto out;
                         break;
                 default:
                         ret = 0;
                         if (sem_init) {
-                                ret = sem_init(path, d, NULL, data);
+                                ret = sem_init(path, d, NULL, data, dent);
                                 if (ret < 0)
                                         goto out;
                         }
                         if (sem_fini && ret == 0)
-                                sem_fini(path, d, NULL, data);
+                                sem_fini(path, d, NULL, data, dent);
                 }
         }
 
@@ -602,7 +604,7 @@ out:
         path[len] = 0;
 
         if (sem_fini)
-                sem_fini(path, parent, d, data);
+                sem_fini(path, parent, d, data, de);
 err:
         if (d)
                 closedir(d);
@@ -701,28 +703,73 @@ static int find_time_check(lstat_t *st, struct find_param *param, int mds)
         return rc;
 }
 
-static int cb_find_init(char *path, DIR *parent, DIR *dir, void *data)
+static unsigned llapi_dir_filetype_table[] = {
+        [DT_UNKNOWN]= 0,
+        [DT_FIFO]= S_IFIFO,
+        [DT_CHR] = S_IFCHR,
+        [DT_DIR] = S_IFDIR,
+        [DT_BLK] = S_IFBLK,
+        [DT_REG] = S_IFREG,
+        [DT_LNK] = S_IFLNK,
+        [DT_SOCK]= S_IFSOCK,
+#if defined(DT_DOOR) && defined(S_IFDOOR)
+        [DT_DOOR]= S_IFDOOR,
+#endif
+};
+#if defined(DT_DOOR) && defined(S_IFDOOR)
+static const int DT_MAX = DT_DOOR;
+#else
+static const int DT_MAX = DT_SOCK;
+#endif
+
+static int cb_find_init(char *path, DIR *parent, DIR *dir,
+                        void *data, struct dirent64 *de)
 {
         struct find_param *param = (struct find_param *)data;
         int decision = 1; /* 1 is accepted; -1 is rejected. */
         lstat_t *st = &param->lmd->lmd_st;
         int lustre_fs = 1;
-        int ret = 0;
+        int checked_type = 0;
+        int ret;
 
         LASSERT(parent != NULL || dir != NULL);
 
         param->lmd->lmd_lmm.lmm_stripe_count = 0;
+
+        /* If a regular expression is presented, make the initial decision */
+        if (param->pattern != NULL) {
+                char *fname = strrchr(path, '/');
+                fname = (fname == NULL ? path : fname + 1);
+                ret = fnmatch(param->pattern, fname, 0);
+                if ((ret == FNM_NOMATCH && !param->exclude_pattern) ||
+                    (ret == 0 && param->exclude_pattern))
+                        goto decided;
+        }
+
+        /* See if we can check the file type from the dirent. */
+        if (param->type && de != NULL && de->d_type != DT_UNKNOWN &&
+            de->d_type <= DT_MAX) {
+                checked_type = 1;
+                if (llapi_dir_filetype_table[de->d_type] == param->type) {
+                        if (param->exclude_type)
+                                goto decided;
+                } else {
+                        if (!param->exclude_type)
+                                goto decided;
+                }
+        }
+
 
         /* If a time or OST should be checked, the decision is not taken yet. */
         if (param->atime || param->ctime || param->mtime || param->obduuid)
                 decision = 0;
 
         /* Request MDS for the stat info. */
-        if (!decision && dir) {
+        if (dir) {
                 /* retrieve needed file info */
                 ret = ioctl(dirfd(dir), LL_IOC_MDC_GETINFO,
                             (void *)param->lmd);
-        } else if (!decision && parent) {
+        } else /* if (parent) LASSERT() above makes always true */ {
                 char *fname = strrchr(path, '/');
                 fname = (fname == NULL ? path : fname + 1);
 
@@ -751,6 +798,16 @@ static int cb_find_init(char *path, DIR *parent, DIR *dir, void *data)
                 }
         }
 
+        if (param->type && !checked_type) {
+                if ((st->st_mode & S_IFMT) == param->type) {
+                        if (param->exclude_type)
+                                goto decided;
+                } else {
+                        if (!param->exclude_type)
+                                goto decided;
+                }
+        }
+
         /* Prepare odb. */
         if (param->obduuid) {
                 if (lustre_fs && param->got_uuids &&
@@ -771,16 +828,6 @@ static int cb_find_init(char *path, DIR *parent, DIR *dir, void *data)
                         param->got_uuids = 0;
                         param->obdindex = OBD_NOT_FOUND;
                 }
-        }
-
-        /* If a regular expression is presented, make the initial decision */
-        if (param->pattern != NULL) {
-                char *fname = strrchr(path, '/');
-                fname = (fname == NULL ? path : fname + 1);
-                ret = fnmatch(param->pattern, fname, 0);
-                if ((ret == FNM_NOMATCH && !param->exclude_pattern) ||
-                    (ret == 0 && param->exclude_pattern))
-                        decision = -1;
         }
 
         /* If an OBD UUID is specified but no one matches, skip this file. */
@@ -861,7 +908,8 @@ decided:
         return 0;
 }
 
-static int cb_common_fini(char *path, DIR *parent, DIR *d, void *data)
+static int cb_common_fini(char *path, DIR *parent, DIR *d, void *data,
+                          struct dirent64 *de)
 {
         struct find_param *param = (struct find_param *)data;
         param->depth--;
@@ -893,14 +941,15 @@ int llapi_find(char *path, struct find_param *param)
 
         strncpy(buf, path, PATH_MAX + 1);
         ret = llapi_semantic_traverse(buf, PATH_MAX + 1, NULL, cb_find_init,
-                                      cb_common_fini, param);
+                                      cb_common_fini, param, NULL);
 
         find_param_fini(param);
         free(buf);
         return ret < 0 ? ret : 0;
 }
 
-static int cb_getstripe(char *path, DIR *parent, DIR *d, void *data)
+static int cb_getstripe(char *path, DIR *parent, DIR *d, void *data,
+                        struct dirent64 *de)
 {
         struct find_param *param = (struct find_param *)data;
         int ret = 0;
@@ -978,7 +1027,7 @@ int llapi_getstripe(char *path, struct find_param *param)
 
         strncpy(buf, path, PATH_MAX + 1);
         ret = llapi_semantic_traverse(buf, PATH_MAX + 1, NULL, cb_getstripe,
-                                      cb_common_fini, param);
+                                      cb_common_fini, param, NULL);
         find_param_fini(param);
         free(buf);
         return ret < 0 ? ret : 0;
@@ -1235,7 +1284,8 @@ int llapi_quotactl(char *mnt, struct if_quotactl *qctl)
         return rc;
 }
 
-static int cb_quotachown(char *path, DIR *parent, DIR *d, void *data)
+static int cb_quotachown(char *path, DIR *parent, DIR *d, void *data,
+                         struct dirent64 *de)
 {
         struct find_param *param = (struct find_param *)data;
         lstat_t *st;
@@ -1315,7 +1365,7 @@ int llapi_quotachown(char *path, int flag)
 
         strncpy(buf, path, PATH_MAX + 1);
         ret = llapi_semantic_traverse(buf, PATH_MAX + 1, NULL, cb_quotachown,
-                                      NULL, &param);
+                                      NULL, &param, NULL);
 out:
         find_param_fini(&param);
         free(buf);

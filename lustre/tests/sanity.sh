@@ -2335,6 +2335,25 @@ setup_56() {
         fi
 }
 
+setup_56_special() {
+	LOCAL_NUMFILES=$1
+	LOCAL_NUMDIRS=$2
+	TDIR=$DIR/${tdir}g
+	setup_56 $1 $2
+	if [ ! -e "$TDIR/loop1b" ] ; then
+		for i in `seq 1 $LOCAL_NUMFILES` ; do
+			mknod $TDIR/loop${i}b b 7 $i
+			mknod $TDIR/null${i}c c 1 3
+			ln -s $TDIR/file0 $TDIR/link${i}l
+		done
+		for i in `seq 1 $LOCAL_NUMDIRS` ; do
+			mknod $TDIR/dir$i/loop${i}b b 7 $i
+			mknod $TDIR/dir$i/null${i}c c 1 3
+			ln -s $TDIR/dir$i/file0 $TDIR/dir$i/link${i}l
+		done
+	fi
+}
+
 test_56g() {
         $LSTRIPE -d $DIR
 
@@ -2375,6 +2394,56 @@ test_56i() {
        [ "$OUT" ] && error "$LFIND returned directory '$OUT'" || true
 }
 run_test 56i "check 'lfs find -ost UUID' skips directories ======="
+
+test_56j() {
+	setup_56_special $NUMFILES $NUMDIRS
+
+	EXPECTED=$((NUMDIRS+1))
+	NUMS=`$LFIND -type d $DIR/${tdir}g | wc -l`
+	[ $NUMS -eq $EXPECTED ] || \
+		error "lfs find -type d $DIR/${tdir}g wrong: found $NUMS, expected $EXPECTED"
+}
+run_test 56j "check lfs find -type d ============================="
+
+test_56k() {
+	setup_56_special $NUMFILES $NUMDIRS
+
+	EXPECTED=$(((NUMDIRS+1) * NUMFILES))
+	NUMS=`$LFIND -type f $DIR/${tdir}g | wc -l`
+	[ $NUMS -eq $EXPECTED ] || \
+		error "lfs find -type f $DIR/${tdir}g wrong: found $NUMS, expected $EXPECTED"
+}
+run_test 56k "check lfs find -type f ============================="
+
+test_56l() {
+	setup_56_special $NUMFILES $NUMDIRS
+
+	EXPECTED=$((NUMDIRS + NUMFILES))
+	NUMS=`$LFIND -type b $DIR/${tdir}g | wc -l`
+	[ $NUMS -eq $EXPECTED ] || \
+		error "lfs find -type b $DIR/${tdir}g wrong: found $NUMS, expected $EXPECTED"
+}
+run_test 56l "check lfs find -type b ============================="
+
+test_56m() {
+	setup_56_special $NUMFILES $NUMDIRS
+
+	EXPECTED=$((NUMDIRS + NUMFILES))
+	NUMS=`$LFIND -type c $DIR/${tdir}g | wc -l`
+	[ $NUMS -eq $EXPECTED ] || \
+		error "lfs find -type c $DIR/${tdir}g wrong: found $NUMS, expected $EXPECTED"
+}
+run_test 56m "check lfs find -type c ============================="
+
+test_56n() {
+	setup_56_special $NUMFILES $NUMDIRS
+
+	EXPECTED=$((NUMDIRS + NUMFILES))
+	NUMS=`$LFIND -type l $DIR/${tdir}g | wc -l`
+	[ $NUMS -eq $EXPECTED ] || \
+		error "lfs find -type l $DIR/${tdir}g wrong: found $NUMS, expected $EXPECTED"
+}
+run_test 56n "check lfs find -type l ============================="
 
 test_57a() {
 	remote_mds && skip "remote MDS" && return
