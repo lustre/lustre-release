@@ -29,10 +29,10 @@
 #include <sys/stat.h>
 #include <sys/queue.h>
 
+#include <sysio.h>
 #ifdef HAVE_XTIO_H
 #include <xtio.h>
 #endif
-#include <sysio.h>
 #include <fs.h>
 #include <mount.h>
 #include <inode.h>

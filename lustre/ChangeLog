@@ -120,6 +120,11 @@ Details    : Modify target file & which_patch.
              could exploit this flaw to run code in the kernel 
              (ie a root privilege escalation). (CVE-2007-4573). 
 
+Severity   : minor
+Bugzilla   : 13732 
+Description: change order of libsysio includes
+Details    : '#include sysio.h' should always come before '#include xtio.h'
+
 --------------------------------------------------------------------------------
 
 2007-09-27         Cluster File Systems, Inc. <info@clusterfs.com>
