@@ -3291,6 +3291,31 @@ static int filter_statfs(struct obd_device *obd, struct obd_statfs *osfs,
         RETURN(rc);
 }
 
+static int filter_use_existing_obj(struct obd_device *obd,
+                                   struct dentry *dchild, void **handle,
+                                   int *cleanup_phase)
+{
+        struct inode *inode = dchild->d_inode;
+        struct iattr iattr;
+        int rc;
+
+        if ((inode->i_mode & (S_ISUID | S_ISGID)) == (S_ISUID|S_ISGID))
+                return 0;
+
+        *handle = fsfilt_start_log(obd, inode, FSFILT_OP_SETATTR, NULL, 1);
+        if (IS_ERR(*handle))
+                return PTR_ERR(*handle);
+
+        iattr.ia_valid = ATTR_MODE;
+        iattr.ia_mode = S_ISUID | S_ISGID |0666;
+        rc = fsfilt_setattr(obd, dchild, *handle, &iattr, 1);
+        if (rc == 0)
+                *cleanup_phase = 3;
+
+        return rc;
+}
+
+
 /* We rely on the fact that only one thread will be creating files in a given
  * group at a time, which is why we don't need an atomic filter_get_new_id.
  * Even if we had that atomic function, the following race would exist:
@@ -3380,14 +3405,24 @@ static int filter_precreate(struct obd_device *obd, struct obdo *oa,
 
                 if (dchild->d_inode != NULL) {
                         /* This would only happen if lastobjid was bad on disk*/
-                        /* Could also happen if recreating missing obj but
-                         * already exists
-                         */
+                        /* Could also happen if recreating missing obj but it
+                         * already exists. */
                         if (recreate_obj) {
                                 CERROR("%s: recreating existing object %.*s?\n",
                                        obd->obd_name, dchild->d_name.len,
                                        dchild->d_name.name);
                         } else {
+                                /* Use these existing objects if they are
+                                 * zero length. */
+                                if (dchild->d_inode->i_size == 0) {
+                                        rc = filter_use_existing_obj(obd,dchild,
+                                                      &handle, &cleanup_phase);
+                                        if (rc == 0)
+                                                goto set_last_id;
+                                        else
+                                                GOTO(cleanup, rc);
+                                }
+
                                 CERROR("%s: Serious error: objid %.*s already "
                                        "exists; is this filesystem corrupt?\n",
                                        obd->obd_name, dchild->d_name.len,
@@ -3413,6 +3448,7 @@ static int filter_precreate(struct obd_device *obd, struct obdo *oa,
                         GOTO(cleanup, rc);
                 }
 
+set_last_id:
                 if (!recreate_obj) {
                         filter_set_last_id(filter, next_id, group);
                         err = filter_update_last_objid(obd, group, 0);
