@@ -394,6 +394,10 @@ Severity   : normal
 Bugzilla   : 13454
 Description: Add jbd statistics patch for RHEL5 and 2.6.18-vanilla
 
+Severity   : minor
+Bugzilla   : 13732 
+Description: change order of libsysio includes
+Details    : '#include sysio.h' should always come before '#include xtio.h'
 
 --------------------------------------------------------------------------------
 
