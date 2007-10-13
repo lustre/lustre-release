@@ -450,6 +450,15 @@ test_17d() {
 }
 run_test 17d "symlinks: create dangling ========================"
 
+test_17e() {
+	mkdir -p $DIR/$tdir
+	local foo=$DIR/$tdir/$tfile
+	ln -s $foo $foo || error "create symlink failed"
+	ls -l $foo || error "ls -l failed"
+	ls $foo && error "ls not failed" || true
+}
+run_test 17e "symlinks: create recursive symlink (should return error) ===="
+
 test_17f() {
 	mkdir -p $DIR/d17f
 	ln -s 1234567890/2234567890/3234567890/4234567890 $DIR/d17f/111
