@@ -337,11 +337,8 @@ EXPORT_SYMBOL(ldlm_pool_shrink);
 int ldlm_pool_setup(struct ldlm_pool *pl, __u32 limit)
 {
         ENTRY;
-        if (ldlm_pl2ns(pl)->ns_client == LDLM_NAMESPACE_SERVER) {
-                spin_lock(&pl->pl_lock);
+        if (ldlm_pl2ns(pl)->ns_client == LDLM_NAMESPACE_SERVER)
                 ldlm_pool_set_limit(pl, limit);
-                spin_unlock(&pl->pl_lock);
-        }
         RETURN(0);
 }
 EXPORT_SYMBOL(ldlm_pool_setup);

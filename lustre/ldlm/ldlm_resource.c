@@ -266,7 +266,7 @@ struct ldlm_namespace *ldlm_namespace_new(char *name, ldlm_side_t client,
 {
         struct ldlm_namespace *ns = NULL;
         struct list_head *bucket;
-        int rc, idx;
+        int rc, idx, namelen;
         ENTRY;
 
         rc = ldlm_get_ref(client);
@@ -283,7 +283,8 @@ struct ldlm_namespace *ldlm_namespace_new(char *name, ldlm_side_t client,
         if (!ns->ns_hash)
                 GOTO(out_ns, NULL);
 
-        OBD_ALLOC(ns->ns_name, strlen(name) + 1);
+        namelen = strlen(name);
+        OBD_ALLOC(ns->ns_name, namelen + 1);
         if (!ns->ns_name)
                 GOTO(out_hash, NULL);
 
@@ -310,30 +311,28 @@ struct ldlm_namespace *ldlm_namespace_new(char *name, ldlm_side_t client,
         ns->ns_max_unused = LDLM_DEFAULT_LRU_SIZE;
         ns->ns_max_age = LDLM_DEFAULT_MAX_ALIVE;
         spin_lock_init(&ns->ns_unused_lock);
-
         ns->ns_connect_flags = 0;
-        mutex_down(ldlm_namespace_lock(client));
-        list_add(&ns->ns_list_chain, ldlm_namespace_list(client));
-        idx = atomic_read(ldlm_namespace_nr(client));
-        atomic_inc(ldlm_namespace_nr(client));
-        mutex_up(ldlm_namespace_lock(client));
-        
+
         ldlm_proc_namespace(ns);
+
+        idx = atomic_read(ldlm_namespace_nr(client));
         
         rc = ldlm_pool_init(&ns->ns_pool, ns, idx, client);
         if (rc) {
-                CERROR("can't initialize lock pool, rc %d\n", rc);
-                GOTO(out_del, rc);
+                CERROR("Can't initialize lock pool, rc %d\n", rc);
+                GOTO(out_proc, rc);
         }
-        RETURN(ns);
 
-out_del:
         mutex_down(ldlm_namespace_lock(client));
-        list_del(&ns->ns_list_chain);
-        atomic_dec(ldlm_namespace_nr(client));
+        list_add(&ns->ns_list_chain, ldlm_namespace_list(client));
+        atomic_inc(ldlm_namespace_nr(client));
         mutex_up(ldlm_namespace_lock(client));
+
+        RETURN(ns);
+out_proc:
+        ldlm_namespace_cleanup(ns, 0);
+        OBD_FREE(ns->ns_name, namelen + 1);
 out_hash:
-        POISON(ns->ns_hash, 0x5a, sizeof(*ns->ns_hash) * RES_HASH_SIZE);
         OBD_VFREE(ns->ns_hash, sizeof(*ns->ns_hash) * RES_HASH_SIZE);
 out_ns:
         OBD_FREE_PTR(ns);
