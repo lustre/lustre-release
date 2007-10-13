@@ -437,6 +437,15 @@ test_17d() {
 }
 run_test 17d "symlinks: create dangling ========================"
 
+test_17e() {
+	mkdir -p $DIR/$tdir
+	local foo=$DIR/$tdir/$tfile
+	ln -s $foo $foo || error "create symlink failed"
+	ls -l $foo || error "ls -l failed"
+	ls $foo && error "ls not failed" || true
+}
+run_test 17e "symlinks: create recursive symlink (should return error) ===="
+
 test_18() {
 	touch $DIR/f
 	ls $DIR || error
