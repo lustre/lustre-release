@@ -168,7 +168,7 @@ static int lprocfs_wr_lru_size(struct file *file, const char *buffer,
         }
 
         tmp = simple_strtoul(dummy, &end, 0);
-        if (*end) {
+        if (dummy == end) {
                 CERROR("invalid value written\n");
                 return -EINVAL;
         }
