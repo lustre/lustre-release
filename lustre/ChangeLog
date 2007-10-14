@@ -125,6 +125,11 @@ Bugzilla   : 13732
 Description: change order of libsysio includes
 Details    : '#include sysio.h' should always come before '#include xtio.h'
 
+Severity   : enhancement
+Bugzilla   : 13207
+Description: adapt the lustre_config script to support the upgrade case
+Details    : Add "-u" option for lustre_config script to support upgrading 1.4
+	     server targets to 1.6 in parallel.
 
 --------------------------------------------------------------------------------
 
