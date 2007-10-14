@@ -803,7 +803,8 @@ static void osc_update_grant(struct client_obd *cli, struct ost_body *body)
 {
         client_obd_list_lock(&cli->cl_loi_list_lock);
         CDEBUG(D_CACHE, "got "LPU64" extra grant\n", body->oa.o_grant);
-        cli->cl_avail_grant += body->oa.o_grant;
+        if (body->oa.o_valid & OBD_MD_FLGRANT)
+                cli->cl_avail_grant += body->oa.o_grant;
         /* waiters are woken in brw_interpret_oap */
         client_obd_list_unlock(&cli->cl_loi_list_lock);
 }

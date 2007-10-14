@@ -413,6 +413,16 @@ Description: adapt the lustre_config script to support the upgrade case
 Details    : Add "-u" option for lustre_config script to support upgrading 1.4
              server targets to 1.6 in parallel.
 
+Severity   : normal
+Bugzilla   : 13570
+Description: grant fixes to avoid grant_space > avail_space
+Details    : In filter_check_grant, for non_grant cache write, we should
+             check the left space by  if (*left > ungranted + bytes), instead
+             of (*left > ungranted), because only we are sure the left space 
+             is enough for another "bytes", then the ungrant space should be
+             increase. In client, we should update cl_avail_grant only there
+             is OBD_MD_FLGRANT in the reply.
+
 --------------------------------------------------------------------------------
 
 2007-08-10         Cluster File Systems, Inc. <info@clusterfs.com>
