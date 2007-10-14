@@ -417,7 +417,7 @@ static int filter_grant_check(struct obd_export *exp, struct obdo *oa,
                                         continue;
                                 }
                         }
-                        if (*left > ungranted) {
+                        if (*left > ungranted + bytes) {
                                 /* if enough space, pretend it was granted */
                                 ungranted += bytes;
                                 rnb[n].flags |= OBD_BRW_GRANTED;
@@ -586,10 +586,8 @@ static int filter_preprw_write(int cmd, struct obd_export *exp, struct obdo *oa,
 
         /* do not zero out oa->o_valid as it is used in filter_commitrw_write()
          * for setting UID/GID and fid EA in first write time. */
-        if (oa->o_valid & OBD_MD_FLGRANT) {
+        if (oa->o_valid & OBD_MD_FLGRANT)
                 oa->o_grant = filter_grant(exp,oa->o_grant,oa->o_undirty,left);
-                oa->o_valid |= OBD_MD_FLGRANT;
-        }
 
         spin_unlock(&exp->exp_obd->obd_osfs_lock);
         filter_fmd_put(exp, fmd);
