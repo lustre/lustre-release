@@ -407,6 +407,12 @@ Details    : If LAST_ID value on disk is smaller than the objects existing in
              LBUG(). If the object is 0-length, then we should use the existing
              object. This will help to avoid a full fsck in most cases.
 
+Severity   : enhancement
+Bugzilla   : 13207
+Description: adapt the lustre_config script to support the upgrade case
+Details    : Add "-u" option for lustre_config script to support upgrading 1.4
+             server targets to 1.6 in parallel.
+
 --------------------------------------------------------------------------------
 
 2007-08-10         Cluster File Systems, Inc. <info@clusterfs.com>
