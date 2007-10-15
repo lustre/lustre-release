@@ -1,7 +1,7 @@
        * version 1.8.0
        * Support for kernels:
         2.6.5-7.286 (SLES 9),
-        2.6.9-55.0.6.EL (RHEL 4),
+        2.6.9-55.0.9.EL (RHEL 4),
         2.6.16.46-0.14 (SLES 10),
         2.6.18-8.1.14.EL5 (RHEL 5).
         2.6.18.8 vanilla (kernel.org)
@@ -422,6 +422,13 @@ Details    : In filter_check_grant, for non_grant cache write, we should
              is enough for another "bytes", then the ungrant space should be
              increase. In client, we should update cl_avail_grant only there
              is OBD_MD_FLGRANT in the reply.
+
+Severity   : critical
+Bugzilla   : 13748
+Description: Update RHEL 4 kernel to fix local root privilege escalation.
+Details    : Update to the latest RHEL 4 kernel to fix the vulnerability
+	     described in CVE-2007-4573.  This problem could allow untrusted
+	     local users to gain root access.
 
 --------------------------------------------------------------------------------
 
