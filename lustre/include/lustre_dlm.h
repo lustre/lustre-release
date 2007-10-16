@@ -621,11 +621,12 @@ do {                                            \
         struct ldlm_lock *_lock, *_next;                        \
         int c = count;                                          \
         list_for_each_entry_safe(_lock, _next, head, member) {  \
+                if (c-- == 0)                                   \
+                        break;                                  \
                 list_del_init(&_lock->member);                  \
                 LDLM_LOCK_PUT(_lock);                           \
-                if (--c == 0)                                   \
-                        break;                                  \
         }                                                       \
+        LASSERT(c <= 0);                                       \
 })
 
 struct ldlm_lock *ldlm_lock_get(struct ldlm_lock *lock);

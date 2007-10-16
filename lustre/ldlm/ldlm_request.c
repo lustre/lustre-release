@@ -877,7 +877,7 @@ int ldlm_cli_cancel_req(struct obd_export *exp,
                 if (imp == NULL || imp->imp_invalid) {
                         CDEBUG(D_DLMTRACE,
                                "skipping cancel on invalid import %p\n", imp);
-                        break;
+                        RETURN(count);
                 }
 
                 req = ptlrpc_prep_req(imp, LUSTRE_DLM_VERSION, LDLM_CANCEL, 2,
