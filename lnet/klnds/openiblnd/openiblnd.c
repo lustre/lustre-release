@@ -443,7 +443,7 @@ kibnal_handle_svcqry (struct socket *sock)
         }
 
         version = (msg->ibm_magic == IBNAL_MSG_MAGIC) ?
-                  msg->ibm_version : __swab32(msg->ibm_version);
+                  msg->ibm_version : __swab16(msg->ibm_version);
         /* Peer is a different protocol version: reply in my current protocol
          * to tell her I'm "old" */
         if (version != IBNAL_MSG_VERSION &&
