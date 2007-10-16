@@ -209,21 +209,9 @@ int ll_drop_dentry(struct dentry *dentry)
                  * sys_getcwd() could return -ENOENT -bzzz */
 #ifdef LUSTRE_KERNEL_VERSION
                 dentry->d_flags |= DCACHE_LUSTRE_INVALID;
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
-                __d_drop(dentry);
-                if (dentry->d_inode) {
-                        /* Put positive dentries to orphan list */
-                        list_add(&dentry->d_hash,
-                                 &ll_i2sbi(dentry->d_inode)->ll_orphan_dentry_list);
-                }
-#else
+#endif
                 if (!dentry->d_inode || !S_ISDIR(dentry->d_inode->i_mode))
                         __d_drop(dentry);
-#endif
-#else
-                if (!dentry->d_inode || !S_ISDIR(dentry->d_inode->i_mode))
-                        __d_drop(dentry);
-#endif
 
         }
         unlock_dentry(dentry);
@@ -316,21 +304,17 @@ void ll_lookup_finish_locks(struct lookup_intent *it, struct dentry *dentry)
 
         /* drop lookup or getattr locks immediately */
         if (it->it_op == IT_LOOKUP || it->it_op == IT_GETATTR) {
-#if (LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))
                 /* on 2.6 there are situation when several lookups and
                  * revalidations may be requested during single operation.
                  * therefore, we don't release intent here -bzzz */
                 ll_intent_drop_lock(it);
-#else
-                ll_intent_release(it);
-#endif
         }
 }
 
 void ll_frob_intent(struct lookup_intent **itp, struct lookup_intent *deft)
 {
         struct lookup_intent *it = *itp;
-#if defined(LUSTRE_KERNEL_VERSION)&&(LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))
+#if defined(LUSTRE_KERNEL_VERSION)
         if (it) {
                 LASSERTF(it->it_magic == INTENT_MAGIC, 
                          "%p has bad intent magic: %x\n",
@@ -678,7 +662,6 @@ do_lookup:
         return;
 }
 
-#if (LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))
 #ifdef LUSTRE_KERNEL_VERSION
 static int ll_revalidate_nd(struct dentry *dentry, struct nameidata *nd)
 {
@@ -762,14 +745,9 @@ out_it:
         RETURN(rc);
 }
 #endif
-#endif
 
 struct dentry_operations ll_d_ops = {
-#if (LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))
         .d_revalidate = ll_revalidate_nd,
-#else
-        .d_revalidate_it = ll_revalidate_it,
-#endif
         .d_release = ll_release,
         .d_delete = ll_ddelete,
 #ifdef LUSTRE_KERNEL_VERSION

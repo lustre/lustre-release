@@ -74,7 +74,6 @@ int ll_unlock(__u32 mode, struct lustre_handle *lockh)
  * Get an inode by inode number (already instantiated by the intent lookup).
  * Returns inode or NULL
  */
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0))
 struct inode *ll_iget(struct super_block *sb, ino_t hash,
                       struct lustre_md *md)
 {
@@ -98,24 +97,6 @@ struct inode *ll_iget(struct super_block *sb, ino_t hash,
 
         return inode;
 }
-#else
-struct inode *ll_iget(struct super_block *sb, ino_t hash,
-                      struct lustre_md *md)
-{
-        struct inode *inode;
-        LASSERT(hash != 0);
-
-        inode = iget4(sb, hash, NULL, md);
-        if (inode) {
-                if (!(inode->i_state & (I_FREEING | I_CLEAR)))
-                        ll_update_inode(inode, md);
-
-                CDEBUG(D_VFSTRACE, "inode: %lu/%u(%p)\n",
-                       inode->i_ino, inode->i_generation, inode);
-        }
-        return inode;
-}
-#endif
 
 static void ll_drop_negative_dentry(struct inode *dir)
 { 
@@ -516,7 +497,6 @@ static struct dentry *ll_lookup_it(struct inode *parent, struct dentry *dentry,
         return retval;
 }
 
-#if (LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))
 #ifdef LUSTRE_KERNEL_VERSION
 static struct dentry *ll_lookup_nd(struct inode *parent, struct dentry *dentry,
                                    struct nameidata *nd)
@@ -644,7 +624,6 @@ static struct dentry *ll_lookup_nd(struct inode *parent, struct dentry *dentry,
 
         RETURN(de);
 }
-#endif
 #endif
 
 /* We depend on "mode" being set with the proper file type/umask by now */
@@ -830,7 +809,6 @@ static int ll_mknod_generic(struct inode *dir, struct qstr *name, int mode,
         RETURN(err);
 }
 
-#if (LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))
 #ifndef LUSTRE_KERNEL_VERSION
 static int ll_create_nd(struct inode *dir, struct dentry *dentry,
                         int mode, struct nameidata *nd)
@@ -875,7 +853,6 @@ static int ll_create_nd(struct inode *dir, struct dentry *dentry,
 
         return ll_create_it(dir, dentry, mode, &nd->intent);
 }
-#endif
 #endif
 
 static int ll_symlink_generic(struct inode *dir, struct qstr *name,
@@ -1184,7 +1161,6 @@ static int ll_mknod(struct inode *dir, struct dentry *dchild, int mode,
                                 old_encode_dev(rdev), dchild);
 }
 
-#if (LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))
 static int ll_unlink(struct inode * dir, struct dentry *dentry)
 {
         return ll_unlink_generic(dir, NULL, dentry, &dentry->d_name);
@@ -1216,7 +1192,6 @@ static int ll_rename(struct inode *old_dir, struct dentry *old_dentry,
                                  new_dir, NULL, new_dentry,
                                  &new_dentry->d_name);
 }
-#endif
 
 struct inode_operations ll_dir_inode_operations = {
 #ifdef LUSTRE_KERNEL_VERSION
@@ -1231,11 +1206,6 @@ struct inode_operations ll_dir_inode_operations = {
         .setattr_raw        = ll_setattr_raw,
 #endif
         .mknod              = ll_mknod,
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
-        .create_it          = ll_create_it,
-        .lookup_it          = ll_lookup_it,
-        .revalidate_it      = ll_inode_revalidate_it,
-#else
         .lookup             = ll_lookup_nd,
         .create             = ll_create_nd,
         /* We need all these non-raw things for NFSD, to not patch it. */
@@ -1247,7 +1217,6 @@ struct inode_operations ll_dir_inode_operations = {
         .rename             = ll_rename,
         .setattr            = ll_setattr,
         .getattr            = ll_getattr,
-#endif
         .permission         = ll_inode_permission,
         .setxattr           = ll_setxattr,
         .getxattr           = ll_getxattr,
@@ -1260,11 +1229,7 @@ struct inode_operations ll_special_inode_operations = {
         .setattr_raw    = ll_setattr_raw,
 #endif
         .setattr        = ll_setattr,
-#if (LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))
         .getattr        = ll_getattr,
-#else
-        .revalidate_it  = ll_inode_revalidate_it,
-#endif
         .permission     = ll_inode_permission,
         .setxattr       = ll_setxattr,
         .getxattr       = ll_getxattr,

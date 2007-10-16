@@ -313,16 +313,12 @@ static int ll_ap_make_ready(void *data, int cmd)
          * we got the page cache list we'd create a lock inversion
          * with the removepage path which gets the page lock then the
          * cli lock */
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,0)
-        clear_page_dirty(page);
-#else
         LASSERTF(!PageWriteback(page),"cmd %x page %p ino %lu index %lu\n", cmd, page,
                  page->mapping->host->i_ino, page->index);
         clear_page_dirty_for_io(page);
 
         /* This actually clears the dirty bit in the radix tree.*/
         set_page_writeback(page);
-#endif
 
         LL_CDEBUG_PAGE(D_PAGE, page, "made ready\n");
         page_cache_get(page);
@@ -904,14 +900,10 @@ int ll_ap_completion(void *data, int cmd, struct obdo *oa, int rc)
                         llap->llap_defer_uptodate = 0;
                 }
                 SetPageError(page);
-#if (LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))
                 if (rc == -ENOSPC)
                         set_bit(AS_ENOSPC, &page->mapping->flags);
                 else
                         set_bit(AS_EIO, &page->mapping->flags);
-#else
-                page->mapping->gfp_mask |= AS_EIO_MASK;
-#endif
         }
 
         unlock_page(page);

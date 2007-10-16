@@ -436,9 +436,7 @@ static int client_common_fill_super(struct super_block *sb, char *md, char *dt,
         sbi->ll_root_fid = rootfid;
 
         sb->s_op = &lustre_super_operations;
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0))
         sb->s_export_op = &lustre_export_operations;
-#endif
 
         /* make root inode
          * XXX: move this to after cbd setup? */
@@ -492,15 +490,6 @@ static int client_common_fill_super(struct super_block *sb, char *md, char *dt,
         checksum = sbi->ll_flags & LL_SBI_CHECKSUM;
         err = obd_set_info_async(sbi->ll_dt_exp, strlen("checksum"),"checksum",
                                  sizeof(checksum), &checksum, NULL);
-
-        /* making vm readahead 0 for 2.4.x. In the case of 2.6.x,
-           backing dev info assigned to inode mapping is used for
-           determining maximal readahead. */
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,6,0)) && \
-    !defined(KERNEL_HAS_AS_MAX_READAHEAD)
-        /* bug 2805 - set VM readahead to zero */
-        vm_max_readahead = vm_min_readahead = 0;
-#endif
 
         sb->s_root = d_alloc_root(root);
         if (data != NULL)
@@ -583,27 +572,6 @@ void lustre_dump_dentry(struct dentry *dentry, int recur)
                 lustre_dump_dentry(d, recur - 1);
         }
 }
-
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
-void lustre_throw_orphan_dentries(struct super_block *sb)
-{
-        struct dentry *dentry, *next;
-        struct ll_sb_info *sbi = ll_s2sbi(sb);
-
-        /* Do this to get rid of orphaned dentries. That is not really trw. */
-        list_for_each_entry_safe(dentry, next, &sbi->ll_orphan_dentry_list,
-                                 d_hash) {
-                CWARN("found orphan dentry %.*s (%p->%p) at unmount, dumping "
-                      "before and after shrink_dcache_parent\n",
-                      dentry->d_name.len, dentry->d_name.name, dentry, next);
-                lustre_dump_dentry(dentry, 1);
-                shrink_dcache_parent(dentry);
-                lustre_dump_dentry(dentry, 1);
-        }
-}
-#else
-#define lustre_throw_orphan_dentries(sb)
-#endif
 
 #ifdef HAVE_EXPORT___IGET
 static void prune_dir_dentries(struct inode *inode)
@@ -1379,13 +1347,9 @@ int ll_setattr_raw(struct inode *inode, struct iattr *attr)
                 UP_WRITE_I_ALLOC_SEM(inode);
                 rc = ll_extent_lock(NULL, inode, lsm, LCK_PW, &policy, &lockh,
                                     ast_flags);
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
-                DOWN_WRITE_I_ALLOC_SEM(inode);
-                LOCK_INODE_MUTEX(inode);
-#else
                 LOCK_INODE_MUTEX(inode);
                 DOWN_WRITE_I_ALLOC_SEM(inode);
-#endif
+
                 if (rc != 0)
                         GOTO(out, rc);
 
@@ -1697,11 +1661,7 @@ void ll_update_inode(struct inode *inode, struct lustre_md *md)
         if (body->valid & OBD_MD_FLNLINK)
                 inode->i_nlink = body->nlink;
         if (body->valid & OBD_MD_FLRDEV)
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
-                inode->i_rdev = body->rdev;
-#else
                 inode->i_rdev = old_decode_dev(body->rdev);
-#endif
         if (body->valid & OBD_MD_FLSIZE) {
                 if (ll_i2mdexp(inode)->exp_connect_flags & OBD_CONNECT_SOM) {
                         if (lli->lli_flags & (LLIF_DONE_WRITING |
@@ -1746,7 +1706,6 @@ void ll_update_inode(struct inode *inode, struct lustre_md *md)
         }
 }
 
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0))
 static struct backing_dev_info ll_backing_dev_info = {
         .ra_pages       = 0,    /* No readahead */
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,12))
@@ -1755,7 +1714,6 @@ static struct backing_dev_info ll_backing_dev_info = {
         .memory_backed  = 0,    /* Does contribute to dirty memory */
 #endif
 };
-#endif
 
 void ll_read_inode2(struct inode *inode, void *opaque)
 {
@@ -1799,15 +1757,12 @@ void ll_read_inode2(struct inode *inode, void *opaque)
         } else {
                 inode->i_op = &ll_special_inode_operations;
 
-#if (LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))
                 init_special_inode(inode, inode->i_mode,
                                    kdev_t_to_nr(inode->i_rdev));
 
                 /* initializing backing dev info. */
                 inode->i_mapping->backing_dev_info = &ll_backing_dev_info;
-#else
-                init_special_inode(inode, inode->i_mode, inode->i_rdev);
-#endif
+
                 EXIT;
         }
 }
