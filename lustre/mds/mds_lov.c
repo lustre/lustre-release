@@ -91,7 +91,7 @@ static int mds_lov_read_objids(struct obd_device *obd)
 
         rc = fsfilt_read_record(obd, mds->mds_lov_objid_filp, ids, size, &off);
         if (rc < 0) {
-		OBD_FREE(ids, size);
+                OBD_FREE(ids, size);
                 CERROR("Error reading objids %d\n", rc);
                 GOTO(out, rc);
         }
@@ -692,6 +692,18 @@ int mds_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
 
 }
 
+/* Collect the preconditions we need to allow client connects */
+static void mds_allow_cli(struct obd_device *obd, unsigned int flag)
+{
+        if (flag & CONFIG_LOG)
+                obd->u.mds.mds_fl_cfglog = 1;
+        if (flag & CONFIG_SYNC)
+                obd->u.mds.mds_fl_synced = 1;
+        if (obd->u.mds.mds_fl_cfglog /* bz11778: && obd->u.mds.mds_fl_synced */)
+                /* Open for clients */
+                obd->obd_no_conn = 0;
+}
+
 struct mds_lov_sync_info {
         struct obd_device *mlsi_obd;     /* the lov device to sync */
         struct obd_device *mlsi_watched; /* target osc */
@@ -887,8 +899,7 @@ int mds_notify(struct obd_device *obd, struct obd_device *watched,
         case OBD_NOTIFY_SYNC_NONBLOCK:
                 break;
         case OBD_NOTIFY_CONFIG:
-                /* Open for clients */
-                obd->obd_no_conn = 0;
+                mds_allow_cli(obd, (unsigned int)data);
         default:
                 RETURN(0);
         }
@@ -919,6 +930,7 @@ int mds_notify(struct obd_device *obd, struct obd_device *watched,
                                     obd->u.mds.mds_lov_desc.ld_tgt_count,
                                     &watched->u.cli.cl_target_uuid);
                 mutex_up(&obd->obd_dev_sem);
+                mds_allow_cli(obd, CONFIG_SYNC);
                 RETURN(rc);
         }
 

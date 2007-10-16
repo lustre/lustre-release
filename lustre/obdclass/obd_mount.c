@@ -750,8 +750,8 @@ static int lustre_stop_mgc(struct super_block *sb)
 {
         struct lustre_sb_info *lsi = s2lsi(sb);
         struct obd_device *obd;
-        char *niduuid, *ptr = 0;
-        int i, rc = 0, len;
+        char *niduuid = 0, *ptr = 0;
+        int i, rc = 0, len = 0;
         ENTRY;
 
         if (!lsi)

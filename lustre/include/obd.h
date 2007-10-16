@@ -524,7 +524,6 @@ struct mds_obd {
         struct lov_desc                  mds_lov_desc;
         __u32                            mds_id;
 
-        unsigned int                     mds_lov_objids_dirty:1;
         struct file                     *mds_lov_objid_filp;
         /* protect update vs free in lov_add_target */
         struct rw_semaphore              mds_lov_objids_sem;
@@ -544,10 +543,12 @@ struct mds_obd {
         struct semaphore                 mds_qonoff_sem;
         struct semaphore                 mds_health_sem;
         unsigned long                    mds_lov_objids_valid:1,
+                                         mds_lov_objids_dirty:1,
                                          mds_fl_user_xattr:1,
                                          mds_fl_acl:1,
-                                         mds_evict_ost_nids:1;
-
+                                         mds_evict_ost_nids:1,
+                                         mds_fl_cfglog:1,
+                                         mds_fl_synced:1;
 
         struct upcall_cache             *mds_identity_cache;
         struct upcall_cache             *mds_rmtacl_cache;

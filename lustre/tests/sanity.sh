@@ -2165,6 +2165,7 @@ test_51() {
 		FNUM=$(($FNUM + 1))
 		echo -n "+"
 	done
+	echo
 	ls -l $DIR/d51 > /dev/null || error
 }
 run_test 51 "special situations: split htree with empty entry =="

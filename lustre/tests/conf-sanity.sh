@@ -299,8 +299,6 @@ run_test 5d "mount with ost down"
 test_5e() {
 	start_ost
 	start_mds
-        # give MDS a chance to connect to OSTs (bz 10476)
-	sleep 5	
 
 #define OBD_FAIL_PTLRPC_DELAY_SEND       0x506
 	do_facet client "sysctl -w lustre.fail_loc=0x80000506"
@@ -787,7 +785,6 @@ test_22() {
 	echo Client mount with a running ost
 	start_ost
 	mount_client $MOUNT
-	sleep 5	#bz10476
 	check_mount || return 41
 	pass
 
