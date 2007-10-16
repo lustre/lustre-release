@@ -459,6 +459,10 @@ struct file_operations name##_fops = {                                     \
 #define LPROC_SEQ_FOPS_RO(name)         __LPROC_SEQ_FOPS(name, NULL)
 #define LPROC_SEQ_FOPS(name)            __LPROC_SEQ_FOPS(name, name##_seq_write)
 
+/* lproc_ptlrpc.c */
+struct ptlrpc_request;
+extern void target_print_req(void *seq_file, struct ptlrpc_request *req);
+
 #else
 /* LPROCFS is not defined */
 static inline void lprocfs_counter_add(struct lprocfs_stats *stats,
@@ -591,6 +595,9 @@ int lprocfs_counter_write(struct file *file, const char *buffer,
 #define LPROCFS_ENTRY_AND_CHECK(dp)
 #define LPROC_SEQ_FOPS_RO(name)
 #define LPROC_SEQ_FOPS(name)
+
+/* lproc_ptlrpc.c */
+#define target_print_req NULL
 
 #endif /* LPROCFS */
 

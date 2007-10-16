@@ -2562,7 +2562,7 @@ static int mdt_setup(struct obd_device *obd, obd_count len, void *buf)
                                 MDS_MAXREPSIZE, MDS_REQUEST_PORTAL,
                                 MDC_REPLY_PORTAL, MDS_SERVICE_WATCHDOG_FACTOR,
                                 mds_handle, LUSTRE_MDS_NAME,
-                                obd->obd_proc_entry, NULL, 
+                                obd->obd_proc_entry, target_print_req,
                                 mds_min_threads, mds_max_threads, "ll_mdt");
 
         if (!mds->mds_service) {
@@ -2579,7 +2579,7 @@ static int mdt_setup(struct obd_device *obd, obd_count len, void *buf)
                                 MDS_MAXREPSIZE, MDS_SETATTR_PORTAL,
                                 MDC_REPLY_PORTAL, MDS_SERVICE_WATCHDOG_FACTOR,
                                 mds_handle, "mds_setattr",
-                                obd->obd_proc_entry, NULL,
+                                obd->obd_proc_entry, target_print_req,
                                 mds_min_threads, mds_max_threads,
                                 "ll_mdt_attr");
         if (!mds->mds_setattr_service) {
@@ -2596,7 +2596,7 @@ static int mdt_setup(struct obd_device *obd, obd_count len, void *buf)
                                 MDS_MAXREPSIZE, MDS_READPAGE_PORTAL,
                                 MDC_REPLY_PORTAL, MDS_SERVICE_WATCHDOG_FACTOR,
                                 mds_handle, "mds_readpage",
-                                obd->obd_proc_entry, NULL, 
+                                obd->obd_proc_entry, target_print_req,
                                 MDS_THREADS_MIN_READPAGE, mds_max_threads,
                                 "ll_mdt_rdpg");
         if (!mds->mds_readpage_service) {
