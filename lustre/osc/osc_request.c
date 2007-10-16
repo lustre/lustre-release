@@ -902,7 +902,7 @@ static inline int can_merge_pages(struct brw_page *p1, struct brw_page *p2)
 }
 
 static obd_count osc_checksum_bulk(int nob, obd_count pg_count,
-                                   struct brw_page **pga)
+                                   struct brw_page **pga, int opc)
 {
         __u32 cksum = ~0;
         int i = 0;
@@ -915,7 +915,7 @@ static obd_count osc_checksum_bulk(int nob, obd_count pg_count,
 
                 /* corrupt the data before we compute the checksum, to
                  * simulate an OST->client data error */
-                if (i == 0 &&
+                if (i == 0 && opc == OST_READ &&
                     OBD_FAIL_CHECK_ONCE(OBD_FAIL_OSC_CHECKSUM_RECEIVE))
                         memcpy(ptr + off, "bad1", min(4, nob));
                 cksum = crc32_le(cksum, ptr + off, count);
@@ -929,7 +929,7 @@ static obd_count osc_checksum_bulk(int nob, obd_count pg_count,
         }
         /* For sending we only compute the wrong checksum instead
          * of corrupting the data so it is still correct on a redo */
-        if (OBD_FAIL_CHECK_ONCE(OBD_FAIL_OSC_CHECKSUM_SEND))
+        if (opc == OST_WRITE && OBD_FAIL_CHECK_ONCE(OBD_FAIL_OSC_CHECKSUM_SEND))
                 cksum++;
 
         return cksum;
@@ -1055,7 +1055,8 @@ static int osc_brw_prep_request(int cmd, struct client_obd *cli,struct obdo *oa,
                 if (unlikely(cli->cl_checksum)) {
                         body->oa.o_valid |= OBD_MD_FLCKSUM;
                         body->oa.o_cksum = osc_checksum_bulk(requested_nob,
-                                                             page_count, pga);
+                                                             page_count, pga,
+                                                             OST_WRITE);
                         CDEBUG(D_PAGE, "checksum at write origin: %x\n",
                                body->oa.o_cksum);
                         /* save this in 'oa', too, for later checking */
@@ -1108,7 +1109,7 @@ static int check_write_checksum(struct obdo *oa, const lnet_process_id_t *peer,
                 return 0;
         }
 
-        new_cksum = osc_checksum_bulk(nob, page_count, pga);
+        new_cksum = osc_checksum_bulk(nob, page_count, pga, OST_WRITE);
 
         if (new_cksum == server_cksum)
                 msg = "changed on the client after we checksummed it - "
@@ -1223,7 +1224,7 @@ static int osc_brw_fini_request(struct ptlrpc_request *req, int rc)
                 char      *router;
 
                 client_cksum = osc_checksum_bulk(rc, aa->aa_page_count,
-                                                 aa->aa_ppga);
+                                                 aa->aa_ppga, OST_READ);
 
                 if (peer->nid == req->rq_bulk->bd_sender) {
                         via = router = "";
