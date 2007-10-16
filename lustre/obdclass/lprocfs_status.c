@@ -1486,7 +1486,6 @@ int lprocfs_obd_rd_recovery_status(char *page, char **start, off_t off,
 
         if (lprocfs_obd_snprintf(&page, size, &len, "status: ") <= 0)
                 goto out;
-
         if (obd->obd_max_recoverable_clients == 0) {
                 lprocfs_obd_snprintf(&page, size, &len, "INACTIVE\n");
                 goto fclose;
@@ -1496,64 +1495,60 @@ int lprocfs_obd_rd_recovery_status(char *page, char **start, off_t off,
         if (obd->obd_recovering == 0) {
                 if (lprocfs_obd_snprintf(&page, size, &len, "COMPLETE\n") <= 0)
                         goto out;
-
-                if (lprocfs_obd_snprintf(&page, size, &len, "recovery_start: %lu\n",
-                    obd->obd_recovery_start) <= 0)
+                if (lprocfs_obd_snprintf(&page, size, &len,
+                                         "recovery_start: %lu\n",
+                                         obd->obd_recovery_start) <= 0)
                         goto out;
-
-                if (lprocfs_obd_snprintf(&page, size, &len, "recovery_end: %lu\n",
-                    obd->obd_recovery_end) <= 0)
+                if (lprocfs_obd_snprintf(&page, size, &len,
+                                         "recovery_duration: %lu\n",
+                                         obd->obd_recovery_end -
+                                         obd->obd_recovery_start) <= 0)
                         goto out;
-
-                /* Number of clients have have completed recovery */
-                if (lprocfs_obd_snprintf(&page, size, &len, "recovered_clients: %d\n",
-                    obd->obd_max_recoverable_clients - obd->obd_recoverable_clients) <= 0)
+                /* Number of clients that have completed recovery */
+                if (lprocfs_obd_snprintf(&page, size, &len,
+                                         "completed_clients: %d/%d\n",
+                                         obd->obd_max_recoverable_clients -
+                                         obd->obd_recoverable_clients,
+                                         obd->obd_max_recoverable_clients) <= 0)
                         goto out;
-
-                if (lprocfs_obd_snprintf(&page, size, &len, "unrecovered_clients: %d\n",
-                    obd->obd_recoverable_clients) <= 0)
+                if (lprocfs_obd_snprintf(&page, size, &len,
+                                         "replayed_requests: %d\n",
+                                         obd->obd_replayed_requests) <= 0)
                         goto out;
-
-                if (lprocfs_obd_snprintf(&page, size, &len, "last_transno: "LPD64"\n",
-                    obd->obd_next_recovery_transno - 1) <= 0)
+                if (lprocfs_obd_snprintf(&page, size, &len,
+                                         "last_transno: "LPD64"\n",
+                                         obd->obd_next_recovery_transno - 1)<=0)
                         goto out;
-
-                lprocfs_obd_snprintf(&page, size, &len, "replayed_requests: %d\n", obd->obd_replayed_requests);
                 goto fclose;
         }
 
         if (lprocfs_obd_snprintf(&page, size, &len, "RECOVERING\n") <= 0)
                 goto out;
-
         if (lprocfs_obd_snprintf(&page, size, &len, "recovery_start: %lu\n",
-            obd->obd_recovery_start) <= 0)
+                                 obd->obd_recovery_start) <= 0)
                 goto out;
-
-        if (lprocfs_obd_snprintf(&page, size, &len, "time remaining: %lu\n",
-                                 CURRENT_SECONDS >= obd->obd_recovery_end ? 0 :
-                                 obd->obd_recovery_end - CURRENT_SECONDS) <= 0)
+        if (lprocfs_obd_snprintf(&page, size, &len, "time_remaining: %lu\n",
+                           cfs_time_current_sec() >= obd->obd_recovery_end ? 0 :
+                           obd->obd_recovery_end - cfs_time_current_sec()) <= 0)
                 goto out;
-
-        if(lprocfs_obd_snprintf(&page, size, &len, "connected_clients: %d/%d\n",
-                                obd->obd_connected_clients,
-                                obd->obd_max_recoverable_clients) <= 0)
-                goto out;
-
-        /* Number of clients have have completed recovery */
-        if (lprocfs_obd_snprintf(&page, size, &len, "completed_clients: %d/%d\n",
-                                 obd->obd_max_recoverable_clients - obd->obd_recoverable_clients,
+        if (lprocfs_obd_snprintf(&page, size, &len,"connected_clients: %d/%d\n",
+                                 obd->obd_connected_clients,
                                  obd->obd_max_recoverable_clients) <= 0)
                 goto out;
-
-        if (lprocfs_obd_snprintf(&page, size, &len, "replayed_requests: %d/??\n",
+        /* Number of clients that have completed recovery */
+        if (lprocfs_obd_snprintf(&page, size, &len,"completed_clients: %d/%d\n",
+                                 obd->obd_max_recoverable_clients -
+                                 obd->obd_recoverable_clients,
+                                 obd->obd_max_recoverable_clients) <= 0)
+                goto out;
+        if (lprocfs_obd_snprintf(&page, size, &len,"replayed_requests: %d/??\n",
                                  obd->obd_replayed_requests) <= 0)
                 goto out;
-
         if (lprocfs_obd_snprintf(&page, size, &len, "queued_requests: %d\n",
                                  obd->obd_requests_queued_for_recovery) <= 0)
                 goto out;
-
-        lprocfs_obd_snprintf(&page, size, &len, "next_transno: "LPD64"\n", obd->obd_next_recovery_transno);
+        lprocfs_obd_snprintf(&page, size, &len, "next_transno: "LPD64"\n",
+                             obd->obd_next_recovery_transno);
 
 fclose:
         *eof = 1;

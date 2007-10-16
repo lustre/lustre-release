@@ -338,7 +338,8 @@ static int import_select_connection(struct obd_import *imp)
                                CONNECTION_SWITCH_INC);
                 }
                 LASSERT(imp_conn->oic_last_attempt);
-                CWARN("Tried all connections, increasing latency to %ds\n",
+                CWARN("%s: tried all connections, increasing latency to %ds\n",
+                      imp->imp_obd->obd_name,
                       at_get(&imp->imp_at.iat_net_latency));
         }
 
@@ -641,6 +642,8 @@ static int ptlrpc_connect_interpret(struct ptlrpc_request *request,
                 }
 
                 if (imp->imp_invalid) {
+                        CDEBUG(D_HA, "%s: reconnected but import is invalid; "
+                               "marking evicted\n", imp->imp_obd->obd_name);
                         IMPORT_SET_STATE(imp, LUSTRE_IMP_EVICTED);
                 } else if (MSG_CONNECT_RECOVERING & msg_flags) {
                         CDEBUG(D_HA, "%s: reconnected to %s during replay\n",
@@ -662,7 +665,8 @@ static int ptlrpc_connect_interpret(struct ptlrpc_request *request,
                 imp->imp_last_replay_transno = 0;
                 IMPORT_SET_STATE(imp, LUSTRE_IMP_REPLAY);
         } else {
-                DEBUG_REQ(D_HA, request, "evicting, flags=%x", msg_flags);
+                DEBUG_REQ(D_HA, request, "evicting (not initial connect and "
+                          "flags reconnect/recovering not set: %x)",msg_flags);
                 imp->imp_remote_handle =
                                 *lustre_msg_get_handle(request->rq_repmsg);
                 IMPORT_SET_STATE(imp, LUSTRE_IMP_EVICTED);

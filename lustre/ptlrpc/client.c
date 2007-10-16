@@ -1556,6 +1556,7 @@ void ptlrpc_free_committed(struct obd_import *imp)
             imp->imp_generation == imp->imp_last_generation_checked) {
                 CDEBUG(D_RPCTRACE, "%s: skip recheck: last_committed "LPU64"\n",
                        imp->imp_obd->obd_name, imp->imp_peer_committed_transno);
+                EXIT;
                 return;
         }
 
@@ -1990,11 +1991,8 @@ int ptlrpc_replay_req(struct ptlrpc_request *req)
         ENTRY;
 
         LASSERT(req->rq_import->imp_state == LUSTRE_IMP_REPLAY);
-
         /* Not handling automatic bulk replay yet (or ever?) */
         LASSERT(req->rq_bulk == NULL);
-
-        DEBUG_REQ(D_HA, req, "REPLAY");
 
         LASSERT (sizeof (*aa) <= sizeof (req->rq_async_args));
         aa = (struct ptlrpc_replay_async_args *)&req->rq_async_args;
@@ -2010,6 +2008,8 @@ int ptlrpc_replay_req(struct ptlrpc_request *req)
         req->rq_interpret_reply = ptlrpc_replay_interpret;
         /* Readjust the timeout for current conditions */
         ptlrpc_at_set_req_timeout(req);
+
+        DEBUG_REQ(D_HA, req, "REPLAY");
 
         atomic_inc(&req->rq_import->imp_replay_inflight);
         ptlrpc_request_addref(req); /* ptlrpcd needs a ref */

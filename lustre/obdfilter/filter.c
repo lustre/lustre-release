@@ -805,10 +805,8 @@ static int filter_init_server_data(struct obd_device *obd, struct file * filp)
                       le64_to_cpu(fsd->lsd_last_transno));
                 obd->obd_next_recovery_transno = obd->obd_last_committed + 1;
                 obd->obd_recovering = 1;
-                obd->obd_recovery_start = CURRENT_SECONDS;
-                obd->obd_recovery_timeout = OBD_RECOVERY_TIMEOUT;
-                obd->obd_recovery_end = obd->obd_recovery_start +
-                        obd->obd_recovery_timeout;
+                obd->obd_recovery_start = 0;
+                obd->obd_recovery_end = 0;
         }
 
 out:

@@ -997,7 +997,7 @@ ptlrpc_server_handle_request(struct ptlrpc_service *svc,
         request->rq_phase = RQ_PHASE_INTERPRET;
 
         CDEBUG(D_RPCTRACE, "Handling RPC pname:cluuid+ref:pid:xid:nid:opc "
-               "%s:%s+%d:%d:"LPU64":%s:%d\n", cfs_curproc_comm(),
+               "%s:%s+%d:%d:x"LPU64":%s:%d\n", cfs_curproc_comm(),
                (request->rq_export ?
                 (char *)request->rq_export->exp_client_uuid.uuid : "0"),
                (request->rq_export ?
@@ -1013,7 +1013,7 @@ ptlrpc_server_handle_request(struct ptlrpc_service *svc,
         request->rq_phase = RQ_PHASE_COMPLETE;
 
         CDEBUG(D_RPCTRACE, "Handled RPC pname:cluuid+ref:pid:xid:nid:opc "
-               "%s:%s+%d:%d:"LPU64":%s:%d\n", cfs_curproc_comm(),
+               "%s:%s+%d:%d:x"LPU64":%s:%d\n", cfs_curproc_comm(),
                (request->rq_export ?
                 (char *)request->rq_export->exp_client_uuid.uuid : "0"),
                (request->rq_export ?
@@ -1031,14 +1031,15 @@ put_conn:
                 class_export_put(request->rq_export);
 
         if (cfs_time_current_sec() > request->rq_deadline) {
-                DEBUG_REQ(D_WARNING, request, "Request took longer than"
-                          " estimated (%+lds); client may timeout.",
+                DEBUG_REQ(D_WARNING, request, "Request x"LPU64" took longer "
+                          "than estimated (%+lds); client may timeout.",
+                          request->rq_xid,
                           cfs_time_current_sec() - request->rq_deadline);
         }
 
         do_gettimeofday(&work_end);
         timediff = cfs_timeval_sub(&work_end, &work_start, NULL);
-        CDEBUG(D_RPCTRACE, "request "LPU64" opc %u from %s processed in "
+        CDEBUG(D_RPCTRACE, "request x"LPU64" opc %u from %s processed in "
                "%ldus (%ldus total) trans "LPU64" rc %d/%d\n",
                request->rq_xid, lustre_msg_get_opc(request->rq_reqmsg),
                libcfs_id2str(request->rq_peer), timediff,

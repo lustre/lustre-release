@@ -2398,7 +2398,8 @@ void _debug_req(struct ptlrpc_request *req, __u32 mask,
         libcfs_debug_vmsg2(data->msg_cdls, data->msg_subsys, mask, data->msg_file,
                            data->msg_fn, data->msg_line, fmt, args,
                            " req@%p x"LPD64"/t"LPD64" o%d->%s@%s:%d lens %d/%d "
-                           "e %d ref %d fl "REQ_FLAGS_FMT"/%x/%x rc %d/%d\n",
+                           "e %d to %d dl %ld ref %d fl "REQ_FLAGS_FMT"/%x/%x "
+                           "rc %d/%d\n",
                            req, req->rq_xid, req->rq_transno,
                            req->rq_reqmsg ? lustre_msg_get_opc(req->rq_reqmsg) : -1,
                            req->rq_import ? obd2cli_tgt(req->rq_import->imp_obd) :
@@ -2410,7 +2411,8 @@ void _debug_req(struct ptlrpc_request *req, __u32 mask,
                                 (char *)req->rq_export->exp_connection->c_remote_uuid.uuid : "<?>",
                            (req->rq_import && req->rq_import->imp_client) ?
                                 req->rq_import->imp_client->cli_request_portal : -1,
-                           req->rq_reqlen, req->rq_replen, req->rq_early_count,
+                           req->rq_reqlen, req->rq_replen,
+                           req->rq_early_count, req->rq_timeout, req->rq_deadline,
                            atomic_read(&req->rq_refcount), DEBUG_REQ_FLAGS(req),
                            req->rq_reqmsg ? lustre_msg_get_flags(req->rq_reqmsg) : 0,
                            req->rq_repmsg ? lustre_msg_get_flags(req->rq_repmsg) : 0,

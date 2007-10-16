@@ -52,7 +52,7 @@ extern unsigned int obd_alloc_fail_rate;
 #define LDLM_TIMEOUT_DEFAULT 20
 /* Time to wait for all clients to reconnect during recovery */
 /* Should be very conservative; must catch the first reconnect after reboot */
-#define OBD_RECOVERY_TIMEOUT (obd_timeout * 5 / 2)
+#define OBD_RECOVERY_FACTOR (5 / 2) /* times obd_timeout */
 /* Change recovery-small 26b time if you change this */
 #define PING_INTERVAL max(obd_timeout / 4, 1U)
 /* Client may skip 1 ping; wait for 2.5 */
