@@ -727,7 +727,6 @@ void mdc_commit_delayed(struct ptlrpc_request *req)
                         LASSERT(cur->rq_transno != 0);
                         LASSERT(cur->rq_import == req->rq_import);
 
-                        list_del_init(&cur->rq_mod_list);
                         /* We no longer want to preserve this for transno-
                          * unconditional replay. */
                         spin_lock(&cur->rq_lock);
