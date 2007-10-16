@@ -651,7 +651,7 @@ static void mds_allow_cli(struct obd_device *obd, unsigned long flag)
                 obd->u.mds.mds_fl_cfglog = 1;
         if (flag & CONFIG_SYNC)
                 obd->u.mds.mds_fl_synced = 1;
-        if (obd->u.mds.mds_fl_cfglog && obd->u.mds.mds_fl_synced)
+        if (obd->u.mds.mds_fl_cfglog /* bz11778: && obd->u.mds.mds_fl_synced */)
                 /* Open for clients */
                 obd->obd_no_conn = 0;
 }

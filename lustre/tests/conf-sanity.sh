@@ -782,19 +782,23 @@ test_22() {
         #reformat to remove all logs
         reformat
 	start_mds
+	echo Client mount before any osts are in the logs
+	mount_client $MOUNT
+	check_mount && return 41
+	pass
+
+	echo Client mount with ost in logs, but none running
+	start_ost
+	stop_ost
+	mount_client $MOUNT
+	# check_mount will block trying to contact ost
+	umount_client $MOUNT
+	pass
 
 	echo Client mount with a running ost
 	start_ost
 	mount_client $MOUNT
 	check_mount || return 41
-	umount_client $MOUNT
-	pass
-
-	echo Client mount with ost in logs, but none running
-	stop_ost
-	mount_client $MOUNT
-	# check_mount will block trying to contact ost
-	umount_client $MOUNT
 	pass
 
 	cleanup
@@ -1117,6 +1121,15 @@ test_32a() {
 	$LCTL conf_param lustre-MDT0000.failover.node=$NID || return 10
 	echo "ok."
 
+	# With a new good MDT failover nid, we should be able to mount a client
+	# (but it cant talk to OST)
+        local OLDMOUNTOPT=$MOUNTOPT
+        MOUNTOPT="exclude=lustre-OST0000"
+	mount_client $MOUNT
+        MOUNTOPT=$OLDMOUNTOPT
+	set_and_check client "cat $LPROC/mdc/*/max_rpcs_in_flight" "lustre-MDT0000.mdc.max_rpcs_in_flight" || return 11
+
+	zconf_umount `hostname` $MOUNT -f
 	cleanup_nocli
 	load_modules
 
