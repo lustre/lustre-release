@@ -405,7 +405,7 @@ ptlrpc_prep_req_pool(struct obd_import *imp, __u32 version, int opcode,
 
         RETURN(request);
 out_ctx:
-        sptlrpc_req_put_ctx(request, 1);
+        sptlrpc_cli_ctx_put(request->rq_cli_ctx, 1);
 out_free:
         class_import_put(imp);
         if (request->rq_pool)
