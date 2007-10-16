@@ -436,6 +436,9 @@ Description: Remove 2.4 kernel checks lustre 1.8
 Details    : Remove 2.5.0 check from dcache.c dir.c file.c llite_internal.h
              llite_lib.c llite_mmap.c lproc_llite.c namei.c rw.c symlink.c
              llite subsystem.
+	     Remove 2.5.0 check from handler.c lproc_mds.c mds_fs.c
+	     mds_internal.h mds_lib.c mds_open.c mds_reint.c mds_xattr.c
+	     in mds subsystem.
 
 --------------------------------------------------------------------------------
 

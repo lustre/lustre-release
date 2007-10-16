@@ -40,14 +40,10 @@
 #include <linux/random.h>
 #include <linux/fs.h>
 #include <linux/jbd.h>
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0))
-# include <linux/smp_lock.h>
-# include <linux/buffer_head.h>
-# include <linux/workqueue.h>
-# include <linux/mount.h>
-#else
-# include <linux/locks.h>
-#endif
+#include <linux/smp_lock.h>
+#include <linux/buffer_head.h>
+#include <linux/workqueue.h>
+#include <linux/mount.h>
 
 #include <linux/lustre_acl.h>
 #include <obd_class.h>
@@ -635,11 +631,9 @@ int mds_pack_posix_acl(struct inode *inode, struct lustre_msg *repmsg,
         if (!inode->i_op || !inode->i_op->getxattr)
                 GOTO(out, 0);
 
-        lock_24kernel();
         rc = inode->i_op->getxattr(&de, MDS_XATTR_NAME_ACL_ACCESS,
                                    lustre_msg_buf(repmsg, repoff, buflen),
                                    buflen);
-        unlock_24kernel();
 
         if (rc >= 0)
                 repbody->aclsize = rc;
@@ -814,10 +808,8 @@ static int mds_getattr_pack_msg(struct ptlrpc_request *req, struct inode *inode,
 
                 size[bufcount] = 0;
                 if (inode->i_op && inode->i_op->getxattr) {
-                        lock_24kernel();
                         rc = inode->i_op->getxattr(&de, MDS_XATTR_NAME_ACL_ACCESS,
                                                    NULL, 0);
-                        unlock_24kernel();
 
                         if (rc < 0) {
                                 if (rc != -ENODATA) {
