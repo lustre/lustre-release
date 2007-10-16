@@ -694,8 +694,6 @@ void client_common_put_super(struct super_block *sb)
         obd_disconnect(sbi->ll_md_exp);
         sbi->ll_md_exp = NULL;
 
-        lustre_throw_orphan_dentries(sb);
-
         EXIT;
 }
 
