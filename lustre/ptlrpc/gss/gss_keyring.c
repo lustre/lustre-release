@@ -226,10 +226,12 @@ static void ctx_destroy_kr(struct ptlrpc_cli_ctx *ctx)
         LASSERT(gctx_kr->gck_timer == NULL);
 
         rc = gss_cli_ctx_fini_common(sec, ctx);
+        if (rc < 0)
+                return;
 
         OBD_FREE_PTR(gctx_kr);
 
-        if (rc) {
+        if (rc > 0) {
                 CWARN("released the last ctx, proceed to destroy sec %s@%p\n",
                       sec->ps_policy->sp_name, sec);
                 sptlrpc_sec_destroy(sec);

@@ -329,6 +329,8 @@ int gss_do_ctx_fini_rpc(struct gss_cli_ctx *gctx)
         int                      rc;
         ENTRY;
 
+        LASSERT(atomic_read(&ctx->cc_refcount) > 0);
+
         if (cli_ctx_is_error(ctx) || !cli_ctx_is_uptodate(ctx)) {
                 CDEBUG(D_SEC, "ctx %p(%u->%s) not uptodate, "
                        "don't send destroy rpc\n", ctx,
@@ -343,9 +345,6 @@ int gss_do_ctx_fini_rpc(struct gss_cli_ctx *gctx)
                "server finishing reverse" : "client finishing forward",
                ctx, ctx->cc_vcred.vc_uid, sec2target_str(ctx->cc_sec));
 
-        /* context's refcount could be 0, steal one */
-        atomic_inc(&ctx->cc_refcount);
-
         gctx->gc_proc = PTLRPC_GSS_PROC_DESTROY;
 
         req = ptlrpc_prep_req_pool(imp, LUSTRE_OBD_VERSION, SEC_CTX_FINI,
@@ -353,7 +352,7 @@ int gss_do_ctx_fini_rpc(struct gss_cli_ctx *gctx)
         if (!req) {
                 CWARN("ctx %p(%u): fail to prepare rpc, destroy locally\n",
                       ctx, ctx->cc_vcred.vc_uid);
-                GOTO(out_ref, rc = -ENOMEM);
+                GOTO(out, rc = -ENOMEM);
         }
 
         /* fix the user desc */
@@ -377,8 +376,7 @@ int gss_do_ctx_fini_rpc(struct gss_cli_ctx *gctx)
         }
 
         ptlrpc_req_finished(req);
-out_ref:
-        atomic_dec(&ctx->cc_refcount);
+out:
         RETURN(rc);
 }
 

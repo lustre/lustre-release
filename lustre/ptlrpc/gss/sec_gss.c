@@ -415,8 +415,10 @@ void gss_cli_ctx_uptodate(struct gss_cli_ctx *gctx)
 static
 void gss_cli_ctx_finalize(struct gss_cli_ctx *gctx)
 {
-        if (gctx->gc_mechctx)
+        if (gctx->gc_mechctx) {
                 lgss_delete_sec_context(&gctx->gc_mechctx);
+                gctx->gc_mechctx = NULL;
+        }
 
         rawobj_free(&gctx->gc_handle);
 }
@@ -1116,8 +1118,10 @@ int gss_cli_ctx_init_common(struct ptlrpc_sec *sec,
 }
 
 /*
- * return 1 if the busy count of the sec dropped to zero, then usually caller
- * should destroy the sec too; otherwise return 0.
+ * return:
+ *  -1: the destroy has been taken care of by someone else
+ *   0: proceed to destroy the ctx
+ *   1: busy count dropped to 0, proceed to destroy ctx and sec
  */
 int gss_cli_ctx_fini_common(struct ptlrpc_sec *sec,
                             struct ptlrpc_cli_ctx *ctx)
@@ -1129,8 +1133,17 @@ int gss_cli_ctx_fini_common(struct ptlrpc_sec *sec,
         LASSERT(atomic_read(&sec->ps_busy) > 0);
 
         if (gctx->gc_mechctx) {
+                /* the final context fini rpc will use this ctx too, and it's
+                 * asynchronous which finished by request_out_callback(). so
+                 * we add refcount, whoever drop finally drop the refcount to
+                 * 0 should responsible for the rest of destroy. */
+                atomic_inc(&ctx->cc_refcount);
+
                 gss_do_ctx_fini_rpc(gctx);
                 gss_cli_ctx_finalize(gctx);
+
+                if (!atomic_dec_and_test(&ctx->cc_refcount))
+                        return -1;
         }
 
         if (sec_is_reverse(sec))
