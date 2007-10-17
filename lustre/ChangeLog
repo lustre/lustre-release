@@ -84,7 +84,7 @@ Details    : llapi_semantic_traverse() modifies the "path" argument by
 
 Severity   : normal
 Bugzilla   : 13454
-Description: Add jbd statistics patch for RHEL5 and 2.6.18-vanilla
+Description: Add jbd statistics patch for RHEL5 and 2.6.18-vanilla.
 
 Severity   : normal
 Bugzilla   : 11673
