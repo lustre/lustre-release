@@ -1,8 +1,8 @@
 Index: linux-2.6.9-full/include/linux/ext3_fs.h
 ===================================================================
---- linux-2.6.9-full.orig/include/linux/ext3_fs.h
-+++ linux-2.6.9-full/include/linux/ext3_fs.h
-@@ -53,6 +53,30 @@
+--- linux-2.6.9-full.orig/include/linux/ext3_fs.h	2007-06-08 23:44:08.000000000 +0400
++++ linux-2.6.9-full/include/linux/ext3_fs.h	2007-10-17 22:25:01.000000000 +0400
+@@ -57,6 +57,30 @@ struct statfs;
  #define ext3_debug(f, a...)	do {} while (0)
  #endif
  
@@ -33,7 +33,7 @@ Index: linux-2.6.9-full/include/linux/ext3_fs.h
  /*
   * Special inodes numbers
   */
-@@ -398,6 +422,14 @@ struct ext3_inode {
+@@ -387,6 +411,14 @@ struct ext3_inode {
  #define ext3_find_first_zero_bit	ext2_find_first_zero_bit
  #define ext3_find_next_zero_bit		ext2_find_next_zero_bit
  
@@ -48,7 +48,7 @@ Index: linux-2.6.9-full/include/linux/ext3_fs.h
  /*
   * Maximal mount counts between two filesystem checks
   */
-@@ -799,6 +831,20 @@ extern unsigned long ext3_count_dirs (st
+@@ -763,6 +795,20 @@ extern unsigned long ext3_count_dirs (st
  extern void ext3_check_inodes_bitmap (struct super_block *);
  extern unsigned long ext3_count_free (struct buffer_head *, unsigned);
  
@@ -68,14 +68,14 @@ Index: linux-2.6.9-full/include/linux/ext3_fs.h
 +
  
  /* inode.c */
- int ext3_forget(handle_t *handle, int is_metadata, struct inode *inode,
+ extern int ext3_block_truncate_page(handle_t *, struct page *,
 Index: linux-2.6.9-full/include/linux/ext3_fs_sb.h
 ===================================================================
---- linux-2.6.9-full.orig/include/linux/ext3_fs_sb.h
-+++ linux-2.6.9-full/include/linux/ext3_fs_sb.h
-@@ -88,6 +88,61 @@ struct ext3_sb_info {
- 	unsigned long s_ext_blocks;
- 	unsigned long s_ext_extents;
+--- linux-2.6.9-full.orig/include/linux/ext3_fs_sb.h	2007-06-08 23:44:07.000000000 +0400
++++ linux-2.6.9-full/include/linux/ext3_fs_sb.h	2007-10-17 22:25:01.000000000 +0400
+@@ -81,6 +81,61 @@ struct ext3_sb_info {
+ 	char *s_qf_names[MAXQUOTAS];		/* Names of quota files with journalled quota */
+ 	int s_jquota_fmt;			/* Format of quota to use */
  #endif
 +
 +	/* for buddy allocator */
@@ -137,9 +137,9 @@ Index: linux-2.6.9-full/include/linux/ext3_fs_sb.h
  #endif	/* _LINUX_EXT3_FS_SB */
 Index: linux-2.6.9-full/fs/ext3/super.c
 ===================================================================
---- linux-2.6.9-full.orig/fs/ext3/super.c
-+++ linux-2.6.9-full/fs/ext3/super.c
-@@ -391,6 +391,7 @@ static void ext3_put_super (struct super
+--- linux-2.6.9-full.orig/fs/ext3/super.c	2007-06-08 23:44:08.000000000 +0400
++++ linux-2.6.9-full/fs/ext3/super.c	2007-10-17 22:26:27.000000000 +0400
+@@ -394,6 +394,7 @@ void ext3_put_super (struct super_block 
  	struct ext3_super_block *es = sbi->s_es;
  	int i;
  
@@ -147,7 +147,7 @@ Index: linux-2.6.9-full/fs/ext3/super.c
  	ext3_ext_release(sb);
  	ext3_xattr_put_super(sb);
  	journal_destroy(sbi->s_journal);
-@@ -458,6 +459,8 @@ static struct inode *ext3_alloc_inode(st
+@@ -463,6 +464,8 @@ static struct inode *ext3_alloc_inode(st
  	ei->vfs_inode.i_version = 1;
  
  	memset(&ei->i_cached_extent, 0, sizeof(ei->i_cached_extent));
@@ -156,7 +156,7 @@ Index: linux-2.6.9-full/fs/ext3/super.c
  	return &ei->vfs_inode;
  }
  
-@@ -2763,7 +2766,13 @@ static struct file_system_type ext3_fs_t
+@@ -2576,7 +2579,13 @@ static struct file_system_type ext3_fs_t
  
  static int __init init_ext3_fs(void)
  {
@@ -171,19 +171,19 @@ Index: linux-2.6.9-full/fs/ext3/super.c
  	if (err)
  		return err;
  	err = init_inodecache();
-@@ -2785,6 +2794,7 @@ static void __exit exit_ext3_fs(void)
+@@ -2598,6 +2607,7 @@ static void __exit exit_ext3_fs(void)
  	unregister_filesystem(&ext3_fs_type);
  	destroy_inodecache();
  	exit_ext3_xattr();
 +	exit_ext3_proc();
  }
  
- int ext3_map_inode_page(struct inode *inode, struct page *page,
+ int ext3_prep_san_write(struct inode *inode, long *blocks,
 Index: linux-2.6.9-full/fs/ext3/mballoc.c
 ===================================================================
---- /dev/null
-+++ linux-2.6.9-full/fs/ext3/mballoc.c
-@@ -0,0 +1,4395 @@
+--- linux-2.6.9-full.orig/fs/ext3/mballoc.c	2007-10-17 21:59:51.072534980 +0400
++++ linux-2.6.9-full/fs/ext3/mballoc.c	2007-10-17 22:25:11.000000000 +0400
+@@ -0,0 +1,4402 @@
 +/*
 + * Copyright (c) 2003-2006, Cluster File Systems, Inc, info@clusterfs.com
 + * Written by Alex Tomas <alex@clusterfs.com>
@@ -1663,8 +1663,8 @@ Index: linux-2.6.9-full/fs/ext3/mballoc.c
 +	struct ext3_free_extent *gex = &ac->ac_g_ex;
 +
 +	BUG_ON(ex->fe_len <= 0);
-+	BUG_ON(ex->fe_len >= (1 << ac->ac_sb->s_blocksize_bits) * 8);
-+	BUG_ON(ex->fe_start >= (1 << ac->ac_sb->s_blocksize_bits) * 8);
++	BUG_ON(ex->fe_len >= EXT3_BLOCKS_PER_GROUP(ac->ac_sb));
++	BUG_ON(ex->fe_start >= EXT3_BLOCKS_PER_GROUP(ac->ac_sb));
 +	BUG_ON(ac->ac_status != AC_STATUS_CONTINUE);
 +
 +	ac->ac_found++;
@@ -1845,8 +1845,8 @@ Index: linux-2.6.9-full/fs/ext3/mballoc.c
 +	i = e3b->bd_info->bb_first_free;
 +
 +	while (free && ac->ac_status == AC_STATUS_CONTINUE) {
-+		i = mb_find_next_zero_bit(bitmap, sb->s_blocksize * 8, i);
-+		if (i >= sb->s_blocksize * 8) {
++		i = mb_find_next_zero_bit(bitmap, EXT3_BLOCKS_PER_GROUP(sb), i);
++		if (i >= EXT3_BLOCKS_PER_GROUP(sb)) {
 +			BUG_ON(free != 0);
 +			break;
 +		}
@@ -1886,7 +1886,7 @@ Index: linux-2.6.9-full/fs/ext3/mballoc.c
 +	i = (i - le32_to_cpu(sbi->s_es->s_first_data_block))
 +			% EXT3_BLOCKS_PER_GROUP(sb);
 +
-+	while (i < sb->s_blocksize * 8) {
++	while (i < EXT3_BLOCKS_PER_GROUP(sb)) {
 +		if (!mb_test_bit(i, bitmap)) {
 +			max = mb_find_extent(e3b, 0, i, sbi->s_stripe, &ex);
 +			if (max >= sbi->s_stripe) {
@@ -3193,7 +3193,7 @@ Index: linux-2.6.9-full/fs/ext3/mballoc.c
 +	struct ext3_inode_info *ei = EXT3_I(ac->ac_inode);
 +	loff_t start, end, size, orig_size, orig_start;
 +	struct list_head *cur;
-+	int bsbits;
++	int bsbits, max;
 +
 +	/* do normalize only data requests, metadata requests
 +	   do not need preallocation */
@@ -3221,6 +3221,13 @@ Index: linux-2.6.9-full/fs/ext3/mballoc.c
 +	if (size < i_size_read(ac->ac_inode))
 +		size = i_size_read(ac->ac_inode);
 +
++	/* max available blocks in a free group */
++	max = EXT3_BLOCKS_PER_GROUP(ac->ac_sb) - 1 - 1
++		- EXT3_SB(ac->ac_sb)->s_itb_per_group;
++
++#define NRL_CHECK_SIZE(req,size,max,bits)	\
++		(req <= (size) || max <= ((size) >> bits))
++
 +	/* first, try to predict filesize */
 +	/* XXX: should this table be tunable? */
 +	start = 0;
@@ -3238,15 +3245,15 @@ Index: linux-2.6.9-full/fs/ext3/mballoc.c
 +		size = 512 * 1024;
 +	} else if (size <= 1024 * 1024) {
 +		size = 1024 * 1024;
-+	} else if (size < 4 * 1024 * 1024) {
++	} else if (NRL_CHECK_SIZE(size, 4 * 1024 * 1024, max, bsbits)) {
 +		start = ac->ac_o_ex.fe_logical << bsbits;
 +		start = (start / (1024 * 1024)) * (1024 * 1024);
 +		size = 1024 * 1024;
-+	} else if (size < 8 * 1024 * 1024) {
++	} else if (NRL_CHECK_SIZE(size, 8 * 1024 * 1024, max, bsbits)) {
 +		start = ac->ac_o_ex.fe_logical << bsbits;
 +		start = (start / (4 * (1024 * 1024))) * 4 * (1024 * 1024);
 +		size = 4 * 1024 * 1024;
-+	} else if (ac->ac_o_ex.fe_len < ((8 << 20) >> bsbits)) {
++	} else if(NRL_CHECK_SIZE(ac->ac_o_ex.fe_len,(8<<20)>>bsbits,max,bsbits)){
 +		start = ac->ac_o_ex.fe_logical;
 +		start = start << bsbits;
 +		start = (start / (8 * (1024 * 1024))) * 8 * (1024 * 1024);
