@@ -1,7 +1,7 @@
 Index: linux-2.6.9-full/include/linux/ext3_fs.h
 ===================================================================
 --- linux-2.6.9-full.orig/include/linux/ext3_fs.h	2007-06-08 23:44:08.000000000 +0400
-+++ linux-2.6.9-full/include/linux/ext3_fs.h	2007-07-19 09:39:07.000000000 +0400
++++ linux-2.6.9-full/include/linux/ext3_fs.h	2007-10-17 22:25:01.000000000 +0400
 @@ -57,6 +57,30 @@ struct statfs;
  #define ext3_debug(f, a...)	do {} while (0)
  #endif
@@ -72,7 +72,7 @@ Index: linux-2.6.9-full/include/linux/ext3_fs.h
 Index: linux-2.6.9-full/include/linux/ext3_fs_sb.h
 ===================================================================
 --- linux-2.6.9-full.orig/include/linux/ext3_fs_sb.h	2007-06-08 23:44:07.000000000 +0400
-+++ linux-2.6.9-full/include/linux/ext3_fs_sb.h	2007-07-19 09:39:07.000000000 +0400
++++ linux-2.6.9-full/include/linux/ext3_fs_sb.h	2007-10-17 22:25:01.000000000 +0400
 @@ -81,6 +81,61 @@ struct ext3_sb_info {
  	char *s_qf_names[MAXQUOTAS];		/* Names of quota files with journalled quota */
  	int s_jquota_fmt;			/* Format of quota to use */
@@ -138,7 +138,7 @@ Index: linux-2.6.9-full/include/linux/ext3_fs_sb.h
 Index: linux-2.6.9-full/fs/ext3/super.c
 ===================================================================
 --- linux-2.6.9-full.orig/fs/ext3/super.c	2007-06-08 23:44:08.000000000 +0400
-+++ linux-2.6.9-full/fs/ext3/super.c	2007-07-19 09:39:07.000000000 +0400
++++ linux-2.6.9-full/fs/ext3/super.c	2007-10-17 22:26:27.000000000 +0400
 @@ -394,6 +394,7 @@ void ext3_put_super (struct super_block 
  	struct ext3_super_block *es = sbi->s_es;
  	int i;
@@ -149,7 +149,7 @@ Index: linux-2.6.9-full/fs/ext3/super.c
  	journal_destroy(sbi->s_journal);
 @@ -463,6 +464,8 @@ static struct inode *ext3_alloc_inode(st
  	ei->vfs_inode.i_version = 1;
- 	
+ 
  	memset(&ei->i_cached_extent, 0, sizeof(ei->i_cached_extent));
 +	INIT_LIST_HEAD(&ei->i_prealloc_list);
 +	spin_lock_init(&ei->i_prealloc_lock);
@@ -181,9 +181,9 @@ Index: linux-2.6.9-full/fs/ext3/super.c
  int ext3_prep_san_write(struct inode *inode, long *blocks,
 Index: linux-2.6.9-full/fs/ext3/mballoc.c
 ===================================================================
---- linux-2.6.9-full.orig/fs/ext3/mballoc.c	2007-07-14 04:24:39.138985848 +0400
-+++ linux-2.6.9-full/fs/ext3/mballoc.c	2007-07-20 11:31:03.000000000 +0400
-@@ -0,0 +1,4392 @@
+--- linux-2.6.9-full.orig/fs/ext3/mballoc.c	2007-10-17 21:59:51.072534980 +0400
++++ linux-2.6.9-full/fs/ext3/mballoc.c	2007-10-17 23:09:22.000000000 +0400
+@@ -0,0 +1,4404 @@
 +/*
 + * Copyright (c) 2003-2006, Cluster File Systems, Inc, info@clusterfs.com
 + * Written by Alex Tomas <alex@clusterfs.com>
@@ -742,10 +742,10 @@ Index: linux-2.6.9-full/fs/ext3/mballoc.c
 +	ext2_set_bit(bit, addr);
 +}
 +
-+static inline void mb_set_bit_atomic(int bit, void *addr)
++static inline void mb_set_bit_atomic(spinlock_t *lock, int bit, void *addr)
 +{
 +	mb_correct_addr_and_bit(bit,addr);
-+	ext2_set_bit_atomic(NULL, bit, addr);
++	ext2_set_bit_atomic(lock, bit, addr);
 +}
 +
 +static inline void mb_clear_bit(int bit, void *addr)
@@ -754,10 +754,10 @@ Index: linux-2.6.9-full/fs/ext3/mballoc.c
 +	ext2_clear_bit(bit, addr);
 +}
 +
-+static inline void mb_clear_bit_atomic(int bit, void *addr)
++static inline void mb_clear_bit_atomic(spinlock_t *lock, int bit, void *addr)
 +{
 +	mb_correct_addr_and_bit(bit,addr);
-+	ext2_clear_bit_atomic(NULL, bit, addr);
++	ext2_clear_bit_atomic(lock, bit, addr);
 +}
 +
 +static inline int mb_find_next_zero_bit(void *addr, int max, int start)
@@ -1328,7 +1328,7 @@ Index: linux-2.6.9-full/fs/ext3/mballoc.c
 +	return 0;
 +}
 +
-+static inline void mb_clear_bits(void *bm, int cur, int len)
++static inline void mb_clear_bits(spinlock_t *lock, void *bm, int cur, int len)
 +{
 +	__u32 *addr;
 +
@@ -1341,12 +1341,12 @@ Index: linux-2.6.9-full/fs/ext3/mballoc.c
 +			cur += 32;
 +			continue;
 +		}
-+		mb_clear_bit_atomic(cur, bm);
++		mb_clear_bit_atomic(lock, cur, bm);
 +		cur++;
 +	}
 +}
 +
-+static inline void mb_set_bits(void *bm, int cur, int len)
++static inline void mb_set_bits(spinlock_t *lock, void *bm, int cur, int len)
 +{
 +	__u32 *addr;
 +
@@ -1359,7 +1359,7 @@ Index: linux-2.6.9-full/fs/ext3/mballoc.c
 +			cur += 32;
 +			continue;
 +		}
-+		mb_set_bit_atomic(cur, bm);
++		mb_set_bit_atomic(lock, cur, bm);
 +		cur++;
 +	}
 +}
@@ -1566,7 +1566,8 @@ Index: linux-2.6.9-full/fs/ext3/mballoc.c
 +		e3b->bd_info->bb_counters[ord]++;
 +	}
 +
-+	mb_set_bits(EXT3_MB_BITMAP(e3b), ex->fe_start, len0);
++	mb_set_bits(sb_bgl_lock(EXT3_SB(e3b->bd_sb), ex->fe_group),
++		    EXT3_MB_BITMAP(e3b), ex->fe_start, len0);
 +	mb_check_buddy(e3b);
 +
 +	return ret;
@@ -1662,8 +1663,8 @@ Index: linux-2.6.9-full/fs/ext3/mballoc.c
 +	struct ext3_free_extent *gex = &ac->ac_g_ex;
 +
 +	BUG_ON(ex->fe_len <= 0);
-+	BUG_ON(ex->fe_len >= (1 << ac->ac_sb->s_blocksize_bits) * 8);
-+	BUG_ON(ex->fe_start >= (1 << ac->ac_sb->s_blocksize_bits) * 8);
++	BUG_ON(ex->fe_len >= EXT3_BLOCKS_PER_GROUP(ac->ac_sb));
++	BUG_ON(ex->fe_start >= EXT3_BLOCKS_PER_GROUP(ac->ac_sb));
 +	BUG_ON(ac->ac_status != AC_STATUS_CONTINUE);
 +
 +	ac->ac_found++;
@@ -1844,8 +1845,8 @@ Index: linux-2.6.9-full/fs/ext3/mballoc.c
 +	i = e3b->bd_info->bb_first_free;
 +
 +	while (free && ac->ac_status == AC_STATUS_CONTINUE) {
-+		i = mb_find_next_zero_bit(bitmap, sb->s_blocksize * 8, i);
-+		if (i >= sb->s_blocksize * 8) {
++		i = mb_find_next_zero_bit(bitmap, EXT3_BLOCKS_PER_GROUP(sb), i);
++		if (i >= EXT3_BLOCKS_PER_GROUP(sb)) {
 +			BUG_ON(free != 0);
 +			break;
 +		}
@@ -1885,7 +1886,7 @@ Index: linux-2.6.9-full/fs/ext3/mballoc.c
 +	i = (i - le32_to_cpu(sbi->s_es->s_first_data_block))
 +			% EXT3_BLOCKS_PER_GROUP(sb);
 +
-+	while (i < sb->s_blocksize * 8) {
++	while (i < EXT3_BLOCKS_PER_GROUP(sb)) {
 +		if (!mb_test_bit(i, bitmap)) {
 +			max = mb_find_extent(e3b, 0, i, sbi->s_stripe, &ex);
 +			if (max >= sbi->s_stripe) {
@@ -2388,8 +2389,8 @@ Index: linux-2.6.9-full/fs/ext3/mballoc.c
 +	spin_lock_init(&sbi->s_mb_history_lock);
 +	i = sbi->s_mb_history_max * sizeof(struct ext3_mb_history);
 +	sbi->s_mb_history = kmalloc(i, GFP_KERNEL);
-+	if (likely(sbi->s_mb_history != NULL))
-+		memset(sbi->s_mb_history, 0, i);
++       if (likely(sbi->s_mb_history != NULL))
++               memset(sbi->s_mb_history, 0, i);
 +	/* if we can't allocate history, then we simple won't use it */
 +}
 +
@@ -3142,7 +3143,8 @@ Index: linux-2.6.9-full/fs/ext3/mballoc.c
 +		}
 +	}
 +#endif
-+	mb_set_bits(bitmap_bh->b_data, ac->ac_b_ex.fe_start, ac->ac_b_ex.fe_len);
++	mb_set_bits(sb_bgl_lock(sbi, ac->ac_b_ex.fe_group), bitmap_bh->b_data,
++		    ac->ac_b_ex.fe_start, ac->ac_b_ex.fe_len);
 +
 +	spin_lock(sb_bgl_lock(sbi, ac->ac_b_ex.fe_group));
 +	gdp->bg_free_blocks_count =
@@ -3191,7 +3193,7 @@ Index: linux-2.6.9-full/fs/ext3/mballoc.c
 +	struct ext3_inode_info *ei = EXT3_I(ac->ac_inode);
 +	loff_t start, end, size, orig_size, orig_start;
 +	struct list_head *cur;
-+	int bsbits;
++	int bsbits, max;
 +
 +	/* do normalize only data requests, metadata requests
 +	   do not need preallocation */
@@ -3219,6 +3221,13 @@ Index: linux-2.6.9-full/fs/ext3/mballoc.c
 +	if (size < i_size_read(ac->ac_inode))
 +		size = i_size_read(ac->ac_inode);
 +
++	/* max available blocks in a free group */
++	max = EXT3_BLOCKS_PER_GROUP(ac->ac_sb) - 1 - 1
++		- EXT3_SB(ac->ac_sb)->s_itb_per_group;
++
++#define NRL_CHECK_SIZE(req,size,max,bits)	\
++		(req <= (size) || max <= ((size) >> bits))
++
 +	/* first, try to predict filesize */
 +	/* XXX: should this table be tunable? */
 +	start = 0;
@@ -3236,15 +3245,15 @@ Index: linux-2.6.9-full/fs/ext3/mballoc.c
 +		size = 512 * 1024;
 +	} else if (size <= 1024 * 1024) {
 +		size = 1024 * 1024;
-+	} else if (size < 4 * 1024 * 1024) {
++	} else if (NRL_CHECK_SIZE(size, 4 * 1024 * 1024, max, bsbits)) {
 +		start = ac->ac_o_ex.fe_logical << bsbits;
 +		start = (start / (1024 * 1024)) * (1024 * 1024);
 +		size = 1024 * 1024;
-+	} else if (size < 8 * 1024 * 1024) {
++	} else if (NRL_CHECK_SIZE(size, 8 * 1024 * 1024, max, bsbits)) {
 +		start = ac->ac_o_ex.fe_logical << bsbits;
 +		start = (start / (4 * (1024 * 1024))) * 4 * (1024 * 1024);
 +		size = 4 * 1024 * 1024;
-+	} else if (ac->ac_o_ex.fe_len < ((8 << 20) >> bsbits)) {
++	} else if(NRL_CHECK_SIZE(ac->ac_o_ex.fe_len,(8<<20)>>bsbits,max,bsbits)){
 +		start = ac->ac_o_ex.fe_logical;
 +		start = start << bsbits;
 +		start = (start / (8 * (1024 * 1024))) * 8 * (1024 * 1024);
@@ -3515,8 +3524,10 @@ Index: linux-2.6.9-full/fs/ext3/mballoc.c
 +		ext3_get_group_no_and_offset(sb, pa->pa_pstart, &groupnr, &start);
 +		len = pa->pa_len;
 +		spin_unlock(&pa->pa_lock);
-+		BUG_ON(groupnr != group);
-+		mb_set_bits(bitmap, start, len);
++		if (unlikely(len == 0))
++			continue;
++		BUG_ON(groupnr != group && len != 0);
++		mb_set_bits(sb_bgl_lock(EXT3_SB(sb), group), bitmap, start,len);
 +		preallocated += len;
 +		count++;
 +	}
@@ -3762,7 +3773,7 @@ Index: linux-2.6.9-full/fs/ext3/mballoc.c
 +
 +	BUG_ON(pa->pa_deleted == 0);
 +	ext3_get_group_no_and_offset(sb, pa->pa_pstart, &group, &bit);
-+	BUG_ON(group != e3b->bd_group);
++	BUG_ON(group != e3b->bd_group && pa->pa_len != 0);
 +	end = bit + pa->pa_len;
 +
 +	ac.ac_sb = sb;
@@ -3816,7 +3827,7 @@ Index: linux-2.6.9-full/fs/ext3/mballoc.c
 +
 +	BUG_ON(pa->pa_deleted == 0);
 +	ext3_get_group_no_and_offset(sb, pa->pa_pstart, &group, &bit);
-+	BUG_ON(group != e3b->bd_group);
++	BUG_ON(group != e3b->bd_group && pa->pa_len != 0);
 +	mb_free_blocks(pa->pa_inode, e3b, bit, pa->pa_len);
 +	atomic_add(pa->pa_len, &EXT3_SB(sb)->s_mb_discarded);
 +
@@ -4527,7 +4538,8 @@ Index: linux-2.6.9-full/fs/ext3/mballoc.c
 +			BUG_ON(!mb_test_bit(bit + i, bitmap_bh->b_data));
 +	}
 +#endif
-+	mb_clear_bits(bitmap_bh->b_data, bit, count);
++	mb_clear_bits(sb_bgl_lock(sbi, block_group), bitmap_bh->b_data, bit,
++			count);
 +
 +	/* We dirtied the bitmap block */
 +	BUFFER_TRACE(bitmap_bh, "dirtied bitmap block");
