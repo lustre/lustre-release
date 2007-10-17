@@ -337,9 +337,9 @@ Details    : llapi_semantic_traverse() modifies the "path" argument by
              overrun may occur. Adding buffer overrun check in liblustreapi.
 
 Severity   : normal
-Bugzilla   : 13730
-Description: client sometimes tried revalidate root dentry.
-Details    : not revalidate dentry if it root dentry.
+Bugzilla   : 13334
+Description: Fix error on 'ls .' at the top of the Lustre mount.
+Details    : Don't revalidate dentry if it is a root dentry.
 
 Severity   : normal
 Bugzilla   : 13518
