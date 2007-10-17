@@ -8,6 +8,12 @@
 
 #include <lustre/lustre_user.h>
 
+/* Initially allocate for these many OSTs, realloc if needed */
+#define INIT_ALLOC_NUM_OSTS     1024
+
+/* Maximum number of osts that can be specified to lfs find */
+#define FIND_MAX_OSTS   1024
+
 typedef void (*llapi_cb_t)(char *obd_type_name, char *obd_name, char *obd_uuid, void *args);
 
 /* liblustreapi.c */
@@ -30,6 +36,10 @@ struct find_param {
         int     csign;
         int     msign;
         int     type;
+        unsigned long long size;
+        int     size_sign;
+        unsigned long long size_units;
+        int size_check;
 
         unsigned zeroend:1, recursive:1, got_uuids:1, obds_printed:1, exclude_pattern:1, exclude_type:1;
 
@@ -42,7 +52,10 @@ struct find_param {
         char   *print_fmt;
 
         struct  obd_uuid        *obduuid;
-        int     obdindex;
+        int                     num_obds;
+        int                     num_alloc_obds;
+        int                     obdindex;
+        int                     *obdindexes;
 
         int     lumlen;
         struct  lov_user_mds_data *lmd;
@@ -63,6 +76,8 @@ extern int llapi_target_check(int num_types, char **obd_types, char *dir);
 extern int llapi_catinfo(char *dir, char *keyword, char *node_name);
 extern int llapi_lov_get_uuids(int fd, struct obd_uuid *uuidp, int *ost_count);
 extern int llapi_is_lustre_mnttype(const char *type);
+extern int parse_size(char *optarg, unsigned long long *size,
+                      unsigned long long *size_units);
 struct mntent;
 #define HAVE_LLAPI_IS_LUSTRE_MNT
 extern int llapi_is_lustre_mnt(struct mntent *mnt);

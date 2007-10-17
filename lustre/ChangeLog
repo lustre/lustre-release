@@ -15,6 +15,12 @@ tbd         Cluster File Systems, Inc. <info@clusterfs.com>
        * Note that reiserfs quotas are disabled on SLES 10 in this kernel.
 
 Severity   : enhancement
+Bugzilla   : 13128
+Description: add --type and --size parameters to lfs find
+Details    : Enhance lfs find by adding filetype and filesize parameters. Also
+	     multiple OBDs can now be specified for the --obd option.
+
+Severity   : enhancement
 Bugzilla   : 11270
 Description: eliminate client locks in face of contention
 Details    : file contention detection and lockless i/o implementation
