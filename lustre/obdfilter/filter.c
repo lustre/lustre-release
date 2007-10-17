@@ -3713,8 +3713,8 @@ cleanup:
         rc2 = lquota_adjust(filter_quota_interface_ref, obd, qcids, NULL, rc,
                             FSFILT_OP_UNLINK);
 
-        CDEBUG(rc ? D_ERROR : D_QUOTA,
-               "filter adjust qunit! (rc:%d)\n", rc? rc : rc2);
+        if (rc2)
+                CDEBUG(D_QUOTA, "filter adjust qunit! (rc:%d)\n", rc2);
         return rc;
 }
 

@@ -335,7 +335,7 @@ int filter_quota_adjust(struct obd_device *obd, unsigned int qcids[],
         int rc2 = 0;
         ENTRY;
 
-        if (rc && rc != -EDQUOT && rc != ENOLCK)
+        if (rc && rc != -EDQUOT)
                 RETURN(0);
 
         switch (opc) {
