@@ -359,9 +359,9 @@ Details    : Last kernels save old s_dev before kill super and not allow
 	      to restore from callback - restore it before call kill_anon_super.
 
 Severity   : normal
-Bugzilla   : 13730
-Description: client sometimes tried revalidate root dentry.
-Details    : not revalidate dentry if it root dentry.
+Bugzilla   : 13334
+Description: Fix error on 'ls .' at the top of the Lustre mount.
+Details    : Don't revalidate dentry if it is a root dentry.
 
 --------------------------------------------------------------------------------
 
