@@ -182,8 +182,8 @@ Index: linux-2.6.9-full/fs/ext3/super.c
 Index: linux-2.6.9-full/fs/ext3/mballoc.c
 ===================================================================
 --- linux-2.6.9-full.orig/fs/ext3/mballoc.c	2007-10-17 21:59:51.072534980 +0400
-+++ linux-2.6.9-full/fs/ext3/mballoc.c	2007-10-17 22:25:11.000000000 +0400
-@@ -0,0 +1,4402 @@
++++ linux-2.6.9-full/fs/ext3/mballoc.c	2007-10-17 23:09:22.000000000 +0400
+@@ -0,0 +1,4404 @@
 +/*
 + * Copyright (c) 2003-2006, Cluster File Systems, Inc, info@clusterfs.com
 + * Written by Alex Tomas <alex@clusterfs.com>
@@ -3524,7 +3524,9 @@ Index: linux-2.6.9-full/fs/ext3/mballoc.c
 +		ext3_get_group_no_and_offset(sb, pa->pa_pstart, &groupnr, &start);
 +		len = pa->pa_len;
 +		spin_unlock(&pa->pa_lock);
-+		BUG_ON(groupnr != group);
++		if (unlikely(len == 0))
++			continue;
++		BUG_ON(groupnr != group && len != 0);
 +		mb_set_bits(sb_bgl_lock(EXT3_SB(sb), group), bitmap, start,len);
 +		preallocated += len;
 +		count++;
@@ -3771,7 +3773,7 @@ Index: linux-2.6.9-full/fs/ext3/mballoc.c
 +
 +	BUG_ON(pa->pa_deleted == 0);
 +	ext3_get_group_no_and_offset(sb, pa->pa_pstart, &group, &bit);
-+	BUG_ON(group != e3b->bd_group);
++	BUG_ON(group != e3b->bd_group && pa->pa_len != 0);
 +	end = bit + pa->pa_len;
 +
 +	ac.ac_sb = sb;
@@ -3825,7 +3827,7 @@ Index: linux-2.6.9-full/fs/ext3/mballoc.c
 +
 +	BUG_ON(pa->pa_deleted == 0);
 +	ext3_get_group_no_and_offset(sb, pa->pa_pstart, &group, &bit);
-+	BUG_ON(group != e3b->bd_group);
++	BUG_ON(group != e3b->bd_group && pa->pa_len != 0);
 +	mb_free_blocks(pa->pa_inode, e3b, bit, pa->pa_len);
 +	atomic_add(pa->pa_len, &EXT3_SB(sb)->s_mb_discarded);
 +
