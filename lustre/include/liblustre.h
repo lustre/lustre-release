@@ -95,8 +95,11 @@ typedef unsigned short umode_t;
 #ifndef smp_processor_id
 #define smp_processor_id() 0
 #endif
-#ifndef smp_num_cpus
-#define smp_num_cpus 1
+#ifndef num_online_cpus
+#define num_online_cpus() 1
+#endif
+#ifndef num_possible_cpus
+#define num_possible_cpus() 1
 #endif
 
 /* always adopt 2.5 definitions */

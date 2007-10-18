@@ -85,10 +85,11 @@
  * considered full when less than ?_MAXREQSIZE is left in them.
  */
 
-#define LDLM_THREADS_AUTO_MIN min((int)(smp_num_cpus * smp_num_cpus * 2), 8)
+#define LDLM_THREADS_AUTO_MIN                                                 \
+        min((int)(num_online_cpus() * num_online_cpus() * 2), 8)
 #define LDLM_THREADS_AUTO_MAX (LDLM_THREADS_AUTO_MIN * 16)
 #define LDLM_BL_THREADS  LDLM_THREADS_AUTO_MIN
-#define LDLM_NBUFS      (64 * smp_num_cpus)
+#define LDLM_NBUFS      (64 * num_online_cpus())
 #define LDLM_BUFSIZE    (8 * 1024)
 #define LDLM_MAXREQSIZE (5 * 1024)
 #define LDLM_MAXREPSIZE (1024)
@@ -97,7 +98,7 @@
 #define MDS_THREADS_MIN 2
 #define MDS_THREADS_MAX 512
 #define MDS_THREADS_MIN_READPAGE 2
-#define MDS_NBUFS       (64 * smp_num_cpus)
+#define MDS_NBUFS       (64 * num_online_cpus())
 #define MDS_BUFSIZE     (8 * 1024)
 /* Assume file name length = FNAME_MAX = 256 (true for ext3).
  *        path name length = PATH_MAX = 4096
@@ -121,7 +122,7 @@
 
 #define MGS_THREADS_AUTO_MIN 2
 #define MGS_THREADS_AUTO_MAX 32
-#define MGS_NBUFS       (64 * smp_num_cpus)
+#define MGS_NBUFS       (64 * num_online_cpus())
 #define MGS_BUFSIZE     (8 * 1024)
 #define MGS_MAXREQSIZE  (8 * 1024)
 #define MGS_MAXREPSIZE  (9 * 1024)
@@ -129,7 +130,7 @@
 /* Absolute limits */
 #define OSS_THREADS_MIN 2
 #define OSS_THREADS_MAX 512
-#define OST_NBUFS       (64 * smp_num_cpus)
+#define OST_NBUFS       (64 * num_online_cpus())
 #define OST_BUFSIZE     (8 * 1024)
 /* OST_MAXREQSIZE ~= 4768 bytes =
  * lustre_msg + obdo + 16 * obd_ioobj + 256 * niobuf_remote
