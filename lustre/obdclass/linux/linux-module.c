@@ -222,7 +222,7 @@ int obd_proc_read_version(char *page, char **start, off_t off, int count,
                           int *eof, void *data)
 {
         *eof = 1;
-#ifdef LUSTRE_KERNEL_VERSION
+#ifdef HAVE_VFS_INTENT_PATCHES
         return snprintf(page, count, "lustre: %s\nkernel: %u\nbuild:  %s\n",
                         LUSTRE_VERSION_STRING, LUSTRE_KERNEL_VERSION,
                         BUILD_VERSION);
