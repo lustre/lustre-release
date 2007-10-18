@@ -92,6 +92,24 @@ void mds_pack_inode2body(struct mds_body *b, struct inode *inode)
         b->suppgid = -1;
 }
 
+static inline unsigned int attr_unpack(__u64 sa_valid) {
+        return (sa_valid & MDS_ATTR_MODE ? ATTR_MODE : 0) | \
+               (sa_valid & MDS_ATTR_UID  ? ATTR_UID : 0) | \
+               (sa_valid & MDS_ATTR_GID ? ATTR_GID : 0) | \
+               (sa_valid & MDS_ATTR_SIZE ? ATTR_SIZE : 0) | \
+               (sa_valid & MDS_ATTR_ATIME ? ATTR_ATIME : 0) | \
+               (sa_valid & MDS_ATTR_MTIME ? ATTR_MTIME : 0) | \
+               (sa_valid & MDS_ATTR_CTIME ? ATTR_CTIME : 0) | \
+               (sa_valid & MDS_ATTR_ATIME_SET ? ATTR_ATIME_SET : 0) | \
+               (sa_valid & MDS_ATTR_MTIME_SET ? ATTR_MTIME_SET : 0) | \
+               (sa_valid & MDS_ATTR_FORCE ? ATTR_FORCE : 0) | \
+               (sa_valid & MDS_ATTR_ATTR_FLAG ? ATTR_ATTR_FLAG : 0) | \
+               (sa_valid & MDS_ATTR_KILL_SUID ? ATTR_KILL_SUID : 0) | \
+               (sa_valid & MDS_ATTR_KILL_SGID ? ATTR_KILL_SGID : 0) | \
+               (sa_valid & MDS_ATTR_CTIME_SET ? ATTR_CTIME_SET : 0) | \
+               (sa_valid & MDS_ATTR_FROM_OPEN ? ATTR_FROM_OPEN : 0);
+}
+
 /* unpacking */
 static int mds_setattr_unpack(struct ptlrpc_request *req, int offset,
                               struct mds_update_record *r)
@@ -111,7 +129,7 @@ static int mds_setattr_unpack(struct ptlrpc_request *req, int offset,
         r->ur_uc.luc_suppgid1 = rec->sa_suppgid;
         r->ur_uc.luc_suppgid2 = -1;
         r->ur_fid1 = &rec->sa_fid;
-        attr->ia_valid = rec->sa_valid;
+        attr->ia_valid = attr_unpack(rec->sa_valid);
         attr->ia_mode = rec->sa_mode;
         attr->ia_uid = rec->sa_uid;
         attr->ia_gid = rec->sa_gid;

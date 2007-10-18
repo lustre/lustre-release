@@ -502,6 +502,21 @@ check_mds_rec_setattr(void)
         CHECK_MEMBER(mds_rec_setattr, sa_uid);
         CHECK_MEMBER(mds_rec_setattr, sa_gid);
         CHECK_MEMBER(mds_rec_setattr, sa_attr_flags);
+        CHECK_CDEFINE(MDS_ATTR_MODE);
+        CHECK_CDEFINE(MDS_ATTR_UID);
+        CHECK_CDEFINE(MDS_ATTR_GID);
+        CHECK_CDEFINE(MDS_ATTR_SIZE);
+        CHECK_CDEFINE(MDS_ATTR_ATIME);
+        CHECK_CDEFINE(MDS_ATTR_MTIME);
+        CHECK_CDEFINE(MDS_ATTR_CTIME);
+        CHECK_CDEFINE(MDS_ATTR_ATIME_SET);
+        CHECK_CDEFINE(MDS_ATTR_MTIME_SET);
+        CHECK_CDEFINE(MDS_ATTR_FORCE);
+        CHECK_CDEFINE(MDS_ATTR_ATTR_FLAG);
+        CHECK_CDEFINE(MDS_ATTR_KILL_SUID);
+        CHECK_CDEFINE(MDS_ATTR_KILL_SGID);
+        CHECK_CDEFINE(MDS_ATTR_CTIME_SET);
+        CHECK_CDEFINE(MDS_ATTR_FROM_OPEN);
 }
 
 static void

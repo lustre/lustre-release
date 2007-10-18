@@ -175,6 +175,24 @@ void mdc_open_pack(struct ptlrpc_request *req, int offset,
         }
 }
 
+static inline __u64 attr_pack(unsigned int ia_valid) {
+        return (ia_valid & ATTR_MODE ? MDS_ATTR_MODE : 0) | \
+               (ia_valid & ATTR_UID  ? MDS_ATTR_UID : 0) | \
+               (ia_valid & ATTR_GID ? MDS_ATTR_GID : 0) | \
+               (ia_valid & ATTR_SIZE ? MDS_ATTR_SIZE : 0) | \
+               (ia_valid & ATTR_ATIME ? MDS_ATTR_ATIME : 0) | \
+               (ia_valid & ATTR_MTIME ? MDS_ATTR_MTIME : 0) | \
+               (ia_valid & ATTR_CTIME ? MDS_ATTR_CTIME : 0) | \
+               (ia_valid & ATTR_ATIME_SET ? MDS_ATTR_ATIME_SET : 0) | \
+               (ia_valid & ATTR_MTIME_SET ? MDS_ATTR_MTIME_SET : 0) | \
+               (ia_valid & ATTR_FORCE ? MDS_ATTR_FORCE : 0) | \
+               (ia_valid & ATTR_ATTR_FLAG ? MDS_ATTR_ATTR_FLAG : 0) | \
+               (ia_valid & ATTR_KILL_SUID ? MDS_ATTR_KILL_SUID : 0) | \
+               (ia_valid & ATTR_KILL_SGID ? MDS_ATTR_KILL_SGID : 0) | \
+               (ia_valid & ATTR_CTIME_SET ? MDS_ATTR_CTIME_SET : 0) | \
+               (ia_valid & ATTR_FROM_OPEN ? MDS_ATTR_FROM_OPEN : 0);
+}
+
 void mdc_setattr_pack(struct ptlrpc_request *req, int offset,
                       struct mdc_op_data *data, struct iattr *iattr, void *ea,
                       int ealen, void *ea2, int ea2len)
@@ -189,7 +207,7 @@ void mdc_setattr_pack(struct ptlrpc_request *req, int offset,
         rec->sa_suppgid = -1;
 
         if (iattr) {
-                rec->sa_valid = iattr->ia_valid;
+                rec->sa_valid = attr_pack(iattr->ia_valid);
                 rec->sa_mode = iattr->ia_mode;
                 rec->sa_uid = iattr->ia_uid;
                 rec->sa_gid = iattr->ia_gid;

@@ -814,7 +814,7 @@ struct mds_rec_setattr {
         __u32           sa_suppgid;
         __u32           sa_mode;
         struct ll_fid   sa_fid;
-        __u64           sa_valid;
+        __u64           sa_valid; /* MDS_ATTR_* attributes */
         __u64           sa_size;
         __u64           sa_mtime;
         __u64           sa_atime;
@@ -825,10 +825,27 @@ struct mds_rec_setattr {
         __u32           sa_padding; /* also fix lustre_swab_mds_rec_setattr */
 };
 
-/* Remove this once we declare it in include/linux/fs.h (v21 kernel patch?) */
-#ifndef ATTR_CTIME_SET
-#define ATTR_CTIME_SET 0x2000
-#endif
+/*
+ * Attribute flags used in mds_rec_setattr::sa_valid.
+ * The kernel's #defines for ATTR_* should not be used over the network
+ * since the client and MDS may run different kernels (see bug 13828)
+ * Therefore, we should only use MDS_ATTR_* attributes for sa_valid.
+ */
+#define MDS_ATTR_MODE       1
+#define MDS_ATTR_UID        2
+#define MDS_ATTR_GID        4
+#define MDS_ATTR_SIZE       8
+#define MDS_ATTR_ATIME      16
+#define MDS_ATTR_MTIME      32
+#define MDS_ATTR_CTIME      64
+#define MDS_ATTR_ATIME_SET  128
+#define MDS_ATTR_MTIME_SET  256
+#define MDS_ATTR_FORCE      512    /* Not a change, but a change it */
+#define MDS_ATTR_ATTR_FLAG  1024
+#define MDS_ATTR_KILL_SUID  2048
+#define MDS_ATTR_KILL_SGID  4096
+#define MDS_ATTR_CTIME_SET  8192
+#define MDS_ATTR_FROM_OPEN  16384  /* called from open path, ie O_TRUNC */
 
 extern void lustre_swab_mds_rec_setattr (struct mds_rec_setattr *sa);
 
