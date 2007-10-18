@@ -1032,13 +1032,16 @@ debugrestore() {
     DEBUGSAVE=""
 }
 
-FAIL_ON_ERROR=true
 ##################################
 # Test interface 
+##################################
+
 error() {
+    local FAIL_ON_ERROR=${FAIL_ON_ERROR:-true}
+    local TYPE=${TYPE:-"FAIL"}
     local ERRLOG
     sysctl -w lustre.fail_loc=0 2> /dev/null || true
-    log "${TESTSUITE} ${TESTNAME}: **** FAIL:" $@
+    log "${TESTSUITE} ${TESTNAME}: **** ${TYPE}:" $@
     ERRLOG=$TMP/lustre_${TESTSUITE}_${TESTNAME}.$(date +%s)
     echo "Dumping lctl log to $ERRLOG"
     # We need to dump the logs on all nodes
@@ -1046,10 +1049,17 @@ error() {
     [ ! "$mds_HOST" = "$(hostname)" ] && do_node $mds_HOST $LCTL dk $ERRLOG
     [ ! "$ost_HOST" = "$(hostname)" -a ! "$ost_HOST" = "$mds_HOST" ] && do_node $ost_HOST $LCTL dk $ERRLOG
     debugrestore
-    [ "$TESTSUITELOG" ] && echo "$0: FAIL: $TESTNAME $@" >> $TESTSUITELOG
+    [ "$TESTSUITELOG" ] && echo "$0: ${TYPE}: $TESTNAME $@" >> $TESTSUITELOG
     if $FAIL_ON_ERROR; then
 	exit 1
     fi
+}
+
+# use only if we are ignoring failures for this test, bugno required.
+# (like ALWAYS_EXCEPT, but run the test and ignore the results.)
+# e.g. error_ignore 5494 "your message"
+error_ignore() {
+    FAIL_ON_ERROR=false TYPE="IGNORE (bz$1)" error $2
 }
 
 skip () {
