@@ -196,9 +196,10 @@ void ll_truncate(struct inode *inode)
                 if (page != NULL) {
                         struct ll_async_page *llap = llap_cast_private(page);
                         if (llap != NULL) {
+                                char *kaddr = kmap_atomic(page, KM_USER0);
                                 llap->llap_checksum =
-                                        crc32_le(0, kmap(page), CFS_PAGE_SIZE);
-                                kunmap(page);
+                                        crc32_le(0, kaddr, CFS_PAGE_SIZE);
+                                kunmap_atomic(kaddr, KM_USER0);
                         }
                         page_cache_release(page);
                 }
@@ -271,10 +272,11 @@ int ll_prepare_write(struct file *file, struct page *page, unsigned from,
         obd_merge_lvb(ll_i2obdexp(inode), lsm, &lvb, 1);
         lov_stripe_unlock(lsm);
         if (lvb.lvb_size <= offset) {
+                char *kaddr = kmap_atomic(page, KM_USER0);
                 LL_CDEBUG_PAGE(D_PAGE, page, "kms "LPU64" <= offset "LPU64"\n",
                                lvb.lvb_size, offset);
-                memset(kmap(page), 0, CFS_PAGE_SIZE);
-                kunmap(page);
+                memset(kaddr, 0, CFS_PAGE_SIZE);
+                kunmap_atomic(kaddr, KM_USER0);
                 GOTO(prepare_done, rc = 0);
         }
 
@@ -641,8 +643,9 @@ static struct ll_async_page *llap_from_page(struct page *page, unsigned origin)
  out:
         if (unlikely(sbi->ll_flags & LL_SBI_LLITE_CHECKSUM)) {
                 __u32 csum = 0;
-                csum = crc32_le(csum, kmap(page), CFS_PAGE_SIZE);
-                kunmap(page);
+                char *kaddr = kmap_atomic(page, KM_USER0);
+                csum = crc32_le(csum, kaddr, CFS_PAGE_SIZE);
+                kunmap_atomic(kaddr, KM_USER0);
                 if (origin == LLAP_ORIGIN_READAHEAD ||
                     origin == LLAP_ORIGIN_READPAGE ||
                     origin == LLAP_ORIGIN_LOCKLESS_IO) {
@@ -713,8 +716,9 @@ static int queue_or_sync_write(struct obd_export *exp, struct inode *inode,
                      llap->llap_checksum != 0)) {
                 __u32 csum = 0;
                 struct page *page = llap->llap_page;
-                csum = crc32_le(csum, kmap(page), CFS_PAGE_SIZE);
-                kunmap(page);
+                char *kaddr = kmap_atomic(page, KM_USER0);
+                csum = crc32_le(csum, kaddr, CFS_PAGE_SIZE);
+                kunmap_atomic(kaddr, KM_USER0);
                 if (llap->llap_checksum == csum) {
                         CDEBUG(D_PAGE, "page %p cksum %x confirmed\n",
                                page, csum);
