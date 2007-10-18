@@ -4670,6 +4670,7 @@ test_124b() {
 run_test 124b "lru resize (performance test) ======================="
 
 test_125() { # 13358
+	[ -z "$(grep acl $LPROC/mdc/*-mdc-*/connect_flags)" ] && skip "must have acl enabled" && return
 	mkdir -p $DIR/d125 || error "mkdir failed"
 	$SETSTRIPE $DIR/d125 65536 -1 -1 || error "setstripe failed"
 	setfacl -R -m u:bin:rwx $DIR/d125 || error "setfacl $DIR/d125 failed"
