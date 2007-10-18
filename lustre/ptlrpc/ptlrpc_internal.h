@@ -35,6 +35,7 @@ struct obd_import;
 struct ldlm_res_id;
 struct ptlrpc_request_set;
 extern int test_req_buffer_pressure;
+extern cfs_mem_cache_t *ptlrpc_cbdata_slab;
 
 void ptlrpc_request_handle_notconn(struct ptlrpc_request *);
 void lustre_assert_wire_constants(void);

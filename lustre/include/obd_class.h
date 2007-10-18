@@ -923,15 +923,12 @@ static inline int obd_brw_rqset(int cmd, struct obd_export *exp,
 {
         struct ptlrpc_request_set *set = NULL;
         struct obd_info oinfo = { { { 0 } } };
-        atomic_t nob;
         int rc = 0;
         ENTRY;
 
         set =  ptlrpc_prep_set();
         if (set == NULL)
                 RETURN(-ENOMEM);
-        atomic_set(&nob, 0);
-        set->set_countp = &nob;
 
         oinfo.oi_oa = oa;
         oinfo.oi_md = lsm;
@@ -940,8 +937,6 @@ static inline int obd_brw_rqset(int cmd, struct obd_export *exp,
                 rc = ptlrpc_set_wait(set);
                 if (rc)
                         CERROR("error from callback: rc = %d\n", rc);
-                else
-                        rc = atomic_read(&nob);
         } else {
                 CDEBUG(rc == -ENOSPC ? D_INODE : D_ERROR,
                        "error from obd_brw_async: rc = %d\n", rc);

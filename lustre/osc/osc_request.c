@@ -1364,8 +1364,6 @@ static int brw_interpret(struct ptlrpc_request *request, void *data, int rc)
                 if (rc == 0)
                         RETURN(0);
         }
-        if ((rc >= 0) && request->rq_set && request->rq_set->set_countp)
-                atomic_add(nob, (atomic_t *)request->rq_set->set_countp);
         client_obd_list_lock(&aa->aa_cli->cl_loi_list_lock);
         if (lustre_msg_get_opc(request->rq_reqmsg) == OST_WRITE)
                 aa->aa_cli->cl_w_in_flight--;

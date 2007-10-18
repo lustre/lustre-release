@@ -4299,8 +4299,18 @@ test_119b() # bug 11737
         sync
         multiop $DIR/$tfile oO_RDONLY:O_DIRECT:r$((2048 * 1024)) || \
                 error "direct read failed"
+        rm -f $DIR/$tfile
 }
 run_test 119b "Sparse directIO read must return actual read amount"
+
+test_119b() # bug 13099
+{
+        BSIZE=1048576
+        directio write $DIR/$tfile 3 1 $BSIZE || error "direct write failed"
+        directio readhole $DIR/$tfile 0 2 $BSIZE || error "reading hole failed"
+        rm -f $DIR/$tfile
+}
+run_test 119b "Testing for direct read hitting hole"
 
 LDLM_POOL_CTL_RECALC=1
 LDLM_POOL_CTL_SHRINK=2
