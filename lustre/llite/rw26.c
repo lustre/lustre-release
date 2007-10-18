@@ -133,14 +133,15 @@ static void ll_free_user_pages(struct page **pages, int npages, int do_dirty)
 
 static ssize_t ll_direct_IO_26_seg(int rw, struct inode *inode,
                                    struct address_space *mapping,
-                                   struct obd_info *oinfo,
-                                   struct ptlrpc_request_set *set,
+                                   struct lov_stripe_md *lsm,
                                    size_t size, loff_t file_offset,
                                    struct page **pages, int page_count)
 {
         struct brw_page *pga;
+        struct obdo oa;
         int i, rc = 0;
         size_t length;
+        loff_t file_offset_orig = file_offset;
         ENTRY;
 
         OBD_ALLOC(pga, sizeof(*pga) * page_count);
@@ -162,11 +163,15 @@ static ssize_t ll_direct_IO_26_seg(int rw, struct inode *inode,
                         POISON_PAGE(pages[i], 0x0d);
         }
 
-        rc = obd_brw_async(rw == WRITE ? OBD_BRW_WRITE : OBD_BRW_READ,
-                           ll_i2obdexp(inode), oinfo, page_count,
-                           pga, NULL, set);
-        if (rc == 0)
-                rc = size;
+        ll_inode_fill_obdo(inode, rw, &oa);
+
+        rc = obd_brw_rqset(rw == WRITE ? OBD_BRW_WRITE : OBD_BRW_READ,
+                           ll_i2obdexp(inode), &oa, lsm, page_count, pga, NULL);
+        if ((rc > 0) && (rw == WRITE)) {
+                lov_stripe_lock(lsm);
+                obd_adjust_kms(ll_i2obdexp(inode), lsm, file_offset_orig + rc, 0);
+                lov_stripe_unlock(lsm);
+        }
 
         OBD_FREE(pga, sizeof(*pga) * page_count);
         RETURN(rc);
@@ -186,10 +191,6 @@ static ssize_t ll_direct_IO_26(int rw, struct kiocb *iocb,
         struct inode *inode = file->f_mapping->host;
         ssize_t count = iov_length(iov, nr_segs), tot_bytes = 0;
         struct ll_inode_info *lli = ll_i2info(inode);
-        struct lov_stripe_md *lsm = lli->lli_smd;
-        struct ptlrpc_request_set *set;
-        struct obd_info oinfo;
-        struct obdo oa;
         unsigned long seg;
         size_t size = MAX_DIO_SIZE;
         ENTRY;
@@ -219,29 +220,9 @@ static ssize_t ll_direct_IO_26(int rw, struct kiocb *iocb,
                         RETURN(-EINVAL);
         }
 
-        set = ptlrpc_prep_set();
-        if (set == NULL)
-                RETURN(-ENOMEM);
-
-        ll_inode_fill_obdo(inode, rw, &oa);
-        oinfo.oi_oa = &oa;
-        oinfo.oi_md = lsm;
-
-        /* need locking between buffered and direct access. and race with 
-         *size changing by concurrent truncates and writes. */
-        if (rw == READ)
-                LOCK_INODE_MUTEX(inode);
-
         for (seg = 0; seg < nr_segs; seg++) {
                 size_t iov_left = iov[seg].iov_len;
                 unsigned long user_addr = (unsigned long)iov[seg].iov_base;
-
-                if (rw == READ) {
-                        if (file_offset >= inode->i_size)
-                                break;
-                        if (file_offset + iov_left > inode->i_size)
-                                iov_left = inode->i_size - file_offset;
-                }
 
                 while (iov_left > 0) {
                         struct page **pages;
@@ -255,7 +236,7 @@ static ssize_t ll_direct_IO_26(int rw, struct kiocb *iocb,
                         if (page_count > 0) {
                                 result = ll_direct_IO_26_seg(rw, inode,
                                                              file->f_mapping,
-                                                             &oinfo, set,
+                                                             lli->lli_smd,
                                                              min(size,iov_left),
                                                              file_offset, pages,
                                                              page_count);
@@ -280,8 +261,8 @@ static ssize_t ll_direct_IO_26(int rw, struct kiocb *iocb,
                                         continue;
                                 }
                                 if (tot_bytes > 0)
-                                        GOTO(wait_io, tot_bytes);
-                                GOTO(out, tot_bytes = page_count < 0 ? page_count : result);
+                                        RETURN(tot_bytes);
+                                RETURN(page_count < 0 ? page_count : result);
                         }
 
                         tot_bytes += result;
@@ -290,24 +271,6 @@ static ssize_t ll_direct_IO_26(int rw, struct kiocb *iocb,
                         user_addr += result;
                 }
         }
-
-        if (tot_bytes > 0) {
-                int rc;
-        wait_io:
-                rc = ptlrpc_set_wait(set);
-                if (rc)
-                        GOTO(out, tot_bytes = rc);
-                if (rw == WRITE) {
-                        lov_stripe_lock(lsm);
-                        obd_adjust_kms(ll_i2obdexp(inode), lsm, file_offset, 0);
-                        lov_stripe_unlock(lsm);
-                }
-        }
-out:
-        if (rw == READ)
-                UNLOCK_INODE_MUTEX(inode);
-
-        ptlrpc_set_destroy(set);
         RETURN(tot_bytes);
 }
 
