@@ -1354,7 +1354,6 @@ static int brw_interpret(struct ptlrpc_request *request, void *data, int rc)
 {
         struct osc_brw_async_args *aa = data;
         int                        i;
-        int                        nob = rc;
         ENTRY;
 
         rc = osc_brw_fini_request(request, rc);
