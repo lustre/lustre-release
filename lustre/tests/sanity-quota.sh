@@ -577,7 +577,7 @@ run_test 6 "Block quota acquire & release ========="
 # quota recovery (block quota only by now)
 test_7()
 {
-	remote_mds && skip "remote mds"
+	remote_mds && skip "remote mds" && return 0
 
 	LIMIT=$(( $BUNIT_SZ * $(($OSTCOUNT + 1)) * 10)) # 10 bunits each sever
 	TESTFILE="$TSTDIR/quota_tst70"
