@@ -4303,14 +4303,14 @@ test_119b() # bug 11737
 }
 run_test 119b "Sparse directIO read must return actual read amount"
 
-test_119b() # bug 13099
+test_119c() # bug 13099
 {
         BSIZE=1048576
         directio write $DIR/$tfile 3 1 $BSIZE || error "direct write failed"
         directio readhole $DIR/$tfile 0 2 $BSIZE || error "reading hole failed"
         rm -f $DIR/$tfile
 }
-run_test 119b "Testing for direct read hitting hole"
+run_test 119c "Testing for direct read hitting hole"
 
 LDLM_POOL_CTL_RECALC=1
 LDLM_POOL_CTL_SHRINK=2
