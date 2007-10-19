@@ -4602,7 +4602,7 @@ test_124a() {
                skip "no lru resize on server" && return 0
         cancel_lru_locks mdc
         lru_resize_enable
-        NSDIR=`find $LPROC/ldlm/namespaces | grep -i mdc | head -1`
+        NSDIR=`find $LPROC/ldlm/namespaces | grep mdc | head -1`
 
         # we want to test main pool functionality, that is cancel based on SLV
         # this is why shrinkers are disabled
@@ -4629,7 +4629,7 @@ test_124a() {
 
         # we want to sleep 30s to not make test too long
         SLEEP=30
-        SLEEP_ADD=10
+        SLEEP_ADD=2
 
         # we know that lru resize allows one client to hold $LIMIT locks for 10h
         MAX_HRS=10
@@ -4637,15 +4637,16 @@ test_124a() {
         # get the pool limit
         LIMIT=`cat $NSDIR/pool/limit`
 
-        # calculate lock volume factor taking into account sleep and data set
-        # use $LRU_SIZE_B here to take into account real number of locks created
+        # calculate lock volume factor taking into account data set size and the
+        # rule that number of locks will be getting smaller durring sleep interval
+        # and we need to additionally enforce LVF to take this into account.
+        # Use $LRU_SIZE_B here to take into account real number of locks created
         # in the case of CMD, LRU_SIZE_B != $NR in most of cases
-        LVF=$(($LIMIT * $MAX_HRS * 60 * 60 / $LRU_SIZE_B / $SLEEP))
-
+        LVF=$(($LRU_SIZE_B * $MAX_HRS * 60 * 60))
         log "make client drop locks $LVF times faster so that ${SLEEP}s is enough to cancel $LRU_SIZE_B lock(s)"
         OLD_LVF=`cat $NSDIR/pool/lock_volume_factor`
         echo "$LVF" > $NSDIR/pool/lock_volume_factor
-        log "sleep for "$((SLEEP+SLEEP_ADD))"s"
+        log "sleep for $((SLEEP+SLEEP_ADD))s"
         sleep $((SLEEP+SLEEP_ADD))
         echo "$OLD_LVF" > $NSDIR/pool/lock_volume_factor
         LRU_SIZE_A=`cat $NSDIR/lru_size`
