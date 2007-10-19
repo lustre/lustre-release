@@ -35,8 +35,8 @@ int obd_alloc_fail(const void *ptr, const char *name, const char *type,
 {
         if (ptr == NULL ||
             (ll_rand() & OBD_ALLOC_FAIL_MASK) < obd_alloc_fail_rate) {
-                CERROR("%s%salloc of %s (%u bytes) failed at %s:%d\n",
-                       ptr ? "force " :"", type, name, (unsigned int)size, file,
+                CERROR("%s%salloc of %s ("LPU64" bytes) failed at %s:%d\n",
+                       ptr ? "force " :"", type, name, (__u64)size, file,
                        line);
                 CERROR("%d total bytes allocated by Lustre, %d by Portals\n",
                        atomic_read(&obd_memory), atomic_read(&libcfs_kmemory));

@@ -459,7 +459,7 @@ Index: linux-2.6.5-7.201/fs/jbd/journal.c
 +		return -EIO;
 +	size = sizeof(struct transaction_stats_s) * journal->j_history_max;
 +	s->stats = kmalloc(size, GFP_KERNEL);
-+	if (s == NULL) {
++	if (s->stats == NULL) {
 +		kfree(s);
 +		return -EIO;
 +	}
@@ -578,7 +578,7 @@ Index: linux-2.6.5-7.201/fs/jbd/journal.c
 +		return -EIO;
 +	size = sizeof(struct transaction_stats_s);
 +	s->stats = kmalloc(size, GFP_KERNEL);
-+	if (s == NULL) {
++	if (s->stats == NULL) {
 +		kfree(s);
 +		return -EIO;
 +	}

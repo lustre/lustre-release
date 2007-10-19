@@ -136,10 +136,20 @@ struct lprocfs_percpu {
         struct lprocfs_counter lp_cntr[0];
 };
 
+#define LPROCFS_GET_NUM_CPU 0x0001
+#define LPROCFS_GET_SMP_ID  0x0002
+
+enum lprocfs_stats_flags {
+        LPROCFS_STATS_FLAG_NOPERCPU = 0x0001, /* stats have no percpu
+                                               * area and need locking */
+};
 
 struct lprocfs_stats {
         unsigned int           ls_num;     /* # of counters */
         unsigned int           ls_percpu_size;
+        int                    ls_flags; /* See LPROCFS_STATS_FLAG_* */
+        spinlock_t             ls_lock;  /* Lock used only when there are
+                                          * no percpu stats areas */
         struct lprocfs_percpu *ls_percpu[0];
 };
 
@@ -170,6 +180,31 @@ static inline void s2dhms(struct dhms *ts, time_t secs)
 
 #ifdef LPROCFS
 
+static inline int lprocfs_stats_lock(struct lprocfs_stats *stats, int type)
+{
+        int rc = 0;
+
+        if (stats->ls_flags & LPROCFS_STATS_FLAG_NOPERCPU) {
+                if (type & LPROCFS_GET_NUM_CPU)
+                        rc = 1;
+                if (type & LPROCFS_GET_SMP_ID)
+                        rc = 0;
+                spin_lock(&stats->ls_lock);
+        } else {
+                if (type & LPROCFS_GET_NUM_CPU)
+                        rc = num_possible_cpus();
+                if (type & LPROCFS_GET_SMP_ID)
+                        rc = smp_processor_id();
+        }
+        return rc;
+}
+
+static inline void lprocfs_stats_unlock(struct lprocfs_stats *stats)
+{
+        if (stats->ls_flags & LPROCFS_STATS_FLAG_NOPERCPU)
+                spin_unlock(&stats->ls_lock);
+}
+
 /* Two optimized LPROCFS counter increment functions are provided:
  *     lprocfs_counter_incr(cntr, value) - optimized for by-one counters
  *     lprocfs_counter_add(cntr) - use for multi-valued counters
@@ -181,10 +216,16 @@ static inline void lprocfs_counter_add(struct lprocfs_stats *stats, int idx,
                                        long amount)
 {
         struct lprocfs_counter *percpu_cntr;
+        int smp_id;
 
         if (!stats)
                 return;
-        percpu_cntr = &(stats->ls_percpu[smp_processor_id()]->lp_cntr[idx]);
+
+        /* With per-client stats, statistics are allocated only for
+         * single CPU area, so the smp_id should be 0 always. */
+        smp_id = lprocfs_stats_lock(stats, LPROCFS_GET_SMP_ID);
+
+        percpu_cntr = &(stats->ls_percpu[smp_id]->lp_cntr[idx]);
         atomic_inc(&percpu_cntr->lc_cntl.la_entry);
         percpu_cntr->lc_count++;
 
@@ -198,21 +239,29 @@ static inline void lprocfs_counter_add(struct lprocfs_stats *stats, int idx,
                         percpu_cntr->lc_max = amount;
         }
         atomic_inc(&percpu_cntr->lc_cntl.la_exit);
+        lprocfs_stats_unlock(stats);
 }
 
 static inline void lprocfs_counter_incr(struct lprocfs_stats *stats, int idx)
 {
         struct lprocfs_counter *percpu_cntr;
+        int smp_id;
 
         if (!stats)
                 return;
-        percpu_cntr = &(stats->ls_percpu[smp_processor_id()]->lp_cntr[idx]);
+
+        smp_id = lprocfs_stats_lock(stats, LPROCFS_GET_SMP_ID);
+
+        percpu_cntr = &(stats->ls_percpu[smp_id]->lp_cntr[idx]);
         atomic_inc(&percpu_cntr->lc_cntl.la_entry);
         percpu_cntr->lc_count++;
         atomic_inc(&percpu_cntr->lc_cntl.la_exit);
+
+        lprocfs_stats_unlock(stats);
 }
 
-extern struct lprocfs_stats *lprocfs_alloc_stats(unsigned int num);
+extern struct lprocfs_stats *lprocfs_alloc_stats(unsigned int num,
+                                                 enum lprocfs_stats_flags flags);
 extern void lprocfs_clear_stats(struct lprocfs_stats *stats);
 extern void lprocfs_free_stats(struct lprocfs_stats **stats);
 extern void lprocfs_init_ops_stats(int num_private_stats, 
@@ -410,6 +459,10 @@ struct file_operations name##_fops = {                                     \
 #define LPROC_SEQ_FOPS_RO(name)         __LPROC_SEQ_FOPS(name, NULL)
 #define LPROC_SEQ_FOPS(name)            __LPROC_SEQ_FOPS(name, name##_seq_write)
 
+/* lproc_ptlrpc.c */
+struct ptlrpc_request;
+extern void target_print_req(void *seq_file, struct ptlrpc_request *req);
+
 #else
 /* LPROCFS is not defined */
 static inline void lprocfs_counter_add(struct lprocfs_stats *stats,
@@ -421,7 +474,8 @@ static inline void lprocfs_counter_init(struct lprocfs_stats *stats,
                                         const char *name, const char *units)
 { return; }
 
-static inline struct lprocfs_stats* lprocfs_alloc_stats(unsigned int num)
+static inline struct lprocfs_stats* lprocfs_alloc_stats(unsigned int num,
+                                                        int client_stat)
 { return NULL; }
 static inline void lprocfs_clear_stats(struct lprocfs_stats *stats)
 { return; }
@@ -541,6 +595,9 @@ int lprocfs_counter_write(struct file *file, const char *buffer,
 #define LPROCFS_ENTRY_AND_CHECK(dp)
 #define LPROC_SEQ_FOPS_RO(name)
 #define LPROC_SEQ_FOPS(name)
+
+/* lproc_ptlrpc.c */
+#define target_print_req NULL
 
 #endif /* LPROCFS */
 

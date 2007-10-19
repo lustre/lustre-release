@@ -198,7 +198,7 @@ typedef struct kqswnal_tx
         struct kqswnal_tx *ktx_alloclist;       /* stack in kqn_txds */
         unsigned int      ktx_state:7;          /* What I'm doing */
         unsigned int      ktx_firsttmpfrag:1;   /* ktx_frags[0] is in my ebuffer ? 0 : 1 */
-        uint32_t          ktx_basepage;         /* page offset in reserved elan tx vaddrs for mapping pages */
+        __u32             ktx_basepage;         /* page offset in reserved elan tx vaddrs for mapping pages */
         int               ktx_npages;           /* pages reserved for mapping messages */
         int               ktx_nmappedpages;     /* # pages mapped for current message */
         int               ktx_port;             /* destination ep port */

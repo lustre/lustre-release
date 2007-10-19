@@ -40,7 +40,8 @@ run_test 3 "stat: drop req, drop rep"
 
 SAMPLE_NAME=recovery-small.junk
 SAMPLE_FILE=$TMP/$SAMPLE_NAME
-dd if=/dev/urandom of=$SAMPLE_FILE bs=1K count=4
+# make this big, else test 9 doesn't wait for bulk -- bz 5595
+dd if=/dev/urandom of=$SAMPLE_FILE bs=1M count=4
 
 test_4() {
     do_facet client "cp $SAMPLE_FILE $MOUNT/$SAMPLE_NAME" || return 1
@@ -195,6 +196,10 @@ test_16() {
 run_test 16 "timeout bulk put, don't evict client (2732)"
 
 test_17() {
+    # With adaptive timeouts, bulk_get won't expire until adaptive_timeout_max
+    OST_AT_MAX=$(do_facet ost1 sysctl -n lustre.adaptive_max)
+    do_facet ost1 sysctl -w lustre.adaptive_max=$TIMEOUT
+
     # OBD_FAIL_PTLRPC_BULK_GET_NET 0x0503 | OBD_FAIL_ONCE
     # OST bulk will time out here, client retries
     do_facet ost1 sysctl -w lustre.fail_loc=0x80000503
@@ -202,12 +207,16 @@ test_17() {
     do_facet client cp $SAMPLE_FILE $DIR/$tfile
     sync
 
-    sleep $TIMEOUT
+    # with AT, client will wait adaptive_max*factor+net_latency before
+    # expiring the req, hopefully timeout*2 is enough
+    sleep $(($TIMEOUT*2))
+
     do_facet ost1 sysctl -w lustre.fail_loc=0
     do_facet client "df $DIR"
     # expect cmp to succeed, client resent bulk
     do_facet client "cmp $SAMPLE_FILE $DIR/$tfile" || return 3
     do_facet client "rm $DIR/$tfile" || return 4
+    do_facet ost1 sysctl -w lustre.adaptive_max=$OST_AT_MAX
     return 0
 }
 run_test 17 "timeout bulk get, don't evict client (2732)"
@@ -558,7 +567,7 @@ test_24() {	# bug 2248 - eviction fails writeback but app doesn't see it
 	rc=$?
 	sysctl -w lustre.fail_loc=0x0
 	client_reconnect
-	[ $rc -eq 0 ] && error "multiop didn't fail fsync: rc $rc" || true
+	[ $rc -eq 0 ] && error_ignore 5494 "multiop didn't fail fsync: rc $rc" || true
 }
 run_test 24 "fsync error (should return error)"
 
@@ -754,7 +763,7 @@ run_test 52 "failover OST under load"
 # test of open reconstruct
 test_53() {
 	touch $DIR/$tfile
-	drop_ldlm_reply "./openfile -f O_RDWR:O_CREAT -m 0755 $DIR/$tfile" ||\
+	drop_ldlm_reply "openfile -f O_RDWR:O_CREAT -m 0755 $DIR/$tfile" ||\
 		return 2
 }
 run_test 53 "touch: drop rep"

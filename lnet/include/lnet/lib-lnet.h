@@ -653,6 +653,11 @@ int lnet_acceptor_timeout(void);
 int lnet_acceptor_port(void);
 #endif
 
+#ifdef HAVE_LIBPTHREAD
+int lnet_count_acceptor_nis(lnet_ni_t **first_ni);
+int lnet_acceptor_port(void);
+#endif
+
 int lnet_acceptor_start(void);
 void lnet_acceptor_stop(void);
 

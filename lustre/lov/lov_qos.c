@@ -517,8 +517,7 @@ static int alloc_rr(struct lov_obd *lov, int *idx_arr, int *stripe_cnt,
                 /* If we have allocated from all of the OSTs, slowly
                    precess the next start */
                 lov->lov_start_idx %= ost_count;
-                if (stripe_cnt_min > 1 &&
-                    (ost_active_count % stripe_cnt_min != 1))
+                if (*stripe_cnt > 1 && (ost_active_count % (*stripe_cnt) != 1))
                         ++lov->lov_offset_idx;
         }
         down_read(&lov->lov_qos.lq_rw_sem);

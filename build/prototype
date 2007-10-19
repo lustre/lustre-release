@@ -35,5 +35,5 @@ s none usr/bin/lustre_uoss=../../usr/lib/fs/lustre/lustre_uoss
 #f none usr/lib/fs/lustre/lustre_echoserver=../lustre/utils/lustre_echoserver 555 root bin
 #s none usr/bin/lustre_echoserver=../../usr/lib/fs/lustre/lustre_echoserver
 f none usr/lib/fs/lustre/readme.txt=../lustre/utils/uoss.readme.txt 444 root bin
-f none usr/lib/libzpool.so.1=$(DMU_SRC)/usr/src/lib/libzpool/i386/libzpool.so.1  755 root sys
-s none usr/lib/libzpool.so=usr/lib/libzpool.so.1
+f none usr/lib/libzpool.so.1=$(DMU_SRC)/usr/src/lib/libzpool/i386/libzpool.so.1  755 root bin
+s none usr/lib/libzpool.so=libzpool.so.1

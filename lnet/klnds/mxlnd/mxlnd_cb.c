@@ -970,7 +970,7 @@ mxlnd_recv_msg(lnet_msg_t *lntmsg, struct kmx_ctx *rx, u8 msg_type, u64 cookie, 
 {
         int             ret     = 0;
         mx_return_t     mxret   = MX_SUCCESS;
-        uint64_t        mask    = 0xF00FFFFFFFFFFFFFLL;
+        __u64           mask    = 0xF00FFFFFFFFFFFFFLL;
 
         rx->mxc_msg_type = msg_type;
         rx->mxc_lntmsg[0] = lntmsg; /* may be NULL if EAGER */
@@ -1018,7 +1018,7 @@ mxlnd_recv_msg(lnet_msg_t *lntmsg, struct kmx_ctx *rx, u8 msg_type, u64 cookie, 
  */
 mx_unexp_handler_action_t
 mxlnd_unexpected_recv(void *context, mx_endpoint_addr_t source,
-                 uint64_t match_value, uint32_t length, void *data_if_available)
+                 __u64 match_value, __u32 length, void *data_if_available)
 {
         int             ret             = 0;
         struct kmx_ctx  *rx             = NULL;
@@ -1718,7 +1718,7 @@ mxlnd_send(lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg)
         struct kmx_ctx         *rx_data         = NULL;
         struct kmx_conn        *conn            = NULL;
         int                     nob             = 0;
-        uint32_t                length          = 0;
+        __u32                   length          = 0;
         struct kmx_peer         *peer           = NULL;
 
         CDEBUG(D_NET, "sending %d bytes in %d frags to %s\n",

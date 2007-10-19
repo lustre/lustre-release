@@ -54,6 +54,7 @@ init_test_env() {
     export FSYTPE=${FSTYPE:-"ldiskfs"}
     export NAME=${NAME:-local}
     export LPROC=/proc/fs/lustre
+    export DIR2
 
     if [ "$ACCEPTOR_PORT" ]; then
         export PORT_OPT="--port $ACCEPTOR_PORT"
@@ -140,6 +141,7 @@ load_modules() {
     fi
 
     load_module llite/lustre
+    load_module llite/llite_lloop
     rm -f $TMP/ogdb-`hostname`
     OGDB=$TMP
     [ -d /r ] && OGDB="/r/tmp"
@@ -368,6 +370,24 @@ wait_for() {
     facet=$1
     HOST=`facet_active_host $facet`
     wait_for_host $HOST
+}
+
+wait_mds_recovery_done () {
+    local timeout=`do_facet mds cat /proc/sys/lustre/timeout`
+#define OBD_RECOVERY_TIMEOUT (obd_timeout * 5 / 2)
+# as we are in process of changing obd_timeout in different ways
+# let's set MAX longer than that
+    MAX=$(( timeout * 4 ))
+    WAIT=0
+    while [ $WAIT -lt $MAX ]; do
+        STATUS=`do_facet mds grep status /proc/fs/lustre/mds/*-MDT*/recovery_status`
+        echo $STATUS | grep COMPLETE && return 0
+        sleep 5
+        WAIT=$((WAIT + 5))
+        echo "Waiting $(($MAX - $WAIT)) secs for MDS recovery done"
+    done
+    echo "MDS recovery not done in $MAX sec"
+    return 1            
 }
 
 client_df() {
@@ -867,13 +887,16 @@ debugrestore() {
     DEBUGSAVE=""
 }
 
-FAIL_ON_ERROR=true
 ##################################
 # Test interface 
+##################################
+
 error() {
+    local FAIL_ON_ERROR=${FAIL_ON_ERROR:-true}
+    local TYPE=${TYPE:-"FAIL"}
     local ERRLOG
     sysctl -w lustre.fail_loc=0 2> /dev/null || true
-    log "${TESTSUITE} ${TESTNAME}: **** FAIL:" $@
+    log "${TESTSUITE} ${TESTNAME}: **** ${TYPE}:" $@
     ERRLOG=$TMP/lustre_${TESTSUITE}_${TESTNAME}.$(date +%s)
     echo "Dumping lctl log to $ERRLOG"
     # We need to dump the logs on all nodes
@@ -881,10 +904,17 @@ error() {
     [ ! "$mds_HOST" = "$(hostname)" ] && do_node $mds_HOST $LCTL dk $ERRLOG
     [ ! "$ost_HOST" = "$(hostname)" -a ! "$ost_HOST" = "$mds_HOST" ] && do_node $ost_HOST $LCTL dk $ERRLOG
     debugrestore
-    [ "$TESTSUITELOG" ] && echo "$0: FAIL: $TESTNAME $@" >> $TESTSUITELOG
+    [ "$TESTSUITELOG" ] && echo "$0: ${TYPE}: $TESTNAME $@" >> $TESTSUITELOG
     if $FAIL_ON_ERROR; then
 	exit 1
     fi
+}
+
+# use only if we are ignoring failures for this test, bugno required.
+# (like ALWAYS_EXCEPT, but run the test and ignore the results.)
+# e.g. error_ignore 5494 "your message"
+error_ignore() {
+    FAIL_ON_ERROR=false TYPE="IGNORE (bz$1)" error $2
 }
 
 skip () {
@@ -983,7 +1013,7 @@ run_one() {
     testnum=$1
     message=$2
     tfile=f${testnum}
-    tdir=d${base}
+    export tdir=d${base}
 
     BEFORE=`date +%s`
     log "== test $testnum: $message ============ `date +%H:%M:%S` ($BEFORE)"
@@ -996,6 +1026,7 @@ run_one() {
         error "LBUG/LASSERT detected"
     pass "($((`date +%s` - $BEFORE))s)"
     unset TESTNAME
+    unset tdir
     cd $SAVE_PWD
     $CLEANUP
 }
@@ -1074,4 +1105,9 @@ remote_mds ()
 remote_ost ()
 {
     [ $(grep -c obdfilter $LPROC/devices) -eq 0 ]
+}
+
+is_patchless ()
+{
+    grep -q patchless $LPROC/version
 }

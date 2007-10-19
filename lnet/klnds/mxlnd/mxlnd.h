@@ -371,9 +371,9 @@ extern lnet_nid_t mxlnd_nic_id2nid(lnet_ni_t *ni, u64 nic_id);
 extern u64 mxlnd_nid2nic_id(lnet_nid_t nid);
 
 /* in mxlnd_cb.c */
-void mxlnd_eager_recv(void *context, uint64_t match_value, uint32_t length);
+void mxlnd_eager_recv(void *context, __u64 match_value, __u32 length);
 extern mx_unexp_handler_action_t mxlnd_unexpected_recv(void *context,
-                mx_endpoint_addr_t source, uint64_t match_value, uint32_t length, 
+                mx_endpoint_addr_t source, __u64 match_value, __u64 length, 
                 void *data_if_available);
 extern void mxlnd_peer_free(struct kmx_peer *peer);
 extern void mxlnd_conn_free(struct kmx_conn *conn);

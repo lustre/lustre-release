@@ -107,10 +107,16 @@ for NAME in $CONFIGS; do
 	which bonnie++ > /dev/null 2>&1 || BONNIE=no
 	if [ "$BONNIE" != "no" ]; then
 	        title bonnie
-		SPACE=`df -P $MOUNT | tail -n 1 | awk '{ print $4 }'`
+		mkdir -p $MOUNT/d0.bonnie
+		$LFS setstripe -c -1 $MOUNT/d0.bonnie
+		sync
+		MIN=`cat /proc/fs/lustre/osc/*/kbytesavail | sort -n | head -n1`
+		SPACE=$(( OSTCOUNT * MIN ))
 		[ $SPACE -lt $SIZE ] && SIZE=$((SPACE * 3 / 4))
+		log "min OST has ${MIN}kB available, using ${SIZE}kB file size"
 		$DEBUG_OFF
-		bonnie++ -f -r 0 -s $((SIZE / 1024)) -n 10 -u $UID -d $MOUNT
+		BONFILE=$MOUNT/d0.bonnie
+		bonnie++ -f -r 0 -s$((SIZE / 1024)) -n 10 -u$UID -d$BONFILE
 		$DEBUG_ON
 		$CLEANUP
 		$SETUP
@@ -120,12 +126,16 @@ for NAME in $CONFIGS; do
 	which iozone > /dev/null 2>&1 || IOZONE=no
 	if [ "$IOZONE" != "no" ]; then
 	        title iozone
-		SPACE=`df -P $MOUNT | tail -n 1 | awk '{ print $4 }'`
+		mkdir -p $MOUNT/d0.iozone
+		$LFS setstripe -c -1 $MOUNT/d0.iozone
+		sync
+		MIN=`cat /proc/fs/lustre/osc/*/kbytesavail | sort -n | head -n1`
+		SPACE=$(( OSTCOUNT * MIN ))
 		[ $SPACE -lt $SIZE ] && SIZE=$((SPACE * 3 / 4))
+		log "min OST has ${MIN}kB available, using ${SIZE}kB file size"
 		IOZONE_OPTS="-i 0 -i 1 -i 2 -e -+d -r $RSIZE -s $SIZE"
-		IOZFILE="$MOUNT/iozone"
+		IOZFILE="$MOUNT/d0.iozone/iozone"
 		# $SPACE was calculated with all OSTs
-		$LFS setstripe $IOZFILE 0 -1 -1
 		$DEBUG_OFF
 		iozone $IOZONE_OPTS -f $IOZFILE
 		$DEBUG_ON
@@ -153,6 +163,7 @@ for NAME in $CONFIGS; do
 		[ $THREADS -lt $IOZ_THREADS ] && IOZ_THREADS=$THREADS
 		IOZVER=`iozone -v | awk '/Revision:/ {print $3}' | tr -d .`
 		if [ "$IOZ_THREADS" -gt 1 -a "$IOZVER" -ge 3145 ]; then
+			$LFS setstripe -c 1 $MOUNT/d0.iozone
 			$DEBUG_OFF
 			THREAD=1
 			IOZFILE="-F "

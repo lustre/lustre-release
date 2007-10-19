@@ -59,7 +59,8 @@ static int mds_export_stats_init(struct obd_device *obd, struct obd_export *exp)
                 return rc;
         num_stats = (sizeof(*obd->obd_type->typ_ops) / sizeof(void *)) +
                      LPROC_MDS_LAST - 1;
-        exp->exp_ops_stats = lprocfs_alloc_stats(num_stats);
+        exp->exp_ops_stats = lprocfs_alloc_stats(num_stats,
+                                                 LPROCFS_STATS_FLAG_NOPERCPU);
         if (exp->exp_ops_stats == NULL)
                 return -ENOMEM;
         lprocfs_init_ops_stats(LPROC_MDS_LAST, exp->exp_ops_stats);
@@ -256,7 +257,7 @@ static int mds_init_server_data(struct obd_device *obd, struct file *file)
         struct lr_server_data *lsd;
         struct mds_client_data *mcd = NULL;
         loff_t off = 0;
-        unsigned long last_rcvd_size = file->f_dentry->d_inode->i_size;
+        unsigned long last_rcvd_size = i_size_read(file->f_dentry->d_inode);
         __u64 mount_count;
         int cl_idx, rc = 0;
         ENTRY;
@@ -445,10 +446,8 @@ static int mds_init_server_data(struct obd_device *obd, struct file *file)
                       obd->obd_recoverable_clients, mds->mds_last_transno);
                 obd->obd_next_recovery_transno = obd->obd_last_committed + 1;
                 obd->obd_recovering = 1;
-                obd->obd_recovery_start = CURRENT_SECONDS;
-                obd->obd_recovery_timeout = OBD_RECOVERY_TIMEOUT;
-                obd->obd_recovery_end = obd->obd_recovery_start +
-                        obd->obd_recovery_timeout;
+                obd->obd_recovery_start = 0;
+                obd->obd_recovery_end = 0;
         }
 
         mds->mds_mount_count = mount_count + 1;

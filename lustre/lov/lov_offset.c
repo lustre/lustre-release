@@ -119,7 +119,7 @@ int lov_stripe_offset(struct lov_stripe_md *lsm, obd_off lov_off,
 {
         unsigned long ssize  = lsm->lsm_stripe_size;
         unsigned long swidth, stripe_off, this_stripe;
-        uint64_t l_off, s_off;
+        __u64 l_off, s_off;
         int magic = lsm->lsm_magic;
         int ret = 0;
 

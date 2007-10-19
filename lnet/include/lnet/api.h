@@ -99,4 +99,12 @@ int LNetGet(lnet_nid_t        self,
 
 int LNetSetAsync(lnet_process_id_t id, int nasync);
 
+#ifndef __KERNEL__
+/* Temporary workaround to allow uOSS and test programs force server
+ * mode in userspace. See comments near ln_server_mode_flag in
+ * lnet/lib-types.h */
+
+void lnet_server_mode();
+#endif        
+
 #endif

@@ -29,10 +29,10 @@
 #include <sys/stat.h>
 #include <sys/queue.h>
 
+#include <sysio.h>
 #ifdef HAVE_XTIO_H
 #include <xtio.h>
 #endif
-#include <sysio.h>
 #include <fs.h>
 #include <mount.h>
 #include <inode.h>
@@ -44,6 +44,7 @@
  * of 'LIST_HEAD'. undef it to suppress warnings
  */
 #undef LIST_HEAD
+#include <liblustre.h>
 #include <lnet/lnetctl.h>     /* needed for parse_dump */
 
 #include "lutil.h"

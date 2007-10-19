@@ -335,6 +335,10 @@ typedef struct lnet_lnd
 
         /* ensure non-RDMA messages can be received outside liblustre */
         int (*lnd_setasync)(struct lnet_ni *ni, lnet_process_id_t id, int nasync);
+
+#ifdef HAVE_LIBPTHREAD
+        int (*lnd_accept)(struct lnet_ni *ni, int sock);
+#endif
 #endif
 } lnd_t;
 
@@ -547,6 +551,15 @@ typedef struct
         struct list_head   ln_active_eqs;
 
         lnet_counters_t    ln_counters;
+
+#ifndef __KERNEL__
+        /* Temporary workaround to allow uOSS and test programs force
+         * server mode in userspace. The only place where we use it is
+         * lnet_prepare(). The only way to turn this flag on is to
+         * call lnet_server_mode() */
+
+        int                ln_server_mode_flag;
+#endif        
 } lnet_t;
 
 #endif

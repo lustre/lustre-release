@@ -48,6 +48,10 @@
 #include <stdlib.h>
 #include <unistd.h>
 
+#ifdef HAVE_LIBPTHREAD
+#include <pthread.h>
+#endif
+
 #ifndef PAGE_SIZE
 
 #define PAGE_SIZE (getpagesize())
@@ -277,18 +281,24 @@ static inline int cfs_psdev_deregister(cfs_psdev_t *foo)
         return 0;
 }
 
-/*
- * portable UNIX device file identification.
- */
-
-typedef unsigned int cfs_rdev_t;
-// typedef unsigned long long kdev_t;
-/*
- */
 #define cfs_lock_kernel()               do {} while (0)
 #define cfs_sigfillset(l) do {}         while (0)
 #define cfs_recalc_sigpending(l)        do {} while (0)
 #define cfs_kernel_thread(l,m,n)        LBUG()
+
+#ifdef HAVE_LIBPTHREAD
+typedef int (*cfs_thread_t)(void *);
+int cfs_create_thread(cfs_thread_t func, void *arg);
+#else
+#define cfs_create_thread(l,m) LBUG()
+#endif
+
+int cfs_parse_int_tunable(int *value, char *name);
+uid_t cfs_curproc_uid(void);
+
+#define LIBCFS_REALLOC(ptr, size) realloc(ptr, size)
+
+#define cfs_online_cpus() sysconf(_SC_NPROCESSORS_ONLN)
 
 // static inline void local_irq_save(unsigned long flag) {return;}
 // static inline void local_irq_restore(unsigned long flag) {return;}

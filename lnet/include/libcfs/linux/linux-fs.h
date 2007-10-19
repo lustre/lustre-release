@@ -48,7 +48,7 @@ typedef struct file cfs_file_t;
 typedef struct dentry cfs_dentry_t;
 
 #ifdef __KERNEL__
-#define cfs_filp_size(f)               ((f)->f_dentry->d_inode->i_size)
+#define cfs_filp_size(f)               (i_size_read((f)->f_dentry->d_inode))
 #define cfs_filp_poff(f)                (&(f)->f_pos)
 
 /* 
@@ -75,12 +75,6 @@ typedef struct file_lock cfs_flock_t;
 #define cfs_flock_set_end(fl, end)          do { (fl)->fl_end = (end); } while(0)
 
 ssize_t cfs_user_write (cfs_file_t *filp, const char *buf, size_t count, loff_t *offset);
-
-/*
- * portable UNIX device file identification.
- */
-
-typedef dev_t cfs_rdev_t;
 
 #endif
 

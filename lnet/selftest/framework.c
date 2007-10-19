@@ -8,12 +8,7 @@
 
 #define DEBUG_SUBSYSTEM S_LNET
 
-#include <libcfs/kp30.h>
-#include <libcfs/libcfs.h>
-#include <lnet/lib-lnet.h>
-
 #include "selftest.h"
-
 
 int brw_inject_errors = 0;
 CFS_MODULE_PARM(brw_inject_errors, "i", int, 0644,

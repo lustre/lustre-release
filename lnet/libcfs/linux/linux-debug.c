@@ -168,9 +168,10 @@ void libcfs_debug_dumpstack(struct task_struct *tsk)
         CWARN("showing stack for process %d\n", tsk->pid);
         show_task(tsk);
 #else
-        CWARN("can't show stack: kernel doesn't export show_task\n");
         if ((tsk == NULL) || (tsk == current))
                 dump_stack();
+        else
+                CWARN("can't show stack: kernel doesn't export show_task\n");
 #endif
 }
 

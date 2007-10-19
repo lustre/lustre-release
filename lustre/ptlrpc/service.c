@@ -38,6 +38,14 @@ int test_req_buffer_pressure = 0;
 CFS_MODULE_PARM(test_req_buffer_pressure, "i", int, 0444,
                 "set non-zero to put pressure on request buffer pools");
 
+static int at_early_margin = 3;
+CFS_MODULE_PARM(at_early_margin, "i", int, 0644,
+                "How far before the deadline we send an early reply");
+
+static int at_extra = 10;
+CFS_MODULE_PARM(at_extra, "i", int, 0644,
+                "How much extra time we give with an early reply");
+
 /* forward ref */
 static int ptlrpc_server_post_idle_rqbds (struct ptlrpc_service *svc);
 
@@ -254,7 +262,7 @@ ptlrpc_server_post_idle_rqbds (struct ptlrpc_service *svc)
 static void ptlrpc_at_timer(unsigned long castmeharder)
 {
         struct ptlrpc_service *svc = (struct ptlrpc_service *)castmeharder;
-        CDEBUG(D_ADAPTTO, "at timer %s hit at %ld%s\n",
+        CDEBUG(D_INFO, "at timer %s hit at %ld%s\n",
                svc->srv_name, cfs_time_current_sec(), 
                list_empty(&svc->srv_at_list) ? ", empty" : ""); 
         svc->srv_at_check = 1;
@@ -321,7 +329,7 @@ ptlrpc_init_svc(int nbufs, int bufsize, int max_req_size, int max_reply_size,
         cfs_timer_init(&service->srv_at_timer, ptlrpc_at_timer, service);
         /* At SOW, service time should be quick; 10s seems generous. If client 
            timeout is less than this, we'll be sending an early reply. */
-        at_init(&service->srv_at_estimate, 10, AT_TIMEBASE_DEFAULT, 0);
+        at_init(&service->srv_at_estimate, 10, 0);
 
         spin_lock (&ptlrpc_all_services_lock);
         list_add (&service->srv_list, &ptlrpc_all_services);
@@ -352,7 +360,7 @@ failed:
         return NULL;
 }
 
-static void ptlrpc_server_decref(struct ptlrpc_request *req)
+static void ptlrpc_server_req_decref(struct ptlrpc_request *req)
 {
         struct ptlrpc_request_buffer_desc *rqbd = req->rq_rqbd;
 
@@ -379,7 +387,7 @@ static void __ptlrpc_server_free_request(struct ptlrpc_request *req)
 {
         list_del(&req->rq_list);
         ptlrpc_req_drop_rs(req);
-        ptlrpc_server_decref(req);
+        ptlrpc_server_req_decref(req);
 }
 
 static void ptlrpc_server_free_request(struct ptlrpc_request *req)
@@ -390,7 +398,8 @@ static void ptlrpc_server_free_request(struct ptlrpc_request *req)
         struct list_head                  *tmp;
         struct list_head                  *nxt;
 
-        DEBUG_REQ(D_INFO, req, "free req");
+        if (req->rq_phase != RQ_PHASE_NEW) /* incorrect message magic */
+                DEBUG_REQ(D_INFO, req, "free req");
         spin_lock(&svc->srv_at_lock);
         list_del_init(&req->rq_timed_list);
         spin_unlock(&svc->srv_at_lock);
@@ -552,12 +561,6 @@ static int ptlrpc_check_req(struct ptlrpc_request *req)
         return 0;
 }
 
-/* If closest exipiration is within EARLY_MIN, send early replies to everybody
-   expiring within EARLY_MAX, asking for AT_EXTRA time */
-#define AT_EARLY_MIN  2   /* Min time needed to send an early reply */
-#define AT_EARLY_MAX  5   /* Dont send early replies if deadline is beyond */
-#define AT_EXTRA 10       /* Early replies add this time to client timeout */
-
 static void ptlrpc_at_set_timer(struct ptlrpc_service *svc)
 {
         struct ptlrpc_request *rq;
@@ -573,13 +576,13 @@ static void ptlrpc_at_set_timer(struct ptlrpc_service *svc)
         /* Set timer for closest deadline */
         rq = list_entry(svc->srv_at_list.next, struct ptlrpc_request, 
                         rq_timed_list);
-        next = rq->rq_deadline - cfs_time_current_sec() - AT_EARLY_MIN;
+        next = rq->rq_deadline - cfs_time_current_sec() - at_early_margin;
         if (next <= 0) 
                 ptlrpc_at_timer((unsigned long)svc);
         else
                 cfs_timer_arm(&svc->srv_at_timer, cfs_time_shift(next));
         spin_unlock(&svc->srv_at_lock);
-        CDEBUG(D_ADAPTTO, "armed %s at %+lds\n", svc->srv_name, next);
+        CDEBUG(D_INFO, "armed %s at %+lds\n", svc->srv_name, next);
 }
 
 /* Add rpc to early reply check list */
@@ -629,7 +632,10 @@ static int ptlrpc_at_send_early_reply(struct ptlrpc_request *req,
                                       int extra_time)
 {
         struct ptlrpc_service *svc = req->rq_rqbd->rqbd_service;
-        long deadline = req->rq_deadline - cfs_time_current_sec();
+        struct ptlrpc_request *reqcopy;
+        struct lustre_msg *reqmsg;
+        long olddl = req->rq_deadline - cfs_time_current_sec();
+        time_t newdl;
         int rc;
         ENTRY;
                             
@@ -638,52 +644,100 @@ static int ptlrpc_at_send_early_reply(struct ptlrpc_request *req,
         DEBUG_REQ(D_ADAPTTO, req, 
                   "%ssending early reply (deadline %+lds, margin %+lds) for "
                   "%d+%d", AT_OFF ? "AT off - not " : "",
-                  deadline, deadline - at_get(&svc->srv_at_estimate), 
+                  olddl, olddl - at_get(&svc->srv_at_estimate),
                   at_get(&svc->srv_at_estimate), extra_time);
 
         if (AT_OFF) 
                 RETURN(0);
         
+        if (olddl < 0) {
+                CDEBUG(D_ADAPTTO, "x"LPU64": Already past deadline (%+lds), not"
+                       " sending early reply\n", req->rq_xid, olddl);
+                /* Return an error so we're not re-added to the timed list. */
+                RETURN(-ETIMEDOUT);
+        }
+
         if ((lustre_msg_get_flags(req->rq_reqmsg) & MSG_AT_SUPPORT) == 0) {
-                CERROR("Wanted to ask client for more time, but no AT "
-                       "support\n");
+                CDEBUG(D_INFO, "Wanted to ask client for more time, but no AT "
+                      "support\n");
                 RETURN(-ENOSYS);
         }
 
-        rc = lustre_pack_reply_flags(req, 1, NULL, NULL, LPRFL_EARLY_REPLY);
-        if (rc) 
-                /* EALREADY means final reply was already packed */
-                RETURN(rc);
-
         if (extra_time) {
-                /* Fake our processing time into the future to ask the 
+                /* Fake our processing time into the future to ask the
                    clients for some extra amount of time */
                 extra_time += cfs_time_current_sec() -
                         req->rq_arrival_time.tv_sec;
                 at_add(&svc->srv_at_estimate, extra_time);
         }
 
-        req->rq_early_count++; /* number sent, server side */
-        rc = ptlrpc_send_reply(req, PTLRPC_REPLY_EARLY);
+        newdl = req->rq_arrival_time.tv_sec + at_get(&svc->srv_at_estimate);
+        if (req->rq_deadline >= newdl) {
+                /* We're not adding any time, no need to send an early reply
+                   (e.g. maybe at adaptive_max) */
+                CDEBUG(D_ADAPTTO, "x"LPU64": Couldn't add any time (%ld/%ld), "
+                       "not sending early reply\n", req->rq_xid, olddl,
+                       newdl - cfs_time_current_sec());
+                RETURN(-ETIMEDOUT);
+        }
+
+        OBD_ALLOC(reqcopy, sizeof *reqcopy);
+        if (reqcopy == NULL)
+                RETURN(-ENOMEM);
+        OBD_ALLOC(reqmsg, req->rq_reqlen);
+        if (!reqmsg) {
+                OBD_FREE(reqcopy, sizeof *reqcopy);
+                RETURN(-ENOMEM);
+        }
+        
+        *reqcopy = *req;
+        reqcopy->rq_reply_state = NULL;
+        reqcopy->rq_rep_swab_mask = 0;
+        /* We only need the reqmsg for the magic */
+        reqcopy->rq_reqmsg = reqmsg;
+        memcpy(reqmsg, req->rq_reqmsg, req->rq_reqlen);
+
+        /* Connection ref */
+        reqcopy->rq_export = class_conn2export(
+                                     lustre_msg_get_handle(reqcopy->rq_reqmsg));
+        if (reqcopy->rq_export == NULL)
+                GOTO(out, rc = -ENODEV);
+
+        /* RPC ref */
+        class_export_rpc_get(reqcopy->rq_export);
+        if (reqcopy->rq_export->exp_obd && 
+            reqcopy->rq_export->exp_obd->obd_fail)
+                GOTO(out_put, rc = -ENODEV);
+
+        rc = lustre_pack_reply_flags(reqcopy, 1, NULL, NULL, LPRFL_EARLY_REPLY);
+        if (rc) 
+                GOTO(out_put, rc);
+
+        rc = ptlrpc_send_reply(reqcopy, PTLRPC_REPLY_EARLY);
 
         if (!rc) {
                 /* Adjust our own deadline to what we told the client */
-                req->rq_deadline = req->rq_arrival_time.tv_sec + 
-                        at_get(&svc->srv_at_estimate);
+                req->rq_deadline = newdl;
+                req->rq_early_count++; /* number sent, server side */
         } else {
                 DEBUG_REQ(D_ERROR, req, "Early reply send failed %d", rc);
         }
 
-        /* Reset reply */
-        req->rq_rep_swab_mask = 0;
         /* Free the (early) reply state from lustre_pack_reply. 
            (ptlrpc_send_reply takes it's own rs ref, so this is safe here) */
-        ptlrpc_req_drop_rs(req);
+        ptlrpc_req_drop_rs(reqcopy);
 
+out_put:
+        class_export_rpc_put(reqcopy->rq_export);
+        class_export_put(reqcopy->rq_export);
+out:
+        OBD_FREE(reqmsg, req->rq_reqlen);
+        OBD_FREE(reqcopy, sizeof *reqcopy);
         RETURN(rc);
 }
 
-/* Check if we need to send any early replies, and send them */
+/* Send early replies to everybody expiring within at_early_margin
+   asking for at_extra time */
 static int ptlrpc_at_check_timed(struct ptlrpc_service *svc)
 {
         struct ptlrpc_request *rq, *n;
@@ -711,7 +765,7 @@ static int ptlrpc_at_check_timed(struct ptlrpc_service *svc)
         rq = list_entry(svc->srv_at_list.next, struct ptlrpc_request,
                         rq_timed_list);
         first = (int)(rq->rq_deadline - now);
-        if (first > AT_EARLY_MIN) {
+        if (first > at_early_margin) {
                 /* We've still got plenty of time.  Reset the timer. */
                 spin_unlock(&svc->srv_at_lock);
                 ptlrpc_at_set_timer(svc);
@@ -722,7 +776,7 @@ static int ptlrpc_at_check_timed(struct ptlrpc_service *svc)
            server will take. Send early replies to everyone expiring soon. */
         CFS_INIT_LIST_HEAD(&work_list);
         list_for_each_entry_safe(rq, n, &svc->srv_at_list, rq_timed_list) {
-                if (rq->rq_deadline <= now + AT_EARLY_MAX) {
+                if (rq->rq_deadline <= now + at_early_margin) {
                         list_move(&rq->rq_timed_list, &work_list);
                         counter++;
                 } else {
@@ -733,7 +787,7 @@ static int ptlrpc_at_check_timed(struct ptlrpc_service *svc)
         spin_unlock(&svc->srv_at_lock);
 
         CDEBUG(D_ADAPTTO, "timeout in %+ds, asking for %d secs on %d early "
-               "replies\n", first, AT_EXTRA, counter);
+               "replies\n", first, at_extra, counter);
         if (first < 0)
                 /* We're already past request deadlines before we even get a 
                    chance to send early replies */
@@ -752,15 +806,11 @@ static int ptlrpc_at_check_timed(struct ptlrpc_service *svc)
                    deleted, and is safe to take a ref to keep the req around */
                 atomic_inc(&rq->rq_refcount);
                 spin_unlock(&svc->srv_at_lock);
-                if (!rq->rq_final && 
-                    (ptlrpc_at_send_early_reply(rq, AT_EXTRA) == 0)) {
+                if (ptlrpc_at_send_early_reply(rq, at_extra) == 0) {
                         counter++;
                         ptlrpc_at_add_timed(rq);
-                } else if (rq->rq_final) {
-                        DEBUG_REQ(D_ADAPTTO, rq, "already packed final reply, "
-                                  "not sending early");
                 }
-                ptlrpc_server_decref(rq);
+                ptlrpc_server_req_decref(rq);
                 spin_lock(&svc->srv_at_lock);
         }
         spin_unlock(&svc->srv_at_lock);
@@ -773,7 +823,7 @@ static int ptlrpc_at_check_timed(struct ptlrpc_service *svc)
         RETURN(0);      
 }
 
-/* Handle freshly incoming reqs, check timeout, send early reply if needed,
+/* Handle freshly incoming reqs, add to timed early reply list,
    pass on to regular request queue */
 static int
 ptlrpc_server_handle_req_in(struct ptlrpc_service *svc)
@@ -833,6 +883,7 @@ ptlrpc_server_handle_req_in(struct ptlrpc_service *svc)
         if (req->rq_export) {
                 rc = ptlrpc_check_req(req);
                 class_export_put(req->rq_export);
+                req->rq_export = NULL;
                 if (rc) 
                         goto err_req;
         }
@@ -932,10 +983,21 @@ ptlrpc_server_handle_request(struct ptlrpc_service *svc,
                 export = class_export_rpc_get(request->rq_export);
         }
 
+        /* Discard requests queued for longer than the deadline.  
+           The deadline is increased if we send an early reply. */
+        if (cfs_time_current_sec() > request->rq_deadline) {
+                CERROR("Dropping timed-out opc %d request from %s"
+                       ": deadline %lds ago\n",
+                       lustre_msg_get_opc(request->rq_reqmsg),
+                       libcfs_id2str(request->rq_peer),
+                       cfs_time_current_sec() - request->rq_deadline);
+                goto put_rpc_export;
+        }
+
         request->rq_phase = RQ_PHASE_INTERPRET;
 
         CDEBUG(D_RPCTRACE, "Handling RPC pname:cluuid+ref:pid:xid:nid:opc "
-               "%s:%s+%d:%d:"LPU64":%s:%d\n", cfs_curproc_comm(),
+               "%s:%s+%d:%d:x"LPU64":%s:%d\n", cfs_curproc_comm(),
                (request->rq_export ?
                 (char *)request->rq_export->exp_client_uuid.uuid : "0"),
                (request->rq_export ?
@@ -951,7 +1013,7 @@ ptlrpc_server_handle_request(struct ptlrpc_service *svc,
         request->rq_phase = RQ_PHASE_COMPLETE;
 
         CDEBUG(D_RPCTRACE, "Handled RPC pname:cluuid+ref:pid:xid:nid:opc "
-               "%s:%s+%d:%d:"LPU64":%s:%d\n", cfs_curproc_comm(),
+               "%s:%s+%d:%d:x"LPU64":%s:%d\n", cfs_curproc_comm(),
                (request->rq_export ?
                 (char *)request->rq_export->exp_client_uuid.uuid : "0"),
                (request->rq_export ?
@@ -960,6 +1022,7 @@ ptlrpc_server_handle_request(struct ptlrpc_service *svc,
                libcfs_id2str(request->rq_peer),
                lustre_msg_get_opc(request->rq_reqmsg));
 
+put_rpc_export:
         if (export != NULL)
                 class_export_rpc_put(export);
 
@@ -968,14 +1031,15 @@ put_conn:
                 class_export_put(request->rq_export);
 
         if (cfs_time_current_sec() > request->rq_deadline) {
-                DEBUG_REQ(D_WARNING, request, "Request took longer than"
-                          " estimated (%+lds); client may timeout.",
+                DEBUG_REQ(D_WARNING, request, "Request x"LPU64" took longer "
+                          "than estimated (%+lds); client may timeout.",
+                          request->rq_xid,
                           cfs_time_current_sec() - request->rq_deadline);
         }
 
         do_gettimeofday(&work_end);
         timediff = cfs_timeval_sub(&work_end, &work_start, NULL);
-        CDEBUG(D_RPCTRACE, "request "LPU64" opc %u from %s processed in "
+        CDEBUG(D_RPCTRACE, "request x"LPU64" opc %u from %s processed in "
                "%ldus (%ldus total) trans "LPU64" rc %d/%d\n",
                request->rq_xid, lustre_msg_get_opc(request->rq_reqmsg),
                libcfs_id2str(request->rq_peer), timediff,
@@ -1197,7 +1261,7 @@ static int ptlrpc_main(void *arg)
 #ifdef WITH_GROUP_INFO
         struct group_info *ginfo = NULL;
 #endif
-        int counter, rc = 0;
+        int counter = 0, rc = 0;
         ENTRY;
 
         ptlrpc_daemonize(data->name);
@@ -1208,7 +1272,7 @@ static int ptlrpc_main(void *arg)
         if (svc->srv_cpu_affinity) {
                 int cpu, num_cpu;
 
-                for (cpu = 0, num_cpu = 0; cpu < NR_CPUS; cpu++) {
+                for (cpu = 0, num_cpu = 0; cpu < num_possible_cpus(); cpu++) {
                         if (!cpu_online(cpu))
                                 continue;
                         if (num_cpu == thread->t_id % num_online_cpus())
@@ -1305,13 +1369,13 @@ static int ptlrpc_main(void *arg)
                 if (!list_empty(&svc->srv_reply_queue))
                         ptlrpc_server_handle_reply (svc);
 
-                counter = 0;
-                while(!list_empty(&svc->srv_req_in_queue)) {
+                if (!list_empty(&svc->srv_req_in_queue)) {
                         /* Process all incoming reqs before handling any */
                         ptlrpc_server_handle_req_in(svc);
                         /* but limit ourselves in case of flood */ 
-                        if (counter++ > 1000)
-                                break;
+                        if (counter++ < 1000)
+                                continue;
+                        counter = 0;
                 }
 
                 if (svc->srv_at_check) 
@@ -1524,7 +1588,7 @@ int ptlrpc_unregister_service(struct ptlrpc_service *service)
 
                 /* Network access will complete in finite time but the HUGE
                  * timeout lets us CWARN for visibility of sluggish NALs */
-                lwi = LWI_TIMEOUT(cfs_time_seconds(FOREVER), NULL, NULL);
+                lwi = LWI_TIMEOUT(cfs_time_seconds(LONG_UNLINK), NULL, NULL);
                 rc = l_wait_event(service->srv_waitq,
                                   service->srv_nrqbd_receiving == 0,
                                   &lwi);

@@ -11,7 +11,7 @@ DIST_SUBDIRS := $(SUBDIRS)
 
 if LIBLUSTRE
 noinst_LIBRARIES= libcfs.a
-libcfs_a_SOURCES= debug.c user-prim.c user-lock.c
+libcfs_a_SOURCES= debug.c user-prim.c user-lock.c user-tcpip.c
 libcfs_a_CPPFLAGS = $(LLCPPFLAGS)
 libcfs_a_CFLAGS = $(LLCFLAGS)
 endif
@@ -49,4 +49,5 @@ install-data-hook: $(install_data_hook)
 EXTRA_DIST := Info.plist
 
 MOSTLYCLEANFILES := @MOSTLYCLEANFILES@ linux-*.c linux/*.o darwin/*.o libcfs
-DIST_SOURCES := $(libcfs-all-objs:%.o=%.c) tracefile.h user-prim.c user-lock.c
+DIST_SOURCES := $(libcfs-all-objs:%.o=%.c) tracefile.h user-prim.c \
+                                           user-lock.c user-tcpip.c

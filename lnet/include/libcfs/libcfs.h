@@ -74,6 +74,9 @@ extern unsigned int libcfs_stack;
 extern unsigned int libcfs_debug;
 extern unsigned int libcfs_printk;
 extern unsigned int libcfs_console_ratelimit;
+extern cfs_duration_t libcfs_console_max_delay;
+extern cfs_duration_t libcfs_console_min_delay;
+extern unsigned int libcfs_console_backoff;
 extern unsigned int libcfs_debug_binary;
 extern char debug_file_path[1024];
 
@@ -164,7 +167,9 @@ extern unsigned int libcfs_panic_on_lbug;
 # define DEBUG_SUBSYSTEM S_UNDEFINED
 #endif
 
-#define CDEBUG_MAX_LIMIT 600
+#define CDEBUG_DEFAULT_MAX_DELAY (cfs_time_seconds(600))         /* jiffies */
+#define CDEBUG_DEFAULT_MIN_DELAY ((cfs_time_seconds(1) + 1) / 2) /* jiffies */
+#define CDEBUG_DEFAULT_BACKOFF   2
 typedef struct {
         cfs_time_t      cdls_next;
         int             cdls_count;
@@ -174,7 +179,7 @@ typedef struct {
 /* Controlled via configure key */
 /* #define CDEBUG_ENABLED */
 
-#ifdef __KERNEL__
+#if defined(__KERNEL__) || (defined(__arch_lib__) && !defined(LUSTRE_UTILS))
 
 #ifdef CDEBUG_ENABLED
 #define __CDEBUG(cdls, mask, format, a...)                              \
@@ -203,20 +208,6 @@ do {                                            \
 #define CDEBUG_LIMIT(mask, format, a...) (void)(0)
 #warning "CDEBUG IS DISABLED. THIS SHOULD NEVER BE DONE FOR PRODUCTION!"
 #endif
-
-#elif defined(__arch_lib__) && !defined(LUSTRE_UTILS)
-
-#define CDEBUG(mask, format, a...)                                      \
-do {                                                                    \
-        if (((mask) & D_CANTMASK) != 0 ||                               \
-            ((libcfs_debug & (mask)) != 0 &&                            \
-             (libcfs_subsystem_debug & DEBUG_SUBSYSTEM) != 0))          \
-                libcfs_debug_msg(NULL, DEBUG_SUBSYSTEM, mask,           \
-                                 __FILE__, __FUNCTION__, __LINE__,      \
-                                 format, ## a);                         \
-} while (0)
-
-#define CDEBUG_LIMIT CDEBUG
 
 #else
 
@@ -335,9 +326,6 @@ int libcfs_register_ioctl(struct libcfs_ioctl_handler *hand);
 int libcfs_deregister_ioctl(struct libcfs_ioctl_handler *hand);
 
 /* libcfs tcpip */
-#define LNET_ACCEPTOR_MIN_RESERVED_PORT    512
-#define LNET_ACCEPTOR_MAX_RESERVED_PORT    1023
-
 int libcfs_ipif_query(char *name, int *up, __u32 *ip, __u32 *mask);
 int libcfs_ipif_enumerate(char ***names);
 void libcfs_ipif_free_enumeration(char **names, int n);
@@ -378,6 +366,10 @@ void lc_watchdog_dumplog(pid_t pid, void *data);
 
 /* __KERNEL__ */
 #endif
+
+/* need both kernel and user-land acceptor */
+#define LNET_ACCEPTOR_MIN_RESERVED_PORT    512
+#define LNET_ACCEPTOR_MAX_RESERVED_PORT    1023
 
 /*
  * libcfs pseudo device operations
@@ -577,36 +569,6 @@ enum cfs_alloc_page_flags {
         CFS_ALLOC_HIGH   = 0x40,
         CFS_ALLOC_HIGHUSER = CFS_ALLOC_WAIT | CFS_ALLOC_FS | CFS_ALLOC_IO | CFS_ALLOC_HIGH,
 };
-
-/*
- * portable UNIX device file identification. (This is not _very_
- * portable. Probably makes no sense for Windows.)
- */
-/*
- * Platform defines
- *
- * cfs_rdev_t
- */
-
-typedef unsigned int cfs_major_nr_t;
-typedef unsigned int cfs_minor_nr_t;
-
-/*
- * Defined by platform.
- */
-cfs_rdev_t     cfs_rdev_build(cfs_major_nr_t major, cfs_minor_nr_t minor);
-cfs_major_nr_t cfs_rdev_major(cfs_rdev_t rdev);
-cfs_minor_nr_t cfs_rdev_minor(cfs_rdev_t rdev);
-
-/*
- * Generic on-wire rdev format.
- */
-
-typedef __u32 cfs_wire_rdev_t;
-
-cfs_wire_rdev_t cfs_wire_rdev_build(cfs_major_nr_t major, cfs_minor_nr_t minor);
-cfs_major_nr_t  cfs_wire_rdev_major(cfs_wire_rdev_t rdev);
-cfs_minor_nr_t  cfs_wire_rdev_minor(cfs_wire_rdev_t rdev);
 
 /*
  * Drop into debugger, if possible. Implementation is provided by platform.

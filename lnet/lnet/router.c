@@ -395,6 +395,7 @@ lnet_add_route (__u32 net, unsigned int hops, lnet_nid_t gateway)
                 list_del(&route->lr_list);
                 
                 LNET_LOCK();
+                lnet_rtr_decref_locked(route->lr_gateway);
                 lnet_peer_decref_locked(route->lr_gateway);
                 LNET_UNLOCK();
                 LIBCFS_FREE(route, sizeof(*route));

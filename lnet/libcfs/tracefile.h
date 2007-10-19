@@ -5,6 +5,10 @@
 
 /* trace file lock routines */
 
+#define TRACEFILE_NAME_SIZE 1024
+extern char      tracefile[TRACEFILE_NAME_SIZE];
+extern long long tracefile_size;
+
 int  tracefile_init_arch(void);
 void tracefile_fini_arch(void);
 
@@ -20,16 +24,21 @@ int trace_start_thread(void);
 void trace_stop_thread(void);
 int tracefile_init(void);
 void tracefile_exit(void);
-int trace_write_daemon_file(struct file *file, const char *buffer,
-			    unsigned long count, void *data);
-int trace_read_daemon_file(char *page, char **start, off_t off, int count,
-			   int *eof, void *data);
-int trace_write_debug_mb(struct file *file, const char *buffer,
-			 unsigned long count, void *data);
-int trace_read_debug_mb(char *page, char **start, off_t off, int count,
-			int *eof, void *data);
-int trace_dk(struct file *file, const char *buffer, unsigned long count,
-             void *data);
+
+
+
+int trace_copyin_string(char *knl_buffer, int knl_buffer_nob,
+                        const char *usr_buffer, int usr_buffer_nob);
+int trace_copyout_string(char *usr_buffer, int usr_buffer_nob,
+                         const char *knl_str, char *append);
+int trace_allocate_string_buffer(char **str, int nob);
+void trace_free_string_buffer(char *str, int nob);
+int trace_dump_debug_buffer_usrstr(void *usr_str, int usr_str_nob);
+int trace_daemon_command(char *str);
+int trace_daemon_command_usrstr(void *usr_str, int usr_str_nob);
+int trace_set_debug_mb(int mb);
+int trace_set_debug_mb_usrstr(void *usr_str, int usr_str_nob);
+int trace_get_debug_mb(void);
 
 extern void libcfs_debug_dumplog_internal(void *arg);
 extern void libcfs_register_panic_notifier(void);
@@ -37,6 +46,7 @@ extern void libcfs_unregister_panic_notifier(void);
 extern int  libcfs_panic_in_progress;
 
 #ifdef LUSTRE_TRACEFILE_PRIVATE
+
 /*
  * Private declare for tracefile
  */
@@ -178,6 +188,8 @@ extern char *trace_get_console_buffer(void);
 extern void trace_put_console_buffer(char *buffer);
 
 extern void trace_call_on_all_cpus(void (*fn)(void *arg), void *arg);
+
+extern int  trace_max_debug_mb(void);
 
 int trace_refill_stock(struct trace_cpu_data *tcd, int gfp,
 		       struct list_head *stock);

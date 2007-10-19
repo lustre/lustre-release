@@ -63,7 +63,7 @@ kqswnal_map_tx_kiov (kqswnal_tx_t *ktx, int offset, int nob,
         int       nfrags    = ktx->ktx_nfrag;
         int       nmapped   = ktx->ktx_nmappedpages;
         int       maxmapped = ktx->ktx_npages;
-        uint32_t  basepage  = ktx->ktx_basepage + nmapped;
+        __u32     basepage  = ktx->ktx_basepage + nmapped;
         char     *ptr;
 
         EP_RAILMASK railmask;
@@ -218,7 +218,7 @@ kqswnal_map_tx_iov (kqswnal_tx_t *ktx, int offset, int nob,
         int       nfrags    = ktx->ktx_nfrag;
         int       nmapped   = ktx->ktx_nmappedpages;
         int       maxmapped = ktx->ktx_npages;
-        uint32_t  basepage  = ktx->ktx_basepage + nmapped;
+        __u32     basepage  = ktx->ktx_basepage + nmapped;
 
         EP_RAILMASK railmask;
         int         rail;

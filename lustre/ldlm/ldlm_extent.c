@@ -227,11 +227,14 @@ ldlm_extent_compat_queue(struct list_head *queue, struct ldlm_lock *req,
         __u64 req_end = req->l_req_extent.end;
         int compat = 1;
         int scan = 0;
+        int check_contention;
         ENTRY;
 
         lockmode_verify(req_mode);
 
         list_for_each(tmp, queue) {
+                check_contention = 1;
+
                 lock = list_entry(tmp, struct ldlm_lock, l_res_link);
 
                 if (req == lock)
@@ -342,16 +345,21 @@ ldlm_extent_compat_queue(struct list_head *queue, struct ldlm_lock *req,
                            lock->l_policy_data.l_extent.start > req_end) {
                         /* if a non group lock doesn't overlap skip it */
                         continue;
-                }
+                } else if (lock->l_req_extent.end < req_start ||
+                           lock->l_req_extent.start > req_end)
+                        /* false contention, the requests doesn't really overlap */
+                                check_contention = 0;
 
                 if (!work_list)
                         RETURN(0);
 
                 /* don't count conflicting glimpse locks */
-                *contended_locks +=
-                        !(lock->l_req_mode == LCK_PR &&
-                          lock->l_policy_data.l_extent.start == 0 &&
-                          lock->l_policy_data.l_extent.end == OBD_OBJECT_EOF);
+                if (lock->l_req_mode == LCK_PR &&
+                    lock->l_policy_data.l_extent.start == 0 &&
+                    lock->l_policy_data.l_extent.end == OBD_OBJECT_EOF)
+                        check_contention = 0;
+
+                *contended_locks += check_contention;
 
                 compat = 0;
                 if (lock->l_blocking_ast)
@@ -364,7 +372,7 @@ ldlm_extent_compat_queue(struct list_head *queue, struct ldlm_lock *req,
             req->l_req_mode != LCK_GROUP &&
             req_end - req_start <=
             req->l_resource->lr_namespace->ns_max_nolock_size)
-                GOTO(destroylock, compat = -EBUSY);
+                GOTO(destroylock, compat = -EUSERS);
 
         RETURN(compat);
 destroylock:

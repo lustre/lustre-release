@@ -191,6 +191,40 @@ typedef struct { volatile int counter; } atomic_t;
 
 #endif
 
+#ifdef HAVE_LIBPTHREAD
+#include <pthread.h>
+
+/*
+ * Completion
+ */
+
+struct cfs_completion {
+        int c_done;
+        pthread_cond_t c_cond;
+        pthread_mutex_t c_mut;
+};
+
+void cfs_init_completion(struct cfs_completion *c);
+void cfs_fini_completion(struct cfs_completion *c);
+void cfs_complete(struct cfs_completion *c);
+void cfs_wait_for_completion(struct cfs_completion *c);
+
+/*
+ * atomic.h
+ */
+
+typedef struct { volatile int counter; } cfs_atomic_t;
+
+int cfs_atomic_read(cfs_atomic_t *a);
+void cfs_atomic_set(cfs_atomic_t *a, int b);
+int cfs_atomic_dec_and_test(cfs_atomic_t *a);
+void cfs_atomic_inc(cfs_atomic_t *a);
+void cfs_atomic_dec(cfs_atomic_t *a);
+void cfs_atomic_add(int b, cfs_atomic_t *a);
+void cfs_atomic_sub(int b, cfs_atomic_t *a);
+
+#endif /* HAVE_LIBPTHREAD */
+
 /* !__KERNEL__ */
 #endif
 

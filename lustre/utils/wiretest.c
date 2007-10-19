@@ -155,6 +155,8 @@ void lustre_assert_wire_constants(void)
                  (long long)MGS_TARGET_REG);
         LASSERTF(MGS_TARGET_DEL == 254, " found %lld\n",
                  (long long)MGS_TARGET_DEL);
+        LASSERTF(MGS_SET_INFO == 255, " found %lld\n",
+                 (long long)MGS_SET_INFO);
         LASSERTF(DISP_IT_EXECD == 1, " found %lld\n",
                  (long long)DISP_IT_EXECD);
         LASSERTF(DISP_LOOKUP_EXECD == 2, " found %lld\n",
@@ -227,6 +229,8 @@ void lustre_assert_wire_constants(void)
                  (long long)MGS_TARGET_REG);
         LASSERTF(MGS_TARGET_DEL == 254, " found %lld\n",
                  (long long)MGS_TARGET_DEL);
+        LASSERTF(MGS_SET_INFO == 255, " found %lld\n",
+                 (long long)MGS_SET_INFO);
         /* Sizes and Offsets */
 
         /* Checks for struct obd_uuid */
@@ -476,12 +480,14 @@ void lustre_assert_wire_constants(void)
         CLASSERT(OBD_CONNECT_RMT_CLIENT == 0x20000ULL);
         CLASSERT(OBD_CONNECT_BRW_SIZE == 0x40000ULL);
         CLASSERT(OBD_CONNECT_QUOTA64 == 0x80000ULL);
-        CLASSERT(OBD_CONNECT_FID_CAPA == 0x100000ULL);
+        CLASSERT(OBD_CONNECT_MDS_CAPA == 0x100000ULL);
         CLASSERT(OBD_CONNECT_OSS_CAPA == 0x200000ULL);
         CLASSERT(OBD_CONNECT_CANCELSET == 0x400000ULL);
         CLASSERT(OBD_CONNECT_SOM == 0x00800000ULL);
         CLASSERT(OBD_CONNECT_AT == 0x01000000ULL);
         CLASSERT(OBD_CONNECT_LRU_RESIZE == 0x02000000ULL);
+        CLASSERT(OBD_CONNECT_MDS_MDS == 0x04000000ULL);
+        CLASSERT(OBD_CONNECT_REAL == 0x08000000ULL);
 
         /* Checks for struct obdo */
         LASSERTF((int)sizeof(struct obdo) == 208, " found %lld\n",
@@ -1160,6 +1166,21 @@ void lustre_assert_wire_constants(void)
                  (long long)(int)offsetof(struct mds_rec_setattr, sa_attr_flags));
         LASSERTF((int)sizeof(((struct mds_rec_setattr *)0)->sa_attr_flags) == 4, " found %lld\n",
                  (long long)(int)sizeof(((struct mds_rec_setattr *)0)->sa_attr_flags));
+        CLASSERT(MDS_ATTR_MODE == 1);
+        CLASSERT(MDS_ATTR_UID == 2);
+        CLASSERT(MDS_ATTR_GID == 4);
+        CLASSERT(MDS_ATTR_SIZE == 8);
+        CLASSERT(MDS_ATTR_ATIME == 16);
+        CLASSERT(MDS_ATTR_MTIME == 32);
+        CLASSERT(MDS_ATTR_CTIME == 64);
+        CLASSERT(MDS_ATTR_ATIME_SET == 128);
+        CLASSERT(MDS_ATTR_MTIME_SET == 256);
+        CLASSERT(MDS_ATTR_FORCE == 512);
+        CLASSERT(MDS_ATTR_ATTR_FLAG == 1024);
+        CLASSERT(MDS_ATTR_KILL_SUID == 2048);
+        CLASSERT(MDS_ATTR_KILL_SGID == 4096);
+        CLASSERT(MDS_ATTR_CTIME_SET == 8192);
+        CLASSERT(MDS_ATTR_FROM_OPEN == 16384);
 
         /* Checks for struct mds_rec_create */
         LASSERTF((int)sizeof(struct mds_rec_create) == 96, " found %lld\n",

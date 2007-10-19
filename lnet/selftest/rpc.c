@@ -8,10 +8,6 @@
 
 #define DEBUG_SUBSYSTEM S_LNET
 
-#include <libcfs/kp30.h>
-#include <libcfs/libcfs.h>
-#include <lnet/lib-lnet.h>
-
 #include "selftest.h"
 
 
@@ -1371,7 +1367,7 @@ srpc_send_reply (srpc_server_rpc_t *rpc)
         return rc;
 }
 
-/* always called with LNET_LOCK() held, and in thread context */
+/* when in kernel always called with LNET_LOCK() held, and in thread context */
 void 
 srpc_lnet_ev_handler (lnet_event_t *ev)
 {
@@ -1557,9 +1553,7 @@ srpc_check_event (int timeout)
                 abort();
         }
                 
-        LNET_LOCK();
         srpc_lnet_ev_handler(&ev);
-        LNET_UNLOCK();
         return 1;
 }
 
@@ -1593,7 +1587,7 @@ srpc_startup (void)
 #ifdef __KERNEL__
         rc = LNetNIInit(LUSTRE_SRV_LNET_PID);
 #else
-        rc = LNetNIInit(getpid());
+        rc = LNetNIInit(getpid() | LNET_PID_USERFLAG);
 #endif
         if (rc < 0) {
                 CERROR ("LNetNIInit() has failed: %d\n", rc);

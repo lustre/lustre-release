@@ -38,8 +38,15 @@ cfs_mem_cache_t *ldlm_resource_slab, *ldlm_lock_slab;
 
 atomic_t ldlm_srv_namespace_nr = ATOMIC_INIT(0);
 atomic_t ldlm_cli_namespace_nr = ATOMIC_INIT(0);
-struct semaphore ldlm_namespace_lock;
-struct list_head ldlm_namespace_list = CFS_LIST_HEAD_INIT(ldlm_namespace_list);
+
+struct semaphore ldlm_srv_namespace_lock;
+struct list_head ldlm_srv_namespace_list = 
+        CFS_LIST_HEAD_INIT(ldlm_srv_namespace_list);
+
+struct semaphore ldlm_cli_namespace_lock;
+struct list_head ldlm_cli_namespace_list = 
+        CFS_LIST_HEAD_INIT(ldlm_cli_namespace_list);
+
 cfs_proc_dir_entry_t *ldlm_type_proc_dir = NULL;
 cfs_proc_dir_entry_t *ldlm_ns_proc_dir = NULL;
 cfs_proc_dir_entry_t *ldlm_svc_proc_dir = NULL;
@@ -48,7 +55,8 @@ cfs_proc_dir_entry_t *ldlm_svc_proc_dir = NULL;
 static int ldlm_proc_dump_ns(struct file *file, const char *buffer,
                              unsigned long count, void *data)
 {
-        ldlm_dump_all_namespaces(D_DLMTRACE);
+        ldlm_dump_all_namespaces(LDLM_NAMESPACE_SERVER, D_DLMTRACE);
+        ldlm_dump_all_namespaces(LDLM_NAMESPACE_CLIENT, D_DLMTRACE);
         RETURN(count);
 }
 
@@ -160,7 +168,7 @@ static int lprocfs_wr_lru_size(struct file *file, const char *buffer,
         }
 
         tmp = simple_strtoul(dummy, &end, 0);
-        if (*end) {
+        if (dummy == end) {
                 CERROR("invalid value written\n");
                 return -EINVAL;
         }
@@ -253,18 +261,12 @@ void ldlm_proc_namespace(struct ldlm_namespace *ns)
 #define ldlm_proc_namespace(ns) do {} while (0)
 #endif /* LPROCFS */
 
-static atomic_t *ldlm_namespace_nr(ldlm_side_t client)
-{
-        return client == LDLM_NAMESPACE_SERVER ? 
-                &ldlm_srv_namespace_nr : &ldlm_cli_namespace_nr;
-}
-
 struct ldlm_namespace *ldlm_namespace_new(char *name, ldlm_side_t client, 
                                           ldlm_appetite_t apt)
 {
         struct ldlm_namespace *ns = NULL;
         struct list_head *bucket;
-        int rc, idx;
+        int rc, idx, namelen;
         ENTRY;
 
         rc = ldlm_get_ref(client);
@@ -281,7 +283,8 @@ struct ldlm_namespace *ldlm_namespace_new(char *name, ldlm_side_t client,
         if (!ns->ns_hash)
                 GOTO(out_ns, NULL);
 
-        OBD_ALLOC(ns->ns_name, strlen(name) + 1);
+        namelen = strlen(name);
+        OBD_ALLOC(ns->ns_name, namelen + 1);
         if (!ns->ns_name)
                 GOTO(out_hash, NULL);
 
@@ -308,30 +311,28 @@ struct ldlm_namespace *ldlm_namespace_new(char *name, ldlm_side_t client,
         ns->ns_max_unused = LDLM_DEFAULT_LRU_SIZE;
         ns->ns_max_age = LDLM_DEFAULT_MAX_ALIVE;
         spin_lock_init(&ns->ns_unused_lock);
-
         ns->ns_connect_flags = 0;
-        mutex_down(&ldlm_namespace_lock);
-        list_add(&ns->ns_list_chain, &ldlm_namespace_list);
-        idx = atomic_read(ldlm_namespace_nr(client));
-        atomic_inc(ldlm_namespace_nr(client));
-        mutex_up(&ldlm_namespace_lock);
-        
+
         ldlm_proc_namespace(ns);
+
+        idx = atomic_read(ldlm_namespace_nr(client));
         
         rc = ldlm_pool_init(&ns->ns_pool, ns, idx, client);
         if (rc) {
-                CERROR("can't initialize lock pool, rc %d\n", rc);
-                GOTO(out_del, rc);
+                CERROR("Can't initialize lock pool, rc %d\n", rc);
+                GOTO(out_proc, rc);
         }
-        RETURN(ns);
 
-out_del:
-        mutex_down(&ldlm_namespace_lock);
-        list_del(&ns->ns_list_chain);
-        atomic_dec(ldlm_namespace_nr(client));
-        mutex_up(&ldlm_namespace_lock);
+        mutex_down(ldlm_namespace_lock(client));
+        list_add(&ns->ns_list_chain, ldlm_namespace_list(client));
+        atomic_inc(ldlm_namespace_nr(client));
+        mutex_up(ldlm_namespace_lock(client));
+
+        RETURN(ns);
+out_proc:
+        ldlm_namespace_cleanup(ns, 0);
+        OBD_FREE(ns->ns_name, namelen + 1);
 out_hash:
-        POISON(ns->ns_hash, 0x5a, sizeof(*ns->ns_hash) * RES_HASH_SIZE);
         OBD_VFREE(ns->ns_hash, sizeof(*ns->ns_hash) * RES_HASH_SIZE);
 out_ns:
         OBD_FREE_PTR(ns);
@@ -471,11 +472,11 @@ int ldlm_namespace_free_prior(struct ldlm_namespace *ns)
         if (!ns)
                 RETURN(ELDLM_OK);
 
-        mutex_down(&ldlm_namespace_lock);
+        mutex_down(ldlm_namespace_lock(ns->ns_client));
         list_del(&ns->ns_list_chain);
         atomic_dec(ldlm_namespace_nr(ns->ns_client));
         ldlm_pool_fini(&ns->ns_pool);
-        mutex_up(&ldlm_namespace_lock);
+        mutex_up(ldlm_namespace_lock(ns->ns_client));
 
         /* At shutdown time, don't call the cancellation callback */
         ldlm_namespace_cleanup(ns, 0);
@@ -553,6 +554,51 @@ int ldlm_namespace_free(struct ldlm_namespace *ns, int force)
         ldlm_namespace_free_prior(ns);
         ldlm_namespace_free_post(ns, force);
         return ELDLM_OK;
+}
+
+void ldlm_namespace_get_nolock(struct ldlm_namespace *ns)
+{
+        LASSERT(ns->ns_refcount >= 0);
+        ns->ns_refcount++;
+}
+
+void ldlm_namespace_get(struct ldlm_namespace *ns)
+{
+        spin_lock(&ns->ns_hash_lock);
+        ldlm_namespace_get_nolock(ns);
+        spin_unlock(&ns->ns_hash_lock);
+}
+
+void ldlm_namespace_put_nolock(struct ldlm_namespace *ns, int wakeup)
+{
+        LASSERT(ns->ns_refcount > 0);
+        ns->ns_refcount--;
+        if (ns->ns_refcount == 0 && wakeup)
+                wake_up(&ns->ns_waitq);
+}
+
+void ldlm_namespace_put(struct ldlm_namespace *ns, int wakeup)
+{
+        spin_lock(&ns->ns_hash_lock);
+        ldlm_namespace_put_nolock(ns, wakeup);
+        spin_unlock(&ns->ns_hash_lock);
+}
+
+/* Should be called under ldlm_namespace_lock(client) taken */
+void ldlm_namespace_move(struct ldlm_namespace *ns, ldlm_side_t client)
+{
+        LASSERT(!list_empty(&ns->ns_list_chain));
+        LASSERT_SEM_LOCKED(ldlm_namespace_lock(client));
+        list_move_tail(&ns->ns_list_chain, ldlm_namespace_list(client));
+}
+
+/* Should be called under ldlm_namespace_lock(client) taken */
+struct ldlm_namespace *ldlm_namespace_first(ldlm_side_t client)
+{
+        LASSERT_SEM_LOCKED(ldlm_namespace_lock(client));
+        LASSERT(!list_empty(ldlm_namespace_list(client)));
+        return container_of(ldlm_namespace_list(client)->next, 
+                struct ldlm_namespace, ns_list_chain);
 }
 
 static __u32 ldlm_hash_fn(struct ldlm_resource *parent, struct ldlm_res_id name)
@@ -653,7 +699,7 @@ ldlm_resource_add(struct ldlm_namespace *ns, struct ldlm_resource *parent,
         bucket = ns->ns_hash + hash;
         list_add(&res->lr_hash, bucket);
         ns->ns_resources++;
-        ns->ns_refcount++;
+        ldlm_namespace_get_nolock(ns);
 
         if (parent == NULL) {
                 list_add(&res->lr_childof, &ns->ns_root_list);
@@ -750,7 +796,9 @@ void __ldlm_resource_putref_final(struct ldlm_resource *res)
                 LBUG();
         }
 
-        ns->ns_refcount--;
+        /* Pass 0 as second argument to not wake up ->ns_waitq yet, will do it
+         * later. */
+        ldlm_namespace_put_nolock(ns, 0);
         list_del_init(&res->lr_hash);
         list_del_init(&res->lr_childof);
 
@@ -862,22 +910,22 @@ void ldlm_res2desc(struct ldlm_resource *res, struct ldlm_resource_desc *desc)
         desc->lr_name = res->lr_name;
 }
 
-void ldlm_dump_all_namespaces(int level)
+void ldlm_dump_all_namespaces(ldlm_side_t client, int level)
 {
         struct list_head *tmp;
 
         if (!((libcfs_debug | D_ERROR) & level))
                 return;
 
-        mutex_down(&ldlm_namespace_lock);
+        mutex_down(ldlm_namespace_lock(client));
 
-        list_for_each(tmp, &ldlm_namespace_list) {
+        list_for_each(tmp, ldlm_namespace_list(client)) {
                 struct ldlm_namespace *ns;
                 ns = list_entry(tmp, struct ldlm_namespace, ns_list_chain);
                 ldlm_namespace_dump(level, ns);
         }
 
-        mutex_up(&ldlm_namespace_lock);
+        mutex_up(ldlm_namespace_lock(client));
 }
 
 void ldlm_namespace_dump(int level, struct ldlm_namespace *ns)

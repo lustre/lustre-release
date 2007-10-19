@@ -316,7 +316,7 @@ static int ll_rd_checksum(char *page, char **start, off_t off,
         struct ll_sb_info *sbi = ll_s2sbi(sb);
 
         return snprintf(page, count, "%u\n",
-                        (sbi->ll_flags & LL_SBI_CHECKSUM) ? 1 : 0);
+                        (sbi->ll_flags & LL_SBI_LLITE_CHECKSUM) ? 1 : 0);
 }
 
 static int ll_wr_checksum(struct file *file, const char *buffer,
@@ -334,9 +334,9 @@ static int ll_wr_checksum(struct file *file, const char *buffer,
         if (rc)
                 return rc;
         if (val)
-                sbi->ll_flags |= LL_SBI_CHECKSUM;
+                sbi->ll_flags |=  (LL_SBI_LLITE_CHECKSUM|LL_SBI_DATA_CHECKSUM);
         else
-                sbi->ll_flags &= ~LL_SBI_CHECKSUM;
+                sbi->ll_flags &= ~(LL_SBI_LLITE_CHECKSUM|LL_SBI_DATA_CHECKSUM);
 
         rc = obd_set_info_async(sbi->ll_osc_exp, strlen("checksum"), "checksum",
                                 sizeof(val), &val, NULL);
@@ -615,6 +615,7 @@ void ll_stats_ops_tally(struct ll_sb_info *sbi, int op, int count)
                  sbi->ll_stats_track_id == current->gid)
                 lprocfs_counter_add(sbi->ll_stats, op, count);
 }
+EXPORT_SYMBOL(ll_stats_ops_tally);
 
 int lprocfs_register_mountpoint(struct proc_dir_entry *parent,
                                 struct super_block *sb, char *osc, char *mdc)
@@ -686,7 +687,7 @@ int lprocfs_register_mountpoint(struct proc_dir_entry *parent,
         entry->data = sbi;
 
         /* File operations stats */
-        sbi->ll_stats = lprocfs_alloc_stats(LPROC_LL_FILE_OPCODES);
+        sbi->ll_stats = lprocfs_alloc_stats(LPROC_LL_FILE_OPCODES, 0);
         if (sbi->ll_stats == NULL)
                 GOTO(out, err = -ENOMEM);
         /* do counter init */
@@ -794,7 +795,7 @@ static int llite_dump_pgcache_seq_show(struct seq_file *seq, void *v)
         /* 2.4 doesn't seem to have SEQ_START_TOKEN, so we implement
          * it in our own state */
         if (dummy_llap->llap_magic == 0) {
-                seq_printf(seq, "gener |  llap  cookie  origin wq du | page "
+                seq_printf(seq, "gener |  llap  cookie  origin wq du wb | page "
                                 "inode index count [ page flags ]\n");
                 return 0;
         }
@@ -809,13 +810,14 @@ static int llite_dump_pgcache_seq_show(struct seq_file *seq, void *v)
                 LASSERTF(llap->llap_origin < LLAP__ORIGIN_MAX, "%u\n",
                          llap->llap_origin);
 
-                seq_printf(seq," %5lu | %p %p %s %s %s | %p %lu/%u(%p) "
+                seq_printf(seq," %5lu | %p %p %s %s %s %s | %p %lu/%u(%p) "
                            "%lu %u [",
                            sbi->ll_pglist_gen,
                            llap, llap->llap_cookie,
                            llap_origins[llap->llap_origin],
                            llap->llap_write_queued ? "wq" : "- ",
                            llap->llap_defer_uptodate ? "du" : "- ",
+                           PageWriteback(page) ? "wb" : "-",
                            page, page->mapping->host->i_ino,
                            page->mapping->host->i_generation,
                            page->mapping->host, page->index,
@@ -828,9 +830,10 @@ static int llite_dump_pgcache_seq_show(struct seq_file *seq, void *v)
 #if (LINUX_VERSION_CODE <= KERNEL_VERSION(2,6,12))
                 seq_page_flag(seq, page, highmem, has_flags);
 #endif
+                seq_page_flag(seq, page, writeback, has_flags);
                 if (!has_flags)
                         seq_puts(seq, "-]\n");
-                else 
+                else
                         seq_puts(seq, "]\n");
         }
 

@@ -151,7 +151,7 @@ static void ll_close_done_writing(struct inode *inode)
         obdo_refresh_inode(inode, &obdo, valid);
 
         CDEBUG(D_INODE, "objid "LPX64" size %Lu, blocks %lu, blksize %lu\n",
-               lli->lli_smd->lsm_object_id, inode->i_size, inode->i_blocks,
+               lli->lli_smd->lsm_object_id, i_size_read(inode), inode->i_blocks,
                1<<inode->i_blkbits);
 
         set_bit(LLI_F_HAVE_OST_SIZE_LOCK, &lli->lli_flags);
@@ -162,7 +162,7 @@ static void ll_close_done_writing(struct inode *inode)
 
  rpc:
         obdo.o_id = inode->i_ino;
-        obdo.o_size = inode->i_size;
+        obdo.o_size = i_size_read(inode);
         obdo.o_blocks = inode->i_blocks;
         obdo.o_valid = OBD_MD_FLID | OBD_MD_FLSIZE | OBD_MD_FLBLOCKS;
 

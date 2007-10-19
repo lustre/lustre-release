@@ -1464,9 +1464,7 @@ ksocknal_peer_failed (ksock_peer_t *peer)
             peer->ksnp_accepting == 0 &&
             ksocknal_find_connecting_route_locked(peer) == NULL) {
                 notify = 1;
-                last_alive = cfs_time_current_sec() - 
-                             cfs_duration_sec(cfs_time_current() - 
-                                              peer->ksnp_last_alive);
+                last_alive = cfs_time_seconds(peer->ksnp_last_alive);
         }
         
         read_unlock (&ksocknal_data.ksnd_global_lock);

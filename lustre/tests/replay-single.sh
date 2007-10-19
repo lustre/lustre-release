@@ -104,7 +104,7 @@ test_2a() {
 run_test 2a "touch"
 
 test_2b() {
-    ./mcreate $DIR/$tfile
+    mcreate $DIR/$tfile
     replay_barrier mds
     touch $DIR/$tfile
     fail mds
@@ -443,7 +443,7 @@ test_20b() { # bug 10480
 
     fail mds                            # start orphan recovery
     df -P $DIR || df -P $DIR || true    # reconnect
-    sleep 2
+    wait_mds_recovery_done || error "MDS recovery not done"
 
     AFTERUSED=`df -P $DIR | tail -1 | awk '{ print $3 }'`
     log "before $BEFOREUSED, after $AFTERUSED"
@@ -454,9 +454,10 @@ test_20b() { # bug 10480
 run_test 20b "write, unlink, eviction, replay, (test mds_cleanup_orphans)"
 
 test_20c() { # bug 10480
-    dd if=/dev/zero of=$DIR/$tfile bs=4k count=10000
-
-    exec 100< $DIR/$tfile
+    multiop $DIR/$tfile Ow_c &
+    pid=$!
+    # give multiop a chance to open
+    sleep 1
 
     ls -la $DIR/$tfile
 
@@ -464,8 +465,7 @@ test_20c() { # bug 10480
 
     df -P $DIR || df -P $DIR || true    # reconnect
 
-    exec 100<&-
-
+    kill -USR1 $pid
     test -s $DIR/$tfile || error "File was truncated"
 
     return 0
@@ -1177,37 +1177,67 @@ test_61c() {
 }
 run_test 61c "test race mds llog sync vs llog cleanup"
 
-
+#Adaptive Timeouts
 at_start() #bug 3055
 {
     if [ -z "$ATOLDBASE" ]; then
-	ATOLDBASE=$(do_facet mds "grep timebase $LPROC/mdt/MDS/mds/timeouts" | awk '{print $3}' )
+	ATOLDBASE=$(do_facet mds "sysctl -n lustre.adaptive_history")
         # speed up the timebase so we can check decreasing AT
-	do_facet mds "echo 8 >> $LPROC/mdt/MDS/mds/timeouts"
-	do_facet mds "echo 8 >> $LPROC/mdt/MDS/mds_readpage/timeouts"
-	do_facet mds "echo 8 >> $LPROC/mdt/MDS/mds_setattr/timeouts"
-	do_facet ost1 "echo 8 >> $LPROC/ost/OSS/ost/timeouts"
+	do_facet mds "sysctl -w lustre.adaptive_history=8"
+	do_facet ost1 "sysctl -w lustre.adaptive_history=8"
     fi
 }
 
-test_65() #bug 3055
+test_65a() #bug 3055
 {
     at_start
     $LCTL dk > /dev/null
+    debugsave
+    sysctl -w lnet.debug="+other"
     # slow down a request
-    sysctl -w lustre.fail_val=30000
+    do_facet mds sysctl -w lustre.fail_val=30000
 #define OBD_FAIL_PTLRPC_PAUSE_REQ        0x50a
-    sysctl -w lustre.fail_loc=0x8000050a
+    do_facet mds sysctl -w lustre.fail_loc=0x8000050a
     createmany -o $DIR/$tfile 10 > /dev/null
     unlinkmany $DIR/$tfile 10 > /dev/null
     # check for log message
     $LCTL dk | grep "Early reply #" || error "No early reply" 
-    # client should show 30s timeouts
+    # client should show 30s estimates
     grep portal $LPROC/mdc/${FSNAME}-MDT0000-mdc-*/timeouts
     sleep 9
     grep portal $LPROC/mdc/${FSNAME}-MDT0000-mdc-*/timeouts
 }
-run_test 65 "AT: verify early replies"
+run_test 65a "AT: verify early replies"
+
+test_65b() #bug 3055
+{
+    at_start
+    # turn on D_ADAPTTO
+    debugsave
+    sysctl -w lnet.debug="+other"
+    $LCTL dk > /dev/null
+    # slow down bulk i/o
+    do_facet ost1 sysctl -w lustre.fail_val=30
+#define OBD_FAIL_OST_BRW_PAUSE_PACK      0x224
+    do_facet ost1 sysctl -w lustre.fail_loc=0x224
+
+    rm -f $DIR/$tfile
+    lfs setstripe $DIR/$tfile --index=0 --count=1
+    # force some real bulk transfer
+    dd if=/dev/urandom of=$TMP/big bs=1M count=4
+    cp $TMP/big $DIR/$tfile
+    echo "append" >> $DIR/$tfile
+    cat $DIR/$tfile >> /dev/null
+    rm $TMP/big
+
+    do_facet ost1 sysctl -w lustre.fail_loc=0
+    # check for log message
+    $LCTL dk | grep "Early reply #" || error "No early reply"
+    debugrestore
+    # client should show 30s estimates
+    grep portal $LPROC/osc/${FSNAME}-OST0000-osc-*/timeouts
+}
+run_test 65b "AT: verify early replies on packed reply / bulk"
 
 test_66a() #bug 3055
 {
@@ -1301,10 +1331,8 @@ test_67b() #bug 3055
 run_test 67b "AT: verify instant slowdown doesn't induce reconnects"
 
 if [ -n "$ATOLDBASE" ]; then
-    do_facet mds "echo $ATOLDBASE >> $LPROC/mdt/MDS/mds/timeouts" 
-    do_facet mds "echo $ATOLDBASE >> $LPROC/mdt/MDS/mds_readpage/timeouts"
-    do_facet mds "echo $ATOLDBASE >> $LPROC/mdt/MDS/mds_setattr/timeouts"
-    do_facet ost1 "echo $ATOLDBASE >> $LPROC/ost/OSS/ost/timeouts"
+    do_facet mds "sysctl -w lustre.adaptive_history=$ATOLDBASE"
+    do_facet ost1 "sysctl -w lustre.adaptive_history=$ATOLDBASE"
 fi
 # end of AT tests includes above lines
 

@@ -426,24 +426,44 @@ int mdc_req2lustre_md(struct ptlrpc_request *req, int offset,
                 int lmmsize;
                 struct lov_mds_md *lmm;
 
-                LASSERT(S_ISREG(md->body->mode));
+                if (!S_ISREG(md->body->mode)) {
+                        CERROR("OBD_MD_FLEASIZE set, should be a regular file, "
+                               "but is not\n");
+                        GOTO(err_out, rc = -EPROTO);
+                }
 
                 if (md->body->eadatasize == 0) {
                         CERROR ("OBD_MD_FLEASIZE set, but eadatasize 0\n");
-                        RETURN(-EPROTO);
+                        GOTO(err_out, rc = -EPROTO);
                 }
                 lmmsize = md->body->eadatasize;
                 lmm = lustre_msg_buf(req->rq_repmsg, offset, lmmsize);
-                LASSERT (lmm != NULL);
+                if (!lmm) {
+                        CERROR ("incorrect message: lmm == 0\n");
+                        GOTO(err_out, rc = -EPROTO);
+                }
                 LASSERT_REPSWABBED(req, offset);
 
                 rc = obd_unpackmd(exp, &md->lsm, lmm, lmmsize);
                 if (rc < 0)
-                        RETURN(rc);
+                        GOTO(err_out, rc);
 
-                LASSERT (rc >= sizeof (*md->lsm));
+                if (rc < sizeof(*md->lsm)) {
+                        CERROR ("lsm size too small:  rc < sizeof (*md->lsm) "
+                                "(%d < %d)\n", rc, sizeof(*md->lsm));
+                        GOTO(err_out, rc = -EPROTO);
+                }
                 rc = 0;
 
+                offset++;
+        }
+
+        if (md->body->valid & OBD_MD_FLDIREA) {
+                if(!S_ISDIR(md->body->mode)) {
+                        CERROR("OBD_MD_FLDIREA set, should be a directory, but "
+                               "is not\n");
+                        GOTO(err_out, rc = -EPROTO);
+                }
                 offset++;
         }
 

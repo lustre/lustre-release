@@ -5,12 +5,6 @@
 #ifndef OST_INTERNAL_H
 #define OST_INTERNAL_H
 
-#ifdef LPROCFS
-extern void ost_print_req(void *seq_file, struct ptlrpc_request *req);
-#else
-# define ost_print_req NULL
-#endif
-
 #define OSS_SERVICE_WATCHDOG_FACTOR 2000
 
 /*

@@ -213,7 +213,7 @@ cfs_duration_t cfs_waitq_timedwait(struct cfs_waitlink *link,
  * Thread schedule APIs.
  */
 #define MAX_SCHEDULE_TIMEOUT    ((long)(~0UL>>12))
-extern void thread_set_timer_deadline(uint64_t	deadline);
+extern void thread_set_timer_deadline(__u64 deadline);
 extern void thread_cancel_timer(void);
 
 static inline int cfs_schedule_timeout(int state, int64_t timeout)
@@ -226,7 +226,7 @@ static inline int cfs_schedule_timeout(int state, int64_t timeout)
 	result = assert_wait((event_t)current_uthread(), state);
 #endif
 	if (timeout > 0) {
-		uint64_t expire;
+		__u64 expire;
 		nanoseconds_to_absolutetime(timeout, &expire);
 		clock_absolutetime_interval_to_deadline(expire, &expire);
 		thread_set_timer_deadline(expire);

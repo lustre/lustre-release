@@ -27,7 +27,7 @@ struct obd_device;
 
 #define OBD_LDLM_DEVICENAME  "ldlm"
 
-#define LDLM_DEFAULT_LRU_SIZE (100 * smp_num_cpus)
+#define LDLM_DEFAULT_LRU_SIZE (100 * num_online_cpus())
 #define LDLM_DEFAULT_MAX_ALIVE (cfs_time_seconds(36000))
 
 typedef enum {
@@ -142,6 +142,9 @@ typedef enum {
  * to send a separate CANCEL rpc. */
 #define LDLM_FL_BL_AST          0x10000000
 #define LDLM_FL_BL_DONE         0x20000000
+
+/* measure lock contention and return -EUSERS if locking contention is high */
+#define LDLM_FL_DENY_ON_CONTENTION 0x40000000
 
 /* The blocking callback is overloaded to perform two functions.  These flags
  * indicate which operation should be performed. */
@@ -294,9 +297,9 @@ typedef enum {
 
 /* default values for the "max_nolock_size", "contention_time"
  * and "contended_locks" namespace tunables */
-#define NS_DEFAULT_MAX_NOLOCK_BYTES 131072
+#define NS_DEFAULT_MAX_NOLOCK_BYTES 0
 #define NS_DEFAULT_CONTENTION_SECONDS 2
-#define NS_DEFAULT_CONTENDED_LOCKS 0
+#define NS_DEFAULT_CONTENDED_LOCKS 32
 
 struct ldlm_namespace {
         char                  *ns_name;
@@ -549,9 +552,6 @@ int ldlm_replay_locks(struct obd_import *imp);
 void ldlm_resource_iterate(struct ldlm_namespace *, struct ldlm_res_id *,
                            ldlm_iterator_t iter, void *data);
 
-/* measure lock contention and return -EBUSY if locking contention is high */
-#define LDLM_FL_DENY_ON_CONTENTION 0x10000000
-
 /* ldlm_flock.c */
 int ldlm_flock_completion_ast(struct ldlm_lock *lock, int flags, void *data);
 
@@ -621,11 +621,12 @@ do {                                            \
         struct ldlm_lock *_lock, *_next;                        \
         int c = count;                                          \
         list_for_each_entry_safe(_lock, _next, head, member) {  \
+                if (c-- == 0)                                   \
+                        break;                                  \
                 list_del_init(&_lock->member);                  \
                 LDLM_LOCK_PUT(_lock);                           \
-                if (--c == 0)                                   \
-                        break;                                  \
         }                                                       \
+        LASSERT(c <= 0);                                       \
 })
 
 struct ldlm_lock *ldlm_lock_get(struct ldlm_lock *lock);
@@ -654,6 +655,12 @@ struct ldlm_namespace *ldlm_namespace_new(char *name, ldlm_side_t client,
                                           ldlm_appetite_t apt);
 int ldlm_namespace_cleanup(struct ldlm_namespace *ns, int flags);
 int ldlm_namespace_free(struct ldlm_namespace *ns, int force);
+void ldlm_namespace_move(struct ldlm_namespace *ns, ldlm_side_t client);
+struct ldlm_namespace *ldlm_namespace_first(ldlm_side_t client);
+void ldlm_namespace_get(struct ldlm_namespace *ns);
+void ldlm_namespace_put(struct ldlm_namespace *ns, int wakeup);
+void ldlm_namespace_get_nolock(struct ldlm_namespace *ns);
+void ldlm_namespace_put_nolock(struct ldlm_namespace *ns, int wakeup);
 int ldlm_proc_setup(void);
 #ifdef LPROCFS
 void ldlm_proc_cleanup(void);
@@ -672,7 +679,7 @@ void ldlm_resource_add_lock(struct ldlm_resource *res, struct list_head *head,
                             struct ldlm_lock *lock);
 void ldlm_resource_unlink_lock(struct ldlm_lock *lock);
 void ldlm_res2desc(struct ldlm_resource *res, struct ldlm_resource_desc *desc);
-void ldlm_dump_all_namespaces(int level);
+void ldlm_dump_all_namespaces(ldlm_side_t client, int level);
 void ldlm_namespace_dump(int level, struct ldlm_namespace *);
 void ldlm_resource_dump(int level, struct ldlm_resource *);
 int ldlm_lock_change_resource(struct ldlm_namespace *, struct ldlm_lock *,
@@ -758,9 +765,9 @@ void unlock_res_and_lock(struct ldlm_lock *lock);
 
 /* ldlm_pool.c */
 int ldlm_pools_init(ldlm_side_t client);
+void ldlm_pools_recalc(ldlm_side_t client);
 void ldlm_pools_fini(void);
 void ldlm_pools_wakeup(void);
-int ldlm_pools_shrink(int nr, unsigned int gfp_mask);
 
 int ldlm_pool_init(struct ldlm_pool *pl, struct ldlm_namespace *ns, 
                    int idx, ldlm_side_t client);

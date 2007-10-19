@@ -12,16 +12,17 @@ set -e
 ONLY=${ONLY:-"$*"}
 
 # These tests don't apply to mountconf
-#              xml xml xml xml xml xml dumb FIXME
-MOUNTCONFSKIP="10  11  12  13  13b 14  15   18"
+#              xml xml xml xml xml xml dumb
+MOUNTCONFSKIP="10  11  12  13  13b 14  15 "
 
-# bug number for skipped test:                     13369
-ALWAYS_EXCEPT=" $CONF_SANITY_EXCEPT $MOUNTCONFSKIP 34a"
+# bug number for skipped test:                     13369 12743
+ALWAYS_EXCEPT=" $CONF_SANITY_EXCEPT $MOUNTCONFSKIP 34a   36"
 # UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
 
 SRCDIR=`dirname $0`
 PATH=$PWD/$SRCDIR:$SRCDIR:$SRCDIR/../utils:$PATH
 
+SAVE_PWD=$PWD
 LUSTRE=${LUSTRE:-`dirname $0`/..}
 RLUSTRE=${RLUSTRE:-$LUSTRE}
 HOSTNAME=`hostname`
@@ -693,11 +694,12 @@ run_test 17 "Verify failed mds_postsetup won't fail assertion (2936) (should ret
 test_18() {
         [ -f $MDSDEV ] && echo "remove $MDSDEV" && rm -f $MDSDEV
         echo "mount mds with large journal..."
-        OLDMDSSIZE=$MDSSIZE
-        MDSSIZE=2000000
-	#FIXME have to change MDS_MKFS_OPTS
-        gen_config
+        local myMDSSIZE=2000000
+        OLD_MDS_MKFS_OPTS=$MDS_MKFS_OPTS
 
+        MDS_MKFS_OPTS="--mgs --mdt --fsname=$FSNAME --device-size=$myMDSSIZE --param sys.timeout=$TIMEOUT $MDSOPT"
+
+        gen_config
         echo "mount lustre system..."
 	setup
         check_mount || return 41
@@ -705,14 +707,14 @@ test_18() {
         echo "check journal size..."
         FOUNDSIZE=`do_facet mds "debugfs -c -R 'stat <8>' $MDSDEV" | awk '/Size: / { print $NF; exit;}'`
         if [ $FOUNDSIZE -gt $((32 * 1024 * 1024)) ]; then
-                log "Success: mkfs creates large journals"
+                log "Success: mkfs creates large journals. Size: $((FOUNDSIZE >> 20))M"
         else
                 error "expected journal size > 32M, found $((FOUNDSIZE >> 20))M"
         fi
 
         cleanup || return $?
 
-        MDSSIZE=$OLDMDSSIZE
+        MDS_MKFS_OPTS=$OLD_MDS_MKFS_OPTS
         gen_config
 }
 run_test 18 "check mkfs creates large journals"
@@ -780,19 +782,23 @@ test_22() {
         #reformat to remove all logs
         reformat
 	start_mds
+	echo Client mount before any osts are in the logs
+	mount_client $MOUNT
+	check_mount && return 41
+	pass
+
+	echo Client mount with ost in logs, but none running
+	start_ost
+	stop_ost
+	mount_client $MOUNT
+	# check_mount will block trying to contact ost
+	umount_client $MOUNT
+	pass
 
 	echo Client mount with a running ost
 	start_ost
 	mount_client $MOUNT
 	check_mount || return 41
-	umount_client $MOUNT
-	pass
-
-	echo Client mount with ost in logs, but none running
-	stop_ost
-	mount_client $MOUNT
-	# check_mount will block trying to contact ost
-	umount_client $MOUNT
 	pass
 
 	cleanup
@@ -926,7 +932,7 @@ set_and_check() {
 	echo "Setting $PARAM from $ORIG to $FINAL"
 	do_facet mds "$LCTL conf_param $PARAM=$FINAL" || error conf_param failed
 	local RESULT
-	local MAX=30
+	local MAX=90
 	local WAIT=0
 	while [ 1 ]; do
 	    sleep 5
@@ -1085,8 +1091,9 @@ test_32a() {
         #       devices
         # or maybe this test is just totally useless on a client-only system
         [ -z "$TUNEFS" ] && skip "No tunefs" && return
-        [ ! -r disk1_4.zip ] && skip "Cant find disk1_4.zip, skipping" && return
-	unzip -o -j -d $TMP/$tdir disk1_4.zip || { skip "Cant unzip disk1_4, skipping" && return ; }
+	local DISK1_4=$LUSTRE/tests/disk1_4.zip
+        [ ! -r $DISK1_4 ] && skip "Cant find $DISK1_4, skipping" && return
+	unzip -o -j -d $TMP/$tdir $DISK1_4 || { skip "Cant unzip $DISK1_4, skipping" && return ; }
 	load_modules
 	sysctl lnet.debug=$PTLDEBUG
 
@@ -1114,6 +1121,15 @@ test_32a() {
 	$LCTL conf_param lustre-MDT0000.failover.node=$NID || return 10
 	echo "ok."
 
+	# With a new good MDT failover nid, we should be able to mount a client
+	# (but it cant talk to OST)
+        local OLDMOUNTOPT=$MOUNTOPT
+        MOUNTOPT="exclude=lustre-OST0000"
+	mount_client $MOUNT
+        MOUNTOPT=$OLDMOUNTOPT
+	set_and_check client "cat $LPROC/mdc/*/max_rpcs_in_flight" "lustre-MDT0000.mdc.max_rpcs_in_flight" || return 11
+
+	zconf_umount `hostname` $MOUNT -f
 	cleanup_nocli
 	load_modules
 
@@ -1135,8 +1151,9 @@ test_32b() {
         #       devices
         # or maybe this test is just totally useless on a client-only system
         [ -z "$TUNEFS" ] && skip "No tunefs" && return
-        [ ! -r disk1_4.zip ] && skip "Cant find disk1_4.zip, skipping" && return
-	unzip -o -j -d $TMP/$tdir disk1_4.zip || { skip "Cant unzip disk1_4, skipping" && return ; }
+	local DISK1_4=$LUSTRE/tests/disk1_4.zip
+        [ ! -r $DISK1_4 ] && skip "Cant find $DISK1_4, skipping" && return
+	unzip -o -j -d $TMP/$tdir $DISK1_4 || { skip "Cant unzip $DISK1_4, skipping" && return ; }
 	load_modules
 	sysctl lnet.debug=$PTLDEBUG
 	NEWNAME=sofia
@@ -1169,7 +1186,7 @@ test_32b() {
 	FSNAME=$NEWNAME
 	mount_client $MOUNT
 	FSNAME=$OLDFS
-	set_and_check client "cat $LPROC/mdc/*/max_rpcs_in_flight" "lustre-MDT0000.mdc.max_rpcs_in_flight" || return 11
+	set_and_check client "cat $LPROC/mdc/*/max_rpcs_in_flight" "${NEWNAME}-MDT0000.mdc.max_rpcs_in_flight" || return 11
 	[ "$(cksum $MOUNT/passwd | cut -d' ' -f 1,2)" == "2479747619 779" ] || return 12  
 	echo "ok."
 
@@ -1224,7 +1241,7 @@ run_test 33a "Drop cancel during umount"
 test_34a() {
         setup
 	do_facet client multiop $DIR/file O_c &
-
+	sleep 0.500s
 	manual_umount_client
 	rc=$?
 	do_facet client killall -USR1 multiop
@@ -1277,7 +1294,7 @@ test_35() { # bug 12459
 
 	log "Set up a fake failnode for the MDS"
 	FAKENID="127.0.0.2"
-	$LCTL conf_param ${FSNAME}-MDT0000.failover.node=$FAKENID || return 4
+	do_facet mds $LCTL conf_param ${FSNAME}-MDT0000.failover.node=$FAKENID || return 4
 
 	log "Wait for RECONNECT_INTERVAL seconds (10s)"
 	sleep 10

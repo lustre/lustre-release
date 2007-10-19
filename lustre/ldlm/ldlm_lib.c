@@ -268,6 +268,7 @@ int client_obd_setup(struct obd_device *obddev, obd_count len, void *buf)
 #ifdef ENABLE_CHECKSUM
         cli->cl_checksum = 1;
 #endif
+        atomic_set(&cli->cl_resends, OSC_DEFAULT_RESENDS);
 
         /* This value may be changed at connect time in
            ptlrpc_connect_interpret. */
@@ -750,20 +751,25 @@ int target_handle_connect(struct ptlrpc_request *req, svc_handler_t handler)
                 OBD_FAIL_TIMEOUT(OBD_FAIL_TGT_DELAY_RECONNECT, 2 * obd_timeout);
         }
 
+        if (rc < 0)
+                GOTO(out, rc);
+
+        /* Tell the client if we're in recovery. */
+        if (target->obd_recovering) {
+                lustre_msg_add_op_flags(req->rq_repmsg, MSG_CONNECT_RECOVERING);
+                /* If this is the first time a client connects,
+                   reset the recovery timer */
+                if (rc == 0)
+                        target_start_recovery_timer(target, handler, req);
+        }
+
         /* We want to handle EALREADY but *not* -EALREADY from
          * target_handle_reconnect(), return reconnection state in a flag */
         if (rc == EALREADY) {
                 lustre_msg_add_op_flags(req->rq_repmsg, MSG_CONNECT_RECONNECT);
                 rc = 0;
-        } else if (rc) {
-                GOTO(out, rc);
-        }
-
-        /* Tell the client if we're in recovery. */
-        /* If this is the first client, start the recovery timer */
-        if (target->obd_recovering) {
-                lustre_msg_add_op_flags(req->rq_repmsg, MSG_CONNECT_RECOVERING);
-                target_start_recovery_timer(target, handler, req);
+        } else {
+                LASSERT(rc == 0);
         }
 
         /* Tell the client if we support replayable requests */
@@ -1039,8 +1045,8 @@ void target_cleanup_recovery(struct obd_device *obd)
 void target_abort_recovery(void *data)
 {
         struct obd_device *obd = data;
-
         ENTRY;
+
         spin_lock_bh(&obd->obd_processing_task_lock);
         if (!obd->obd_recovering) {
                 spin_unlock_bh(&obd->obd_processing_task_lock);
@@ -1048,12 +1054,14 @@ void target_abort_recovery(void *data)
                 return;
         }
         obd->obd_recovering = obd->obd_abort_recovery = 0;
-        obd->obd_recoverable_clients = 0;
         target_cancel_recovery_timer(obd);
         spin_unlock_bh(&obd->obd_processing_task_lock);
 
-        LCONSOLE_WARN("%s: recovery period over; disconnecting unfinished "
-                      "clients.\n", obd->obd_name);
+        LCONSOLE_WARN("%s: recovery period over; %d clients never reconnected "
+                      "after %lds (%d clients did)\n",
+                      obd->obd_name, obd->obd_recoverable_clients,
+                      cfs_time_current_sec()- obd->obd_recovery_start,
+                      obd->obd_connected_clients);
         class_disconnect_stale_exports(obd);
         abort_recovery_queue(obd);
 
@@ -1081,8 +1089,7 @@ void target_cancel_recovery_timer(struct obd_device *obd)
         cfs_timer_disarm(&obd->obd_recovery_timer);
 }
 
-static void reset_recovery_timer(struct obd_device *obd,
-                                 struct ptlrpc_request *req, int first)
+static void reset_recovery_timer(struct obd_device *obd, int mintime)
 {
         spin_lock_bh(&obd->obd_processing_task_lock);
         if (!obd->obd_recovering) {
@@ -1090,35 +1097,34 @@ static void reset_recovery_timer(struct obd_device *obd,
                 return;
         }
         /* Track the client's largest expected replay time */
-        obd->obd_recovery_timeout = 
-                max((first ? (int)OBD_RECOVERY_TIMEOUT : 
-                     obd->obd_recovery_timeout),
-                    (int)lustre_msg_get_timeout(req->rq_reqmsg));
+        obd->obd_recovery_timeout = max(mintime, obd->obd_recovery_timeout);
+        obd->obd_recovery_end = cfs_time_current_sec() +
+                obd->obd_recovery_timeout;
         cfs_timer_arm(&obd->obd_recovery_timer, 
                       cfs_time_shift(obd->obd_recovery_timeout));
         spin_unlock_bh(&obd->obd_processing_task_lock);
         CDEBUG(D_HA, "%s: recovery timer will expire in %u seconds\n", 
                obd->obd_name, obd->obd_recovery_timeout);
-        obd->obd_recovery_end = cfs_time_current_sec() + 
-                obd->obd_recovery_timeout;
 }
 
 
-/* Only start it the first time called */
+/* Reset the timer with each new client connection */
 void target_start_recovery_timer(struct obd_device *obd, svc_handler_t handler,
                                  struct ptlrpc_request *req)
 {
         spin_lock_bh(&obd->obd_processing_task_lock);
-        if (obd->obd_recovery_handler) {
-                spin_unlock_bh(&obd->obd_processing_task_lock);
-                return;
-        }
+        if (obd->obd_recovery_handler)
+                goto out;
         CWARN("%s: starting recovery timer\n", obd->obd_name);
+        obd->obd_recovery_start = cfs_time_current_sec();
+        /* minimum */
+        obd->obd_recovery_timeout = OBD_RECOVERY_FACTOR * obd_timeout;
         obd->obd_recovery_handler = handler;
         cfs_timer_init(&obd->obd_recovery_timer, target_recovery_expired, obd);
+out:
         spin_unlock_bh(&obd->obd_processing_task_lock);
-
-        reset_recovery_timer(obd, req, 1);
+        reset_recovery_timer(obd, OBD_RECOVERY_FACTOR *
+                             lustre_msg_get_timeout(req->rq_reqmsg));
 }
 
 static int check_for_next_transno(struct obd_device *obd)
@@ -1179,9 +1185,10 @@ static void process_recovery_queue(struct obd_device *obd)
                     obd->obd_next_recovery_transno) {
                         spin_unlock_bh(&obd->obd_processing_task_lock);
                         CDEBUG(D_HA, "Waiting for transno "LPD64" (1st is "
-                               LPD64")\n",
+                               LPD64", x"LPU64")\n",
                                obd->obd_next_recovery_transno,
-                               lustre_msg_get_transno(req->rq_reqmsg));
+                               lustre_msg_get_transno(req->rq_reqmsg),
+                               req->rq_xid);
                         l_wait_event(obd->obd_next_transno_waitq,
                                      check_for_next_transno(obd), &lwi);
                         spin_lock_bh(&obd->obd_processing_task_lock);
@@ -1200,7 +1207,8 @@ static void process_recovery_queue(struct obd_device *obd)
                 DEBUG_REQ(D_HA, req, "processing: ");
                 (void)obd->obd_recovery_handler(req);
                 obd->obd_replayed_requests++;
-                reset_recovery_timer(obd, req, 0);
+                reset_recovery_timer(obd, 2 * /* safety */
+                        at_get(&req->rq_rqbd->rqbd_service->srv_at_estimate));
                 /* bug 1580: decide how to properly sync() in recovery */
                 //mds_fsync_super(obd->u.obt.obt_sb);
                 class_export_put(req->rq_export);
@@ -1329,32 +1337,34 @@ struct obd_device * target_req2obd(struct ptlrpc_request *req)
         return req->rq_export->exp_obd;
 }
 
-int target_queue_final_reply(struct ptlrpc_request *req, int rc)
+int target_queue_last_replay_reply(struct ptlrpc_request *req, int rc)
 {
         struct obd_device *obd = target_req2obd(req);
         struct ptlrpc_request *saved_req;
         struct lustre_msg *reqmsg;
         int recovery_done = 0;
 
-        LASSERT ((rc == 0) == lustre_packed_reply(req));
+        LASSERT ((rc == 0) == req->rq_packed_final);
 
-        if (!lustre_packed_reply(req)) {
+        if (!req->rq_packed_final) {
                 /* Just like ptlrpc_error, but without the sending. */
                 rc = lustre_pack_reply(req, 1, NULL, NULL);
                 if (rc)
-                        CERROR("pack error %d\n", rc);
+                        return rc;
                 req->rq_type = PTL_RPC_MSG_ERR;
         }
 
-        LASSERT (!req->rq_reply_state->rs_difficult);
+        LASSERT(!req->rq_reply_state->rs_difficult);
         LASSERT(list_empty(&req->rq_list));
         /* XXX a bit like the request-dup code in queue_recovery_request */
         OBD_ALLOC(saved_req, sizeof *saved_req);
         if (!saved_req)
-                LBUG();
+                return -ENOMEM;
         OBD_ALLOC(reqmsg, req->rq_reqlen);
-        if (!reqmsg)
-                LBUG();
+        if (!reqmsg) {
+                OBD_FREE(saved_req, sizeof *req);
+                return -ENOMEM;
+        }
         *saved_req = *req;
         memcpy(reqmsg, req->rq_reqmsg, req->rq_reqlen);
 
@@ -1550,9 +1560,10 @@ void target_committed_to_req(struct ptlrpc_request *req)
                 lustre_msg_set_last_committed(req->rq_repmsg,
                                               obd->obd_last_committed);
         else
-                DEBUG_REQ(D_IOCTL, req, "not sending last_committed update");
+                DEBUG_REQ(D_IOCTL, req, "not sending last_committed update (%d/"
+                          "%d)", obd->obd_no_transno, req->rq_repmsg == NULL);
 
-        CDEBUG(D_INFO, "last_committed "LPU64", xid "LPU64"\n",
+        CDEBUG(D_INFO, "last_committed x"LPU64", this req x"LPU64"\n",
                obd->obd_last_committed, req->rq_xid);
 }
 

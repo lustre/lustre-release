@@ -160,7 +160,7 @@ static int llog_lvfs_read_header(struct llog_handle *handle)
 
         obd = handle->lgh_ctxt->loc_exp->exp_obd;
 
-        if (handle->lgh_file->f_dentry->d_inode->i_size == 0) {
+        if (i_size_read(handle->lgh_file->f_dentry->d_inode) == 0) {
                 CDEBUG(D_RPCTRACE, "not reading header from 0-byte log\n");
                 RETURN(LLOG_EEMPTY);
         }
@@ -195,7 +195,7 @@ static int llog_lvfs_read_header(struct llog_handle *handle)
         }
 
         handle->lgh_last_idx = handle->lgh_hdr->llh_tail.lrt_index;
-        handle->lgh_file->f_pos = handle->lgh_file->f_dentry->d_inode->i_size;
+        handle->lgh_file->f_pos = i_size_read(handle->lgh_file->f_dentry->d_inode);
 
         RETURN(rc);
 }
@@ -237,11 +237,11 @@ static int llog_lvfs_write_rec(struct llog_handle *loghandle,
                 loff_t saved_offset;
 
                 /* no header: only allowed to insert record 1 */
-                if (idx != 1 && !file->f_dentry->d_inode->i_size) {
+                if (idx != 1 && !i_size_read(file->f_dentry->d_inode)) {
                         CERROR("idx != -1 in empty log\n");
                         LBUG();
                 }
-                
+
                 if (idx && llh->llh_size && llh->llh_size != rec->lrh_len)
                         RETURN(-EINVAL);
 
@@ -398,7 +398,7 @@ static int llog_lvfs_next_block(struct llog_handle *loghandle, int *cur_idx,
         CDEBUG(D_OTHER, "looking for log index %u (cur idx %u off "LPU64")\n",
                next_idx, *cur_idx, *cur_offset);
 
-        while (*cur_offset < loghandle->lgh_file->f_dentry->d_inode->i_size) {
+        while (*cur_offset < i_size_read(loghandle->lgh_file->f_dentry->d_inode)) {
                 struct llog_rec_hdr *rec;
                 struct llog_rec_tail *tail;
                 loff_t ppos;
@@ -484,7 +484,7 @@ static int llog_lvfs_prev_block(struct llog_handle *loghandle,
         cur_offset = LLOG_CHUNK_SIZE;
         llog_skip_over(&cur_offset, 0, prev_idx);
 
-        while (cur_offset < loghandle->lgh_file->f_dentry->d_inode->i_size) {
+        while (cur_offset < i_size_read(loghandle->lgh_file->f_dentry->d_inode)) {
                 struct llog_rec_hdr *rec;
                 struct llog_rec_tail *tail;
                 loff_t ppos;
@@ -775,8 +775,8 @@ int llog_get_cat_list(struct obd_device *obd, struct obd_device *disk_obd,
                 GOTO(out, rc = -ENOENT);
         }
 
-        CDEBUG(D_CONFIG, "cat list: disk size=%d, read=%d\n", 
-               (int)file->f_dentry->d_inode->i_size, size);
+        CDEBUG(D_CONFIG, "cat list: disk size=%d, read=%d\n",
+               (int)i_size_read(file->f_dentry->d_inode), size);
 
         rc = fsfilt_read_record(disk_obd, file, idarray, size, &off);
         if (rc) {

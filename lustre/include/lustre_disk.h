@@ -266,6 +266,9 @@ struct lustre_mount_info {
 
 /* obd_mount.c */
 void lustre_register_client_fill_super(int (*cfs)(struct super_block *sb));
+void lustre_register_kill_super_cb(void (*cfs)(struct super_block *sb));
+
+
 int lustre_common_put_super(struct super_block *sb);
 int lustre_process_log(struct super_block *sb, char *logname, 
                      struct config_llog_instance *cfg);

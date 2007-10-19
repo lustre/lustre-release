@@ -12,8 +12,8 @@ init_test_env $@
 
 ALWAYS_EXCEPT="10 $INSANITY_EXCEPT"
 
-SETUP=${SETUP:-"setup"}
-CLEANUP=${CLEANUP:-"cleanup"}
+SETUP=${SETUP:-""}
+CLEANUP=${CLEANUP:-""}
 
 build_test_filter
 
@@ -106,22 +106,6 @@ start_ost() {
     start ost$1 `ostdevname $1` $OST_MOUNT_OPTS
 }
 
-setup() {
-    cleanup
-    rm -rf logs/*
-    formatall
-    setupall
-
-    while ! do_node $CLIENTS "ls -d $LUSTRE" > /dev/null; do sleep 5; done
-    grep " $MOUNT " /proc/mounts || zconf_mount $CLIENTS $MOUNT
-}
-
-cleanup() {
-    zconf_umount $CLIENTS $MOUNT
-    cleanupall
-    cleanup_check
-}
-
 trap exit INT
 
 client_touch() {
@@ -159,21 +143,7 @@ clients_recover_osts() {
 #    do_node $CLIENTS "$LCTL "'--device %OSC_`hostname`_'"${facet}_svc_MNT_client_facet recover"
 }
 
-if [ "$ONLY" == "cleanup" ]; then
-    $CLEANUP
-    exit
-fi
-
-if [ ! -z "$EVAL" ]; then
-    eval "$EVAL"
-    exit $?
-fi
-
-$SETUP
-
-if [ "$ONLY" == "setup" ]; then
-    exit 0
-fi
+cleanup_and_setup_lustre
 
 # 9 Different Failure Modes Combinations
 echo "Starting Test 17 at `date`"
@@ -576,5 +546,5 @@ test_10() {
 run_test 10 "Running Availability for 6 hours..."
 
 equals_msg `basename $0`: test complete, cleaning up
-$CLEANUP
+check_and_cleanup_lustre
 [ -f "$TESTSUITELOG" ] && cat $TESTSUITELOG || true

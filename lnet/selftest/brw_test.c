@@ -6,7 +6,6 @@
  *
  */
 
-#include <libcfs/kp30.h>
 #include "selftest.h"
 
 

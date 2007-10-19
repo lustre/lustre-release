@@ -43,8 +43,6 @@
 extern cfs_mem_cache_t *ldlm_resource_slab;
 extern cfs_mem_cache_t *ldlm_lock_slab;
 extern struct lustre_lock ldlm_handle_lock;
-extern struct list_head ldlm_namespace_list;
-extern struct semaphore ldlm_namespace_lock;
 
 static struct semaphore ldlm_ref_sem;
 static int ldlm_refcount;
@@ -567,6 +565,7 @@ int ldlm_server_blocking_ast(struct ldlm_lock *lock,
         req->rq_async_args.pointer_arg[0] = arg;
         req->rq_async_args.pointer_arg[1] = lock;
         req->rq_interpret_reply = ldlm_cb_interpret;
+        req->rq_no_resend = 1;
 
         lock_res(lock->l_resource);
         if (lock->l_granted_mode != lock->l_req_mode) {
@@ -668,6 +667,7 @@ int ldlm_server_completion_ast(struct ldlm_lock *lock, int flags, void *data)
         req->rq_async_args.pointer_arg[0] = arg;
         req->rq_async_args.pointer_arg[1] = lock;
         req->rq_interpret_reply = ldlm_cb_interpret;
+        req->rq_no_resend = 1;
 
         body = lustre_msg_buf(req->rq_reqmsg, DLM_LOCKREQ_OFF, sizeof(*body));
         body->lock_handle[0] = lock->l_remote_handle;
@@ -1018,7 +1018,7 @@ existing_lock:
         EXIT;
  out:
         req->rq_status = rc ?: err;  /* return either error - bug 11190 */
-        if (!lustre_packed_reply(req)) {
+        if (!req->rq_packed_final) {
                 err = lustre_pack_reply(req, 1, NULL, NULL);
                 if (rc == 0)
                         rc = err;
@@ -1332,7 +1332,8 @@ static void ldlm_handle_gl_callback(struct ptlrpc_request *req,
         if (lock->l_granted_mode == LCK_PW &&
             !lock->l_readers && !lock->l_writers &&
             cfs_time_after(cfs_time_current(),
-                           cfs_time_add(lock->l_last_used, cfs_time_seconds(10)))) {
+                           cfs_time_add(lock->l_last_used, 
+                                        cfs_time_seconds(10)))) {
                 unlock_res_and_lock(lock);
                 if (ldlm_bl_to_thread(ns, NULL, lock, 0))
                         ldlm_handle_bl_callback(ns, NULL, lock);
@@ -1348,14 +1349,13 @@ static void ldlm_handle_gl_callback(struct ptlrpc_request *req,
 static int ldlm_callback_reply(struct ptlrpc_request *req, int rc)
 {
         req->rq_status = rc;
-        if (!lustre_packed_reply(req)) {
+        if (!req->rq_packed_final) {
                 rc = lustre_pack_reply(req, 1, NULL, NULL);
                 if (rc)
                         return rc;
         }
         return ptlrpc_reply(req);
 }
-
 int ldlm_bl_to_thread(struct ldlm_namespace *ns, struct ldlm_lock_desc *ld,
                       struct ldlm_lock *lock, int flags)
 {
@@ -1843,9 +1843,11 @@ static int ldlm_cleanup(ldlm_side_t client, int force)
 #endif
         ENTRY;
 
-        if (!list_empty(&ldlm_namespace_list)) {
+        if (!list_empty(ldlm_namespace_list(LDLM_NAMESPACE_SERVER)) || 
+            !list_empty(ldlm_namespace_list(LDLM_NAMESPACE_CLIENT))) {
                 CERROR("ldlm still has namespaces; clean these up first.\n");
-                ldlm_dump_all_namespaces(D_DLMTRACE);
+                ldlm_dump_all_namespaces(LDLM_NAMESPACE_SERVER, D_DLMTRACE);
+                ldlm_dump_all_namespaces(LDLM_NAMESPACE_CLIENT, D_DLMTRACE);
                 RETURN(-EBUSY);
         }
 
@@ -1890,7 +1892,8 @@ static int ldlm_cleanup(ldlm_side_t client, int force)
 int __init ldlm_init(void)
 {
         init_mutex(&ldlm_ref_sem);
-        init_mutex(&ldlm_namespace_lock);
+        init_mutex(ldlm_namespace_lock(LDLM_NAMESPACE_SERVER));
+        init_mutex(ldlm_namespace_lock(LDLM_NAMESPACE_CLIENT));
         ldlm_resource_slab = cfs_mem_cache_create("ldlm_resources",
                                                sizeof(struct ldlm_resource), 0,
                                                SLAB_HWCACHE_ALIGN);
@@ -2008,7 +2011,7 @@ EXPORT_SYMBOL(target_queue_recovery_request);
 EXPORT_SYMBOL(target_handle_ping);
 EXPORT_SYMBOL(target_pack_pool_reply);
 EXPORT_SYMBOL(target_handle_disconnect);
-EXPORT_SYMBOL(target_queue_final_reply);
+EXPORT_SYMBOL(target_queue_last_replay_reply);
 
 /* l_lock.c */
 EXPORT_SYMBOL(lock_res_and_lock);

@@ -598,10 +598,6 @@ int lprocfs_rd_timeouts(char *page, char **start, off_t off, int count,
                               "adaptive timeouts off, using obd_timeout %u\n",
                               obd_timeout);
         
-        rc += snprintf(page + rc, count - rc, 
-                       "%-10s : %ld sec\n", "timebase",
-                       imp->imp_at.iat_net_latency.at_binlimit * AT_BINS);
-        
         now = cfs_time_current_sec();
 
         /* Some network health info for kicks */
@@ -640,38 +636,6 @@ int lprocfs_rd_timeouts(char *page, char **start, off_t off, int count,
         return rc;
 }
 
-int lprocfs_wr_timeouts(struct file *file, const char *buffer,
-                        unsigned long count, void *data)
-{
-        struct obd_device *obd = (struct obd_device *)data;
-        struct obd_import *imp;
-        time_t bval;
-        int val, i, rc;
-
-        LASSERT(obd != NULL);
-        LPROCFS_CLIMP_CHECK(obd);
-        imp = obd->u.cli.cl_import;
-         
-        rc = lprocfs_write_helper(buffer, count, &val);
-        if (rc < 0)
-                return rc;
-        if (val <= 0)
-                return -ERANGE;
-
-        bval = max(1, val / AT_BINS);
-        spin_lock(&imp->imp_at.iat_net_latency.at_lock);
-        imp->imp_at.iat_net_latency.at_binlimit = bval;
-        spin_unlock(&imp->imp_at.iat_net_latency.at_lock);
-        for(i = 0; i < IMP_AT_MAX_PORTALS; i++) {
-                spin_lock(&imp->imp_at.iat_service_estimate[i].at_lock);
-                imp->imp_at.iat_service_estimate[i].at_binlimit = bval;
-                spin_unlock(&imp->imp_at.iat_service_estimate[i].at_lock);
-        }
-        
-        LPROCFS_CLIMP_EXIT(obd);
-        return count;
-}
-
 static const char *obd_connect_names[] = {
         "read_only",
         "lov_index",
@@ -699,6 +663,8 @@ static const char *obd_connect_names[] = {
         "size_on_mds",
         "adaptive_timeout",
         "lru_resize",
+        "mds_mds_connection",
+        "real_conn",
         NULL
 };
 
@@ -778,31 +744,49 @@ int lprocfs_obd_cleanup(struct obd_device *obd)
         return 0;
 }
 
-struct lprocfs_stats *lprocfs_alloc_stats(unsigned int num)
+struct lprocfs_stats *lprocfs_alloc_stats(unsigned int num,
+                                          enum lprocfs_stats_flags flags)
 {
         struct lprocfs_stats *stats;
         struct lprocfs_percpu *percpu;
         unsigned int percpusize;
         unsigned int i;
+        unsigned int num_cpu;
 
         if (num == 0)
                 return NULL;
 
-        OBD_ALLOC(stats, offsetof(typeof(*stats), ls_percpu[num_online_cpus()]));
+        if (flags & LPROCFS_STATS_FLAG_NOPERCPU)
+                num_cpu = 1;
+        else
+                num_cpu = num_possible_cpus();
+
+        OBD_ALLOC(stats, offsetof(typeof(*stats), ls_percpu[num_cpu]));
         if (stats == NULL)
                 return NULL;
 
-        percpusize = L1_CACHE_ALIGN(offsetof(typeof(*percpu), lp_cntr[num]));
-        stats->ls_percpu_size = num_online_cpus() * percpusize;
+        if (flags & LPROCFS_STATS_FLAG_NOPERCPU) {
+                stats->ls_flags = flags;
+                spin_lock_init(&stats->ls_lock);
+                /* Use this lock only if there are no percpu areas */
+        } else {
+                stats->ls_flags = 0;
+        }
+
+        percpusize = offsetof(typeof(*percpu), lp_cntr[num]);
+        if (num_cpu > 1)
+                percpusize = L1_CACHE_ALIGN(percpusize);
+
+        stats->ls_percpu_size = num_cpu * percpusize;
         OBD_ALLOC(stats->ls_percpu[0], stats->ls_percpu_size);
         if (stats->ls_percpu[0] == NULL) {
                 OBD_FREE(stats, offsetof(typeof(*stats),
-                                         ls_percpu[num_online_cpus()]));
+                                         ls_percpu[num_cpu]));
                 return NULL;
         }
 
         stats->ls_num = num;
-        for (i = 1; i < num_online_cpus(); i++)
+        for (i = 1; i < num_cpu; i++)
                 stats->ls_percpu[i] = (void *)(stats->ls_percpu[i - 1]) +
                         percpusize;
 
@@ -812,21 +796,29 @@ struct lprocfs_stats *lprocfs_alloc_stats(unsigned int num)
 void lprocfs_free_stats(struct lprocfs_stats **statsh)
 {
         struct lprocfs_stats *stats = *statsh;
+        unsigned int num_cpu;
         
         if (!stats || (stats->ls_num == 0))
                 return;
         *statsh = NULL;
+        if (stats->ls_flags & LPROCFS_STATS_FLAG_NOPERCPU)
+                num_cpu = 1;
+        else
+                num_cpu = num_possible_cpus();
 
         OBD_FREE(stats->ls_percpu[0], stats->ls_percpu_size);
-        OBD_FREE(stats, offsetof(typeof(*stats), ls_percpu[num_online_cpus()]));
+        OBD_FREE(stats, offsetof(typeof(*stats), ls_percpu[num_cpu]));
 }
 
 void lprocfs_clear_stats(struct lprocfs_stats *stats)
 {
         struct lprocfs_counter *percpu_cntr;
-        int i,j;
+        int i, j;
+        unsigned int num_cpu;
 
-        for (i = 0; i < num_online_cpus(); i++) {
+        num_cpu = lprocfs_stats_lock(stats, LPROCFS_GET_NUM_CPU);
+
+        for (i = 0; i < num_cpu; i++) {
                 for (j = 0; j < stats->ls_num; j++) {        
                         percpu_cntr = &(stats->ls_percpu[i])->lp_cntr[j];
                         atomic_inc(&percpu_cntr->lc_cntl.la_entry);
@@ -838,6 +830,8 @@ void lprocfs_clear_stats(struct lprocfs_stats *stats)
                         atomic_inc(&percpu_cntr->lc_cntl.la_exit);
                 }
         }
+
+        lprocfs_stats_unlock(stats);
 }
 
 static ssize_t lprocfs_stats_seq_write(struct file *file, const char *buf,
@@ -878,6 +872,7 @@ static int lprocfs_stats_seq_show(struct seq_file *p, void *v)
        struct lprocfs_counter  *cntr = v;
        struct lprocfs_counter  t, ret = { .lc_min = ~(__u64)0 };
        int i, idx, rc = 0;
+       unsigned int num_cpu;
 
        if (cntr == &(stats->ls_percpu[0])->lp_cntr[0]) {
                struct timeval now;
@@ -889,7 +884,12 @@ static int lprocfs_stats_seq_show(struct seq_file *p, void *v)
        }
        idx = cntr - &(stats->ls_percpu[0])->lp_cntr[0];
 
-       for (i = 0; i < num_online_cpus(); i++) {
+       if (stats->ls_flags & LPROCFS_STATS_FLAG_NOPERCPU)
+               num_cpu = 1;
+       else
+               num_cpu = num_possible_cpus();
+
+       for (i = 0; i < num_cpu; i++) {
                struct lprocfs_counter *percpu_cntr =
                        &(stats->ls_percpu[i])->lp_cntr[idx];
                int centry;
@@ -988,9 +988,13 @@ void lprocfs_counter_init(struct lprocfs_stats *stats, int index,
 {
         struct lprocfs_counter *c;
         int i;
+        unsigned int num_cpu;
 
         LASSERT(stats != NULL);
-        for (i = 0; i < num_online_cpus(); i++) {
+
+        num_cpu = lprocfs_stats_lock(stats, LPROCFS_GET_NUM_CPU);
+
+        for (i = 0; i < num_cpu; i++) {
                 c = &(stats->ls_percpu[i]->lp_cntr[index]);
                 c->lc_config = conf;
                 c->lc_count = 0;
@@ -1000,6 +1004,8 @@ void lprocfs_counter_init(struct lprocfs_stats *stats, int index,
                 c->lc_name = name;
                 c->lc_units = units;
         }
+
+        lprocfs_stats_unlock(stats);
 }
 EXPORT_SYMBOL(lprocfs_counter_init);
 
@@ -1090,7 +1096,7 @@ int lprocfs_alloc_obd_stats(struct obd_device *obd, unsigned num_private_stats)
 
         num_stats = ((int)sizeof(*obd->obd_type->typ_ops) / sizeof(void *)) +
                 num_private_stats - 1 /* o_owner */;
-        stats = lprocfs_alloc_stats(num_stats);
+        stats = lprocfs_alloc_stats(num_stats, 0);
         if (stats == NULL)
                 return -ENOMEM;
 
@@ -1180,7 +1186,7 @@ int lprocfs_exp_setup(struct obd_export *exp)
 
         /* Always add ldlm stats */
         exp->exp_ldlm_stats = lprocfs_alloc_stats(LDLM_LAST_OPC 
-                                                  - LDLM_FIRST_OPC);
+                                                  - LDLM_FIRST_OPC, 0);
         if (exp->exp_ldlm_stats == NULL) {
                 lprocfs_remove(&exp->exp_proc);
                 GOTO(out, rc = -ENOMEM);
@@ -1480,7 +1486,6 @@ int lprocfs_obd_rd_recovery_status(char *page, char **start, off_t off,
 
         if (lprocfs_obd_snprintf(&page, size, &len, "status: ") <= 0)
                 goto out;
-
         if (obd->obd_max_recoverable_clients == 0) {
                 lprocfs_obd_snprintf(&page, size, &len, "INACTIVE\n");
                 goto fclose;
@@ -1490,64 +1495,60 @@ int lprocfs_obd_rd_recovery_status(char *page, char **start, off_t off,
         if (obd->obd_recovering == 0) {
                 if (lprocfs_obd_snprintf(&page, size, &len, "COMPLETE\n") <= 0)
                         goto out;
-
-                if (lprocfs_obd_snprintf(&page, size, &len, "recovery_start: %lu\n",
-                    obd->obd_recovery_start) <= 0)
+                if (lprocfs_obd_snprintf(&page, size, &len,
+                                         "recovery_start: %lu\n",
+                                         obd->obd_recovery_start) <= 0)
                         goto out;
-
-                if (lprocfs_obd_snprintf(&page, size, &len, "recovery_end: %lu\n",
-                    obd->obd_recovery_end) <= 0)
+                if (lprocfs_obd_snprintf(&page, size, &len,
+                                         "recovery_duration: %lu\n",
+                                         obd->obd_recovery_end -
+                                         obd->obd_recovery_start) <= 0)
                         goto out;
-
-                /* Number of clients have have completed recovery */
-                if (lprocfs_obd_snprintf(&page, size, &len, "recovered_clients: %d\n",
-                    obd->obd_max_recoverable_clients - obd->obd_recoverable_clients) <= 0)
+                /* Number of clients that have completed recovery */
+                if (lprocfs_obd_snprintf(&page, size, &len,
+                                         "completed_clients: %d/%d\n",
+                                         obd->obd_max_recoverable_clients -
+                                         obd->obd_recoverable_clients,
+                                         obd->obd_max_recoverable_clients) <= 0)
                         goto out;
-
-                if (lprocfs_obd_snprintf(&page, size, &len, "unrecovered_clients: %d\n",
-                    obd->obd_recoverable_clients) <= 0)
+                if (lprocfs_obd_snprintf(&page, size, &len,
+                                         "replayed_requests: %d\n",
+                                         obd->obd_replayed_requests) <= 0)
                         goto out;
-
-                if (lprocfs_obd_snprintf(&page, size, &len, "last_transno: "LPD64"\n",
-                    obd->obd_next_recovery_transno - 1) <= 0)
+                if (lprocfs_obd_snprintf(&page, size, &len,
+                                         "last_transno: "LPD64"\n",
+                                         obd->obd_next_recovery_transno - 1)<=0)
                         goto out;
-
-                lprocfs_obd_snprintf(&page, size, &len, "replayed_requests: %d\n", obd->obd_replayed_requests);
                 goto fclose;
         }
 
         if (lprocfs_obd_snprintf(&page, size, &len, "RECOVERING\n") <= 0)
                 goto out;
-
         if (lprocfs_obd_snprintf(&page, size, &len, "recovery_start: %lu\n",
-            obd->obd_recovery_start) <= 0)
+                                 obd->obd_recovery_start) <= 0)
                 goto out;
-
-        if (lprocfs_obd_snprintf(&page, size, &len, "time remaining: %lu\n",
-                                 CURRENT_SECONDS >= obd->obd_recovery_end ? 0 :
-                                 obd->obd_recovery_end - CURRENT_SECONDS) <= 0)
+        if (lprocfs_obd_snprintf(&page, size, &len, "time_remaining: %lu\n",
+                           cfs_time_current_sec() >= obd->obd_recovery_end ? 0 :
+                           obd->obd_recovery_end - cfs_time_current_sec()) <= 0)
                 goto out;
-
-        if(lprocfs_obd_snprintf(&page, size, &len, "connected_clients: %d/%d\n",
-                                obd->obd_connected_clients,
-                                obd->obd_max_recoverable_clients) <= 0)
-                goto out;
-
-        /* Number of clients have have completed recovery */
-        if (lprocfs_obd_snprintf(&page, size, &len, "completed_clients: %d/%d\n",
-                                 obd->obd_max_recoverable_clients - obd->obd_recoverable_clients,
+        if (lprocfs_obd_snprintf(&page, size, &len,"connected_clients: %d/%d\n",
+                                 obd->obd_connected_clients,
                                  obd->obd_max_recoverable_clients) <= 0)
                 goto out;
-
-        if (lprocfs_obd_snprintf(&page, size, &len, "replayed_requests: %d/??\n",
+        /* Number of clients that have completed recovery */
+        if (lprocfs_obd_snprintf(&page, size, &len,"completed_clients: %d/%d\n",
+                                 obd->obd_max_recoverable_clients -
+                                 obd->obd_recoverable_clients,
+                                 obd->obd_max_recoverable_clients) <= 0)
+                goto out;
+        if (lprocfs_obd_snprintf(&page, size, &len,"replayed_requests: %d/??\n",
                                  obd->obd_replayed_requests) <= 0)
                 goto out;
-
         if (lprocfs_obd_snprintf(&page, size, &len, "queued_requests: %d\n",
                                  obd->obd_requests_queued_for_recovery) <= 0)
                 goto out;
-
-        lprocfs_obd_snprintf(&page, size, &len, "next_transno: "LPD64"\n", obd->obd_next_recovery_transno);
+        lprocfs_obd_snprintf(&page, size, &len, "next_transno: "LPD64"\n",
+                             obd->obd_next_recovery_transno);
 
 fclose:
         *eof = 1;
@@ -1586,7 +1587,6 @@ EXPORT_SYMBOL(lprocfs_rd_num_exports);
 EXPORT_SYMBOL(lprocfs_rd_numrefs);
 EXPORT_SYMBOL(lprocfs_at_hist_helper);
 EXPORT_SYMBOL(lprocfs_rd_timeouts);
-EXPORT_SYMBOL(lprocfs_wr_timeouts);
 EXPORT_SYMBOL(lprocfs_rd_blksize);
 EXPORT_SYMBOL(lprocfs_rd_kbytestotal);
 EXPORT_SYMBOL(lprocfs_rd_kbytesfree);

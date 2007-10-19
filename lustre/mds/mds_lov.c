@@ -71,7 +71,7 @@ static int mds_lov_read_objids(struct obd_device *obd)
         /* Read everything in the file, even if our current lov desc
            has fewer targets. Old targets not in the lov descriptor
            during mds setup may still have valid objids. */
-        size = mds->mds_lov_objid_filp->f_dentry->d_inode->i_size;
+        size = i_size_read(mds->mds_lov_objid_filp->f_dentry->d_inode);
         if (size == 0)
                 RETURN(0);
 
@@ -651,7 +651,7 @@ static void mds_allow_cli(struct obd_device *obd, unsigned long flag)
                 obd->u.mds.mds_fl_cfglog = 1;
         if (flag & CONFIG_SYNC)
                 obd->u.mds.mds_fl_synced = 1;
-        if (obd->u.mds.mds_fl_cfglog && obd->u.mds.mds_fl_synced)
+        if (obd->u.mds.mds_fl_cfglog /* bz11778: && obd->u.mds.mds_fl_synced */)
                 /* Open for clients */
                 obd->obd_no_conn = 0;
 }

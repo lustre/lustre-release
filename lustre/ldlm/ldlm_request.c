@@ -877,7 +877,7 @@ int ldlm_cli_cancel_req(struct obd_export *exp,
                 if (imp == NULL || imp->imp_invalid) {
                         CDEBUG(D_DLMTRACE,
                                "skipping cancel on invalid import %p\n", imp);
-                        break;
+                        RETURN(count);
                 }
 
                 req = ptlrpc_prep_req(imp, LUSTRE_DLM_VERSION, LDLM_CANCEL, 2,
@@ -982,6 +982,7 @@ int ldlm_cli_cancel(struct lustre_handle *lockh)
         }
         
         rc = ldlm_cli_cancel_local(lock);
+
         if (rc < 0 || rc == LDLM_FL_LOCAL_ONLY)
                 GOTO(out, rc);
 
@@ -991,9 +992,10 @@ int ldlm_cli_cancel(struct lustre_handle *lockh)
  out:
         LDLM_LOCK_PUT(lock);
         return rc < 0 ? rc : 0;
+
 }
 
-/* - Free space in lru for @count new locks,
+/* - Free space in lru for @count new locks, 
  *   redundant unused locks are canceled locally;
  * - also cancel locally unused aged locks;
  * - do not cancel more than @max locks;
@@ -1060,7 +1062,7 @@ int ldlm_cancel_lru_local(struct ldlm_namespace *ns, struct list_head *cancels,
                                 if (slv == 1 || lv < slv)
                                         break;
                         } else {
-                                if (added > count)
+                                if (added >= count)
                                         break;
                         }
                 } else {
@@ -1421,12 +1423,7 @@ int ldlm_cli_join_lru(struct ldlm_namespace *ns,
                     !lock->l_readers && !lock->l_writers &&
                     !(lock->l_flags & LDLM_FL_LOCAL) &&
                     !(lock->l_flags & LDLM_FL_CBPENDING)) {
-                        lock->l_last_used = cfs_time_current();
-                        spin_lock(&ns->ns_unused_lock);
-                        LASSERT(ns->ns_nr_unused >= 0);
-                        list_add_tail(&lock->l_lru, &ns->ns_unused_list);
-                        ns->ns_nr_unused++;
-                        spin_unlock(&ns->ns_unused_lock);
+                        ldlm_lock_add_to_lru(lock);
                         lock->l_flags &= ~LDLM_FL_NO_LRU;
                         LDLM_DEBUG(lock, "join lock to lru");
                         count++;

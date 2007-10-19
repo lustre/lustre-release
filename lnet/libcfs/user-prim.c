@@ -139,6 +139,69 @@ int64_t cfs_waitq_timedwait(struct cfs_waitlink *link, int state, int64_t timeou
         return 0;
 }
 
+#ifdef HAVE_LIBPTHREAD
+
+/*
+ * Threads
+ */
+
+struct lustre_thread_arg {
+        cfs_thread_t f; 
+        void *arg;
+};
+static void *cfs_thread_helper(void *data)
+{
+        struct lustre_thread_arg *targ = data;
+        cfs_thread_t f  = targ->f;
+        void *arg = targ->arg;
+
+        free(targ);
+        
+        (void)f(arg);
+        return NULL;
+}
+int cfs_create_thread(cfs_thread_t func, void *arg)
+{
+        pthread_t tid;
+        pthread_attr_t tattr;
+        int rc;
+        struct lustre_thread_arg *targ_p = malloc(sizeof(struct lustre_thread_arg));
+
+        if ( targ_p == NULL )
+                return -ENOMEM;
+        
+        targ_p->f = func;
+        targ_p->arg = arg;
+
+        pthread_attr_init(&tattr); 
+        pthread_attr_setdetachstate(&tattr, PTHREAD_CREATE_DETACHED);
+        rc = pthread_create(&tid, &tattr, cfs_thread_helper, targ_p);
+        pthread_attr_destroy(&tattr);
+        return -rc;
+}
+#endif
+
+uid_t cfs_curproc_uid(void)
+{
+        return getuid();
+}
+
+int cfs_parse_int_tunable(int *value, char *name)
+{
+        char    *env = getenv(name);
+        char    *end;
+
+        if (env == NULL)
+                return 0;
+
+        *value = strtoull(env, &end, 0);
+        if (*end == 0)
+                return 0;
+
+        CERROR("Can't parse tunable %s=%s\n", name, env);
+        return -EINVAL;
+}
+
 /*
  * Allocator
  */
@@ -219,29 +282,6 @@ void cfs_mem_cache_free(cfs_mem_cache_t *c, void *addr)
 #ifdef __LINUX__
 #include <linux/kdev_t.h>
 #endif
-
-#ifndef MKDEV
-
-#define MAJOR(dev)      ((dev)>>8)
-#define MINOR(dev)      ((dev) & 0xff)
-#define MKDEV(ma,mi)    ((ma)<<8 | (mi))
-
-#endif
-
-cfs_rdev_t cfs_rdev_build(cfs_major_nr_t major, cfs_minor_nr_t minor)
-{
-        return MKDEV(major, minor);
-}
-
-cfs_major_nr_t cfs_rdev_major(cfs_rdev_t rdev)
-{
-        return MAJOR(rdev);
-}
-
-cfs_minor_nr_t cfs_rdev_minor(cfs_rdev_t rdev)
-{
-        return MINOR(rdev);
-}
 
 void cfs_enter_debugger(void)
 {

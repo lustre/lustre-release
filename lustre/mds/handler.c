@@ -108,7 +108,7 @@ static int mds_sendpage(struct ptlrpc_request *req, struct file *file,
                 tmpsize = tmpcount > CFS_PAGE_SIZE ? CFS_PAGE_SIZE : tmpcount;
                 CDEBUG(D_EXT2, "reading %u@%llu from dir %lu (size %llu)\n",
                        tmpsize, offset, file->f_dentry->d_inode->i_ino,
-                       file->f_dentry->d_inode->i_size);
+                       i_size_read(file->f_dentry->d_inode));
 
                 rc = fsfilt_readpage(req->rq_export->exp_obd, file,
                                      kmap(pages[i]), tmpsize, &offset);
@@ -817,13 +817,14 @@ static int mds_getattr_pack_msg(struct ptlrpc_request *req, struct inode *inode,
                 }
                 bufcount++;
         } else if (S_ISLNK(inode->i_mode) && (body->valid & OBD_MD_LINKNAME)) {
-                if (inode->i_size + 1 != body->eadatasize)
+                if (i_size_read(inode) + 1 != body->eadatasize)
                         CERROR("symlink size: %Lu, reply space: %d\n",
-                               inode->i_size + 1, body->eadatasize);
-                size[bufcount] = min_t(int, inode->i_size+1, body->eadatasize);
+                               i_size_read(inode) + 1, body->eadatasize);
+                size[bufcount] = min_t(int, i_size_read(inode) + 1,
+                                       body->eadatasize);
                 bufcount++;
                 CDEBUG(D_INODE, "symlink size: %Lu, reply space: %d\n",
-                       inode->i_size + 1, body->eadatasize);
+                       i_size_read(inode) + 1, body->eadatasize);
         }
 
 #ifdef CONFIG_FS_POSIX_ACL
@@ -1027,7 +1028,7 @@ static int mds_getattr_lock(struct ptlrpc_request *req, int offset,
                 pop_ctxt(&saved, &obd->obd_lvfs_ctxt, &uc);
         default:
                 mds_exit_ucred(&uc, mds);
-                if (!lustre_packed_reply(req)) {
+                if (!req->rq_packed_final) {
                         req->rq_status = rc;
                         lustre_pack_reply(req, 1, NULL, NULL);
                 }
@@ -1077,7 +1078,7 @@ static int mds_getattr(struct ptlrpc_request *req, int offset)
 out_pop:
         pop_ctxt(&saved, &obd->obd_lvfs_ctxt, &uc);
 out_ucred:
-        if (!lustre_packed_reply(req)) {
+        if (!req->rq_packed_final) {
                 req->rq_status = rc;
                 lustre_pack_reply(req, 1, NULL, NULL);
         }
@@ -1246,7 +1247,7 @@ static int mds_readpage(struct ptlrpc_request *req, int offset)
 
         repbody = lustre_msg_buf(req->rq_repmsg, REPLY_REC_OFF,
                                  sizeof(*repbody));
-        repbody->size = file->f_dentry->d_inode->i_size;
+        repbody->size = i_size_read(file->f_dentry->d_inode);
         repbody->valid = OBD_MD_FLSIZE;
 
         /* to make this asynchronous make sure that the handling function
@@ -1798,7 +1799,7 @@ int mds_handle(struct ptlrpc_request *req)
         if (lustre_msg_get_flags(req->rq_reqmsg) & MSG_LAST_REPLAY) {
                 if (obd && obd->obd_recovering) {
                         DEBUG_REQ(D_HA, req, "LAST_REPLAY, queuing reply");
-                        return target_queue_final_reply(req, rc);
+                        return target_queue_last_replay_reply(req, rc);
                 }
                 /* Lost a race with recovery; let the error path DTRT. */
                 rc = req->rq_status = -ENOTCONN;
@@ -2546,7 +2547,7 @@ static int mdt_setup(struct obd_device *obd, obd_count len, void *buf)
                 mds_max_threads = mds_min_threads = mds_num_threads;
         } else {
                 /* Base min threads on memory and cpus */
-                mds_min_threads = smp_num_cpus * num_physpages >> 
+                mds_min_threads = num_possible_cpus() * num_physpages >> 
                         (27 - CFS_PAGE_SHIFT);
                 if (mds_min_threads < MDS_THREADS_MIN)
                         mds_min_threads = MDS_THREADS_MIN;
@@ -2561,7 +2562,7 @@ static int mdt_setup(struct obd_device *obd, obd_count len, void *buf)
                                 MDS_MAXREPSIZE, MDS_REQUEST_PORTAL,
                                 MDC_REPLY_PORTAL, MDS_SERVICE_WATCHDOG_FACTOR,
                                 mds_handle, LUSTRE_MDS_NAME,
-                                obd->obd_proc_entry, NULL, 
+                                obd->obd_proc_entry, target_print_req,
                                 mds_min_threads, mds_max_threads, "ll_mdt");
 
         if (!mds->mds_service) {
@@ -2578,7 +2579,7 @@ static int mdt_setup(struct obd_device *obd, obd_count len, void *buf)
                                 MDS_MAXREPSIZE, MDS_SETATTR_PORTAL,
                                 MDC_REPLY_PORTAL, MDS_SERVICE_WATCHDOG_FACTOR,
                                 mds_handle, "mds_setattr",
-                                obd->obd_proc_entry, NULL,
+                                obd->obd_proc_entry, target_print_req,
                                 mds_min_threads, mds_max_threads,
                                 "ll_mdt_attr");
         if (!mds->mds_setattr_service) {
@@ -2595,7 +2596,7 @@ static int mdt_setup(struct obd_device *obd, obd_count len, void *buf)
                                 MDS_MAXREPSIZE, MDS_READPAGE_PORTAL,
                                 MDC_REPLY_PORTAL, MDS_SERVICE_WATCHDOG_FACTOR,
                                 mds_handle, "mds_readpage",
-                                obd->obd_proc_entry, NULL, 
+                                obd->obd_proc_entry, target_print_req,
                                 MDS_THREADS_MIN_READPAGE, mds_max_threads,
                                 "ll_mdt_rdpg");
         if (!mds->mds_readpage_service) {

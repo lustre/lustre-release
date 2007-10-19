@@ -659,8 +659,7 @@ static int ost_brw_read(struct ptlrpc_request *req, struct obd_trans_info *oti)
         if (OBD_FAIL_CHECK(OBD_FAIL_OST_BRW_READ_BULK))
                 GOTO(out, rc = -EIO);
 
-        OBD_FAIL_TIMEOUT(OBD_FAIL_OST_BRW_PAUSE_BULK | OBD_FAIL_ONCE,
-                         (obd_timeout + 1) / 4);
+        OBD_FAIL_TIMEOUT(OBD_FAIL_OST_BRW_PAUSE_BULK, (obd_timeout + 1) / 4);
 
         /* Check if there is eviction in progress, and if so, wait for it to
          * finish */
@@ -915,10 +914,11 @@ static int ost_brw_write(struct ptlrpc_request *req, struct obd_trans_info *oti)
 
         if (OBD_FAIL_CHECK(OBD_FAIL_OST_BRW_WRITE_BULK))
                 GOTO(out, rc = -EIO);
+        if (OBD_FAIL_CHECK(OBD_FAIL_OST_BRW_WRITE_BULK2))
+                GOTO(out, rc = -EFAULT);
 
         /* pause before transaction has been started */
-        OBD_FAIL_TIMEOUT(OBD_FAIL_OST_BRW_PAUSE_BULK | OBD_FAIL_ONCE,
-                         (obd_timeout + 1) / 4);
+        OBD_FAIL_TIMEOUT(OBD_FAIL_OST_BRW_PAUSE_BULK, (obd_timeout + 1) / 4);
 
         /* Check if there is eviction in progress, and if so, wait for it to
          * finish */
@@ -986,6 +986,7 @@ static int ost_brw_write(struct ptlrpc_request *req, struct obd_trans_info *oti)
         rc = lustre_pack_reply(req, 3, size, NULL);
         if (rc != 0)
                 GOTO(out, rc);
+        OBD_FAIL_TIMEOUT(OBD_FAIL_OST_BRW_PAUSE_PACK, obd_fail_val);
         rcs = lustre_msg_buf(req->rq_repmsg, REPLY_REC_OFF + 1,
                              niocount * sizeof(*rcs));
 
@@ -1643,7 +1644,7 @@ out:
         if (lustre_msg_get_flags(req->rq_reqmsg) & MSG_LAST_REPLAY) {
                 if (obd && obd->obd_recovering) {
                         DEBUG_REQ(D_HA, req, "LAST_REPLAY, queuing reply");
-                        return target_queue_final_reply(req, rc);
+                        return target_queue_last_replay_reply(req, rc);
                 }
                 /* Lost a race with recovery; let the error path DTRT. */
                 rc = req->rq_status = -ENOTCONN;
@@ -1749,7 +1750,7 @@ static int ost_setup(struct obd_device *obd, obd_count len, void *buf)
                 oss_max_threads = oss_min_threads = oss_num_threads;
         } else {
                 /* Base min threads on memory and cpus */
-                oss_min_threads = smp_num_cpus * num_physpages >> 
+                oss_min_threads = num_possible_cpus() * num_physpages >> 
                         (27 - CFS_PAGE_SHIFT);
                 if (oss_min_threads < OSS_THREADS_MIN)
                         oss_min_threads = OSS_THREADS_MIN;
@@ -1764,7 +1765,7 @@ static int ost_setup(struct obd_device *obd, obd_count len, void *buf)
                                 OST_MAXREPSIZE, OST_REQUEST_PORTAL,
                                 OSC_REPLY_PORTAL, OSS_SERVICE_WATCHDOG_FACTOR, 
                                 ost_handle, LUSTRE_OSS_NAME,
-                                obd->obd_proc_entry, ost_print_req,
+                                obd->obd_proc_entry, target_print_req,
                                 oss_min_threads, oss_max_threads, "ll_ost");
         if (ost->ost_service == NULL) {
                 CERROR("failed to start OST service\n");
@@ -1792,7 +1793,7 @@ static int ost_setup(struct obd_device *obd, obd_count len, void *buf)
                                 OST_MAXREPSIZE, OST_CREATE_PORTAL,
                                 OSC_REPLY_PORTAL, OSS_SERVICE_WATCHDOG_FACTOR,
                                 ost_handle, "ost_create",
-                                obd->obd_proc_entry, ost_print_req,
+                                obd->obd_proc_entry, target_print_req,
                                 oss_min_create_threads,
                                 oss_max_create_threads,
                                 "ll_ost_creat");
@@ -1810,7 +1811,7 @@ static int ost_setup(struct obd_device *obd, obd_count len, void *buf)
                                 OST_MAXREPSIZE, OST_IO_PORTAL,
                                 OSC_REPLY_PORTAL, OSS_SERVICE_WATCHDOG_FACTOR, 
                                 ost_handle, "ost_io",
-                                obd->obd_proc_entry, ost_print_req,
+                                obd->obd_proc_entry, target_print_req,
                                 oss_min_threads, oss_max_threads, "ll_ost_io");
         if (ost->ost_io_service == NULL) {
                 CERROR("failed to start OST I/O service\n");

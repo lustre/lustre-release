@@ -178,11 +178,11 @@ static int filter_lvbo_update(struct ldlm_resource *res, struct lustre_msg *m,
         if (dentry->d_inode == NULL)
                 GOTO(out_dentry, rc = -ENOENT);
 
-        if (dentry->d_inode->i_size > lvb->lvb_size || !increase_only) {
+        if (i_size_read(dentry->d_inode) > lvb->lvb_size || !increase_only) {
                 CDEBUG(D_DLMTRACE, "res: "LPU64" updating lvb size from disk: "
                        LPU64" -> %llu\n", res->lr_name.name[0],
-                       lvb->lvb_size, dentry->d_inode->i_size);
-                lvb->lvb_size = dentry->d_inode->i_size;
+                       lvb->lvb_size, i_size_read(dentry->d_inode));
+                lvb->lvb_size = i_size_read(dentry->d_inode);
         }
 
         if (LTIME_S(dentry->d_inode->i_mtime) >lvb->lvb_mtime|| !increase_only){

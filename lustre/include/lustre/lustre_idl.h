@@ -262,31 +262,33 @@ extern void lustre_swab_ptlrpc_body(struct ptlrpc_body *pb);
 #define MSG_CONNECT_NEXT_VER    0x80 /* use next version of lustre_msg */
 
 /* Connect flags */
-#define OBD_CONNECT_RDONLY         0x1ULL /* client allowed read-only access */
-#define OBD_CONNECT_INDEX          0x2ULL /* connect to specific LOV idx */
-#define OBD_CONNECT_GRANT          0x8ULL /* OSC acquires grant at connect */
-#define OBD_CONNECT_SRVLOCK       0x10ULL /* server takes locks for client */
-#define OBD_CONNECT_VERSION       0x20ULL /* Server supports versions in ocd */
-#define OBD_CONNECT_REQPORTAL     0x40ULL /* Separate portal for non-IO reqs */
-#define OBD_CONNECT_ACL           0x80ULL /* client uses access control lists */
-#define OBD_CONNECT_XATTR        0x100ULL /* client using extended attributes*/
-#define OBD_CONNECT_CROW         0x200ULL /* MDS+OST create objects on write */
-#define OBD_CONNECT_TRUNCLOCK    0x400ULL /* locks on server for punch b=9528 */
-#define OBD_CONNECT_TRANSNO      0x800ULL /* replay sends initial transno */
-#define OBD_CONNECT_IBITS       0x1000ULL /* support for inodebits locks */
-#define OBD_CONNECT_JOIN        0x2000ULL /* files can be concatenated */
-#define OBD_CONNECT_ATTRFID     0x4000ULL /* Server supports GetAttr By Fid */
-#define OBD_CONNECT_NODEVOH     0x8000ULL /* No open handle for special nodes */
-#define OBD_CONNECT_LCL_CLIENT 0x10000ULL /* local 1.8 client */
-#define OBD_CONNECT_RMT_CLIENT 0x20000ULL /* Remote 1.8 client */
-#define OBD_CONNECT_BRW_SIZE   0x40000ULL /* Max bytes per rpc */
-#define OBD_CONNECT_QUOTA64    0x80000ULL /* 64bit qunit_data.qd_count b=10707*/
-#define OBD_CONNECT_FID_CAPA  0x100000ULL /* fid capability */
-#define OBD_CONNECT_OSS_CAPA  0x200000ULL /* OSS capability */
-#define OBD_CONNECT_CANCELSET 0x400000ULL /* Early batched cancels. */
-#define OBD_CONNECT_SOM     0x00800000ULL /* Size on MDS */
-#define OBD_CONNECT_AT      0x01000000ULL /* client uses adaptive timeouts */
-#define OBD_CONNECT_LRU_RESIZE 0x02000000ULL /* Lru resize feature. */
+#define OBD_CONNECT_RDONLY            0x1ULL /*client allowed read-only access*/
+#define OBD_CONNECT_INDEX             0x2ULL /*connect to specific LOV idx */
+#define OBD_CONNECT_GRANT             0x8ULL /*OSC acquires grant at connect */
+#define OBD_CONNECT_SRVLOCK          0x10ULL /*server takes locks for client */
+#define OBD_CONNECT_VERSION          0x20ULL /*Lustre versions in ocd */
+#define OBD_CONNECT_REQPORTAL        0x40ULL /*Separate non-IO request portal */
+#define OBD_CONNECT_ACL              0x80ULL /*access control lists */
+#define OBD_CONNECT_XATTR           0x100ULL /*client use extended attributes */
+#define OBD_CONNECT_CROW            0x200ULL /*MDS+OST create objects on write*/
+#define OBD_CONNECT_TRUNCLOCK       0x400ULL /*locks on server for punch */
+#define OBD_CONNECT_TRANSNO         0x800ULL /*replay sends initial transno */
+#define OBD_CONNECT_IBITS          0x1000ULL /*support for inodebits locks */
+#define OBD_CONNECT_JOIN           0x2000ULL /*files can be concatenated */
+#define OBD_CONNECT_ATTRFID        0x4000ULL /*Server supports GetAttr By Fid */
+#define OBD_CONNECT_NODEVOH        0x8000ULL /*No open handle on special nodes*/
+#define OBD_CONNECT_LCL_CLIENT    0x10000ULL /*local 1.8 client */
+#define OBD_CONNECT_RMT_CLIENT    0x20000ULL /*Remote 1.8 client */
+#define OBD_CONNECT_BRW_SIZE      0x40000ULL /*Max bytes per rpc */
+#define OBD_CONNECT_QUOTA64       0x80000ULL /*64bit qunit_data.qd_count */
+#define OBD_CONNECT_MDS_CAPA     0x100000ULL /*MDS capability */
+#define OBD_CONNECT_OSS_CAPA     0x200000ULL /*OSS capability */
+#define OBD_CONNECT_CANCELSET    0x400000ULL /*Early batched cancels. */
+#define OBD_CONNECT_SOM        0x00800000ULL /*Size on MDS */
+#define OBD_CONNECT_AT         0x01000000ULL /*client uses adaptive timeouts */
+#define OBD_CONNECT_LRU_RESIZE 0x02000000ULL /*Lru resize feature. */
+#define OBD_CONNECT_MDS_MDS    0x04000000ULL /*MDS-MDS connection */
+#define OBD_CONNECT_REAL       0x08000000ULL /*real connection */
 /* also update obd_connect_names[] for lprocfs_rd_connect_flags()
  * and lustre/utils/wirecheck.c */
 
@@ -812,7 +814,7 @@ struct mds_rec_setattr {
         __u32           sa_suppgid;
         __u32           sa_mode;
         struct ll_fid   sa_fid;
-        __u64           sa_valid;
+        __u64           sa_valid; /* MDS_ATTR_* attributes */
         __u64           sa_size;
         __u64           sa_mtime;
         __u64           sa_atime;
@@ -823,10 +825,27 @@ struct mds_rec_setattr {
         __u32           sa_padding; /* also fix lustre_swab_mds_rec_setattr */
 };
 
-/* Remove this once we declare it in include/linux/fs.h (v21 kernel patch?) */
-#ifndef ATTR_CTIME_SET
-#define ATTR_CTIME_SET 0x2000
-#endif
+/*
+ * Attribute flags used in mds_rec_setattr::sa_valid.
+ * The kernel's #defines for ATTR_* should not be used over the network
+ * since the client and MDS may run different kernels (see bug 13828)
+ * Therefore, we should only use MDS_ATTR_* attributes for sa_valid.
+ */
+#define MDS_ATTR_MODE       1
+#define MDS_ATTR_UID        2
+#define MDS_ATTR_GID        4
+#define MDS_ATTR_SIZE       8
+#define MDS_ATTR_ATIME      16
+#define MDS_ATTR_MTIME      32
+#define MDS_ATTR_CTIME      64
+#define MDS_ATTR_ATIME_SET  128
+#define MDS_ATTR_MTIME_SET  256
+#define MDS_ATTR_FORCE      512    /* Not a change, but a change it */
+#define MDS_ATTR_ATTR_FLAG  1024
+#define MDS_ATTR_KILL_SUID  2048
+#define MDS_ATTR_KILL_SGID  4096
+#define MDS_ATTR_CTIME_SET  8192
+#define MDS_ATTR_FROM_OPEN  16384  /* called from open path, ie O_TRUNC */
 
 extern void lustre_swab_mds_rec_setattr (struct mds_rec_setattr *sa);
 
@@ -1108,9 +1127,17 @@ typedef enum {
         MGS_EXCEPTION,         /* node died, etc. */
         MGS_TARGET_REG,        /* whenever target starts up */
         MGS_TARGET_DEL,
+        MGS_SET_INFO,
         MGS_LAST_OPC
 } mgs_cmd_t;
 #define MGS_FIRST_OPC MGS_CONNECT
+
+#define MGS_PARAM_MAXLEN 1024
+#define KEY_SET_INFO "set_info"
+
+struct mgs_send_param {
+        char             mgs_param[MGS_PARAM_MAXLEN];
+};
 
 /* We pass this info to the MGS so it can write config logs */
 #define MTI_NAME_MAXLEN 64

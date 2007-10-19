@@ -94,15 +94,12 @@ command_t cmdlist[] = {
         {"find", lfs_find, 0,
          "To find files that match given parameters recursively in a directory tree.\n"
          "usage: find <dir/file> ... \n"
-         "     [[!] --atime|-A N] [[!] --mtime|-M N] [[!] --ctime|-C N] [--maxdepth|-D N]\n"
-         "     [[!] --name|-n <pattern>] [--print0|-P] [--print|-p] [--obd|-O <uuid>]\n"
-         "\t !: used before --atime, --mtime, --ctime specifies the negative value\n"
-         "\t !: used before --name means find exclude the regular expression pattern\n"
-         "If one of the options below is provided, find works the same as 'getstripe':\n"
-         "To list the striping info for a given filename or files in a directory or\n"
-         "recursively.\n"
-         "OBSOLETE usage: find [--quiet | -q] [--verbose | -v]\n"
-         "                     [--recursive | -r] <dir|file> ..."},
+         "     [[!] --atime|-A [+-]N] [[!] --mtime|-M [+-]N] [[!] --ctime|-C [+-]N]\n"
+         "     [--maxdepth|-D N] [[!] --name|-n <pattern>] [--print0|-P]\n"
+         "     [--print|-p] [--obd|-O <uuid>] [[!] --type|-t <filetype>]\n"
+         "\t !: used before an option indicates 'NOT' the requested attribute\n"
+         "\t -: used before an value indicates 'AT MOST' the requested value\n"
+         "\t +: used before an option indicates 'AT LEAST' the requested value\n"},
         {"check", lfs_check, 0,
          "Display the status of MDS or OSTs (as specified in the command)\n"
          "or all the servers (MDS and OSTs).\n"
@@ -137,7 +134,7 @@ command_t cmdlist[] = {
          "usage: setquota [ -u | -g ] <name> <block-softlimit> <block-hardlimit> <inode-softlimit> <inode-hardlimit> <filesystem>\n"
          "       setquota -t [ -u | -g ] <block-grace> <inode-grace> <filesystem>"},
         {"quota", lfs_quota, 0, "Display disk usage and limits.\n"
-         "usage: quota [ -o obd_uuid ] [ -u | -g ] [name] <filesystem>"},
+         "usage: quota [ -o obd_uuid ] [{-u|-g  <name>}|-t] <filesystem>"},
 #endif
         {"help", Parser_help, 0, "help"},
         {"exit", Parser_quit, 0, "quit"},
@@ -150,7 +147,7 @@ static int lfs_setstripe(int argc, char **argv)
 {
         char *fname;
         int result;
-        unsigned long st_size;
+        unsigned long long st_size;
         int  st_offset, st_count;
         char *end;
         int c;
@@ -158,6 +155,7 @@ static int lfs_setstripe(int argc, char **argv)
         char *stripe_size_arg = NULL;
         char *stripe_off_arg = NULL;
         char *stripe_count_arg = NULL;
+        unsigned long long size_units;
 
         struct option long_opts[] = {
                 {"size",        required_argument, 0, 's'},
@@ -241,25 +239,11 @@ static int lfs_setstripe(int argc, char **argv)
 
         /* get the stripe size */
         if (stripe_size_arg != NULL) {
-                st_size = strtoul(stripe_size_arg, &end, 0);
-                if (*end != '\0') {
-                        if ((*end == 'k' || *end == 'K') && 
-                            *(end+1) == '\0' &&
-                            (st_size & (~0UL << (32 - 10))) == 0) {
-                                st_size <<= 10;
-                        } else if ((*end == 'm' || *end == 'M') && 
-                                   *(end+1) == '\0' &&
-                                   (st_size & (~0UL << (32 - 20))) == 0) {
-                                st_size <<= 20;
-                        } else if ((*end == 'g' || *end == 'G') && 
-                                   *(end+1) == '\0' &&
-                                   (st_size & (~0UL << (32 - 30))) == 0) {
-                                st_size <<= 30;
-                        } else {
-                                fprintf(stderr, "error: %s: bad stripe size '%s'\n",
-                                        argv[0], stripe_size_arg);
-                                return CMD_HELP;
-                        }
+                result = parse_size(stripe_size_arg, &st_size, &size_units);
+                if (result) {
+                        fprintf(stderr,"error: bad size '%s'\n",
+                                stripe_size_arg);
+                        return result;
                 }
         }
         /* get the stripe offset */
@@ -320,7 +304,7 @@ static int lfs_find(int argc, char **argv)
         int c, ret;
         time_t t;
         struct find_param param = { .maxdepth = -1 };
-        char timestr[1024];
+        char str[1024];
         struct option long_opts[] = {
                 /* New find options. */
                 {"atime",     required_argument, 0, 'A'},
@@ -336,6 +320,8 @@ static int lfs_find(int argc, char **argv)
                 /* Old find options. */
                 {"quiet",     no_argument,       0, 'q'},
                 {"recursive", no_argument,       0, 'r'},
+                {"size",      required_argument, 0, 's'},
+                {"type",      required_argument, 0, 't'},
                 {"verbose",   no_argument,       0, 'v'},
                 {0, 0, 0, 0}
         };
@@ -348,7 +334,7 @@ static int lfs_find(int argc, char **argv)
 
         time(&t);
 
-        while ((c = getopt_long_only(argc, argv, "-A:C:D:M:n:PpO:qrv",
+        while ((c = getopt_long_only(argc, argv, "-A:C:D:M:n:PpO:qrs:t:v",
                                      long_opts, NULL)) >= 0) {
                 xtime = NULL;
                 xsign = NULL;
@@ -399,10 +385,10 @@ static int lfs_find(int argc, char **argv)
                                 else if (optarg[0] == '+')
                                         optarg[0] = '-';
                                 else {
-                                        timestr[0] = '-';
-                                        timestr[1] = '\0';
-                                        strcat(timestr, optarg);
-                                        optarg = timestr;
+                                        str[0] = '-';
+                                        str[1] = '\0';
+                                        strcat(str, optarg);
+                                        optarg = str;
                                 }
                         }
                         ret = set_time(&t, xtime, optarg);
@@ -412,26 +398,49 @@ static int lfs_find(int argc, char **argv)
                                 *xsign = ret;
                         break;
                 case 'D':
+                        new_fashion = 1;
                         param.maxdepth = strtol(optarg, 0, 0);
                         break;
                 case 'n':
                         new_fashion = 1;
                         param.pattern = (char *)optarg;
-                        if (neg_opt)
-                                param.exclude_pattern = 1;
-                        else
-                                param.exclude_pattern = 0;
+                        param.exclude_pattern = !!neg_opt;
                         break;
-                case 'O':
-                        if (param.obduuid) {
-                                fprintf(stderr,
-                                        "error: %s: only one obduuid allowed",
-                                        argv[0]);
-                                return CMD_HELP;
+                case 'O': {
+                        char *buf, *token, *next, *p;
+                        int len;
+
+                        len = strlen((char *)optarg);
+                        buf = malloc(len+1);
+                        if (buf == NULL)
+                                return -ENOMEM;
+                        strcpy(buf, (char *)optarg);
+
+                        if (param.num_alloc_obds == 0) {
+                                param.obduuid = (struct obd_uuid *)malloc(FIND_MAX_OSTS *
+                                                       sizeof(struct obd_uuid));
+                                if (param.obduuid == NULL)
+                                        return -ENOMEM;
+                                param.num_alloc_obds = INIT_ALLOC_NUM_OSTS;
                         }
-                        param.obduuid = (struct obd_uuid *)optarg;
+
+                        for (token = buf; token && *token; token = next) {
+                                p = strchr(token, ',');
+                                next = 0;
+                                if (p) {
+                                        *p = 0;
+                                        next = p+1;
+                                }
+                                strcpy((char *)&param.obduuid[param.num_obds++].uuid,
+                                       token);
+                        }
+
+                        if (buf)
+                                free(buf);
                         break;
+                }
                 case 'p':
+                        new_fashion = 1;
                         param.zeroend = 1;
                         break;
                 case 'P':
@@ -444,6 +453,52 @@ static int lfs_find(int argc, char **argv)
                 case 'r':
                         new_fashion = 0;
                         param.recursive = 1;
+                        break;
+                case 't':
+                        param.exclude_type = !!neg_opt;
+                        switch(optarg[0]) {
+                        case 'b': param.type = S_IFBLK; break;
+                        case 'c': param.type = S_IFCHR; break;
+                        case 'd': param.type = S_IFDIR; break;
+                        case 'f': param.type = S_IFREG; break;
+                        case 'l': param.type = S_IFLNK; break;
+                        case 'p': param.type = S_IFIFO; break;
+                        case 's': param.type = S_IFSOCK; break;
+#ifdef S_IFDOOR /* Solaris only */
+                        case 'D': param.type = S_IFDOOR; break;
+#endif
+                        default: fprintf(stderr, "error: %s: bad type '%s'\n",
+                                         argv[0], optarg);
+                                 return CMD_HELP;
+                        };
+                        break;
+                case 's':
+                        if (neg_opt) {
+                                if (optarg[0] == '-')
+                                        optarg[0] = '+';
+                                else if (optarg[0] == '+')
+                                        optarg[0] = '-';
+                                else {
+                                        str[0] = '-';
+                                        str[1] = '\0';
+                                        strcat(str, optarg);
+                                        optarg = str;
+                                }
+                        }
+                        if (optarg[0] == '+')
+                                param.size_sign = -1;
+                        else if (optarg[0] == '-')
+                                param.size_sign = +1;
+
+                        if (param.size_sign)
+                                optarg++;
+                        ret = parse_size(optarg, &param.size,&param.size_units);
+                        if (ret) {
+                                fprintf(stderr,"error: bad size '%s'\n",
+                                        optarg);
+                                return ret;
+                        }
+                        param.size_check = 1;
                         break;
                 case 'v':
                         new_fashion = 0;
@@ -471,6 +526,12 @@ static int lfs_find(int argc, char **argv)
         if (new_fashion) {
                 param.quiet = 1;
         } else {
+                static int deprecated_warning;
+                if (!deprecated_warning) {
+                        fprintf(stderr, "lfs find: -q, -r, -v options "
+                                "deprecated.  Use 'lfs getstripe' instead.\n");
+                        deprecated_warning = 1;
+                }
                 if (!param.recursive && param.maxdepth == -1)
                         param.maxdepth = 1;
         }
@@ -485,6 +546,9 @@ static int lfs_find(int argc, char **argv)
         if (ret)
                 fprintf(stderr, "error: %s failed for %s.\n",
                         argv[0], argv[optind - 1]);
+
+        if (param.obduuid && param.num_alloc_obds)
+                free(param.obduuid);
 
         return ret;
 }
@@ -1382,7 +1446,7 @@ static void print_quota_title(char *name, struct if_quotactl *qctl)
                *type2name(qctl->qc_type), qctl->qc_id);
         printf("%15s%8s %7s%8s%8s%8s %7s%8s%8s\n",
                "Filesystem",
-               "blocks", "quota", "limit", "grace",
+               "kbytes", "quota", "limit", "grace",
                "files", "quota", "limit", "grace");
 }
 
@@ -1485,7 +1549,7 @@ static void print_mds_quota(char *mnt, struct if_quotactl *qctl)
 static void print_lov_quota(char *mnt, struct if_quotactl *qctl)
 {
         DIR *dir;
-        struct obd_uuid uuids[1024], *uuidp;
+        struct obd_uuid *uuids = NULL, *uuidp;
         int obdcount = 1024;
         int i, rc;
 
@@ -1495,9 +1559,26 @@ static void print_lov_quota(char *mnt, struct if_quotactl *qctl)
                 return;
         }
 
+        uuids = (struct obd_uuid *)malloc(INIT_ALLOC_NUM_OSTS *
+                                          sizeof(struct obd_uuid));
+        if (uuids == NULL)
+                goto out;
+
+retry_get_uuids:
         rc = llapi_lov_get_uuids(dirfd(dir), uuids, &obdcount);
         if (rc != 0) {
-                fprintf(stderr, "get ost uuid failed: %s\n", strerror(errno));
+                struct obd_uuid *uuids_temp;
+
+                if (rc == -EOVERFLOW) {
+                        uuids_temp = realloc(uuids, obdcount *
+                                             sizeof(struct obd_uuid));
+                        if (uuids_temp != NULL)
+                                goto retry_get_uuids;
+                        else
+                                rc = -ENOMEM;
+                }
+
+                fprintf(stderr, "get ost uuid failed: %s\n", strerror(rc));
                 goto out;
         }
 
@@ -1525,22 +1606,20 @@ static int lfs_quota(int argc, char **argv)
 {
         int c;
         char *name = NULL, *mnt;
-        struct if_quotactl qctl;
+        struct if_quotactl qctl = { .qc_cmd = LUSTRE_Q_GETQUOTA,
+                                    .qc_type = 0x01 };
         char *obd_type = (char *)qctl.obd_type;
         char *obd_uuid = (char *)qctl.obd_uuid.uuid;
         int rc;
-
-        memset(&qctl, 0, sizeof(qctl));
-        qctl.qc_cmd = LUSTRE_Q_GETQUOTA;
 
         optind = 0;
         while ((c = getopt(argc, argv, "ugto:")) != -1) {
                 switch (c) {
                 case 'u':
-                        qctl.qc_type |= 0x01;
+                        qctl.qc_type = 0x01;
                         break;
                 case 'g':
-                        qctl.qc_type |= 0x02;
+                        qctl.qc_type = 0x02;
                         break;
                 case 't':
                         qctl.qc_cmd = LUSTRE_Q_GETINFO;
@@ -1558,25 +1637,23 @@ static int lfs_quota(int argc, char **argv)
         if (qctl.qc_type)
                 qctl.qc_type--;
 
-        if (qctl.qc_type == UGQUOTA) {
-                fprintf(stderr, "error: user or group can't be specified"
-                                "both\n");
-                return CMD_HELP;
-        }
 
         if (qctl.qc_cmd == LUSTRE_Q_GETQUOTA) {
-                if (optind + 2 != argc)
+                if (optind + 2 != argc) {
+                        fprintf(stderr, "error: missing quota argument(s)\n");
                         return CMD_HELP;
+                }
 
                 name = argv[optind++];
                 rc = name2id(&qctl.qc_id, name, qctl.qc_type);
                 if (rc) {
-                        fprintf(stderr, "error: find id for name %s failed: %s\n",
+                        fprintf(stderr,"error: can't find id for name %s: %s\n",
                                 name, strerror(errno));
                         return CMD_HELP;
                 }
                 print_quota_title(name, &qctl);
         } else if (optind + 1 != argc) {
+                fprintf(stderr, "error: missing quota info argument(s)\n");
                 return CMD_HELP;
         }
 

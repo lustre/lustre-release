@@ -73,4 +73,17 @@ static inline int lproc_osc_attach_seqstat(struct obd_device *dev) {return 0;}
         ({ type __x = (x); type __y = (y); __x < __y ? __x: __y; })
 #endif
 
+static inline int osc_recoverable_error(int rc)
+{
+        return (rc == -EIO || rc == -EROFS || rc == -ENOMEM || rc == -EAGAIN);
+}
+
+/* return 1 if osc should be resend request */
+static inline int osc_should_resend(int resend, struct client_obd *cli)
+{
+        return atomic_read(&cli->cl_resends) ? 
+                atomic_read(&cli->cl_resends) > resend : 1; 
+}
+
+
 #endif /* OSC_INTERNAL_H */

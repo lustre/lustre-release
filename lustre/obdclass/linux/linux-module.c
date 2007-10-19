@@ -222,7 +222,7 @@ int obd_proc_read_version(char *page, char **start, off_t off, int count,
                           int *eof, void *data)
 {
         *eof = 1;
-#ifdef LUSTRE_KERNEL_VERSION
+#ifdef HAVE_VFS_INTENT_PATCHES
         return snprintf(page, count, "lustre: %s\nkernel: %u\nbuild:  %s\n",
                         LUSTRE_VERSION_STRING, LUSTRE_KERNEL_VERSION,
                         BUILD_VERSION);
@@ -323,8 +323,8 @@ static void *obd_device_list_seq_next(struct seq_file *p, void *v, loff_t *pos)
 
 static int obd_device_list_seq_show(struct seq_file *p, void *v)
 {
-        int index = *(loff_t *)v;
-        struct obd_device *obd = class_num2obd(index);
+        loff_t index = *(loff_t *)v;
+        struct obd_device *obd = class_num2obd((int)index);
         char *status;
 
         if (obd == NULL)

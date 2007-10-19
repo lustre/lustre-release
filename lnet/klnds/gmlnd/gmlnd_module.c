@@ -68,7 +68,7 @@ static cfs_sysctl_table_t gmnal_ctl_table[] = {
                 .procname = "port",
                 .data     = &port,
                 .maxlen   = sizeof (int),
-                .data     = 0444,
+                .mode     = 0444,
                 .proc_handler = &proc_dointvec
         },
         {

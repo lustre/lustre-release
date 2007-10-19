@@ -1,3 +1,177 @@
+2007-10-26         Cluster File Systems, Inc. <info@clusterfs.com>
+       * version 1.6.4
+       * Support for kernels:
+        2.6.5-7.286 (SLES 9),
+        2.6.9-55.0.9.EL (RHEL 4),
+        2.6.16.53-0.8 (SLES 10),
+        2.6.18-8.1.14.el5 (RHEL 5),
+        2.6.18.8 vanilla (kernel.org)
+       * Client support for unpatched kernels:
+        (see http://wiki.lustre.org/index.php?title=Patchless_Client)
+        2.6.16 - 2.6.22 vanilla (kernel.org)
+       * Due to recently discovered recovery problems, we do not recommend
+        using patchless RHEL 4 clients with this or any earlier release.
+       * Recommended e2fsprogs version: 1.40.2-cfs1
+       * Note that reiserfs quotas are disabled on SLES 10 in this kernel.
+
+Severity   : normal
+Bugzilla   : 13730
+Description: Not fail import if we got -EAGAIN
+Details    : if osc_interpret_create got -EAGAIN his immediately exit and 
+             wakeup oscc_waitq. After wakeup oscc_wait_for_objects call 
+	     oscc_has_objects and see osc has no objests and call 
+             oscc_internal_create for resend create request.
+
+Severity   : normal
+Bugzilla   : 13521
+Description: Update kernel patches for SLES10 2.6.16.53-0.8.
+Details    : Update which_patch & target file for SLES10 latest kernel.
+
+Severity   : enhancement
+Bugzilla   : 13128
+Description: add --type and --size parameters to lfs find
+Details    : Enhance lfs find by adding filetype and filesize parameters. Also
+	     multiple OBDs can now be specified for the --obd option.
+
+Severity   : enhancement
+Bugzilla   : 11270
+Description: eliminate client locks in face of contention
+Details    : file contention detection and lockless i/o implementation
+	     for contended files.
+
+Severity   : normal
+Bugzilla   : 12411
+Description: Remove client patches from SLES 10 kernel.
+Details    : This causes SLES 10 clients to behave as patchless clients
+	     even on a Lustre-patched (server) kernel.
+
+Severity   : minor
+Bugzilla   : 2369 
+Description: use i_size_read and i_size_write in 2.6 port
+Details    : replace inode->i_size access with i_size_read/write()
+
+Severity   : normal
+Frequency  : when removing large files
+Bugzilla   : 13181
+Description: scheduling issue during removal of large Lustre files
+Details    : Don't take the BKL in fsfilt_ext3_setattr() for 2.6 kernels.
+	     It causes scheduling issues when removing large files (17TB in the
+	     present case).
+
+Severity   : normal
+Bugzilla   : 13358
+Description: 1.4.11 Can't handle directories with stripe set and extended acls
+Details    : Impossible (EPROTO is returned) to access a directory that has a
+	     non-default striping and ACLs.
+
+Severity   : normal
+Frequency  : only on ppc
+Bugzilla   : 12234
+Description: /proc/fs/lustre/devices broken on ppc
+Details    : The patch as applied to 1.6.2 doesn't look correct for all arches.
+	     We should make sure the type of 'index' is loff_t and then cast 
+	     explicitly as needed below. Do not assign an explicitly cast
+	     loff_t to an int.
+
+Severity   : normal
+Frequency  : only for rhel5
+Bugzilla   : 13616
+Description: Kernel patches update for RHEL5 2.6.18-8.1.10.el5.
+Details    : Modify the target file & which_kernel.
+
+Severity   : normal
+Frequency  : if the uninit_groups feature is enabled on ldiskfs
+Bugzilla   : 13706
+Description: e2fsck reports "invalid unused inodes count"
+Details    : If a new ldiskfs filesystem is created with the "uninit_groups"
+	     feature and only a single inode is created in a group then the
+	     "bg_unused_inodes" count is incorrectly updated.  Creating a
+	     second inode in that group would update it correctly.
+
+Severity   : minor
+Bugzilla   : 12948
+Description: buffer overruns could theoretically occur
+Details    : llapi_semantic_traverse() modifies the "path" argument by
+	     appending values to the end of the origin string, and a buffer
+	     overrun may occur. Adding buffer overrun check in liblustreapi.
+
+Severity   : normal
+Bugzilla   : 13454
+Description: Add jbd statistics patch for RHEL5 and 2.6.18-vanilla.
+
+Severity   : normal
+Bugzilla   : 11673
+Description: handle "serious error: objid * already exists" more gracefully
+Details    : If LAST_ID value on disk is smaller than the objects existing in
+	     the O/0/d* directories, it indicates disk corruption and causes an
+	     LBUG(). If the object is 0-length, then we should use the existing
+	     object. This will help to avoid a full fsck in most cases.
+
+Severity   : normal
+Bugzilla   : 13518
+Description: Kernel patches update for RHEL4 2.6.9-55.0.6.
+Details    : Modify vm-tunables-rhel4.patch.
+
+Severity   : normal
+Bugzilla   : 13452
+Description: Kernel config for 2.6.18-vanilla.
+Details    : Modify targets/2.6-vanilla.target.in.
+	     Add config file kernel-2.6.18-2.6-vanilla-i686.config.
+	     Add config file kernel-2.6.18-2.6-vanilla-i686-smp.config.
+	     Add config file kernel-2.6.18-2.6-vanilla-x86_64.config.
+	     Add config file kernel-2.6.18-2.6-vanilla-x86_64-smp.config.
+
+Severity   : major
+Bugzilla   : 11710
+Description: improve handling recoverable errors
+Details    : if request processig with error which can be recoverable on server
+             request should be resend, otherwise page released from cache and
+             marked as error.
+
+Severity   : critical
+Bugzilla   : 13751
+Description: Kernel patches update for RHEL5 2.6.18-8.1.14.el5.
+Details    : Modify target file & which_patch.
+             A flaw was found in the IA32 system call emulation provided 
+             on AMD64 and Intel 64 platforms. An improperly validated 64-bit 
+             value could be stored in the %RAX register, which could trigger an 
+             out-of-bounds system call table access. An untrusted local user 
+             could exploit this flaw to run code in the kernel 
+             (ie a root privilege escalation). (CVE-2007-4573). 
+
+Severity   : minor
+Bugzilla   : 13732 
+Description: change order of libsysio includes
+Details    : '#include sysio.h' should always come before '#include xtio.h'
+
+Severity   : enhancement
+Bugzilla   : 13207
+Description: adapt the lustre_config script to support the upgrade case
+Details    : Add "-u" option for lustre_config script to support upgrading 1.4
+	     server targets to 1.6 in parallel.
+
+Severity   : normal
+Bugzilla   : 13570
+Description: To avoid grant space > avaible space when the disk is almost
+             full. Without this patch you might see the error "grant XXXX >
+	     available" or some LBUG about grant, when the disk is almost 
+	     full.
+Details    : In filter_check_grant, for non_grant cache write, we should
+	     check the left space by  if (*left > ungranted + bytes), instead 
+	     of (*left > ungranted), because only we are sure the left space 
+	     is enough for another "bytes", then the ungrant space should be 
+	     increase. In client, we should update cl_avail_grant only there is
+	     OBD_MD_FLGRANT in the reply.
+
+Severity   : critical
+Bugzilla   : 13748
+Description: Update RHEL 4 kernel to fix local root privilege escalation.
+Details    : Update to the latest RHEL 4 kernel to fix the vulnerability
+	     described in CVE-2007-4573.  This problem could allow untrusted
+	     local users to gain root access.
+
+--------------------------------------------------------------------------------
+
 2007-09-27         Cluster File Systems, Inc. <info@clusterfs.com>
        * version 1.6.3
        * Support for kernels:
@@ -14,17 +188,16 @@
        * Recommended e2fsprogs version: 1.40.2-cfs1
        * Note that reiserfs quotas are disabled on SLES 10 in this kernel.
 
+Severity   : minor
+Bugzilla   : 12186
+Description: Fix errors in lfs documentation
+Details    : Fixes man pages
+
 Severity   : enhancement
 Bugzilla   : 3055
 Description: Adaptive timeouts
 Details    : RPC timeouts adapt to changing server load and network
 	     conditions to reduce resend attempts and improve recovery time.
-
-Severity   : major
-Frequency  : Heavily loaded servers
-Bugzilla   : 12932
-Description: obd_health_check_timeout too short
-Details    : set obd_health_check_timeout as 1.5x of obd_timeout
 
 Severity   : enhancement
 Bugzilla   : 12192
@@ -47,18 +220,6 @@ Severity   : enhancement
 Bugzilla   : 11248
 Description: merge and cleanup kernel patches.
 Details    : Remove mnt_lustre_list in vfs_intent-2.6-rhel4.patch.
-
-Severity   : enhancement
-Bugzilla   : 10657
-Description: Add journal checksum support.(Kernel part)
-Details    : The journal checksum feature adds two new flags i.e
-	     JBD2_FEATURE_INCOMPAT_ASYNC_COMMIT and
-	     JBD2_FEATURE_COMPAT_CHECKSUM. JBD2_FEATURE_CHECKSUM flag
-	     indicates that the commit block contains the checksum for
-	     the blocks described by the descriptor blocks. Now commit
-	     record can be sent to disk without waiting for descriptor
-	     blocks to be written to disk. This behavior is controlled
-	     using JBD2_FEATURE_ASYNC_COMMIT flag.
 
 Severity   : enhancement
 Bugzilla   : 13039
@@ -115,7 +276,7 @@ Bugzilla   : 12398
 Description: enable data checksumming by default
 Details    : enable checksum by default, allow --disable-checksum
 	     configure option and "-o nochecksum" mount option.  Checksums
-	     can also be disabled at runtime via $LPROC/llite/*/checksum_pages.
+	     can also be disabled at runtime via $LPROC/osc/*/checksum_pages.
 
 Severity   : normal
 Frequency  : Occasionally with failover
@@ -124,12 +285,6 @@ Description: Client eviction due to failover config
 Details    : after a connection loss, the lustre client should attempt to
 	     reconnect to the last active server first before trying the
 	     other potential connections.
-
-Severity   : enhancement
-Bugzilla   : 11270
-Description: eliminate client locks in face of contention
-Details    : file contention detection and lockless i/o implementation
-	     for contended files.
 
 Severity   : enhancement
 Bugzilla   : 11401
@@ -160,16 +315,16 @@ Severity   : enhancement
 Bugzilla   : 2262
 Description: self-adjustable client's lru lists
 Details    : use adaptive algorithm for managing client cached locks lru 
-             lists according to current server load, other client's work
-             pattern, memory activities, etc. Both, server and client 
-             side namespaces provide number of proc tunables for controlling 
-             things
+	     lists according to current server load, other client's work
+	     pattern, memory activities, etc. Both, server and client 
+	     side namespaces provide number of proc tunables for controlling 
+	     things
 
 Severity   : cleanup
 Bugzilla   : 13532
 Description: rewrite ext2-derived code in llite/dir.c and obdclass/uuid.c
 Details    : rewrite inherited code (uuid parsing code from ext2 utils and
-             readdir code from ext3) from scratch preserving functionality.
+	     readdir code from ext3) from scratch preserving functionality.
 
 Severity   : normal 
 Bugzilla   : 13436
@@ -178,6 +333,48 @@ Details    : In open/enqueue processs, Some errors, which will cause client
 	     disconnected, should be returned by rq_status, while other 
 	     errors should still be returned by intent, then mdc or llite will
 	     detect them.
+
+Severity   : enhancement
+Bugzilla   : 11230
+Description: Tune the kernel for good SCSI performance. 
+Details    : Set the value of /sys/block/{dev}/queue/max_sectors_kb
+	     to the value of /sys/block/{dev}/queue/max_hw_sectors_kb
+	     in mount_lustre.
+
+Severity   : critical
+Frequency  : Always for filesystems larger than 2TB on 32-bit systems.
+Bugzilla   : 13547, 13627
+Description: Data corruption for OSTs that are formatted larger than 2TB
+	     on 32-bit servers.
+Details    : When generating the bio request for lustre file writes the
+	     sector number would overflow a temporary variable before being
+	     used for the IO.  The data reads correctly from Lustre (which
+	     will overflow in a similar manner) but other file data or
+	     filesystem metadata may be corrupted in some cases.
+
+Severity   : normal
+Bugzilla   : 13600
+Description: "lfs find -obd UUID" prints directories
+Details    : "lfs find -obd UUID" will return all directory names instead
+	     of just file names. It is incorrect because the directories
+	     do not reside on the OSTs.
+
+Severity   : normal
+Bugzilla   : 13596
+Description: MDS hang after unclean shutdown of lots of clients
+Details    : Never resend AST requests.
+
+Severity   : normal
+Bugzilla   : 13304
+Frequency  : Always, for kernels after 2.6.16
+Description: Fix warning idr_remove called for id=.. which is not allocated.
+Details    : Last kernels save old s_dev before kill super and not allow 
+	      to restore from callback - restore it before call kill_anon_super.
+
+Severity   : normal
+Bugzilla   : 13334
+Description: Fix error on 'ls .' at the top of the Lustre mount.
+Details    : Don't revalidate dentry if it is a root dentry.
 
 --------------------------------------------------------------------------------
 

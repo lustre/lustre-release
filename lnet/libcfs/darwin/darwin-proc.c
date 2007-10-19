@@ -49,9 +49,86 @@ extern unsigned int libcfs_console_ratelimit;
 extern unsigned int libcfs_catastrophe;
 extern atomic_t libcfs_kmemory;
 
-extern long max_debug_mb;
-extern int cfs_trace_daemon SYSCTL_HANDLER_ARGS;
-extern int cfs_debug_mb SYSCTL_HANDLER_ARGS;
+static int sysctl_debug_kernel SYSCTL_HANDLER_ARGS
+{
+#error "Check me"
+        const int  maxstr = 1024;
+        char      *str;
+        int        error;
+
+        if (req->newptr == USER_ADDR_NULL) {
+                /* read request */
+                return -EINVAL;
+        }
+
+        /* write request */
+        error = trace_allocate_string_buffer(&str, maxstr + 1);
+        if (error != 0)
+                return error;
+
+	error = SYSCTL_IN(req, str, maxstr);
+
+        /* NB str guaranteed terminted */
+        if (error == 0)
+                error = tracefile_dump_all_pages(str);
+
+        trace_free_string_buffer(str, maxstr + 1);
+        return error;
+}
+
+static int sysctl_daemon_file SYSCTL_HANDLER_ARGS
+{
+#error "Check me"
+	int   error;
+	char *str;
+
+        if (req->newptr == USER_ADDR_NULL) {
+                /* a read */
+		tracefile_read_lock();
+
+                /* include terminating '\0' */
+		error = SYSCTL_OUT(req, tracefile, strlen(tracefile) + 1);
+
+		tracefile_read_unlock();
+                return error;
+        }
+        
+        /* write request */
+        error = trace_allocate_string_buffer(&str, TRACEFILE_NAME_SIZE);
+        if (error != 0)
+                return error;
+
+	error = SYSCTL_IN(req, str, TRACEFILE_NAME_SIZE - 1);
+
+        /* NB str guaranteed terminted */
+	if (error == 0)
+		error = trace_daemon_command(str);
+
+        trace_free_string_buffer(str, TRACEFILE_NAME_SIZE);
+	return error;
+}
+
+
+static int sysctl_debug_mb SYSCTL_HANDLER_ARGS
+{
+#error "Check me"
+	long mb;
+	int  error;
+	
+	if (req->newptr == USER_ADDR_NULL) {
+		/* read */
+		mb = trace_get_debug_mb();
+		error = SYSCTL_OUT(req, &mb, sizeof(mb));
+	} else {
+		/* write */
+		error = SYSCTL_IN(req, &mb, sizeof(mb));
+		if (error == 0)
+			error = trace_set_debug_mb(mb);
+	}
+	
+	return error;
+}
+
 /*
  * sysctl table for lnet
  */
@@ -80,12 +157,17 @@ SYSCTL_INT(_lnet,		        OID_AUTO,	memused,
 SYSCTL_INT(_lnet,		        OID_AUTO,	catastrophe,
 	     CTLTYPE_INT | CTLFLAG_RW,			(int *)&libcfs_catastrophe,
 	     0,		"catastrophe");
-SYSCTL_PROC(_lnet,		        OID_AUTO,	trace_daemon,
+
+#error "check me"
+SYSCTL_PROC(_lnet,		        OID_AUTO,	debug_kernel,
+	     CTLTYPE_STRING | CTLFLAG_W,		0,
+	     0,		&sysctl_debug_kernel,		"A",	"debug_kernel");
+SYSCTL_PROC(_lnet,		        OID_AUTO,	daemon_file,
 	     CTLTYPE_STRING | CTLFLAG_RW,		0,
-	     0,		&cfs_trace_daemon,		"A",	"trace daemon");
+	     0,		&sysctl_daemon_file,		"A",	"daemon_file");
 SYSCTL_PROC(_lnet,		        OID_AUTO,	debug_mb,
-	     CTLTYPE_INT | CTLFLAG_RW,		        &max_debug_mb,
-	     0,		&cfs_debug_mb,		        "L",	"max debug size");
+	     CTLTYPE_INT | CTLFLAG_RW,		        0,
+	     0,		&sysctl_debug_mb,	        "L",	"debug_mb");
 
 
 static cfs_sysctl_table_t	top_table[] = {
@@ -97,7 +179,8 @@ static cfs_sysctl_table_t	top_table[] = {
 	&sysctl__lnet_debug_path,
 	&sysctl__lnet_memused,
 	&sysctl__lnet_catastrophe,
-	&sysctl__lnet_trace_daemon,
+	&sysctl__lnet_debug_kernel,
+	&sysctl__lnet_daemon_file,
 	&sysctl__lnet_debug_mb,
 	NULL
 };

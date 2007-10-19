@@ -17,7 +17,7 @@ SRCDIR=`dirname $0`
 export PATH=$PWD/$SRCDIR:$SRCDIR:$PWD/$SRCDIR/../utils:$PATH:/sbin
 
 ONLY=${ONLY:-"$*"}
-ALWAYS_EXCEPT=${ALWAYS_EXCEPT:-""}
+ALWAYS_EXCEPT="$SANITY_QUOTA_EXCEPT"
 # UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
 
 case `uname -r` in
@@ -582,7 +582,7 @@ run_test 6 "Block quota acquire & release ========="
 # quota recovery (block quota only by now)
 test_7()
 {
-	remote_mds && skip "remote mds"
+	remote_mds && skip "remote mds" && return 0
 
 	LIMIT=$(( $BUNIT_SZ * $(($OSTCOUNT + 1)) * 10)) # 10 bunits each sever
 	TESTFILE="$TSTDIR/quota_tst70"

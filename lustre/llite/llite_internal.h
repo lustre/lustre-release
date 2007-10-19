@@ -209,12 +209,14 @@ enum stats_track_type {
 
 /* flags for sbi->ll_flags */
 #define LL_SBI_NOLCK            0x01 /* DLM locking disabled (directio-only) */
-#define LL_SBI_CHECKSUM         0x02 /* checksum each page as it's written */
+#define LL_SBI_DATA_CHECKSUM    0x02 /* checksum each page on the wire */
 #define LL_SBI_FLOCK            0x04
 #define LL_SBI_USER_XATTR       0x08 /* support user xattr */
 #define LL_SBI_ACL              0x10 /* support ACL */
 #define LL_SBI_JOIN             0x20 /* support JOIN */
 #define LL_SBI_LOCALFLOCK       0x40 /* Local flocks support by kernel */
+#define LL_SBI_LRU_RESIZE       0x80 /* support lru resize */
+#define LL_SBI_LLITE_CHECKSUM  0x100 /* checksum each page in memory */
 
 /* default value for ll_sb_info->contention_time */
 #define SBI_DEFAULT_CONTENTION_SECONDS     60
@@ -403,7 +405,8 @@ struct ll_async_page {
                          llap_defer_uptodate:1,
                          llap_origin:3,
                          llap_ra_used:1,
-                         llap_ignore_quota:1;
+                         llap_ignore_quota:1,
+                         llap_lockless_io_page:1;
         void            *llap_cookie;
         struct page     *llap_page;
         struct list_head llap_pending_write;
@@ -572,7 +575,8 @@ int ll_lov_setstripe_ea_info(struct inode *inode, struct file *file,
 int ll_lov_getstripe_ea_info(struct inode *inode, const char *filename,
                              struct lov_mds_md **lmm, int *lmm_size,
                              struct ptlrpc_request **request);
-int ll_dir_setstripe(struct inode *inode, struct lov_user_md *lump);
+int ll_dir_setstripe(struct inode *inode, struct lov_user_md *lump,
+                     int set_default);
 int ll_dir_getstripe(struct inode *inode, struct lov_mds_md **lmm, 
                      int *lmm_size, struct ptlrpc_request **request);
 
@@ -595,6 +599,7 @@ char *ll_read_opt(const char *opt, char *data);
 void ll_lli_init(struct ll_inode_info *lli);
 int ll_fill_super(struct super_block *sb);
 void ll_put_super(struct super_block *sb);
+void ll_kill_super(struct super_block *sb);
 struct inode *ll_inode_from_lock(struct ldlm_lock *lock);
 void ll_clear_inode(struct inode *inode);
 int ll_setattr_raw(struct inode *inode, struct iattr *attr);
@@ -803,5 +808,52 @@ struct ll_statahead_info {
 int ll_statahead_enter(struct inode *dir, struct dentry **dentry, int lookup);
 void ll_statahead_exit(struct dentry *dentry, int result);
 void ll_stop_statahead(struct inode *inode);
+
+/* llite ioctl register support rountine */
+#ifdef __KERNEL__
+enum llioc_iter {
+        LLIOC_CONT = 0,
+        LLIOC_STOP
+};
+
+#define LLIOC_MAX_CMD           256
+
+/*
+ * Rules to write a callback function:
+ *
+ * Parameters:
+ *  @magic: Dynamic ioctl call routine will feed this vaule with the pointer
+ *      returned to ll_iocontrol_register.  Callback functions should use this
+ *      data to check the potential collasion of ioctl cmd. If collasion is 
+ *      found, callback function should return LLIOC_CONT.
+ *  @rcp: The result of ioctl command.
+ *
+ *  Return values:
+ *      If @magic matches the pointer returned by ll_iocontrol_data, the 
+ *      callback should return LLIOC_STOP; return LLIOC_STOP otherwise.
+ */
+typedef enum llioc_iter (*llioc_callback_t)(struct inode *inode, 
+                struct file *file, unsigned int cmd, unsigned long arg,
+                void *magic, int *rcp);
+
+enum llioc_iter ll_iocontrol_call(struct inode *inode, struct file *file, 
+                unsigned int cmd, unsigned long arg, int *rcp);
+
+/* export functions */
+/* Register ioctl block dynamatically for a regular file. 
+ *
+ * @cmd: the array of ioctl command set
+ * @count: number of commands in the @cmd
+ * @cb: callback function, it will be called if an ioctl command is found to 
+ *      belong to the command list @cmd.
+ *
+ * Return vaule:
+ *      A magic pointer will be returned if success; 
+ *      otherwise, NULL will be returned. 
+ * */
+void *ll_iocontrol_register(llioc_callback_t cb, int count, unsigned int *cmd);
+void ll_iocontrol_unregister(void *magic);
+
+#endif
 
 #endif /* LLITE_INTERNAL_H */

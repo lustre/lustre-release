@@ -7,8 +7,8 @@
 set -e
 
 ONLY=${ONLY:-"$*"}
-# bug number for skipped test: 4900 4900 2108 9789 3637 9789 3561 5188/5749 13310 10764
-ALWAYS_EXCEPT=${ALWAYS_EXCEPT:-"27o 27q  42a  42b  42c  42d  45   68        74b   75"}
+# bug number for skipped test: 12652 4900 4900 2108 9789 3637 9789 3561 13310 10764
+ALWAYS_EXCEPT=${ALWAYS_EXCEPT:-"14c  27o  27q  42a  42b  42c  42d  45   74b   75"}
 # UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
 
 [ "$SLOW" = "no" ] && EXCEPT="$EXCEPT 24o 27m 36f 36g 51b 51c 60c 63 64b 71 73 101 103 115 120g"
@@ -57,21 +57,6 @@ ACCEPTOR_PORT=${ACCEPTOR_PORT:-988}
 UMOUNT=${UMOUNT:-"umount -d"}
 CHECK_GRANT=${CHECK_GRANT:-"yes"}
 GRANT_CHECK_LIST=${GRANT_CHECK_LIST:-""}
-
-if [ $UID -ne 0 ]; then
-	echo "Warning: running as non-root uid $UID"
-	RUNAS_ID="$UID"
-	RUNAS=""
-else
-	RUNAS_ID=${RUNAS_ID:-500}
-	RUNAS=${RUNAS:-"runas -u $RUNAS_ID"}
-
-	# $RUNAS_ID may get set incorrectly somewhere else
-	if [ $RUNAS_ID -eq 0 ]; then
-		echo "Error: \$RUNAS_ID set to 0, but \$UID is also 0!"
-		exit 1
-	fi
-fi
 
 export NAME=${NAME:-local}
 
@@ -134,6 +119,20 @@ MAXFREE=${MAXFREE:-$((200000 * $OSTCOUNT))}
 [ -f $DIR/d52a/foo ] && chattr -a $DIR/d52a/foo
 [ -f $DIR/d52b/foo ] && chattr -i $DIR/d52b/foo
 rm -rf $DIR/[Rdfs][1-9]*
+
+if [ $UID -ne 0 ]; then
+	log "running as non-root uid $UID"
+	RUNAS_ID="$UID"
+	RUNAS=""
+else
+	RUNAS_ID=${RUNAS_ID:-500}
+	RUNAS=${RUNAS:-"runas -u $RUNAS_ID"}
+
+	# $RUNAS_ID may get set incorrectly somewhere else
+	[ $RUNAS_ID -eq 0 ] && error "\$RUNAS_ID set to 0, but \$UID is also 0!"
+fi
+
+$RUNAS ls $DIR >/dev/null || error "uid $RUNAS_ID doesn't exist on MDS!"
 
 build_test_filter
 
@@ -437,6 +436,15 @@ test_17d() {
 	touch $DIR/d17/f17d || error "creating to new symlink"
 }
 run_test 17d "symlinks: create dangling ========================"
+
+test_17e() {
+	mkdir -p $DIR/$tdir
+	local foo=$DIR/$tdir/$tfile
+	ln -s $foo $foo || error "create symlink failed"
+	ls -l $foo || error "ls -l failed"
+	ls $foo && error "ls not failed" || true
+}
+run_test 17e "symlinks: create recursive symlink (should return error) ===="
 
 test_18() {
 	touch $DIR/f
@@ -1038,7 +1046,7 @@ test_27u() { # bug 4900
         sysctl -w lustre.fail_loc=0
 
         $LFS getstripe $DIR/d27u > $TMP/files
-        OBJS=`cat $TMP/files | awk -vobjs=0 '($1 == 0) { objs += 1 } END { print objs;}'`
+        OBJS=`awk -vobj=0 '($1 == 0) { obj += 1 } END { print obj;}' $TMP/files`
         unlinkmany $DIR/d27u/t- 1000
         [ $OBJS -gt 0 ] && \
                 error "Found $OBJS objects were created on OST-0" || pass
@@ -1951,7 +1959,7 @@ test_48b() { # bug 2399
 	fi
 	ls . > /dev/null && error "'ls .' worked after removing cwd"
 	ls .. > /dev/null || error "'ls ..' failed after removing cwd"
-	cd . && error "'cd .' worked after removing cwd"
+	is_patchless || ( cd . && error "'cd .' worked after removing cwd" )
 	mkdir . && error "'mkdir .' worked after removing cwd"
 	rmdir . && error "'rmdir .' worked after removing cwd"
 	ln -s . foo && error "'ln -s .' worked after removing cwd"
@@ -1974,7 +1982,7 @@ test_48c() { # bug 2350
 	fi
 	$TRACE ls . && error "'ls .' worked after removing cwd"
 	$TRACE ls .. || error "'ls ..' failed after removing cwd"
-	$TRACE cd . && error "'cd .' worked after removing cwd"
+	is_patchless || ( $TRACE cd . && error "'cd .' worked after removing cwd" )
 	$TRACE mkdir . && error "'mkdir .' worked after removing cwd"
 	$TRACE rmdir . && error "'rmdir .' worked after removing cwd"
 	$TRACE ln -s . foo && error "'ln -s .' worked after removing cwd"
@@ -1998,11 +2006,11 @@ test_48d() { # bug 2350
 	fi
 	$TRACE ls . && error "'ls .' worked after removing parent"
 	$TRACE ls .. && error "'ls ..' worked after removing parent"
-	$TRACE cd . && error "'cd .' worked after recreate parent"
+	is_patchless || ( $TRACE cd . && error "'cd .' worked after recreate parent" )
 	$TRACE mkdir . && error "'mkdir .' worked after removing parent"
 	$TRACE rmdir . && error "'rmdir .' worked after removing parent"
 	$TRACE ln -s . foo && error "'ln -s .' worked after removing parent"
-	$TRACE cd .. && error "'cd ..' worked after removing parent" || true
+	is_patchless || ( $TRACE cd .. && error "'cd ..' worked after removing parent" || true )
 }
 run_test 48d "Access removed parent subdir (should return errors)"
 
@@ -2336,6 +2344,25 @@ setup_56() {
         fi
 }
 
+setup_56_special() {
+	LOCAL_NUMFILES=$1
+	LOCAL_NUMDIRS=$2
+	TDIR=$DIR/${tdir}g
+	setup_56 $1 $2
+	if [ ! -e "$TDIR/loop1b" ] ; then
+		for i in `seq 1 $LOCAL_NUMFILES` ; do
+			mknod $TDIR/loop${i}b b 7 $i
+			mknod $TDIR/null${i}c c 1 3
+			ln -s $TDIR/file0 $TDIR/link${i}l
+		done
+		for i in `seq 1 $LOCAL_NUMDIRS` ; do
+			mknod $TDIR/dir$i/loop${i}b b 7 $i
+			mknod $TDIR/dir$i/null${i}c c 1 3
+			ln -s $TDIR/dir$i/file0 $TDIR/dir$i/link${i}l
+		done
+	fi
+}
+
 test_56g() {
         $LSTRIPE -d $DIR
 
@@ -2367,6 +2394,65 @@ test_56h() {
         echo "lfs find ! -name passed."
 }
 run_test 56h "check lfs find ! -name ============================="
+
+test_56i() {
+       tdir=${tdir}i
+       mkdir -p $DIR/$tdir
+       UUID=`$GETSTRIPE $DIR/$tdir | awk '/0: / { print $2 }'`
+       OUT="`$LFIND -ost $UUID $DIR/$tdir`"
+       [ "$OUT" ] && error "$LFIND returned directory '$OUT'" || true
+}
+run_test 56i "check 'lfs find -ost UUID' skips directories ======="
+
+test_56j() {
+	setup_56_special $NUMFILES $NUMDIRS
+
+	EXPECTED=$((NUMDIRS+1))
+	NUMS=`$LFIND -type d $DIR/${tdir}g | wc -l`
+	[ $NUMS -eq $EXPECTED ] || \
+		error "lfs find -type d $DIR/${tdir}g wrong: found $NUMS, expected $EXPECTED"
+}
+run_test 56j "check lfs find -type d ============================="
+
+test_56k() {
+	setup_56_special $NUMFILES $NUMDIRS
+
+	EXPECTED=$(((NUMDIRS+1) * NUMFILES))
+	NUMS=`$LFIND -type f $DIR/${tdir}g | wc -l`
+	[ $NUMS -eq $EXPECTED ] || \
+		error "lfs find -type f $DIR/${tdir}g wrong: found $NUMS, expected $EXPECTED"
+}
+run_test 56k "check lfs find -type f ============================="
+
+test_56l() {
+	setup_56_special $NUMFILES $NUMDIRS
+
+	EXPECTED=$((NUMDIRS + NUMFILES))
+	NUMS=`$LFIND -type b $DIR/${tdir}g | wc -l`
+	[ $NUMS -eq $EXPECTED ] || \
+		error "lfs find -type b $DIR/${tdir}g wrong: found $NUMS, expected $EXPECTED"
+}
+run_test 56l "check lfs find -type b ============================="
+
+test_56m() {
+	setup_56_special $NUMFILES $NUMDIRS
+
+	EXPECTED=$((NUMDIRS + NUMFILES))
+	NUMS=`$LFIND -type c $DIR/${tdir}g | wc -l`
+	[ $NUMS -eq $EXPECTED ] || \
+		error "lfs find -type c $DIR/${tdir}g wrong: found $NUMS, expected $EXPECTED"
+}
+run_test 56m "check lfs find -type c ============================="
+
+test_56n() {
+	setup_56_special $NUMFILES $NUMDIRS
+
+	EXPECTED=$((NUMDIRS + NUMFILES))
+	NUMS=`$LFIND -type l $DIR/${tdir}g | wc -l`
+	[ $NUMS -eq $EXPECTED ] || \
+		error "lfs find -type l $DIR/${tdir}g wrong: found $NUMS, expected $EXPECTED"
+}
+run_test 56n "check lfs find -type l ============================="
 
 test_57a() {
 	remote_mds && skip "remote MDS" && return
@@ -2562,15 +2648,14 @@ test_65c() {
 }
 run_test 65c "directory setstripe $(($STRIPESIZE * 4)) 1 $(($OSTCOUNT - 1))"
 
-[ $STRIPECOUNT -eq 0 ] && sc=1 || sc=$(($STRIPECOUNT - 1))
-
 test_65d() {
 	mkdir -p $DIR/d65
+	[ $STRIPECOUNT -le 0 ] && sc=1 || sc=$(($STRIPECOUNT - 1))
 	$SETSTRIPE $DIR/d65 $STRIPESIZE -1 $sc || error "setstripe"
 	touch $DIR/d65/f4 $DIR/d65/f5
 	$LVERIFY $DIR/d65 $DIR/d65/f4 $DIR/d65/f5 || error "lverify failed"
 }
-run_test 65d "directory setstripe $STRIPESIZE -1 $sc =============="
+run_test 65d "directory setstripe $STRIPESIZE -1 stripe_count =============="
 
 test_65e() {
 	mkdir -p $DIR/d65
@@ -2714,12 +2799,14 @@ test_67b() { # bug 3285 - supplementary group fails on MDS, passes on client
 }
 run_test 67b "supplementary group test ========================="
 
+LLOOP=
 cleanup_68() {
 	trap 0
-	if [ "$LOOPDEV" ]; then
-		swapoff $LOOPDEV || error "swapoff failed"
-		losetup -d $LOOPDEV || error "losetup -d failed"
-		unset LOOPDEV LOOPNUM
+	if [ ! -z "$LLOOP" ]; then
+		swapoff $LLOOP || error "swapoff failed"
+		$LCTL blockdev_detach $LLOOP || error "detach failed"
+		rm -f $LLOOP
+		unset LLOOP
 	fi
 	rm -f $DIR/f68
 }
@@ -2732,6 +2819,7 @@ swap_used() {
 	swapon -s | awk '($1 == "'$1'") { print $4 }'
 }
 
+
 # excercise swapping to lustre by adding a high priority swapfile entry
 # and then consuming memory until it is used.
 test_68() {
@@ -2739,20 +2827,24 @@ test_68() {
 	grep -q obdfilter $LPROC/devices && \
 		skip "local OST" && return
 
-	find_loop_dev
-	dd if=/dev/zero of=$DIR/f68 bs=64k count=1024
+	grep -q llite_lloop /proc/modules
+	[ $? -ne 0 ] && skip "can't find module llite_lloop" && return
+
+	LLOOP=$TMP/lloop.`date +%s`.`date +%N`
+	dd if=/dev/zero of=$DIR/f68 bs=64k seek=2047 count=1
+	mkswap $DIR/f68
+
+	$LCTL blockdev_attach $DIR/f68 $LLOOP || error "attach failed"
 
 	trap cleanup_68 EXIT
 
-	losetup $LOOPDEV $DIR/f68 || error "losetup $LOOPDEV failed"
-	mkswap $LOOPDEV
-	swapon -p 32767 $LOOPDEV || error "swapon $LOOPDEV failed"
+	swapon -p 32767 $LLOOP || error "swapon $LLOOP failed"
 
-	echo "before: `swapon -s | grep $LOOPDEV`"
-	KBFREE=`meminfo MemTotal`
-	$MEMHOG $KBFREE || error "error allocating $KBFREE kB"
-	echo "after: `swapon -s | grep $LOOPDEV`"
-	SWAPUSED=`swap_used $LOOPDEV`
+	echo "before: `swapon -s | grep $LLOOP`"
+	MEMTOTAL=`meminfo MemTotal`
+	$MEMHOG $MEMTOTAL || error "error allocating $MEMTOTAL kB"
+	echo "after: `swapon -s | grep $LLOOP`"
+	SWAPUSED=`swap_used $LLOOP`
 
 	cleanup_68
 
@@ -2828,7 +2920,7 @@ test_72() { # bug 5695 - Test that on 2.6 remove_suid works properly
 	touch $DIR/f72
 	chmod 777 $DIR/f72
 	chmod ug+s $DIR/f72
-	$RUNAS -u $(($RUNAS_ID + 1)) dd if=/dev/zero of=$DIR/f72 bs=512 count=1 || error
+	$RUNAS dd if=/dev/zero of=$DIR/f72 bs=512 count=1 || error
 	# See if we are still setuid/sgid
 	test -u $DIR/f72 -o -g $DIR/f72 && error "S/gid is not dropped on write"
 	# Now test that MDS is updated too
@@ -3027,8 +3119,8 @@ run_test 76 "destroy duplicate inodes in client inode cache ===="
 export ORIG_CSUM=""
 set_checksums()
 {
-	[ "$ORIG_CSUM" ]||ORIG_CSUM=`cat $LPROC/llite/*/checksum_pages|head -n1`
-	for f in $LPROC/llite/*/checksum_pages; do
+	[ "$ORIG_CSUM" ] || ORIG_CSUM=`cat $LPROC/osc/*/checksums | head -n1`
+	for f in $LPROC/osc/*/checksums; do
 		echo $1 >> $f
 	done
 
@@ -3455,30 +3547,30 @@ test_102b() {
 run_test 102b "getfattr/setfattr for trusted.lov EAs ============"
 
 test_102c() {
-	# b10930: get/set/list trusted.lov xattr
-	echo "get/set/list trusted.lov xattr ..."
+	# b10930: get/set/list lustre.lov xattr
+	echo "get/set/list lustre.lov xattr ..."
 	[ "$OSTCOUNT" -lt "2" ] && skip "skipping 2-stripe test" && return
 	mkdir -p $DIR/$tdir
 	chown $RUNAS_ID $DIR/$tdir
 	local testfile=$DIR/$tdir/$tfile
 	$RUNAS $SETSTRIPE $testfile 65536 1 2
-	$RUNAS getfattr -d -m "^trusted" $testfile 2> /dev/null | \
-	grep "trusted.lov" || error "can't get trusted.lov from $testfile"
+	$RUNAS getfattr -d -m "^lustre" $testfile 2> /dev/null | \
+	grep "lustre.lov" || error "can't get lustre.lov from $testfile"
 
 	local testfile2=${testfile}2
-	local value=`getfattr -n trusted.lov $testfile 2> /dev/null | \
-		     grep "trusted.lov" |sed -e 's/[^=]\+=//'  `
+	local value=`getfattr -n lustre.lov $testfile 2> /dev/null | \
+		     grep "lustre.lov" |sed -e 's/[^=]\+=//'  `
 	
 	$RUNAS $MCREATE $testfile2
-	$RUNAS setfattr -n trusted.lov -v $value $testfile2 	
+	$RUNAS setfattr -n lustre.lov -v $value $testfile2 	
 	local tmp_file=${testfile}3
 	$RUNAS $GETSTRIPE -v $testfile2 > $tmp_file
 	local stripe_size=`grep "size"  $tmp_file| awk '{print $2}'`
 	local stripe_count=`grep "count"  $tmp_file| awk '{print $2}'`
-	[ $stripe_size -eq 65536 ] || error "stripe size $stripe_size != 65536"
-	[ $stripe_count -eq 2 ] || error "stripe count $stripe_count != 2"
+	[ "$stripe_size" -eq 65536 ] || error "stripe size $stripe_size != 65536"
+	[ "$stripe_count" -eq 2 ] || error "stripe count $stripe_count != 2"
 }
-run_test 102c "non-root getfattr/setfattr for trusted.lov EAs ==========="
+run_test 102c "non-root getfattr/setfattr for lustre.lov EAs ==========="
 
 get_stripe_info() {
 	stripe_size=0
@@ -3621,7 +3713,7 @@ run_test 102g "star copy files, keep osts ==========="
 
 run_acl_subtest()
 {
-    $SAVE_PWD/acl/run $SAVE_PWD/acl/$1.test
+    $LUSTRE/tests/acl/run $LUSTRE/tests/acl/$1.test
     return $?
 }
 
@@ -3648,7 +3740,7 @@ test_103 () {
 
     # inheritance test got from HP
     echo "performing inheritance..."
-    cp $SAVE_PWD/acl/make-tree . || error
+    cp $LUSTRE/tests/acl/make-tree . || error
     chmod +x make-tree || error
     run_acl_subtest inheritance > /dev/null || error
     rm -f make-tree
@@ -3881,15 +3973,306 @@ test_117() # bug 10891
 }
 run_test 117 "verify fsfilt_extend ============================="
 
-test_118() #bug 11710
-{
-	sync; sleep 1; sync
-	multiop $DIR/$tfile oO_CREAT:O_RDWR:O_SYNC:w4096c;
-	dirty=$(grep -c dirty $LPROC/llite/*/dump_page_cache)
+# Reset async IO behavior after error case
+reset_async() {
+	FILE=$DIR/reset_async
 
-	return $dirty
+	# Ensure all OSCs are cleared
+	$LSTRIPE $FILE 0 -1 -1
+        dd if=/dev/zero of=$FILE bs=64k count=$OSTCOUNT
+	sync
+        rm $FILE
 }
-run_test 118 "verify O_SYNC works"
+
+test_118a() #bug 11710
+{
+	reset_async
+	
+ 	multiop $DIR/$tfile oO_CREAT:O_RDWR:O_SYNC:w4096c
+	DIRTY=$(grep -c dirty $LPROC/llite/*/dump_page_cache)
+        WRITEBACK=$(grep -c writeback $LPROC/llite/*/dump_page_cache)
+
+	if [[ $DIRTY -ne 0 || $WRITEBACK -ne 0 ]]; then
+		error "Dirty pages not flushed to disk, dirty=$DIRTY, writeback=$WRITEBACK"
+		return 1;
+        fi
+}
+run_test 118a "verify O_SYNC works =========="
+
+test_118b()
+{
+	reset_async
+
+	#define OBD_FAIL_OST_ENOENT 0x217
+	sysctl -w lustre.fail_loc=0x217
+	multiop $DIR/$tfile oO_CREAT:O_RDWR:O_SYNC:w4096c
+	RC=$?
+	sysctl -w lustre.fail_loc=0
+        DIRTY=$(grep -c dirty $LPROC/llite/*/dump_page_cache)
+        WRITEBACK=$(grep -c writeback $LPROC/llite/*/dump_page_cache)
+
+	if [[ $RC -eq 0 ]]; then
+		error "Must return error due to dropped pages, rc=$RC"
+		return 1;
+	fi
+
+	if [[ $DIRTY -ne 0 || $WRITEBACK -ne 0 ]]; then
+		error "Dirty pages not flushed to disk, dirty=$DIRTY, writeback=$WRITEBACK"
+		return 1;
+	fi
+
+	echo "Dirty pages not leaked on ENOENT"
+
+	# Due to the above error the OSC will issue all RPCs syncronously
+	# until a subsequent RPC completes successfully without error.
+	multiop $DIR/$tfile Ow4096yc
+	rm -f $DIR/$tfile
+	
+	return 0
+}
+run_test 118b "Reclaim dirty pages on fatal error =========="
+
+test_118c()
+{
+	reset_async
+
+	#define OBD_FAIL_OST_EROFS               0x216
+	sysctl -w lustre.fail_loc=0x216
+
+	# multiop should block due to fsync until pages are written
+	multiop $DIR/$tfile oO_CREAT:O_RDWR:O_SYNC:w4096c &
+	MULTIPID=$!
+	sleep 1
+
+	if [[ `ps h -o comm -p $MULTIPID` != "multiop" ]]; then
+		error "Multiop failed to block on fsync, pid=$MULTIPID"
+	fi
+
+        WRITEBACK=$(grep -c writeback $LPROC/llite/*/dump_page_cache)
+	if [[ $WRITEBACK -eq 0 ]]; then
+		error "No page in writeback, writeback=$WRITEBACK"
+	fi
+
+	sysctl -w lustre.fail_loc=0
+        wait $MULTIPID
+	RC=$?
+	if [[ $RC -ne 0 ]]; then
+		error "Multiop fsync failed, rc=$RC"
+	fi
+
+        DIRTY=$(grep -c dirty $LPROC/llite/*/dump_page_cache)
+        WRITEBACK=$(grep -c writeback $LPROC/llite/*/dump_page_cache)
+	if [[ $DIRTY -ne 0 || $WRITEBACK -ne 0 ]]; then
+		error "Dirty pages not flushed to disk, dirty=$DIRTY, writeback=$WRITEBACK"
+	fi
+	
+	rm -f $DIR/$tfile
+	echo "Dirty pages flushed via fsync on EROFS"
+	return 0
+}
+run_test 118c "Fsync blocks on EROFS until dirty pages are flushed =========="
+
+test_118d()
+{
+	reset_async
+
+	#define OBD_FAIL_OST_BRW_PAUSE_BULK
+	sysctl -w lustre.fail_loc=0x214
+	# multiop should block due to fsync until pages are written
+	multiop $DIR/$tfile oO_CREAT:O_RDWR:O_SYNC:w4096c &	
+	MULTIPID=$!
+	sleep 1
+
+	if [[ `ps h -o comm -p $MULTIPID` != "multiop" ]]; then
+		error "Multiop failed to block on fsync, pid=$MULTIPID"
+	fi
+
+        WRITEBACK=$(grep -c writeback $LPROC/llite/*/dump_page_cache)
+	if [[ $WRITEBACK -eq 0 ]]; then
+		error "No page in writeback, writeback=$WRITEBACK"
+	fi
+
+        wait $MULTIPID || error "Multiop fsync failed, rc=$?"
+
+        DIRTY=$(grep -c dirty $LPROC/llite/*/dump_page_cache)
+        WRITEBACK=$(grep -c writeback $LPROC/llite/*/dump_page_cache)	
+	if [[ $DIRTY -ne 0 || $WRITEBACK -ne 0 ]]; then
+		error "Dirty pages not flushed to disk, dirty=$DIRTY, writeback=$WRITEBACK"
+	fi
+
+	rm -f $DIR/$tfile
+	echo "Dirty pages gaurenteed flushed via fsync"
+	return 0
+}
+run_test 118d "Fsync validation inject a delay of the bulk =========="
+
+test_118f() {
+        reset_async
+
+        #define OBD_FAIL_OSC_BRW_PREP_REQ2        0x40a
+        sysctl -w lustre.fail_loc=0x8000040a
+
+	# Should simulate EINVAL error which is fatal
+        multiop $DIR/$tfile oO_CREAT:O_RDWR:O_SYNC:w4096c
+        RC=$?
+
+	if [[ $RC -eq 0 ]]; then
+		error "Must return error due to dropped pages, rc=$RC"
+	fi
+
+        LOCKED=$(grep -c locked $LPROC/llite/*/dump_page_cache)
+        DIRTY=$(grep -c dirty $LPROC/llite/*/dump_page_cache)
+        WRITEBACK=$(grep -c writeback $LPROC/llite/*/dump_page_cache)
+	if [[ $LOCKED -ne 0 ]]; then
+		error "Locked pages remain in cache, locked=$LOCKED"
+	fi
+
+	if [[ $DIRTY -ne 0 || $WRITEBACK -ne 0 ]]; then
+		error "Dirty pages not flushed to disk, dirty=$DIRTY, writeback=$WRITEBACK"
+	fi
+
+	rm -f $DIR/$tfile
+	echo "No pages locked after fsync"
+
+        reset_async
+	return 0
+}
+run_test 118f "Simulate unrecoverable OSC side error =========="
+
+test_118g() {
+        reset_async
+
+	#define OBD_FAIL_OSC_BRW_PREP_REQ        0x406
+        sysctl -w lustre.fail_loc=0x406
+
+	# simulate local -ENOMEM
+        multiop $DIR/$tfile oO_CREAT:O_RDWR:O_SYNC:w4096c
+        RC=$?
+	
+        sysctl -w lustre.fail_loc=0
+	if [[ $RC -eq 0 ]]; then
+		error "Must return error due to dropped pages, rc=$RC"
+	fi
+
+        LOCKED=$(grep -c locked $LPROC/llite/*/dump_page_cache)
+        DIRTY=$(grep -c dirty $LPROC/llite/*/dump_page_cache)
+        WRITEBACK=$(grep -c writeback $LPROC/llite/*/dump_page_cache)
+	if [[ $LOCKED -ne 0 ]]; then
+		error "Locked pages remain in cache, locked=$LOCKED"
+	fi
+	
+	if [[ $DIRTY -ne 0 || $WRITEBACK -ne 0 ]]; then
+		error "Dirty pages not flushed to disk, dirty=$DIRTY, writeback=$WRITEBACK"
+	fi
+
+	rm -f $DIR/$tfile
+	echo "No pages locked after fsync"
+
+        reset_async
+	return 0
+}
+run_test 118g "Don't stay in wait if we got local -ENOMEM  =========="
+
+test_118h() {
+        reset_async
+
+	#define OBD_FAIL_OST_BRW_WRITE_BULK      0x20e
+        sysctl -w lustre.fail_loc=0x20e
+	# Should simulate ENOMEM error which is recoverable and should be handled by timeout
+        multiop $DIR/$tfile oO_CREAT:O_RDWR:O_SYNC:w4096c
+        RC=$?
+	
+        sysctl -w lustre.fail_loc=0
+	if [[ $RC -eq 0 ]]; then
+		error "Must return error due to dropped pages, rc=$RC"
+	fi
+
+        LOCKED=$(grep -c locked $LPROC/llite/*/dump_page_cache)
+        DIRTY=$(grep -c dirty $LPROC/llite/*/dump_page_cache)
+        WRITEBACK=$(grep -c writeback $LPROC/llite/*/dump_page_cache)
+	if [[ $LOCKED -ne 0 ]]; then
+		error "Locked pages remain in cache, locked=$LOCKED"
+	fi
+	
+	if [[ $DIRTY -ne 0 || $WRITEBACK -ne 0 ]]; then
+		error "Dirty pages not flushed to disk, dirty=$DIRTY, writeback=$WRITEBACK"
+	fi
+
+	rm -f $DIR/$tfile
+	echo "No pages locked after fsync"
+
+	return 0
+}
+run_test 118h "Verify timeout in handling recoverables errors  =========="
+
+test_118i() {
+        reset_async
+
+	#define OBD_FAIL_OST_BRW_WRITE_BULK      0x20e
+        sysctl -w lustre.fail_loc=0x20e
+	
+	# Should simulate ENOMEM error which is recoverable and should be handled by timeout
+        multiop $DIR/$tfile oO_CREAT:O_RDWR:O_SYNC:w4096c &
+	PID=$!
+	sleep 5
+	sysctl -w lustre.fail_loc=0
+	
+	wait $PID
+        RC=$?
+	if [[ $RC -ne 0 ]]; then
+		error "got error, but should be not, rc=$RC"
+	fi
+
+        LOCKED=$(grep -c locked $LPROC/llite/*/dump_page_cache)
+        DIRTY=$(grep -c dirty $LPROC/llite/*/dump_page_cache)
+        WRITEBACK=$(grep -c writeback $LPROC/llite/*/dump_page_cache)
+	if [[ $LOCKED -ne 0 ]]; then
+		error "Locked pages remain in cache, locked=$LOCKED"
+	fi
+	
+	if [[ $DIRTY -ne 0 || $WRITEBACK -ne 0 ]]; then
+		error "Dirty pages not flushed to disk, dirty=$DIRTY, writeback=$WRITEBACK"
+	fi
+
+	rm -f $DIR/$tfile
+	echo "No pages locked after fsync"
+
+	return 0
+}
+run_test 118i "Fix error before timeout in recoverable error  =========="
+
+test_118j() {
+        reset_async
+
+	#define OBD_FAIL_OST_BRW_WRITE_BULK2     0x220
+        sysctl -w lustre.fail_loc=0x220
+
+	# return -EIO from OST
+        multiop $DIR/$tfile oO_CREAT:O_RDWR:O_SYNC:w4096c
+        RC=$?
+        sysctl -w lustre.fail_loc=0x0
+	if [[ $RC -eq 0 ]]; then
+		error "Must return error due to dropped pages, rc=$RC"
+	fi
+
+        LOCKED=$(grep -c locked $LPROC/llite/*/dump_page_cache)
+        DIRTY=$(grep -c dirty $LPROC/llite/*/dump_page_cache)
+        WRITEBACK=$(grep -c writeback $LPROC/llite/*/dump_page_cache)
+	if [[ $LOCKED -ne 0 ]]; then
+		error "Locked pages remain in cache, locked=$LOCKED"
+	fi
+	
+	# in recoverable error on OST we want resend and stay until it finished
+	if [[ $DIRTY -ne 0 || $WRITEBACK -ne 0 ]]; then
+		error "Dirty pages not flushed to disk, dirty=$DIRTY, writeback=$WRITEBACK"
+	fi
+
+	rm -f $DIR/$tfile
+	echo "No pages locked after fsync"
+
+ 	return 0
+}
+run_test 118j "Simulate unrecoverable OST side error =========="
 
 test_119a() # bug 11737
 {
@@ -3923,11 +4306,8 @@ LDLM_POOL_CTL_RECALC=1
 LDLM_POOL_CTL_SHRINK=2
 
 disable_pool_recalc() {
-	NSL=`find $LPROC/ldlm/namespaces | grep $1`
-        for NSD in $NSL; do
+        for NSD in $LPROC/ldlm/namespaces/*$1*; do
                 if test -f $NSD/pool/control; then
-                        NS=`basename $NSD`
-                        echo "disable pool recalc for $NS pool"
                         CONTROL=`cat $NSD/pool/control`
                         CONTROL=$((CONTROL & ~LDLM_POOL_CTL_RECALC))
                         echo "$CONTROL" > $NSD/pool/control
@@ -3936,11 +4316,8 @@ disable_pool_recalc() {
 }
 
 enable_pool_recalc() {
-	NSL=`find $LPROC/ldlm/namespaces | grep $1`
-        for NSD in $NSL; do
+        for NSD in $LPROC/ldlm/namespaces/*$1*; do
                 if test -f $NSD/pool/control; then
-                        NS=`basename $NSD`
-                        echo "enable pool recalc $NS pool"
                         CONTROL=`cat $NSD/pool/control`
                         CONTROL=$((CONTROL | LDLM_POOL_CTL_RECALC))
                         echo "$CONTROL" > $NSD/pool/control
@@ -3949,11 +4326,8 @@ enable_pool_recalc() {
 }
 
 disable_pool_shrink() {
-	NSL=`find $LPROC/ldlm/namespaces | grep $1`
-        for NSD in $NSL; do
+        for NSD in $LPROC/ldlm/namespaces/*$1*; do
                 if test -f $NSD/pool/control; then
-                        NS=`basename $NSD`
-                        echo "disable pool shrink for $NS pool"
                         CONTROL=`cat $NSD/pool/control`
                         CONTROL=$((CONTROL & ~LDLM_POOL_CTL_SHRINK))
                         echo "$CONTROL" > $NSD/pool/control
@@ -3962,11 +4336,8 @@ disable_pool_shrink() {
 }
 
 enable_pool_shrink() {
-	NSL=`find $LPROC/ldlm/namespaces | grep $1`
-        for NSD in $NSL; do
+        for NSD in $LPROC/ldlm/namespaces/*$1*; do
                 if test -f $NSD/pool/control; then
-                        NS=`basename $NSD`
-                        echo "enable pool shrink for $NS pool"
                         CONTROL=`cat $NSD/pool/control`
                         CONTROL=$((CONTROL | LDLM_POOL_CTL_SHRINK))
                         echo "$CONTROL" > $NSD/pool/control
@@ -3984,30 +4355,45 @@ enable_pool() {
         enable_pool_recalc $1
 }
 
-test_120a() {
-        disable_pool mdc
-        disable_pool "mds-$FSNAME"
+lru_resize_enable()
+{
+        enable_pool osc
+        enable_pool "filter-$FSNAME"
+        enable_pool mdc
+        enable_pool "mds-$FSNAME"
+}
+
+lru_resize_disable()
+{
         disable_pool osc
         disable_pool "filter-$FSNAME"
-        mkdir $DIR/$tdir
+        disable_pool mdc
+        disable_pool "mds-$FSNAME"
+}
+
+test_120a() {
+        [ -z "`grep early_lock_cancel $LPROC/mdc/*/connect_flags`" ] && \
+               skip "no early lock cancel on server" && return 9
+        lru_resize_disable
+        mkdir -p $DIR/$tdir
         cancel_lru_locks mdc
         stat $DIR/$tdir > /dev/null
         can1=`awk '/ldlm_cancel/ {print $2}' $LPROC/ldlm/services/ldlm_canceld/stats`
         blk1=`awk '/ldlm_bl_callback/ {print $2}' $LPROC/ldlm/services/ldlm_cbd/stats`
-        mkdir $DIR/$tdir/d1
+        mkdir -p $DIR/$tdir/d1
         can2=`awk '/ldlm_cancel/ {print $2}' $LPROC/ldlm/services/ldlm_canceld/stats`
         blk2=`awk '/ldlm_bl_callback/ {print $2}' $LPROC/ldlm/services/ldlm_cbd/stats`
         [ $can1 -eq $can2 ] || error $((can2-can1)) "cancel RPC occured."
         [ $blk1 -eq $blk2 ] || error $((blk2-blk1)) "blocking RPC occured."
+        lru_resize_enable
 }
 run_test 120a "Early Lock Cancel: mkdir test ==================="
 
 test_120b() {
-        disable_pool mdc
-        disable_pool "mds-$FSNAME"
-        disable_pool osc
-        disable_pool "filter-$FSNAME"
-        mkdir $DIR/$tdir
+        [ -z "`grep early_lock_cancel $LPROC/mdc/*/connect_flags`" ] && \
+               skip "no early lock cancel on server" && return 9
+        lru_resize_disable
+        mkdir -p $DIR/$tdir
         cancel_lru_locks mdc
         stat $DIR/$tdir > /dev/null
         can1=`awk '/ldlm_cancel/ {print $2}' $LPROC/ldlm/services/ldlm_canceld/stats`
@@ -4017,14 +4403,14 @@ test_120b() {
         can2=`awk '/ldlm_cancel/ {print $2}' $LPROC/ldlm/services/ldlm_canceld/stats`
         [ $can1 -eq $can2 ] || error $((can2-can1)) "cancel RPC occured."
         [ $blk1 -eq $blk2 ] || error $((blk2-blk1)) "blocking RPC occured."
+        lru_resize_enable
 }
 run_test 120b "Early Lock Cancel: create test =================="
 
 test_120c() {
-        disable_pool mdc
-        disable_pool "mds-$FSNAME"
-        disable_pool osc
-        disable_pool "filter-$FSNAME"
+        [ -z "`grep early_lock_cancel $LPROC/mdc/*/connect_flags`" ] && \
+               skip "no early lock cancel on server" && return 9
+        lru_resize_disable
         mkdir -p $DIR/$tdir/d1 $DIR/$tdir/d2
         touch $DIR/$tdir/d1/f1
         cancel_lru_locks mdc
@@ -4036,14 +4422,14 @@ test_120c() {
         blk2=`awk '/ldlm_bl_callback/ {print $2}' $LPROC/ldlm/services/ldlm_cbd/stats`
         [ $can1 -eq $can2 ] || error $((can2-can1)) "cancel RPC occured."
         [ $blk1 -eq $blk2 ] || error $((blk2-blk1)) "blocking RPC occured."
+        lru_resize_enable
 }
 run_test 120c "Early Lock Cancel: link test ===================="
 
 test_120d() {
-        disable_pool mdc
-        disable_pool "mds-$FSNAME"
-        disable_pool osc
-        disable_pool "filter-$FSNAME"
+        [ -z "`grep early_lock_cancel $LPROC/mdc/*/connect_flags`" ] && \
+               skip "no early lock cancel on server" && return 9
+        lru_resize_disable
         touch $DIR/$tdir
         cancel_lru_locks mdc
         stat $DIR/$tdir > /dev/null
@@ -4054,15 +4440,15 @@ test_120d() {
         blk2=`awk '/ldlm_bl_callback/ {print $2}' $LPROC/ldlm/services/ldlm_cbd/stats`
         [ $can1 -eq $can2 ] || error $((can2-can1)) "cancel RPC occured."
         [ $blk1 -eq $blk2 ] || error $((blk2-blk1)) "blocking RPC occured."
+        lru_resize_enable
 }
 run_test 120d "Early Lock Cancel: setattr test ================="
 
 test_120e() {
-        disable_pool mdc
-        disable_pool "mds-$FSNAME"
-        disable_pool osc
-        disable_pool "filter-$FSNAME"
-        mkdir $DIR/$tdir
+        [ -z "`grep early_lock_cancel $LPROC/mdc/*/connect_flags`" ] && \
+               skip "no early lock cancel on server" && return 9
+        lru_resize_disable
+        mkdir -p $DIR/$tdir
         dd if=/dev/zero of=$DIR/$tdir/f1 count=1
         cancel_lru_locks mdc
         cancel_lru_locks osc
@@ -4075,14 +4461,14 @@ test_120e() {
         blk2=`awk '/ldlm_bl_callback/ {print $2}' $LPROC/ldlm/services/ldlm_cbd/stats`
         [ $can1 -eq $can2 ] || error $((can2-can1)) "cancel RPC occured."
         [ $blk1 -eq $blk2 ] || error $((blk2-blk1)) "blocking RPC occured."
+        lru_resize_enable
 }
 run_test 120e "Early Lock Cancel: unlink test =================="
 
 test_120f() {
-        disable_pool mdc
-        disable_pool "mds-$FSNAME"
-        disable_pool osc
-        disable_pool "filter-$FSNAME"
+        [ -z "`grep early_lock_cancel $LPROC/mdc/*/connect_flags`" ] && \
+               skip "no early lock cancel on server" && return 9
+        lru_resize_disable
         mkdir -p $DIR/$tdir/d1 $DIR/$tdir/d2
         dd if=/dev/zero of=$DIR/$tdir/d1/f1 count=1
         dd if=/dev/zero of=$DIR/$tdir/d2/f2 count=1
@@ -4098,17 +4484,17 @@ test_120f() {
         blk2=`awk '/ldlm_bl_callback/ {print $2}' $LPROC/ldlm/services/ldlm_cbd/stats`
         [ $can1 -eq $can2 ] || error $((can2-can1)) "cancel RPC occured."
         [ $blk1 -eq $blk2 ] || error $((blk2-blk1)) "blocking RPC occured."
+        lru_resize_enable
 }
 run_test 120f "Early Lock Cancel: rename test =================="
 
 test_120g() {
-        disable_pool mdc
-        disable_pool "mds-$FSNAME"
-        disable_pool osc
-        disable_pool "filter-$FSNAME"
+        [ -z "`grep early_lock_cancel $LPROC/mdc/*/connect_flags`" ] && \
+               skip "no early lock cancel on server" && return 9
+        lru_resize_disable
         count=10000
         echo create $count files
-        mkdir  $DIR/$tdir
+        mkdir -p $DIR/$tdir
         cancel_lru_locks mdc
         cancel_lru_locks osc
         t0=`date +%s`
@@ -4131,21 +4517,21 @@ test_120g() {
         echo total: $((can2-can1)) cancels, $((blk2-blk1)) blockings
         sleep 2
         # wait for commitment of removal
+        lru_resize_enable
 }
 run_test 120g "Early Lock Cancel: performance test ============="
 
-test_121() { #bug #10589
-	rm -rf $DIR/$tfile
+test_121() { #bug 10589
 	writes=`dd if=/dev/zero of=$DIR/$tfile count=1 2>&1 | awk 'BEGIN { FS="+" } /out/ {print $1}'`
 	sysctl -w lustre.fail_loc=0x310
 	cancel_lru_locks osc > /dev/null
 	reads=`dd if=$DIR/$tfile of=/dev/null 2>&1 | awk 'BEGIN { FS="+" } /in/ {print $1}'`
 	sysctl -w lustre.fail_loc=0
-	[ $reads -eq $writes ] || error "read" $reads "blocks, must be" $writes
+	[ "$reads" -eq "$writes" ] || error "read" $reads "blocks, must be" $writes
 }
 run_test 121 "read cancel race ================================="
 
-test_122() { #bug #11544
+test_122() { #bug 11544
         #define OBD_FAIL_PTLRPC_CLIENT_BULK_CB   0x508
         sysctl -w lustre.fail_loc=0x508
         dd if=/dev/zero of=$DIR/$tfile count=1
@@ -4205,76 +4591,134 @@ test_123() # statahead(bug 11401)
         delta=$((etime - stime))
         log "rm -r $DIR/$tdir/: $delta seconds"
         log "rm done"
-        cat /proc/fs/lustre/llite/*/statahead_stats
+        cat $LPROC/llite/*/statahead_stats
         # wait for commitment of removal
         sleep 2
 }
 run_test 123 "verify statahead work"
 
-test_124() {
+test_124a() {
+	[ -z "`grep lru_resize $LPROC/mdc/*/connect_flags`" ] && \
+               skip "no lru resize on server" && return 0
+        cancel_lru_locks mdc
+        lru_resize_enable
         NSDIR=`find $LPROC/ldlm/namespaces | grep mdc | head -1`
-
-        if ! test -f $NSDIR/pool/stats; then
-                skip "lru resize is not enabled!"
-                return
-        fi
-
-        # enable all after ELC tests
-        enable_pool osc
-        enable_pool "filter-$FSNAME"
-        enable_pool mdc
-        enable_pool "mds-$FSNAME"
 
         # we want to test main pool functionality, that is cancel based on SLV
         # this is why shrinkers are disabled
         disable_pool_shrink "mds-$FSNAME"
         disable_pool_shrink mdc
 
-        NR=1000
-        mkdir $DIR/$tdir
-        
+        NR=2000
+        mkdir -p $DIR/$tdir || error "failed to create $DIR/$tdir"
+
+        LRU_SIZE=`cat $NSDIR/lru_size`
+
         # use touch to produce $NR new locks
         log "create $NR files at $DIR/$tdir"
         for ((i=0;i<$NR;i++)); do touch $DIR/$tdir/f$i; done
 
         LRU_SIZE_B=`cat $NSDIR/lru_size`
-        log "created $LRU_SIZE_B locks"
+        if test $LRU_SIZE -ge $LRU_SIZE_B; then
+                skip "No cached locks created!"
+                cat $NSDIR/pool/state
+                return 0
+        fi
+        LRU_SIZE_B=$((LRU_SIZE_B-LRU_SIZE))
+        log "created $LRU_SIZE_B lock(s)"
 
-        # we want to sleep 2m to not make test too long
-        SLEEP=120
-        
-        # we allow one client to hold $LIMIT locks for 10h
+        # we want to sleep 30s to not make test too long
+        SLEEP=30
+        SLEEP_ADD=2
+
+        # we know that lru resize allows one client to hold $LIMIT locks for 10h
         MAX_HRS=10
-        
+
         # get the pool limit
         LIMIT=`cat $NSDIR/pool/limit`
-        
-        # calculate lock volume factor taking into account sleep and data set
-        # use $LRU_SIZE_B here to take into account real number of locks created
+
+        # calculate lock volume factor taking into account data set size and the
+        # rule that number of locks will be getting smaller durring sleep interval
+        # and we need to additionally enforce LVF to take this into account.
+        # Use $LRU_SIZE_B here to take into account real number of locks created
         # in the case of CMD, LRU_SIZE_B != $NR in most of cases
-        LVF=$(($LIMIT * $MAX_HRS * 60 * 60 / $LRU_SIZE_B / $SLEEP))
-        
-        log "make client drop locks $LVF times faster so that ${SLEEP}s is \
-enough to cancel $LRU_SIZE_B locks"
+        LVF=$(($LRU_SIZE_B * $MAX_HRS * 60 * 60))
+        log "make client drop locks $LVF times faster so that ${SLEEP}s is enough to cancel $LRU_SIZE_B lock(s)"
         OLD_LVF=`cat $NSDIR/pool/lock_volume_factor`
         echo "$LVF" > $NSDIR/pool/lock_volume_factor
-        log "sleep for ${SLEEP}s"
-        sleep $SLEEP
-        LRU_SIZE_A=`cat $NSDIR/lru_size`
+        log "sleep for $((SLEEP+SLEEP_ADD))s"
+        sleep $((SLEEP+SLEEP_ADD))
         echo "$OLD_LVF" > $NSDIR/pool/lock_volume_factor
+        LRU_SIZE_A=`cat $NSDIR/lru_size`
 
-        [ $LRU_SIZE_B -gt $LRU_SIZE_A ] || {
-                error "No locks dropped in ${SLEEP}s. LRU size: $LRU_SIZE_A"
-                enable_pool_shrink mdc
+        [ $LRU_SIZE_B -ge $LRU_SIZE_A ] || {
+                error "No locks dropped in "$((SLEEP+SLEEP_ADD))"s. LRU size: $LRU_SIZE_A"
+                lru_resize_enable
+                unlinkmany $DIR/$tdir/f $NR
                 return
         }
-        
-        log "Dropped "$((LRU_SIZE_B-LRU_SIZE_A))" locks in ${SLEEP}s"
-        enable_pool_shrink mdc
+
+        log "Dropped "$((LRU_SIZE_B-LRU_SIZE_A))" locks in "$((SLEEP+SLEEP_ADD))"s"
+        lru_resize_enable
         log "unlink $NR files at $DIR/$tdir"
-        unlinkmany $DIR/$tdir/f $NR > /dev/null 2>&1
+        unlinkmany $DIR/$tdir/f $NR
 }
-run_test 124 "lru resize ======================================="
+run_test 124a "lru resize ======================================="
+
+test_124b() {
+	[ -z "`grep lru_resize $LPROC/mdc/*/connect_flags`" ] && \
+               skip "no lru resize on server" && return 0
+        cleanup -f || error "failed to unmount"
+        MOUNTOPT="$MOUNTOPT,nolruresize"
+        setup || error "setup failed"
+
+        NR=3000
+        mkdir -p $DIR/$tdir || error "failed to create $DIR/$tdir"
+
+        createmany -o $DIR/$tdir/f $NR
+        log "doing ls -la $DIR/$tdir 3 times (lru resize disabled)"
+        stime=`date +%s`
+        ls -la $DIR/$tdir > /dev/null
+        ls -la $DIR/$tdir > /dev/null
+        ls -la $DIR/$tdir > /dev/null
+        etime=`date +%s`
+        nolruresize_delta=$((etime-stime))
+        log "ls -la time: $nolruresize_delta seconds"
+
+        cleanup -f || error "failed to unmount"
+        MOUNTOPT=`echo $MOUNTOPT | sed "s/nolruresize/lruresize/"`
+        setup || error "setup failed"
+
+        createmany -o $DIR/$tdir/f $NR
+        log "doing ls -la $DIR/$tdir 3 times (lru resize enabled)"
+        stime=`date +%s`
+        ls -la $DIR/$tdir > /dev/null
+        ls -la $DIR/$tdir > /dev/null
+        ls -la $DIR/$tdir > /dev/null
+        etime=`date +%s`
+        lruresize_delta=$((etime-stime))
+        log "ls -la time: $lruresize_delta seconds"
+
+        if test $lruresize_delta -gt $nolruresize_delta; then
+                log "ls -la is $((lruresize_delta - $nolruresize_delta))s slower with lru resize enabled"
+        elif test $nolruresize_delta -gt $lruresize_delta; then
+                log "ls -la is $((nolruresize_delta - $lruresize_delta))s faster with lru resize enabled"
+        else
+                log "lru resize performs the same with no lru resize"
+        fi
+
+        unlinkmany $DIR/$tdir/f $NR
+}
+run_test 124b "lru resize (performance test) ======================="
+
+test_125() { # 13358
+	[ -z "$(grep acl $LPROC/mdc/*-mdc-*/connect_flags)" ] && skip "must have acl enabled" && return
+	mkdir -p $DIR/d125 || error "mkdir failed"
+	$SETSTRIPE $DIR/d125 65536 -1 -1 || error "setstripe failed"
+	setfacl -R -m u:bin:rwx $DIR/d125 || error "setfacl $DIR/d125 failes"
+	ls -ld $DIR/d125 || error "cannot access $DIR/d125"
+}
+run_test 125 "don't return EPROTO when a dir has a non-default striping and ACLs"
 
 TMPDIR=$OLDTMPDIR
 TMP=$OLDTMP

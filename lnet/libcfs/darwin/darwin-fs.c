@@ -416,21 +416,6 @@ kern_file_sync (cfs_file_t *fp)
 
 #endif /* !__DARWIN8__ */
 
-cfs_rdev_t cfs_rdev_build(cfs_major_nr_t major, cfs_minor_nr_t minor)
-{
-        return makedev(major, minor);
-}
-
-cfs_major_nr_t cfs_rdev_major(cfs_rdev_t rdev)
-{
-        return major(rdev);
-}
-
-cfs_minor_nr_t cfs_rdev_minor(cfs_rdev_t rdev)
-{
-        return minor(rdev);
-}
-
 struct posix_acl *posix_acl_alloc(int count, int flags)
 {
         static struct posix_acl acl;

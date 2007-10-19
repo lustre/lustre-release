@@ -38,8 +38,8 @@ extern unsigned int obd_dump_on_eviction;
    networking / disk / timings affected by load (use Adaptive Timeouts) */
 extern unsigned int obd_timeout;          /* seconds */
 extern unsigned int ldlm_timeout;         /* seconds */
-extern unsigned int adaptive_timeout_min; /* seconds */
 extern unsigned int adaptive_timeout_max; /* seconds */
+extern unsigned int adaptive_timeout_history; /* seconds */
 extern unsigned int obd_sync_filter;
 extern unsigned int obd_max_dirty_pages;
 extern atomic_t obd_dirty_pages;
@@ -52,26 +52,31 @@ extern unsigned int obd_alloc_fail_rate;
 #define LDLM_TIMEOUT_DEFAULT 20
 /* Time to wait for all clients to reconnect during recovery */
 /* Should be very conservative; must catch the first reconnect after reboot */
-#define OBD_RECOVERY_TIMEOUT (obd_timeout * 5 / 2)
+#define OBD_RECOVERY_FACTOR (5 / 2) /* times obd_timeout */
 /* Change recovery-small 26b time if you change this */
 #define PING_INTERVAL max(obd_timeout / 4, 1U)
 /* Client may skip 1 ping; wait for 2.5 */
 #define PING_EVICT_TIMEOUT (PING_INTERVAL * 5 / 2)
 #define DISK_TIMEOUT 50          /* Beyond this we warn about disk speed */
-#define CONNECTION_SWITCH_MIN 5  /* Connection switching rate limiter */
+#define CONNECTION_SWITCH_MIN 5U /* Connection switching rate limiter */
+ /* Max connect interval for nonresponsive servers; ~50s to avoid building up
+    connect requests in the LND queues, but within obd_timeout so we don't
+    miss the recovery window */
+#define CONNECTION_SWITCH_MAX min(50U, max(CONNECTION_SWITCH_MIN,obd_timeout))
+#define CONNECTION_SWITCH_INC 5  /* Connection timeout backoff */
 #ifndef CRAY_XT3
 /* In general this should be low to have quick detection of a system 
-   running on a backup server. */
-#define INITIAL_CONNECT_TIMEOUT max_t(int,CONNECTION_SWITCH_MIN,obd_timeout/20)
+   running on a backup server. (If it's too low, import_select_connection
+   will increase the timeout anyhow.)  */
+#define INITIAL_CONNECT_TIMEOUT max(CONNECTION_SWITCH_MIN,obd_timeout/20)
 #else
 /* ...but for very large systems (e.g. CRAY) we need to keep the initial 
    connect t.o. high (bz 10803), because they will nearly ALWAYS be doing the
    connects for the first time (clients "reboot" after every process, so no
    chance to generate adaptive timeout data. */
-#define INITIAL_CONNECT_TIMEOUT max_t(int,CONNECTION_SWITCH_MIN,obd_timeout/2)
+#define INITIAL_CONNECT_TIMEOUT max(CONNECTION_SWITCH_MIN,obd_timeout/2)
 #endif
-#define LND_TIMEOUT 50           /* LNET LND-level RPC timeout */
-#define FOREVER 300              /* Something taking this long is broken */
+#define LONG_UNLINK 300          /* Unlink should happen before now */
 
 
 #define OBD_FAIL_MDS                     0x100
@@ -166,9 +171,11 @@ extern unsigned int obd_alloc_fail_rate;
 #define OBD_FAIL_OST_DROP_REQ            0x21d
 #define OBD_FAIL_OST_SETATTR_CREDITS     0x21e
 #define OBD_FAIL_OST_HOLD_WRITE_RPC      0x21f
+#define OBD_FAIL_OST_BRW_WRITE_BULK2     0x220
 #define OBD_FAIL_OST_LLOG_RECOVERY_TIMEOUT 0x221
 #define OBD_FAIL_OST_CANCEL_COOKIE_TIMEOUT 0x222
 #define OBD_FAIL_OST_PAUSE_CREATE        0x223
+#define OBD_FAIL_OST_BRW_PAUSE_PACK      0x224
 
 #define OBD_FAIL_LDLM                    0x300
 #define OBD_FAIL_LDLM_NAMESPACE_NEW      0x301
@@ -199,6 +206,7 @@ extern unsigned int obd_alloc_fail_rate;
 #define OBD_FAIL_OSC_SHUTDOWN            0x407
 #define OBD_FAIL_OSC_CHECKSUM_RECEIVE    0x408
 #define OBD_FAIL_OSC_CHECKSUM_SEND       0x409
+#define OBD_FAIL_OSC_BRW_PREP_REQ2       0x40a
 
 #define OBD_FAIL_PTLRPC                  0x500
 #define OBD_FAIL_PTLRPC_ACK              0x501

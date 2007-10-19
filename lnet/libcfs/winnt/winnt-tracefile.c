@@ -29,8 +29,6 @@
 #endif
 
 extern union trace_data_union trace_data[NR_CPUS];
-extern char *tracefile;
-extern int64_t tracefile_size;
 
 event_t     tracefile_event;
 
@@ -175,121 +173,11 @@ int tcd_owns_tage(struct trace_cpu_data *tcd, struct trace_page *tage)
 	return 1;
 }
 
-
-int trace_write_daemon_file(struct file *file, const char *buffer,
-                            unsigned long count, void *data)
+int trace_max_debug_mb(void)
 {
-	char *name;
-	unsigned long off;
-	int rc;
-
-	name =cfs_alloc(count + 1, 0);
-	if (name == NULL)
-		return -ENOMEM;
-
-	if (copy_from_user((void *)name, (void*)buffer, count)) {
-		rc = -EFAULT;
-		goto out;
-	}
-
-	/* be nice and strip out trailing '\n' */
-	for (off = count ; off > 2 && isspace(name[off - 1]); off--)
-		;
-
-	name[off] = '\0';
-
-	tracefile_write_lock();
-	if (strcmp(name, "stop") == 0) {
-		tracefile = NULL;
-		trace_stop_thread();
-		goto out_sem;
-	} else if (strncmp(name, "size=", 5) == 0) {
-		tracefile_size = simple_strtoul(name + 5, NULL, 0);
-		if (tracefile_size < 10 || tracefile_size > 20480)
-			tracefile_size = TRACEFILE_SIZE;
-		else
-			tracefile_size <<= 20;
-		goto out_sem;
-	}
-
-	if (tracefile != NULL)
-		cfs_free(tracefile);
-
-	tracefile = name;
-	name = NULL;
-	printk(KERN_INFO "Lustre: debug daemon will attempt to start writing "
-	       "to %s (%lukB max)\n", tracefile, (long)(tracefile_size >> 10));
-
-	trace_start_thread();
-out_sem:
-    tracefile_write_unlock();
-out:
-    if (name != NULL)
-	    cfs_free(name);
-	return count;
-}
-
-int trace_read_daemon_file(char *page, char **start, off_t off, int count,
-                           int *eof, void *data)
-{
-	int rc;
-
-	tracefile_read_lock();
-	rc = snprintf(page, count, "%s", tracefile);
-	tracefile_read_unlock();
-
-	return rc;
-}
-
-int trace_write_debug_mb(struct file *file, const char *buffer,
-                         unsigned long count, void *data)
-{
-	char string[32];
-	int i;
-	unsigned max;
-
-	if (count >= sizeof(string)) {
-		printk(KERN_ERR "Lustre: value too large (length %lu bytes)\n",
-		       count);
-		return -EOVERFLOW;
-	}
-
-	if (copy_from_user((void *)string, (void *)buffer, count))
-		return -EFAULT;
-
-	max = simple_strtoul(string, NULL, 0);
-	if (max == 0)
-		return -EINVAL;
-
-	if (max > (num_physpages >> (20 - 2 - CFS_PAGE_SHIFT)) / 5 || max >= 512) {
-		printk(KERN_ERR "Lustre: Refusing to set debug buffer size to "
-		       "%dMB, which is more than 80%% of available RAM (%lu)\n",
-		       max, (num_physpages >> (20 - 2 - CFS_PAGE_SHIFT)) / 5);
-		return -EINVAL;
-	}
-
-	max /= smp_num_cpus;
-
-	for (i = 0; i < NR_CPUS; i++) {
-		struct trace_cpu_data *tcd;
-		tcd = &trace_data[i].tcd;
-		tcd->tcd_max_pages = max << (20 - CFS_PAGE_SHIFT);
-	}
-	return count;
-}
-
-int trace_read_debug_mb(char *page, char **start, off_t off, int count,
-                        int *eof, void *data)
-{
-	struct trace_cpu_data *tcd;
-	int rc;
-
-	tcd = trace_get_tcd();
-        LASSERT (tcd != NULL);
-	rc = snprintf(page, count, "%lu\n",
-		      (tcd->tcd_max_pages >> (20 - CFS_PAGE_SHIFT)) * smp_num_cpus);
-	trace_put_tcd(tcd);
-	return rc;
+	int  total_mb = (num_physpages >> (20 - CFS_PAGE_SHIFT));
+	
+	return MAX(512, (total_mb * 80)/100);
 }
 
 void

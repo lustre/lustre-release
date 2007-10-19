@@ -59,6 +59,11 @@ struct obd_statfs;
 #define IOC_OBD_STATFS                  _IOWR('f', 164, struct obd_statfs *)
 #define IOC_LOV_GETINFO                 _IOWR('f', 165, struct lov_user_mds_data *)
 
+#define LL_IOC_LLOOP_ATTACH             _IOWR('f', 166, OBD_IOC_DATA_TYPE)
+#define LL_IOC_LLOOP_DETACH             _IOWR('f', 167, OBD_IOC_DATA_TYPE)
+#define LL_IOC_LLOOP_INFO               _IOWR('f', 168, OBD_IOC_DATA_TYPE)
+#define LL_IOC_LLOOP_DETACH_BYDEV       _IOWR('f', 169, OBD_IOC_DATA_TYPE)
+
 #define LL_STATFS_MDC           1
 #define LL_STATFS_LOV           2
 

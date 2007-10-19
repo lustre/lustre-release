@@ -151,7 +151,7 @@ void obdo_from_inode(struct obdo *dst, struct inode *src, obd_flag valid)
                 newvalid |= OBD_MD_FLCTIME;
         }
         if (valid & OBD_MD_FLSIZE) {
-                dst->o_size = src->i_size;
+                dst->o_size = i_size_read(src);
                 newvalid |= OBD_MD_FLSIZE;
         }
         if (valid & OBD_MD_FLBLOCKS) {  /* allocation of space (x512 bytes) */
@@ -207,7 +207,7 @@ void obdo_refresh_inode(struct inode *dst, struct obdo *src, obd_flag valid)
 
         if (valid & OBD_MD_FLATIME && src->o_atime > LTIME_S(dst->i_atime))
                 LTIME_S(dst->i_atime) = src->o_atime;
-        
+
         /* mtime is always updated with ctime, but can be set in past.
            As write and utime(2) may happen within 1 second, and utime's
            mtime has a priority over write's one, leave mtime from mds 
@@ -217,8 +217,8 @@ void obdo_refresh_inode(struct inode *dst, struct obdo *src, obd_flag valid)
                 if (valid & OBD_MD_FLMTIME)
                         LTIME_S(dst->i_mtime) = src->o_mtime;
         }
-        if (valid & OBD_MD_FLSIZE) 
-                dst->i_size = src->o_size;
+        if (valid & OBD_MD_FLSIZE)
+                i_size_write(dst, src->o_size);
         /* optimum IO size */
         if (valid & OBD_MD_FLBLKSZ && src->o_blksize > (1<<dst->i_blkbits)) {
                 dst->i_blkbits = ffs(src->o_blksize)-1;
@@ -257,7 +257,7 @@ void obdo_to_inode(struct inode *dst, struct obdo *src, obd_flag valid)
         if (valid & OBD_MD_FLCTIME && src->o_ctime > LTIME_S(dst->i_ctime))
                 LTIME_S(dst->i_ctime) = src->o_ctime;
         if (valid & OBD_MD_FLSIZE)
-                dst->i_size = src->o_size;
+                i_size_write(dst, src->o_size);
         if (valid & OBD_MD_FLBLOCKS) { /* allocation of space */
                 dst->i_blocks = src->o_blocks;
                 if (dst->i_blocks < src->o_blocks) /* overflow */

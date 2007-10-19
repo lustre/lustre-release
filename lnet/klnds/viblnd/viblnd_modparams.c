@@ -164,7 +164,7 @@ static cfs_sysctl_table_t kibnal_ctl_table[] = {
                 .proc_handler = &proc_dointvec
         },
         {
-                ,ctl_name = 5,
+                .ctl_name = 5,
                 .procname = "cksum",
                 .data     = &cksum,
                 .maxlen   = sizeof(int),

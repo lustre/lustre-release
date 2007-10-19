@@ -30,18 +30,6 @@
 #endif
 
 
-/*
- * Platform defines
- *
- * cfs_rdev_t
- */
-
-typedef unsigned short cfs_rdev_t;
-
-typedef unsigned int cfs_major_nr_t;
-typedef unsigned int cfs_minor_nr_t;
-
-
 #define MINORBITS	8
 #define MINORMASK	((1U << MINORBITS) - 1)
 
@@ -49,22 +37,6 @@ typedef unsigned int cfs_minor_nr_t;
 #define MINOR(dev)	((unsigned int) ((dev) & MINORMASK))
 #define NODEV		0
 #define MKDEV(ma,mi)	(((ma) << MINORBITS) | (mi))
-
-
-static inline cfs_rdev_t cfs_rdev_build(cfs_major_nr_t major, cfs_minor_nr_t minor)
-{
-    return MKDEV(major, minor);
-}
-
-static inline cfs_major_nr_t cfs_rdev_major(cfs_rdev_t rdev)
-{
-    return MAJOR(rdev);
-}
-
-static inline cfs_minor_nr_t cfs_rdev_minor(cfs_rdev_t rdev)
-{
-    return MINOR(rdev);
-}
 
 
 #ifdef __KERNEL__
@@ -159,6 +131,8 @@ typedef struct file_lock{
 #define ATTR_FROM_OPEN  0x1000  /* called from open path, ie O_TRUNC */
 //#define ATTR_CTIME_SET  0x2000
 #define ATTR_BLOCKS     0x4000
+#define ATTR_KILL_SUID  0
+#define ATTR_KILL_SGID  0
 
 #define in_group_p(x)	(0)
 

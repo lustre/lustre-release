@@ -479,7 +479,7 @@ static int llog_catinfo_config(struct obd_device *obd, char *buf, int buf_len,
                 l = snprintf(out, remains, "[Log Name]: %s\nLog Size: %llu\n"
                              "Last Index: %d\nUncanceled Records: %d\n\n",
                              name[i],
-                             handle->lgh_file->f_dentry->d_inode->i_size,
+                             i_size_read(handle->lgh_file->f_dentry->d_inode),
                              handle->lgh_last_idx, uncanceled);
                 out += l;
                 remains -= l;
@@ -544,7 +544,7 @@ static int llog_catinfo_cb(struct llog_handle *cat,
                      "\tLog Size: %llu\n\tLast Index: %d\n"
                      "\tUncanceled Records: %d\n",
                      logid->lgl_oid, logid->lgl_ogr, logid->lgl_ogen,
-                     handle->lgh_file->f_dentry->d_inode->i_size,
+                     i_size_read(handle->lgh_file->f_dentry->d_inode),
                      handle->lgh_last_idx, count);
         out += l;
         remains -= l;

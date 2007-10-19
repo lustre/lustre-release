@@ -54,13 +54,14 @@ Index: linux-2.6.16.46-0.14/include/linux/ext3_extents.h
 ===================================================================
 --- linux-2.6.16.46-0.14.orig/include/linux/ext3_extents.h
 +++ linux-2.6.16.46-0.14/include/linux/ext3_extents.h
-@@ -170,7 +170,8 @@ struct ext3_extents_helpers {
+@@ -170,7 +170,9 @@ struct ext3_extents_helpers {
   */
  typedef int (*ext_prepare_callback)(struct ext3_extents_tree *,
  				    struct ext3_ext_path *,
 -				    struct ext3_ext_cache *);
 +				    struct ext3_ext_cache *,
 +				    struct ext3_extent *);
++#define HAVE_EXT_PREPARE_CB_EXTENT
  
  #define EXT_CONTINUE	0
  #define EXT_BREAK	1
@@ -270,7 +271,7 @@ Index: linux-2.6.16.46-0.14/fs/ext3/extents.c
 +	 */
 +	down(&EXT3_I(inode)->truncate_sem);
 +	err = ext3_ext_walk_space(&tree, start_blk , EXT_MAX_BLOCK - start_blk,
-+				  (void *)ext3_ext_fiemap_cb);
++				  ext3_ext_fiemap_cb);
 +	up(&EXT3_I(inode)->truncate_sem);
 +	if (err)
 +		return err;

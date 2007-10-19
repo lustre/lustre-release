@@ -33,10 +33,10 @@
 #include <fcntl.h>
 #include <sys/uio.h>
 
+#include <sysio.h>
 #ifdef HAVE_XTIO_H
 #include <xtio.h>
 #endif
-#include <sysio.h>
 #include <fs.h>
 #include <mount.h>
 #include <inode.h>
@@ -269,8 +269,8 @@ int llu_glimpse_size(struct inode *inode)
         st->st_atime = lvb.lvb_atime;
         st->st_ctime = lvb.lvb_ctime;
 
-        CDEBUG(D_DLMTRACE, "glimpse: size: %llu, blocks: "LPU64"\n",
-               (long long)st->st_size, st->st_blocks);
+        CDEBUG(D_DLMTRACE, "glimpse: size: "LPU64", blocks: "LPU64"\n",
+               (__u64)st->st_size, (__u64)st->st_blocks);
 
         RETURN(rc);
 }

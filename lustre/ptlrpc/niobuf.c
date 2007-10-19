@@ -349,14 +349,14 @@ int ptlrpc_send_reply (struct ptlrpc_request *req, int flags)
                              req->rq_arrival_time.tv_sec, 1);
         if (!(flags & PTLRPC_REPLY_EARLY) && 
             (req->rq_type != PTL_RPC_MSG_ERR)) {
-                int oldse = at_get(&svc->srv_at_estimate);
                 /* early replies and errors don't count toward our service
                    time estimate */
-                at_add(&svc->srv_at_estimate, service_time);
-                if (service_time > oldse)
+                int oldse = at_add(&svc->srv_at_estimate, service_time);
+                if (oldse != 0)
                         DEBUG_REQ(D_ADAPTTO, req,
-                                  "svc %s increased estimate from %d to %d",
-                                  svc->srv_name, oldse, service_time);
+                                  "svc %s changed estimate from %d to %d",
+                                  svc->srv_name, oldse, 
+                                  at_get(&svc->srv_at_estimate));
         }
         /* Report actual service time for client latency calc */
         lustre_msg_set_service_time(req->rq_repmsg, service_time);

@@ -346,24 +346,18 @@ static int lustre_pack_reply_v1(struct ptlrpc_request *req, int count,
         int                        size;
         ENTRY;
 
-        /* Insure only 1 reply at a time: hold sem until ptlrpc_req_drop_rs */
-        down(&req->rq_rs_sem);
         LASSERT(req->rq_reply_state == NULL);
-        if (req->rq_final && (flags & LPRFL_EARLY_REPLY)) {
-                /* Already packed final, no more early */
-                up(&req->rq_rs_sem); 
-                RETURN(-EALREADY);
-        }
+
+        if ((flags & LPRFL_EARLY_REPLY) == 0)
+                req->rq_packed_final = 1;
 
         msg_len = lustre_msg_size_v1(count, lens);
         size = sizeof(struct ptlrpc_reply_state) + msg_len;
         OBD_ALLOC(rs, size);
         if (unlikely(rs == NULL)) {
                 rs = lustre_get_emerg_rs(req->rq_rqbd->rqbd_service, size);
-                if (!rs) {
-                        up(&req->rq_rs_sem);
+                if (!rs) 
                         RETURN (-ENOMEM);
-                }
         }
         atomic_set(&rs->rs_refcount, 1);        /* 1 ref for rq_reply_state */
         rs->rs_cb_id.cbid_fn = reply_out_callback;
@@ -377,8 +371,6 @@ static int lustre_pack_reply_v1(struct ptlrpc_request *req, int count,
         req->rq_replen = msg_len;
         req->rq_reply_state = rs;
         req->rq_repmsg = rs->rs_msg;
-        if (!flags)
-                req->rq_final = 1; /* checked in lustre_packed_reply */
 
         lustre_init_msg_v1(rs->rs_msg, count, lens, bufs);
 
@@ -395,24 +387,18 @@ static int lustre_pack_reply_v2(struct ptlrpc_request *req, int count,
         int                        size;
         ENTRY;
 
-        /* Insure only 1 reply at a time: hold sem until ptlrpc_req_drop_rs */
-        down(&req->rq_rs_sem); 
         LASSERT(req->rq_reply_state == NULL);
-        if (req->rq_final && (flags & LPRFL_EARLY_REPLY)) {
-                /* Already packed final, no more early */
-                up(&req->rq_rs_sem); 
-                RETURN(-EALREADY);
-        }
+
+        if ((flags & LPRFL_EARLY_REPLY) == 0)
+                req->rq_packed_final = 1;
 
         msg_len = lustre_msg_size_v2(count, lens);
         size = sizeof(struct ptlrpc_reply_state) + msg_len;
         OBD_ALLOC(rs, size);
         if (unlikely(rs == NULL)) {
                 rs = lustre_get_emerg_rs(req->rq_rqbd->rqbd_service, size);
-                if (!rs) {
-                        up(&req->rq_rs_sem);
+                if (!rs) 
                         RETURN (-ENOMEM);
-                }
         }
         atomic_set(&rs->rs_refcount, 1);        /* 1 ref for rq_reply_state */
         rs->rs_cb_id.cbid_fn = reply_out_callback;
@@ -426,8 +412,6 @@ static int lustre_pack_reply_v2(struct ptlrpc_request *req, int count,
         req->rq_replen = msg_len;
         req->rq_reply_state = rs;
         req->rq_repmsg = rs->rs_msg;
-        if (!(flags & LPRFL_EARLY_REPLY))
-                req->rq_final = 1; /* checked in lustre_packed_reply */
 
         /* server side, no rq_repbuf */
         lustre_init_msg_v2(rs->rs_msg, count, lens, bufs);
@@ -1579,7 +1563,7 @@ __u32 lustre_msg_get_timeout(struct lustre_msg *msg)
         case LUSTRE_MSG_MAGIC_V2_SWABBED: {
                 struct ptlrpc_body *pb;
                 
-                pb = lustre_msg_buf(msg, MSG_PTLRPC_BODY_OFF, sizeof(*pb));
+                pb = lustre_msg_buf_v2(msg, MSG_PTLRPC_BODY_OFF, sizeof(*pb));
                 if (!pb) {
                         CERROR("invalid msg %p: no ptlrpc body!\n", msg);
                         return 0;
@@ -1603,7 +1587,7 @@ __u32 lustre_msg_get_service_time(struct lustre_msg *msg)
         case LUSTRE_MSG_MAGIC_V2_SWABBED: {
                 struct ptlrpc_body *pb;
         
-                pb = lustre_msg_buf(msg, MSG_PTLRPC_BODY_OFF, sizeof(*pb));
+                pb = lustre_msg_buf_v2(msg, MSG_PTLRPC_BODY_OFF, sizeof(*pb));
                 if (!pb) {
                         CERROR("invalid msg %p: no ptlrpc body!\n", msg);
                         return 0;
@@ -2414,7 +2398,8 @@ void _debug_req(struct ptlrpc_request *req, __u32 mask,
         libcfs_debug_vmsg2(data->msg_cdls, data->msg_subsys, mask, data->msg_file,
                            data->msg_fn, data->msg_line, fmt, args,
                            " req@%p x"LPD64"/t"LPD64" o%d->%s@%s:%d lens %d/%d "
-                           "e %d ref %d fl "REQ_FLAGS_FMT"/%x/%x rc %d/%d\n",
+                           "e %d to %d dl %ld ref %d fl "REQ_FLAGS_FMT"/%x/%x "
+                           "rc %d/%d\n",
                            req, req->rq_xid, req->rq_transno,
                            req->rq_reqmsg ? lustre_msg_get_opc(req->rq_reqmsg) : -1,
                            req->rq_import ? obd2cli_tgt(req->rq_import->imp_obd) :
@@ -2426,7 +2411,8 @@ void _debug_req(struct ptlrpc_request *req, __u32 mask,
                                 (char *)req->rq_export->exp_connection->c_remote_uuid.uuid : "<?>",
                            (req->rq_import && req->rq_import->imp_client) ?
                                 req->rq_import->imp_client->cli_request_portal : -1,
-                           req->rq_reqlen, req->rq_replen, req->rq_early_count,
+                           req->rq_reqlen, req->rq_replen,
+                           req->rq_early_count, req->rq_timeout, req->rq_deadline,
                            atomic_read(&req->rq_refcount), DEBUG_REQ_FLAGS(req),
                            req->rq_reqmsg ? lustre_msg_get_flags(req->rq_reqmsg) : 0,
                            req->rq_repmsg ? lustre_msg_get_flags(req->rq_repmsg) : 0,
