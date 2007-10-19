@@ -1,4 +1,4 @@
-2007-10-17  Cluster File Systems, Inc. <info@clusterfs.com>
+2007-10-26  Cluster File Systems, Inc. <info@clusterfs.com>
        * version 3.0.3
 
 Severity   : normal
@@ -6,11 +6,6 @@ Bugzilla   : 13164
 Description: statfs speedup patches.
 Details    : The patches  improve statfs performance for very large
 	     filesystems.
-
---------------------------------------------------------------------------------
-
-tbd         Cluster File Systems, Inc. <info@clusterfs.com>
-       * version 3.0.3
 
 Severity   : normal
 Frequency  : if the uninit_groups feature is enabled on ldiskfs
