@@ -15,6 +15,14 @@ tbd         Cluster File Systems, Inc. <info@clusterfs.com>
        * Note that reiserfs quotas are disabled on SLES 10 in this kernel.
 
 Severity   : normal
+Bugzilla   : 13730
+Description: Not fail import if we got -EAGAIN
+Details    : if osc_interpret_create got -EAGAIN his immediately exit and 
+             wakeup oscc_waitq. After wakeup oscc_wait_for_objects call 
+	     oscc_has_objects and see osc has no objests and call 
+             oscc_internal_create for resend create request.
+
+Severity   : normal
 Bugzilla   : 13521
 Description: Update kernel patches for SLES10 2.6.16.53-0.8.
 Details    : Update which_patch & target file for SLES10 latest kernel.
