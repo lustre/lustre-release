@@ -360,6 +360,24 @@ cleanup_check() {
     return 0
 }
 
+wait_delete_completed () {
+    local TOTALPREV=`awk 'BEGIN{total=0}; {total+=$1}; END{print total}' \
+            $LPROC/osc/*/kbytesavail`
+
+    local WAIT=0
+    local MAX_WAIT=20
+    while [ "$WAIT" -ne "$MAX_WAIT" ]; do
+        sleep 1
+        TOTAL=`awk 'BEGIN{total=0}; {total+=$1}; END{print total}' \
+            $LPROC/osc/*/kbytesavail`
+        [ "$TOTAL" -eq "$TOTALPREV" ] && break
+        echo "Waiting delete completed ... prev: $TOTALPREV current: $TOTAL "
+        TOTALPREV=$TOTAL
+        WAIT=$(( WAIT + 1))
+    done
+    echo "Delete completed."
+}
+
 wait_for_host() {
     HOST=$1
     check_network "$HOST" 900
