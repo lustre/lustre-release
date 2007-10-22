@@ -51,6 +51,14 @@ typedef unsigned long long cycles_t;
 #  define cpu_to_le32(x) (x)
 #  define le64_to_cpu(x) (x)
 #  define cpu_to_le64(x) (x)
+
+#  define be16_to_cpu(x) bswap_16(x)
+#  define cpu_to_be16(x) bswap_16(x)
+#  define be32_to_cpu(x) bswap_32(x)
+#  define cpu_to_be32(x) bswap_32(x)
+#  define be64_to_cpu(x) bswap_64(x)
+#  define cpu_to_be64(x) bswap_64(x)
+
 # else
 #  if __BYTE_ORDER == __BIG_ENDIAN
 #   define le16_to_cpu(x) bswap_16(x)
@@ -59,6 +67,14 @@ typedef unsigned long long cycles_t;
 #   define cpu_to_le32(x) bswap_32(x)
 #   define le64_to_cpu(x) bswap_64(x)
 #   define cpu_to_le64(x) bswap_64(x)
+
+#   define be16_to_cpu(x) (x)
+#   define cpu_to_be16(x) (x)
+#   define be32_to_cpu(x) (x)
+#   define cpu_to_be32(x) (x)
+#   define be64_to_cpu(x) (x)
+#   define cpu_to_be64(x) (x)
+
 #  else
 #   error "Unknown byte order"
 #  endif /* __BIG_ENDIAN */
