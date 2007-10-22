@@ -2777,7 +2777,7 @@ run_test 65k "validate manual striping works properly with deactivated OSCs"
 test_65l() { # bug 12836
 	mkdir -p $DIR/$tdir/test_dir
 	$LFS setstripe $DIR/$tdir/test_dir 65536 -1 -1
-	$LFS find -mtime -1 $DIR/$tdir
+	$LFS find -mtime -1 $DIR/$tdir >/dev/null
 }
 run_test 65l "lfs find on -1 stripe dir ========================"
 
@@ -3274,6 +3274,9 @@ run_test 78 "handle large O_DIRECT writes correctly ============"
 test_79() { # bug 12743
 	[ $(grep -c obdfilter $LPROC/devices) -eq 0 ] &&
 		skip "skipping test for remote OST" && return
+
+	wait_delete_completed
+
         BKTOTAL=`awk 'BEGIN{total=0}; {total+=$1}; END{print total}' \
                  $LPROC/obdfilter/*/kbytestotal`
         BKFREE=`awk 'BEGIN{free=0}; {free+=$1}; END{print free}' \
