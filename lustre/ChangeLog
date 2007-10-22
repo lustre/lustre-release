@@ -14,6 +14,11 @@ tbd         Cluster File Systems, Inc. <info@clusterfs.com>
        * Recommended e2fsprogs version: 1.40.2-cfs1
        * Note that reiserfs quotas are disabled on SLES 10 in this kernel.
 
+Severity   : normal
+Bugzilla   : 13556
+Description: conf-sanity.sh test_33 failed with 1
+Details    : change mgsnode 
+
 --------------------------------------------------------------------------------
 
 2007-10-26         Cluster File Systems, Inc. <info@clusterfs.com>
