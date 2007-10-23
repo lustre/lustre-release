@@ -13,7 +13,7 @@ ALWAYS_EXCEPT="                 27o 27q  42a  42b  42c  42d  45   74b   75 $SANI
 #ALWAYS_EXCEPT=${ALWAYS_EXCEPT:-"27m 42a 42b 42c 42d 45 68 76"}
 # UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
 
-[ "$SLOW" = "no" ] && EXCEPT="$EXCEPT 24o 27m 36f 36g 51b 51c 63 64b 71 73 101 115"
+[ "$SLOW" = "no" ] && EXCEPT="$EXCEPT 24o 27m 36f 36g 51b 51c 63 64b 68 71 73 101 115"
 
 # Tests that fail on uml
 CPU=`awk '/model/ {print $4}' /proc/cpuinfo`
@@ -2828,8 +2828,12 @@ test_68() {
 	grep -q llite_lloop /proc/modules
 	[ $? -ne 0 ] && skip "can't find module llite_lloop" && return
 
+	MEMTOTAL=`meminfo MemTotal`
+	NR_BLOCKS=$((MEMTOTAL>>8))
+	[[ $NR_BLOCKS -le 2048 ]] && NR_BLOCKS=2048
+
 	LLOOP=$TMP/lloop.`date +%s`.`date +%N`
-	dd if=/dev/zero of=$DIR/f68 bs=64k seek=2047 count=1
+	dd if=/dev/zero of=$DIR/f68 bs=64k seek=$NR_BLOCKS count=1
 	mkswap $DIR/f68
 
 	$LCTL blockdev_attach $DIR/f68 $LLOOP || error "attach failed"
@@ -2839,7 +2843,6 @@ test_68() {
 	swapon -p 32767 $LLOOP || error "swapon $LLOOP failed"
 
 	echo "before: `swapon -s | grep $LLOOP`"
-	MEMTOTAL=`meminfo MemTotal`
 	$MEMHOG $MEMTOTAL || error "error allocating $MEMTOTAL kB"
 	echo "after: `swapon -s | grep $LLOOP`"
 	SWAPUSED=`swap_used $LLOOP`
