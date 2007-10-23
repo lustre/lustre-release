@@ -716,9 +716,15 @@ kiblnd_create_conn (kib_peer_t *peer, struct rdma_cm_id *cmid, int state)
                 }
         }
 
+#if (IBLND_OFED_VERSION == 1025)
+        cq = ib_create_cq(cmid->device,
+                          kiblnd_cq_completion, kiblnd_cq_event, conn,
+                          IBLND_CQ_ENTRIES(), 0);
+#else
         cq = ib_create_cq(cmid->device,
                           kiblnd_cq_completion, kiblnd_cq_event, conn,
                           IBLND_CQ_ENTRIES());
+#endif
         if (!IS_ERR(cq)) {
                 conn->ibc_cq = cq;
         } else {

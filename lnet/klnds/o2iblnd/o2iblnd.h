@@ -49,6 +49,7 @@
 #include <linux/kmod.h>
 #include <linux/sysctl.h>
 #include <linux/random.h>
+#include <linux/pci.h>
 
 #include <net/sock.h>
 #include <linux/in.h>
@@ -570,7 +571,7 @@ kiblnd_rd_size (kib_rdma_desc_t *rd)
 }
 #endif
 
-#if (IBLND_OFED_VERSION == 102)
+#if (IBLND_OFED_VERSION == 1020) || (IBLND_OFED_VERSION == 1025)
 
 static inline __u64 kiblnd_dma_map_single(struct ib_device *dev,
                                           void *msg, size_t size,
@@ -622,7 +623,7 @@ static inline unsigned int kiblnd_sg_dma_len(struct ib_device *dev,
 #define KIBLND_CONN_PARAM(e)            ((e)->param.conn.private_data)
 #define KIBLND_CONN_PARAM_LEN(e)        ((e)->param.conn.private_data_len)
 
-#elif (IBLND_OFED_VERSION == 101)
+#elif (IBLND_OFED_VERSION == 1010)
 
 static inline dma_addr_t kiblnd_dma_map_single(struct ib_device *dev,
                                                void *msg, size_t size,

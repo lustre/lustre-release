@@ -536,6 +536,7 @@ else
 	EXTRA_LNET_INCLUDE="$O2IBCPPFLAGS $EXTRA_LNET_INCLUDE"
 	LB_LINUX_TRY_COMPILE([
 	        #include <linux/version.h>
+		#include <linux/pci.h>
 	        #if !HAVE_GFP_T
 		typedef int gfp_t;
 		#endif
@@ -568,11 +569,19 @@ else
 		O2IBCPPFLAGS=""
 	])
 
+# version checking is a hack and isn't reliable, we need verify it
+# with each new ofed release
+
 	IB_DMA_MAP="`grep -c ib_dma_map_single ${O2IBPATH}/include/rdma/ib_verbs.h`"
 	if test "$IB_DMA_MAP" != 0 ; then
-		IBLND_OFED_VERSION="102"
+		IB_COMP_VECT="`grep -c comp_vector ${O2IBPATH}/include/rdma/ib_verbs.h`"
+		if test "$IB_COMP_VECT" != 0 ; then
+			IBLND_OFED_VERSION="1025"
+		else
+			IBLND_OFED_VERSION="1020"
+		fi
 	else
-		IBLND_OFED_VERSION="101"
+		IBLND_OFED_VERSION="1010"
 	fi
 
         AC_DEFINE_UNQUOTED(IBLND_OFED_VERSION, $IBLND_OFED_VERSION,

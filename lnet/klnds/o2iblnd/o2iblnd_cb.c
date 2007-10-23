@@ -1326,9 +1326,12 @@ void
 kiblnd_connect_peer (kib_peer_t *peer)
 {
         struct rdma_cm_id *cmid;
-        struct sockaddr_in sockaddr;
+        kib_net_t         *net = peer->ibp_ni->ni_data;
+        struct sockaddr_in srcaddr;
+        struct sockaddr_in dstaddr;
         int                rc;
 
+        LASSERT (net != NULL);
         LASSERT (peer->ibp_connecting > 0);
 
         cmid = rdma_create_id(kiblnd_cm_callback, peer, RDMA_PS_TCP);
@@ -1339,14 +1342,20 @@ kiblnd_connect_peer (kib_peer_t *peer)
                 goto failed;
         }
 
-        memset(&sockaddr, 0, sizeof(sockaddr));
-        sockaddr.sin_family = AF_INET;
-        sockaddr.sin_port = htons(*kiblnd_tunables.kib_service);
-        sockaddr.sin_addr.s_addr = htonl(LNET_NIDADDR(peer->ibp_nid));
+        memset(&srcaddr, 0, sizeof(srcaddr));
+        srcaddr.sin_family = AF_INET;
+        srcaddr.sin_addr.s_addr = htonl(net->ibn_dev->ibd_ifip);
+
+        memset(&dstaddr, 0, sizeof(dstaddr));
+        dstaddr.sin_family = AF_INET;
+        dstaddr.sin_port = htons(*kiblnd_tunables.kib_service);
+        dstaddr.sin_addr.s_addr = htonl(LNET_NIDADDR(peer->ibp_nid));
 
         kiblnd_peer_addref(peer);               /* cmid's ref */
 
-        rc = rdma_resolve_addr(cmid, NULL, (struct sockaddr *)&sockaddr,
+        rc = rdma_resolve_addr(cmid,
+                               (struct sockaddr *)&srcaddr,
+                               (struct sockaddr *)&dstaddr,
                                *kiblnd_tunables.kib_timeout * 1000);
         if (rc == 0)
                 return;
