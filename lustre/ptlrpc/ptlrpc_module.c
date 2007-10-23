@@ -37,7 +37,7 @@
 #include <lustre_net.h>
 
 #include "ptlrpc_internal.h"
-
+cfs_mem_cache_t *ptlrpc_cbdata_slab;
 extern spinlock_t ptlrpc_last_xid_lock;
 extern spinlock_t ptlrpc_rs_debug_lock;
 extern spinlock_t ptlrpc_all_services_lock;
@@ -78,10 +78,20 @@ __init int ptlrpc_init(void)
         rc = ldlm_init();
         if (rc)
                 GOTO(cleanup, rc);
+        cleanup_phase = 4;
+
+        ptlrpc_cbdata_slab = cfs_mem_cache_create("ptlrpc_cbdatas",
+                                sizeof (struct ptlrpc_set_cbdata), 0, 
+                                SLAB_HWCACHE_ALIGN);
+        if (ptlrpc_cbdata_slab == NULL)
+                GOTO(cleanup, rc);
+
         RETURN(0);
 
 cleanup:
         switch(cleanup_phase) {
+        case 4:
+                ldlm_exit();
         case 3:
                 ptlrpc_stop_pinger();
         case 2:
@@ -101,6 +111,7 @@ static void __exit ptlrpc_exit(void)
         ptlrpc_stop_pinger();
         ptlrpc_exit_portals();
         ptlrpc_cleanup_connection();
+        cfs_mem_cache_destroy(ptlrpc_cbdata_slab);
 }
 
 /* connection.c */
@@ -149,6 +160,7 @@ EXPORT_SYMBOL(ptlrpc_retain_replayable_request);
 EXPORT_SYMBOL(ptlrpc_next_xid);
 
 EXPORT_SYMBOL(ptlrpc_prep_set);
+EXPORT_SYMBOL(ptlrpc_set_add_cb);
 EXPORT_SYMBOL(ptlrpc_set_add_req);
 EXPORT_SYMBOL(ptlrpc_set_add_new_req);
 EXPORT_SYMBOL(ptlrpc_set_destroy);

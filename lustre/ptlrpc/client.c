@@ -573,6 +573,7 @@ struct ptlrpc_request_set *ptlrpc_prep_set(void)
         set->set_remaining = 0;
         spin_lock_init(&set->set_new_req_lock);
         CFS_INIT_LIST_HEAD(&set->set_new_requests);
+        CFS_INIT_LIST_HEAD(&set->set_cblist);
 
         RETURN(set);
 }
@@ -630,6 +631,23 @@ void ptlrpc_set_destroy(struct ptlrpc_request_set *set)
 
         OBD_FREE(set, sizeof(*set));
         EXIT;
+}
+
+int ptlrpc_set_add_cb(struct ptlrpc_request_set *set,
+                      set_interpreter_func fn, void *data)
+{
+        struct ptlrpc_set_cbdata *cbdata;
+
+        OBD_SLAB_ALLOC(cbdata, ptlrpc_cbdata_slab, 
+                        CFS_ALLOC_STD, sizeof(*cbdata));
+        if (cbdata == NULL)
+                RETURN(-ENOMEM);
+
+        cbdata->psc_interpret = fn;
+        cbdata->psc_data = data;
+        list_add_tail(&cbdata->psc_item, &set->set_cblist);
+        
+        RETURN(0);
 }
 
 void ptlrpc_set_add_req(struct ptlrpc_request_set *set,
@@ -1375,6 +1393,19 @@ int ptlrpc_set_wait(struct ptlrpc_request_set *set)
                 int (*interpreter)(struct ptlrpc_request_set *set,void *,int) =
                         set->set_interpret;
                 rc = interpreter (set, set->set_arg, rc);
+        } else {
+                struct ptlrpc_set_cbdata *cbdata, *n;
+                int err;
+
+                list_for_each_entry_safe(cbdata, n, 
+                                         &set->set_cblist, psc_item) {
+                        list_del_init(&cbdata->psc_item);
+                        err = cbdata->psc_interpret(set, cbdata->psc_data, rc);
+                        if (err && !rc)
+                                rc = err;
+                        OBD_SLAB_FREE(cbdata, ptlrpc_cbdata_slab, 
+                                        sizeof(*cbdata));
+                }
         }
 
         RETURN(rc);
