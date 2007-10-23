@@ -60,8 +60,8 @@ static void ll_destroy_inode(struct inode *inode)
 int ll_init_inodecache(void)
 {
         ll_inode_cachep = cfs_mem_cache_create("lustre_inode_cache",
-                                                 sizeof(struct ll_inode_info),
-                                                 0, SLAB_HWCACHE_ALIGN);
+                                               sizeof(struct ll_inode_info),
+                                               0, SLAB_HWCACHE_ALIGN);
         if (ll_inode_cachep == NULL)
                 return -ENOMEM;
         return 0;
@@ -100,10 +100,9 @@ static int __init init_lustre_lite(void)
         rc = ll_init_inodecache();
         if (rc)
                 return -ENOMEM;
-
         ll_file_data_slab = cfs_mem_cache_create("ll_file_data",
-                                              sizeof(struct ll_file_data), 0,
-                                                  SLAB_HWCACHE_ALIGN);
+                                                 sizeof(struct ll_file_data), 0,
+                                                 SLAB_HWCACHE_ALIGN);
         if (ll_file_data_slab == NULL) {
                 ll_destroy_inodecache();
                 return -ENOMEM;
@@ -166,9 +165,8 @@ static int __init init_lustre_lite(void)
 
 static void __exit exit_lustre_lite(void)
 {
-#ifdef HAVE_KMEM_CACHE_DESTROY_INT
         int rc;
-#endif
+        
         del_timer(&ll_capa_timer);
         ll_capa_thread_stop();
         LASSERTF(capa_count[CAPA_SITE_CLIENT] == 0,
@@ -199,9 +197,8 @@ static void __exit exit_lustre_lite(void)
                 LASSERTF(rc == 0, "couldn't destroy ll_async_page slab\n");
         }
 
-        if (proc_lustre_fs_root) {
+        if (proc_lustre_fs_root)
                 lprocfs_remove(&proc_lustre_fs_root);
-        }
 }
 
 MODULE_AUTHOR("Cluster File Systems, Inc. <info@clusterfs.com>");

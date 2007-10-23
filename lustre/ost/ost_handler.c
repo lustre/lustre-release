@@ -1062,7 +1062,7 @@ static int ost_brw_write(struct ptlrpc_request *req, struct obd_trans_info *oti)
          * grant info will be cleared for resent req, then fed_grant and 
          * total_grant will not be modified in following preprw_write */ 
         if (lustre_msg_get_flags(req->rq_reqmsg) & (MSG_RESENT | MSG_REPLAY)) {
-                DEBUG_REQ(D_CACHE, req, "clear resent/replay req grant info\n");
+                DEBUG_REQ(D_CACHE, req, "clear resent/replay req grant info");
                 body->oa.o_valid &= ~OBD_MD_FLGRANT;
         }
 
@@ -1339,7 +1339,7 @@ static int ost_handle_quotacheck(struct ptlrpc_request *req)
 }
 
 static int ost_llog_handle_connect(struct obd_export *exp,
-                                                   struct ptlrpc_request *req)
+                                   struct ptlrpc_request *req)
 {
         struct llogd_conn_body *body;
         int rc;

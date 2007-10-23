@@ -850,8 +850,8 @@ int ldlm_handle_enqueue0(struct ldlm_namespace *ns,
                 lock = find_existing_lock(req->rq_export,
                                           &dlm_req->lock_handle[0]);
                 if (lock != NULL) {
-                        DEBUG_REQ(D_HA, req, "found existing lock cookie "LPX64,
-                                  lock->l_handle.h_cookie);
+                        DEBUG_REQ(D_DLMTRACE, req, "found existing lock cookie "
+                                  LPX64, lock->l_handle.h_cookie);
                         GOTO(existing_lock, rc = 0);
                 }
         }

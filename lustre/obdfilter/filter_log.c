@@ -155,13 +155,13 @@ static int filter_recov_log_unlink_cb(struct llog_ctxt *ctxt,
         rc = filter_destroy(exp, oa, NULL, NULL, NULL);
         OBDO_FREE(oa);
         if (rc == -ENOENT) {
-                CDEBUG(D_HA, "object already removed, send cookie\n");
+                CDEBUG(D_RPCTRACE, "object already removed, send cookie\n");
                 llog_cancel(ctxt, NULL, 1, cookie, 0);
                 RETURN(0);
         }
 
         if (rc == 0)
-                CDEBUG(D_HA, "object: "LPU64" in record is destroyed\n", oid);
+                CDEBUG(D_RPCTRACE, "object "LPU64" is destroyed\n", oid);
 
         RETURN(rc);
 }
@@ -199,13 +199,13 @@ static int filter_recov_log_setattr_cb(struct llog_ctxt *ctxt,
         OBDO_FREE(oinfo.oi_oa);
 
         if (rc == -ENOENT) {
-                CDEBUG(D_HA, "object already removed, send cookie\n");
+                CDEBUG(D_RPCTRACE, "object already removed, send cookie\n");
                 llog_cancel(ctxt, NULL, 1, cookie, 0);
                 RETURN(0);
         }
 
         if (rc == 0)
-                CDEBUG(D_HA, "object: "LPU64" in record is chown/chgrp\n", oid);
+                CDEBUG(D_RPCTRACE, "object "LPU64" is chown/chgrp\n", oid);
 
         RETURN(rc);
 }

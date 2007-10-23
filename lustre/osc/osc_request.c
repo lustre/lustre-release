@@ -63,9 +63,6 @@ extern quota_interface_t osc_quota_interface;
 
 static void osc_release_ppga(struct brw_page **ppga, obd_count count);
 
-/* by default 10s */
-atomic_t osc_resend_time; 
-
 /* Pack OSC object metadata for disk storage (LE byte order). */
 static int osc_packmd(struct obd_export *exp, struct lov_mds_md **lmmp,
                       struct lov_stripe_md *lsm)
@@ -453,13 +450,12 @@ int osc_real_create(struct obd_export *exp, struct obdo *oa,
 
         CDEBUG(D_HA, "transno: "LPD64"\n",
                lustre_msg_get_transno(req->rq_repmsg));
-        EXIT;
 out_req:
         ptlrpc_req_finished(req);
 out:
         if (rc && !*ea)
                 obd_free_memmd(exp, &lsm);
-        return rc;
+        RETURN(rc);
 }
 
 static int osc_punch_interpret(struct ptlrpc_request *req,
@@ -628,7 +624,8 @@ static int osc_destroy(struct obd_export *exp, struct obdo *oa,
                                         LDLM_FL_DISCARD_DATA);
         if (exp_connect_cancelset(exp) && count) {
                 bufcount = 3;
-                size[REQ_REC_OFF + 1] = ldlm_request_bufsize(count,OST_DESTROY);
+                size[REQ_REC_OFF + 1] = ldlm_request_bufsize(count,
+                                                             OST_DESTROY);
         }
         req = ptlrpc_prep_req(class_exp2cliimp(exp), LUSTRE_OST_VERSION,
                               OST_DESTROY, bufcount, size, NULL);
@@ -3400,7 +3397,7 @@ static int osc_setinfo_mds_conn_interpret(struct ptlrpc_request *req,
         imp->imp_server_timeout = 1;
         imp->imp_pingable = 1;
         spin_unlock(&imp->imp_lock);
-        CDEBUG(D_HA, "pinging OST %s\n", obd2cli_tgt(imp->imp_obd));
+        CDEBUG(D_RPCTRACE, "pinging OST %s\n", obd2cli_tgt(imp->imp_obd));
 
         RETURN(rc);
 }
@@ -3476,7 +3473,7 @@ static int osc_set_info_async(struct obd_export *exp, obd_count keylen,
         if (req == NULL)
                 RETURN(-ENOMEM);
 
-        if (KEY_IS("mds_conn")) {
+        if (KEY_IS(KEY_MDS_CONN)) {
                 struct osc_creator *oscc = &obd->u.cli.cl_oscc;
 
                 oscc->oscc_oa.o_gr = (*(__u32 *)val);

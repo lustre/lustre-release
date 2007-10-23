@@ -153,7 +153,7 @@ int llog_obd_repl_cancel(struct llog_ctxt *ctxt,
 
         mutex_down(&ctxt->loc_sem);
         if (ctxt->loc_imp == NULL) {
-                CDEBUG(D_HA, "no import for ctxt %p\n", ctxt);
+                CDEBUG(D_RPCTRACE, "no import for ctxt %p\n", ctxt);
                 GOTO(out, rc = 0);
         }
 
@@ -184,7 +184,7 @@ int llog_obd_repl_cancel(struct llog_ctxt *ctxt,
 
         if ((llcd->llcd_size - llcd->llcd_cookiebytes) < sizeof(*cookies) ||
             (flags & OBD_LLOG_FL_SENDNOW)) {
-                CDEBUG(D_HA, "send llcd %p:%p\n", llcd, llcd->llcd_ctxt);
+                CDEBUG(D_RPCTRACE, "send llcd %p:%p\n", llcd, llcd->llcd_ctxt);
                 ctxt->loc_llcd = NULL;
                 llcd_send(llcd);
         }
@@ -200,7 +200,7 @@ int llog_obd_repl_sync(struct llog_ctxt *ctxt, struct obd_export *exp)
         ENTRY;
 
         if (exp && (ctxt->loc_imp == exp->exp_imp_reverse)) {
-                CDEBUG(D_HA, "reverse import disconnected, put llcd %p:%p\n",
+                CDEBUG(D_RPCTRACE,"reverse import disconnect, put llcd %p:%p\n",
                        ctxt->loc_llcd, ctxt);
                 mutex_down(&ctxt->loc_sem);
                 if (ctxt->loc_llcd != NULL) {
@@ -335,7 +335,7 @@ static int log_commit_thread(void *arg)
 
                         list_del(&llcd->llcd_list);
                         if (llcd->llcd_cookiebytes == 0) {
-                                CDEBUG(D_HA, "put empty llcd %p:%p\n",
+                                CDEBUG(D_RPCTRACE, "put empty llcd %p:%p\n",
                                        llcd, llcd->llcd_ctxt);
                                 llcd_put(llcd);
                                 continue;

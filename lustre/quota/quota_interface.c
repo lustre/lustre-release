@@ -655,8 +655,8 @@ int osc_quota_init(void)
 
         LASSERT(qinfo_cachep == NULL);
         qinfo_cachep = cfs_mem_cache_create("osc_quota_info",
-                                         sizeof(struct osc_quota_info),
-                                         0, 0);
+                                            sizeof(struct osc_quota_info),
+                                            0, 0);
         if (!qinfo_cachep)
                 RETURN(-ENOMEM);
 

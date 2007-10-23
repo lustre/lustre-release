@@ -548,20 +548,21 @@ int obd_init_caches(void)
 
         LASSERT(obd_device_cachep == NULL);
         obd_device_cachep = cfs_mem_cache_create("ll_obd_dev_cache",
-                                              sizeof(struct obd_device), 0, 0);
+                                                 sizeof(struct obd_device), 
+                                                 0, 0);
         if (!obd_device_cachep)
                 GOTO(out, -ENOMEM);
 
         LASSERT(obdo_cachep == NULL);
         obdo_cachep = cfs_mem_cache_create("ll_obdo_cache", sizeof(struct obdo),
-                                        0, 0);
+                                           0, 0);
         if (!obdo_cachep)
                 GOTO(out, -ENOMEM);
 
         LASSERT(import_cachep == NULL);
         import_cachep = cfs_mem_cache_create("ll_import_cache",
-                                          sizeof(struct obd_import),
-                                          0, 0);
+                                             sizeof(struct obd_import),
+                                             0, 0);
         if (!import_cachep)
                 GOTO(out, -ENOMEM);
 

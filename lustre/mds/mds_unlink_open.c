@@ -258,15 +258,12 @@ int mds_cleanup_pending(struct obd_device *obd)
                 MDS_UP_READ_ORPHAN_SEM(child_inode);
 
                 rc = mds_unlink_orphan(obd, dchild, child_inode, pending_dir);
-                if (rc == 0) {
-                        item ++;
-                        CDEBUG(D_HA, "%s: removed orphan %s\n",
-                               obd->obd_name, d_name);
-                } else {
-                        CDEBUG(D_INODE, "%s: removed orphan %s failed,"
-                               " rc = %d\n", obd->obd_name, d_name, rc);
+                CDEBUG(D_INODE, "%s: removed orphan %s: rc %d\n",
+                       obd->obd_name, d_name, rc);
+                if (rc == 0)
+                        item++;
+                else
                         rc = 0;
-                }
 next:
                 l_dput(dchild);
                 UNLOCK_INODE_MUTEX(pending_dir);

@@ -157,7 +157,7 @@ static int oscc_internal_create(struct osc_creator *oscc)
         LASSERT(body->oa.o_gr > 0);
         body->oa.o_valid |= OBD_MD_FLID | OBD_MD_FLGROUP;
         spin_unlock(&oscc->oscc_lock);
-        CDEBUG(D_HA, "preallocating through id "LPU64" (last seen "LPU64")\n",
+        CDEBUG(D_RPCTRACE, "prealloc through id "LPU64" (last seen "LPU64")\n",
                body->oa.o_id, oscc->oscc_last_id);
 
         ptlrpc_req_set_repsize(request, 2, size);
@@ -314,15 +314,12 @@ int osc_create(struct obd_export *exp, struct obdo *oa,
                 }
                 oscc->oscc_flags |= OSCC_FLAG_SYNC_IN_PROGRESS;
                 spin_unlock(&oscc->oscc_lock);
-                CDEBUG(D_HA, "%s: oscc recovery started\n",
-                       oscc->oscc_obd->obd_name);
+                CDEBUG(D_HA, "%s: oscc recovery started - delete to "LPU64"\n",
+                       oscc->oscc_obd->obd_name, oscc->oscc_next_id - 1);
 
                 /* delete from next_id on up */
                 oa->o_valid |= OBD_MD_FLID;
                 oa->o_id = oscc->oscc_next_id - 1;
-
-                CDEBUG(D_HA, "%s: deleting to next_id: "LPU64"\n",
-                       oscc->oscc_obd->obd_name, oa->o_id);
 
                 rc = osc_real_create(exp, oa, ea, NULL);
 
@@ -360,8 +357,8 @@ int osc_create(struct obd_export *exp, struct obdo *oa,
                 if (oscc_recovering(oscc)) {
                         struct l_wait_info lwi;
 
-                        CDEBUG(D_HA,"%p: oscc recovery in progress, waiting\n",
-                               oscc);
+                        CDEBUG(D_HA,"%s: oscc recovery in progress, waiting\n",
+                               oscc->oscc_obd->obd_name);
 
                         lwi = LWI_TIMEOUT(cfs_timeout_cap(cfs_time_seconds(obd_timeout/4)),
                                           NULL, NULL);
@@ -369,12 +366,12 @@ int osc_create(struct obd_export *exp, struct obdo *oa,
                                           !oscc_recovering(oscc), &lwi);
                         LASSERT(rc == 0 || rc == -ETIMEDOUT);
                         if (rc == -ETIMEDOUT) {
-                                CDEBUG(D_HA,"%p: timeout waiting on recovery\n",
-                                       oscc);
+                                CDEBUG(D_HA,"%s: timeout waiting on recovery\n",
+                                       oscc->oscc_obd->obd_name);
                                 RETURN(rc);
                         }
-                        CDEBUG(D_HA, "%p: oscc recovery over, waking up\n",
-                               oscc);
+                        CDEBUG(D_HA, "%s: oscc recovery over, waking up\n",
+                               oscc->oscc_obd->obd_name);
                 }
 
                 spin_lock(&oscc->oscc_lock);
@@ -391,7 +388,7 @@ int osc_create(struct obd_export *exp, struct obdo *oa,
                         oscc->oscc_next_id++;
                         try_again = 0;
 
-                        CDEBUG(D_HA, "%s: set oscc_next_id = "LPU64"\n",
+                        CDEBUG(D_RPCTRACE, "%s: set oscc_next_id = "LPU64"\n",
                                exp->exp_obd->obd_name, oscc->oscc_next_id);
                 } else if (oscc->oscc_flags & OSCC_FLAG_NOSPC) {
                         rc = -ENOSPC;
@@ -405,7 +402,7 @@ int osc_create(struct obd_export *exp, struct obdo *oa,
         }
 
         if (rc == 0)
-                CDEBUG(D_HA, "%s: returning objid "LPU64"\n",
+                CDEBUG(D_INFO, "%s: returning objid "LPU64"\n",
                        obd2cli_tgt(oscc->oscc_obd), lsm->lsm_object_id);
         else if (*ea == NULL)
                 obd_free_memmd(exp, &lsm);

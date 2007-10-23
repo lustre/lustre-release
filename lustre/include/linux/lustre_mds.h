@@ -25,7 +25,7 @@
 #   include <linux/posix_acl_xattr.h>
 #  endif
 # endif
-# ifndef LUSTRE_KERNEL_VERSION
+# ifndef HAVE_VFS_INTENT_PATCHES
 #  include <linux/lustre_intent.h>
 # endif
 #endif

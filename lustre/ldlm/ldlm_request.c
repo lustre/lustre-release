@@ -889,8 +889,8 @@ int ldlm_cli_cancel_req(struct obd_export *exp, struct list_head *cancels,
         while (1) {
                 imp = class_exp2cliimp(exp);
                 if (imp == NULL || imp->imp_invalid) {
-                        CDEBUG(D_HA, "skipping cancel on invalid import %p\n",
-                               imp);
+                        CDEBUG(D_DLMTRACE,
+                               "skipping cancel on invalid import %p\n", imp);
                         RETURN(count);
                 }
 
@@ -1053,6 +1053,8 @@ int ldlm_cancel_lru_local(struct ldlm_namespace *ns, struct list_head *cancels,
 
         while (!list_empty(&ns->ns_unused_list)) {
                 struct ldlm_pool *pl = &ns->ns_pool;
+
+                LASSERT(unused >= 0);
 
                 if (max && added >= max)
                         break;
@@ -1248,7 +1250,7 @@ int ldlm_cancel_resource_local(struct ldlm_resource *res,
 
                 /* See CBPENDING comment in ldlm_cancel_lru */
                 lock->l_flags |= LDLM_FL_CBPENDING | LDLM_FL_CANCELING |
-                        lock_flags;
+                                 lock_flags;
 
                 LASSERT(list_empty(&lock->l_bl_ast));
                 list_add(&lock->l_bl_ast, cancels);
@@ -1320,7 +1322,8 @@ int ldlm_cli_cancel_list(struct list_head *cancels, int count,
                                 ldlm_cancel_pack(req, off, cancels, count);
                         else
                                 res = ldlm_cli_cancel_req(lock->l_conn_export,
-                                                          cancels, count, flags);
+                                                          cancels, count,
+                                                          flags);
                 } else {
                         res = ldlm_cli_cancel_req(lock->l_conn_export,
                                                   cancels, 1, flags);

@@ -48,8 +48,8 @@ int lustre_dquot_init(void)
 
         LASSERT(lustre_dquot_cachep == NULL);
         lustre_dquot_cachep = cfs_mem_cache_create("lustre_dquot_cache",
-                                                sizeof(struct lustre_dquot),
-                                                0, 0);
+                                                   sizeof(struct lustre_dquot),
+                                                   0, 0);
         if (!lustre_dquot_cachep)
                 return (-ENOMEM);
 

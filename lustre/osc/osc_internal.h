@@ -68,11 +68,6 @@ int lproc_osc_attach_seqstat(struct obd_device *dev);
 static inline int lproc_osc_attach_seqstat(struct obd_device *dev) {return 0;}
 #endif
 
-#ifndef min_t
-#define min_t(type,x,y) \
-        ({ type __x = (x); type __y = (y); __x < __y ? __x: __y; })
-#endif
-
 static inline int osc_recoverable_error(int rc)
 {
         return (rc == -EIO || rc == -EROFS || rc == -ENOMEM || rc == -EAGAIN);
@@ -82,8 +77,12 @@ static inline int osc_recoverable_error(int rc)
 static inline int osc_should_resend(int resend, struct client_obd *cli)
 {
         return atomic_read(&cli->cl_resends) ? 
-                atomic_read(&cli->cl_resends) > resend : 1; 
+               atomic_read(&cli->cl_resends) > resend : 1; 
 }
 
+#ifndef min_t
+#define min_t(type,x,y) \
+        ({ type __x = (x); type __y = (y); __x < __y ? __x: __y; })
+#endif
 
 #endif /* OSC_INTERNAL_H */

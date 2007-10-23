@@ -87,8 +87,8 @@ int qunit_cache_init(void)
 
         LASSERT(qunit_cachep == NULL);
         qunit_cachep = cfs_mem_cache_create("ll_qunit_cache",
-                                         sizeof(struct lustre_qunit),
-                                         0, 0);
+                                            sizeof(struct lustre_qunit),
+                                            0, 0);
         if (!qunit_cachep)
                 RETURN(-ENOMEM);
 

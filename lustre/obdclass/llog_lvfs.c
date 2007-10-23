@@ -344,7 +344,7 @@ static int llog_lvfs_write_rec(struct llog_handle *loghandle,
         if (rc)
                 RETURN(rc);
 
-        CDEBUG(D_HA, "added record "LPX64": idx: %u, %u bytes\n",
+        CDEBUG(D_RPCTRACE, "added record "LPX64": idx: %u, %u bytes\n",
                loghandle->lgh_id.lgl_oid, index, rec->lrh_len);
         if (rc == 0 && reccookie) {
                 reccookie->lgc_lgl = loghandle->lgh_id;
@@ -480,7 +480,7 @@ static int llog_lvfs_prev_block(struct llog_handle *loghandle,
         if (len == 0 || len & (LLOG_CHUNK_SIZE - 1))
                 RETURN(-EINVAL);
 
-        CDEBUG(D_OTHER, "looking for log index %u n", prev_idx);
+        CDEBUG(D_OTHER, "looking for log index %u\n", prev_idx);
 
         cur_offset = LLOG_CHUNK_SIZE;
         llog_skip_over(&cur_offset, 0, prev_idx);

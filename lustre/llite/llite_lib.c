@@ -81,7 +81,7 @@ static struct ll_sb_info *ll_init_sbi(void)
 
         ll_generate_random_uuid(uuid);
         class_uuid_unparse(uuid, &sbi->ll_sb_uuid);
-        CDEBUG(D_HA, "generated uuid: %s\n", sbi->ll_sb_uuid.uuid);
+        CDEBUG(D_CONFIG, "generated uuid: %s\n", sbi->ll_sb_uuid.uuid);
 
         spin_lock(&ll_sb_lock);
         list_add_tail(&sbi->ll_list, &ll_super_blocks);
@@ -122,7 +122,7 @@ void ll_free_sbi(struct super_block *sb)
 }
 
 static struct dentry_operations ll_d_root_ops = {
-#ifdef LUSTRE_KERNEL_VERSION
+#ifdef DCACHE_LUSTRE_INVALID
         .d_compare = ll_dcompare,
 #endif
 };
@@ -421,8 +421,8 @@ static int client_common_fill_super(struct super_block *sb, char *md, char *dt,
                 ll_async_page_slab_size =
                         size_round(sizeof(struct ll_async_page)) + err;
                 ll_async_page_slab = cfs_mem_cache_create("ll_async_page",
-                                                        ll_async_page_slab_size,
-                                                           0, 0);
+                                                          ll_async_page_slab_size,
+                                                          0, 0);
                 if (!ll_async_page_slab)
                         GOTO(out_dt_fid, err = -ENOMEM);
         }
@@ -1804,9 +1804,6 @@ int ll_iocontrol(struct inode *inode, struct file *file,
 
                 body = lustre_msg_buf(req->rq_repmsg, REPLY_REC_OFF,
                                       sizeof(*body));
-
-                /*Now the ext3 will be packed directly back to client,
-                 *no need convert here*/
                 flags = body->flags;
 
                 ptlrpc_req_finished (req);

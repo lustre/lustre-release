@@ -595,8 +595,8 @@ static int pinger_check_rpcs(void *arg)
                         req->rq_import_generation = generation;
                         ptlrpc_set_add_req(set, req);
                 } else {
-                        CDEBUG(D_HA, "don't need to ping %s ("CFS_TIME_T" > "
-                               CFS_TIME_T")\n", obd2cli_tgt(imp->imp_obd),
+                        CDEBUG(D_INFO, "don't need to ping %s ("CFS_TIME_T
+                               " > "CFS_TIME_T")\n", obd2cli_tgt(imp->imp_obd),
                                imp->imp_next_ping, pd->pd_this_ping);
                 }
         }
@@ -605,13 +605,13 @@ static int pinger_check_rpcs(void *arg)
 
         /* Might be empty, that's OK. */
         if (set->set_remaining == 0)
-                CDEBUG(D_HA, "nothing to ping\n");
+                CDEBUG(D_RPCTRACE, "nothing to ping\n");
 
         list_for_each(iter, &set->set_requests) {
                 struct ptlrpc_request *req =
                         list_entry(iter, struct ptlrpc_request,
                                    rq_set_chain);
-                DEBUG_REQ(D_HA, req, "pinging %s->%s",
+                DEBUG_REQ(D_RPCTRACE, req, "pinging %s->%s",
                           req->rq_import->imp_obd->obd_uuid.uuid,
                           obd2cli_tgt(req->rq_import->imp_obd));
                 (void)ptl_send_rpc(req, 0);
@@ -621,10 +621,9 @@ do_check_set:
         rc = ptlrpc_check_set(set);
 
         /* not finished, and we are not expired, simply return */
-        if (!rc && cfs_time_before(curtime, 
-                                   cfs_time_add(pd->pd_this_ping, 
-                                                cfs_time_seconds(PING_INTERVAL)))) {
-                CDEBUG(D_HA, "not finished, but also not expired\n");
+        if (!rc && cfs_time_before(curtime, cfs_time_add(pd->pd_this_ping,
+                                            cfs_time_seconds(PING_INTERVAL)))) {
+                CDEBUG(D_RPCTRACE, "not finished, but also not expired\n");
                 pd->pd_recursion--;
                 return 0;
         }
@@ -647,7 +646,7 @@ do_check_set:
                         continue;
                 }
 
-                CDEBUG(D_HA, "pinger initiate expire_one_request\n");
+                CDEBUG(D_RPCTRACE, "pinger initiate expire_one_request\n");
                 ptlrpc_expire_one_request(req);
         }
         mutex_up(&pinger_sem);
@@ -660,7 +659,7 @@ out:
                                         cfs_time_seconds(PING_INTERVAL));
         pd->pd_this_ping = 0; /* XXX for debug */
 
-        CDEBUG(D_HA, "finished a round ping\n");
+        CDEBUG(D_INFO, "finished a round ping\n");
         pd->pd_recursion--;
         return 0;
 }
@@ -743,9 +742,8 @@ void ptlrpc_pinger_wake_up()
         struct obd_import *imp;
         ENTRY;
         list_for_each_entry(imp, &pinger_imports, imp_pinger_chain) {
-                CDEBUG(D_HA, "Checking that we need to do anything about import"
-                             " %s->%s\n", imp->imp_obd->obd_uuid.uuid,
-                             obd2cli_tgt(imp->imp_obd));
+                CDEBUG(D_RPCTRACE, "checking import %s->%s\n",
+                       imp->imp_obd->obd_uuid.uuid, obd2cli_tgt(imp->imp_obd));
 #ifdef ENABLE_LIBLUSTRE_RECOVERY
                 if (imp->imp_state == LUSTRE_IMP_DISCON && !imp->imp_deactive)
 #else

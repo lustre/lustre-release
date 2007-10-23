@@ -24,7 +24,7 @@
 #define LL_IT2STR(it) ((it) ? ldlm_it2str((it)->it_op) : "0")
 #define LUSTRE_FPRIVATE(file) ((file)->private_data)
 
-#ifdef LUSTRE_KERNEL_VERSION
+#ifdef HAVE_VFS_INTENT_PATCHES
 static inline struct lookup_intent *ll_nd2it(struct nameidata *nd)
 {
         return &nd->intent;
@@ -36,7 +36,7 @@ struct ll_dentry_data {
         int                      lld_mnt_count;
         struct obd_client_handle lld_cwd_och;
         struct obd_client_handle lld_mnt_och;
-#ifndef LUSTRE_KERNEL_VERSION
+#ifndef HAVE_VFS_INTENT_PATCHES
         struct lookup_intent     *lld_it;
 #endif
 };
@@ -278,7 +278,9 @@ struct ll_sb_info {
         enum stats_track_type     ll_stats_track_type;
         int                       ll_stats_track_id;
         int                       ll_rw_stats_on;
-        dev_t                     ll_sdev_orig;      /* save s_dev before assign for clustred nfs*/
+
+        dev_t                     ll_sdev_orig; /* save s_dev before assign for
+                                                 * clustred nfs */
 };
 
 #define LL_DEFAULT_MAX_RW_CHUNK         (32 * 1024 * 1024)
@@ -460,7 +462,7 @@ struct inode *ll_iget(struct super_block *sb, ino_t hash,
 struct dentry *ll_find_alias(struct inode *, struct dentry *);
 int ll_md_blocking_ast(struct ldlm_lock *, struct ldlm_lock_desc *,
                        void *data, int flag);
-#ifndef LUSTRE_KERNEL_VERSION
+#ifndef HAVE_VFS_INTENT_PATCHES
 struct lookup_intent *ll_convert_intent(struct open_intent *oit,
                                         int lookup_flags);
 #endif

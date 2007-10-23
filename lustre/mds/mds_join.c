@@ -233,7 +233,7 @@ static void mds_finish_join(struct mds_obd *mds, struct ptlrpc_request *req,
         }
 
         if (body->valid & OBD_MD_FLMODEASIZE)
-                CDEBUG(D_HA, "updating max_mdsize/max_cookiesize: %d/%d\n",
+                CDEBUG(D_INODE, "updating max_mdsize/max_cookiesize: %d/%d\n",
                        mds->mds_max_mdsize, mds->mds_max_cookiesize);
 
         mds_pack_inode2fid(&body->fid1, inode);

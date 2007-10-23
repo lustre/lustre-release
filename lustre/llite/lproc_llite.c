@@ -629,15 +629,11 @@ int lprocfs_register_mountpoint(struct proc_dir_entry *parent,
                 void *ptr = NULL;
                 if (type & LPROCFS_TYPE_REGS)
                         ptr = "regs";
-                else {
-                        if (type & LPROCFS_TYPE_BYTES)
-                                ptr = "bytes";
-                        else {
-                                if (type & LPROCFS_TYPE_PAGES)
-                                        ptr = "pages";
-                        }
-                }
-                lprocfs_counter_init(sbi->ll_stats, 
+                else if (type & LPROCFS_TYPE_BYTES)
+                        ptr = "bytes";
+                else if (type & LPROCFS_TYPE_PAGES)
+                        ptr = "pages";
+                lprocfs_counter_init(sbi->ll_stats,
                                      llite_opcode_table[id].opcode,
                                      (type & LPROCFS_CNTR_AVGMINMAX),
                                      llite_opcode_table[id].opname, ptr);

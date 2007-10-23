@@ -2623,7 +2623,8 @@ static void mdt_intent_fixup_resent(struct mdt_thread_info *info,
                         lh->mlh_reg_mode = lock->l_granted_mode;
 
                         LDLM_DEBUG(lock, "restoring lock cookie");
-                        DEBUG_REQ(D_HA, req, "restoring lock cookie "LPX64,
+                        DEBUG_REQ(D_DLMTRACE, req,
+                                  "restoring lock cookie "LPX64,
                                   lh->mlh_reg_lh.cookie);
                         if (old_lock)
                                 *old_lock = LDLM_LOCK_GET(lock);
@@ -2647,7 +2648,7 @@ static void mdt_intent_fixup_resent(struct mdt_thread_info *info,
          */
         lustre_msg_clear_flags(req->rq_reqmsg, MSG_RESENT);
 
-        DEBUG_REQ(D_HA, req, "no existing lock with rhandle "LPX64,
+        DEBUG_REQ(D_DLMTRACE, req, "no existing lock with rhandle "LPX64,
                   remote_hdl.cookie);
 }
 

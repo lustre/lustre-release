@@ -71,7 +71,7 @@ static void mds_cancel_cookies_cb(struct obd_device *obd, __u64 transno,
 
         obd_transno_commit_cb(obd, transno, error);
 
-        CDEBUG(D_HA, "cancelling %d cookies\n",
+        CDEBUG(D_RPCTRACE, "cancelling %d cookies\n",
                (int)(mlcd->mlcd_cookielen / sizeof(*mlcd->mlcd_cookies)));
 
         rc = obd_unpackmd(obd->u.mds.mds_osc_exp, &lsm, mlcd->mlcd_lmm,
@@ -111,7 +111,7 @@ int mds_finish_transno(struct mds_obd *mds, struct inode *inode, void *handle,
         int err;
         __u64 transno, prev_transno;
         loff_t off;
-        int log_pri = D_HA;
+        int log_pri = D_RPCTRACE;
         ENTRY;
 
         if (IS_ERR(handle)) {

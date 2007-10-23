@@ -2289,7 +2289,7 @@ static void fixup_handle_for_resent_req(struct ptlrpc_request *req, int offset,
                 if (lock->l_remote_handle.cookie == remote_hdl.cookie) {
                         lockh->cookie = lock->l_handle.h_cookie;
                         LDLM_DEBUG(lock, "restoring lock cookie");
-                        DEBUG_REQ(D_HA, req, "restoring lock cookie "LPX64,
+                        DEBUG_REQ(D_DLMTRACE, req,"restoring lock cookie "LPX64,
                                   lockh->cookie);
                         if (old_lock)
                                 *old_lock = LDLM_LOCK_GET(lock);
@@ -2316,7 +2316,7 @@ static void fixup_handle_for_resent_req(struct ptlrpc_request *req, int offset,
 
         lustre_msg_clear_flags(req->rq_reqmsg, MSG_RESENT);
 
-        DEBUG_REQ(D_HA, req, "no existing lock with rhandle "LPX64,
+        DEBUG_REQ(D_DLMTRACE, req, "no existing lock with rhandle "LPX64,
                   remote_hdl.cookie);
 }
 

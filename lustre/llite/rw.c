@@ -20,7 +20,6 @@
  *   along with Lustre; if not, write to the Free Software
  *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
-
 #ifndef AUTOCONF_INCLUDED
 #include <linux/config.h>
 #endif
@@ -1501,7 +1500,9 @@ int ll_readpage(struct file *filp, struct page *page)
                 ras_update(ll_i2sbi(inode), inode, &fd->fd_ras, page->index,
                            llap->llap_defer_uptodate);
 
+
         if (llap->llap_defer_uptodate) {
+                /* This is the callpath if we got the page from a readahead */
                 llap->llap_ra_used = 1;
                 rc = ll_readahead(&fd->fd_ras, exp, page->mapping, oig,
                                   fd->fd_flags);
@@ -1517,7 +1518,8 @@ int ll_readpage(struct file *filp, struct page *page)
         if (likely((fd->fd_flags & LL_FILE_IGNORE_LOCK) == 0)) {
                 rc = ll_page_matches(page, fd->fd_flags);
                 if (rc < 0) {
-                        LL_CDEBUG_PAGE(D_ERROR, page, "lock match failed: rc %d\n", rc);
+                        LL_CDEBUG_PAGE(D_ERROR, page,
+                                       "lock match failed: rc %d\n", rc);
                         GOTO(out, rc);
                 }
 
@@ -1534,6 +1536,8 @@ int ll_readpage(struct file *filp, struct page *page)
                 GOTO(out, rc);
 
         LL_CDEBUG_PAGE(D_PAGE, page, "queued readpage\n");
+        /* We have just requested the actual page we want, see if we can tack
+         * on some readahead to that page's RPC before it is sent. */
         if (ll_i2sbi(inode)->ll_ra_info.ra_max_pages)
                 ll_readahead(&fd->fd_ras, exp, page->mapping, oig,
                              fd->fd_flags);

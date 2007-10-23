@@ -123,8 +123,6 @@ void groups_free(struct group_info *ginfo);
 #define gfp_t int
 #endif
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0)
-
 #define lock_dentry(___dentry)          spin_lock(&(___dentry)->d_lock)
 #define unlock_dentry(___dentry)        spin_unlock(&(___dentry)->d_lock)
 
@@ -203,7 +201,7 @@ static inline int cleanup_group_info(void)
 
 #include <linux/proc_fs.h>
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,11)
+#ifndef HAVE___D_REHASH
 #define __d_rehash(dentry, lock) d_rehash_cond(dentry, lock)
 #endif
 
@@ -217,8 +215,6 @@ static inline int cleanup_group_info(void)
 
 #define CheckWriteback(page, cmd) \
         (!(!PageWriteback(page) && cmd == OBD_BRW_WRITE))
-
-#endif
 
 #ifdef HAVE_PAGE_LIST
 static inline int mapping_has_pages(struct address_space *mapping)

@@ -47,7 +47,7 @@ static void ll_release(struct dentry *de)
                 EXIT;
                 return;
         }
-#ifndef LUSTRE_KERNEL_VERSION
+#ifndef HAVE_VFS_INTENT_PATCHES
         if (lld->lld_it) {
                 ll_intent_release(lld->lld_it);
                 OBD_FREE(lld->lld_it, sizeof(*lld->lld_it));
@@ -60,7 +60,7 @@ static void ll_release(struct dentry *de)
         EXIT;
 }
 
-#ifdef LUSTRE_KERNEL_VERSION
+#ifdef DCACHE_LUSTRE_INVALID
 /* Compare if two dentries are the same.  Don't match if the existing dentry
  * is marked DCACHE_LUSTRE_INVALID.  Returns 1 if different, 0 if the same.
  *
@@ -151,7 +151,7 @@ void ll_intent_release(struct lookup_intent *it)
 
         CDEBUG(D_INFO, "intent %p released\n", it);
         ll_intent_drop_lock(it);
-#ifdef LUSTRE_KERNEL_VERSION
+#ifdef HAVE_VFS_INTENT_PATCHES
         it->it_magic = 0;
         it->it_op_release = 0;
 #endif
@@ -195,7 +195,7 @@ int ll_drop_dentry(struct dentry *dentry)
                 RETURN (0);
         }
 
-#ifdef LUSTRE_KERNEL_VERSION
+#ifdef DCACHE_LUSTRE_INVALID
         if (!(dentry->d_flags & DCACHE_LUSTRE_INVALID)) {
 #else
         if (!d_unhashed(dentry)) {
@@ -207,7 +207,7 @@ int ll_drop_dentry(struct dentry *dentry)
                 /* actually we don't unhash the dentry, rather just
                  * mark it inaccessible for to __d_lookup(). otherwise
                  * sys_getcwd() could return -ENOENT -bzzz */
-#ifdef LUSTRE_KERNEL_VERSION
+#ifdef DCACHE_LUSTRE_INVALID
                 dentry->d_flags |= DCACHE_LUSTRE_INVALID;
 #endif
                 if (!dentry->d_inode || !S_ISDIR(dentry->d_inode->i_mode))
@@ -314,7 +314,7 @@ void ll_lookup_finish_locks(struct lookup_intent *it, struct dentry *dentry)
 void ll_frob_intent(struct lookup_intent **itp, struct lookup_intent *deft)
 {
         struct lookup_intent *it = *itp;
-#if defined(LUSTRE_KERNEL_VERSION)
+#ifdef HAVE_VFS_INTENT_PATCHES
         if (it) {
                 LASSERTF(it->it_magic == INTENT_MAGIC, 
                          "%p has bad intent magic: %x\n",
@@ -325,7 +325,7 @@ void ll_frob_intent(struct lookup_intent **itp, struct lookup_intent *deft)
         if (!it || it->it_op == IT_GETXATTR)
                 it = *itp = deft;
 
-#ifdef LUSTRE_KERNEL_VERSION
+#ifdef HAVE_VFS_INTENT_PATCHES
         it->it_op_release = ll_intent_release;
 #endif
 }
@@ -353,7 +353,7 @@ int ll_revalidate_it(struct dentry *de, int lookup_flags,
                 if (it && (it->it_op & IT_CREAT))
                         RETURN(0);
 
-#ifdef LUSTRE_KERNEL_VERSION
+#ifdef DCACHE_LUSTRE_INVALID
                 if (de->d_flags & DCACHE_LUSTRE_INVALID)
                         RETURN(0);
 #endif
@@ -393,7 +393,6 @@ int ll_revalidate_it(struct dentry *de, int lookup_flags,
         }
         if (IS_ERR(op_data))
                 RETURN(PTR_ERR(op_data));
-
 
         if ((it->it_op == IT_OPEN) && de->d_inode) {
                 struct inode *inode = de->d_inode;
@@ -500,7 +499,7 @@ out:
         if (req != NULL && !it_disposition(it, DISP_ENQ_COMPLETE))
                 ptlrpc_req_finished(req);
         if (rc == 0) {
-#ifdef LUSTRE_KERNEL_VERSION
+#ifdef DCACHE_LUSTRE_INVALID
                 ll_unhash_aliases(de->d_inode);
                 /* done in ll_unhash_aliases()
                    dentry->d_flags |= DCACHE_LUSTRE_INVALID; */
@@ -514,7 +513,7 @@ out:
                        de->d_name.name, de, de->d_parent, de->d_inode,
                        atomic_read(&de->d_count));
                 ll_lookup_finish_locks(it, de);
-#ifdef LUSTRE_KERNEL_VERSION
+#ifdef DCACHE_LUSTRE_INVALID
                 lock_dentry(de);
                 de->d_flags &= ~DCACHE_LUSTRE_INVALID;
                 unlock_dentry(de);
@@ -662,7 +661,7 @@ do_lookup:
         return;
 }
 
-#ifdef LUSTRE_KERNEL_VERSION
+#ifdef HAVE_VFS_INTENT_PATCHES
 static int ll_revalidate_nd(struct dentry *dentry, struct nameidata *nd)
 {
         int rc;
@@ -750,7 +749,7 @@ struct dentry_operations ll_d_ops = {
         .d_revalidate = ll_revalidate_nd,
         .d_release = ll_release,
         .d_delete = ll_ddelete,
-#ifdef LUSTRE_KERNEL_VERSION
+#ifdef DCACHE_LUSTRE_INVALID
         .d_compare = ll_dcompare,
 #endif
 #if 0

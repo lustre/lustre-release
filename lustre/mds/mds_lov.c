@@ -617,7 +617,7 @@ int mds_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
         }
 
         case OBD_IOC_SYNC: {
-                CDEBUG(D_HA, "syncing mds %s\n", obd->obd_name);
+                CDEBUG(D_INFO, "syncing mds %s\n", obd->obd_name);
                 rc = fsfilt_sync(obd, obd->u.obt.obt_sb);
                 RETURN(rc);
         }
@@ -761,10 +761,13 @@ static int __mds_lov_synchronize(void *data)
         LASSERT(uuid);
 
         rc = mds_lov_update_mds(obd, watched, idx, uuid);
-        if (rc != 0)
+        if (rc != 0) {
+                CERROR("%s failed at update_mds: %d\n", obd_uuid2str(uuid), rc);
                 GOTO(out, rc);
+        }
         mgi.group = FILTER_GROUP_MDS0 + mds->mds_id;
         mgi.uuid = uuid;
+
         rc = obd_set_info_async(mds->mds_osc_exp, strlen(KEY_MDS_CONN),
                                 KEY_MDS_CONN, sizeof(mgi), &mgi, NULL);
         if (rc != 0)
@@ -796,8 +799,8 @@ static int __mds_lov_synchronize(void *data)
 
         rc = mds_lov_clear_orphans(mds, uuid);
         if (rc != 0) {
-                CERROR("%s: failed at mds_lov_clear_orphans: %d\n",
-                       obd->obd_name, rc);
+                CERROR("%s failed at mds_lov_clear_orphans: %d\n",
+                       obd_uuid2str(uuid), rc);
                 GOTO(out, rc);
         }
         

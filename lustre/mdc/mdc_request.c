@@ -719,8 +719,7 @@ void mdc_commit_delayed(struct ptlrpc_request *req)
         list_del_init(&req->rq_mod_list);
         if (req->rq_sequence) {
                 list_for_each_entry_safe(cur, tmp, &mod->mod_replay_list,
-                                         rq_mod_list)
-                {
+                                         rq_mod_list) {
                         LASSERT(cur != LP_POISON);
                         LASSERT(cur->rq_type != LI_POISON);
                         DEBUG_REQ(D_HA, cur, "req balanced");
@@ -800,7 +799,7 @@ int mdc_set_open_replay_data(struct obd_export *exp,
                 LBUG();
         }
 
-        DEBUG_REQ(D_HA, open_req, "Set up open replay data");
+        DEBUG_REQ(D_RPCTRACE, open_req, "Set up open replay data");
         RETURN(0);
 }
 
@@ -870,7 +869,7 @@ int mdc_close(struct obd_export *exp, struct md_op_data *op_data,
         mdc_put_rpc_lock(obd->u.cli.cl_close_lock, NULL);
 
         if (req->rq_repmsg == NULL) {
-                CDEBUG(D_HA, "request failed to send: %p, %d\n", req,
+                CDEBUG(D_RPCTRACE, "request failed to send: %p, %d\n", req,
                        req->rq_status);
                 if (rc == 0)
                         rc = req->rq_status ? req->rq_status : -EIO;

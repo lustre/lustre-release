@@ -1359,12 +1359,12 @@ int t56(char *name)
         rc = getdirentries(fd, (char *)&dir, nbytes, &basep);
 
         if (rc != -1) {
-                printf("Test failed: getdirentries returned %d\n", rc);
+                printf("Test failed: getdirentries returned %ld\n", rc);
                 t_close(fd);
                 return -1;
         }
         if (errno != EINVAL) {
-                printf("Test failed: getdirentries returned %d but errno is set"
+                printf("Test failed: getdirentries returned %ld but errno is set"
                                 " to %d (should be EINVAL)\n", rc, errno);
                 t_close(fd);
                 return -1;

@@ -323,7 +323,7 @@ struct dentry *ll_find_alias(struct inode *inode, struct dentry *de)
                 dget_locked(dentry);
                 lock_dentry(dentry);
                 __d_drop(dentry);
-#ifdef LUSTRE_KERNEL_VERSION
+#ifdef DCACHE_LUSTRE_INVALID
                 dentry->d_flags &= ~DCACHE_LUSTRE_INVALID;
 #endif
                 unlock_dentry(dentry);
@@ -497,7 +497,7 @@ static struct dentry *ll_lookup_it(struct inode *parent, struct dentry *dentry,
         return retval;
 }
 
-#ifdef LUSTRE_KERNEL_VERSION
+#ifdef HAVE_VFS_INTENT_PATCHES
 static struct dentry *ll_lookup_nd(struct inode *parent, struct dentry *dentry,
                                    struct nameidata *nd)
 {
@@ -809,7 +809,7 @@ static int ll_mknod_generic(struct inode *dir, struct qstr *name, int mode,
         RETURN(err);
 }
 
-#ifndef LUSTRE_KERNEL_VERSION
+#ifndef HAVE_VFS_INTENT_PATCHES
 static int ll_create_nd(struct inode *dir, struct dentry *dentry,
                         int mode, struct nameidata *nd)
 {
@@ -1064,7 +1064,6 @@ static int ll_unlink_generic(struct inode *dir, struct dentry *dparent,
         ll_get_child_fid(dir, name, &op_data->op_fid3);
         rc = md_unlink(ll_i2sbi(dir)->ll_md_exp, op_data, &request);
         ll_finish_md_op_data(op_data);
-
         if (rc)
                 GOTO(out, rc);
 
@@ -1117,7 +1116,7 @@ static int ll_rename_generic(struct inode *src, struct dentry *src_dparent,
         RETURN(err);
 }
 
-#ifdef LUSTRE_KERNEL_VERSION
+#ifdef HAVE_VFS_INTENT_PATCHES
 static int ll_mknod_raw(struct nameidata *nd, int mode, dev_t rdev)
 {
         return ll_mknod_generic(nd->dentry->d_inode, &nd->last, mode,rdev,NULL);
@@ -1194,7 +1193,7 @@ static int ll_rename(struct inode *old_dir, struct dentry *old_dentry,
 }
 
 struct inode_operations ll_dir_inode_operations = {
-#ifdef LUSTRE_KERNEL_VERSION
+#ifdef HAVE_VFS_INTENT_PATCHES
         .link_raw           = ll_link_raw,
         .unlink_raw         = ll_unlink_raw,
         .symlink_raw        = ll_symlink_raw,
@@ -1225,7 +1224,7 @@ struct inode_operations ll_dir_inode_operations = {
 };
 
 struct inode_operations ll_special_inode_operations = {
-#ifdef LUSTRE_KERNEL_VERSION
+#ifdef HAVE_VFS_INTENT_PATCHES
         .setattr_raw    = ll_setattr_raw,
 #endif
         .setattr        = ll_setattr,
