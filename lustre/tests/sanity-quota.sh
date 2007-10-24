@@ -986,16 +986,20 @@ check_if_quota_zero(){
 	echo "pass check_if_quota_zero"
 }
 
-# test setting quota on root, b=12223
-test_13(){
-        TESTFILE="$TSTDIR/quota_tst13"
+pre_test_14 () {
+        # reboot the lustre
+        cd $T_PWD; sh llmountcleanup.sh || error "llmountcleanup failed"
+        sh llmount.sh
+        pre_test
+        setup
+        run_test 0 "reboot lustre"
+}
 
-	# reboot the lustre
-	cd $T_PWD; sh llmountcleanup.sh || error "llmountcleanup failed"
-	sh llmount.sh 
-	pre_test
-	setup
-	run_test 0 "reboot lustre"
+pre_test_14 
+
+test_14(){ # b=12223 -- setting quota on root
+	mkdir $TSTDIR/$tdir || error "mkdir $TSTDIR/$tdir failed"
+	TESTFILE="$TSTDIR/$tdir/$tfile"
 
 	# out of root's file and block quota
         $LFS setquota -u root 10 10 10 10 $MOUNT
@@ -1013,7 +1017,7 @@ test_13(){
 	for i in `seq 1 10`; do $RUNAS rm -f ${TESTFILE}a_$i; done 
 
 	# do the check
-	dmesg | tail | grep "\-122" |grep llog_obd_origin_add && error "test_13 failed."
+	dmesg | tail | grep "\-122" |grep llog_obd_origin_add && error "err -122 not found in dmesg" 
 	$LFS setquota -u root 0 0 0 0 $MOUNT
 	#check_if_quota_zero u root
 
@@ -1021,7 +1025,7 @@ test_13(){
 	unlinkmany ${TESTFILE} 15
 	rm -f $TESTFILE
 }
-run_test 13 "test setting quota on root ==="
+run_test 14 "test setting quota on root ==="
 
 # turn off quota
 test_99()
