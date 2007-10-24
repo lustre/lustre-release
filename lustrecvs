@@ -27,7 +27,7 @@ EOF
 
 if [ -z "$LUSTRECVS_UPDATED" ] ; then
     echo "$progname: updating lustrecvs"
-    cvs -z9 up -l || fatal 1 "Error updating lustrecvs"
+    cvs up -l || fatal 1 "Error updating lustrecvs"
     export LUSTRECVS_UPDATED=yes
     exec "$0" "$@"
 fi
@@ -119,7 +119,7 @@ cvs_cmd ()
         ( cd "$dir" && cvs up $datecmd -dAP $uptag )
     else
         echo "$progname: Checking out $dir from $tag"
-        cvs -z9 co $datecmd -P $cotag -d "$dir" "$module"
+        cvs co $datecmd -P $cotag -d "$dir" "$module"
     fi
     if [ $? != 0 ] ; then
         error_modules="$dir $error_modules"
