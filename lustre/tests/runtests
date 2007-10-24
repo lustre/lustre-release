@@ -24,12 +24,6 @@ fail() {
 	exit $RC
 }
 
-log() {
-	echo "$*"
-	lctl mark "$*"
-}
-
-
 ERROR=
 SRC="/etc /bin"
 [ "$COUNT" ] || COUNT=1000
