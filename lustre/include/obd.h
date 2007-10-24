@@ -523,18 +523,11 @@ struct mds_obd {
         struct obd_export               *mds_osc_exp; /* XXX lov_exp */
         struct lov_desc                  mds_lov_desc;
         __u32                            mds_id;
-
-        struct file                     *mds_lov_objid_filp;
-        /* protect update vs free in lov_add_target */
-        struct rw_semaphore              mds_lov_objids_sem;
-        /* protect update vs update or memmove vs update */
-        spinlock_t                       mds_lov_objids_lock;
-        /* wait for safe free */
-        cfs_waitq_t                      mds_lov_objids_wait;
         obd_id                          *mds_lov_objids;
-        __u32                            mds_lov_objids_count;
+        int                              mds_lov_objids_size;
+        __u32                            mds_lov_objids_in_file;
         int                              mds_lov_nextid_set;
-
+        struct file                     *mds_lov_objid_filp;
         struct file                     *mds_health_check_filp;
         unsigned long                   *mds_client_bitmap;
 //        struct upcall_cache             *mds_group_hash;
@@ -559,8 +552,6 @@ struct mds_obd {
         /* for capability keys update */
         struct lustre_capa_key          *mds_capa_keys;
 };
-
-#define mds_lov_objids_size(mds)        ((mds)->mds_lov_objids_count*sizeof(obd_id))
 
 struct echo_obd {
         struct obdo          eo_oa;

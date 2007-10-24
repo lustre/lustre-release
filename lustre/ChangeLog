@@ -794,19 +794,6 @@ Details    : If a OST has no remain object, system will block on the creating
             empty osc while others are not empty.  If we must block, we block
             for the shortest possible period of time.
 
-Severity   : major
-Bugzilla   : 11710
-Description: improve handling recoverable errors
-Details    : if request processig with error which can be recoverable on server
-             request should be resend, otherwise page released from cache and
-             marked as error.
-
-Severity   : enhancement
-Bugzilla   : 12702
-Description: refine locking for avoid write wrong info into lov_objid file
-Details    : fix possible races with add new target and write/update data in 
-             lov_objid file.
-
 --------------------------------------------------------------------------------
 
 2007-05-03  Cluster File Systems, Inc. <info@clusterfs.com>
