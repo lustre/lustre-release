@@ -2813,7 +2813,7 @@ static int osc_enqueue_fini(struct ptlrpc_request *req, struct obd_info *oinfo,
                         struct ldlm_reply *rep;
 
                         /* swabbed by ldlm_cli_enqueue() */
-                        LASSERT_REPSWABBED(req, DLM_LOCKREPLY_OFF);
+                        LASSERT(lustre_rep_swabbed(req, DLM_LOCKREPLY_OFF));
                         rep = lustre_msg_buf(req->rq_repmsg, DLM_LOCKREPLY_OFF,
                                              sizeof(*rep));
                         LASSERT(rep != NULL);

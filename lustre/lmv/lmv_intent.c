@@ -73,7 +73,7 @@ int lmv_intent_remote(struct obd_export *exp, void *lmm,
         body = lustre_msg_buf((*reqp)->rq_repmsg,
                               DLM_REPLY_REC_OFF, sizeof(*body));
         LASSERT(body != NULL);
-        LASSERT_REPSWABBED((*reqp), DLM_REPLY_REC_OFF);
+        LASSERT(lustre_rep_swabbed(*reqp, DLM_REPLY_REC_OFF));
 
         if (!(body->valid & OBD_MD_MDS))
                 RETURN(0);
@@ -315,7 +315,7 @@ repeat:
         body = lustre_msg_buf((*reqp)->rq_repmsg,
                               DLM_REPLY_REC_OFF, sizeof(*body));
         LASSERT(body != NULL);
-        LASSERT_REPSWABBED((*reqp), DLM_REPLY_REC_OFF);
+        LASSERT(lustre_rep_swabbed(*reqp, DLM_REPLY_REC_OFF));
 
         /* could not find object, FID is not present in response. */
         if (!(body->valid & OBD_MD_FLID))
@@ -484,7 +484,7 @@ int lmv_intent_getattr(struct obd_export *exp, struct md_op_data *op_data,
         body = lustre_msg_buf((*reqp)->rq_repmsg,
                               DLM_REPLY_REC_OFF, sizeof(*body));
         LASSERT(body != NULL);
-        LASSERT_REPSWABBED((*reqp), DLM_REPLY_REC_OFF);
+        LASSERT(lustre_rep_swabbed(*reqp, DLM_REPLY_REC_OFF));
 
         /* could not find object, FID is not present in response. */
         if (!(body->valid & OBD_MD_FLID))
@@ -553,7 +553,7 @@ int lmv_lookup_slaves(struct obd_export *exp, struct ptlrpc_request **reqp)
         body = lustre_msg_buf((*reqp)->rq_repmsg,
                               DLM_REPLY_REC_OFF, sizeof(*body));
         LASSERT(body != NULL);
-        LASSERT_REPSWABBED((*reqp), DLM_REPLY_REC_OFF);
+        LASSERT(lustre_rep_swabbed(*reqp, DLM_REPLY_REC_OFF));
 
         LASSERT((body->valid & OBD_MD_FLID) != 0);
         obj = lmv_obj_grab(obd, &body->fid1);
@@ -612,7 +612,7 @@ int lmv_lookup_slaves(struct obd_export *exp, struct ptlrpc_request **reqp)
                 body2 = lustre_msg_buf(req->rq_repmsg,
                                        DLM_REPLY_REC_OFF, sizeof(*body2));
                 LASSERT(body2 != NULL);
-                LASSERT_REPSWABBED(req, DLM_REPLY_REC_OFF);
+                LASSERT(lustre_rep_swabbed(req, DLM_REPLY_REC_OFF));
 
                 obj->lo_inodes[i].li_size = body2->size;
 
@@ -790,7 +790,7 @@ repeat:
                 body = lustre_msg_buf((*reqp)->rq_repmsg,
                                       DLM_REPLY_REC_OFF, sizeof(*body));
                 LASSERT(body != NULL);
-                LASSERT_REPSWABBED((*reqp), DLM_REPLY_REC_OFF);
+                LASSERT(lustre_rep_swabbed(*reqp, DLM_REPLY_REC_OFF));
                 LASSERT((body->valid & OBD_MD_FLID) != 0);
 
                 obj = lmv_obj_grab(obd, &body->fid1);
@@ -915,7 +915,8 @@ int lmv_revalidate_slaves(struct obd_export *exp, struct ptlrpc_request **reqp,
                                                               DLM_REPLY_REC_OFF,
                                                               sizeof(*body));
                                         LASSERT(body != NULL);
-                                        LASSERT_REPSWABBED(mreq, DLM_REPLY_REC_OFF);
+                                        LASSERT(lustre_rep_swabbed(
+                                                      mreq, DLM_REPLY_REC_OFF));
                                         goto update;
                                 }
                                 /* take already cached attrs into account */
@@ -978,7 +979,7 @@ int lmv_revalidate_slaves(struct obd_export *exp, struct ptlrpc_request **reqp,
                 body = lustre_msg_buf(req->rq_repmsg,
                                       DLM_REPLY_REC_OFF, sizeof(*body));
                 LASSERT(body != NULL);
-                LASSERT_REPSWABBED(req, DLM_REPLY_REC_OFF);
+                LASSERT(lustre_rep_swabbed(req, DLM_REPLY_REC_OFF));
 
 update:
                 obj->lo_inodes[i].li_size = body->size;
@@ -1008,7 +1009,7 @@ release_lock:
                 body = lustre_msg_buf((*reqp)->rq_repmsg,
                                       DLM_REPLY_REC_OFF, sizeof(*body));
                 LASSERT(body != NULL);
-                LASSERT_REPSWABBED((*reqp), DLM_REPLY_REC_OFF);
+                LASSERT(lustre_rep_swabbed(*reqp, DLM_REPLY_REC_OFF));
 
                 body->size = size;
 

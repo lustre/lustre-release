@@ -960,7 +960,7 @@ static int ost_brw_write(struct ptlrpc_request *req, struct obd_trans_info *oti)
                 GOTO(out, rc = -EFAULT);
         }
 
-        LASSERT_REQSWAB(req, REQ_REC_OFF + 1);
+        lustre_set_req_swabbed(req, REQ_REC_OFF + 1);
         objcount = lustre_msg_buflen(req->rq_reqmsg, REQ_REC_OFF + 1) /
                    sizeof(*ioo);
         if (objcount == 0) {

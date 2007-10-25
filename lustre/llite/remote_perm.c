@@ -272,7 +272,7 @@ check:
 
         perm = lustre_msg_buf(req->rq_repmsg, REPLY_REC_OFF + 1, sizeof(*perm));
         LASSERT(perm);
-        LASSERT_REPSWABBED(req, REPLY_REC_OFF + 1);
+        LASSERT(lustre_rep_swabbed(req, REPLY_REC_OFF + 1));
 
         rc = ll_update_remote_perm(inode, perm);
         up(&lli->lli_rmtperm_sem);

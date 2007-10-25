@@ -155,7 +155,7 @@ lmv_get_mea(struct ptlrpc_request *req, int offset)
 	LASSERT(req);
 
         body = lustre_msg_buf(req->rq_repmsg, offset, sizeof(*body));
-        LASSERT_REPSWABBED(req, offset);
+        LASSERT(lustre_rep_swabbed(req, offset));
 
 	if (!body || !S_ISDIR(body->mode) || !body->eadatasize)
 		return NULL;

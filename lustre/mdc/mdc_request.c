@@ -188,7 +188,7 @@ static int mdc_getattr_common(struct obd_export *exp, unsigned int ea_size,
         CDEBUG(D_NET, "mode: %o\n", body->mode);
 
         offset = REPLY_REC_OFF + 1;
-        LASSERT_REPSWAB(req, offset);
+        lustre_set_rep_swabbed(req, offset);
         if (body->eadatasize != 0) {
                 /* reply indicates presence of eadata; check it's there... */
                 eadata = lustre_msg_buf(req->rq_repmsg, offset++,
@@ -499,7 +499,7 @@ int mdc_get_lustre_md(struct obd_export *exp, struct ptlrpc_request *req,
 
         md->body = lustre_msg_buf(req->rq_repmsg, offset, sizeof (*md->body));
         LASSERT (md->body != NULL);
-        LASSERT_REPSWABBED(req, offset);
+        LASSERT(lustre_rep_swabbed(req, offset));
         offset++;
 
         if (md->body->valid & OBD_MD_FLEASIZE) {
@@ -522,7 +522,7 @@ int mdc_get_lustre_md(struct obd_export *exp, struct ptlrpc_request *req,
                         CERROR ("incorrect message: lmm == 0\n");
                         GOTO(out, rc = -EPROTO);
                 }
-                LASSERT_REPSWABBED(req, offset);
+                LASSERT(lustre_rep_swabbed(req, offset));
 
                 rc = obd_unpackmd(dt_exp, &md->lsm, lmm, lmmsize);
                 if (rc < 0)
@@ -557,7 +557,7 @@ int mdc_get_lustre_md(struct obd_export *exp, struct ptlrpc_request *req,
                                 GOTO(out, rc = -EPROTO);
                         }
 
-                        LASSERT_REPSWABBED(req, offset);
+                        LASSERT(lustre_rep_swabbed(req, offset));
 
                         rc = obd_unpackmd(md_exp, (void *)&md->mea, lmv,
                                           lmvsize);
@@ -759,7 +759,7 @@ int mdc_set_open_replay_data(struct obd_export *exp,
         LASSERT(rec != NULL);
 
         /* Incoming message in my byte order (it's been swabbed). */
-        LASSERT_REPSWABBED(open_req, DLM_REPLY_REC_OFF);
+        LASSERT(lustre_rep_swabbed(open_req, DLM_REPLY_REC_OFF));
 
         /* Outgoing messages always in my byte order. */
         LASSERT(body != NULL);

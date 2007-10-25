@@ -578,7 +578,7 @@ int target_handle_connect(struct ptlrpc_request *req)
 
         OBD_RACE(OBD_FAIL_TGT_CONN_RACE);
 
-        LASSERT_REQSWAB(req, REQ_REC_OFF);
+        lustre_set_req_swabbed(req, REQ_REC_OFF);
         str = lustre_msg_string(req->rq_reqmsg, REQ_REC_OFF, sizeof(tgtuuid)-1);
         if (str == NULL) {
                 DEBUG_REQ(D_ERROR, req, "bad target UUID for connect");
@@ -611,7 +611,7 @@ int target_handle_connect(struct ptlrpc_request *req)
            Really, class_uuid2obd should take the ref. */
         targref = class_incref(target);
 
-        LASSERT_REQSWAB(req, REQ_REC_OFF + 1);
+        lustre_set_req_swabbed(req, REQ_REC_OFF + 1);
         str = lustre_msg_string(req->rq_reqmsg, REQ_REC_OFF + 1,
                                 sizeof(cluuid) - 1);
         if (str == NULL) {

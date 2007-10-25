@@ -387,8 +387,10 @@ static int ll_och_fill(struct obd_export *md_exp, struct ll_inode_info *lli,
         LASSERT(och);
 
         body = lustre_msg_buf(req->rq_repmsg, DLM_REPLY_REC_OFF, sizeof(*body));
-        LASSERT(body != NULL);                      /* reply already checked out */
-        LASSERT_REPSWABBED(req, DLM_REPLY_REC_OFF); /* and swabbed in md_enqueue */
+        /* reply already checked out */
+        LASSERT(body != NULL);
+        /* and swabbed in md_enqueue */
+        LASSERT(lustre_rep_swabbed(req, DLM_REPLY_REC_OFF));
 
         memcpy(&och->och_fh, &body->handle, sizeof(body->handle));
         och->och_magic = OBD_CLIENT_HANDLE_MAGIC;
@@ -1796,7 +1798,7 @@ int ll_lov_getstripe_ea_info(struct inode *inode, const char *filename,
         body = lustre_msg_buf(req->rq_repmsg, REPLY_REC_OFF, sizeof(*body));
         LASSERT(body != NULL); /* checked by mdc_getattr_name */
         /* swabbed by mdc_getattr_name */
-        LASSERT_REPSWABBED(req, REPLY_REC_OFF);
+        LASSERT(lustre_rep_swabbed(req, REPLY_REC_OFF));
 
         lmmsize = body->eadatasize;
 
@@ -1807,7 +1809,7 @@ int ll_lov_getstripe_ea_info(struct inode *inode, const char *filename,
 
         lmm = lustre_msg_buf(req->rq_repmsg, REPLY_REC_OFF + 1, lmmsize);
         LASSERT(lmm != NULL);
-        LASSERT_REPSWABBED(req, REPLY_REC_OFF + 1);
+        LASSERT(lustre_rep_swabbed(req, REPLY_REC_OFF + 1));
 
         /*
          * This is coming from the MDS, so is probably in

@@ -470,7 +470,8 @@ int mdc_enqueue(struct obd_export *exp, struct ldlm_enqueue_info *einfo,
         lockrep = lustre_msg_buf(req->rq_repmsg, DLM_LOCKREPLY_OFF,
                                  sizeof(*lockrep));
         LASSERT(lockrep != NULL);                 /* checked by ldlm_cli_enqueue() */
-        LASSERT_REPSWABBED(req, DLM_LOCKREPLY_OFF); /* swabbed by ldlm_cli_enqueue() */
+        /* swabbed by ldlm_cli_enqueue() */
+        LASSERT(lustre_rep_swabbed(req, DLM_LOCKREPLY_OFF));
 
         it->d.lustre.it_disposition = (int)lockrep->lock_policy_res1;
         it->d.lustre.it_status = (int)lockrep->lock_policy_res2;
@@ -771,8 +772,10 @@ int mdc_intent_lock(struct obd_export *exp, struct md_op_data *op_data,
 
         mdt_body = lustre_msg_buf(request->rq_repmsg, DLM_REPLY_REC_OFF,
                                   sizeof(*mdt_body));
-        LASSERT(mdt_body != NULL);      /* mdc_enqueue checked */
-        LASSERT_REPSWABBED(request, 1); /* mdc_enqueue swabbed */
+        /* mdc_enqueue checked */
+        LASSERT(mdt_body != NULL);
+        /* mdc_enqueue swabbed */
+        LASSERT(lustre_rep_swabbed(request, 1));
 
         /* If we were revalidating a fid/name pair, mark the intent in
          * case we fail and get called again from lookup */

@@ -60,7 +60,7 @@ static int ll_readlink_internal(struct inode *inode,
         body = lustre_msg_buf((*request)->rq_repmsg, REPLY_REC_OFF,
                               sizeof(*body));
         LASSERT(body != NULL);
-        LASSERT_REPSWABBED(*request, REPLY_REC_OFF);
+        LASSERT(lustre_rep_swabbed(*request, REPLY_REC_OFF));
 
         if ((body->valid & OBD_MD_LINKNAME) == 0) {
                 CERROR("OBD_MD_LINKNAME not set on reply\n");

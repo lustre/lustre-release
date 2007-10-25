@@ -640,10 +640,9 @@ static int after_reply(struct ptlrpc_request *req)
         /* NB Until this point, the whole of the incoming message,
          * including buflens, status etc is in the sender's byte order. */
 
-#if SWAB_PARANOIA
         /* Clear reply swab mask; this is a new reply in sender's byte order */
         req->rq_rep_swab_mask = 0;
-#endif
+
         rc = sptlrpc_cli_unwrap_reply(req);
         if (rc) {
                 DEBUG_REQ(D_ERROR, req, "unwrap reply failed (%d):", rc);

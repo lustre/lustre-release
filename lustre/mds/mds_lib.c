@@ -117,7 +117,7 @@ static int mds_setattr_unpack(struct ptlrpc_request *req, int offset,
         LTIME_S(attr->ia_ctime) = rec->sa_ctime;
         r->ur_flags = rec->sa_attr_flags;
 
-        LASSERT_REQSWAB (req, offset + 1);
+        lustre_set_req_swabbed(req, offset + 1);
         r->ur_eadatalen = lustre_msg_buflen(req->rq_reqmsg, offset + 1);
         if (r->ur_eadatalen) {
                 r->ur_eadata = lustre_msg_buf(req->rq_reqmsg, offset + 1, 0);
@@ -165,13 +165,13 @@ static int mds_create_unpack(struct ptlrpc_request *req, int offset,
         r->ur_time = rec->cr_time;
         r->ur_flags = rec->cr_flags;
 
-        LASSERT_REQSWAB(req, offset + 1);
+        lustre_set_req_swabbed(req, offset + 1);
         r->ur_name = lustre_msg_string(req->rq_reqmsg, offset + 1, 0);
         if (r->ur_name == NULL)
                 RETURN (-EFAULT);
         r->ur_namelen = lustre_msg_buflen(req->rq_reqmsg, offset + 1);
 
-        LASSERT_REQSWAB(req, offset + 2);
+        lustre_set_req_swabbed(req, offset + 2);
         r->ur_tgtlen = lustre_msg_buflen(req->rq_reqmsg, offset + 2);
         if (r->ur_tgtlen) {
                 /* NB for now, we only seem to pass NULL terminated symlink
@@ -217,7 +217,7 @@ static int mds_link_unpack(struct ptlrpc_request *req, int offset,
         r->ur_fid2 = &rec->lk_fid2;
         r->ur_time = rec->lk_time;
 
-        LASSERT_REQSWAB(req, offset + 1);
+        lustre_set_req_swabbed(req, offset + 1);
         r->ur_name = lustre_msg_string(req->rq_reqmsg, offset + 1, 0);
         if (r->ur_name == NULL)
                 RETURN (-EFAULT);
@@ -255,7 +255,7 @@ static int mds_unlink_unpack(struct ptlrpc_request *req, int offset,
         r->ur_fid2 = &rec->ul_fid2;
         r->ur_time = rec->ul_time;
 
-        LASSERT_REQSWAB(req, offset + 1);
+        lustre_set_req_swabbed(req, offset + 1);
         r->ur_name = lustre_msg_string(req->rq_reqmsg, offset + 1, 0);
         if (r->ur_name == NULL)
                 RETURN(-EFAULT);
@@ -293,13 +293,13 @@ static int mds_rename_unpack(struct ptlrpc_request *req, int offset,
         r->ur_fid2 = &rec->rn_fid2;
         r->ur_time = rec->rn_time;
 
-        LASSERT_REQSWAB (req, offset + 1);
+        lustre_set_req_swabbed(req, offset + 1);
         r->ur_name = lustre_msg_string(req->rq_reqmsg, offset + 1, 0);
         if (r->ur_name == NULL)
                 RETURN(-EFAULT);
         r->ur_namelen = lustre_msg_buflen(req->rq_reqmsg, offset + 1);
 
-        LASSERT_REQSWAB (req, offset + 2);
+        lustre_set_req_swabbed(req, offset + 2);
         r->ur_tgt = lustre_msg_string(req->rq_reqmsg, offset + 2, 0);
         if (r->ur_tgt == NULL)
                 RETURN(-EFAULT);
@@ -339,13 +339,13 @@ static int mds_open_unpack(struct ptlrpc_request *req, int offset,
         r->ur_time = rec->cr_time;
         r->ur_flags = rec->cr_flags;
 
-        LASSERT_REQSWAB(req, offset + 1);
+        lustre_set_req_swabbed(req, offset + 1);
         r->ur_name = lustre_msg_string(req->rq_reqmsg, offset + 1, 0);
         if (r->ur_name == NULL)
                 RETURN(-EFAULT);
         r->ur_namelen = lustre_msg_buflen(req->rq_reqmsg, offset + 1);
 
-        LASSERT_REQSWAB(req, offset + 2);
+        lustre_set_req_swabbed(req, offset + 2);
         r->ur_eadatalen = lustre_msg_buflen(req->rq_reqmsg, offset + 2);
         if (r->ur_eadatalen) {
                 r->ur_eadata = lustre_msg_buf(req->rq_reqmsg, offset + 2, 0);

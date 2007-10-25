@@ -607,10 +607,9 @@ ptlrpc_server_handle_request(struct ptlrpc_service *svc,
                 LBUG();
         }
 
-#if SWAB_PARANOIA
         /* Clear request swab mask; this is a new request */
         request->rq_req_swab_mask = 0;
-#endif
+
         rc = lustre_unpack_msg(request->rq_reqmsg, request->rq_reqlen);
         if (rc != 0) {
                 CERROR ("error unpacking request: ptl %d from %s"
