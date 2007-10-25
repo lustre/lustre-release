@@ -1302,9 +1302,10 @@ struct md_ops {
                                         struct obd_client_handle *);
         int (*m_set_lock_data)(struct obd_export *, __u64 *, void *);
 
-        int (*m_lock_match)(struct obd_export *, int, const struct lu_fid *,
-                            ldlm_type_t, ldlm_policy_data_t *, ldlm_mode_t,
-                            struct lustre_handle *);
+        ldlm_mode_t (*m_lock_match)(struct obd_export *, int,
+                                    const struct lu_fid *, ldlm_type_t,
+                                    ldlm_policy_data_t *, ldlm_mode_t,
+                                    struct lustre_handle *);
 
         int (*m_cancel_unused)(struct obd_export *, const struct lu_fid *,
                                ldlm_policy_data_t *, ldlm_mode_t, int flags,

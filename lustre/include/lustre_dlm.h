@@ -625,10 +625,10 @@ void ldlm_lock_addref(struct lustre_handle *lockh, __u32 mode);
 void ldlm_lock_decref(struct lustre_handle *lockh, __u32 mode);
 void ldlm_lock_decref_and_cancel(struct lustre_handle *lockh, __u32 mode);
 void ldlm_lock_allow_match(struct ldlm_lock *lock);
-int ldlm_lock_match(struct ldlm_namespace *ns, int flags,
-                    const struct ldlm_res_id *,
-                    ldlm_type_t type, ldlm_policy_data_t *, ldlm_mode_t mode,
-                    struct lustre_handle *);
+ldlm_mode_t ldlm_lock_match(struct ldlm_namespace *ns, int flags,
+                            const struct ldlm_res_id *, ldlm_type_t type,
+                            ldlm_policy_data_t *, ldlm_mode_t mode,
+                            struct lustre_handle *);
 struct ldlm_resource *ldlm_lock_convert(struct ldlm_lock *lock, int new_mode,
                                         int *flags);
 void ldlm_lock_cancel(struct ldlm_lock *lock);

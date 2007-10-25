@@ -146,22 +146,20 @@ int mdc_set_lock_data(struct obd_export *exp, __u64 *lockh, void *data)
         RETURN(0);
 }
 
-int mdc_lock_match(struct obd_export *exp, int flags,
-                   const struct lu_fid *fid, ldlm_type_t type,
-                   ldlm_policy_data_t *policy, ldlm_mode_t mode,
-                   struct lustre_handle *lockh)
+ldlm_mode_t mdc_lock_match(struct obd_export *exp, int flags,
+                           const struct lu_fid *fid, ldlm_type_t type,
+                           ldlm_policy_data_t *policy, ldlm_mode_t mode,
+                           struct lustre_handle *lockh)
 {
         struct ldlm_res_id res_id =
                 { .name = {fid_seq(fid),
                            fid_oid(fid),
                            fid_ver(fid)} };
-        struct obd_device *obd = class_exp2obd(exp);
-        int rc;
+        ldlm_mode_t rc;
         ENTRY;
 
-        rc = ldlm_lock_match(obd->obd_namespace, flags,
+        rc = ldlm_lock_match(class_exp2obd(exp)->obd_namespace, flags,
                              &res_id, type, policy, mode, lockh);
-
         RETURN(rc);
 }
 
@@ -669,11 +667,8 @@ int mdc_intent_lock(struct obd_export *exp, struct md_op_data *op_data,
                 /* We could just return 1 immediately, but since we should only
                  * be called in revalidate_it if we already have a lock, let's
                  * verify that. */
-                struct ldlm_res_id res_id = { .name = { fid_seq(&op_data->op_fid2),
-                                                        fid_oid(&op_data->op_fid2),
-                                                        fid_ver(&op_data->op_fid2) } };
                 ldlm_policy_data_t policy;
-                ldlm_mode_t mode = LCK_CR;
+                ldlm_mode_t mode;
 
                 /* As not all attributes are kept under update lock, e.g.
                    owner/group/acls are under lookup lock, we need both
@@ -686,30 +681,10 @@ int mdc_intent_lock(struct obd_export *exp, struct md_op_data *op_data,
                 policy.l_inodebits.bits = (it->it_op == IT_GETATTR) ?
                         MDS_INODELOCK_UPDATE : MDS_INODELOCK_LOOKUP;
 
-                rc = ldlm_lock_match(exp->exp_obd->obd_namespace,
-                                     LDLM_FL_BLOCK_GRANTED, &res_id,
-                                     LDLM_IBITS, &policy, mode, &lockh);
-                if (!rc) {
-                        mode = LCK_CW;
-                        rc = ldlm_lock_match(exp->exp_obd->obd_namespace,
-                                             LDLM_FL_BLOCK_GRANTED, &res_id,
-                                             LDLM_IBITS, &policy, mode, &lockh);
-                }
-                if (!rc) {
-                        mode = LCK_PR;
-                        rc = ldlm_lock_match(exp->exp_obd->obd_namespace,
-                                             LDLM_FL_BLOCK_GRANTED, &res_id,
-                                             LDLM_IBITS, &policy, mode, &lockh);
-                }
-
-                if (!rc) {
-                        mode = LCK_PW;
-                        rc = ldlm_lock_match(exp->exp_obd->obd_namespace,
-                                             LDLM_FL_BLOCK_GRANTED, &res_id,
-                                             LDLM_IBITS, &policy, mode, &lockh);
-                }
-
-                if (rc) {
+                mode = mdc_lock_match(exp, LDLM_FL_BLOCK_GRANTED,
+                                      &op_data->op_fid2, LDLM_IBITS, &policy,
+                                      LCK_CR|LCK_CW|LCK_PR|LCK_PW, &lockh);
+                if (mode) {
                         memcpy(&it->d.lustre.it_lock_handle, &lockh,
                                sizeof(lockh));
                         it->d.lustre.it_lock_mode = mode;
@@ -717,8 +692,8 @@ int mdc_intent_lock(struct obd_export *exp, struct md_op_data *op_data,
 
                 /* Only return failure if it was not GETATTR by cfid
                    (from inode_revalidate) */
-                if (rc || op_data->op_namelen != 0)
-                        RETURN(rc);
+                if (mode || op_data->op_namelen != 0)
+                        RETURN(!!mode);
         }
 
         /* lookup_it may be called only after revalidate_it has run, because

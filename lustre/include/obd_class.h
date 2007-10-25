@@ -1945,10 +1945,12 @@ static inline int md_cancel_unused(struct obd_export *exp,
         RETURN(rc);
 }
 
-static inline int md_lock_match(struct obd_export *exp, int flags,
-                                const struct lu_fid *fid, ldlm_type_t type,
-                                ldlm_policy_data_t *policy, ldlm_mode_t mode,
-                                struct lustre_handle *lockh)
+static inline ldlm_mode_t md_lock_match(struct obd_export *exp, int flags,
+                                        const struct lu_fid *fid,
+                                        ldlm_type_t type,
+                                        ldlm_policy_data_t *policy,
+                                        ldlm_mode_t mode,
+                                        struct lustre_handle *lockh)
 {
         ENTRY;
         EXP_CHECK_MD_OP(exp, lock_match);

@@ -151,8 +151,8 @@ int mdc_unlink(struct obd_export *exp, struct md_op_data *op_data,
 int mdc_cancel_unused(struct obd_export *exp, const struct lu_fid *fid,
                       ldlm_policy_data_t *policy, ldlm_mode_t mode,
                       int flags, void *opaque);
-int mdc_lock_match(struct obd_export *exp, int flags,
-                   const struct lu_fid *fid, ldlm_type_t type,
-                   ldlm_policy_data_t *policy, ldlm_mode_t mode,
-                   struct lustre_handle *lockh);
+ldlm_mode_t mdc_lock_match(struct obd_export *exp, int flags,
+                           const struct lu_fid *fid, ldlm_type_t type,
+                           ldlm_policy_data_t *policy, ldlm_mode_t mode,
+                           struct lustre_handle *lockh);
 #endif

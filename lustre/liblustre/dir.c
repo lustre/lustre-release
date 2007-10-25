@@ -74,16 +74,11 @@ static int llu_dir_do_readpage(struct inode *inode, struct page *page)
         struct mdt_body *body;
         struct lookup_intent it = { .it_op = IT_READDIR };
         struct md_op_data op_data;
-        struct obd_device *obddev = class_exp2obd(sbi->ll_md_exp);
-        struct ldlm_res_id res_id =
-                { .name = {fid_seq(&lli->lli_fid), 
-                           fid_oid(&lli->lli_fid), 
-                           fid_ver(&lli->lli_fid)} };
         ldlm_policy_data_t policy = { .l_inodebits = { MDS_INODELOCK_UPDATE } };
         ENTRY;
 
-        rc = ldlm_lock_match(obddev->obd_namespace, LDLM_FL_BLOCK_GRANTED,
-                             &res_id, LDLM_IBITS, &policy, LCK_CR, &lockh);
+        rc = md_lock_match(sbi->ll_md_exp, LDLM_FL_BLOCK_GRANTED,
+                           &lli->lli_fid, LDLM_IBITS, &policy, LCK_CR, &lockh);
         if (!rc) {
                 struct ldlm_enqueue_info einfo = {LDLM_IBITS, LCK_CR,
                         llu_md_blocking_ast, ldlm_completion_ast, NULL, inode};

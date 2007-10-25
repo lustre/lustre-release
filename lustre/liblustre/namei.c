@@ -241,7 +241,7 @@ static int llu_pb_revalidate(struct pnode *pnode, int flags,
                 }
         }
 
-        exp = llu_i2mdcexp(pb->pb_ino);
+        exp = llu_i2mdexp(pb->pb_ino);
         icbd.icbd_parent = pnode->p_parent->p_base->pb_ino;
         icbd.icbd_child = pnode;
 
@@ -432,7 +432,7 @@ static int llu_lookup_it(struct inode *parent, struct pnode *pnode,
                             pnode->p_base->pb_name.name,
                             pnode->p_base->pb_name.len, flags, opc);
 
-        rc = md_intent_lock(llu_i2mdcexp(parent), &op_data, NULL, 0, it,
+        rc = md_intent_lock(llu_i2mdexp(parent), &op_data, NULL, 0, it,
                             flags, &req, llu_md_blocking_ast,
                             LDLM_FL_CANCEL_ON_BLOCK);
         if (rc < 0)

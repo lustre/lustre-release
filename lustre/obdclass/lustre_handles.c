@@ -93,6 +93,7 @@ void class_handle_hash(struct portals_handle *h, portals_handle_addref_cb cb)
         bucket = &handle_hash[h->h_cookie & HANDLE_HASH_MASK];
         spin_lock(&bucket->lock);
         list_add_rcu(&h->h_link, &bucket->head);
+        h->h_in = 1;
         spin_unlock(&bucket->lock);
 
         CDEBUG(D_INFO, "added object %p with handle "LPX64" to hash\n",
@@ -112,11 +113,11 @@ static void class_handle_unhash_nolock(struct portals_handle *h)
                h, h->h_cookie);
 
         spin_lock(&h->h_lock);
-        if (h->h_cookie == 0) {
+        if (h->h_in == 0) {
                 spin_unlock(&h->h_lock);
                 return;
         }
-        h->h_cookie = 0;
+        h->h_in = 0;
         spin_unlock(&h->h_lock);
         list_del_rcu(&h->h_link);
 }
@@ -143,6 +144,7 @@ void class_handle_hash_back(struct portals_handle *h)
         atomic_inc(&handle_count);
         spin_lock(&bucket->lock);
         list_add_rcu(&h->h_link, &bucket->head);
+        h->h_in = 1;
         spin_unlock(&bucket->lock);
 
         EXIT;

@@ -109,6 +109,24 @@ static void llu_fsop_gone(struct filesys *fs)
 
 static struct inode_ops llu_inode_ops;
 
+static ldlm_mode_t llu_take_md_lock(struct inode *inode, __u64 bits,
+                                    struct lustre_handle *lockh)
+{
+        ldlm_policy_data_t policy = { .l_inodebits = {bits}};
+        struct lu_fid *fid;
+        ldlm_mode_t rc;
+        int flags;
+        ENTRY;
+
+        fid = &llu_i2info(inode)->lli_fid;
+        CDEBUG(D_INFO, "trying to match res "DFID"\n", PFID(fid));
+
+        flags = LDLM_FL_BLOCK_GRANTED | LDLM_FL_CBPENDING;
+        rc = md_lock_match(llu_i2mdexp(inode), flags, fid, LDLM_IBITS, &policy,
+                           LCK_CR|LCK_CW|LCK_PR|LCK_PW, lockh);
+        RETURN(rc);
+}
+
 void llu_update_inode(struct inode *inode, struct mdt_body *body,
                       struct lov_stripe_md *lsm)
 {
@@ -164,12 +182,32 @@ void llu_update_inode(struct inode *inode, struct mdt_body *body,
                 st->st_nlink = body->nlink;
         if (body->valid & OBD_MD_FLRDEV)
                 st->st_rdev = body->rdev;
-        if (body->valid & OBD_MD_FLSIZE)
-                st->st_size = body->size;
-        if (body->valid & OBD_MD_FLBLOCKS)
-                st->st_blocks = body->blocks;
         if (body->valid & OBD_MD_FLFLAGS)
                 lli->lli_st_flags = body->flags;
+        if (body->valid & OBD_MD_FLSIZE) {
+                if ((llu_i2sbi(inode)->ll_lco.lco_flags & OBD_CONNECT_SOM) && 
+                    S_ISREG(st->st_mode) && lli->lli_smd) {
+                        struct lustre_handle lockh;
+                        ldlm_mode_t mode;
+                        
+                        /* As it is possible a blocking ast has been processed
+                         * by this time, we need to check there is an UPDATE 
+                         * lock on the client and set LLIF_MDS_SIZE_LOCK holding
+                         * it. */
+                        mode = llu_take_md_lock(inode, MDS_INODELOCK_UPDATE,
+                                                &lockh);
+                        if (mode) {
+                                st->st_size = body->size;
+                                lli->lli_flags |= LLIF_MDS_SIZE_LOCK;
+                                ldlm_lock_decref(&lockh, mode);
+                        }
+                } else {
+                    st->st_size = body->size;
+                }
+                
+                if (body->valid & OBD_MD_FLBLOCKS)
+                        st->st_blocks = body->blocks;
+        }
 }
 
 void obdo_to_inode(struct inode *dst, struct obdo *src, obd_flag valid)
@@ -378,27 +416,20 @@ static struct inode* llu_new_inode(struct filesys *fs,
 
 static int llu_have_md_lock(struct inode *inode, __u64 lockpart)
 {
-        struct llu_sb_info *sbi = llu_i2sbi(inode);
-        struct llu_inode_info *lli = llu_i2info(inode);
         struct lustre_handle lockh;
-        struct ldlm_res_id res_id = { .name = {0} };
-        struct obd_device *obddev;
         ldlm_policy_data_t policy = { .l_inodebits = { lockpart } };
+        struct lu_fid *fid;
         int flags;
         ENTRY;
 
         LASSERT(inode);
 
-        obddev = sbi->ll_md_exp->exp_obd;
-        res_id.name[0] = fid_seq(&lli->lli_fid);
-        res_id.name[1] = fid_oid(&lli->lli_fid);
-        res_id.name[2] = fid_ver(&lli->lli_fid);
-
-        CDEBUG(D_INFO, "trying to match res "LPU64"\n", res_id.name[0]);
+        fid = &llu_i2info(inode)->lli_fid;
+        CDEBUG(D_INFO, "trying to match res "DFID"\n", PFID(fid));
 
         flags = LDLM_FL_BLOCK_GRANTED | LDLM_FL_CBPENDING | LDLM_FL_TEST_LOCK;
-        if (ldlm_lock_match(obddev->obd_namespace, flags, &res_id, LDLM_IBITS,
-                            &policy, LCK_PW | LCK_PR, &lockh)) {
+        if (md_lock_match(llu_i2mdexp(inode), flags, fid, LDLM_IBITS, &policy,
+                          LCK_CR|LCK_CW|LCK_PR|LCK_PW, &lockh)) {
                 RETURN(1);
         }
         RETURN(0);
@@ -455,9 +486,6 @@ static int llu_inode_revalidate(struct inode *inode)
                 llu_update_inode(inode, md.body, md.lsm);
                 if (md.lsm != NULL && llu_i2info(inode)->lli_smd != md.lsm)
                         obd_free_memmd(sbi->ll_dt_exp, &md.lsm);
-                if (md.body->valid & OBD_MD_FLSIZE &&
-                    sbi->ll_lco.lco_flags & OBD_CONNECT_SOM)
-                        llu_i2info(inode)->lli_flags |= LLIF_MDS_SIZE_LOCK;
                 ptlrpc_req_finished(req);
         }
 
@@ -1411,7 +1439,7 @@ static int llu_file_flock(struct inode *ino,
                flock.l_flock.pid, flags, einfo.ei_mode, flock.l_flock.start,
                flock.l_flock.end);
 
-        rc = ldlm_cli_enqueue(llu_i2mdcexp(ino), NULL, &einfo, &res_id, 
+        rc = ldlm_cli_enqueue(llu_i2mdexp(ino), NULL, &einfo, &res_id, 
                               &flock, &flags, NULL, 0, NULL, &lockh, 0);
         RETURN(rc);
 }

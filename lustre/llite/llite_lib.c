@@ -1660,25 +1660,6 @@ void ll_update_inode(struct inode *inode, struct lustre_md *md)
                 inode->i_nlink = body->nlink;
         if (body->valid & OBD_MD_FLRDEV)
                 inode->i_rdev = old_decode_dev(body->rdev);
-        if (body->valid & OBD_MD_FLSIZE) {
-                if (ll_i2mdexp(inode)->exp_connect_flags & OBD_CONNECT_SOM) {
-                        if (lli->lli_flags & (LLIF_DONE_WRITING |
-                                              LLIF_EPOCH_PENDING |
-                                              LLIF_SOM_DIRTY))
-                          CWARN("ino %lu flags %lu still has size authority!"
-                                "do not trust the size got from MDS\n", 
-                                inode->i_ino, lli->lli_flags);
-                        else {
-                                i_size_write(inode, body->size);
-                                lli->lli_flags |= LLIF_MDS_SIZE_LOCK;
-                        }
-                } else {
-                        i_size_write(inode, body->size);
-                }
-
-                if (body->valid & OBD_MD_FLBLOCKS)
-                        inode->i_blocks = body->blocks;
-        }
 
         if (body->valid & OBD_MD_FLID) {
                 /* FID shouldn't be changed! */
@@ -1693,6 +1674,40 @@ void ll_update_inode(struct inode *inode, struct lustre_md *md)
         }
 
         LASSERT(fid_seq(&lli->lli_fid) != 0);
+
+        if (body->valid & OBD_MD_FLSIZE) {
+                if ((ll_i2mdexp(inode)->exp_connect_flags & OBD_CONNECT_SOM) &&
+                    S_ISREG(inode->i_mode) && lli->lli_smd) {
+                        struct lustre_handle lockh;
+                        ldlm_mode_t mode;
+                        
+                        /* As it is possible a blocking ast has been processed
+                         * by this time, we need to check there is an UPDATE 
+                         * lock on the client and set LLIF_MDS_SIZE_LOCK holding
+                         * it. */
+                        mode = ll_take_md_lock(inode, MDS_INODELOCK_UPDATE,
+                                               &lockh);
+                        if (mode) {
+                                if (lli->lli_flags & (LLIF_DONE_WRITING |
+                                                      LLIF_EPOCH_PENDING |
+                                                      LLIF_SOM_DIRTY)) {
+                                        CERROR("ino %lu flags %lu still has "
+                                               "size authority! do not trust "
+                                               "the size got from MDS\n",
+                                               inode->i_ino, lli->lli_flags);
+                                } else {
+                                        i_size_write(inode, body->size);
+                                        lli->lli_flags |= LLIF_MDS_SIZE_LOCK;
+                                }
+                                ldlm_lock_decref(&lockh, mode);
+                        }
+                } else {
+                        i_size_write(inode, body->size);
+                }
+
+                if (body->valid & OBD_MD_FLBLOCKS)
+                        inode->i_blocks = body->blocks;
+        }
 
         if (body->valid & OBD_MD_FLMDSCAPA) {
                 LASSERT(md->mds_capa);

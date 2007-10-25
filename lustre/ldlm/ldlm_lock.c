@@ -892,7 +892,8 @@ void ldlm_grant_lock(struct ldlm_lock *lock, struct list_head *work_list)
 
 /* returns a referenced lock or NULL.  See the flag descriptions below, in the
  * comment above ldlm_lock_match */
-static struct ldlm_lock *search_queue(struct list_head *queue, ldlm_mode_t mode,
+static struct ldlm_lock *search_queue(struct list_head *queue,
+                                      ldlm_mode_t *mode,
                                       ldlm_policy_data_t *policy,
                                       struct ldlm_lock *old_lock, int flags)
 {
@@ -900,6 +901,8 @@ static struct ldlm_lock *search_queue(struct list_head *queue, ldlm_mode_t mode,
         struct list_head *tmp;
 
         list_for_each(tmp, queue) {
+                ldlm_mode_t match;
+
                 lock = list_entry(tmp, struct ldlm_lock, l_res_link);
 
                 if (lock == old_lock)
@@ -918,8 +921,9 @@ static struct ldlm_lock *search_queue(struct list_head *queue, ldlm_mode_t mode,
                     lock->l_readers == 0 && lock->l_writers == 0)
                         continue;
 
-                if (!(lock->l_req_mode & mode))
+                if (!(lock->l_req_mode & *mode))
                         continue;
+                match = lock->l_req_mode;
 
                 if (lock->l_resource->lr_type == LDLM_EXTENT &&
                     (lock->l_policy_data.l_extent.start >
@@ -927,7 +931,7 @@ static struct ldlm_lock *search_queue(struct list_head *queue, ldlm_mode_t mode,
                      lock->l_policy_data.l_extent.end < policy->l_extent.end))
                         continue;
 
-                if (unlikely(mode == LCK_GROUP) &&
+                if (unlikely(match == LCK_GROUP) &&
                     lock->l_resource->lr_type == LDLM_EXTENT &&
                     lock->l_policy_data.l_extent.gid != policy->l_extent.gid)
                         continue;
@@ -951,8 +955,9 @@ static struct ldlm_lock *search_queue(struct list_head *queue, ldlm_mode_t mode,
                         LDLM_LOCK_GET(lock);
                         ldlm_lock_touch_in_lru(lock);
                 } else {
-                        ldlm_lock_addref_internal_nolock(lock, mode);
+                        ldlm_lock_addref_internal_nolock(lock, match);
                 }
+                *mode = match;
                 return lock;
         }
 
@@ -991,10 +996,10 @@ void ldlm_lock_allow_match(struct ldlm_lock *lock)
  * caller code unchanged), the context failure will be discovered by caller
  * sometime later.
  */
-int ldlm_lock_match(struct ldlm_namespace *ns, int flags,
-                    const struct ldlm_res_id *res_id, ldlm_type_t type,
-                    ldlm_policy_data_t *policy, ldlm_mode_t mode,
-                    struct lustre_handle *lockh)
+ldlm_mode_t ldlm_lock_match(struct ldlm_namespace *ns, int flags,
+                            const struct ldlm_res_id *res_id, ldlm_type_t type,
+                            ldlm_policy_data_t *policy, ldlm_mode_t mode,
+                            struct lustre_handle *lockh)
 {
         struct ldlm_resource *res;
         struct ldlm_lock *lock, *old_lock = NULL;
@@ -1019,15 +1024,15 @@ int ldlm_lock_match(struct ldlm_namespace *ns, int flags,
 
         lock_res(res);
 
-        lock = search_queue(&res->lr_granted, mode, policy, old_lock, flags);
+        lock = search_queue(&res->lr_granted, &mode, policy, old_lock, flags);
         if (lock != NULL)
                 GOTO(out, rc = 1);
         if (flags & LDLM_FL_BLOCK_GRANTED)
                 GOTO(out, rc = 0);
-        lock = search_queue(&res->lr_converting, mode, policy, old_lock, flags);
+        lock = search_queue(&res->lr_converting, &mode, policy, old_lock, flags);
         if (lock != NULL)
                 GOTO(out, rc = 1);
-        lock = search_queue(&res->lr_waiting, mode, policy, old_lock, flags);
+        lock = search_queue(&res->lr_waiting, &mode, policy, old_lock, flags);
         if (lock != NULL)
                 GOTO(out, rc = 1);
 
@@ -1095,7 +1100,7 @@ int ldlm_lock_match(struct ldlm_namespace *ns, int flags,
         if (old_lock)
                 LDLM_LOCK_PUT(old_lock);
 
-        return rc;
+        return rc ? mode : 0;
 }
 
 /* Returns a referenced lock */

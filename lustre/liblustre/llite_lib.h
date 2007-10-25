@@ -104,7 +104,7 @@ static inline struct obd_export *llu_i2obdexp(struct inode *inode)
         return llu_i2info(inode)->lli_sbi->ll_dt_exp;
 }
 
-static inline struct obd_export *llu_i2mdcexp(struct inode *inode)
+static inline struct obd_export *llu_i2mdexp(struct inode *inode)
 {
         return llu_i2info(inode)->lli_sbi->ll_md_exp;
 }

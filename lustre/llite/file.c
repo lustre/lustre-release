@@ -1096,14 +1096,14 @@ int ll_local_size(struct inode *inode)
                 RETURN(0);
 
         rc = obd_match(sbi->ll_dt_exp, lli->lli_smd, LDLM_EXTENT,
-                       &policy, LCK_PR | LCK_PW, &flags, inode, &lockh);
+                       &policy, LCK_PR, &flags, inode, &lockh);
         if (rc < 0)
                 RETURN(rc);
         else if (rc == 0)
                 RETURN(-ENODATA);
 
         ll_merge_lvb(inode);
-        obd_cancel(sbi->ll_dt_exp, lli->lli_smd, LCK_PR | LCK_PW, &lockh);
+        obd_cancel(sbi->ll_dt_exp, lli->lli_smd, LCK_PR, &lockh);
         RETURN(0);
 }
 
@@ -2553,11 +2553,28 @@ int ll_have_md_lock(struct inode *inode, __u64 bits)
 
         flags = LDLM_FL_BLOCK_GRANTED | LDLM_FL_CBPENDING | LDLM_FL_TEST_LOCK;
         if (md_lock_match(ll_i2mdexp(inode), flags, fid, LDLM_IBITS, &policy,
-                          LCK_CR|LCK_CW|LCK_PR, &lockh)) {
+                          LCK_CR|LCK_CW|LCK_PR|LCK_PW, &lockh)) {
                 RETURN(1);
         }
-
         RETURN(0);
+}
+
+ldlm_mode_t ll_take_md_lock(struct inode *inode, __u64 bits,
+                            struct lustre_handle *lockh)
+{
+        ldlm_policy_data_t policy = { .l_inodebits = {bits}};
+        struct lu_fid *fid;
+        ldlm_mode_t rc;
+        int flags;
+        ENTRY;
+
+        fid = &ll_i2info(inode)->lli_fid;
+        CDEBUG(D_INFO, "trying to match res "DFID"\n", PFID(fid));
+
+        flags = LDLM_FL_BLOCK_GRANTED | LDLM_FL_CBPENDING;
+        rc = md_lock_match(ll_i2mdexp(inode), flags, fid, LDLM_IBITS, &policy,
+                           LCK_CR|LCK_CW|LCK_PR|LCK_PW, lockh);
+        RETURN(rc);
 }
 
 static int ll_inode_revalidate_fini(struct inode *inode, int rc) {
@@ -2642,8 +2659,7 @@ int ll_inode_revalidate_it(struct dentry *dentry, struct lookup_intent *it)
                 }
 
                 ll_lookup_finish_locks(&oit, dentry);
-        } else if (!ll_have_md_lock(dentry->d_inode,
-                                    MDS_INODELOCK_UPDATE)) {
+        } else if (!ll_have_md_lock(dentry->d_inode, MDS_INODELOCK_UPDATE)) {
                 struct ll_sb_info *sbi = ll_i2sbi(dentry->d_inode);
                 obd_valid valid = OBD_MD_FLGETATTR;
                 struct obd_capa *oc;

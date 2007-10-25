@@ -358,7 +358,7 @@ int ll_revalidate_it(struct dentry *de, int lookup_flags,
                         RETURN(0);
 #endif
 
-                rc = ll_have_md_lock(de->d_parent->d_inode, 
+                rc = ll_have_md_lock(de->d_parent->d_inode,
                                      MDS_INODELOCK_UPDATE);
         
                 RETURN(rc);

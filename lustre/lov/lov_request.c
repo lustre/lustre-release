@@ -360,7 +360,7 @@ int lov_update_match_set(struct lov_request_set *set, struct lov_request *req,
         int ret = rc;
         ENTRY;
 
-        if (rc == 1)
+        if (rc > 0)
                 ret = 0;
         else if (rc == 0)
                 ret = 1;

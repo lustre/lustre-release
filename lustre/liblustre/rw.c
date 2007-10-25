@@ -250,7 +250,7 @@ int llu_local_size(struct inode *inode)
                 RETURN(0);
         
         rc = obd_match(sbi->ll_dt_exp, lli->lli_smd, LDLM_EXTENT,
-                       &policy, LCK_PR | LCK_PW, &flags, inode, &lockh);
+                       &policy, LCK_PR, &flags, inode, &lockh);
         if (rc < 0)
                 RETURN(rc);
         else if (rc == 0)

@@ -2710,14 +2710,15 @@ int lmv_set_lock_data(struct obd_export *exp, __u64 *lockh, void *data)
         RETURN(md_set_lock_data(lmv->tgts[0].ltd_exp, lockh, data));
 }
 
-int lmv_lock_match(struct obd_export *exp, int flags,
-                   const struct lu_fid *fid, ldlm_type_t type,
-                   ldlm_policy_data_t *policy, ldlm_mode_t mode,
-                   struct lustre_handle *lockh)
+ldlm_mode_t lmv_lock_match(struct obd_export *exp, int flags,
+                           const struct lu_fid *fid, ldlm_type_t type,
+                           ldlm_policy_data_t *policy, ldlm_mode_t mode,
+                           struct lustre_handle *lockh)
 {
         struct obd_device *obd = exp->exp_obd;
         struct lmv_obd *lmv = &obd->u.lmv;
-        int i, rc = 0;
+        ldlm_mode_t rc;
+        int i;
         ENTRY;
 
         CDEBUG(D_OTHER, "lock match for "DFID"\n", PFID(fid));
@@ -2730,10 +2731,10 @@ int lmv_lock_match(struct obd_export *exp, int flags,
                 rc = md_lock_match(lmv->tgts[i].ltd_exp, flags, fid,
                                    type, policy, mode, lockh);
                 if (rc)
-                        RETURN(1);
+                        RETURN(rc);
         }
 
-        RETURN(rc);
+        RETURN(0);
 }
 
 int lmv_get_lustre_md(struct obd_export *exp, struct ptlrpc_request *req,

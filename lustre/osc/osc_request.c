@@ -2766,8 +2766,7 @@ static void osc_set_data_with_check(struct lustre_handle *lockh, void *data,
                 return;
         }
         lock_res_and_lock(lock);
-#ifdef __KERNEL__
-#ifdef __LINUX__
+#if defined (__KERNEL__) && defined (__LINUX__)
         /* Liang XXX: Darwin and Winnt checking should be added */
         if (lock->l_ast_data && lock->l_ast_data != data) {
                 struct inode *new_inode = data;
@@ -2781,7 +2780,6 @@ static void osc_set_data_with_check(struct lustre_handle *lockh, void *data,
                          old_inode->i_state,
                          new_inode, new_inode->i_ino, new_inode->i_generation);
         }
-#endif
 #endif
         lock->l_ast_data = data;
         lock->l_flags |= (flags & LDLM_FL_NO_LRU);
@@ -2883,6 +2881,7 @@ static int osc_enqueue(struct obd_export *exp, struct obd_info *oinfo,
         struct ldlm_reply *rep;
         struct ptlrpc_request *req = NULL;
         int intent = oinfo->oi_flags & LDLM_FL_HAS_INTENT;
+        ldlm_mode_t mode;
         int rc;
         ENTRY;
 
@@ -2899,11 +2898,29 @@ static int osc_enqueue(struct obd_export *exp, struct obd_info *oinfo,
                 goto no_match;
 
         /* Next, search for already existing extent locks that will cover us */
-        rc = ldlm_lock_match(obd->obd_namespace,
-                             oinfo->oi_flags | LDLM_FL_LVB_READY, &res_id,
-                             einfo->ei_type, &oinfo->oi_policy, einfo->ei_mode,
-                             oinfo->oi_lockh);
-        if (rc == 1) {
+        /* If we're trying to read, we also search for an existing PW lock.  The
+         * VFS and page cache already protect us locally, so lots of readers/
+         * writers can share a single PW lock.
+         *
+         * There are problems with conversion deadlocks, so instead of
+         * converting a read lock to a write lock, we'll just enqueue a new
+         * one.
+         *
+         * At some point we should cancel the read lock instead of making them
+         * send us a blocking callback, but there are problems with canceling
+         * locks out from other users right now, too. */
+        mode = einfo->ei_mode;
+        if (einfo->ei_mode == LCK_PR)
+                mode |= LCK_PW;
+        mode = ldlm_lock_match(obd->obd_namespace,
+                               oinfo->oi_flags | LDLM_FL_LVB_READY, &res_id,
+                               einfo->ei_type, &oinfo->oi_policy, mode,
+                               oinfo->oi_lockh);
+        if (mode) {
+                /* addref the lock only if not async requests and PW lock is
+                 * matched whereas we asked for PR. */
+                if (!rqset && einfo->ei_mode != mode)
+                        ldlm_lock_addref(oinfo->oi_lockh, LCK_PR);
                 osc_set_data_with_check(oinfo->oi_lockh, einfo->ei_cbdata,
                                         oinfo->oi_flags);
                 if (intent) {
@@ -2916,43 +2933,12 @@ static int osc_enqueue(struct obd_export *exp, struct obd_info *oinfo,
                 oinfo->oi_cb_up(oinfo, ELDLM_OK);
 
                 /* For async requests, decref the lock. */
-                if (rqset)
+                if (einfo->ei_mode != mode)
+                        ldlm_lock_decref(oinfo->oi_lockh, LCK_PW);
+                else if (rqset)
                         ldlm_lock_decref(oinfo->oi_lockh, einfo->ei_mode);
 
                 RETURN(ELDLM_OK);
-        }
-
-        /* If we're trying to read, we also search for an existing PW lock.  The
-         * VFS and page cache already protect us locally, so lots of readers/
-         * writers can share a single PW lock.
-         *
-         * There are problems with conversion deadlocks, so instead of
-         * converting a read lock to a write lock, we'll just enqueue a new
-         * one.
-         *
-         * At some point we should cancel the read lock instead of making them
-         * send us a blocking callback, but there are problems with canceling
-         * locks out from other users right now, too. */
-
-        if (einfo->ei_mode == LCK_PR) {
-                rc = ldlm_lock_match(obd->obd_namespace,
-                                     oinfo->oi_flags | LDLM_FL_LVB_READY,
-                                     &res_id, einfo->ei_type, &oinfo->oi_policy,
-                                     LCK_PW, oinfo->oi_lockh);
-                if (rc == 1) {
-                        /* FIXME: This is not incredibly elegant, but it might
-                         * be more elegant than adding another parameter to
-                         * lock_match.  I want a second opinion. */
-                        /* addref the lock only if not async requests. */
-                        if (!rqset)
-                                ldlm_lock_addref(oinfo->oi_lockh, LCK_PR);
-                        osc_set_data_with_check(oinfo->oi_lockh,
-                                                einfo->ei_cbdata,
-                                                oinfo->oi_flags);
-                        oinfo->oi_cb_up(oinfo, ELDLM_OK);
-                        ldlm_lock_decref(oinfo->oi_lockh, LCK_PW);
-                        RETURN(ELDLM_OK);
-                }
         }
 
  no_match:
@@ -3011,8 +2997,8 @@ static int osc_match(struct obd_export *exp, struct lov_stripe_md *lsm,
 {
         struct ldlm_res_id res_id = { .name = {0} };
         struct obd_device *obd = exp->exp_obd;
-        int rc;
         int lflags = *flags;
+        ldlm_mode_t rc;
         ENTRY;
 
         res_id.name[0] = lsm->lsm_object_id;
@@ -3026,28 +3012,21 @@ static int osc_match(struct obd_export *exp, struct lov_stripe_md *lsm,
         policy->l_extent.end |= ~CFS_PAGE_MASK;
 
         /* Next, search for already existing extent locks that will cover us */
-        rc = ldlm_lock_match(obd->obd_namespace, lflags | LDLM_FL_LVB_READY,
-                             &res_id, type, policy, mode, lockh);
-        if (rc) {
-                //if (!(*flags & LDLM_FL_TEST_LOCK))
-                        osc_set_data_with_check(lockh, data, lflags);
-                RETURN(rc);
-        }
         /* If we're trying to read, we also search for an existing PW lock.  The
          * VFS and page cache already protect us locally, so lots of readers/
          * writers can share a single PW lock. */
-        if (mode == LCK_PR) {
-                rc = ldlm_lock_match(obd->obd_namespace,
-                                     lflags | LDLM_FL_LVB_READY, &res_id,
-                                     type, policy, LCK_PW, lockh);
-                if (rc == 1 && !(lflags & LDLM_FL_TEST_LOCK)) {
-                        /* FIXME: This is not incredibly elegant, but it might
-                         * be more elegant than adding another parameter to
-                         * lock_match.  I want a second opinion. */
-                        osc_set_data_with_check(lockh, data, lflags);
+        rc = mode;
+        if (mode == LCK_PR)
+                rc |= LCK_PW;
+        rc = ldlm_lock_match(obd->obd_namespace, lflags | LDLM_FL_LVB_READY,
+                             &res_id, type, policy, rc, lockh);
+        if (rc) {
+                osc_set_data_with_check(lockh, data, lflags);
+                if (!(lflags & LDLM_FL_TEST_LOCK) && mode != rc) {
                         ldlm_lock_addref(lockh, LCK_PR);
                         ldlm_lock_decref(lockh, LCK_PW);
                 }
+                RETURN(rc);
         }
         RETURN(rc);
 }
