@@ -251,12 +251,12 @@ static inline int obd_ioctl_pack(struct obd_ioctl_data *data, char **pbuf,
         data->ioc_version = OBD_IOCTL_VERSION;
 
         if (*pbuf && data->ioc_len > max)
-                return 1;
+                return -EINVAL;
         if (*pbuf == NULL) {
                 *pbuf = malloc(data->ioc_len);
         }
         if (!*pbuf)
-                return 1;
+                return -ENOMEM;
         overlay = (struct obd_ioctl_data *)*pbuf;
         memcpy(*pbuf, data, sizeof(*data));
 
@@ -270,7 +270,7 @@ static inline int obd_ioctl_pack(struct obd_ioctl_data *data, char **pbuf,
         if (data->ioc_inlbuf4)
                 LOGL(data->ioc_inlbuf4, data->ioc_inllen4, ptr);
         if (obd_ioctl_is_invalid(overlay))
-                return 1;
+                return -EINVAL;
 
         return 0;
 }

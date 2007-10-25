@@ -1026,9 +1026,9 @@ int llapi_obd_statfs(char *path, __u32 type, __u32 index,
         data.ioc_pbuf2 = (char *)uuid_buf;
         data.ioc_plen2 = sizeof(struct obd_uuid);
 
-        if (obd_ioctl_pack(&data, &rawbuf, sizeof(raw))) {
+        if ((rc = obd_ioctl_pack(&data, &rawbuf, sizeof(raw))) != 0) {
                 fprintf(stderr, "llapi_obd_statfs: error packing ioctl data\n");
-                return -EINVAL;
+                return rc;
         }
 
         fd = open(path, O_RDONLY);
