@@ -65,7 +65,11 @@ static inline void ll_set_fs_pwd(struct fs_struct *fs, struct vfsmount *mnt,
 #define ll_set_fs_pwd set_fs_pwd
 #endif /* HAVE_SET_FS_PWD */
 
-#define ATTR_BLOCKS     0x4000
+/*
+ * set ATTR_BLOCKS to a high value to avoid any risk of collision with other
+ * ATTR_* attributes (see bug 13828)
+ */
+#define ATTR_BLOCKS    (1 << 27)
 
 #if HAVE_INODE_I_MUTEX
 #define UNLOCK_INODE_MUTEX(inode) do {mutex_unlock(&(inode)->i_mutex); } while(0)

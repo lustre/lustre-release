@@ -86,6 +86,44 @@ void mds_pack_inode2body(struct mds_body *b, struct inode *inode)
         b->suppgid = -1;
 }
 
+static inline unsigned int attr_unpack(__u64 sa_valid) {
+        unsigned int ia_valid = 0;
+
+        if (sa_valid & MDS_ATTR_MODE)
+                ia_valid |= ATTR_MODE;
+        if (sa_valid & MDS_ATTR_UID)
+                ia_valid |= ATTR_UID;
+        if (sa_valid & MDS_ATTR_GID)
+                ia_valid |= ATTR_GID;
+        if (sa_valid & MDS_ATTR_SIZE)
+                ia_valid |= ATTR_SIZE;
+        if (sa_valid & MDS_ATTR_ATIME)
+                ia_valid |= ATTR_ATIME;
+        if (sa_valid & MDS_ATTR_MTIME)
+                ia_valid |= ATTR_MTIME;
+        if (sa_valid & MDS_ATTR_CTIME)
+                ia_valid |= ATTR_CTIME;
+        if (sa_valid & MDS_ATTR_ATIME_SET)
+                ia_valid |= ATTR_ATIME_SET;
+        if (sa_valid & MDS_ATTR_MTIME_SET)
+                ia_valid |= ATTR_MTIME_SET;
+        if (sa_valid & MDS_ATTR_FORCE)
+                ia_valid |= ATTR_FORCE;
+        if (sa_valid & MDS_ATTR_ATTR_FLAG)
+                ia_valid |= ATTR_ATTR_FLAG;
+        if (sa_valid & MDS_ATTR_KILL_SUID)
+                ia_valid |=  ATTR_KILL_SUID;
+        if (sa_valid & MDS_ATTR_KILL_SGID)
+                ia_valid |= ATTR_KILL_SGID;
+        if (sa_valid & MDS_ATTR_CTIME_SET)
+                ia_valid |= ATTR_CTIME_SET;
+        if (sa_valid & MDS_ATTR_FROM_OPEN)
+                ia_valid |= ATTR_FROM_OPEN;
+        if (sa_valid & MDS_ATTR_BLOCKS)
+                ia_valid |= ATTR_BLOCKS;
+        return ia_valid;
+}
+
 /* unpacking */
 static int mds_setattr_unpack(struct ptlrpc_request *req, int offset,
                               struct mds_update_record *r)
@@ -107,7 +145,7 @@ static int mds_setattr_unpack(struct ptlrpc_request *req, int offset,
         r->ur_uc.luc_suppgid2 = -1;
 #endif
         r->ur_fid1 = &rec->sa_fid;
-        attr->ia_valid = rec->sa_valid;
+        attr->ia_valid = attr_unpack(rec->sa_valid);
         attr->ia_mode = rec->sa_mode;
         attr->ia_uid = rec->sa_uid;
         attr->ia_gid = rec->sa_gid;

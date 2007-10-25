@@ -96,11 +96,24 @@ static inline void d_rehash_cond(struct dentry * entry, int lock)
 #define __d_rehash(dentry, lock) d_rehash_cond(dentry, lock)
 #endif /* !HAVE_D_REHASH_COND && !HAVE___D_REHASH*/
 
-#ifndef ATTR_FROM_OPEN
-#define ATTR_FROM_OPEN 0
-#endif
+#ifdef ATTR_OPEN
+# define ATTR_FROM_OPEN ATTR_OPEN
+#else
+# ifndef ATTR_FROM_OPEN
+#  define ATTR_FROM_OPEN 0
+# endif
+#endif /* ATTR_OPEN */
+
 #ifndef ATTR_RAW
 #define ATTR_RAW 0
 #endif
 
+#ifndef ATTR_CTIME_SET
+/*
+ * set ATTR_CTIME_SET to a high value to avoid any risk of collision with other
+ * ATTR_* attributes (see bug 13828)
+ */
+#define ATTR_CTIME_SET (1 << 28)
 #endif
+
+#endif /* LUSTRE_PATCHLESS_COMPAT_H */

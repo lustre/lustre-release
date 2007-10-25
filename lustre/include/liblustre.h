@@ -483,6 +483,8 @@ static inline cfs_page_t* __grab_cache_page(unsigned long index)
 #define ATTR_FROM_OPEN  0x1000  /* called from open path, ie O_TRUNC */
 #define ATTR_CTIME_SET  0x2000
 #define ATTR_BLOCKS     0x4000
+#define ATTR_KILL_SUID  0
+#define ATTR_KILL_SGID  0
 
 struct iattr {
         unsigned int    ia_valid;

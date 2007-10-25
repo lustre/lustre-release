@@ -1165,6 +1165,22 @@ void lustre_assert_wire_constants(void)
                  (long long)(int)offsetof(struct mds_rec_setattr, sa_attr_flags));
         LASSERTF((int)sizeof(((struct mds_rec_setattr *)0)->sa_attr_flags) == 4, " found %lld\n",
                  (long long)(int)sizeof(((struct mds_rec_setattr *)0)->sa_attr_flags));
+        CLASSERT(MDS_ATTR_MODE == 1);
+        CLASSERT(MDS_ATTR_UID == 2);
+        CLASSERT(MDS_ATTR_GID == 4);
+        CLASSERT(MDS_ATTR_SIZE == 8);
+        CLASSERT(MDS_ATTR_ATIME == 16);
+        CLASSERT(MDS_ATTR_MTIME == 32);
+        CLASSERT(MDS_ATTR_CTIME == 64);
+        CLASSERT(MDS_ATTR_ATIME_SET == 128);
+        CLASSERT(MDS_ATTR_MTIME_SET == 256);
+        CLASSERT(MDS_ATTR_FORCE == 512);
+        CLASSERT(MDS_ATTR_ATTR_FLAG == 1024);
+        CLASSERT(MDS_ATTR_KILL_SUID == 2048);
+        CLASSERT(MDS_ATTR_KILL_SGID == 4096);
+        CLASSERT(MDS_ATTR_CTIME_SET == 8192);
+        CLASSERT(MDS_ATTR_FROM_OPEN == 16384);
+        CLASSERT(MDS_ATTR_BLOCKS == 32768);
 
         /* Checks for struct mds_rec_create */
         LASSERTF((int)sizeof(struct mds_rec_create) == 96, " found %lld\n",

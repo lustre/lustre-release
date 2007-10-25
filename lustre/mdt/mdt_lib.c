@@ -667,6 +667,44 @@ int mdt_handle_last_unlink(struct mdt_thread_info *info, struct mdt_object *mo,
         RETURN(0);
 }
 
+static inline unsigned int attr_unpack(__u64 sa_valid) {
+        unsigned int ia_valid = 0;
+
+        if (sa_valid & MDS_ATTR_MODE)
+                ia_valid |= ATTR_MODE;
+        if (sa_valid & MDS_ATTR_UID)
+                ia_valid |= ATTR_UID;
+        if (sa_valid & MDS_ATTR_GID)
+                ia_valid |= ATTR_GID;
+        if (sa_valid & MDS_ATTR_SIZE)
+                ia_valid |= ATTR_SIZE;
+        if (sa_valid & MDS_ATTR_ATIME)
+                ia_valid |= ATTR_ATIME;
+        if (sa_valid & MDS_ATTR_MTIME)
+                ia_valid |= ATTR_MTIME;
+        if (sa_valid & MDS_ATTR_CTIME)
+                ia_valid |= ATTR_CTIME;
+        if (sa_valid & MDS_ATTR_ATIME_SET)
+                ia_valid |= ATTR_ATIME_SET;
+        if (sa_valid & MDS_ATTR_MTIME_SET)
+                ia_valid |= ATTR_MTIME_SET;
+        if (sa_valid & MDS_ATTR_FORCE)
+                ia_valid |= ATTR_FORCE;
+        if (sa_valid & MDS_ATTR_ATTR_FLAG)
+                ia_valid |= ATTR_ATTR_FLAG;
+        if (sa_valid & MDS_ATTR_KILL_SUID)
+                ia_valid |=  ATTR_KILL_SUID;
+        if (sa_valid & MDS_ATTR_KILL_SGID)
+                ia_valid |= ATTR_KILL_SGID;
+        if (sa_valid & MDS_ATTR_CTIME_SET)
+                ia_valid |= ATTR_CTIME_SET;
+        if (sa_valid & MDS_ATTR_FROM_OPEN)
+                ia_valid |= ATTR_FROM_OPEN;
+        if (sa_valid & MDS_ATTR_BLOCKS)
+                ia_valid |= ATTR_BLOCKS;
+        return ia_valid;
+}
+
 static __u64 mdt_attr_valid_xlate(__u64 in, struct mdt_reint_record *rr,
                                   struct md_attr *ma)
 {
@@ -734,7 +772,7 @@ static int mdt_setattr_unpack_rec(struct mdt_thread_info *info)
         uc->mu_suppgids[1] = -1;
 
         rr->rr_fid1 = &rec->sa_fid;
-        la->la_valid = mdt_attr_valid_xlate(rec->sa_valid, rr, ma);
+        la->la_valid = mdt_attr_valid_xlate(attr_unpack(rec->sa_valid), rr, ma);
         la->la_mode  = rec->sa_mode;
         la->la_flags = rec->sa_attr_flags;
         la->la_uid   = rec->sa_uid;
