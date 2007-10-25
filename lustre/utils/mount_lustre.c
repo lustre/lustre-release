@@ -38,6 +38,7 @@
 #include <lustre_ver.h>
 #include <glob.h>
 #include <ctype.h>
+#include <limits.h>
 
 #define MAX_HW_SECTORS_KB_PATH  "queue/max_hw_sectors_kb"
 #define MAX_SECTORS_KB_PATH     "queue/max_sectors_kb"
@@ -282,21 +283,33 @@ int set_tunables(char *source, int src_len)
         struct stat stat_buf;
         char *chk_major, *chk_minor;
         char *savept, *dev, *s2 = 0;
-        char buf[PATH_MAX], path[PATH_MAX];
+        char *ret_path;
+        char buf[PATH_MAX] = {'\0'}, path[PATH_MAX] = {'\0'};
+        char real_path[PATH_MAX] = {'\0'};
         int i, rc = 0;
         int major, minor;
 
         if (!source)
                 return -EINVAL;
 
-        if (strncmp(source, "/dev/loop", 9) == 0)
+        ret_path = realpath(source, real_path);
+        if (ret_path == NULL) {
+                if (verbose)
+                        fprintf(stderr, "warning: %s: cannot resolve: %s",
+                                source, strerror(errno));
+                return -EINVAL;
+        }
+
+        src_len = sizeof(real_path);
+
+        if (strncmp(real_path, "/dev/loop", 9) == 0)
                 return 0;
 
-        if ((*source != '/') && ((s2 = strpbrk(source, ",:")) != NULL))
+        if ((real_path[0] != '/') && ((s2 = strpbrk(real_path, ",:")) != NULL))
                 return 0;
 
-        dev = source + src_len - 1;
-        while (dev > source && (*dev != '/')) {
+        dev = real_path + src_len - 1;
+        while (dev > real_path && (*dev != '/')) {
                 if (isdigit(*dev))
                         *dev = 0;
                 dev--;
@@ -321,8 +334,8 @@ int set_tunables(char *source, int src_len)
          * match any entry under /sys/block/. In that case we need to
          * match the major/minor number to find the entry under
          * sys/block corresponding to /dev/X */
-        dev = source + src_len - 1;
-        while (dev > source) {
+        dev = real_path + src_len - 1;
+        while (dev > real_path) {
                 if (isdigit(*dev))
                         *dev = 0;
                 dev--;
@@ -365,7 +378,7 @@ int set_tunables(char *source, int src_len)
         if (i == glob_info.gl_pathc) {
                 if (verbose)
                         fprintf(stderr,"warning: device %s does not match any "
-                                "entry under /sys/block\n", source);
+                                "entry under /sys/block\n", real_path);
                 return -EINVAL;
         }
 
