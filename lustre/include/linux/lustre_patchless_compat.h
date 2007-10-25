@@ -108,7 +108,11 @@ static inline void d_rehash_cond(struct dentry * entry, int lock)
 #endif
 
 #ifndef ATTR_CTIME_SET
-#define ATTR_CTIME_SET 131072
+/*
+ * set ATTR_CTIME_SET to a high value to avoid any risk of collision with other
+ * ATTR_* attributes (see bug 13828)
+ */
+#define ATTR_CTIME_SET (1 << 28)
 #endif
 
 #endif /* LUSTRE_PATCHLESS_COMPAT_H */

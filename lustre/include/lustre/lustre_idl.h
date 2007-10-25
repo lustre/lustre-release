@@ -831,21 +831,21 @@ struct mds_rec_setattr {
  * since the client and MDS may run different kernels (see bug 13828)
  * Therefore, we should only use MDS_ATTR_* attributes for sa_valid.
  */
-#define MDS_ATTR_MODE       1
-#define MDS_ATTR_UID        2
-#define MDS_ATTR_GID        4
-#define MDS_ATTR_SIZE       8
-#define MDS_ATTR_ATIME      16
-#define MDS_ATTR_MTIME      32
-#define MDS_ATTR_CTIME      64
-#define MDS_ATTR_ATIME_SET  128
-#define MDS_ATTR_MTIME_SET  256
-#define MDS_ATTR_FORCE      512    /* Not a change, but a change it */
-#define MDS_ATTR_ATTR_FLAG  1024
-#define MDS_ATTR_KILL_SUID  2048
-#define MDS_ATTR_KILL_SGID  4096
-#define MDS_ATTR_CTIME_SET  8192
-#define MDS_ATTR_FROM_OPEN  16384  /* called from open path, ie O_TRUNC */
+#define MDS_ATTR_MODE          0x1ULL /* = 1 */
+#define MDS_ATTR_UID           0x2ULL /* = 2 */
+#define MDS_ATTR_GID           0x4ULL /* = 4 */
+#define MDS_ATTR_SIZE          0x8ULL /* = 8 */
+#define MDS_ATTR_ATIME        0x10ULL /* = 16 */
+#define MDS_ATTR_MTIME        0x20ULL /* = 32 */
+#define MDS_ATTR_CTIME        0x40ULL /* = 64 */
+#define MDS_ATTR_ATIME_SET    0x80ULL /* = 128 */
+#define MDS_ATTR_MTIME_SET   0x100ULL /* = 256 */
+#define MDS_ATTR_FORCE       0x200ULL /* = 512, Not a change, but a change it */
+#define MDS_ATTR_ATTR_FLAG   0x400ULL /* = 1024 */
+#define MDS_ATTR_KILL_SUID   0x800ULL /* = 2048 */
+#define MDS_ATTR_KILL_SGID  0x1000ULL /* = 4096 */
+#define MDS_ATTR_CTIME_SET  0x2000ULL /* = 8192 */
+#define MDS_ATTR_FROM_OPEN  0x4000ULL /* = 16384, called from open path, ie O_TRUNC */
 
 extern void lustre_swab_mds_rec_setattr (struct mds_rec_setattr *sa);
 

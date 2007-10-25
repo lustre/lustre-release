@@ -93,21 +93,39 @@ void mds_pack_inode2body(struct mds_body *b, struct inode *inode)
 }
 
 static inline unsigned int attr_unpack(__u64 sa_valid) {
-        return (sa_valid & MDS_ATTR_MODE ? ATTR_MODE : 0) | \
-               (sa_valid & MDS_ATTR_UID  ? ATTR_UID : 0) | \
-               (sa_valid & MDS_ATTR_GID ? ATTR_GID : 0) | \
-               (sa_valid & MDS_ATTR_SIZE ? ATTR_SIZE : 0) | \
-               (sa_valid & MDS_ATTR_ATIME ? ATTR_ATIME : 0) | \
-               (sa_valid & MDS_ATTR_MTIME ? ATTR_MTIME : 0) | \
-               (sa_valid & MDS_ATTR_CTIME ? ATTR_CTIME : 0) | \
-               (sa_valid & MDS_ATTR_ATIME_SET ? ATTR_ATIME_SET : 0) | \
-               (sa_valid & MDS_ATTR_MTIME_SET ? ATTR_MTIME_SET : 0) | \
-               (sa_valid & MDS_ATTR_FORCE ? ATTR_FORCE : 0) | \
-               (sa_valid & MDS_ATTR_ATTR_FLAG ? ATTR_ATTR_FLAG : 0) | \
-               (sa_valid & MDS_ATTR_KILL_SUID ? ATTR_KILL_SUID : 0) | \
-               (sa_valid & MDS_ATTR_KILL_SGID ? ATTR_KILL_SGID : 0) | \
-               (sa_valid & MDS_ATTR_CTIME_SET ? ATTR_CTIME_SET : 0) | \
-               (sa_valid & MDS_ATTR_FROM_OPEN ? ATTR_FROM_OPEN : 0);
+        unsigned int ia_valid = 0;
+
+        if (sa_valid & MDS_ATTR_MODE)
+                ia_valid |= ATTR_MODE;
+        if (sa_valid & MDS_ATTR_UID)
+                ia_valid |= ATTR_UID;
+        if (sa_valid & MDS_ATTR_GID)
+                ia_valid |= ATTR_GID;
+        if (sa_valid & MDS_ATTR_SIZE)
+                ia_valid |= ATTR_SIZE;
+        if (sa_valid & MDS_ATTR_ATIME)
+                ia_valid |= ATTR_ATIME;
+        if (sa_valid & MDS_ATTR_MTIME)
+                ia_valid |= ATTR_MTIME;
+        if (sa_valid & MDS_ATTR_CTIME)
+                ia_valid |= ATTR_CTIME;
+        if (sa_valid & MDS_ATTR_ATIME_SET)
+                ia_valid |= ATTR_ATIME_SET;
+        if (sa_valid & MDS_ATTR_MTIME_SET)
+                ia_valid |= ATTR_MTIME_SET;
+        if (sa_valid & MDS_ATTR_FORCE)
+                ia_valid |= ATTR_FORCE;
+        if (sa_valid & MDS_ATTR_ATTR_FLAG)
+                ia_valid |= ATTR_ATTR_FLAG;
+        if (sa_valid & MDS_ATTR_KILL_SUID)
+                ia_valid |=  ATTR_KILL_SUID;
+        if (sa_valid & MDS_ATTR_KILL_SGID)
+                ia_valid |= ATTR_KILL_SGID;
+        if (sa_valid & MDS_ATTR_CTIME_SET)
+                ia_valid |= ATTR_CTIME_SET;
+        if (sa_valid & MDS_ATTR_FROM_OPEN)
+                ia_valid |= ATTR_FROM_OPEN;
+        return ia_valid;
 }
 
 /* unpacking */

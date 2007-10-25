@@ -107,22 +107,29 @@ void mdc_create_pack(struct ptlrpc_request *req, int offset,
 
 static __u32 mds_pack_open_flags(__u32 flags)
 {
-        return
-                (flags & (FMODE_READ | FMODE_WRITE |
-                          MDS_OPEN_DELAY_CREATE | MDS_OPEN_HAS_EA |
-                          MDS_OPEN_HAS_OBJS | MDS_OPEN_OWNEROVERRIDE |
-                          MDS_OPEN_LOCK)) |
-                ((flags & O_CREAT) ? MDS_OPEN_CREAT : 0) |
-                ((flags & O_EXCL) ? MDS_OPEN_EXCL : 0) |
-                ((flags & O_TRUNC) ? MDS_OPEN_TRUNC : 0) |
-                ((flags & O_APPEND) ? MDS_OPEN_APPEND : 0) |
-                ((flags & O_SYNC) ? MDS_OPEN_SYNC : 0) |
-                ((flags & O_DIRECTORY) ? MDS_OPEN_DIRECTORY : 0) |
-                ((flags & O_JOIN_FILE) ? MDS_OPEN_JOIN_FILE : 0) |
+        __u32 cr_flags = (flags & (FMODE_READ | FMODE_WRITE |
+                                   MDS_OPEN_DELAY_CREATE | MDS_OPEN_HAS_EA |
+                                   MDS_OPEN_HAS_OBJS | MDS_OPEN_OWNEROVERRIDE |
+                                   MDS_OPEN_LOCK));
+        if (flags & O_CREAT)
+                cr_flags |= MDS_OPEN_CREAT;
+        if (flags & O_EXCL)
+                cr_flags |= MDS_OPEN_EXCL;
+        if (flags & O_TRUNC)
+                cr_flags |= MDS_OPEN_TRUNC;
+        if (flags & O_APPEND)
+                cr_flags |= MDS_OPEN_APPEND;
+        if (flags & O_SYNC)
+                cr_flags |= MDS_OPEN_SYNC;
+        if (flags & O_DIRECTORY)
+                cr_flags |= MDS_OPEN_DIRECTORY;
+        if (flags & O_JOIN_FILE)
+                cr_flags |= MDS_OPEN_JOIN_FILE;
 #ifdef FMODE_EXEC
-                ((flags & FMODE_EXEC) ? MDS_FMODE_EXEC : 0) |
+        if (flags & FMODE_EXEC)
+                cr_flags |= MDS_FMODE_EXEC;
 #endif
-                0;
+        return cr_flags;
 }
 
 /* packing of MDS records */
@@ -176,21 +183,39 @@ void mdc_open_pack(struct ptlrpc_request *req, int offset,
 }
 
 static inline __u64 attr_pack(unsigned int ia_valid) {
-        return (ia_valid & ATTR_MODE ? MDS_ATTR_MODE : 0) | \
-               (ia_valid & ATTR_UID  ? MDS_ATTR_UID : 0) | \
-               (ia_valid & ATTR_GID ? MDS_ATTR_GID : 0) | \
-               (ia_valid & ATTR_SIZE ? MDS_ATTR_SIZE : 0) | \
-               (ia_valid & ATTR_ATIME ? MDS_ATTR_ATIME : 0) | \
-               (ia_valid & ATTR_MTIME ? MDS_ATTR_MTIME : 0) | \
-               (ia_valid & ATTR_CTIME ? MDS_ATTR_CTIME : 0) | \
-               (ia_valid & ATTR_ATIME_SET ? MDS_ATTR_ATIME_SET : 0) | \
-               (ia_valid & ATTR_MTIME_SET ? MDS_ATTR_MTIME_SET : 0) | \
-               (ia_valid & ATTR_FORCE ? MDS_ATTR_FORCE : 0) | \
-               (ia_valid & ATTR_ATTR_FLAG ? MDS_ATTR_ATTR_FLAG : 0) | \
-               (ia_valid & ATTR_KILL_SUID ? MDS_ATTR_KILL_SUID : 0) | \
-               (ia_valid & ATTR_KILL_SGID ? MDS_ATTR_KILL_SGID : 0) | \
-               (ia_valid & ATTR_CTIME_SET ? MDS_ATTR_CTIME_SET : 0) | \
-               (ia_valid & ATTR_FROM_OPEN ? MDS_ATTR_FROM_OPEN : 0);
+        __u64 sa_valid = 0;
+
+        if (ia_valid & ATTR_MODE)
+                sa_valid |= MDS_ATTR_MODE;
+        if (ia_valid & ATTR_UID)
+                sa_valid |= MDS_ATTR_UID;
+        if (ia_valid & ATTR_GID)
+                sa_valid |= MDS_ATTR_GID;
+        if (ia_valid & ATTR_SIZE)
+                sa_valid |= MDS_ATTR_SIZE;
+        if (ia_valid & ATTR_ATIME)
+                sa_valid |= MDS_ATTR_ATIME;
+        if (ia_valid & ATTR_MTIME)
+                sa_valid |= MDS_ATTR_MTIME;
+        if (ia_valid & ATTR_CTIME)
+                sa_valid |= MDS_ATTR_CTIME;
+        if (ia_valid & ATTR_ATIME_SET)
+                sa_valid |= MDS_ATTR_ATIME_SET;
+        if (ia_valid & ATTR_MTIME_SET)
+                sa_valid |= MDS_ATTR_MTIME_SET;
+        if (ia_valid & ATTR_FORCE)
+                sa_valid |= MDS_ATTR_FORCE;
+        if (ia_valid & ATTR_ATTR_FLAG)
+                sa_valid |= MDS_ATTR_ATTR_FLAG;
+        if (ia_valid & ATTR_KILL_SUID)
+                sa_valid |=  MDS_ATTR_KILL_SUID;
+        if (ia_valid & ATTR_KILL_SGID)
+                sa_valid |= MDS_ATTR_KILL_SGID;
+        if (ia_valid & ATTR_CTIME_SET)
+                sa_valid |= MDS_ATTR_CTIME_SET;
+        if (ia_valid & ATTR_FROM_OPEN)
+                sa_valid |= MDS_ATTR_FROM_OPEN;
+        return sa_valid;
 }
 
 void mdc_setattr_pack(struct ptlrpc_request *req, int offset,
