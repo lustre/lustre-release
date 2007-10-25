@@ -4305,6 +4305,24 @@ test_118j() {
 }
 run_test 118j "Simulate unrecoverable OST side error =========="
 
+test_118k()
+{
+	#define OBD_FAIL_OST_BRW_WRITE_BULK      0x20e
+	do_facet ost sysctl -w lustre.fail_loc=0x20e
+	mkdir -p $DIR/$tdir
+
+        for ((i=0;i<10;i++)); do
+                dd if=/dev/zero of=$DIR/$tdir/$tdir-$i bs=1M count=10 &
+	        SLEEPPID=$!
+                sleep 0.500s
+	        kill $SLEEPPID
+	        wait $SLEEPPID
+        done
+
+        sysctl -w lustre.fail_loc=0
+}
+run_test 118k "bio alloc -ENOMEM and IO TERM handling ========="
+
 test_119a() # bug 11737
 {
         BSIZE=$((512 * 1024))

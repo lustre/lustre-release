@@ -403,7 +403,6 @@ struct ptlrpc_request {
         struct ptlrpc_request_set *rq_set;
         void *rq_interpret_reply;               /* Async completion handler */
         union ptlrpc_async_args rq_async_args;  /* Async completion context */
-        void *rq_ptlrpcd_data;
         struct ptlrpc_request_pool *rq_pool;    /* Pool if request from
                                                    preallocated list */
         struct lu_context           rq_session;

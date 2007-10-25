@@ -13,6 +13,16 @@
        * Note that reiserfs quotas are disabled on SLES 10 in this kernel.
 
 Severity   : normal
+Bugzilla   : 13888
+Description: interrupt oig_wait produce painc on resend.
+Details    : brw_redo_request can be used for resend requests from ptlrpcd and
+	     private set, and this produce situation when rq_ptlrpcd_data not
+	     copyed to new allocated request and triggered LBUG on assert 
+	     req->rq_ptlrpcd_data != NULL. But this member used only for wakeup
+	     ptlrpcd set if request is changed and can be safety changed to use
+	     rq_set directly.
+
+Severity   : normal
 Bugzilla   : 13497
 Description: LASSERT_{REQ,REP}SWAB macros are buggy
 Details    : If SWAB_PARANOIA is disabled, the LASSERT_REQSWAB and
@@ -454,6 +464,7 @@ Details    : Remove 2.5.0 check from dcache.c dir.c file.c llite_internal.h
 	     Remove 2.5.0 check from handler.c lproc_mds.c mds_fs.c
 	     mds_internal.h mds_lib.c mds_open.c mds_reint.c mds_xattr.c
 	     in mds subsystem.
+
 
 --------------------------------------------------------------------------------
 

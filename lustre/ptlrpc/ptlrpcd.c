@@ -48,8 +48,6 @@ struct ptlrpcd_ctl {
         spinlock_t                pc_lock;
         struct completion         pc_starting;
         struct completion         pc_finishing;
-        struct list_head          pc_req_list;
-        cfs_waitq_t               pc_waitq;
         struct ptlrpc_request_set *pc_set;
         char                      pc_name[16];
 #ifndef __KERNEL__
@@ -68,11 +66,11 @@ static int ptlrpcd_users = 0;
 
 void ptlrpcd_wake(struct ptlrpc_request *req)
 {
-        struct ptlrpcd_ctl *pc = req->rq_ptlrpcd_data;
+        struct ptlrpc_request_set *rq_set = req->rq_set;
 
-        LASSERT(pc != NULL);
+        LASSERT(rq_set != NULL);
 
-        cfs_waitq_signal(&pc->pc_waitq);
+        cfs_waitq_signal(&rq_set->set_waitq);
 }
 
 /* requests that are added to the ptlrpcd queue are sent via
@@ -86,9 +84,8 @@ void ptlrpcd_add_req(struct ptlrpc_request *req)
         else
                 pc = &ptlrpcd_recovery_pc;
 
-        req->rq_ptlrpcd_data = pc;
         ptlrpc_set_add_new_req(pc->pc_set, req);
-        wake_up(&pc->pc_waitq);
+        cfs_waitq_signal(&pc->pc_set->set_waitq);
 }
 
 static int ptlrpcd_check(struct ptlrpcd_ctl *pc)
@@ -162,19 +159,13 @@ static int ptlrpcd(void *arg)
          * on the set's new_req_list and ptlrpcd_check moves them into
          * the set. */
         while (1) {
-                cfs_waitlink_t set_wait;
                 struct l_wait_info lwi;
                 cfs_duration_t timeout;
 
                 timeout = cfs_time_seconds(ptlrpc_set_next_timeout(pc->pc_set));
                 lwi = LWI_TIMEOUT(timeout, ptlrpc_expired_set, pc->pc_set);
 
-                /* ala the pinger, wait on pc's waitqueue and the set's */
-                cfs_waitlink_init(&set_wait);
-                cfs_waitq_add(&pc->pc_set->set_waitq, &set_wait);
-                cfs_waitq_forward(&set_wait, &pc->pc_waitq);
-                l_wait_event(pc->pc_waitq, ptlrpcd_check(pc), &lwi);
-                cfs_waitq_del(&pc->pc_set->set_waitq, &set_wait);
+                l_wait_event(pc->pc_set->set_waitq, ptlrpcd_check(pc), &lwi);
 
                 if (test_bit(LIOD_STOP, &pc->pc_flags))
                         break;
@@ -188,8 +179,11 @@ static int ptlrpcd(void *arg)
 
 static void ptlrpcd_zombie_impexp_notify(void)
 {
-        cfs_waitq_signal(&ptlrpcd_pc.pc_waitq);
+        LASSERT(ptlrpcd_pc.pc_set != NULL); // call before ptlrpcd inited ?
+
+        cfs_waitq_signal(&ptlrpcd_pc.pc_set->set_waitq);
 }
+
 #else
 
 int ptlrpcd_check_async_rpcs(void *arg)
@@ -231,10 +225,8 @@ static int ptlrpcd_start(char *name, struct ptlrpcd_ctl *pc)
         memset(pc, 0, sizeof(*pc));
         init_completion(&pc->pc_starting);
         init_completion(&pc->pc_finishing);
-        cfs_waitq_init(&pc->pc_waitq);
         pc->pc_flags = 0;
         spin_lock_init(&pc->pc_lock);
-        CFS_INIT_LIST_HEAD(&pc->pc_req_list);
         snprintf (pc->pc_name, sizeof (pc->pc_name), name);
 
         pc->pc_set = ptlrpc_prep_set();
@@ -267,7 +259,7 @@ static int ptlrpcd_start(char *name, struct ptlrpcd_ctl *pc)
 static void ptlrpcd_stop(struct ptlrpcd_ctl *pc)
 {
         set_bit(LIOD_STOP, &pc->pc_flags);
-        cfs_waitq_signal(&pc->pc_waitq);
+        cfs_waitq_signal(&pc->pc_set->set_waitq);
 #ifdef __KERNEL__
         obd_zombie_impexp_notify = NULL;
         wait_for_completion(&pc->pc_finishing);
