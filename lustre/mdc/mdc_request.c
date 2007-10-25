@@ -144,7 +144,7 @@ int mdc_getattr_common(struct obd_export *exp, unsigned int ea_size,
 
         CDEBUG(D_NET, "mode: %o\n", body->mode);
 
-        LASSERT_REPSWAB(req, REPLY_REC_OFF + 1);
+        lustre_set_rep_swabbed(req, REPLY_REC_OFF + 1);
         if (body->eadatasize != 0) {
                 /* reply indicates presence of eadata; check it's there... */
                 eadata = lustre_msg_buf(req->rq_repmsg, REPLY_REC_OFF + 1,
@@ -419,7 +419,7 @@ int mdc_req2lustre_md(struct ptlrpc_request *req, int offset,
 
         md->body = lustre_msg_buf(req->rq_repmsg, offset, sizeof (*md->body));
         LASSERT (md->body != NULL);
-        LASSERT_REPSWABBED(req, offset);
+        LASSERT(lustre_rep_swabbed(req, offset));
         offset++;
 
         if (md->body->valid & OBD_MD_FLEASIZE) {
@@ -442,7 +442,7 @@ int mdc_req2lustre_md(struct ptlrpc_request *req, int offset,
                         CERROR ("incorrect message: lmm == 0\n");
                         GOTO(err_out, rc = -EPROTO);
                 }
-                LASSERT_REPSWABBED(req, offset);
+                LASSERT(lustre_rep_swabbed(req, offset));
 
                 rc = obd_unpackmd(exp, &md->lsm, lmm, lmmsize);
                 if (rc < 0)
@@ -575,7 +575,7 @@ void mdc_set_open_replay_data(struct obd_client_handle *och,
 
         /* incoming message in my byte order (it's been swabbed) */
         LASSERT(rec != NULL);
-        LASSERT_REPSWABBED(open_req, DLM_REPLY_REC_OFF);
+        LASSERT(lustre_rep_swabbed(open_req, DLM_REPLY_REC_OFF));
         /* outgoing messages always in my byte order */
         LASSERT(body != NULL);
 

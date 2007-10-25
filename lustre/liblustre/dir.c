@@ -112,7 +112,7 @@ static int llu_dir_do_readpage(struct inode *inode, struct page *page)
                                       sizeof(*body));
                 LASSERT(body != NULL);         /* checked by mdc_readpage() */
                 /* swabbed by mdc_readpage() */
-                LASSERT_REPSWABBED(request, REPLY_REC_OFF);
+                LASSERT(lustre_rep_swabbed(request, REPLY_REC_OFF));
 
                 st->st_size = body->size;
         } else {

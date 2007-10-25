@@ -269,7 +269,7 @@ do_getxattr:
 
         body = lustre_msg_buf(req->rq_repmsg, REPLY_REC_OFF, sizeof(*body));
         LASSERT(body);
-        LASSERT_REPSWABBED(req, REPLY_REC_OFF);
+        LASSERT(lustre_rep_swabbed(req, REPLY_REC_OFF));
 
         /* only detect the xattr size */
         if (size == 0)
@@ -288,7 +288,7 @@ do_getxattr:
         }
 
         /* do not need swab xattr data */
-        LASSERT_REPSWAB(req, REPLY_REC_OFF + 1);
+        lustre_set_rep_swabbed(req, REPLY_REC_OFF + 1);
         xdata = lustre_msg_buf(req->rq_repmsg, REPLY_REC_OFF + 1,
                                body->eadatasize);
         if (!xdata) {

@@ -790,8 +790,8 @@ static int mds_getattr_pack_msg(struct ptlrpc_request *req, struct inode *inode,
         LASSERT(offset == REQ_REC_OFF); /* non-intent */
 
         body = lustre_msg_buf(req->rq_reqmsg, offset, sizeof(*body));
-        LASSERT(body != NULL);                 /* checked by caller */
-        LASSERT_REQSWABBED(req, offset);       /* swabbed by caller */
+        LASSERT(body != NULL);                    /* checked by caller */
+        LASSERT(lustre_req_swabbed(req, offset)); /* swabbed by caller */
 
         if ((S_ISREG(inode->i_mode) && (body->valid & OBD_MD_FLEASIZE)) ||
             (S_ISDIR(inode->i_mode) && (body->valid & OBD_MD_FLDIREA))) {
@@ -893,7 +893,7 @@ static int mds_getattr_lock(struct ptlrpc_request *req, int offset,
                 RETURN(-EFAULT);
         }
 
-        LASSERT_REQSWAB(req, offset + 1);
+        lustre_set_req_swabbed(req, offset + 1);
         name = lustre_msg_string(req->rq_reqmsg, offset + 1, 0);
         if (name == NULL) {
                 CERROR("Can't unpack name\n");

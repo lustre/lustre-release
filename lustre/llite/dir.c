@@ -103,7 +103,7 @@ static int ll_dir_readpage(struct file *file, struct page *page)
                                       sizeof(*body));
                 LASSERT(body != NULL); /* checked by mdc_readpage() */
                 /* swabbed by mdc_readpage() */
-                LASSERT_REPSWABBED(request, REPLY_REC_OFF);
+                LASSERT(lustre_rep_swabbed(request, REPLY_REC_OFF));
 
                 i_size_write(inode, body->size);
                 SetPageUptodate(page);
@@ -589,7 +589,7 @@ int ll_dir_getstripe(struct inode *inode, struct lov_mds_md **lmmp,
                         sizeof(*body));
         LASSERT(body != NULL); /* checked by mdc_getattr_name */
         /* swabbed by mdc_getattr_name */
-        LASSERT_REPSWABBED(req, REPLY_REC_OFF);
+        LASSERT(lustre_rep_swabbed(req, REPLY_REC_OFF));
 
         lmmsize = body->eadatasize;
 
@@ -600,7 +600,7 @@ int ll_dir_getstripe(struct inode *inode, struct lov_mds_md **lmmp,
 
         lmm = lustre_msg_buf(req->rq_repmsg, REPLY_REC_OFF + 1, lmmsize);
         LASSERT(lmm != NULL);
-        LASSERT_REPSWABBED(req, REPLY_REC_OFF + 1);
+        LASSERT(lustre_rep_swabbed(req, REPLY_REC_OFF + 1));
 
         /*
          * This is coming from the MDS, so is probably in
@@ -730,7 +730,7 @@ static int ll_dir_ioctl(struct inode *inode, struct file *file,
                                               sizeof(*body));
                         LASSERT(body != NULL); /* checked by mdc_getattr_name */
                         /* swabbed by mdc_getattr_name */
-                        LASSERT_REPSWABBED(request, REPLY_REC_OFF);
+                        LASSERT(lustre_rep_swabbed(request, REPLY_REC_OFF));
                 } else {
                         GOTO(out_req, rc);
                 }

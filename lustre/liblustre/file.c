@@ -144,7 +144,8 @@ int llu_local_open(struct llu_inode_info *lli, struct lookup_intent *it)
 
         body = lustre_msg_buf(req->rq_repmsg, DLM_REPLY_REC_OFF, sizeof(*body));
         LASSERT(body != NULL);                 /* reply already checked out */
-        LASSERT_REPSWABBED(req, DLM_REPLY_REC_OFF);       /* and swabbed down */
+        /* and swabbed down */
+        LASSERT(lustre_rep_swabbed(req, DLM_REPLY_REC_OFF));
 
         /* already opened? */
         if (lli->lli_open_count++)

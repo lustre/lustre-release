@@ -386,24 +386,6 @@ static inline int lustre_rep_swabbed(struct ptlrpc_request *req, int index)
         return req->rq_rep_swab_mask & (1 << index);
 }
 
-#define SWAB_PARANOIA 1
-
-#if SWAB_PARANOIA
-/* unpacking: assert idx not unpacked already */
-#define LASSERT_REQSWAB(rq, idx) lustre_set_req_swabbed(rq, idx)
-#define LASSERT_REPSWAB(rq, idx) lustre_set_rep_swabbed(rq, idx)
-
-/* just looking: assert idx already unpacked */
-#define LASSERT_REQSWABBED(rq, idx) LASSERT(lustre_req_swabbed(rq, idx))
-#define LASSERT_REPSWABBED(rq, idx) LASSERT(lustre_rep_swabbed(rq, idx))
-
-#else
-#define LASSERT_REQSWAB(rq, idx)
-#define LASSERT_REPSWAB(rq, idx)
-#define LASSERT_REQSWABBED(rq, idx)
-#define LASSERT_REPSWABBED(rq, idx)
-#endif
-
 static inline const char *
 ptlrpc_rqphase2str(struct ptlrpc_request *req)
 {

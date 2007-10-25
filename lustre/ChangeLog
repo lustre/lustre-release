@@ -15,6 +15,13 @@ tbd         Cluster File Systems, Inc. <info@clusterfs.com>
        * Note that reiserfs quotas are disabled on SLES 10 in this kernel.
 
 Severity   : normal
+Bugzilla   : 13497
+Description: LASSERT_{REQ,REP}SWAB macros are buggy
+Details    : If SWAB_PARANOIA is disabled, the LASSERT_REQSWAB and
+             LASSERT_REPSWAB macros become no-ops, which is incorrect. Drop
+	     these macros and replace them with their difinitions instead.
+
+Severity   : normal
 Bugzilla   : 13556
 Description: conf-sanity.sh test_33 failed with 1
 Details    : change mgsnode 
