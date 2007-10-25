@@ -399,7 +399,7 @@ static int llu_have_md_lock(struct inode *inode, __u64 lockpart)
 
         flags = LDLM_FL_BLOCK_GRANTED | LDLM_FL_CBPENDING | LDLM_FL_TEST_LOCK;
         if (ldlm_lock_match(obddev->obd_namespace, flags, &res_id, LDLM_IBITS,
-                            &policy, LCK_PW | LCK_PR, &lockh)) {
+                            &policy, LCK_CR|LCK_CW|LCK_PR|LCK_PW, &lockh)) {
                 RETURN(1);
         }
         RETURN(0);

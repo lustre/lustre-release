@@ -32,10 +32,12 @@ struct portals_handle {
 
         /* newly added fields to handle the RCU issue. -jxiong */
         spinlock_t h_lock;
-        unsigned int h_size;
         void *h_ptr;
         void (*h_free_cb)(void *, size_t);
         struct rcu_head h_rcu;
+        unsigned int h_size;
+        __u8 h_in:1;
+        __u8 h_unused[3];
 };
 #define RCU2HANDLE(rcu)    container_of(rcu, struct portals_handle, h_rcu)
 

@@ -595,46 +595,33 @@ int mdc_enqueue(struct obd_export *exp, struct ldlm_enqueue_info *einfo,
 }
 EXPORT_SYMBOL(mdc_enqueue);
 
-int mdc_revalidate_lock(struct obd_export *exp,
-                        struct lookup_intent *it,
+int mdc_revalidate_lock(struct obd_export *exp, struct lookup_intent *it,
                         struct ll_fid *fid)
 {
                 /* We could just return 1 immediately, but since we should only
                  * be called in revalidate_it if we already have a lock, let's
                  * verify that. */
         struct ldlm_res_id res_id = {.name ={fid->id, fid->generation}};
-                struct lustre_handle lockh;
-                ldlm_policy_data_t policy;
-                int mode = LCK_CR;
-        int rc;
+        struct lustre_handle lockh;
+        ldlm_policy_data_t policy;
+        ldlm_mode_t mode;
 
-                /* As not all attributes are kept under update lock, e.g. 
-                   owner/group/acls are under lookup lock, we need both 
-                   ibits for GETATTR. */
-                policy.l_inodebits.bits = (it->it_op == IT_GETATTR) ?
-                        MDS_INODELOCK_UPDATE | MDS_INODELOCK_LOOKUP :
-                        MDS_INODELOCK_LOOKUP;
+        /* As not all attributes are kept under update lock, e.g. 
+           owner/group/acls are under lookup lock, we need both 
+           ibits for GETATTR. */
+        policy.l_inodebits.bits = (it->it_op == IT_GETATTR) ?
+                MDS_INODELOCK_UPDATE | MDS_INODELOCK_LOOKUP :
+                MDS_INODELOCK_LOOKUP;
 
-        rc = ldlm_lock_match(exp->exp_obd->obd_namespace, LDLM_FL_BLOCK_GRANTED,
-                             &res_id, LDLM_IBITS, &policy, LCK_CR, &lockh);
-                if (!rc) {
-                        mode = LCK_CW;
-                        rc = ldlm_lock_match(exp->exp_obd->obd_namespace,
-                                     LDLM_FL_BLOCK_GRANTED, &res_id, LDLM_IBITS,
-                                     &policy, LCK_CW, &lockh);
-                }
-                if (!rc) {
-                        mode = LCK_PR;
-                        rc = ldlm_lock_match(exp->exp_obd->obd_namespace,
-                                     LDLM_FL_BLOCK_GRANTED, &res_id, LDLM_IBITS,
-                                     &policy, LCK_PR, &lockh);
-                }
-                if (rc) {
+        mode = ldlm_lock_match(exp->exp_obd->obd_namespace,
+                               LDLM_FL_BLOCK_GRANTED, &res_id, LDLM_IBITS,
+                               &policy, LCK_CR|LCK_CW|LCK_PR|LCK_PW, &lockh);
+        if (mode) {
                 memcpy(&it->d.lustre.it_lock_handle, &lockh, sizeof(lockh));
-                        it->d.lustre.it_lock_mode = mode;
-                }
+                it->d.lustre.it_lock_mode = mode;
+        }
 
-        return rc;
+        return !!mode;
 }
 EXPORT_SYMBOL(mdc_revalidate_lock);
 

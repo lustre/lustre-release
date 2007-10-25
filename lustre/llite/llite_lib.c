@@ -1271,7 +1271,7 @@ static int ll_setattr_do_truncate(struct inode *inode, loff_t new_size)
                 ast_flags = LDLM_FL_BLOCK_GRANTED;
                 rc = obd_match(sbi->ll_osc_exp, lsm, LDLM_EXTENT,
                                &policy, LCK_PW, &ast_flags, inode, &lockh);
-                if (rc == 1) {
+                if (rc > 0) {
                         local_lock = 2;
                         rc = 0;
                 } else if (rc == 0) {

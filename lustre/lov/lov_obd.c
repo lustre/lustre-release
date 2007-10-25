@@ -1842,6 +1842,7 @@ static int lov_enqueue(struct obd_export *exp, struct obd_info *oinfo,
                        struct ldlm_enqueue_info *einfo,
                        struct ptlrpc_request_set *rqset)
 {
+        ldlm_mode_t mode = einfo->ei_mode;
         struct lov_request_set *set;
         struct lov_request *req;
         struct list_head *pos;
@@ -1851,6 +1852,7 @@ static int lov_enqueue(struct obd_export *exp, struct obd_info *oinfo,
 
         LASSERT(oinfo);
         ASSERT_LSM_MAGIC(oinfo->oi_md);
+        LASSERT(mode == (mode & -mode));
 
         /* we should never be asked to replay a lock this way. */
         LASSERT((oinfo->oi_flags & LDLM_FL_REPLAY) == 0);
@@ -1880,7 +1882,7 @@ static int lov_enqueue(struct obd_export *exp, struct obd_info *oinfo,
                 RETURN(rc);
         }
 out:
-        rc = lov_fini_enqueue_set(set, einfo->ei_mode, rc, rqset);
+        rc = lov_fini_enqueue_set(set, mode, rc, rqset);
         RETURN(rc);
 }
 
@@ -1898,6 +1900,7 @@ static int lov_match(struct obd_export *exp, struct lov_stripe_md *lsm,
         ENTRY;
 
         ASSERT_LSM_MAGIC(lsm);
+        LASSERT((*flags & LDLM_FL_TEST_LOCK) || mode == (mode & -mode));
 
         if (!exp || !exp->exp_obd)
                 RETURN(-ENODEV);
@@ -1920,7 +1923,7 @@ static int lov_match(struct obd_export *exp, struct lov_stripe_md *lsm,
                                req->rq_oi.oi_md, type, &sub_policy,
                                mode, &lov_flags, data, lov_lockhp);
                 rc = lov_update_match_set(set, req, rc);
-                if (rc != 1)
+                if (rc <= 0)
                         break;
         }
         lov_fini_match_set(set, mode, *flags);
