@@ -26,6 +26,16 @@ Bugzilla   : 13556
 Description: conf-sanity.sh test_33 failed with 1
 Details    : change mgsnode 
 
+Severity   : normal
+Bugzilla   : 13888
+Description: interrupt oig_wait produce painc on resend.
+Details    : brw_redo_request can be used for resend requests from ptlrpcd and
+	     private set, and this produce situation when rq_ptlrpcd_data not
+	     copyed to new allocated request and triggered LBUG on assert 
+	     req->rq_ptlrpcd_data != NULL. But this member used only for wakeup
+	     ptlrpcd set if request is changed and can be safety changed to use
+	     rq_set directly.
+
 --------------------------------------------------------------------------------
 
 2007-10-26         Cluster File Systems, Inc. <info@clusterfs.com>

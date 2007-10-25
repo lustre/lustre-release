@@ -1341,12 +1341,16 @@ int osc_brw_redo_request(struct ptlrpc_request *request,
                         oap->oap_request = ptlrpc_request_addref(new_req);
                 }
         }
+
+        /* use ptlrpc_set_add_req is safe because interpret functions work 
+         * in check_set context. only one way exist with access to request 
+         * from different thread got -EINTR - this way protected with 
+         * cl_loi_list_lock */
+        ptlrpc_set_add_req(set, new_req);
+
         client_obd_list_unlock(&aa->aa_cli->cl_loi_list_lock);
 
         DEBUG_REQ(D_INFO, new_req, "new request");
-
-        ptlrpc_set_add_req(set, new_req);
-
         RETURN(0);
 }
 
