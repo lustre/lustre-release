@@ -660,29 +660,22 @@ test_50() {
 	debugsave
 	sysctl -w lnet.debug="-dlmtrace -ha"
 	# put a load of file creates/writes/deletes
-	writemany -a -q $DIR/$tdir/$tfile 0 5 &
+	writemany -q $DIR/$tdir/$tfile 0 5 &
 	CLIENT_PID=$!
 	echo writemany pid $CLIENT_PID
 	sleep 10
-	ps $CLIENT_PID > /dev/null || error "Writemany died 1.1"
 	FAILURE_MODE="SOFT"
 	$LCTL mark "$TESTNAME fail mds 1"
 	fail mds
-	ps $CLIENT_PID > /dev/null || error "Writemany died 2.1"
 	# wait for client to reconnect to MDS
 	sleep 60
-	ps $CLIENT_PID > /dev/null || error "Writemany died 2.2"
 	$LCTL mark "$TESTNAME fail mds 2"
 	fail mds
-	ps $CLIENT_PID > /dev/null || error "Writemany died 3.1"
 	sleep 60
-	ps $CLIENT_PID > /dev/null || error "Writemany died 3.2"
 	$LCTL mark "$TESTNAME fail mds 3"
 	fail mds
 	# client process should see no problems even though MDS went down
-	ps $CLIENT_PID > /dev/null || error "Writemany died 4.1"
 	sleep $TIMEOUT
-	ps $CLIENT_PID > /dev/null || error "Writemany died 4.2"
         kill -USR1 $CLIENT_PID
 	wait $CLIENT_PID 
 	rc=$?
@@ -696,7 +689,7 @@ run_test 50 "failover MDS under load"
 test_51() {
 	mkdir -p $DIR/$tdir
 	# put a load of file creates/writes/deletes
-	writemany -a -q $DIR/$tdir/$tfile 0 5 &
+	writemany -q $DIR/$tdir/$tfile 0 5 &
 	CLIENT_PID=$!
 	sleep 1
 	FAILURE_MODE="SOFT"
@@ -707,9 +700,7 @@ test_51() {
         for i in $SEQ
           do
           echo failover in $i sec
-	  ps $CLIENT_PID > /dev/null || error "Writemany died $i.1"
           sleep $i
-	  ps $CLIENT_PID > /dev/null || error "Writemany died $i.1"
 	  $LCTL mark "$TESTNAME fail mds $i"
           facet_failover mds
         done
