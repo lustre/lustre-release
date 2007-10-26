@@ -1,6 +1,8 @@
 lnxmaj="2.6.16"
 lnxrel="53-0.8"
 
+EXTRA_VERSION_DELIMITER="."
+
 KERNEL=linux-$lnxmaj.$lnxrel.tar.bz2
 SERIES=2.6-sles10.series
 VERSION=$lnxmaj
