@@ -4687,7 +4687,7 @@ test_124a() {
         echo "$OLD_LVF" > $NSDIR/pool/lock_volume_factor
         LRU_SIZE_A=`cat $NSDIR/lru_size`
 
-        [ $LRU_SIZE_B -ge $LRU_SIZE_A ] || {
+        [ $LRU_SIZE_B -gt $LRU_SIZE_A ] || {
                 error "No locks dropped in "$((SLEEP+SLEEP_ADD))"s. LRU size: $LRU_SIZE_A"
                 lru_resize_enable
                 unlinkmany $DIR/$tdir/f $NR
