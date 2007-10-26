@@ -50,22 +50,36 @@
 #include "mds_internal.h"
 
 
-static int mds_export_stats_init(struct obd_device *obd, struct obd_export *exp)
-{
-        int rc, num_stats;
+static int mds_export_stats_init(struct obd_device *obd,
+                                 struct obd_export *exp,
+                                 lnet_nid_t client_nid)
+  {
+        int rc, num_stats, newnid;
 
-        rc = lprocfs_exp_setup(exp);
+        rc = lprocfs_exp_setup(exp, client_nid, &newnid);
         if (rc)
                 return rc;
-        num_stats = (sizeof(*obd->obd_type->typ_ops) / sizeof(void *)) +
-                     LPROC_MDS_LAST - 1;
-        exp->exp_ops_stats = lprocfs_alloc_stats(num_stats,
-                                                 LPROCFS_STATS_FLAG_NOPERCPU);
-        if (exp->exp_ops_stats == NULL)
-                return -ENOMEM;
-        lprocfs_init_ops_stats(LPROC_MDS_LAST, exp->exp_ops_stats);
-        mds_stats_counter_init(exp->exp_ops_stats);
-        lprocfs_register_stats(exp->exp_proc, "stats", exp->exp_ops_stats);
+
+        if (client_nid && newnid) {
+                struct nid_stat *tmp = exp->exp_nid_stats;
+                LASSERT(tmp != NULL);
+
+                num_stats = (sizeof(*obd->obd_type->typ_ops) / sizeof(void *)) +
+                             LPROC_MDS_LAST - 1;
+                tmp->nid_stats = lprocfs_alloc_stats(num_stats,
+                                                     LPROCFS_STATS_FLAG_NOPERCPU);
+                if (tmp->nid_stats == NULL)
+                        return -ENOMEM;
+
+                lprocfs_init_ops_stats(LPROC_MDS_LAST, tmp->nid_stats);
+                rc = lprocfs_register_stats(tmp->nid_proc, "stats",
+                                            tmp->nid_stats);
+                if (rc)
+                        return rc;
+
+                mds_stats_counter_init(tmp->nid_stats);
+        }
+
         return 0;
 }
 
@@ -78,7 +92,7 @@ static int mds_export_stats_init(struct obd_device *obd, struct obd_export *exp)
  * mds_init_server_data() callsite needs to be fixed.
  */
 int mds_client_add(struct obd_device *obd, struct obd_export *exp,
-                   int cl_idx)
+                   int cl_idx, lnet_nid_t client_nid)
 {
         struct mds_obd *mds = &obd->u.mds;
         struct mds_export_data *med = &exp->exp_mds_data;
@@ -126,7 +140,7 @@ int mds_client_add(struct obd_device *obd, struct obd_export *exp,
         med->med_lr_off = le32_to_cpu(mds->mds_server_data->lsd_client_start) +
                 (cl_idx * le16_to_cpu(mds->mds_server_data->lsd_client_size));
         LASSERTF(med->med_lr_off > 0, "med_lr_off = %llu\n", med->med_lr_off);
-        mds_export_stats_init(obd, exp);
+        mds_export_stats_init(obd, exp, client_nid);
 
         if (new_client) {
                 struct lvfs_run_ctxt saved;
@@ -411,7 +425,7 @@ static int mds_init_server_data(struct obd_device *obd, struct file *file)
                 } else {
                         med = &exp->exp_mds_data;
                         med->med_mcd = mcd;
-                        rc = mds_client_add(obd, exp, cl_idx);
+                        rc = mds_client_add(obd, exp, cl_idx, 0);
                         /* can't fail for existing client */
                         LASSERTF(rc == 0, "rc = %d\n", rc);
 
@@ -629,7 +643,6 @@ err_fid:
         dput(mds->mds_fid_de);
         goto err_pop;
 }
-
 
 int mds_fs_cleanup(struct obd_device *obd)
 {

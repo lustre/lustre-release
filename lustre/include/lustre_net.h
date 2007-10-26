@@ -880,7 +880,8 @@ ptlrpc_req_set_repsize(struct ptlrpc_request *req, int count, int *lens)
 int client_obd_setup(struct obd_device *obddev, obd_count len, void *buf);
 int client_obd_cleanup(struct obd_device * obddev);
 int client_connect_import(struct lustre_handle *conn, struct obd_device *obd,
-                          struct obd_uuid *cluuid, struct obd_connect_data *);
+                          struct obd_uuid *cluuid, struct obd_connect_data *,
+                          void *localdata);
 int client_disconnect_export(struct obd_export *exp);
 int client_import_add_conn(struct obd_import *imp, struct obd_uuid *uuid,
                            int priority);

@@ -353,7 +353,7 @@ int client_obd_cleanup(struct obd_device *obddev)
 /* ->o_connect() method for client side (OSC and MDC and MGC) */
 int client_connect_import(struct lustre_handle *dlm_handle,
                           struct obd_device *obd, struct obd_uuid *cluuid,
-                          struct obd_connect_data *data)
+                          struct obd_connect_data *data, void *localdata)
 {
         struct client_obd *cli = &obd->u.cli;
         struct obd_import *imp = cli->cl_import;
@@ -565,6 +565,7 @@ int target_handle_connect(struct ptlrpc_request *req, svc_handler_t handler)
         int rc = 0, abort_recovery;
         struct obd_connect_data *data;
         int size[2] = { sizeof(struct ptlrpc_body), sizeof(*data) };
+        lnet_nid_t client_nid = 0;
         ENTRY;
 
         OBD_RACE(OBD_FAIL_TGT_CONN_RACE);
@@ -775,6 +776,7 @@ int target_handle_connect(struct ptlrpc_request *req, svc_handler_t handler)
         /* Tell the client if we support replayable requests */
         if (target->obd_replayable)
                 lustre_msg_add_op_flags(req->rq_repmsg, MSG_CONNECT_REPLAYABLE);
+        client_nid = req->rq_peer.nid;
 
         if (export == NULL) {
                 if (target->obd_recovering) {
@@ -788,7 +790,8 @@ int target_handle_connect(struct ptlrpc_request *req, svc_handler_t handler)
                         rc = -EBUSY;
                 } else {
  dont_check_exports:
-                        rc = obd_connect(&conn, target, &cluuid, data);
+                        rc = obd_connect(&conn, target, &cluuid, data,
+                                         &client_nid);
                 }
         } else {
                 rc = obd_reconnect(export, target, &cluuid, data);

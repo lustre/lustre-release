@@ -196,7 +196,7 @@ static int client_common_fill_super(struct super_block *sb,
         else
                 sbi->ll_fop = &ll_file_operations_noflock;
 
-        err = obd_connect(&mdc_conn, obd, &sbi->ll_sb_uuid, data);
+        err = obd_connect(&mdc_conn, obd, &sbi->ll_sb_uuid, data, NULL);
         if (err == -EBUSY) {
                 LCONSOLE_ERROR_MSG(0x14f, "An MDT (mdc %s) is performing "
                                    "recovery, of which this client is not a "
@@ -288,7 +288,7 @@ static int client_common_fill_super(struct super_block *sb,
         data->ocd_brw_size = PTLRPC_MAX_BRW_PAGES << CFS_PAGE_SHIFT;
 
 
-        err = obd_connect(&osc_conn, obd, &sbi->ll_sb_uuid, data);
+        err = obd_connect(&osc_conn, obd, &sbi->ll_sb_uuid, data, NULL);
         if (err == -EBUSY) {
                 LCONSOLE_ERROR_MSG(0x150, "An OST (osc %s) is performing "
                                    "recovery, of which this client is not a "
@@ -878,7 +878,7 @@ static int old_lustre_process_log(struct super_block *sb, char *newprofile,
         /* If we don't have this then an ACL MDS will refuse the connection */
         ocd.ocd_connect_flags = OBD_CONNECT_ACL;
 
-        rc = obd_connect(&mdc_conn, obd, &mdc_uuid, &ocd);
+        rc = obd_connect(&mdc_conn, obd, &mdc_uuid, &ocd, NULL);
         if (rc) {
                 CERROR("cannot connect to %s: rc = %d\n", mdt, rc);
                 GOTO(out_cleanup, rc);

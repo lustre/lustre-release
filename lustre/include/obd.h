@@ -735,6 +735,8 @@ struct obd_device {
         cfs_waitq_t             obd_llog_waitq;
         struct list_head        obd_exports;
         int                     obd_num_exports;
+        struct list_head        obd_proc_nid_list;
+        spinlock_t              nid_lock;
         struct ldlm_namespace  *obd_namespace;
         struct ptlrpc_client    obd_ldlm_client; /* XXX OST/MDS only */
         /* a spinlock is OK for what we do now, may need a semaphore later */
@@ -787,12 +789,11 @@ struct obd_device {
         } u;
         /* Fields used by LProcFS */
         cfs_proc_dir_entry_t  *obd_proc_entry;
-        cfs_proc_dir_entry_t  *obd_proc_exports;
+        cfs_proc_dir_entry_t  *obd_proc_exports_entry;
         cfs_proc_dir_entry_t  *obd_svc_procroot;
         struct lprocfs_stats  *obd_stats;
         struct lprocfs_stats  *obd_svc_stats;
         unsigned int           obd_cntr_base;
-        struct semaphore       obd_proc_exp_sem;
         atomic_t               obd_evict_inprogress;
         cfs_waitq_t            obd_evict_inprogress_waitq;
 };
@@ -849,7 +850,8 @@ struct obd_ops {
          * granted by the target, which are guaranteed to be a subset of flags
          * asked for. If @ocd == NULL, use default parameters. */
         int (*o_connect)(struct lustre_handle *conn, struct obd_device *src,
-                         struct obd_uuid *cluuid, struct obd_connect_data *ocd);
+                         struct obd_uuid *cluuid, struct obd_connect_data *ocd,
+                         void *localdata);
         int (*o_reconnect)(struct obd_export *exp, struct obd_device *src,
                            struct obd_uuid *cluuid,
                            struct obd_connect_data *ocd);

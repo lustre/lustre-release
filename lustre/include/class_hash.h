@@ -93,6 +93,9 @@ int lustre_hash_delitem_by_key(struct lustre_class_hash_body *hash_body,
                                void *key);
 int lustre_hash_delitem(struct lustre_class_hash_body *hash_body, void *key, 
                         struct hlist_node *hash_item);
+void lustre_hash_bucket_iterate(struct lustre_class_hash_body *hash_body,
+                                void *key, hash_item_iterate_cb,
+                                void *data);
 void * lustre_hash_get_object_by_key(struct lustre_class_hash_body *hash_body,
                                       void *key);
 

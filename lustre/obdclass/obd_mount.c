@@ -707,7 +707,7 @@ static int lustre_start_mgc(struct super_block *sb)
         data->ocd_connect_flags = OBD_CONNECT_VERSION | OBD_CONNECT_AT;
         data->ocd_version = LUSTRE_VERSION_CODE;
         /* We connect to the MGS at setup, and don't disconnect until cleanup */
-        rc = obd_connect(&mgc_conn, obd, &(obd->obd_uuid), data);
+        rc = obd_connect(&mgc_conn, obd, &(obd->obd_uuid), data, NULL);
         OBD_FREE_PTR(data);
         if (rc) {
                 CERROR("connect failed %d\n", rc);

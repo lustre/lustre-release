@@ -343,7 +343,7 @@ int mds_lov_connect(struct obd_device *obd, char * lov_name)
 #endif
         data->ocd_version = LUSTRE_VERSION_CODE;
         /* NB: lov_connect() needs to fill in .ocd_index for each OST */
-        rc = obd_connect(&conn, mds->mds_osc_obd, &obd->obd_uuid, data);
+        rc = obd_connect(&conn, mds->mds_osc_obd, &obd->obd_uuid, data, NULL);
         OBD_FREE(data, sizeof(*data));
         if (rc) {
                 CERROR("MDS cannot connect to LOV %s (%d)\n", lov_name, rc);

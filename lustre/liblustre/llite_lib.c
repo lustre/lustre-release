@@ -159,7 +159,7 @@ int liblustre_process_log(struct config_llog_instance *cfg,
         ocd->ocd_connect_flags = OBD_CONNECT_VERSION | OBD_CONNECT_AT;
         ocd->ocd_version = LUSTRE_VERSION_CODE;
 
-        rc = obd_connect(&mgc_conn, obd, &mgc_uuid, ocd);
+        rc = obd_connect(&mgc_conn, obd, &mgc_uuid, ocd, NULL);
         if (rc) {
                 CERROR("cannot connect to %s at %s: rc = %d\n",
                        LUSTRE_MGS_OBDNAME, mgsnid, rc);

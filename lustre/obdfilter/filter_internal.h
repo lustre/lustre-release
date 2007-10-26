@@ -30,6 +30,7 @@
 #define GRANT_FOR_LLOG(obd) 16
 
 extern struct file_operations filter_per_export_stats_fops;
+extern struct file_operations filter_per_nid_stats_fops;
 
 /* Data stored per client in the last_rcvd file.  In le32 order. */
 struct filter_client_data {

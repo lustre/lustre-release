@@ -1941,7 +1941,7 @@ llu_fsswop_mount(const char *source,
         ocd.ocd_version = LUSTRE_VERSION_CODE;
 
         /* setup mdc */
-        err = obd_connect(&mdc_conn, obd, &sbi->ll_sb_uuid, &ocd);
+        err = obd_connect(&mdc_conn, obd, &sbi->ll_sb_uuid, &ocd, NULL);
         if (err) {
                 CERROR("cannot connect to %s: rc = %d\n", mdc, err);
                 GOTO(out_free, err);
@@ -1971,7 +1971,7 @@ llu_fsswop_mount(const char *source,
         ocd.ocd_connect_flags = OBD_CONNECT_SRVLOCK | OBD_CONNECT_REQPORTAL |
                 OBD_CONNECT_VERSION | OBD_CONNECT_TRUNCLOCK | OBD_CONNECT_AT;
         ocd.ocd_version = LUSTRE_VERSION_CODE;
-        err = obd_connect(&osc_conn, obd, &sbi->ll_sb_uuid, &ocd);
+        err = obd_connect(&osc_conn, obd, &sbi->ll_sb_uuid, &ocd, NULL);
         if (err) {
                 CERROR("cannot connect to %s: rc = %d\n", osc, err);
                 GOTO(out_mdc, err);

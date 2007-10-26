@@ -237,6 +237,9 @@ void filter_tally(struct obd_export *exp, struct page **pages, int nr_pages,
                               nr_pages);
         lprocfs_oh_tally_log2(&fed->fed_brw_stats.hist[BRW_R_PAGES + wr],
                               nr_pages);
+        if (exp->exp_nid_stats && exp->exp_nid_stats->nid_brw_stats)
+                lprocfs_oh_tally_log2(&exp->exp_nid_stats->nid_brw_stats->hist[BRW_W_PAGES + wr],
+                                      nr_pages);
 
         while (nr_pages-- > 0) {
                 if (last_page && (*pages)->index != (last_page->index + 1))
@@ -258,6 +261,13 @@ void filter_tally(struct obd_export *exp, struct page **pages, int nr_pages,
                          discont_blocks);
         lprocfs_oh_tally(&fed->fed_brw_stats.hist[BRW_R_DISCONT_BLOCKS + wr],
                          discont_blocks);
+
+        if (exp->exp_nid_stats && exp->exp_nid_stats->nid_brw_stats) {
+                lprocfs_oh_tally_log2(&exp->exp_nid_stats->nid_brw_stats->hist[BRW_W_DISCONT_PAGES + wr],
+                                      discont_pages);
+                lprocfs_oh_tally_log2(&exp->exp_nid_stats->nid_brw_stats->hist[BRW_W_DISCONT_BLOCKS + wr],
+                                      discont_blocks);
+        }
 }
 
 #define pct(a,b) (b ? a * 100 / b : 0)
@@ -344,6 +354,8 @@ static void brw_stats_show(struct seq_file *seq, struct brw_stats *brw_stats)
 #endif
 }
 
+#undef pct
+
 static int filter_brw_stats_seq_show(struct seq_file *seq, void *v)
 {
         struct obd_device *dev = seq->private;
@@ -401,4 +413,32 @@ static ssize_t filter_per_export_stats_seq_write(struct file *file,
 LPROC_SEQ_FOPS(filter_per_export_stats);
 
 LPROCFS_INIT_VARS(filter, lprocfs_module_vars, lprocfs_obd_vars)
+
+static int filter_per_nid_stats_seq_show(struct seq_file *seq, void *v)
+{
+        nid_stat_t *tmp = seq->private;
+
+        if (tmp->nid_brw_stats)
+                brw_stats_show(seq, tmp->nid_brw_stats);
+
+        return 0;
+}
+
+static ssize_t filter_per_nid_stats_seq_write(struct file *file,
+                                              const char *buf, size_t len,
+                                              loff_t *off)
+{
+        struct seq_file *seq = file->private_data;
+        nid_stat_t *tmp = seq->private;
+        int i;
+
+        if (tmp->nid_brw_stats)
+                for (i = 0; i < BRW_LAST; i++)
+                        lprocfs_oh_clear(&tmp->nid_brw_stats->hist[i]);
+
+        return len;
+}
+
+LPROC_SEQ_FOPS(filter_per_nid_stats);
+
 #endif /* LPROCFS */

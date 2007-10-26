@@ -322,11 +322,13 @@ static int mds_reconnect(struct obd_export *exp, struct obd_device *obd,
  * on the server, etc.
  */
 static int mds_connect(struct lustre_handle *conn, struct obd_device *obd,
-                       struct obd_uuid *cluuid, struct obd_connect_data *data)
+                       struct obd_uuid *cluuid, struct obd_connect_data *data,
+                       void *localdata)
 {
         struct obd_export *exp;
         struct mds_export_data *med;
         struct mds_client_data *mcd = NULL;
+        lnet_nid_t *client_nid = (lnet_nid_t *)localdata;
         int rc, abort_recovery;
         ENTRY;
 
@@ -368,7 +370,7 @@ static int mds_connect(struct lustre_handle *conn, struct obd_device *obd,
         memcpy(mcd->mcd_uuid, cluuid, sizeof(mcd->mcd_uuid));
         med->med_mcd = mcd;
 
-        rc = mds_client_add(obd, exp, -1);
+        rc = mds_client_add(obd, exp, -1, *client_nid);
         GOTO(out, rc);
 
 out:
@@ -1884,6 +1886,38 @@ static void fsoptions_to_mds_flags(struct mds_obd *mds, char *options)
         }
 }
 
+static int mds_nid_stats_clear_read(char *page, char **start, off_t off,
+                                    int count, int *eof,  void *data)
+{
+        *eof = 1;
+        return snprintf(page, count, "%s\n",
+                        "Write into this file to clear all nid stats and "
+                        "stale nid entries");
+}
+
+static int mds_nid_stats_clear_write(struct file *file, const char *buffer,
+                                     unsigned long count, void *data)
+{
+        struct obd_device *obd = (struct obd_device *)data;
+        struct list_head *nids= &obd->obd_proc_nid_list;
+        nid_stat_t *client_stat = NULL, *nxt;
+
+        spin_lock(&obd->nid_lock);
+
+        list_for_each_entry_safe (client_stat, nxt, nids, nid_chain) {
+                if (!client_stat->nid_exp_ref_count)
+                        lprocfs_free_client_stats(client_stat);
+                else if (client_stat->nid_stats) {
+                        lprocfs_clear_stats(client_stat->nid_stats);
+                }
+        }
+
+        spin_unlock(&obd->nid_lock);
+
+        return count;
+}
+
+
 /* mount the file system (secretly).  lustre_cfg parameters are:
  * 1 = device
  * 2 = fstype
@@ -1957,8 +1991,8 @@ static int mds_setup(struct obd_device *obd, obd_count len, void *buf)
             lprocfs_alloc_obd_stats(obd, LPROC_MDS_LAST) == 0) {
                 /* Init private stats here */
                 mds_stats_counter_init(obd->obd_stats);
-                obd->obd_proc_exports = proc_mkdir("exports",
-                                                   obd->obd_proc_entry);
+                obd->obd_proc_exports_entry = proc_mkdir("exports",
+                                                         obd->obd_proc_entry);
         }
 
         rc = mds_fs_setup(obd, mnt);
@@ -1967,6 +2001,11 @@ static int mds_setup(struct obd_device *obd, obd_count len, void *buf)
                        obd->obd_name, rc);
                 GOTO(err_ns, rc);
         }
+
+        if (obd->obd_proc_exports_entry)
+                lprocfs_add_simple(obd->obd_proc_exports_entry,
+                                   "clear", mds_nid_stats_clear_read,
+                                   mds_nid_stats_clear_write, obd);
 
         if (lcfg->lcfg_bufcount >= 4 && LUSTRE_CFG_BUFLEN(lcfg, 3) > 0) {
                 class_uuid_t uuid;
@@ -2234,6 +2273,8 @@ static int mds_cleanup(struct obd_device *obd)
                    we just need to drop our ref */
                 class_export_put(mds->mds_osc_exp);
 
+        lprocfs_free_per_client_stats(obd);
+        remove_proc_entry("clear", obd->obd_proc_exports_entry);
         lprocfs_obd_cleanup(obd);
         lprocfs_free_obd_stats(obd);
 

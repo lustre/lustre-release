@@ -286,6 +286,35 @@ int lustre_hash_delitem(struct lustre_class_hash_body *hash_body,
 }
 EXPORT_SYMBOL(lustre_hash_delitem);
 
+void lustre_hash_bucket_iterate(struct lustre_class_hash_body *hash_body,
+                                void *key, hash_item_iterate_cb func, void *data)
+{
+        int hashent, find = 0;
+        struct lustre_hash_bucket *bucket = NULL;
+        struct hlist_node *hash_item_node = NULL;
+        struct lustre_hash_operations *hop = hash_body->lchb_hash_operations;
+        struct obd_export *tmp = NULL;
+
+        ENTRY;
+
+        hashent = hop->lustre_hashfn(hash_body, key);
+        bucket = &hash_body->lchb_hash_tables[hashent];
+
+        spin_lock(&bucket->lhb_lock);
+        hlist_for_each(hash_item_node, &(bucket->lhb_head)) {
+                find = hop->lustre_hash_key_compare(key, hash_item_node);
+                if (find) {
+                        tmp = (struct obd_export *)hop->lustre_hash_object_refcount_get(
+                                                                        hash_item_node);
+                        ((struct exp_uuid_cb_data *)data)->exp = tmp;
+                        func(data);
+                        hop->lustre_hash_object_refcount_put(hash_item_node);
+                }
+        }
+        spin_unlock(&bucket->lhb_lock);
+}
+EXPORT_SYMBOL(lustre_hash_bucket_iterate);
+
 void * lustre_hash_get_object_by_key(struct lustre_class_hash_body *hash_body,
                                      void *key)
 {

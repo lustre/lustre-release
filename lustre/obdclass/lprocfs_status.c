@@ -735,13 +735,50 @@ int lprocfs_obd_cleanup(struct obd_device *obd)
 {
         if (!obd) 
                 return -EINVAL;
-        if (obd->obd_proc_exports) {
+        if (obd->obd_proc_exports_entry) {
                 /* Should be no exports left */
-                LASSERT(obd->obd_proc_exports->subdir == NULL);
-                lprocfs_remove(&obd->obd_proc_exports);
+                LASSERT(obd->obd_proc_exports_entry->subdir == NULL);
+                lprocfs_remove(&obd->obd_proc_exports_entry);
         }
         lprocfs_remove(&obd->obd_proc_entry);
         return 0;
+}
+
+void lprocfs_free_client_stats(nid_stat_t *client_stat)
+{
+        LASSERT(client_stat->nid_exp_ref_count == 0);
+
+        list_del(&client_stat->nid_chain);
+
+        if (client_stat->nid_proc)
+                lprocfs_remove(&client_stat->nid_proc);
+
+        if (client_stat->nid_stats)
+                lprocfs_free_stats(&client_stat->nid_stats);
+
+        if (client_stat->nid_brw_stats)
+                OBD_FREE(client_stat->nid_brw_stats, sizeof(struct brw_stats));
+
+        OBD_FREE(client_stat, sizeof(struct nid_stat));
+        return;
+
+}
+
+void lprocfs_free_per_client_stats(struct obd_device *obd)
+{
+
+        struct list_head *nids= &obd->obd_proc_nid_list;
+        nid_stat_t *client_stat = NULL, *nxt;
+        ENTRY;
+
+        spin_lock(&obd->nid_lock);
+
+        list_for_each_entry_safe (client_stat, nxt, nids, nid_chain)
+                lprocfs_free_client_stats(client_stat);
+
+        spin_unlock(&obd->nid_lock);
+        return;
+
 }
 
 struct lprocfs_stats *lprocfs_alloc_stats(unsigned int num,
@@ -1137,93 +1174,110 @@ int lprocfs_exp_rd_nid(char *page, char **start, off_t off, int count,
         return snprintf(page, count, "%s\n", obd_export_nid2str(exp));
 }
 
-int lprocfs_exp_rd_uuid(char *page, char **start, off_t off, int count,
-                         int *eof,  void *data)
+void lprocfs_exp_print_uuid(void *cb_data)
 {
-        struct obd_export *exp = (struct obd_export*)data;
-        LASSERT(exp != NULL);
-        *eof = 1;
-        return snprintf(page, count, "%s\n", 
-                        obd_uuid2str(&exp->exp_client_uuid));
+        struct exp_uuid_cb_data *data = (struct exp_rd_uuid_cb_data *)cb_data;
+
+        if (data->exp->exp_nid_stats)
+                *data->len += snprintf((data->page + *data->len),
+                                       data->count, "%s\n",
+                                       obd_uuid2str(&data->exp->exp_client_uuid));
 }
 
-int lprocfs_exp_setup(struct obd_export *exp)
+int lprocfs_exp_rd_uuid(char *page, char **start, off_t off, int count,
+                        int *eof,  void *data)
 {
-        char name[sizeof (exp->exp_client_uuid.uuid) + 3];
-        int i = 1, rc;
+        struct nid_stat *stats = (struct nid_stat *)data;
+        struct exp_uuid_cb_data cb_data;
+        struct obd_device *obd = stats->nid_obd;
+        int len = 0;
+
+        *eof = 1;
+        page[0] = '\0';
+        LASSERT(obd != NULL);
+
+        cb_data.page = page;
+        cb_data.count = count;
+        cb_data.eof = eof;
+        cb_data.len = &len;
+        cb_data.exp = NULL;
+        lustre_hash_bucket_iterate(obd->obd_nid_hash_body,
+                                   &stats->nid, lprocfs_exp_print_uuid,
+                                   &cb_data);
+        return (*cb_data.len);
+}
+
+int lprocfs_exp_setup(struct obd_export *exp, lnet_nid_t nid, int *newnid)
+{
+        int rc = 0;
+        struct nid_stat *tmp = NULL;
+        struct obd_device *obd = NULL;
+        struct obd_export *export = NULL;
         ENTRY;
 
-        if (!exp || !exp->exp_obd || !exp->exp_obd->obd_proc_exports)
+        if (exp->exp_obd)
+                obd = exp->exp_obd;
+
+        if (!exp || !exp->exp_obd || !exp->exp_obd->obd_proc_exports_entry ||
+            !obd->obd_nid_hash_body)
                 RETURN(-EINVAL);
 
-        mutex_down(&exp->exp_obd->obd_proc_exp_sem);
-        sprintf(name, "%s", (char *)exp->exp_client_uuid.uuid);
-        while (lprocfs_srch(exp->exp_obd->obd_proc_exports, name)) {
-                /* We might add a new export before deleting the old one during 
-                   an eviction (recovery-small 19a). Suckage. We
-                   could block, or come up with a new name, or just give up. */
-                if (++i > 9) 
-                        GOTO(out, rc = -EEXIST);
-                sprintf(name, "%s:%d", (char *)exp->exp_client_uuid.uuid, i);
+        *newnid = 0;
+
+        if (!nid)
+                RETURN(rc);
+
+        export = lustre_hash_get_object_by_key(obd->obd_nid_hash_body,
+                                               &nid);
+        if (export) {
+                exp->exp_nid_stats = export->exp_nid_stats;
+                *newnid = 0;
+                class_export_put(export);
+        } else {
+                OBD_ALLOC(tmp, sizeof(struct nid_stat));
+                if (tmp == NULL)
+                        GOTO(out, rc = -ENOMEM);
+
+                tmp->nid = nid;
+                tmp->nid_obd = exp->exp_obd;
+                tmp->nid_exp_ref_count = 0;
+                tmp->nid_proc = proc_mkdir(libcfs_nid2str(nid),
+                                           exp->exp_obd->obd_proc_exports_entry);
+                if (!tmp->nid_proc) {
+                        CERROR("Error making export directory for"
+                               " nid %s\n", libcfs_nid2str(nid));
+                        OBD_FREE(tmp, sizeof(struct nid_stat));
+                        GOTO(out, rc = -ENOMEM);
+                }
+
+                rc = lprocfs_add_simple(tmp->nid_proc, "uuid",
+                                        lprocfs_exp_rd_uuid, NULL, tmp);
+                if (rc)
+                        CERROR("Error adding the uuid file\n");
+
+                exp->exp_nid_stats = tmp;
+                *newnid = 1;
+
+                spin_lock(&obd->nid_lock);
+
+                list_add_tail(&tmp->nid_chain,
+                              &exp->exp_obd->obd_proc_nid_list);
+
+                spin_unlock(&obd->nid_lock);
+
         }
-
-        /* Create a proc entry for this export */
-        exp->exp_proc = proc_mkdir(name, exp->exp_obd->obd_proc_exports);
-        if (!exp->exp_proc) {
-                CERROR("Error making export directory for %s\n", name);
-                GOTO(out, rc = -ENOMEM);
-        }
-
-        /* Always add nid and uuid */
-        rc = lprocfs_add_simple(exp->exp_proc, "nid",
-                                lprocfs_exp_rd_nid, NULL, exp);
-        if (rc)
-                GOTO(out, rc);
-        rc = lprocfs_add_simple(exp->exp_proc, "uuid",
-                                lprocfs_exp_rd_uuid, NULL, exp);
-        if (rc)
-                GOTO(out, rc);
-
-        /* Always add ldlm stats */
-        exp->exp_ldlm_stats = lprocfs_alloc_stats(LDLM_LAST_OPC 
-                                                  - LDLM_FIRST_OPC, 0);
-        if (exp->exp_ldlm_stats == NULL) {
-                lprocfs_remove(&exp->exp_proc);
-                GOTO(out, rc = -ENOMEM);
-        }
-
-        lprocfs_counter_init(exp->exp_ldlm_stats, 
-                             LDLM_ENQUEUE - LDLM_FIRST_OPC,
-                             0, "ldlm_enqueue", "reqs");
-        lprocfs_counter_init(exp->exp_ldlm_stats, 
-                             LDLM_CONVERT - LDLM_FIRST_OPC,
-                             0, "ldlm_convert", "reqs");
-        lprocfs_counter_init(exp->exp_ldlm_stats, 
-                             LDLM_CANCEL - LDLM_FIRST_OPC,
-                             0, "ldlm_cancel", "reqs");
-        lprocfs_counter_init(exp->exp_ldlm_stats, 
-                             LDLM_BL_CALLBACK - LDLM_FIRST_OPC,
-                             0, "ldlm_bl_callback", "reqs");
-        lprocfs_counter_init(exp->exp_ldlm_stats, 
-                             LDLM_CP_CALLBACK - LDLM_FIRST_OPC,
-                             0, "ldlm_cp_callback", "reqs");
-        lprocfs_counter_init(exp->exp_ldlm_stats, 
-                             LDLM_GL_CALLBACK - LDLM_FIRST_OPC,
-                             0, "ldlm_gl_callback", "reqs");
-        lprocfs_register_stats(exp->exp_proc, "ldlm_stats",
-                               exp->exp_ldlm_stats);
+        if (exp->exp_nid_stats)
+                exp->exp_nid_stats->nid_exp_ref_count++;
 out:
-        mutex_up(&exp->exp_obd->obd_proc_exp_sem);
         RETURN(rc);
 }
 
 int lprocfs_exp_cleanup(struct obd_export *exp)
 {
-        mutex_down(&exp->exp_obd->obd_proc_exp_sem);
-        lprocfs_remove(&exp->exp_proc);
-        lprocfs_free_stats(&exp->exp_ops_stats);
-        lprocfs_free_stats(&exp->exp_ldlm_stats);
-        mutex_up(&exp->exp_obd->obd_proc_exp_sem);
+        if (exp->exp_nid_stats) {
+                exp->exp_nid_stats->nid_exp_ref_count--;
+                exp->exp_nid_stats = NULL;
+        }
         return 0;
 }
 
@@ -1563,6 +1617,9 @@ EXPORT_SYMBOL(lprocfs_remove);
 EXPORT_SYMBOL(lprocfs_add_vars);
 EXPORT_SYMBOL(lprocfs_obd_setup);
 EXPORT_SYMBOL(lprocfs_obd_cleanup);
+EXPORT_SYMBOL(lprocfs_add_simple);
+EXPORT_SYMBOL(lprocfs_free_client_stats);
+EXPORT_SYMBOL(lprocfs_free_per_client_stats);
 EXPORT_SYMBOL(lprocfs_alloc_stats);
 EXPORT_SYMBOL(lprocfs_free_stats);
 EXPORT_SYMBOL(lprocfs_clear_stats);

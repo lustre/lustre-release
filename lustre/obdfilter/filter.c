@@ -158,14 +158,35 @@ static void init_brw_stats(struct brw_stats *brw_stats)
                 spin_lock_init(&brw_stats->hist[i].oh_lock);
 }
 
+static int lprocfs_init_rw_stats(struct obd_device *obd,
+                                 struct lprocfs_stats **stats)
+{
+        int num_stats;
+
+        num_stats = (sizeof(*obd->obd_type->typ_ops) / sizeof(void *)) +
+                                                        LPROC_FILTER_LAST - 1;
+        *stats = lprocfs_alloc_stats(num_stats, 0);
+        if (*stats == NULL)
+                return -ENOMEM;
+
+        lprocfs_init_ops_stats(LPROC_FILTER_LAST, *stats);
+        lprocfs_counter_init(*stats, LPROC_FILTER_READ_BYTES,
+                             LPROCFS_CNTR_AVGMINMAX, "read_bytes", "bytes");
+        lprocfs_counter_init(*stats, LPROC_FILTER_WRITE_BYTES,
+                             LPROCFS_CNTR_AVGMINMAX, "write_bytes", "bytes");
+
+        return(0);
+}
+
 /* brw_stats are 2128, ops are 3916, ldlm are 204, so 6248 bytes per client,
    plus the procfs overhead :( */
 static int filter_export_stats_init(struct obd_device *obd,
-                                    struct obd_export *exp)
+                                    struct obd_export *exp,
+                                    lnet_nid_t client_nid)
 {
         struct filter_export_data *fed = &exp->exp_filter_data;
         struct proc_dir_entry *brw_entry;
-        int rc, num_stats;
+        int rc, newnid = 0;
         ENTRY;
 
         init_brw_stats(&fed->fed_brw_stats);
@@ -173,31 +194,38 @@ static int filter_export_stats_init(struct obd_device *obd,
         if (obd_uuid_equals(&exp->exp_client_uuid, &obd->obd_uuid))
                 /* Self-export gets no proc entry */
                 RETURN(0);
-
-        rc = lprocfs_exp_setup(exp);
+        rc = lprocfs_exp_setup(exp, client_nid, &newnid);
         if (rc)
                 RETURN(rc);
 
-        /* Create a per export proc entry for brw_stats */
-        brw_entry = create_proc_entry("brw_stats", 0644, exp->exp_proc);
-        if (brw_entry == NULL)
-               RETURN(-ENOMEM);
-        brw_entry->proc_fops = &filter_per_export_stats_fops;
-        brw_entry->data = fed;
+        if (client_nid && newnid) {
+                struct nid_stat *tmp = exp->exp_nid_stats;
+                LASSERT(tmp != NULL);
 
-        /* Create a per export proc entry for ops stats */
-        num_stats = (sizeof(*obd->obd_type->typ_ops) / sizeof(void *)) +
-                     LPROC_FILTER_LAST - 1;
-        exp->exp_ops_stats = lprocfs_alloc_stats(num_stats,
-                                                 LPROCFS_STATS_FLAG_NOPERCPU);
-        if (exp->exp_ops_stats == NULL)
-              RETURN(-ENOMEM);
-        lprocfs_init_ops_stats(LPROC_FILTER_LAST, exp->exp_ops_stats);
-        lprocfs_counter_init(exp->exp_ops_stats, LPROC_FILTER_READ_BYTES,
-                             LPROCFS_CNTR_AVGMINMAX, "read_bytes", "bytes");
-        lprocfs_counter_init(exp->exp_ops_stats, LPROC_FILTER_WRITE_BYTES,
-                             LPROCFS_CNTR_AVGMINMAX, "write_bytes", "bytes");
-        lprocfs_register_stats(exp->exp_proc, "stats", exp->exp_ops_stats);
+                OBD_ALLOC(tmp->nid_brw_stats, sizeof(struct brw_stats));
+                if (tmp->nid_brw_stats == NULL)
+                        RETURN(-ENOMEM);
+
+                init_brw_stats(tmp->nid_brw_stats);
+
+                brw_entry = create_proc_entry("brw_stats", 0644,
+                                              exp->exp_nid_stats->nid_proc);
+                if (brw_entry == NULL)
+                       RETURN(-ENOMEM);
+
+                brw_entry->proc_fops = &filter_per_nid_stats_fops;
+                brw_entry->data = exp->exp_nid_stats;
+
+                rc = lprocfs_init_rw_stats(obd, &exp->exp_nid_stats->nid_stats);
+                if (rc)
+                        RETURN(rc);
+
+                rc = lprocfs_register_stats(tmp->nid_proc, "stats",
+                                            tmp->nid_stats);
+                if (rc)
+                        RETURN(rc);
+        }
+
         RETURN(0);
 }
 
@@ -206,7 +234,7 @@ static int filter_export_stats_init(struct obd_device *obd,
  * Otherwise, we have just read the data from the last_rcvd file and
  * we know its offset. */
 static int filter_client_add(struct obd_device *obd, struct obd_export *exp,
-                             int cl_idx)
+                             int cl_idx, lnet_nid_t client_nid)
 {
         struct filter_obd *filter = &obd->u.filter;
         struct filter_export_data *fed = &exp->exp_filter_data;
@@ -768,8 +796,8 @@ static int filter_init_server_data(struct obd_device *obd, struct file * filp)
                 } else {
                         fed = &exp->exp_filter_data;
                         fed->fed_fcd = fcd;
-                        filter_export_stats_init(obd, exp);
-                        rc = filter_client_add(obd, exp, cl_idx);
+                        filter_export_stats_init(obd, exp, 0);
+                        rc = filter_client_add(obd, exp, cl_idx, 0);
                         /* can't fail for existing client */
                         LASSERTF(rc == 0, "rc = %d\n", rc);
 
@@ -1764,6 +1792,42 @@ err_mntput:
         obd->u.obt.obt_sb = 0;
         return rc;
 }
+static int filter_nid_stats_clear_read(char *page, char **start, off_t off,
+                                       int count, int *eof,  void *data)
+{
+        *eof = 1;
+        return snprintf(page, count, "%s\n",
+                        "Write into this file to clear all nid stats and "
+                        "stale nid entries");
+}
+
+static int filter_nid_stats_clear_write(struct file *file, const char *buffer,
+                                        unsigned long count, void *data)
+{
+        struct obd_device *obd = (struct obd_device *)data;
+        struct list_head *nids = &obd->obd_proc_nid_list;
+        nid_stat_t *client_stat = NULL, *nxt;
+        int i;
+
+        spin_lock(&obd->nid_lock);
+
+        list_for_each_entry_safe (client_stat, nxt, nids, nid_chain) {
+                if (!client_stat->nid_exp_ref_count) {
+                        lprocfs_free_client_stats(client_stat);
+                } else {
+                        if (client_stat->nid_stats)
+                                lprocfs_clear_stats(client_stat->nid_stats);
+                        if (client_stat->nid_brw_stats)
+                                for (i = 0; i < BRW_LAST; i++)
+                                        lprocfs_oh_clear(
+                                        &client_stat->nid_brw_stats->hist[i]);
+                }
+        }
+
+        spin_unlock(&obd->nid_lock);
+
+        return count;
+}
 
 static int filter_setup(struct obd_device *obd, obd_count len, void *buf)
 {
@@ -1796,9 +1860,13 @@ static int filter_setup(struct obd_device *obd, obd_count len, void *buf)
                                      LPROCFS_CNTR_AVGMINMAX,
                                      "write_bytes", "bytes");
                 lproc_filter_attach_seqstat(obd);
-                obd->obd_proc_exports = proc_mkdir("exports",
-                                                   obd->obd_proc_entry);
+                obd->obd_proc_exports_entry = proc_mkdir("exports",
+                                                         obd->obd_proc_entry);
         }
+        if (obd->obd_proc_exports_entry)
+                lprocfs_add_simple(obd->obd_proc_exports_entry, "clear",
+                                   filter_nid_stats_clear_read,
+                                   filter_nid_stats_clear_write, obd);
 
         memcpy((void *)page, lustre_cfg_buf(lcfg, 4),
                LUSTRE_CFG_BUFLEN(lcfg, 4));
@@ -1935,6 +2003,8 @@ static int filter_cleanup(struct obd_device *obd)
                 }
         }
 
+        lprocfs_free_per_client_stats(obd);
+        remove_proc_entry("clear", obd->obd_proc_exports_entry);
         lprocfs_obd_cleanup(obd);
         lprocfs_free_obd_stats(obd);
 
@@ -2054,11 +2124,13 @@ static int filter_reconnect(struct obd_export *exp, struct obd_device *obd,
 /* nearly identical to mds_connect */
 static int filter_connect(struct lustre_handle *conn, struct obd_device *obd,
                           struct obd_uuid *cluuid,
-                          struct obd_connect_data *data)
+                          struct obd_connect_data *data,
+                          void *localdata)
 {
         struct obd_export *exp;
         struct filter_export_data *fed;
         struct filter_client_data *fcd = NULL;
+        lnet_nid_t *client_nid = (lnet_nid_t *)localdata;
         int rc;
         ENTRY;
 
@@ -2077,7 +2149,7 @@ static int filter_connect(struct lustre_handle *conn, struct obd_device *obd,
         if (rc)
                 GOTO(cleanup, rc);
 
-        filter_export_stats_init(obd, exp);
+        filter_export_stats_init(obd, exp, *client_nid);
 
         if (!obd->obd_replayable)
                 GOTO(cleanup, rc = 0);
@@ -2091,7 +2163,7 @@ static int filter_connect(struct lustre_handle *conn, struct obd_device *obd,
         memcpy(fcd->fcd_uuid, cluuid, sizeof(fcd->fcd_uuid));
         fed->fed_fcd = fcd;
 
-        rc = filter_client_add(obd, exp, -1);
+        rc = filter_client_add(obd, exp, -1, *client_nid);
 
         GOTO(cleanup, rc);
 
