@@ -561,7 +561,7 @@ unpack_linux()
 patch_linux()
 {
     [ "$SERIES" ] || return 0
-    FULL_PATCH="$PWD/lustre-kernel-${TARGET}-${EXTRA_VERSION}.patch"
+    FULL_PATCH="$PWD/lustre-kernel-${TARGET}${EXTRA_VERSION_DELIMITER}${EXTRA_VERSION}.patch"
     [ -f "$FULL_PATCH" ] && rm -f "$FULL_PATCH"
     pushd linux >/dev/null
     for series in $SERIES ; do
@@ -628,6 +628,7 @@ prep_kernel_build()
         -e "s^@ENABLE_INIT_SCRIPTS@^$ENABLE_INIT_SCRIPTS^g" \
         -e "s^@JENSEN_ARCHS@^$BOOT_ARCHS^g" \
         -e "s^@KERNEL_EXTRA_VERSION@^$EXTRA_VERSION^g" \
+        -e "s^@KERNEL_EXTRA_VERSION_DELIMITER@^$EXTRA_VERSION_DELIMITER^g" \
         -e "s^@KERNEL_RELEASE@^${EXTRA_VERSION//-/_}^g" \
         -e "s^@KERNEL_SOURCE@^$KERNEL^g" \
         -e "s^@KERNEL_VERSION@^$VERSION^g" \
@@ -1523,6 +1524,7 @@ check_options
 unpack_lustre
 
 load_target
+EXTRA_VERSION_DELIMITER=${EXTRA_VERSION_DELIMITER:-"-"}
 
 build_success=false
 if $PATCHLESS; then

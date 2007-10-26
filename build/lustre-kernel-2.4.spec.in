@@ -10,6 +10,7 @@ Summary: The Linux kernel (the core of the Linux operating system)
 #
 %define kversion @KERNEL_VERSION@
 %define kextraver @KERNEL_EXTRA_VERSION@
+%define kextraverdelim @KERNEL_EXTRA_VERSION_DELIMITER@
 %define release @KERNEL_RELEASE@
 # /usr/src/%{kslnk} -> /usr/src/linux-%{KVERREL}
 %define kslnk linux-2.4
@@ -149,7 +150,7 @@ Second, per-architecture exclusions (ifarch)
 Name: kernel-lustre
 Version: %{kversion}
 Release: %{release}%{?targetboard:%{targetboard}}%{?debuglevel_1:.dbg}
-%define KVERREL %{PACKAGE_VERSION}-%{kextraver}%{?targetboard:%{targetboard}}%{?debuglevel_1:.dbg}
+%define KVERREL %{PACKAGE_VERSION}%{kextraverdelim}%{kextraver}%{?targetboard:%{targetboard}}%{?debuglevel_1:.dbg}
 License: GPL
 Group: System Environment/Kernel
 ExclusiveArch: %{all_x86} x86_64 ia64 ppc
@@ -631,7 +632,7 @@ BuildObj ()
 		flavext="-$flavor"
 		flavtgt="$flavor"
 	fi
-        perl -p -i -e "s/^EXTRAVERSION.*/EXTRAVERSION = -%{kextraver}${flavtgt}/" $RPM_BUILD_ROOT/usr/src/linux-%{KVERREL}/Makefile
+        perl -p -i -e "s/^EXTRAVERSION.*/EXTRAVERSION = %{kextraverdelim}%{kextraver}${flavtgt}/" $RPM_BUILD_ROOT/usr/src/linux-%{KVERREL}/Makefile
 	c="$RPM_BUILD_ROOT/usr/src/linux-%{KVERREL}"
 	o="${c}-obj/%{_target_cpu}/$flavor"
 	mkdir -p $o
@@ -717,7 +718,7 @@ if [ "%{buildbase}" -ne 0 ] ; then
         if [ "%{buildup}" -ne 0 ] ; then
 	    BuildObj up
         fi
-        perl -p -i -e "s/^EXTRAVERSION.*/EXTRAVERSION = -%{kextraver}custom/" $RPM_BUILD_ROOT/usr/src/linux-%{KVERREL}/Makefile
+        perl -p -i -e "s/^EXTRAVERSION.*/EXTRAVERSION = %{kextraverdelim}%{kextraver}custom/" $RPM_BUILD_ROOT/usr/src/linux-%{KVERREL}/Makefile
 	# Remove $RPM_BUILD_ROOT prefix from symlinks.
 	for link in $(find $objdir -type l); do
 	    target=$(readlink $link)
@@ -725,7 +726,7 @@ if [ "%{buildbase}" -ne 0 ] ; then
 	    ln -s ${target/$RPM_BUILD_ROOT/} $link
 	done
     else # 2.4 rh-style
-        perl -p -i -e "s/^EXTRAVERSION.*/EXTRAVERSION = -%{kextraver}custom/" $RPM_BUILD_ROOT/usr/src/linux-%{KVERREL}/Makefile
+        perl -p -i -e "s/^EXTRAVERSION.*/EXTRAVERSION = %{kextraverdelim}%{kextraver}custom/" $RPM_BUILD_ROOT/usr/src/linux-%{KVERREL}/Makefile
         # get the one from the build we just completed as it might have picked
         # up new options
         #cp ../lustre/kernel_patches/kernel_configs/kernel-%{kversion}-@LUSTRE_TARGET@-%{_target_cpu}%{dashtargetboard}.config $RPM_BUILD_ROOT/usr/src/linux-%{KVERREL}/.config
