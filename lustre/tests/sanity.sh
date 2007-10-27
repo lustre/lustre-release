@@ -132,7 +132,7 @@ else
 	[ $RUNAS_ID -eq 0 ] && error "\$RUNAS_ID set to 0, but \$UID is also 0!"
 fi
 
-$RUNAS ls $DIR >/dev/null || error "uid $RUNAS_ID doesn't exist on MDS!"
+check_runas_id
 
 build_test_filter
 
@@ -2243,7 +2243,7 @@ test_54e() {
 	check_kernel_version 46 || return 0
 	f="$DIR/f54e"
 	string="aaaaaa"
-	mknod $f c 4 0
+	mknod $f c 5 0
 	echo $string > $f || error
 }
 run_test 54e "console/tty device works in lustre ======================"
