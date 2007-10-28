@@ -1113,6 +1113,7 @@ void ptlrpc_import_setasync(struct obd_import *imp, int count)
 
 
 /* Adaptive Timeout utils */
+extern unsigned int at_min, at_max, at_history;
 
 /* Bin into timeslices using AT_BINS bins.
    This gives us a max of the last binlimit*AT_BINS secs without the storage,
@@ -1122,7 +1123,7 @@ int at_add(struct adaptive_timeout *at, unsigned int val)
 {
         unsigned int old = at->at_current;
         time_t now = cfs_time_current_sec();
-        time_t binlimit = max_t(time_t, adaptive_timeout_history / AT_BINS, 1);
+        time_t binlimit = max_t(time_t, at_history / AT_BINS, 1);
 
         LASSERT(at);
 #if 0
@@ -1177,10 +1178,14 @@ int at_add(struct adaptive_timeout *at, unsigned int val)
                    for proc only */
                 at->at_current = val;
 
+        if (at_max > 0)
+                at->at_current =  min(at->at_current, at_max);
+        at->at_current =  max(at->at_current, at_min);
+
 #if 0
         if (at->at_current != old)
-                CDEBUG(D_ADAPTTO, "AT change: old=%u new=%u delta=%d (val=%u) "
-                       "hist %u %u %u %u\n",
+                CDEBUG(D_ADAPTTO, "AT %p change: old=%u new=%u delta=%d "
+                       "(val=%u) hist %u %u %u %u\n", at,
                        old, at->at_current, at->at_current - old, val,
                        at->at_hist[0], at->at_hist[1], at->at_hist[2],
                        at->at_hist[3]);
@@ -1226,25 +1231,5 @@ int import_at_get_index(struct obd_import *imp, int portal)
 out:
         spin_unlock(&imp->imp_lock);
         return i;
-}
-
-/* Get total expected lock callback time (net + service).
-   Since any early reply will only affect the RPC wait time, and not
-   any local lock timer we set based on the return value here,
-   we should be conservative. */
-int import_at_get_ldlm(struct obd_import *imp) 
-{
-        int idx, tot;
-        
-        if (!imp || !imp->imp_client || AT_OFF)
-                return obd_timeout;
-        
-        idx = import_at_get_index(imp, imp->imp_client->cli_request_portal);
-        tot = at_get(&imp->imp_at.iat_net_latency) +
-                at_get(&imp->imp_at.iat_service_estimate[idx]);
-
-        /* add an arbitrary minimum: 150% + 10 sec */
-        tot += (tot >> 1) + 10;
-        return tot;
 }
 

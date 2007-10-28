@@ -323,6 +323,8 @@ struct ldlm_namespace *ldlm_namespace_new(char *name, ldlm_side_t client,
                 GOTO(out_proc, rc);
         }
 
+        at_init(&ns->ns_at_estimate, ldlm_enqueue_min, 0);
+
         mutex_down(ldlm_namespace_lock(client));
         list_add(&ns->ns_list_chain, ldlm_namespace_list(client));
         atomic_inc(ldlm_namespace_nr(client));

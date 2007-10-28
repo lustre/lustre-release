@@ -197,8 +197,8 @@ run_test 16 "timeout bulk put, don't evict client (2732)"
 
 test_17() {
     # With adaptive timeouts, bulk_get won't expire until adaptive_timeout_max
-    OST_AT_MAX=$(do_facet ost1 sysctl -n lustre.adaptive_max)
-    do_facet ost1 sysctl -w lustre.adaptive_max=$TIMEOUT
+    OST_AT_MAX=$(do_facet ost1 "cat /sys/module/ptlrpc/at_max")
+    do_facet ost1 "echo $TIMEOUT >> /sys/module/ptlrpc/at_max"
 
     # OBD_FAIL_PTLRPC_BULK_GET_NET 0x0503 | OBD_FAIL_ONCE
     # OST bulk will time out here, client retries
@@ -216,7 +216,7 @@ test_17() {
     # expect cmp to succeed, client resent bulk
     do_facet client "cmp $SAMPLE_FILE $DIR/$tfile" || return 3
     do_facet client "rm $DIR/$tfile" || return 4
-    do_facet ost1 sysctl -w lustre.adaptive_max=$OST_AT_MAX
+    do_facet ost1 "echo $OST_AT_MAX >> /sys/module/ptlrpc/at_max"
     return 0
 }
 run_test 17 "timeout bulk get, don't evict client (2732)"

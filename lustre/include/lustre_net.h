@@ -536,7 +536,7 @@ struct ptlrpc_service {
         __u32            srv_rep_portal;
         
         /* AT stuff */
-        struct adaptive_timeout srv_at_estimate;/* estimated service time */
+        struct adaptive_timeout srv_at_estimate;/* estimated rpc service time */
         spinlock_t        srv_at_lock;
         struct list_head  srv_at_list;          /* reqs waiting for replies */
         cfs_timer_t       srv_at_timer;         /* early reply timer */

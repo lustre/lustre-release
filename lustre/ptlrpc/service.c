@@ -34,17 +34,28 @@
 #include <lnet/types.h>
 #include "ptlrpc_internal.h"
 
+/* The following are visible and mutable through /sys/module/ptlrpc */
 int test_req_buffer_pressure = 0;
 CFS_MODULE_PARM(test_req_buffer_pressure, "i", int, 0444,
                 "set non-zero to put pressure on request buffer pools");
-
+unsigned int at_min = 0;
+CFS_MODULE_PARM(at_min, "i", int, 0644,
+                "Adaptive timeout minimum (sec)");
+unsigned int at_max = 600;
+EXPORT_SYMBOL(at_max);
+CFS_MODULE_PARM(at_max, "i", int, 0644,
+                "Adaptive timeout maximum (sec)");
+unsigned int at_history = 600;
+CFS_MODULE_PARM(at_history, "i", int, 0644,
+                "Adaptive timeouts remember the slowest event that took place "
+                "within this period (sec)");
 static int at_early_margin = 3;
 CFS_MODULE_PARM(at_early_margin, "i", int, 0644,
-                "How far before the deadline we send an early reply");
-
-static int at_extra = 10;
+                "How soon before an RPC deadline to send an early reply");
+static int at_extra = 30;
 CFS_MODULE_PARM(at_extra, "i", int, 0644,
-                "How much extra time we give with an early reply");
+                "How much extra time to give with each early reply");
+
 
 /* forward ref */
 static int ptlrpc_server_post_idle_rqbds (struct ptlrpc_service *svc);
@@ -1704,7 +1715,7 @@ int ptlrpc_service_health_check(struct ptlrpc_service *svc)
         spin_unlock(&svc->srv_lock);
 
         if ((timediff / ONE_MILLION) > (AT_OFF ? obd_timeout * 3/2 : 
-                                        adaptive_timeout_max)) {
+                                        at_max)) {
                 CERROR("%s: unhealthy - request has been waiting %lds\n",
                        svc->srv_name, timediff / ONE_MILLION);
                 return (-1);

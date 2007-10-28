@@ -917,8 +917,8 @@ test_44() {
     mdcdev=`awk '/-mdc-/ {print $1}' $LPROC/devices`
     [ "$mdcdev" ] || exit 2
     # adaptive timeouts slow this way down
-    MDS_AT_MAX=$(do_facet mds "sysctl -n lustre.adaptive_max")
-    do_facet mds "sysctl -w lustre.adaptive_max=40"
+    MDS_AT_MAX=$(do_facet mds "cat /sys/module/ptlrpc/at_max")
+    do_facet mds "echo 40 >> /sys/module/ptlrpc/at_max"
     for i in `seq 1 10`; do
 	echo "$i of 10 ($(date +%s))"
 	do_facet mds "grep service $LPROC/mdt/MDS/mds/timeouts"
@@ -928,7 +928,7 @@ test_44() {
 	df $MOUNT
     done
     do_facet mds "sysctl -w lustre.fail_loc=0"
-    do_facet mds "sysctl -w lustre.adaptive_max=$MDS_AT_MAX"
+    do_facet mds "echo $MDS_AT_MAX >> /sys/module/ptlrpc/at_max"
     return 0
 }
 run_test 44 "race in target handle connect"
@@ -1181,10 +1181,10 @@ run_test 61c "test race mds llog sync vs llog cleanup"
 at_start() #bug 3055
 {
     if [ -z "$ATOLDBASE" ]; then
-	ATOLDBASE=$(do_facet mds "sysctl -n lustre.adaptive_history")
+	ATOLDBASE=$(do_facet mds "cat /sys/module/ptlrpc/at_history")
         # speed up the timebase so we can check decreasing AT
-	do_facet mds "sysctl -w lustre.adaptive_history=8"
-	do_facet ost1 "sysctl -w lustre.adaptive_history=8"
+	do_facet mds "echo 8 >> /sys/module/ptlrpc/at_history"
+	do_facet ost1 "echo 8 >> /sys/module/ptlrpc/at_history"
     fi
 }
 
@@ -1330,9 +1330,29 @@ test_67b() #bug 3055
 }
 run_test 67b "AT: verify instant slowdown doesn't induce reconnects"
 
+test_68 () #bug 13813
+{
+    at_start
+    local ENQ_MIN=$(cat /sys/module/ptlrpc/ldlm_enqueue_min)
+    echo $TIMEOUT >> /sys/module/ptlrpc/ldlm_enqueue_min
+    rm -f $DIR/${tfile}_[1-2]
+    lfs setstripe $DIR/$tfile --index=0 --count=1
+#define OBD_FAIL_LDLM_PAUSE_CANCEL       0x312
+    sysctl -w lustre.fail_val=$(($TIMEOUT - 1))
+    sysctl -w lustre.fail_loc=0x80000312
+    cp /etc/profile $DIR/${tfile}_1 || error "1st cp failed $?"
+    sysctl -w lustre.fail_val=$((TIMEOUT * 3 / 2))
+    sysctl -w lustre.fail_loc=0x80000312
+    cp /etc/profile $DIR/${tfile}_2 || error "2nd cp failed $?"
+    sysctl -w lustre.fail_loc=0
+    echo $ENQ_MIN >> /sys/module/ptlrpc/ldlm_enqueue_min
+    return 0
+}
+run_test 68 "AT: verify slowing locks"
+
 if [ -n "$ATOLDBASE" ]; then
-    do_facet mds "sysctl -w lustre.adaptive_history=$ATOLDBASE"
-    do_facet ost1 "sysctl -w lustre.adaptive_history=$ATOLDBASE"
+    do_facet mds "echo $ATOLDBASE >> /sys/module/ptlrpc/at_history"
+    do_facet ost1 "echo $ATOLDBASE >> /sys/module/ptlrpc/at_history"
 fi
 # end of AT tests includes above lines
 

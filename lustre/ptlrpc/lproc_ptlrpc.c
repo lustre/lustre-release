@@ -155,7 +155,7 @@ void ptlrpc_lprocfs_register(struct proc_dir_entry *root, char *dir,
         lprocfs_counter_init(svc_stats, PTLRPC_REQACTIVE_CNTR,
                              svc_counter_config, "req_active", "reqs");
         lprocfs_counter_init(svc_stats, PTLRPC_TIMEOUT,
-                             svc_counter_config, "adaptive_timeout", "sec");
+                             svc_counter_config, "req_timeout", "sec");
         lprocfs_counter_init(svc_stats, PTLRPC_REQBUF_AVAIL_CNTR,
                              svc_counter_config, "reqbuf_avail", "bufs");
         for (i = 0; i < LUSTRE_MAX_OPCODES; i++) {

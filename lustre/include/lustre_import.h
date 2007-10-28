@@ -147,15 +147,12 @@ static inline void at_init(struct adaptive_timeout *at, int val, int flags) {
         spin_lock_init(&at->at_lock);
 }
 static inline int at_get(struct adaptive_timeout *at) {
-        extern unsigned int adaptive_timeout_max;
-        if (adaptive_timeout_max)
-                return min(at->at_current, adaptive_timeout_max);
         return at->at_current;
 }
 int at_add(struct adaptive_timeout *at, unsigned int val);
 int import_at_get_index(struct obd_import *imp, int portal);
-int import_at_get_ldlm(struct obd_import *imp);
-#define AT_OFF (adaptive_timeout_max == 0)
+extern unsigned int at_max;
+#define AT_OFF (at_max == 0)
 
 /* genops.c */
 struct obd_export;

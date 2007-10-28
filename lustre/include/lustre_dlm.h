@@ -337,6 +337,8 @@ struct ldlm_namespace {
         unsigned               ns_contention_time;
         /* limit size of nolock requests, in bytes */
         unsigned               ns_max_nolock_size;
+
+        struct adaptive_timeout ns_at_estimate;/* estimated lock callback time*/
 };
 
 static inline int ns_connect_lru_resize(struct ldlm_namespace *ns)

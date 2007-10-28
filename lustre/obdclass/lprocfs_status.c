@@ -593,11 +593,6 @@ int lprocfs_rd_timeouts(char *page, char **start, off_t off, int count,
         imp = obd->u.cli.cl_import;
         *eof = 1;
 
-        if (AT_OFF)
-                rc += snprintf(page + rc, count - rc,
-                              "adaptive timeouts off, using obd_timeout %u\n",
-                              obd_timeout);
-        
         now = cfs_time_current_sec();
 
         /* Some network health info for kicks */

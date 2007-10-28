@@ -38,8 +38,6 @@ extern unsigned int obd_dump_on_eviction;
    networking / disk / timings affected by load (use Adaptive Timeouts) */
 extern unsigned int obd_timeout;          /* seconds */
 extern unsigned int ldlm_timeout;         /* seconds */
-extern unsigned int adaptive_timeout_max; /* seconds */
-extern unsigned int adaptive_timeout_history; /* seconds */
 extern unsigned int obd_sync_filter;
 extern unsigned int obd_max_dirty_pages;
 extern atomic_t obd_dirty_pages;
@@ -195,6 +193,7 @@ extern unsigned int obd_alloc_fail_rate;
 #define OBD_FAIL_LDLM_GLIMPSE            0x30f
 #define OBD_FAIL_LDLM_CANCEL_RACE        0x310
 #define OBD_FAIL_LDLM_CANCEL_EVICT_RACE  0x311
+#define OBD_FAIL_LDLM_PAUSE_CANCEL       0x312
 
 #define OBD_FAIL_OSC                     0x400
 #define OBD_FAIL_OSC_BRW_READ_BULK       0x401

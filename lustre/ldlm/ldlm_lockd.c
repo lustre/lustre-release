@@ -266,14 +266,13 @@ static void waiting_locks_callback(unsigned long unused)
  */
 static int __ldlm_add_waiting_lock(struct ldlm_lock *lock)
 {
-        int timeout = obd_timeout / 2;  /* Non-AT value */
+        int timeout;
         cfs_time_t timeout_rounded;
 
         if (!list_empty(&lock->l_pending_chain))
                 return 0;
 
-        if (lock->l_export && !AT_OFF) 
-                timeout = import_at_get_ldlm(lock->l_export->exp_imp_reverse);
+        timeout = ldlm_get_enq_timeout(lock);
 
         lock->l_callback_timeout = cfs_time_shift(timeout);
 
@@ -284,6 +283,8 @@ static int __ldlm_add_waiting_lock(struct ldlm_lock *lock)
             !cfs_timer_is_armed(&waiting_locks_timer)) {
                 cfs_timer_arm(&waiting_locks_timer, timeout_rounded);
         }
+        /* if the new lock has a shorter timeout than something earlier on
+           the list, we'll wait the longer amount of time; no big deal. */
         list_add_tail(&lock->l_pending_chain, &waiting_locks_list); /* FIFO */
         return 1;
 }
@@ -687,6 +688,11 @@ int ldlm_server_completion_ast(struct ldlm_lock *lock, int flags, void *data)
 
         LDLM_DEBUG(lock, "server preparing completion AST (after %ldus wait)",
                    total_enqueue_wait);
+
+        /* Server-side enqueue wait time estimate, used in
+            __ldlm_add_waiting_lock to set future enqueue timers */
+        at_add(&lock->l_resource->lr_namespace->ns_at_estimate,
+               total_enqueue_wait / ONE_MILLION);
 
         ptlrpc_req_set_repsize(req, 1, NULL);
 
@@ -1124,7 +1130,7 @@ int ldlm_handle_convert(struct ptlrpc_request *req)
         RETURN(0);
 }
 
-/* Cancel all the locks, which handles are packed into ldlm_request */
+/* Cancel all the locks whos handles are packed into ldlm_request */
 int ldlm_request_cancel(struct ptlrpc_request *req,
                         struct ldlm_request *dlm_req, int first)
 {

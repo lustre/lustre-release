@@ -34,6 +34,10 @@
 
 #include "ldlm_internal.h"
 
+int ldlm_enqueue_min = OBD_TIMEOUT_DEFAULT;
+CFS_MODULE_PARM(ldlm_enqueue_min, "i", int, 0644,
+                "lock enqueue timeout minimum");
+
 static void interrupted_completion_wait(void *data)
 {
 }
@@ -85,6 +89,20 @@ int ldlm_expired_completion_wait(void *data)
         RETURN(0);
 }
 
+/* We use the same basis for both server side and client side functions
+   from a single node. */
+int ldlm_get_enq_timeout(struct ldlm_lock *lock)
+{
+        int timeout = at_get(&lock->l_resource->lr_namespace->ns_at_estimate);
+        if (AT_OFF)
+                return obd_timeout / 2;
+        /* Since these are non-updating timeouts, we should be conservative.
+           It would be nice to have some kind of "early reply" mechanism for
+           lock callbacks too... */
+        timeout = timeout + (timeout >> 1); /* 150% */
+        return max(timeout, ldlm_enqueue_min);
+}
+
 int ldlm_completion_ast(struct ldlm_lock *lock, int flags, void *data)
 {
         /* XXX ALLOCATE - 160 bytes */
@@ -92,7 +110,7 @@ int ldlm_completion_ast(struct ldlm_lock *lock, int flags, void *data)
         struct obd_device *obd;
         struct obd_import *imp = NULL;
         struct l_wait_info lwi;
-        __u32 timeout = obd_timeout; /* Non-AT value */
+        __u32 timeout;
         int rc = 0;
         ENTRY;
 
@@ -119,8 +137,12 @@ noreproc:
         /* if this is a local lock, then there is no import */
         if (obd != NULL) {
                 imp = obd->u.cli.cl_import;
-                timeout = import_at_get_ldlm(imp);
         }
+
+        /* Wait a long time for enqueue - server may have to callback a
+           lock from another client.  Server will evict the other client if it
+           doesn't respond reasonably, and then give us the lock. */
+        timeout = ldlm_get_enq_timeout(lock) * 2;
 
         lwd.lwd_lock = lock;
 
@@ -155,7 +177,13 @@ noreproc:
                 RETURN(rc);
         }
 
-        LDLM_DEBUG(lock, "client-side enqueue waking up: granted");
+        LDLM_DEBUG(lock, "client-side enqueue waking up: granted after %lds",
+                   cfs_time_current_sec() - lock->l_enqueued_time.tv_sec);
+
+        /* Update our time estimate */
+        at_add(&lock->l_resource->lr_namespace->ns_at_estimate,
+               cfs_time_current_sec() - lock->l_enqueued_time.tv_sec);
+
         RETURN(0);
 }
 
@@ -863,6 +891,8 @@ int ldlm_cli_cancel_req(struct obd_export *exp,
 
         LASSERT(exp != NULL);
         LASSERT(count > 0);
+
+        OBD_FAIL_TIMEOUT(OBD_FAIL_LDLM_PAUSE_CANCEL, obd_fail_val);
 
         if (OBD_FAIL_CHECK(OBD_FAIL_LDLM_CANCEL_RACE))
                 RETURN(count);
