@@ -2343,7 +2343,7 @@ test_54e() {
 	check_kernel_version 46 || return 0
 	f="$DIR/f54e"
 	string="aaaaaa"
-	mknod $f c 4 0
+	mknod $f c 5 0
 	echo $string > $f || error
 }
 run_test 54e "console/tty device works in lustre ======================"
