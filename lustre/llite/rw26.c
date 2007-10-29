@@ -177,7 +177,7 @@ static ssize_t ll_direct_IO_26_seg(int rw, struct inode *inode,
                         POISON_PAGE(pages[i], 0x0d);
         }
 
-        ll_inode_fill_obdo(inode, rw, &oa);
+        ll_inode_fill_obdo(inode, rw == WRITE ? OBD_BRW_WRITE : OBD_BRW_READ, &oa);
 
         if (rw == WRITE) {
                 lprocfs_counter_add(ll_i2sbi(inode)->ll_stats,
