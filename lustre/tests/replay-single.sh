@@ -1026,9 +1026,10 @@ test_48() {
 run_test 48 "MDS->OSC failure during precreate cleanup (2824)"
 
 test_50() {
-    local oscdev=`grep ${ost1_svc}-osc- $LPROC/devices | awk '{print $1}'`
+    local oscdev=`do_facet mds grep \'${ost1_svc}-osc \' $LPROC/devices | awk '{print $1}' | head -1`
     [ "$oscdev" ] || return 1
-    $LCTL --device $oscdev recover &&  $LCTL --device $oscdev recover
+    do_facet mds $LCTL --device $oscdev recover || return 2 
+    do_facet mds $LCTL --device $oscdev recover || return 3 
     # give the mds_lov_sync threads a chance to run
     sleep 5
 }
