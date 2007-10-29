@@ -576,7 +576,7 @@ do {                                                                          \
 #define OBD_SLAB_FREE_PTR(ptr, slab)                                          \
         OBD_SLAB_FREE((ptr), (slab), sizeof *(ptr))
 
-#define KEY_IS(str) (keylen >= strlen(key) && strcmp(key, str) == 0)
+#define KEY_IS(str) (keylen >= strlen(str) && strcmp(key, str) == 0)
 
 #if defined(__linux__)
 #include <linux/obd_support.h>

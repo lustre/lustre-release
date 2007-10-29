@@ -1330,9 +1330,8 @@ static char *reint_names[] = {
 
 static int mds_set_info_rpc(struct obd_export *exp, struct ptlrpc_request *req)
 {
-        char *key;
-        __u32 *val;
-        int keylen, rc = 0;
+        void *key, *val;
+        int keylen, vallen, rc = 0;
         ENTRY;
 
         key = lustre_msg_buf(req->rq_reqmsg, REQ_REC_OFF, 1);
@@ -1342,25 +1341,27 @@ static int mds_set_info_rpc(struct obd_export *exp, struct ptlrpc_request *req)
         }
         keylen = lustre_msg_buflen(req->rq_reqmsg, REQ_REC_OFF);
 
-        val = lustre_msg_buf(req->rq_reqmsg, REQ_REC_OFF + 1, sizeof(*val));
-        if (val == NULL) {
-                DEBUG_REQ(D_HA, req, "no set_info val");
-                RETURN(-EFAULT);
-        }
+        val = lustre_msg_buf(req->rq_reqmsg, REQ_REC_OFF + 1, 0);
+        vallen = lustre_msg_buflen(req->rq_reqmsg, REQ_REC_OFF + 1);
 
         rc = lustre_pack_reply(req, 1, NULL, NULL);
         if (rc)
                 RETURN(rc);
         lustre_msg_set_status(req->rq_repmsg, 0);
 
-        if (keylen < strlen("read-only") ||
-            memcmp(key, "read-only", keylen) != 0)
-                RETURN(-EINVAL);
+        if (KEY_IS("read-only")) {
+                if (val == NULL || vallen < sizeof(__u32)) {
+                        DEBUG_REQ(D_HA, req, "no set_info val");
+                        RETURN(-EFAULT);
+                }
 
-        if (*val)
-                exp->exp_connect_flags |= OBD_CONNECT_RDONLY;
-        else
-                exp->exp_connect_flags &= ~OBD_CONNECT_RDONLY;
+                if (*(__u32 *)val)
+                        exp->exp_connect_flags |= OBD_CONNECT_RDONLY;
+                else
+                        exp->exp_connect_flags &= ~OBD_CONNECT_RDONLY;
+        } else {
+                RETURN(-EINVAL);
+        }
 
         RETURN(0);
 }

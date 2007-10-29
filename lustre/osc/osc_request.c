@@ -3256,13 +3256,12 @@ static int osc_get_info(struct obd_export *exp, obd_count keylen,
         if (!vallen || !val)
                 RETURN(-EFAULT);
 
-        if (keylen > strlen("lock_to_stripe") &&
-            strcmp(key, "lock_to_stripe") == 0) {
+        if (KEY_IS("lock_to_stripe")) {
                 __u32 *stripe = val;
                 *vallen = sizeof(*stripe);
                 *stripe = 0;
                 RETURN(0);
-        } else if (keylen >= strlen("last_id") && strcmp(key, "last_id") == 0) {
+        } else if (KEY_IS("last_id")) {
                 struct ptlrpc_request *req;
                 obd_id *reply;
                 char *bufs[2] = { NULL, key };
