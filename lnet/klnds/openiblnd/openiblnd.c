@@ -988,12 +988,12 @@ kibnal_create_conn (void)
                 }
         }
 
-        /* We can post up to IBLND_MSG_QUEUE_SIZE immediate/req messages and
-         * the same # of ack/nak/rdma+done messages */
+        /* We can post up to IBNAL_RX_MSGS, which may also include an
+         * additional RDMA work item */
 
         params.qp_create = (struct ib_qp_create_param) {
                 .limit = {
-                        .max_outstanding_send_request    = 3 * IBNAL_MSG_QUEUE_SIZE,
+                        .max_outstanding_send_request    = 2 * IBNAL_RX_MSGS,
                         .max_outstanding_receive_request = IBNAL_RX_MSGS,
                         .max_send_gather_element         = 1,
                         .max_receive_scatter_element     = 1,
