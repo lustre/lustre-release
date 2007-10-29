@@ -223,7 +223,7 @@ static ssize_t ll_direct_IO_26(int rw, struct kiocb *iocb,
         if (set == NULL)
                 RETURN(-ENOMEM);
 
-        ll_inode_fill_obdo(inode, rw, &oa);
+        ll_inode_fill_obdo(inode, rw == WRITE ? OBD_BRW_WRITE : OBD_BRW_READ, &oa);
         oinfo.oi_oa = &oa;
         oinfo.oi_md = lsm;
 
