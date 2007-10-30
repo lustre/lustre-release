@@ -836,9 +836,11 @@ test_23() {
 test_24a() {
 	local fs2mds_HOST=$mds_HOST
 	local fs2ost_HOST=$ost_HOST
-
-	[ -z "$fs2ost_DEV" -o -z "$fs2mds_DEV" ] && [ -b "$MDSDEV" ] && \
-            log "mixed loopback and real device not working" && return
+	[ -n "$ost1_HOST" ] && fs2ost_HOST=$ost1_HOST
+	if [ -z "$fs2ost_DEV" -o -z "$fs2mds_DEV" ]; then
+		do_facet mds [ -b "$MDSDEV" ] && \
+		skip "mixed loopback and real device not working" && return
+	fi
 
 	local fs2mdsdev=${fs2mds_DEV:-${MDSDEV}_2}
 	local fs2ostdev=${fs2ost_DEV:-$(ostdevname 1)_2}
@@ -883,12 +885,14 @@ run_test 24a "Multiple MDTs on a single node"
 
 test_24b() {
 	local fs2mds_HOST=$mds_HOST
-        [ -z "$fs2mds_DEV" ] && [ -b "$MDSDEV" ] && \
-            log "mixed loopback and real device not working" && return
+	if [ -z "$fs2mds_DEV" ]; then
+		do_facet mds [ -b "$MDSDEV" ] && \
+		skip "mixed loopback and real device not working" && return
+	fi
 
 	local fs2mdsdev=${fs2mds_DEV:-${MDSDEV}_2}
 
-        add fs2mds $MDS_MKFS_OPTS --fsname=${FSNAME}2 --mgs --reformat $fs2mdsdev || exit 10 
+	add fs2mds $MDS_MKFS_OPTS --fsname=${FSNAME}2 --mgs --reformat $fs2mdsdev || exit 10 
 	setup
 	start fs2mds $fs2mdsdev $MDS_MOUNT_OPTS && return 2
 	cleanup || return 6
@@ -1199,9 +1203,12 @@ test_33() { # bug 12333
         local FSNAME2=test1234
         local fs2mds_HOST=$mds_HOST
         local fs2ost_HOST=$ost_HOST
+        [ -n "$ost1_HOST" ] && fs2ost_HOST=$ost1_HOST
 
-        [ -z "$fs2ost_DEV" -o -z "$fs2mds_DEV" ] && [ -b "$MDSDEV" ] && \
-            log "mixed loopback and real device not working" && return
+        if [ -z "$fs2ost_DEV" -o -z "$fs2mds_DEV" ]; then
+                do_facet mds [ -b "$MDSDEV" ] && \
+                skip "mixed loopback and real device not working" && return
+        fi
 
         local fs2mdsdev=${fs2mds_DEV:-${MDSDEV}_2}
         local fs2ostdev=${fs2ost_DEV:-$(ostdevname 1)_2}
@@ -1338,19 +1345,25 @@ test_36() { # 12743
         local fs2mds_HOST=$mds_HOST
         local fs2ost_HOST=$ost_HOST
         local fs3ost_HOST=$ost_HOST
+
+        [ -n "$ost1_HOST" ] && fs2ost_HOST=$ost1_HOST && fs3ost_HOST=$ost1_HOST
         rc=0
 
-        [ -z "$fs2ost_DEV" -o -z "$fs2mds_DEV" ] && [ -b "$MDSDEV" ] && \
-            log "mixed loopback and real device not working" && return
-
+        if [ -z "$fs2ost_DEV" -o -z "$fs2mds_DEV" -o -z "$fs3ost_DEV" ]; then
+		do_facet mds [ -b "$MDSDEV" ] && \
+		skip "mixed loopback and real device not working" && return
+        fi
         [ $OSTCOUNT -lt 2 ] && skip "skipping test for single OST" && return
+
+        [ $(grep -c obdfilter $LPROC/devices) -eq 0 ] &&
+                skip "skipping test for remote OST" && return
 
         local fs2mdsdev=${fs2mds_DEV:-${MDSDEV}_2}
         local fs2ostdev=${fs2ost_DEV:-$(ostdevname 1)_2}
         local fs3ostdev=${fs3ost_DEV:-$(ostdevname 2)_2}
         add fs2mds $MDS_MKFS_OPTS --fsname=${FSNAME2} --reformat $fs2mdsdev || exit 10
-        add fs2ost $OST_MKFS_OPTS --mkfsoptions='-b1024' --fsname=${FSNAME2} --mgsnode=`hostname`@tcp --reformat $fs2ostdev || exit 10
-        add fs3ost $OST_MKFS_OPTS --mkfsoptions='-b4096' --fsname=${FSNAME2} --mgsnode=`hostname`@tcp --reformat $fs3ostdev || exit 10
+        add fs2ost $OST_MKFS_OPTS --mkfsoptions='-b1024' --fsname=${FSNAME2} --mgsnode=$MGSNID --reformat $fs2ostdev || exit 10
+        add fs3ost $OST_MKFS_OPTS --mkfsoptions='-b4096' --fsname=${FSNAME2} --mgsnode=$MGSNID --reformat $fs3ostdev || exit 10
 
         start fs2mds $fs2mdsdev $MDS_MOUNT_OPTS
         start fs2ost $fs2ostdev $OST_MOUNT_OPTS
@@ -1358,9 +1371,10 @@ test_36() { # 12743
         mkdir -p $MOUNT2
         mount -t lustre $MGSNID:/${FSNAME2} $MOUNT2 || return 1
 
+	sleep 5 # until 11778 fixed
+
         dd if=/dev/zero of=$MOUNT2/$tfile bs=1M count=7 || return 2
-        [ $(grep -c obdfilter $LPROC/devices) -eq 0 ] &&
-                skip "skipping test for remote OST" && return
+
         BKTOTAL=`awk 'BEGIN{total=0}; {total+=$1}; END{print total}' \
                 $LPROC/obdfilter/*/kbytestotal`
         BKFREE=`awk 'BEGIN{free=0}; {free+=$1}; END{print free}' \
