@@ -1000,7 +1000,7 @@ equals_msg() {
 
     local suffixlen=$((${#EQUALS} - ${#msg}))
     [ $suffixlen -lt 5 ] && suffixlen=5
-    printf '===== %s %.*s\n' "$msg" $suffixlen $EQUALS
+    log `echo $(printf '===== %s %.*s\n' "$msg" $suffixlen $EQUALS)`
 }
 
 log() {

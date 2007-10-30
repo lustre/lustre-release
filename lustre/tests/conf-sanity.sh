@@ -1094,6 +1094,9 @@ test_32a() {
         #       there appears to be a lot of assumption here about loopback
         #       devices
         # or maybe this test is just totally useless on a client-only system
+	[ "$mds_HOST" = "`hostname`" ] || { skip "remote MDS" && return 0; }
+	[ "$ost1_HOST" = "`hostname`" ] || { skip "remote OST" && return 0; }
+
         [ -z "$TUNEFS" ] && skip "No tunefs" && return
 	local DISK1_4=$LUSTRE/tests/disk1_4.zip
         [ ! -r $DISK1_4 ] && skip "Cant find $DISK1_4, skipping" && return
@@ -1154,6 +1157,9 @@ test_32b() {
         #       there appears to be a lot of assumption here about loopback
         #       devices
         # or maybe this test is just totally useless on a client-only system
+        [ "$mds_HOST" = "`hostname`" ] || { skip "remote MDS" && return 0; }
+        [ "$ost1_HOST" = "`hostname`" ] || { skip "remote OST" && return 0; }
+
         [ -z "$TUNEFS" ] && skip "No tunefs" && return
 	local DISK1_4=$LUSTRE/tests/disk1_4.zip
         [ ! -r $DISK1_4 ] && skip "Cant find $DISK1_4, skipping" && return
