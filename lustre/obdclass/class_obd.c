@@ -51,13 +51,6 @@ atomic_t libcfs_kmemory = {0};
 struct obd_device *obd_devs[MAX_OBD_DEVICES];
 struct list_head obd_types;
 spinlock_t obd_dev_lock = SPIN_LOCK_UNLOCKED;
-#ifndef __KERNEL__
-atomic_t obd_memory;
-int obd_memmax;
-unsigned int obd_fail_val;
-unsigned int obd_fail_loc;
-unsigned int obd_alloc_fail_rate;
-#endif
 
 /* The following are visible and mutable through /proc/sys/lustre/. */
 unsigned int obd_debug_peer_on_timeout;
@@ -533,7 +526,21 @@ int init_obdclass(void)
         spin_lock_init(&obd_types_lock);
         cfs_waitq_init(&obd_race_waitq);
         obd_zombie_impexp_init();
+#ifdef LPROCFS
+        obd_memory = lprocfs_alloc_stats(OBD_STATS_NUM, 
+                                         LPROCFS_STATS_FLAG_PERCPU);
+        if (obd_memory == NULL) {
+                CERROR("kmalloc of 'obd_memory' failed\n");
+                RETURN(-ENOMEM);
+        }
 
+        lprocfs_counter_init(obd_memory, OBD_MEMORY_STAT,
+                             LPROCFS_CNTR_AVGMINMAX, 
+                             "memused", "bytes");
+        lprocfs_counter_init(obd_memory, OBD_MEMORY_PAGES_STAT,
+                             LPROCFS_CNTR_AVGMINMAX, 
+                             "pagesused", "pages");
+#endif
         err = obd_init_checks();
         if (err == -EOVERFLOW)
                 return err;
@@ -578,6 +585,8 @@ int init_obdclass(void)
 static void cleanup_obdclass(void)
 {
         int i;
+        __u64 memory_leaked, pages_leaked;
+        __u64 memory_max, pages_max;
         int lustre_unregister_fs(void);
         ENTRY;
 
@@ -601,6 +610,20 @@ static void cleanup_obdclass(void)
 
         class_handle_cleanup();
         class_exit_uuidlist();
+
+        memory_leaked = obd_memory_sum();
+        pages_leaked = obd_pages_sum();
+
+        memory_max = obd_memory_max();
+        pages_max = obd_pages_max();
+
+        lprocfs_free_stats(&obd_memory);
+        CDEBUG((memory_leaked | pages_leaked) ? D_ERROR : D_INFO,
+               "obd_memory max: "LPU64", leaked: "LPU64" "
+               "obd_memory_pages max: "LPU64", leaked: "LPU64"\n",
+               memory_max, memory_leaked, 
+               pages_max, pages_leaked);
+
         EXIT;
 }
 

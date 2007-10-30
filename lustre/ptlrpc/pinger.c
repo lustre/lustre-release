@@ -161,6 +161,8 @@ static int ptlrpc_pinger_main(void *arg)
                                 ptlrpc_update_next_ping(imp);
                 }
                 mutex_up(&pinger_sem);
+                /* update memory usage info */
+                obd_update_maxusage();
 
                 /* Wait until the next ping time, or until we're stopped. */
                 time_to_next_ping = cfs_time_sub(cfs_time_add(this_ping, 

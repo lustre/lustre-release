@@ -544,7 +544,7 @@ static int echo_client_kbrw(struct obd_device *obd, int rw, struct obdo *oa,
                 LASSERT (pgp->pg == NULL);      /* for cleanup */
 
                 rc = -ENOMEM;
-                pgp->pg = cfs_alloc_page (gfp_mask);
+                OBD_PAGE_ALLOC(pgp->pg, gfp_mask);
                 if (pgp->pg == NULL)
                         goto out;
 
@@ -576,7 +576,7 @@ static int echo_client_kbrw(struct obd_device *obd, int rw, struct obdo *oa,
                         if (vrc != 0 && rc == 0)
                                 rc = vrc;
                 }
-                cfs_free_page(pgp->pg);
+                OBD_PAGE_FREE(pgp->pg);
         }
         OBD_FREE(pga, npages * sizeof(*pga));
         return (rc);
@@ -807,13 +807,14 @@ static int echo_client_async_page(struct obd_export *exp, int rw,
         /* prepare the group of pages that we're going to be keeping
          * in flight */
         for (i = 0; i < npages; i++) {
-                cfs_page_t *page = cfs_alloc_page(CFS_ALLOC_STD);
+                cfs_page_t *page;
+                OBD_PAGE_ALLOC(page, CFS_ALLOC_STD);
                 if (page == NULL)
                         GOTO(out, rc = -ENOMEM);
 
                 OBD_ALLOC(eap, sizeof(*eap));
                 if (eap == NULL) {
-                        cfs_free_page(page);
+                        OBD_PAGE_FREE(page);
                         GOTO(out, rc = -ENOMEM);
                 }
 
@@ -908,7 +909,7 @@ out:
                                 obd_teardown_async_page(exp, lsm, NULL,
                                                         eap->eap_cookie);
                         OBD_FREE(eap, sizeof(*eap));
-                        cfs_free_page(page);
+                        OBD_PAGE_FREE(page);
                 }
                 OBD_FREE(aps, npages * sizeof aps[0]);
         }

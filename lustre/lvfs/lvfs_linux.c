@@ -49,12 +49,6 @@
 #include <lustre_lib.h>
 #include <lustre_quota.h>
 
-atomic_t obd_memory;
-int obd_memmax;
-unsigned int obd_fail_val;
-unsigned int obd_fail_loc;
-unsigned int obd_alloc_fail_rate = 0;
-
 /* Debugging check only needed during development */
 #ifdef OBD_CTXT_DEBUG
 # define ASSERT_CTXT_MAGIC(magic) LASSERT((magic) == OBD_RUN_CTXT_MAGIC)
@@ -460,8 +454,7 @@ long l_readdir(struct file *file, struct list_head *dentry_list)
         return 0; 
 }
 EXPORT_SYMBOL(l_readdir);
-EXPORT_SYMBOL(obd_memory);
-EXPORT_SYMBOL(obd_memmax);
+
 
 #ifdef LUSTRE_KERNEL_VERSION
 #ifndef HAVE_CLEAR_RDONLY_ON_PUT
@@ -512,31 +505,6 @@ int lvfs_check_io_health(struct obd_device *obd, struct file *file)
 }
 EXPORT_SYMBOL(lvfs_check_io_health);
 
-static int __init lvfs_linux_init(void)
-{
-        RETURN(0);
-}
-
-static void __exit lvfs_linux_exit(void)
-{
-        int leaked;
-        ENTRY;
-
-        leaked = atomic_read(&obd_memory);
-        CDEBUG(leaked ? D_ERROR : D_INFO,
-               "obd mem max: %d leaked: %d\n", obd_memmax, leaked);
-
-        EXIT;
-        return;
-}
-
-EXPORT_SYMBOL(obd_fail_loc);
-EXPORT_SYMBOL(obd_alloc_fail_rate);
-EXPORT_SYMBOL(obd_fail_val);
-
 MODULE_AUTHOR("Cluster File Systems, Inc. <info@clusterfs.com>");
 MODULE_DESCRIPTION("Lustre VFS Filesystem Helper v0.1");
 MODULE_LICENSE("GPL");
-
-module_init(lvfs_linux_init);
-module_exit(lvfs_linux_exit);

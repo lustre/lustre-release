@@ -123,11 +123,11 @@ struct lprocfs_atomic {
 struct lprocfs_counter {
         struct lprocfs_atomic  lc_cntl;  /* may need to move to per set */
         unsigned int           lc_config;
-        __u64                  lc_count;
-        __u64                  lc_sum;
-        __u64                  lc_min;
-        __u64                  lc_max;
-        __u64                  lc_sumsquare;
+        __s64                  lc_count;
+        __s64                  lc_sum;
+        __s64                  lc_min;
+        __s64                  lc_max;
+        __s64                  lc_sumsquare;
         const char            *lc_name;   /* must be static */
         const char            *lc_units;  /* must be static */
 };
@@ -140,8 +140,19 @@ struct lprocfs_percpu {
 #define LPROCFS_GET_SMP_ID  0x0002
 
 enum lprocfs_stats_flags {
+        LPROCFS_STATS_FLAG_PERCPU   = 0x0000, /* per cpu counter */
         LPROCFS_STATS_FLAG_NOPERCPU = 0x0001, /* stats have no percpu
                                                * area and need locking */
+};
+
+enum lprocfs_fields_flags {
+        LPROCFS_FIELDS_FLAGS_CONFIG = 0x0001,
+        LPROCFS_FIELDS_FLAGS_SUM    = 0x0002,
+        LPROCFS_FIELDS_FLAGS_MIN    = 0x0003,
+        LPROCFS_FIELDS_FLAGS_MAX    = 0x0004,
+        LPROCFS_FIELDS_FLAGS_AVG    = 0x0005,
+        LPROCFS_FIELDS_FLAGS_SUMSQUARE = 0x0006,
+        LPROCFS_FIELDS_FLAGS_COUNT  = 0x0007,
 };
 
 struct lprocfs_stats {
@@ -242,7 +253,11 @@ static inline void lprocfs_counter_add(struct lprocfs_stats *stats, int idx,
         lprocfs_stats_unlock(stats);
 }
 
-static inline void lprocfs_counter_incr(struct lprocfs_stats *stats, int idx)
+#define lprocfs_counter_incr(stats, idx) \
+        lprocfs_counter_add(stats, idx, 1)
+
+static inline void lprocfs_counter_sub(struct lprocfs_stats *stats, int idx,
+                                       long amount)
 {
         struct lprocfs_counter *percpu_cntr;
         int smp_id;
@@ -250,17 +265,38 @@ static inline void lprocfs_counter_incr(struct lprocfs_stats *stats, int idx)
         if (!stats)
                 return;
 
+        /* With per-client stats, statistics are allocated only for
+         * single CPU area, so the smp_id should be 0 always. */
         smp_id = lprocfs_stats_lock(stats, LPROCFS_GET_SMP_ID);
-
+        
         percpu_cntr = &(stats->ls_percpu[smp_id]->lp_cntr[idx]);
         atomic_inc(&percpu_cntr->lc_cntl.la_entry);
-        percpu_cntr->lc_count++;
+        if (percpu_cntr->lc_config & LPROCFS_CNTR_AVGMINMAX)
+                percpu_cntr->lc_sum -= amount;
         atomic_inc(&percpu_cntr->lc_cntl.la_exit);
-
         lprocfs_stats_unlock(stats);
 }
+#define lprocfs_counter_decr(stats, idx) \
+        lprocfs_counter_sub(stats, idx, 1)
 
-extern struct lprocfs_stats *lprocfs_alloc_stats(unsigned int num,
+extern __s64 lprocfs_read_helper(struct lprocfs_counter *lc, 
+                                 enum lprocfs_fields_flags field);
+
+static inline __u64 lprocfs_stats_collector(struct lprocfs_stats *stats, 
+                                            int idx, 
+                                            enum lprocfs_fields_flags field)
+{
+        __u64 ret = 0;
+        int i;
+
+        LASSERT(stats != NULL);
+        for (i = 0; i < num_possible_cpus(); i++)
+                ret += lprocfs_read_helper(&(stats->ls_percpu[i]->lp_cntr[idx]),
+                                           field);
+        return ret;
+}
+
+extern struct lprocfs_stats *lprocfs_alloc_stats(unsigned int num, 
                                                  enum lprocfs_stats_flags flags);
 extern void lprocfs_clear_stats(struct lprocfs_stats *stats);
 extern void lprocfs_free_stats(struct lprocfs_stats **stats);
@@ -483,13 +519,19 @@ static inline void lprocfs_counter_add(struct lprocfs_stats *stats,
                                        int index, long amount) { return; }
 static inline void lprocfs_counter_incr(struct lprocfs_stats *stats,
                                         int index) { return; }
+static inline void lprocfs_counter_sub(struct lprocfs_stats *stats,
+                                       int index, long amount) { return; }
 static inline void lprocfs_counter_init(struct lprocfs_stats *stats,
                                         int index, unsigned conf,
                                         const char *name, const char *units)
 { return; }
 
+static inline __u64 lc_read_helper(struct lprocfs_counter *lc, 
+                                   enum lprocfs_fields_flags field) 
+{ return 0; }
+
 static inline struct lprocfs_stats* lprocfs_alloc_stats(unsigned int num,
-                                                        int client_stat)
+                                                        enum lprocfs_stats_flags flags)
 { return NULL; }
 static inline void lprocfs_clear_stats(struct lprocfs_stats *stats)
 { return; }
@@ -614,6 +656,11 @@ int lprocfs_counter_read(char *page, char **start, off_t off,
 static inline
 int lprocfs_counter_write(struct file *file, const char *buffer,
                           unsigned long count, void *data) { return 0; }
+
+static inline
+__u64 lprocfs_stats_collector(struct lprocfs_stats *stats, int idx, 
+                               enum lprocfs_fields_flags field)
+{ return (__u64)0; }
 
 #define LPROCFS_ENTRY()
 #define LPROCFS_EXIT()
