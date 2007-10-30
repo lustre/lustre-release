@@ -125,6 +125,8 @@ static inline unsigned int attr_unpack(__u64 sa_valid) {
                 ia_valid |= ATTR_CTIME_SET;
         if (sa_valid & MDS_ATTR_FROM_OPEN)
                 ia_valid |= ATTR_FROM_OPEN;
+        if (sa_valid & MDS_OPEN_OWNEROVERRIDE)
+                ia_valid |= MDS_OPEN_OWNEROVERRIDE;
         return ia_valid;
 }
 

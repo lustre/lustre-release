@@ -215,6 +215,9 @@ static inline __u64 attr_pack(unsigned int ia_valid) {
                 sa_valid |= MDS_ATTR_CTIME_SET;
         if (ia_valid & ATTR_FROM_OPEN)
                 sa_valid |= MDS_ATTR_FROM_OPEN;
+        if (ia_valid & MDS_OPEN_OWNEROVERRIDE)
+                /* NFSD hack (see bug 5781) */
+                sa_valid |= MDS_OPEN_OWNEROVERRIDE;
         return sa_valid;
 }
 
