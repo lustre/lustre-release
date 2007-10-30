@@ -1371,7 +1371,7 @@ test_36() { # 12743
         mkdir -p $MOUNT2
         mount -t lustre $MGSNID:/${FSNAME2} $MOUNT2 || return 1
 
-	sleep 5 # until 11778 fixed
+        sleep 5 # until 11778 fixed
 
         dd if=/dev/zero of=$MOUNT2/$tfile bs=1M count=7 || return 2
 
