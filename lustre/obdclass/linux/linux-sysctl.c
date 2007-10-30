@@ -91,7 +91,7 @@ int LL_PROC_PROTO(proc_set_timeout)
 #ifdef RANDOM_FAIL_ALLOC
 int LL_PROC_PROTO(proc_alloc_fail_rate)
 {
-        DECLARE_LL_PROC_PPOS_DECL
+        DECLARE_LL_PROC_PPOS_DECL;
         int rc = 0;
 
         if (!table->data || !table->maxlen || !*lenp || (*ppos && !write)) {
@@ -125,7 +125,7 @@ int LL_PROC_PROTO(proc_memory_alloc)
 {
         char buf[22];
         int len;
-        DECLARE_LL_PROC_PPOS_DECL
+        DECLARE_LL_PROC_PPOS_DECL;
 
         if (!*lenp || (*ppos && !write)) {
                 *lenp = 0;
@@ -149,7 +149,7 @@ int LL_PROC_PROTO(proc_pages_alloc)
 {
         char buf[22];
         int len;
-        DECLARE_LL_PROC_PPOS_DECL
+        DECLARE_LL_PROC_PPOS_DECL;
 
         if (!*lenp || (*ppos && !write)) {
                 *lenp = 0;
@@ -173,7 +173,7 @@ int LL_PROC_PROTO(proc_mem_max)
 {
         char buf[22];
         int len;
-        DECLARE_LL_PROC_PPOS_DECL
+        DECLARE_LL_PROC_PPOS_DECL;
 
         if (!*lenp || (*ppos && !write)) {
                 *lenp = 0;
@@ -197,7 +197,7 @@ int LL_PROC_PROTO(proc_pages_max)
 {
         char buf[22];
         int len;
-        DECLARE_LL_PROC_PPOS_DECL
+        DECLARE_LL_PROC_PPOS_DECL;
 
         if (!*lenp || (*ppos && !write)) {
                 *lenp = 0;
