@@ -14,6 +14,13 @@ tbd         Cluster File Systems, Inc. <info@clusterfs.com>
        * Recommended e2fsprogs version: 1.40.2-cfs1
        * Note that reiserfs quotas are disabled on SLES 10 in this kernel.
 
+Severity   : enhancement
+Bugzilla   : 11622
+Description: Lustre Page Accounting
+Details    : New macros for page alloc and free which enable accounting
+	     of page allocation of Lustre. Use percpu counters to store memory
+	     and page statistics.
+
 Severity   : normal
 Bugzilla   : 13497
 Description: LASSERT_{REQ,REP}SWAB macros are buggy
