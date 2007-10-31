@@ -8,6 +8,7 @@ ost_HOST=${ost_HOST:-`hostname`}
 LIVE_CLIENT=${LIVE_CLIENT:-`hostname`}
 # This should always be a list, not a regexp
 FAIL_CLIENTS=${FAIL_CLIENTS:-""}
+PDSH=${PDSH:-no_dsh}
 
 TMP=${TMP:-/tmp}
 MDSDEV=${MDSDEV:-$TMP/${FSNAME}-mdt}
@@ -27,6 +28,8 @@ TIMEOUT=${TIMEOUT:-30}
 PTLDEBUG=${PTLDEBUG:-0x33f0404}
 SUBSYSTEM=${SUBSYSTEM:- 0xffb7e3ff}
 
+L_GETGROUPS=${L_GETGROUPS:-`do_facet mds which l_getgroups || echo`}
+
 MKFSOPT=""
 MOUNTOPT=""
 [ "x$MDSJOURNALSIZE" != "x" ] &&
@@ -41,8 +44,8 @@ MOUNTOPT=""
     MOUNTOPT=$MOUNTOPT" --param lov.stripesize=$STRIPE_BYTES"
 [ "x$STRIPES_PER_OBJ" != "x" ] &&
     MOUNTOPT=$MOUNTOPT" --param lov.stripecount=$STRIPES_PER_OBJ"
-[ "x$LUSTRE" != "x" ] && [ -f $LUSTRE/utils/l_getgroups ] &&
-    MOUNTOPT=$MOUNTOPT"  --param mdt.group_upcall=$LUSTRE/utils/l_getgroups" 
+[ "x$L_GETGROUPS" != "x" ] &&
+    MOUNTOPT=$MOUNTOPT" --param mdt.group_upcall=$L_GETGROUPS"
 MDS_MKFS_OPTS="--mgs --mdt --fsname=$FSNAME --device-size=$MDSSIZE --param sys.timeout=$TIMEOUT $MKFSOPT $MOUNTOPT $MDSOPT"
 
 MKFSOPT=""
@@ -59,9 +62,6 @@ MDS_MOUNT_OPTS="-o loop"
 OST_MOUNT_OPTS="-o loop"
 MOUNT=${MOUNT:-"/mnt/lustre"}
 
-PDSH=${PDSH:-no_dsh}
 FAILURE_MODE=${FAILURE_MODE:-SOFT} # or HARD
 POWER_DOWN=${POWER_DOWN:-"powerman --off"}
 POWER_UP=${POWER_UP:-"powerman --on"}
-
-PDSH=${PDSH:-no_dsh}

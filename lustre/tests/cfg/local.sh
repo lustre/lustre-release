@@ -6,6 +6,7 @@ mdsfailover_HOST=${mdsfailover_HOST}
 mgs_HOST=${mgs_HOST:-$mds_HOST}
 ost_HOST=${ost_HOST:-`hostname`}
 ostfailover_HOST=${ostfailover_HOST}
+PDSH=${PDSH:-no_dsh}
 
 TMP=${TMP:-/tmp}
 
@@ -31,6 +32,8 @@ TIMEOUT=${TIMEOUT:-20}
 PTLDEBUG=${PTLDEBUG:-0x33f1504}
 SUBSYSTEM=${SUBSYSTEM:- 0xffb7e3ff}
 
+L_GETGROUPS=${L_GETGROUPS:-`do_facet mds which l_getgroups || echo`}
+
 MKFSOPT=""
 MOUNTOPT=""
 [ "x$MDSJOURNALSIZE" != "x" ] &&
@@ -45,8 +48,8 @@ MOUNTOPT=""
     MOUNTOPT=$MOUNTOPT" --param lov.stripesize=$STRIPE_BYTES"
 [ "x$STRIPES_PER_OBJ" != "x" ] &&
     MOUNTOPT=$MOUNTOPT" --param lov.stripecount=$STRIPES_PER_OBJ"
-[ "x$LUSTRE" != "x" ] && [ -f $LUSTRE/utils/l_getgroups ] &&
-    MOUNTOPT=$MOUNTOPT" --param mdt.group_upcall=$LUSTRE/utils/l_getgroups"
+[ "x$L_GETGROUPS" != "x" ] &&
+    MOUNTOPT=$MOUNTOPT" --param mdt.group_upcall=$L_GETGROUPS"
 MDS_MKFS_OPTS="--mgs --mdt --fsname=$FSNAME --device-size=$MDSSIZE --param sys.timeout=$TIMEOUT $MKFSOPT $MOUNTOPT $MDSOPT"
 
 MKFSOPT=""
@@ -71,7 +74,6 @@ DIR=${DIR:-$MOUNT}
 DIR1=${DIR:-$MOUNT1}
 DIR2=${DIR2:-$MOUNT2}
 
-PDSH=${PDSH:-no_dsh}
 FAILURE_MODE=${FAILURE_MODE:-SOFT} # or HARD
 POWER_DOWN=${POWER_DOWN:-"powerman --off"}
 POWER_UP=${POWER_UP:-"powerman --on"}
