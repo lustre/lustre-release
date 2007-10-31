@@ -51,7 +51,7 @@ static int lsm_lmm_verify_common(struct lov_mds_md *lmm, int lmm_bytes,
                                  int stripe_count)
 {
 
-        if (stripe_count == 0) {
+        if (stripe_count == 0 || stripe_count > LOV_V1_INSANE_STRIPE_COUNT) {
                 CERROR("bad stripe count %d\n", stripe_count);
                 lov_dump_lmm_v1(D_WARNING, lmm);
                 return -EINVAL;
