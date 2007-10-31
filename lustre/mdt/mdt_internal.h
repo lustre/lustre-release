@@ -695,32 +695,6 @@ static inline int mdt_check_resent(struct mdt_thread_info *info,
         RETURN(0);
 }
 
-#define MDT_FAIL_CHECK(id)                                              \
-({                                                                      \
-        if (unlikely(OBD_FAIL_CHECK(id)))                               \
-                CERROR(LUSTRE_MDT_NAME": " #id " test failed\n");      \
-        OBD_FAIL_CHECK(id);                                             \
-})
-
-#define MDT_FAIL_CHECK_ONCE(id)                                              \
-({      int _ret_ = 0;                                                       \
-        if (unlikely(OBD_FAIL_CHECK(id))) {                                  \
-                CERROR(LUSTRE_MDT_NAME": *** obd_fail_loc=%x ***\n", id);    \
-                obd_fail_loc |= OBD_FAILED;                                  \
-                if ((id) & OBD_FAIL_ONCE)                                    \
-                        obd_fail_loc |= OBD_FAIL_ONCE;                       \
-                _ret_ = 1;                                                   \
-        }                                                                    \
-        _ret_;                                                               \
-})
-
-#define MDT_FAIL_RETURN(id, ret)                                             \
-do {                                                                         \
-        if (unlikely(MDT_FAIL_CHECK_ONCE(id))) {                             \
-                RETURN(ret);                                                 \
-        }                                                                    \
-} while(0)
-
 struct md_ucred *mdt_ucred(const struct mdt_thread_info *info);
 
 static inline int is_identity_get_disabled(struct upcall_cache *cache)

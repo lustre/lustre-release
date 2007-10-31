@@ -604,7 +604,7 @@ static int mdt_finish_open(struct mdt_thread_info *info,
         } else if (flags & MDS_OPEN_DIRECTORY)
                 RETURN(-ENOTDIR);
 
-        if (MDT_FAIL_CHECK(OBD_FAIL_MDS_OPEN_CREATE)) {
+        if (OBD_FAIL_CHECK(OBD_FAIL_MDS_OPEN_CREATE)) {
                 obd_fail_loc = OBD_FAIL_LDLM_REPLY | OBD_FAIL_ONCE;
                 RETURN(-EAGAIN);
         }
@@ -891,7 +891,7 @@ int mdt_reint_open(struct mdt_thread_info *info, struct mdt_lock_handle *lhc)
                        "regular open\n");
         }
 
-        if (MDT_FAIL_CHECK(OBD_FAIL_MDS_OPEN_PACK))
+        if (OBD_FAIL_CHECK(OBD_FAIL_MDS_OPEN_PACK))
                 GOTO(out, result = err_serious(-ENOMEM));
 
         mdt_set_disposition(info, ldlm_rep,
@@ -1213,7 +1213,7 @@ int mdt_close(struct mdt_thread_info *info)
         if (repbody != NULL)
                 mdt_shrink_reply(info);
 
-        if (MDT_FAIL_CHECK(OBD_FAIL_MDS_CLOSE_PACK))
+        if (OBD_FAIL_CHECK(OBD_FAIL_MDS_CLOSE_PACK))
                 RETURN(err_serious(-ENOMEM));
 
         RETURN(rc ? rc : ret);

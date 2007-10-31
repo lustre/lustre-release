@@ -40,7 +40,6 @@
 #include <linux/module.h>
 /*
  * struct OBD_{ALLOC,FREE}*()
- * MDT_FAIL_CHECK
  */
 #include <obd_support.h>
 /* struct ptlrpc_request */
@@ -286,7 +285,7 @@ static int mdt_getstatus(struct mdt_thread_info *info)
         if (rc)
                 RETURN(err_serious(rc));
 
-        if (MDT_FAIL_CHECK(OBD_FAIL_MDS_GETSTATUS_PACK))
+        if (OBD_FAIL_CHECK(OBD_FAIL_MDS_GETSTATUS_PACK))
                 RETURN(err_serious(-ENOMEM));
 
         repbody = req_capsule_server_get(&info->mti_pill, &RMF_MDT_BODY);
@@ -334,7 +333,7 @@ static int mdt_statfs(struct mdt_thread_info *info)
         if (rc)
                 RETURN(err_serious(rc));
 
-        if (MDT_FAIL_CHECK(OBD_FAIL_MDS_STATFS_PACK)) {
+        if (OBD_FAIL_CHECK(OBD_FAIL_MDS_STATFS_PACK)) {
                 rc = err_serious(-ENOMEM);
         } else {
                 osfs = req_capsule_server_get(&info->mti_pill,&RMF_OBD_STATFS);
@@ -419,7 +418,7 @@ static int mdt_getattr_internal(struct mdt_thread_info *info,
         int                     rc;
         ENTRY;
 
-        if (unlikely(MDT_FAIL_CHECK(OBD_FAIL_MDS_GETATTR_PACK)))
+        if (OBD_FAIL_CHECK(OBD_FAIL_MDS_GETATTR_PACK))
                 RETURN(err_serious(-ENOMEM));
 
         repbody = req_capsule_server_get(pill, &RMF_MDT_BODY);
@@ -1121,7 +1120,7 @@ static int mdt_sendpage(struct mdt_thread_info *info,
         if (rc)
                 GOTO(free_desc, rc);
 
-        if (MDT_FAIL_CHECK(OBD_FAIL_MDS_SENDPAGE))
+        if (OBD_FAIL_CHECK(OBD_FAIL_MDS_SENDPAGE))
                 GOTO(abort_bulk, rc);
 
         *lwi = LWI_TIMEOUT(obd_timeout * HZ / 4, NULL, NULL);
@@ -1334,7 +1333,7 @@ static int mdt_readpage(struct mdt_thread_info *info)
         int                i;
         ENTRY;
 
-        if (MDT_FAIL_CHECK(OBD_FAIL_MDS_READPAGE_PACK))
+        if (OBD_FAIL_CHECK(OBD_FAIL_MDS_READPAGE_PACK))
                 RETURN(err_serious(-ENOMEM));
 
         reqbody = req_capsule_client_get(&info->mti_pill, &RMF_MDT_BODY);
@@ -1385,7 +1384,7 @@ free_rdpg:
                         __cfs_free_page(rdpg->rp_pages[i]);
         OBD_FREE(rdpg->rp_pages, rdpg->rp_npages * sizeof rdpg->rp_pages[0]);
 
-        MDT_FAIL_RETURN(OBD_FAIL_MDS_SENDPAGE, 0);
+        OBD_FAIL_RETURN(OBD_FAIL_MDS_SENDPAGE, 0);
 
         return rc;
 }
@@ -1425,7 +1424,7 @@ static int mdt_reint_internal(struct mdt_thread_info *info,
                 repbody->aclsize = 0;
         }
 
-        if (MDT_FAIL_CHECK(OBD_FAIL_MDS_REINT_UNPACK))
+        if (OBD_FAIL_CHECK(OBD_FAIL_MDS_REINT_UNPACK))
                 GOTO(out_shrink, rc = err_serious(-EFAULT));
 
         rc = mdt_reint_unpack(info, op);
@@ -1538,7 +1537,7 @@ static int mdt_sync(struct mdt_thread_info *info)
         if (body == NULL)
                 RETURN(err_serious(-EINVAL));
 
-        if (MDT_FAIL_CHECK(OBD_FAIL_MDS_SYNC_PACK))
+        if (OBD_FAIL_CHECK(OBD_FAIL_MDS_SYNC_PACK))
                 RETURN(err_serious(-ENOMEM));
 
         if (fid_seq(&body->fid1) == 0) {
@@ -2164,7 +2163,7 @@ static void mdt_thread_info_init(struct ptlrpc_request *req,
         if (req->rq_export) {
                 info->mti_mdt = mdt_dev(req->rq_export->exp_obd->obd_lu_dev);
                 info->mti_exp = req->rq_export;
-        }         else
+        } else
                 info->mti_mdt = NULL;
         info->mti_env = req->rq_svc_thread->t_env;
         ci = md_capainfo(info->mti_env);
@@ -2320,7 +2319,7 @@ static int mdt_handle0(struct ptlrpc_request *req,
 
         ENTRY;
 
-        MDT_FAIL_RETURN(OBD_FAIL_MDS_ALL_REQUEST_NET | OBD_FAIL_ONCE, 0);
+        OBD_FAIL_RETURN(OBD_FAIL_MDS_ALL_REQUEST_NET | OBD_FAIL_ONCE, 0);
 
         LASSERT(current->journal_info == NULL);
 

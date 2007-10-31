@@ -399,7 +399,7 @@ static int mdt_reint_create(struct mdt_thread_info *info,
         int rc;
         ENTRY;
 
-        if (MDT_FAIL_CHECK(OBD_FAIL_MDS_REINT_CREATE))
+        if (OBD_FAIL_CHECK(OBD_FAIL_MDS_REINT_CREATE))
                 GOTO(out, rc = err_serious(-ESTALE));
 
         if (info->mti_dlm_req)
@@ -453,7 +453,7 @@ static int mdt_reint_unlink(struct mdt_thread_info *info,
         if (info->mti_dlm_req)
                 ldlm_request_cancel(req, info->mti_dlm_req, 0);
 
-        if (MDT_FAIL_CHECK(OBD_FAIL_MDS_REINT_UNLINK))
+        if (OBD_FAIL_CHECK(OBD_FAIL_MDS_REINT_UNLINK))
                 GOTO(out, rc = err_serious(-ENOENT));
 
         /* step 1: lock the parent */
@@ -553,7 +553,7 @@ static int mdt_reint_link(struct mdt_thread_info *info,
         DEBUG_REQ(D_INODE, req, "link "DFID" to "DFID"/%s",
                   PFID(rr->rr_fid1), PFID(rr->rr_fid2), rr->rr_name);
 
-        if (MDT_FAIL_CHECK(OBD_FAIL_MDS_REINT_LINK))
+        if (OBD_FAIL_CHECK(OBD_FAIL_MDS_REINT_LINK))
                 GOTO(out, rc = err_serious(-ENOENT));
 
         if (info->mti_dlm_req)
