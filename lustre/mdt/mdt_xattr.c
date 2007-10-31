@@ -55,7 +55,7 @@ static int mdt_getxattr_pack_reply(struct mdt_thread_info * info)
         int                     size, rc;
         ENTRY;
         
-        if (MDT_FAIL_CHECK(OBD_FAIL_MDS_GETXATTR_PACK))
+        if (OBD_FAIL_CHECK(OBD_FAIL_MDS_GETXATTR_PACK))
                 RETURN(-ENOMEM);
 
         /* Determine how many bytes we need */
@@ -274,7 +274,7 @@ int mdt_setxattr(struct mdt_thread_info *info)
 
         CDEBUG(D_INODE, "setxattr "DFID"\n", PFID(&body->fid1));
 
-        if (MDT_FAIL_CHECK(OBD_FAIL_MDS_SETXATTR))
+        if (OBD_FAIL_CHECK(OBD_FAIL_MDS_SETXATTR))
                 RETURN(err_serious(-ENOMEM));
 
         reqbody = req_capsule_client_get(pill, &RMF_MDT_BODY);
