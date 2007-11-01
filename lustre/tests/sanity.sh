@@ -4678,7 +4678,7 @@ test_124a() {
         # and we need to additionally enforce LVF to take this into account.
         # Use $LRU_SIZE_B here to take into account real number of locks created
         # in the case of CMD, LRU_SIZE_B != $NR in most of cases
-        LVF=$(($LRU_SIZE_B * $MAX_HRS * 60 * 60))
+        LVF=$(($MAX_HRS * 60 * 60 * $LIMIT / $SLEEP))
         log "make client drop locks $LVF times faster so that ${SLEEP}s is enough to cancel $LRU_SIZE_B lock(s)"
         OLD_LVF=`cat $NSDIR/pool/lock_volume_factor`
         echo "$LVF" > $NSDIR/pool/lock_volume_factor
