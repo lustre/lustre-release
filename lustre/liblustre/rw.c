@@ -774,7 +774,7 @@ ssize_t llu_file_prwv(const struct iovec *iovec, int iovlen,
 
         err = oig_wait(iogroup->lig_oig);
         if (err) {
-                CERROR("sync error %d, data corruption possible\n", err);
+                CERROR("%s error: %s\n", is_read ? "read" : "write", strerror(-err));
                 GOTO(err_unlock, err);
         }
 
