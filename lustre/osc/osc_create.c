@@ -66,7 +66,23 @@ static int osc_interpret_create(struct ptlrpc_request *req, void *data, int rc)
         
         spin_lock(&oscc->oscc_lock);
         oscc->oscc_flags &= ~OSCC_FLAG_CREATING;
-        if (rc == -ENOSPC || rc == -EROFS) {
+        switch (rc) {
+        case 0: {
+                if (body) {
+                        int diff = body->oa.o_id - oscc->oscc_last_id;
+
+                        if (diff < oscc->oscc_grow_count)
+                                oscc->oscc_grow_count =
+                                        max(diff/3, OST_MIN_PRECREATE);
+                        else
+                                oscc->oscc_flags &= ~OSCC_FLAG_LOW;
+                        oscc->oscc_last_id = body->oa.o_id;
+                }
+                spin_unlock(&oscc->oscc_lock);
+                break;
+        }
+        case -ENOSPC:
+        case -EROFS: {
                 oscc->oscc_flags |= OSCC_FLAG_NOSPC;
                 if (body && rc == -ENOSPC) {
                         oscc->oscc_grow_count = OST_MIN_PRECREATE;
@@ -74,7 +90,17 @@ static int osc_interpret_create(struct ptlrpc_request *req, void *data, int rc)
                 }
                 spin_unlock(&oscc->oscc_lock);
                 DEBUG_REQ(D_INODE, req, "OST out of space, flagging");
-        } else if (rc != 0 && rc != -EIO) {
+                break;
+        }
+        case -EIO: {
+                /* filter always set body->oa.o_id as the last_id 
+                 * of filter (see filter_handle_precreate for detail)*/
+                if (body && body->oa.o_id > oscc->oscc_last_id)
+                        oscc->oscc_last_id = body->oa.o_id;
+                spin_unlock(&oscc->oscc_lock);
+                break;
+        }
+        default: {
                 oscc->oscc_flags |= OSCC_FLAG_RECOVERING;
                 oscc->oscc_grow_count = OST_MIN_PRECREATE;
                 spin_unlock(&oscc->oscc_lock);
@@ -82,26 +108,7 @@ static int osc_interpret_create(struct ptlrpc_request *req, void *data, int rc)
                           "Unknown rc %d from async create: failing oscc", rc);
                 ptlrpc_fail_import(req->rq_import,
                                    lustre_msg_get_conn_cnt(req->rq_reqmsg));
-        } else {
-                if (rc == 0) {
-                         if (body) {
-                                int diff = body->oa.o_id - oscc->oscc_last_id;
-
-                                if (diff < oscc->oscc_grow_count)
-                                        oscc->oscc_grow_count =
-                                                max(diff/3, OST_MIN_PRECREATE);
-                                else
-                                        oscc->oscc_flags &= ~OSCC_FLAG_LOW;
-                                oscc->oscc_last_id = body->oa.o_id;
-                        }
-                } else {
-                        /* filter always set body->oa.o_id as the last_id 
-                         * of filter (see filter_handle_precreate for detail)*/
-                        if (body && body->oa.o_id > oscc->oscc_last_id)
-                                oscc->oscc_last_id = body->oa.o_id;
-                }
-                spin_unlock(&oscc->oscc_lock);
-
+        }
         }
 
         CDEBUG(D_HA, "preallocated through id "LPU64" (next to use "LPU64")\n",

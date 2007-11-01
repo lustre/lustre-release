@@ -476,10 +476,13 @@ test_20b() { # bug 10480
     df -P $DIR || df -P $DIR || true    # reconnect
     wait_mds_recovery_done || error "MDS recovery not done"
 
+    # FIXME just because recovery is done doesn't mean we've finished 
+    # orphan cleanup.  Fake it with a sleep for now...
+    sleep 10
     AFTERUSED=`df -P $DIR | tail -1 | awk '{ print $3 }'`
     log "before $BEFOREUSED, after $AFTERUSED"
     [ $AFTERUSED -gt $((BEFOREUSED + 20)) ] && \
-        error "after $AFTERUSED > before $BEFOREUSED" && return 5
+        error "after $AFTERUSED > before $BEFOREUSED"
     return 0
 }
 run_test 20b "write, unlink, eviction, replay, (test mds_cleanup_orphans)"

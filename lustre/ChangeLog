@@ -498,6 +498,13 @@ Bugzilla   : 13147
 Description: block reactivating mgc import until all deactivates complete
 Details    : Fix race when failing back MDT/MGS to itself (testing)
 
+Severity   : minor
+Frequency  : at statup only
+Bugzilla   : 12860
+Description: mds_lov_synchronize race leads to various problems
+Details    : simultaneous MDT->OST connections at startup can cause the 
+	     sync to abort, leaving the OSC in a bad state.
+
 Severity   : enhancement
 Bugzilla   : 12194
 Description: add optional extra BUILD_VERSION info

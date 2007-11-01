@@ -902,7 +902,7 @@ static int lov_clear_orphans(struct obd_export *export, struct obdo *src_oa,
 
                 /* if called for a specific target, we don't
                    care if it is not active. */
-                if (!lov->lov_tgts[i]->ltd_active == 0 && ost_uuid == NULL) {
+                if (!lov->lov_tgts[i]->ltd_active && ost_uuid == NULL) {
                         CDEBUG(D_HA, "lov idx %d inactive\n", i);
                         continue;
                 }
@@ -2390,6 +2390,7 @@ static int lov_set_info_async(struct obd_export *exp, obd_count keylen,
 {
         struct obd_device *obddev = class_exp2obd(exp);
         struct lov_obd *lov = &obddev->u.lov;
+        obd_count count;
         int i, rc = 0, err;
         int no_set = !set;
         int incr = 0, check_uuid = 0, do_inactive = 0;
@@ -2401,9 +2402,14 @@ static int lov_set_info_async(struct obd_export *exp, obd_count keylen,
                         RETURN(-ENOMEM);
         }
 
+        lov_getref(obddev);
+        count = lov->desc.ld_tgt_count;
+
         if (KEY_IS(KEY_NEXT_ID)) {
-                if (vallen != lov->desc.ld_tgt_count * sizeof(obd_id))
-                        RETURN(-EINVAL);
+                /* We must use mds's idea of # osts for indexing into
+                   mds->mds_lov_objids */
+                count = vallen / sizeof(obd_id);
+                LASSERT(count <= lov->desc.ld_tgt_count);
                 vallen = sizeof(obd_id);
                 incr = sizeof(obd_id);
                 do_inactive = 1;
@@ -2415,9 +2421,7 @@ static int lov_set_info_async(struct obd_export *exp, obd_count keylen,
                 /* use defaults:  do_inactive = incr = 0; */
         }
 
-        lov_getref(obddev);
-
-        for (i = 0; i < lov->desc.ld_tgt_count; i++, val = (char *)val + incr) {
+        for (i = 0; i < count; i++, val = (char *)val + incr) {
                 /* OST was disconnected */
                 if (!lov->lov_tgts[i] || !lov->lov_tgts[i]->ltd_exp)
                         continue;

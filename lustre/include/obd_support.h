@@ -113,6 +113,7 @@ extern int obd_race_state;
 #define OBD_FAIL_MDS_WRITEPAGE_PACK      0x13b
 #define OBD_FAIL_MDS_LLOG_CREATE_FAILED  0x13c
 #define OBD_FAIL_MDS_OSC_PRECREATE       0x13d
+#define OBD_FAIL_MDS_LOV_SYNC_RACE       0x13e
 
 #define OBD_FAIL_OST                     0x200
 #define OBD_FAIL_OST_CONNECT_NET         0x201

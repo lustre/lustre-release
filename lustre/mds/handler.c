@@ -2145,9 +2145,10 @@ int mds_postrecov(struct obd_device *obd)
         LASSERT(!obd->obd_recovering);
         LASSERT(llog_get_context(obd, LLOG_MDS_OST_ORIG_CTXT) != NULL);
 
-        /* FIXME why not put this in the synchronize? */
         /* set nextid first, so we are sure it happens */
+        mutex_down(&obd->obd_dev_sem);
         rc = mds_lov_set_nextid(obd);
+        mutex_up(&obd->obd_dev_sem);
         if (rc) {
                 CERROR("%s: mds_lov_set_nextid failed %d\n",
                        obd->obd_name, rc);
