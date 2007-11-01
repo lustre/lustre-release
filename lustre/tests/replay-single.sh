@@ -1051,8 +1051,177 @@ test_52() {
 }
 run_test 52 "time out lock replay (3764)"
 
-#b_cray 53 "|X| open request and close reply while two MDC requests in flight"
-#b_cray 54 "|X| open request and close reply while two MDC requests in flight"
+# bug 3462 - simultaneous MDC requests
+test_53a() {
+    mkdir -p $DIR/${tdir}-1
+    mkdir -p $DIR/${tdir}-2
+    multiop $DIR/${tdir}-1/f O_c &
+    close_pid=$!
+    # give multiop a chance to open
+    sleep 1
+
+    #define OBD_FAIL_MDS_CLOSE_NET 0x115
+    do_facet mds "sysctl -w lustre.fail_loc=0x80000115"
+    kill -USR1 $close_pid
+    cancel_lru_locks MDC # force the close
+    do_facet mds "sysctl -w lustre.fail_loc=0"
+    mcreate $DIR/${tdir}-2/f || return 1
+    
+    # close should still be here
+    [ -d /proc/$close_pid ] || return 2
+    replay_barrier_nodf mds
+    fail mds
+    wait $close_pid || return 3
+
+    $CHECKSTAT -t file $DIR/${tdir}-1/f || return 4
+    $CHECKSTAT -t file $DIR/${tdir}-2/f || return 5
+    rm -rf $DIR/${tdir}-*
+}
+run_test 53a "|X| close request while two MDC requests in flight"
+
+test_53b() {
+    mkdir -p $DIR/$tdir-1
+    mkdir -p $DIR/$tdir-2
+    multiop $DIR/$tdir-1/f O_c &
+    close_pid=$!
+
+    #define OBD_FAIL_MDS_REINT_NET 0x107
+    do_facet mds "sysctl -w lustre.fail_loc=0x80000107"
+    mcreate $DIR/${tdir}-2/f &
+    open_pid=$!
+    sleep 1
+
+    do_facet mds "sysctl -w lustre.fail_loc=0"
+    kill -USR1 $close_pid
+    cancel_lru_locks MDC # force the close
+    wait $close_pid || return 1
+    # open should still be here
+    [ -d /proc/$open_pid ] || return 2
+
+    replay_barrier_nodf mds
+    fail mds
+    wait $open_pid || return 3
+
+    $CHECKSTAT -t file $DIR/${tdir}-1/f || return 4
+    $CHECKSTAT -t file $DIR/${tdir}-2/f || return 5
+    rm -rf $DIR/${tdir}-*
+}
+run_test 53b "|X| open request while two MDC requests in flight"
+
+test_53c() {
+    mkdir -p $DIR/${tdir}-1
+    mkdir -p $DIR/${tdir}-2
+    multiop $DIR/${tdir}-1/f O_c &
+    close_pid=$!
+
+    do_facet mds "sysctl -w lustre.fail_loc=0x80000107"
+    mcreate $DIR/${tdir}-2/f &
+    open_pid=$!
+    sleep 1
+
+    do_facet mds "sysctl -w lustre.fail_loc=0x80000115"
+    kill -USR1 $close_pid
+    cancel_lru_locks MDC  # force the close
+
+    replay_barrier_nodf mds
+    fail_nodf mds
+    wait $open_pid || return 1
+    sleep 2
+    # close should be gone
+    [ -d /proc/$close_pid ] && return 2
+    do_facet mds "sysctl -w lustre.fail_loc=0"
+
+    $CHECKSTAT -t file $DIR/${tdir}-1/f || return 3
+    $CHECKSTAT -t file $DIR/${tdir}-2/f || return 4
+    rm -rf $DIR/${tdir}-*
+}
+run_test 53c "|X| open request and close request while two MDC requests in flight"
+
+test_53d() {
+    mkdir -p $DIR/${tdir}-1
+    mkdir -p $DIR/${tdir}-2
+    multiop $DIR/${tdir}-1/f O_c &
+    close_pid=$!
+    # give multiop a chance to open
+    sleep 1
+
+    # define OBD_FAIL_MDS_CLOSE_NET_REP 0X138    
+    do_facet mds "sysctl -w lustre.fail_loc=0x8000013b"
+    kill -USR1 $close_pid
+    cancel_lru_locks MDC  # force the close
+    do_facet mds "sysctl -w lustre.fail_loc=0"
+    mcreate $DIR/${tdir}-2/f || return 1
+    
+    # close should still be here
+    [ -d /proc/$close_pid ] || return 2
+    replay_barrier_nodf mds
+    fail mds
+    wait $close_pid || return 3
+
+    $CHECKSTAT -t file $DIR/${tdir}-1/f || return 4
+    $CHECKSTAT -t file $DIR/${tdir}-2/f || return 5
+    rm -rf $DIR/${tdir}-*
+}
+run_test 53d "|X| close reply while two MDC requests in flight"
+
+test_53e() {
+    mkdir -p $DIR/$tdir-1
+    mkdir -p $DIR/$tdir-2
+    multiop $DIR/$tdir-1/f O_c &
+    close_pid=$!
+
+    #define OBD_FAIL_MDS_REINT_NET_REP       0x119
+    do_facet mds "sysctl -w lustre.fail_loc=0x80000119"
+    mcreate $DIR/${tdir}-2/f &
+    open_pid=$!
+    sleep 1
+    
+    do_facet mds "sysctl -w lustre.fail_loc=0"
+    kill -USR1 $close_pid
+    cancel_lru_locks MDC  # force the close
+    wait $close_pid || return 1
+    # open should still be here
+    [ -d /proc/$open_pid ] || return 2
+    
+    replay_barrier_nodf mds
+    fail mds
+    wait $open_pid || return 3
+
+    $CHECKSTAT -t file $DIR/${tdir}-1/f || return 4
+    $CHECKSTAT -t file $DIR/${tdir}-2/f || return 5
+    rm -rf $DIR/${tdir}-*
+}
+run_test 53e "|X| open reply while two MDC requests in flight"
+
+test_53h() {
+    mkdir -p $DIR/${tdir}-1
+    mkdir -p $DIR/${tdir}-2
+    multiop $DIR/${tdir}-1/f O_c &
+    close_pid=$!
+
+    do_facet mds "sysctl -w lustre.fail_loc=0x80000107"
+    mcreate $DIR/${tdir}-2/f &
+    open_pid=$!
+    sleep 1
+    
+    do_facet mds "sysctl -w lustre.fail_loc=0x8000013b"
+    kill -USR1 $close_pid
+    cancel_lru_locks MDC  # force the close
+    sleep 1
+
+    replay_barrier_nodf mds
+    fail_nodf mds
+    wait $open_pid || return 1
+    sleep 2
+    # close should be gone
+    [ -d /proc/$close_pid ] && return 2
+    do_facet mds "sysctl -w lustre.fail_loc=0"
+
+    $CHECKSTAT -t file $DIR/${tdir}-1/f || return 3
+    $CHECKSTAT -t file $DIR/${tdir}-2/f || return 4
+    rm -rf $DIR/${tdir}-*
+}
+run_test 53h "|X| open request and close reply while two MDC requests in flight"
 
 #b3761 ASSERTION(hash != 0) failed
 test_55() {
@@ -1356,7 +1525,6 @@ if [ -n "$ATOLDBASE" ]; then
     do_facet ost1 "echo $ATOLDBASE >> /sys/module/ptlrpc/at_history"
 fi
 # end of AT tests includes above lines
-
 
 equals_msg `basename $0`: test complete, cleaning up
 check_and_cleanup_lustre

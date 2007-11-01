@@ -486,6 +486,11 @@ fail() {
     df $MOUNT || error "post-failover df: $?"
 }
 
+fail_nodf() {
+    local facet=$1
+    facet_failover $facet
+}
+
 fail_abort() {
     local facet=$1
     stop $facet

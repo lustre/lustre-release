@@ -142,6 +142,7 @@ extern unsigned int obd_alloc_fail_rate;
 #define OBD_FAIL_MDS_LOV_SYNC_RACE       0x138
 #define OBD_FAIL_MDS_OSC_PRECREATE       0x139
 #define OBD_FAIL_MDS_LLOG_SYNC_TIMEOUT   0x13a
+#define OBD_FAIL_MDS_CLOSE_NET_REP       0x13b
 
 #define OBD_FAIL_OST                     0x200
 #define OBD_FAIL_OST_CONNECT_NET         0x201

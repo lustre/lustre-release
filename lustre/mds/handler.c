@@ -1674,6 +1674,7 @@ int mds_handle(struct ptlrpc_request *req)
                 DEBUG_REQ(D_INODE, req, "close");
                 OBD_FAIL_RETURN(OBD_FAIL_MDS_CLOSE_NET, 0);
                 rc = mds_close(req, REQ_REC_OFF);
+                fail = OBD_FAIL_MDS_CLOSE_NET_REP;
                 break;
 
         case MDS_DONE_WRITING:
