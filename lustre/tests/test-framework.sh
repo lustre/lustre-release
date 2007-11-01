@@ -179,6 +179,8 @@ wait_for_lnet() {
 }
 
 unload_modules() {
+    wait_exit_ST client # bug 12845
+
     lsmod | grep lnet > /dev/null && $LCTL dl && $LCTL dk $TMP/debug
     local MODULES=$($LCTL modules | awk '{ print $2 }')
     $RMMOD $MODULES > /dev/null 2>&1 || true
@@ -256,24 +258,8 @@ stop() {
 
     # umount should block, but we should wait for unrelated obd's
     # like the MGS or MGC to also stop.
-    local WAIT=0
-    local INTERVAL=1
-    # conf-sanity 31 takes a long time cleanup
-    while [ $WAIT -lt 300 ]; do
-	running=$(do_facet ${facet} "[ -e $LPROC ] && grep ST' ' $LPROC/devices") || true
-	if [ -z "${running}" ]; then
-	    return 0
-	fi
-	echo "waited $WAIT for${running}"
-	if [ $INTERVAL -lt 64 ]; then 
-	    INTERVAL=$((INTERVAL + INTERVAL))
-	fi
-	sleep $INTERVAL
-	WAIT=$((WAIT + INTERVAL))
-    done
-    echo "service didn't stop after $WAIT seconds.  Still running:"
-    echo ${running}
-    exit 1
+
+    wait_exit_ST ${facet}
 }
 
 zconf_mount() {
@@ -406,6 +392,25 @@ wait_mds_recovery_done () {
     done
     echo "MDS recovery not done in $MAX sec"
     return 1            
+}
+
+wait_exit_ST () {
+    local facet=$1
+
+    local WAIT=0
+    local INTERVAL=1
+    # conf-sanity 31 takes a long time cleanup
+    while [ $WAIT -lt 300 ]; do
+        running=$(do_facet ${facet} "[ -e $LPROC ] && grep ST' ' $LPROC/devices") || true
+        [ -z "${running}" ] && return 0
+        echo "waited $WAIT for${running}"
+        [ $INTERVAL -lt 64 ] && INTERVAL=$((INTERVAL + INTERVAL))
+        sleep $INTERVAL
+        WAIT=$((WAIT + INTERVAL))
+    done
+    echo "service didn't stop after $WAIT seconds.  Still running:"
+    echo ${running}
+    return 1
 }
 
 client_df() {
