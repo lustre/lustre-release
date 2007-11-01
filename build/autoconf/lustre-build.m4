@@ -664,7 +664,7 @@ fi
 
 AC_SUBST(ac_configure_args)
 
-MOSTLYCLEANFILES='.*.cmd .*.flags *.o *.ko *.mod.c .depend .*.1.* Modules.symvers'
+MOSTLYCLEANFILES='.*.cmd .*.flags *.o *.ko *.mod.c .depend .*.1.* Modules.symvers Module.symvers'
 AC_SUBST(MOSTLYCLEANFILES)
 
 AC_OUTPUT
