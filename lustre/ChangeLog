@@ -15,6 +15,15 @@ tbd         Cluster File Systems, Inc. <info@clusterfs.com>
        * Note that reiserfs quotas are disabled on SLES 10 in this kernel.
 
 Severity   : enhancement
+Bugzilla   : 13690
+Description: Build SLES10 patchless client fails
+Details    : The configure was broken by run ./configure with 
+             --with-linux-obj=.... argument for patchless client. When the
+	     configure use --with-linux-obj, the LINUXINCLUDE= -Iinclude
+	     can't search header adequately. Use absolute path such as 
+	     -I($LINUX)/include instead. 
+
+Severity   : enhancement
 Bugzilla   : 11622
 Description: Lustre Page Accounting
 Details    : New macros for page alloc and free which enable accounting
