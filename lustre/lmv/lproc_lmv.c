@@ -23,9 +23,7 @@
 
 #include <linux/version.h>
 #include <linux/seq_file.h>
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0))
 #include <asm/statfs.h>
-#endif
 #include <lprocfs_status.h>
 #include <obd_class.h>
 
