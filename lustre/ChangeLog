@@ -14,18 +14,26 @@
 
 Severity   : normal
 Bugzilla   : 13568
-Description: Remove 2.4 kernel checks lustre 1.8
+Description: Remove 2.4 kernel support from lustre 1.8.0
 Details    : Remove 2.5.0 check from quota_check.c, quota_ctl.c,
              quota_interface.c in quota subsystem.
 	     Remove 2.4 kernel check from obd_mount.c, linux/linux-sysctl.c in
              obdclass subsystem.
              Remove lock_24kernel from fsfilt_ext3.c fsfilt_reiserfs.c 
              lvfs_linux.c upcall_cache.c in lvfs subsystem.
+             Remove 2.5.0 check from dcache.c dir.c file.c llite_internal.h
+             llite_lib.c llite_mmap.c lproc_llite.c namei.c rw.c symlink.c
+             in llite subsystem.
+	     Remove 2.5.0 check from handler.c lproc_mds.c mds_fs.c
+	     mds_internal.h mds_lib.c mds_open.c mds_reint.c mds_xattr.c
+	     in mds subsystem.
 	     Remove 2.4 kernel check from lproc_osc.c, osc_request.c in osc
 	     subsystem.
 	     Remove 2.4 kernel check from filter.c, lproc_obdfilter.c in 
 	     obdfilter subsystem.
 	     Remove 2.4 kernel code from lustre/obdecho/echo_client.c.
+	     Remove 2.4 kernel check from lustre/mgs/lproc_mgs.c,
+	     lustre/mgs/mgs_fs.c.
 
 Severity   : enhancement
 Bugzilla   : 13690
@@ -469,15 +477,6 @@ Details    : Update to the latest RHEL 4 kernel to fix the vulnerability
 	     described in CVE-2007-4573.  This problem could allow untrusted
 	     local users to gain root access.
 
-Severity   : normal
-Bugzilla   : 13568
-Description: Remove 2.4 kernel checks lustre 1.8
-Details    : Remove 2.5.0 check from dcache.c dir.c file.c llite_internal.h
-             llite_lib.c llite_mmap.c lproc_llite.c namei.c rw.c symlink.c
-             llite subsystem.
-	     Remove 2.5.0 check from handler.c lproc_mds.c mds_fs.c
-	     mds_internal.h mds_lib.c mds_open.c mds_reint.c mds_xattr.c
-	     in mds subsystem.
 
 Severity   : normal
 Frequency  : when using O_DIRECT and quotas
