@@ -31,9 +31,7 @@
 #define DEBUG_SUBSYSTEM S_MDS
 
 #include <linux/version.h>
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0))
 #include <asm/statfs.h>
-#endif
 
 #include <linux/module.h>
 

@@ -35,6 +35,7 @@ Details    : Remove 2.5.0 check from quota_check.c, quota_ctl.c,
 	     Remove 2.4 kernel check from lustre/mgs/lproc_mgs.c,
 	     lustre/mgs/mgs_fs.c.
 	     Remove 2.4 kernel code from lustre/mgc/mgc_request.c.
+	     Remove 2.4 kernel check from lustre/mdt/mdt_lproc.c.
 
 Severity   : enhancement
 Bugzilla   : 13690
