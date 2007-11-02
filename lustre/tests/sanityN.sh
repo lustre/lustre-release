@@ -160,6 +160,9 @@ test_6() {
 run_test 6 "remove of open file on other node =================="
 
 test_7() {
+	# run_one creates uniq $tdir (bug 13798)
+	# opendirunlink failes if it exists
+	rmdir $DIR1/$tdir || true
 	opendirunlink $DIR1/$tdir $DIR2/$tdir || \
 		error "opendirunlink $DIR1/$tdir $DIR2/$tdir"
 }
