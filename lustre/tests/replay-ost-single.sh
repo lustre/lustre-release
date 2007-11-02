@@ -4,6 +4,7 @@ set -e
 
 PTLDEBUG=${PTLDEBUG:--1}
 LUSTRE=${LUSTRE:-`dirname $0`/..}
+SETUP=${SETUP:-""}
 CLEANUP=${CLEANUP:-""}
 . $LUSTRE/tests/test-framework.sh
 init_test_env $@
@@ -27,18 +28,11 @@ gen_config() {
     formatall
 }
 
-cleanup() {
-    cleanupall
-}
-
-if [ "$ONLY" == "cleanup" ]; then
-    cleanup
-    exit
-fi
-
 build_test_filter
 
-SETUP=${SETUP:-"setup"}
+cleanup_and_setup_lustre
+rm -rf $DIR/${TESTSUITE}/[df][0-9]* # bug 13798 new t-f tdir staff
+rm -rf $DIR/[df][0-9]*
 
 test_0a() {
     # needs to run during initial client->OST connection
