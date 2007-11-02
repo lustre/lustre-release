@@ -485,8 +485,6 @@ static int fsfilt_ext3_setattr(struct dentry *dentry, void *handle,
         struct inode *inode = dentry->d_inode;
         int rc = 0;
 
-        lock_24kernel();
-
         /* Avoid marking the inode dirty on the superblock list unnecessarily.
          * We are already writing the inode to disk as part of this
          * transaction and want to avoid a lot of extra inode writeout
@@ -537,7 +535,6 @@ static int fsfilt_ext3_setattr(struct dentry *dentry, void *handle,
         }
 
  out:
-        unlock_24kernel();
         RETURN(rc);
 }
 
