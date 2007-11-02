@@ -27,6 +27,9 @@ cleanup_and_setup_lustre
 
 mkdir -p $DIR
 
+rm -rf $DIR/${TESTSUITE}/[df][0-9]* # bug 13798 new t-f tdir staff
+rm -rf $DIR/[df][0-9]*
+
 test_0() {
     sleep 10
     mkdir $DIR/$tfile

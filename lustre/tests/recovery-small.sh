@@ -19,6 +19,8 @@ SETUP=${SETUP:-""}
 CLEANUP=${CLEANUP:-""}
 
 cleanup_and_setup_lustre
+rm -rf $DIR/${TESTSUITE}/[df][0-9]* # bug 13798 new t-f tdir staff
+rm -rf $DIR/[df][0-9]*
 
 test_1() {
     drop_request "mcreate $MOUNT/1"  || return 1
