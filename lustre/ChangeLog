@@ -23,6 +23,8 @@ Details    : Remove 2.5.0 check from quota_check.c, quota_ctl.c,
              lvfs_linux.c upcall_cache.c in lvfs subsystem.
 	     Remove 2.4 kernel check from lproc_osc.c, osc_request.c in osc
 	     subsystem.
+	     Remove 2.4 kernel check from filter.c, lproc_obdfilter.c in 
+	     obdfilter subsystem.
 
 Severity   : enhancement
 Bugzilla   : 13690

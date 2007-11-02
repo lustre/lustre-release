@@ -44,10 +44,8 @@
 #include <linux/init.h>
 #include <linux/version.h>
 #include <linux/sched.h>
-#if (LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))
-# include <linux/mount.h>
-# include <linux/buffer_head.h>
-#endif
+#include <linux/mount.h>
+#include <linux/buffer_head.h>
 
 #include <obd_class.h>
 #include <obd_lov.h>
@@ -1528,11 +1526,9 @@ int filter_vfs_unlink(struct inode *dir, struct dentry *dentry)
          *       here) or some other ordering issue. */
         DQUOT_INIT(dir);
 
-#if (LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))
         rc = security_inode_unlink(dir, dentry);
         if (rc)
                 GOTO(out, rc);
-#endif
 
         rc = dir->i_op->unlink(dir, dentry);
 out:
