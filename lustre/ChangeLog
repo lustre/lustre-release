@@ -12,6 +12,18 @@
        * Recommended e2fsprogs version: 1.40.2-cfs1
        * Note that reiserfs quotas are disabled on SLES 10 in this kernel.
 
+Severity   : normal
+Bugzilla   : 13568
+Description: Remove 2.4 kernel checks lustre 1.8
+Details    : Remove 2.5.0 check from quota_check.c, quota_ctl.c,
+             quota_interface.c in quota subsystem.
+	     Remove 2.4 kernel check from obd_mount.c, linux/linux-sysctl.c in
+             obdclass subsystem.
+             Remove lock_24kernel from fsfilt_ext3.c fsfilt_reiserfs.c 
+             lvfs_linux.c upcall_cache.c in lvfs subsystem.
+	     Remove 2.4 kernel check from lproc_osc.c, osc_request.c in osc
+	     subsystem.
+
 Severity   : enhancement
 Bugzilla   : 13690
 Description: Build SLES10 patchless client fails
@@ -403,16 +415,6 @@ Details    : Modify target file & which_patch.
              out-of-bounds system call table access. An untrusted local user 
              could exploit this flaw to run code in the kernel 
              (ie a root privilege escalation). (CVE-2007-4573). 
-
-Severity   : normal
-Bugzilla   : 13568
-Description: Remove 2.4 kernel checks lustre 1.8
-Details    : Remove 2.5.0 check from quota_check.c, quota_ctl.c,
-             quota_interface.c in quota subsystem.
-	     Remove 2.4 kernel check from obd_mount.c, linux/linux-sysctl.c in
-             obdclass subsystem.
-             Remove lock_24kernel from fsfilt_ext3.c fsfilt_reiserfs.c 
-             lvfs_linux.c upcall_cache.c in lvfs subsystem.
 
 Severity   : major
 Bugzilla   : 13093
