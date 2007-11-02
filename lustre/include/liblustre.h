@@ -105,7 +105,7 @@ typedef unsigned short umode_t;
 
 /* always adopt 2.5 definitions */
 #define KERNEL_VERSION(a,b,c) ((a)*100+(b)*10+c)
-#define LINUX_VERSION_CODE KERNEL_VERSION(2,5,0)
+#define LINUX_VERSION_CODE KERNEL_VERSION(2,6,5)
 
 #ifndef page_private
 #define page_private(page) ((page)->private)

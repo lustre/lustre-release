@@ -40,6 +40,12 @@ Details    : Remove 2.5.0 check from quota_check.c, quota_ctl.c,
 	     Remove 2.4 kernel check from lustre/lov/lproc_lov.c.
 	     Remove 2.4 kernel check from lustre/lmv/lproc_lmv.c.
 	     Remove lock_24kernel from lustre/lvfs/fsfilt_ext3.c.
+	     Remove 2.4 kernel code from include/liblustre.h,
+	     include/lustre_disk.h, include/lustre_quota.h,
+	     include/linux/lprocfs_status.h, include/linux/lvfs.h,
+	     include/linux/lustre_lite.h, include/linux/lustre_net.h,
+	     include/linux/lustre_user.h, include/linux/lvfs_linux.h,
+	     include/linux/obd_class.h, include/linux/lustre_compat25.h.
 
 Severity   : enhancement
 Bugzilla   : 13690

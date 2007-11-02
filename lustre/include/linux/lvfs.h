@@ -64,11 +64,7 @@ struct lvfs_run_ctxt {
         struct lvfs_ucred        luc;
         int                      ngroups;
         struct lvfs_callback_ops cb_ops;
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,4)
         struct group_info       *group_info;
-#else
-        struct group_info        group_info;
-#endif
 #ifdef OBD_CTXT_DEBUG
         __u32                    magic;
 #endif

@@ -25,8 +25,8 @@
 
 #ifdef __KERNEL__
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0) && LINUX_VERSION_CODE < KERNEL_VERSION(2,5,69)
-#error sorry, lustre requires at least 2.5.69
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,5)
+#error Sorry, Lustre requires at Linux kernel version 2.6.5 or later
 #endif
 
 #include <libcfs/linux/portals_compat25.h>
@@ -94,29 +94,8 @@ static inline void ll_set_fs_pwd(struct fs_struct *fs, struct vfsmount *mnt,
 #define LOCK_DQONOFF_MUTEX(dqopt) do {down(&(dqopt)->dqonoff_sem); } while(0)
 #endif /* HAVE_DQUOTOFF_MUTEX */
 
-
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,4)
-#define NGROUPS_SMALL           NGROUPS
-#define NGROUPS_PER_BLOCK       ((int)(EXEC_PAGESIZE / sizeof(gid_t)))
-
-struct group_info {
-        int        ngroups;
-        atomic_t   usage;
-        gid_t      small_block[NGROUPS_SMALL];
-        int        nblocks;
-        gid_t     *blocks[0];
-};
-#define current_ngroups current->ngroups
-#define current_groups current->groups
-
-struct group_info *groups_alloc(int gidsetsize);
-void groups_free(struct group_info *ginfo);
-#else /* >= 2.6.4 */
-
 #define current_ngroups current->group_info->ngroups
 #define current_groups current->group_info->small_block
-
-#endif /* LINUX_VERSION_CODE < KERNEL_VERSION(2,6,4) */
 
 #ifndef page_private
 #define page_private(page) ((page)->private)
@@ -130,8 +109,6 @@ void groups_free(struct group_info *ginfo);
 #define lock_dentry(___dentry)          spin_lock(&(___dentry)->d_lock)
 #define unlock_dentry(___dentry)        spin_unlock(&(___dentry)->d_lock)
 
-#define lock_24kernel()         do {} while (0)
-#define unlock_24kernel()       do {} while (0)
 #define ll_kernel_locked()      kernel_locked()
 
 /*
