@@ -150,8 +150,10 @@ int llog_setup(struct obd_device *obd, int index, struct obd_device *disk_obd,
         if (op->lop_setup)
                 rc = op->lop_setup(obd, index, disk_obd, count, logid);
 
-        if (rc)
+        if (rc) {
                 llog_ctxt_destroy(ctxt);
+                obd->obd_llog_ctxt[index] = NULL;
+        }
 out:
         RETURN(rc);
 }
