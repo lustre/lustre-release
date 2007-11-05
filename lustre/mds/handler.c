@@ -2059,18 +2059,17 @@ static int mds_setup(struct obd_device *obd, obd_count len, void *buf)
         label = fsfilt_get_label(obd, obd->u.obt.obt_sb);
         if (obd->obd_recovering) {
                 LCONSOLE_WARN("MDT %s now serving %s (%s%s%s), but will be in "
-                              "recovery until %d %s reconnect, or if no clients"
-                              " reconnect for %d:%.02d; during that time new "
-                              "clients will not be allowed to connect. "
+                              "recovery for at least %d:%.02d, or until %d "
+                              "client%s reconnect. During this time new clients"
+                              " will not be allowed to connect. "
                               "Recovery progress can be monitored by watching "
                               "/proc/fs/lustre/mds/%s/recovery_status.\n",
                               obd->obd_name, lustre_cfg_string(lcfg, 1),
                               label ?: "", label ? "/" : "", str,
-                              obd->obd_recoverable_clients,
-                              (obd->obd_recoverable_clients == 1) ?
-                              "client" : "clients",
                               obd->obd_recovery_timeout / 60,
                               obd->obd_recovery_timeout % 60,
+                              obd->obd_max_recoverable_clients,
+                              (obd->obd_max_recoverable_clients == 1) ? "":"s",
                               obd->obd_name);
         } else {
                 LCONSOLE_INFO("MDT %s now serving %s (%s%s%s) with recovery "

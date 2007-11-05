@@ -462,6 +462,7 @@ static int mds_init_server_data(struct obd_device *obd, struct file *file)
                 obd->obd_recovering = 1;
                 obd->obd_recovery_start = 0;
                 obd->obd_recovery_end = 0;
+                obd->obd_recovery_timeout = OBD_RECOVERY_FACTOR * obd_timeout;
         }
 
         mds->mds_mount_count = mount_count + 1;
