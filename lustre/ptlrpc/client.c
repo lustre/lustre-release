@@ -190,7 +190,7 @@ void ptlrpc_free_bulk(struct ptlrpc_bulk_desc *desc)
 }
 
 /* Set server timelimit for this req */
-static void ptlrpc_at_set_req_timeout(struct ptlrpc_request *req) 
+void ptlrpc_at_set_req_timeout(struct ptlrpc_request *req)
 {
         __u32 serv_est;
         int idx;
@@ -532,7 +532,6 @@ ptlrpc_prep_req_pool(struct obd_import *imp, __u32 version, int opcode,
 
         request->rq_phase = RQ_PHASE_NEW;
 
-        /* XXX FIXME bug 249 */
         request->rq_request_portal = imp->imp_client->cli_request_portal;
         request->rq_reply_portal = imp->imp_client->cli_reply_portal;
         

@@ -160,7 +160,8 @@ static int oscc_internal_create(struct osc_creator *oscc)
                 RETURN(-ENOMEM);
         }
 
-        request->rq_request_portal = OST_CREATE_PORTAL; //XXX FIXME bug 249
+        request->rq_request_portal = OST_CREATE_PORTAL;
+        ptlrpc_at_set_req_timeout(request);
         body = lustre_msg_buf(request->rq_reqmsg, REQ_REC_OFF, sizeof(*body));
 
         spin_lock(&oscc->oscc_lock);

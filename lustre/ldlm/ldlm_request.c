@@ -918,9 +918,9 @@ int ldlm_cli_cancel_req(struct obd_export *exp,
                 req->rq_no_resend = 1;
                 req->rq_no_delay = 1;
 
-                /* XXX FIXME bug 249 */
                 req->rq_request_portal = LDLM_CANCEL_REQUEST_PORTAL;
                 req->rq_reply_portal = LDLM_CANCEL_REPLY_PORTAL;
+                ptlrpc_at_set_req_timeout(req);
 
                 body = lustre_msg_buf(req->rq_reqmsg, DLM_LOCKREQ_OFF,
                                       sizeof(*body));

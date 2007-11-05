@@ -812,6 +812,7 @@ static int ost_brw_read(struct ptlrpc_request *req, struct obd_trans_info *oti)
                 else
                         rc = ptlrpc_start_bulk_transfer(desc);
                 if (rc == 0) {
+                        time_t start = cfs_time_current_sec();
                         do {
                                 long timeoutl = req->rq_deadline - 
                                         cfs_time_current_sec();
@@ -830,7 +831,11 @@ static int ost_brw_read(struct ptlrpc_request *req, struct obd_trans_info *oti)
                                  (req->rq_deadline > cfs_time_current_sec()));
 
                         if (rc == -ETIMEDOUT) {
-                                DEBUG_REQ(D_ERROR, req, "timeout on bulk PUT");
+                                DEBUG_REQ(D_ERROR, req,
+                                          "timeout on bulk PUT after %ld%+lds",
+                                          req->rq_deadline - start,
+                                          cfs_time_current_sec() -
+                                          req->rq_deadline);
                                 ptlrpc_abort_bulk(desc);
                         } else if (exp->exp_failed) {
                                 DEBUG_REQ(D_ERROR, req, "Eviction on bulk PUT");
@@ -1063,6 +1068,7 @@ static int ost_brw_write(struct ptlrpc_request *req, struct obd_trans_info *oti)
         else
                 rc = ptlrpc_start_bulk_transfer (desc);
         if (rc == 0) {
+                time_t start = cfs_time_current_sec();
                 do {
                         long timeoutl = req->rq_deadline - 
                                 cfs_time_current_sec();
@@ -1079,7 +1085,11 @@ static int ost_brw_write(struct ptlrpc_request *req, struct obd_trans_info *oti)
                          (req->rq_deadline > cfs_time_current_sec()));
 
                 if (rc == -ETIMEDOUT) {
-                        DEBUG_REQ(D_ERROR, req, "timeout on bulk GET");
+                        DEBUG_REQ(D_ERROR, req,
+                                  "timeout on bulk GET after %ld%+lds",
+                                  req->rq_deadline - start,
+                                  cfs_time_current_sec() -
+                                  req->rq_deadline);
                         ptlrpc_abort_bulk(desc);
                 } else if (desc->bd_export->exp_failed) {
                         DEBUG_REQ(D_ERROR, req, "Eviction on bulk GET");

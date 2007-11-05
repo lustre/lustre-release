@@ -49,7 +49,7 @@ unsigned int at_history = 600;
 CFS_MODULE_PARM(at_history, "i", int, 0644,
                 "Adaptive timeouts remember the slowest event that took place "
                 "within this period (sec)");
-static int at_early_margin = 3;
+static int at_early_margin = 5;
 CFS_MODULE_PARM(at_early_margin, "i", int, 0644,
                 "How soon before an RPC deadline to send an early reply");
 static int at_extra = 30;
@@ -662,8 +662,9 @@ static int ptlrpc_at_send_early_reply(struct ptlrpc_request *req,
                 RETURN(0);
         
         if (olddl < 0) {
-                CDEBUG(D_ADAPTTO, "x"LPU64": Already past deadline (%+lds), not"
-                       " sending early reply\n", req->rq_xid, olddl);
+                CDEBUG(D_WARNING, "x"LPU64": Already past deadline (%+lds), not"
+                       " sending early reply. Increase at_early_margin (%d)?\n",
+                       req->rq_xid, olddl, at_early_margin);
                 /* Return an error so we're not re-added to the timed list. */
                 RETURN(-ETIMEDOUT);
         }
@@ -996,11 +997,12 @@ ptlrpc_server_handle_request(struct ptlrpc_service *svc,
         /* Discard requests queued for longer than the deadline.  
            The deadline is increased if we send an early reply. */
         if (cfs_time_current_sec() > request->rq_deadline) {
-                CERROR("Dropping timed-out opc %d request from %s"
-                       ": deadline %lds ago\n",
-                       lustre_msg_get_opc(request->rq_reqmsg),
-                       libcfs_id2str(request->rq_peer),
-                       cfs_time_current_sec() - request->rq_deadline);
+                DEBUG_REQ(D_ERROR, request, "Dropping timed-out request from %s"
+                          ": deadline %ld%+lds ago\n",
+                          libcfs_id2str(request->rq_peer),
+                          request->rq_deadline -
+                          request->rq_arrival_time.tv_sec,
+                          cfs_time_current_sec() - request->rq_deadline);
                 goto put_rpc_export;
         }
 
@@ -1042,8 +1044,9 @@ put_conn:
 
         if (cfs_time_current_sec() > request->rq_deadline) {
                 DEBUG_REQ(D_WARNING, request, "Request x"LPU64" took longer "
-                          "than estimated (%+lds); client may timeout.",
-                          request->rq_xid,
+                          "than estimated (%ld%+lds); client may timeout.",
+                          request->rq_xid, request->rq_deadline -
+                          request->rq_arrival_time.tv_sec,
                           cfs_time_current_sec() - request->rq_deadline);
         }
 

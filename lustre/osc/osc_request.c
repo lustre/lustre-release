@@ -478,6 +478,7 @@ static int osc_punch(struct obd_export *exp, struct obd_info *oinfo,
                 RETURN(-ENOMEM);
 
         req->rq_request_portal = OST_IO_PORTAL;         /* bug 7198 */
+        ptlrpc_at_set_req_timeout(req);
 
         body = lustre_msg_buf(req->rq_reqmsg, REQ_REC_OFF, sizeof(*body));
         memcpy(&body->oa, oinfo->oi_oa, sizeof(*oinfo->oi_oa));
@@ -610,6 +611,7 @@ static int osc_destroy(struct obd_export *exp, struct obdo *oa,
                 RETURN(-ENOMEM);
 
         req->rq_request_portal = OST_IO_PORTAL;         /* bug 7198 */
+        ptlrpc_at_set_req_timeout(req);
 
         body = lustre_msg_buf(req->rq_reqmsg, REQ_REC_OFF, sizeof(*body));
 
@@ -942,6 +944,7 @@ static int osc_brw_prep_request(int cmd, struct client_obd *cli,struct obdo *oa,
                 RETURN (-ENOMEM);
 
         req->rq_request_portal = OST_IO_PORTAL;         /* bug 7198 */
+        ptlrpc_at_set_req_timeout(req);
 
         if (opc == OST_WRITE)
                 desc = ptlrpc_prep_bulk_imp (req, page_count,
@@ -3048,7 +3051,8 @@ static int osc_statfs_async(struct obd_device *obd, struct obd_info *oinfo,
                 RETURN(-ENOMEM);
 
         ptlrpc_req_set_repsize(req, 2, size);
-        req->rq_request_portal = OST_CREATE_PORTAL; //XXX FIXME bug 249
+        req->rq_request_portal = OST_CREATE_PORTAL;
+        ptlrpc_at_set_req_timeout(req);
 
         req->rq_interpret_reply = osc_statfs_interpret;
         CLASSERT(sizeof(*aa) <= sizeof(req->rq_async_args));
@@ -3079,7 +3083,8 @@ static int osc_statfs(struct obd_device *obd, struct obd_statfs *osfs,
                 RETURN(-ENOMEM);
 
         ptlrpc_req_set_repsize(req, 2, size);
-        req->rq_request_portal = OST_CREATE_PORTAL; //XXX FIXME bug 249
+        req->rq_request_portal = OST_CREATE_PORTAL;
+        ptlrpc_at_set_req_timeout(req);
 
         rc = ptlrpc_queue_wait(req);
         if (rc)
