@@ -126,20 +126,22 @@ struct obd_export {
 
 static inline int exp_connect_cancelset(struct obd_export *exp)
 {
-        return exp ? exp->exp_connect_flags & OBD_CONNECT_CANCELSET : 0;
+        return exp ? !!(exp->exp_connect_flags & OBD_CONNECT_CANCELSET) : 0;
 }
 
 static inline int exp_connect_lru_resize(struct obd_export *exp)
 {
         LASSERT(exp != NULL);
-        return exp->exp_connect_flags & OBD_CONNECT_LRU_RESIZE;
+        return !!(exp->exp_connect_flags & OBD_CONNECT_LRU_RESIZE);
 }
 
 static inline int imp_connect_lru_resize(struct obd_import *imp)
 {
+        struct obd_connect_data *ocd;
+
         LASSERT(imp != NULL);
-        return imp->imp_connect_data.ocd_connect_flags & 
-                      OBD_CONNECT_LRU_RESIZE;
+        ocd = &imp->imp_connect_data;
+        return !!(ocd->ocd_connect_flags & OBD_CONNECT_LRU_RESIZE);
 }
 
 extern struct obd_export *class_conn2export(struct lustre_handle *conn);

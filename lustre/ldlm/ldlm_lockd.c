@@ -1761,16 +1761,16 @@ static int ldlm_bl_thread_main(void *arg)
 
 #endif
 
-static int ldlm_setup(ldlm_side_t client);
-static int ldlm_cleanup(ldlm_side_t client, int force);
+static int ldlm_setup(void);
+static int ldlm_cleanup(int force);
 
-int ldlm_get_ref(ldlm_side_t client)
+int ldlm_get_ref(void)
 {
         int rc = 0;
         ENTRY;
         mutex_down(&ldlm_ref_sem);
         if (++ldlm_refcount == 1) {
-                rc = ldlm_setup(client);
+                rc = ldlm_setup();
                 if (rc)
                         ldlm_refcount--;
         }
@@ -1779,12 +1779,12 @@ int ldlm_get_ref(ldlm_side_t client)
         RETURN(rc);
 }
 
-void ldlm_put_ref(ldlm_side_t client, int force)
+void ldlm_put_ref(int force)
 {
         ENTRY;
         mutex_down(&ldlm_ref_sem);
         if (ldlm_refcount == 1) {
-                int rc = ldlm_cleanup(client, force);
+                int rc = ldlm_cleanup(force);
                 if (rc)
                         CERROR("ldlm_cleanup failed: %d\n", rc);
                 else
@@ -1797,7 +1797,7 @@ void ldlm_put_ref(ldlm_side_t client, int force)
         EXIT;
 }
 
-static int ldlm_setup(ldlm_side_t client)
+static int ldlm_setup(void)
 {
         struct ldlm_bl_pool *blp;
         int rc = 0;
@@ -1902,7 +1902,7 @@ static int ldlm_setup(ldlm_side_t client)
 #endif
 
 #ifdef __KERNEL__
-        rc = ldlm_pools_init(client);
+        rc = ldlm_pools_init();
         if (rc)
                 GOTO(out_thread, rc);
 #endif
@@ -1924,7 +1924,7 @@ static int ldlm_setup(ldlm_side_t client)
         return rc;
 }
 
-static int ldlm_cleanup(ldlm_side_t client, int force)
+static int ldlm_cleanup(int force)
 {
 #ifdef __KERNEL__
         struct ldlm_bl_pool *blp = ldlm_state->ldlm_bl_pool;

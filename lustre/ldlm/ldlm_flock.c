@@ -134,7 +134,7 @@ ldlm_process_flock_lock(struct ldlm_lock *req, int *flags, int first_enq,
         struct ldlm_lock *new = req;
         struct ldlm_lock *new2 = NULL;
         ldlm_mode_t mode = req->l_req_mode;
-        int local = ns->ns_client;
+        int local = ns_is_client(ns);
         int added = (mode == LCK_NL);
         int overlaps = 0;
         ENTRY;

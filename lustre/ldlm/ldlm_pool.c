@@ -337,7 +337,7 @@ EXPORT_SYMBOL(ldlm_pool_shrink);
 int ldlm_pool_setup(struct ldlm_pool *pl, __u32 limit)
 {
         ENTRY;
-        if (ldlm_pl2ns(pl)->ns_client == LDLM_NAMESPACE_SERVER)
+        if (ns_is_server(ldlm_pl2ns(pl)))
                 ldlm_pool_set_limit(pl, limit);
         RETURN(0);
 }
@@ -368,7 +368,7 @@ static int lprocfs_rd_pool_state(char *page, char **start, off_t off,
                        pl->pl_name);
         nr += snprintf(page + nr, count - nr, "  SLV: "LPU64"\n", slv);
 
-        if (ldlm_pl2ns(pl)->ns_client == LDLM_NAMESPACE_CLIENT) {
+        if (ns_is_client(ldlm_pl2ns(pl))) {
                 nr += snprintf(page + nr, count - nr, "  LVF: %d\n",
                                atomic_read(&pl->pl_lock_volume_factor));
         }
@@ -465,11 +465,11 @@ static int ldlm_pool_proc_init(struct ldlm_pool *pl)
         snprintf(var_name, MAX_STRING_SIZE, "grant_step");
         pool_vars[0].data = &pl->pl_grant_step;
         pool_vars[0].read_fptr = lprocfs_rd_atomic;
-        if (ns->ns_client == LDLM_NAMESPACE_SERVER)
+        if (ns_is_server(ns))
                 pool_vars[0].write_fptr = lprocfs_wr_atomic;
         lprocfs_add_vars(pl->pl_proc_dir, pool_vars, 0);
 
-        if (ns->ns_client == LDLM_NAMESPACE_CLIENT) {
+        if (ns_is_client(ns)) {
                 snprintf(var_name, MAX_STRING_SIZE, "lock_volume_factor");
                 pool_vars[0].data = &pl->pl_lock_volume_factor;
                 pool_vars[0].read_fptr = lprocfs_rd_uint;
@@ -589,7 +589,7 @@ void ldlm_pool_add(struct ldlm_pool *pl, struct ldlm_lock *lock)
         /* No need to recalc client pools here as this is already done 
          * on enqueue/cancel and locks to cancel already packed to the
          * rpc. */
-        if (ldlm_pl2ns(pl)->ns_client == LDLM_NAMESPACE_SERVER)
+        if (ns_is_server(ldlm_pl2ns(pl)))
                 ldlm_pool_recalc(pl);
         EXIT;
 }
@@ -604,7 +604,7 @@ void ldlm_pool_del(struct ldlm_pool *pl, struct ldlm_lock *lock)
         atomic_dec(&pl->pl_grant_speed);
         
         /* Same as in ldlm_pool_add() */
-        if (ldlm_pl2ns(pl)->ns_client == LDLM_NAMESPACE_SERVER)
+        if (ns_is_server(ldlm_pl2ns(pl)))
                 ldlm_pool_recalc(pl);
         EXIT;
 }
@@ -825,8 +825,8 @@ static int ldlm_pools_thread_main(void *arg)
                 struct l_wait_info lwi;
 
                 /* Recal all pools on this tick. */
-                ldlm_pools_recalc(LDLM_NAMESPACE_CLIENT);
                 ldlm_pools_recalc(LDLM_NAMESPACE_SERVER);
+                ldlm_pools_recalc(LDLM_NAMESPACE_CLIENT);
                 
                 /* Wait until the next check time, or until we're
                  * stopped. */
@@ -853,7 +853,7 @@ static int ldlm_pools_thread_main(void *arg)
         complete_and_exit(&ldlm_pools_comp, 0);
 }
 
-static int ldlm_pools_thread_start(ldlm_side_t client)
+static int ldlm_pools_thread_start(void)
 {
         struct l_wait_info lwi = { 0 };
         int rc;
@@ -866,7 +866,6 @@ static int ldlm_pools_thread_start(ldlm_side_t client)
         if (ldlm_pools_thread == NULL)
                 RETURN(-ENOMEM);
 
-        ldlm_pools_thread->t_id = client;
         init_completion(&ldlm_pools_comp);
         cfs_waitq_init(&ldlm_pools_thread->t_ctl_waitq);
 
@@ -907,12 +906,12 @@ static void ldlm_pools_thread_stop(void)
         EXIT;
 }
 
-int ldlm_pools_init(ldlm_side_t client)
+int ldlm_pools_init(void)
 {
         int rc;
         ENTRY;
 
-        rc = ldlm_pools_thread_start(client);
+        rc = ldlm_pools_thread_start();
         if (rc == 0) {
                 ldlm_pools_srv_shrinker = set_shrinker(DEFAULT_SEEKS,
                                                        ldlm_pools_srv_shrink);
@@ -1007,7 +1006,7 @@ void ldlm_pool_set_limit(struct ldlm_pool *pl, __u32 limit)
 }
 EXPORT_SYMBOL(ldlm_pool_set_limit);
 
-int ldlm_pools_init(ldlm_side_t client)
+int ldlm_pools_init(void)
 {
         return 0;
 }

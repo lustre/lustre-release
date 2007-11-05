@@ -214,7 +214,7 @@ void ldlm_proc_namespace(struct ldlm_namespace *ns)
         lock_vars[0].read_fptr = lprocfs_rd_atomic;
         lprocfs_add_vars(ldlm_ns_proc_dir, lock_vars, 0);
 
-        if (ns->ns_client) {
+        if (ns_is_client(ns)) {
                 snprintf(lock_name, MAX_STRING_SIZE, "%s/lock_unused_count",
                          ns->ns_name);
                 lock_vars[0].data = &ns->ns_nr_unused;
@@ -250,7 +250,7 @@ struct ldlm_namespace *ldlm_namespace_new(char *name, ldlm_side_t client,
         int rc, idx, namelen;
         ENTRY;
 
-        rc = ldlm_get_ref(client);
+        rc = ldlm_get_ref();
         if (rc) {
                 CERROR("ldlm_get_ref failed: %d\n", rc);
                 RETURN(NULL);
@@ -313,7 +313,7 @@ out_hash:
 out_ns:
         OBD_FREE_PTR(ns);
 out_ref:
-        ldlm_put_ref(client, 0);
+        ldlm_put_ref(0);
         RETURN(NULL);
 }
 
@@ -328,7 +328,7 @@ static void cleanup_resource(struct ldlm_resource *res, struct list_head *q,
                              int flags)
 {
         struct list_head *tmp;
-        int rc = 0, client = res->lr_namespace->ns_client;
+        int rc = 0, client = ns_is_client(res->lr_namespace);
         int local_only = (flags & LDLM_FL_LOCAL_ONLY);
         ENTRY;
 
@@ -445,17 +445,15 @@ int ldlm_namespace_cleanup(struct ldlm_namespace *ns, int flags)
 /* Cleanup, but also free, the namespace */
 int ldlm_namespace_free(struct ldlm_namespace *ns, int force)
 {
-        ldlm_side_t client;
         ENTRY;
         if (!ns)
                 RETURN(ELDLM_OK);
 
-        client = ns->ns_client;
-        mutex_down(ldlm_namespace_lock(client));
+        mutex_down(ldlm_namespace_lock(ns->ns_client));
         list_del(&ns->ns_list_chain);
         atomic_dec(ldlm_namespace_nr(ns->ns_client));
         ldlm_pool_fini(&ns->ns_pool);
-        mutex_up(ldlm_namespace_lock(client));
+        mutex_up(ldlm_namespace_lock(ns->ns_client));
 
         /* At shutdown time, don't call the cancellation callback */
         ldlm_namespace_cleanup(ns, 0);
@@ -493,12 +491,11 @@ int ldlm_namespace_free(struct ldlm_namespace *ns, int force)
                        "dlm namespace %s free done waiting\n", ns->ns_name);
         }
 
-        POISON(ns->ns_hash, 0x5a, sizeof(*ns->ns_hash) * RES_HASH_SIZE);
         OBD_VFREE(ns->ns_hash, sizeof(*ns->ns_hash) * RES_HASH_SIZE);
         OBD_FREE(ns->ns_name, strlen(ns->ns_name) + 1);
         OBD_FREE_PTR(ns);
 
-        ldlm_put_ref(client, force);
+        ldlm_put_ref(force);
 
         RETURN(ELDLM_OK);
 }
@@ -883,8 +880,9 @@ void ldlm_namespace_dump(int level, struct ldlm_namespace *ns)
         if (!((libcfs_debug | D_ERROR) & level))
                 return;
 
-        CDEBUG(level, "--- Namespace: %s (rc: %d, client: %d)\n",
-                  ns->ns_name, ns->ns_refcount, ns->ns_client);
+        CDEBUG(level, "--- Namespace: %s (rc: %d, side: %s)\n", 
+               ns->ns_name, ns->ns_refcount, 
+               ns_is_client(ns) ? "client" : "server");
 
         if (cfs_time_before(cfs_time_current(), ns->ns_next_dump))
                 return;

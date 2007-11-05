@@ -358,7 +358,7 @@ int ldlm_lock_change_resource(struct ldlm_namespace *ns, struct ldlm_lock *lock,
         int type;
         ENTRY;
 
-        LASSERT(ns->ns_client != 0);
+        LASSERT(ns_is_client(ns));
 
         lock_res_and_lock(lock);
         if (memcmp(new_resid, &lock->l_resource->lr_name,
@@ -609,7 +609,7 @@ void ldlm_lock_decref_internal(struct ldlm_lock *lock, __u32 mode)
             (lock->l_flags & LDLM_FL_CBPENDING)) {
                 /* If we received a blocked AST and this was the last reference,
                  * run the callback. */
-                if (ns->ns_client == LDLM_NAMESPACE_SERVER && lock->l_export)
+                if (ns_is_server(ns) && lock->l_export)
                         CERROR("FL_CBPENDING set on non-local lock--just a "
                                "warning\n");
 
@@ -621,7 +621,7 @@ void ldlm_lock_decref_internal(struct ldlm_lock *lock, __u32 mode)
                 if ((lock->l_flags & LDLM_FL_ATOMIC_CB) ||
                     ldlm_bl_to_thread_lock(ns, NULL, lock) != 0)
                         ldlm_handle_bl_callback(ns, NULL, lock);
-        } else if (ns->ns_client == LDLM_NAMESPACE_CLIENT &&
+        } else if (ns_is_client(ns) &&
                    !lock->l_readers && !lock->l_writers &&
                    !(lock->l_flags & LDLM_FL_NO_LRU)) {
                 /* If this is a client-side namespace and this was the last
@@ -1152,7 +1152,7 @@ ldlm_error_t ldlm_lock_enqueue(struct ldlm_namespace *ns,
 {
         struct ldlm_lock *lock = *lockp;
         struct ldlm_resource *res = lock->l_resource;
-        int local = res->lr_namespace->ns_client;
+        int local = ns_is_client(res->lr_namespace);
         ldlm_processing_policy policy;
         ldlm_error_t rc = ELDLM_OK;
         ENTRY;
@@ -1392,7 +1392,7 @@ void ldlm_reprocess_all(struct ldlm_resource *res)
         ENTRY;
 
         /* Local lock trees don't get reprocessed. */
-        if (res->lr_namespace->ns_client) {
+        if (ns_is_client(res->lr_namespace)) {
                 EXIT;
                 return;
         }
@@ -1619,7 +1619,7 @@ struct ldlm_resource *ldlm_lock_convert(struct ldlm_lock *lock, int new_mode,
         ldlm_resource_unlink_lock(lock);
 
         /* If this is a local resource, put it on the appropriate list. */
-        if (res->lr_namespace->ns_client) {
+        if (ns_is_client(res->lr_namespace)) {
                 if (*flags & (LDLM_FL_BLOCK_CONV | LDLM_FL_BLOCK_GRANTED)) {
                         ldlm_resource_add_lock(res, &res->lr_converting, lock);
                 } else {

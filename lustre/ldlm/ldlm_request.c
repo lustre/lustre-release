@@ -245,7 +245,7 @@ int ldlm_cli_enqueue_local(struct ldlm_namespace *ns,
         ENTRY;
 
         LASSERT(!(*flags & LDLM_FL_REPLAY));
-        if (unlikely(ns->ns_client)) {
+        if (unlikely(ns_is_client(ns))) {
                 CERROR("Trying to enqueue local lock in a shadow namespace\n");
                 LBUG();
         }
@@ -686,7 +686,7 @@ static int ldlm_cli_convert_local(struct ldlm_lock *lock, int new_mode,
         struct ldlm_resource *res;
         int rc;
         ENTRY;
-        if (lock->l_resource->lr_namespace->ns_client) {
+        if (ns_is_client(lock->l_resource->lr_namespace)) {
                 CERROR("Trying to cancel local lock\n");
                 LBUG();
         }
@@ -812,7 +812,7 @@ static int ldlm_cli_cancel_local(struct ldlm_lock *lock)
                 }
                 ldlm_lock_cancel(lock);
         } else {
-                if (lock->l_resource->lr_namespace->ns_client) {
+                if (ns_is_client(lock->l_resource->lr_namespace)) {
                         LDLM_ERROR(lock, "Trying to cancel local lock");
                         LBUG();
                 }
@@ -1441,7 +1441,7 @@ int ldlm_cli_join_lru(struct ldlm_namespace *ns,
         int count = 0;
         ENTRY;
 
-        LASSERT(ns->ns_client == LDLM_NAMESPACE_CLIENT);
+        LASSERT(ns_is_client(ns));
 
         res = ldlm_resource_get(ns, NULL, res_id, LDLM_EXTENT, 0);
         if (res == NULL)
