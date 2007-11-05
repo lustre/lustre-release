@@ -10,7 +10,7 @@ LOG=${LOG:-"$TMP/lfscktest.log"}
 L2FSCK_PATH=${L2FSCK_PATH:-""}
 NUMFILES=${NUMFILES:-10}
 NUMDIRS=${NUMDIRS:-4}
-LFIND=${LFIND:-"lfs find"}
+GETSTRIPE=${GETSTRIPE:-"lfs getstripe"}
 GETFATTR=${GETFATTR:-getfattr}
 SETFATTR=${SETFATTR:-setfattr}
 MAX_ERR=1
@@ -25,10 +25,10 @@ LUSTRE=${LUSTRE:-`dirname $0`/..}
 init_test_env $@
 . ${CONFIG:=$LUSTRE/tests/cfg/$NAME.sh}
 
-WAS_MOUNTED=`mount | grep $MOUNT`
-[ "$WAS_MOUNTED" ] || $FORMAT && $SETUP
+WAS_MOUNTED=`mount | grep $MOUNT || true`
+[ -z "$WAS_MOUNTED" ] && sh llmount.sh
 
-DIR=${DIR:-$MOUNT/$TESTNAME}
+DIR=$DIR/$TESTNAME
 [ -z "`echo $DIR | grep $MOUNT`" ] && echo "$DIR not in $MOUNT" && exit 3
 
 if [ "$WAS_MOUNTED" ]; then
@@ -50,7 +50,7 @@ if [ "$LFSCK_SETUP" != "no" ]; then
 	#Create test directory 
 	rm -rf $DIR
 	mkdir -p $DIR
-	OSTCOUNT=`$LFIND $MOUNT | grep -c "^[0-9]*: "`
+	OSTCOUNT=`$GETSTRIPE $MOUNT | grep -c "^[0-9]*: " || true`
 
 	# Create some files on the filesystem
 	for d in `seq -f d%g $NUMDIRS`; do
@@ -89,13 +89,13 @@ if [ "$LFSCK_SETUP" != "no" ]; then
 
 	# Get objids for a file on the OST
 	OST_FILES=`seq -f $DIR/testfile.%g $NUMFILES`
-	OST_REMOVE=`$LFIND $OST_FILES | awk '$1 == 0 { print $2 }' | head -n $NUMFILES`
+	OST_REMOVE=`$GETSTRIPE $OST_FILES | awk '$1 == 0 { print $2 }' | head -n $NUMFILES`
 
 	export MDS_DUPE=""
 	for f in `seq -f testfile.%g $((NUMFILES + 1)) $((NUMFILES * 2))`; do
 		TEST_FILE=$DIR/$f
 		echo "DUPLICATING MDS file $TEST_FILE"
-		$LFIND -v $TEST_FILE >> $LOG || exit 20
+		$GETSTRIPE -v $TEST_FILE >> $LOG || exit 20
 		MDS_DUPE="$MDS_DUPE $TEST_FILE"
 	done
 	MDS_DUPE=`echo $MDS_DUPE | sed "s#$MOUNT/##g"`
@@ -104,7 +104,7 @@ if [ "$LFSCK_SETUP" != "no" ]; then
 	for f in `seq -f testfile.%g $((NUMFILES * 2 + 1)) $((NUMFILES * 3))`; do
 		TEST_FILE=$DIR/$f
 		echo "REMOVING MDS file $TEST_FILE which has info:"
-		$LFIND -v $TEST_FILE >> $LOG || exit 30
+		$GETSTRIPE -v $TEST_FILE >> $LOG || exit 30
 		MDS_REMOVE="$MDS_REMOVE $TEST_FILE"
 	done
 	MDS_REMOVE=`echo $MDS_REMOVE | sed "s#$MOUNT/##g"`
@@ -126,6 +126,7 @@ if [ "$LFSCK_SETUP" != "no" ]; then
 	[ $RET -ne 0 ] && exit 50
 
 	SAVE_PWD=$PWD
+        [ "$FSTYPE" = "ldiskfs" ] && load_module ../ldiskfs/ldiskfs/ldiskfs
 	mount -t $FSTYPE -o loop $MDSDEV $MOUNT || exit 60
 	do_umount() {
 		trap 0
@@ -179,7 +180,7 @@ for OSTDEV in $OSTDEVS; do
 done
 
 #Remount filesystem
-[ "`mount | grep $MOUNT`" ] || $SETUP
+[ "`mount | grep $MOUNT`" ] || setupall
 
 # need to turn off shell error detection to get proper error return
 # lfsck will return 1 if the filesystem had errors fixed
