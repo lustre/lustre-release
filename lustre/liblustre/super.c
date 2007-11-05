@@ -1937,6 +1937,9 @@ llu_fsswop_mount(const char *source,
 
         ocd.ocd_connect_flags = OBD_CONNECT_IBITS | OBD_CONNECT_VERSION |
                 OBD_CONNECT_AT;
+#ifdef LIBLUSTRE_POSIX_ACL
+        ocd.ocd_connect_flags |= OBD_CONNECT_ACL;
+#endif
         ocd.ocd_ibits_known = MDS_INODELOCK_FULL;
         ocd.ocd_version = LUSTRE_VERSION_CODE;
 
@@ -1991,7 +1994,8 @@ llu_fsswop_mount(const char *source,
 
         /* fetch attr of root inode */
         err = mdc_getattr(sbi->ll_mdc_exp, &rootfid,
-                          OBD_MD_FLGETATTR | OBD_MD_FLBLOCKS, 0, &request);
+                          OBD_MD_FLGETATTR | OBD_MD_FLBLOCKS, 0, 
+                          &request);
         if (err) {
                 CERROR("mdc_getattr failed for root: rc = %d\n", err);
                 GOTO(out_osc, err);

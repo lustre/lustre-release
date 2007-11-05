@@ -54,9 +54,19 @@ do {                                                            \
         CHECK_VALUE((int)offsetof(struct s, m));                \
 } while(0)
 
+#define CHECK_MEMBER_OFFSET_TYPEDEF(s,m)                        \
+do {                                                            \
+        CHECK_VALUE((int)offsetof(s, m));                       \
+} while(0)
+
 #define CHECK_MEMBER_SIZEOF(s,m)                                \
 do {                                                            \
         CHECK_VALUE((int)sizeof(((struct s *)0)->m));           \
+} while(0)
+
+#define CHECK_MEMBER_SIZEOF_TYPEDEF(s,m)                        \
+do {                                                            \
+        CHECK_VALUE((int)sizeof(((s *)0)->m));                  \
 } while(0)
 
 #define CHECK_MEMBER(s,m)                                       \
@@ -65,12 +75,23 @@ do {                                                            \
         CHECK_MEMBER_SIZEOF(s, m);                              \
 } while(0)
 
+#define CHECK_MEMBER_TYPEDEF(s,m)                               \
+do {                                                            \
+        CHECK_MEMBER_OFFSET_TYPEDEF(s, m);                      \
+        CHECK_MEMBER_SIZEOF_TYPEDEF(s, m);                      \
+} while(0)
+
 #define CHECK_STRUCT(s)                                         \
 do {                                                            \
         COMMENT("Checks for struct "#s);                        \
                 CHECK_VALUE((int)sizeof(struct s));             \
 } while(0)
 
+#define CHECK_STRUCT_TYPEDEF(s)                                 \
+do {                                                            \
+        COMMENT("Checks for type "#s);                          \
+                CHECK_VALUE((int)sizeof(s));                    \
+} while(0)
 
 static void
 check_lustre_handle(void)
@@ -1005,6 +1026,25 @@ check_lustre_disk_data(void)
 }
 
 static void
+check_posix_acl_xattr_entry(void)
+{
+        BLANK_LINE();
+        CHECK_STRUCT_TYPEDEF(posix_acl_xattr_entry);
+        CHECK_MEMBER_TYPEDEF(posix_acl_xattr_entry, e_tag);
+        CHECK_MEMBER_TYPEDEF(posix_acl_xattr_entry, e_perm);
+        CHECK_MEMBER_TYPEDEF(posix_acl_xattr_entry, e_id);
+}
+
+static void
+check_posix_acl_xattr_header(void)
+{
+        BLANK_LINE();
+        CHECK_STRUCT_TYPEDEF(posix_acl_xattr_header);
+        CHECK_MEMBER_TYPEDEF(posix_acl_xattr_header, a_version);
+        CHECK_MEMBER_TYPEDEF(posix_acl_xattr_header, a_entries);
+}
+
+static void
 system_string (char *cmdline, char *str, int len)
 {
         int   fds[2];
@@ -1253,6 +1293,8 @@ main(int argc, char **argv)
         check_qunit_data_old();
         check_mgs_target_info();
         check_lustre_disk_data();
+        check_posix_acl_xattr_entry();
+        check_posix_acl_xattr_header();
 
 
         printf("}\n\n");

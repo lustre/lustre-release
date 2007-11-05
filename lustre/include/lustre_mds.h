@@ -101,14 +101,8 @@ struct mds_file_data {
 # endif /* HAVE_XATTR_ACL */
 
 # define LUSTRE_POSIX_ACL_MAX_ENTRIES   (32)
-
-# ifdef __KERNEL__
 #  define LUSTRE_POSIX_ACL_MAX_SIZE      \
                 (mds_xattr_acl_size(LUSTRE_POSIX_ACL_MAX_ENTRIES))
-# else /* __KERNEL__ */
-#  define LUSTRE_POSIX_ACL_MAX_SIZE	0
-# endif /* __KERNEL__ */
-
 #else /* CONFIG_FS_POSIX_ACL */
 # define LUSTRE_POSIX_ACL_MAX_SIZE      0
 #endif /* CONFIG_FS_POSIX_ACL */

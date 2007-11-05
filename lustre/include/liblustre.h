@@ -903,6 +903,15 @@ void posix_acl_release(struct posix_acl *acl)
 {
 }
 
+#ifdef LIBLUSTRE_POSIX_ACL
+ #define posix_acl_xattr_entry xattr_acl_entry
+ #define posix_acl_xattr_header xattr_acl_header
+ #define posix_acl_xattr_size(entry) xattr_acl_size(entry)
+ #ifndef CONFIG_FS_POSIX_ACL
+  #define CONFIG_FS_POSIX_ACL 1
+ #endif
+#endif
+
 #ifndef ENOTSUPP
 #define ENOTSUPP ENOTSUP
 #endif
