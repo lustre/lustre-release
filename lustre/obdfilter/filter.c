@@ -2015,7 +2015,8 @@ err_mntput:
 static int filter_setup(struct obd_device *obd, struct lustre_cfg* lcfg)
 {
         struct lprocfs_static_vars lvars;
-        unsigned long page;
+        unsigned long addr;
+        struct page *page;
         int rc;
 
         CLASSERT(offsetof(struct obd_device, u.obt) ==
@@ -2025,9 +2026,11 @@ static int filter_setup(struct obd_device *obd, struct lustre_cfg* lcfg)
                 RETURN(-EINVAL);
 
         /* 2.6.9 selinux wants a full option page for do_kern_mount (bug6471) */
-        page = get_zeroed_page(GFP_KERNEL);
+        OBD_PAGE_ALLOC(page, CFS_ALLOC_STD);
         if (!page)
                 RETURN(-ENOMEM);
+        addr = (unsigned long)cfs_page_address(page);
+        clear_page((void *)addr);
 
         /* lprocfs must be setup before the filter so state can be safely added
          * to /proc incrementally as the filter is setup */
@@ -2047,10 +2050,10 @@ static int filter_setup(struct obd_device *obd, struct lustre_cfg* lcfg)
                                                    obd->obd_proc_entry);
         }
 
-        memcpy((void *)page, lustre_cfg_buf(lcfg, 4),
+        memcpy((void *)addr, lustre_cfg_buf(lcfg, 4),
                LUSTRE_CFG_BUFLEN(lcfg, 4));
-        rc = filter_common_setup(obd, lcfg, (void *)page);
-        free_page(page);
+        rc = filter_common_setup(obd, lcfg, (void *)addr);
+        OBD_PAGE_FREE(page);
 
         if (rc) {
                 lprocfs_obd_cleanup(obd);

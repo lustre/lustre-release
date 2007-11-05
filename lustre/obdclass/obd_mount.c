@@ -1305,6 +1305,7 @@ static struct vfsmount *server_kernel_mount(struct super_block *sb)
         struct vfsmount *mnt;
         char *options = NULL;
         unsigned long page, s_flags;
+        struct page *__page;
         int rc;
         ENTRY;
 
@@ -1343,9 +1344,10 @@ static struct vfsmount *server_kernel_mount(struct super_block *sb)
         /* Done with our pre-mount, now do the real mount. */
 
         /* Glom up mount options */
-        page = __get_free_page(GFP_KERNEL);
-        if (!page)
+        OBD_PAGE_ALLOC(__page, CFS_ALLOC_STD);
+        if (!__page)
                 GOTO(out_free, rc = -ENOMEM);
+        page = (unsigned long)cfs_page_address(__page);
 
         options = (char *)page;
         memset(options, 0, CFS_PAGE_SIZE);
@@ -1367,7 +1369,7 @@ static struct vfsmount *server_kernel_mount(struct super_block *sb)
                MT_STR(ldd), lmd->lmd_dev, options);
         mnt = ll_kern_mount(MT_STR(ldd), s_flags, lmd->lmd_dev,
                             (void *)options);
-        free_page(page);
+        OBD_PAGE_FREE(__page);
         if (IS_ERR(mnt)) {
                 rc = PTR_ERR(mnt);
                 CERROR("ll_kern_mount failed: rc = %d\n", rc);

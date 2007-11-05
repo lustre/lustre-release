@@ -126,16 +126,14 @@ static struct page *llu_dir_read_page(struct inode *ino, unsigned long pgidx)
         int rc;
         ENTRY;
 
-        page = cfs_alloc_page(0);
-        if (!page) {
-                CERROR("alloc page failed\n");
+        OBD_PAGE_ALLOC(page, 0);
+        if (!page)
                 RETURN(ERR_PTR(-ENOMEM));
-        }
         page->index = pgidx;
 
         rc = llu_dir_do_readpage(ino, page);
         if (rc) {
-                free_page(page);
+                OBD_PAGE_FREE(page);
                 RETURN(ERR_PTR(rc));
         }
 
@@ -248,7 +246,7 @@ ssize_t llu_iop_filldirentries(struct inode *ino, _SYSIO_OFF_T *basep,
                                                 le16_to_cpu(de->rec_len),
                                                 le32_to_cpu(de->inode), d_type, &filled);
                                 if (over) {
-                                        free_page(page);
+                                        OBD_PAGE_FREE(page);
                                         /*
                                          * if buffer overflow with no data
                                          * returned yet, then report error
@@ -261,7 +259,7 @@ ssize_t llu_iop_filldirentries(struct inode *ino, _SYSIO_OFF_T *basep,
                         }
                 }
                 
-                free_page(page);
+                OBD_PAGE_FREE(page);
         }
 done:
         lli->lli_dir_pos = pgidx << CFS_PAGE_SHIFT | offset;

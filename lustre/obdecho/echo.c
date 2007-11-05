@@ -311,7 +311,7 @@ int echo_preprw(int cmd, struct obd_export *export, struct obdo *oa,
                                 /* Take extra ref so __free_pages() can be called OK */
                                 cfs_get_page (r->page);
                         } else {
-                                r->page = cfs_alloc_page(gfp_mask);
+                                OBD_PAGE_ALLOC(r->page, gfp_mask);
                                 if (r->page == NULL) {
                                         CERROR("can't get page %u/%u for id "
                                                LPU64"\n",
@@ -362,7 +362,7 @@ preprw_cleanup:
                 cfs_kunmap(r->page);
                 /* NB if this is a persistent page, __free_pages will just
                  * lose the extra ref gained above */
-                cfs_free_page(r->page);
+                OBD_PAGE_FREE(r->page);
                 atomic_dec(&obd->u.echo.eo_prep);
         }
         memset(res, 0, sizeof(*res) * niocount);
@@ -433,7 +433,7 @@ int echo_commitrw(int cmd, struct obd_export *export, struct obdo *oa,
 
                         cfs_kunmap(page);
                         /* NB see comment above regarding persistent pages */
-                        cfs_free_page(page);
+                        OBD_PAGE_FREE(page);
                         atomic_dec(&obd->u.echo.eo_prep);
                 }
         }
@@ -448,7 +448,7 @@ commitrw_cleanup:
                 cfs_page_t *page = r->page;
 
                 /* NB see comment above regarding persistent pages */
-                cfs_free_page(page);
+                OBD_PAGE_FREE(page);
                 atomic_dec(&obd->u.echo.eo_prep);
         }
         return rc;
@@ -544,7 +544,7 @@ echo_persistent_pages_fini (void)
 
         for (i = 0; i < ECHO_PERSISTENT_PAGES; i++)
                 if (echo_persistent_pages[i] != NULL) {
-                        cfs_free_page (echo_persistent_pages[i]);
+                        OBD_PAGE_FREE(echo_persistent_pages[i]);
                         echo_persistent_pages[i] = NULL;
                 }
 }
@@ -559,7 +559,7 @@ echo_persistent_pages_init (void)
                 int gfp_mask = (i < ECHO_PERSISTENT_PAGES/2) ?
                         CFS_ALLOC_STD : CFS_ALLOC_HIGHUSER;
 
-                pg = cfs_alloc_page (gfp_mask);
+                OBD_PAGE_ALLOC(pg, gfp_mask);
                 if (pg == NULL) {
                         echo_persistent_pages_fini ();
                         return (-ENOMEM);

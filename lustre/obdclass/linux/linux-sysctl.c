@@ -53,6 +53,9 @@ enum {
         OBD_TIMEOUT,            /* RPC timeout before recovery/intr */
         OBD_DUMP_ON_TIMEOUT,    /* dump kernel debug log upon eviction */
         OBD_MEMUSED,            /* bytes currently OBD_ALLOCated */
+        OBD_PAGESUSED,          /* pages currently OBD_PAGE_ALLOCated */
+        OBD_MAXMEMUSED,         /* maximum bytes OBD_ALLOCated concurrently */
+        OBD_MAXPAGESUSED,       /* maximum pages OBD_PAGE_ALLOCated concurrently */
         OBD_SYNCFILTER,         /* XXX temporary, as we play with sync osts.. */
         OBD_LDLM_TIMEOUT,       /* LDLM timeout for ASTs before client eviction */
         OBD_DUMP_ON_EVICTION,   /* dump kernel debug log upon eviction */
@@ -78,6 +81,102 @@ int LL_PROC_PROTO(proc_set_timeout)
         if (ldlm_timeout >= obd_timeout)
                 ldlm_timeout = max(obd_timeout / 3, 1U);
         return rc;
+}
+
+int LL_PROC_PROTO(proc_memory_alloc)
+{
+        char buf[22];
+        int len;
+        DECLARE_LL_PROC_PPOS_DECL;
+
+        if (!*lenp || (*ppos && !write)) {
+                *lenp = 0;
+                return 0;
+        }
+        if (write) 
+                return -EINVAL;
+        
+        len = snprintf(buf, sizeof(buf), LPU64"\n", obd_memory_sum());
+        if (len > *lenp)
+                len = *lenp;
+        buf[len] = '\0';
+        if (copy_to_user(buffer, buf, len))
+                return -EFAULT;
+        *lenp = len;
+        *ppos += *lenp;
+        return 0;
+}
+
+int LL_PROC_PROTO(proc_pages_alloc)
+{
+        char buf[22];
+        int len;
+        DECLARE_LL_PROC_PPOS_DECL;
+
+        if (!*lenp || (*ppos && !write)) {
+                *lenp = 0;
+                return 0;
+        }
+        if (write)
+                return -EINVAL;
+
+        len = snprintf(buf, sizeof(buf), LPU64"\n", obd_pages_sum());
+        if (len > *lenp)
+                len = *lenp;
+        buf[len] = '\0';
+        if (copy_to_user(buffer, buf, len))
+                return -EFAULT;
+        *lenp = len;
+        *ppos += *lenp;
+        return 0;
+}
+
+int LL_PROC_PROTO(proc_mem_max)
+{
+        char buf[22];
+        int len;
+        DECLARE_LL_PROC_PPOS_DECL;
+
+        if (!*lenp || (*ppos && !write)) {
+                *lenp = 0;
+                return 0;
+        }
+        if (write)
+                return -EINVAL;
+
+        len = snprintf(buf, sizeof(buf), LPU64"\n", obd_memory_max());
+        if (len > *lenp)
+                len = *lenp;
+        buf[len] = '\0';
+        if (copy_to_user(buffer, buf, len))
+                return -EFAULT;
+        *lenp = len;
+        *ppos += *lenp;
+        return 0;
+}
+
+int LL_PROC_PROTO(proc_pages_max)
+{
+        char buf[22];
+        int len;
+        DECLARE_LL_PROC_PPOS_DECL;
+
+        if (!*lenp || (*ppos && !write)) {
+                *lenp = 0;
+                return 0;
+        }
+        if (write)
+                return -EINVAL;
+
+        len = snprintf(buf, sizeof(buf), LPU64"\n", obd_pages_max());
+        if (len > *lenp)
+                len = *lenp;
+        buf[len] = '\0';
+        if (copy_to_user(buffer, buf, len))
+                return -EFAULT;
+        *lenp = len;
+        *ppos += *lenp;
+        return 0;
 }
 
 static cfs_sysctl_table_t obd_table[] = {
@@ -132,10 +231,34 @@ static cfs_sysctl_table_t obd_table[] = {
         {
                 .ctl_name = OBD_MEMUSED,
                 .procname = "memused",
-                .data     = (int *)&obd_memory.counter,
-                .maxlen   = sizeof(int),
-                .mode     = 0644,
-                .proc_handler = &proc_dointvec
+                .data     = NULL,
+                .maxlen   = 0,
+                .mode     = 0444,
+                .proc_handler = &proc_memory_alloc
+        },
+        {
+                .ctl_name = OBD_PAGESUSED,
+                .procname = "pagesused",
+                .data     = NULL,
+                .maxlen   = 0,
+                .mode     = 0444,
+                .proc_handler = &proc_pages_alloc
+        },
+        {
+                .ctl_name = OBD_MAXMEMUSED,
+                .procname = "memused_max",
+                .data     = NULL,
+                .maxlen   = 0,
+                .mode     = 0444,
+                .proc_handler = &proc_mem_max
+        },
+        {
+                .ctl_name = OBD_MAXPAGESUSED,
+                .procname = "pagesused_max",
+                .data     = NULL,
+                .maxlen   = 0,
+                .mode     = 0444,
+                .proc_handler = &proc_pages_max
         },
         {
                 .ctl_name = OBD_LDLM_TIMEOUT,

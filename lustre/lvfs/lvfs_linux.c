@@ -50,8 +50,11 @@
 #include <lustre_lib.h>
 #include <lustre_quota.h>
 
-atomic_t obd_memory;
-int obd_memmax;
+__u64 obd_max_pages = 0;
+__u64 obd_max_alloc = 0;
+struct lprocfs_stats *obd_memory = NULL;
+spinlock_t obd_updatemax_lock = SPIN_LOCK_UNLOCKED;
+/* refine later and change to seqlock or simlar from libcfs */
 
 /* Debugging check only needed during development */
 #ifdef OBD_CTXT_DEBUG
@@ -446,8 +449,6 @@ long l_readdir(struct file *file, struct list_head *dentry_list)
         return 0;
 }
 EXPORT_SYMBOL(l_readdir);
-EXPORT_SYMBOL(obd_memory);
-EXPORT_SYMBOL(obd_memmax);
 
 #if defined (CONFIG_DEBUG_MEMORY) && defined(__KERNEL__)
 static spinlock_t obd_memlist_lock = SPIN_LOCK_UNLOCKED;
@@ -606,19 +607,12 @@ void lvfs_memdbg_show(void)
         struct obd_mem_track *mt;
         int header = 0;
 #endif
-        int leaked;
 	
 #if defined (CONFIG_DEBUG_MEMORY) && defined(__KERNEL__)
 	int i;
 #endif
 
-        leaked = atomic_read(&obd_memory);
-
-        if (leaked > 0) {
-                CWARN("Memory leaks detected (max %d, leaked %d)\n",
-                      obd_memmax, leaked);
-        }
-        
+       
 #if defined (CONFIG_DEBUG_MEMORY) && defined(__KERNEL__)
         spin_lock(&obd_memlist_lock);
         for (i = 0, head = obd_memtable; i < obd_memtable_size; i++, head++) {
@@ -686,6 +680,94 @@ int lvfs_check_io_health(struct obd_device *obd, struct file *file)
 }
 EXPORT_SYMBOL(lvfs_check_io_health);
 #endif /* LUSTRE_KERNEL_VERSION */
+
+void obd_update_maxusage()
+{
+        __u64 max1, max2;
+
+        max1 = obd_pages_sum();
+        max2 = obd_memory_sum();
+
+        spin_lock(&obd_updatemax_lock);
+        if (max1 > obd_max_pages)
+                obd_max_pages = max1;
+        if (max2 > obd_max_alloc)
+                obd_max_alloc = max2;
+        spin_unlock(&obd_updatemax_lock);
+        
+}
+
+__u64 obd_memory_max(void)
+{
+        __u64 ret;
+
+        spin_lock(&obd_updatemax_lock);
+        ret = obd_max_alloc;
+        spin_unlock(&obd_updatemax_lock);
+
+        return ret;
+}
+
+__u64 obd_pages_max(void)
+{
+        __u64 ret;
+
+        spin_lock(&obd_updatemax_lock);
+        ret = obd_max_pages;
+        spin_unlock(&obd_updatemax_lock);
+
+        return ret;
+}
+
+EXPORT_SYMBOL(obd_update_maxusage);
+EXPORT_SYMBOL(obd_pages_max);
+EXPORT_SYMBOL(obd_memory_max);
+EXPORT_SYMBOL(obd_memory);
+
+#ifdef LPROCFS
+__s64 lprocfs_read_helper(struct lprocfs_counter *lc,
+                          enum lprocfs_fields_flags field)
+{
+        __u64 ret = 0;
+        int centry;
+
+        if (!lc)
+                RETURN(0);
+        do {
+                centry = atomic_read(&lc->lc_cntl.la_entry);
+
+                switch (field) {
+                        case LPROCFS_FIELDS_FLAGS_CONFIG:
+                                ret = lc->lc_config;
+                                break;
+                        case LPROCFS_FIELDS_FLAGS_SUM:
+                                ret = lc->lc_sum;
+                                break;
+                        case LPROCFS_FIELDS_FLAGS_MIN:
+                                ret = lc->lc_min;
+                                break;
+                        case LPROCFS_FIELDS_FLAGS_MAX:
+                                ret = lc->lc_max;
+                                break;
+                        case LPROCFS_FIELDS_FLAGS_AVG:
+                                ret = (lc->lc_max - lc->lc_min)/2;
+                                break;
+                        case LPROCFS_FIELDS_FLAGS_SUMSQUARE:
+                                ret = lc->lc_sumsquare;
+                                break;
+                        case LPROCFS_FIELDS_FLAGS_COUNT:
+                                ret = lc->lc_count;
+                                break;
+                        default:
+                                break;
+                };
+        } while (centry != atomic_read(&lc->lc_cntl.la_entry) &&
+                 centry != atomic_read(&lc->lc_cntl.la_exit));
+
+        RETURN(ret);
+}
+EXPORT_SYMBOL(lprocfs_read_helper);
+#endif /* LPROCFS */
 
 static int __init lvfs_linux_init(void)
 {

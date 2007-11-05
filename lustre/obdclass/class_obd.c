@@ -51,9 +51,12 @@ atomic_t libcfs_kmemory = {0};
 struct obd_device *obd_devs[MAX_OBD_DEVICES];
 struct list_head obd_types;
 spinlock_t obd_dev_lock = SPIN_LOCK_UNLOCKED;
+
 #ifndef __KERNEL__
-atomic_t obd_memory;
-int obd_memmax;
+__u64 obd_max_pages = 0;
+__u64 obd_max_alloc = 0;
+__u64 obd_alloc;
+__u64 obd_pages;
 #endif
 
 /* The following are visible and mutable through /proc/sys/lustre/. */
@@ -545,7 +548,21 @@ int init_obdclass(void)
         spin_lock_init(&obd_types_lock);
         cfs_waitq_init(&obd_race_waitq);
         obd_zombie_impexp_init();
-
+#ifdef LPROCFS
+        obd_memory = lprocfs_alloc_stats(OBD_STATS_NUM, 
+                                         LPROCFS_STATS_FLAG_PERCPU);
+        if (obd_memory == NULL) {
+                CERROR("kmalloc of 'obd_memory' failed\n");
+                RETURN(-ENOMEM);
+        }
+ 
+        lprocfs_counter_init(obd_memory, OBD_MEMORY_STAT,
+                             LPROCFS_CNTR_AVGMINMAX, 
+                             "memused", "bytes");
+        lprocfs_counter_init(obd_memory, OBD_MEMORY_PAGES_STAT,
+                             LPROCFS_CNTR_AVGMINMAX, 
+                             "pagesused", "pages");
+#endif
         err = obd_init_checks();
         if (err == -EOVERFLOW)
                 return err;
@@ -594,6 +611,8 @@ static void cleanup_obdclass(void)
 {
         int i;
         int lustre_unregister_fs(void);
+        __u64 memory_leaked, pages_leaked;
+        __u64 memory_max, pages_max;
         ENTRY;
 
         lustre_unregister_fs();
@@ -617,6 +636,23 @@ static void cleanup_obdclass(void)
 
         class_handle_cleanup();
         class_exit_uuidlist();
+
+        memory_leaked = obd_memory_sum();
+        pages_leaked = obd_pages_sum();
+        
+        memory_max = obd_memory_max();
+        pages_max = obd_pages_max();
+
+        lprocfs_free_stats(&obd_memory);
+        if (memory_leaked > 0) {
+                CWARN("Memory leaks detected (max "LPU64", leaked "LPD64")\n",
+                      memory_max, memory_leaked);
+        }
+        if (pages_leaked > 0) {
+                CWARN("Page leaks detected (max "LPU64", leaked "LPU64")\n",
+                      pages_max, pages_leaked);
+        }
+ 
         EXIT;
 }
 

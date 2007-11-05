@@ -24,10 +24,16 @@
 #define _OBD_SUPPORT
 
 #include <libcfs/kp30.h>
+#include <lprocfs_status.h>
 
 /* global variables */
-extern atomic_t obd_memory;
-extern int obd_memmax;
+extern struct lprocfs_stats *obd_memory;
+enum {
+        OBD_MEMORY_STAT = 0,
+        OBD_MEMORY_PAGES_STAT = 1,
+        OBD_STATS_NUM,
+};
+
 extern unsigned int obd_fail_loc;
 extern unsigned int obd_fail_val;
 extern unsigned int obd_debug_peer_on_timeout;
@@ -361,6 +367,68 @@ do {                                                                         \
 
 extern atomic_t libcfs_kmemory;
 
+#ifdef LPROCFS 
+#define obd_memory_add(size)                                                  \
+        lprocfs_counter_add(obd_memory, OBD_MEMORY_STAT, (long)(size))
+#define obd_memory_sub(size)                                                  \
+        lprocfs_counter_sub(obd_memory, OBD_MEMORY_STAT, (long)(size))
+#define obd_memory_sum()                                                      \
+        lprocfs_stats_collector(obd_memory, OBD_MEMORY_STAT,                  \
+                                LPROCFS_FIELDS_FLAGS_SUM)
+#define obd_pages_add(order)                                                  \
+        lprocfs_counter_add(obd_memory, OBD_MEMORY_PAGES_STAT,                \
+                            (long)(1 << (order)))
+#define obd_pages_sub(order)                                                  \
+        lprocfs_counter_sub(obd_memory, OBD_MEMORY_PAGES_STAT,                \
+                            (long)(1 << (order)))
+#define obd_pages_sum()                                                       \
+        lprocfs_stats_collector(obd_memory, OBD_MEMORY_PAGES_STAT,            \
+                                LPROCFS_FIELDS_FLAGS_SUM)
+
+extern void obd_update_maxusage(void);
+extern __u64 obd_memory_max(void);
+extern __u64 obd_pages_max(void);
+
+#else
+
+extern __u64 obd_alloc;
+extern __u64 obd_pages;
+
+extern __u64 obd_max_alloc;
+extern __u64 obd_max_pages;
+
+static inline void obd_memory_add(long size)
+{
+        obd_alloc += size;
+        if (obd_alloc > obd_max_alloc)
+                obd_max_alloc = obd_alloc;
+}
+
+static inline void obd_memory_sub(long size)
+{
+        obd_alloc -= size;
+}
+
+static inline void obd_pages_add(int order) 
+{
+        obd_pages += 1<< order;
+        if (obd_pages > obd_max_pages)
+                obd_max_pages = obd_pages;
+}
+
+static inline void obd_pages_sub(int order)
+{
+        obd_pages -= 1<< order;
+}
+
+#define obd_memory_sum() (obd_alloc)
+#define obd_pages_sum()  (obd_pages)
+
+#define obd_memory_max() (obd_max_alloc)
+#define obd_pages_max() (obd_max_pages)
+
+#endif
+
 #if defined (CONFIG_DEBUG_MEMORY) && defined(__KERNEL__)
 
 #define OBD_MT_WRONG_SIZE    (1 << 0)
@@ -476,19 +544,17 @@ __put_mem_track(void *ptr, int size,
 
 #if OBD_DEBUG_MEMUSAGE
 #define OBD_ALLOC_POST(ptr, size, name)                                 \
-                atomic_add(size, &obd_memory);                          \
-                if (atomic_read(&obd_memory) > obd_memmax)              \
-                        obd_memmax = atomic_read(&obd_memory);          \
+                obd_memory_add(size);                                   \
                 get_mem_track((ptr), (size), __FILE__, __LINE__);       \
-                CDEBUG(D_MALLOC, name " '" #ptr "': %d at %p (tot %d)\n", \
-                       (int)(size), ptr, atomic_read(&obd_memory))
+                CDEBUG(D_MALLOC, name " '" #ptr "': %d at %p.\n",       \
+                       (int)(size), ptr)
 
 #define OBD_FREE_PRE(ptr, size, name)                                   \
         LASSERT(ptr);                                                   \
         put_mem_track((ptr), (size), __FILE__, __LINE__);               \
-        atomic_sub(size, &obd_memory);                                  \
-        CDEBUG(D_MALLOC, name " '" #ptr "': %d at %p (tot %d).\n",      \
-               (int)(size), ptr, atomic_read(&obd_memory));             \
+        obd_memory_sub(size);                                           \
+        CDEBUG(D_MALLOC, name " '" #ptr "': %d at %p.\n",               \
+               (int)(size), ptr);                                       \
         POISON(ptr, 0x5a, size)
 
 #else /* !OBD_DEBUG_MEMUSAGE */
@@ -516,10 +582,10 @@ do {                                                                          \
 do {                                                                          \
         (ptr) = cfs_alloc(size, (gfp_mask));                                  \
         if (unlikely((ptr) == NULL)) {                                        \
-                CERROR("kmalloc of '" #ptr "' (%d bytes) failed at %s:%d\n",  \
-                       (int)(size), __FILE__, __LINE__);                      \
-                CERROR("%d total bytes allocated by Lustre, %d by Portals\n", \
-                       atomic_read(&obd_memory), atomic_read(&libcfs_kmemory));\
+                CERROR("kmalloc of '" #ptr "' (%d bytes) failed\n",           \
+                       (int)(size));                                          \
+                CERROR(LPU64" total bytes allocated by Lustre, %d by LNET\n", \
+                       obd_memory_sum(), atomic_read(&libcfs_kmemory));       \
         } else {                                                              \
                 memset(ptr, 0, size);                                         \
                 OBD_ALLOC_POST(ptr, size, "kmalloced");                       \
@@ -543,10 +609,10 @@ do {                                                                          \
 do {                                                                          \
         (ptr) = cfs_alloc_large(size);                                        \
         if (unlikely((ptr) == NULL)) {                                        \
-                CERROR("vmalloc of '" #ptr "' (%d bytes) failed at %s:%d\n",  \
-                       (int)(size), __FILE__, __LINE__);                      \
-                CERROR("%d total bytes allocated by Lustre, %d by Portals\n", \
-                       atomic_read(&obd_memory), atomic_read(&libcfs_kmemory));\
+                CERROR("vmalloc of '" #ptr "' (%d bytes) failed\n",           \
+                       (int)(size));                                          \
+                CERROR(LPU64" total bytes allocated by Lustre, %d by LNET\n", \
+                       obd_memory_sum(), atomic_read(&libcfs_kmemory));       \
         } else {                                                              \
                 memset(ptr, 0, size);                                         \
                 OBD_ALLOC_POST(ptr, size, "vmalloced");                       \
@@ -625,10 +691,10 @@ do {                                                                          \
         LASSERT(!in_interrupt());                                             \
         (ptr) = cfs_mem_cache_alloc(slab, (type));                            \
         if (unlikely((ptr) == NULL)) {                                        \
-                CERROR("slab-alloc of '"#ptr"' (%d bytes) failed at %s:%d\n", \
-                       (int)(size), __FILE__, __LINE__);                      \
-                CERROR("%d total bytes allocated by Lustre, %d by Portals\n", \
-                       atomic_read(&obd_memory), atomic_read(&libcfs_kmemory));\
+                CERROR("slab-alloc of '"#ptr"' (%d bytes) failed\n",          \
+                       (int)(size));                                          \
+                CERROR(LPU64" total bytes allocated by Lustre, %d by LNET\n", \
+                       obd_memory_sum(), atomic_read(&libcfs_kmemory));       \
         } else {                                                              \
                 memset(ptr, 0, size);                                         \
                 OBD_ALLOC_POST(ptr, size, "slab-alloced");                    \
@@ -650,6 +716,47 @@ do {                                                                          \
         OBD_SLAB_FREE((ptr), (slab), sizeof *(ptr))
 
 #define KEY_IS(str) (keylen >= strlen(str) && strcmp(key, str) == 0)
+
+/* Wrapper for contiguous page frame allocation */
+#define OBD_PAGES_ALLOC(ptr, order, gfp_mask)                                 \
+do {                                                                          \
+        (ptr) = cfs_alloc_pages(gfp_mask, order);                             \
+        if (unlikely((ptr) == NULL)) {                                        \
+                CERROR("alloc_pages of '" #ptr "' %d page(s) / "LPU64" bytes "\
+                       "failed\n", (int)(1 << (order)),                       \
+                       (__u64)((1 << (order)) << CFS_PAGE_SHIFT));            \
+                CERROR(LPU64" total bytes and "LPU64" total pages "           \
+                       "("LPU64" bytes) allocated by Lustre, "                \
+                       "%d total bytes by LNET\n",                            \
+                       obd_memory_sum(),                                      \
+                       obd_pages_sum() << CFS_PAGE_SHIFT,                     \
+                       obd_pages_sum(),                                       \
+                       atomic_read(&libcfs_kmemory));                         \
+        } else {                                                              \
+                obd_pages_add(order);                                         \
+                CDEBUG(D_MALLOC, "alloc_pages '" #ptr "': %d page(s) / "      \
+                       LPU64" bytes at %p.\n",                                \
+                       (int)(1 << (order)),                                   \
+                       (__u64)((1 << (order)) << CFS_PAGE_SHIFT), ptr);       \
+        }                                                                     \
+} while (0)
+
+#define OBD_PAGE_ALLOC(ptr, gfp_mask)                                         \
+        OBD_PAGES_ALLOC(ptr, 0, gfp_mask)
+
+#define OBD_PAGES_FREE(ptr, order)                                            \
+do {                                                                          \
+        LASSERT(ptr);                                                         \
+        obd_pages_sub(order);                                                 \
+        CDEBUG(D_MALLOC, "free_pages '" #ptr "': %d page(s) / "LPU64" bytes " \
+               "at %p.\n",                                                    \
+               (int)(1 << (order)), (__u64)((1 << (order)) << CFS_PAGE_SHIFT),\
+               ptr);                                                          \
+        __cfs_free_pages(ptr, order);                                         \
+        (ptr) = (void *)0xdeadbeef;                                           \
+} while (0)
+
+#define OBD_PAGE_FREE(ptr) OBD_PAGES_FREE(ptr, 0)
 
 #if defined(__linux__)
 #include <linux/obd_support.h>
