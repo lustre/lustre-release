@@ -43,8 +43,8 @@ typedef enum {
 } ldlm_error_t;
 
 typedef enum {
-        LDLM_NAMESPACE_SERVER = 0,
-        LDLM_NAMESPACE_CLIENT = 1
+        LDLM_NAMESPACE_SERVER = 1 << 0,
+        LDLM_NAMESPACE_CLIENT = 1 << 1
 } ldlm_side_t;
 
 #define LDLM_FL_LOCK_CHANGED   0x000001 /* extent, mode, or resource changed */
@@ -341,10 +341,30 @@ struct ldlm_namespace {
         struct adaptive_timeout ns_at_estimate;/* estimated lock callback time*/
 };
 
+static inline int ns_is_client(struct ldlm_namespace *ns)
+{
+        LASSERT(ns != NULL);
+        LASSERT(!(ns->ns_client & ~(LDLM_NAMESPACE_CLIENT | 
+                                    LDLM_NAMESPACE_SERVER)));
+        LASSERT(ns->ns_client == LDLM_NAMESPACE_CLIENT ||
+                ns->ns_client == LDLM_NAMESPACE_SERVER);
+        return ns->ns_client == LDLM_NAMESPACE_CLIENT;
+}
+
+static inline int ns_is_server(struct ldlm_namespace *ns)
+{
+        LASSERT(ns != NULL);
+        LASSERT(!(ns->ns_client & ~(LDLM_NAMESPACE_CLIENT | 
+                                    LDLM_NAMESPACE_SERVER)));
+        LASSERT(ns->ns_client == LDLM_NAMESPACE_CLIENT ||
+                ns->ns_client == LDLM_NAMESPACE_SERVER);
+        return ns->ns_client == LDLM_NAMESPACE_SERVER;
+}
+
 static inline int ns_connect_lru_resize(struct ldlm_namespace *ns)
 {
         LASSERT(ns != NULL);
-        return ns->ns_connect_flags & OBD_CONNECT_LRU_RESIZE;
+        return !!(ns->ns_connect_flags & OBD_CONNECT_LRU_RESIZE);
 }
 
 /*
@@ -574,8 +594,8 @@ int ldlm_request_cancel(struct ptlrpc_request *req,
                         struct ldlm_request *dlm_req, int first);
 int ldlm_del_waiting_lock(struct ldlm_lock *lock);
 int ldlm_refresh_waiting_lock(struct ldlm_lock *lock);
-int ldlm_get_ref(ldlm_side_t client);
-void ldlm_put_ref(ldlm_side_t client, int force);
+int ldlm_get_ref(void);
+void ldlm_put_ref(int force);
 
 /* ldlm_lock.c */
 ldlm_processing_policy ldlm_get_processing_policy(struct ldlm_resource *res);
@@ -767,8 +787,8 @@ struct ldlm_resource * lock_res_and_lock(struct ldlm_lock *lock);
 void unlock_res_and_lock(struct ldlm_lock *lock);
 
 /* ldlm_pool.c */
-int ldlm_pools_init(ldlm_side_t client);
 void ldlm_pools_recalc(ldlm_side_t client);
+int ldlm_pools_init(void);
 void ldlm_pools_fini(void);
 void ldlm_pools_wakeup(void);
 

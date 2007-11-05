@@ -286,7 +286,7 @@ int client_obd_setup(struct obd_device *obddev, obd_count len, void *buf)
         } else {
                 cli->cl_max_rpcs_in_flight = OSC_MAX_RIF_DEFAULT;
         }
-        rc = ldlm_get_ref(LDLM_NAMESPACE_CLIENT);
+        rc = ldlm_get_ref();
         if (rc) {
                 CERROR("ldlm_get_ref failed: %d\n", rc);
                 GOTO(err, rc);
@@ -337,7 +337,7 @@ int client_obd_setup(struct obd_device *obddev, obd_count len, void *buf)
 err_import:
         class_destroy_import(imp);
 err_ldlm:
-        ldlm_put_ref(LDLM_NAMESPACE_CLIENT, 0);
+        ldlm_put_ref(0);
 err:
         RETURN(rc);
 
@@ -346,7 +346,7 @@ err:
 int client_obd_cleanup(struct obd_device *obddev)
 {
         ENTRY;
-        ldlm_put_ref(LDLM_NAMESPACE_CLIENT, obddev->obd_force);
+        ldlm_put_ref(obddev->obd_force);
         RETURN(0);
 }
 
