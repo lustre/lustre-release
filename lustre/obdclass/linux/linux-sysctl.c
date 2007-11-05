@@ -91,8 +91,8 @@ int LL_PROC_PROTO(proc_set_timeout)
 #ifdef RANDOM_FAIL_ALLOC
 int LL_PROC_PROTO(proc_alloc_fail_rate)
 {
-        DECLARE_LL_PROC_PPOS_DECL;
         int rc = 0;
+        DECLARE_LL_PROC_PPOS_DECL;
 
         if (!table->data || !table->maxlen || !*lenp || (*ppos && !write)) {
                 *lenp = 0;

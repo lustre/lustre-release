@@ -1171,7 +1171,7 @@ int lprocfs_exp_rd_nid(char *page, char **start, off_t off, int count,
 
 void lprocfs_exp_print_uuid(void *cb_data)
 {
-        struct exp_uuid_cb_data *data = (struct exp_rd_uuid_cb_data *)cb_data;
+        struct exp_uuid_cb_data *data = (struct exp_uuid_cb_data *)cb_data;
 
         if (data->exp->exp_nid_stats)
                 *data->len += snprintf((data->page + *data->len),
