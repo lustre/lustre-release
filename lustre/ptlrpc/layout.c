@@ -54,13 +54,6 @@
 #include <lustre_req_layout.h>
 #include <linux/lustre_acl.h>
 
-#if __KERNEL__
-#define __POSIX_ACL_MAX_SIZE \
-        (sizeof(xattr_acl_header) + 32 * sizeof(xattr_acl_entry))
-#else
-#define __POSIX_ACL_MAX_SIZE 0
-#endif
-
 /*
  * empty set of fields... for suitable definition of emptiness.
  */
@@ -540,8 +533,8 @@ EXPORT_SYMBOL(RMF_REC_SETATTR);
 const struct req_msg_field RMF_EADATA = DEFINE_MSGF("eadata", 0, -1, NULL);
 EXPORT_SYMBOL(RMF_EADATA);
 
-const struct req_msg_field RMF_ACL = DEFINE_MSGF("acl", 0,
-                                     __POSIX_ACL_MAX_SIZE, NULL);
+const struct req_msg_field RMF_ACL = 
+        DEFINE_MSGF("acl", 0, LUSTRE_POSIX_ACL_MAX_SIZE, NULL);
 EXPORT_SYMBOL(RMF_ACL);
 
 const struct req_msg_field RMF_LOGCOOKIES =

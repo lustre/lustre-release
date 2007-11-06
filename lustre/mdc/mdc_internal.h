@@ -83,9 +83,6 @@ static inline int client_is_remote(struct obd_export *exp)
         }
 }
 
-/* Quota stuff */
-extern quota_interface_t *quota_interface;
-
 /* mdc/mdc_locks.c */
 int mdc_set_lock_data(struct obd_export *exp,
                       __u64 *lockh, void *data);

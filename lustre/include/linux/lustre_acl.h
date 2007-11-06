@@ -14,7 +14,15 @@
 # include <linux/fs.h>
 # include <linux/dcache.h>
 # ifdef CONFIG_FS_POSIX_ACL
-# include <linux/xattr_acl.h>
+#  ifdef HAVE_XATTR_ACL
+#   include <linux/xattr_acl.h>
+#  endif
+#  ifdef HAVE_LINUX_POSIX_ACL_XATTR_H
+#   include <linux/posix_acl_xattr.h>
+#  endif
+# endif
+# ifndef HAVE_VFS_INTENT_PATCHES
+#  include <linux/lustre_intent.h>
 # endif
 #endif
 
@@ -30,14 +38,7 @@
 
 # define LUSTRE_POSIX_ACL_MAX_ENTRIES   (32)
 
-# ifdef __KERNEL__
-# define LUSTRE_POSIX_ACL_MAX_SIZE              \
-                (sizeof(xattr_acl_header) +     \
-                LUSTRE_POSIX_ACL_MAX_ENTRIES *  \
-                sizeof(xattr_acl_entry))
-# else /* __KERNEL__ */
-#  define LUSTRE_POSIX_ACL_MAX_SIZE      0
-# endif /* __KERNEL__ */
+# define LUSTRE_POSIX_ACL_MAX_SIZE   XATTR_ACL_SIZE
 
 #else /* CONFIG_FS_POSIX_ACL */
 # define LUSTRE_POSIX_ACL_MAX_SIZE      0

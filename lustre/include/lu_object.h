@@ -827,7 +827,7 @@ static inline int lu_object_assert_not_exists(const struct lu_object *o)
 /*
  * Attr of this object.
  */
-static inline const __u32 lu_object_attr(const struct lu_object *o)
+static inline __u32 lu_object_attr(const struct lu_object *o)
 {
         LASSERT(lu_object_exists(o) > 0);
         return o->lo_header->loh_attr;

@@ -14,7 +14,12 @@
 # include <linux/fs.h>
 # include <linux/dcache.h>
 # ifdef CONFIG_FS_POSIX_ACL
-# include <linux/xattr_acl.h>
+#  ifdef HAVE_XATTR_ACL
+#   include <linux/xattr_acl.h>
+#  endif
+#  ifdef HAVE_LINUX_POSIX_ACL_XATTR_H
+#   include <linux/posix_acl_xattr.h>
+#  endif
 # endif
 #endif
 #include <lustre_handles.h>

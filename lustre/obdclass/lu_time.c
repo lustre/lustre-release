@@ -151,7 +151,6 @@ unsigned long long lu_time_stamp_get(void)
 	 * do_gettimeofday() goes backwards sometimes :(.  Usethe TSC
 	 */
 	unsigned long long ret;
-	extern unsigned long cpu_khz;
 
 	rdtscll(ret);
 	do_div(ret, cpu_khz / 1000);

@@ -219,14 +219,14 @@ static struct page *ll_dir_page_locate(struct inode *dir, unsigned long hash,
         struct page *page;
         int found;
 
-	spin_lock_irq(&mapping->tree_lock);
+        TREE_READ_LOCK_IRQ(mapping);
 	found = radix_tree_gang_lookup(&mapping->page_tree,
                                        (void **)&page, offset, 1);
 	if (found > 0) {
                 struct lu_dirpage *dp;
 
 		page_cache_get(page);
-                spin_unlock_irq(&mapping->tree_lock);
+                TREE_READ_UNLOCK_IRQ(mapping);
                 /*
                  * In contrast to find_lock_page() we are sure that directory
                  * page cannot be truncated (while DLM lock is held) and,
@@ -255,7 +255,7 @@ static struct page *ll_dir_page_locate(struct inode *dir, unsigned long hash,
                 }
 
 	} else {
-                spin_unlock_irq(&mapping->tree_lock);
+                TREE_READ_UNLOCK_IRQ(mapping);
                 page = NULL;
         }
         return page;

@@ -1176,6 +1176,99 @@ LB_LINUX_TRY_COMPILE([
 ])
 ])
 
+AC_DEFUN([LC_S_TIME_GRAN],
+[AC_MSG_CHECKING([if super block has s_time_gran member])
+LB_LINUX_TRY_COMPILE([
+        #include <linux/fs.h>
+],[
+	struct super_block sb;
+
+        return sb.s_time_gran;
+],[
+	AC_MSG_RESULT([yes])
+	AC_DEFINE(HAVE_S_TIME_GRAN, 1, [super block has s_time_gran member])
+],[
+        AC_MSG_RESULT([no])
+])
+])
+
+AC_DEFUN([LC_SB_TIME_GRAN],
+[AC_MSG_CHECKING([if kernel has old get_sb_time_gran])
+LB_LINUX_TRY_COMPILE([
+        #include <linux/fs.h>
+],[
+	return get_sb_time_gran(NULL);
+],[
+        AC_MSG_RESULT([yes])
+	AC_DEFINE(HAVE_SB_TIME_GRAN, 1, [kernel has old get_sb_time_gran])
+],[
+        AC_MSG_RESULT([no])
+])
+])
+
+
+# ~2.6.12 merge patch from oracle to convert tree_lock from spinlock to rwlock
+AC_DEFUN([LC_RW_TREE_LOCK],
+[AC_MSG_CHECKING([if kernel has tree_lock as rwlock])
+tmp_flags="$EXTRA_KCFLAGS"
+EXTRA_KCFLAGS="-Werror"
+LB_LINUX_TRY_COMPILE([
+        #include <linux/fs.h>
+],[
+	struct address_space a;
+
+	write_lock(&a.tree_lock);
+],[
+        AC_MSG_RESULT([yes])
+	AC_DEFINE(HAVE_RW_TREE_LOCK, 1, [kernel has tree_lock as rw_lock])
+],[
+        AC_MSG_RESULT([no])
+])
+EXTRA_KCFLAGS="$tmp_flags"
+])
+
+AC_DEFUN([LC_CONST_ACL_SIZE],
+[AC_MSG_CHECKING([calc acl size])
+tmp_flags="$CFLAGS"
+CFLAGS="$CFLAGS -I $LINUX/include $EXTRA_KCFLAGS"
+AC_TRY_RUN([
+#include <linux/autoconf.h>
+#include <linux/types.h>
+// block include 
+#define __LINUX_POSIX_ACL_H
+
+# ifdef CONFIG_FS_POSIX_ACL
+#  ifdef HAVE_XATTR_ACL
+#   include <linux/xattr_acl.h>
+#  endif
+#  ifdef HAVE_LINUX_POSIX_ACL_XATTR_H
+#   include <linux/posix_acl_xattr.h>
+#  endif
+# endif
+
+#include <linux/lustre_acl.h>
+
+#include <stdio.h>
+
+main(void)
+{
+    int size = mds_xattr_acl_size(LUSTRE_POSIX_ACL_MAX_ENTRIES);
+    FILE *f = fopen("acl.size","w+");
+    fprintf(f,"%d", size);
+    fclose(f);
+}
+
+],[
+	acl_size=`cat acl.size`
+	AC_MSG_RESULT([ACL size $acl_size])
+        AC_DEFINE_UNQUOTED(XATTR_ACL_SIZE, AS_TR_SH([$acl_size]), [size of xattr acl])
+],[
+        AC_ERROR([ACL size can't computed])
+])
+CFLAGS="$tmp_flags"
+])
+
+
 #
 # LC_PROG_LINUX
 #
@@ -1192,6 +1285,7 @@ LC_CONFIG_LIBLUSTRE_RECOVERY
 LC_CONFIG_QUOTA
 LC_CONFIG_HEALTH_CHECK_WRITE
 LC_CONFIG_LRU_RESIZE
+
 
 LC_TASK_PPTR
 # RHEL4 patches
@@ -1217,9 +1311,13 @@ LC_STRUCT_FILE_OPS_UNLOCKED_IOCTL
 LC_FILEMAP_POPULATE
 LC_D_ADD_UNIQUE
 LC_BIT_SPINLOCK_H
+
 LC_XATTR_ACL
-LC_STRUCT_INTENT_FILE
 LC_POSIX_ACL_XATTR_H
+LC_CONST_ACL_SIZE
+
+LC_STRUCT_INTENT_FILE
+
 LC_FUNC_SET_FS_PWD
 LC_CAPA_CRYPTO
 LC_CONFIG_GSS
@@ -1232,6 +1330,13 @@ LC_FUNC_RCU
 
 # does the kernel have VFS intent patches?
 LC_VFS_INTENT_PATCHES
+
+# ~2.6.11
+LC_S_TIME_GRAN
+LC_SB_TIME_GRAN
+
+# 2.6.12
+LC_RW_TREE_LOCK
 
 # 2.6.15
 LC_INODE_I_MUTEX
