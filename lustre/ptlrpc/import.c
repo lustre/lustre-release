@@ -779,7 +779,10 @@ finish:
                                 ocd->ocd_brw_size >> CFS_PAGE_SHIFT;
                 }
 
-                imp->imp_obd->obd_namespace->ns_connect_flags = ocd->ocd_connect_flags;
+                imp->imp_obd->obd_namespace->ns_connect_flags = 
+                        ocd->ocd_connect_flags;
+                imp->imp_obd->obd_namespace->ns_orig_connect_flags = 
+                        ocd->ocd_connect_flags;
 
                 if ((ocd->ocd_connect_flags & OBD_CONNECT_AT) &&
                     (imp->imp_msg_magic == LUSTRE_MSG_MAGIC_V2))

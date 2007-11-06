@@ -643,7 +643,7 @@ void ldlm_lock_decref_internal(struct ldlm_lock *lock, __u32 mode)
                  * are not supported by the server, otherwise, it is done on 
                  * enqueue. */
                 if (!exp_connect_cancelset(lock->l_conn_export) && 
-                    !exp_connect_lru_resize(lock->l_conn_export))
+                    !ns_connect_lru_resize(ns))
                         ldlm_cancel_lru(ns, 0, LDLM_ASYNC);
         } else {
                 unlock_res_and_lock(lock);
