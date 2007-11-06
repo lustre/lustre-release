@@ -138,6 +138,7 @@ static int lprocfs_wr_lru_size(struct file *file, const char *buffer,
         struct ldlm_namespace *ns = data;
         char dummy[MAX_STRING_SIZE + 1], *end;
         unsigned long tmp;
+        int lru_resize;
 
         dummy[MAX_STRING_SIZE] = '\0';
         if (copy_from_user(dummy, buffer, MAX_STRING_SIZE))
@@ -172,8 +173,12 @@ static int lprocfs_wr_lru_size(struct file *file, const char *buffer,
                 CERROR("invalid value written\n");
                 return -EINVAL;
         }
-
+        lru_resize = (tmp == 0);
+        
         if (ns_connect_lru_resize(ns)) {
+                if (!lru_resize)
+                        ns->ns_max_unused = (unsigned int)tmp;
+                        
                 if (tmp > ns->ns_nr_unused)
                         tmp = ns->ns_nr_unused;
                 tmp = ns->ns_nr_unused - tmp;
@@ -181,11 +186,26 @@ static int lprocfs_wr_lru_size(struct file *file, const char *buffer,
                 CDEBUG(D_DLMTRACE, "changing namespace %s unused locks from %u to %u\n", 
                        ns->ns_name, ns->ns_nr_unused, (unsigned int)tmp);
                 ldlm_cancel_lru(ns, (unsigned int)tmp, LDLM_ASYNC);
+                
+                if (!lru_resize) {
+                        CDEBUG(D_DLMTRACE, "disable lru_resize for namespace %s\n", 
+                               ns->ns_name);
+                        ns->ns_connect_flags &= ~OBD_CONNECT_LRU_RESIZE;
+                }
         } else {
                 CDEBUG(D_DLMTRACE, "changing namespace %s max_unused from %u to %u\n",
                        ns->ns_name, ns->ns_max_unused, (unsigned int)tmp);
                 ns->ns_max_unused = (unsigned int)tmp;
                 ldlm_cancel_lru(ns, 0, LDLM_ASYNC);
+                
+                /* Make sure that originally lru resize was supported before 
+                 * turning it on here. */
+                if (lru_resize && 
+                    (ns->ns_orig_connect_flags & OBD_CONNECT_LRU_RESIZE)) {
+                        CDEBUG(D_DLMTRACE, "enable lru_resize for namespace %s\n", 
+                               ns->ns_name);
+                        ns->ns_connect_flags |= OBD_CONNECT_LRU_RESIZE;
+                }
         }
 
         return count;
@@ -289,6 +309,7 @@ struct ldlm_namespace *ldlm_namespace_new(char *name, ldlm_side_t client,
         ns->ns_max_unused = LDLM_DEFAULT_LRU_SIZE;
         ns->ns_max_age = LDLM_DEFAULT_MAX_ALIVE;
         spin_lock_init(&ns->ns_unused_lock);
+        ns->ns_orig_connect_flags = 0;
         ns->ns_connect_flags = 0;
         ldlm_proc_namespace(ns);
 

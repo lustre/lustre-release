@@ -776,6 +776,8 @@ finish:
 
                 imp->imp_obd->obd_namespace->ns_connect_flags = 
                                                         ocd->ocd_connect_flags;
+                imp->imp_obd->obd_namespace->ns_orig_connect_flags = 
+                                                        ocd->ocd_connect_flags;
 
                 LASSERT((cli->cl_max_pages_per_rpc <= PTLRPC_MAX_BRW_PAGES) &&
                         (cli->cl_max_pages_per_rpc > 0));

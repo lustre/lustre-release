@@ -522,7 +522,7 @@ struct ptlrpc_request *ldlm_prep_enqueue_req(struct obd_export *exp,
                  * rpc right on enqueue, what will make it slower, vs. 
                  * asynchronous rpc in blocking thread. */
                 count += ldlm_cancel_lru_local(ns, cancels,
-                                               exp_connect_lru_resize(exp) ? 0 : 1,
+                                               ns_connect_lru_resize(ns) ? 0 : 1,
                                                avail - count, LDLM_CANCEL_AGED);
                 size[DLM_LOCKREQ_OFF] =
                         ldlm_request_bufsize(count, LDLM_ENQUEUE);

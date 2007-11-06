@@ -298,9 +298,12 @@ typedef enum {
 struct ldlm_namespace {
         char                  *ns_name;
         ldlm_side_t            ns_client; /* is this a client-side lock tree? */
-        __u64                  ns_connect_flags; /* client side connect flags 
-                                                  * supported by server */
-        struct list_head      *ns_hash; /* hash table for ns */
+        __u64                  ns_connect_flags; /* ns connect flags supported
+                                           * by server (may be changed via proc,
+                                           * lru resize may be disabled/enabled) */
+        __u64                  ns_orig_connect_flags; /* client side orig connect
+                                           * flags supported by server */
+        struct list_head      *ns_hash;   /* hash table for ns */
         spinlock_t             ns_hash_lock;
         __u32                  ns_refcount; /* count of resources in the hash */
         struct list_head       ns_root_list; /* all root resources in ns */
