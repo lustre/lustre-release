@@ -866,6 +866,28 @@ int mds_notify(struct obd_device *obd, struct obd_device *watched,
         RETURN(rc);
 }
 
+int mds_get_default_md(struct obd_device *obd, struct lov_mds_md *lmm,
+                       int *size)
+{
+        struct lov_desc *ldesc;
+        ENTRY;
+
+        ldesc = &obd->u.mds.mds_lov_desc;
+        LASSERT(ldesc != NULL);
+
+        if (!lmm)
+                RETURN(0);
+
+        lmm->lmm_magic = LOV_MAGIC_V1;
+        lmm->lmm_object_gr = LOV_OBJECT_GROUP_DEFAULT;
+        lmm->lmm_pattern = ldesc->ld_pattern;
+        lmm->lmm_stripe_size = ldesc->ld_default_stripe_size;
+        lmm->lmm_stripe_count = ldesc->ld_default_stripe_count;
+        *size = sizeof(struct lov_mds_md);
+
+        RETURN(sizeof(struct lov_mds_md));
+}
+
 /* Convert the on-disk LOV EA structre.
  * We always try to convert from an old LOV EA format to the common in-memory
  * (lsm) format (obd_unpackmd() understands the old on-disk (lmm) format) and

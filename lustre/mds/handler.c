@@ -457,7 +457,8 @@ static int mds_destroy_export(struct obd_export *export)
                        mfd->mfd_dentry->d_name.len,mfd->mfd_dentry->d_name.name,
                        mfd->mfd_dentry->d_inode->i_ino);
 
-                rc = mds_get_md(obd, mfd->mfd_dentry->d_inode, lmm,&lmm_size,1);
+                rc = mds_get_md(obd, mfd->mfd_dentry->d_inode, lmm,
+                                &lmm_size, 1, 0);
                 if (rc < 0)
                         CWARN("mds_get_md failure, rc=%d\n", rc);
                 else
@@ -562,14 +563,17 @@ static int mds_getstatus(struct ptlrpc_request *req)
  * The EA size is also returned on success, and -ve errno on failure. 
  * If there is no EA then 0 is returned. */
 int mds_get_md(struct obd_device *obd, struct inode *inode, void *md,
-               int *size, int lock)
+               int *size, int lock, int flags)
 {
         int rc = 0;
-        int lmm_size;
+        int lmm_size = 0;
 
         if (lock)
                 LOCK_INODE_MUTEX(inode);
         rc = fsfilt_get_md(obd, inode, md, *size, "lov");
+
+        if (rc == 0 && flags == MDS_GETATTR)
+                rc = mds_get_default_md(obd, md, &lmm_size);
 
         if (rc < 0) {
                 CERROR("Error %d reading eadata for ino %lu\n",
@@ -597,7 +601,7 @@ int mds_get_md(struct obd_device *obd, struct inode *inode, void *md,
 /* Call with lock=1 if you want mds_pack_md to take the i_mutex.
  * Call with lock=0 if the caller has already taken the i_mutex. */
 int mds_pack_md(struct obd_device *obd, struct lustre_msg *msg, int offset,
-                struct mds_body *body, struct inode *inode, int lock)
+                struct mds_body *body, struct inode *inode, int lock, int flags)
 {
         struct mds_obd *mds = &obd->u.mds;
         void *lmm;
@@ -625,7 +629,7 @@ int mds_pack_md(struct obd_device *obd, struct lustre_msg *msg, int offset,
                 // RETURN(-EINVAL);
         }
 
-        rc = mds_get_md(obd, inode, lmm, &lmm_size, lock);
+        rc = mds_get_md(obd, inode, lmm, &lmm_size, lock, flags);
         if (rc > 0) {
                 if (S_ISDIR(inode->i_mode))
                         body->valid |= OBD_MD_FLDIREA;
@@ -692,6 +696,7 @@ static int mds_getattr_internal(struct obd_device *obd, struct dentry *dentry,
         struct mds_body *body;
         struct inode *inode = dentry->d_inode;
         int rc = 0;
+        int flags = 0;
         ENTRY;
 
         if (inode == NULL)
@@ -707,8 +712,12 @@ static int mds_getattr_internal(struct obd_device *obd, struct dentry *dentry,
 
         if ((S_ISREG(inode->i_mode) && (reqbody->valid & OBD_MD_FLEASIZE)) ||
             (S_ISDIR(inode->i_mode) && (reqbody->valid & OBD_MD_FLDIREA))) {
+                if (lustre_msg_get_opc(req->rq_reqmsg) == MDS_GETATTR &&
+                   ((S_ISDIR(inode->i_mode) && (reqbody->valid & OBD_MD_FLDIREA))))
+                        flags = MDS_GETATTR;
+
                 rc = mds_pack_md(obd, req->rq_repmsg, reply_off, body,
-                                 inode, 1);
+                                 inode, 1, flags);
 
                 /* If we have LOV EA data, the OST holds size, atime, mtime */
                 if (!(body->valid & OBD_MD_FLEASIZE) &&
@@ -803,6 +812,9 @@ static int mds_getattr_pack_msg(struct ptlrpc_request *req, struct inode *inode,
                 UNLOCK_INODE_MUTEX(inode);
                 CDEBUG(D_INODE, "got %d bytes MD data for inode %lu\n",
                        rc, inode->i_ino);
+                if ((rc == 0) && (lustre_msg_get_opc(req->rq_reqmsg) == MDS_GETATTR) &&
+                     ((S_ISDIR(inode->i_mode) && (body->valid & OBD_MD_FLDIREA))))
+                        rc = sizeof(struct lov_mds_md);
                 if (rc < 0) {
                         if (rc != -ENODATA) {
                                 CERROR("error getting inode %lu MD: rc = %d\n",

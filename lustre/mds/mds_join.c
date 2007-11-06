@@ -295,7 +295,7 @@ static int mds_join_unlink_tail_inode(struct mds_update_record *rec,
                 GOTO(cleanup, rc);
         }
 
-        rc = mds_get_md(obd, tail_inode, tail_lmm, &lmm_size, 1);
+        rc = mds_get_md(obd, tail_inode, tail_lmm, &lmm_size, 1, 0);
         if (rc < 0) /* get md fails */
                 GOTO(cleanup, rc);
 
@@ -383,7 +383,7 @@ int mds_join_file(struct mds_update_record *rec, struct ptlrpc_request *req,
 
         LOCK_INODE_MUTEX(head_inode);
         cleanup_phase = 1;
-        rc = mds_get_md(obd, head_inode, head_lmm, &size, 0);
+        rc = mds_get_md(obd, head_inode, head_lmm, &size, 0, 0);
         if (rc < 0)
                 GOTO(cleanup, rc);
 

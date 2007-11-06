@@ -574,7 +574,7 @@ static int mds_reint_setattr(struct mds_update_record *rec, int offset,
                         GOTO(cleanup, rc = -ENOMEM);
 
                 cleanup_phase = 2;
-                rc = mds_get_md(obd, inode, lmm, &lmm_size, need_lock);
+                rc = mds_get_md(obd, inode, lmm, &lmm_size, need_lock, 0);
                 if (rc < 0)
                         GOTO(cleanup, rc);
                 rc = 0;
@@ -928,7 +928,7 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
                 if (S_ISDIR(inode->i_mode)) {
                         struct lov_mds_md lmm;
                         int lmm_size = sizeof(lmm);
-                        rc = mds_get_md(obd, dir, &lmm, &lmm_size, 1);
+                        rc = mds_get_md(obd, dir, &lmm, &lmm_size, 1, 0);
                         if (rc > 0) {
                                 LOCK_INODE_MUTEX(inode);
                                 rc = fsfilt_set_md(obd, inode, handle,
@@ -1653,7 +1653,7 @@ static int mds_reint_unlink(struct mds_update_record *rec, int offset,
                         mds_pack_inode2fid(&body->fid1, child_inode);
                         mds_pack_inode2body(body, child_inode);
                         mds_pack_md(obd, req->rq_repmsg, offset + 1, body,
-                                    child_inode, MDS_PACK_MD_LOCK);
+                                    child_inode, MDS_PACK_MD_LOCK, 0);
                 }
         }
 
@@ -2229,7 +2229,7 @@ static int mds_reint_rename(struct mds_update_record *rec, int offset,
                         mds_pack_inode2fid(&body->fid1, new_inode);
                         mds_pack_inode2body(body, new_inode);
                         mds_pack_md(obd, req->rq_repmsg, offset + 1, body,
-                                    new_inode, MDS_PACK_MD_LOCK);
+                                    new_inode, MDS_PACK_MD_LOCK, 0);
                 }
         }
 

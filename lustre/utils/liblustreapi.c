@@ -432,7 +432,11 @@ void lov_dump_user_lmm_v1(struct lov_user_md_v1 *lum, char *path, int is_dir,
         /* if it's a directory */
         if (is_dir) {
                 if (obdstripe == 1) {
-                        printf("default stripe_count: %d stripe_size: %u "
+                        if (lum->lmm_object_gr == LOV_OBJECT_GROUP_DEFAULT) {
+                                printf("(Default) ");
+                                lum->lmm_object_gr = LOV_OBJECT_GROUP_CLEAR;
+                        }
+                        printf("stripe_count: %d stripe_size: %u "
                                "stripe_offset: %d\n",
                                lum->lmm_stripe_count == (__u16)-1 ? -1 :
                                         lum->lmm_stripe_count,
