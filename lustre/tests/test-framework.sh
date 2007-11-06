@@ -1182,6 +1182,8 @@ run_one() {
     message=$2
     tfile=f${testnum}
     export tdir=d${TESTSUITE}/d${base}
+    local SAVE_UMASK=`umask`
+    umask 0022
     mkdir -p $DIR/$tdir
 
     BEFORE=`date +%s`
@@ -1197,6 +1199,7 @@ run_one() {
     rmdir ${DIR}/$tdir >/dev/null 2>&1 || true
     unset TESTNAME
     unset tdir
+    umask $SAVE_UMASK
     cd $SAVE_PWD
     $CLEANUP
 }
