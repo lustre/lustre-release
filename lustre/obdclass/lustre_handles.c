@@ -52,7 +52,16 @@ static struct handle_bucket {
 
 static atomic_t handle_count = ATOMIC_INIT(0);
 
+#ifdef __arch_um__
+/* For unknown reason, UML uses kmalloc rather than vmalloc to allocate
+ * memory(OBD_VMALLOC). Therefore, we have to redefine the
+ * HANDLE_HASH_SIZE to make the hash heads don't exceed 128K.
+ */
+#define HANDLE_HASH_SIZE 4096
+#else
 #define HANDLE_HASH_SIZE (1 << 14)
+#endif /* ifdef __arch_um__ */
+
 #define HANDLE_HASH_MASK (HANDLE_HASH_SIZE - 1)
 
 /*

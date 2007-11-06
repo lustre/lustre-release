@@ -167,6 +167,7 @@
 
 struct ptlrpc_connection {
         struct list_head        c_link;
+        struct hlist_node       c_hash;
         lnet_nid_t              c_self;
         lnet_process_id_t       c_peer;
         struct obd_uuid         c_remote_uuid;
@@ -671,7 +672,7 @@ struct ptlrpc_connection *ptlrpc_get_connection(lnet_process_id_t peer,
                                                 lnet_nid_t self, struct obd_uuid *uuid);
 int ptlrpc_put_connection(struct ptlrpc_connection *c);
 struct ptlrpc_connection *ptlrpc_connection_addref(struct ptlrpc_connection *);
-void ptlrpc_init_connection(void);
+int ptlrpc_init_connection(void);
 void ptlrpc_cleanup_connection(void);
 extern lnet_pid_t ptl_get_pid(void);
 

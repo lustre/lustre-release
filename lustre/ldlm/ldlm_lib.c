@@ -568,7 +568,6 @@ int target_handle_connect(struct ptlrpc_request *req)
         struct obd_uuid tgtuuid;
         struct obd_uuid cluuid;
         struct obd_uuid remote_uuid;
-        struct list_head *p;
         char *str, *tmp;
         int rc = 0;
         int initial_conn = 0;
@@ -689,43 +688,35 @@ int target_handle_connect(struct ptlrpc_request *req)
                 goto dont_check_exports;
 
         spin_lock(&target->obd_dev_lock);
-        list_for_each(p, &target->obd_exports) {
-                export = list_entry(p, struct obd_export, exp_obd_chain);
-                if (obd_uuid_equals(&cluuid, &export->exp_client_uuid)) {
-                        if (export->exp_connecting) { /* bug 9635, et. al. */
-                                CWARN("%s: exp %p already connecting\n",
-                                      export->exp_obd->obd_name, export);
-                                export = NULL;
-                                rc = -EALREADY;
-                                break;
-                        }
+        export = lustre_hash_get_object_by_key(target->obd_uuid_hash_body, &cluuid);
 
-                        /* make darn sure this is coming from the same peer
-                         * if the UUIDs matched */
-                        if ((export->exp_connection != NULL) &&
-                            (strcmp(libcfs_nid2str(req->rq_peer.nid),
-                                    libcfs_nid2str(export->exp_connection->c_peer.nid)))) {
-                                CWARN("%s: cookie %s seen on new NID %s when "
-                                      "existing NID %s is already connected\n",
-                                      target->obd_name, cluuid.uuid,
-                                      libcfs_nid2str(req->rq_peer.nid),
-                                      libcfs_nid2str(export->exp_connection->c_peer.nid));
-                                export = NULL;
-                                rc = -EALREADY;
-                                break;
-                        }
-
-                        spin_lock(&export->exp_lock);
-                        export->exp_connecting = 1;
-                        spin_unlock(&export->exp_lock);
-                        spin_unlock(&target->obd_dev_lock);
-                        LASSERT(export->exp_obd == target);
-
-                        rc = target_handle_reconnect(&conn, export, &cluuid,
-                                                     initial_conn);
-                        break;
-                }
+        if (export != NULL && export->exp_connecting) { /* bug 9635, et. al. */
+                CWARN("%s: exp %p already connecting\n",
+                      export->exp_obd->obd_name, export);
+                class_export_put(export);
                 export = NULL;
+                rc = -EALREADY;
+        } else if (export != NULL && export->exp_connection != NULL &&
+                   req->rq_peer.nid != export->exp_connection->c_peer.nid) {
+                /* make darn sure this is coming from the same peer
+                 * if the UUIDs matched */
+                  CWARN("%s: cookie %s seen on new NID %s when "
+                          "existing NID %s is already connected\n",
+                        target->obd_name, cluuid.uuid,
+                  libcfs_nid2str(req->rq_peer.nid),
+                  libcfs_nid2str(export->exp_connection->c_peer.nid));
+                  class_export_put(export);
+                  export = NULL;
+                  rc = -EALREADY;
+        } else if (export != NULL) {
+                spin_lock(&export->exp_lock);
+                export->exp_connecting = 1;
+                spin_unlock(&export->exp_lock);
+                class_export_put(export);
+                spin_unlock(&target->obd_dev_lock);
+                LASSERT(export->exp_obd == target);
+
+                rc = target_handle_reconnect(&conn, export, &cluuid, initial_conn);
         }
 
         /* If we found an export, we already unlocked. */
@@ -870,6 +861,14 @@ dont_check_exports:
         export->exp_connection = ptlrpc_get_connection(req->rq_peer,
                                                        req->rq_self,
                                                        &remote_uuid);
+
+        spin_lock(&target->obd_dev_lock);
+        /* Export might be hashed already, e.g. if this is reconnect */
+        if (hlist_unhashed(&export->exp_nid_hash))
+                lustre_hash_additem(export->exp_obd->obd_nid_hash_body, 
+                                    &export->exp_connection->c_peer.nid, 
+                                    &export->exp_nid_hash);
+        spin_unlock(&target->obd_dev_lock);
 
         spin_lock_bh(&target->obd_processing_task_lock);
         if (target->obd_recovering && !export->exp_in_recovery) {
