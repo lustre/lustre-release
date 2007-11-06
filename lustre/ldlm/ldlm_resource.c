@@ -331,6 +331,7 @@ struct ldlm_namespace *ldlm_namespace_new(char *name, ldlm_side_t client,
         ns->ns_max_unused = LDLM_DEFAULT_LRU_SIZE;
         ns->ns_max_age = LDLM_DEFAULT_MAX_ALIVE;
         spin_lock_init(&ns->ns_unused_lock);
+        ns->ns_orig_connect_flags = 0;
         ns->ns_connect_flags = 0;
 
         ldlm_proc_namespace(ns);
