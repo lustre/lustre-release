@@ -924,13 +924,14 @@ error() {
     local TYPE=${TYPE:-"FAIL"}
     local ERRLOG
     sysctl -w lustre.fail_loc=0 2> /dev/null || true
-    log "${TESTSUITE} ${TESTNAME}: **** ${TYPE}:" $@
+    log " ${TESTSUITE} ${TESTNAME}: @@@@@@ ${TYPE}: $@ "
     ERRLOG=$TMP/lustre_${TESTSUITE}_${TESTNAME}.$(date +%s)
     echo "Dumping lctl log to $ERRLOG"
     # We need to dump the logs on all nodes
-    $LCTL dk $ERRLOG
-    [ ! "$mds_HOST" = "$(hostname)" ] && do_node $mds_HOST $LCTL dk $ERRLOG
-    [ ! "$ost_HOST" = "$(hostname)" -a ! "$ost_HOST" = "$mds_HOST" ] && do_node $ost_HOST $LCTL dk $ERRLOG
+    local NODES=$(nodes_list)
+    for NODE in $NODES; do
+        do_node $NODE $LCTL dk $ERRLOG
+    done
     debugrestore
     [ "$TESTSUITELOG" ] && echo "$0: ${TYPE}: $TESTNAME $@" >> $TESTSUITELOG
     if $FAIL_ON_ERROR; then
@@ -1016,7 +1017,16 @@ equals_msg() {
 log() {
     echo "$*"
     lsmod | grep lnet > /dev/null || load_modules
-    $LCTL mark "$*" 2> /dev/null || true
+
+    local MSG="$*"
+    # Get rif of '
+    MSG=${MSG//\'/\\\'}
+    MSG=${MSG//\(/\\\(}
+    MSG=${MSG//\)/\\\)}
+    local NODES=$(nodes_list)
+    for NODE in $NODES; do
+        do_node $NODE $LCTL mark "$MSG" 2> /dev/null || true
+    done
 }
 
 trace() {
@@ -1138,6 +1148,29 @@ remote_mds ()
 remote_ost ()
 {
     [ $(grep -c obdfilter $LPROC/devices) -eq 0 ]
+}
+
+osts_nodes () {
+    local OSTNODES=$(facet_host ost1)
+
+    for num in `seq $OSTCOUNT`; do
+        local myOST=$(facet_host ost$num)
+        [[ ! '\ '"$OSTNODES"'\ ' = *'\ '"$myOST"'\ '* ]] && OSTNODES="$OSTNODES $myOST"
+    done
+
+    echo $OSTNODES
+}
+
+nodes_list () {
+    # FIXME. We need a list of clients
+    local myNODES=`hostname`
+
+    [ ! "$mds_HOST" = "$(hostname)" ] && myNODES="$myNODES $mds_HOST"
+
+    local OSTNODES=$(osts_nodes)
+    local myOSTNODES=`echo ' '"$OSTNODES"' ' | sed -e s/[\ ]$mds_HOST[\ ]/\ / -e s/[\ ]$(hostname)[\ ]/\ /`
+    [ -n "$myOSTNODES" ] && myNODES="$myNODES $myOSTNODES"
+    echo $myNODES
 }
 
 is_patchless ()
