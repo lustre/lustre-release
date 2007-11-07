@@ -4406,7 +4406,7 @@ lru_resize_disable()
 
 test_120a() {
         [ -z "`grep early_lock_cancel $LPROC/mdc/*/connect_flags`" ] && \
-               skip "no early lock cancel on server" && return 9
+               skip "no early lock cancel on server" && return 0
         lru_resize_disable
         cancel_lru_locks mdc
         stat $DIR/$tdir > /dev/null
@@ -4423,7 +4423,7 @@ run_test 120a "Early Lock Cancel: mkdir test ==================="
 
 test_120b() {
         [ -z "`grep early_lock_cancel $LPROC/mdc/*/connect_flags`" ] && \
-               skip "no early lock cancel on server" && return 9
+               skip "no early lock cancel on server" && return 0
         lru_resize_disable
         cancel_lru_locks mdc
         stat $DIR/$tdir > /dev/null
@@ -4440,7 +4440,7 @@ run_test 120b "Early Lock Cancel: create test =================="
 
 test_120c() {
         [ -z "`grep early_lock_cancel $LPROC/mdc/*/connect_flags`" ] && \
-               skip "no early lock cancel on server" && return 9
+               skip "no early lock cancel on server" && return 0
         lru_resize_disable
         mkdir -p $DIR/$tdir/d1 $DIR/$tdir/d2
         touch $DIR/$tdir/d1/f1
@@ -4459,7 +4459,7 @@ run_test 120c "Early Lock Cancel: link test ===================="
 
 test_120d() {
         [ -z "`grep early_lock_cancel $LPROC/mdc/*/connect_flags`" ] && \
-               skip "no early lock cancel on server" && return 9
+               skip "no early lock cancel on server" && return 0
         lru_resize_disable
         touch $DIR/$tdir
         cancel_lru_locks mdc
@@ -4477,7 +4477,7 @@ run_test 120d "Early Lock Cancel: setattr test ================="
 
 test_120e() {
         [ -z "`grep early_lock_cancel $LPROC/mdc/*/connect_flags`" ] && \
-               skip "no early lock cancel on server" && return 9
+               skip "no early lock cancel on server" && return 0
         lru_resize_disable
         dd if=/dev/zero of=$DIR/$tdir/f1 count=1
         cancel_lru_locks mdc
@@ -4497,7 +4497,7 @@ run_test 120e "Early Lock Cancel: unlink test =================="
 
 test_120f() {
         [ -z "`grep early_lock_cancel $LPROC/mdc/*/connect_flags`" ] && \
-               skip "no early lock cancel on server" && return 9
+               skip "no early lock cancel on server" && return 0
         lru_resize_disable
         mkdir -p $DIR/$tdir/d1 $DIR/$tdir/d2
         dd if=/dev/zero of=$DIR/$tdir/d1/f1 count=1
@@ -4520,7 +4520,7 @@ run_test 120f "Early Lock Cancel: rename test =================="
 
 test_120g() {
         [ -z "`grep early_lock_cancel $LPROC/mdc/*/connect_flags`" ] && \
-               skip "no early lock cancel on server" && return 9
+               skip "no early lock cancel on server" && return 0
         lru_resize_disable
         count=10000
         echo create $count files
