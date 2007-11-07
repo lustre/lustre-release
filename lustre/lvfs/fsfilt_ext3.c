@@ -340,7 +340,7 @@ static int fsfilt_ext3_credits_needed(int objcount, struct fsfilt_objinfo *fso,
          * quota file that is active.  This is at least true for now.
          */
         needed += hweight32(sb_any_quota_enabled(sb)) *
-                FSFILT_SINGLEDATA_TRANS_BLOCKS(inode->i_sb);
+                FSFILT_SINGLEDATA_TRANS_BLOCKS(sb);
 #endif
 
         return needed;
