@@ -582,7 +582,7 @@ test_30() { #bug #11110
     /bin/sh -c 'sleep 1; rm -f $DIR2/$tdir/bash; cp /bin/bash $DIR2/$tdir' &
     err=$($DIR1/$tdir/bash -c 'sleep 2; openfile -f O_RDONLY /proc/$$/exe >& /dev/null; echo $?')
     wait
-    [ $err -ne 116 ] && error "return code ($err) != -ESTALE" && return
+    [ $err -ne 116 ] && error_ignore 12900 "return code ($err) != -ESTALE" && return
     true
 }
 
