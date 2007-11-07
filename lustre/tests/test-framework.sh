@@ -1064,7 +1064,6 @@ error() {
     local TYPE=${TYPE:-"FAIL"}
     local ERRLOG
     sysctl -w lustre.fail_loc=0 2> /dev/null || true
-    log "${TESTSUITE} ${TESTNAME}: **** ${TYPE}:" $@
     log " ${TESTSUITE} ${TESTNAME}: @@@@@@ ${TYPE}: $@ "
     ERRLOG=$TMP/lustre_${TESTSUITE}_${TESTNAME}.$(date +%s)
     echo "Dumping lctl log to $ERRLOG"
