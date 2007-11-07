@@ -1,7 +1,7 @@
        * version 1.8.0
        * Support for kernels:
         2.6.5-7.286 (SLES 9),
-        2.6.9-55.0.9.EL (RHEL 4),
+        2.6.9-55.0.12.EL (RHEL 4),
         2.6.16.53-0.8 (SLES 10),
         2.6.18-8.1.14.EL5 (RHEL 5).
         2.6.18.8 vanilla (kernel.org)
@@ -11,6 +11,10 @@
         2.6.16 - 2.6.21 vanilla (kernel.org)
        * Recommended e2fsprogs version: 1.40.2-cfs1
        * Note that reiserfs quotas are disabled on SLES 10 in this kernel.
+
+Severity   : normal
+Bugzilla   : 14041
+Description: Update to RHEL4 latest kernel.
 
 Severity   : normal
 Bugzilla   : 13568
