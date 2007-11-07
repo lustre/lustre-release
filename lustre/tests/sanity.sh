@@ -528,7 +528,6 @@ run_test 21 "write to dangling link ============================"
 
 test_22() {
 	WDIR=$DIR/$tdir
-	mkdir $WDIR
 	chown $RUNAS_ID $WDIR
 	(cd $WDIR || error "cd $WDIR failed";
 	$RUNAS tar cf - /etc/hosts /etc/sysconfig/network | \
@@ -1887,7 +1886,6 @@ test_42d() {
 run_test 42d "test complete truncate of file with cached dirty data"
 
 test_43() {
-	mkdir $DIR/$tdir
 	cp -p /bin/ls $DIR/$tdir/$tfile
 	exec 9>> $DIR/$tdir/$tfile
 	$DIR/$tdir/$tfile && error || true
@@ -3819,7 +3817,6 @@ test_105c() {
 run_test 105c "lockf when mounted without -o flock test ========"
 
 test_106() { #bug 10921
-	mkdir $DIR/$tdir || error "mkdir $DIR/$tdir failed"
 	$DIR/$tdir && error "exec $DIR/$tdir succeeded"
 	chmod 777 $DIR/$tdir || error "chmod $DIR/$tdir failed"
 }
@@ -4424,7 +4421,6 @@ test_120a() {
         [ -z "`grep early_lock_cancel $LPROC/mdc/*/connect_flags`" ] && \
                skip "no early lock cancel on server" && return 0
         lru_resize_disable
-        mkdir $DIR/$tdir
         cancel_lru_locks mdc
         stat $DIR/$tdir > /dev/null
         can1=`awk '/ldlm_cancel/ {print $2}' $LPROC/ldlm/services/ldlm_canceld/stats`
@@ -4442,7 +4438,6 @@ test_120b() {
         [ -z "`grep early_lock_cancel $LPROC/mdc/*/connect_flags`" ] && \
                skip "no early lock cancel on server" && return 0
         lru_resize_disable
-        mkdir $DIR/$tdir
         cancel_lru_locks mdc
         stat $DIR/$tdir > /dev/null
         can1=`awk '/ldlm_cancel/ {print $2}' $LPROC/ldlm/services/ldlm_canceld/stats`
@@ -4497,7 +4492,6 @@ test_120e() {
         [ -z "`grep early_lock_cancel $LPROC/mdc/*/connect_flags`" ] && \
                skip "no early lock cancel on server" && return 0
         lru_resize_disable
-        mkdir $DIR/$tdir
         dd if=/dev/zero of=$DIR/$tdir/f1 count=1
         cancel_lru_locks mdc
         cancel_lru_locks osc
