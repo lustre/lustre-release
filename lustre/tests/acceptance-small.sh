@@ -32,6 +32,7 @@ if [ "$ACC_SM_ONLY" ]; then
 	export ${O}="yes"
     done
 fi
+LFSCK="no" # bug 13698
 
 LIBLUSTRETESTS=${LIBLUSTRETESTS:-../liblustre/tests}
 
@@ -52,8 +53,7 @@ setup_if_needed() {
 }
 
 title() {
-    echo "-----============= acceptance-small: "$*" ============-----"
-    $LCTL mark "----===== $* =====----" 2> /dev/null || true
+    log "-----============= acceptance-small: "$*" ============----- `date`"
     RANTEST=${RANTEST}$*", "
 }
 
