@@ -130,16 +130,14 @@ Index: linux-2.6.9/drivers/scsi/sd.c
  	return 0;
  
  error_out:
-@@ -849,6 +914,9 @@ static void sd_rw_intr(struct scsi_cmnd 
- 			break;
- 		}
+@@ -849,6 +914,7 @@ static void sd_rw_intr(struct scsi_cmnd 
+ 		break;
  	}
-+
+  out:
 +	sd_iostats_finish_req(SCpnt);
-+
- 	/*
- 	 * This calls the generic completion function, now that we know
- 	 * how many actual sectors finished, and how many sectors we need
+ 	scsi_io_completion(SCpnt, good_bytes);
+ }
+
 @@ -1575,6 +1643,481 @@ static void sd_shutdown(struct device *d
  	sd_sync_cache(sdp);
  }	
