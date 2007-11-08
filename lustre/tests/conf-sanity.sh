@@ -762,12 +762,12 @@ test_21c() {
 	stop_ost
 	stop_ost2
 	stop_mds
+        #reformat to remove ost2 from logs
+        reformat
 }
 run_test 21c "start mds between two osts, stop mds last"
 
 test_22() {
-        #reformat to remove all logs
-        reformat
 	start_mds
 	echo Client mount before any osts are in the logs
 	mount_client $MOUNT
