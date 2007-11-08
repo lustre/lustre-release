@@ -1250,12 +1250,14 @@ AC_TRY_RUN([
 
 #include <stdio.h>
 
-main(void)
+int main(void)
 {
     int size = mds_xattr_acl_size(LUSTRE_POSIX_ACL_MAX_ENTRIES);
     FILE *f = fopen("acl.size","w+");
     fprintf(f,"%d", size);
     fclose(f);
+
+    return 0;
 }
 
 ],[
