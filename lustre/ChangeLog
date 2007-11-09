@@ -14,11 +14,11 @@ tbd         Cluster File Systems, Inc. <info@clusterfs.com>
        * Recommended e2fsprogs version: 1.40.2-cfs1
        * Note that reiserfs quotas are disabled on SLES 10 in this kernel.
 
-Severity   : normal
+Severity   : enhancement
 Bugzilla   : 13889
 Description: Update to SLES9 kernel-2.6.5-7.287.3.
 
-Severity   : normal
+Severity   : enhancement
 Bugzilla   : 14041
 Description: Update to RHEL4 kernel-2.6.9-55.0.12.EL.
 
@@ -26,7 +26,7 @@ Severity   : enhancement
 Bugzilla   : 13690
 Description: Build SLES10 patchless client fails
 Details    : The configure was broken by run ./configure with 
-             --with-linux-obj=.... argument for patchless client. When the
+	     --with-linux-obj=.... argument for patchless client. When the
 	     configure use --with-linux-obj, the LINUXINCLUDE= -Iinclude
 	     can't search header adequately. Use absolute path such as 
 	     -I($LINUX)/include instead. 
@@ -39,18 +39,15 @@ Details    : New macros for page alloc and free which enable accounting
 	     and page statistics.
 
 Severity   : normal
+Frequency  : only if debugging is disabled
 Bugzilla   : 13497
 Description: LASSERT_{REQ,REP}SWAB macros are buggy
 Details    : If SWAB_PARANOIA is disabled, the LASSERT_REQSWAB and
-             LASSERT_REPSWAB macros become no-ops, which is incorrect. Drop
+	     LASSERT_REPSWAB macros become no-ops, which is incorrect. Drop
 	     these macros and replace them with their difinitions instead.
 
 Severity   : normal
-Bugzilla   : 13556
-Description: conf-sanity.sh test_33 failed with 1
-Details    : change mgsnode 
-
-Severity   : normal
+Frequency  : rarely
 Bugzilla   : 13888
 Description: interrupt oig_wait produce painc on resend.
 Details    : brw_redo_request can be used for resend requests from ptlrpcd and
@@ -59,13 +56,6 @@ Details    : brw_redo_request can be used for resend requests from ptlrpcd and
 	     req->rq_ptlrpcd_data != NULL. But this member used only for wakeup
 	     ptlrpcd set if request is changed and can be safety changed to use
 	     rq_set directly.
-
-Severity   : normal
-Frequency  : when using O_DIRECT and quotas
-Bugzilla   : 13930
-Description: Incorrect file ownership on O_DIRECT output files
-Details    : block usage reported by 'lfs quota' does not take into account
-             files that have been written with O_DIRECT.
 
 --------------------------------------------------------------------------------
 
@@ -86,14 +76,15 @@ Details    : block usage reported by 'lfs quota' does not take into account
        * Note that reiserfs quotas are disabled on SLES 10 in this kernel.
 
 Severity   : normal
+Frequency  : occasional
 Bugzilla   : 13730
-Description: Not fail import if we got -EAGAIN
-Details    : if osc_interpret_create got -EAGAIN his immediately exit and 
-             wakeup oscc_waitq. After wakeup oscc_wait_for_objects call 
-	     oscc_has_objects and see osc has no objests and call 
-             oscc_internal_create for resend create request.
+Description: Do not fail import if osc_interpret_create gets -EAGAIN
+Details    : If osc_interpret_create got -EAGAIN it immediately exits and 
+	     wakeup oscc_waitq.  After wakeup oscc_wait_for_objects call 
+	     oscc_has_objects and see OSC has no objests and call 
+	     oscc_internal_create to resend create request.
 
-Severity   : normal
+Severity   : enhancement
 Bugzilla   : 13521
 Description: Update kernel patches for SLES10 2.6.16.53-0.8.
 Details    : Update which_patch & target file for SLES10 latest kernel.
@@ -110,13 +101,13 @@ Description: eliminate client locks in face of contention
 Details    : file contention detection and lockless i/o implementation
 	     for contended files.
 
-Severity   : normal
+Severity   : enhancement
 Bugzilla   : 12411
 Description: Remove client patches from SLES 10 kernel.
 Details    : This causes SLES 10 clients to behave as patchless clients
 	     even on a Lustre-patched (server) kernel.
 
-Severity   : minor
+Severity   : enhancement
 Bugzilla   : 2369 
 Description: use i_size_read and i_size_write in 2.6 port
 Details    : replace inode->i_size access with i_size_read/write()
@@ -130,8 +121,9 @@ Details    : Don't take the BKL in fsfilt_ext3_setattr() for 2.6 kernels.
 	     present case).
 
 Severity   : normal
+Frequency  : always
 Bugzilla   : 13358
-Description: 1.4.11 Can't handle directories with stripe set and extended acls
+Description: 1.4.11 Can't handle directories with stripe set and extended ACLs
 Details    : Impossible (EPROTO is returned) to access a directory that has a
 	     non-default striping and ACLs.
 
@@ -160,17 +152,19 @@ Details    : If a new ldiskfs filesystem is created with the "uninit_groups"
 	     second inode in that group would update it correctly.
 
 Severity   : minor
+Frequency  : rarely
 Bugzilla   : 12948
 Description: buffer overruns could theoretically occur
 Details    : llapi_semantic_traverse() modifies the "path" argument by
 	     appending values to the end of the origin string, and a buffer
 	     overrun may occur. Adding buffer overrun check in liblustreapi.
 
-Severity   : normal
+Severity   : enhancement
 Bugzilla   : 13454
 Description: Add jbd statistics patch for RHEL5 and 2.6.18-vanilla.
 
 Severity   : normal
+Frequency  : only if filesystem is inconsistent
 Bugzilla   : 11673
 Description: handle "serious error: objid * already exists" more gracefully
 Details    : If LAST_ID value on disk is smaller than the objects existing in
@@ -178,12 +172,12 @@ Details    : If LAST_ID value on disk is smaller than the objects existing in
 	     LBUG(). If the object is 0-length, then we should use the existing
 	     object. This will help to avoid a full fsck in most cases.
 
-Severity   : normal
+Severity   : enhancement
 Bugzilla   : 13518
 Description: Kernel patches update for RHEL4 2.6.9-55.0.6.
 Details    : Modify vm-tunables-rhel4.patch.
 
-Severity   : normal
+Severity   : enhancement
 Bugzilla   : 13452
 Description: Kernel config for 2.6.18-vanilla.
 Details    : Modify targets/2.6-vanilla.target.in.
@@ -193,22 +187,24 @@ Details    : Modify targets/2.6-vanilla.target.in.
 	     Add config file kernel-2.6.18-2.6-vanilla-x86_64-smp.config.
 
 Severity   : major
+Frequency  : occasional
 Bugzilla   : 11710
 Description: improve handling recoverable errors
-Details    : if request processig with error which can be recoverable on server
-             request should be resend, otherwise page released from cache and
-             marked as error.
+Details    : If request processed with error which can be recoverable on server
+	     request should be resend, otherwise page released from cache and
+	     marked as error.
 
 Severity   : critical
+Frequency  : always
 Bugzilla   : 13751
 Description: Kernel patches update for RHEL5 2.6.18-8.1.14.el5.
 Details    : Modify target file & which_patch.
-             A flaw was found in the IA32 system call emulation provided 
-             on AMD64 and Intel 64 platforms. An improperly validated 64-bit 
-             value could be stored in the %RAX register, which could trigger an 
-             out-of-bounds system call table access. An untrusted local user 
-             could exploit this flaw to run code in the kernel 
-             (ie a root privilege escalation). (CVE-2007-4573). 
+	     A flaw was found in the IA32 system call emulation provided 
+	     on AMD64 and Intel 64 platforms. An improperly validated 64-bit 
+	     value could be stored in the %RAX register, which could trigger an 
+	     out-of-bounds system call table access. An untrusted local user 
+	     could exploit this flaw to run code in the kernel 
+	     (ie a root privilege escalation). (CVE-2007-4573). 
 
 Severity   : minor
 Bugzilla   : 13732 
@@ -222,9 +218,10 @@ Details    : Add "-u" option for lustre_config script to support upgrading 1.4
 	     server targets to 1.6 in parallel.
 
 Severity   : normal
+Frequency  : rarely
 Bugzilla   : 13570
 Description: To avoid grant space > avaible space when the disk is almost
-             full. Without this patch you might see the error "grant XXXX >
+	     full. Without this patch you might see the error "grant XXXX >
 	     available" or some LBUG about grant, when the disk is almost 
 	     full.
 Details    : In filter_check_grant, for non_grant cache write, we should
@@ -235,11 +232,19 @@ Details    : In filter_check_grant, for non_grant cache write, we should
 	     OBD_MD_FLGRANT in the reply.
 
 Severity   : critical
+Frequency  : always
 Bugzilla   : 13748
 Description: Update RHEL 4 kernel to fix local root privilege escalation.
 Details    : Update to the latest RHEL 4 kernel to fix the vulnerability
 	     described in CVE-2007-4573.  This problem could allow untrusted
 	     local users to gain root access.
+
+Severity   : normal
+Frequency  : when using O_DIRECT and quotas
+Bugzilla   : 13930
+Description: Incorrect file ownership on O_DIRECT output files
+Details    : block usage reported by 'lfs quota' does not take into account
+	     files that have been written with O_DIRECT.
 
 --------------------------------------------------------------------------------
 
@@ -253,7 +258,7 @@ Details    : Update to the latest RHEL 4 kernel to fix the vulnerability
         2.6.18.8 vanilla (kernel.org)
        * Client support for unpatched kernels:
         (see http://wiki.lustre.org/index.php?title=Patchless_Client)
-        2.6.16 - 2.6.22 vanilla (kernel.org)
+        2.6.16 - 2.6.21 vanilla (kernel.org)
        * Due to recently discovered recovery problems, we do not recommend
         using patchless RHEL 4 clients with this or any earlier release.
        * Recommended e2fsprogs version: 1.40.2-cfs1
@@ -431,7 +436,7 @@ Details    : "lfs find -obd UUID" will return all directory names instead
 	     do not reside on the OSTs.
 
 Severity   : normal
-Bugzilla   : 13596
+Bugzilla   : 13596, 13614
 Description: MDS hang after unclean shutdown of lots of clients
 Details    : Never resend AST requests.
 
@@ -440,7 +445,7 @@ Bugzilla   : 13304
 Frequency  : Always, for kernels after 2.6.16
 Description: Fix warning idr_remove called for id=.. which is not allocated.
 Details    : Last kernels save old s_dev before kill super and not allow 
-	      to restore from callback - restore it before call kill_anon_super.
+	     to restore from callback - restore it before call kill_anon_super.
 
 Severity   : normal
 Bugzilla   : 13334
