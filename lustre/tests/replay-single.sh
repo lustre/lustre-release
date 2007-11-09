@@ -920,8 +920,10 @@ test_44() {
     mdcdev=`awk '/-mdc-/ {print $1}' $LPROC/devices`
     [ "$mdcdev" ] || exit 2
     # adaptive timeouts slow this way down
-    MDS_AT_MAX=$(do_facet mds "cat /sys/module/ptlrpc/at_max")
-    do_facet mds "echo 40 >> /sys/module/ptlrpc/at_max"
+    local at_max=$(do_facet mds "find /sys/ -name at_max")
+    [ -z "$at_max" ] && skip "missing /sys/.../at_max" && return 0
+    MDS_AT_MAX=$(do_facet mds "cat $at_max")
+    do_facet mds "echo 40 >> $at_max"
     for i in `seq 1 10`; do
 	echo "$i of 10 ($(date +%s))"
 	do_facet mds "grep service $LPROC/mdt/MDS/mds/timeouts"
@@ -931,7 +933,7 @@ test_44() {
 	df $MOUNT
     done
     do_facet mds "sysctl -w lustre.fail_loc=0"
-    do_facet mds "echo $MDS_AT_MAX >> /sys/module/ptlrpc/at_max"
+    do_facet mds "echo $MDS_AT_MAX >> $at_max"
     return 0
 }
 run_test 44 "race in target handle connect"
@@ -1354,16 +1356,18 @@ run_test 61c "test race mds llog sync vs llog cleanup"
 at_start() #bug 3055
 {
     if [ -z "$ATOLDBASE" ]; then
-	ATOLDBASE=$(do_facet mds "cat /sys/module/ptlrpc/at_history")
+	local at_history=$(do_facet mds "find /sys/ -name at_history")
+	[ -z "$at_history" ] && skip "missing /sys/.../at_history " && return 1
+	ATOLDBASE=$(do_facet mds "cat $at_history")
         # speed up the timebase so we can check decreasing AT
-	do_facet mds "echo 8 >> /sys/module/ptlrpc/at_history"
-	do_facet ost1 "echo 8 >> /sys/module/ptlrpc/at_history"
+	do_facet mds "echo 8 >> $at_history"
+	do_facet ost1 "echo 8 >> $at_history"
     fi
 }
 
 test_65a() #bug 3055
 {
-    at_start
+    at_start || return 0
     $LCTL dk > /dev/null
     debugsave
     sysctl -w lnet.debug="+other"
@@ -1384,7 +1388,7 @@ run_test 65a "AT: verify early replies"
 
 test_65b() #bug 3055
 {
-    at_start
+    at_start || return 0
     # turn on D_ADAPTTO
     debugsave
     sysctl -w lnet.debug="+other"
@@ -1414,7 +1418,7 @@ run_test 65b "AT: verify early replies on packed reply / bulk"
 
 test_66a() #bug 3055
 {
-    at_start
+    at_start || return 0
     grep "portal 12" $LPROC/mdc/${FSNAME}-MDT0000-mdc-*/timeouts
     # adjust 5s at a time so no early reply is sent (within deadline)
     do_facet mds "sysctl -w lustre.fail_val=5000"
@@ -1442,7 +1446,7 @@ run_test 66a "AT: verify MDT service time adjusts with no early replies"
 
 test_66b() #bug 3055
 {
-    at_start
+    at_start || return 0
     ORIG=$(awk '/network/ {print $4}' $LPROC/mdc/lustre-*/timeouts)
     sysctl -w lustre.fail_val=$(($ORIG + 5))
 #define OBD_FAIL_PTLRPC_PAUSE_REP      0x50c
@@ -1458,7 +1462,7 @@ run_test 66b "AT: verify net latency adjusts"
 
 test_67a() #bug 3055
 {
-    at_start
+    at_start || return 0
     CONN1=$(awk '/_connect/ {total+=$2} END {print total}' $LPROC/osc/*/stats)
     # sleeping threads may drive values above this
     do_facet ost1 "sysctl -w lustre.fail_val=400"
@@ -1477,7 +1481,7 @@ run_test 67a "AT: verify slow request processing doesn't induce reconnects"
 
 test_67b() #bug 3055
 {
-    at_start
+    at_start || return 0
     CONN1=$(awk '/_connect/ {total+=$2} END {print total}' $LPROC/osc/*/stats)
 #define OBD_FAIL_OST_PAUSE_CREATE        0x223
     do_facet ost1 "sysctl -w lustre.fail_val=20000"
@@ -1505,9 +1509,11 @@ run_test 67b "AT: verify instant slowdown doesn't induce reconnects"
 
 test_68 () #bug 13813
 {
-    at_start
-    local ENQ_MIN=$(cat /sys/module/ptlrpc/ldlm_enqueue_min)
-    echo $TIMEOUT >> /sys/module/ptlrpc/ldlm_enqueue_min
+    at_start || return 0
+    local ldlm_enqueue_min=$(find /sys -name ldlm_enqueue_min)
+    [ -z "$ldlm_enqueue_min" ] && skip "missing /sys/.../ldlm_enqueue_min" && return 0
+    local ENQ_MIN=$(cat $ldlm_enqueue_min)
+    echo $TIMEOUT >> $ldlm_enqueue_min
     rm -f $DIR/${tfile}_[1-2]
     lfs setstripe $DIR/$tfile --index=0 --count=1
 #define OBD_FAIL_LDLM_PAUSE_CANCEL       0x312
@@ -1518,14 +1524,15 @@ test_68 () #bug 13813
     sysctl -w lustre.fail_loc=0x80000312
     cp /etc/profile $DIR/${tfile}_2 || error "2nd cp failed $?"
     sysctl -w lustre.fail_loc=0
-    echo $ENQ_MIN >> /sys/module/ptlrpc/ldlm_enqueue_min
+    echo $ENQ_MIN >> $ldlm_enqueue_min
     return 0
 }
 run_test 68 "AT: verify slowing locks"
 
 if [ -n "$ATOLDBASE" ]; then
-    do_facet mds "echo $ATOLDBASE >> /sys/module/ptlrpc/at_history"
-    do_facet ost1 "echo $ATOLDBASE >> /sys/module/ptlrpc/at_history"
+    at_history=$(do_facet mds "find /sys/ -name at_history")
+    do_facet mds "echo $ATOLDBASE >> $at_history" || true
+    do_facet ost1 "echo $ATOLDBASE >> $at_history" || true
 fi
 # end of AT tests includes above lines
 
