@@ -762,12 +762,12 @@ test_21c() {
 	stop_ost
 	stop_ost2
 	stop_mds
-        #reformat to remove ost2 from logs
-        reformat
 }
 run_test 21c "start mds between two osts, stop mds last"
 
 test_22() {
+	#reformat to remove all logs
+	reformat
 	start_mds
 	echo Client mount before any osts are in the logs
 	mount_client $MOUNT
@@ -821,6 +821,9 @@ test_23() {
 #run_test 23 "interrupt client during recovery mount delay"
 
 test_24a() {
+	#set up fs1 
+	gen_config
+	#set up fs2
 	local fs2mds_HOST=$mds_HOST
 	local fs2ost_HOST=$ost_HOST
 	[ -n "$ost1_HOST" ] && fs2ost_HOST=$ost1_HOST
