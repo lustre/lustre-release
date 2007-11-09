@@ -72,7 +72,7 @@ Details    : block usage reported by 'lfs quota' does not take into account
 2007-10-26         Cluster File Systems, Inc. <info@clusterfs.com>
        * version 1.6.4
        * Support for kernels:
-        2.6.5-7.287.3 (SLES 9),
+        2.6.5-7.286 (SLES 9),
         2.6.9-55.0.9.EL (RHEL 4),
         2.6.16.53-0.8 (SLES 10),
         2.6.18-8.1.14.el5 (RHEL 5),
