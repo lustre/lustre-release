@@ -1,7 +1,7 @@
 tbd         Cluster File Systems, Inc. <info@clusterfs.com>
        * version 1.6.5
        * Support for kernels:
-        2.6.5-7.286 (SLES 9),
+        2.6.5-7.287.3 (SLES 9),
         2.6.9-55.0.12.EL (RHEL 4),
         2.6.16.53-0.8 (SLES 10),
         2.6.18-8.1.14.el5 (RHEL 5),
@@ -15,8 +15,12 @@ tbd         Cluster File Systems, Inc. <info@clusterfs.com>
        * Note that reiserfs quotas are disabled on SLES 10 in this kernel.
 
 Severity   : normal
+Bugzilla   : 13889
+Description: Update to SLES9 kernel-2.6.5-7.287.3.
+
+Severity   : normal
 Bugzilla   : 14041
-Description: Update to RHEL4 latest kernel.
+Description: Update to RHEL4 kernel-2.6.9-55.0.12.EL.
 
 Severity   : enhancement
 Bugzilla   : 13690
@@ -68,7 +72,7 @@ Details    : block usage reported by 'lfs quota' does not take into account
 2007-10-26         Cluster File Systems, Inc. <info@clusterfs.com>
        * version 1.6.4
        * Support for kernels:
-        2.6.5-7.286 (SLES 9),
+        2.6.5-7.287.3 (SLES 9),
         2.6.9-55.0.9.EL (RHEL 4),
         2.6.16.53-0.8 (SLES 10),
         2.6.18-8.1.14.el5 (RHEL 5),
