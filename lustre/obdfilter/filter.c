@@ -3817,28 +3817,40 @@ static int filter_get_info(struct obd_export *exp, __u32 keylen,
                 RETURN(-EINVAL);
         }
 
-        if (keylen == strlen("blocksize") &&
-            memcmp(key, "blocksize", keylen) == 0) {
+        if (KEY_IS("blocksize")) {
                 __u32 *blocksize = val;
+                if (blocksize) {
+                        if (*vallen < sizeof(*blocksize))
+                                RETURN(-EOVERFLOW);
+                        *blocksize = obd->u.obt.obt_sb->s_blocksize;
+                }
                 *vallen = sizeof(*blocksize);
-                *blocksize = obd->u.obt.obt_sb->s_blocksize;
                 RETURN(0);
         }
 
-        if (keylen == strlen("blocksize_bits") &&
-            memcmp(key, "blocksize_bits", keylen) == 0) {
+        if (KEY_IS("blocksize_bits")) {
                 __u32 *blocksize_bits = val;
+                if (blocksize_bits) {
+                        if (*vallen < sizeof(*blocksize_bits))
+                                RETURN(-EOVERFLOW);
+                        *blocksize_bits = obd->u.obt.obt_sb->s_blocksize_bits;
+                }
                 *vallen = sizeof(*blocksize_bits);
-                *blocksize_bits = obd->u.obt.obt_sb->s_blocksize_bits;
                 RETURN(0);
         }
 
-        if (keylen >= strlen("last_id") && memcmp(key, "last_id", 7) == 0) {
+        if (KEY_IS("last_id")) {
                 obd_id *last_id = val;
                 /* FIXME: object groups */
-                *last_id = filter_last_id(&obd->u.filter, 0);
+                if (last_id) {
+                        if (*vallen < sizeof(*last_id))
+                                RETURN(-EOVERFLOW);
+                        *last_id = filter_last_id(&obd->u.filter, 0);
+                }
+                *vallen = sizeof(*last_id);
                 RETURN(0);
         }
+
         CDEBUG(D_IOCTL, "invalid key\n");
         RETURN(-EINVAL);
 }
@@ -3871,8 +3883,7 @@ static int filter_set_info_async(struct obd_export *exp, __u32 keylen,
                 RETURN(0);
         }
 
-        if (keylen < strlen(KEY_MDS_CONN) ||
-            memcmp(key, KEY_MDS_CONN, keylen) != 0)
+        if (!KEY_IS(KEY_MDS_CONN))
                 RETURN(-EINVAL);
 
         LCONSOLE_WARN("%s: received MDS connection from %s\n", obd->obd_name,

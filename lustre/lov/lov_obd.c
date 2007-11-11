@@ -2361,7 +2361,7 @@ static int lov_get_info(struct obd_export *exp, __u32 keylen,
                 GOTO(out, rc = -ENXIO);
         } else if (KEY_IS("last_id")) {
                 obd_id *ids = val;
-                int size = sizeof(obd_id);
+                unsigned int size = sizeof(obd_id);
                 for (i = 0; i < lov->desc.ld_tgt_count; i++) {
                         if (!lov->lov_tgts[i] || !lov->lov_tgts[i]->ltd_active)
                                 continue;
