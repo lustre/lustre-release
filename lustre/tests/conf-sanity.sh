@@ -14,8 +14,8 @@ ONLY=${ONLY:-"$*"}
 # These tests don't apply to mountconf
 MOUNTCONFSKIP="9 10 11 12 13 13b 14 15"
 
-# bug number for skipped test:                     2661 13709 10510 12743
-ALWAYS_EXCEPT=" $CONF_SANITY_EXCEPT $MOUNTCONFSKIP 16   22    23    36"
+# bug number for skipped test:                     2661 13709 10510 13710 12743
+ALWAYS_EXCEPT=" $CONF_SANITY_EXCEPT $MOUNTCONFSKIP 16   22    23    33    36"
 # UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
 
 SRCDIR=`dirname $0`
