@@ -1307,25 +1307,27 @@ out_free:
         RETURN(ERR_PTR(rc));
 }
 
-/* We have to wait for everything to finish, including lnet lnd expires, 
-   before it is safe to free the sb */
 static void server_wait_finished(struct vfsmount *mnt)
 {
         wait_queue_head_t   waitq;
         struct l_wait_info  lwi;
-        int                 waited = 0;
+        int                 retries = 120;
 
         init_waitqueue_head(&waitq);
 
-        while (atomic_read(&mnt->mnt_count) > 1) {
-                if (waited && (waited % 30 == 0))
-                        LCONSOLE_WARN("Mount still busy with %d refs after "
-                                      "%d secs\n", atomic_read(&mnt->mnt_count),
-                                      waited);
+        while ((atomic_read(&mnt->mnt_count) > 1) && (retries > 0)) {
+                LCONSOLE_WARN("Mount still busy with %d refs, waiting for "
+                              "%d secs...\n",
+                              atomic_read(&mnt->mnt_count), retries);
+
                 /* Wait for a bit */
-                waited += 3;
-                lwi = LWI_TIMEOUT(cfs_time_seconds(3), NULL, NULL);
+                retries -= 5;
+                lwi = LWI_TIMEOUT(5 * HZ, NULL, NULL);
                 l_wait_event(waitq, 0, &lwi);
+        }
+        if (atomic_read(&mnt->mnt_count) > 1) {
+                CERROR("Mount %p is still busy (%d refs), giving up.\n",
+                       mnt, atomic_read(&mnt->mnt_count));
         }
 }
 
