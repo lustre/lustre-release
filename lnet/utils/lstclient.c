@@ -23,9 +23,10 @@ unsigned int libcfs_debug = 0;
 
 static struct option lstjn_options[] =
 {
-        {"sesid",   required_argument,  0, 's' },
-        {"group",   required_argument,  0, 'g' },
-        {0,         0,                  0,  0  }
+        {"sesid",       required_argument,  0, 's' },
+        {"group",       required_argument,  0, 'g' },
+        {"server_mode", no_argument,        0, 'm' },
+        {0,             0,                  0,  0  }
 };
 
 void
@@ -126,12 +127,16 @@ main(int argc, char **argv)
 {
         char   *ses = NULL;
         char   *grp = NULL;
+        int     server_mode_flag = 0;
         int     optidx;
         int     c;
         int     rc;
 
+        const char *usage_string =
+                "Usage: lstclient --sesid ID --group GROUP [--server_mode]\n";
+
         while (1) {
-                c = getopt_long(argc, argv, "s:g:",
+                c = getopt_long(argc, argv, "s:g:m",
                                 lstjn_options, &optidx);
 
                 if (c == -1)
@@ -144,15 +149,17 @@ main(int argc, char **argv)
                 case 'g':
                         grp = optarg;
                         break;
+                case 'm':
+                        server_mode_flag = 1;
+                        break;
                 default:
-                        fprintf(stderr,
-                                "Usage: lstclient --sesid ID --group GROUP\n");
+                        fprintf(stderr, usage_string);
                         return -1;
                 }
         }
 
         if (optind != argc || grp == NULL || ses == NULL) {
-                fprintf(stderr, "Usage: lstclient --sesid ID --group GROUP\n");
+                fprintf(stderr, usage_string);
                 return -1;
         }
 
@@ -169,6 +176,9 @@ main(int argc, char **argv)
                 return -1;
         }
 
+        if (server_mode_flag)
+                lnet_server_mode();
+        
         rc = lnet_selftest_init();
         if (rc != 0) {
                 fprintf(stderr, "Can't startup selftest\n");
