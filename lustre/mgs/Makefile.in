@@ -1,4 +1,0 @@
-MODULES := mgs
-mgs-objs := mgs_handler.o mgs_fs.o mgs_llog.o lproc_mgs.o
-
-@INCLUDE_RULES@
