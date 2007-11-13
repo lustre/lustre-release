@@ -1299,7 +1299,7 @@ test_34c() {
 	cleanup
 	return 0	
 }
-run_test 34c "force umount with failed mds should be normal"
+run_test 34c "force umount with failed ost should be normal"
 
 test_35() { # bug 12459
 	setup
@@ -1314,7 +1314,7 @@ test_35() { # bug 12459
 	log "Wait for RECONNECT_INTERVAL seconds (10s)"
 	sleep 10
 
-	MSG="conf-sanity.sh test_33 `date +%F%kh%Mm%Ss`"
+	MSG="conf-sanity.sh test_35 `date +%F%kh%Mm%Ss`"
 	$LCTL clear
 	log "$MSG"
 	log "Stopping the MDT:"
