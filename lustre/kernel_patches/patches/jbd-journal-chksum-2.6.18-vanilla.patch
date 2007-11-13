@@ -1,16 +1,16 @@
-Index: linux-2.6.18-8.1.8/fs/jbd/commit.c
+Index: linux-2.6.18.8/fs/jbd/commit.c
 ===================================================================
---- linux-2.6.18-8.1.8.orig/fs/jbd/commit.c
-+++ linux-2.6.18-8.1.8/fs/jbd/commit.c
-@@ -21,6 +21,7 @@
+--- linux-2.6.18.8.orig/fs/jbd/commit.c
++++ linux-2.6.18.8/fs/jbd/commit.c
+@@ -22,6 +22,7 @@
  #include <linux/mm.h>
  #include <linux/pagemap.h>
  #include <linux/smp_lock.h>
 +#include <linux/crc32.h>
  
+ 
  /*
-  * Default IO end handler for temporary BJ_IO buffer_heads.
-@@ -93,19 +94,23 @@ static int inverted_lock(journal_t *jour
+@@ -95,19 +96,23 @@ static int inverted_lock(journal_t *jour
  	return 1;
  }
  
@@ -38,7 +38,7 @@ Index: linux-2.6.18-8.1.8/fs/jbd/commit.c
  	int barrier_done = 0;
  
  	if (is_journal_aborted(journal))
-@@ -117,21 +122,34 @@ static int journal_write_commit_record(j
+@@ -119,21 +124,34 @@ static int journal_write_commit_record(j
  
  	bh = jh2bh(descriptor);
  
@@ -82,7 +82,7 @@ Index: linux-2.6.18-8.1.8/fs/jbd/commit.c
  	/* is it possible for another commit to fail at roughly
  	 * the same time as this one?  If so, we don't want to
  	 * trust the barrier flag in the super, but instead want
-@@ -152,14 +170,72 @@ static int journal_write_commit_record(j
+@@ -154,12 +172,70 @@ static int journal_write_commit_record(j
  		clear_buffer_ordered(bh);
  		set_buffer_uptodate(bh);
  		set_buffer_dirty(bh);
@@ -94,8 +94,7 @@ Index: linux-2.6.18-8.1.8/fs/jbd/commit.c
 +	*cbh = bh;
 +	return ret;
 +}
- 
--	return (ret == -EIO);
++
 +/*
 + * This function along with journal_submit_commit_record
 + * allows to write the commit record asynchronously.
@@ -113,8 +112,8 @@ Index: linux-2.6.18-8.1.8/fs/jbd/commit.c
 +	journal_put_journal_head(bh2jh(bh));
 +	
 +	return ret;
- }
- 
++}
++
 +/*
 + * Wait for all submitted IO to complete.
 + */
@@ -123,7 +122,8 @@ Index: linux-2.6.18-8.1.8/fs/jbd/commit.c
 +{
 +	int ret = 0;
 +	struct journal_head *jh;
-+
+ 
+-	return (ret == -EIO);
 +	while (commit_transaction->t_locked_list) {
 +		struct buffer_head *bh;
 +
@@ -154,12 +154,31 @@ Index: linux-2.6.18-8.1.8/fs/jbd/commit.c
 +		cond_resched_lock(&journal->j_list_lock);
 +	}
 +	return ret;
+ }
+ 
+ void journal_do_submit_data(struct buffer_head **wbuf, int bufs)
+@@ -273,6 +349,20 @@ write_out_data:
+ 	journal_do_submit_data(wbuf, bufs);
+ }
+ 
++static inline __u32 jbd_checksum_data(__u32 crc32_sum, struct buffer_head *bh)
++{
++	struct page *page = bh->b_page;
++	char *addr;
++	__u32 checksum;
++
++	addr = kmap(page);
++	checksum = crc32_be(crc32_sum,
++			    (void *)(addr + offset_in_page(bh->b_data)),
++			    bh->b_size);
++	kunmap(page);
++	return checksum;
 +}
 +
- void journal_do_submit_data(struct buffer_head **wbuf, int bufs)
- {
- 	int i;
-@@ -293,6 +369,8 @@ void journal_commit_transaction(journal_
+ /*
+  * journal_commit_transaction
+  *
+@@ -296,6 +386,8 @@ void journal_commit_transaction(journal_
  	int first_tag = 0;
  	int tag_flag;
  	int i;
@@ -168,7 +187,7 @@ Index: linux-2.6.18-8.1.8/fs/jbd/commit.c
  
  	/*
  	 * First job: lock down the current transaction and wait for
-@@ -428,38 +506,14 @@ void journal_commit_transaction(journal_
+@@ -439,38 +531,14 @@ void journal_commit_transaction(journal_
  	journal_submit_data_buffers(journal, commit_transaction);
  
  	/*
@@ -213,7 +232,7 @@ Index: linux-2.6.18-8.1.8/fs/jbd/commit.c
  	spin_unlock(&journal->j_list_lock);
  
  	if (err)
-@@ -627,6 +681,16 @@ void journal_commit_transaction(journal_
+@@ -643,6 +711,16 @@ void journal_commit_transaction(journal_
  start_journal_io:
  			for (i = 0; i < bufs; i++) {
  				struct buffer_head *bh = wbuf[i];
@@ -222,15 +241,15 @@ Index: linux-2.6.18-8.1.8/fs/jbd/commit.c
 +				 */
 +				if (JFS_HAS_COMPAT_FEATURE(journal,
 +					JFS_FEATURE_COMPAT_CHECKSUM)) {
-+					crc32_sum = crc32_be(crc32_sum,
-+							(void *)bh->b_data,
-+							bh->b_size);
++					crc32_sum =
++						jbd_checksum_data(crc32_sum,
++								   bh);
 +				}
 +
  				lock_buffer(bh);
  				clear_buffer_dirty(bh);
  				set_buffer_uptodate(bh);
-@@ -642,6 +706,23 @@ start_journal_io:
+@@ -659,6 +737,23 @@ start_journal_io:
  		}
  	}
  
@@ -254,7 +273,7 @@ Index: linux-2.6.18-8.1.8/fs/jbd/commit.c
  	/* Lo and behold: we have just managed to send a transaction to
             the log.  Before we can commit it, wait for the IO so far to
             complete.  Control buffers being written are on the
-@@ -740,9 +821,15 @@ wait_for_iobuf:
+@@ -757,9 +852,15 @@ wait_for_iobuf:
  	}
  
  	jbd_debug(3, "JBD: commit phase 6\n");
@@ -273,10 +292,10 @@ Index: linux-2.6.18-8.1.8/fs/jbd/commit.c
  
  	if (err)
  		__journal_abort_hard(journal);
-Index: linux-2.6.18-8.1.8/include/linux/jbd.h
+Index: linux-2.6.18.8/include/linux/jbd.h
 ===================================================================
---- linux-2.6.18-8.1.8.orig/include/linux/jbd.h
-+++ linux-2.6.18-8.1.8/include/linux/jbd.h
+--- linux-2.6.18.8.orig/include/linux/jbd.h
++++ linux-2.6.18.8/include/linux/jbd.h
 @@ -148,6 +148,29 @@ typedef struct journal_header_s
  	__be32		h_sequence;
  } journal_header_t;
@@ -327,7 +346,7 @@ Index: linux-2.6.18-8.1.8/include/linux/jbd.h
  
  #ifdef __KERNEL__
  
-@@ -967,6 +994,8 @@ extern int	   journal_check_available_fe
+@@ -1053,6 +1080,8 @@ extern int	   journal_check_available_fe
  		   (journal_t *, unsigned long, unsigned long, unsigned long);
  extern int	   journal_set_features 
  		   (journal_t *, unsigned long, unsigned long, unsigned long);
@@ -336,10 +355,10 @@ Index: linux-2.6.18-8.1.8/include/linux/jbd.h
  extern int	   journal_create     (journal_t *);
  extern int	   journal_load       (journal_t *journal);
  extern void	   journal_destroy    (journal_t *);
-Index: linux-2.6.18-8.1.8/fs/jbd/recovery.c
+Index: linux-2.6.18.8/fs/jbd/recovery.c
 ===================================================================
---- linux-2.6.18-8.1.8.orig/fs/jbd/recovery.c
-+++ linux-2.6.18-8.1.8/fs/jbd/recovery.c
+--- linux-2.6.18.8.orig/fs/jbd/recovery.c
++++ linux-2.6.18.8/fs/jbd/recovery.c
 @@ -21,6 +21,7 @@
  #include <linux/jbd.h>
  #include <linux/errno.h>
@@ -535,11 +554,11 @@ Index: linux-2.6.18-8.1.8/fs/jbd/recovery.c
  		/* It's really bad news if different passes end up at
  		 * different places (but possible due to IO errors). */
  		if (info->end_transaction != next_commit_ID) {
-Index: linux-2.6.18-8.1.8/fs/jbd/journal.c
+Index: linux-2.6.18.8/fs/jbd/journal.c
 ===================================================================
---- linux-2.6.18-8.1.8.orig/fs/jbd/journal.c
-+++ linux-2.6.18-8.1.8/fs/jbd/journal.c
-@@ -66,6 +66,7 @@ EXPORT_SYMBOL(journal_update_format);
+--- linux-2.6.18.8.orig/fs/jbd/journal.c
++++ linux-2.6.18.8/fs/jbd/journal.c
+@@ -67,6 +67,7 @@ EXPORT_SYMBOL(journal_update_format);
  EXPORT_SYMBOL(journal_check_used_features);
  EXPORT_SYMBOL(journal_check_available_features);
  EXPORT_SYMBOL(journal_set_features);
@@ -547,7 +566,7 @@ Index: linux-2.6.18-8.1.8/fs/jbd/journal.c
  EXPORT_SYMBOL(journal_create);
  EXPORT_SYMBOL(journal_load);
  EXPORT_SYMBOL(journal_destroy);
-@@ -1271,6 +1272,33 @@ int journal_set_features (journal_t *jou
+@@ -1573,6 +1574,33 @@ int journal_set_features (journal_t *jou
  	return 1;
  }
  
@@ -581,10 +600,10 @@ Index: linux-2.6.18-8.1.8/fs/jbd/journal.c
  
  /**
   * int journal_update_format () - Update on-disk journal structure.
-Index: linux-2.6.18-8.1.8/fs/Kconfig
+Index: linux-2.6.18.8/fs/Kconfig
 ===================================================================
---- linux-2.6.18-8.1.8.orig/fs/Kconfig
-+++ linux-2.6.18-8.1.8/fs/Kconfig
+--- linux-2.6.18.8.orig/fs/Kconfig
++++ linux-2.6.18.8/fs/Kconfig
 @@ -140,6 +140,7 @@ config EXT3_FS_SECURITY
  
  config JBD
@@ -593,10 +612,10 @@ Index: linux-2.6.18-8.1.8/fs/Kconfig
  	help
  	  This is a generic journaling layer for block devices.  It is
  	  currently used by the ext3 and OCFS2 file systems, but it could
-Index: linux-2.6.18-8.1.8/Documentation/filesystems/ext3.txt
+Index: linux-2.6.18.8/Documentation/filesystems/ext3.txt
 ===================================================================
---- linux-2.6.18-8.1.8.orig/Documentation/filesystems/ext3.txt
-+++ linux-2.6.18-8.1.8/Documentation/filesystems/ext3.txt
+--- linux-2.6.18.8.orig/Documentation/filesystems/ext3.txt
++++ linux-2.6.18.8/Documentation/filesystems/ext3.txt
 @@ -14,6 +14,16 @@ Options
  When mounting an ext3 filesystem, the following option are accepted:
  (*) == default

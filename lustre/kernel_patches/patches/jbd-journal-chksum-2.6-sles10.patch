@@ -1,7 +1,7 @@
-Index: linux-2.6.16.46-0.14/fs/jbd/commit.c
+Index: linux-2.6.16.53-0.16/fs/jbd/commit.c
 ===================================================================
---- linux-2.6.16.46-0.14.orig/fs/jbd/commit.c
-+++ linux-2.6.16.46-0.14/fs/jbd/commit.c
+--- linux-2.6.16.53-0.16.orig/fs/jbd/commit.c
++++ linux-2.6.16.53-0.16/fs/jbd/commit.c
 @@ -22,6 +22,7 @@
  #include <linux/pagemap.h>
  #include <linux/smp_lock.h>
@@ -82,7 +82,7 @@ Index: linux-2.6.16.46-0.14/fs/jbd/commit.c
  	/* is it possible for another commit to fail at roughly
  	 * the same time as this one?  If so, we don't want to
  	 * trust the barrier flag in the super, but instead want
-@@ -153,15 +171,74 @@ static int journal_write_commit_record(j
+@@ -153,12 +171,84 @@ static int journal_write_commit_record(j
  		clear_buffer_ordered(bh);
  		set_buffer_uptodate(bh);
  		set_buffer_dirty(bh);
@@ -113,9 +113,9 @@ Index: linux-2.6.16.46-0.14/fs/jbd/commit.c
 +	journal_put_journal_head(bh2jh(bh));
 +	
 +	return ret;
- }
- 
- /*
++}
++
++/*
 + * Wait for all submitted IO to complete.
 + */
 +static int journal_wait_on_locked_list(journal_t *journal,
@@ -156,12 +156,22 @@ Index: linux-2.6.16.46-0.14/fs/jbd/commit.c
 +	return ret;
 +}
 +
++static inline __u32 jbd_checksum_data(__u32 crc32_sum, struct buffer_head *bh)
++{
++	struct page *page = bh->b_page;
++	char *addr;
++	__u32 checksum;
 +
-+/*
-  * journal_commit_transaction
-  *
-  * The primary function for committing a transaction to the log.  This
-@@ -184,6 +261,8 @@ void journal_commit_transaction(journal_
++	addr = kmap(page);
++	checksum = crc32_be(crc32_sum,
++			    (void *)(addr + offset_in_page(bh->b_data)),
++			    bh->b_size);
++	kunmap(page);
++	return checksum;
+ }
+ 
+ /*
+@@ -184,6 +274,8 @@ void journal_commit_transaction(journal_
  	int first_tag = 0;
  	int tag_flag;
  	int i;
@@ -170,7 +180,7 @@ Index: linux-2.6.16.46-0.14/fs/jbd/commit.c
  
  	/*
  	 * First job: lock down the current transaction and wait for
-@@ -395,37 +474,14 @@ write_out_data:
+@@ -395,37 +487,14 @@ write_out_data:
  	}
  
  	/*
@@ -214,7 +224,7 @@ Index: linux-2.6.16.46-0.14/fs/jbd/commit.c
  	spin_unlock(&journal->j_list_lock);
  
  	if (err)
-@@ -598,6 +654,16 @@ write_out_data:
+@@ -598,6 +667,16 @@ write_out_data:
  start_journal_io:
  			for (i = 0; i < bufs; i++) {
  				struct buffer_head *bh = wbuf[i];
@@ -223,15 +233,15 @@ Index: linux-2.6.16.46-0.14/fs/jbd/commit.c
 +				 */
 +				if (JFS_HAS_COMPAT_FEATURE(journal,
 +					JFS_FEATURE_COMPAT_CHECKSUM)) {
-+					crc32_sum = crc32_be(crc32_sum,
-+							(void *)bh->b_data,
-+							bh->b_size);
++					crc32_sum =
++						jbd_checksum_data(crc32_sum,
++								   bh);
 +				}
 +
  				lock_buffer(bh);
  				clear_buffer_dirty(bh);
  				set_buffer_uptodate(bh);
-@@ -614,6 +680,23 @@ start_journal_io:
+@@ -614,6 +693,23 @@ start_journal_io:
  		}
  	}
  
@@ -255,7 +265,7 @@ Index: linux-2.6.16.46-0.14/fs/jbd/commit.c
  	/* Lo and behold: we have just managed to send a transaction to
             the log.  Before we can commit it, wait for the IO so far to
             complete.  Control buffers being written are on the
-@@ -712,9 +795,15 @@ wait_for_iobuf:
+@@ -712,9 +808,15 @@ wait_for_iobuf:
  	}
  
  	jbd_debug(3, "JBD: commit phase 6\n");
@@ -274,10 +284,10 @@ Index: linux-2.6.16.46-0.14/fs/jbd/commit.c
  
  	if (err)
  		__journal_abort_hard(journal);
-Index: linux-2.6.16.46-0.14/include/linux/jbd.h
+Index: linux-2.6.16.53-0.16/include/linux/jbd.h
 ===================================================================
---- linux-2.6.16.46-0.14.orig/include/linux/jbd.h
-+++ linux-2.6.16.46-0.14/include/linux/jbd.h
+--- linux-2.6.16.53-0.16.orig/include/linux/jbd.h
++++ linux-2.6.16.53-0.16/include/linux/jbd.h
 @@ -142,6 +142,29 @@ typedef struct journal_header_s
  	__be32		h_sequence;
  } journal_header_t;
@@ -337,10 +347,10 @@ Index: linux-2.6.16.46-0.14/include/linux/jbd.h
  extern int	   journal_create     (journal_t *);
  extern int	   journal_load       (journal_t *journal);
  extern void	   journal_destroy    (journal_t *);
-Index: linux-2.6.16.46-0.14/fs/jbd/recovery.c
+Index: linux-2.6.16.53-0.16/fs/jbd/recovery.c
 ===================================================================
---- linux-2.6.16.46-0.14.orig/fs/jbd/recovery.c
-+++ linux-2.6.16.46-0.14/fs/jbd/recovery.c
+--- linux-2.6.16.53-0.16.orig/fs/jbd/recovery.c
++++ linux-2.6.16.53-0.16/fs/jbd/recovery.c
 @@ -21,6 +21,7 @@
  #include <linux/jbd.h>
  #include <linux/errno.h>
@@ -536,10 +546,10 @@ Index: linux-2.6.16.46-0.14/fs/jbd/recovery.c
  		/* It's really bad news if different passes end up at
  		 * different places (but possible due to IO errors). */
  		if (info->end_transaction != next_commit_ID) {
-Index: linux-2.6.16.46-0.14/fs/jbd/journal.c
+Index: linux-2.6.16.53-0.16/fs/jbd/journal.c
 ===================================================================
---- linux-2.6.16.46-0.14.orig/fs/jbd/journal.c
-+++ linux-2.6.16.46-0.14/fs/jbd/journal.c
+--- linux-2.6.16.53-0.16.orig/fs/jbd/journal.c
++++ linux-2.6.16.53-0.16/fs/jbd/journal.c
 @@ -64,6 +64,7 @@ EXPORT_SYMBOL(journal_update_format);
  EXPORT_SYMBOL(journal_check_used_features);
  EXPORT_SYMBOL(journal_check_available_features);
@@ -582,10 +592,10 @@ Index: linux-2.6.16.46-0.14/fs/jbd/journal.c
  
  /**
   * int journal_update_format () - Update on-disk journal structure.
-Index: linux-2.6.16.46-0.14/fs/Kconfig
+Index: linux-2.6.16.53-0.16/fs/Kconfig
 ===================================================================
---- linux-2.6.16.46-0.14.orig/fs/Kconfig
-+++ linux-2.6.16.46-0.14/fs/Kconfig
+--- linux-2.6.16.53-0.16.orig/fs/Kconfig
++++ linux-2.6.16.53-0.16/fs/Kconfig
 @@ -140,6 +140,7 @@ config EXT3_FS_SECURITY
  
  config JBD
@@ -594,10 +604,10 @@ Index: linux-2.6.16.46-0.14/fs/Kconfig
  	help
  	  This is a generic journaling layer for block devices.  It is
  	  currently used by the ext3 and OCFS2 file systems, but it could
-Index: linux-2.6.16.46-0.14/Documentation/filesystems/ext3.txt
+Index: linux-2.6.16.53-0.16/Documentation/filesystems/ext3.txt
 ===================================================================
---- linux-2.6.16.46-0.14.orig/Documentation/filesystems/ext3.txt
-+++ linux-2.6.16.46-0.14/Documentation/filesystems/ext3.txt
+--- linux-2.6.16.53-0.16.orig/Documentation/filesystems/ext3.txt
++++ linux-2.6.16.53-0.16/Documentation/filesystems/ext3.txt
 @@ -14,6 +14,16 @@ Options
  When mounting an ext3 filesystem, the following option are accepted:
  (*) == default
