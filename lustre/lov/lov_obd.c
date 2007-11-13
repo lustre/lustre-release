@@ -97,6 +97,7 @@ static int lov_connect_obd(struct obd_device *obd, __u32 index, int activate,
         struct obd_uuid lov_osc_uuid = { "LOV_OSC_UUID" };
         struct lustre_handle conn = {0, };
         struct obd_import *imp;
+
 #ifdef __KERNEL__
         cfs_proc_dir_entry_t *lov_proc_dir;
 #endif
@@ -172,6 +173,7 @@ static int lov_connect_obd(struct obd_device *obd, __u32 index, int activate,
         if (activate) {
                 lov->lov_tgts[index]->ltd_active = 1;
                 lov->desc.ld_active_tgt_count++;
+                lov->lov_tgts[index]->ltd_exp->exp_obd->obd_inactive = 0;
         }
         CDEBUG(D_CONFIG, "Connected tgt idx %d %s (%s) %sactive\n", index,
                obd_uuid2str(&tgt_uuid), tgt_obd->obd_name, activate ? "":"in");
@@ -257,6 +259,7 @@ static int lov_disconnect_obd(struct obd_device *obd, __u32 index)
         struct obd_device *osc_obd =
                 class_exp2obd(lov->lov_tgts[index]->ltd_exp);
         int rc;
+
         ENTRY;
 
         CDEBUG(D_CONFIG, "%s: disconnecting target %s\n", 
@@ -265,6 +268,7 @@ static int lov_disconnect_obd(struct obd_device *obd, __u32 index)
         if (lov->lov_tgts[index]->ltd_active) {
                 lov->lov_tgts[index]->ltd_active = 0;
                 lov->desc.ld_active_tgt_count--;
+                lov->lov_tgts[index]->ltd_exp->exp_obd->obd_inactive = 1;
         }
 
         lov_proc_dir = lprocfs_srch(obd->obd_proc_entry, "target_obds");
@@ -385,10 +389,14 @@ static int lov_set_osc_active(struct obd_device *obd, struct obd_uuid *uuid,
                activate ? "" : "in");
 
         lov->lov_tgts[i]->ltd_active = activate;
-        if (activate)
+
+        if (activate) {
                 lov->desc.ld_active_tgt_count++;
-        else
+                lov->lov_tgts[i]->ltd_exp->exp_obd->obd_inactive = 0;
+        } else {
                 lov->desc.ld_active_tgt_count--;
+                lov->lov_tgts[i]->ltd_exp->exp_obd->obd_inactive = 1;
+        }
         /* remove any old qos penalty */
         lov->lov_tgts[i]->ltd_qos.ltq_penalty = 0;
 

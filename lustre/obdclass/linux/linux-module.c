@@ -333,6 +333,8 @@ static int obd_device_list_seq_show(struct seq_file *p, void *v)
         LASSERT(obd->obd_magic == OBD_DEVICE_MAGIC);
         if (obd->obd_stopping)
                 status = "ST";
+        else if (obd->obd_inactive)
+                status = "IN";
         else if (obd->obd_set_up)
                 status = "UP";
         else if (obd->obd_attached)
