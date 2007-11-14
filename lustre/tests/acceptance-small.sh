@@ -102,7 +102,7 @@ for NAME in $CONFIGS; do
 		rm -f /mnt/lustre/`hostname`/client.txt
 	fi
 
-	chown $UID $MOUNT && chmod 700 $MOUNT
+	chown $UID $MOUNT
 	which bonnie++ > /dev/null 2>&1 || BONNIE=no
 	if [ "$BONNIE" != "no" ]; then
 	        title bonnie

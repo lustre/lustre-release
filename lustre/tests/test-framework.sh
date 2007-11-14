@@ -1180,6 +1180,7 @@ is_patchless ()
 
 check_runas_id() {
     mkdir $DIR/d0_runas_test
+    chmod 0755 $DIR
     chown $RUNAS_ID:$RUNAS_ID $DIR/d0_runas_test
     $RUNAS touch $DIR/d0_runas_test/f$$ || \
         error "unable to write to $DIR/d0_runas_test as UID $RUNAS_ID. 
