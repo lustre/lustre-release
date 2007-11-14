@@ -21,5 +21,4 @@ ext3-uninit-2.6.9.patch
 ext3-nanosecond-2.6-rhel4.patch
 ext3-unlink-race.patch
 ext3-mmp-2.6-rhel4.patch
-ext3-blockmap-validation-2.6-rhel4.patch
 ext3-fiemap-2.6-sles10.patch
