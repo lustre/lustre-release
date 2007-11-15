@@ -18,3 +18,13 @@ ext3-disable-write-bar-by-default-2.6-sles10.patch
 ext3-uninit-2.6-sles10.patch
 ext3-nanosecond-2.6-sles10.patch
 ext3-inode-version-2.6-sles10.patch
+ext3-journal-chksum-2.6.18-vanilla.patch
+ext3-tall-htree-sles10.patch 
+ext3-htree-path.patch
+ext3-htree-r5-hash.patch
+ext3-htree-path-ops.patch
+ext3-hash-selection-sles10.patch 
+ext3-htree-comments.patch
+ext3-orphans-delay.patch
+ext3-iam-common.patch 
+ext3-iam-sles10.patch 
