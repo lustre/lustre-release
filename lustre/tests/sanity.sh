@@ -2240,8 +2240,12 @@ run_test 54d "fifo device works in lustre ======================"
 test_54e() {
 	check_kernel_version 46 || return 0
 	f="$DIR/f54e"
+	ls -l $f
+	ls -l /dev/tty0
 	string="aaaaaa"
 	mknod $f c 5 0
+	ls -l $f
+	ls -l /dev/tty0
 	echo $string > $f || error
 }
 run_test 54e "console/tty device works in lustre ======================"
