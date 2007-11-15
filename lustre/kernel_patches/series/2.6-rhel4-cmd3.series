@@ -32,6 +32,7 @@ quota-umount-race-fix.patch
 quota-deadlock-on-pagelock-ext3.patch
 inode-nr_unused-2.6.9-rhel4.patch
 proc-sleep-2.6.9.patch 
+dynamic-locks-common.patch
 dynamic-locks-2.6.9.patch 
 jbd-checkpoint-on-commit.patch
 jbd-copy-out-everything.patch 
