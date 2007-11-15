@@ -238,7 +238,7 @@ test_11() {
 run_test 11 "execution of file opened for write should return error ===="
 
 test_12() {
-       sh lockorder.sh
+       DIR=$DIR DIR2=$DIR2 sh lockorder.sh
 }
 run_test 12 "test lock ordering (link, stat, unlink) ==========="
 
