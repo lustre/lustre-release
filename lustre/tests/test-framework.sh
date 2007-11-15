@@ -343,6 +343,9 @@ start() {
     shift
     echo "Starting ${facet}: $@ ${device} ${MOUNT%/*}/${facet}"
     do_facet ${facet} mkdir -p ${MOUNT%/*}/${facet}
+    do_facet ${facet} "sysctl -w lnet.debug=$PTLDEBUG;
+        sysctl -w lnet.subsystem_debug=${SUBSYSTEM# };
+        sysctl -w lnet.debug_mb=${DEBUG_SIZE}"
     do_facet ${facet} mount -t lustre $@ ${device} ${MOUNT%/*}/${facet} 
     RC=${PIPESTATUS[0]}
     if [ $RC -ne 0 ]; then
@@ -396,7 +399,9 @@ zconf_mount() {
     do_node $client mkdir -p $mnt
     do_node $client mount -t lustre $OPTIONS $device $mnt || return 1
 
-    do_node $client "sysctl -w lnet.debug=$PTLDEBUG; sysctl -w lnet.subsystem_debug=${SUBSYSTEM# }"
+    do_node $client "sysctl -w lnet.debug=$PTLDEBUG;
+        sysctl -w lnet.subsystem_debug=${SUBSYSTEM# };
+        sysctl -w lnet.debug_mb=${DEBUG_SIZE}"
     [ -d /r ] && $LCTL modules > /r/tmp/ogdb-`hostname`
     return 0
 }
