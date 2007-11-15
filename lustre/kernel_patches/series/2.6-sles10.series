@@ -1,5 +1,4 @@
 lustre_version.patch
-ext3-wantedi-misc-2.6-suse.patch 
 jbd-2.6.10-jcberr.patch
 iopen-misc-2.6.12.patch
 export_symbols-2.6.12.patch 
@@ -10,4 +9,9 @@ sd_iostats-2.6-rhel5.patch
 export_symbol_numa-2.6-fc5.patch 
 blkdev_tunables-2.6-sles10.patch
 jbd-stats-2.6-sles10.patch
+jbd-journal-chksum-2.6-sles10.patch
+dynamic-locks-common.patch 
+dynamic-locks-2.6.16-sles10.patch 
+proc-sleep-2.6.16-sles10.patch 
+export-nr_free_buffer_pages.patch 
 i_filter_data.patch
