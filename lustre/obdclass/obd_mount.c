@@ -1311,7 +1311,7 @@ static void server_wait_finished(struct vfsmount *mnt)
 {
         wait_queue_head_t   waitq;
         struct l_wait_info  lwi;
-        int                 retries = 120;
+        int                 retries = 330;
 
         init_waitqueue_head(&waitq);
 
