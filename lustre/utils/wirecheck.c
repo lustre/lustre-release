@@ -1025,6 +1025,7 @@ check_lustre_disk_data(void)
         CHECK_MEMBER(lustre_disk_data, ldd_params);
 }
 
+#ifdef LIBLUSTRE_POSIX_ACL
 static void
 check_posix_acl_xattr_entry(void)
 {
@@ -1043,6 +1044,7 @@ check_posix_acl_xattr_header(void)
         CHECK_MEMBER_TYPEDEF(posix_acl_xattr_header, a_version);
         CHECK_MEMBER_TYPEDEF(posix_acl_xattr_header, a_entries);
 }
+#endif
 
 static void
 system_string (char *cmdline, char *str, int len)
@@ -1293,8 +1295,10 @@ main(int argc, char **argv)
         check_qunit_data_old();
         check_mgs_target_info();
         check_lustre_disk_data();
+#ifdef LIBLUSTRE_POSIX_ACL
         check_posix_acl_xattr_entry();
         check_posix_acl_xattr_header();
+#endif
 
 
         printf("}\n\n");

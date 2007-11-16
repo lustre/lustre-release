@@ -2141,32 +2141,34 @@ void lustre_assert_wire_constants(void)
         LASSERTF((int)sizeof(((struct lustre_disk_data *)0)->ldd_params) == 4096, " found %lld\n",
                  (long long)(int)sizeof(((struct lustre_disk_data *)0)->ldd_params));
 
+#ifdef LIBLUSTRE_POSIX_ACL
         /* Checks for type posix_acl_xattr_entry */
-        LASSERTF((int)sizeof(xattr_acl_entry) == 8, " found %lld\n",
-                 (long long)(int)sizeof(xattr_acl_entry));
-        LASSERTF((int)offsetof(xattr_acl_entry, e_tag) == 0, " found %lld\n",
-                 (long long)(int)offsetof(xattr_acl_entry, e_tag));
-        LASSERTF((int)sizeof(((xattr_acl_entry *)0)->e_tag) == 2, " found %lld\n",
-                 (long long)(int)sizeof(((xattr_acl_entry *)0)->e_tag));
-        LASSERTF((int)offsetof(xattr_acl_entry, e_perm) == 2, " found %lld\n",
-                 (long long)(int)offsetof(xattr_acl_entry, e_perm));
-        LASSERTF((int)sizeof(((xattr_acl_entry *)0)->e_perm) == 2, " found %lld\n",
-                 (long long)(int)sizeof(((xattr_acl_entry *)0)->e_perm));
-        LASSERTF((int)offsetof(xattr_acl_entry, e_id) == 4, " found %lld\n",
-                 (long long)(int)offsetof(xattr_acl_entry, e_id));
-        LASSERTF((int)sizeof(((xattr_acl_entry *)0)->e_id) == 4, " found %lld\n",
-                 (long long)(int)sizeof(((xattr_acl_entry *)0)->e_id));
+        LASSERTF((int)sizeof(posix_acl_xattr_entry) == 8, " found %lld\n",
+                 (long long)(int)sizeof(posix_acl_xattr_entry));
+        LASSERTF((int)offsetof(posix_acl_xattr_entry, e_tag) == 0, " found %lld\n",
+                 (long long)(int)offsetof(posix_acl_xattr_entry, e_tag));
+        LASSERTF((int)sizeof(((posix_acl_xattr_entry *)0)->e_tag) == 2, " found %lld\n",
+                 (long long)(int)sizeof(((posix_acl_xattr_entry *)0)->e_tag));
+        LASSERTF((int)offsetof(posix_acl_xattr_entry, e_perm) == 2, " found %lld\n",
+                 (long long)(int)offsetof(posix_acl_xattr_entry, e_perm));
+        LASSERTF((int)sizeof(((posix_acl_xattr_entry *)0)->e_perm) == 2, " found %lld\n",
+                 (long long)(int)sizeof(((posix_acl_xattr_entry *)0)->e_perm));
+        LASSERTF((int)offsetof(posix_acl_xattr_entry, e_id) == 4, " found %lld\n",
+                 (long long)(int)offsetof(posix_acl_xattr_entry, e_id));
+        LASSERTF((int)sizeof(((posix_acl_xattr_entry *)0)->e_id) == 4, " found %lld\n",
+                 (long long)(int)sizeof(((posix_acl_xattr_entry *)0)->e_id));
 
         /* Checks for type posix_acl_xattr_header */
-        LASSERTF((int)sizeof(xattr_acl_header) == 4, " found %lld\n",
-                 (long long)(int)sizeof(xattr_acl_header));
-        LASSERTF((int)offsetof(xattr_acl_header, a_version) == 0, " found %lld\n",
-                 (long long)(int)offsetof(xattr_acl_header, a_version));
-        LASSERTF((int)sizeof(((xattr_acl_header *)0)->a_version) == 4, " found %lld\n",
-                 (long long)(int)sizeof(((xattr_acl_header *)0)->a_version));
-        LASSERTF((int)offsetof(xattr_acl_header, a_entries) == 4, " found %lld\n",
-                 (long long)(int)offsetof(xattr_acl_header, a_entries));
-        LASSERTF((int)sizeof(((xattr_acl_header *)0)->a_entries) == 0, " found %lld\n",
-                 (long long)(int)sizeof(((xattr_acl_header *)0)->a_entries));
+        LASSERTF((int)sizeof(posix_acl_xattr_header) == 4, " found %lld\n",
+                 (long long)(int)sizeof(posix_acl_xattr_header));
+        LASSERTF((int)offsetof(posix_acl_xattr_header, a_version) == 0, " found %lld\n",
+                 (long long)(int)offsetof(posix_acl_xattr_header, a_version));
+        LASSERTF((int)sizeof(((posix_acl_xattr_header *)0)->a_version) == 4, " found %lld\n",
+                 (long long)(int)sizeof(((posix_acl_xattr_header *)0)->a_version));
+        LASSERTF((int)offsetof(posix_acl_xattr_header, a_entries) == 4, " found %lld\n",
+                 (long long)(int)offsetof(posix_acl_xattr_header, a_entries));
+        LASSERTF((int)sizeof(((posix_acl_xattr_header *)0)->a_entries) == 0, " found %lld\n",
+                 (long long)(int)sizeof(((posix_acl_xattr_header *)0)->a_entries));
+#endif
 
 }
