@@ -28,46 +28,11 @@ Severity   : normal
 Bugzilla   : 14041
 Description: Update to RHEL4 latest kernel.
 
-Severity   : normal
-Bugzilla   : 13568
-Description: Remove 2.4 kernel support from lustre 1.8.0
-Details    : Remove 2.5.0 check from quota_check.c, quota_ctl.c,
-             quota_interface.c in quota subsystem.
-	     Remove 2.4 kernel check from obd_mount.c, linux/linux-sysctl.c in
-             obdclass subsystem.
-             Remove lock_24kernel from fsfilt_ext3.c fsfilt_reiserfs.c 
-             lvfs_linux.c upcall_cache.c in lvfs subsystem.
-             Remove 2.5.0 check from dcache.c dir.c file.c llite_internal.h
-             llite_lib.c llite_mmap.c lproc_llite.c namei.c rw.c symlink.c
-             in llite subsystem.
-	     Remove 2.5.0 check from handler.c lproc_mds.c mds_fs.c
-	     mds_internal.h mds_lib.c mds_open.c mds_reint.c mds_xattr.c
-	     in mds subsystem.
-	     Remove 2.4 kernel check from lproc_osc.c, osc_request.c in osc
-	     subsystem.
-	     Remove 2.4 kernel check from filter.c, lproc_obdfilter.c in 
-	     obdfilter subsystem.
-	     Remove 2.4 kernel code from lustre/obdecho/echo_client.c.
-	     Remove 2.4 kernel check from lustre/mgs/lproc_mgs.c,
-	     lustre/mgs/mgs_fs.c.
-	     Remove 2.4 kernel code from lustre/mgc/mgc_request.c.
-	     Remove 2.4 kernel check from lustre/mdt/mdt_lproc.c.
-	     Remove 2.4 kernel code from lustre/mdc/mdc_request.c.
-	     Remove 2.4 kernel check from lustre/lov/lproc_lov.c.
-	     Remove 2.4 kernel check from lustre/lmv/lproc_lmv.c.
-	     Remove lock_24kernel from lustre/lvfs/fsfilt_ext3.c.
-	     Remove 2.4 kernel code from include/liblustre.h,
-	     include/lustre_disk.h, include/lustre_quota.h,
-	     include/linux/lprocfs_status.h, include/linux/lvfs.h,
-	     include/linux/lustre_lite.h, include/linux/lustre_net.h,
-	     include/linux/lustre_user.h, include/linux/lvfs_linux.h,
-	     include/linux/obd_class.h, include/linux/lustre_compat25.h.
-
 Severity   : enhancement
 Bugzilla   : 13690
 Description: Build SLES10 patchless client fails
 Details    : The configure was broken by run ./configure with 
-             --with-linux-obj=.... argument for patchless client. When the
+	     --with-linux-obj=.... argument for patchless client. When the
 	     configure use --with-linux-obj, the LINUXINCLUDE= -Iinclude
 	     can't search header adequately. Use absolute path such as 
 	     -I($LINUX)/include instead. 
@@ -86,8 +51,8 @@ Severity   : normal
 Bugzilla   : 13497
 Description: LASSERT_{REQ,REP}SWAB macros are buggy
 Details    : If SWAB_PARANOIA is disabled, the LASSERT_REQSWAB and
-             LASSERT_REPSWAB macros become no-ops, which is incorrect. Drop
-              these macros and replace them with their difinitions instead.
+	     LASSERT_REPSWAB macros become no-ops, which is incorrect. Drop
+	     these macros and replace them with their difinitions instead.
 
 Severity   : normal
 Bugzilla   : 13521
@@ -97,16 +62,16 @@ Details    : Update which_patch & target file for SLES10 latest kernel.
 Bugzilla   : 12411
 Description: Remove client patches from SLES 10 kernel.
 Details    : This causes SLES 10 clients to behave as patchless clients
-             even on a Lustre-patched (server) kernel.
+	     even on a Lustre-patched (server) kernel.
 
 Severity   : enhancement
 Bugzilla   : 2262
 Description: self-adjustable client's lru lists
 Details    : use adaptive algorithm for managing client cached locks lru 
-             lists according to current server load, other client's work
-             pattern, memory activities, etc. Both, server and client 
-             side namespaces provide number of proc tunables for controlling 
-             things
+	     lists according to current server load, other client's work
+	     pattern, memory activities, etc. Both, server and client 
+	     side namespaces provide number of proc tunables for controlling 
+	     things
 
 Severity   : enhancement
 Bugzilla   : 13641
@@ -304,9 +269,10 @@ Details    : Make lfs setstripe understand 'k', 'm' and 'g' for stripe size.
 
 Severity   : normal
 Bugzilla   : 12398
-Description: testing performance impact of enabling checksumming
-Details    : enable checksum by default, allow --disable-checksum 
-	     configure option and "-o nochecksum" mount option 
+Description: enable data checksumming by default
+Details    : enable checksum by default, allow --disable-checksum
+	     configure option and "-o nochecksum" mount option.  Checksums
+	     can also be disabled at runtime via $LPROC/osc/*/checksum_pages.
 
 Severity   : normal
 Bugzilla   : 11802
@@ -406,17 +372,16 @@ Details    : fix set/restore device id for avoid EMFILE error and mark lustre fs
 Severity   : normal
 Bugzilla   : 13304
 Frequency  : Always, for kernels after 2.6.16
-Description: Fix warning idr_remove called for id=.. which is not
-             allocated.
+Description: Fix warning idr_remove called for id=.. which is not allocated.
 Details    : Last kernels save old s_dev before kill super and not allow 
-             to restore from callback - restore it before call kill_anon_super.
+	     to restore from callback - restore it before call kill_anon_super.
 
 Severity   : minor
 Bugzilla   : 12948
 Description: buffer overruns could theoretically occur
 Details    : llapi_semantic_traverse() modifies the "path" argument by
-             appending values to the end of the origin string, and a 
-             overrun may occur. Adding buffer overrun check in liblustreapi.
+	     appending values to the end of the origin string, and a 
+	     overrun may occur. Adding buffer overrun check in liblustreapi.
 
 Severity   : normal
 Bugzilla   : 13334
@@ -432,35 +397,35 @@ Severity   : normal
 Bugzilla   : 13452
 Description: Kernel config for 2.6.18-vanilla.
 Details    : Modify targets/2.6-vanilla.target.in.
-             Add config file kernel-2.6.18-2.6-vanilla-i686.config.
-             Add config file kernel-2.6.18-2.6-vanilla-i686-smp.config.
-             Add config file kernel-2.6.18-2.6-vanilla-x86_64.config.
-             Add config file kernel-2.6.18-2.6-vanilla-x86_64-smp.config.
+	     Add config file kernel-2.6.18-2.6-vanilla-i686.config.
+	     Add config file kernel-2.6.18-2.6-vanilla-i686-smp.config.
+	     Add config file kernel-2.6.18-2.6-vanilla-x86_64.config.
+	     Add config file kernel-2.6.18-2.6-vanilla-x86_64-smp.config.
 
 Severity   : major
 Bugzilla   : 11710
 Description: improve handling recoverable errors
 Details    : if request processig with error which can be recoverable on server
-             request should be resend, otherwise page released from cache and
-             marked as error.
+	     request should be resend, otherwise page released from cache and
+	     marked as error.
 
 Severity   : critical
 Bugzilla   : 13751
 Description: Kernel patches update for RHEL5 2.6.18-8.1.14.el5.
 Details    : Modify target file & which_patch.
-             A flaw was found in the IA32 system call emulation provided 
-             on AMD64 and Intel 64 platforms. An improperly validated 64-bit 
-             value could be stored in the %RAX register, which could trigger an 
-             out-of-bounds system call table access. An untrusted local user 
-             could exploit this flaw to run code in the kernel 
-             (ie a root privilege escalation). (CVE-2007-4573). 
+	     A flaw was found in the IA32 system call emulation provided 
+	     on AMD64 and Intel 64 platforms. An improperly validated 64-bit 
+	     value could be stored in the %RAX register, which could trigger an 
+	     out-of-bounds system call table access. An untrusted local user 
+	     could exploit this flaw to run code in the kernel 
+	     (ie a root privilege escalation). (CVE-2007-4573). 
 
 Severity   : major
 Bugzilla   : 13093
 Description: O_DIRECT bypasses client statistics.
 Details    : When running with O_DIRECT I/O, neither the client rpc_stats nor
-             read_ahead_stats were updated. copied the stats section from
-             osc_send_oap_rpc() into async_internal().
+	     read_ahead_stats were updated. copied the stats section from
+	     osc_send_oap_rpc() into async_internal().
 
 Severity   : normal
 Bugzilla   : 13454
@@ -475,28 +440,28 @@ Severity   : normal
 Bugzilla   : 11673
 Description: handle "serious error: objid * already exists" more gracefully
 Details    : If LAST_ID value on disk is smaller than the objects existing in
-             the O/0/d* directories, it indicates disk corruption and causes an
-             LBUG(). If the object is 0-length, then we should use the existing
-             object. This will help to avoid a full fsck in most cases.
+	     the O/0/d* directories, it indicates disk corruption and causes an
+	     LBUG(). If the object is 0-length, then we should use the existing
+	     object. This will help to avoid a full fsck in most cases.
 
 Severity   : enhancement
 Bugzilla   : 13207
 Description: adapt the lustre_config script to support the upgrade case
 Details    : Add "-u" option for lustre_config script to support upgrading 1.4
-             server targets to 1.6 in parallel.
+	     server targets to 1.6 in parallel.
 
 Severity   : normal
 Bugzilla   : 13570
 Description: To avoid grant space > avaible space when the disk is almost
-             full. Without this patch you might see the error "grant XXXX >
-             available" or some LBUG about grant, when the disk is almost 
-             full.
+	     full. Without this patch you might see the error "grant XXXX >
+	     available" or some LBUG about grant, when the disk is almost 
+	     full.
 Details    : In filter_check_grant, for non_grant cache write, we should
-             check the left space by  if (*left > ungranted + bytes), instead
-             of (*left > ungranted), because only we are sure the left space 
-             is enough for another "bytes", then the ungrant space should be
-             increase. In client, we should update cl_avail_grant only there
-             is OBD_MD_FLGRANT in the reply.
+	     check the left space by  if (*left > ungranted + bytes), instead
+	     of (*left > ungranted), because only we are sure the left space 
+	     is enough for another "bytes", then the ungrant space should be
+	     increase. In client, we should update cl_avail_grant only there
+	     is OBD_MD_FLGRANT in the reply.
 
 Severity   : critical
 Bugzilla   : 13748
@@ -809,9 +774,7 @@ Details    : dev_clear_rdonly(bdev) must be called in kill_bdev() instead of
 Severity   : minor
 Bugzilla   : 11706
 Description: service threads may hog cpus when there are a lot of requests
-             coming
-Details    : Insert cond_resched to give other threads a chance to use some of
-             the cpu
+Details    : Insert cond_resched to give other threads a chance to use some CPU
 
 Severity   : normal
 Frequency  : rare
@@ -827,44 +790,50 @@ Severity   : normal
 Bugzilla   : 12597
 Description: brw_stats were being printed incorrectly
 Details    : brw_stats were being printed as log2 but all of them were not
-             recorded as log2. Also remove some code duplication arising from
-             filter_tally_{read,write}.
+	     recorded as log2. Also remove some code duplication arising from
+	     filter_tally_{read,write}.
 
 Severity   : normal
 Bugzilla   : 11674
 Frequency  : rare, only in recovery.
 Description: ASSERTION(req->rq_type != LI_POISON) failed
 Details    : imp_lock should be held while iterating over imp_sending_list for
-             prevent destroy request after get timeout in ptlrpc_queue_wait.
+	     prevent destroy request after get timeout in ptlrpc_queue_wait.
 
 Severity   : normal
 Bugzilla   : 12689
 Description: replay-single.sh test 52 fails
 Details    : A lock's skiplist need to be cleanup when it being unlinked 
-             from its resource list.
+	     from its resource list.
 
 Severity   : normal
 Bugzilla   : 11737
 Description: Short directio read returns full requested size rather than
-             actual amount read.
+	     actual amount read.
 Details    : Direct I/O operations should return actual amount of bytes
-             transferred rather than requested size.
+	     transferred rather than requested size.
 
 Severity   : enhancement
 Bugzilla   : 10589
 Description: metadata RPC reduction (e.g. for rm performance)
 Details    : decrease the amount of synchronous RPC between clients and servers
-             by canceling conflicing lock before the operation on the client side
-             and packing thier handles into the main operation RPC to server.
+	     by canceling conflicing lock before the operation on the client
+	     and packing thier handles into the main operation RPC to server.
 
 Severity   : enhancement
 Bugzilla   : 4900
 Description: Async OSC create to avoid the blocking unnecessarily.
 Details    : If a OST has no remain object, system will block on the creating
-            when need to create a new object on this OST. Now, ways use
-            pre-created objects when available, instead of blocking on an
-            empty osc while others are not empty.  If we must block, we block
-            for the shortest possible period of time.
+	    when need to create a new object on this OST. Now, ways use
+	    pre-created objects when available, instead of blocking on an
+	    empty osc while others are not empty.  If we must block, we block
+	    for the shortest possible period of time.
+
+Severity   : enhancement
+Bugzilla   : 12702
+Description: refine locking for avoid write wrong info into lov_objid file
+Details    : fix possible races with add new target and write/update data in 
+	     lov_objid file.
 
 --------------------------------------------------------------------------------
 
@@ -887,7 +856,7 @@ Details    : The __iget() symbol export is missing.  To avoid the need for
 	     this on patchless clients the deathrow inode reaper is turned
 	     off, and we depend on the VM to clean up old inodes.  This
 	     dependency was during via the fix for bug 12181.
-
+	
 --------------------------------------------------------------------------------
 
 2007-04-19  Cluster File Systems, Inc. <info@clusterfs.com>
@@ -942,8 +911,7 @@ Severity   : enhancement
 Bugzilla   : 4226
 Description: Permanently set tunables
 Details    : All writable /proc/fs/lustre tunables can now be permanently
-             set on a per-server basis, at mkfs time or on a live
-	     system.
+	     set on a per-server basis, at mkfs time or on a live system.
 	
 Severity   : enhancement
 Bugzilla   : 10547
@@ -960,15 +928,15 @@ Severity   : minor
 Bugzilla   : 6062
 Description: SPEC SFS validation failure on NFS v2 over lustre.
 Details    : Changes the blocksize for regular files to be 2x RPC size,
-             and not depend on stripe size.
+	     and not depend on stripe size.
 	
 Severity   : enhancement
 Bugzilla   : 9293
 Description: Multiple MD RPCs in flight.
 Details    : Further unserialise some read-only MDS RPCs - learn about intents.
-             To avoid overly-overloading MDS, introduce a limit on number of
-             MDS RPCs in flight for a single client and add /proc controls
-             to adjust this limit.
+	     To avoid overly-overloading MDS, introduce a limit on number of
+	     MDS RPCs in flight for a single client and add /proc controls
+	     to adjust this limit.
 
 Severity   : enhancement
 Bugzilla   : 22484
