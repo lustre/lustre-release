@@ -755,11 +755,9 @@ static int lustre_stop_mgc(struct super_block *sb)
                 GOTO(out, rc = -EBUSY);
         }
 
-        /* MGC must always stop */
-        obd->obd_force = 1;
-        /* client_disconnect_export uses the no_recov flag to decide whether it
-           should disconnect or just invalidate.  (The MGC has no
-           recoverable data in any case.) */
+        /* MGC should disconnect nicely so MGS won't print eviction messages */
+        obd->obd_force = (lsi->lsi_flags & LSI_UMOUNT_FORCE) != 0;
+        /* The MGC has no recoverable data in any case. */
         obd->obd_no_recov = 1;
 
         if (obd->u.cli.cl_mgc_mgsexp)
