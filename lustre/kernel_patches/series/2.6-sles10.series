@@ -1,6 +1,7 @@
 lustre_version.patch
+vfs_intent-2.6-sles10.patch
+vfs_races-2.6.18-vanilla.patch
 jbd-2.6.10-jcberr.patch
-iopen-misc-2.6.12.patch
 export_symbols-2.6.12.patch 
 dev_read_only-2.6-fc5.patch 
 export-2.6-fc5.patch 
@@ -14,4 +15,3 @@ dynamic-locks-common.patch
 dynamic-locks-2.6.16-sles10.patch 
 proc-sleep-2.6.16-sles10.patch 
 export-nr_free_buffer_pages.patch 
-i_filter_data.patch
