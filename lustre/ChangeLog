@@ -72,6 +72,24 @@ Details    : brw_redo_request can be used for resend requests from ptlrpcd and
 	     ptlrpcd set if request is changed and can be safety changed to use
 	     rq_set directly.
 
+Severity   : normal
+Bugzilla   : 11089
+Description: organize the stats on per-nid basis instead of the existing per-export basis.
+Details    : Change the structure of stats under obdfilter and mds to
+	     New structure:
+		+- exports
+			|
+			+- nid#1
+			|   |
+			|   + stats
+			|   |
+			|   + uuids
+			|
+			+- nid#2...
+			+- clear
+	     The "uuid"s file would list the uuids of _active_ exports. 
+	     And the clear entry is to clear all stats and stale nids.
+
 --------------------------------------------------------------------------------
 
 2007-10-26         Cluster File Systems, Inc. <info@clusterfs.com>
