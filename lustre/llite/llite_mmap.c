@@ -414,15 +414,21 @@ struct page *ll_nopage(struct vm_area_struct *vma, unsigned long address,
                 /* XXX change inode size without ll_inode_size_lock() held!
                  *     there is a race condition with truncate path. (see
                  *     ll_extent_lock) */
-               /* region is within kms and, hence, within real file size (A).
+                /* XXX i_size_write() is not used because it is not safe to
+                 *     take the ll_inode_size_lock() due to a potential lock
+                 *     inversion (bug 6077).  And since it's not safe to use
+                 *     i_size_write() without a covering mutex we do the
+                 *     assignment directly.  It is not critical that the
+                 *     size be correct. */
+                /* NOTE: region is within kms and, hence, within real file size (A).
                  * We need to increase i_size to cover the read region so that
                  * generic_file_read() will do its job, but that doesn't mean
                  * the kms size is _correct_, it is only the _minimum_ size.
                  * If someone does a stat they will get the correct size which
                  * will always be >= the kms value here.  b=11081 */
                 if (i_size_read(inode) < kms) {
-                        i_size_write(inode, kms);
-			 CDEBUG(D_INODE, "ino=%lu, updating i_size %llu\n",
+                        inode->i_size = kms;
+                        CDEBUG(D_INODE, "ino=%lu, updating i_size %llu\n",
                                inode->i_ino, i_size_read(inode));
                 }
                 lov_stripe_unlock(lsm);

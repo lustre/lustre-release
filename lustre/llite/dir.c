@@ -105,7 +105,12 @@ static int ll_dir_readpage(struct file *file, struct page *page)
                 /* swabbed by mdc_readpage() */
                 LASSERT(lustre_rep_swabbed(request, REPLY_REC_OFF));
 
-                i_size_write(inode, body->size);
+                if (body->size != i_size_read(inode)) {
+                        ll_inode_size_lock(inode, 0);
+                        i_size_write(inode, body->size);
+                        ll_inode_size_unlock(inode, 0);
+                }
+
                 SetPageUptodate(page);
         }
         ptlrpc_req_finished(request);
