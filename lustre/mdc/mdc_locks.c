@@ -247,12 +247,12 @@ static struct ptlrpc_request *mdc_intent_open_pack(struct obd_export *exp,
                            [DLM_REPLY_REC_OFF+1] = obddev->u.cli.
                                                         cl_max_mds_easize,
                            [DLM_REPLY_REC_OFF+2] = LUSTRE_POSIX_ACL_MAX_SIZE };
-                CFS_LIST_HEAD(cancels);
-                int count = 0;
-                int mode;
+        CFS_LIST_HEAD(cancels);
+        int count = 0;
+        int mode;
         int rc;
-                
-                it->it_create_mode |= S_IFREG;
+
+        it->it_create_mode |= S_IFREG;
 
         rc = lustre_msg_size(class_exp2cliimp(exp)->imp_msg_magic, 6, size);
                 if (rc & (rc - 1))
@@ -262,34 +262,34 @@ static struct ptlrpc_request *mdc_intent_open_pack(struct obd_export *exp,
 
                 /* If inode is known, cancel conflicting OPEN locks. */
         if (data->fid2.id) {
-                        if (it->it_flags & (FMODE_WRITE|MDS_OPEN_TRUNC))
-                                mode = LCK_CW;
+                if (it->it_flags & (FMODE_WRITE|MDS_OPEN_TRUNC))
+                        mode = LCK_CW;
 #ifdef FMODE_EXEC
-                        else if (it->it_flags & FMODE_EXEC)
-                                mode = LCK_PR;
+                else if (it->it_flags & FMODE_EXEC)
+                        mode = LCK_PR;
 #endif
-                        else 
-                                mode = LCK_CR;
-                count = mdc_resource_get_unused(exp, &data->fid2, &cancels,
-                                                mode, MDS_INODELOCK_OPEN);
-                }
-
-                /* If CREATE or JOIN_FILE, cancel parent's UPDATE lock. */
-                if (it->it_op & IT_CREAT || it->it_flags & O_JOIN_FILE)
-                        mode = LCK_EX;
                 else
                         mode = LCK_CR;
+                count = mdc_resource_get_unused(exp, &data->fid2, &cancels,
+                                                mode, MDS_INODELOCK_OPEN);
+        }
+
+        /* If CREATE or JOIN_FILE, cancel parent's UPDATE lock. */
+        if (it->it_op & IT_CREAT || it->it_flags & O_JOIN_FILE)
+                mode = LCK_EX;
+        else
+                mode = LCK_CR;
         count += mdc_resource_get_unused(exp, &data->fid1, &cancels, mode,
                                          MDS_INODELOCK_UPDATE);
-                if (it->it_flags & O_JOIN_FILE) {
+        if (it->it_flags & O_JOIN_FILE) {
                 __u64 head_size = (*(__u64 *)data->data);
                         /* join is like an unlink of the tail */
                 size[DLM_INTENT_REC_OFF + 3] = sizeof(struct mds_rec_join);
                 req = ldlm_prep_enqueue_req(exp, 7, size, &cancels, count);
                 mdc_join_pack(req, DLM_INTENT_REC_OFF + 3, data, head_size);
-                } else {
+        } else {
                 req = ldlm_prep_enqueue_req(exp, 6, size, &cancels, count);
-                }
+        }
 
         if (req) {
                 spin_lock(&req->rq_lock);
