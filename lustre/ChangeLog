@@ -15,6 +15,13 @@ tbd         Cluster File Systems, Inc. <info@clusterfs.com>
        * Note that reiserfs quotas are disabled on SLES 10 in this kernel.
 
 Severity   : normal
+Bugzilla   : 3462
+Description: Fix a replay issue
+Details    : In some cases, older replay request will revert the 
+             mcd->mcd_last_xid on MDS which is used to record the client's
+	     latest sent request.
+
+Severity   : normal
 Bugzilla   : 13969
 Description: Update to RHEL5 kernel 2.6.18-8.1.15.el5.
 

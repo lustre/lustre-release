@@ -174,10 +174,14 @@ int mds_finish_transno(struct mds_obd *mds, struct inode *inode, void *handle,
                 mcd->mcd_last_close_data = cpu_to_le32(op_data);
         } else {
                 prev_transno = le64_to_cpu(mcd->mcd_last_transno);
-                mcd->mcd_last_transno = cpu_to_le64(transno);
-                mcd->mcd_last_xid = cpu_to_le64(req->rq_xid);
-                mcd->mcd_last_result = cpu_to_le32(rc);
-                mcd->mcd_last_data = cpu_to_le32(op_data);
+                if (((lustre_msg_get_flags(req->rq_reqmsg) &
+                      (MSG_RESENT | MSG_REPLAY)) == 0) ||
+                    (transno > prev_transno)) {
+                        mcd->mcd_last_transno = cpu_to_le64(transno);
+                        mcd->mcd_last_xid     = cpu_to_le64(req->rq_xid);
+                        mcd->mcd_last_result  = cpu_to_le32(rc);
+                        mcd->mcd_last_data    = cpu_to_le32(op_data);
+                }
         }
         /* update the server data to not lose the greatest transno. Bug 11125 */
         if ((transno == 0) && (prev_transno == mds->mds_last_transno))
