@@ -485,6 +485,13 @@ Description: Incorrect file ownership on O_DIRECT output files
 Details    : block usage reported by 'lfs quota' does not take into account
 	     files that have been written with O_DIRECT.
 
+Severity   : normal
+Frequency  : always
+Bugzilla   : 13976
+Description: touch file failed when fs is not full
+Details    : OST in recovery should not be discarded by MDS in alloc_qos(),
+             otherwise we can get ENOSP while fs is not full.
+
 --------------------------------------------------------------------------------
 
 2007-08-10         Cluster File Systems, Inc. <info@clusterfs.com>
