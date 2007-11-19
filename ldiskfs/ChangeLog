@@ -1,6 +1,10 @@
 tbd  Cluster File Systems, Inc. <info@clusterfs.com>
        * version 3.0.4
 
+Severity   : normal
+Bugzilla   : 13397
+Description: Add support for vanilla-2.6.22 kernel.
+
 --------------------------------------------------------------------------------
 
 2007-10-26  Cluster File Systems, Inc. <info@clusterfs.com>
