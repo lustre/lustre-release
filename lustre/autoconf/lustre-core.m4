@@ -1411,7 +1411,7 @@ AC_CHECK_HEADERS([asm/page.h sys/user.h sys/vfs.h stdint.h blkid/blkid.h])
 
 # include/lustre/lustre_user.h
 # See note there re: __ASM_X86_64_PROCESSOR_H
-AC_CHECK_HEADERS([linux/quota.h])
+AC_CHECK_HEADERS([linux/fs.h linux/quota.h])
 
 # liblustre/llite_lib.h
 AC_CHECK_HEADERS([xtio.h file.h])
