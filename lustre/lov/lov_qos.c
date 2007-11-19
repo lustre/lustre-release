@@ -691,7 +691,7 @@ static int alloc_qos(struct obd_export *exp, int *idx_arr, int *stripe_cnt,
                 if (OBD_FAIL_CHECK(OBD_FAIL_MDS_OSC_PRECREATE) && i == 0)
                         continue;
 
-                if (obd_precreate(lov->lov_tgts[i]->ltd_exp, 1) >= 2)
+                if (obd_precreate(lov->lov_tgts[i]->ltd_exp, 1) > 2)
                         continue;
 
                 lov->lov_tgts[i]->ltd_qos.ltq_usable = 1;

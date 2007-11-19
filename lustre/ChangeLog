@@ -101,6 +101,13 @@ Details    : Concurrent access to the same directory from multiple clients with
 	     ll_readdir(). i_version must be increased every time the lock is
 	     cancelled to ensure a revalidate is done.
 
+Severity   : normal
+Frequency  : always
+Bugzilla   : 13976
+Description: touch file failed when fs is not full
+Details    : OST in recovery should not be discarded by MDS in alloc_qos(),
+             otherwise we can get ENOSP while fs is not full.
+
 --------------------------------------------------------------------------------
 
 2007-10-26         Cluster File Systems, Inc. <info@clusterfs.com>
