@@ -944,22 +944,25 @@ static int clean_param(char *buf, char *key)
         return 0;
 } 
 
-static int add_param(char *buf, char *key, char *val)
+static int add_param(char *buf, char *key, char *val, int unique)
 {
         int end = sizeof(((struct lustre_disk_data *)0)->ldd_params);
         int start;
         int keylen = 0;
         char *ptr;
 
-        if (key) {
+        if (key)
                 keylen = strlen(key);
-                clean_param(buf, key);
-        } else {
-                if((ptr = strchr(val, '=')) == NULL)
-                        return 1;
-                *ptr = '\0';
-                clean_param(buf, val);
-                *ptr = '=';
+        if (unique) {
+                if (key) {
+                        clean_param(buf, key);
+                } else {
+                        if((ptr = strchr(val, '=')) == NULL)
+                                return 1;
+                        *ptr = '\0';
+                        clean_param(buf, val);
+                        *ptr = '=';
+                }
         }
                 
         start = strlen(buf);
@@ -1097,12 +1100,12 @@ int parse_opts(int argc, char *const argv[], struct mkfs_opts *mop,
                         if (!nids)
                                 return 1;
                         rc = add_param(mop->mo_ldd.ldd_params, PARAM_FAILNODE,
-                                       nids);
+                                       nids, 0);
                         /* Combo needs to add MDT failnodes as MGS failnodes
                            as well */
                         if (!rc && IS_MGS(&mop->mo_ldd)) {
                                 rc = add_param(mop->mo_ldd.ldd_params,
-                                               PARAM_MGSNODE, nids);
+                                               PARAM_MGSNODE, nids, 0);
                         }
                         free(nids);
                         if (rc)
@@ -1166,7 +1169,7 @@ int parse_opts(int argc, char *const argv[], struct mkfs_opts *mop,
                         if (!nids)
                                 return 1;
                         rc = add_param(mop->mo_ldd.ldd_params, PARAM_MGSNODE,
-                                       nids);
+                                       nids, 0);
                         free(nids);
                         if (rc)
                                 return rc;
@@ -1201,7 +1204,7 @@ int parse_opts(int argc, char *const argv[], struct mkfs_opts *mop,
                                                 "tunefs.lustre(8)\n", optarg + 
                                                 prefix_len);
                         }
-                        rc = add_param(mop->mo_ldd.ldd_params, NULL, optarg);
+                        rc = add_param(mop->mo_ldd.ldd_params, NULL, optarg, 0);
                         if (rc)
                                 return rc;
                         /* Must update the mgs logs */
@@ -1246,7 +1249,7 @@ int parse_opts(int argc, char *const argv[], struct mkfs_opts *mop,
                                 "use 'NONE'\n");
                 else {
                         rc = add_param(mop->mo_ldd.ldd_params, PARAM_MDT_UPCALL,
-                                       "/usr/sbin/l_getgroups");
+                                       "/usr/sbin/l_getgroups", 1);
                         if (rc)
                                 return rc;
                         /* Must update the mgs logs */
