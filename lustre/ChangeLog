@@ -14,6 +14,7 @@ tbd         Cluster File Systems, Inc. <info@clusterfs.com>
        * Recommended e2fsprogs version: 1.40.2-cfs4
        * Note that reiserfs quotas are disabled on SLES 10 in this kernel.
 
+
 Severity   : normal
 Bugzilla   : 3462
 Description: Fix a replay issue
@@ -107,6 +108,14 @@ Details    : Change the structure of stats under obdfilter and mds to
         using patchless RHEL 4 clients with this or any earlier release.
        * Recommended e2fsprogs version: 1.40.2-cfs1
        * Note that reiserfs quotas are disabled on SLES 10 in this kernel.
+
+Severity   : major
+Frequency  : occasional
+Bugzilla   : 13917
+Description: MDS hang or stay in waiting lock
+Details    : If client receive lock with CBPENDING flag ldlm need send lock
+	     cancel as separate rpc, to avoid situation when cancel request
+	     can't processed due all i/o threads stay in wait lock.
 
 Severity   : normal
 Frequency  : occasional
