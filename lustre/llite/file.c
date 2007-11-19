@@ -2302,6 +2302,8 @@ loff_t ll_file_seek(struct file *file, loff_t offset, int origin)
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
                         file->f_reada = 0;
                         file->f_version = ++event;
+#else
+                        file->f_version = 0;
 #endif
                 }
                 retval = offset;

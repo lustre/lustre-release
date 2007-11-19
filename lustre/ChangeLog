@@ -91,6 +91,16 @@ Details    : Change the structure of stats under obdfilter and mds to
 	     The "uuid"s file would list the uuids of _active_ exports. 
 	     And the clear entry is to clear all stats and stale nids.
 
+Severity   : normal
+Frequency  : rare
+Bugzilla   : 12266
+Description: Processes looping in ll_readdir() on Lustre clients finally causing
+	     a full node pseudo-hang
+Details    : Concurrent access to the same directory from multiple clients with
+	     intensive file creation/removal can cause a client node to spin in
+	     ll_readdir(). i_version must be increased every time the lock is
+	     cancelled to ensure a revalidate is done.
+
 --------------------------------------------------------------------------------
 
 2007-10-26         Cluster File Systems, Inc. <info@clusterfs.com>

@@ -249,6 +249,7 @@ int ll_mdc_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock_desc *desc,
                                inode->i_ino);
                         truncate_inode_pages(inode->i_mapping, 0);
                         ll_drop_negative_dentry(inode);
+                        inode->i_version++; /* XXX: remove with inode version*/
                 }
 
                 if (inode->i_sb->s_root &&
