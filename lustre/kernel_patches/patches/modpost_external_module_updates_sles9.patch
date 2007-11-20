@@ -1,3 +1,7 @@
+This patch updates the SLES 9 module build system to properly support
+dependencies between external modules, similarly to the way they are
+supported in newer kernels.
+
 Index: linux-2.6.5-7.286/scripts/Makefile.modpost
 ===================================================================
 --- linux-2.6.5-7.286.orig/scripts/Makefile.modpost

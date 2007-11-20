@@ -1,3 +1,7 @@
+This patch updates the RHEL 4 module build system to properly support
+dependencies between external modules, similarly to the way they are
+supported in newer kernels.
+
 Index: linux-2.6.9-55.EL/scripts/Makefile.modpost
 ===================================================================
 --- linux-2.6.9-55.EL.orig/scripts/Makefile.modpost
