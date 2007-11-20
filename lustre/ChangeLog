@@ -16,17 +16,18 @@ tbd         Cluster File Systems, Inc. <info@clusterfs.com>
 
 
 Severity   : normal
+Frequency  : very rare
 Bugzilla   : 3462
-Description: Fix a replay issue
+Description: Fix replay if there is an un-replied request and open
 Details    : In some cases, older replay request will revert the 
-             mcd->mcd_last_xid on MDS which is used to record the client's
+	     mcd->mcd_last_xid on MDS which is used to record the client's
 	     latest sent request.
 
-Severity   : normal
+Severity   : enhancement
 Bugzilla   : 13969
 Description: Update to RHEL5 kernel 2.6.18-8.1.15.el5.
 
-Severity   : normal
+Severity   : enhancement
 Bugzilla   : 13874
 Description: Update to SLES10 SP1 kernel 2.6.16.53-0.16
 
@@ -73,19 +74,15 @@ Details    : brw_redo_request can be used for resend requests from ptlrpcd and
 	     ptlrpcd set if request is changed and can be safety changed to use
 	     rq_set directly.
 
-Severity   : normal
+Severity   : enhancement
 Bugzilla   : 11089
-Description: organize the stats on per-nid basis instead of the existing per-export basis.
+Description: organize the server-side client stats on per-nid basis
 Details    : Change the structure of stats under obdfilter and mds to
 	     New structure:
 		+- exports
-			|
 			+- nid#1
-			|   |
 			|   + stats
-			|   |
 			|   + uuids
-			|
 			+- nid#2...
 			+- clear
 	     The "uuid"s file would list the uuids of _active_ exports. 
@@ -106,7 +103,7 @@ Frequency  : always
 Bugzilla   : 13976
 Description: touch file failed when fs is not full
 Details    : OST in recovery should not be discarded by MDS in alloc_qos(),
-             otherwise we can get ENOSP while fs is not full.
+	     otherwise we can get ENOSP while fs is not full.
 
 --------------------------------------------------------------------------------
 
