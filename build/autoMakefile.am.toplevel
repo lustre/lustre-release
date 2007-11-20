@@ -27,7 +27,7 @@ tags:
 if MODULES
 sources: all-sources
 
-all-sources:
+all-sources: $(EXTRA_SOURCES)
 	for dir in $(SOURCES_SUBDIRS) ; do \
 		$(MAKE) sources -C $$dir || exit $$? ; \
 	done
