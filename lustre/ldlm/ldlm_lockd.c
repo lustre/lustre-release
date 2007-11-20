@@ -495,6 +495,60 @@ static int ldlm_handle_ast_error(struct ldlm_lock *lock,
         return rc;
 }
 
+static int ldlm_cb_interpret(struct ptlrpc_request *req, void *data, int rc)
+{
+        struct ldlm_cb_set_arg *arg;
+        struct ldlm_lock *lock;
+        ENTRY;
+
+        LASSERT(data != NULL);
+
+        arg = req->rq_async_args.pointer_arg[0];
+        lock = req->rq_async_args.pointer_arg[1];
+        LASSERT(lock != NULL);
+        if (rc != 0) {
+                /* If client canceled the lock but the cancel has not 
+                 * been recieved yet, we need to update lvbo to have the
+                 * proper attributes cached. */
+                if (rc == -EINVAL && arg->type == LDLM_BL_CALLBACK)
+                        ldlm_res_lvbo_update(lock->l_resource, NULL, 
+                                             0, 1);
+                rc = ldlm_handle_ast_error(lock, req, rc, 
+                                           arg->type == LDLM_BL_CALLBACK
+                                           ? "blocking" : "completion");
+        }                
+
+        LDLM_LOCK_PUT(lock);
+
+        if (rc == -ERESTART)
+                atomic_set(&arg->restart, 1);
+
+        RETURN(0);
+}
+
+static inline int ldlm_bl_and_cp_ast_fini(struct ptlrpc_request *req,
+                                          struct ldlm_cb_set_arg *arg,
+                                          struct ldlm_lock *lock,
+                                          int instant_cancel)
+{
+        int rc = 0;
+        ENTRY;
+
+        if (unlikely(instant_cancel)) {
+                rc = ptl_send_rpc(req, 1);
+                ptlrpc_req_finished(req);
+                if (rc == 0)
+                        /* If we cancelled the lock, we need to restart
+                         * ldlm_reprocess_queue */
+                        atomic_set(&arg->restart, 1);
+        } else {
+                LDLM_LOCK_GET(lock);
+                ptlrpc_set_add_req(arg->set, req);
+        }       
+
+        RETURN(rc);
+}
+
 /*
  * ->l_blocking_ast() method for server-side locks. This is invoked when newly
  * enqueued server lock conflicts with given one.
@@ -506,11 +560,12 @@ int ldlm_server_blocking_ast(struct ldlm_lock *lock,
                              struct ldlm_lock_desc *desc,
                              void *data, int flag)
 {
+        struct ldlm_cb_set_arg *arg = (struct ldlm_cb_set_arg *)data;
         struct ldlm_request *body;
         struct ptlrpc_request *req;
         int size[] = { [MSG_PTLRPC_BODY_OFF] = sizeof(struct ptlrpc_body),
                        [DLM_LOCKREQ_OFF]     = sizeof(*body) };
-        int instant_cancel = 0, rc = 0;
+        int instant_cancel = 0, rc;
         ENTRY;
 
         if (flag == LDLM_CB_CANCELING) {
@@ -519,6 +574,7 @@ int ldlm_server_blocking_ast(struct ldlm_lock *lock,
         }
 
         LASSERT(lock);
+        LASSERT(data != NULL);
         if (lock->l_export->exp_obd->obd_recovering != 0) {
                 LDLM_ERROR(lock, "BUG 6063: lock collide during recovery");
                 ldlm_lock_dump(D_ERROR, lock, 0);
@@ -529,6 +585,11 @@ int ldlm_server_blocking_ast(struct ldlm_lock *lock,
                               NULL);
         if (req == NULL)
                 RETURN(-ENOMEM);
+
+        req->rq_async_args.pointer_arg[0] = arg;
+        req->rq_async_args.pointer_arg[1] = lock;
+        req->rq_interpret_reply = ldlm_cb_interpret;
+        req->rq_no_resend = 1;
 
         lock_res(lock->l_resource);
         if (lock->l_granted_mode != lock->l_req_mode) {
@@ -574,42 +635,25 @@ int ldlm_server_blocking_ast(struct ldlm_lock *lock,
                 lprocfs_counter_incr(lock->l_export->exp_ldlm_stats,
                                      LDLM_BL_CALLBACK - LDLM_FIRST_OPC);
 
-        if (unlikely(instant_cancel)) {
-                rc = ptl_send_rpc(req, 1);
-        } else {
-                rc = ptlrpc_queue_wait(req);
-                OBD_FAIL_TIMEOUT(OBD_FAIL_LDLM_GLIMPSE, 2);
-        }
-        if (rc != 0) {
-                /* If client canceled the lock but the cancel has not been
-                 * recieved yet, we need to update lvbo to have the proper
-                 * attributes cached. */
-                if (rc == -EINVAL)
-                        ldlm_res_lvbo_update(lock->l_resource, NULL, 0, 1);
-                rc = ldlm_handle_ast_error(lock, req, rc, "blocking");
-        }
-
-        ptlrpc_req_finished(req);
-
-        /* If we cancelled the lock, we need to restart ldlm_reprocess_queue */
-        if (!rc && instant_cancel)
-                rc = -ERESTART;
+        rc = ldlm_bl_and_cp_ast_fini(req, arg, lock, instant_cancel);
 
         RETURN(rc);
 }
 
 int ldlm_server_completion_ast(struct ldlm_lock *lock, int flags, void *data)
 {
+        struct ldlm_cb_set_arg *arg = (struct ldlm_cb_set_arg *)data;
         struct ldlm_request *body;
         struct ptlrpc_request *req;
         struct timeval granted_time;
         long total_enqueue_wait;
         int size[3] = { [MSG_PTLRPC_BODY_OFF] = sizeof(struct ptlrpc_body),
                         [DLM_LOCKREQ_OFF]     = sizeof(*body) };
-        int rc = 0, buffers = 2, instant_cancel = 0;
+        int rc, buffers = 2, instant_cancel = 0;
         ENTRY;
 
         LASSERT(lock != NULL);
+        LASSERT(data != NULL);
 
         do_gettimeofday(&granted_time);
         total_enqueue_wait = cfs_timeval_sub(&granted_time,
@@ -631,6 +675,11 @@ int ldlm_server_completion_ast(struct ldlm_lock *lock, int flags, void *data)
                               size, NULL);
         if (req == NULL)
                 RETURN(-ENOMEM);
+
+        req->rq_async_args.pointer_arg[0] = arg;
+        req->rq_async_args.pointer_arg[1] = lock;
+        req->rq_interpret_reply = ldlm_cb_interpret;
+        req->rq_no_resend = 1;
 
         body = lustre_msg_buf(req->rq_reqmsg, DLM_LOCKREQ_OFF, sizeof(*body));
         body->lock_handle[0] = lock->l_remote_handle;
@@ -683,15 +732,7 @@ int ldlm_server_completion_ast(struct ldlm_lock *lock, int flags, void *data)
                 lprocfs_counter_incr(lock->l_export->exp_ldlm_stats,
                                      LDLM_CP_CALLBACK - LDLM_FIRST_OPC);
 
-        rc = ptlrpc_queue_wait(req);
-        if (rc != 0)
-                rc = ldlm_handle_ast_error(lock, req, rc, "completion");
-
-        ptlrpc_req_finished(req);
-
-        /* If we cancelled the lock, we need to restart ldlm_reprocess_queue */
-        if (!rc && instant_cancel)
-                rc = -ERESTART;
+        rc = ldlm_bl_and_cp_ast_fini(req, arg, lock, instant_cancel);
 
         RETURN(rc);
 }

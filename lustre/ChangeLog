@@ -492,6 +492,12 @@ Description: touch file failed when fs is not full
 Details    : OST in recovery should not be discarded by MDS in alloc_qos(),
              otherwise we can get ENOSP while fs is not full.
 
+Severity   : normal
+Bugzilla   : 11301
+Description: parallel lock callbacks
+Details    : Instead of sending blocking and completion callbacks as separated
+             requests, adding them to a set and sending in parallel.
+
 --------------------------------------------------------------------------------
 
 2007-08-10         Cluster File Systems, Inc. <info@clusterfs.com>
