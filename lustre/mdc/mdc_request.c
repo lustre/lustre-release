@@ -530,7 +530,7 @@ int mdc_get_lustre_md(struct obd_export *exp, struct ptlrpc_request *req,
 
                 if (rc < sizeof(*md->lsm)) {
                         CERROR ("lsm size too small:  rc < sizeof (*md->lsm) "
-                                "(%d < %d)\n", rc, sizeof(*md->lsm));
+                                "(%d < "LPSZ")\n", rc, sizeof(*md->lsm));
                         GOTO(out, rc = -EPROTO);
                 }
 
