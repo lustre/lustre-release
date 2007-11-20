@@ -795,15 +795,15 @@ run_test 26e "unlink multiple component recursive symlink ======"
 
 # recursive symlinks (bug 7022)
 test_26f() {
-	mkdir $DIR/$tfile        || error "mkdir $DIR/$tfile failed"
-	cd $DIR/$tfile           || error "cd $DIR/$tfile failed"
-	mkdir -p $tdir/bar1      || error "mkdir $tdir/bar1 failed"
+	mkdir $DIR/$tdir/$tfile        || error "mkdir $DIR/$tdir/$tfile failed"
+	cd $DIR/$tdir/$tfile           || error "cd $DIR/$tdir/$tfile failed"
+	mkdir -p lndir/bar1      || error "mkdir lndir/bar1 failed"
 	mkdir $tfile             || error "mkdir $tfile failed"
 	cd $tfile                || error "cd $tfile failed"
 	ln -s .. dotdot          || error "ln dotdot failed"
-	ln -s dotdot/$tdir $tdir || error "ln $tdir failed"
-	cd ../..                 || error "cd ../.. failed"
-	output=`ls $tfile/$tfile/$tdir/bar1`
+	ln -s dotdot/lndir lndir || error "ln lndir failed"
+	cd $DIR/$tdir                 || error "cd $DIR/$tdir failed"
+	output=`ls $tfile/$tfile/lndir/bar1`
 	[ "$output" = bar1 ] && error "unexpected output"
 	rm -r $tfile             || error "rm $tfile failed"
 	$CHECKSTAT -a $DIR/$tfile || error "$tfile not gone"
