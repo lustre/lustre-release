@@ -2,10 +2,14 @@ SUBDIRS := @LDISKFS_SUBDIR@ . @LIBSYSIO_SUBDIR@ @SNMP_SUBDIR@ lnet lustre
 DIST_SUBDIRS := @SNMP_DIST_SUBDIR@ libsysio ldiskfs lnet lustre
 SOURCES_SUBDIRS := @LDISKFS_SUBDIR@ lnet lustre
 RPM_SUBDIRS := @LDISKFS_SUBDIR@
+EXTRA_SOURCES := @SYMVERFILE@
 
 include build/autoMakefile.am.toplevel
 
 EXTRA_DIST += config.h.in
+
+@SYMVERFILE@: @LDISKFS_DIR@/@SYMVERFILE@
+	cp @LDISKFS_DIR@/@SYMVERFILE@ @SYMVERFILE@
 
 CSTK=/tmp/checkstack
 CSTKO=/tmp/checkstack.orig
