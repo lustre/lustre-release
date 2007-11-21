@@ -24,43 +24,21 @@ ALWAYS_EXCEPT="$REPLAY_OST_SINGLE_EXCEPT"
 # It is replay-ost-single, after all
 OSTCOUNT=1
 
-gen_config() {
-    formatall
-}
-
 build_test_filter
 
-cleanup_and_setup_lustre
+REFORMAT=--reformat cleanup_and_setup_lustre
 rm -rf $DIR/${TESTSUITE}/[df][0-9]* # bug 13798 new t-f tdir staff
 rm -rf $DIR/[df][0-9]*
 
 test_0a() {
+    zconf_umount `hostname` $MOUNT -f
     # needs to run during initial client->OST connection
     #define OBD_FAIL_OST_ALL_REPLY_NET       0x211
     do_facet ost "sysctl -w lustre.fail_loc=0x80000211"
     zconf_mount `hostname` $MOUNT && df $MOUNT || error "0a mount fail"
 }
+run_test 0a "target handle mismatch (bug 5317) `date +%H:%M:%S`"
 
-setup() {
-    gen_config
-    start mds $MDSDEV $MDS_MOUNT_OPTS
-    start ost1 `ostdevname 1` $OST_MOUNT_OPTS
-    [ "$DAEMONFILE" ] && $LCTL debug_daemon start $DAEMONFILE $DAEMONSIZE
-
-    # this might not mount if we aren't running test 0a
-    [ -z "`grep " $MOUNT " /proc/mounts`" ] && \
-	run_test 0a "target handle mismatch (bug 5317) `date +%H:%M:%S`" 
-
-    if [ -z "`grep " $MOUNT " /proc/mounts`" ]; then
-	zconf_mount `hostname` $MOUNT || error "mount fail"
-    fi
-
-    do_facet ost1 "sysctl -w lustre.fail_loc=0"
-}
-
-mkdir -p $DIR
-
-$SETUP
 test_0b() {
     fail ost1
     cp /etc/profile  $DIR/$tfile
