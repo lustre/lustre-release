@@ -481,7 +481,6 @@ test_25() {
 	[ `cat $LPROC/mdc/*-mdc-*/connect_flags | grep -c acl` -lt 2 ] && \
 	    skip "must have acl, skipping" && return
 
-	mkdir $DIR1/$tdir || error "mkdir $DIR1/$tdir"
 	touch $DIR1/$tdir/f1 || error "touch $DIR1/$tdir/f1"
 	chmod 0755 $DIR1/$tdir/f1 || error "chmod 0755 $DIR1/$tdir/f1"
 
@@ -576,8 +575,6 @@ test_29() { # bug 10999
 #run_test 29 "lock put race between glimpse and enqueue ========="
 
 test_30() { #bug #11110
-    rm -rf $DIR1/$tdir
-    mkdir -p $DIR1/$tdir
     cp -f /bin/bash $DIR1/$tdir/bash
     /bin/sh -c 'sleep 1; rm -f $DIR2/$tdir/bash; cp /bin/bash $DIR2/$tdir' &
     err=$($DIR1/$tdir/bash -c 'sleep 2; openfile -f O_RDONLY /proc/$$/exe >& /dev/null; echo $?')
