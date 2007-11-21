@@ -73,7 +73,9 @@
  *
  */
 
+#ifndef AUTOCONF_INCLUDED
 #include <linux/config.h>
+#endif
 #include <linux/module.h>
 
 #include <linux/sched.h>
@@ -483,7 +485,7 @@ static int loop_clr_fd(struct lloop_device *lo, struct block_device *bdev,
         lo->lo_offset = 0;
         lo->lo_sizelimit = 0;
         lo->lo_flags = 0;
-        invalidate_bdev(bdev, 0);
+        ll_invalidate_bdev(bdev, 0);
         set_capacity(disks[lo->lo_number], 0);
         bd_set_size(bdev, 0);
         mapping_set_gfp_mask(filp->f_mapping, gfp);
@@ -753,7 +755,7 @@ static void lloop_exit(void)
                 blk_put_queue(loop_dev[i].lo_queue);
                 put_disk(disks[i]);
         }
-        if (unregister_blkdev(lloop_major, "lloop"))
+        if (ll_unregister_blkdev(lloop_major, "lloop"))
                 CWARN("lloop: cannot unregister blkdev\n");
 
         kfree(disks);

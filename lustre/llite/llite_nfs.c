@@ -27,6 +27,9 @@
 #define DEBUG_SUBSYSTEM S_LLITE
 #include <lustre_lite.h>
 #include "llite_internal.h"
+#ifdef HAVE_LINUX_EXPORTFS_H
+#include <linux/exportfs.h>
+#endif
 
 static int ll_nfs_test_inode(struct inode *inode, void *opaque)
 {
