@@ -793,7 +793,7 @@ EXPORT_SYMBOL(class_import_put);
 
 static void init_imp_at(struct imp_at *at) {
         int i;
-        at_init(&at->iat_net_latency, CONNECTION_SWITCH_INC, 0);
+        at_init(&at->iat_net_latency, 0, 0);
         for (i = 0; i < IMP_AT_MAX_PORTALS; i++) {
                 /* max service estimates are tracked on the server side, so
                    don't use the AT history here, just use the last reported

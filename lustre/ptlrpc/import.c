@@ -330,7 +330,8 @@ static int import_select_connection(struct obd_import *imp)
            we do finally connect. (FIXME: really we should wait for all network
            state associated with the last connection attempt to drain before
            trying to reconnect on it.) */
-        if (tried_all && (imp->imp_conn_list.next == &imp_conn->oic_item)) {
+        if (tried_all && (imp->imp_conn_list.next == &imp_conn->oic_item) &&
+            !imp->imp_recon_bk /* not retrying */) {
                 if (at_get(&imp->imp_at.iat_net_latency) <
                     CONNECTION_SWITCH_MAX) {
                         at_add(&imp->imp_at.iat_net_latency,
