@@ -343,15 +343,16 @@ start() {
     shift
     echo "Starting ${facet}: $@ ${device} ${MOUNT%/*}/${facet}"
     do_facet ${facet} mkdir -p ${MOUNT%/*}/${facet}
-    do_facet ${facet} "sysctl -w lnet.debug=$PTLDEBUG;
-        sysctl -w lnet.subsystem_debug=${SUBSYSTEM# };
-        sysctl -w lnet.debug_mb=${DEBUG_SIZE}"
     do_facet ${facet} mount -t lustre $@ ${device} ${MOUNT%/*}/${facet} 
     RC=${PIPESTATUS[0]}
     if [ $RC -ne 0 ]; then
         echo mount -t lustre $@ ${device} ${MOUNT%/*}/${facet} 
         echo Start of ${device} on ${facet} failed ${RC}
     else 
+        do_facet ${facet} "sysctl -w lnet.debug=$PTLDEBUG; \
+        sysctl -w lnet.subsystem_debug=${SUBSYSTEM# }; \
+        sysctl -w lnet.debug_mb=${DEBUG_SIZE}"
+
         do_facet ${facet} sync
         label=$(do_facet ${facet} "e2label ${device}")
         [ -z "$label" ] && echo no label for ${device} && exit 1
