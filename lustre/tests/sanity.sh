@@ -2460,6 +2460,23 @@ test_56n() {
 }
 run_test 56n "check lfs find -type l ============================="
 
+test_56o() {
+	setup_56 $NUMFILES $NUMDIRS
+	TDIR=$DIR/${tdir}g
+
+	utime $TDIR/file1 > /dev/null || error
+	utime $TDIR/file2 > /dev/null || error
+	utime $TDIR/dir1 > /dev/null || error
+	utime $TDIR/dir2 > /dev/null || error
+	utime $TDIR/dir1/file1 > /dev/null || error
+
+	EXPECTED=5
+	NUMS=`$LFIND -mtime +1 $TDIR | wc -l`
+	[ $NUMS -eq $EXPECTED ] || \
+		error "lfs find -mtime $TDIR wrong: found $NUMS, expected $EXPECTED"
+}
+run_test 56o "check lfs find -mtime for old files =========================="
+
 test_57a() {
 	remote_mds && skip "remote MDS" && return
 
