@@ -554,5 +554,22 @@ generic_file_write(struct file *filp, const char __user *buf, size_t len, loff_t
 #define p_pptr parent
 #endif
 
+#ifdef HAVE_UNREGISTER_BLKDEV_RETURN_INT
+#define ll_unregister_blkdev(a,b)       unregister_blkdev((a),(b))
+#else
+static inline 
+int ll_unregister_blkdev(unsigned int dev, const char *name)
+{
+        unregister_blkdev(dev, name);
+        return 0;
+}
+#endif
+
+#ifdef HAVE_INVALIDATE_BDEV_2ARG
+#define ll_invalidate_bdev(a,b)         invalidate_bdev((a),(b))
+#else
+#define ll_invalidate_bdev(a,b)         invalidate_bdev((a))
+#endif
+
 #endif /* __KERNEL__ */
 #endif /* _COMPAT25_H */

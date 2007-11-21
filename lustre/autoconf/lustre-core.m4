@@ -1151,6 +1151,65 @@ LB_LINUX_TRY_COMPILE([
 ])
 ])
 
+# 2.6.22 lost second parameter for invalidate_bdev
+AC_DEFUN([LC_INVALIDATE_BDEV_2ARG],
+[AC_MSG_CHECKING([if invalidate_bdev has second argument])
+LB_LINUX_TRY_COMPILE([
+        #include <linux/buffer_head.h>
+],[
+        invalidate_bdev(NULL,0);
+],[
+        AC_MSG_RESULT([yes])
+        AC_DEFINE(HAVE_INVALIDATE_BDEV_2ARG, 1,
+                [invalidate_bdev has second argument])
+],[
+        AC_MSG_RESULT([no])
+])
+])
+
+# 2.6.23 have return type 'void' for unregister_blkdev
+AC_DEFUN([LC_UNREGISTER_BLKDEV_RETURN_INT],
+[AC_MSG_CHECKING([if unregister_blkdev return int])
+LB_LINUX_TRY_COMPILE([
+        #include <linux/fs.h>
+],[
+        int i = unregister_blkdev(0,NULL);
+],[
+        AC_MSG_RESULT([yes])
+        AC_DEFINE(HAVE_UNREGISTER_BLKDEV_RETURN_INT, 1, 
+                [unregister_blkdev return int])
+],[
+        AC_MSG_RESULT([no])
+])
+])
+
+# 2.6.23 change .sendfile to .splice_read
+AC_DEFUN([LC_KERNEL_SPLICE_READ],
+[AC_MSG_CHECKING([if kernel has .splice_read])
+LB_LINUX_TRY_COMPILE([
+        #include <linux/fs.h>
+],[
+        struct file_operations file;
+
+        file.splice_read = NULL;
+], [
+        AC_MSG_RESULT([yes])
+        AC_DEFINE(HAVE_KERNEL_SPLICE_READ, 1,
+                [kernel has .slice_read])
+],[
+        AC_MSG_RESULT([no])
+])
+])
+
+# 2.6.23 extract nfs export related data into exportfs.h
+AC_DEFUN([LC_HAVE_EXPORTFS_H],
+[
+tmpfl="$CFLAGS"
+CFLAGS="$CFLAGS -I$LINUX_OBJ/include"
+AC_CHECK_HEADERS([linux/exportfs.h])
+CFLAGS="$tmpfl"
+])
+
 #
 # LC_PROG_LINUX
 #
@@ -1236,7 +1295,15 @@ AC_DEFUN([LC_PROG_LINUX],
           LC_CANCEL_DIRTY_PAGE
 
           # raid5-zerocopy patch
-          LC_PAGE_CONSTANT])
+          LC_PAGE_CONSTANT
+	  
+	  # 2.6.22
+          LC_INVALIDATE_BDEV_2ARG
+          # 2.6.23
+          LC_UNREGISTER_BLKDEV_RETURN_INT
+          LC_KERNEL_SPLICE_READ
+          LC_HAVE_EXPORTFS_H
+])
 
 #
 # LC_CONFIG_CLIENT_SERVER
