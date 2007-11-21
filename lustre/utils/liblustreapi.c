@@ -879,18 +879,6 @@ static int cb_find_init(char *path, DIR *parent, DIR *dir,
                         goto decided;
         }
 
-        /* Check the time on mds. */
-        if (!decision) {
-                int for_mds;
-
-                for_mds = lustre_fs ? (S_ISREG(st->st_mode) &&
-                                       param->lmd->lmd_lmm.lmm_stripe_count)
-                                    : 0;
-                decision = find_time_check(st, param, for_mds);
-                if (decision == -1)
-                        goto decided;
-        }
-
         /* See if we can check the file type from the dirent. */
         if (param->type && de != NULL && de->d_type != DT_UNKNOWN &&
             de->d_type <= DT_MAX) {
@@ -942,6 +930,18 @@ static int cb_find_init(char *path, DIR *parent, DIR *dir,
                                 "IOC_MDC_GETFILEINFO", path);
                         return ret;
                 }
+        }
+
+        /* Check the time on mds. */
+        if (!decision) {
+                int for_mds;
+
+                for_mds = lustre_fs ? (S_ISREG(st->st_mode) &&
+                                       param->lmd->lmd_lmm.lmm_stripe_count)
+                                    : 0;
+                decision = find_time_check(st, param, for_mds);
+                if (decision == -1)
+                        goto decided;
         }
 
         if (param->type && !checked_type) {
