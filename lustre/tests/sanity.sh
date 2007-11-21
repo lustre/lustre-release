@@ -1777,9 +1777,13 @@ run_test 42d "test complete truncate of file with cached dirty data"
 
 test_43() {
 	cp -p /bin/ls $DIR/$tdir/$tfile
-	exec 100>> $DIR/$tdir/$tfile
+	multiop $DIR/$tdir/$tfile Ow_c &
+	pid=$!
+	# give multiop a chance to open
+	sleep 1
+
 	$DIR/$tdir/$tfile && error || true
-	exec 100<&-
+	kill -USR1 $pid
 }
 run_test 43 "execution of file opened for write should return -ETXTBSY"
 
