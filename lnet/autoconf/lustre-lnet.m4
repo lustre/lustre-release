@@ -1140,7 +1140,7 @@ EXTRA_KCFLAGS="-Werror"
 LB_LINUX_TRY_COMPILE([
         #include <linux/slab.h>
 ],[
-	struct kmem_cache_s *cachep = NULL;
+	kmem_cache_t *cachep = NULL;
 	
 	kmem_cache_free(cachep, NULL);
 
@@ -1152,6 +1152,22 @@ LB_LINUX_TRY_COMPILE([
         AC_MSG_RESULT(NO)
 ])
 EXTRA_KCFLAGS="$tmp_flags"
+])
+# 2.6.23 lost dtor argument
+AC_DEFUN([LN_KMEM_CACHE_CREATE_DTOR],
+[AC_MSG_CHECKING([check kmem_cache_create has dtor argument])
+LB_LINUX_TRY_COMPILE([
+        #include <linux/slab.h>
+],[
+        struct kmem_cache_s *cachep = NULL;
+	kmem_cache_create(NULL, 0, 0, 0, NULL, NULL);
+],[
+        AC_MSG_RESULT(yes)
+        AC_DEFINE(HAVE_KMEM_CACHE_CREATE_DTOR, 1,
+                  [kmem_cache_create has dtor argument])
+],[
+        AC_MSG_RESULT(NO)
+])
 ])
 
 #
@@ -1191,6 +1207,8 @@ LN_3ARGS_INIT_WORK
 # 2.6.21
 LN_2ARGS_REGISTER_SYSCTL
 LN_KMEM_CACHE_S
+# 2.6.23
+LN_KMEM_CACHE_CREATE_DTOR
 ])
 
 #

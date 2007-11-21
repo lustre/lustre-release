@@ -39,6 +39,8 @@
 #include <linux/proc_fs.h>
 #include <linux/mm.h>
 #include <linux/timer.h>
+#include <linux/signal.h>
+#include <linux/sched.h>
 
 #include <linux/miscdevice.h>
 #include <libcfs/linux/portals_compat25.h>

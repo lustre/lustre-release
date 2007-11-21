@@ -103,7 +103,11 @@ cfs_mem_cache_t *
 cfs_mem_cache_create (const char *name, size_t size, size_t offset,
                       unsigned long flags)
 {
+#ifdef HAVE_KMEM_CACHE_CREATE_DTOR
         return kmem_cache_create(name, size, offset, flags, NULL, NULL);
+#else
+        return kmem_cache_create(name, size, offset, flags, NULL);
+#endif
 }
 
 int
