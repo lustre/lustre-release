@@ -1432,8 +1432,8 @@ test_37() {
 	rm -f $LOCAL_MDSDEV
 
 	touch $LOCAL_MDSDEV
-	mkfs.lustre --reformat --fsname=lustre --mdt --mgs --device-size=9000 $LOCAL_MDSDEV
-		|| error "mkfs.lustre $LOCAL_MDSDEV failed"
+	mkfs.lustre --reformat --fsname=lustre --mdt --mgs --device-size=9000 $LOCAL_MDSDEV ||
+		error "mkfs.lustre $LOCAL_MDSDEV failed"
 	ln -s $LOCAL_MDSDEV $SYM_MDSDEV
 
 	echo "mount symlink device - $SYM_MDSDEV"
