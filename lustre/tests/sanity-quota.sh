@@ -435,6 +435,32 @@ test_4() {
 }
 run_test 4 "File soft limit (start timer, timer goes off, stop timer) ==="
 
+test_4a() {
+        GR_STR1="1w3d"
+        GR_STR2="1000s"
+        GR_STR3="5s"
+        GR_STR4="1w2d3h4m5s"
+        GR_STR5="5c"
+        GR_STR6="1111111111111111"
+
+        # test of valid grace strings handling
+        echo "  Valid grace strings test"
+        $LFS setquota -t -u $GR_STR1 $GR_STR2 $DIR
+        $LFS quota -u -t $DIR | grep "Block grace time: $GR_STR1"
+        $LFS setquota -t -g $GR_STR3 $GR_STR4 $DIR
+        $LFS quota -g -t $DIR | grep "Inode grace time: $GR_STR4"
+
+        # test of invalid grace strings handling
+        echo "  Invalid grace strings test"
+        ! $LFS setquota -t -u $GR_STR4 $GR_STR5 $DIR
+        ! $LFS setquota -t -g $GR_STR4 $GR_STR6 $DIR
+
+        # cleanup
+        $LFS setquota -t -u $MAX_DQ_TIME $MAX_IQ_TIME $DIR
+        $LFS setquota -t -g $MAX_DQ_TIME $MAX_IQ_TIME $DIR
+}
+run_test 4a "Grace time strings handling ==="
+
 # chown & chgrp (chown & chgrp successfully even out of block/file quota)
 test_5() {
 	BLIMIT=$(( $BUNIT_SZ * $((OSTCOUNT + 1)) * 10)) # 10 bunits on each server

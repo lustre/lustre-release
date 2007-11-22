@@ -136,6 +136,13 @@ setquota [-u|-g] <name> <block-softlimit> <block-hardlimit> <inode-softlimit>
 
 \series bold
 lfs\InsetSpace ~
+setquota -t [-u|-g] <block-grace> <inode-grace> <filesystem>
+\end_layout
+
+\begin_layout Standard
+
+\series bold
+lfs\InsetSpace ~
 quota [-o obd_uuid] [-u|-g] <name> <filesystem>
 \end_layout
 
@@ -517,6 +524,32 @@ quota
 
 \begin_layout LyX-Code
    $lfs setquota -u bob 0 1000000 0 10000 /mnt/lustre
+\end_layout
+
+\begin_layout Description
+Set\InsetSpace ~
+grace\InsetSpace ~
+times\InsetSpace ~
+for\InsetSpace ~
+user\InsetSpace ~
+quotas:\InsetSpace ~
+1000\InsetSpace ~
+seconds\InsetSpace ~
+for\InsetSpace ~
+block\InsetSpace ~
+quotas,\InsetSpace ~
+1\InsetSpace ~
+week\InsetSpace ~
+and\InsetSpace ~
+4\InsetSpace ~
+days\InsetSpace ~
+for\InsetSpace ~
+inode\InsetSpace ~
+quotas
+\end_layout
+
+\begin_layout LyX-Code
+   $lfs setquota -t -u 1000 1w4d /mnt/lustre
 \end_layout
 
 \begin_layout Description
