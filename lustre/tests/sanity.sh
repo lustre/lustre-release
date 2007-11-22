@@ -132,7 +132,7 @@ else
 	[ $RUNAS_ID -eq 0 ] && error "\$RUNAS_ID set to 0, but \$UID is also 0!"
 fi
 
-check_runas_id
+check_runas_id $RUNAS_ID $RUNAS
 
 build_test_filter
 

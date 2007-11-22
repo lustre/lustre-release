@@ -1213,12 +1213,15 @@ is_patchless ()
 }
 
 check_runas_id() {
+    local myRUNAS_ID=$1
+    shift
+    local myRUNAS=$@
     mkdir $DIR/d0_runas_test
     chmod 0755 $DIR
-    chown $RUNAS_ID:$RUNAS_ID $DIR/d0_runas_test
-    $RUNAS touch $DIR/d0_runas_test/f$$ || \
-        error "unable to write to $DIR/d0_runas_test as UID $RUNAS_ID. 
+    chown $myRUNAS_ID:$myRUNAS_ID $DIR/d0_runas_test
+    $myRUNAS touch $DIR/d0_runas_test/f$$ || \
+        error "unable to write to $DIR/d0_runas_test as UID $myRUNAS_ID. 
         Please set RUNAS_ID to some UID which exists on MDS and client or 
-        add user $RUNAS_ID:$RUNAS_ID on these nodes."
+        add user $myRUNAS_ID:$myRUNAS_ID on these nodes."
     rm -rf $DIR/d0_runas_test
 }

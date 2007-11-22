@@ -31,13 +31,9 @@ esac
 TMP=${TMP:-/tmp}
 
 ORIG_PWD=${PWD}
-LFS=${LFS:-lfs}
-LCTL=${LCTL:-lctl}
 SETSTRIPE=${SETSTRIPE:-"$LFS setstripe"}
 TSTID=${TSTID:-60000}
 TSTID2=${TSTID2:-60001}
-RUNAS=${RUNAS:-"runas -u $TSTID"}
-RUNAS2=${RUNAS2:-"runas -u $TSTID2"}
 TSTUSR=${TSTUSR:-"quota_usr"}
 TSTUSR2=${TSTUSR2:-"quota_2usr"}
 BLK_SZ=1024
@@ -55,41 +51,13 @@ init_test_env $@
 . ${CONFIG:=$LUSTRE/tests/cfg/$NAME.sh}
 
 QUOTALOG=${TESTSUITELOG:-$TMP/$(basename $0 .sh).log}
-FAIL_ON_ERROR=false
 
 [ "$QUOTALOG" ] && rm -f $QUOTALOG || true
 
-mounted_lustre_filesystems() {
-	awk '($3 ~ "lustre" && $1 ~ ":") { print $2 }' /proc/mounts | sed -n ${1}p
-}
-
-# Remember where our caller has hinted that we should mount lustre
-MOUNT_HINT=$MOUNT
-MOUNT_HINT2=$MOUNT_2
-MOUNT="`mounted_lustre_filesystems 1`"
-MOUNT_2="`mounted_lustre_filesystems 2`"
-if [ "$MOUNT" -a "$MOUNT_2" ]; then
-	echo "testing on $MOUNT and $MOUNT_2"
-elif [ "$MOUNT" -o "$MOUNT_2" ]; then
-        error "test needs two mounts, only found $MOUNT $MOUNT_2!"
-else
-	export QUOTA_OPTS="quotaon=ug"
-	export MOUNT=$MOUNT_HINT 
-	export MOUNT_2=$MOUNT_HINT2
-	MOUNT_2=${MOUNT_2:-/mnt/lustre_2}
-	bash llmount.sh 
-	MOUNT="`mounted_lustre_filesystems 1`"
-	MOUNT_2="`mounted_lustre_filesystems 2`"
-	[ -z "$MOUNT" ] && error "NAME=$MOUNT not mounted"
-	[ -z "$MOUNT_2" ] && error "NAME=$MOUNT_2 not mounted"
-	I_MOUNTED=yes
-fi
-
-[ `echo $MOUNT | wc -w` -gt 1 ] && error "NAME=$NAME mounted more than once"
-
 DIR=${DIR:-$MOUNT}
-[ -z "`echo $DIR | grep $MOUNT`" ] && echo "$DIR not in $MOUNT" && exit 99
-DIR2=${DIR2:-$MOUNT_2}
+DIR2=${DIR2:-$MOUNT2}
+
+cleanup_and_setup_lustre
 
 LOVNAME=`cat $LPROC/llite/*/lov/common_name | tail -n 1`
 OSTCOUNT=`cat $LPROC/lov/$LOVNAME/numobd`
@@ -98,11 +66,10 @@ STRIPESIZE=`cat $LPROC/lov/$LOVNAME/stripesize`
 ORIGFREE=`cat $LPROC/lov/$LOVNAME/kbytesavail`
 MAXFREE=${MAXFREE:-$((200000 * $OSTCOUNT))}
 MDS=$(\ls $LPROC/mds 2> /dev/null | grep -v num_refs | tail -n 1)
-TSTDIR=$DIR/quota_test_dir
-TSTDIR2=$DIR2/quota_test_dir
-SHOW_QUOTA_USER="$LFS quota -u $TSTUSR $MOUNT"
-SHOW_QUOTA_GROUP="$LFS quota -g $TSTUSR $MOUNT"
-SHOW_QUOTA_INFO="$LFS quota -t $MOUNT"
+
+SHOW_QUOTA_USER="$LFS quota -u $TSTUSR $DIR"
+SHOW_QUOTA_GROUP="$LFS quota -g $TSTUSR $DIR"
+SHOW_QUOTA_INFO="$LFS quota -t $DIR"
 
 build_test_filter
 
@@ -181,60 +148,32 @@ post_test() {
 	fi
 }
 
-setup() {
-	# create local test group
-	GRP="`cat /etc/group | grep "^${TSTUSR}:" | awk -F: '{print $1}'`"
-	if [ -z "$GRP" ]; then
-		groupadd -g $TSTID "$TSTUSR"
-	fi
-	TSTID="`cat /etc/group | grep "^${TSTUSR}:" | awk -F: '{print $3}'`"
+RUNAS="runas -u $TSTID"
+RUNAS2="runas -u $TSTID2"
+FAIL_ON_ERROR=true check_runas_id $TSTID $RUNAS
+FAIL_ON_ERROR=true check_runas_id $TSTID2 $RUNAS2
 
-        GRP2="`cat /etc/group | grep "^${TSTUSR2}:" | awk -F: '{print $1}'`"
-        if [ -z "$GRP2" ]; then
-                groupadd -g $TSTID2 "$TSTUSR2"
-        fi
-        TSTID2="`cat /etc/group | grep "^${TSTUSR2}:" | awk -F: '{print $3}'`"
-
-	# create test user
-	USR="`cat /etc/passwd | grep "^${TSTUSR}:" | awk -F: '{print $1}'`"
-	if [ -z "$USR" ]; then
-		useradd -u $TSTID -g $TSTID -d /tmp "$TSTUSR"
-	fi
-	
-	RUNAS="runas -u $TSTID"
-
-	USR2="`cat /etc/passwd | grep "^${TSTUSR2}:" | awk -F: '{print $1}'`"
-        if [ -z "$USR2" ]; then
-                useradd -u $TSTID2 -g $TSTID2 -d /tmp "$TSTUSR2"
-        fi
-
-        RUNAS2="runas -u $TSTID2"
-	
-	# create test directory
-	rm -fr $TSTDIR
-
-	mkdir -p $TSTDIR 
-	chmod 777 $TSTDIR
-}
-setup
+FAIL_ON_ERROR=false
 
 # set quota
 test_0() {
-	$LFS quotaoff -ug $MOUNT
-	$LFS quotacheck -ug $MOUNT
+	$LFS quotaoff -ug $DIR
+	$LFS quotacheck -ug $DIR
 
-	$LFS setquota -u $TSTUSR 0 0 0 0 $MOUNT
-	$LFS setquota -g $TSTUSR 0 0 0 0 $MOUNT
+	$LFS setquota -u $TSTUSR 0 0 0 0 $DIR
+	$LFS setquota -g $TSTUSR 0 0 0 0 $DIR
 }
 run_test 0 "Set quota ============================="
 
 # block hard limit (normal use and out of quota)
 test_1() {
+	chmod 0777 $DIR/$tdir
+
 	LIMIT=$(( $BUNIT_SZ * $(($OSTCOUNT + 1)) * 5)) # 5 bunits each sever
-	TESTFILE="$TSTDIR/quota_tst10"
+	TESTFILE=$DIR/$tdir/$tfile-0	
 	
 	echo "  User quota (limit: $LIMIT kbytes)"
-	$LFS setquota -u $TSTUSR 0 $LIMIT 0 0 $MOUNT
+	$LFS setquota -u $TSTUSR 0 $LIMIT 0 0 $DIR
 	$SHOW_QUOTA_USER
 	
 	$LFS setstripe $TESTFILE 65536 0 1
@@ -253,10 +192,10 @@ test_1() {
 	rm -f $TESTFILE
 	
 	echo "  Group quota (limit: $LIMIT kbytes)"
-	$LFS setquota -u $TSTUSR 0 0 0 0 $MOUNT		# clear user limit
-	$LFS setquota -g $TSTUSR 0 $LIMIT 0 0 $MOUNT
+	$LFS setquota -u $TSTUSR 0 0 0 0 $DIR		# clear user limit
+	$LFS setquota -g $TSTUSR 0 $LIMIT 0 0 $DIR
 	$SHOW_QUOTA_GROUP
-	TESTFILE="$TSTDIR/quota_tst11"
+	TESTFILE=$DIR/$tdir/$tfile-1	
 
 	$LFS setstripe $TESTFILE 65536 0 1
 	chown $TSTUSR.$TSTUSR $TESTFILE
@@ -272,17 +211,19 @@ test_1() {
 
 	# cleanup
 	rm -f $TESTFILE
-	$LFS setquota -g $TSTUSR 0 0 0 0 $MOUNT
+	$LFS setquota -g $TSTUSR 0 0 0 0 $DIR
 }
 run_test 1 "Block hard limit (normal use and out of quota) ==="
 
 # file hard limit (normal use and out of quota)
 test_2() {
+	chmod 0777 $DIR/$tdir
+
 	LIMIT=$(($IUNIT_SZ * 10)) # 10 iunits on mds
-	TESTFILE="$TSTDIR/quota_tstr20"
+	TESTFILE=$DIR/$tdir/$tfile-0	
 
 	echo "  User quota (limit: $LIMIT files)"
-	$LFS setquota -u $TSTUSR 0 0 0 $LIMIT $MOUNT
+	$LFS setquota -u $TSTUSR 0 0 0 $LIMIT $DIR
 	$SHOW_QUOTA_USER
 
 	echo "    Create $LIMIT files ..."
@@ -297,10 +238,10 @@ test_2() {
 	rm ${TESTFILE}_xxx
 
 	echo "  Group quota (limit: $LIMIT files)"
-	$LFS setquota -u $TSTUSR 0 0 0 0 $MOUNT		# clear user limit
-	$LFS setquota -g $TSTUSR 0 0 0 $LIMIT $MOUNT
+	$LFS setquota -u $TSTUSR 0 0 0 0 $DIR		# clear user limit
+	$LFS setquota -g $TSTUSR 0 0 0 $LIMIT $DIR
 	$SHOW_QUOTA_GROUP
-	TESTFILE="$TSTDIR/quota_tst21"
+	TESTFILE=$DIR/$tdir/$tfile-1
 
 	echo "    Create $LIMIT files ..."
 	$RUNAS createmany -m ${TESTFILE} $LIMIT || \
@@ -317,7 +258,7 @@ test_2() {
 	unlinkmany ${TESTFILE} $LIMIT
 	rm ${TESTFILE}_xxx
 
-	$LFS setquota -g $TSTUSR 0 0 0 0 $MOUNT
+	$LFS setquota -g $TSTUSR 0 0 0 0 $DIR
 }
 run_test 2 "File hard limit (normal use and out of quota) ==="
 
@@ -382,30 +323,34 @@ test_block_soft() {
 
 # block soft limit (start timer, timer goes off, stop timer)
 test_3() {
+	chmod 0777 $DIR/$tdir
+
 	LIMIT=$(( $BUNIT_SZ * 2 )) # 1 bunit on mds and 1 bunit on the ost
 	GRACE=10
 
 	echo "  User quota (soft limit: $LIMIT kbytes  grace: $GRACE seconds)"
-	TESTFILE="$TSTDIR/quota_tst30"
+	TESTFILE=$DIR/$tdir/$tfile-0
+
 	$LFS setstripe $TESTFILE 65536 0 1
 	chown $TSTUSR.$TSTUSR $TESTFILE
 
-	$LFS setquota -t -u $GRACE $MAX_IQ_TIME $MOUNT
-	$LFS setquota -u $TSTUSR $LIMIT 0 0 0 $MOUNT
+	$LFS setquota -t -u $GRACE $MAX_IQ_TIME $DIR
+	$LFS setquota -u $TSTUSR $LIMIT 0 0 0 $DIR
 
 	test_block_soft $TESTFILE $GRACE
-	$LFS setquota -u $TSTUSR 0 0 0 0 $MOUNT
+	$LFS setquota -u $TSTUSR 0 0 0 0 $DIR
 
 	echo "  Group quota (soft limit: $LIMIT kbytes  grace: $GRACE seconds)"
-	TESTFILE="$TSTDIR/quota_tst31"
+	TESTFILE=$DIR/$tdir/$tfile-1
+
 	$LFS setstripe $TESTFILE 65536 0 1
 	chown $TSTUSR.$TSTUSR $TESTFILE
 
-	$LFS setquota -t -g $GRACE $MAX_IQ_TIME $MOUNT
-	$LFS setquota -g $TSTUSR $LIMIT 0 0 0 $MOUNT
+	$LFS setquota -t -g $GRACE $MAX_IQ_TIME $DIR
+	$LFS setquota -g $TSTUSR $LIMIT 0 0 0 $DIR
 
 	test_block_soft $TESTFILE $GRACE
-	$LFS setquota -g $TSTUSR 0 0 0 0 $MOUNT
+	$LFS setquota -g $TSTUSR 0 0 0 0 $DIR
 }
 run_test 3 "Block soft limit (start timer, timer goes off, stop timer) ==="
 
@@ -461,30 +406,32 @@ test_file_soft() {
 
 # file soft limit (start timer, timer goes off, stop timer)
 test_4() {
+	chmod 0777 $DIR/$tdir
 	LIMIT=$(($IUNIT_SZ * 10))	# 10 iunits on mds
-	TESTFILE="$TSTDIR/quota_tst40"
+	TESTFILE=$DIR/$tdir/$tfile-0
+
 	GRACE=5
 
 	echo "  User quota (soft limit: $LIMIT files  grace: $GRACE seconds)"
-	$LFS setquota -t -u $MAX_DQ_TIME $GRACE $MOUNT
-	$LFS setquota -u $TSTUSR 0 0 $LIMIT 0 $MOUNT
+	$LFS setquota -t -u $MAX_DQ_TIME $GRACE $DIR
+	$LFS setquota -u $TSTUSR 0 0 $LIMIT 0 $DIR
 	$SHOW_QUOTA_USER
 
 	test_file_soft $TESTFILE $LIMIT $GRACE
-	$LFS setquota -u $TSTUSR 0 0 0 0 $MOUNT
+	$LFS setquota -u $TSTUSR 0 0 0 0 $DIR
 
 	echo "  Group quota (soft limit: $LIMIT files  grace: $GRACE seconds)"
-	$LFS setquota -t -g $MAX_DQ_TIME $GRACE $MOUNT
-	$LFS setquota -g $TSTUSR 0 0 $LIMIT 0 $MOUNT
+	$LFS setquota -t -g $MAX_DQ_TIME $GRACE $DIR
+	$LFS setquota -g $TSTUSR 0 0 $LIMIT 0 $DIR
 	$SHOW_QUOTA_GROUP
-	TESTFILE="$TSTDIR/quota_tst41"
+	TESTFILE=$DIR/$tdir/$tfile-1
 
 	test_file_soft $TESTFILE $LIMIT $GRACE
-	$LFS setquota -g $TSTUSR 0 0 0 0 $MOUNT
+	$LFS setquota -g $TSTUSR 0 0 0 0 $DIR
 	
 	# cleanup
-	$LFS setquota -t -u $MAX_DQ_TIME $MAX_IQ_TIME $MOUNT
-	$LFS setquota -t -g $MAX_DQ_TIME $MAX_IQ_TIME $MOUNT
+	$LFS setquota -t -u $MAX_DQ_TIME $MAX_IQ_TIME $DIR
+	$LFS setquota -t -g $MAX_DQ_TIME $MAX_IQ_TIME $DIR
 }
 run_test 4 "File soft limit (start timer, timer goes off, stop timer) ==="
 
@@ -494,27 +441,27 @@ test_5() {
 	ILIMIT=$(( $IUNIT_SZ * 10 )) # 10 iunits on mds
 	
 	echo "  Set quota limit (0 $BLIMIT 0 $ILIMIT) for $TSTUSR.$TSTUSR"
-	$LFS setquota -u $TSTUSR 0 $BLIMIT 0 $ILIMIT $MOUNT
-	$LFS setquota -g $TSTUSR 0 $BLIMIT 0 $ILIMIT $MOUNT
+	$LFS setquota -u $TSTUSR 0 $BLIMIT 0 $ILIMIT $DIR
+	$LFS setquota -g $TSTUSR 0 $BLIMIT 0 $ILIMIT $DIR
 	$SHOW_QUOTA_USER
 	$SHOW_QUOTA_GROUP
 	
 	echo "  Create more than $ILIMIT files and more than $BLIMIT kbytes ..."
-	createmany -m $TSTDIR/quota_tst50_ $((ILIMIT + 1)) || \
+	createmany -m $DIR/$tdir/$tfile-0_ $((ILIMIT + 1)) || \
 		error "touch failure, expect success"
-	dd if=/dev/zero of=$TSTDIR/quota_tst50_1 bs=$BLK_SZ count=$((BLIMIT+1)) || error "write failure, expect success"
+	dd if=/dev/zero of=$DIR/$tdir/$tfile-0_1 bs=$BLK_SZ count=$((BLIMIT+1)) || error "write failure, expect success"
 
 	echo "  Chown files to $TSTUSR.$TSTUSR ..."
 	for i in `seq 0 $ILIMIT`; do
-		chown $TSTUSR.$TSTUSR $TSTDIR/quota_tst50_$i || \
+	chown $TSTUSR.$TSTUSR $DIR/$tdir/$tfile-0_$i || \
 			error "chown failure, but expect success"
 	done
 
 	# cleanup
-	unlinkmany $TSTDIR/quota_tst50_ $((ILIMIT + 1))
+	unlinkmany $DIR/$tdir/$tfile-0_ $((ILIMIT + 1))
 
-	$LFS setquota -u $TSTUSR 0 0 0 0 $MOUNT
-	$LFS setquota -g $TSTUSR 0 0 0 0 $MOUNT
+	$LFS setquota -u $TSTUSR 0 0 0 0 $DIR
+	$LFS setquota -g $TSTUSR 0 0 0 0 $DIR
 }
 run_test 5 "Chown & chgrp successfully even out of block/file quota ==="
 
@@ -525,13 +472,15 @@ test_6() {
 		return 0;
 	fi
 
+	chmod 0777 $DIR/$tdir
+
 	LIMIT=$((BUNIT_SZ * (OSTCOUNT + 1) * 5)) # 5 bunits per server
-	FILEA="$TSTDIR/quota_tst60_a"
-	FILEB="$TSTDIR/quota_tst60_b"
+	FILEA="$DIR/$tdir/$tfile-0_a"
+	FILEB="$DIR/$tdir/$tfile-0_b"
 	
 	echo "  Set block limit $LIMIT kbytes to $TSTUSR.$TSTUSR"
-	$LFS setquota -u $TSTUSR 0 $LIMIT 0 0 $MOUNT
-	$LFS setquota -g $TSTUSR 0 $LIMIT 0 0 $MOUNT
+	$LFS setquota -u $TSTUSR 0 $LIMIT 0 0 $DIR
+	$LFS setquota -g $TSTUSR 0 $LIMIT 0 0 $DIR
 	$SHOW_QUOTA_USER
 	$SHOW_QUOTA_GROUP
 
@@ -573,8 +522,8 @@ test_6() {
 
 	# cleanup
 	rm -f $FILEA
-	$LFS setquota -u $TSTUSR 0 0 0 0 $MOUNT
-	$LFS setquota -g $TSTUSR 0 0 0 0 $MOUNT
+	$LFS setquota -u $TSTUSR 0 0 0 0 $DIR
+	$LFS setquota -g $TSTUSR 0 0 0 0 $DIR
 	return 0
 }
 run_test 6 "Block quota acquire & release ========="
@@ -582,12 +531,13 @@ run_test 6 "Block quota acquire & release ========="
 # quota recovery (block quota only by now)
 test_7()
 {
+	chmod 0777 $DIR/$tdir
 	remote_mds && skip "remote mds" && return 0
 
 	LIMIT=$(( $BUNIT_SZ * $(($OSTCOUNT + 1)) * 10)) # 10 bunits each sever
-	TESTFILE="$TSTDIR/quota_tst70"
+	TESTFILE="$DIR/$tdir/$tfile-0"
 	
-	$LFS setquota -u $TSTUSR 0 $LIMIT 0 0 $MOUNT
+	$LFS setquota -u $TSTUSR 0 $LIMIT 0 0 $DIR
 	
 	$LFS setstripe $TESTFILE 65536 0 1
 	chown $TSTUSR.$TSTUSR $TESTFILE
@@ -612,19 +562,19 @@ test_7()
 	sleep 20
 
 	# check limits
-	PATTERN="`echo $MOUNT | sed 's/\//\\\\\//g'`"
-	TOTAL_LIMIT="`$LFS quota -u $TSTUSR $MOUNT | awk '/^.*'$PATTERN'.*[[:digit:]+][[:space:]+]/ { print $4 }'`"
+	PATTERN="`echo $DIR | sed 's/\//\\\\\//g'`"
+	TOTAL_LIMIT="`$LFS quota -u $TSTUSR $DIR | awk '/^.*'$PATTERN'.*[[:digit:]+][[:space:]+]/ { print $4 }'`"
 	[ $TOTAL_LIMIT -eq $LIMIT ] || error "total limits not recovery!"
 	echo "  total limits = $TOTAL_LIMIT"
 	
         OST0_UUID=`do_facet ost1 "$LCTL dl | grep -m1 obdfilter" | awk '{print $((NF-1))}'`
         [ -z "$OST0_UUID" ] && OST0_UUID=`do_facet ost1 "$LCTL dl | grep -m1 obdfilter" | awk '{print $((NF-1))}'`
-	OST0_LIMIT="`$LFS quota -o $OST0_UUID -u $TSTUSR $MOUNT | awk '/^.*[[:digit:]+][[:space:]+]/ { print $3 }'`"
+	OST0_LIMIT="`$LFS quota -o $OST0_UUID -u $TSTUSR $DIR | awk '/^.*[[:digit:]+][[:space:]+]/ { print $3 }'`"
 	[ $OST0_LIMIT -eq $BUNIT_SZ ] || error "high limits not released!"
 	echo "  limits on $OST0_UUID = $OST0_LIMIT"
 
 	# cleanup
-	$LFS setquota -u $TSTUSR 0 0 0 0 $MOUNT
+	$LFS setquota -u $TSTUSR 0 0 0 0 $DIR
 }
 run_test 7 "Quota recovery (only block limit) ======"
 
@@ -637,19 +587,20 @@ test_8() {
 	[ ! -d $DBENCH_LIB ] && skip "dbench not installed" && return 0
 	
 	echo "  Set enough high limit for user: $TSTUSR"
-	$LFS setquota -u $TSTUSR 0 $BLK_LIMIT 0 $FILE_LIMIT $MOUNT
+	$LFS setquota -u $TSTUSR 0 $BLK_LIMIT 0 $FILE_LIMIT $DIR
 	echo "  Set enough high limit for group: $TSTUSR"
-	$LFS setquota -g $USER 0 $BLK_LIMIT 0 $FILE_LIMIT $MOUNT
+	$LFS setquota -g $USER 0 $BLK_LIMIT 0 $FILE_LIMIT $DIR
 	
 
-	TGT=$TSTDIR/client.txt
+	TGT=$DIR/$tdir/client.txt
 	SRC=${SRC:-$DBENCH_LIB/client.txt}
 	[ ! -e $TGT -a -e $SRC ] && echo "copying $SRC to $TGT" && cp $SRC $TGT
 	SRC=$DBENCH_LIB/client_plain.txt
 	[ ! -e $TGT -a -e $SRC ] && echo "copying $SRC to $TGT" && cp $SRC $TGT
 
+	chmod 0777 $DIR/$tdir
 	SAVE_PWD=$PWD
-	cd $TSTDIR
+	cd $DIR/$tdir
 	$RUNAS dbench -c client.txt 3
 	RC=$?
 	
@@ -661,6 +612,7 @@ run_test 8 "Run dbench with quota enabled ==========="
 
 # run for fixing bug10707, it needs a big room. test for 64bit
 test_9() {
+	chmod 0777 $DIR/$tdir
         lustrefs_size=`(echo 0; df -t lustre -P | awk '{print $4}') | tail -n 1`
         size_file=$((1024 * 1024 * 9 / 2 * $OSTCOUNT))
         echo "lustrefs_size:$lustrefs_size  size_file:$size_file"
@@ -676,15 +628,15 @@ test_9() {
 	debugsave
 	sysctl -w lnet.debug="+quota"
 
-        TESTFILE="$TSTDIR/quota_tst90"
+        TESTFILE="$DIR/$tdir/$tfile-0"
 
         BLK_LIMIT=$((100 * 1024 * 1024)) # 100G
         FILE_LIMIT=1000000
 
         echo "  Set enough high limit(block:$BLK_LIMIT; file: $FILE_LIMIT) for user: $TSTUSR"
-        $LFS setquota -u $TSTUSR 0 $BLK_LIMIT 0 $FILE_LIMIT $MOUNT
+        $LFS setquota -u $TSTUSR 0 $BLK_LIMIT 0 $FILE_LIMIT $DIR
         echo "  Set enough high limit(block:$BLK_LIMIT; file: $FILE_LIMIT) for group: $TSTUSR"
-        $LFS setquota -g $TSTUSR 0 $BLK_LIMIT 0 $FILE_LIMIT $MOUNT
+        $LFS setquota -g $TSTUSR 0 $BLK_LIMIT 0 $FILE_LIMIT $DIR
 
         echo "  Set stripe"
         [ $OSTCOUNT -ge 2 ] && $LFS setstripe $TESTFILE 65536 0 $OSTCOUNT
@@ -723,16 +675,12 @@ run_test 9 "run for fixing bug10707(64bit) ==========="
 
 # run for fixing bug10707, it need a big room. test for 32bit
 test_10() {
+	chmod 0777 $DIR/$tdir
 	lustrefs_size=`(echo 0; df -t lustre -P | awk '{print $4}') | tail -n 1`
 	size_file=$((1024 * 1024 * 9 / 2 * $OSTCOUNT))
 	echo "lustrefs_size:$lustrefs_size  size_file:$size_file"
 	if [ $lustrefs_size -lt $size_file ]; then
 		skip "less than $size_file free"
-		return 0;
-	fi
-
-	if [ ! -d /proc/fs/lustre/ost/ -o ! -d /proc/fs/lustre/mds ]; then
-		skip "mds or ost isn't local"
 		return 0;
 	fi
 
@@ -748,15 +696,15 @@ test_10() {
 	# make qd_count 32 bit
 	sysctl -w lustre.fail_loc=0xA00
 
-	TESTFILE="$TSTDIR/quota_tst100"
+	TESTFILE="$DIR/$tdir/$tfile-0"
 
 	BLK_LIMIT=$((100 * 1024 * 1024)) # 100G
 	FILE_LIMIT=1000000
 
 	echo "  Set enough high limit(block:$BLK_LIMIT; file: $FILE_LIMIT) for user: $TSTUSR"
-	$LFS setquota -u $TSTUSR 0 $BLK_LIMIT 0 $FILE_LIMIT $MOUNT
+	$LFS setquota -u $TSTUSR 0 $BLK_LIMIT 0 $FILE_LIMIT $DIR
 	echo "  Set enough high limit(block:$BLK_LIMIT; file: $FILE_LIMIT) for group: $TSTUSR"
-	$LFS setquota -g $TSTUSR 0 $BLK_LIMIT 0 $FILE_LIMIT $MOUNT
+	$LFS setquota -g $TSTUSR 0 $BLK_LIMIT 0 $FILE_LIMIT $DIR
        
 	echo "  Set stripe"
 	[ $OSTCOUNT -ge 2 ] && $LFS setstripe $TESTFILE 65536 0 $OSTCOUNT
@@ -811,7 +759,7 @@ test_11() {
        echo 30 > /proc/sys/vm/dirty_expire_centisecs
        echo 1  > /proc/sys/vm/dirty_ratio
        echo 50 > /proc/sys/vm/dirty_writeback_centisecs
-       TESTDIR="$TSTDIR/quota_tst110"
+       TESTDIR="$DIR/$tdir"
        local RV=0
 
        #do the test
@@ -820,12 +768,12 @@ test_11() {
        i=1
        while [ $i -le $REPS ]; do
 	   echo "test: cycle($i of $REPS) start at $(date)"
-	   mkdir -p $TESTDIR && chmod 777 $TESTDIR
+	   mkdir -p $DIR/$tdir && chmod 777 $DIR/$tdir
 	   echo -n "    create a file for uid "
 	   for j in `seq 1 30`; do
 	       echo -n "$j "
                # 30MB per dd for a total of 900MB (if space even permits)
-	       runas -u $j dd if=/dev/zero of=$TESTDIR/$j  bs=$BLK_SZ count=30720 > /dev/null 2>&1 &
+	       runas -u $j dd if=/dev/zero of=$DIR/$tdir/$tfile  bs=$BLK_SZ count=30720 > /dev/null 2>&1 &
 	   done
 	   echo ""
 	   PROCS=$(ps -ef | grep -v grep | grep "dd if /dev/zero of $TESTDIR" | wc -l)
@@ -834,11 +782,11 @@ test_11() {
 	     sleep 60
 	     MINS=$(($MINS+1))
 	     PROCS=$(ps -ef | grep -v grep | grep "dd if /dev/zero of $TESTDIR" | wc -l)
-	     USED=$(du -s $TESTDIR | awk '{print $1}')
+	     USED=$(du -s $DIR/$tdir | awk '{print $1}')
 	     PCT=$(($USED * 100 / $block_limit))
 	     echo "${i}/${REPS} ${PCT}% p${PROCS} t${MINS}  "
 	     if [ $USED -le $LAST_USED ]; then
-		 kill -9 $(ps -ef | grep "dd if /dev/zero of $TESTDIR" | grep -v grep | awk '{ print $2 }')
+		 kill -9 $(ps -ef | grep "dd if /dev/zero of $DIR/$tdir" | grep -v grep | awk '{ print $2 }')
 		 i=$REPS
 		 RV=2
 		 break
@@ -846,7 +794,7 @@ test_11() {
              LAST_USED=$USED
 	   done
 	   echo "    removing the test files..."
-	   rm -rf $TESTDIR
+	   rm -rf $DIR/$tdir/$tfile-0
 	   echo "cycle $i done at $(date)"
 	   i=$[$i+1]
        done
@@ -867,12 +815,17 @@ run_test 11 "run for fixing bug10912 ==========="
 
 # test a deadlock between quota and journal b=11693
 test_12() {
+	chmod 0777 $DIR/$tdir
+	chmod 0777 $DIR2/$tdir
+
+	[ "$(grep $DIR2 /proc/mounts)" ] || mount_client $DIR2 || \
+		{ skip "Need lustre mounted on $MOUNT2 " && retutn 0; }
 	LIMIT=$(( $BUNIT_SZ * $(($OSTCOUNT + 1)) * 10)) # 10 bunits each sever
-	TESTFILE="$TSTDIR/quota_tst120"
-	TESTFILE2="$TSTDIR2/quota_tst121"
+	TESTFILE="$DIR/$tdir/$tfile-0"
+	TESTFILE2="$DIR2/$tdir/$tfile-1"
 	
 	echo "   User quota (limit: $LIMIT kbytes)"
-	$LFS setquota -u $TSTUSR 0 $LIMIT 0 0 $MOUNT
+	$LFS setquota -u $TSTUSR 0 $LIMIT 0 0 $DIR
 	
 	$LFS setstripe $TESTFILE 65536 0 1
 	chown $TSTUSR.$TSTUSR $TESTFILE
@@ -919,7 +872,7 @@ test_12() {
 
 	rm -f $TESTFILE $TESTFILE2
 	
-	$LFS setquota -u $TSTUSR 0 0 0 0 $MOUNT		# clear user limit
+	$LFS setquota -u $TSTUSR 0 0 0 0 $DIR		# clear user limit
 }
 run_test 12 "test a deadlock between quota and journal ==="
 
@@ -927,10 +880,10 @@ run_test 12 "test a deadlock between quota and journal ==="
 test_13() {
 	# one OST * 10 + (mds + other OSTs)
 	LIMIT=$((BUNIT_SZ * 10 + (BUNIT_SZ * OSTCOUNT)))
-	TESTFILE="$TSTDIR/quota_tst13"
+	TESTFILE="$DIR/$tdir/$tfile"
 	
 	echo "   User quota (limit: $LIMIT kbytes)"
-	$LFS setquota -u $TSTUSR 0 $LIMIT 0 0 $MOUNT
+	$LFS setquota -u $TSTUSR 0 $LIMIT 0 0 $DIR
 	$SHOW_QUOTA_USER
 	
 	$LFS setstripe $TESTFILE 65536 0 1
@@ -979,17 +932,17 @@ test_13() {
 
 	rm -f $TESTFILE $TESTFILE.2
 	
-	$LFS setquota -u $TSTUSR 0 0 0 0 $MOUNT		# clear user limit
+	$LFS setquota -u $TSTUSR 0 0 0 0 $DIR		# clear user limit
 }
 run_test 13 "test multiple clients write block quota ==="
 
 check_if_quota_zero(){
-        line=`$LFS quota -$1 $2 $MOUNT | wc -l`
+        line=`$LFS quota -$1 $2 $DIR | wc -l`
 	for i in `seq 3 $line`; do
 	    for j in 3 4 6 7; do
-		tmp=`$LFS quota -$1 $2 $MOUNT | sed -n ${i}p | 
+		tmp=`$LFS quota -$1 $2 $DIR | sed -n ${i}p | 
                      awk  '{print $'"$j"'}'`
-		[ -n "$tmp" ] && [ $tmp -ne 0 ] && $LFS quota -$1 $2 $MOUNT && \
+		[ -n "$tmp" ] && [ $tmp -ne 0 ] && $LFS quota -$1 $2 $DIR && \
 		    error "quota on $1 isn't clean"
 	    done
 	done
@@ -1001,18 +954,16 @@ pre_test_14 () {
         cd $T_PWD; sh llmountcleanup.sh || error "llmountcleanup failed"
         sh llmount.sh
         pre_test
-        setup
         run_test 0 "reboot lustre"
 }
 
 pre_test_14 
 
 test_14(){ # b=12223 -- setting quota on root
-	mkdir $TSTDIR/$tdir || error "mkdir $TSTDIR/$tdir failed"
-	TESTFILE="$TSTDIR/$tdir/$tfile"
+	TESTFILE="$DIR/$tdir/$tfile"
 
 	# out of root's file and block quota
-        $LFS setquota -u root 10 10 10 10 $MOUNT
+        $LFS setquota -u root 10 10 10 10 $DIR
 	createmany -m ${TESTFILE} 20 || \
 	    error "unexpected: user(root) create files failly!"
 	dd if=/dev/zero of=$TESTFILE bs=4k count=4096 || \
@@ -1022,13 +973,13 @@ test_14(){ # b=12223 -- setting quota on root
 	    error "unexpected: user(quota_usr) write a file successfully!"	
 
 	# trigger the llog
-	chmod 777 $MOUNT
+	chmod 777 $DIR
 	for i in `seq 1 10`; do $RUNAS touch ${TESTFILE}a_$i; done 
 	for i in `seq 1 10`; do $RUNAS rm -f ${TESTFILE}a_$i; done 
 
 	# do the check
 	dmesg | tail | grep "\-122" |grep llog_obd_origin_add && error "err -122 not found in dmesg" 
-	$LFS setquota -u root 0 0 0 0 $MOUNT
+	$LFS setquota -u root 0 0 0 0 $DIR
 	#check_if_quota_zero u root
 
 	# clean 
@@ -1040,24 +991,16 @@ run_test 14 "test setting quota on root ==="
 # turn off quota
 test_99()
 {
-	$LFS quotaoff $MOUNT
+	$LFS quotaoff $DIR
 	return 0
 }
 run_test 99 "Quota off ==============================="
 
 
 log "cleanup: ======================================================"
-if [ "`mount | grep ^$NAME`" ]; then
-	rm -fr $TSTDIR
-	    post_test
-	# delete test user and group
-	userdel "$TSTUSR"
-	userdel "$TSTUSR2"
-	if [ "$I_MOUNTED" = "yes" ]; then
-		cd $ORIG_PWD && (sh llmountcleanup.sh || error "llmountcleanup failed")
-	fi
-fi
-
+cd $ORIG_PWD
+post_test
+check_and_cleanup_lustre
 echo '=========================== finished ==============================='
 [ -f "$QUOTALOG" ] && cat $QUOTALOG && grep -q FAIL $QUOTALOG && exit 1 || true
 echo "$0: completed"
