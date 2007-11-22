@@ -1332,10 +1332,8 @@ static int ost_handle_quotacheck(struct ptlrpc_request *req)
                 RETURN(-EPROTO);
 
         rc = lustre_pack_reply(req, 1, NULL, NULL);
-        if (rc) {
-                CERROR("ost: out of memory while packing quotacheck reply\n");
-                RETURN(-ENOMEM);
-        }
+        if (rc)
+                RETURN(rc);
 
         req->rq_status = obd_quotacheck(req->rq_export, oqctl);
         RETURN(0);

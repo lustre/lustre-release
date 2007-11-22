@@ -387,6 +387,7 @@ EXPORT_SYMBOL(lustre_pack_reply_v2);
 int lustre_pack_reply(struct ptlrpc_request *req, int count, int *lens,
                       char **bufs)
 {
+        int rc = 0;
         int size[] = { sizeof(struct ptlrpc_body) };
 
         if (!lens) {
@@ -400,16 +401,22 @@ int lustre_pack_reply(struct ptlrpc_request *req, int count, int *lens,
         switch (req->rq_reqmsg->lm_magic) {
         case LUSTRE_MSG_MAGIC_V1:
         case LUSTRE_MSG_MAGIC_V1_SWABBED:
-                return lustre_pack_reply_v1(req, count - 1, lens + 1,
-                                            bufs ? bufs + 1 : NULL);
+                rc = lustre_pack_reply_v1(req, count - 1, lens + 1,
+                                          bufs ? bufs + 1 : NULL);
+                break;
         case LUSTRE_MSG_MAGIC_V2:
         case LUSTRE_MSG_MAGIC_V2_SWABBED:
-                return lustre_pack_reply_v2(req, count, lens, bufs);
+                rc = lustre_pack_reply_v2(req, count, lens, bufs);
+                break;
         default:
                 LASSERTF(0, "incorrect message magic: %08x\n",
                          req->rq_reqmsg->lm_magic);
-                return -EINVAL;
+                rc = -EINVAL;
         }
+        if (rc != 0)
+                CERROR("lustre_pack_reply failed: rc=%d size=%d\n", rc,
+                       lustre_msg_size(req->rq_reqmsg->lm_magic, count, lens));
+        return rc;
 }
 
 void *lustre_msg_buf_v1(void *msg, int n, int min_size)

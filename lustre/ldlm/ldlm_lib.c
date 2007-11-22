@@ -1983,10 +1983,9 @@ int target_handle_dqacq_callback(struct ptlrpc_request *req)
         ENTRY;
 
         rc = lustre_pack_reply(req, 2, repsize, NULL);
-        if (rc) {
-                CERROR("packing reply failed!: rc = %d\n", rc);
+        if (rc)
                 RETURN(rc);
-        }
+
         LASSERT(req->rq_export);
 
         /* fixed for bug10707 */
