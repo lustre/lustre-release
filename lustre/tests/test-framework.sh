@@ -33,8 +33,8 @@ usage() {
 
 print_summary () {
     [ -n "$ONLY" ] && echo "WARNING: ONLY is set to ${ONLY}."
-    local form="%-13s %-15s %s\n"
-    echo "$(printf "$form" "status" "script" "skipped")"
+    local form="%-13s %-17s %s\n"
+    echo "$(printf "$form" "status" "script" "skipped tests")"
     echo "------------------------------------------------------------------------------------"
     for O in $TESTSUITE_LIST; do
         local skipped=""
