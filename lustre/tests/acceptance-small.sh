@@ -25,8 +25,12 @@ fi
 [ "$DEBUG_OFF" ] || DEBUG_OFF="eval sysctl -w lnet.debug=\"$DEBUG_LVL\""
 [ "$DEBUG_ON" ] || DEBUG_ON="eval sysctl -w lnet.debug=0x33f0484"
 
+export TESTSUITE_LIST="RUNTESTS SANITY DBENCH BONNIE IOZONE FSX SANITYN LFSCK LIBLUSTRE REPLAY_SINGLE CONF_SANITY RECOVERY_SMALL REPLAY_OST_SINGLE REPLAY_DUAL INSANITY SANITY_QUOTA"
+
 if [ "$ACC_SM_ONLY" ]; then
-    export RUNTESTS="no" SANITY="no" DBENCH="no" BONNIE="no" IOZONE="no" FSX="no" SANITYN="no" LFSCK="no" LIBLUSTRE="no" REPLAY_SINGLE="no" CONF_SANITY="no" RECOVERY_SMALL="no" REPLAY_OST_SINGLE="no" REPLAY_DUAL="no" INSANITY="no" SANITY_QUOTA="no"
+    for O in $TESTSUITE_LIST; do
+	export ${O}="no"
+    done
     for O in $ACC_SM_ONLY; do
 	O=`echo $O | tr "[:lower:]" "[:upper:]"`
 	export ${O}="yes"
@@ -72,6 +76,7 @@ for NAME in $CONFIGS; do
 		bash runtests
 		$CLEANUP
 		$SETUP
+		RUNTESTS="done"
 	fi
 
 	if [ "$SANITY" != "no" ]; then
@@ -79,6 +84,7 @@ for NAME in $CONFIGS; do
 		bash sanity.sh
 		$CLEANUP
 		$SETUP
+		SANITY="done"
 	fi
 
 	which dbench > /dev/null 2>&1 || DBENCH=no
@@ -101,6 +107,7 @@ for NAME in $CONFIGS; do
 			$SETUP
 		fi
 		rm -f /mnt/lustre/`hostname`/client.txt
+		DBENCH="done"
 	fi
 
 	chown $UID $MOUNT
@@ -116,6 +123,7 @@ for NAME in $CONFIGS; do
 		$DEBUG_ON
 		$CLEANUP
 		$SETUP
+		BONNNIE="done"
 	fi
 
 	export O_DIRECT
@@ -171,6 +179,7 @@ for NAME in $CONFIGS; do
 			VER=`iozone -v | awk '/Revision:/ { print $3 }'`
 			echo "iozone $VER too old for multi-thread test"
 		fi
+		IOZONE="done"
 	fi
 
 	if [ "$FSX" != "no" ]; then
@@ -183,6 +192,7 @@ for NAME in $CONFIGS; do
 		$DEBUG_ON
 		$CLEANUP
 		$SETUP
+		FSX="done"
 	fi	
 
 	if [ "$SANITYN" != "no" ]; then
@@ -198,6 +208,7 @@ for NAME in $CONFIGS; do
 		$DEBUG_ON
 		$CLEANUP
 		$SETUP
+		SANITYN="done"
 	fi
 
 	if [ "$LFSCK" != "no" -a -x /usr/sbin/lfsck ]; then
@@ -214,6 +225,7 @@ for NAME in $CONFIGS; do
 		else
 			echo "remote OST, skipping test"
 		fi
+		LFSCK="done"
 	fi
 
 	if [ "$LIBLUSTRE" != "no" ]; then
@@ -237,6 +249,7 @@ for NAME in $CONFIGS; do
 		fi
 		$CLEANUP
 		#$SETUP
+		LIBLUSTRE="done"
 	fi
 
 	$CLEANUP
@@ -245,36 +258,43 @@ done
 if [ "$REPLAY_SINGLE" != "no" ]; then
         title replay-single
 	bash replay-single.sh
+	REPLAY_SINGLE="done"
 fi
 
 if [ "$CONF_SANITY" != "no" ]; then
         title conf-sanity
         bash conf-sanity.sh
+        CONF_SANITY="done"
 fi
 
 if [ "$RECOVERY_SMALL" != "no" ]; then
         title recovery-small
         bash recovery-small.sh
+        RECOVERY_SMALL="done"
 fi
 
 if [ "$REPLAY_OST_SINGLE" != "no" ]; then
         title replay-ost-single
         bash replay-ost-single.sh
+        REPLAY_OST_SINGLE="done"
 fi
 
 if [ "$REPLAY_DUAL" != "no" ]; then
         title replay-dual
         bash replay-dual.sh
+        REPLAY_DUAL="done"
 fi
 
 if [ "$INSANITY" != "no" ]; then
         title insanity
         bash insanity.sh -r
+        INSANITY="done"
 fi
 
 if [ "$SANITY_QUOTA" != "no" ]; then
         title sanity-quota
         bash sanity-quota.sh
+        SANITY_QUOTA="done"
 fi
 
 
@@ -282,5 +302,5 @@ RC=$?
 title FINISHED
 echo "Finished at `date` in $((`date +%s` - $STARTTIME))s"
 echo "Tests ran: $RANTEST"
-
+print_summary
 echo "$0: completed with rc $RC" && exit $RC
