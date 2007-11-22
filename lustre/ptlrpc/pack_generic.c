@@ -454,7 +454,11 @@ int lustre_pack_reply_flags(struct ptlrpc_request *req, int count, int *lens,
 int lustre_pack_reply(struct ptlrpc_request *req, int count, int *lens,
                       char **bufs)
 {
-        return lustre_pack_reply_flags(req, count, lens, bufs, 0);
+        int rc = lustre_pack_reply_flags(req, count, lens, bufs, 0);
+        if (rc != 0)
+                CERROR("lustre_pack_reply failed: rc=%d size=%d\n", rc,
+                       lustre_msg_size(req->rq_reqmsg->lm_magic, count, lens));
+        return rc;
 }
 
 

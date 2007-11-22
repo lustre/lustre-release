@@ -1091,10 +1091,9 @@ int ldlm_handle_convert(struct ptlrpc_request *req)
                                      LDLM_CONVERT - LDLM_FIRST_OPC);
 
         rc = lustre_pack_reply(req, 2, size, NULL);
-        if (rc) {
-                CERROR("out of memory\n");
-                RETURN(-ENOMEM);
-        }
+        if (rc)
+                RETURN(rc);
+
         dlm_rep = lustre_msg_buf(req->rq_repmsg, DLM_LOCKREPLY_OFF,
                                  sizeof(*dlm_rep));
         dlm_rep->lock_flags = dlm_req->lock_flags;
@@ -1201,10 +1200,8 @@ int ldlm_handle_cancel(struct ptlrpc_request *req)
                                      LDLM_CANCEL - LDLM_FIRST_OPC);
 
         rc = lustre_pack_reply(req, 1, NULL, NULL);
-        if (rc) {
-                CERROR("out of memory\n");
-                RETURN(-ENOMEM);
-        }
+        if (rc)
+                RETURN(rc);
 
         if (!ldlm_request_cancel(req, dlm_req, 0))
                 req->rq_status = ESTALE;

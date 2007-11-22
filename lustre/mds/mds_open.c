@@ -817,6 +817,7 @@ int mds_pin(struct ptlrpc_request *req, int offset)
         rc = lustre_pack_reply(req, 2, size, NULL);
         if (rc)
                 RETURN(rc);
+
         repbody = lustre_msg_buf(req->rq_repmsg, REPLY_REC_OFF,
                                  sizeof(*repbody));
 
@@ -1442,13 +1443,11 @@ int mds_close(struct ptlrpc_request *req, int offset)
         ENTRY;
 
         rc = lustre_pack_reply(req, 4, repsize, NULL);
-        if (rc) {
-                CERROR("lustre_pack_reply: rc = %d\n", rc);
+        if (rc)
                 req->rq_status = rc;
                 /* continue on to drop local open even if we can't send reply */
-        } else {
+        else
                 MDS_CHECK_RESENT(req, mds_reconstruct_generic(req));
-        }
 
         CDEBUG(D_INODE, "close req->rep_len %d mdsize %d cookiesize %d\n",
                req->rq_replen,
@@ -1533,10 +1532,8 @@ int mds_done_writing(struct ptlrpc_request *req, int offset)
         }
 
         rc = lustre_pack_reply(req, 2, size, NULL);
-        if (rc) {
-                CERROR("lustre_pack_reply: rc = %d\n", rc);
+        if (rc)
                 req->rq_status = rc;
-        }
 
         RETURN(0);
 }

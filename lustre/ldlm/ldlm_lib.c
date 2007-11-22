@@ -994,12 +994,11 @@ static void abort_recovery_queue(struct obd_device *obd)
                 req->rq_status = -ENOTCONN;
                 req->rq_type = PTL_RPC_MSG_ERR;
                 rc = lustre_pack_reply(req, 1, NULL, NULL);
-                if (rc == 0) {
+                if (rc == 0)
                         ptlrpc_reply(req);
-                } else {
+                else
                         DEBUG_REQ(D_ERROR, req,
                                   "packing failed for abort-reply; skipping");
-                }
                 target_release_saved_req(req);
         }
 }
@@ -1605,10 +1604,9 @@ int target_handle_dqacq_callback(struct ptlrpc_request *req)
         ENTRY;
         
         rc = lustre_pack_reply(req, 2, repsize, NULL);
-        if (rc) {
-                CERROR("packing reply failed!: rc = %d\n", rc);
+        if (rc)
                 RETURN(rc);
-        }
+
         LASSERT(req->rq_export);
 
         /* fixed for bug10707 */

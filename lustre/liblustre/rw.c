@@ -196,10 +196,8 @@ static int llu_glimpse_callback(struct ldlm_lock *lock, void *reqp)
                 stripe = llu_lock_to_stripe_offset(inode, lock);
 
         rc = lustre_pack_reply(req, 2, size, NULL);
-        if (rc) {
-                CERROR("lustre_pack_reply: %d\n", rc);
+        if (rc)
                 GOTO(iput, rc);
-        }
 
         lvb = lustre_msg_buf(req->rq_repmsg, REPLY_REC_OFF, sizeof(*lvb));
         lvb->lvb_size = lli->lli_smd->lsm_oinfo[stripe]->loi_kms;

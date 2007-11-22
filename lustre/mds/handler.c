@@ -542,12 +542,10 @@ static int mds_getstatus(struct ptlrpc_request *req)
         int rc, size[2] = { sizeof(struct ptlrpc_body), sizeof(*body) };
         ENTRY;
 
+        OBD_FAIL_RETURN(OBD_FAIL_MDS_GETSTATUS_PACK, req->rq_status = -ENOMEM);
         rc = lustre_pack_reply(req, 2, size, NULL);
-        if (rc || OBD_FAIL_CHECK(OBD_FAIL_MDS_GETSTATUS_PACK)) {
-                CERROR("mds: out of memory for message\n");
-                req->rq_status = -ENOMEM;       /* superfluous? */
-                RETURN(-ENOMEM);
-        }
+        if (rc)
+                RETURN(req->rq_status = rc);
 
         body = lustre_msg_buf(req->rq_repmsg, REPLY_REC_OFF, sizeof(*body));
         memcpy(&body->fid1, &mds->mds_rootfid, sizeof(body->fid1));
@@ -873,7 +871,6 @@ static int mds_getattr_pack_msg(struct ptlrpc_request *req, struct inode *inode,
 
         rc = lustre_pack_reply(req, bufcount, size, NULL);
         if (rc) {
-                CERROR("lustre_pack_reply failed: rc %d\n", rc);
                 req->rq_status = rc;
                 RETURN(rc);
         }
@@ -1043,8 +1040,10 @@ static int mds_getattr_lock(struct ptlrpc_request *req, int offset,
         default:
                 mds_exit_ucred(&uc, mds);
                 if (!req->rq_packed_final) {
+                        int rc2 = lustre_pack_reply(req, 1, NULL, NULL);
+                        if (rc == 0)
+                                rc = rc2;
                         req->rq_status = rc;
-                        lustre_pack_reply(req, 1, NULL, NULL);
                 }
         }
         return rc;
@@ -1093,8 +1092,10 @@ out_pop:
         pop_ctxt(&saved, &obd->obd_lvfs_ctxt, &uc);
 out_ucred:
         if (!req->rq_packed_final) {
+                int rc2 = lustre_pack_reply(req, 1, NULL, NULL);
+                if (rc == 0)
+                        rc = rc2;
                 req->rq_status = rc;
-                lustre_pack_reply(req, 1, NULL, NULL);
         }
         mds_exit_ucred(&uc, mds);
         return rc;
@@ -1128,11 +1129,11 @@ static int mds_statfs(struct ptlrpc_request *req)
                           at_get(&svc->srv_at_estimate) / 1000) + 1);
         OBD_COUNTER_INCREMENT(obd, statfs);
 
+        if (OBD_FAIL_CHECK(OBD_FAIL_MDS_STATFS_PACK))
+                GOTO(out, rc = -ENOMEM);
         rc = lustre_pack_reply(req, 2, size, NULL);
-        if (rc || OBD_FAIL_CHECK(OBD_FAIL_MDS_STATFS_PACK)) {
-                CERROR("mds: statfs lustre_pack_reply failed: rc = %d\n", rc);
+        if (rc)
                 GOTO(out, rc);
-        }
 
         /* We call this so that we can cache a bit - 1 jiffie worth */
         rc = mds_obd_statfs(obd, lustre_msg_buf(req->rq_repmsg, REPLY_REC_OFF,
@@ -1162,11 +1163,11 @@ static int mds_sync(struct ptlrpc_request *req, int offset)
         if (body == NULL)
                 GOTO(out, rc = -EFAULT);
 
+        if (OBD_FAIL_CHECK(OBD_FAIL_MDS_SYNC_PACK))
+                GOTO(out, rc = -ENOMEM);
         rc = lustre_pack_reply(req, 2, size, NULL);
-        if (rc || OBD_FAIL_CHECK(OBD_FAIL_MDS_SYNC_PACK)) {
-                CERROR("fsync lustre_pack_reply failed: rc = %d\n", rc);
+        if (rc)
                 GOTO(out, rc);
-        }
 
         if (body->fid1.id == 0) {
                 /* a fid of zero is taken to mean "sync whole filesystem" */
@@ -1215,14 +1216,10 @@ static int mds_readpage(struct ptlrpc_request *req, int offset)
         struct lvfs_ucred uc = {NULL,};
         ENTRY;
 
-        if (OBD_FAIL_CHECK(OBD_FAIL_MDS_READPAGE_PACK))
-                RETURN(-ENOMEM);
-
+        OBD_FAIL_RETURN(OBD_FAIL_MDS_READPAGE_PACK, -ENOMEM);
         rc = lustre_pack_reply(req, 2, size, NULL);
-        if (rc) {
-                CERROR("error packing readpage reply: rc %d\n", rc);
+        if (rc)
                 GOTO(out, rc);
-        }
 
         body = lustre_swab_reqbuf(req, offset, sizeof(*body),
                                   lustre_swab_mds_body);
@@ -1359,6 +1356,7 @@ static int mds_set_info_rpc(struct obd_export *exp, struct ptlrpc_request *req)
         rc = lustre_pack_reply(req, 1, NULL, NULL);
         if (rc)
                 RETURN(rc);
+
         lustre_msg_set_status(req->rq_repmsg, 0);
 
         if (KEY_IS("read-only")) {
@@ -1390,10 +1388,8 @@ static int mds_handle_quotacheck(struct ptlrpc_request *req)
                 RETURN(-EPROTO);
 
         rc = lustre_pack_reply(req, 1, NULL, NULL);
-        if (rc) {
-                CERROR("mds: out of memory while packing quotacheck reply\n");
+        if (rc)
                 RETURN(rc);
-        }
 
         req->rq_status = obd_quotacheck(req->rq_export, oqctl);
         RETURN(0);
@@ -2415,7 +2411,8 @@ static int mds_intent_policy(struct ldlm_namespace *ns,
         if (lustre_msg_bufcount(req->rq_reqmsg) <= DLM_INTENT_IT_OFF) {
                 /* No intent was provided */
                 rc = lustre_pack_reply(req, 2, repsize, NULL);
-                LASSERT(rc == 0);
+                if (rc)
+                        RETURN(rc);
                 RETURN(0);
         }
 

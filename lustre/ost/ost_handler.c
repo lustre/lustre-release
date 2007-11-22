@@ -991,6 +991,7 @@ static int ost_brw_write(struct ptlrpc_request *req, struct obd_trans_info *oti)
         rc = lustre_pack_reply(req, 3, size, NULL);
         if (rc != 0)
                 GOTO(out, rc);
+
         OBD_FAIL_TIMEOUT(OBD_FAIL_OST_BRW_PAUSE_PACK, obd_fail_val);
         rcs = lustre_msg_buf(req->rq_repmsg, REPLY_REC_OFF + 1,
                              niocount * sizeof(*rcs));
@@ -1334,10 +1335,8 @@ static int ost_handle_quotacheck(struct ptlrpc_request *req)
                 RETURN(-EPROTO);
 
         rc = lustre_pack_reply(req, 1, NULL, NULL);
-        if (rc) {
-                CERROR("ost: out of memory while packing quotacheck reply\n");
-                RETURN(-ENOMEM);
-        }
+        if (rc)
+                RETURN(rc);
 
         req->rq_status = obd_quotacheck(req->rq_export, oqctl);
         RETURN(0);

@@ -14,6 +14,11 @@ tbd         Cluster File Systems, Inc. <info@clusterfs.com>
        * Recommended e2fsprogs version: 1.40.2-cfs4
        * Note that reiserfs quotas are disabled on SLES 10 in this kernel.
 
+Severity   : normal
+Bugzilla   : 11791
+Description: Inconsistent usage of lustre_pack_reply()
+Details    : Standardize the usage of lustre_pack_reply() such that it
+             always generate a CERROR on failure.
 
 Severity   : normal
 Frequency  : very rare
