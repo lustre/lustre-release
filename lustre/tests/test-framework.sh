@@ -1,7 +1,7 @@
 #!/bin/bash
 # vim:expandtab:shiftwidth=4:softtabstop=4:tabstop=4:
 
-trap 'echo "test-framework exiting on error"' ERR
+trap 'print_summary && echo "test-framework exiting on error"' ERR
 set -e
 #set -x
 
@@ -29,6 +29,33 @@ usage() {
     echo "       -r: reformat"
 
     exit
+}
+
+print_summary () {
+    [ -n "$ONLY" ] && echo "WARNING: ONLY is set to ${ONLY}."
+    local form="%-13s %-15s %s\n"
+    echo "$(printf "$form" "status" "script" "skipped")"
+    echo "------------------------------------------------------------------------------------"
+    for O in $TESTSUITE_LIST; do
+        local skipped=""
+        local o=$(echo $O | tr "[:upper:]" "[:lower:]")
+        o=${o//_/-}
+        o=${o//tyn/tyN}
+        local log=${TMP}/${o}.log 
+        [ -f $log ] && skipped=$(cat $log | awk '{ printf " %s", $3 }' | sed 's/test_//g')
+        [ "${!O}" = "done" ] && \
+            echo "$(printf "$form" "Done" "$O" "$skipped")"
+    done
+
+    for O in $TESTSUITE_LIST; do
+        [ "${!O}" = "no" ] && \
+            echo "$(printf "$form" "Skipped" "$O" "")"
+    done
+
+    for O in $TESTSUITE_LIST; do
+        [ "${!O}" = "done" -o "${!O}" = "no" ] || \
+            echo "$(printf "$form" "UNFINISHED" "$O" "")"
+    done
 }
 
 init_test_env() {
