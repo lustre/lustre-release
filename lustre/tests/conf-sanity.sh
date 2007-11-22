@@ -1423,5 +1423,31 @@ test_36() { # 12743
 }
 run_test 36 "df report consistency on OSTs with different block size"
 
+test_37() {
+	LOCAL_MDSDEV="$TMP/mdt.img"
+	SYM_MDSDEV="$TMP/sym_mdt.img"
+
+	echo "MDS :     $LOCAL_MDSDEV"
+	echo "SYMLINK : $SYM_MDSDEV"
+	rm -f $LOCAL_MDSDEV
+
+	touch $LOCAL_MDSDEV
+	mkfs.lustre --reformat --fsname=lustre --mdt --mgs --device-size=9000 $LOCAL_MDSDEV
+		|| error "mkfs.lustre $LOCAL_MDSDEV failed"
+	ln -s $LOCAL_MDSDEV $SYM_MDSDEV
+
+	echo "mount symlink device - $SYM_MDSDEV"
+
+	mount_op=`mount -v -t lustre -o loop $SYM_MDSDEV ${MOUNT%/*}/mds 2>&1 | grep "unable to set tunable"`
+	umount -d ${MOUNT%/*}/mds
+	rm -f $LOCAL_MDSDEV $SYM_MDSDEV
+
+	if [ -n "$mount_op" ]; then
+		error "**** FAIL: set tunables failed for symlink device"
+	fi
+	return 0
+}
+run_test 37 "verify set tunables works for symlink device"
+
 equals_msg `basename $0`: test complete
 [ -f "$TESTSUITELOG" ] && cat $TESTSUITELOG || true
