@@ -12,10 +12,12 @@ set -e
 ONLY=${ONLY:-"$*"}
 
 # These tests don't apply to mountconf
-MOUNTCONFSKIP="9 10 11 12 13 13b 14 15"
+MOUNTCONFSKIP="10 11 12 13 13b 14 15"
+# bug number for skipped test: 13739   13710
+HEAD_EXCEPT="                  32a 32b 33"
 
-# bug number for skipped test:                     2661 13709 10510 13710 12743
-ALWAYS_EXCEPT=" $CONF_SANITY_EXCEPT $MOUNTCONFSKIP 16   22    23    33    36"
+# bug number for skipped test:                                  13709 10510 12743
+ALWAYS_EXCEPT=" $CONF_SANITY_EXCEPT $MOUNTCONFSKIP $HEAD_EXCEPT 22    23    36"
 # UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
 
 SRCDIR=`dirname $0`
@@ -613,6 +615,7 @@ test_15() {
 }
 run_test 15 "zconf-mount without /sbin/mount.lustre (should return error)"
 
+# LOGS/PENDING do not exist anymore since CMD3
 test_16() {
         TMPMTPT="${MOUNT%/*}/conf16"
 
@@ -625,41 +628,27 @@ test_16() {
 
         [ -f "$MDSDEV" ] && LOOPOPT="-o loop"
 
-        log "change the mode of $MDSDEV/OBJECTS,LOGS,PENDING to 555"
+        log "change the mode of $MDSDEV/OBJECTS to 555"
         do_facet mds "mkdir -p $TMPMTPT &&
                       mount $LOOPOPT -t $FSTYPE $MDSDEV $TMPMTPT &&
-                      chmod 555 $TMPMTPT/{OBJECTS,LOGS,PENDING} &&
+                      chmod 555 $TMPMTPT/OBJECTS &&
                       umount $TMPMTPT" || return $?
 
-        log "mount Lustre to change the mode of OBJECTS/LOGS/PENDING, then umount Lustre"
+        log "mount Lustre to change the mode of OBJECTS, then umount Lustre"
 	setup
         check_mount || return 41
         cleanup || return $?
 
-        log "read the mode of OBJECTS/LOGS/PENDING and check if they has been changed properly"
+        log "read the mode of OBJECTS and check if they has been changed properly"
         EXPECTEDOBJECTSMODE=`do_facet mds "debugfs -R 'stat OBJECTS' $MDSDEV 2> /dev/null" | grep 'Mode: ' | sed -e "s/.*Mode: *//" -e "s/ *Flags:.*//"`
-        EXPECTEDLOGSMODE=`do_facet mds "debugfs -R 'stat LOGS' $MDSDEV 2> /dev/null" | grep 'Mode: ' | sed -e "s/.*Mode: *//" -e "s/ *Flags:.*//"`
-        EXPECTEDPENDINGMODE=`do_facet mds "debugfs -R 'stat PENDING' $MDSDEV 2> /dev/null" | grep 'Mode: ' | sed -e "s/.*Mode: *//" -e "s/ *Flags:.*//"`
 
         if [ "$EXPECTEDOBJECTSMODE" = "0777" ]; then
                 log "Success:Lustre change the mode of OBJECTS correctly"
         else
                 error "Lustre does not change mode of OBJECTS properly"
         fi
-
-        if [ "$EXPECTEDLOGSMODE" = "0777" ]; then
-                log "Success:Lustre change the mode of LOGS correctly"
-        else
-                error "Lustre does not change mode of LOGS properly"
-        fi
-
-        if [ "$EXPECTEDPENDINGMODE" = "0777" ]; then
-                log "Success:Lustre change the mode of PENDING correctly"
-        else
-                error "Lustre does not change mode of PENDING properly"
-        fi
 }
-run_test 16 "verify that lustre will correct the mode of OBJECTS/LOGS/PENDING"
+run_test 16 "verify that lustre will correct the mode of OBJECTS"
 
 test_17() {
         if [ ! -e "$MDSDEV" ]; then
@@ -1092,6 +1081,7 @@ test_32a() {
         [ -z "$TUNEFS" ] && skip "No tunefs" && return
 	local DISK1_4=$LUSTRE/tests/disk1_4.zip
         [ ! -r $DISK1_4 ] && skip "Cant find $DISK1_4, skipping" && return
+	mkdir -p $TMP/$tdir
 	unzip -o -j -d $TMP/$tdir $DISK1_4 || { skip "Cant unzip $DISK1_4, skipping" && return ; }
 	load_modules
 	sysctl lnet.debug=$PTLDEBUG
@@ -1153,6 +1143,7 @@ test_32b() {
         [ -z "$TUNEFS" ] && skip "No tunefs" && return
 	local DISK1_4=$LUSTRE/tests/disk1_4.zip
         [ ! -r $DISK1_4 ] && skip "Cant find $DISK1_4, skipping" && return
+	mkdir -p $TMP/$tdir
 	unzip -o -j -d $TMP/$tdir $DISK1_4 || { skip "Cant unzip $DISK1_4, skipping" && return ; }
 	load_modules
 	sysctl lnet.debug=$PTLDEBUG
