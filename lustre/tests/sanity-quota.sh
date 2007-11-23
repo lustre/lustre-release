@@ -476,12 +476,38 @@ test_4() {
 
 	test_file_soft $TESTFILE $LIMIT $GRACE
 	$LFS setquota -g $TSTUSR 0 0 0 0 $MOUNT
-	
+
 	# cleanup
 	$LFS setquota -t -u $MAX_DQ_TIME $MAX_IQ_TIME $MOUNT
 	$LFS setquota -t -g $MAX_DQ_TIME $MAX_IQ_TIME $MOUNT
 }
 run_test 4 "File soft limit (start timer, timer goes off, stop timer) ==="
+
+test_4a() {
+        GR_STR1="1w3d"
+        GR_STR2="1000s"
+        GR_STR3="5s"
+        GR_STR4="1w2d3h4m5s"
+        GR_STR5="5c"
+        GR_STR6="1111111111111111"
+
+        # test of valid grace strings handling
+        echo "  Valid grace strings test"
+        $LFS setquota -t -u $GR_STR1 $GR_STR2 $MOUNT
+        $LFS quota -u -t $MOUNT | grep "Block grace time: $GR_STR1"
+        $LFS setquota -t -g $GR_STR3 $GR_STR4 $MOUNT
+        $LFS quota -g -t $MOUNT | grep "Inode grace time: $GR_STR4"
+
+        # test of invalid grace strings handling
+        echo "  Invalid grace strings test"
+        ! $LFS setquota -t -u $GR_STR4 $GR_STR5 $MOUNT
+        ! $LFS setquota -t -g $GR_STR4 $GR_STR6 $MOUNT
+
+        # cleanup
+        $LFS setquota -t -u $MAX_DQ_TIME $MAX_IQ_TIME $MOUNT
+        $LFS setquota -t -g $MAX_DQ_TIME $MAX_IQ_TIME $MOUNT
+}
+run_test 4a "Grace time strings handling ==="
 
 # chown & chgrp (chown & chgrp successfully even out of block/file quota)
 test_5() {
@@ -500,7 +526,7 @@ test_5() {
 	dd if=/dev/zero of=$TSTDIR/quota_tst50_1 bs=$BLK_SZ count=$((BLIMIT+1)) || error "write failure, expect success"
 
 	echo "  Chown files to $TSTUSR.$TSTUSR ..."
-	for i in `seq 0 ILIMIT`; do
+	for i in `seq 0 $ILIMIT`; do
 		chown $TSTUSR.$TSTUSR $TSTDIR/quota_tst50_$i || \
 			error "chown failure, but expect success"
 	done

@@ -1268,6 +1268,65 @@ do {                                                                    \
         }                                                               \
 } while (0)
 
+#define ADD_OVERFLOW(a,b) ((a + b) < a) ? (a = ULONG_MAX) : (a = a + b)
+
+/* Convert format time string "XXwXXdXXhXXmXXs" into seconds value
+ * returns the value or ULONG_MAX on integer overflow or incorrect format
+ * Notes:
+ *        1. the order of specifiers is arbitrary (may be: 5w3s or 3s5w)
+ *        2. specifiers may be encountered multiple times (2s3s is 5 seconds)
+ *        3. empty integer value is interpreted as 0
+ */
+ 
+static unsigned long str2sec(const char* timestr) {
+        const char spec[] = "smhdw";
+        const unsigned long mult[] = {1, 60, 60*60, 24*60*60, 7*24*60*60};
+        unsigned long val = 0;
+        char *tail;
+
+        if (strpbrk(timestr, spec) == NULL) {
+                /* no specifiers inside the time string,
+                   should treat it as an integer value */
+                val = strtoul(timestr, &tail, 10);
+                return *tail ? ULONG_MAX : val;
+        }
+
+        /* format string is XXwXXdXXhXXmXXs */
+        while (*timestr) {
+                unsigned long v;
+                int ind;
+                char* ptr;
+
+                v = strtoul(timestr, &tail, 10);
+                if (v == ULONG_MAX || *tail == '\0')
+                        /* value too large (ULONG_MAX or more) 
+                           or missing specifier */
+                        goto error;
+
+                ptr = strchr(spec, *tail);
+                if (ptr == NULL)
+                        /* unknown specifier */
+                        goto error;
+
+                ind = ptr - spec;
+
+                /* check if product will overflow the type */
+                if (!(v < ULONG_MAX / mult[ind]))
+                        goto error;
+
+                ADD_OVERFLOW(val, mult[ind] * v);
+                if (val == ULONG_MAX)
+                        goto error;
+
+                timestr = tail + 1;
+        }
+
+        return val;
+
+error:
+        return ULONG_MAX;
+}
+
 int lfs_setquota(int argc, char **argv)
 {
         int c;
@@ -1333,8 +1392,14 @@ int lfs_setquota(int argc, char **argv)
                 if (optind + 3 != argc)
                         return CMD_HELP;
 
-                ARG2INT(dqi->dqi_bgrace, argv[optind++], "block-grace");
-                ARG2INT(dqi->dqi_igrace, argv[optind++], "inode-grace");
+                if ((dqi->dqi_bgrace = str2sec(argv[optind++])) == ULONG_MAX) {
+                        fprintf(stderr, "error: bad %s: %s\n", "block-grace", argv[optind - 1]);
+                        return CMD_HELP;
+                }
+                if ((dqi->dqi_igrace = str2sec(argv[optind++])) == ULONG_MAX) {
+                        fprintf(stderr, "error: bad %s: %s\n", "inode-grace", argv[optind - 1]);
+                        return CMD_HELP;
+                }
         }
 
         mnt = argv[optind];
@@ -1361,19 +1426,29 @@ static inline char *type2name(int check_type)
 }
 
 
-static void grace2str(time_t seconds,char *buf)
+/* Converts seconds value into format string
+ * result is returned in buf
+ * Notes:
+ *        1. result is in descenting order: 1w2d3h4m5s
+ *        2. zero fields are not filled (except for p. 3): 5d1s
+ *        3. zero seconds value is presented as "0s"
+ */
+static void sec2str(time_t seconds, char *buf)
 {
-        uint minutes, hours, days;
+        const char spec[] = "smhdw";
+        const unsigned long mult[] = {1, 60, 60*60, 24*60*60, 7*24*60*60};
+        unsigned long c;
+        char* tail = buf;
+        int i;
 
-        minutes = (seconds + 30) / 60;
-        hours = minutes / 60;
-        minutes %= 60;
-        days = hours / 24;
-        hours %= 24;
-        if (days >= 2)
-                snprintf(buf, 40, "%ddays", days);
-        else
-                snprintf(buf, 40, "%02d:%02d", hours + days * 24, minutes);
+        for (i = sizeof(mult) / sizeof(mult[0]) - 1 ; i >= 0; i--) {
+                c = seconds / mult[i];
+
+                if (c > 0 || (i == 0 && buf == tail))
+                        tail += snprintf(tail, 40-(tail-buf), "%lu%c", c, spec[i]);
+
+                seconds %= mult[i];
+        }
 }
 
 
@@ -1387,7 +1462,7 @@ static void diff2str(time_t seconds, char *buf, time_t now)
                 strcpy(buf, "none");
                 return;
         }
-        grace2str(seconds - now, buf);
+        sec2str(seconds - now, buf);
 }
 
 static void print_quota_title(char *name, struct if_quotactl *qctl)
@@ -1474,8 +1549,8 @@ static void print_quota(char *mnt, struct if_quotactl *qctl, int ost_only)
                 char bgtimebuf[40];
                 char igtimebuf[40];
 
-                grace2str(qctl->qc_dqinfo.dqi_bgrace, bgtimebuf);
-                grace2str(qctl->qc_dqinfo.dqi_igrace, igtimebuf);
+                sec2str(qctl->qc_dqinfo.dqi_bgrace, bgtimebuf);
+                sec2str(qctl->qc_dqinfo.dqi_igrace, igtimebuf);
                 printf("Block grace time: %s; Inode grace time: %s\n",
                        bgtimebuf, igtimebuf);
         }
