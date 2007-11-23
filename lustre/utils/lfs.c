@@ -1136,6 +1136,8 @@ static int lfs_quotaon(int argc, char **argv)
 
         if (qctl.qc_type)
                 qctl.qc_type--;
+        else /* by default, enable quota for both user & group */
+                qctl.qc_type = 0x02;
 
         if (argc == optind)
                 return CMD_HELP;
@@ -1183,6 +1185,8 @@ static int lfs_quotaoff(int argc, char **argv)
 
         if (qctl.qc_type)
                 qctl.qc_type--;
+        else /* by default, disable quota for both user & group */
+                qctl.qc_type = 0x02;
 
         if (argc == optind)
                 return CMD_HELP;
