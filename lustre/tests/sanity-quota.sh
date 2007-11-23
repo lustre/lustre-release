@@ -19,6 +19,7 @@ export PATH=$PWD/$SRCDIR:$SRCDIR:$PWD/$SRCDIR/../utils:$PATH:/sbin
 ONLY=${ONLY:-"$*"}
 ALWAYS_EXCEPT="$SANITY_QUOTA_EXCEPT"
 # UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
+[ "$SLOW" = "no" ] && EXCEPT="$EXCEPT  9 10 11"
 
 case `uname -r` in
 2.6*) FSTYPE=${FSTYPE:-ldiskfs};;
@@ -637,14 +638,21 @@ test_8() {
 run_test 8 "Run dbench with quota enabled ==========="
 
 # run for fixing bug10707, it needs a big room. test for 64bit
+KB=1024
+GB=$((KB * 1024 * 1024))
+FSIZE=$((OSTCOUNT * 9 / 2))
+# Use this as dd bs to decrease time
+# inode->i_blkbits = min(PTLRPC_MAX_BRW_BITS+1, LL_MAX_BLKSIZE_BITS);
+blksize=$((1 << 21)) # 2Mb
+
 test_9() {
 	chmod 0777 $DIR/$tdir
         lustrefs_size=`(echo 0; df -t lustre -P | awk '{print $4}') | tail -n 1`
-        size_file=$((1024 * 1024 * 9 / 2 * $OSTCOUNT))
-        echo "lustrefs_size:$lustrefs_size  size_file:$size_file"
-        if [ $lustrefs_size -lt $size_file ]; then
-	    skip "less than $size_file free"
-	    return 0;
+        size_file=$((FSIZE * GB))
+        echo "lustrefs_size:$lustrefs_size  size_file:$((size_file / KB))"
+        if [ $((lustrefs_size * KB)) -lt $size_file ]; then
+		skip "less than $size_file bytes free"
+	    	return 0;
         fi
 
 	set_blk_unitsz $((1024 * 100))
@@ -656,7 +664,7 @@ test_9() {
 
         TESTFILE="$DIR/$tdir/$tfile-0"
 
-        BLK_LIMIT=$((100 * 1024 * 1024)) # 100G
+        BLK_LIMIT=$((100 * KB * KB)) # 100G
         FILE_LIMIT=1000000
 
         echo "  Set enough high limit(block:$BLK_LIMIT; file: $FILE_LIMIT) for user: $TSTUSR"
@@ -672,22 +680,24 @@ test_9() {
         $SHOW_QUOTA_USER
         $SHOW_QUOTA_GROUP
 
-        echo "    Write the big file of $(($OSTCOUNT * 9 / 2 ))G ..."
-        $RUNAS dd if=/dev/zero of=$TESTFILE  bs=$BLK_SZ count=$size_file || error "(usr) write $((9 / 2 * $OSTCOUNT))G file failure, but expect success"
-	
+        echo "    Write the big file of $FSIZE G ..."
+        $RUNAS dd if=/dev/zero of=$TESTFILE  bs=$blksize count=$((size_file / blksize)) || \
+               error "(usr) write $FSIZE G file failure, but expect success"
+
         $SHOW_QUOTA_USER
         $SHOW_QUOTA_GROUP
 
-	echo "    delete the big file of $(($OSTCOUNT * 9 / 2))G..." 
+        echo "    delete the big file of $FSIZE G..." 
         $RUNAS rm -f $TESTFILE
 
         $SHOW_QUOTA_USER
         $SHOW_QUOTA_GROUP
 
-        echo "    write the big file of 2G..."
-        $RUNAS dd if=/dev/zero of=$TESTFILE  bs=$BLK_SZ count=$((1024 * 1024 * 2)) || error "(usr) write $((9 / 2 * $OSTCOUNT))G file failure, but expect seccess"
+        echo "    write the big file of 2 G..."
+        $RUNAS dd if=/dev/zero of=$TESTFILE  bs=$blksize count=$((2 * GB / blksize)) || \
+               error "(usr) write 2 G file failure, but expect seccess"
 
-        echo "    delete the big file of 2G..."
+        echo "    delete the big file of 2 G..."
         $RUNAS rm -f $TESTFILE 
         RC=$?
 
@@ -703,10 +713,10 @@ run_test 9 "run for fixing bug10707(64bit) ==========="
 test_10() {
 	chmod 0777 $DIR/$tdir
 	lustrefs_size=`(echo 0; df -t lustre -P | awk '{print $4}') | tail -n 1`
-	size_file=$((1024 * 1024 * 9 / 2 * $OSTCOUNT))
-	echo "lustrefs_size:$lustrefs_size  size_file:$size_file"
-	if [ $lustrefs_size -lt $size_file ]; then
-		skip "less than $size_file free"
+	size_file=$((FSIZE * GB))
+	echo "lustrefs_size:$lustrefs_size  size_file:$((size_file / KB))"
+	if [ $((lustrefs_size * KB)) -lt $size_file ]; then
+		skip "less than $size_file bytes free"
 		return 0;
 	fi
 
@@ -724,7 +734,7 @@ test_10() {
 
 	TESTFILE="$DIR/$tdir/$tfile-0"
 
-	BLK_LIMIT=$((100 * 1024 * 1024)) # 100G
+	BLK_LIMIT=$((100 * KB * KB)) # 100G
 	FILE_LIMIT=1000000
 
 	echo "  Set enough high limit(block:$BLK_LIMIT; file: $FILE_LIMIT) for user: $TSTUSR"
@@ -740,22 +750,24 @@ test_10() {
         $SHOW_QUOTA_USER
         $SHOW_QUOTA_GROUP
 
-	echo "    Write the big file of $(($OSTCOUNT * 9 / 2 ))G ..."
-	$RUNAS dd if=/dev/zero of=$TESTFILE  bs=$BLK_SZ count=$size_file || error "(usr) write $((9 / 2 * $OSTCOUNT))G file failure, but expect success"
+        echo "    Write the big file of $FSIZE G ..."
+        $RUNAS dd if=/dev/zero of=$TESTFILE  bs=$blksize count=$((size_file / blksize)) || \
+		error "(usr) write $FSIZE G file failure, but expect success"
+ 
+        $SHOW_QUOTA_USER
+        $SHOW_QUOTA_GROUP
+
+        echo "    delete the big file of $FSIZE G..."
+        $RUNAS rm -f $TESTFILE 
 
         $SHOW_QUOTA_USER
         $SHOW_QUOTA_GROUP
 
-	echo "    delete the big file of $(($OSTCOUNT * 9 / 2))G..."
-	$RUNAS rm -f $TESTFILE 
+	echo "    write the big file of 2 G..."
+	$RUNAS dd if=/dev/zero of=$TESTFILE  bs=$blksize count=$((2 * GB / blkzise)) || \
+		error "(usr) write 2 G file failure, but expect success" 
 
-        $SHOW_QUOTA_USER
-        $SHOW_QUOTA_GROUP
-
-	echo "    write the big file of 2G..."
-	$RUNAS dd if=/dev/zero of=$TESTFILE  bs=$BLK_SZ count=$((1024 * 1024 * 2)) || error "(usr) write $((9 / 2 * $OSTCOUNT))G file failure, but expect success" 
-
-	echo "    delete the big file of 2G..."
+	echo "    delete the big file of 2 G..."
 	$RUNAS rm -f $TESTFILE 
 
 	RC=$?
@@ -799,7 +811,7 @@ test_11() {
 	   for j in `seq 1 30`; do
 	       echo -n "$j "
                # 30MB per dd for a total of 900MB (if space even permits)
-	       runas -u $j dd if=/dev/zero of=$DIR/$tdir/$tfile  bs=$BLK_SZ count=30720 > /dev/null 2>&1 &
+	       runas -u $j dd if=/dev/zero of=$DIR/$tdir/$tfile  bs=$blksize count=15 > /dev/null 2>&1 &
 	   done
 	   echo ""
 	   PROCS=$(ps -ef | grep -v grep | grep "dd if /dev/zero of $TESTDIR" | wc -l)
