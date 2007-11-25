@@ -682,7 +682,7 @@ ksocknal_local_ipvec (lnet_ni_t *ni, __u32 *ipaddrs)
         read_lock (&ksocknal_data.ksnd_global_lock);
 
         nip = net->ksnn_ninterfaces;
-        LASSERT (nip < LNET_MAX_INTERFACES);
+        LASSERT (nip <= LNET_MAX_INTERFACES);
 
         /* Only offer interfaces for additional connections if I have 
          * more than one. */
