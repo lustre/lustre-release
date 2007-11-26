@@ -33,13 +33,15 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <sys/mount.h>
+#include <sys/utsname.h>
 
 #include <string.h>
 #include <getopt.h>
 #include <limits.h>
 
 #ifdef __linux__
-# include <linux/fs.h> /* for BLKGETSIZE64 */
+#include <linux/fs.h> /* for BLKGETSIZE64 */
+#include <linux/version.h>
 #endif
 #include <lustre_disk.h>
 #include <lustre_param.h>
@@ -71,7 +73,7 @@ struct mkfs_opts {
 static char *progname;
 static int verbose = 1;
 static int print_only = 0;
-
+static int failover = 0;
 
 void usage(FILE *out)
 {
@@ -379,6 +381,32 @@ int loop_format(struct mkfs_opts *mop)
         return ret;
 }
 
+/* Display the need for the latest e2fsprogs to be installed. make_backfs
+ * indicates if the caller is make_lustre_backfs() or not. */
+static void disp_old_e2fsprogs_msg(const char *feature, int make_backfs)
+{
+        static int msg_displayed;
+
+        if (msg_displayed) {
+                fprintf(stderr, "WARNING: e2fsprogs does not support %s "
+                        "feature.\n\n", feature);
+                return;
+        }
+
+        msg_displayed++;
+
+        fprintf(stderr, "WARNING: The e2fsprogs package currently installed on "
+                "your system does not support \"%s\" feature.\nPlease install "
+                "the latest version of e2fsprogs from http://www.clusterfs.com/"
+                "downloads/public/Lustre/Tools/e2fsprogs/\nto enable this "
+                "feature.\n", feature);
+
+        if (make_backfs)
+                fprintf(stderr, "Feature will not be enabled until e2fsprogs "
+                        "is updated and 'tune2fs -O %s %%{device}' "
+                        "is run.\n\n", feature);
+}
+
 /* Check whether the file exists in the device */
 static int file_in_dev(char *file_name, char *dev_name)
 {
@@ -407,12 +435,7 @@ static int file_in_dev(char *file_name, char *dev_name)
                 debugfs_cmd[i] = 0;
                 fprintf(stderr, "%s", debugfs_cmd);
                 if (strstr(debugfs_cmd, "unsupported feature")) {
-                        fprintf(stderr, "In all likelihood, the "
-                                "'unsupported feature' is 'extents', which "
-                                "older debugfs does not understand.\n"
-                                "Use e2fsprogs-1.40.2-cfs1 or later, available "
-                                "from ftp://ftp.lustre.org/pub/lustre/other/"
-                                "e2fsprogs/\n");
+                        disp_old_e2fsprogs_msg("an unknown", 0);
                 }
                 return -1;
         }
@@ -443,6 +466,90 @@ static int is_lustre_target(struct mkfs_opts *mop)
         return 0; /* The device is not a lustre target. */
 }
 
+/* Check if a certain feature is supported by e2fsprogs.
+ * Firstly we try to use "debugfs supported_features" command to check if
+ * the feature is supported. If this fails we try to set this feature with
+ * mke2fs to check for its support. */
+static int is_e2fsprogs_feature_supp(const char *feature)
+{
+        FILE *fp;
+        char cmd[PATH_MAX];
+        char imgname[] = "/tmp/test-img-XXXXXX";
+        int fd = -1;
+        int ret = 0;
+
+        snprintf(cmd, sizeof(cmd),
+                 "debugfs -c -R \"supported_features %s\" 2>&1", feature);
+
+        /* Using popen() instead of run_command() since debugfs does not return
+         * proper error code if command is not supported */
+        fp = popen(cmd, "r");
+        if (!fp) {
+                fprintf(stderr, "%s: %s\n", progname, strerror(errno));
+                return 0;
+        }
+        ret = fread(cmd, 1, sizeof(cmd), fp);
+        if (ret > 0) {
+                if (strstr(cmd, feature) && !(strstr(cmd, "Unknown")))
+                        return 0;
+        }
+
+        if ((fd = mkstemp(imgname)) < 0)
+                return -1;
+
+        snprintf(cmd, sizeof(cmd), "mke2fs -F -O %s %s 100 >/dev/null 2>&1",
+                 feature, imgname);
+        /* run_command() displays the output of mke2fs when it fails for
+         * some feature, so use system() directly */
+        ret = system(cmd);
+        if (fd >= 0)
+                remove(imgname);
+
+        return ret;
+}
+
+static void disp_old_kernel_msg(char *feature)
+{
+       fprintf(stderr, "WARNING: ldiskfs filesystem does not support \"%s\" "
+               "feature.\n\n", feature);
+}
+
+static void enable_default_backfs_features(struct mkfs_opts *mop)
+{
+        struct utsname uts;
+        int maj_high, maj_low, min;
+        int ret;
+
+        strscat(mop->mo_mkfsopts, " -O dir_index", sizeof(mop->mo_mkfsopts));
+
+        if (is_e2fsprogs_feature_supp("uninit_groups") == 0)
+                strscat(mop->mo_mkfsopts, ",uninit_groups",
+                        sizeof(mop->mo_mkfsopts));
+        else
+                disp_old_e2fsprogs_msg("uninit_groups", 1);
+
+        ret = uname(&uts);
+        if (ret)
+                return;
+
+        sscanf(uts.release, "%d.%d.%d", &maj_high, &maj_low, &min);
+        printf("%d %d %d\n", maj_high, maj_low, min);
+
+        /* Multiple mount protection is enabled only if failover node is
+         * specified and if kernel version is higher than 2.6.9 */
+        if (failover) {
+                if (KERNEL_VERSION(maj_high, maj_low, min) >=
+                    KERNEL_VERSION(2,6,9)) {
+                        if (is_e2fsprogs_feature_supp("mmp") == 0)
+                                strscat(mop->mo_mkfsopts, ",mmp",
+                                        sizeof(mop->mo_mkfsopts));
+                        else
+                                disp_old_e2fsprogs_msg("mmp", 1);
+                } else {
+                        disp_old_kernel_msg("mmp");
+                }
+        }
+}
 /* Build fs according to type */
 int make_lustre_backfs(struct mkfs_opts *mop)
 {
@@ -544,16 +651,8 @@ int make_lustre_backfs(struct mkfs_opts *mop)
                                 sizeof(mop->mo_mkfsopts));
                 }
 
-                if (strstr(mop->mo_mkfsopts, "-O") == NULL) {
-                        /* Enable hashed b-tree directory lookup in large dirs
-                           bz6224 */
-                        strscat(mop->mo_mkfsopts, " -O dir_index",
-                                sizeof(mop->mo_mkfsopts));
-                        /* ldiskfs2: do not initialize all groups. */
-                        if (mop->mo_ldd.ldd_mount_type == LDD_MT_LDISKFS2)
-                                strscat(mop->mo_mkfsopts, ",uninit_groups",
-                                        sizeof(mop->mo_mkfsopts));
-                }
+                if (strstr(mop->mo_mkfsopts, "-O") == NULL)
+                        enable_default_backfs_features(mop);
 
                 /* Allow reformat of full devices (as opposed to
                    partitions.)  We already checked for mounted dev. */
@@ -1112,6 +1211,7 @@ int parse_opts(int argc, char *const argv[], struct mkfs_opts *mop,
                                 return rc;
                         /* Must update the mgs logs */
                         mop->mo_ldd.ldd_flags |= LDD_F_UPDATE;
+                        failover = 1;
                         break;
                 }
                 case 'G':
