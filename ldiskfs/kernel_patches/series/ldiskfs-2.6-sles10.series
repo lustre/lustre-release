@@ -28,3 +28,4 @@ ext3-htree-comments.patch
 ext3-orphans-delay.patch
 ext3-iam-common.patch 
 ext3-iam-sles10.patch 
+ext3-mmp-2.6-sles10.patch
