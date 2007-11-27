@@ -661,7 +661,7 @@ test_50() {
 	rc=$?
 	echo writemany returned $rc
 	#these may fail because of eviction due to slow AST response.
-	return $rc
+	[ $rc -eq 0 ] || error_ignore 13652 "writemany returned rc $rc" || true
 }
 run_test 50 "failover MDS under load"
 
@@ -689,7 +689,7 @@ test_51() {
 	wait $CLIENT_PID 
 	rc=$?
 	echo writemany returned $rc
-	return $rc
+	[ $rc -eq 0 ] || error_ignore 13652 "writemany returned rc $rc" || true
 }
 run_test 51 "failover MDS during recovery"
 
