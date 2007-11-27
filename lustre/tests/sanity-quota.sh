@@ -977,11 +977,16 @@ run_test 13 "test multiple clients write block quota ==="
 check_if_quota_zero(){
         line=`$LFS quota -$1 $2 $DIR | wc -l`
 	for i in `seq 3 $line`; do
-	    for j in 3 4 6 7; do
+	    if [ $i -eq 3 ]; then
+		field="3 4 6 7"
+	    else
+		field="3 5"
+	    fi
+	    for j in $field; do
 		tmp=`$LFS quota -$1 $2 $DIR | sed -n ${i}p | 
                      awk  '{print $'"$j"'}'`
 		[ -n "$tmp" ] && [ $tmp -ne 0 ] && $LFS quota -$1 $2 $DIR && \
-		    error "quota on $1 isn't clean"
+		    error "quota on $2 isn't clean"
 	    done
 	done
 	echo "pass check_if_quota_zero"

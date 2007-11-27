@@ -877,7 +877,7 @@ static int mds_get_space(struct obd_device *obd, struct obd_quotactl *oqctl)
 {
         struct obd_quotactl *soqc;
         struct lvfs_run_ctxt saved;
-        int rc;
+        int rc, rc1;
         ENTRY;
 
         OBD_ALLOC_PTR(soqc);
@@ -889,25 +889,26 @@ static int mds_get_space(struct obd_device *obd, struct obd_quotactl *oqctl)
         soqc->qc_type = oqctl->qc_type;
 
         rc = obd_quotactl(obd->u.mds.mds_osc_exp, soqc);
-        if (rc)
-               GOTO(out, rc);
 
         oqctl->qc_dqblk.dqb_curspace = soqc->qc_dqblk.dqb_curspace;
 
         push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
         soqc->qc_dqblk.dqb_curspace = 0;
-        rc = fsfilt_quotactl(obd, obd->u.obt.obt_sb, soqc);
+        rc1 = fsfilt_quotactl(obd, obd->u.obt.obt_sb, soqc);
         pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
 
-        if (rc)
-                GOTO(out, rc);
-
         oqctl->qc_dqblk.dqb_curinodes += soqc->qc_dqblk.dqb_curinodes;
+        if (!rc1)
+                oqctl->qc_dqblk.dqb_valid |= QIF_INODES;
         oqctl->qc_dqblk.dqb_curspace += soqc->qc_dqblk.dqb_curspace;
-        EXIT;
-out:
+        if (!rc && !rc1)
+                oqctl->qc_dqblk.dqb_valid |= QIF_USAGE;
+
         OBD_FREE_PTR(soqc);
-        return rc;
+
+        if (!rc)
+                rc = rc1;
+        RETURN(rc);
 }
 
 int mds_get_dqblk(struct obd_device *obd, struct obd_quotactl *oqctl)
@@ -920,6 +921,7 @@ int mds_get_dqblk(struct obd_device *obd, struct obd_quotactl *oqctl)
         ENTRY;
 
         down(&mds->mds_qonoff_sem);
+        dqblk->dqb_valid = 0;
         if (qinfo->qi_files[oqctl->qc_type] == NULL)
                 GOTO(out, rc = -ESRCH);
 
@@ -934,6 +936,7 @@ int mds_get_dqblk(struct obd_device *obd, struct obd_quotactl *oqctl)
         dqblk->dqb_bsoftlimit = dquot->dq_dqb.dqb_bsoftlimit;
         dqblk->dqb_btime = dquot->dq_dqb.dqb_btime;
         dqblk->dqb_itime = dquot->dq_dqb.dqb_itime;
+        dqblk->dqb_valid |= QIF_LIMITS | QIF_TIMES;
         up(&dquot->dq_sem);
 
         lustre_dqput(dquot);

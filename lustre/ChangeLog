@@ -1656,6 +1656,15 @@ Description: Improve multi-block allocation algorithm to avoid fragmentation
 Details    : The mballoc3 code (ldiskfs2 only) adds new mechanisms to improve
 	     allocation locality and avoid filesystem fragmentation.
 
+Severity   : normal
+Frequency  : rare
+Bugzilla   : 14036
+Description: lfs quota fails with deactivated OSTS
+Details    : With this patch, three improvements are included:
+	     1. detete the softlimit in mds and osts when use "lfs quota".
+	     2. display the inaccurate data in the output of "lfs quota".
+	     3. try to get quota info when "lfs quota" is executed.
+
 ------------------------------------------------------------------------------
 
 2007-04-01  Cluster File Systems, Inc. <info@clusterfs.com>

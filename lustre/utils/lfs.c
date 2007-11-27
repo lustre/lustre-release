@@ -1529,7 +1529,11 @@ static void print_quota_title(char *name, struct if_quotactl *qctl)
                "files", "quota", "limit", "grace");
 }
 
-static void print_quota(char *mnt, struct if_quotactl *qctl, int ost_only)
+#define GENERAL_QUOTA_INFO 1
+#define MDS_QUOTA_INFO     2
+#define OST_QUOTA_INFO     3
+
+static void print_quota(char *mnt, struct if_quotactl *qctl, int type)
 {
         time_t now;
 
@@ -1577,10 +1581,16 @@ static void print_quota(char *mnt, struct if_quotactl *qctl, int ost_only)
 
                         if (bover)
                                 diff2str(dqb->dqb_btime, timebuf, now);
-
-                        sprintf(numbuf[0], LPU64, toqb(dqb->dqb_curspace));
-                        sprintf(numbuf[1], LPU64, dqb->dqb_bsoftlimit);
-                        sprintf(numbuf[2], LPU64, dqb->dqb_bhardlimit);
+                        sprintf(numbuf[0], (dqb->dqb_valid & QIF_SPACE) ?
+                                LPU64 : "["LPU64"]", toqb(dqb->dqb_curspace));
+                        if (type == GENERAL_QUOTA_INFO)
+                                sprintf(numbuf[1], (dqb->dqb_valid & QIF_BLIMITS)
+                                        ? LPU64 : "["LPU64"]",
+                                        dqb->dqb_bsoftlimit);
+                        else
+                                sprintf(numbuf[1], "%s", "");
+                        sprintf(numbuf[2], (dqb->dqb_valid & QIF_BLIMITS)
+                                ? LPU64 : "["LPU64"]", dqb->dqb_bhardlimit);
                         printf(" %7s%c %6s %7s %7s",
                                numbuf[0], bover ? '*' : ' ', numbuf[1],
                                numbuf[2], bover > 1 ? timebuf : "");
@@ -1588,10 +1598,17 @@ static void print_quota(char *mnt, struct if_quotactl *qctl, int ost_only)
                         if (iover)
                                 diff2str(dqb->dqb_itime, timebuf, now);
 
-                        sprintf(numbuf[0], LPU64, dqb->dqb_curinodes);
-                        sprintf(numbuf[1], LPU64, dqb->dqb_isoftlimit);
-                        sprintf(numbuf[2], LPU64, dqb->dqb_ihardlimit);
-                        if (!ost_only)
+                        sprintf(numbuf[0], (dqb->dqb_valid & QIF_INODES) ?
+                                LPU64 : "["LPU64"]", dqb->dqb_curinodes);
+                       if (type == GENERAL_QUOTA_INFO)
+                                sprintf(numbuf[1], (dqb->dqb_valid & QIF_ILIMITS)
+                                        ? LPU64 : "["LPU64"]",
+                                        dqb->dqb_isoftlimit);
+                        else
+                                sprintf(numbuf[1], "%s", "");
+                        sprintf(numbuf[2], (dqb->dqb_valid & QIF_ILIMITS) ?
+                                LPU64 : "["LPU64"]", dqb->dqb_ihardlimit);
+                        if (type != OST_QUOTA_INFO)
                                 printf(" %7s%c %6s %7s %7s",
                                        numbuf[0], iover ? '*' : ' ', numbuf[1],
                                        numbuf[2], iover > 1 ? timebuf : "");
@@ -1609,7 +1626,7 @@ static void print_quota(char *mnt, struct if_quotactl *qctl, int ost_only)
         }
 }
 
-static void print_mds_quota(char *mnt, struct if_quotactl *qctl)
+static int print_mds_quota(char *mnt, struct if_quotactl *qctl)
 {
         int rc;
 
@@ -1618,24 +1635,24 @@ static void print_mds_quota(char *mnt, struct if_quotactl *qctl)
         rc = llapi_quotactl(mnt, qctl);
         if (rc) {
                 fprintf(stderr, "quotactl failed: %s\n", strerror(errno));
-                return;
+                return rc;
         }
-        qctl->qc_dqblk.dqb_valid = 0;
 
-        print_quota(obd_uuid2str(&qctl->obd_uuid), qctl, 0);
+        print_quota(obd_uuid2str(&qctl->obd_uuid), qctl, MDS_QUOTA_INFO);
+        return 0;
 }
 
-static void print_lov_quota(char *mnt, struct if_quotactl *qctl)
+static int print_lov_quota(char *mnt, struct if_quotactl *qctl)
 {
         DIR *dir;
         struct obd_uuid *uuids = NULL, *uuidp;
         int obdcount = 1024;
-        int i, rc;
+        int i, rc, rc1=0;
 
         dir = opendir(mnt);
         if (!dir) {
                 fprintf(stderr, "open %s failed: %s\n", mnt, strerror(errno));
-                return;
+                return -ENOENT;
         }
 
         uuids = (struct obd_uuid *)malloc(INIT_ALLOC_NUM_OSTS *
@@ -1668,17 +1685,21 @@ retry_get_uuids:
                 qctl->qc_dqblk.dqb_valid = 0;
                 rc = llapi_quotactl(mnt, qctl);
                 if (rc) {
+                        if (!rc1)
+                                rc1 = rc;
                         fprintf(stderr, "%s quotactl failed: %s\n",
                                 uuidp->uuid, strerror(errno));
                         continue;
                 }
 
-                print_quota((char *)uuidp->uuid, qctl, 1);
+                print_quota((char *)uuidp->uuid, qctl, OST_QUOTA_INFO);
         }
 
 out:
         closedir(dir);
-        return;
+        if (!rc)
+                rc = rc1;
+        return rc;
 }
 
 static int lfs_quota(int argc, char **argv)
@@ -1689,7 +1710,7 @@ static int lfs_quota(int argc, char **argv)
                                     .qc_type = 0x01 };
         char *obd_type = (char *)qctl.obd_type;
         char *obd_uuid = (char *)qctl.obd_uuid.uuid;
-        int rc;
+        int rc, rc1 = 0, rc2 = 0, rc3 = 0;
 
         optind = 0;
         while ((c = getopt(argc, argv, "ugto:")) != -1) {
@@ -1738,13 +1759,9 @@ static int lfs_quota(int argc, char **argv)
 
         mnt = argv[optind];
 
-        rc = llapi_quotactl(mnt, &qctl);
-        if (rc) {
-                if (*obd_type)
-                        fprintf(stderr, "%s %s ", obd_type, obd_uuid);
-                fprintf(stderr, "quota failed: %s\n", strerror(errno));
-                return rc;
-        }
+        rc1 = llapi_quotactl(mnt, &qctl);
+        if (rc1 && *obd_type)
+                fprintf(stderr, "%s %s ", obd_type, obd_uuid);
 
         if (!name)
                 rc = id2name(&name, getuid(), qctl.qc_type);
@@ -1754,13 +1771,17 @@ static int lfs_quota(int argc, char **argv)
                 name = obd_uuid;
         }
 
-        print_quota(mnt, &qctl, 0);
+        print_quota(mnt, &qctl, GENERAL_QUOTA_INFO);
 
         if (!*obd_uuid && qctl.qc_cmd != LUSTRE_Q_GETINFO) {
-                print_mds_quota(mnt, &qctl);
-                print_lov_quota(mnt, &qctl);
+                rc2 = print_mds_quota(mnt, &qctl);
+                rc3 = print_lov_quota(mnt, &qctl);
         }
 
+        if (rc1 || rc2 || rc3)
+                printf("Some errors happened when getting quota info. "
+                       "Some devices may be not working or deactivated. "
+                       "The data in \"[]\" is inaccurate.\n");
         return 0;
 }
 #endif /* HAVE_QUOTA_SUPPORT */

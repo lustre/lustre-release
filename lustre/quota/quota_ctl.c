@@ -223,19 +223,18 @@ int client_quota_ctl(struct obd_export *exp, struct obd_quotactl *oqctl)
         ptlrpc_req_set_repsize(req, 2, size);
 
         rc = ptlrpc_queue_wait(req);
-        if (!rc) {
-                oqc = lustre_swab_repbuf(req, REPLY_REC_OFF, sizeof(*oqc),
-                                         lustre_swab_obd_quotactl);
-                if (oqc == NULL) {
-                        CERROR ("Can't unpack obd_quotactl\n");
-                        GOTO(out, rc = -EPROTO);
-                }
-
-                *oqctl = *oqc;
+        oqc = lustre_swab_repbuf(req, REPLY_REC_OFF, sizeof(*oqc),
+                                 lustre_swab_obd_quotactl);
+        if (oqc == NULL) {
+                CERROR ("Can't unpack obd_quotactl\n");
+                GOTO(out, rc = -EPROTO);
         }
+
+        *oqctl = *oqc;
+        EXIT;
 out:
         ptlrpc_req_finished(req);
-        RETURN (rc);
+        return rc;
 }
 
 int lov_quota_ctl(struct obd_export *exp, struct obd_quotactl *oqctl)
@@ -261,11 +260,10 @@ int lov_quota_ctl(struct obd_export *exp, struct obd_quotactl *oqctl)
                         if (oqctl->qc_cmd == Q_GETOQUOTA) {
                                 CERROR("ost %d is inactive\n", i);
                                 rc = -EIO;
-                                break;
                         } else {
                                 CDEBUG(D_HA, "ost %d is inactive\n", i);
-                                continue;
                         }
+                        continue;
                 }
 
                 err = obd_quotactl(lov->lov_tgts[i]->ltd_exp, oqctl);

@@ -982,9 +982,12 @@ static int ll_dir_ioctl(struct inode *inode, struct file *file,
 
                         /* XXX: dqb_valid is borrowed as a flag to mark that
                          *      only mds quota is wanted */
-                        if (qctl->qc_dqblk.dqb_valid)
+                        if (qctl->qc_dqblk.dqb_valid) {
                                 qctl->obd_uuid = sbi->ll_mdc_exp->exp_obd->
                                                         u.cli.cl_target_uuid;
+                                qctl->qc_dqblk.dqb_valid = 0;
+                        }
+
                         break;
                 case Q_GETINFO:
                         break;
