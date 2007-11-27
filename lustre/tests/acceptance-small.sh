@@ -123,7 +123,7 @@ for NAME in $CONFIGS; do
 		$DEBUG_ON
 		$CLEANUP
 		$SETUP
-		BONNNIE="done"
+		BONNIE="done"
 	fi
 
 	export O_DIRECT
