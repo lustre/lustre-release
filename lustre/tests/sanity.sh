@@ -143,6 +143,8 @@ MAXFREE=${MAXFREE:-$((200000 * $OSTCOUNT))}
 [ -f $DIR/d52b/foo ] && chattr -i $DIR/d52b/foo
 rm -rf $DIR/[Rdfs][1-9]*
 
+check_runas_id $RUNAS_ID $RUNAS
+
 build_test_filter
 
 if [ "${ONLY}" = "MOUNT" ] ; then 

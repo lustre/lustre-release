@@ -931,7 +931,7 @@ cleanup_and_setup_lustre() {
 
 check_and_cleanup_lustre() {
     if [ "`mount | grep $MOUNT`" ]; then
-        rm -rf $DIR/[Rdfs][1-9]*
+        rm -rf $DIR/[Rdfs][0-9]*
         rm -f $DIR/${TESTSUITE}/[Rdfs][1-9]*
     fi
     if [ "$I_MOUNTED" = "yes" ]; then
@@ -1373,4 +1373,18 @@ nodes_list () {
 is_patchless ()
 {
     grep -q patchless $LPROC/version
+}
+
+check_runas_id() {
+    local myRUNAS_ID=$1
+    shift
+    local myRUNAS=$@
+    mkdir $DIR/d0_runas_test
+    chmod 0755 $DIR
+    chown $myRUNAS_ID:$myRUNAS_ID $DIR/d0_runas_test
+    $myRUNAS touch $DIR/d0_runas_test/f$$ || \
+        error "unable to write to $DIR/d0_runas_test as UID $myRUNAS_ID. 
+        Please set RUNAS_ID to some UID which exists on MDS and client or 
+        add user $myRUNAS_ID:$myRUNAS_ID on these nodes."
+    rm -rf $DIR/d0_runas_test
 }

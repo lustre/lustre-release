@@ -75,6 +75,8 @@ OSTCOUNT=`cat $LPROC/lov/$LOVNAME/numobd`
 
 rm -rf $DIR1/[df][0-9]* $DIR1/lnk
 
+check_runas_id $RUNAS_ID $RUNAS
+
 build_test_filter
 
 test_1a() {
