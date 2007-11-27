@@ -2830,6 +2830,9 @@ test_68() {
 	grep -q llite_lloop /proc/modules
 	[ $? -ne 0 ] && skip "can't find module llite_lloop" && return
 
+	[ -z "`$LCTL list_nids | grep -v tcp`" ] && \
+		skip "can't reliably test swap with TCP" && return
+
 	MEMTOTAL=`meminfo MemTotal`
 	NR_BLOCKS=$((MEMTOTAL>>8))
 	[[ $NR_BLOCKS -le 2048 ]] && NR_BLOCKS=2048
@@ -3143,8 +3146,8 @@ run_test 76 "destroy duplicate inodes in client inode cache ===="
 export ORIG_CSUM=""
 set_checksums()
 {
-	[ "$ORIG_CSUM" ]||ORIG_CSUM=`cat $LPROC/llite/*/checksum_pages|head -n1`
-	for f in $LPROC/llite/*/checksum_pages; do
+	[ "$ORIG_CSUM" ] || ORIG_CSUM=`cat $LPROC/osc/*/checksums | head -n1`
+	for f in $LPROC/osc/*/checksums; do
 		echo $1 >> $f
 	done
 
