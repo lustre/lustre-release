@@ -56,6 +56,46 @@
 #include <lustre/liblustreapi.h>
 #include <obd_lov.h>
 
+static unsigned llapi_dir_filetype_table[] = {
+        [DT_UNKNOWN]= 0,
+        [DT_FIFO]= S_IFIFO,
+        [DT_CHR] = S_IFCHR,
+        [DT_DIR] = S_IFDIR,
+        [DT_BLK] = S_IFBLK,
+        [DT_REG] = S_IFREG,
+        [DT_LNK] = S_IFLNK,
+        [DT_SOCK]= S_IFSOCK,
+#if defined(DT_DOOR) && defined(S_IFDOOR)
+        [DT_DOOR]= S_IFDOOR,
+#endif
+};
+
+#if defined(DT_DOOR) && defined(S_IFDOOR)
+static const int DT_MAX = DT_DOOR;
+#else
+static const int DT_MAX = DT_SOCK;
+#endif
+
+static unsigned llapi_filetype_dir_table[] = {
+        [0]= DT_UNKNOWN,
+        [S_IFIFO]= DT_FIFO,
+        [S_IFCHR] = DT_CHR,
+        [S_IFDIR] = DT_DIR,
+        [S_IFBLK] = DT_BLK,
+        [S_IFREG] = DT_REG,
+        [S_IFLNK] = DT_LNK,
+        [S_IFSOCK]= DT_SOCK,
+#if defined(DT_DOOR) && defined(S_IFDOOR)
+        [S_IFDOOR]= DT_DOOR,
+#endif
+};
+
+#if defined(DT_DOOR) && defined(S_IFDOOR)
+static const int S_IFMAX = DT_DOOR;
+#else
+static const int S_IFMAX = DT_SOCK;
+#endif
+
 static void err_msg(char *fmt, ...)
 {
         va_list args;
@@ -624,20 +664,43 @@ int llapi_file_lookup(int dirfd, const char *name)
         return ioctl(dirfd, IOC_MDC_LOOKUP, buf);
 }
 
-/* some 64bit libcs implement readdir64() by calling sys_getdents().  the
- * kernel's sys_getdents() doesn't return d_type.  */
-unsigned char handle_dt_unknown(char *path)
+int llapi_mds_getfileinfo(char *path, DIR *parent,
+                          struct lov_user_mds_data *lmd)
 {
-        int fd;
+        lstat_t *st = &lmd->lmd_st;
+        char *fname = strrchr(path, '/');
+        int ret = 0;
 
-        fd = open(path, O_DIRECTORY|O_RDONLY);
-        if (fd < 0) {
-                if (errno == ENOTDIR)
-                        return DT_REG; /* kind of a lie */
-                return DT_UNKNOWN;
+        if (parent == NULL)
+                return -EINVAL;
+
+        fname = (fname == NULL ? path : fname + 1);
+        /* retrieve needed file info */
+        strncpy((char *)lmd, fname, lov_mds_md_size(MAX_LOV_UUID_COUNT));
+        ret = ioctl(dirfd(parent), IOC_MDC_GETFILEINFO, (void *)lmd);
+
+        if (ret) {
+                if (errno == ENOTTY) {
+                        /* ioctl is not supported, it is not a lustre fs.
+                         * Do the regular lstat(2) instead. */
+                        ret = lstat_f(path, st);
+                        if (ret) {
+                                err_msg("error: %s: lstat failed for %s",
+                                        __FUNCTION__, path);
+                                return ret;
+                        }
+                } else if (errno == ENOENT) {
+                        err_msg("warning: %s: %s does not exist", __FUNCTION__,
+                                path);
+                        return -ENOENT;
+                } else {
+                        err_msg("error: %s: IOC_MDC_GETFILEINFO failed for %s",
+                                __FUNCTION__, path);
+                        return ret;
+                }
         }
-        close(fd);
-        return DT_DIR;
+
+        return 0;
 }
 
 static DIR *opendir_parent(char *path)
@@ -688,6 +751,8 @@ static int llapi_semantic_traverse(char *path, int size, DIR *parent,
                 GOTO(out, ret = 0);
 
         while ((dent = readdir64(d)) != NULL) {
+                ((struct find_param *)data)->have_fileinfo = 0;
+
                 if (!strcmp(dent->d_name, ".") || !strcmp(dent->d_name, ".."))
                         continue;
 
@@ -701,17 +766,24 @@ static int llapi_semantic_traverse(char *path, int size, DIR *parent,
                 strcat(path, "/");
                 strcat(path, dent->d_name);
 
-                if (dent->d_type == DT_UNKNOWN)
-                        dent->d_type = handle_dt_unknown(path);
+                if (dent->d_type == DT_UNKNOWN) {
+                        lstat_t *st = &((struct find_param *)data)->lmd->lmd_st;
+
+                        ret = llapi_mds_getfileinfo(path, d,
+                                             ((struct find_param *)data)->lmd);
+                        if (ret == 0) {
+                                ((struct find_param *)data)->have_fileinfo = 1;
+                                dent->d_type = llapi_filetype_dir_table[st->st_mode &
+                                                                        S_IFMT];
+                        }
+                        if (ret == -ENOENT)
+                                continue;
+                }
 
                 switch (dent->d_type) {
                 case DT_UNKNOWN:
                         fprintf(stderr, "error: %s: '%s' is UNKNOWN type %d",
                                 __FUNCTION__, dent->d_name, dent->d_type);
-                        /* If we cared we could stat the file to determine
-                         * type and continue on here, but we don't since we
-                         * know d_type should be valid for lustre and this
-                         * tool only makes sense for lustre filesystems. */
                         break;
                 case DT_DIR:
                         ret = llapi_semantic_traverse(path, size, d, sem_init,
@@ -836,25 +908,6 @@ static int find_time_check(lstat_t *st, struct find_param *param, int mds)
         return rc;
 }
 
-static unsigned llapi_dir_filetype_table[] = {
-        [DT_UNKNOWN]= 0,
-        [DT_FIFO]= S_IFIFO,
-        [DT_CHR] = S_IFCHR,
-        [DT_DIR] = S_IFDIR,
-        [DT_BLK] = S_IFBLK,
-        [DT_REG] = S_IFREG,
-        [DT_LNK] = S_IFLNK,
-        [DT_SOCK]= S_IFSOCK,
-#if defined(DT_DOOR) && defined(S_IFDOOR)
-        [DT_DOOR]= S_IFDOOR,
-#endif
-};
-#if defined(DT_DOOR) && defined(S_IFDOOR)
-static const int DT_MAX = DT_DOOR;
-#else
-static const int DT_MAX = DT_SOCK;
-#endif
-
 static int cb_find_init(char *path, DIR *parent, DIR *dir,
                         void *data, struct dirent64 *de)
 {
@@ -863,7 +916,7 @@ static int cb_find_init(char *path, DIR *parent, DIR *dir,
         lstat_t *st = &param->lmd->lmd_st;
         int lustre_fs = 1;
         int checked_type = 0;
-        int ret;
+        int ret = 0;
 
         LASSERT(parent != NULL || dir != NULL);
 
@@ -898,19 +951,22 @@ static int cb_find_init(char *path, DIR *parent, DIR *dir,
             param->size_check)
                 decision = 0;
 
+        ret = 0;
         /* Request MDS for the stat info. */
-        if (dir) {
-                /* retrieve needed file info */
-                ret = ioctl(dirfd(dir), LL_IOC_MDC_GETINFO,
-                            (void *)param->lmd);
-        } else /* if (parent) LASSERT() above makes always true */ {
-                char *fname = strrchr(path, '/');
-                fname = (fname == NULL ? path : fname + 1);
+        if (param->have_fileinfo == 0) {
+                if (dir) {
+                        /* retrieve needed file info */
+                        ret = ioctl(dirfd(dir), LL_IOC_MDC_GETINFO,
+                                    (void *)param->lmd);
+                } else {
+                        char *fname = strrchr(path, '/');
+                        fname = (fname == NULL ? path : fname + 1);
 
-                /* retrieve needed file info */
-                strncpy((char *)param->lmd, fname, param->lumlen);
-                ret = ioctl(dirfd(parent), IOC_MDC_GETFILEINFO,
-                           (void *)param->lmd);
+                        /* retrieve needed file info */
+                        strncpy((char *)param->lmd, fname, param->lumlen);
+                        ret = ioctl(dirfd(parent), IOC_MDC_GETFILEINFO,
+                                   (void *)param->lmd);
+                }
         }
 
         if (ret) {
