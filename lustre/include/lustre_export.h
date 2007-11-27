@@ -59,7 +59,8 @@ struct filter_export_data {
 
 typedef struct nid_stat {
         lnet_nid_t               nid;
-        struct list_head         nid_chain;
+        struct hlist_node        nid_hash;
+        struct list_head         nid_list;
         struct obd_device       *nid_obd;
         struct proc_dir_entry   *nid_proc;
         struct lprocfs_stats    *nid_stats;
@@ -128,16 +129,7 @@ static inline int imp_connect_lru_resize(struct obd_import *imp)
         return !!(ocd->ocd_connect_flags & OBD_CONNECT_LRU_RESIZE);
 }
 
-struct exp_uuid_cb_data {
-        char                   *page;
-        int                     count;
-        int                    *eof;
-        int                    *len;
-        struct obd_export      *exp;
-};
-
 extern struct obd_export *class_conn2export(struct lustre_handle *conn);
 extern struct obd_device *class_conn2obd(struct lustre_handle *conn);
-typedef void (*hash_item_iterate_cb) (void *);
 
 #endif /* __EXPORT_H */

@@ -354,8 +354,13 @@ extern int lprocfs_add_simple(struct proc_dir_entry *root, char *name,
                               read_proc_t *read_proc, write_proc_t *write_proc,
                               void *data);
 struct nid_stat;
-extern void lprocfs_free_client_stats(struct nid_stat *stat);
 extern void lprocfs_free_per_client_stats(struct obd_device *obd);
+extern int lprocfs_nid_stats_clear_write(struct file *file, const char *buffer,
+                                         unsigned long count, void *data);
+extern int lprocfs_nid_stats_clear_read(char *page, char **start, off_t off,
+                                        int count, int *eof,  void *data);
+
+
 extern struct file_operations lprocfs_evict_client_fops;
 
 extern int lprocfs_seq_create(cfs_proc_dir_entry_t *parent, char *name, 
@@ -562,9 +567,17 @@ static inline int lprocfs_add_simple(struct proc_dir_entry *root,
                                      void *data)
 {return 0; }
 struct nid_stat;
-static inline void lprocfs_free_client_stats(struct nid_stat *stat){}
 static inline void lprocfs_free_per_client_stats(struct obd_device *obd)
 {}
+static inline
+int lprocfs_nid_stats_clear_write(struct file *file, const char *buffer,
+                                  unsigned long count, void *data)
+{return count;}
+static inline
+int lprocfs_nid_stats_clear_read(char *page, char **start, off_t off,
+                                 int count, int *eof,  void *data)
+{return count;}
+
 
 static inline cfs_proc_dir_entry_t *
 lprocfs_register(const char *name, cfs_proc_dir_entry_t *parent,

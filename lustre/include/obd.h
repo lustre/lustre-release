@@ -731,13 +731,15 @@ struct obd_device {
         /* uuid-export hash body */
         struct lustre_class_hash_body *obd_uuid_hash_body;
         /* nid-export hash body */
-        struct lustre_class_hash_body *obd_nid_hash_body; 
-        atomic_t obd_refcount;
+        struct lustre_class_hash_body *obd_nid_hash_body;
+        /* nid stats body */
+        struct lustre_class_hash_body *obd_nid_stats_hash_body;
+        struct list_head        obd_nid_stats;
+        atomic_t                obd_refcount;
         cfs_waitq_t             obd_refcount_waitq;
         cfs_waitq_t             obd_llog_waitq;
         struct list_head        obd_exports;
         int                     obd_num_exports;
-        struct list_head        obd_proc_nid_list;
         spinlock_t              nid_lock;
         struct ldlm_namespace  *obd_namespace;
         struct ptlrpc_client    obd_ldlm_client; /* XXX OST/MDS only */

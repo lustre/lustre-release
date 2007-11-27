@@ -1792,42 +1792,6 @@ err_mntput:
         obd->u.obt.obt_sb = 0;
         return rc;
 }
-static int filter_nid_stats_clear_read(char *page, char **start, off_t off,
-                                       int count, int *eof,  void *data)
-{
-        *eof = 1;
-        return snprintf(page, count, "%s\n",
-                        "Write into this file to clear all nid stats and "
-                        "stale nid entries");
-}
-
-static int filter_nid_stats_clear_write(struct file *file, const char *buffer,
-                                        unsigned long count, void *data)
-{
-        struct obd_device *obd = (struct obd_device *)data;
-        struct list_head *nids = &obd->obd_proc_nid_list;
-        nid_stat_t *client_stat = NULL, *nxt;
-        int i;
-
-        spin_lock(&obd->nid_lock);
-
-        list_for_each_entry_safe (client_stat, nxt, nids, nid_chain) {
-                if (!client_stat->nid_exp_ref_count) {
-                        lprocfs_free_client_stats(client_stat);
-                } else {
-                        if (client_stat->nid_stats)
-                                lprocfs_clear_stats(client_stat->nid_stats);
-                        if (client_stat->nid_brw_stats)
-                                for (i = 0; i < BRW_LAST; i++)
-                                        lprocfs_oh_clear(
-                                        &client_stat->nid_brw_stats->hist[i]);
-                }
-        }
-
-        spin_unlock(&obd->nid_lock);
-
-        return count;
-}
 
 static int filter_setup(struct obd_device *obd, obd_count len, void *buf)
 {
@@ -1868,8 +1832,8 @@ static int filter_setup(struct obd_device *obd, obd_count len, void *buf)
         }
         if (obd->obd_proc_exports_entry)
                 lprocfs_add_simple(obd->obd_proc_exports_entry, "clear",
-                                   filter_nid_stats_clear_read,
-                                   filter_nid_stats_clear_write, obd);
+                                   lprocfs_nid_stats_clear_read,
+                                   lprocfs_nid_stats_clear_write, obd);
 
         memcpy((void *)addr, lustre_cfg_buf(lcfg, 4),
                LUSTRE_CFG_BUFLEN(lcfg, 4));
@@ -1877,8 +1841,9 @@ static int filter_setup(struct obd_device *obd, obd_count len, void *buf)
         OBD_PAGE_FREE(page);
 
         if (rc) {
-                lprocfs_obd_cleanup(obd);
+                lprocfs_free_per_client_stats(obd);
                 lprocfs_free_obd_stats(obd);
+                lprocfs_obd_cleanup(obd);
         }
 
         return rc;
@@ -2006,10 +1971,10 @@ static int filter_cleanup(struct obd_device *obd)
                 }
         }
 
-        lprocfs_free_per_client_stats(obd);
         remove_proc_entry("clear", obd->obd_proc_exports_entry);
-        lprocfs_obd_cleanup(obd);
+        lprocfs_free_per_client_stats(obd);
         lprocfs_free_obd_stats(obd);
+        lprocfs_obd_cleanup(obd);
 
         lquota_cleanup(filter_quota_interface_ref, obd);
 
