@@ -21,6 +21,9 @@ GRANT_CHECK_LIST=${GRANT_CHECK_LIST:-""}
 # bug number: 2766 4176
 ALWAYS_EXCEPT="0b  39   $REPLAY_SINGLE_EXCEPT"
 
+#                                                       63 min  7 min  AT AT AT AT"
+[ "SLOW" = "no" ] && EXCEPT="$EXCEPT 1 2 3 4 6 6b 12 16 44      44b    65 66 67 68"
+
 build_test_filter
 
 cleanup_and_setup_lustre
@@ -1141,7 +1144,7 @@ test_58() {
     replay_barrier $SINGLEMDS
     fail $SINGLEMDS
     sleep 2
-    $CHECKSTAT -t file $DIR/$tdir/$tfile-* || return 1
+    $CHECKSTAT -t file $DIR/$tdir/$tfile-* >/dev/null || return 1
     do_facet $SINGLEMDS "sysctl -w lustre.fail_loc=0x0"
     unlinkmany $DIR/$tdir/$tfile-%d 2500
     rmdir $DIR/$tdir

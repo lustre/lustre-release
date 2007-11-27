@@ -5,6 +5,9 @@ set -e
 #         bug  5494 7288 5493
 ALWAYS_EXCEPT="24   27   52 $RECOVERY_SMALL_EXCEPT"
 
+#
+[ "$SLOW" = "no" ] && EXCEPT="$EXCEPT 0 1 2 3 6 7 15 18 24b 25 30 31 32 33 34a "
+
 PTLDEBUG=${PTLDEBUG:--1}
 LUSTRE=${LUSTRE:-`dirname $0`/..}
 . $LUSTRE/tests/test-framework.sh

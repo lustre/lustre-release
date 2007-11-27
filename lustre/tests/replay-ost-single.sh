@@ -21,6 +21,9 @@ CPU=`awk '/model/ {print $4}' /proc/cpuinfo`
 # BUG NUMBER: 
 ALWAYS_EXCEPT="$REPLAY_OST_SINGLE_EXCEPT"
 
+#					
+[ "$SLOW" = "no" ] && EXCEPT="$EXCEPT	"
+
 # It is replay-ost-single, after all
 OSTCOUNT=1
 

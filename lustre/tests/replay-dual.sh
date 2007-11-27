@@ -5,6 +5,9 @@ set -e
 # bug number:  6088 10124 10800
 ALWAYS_EXCEPT="8    15c   17    $REPLAY_DUAL_EXCEPT"
 
+#                                                    
+[ "$SLOW" = "no" ] && EXCEPT="$EXCEPT 1 2 3 4 5 14"
+
 SAVE_PWD=$PWD
 PTLDEBUG=${PTLDEBUG:--1}
 LUSTRE=${LUSTRE:-`dirname $0`/..}
