@@ -2853,9 +2853,12 @@ test_68() {
 	grep -q llite_lloop /proc/modules
 	[ $? -ne 0 ] && skip "can't find module llite_lloop" && return
 
-        MEMTOTAL=`meminfo MemTotal`
-        NR_BLOCKS=$((MEMTOTAL>>8))
-        [[ $NR_BLOCKS -le 2048 ]] && NR_BLOCKS=2048
+	[ -z "`$LCTL list_nids | grep -v tcp`" ] && \
+		skip "can't reliably test swap with TCP" && return
+
+	MEMTOTAL=`meminfo MemTotal`
+	NR_BLOCKS=$((MEMTOTAL>>8))
+	[[ $NR_BLOCKS -le 2048 ]] && NR_BLOCKS=2048
 
 	LLOOP=$TMP/lloop.`date +%s`.`date +%N`
 	dd if=/dev/zero of=$DIR/f68 bs=64k seek=$NR_BLOCKS count=1
