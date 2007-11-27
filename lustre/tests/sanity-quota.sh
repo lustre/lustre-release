@@ -32,7 +32,6 @@ esac
 TMP=${TMP:-/tmp}
 
 ORIG_PWD=${PWD}
-SETSTRIPE=${SETSTRIPE:-"$LFS setstripe"}
 TSTID=${TSTID:-60000}
 TSTID2=${TSTID2:-60001}
 TSTUSR=${TSTUSR:-"quota_usr"}
@@ -62,11 +61,6 @@ cleanup_and_setup_lustre
 
 LOVNAME=`cat $LPROC/llite/*/lov/common_name | tail -n 1`
 OSTCOUNT=`cat $LPROC/lov/$LOVNAME/numobd`
-STRIPECOUNT=`cat $LPROC/lov/$LOVNAME/stripecount`
-STRIPESIZE=`cat $LPROC/lov/$LOVNAME/stripesize`
-ORIGFREE=`cat $LPROC/lov/$LOVNAME/kbytesavail`
-MAXFREE=${MAXFREE:-$((200000 * $OSTCOUNT))}
-MDS=$(\ls $LPROC/mds 2> /dev/null | grep -v num_refs | tail -n 1)
 
 SHOW_QUOTA_USER="$LFS quota -u $TSTUSR $DIR"
 SHOW_QUOTA_GROUP="$LFS quota -g $TSTUSR $DIR"
@@ -177,7 +171,7 @@ test_1() {
 	$LFS setquota -u $TSTUSR 0 $LIMIT 0 0 $DIR
 	$SHOW_QUOTA_USER
 	
-	$LFS setstripe $TESTFILE 65536 0 1
+	$LFS setstripe $TESTFILE -c 1
 	chown $TSTUSR.$TSTUSR $TESTFILE
 
 	echo "    Write ..."
@@ -198,7 +192,7 @@ test_1() {
 	$SHOW_QUOTA_GROUP
 	TESTFILE=$DIR/$tdir/$tfile-1	
 
-	$LFS setstripe $TESTFILE 65536 0 1
+	$LFS setstripe $TESTFILE -c 1
 	chown $TSTUSR.$TSTUSR $TESTFILE
 
 	echo "    Write ..."
@@ -332,7 +326,7 @@ test_3() {
 	echo "  User quota (soft limit: $LIMIT kbytes  grace: $GRACE seconds)"
 	TESTFILE=$DIR/$tdir/$tfile-0
 
-	$LFS setstripe $TESTFILE 65536 0 1
+	$LFS setstripe $TESTFILE -c 1
 	chown $TSTUSR.$TSTUSR $TESTFILE
 
 	$LFS setquota -t -u $GRACE $MAX_IQ_TIME $DIR
@@ -344,7 +338,7 @@ test_3() {
 	echo "  Group quota (soft limit: $LIMIT kbytes  grace: $GRACE seconds)"
 	TESTFILE=$DIR/$tdir/$tfile-1
 
-	$LFS setstripe $TESTFILE 65536 0 1
+	$LFS setstripe $TESTFILE -c 1
 	chown $TSTUSR.$TSTUSR $TESTFILE
 
 	$LFS setquota -t -g $GRACE $MAX_IQ_TIME $DIR
@@ -512,8 +506,8 @@ test_6() {
 	$SHOW_QUOTA_GROUP
 
 	echo "  Create filea on OST0 and fileb on OST1"
-	$LFS setstripe $FILEA 65536 0 1
-	$LFS setstripe $FILEB 65536 1 1
+	$LFS setstripe $FILEA -i 0 -c 1
+	$LFS setstripe $FILEB -i 1 -c 1
 	chown $TSTUSR.$TSTUSR $FILEA
 	chown $TSTUSR.$TSTUSR $FILEB
 
@@ -566,7 +560,7 @@ test_7()
 	
 	$LFS setquota -u $TSTUSR 0 $LIMIT 0 0 $DIR
 	
-	$LFS setstripe $TESTFILE 65536 0 1
+	$LFS setstripe $TESTFILE -c 1
 	chown $TSTUSR.$TSTUSR $TESTFILE
 
 	echo "  Write to OST0..."
@@ -673,7 +667,7 @@ test_9() {
         $LFS setquota -g $TSTUSR 0 $BLK_LIMIT 0 $FILE_LIMIT $DIR
 
         echo "  Set stripe"
-        [ $OSTCOUNT -ge 2 ] && $LFS setstripe $TESTFILE 65536 0 $OSTCOUNT
+        [ $OSTCOUNT -ge 2 ] && $LFS setstripe $TESTFILE -c $OSTCOUNT
         touch $TESTFILE
         chown $TSTUSR.$TSTUSR $TESTFILE
 
@@ -705,6 +699,8 @@ test_9() {
 	set_blk_unitsz $BUNIT_SZ
 
 	debugrestore
+	wait_delete_completed
+
         return $RC
 }
 run_test 9 "run for fixing bug10707(64bit) ==========="
@@ -743,7 +739,7 @@ test_10() {
 	$LFS setquota -g $TSTUSR 0 $BLK_LIMIT 0 $FILE_LIMIT $DIR
        
 	echo "  Set stripe"
-	[ $OSTCOUNT -ge 2 ] && $LFS setstripe $TESTFILE 65536 0 $OSTCOUNT
+	[ $OSTCOUNT -ge 2 ] && $LFS setstripe $TESTFILE -c $OSTCOUNT
 	touch $TESTFILE
 	chown $TSTUSR.$TSTUSR $TESTFILE
 
@@ -780,6 +776,8 @@ test_10() {
 
 	set_blk_tunesz $BTUNE_SZ
 	set_blk_unitsz $BUNIT_SZ
+
+	wait_delete_completed
 
 	return $RC
 }
@@ -854,20 +852,20 @@ run_test 11 "run for fixing bug10912 ==========="
 # test a deadlock between quota and journal b=11693
 test_12() {
 	chmod 0777 $DIR/$tdir
-	chmod 0777 $DIR2/$tdir
 
 	[ "$(grep $DIR2 /proc/mounts)" ] || mount_client $DIR2 || \
 		{ skip "Need lustre mounted on $MOUNT2 " && retutn 0; }
+
 	LIMIT=$(( $BUNIT_SZ * $(($OSTCOUNT + 1)) * 10)) # 10 bunits each sever
 	TESTFILE="$DIR/$tdir/$tfile-0"
 	TESTFILE2="$DIR2/$tdir/$tfile-1"
 	
 	echo "   User quota (limit: $LIMIT kbytes)"
 	$LFS setquota -u $TSTUSR 0 $LIMIT 0 0 $DIR
-	
-	$LFS setstripe $TESTFILE 65536 0 1
+
+	$LFS setstripe $TESTFILE -i 0 -c 1 
 	chown $TSTUSR.$TSTUSR $TESTFILE
-	$LFS setstripe $TESTFILE2 65536 0 1
+	$LFS setstripe $TESTFILE2 -i 0 -c 1
         chown $TSTUSR2.$TSTUSR2 $TESTFILE2
 
 	#define OBD_FAIL_OST_HOLD_WRITE_RPC      0x21f
@@ -924,9 +922,9 @@ test_13() {
 	$LFS setquota -u $TSTUSR 0 $LIMIT 0 0 $DIR
 	$SHOW_QUOTA_USER
 	
-	$LFS setstripe $TESTFILE 65536 0 1
+	$LFS setstripe $TESTFILE -i 0 -c 1
 	chown $TSTUSR.$TSTUSR $TESTFILE
-	$LFS setstripe $TESTFILE.2 65536 0 1
+	$LFS setstripe $TESTFILE.2 -i 0 -c 1
         chown $TSTUSR.$TSTUSR $TESTFILE.2
 
 	echo "   step1: write out of block quota ..."
@@ -966,7 +964,7 @@ test_13() {
 	fz2=`stat -c %s $TESTFILE.2`
 	$SHOW_QUOTA_USER
 	[ $((fz + fz2)) -lt $((BUNIT_SZ * BLK_SZ * 10)) ] && \
-		error "files too small $fz + $fz < $((BUNIT_SZ * BLK_SZ * 10))"
+		error "files too small $fz + $fz2 < $((BUNIT_SZ * BLK_SZ * 10))"
 
 	rm -f $TESTFILE $TESTFILE.2
 	
