@@ -11,7 +11,7 @@ ONLY=${ONLY:-"$*"}
 ALWAYS_EXCEPT=${ALWAYS_EXCEPT:-"27o  27q  42a  42b  42c  42d  45  51d   74b   75 $SANITY_EXCEPT" }
 # UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
 
-[ "$SLOW" = "no" ] && EXCEPT="$EXCEPT 24o 27m 36f 36g 51b 51c 60c 63 64b 68 71 73 101 103 115 120g"
+[ "$SLOW" = "no" ] && EXCEPT="$EXCEPT 24o 27m 36f 36g 51b 51c 60c 63 64b 68 71 73 78 101 103 115 120g"
 
 # Tests that fail on uml, maybe elsewhere, FIXME
 CPU=`awk '/model/ {print $4}' /proc/cpuinfo`
@@ -4606,11 +4606,11 @@ test_123() # statahead(bug 11401)
 
         mkdir -p $DIR/$tdir
 
-        for ((i=1, j=0; i<=10000; j=$i, i=$((i * 10)) )); do
+        for ((i=1, j=0; i<=100000; j=$i, i=$((i * 10)) )); do
                 createmany -o $DIR/$tdir/$tfile $j $((i - j))
 
                 grep '[0-9]' $LPROC/llite/*/statahead_max
-                cancel_lru_locks mdc
+                cancel_lru_locks osc
                 stime=`date +%s`
                 ls -l $DIR/$tdir > /dev/null
                 etime=`date +%s`
@@ -4624,7 +4624,7 @@ test_123() # statahead(bug 11401)
                 done
 
                 grep '[0-9]' $LPROC/llite/*/statahead_max
-                cancel_lru_locks mdc
+                cancel_lru_locks osc
                 stime=`date +%s`
                 ls -l $DIR/$tdir > /dev/null
                 etime=`date +%s`
@@ -4639,6 +4639,9 @@ test_123() # statahead(bug 11401)
                 if [ $delta_sa -gt $delta ]; then
                         log "ls $i files is slower with statahead!"
                 fi
+
+                [ $delta -gt 20 ] && break
+                [ "$SLOW" = "no" -a $delta -gt 3 ] && break		
         done
         log "ls done"
 
@@ -4730,7 +4733,7 @@ test_124b() {
         MOUNTOPT="$MOUNTOPT,nolruresize"
         setup || error "setup failed"
 
-        NR=3000
+        NR=2000
         mkdir -p $DIR/$tdir || error "failed to create $DIR/$tdir"
 
         createmany -o $DIR/$tdir/f $NR

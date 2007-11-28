@@ -12,6 +12,9 @@ init_test_env $@
 
 ALWAYS_EXCEPT="10 $INSANITY_EXCEPT"
 
+#
+[ "$SLOW" = "no" ] && EXCEPT="$EXCEPT "
+
 SETUP=${SETUP:-""}
 CLEANUP=${CLEANUP:-""}
 

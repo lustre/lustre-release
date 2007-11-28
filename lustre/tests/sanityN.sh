@@ -7,7 +7,7 @@ ONLY=${ONLY:-"$*"}
 ALWAYS_EXCEPT="                 14b  14c   $SANITYN_EXCEPT"
 # UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
 
-[ "$SLOW" = "no" ] && EXCEPT="$EXCEPT 16"
+[ "$SLOW" = "no" ] && EXCEPT="$EXCEPT	12 16"
 
 # Tests that fail on uml
 [ "$UML" = "true" ] && EXCEPT="$EXCEPT 7"

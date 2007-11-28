@@ -27,6 +27,11 @@ fi
 
 export TESTSUITE_LIST="RUNTESTS SANITY DBENCH BONNIE IOZONE FSX SANITYN LFSCK LIBLUSTRE REPLAY_SINGLE CONF_SANITY RECOVERY_SMALL REPLAY_OST_SINGLE REPLAY_DUAL INSANITY SANITY_QUOTA"
 
+if [ "$SLOW" = "no" ]; then
+#          5 min  
+    export IOZONE="no"
+fi
+
 if [ "$ACC_SM_ONLY" ]; then
     for O in $TESTSUITE_LIST; do
 	export ${O}="no"
@@ -94,13 +99,17 @@ for NAME in $CONFIGS; do
 		[ $THREADS -lt $DB_THREADS ] && DB_THREADS=$THREADS
 
 		$DEBUG_OFF
-		bash rundbench 1
-		$DEBUG_ON
-		$CLEANUP
-		$SETUP
+		duration=""
+		[ "$SLOW" = "no" ] && duration=" -t 120"
+		if [ "$SLOW" != "no" -o $DB_THREADS -eq 1 ]; then
+			bash rundbench 1 $duration
+			$DEBUG_ON
+			$CLEANUP
+			$SETUP
+		fi
 		if [ $DB_THREADS -gt 1 ]; then
 			$DEBUG_OFF
-			bash rundbench $DB_THREADS
+			bash rundbench $DB_THREADS $duration
 			$DEBUG_ON
 			$CLEANUP
 			$SETUP

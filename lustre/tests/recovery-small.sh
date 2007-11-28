@@ -5,6 +5,10 @@ set -e
 #         bug  5493
 ALWAYS_EXCEPT="52 $RECOVERY_SMALL_EXCEPT"
 
+# also long tests: 19, 21a, 21e, 21f, 23, 27 				
+#                                     1     2.5    4    4          (min)"  
+[ "$SLOW" = "no" ] && EXCEPT="$EXCEPT 17    26b    50   51     57" 
+
 #PTLDEBUG=${PTLDEBUG:--1}
 LUSTRE=${LUSTRE:-`dirname $0`/..}
 . $LUSTRE/tests/test-framework.sh
