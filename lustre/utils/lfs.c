@@ -99,15 +99,12 @@ command_t cmdlist[] = {
         {"find", lfs_find, 0,
          "To find files that match given parameters recursively in a directory tree.\n"
          "usage: find <dir/file> ... \n"
-         "     [[!] --atime|-A N] [[!] --mtime|-M N] [[!] --ctime|-C N] [--maxdepth|-D N]\n"
-         "     [[!] --name|-n <pattern>] [--print0|-P] [--print|-p] [--obd|-O <uuid>]\n"
-         "\t !: used before --atime, --mtime, --ctime specifies the negative value\n"
-         "\t !: used before --name means find exclude the regular expression pattern\n"
-         "If one of the options below is provided, find works the same as 'getstripe':\n"
-         "To list the striping info for a given filename or files in a directory or\n"
-         "recursively.\n"
-         "OBSOLETE usage: find [--quiet | -q] [--verbose | -v]\n"
-         "                     [--recursive | -r] <dir|file> ..."},
+         "     [[!] --atime|-A [+-]N] [[!] --mtime|-M [+-]N] [[!] --ctime|-C [+-]N]\n"
+         "     [--maxdepth|-D N] [[!] --name|-n <pattern>] [--print0|-P]\n"
+         "     [--print|-p] [--obd|-O <uuid>] [[!] --type|-t <filetype>]\n"
+         "\t !: used before an option indicates 'NOT' the requested attribute\n"
+         "\t -: used before an value indicates 'AT MOST' the requested value\n"
+         "\t +: used before an option indicates 'AT LEAST' the requested value\n"},
         {"check", lfs_check, 0,
          "Display the status of MDS or OSTs (as specified in the command)\n"
          "or all the servers (MDS and OSTs).\n"
@@ -348,6 +345,7 @@ static int lfs_find(int argc, char **argv)
                 /* Old find options. */
                 {"quiet",     no_argument,       0, 'q'},
                 {"recursive", no_argument,       0, 'r'},
+                {"type",      required_argument, 0, 't'},
                 {"verbose",   no_argument,       0, 'v'},
                 {0, 0, 0, 0}
         };
@@ -360,7 +358,7 @@ static int lfs_find(int argc, char **argv)
 
         time(&t);
 
-        while ((c = getopt_long_only(argc, argv, "-A:C:D:M:n:PpO:qrv",
+        while ((c = getopt_long_only(argc, argv, "-A:C:D:M:n:PpO:qrt:v",
                                      long_opts, NULL)) >= 0) {
                 xtime = NULL;
                 xsign = NULL;
@@ -424,15 +422,13 @@ static int lfs_find(int argc, char **argv)
                                 *xsign = ret;
                         break;
                 case 'D':
+                        new_fashion = 1;
                         param.maxdepth = strtol(optarg, 0, 0);
                         break;
                 case 'n':
                         new_fashion = 1;
                         param.pattern = (char *)optarg;
-                        if (neg_opt)
-                                param.exclude_pattern = 1;
-                        else
-                                param.exclude_pattern = 0;
+                        param.exclude_pattern = !!neg_opt;
                         break;
                 case 'O':
                         if (param.obduuid) {
@@ -444,6 +440,7 @@ static int lfs_find(int argc, char **argv)
                         param.obduuid = (struct obd_uuid *)optarg;
                         break;
                 case 'p':
+                        new_fashion = 1;
                         param.zeroend = 1;
                         break;
                 case 'P':
@@ -456,6 +453,24 @@ static int lfs_find(int argc, char **argv)
                 case 'r':
                         new_fashion = 0;
                         param.recursive = 1;
+                        break;
+                case 't':
+                        param.exclude_type = !!neg_opt;
+                        switch(optarg[0]) {
+                        case 'b': param.type = S_IFBLK; break;
+                        case 'c': param.type = S_IFCHR; break;
+                        case 'd': param.type = S_IFDIR; break;
+                        case 'f': param.type = S_IFREG; break;
+                        case 'l': param.type = S_IFLNK; break;
+                        case 'p': param.type = S_IFIFO; break;
+                        case 's': param.type = S_IFSOCK; break;
+#ifdef S_IFDOOR /* Solaris only */
+                        case 'D': param.type = S_IFDOOR; break;
+#endif
+                        default: fprintf(stderr, "error: %s: bad type '%s'\n",
+                                         argv[0], optarg);
+                                 return CMD_HELP;
+                        };
                         break;
                 case 'v':
                         new_fashion = 0;
@@ -483,6 +498,12 @@ static int lfs_find(int argc, char **argv)
         if (new_fashion) {
                 param.quiet = 1;
         } else {
+                static int deprecated_warning;
+                if (!deprecated_warning) {
+                        fprintf(stderr, "lfs find: -q, -r, -v options "
+                                "deprecated.  Use 'lfs getstripe' instead.\n");
+                        deprecated_warning = 1;
+                }
                 if (!param.recursive && param.maxdepth == -1)
                         param.maxdepth = 1;
         }
