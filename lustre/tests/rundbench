@@ -4,7 +4,8 @@ DIR=${DIR:-$MOUNT/`hostname`}
 #[ -e /proc/sys/lnet/debug ] && echo 0 > /proc/sys/lnet/debug 
 mkdir -p $DIR
 TGT=$DIR/client.txt
-SRC=${SRC:-/usr/share/dbench/client.txt}
+DBENCH_LIB=${DBENCH_LIB:-/usr/share/dbench}
+SRC=${SRC:-$DBENCH_LIB/client.txt}
 [ ! -s $TGT -a -s $SRC ] && echo "copying $SRC to $TGT" && cp $SRC $TGT
 SRC=${SRC:-/usr/lib/dbench/client.txt}
 [ ! -s $TGT -a -s $SRC ] && echo "copying $SRC to $TGT" && cp $SRC $TGT
