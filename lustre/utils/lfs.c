@@ -1647,7 +1647,7 @@ static int print_lov_quota(char *mnt, struct if_quotactl *qctl)
         DIR *dir;
         struct obd_uuid *uuids = NULL, *uuidp;
         int obdcount = 1024;
-        int i, rc, rc1=0;
+        int i, rc = 0, rc1 = 0;
 
         dir = opendir(mnt);
         if (!dir) {
