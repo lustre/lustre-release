@@ -67,6 +67,56 @@ static void err_msg(char *fmt, ...)
         fprintf(stderr, ": %s (%d)\n", strerror(tmp_errno), tmp_errno);
 }
 
+int parse_size(char *optarg, unsigned long long *size,
+               unsigned long long *size_units)
+{
+        char *end;
+
+        *size = strtoul(optarg, &end, 0);
+
+        if (*end != '\0') {
+                if ((*end == 'b') && *(end+1) == '\0' &&
+                    (*size & (~0ULL << (64 - 9))) == 0) {
+                        *size <<= 9;
+                        *size_units = 1 << 9;
+                } else if ((*end == 'k' || *end == 'K') &&
+                           *(end+1) == '\0' && (*size &
+                           (~0ULL << (64 - 10))) == 0) {
+                        *size <<= 10;
+                        *size_units = 1 << 10;
+                } else if ((*end == 'm' || *end == 'M') &&
+                           *(end+1) == '\0' && (*size &
+                           (~0ULL << (64 - 20))) == 0) {
+                        *size <<= 20;
+                        *size_units = 1 << 20;
+                } else if ((*end == 'g' || *end == 'G') &&
+                           *(end+1) == '\0' && (*size &
+                           (~0ULL << (64 - 30))) == 0) {
+                        *size <<= 30;
+                        *size_units = 1 << 30;
+                } else if ((*end == 't' || *end == 'T') &&
+                           *(end+1) == '\0' && (*size &
+                           (~0ULL << (64 - 40))) == 0) {
+                        *size <<= 40;
+                        *size_units = 1ULL << 40;
+                } else if ((*end == 'p' || *end == 'P') &&
+                           *(end+1) == '\0' && (*size &
+                           (~0ULL << (64 - 50))) == 0) {
+                        *size <<= 50;
+                        *size_units = 1ULL << 50;
+                } else if ((*end == 'e' || *end == 'E') &&
+                           *(end+1) == '\0' && (*size &
+                           (~0ULL << (64 - 60))) == 0) {
+                        *size <<= 60;
+                        *size_units = 1ULL << 60;
+                } else {
+                        return -1;
+                }
+        }
+
+        return 0;
+}
+
 int llapi_file_open(const char *name, int flags, int mode,
                     unsigned long stripe_size, int stripe_offset,
                     int stripe_count, int stripe_pattern)
@@ -174,16 +224,26 @@ static int common_param_init(struct find_param *param)
         }
 
         param->got_uuids = 0;
+        param->obdindexes = NULL;
         param->obdindex = OBD_NOT_FOUND;
         return 0;
 }
 
 static void find_param_fini(struct find_param *param)
 {
+        if (param->obdindexes)
+                free(param->obdindexes);
+
         if (param->lmd)
                 free(param->lmd);
 }
 
+/*
+ * If uuidp is NULL, return the number of available obd uuids.
+ * If uuidp is non-NULL, then it will return the uuids of the obds. If
+ * there are more OSTs then allocated to uuidp, then an error is returned with
+ * the ost_count set to number of available obd uuids.
+ */
 int llapi_lov_get_uuids(int fd, struct obd_uuid *uuidp, int *ost_count)
 {
         char lov_name[sizeof(struct obd_uuid)];
@@ -209,19 +269,26 @@ int llapi_lov_get_uuids(int fd, struct obd_uuid *uuidp, int *ost_count)
                 return rc;
         }
 
-        while ((fgets(buf, sizeof(buf), fp) != NULL) && index < *ost_count) {
-                if (sscanf(buf, "%d: %s", &index, uuidp[index].uuid) < 2)
-                        break;
+        while (fgets(buf, sizeof(buf), fp) != NULL) {
+                if (uuidp && (index < *ost_count)) {
+                        if (sscanf(buf, "%d: %s", &index, uuidp[index].uuid) <2)
+                                break;
+                }
                 index++;
         }
 
         fclose(fp);
-        *ost_count = index;
 
+        if (uuidp && (index >= *ost_count))
+                return -EOVERFLOW;
+
+        *ost_count = index;
         return rc;
 }
 
-static int setup_obd_uuids(DIR *dir, char *dname, struct find_param *param)
+/* Here, param->obduuid points to a single obduuid, the index of which is
+ * returned in param->obdindex */
+static int setup_obd_uuid(DIR *dir, char *dname, struct find_param *param)
 {
         char uuid[sizeof(struct obd_uuid)];
         char buf[1024];
@@ -282,6 +349,66 @@ static int setup_obd_uuids(DIR *dir, char *dname, struct find_param *param)
         }
 
         return (rc);
+}
+
+/* In this case, param->obduuid will be an array of obduuids and
+ * obd index for all these obduuids will be returned in
+ * param->obdindexes */
+static int setup_obd_indexes(DIR *dir, struct find_param *param)
+{
+        struct obd_uuid *uuids = NULL;
+        int obdcount = INIT_ALLOC_NUM_OSTS;
+        int ret, obd_valid = 0, obdnum, i;
+
+        uuids = (struct obd_uuid *)malloc(INIT_ALLOC_NUM_OSTS *
+                                          sizeof(struct obd_uuid));
+        if (uuids == NULL)
+                return -ENOMEM;
+
+retry_get_uuids:
+        ret = llapi_lov_get_uuids(dirfd(dir), uuids,
+                                  &obdcount);
+        if (ret) {
+                struct obd_uuid *uuids_temp;
+
+                if (ret == -EOVERFLOW) {
+                        uuids_temp = realloc(uuids, obdcount *
+                                             sizeof(struct obd_uuid));
+                        if (uuids_temp != NULL)
+                                goto retry_get_uuids;
+                        else
+                                ret = -ENOMEM;
+                }
+
+                fprintf(stderr, "get ost uuid failed: %s\n", strerror(errno));
+                return ret;
+        }
+
+        param->obdindexes = malloc(param->num_obds * sizeof(param->obdindex));
+        if (param->obdindexes == NULL)
+                return -ENOMEM;
+
+        for (obdnum = 0; obdnum < param->num_obds; obdnum++) {
+                for (i = 0; i <= obdcount; i++) {
+                        if (strcmp((char *)&param->obduuid[obdnum].uuid,
+                                   (char *)&uuids[i]) == 0) {
+                                param->obdindexes[obdnum] = i;
+                                obd_valid++;
+                                break;
+                        }
+                }
+                if (i == obdcount)
+                        param->obdindexes[obdnum] = OBD_NOT_FOUND;
+        }
+
+        if (obd_valid == 0)
+                param->obdindex = OBD_NOT_FOUND;
+        else
+                param->obdindex = obd_valid;
+
+        param->got_uuids = 1;
+
+        return 0;
 }
 
 void lov_dump_user_lmm_v1(struct lov_user_md_v1 *lum, char *path, int is_dir,
@@ -613,12 +740,12 @@ err:
         return ret;
 }
 
-/* Check if the file time matches 1 of the given criteria (e.g. --atime +/-N).
+/* Check if the value matches 1 of the given criteria (e.g. --atime +/-N).
  * @mds indicates if this is MDS timestamps and there are attributes on OSTs.
  *
  * The result is -1 if it does not match, 0 if not yet clear, 1 if matches.
- * The table bolow gives the answers for the specified parameters (time and
- * sign), 1st column is the answer for the MDS time, the 2nd is for the OST:
+ * The table bolow gives the answers for the specified parameters (value and
+ * sign), 1st column is the answer for the MDS value, the 2nd is for the OST:
  * --------------------------------------
  * 1 | file > limit; sign > 0 | -1 / -1 |
  * 2 | file = limit; sign > 0 |  ? /  1 |
@@ -630,18 +757,20 @@ err:
  * 8 | file = limit; sign < 0 |  ? / -1 |
  * 9 | file < limit; sign < 0 |  ? / -1 |
  * --------------------------------------
- * Note: 5th actually means that the file time stamp is within the interval
- * (limit - 24hours, limit]. */
-static int find_time_cmp(time_t file, time_t limit, int sign, int mds) {
+ * Note: 5th actually means that the value is within the interval
+ * (limit - margin, limit]. */
+static int find_value_cmp(unsigned int file, unsigned int limit, int sign,
+                          unsigned long long margin, int mds)
+{
         if (sign > 0) {
-                if (file <= limit)
+                if (file < limit)
                         return mds ? 0 : 1;
         }
 
         if (sign == 0) {
-                if (file <= limit && file + 24 * 60 * 60 > limit)
+                if (file <= limit && file + margin > limit)
                         return mds ? 0 : 1;
-                if (file + 24 * 60 * 60 <= limit)
+                if (file + margin <= limit)
                         return mds ? 0 : -1;
         }
 
@@ -669,16 +798,16 @@ static int find_time_check(lstat_t *st, struct find_param *param, int mds)
 
         /* Check if file is accepted. */
         if (param->atime) {
-                ret = find_time_cmp(st->st_atime, param->atime,
-                                    param->asign, mds);
+                ret = find_value_cmp(st->st_atime, param->atime,
+                                     param->asign, 24 * 60 * 60, mds);
                 if (ret < 0)
                         return ret;
                 rc = ret;
         }
 
         if (param->mtime) {
-                ret = find_time_cmp(st->st_mtime, param->mtime,
-                                    param->msign, mds);
+                ret = find_value_cmp(st->st_mtime, param->mtime,
+                                     param->msign, 24 * 60 * 60, mds);
                 if (ret < 0)
                         return ret;
 
@@ -689,8 +818,8 @@ static int find_time_check(lstat_t *st, struct find_param *param, int mds)
         }
 
         if (param->ctime) {
-                ret = find_time_cmp(st->st_ctime, param->ctime,
-                                    param->csign, mds);
+                ret = find_value_cmp(st->st_ctime, param->ctime,
+                                     param->csign, 24 * 60 * 60, mds);
                 if (ret < 0)
                         return ret;
 
@@ -761,7 +890,8 @@ static int cb_find_init(char *path, DIR *parent, DIR *dir,
 
 
         /* If a time or OST should be checked, the decision is not taken yet. */
-        if (param->atime || param->ctime || param->mtime || param->obduuid)
+        if (param->atime || param->ctime || param->mtime || param->obduuid ||
+            param->size)
                 decision = 0;
 
         /* Request MDS for the stat info. */
@@ -823,9 +953,10 @@ static int cb_find_init(char *path, DIR *parent, DIR *dir,
                 }
 
                 if (lustre_fs && !param->got_uuids) {
-                        ret = setup_obd_uuids(dir ? dir : parent, path, param);
+                        ret = setup_obd_indexes(dir ? dir : parent, param);
                         if (ret)
                                 return ret;
+
                         param->st_dev = st->st_dev;
                 } else if (!lustre_fs && param->got_uuids) {
                         /* A lustre/non-lustre mount point is crossed. */
@@ -836,28 +967,30 @@ static int cb_find_init(char *path, DIR *parent, DIR *dir,
 
         /* If an OBD UUID is specified but no one matches, skip this file. */
         if (param->obduuid && param->obdindex == OBD_NOT_FOUND)
-                decision = -1;
+                goto decided;
 
         /* If a OST UUID is given, and some OST matches, check it here. */
-        if (decision != -1 && param->obdindex != OBD_NOT_FOUND) {
+        if (param->obdindex != OBD_NOT_FOUND) {
                 if (!S_ISREG(st->st_mode))
                         goto decided;
 
                 /* Only those files should be accepted, which have a
                  * stripe on the specified OST. */
                 if (!param->lmd->lmd_lmm.lmm_stripe_count) {
-                        decision = -1;
+                        goto decided;
                 } else {
-                        int i;
+                        int i, j;
                         for (i = 0;
                              i < param->lmd->lmd_lmm.lmm_stripe_count; i++) {
-                               if (param->obdindex ==
-                                   param->lmd->lmd_lmm.lmm_objects[i].l_ost_idx)
-                                        break;
+                                for (j = 0; j < param->num_obds; j++) {
+                                        if (param->obdindexes[j] ==
+                                            param->lmd->lmd_lmm.lmm_objects[i].l_ost_idx)
+                                                goto obd_matches;
+                                }
                         }
 
                         if (i == param->lmd->lmd_lmm.lmm_stripe_count)
-                                decision = -1;
+                                goto decided;
                 }
         }
 
@@ -871,11 +1004,12 @@ static int cb_find_init(char *path, DIR *parent, DIR *dir,
                 decision = find_time_check(st, param, for_mds);
         }
 
+obd_matches:
         /* If file still fits the request, ask osd for updated info.
            The regulat stat is almost of the same speed as some new
            'glimpse-size-ioctl'. */
-        if (!decision && param->lmd->lmd_lmm.lmm_stripe_count &&
-            S_ISREG(st->st_mode)) {
+        if (!decision && S_ISREG(st->st_mode) &&
+            (param->lmd->lmd_lmm.lmm_stripe_count || param->size)) {
                 if (param->obdindex != OBD_NOT_FOUND) {
                         /* Check whether the obd is active or not, if it is
                          * not active, just print the object affected by this
@@ -919,9 +1053,15 @@ static int cb_find_init(char *path, DIR *parent, DIR *dir,
                 }
 
                 /* Check the time on osc. */
-                if (!decision)
-                        decision = find_time_check(st, param, 0);
+                decision = find_time_check(st, param, 0);
+                if (decision == -1)
+                        goto decided;
         }
+
+        if (param->size)
+                decision = find_value_cmp(st->st_size, param->size,
+                                          param->size_sign, param->size_units,
+                                          0);
 
 print_path:
         if (decision != -1) {
@@ -991,7 +1131,7 @@ static int cb_getstripe(char *path, DIR *parent, DIR *d, void *data,
 
         /* Prepare odb. */
         if (!param->got_uuids) {
-                ret = setup_obd_uuids(d ? d : parent, path, param);
+                ret = setup_obd_uuid(d ? d : parent, path, param);
                 if (ret)
                         return ret;
         }
