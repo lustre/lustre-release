@@ -2458,12 +2458,12 @@ setup_56_special() {
 		for i in `seq 1 $LOCAL_NUMFILES` ; do
 			mknod $TDIR/loop${i}b b 7 $i
 			mknod $TDIR/null${i}c c 1 3
-			ln -s $TDIR/file0 $TDIR/link${i}l
+			ln -s $TDIR/file1 $TDIR/link${i}l
 		done
 		for i in `seq 1 $LOCAL_NUMDIRS` ; do
 			mknod $TDIR/dir$i/loop${i}b b 7 $i
 			mknod $TDIR/dir$i/null${i}c c 1 3
-			ln -s $TDIR/dir$i/file0 $TDIR/dir$i/link${i}l
+			ln -s $TDIR/dir$i/file1 $TDIR/dir$i/link${i}l
 		done
 	fi
 }
