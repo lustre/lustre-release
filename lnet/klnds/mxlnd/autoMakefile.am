@@ -10,4 +10,4 @@ endif
 endif
 
 MOSTLYCLEANFILES = @MOSTLYCLEANFILES@
-DIST_SOURCES = $(kmxlnd-objs:%.o=%.c) mxlnd.h
+DIST_SOURCES = $(kmxlnd-objs:%.o=%.c) mxlnd.h mxlnd_wire.h
