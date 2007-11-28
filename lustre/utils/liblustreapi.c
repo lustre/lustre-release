@@ -980,6 +980,10 @@ static int cb_find_init(char *path, DIR *parent, DIR *dir,
                                         __FUNCTION__, path);
                                 return ret;
                         }
+                } else if (errno == ENOENT) {
+                        err_msg("warning: %s: %s does not exist",
+                                __FUNCTION__, path);
+                        goto decided;
                 } else {
                         err_msg("error: %s: %s failed for %s", __FUNCTION__,
                                 dir ? "LL_IOC_MDC_GETINFO" :
@@ -1078,9 +1082,15 @@ obd_matches:
                 }
 
                 if (ret) {
-                        fprintf(stderr, "%s: IOC_LOV_GETINFO on %s failed: "
-                                "%s.\n", __FUNCTION__, path, strerror(errno));
-                        return -EINVAL;
+                        if (errno == ENOENT) {
+                                err_msg("warning: %s: %s does not exist",
+                                        __FUNCTION__, path);
+                                goto decided;
+                        } else {
+                                fprintf(stderr, "%s: IOC_LOV_GETINFO on %s failed: "
+                                        "%s.\n", __FUNCTION__, path, strerror(errno));
+                                return ret;
+                        }
                 }
 
                 /* Check the time on osc. */
@@ -1186,6 +1196,10 @@ static int cb_getstripe(char *path, DIR *parent, DIR *d, void *data,
                 } else if (errno == ENOTTY) {
                         fprintf(stderr, "%s: '%s' not on a Lustre fs?\n",
                                 __FUNCTION__, path);
+                } else if (errno == ENOENT) {
+                        err_msg("warning: %s: %s does not exist",
+                                __FUNCTION__, path);
+                        goto out;
                 } else {
                         err_msg("error: %s: %s failed for %s", __FUNCTION__,
                                 d ? "LL_IOC_LOV_GETSTRIPE" :
@@ -1515,6 +1529,10 @@ static int cb_quotachown(char *path, DIR *parent, DIR *d, void *data,
                         if (!param->obduuid && !param->quiet)
                                 fprintf(stderr, "%s has no stripe info\n",
                                         path);
+                        rc = 0;
+                } else if (errno == ENOENT) {
+                        err_msg("warning: %s: %s does not exist",
+                                __FUNCTION__, path);
                         rc = 0;
                 } else if (errno != EISDIR) {
                         rc = errno;
