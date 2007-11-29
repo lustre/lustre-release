@@ -284,7 +284,6 @@ static int mds_lov_get_objid(struct obd_device * obd, struct obd_export *export,
                 mds->mds_lov_page_array[page] = data;
         }
 
-        printk("get %d - %p - %d/%d\n", idx, data, page, off);
         if (data[off] == 0) {
                 /* We never read this lastid; ask the osc */
                 struct obd_id_info lastid;
