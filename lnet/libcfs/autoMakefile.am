@@ -50,4 +50,4 @@ EXTRA_DIST := Info.plist
 
 MOSTLYCLEANFILES := @MOSTLYCLEANFILES@ linux-*.c linux/*.o darwin/*.o libcfs
 DIST_SOURCES := $(libcfs-all-objs:%.o=%.c) tracefile.h user-prim.c \
-                                           user-lock.c user-tcpip.c
+                                           user-lock.c user-tcpip.c user-bitops.c
