@@ -3493,7 +3493,7 @@ setup_test102() {
 		done
 	done
 
-	cd ..
+	cd $DIR
 	star -c  f=$TMP/f102.tar $tdir 
 	SETUP_TEST102=yes
 }
