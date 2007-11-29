@@ -45,38 +45,49 @@
 #include <lustre_fsfilt.h>
 #include <lustre_disk.h>
 
-int mgc_logname2resid(char *logname, struct ldlm_res_id *res_id)
+static int mgc_name2resid(char *name, int len, struct ldlm_res_id *res_id)
 {
-        char *name_end;
-        int len;
         __u64 resname = 0;
 
-        /* fsname is at most 8 chars long at the beginning of the logname
-           e.g. "lustre-MDT0001" or "lustre" */
-        name_end = strrchr(logname, '-');
-        if (name_end)
-                len = name_end - logname;
-        else
-                len = strlen(logname);
         if (len > 8) {
-                CERROR("fsname too long: %s\n", logname);
+                CERROR("name too long: %s\n", name);
                 return -EINVAL;
         }
         if (len <= 0) {
-                CERROR("missing fsname: %s\n", logname);
+                CERROR("missing name: %s\n", name);
                 return -EINVAL;
         }
-        memcpy(&resname, logname, len);
+        memcpy(&resname, name, len);
 
         memset(res_id, 0, sizeof(*res_id));
 
         /* Always use the same endianness for the resid */
         res_id->name[0] = cpu_to_le64(resname);
-        CDEBUG(D_MGC, "log %s to resid "LPX64"/"LPX64" (%.8s)\n", logname,
+        CDEBUG(D_MGC, "log %s to resid "LPX64"/"LPX64" (%.8s)\n", name,
                res_id->name[0], res_id->name[1], (char *)&res_id->name[0]);
         return 0;
 }
-EXPORT_SYMBOL(mgc_logname2resid);
+
+int mgc_fsname2resid(char *fsname, struct ldlm_res_id *res_id)
+{
+        /* fsname is at most 8 chars long, maybe contain "-".
+         * e.g. "lustre", "CFS-000" */
+        return mgc_name2resid(fsname, strlen(fsname), res_id);
+}
+EXPORT_SYMBOL(mgc_fsname2resid);
+
+int mgc_logname2resid(char *logname, struct ldlm_res_id *res_id)
+{
+        char *name_end;
+        int len;
+
+        /* logname consists of "fsname-nodetype".
+         * e.g. "lustre-MDT0001", "CFS-000-client" */
+        name_end = strrchr(logname, '-');
+        LASSERT(name_end);
+        len = name_end - logname;
+        return mgc_name2resid(logname, len, res_id);
+}
 
 /********************** config llog list **********************/
 static struct list_head config_llog_list = LIST_HEAD_INIT(config_llog_list);

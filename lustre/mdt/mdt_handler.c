@@ -4365,7 +4365,7 @@ static void mdt_allow_cli(struct mdt_device *m, unsigned int flag)
         if (flag & CONFIG_SYNC)
                 m->mdt_fl_synced = 1;
 
-        if (m->mdt_fl_cfglog && m->mdt_fl_synced)
+        if (m->mdt_fl_cfglog /* bz11778: && m->mdt_fl_synced */)
                 /* Open for clients */
                 m->mdt_md_dev.md_lu_dev.ld_obd->obd_no_conn = 0;
 }
