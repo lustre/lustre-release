@@ -93,8 +93,7 @@ int mds_log_op_setattr(struct obd_device *obd, __u32 uid, __u32 gid,
                       struct llog_cookie *logcookies, int cookies_size);
 
 int mds_lov_write_objids(struct obd_device *obd);
-void mds_lov_update_objids(struct obd_device *obd, obd_id *ids);
-void mds_objids_from_lmm(obd_id *, struct lov_mds_md *, struct lov_desc *);
+void mds_lov_update_objids(struct obd_device *obd, struct lov_mds_md *lmm);
 
 /* ioctls for trying requests */
 #define IOC_REQUEST_TYPE                   'f'

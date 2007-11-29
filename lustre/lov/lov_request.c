@@ -690,9 +690,6 @@ int lov_update_create_set(struct lov_request_set *set,
         if (rc)
                 RETURN(rc);
 
-        if (oti && oti->oti_objid)
-                oti->oti_objid[req->rq_idx] = req->rq_oi.oi_oa->o_id;
-
         loi->loi_id = req->rq_oi.oi_oa->o_id;
         loi->loi_gr = req->rq_oi.oi_oa->o_gr;
         loi->loi_ost_idx = req->rq_idx;

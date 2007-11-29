@@ -11,7 +11,7 @@ DIST_SUBDIRS := $(SUBDIRS)
 
 if LIBLUSTRE
 noinst_LIBRARIES= libcfs.a
-libcfs_a_SOURCES= debug.c user-prim.c user-lock.c user-tcpip.c
+libcfs_a_SOURCES= debug.c user-prim.c user-lock.c user-tcpip.c user-bitops.c
 libcfs_a_CPPFLAGS = $(LLCPPFLAGS)
 libcfs_a_CFLAGS = $(LLCFLAGS)
 endif

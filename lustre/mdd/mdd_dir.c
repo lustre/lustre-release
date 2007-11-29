@@ -1015,7 +1015,7 @@ static int mdd_create_data(const struct lu_env *env, struct md_object *pobj,
 
         /* update lov_objid data, must be before transaction stop! */
         if (rc == 0)
-                mdd_lov_objid_update(env, mdd);
+                mdd_lov_objid_update(mdd, lmm);
 
         mdd_trans_stop(env, mdd, rc, handle);
 out_free:
@@ -1389,7 +1389,7 @@ cleanup:
 
         /* update lov_objid data, must be before transaction stop! */
         if (rc == 0)
-                mdd_lov_objid_update(env, mdd);
+                mdd_lov_objid_update(mdd, lmm);
 
         mdd_pdo_write_unlock(env, mdd_pobj, dlh);
 out_trans:

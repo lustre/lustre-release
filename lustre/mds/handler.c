@@ -62,6 +62,10 @@ int mds_num_threads;
 CFS_MODULE_PARM(mds_num_threads, "i", int, 0444,
                 "number of MDS service threads to start");
 
+__u32 mds_max_ost_index=0xFFFF;
+CFS_MODULE_PARM(mds_max_ost_index, "i", int, 0444,
+                "maximal OST index");
+
 static int mds_intent_policy(struct ldlm_namespace *ns,
                              struct ldlm_lock **lockp, void *req_cookie,
                              ldlm_mode_t mode, int flags, void *data);
@@ -2236,8 +2240,9 @@ static int mds_cleanup(struct obd_device *obd)
         lquota_cleanup(mds_quota_interface_ref, obd);
 
         mds_update_server_data(obd, 1);
-        if (mds->mds_lov_objids != NULL)
-                OBD_FREE(mds->mds_lov_objids, mds->mds_lov_objids_size);
+        /* XXX
+        mds_lov_destroy_objids(obd);
+        */
         mds_fs_cleanup(obd);
 
 #if 0
@@ -2778,7 +2783,6 @@ static int mds_cmd_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
         struct lustre_sb_info *lsi;
         struct lustre_mount_info *lmi;
         struct dentry  *dentry;
-        struct file *file;
         int rc = 0;
         ENTRY;
 
@@ -2829,19 +2833,10 @@ static int mds_cmd_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
                 CERROR("__iopen__ directory has no inode? rc = %d\n", rc);
                 GOTO(err_fid, rc);
         }
-
-        /* open and test the lov objd file */
-        file = filp_open(LOV_OBJID, O_RDWR | O_CREAT, 0644);
-        if (IS_ERR(file)) {
-                rc = PTR_ERR(file);
-                CERROR("cannot open/create %s file: rc = %d\n", LOV_OBJID, rc);
-                GOTO(err_fid, rc = PTR_ERR(file));
-        }
-        mds->mds_lov_objid_filp = file;
-        if (!S_ISREG(file->f_dentry->d_inode->i_mode)) {
-                CERROR("%s is not a regular file!: mode = %o\n", LOV_OBJID,
-                       file->f_dentry->d_inode->i_mode);
-                GOTO(err_lov_objid, rc = -ENOENT);
+        rc = mds_lov_init_objids(obd);
+        if (rc != 0) {
+               CERROR("cannot init lov objid rc = %d\n", rc);
+               GOTO(err_fid, rc );
         }
 
         rc = mds_lov_presetup(mds, lcfg);
@@ -2865,10 +2860,6 @@ static int mds_cmd_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
 err_pop:
         pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
         RETURN(rc);
-err_lov_objid:
-        if (mds->mds_lov_objid_filp &&
-                filp_close((struct file *)mds->mds_lov_objid_filp, 0))
-                CERROR("can't close %s after error\n", LOV_OBJID);
 err_fid:
         dput(mds->mds_fid_de);
 err_objects:
@@ -2890,19 +2881,13 @@ static int mds_cmd_cleanup(struct obd_device *obd)
                               "will be preserved.\n", obd->obd_name);
 
         push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
-        if (mds->mds_lov_objid_filp) {
-                rc = filp_close((struct file *)mds->mds_lov_objid_filp, 0);
-                mds->mds_lov_objid_filp = NULL;
-                if (rc)
-                        CERROR("%s file won't close, rc=%d\n", LOV_OBJID, rc);
-        }
+
+        mds_lov_destroy_objids(obd);
+
         if (mds->mds_objects_dir != NULL) {
                 l_dput(mds->mds_objects_dir);
                 mds->mds_objects_dir = NULL;
         }
-
-        if (mds->mds_lov_objids != NULL)
-                OBD_FREE(mds->mds_lov_objids, mds->mds_lov_objids_size);
 
         shrink_dcache_parent(mds->mds_fid_de);
         dput(mds->mds_fid_de);

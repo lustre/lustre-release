@@ -12,6 +12,13 @@
        * Recommended e2fsprogs version: 1.40.2-cfs4
        * Note that reiserfs quotas are disabled on SLES 10 in this kernel.
 
+
+Severity   : enhancement
+Bugzilla   : 12702
+Description: lost problems with lov objid file
+Details    : Fixes some scability and access to not inited memory problems 
+             in work with lov objdid file.
+
 Severity   : major
 Frequency  : always
 Bugzilla   : 14270

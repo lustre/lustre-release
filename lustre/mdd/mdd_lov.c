@@ -342,56 +342,17 @@ static obd_id mdd_lov_create_id(const struct lu_fid *fid)
         return fid_flatten(fid);
 }
 
-static int mdd_lov_objid_alloc(const struct lu_env *env,
-                               struct mdd_device *mdd)
+void mdd_lov_objid_update(struct mdd_device *mdd, struct lov_mds_md *lmm)
 {
-        struct mdd_thread_info *info = mdd_env_info(env);
-        struct mds_obd *mds = &mdd->mdd_obd_dev->u.mds;
-
-        OBD_ALLOC(info->mti_oti.oti_objid,
-                  mds->mds_lov_desc.ld_tgt_count * sizeof(obd_id));
-        return (info->mti_oti.oti_objid == NULL ? -ENOMEM : 0);
-}
-
-void mdd_lov_objid_update(const struct lu_env *env, struct mdd_device *mdd)
-{
-        struct mdd_thread_info *info = mdd_env_info(env);
-        if (info->mti_oti.oti_objid != NULL)
-                mds_lov_update_objids(mdd->mdd_obd_dev,
-                                      info->mti_oti.oti_objid);
-}
-
-static void mdd_lov_objid_from_lmm(const struct lu_env *env,
-                                   struct mdd_device *mdd,
-                                   struct lov_mds_md *lmm)
-{
-        struct mds_obd *mds = &mdd->mdd_obd_dev->u.mds;
-        struct mdd_thread_info *info = mdd_env_info(env);
-        mds_objids_from_lmm(info->mti_oti.oti_objid, lmm, &mds->mds_lov_desc);
-}
-
-static void mdd_lov_objid_free(const struct lu_env *env,
-                               struct mdd_device *mdd)
-{
-        struct mdd_thread_info *info = mdd_env_info(env);
-        struct mds_obd *mds = &mdd->mdd_obd_dev->u.mds;
-
-        OBD_FREE(info->mti_oti.oti_objid,
-                 mds->mds_lov_desc.ld_tgt_count * sizeof(obd_id));
-        info->mti_oti.oti_objid = NULL;
+        mds_lov_update_objids(mdd->mdd_obd_dev, lmm);
 }
 
 void mdd_lov_create_finish(const struct lu_env *env, struct mdd_device *mdd,
                            struct lov_mds_md *lmm, int lmm_size,
                            const struct md_op_spec *spec)
 {
-        struct mdd_thread_info *info = mdd_env_info(env);
-
         if (lmm && !spec->u.sp_ea.no_lov_create)
                 OBD_FREE(lmm, lmm_size);
-
-        if (info->mti_oti.oti_objid != NULL)
-                mdd_lov_objid_free(env, mdd);
 }
 
 int mdd_lov_create(const struct lu_env *env, struct mdd_device *mdd,
@@ -413,15 +374,11 @@ int mdd_lov_create(const struct lu_env *env, struct mdd_device *mdd,
                 RETURN(0);
 
         oti_init(oti, NULL);
-        rc = mdd_lov_objid_alloc(env, mdd);
-        if (rc != 0)
-                RETURN(rc);
 
         /* replay case, has objects already, only get lov from eadata */
         if (spec->u.sp_ea.no_lov_create != 0) {
                 *lmm = (struct lov_mds_md *)spec->u.sp_ea.eadata;
                 *lmm_size = spec->u.sp_ea.eadatalen;
-                mdd_lov_objid_from_lmm(env, mdd, *lmm);
                 RETURN(0);
         }
 
@@ -553,12 +510,9 @@ out_oti:
 out_ids:
         if (lsm)
                 obd_free_memmd(lov_exp, &lsm);
-        if (rc != 0)
-                mdd_lov_objid_free(env, mdd);
 
         return rc;
 }
-
 
 /*
  * used when destroying orphans and from mds_reint_unlink() when MDS wants to

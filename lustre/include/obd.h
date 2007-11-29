@@ -36,6 +36,9 @@
 #include <lustre_capa.h>
 #include <class_hash.h>
 
+#include <libcfs/bitmap.h>
+
+
 #define MAX_OBD_DEVICES 8192
 
 /* this is really local to the OSC */
@@ -524,11 +527,17 @@ struct mds_obd {
         struct obd_export               *mds_osc_exp; /* XXX lov_exp */
         struct lov_desc                  mds_lov_desc;
         __u32                            mds_id;
-        obd_id                          *mds_lov_objids;
-        int                              mds_lov_objids_size;
-        __u32                            mds_lov_objids_in_file;
-        int                              mds_lov_nextid_set;
+
+        /* mark pages dirty for write. */
+        bitmap_t                         *mds_lov_page_dirty;
+        /* array for store pages with obd_id */
+        void                            **mds_lov_page_array;
+        /* file for store objid */
         struct file                     *mds_lov_objid_filp;
+        __u32                            mds_lov_objid_count;
+        __u32                            mds_lov_objid_lastpage;
+        __u32                            mds_lov_objid_lastidx;
+
         struct file                     *mds_health_check_filp;
         unsigned long                   *mds_client_bitmap;
 //        struct upcall_cache             *mds_group_hash;
@@ -536,9 +545,7 @@ struct mds_obd {
         struct lustre_quota_info         mds_quota_info;
         struct semaphore                 mds_qonoff_sem;
         struct semaphore                 mds_health_sem;
-        unsigned long                    mds_lov_objids_valid:1,
-                                         mds_lov_objids_dirty:1,
-                                         mds_fl_user_xattr:1,
+        unsigned long                    mds_fl_user_xattr:1,
                                          mds_fl_acl:1,
                                          mds_evict_ost_nids:1,
                                          mds_fl_cfglog:1,
@@ -553,6 +560,25 @@ struct mds_obd {
         /* for capability keys update */
         struct lustre_capa_key          *mds_capa_keys;
 };
+
+/* lov objid */
+extern __u32 mds_max_ost_index;
+
+#define MDS_LOV_ALLOC_SIZE (CFS_PAGE_SIZE)
+
+#define OBJID_PER_PAGE() (MDS_LOV_ALLOC_SIZE / sizeof(obd_id))
+
+#define MDS_LOV_OBJID_PAGES_COUNT (mds_max_ost_index/OBJID_PER_PAGE())
+
+extern int mds_lov_init_objids(struct obd_device *obd);
+extern void mds_lov_destroy_objids(struct obd_device *obd);
+
+struct obd_id_info {
+        __u32   idx;
+        obd_id  *data;
+};
+
+/* */
 
 struct echo_obd {
         struct obdo          eo_oa;
@@ -715,7 +741,6 @@ struct niobuf_local {
 struct obd_trans_info {
         __u64                    oti_transno;
         __u64                    oti_xid;
-        __u64                   *oti_objid;
         /* Only used on the server side for tracking acks. */
         struct oti_req_ack_lock {
                 struct lustre_handle lock;
