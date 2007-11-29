@@ -724,8 +724,8 @@ static int showdf(char *mntdir, struct obd_statfs *stat,
                         int shift = cooked ? 0 : 10;
 
                         avail = (stat->os_bavail * stat->os_bsize) >> shift;
-                        used = stat->os_blocks - stat->os_bavail;
-                        used = (used * stat->os_bsize) >> shift;
+                        used  = ((stat->os_blocks - stat->os_bfree) *
+                                 stat->os_bsize) >> shift;
                         total = (stat->os_blocks * stat->os_bsize) >> shift;
                 }
 
