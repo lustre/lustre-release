@@ -198,6 +198,7 @@ case x$with_ldiskfs in
 esac
 AC_SUBST(LDISKFS_DIR)
 AC_SUBST(LDISKFS_SUBDIR)
+AM_CONDITIONAL(LDISKFS_ENABLED, test x$with_ldiskfs != xno)
 
 # We have to configure even if we don't build here for make dist to work
 AC_CONFIG_SUBDIRS(ldiskfs)
