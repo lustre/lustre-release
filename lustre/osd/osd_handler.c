@@ -566,7 +566,7 @@ static int osd_statfs(const struct lu_env *env,
         spin_lock(&osd->od_osfs_lock);
         /* cache 1 second */
         if (cfs_time_before_64(osd->od_osfs_age, cfs_time_shift_64(-1))) {
-                result = sb->s_op->statfs(sb, &osd->od_kstatfs);
+                result = ll_do_statfs(sb, &osd->od_kstatfs);
                 if (likely(result == 0)) /* N.B. statfs can't really fail */
                         osd->od_osfs_age = cfs_time_current_64();
         }
@@ -811,7 +811,11 @@ static const int osd_dto_credits[DTO_NR] = {
          * also counted in. Do not know why?
          */
         [DTO_XATTR_SET]     = 16,
-        [DTO_LOG_REC]       = 16
+        [DTO_LOG_REC]       = 16,
+        /* creadits for inode change during write */
+        [DTO_WRITE_BASE]    = 3,
+        /* credits for single block write */
+        [DTO_WRITE_BLOCK]   = 12 
 };
 
 static int osd_credit_get(const struct lu_env *env, struct dt_device *d,

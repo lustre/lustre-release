@@ -44,9 +44,23 @@
 
 #include "mdd_internal.h"
 
+static int dto_txn_credits[DTO_NR];
+
 int mdd_txn_start_cb(const struct lu_env *env, struct txn_param *param,
                      void *cookie)
 {
+        struct mdd_device *mdd = cookie;
+        struct obd_device *obd = mdd2obd_dev(mdd);
+        /* Each transaction updates lov objids, the credits should be added for
+         * this */
+        int blk, shift = mdd->mdd_dt_conf.ddp_block_shift;
+        blk = ((obd->u.mds.mds_lov_desc.ld_tgt_count * sizeof(obd_id) +
+               (1 << shift) - 1) >> shift) + 1;
+
+        /* add lov objids credits */
+        param->tp_credits += blk * dto_txn_credits[DTO_WRITE_BLOCK] +
+                             dto_txn_credits[DTO_WRITE_BASE];
+
         return 0;
 }
 
@@ -66,7 +80,6 @@ int mdd_txn_commit_cb(const struct lu_env *env, struct thandle *txn,
         return 0;
 }
 
-static int dto_txn_credits[DTO_NR];
 void mdd_txn_param_build(const struct lu_env *env, struct mdd_device *mdd,
                          enum mdd_txn_op op)
 {
