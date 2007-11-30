@@ -223,7 +223,6 @@ run_test 5 "|x| 220 open(O_CREAT)"
 
 test_6() {
     replay_barrier $SINGLEMDS
-    mkdir $DIR/$tdir
     mcreate $DIR/$tdir/$tfile
     fail $SINGLEMDS
     $CHECKSTAT -t dir $DIR/$tdir || return 1
@@ -242,7 +241,6 @@ test_6b() {
 run_test 6b "|X| rmdir"
 
 test_7() {
-    mkdir $DIR/$tdir
     replay_barrier $SINGLEMDS
     mcreate $DIR/$tdir/$tfile
     fail $SINGLEMDS
@@ -1139,7 +1137,6 @@ run_test 57 "test recovery from llog for setattr op"
 test_58() {
 #define OBD_FAIL_MDS_OST_SETATTR       0x12c
     do_facet $SINGLEMDS "sysctl -w lustre.fail_loc=0x8000012c"
-    mkdir $DIR/$tdir
     createmany -o $DIR/$tdir/$tfile-%d 2500
     replay_barrier $SINGLEMDS
     fail $SINGLEMDS
@@ -1154,7 +1151,6 @@ run_test 58 "test recovery from llog for setattr op (test llog_gen_rec)"
 # log_commit_thread vs filter_destroy race used to lead to import use after free
 # bug 11658
 test_59() {
-    mkdir $DIR/$tdir
     createmany -o $DIR/$tdir/$tfile-%d 200
     sync
     unlinkmany $DIR/$tdir/$tfile-%d 200
@@ -1171,7 +1167,6 @@ run_test 59 "test log_commit_thread vs filter_destroy race"
 # race between add unlink llog vs cat log init in post_recovery (only for b1_6)
 # bug 12086: should no oops and No ctxt error for this test
 test_60() {
-    mkdir $DIR/$tdir
     createmany -o $DIR/$tdir/$tfile-%d 200
     replay_barrier $SINGLEMDS
     unlinkmany $DIR/$tdir/$tfile-%d 0 100
