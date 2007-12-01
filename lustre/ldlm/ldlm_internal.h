@@ -56,7 +56,7 @@ void ldlm_resource_insert_lock_after(struct ldlm_lock *original,
 struct ldlm_cb_set_arg {
         struct ptlrpc_request_set *set;
         atomic_t restart;
-        __u16 type; /* LDLM_BL_CALLBACK or LDLM_CP_CALLBACK */
+        __u32 type; /* LDLM_BL_CALLBACK or LDLM_CP_CALLBACK */
 };
 
 void ldlm_grant_lock(struct ldlm_lock *lock, struct list_head *work_list);

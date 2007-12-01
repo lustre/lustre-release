@@ -560,7 +560,7 @@ int ldlm_server_blocking_ast(struct ldlm_lock *lock,
                              struct ldlm_lock_desc *desc,
                              void *data, int flag)
 {
-        struct ldlm_cb_set_arg *arg = (struct ldlm_cb_set_arg *)data;
+        struct ldlm_cb_set_arg *arg = data;
         struct ldlm_request *body;
         struct ptlrpc_request *req;
         int size[] = { [MSG_PTLRPC_BODY_OFF] = sizeof(struct ptlrpc_body),
@@ -642,7 +642,7 @@ int ldlm_server_blocking_ast(struct ldlm_lock *lock,
 
 int ldlm_server_completion_ast(struct ldlm_lock *lock, int flags, void *data)
 {
-        struct ldlm_cb_set_arg *arg = (struct ldlm_cb_set_arg *)data;
+        struct ldlm_cb_set_arg *arg = data;
         struct ldlm_request *body;
         struct ptlrpc_request *req;
         struct timeval granted_time;
