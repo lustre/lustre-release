@@ -339,7 +339,7 @@ int llu_inode_getattr(struct inode *inode, struct obdo *obdo)
         oinfo.oi_oa->o_valid = OBD_MD_FLID | OBD_MD_FLTYPE |
                                OBD_MD_FLSIZE | OBD_MD_FLBLOCKS |
                                OBD_MD_FLBLKSZ | OBD_MD_FLMTIME |
-                               OBD_MD_FLCTIME;
+                               OBD_MD_FLCTIME | OBD_MD_FLGROUP;
 
         set = ptlrpc_prep_set();
         if (set == NULL) {
@@ -865,7 +865,8 @@ int llu_setattr_raw(struct inode *inode, struct iattr *attr)
                 CDEBUG(D_INODE, "set mtime on OST inode %llu to %lu\n",
                        (long long)st->st_ino, LTIME_S(attr->ia_mtime));
                 oa.o_id = lsm->lsm_object_id;
-                oa.o_valid = OBD_MD_FLID;
+                oa.o_gr = lsm->lsm_object_gr;
+                oa.o_valid = OBD_MD_FLID | OBD_MD_FLGROUP;
 
                 obdo_from_inode(&oa, inode, OBD_MD_FLTYPE | OBD_MD_FLATIME |
                                             OBD_MD_FLMTIME | OBD_MD_FLCTIME);
@@ -946,7 +947,7 @@ static int llu_iop_symlink_raw(struct pnode *pno, const char *tgt)
         int len = qstr->len;
         struct ptlrpc_request *request = NULL;
         struct llu_sb_info *sbi = llu_i2sbi(dir);
-        struct md_op_data op_data;
+        struct md_op_data op_data = {{ 0 }};
         int err = -EMLINK;
         ENTRY;
 
@@ -1061,7 +1062,7 @@ static int llu_iop_mknod_raw(struct pnode *pno,
         struct ptlrpc_request *request = NULL;
         struct inode *dir = pno->p_parent->p_base->pb_ino;
         struct llu_sb_info *sbi = llu_i2sbi(dir);
-        struct md_op_data op_data;
+        struct md_op_data op_data = {{ 0 }};
         int err = -EMLINK;
         ENTRY;
 
@@ -1108,7 +1109,7 @@ static int llu_iop_link_raw(struct pnode *old, struct pnode *new)
         const char *name = new->p_base->pb_name.name;
         int namelen = new->p_base->pb_name.len;
         struct ptlrpc_request *request = NULL;
-        struct md_op_data op_data;
+        struct md_op_data op_data = {{ 0 }};
         int rc;
         ENTRY;
 
@@ -1136,7 +1137,7 @@ static int llu_iop_unlink_raw(struct pnode *pno)
         int len = qstr->len;
         struct inode *target = pno->p_base->pb_ino;
         struct ptlrpc_request *request = NULL;
-        struct md_op_data op_data;
+        struct md_op_data op_data = { { 0 } };
         int rc;
         ENTRY;
 
@@ -1163,7 +1164,7 @@ static int llu_iop_rename_raw(struct pnode *old, struct pnode *new)
         const char *newname = new->p_base->pb_name.name;
         int newnamelen = new->p_base->pb_name.len;
         struct ptlrpc_request *request = NULL;
-        struct md_op_data op_data;
+        struct md_op_data op_data = { { 0 } };
         int rc;
         ENTRY;
 
@@ -1307,7 +1308,7 @@ static int llu_iop_mkdir_raw(struct pnode *pno, mode_t mode)
         int len = qstr->len;
         struct ptlrpc_request *request = NULL;
         struct intnl_stat *st = llu_i2stat(dir);
-        struct md_op_data op_data;
+        struct md_op_data op_data = {{ 0 }};
         int err = -EMLINK;
         ENTRY;
 
@@ -1336,7 +1337,7 @@ static int llu_iop_rmdir_raw(struct pnode *pno)
         const char *name = qstr->name;
         int len = qstr->len;
         struct ptlrpc_request *request = NULL;
-        struct md_op_data op_data;
+        struct md_op_data op_data = {{ 0 }};
         int rc;
         ENTRY;
 
@@ -1434,13 +1435,26 @@ static int llu_file_flock(struct inode *ino,
                 LBUG();
         }
 
-        CDEBUG(D_DLMTRACE, "inode=%llu, pid=%u, flags=%#x, mode=%u, "
-               "start="LPU64", end="LPU64"\n", (unsigned long long)st->st_ino,
-               flock.l_flock.pid, flags, einfo.ei_mode, flock.l_flock.start,
+        CDEBUG(D_DLMTRACE, "inode=%llu, pid=%u, cmd=%d, flags=%#x, mode=%u, "
+               "start="LPX64", end="LPX64"\n", (unsigned long long)st->st_ino,
+               flock.l_flock.pid, cmd, flags, einfo.ei_mode, flock.l_flock.start,
                flock.l_flock.end);
 
-        rc = ldlm_cli_enqueue(llu_i2mdexp(ino), NULL, &einfo, &res_id, 
-                              &flock, &flags, NULL, 0, NULL, &lockh, 0);
+        {
+                struct lmv_obd *lmv;
+                struct obd_device *lmv_obd;
+                lmv_obd = class_exp2obd(llu_i2mdexp(ino));
+                lmv = &lmv_obd->u.lmv;
+
+                if (lmv->desc.ld_tgt_count < 1)
+                        RETURN(rc = -ENODEV);
+                
+                if (lmv->tgts[0].ltd_exp != NULL)
+                        rc = ldlm_cli_enqueue(lmv->tgts[0].ltd_exp, NULL, &einfo, &res_id, 
+                                              &flock, &flags, NULL, 0, NULL, &lockh, 0);
+                else
+                        rc = -ENODEV;
+        }
         RETURN(rc);
 }
 
@@ -1684,7 +1698,7 @@ static int llu_lov_dir_setstripe(struct inode *ino, unsigned long arg)
 {
         struct llu_sb_info *sbi = llu_i2sbi(ino);
         struct ptlrpc_request *request = NULL;
-        struct md_op_data op_data;
+        struct md_op_data op_data = {{ 0 }};
         struct lov_user_md lum, *lump = (struct lov_user_md *)arg;
         int rc = 0;
 
@@ -1731,7 +1745,7 @@ static int llu_lov_setstripe_ea_info(struct inode *ino, int flags,
 
         struct ptlrpc_request *req = NULL;
         struct lustre_md md;
-        struct md_op_data data;
+        struct md_op_data data = {{ 0 }};
         struct lustre_handle lockh;
         int rc = 0;
         ENTRY;
@@ -1755,7 +1769,7 @@ static int llu_lov_setstripe_ea_info(struct inode *ino, int flags,
         lli2->lli_symlink_name = NULL;
         ino->i_private = lli2;
 
-        llu_prep_md_op_data(&data, NULL, ino, NULL, 0, O_RDWR, 
+        llu_prep_md_op_data(&data, NULL, ino, NULL, 0, O_RDWR,
                             LUSTRE_OPC_ANY);
 
         rc = md_enqueue(sbi->ll_md_exp, &einfo, &oit, &data,

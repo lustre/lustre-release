@@ -129,10 +129,6 @@
  *
  */
 
-static __u32 hash_x_index(__u32 value)
-{
-        return ((__u32)~0) - value;
-}
 #ifdef HAVE_PG_FS_MISC
 #define PageChecked(page)        test_bit(PG_fs_misc, &(page)->flags)
 #define SetPageChecked(page)     set_bit(PG_fs_misc, &(page)->flags)
@@ -259,21 +255,6 @@ static struct page *ll_dir_page_locate(struct inode *dir, unsigned long hash,
                 page = NULL;
         }
         return page;
-}
-
-/*
- * Chain of hash overflow pages.
- */
-struct ll_dir_chain {
-        /* XXX something. Later */
-};
-
-static void ll_dir_chain_init(struct ll_dir_chain *chain)
-{
-}
-
-static void ll_dir_chain_fini(struct ll_dir_chain *chain)
-{
 }
 
 static struct page *ll_get_dir_page(struct inode *dir, __u32 hash, int exact,

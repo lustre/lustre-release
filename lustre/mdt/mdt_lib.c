@@ -1172,7 +1172,6 @@ static int mdt_open_unpack(struct mdt_thread_info *info)
         if (rr->rr_name == NULL)
                 RETURN(-EFAULT);
         rr->rr_namelen = req_capsule_get_size(pill, &RMF_NAME, RCL_CLIENT) - 1;
-        LASSERT(rr->rr_namelen > 0);
 
         sp->u.sp_ea.eadatalen = req_capsule_get_size(pill, &RMF_EADATA,
                                                      RCL_CLIENT);

@@ -251,7 +251,30 @@ static inline int fid_is_igif(const struct lu_fid *fid)
         fid_oid(fid), \
         fid_ver(fid)
 
-#ifdef __KERNEL__
+static inline void fid_cpu_to_le(struct lu_fid *dst, const struct lu_fid *src)
+{
+        /* check that all fields are converted */
+        CLASSERT(sizeof *src ==
+                 sizeof fid_seq(src) +
+                 sizeof fid_oid(src) + sizeof fid_ver(src));
+        LASSERTF(fid_is_igif(src) || fid_ver(src) == 0, DFID"\n", PFID(src));
+        dst->f_seq = cpu_to_le64(fid_seq(src));
+        dst->f_oid = cpu_to_le32(fid_oid(src));
+        dst->f_ver = cpu_to_le32(fid_ver(src));
+}
+
+static inline void fid_le_to_cpu(struct lu_fid *dst, const struct lu_fid *src)
+{
+        /* check that all fields are converted */
+        CLASSERT(sizeof *src ==
+                 sizeof fid_seq(src) +
+                 sizeof fid_oid(src) + sizeof fid_ver(src));
+        dst->f_seq = le64_to_cpu(fid_seq(src));
+        dst->f_oid = le32_to_cpu(fid_oid(src));
+        dst->f_ver = le32_to_cpu(fid_ver(src));
+        LASSERTF(fid_is_igif(dst) || fid_ver(dst) == 0, DFID"\n", PFID(dst));
+}
+
 static inline void fid_cpu_to_be(struct lu_fid *dst, const struct lu_fid *src)
 {
         /* check that all fields are converted */
@@ -276,6 +299,7 @@ static inline void fid_be_to_cpu(struct lu_fid *dst, const struct lu_fid *src)
         LASSERTF(fid_is_igif(dst) || fid_ver(dst) == 0, DFID"\n", PFID(dst));
 }
 
+#ifdef __KERNEL__
 /*
  * Storage representation for fids.
  *

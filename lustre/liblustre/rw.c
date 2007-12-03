@@ -451,12 +451,18 @@ static int llu_ap_completion(void *data, int cmd, struct obdo *oa, int rc)
         RETURN(0);
 }
 
+static struct obd_capa * llu_ap_lookup_capa(void *data, int cmd)
+{
+        return NULL;
+}
+
 static struct obd_async_page_ops llu_async_page_ops = {
         .ap_make_ready =        NULL,
         .ap_refresh_count =     NULL,
         .ap_fill_obdo =         llu_ap_fill_obdo,
         .ap_update_obdo =       llu_ap_update_obdo,
         .ap_completion =        llu_ap_completion,
+        .ap_lookup_capa =       llu_ap_lookup_capa,
 };
 
 static int llu_queue_pio(int cmd, struct llu_io_group *group,
@@ -528,6 +534,7 @@ static int llu_queue_pio(int cmd, struct llu_io_group *group,
                         llap->llap_cookie = NULL;
                         RETURN(rc);
                 }
+
                 CDEBUG(D_CACHE, "llap %p page %p group %p obj off "LPU64"\n",
                        llap, page, llap->llap_cookie,
                        (obd_off)pages->index << CFS_PAGE_SHIFT);

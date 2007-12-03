@@ -745,7 +745,6 @@ static int mdt_open_by_fid(struct mdt_thread_info* info,
         int                      rc;
         ENTRY;
 
-        LASSERT(info->mti_spec.u.sp_ea.no_lov_create);
         o = mdt_object_find(info->mti_env, info->mti_mdt, rr->rr_fid2);
         if (IS_ERR(o))
                 RETURN(rc = PTR_ERR(o));
@@ -758,7 +757,7 @@ static int mdt_open_by_fid(struct mdt_thread_info* info,
 
                 rc = mo_attr_get(env, mdt_object_child(o), ma);
                 if (rc == 0)
-                        rc = mdt_mfd_open(info, NULL, o, flags, 0);
+                        rc = mdt_finish_open(info, NULL, o, flags, 0, rep);
         } else if (rc == 0) {
                 rc = -ENOENT;
         } else  {
@@ -872,13 +871,17 @@ int mdt_reint_open(struct mdt_thread_info *info, struct mdt_lock_handle *lhc)
                PFID(rr->rr_fid2), create_flags,
                ma->ma_attr.la_mode, lustre_msg_get_flags(req->rq_reqmsg));
 
-        if (lustre_msg_get_flags(req->rq_reqmsg) & MSG_REPLAY) {
-                /* This is a replay request. */
+        if ((lustre_msg_get_flags(req->rq_reqmsg) & MSG_REPLAY) ||
+            (req->rq_export->exp_libclient && create_flags&MDS_OPEN_HAS_EA)) {
+                /* This is a replay request or from liblustre with ea. */
                 result = mdt_open_by_fid(info, ldlm_rep);
 
-                if (result != -ENOENT)
+                if (result != -ENOENT) {
+                        if (req->rq_export->exp_libclient &&
+                            create_flags&MDS_OPEN_HAS_EA)
+                                GOTO(out, result = 0);
                         GOTO(out, result);
-
+                }
                 /*
                  * We didn't find the correct object, so we need to re-create it
                  * via a regular replay.

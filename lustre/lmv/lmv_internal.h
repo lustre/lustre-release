@@ -166,6 +166,10 @@ lmv_get_mea(struct ptlrpc_request *req, int offset)
 
 	if (mea->mea_count == 0)
 		return NULL;
+        if( mea->mea_magic != MEA_MAGIC_LAST_CHAR &&
+                mea->mea_magic != MEA_MAGIC_ALL_CHARS &&
+                mea->mea_magic != MEA_MAGIC_HASH_SEGMENT)
+                return NULL;
 	
 	return mea;
 }

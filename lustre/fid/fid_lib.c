@@ -67,32 +67,6 @@ const struct lu_fid LUSTRE_BFL_FID = { .f_seq = 0x0000000000000003,
                                        .f_ver = 0x0000000000000000 };
 EXPORT_SYMBOL(LUSTRE_BFL_FID);
 
-void fid_cpu_to_le(struct lu_fid *dst, const struct lu_fid *src)
-{
-        /* check that all fields are converted */
-        CLASSERT(sizeof *src ==
-                 sizeof fid_seq(src) +
-                 sizeof fid_oid(src) + sizeof fid_ver(src));
-        LASSERTF(fid_is_igif(src) || fid_ver(src) == 0, DFID"\n", PFID(src));
-        dst->f_seq = cpu_to_le64(fid_seq(src));
-        dst->f_oid = cpu_to_le32(fid_oid(src));
-        dst->f_ver = cpu_to_le32(fid_ver(src));
-}
-EXPORT_SYMBOL(fid_cpu_to_le);
-
-void fid_le_to_cpu(struct lu_fid *dst, const struct lu_fid *src)
-{
-        /* check that all fields are converted */
-        CLASSERT(sizeof *src ==
-                 sizeof fid_seq(src) +
-                 sizeof fid_oid(src) + sizeof fid_ver(src));
-        dst->f_seq = le64_to_cpu(fid_seq(src));
-        dst->f_oid = le32_to_cpu(fid_oid(src));
-        dst->f_ver = le32_to_cpu(fid_ver(src));
-        LASSERTF(fid_is_igif(dst) || fid_ver(dst) == 0, DFID"\n", PFID(dst));
-}
-EXPORT_SYMBOL(fid_le_to_cpu);
-
 void range_cpu_to_le(struct lu_range *dst, const struct lu_range *src)
 {
         /* check that all fields are converted */

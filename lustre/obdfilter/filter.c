@@ -1388,6 +1388,8 @@ struct dentry *filter_parent_lock(struct obd_device *obd, obd_gr group,
 
         if (IS_ERR(dparent))
                 return dparent;
+        if (dparent == NULL)
+                return ERR_PTR(-ENOENT);
 
         rc = filter_lock_dentry(obd, dparent);
         fsfilt_check_slow(obd, now, obd_timeout, "parent lock");
@@ -2772,8 +2774,8 @@ struct dentry *__filter_oa2dentry(struct obd_device *obd, struct obdo *oa,
         dchild = filter_fid2dentry(obd, NULL, group, oa->o_id);
 
         if (IS_ERR(dchild)) {
-                CERROR("%s error looking up object: "LPU64"\n",
-                       what, oa->o_id);
+                CERROR("%s error looking up object: "LPU64":"LPU64"\n",
+                       what, group, oa->o_id);
                 RETURN(dchild);
         }
 

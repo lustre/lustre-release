@@ -62,19 +62,21 @@
 
 #include "llite_lib.h"
 
+/* (new) readdir implementation overview can be found in lustre/llite/dir.c */
+
 static int llu_dir_do_readpage(struct inode *inode, struct page *page)
 {
         struct llu_inode_info *lli = llu_i2info(inode);
-        struct intnl_stat *st = llu_i2stat(inode);
-        struct llu_sb_info *sbi = llu_i2sbi(inode);
+        struct intnl_stat     *st = llu_i2stat(inode);
+        struct llu_sb_info    *sbi = llu_i2sbi(inode);
+        struct ptlrpc_request *request;
+        struct lustre_handle   lockh;
+        struct mdt_body       *body;
+        struct lookup_intent   it = { .it_op = IT_READDIR };
+        struct md_op_data      op_data = {{ 0 }};
+        ldlm_policy_data_t policy = { .l_inodebits = { MDS_INODELOCK_UPDATE } };
         __u64 offset;
         int rc = 0;
-        struct ptlrpc_request *request;
-        struct lustre_handle lockh;
-        struct mdt_body *body;
-        struct lookup_intent it = { .it_op = IT_READDIR };
-        struct md_op_data op_data;
-        ldlm_policy_data_t policy = { .l_inodebits = { MDS_INODELOCK_UPDATE } };
         ENTRY;
 
         rc = md_lock_match(sbi->ll_md_exp, LDLM_FL_BLOCK_GRANTED,
@@ -99,7 +101,7 @@ static int llu_dir_do_readpage(struct inode *inode, struct page *page)
         }
         ldlm_lock_dump_handle(D_OTHER, &lockh);
 
-        offset = (__u64)page->index << CFS_PAGE_SHIFT;
+        offset = (__u64)hash_x_index(page->index);
         rc = md_readpage(sbi->ll_md_exp, &lli->lli_fid, NULL,
                          offset, page, &request);
         if (!rc) {
@@ -109,7 +111,8 @@ static int llu_dir_do_readpage(struct inode *inode, struct page *page)
                 /* swabbed by md_readpage() */
                 LASSERT(lustre_rep_swabbed(request, REPLY_REC_OFF));
 
-                st->st_size = body->size;
+                if (body->valid & OBD_MD_FLSIZE)
+                        st->st_size = body->size;
         } else {
                 CERROR("read_dir_page(%ld) error %d\n", page->index, rc);
         }
@@ -120,7 +123,8 @@ static int llu_dir_do_readpage(struct inode *inode, struct page *page)
         return rc;
 }
 
-static struct page *llu_dir_read_page(struct inode *ino, unsigned long pgidx)
+static struct page *llu_dir_read_page(struct inode *ino, __u32 hash,
+                                      int exact, struct ll_dir_chain *chain)
 {
         struct page *page;
         int rc;
@@ -129,7 +133,7 @@ static struct page *llu_dir_read_page(struct inode *ino, unsigned long pgidx)
         OBD_PAGE_ALLOC(page, 0);
         if (!page)
                 RETURN(ERR_PTR(-ENOMEM));
-        page->index = pgidx;
+        page->index = hash_x_index(hash);
 
         rc = llu_dir_do_readpage(ino, page);
         if (rc) {
@@ -165,7 +169,6 @@ static unsigned char ext2_filetype_table[EXT2_FT_MAX] = {
 
 #define NAME_OFFSET(de) ((int) ((de)->d_name - (char *) (de)))
 #define ROUND_UP64(x)   (((x)+sizeof(__u64)-1) & ~(sizeof(__u64)-1))
-
 static int filldir(char *buf, int buflen,
                    const char *name, int namelen, loff_t offset,
                    ino_t ino, unsigned int d_type, int *filled)
@@ -191,14 +194,23 @@ static int filldir(char *buf, int buflen,
         return 0;
 }
 
-ssize_t llu_iop_filldirentries(struct inode *ino, _SYSIO_OFF_T *basep, 
+/* 
+ * TODO: much of the code here is similar/identical to llite ll_readdir().
+ * These code can be factored out and shared in a common module.
+ */
+
+ssize_t llu_iop_filldirentries(struct inode *dir, _SYSIO_OFF_T *basep, 
 			       char *buf, size_t nbytes)
 {
-        struct llu_inode_info *lli = llu_i2info(ino);
-        struct intnl_stat *st = llu_i2stat(ino);
-        loff_t pos = *basep, offset;
-        unsigned long maxpages, pgidx;
+        struct llu_inode_info *lli = llu_i2info(dir);
+        struct intnl_stat     *st = llu_i2stat(dir);
+        loff_t                 pos = *basep;
+        struct ll_dir_chain    chain;
+        struct page           *page;
         int filled = 0;
+        int rc;
+        int done;
+        int shift;
         ENTRY;
 
         liblustre_wait_event(0);
@@ -208,62 +220,99 @@ ssize_t llu_iop_filldirentries(struct inode *ino, _SYSIO_OFF_T *basep,
                 RETURN(0);
         }
 
-        if (pos == -1)
-                pos = lli->lli_dir_pos;
+        if (pos == DIR_END_OFF)
+                /*
+                 * end-of-file.
+                 */
+                RETURN(0);
 
-        maxpages = (st->st_size + CFS_PAGE_SIZE - 1) >> CFS_PAGE_SHIFT;
-        pgidx = pos >> CFS_PAGE_SHIFT;
-        offset = pos & ~CFS_PAGE_MASK;
+        rc    = 0;
+        done  = 0;
+        shift = 0;
+        ll_dir_chain_init(&chain);
 
-        for ( ; pgidx < maxpages ; pgidx++, offset = 0) {
-                struct page *page;
-                struct ext2_dirent *de;
-                char *addr, *limit;
+        page = llu_dir_read_page(dir, pos, 0, &chain);
+        while (rc == 0 && !done) {
+                struct lu_dirpage *dp;
+                struct lu_dirent  *ent;
 
-                page = llu_dir_read_page(ino, pgidx);
-                if (IS_ERR(page))
-                        continue;
+                if (!IS_ERR(page)) {
+                        /* 
+                         * If page is empty (end of directoryis reached),
+                         * use this value. 
+                         */
+                        __u32 hash = DIR_END_OFF;
+                        __u32 next;
 
-                /* size might have been updated by md_readpage */
-                maxpages = (st->st_size + CFS_PAGE_SIZE - 1) >> CFS_PAGE_SHIFT;
+                        dp = page->addr;
+                        for (ent = lu_dirent_start(dp); ent != NULL && !done;
+                             ent = lu_dirent_next(ent)) {
+                                char          *name;
+                                int            namelen;
+                                struct lu_fid  fid;
+                                ino_t          ino;
 
-                /* fill in buffer */
-                addr = page->addr;
-                limit = addr + CFS_PAGE_SIZE - EXT2_DIR_REC_LEN(1);
-                de = (struct ext2_dirent *) (addr + offset);
+                                hash    = le32_to_cpu(ent->lde_hash);
+                                namelen = le16_to_cpu(ent->lde_namelen);
 
-                for ( ; (char*) de <= limit; de = ext2_next_entry(de)) {
-                        if (de->inode) {
-                                int over;
-                                unsigned char d_type = DT_UNKNOWN;
-
-                                if (de->file_type < EXT2_FT_MAX)
-                                        d_type = ext2_filetype_table[de->file_type];
-
-                                offset = (char*) de - addr;
-                                over =  filldir(buf, nbytes, de->name, de->name_len,
-                                                (((__u64)pgidx << PAGE_SHIFT) | offset) +
-                                                le16_to_cpu(de->rec_len),
-                                                le32_to_cpu(de->inode), d_type, &filled);
-                                if (over) {
-                                        OBD_PAGE_FREE(page);
+                                if (hash < pos)
                                         /*
-                                         * if buffer overflow with no data
-                                         * returned yet, then report error
-                                         * instead of eof
+                                         * Skip until we find target hash
+                                         * value.
                                          */
-                                        if (filled == 0)
-                                                RETURN(-EINVAL);
-                                        GOTO(done, 0);
-                                }
+                                        continue;
+
+                                if (namelen == 0)
+                                        /*
+                                         * Skip dummy record.
+                                         */
+                                        continue;
+
+                                fid  = ent->lde_fid;
+                                name = ent->lde_name;
+                                fid_le_to_cpu(&fid, &fid);
+                                ino  = llu_fid_build_ino(llu_i2sbi(dir), &fid);
+
+                                done = filldir(buf, nbytes, name, namelen,
+                                               (loff_t)hash, ino, DT_UNKNOWN,
+                                               &filled);
                         }
+                        next = le32_to_cpu(dp->ldp_hash_end);
+                        OBD_PAGE_FREE(page);
+                        if (!done) {
+                                pos = next;
+                                if (pos == DIR_END_OFF)
+                                        /*
+                                         * End of directory reached.
+                                         */
+                                        done = 1;
+                                else if (1 /* chain is exhausted*/)
+                                        /*
+                                         * Normal case: continue to the next
+                                         * page.
+                                         */
+                                        page = llu_dir_read_page(dir, pos, 1,
+                                                               &chain);
+                                else {
+                                        /*
+                                         * go into overflow page.
+                                         */
+                                }
+                        } else {
+                                pos = hash;
+                                if (filled == 0)
+                                        GOTO(out, filled = -EINVAL);
+                        }
+                } else {
+                        rc = PTR_ERR(page);
+                        CERROR("error reading dir "DFID" at %lu: rc %d\n",
+                               PFID(&lli->lli_fid), (unsigned long)pos, rc);
                 }
-                
-                OBD_PAGE_FREE(page);
         }
-done:
-        lli->lli_dir_pos = pgidx << CFS_PAGE_SHIFT | offset;
+        lli->lli_dir_pos = (loff_t)(__s32)pos;
         *basep = lli->lli_dir_pos;
+out:
+        ll_dir_chain_fini(&chain);
         liblustre_wait_event(0);
         RETURN(filled);
 }

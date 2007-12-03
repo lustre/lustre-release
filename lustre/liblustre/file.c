@@ -77,7 +77,6 @@ void llu_prep_md_op_data(struct md_op_data *op_data, struct inode *i1,
 {
         LASSERT(i1 != NULL || i2 != NULL);
         LASSERT(op_data);
-        memset(op_data, 0, sizeof(*op_data));
 
         if (i1) {
                 ll_i2gids(op_data->op_suppgids, i1, i2);
@@ -324,7 +323,7 @@ int llu_sizeonmds_update(struct inode *inode, struct md_open_data *mod,
 {
         struct llu_inode_info *lli = llu_i2info(inode);
         struct llu_sb_info *sbi = llu_i2sbi(inode);
-        struct md_op_data op_data;
+        struct md_op_data op_data = {{ 0 }};
         struct obdo oa;
         int rc;
         ENTRY;

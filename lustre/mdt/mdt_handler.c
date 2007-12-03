@@ -1643,7 +1643,9 @@ static int mdt_enqueue(struct mdt_thread_info *info)
          * bits get corrupted somewhere in mdt_intent_policy().
          */
         req_bits = info->mti_dlm_req->lock_desc.l_policy_data.l_inodebits.bits;
-        LASSERT(req_bits != 0);
+        /* This is disabled because we need to support liblustre flock.
+         * LASSERT(req_bits != 0);
+         */
 
         rc = ldlm_handle_enqueue0(info->mti_mdt->mdt_namespace,
                                   req, info->mti_dlm_req, &cbs);

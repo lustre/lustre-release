@@ -206,7 +206,7 @@ static int llu_pb_revalidate(struct pnode *pnode, int flags,
 {
         struct pnode_base *pb = pnode->p_base;
         struct it_cb_data icbd;
-        struct md_op_data op_data;
+        struct md_op_data op_data = {{ 0 }};
         struct ptlrpc_request *req = NULL;
         struct lookup_intent lookup_it = { .it_op = IT_LOOKUP };
         struct obd_export *exp;
@@ -402,7 +402,7 @@ struct inode *llu_inode_from_lock(struct ldlm_lock *lock)
 static int llu_lookup_it(struct inode *parent, struct pnode *pnode,
                          struct lookup_intent *it, int flags)
 {
-        struct md_op_data op_data;
+        struct md_op_data op_data = {{ 0 }};
         struct it_cb_data icbd;
         struct ptlrpc_request *req = NULL;
         struct lookup_intent lookup_it = { .it_op = IT_LOOKUP };
