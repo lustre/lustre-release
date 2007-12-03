@@ -1140,7 +1140,7 @@ EXTRA_KCFLAGS="-Werror"
 LB_LINUX_TRY_COMPILE([
         #include <linux/slab.h>
 ],[
-	kmem_cache_t *cachep = NULL;
+	kmem_cache_s *cachep = NULL;
 	
 	kmem_cache_free(cachep, NULL);
 
