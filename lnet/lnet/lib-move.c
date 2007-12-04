@@ -1131,7 +1131,7 @@ lnet_return_credits_locked (lnet_msg_t *msg)
         }
         
         if (msg->msg_peerrtrcredit) {
-                /* give pack peer router credits */
+                /* give back peer router credits */
                 msg->msg_peerrtrcredit = 0;
                 
                 LASSERT((rxpeer->lp_rtrcredits < 0) == !list_empty(&rxpeer->lp_rtrq));
