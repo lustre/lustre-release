@@ -428,6 +428,28 @@ int mds_update_unpack(struct ptlrpc_request *req, int offset,
         RETURN(rc);
 }
 
+void mds_root_squash(struct mds_obd *mds, lnet_nid_t *peernid,
+                     __u32 *fsuid, __u32 *fsgid, __u32 *cap,
+                     __u32 *suppgid, __u32 *suppgid2)
+{
+        if (!mds->mds_squash_uid || *fsuid)
+               return;
+
+        if (*peernid == mds->mds_nosquash_nid)
+                return;
+
+        CDEBUG(D_OTHER, "squash req from %s, (%d:%d/%x)=>(%d:%d/%x)\n",
+               libcfs_nid2str(*peernid), *fsuid, *fsgid, *cap,
+               mds->mds_squash_uid, mds->mds_squash_gid, 0);
+
+        *fsuid = mds->mds_squash_uid;
+        *fsgid = mds->mds_squash_gid;
+        *cap = 0;
+        *suppgid = -1;
+        if (suppgid2)
+                *suppgid2 = -1;
+}
+
 int mds_init_ucred(struct lvfs_ucred *ucred, struct ptlrpc_request *req,
                    int offset)
 {
@@ -446,6 +468,10 @@ int mds_init_ucred(struct lvfs_ucred *ucred, struct ptlrpc_request *req,
         } else
 #endif
         {
+                mds_root_squash(mds, &req->rq_peer.nid, &body->fsuid,
+                                &body->fsgid, &body->capability,
+                                &body->suppgid, NULL);
+
                 ucred->luc_fsuid = body->fsuid;
                 ucred->luc_fsgid = body->fsgid;
                 ucred->luc_cap = body->capability;

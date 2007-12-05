@@ -1293,6 +1293,11 @@ int mds_reint(struct ptlrpc_request *req, int offset,
                 GOTO(out, req->rq_status = -EINVAL);
         }
 
+        mds_root_squash(&req->rq_export->exp_obd->u.mds, &req->rq_peer.nid,
+                        &rec->ur_uc.luc_fsuid, &rec->ur_uc.luc_fsgid,
+                        &rec->ur_uc.luc_cap, &rec->ur_uc.luc_suppgid1,
+                        &rec->ur_uc.luc_suppgid2);
+
         /* rc will be used to interrupt a for loop over multiple records */
         rc = mds_reint_rec(rec, offset, req, lockh);
  out:

@@ -305,6 +305,93 @@ static int lprocfs_rd_atime_diff(char *page, char **start, off_t off,
         return snprintf(page, count, "%lu\n", mds->mds_atime_diff);
 }
 
+static int lprocfs_wr_rootsquash(struct file *file, const char *buffer,
+                                 unsigned long count, void *data)
+{
+        struct obd_device *obd = data;
+        struct mds_obd *mds = &obd->u.mds;
+        char kernbuf[50], *tmp, *end;
+        unsigned long uid, gid;
+
+        if (count > (sizeof(kernbuf) - 1))
+                return -EINVAL;
+
+        if (copy_from_user(kernbuf, buffer, count))
+                return -EFAULT;
+
+        kernbuf[count] = '\0';
+
+        uid = simple_strtoul(kernbuf, &tmp, 0);
+        if (kernbuf == tmp) {
+                if (tmp[0] != ':')
+                        return -EINVAL;
+                uid = mds->mds_squash_uid;
+        }
+        /* skip ':' */
+        tmp++;
+        gid = simple_strtoul(tmp, &end, 0);
+        if (tmp == end)
+                gid = mds->mds_squash_gid;
+
+        mds->mds_squash_uid = uid;
+        mds->mds_squash_gid = gid;
+        return count;
+}
+
+static int lprocfs_rd_rootsquash(char *page, char **start, off_t off,
+                                 int count, int *eof, void *data)
+{
+        struct obd_device *obd = data;
+        struct mds_obd *mds = &obd->u.mds;
+
+        *eof = 1;
+        return snprintf(page, count, "%lu:%lu\n",
+                        (unsigned long)mds->mds_squash_uid,
+                        (unsigned long)mds->mds_squash_gid);
+}
+
+static int lprocfs_wr_nosquash_nid(struct file *file, const char *buffer,
+                                   unsigned long count, void *data)
+{
+        struct obd_device *obd = data;
+        struct mds_obd *mds = &obd->u.mds;
+        char kernbuf[30], *start, *end;
+
+        if (count > (sizeof(kernbuf) - 1))
+                return -EINVAL;
+
+        if (copy_from_user(kernbuf, buffer, count))
+                return -EFAULT;
+        kernbuf[count] = '\0';
+
+        /* strip frontal whitespaces */
+        start = kernbuf;
+        while (*start && isspace(*start))
+                start++;
+        /* EOL - string doesn't contain NID */
+        if (*start == '\0')
+                return -EINVAL;
+        /* strip backward whitespaces */
+        end = kernbuf + count - 1;
+        while (*end && isspace(*end))
+                end--;
+        *(end + 1) = '\0';
+
+        mds->mds_nosquash_nid = libcfs_str2nid(start);
+        return count;
+}
+
+static int lprocfs_rd_nosquash_nid(char *page, char **start, off_t off,
+                                   int count, int *eof, void *data)
+{
+        struct obd_device *obd = data;
+        struct mds_obd *mds = &obd->u.mds;
+
+        *eof = 1;
+        return snprintf(page, count, "%s\n",
+                        libcfs_nid2str(mds->mds_nosquash_nid));
+}
+
 struct lprocfs_vars lprocfs_mds_obd_vars[] = {
         { "uuid",            lprocfs_rd_uuid,        0, 0 },
         { "blocksize",       lprocfs_rd_blksize,     0, 0 },
@@ -336,6 +423,10 @@ struct lprocfs_vars lprocfs_mds_obd_vars[] = {
         { "group_flush",     0, lprocfs_wr_group_flush, 0},
         { "group_info",      0, lprocfs_wr_group_info, 0 },
         { "atime_diff",      lprocfs_rd_atime_diff, lprocfs_wr_atime_diff, 0 },
+        { "rootsquash",      lprocfs_rd_rootsquash,
+                             lprocfs_wr_rootsquash, 0 },
+        { "nosquash_nid",    lprocfs_rd_nosquash_nid,
+                             lprocfs_wr_nosquash_nid, 0 },
         { 0 }
 };
 

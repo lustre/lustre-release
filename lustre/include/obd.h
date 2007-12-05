@@ -467,6 +467,10 @@ struct mds_obd {
                                          mds_fl_cfglog:1,
                                          mds_fl_synced:1,
                                          mds_evict_ost_nids:1;
+
+        uid_t                            mds_squash_uid;
+        gid_t                            mds_squash_gid;
+        lnet_nid_t                       mds_nosquash_nid;
 };
 
 struct echo_obd {

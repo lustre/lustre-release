@@ -126,6 +126,13 @@ Details    : When CRAY_XT3 is defined, the fsgid supplied by the client is
 	     whereas the supplied fsgid can be trusted if it is in the list of
 	     supplementary groups returned by the group upcall.
 
+Severity   : normal
+Bugzilla   : 12749
+Description: Root Squash Functionality
+Details    : Implementation of NFS-like root squash capability. Specifically,
+             don't allow someone with root access on a client node to be able
+             to manipulate files owned by root on a server node.
+
 --------------------------------------------------------------------------------
 
 2007-10-26         Cluster File Systems, Inc. <info@clusterfs.com>

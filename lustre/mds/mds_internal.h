@@ -174,6 +174,9 @@ int mds_update_unpack(struct ptlrpc_request *, int offset,
 int mds_init_ucred(struct lvfs_ucred *ucred, struct ptlrpc_request *req,
                    int offset);
 void mds_exit_ucred(struct lvfs_ucred *ucred, struct mds_obd *obd);
+void mds_root_squash(struct mds_obd *mds, lnet_nid_t *peernid,
+                     __u32 *fsuid, __u32 *fsgid, __u32 *cap,
+                     __u32 *suppgid, __u32 *suppgid2);
 
 /* mds/mds_unlink_open.c */
 int mds_osc_destroy_orphan(struct obd_device *obd, umode_t mode,
