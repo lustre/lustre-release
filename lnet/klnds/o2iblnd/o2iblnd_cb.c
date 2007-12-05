@@ -2254,8 +2254,8 @@ kiblnd_passive_connect (struct rdma_cm_id *cmid, void *priv, int priv_nob)
         if (reqmsg->ibm_u.connparams.ibcp_max_frags != IBLND_MAX_RDMA_FRAGS) {
                 CERROR("Can't accept %s: incompatible max_frags %d (%d wanted)\n",
                        libcfs_nid2str(nid),
-                       reqmsg->ibm_u.connparams.ibcp_queue_depth,
-                       IBLND_MSG_QUEUE_SIZE);
+                       reqmsg->ibm_u.connparams.ibcp_max_frags,
+                       IBLND_MAX_RDMA_FRAGS);
                 goto failed;
         }
 
@@ -2515,8 +2515,8 @@ kiblnd_check_connreply (kib_conn_t *conn, void *priv, int priv_nob)
         if (msg->ibm_u.connparams.ibcp_max_frags != IBLND_MAX_RDMA_FRAGS) {
                 CERROR("%s has incompatible max_frags %d (%d wanted)\n",
                        libcfs_nid2str(peer->ibp_nid),
-                       msg->ibm_u.connparams.ibcp_queue_depth,
-                       IBLND_MSG_QUEUE_SIZE);
+                       msg->ibm_u.connparams.ibcp_max_frags,
+                       IBLND_MAX_RDMA_FRAGS);
                 rc = -EPROTO;
                 goto failed;
         }
