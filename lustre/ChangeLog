@@ -116,6 +116,16 @@ Description: touch file failed when fs is not full
 Details    : OST in recovery should not be discarded by MDS in alloc_qos(),
 	     otherwise we can get ENOSP while fs is not full.
 
+Severity   : normal
+Frequency  : only for Cray XT3
+Bugzilla   : 12829/13455
+Description: Changing primary group doesn't change the group lustre assigns to
+	     a file
+Details    : When CRAY_XT3 is defined, the fsgid supplied by the client is
+	     overridden with the primary group provided by the group upcall,
+	     whereas the supplied fsgid can be trust if it is in the list of
+	     supplementary groups returned by the group upcall.
+
 --------------------------------------------------------------------------------
 
 2007-10-26         Cluster File Systems, Inc. <info@clusterfs.com>
