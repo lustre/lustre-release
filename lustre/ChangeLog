@@ -123,7 +123,7 @@ Description: Changing primary group doesn't change the group lustre assigns to
 	     a file
 Details    : When CRAY_XT3 is defined, the fsgid supplied by the client is
 	     overridden with the primary group provided by the group upcall,
-	     whereas the supplied fsgid can be trust if it is in the list of
+	     whereas the supplied fsgid can be trusted if it is in the list of
 	     supplementary groups returned by the group upcall.
 
 --------------------------------------------------------------------------------
