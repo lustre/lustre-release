@@ -4795,6 +4795,15 @@ test_125() { # 13358
 }
 run_test 125 "don't return EPROTO when a dir has a non-default striping and ACLs"
 
+test_126() { # bug 12829/13455
+	[ "$UID" != 0 ] && echo "skipping $TESTNAME (must run as root)" && return
+	$RUNAS -u 0 -g 1 touch $DIR/$tfile || error "touch failed"
+	gid=`ls -n $DIR/$tfile | awk '{print $4}'`
+	rm -f $DIR/$tfile
+	[ $gid -eq "1" ] || error "gid is set to" $gid "instead of 1"
+}
+run_test 126 "check that the fsgid provided by the client is taken into account"
+
 TMPDIR=$OLDTMPDIR
 TMP=$OLDTMP
 HOME=$OLDHOME

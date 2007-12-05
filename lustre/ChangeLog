@@ -517,6 +517,16 @@ Description: parallel lock callbacks
 Details    : Instead of sending blocking and completion callbacks as separated
              requests, adding them to a set and sending in parallel.
 
+Severity   : normal
+Frequency  : only for Cray XT3
+Bugzilla   : 12829/13455
+Description: Changing primary group doesn't change the group lustre assigns to
+	     a file
+Details    : When CRAY_XT3 is defined, the fsgid supplied by the client is
+	     overridden with the primary group provided by the group upcall,
+	     whereas the supplied fsgid can be trusted if it is in the list of
+	     supplementary groups returned by the group upcall.
+
 --------------------------------------------------------------------------------
 
 2007-08-10         Cluster File Systems, Inc. <info@clusterfs.com>

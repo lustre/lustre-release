@@ -2351,6 +2351,9 @@ int mds_reint_rec(struct mds_update_record *rec, int offset,
         struct obd_device *obd = req->rq_export->exp_obd;
 #if 0
         struct mds_obd *mds = &obd->u.mds;
+#ifdef CRAY_XT3
+        gid_t fsgid = rec->ur_uc.luc_fsgid;
+#endif
 #endif
         struct lvfs_run_ctxt saved;
         int rc;
@@ -2389,6 +2392,17 @@ int mds_reint_rec(struct mds_update_record *rec, int offset,
 #endif
 
         push_ctxt(&saved, &obd->obd_lvfs_ctxt, &rec->ur_uc);
+
+#if 0
+#ifdef CRAY_XT3
+        if (rec->ur_uc.luc_uce && fsgid != rec->ur_uc.luc_fsgid &&
+            in_group_p(fsgid)) {
+                rec->ur_uc.luc_fsgid = fsgid;
+                current->fsgid = saved.luc.luc_fsgid = fsgid;
+        }
+#endif
+#endif
+
         rc = reinters[rec->ur_opcode] (rec, offset, req, lockh);
         pop_ctxt(&saved, &obd->obd_lvfs_ctxt, &rec->ur_uc);
 
