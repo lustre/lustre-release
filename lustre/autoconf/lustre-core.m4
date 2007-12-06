@@ -1494,6 +1494,19 @@ if test x$enable_liblustre != xyes ; then
 fi
 AC_MSG_RESULT([$enable_liblustre_tests])
 
+AC_MSG_CHECKING([whether to enable liblustre acl])
+AC_ARG_ENABLE([liblustre-acl],
+	AC_HELP_STRING([--disable-liblustre-acl],
+			[disable ACL support for liblustre]),
+	[],[enable_liblustre_acl=yes])
+if test x$enable_liblustre != xyes ; then
+   enable_liblustre_acl='no'
+fi
+AC_MSG_RESULT([$enable_liblustre_acl])
+if test x$enable_liblustre_acl != xno ; then
+  AC_DEFINE(LIBLUSTRE_POSIX_ACL, 1, Liblustre Support ACL-enabled MDS)
+fi
+
 AC_MSG_CHECKING([whether to build mpitests])
 AC_ARG_ENABLE([mpitests],
 	AC_HELP_STRING([--enable-mpitests],

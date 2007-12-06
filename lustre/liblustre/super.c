@@ -2075,6 +2075,9 @@ llu_fsswop_mount(const char *source,
                            sizeof(async), &async, NULL);
 
         ocd.ocd_connect_flags = OBD_CONNECT_IBITS | OBD_CONNECT_VERSION;
+#ifdef LIBLUSTRE_POSIX_ACL
+        ocd.ocd_connect_flags |= OBD_CONNECT_ACL;
+#endif
         ocd.ocd_ibits_known = MDS_INODELOCK_FULL;
         ocd.ocd_version = LUSTRE_VERSION_CODE;
 
