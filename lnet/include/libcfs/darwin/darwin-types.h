@@ -64,6 +64,7 @@ typedef struct { volatile uint32_t counter; }	atomic_t;
 #define atomic_read(a)			((a)->counter)
 #define atomic_set(a, v)		(((a)->counter) = (v))
 #ifdef __DARWIN8__
+/* OS*Atomic return the value before the operation */
 #define atomic_add(v, a)		OSAddAtomic(v, (SInt32 *)&((a)->counter))
 #define atomic_sub(v, a)		OSAddAtomic(-(v), (SInt32 *)&((a)->counter))
 #define atomic_inc(a)			OSIncrementAtomic((SInt32 *)&((a)->counter))
@@ -74,8 +75,10 @@ typedef struct { volatile uint32_t counter; }	atomic_t;
 #define atomic_inc(a)			atomic_add(1, a)
 #define atomic_dec(a)			atomic_sub(1, a)
 #endif /* !__DARWIN8__ */
-#define atomic_sub_and_test(v, a)	( atomic_sub(v, a) == -(a) )
-#define atomic_dec_and_test(a)		( atomic_dec(a) == 1 )
+#define atomic_sub_and_test(v, a)       (atomic_sub(v, a) == (v))
+#define atomic_dec_and_test(a)          (atomic_dec(a) == 1)
+#define atomic_inc_return(a)            (atomic_inc(a) + 1)
+#define atomic_dec_return(a)            (atomic_dec(a) - 1)
 
 #include <libsa/mach/mach.h>
 typedef off_t   			loff_t;
