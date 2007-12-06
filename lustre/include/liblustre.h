@@ -725,6 +725,8 @@ typedef struct { volatile int counter; } atomic_t;
 #define atomic_inc(a)  (((a)->counter)++)
 #define atomic_dec(a)  do { (a)->counter--; } while (0)
 #define atomic_add(b,a)  do {(a)->counter += b;} while (0)
+#define atomic_add_return(n,a) ((a)->counter = n)
+#define atomic_inc_return(a) atomic_add_return(1,a)
 #define atomic_sub(b,a)  do {(a)->counter -= b;} while (0)
 #define atomic_sub_return(n,a) ((a)->counter -= n)
 #define atomic_dec_return(a)  atomic_sub_return(1,a)
