@@ -55,8 +55,8 @@ extern int  libcfs_panic_in_progress;
 
 #define TRACEFILE_SIZE (500 << 20)
 
-/* Size of a buffer for sprinting console messages to in IRQ context (no
- * logging in IRQ context) */
+/* Size of a buffer for sprinting console messages if we can't get a page 
+ * from system */
 #define TRACE_CONSOLE_BUFFER_SIZE   1024
 
 union trace_data_union {
@@ -84,7 +84,8 @@ union trace_data_union {
 
 		/*
 		 * Maximal number of pages allowed on ->tcd_pages and
-		 * ->tcd_daemon_pages each. Always TCD_MAX_PAGES in current
+		 * ->tcd_daemon_pages each. 
+		 * Always TCD_MAX_PAGES * tcd_pages_factor / 100 in current
 		 * implementation.
 		 */
 		unsigned long           tcd_max_pages;
@@ -115,11 +116,27 @@ union trace_data_union {
 		/* number of pages on ->tcd_stock_pages */
 		unsigned long           tcd_cur_stock_pages;
 
-		int                     tcd_shutting_down;
-		int                     tcd_cpu;
+		unsigned short          tcd_shutting_down;
+		unsigned short          tcd_cpu;
+		unsigned short          tcd_type;
+		/* The factors to share debug memory. */
+		unsigned short          tcd_pages_factor;
 	} tcd;
-	char __pad[SMP_CACHE_BYTES];
+	char __pad[L1_CACHE_ALIGN(sizeof(struct trace_cpu_data))];
 };
+
+#define TCD_MAX_TYPES      8
+extern union trace_data_union (*trace_data[TCD_MAX_TYPES])[NR_CPUS];
+
+#define tcd_for_each(tcd, i, j)                                       \
+    for (i = 0; trace_data[i] != NULL; i++)                           \
+        for (j = 0, ((tcd) = &(*trace_data[i])[j].tcd);               \
+             j < num_possible_cpus(); j++, (tcd) = &(*trace_data[i])[j].tcd)
+
+#define tcd_for_each_type_lock(tcd, i)                                \
+    for (i = 0; trace_data[i] &&                                      \
+         (tcd = &(*trace_data[i])[smp_processor_id()].tcd) &&         \
+         trace_lock_tcd(tcd); trace_unlock_tcd(tcd), i++)
 
 /* XXX nikita: this declaration is internal to tracefile.c and should probably
  * be moved there */
@@ -173,7 +190,11 @@ struct trace_page {
 	/*
 	 * cpu that owns this page
 	 */
-	int              cpu;
+	unsigned short   cpu;
+	/*
+	 * type(context) of this page 
+	 */
+	unsigned short   type;
 };
 
 extern void set_ptldebug_header(struct ptldebug_header *header,
@@ -184,6 +205,8 @@ extern void print_to_console(struct ptldebug_header *hdr, int mask, const char *
 
 extern struct trace_cpu_data *trace_get_tcd(void);
 extern void trace_put_tcd(struct trace_cpu_data *tcd);
+extern int trace_lock_tcd(struct trace_cpu_data *tcd);
+extern void trace_unlock_tcd(struct trace_cpu_data *tcd);
 extern char *trace_get_console_buffer(void);
 extern void trace_put_console_buffer(char *buffer);
 

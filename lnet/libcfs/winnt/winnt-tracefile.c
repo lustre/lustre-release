@@ -28,7 +28,7 @@
 #define put_cpu() do { } while (0)
 #endif
 
-extern union trace_data_union trace_data[NR_CPUS];
+#define TCD_TYPE_MAX        1
 
 event_t     tracefile_event;
 
@@ -36,8 +36,24 @@ void tracefile_init_arch()
 {
 	int    i;
 	int    j;
+    struct trace_cpu_data *tcd;
 
     cfs_init_event(&tracefile_event, TRUE, TRUE);
+
+    /* initialize trace_data */
+    memset(trace_data, 0, sizeof(trace_data));
+    for (i = 0; i < TCD_TYPE_MAX; i++) {
+        trace_data[i]=cfs_alloc(sizeof(struct trace_data_union)*NR_CPUS, 0);
+        if (trace_data[i] == NULL)
+            goto out;
+    }
+
+    /* arch related info initialized */
+    tcd_for_each(tcd, i, j) {
+        tcd->tcd_pages_factor = 100; /* Only one type */
+        tcd->tcd_cpu = j;
+        tcd->tcd_type = i;
+    }
 
     memset(trace_console_buffers, 0, sizeof(trace_console_buffers));
 
@@ -47,15 +63,17 @@ void tracefile_init_arch()
 				cfs_alloc(TRACE_CONSOLE_BUFFER_SIZE,
 					CFS_ALLOC_ZERO);
 
-			if (trace_console_buffers[i][j] == NULL) {
-				tracefile_fini_arch();
-				KsPrint((0, "Can't allocate console message buffer\n"));
-				return -ENOMEM;
-			}
+			if (trace_console_buffers[i][j] == NULL)
+                goto out;
 		}
     }
 
 	return 0;
+
+out:
+	tracefile_fini_arch();
+	KsPrint((0, "lnet: No enough memory\n"));
+	return -ENOMEM;
 }
 
 void tracefile_fini_arch()
@@ -70,6 +88,11 @@ void tracefile_fini_arch()
 				trace_console_buffers[i][j] = NULL;
 			}
         }
+    }
+
+    for (i = 0; trace_data[i] != NULL; i++) {
+        cfs_free(trace_data[i]);
+        trace_data[i] = NULL;
     }
 }
 
@@ -112,12 +135,25 @@ trace_get_tcd(void)
 #pragma message("todo: return NULL if in interrupt context")
 
 	int cpu = (int) KeGetCurrentProcessorNumber();
-	return &trace_data[cpu].tcd;
+	return &(*trace_data[0])[cpu].tcd;
 }
 
 void
 trace_put_tcd (struct trace_cpu_data *tcd, unsigned long flags)
 {
+}
+
+int 
+trace_lock_tcd(struct trace_cpu_data *tcd)
+{
+    __LASSERT(tcd->tcd_type < TCD_TYPE_MAX);
+    return 1;
+}
+
+void
+trace_unlock_tcd(struct trace_cpu_data *tcd)
+{
+    __LASSERT(tcd->tcd_type < TCD_TYPE_MAX);
 }
 
 void

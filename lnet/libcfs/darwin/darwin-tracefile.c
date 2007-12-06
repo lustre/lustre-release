@@ -11,7 +11,6 @@
  */
 
 #define M_TCD_MAX_PAGES (128 * 1280)
-extern union trace_data_union trace_data[NR_CPUS];
 
 static long max_permit_mb = (64 * 1024);
 

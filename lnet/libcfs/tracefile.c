@@ -30,7 +30,7 @@
 #include <libcfs/libcfs.h>
 
 /* XXX move things up to the top, comment */
-union trace_data_union trace_data[NR_CPUS] __cacheline_aligned;
+union trace_data_union (*trace_data[TCD_MAX_TYPES])[NR_CPUS] __cacheline_aligned;
 
 char tracefile[TRACEFILE_NAME_SIZE];
 long long tracefile_size = TRACEFILE_SIZE;
@@ -142,6 +142,7 @@ static struct trace_page *trace_get_tage_try(struct trace_cpu_data *tcd,
 
                 tage->used = 0;
                 tage->cpu = smp_processor_id();
+                tage->type = tcd->tcd_type;
                 list_add_tail(&tage->linkage, &tcd->tcd_pages);
                 tcd->tcd_cur_pages++;
 
@@ -459,20 +460,17 @@ panic_collect_pages(struct page_collection *pc)
          * CPUs have been stopped during a panic.  If this isn't true for some
          * arch, this will have to be implemented separately in each arch.  */
         int                    i;
+        int                    j;
         struct trace_cpu_data *tcd;
 
         CFS_INIT_LIST_HEAD(&pc->pc_pages);
 
-        for (i = 0; i < num_possible_cpus(); i++) {
-                tcd = &trace_data[i].tcd;
-
-                list_splice(&tcd->tcd_pages, &pc->pc_pages);
-                CFS_INIT_LIST_HEAD(&tcd->tcd_pages);
+        tcd_for_each(tcd, i, j) {
+                list_splice_init(&tcd->tcd_pages, &pc->pc_pages);
                 tcd->tcd_cur_pages = 0;
 
                 if (pc->pc_want_daemon_pages) {
-                        list_splice(&tcd->tcd_daemon_pages, &pc->pc_pages);
-                        CFS_INIT_LIST_HEAD(&tcd->tcd_daemon_pages);
+                        list_splice_init(&tcd->tcd_daemon_pages, &pc->pc_pages);
                         tcd->tcd_cur_daemon_pages = 0;
                 }
         }
@@ -482,22 +480,18 @@ static void collect_pages_on_cpu(void *info)
 {
         struct trace_cpu_data *tcd;
         struct page_collection *pc = info;
-
-        tcd = trace_get_tcd();
-        __LASSERT (tcd != NULL);
+        int i;
 
         spin_lock(&pc->pc_lock);
-        list_splice(&tcd->tcd_pages, &pc->pc_pages);
-        CFS_INIT_LIST_HEAD(&tcd->tcd_pages);
-        tcd->tcd_cur_pages = 0;
-        if (pc->pc_want_daemon_pages) {
-                list_splice(&tcd->tcd_daemon_pages, &pc->pc_pages);
-                CFS_INIT_LIST_HEAD(&tcd->tcd_daemon_pages);
-                tcd->tcd_cur_daemon_pages = 0;
+        tcd_for_each_type_lock(tcd, i) {
+                list_splice_init(&tcd->tcd_pages, &pc->pc_pages);
+                tcd->tcd_cur_pages = 0;
+                if (pc->pc_want_daemon_pages) {
+                        list_splice_init(&tcd->tcd_daemon_pages, &pc->pc_pages);
+                        tcd->tcd_cur_daemon_pages = 0;
+                }
         }
         spin_unlock(&pc->pc_lock);
-
-        trace_put_tcd(tcd);
 }
 
 static void collect_pages(struct page_collection *pc)
@@ -517,26 +511,24 @@ static void put_pages_back_on_cpu(void *info)
         struct list_head *cur_head;
         struct trace_page *tage;
         struct trace_page *tmp;
-
-        tcd = trace_get_tcd();
-        __LASSERT (tcd != NULL);
-
-        cur_head = tcd->tcd_pages.next;
+        int i;
 
         spin_lock(&pc->pc_lock);
-        list_for_each_entry_safe(tage, tmp, &pc->pc_pages, linkage) {
+        tcd_for_each_type_lock(tcd, i) {
+                cur_head = tcd->tcd_pages.next;
 
-                __LASSERT_TAGE_INVARIANT(tage);
+                list_for_each_entry_safe(tage, tmp, &pc->pc_pages, linkage) {
 
-                if (tage->cpu != smp_processor_id())
-                        continue;
+                        __LASSERT_TAGE_INVARIANT(tage);
 
-                tage_to_tail(tage, cur_head);
-                tcd->tcd_cur_pages++;
+                        if (tage->cpu != smp_processor_id() || tage->type != i)
+                                continue;
+
+                        tage_to_tail(tage, cur_head);
+                        tcd->tcd_cur_pages++;
+                }
         }
         spin_unlock(&pc->pc_lock);
-
-        trace_put_tcd(tcd);
 }
 
 static void put_pages_back(struct page_collection *pc)
@@ -560,7 +552,8 @@ static void put_pages_on_tcd_daemon_list(struct page_collection *pc,
 
                 __LASSERT_TAGE_INVARIANT(tage);
 
-                if (tage->cpu != smp_processor_id())
+                if (tage->cpu != smp_processor_id() ||
+                    tage->type != tcd->tcd_type)
                         continue;
 
                 tage_to_tail(tage, &tcd->tcd_daemon_pages);
@@ -585,13 +578,10 @@ static void put_pages_on_tcd_daemon_list(struct page_collection *pc,
 static void put_pages_on_daemon_list_on_cpu(void *info)
 {
         struct trace_cpu_data *tcd;
+        int i;
 
-        tcd = trace_get_tcd();
-        __LASSERT (tcd != NULL);
-
-        put_pages_on_tcd_daemon_list(info, tcd);
-
-        trace_put_tcd(tcd);
+        tcd_for_each_type_lock(tcd, i)
+                put_pages_on_tcd_daemon_list(info, tcd);
 }
 
 static void put_pages_on_daemon_list(struct page_collection *pc)
@@ -868,9 +858,12 @@ int trace_daemon_command_usrstr(void *usr_str, int usr_str_nob)
 int trace_set_debug_mb(int mb)
 {
 	int i;
+        int j;
+        int pages;
         int limit = trace_max_debug_mb();
+        struct trace_cpu_data *tcd;
         
-	if (mb <= 0)
+	if (mb < num_possible_cpus())
 		return -EINVAL;
 
 	if (mb > limit) {
@@ -880,14 +873,12 @@ int trace_set_debug_mb(int mb)
 	}
 
 	mb /= num_possible_cpus();
+        pages = mb << (20 - CFS_PAGE_SHIFT);
 
         tracefile_write_lock();
 
-	for (i = 0; i < num_possible_cpus(); i++) {
-		struct trace_cpu_data *tcd = &trace_data[i].tcd;
-
-		tcd->tcd_max_pages = mb << (20 - CFS_PAGE_SHIFT);
-	}
+        tcd_for_each(tcd, i, j)
+		tcd->tcd_max_pages = (pages * tcd->tcd_pages_factor) / 100;
 
         tracefile_write_unlock();
 
@@ -909,19 +900,18 @@ int trace_set_debug_mb_usrstr(void *usr_str, int usr_str_nob)
 int trace_get_debug_mb(void)
 {
 	int i;
+        int j;
+        struct trace_cpu_data *tcd;
         int total_pages = 0;
         
         tracefile_read_lock();
 
-	for (i = 0; i < num_possible_cpus(); i++) {
-		struct trace_cpu_data *tcd = &trace_data[i].tcd;
-
+        tcd_for_each(tcd, i, j)
                 total_pages += tcd->tcd_max_pages;
-	}
 
         tracefile_read_unlock();
 
-        return total_pages >> (20 - CFS_PAGE_SHIFT);
+        return (total_pages >> (20 - CFS_PAGE_SHIFT)) + 1;
 }
 
 static int tracefiled(void *arg)
@@ -1060,23 +1050,26 @@ int tracefile_init(void)
 {
         struct trace_cpu_data *tcd;
         int                    i;
+        int                    j;
         int                    rc;
+        int                    factor;
 
         rc = tracefile_init_arch();
         if (rc != 0)
                 return rc;
 
-        for (i = 0; i < num_possible_cpus(); i++) {
-                tcd = &trace_data[i].tcd;
+        tcd_for_each(tcd, i, j) {
+                /* tcd_pages_factor is initialized int tracefile_init_arch. */
+                factor = tcd->tcd_pages_factor;
                 CFS_INIT_LIST_HEAD(&tcd->tcd_pages);
                 CFS_INIT_LIST_HEAD(&tcd->tcd_stock_pages);
                 CFS_INIT_LIST_HEAD(&tcd->tcd_daemon_pages);
                 tcd->tcd_cur_pages = 0;
                 tcd->tcd_cur_stock_pages = 0;
                 tcd->tcd_cur_daemon_pages = 0;
-                tcd->tcd_max_pages = TCD_MAX_PAGES;
+                tcd->tcd_max_pages = (TCD_MAX_PAGES * factor) / 100;
+                LASSERT(tcd->tcd_max_pages > 0);
                 tcd->tcd_shutting_down = 0;
-                tcd->tcd_cpu = i;
         }
 
         return 0;
@@ -1087,21 +1080,19 @@ static void trace_cleanup_on_cpu(void *info)
         struct trace_cpu_data *tcd;
         struct trace_page *tage;
         struct trace_page *tmp;
+        int i;
 
-        tcd = trace_get_tcd();
-        __LASSERT (tcd != NULL);
+        tcd_for_each_type_lock(tcd, i) {
+                tcd->tcd_shutting_down = 1;
 
-        tcd->tcd_shutting_down = 1;
+                list_for_each_entry_safe(tage, tmp, &tcd->tcd_pages, linkage) {
+                        __LASSERT_TAGE_INVARIANT(tage);
 
-        list_for_each_entry_safe(tage, tmp, &tcd->tcd_pages, linkage) {
-                __LASSERT_TAGE_INVARIANT(tage);
-
-                list_del(&tage->linkage);
-                tage_free(tage);
+                        list_del(&tage->linkage);
+                        tage_free(tage);
+                }
+                tcd->tcd_cur_pages = 0;
         }
-        tcd->tcd_cur_pages = 0;
-
-        trace_put_tcd(tcd);
 }
 
 static void trace_cleanup(void)

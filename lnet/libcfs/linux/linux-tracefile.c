@@ -10,7 +10,20 @@
 #define put_cpu() do { } while (0)
 #endif
 
-extern union trace_data_union trace_data[NR_CPUS];
+/* three types of trace_data in linux */
+enum {
+	TCD_TYPE_PROC = 0,
+	TCD_TYPE_SOFTIRQ,
+	TCD_TYPE_IRQ,
+	TCD_TYPE_MAX
+};
+
+/* percents to share the total debug memory for each type */
+static unsigned int pages_factor[TCD_TYPE_MAX] = {
+	80,  /* 80% pages for TCD_TYPE_PROC */
+	10,  /* 10% pages for TCD_TYPE_SOFTIRQ */
+	10   /* 10% pages for TCD_TYPE_IRQ */
+};
 
 char *trace_console_buffers[NR_CPUS][3];
 
@@ -20,8 +33,26 @@ int tracefile_init_arch()
 {
 	int    i;
 	int    j;
+	struct trace_cpu_data *tcd;
 
 	init_rwsem(&tracefile_sem);
+
+	/* initialize trace_data */
+	memset(trace_data, 0, sizeof(trace_data));
+	for (i = 0; i < TCD_TYPE_MAX; i++) {
+		trace_data[i]=kmalloc(sizeof(union trace_data_union)*NR_CPUS,
+							  GFP_KERNEL);
+		if (trace_data[i] == NULL)
+			goto out;
+
+	}
+
+	/* arch related info initialized */
+	tcd_for_each(tcd, i, j) {
+		tcd->tcd_pages_factor = pages_factor[i];
+		tcd->tcd_type = i;
+		tcd->tcd_cpu = j;
+	}
 
 	for (i = 0; i < num_possible_cpus(); i++)
 		for (j = 0; j < 3; j++) {
@@ -29,16 +60,17 @@ int tracefile_init_arch()
 				kmalloc(TRACE_CONSOLE_BUFFER_SIZE,
 					GFP_KERNEL);
 
-			if (trace_console_buffers[i][j] == NULL) {
-				tracefile_fini_arch();
-				printk(KERN_ERR
-				       "Can't allocate "
-				       "console message buffer\n");
-				return -ENOMEM;
-			}
+			if (trace_console_buffers[i][j] == NULL)
+				goto out;
 		}
 
 	return 0;
+
+out:
+	tracefile_fini_arch();
+	printk(KERN_ERR "lnet: No enough memory\n");
+	return -ENOMEM;
+
 }
 
 void tracefile_fini_arch()
@@ -52,6 +84,11 @@ void tracefile_fini_arch()
 				kfree(trace_console_buffers[i][j]);
 				trace_console_buffers[i][j] = NULL;
 			}
+
+	for (i = 0; trace_data[i] != NULL; i++) {
+		kfree(trace_data[i]);
+		trace_data[i] = NULL;
+	}
 }
 
 void tracefile_read_lock()
@@ -102,18 +139,37 @@ trace_get_tcd(void)
 {
 	int cpu;
 
-	if (in_interrupt()) /* no logging in IRQ context */
-		return NULL;
-
 	cpu = get_cpu();
-	return &trace_data[cpu].tcd;
+	if (in_irq())
+		return &(*trace_data[TCD_TYPE_IRQ])[cpu].tcd;
+	else if (in_softirq())
+		return &(*trace_data[TCD_TYPE_SOFTIRQ])[cpu].tcd;
+	return &(*trace_data[TCD_TYPE_PROC])[cpu].tcd;
 }
 
 void
 trace_put_tcd (struct trace_cpu_data *tcd)
 {
-	__LASSERT (!in_interrupt());
 	put_cpu();
+}
+
+int trace_lock_tcd(struct trace_cpu_data *tcd)
+{
+	__LASSERT(tcd->tcd_type < TCD_TYPE_MAX);
+	if (tcd->tcd_type == TCD_TYPE_IRQ)
+		local_irq_disable();
+	else if (tcd->tcd_type == TCD_TYPE_SOFTIRQ)
+		local_bh_disable();
+	return 1;
+}
+
+void trace_unlock_tcd(struct trace_cpu_data *tcd)
+{
+	__LASSERT(tcd->tcd_type < TCD_TYPE_MAX);
+	if (tcd->tcd_type == TCD_TYPE_IRQ)
+		local_irq_enable();
+	else if (tcd->tcd_type == TCD_TYPE_SOFTIRQ)
+		local_bh_enable();
 }
 
 int tcd_owns_tage(struct trace_cpu_data *tcd, struct trace_page *tage)
