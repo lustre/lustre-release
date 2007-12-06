@@ -492,6 +492,15 @@ Index: linux-2.6.18.8/fs/ext3/mballoc.c
 ===================================================================
 --- linux-2.6.18.8.orig/fs/ext3/mballoc.c	2007-07-17 09:18:14.000000000 +0200
 +++ linux-2.6.18.8/fs/ext3/mballoc.c	2007-07-17 09:23:56.000000000 +0200
+@@ -307,7 +307,7 @@
+  */
+ #define MB_DEFAULT_STRIPE		256
+ 
+-static kmem_cache_t *ext3_pspace_cachep = NULL;
++static struct kmem_cache *ext3_pspace_cachep = NULL;
+ 
+ #ifdef EXT3_BB_MAX_BLOCKS
+ #undef EXT3_BB_MAX_BLOCKS
 @@ -350,8 +350,8 @@ struct ext3_prealloc_space {
  	spinlock_t		pa_lock;
  	atomic_t		pa_count;
