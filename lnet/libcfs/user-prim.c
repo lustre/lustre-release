@@ -279,7 +279,7 @@ void cfs_mem_cache_free(cfs_mem_cache_t *c, void *addr)
 /*
  * This uses user-visible declarations from <linux/kdev_t.h>
  */
-#ifdef __LINUX__
+#ifdef __linux__
 #include <linux/kdev_t.h>
 #endif
 
@@ -345,7 +345,7 @@ void cfs_clear_sigpending(void)
         return;
 }
 
-#ifdef __LINUX__
+#ifdef __linux__
 
 /*
  * In glibc (NOT in Linux, so check above is not right), implement
@@ -375,7 +375,7 @@ void *cfs_stack_trace_frame(struct cfs_stack_trace *trace, int frame_no)
         return NULL;
 }
 
-/* __LINUX__ */
+/* __linux__ */
 #endif
 
 void lbug_with_loc(char *file, const char *func, const int line)
