@@ -1013,7 +1013,7 @@ static int osc_brw_prep_request(int cmd, struct client_obd *cli,struct obdo *oa,
                 LASSERTF((pg->off & ~CFS_PAGE_MASK) + pg->count <= CFS_PAGE_SIZE,
                          "i: %d pg: %p off: "LPU64", count: %u\n", i, pg,
                          pg->off, pg->count);
-#ifdef __LINUX__
+#ifdef __linux__
                 LASSERTF(i == 0 || pg->off > pg_prev->off,
                          "i %d p_c %u pg %p [pri %lu ind %lu] off "LPU64
                          " prev_pg %p [pri %lu ind %lu] off "LPU64"\n",
@@ -2133,7 +2133,7 @@ static int osc_send_oap_rpc(struct client_obd *cli, struct lov_oinfo *loi,
                  * XXX nikita: this assertion should be adjusted when lustre
                  * starts using PG_writeback for pages being written out.
                  */
-#if defined(__KERNEL__) && defined(__LINUX__)
+#if defined(__KERNEL__) && defined(__linux__)
                 LASSERT(PageLocked(oap->oap_page));
 #endif
                 /* If there is a gap at the start of this page, it can't merge
@@ -2770,7 +2770,7 @@ static void osc_set_data_with_check(struct lustre_handle *lockh, void *data,
                 return;
         }
         lock_res_and_lock(lock);
-#if defined (__KERNEL__) && defined (__LINUX__)
+#if defined (__KERNEL__) && defined (__linux__)
         /* Liang XXX: Darwin and Winnt checking should be added */
         if (lock->l_ast_data && lock->l_ast_data != data) {
                 struct inode *new_inode = data;
