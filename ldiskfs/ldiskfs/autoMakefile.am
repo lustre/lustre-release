@@ -55,6 +55,9 @@ endif
 			> linux/ldiskfs$$i ; \
 	done
 	sed $(strip $(ldiskfs_sed_flags)) \
+        linux-stage/include/linux/dynlocks.h \
+        > linux/dynlocks.h
+	sed $(strip $(ldiskfs_sed_flags)) \
         linux-stage/include/linux/lustre_iam.h \
         > linux/lustre_iam.h
 	@echo

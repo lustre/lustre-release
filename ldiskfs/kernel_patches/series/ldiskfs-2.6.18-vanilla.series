@@ -16,3 +16,8 @@ ext3-nanosecond-2.6.18-vanilla.patch
 ext3-inode-version-2.6.18-vanilla.patch
 ext3-handle-directory-corruption-better.patch
 ext3-mmp-2.6.18-vanilla.patch
+ext3-dynlocks-common.patch
+ext3-dynlocks-2.6.18-vanilla.patch
+ext3-iam-common.patch
+ext3-iam-2.6.18-vanilla.patch
+ext3-orphans-delay.patch
