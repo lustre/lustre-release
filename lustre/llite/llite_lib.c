@@ -34,6 +34,7 @@
 #include <lprocfs_status.h>
 #include <lustre_disk.h>
 #include <lustre_param.h>
+#include <lustre_cache.h>
 #include "llite_internal.h"
 
 cfs_mem_cache_t *ll_file_data_slab;
@@ -287,7 +288,6 @@ static int client_common_fill_super(struct super_block *sb,
         obd->obd_upcall.onu_upcall = ll_ocd_update;
         data->ocd_brw_size = PTLRPC_MAX_BRW_PAGES << CFS_PAGE_SHIFT;
 
-
         err = obd_connect(&osc_conn, obd, &sbi->ll_sb_uuid, data, NULL);
         if (err == -EBUSY) {
                 LCONSOLE_ERROR_MSG(0x150, "An OST (osc %s) is performing "
@@ -304,15 +304,33 @@ static int client_common_fill_super(struct super_block *sb,
         sbi->ll_lco.lco_flags = data->ocd_connect_flags;
         spin_unlock(&sbi->ll_lco.lco_lock);
 
-        mdc_init_ea_size(sbi->ll_mdc_exp, sbi->ll_osc_exp);
+        err = obd_register_page_removal_cb(sbi->ll_osc_exp,
+                                           ll_page_removal_cb, 
+                                           ll_pin_extent_cb);
+        if (err) {
+                CERROR("cannot register page removal callback: rc = %d\n",err);
+                GOTO(out_osc, err);
+        }
+        err = obd_register_lock_cancel_cb(sbi->ll_osc_exp,
+                                          ll_extent_lock_cancel_cb);
+        if (err) {
+                CERROR("cannot register lock cancel callback: rc = %d\n", err);
+                GOTO(out_page_rm_cb, err);
+        }
+
+        err = mdc_init_ea_size(sbi->ll_mdc_exp, sbi->ll_osc_exp);
+        if (err) {
+                CERROR("cannot set max EA and cookie sizes: rc = %d\n", err);
+                GOTO(out_lock_cn_cb, err);
+        }
 
         err = obd_prep_async_page(sbi->ll_osc_exp, NULL, NULL, NULL,
-                                  0, NULL, NULL, NULL);
+                                  0, NULL, NULL, NULL, 0, NULL);
         if (err < 0) {
                 LCONSOLE_ERROR_MSG(0x151, "There are no OST's in this "
                                    "filesystem. There must be at least one "
                                    "active OST for a client to start.\n");
-                GOTO(out_osc, err);
+                GOTO(out_lock_cn_cb, err);
         }
 
         if (!ll_async_page_slab) {
@@ -322,13 +340,13 @@ static int client_common_fill_super(struct super_block *sb,
                                                           ll_async_page_slab_size,
                                                           0, 0);
                 if (!ll_async_page_slab)
-                        GOTO(out_osc, -ENOMEM);
+                        GOTO(out_lock_cn_cb, -ENOMEM);
         }
 
         err = mdc_getstatus(sbi->ll_mdc_exp, &rootfid);
         if (err) {
                 CERROR("cannot mds_connect: rc = %d\n", err);
-                GOTO(out_osc, err);
+                GOTO(out_lock_cn_cb, err);
         }
         CDEBUG(D_SUPER, "rootfid "LPU64"\n", rootfid.id);
         sbi->ll_rootino = rootfid.id;
@@ -346,14 +364,14 @@ static int client_common_fill_super(struct super_block *sb,
                           0, &request);
         if (err) {
                 CERROR("mdc_getattr failed for root: rc = %d\n", err);
-                GOTO(out_osc, err);
+                GOTO(out_lock_cn_cb, err);
         }
 
         err = mdc_req2lustre_md(request, REPLY_REC_OFF, sbi->ll_osc_exp, &md);
         if (err) {
                 CERROR("failed to understand root inode md: rc = %d\n",err);
                 ptlrpc_req_finished (request);
-                GOTO(out_osc, err);
+                GOTO(out_lock_cn_cb, err);
         }
 
         LASSERT(sbi->ll_rootino != 0);
@@ -396,6 +414,12 @@ static int client_common_fill_super(struct super_block *sb,
 out_root:
         if (root)
                 iput(root);
+out_lock_cn_cb:
+        obd_unregister_lock_cancel_cb(sbi->ll_osc_exp,
+                                      ll_extent_lock_cancel_cb);
+out_page_rm_cb:
+        obd_unregister_page_removal_cb(sbi->ll_osc_exp,
+                                       ll_page_removal_cb);
 out_osc:
         obd_disconnect(sbi->ll_osc_exp);
         sbi->ll_osc_exp = NULL;
@@ -595,6 +619,11 @@ void client_common_put_super(struct super_block *sb)
         prune_deathrow(sbi, 0);
 
         list_del(&sbi->ll_conn_chain);
+
+        obd_unregister_page_removal_cb(sbi->ll_osc_exp,
+                                       ll_page_removal_cb);
+        obd_unregister_lock_cancel_cb(sbi->ll_osc_exp,ll_extent_lock_cancel_cb);
+
         obd_disconnect(sbi->ll_osc_exp);
         sbi->ll_osc_exp = NULL;
 

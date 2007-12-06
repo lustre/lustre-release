@@ -1240,9 +1240,21 @@ test_33() { # bug 12333
 }
 run_test 33 "Mount ost with a large index number"
 
-umount_client $MOUNT	
+umount_client $MOUNT
 cleanup_nocli
 
+test_23() {
+        start_ost
+        start_mds
+        # Simulate -EINTR during mount OBD_FAIL_LDLM_CLOSE_THREAD
+        sysctl -w lustre.fail_loc=0x80000313
+        mount_client $MOUNT
+        cleanup
+}
+run_test 23 "Simulate -EINTR during mount"
+
+equals_msg "Done"
+echo "$0: completed"
 test_33a() {
         setup
 

@@ -133,6 +133,13 @@ Details    : Implementation of NFS-like root squash capability. Specifically,
              don't allow someone with root access on a client node to be able
              to manipulate files owned by root on a server node.
 
+Severity   : normal
+Bugzilla   : 10718
+Description: Slow trucate/writes to huge files at high offsets.
+Details    : Directly associate cached pages to lock that protect those pages,
+             this allows us to quickly find what pages to write and remove
+	     once lock callback is received.
+
 --------------------------------------------------------------------------------
 
 2007-10-26         Cluster File Systems, Inc. <info@clusterfs.com>

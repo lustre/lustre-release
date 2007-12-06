@@ -406,6 +406,7 @@ struct ll_async_page {
                          llap_origin:3,
                          llap_ra_used:1,
                          llap_ignore_quota:1,
+                         llap_nocache:1,
                          llap_lockless_io_page:1;
         void            *llap_cookie;
         struct page     *llap_page;
@@ -508,6 +509,10 @@ int ll_prepare_mdc_op_data(struct mdc_op_data *,
 struct lookup_intent *ll_convert_intent(struct open_intent *oit,
                                         int lookup_flags);
 #endif
+void ll_pin_extent_cb(void *data);
+int ll_page_removal_cb(void *data, int discard);
+int ll_extent_lock_cancel_cb(struct ldlm_lock *lock, struct ldlm_lock_desc *new,
+                             void *data, int flag);
 int lookup_it_finish(struct ptlrpc_request *request, int offset,
                      struct lookup_intent *it, void *data);
 void ll_lookup_finish_locks(struct lookup_intent *it, struct dentry *dentry);

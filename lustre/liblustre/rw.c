@@ -486,7 +486,9 @@ static int llu_queue_pio(int cmd, struct llu_io_group *group,
                 rc = obd_prep_async_page(exp, lsm, NULL, page,
                                          (obd_off)page->index << CFS_PAGE_SHIFT,
                                          &llu_async_page_ops,
-                                         llap, &llap->llap_cookie);
+                                         llap, &llap->llap_cookie,
+                                         1 /* no cache in liblustre at all */,
+                                         NULL);
                 if (rc) {
                         LASSERT(rc < 0);
                         llap->llap_cookie = NULL;
@@ -557,7 +559,8 @@ struct llu_io_group * get_io_group(struct inode *inode, int maxpages,
         if (!llap_cookie_size)
                 llap_cookie_size = obd_prep_async_page(llu_i2obdexp(inode),
                                                        NULL, NULL, NULL, 0,
-                                                       NULL, NULL, NULL);
+                                                       NULL, NULL, NULL, 0,
+                                                       NULL);
 
         OBD_ALLOC(group, LLU_IO_GROUP_SIZE(maxpages));
         if (!group)
