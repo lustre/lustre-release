@@ -226,7 +226,7 @@ Description: Assertion failure in kernel ptllnd caused by posting passive
 	
 Severity   : major
 Frequency  : rare
-Bugzilla   : 12455
+Bugzilla   : 12445
 Description: A race in kernel ptllnd between deleting a peer and posting
              new communications for it could hang communications -
 	     manifesting as "Unexpectedly long timeout" messages.
