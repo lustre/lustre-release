@@ -520,7 +520,7 @@ out:
 #endif
         }
         RETURN(rc);
-        
+
         /*
          * This part is here to combat evil-evil race in real_lookup on 2.6
          * kernels.  The race details are: We enter do_lookup() looking for some
@@ -544,7 +544,7 @@ do_lookup:
                 ll_lookup_finish_locks(it, de);
                 it = &lookup_it;
         }
-        
+
         /* Do real lookup here. */
         op_data = ll_prep_md_op_data(NULL, parent, NULL, de->d_name.name,
                                      de->d_name.len, 0, (it->it_op & IT_CREAT ?
@@ -560,7 +560,7 @@ do_lookup:
                                                            DLM_REPLY_REC_OFF,
                                                            sizeof(*mdt_body));
                 struct lu_fid fid = {.f_seq = 0, .f_oid = 0, .f_ver = 0};
-                
+
                 if (de->d_inode)
                         fid = *ll_inode2fid(de->d_inode);
 
@@ -731,7 +731,7 @@ int ll_revalidate_nd(struct dentry *dentry, struct nameidata *nd)
                         ll_d2d(dentry)->lld_it = it;
                         it = NULL; /* avoid freeing */
                 }
-                        
+
 out_it:
                 if (it) {
                         ll_intent_release(it);

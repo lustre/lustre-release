@@ -335,20 +335,19 @@ struct dentry *ll_find_alias(struct inode *inode, struct dentry *de)
                        de->d_parent, de->d_inode, atomic_read(&de->d_count));
                 return dentry;
         }
-        
+
         if (last_discon) {
                 CDEBUG(D_DENTRY, "Reuse disconnected dentry %p inode %p "
                         "refc %d\n", last_discon, last_discon->d_inode,
                         atomic_read(&last_discon->d_count));
-                __d_rehash(de, 0);
                 dget_locked(last_discon);
-                __d_move(last_discon, de);
                 spin_unlock(&dcache_lock);
                 d_rehash(de);
+                d_move(last_discon, de);
                 iput(inode);
                 return last_discon;
         }
-       
+
         ll_d_add(de, inode);
 
         spin_unlock(&dcache_lock);

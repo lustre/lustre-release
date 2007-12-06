@@ -21,6 +21,10 @@
 #include <lustre_ver.h>
 #include <lustre_disk.h>  /* for s2sbi */
 
+#ifndef FMODE_EXEC
+#define FMODE_EXEC 0
+#endif
+
 #define LL_IT2STR(it) ((it) ? ldlm_it2str((it)->it_op) : "0")
 #define LUSTRE_FPRIVATE(file) ((file)->private_data)
 

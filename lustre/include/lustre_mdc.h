@@ -21,6 +21,9 @@
 #   include <linux/posix_acl_xattr.h>
 #  endif
 # endif
+# ifndef HAVE_VFS_INTENT_PATCHES
+# include <linux/lustre_intent.h>
+# endif
 #endif
 #include <lustre_handles.h>
 #include <libcfs/kp30.h>

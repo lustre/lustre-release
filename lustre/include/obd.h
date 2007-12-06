@@ -1266,6 +1266,8 @@ struct md_open_data {
         struct list_head          mod_replay_list;
 };
 
+struct lookup_intent;
+
 struct md_ops {
         int (*m_getstatus)(struct obd_export *, struct lu_fid *,
                            struct obd_capa **);

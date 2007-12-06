@@ -32,6 +32,9 @@
 #include <asm/div64.h>
 #include <linux/seq_file.h>
 #include <linux/namei.h>
+# ifndef HAVE_VFS_INTENT_PATCHES
+# include <linux/lustre_intent.h>
+# endif
 #else
 #include <liblustre.h>
 #endif
