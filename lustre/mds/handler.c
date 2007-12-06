@@ -2137,7 +2137,7 @@ err_cleanup:
 
 int mds_postrecov(struct obd_device *obd)
 {
-        int rc;
+        int rc = 0;
         ENTRY;
 
         if (obd->obd_fail)
@@ -2145,17 +2145,6 @@ int mds_postrecov(struct obd_device *obd)
 
         LASSERT(!obd->obd_recovering);
         LASSERT(llog_get_context(obd, LLOG_MDS_OST_ORIG_CTXT) != NULL);
-
-        /* set nextid first, so we are sure it happens */
-        mutex_down(&obd->obd_dev_sem);
-        rc = mds_lov_set_nextid(obd);
-        mutex_up(&obd->obd_dev_sem);
-        if (rc) {
-                CERROR("%s: mds_lov_set_nextid failed %d\n",
-                       obd->obd_name, rc);
-                GOTO(out, rc);
-        }
-
         /* clean PENDING dir */
         if (strncmp(obd->obd_name, MDD_OBD_NAME, strlen(MDD_OBD_NAME)))
                 rc = mds_cleanup_pending(obd);

@@ -2367,7 +2367,7 @@ static int lov_get_info(struct obd_export *exp, __u32 keylen,
                 LDLM_ERROR(data->lock, "lock on inode without such object");
                 dump_lsm(D_ERROR, data->lsm);
                 GOTO(out, rc = -ENXIO);
-        } else if (KEY_IS("last_id")) {
+        } else if (KEY_IS(KEY_LAST_ID)) {
                 struct obd_id_info *info = val;
                 int size = sizeof(obd_id);
                 struct lov_tgt_desc *tgt;
@@ -2385,6 +2385,14 @@ static int lov_get_info(struct obd_export *exp, __u32 keylen,
                 *desc_ret = lov->desc;
 
                 GOTO(out, rc = 0);
+        } else if (KEY_IS(KEY_LOV_IDX)) {
+                struct lov_tgt_desc *tgt;
+
+                for(i = 0; i < lov->desc.ld_tgt_count; i++) {
+                        tgt = lov->lov_tgts[i];
+                        if (obd_uuid_equals(val, &tgt->ltd_uuid))
+                                GOTO(out, rc = i);
+                }
         }
 
         rc = -EINVAL;
@@ -2420,7 +2428,7 @@ static int lov_set_info_async(struct obd_export *exp, obd_count keylen,
 
         if (KEY_IS(KEY_NEXT_ID)) {
                 count = vallen / sizeof(struct obd_id_info);
-                vallen = sizeof(struct obd_id_info);
+                vallen = sizeof(obd_id);
                 incr = sizeof(struct obd_id_info);
                 do_inactive = 1;
                 next_id = 1;

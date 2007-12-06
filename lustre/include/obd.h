@@ -989,6 +989,8 @@ enum obd_cleanup_stage {
 #define KEY_CONN_DATA           "conn_data"
 #define KEY_MAX_EASIZE          "max_easize"
 #define KEY_REVIMP_UPD          "revimp_update"
+#define KEY_LOV_IDX             "lov_idx"
+#define KEY_LAST_ID             "last_id"
 
 struct lu_context;
 
