@@ -724,10 +724,10 @@ kptl_tx_t *
 kptllnd_find_timed_out_tx(kptl_peer_t *peer)
 {
         kptl_tx_t         *tx;
-        struct list_head  *tmp;
+        struct list_head  *ele;
 
-        list_for_each(tmp, &peer->peer_sendq) {
-                tx = list_entry(peer->peer_sendq.next, kptl_tx_t, tx_list);
+        list_for_each(ele, &peer->peer_sendq) {
+                tx = list_entry(ele, kptl_tx_t, tx_list);
 
                 if (time_after_eq(jiffies, tx->tx_deadline)) {
                         kptllnd_tx_addref(tx);
@@ -735,8 +735,8 @@ kptllnd_find_timed_out_tx(kptl_peer_t *peer)
                 }
         }
 
-        list_for_each(tmp, &peer->peer_activeq) {
-                tx = list_entry(peer->peer_activeq.next, kptl_tx_t, tx_list);
+        list_for_each(ele, &peer->peer_activeq) {
+                tx = list_entry(ele, kptl_tx_t, tx_list);
 
                 if (time_after_eq(jiffies, tx->tx_deadline)) {
                         kptllnd_tx_addref(tx);
