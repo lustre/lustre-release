@@ -806,7 +806,8 @@ finish:
  out:
         if (rc != 0) {
                 IMPORT_SET_STATE(imp, LUSTRE_IMP_DISCON);
-                if (aa->pcaa_initial_connect && !imp->imp_initial_recov)
+                if (aa->pcaa_initial_connect && !imp->imp_initial_recov &&
+                    (request->rq_import_generation == imp->imp_generation))
                         ptlrpc_deactivate_import(imp);
 
                 if (imp->imp_recon_bk && imp->imp_last_recon) {
