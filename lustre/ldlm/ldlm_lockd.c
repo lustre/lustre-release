@@ -1701,10 +1701,11 @@ static int ldlm_bl_thread_main(void *arg)
                                     busy >= atomic_read(&blp->blp_num_threads)))
                                 /* discard the return value, we tried */
                                 ldlm_bl_thread_start(blp);
-                } else
+                } else {
                         if (blwi->blwi_ns == NULL)
                                 /* added by ldlm_cleanup() */
                                 break;
+                }
 
                 if (blwi->blwi_flags == LDLM_FL_CANCELING) {
                         /* The special case when we cancel locks in lru
@@ -1718,9 +1719,10 @@ static int ldlm_bl_thread_main(void *arg)
                         ldlm_cli_cancel_req(blwi->blwi_lock->l_conn_export,
                                             &head, 1);
                         LDLM_LOCK_PUT(blwi->blwi_lock);
-                } else
+                } else {
                         ldlm_handle_bl_callback(blwi->blwi_ns, &blwi->blwi_ld,
                                                 blwi->blwi_lock);
+                }
                 OBD_FREE(blwi, sizeof(*blwi));
         }
 
