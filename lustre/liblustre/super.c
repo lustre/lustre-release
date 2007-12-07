@@ -95,6 +95,8 @@ static void llu_fsop_gone(struct filesys *fs)
         ENTRY;
 
         list_del(&sbi->ll_conn_chain);
+        obd_unregister_lock_cancel_cb(sbi->ll_osc_exp,
+                                      llu_extent_lock_cancel_cb);
         obd_disconnect(sbi->ll_osc_exp);
         obd_disconnect(sbi->ll_mdc_exp);
 
@@ -1982,12 +1984,19 @@ llu_fsswop_mount(const char *source,
         sbi->ll_osc_exp = class_conn2export(&osc_conn);
         sbi->ll_lco.lco_flags = ocd.ocd_connect_flags;
 
+        err = obd_register_lock_cancel_cb(sbi->ll_osc_exp,
+                                          llu_extent_lock_cancel_cb);
+        if (err) {
+                CERROR("cannot register lock cancel callback: rc = %d\n", err);
+                GOTO(out_osc, err);
+        }
+
         mdc_init_ea_size(sbi->ll_mdc_exp, sbi->ll_osc_exp);
 
         err = mdc_getstatus(sbi->ll_mdc_exp, &rootfid);
         if (err) {
                 CERROR("cannot mds_connect: rc = %d\n", err);
-                GOTO(out_osc, err);
+                GOTO(out_lock_cn_cb, err);
         }
         CDEBUG(D_SUPER, "rootfid "LPU64"\n", rootfid.id);
         sbi->ll_rootino = rootfid.id;
@@ -1998,7 +2007,7 @@ llu_fsswop_mount(const char *source,
                           &request);
         if (err) {
                 CERROR("mdc_getattr failed for root: rc = %d\n", err);
-                GOTO(out_osc, err);
+                GOTO(out_lock_cn_cb, err);
         }
 
         err = mdc_req2lustre_md(request, REPLY_REC_OFF, sbi->ll_osc_exp, &md);
@@ -2041,6 +2050,9 @@ out_inode:
         _sysio_i_gone(root);
 out_request:
         ptlrpc_req_finished(request);
+out_lock_cn_cb:
+        obd_unregister_lock_cancel_cb(sbi->ll_osc_exp,
+                                      llu_extent_lock_cancel_cb);
 out_osc:
         obd_disconnect(sbi->ll_osc_exp);
 out_mdc:

@@ -112,7 +112,7 @@ static int llu_lock_to_stripe_offset(struct inode *inode, struct ldlm_lock *lock
         RETURN(stripe);
 }
 
-static int llu_extent_lock_callback(struct ldlm_lock *lock,
+int llu_extent_lock_cancel_cb(struct ldlm_lock *lock,
                                     struct ldlm_lock_desc *new, void *data,
                                     int flag)
 {
@@ -240,7 +240,7 @@ int llu_glimpse_size(struct inode *inode)
 
         einfo.ei_type = LDLM_EXTENT;
         einfo.ei_mode = LCK_PR;
-        einfo.ei_cb_bl = llu_extent_lock_callback;
+        einfo.ei_cb_bl = osc_extent_blocking_cb;
         einfo.ei_cb_cp = ldlm_completion_ast;
         einfo.ei_cb_gl = llu_glimpse_callback;
         einfo.ei_cbdata = inode;
@@ -300,7 +300,7 @@ int llu_extent_lock(struct ll_file_data *fd, struct inode *inode,
 
         einfo.ei_type = LDLM_EXTENT;
         einfo.ei_mode = mode;
-        einfo.ei_cb_bl = llu_extent_lock_callback;
+        einfo.ei_cb_bl = osc_extent_blocking_cb;
         einfo.ei_cb_cp = ldlm_completion_ast;
         einfo.ei_cb_gl = llu_glimpse_callback;
         einfo.ei_cbdata = inode;
