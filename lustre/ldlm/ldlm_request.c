@@ -535,7 +535,7 @@ struct ptlrpc_request *ldlm_prep_enqueue_req(struct obd_export *exp,
 
                 flags = ns_connect_lru_resize(ns) ? 
                         LDLM_CANCEL_LRUR : LDLM_CANCEL_AGED;
-                cancel = ns_connect_lru_resize(exp) ? 0 : 1;
+                cancel = ns_connect_lru_resize(ns) ? 0 : 1;
 
                 /* Cancel lru locks here _only_ if the server supports 
                  * EARLY_CANCEL. Otherwise we have to send extra CANCEL
