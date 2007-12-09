@@ -648,7 +648,7 @@ void ldlm_lock_decref_internal(struct ldlm_lock *lock, __u32 mode)
                  * enqueue. */
                 if (!exp_connect_cancelset(lock->l_conn_export) && 
                     !ns_connect_lru_resize(ns))
-                        ldlm_cancel_lru(ns, 0, LDLM_ASYNC);
+                        ldlm_cancel_lru(ns, 0, LDLM_ASYNC, 0);
         } else {
                 unlock_res_and_lock(lock);
         }

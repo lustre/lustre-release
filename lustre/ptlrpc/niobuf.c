@@ -383,6 +383,9 @@ int ptlrpc_send_reply (struct ptlrpc_request *req, int flags)
                       lustre_msg_get_magic(req->rq_repmsg), req->rq_replen);
         }
 
+        if (req->rq_export && req->rq_export->exp_obd)
+                target_pack_pool_reply(req);
+
         if (req->rq_export == NULL || req->rq_export->exp_connection == NULL)
                 conn = ptlrpc_get_connection(req->rq_peer, req->rq_self, NULL);
         else

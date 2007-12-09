@@ -152,7 +152,8 @@ static int lprocfs_wr_lru_size(struct file *file, const char *buffer,
                         int canceled, unused  = ns->ns_nr_unused;
                         
                         /* Try to cancel all @ns_nr_unused locks. */
-                        canceled = ldlm_cancel_lru(ns, unused, LDLM_SYNC);
+                        canceled = ldlm_cancel_lru(ns, unused, LDLM_SYNC, 
+                                                   LDLM_CANCEL_PASSED);
                         if (canceled < unused) {
                                 CERROR("not all requested locks are canceled, "
                                        "requested: %d, canceled: %d\n", unused, 
@@ -162,7 +163,7 @@ static int lprocfs_wr_lru_size(struct file *file, const char *buffer,
                 } else {
                         tmp = ns->ns_max_unused;
                         ns->ns_max_unused = 0;
-                        ldlm_cancel_lru(ns, 0, LDLM_SYNC);
+                        ldlm_cancel_lru(ns, 0, LDLM_SYNC, LDLM_CANCEL_PASSED);
                         ns->ns_max_unused = tmp;
                 }
                 return count;
@@ -185,7 +186,7 @@ static int lprocfs_wr_lru_size(struct file *file, const char *buffer,
                 
                 CDEBUG(D_DLMTRACE, "changing namespace %s unused locks from %u to %u\n", 
                        ns->ns_name, ns->ns_nr_unused, (unsigned int)tmp);
-                ldlm_cancel_lru(ns, (unsigned int)tmp, LDLM_ASYNC);
+                ldlm_cancel_lru(ns, (unsigned int)tmp, LDLM_ASYNC, LDLM_CANCEL_PASSED);
                 
                 if (!lru_resize) {
                         CDEBUG(D_DLMTRACE, "disable lru_resize for namespace %s\n", 
@@ -196,7 +197,7 @@ static int lprocfs_wr_lru_size(struct file *file, const char *buffer,
                 CDEBUG(D_DLMTRACE, "changing namespace %s max_unused from %u to %u\n",
                        ns->ns_name, ns->ns_max_unused, (unsigned int)tmp);
                 ns->ns_max_unused = (unsigned int)tmp;
-                ldlm_cancel_lru(ns, 0, LDLM_ASYNC);
+                ldlm_cancel_lru(ns, 0, LDLM_ASYNC, LDLM_CANCEL_PASSED);
                 
                 /* Make sure that originally lru resize was supported before 
                  * turning it on here. */
@@ -245,6 +246,13 @@ void ldlm_proc_namespace(struct ldlm_namespace *ns)
                 lock_vars[0].data = ns;
                 lock_vars[0].read_fptr = lprocfs_rd_lru_size;
                 lock_vars[0].write_fptr = lprocfs_wr_lru_size;
+                lprocfs_add_vars(ldlm_ns_proc_dir, lock_vars, 0);
+                
+                snprintf(lock_name, MAX_STRING_SIZE, "%s/shrink_thumb",
+                         ns->ns_name);
+                lock_vars[0].data = ns;
+                lock_vars[0].read_fptr = lprocfs_rd_uint;
+                lock_vars[0].write_fptr = lprocfs_wr_uint;
                 lprocfs_add_vars(ldlm_ns_proc_dir, lock_vars, 0);
                 
                 snprintf(lock_name, MAX_STRING_SIZE, "%s/lru_max_age",
@@ -308,6 +316,7 @@ struct ldlm_namespace *ldlm_namespace_new(char *name, ldlm_side_t client,
         if (!ns->ns_name)
                 GOTO(out_hash, NULL);
 
+        ns->ns_shrink_thumb = LDLM_LOCK_SHRINK_THUMB;
         ns->ns_appetite = apt;
         strcpy(ns->ns_name, name);
 

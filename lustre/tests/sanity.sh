@@ -4745,36 +4745,53 @@ run_test 124a "lru resize ======================================="
 test_124b() {
 	[ -z "`grep lru_resize $LPROC/mdc/*/connect_flags`" ] && \
                skip "no lru resize on server" && return 0
-        cleanup -f || error "failed to unmount"
-        MOUNTOPT="$MOUNTOPT,nolruresize"
-        setup || error "setup failed"
 
-        NR=2000
-        mkdir -p $DIR/$tdir || error "failed to create $DIR/$tdir"
+        NSDIR=`find $LPROC/ldlm/namespaces | grep mdc | head -1`
+        LIMIT=`cat $NSDIR/pool/limit`
 
-        createmany -o $DIR/$tdir/f $NR
-        log "doing ls -la $DIR/$tdir 3 times (lru resize disabled)"
+	#define LDLM_DEFAULT_LRU_SIZE (100 * num_online_cpus())
+        NR_CPU=$(awk '/processor/' /proc/cpuinfo | wc -l)
+	test $NR_CPU -gt 1 && SUFFIX="(s)" || SUFFIX=""
+	# 100 locks here is default value for non-shrinkable lru as well
+        # as the order to switch to static lru managing policy
+        LDLM_DEFAULT_LRU_SIZE=$((100 * NR_CPU))
+	log "$NR_CPU CPU${SUFFIX} detected, LDLM_DEFAULT_LRU_SIZE = $LDLM_DEFAULT_LRU_SIZE"
+
+        log "disable lru resize for $(basename $NSDIR)"
+        echo $LDLM_DEFAULT_LRU_SIZE > $NSDIR/lru_size
+
+        NR=$((LIMIT-(LIMIT/3)))
+        mkdir -p $DIR/$tdir/disable_lru_resize || 
+		error "failed to create $DIR/$tdir/disable_lru_resize"
+
+        createmany -o $DIR/$tdir/disable_lru_resize/f $NR
+        log "doing ls -la $DIR/$tdir/disable_lru_resize 3 times"
         stime=`date +%s`
-        ls -la $DIR/$tdir > /dev/null
-        ls -la $DIR/$tdir > /dev/null
-        ls -la $DIR/$tdir > /dev/null
+        ls -la $DIR/$tdir/disable_lru_resize > /dev/null
+        ls -la $DIR/$tdir/disable_lru_resize > /dev/null
+        ls -la $DIR/$tdir/disable_lru_resize > /dev/null
         etime=`date +%s`
         nolruresize_delta=$((etime-stime))
         log "ls -la time: $nolruresize_delta seconds"
+        log "lru_size = $(cat $NSDIR/lru_size)"
 
-        cleanup -f || error "failed to unmount"
-        MOUNTOPT=`echo $MOUNTOPT | sed "s/nolruresize/lruresize/"`
-        setup || error "setup failed"
+        mkdir -p $DIR/$tdir/enable_lru_resize || 
+		error "failed to create $DIR/$tdir/enable_lru_resize"
+        
+	# 0 locks means here flush lru and switch to lru resize policy 
+        log "enable lru resize for $(basename $NSDIR)"
+        echo 0 > $NSDIR/lru_size
 
-        createmany -o $DIR/$tdir/f $NR
-        log "doing ls -la $DIR/$tdir 3 times (lru resize enabled)"
+        createmany -o $DIR/$tdir/enable_lru_resize/f $NR
+        log "doing ls -la $DIR/$tdir/enable_lru_resize 3 times"
         stime=`date +%s`
-        ls -la $DIR/$tdir > /dev/null
-        ls -la $DIR/$tdir > /dev/null
-        ls -la $DIR/$tdir > /dev/null
+        ls -la $DIR/$tdir/enable_lru_resize > /dev/null
+        ls -la $DIR/$tdir/enable_lru_resize > /dev/null
+        ls -la $DIR/$tdir/enable_lru_resize > /dev/null
         etime=`date +%s`
         lruresize_delta=$((etime-stime))
         log "ls -la time: $lruresize_delta seconds"
+        log "lru_size = $(cat $NSDIR/lru_size)"
 
         if test $lruresize_delta -gt $nolruresize_delta; then
                 log "ls -la is $((lruresize_delta - $nolruresize_delta))s slower with lru resize enabled"
@@ -4783,8 +4800,6 @@ test_124b() {
         else
                 log "lru resize performs the same with no lru resize"
         fi
-
-        unlinkmany $DIR/$tdir/f $NR
 }
 run_test 124b "lru resize (performance test) ======================="
 
