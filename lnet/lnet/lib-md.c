@@ -39,6 +39,7 @@ lnet_md_unlink(lnet_libmd_t *md)
                 /* Disassociate from ME (if any), and unlink it if it was created
                  * with LNET_UNLINK */
                 if (me != NULL) {
+                        md->md_me = NULL;
                         me->me_md = NULL;
                         if (me->me_unlink == LNET_UNLINK)
                                 lnet_me_unlink(me);

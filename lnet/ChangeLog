@@ -29,6 +29,10 @@ tbd         Cluster File Systems, Inc. <info@clusterfs.com>
 	ptllnd    - Portals 3.3 / UNICOS/lc 1.5.x, 2.0.x
 
 Severity   : normal
+Bugzilla   : 14238
+Description: ASSERTION(me == md->md_me) failed in lnet_match_md()
+
+Severity   : normal
 Bugzilla   : 12494
 Description: increase send queue size for ciblnd/openiblnd
 

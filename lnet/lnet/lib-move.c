@@ -140,8 +140,8 @@ lnet_match_md(int index, int op_mask, lnet_process_id_t src,
               lnet_libmd_t **md_out)
 {
         lnet_portal_t    *ptl = &the_lnet.ln_portals[index];
-        struct list_head *tmp;
         lnet_me_t        *me;
+        lnet_me_t        *tmp;
         lnet_libmd_t     *md;
         int               rc;
 
@@ -154,11 +154,10 @@ lnet_match_md(int index, int op_mask, lnet_process_id_t src,
                 return LNET_MATCHMD_DROP;
         }
 
-        list_for_each (tmp, &ptl->ptl_ml) {
-                me = list_entry(tmp, lnet_me_t, me_list);
+        list_for_each_entry_safe (me, tmp, &ptl->ptl_ml, me_list) {
                 md = me->me_md;
 
-                 /* ME attached but MD not attached yet */
+                /* ME attached but MD not attached yet */
                 if (md == NULL)
                         continue;
 

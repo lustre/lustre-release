@@ -145,7 +145,7 @@ lnet_me_unlink(lnet_me_t *me)
 {
         list_del (&me->me_list);
 
-        if (me->me_md) {
+        if (me->me_md != NULL) {
                 me->me_md->md_me = NULL;
                 lnet_md_unlink(me->me_md);
         }
