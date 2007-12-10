@@ -36,9 +36,15 @@ typedef enum {
 } ldlm_sync_t;
 
 /* Cancel lru flag, it indicates we cancel aged locks. */
-#define LDLM_CANCEL_AGED 0x00000001
+enum {
+        LDLM_CANCEL_AGED   = 1 << 0, /* Cancel aged locks (non lru resize). */
+        LDLM_CANCEL_PASSED = 1 << 1, /* Cancel passed number of locks. */
+        LDLM_CANCEL_SHRINK = 1 << 2, /* Cancel locks from shrinker. */
+        LDLM_CANCEL_LRUR   = 1 << 3  /* Cancel locks from lru resize. */
+};
 
-int ldlm_cancel_lru(struct ldlm_namespace *ns, int nr, ldlm_sync_t sync);
+int ldlm_cancel_lru(struct ldlm_namespace *ns, int nr, ldlm_sync_t sync, 
+                    int flags);
 int ldlm_cancel_lru_local(struct ldlm_namespace *ns, struct list_head *cancels,
                           int count, int max, int flags);
 

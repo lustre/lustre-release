@@ -1794,18 +1794,16 @@ int target_pack_pool_reply(struct ptlrpc_request *req)
         struct ldlm_pool *pl;
         ENTRY;
    
-        if (req->rq_export == NULL) {
+        if (!req->rq_export || !exp_connect_lru_resize(req->rq_export)) {
                 lustre_msg_set_slv(req->rq_repmsg, 0);
                 lustre_msg_set_limit(req->rq_repmsg, 0);
                 RETURN(0);
         }
  
-        if (!exp_connect_lru_resize(req->rq_export))
-                RETURN(0);
-        
         pl = ldlm_exp2pl(req->rq_export);
 
         spin_lock(&pl->pl_lock);
+        LASSERT(ldlm_pool_get_slv(pl) != 0 && ldlm_pool_get_limit(pl) != 0);
         lustre_msg_set_slv(req->rq_repmsg, ldlm_pool_get_slv(pl));
         lustre_msg_set_limit(req->rq_repmsg, ldlm_pool_get_limit(pl));
         spin_unlock(&pl->pl_lock);
@@ -1829,7 +1827,6 @@ int target_send_reply_msg(struct ptlrpc_request *req, int rc, int fail_id)
                 DEBUG_REQ(D_NET, req, "sending reply");
         }
 
-        target_pack_pool_reply(req);
         return (ptlrpc_send_reply(req, 1));
 }
 

@@ -4672,12 +4672,21 @@ test_121() { #bug #10589
 }
 run_test 121 "read cancel race ========="
 
+cmd_cancel_lru_locks() {
+        NS=$1
+        test "x$NS" = "x" && NS="mdc"
+        for d in `find $LPROC/ldlm/namespaces | grep $NS`; do
+                if test -f $d/lru_size; then
+                        cancel_lru_locks $d
+                fi
+        done
+}
+
 test_124a() {
 	[ -z "`grep lru_resize $LPROC/mdc/*/connect_flags`" ] && \
                skip "no lru resize on server" && return 0
-        cancel_lru_locks mdc
+        cmd_cancel_lru_locks "mdc"
         lru_resize_enable
-        NSDIR=`find $LPROC/ldlm/namespaces | grep mdc | head -1`
 
         # we want to test main pool functionality, that is cancel based on SLV
         # this is why shrinkers are disabled
@@ -4687,20 +4696,33 @@ test_124a() {
         NR=2000
         mkdir -p $DIR/$tdir || error "failed to create $DIR/$tdir"
 
-        LRU_SIZE=`cat $NSDIR/lru_size`
-
         # use touch to produce $NR new locks
         log "create $NR files at $DIR/$tdir"
         for ((i=0;i<$NR;i++)); do touch $DIR/$tdir/f$i; done
+        
+        NSDIR=""
+        LRU_SIZE=0
+        for d in `find $LPROC/ldlm/namespaces | grep mdc-`; do
+                if test -f $d/lru_size; then
+                        LRU_SIZE=`cat $d/lru_size`
+                        if test $LRU_SIZE -gt 0; then
+                                log "using $d namespace"
+                                NSDIR=$d
+                                break
+                        fi
+                fi
+        done
 
-        LRU_SIZE_B=`cat $NSDIR/lru_size`
-        if test $LRU_SIZE -ge $LRU_SIZE_B; then
+        if test -z $NSDIR; then
                 skip "No cached locks created!"
-                cat $NSDIR/pool/state
                 return 0
         fi
-        LRU_SIZE_B=$((LRU_SIZE_B-LRU_SIZE))
-        log "created $LRU_SIZE_B lock(s)"
+
+        if test $LRU_SIZE -lt 100; then
+                skip "Not enough cached locks created!"
+                return 0
+        fi
+        log "created $LRU_SIZE lock(s)"
 
         # we want to sleep 30s to not make test too long
         SLEEP=30
@@ -4718,6 +4740,7 @@ test_124a() {
         # Use $LRU_SIZE_B here to take into account real number of locks created
         # in the case of CMD, LRU_SIZE_B != $NR in most of cases
         LVF=$(($MAX_HRS * 60 * 60 * $LIMIT / $SLEEP))
+        LRU_SIZE_B=$LRU_SIZE
         log "make client drop locks $LVF times faster so that ${SLEEP}s is enough to cancel $LRU_SIZE_B lock(s)"
         OLD_LVF=`cat $NSDIR/pool/lock_volume_factor`
         echo "$LVF" > $NSDIR/pool/lock_volume_factor
@@ -4740,39 +4763,82 @@ test_124a() {
 }
 run_test 124a "lru resize ======================================="
 
+set_lru_size() {
+        NS=$1
+        SIZE=$2
+        test "x$NS" = "x" && NS="mdc"
+        test "x$SIZE" = "x" && SIZE="0"
+        test $SIZE -lt 0 && SIZE="0"
+        test $SIZE -gt 0 && ACTION="disabled" || ACTION="enabled"
+        for d in `find $LPROC/ldlm/namespaces | grep $NS`; do
+                if test -f $d/lru_size; then
+                        log "$(basename $d):"
+                        log "  lru resize $ACTION"
+                        log "  lru_size=$SIZE"
+                        echo $SIZE > $d/lru_size
+                fi
+        done
+}
+
+get_lru_size() {
+        NS=$1
+        test "x$NS" = "x" && NS="mdc"
+        for d in `find $LPROC/ldlm/namespaces | grep $NS`; do
+                if test -f $d/lru_size; then
+                        log "$(basename $d):"
+                        log "  lru_size=$(cat $d/lru_size)"
+                fi
+        done
+}
+
 test_124b() {
 	[ -z "`grep lru_resize $LPROC/mdc/*/connect_flags`" ] && \
                skip "no lru resize on server" && return 0
-        cleanup -f || error "failed to unmount"
-        MOUNTOPT="$MOUNTOPT,nolruresize"
-        setup
 
-        NR=2000
-        mkdir -p $DIR/$tdir || error "failed to create $DIR/$tdir"
+        NSDIR=`find $LPROC/ldlm/namespaces | grep mdc | head -1`
+        LIMIT=`cat $NSDIR/pool/limit`
 
-        createmany -o $DIR/$tdir/f $NR
-        log "doing ls -la $DIR/$tdir 3 times (lru resize disabled)"
+        NR_CPU=$(awk '/processor/' /proc/cpuinfo | wc -l)
+	# 100 locks here is default value for non-shrinkable lru as well
+        # as the order to switch to static lru managing policy
+	# define LDLM_DEFAULT_LRU_SIZE (100 * num_online_cpus())
+        LDLM_DEFAULT_LRU_SIZE=$((100 * NR_CPU))
+
+        NR=$((LIMIT-(LIMIT/3)))
+        log "starting lru resize disable cycle"
+        set_lru_size "mdc-" $LDLM_DEFAULT_LRU_SIZE
+
+        mkdir -p $DIR/$tdir/disable_lru_resize || 
+                error "failed to create $DIR/$tdir/disable_lru_resize"
+
+        createmany -o $DIR/$tdir/disable_lru_resize/f $NR
+        log "doing ls -la $DIR/$tdir/disable_lru_resize 3 times"
         stime=`date +%s`
-        ls -la $DIR/$tdir > /dev/null
-        ls -la $DIR/$tdir > /dev/null
-        ls -la $DIR/$tdir > /dev/null
+        ls -la $DIR/$tdir/disable_lru_resize > /dev/null
+        ls -la $DIR/$tdir/disable_lru_resize > /dev/null
+        ls -la $DIR/$tdir/disable_lru_resize > /dev/null
         etime=`date +%s`
         nolruresize_delta=$((etime-stime))
         log "ls -la time: $nolruresize_delta seconds"
+        get_lru_size "mdc-"
+    
+        log "starting lru resize enable cycle"
+        mkdir -p $DIR/$tdir/enable_lru_resize || 
+                error "failed to create $DIR/$tdir/enable_lru_resize"
 
-        cleanup -f || error "failed to unmount"
-        MOUNTOPT=`echo $MOUNTOPT | sed "s/nolruresize/lruresize/"`
-        setup
+	# 0 locks means here flush lru and switch to lru resize policy 
+        set_lru_size "mdc-" 0
 
-        createmany -o $DIR/$tdir/f $NR
-        log "doing ls -la $DIR/$tdir 3 times (lru resize enabled)"
+        createmany -o $DIR/$tdir/enable_lru_resize/f $NR
+        log "doing ls -la $DIR/$tdir/enable_lru_resize 3 times"
         stime=`date +%s`
-        ls -la $DIR/$tdir > /dev/null
-        ls -la $DIR/$tdir > /dev/null
-        ls -la $DIR/$tdir > /dev/null
+        ls -la $DIR/$tdir/enable_lru_resize > /dev/null
+        ls -la $DIR/$tdir/enable_lru_resize > /dev/null
+        ls -la $DIR/$tdir/enable_lru_resize > /dev/null
         etime=`date +%s`
         lruresize_delta=$((etime-stime))
         log "ls -la time: $lruresize_delta seconds"
+        get_lru_size "mdc-"
 
         if test $lruresize_delta -gt $nolruresize_delta; then
                 log "ls -la is $((lruresize_delta - $nolruresize_delta))s slower with lru resize enabled"
@@ -4781,8 +4847,6 @@ test_124b() {
         else
                 log "lru resize performs the same with no lru resize"
         fi
-
-        unlinkmany $DIR/$tdir/f $NR
 }
 run_test 124b "lru resize (performance test) ======================="
 

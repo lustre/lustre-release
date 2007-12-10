@@ -342,6 +342,9 @@ int ptlrpc_send_reply (struct ptlrpc_request *req, int may_be_difficult)
         lustre_msg_set_opc(req->rq_repmsg,
                 req->rq_reqmsg ? lustre_msg_get_opc(req->rq_reqmsg) : 0);
 
+        if (req->rq_export && req->rq_export->exp_obd)
+                target_pack_pool_reply(req);
+
         if (req->rq_export == NULL || req->rq_export->exp_connection == NULL)
                 conn = ptlrpc_get_connection(req->rq_peer, req->rq_self, NULL);
         else

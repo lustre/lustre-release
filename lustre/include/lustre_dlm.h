@@ -217,10 +217,12 @@ struct ldlm_lock;
 struct ldlm_resource;
 struct ldlm_namespace;
 
-typedef int (*ldlm_pool_recalc_t)(struct ldlm_pool *pl);
-                                  
-typedef int (*ldlm_pool_shrink_t)(struct ldlm_pool *pl,
-                                  int nr, unsigned int gfp_mask);
+struct ldlm_pool_ops {
+        int (*po_recalc)(struct ldlm_pool *pl);
+        int (*po_shrink)(struct ldlm_pool *pl, int nr, 
+                         unsigned int gfp_mask);
+        int (*po_setup)(struct ldlm_pool *pl, int limit);
+};
 
 enum {
         LDLM_POOL_CTL_RECALC = 1 << 0, /* Pool recalc is enabled */
@@ -235,39 +237,39 @@ enum {
 #define LDLM_POOLS_MODEST_MARGIN (5)
 
 /* A change to SLV in % after which we want to wake up pools thread asap. */
-#define LDLM_POOLS_FAST_SLV_CHANGE (5)
+#define LDLM_POOLS_FAST_SLV_CHANGE (50)
 
 struct ldlm_pool {
         /* Common pool fields */
-        cfs_proc_dir_entry_t  *pl_proc_dir;           /* Pool proc directory. */
-        char                   pl_name[100];          /* Pool name, should be long 
-                                                       * enough to contain complex 
-                                                       * proc entry name. */
-        spinlock_t             pl_lock;               /* Lock for protecting slv/clv 
-                                                       * updates. */
-        atomic_t               pl_limit;              /* Number of allowed locks in
-                                                       * in pool, both, client and 
-                                                       * server side. */
-        atomic_t               pl_granted;            /* Number of granted locks. */
-        atomic_t               pl_grant_rate;         /* Grant rate per T. */
-        atomic_t               pl_cancel_rate;        /* Cancel rate per T. */
-        atomic_t               pl_grant_speed;        /* Grant speed (GR - CR) per T. */
-        __u64                  pl_server_lock_volume; /* Server lock volume. Protected 
-                                                       * by pl_lock. */
-        cfs_time_t             pl_update_time;        /* Time when last slv from server 
-                                                       * was obtained. */
-        ldlm_pool_recalc_t     pl_recalc;             /* Recalc callback func pointer. */
-        ldlm_pool_shrink_t     pl_shrink;             /* Shrink callback func pointer. */
-        int                    pl_control;            /* Pool features mask */
-        
-        /* Server side pool fields */
-        atomic_t               pl_grant_plan;         /* Planned number of granted 
-                                                       * locks for next T. */
-        atomic_t               pl_grant_step;         /* Grant plan step for next T. */
-
-        /* Client side pool related fields */
+        cfs_proc_dir_entry_t  *pl_proc_dir;      /* Pool proc directory. */
+        char                   pl_name[100];     /* Pool name, should be long 
+                                                  * enough to contain complex
+                                                  * proc entry name. */
+        spinlock_t             pl_lock;          /* Lock for protecting slv/clv 
+                                                  * updates. */
+        atomic_t               pl_limit;         /* Number of allowed locks in
+                                                  * in pool, both, client and 
+                                                  * server side. */
+        atomic_t               pl_granted;       /* Number of granted locks. */
+        atomic_t               pl_grant_rate;    /* Grant rate per T. */
+        atomic_t               pl_cancel_rate;   /* Cancel rate per T. */
+        atomic_t               pl_grant_speed;   /* Grant speed (GR-CR) per T. */
+        __u64                  pl_server_lock_volume; /* Server lock volume. 
+                                                  * Protected by pl_lock */
         atomic_t               pl_lock_volume_factor; /* Lock volume factor. */
-        struct lprocfs_stats  *pl_stats;              /* Pool statistics. */
+
+        time_t                 pl_recalc_time;   /* Time when last slv from 
+                                                  * server was obtained. */
+        struct ldlm_pool_ops  *pl_ops;           /* Recalc and shrink ops. */ 
+
+        int                    pl_control;       /* Pool features mask */
+        
+        atomic_t               pl_grant_plan;    /* Planned number of granted 
+                                                  * locks for next T. */
+        atomic_t               pl_grant_step;    /* Grant plan step for next 
+                                                  * T. */
+
+        struct lprocfs_stats  *pl_stats;         /* Pool statistics. */
 };
 
 static inline int pool_recalc_enabled(struct ldlm_pool *pl)
@@ -295,6 +297,12 @@ typedef enum {
         LDLM_NAMESPACE_MODEST = 1 << 1
 } ldlm_appetite_t;
 
+/* Default value for ->ns_shrink_thumb. If lock is not extent one its cost 
+ * is one page. Here we have 256 pages which is 1M on i386. Thus by default
+ * all extent locks which have more than 1M long extent will be kept in lru,
+ * others (including ibits locks) will be canceled on memory pressure event. */
+#define LDLM_LOCK_SHRINK_THUMB 256
+
 struct ldlm_namespace {
         char                  *ns_name;
         ldlm_side_t            ns_client; /* is this a client-side lock tree? */
@@ -315,6 +323,9 @@ struct ldlm_namespace {
 
         unsigned int           ns_max_unused;
         unsigned int           ns_max_age;
+        
+        /* Lower limit to number of pages in lock to keep it in cache */
+        unsigned int           ns_shrink_thumb;
         cfs_time_t             ns_next_dump;   /* next debug dump, jiffies */
 
         atomic_t               ns_locks;
@@ -805,7 +816,7 @@ int ldlm_pool_init(struct ldlm_pool *pl, struct ldlm_namespace *ns,
 int ldlm_pool_shrink(struct ldlm_pool *pl, int nr, 
                      unsigned int gfp_mask);
 void ldlm_pool_fini(struct ldlm_pool *pl);
-int ldlm_pool_setup(struct ldlm_pool *pl, __u32 limit);
+int ldlm_pool_setup(struct ldlm_pool *pl, int limit);
 int ldlm_pool_recalc(struct ldlm_pool *pl);
 __u64 ldlm_pool_get_slv(struct ldlm_pool *pl);
 __u32 ldlm_pool_get_limit(struct ldlm_pool *pl);
