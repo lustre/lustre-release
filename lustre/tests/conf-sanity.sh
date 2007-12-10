@@ -1042,14 +1042,15 @@ test_29() {
 	cleanup_nocli
 	#writeconf to remove all ost2 traces for subsequent tests
 	writeconf
+	start_mds
+	start_ost
+	cleanup
 }
 run_test 29 "permanently remove an OST"
 
 test_30() {
-	# start mds first after writeconf
-	start_mds
-	start_ost
-	mount_client $MOUNT
+	setup
+
 	TEST="cat $LPROC/llite/$FSNAME-*/max_read_ahead_whole_mb"
 	ORIG=$($TEST) 
 	for i in $(seq 1 20); do 
