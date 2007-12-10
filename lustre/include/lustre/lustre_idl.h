@@ -553,6 +553,12 @@ extern void lustre_swab_ptlrpc_body(struct ptlrpc_body *pb);
 /* also update obd_connect_names[] for lprocfs_rd_connect_flags()
  * and lustre/utils/wirecheck.c */
 
+#ifdef HAVE_LRU_RESIZE_SUPPORT
+#define LRU_RESIZE_CONNECT_FLAG OBD_CONNECT_LRU_RESIZE
+#else
+#define LRU_RESIZE_CONNECT_FLAG 0
+#endif
+
 #define MDT_CONNECT_SUPPORTED  (OBD_CONNECT_RDONLY | OBD_CONNECT_VERSION | \
                                 OBD_CONNECT_ACL | OBD_CONNECT_XATTR | \
                                 OBD_CONNECT_IBITS | OBD_CONNECT_JOIN | \
@@ -561,13 +567,13 @@ extern void lustre_swab_ptlrpc_body(struct ptlrpc_body *pb);
                                 OBD_CONNECT_RMT_CLIENT | \
                                 OBD_CONNECT_MDS_CAPA | OBD_CONNECT_OSS_CAPA | \
                                 OBD_CONNECT_MDS_MDS | OBD_CONNECT_CANCELSET | \
-                                OBD_CONNECT_LRU_RESIZE)
+                                LRU_RESIZE_CONNECT_FLAG)
 #define OST_CONNECT_SUPPORTED  (OBD_CONNECT_SRVLOCK | OBD_CONNECT_GRANT | \
                                 OBD_CONNECT_REQPORTAL | OBD_CONNECT_VERSION | \
                                 OBD_CONNECT_TRUNCLOCK | OBD_CONNECT_INDEX | \
                                 OBD_CONNECT_BRW_SIZE | OBD_CONNECT_QUOTA64 | \
                                 OBD_CONNECT_OSS_CAPA | OBD_CONNECT_CANCELSET | \
-                                OBD_CONNECT_LRU_RESIZE)
+                                LRU_RESIZE_CONNECT_FLAG)
 #define ECHO_CONNECT_SUPPORTED (0)
 #define MGS_CONNECT_SUPPORTED  (OBD_CONNECT_VERSION)
 
