@@ -46,7 +46,7 @@ enum {
 int ldlm_cancel_lru(struct ldlm_namespace *ns, int nr, ldlm_sync_t sync, 
                     int flags);
 int ldlm_cancel_lru_local(struct ldlm_namespace *ns, struct list_head *cancels,
-                          int count, int max, int flags);
+                          int count, int max, int cancel_flags, int flags);
 
 /* ldlm_resource.c */
 int ldlm_resource_putref_locked(struct ldlm_resource *res);

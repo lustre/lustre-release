@@ -340,7 +340,7 @@ static int ldlm_cli_pool_shrink(struct ldlm_pool *pl,
          * policy. */
         if (nr == 0)
                 RETURN(ldlm_cancel_lru_local(ldlm_pl2ns(pl), NULL, 0, 
-                                             0, LDLM_CANCEL_SHRINK));
+                                             0, 0, LDLM_CANCEL_SHRINK));
 
         /* Cancel @nr locks accoding to shrink policy */
         RETURN(ldlm_cancel_lru(ldlm_pl2ns(pl), nr, LDLM_SYNC, 
