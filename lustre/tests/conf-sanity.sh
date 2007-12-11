@@ -293,7 +293,10 @@ test_5c() {
 	start_mds
 	[ -d $MOUNT ] || mkdir -p $MOUNT
 	grep " $MOUNT " /etc/mtab && echo "test 5c: mtab before mount" && return 10
-	mount -t lustre $MGSNID:/wrong.$FSNAME $MOUNT || :
+	local oldfs="${FSNAME}"
+	FSNAME="wrong.${FSNAME}"
+	mount_client $MOUNT || :
+	FSNAME=${oldfs}
 	grep " $MOUNT " /etc/mtab && echo "test 5c: mtab after failed mount" && return 11
 	umount_client $MOUNT
 	cleanup_nocli  || return $?
