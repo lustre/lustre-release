@@ -22,7 +22,7 @@ GRANT_CHECK_LIST=${GRANT_CHECK_LIST:-""}
 ALWAYS_EXCEPT="0b  39   $REPLAY_SINGLE_EXCEPT"
 
 #                                                       63 min  7 min  AT AT AT AT"
-[ "SLOW" = "no" ] && EXCEPT="$EXCEPT 1 2 3 4 6 6b 12 16 44      44b    65 66 67 68"
+[ "$SLOW" = "no" ] && EXCEPT="$EXCEPT 1 2 3 4 6 6b 12 16 44      44b    65 66 67 68"
 
 build_test_filter
 
