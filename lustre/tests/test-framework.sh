@@ -47,7 +47,7 @@ print_summary () {
         [ -f $log ] && slow=$(grep SLOW $log | awk '{ printf " %s", $3 }' | sed 's/test_//g')
         [ "${!O}" = "done" ] && \
             printf "$form" "Done" "$O" "E=$skipped" && \
-            [ -n "$slow" ] && echo "$(printf "$form" "-" "-" "S=$slow")"
+            [ -n "$slow" ] && printf "$form" "-" "-" "S=$slow"
 
     done
 
