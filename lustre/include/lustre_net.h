@@ -284,7 +284,8 @@ struct ptlrpc_request {
                 rq_no_resend:1, rq_waiting:1, rq_receiving_reply:1,
                 rq_no_delay:1, rq_net_err:1, rq_early:1, rq_must_unlink:1,
                 /* server-side flags */
-                rq_packed_final:1;  /* packed final reply */
+                rq_packed_final:1,  /* packed final reply */
+                rq_sent_final:1;    /* stop sending early replies */
         enum rq_phase rq_phase; /* one of RQ_PHASE_* */
         atomic_t rq_refcount;   /* client-side refcount for SENT race,
                                    server-side refcounf for multiple replies */

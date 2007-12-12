@@ -378,6 +378,7 @@ static void ptlrpc_server_req_decref(struct ptlrpc_request *req)
         if (!atomic_dec_and_test(&req->rq_refcount))
                 return;
 
+        LASSERT(list_empty(&req->rq_timed_list));
         if (req != &rqbd->rqbd_req) {
                 /* NB request buffers use an embedded
                  * req if the incoming req unlinked the
@@ -412,6 +413,7 @@ static void ptlrpc_server_free_request(struct ptlrpc_request *req)
         if (req->rq_phase != RQ_PHASE_NEW) /* incorrect message magic */
                 DEBUG_REQ(D_INFO, req, "free req");
         spin_lock(&svc->srv_at_lock);
+        req->rq_sent_final = 1;
         list_del_init(&req->rq_timed_list);
         spin_unlock(&svc->srv_at_lock);
 
@@ -614,6 +616,11 @@ static int ptlrpc_at_add_timed(struct ptlrpc_request *req)
         
         spin_lock(&svc->srv_at_lock);
 
+        if (unlikely(req->rq_sent_final)) {
+                spin_unlock(&svc->srv_at_lock);
+                return 0;
+        }
+
         LASSERT(list_empty(&req->rq_timed_list));
         /* Add to sorted list.  Presumably latest rpcs will have the latest
            deadlines, so search backward. */
@@ -708,6 +715,12 @@ static int ptlrpc_at_send_early_reply(struct ptlrpc_request *req,
         /* We only need the reqmsg for the magic */
         reqcopy->rq_reqmsg = reqmsg;
         memcpy(reqmsg, req->rq_reqmsg, req->rq_reqlen);
+
+        if (req->rq_sent_final) {
+                CDEBUG(D_ADAPTTO, "x"LPU64": normal reply already sent out, "
+                       "abort sending early reply\n", req->rq_xid);
+                GOTO(out, rc = 0);
+        }
 
         /* Connection ref */
         reqcopy->rq_export = class_conn2export(
