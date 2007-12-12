@@ -34,27 +34,31 @@ usage() {
 print_summary () {
     [ -n "$ONLY" ] && echo "WARNING: ONLY is set to ${ONLY}."
     local form="%-13s %-17s %s\n"
-    echo "$(printf "$form" "status" "script" "skipped tests")"
+    printf "$form" "status" "script" "skipped tests E(xcluded) S(low)"
     echo "------------------------------------------------------------------------------------"
     for O in $TESTSUITE_LIST; do
         local skipped=""
+        local slow=""
         local o=$(echo $O | tr "[:upper:]" "[:lower:]")
         o=${o//_/-}
         o=${o//tyn/tyN}
         local log=${TMP}/${o}.log 
-        [ -f $log ] && skipped=$(cat $log | awk '{ printf " %s", $3 }' | sed 's/test_//g')
+        [ -f $log ] && skipped=$(grep excluded $log | awk '{ printf " %s", $3 }' | sed 's/test_//g')
+        [ -f $log ] && slow=$(grep SLOW $log | awk '{ printf " %s", $3 }' | sed 's/test_//g')
         [ "${!O}" = "done" ] && \
-            echo "$(printf "$form" "Done" "$O" "$skipped")"
+            printf "$form" "Done" "$O" "E=$skipped" && \
+            [ -n "$slow" ] && echo "$(printf "$form" "-" "-" "S=$slow")"
+
     done
 
     for O in $TESTSUITE_LIST; do
         [ "${!O}" = "no" ] && \
-            echo "$(printf "$form" "Skipped" "$O" "")"
+            printf "$form" "Skipped" "$O" ""
     done
 
     for O in $TESTSUITE_LIST; do
         [ "${!O}" = "done" -o "${!O}" = "no" ] || \
-            echo "$(printf "$form" "UNFINISHED" "$O" "")"
+            printf "$form" "UNFINISHED" "$O" ""
     done
 }
 
@@ -991,8 +995,13 @@ build_test_filter() {
     done
     [ "$EXCEPT$ALWAYS_EXCEPT" ] && \
         log "skipping tests: `echo $EXCEPT $ALWAYS_EXCEPT`"
+    [ "$EXCEPT_SLOW" ] && \
+        log "skipping tests SLOW=no: `echo $EXCEPT_SLOW`"
     for E in $EXCEPT $ALWAYS_EXCEPT; do
         eval EXCEPT_${E}=true
+    done
+    for E in $EXCEPT_SLOW; do
+        eval EXCEPT_SLOW_${E}=true
     done
     for G in $GRANT_CHECK_LIST; do
         eval GCHECK_ONLY_${G}=true
@@ -1033,6 +1042,17 @@ run_test() {
         TESTNAME=test_$1 skip "skipping excluded test $1 (base $base)"
         return 0
     fi
+    testname=EXCEPT_SLOW_$1
+    if [ ${!testname}x != x ]; then
+        TESTNAME=test_$1 skip "skipping SLOW test $1"
+        return 0
+    fi
+    testname=EXCEPT_SLOW_$base
+    if [ ${!testname}x != x ]; then
+        TESTNAME=test_$1 skip "skipping SLOW test $1 (base $base)"
+        return 0
+    fi
+
     run_one $1 "$2"
     
     return $?

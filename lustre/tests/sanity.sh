@@ -11,7 +11,7 @@ ONLY=${ONLY:-"$*"}
 ALWAYS_EXCEPT=${ALWAYS_EXCEPT:-"27o  27q  42a  42b  42c  42d  45  51d   74b   75 $SANITY_EXCEPT" }
 # UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
 
-[ "$SLOW" = "no" ] && EXCEPT="$EXCEPT 24o 27m 36f 36g 51b 51c 60c 63 64b 68 71 73 78 101 103 115 120g"
+[ "$SLOW" = "no" ] && EXCEPT_SLOW="24o 27m 36f 36g 51b 51c 60c 63 64b 68 71 73 78 101 103 115 120g"
 
 # Tests that fail on uml, maybe elsewhere, FIXME
 CPU=`awk '/model/ {print $4}' /proc/cpuinfo`
