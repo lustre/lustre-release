@@ -22,7 +22,7 @@ CPU=`awk '/model/ {print $4}' /proc/cpuinfo`
 ALWAYS_EXCEPT="$REPLAY_OST_SINGLE_EXCEPT"
 
 #					
-[ "$SLOW" = "no" ] && EXCEPT="$EXCEPT	"
+[ "$SLOW" = "no" ] && EXCEPT_SLOW=""
 
 # It is replay-ost-single, after all
 OSTCOUNT=1
