@@ -844,7 +844,7 @@ int mds_lock_new_child(struct obd_device *obd, struct inode *inode,
         if (child_lockh == NULL)
                 child_lockh = &lockh;
 
-        rc = ldlm_cli_enqueue_local(obd->obd_namespace, child_res_id,
+        rc = ldlm_cli_enqueue_local(obd->obd_namespace, &child_res_id,
                                     LDLM_PLAIN, NULL, LCK_EX, &lock_flags,
                                     ldlm_blocking_ast, ldlm_completion_ast,
                                     NULL, NULL, 0, NULL, child_lockh);
@@ -1165,7 +1165,7 @@ found_child:
                 child_res_id.name[0] = dchild->d_inode->i_ino;
                 child_res_id.name[1] = dchild->d_inode->i_generation;
 
-                rc = ldlm_cli_enqueue_local(obd->obd_namespace, child_res_id,
+                rc = ldlm_cli_enqueue_local(obd->obd_namespace, &child_res_id,
                                             LDLM_IBITS, &policy, child_mode, 
                                             &lock_flags, ldlm_blocking_ast, 
                                             ldlm_completion_ast, NULL, NULL,

@@ -259,7 +259,8 @@ int ldlm_glimpse_ast(struct ldlm_lock *lock, void *reqp)
         return -ELDLM_NO_LOCK_DATA;
 }
 
-int ldlm_cli_enqueue_local(struct ldlm_namespace *ns, struct ldlm_res_id res_id,
+int ldlm_cli_enqueue_local(struct ldlm_namespace *ns,
+                           struct ldlm_res_id *res_id,
                            ldlm_type_t type, ldlm_policy_data_t *policy,
                            ldlm_mode_t mode, int *flags,
                            ldlm_blocking_callback blocking,
@@ -278,7 +279,7 @@ int ldlm_cli_enqueue_local(struct ldlm_namespace *ns, struct ldlm_res_id res_id,
                 LBUG();
         }
 
-        lock = ldlm_lock_create(ns, res_id, type, mode, blocking,
+        lock = ldlm_lock_create(ns, *res_id, type, mode, blocking,
                                 completion, glimpse, data, lvb_len);
         if (!lock)
                 GOTO(out_nolock, err = -ENOMEM);
@@ -304,7 +305,7 @@ int ldlm_cli_enqueue_local(struct ldlm_namespace *ns, struct ldlm_res_id res_id,
         if (policy != NULL)
                 *policy = lock->l_policy_data;
         if ((*flags) & LDLM_FL_LOCK_CHANGED)
-                res_id = lock->l_resource->lr_name;
+                *res_id = lock->l_resource->lr_name;
 
         LDLM_DEBUG_NOLOCK("client-side local enqueue handler END (lock %p)",
                           lock);

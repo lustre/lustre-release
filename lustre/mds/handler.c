@@ -188,7 +188,7 @@ struct dentry *mds_fid2locked_dentry(struct obd_device *obd, struct ll_fid *fid,
 
         res_id.name[0] = de->d_inode->i_ino;
         res_id.name[1] = de->d_inode->i_generation;
-        rc = ldlm_cli_enqueue_local(obd->obd_namespace, res_id, 
+        rc = ldlm_cli_enqueue_local(obd->obd_namespace, &res_id, 
                                     LDLM_IBITS, &policy, lock_mode, &flags, 
                                     ldlm_blocking_ast, ldlm_completion_ast,
                                     NULL, NULL, 0, NULL, lockh);

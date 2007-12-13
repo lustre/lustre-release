@@ -473,7 +473,7 @@ static int echo_setup(struct obd_device *obd, obd_count len, void *buf)
                 RETURN(-ENOMEM);
         }
 
-        rc = ldlm_cli_enqueue_local(obd->obd_namespace, res_id, LDLM_PLAIN, 
+        rc = ldlm_cli_enqueue_local(obd->obd_namespace, &res_id, LDLM_PLAIN, 
                                     NULL, LCK_NL, &lock_flags, NULL, 
                                     ldlm_completion_ast, NULL, NULL, 
                                     0, NULL, &obd->u.echo.eo_nl_lock);

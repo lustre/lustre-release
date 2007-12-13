@@ -1270,7 +1270,7 @@ static int filter_prepare_destroy(struct obd_device *obd, obd_id objid)
         ENTRY;
         /* Tell the clients that the object is gone now and that they should
          * throw away any cached pages. */
-        rc = ldlm_cli_enqueue_local(obd->obd_namespace, res_id, LDLM_EXTENT,
+        rc = ldlm_cli_enqueue_local(obd->obd_namespace, &res_id, LDLM_EXTENT,
                                     &policy, LCK_PW, &flags, ldlm_blocking_ast,
                                     ldlm_completion_ast, NULL, NULL, 0, NULL,
                                     &lockh);
@@ -3126,7 +3126,7 @@ static int filter_create(struct obd_export *exp, struct obdo *oa,
             (oa->o_flags & OBD_FL_RECREATE_OBJS)) {
                 /* Cancel all conflicting extent locks on recreating object,
                  * thus object's metadata will be updated on the clients */
-                rc = ldlm_cli_enqueue_local(obd->obd_namespace, res_id,
+                rc = ldlm_cli_enqueue_local(obd->obd_namespace, &res_id,
                                             LDLM_EXTENT, &policy, LCK_PW,
                                             &flags, ldlm_blocking_ast,
                                             ldlm_completion_ast,

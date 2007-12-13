@@ -1075,7 +1075,7 @@ int enqueue_ordered_locks(struct obd_device *obd, struct ldlm_res_id *p1_res_id,
                res_id[0]->name[0], res_id[1]->name[0]);
 
         flags = LDLM_FL_LOCAL_ONLY | LDLM_FL_ATOMIC_CB;
-        rc = ldlm_cli_enqueue_local(obd->obd_namespace, *res_id[0],
+        rc = ldlm_cli_enqueue_local(obd->obd_namespace, res_id[0],
                                     LDLM_IBITS, policies[0], lock_modes[0],
                                     &flags, ldlm_blocking_ast, 
                                     ldlm_completion_ast, NULL, NULL, 0, 
@@ -1090,7 +1090,7 @@ int enqueue_ordered_locks(struct obd_device *obd, struct ldlm_res_id *p1_res_id,
                 ldlm_lock_addref(handles[1], lock_modes[1]);
         } else if (res_id[1]->name[0] != 0) {
                 flags = LDLM_FL_LOCAL_ONLY | LDLM_FL_ATOMIC_CB;
-                rc = ldlm_cli_enqueue_local(obd->obd_namespace, *res_id[1],
+                rc = ldlm_cli_enqueue_local(obd->obd_namespace, res_id[1],
                                             LDLM_IBITS, policies[1],
                                             lock_modes[1], &flags, 
                                             ldlm_blocking_ast,
@@ -1201,7 +1201,7 @@ int enqueue_4ordered_locks(struct obd_device *obd,struct ldlm_res_id *p1_res_id,
                                 try_to_aggregate_locks(res_id[i], policies[i],
                                                        res_id[i+1], policies[i+1]);
                         rc = ldlm_cli_enqueue_local(obd->obd_namespace,
-                                                    *res_id[i], LDLM_IBITS,
+                                                    res_id[i], LDLM_IBITS,
                                                     policies[i], lock_modes[i],
                                                     &flags, ldlm_blocking_ast,
                                                     ldlm_completion_ast, NULL, 
@@ -1291,7 +1291,7 @@ static int mds_verify_child(struct obd_device *obd,
                         GOTO(cleanup, rc = 1);
                 }
 
-                rc = ldlm_cli_enqueue_local(obd->obd_namespace, *child_res_id, 
+                rc = ldlm_cli_enqueue_local(obd->obd_namespace, child_res_id, 
                                             LDLM_IBITS, child_policy, 
                                             child_mode, &flags, 
                                             ldlm_blocking_ast, 

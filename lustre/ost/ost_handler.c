@@ -233,7 +233,7 @@ static int ost_punch_lock_get(struct obd_export *exp, struct obdo *oa,
         else
                 policy.l_extent.end = finis | ~CFS_PAGE_MASK;
 
-        RETURN(ldlm_cli_enqueue_local(exp->exp_obd->obd_namespace, res_id, 
+        RETURN(ldlm_cli_enqueue_local(exp->exp_obd->obd_namespace, &res_id, 
                                       LDLM_EXTENT, &policy, LCK_PW, &flags,
                                       ldlm_blocking_ast, ldlm_completion_ast,
                                       ldlm_glimpse_ast, NULL, 0, NULL, lh));
@@ -556,7 +556,7 @@ static int ost_brw_lock_get(int mode, struct obd_export *exp,
         policy.l_extent.end   = (nb[nrbufs - 1].offset +
                                  nb[nrbufs - 1].len - 1) | ~CFS_PAGE_MASK;
 
-        RETURN(ldlm_cli_enqueue_local(exp->exp_obd->obd_namespace, res_id, 
+        RETURN(ldlm_cli_enqueue_local(exp->exp_obd->obd_namespace, &res_id, 
                                       LDLM_EXTENT, &policy, mode, &flags,
                                       ldlm_blocking_ast, ldlm_completion_ast,
                                       ldlm_glimpse_ast, NULL, 0, NULL, lh));
