@@ -48,6 +48,7 @@ struct lu_time_data {
         unsigned long long ltd_timestamp[LU_TIME_DEPTH_MAX];
 };
 
+/* context key constructor/destructor: lu_time_key_init, lu_time_key_fini */
 LU_KEY_INIT_FINI(lu_time, struct lu_time_data);
 
 void lu_time_key_exit(const struct lu_context *ctx,

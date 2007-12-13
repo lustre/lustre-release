@@ -53,8 +53,10 @@
 
 #ifdef __KERNEL__
 
+/* context key constructor/destructor: fld_key_init, fld_key_fini */
 LU_KEY_INIT_FINI(fld, struct fld_thread_info);
 
+/* context key: fld_thread_key */
 LU_CONTEXT_KEY_DEFINE(fld, LCT_MD_THREAD|LCT_DT_THREAD);
 
 cfs_proc_dir_entry_t *fld_type_proc_dir = NULL;

@@ -4542,13 +4542,13 @@ static struct lu_device *mdt_device_alloc(const struct lu_env *env,
         return l;
 }
 
-/*
- * context key constructor/destructor
- */
+/* context key constructor/destructor: mdt_key_init, mdt_key_fini */
 LU_KEY_INIT_FINI(mdt, struct mdt_thread_info);
 
+/* context key: mdt_thread_key */
 LU_CONTEXT_KEY_DEFINE(mdt, LCT_MD_THREAD);
 
+/* context key constructor/destructor: mdt_txn_key_init, mdt_txn_key_fini */
 LU_KEY_INIT_FINI(mdt_txn, struct mdt_txn_info);
 
 struct lu_context_key mdt_txn_key = {
@@ -4562,6 +4562,7 @@ struct md_ucred *mdt_ucred(const struct mdt_thread_info *info)
         return md_ucred(info->mti_env);
 }
 
+/* type constructor/destructor: mdt_type_init, mdt_type_fini */
 LU_TYPE_INIT_FINI(mdt, &mdt_thread_key, &mdt_txn_key);
 
 static struct lu_device_type_operations mdt_device_type_ops = {

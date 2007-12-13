@@ -356,8 +356,10 @@ static int seq_req_handle(struct ptlrpc_request *req,
         RETURN(rc);
 }
 
+/* context key constructor/destructor: seq_key_init, seq_key_fini */
 LU_KEY_INIT_FINI(seq, struct seq_thread_info);
 
+/* context key: seq_thread_key */
 LU_CONTEXT_KEY_DEFINE(seq, LCT_MD_THREAD);
 
 static void seq_thread_info_init(struct ptlrpc_request *req,

@@ -382,9 +382,10 @@ static void cmm_device_free(const struct lu_env *env, struct lu_device *d)
         OBD_FREE_PTR(m);
 }
 
-/* context key constructor/destructor */
+/* context key constructor/destructor: cmm_key_init, cmm_key_fini */
 LU_KEY_INIT_FINI(cmm, struct cmm_thread_info);
 
+/* context key: cmm_thread_key */
 LU_CONTEXT_KEY_DEFINE(cmm, LCT_MD_THREAD);
 
 struct cmm_thread_info *cmm_env_info(const struct lu_env *env)
@@ -396,6 +397,7 @@ struct cmm_thread_info *cmm_env_info(const struct lu_env *env)
         return info;
 }
 
+/* type constructor/destructor: cmm_type_init/cmm_type_fini */
 LU_TYPE_INIT_FINI(cmm, &cmm_thread_key);
 
 static int cmm_device_init(const struct lu_env *env, struct lu_device *d,

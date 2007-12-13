@@ -2208,10 +2208,7 @@ static struct dt_index_operations osd_index_compat_ops = {
         .dio_delete = osd_index_compat_delete
 };
 
-/*
- * OSD device type methods
- */
- 
+/* type constructor/destructor: osd_type_init, osd_type_fini */
 LU_TYPE_INIT_FINI(osd, &osd_key);
 
 static struct lu_context_key osd_key = {
@@ -2234,6 +2231,7 @@ static void *osd_key_init(const struct lu_context *ctx,
         return info;
 }
 
+/* context key destructor: osd_key_fini */
 LU_KEY_FINI(osd, struct osd_thread_info);
 
 static void osd_key_exit(const struct lu_context *ctx,

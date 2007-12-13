@@ -289,11 +289,13 @@ void mdc_device_free(const struct lu_env *env, struct lu_device *ld)
         OBD_FREE_PTR(mc);
 }
 
-/* context key constructor/destructor */
+/* context key constructor/destructor: mdc_key_init, mdc_key_fini */
 LU_KEY_INIT_FINI(mdc, struct mdc_thread_info);
 
+/* context key: mdc_thread_key */
 LU_CONTEXT_KEY_DEFINE(mdc, LCT_MD_THREAD|LCT_CL_THREAD);
 
+/* type constructor/destructor: mdc_type_init, mdc_type_fini */
 LU_TYPE_INIT_FINI(mdc, &mdc_thread_key);
 
 static struct lu_device_type_operations mdc_device_type_ops = {

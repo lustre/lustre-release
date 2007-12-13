@@ -290,6 +290,7 @@ struct lu_cdebug_data {
         struct lu_fid_pack lck_pack;
 };
 
+/* context key constructor/destructor: lu_global_key_init, lu_global_key_fini */
 LU_KEY_INIT_FINI(lu_global, struct lu_cdebug_data);
 
 /*
