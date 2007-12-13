@@ -278,27 +278,23 @@ int class_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
         /* just leave this on forever.  I can't use obd_set_up here because
            other fns check that status, and we're not actually set up yet. */
         obd->obd_starting = 1;
- 
+        spin_unlock(&obd->obd_dev_lock);
+
         /* create an uuid-export hash body */
-        err = lustre_hash_init(&obd->obd_uuid_hash_body, "UUID_HASH", 
+        err = lustre_hash_init(&obd->obd_uuid_hash_body, "UUID_HASH",
                                128, &uuid_hash_operations);
-        if (err) {
-                spin_unlock(&obd->obd_dev_lock);
+        if (err)
                 GOTO(err_hash, err);
-        }
 
         /* create a nid-export hash body */
-        err = lustre_hash_init(&obd->obd_nid_hash_body, "NID_HASH", 
+        err = lustre_hash_init(&obd->obd_nid_hash_body, "NID_HASH",
                                128, &nid_hash_operations);
-        if (err) {
-                spin_unlock(&obd->obd_dev_lock);
+        if (err)
                 GOTO(err_hash, err);
-        }
 
         /* create a nid-stats hash body */
         err = lustre_hash_init(&obd->obd_nid_stats_hash_body, "NID_STATS",
                                128, &nid_stat_hash_operations);
-        spin_unlock(&obd->obd_dev_lock);
         if (err)
                 GOTO(err_hash, err);
 

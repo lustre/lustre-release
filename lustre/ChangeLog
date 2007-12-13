@@ -14,6 +14,13 @@ tbd         Cluster File Systems, Inc. <info@clusterfs.com>
        * Recommended e2fsprogs version: 1.40.2-cfs4
        * Note that reiserfs quotas are disabled on SLES 10 in this kernel.
 
+Severity   : minor
+Bugzilla   : 14418
+Frequency  : only at startup
+Description: not alloc memory with spinlock held.
+Details    : allocation memory with GFP_KERNEL can produce sleep deadlock,
+             if any spinlock held.
+
 Severity   : major
 Frequency  : always
 Bugzilla   : 14270
