@@ -1032,7 +1032,11 @@ int ptlrpc_disconnect_import(struct obd_import *imp, int noclose)
 {
         struct ptlrpc_request *req;
         int rq_opc, rc = 0;
+        int nowait = imp->imp_obd->obd_force;
         ENTRY;
+
+        if (nowait)
+                GOTO(set_state, rc);
 
         switch (imp->imp_connect_op) {
         case OST_CONNECT: rq_opc = OST_DISCONNECT; break;
@@ -1094,6 +1098,7 @@ int ptlrpc_disconnect_import(struct obd_import *imp, int noclose)
                 ptlrpc_req_finished(req);
         }
 
+set_state:
         spin_lock(&imp->imp_lock);
 out:
         if (noclose) 

@@ -14,6 +14,15 @@ tbd         Cluster File Systems, Inc. <info@clusterfs.com>
        * Recommended e2fsprogs version: 1.40.2-cfs4
        * Note that reiserfs quotas are disabled on SLES 10 in this kernel.
 
+Severity   : major
+Bugzilla   : 14260
+Frequency  : rare, at shutdown
+Description: access already free / zero obd_namespace.
+Details    : if client_disconnect_export was called without force flag set,
+             and exist connect request in flight, this can produce access to
+	     NULL pointer (or already free pointer) when connect_interpret 
+	     store ocd flags in obd_namespace.
+
 Severity   : minor
 Bugzilla   : 14418
 Frequency  : only at startup

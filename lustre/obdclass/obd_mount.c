@@ -755,9 +755,8 @@ static int lustre_stop_mgc(struct super_block *sb)
                 GOTO(out, rc = -EBUSY);
         }
 
-        /* MGC should disconnect nicely so MGS won't print eviction messages */
-        obd->obd_force = (lsi->lsi_flags & LSI_UMOUNT_FORCE) != 0;
-        /* The MGC has no recoverable data in any case. */
+        /* The MGC has no recoverable data in any case. 
+         * force shotdown set in umount_begin */
         obd->obd_no_recov = 1;
 
         if (obd->u.cli.cl_mgc_mgsexp)
@@ -1367,12 +1366,10 @@ static void server_put_super(struct super_block *sb)
                 obd = class_name2obd(lsi->lsi_ldd->ldd_svname);
                 if (obd) {
                         CDEBUG(D_MOUNT, "stopping %s\n", obd->obd_name);
-                        if (lsi->lsi_flags & LSI_UMOUNT_FORCE)
-                                obd->obd_force = 1;
                         if (lsi->lsi_flags & LSI_UMOUNT_FAILOVER)
                                 obd->obd_fail = 1;
                         /* We can't seem to give an error return code
-                           to .put_super, so we better make sure we clean up! */
+                         * to .put_super, so we better make sure we clean up! */
                         obd->obd_force = 1;
                         class_manual_cleanup(obd);
                 } else {

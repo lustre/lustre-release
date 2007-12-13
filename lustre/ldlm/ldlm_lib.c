@@ -474,14 +474,16 @@ int client_disconnect_export(struct obd_export *exp)
                                        NULL);
                 ldlm_namespace_free_prior(obd->obd_namespace);
                 to_be_freed = obd->obd_namespace;
-                obd->obd_namespace = NULL;
         }
 
-        /* Yeah, obd_force means "forced shutdown". */
-        if (!obd->obd_force)
-                rc = ptlrpc_disconnect_import(imp, 0);
+        rc = ptlrpc_disconnect_import(imp, 0);
 
         ptlrpc_invalidate_import(imp);
+        /* set obd_namespace to NULL only after invalidate, because we can have
+         * some connect requests in flight, and his need store a connect flags
+         * in obd_namespace. bug 14260 */
+        obd->obd_namespace = NULL;
+	
         ptlrpc_free_rq_pool(imp->imp_rq_pool);
         class_destroy_import(imp);
         cli->cl_import = NULL;
@@ -494,7 +496,7 @@ int client_disconnect_export(struct obd_export *exp)
  out_sem:
         mutex_up(&cli->cl_sem);
         if (to_be_freed)
-                ldlm_namespace_free_post(to_be_freed, obd->obd_no_recov);
+                ldlm_namespace_free_post(to_be_freed, obd->obd_force);
         RETURN(rc);
 }
 

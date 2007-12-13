@@ -1141,14 +1141,13 @@ int ptlrpc_check_set(struct ptlrpc_request_set *set)
                 if (req->rq_bulk != NULL)
                         ptlrpc_unregister_bulk (req);
 
-                req->rq_phase = RQ_PHASE_COMPLETE;
-
                 if (req->rq_interpret_reply != NULL) {
                         int (*interpreter)(struct ptlrpc_request *,void *,int) =
                                 req->rq_interpret_reply;
                         req->rq_status = interpreter(req, &req->rq_async_args,
                                                      req->rq_status);
                 }
+                req->rq_phase = RQ_PHASE_COMPLETE;
 
                 CDEBUG(D_RPCTRACE, "Completed RPC pname:cluuid:pid:xid:nid:"
                        "opc %s:%s:%d:"LPU64":%s:%d\n", cfs_curproc_comm(),
@@ -1317,6 +1316,7 @@ int ptlrpc_set_next_timeout(struct ptlrpc_request_set *set)
                 if (!(((req->rq_phase == RQ_PHASE_RPC) && !req->rq_waiting) ||
                       (req->rq_phase == RQ_PHASE_BULK) || 
                       (req->rq_phase == RQ_PHASE_NEW)))
+                        continue;
 
                 if (req->rq_timedout)   /* already timed out */
                         continue;
