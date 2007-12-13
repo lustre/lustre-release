@@ -212,7 +212,8 @@ int dqacq_handler(struct obd_device *obd, struct qunit_data *qdata, int opc)
         int rc = 0;
         ENTRY;
 
-        OBD_FAIL_RETURN(OBD_FAIL_OBD_DQACQ, -EIO);
+        if (OBD_FAIL_CHECK(OBD_FAIL_OBD_DQACQ))
+                RETURN(-EIO);
 
         dquot = lustre_dqget(obd, info, qdata->qd_id, qdata_type);
         if (IS_ERR(dquot))

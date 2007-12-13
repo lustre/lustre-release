@@ -581,7 +581,7 @@ int mdt_client_new(const struct lu_env *env, struct mdt_device *mdt)
         spin_lock(&mdt->mdt_client_bitmap_lock);
         cl_idx = find_first_zero_bit(bitmap, LR_MAX_CLIENTS);
         if (cl_idx >= LR_MAX_CLIENTS ||
-            OBD_FAIL_CHECK_ONCE(OBD_FAIL_MDS_CLIENT_ADD)) {
+            OBD_FAIL_CHECK(OBD_FAIL_MDS_CLIENT_ADD)) {
                 CERROR("no room for %u clients - fix LR_MAX_CLIENTS\n",
                        cl_idx);
                 spin_unlock(&mdt->mdt_client_bitmap_lock);
@@ -937,7 +937,8 @@ int mdt_fs_setup(const struct lu_env *env, struct mdt_device *mdt,
         int rc = 0;
         ENTRY;
 
-        OBD_FAIL_RETURN(OBD_FAIL_MDS_FS_SETUP, -ENOENT);
+        if (OBD_FAIL_CHECK(OBD_FAIL_MDS_FS_SETUP))
+                RETURN(-ENOENT);
 
         /* prepare transactions callbacks */
         mdt->mdt_txn_cb.dtc_txn_start = mdt_txn_start_cb;

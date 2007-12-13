@@ -52,10 +52,9 @@ static int ptl_send_buf (lnet_handle_md_t *mdh, void *base, int len,
         md.eq_handle = ptlrpc_eq_h;
 
         if (unlikely(ack == LNET_ACK_REQ &&
-                     OBD_FAIL_CHECK(OBD_FAIL_PTLRPC_ACK | OBD_FAIL_ONCE))) {
+                     OBD_FAIL_CHECK_ORSET(OBD_FAIL_PTLRPC_ACK, OBD_FAIL_ONCE))){
                 /* don't ask for the ack to simulate failing client */
                 ack = LNET_NOACK_REQ;
-                obd_fail_loc |= OBD_FAIL_ONCE | OBD_FAILED;
         }
 
         rc = LNetMDBind (md, LNET_UNLINK, mdh);
@@ -93,7 +92,7 @@ int ptlrpc_start_bulk_transfer (struct ptlrpc_bulk_desc *desc)
         __u64                     xid;
         ENTRY;
 
-        if (OBD_FAIL_CHECK_ONCE(OBD_FAIL_PTLRPC_BULK_PUT_NET))
+        if (OBD_FAIL_CHECK(OBD_FAIL_PTLRPC_BULK_PUT_NET))
                 RETURN(0);
 
         /* NB no locking required until desc is on the network */
@@ -198,7 +197,7 @@ int ptlrpc_register_bulk (struct ptlrpc_request *req)
         lnet_md_t         md;
         ENTRY;
 
-        if (OBD_FAIL_CHECK_ONCE(OBD_FAIL_PTLRPC_BULK_GET_NET))
+        if (OBD_FAIL_CHECK(OBD_FAIL_PTLRPC_BULK_GET_NET))
                 RETURN(0);
 
         /* NB no locking required until desc is on the network */
@@ -405,7 +404,8 @@ int ptl_send_rpc(struct ptlrpc_request *request, int noreply)
         lnet_md_t         reply_md;
         ENTRY;
 
-        OBD_FAIL_RETURN(OBD_FAIL_PTLRPC_DROP_RPC, 0);
+        if (OBD_FAIL_CHECK(OBD_FAIL_PTLRPC_DROP_RPC))
+                RETURN(0);
 
         LASSERT (request->rq_type == PTL_RPC_MSG_REQUEST);
 
@@ -552,7 +552,7 @@ int ptlrpc_register_rqbd (struct ptlrpc_request_buffer_desc *rqbd)
         CDEBUG(D_NET, "LNetMEAttach: portal %d\n",
                service->srv_req_portal);
 
-        if (OBD_FAIL_CHECK_ONCE(OBD_FAIL_PTLRPC_RQBD))
+        if (OBD_FAIL_CHECK(OBD_FAIL_PTLRPC_RQBD))
                 return (-ENOMEM);
 
         rc = LNetMEAttach(service->srv_req_portal,

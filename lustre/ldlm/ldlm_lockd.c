@@ -949,7 +949,7 @@ existing_lock:
                 }
                 unlock_res_and_lock(lock);
 
-                if (OBD_FAIL_CHECK_ONCE(OBD_FAIL_LDLM_ENQUEUE_EXTENT_ERR))
+                if (OBD_FAIL_CHECK(OBD_FAIL_LDLM_ENQUEUE_EXTENT_ERR))
                         GOTO(out, rc = -ENOMEM);
 
                 rc = lustre_pack_reply(req, buffers, size, NULL);
@@ -985,7 +985,7 @@ existing_lock:
         /* Don't move a pending lock onto the export if it has already
          * been evicted.  Cancel it now instead. (bug 5683) */
         if (unlikely(req->rq_export->exp_failed ||
-                     OBD_FAIL_CHECK_ONCE(OBD_FAIL_LDLM_ENQUEUE_OLD_EXPORT))) {
+                     OBD_FAIL_CHECK(OBD_FAIL_LDLM_ENQUEUE_OLD_EXPORT))) {
                 LDLM_ERROR(lock, "lock on destroyed export %p", req->rq_export);
                 rc = -ENOTCONN;
         } else if (lock->l_flags & LDLM_FL_AST_SENT) {
@@ -1502,21 +1502,26 @@ static int ldlm_callback_handler(struct ptlrpc_request *req)
 
         switch (lustre_msg_get_opc(req->rq_reqmsg)) {
         case LDLM_BL_CALLBACK:
-                OBD_FAIL_RETURN(OBD_FAIL_LDLM_BL_CALLBACK, 0);
+                if (OBD_FAIL_CHECK(OBD_FAIL_LDLM_BL_CALLBACK))
+                        RETURN(0);
                 break;
         case LDLM_CP_CALLBACK:
-                OBD_FAIL_RETURN(OBD_FAIL_LDLM_CP_CALLBACK, 0);
+                if (OBD_FAIL_CHECK(OBD_FAIL_LDLM_CP_CALLBACK))
+                        RETURN(0);
                 break;
         case LDLM_GL_CALLBACK:
-                OBD_FAIL_RETURN(OBD_FAIL_LDLM_GL_CALLBACK, 0);
+                if (OBD_FAIL_CHECK(OBD_FAIL_LDLM_GL_CALLBACK))
+                        RETURN(0);
                 break;
         case OBD_LOG_CANCEL: /* remove this eventually - for 1.4.0 compat */
-                OBD_FAIL_RETURN(OBD_FAIL_OBD_LOG_CANCEL_NET, 0);
+                if (OBD_FAIL_CHECK(OBD_FAIL_OBD_LOG_CANCEL_NET))
+                        RETURN(0);
                 rc = llog_origin_handle_cancel(req);
                 ldlm_callback_reply(req, rc);
                 RETURN(0);
         case OBD_QC_CALLBACK:
-                OBD_FAIL_RETURN(OBD_FAIL_OBD_QC_CALLBACK_NET, 0);
+                if (OBD_FAIL_CHECK(OBD_FAIL_OBD_QC_CALLBACK_NET))
+                        RETURN(0);
                 rc = target_handle_qc_callback(req);
                 ldlm_callback_reply(req, rc);
                 RETURN(0);
@@ -1526,22 +1531,26 @@ static int ldlm_callback_handler(struct ptlrpc_request *req)
                 rc = target_handle_dqacq_callback(req);
                 RETURN(0);
         case LLOG_ORIGIN_HANDLE_CREATE:
-                OBD_FAIL_RETURN(OBD_FAIL_OBD_LOGD_NET, 0);
+                if (OBD_FAIL_CHECK(OBD_FAIL_OBD_LOGD_NET))
+                        RETURN(0);
                 rc = llog_origin_handle_create(req);
                 ldlm_callback_reply(req, rc);
                 RETURN(0);
         case LLOG_ORIGIN_HANDLE_NEXT_BLOCK:
-                OBD_FAIL_RETURN(OBD_FAIL_OBD_LOGD_NET, 0);
+                if (OBD_FAIL_CHECK(OBD_FAIL_OBD_LOGD_NET))
+                        RETURN(0);
                 rc = llog_origin_handle_next_block(req);
                 ldlm_callback_reply(req, rc);
                 RETURN(0);
         case LLOG_ORIGIN_HANDLE_READ_HEADER:
-                OBD_FAIL_RETURN(OBD_FAIL_OBD_LOGD_NET, 0);
+                if (OBD_FAIL_CHECK(OBD_FAIL_OBD_LOGD_NET))
+                        RETURN(0);
                 rc = llog_origin_handle_read_header(req);
                 ldlm_callback_reply(req, rc);
                 RETURN(0);
         case LLOG_ORIGIN_HANDLE_CLOSE:
-                OBD_FAIL_RETURN(OBD_FAIL_OBD_LOGD_NET, 0);
+                if (OBD_FAIL_CHECK(OBD_FAIL_OBD_LOGD_NET))
+                        RETURN(0);
                 rc = llog_origin_handle_close(req);
                 ldlm_callback_reply(req, rc);
                 RETURN(0);
@@ -1661,13 +1670,15 @@ static int ldlm_cancel_handler(struct ptlrpc_request *req)
         /* XXX FIXME move this back to mds/handler.c, bug 249 */
         case LDLM_CANCEL:
                 CDEBUG(D_INODE, "cancel\n");
-                OBD_FAIL_RETURN(OBD_FAIL_LDLM_CANCEL, 0);
+                if (OBD_FAIL_CHECK(OBD_FAIL_LDLM_CANCEL))
+                        RETURN(0);
                 rc = ldlm_handle_cancel(req);
                 if (rc)
                         break;
                 RETURN(0);
         case OBD_LOG_CANCEL:
-                OBD_FAIL_RETURN(OBD_FAIL_OBD_LOG_CANCEL_NET, 0);
+                if (OBD_FAIL_CHECK(OBD_FAIL_OBD_LOG_CANCEL_NET))
+                        RETURN(0);
                 rc = llog_origin_handle_cancel(req);
                 ldlm_callback_reply(req, rc);
                 RETURN(0);

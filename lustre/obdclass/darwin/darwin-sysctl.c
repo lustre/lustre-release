@@ -22,7 +22,7 @@ cfs_sysctl_table_header_t *obd_table_header = NULL;
 
 int proc_fail_loc SYSCTL_HANDLER_ARGS;
 int proc_obd_timeout SYSCTL_HANDLER_ARGS;
-extern unsigned int obd_fail_loc;
+extern unsigned long obd_fail_loc;
 extern unsigned int obd_dump_on_timeout;
 extern unsigned int obd_timeout;
 extern unsigned int ldlm_timeout;
@@ -76,7 +76,7 @@ extern cfs_waitq_t obd_race_waitq;
 int proc_fail_loc SYSCTL_HANDLER_ARGS
 { 
 	int error = 0; 
-	int old_fail_loc = obd_fail_loc;
+	long old_fail_loc = obd_fail_loc;
 	
 	error = sysctl_handle_long(oidp, oidp->oid_arg1, oidp->oid_arg2, req); 
 	if (!error && req->newptr != USER_ADDR_NULL) {

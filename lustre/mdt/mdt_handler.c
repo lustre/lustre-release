@@ -1384,7 +1384,8 @@ free_rdpg:
                         __cfs_free_page(rdpg->rp_pages[i]);
         OBD_FREE(rdpg->rp_pages, rdpg->rp_npages * sizeof rdpg->rp_pages[0]);
 
-        OBD_FAIL_RETURN(OBD_FAIL_MDS_SENDPAGE, 0);
+        if (OBD_FAIL_CHECK(OBD_FAIL_MDS_SENDPAGE))
+                RETURN(0);
 
         return rc;
 }
@@ -2027,7 +2028,7 @@ static int mdt_req_handle(struct mdt_thread_info *info,
         /*
          * Mask out OBD_FAIL_ONCE, because that will stop
          * correct handling of failed req later in ldlm due to doing
-         * obd_fail_loc |= OBD_FAIL_ONCE | OBD_FAILED without actually
+         * obd_fail_loc |= OBD_FAIL_ONCE without actually
          * correct actions like it is done in target_send_reply_msg().
          */
         if (h->mh_fail_id != 0) {
@@ -2035,7 +2036,8 @@ static int mdt_req_handle(struct mdt_thread_info *info,
                  * Set to info->mti_fail_id to handler fail_id, it will be used
                  * later, and better than use default fail_id.
                  */
-                if (OBD_FAIL_CHECK(h->mh_fail_id && OBD_FAIL_MASK_LOC)) {
+                if (OBD_FAIL_CHECK_RESET(h->mh_fail_id && OBD_FAIL_MASK_LOC,
+                                         h->mh_fail_id & ~OBD_FAILED)) {
                         info->mti_fail_id = h->mh_fail_id;
                         RETURN(0);
                 }
@@ -2321,7 +2323,8 @@ static int mdt_handle0(struct ptlrpc_request *req,
 
         ENTRY;
 
-        OBD_FAIL_RETURN(OBD_FAIL_MDS_ALL_REQUEST_NET | OBD_FAIL_ONCE, 0);
+        if (OBD_FAIL_CHECK_ORSET(OBD_FAIL_MDS_ALL_REQUEST_NET, OBD_FAIL_ONCE))
+                RETURN(0);
 
         LASSERT(current->journal_info == NULL);
 

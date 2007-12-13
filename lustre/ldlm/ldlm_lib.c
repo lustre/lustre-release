@@ -1828,8 +1828,7 @@ int target_pack_pool_reply(struct ptlrpc_request *req)
 
 int target_send_reply_msg(struct ptlrpc_request *req, int rc, int fail_id)
 {
-        if (OBD_FAIL_CHECK(fail_id | OBD_FAIL_ONCE)) {
-                obd_fail_loc |= OBD_FAIL_ONCE | OBD_FAILED;
+        if (OBD_FAIL_CHECK_ORSET(fail_id & ~OBD_FAIL_ONCE, OBD_FAIL_ONCE)) {
                 DEBUG_REQ(D_ERROR, req, "dropping reply");
                 return (-ECOMM);
         }

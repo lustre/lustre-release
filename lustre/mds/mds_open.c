@@ -357,7 +357,7 @@ static int mds_create_objects(struct ptlrpc_request *req, int offset,
                 RETURN(rc);
         }
 
-        if (OBD_FAIL_CHECK_ONCE(OBD_FAIL_MDS_ALLOC_OBDO))
+        if (OBD_FAIL_CHECK(OBD_FAIL_MDS_ALLOC_OBDO))
                 GOTO(out_ids, rc = -ENOMEM);
 
         OBDO_ALLOC(oinfo.oi_oa);
@@ -872,8 +872,8 @@ int mds_open(struct mds_update_record *rec, int offset,
 
         mds_counter_incr(req->rq_export, LPROC_MDS_OPEN);
 
-        OBD_FAIL_TIMEOUT(OBD_FAIL_MDS_PAUSE_OPEN | OBD_FAIL_ONCE,
-                         (obd_timeout + 1) / 4);
+        OBD_FAIL_TIMEOUT_ORSET(OBD_FAIL_MDS_PAUSE_OPEN, OBD_FAIL_ONCE,
+                               (obd_timeout + 1) / 4);
 
         CLASSERT(MAXQUOTAS < 4);
         if (offset == DLM_INTENT_REC_OFF) { /* intent */
@@ -1128,8 +1128,8 @@ found_child:
                 GOTO(cleanup, rc = -ENOTDIR);
         }
 
-        if (OBD_FAIL_CHECK(OBD_FAIL_MDS_OPEN_CREATE)) {
-                obd_fail_loc = OBD_FAIL_LDLM_REPLY | OBD_FAIL_ONCE;
+        if (OBD_FAIL_CHECK_RESET(OBD_FAIL_MDS_OPEN_CREATE,
+                                 OBD_FAIL_LDLM_REPLY | OBD_FAIL_ONCE)) {
                 GOTO(cleanup, rc = -EAGAIN);
         }
 

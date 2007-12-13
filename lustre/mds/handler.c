@@ -519,7 +519,8 @@ static int mds_getstatus(struct ptlrpc_request *req)
         int rc, size[2] = { sizeof(struct ptlrpc_body), sizeof(*body) };
         ENTRY;
 
-        OBD_FAIL_RETURN(OBD_FAIL_MDS_GETSTATUS_PACK, req->rq_status = -ENOMEM);
+        if (OBD_FAIL_CHECK(OBD_FAIL_MDS_GETSTATUS_PACK))
+                RETURN(req->rq_status = -ENOMEM);
         rc = lustre_pack_reply(req, 2, size, NULL);
         if (rc)
                 RETURN(req->rq_status = rc);
@@ -1177,7 +1178,8 @@ static int mds_readpage(struct ptlrpc_request *req, int offset)
         struct lvfs_ucred uc = {0,};
         ENTRY;
 
-        OBD_FAIL_RETURN(OBD_FAIL_MDS_READPAGE_PACK, -ENOMEM);
+        if (OBD_FAIL_CHECK(OBD_FAIL_MDS_READPAGE_PACK))
+                RETURN(-ENOMEM);
         rc = lustre_pack_reply(req, 2, size, NULL);
         if (rc)
                 GOTO(out, rc);
@@ -1468,7 +1470,8 @@ int mds_handle(struct ptlrpc_request *req)
         struct obd_device *obd = NULL;
         ENTRY;
 
-        OBD_FAIL_RETURN(OBD_FAIL_MDS_ALL_REQUEST_NET | OBD_FAIL_ONCE, 0);
+        if (OBD_FAIL_CHECK_ORSET(OBD_FAIL_MDS_ALL_REQUEST_NET, OBD_FAIL_ONCE))
+                RETURN(0);
 
         LASSERT(current->journal_info == NULL);
 
@@ -1534,7 +1537,8 @@ int mds_handle(struct ptlrpc_request *req)
         switch (lustre_msg_get_opc(req->rq_reqmsg)) {
         case MDS_CONNECT:
                 DEBUG_REQ(D_INODE, req, "connect");
-                OBD_FAIL_RETURN(OBD_FAIL_MDS_CONNECT_NET, 0);
+                if (OBD_FAIL_CHECK(OBD_FAIL_MDS_CONNECT_NET))
+                        RETURN(0);
                 rc = target_handle_connect(req);
                 if (!rc) {
                         /* Now that we have an export, set mds. */
@@ -1551,39 +1555,45 @@ int mds_handle(struct ptlrpc_request *req)
 
         case MDS_DISCONNECT:
                 DEBUG_REQ(D_INODE, req, "disconnect");
-                OBD_FAIL_RETURN(OBD_FAIL_MDS_DISCONNECT_NET, 0);
+                if (OBD_FAIL_CHECK(OBD_FAIL_MDS_DISCONNECT_NET))
+                        RETURN(0);
                 rc = target_handle_disconnect(req);
                 req->rq_status = rc;            /* superfluous? */
                 break;
 
         case MDS_GETSTATUS:
                 DEBUG_REQ(D_INODE, req, "getstatus");
-                OBD_FAIL_RETURN(OBD_FAIL_MDS_GETSTATUS_NET, 0);
+                if (OBD_FAIL_CHECK(OBD_FAIL_MDS_GETSTATUS_NET))
+                        RETURN(0);
                 rc = mds_getstatus(req);
                 break;
 
         case MDS_GETATTR:
                 DEBUG_REQ(D_INODE, req, "getattr");
-                OBD_FAIL_RETURN(OBD_FAIL_MDS_GETATTR_NET, 0);
+                if (OBD_FAIL_CHECK(OBD_FAIL_MDS_GETATTR_NET))
+                        RETURN(0);
                 rc = mds_getattr(req, REQ_REC_OFF);
                 break;
 
         case MDS_SETXATTR:
                 DEBUG_REQ(D_INODE, req, "setxattr");
-                OBD_FAIL_RETURN(OBD_FAIL_MDS_SETXATTR_NET, 0);
+                if (OBD_FAIL_CHECK(OBD_FAIL_MDS_SETXATTR_NET))
+                        RETURN(0);
                 rc = mds_setxattr(req);
                 break;
 
         case MDS_GETXATTR:
                 DEBUG_REQ(D_INODE, req, "getxattr");
-                OBD_FAIL_RETURN(OBD_FAIL_MDS_GETXATTR_NET, 0);
+                if (OBD_FAIL_CHECK(OBD_FAIL_MDS_GETXATTR_NET))
+                        RETURN(0);
                 rc = mds_getxattr(req);
                 break;
 
         case MDS_GETATTR_NAME: {
                 struct lustre_handle lockh = { 0 };
                 DEBUG_REQ(D_INODE, req, "getattr_name");
-                OBD_FAIL_RETURN(OBD_FAIL_MDS_GETATTR_NAME_NET, 0);
+                if (OBD_FAIL_CHECK(OBD_FAIL_MDS_GETATTR_NAME_NET))
+                        RETURN(0);
 
                 /* If this request gets a reconstructed reply, we won't be
                  * acquiring any new locks in mds_getattr_lock, so we don't
@@ -1599,16 +1609,18 @@ int mds_handle(struct ptlrpc_request *req)
         }
         case MDS_STATFS:
                 DEBUG_REQ(D_INODE, req, "statfs");
-                OBD_FAIL_RETURN(OBD_FAIL_MDS_STATFS_NET, 0);
+                if (OBD_FAIL_CHECK(OBD_FAIL_MDS_STATFS_NET))
+                        RETURN(0);
                 rc = mds_statfs(req);
                 break;
 
         case MDS_READPAGE:
                 DEBUG_REQ(D_INODE, req, "readpage");
-                OBD_FAIL_RETURN(OBD_FAIL_MDS_READPAGE_NET, 0);
+                if (OBD_FAIL_CHECK(OBD_FAIL_MDS_READPAGE_NET))
+                        RETURN(0);
                 rc = mds_readpage(req, REQ_REC_OFF);
 
-                if (OBD_FAIL_CHECK_ONCE(OBD_FAIL_MDS_SENDPAGE)) {
+                if (OBD_FAIL_CHECK(OBD_FAIL_MDS_SENDPAGE)) {
                         RETURN(0);
                 }
 
@@ -1639,7 +1651,8 @@ int mds_handle(struct ptlrpc_request *req)
                            reint_names[opc] == NULL) ? reint_names[opc] :
                                                        "unknown opcode");
 
-                OBD_FAIL_RETURN(OBD_FAIL_MDS_REINT_NET, 0);
+                if (OBD_FAIL_CHECK(OBD_FAIL_MDS_REINT_NET))
+                        RETURN(0);
 
                 if (opc == REINT_UNLINK || opc == REINT_RENAME)
                         bufcount = 4;
@@ -1659,25 +1672,29 @@ int mds_handle(struct ptlrpc_request *req)
 
         case MDS_CLOSE:
                 DEBUG_REQ(D_INODE, req, "close");
-                OBD_FAIL_RETURN(OBD_FAIL_MDS_CLOSE_NET, 0);
+                if (OBD_FAIL_CHECK(OBD_FAIL_MDS_CLOSE_NET))
+                        RETURN(0);
                 rc = mds_close(req, REQ_REC_OFF);
                 break;
 
         case MDS_DONE_WRITING:
                 DEBUG_REQ(D_INODE, req, "done_writing");
-                OBD_FAIL_RETURN(OBD_FAIL_MDS_DONE_WRITING_NET, 0);
+                if (OBD_FAIL_CHECK(OBD_FAIL_MDS_DONE_WRITING_NET))
+                        RETURN(0);
                 rc = mds_done_writing(req, REQ_REC_OFF);
                 break;
 
         case MDS_PIN:
                 DEBUG_REQ(D_INODE, req, "pin");
-                OBD_FAIL_RETURN(OBD_FAIL_MDS_PIN_NET, 0);
+                if (OBD_FAIL_CHECK(OBD_FAIL_MDS_PIN_NET))
+                        RETURN(0);
                 rc = mds_pin(req, REQ_REC_OFF);
                 break;
 
         case MDS_SYNC:
                 DEBUG_REQ(D_INODE, req, "sync");
-                OBD_FAIL_RETURN(OBD_FAIL_MDS_SYNC_NET, 0);
+                if (OBD_FAIL_CHECK(OBD_FAIL_MDS_SYNC_NET))
+                        RETURN(0);
                 rc = mds_sync(req, REQ_REC_OFF);
                 break;
 
@@ -1688,13 +1705,15 @@ int mds_handle(struct ptlrpc_request *req)
 
         case MDS_QUOTACHECK:
                 DEBUG_REQ(D_INODE, req, "quotacheck");
-                OBD_FAIL_RETURN(OBD_FAIL_MDS_QUOTACHECK_NET, 0);
+                if (OBD_FAIL_CHECK(OBD_FAIL_MDS_QUOTACHECK_NET))
+                        RETURN(0);
                 rc = mds_handle_quotacheck(req);
                 break;
 
         case MDS_QUOTACTL:
                 DEBUG_REQ(D_INODE, req, "quotactl");
-                OBD_FAIL_RETURN(OBD_FAIL_MDS_QUOTACTL_NET, 0);
+                if (OBD_FAIL_CHECK(OBD_FAIL_MDS_QUOTACTL_NET))
+                        RETURN(0);
                 rc = mds_handle_quotactl(req);
                 break;
 
@@ -1705,20 +1724,23 @@ int mds_handle(struct ptlrpc_request *req)
 
         case OBD_LOG_CANCEL:
                 CDEBUG(D_INODE, "log cancel\n");
-                OBD_FAIL_RETURN(OBD_FAIL_OBD_LOG_CANCEL_NET, 0);
+                if (OBD_FAIL_CHECK(OBD_FAIL_OBD_LOG_CANCEL_NET))
+                        RETURN(0);
                 rc = -ENOTSUPP; /* la la la */
                 break;
 
         case LDLM_ENQUEUE:
                 DEBUG_REQ(D_INODE, req, "enqueue");
-                OBD_FAIL_RETURN(OBD_FAIL_LDLM_ENQUEUE, 0);
+                if (OBD_FAIL_CHECK(OBD_FAIL_LDLM_ENQUEUE))
+                        RETURN(0);
                 rc = ldlm_handle_enqueue(req, ldlm_server_completion_ast,
                                          ldlm_server_blocking_ast, NULL);
                 fail = OBD_FAIL_LDLM_REPLY;
                 break;
         case LDLM_CONVERT:
                 DEBUG_REQ(D_INODE, req, "convert");
-                OBD_FAIL_RETURN(OBD_FAIL_LDLM_CONVERT, 0);
+                if (OBD_FAIL_CHECK(OBD_FAIL_LDLM_CONVERT))
+                        RETURN(0);
                 rc = ldlm_handle_convert(req);
                 break;
         case LDLM_BL_CALLBACK:
@@ -1726,41 +1748,49 @@ int mds_handle(struct ptlrpc_request *req)
                 DEBUG_REQ(D_INODE, req, "callback");
                 CERROR("callbacks should not happen on MDS\n");
                 LBUG();
-                OBD_FAIL_RETURN(OBD_FAIL_LDLM_BL_CALLBACK, 0);
+                if (OBD_FAIL_CHECK(OBD_FAIL_LDLM_BL_CALLBACK))
+                        RETURN(0);
                 break;
         case LLOG_ORIGIN_HANDLE_CREATE:
                 DEBUG_REQ(D_INODE, req, "llog_init");
-                OBD_FAIL_RETURN(OBD_FAIL_OBD_LOGD_NET, 0);
+                if (OBD_FAIL_CHECK(OBD_FAIL_OBD_LOGD_NET))
+                        RETURN(0);
                 rc = llog_origin_handle_create(req);
                 break;
         case LLOG_ORIGIN_HANDLE_DESTROY:
                 DEBUG_REQ(D_INODE, req, "llog_init");
-                OBD_FAIL_RETURN(OBD_FAIL_OBD_LOGD_NET, 0);
+                if (OBD_FAIL_CHECK(OBD_FAIL_OBD_LOGD_NET))
+                        RETURN(0);
                 rc = llog_origin_handle_destroy(req);
                 break;
         case LLOG_ORIGIN_HANDLE_NEXT_BLOCK:
                 DEBUG_REQ(D_INODE, req, "llog next block");
-                OBD_FAIL_RETURN(OBD_FAIL_OBD_LOGD_NET, 0);
+                if (OBD_FAIL_CHECK(OBD_FAIL_OBD_LOGD_NET))
+                        RETURN(0);
                 rc = llog_origin_handle_next_block(req);
                 break;
         case LLOG_ORIGIN_HANDLE_PREV_BLOCK:
                 DEBUG_REQ(D_INODE, req, "llog prev block");
-                OBD_FAIL_RETURN(OBD_FAIL_OBD_LOGD_NET, 0);
+                if (OBD_FAIL_CHECK(OBD_FAIL_OBD_LOGD_NET))
+                        RETURN(0);
                 rc = llog_origin_handle_prev_block(req);
                 break;
         case LLOG_ORIGIN_HANDLE_READ_HEADER:
                 DEBUG_REQ(D_INODE, req, "llog read header");
-                OBD_FAIL_RETURN(OBD_FAIL_OBD_LOGD_NET, 0);
+                if (OBD_FAIL_CHECK(OBD_FAIL_OBD_LOGD_NET))
+                        RETURN(0);
                 rc = llog_origin_handle_read_header(req);
                 break;
         case LLOG_ORIGIN_HANDLE_CLOSE:
                 DEBUG_REQ(D_INODE, req, "llog close");
-                OBD_FAIL_RETURN(OBD_FAIL_OBD_LOGD_NET, 0);
+                if (OBD_FAIL_CHECK(OBD_FAIL_OBD_LOGD_NET))
+                        RETURN(0);
                 rc = llog_origin_handle_close(req);
                 break;
         case LLOG_CATINFO:
                 DEBUG_REQ(D_INODE, req, "llog catinfo");
-                OBD_FAIL_RETURN(OBD_FAIL_OBD_LOGD_NET, 0);
+                if (OBD_FAIL_CHECK(OBD_FAIL_OBD_LOGD_NET))
+                        RETURN(0);
                 rc = llog_catinfo(req);
                 break;
         default:

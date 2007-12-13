@@ -913,7 +913,7 @@ static obd_count osc_checksum_bulk(int nob, obd_count pg_count,
                 /* corrupt the data before we compute the checksum, to
                  * simulate an OST->client data error */
                 if (i == 0 && opc == OST_READ &&
-                    OBD_FAIL_CHECK_ONCE(OBD_FAIL_OSC_CHECKSUM_RECEIVE))
+                    OBD_FAIL_CHECK(OBD_FAIL_OSC_CHECKSUM_RECEIVE))
                         memcpy(ptr + off, "bad1", min(4, nob));
                 cksum = crc32_le(cksum, ptr + off, count);
                 cfs_kunmap(pga[i]->pg);
@@ -926,7 +926,7 @@ static obd_count osc_checksum_bulk(int nob, obd_count pg_count,
         }
         /* For sending we only compute the wrong checksum instead
          * of corrupting the data so it is still correct on a redo */
-        if (opc == OST_WRITE && OBD_FAIL_CHECK_ONCE(OBD_FAIL_OSC_CHECKSUM_SEND))
+        if (opc == OST_WRITE && OBD_FAIL_CHECK(OBD_FAIL_OSC_CHECKSUM_SEND))
                 cksum++;
 
         return cksum;
@@ -950,8 +950,10 @@ static int osc_brw_prep_request(int cmd, struct client_obd *cli,struct obdo *oa,
         struct osc_brw_async_args *aa;
 
         ENTRY;
-        OBD_FAIL_RETURN(OBD_FAIL_OSC_BRW_PREP_REQ, -ENOMEM); /* Recoverable */
-        OBD_FAIL_RETURN(OBD_FAIL_OSC_BRW_PREP_REQ2, -EINVAL); /* Fatal */
+        if (OBD_FAIL_CHECK(OBD_FAIL_OSC_BRW_PREP_REQ))
+                RETURN(-ENOMEM); /* Recoverable */
+        if (OBD_FAIL_CHECK(OBD_FAIL_OSC_BRW_PREP_REQ2))
+                RETURN(-EINVAL); /* Fatal */
 
         if ((cmd & OBD_BRW_WRITE) != 0) {
                 opc = OST_WRITE;
@@ -3008,7 +3010,8 @@ static int osc_match(struct obd_export *exp, struct lov_stripe_md *lsm,
         res_id.name[0] = lsm->lsm_object_id;
         res_id.name[2] = lsm->lsm_object_gr;
 
-        OBD_FAIL_RETURN(OBD_FAIL_OSC_MATCH, -EIO);
+        if (OBD_FAIL_CHECK(OBD_FAIL_OSC_MATCH))
+                RETURN(-EIO);
 
         /* Filesystem lock extents are extended to page boundaries so that
          * dealing with the page cache is a little smoother */

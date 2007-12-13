@@ -67,7 +67,7 @@ enum {
 int LL_PROC_PROTO(proc_fail_loc)
 {
         int rc;
-        int old_fail_loc = obd_fail_loc;
+        long old_fail_loc = obd_fail_loc;
 
         rc = ll_proc_dointvec(table, write, filp, buffer, lenp, ppos);
         if (old_fail_loc != obd_fail_loc)

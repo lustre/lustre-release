@@ -382,7 +382,7 @@ int mdd_lov_create(const struct lu_env *env, struct mdd_device *mdd,
                 RETURN(0);
         }
 
-        if (OBD_FAIL_CHECK_ONCE(OBD_FAIL_MDS_ALLOC_OBDO))
+        if (OBD_FAIL_CHECK(OBD_FAIL_MDS_ALLOC_OBDO))
                 GOTO(out_ids, rc = -ENOMEM);
 
         LASSERT(lov_exp != NULL);

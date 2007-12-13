@@ -661,12 +661,11 @@ extern struct lu_context_key       mdt_thread_key;
 static inline void mdt_fail_write(const struct lu_env *env,
                                   struct dt_device *dd, int id)
 {
-        if (OBD_FAIL_CHECK(id)) {
+        if (OBD_FAIL_CHECK_ORSET(id, OBD_FAIL_ONCE)) {
                 CERROR(LUSTRE_MDT_NAME": obd_fail_loc=%x, fail write ops\n",
                        id);
                 dd->dd_ops->dt_ro(env, dd);
                 /* We set FAIL_ONCE because we never "un-fail" a device */
-                obd_fail_loc |= OBD_FAILED | OBD_FAIL_ONCE;
         }
 }
 

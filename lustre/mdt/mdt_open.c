@@ -604,8 +604,8 @@ static int mdt_finish_open(struct mdt_thread_info *info,
         } else if (flags & MDS_OPEN_DIRECTORY)
                 RETURN(-ENOTDIR);
 
-        if (OBD_FAIL_CHECK(OBD_FAIL_MDS_OPEN_CREATE)) {
-                obd_fail_loc = OBD_FAIL_LDLM_REPLY | OBD_FAIL_ONCE;
+        if (OBD_FAIL_CHECK_RESET(OBD_FAIL_MDS_OPEN_CREATE,
+                                 OBD_FAIL_LDLM_REPLY | OBD_FAIL_ONCE)) {
                 RETURN(-EAGAIN);
         }
 
@@ -845,8 +845,8 @@ int mdt_reint_open(struct mdt_thread_info *info, struct mdt_lock_handle *lhc)
         int                      created = 0;
         ENTRY;
 
-        OBD_FAIL_TIMEOUT(OBD_FAIL_MDS_PAUSE_OPEN | OBD_FAIL_ONCE,
-                         (obd_timeout + 1) / 4);
+        OBD_FAIL_TIMEOUT_ORSET(OBD_FAIL_MDS_PAUSE_OPEN, OBD_FAIL_ONCE,
+                               (obd_timeout + 1) / 4);
 
         repbody = req_capsule_server_get(&info->mti_pill, &RMF_MDT_BODY);
 

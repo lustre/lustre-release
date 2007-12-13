@@ -33,6 +33,8 @@
 #endif
 #ifndef __KERNEL__
 # include <liblustre.h>
+#else
+# include <asm/atomic.h>
 #endif
 
 #include <obd_support.h>
@@ -73,9 +75,9 @@ cfs_waitq_t obd_race_waitq;
 int obd_race_state;
 
 #ifdef __KERNEL__
-unsigned int obd_print_fail_loc(void)
+unsigned long obd_print_fail_loc(void)
 {
-        CWARN("obd_fail_loc = %x\n", obd_fail_loc);
+        CWARN("obd_fail_loc = %lx\n", obd_fail_loc);
         return obd_fail_loc;
 }
 
