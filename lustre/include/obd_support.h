@@ -24,6 +24,7 @@
 #define _OBD_SUPPORT
 
 #include <libcfs/kp30.h>
+#include <lvfs.h>
 #include <lprocfs_status.h>
 
 /* global variables */
@@ -49,6 +50,7 @@ extern unsigned int obd_max_dirty_pages;
 extern atomic_t obd_dirty_pages;
 extern cfs_waitq_t obd_race_waitq;
 extern int obd_race_state;
+extern unsigned int obd_alloc_fail_rate;
 
 /* Timeout definitions */
 #define LDLM_TIMEOUT_DEFAULT 20
@@ -221,6 +223,8 @@ extern int obd_race_state;
 #define OBD_FAIL_QUOTA_QD_COUNT_32BIT    0xa00
 
 #define OBD_FAIL_LPROC_REMOVE            0xb00
+
+#define OBD_FAIL_GENERAL_ALLOC           0xc00
 
 #define OBD_FAIL_SEQ                     0x1000
 #define OBD_FAIL_SEQ_QUERY_NET           0x1001
@@ -564,6 +568,16 @@ __put_mem_track(void *ptr, int size,
 
 #endif /* !OBD_DEBUG_MEMUSAGE */
 
+#ifdef RANDOM_FAIL_ALLOC
+#define HAS_FAIL_ALLOC_FLAG OBD_FAIL_CHECK(OBD_FAIL_GENERAL_ALLOC)
+#else
+#define HAS_FAIL_ALLOC_FLAG 0
+#endif
+
+#define OBD_ALLOC_FAIL_BITS 24
+#define OBD_ALLOC_FAIL_MASK ((1 << OBD_ALLOC_FAIL_BITS) - 1)
+#define OBD_ALLOC_FAIL_MULT (OBD_ALLOC_FAIL_MASK / 100)
+
 #if defined(LUSTRE_UTILS) /* this version is for utils only */
 #define OBD_ALLOC_GFP(ptr, size, gfp_mask)                                    \
 do {                                                                          \
@@ -578,15 +592,20 @@ do {                                                                          \
         }                                                                     \
 } while (0)
 #else /* this version is for the kernel and liblustre */
+#define OBD_FREE_RTN0(ptr)                                                    \
+({                                                                            \
+        cfs_free(ptr);                                                        \
+        (ptr) = NULL;                                                         \
+        0;                                                                    \
+})
 #define OBD_ALLOC_GFP(ptr, size, gfp_mask)                                    \
 do {                                                                          \
         (ptr) = cfs_alloc(size, (gfp_mask));                                  \
-        if (unlikely((ptr) == NULL)) {                                        \
-                CERROR("kmalloc of '" #ptr "' (%d bytes) failed\n",           \
-                       (int)(size));                                          \
-                CERROR(LPU64" total bytes allocated by Lustre, %d by LNET\n", \
-                       obd_memory_sum(), atomic_read(&libcfs_kmemory));       \
-        } else {                                                              \
+        if (likely((ptr) != NULL &&                                           \
+                   (!HAS_FAIL_ALLOC_FLAG || obd_alloc_fail_rate == 0 ||       \
+                    !obd_alloc_fail(ptr, #ptr, "km", size,                    \
+                                    __FILE__, __LINE__) ||                    \
+                    OBD_FREE_RTN0(ptr)))){                                    \
                 memset(ptr, 0, size);                                         \
                 OBD_ALLOC_POST(ptr, size, "kmalloced");                       \
         }                                                                     \
@@ -686,16 +705,21 @@ do {                                                                          \
 /* we memset() the slab object to 0 when allocation succeeds, so DO NOT
  * HAVE A CTOR THAT DOES ANYTHING.  its work will be cleared here.  we'd
  * love to assert on that, but slab.c keeps kmem_cache_s all to itself. */
+#define OBD_SLAB_FREE_RTN0(ptr, slab)                                         \
+({                                                                            \
+        cfs_mem_cache_free((slab), (ptr));                                    \
+        (ptr) = NULL;                                                         \
+        0;                                                                    \
+}) 
 #define OBD_SLAB_ALLOC(ptr, slab, type, size)                                 \
 do {                                                                          \
         LASSERT(!in_interrupt());                                             \
         (ptr) = cfs_mem_cache_alloc(slab, (type));                            \
-        if (unlikely((ptr) == NULL)) {                                        \
-                CERROR("slab-alloc of '"#ptr"' (%d bytes) failed\n",          \
-                       (int)(size));                                          \
-                CERROR(LPU64" total bytes allocated by Lustre, %d by LNET\n", \
-                       obd_memory_sum(), atomic_read(&libcfs_kmemory));       \
-        } else {                                                              \
+        if (likely((ptr) != NULL &&                                           \
+                   (!HAS_FAIL_ALLOC_FLAG || obd_alloc_fail_rate == 0 ||       \
+                    !obd_alloc_fail(ptr, #ptr, "slab-", size,                 \
+                                    __FILE__, __LINE__) ||                    \
+                    OBD_SLAB_FREE_RTN0(ptr, slab)))) {                        \
                 memset(ptr, 0, size);                                         \
                 OBD_ALLOC_POST(ptr, size, "slab-alloced");                    \
         }                                                                     \

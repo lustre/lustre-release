@@ -4,7 +4,7 @@
 # See the file COPYING in this distribution
 if LIBLUSTRE
 noinst_LIBRARIES = liblvfs.a
-liblvfs_a_SOURCES = lvfs_userfs.c
+liblvfs_a_SOURCES = lvfs_userfs.c prng.c lvfs_lib.c
 liblvfs_a_CFLAGS = $(LLCFLAGS)
 liblvfs_a_CPPFLAGS = $(LLCPPFLAGS)
 

@@ -12,6 +12,10 @@
        * Recommended e2fsprogs version: 1.40.2-cfs4
        * Note that reiserfs quotas are disabled on SLES 10 in this kernel.
 
+Severity   : enhancement
+Bugzilla   : 12211
+Description: make lustre randomly fail allocating memory
+Details    : Make lustre randomly failed allocating memory for testing purpose.
 
 Severity   : enhancement
 Bugzilla   : 12702
