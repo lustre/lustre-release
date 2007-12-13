@@ -52,7 +52,8 @@ int ldlm_cancel_lru_local(struct ldlm_namespace *ns, struct list_head *cancels,
 int ldlm_resource_putref_locked(struct ldlm_resource *res);
 void ldlm_resource_insert_lock_after(struct ldlm_lock *original,
                                      struct ldlm_lock *new);
-
+int ldlm_namespace_free_prior(struct ldlm_namespace *ns);
+int ldlm_namespace_free_post(struct ldlm_namespace *ns, int force);
 /* ldlm_lock.c */
 
 /* Number of blocking/completion callbacks that will be sent in

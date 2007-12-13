@@ -37,6 +37,8 @@
 #include <lustre_dlm.h>
 #include <lustre_net.h>
 #include <lustre_sec.h>
+#include "ldlm_internal.h"
+
 
 /* @priority: if non-zero, move the selected to the list head
  * @create: if zero, only search in existed connections
@@ -369,6 +371,7 @@ int client_connect_import(const struct lu_env *env,
         struct obd_import *imp = cli->cl_import;
         struct obd_export *exp;
         struct obd_connect_data *ocd;
+        struct ldlm_namespace *to_be_freed = NULL;
         int rc;
         ENTRY;
 
@@ -425,7 +428,8 @@ int client_connect_import(const struct lu_env *env,
 
         if (rc) {
 out_ldlm:
-                ldlm_namespace_free(obd->obd_namespace, 0);
+                ldlm_namespace_free_prior(obd->obd_namespace);
+                to_be_freed = obd->obd_namespace;
                 obd->obd_namespace = NULL;
 out_disco:
                 cli->cl_conn_count--;
@@ -435,6 +439,9 @@ out_disco:
         }
 out_sem:
         mutex_up(&cli->cl_sem);
+        if (to_be_freed)
+                ldlm_namespace_free_post(to_be_freed, 1);
+
         return rc;
 }
 
@@ -444,6 +451,7 @@ int client_disconnect_export(struct obd_export *exp)
         struct client_obd *cli;
         struct obd_import *imp;
         int rc = 0, err;
+        struct ldlm_namespace *to_be_freed = NULL;
         ENTRY;
 
         if (!obd) {
@@ -483,14 +491,18 @@ int client_disconnect_export(struct obd_export *exp)
                 ldlm_cli_cancel_unused(obd->obd_namespace, NULL,
                                        obd->obd_force ? LDLM_FL_LOCAL_ONLY:0,
                                        NULL);
-                ldlm_namespace_free(obd->obd_namespace, obd->obd_force);
-                obd->obd_namespace = NULL;
+                ldlm_namespace_free_prior(obd->obd_namespace);
+                to_be_freed = obd->obd_namespace;
         }
 
-        if (!obd->obd_force)
-                rc = ptlrpc_disconnect_import(imp, 0);
+        rc = ptlrpc_disconnect_import(imp, 0);
 
         ptlrpc_invalidate_import(imp);
+        /* set obd_namespace to NULL only after invalidate, because we can have
+         * some connect requests in flight, and his need store a connect flags
+         * in obd_namespace. bug 14260 */
+        obd->obd_namespace = NULL;
+
         ptlrpc_free_rq_pool(imp->imp_rq_pool);
         destroy_import(imp);
         cli->cl_import = NULL;
@@ -502,6 +514,9 @@ int client_disconnect_export(struct obd_export *exp)
                 rc = err;
  out_sem:
         mutex_up(&cli->cl_sem);
+        if (to_be_freed)
+                ldlm_namespace_free_post(to_be_freed, obd->obd_force);
+
         RETURN(rc);
 }
 

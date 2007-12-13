@@ -1026,14 +1026,13 @@ check_ctx:
                 if (req->rq_bulk != NULL)
                         ptlrpc_unregister_bulk (req);
 
-                req->rq_phase = RQ_PHASE_COMPLETE;
-
                 if (req->rq_interpret_reply != NULL) {
                         int (*interpreter)(struct ptlrpc_request *,void *,int) =
                                 req->rq_interpret_reply;
                         req->rq_status = interpreter(req, &req->rq_async_args,
                                                      req->rq_status);
                 }
+                req->rq_phase = RQ_PHASE_COMPLETE;
 
                 CDEBUG(D_RPCTRACE, "Completed RPC pname:cluuid:pid:xid:nid:"
                        "opc %s:%s:%d:"LPU64":%s:%d\n", cfs_curproc_comm(),
