@@ -55,7 +55,7 @@
  	/**** FIX THIS: This could be very bad if disks is close to 256 ****/
  	void *ptrs[disks];
  
-@@ -757,18 +783,41 @@ static void compute_parity(struct stripe
+@@ -761,18 +787,46 @@ static void compute_parity(struct stripe
  		BUG();		/* Not implemented yet */
  	}
  
@@ -83,6 +83,11 @@
 +		if (!wbi->bi_next && test_bit(R5_Insync, &sh->dev[i].flags) &&
 +		    test_bit(R5_OVERWRITE, &sh->dev[i].flags)) {
 +			page = zero_copy_data(wbi, sector);
++			/* we don't do zerocopy on a HighMem page. Raid6 tend 
++			 * to prepare all of the pages' content to be accessed
++			 * before computing PQ parity. If we need to support HighMem
++			 * page also, we have to modify the gen_syndrome()
++			 * algorithm. -jay */
 +			if (page && !PageHighMem(page)) {
 +				atomic_inc(&conf->writes_zcopy);
 +				sh->dev[i].req.bi_io_vec[0].bv_page = page;
@@ -106,7 +111,7 @@
  
  //	switch(method) {
  //	case RECONSTRUCT_WRITE:
-@@ -779,7 +828,10 @@ static void compute_parity(struct stripe
+@@ -783,7 +837,10 @@ static void compute_parity(struct stripe
  		count = 0;
  		i = d0_idx;
  		do {
@@ -118,7 +123,7 @@
  
  			i = raid6_next_disk(i, disks);
  		} while ( i != d0_idx );
-@@ -1183,7 +1235,8 @@ static void handle_stripe(struct stripe_
+@@ -1185,7 +1242,8 @@ static void handle_stripe(struct stripe_
  			if (sh->dev[i].written) {
  				dev = &sh->dev[i];
  				if (!test_bit(R5_LOCKED, &dev->flags) &&
@@ -128,7 +133,7 @@
  					/* We can return any write requests */
  					struct bio *wbi, *wbi2;
  					PRINTK("Return write for stripe %llu disc %d\n",
-@@ -1191,6 +1244,7 @@ static void handle_stripe(struct stripe_
+@@ -1193,6 +1251,7 @@ static void handle_stripe(struct stripe_
  					spin_lock_irq(&conf->device_lock);
  					wbi = dev->written;
  					dev->written = NULL;
@@ -136,7 +141,7 @@
  					while (wbi && wbi->bi_sector < dev->sector + STRIPE_SECTORS) {
  						wbi2 = r5_next_bio(wbi, dev->sector);
  						if (--wbi->bi_phys_segments == 0) {
-@@ -2005,6 +2059,7 @@ static int run (mddev_t *mddev)
+@@ -2007,6 +2066,7 @@ static int run (mddev_t *mddev)
  		if (mddev->queue->backing_dev_info.ra_pages < 2 * stripe)
  			mddev->queue->backing_dev_info.ra_pages = 2 * stripe;
  	}
@@ -144,17 +149,17 @@
  
  	/* Ok, everything is just fine now */
  	mddev->array_size =  mddev->size * (mddev->raid_disks - 2);
-@@ -2092,9 +2147,11 @@ static void status (struct seq_file *seq
-             atomic_read(&conf->handled_in_raid5d),
-             atomic_read(&conf->out_of_stripes),
-             atomic_read(&conf->handle_called));
--    seq_printf (seq, "\n\t\treads: %u for rmw, %u for rcw",
-+    seq_printf (seq, "\n\t\treads: %u for rmw, %u for rcw. zcopy writes: %u, copied writes: %u",
-             atomic_read(&conf->reads_for_rmw),
--            atomic_read(&conf->reads_for_rcw));
-+            atomic_read(&conf->reads_for_rcw),
-+			atomic_read(&conf->writes_zcopy),
-+			atomic_read(&conf->writes_copied));
-     seq_printf (seq, "\n\t\t%u delayed, %u active, queues: %u in, %u out\n",
-             atomic_read(&conf->delayed),
-             atomic_read(&conf->active_stripes),
+@@ -2094,9 +2154,11 @@ static void status (struct seq_file *seq
+ 		atomic_read(&conf->handled_in_raid5d),
+ 		atomic_read(&conf->out_of_stripes),
+ 		atomic_read(&conf->handle_called));
+-	seq_printf (seq, "\n\t\treads: %u for rmw, %u for rcw",
++	seq_printf (seq, "\n\t\treads: %u for rmw, %u for rcw. zcopy writes: %u, copied writes: %u",
+ 		atomic_read(&conf->reads_for_rmw),
+-		atomic_read(&conf->reads_for_rcw));
++		atomic_read(&conf->reads_for_rcw),
++		atomic_read(&conf->writes_zcopy),
++		atomic_read(&conf->writes_copied));
+ 	seq_printf (seq, "\n\t\t%u delayed, %u active, queues: %u in, %u out\n",
+ 		atomic_read(&conf->delayed),
+ 		atomic_read(&conf->active_stripes),

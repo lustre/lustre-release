@@ -1,5 +1,6 @@
---- linux-2.6.9.orig/drivers/md/raid6main.c	2006-09-07 23:09:20.000000000 +0800
-+++ linux-2.6.9/drivers/md/raid6main.c	2006-09-07 23:09:11.000000000 +0800
+diff -pur linux-2.6.9-55.0.9.orig/drivers/md/raid6main.c linux-2.6.9-55.0.9/drivers/md/raid6main.c
+--- linux-2.6.9-55.0.9.orig/drivers/md/raid6main.c	2007-09-28 17:53:55.000000000 +0800
++++ linux-2.6.9-55.0.9/drivers/md/raid6main.c	2007-12-13 20:19:11.000000000 +0800
 @@ -96,9 +96,10 @@ static inline void __release_stripe(raid
  		if (atomic_read(&conf->active_stripes)==0)
  			BUG();
@@ -26,7 +27,7 @@
  					BUG();
  				list_del_init(&sh->lru);
 +				if (test_bit(STRIPE_DELAYED, &sh->state))
-+                    atomic_dec(&conf->delayed);
++					atomic_dec(&conf->delayed);
 +
  			}
  		}
@@ -142,28 +143,26 @@
  		handle_stripe(sh);
  		release_stripe(sh);
  
-@@ -1939,7 +1963,24 @@ static void status (struct seq_file *seq
-  		seq_printf (seq, "%s",
+@@ -1940,6 +1964,23 @@ static void status (struct seq_file *seq
  			    conf->disks[i].rdev &&
  			    conf->disks[i].rdev->in_sync ? "U" : "_");
--	seq_printf (seq, "]");
-+ 	seq_printf (seq, "]");
+ 	seq_printf (seq, "]");
 + 
-+    seq_printf (seq, "\n\t\tin: %u reads, %u writes; out: %u reads, %u writes",
-+            atomic_read(&conf->reads_in), atomic_read(&conf->writes_in),
-+            atomic_read(&conf->reads_out), atomic_read(&conf->writes_out));
-+    seq_printf (seq, "\n\t\t%u in raid5d, %u out of stripes, %u handle called",
-+            atomic_read(&conf->handled_in_raid5d),
-+            atomic_read(&conf->out_of_stripes),
-+            atomic_read(&conf->handle_called));
-+    seq_printf (seq, "\n\t\treads: %u for rmw, %u for rcw",
-+            atomic_read(&conf->reads_for_rmw),
-+            atomic_read(&conf->reads_for_rcw));
-+    seq_printf (seq, "\n\t\t%u delayed, %u active, queues: %u in, %u out\n",
-+            atomic_read(&conf->delayed),
-+            atomic_read(&conf->active_stripes),
-+            atomic_read(&conf->in_reqs_in_queue),
-+            atomic_read(&conf->out_reqs_in_queue));
++	seq_printf (seq, "\n\t\tin: %u reads, %u writes; out: %u reads, %u writes",
++		atomic_read(&conf->reads_in), atomic_read(&conf->writes_in),
++		atomic_read(&conf->reads_out), atomic_read(&conf->writes_out));
++	seq_printf (seq, "\n\t\t%u in raid5d, %u out of stripes, %u handle called",
++		atomic_read(&conf->handled_in_raid5d),
++		atomic_read(&conf->out_of_stripes),
++		atomic_read(&conf->handle_called));
++	seq_printf (seq, "\n\t\treads: %u for rmw, %u for rcw",
++		atomic_read(&conf->reads_for_rmw),
++		atomic_read(&conf->reads_for_rcw));
++	seq_printf (seq, "\n\t\t%u delayed, %u active, queues: %u in, %u out\n",
++		atomic_read(&conf->delayed),
++		atomic_read(&conf->active_stripes),
++		atomic_read(&conf->in_reqs_in_queue),
++		atomic_read(&conf->out_reqs_in_queue));
 +
  #if RAID6_DUMPSTATE
  	seq_printf (seq, "\n");

@@ -1,25 +1,18 @@
---- linux-2.6.9.orig/include/linux/raid/raid5.h	2006-09-08 02:51:59.000000000 +0800
-+++ linux-2.6.9/include/linux/raid/raid5.h	2006-09-08 02:49:24.000000000 +0800
-@@ -154,6 +154,8 @@ struct stripe_head {
- #define	R5_Wantwrite	5
- #define	R5_Syncio	6	/* this io need to be accounted as resync io */
- #define	R5_Direct	7	/* use page from passed bio to avoid memcpy */
-+#define	R5_Overlap      8	/* There is a pending overlapping request 
-+				 * on this block */
- 
- /*
-  * Write method
-@@ -220,6 +221,7 @@ struct raid5_private_data {
- 	atomic_t		active_stripes;
- 	struct list_head	inactive_list;
- 	wait_queue_head_t	wait_for_stripe;
-+	wait_queue_head_t	wait_for_overlap;
- 	int			inactive_blocked;	/* release of inactive stripes blocked,
- 							 * waiting for 25% to be free
- 							 */        
---- linux-2.6.9.orig/drivers/md/raid6main.c	2006-09-08 02:51:59.000000000 +0800
-+++ linux-2.6.9/drivers/md/raid6main.c	2006-09-08 02:51:28.000000000 +0800
-@@ -907,7 +907,7 @@ static void compute_block_2(struct strip
+diff -pur linux-2.6.9-55.0.9.orig/drivers/md/raid6main.c linux-2.6.9-55.0.9/drivers/md/raid6main.c
+--- linux-2.6.9-55.0.9.orig/drivers/md/raid6main.c	2007-12-13 20:52:42.000000000 +0800
++++ linux-2.6.9-55.0.9/drivers/md/raid6main.c	2007-12-13 21:05:04.000000000 +0800
+@@ -749,6 +749,10 @@ static void compute_parity(struct stripe
+ 			if ( i != pd_idx && i != qd_idx && sh->dev[i].towrite ) {
+ 				chosen = sh->dev[i].towrite;
+ 				sh->dev[i].towrite = NULL;
++
++				if (test_and_clear_bit(R5_Overlap, &sh->dev[i].flags))
++					wake_up(&conf->wait_for_overlap);
++
+ 				if (sh->dev[i].written) BUG();
+ 				sh->dev[i].written = chosen;
+ 			}
+@@ -907,7 +911,7 @@ static void compute_block_2(struct strip
   * toread/towrite point to the first in a chain.
   * The bi_next chain must be in order.
   */
@@ -28,7 +21,7 @@
  {
  	struct bio **bip;
  	raid6_conf_t *conf = sh->raid_conf;
-@@ -924,10 +924,13 @@ static void add_stripe_bio (struct strip
+@@ -924,10 +928,13 @@ static void add_stripe_bio (struct strip
  	else
  		bip = &sh->dev[dd_idx].toread;
  	while (*bip && (*bip)->bi_sector < bi->bi_sector) {
@@ -44,7 +37,7 @@
  	if (*bip && bi->bi_next && (*bip) != bi->bi_next)
  		BUG();
  	if (*bip)
-@@ -954,6 +957,14 @@ static void add_stripe_bio (struct strip
+@@ -954,6 +961,14 @@ static void add_stripe_bio (struct strip
  		if (sector >= sh->dev[dd_idx].sector + STRIPE_SECTORS)
  			set_bit(R5_OVERWRITE, &sh->dev[dd_idx].flags);
  	}
@@ -59,7 +52,7 @@
  }
  
  /*
-@@ -1040,6 +1051,9 @@ static void handle_stripe(struct stripe_
+@@ -1038,6 +1053,9 @@ static void handle_stripe(struct stripe_
  			spin_lock_irq(&conf->device_lock);
  			rbi = dev->toread;
  			dev->toread = NULL;
@@ -69,7 +62,7 @@
  			spin_unlock_irq(&conf->device_lock);
  			while (rbi && rbi->bi_sector < dev->sector + STRIPE_SECTORS) {
  				copy_data(0, rbi, dev->page, dev->sector);
-@@ -1089,6 +1103,9 @@ static void handle_stripe(struct stripe_
+@@ -1087,6 +1105,9 @@ static void handle_stripe(struct stripe_
  			sh->dev[i].towrite = NULL;
  			if (bi) to_write--;
  
@@ -79,7 +72,7 @@
  			while (bi && bi->bi_sector < sh->dev[i].sector + STRIPE_SECTORS){
  				struct bio *nextbi = r5_next_bio(bi, sh->dev[i].sector);
  				clear_bit(BIO_UPTODATE, &bi->bi_flags);
-@@ -1117,6 +1134,8 @@ static void handle_stripe(struct stripe_
+@@ -1115,6 +1136,8 @@ static void handle_stripe(struct stripe_
  			if (!test_bit(R5_Insync, &sh->dev[i].flags)) {
  				bi = sh->dev[i].toread;
  				sh->dev[i].toread = NULL;
@@ -88,31 +81,31 @@
  				if (bi) to_read--;
  				while (bi && bi->bi_sector < sh->dev[i].sector + STRIPE_SECTORS){
  					struct bio *nextbi = r5_next_bio(bi, sh->dev[i].sector);
-@@ -1649,6 +1668,8 @@ static int make_request (request_queue_t
-         sh = NULL;
-         /* iterrate through all pages in the stripe */
-         for (j = 0; j < data_disks && sectors > 0; j++) {
+@@ -1647,6 +1670,8 @@ static int make_request (request_queue_t
+ 		sh = NULL;
+ 		/* iterrate through all pages in the stripe */
+ 		for (j = 0; j < data_disks && sectors > 0; j++) {
 +			DEFINE_WAIT(w);
 +
-             if (r_sector + STRIPE_SECTORS <= bi->bi_sector ||
-                     r_sector >= last_sector) {
-                 r_sector += sectors_per_chunk;
-@@ -1657,6 +1678,9 @@ static int make_request (request_queue_t
-             new_sector = raid6_compute_sector(r_sector, raid_disks,
-                             data_disks, &dd_idx, 
-                             &pd_idx, conf);
+ 			if (r_sector + STRIPE_SECTORS <= bi->bi_sector ||
+ 			    r_sector >= last_sector) {
+ 				r_sector += sectors_per_chunk;
+@@ -1655,6 +1680,9 @@ static int make_request (request_queue_t
+ 			new_sector = raid6_compute_sector(r_sector, raid_disks,
+ 							data_disks, &dd_idx, 
+ 							&pd_idx, conf);
 +
 +retry:
 +			prepare_to_wait(&conf->wait_for_overlap, &w, TASK_UNINTERRUPTIBLE);
-             if (sh == NULL) {
-                 /* first, try to get stripe w/o blocking
-                  * if we can't, then it's time to submit
-@@ -1669,10 +1693,18 @@ static int make_request (request_queue_t
-                 }
-             }
-             if (sh) {
--                add_stripe_bio(sh, bi, dd_idx, (bi->bi_rw&RW_MASK));
-+                if(!add_stripe_bio(sh, bi, dd_idx, (bi->bi_rw&RW_MASK))) {
+ 			if (sh == NULL) {
+ 				/* first, try to get stripe w/o blocking
+ 				 * if we can't, then it's time to submit
+@@ -1667,10 +1695,18 @@ static int make_request (request_queue_t
+ 				}
+ 			}
+ 			if (sh) {
+-				add_stripe_bio(sh, bi, dd_idx, (bi->bi_rw&RW_MASK));
++				if(!add_stripe_bio(sh, bi, dd_idx, (bi->bi_rw&RW_MASK))) {
 +					/* Failed to be added due to overlapped. */
 +					raid6_unplug_device(mddev->queue);
 +					release_stripe(sh);
@@ -120,14 +113,14 @@
 +					goto retry;
 +				}
 +				finish_wait(&conf->wait_for_overlap, &w);
-             } else {
-                 /* cannot get stripe for read-ahead, just give-up */
-                 clear_bit(BIO_UPTODATE, &bi->bi_flags);
+ 			} else {
+ 				/* cannot get stripe for read-ahead, just give-up */
+ 				clear_bit(BIO_UPTODATE, &bi->bi_flags);
 +				finish_wait(&conf->wait_for_overlap, &w);
-                 sectors = 0;
-                 break;
-             }
-@@ -1690,7 +1722,6 @@ static int make_request (request_queue_t
+ 				sectors = 0;
+ 				break;
+ 			}
+@@ -1688,7 +1724,6 @@ static int make_request (request_queue_t
  			raid6_plug_device(conf);
  			handle_stripe(sh, bios);
  			release_stripe(sh);
@@ -135,7 +128,7 @@
  			sh = NULL;
  		}
  
-@@ -1849,6 +1880,7 @@ static int run (mddev_t *mddev)
+@@ -1847,6 +1882,7 @@ static int run (mddev_t *mddev)
  
  	conf->device_lock = SPIN_LOCK_UNLOCKED;
  	init_waitqueue_head(&conf->wait_for_stripe);
@@ -143,3 +136,23 @@
  	INIT_LIST_HEAD(&conf->handle_list);
  	INIT_LIST_HEAD(&conf->delayed_list);
  	INIT_LIST_HEAD(&conf->inactive_list);
+diff -pur linux-2.6.9-55.0.9.orig/include/linux/raid/raid5.h linux-2.6.9-55.0.9/include/linux/raid/raid5.h
+--- linux-2.6.9-55.0.9.orig/include/linux/raid/raid5.h	2007-12-13 21:09:13.000000000 +0800
++++ linux-2.6.9-55.0.9/include/linux/raid/raid5.h	2007-12-13 21:01:33.000000000 +0800
+@@ -154,6 +154,8 @@ struct stripe_head {
+ #define	R5_Wantwrite	5
+ #define	R5_Syncio	6	/* this io need to be accounted as resync io */
+ #define	R5_Direct	7	/* use page from passed bio to avoid memcpy */
++#define	R5_Overlap      8	/* There is a pending overlapping request 
++					 * on this block */
+ 
+ /*
+  * Write method
+@@ -221,6 +223,7 @@ struct raid5_private_data {
+ 	atomic_t		active_stripes;
+ 	struct list_head	inactive_list;
+ 	wait_queue_head_t	wait_for_stripe;
++	wait_queue_head_t	wait_for_overlap;
+ 	int			inactive_blocked;	/* release of inactive stripes blocked,
+ 							 * waiting for 25% to be free
+ 							 */        
