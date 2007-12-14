@@ -11,7 +11,7 @@ tbd         Cluster File Systems, Inc. <info@clusterfs.com>
         2.6.16 - 2.6.22 vanilla (kernel.org)
        * Due to recently discovered recovery problems, we do not recommend
         using patchless RHEL 4 clients with this or any earlier release.
-       * Recommended e2fsprogs version: 1.40.2-cfs4
+       * Recommended e2fsprogs version: 1.40.2-cfs5
        * Note that reiserfs quotas are disabled on SLES 10 in this kernel.
 
 Severity   : major
