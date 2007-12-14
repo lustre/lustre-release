@@ -9,7 +9,7 @@
         (see http://wiki.lustre.org/index.php?title=Patchless_Client)
         2.6.9-42.0.10.EL (RHEL 4),
         2.6.16 - 2.6.21 vanilla (kernel.org)
-       * Recommended e2fsprogs version: 1.40.2-cfs4
+       * Recommended e2fsprogs version: 1.40.2-cfs5
        * Note that reiserfs quotas are disabled on SLES 10 in this kernel.
 
 Severity   : major
