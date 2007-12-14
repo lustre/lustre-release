@@ -3910,6 +3910,7 @@ test_115() {
 run_test 115 "verify dynamic thread creation===================="
 
 free_min_max () {
+	wait_delete_completed
 	AVAIL=($(cat $LPROC/osc/*[oO][sS][cC][-_]*/kbytesavail))
 	echo OST kbytes available: ${AVAIL[@]}
 	MAXI=0; MAXV=${AVAIL[0]}
