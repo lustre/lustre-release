@@ -919,7 +919,7 @@ static struct ldlm_lock *search_queue(struct list_head *queue,
                 lock = list_entry(tmp, struct ldlm_lock, l_res_link);
 
                 if (lock == old_lock)
-                        break;
+                        continue;
 
                 /* llite sometimes wants to match locks that will be
                  * canceled when their users drop, but we allow it to match

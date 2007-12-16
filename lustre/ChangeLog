@@ -156,6 +156,15 @@ Details    : Directly associate cached pages to lock that protect those pages,
              this allows us to quickly find what pages to write and remove
 	     once lock callback is received.
 
+Severity   : normal
+Bugzilla   : 14379
+Description: Too many locks accumulating on client during NFS usage
+Details    : mds_open improperly used accmode to find out access mode to a
+             file. Also mdc_intent_lock logic to find out if we already have
+	     lock similar to just received was flawed since introduction of
+	     skiplists - locks are now added to the front of the granted
+	     queue.
+
 --------------------------------------------------------------------------------
 
 2007-12-07         Cluster File Systems, Inc. <info@clusterfs.com>

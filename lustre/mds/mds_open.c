@@ -1151,9 +1151,9 @@ found_child:
 
         /* We cannot use acc_mode here, because it is zeroed in case of
            creating a file, so we get wrong lockmode */
-        if (accmode(dchild->d_inode, rec->ur_flags) & MAY_WRITE)
+        if (rec->ur_flags & FMODE_WRITE)
                 child_mode = LCK_CW;
-        else if (accmode(dchild->d_inode, rec->ur_flags) & MAY_EXEC)
+        else if (rec->ur_flags & MDS_FMODE_EXEC)
                 child_mode = LCK_PR;
         else
                 child_mode = LCK_CR;
