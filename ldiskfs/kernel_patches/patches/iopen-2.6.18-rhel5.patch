@@ -163,7 +163,7 @@ Index: linux-2.6.18.8/fs/ext3/iopen.c
 +	security_d_instantiate(goal, inode);
 +	__d_drop(dentry);
 +	d_rehash_cond(dentry, 0);
-+	__d_move(goal, dentry);
++	d_move_locked(goal, dentry);
 +	spin_unlock(&dcache_lock);
 +	iput(inode);
 +
