@@ -40,37 +40,24 @@ diff -urp linux-2.6.18.rawops/fs/dcache.c linux-2.6.18.races/fs/dcache.c
  }
  
  #define do_switch(x,y) do { \
-@@ -1481,14 +1496,13 @@ static void switch_names(struct dentry *
+@@ -1481,7 +1496,7 @@ static void switch_names(struct dentry *
+  * Update the dcache to reflect the move of a file name. Negative
   * dcache entries should not be moved in this way.
   */
- 
--void d_move(struct dentry * dentry, struct dentry * target)
-+void __d_move(struct dentry * dentry, struct dentry * target)
+-static void d_move_locked(struct dentry * dentry, struct dentry * target)
++void d_move_locked(struct dentry * dentry, struct dentry * target)
  {
  	struct hlist_head *list;
  
- 	if (!dentry->d_inode)
- 		printk(KERN_WARNING "VFS: moving negative dcache entry\n");
- 
--	spin_lock(&dcache_lock);
- 	write_seqlock(&rename_lock);
- 	/*
- 	 * XXXX: do we really need to take target->d_lock?
-@@ -1549,6 +1563,14 @@ already_unhashed:
- 	fsnotify_d_move(dentry);
+@@ -1549,6 +1563,8 @@ already_unhashed:
  	spin_unlock(&dentry->d_lock);
  	write_sequnlock(&rename_lock);
-+}
-+
-+EXPORT_SYMBOL(__d_move);
-+
-+void d_move(struct dentry *dentry, struct dentry *target)
-+{
-+	spin_lock(&dcache_lock);
-+	__d_move(dentry, target);
- 	spin_unlock(&dcache_lock);
  }
++
++EXPORT_SYMBOL(d_move_locked);
  
+ /**
+  * d_move - move a dentry
 diff -urp linux-2.6.18.rawops/include/linux/dcache.h linux-2.6.18.races/include/linux/dcache.h
 --- linux-2.6.18.rawops/include/linux/dcache.h	2007-02-14 16:52:37.000000000 +0200
 +++ linux-2.6.18.races/include/linux/dcache.h	2007-02-14 19:21:14.000000000 +0200
@@ -94,7 +81,7 @@ diff -urp linux-2.6.18.rawops/include/linux/dcache.h linux-2.6.18.races/include/
  
  /* used for rename() and baskets */
  extern void d_move(struct dentry *, struct dentry *);
-+extern void __d_move(struct dentry *, struct dentry *);
++extern void d_move_locked(struct dentry *, struct dentry *);
  
  /* appendix may either be NULL or be used for transname suffixes */
  extern struct dentry * d_lookup(struct dentry *, struct qstr *);
