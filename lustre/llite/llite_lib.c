@@ -1696,13 +1696,17 @@ void ll_update_inode(struct inode *inode, struct lustre_md *md)
                                                "the size got from MDS\n",
                                                inode->i_ino, lli->lli_flags);
                                 } else {
-                                        i_size_write(inode, body->size);
+                                        /* Use old size assignment to avoid
+                                         * deadlock bz14138 & bz14326 */
+                                        inode->i_size = body->size;
                                         lli->lli_flags |= LLIF_MDS_SIZE_LOCK;
                                 }
                                 ldlm_lock_decref(&lockh, mode);
                         }
                 } else {
-                        i_size_write(inode, body->size);
+                        /* Use old size assignment to avoid
+                         * deadlock bz14138 & bz14326 */
+                        inode->i_size = body->size;
                 }
 
                 if (body->valid & OBD_MD_FLBLOCKS)
