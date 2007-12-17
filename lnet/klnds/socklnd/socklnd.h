@@ -367,6 +367,10 @@ extern ksock_proto_t ksocknal_protocol_v2x;
 #define KSOCK_PROTO_V1_MINOR    LNET_PROTO_TCP_VERSION_MINOR
 #define KSOCK_PROTO_V1          KSOCK_PROTO_V1_MAJOR
 
+#ifndef CPU_MASK_NONE
+#define CPU_MASK_NONE   0UL
+#endif
+
 static inline int
 ksocknal_route_mask(void) 
 {
