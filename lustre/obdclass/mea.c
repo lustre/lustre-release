@@ -20,16 +20,15 @@
  */
 
 #define DEBUG_SUBSYSTEM S_CLASS
+#include <obd_class.h>
 #ifdef __KERNEL__
 #include <linux/kmod.h>   /* for request_module() */
 #include <linux/module.h>
-#include <obd_class.h>
 #include <linux/random.h>
 #include <linux/slab.h>
 #include <linux/pagemap.h>
 #else
 #include <liblustre.h>
-#include <obd_class.h>
 #include <obd.h>
 #endif
 #include <lprocfs_status.h>
@@ -37,8 +36,10 @@
 
 #ifdef __KERNEL__
 #include <linux/jbd.h>
+#ifdef HAVE_SERVER_SUPPORT
 /* LDISKFS_SB() */
 #include <linux/ldiskfs_fs.h>
+#endif
 #endif
 static int mea_last_char_hash(int count, char *name, int namelen)
 {

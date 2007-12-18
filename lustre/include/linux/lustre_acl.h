@@ -32,8 +32,10 @@
 #  define MDS_XATTR_NAME_ACL_ACCESS XATTR_NAME_ACL_ACCESS
 #  define mds_xattr_acl_size(entry) xattr_acl_size(entry)
 # else /* HAVE_XATTR_ACL */
-#  define MDS_XATTR_NAME_ACL_ACCESS POSIX_ACL_XATTR_ACCESS
-#  define mds_xattr_acl_size(entry) posix_acl_xattr_size(entry)
+#  ifdef HAVE_LINUX_POSIX_ACL_XATTR_H
+#   define MDS_XATTR_NAME_ACL_ACCESS POSIX_ACL_XATTR_ACCESS
+#   define mds_xattr_acl_size(entry) posix_acl_xattr_size(entry)
+#  endif /* HAVE_LINUX_POSIX_ACL_XATTR_H */
 # endif /* HAVE_XATTR_ACL */
 
 # define LUSTRE_POSIX_ACL_MAX_ENTRIES   (32)

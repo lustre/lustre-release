@@ -1,6 +1,4 @@
 /*
- *  linux/fs/ldiskfs/hash.c
- *
  * Copyright (C) 2002 by Theodore Ts'o
  *
  * This file is released under the GPL v2.
@@ -9,10 +7,20 @@
  * License.
  */
 
+/*
+ * obdclass/hash.c is copied from ldiskfs/hash.c.
+ * ldiskfs is used by server only.
+ * obdclass is shared by both client and server, it should not depend on ldiskfs.
+ */
+
 #include <linux/fs.h>
 #include <linux/jbd.h>
 #include <linux/sched.h>
-#include <linux/ldiskfs_fs.h>
+#ifdef HAVE_SERVER_SUPPORT
+# include <linux/ldiskfs_fs.h>
+#else
+# include <obd_class.h>
+#endif
 
 #define DELTA 0x9E3779B9
 

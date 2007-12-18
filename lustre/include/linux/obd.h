@@ -17,6 +17,9 @@
 # include <linux/smp_lock.h>
 # include <linux/proc_fs.h>
 # include <linux/mount.h>
+# ifndef HAVE_VFS_INTENT_PATCHES
+#  include <linux/lustre_intent.h>
+# endif
 #endif
 
 typedef spinlock_t client_obd_lock_t;

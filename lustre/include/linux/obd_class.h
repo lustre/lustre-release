@@ -39,6 +39,33 @@
 #include <linux/timer.h>
 #endif
 
+#ifdef __KERNEL__
+# ifndef HAVE_SERVER_SUPPORT
+
+/* hash info structure used by the directory hash */
+#  define LDISKFS_DX_HASH_LEGACY        0
+#  define LDISKFS_DX_HASH_HALF_MD4      1
+#  define LDISKFS_DX_HASH_TEA           2
+#  define LDISKFS_DX_HASH_R5            3
+#  define LDISKFS_DX_HASH_SAME          4
+#  define LDISKFS_DX_HASH_MAX           4
+
+/* hash info structure used by the directory hash */
+struct ldiskfs_dx_hash_info
+{
+        u32     hash;
+        u32     minor_hash;
+        int     hash_version;
+        u32     *seed;
+};
+
+#  define LDISKFS_HTREE_EOF     0x7fffffff
+
+int ldiskfsfs_dirhash(const char *name, int len, struct ldiskfs_dx_hash_info *hinfo);
+
+# endif /* HAVE_SERVER_SUPPORT */
+#endif /* __KERNEL__ */
+
 void obd_zombie_impexp_init(void);
 void obd_zombie_impexp_cull(void);
 extern void (*obd_zombie_impexp_notify)(void);

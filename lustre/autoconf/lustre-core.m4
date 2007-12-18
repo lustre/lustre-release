@@ -1350,6 +1350,7 @@ CFLAGS="$tmp_flags"
 AC_DEFUN([LC_PROG_LINUX],
          [LC_LUSTRE_VERSION_H
          if test x$enable_server = xyes ; then
+             AC_DEFINE(HAVE_SERVER_SUPPORT, 1, [support server])
              LC_CONFIG_BACKINGFS
          fi
          LC_CONFIG_PINGER
