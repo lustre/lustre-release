@@ -399,7 +399,7 @@ lnet_acceptor(void *arg)
 	if (rc != 0)
 		return rc;
 
-	while (lnet_acceptor_state.pta_shutdown == 0) {
+	while (!lnet_acceptor_state.pta_shutdown) {
 		
 		rc = libcfs_sock_accept(&newsock, lnet_acceptor_state.pta_sock);
 		if (rc != 0) {
@@ -498,7 +498,7 @@ lnet_acceptor_start(void)
 
 	mutex_down(&lnet_acceptor_state.pta_signal); /* wait for acceptor to startup */
 
-	if (lnet_acceptor_state.pta_shutdown == 0) {
+	if (!lnet_acceptor_state.pta_shutdown) {
                 /* started OK */
                 LASSERT (lnet_acceptor_state.pta_sock != NULL);
 		return 0;
@@ -574,7 +574,7 @@ lnet_parse_string_tunable(char **value, char *name, char *dflt)
 }
 
 int
-lnet_get_tunables()
+lnet_acceptor_get_tunables()
 {
         int rc;
         rc = lnet_parse_string_tunable(&accept_type, "LNET_ACCEPT", "secure");
@@ -691,9 +691,9 @@ int
 lnet_acceptor(void *arg)
 {
         char           name[16];
-        int secure = (int)((unsigned long)arg);
-        int rc;
-        int newsock;
+        int            secure = (int)((unsigned long)arg);
+        int            rc;
+        int            newsock;
         __u32          peer_ip;
         int            peer_port;
         __u32          magic;
@@ -725,7 +725,7 @@ lnet_acceptor(void *arg)
         if (rc != 0)
                 return rc;
 
-        while (lnet_acceptor_state.pta_shutdown == 0) {
+        while (!lnet_acceptor_state.pta_shutdown) {
 
                 rc = libcfs_sock_accept(&newsock, lnet_acceptor_state.pta_sock,
                                         &peer_ip, &peer_port);
@@ -733,7 +733,7 @@ lnet_acceptor(void *arg)
                         continue;
 
                 /* maybe we're waken up with libcfs_sock_abort_accept() */
-                if ( lnet_acceptor_state.pta_shutdown ) {
+                if (lnet_acceptor_state.pta_shutdown) {
                         close(newsock);
                         break;
                 }
@@ -780,14 +780,14 @@ lnet_acceptor_start(void)
         long   secure;
         int rc;
 
-        /* Do nothing if we're liblustre clients */
-        if (the_lnet.ln_pid & LNET_PID_USERFLAG)
-                return 0;
-        
-        rc = lnet_get_tunables();
-        if ( rc !=0 )
+        rc = lnet_acceptor_get_tunables();
+        if (rc != 0)
                 return rc;
-                
+
+        /* Do nothing if we're liblustre clients */
+        if ((the_lnet.ln_pid & LNET_PID_USERFLAG) != 0)
+                return 0;
+                        
         cfs_init_completion(&lnet_acceptor_state.pta_completion);
 
         if (!strcmp(accept_type, "secure")) {
@@ -795,6 +795,7 @@ lnet_acceptor_start(void)
         } else if (!strcmp(accept_type, "all")) {
                 secure = 0;
         } else if (!strcmp(accept_type, "none")) {
+                skip_waiting_for_completion = 1;
                 return 0;
         } else {
                 LCONSOLE_ERROR ("Can't parse 'accept_type=\"%s\"'\n", accept_type);
@@ -808,7 +809,7 @@ lnet_acceptor_start(void)
         }
 
         rc = cfs_create_thread(lnet_acceptor, (void *)secure);
-        if (rc) {
+        if (rc != 0) {
                 CERROR("Can't start acceptor thread: %d\n", rc);
                 cfs_fini_completion(&lnet_acceptor_state.pta_completion);
                 return rc;
@@ -817,7 +818,7 @@ lnet_acceptor_start(void)
         /* wait for acceptor to startup */
         cfs_wait_for_completion(&lnet_acceptor_state.pta_completion);
 
-        if (lnet_acceptor_state.pta_shutdown == 0)
+        if (!lnet_acceptor_state.pta_shutdown)
                 return 0;
         
         cfs_fini_completion(&lnet_acceptor_state.pta_completion);
@@ -828,10 +829,10 @@ void
 lnet_acceptor_stop(void)
 {
         /* Do nothing if we're liblustre clients */
-        if (the_lnet.ln_pid & LNET_PID_USERFLAG)
+        if ((the_lnet.ln_pid & LNET_PID_USERFLAG) != 0)
                 return;
 
-        if ( !skip_waiting_for_completion ) {
+        if (!skip_waiting_for_completion) {
                 lnet_acceptor_state.pta_shutdown = 1;
                 libcfs_sock_abort_accept(accept_port);
                 
