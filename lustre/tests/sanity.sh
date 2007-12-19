@@ -4405,7 +4405,8 @@ test_118k()
 	mkdir -p $DIR/$tdir
 
         for ((i=0;i<10;i++)); do
-                dd if=/dev/zero of=$DIR/$tdir/$tdir-$i bs=1M count=10 &
+                (dd if=/dev/zero of=$DIR/$tdir/$tfile-$i bs=1M count=10 || \
+			error "dd to $DIR/$tdir/$tfile-$i failed" )&
 	        SLEEPPID=$!
                 sleep 0.500s
 	        kill $SLEEPPID
