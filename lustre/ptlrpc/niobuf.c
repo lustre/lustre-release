@@ -362,7 +362,10 @@ int ptlrpc_send_reply (struct ptlrpc_request *req, int flags)
         lustre_msg_set_service_time(req->rq_repmsg, service_time);
         /* Report service time estimate for future client reqs */
         lustre_msg_set_timeout(req->rq_repmsg, at_get(&svc->srv_at_estimate));
-        
+
+        if (req->rq_export && req->rq_export->exp_obd)
+                target_pack_pool_reply(req);
+
         if (lustre_msg_get_flags(req->rq_reqmsg) & MSG_AT_SUPPORT) {
                 /* early replies go to offset 0, regular replies go after that*/
                 if (flags & PTLRPC_REPLY_EARLY) {
@@ -382,9 +385,6 @@ int ptlrpc_send_reply (struct ptlrpc_request *req, int flags)
                       lustre_msg_get_magic(req->rq_reqmsg),
                       lustre_msg_get_magic(req->rq_repmsg), req->rq_replen);
         }
-
-        if (req->rq_export && req->rq_export->exp_obd)
-                target_pack_pool_reply(req);
 
         if (req->rq_export == NULL || req->rq_export->exp_connection == NULL)
                 conn = ptlrpc_get_connection(req->rq_peer, req->rq_self, NULL);

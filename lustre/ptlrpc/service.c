@@ -811,6 +811,9 @@ static int ptlrpc_at_check_timed(struct ptlrpc_service *svc)
 
         spin_unlock(&svc->srv_at_lock);
 
+        /* we have a new earliest deadline, restart the timer */
+        ptlrpc_at_set_timer(svc);
+
         CDEBUG(D_ADAPTTO, "timeout in %+ds, asking for %d secs on %d early "
                "replies\n", first, at_extra, counter);
         if (first < 0)
@@ -821,7 +824,6 @@ static int ptlrpc_at_check_timed(struct ptlrpc_service *svc)
 
         /* ptlrpc_server_free_request may delete an entry out of the work
            list */
-        counter = 0;
         spin_lock(&svc->srv_at_lock);
         while (!list_empty(&work_list)) {
                 rq = list_entry(work_list.next, struct ptlrpc_request,
@@ -831,19 +833,14 @@ static int ptlrpc_at_check_timed(struct ptlrpc_service *svc)
                    deleted, and is safe to take a ref to keep the req around */
                 atomic_inc(&rq->rq_refcount);
                 spin_unlock(&svc->srv_at_lock);
-                if (ptlrpc_at_send_early_reply(rq, at_extra) == 0) {
-                        counter++;
+
+                if (ptlrpc_at_send_early_reply(rq, at_extra) == 0)
                         ptlrpc_at_add_timed(rq);
-                }
+
                 ptlrpc_server_req_decref(rq);
                 spin_lock(&svc->srv_at_lock);
         }
         spin_unlock(&svc->srv_at_lock);
-
-        if (!counter)
-                /* Nothing added to timed list, so we have to kick the timer
-                   ourselves. */
-                ptlrpc_at_set_timer(svc);
 
         RETURN(0);      
 }
