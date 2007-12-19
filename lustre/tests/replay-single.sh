@@ -1456,11 +1456,7 @@ test_65b() #bug 3055
     rm -f $DIR/$tfile
     lfs setstripe $DIR/$tfile --index=0 --count=1
     # force some real bulk transfer
-    dd if=/dev/urandom of=$TMP/big bs=1M count=4
-    cp $TMP/big $DIR/$tfile
-    echo "append" >> $DIR/$tfile
-    cat $DIR/$tfile >> /dev/null
-    rm $TMP/big
+    multiop $DIR/$tfile oO_CREAT:O_RDWR:O_SYNC:w4096c
 
     do_facet ost1 sysctl -w lustre.fail_loc=0
     # check for log message
