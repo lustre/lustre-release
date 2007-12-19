@@ -145,12 +145,12 @@ Index: linux-2.6.18/fs/ext3/extents.c
  }
  
 +struct fiemap_internal {
-+	struct fiemap	   	*fiemap_s;
++	struct fiemap		*fiemap_s;
 +	struct fiemap_extent    fm_extent;
-+	size_t		  	tot_mapping_len;
-+	char		    	*cur_ext_ptr;
-+	int		     	current_extent;
-+	int		     	err;
++	size_t			tot_mapping_len;
++	char			*cur_ext_ptr;
++	int			current_extent;
++	int			err;
 +};
 +
 +/*
