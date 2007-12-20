@@ -274,7 +274,7 @@ libcfs_num_str2addr(char *str, int nob, __u32 *addr)
         n = nob;
         if (sscanf(str, "%u%n", addr, &n) >= 1 && n == nob)
                 return 1;
-        
+
         return 0;
 }
 
