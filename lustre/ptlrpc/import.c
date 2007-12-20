@@ -600,6 +600,7 @@ static int ptlrpc_connect_interpret(struct ptlrpc_request *request,
                                 *lustre_msg_get_handle(request->rq_repmsg);
 
                 IMPORT_SET_STATE(imp, LUSTRE_IMP_FULL);
+                ptlrpc_activate_import(imp);
                 GOTO(finish, rc = 0);
         } else {
                 spin_unlock(&imp->imp_lock);
