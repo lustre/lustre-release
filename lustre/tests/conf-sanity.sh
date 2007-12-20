@@ -1468,5 +1468,62 @@ test_37() {
 }
 run_test 37 "verify set tunables works for symlink device"
 
+test_38() { # bug 14222
+	setup
+	# like runtests
+	COUNT=10
+	SRC="/etc /bin"
+	FILES=`find $SRC -type f -mtime +1 | head -n $COUNT`
+	log "copying $(echo $FILES | wc -w) files to $DIR/$tdir"
+	mkdir -p $DIR/$tdir
+	tar cf - $FILES | tar xf - -C $DIR/$tdir || \
+		error "copying $SRC to $DIR/$tdir"
+	sync
+	umount_client $MOUNT
+	stop_mds
+	log "rename lov_objid file on MDS"
+	rm -f $TMP/lov_objid.orig
+	do_facet mds "debugfs -c -R \\\"dump lov_objid $TMP/lov_objid.orig\\\" $MDSDEV"
+	do_facet mds "debugfs -w -R \\\"rm lov_objid\\\" $MDSDEV"
+
+	do_facet mds "od -Ax -td8 $TMP/lov_objid.orig"
+	# check create in mds_lov_connect
+	start_mds
+	mount_client $MOUNT
+	for f in $FILES; do
+		[ $V ] && log "verifying $DIR/$tdir/$f"
+		diff -q $f $DIR/$tdir/$f || ERROR=y
+	done
+	do_facet mds "debugfs -c -R \\\"dump lov_objid $TMP/lov_objid.new\\\"  $MDSDEV"
+	do_facet mds "od -Ax -td8 $TMP/lov_objid.new"
+	[ "$ERROR" = "y" ] && error "old and new files are different after connect" || true
+	
+	
+	# check it's updates in sync
+	umount_client $MOUNT
+	stop_mds
+	
+	do_facet mds dd if=/dev/zero of=$TMP/lov_objid.clear bs=4096 count=1
+	do_facet mds "debugfs -w -R \\\"rm lov_objid\\\" $MDSDEV"
+	do_facet mds "debugfs -w -R \\\"write $TMP/lov_objid.clear lov_objid\\\" $MDSDEV "
+
+	start_mds
+	mount_client $MOUNT
+	for f in $FILES; do
+		[ $V ] && log "verifying $DIR/$tdir/$f"
+		diff -q $f $DIR/$tdir/$f || ERROR=y
+	done
+        do_facet mds "debugfs -c -R \\\"dump lov_objid $TMP/lov_objid.new1\\\" $MDSDEV"
+	do_facet mds "od -Ax -td8 $TMP/lov_objid.new1"
+	umount_client $MOUNT
+	stop_mds
+	[ "$ERROR" = "y" ] && error "old and new files are different after sync" || true
+	
+	log "files compared the same"
+	#cleanup
+}
+
+run_test 38 "MDS recreates missing lov_objid file from OST data"
+
 equals_msg `basename $0`: test complete
 [ -f "$TESTSUITELOG" ] && cat $TESTSUITELOG || true

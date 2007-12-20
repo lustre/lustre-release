@@ -587,18 +587,10 @@ int mds_fs_setup(struct obd_device *obd, struct vfsmount *mnt)
                 GOTO(err_last_rcvd, rc);
         }
 
-        /* open and test the lov objd file */
-        file = filp_open(LOV_OBJID, O_RDWR | O_CREAT, 0644);
-        if (IS_ERR(file)) {
-                rc = PTR_ERR(file);
-                CERROR("cannot open/create %s file: rc = %d\n", LOV_OBJID, rc);
-                GOTO(err_client, rc = PTR_ERR(file));
-        }
-        mds->mds_lov_objid_filp = file;
-        if (!S_ISREG(file->f_dentry->d_inode->i_mode)) {
-                CERROR("%s is not a regular file!: mode = %o\n", LOV_OBJID,
-                       file->f_dentry->d_inode->i_mode);
-                GOTO(err_lov_objid, rc = -ENOENT);
+        rc = mds_lov_init_objids(obd);
+        if (rc != 0) {
+               CERROR("cannot init lov objid rc = %d\n", rc);
+               GOTO(err_client, rc );
         }
 
         /* open and test the check io file junk */
@@ -627,8 +619,7 @@ err_health_check:
             filp_close(mds->mds_health_check_filp, 0))
                 CERROR("can't close %s after error\n", HEALTH_CHECK);
 err_lov_objid:
-        if (mds->mds_lov_objid_filp && filp_close(mds->mds_lov_objid_filp, 0))
-                CERROR("can't close %s after error\n", LOV_OBJID);
+         mds_lov_destroy_objids(obd);
 err_client:
         class_disconnect_exports(obd);
 err_last_rcvd:
@@ -665,12 +656,9 @@ int mds_fs_cleanup(struct obd_device *obd)
                 if (rc)
                         CERROR("%s file won't close, rc=%d\n", LAST_RCVD, rc);
         }
-        if (mds->mds_lov_objid_filp) {
-                rc = filp_close(mds->mds_lov_objid_filp, 0);
-                mds->mds_lov_objid_filp = NULL;
-                if (rc)
-                        CERROR("%s file won't close, rc=%d\n", LOV_OBJID, rc);
-        }
+
+        mds_lov_destroy_objids(obd);
+
         if (mds->mds_health_check_filp) {
                 rc = filp_close(mds->mds_health_check_filp, 0);
                 mds->mds_health_check_filp = NULL;

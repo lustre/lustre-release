@@ -505,7 +505,7 @@ static int mds_destroy_export(struct obd_export *export)
 
 static int mds_disconnect(struct obd_export *exp)
 {
-        int rc;
+        int rc = 0;
         ENTRY;
 
         LASSERT(exp);
@@ -2172,16 +2172,6 @@ int mds_postrecov(struct obd_device *obd)
         LASSERT(ctxt != NULL);
         llog_ctxt_put(ctxt);
 
-        /* set nextid first, so we are sure it happens */
-        mutex_down(&obd->obd_dev_sem);
-        rc = mds_lov_set_nextid(obd);
-        mutex_up(&obd->obd_dev_sem);
-        if (rc) {
-                CERROR("%s: mds_lov_set_nextid failed %d\n",
-                       obd->obd_name, rc);
-                GOTO(out, rc);
-        }
-
         /* clean PENDING dir */
         rc = mds_cleanup_pending(obd);
         if (rc < 0)
@@ -2263,8 +2253,6 @@ static int mds_cleanup(struct obd_device *obd)
         lquota_cleanup(mds_quota_interface_ref, obd);
 
         mds_update_server_data(obd, 1);
-        if (mds->mds_lov_objids != NULL) 
-                OBD_FREE(mds->mds_lov_objids, mds->mds_lov_objids_size);
         mds_fs_cleanup(obd);
 
         upcall_cache_cleanup(mds->mds_group_hash);

@@ -307,7 +307,7 @@ static int mds_create_objects(struct ptlrpc_request *req, int offset,
                               struct mds_update_record *rec,
                               struct mds_obd *mds, struct obd_device *obd,
                               struct dentry *dchild, void **handle,
-                              obd_id **ids)
+                              struct lov_mds_md **objid)
 {
         struct inode *inode = dchild->d_inode;
         struct obd_trans_info oti = { 0 };
@@ -317,6 +317,8 @@ static int mds_create_objects(struct ptlrpc_request *req, int offset,
         struct obd_info oinfo = { { { 0 } } };
         void *lmm_buf;
         ENTRY;
+
+        *objid = NULL;
 
         if (!S_ISREG(inode->i_mode))
                 RETURN(0);
@@ -329,11 +331,7 @@ static int mds_create_objects(struct ptlrpc_request *req, int offset,
         if (body->valid & OBD_MD_FLEASIZE)
                 RETURN(0);
 
-        OBD_ALLOC(*ids, mds->mds_lov_desc.ld_tgt_count * sizeof(**ids));
-        if (*ids == NULL)
-                RETURN(-ENOMEM);
         oti_init(&oti, req);
-        oti.oti_objid = *ids;
 
         /* replay case */
         if (lustre_msg_get_flags(req->rq_reqmsg) & MSG_REPLAY) {
@@ -355,8 +353,6 @@ static int mds_create_objects(struct ptlrpc_request *req, int offset,
                         GOTO(out_ids, rc);
                 }
 
-                mds_objids_from_lmm(*ids, lmm, &mds->mds_lov_desc);
-
                 rc = fsfilt_set_md(obd, inode, *handle, lmm, lmm_size, "lov");
                 if (rc)
                         CERROR("open replay failed to set md:%d\n", rc);
@@ -364,6 +360,7 @@ static int mds_create_objects(struct ptlrpc_request *req, int offset,
                 LASSERT(lmm_buf);
                 memcpy(lmm_buf, lmm, lmm_size);
 
+                *objid = lmm_buf;
                 RETURN(rc);
         }
 
@@ -481,16 +478,14 @@ static int mds_create_objects(struct ptlrpc_request *req, int offset,
         lmm_buf = lustre_msg_buf(req->rq_repmsg, offset, lmm_size);
         LASSERT(lmm_buf);
         memcpy(lmm_buf, lmm, lmm_size);
+        *objid = lmm_buf; /* save for mds_lov_update_objid */
+
  free_diskmd:
         obd_free_diskmd(mds->mds_osc_exp, &lmm);
  out_oa:
         oti_free_cookies(&oti);
         OBDO_FREE(oinfo.oi_oa);
  out_ids:
-        if (rc) {
-                OBD_FREE(*ids, mds->mds_lov_desc.ld_tgt_count * sizeof(**ids));
-                *ids = NULL;
-        }
         if (oinfo.oi_md)
                 obd_free_memmd(mds->mds_osc_exp, &oinfo.oi_md);
         RETURN(rc);
@@ -673,7 +668,7 @@ static int mds_finish_open(struct ptlrpc_request *req, struct dentry *dchild,
         struct mds_obd *mds = mds_req2mds(req);
         struct obd_device *obd = req->rq_export->exp_obd;
         struct mds_file_data *mfd = NULL;
-        obd_id *ids = NULL; /* object IDs created */
+        struct lov_mds_md *lmm = NULL; /* object IDs created */
         int rc = 0;
         ENTRY;
 
@@ -706,7 +701,7 @@ static int mds_finish_open(struct ptlrpc_request *req, struct dentry *dchild,
                     !(body->valid & OBD_MD_FLMODEASIZE)) {
                         /* no EA: create objects */
                         rc = mds_create_objects(req, DLM_REPLY_REC_OFF + 1, rec,
-                                                mds, obd, dchild, handle, &ids);
+                                                mds, obd, dchild, handle, &lmm);
                         if (rc) {
                                 CERROR("mds_create_objects: rc = %d\n", rc);
                                 UNLOCK_INODE_MUTEX(dchild->d_inode);
@@ -746,10 +741,8 @@ static int mds_finish_open(struct ptlrpc_request *req, struct dentry *dchild,
         CDEBUG(D_INODE, "mfd %p, cookie "LPX64"\n", mfd,
                mfd->mfd_handle.h_cookie);
 
-        if (ids != NULL) {
-                mds_lov_update_objids(obd, ids);
-                OBD_FREE(ids, sizeof(*ids) * mds->mds_lov_desc.ld_tgt_count);
-        }
+        mds_lov_update_objids(obd, lmm);
+
         if (rc) /* coverity[deadcode] */
                 mds_mfd_unlink(mfd, 1);
 

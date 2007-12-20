@@ -1569,7 +1569,6 @@ static int ll_lov_recreate_obj(struct inode *inode, struct file *file,
         obdo_from_inode(oa, inode, OBD_MD_FLTYPE | OBD_MD_FLATIME |
                         OBD_MD_FLMTIME | OBD_MD_FLCTIME);
 
-        oti.oti_objid = NULL;
         memcpy(lsm2, lsm, lsm_size);
         rc = obd_create(exp, oa, &lsm2, &oti);
 

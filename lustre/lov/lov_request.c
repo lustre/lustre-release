@@ -687,9 +687,6 @@ int lov_update_create_set(struct lov_request_set *set,
         if (rc)
                 RETURN(rc);
 
-        if (oti && oti->oti_objid)
-                oti->oti_objid[req->rq_idx] = req->rq_oi.oi_oa->o_id;
-
         loi->loi_id = req->rq_oi.oi_oa->o_id;
         loi->loi_ost_idx = req->rq_idx;
         CDEBUG(D_INODE, "objid "LPX64" has subobj "LPX64"/"LPU64" at idx %d\n",

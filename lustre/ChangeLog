@@ -14,6 +14,13 @@ tbd         Cluster File Systems, Inc. <info@clusterfs.com>
        * Recommended e2fsprogs version: 1.40.2-cfs5
        * Note that reiserfs quotas are disabled on SLES 10 in this kernel.
 
+Severity   : normal
+Bugzilla   : 12702
+Frequency  : rare, in recovery and (or) destroy lovobjid file.
+Description: rewrite lov objid code.
+Details    : Cleanup for lov objid code, remove scability problems and wrong
+             locking. Fix sending last_id into ost.
+
 Severity   : enhancement
 Bugzilla   : 14388
 Description: Update to SLES10 SP1 latest kernel-2.6.16.54-0.2.3.

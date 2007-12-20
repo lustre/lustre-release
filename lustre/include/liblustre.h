@@ -64,6 +64,7 @@
 #include <fcntl.h>
 
 #include <libcfs/list.h>
+#include <libcfs/user-bitops.h>
 #include <lnet/lnet.h>
 #include <libcfs/kp30.h>
 

@@ -2496,23 +2496,32 @@ static int lov_get_info(struct obd_export *exp, __u32 keylen,
                 LDLM_ERROR(data->lock, "lock on inode without such object");
                 dump_lsm(D_ERROR, data->lsm);
                 GOTO(out, rc = -ENXIO);
-        } else if (KEY_IS("last_id")) {
-                obd_id *ids = val;
-                unsigned int size = sizeof(obd_id);
-                for (i = 0; i < lov->desc.ld_tgt_count; i++) {
-                        if (!lov->lov_tgts[i] || !lov->lov_tgts[i]->ltd_active)
-                                continue;
-                        rc = obd_get_info(lov->lov_tgts[i]->ltd_exp,
-                                          keylen, key, &size, ids + i);
-                        if (rc != 0)
-                                GOTO(out, rc);
-                }
+        } else if (KEY_IS(KEY_LAST_ID)) {
+                struct obd_id_info *info = val;
+                int size = sizeof(obd_id);
+                struct lov_tgt_desc *tgt;
+
+                LASSERT(*vallen == sizeof(struct obd_id_info));
+                tgt = lov->lov_tgts[info->idx];
+
+                if (!tgt || !tgt->ltd_active)
+                        GOTO(out, rc = -ESRCH);
+
+                rc = obd_get_info(tgt->ltd_exp, keylen, key, &size, info->data);
                 GOTO(out, rc = 0);
         } else if (KEY_IS(KEY_LOVDESC)) {
                 struct lov_desc *desc_ret = val;
                 *desc_ret = lov->desc;
 
                 GOTO(out, rc = 0);
+        } else if (KEY_IS(KEY_LOV_IDX)) {
+                struct lov_tgt_desc *tgt;
+
+                for(i = 0; i < lov->desc.ld_tgt_count; i++) {
+                        tgt = lov->lov_tgts[i];
+                        if (obd_uuid_equals(val, &tgt->ltd_uuid))
+                                GOTO(out, rc = i);
+                }
         }
 
         rc = -EINVAL;
@@ -2530,6 +2539,9 @@ static int lov_set_info_async(struct obd_export *exp, obd_count keylen,
         obd_count count;
         int i, rc = 0, err, incr = 0, check_uuid = 0, do_inactive = 0;
         int no_set = !set;
+        unsigned next_id = 0;
+        struct lov_tgt_desc *tgt;
+        void *data;
         ENTRY;
 
         if (no_set) {
@@ -2542,13 +2554,11 @@ static int lov_set_info_async(struct obd_export *exp, obd_count keylen,
         count = lov->desc.ld_tgt_count;
 
         if (KEY_IS(KEY_NEXT_ID)) {
-                /* We must use mds's idea of # osts for indexing into
-                   mds->mds_lov_objids */
-                count = vallen / sizeof(obd_id);
-                LASSERT(count <= lov->desc.ld_tgt_count);
+                count = vallen / sizeof(struct obd_id_info);
                 vallen = sizeof(obd_id);
-                incr = sizeof(obd_id);
+                incr = sizeof(struct obd_id_info);
                 do_inactive = 1;
+                next_id = 1;
         } else if (KEY_IS("checksum")) {
                 do_inactive = 1;
         } else if (KEY_IS(KEY_MDS_CONN) || KEY_IS("unlinked")) {
@@ -2560,21 +2570,28 @@ static int lov_set_info_async(struct obd_export *exp, obd_count keylen,
         }
 
         for (i = 0; i < count; i++, val = (char *)val + incr) {
+                if (next_id) {
+                        tgt = lov->lov_tgts[((struct obd_id_info*)val)->idx];
+                        data = ((struct obd_id_info*)val)->data;
+                } else {
+                        tgt = lov->lov_tgts[i];
+                        data = val;
+                }
                 /* OST was disconnected */
-                if (!lov->lov_tgts[i] || !lov->lov_tgts[i]->ltd_exp)
+                if (!tgt || !tgt->ltd_exp)
                         continue;
 
                 /* OST is inactive and we don't want inactive OSCs */
-                if (!lov->lov_tgts[i]->ltd_active && !do_inactive)
+                if (!tgt->ltd_active && !do_inactive)
                         continue;
 
                 /* Only want a specific OSC */
                 if (check_uuid &&
-                    !obd_uuid_equals(val, &lov->lov_tgts[i]->ltd_uuid))
+                    !obd_uuid_equals(val, &tgt->ltd_uuid))
                         continue;
 
-                err = obd_set_info_async(lov->lov_tgts[i]->ltd_exp,
-                                         keylen, key, vallen, val, set);
+                err = obd_set_info_async(tgt->ltd_exp,
+                                         keylen, key, vallen, data, set);
                 if (!rc)
                         rc = err;
         }

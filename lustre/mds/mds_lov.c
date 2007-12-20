@@ -41,32 +41,151 @@
 
 #include "mds_internal.h"
 
-void mds_lov_update_objids(struct obd_device *obd, obd_id *ids)
+static void mds_lov_dump_objids(const char *label, struct obd_device *obd)
 {
         struct mds_obd *mds = &obd->u.mds;
-        int i;
-        ENTRY;
+        unsigned int i=0, j;
 
-        lock_kernel();
-        for (i = 0; i < mds->mds_lov_desc.ld_tgt_count; i++)
-                if (ids[i] > (mds->mds_lov_objids)[i]) {
-                        (mds->mds_lov_objids)[i] = ids[i];
-                        mds->mds_lov_objids_dirty = 1;
+        CDEBUG(D_INFO, "dump from %s\n", label);
+        if (mds->mds_lov_page_dirty == NULL) {
+                CERROR("NULL bitmap!\n");
+                GOTO(skip_bitmap, i);
+        }
+
+        for(i=0; i < ((mds->mds_lov_page_dirty->size/BITS_PER_LONG)+1) ;i++)
+                CDEBUG(D_INFO, "%u - %lx\n", i, mds->mds_lov_page_dirty->data[i]);
+skip_bitmap:
+        if (mds->mds_lov_page_array == NULL) {
+                CERROR("not init page array!\n");
+                GOTO(skip_array, i);
+
+        }
+        for(i=0; i < MDS_LOV_OBJID_PAGES_COUNT ;i++) {
+                obd_id *data = mds->mds_lov_page_array[i];
+
+                if (data == NULL)
+                        continue;
+
+                for(j=0; j < OBJID_PER_PAGE(); j++) {
+                        if (data[j] == 0)
+                                continue;
+                        CDEBUG(D_INFO,"objid page %u idx %u - "LPU64" \n",
+                               i,j,data[j]);
                 }
-        unlock_kernel();
+        }
+skip_array:
         EXIT;
 }
+
+int mds_lov_init_objids(struct obd_device *obd)
+{
+        struct mds_obd *mds = &obd->u.mds;
+        int size = MDS_LOV_OBJID_PAGES_COUNT*sizeof(void *);
+        struct file *file;
+        int rc;
+        ENTRY;
+
+        CLASSERT(((MDS_LOV_ALLOC_SIZE % sizeof(obd_id)) == 0));
+
+        mds->mds_lov_page_dirty = ALLOCATE_BITMAP(MDS_LOV_OBJID_PAGES_COUNT);
+        if (mds->mds_lov_page_dirty == NULL)
+                RETURN(-ENOMEM);
+
+
+        OBD_ALLOC(mds->mds_lov_page_array, size);
+        if (mds->mds_lov_page_array == NULL)
+                GOTO(err_free_bitmap, rc = -ENOMEM);
+
+        /* open and test the lov objd file */
+        file = filp_open(LOV_OBJID, O_RDWR | O_CREAT, 0644);
+        if (IS_ERR(file)) {
+                rc = PTR_ERR(file);
+                CERROR("cannot open/create %s file: rc = %d\n", LOV_OBJID, rc);
+                GOTO(err_free, rc = PTR_ERR(file));
+        }
+        if (!S_ISREG(file->f_dentry->d_inode->i_mode)) {
+                CERROR("%s is not a regular file!: mode = %o\n", LOV_OBJID,
+                       file->f_dentry->d_inode->i_mode);
+                GOTO(err_open, rc = -ENOENT);
+        }
+        mds->mds_lov_objid_filp = file;
+
+        RETURN (0);
+err_open:
+        if (filp_close((struct file *)file, 0))
+                CERROR("can't close %s after error\n", LOV_OBJID);
+err_free:
+        OBD_FREE(mds->mds_lov_page_array, size);
+err_free_bitmap:
+        FREE_BITMAP(mds->mds_lov_page_dirty);
+
+        RETURN(rc);
+}
+EXPORT_SYMBOL(mds_lov_init_objids);
+
+void mds_lov_destroy_objids(struct obd_device *obd)
+{
+        struct mds_obd *mds = &obd->u.mds;
+        int i, rc;
+        ENTRY;
+
+        if (mds->mds_lov_page_array != NULL) {
+                for(i=0;i<MDS_LOV_OBJID_PAGES_COUNT;i++) {
+                        obd_id *data = mds->mds_lov_page_array[i];
+                        if (data != NULL)
+                                OBD_FREE(data, MDS_LOV_ALLOC_SIZE);
+                }
+                OBD_FREE(mds->mds_lov_page_array,
+                         MDS_LOV_OBJID_PAGES_COUNT*sizeof(void *));
+        }
+
+        if (mds->mds_lov_objid_filp) {
+                rc = filp_close((struct file *)mds->mds_lov_objid_filp, 0);
+                mds->mds_lov_objid_filp = NULL;
+                if (rc)
+                        CERROR("%s file won't close, rc=%d\n", LOV_OBJID, rc);
+        }
+
+        FREE_BITMAP(mds->mds_lov_page_dirty);
+        EXIT;
+}
+EXPORT_SYMBOL(mds_lov_destroy_objids);
+
+void mds_lov_update_objids(struct obd_device *obd, struct lov_mds_md *lmm)
+{
+        struct mds_obd *mds = &obd->u.mds;
+        int j;
+        ENTRY;
+
+        /* if we create file without objects - lmm is NULL */
+        if (lmm == NULL)
+                return;
+
+        for (j = 0; j < le32_to_cpu(lmm->lmm_stripe_count); j++) {
+                int i = le32_to_cpu(lmm->lmm_objects[j].l_ost_idx);
+                obd_id id = le64_to_cpu(lmm->lmm_objects[j].l_object_id);
+                int page = i / OBJID_PER_PAGE();
+                int idx = i % OBJID_PER_PAGE();
+                obd_id *data = mds->mds_lov_page_array[page];
+
+                CDEBUG(D_INODE,"update last object for ost %d"
+                       " - new "LPU64" old "LPU64"\n", i, id, data[idx]);
+                if (id > data[idx]) {
+                        data[idx] = id;
+                        bitmap_set(mds->mds_lov_page_dirty, page);
+                }
+        }
+        EXIT;
+}
+EXPORT_SYMBOL(mds_lov_update_objids);
 
 static int mds_lov_read_objids(struct obd_device *obd)
 {
         struct mds_obd *mds = &obd->u.mds;
-        obd_id *ids;
         loff_t off = 0;
-        int i, rc, size;
+        int i, rc = 0, count = 0, page = 0;
+        size_t size;
         ENTRY;
-
-        LASSERT(!mds->mds_lov_objids_size);
-        LASSERT(!mds->mds_lov_objids_dirty);
 
         /* Read everything in the file, even if our current lov desc
            has fewer targets. Old targets not in the lov descriptor
@@ -75,54 +194,122 @@ static int mds_lov_read_objids(struct obd_device *obd)
         if (size == 0)
                 RETURN(0);
 
-        OBD_ALLOC(ids, size);
-        if (ids == NULL)
-                RETURN(-ENOMEM);
-        mds->mds_lov_objids = ids;
-        mds->mds_lov_objids_size = size;
+        page = (size/(OBJID_PER_PAGE()*sizeof(obd_id)))+1;
+        CDEBUG(D_INFO, "file size %d pages %d\n", size, page);
+        for(i=0; i < page; i++) {
+                obd_id *data =  mds->mds_lov_page_array[i];
+                loff_t off_old = off;
 
-        rc = fsfilt_read_record(obd, mds->mds_lov_objid_filp, ids, size, &off);
-        if (rc < 0) {
-                CERROR("Error reading objids %d\n", rc);
-                RETURN(rc);
+                LASSERT(data == NULL);
+                OBD_ALLOC(data, MDS_LOV_ALLOC_SIZE);
+                if (data == NULL)
+                        GOTO(out, rc = -ENOMEM);
+
+                mds->mds_lov_page_array[i] = data;
+
+                rc = fsfilt_read_record(obd, mds->mds_lov_objid_filp, data,
+                                        OBJID_PER_PAGE()*sizeof(obd_id), &off);
+                if (rc < 0) {
+                        CERROR("Error reading objids %d\n", rc);
+                        GOTO(out, rc);
+                }
+                if (off == off_old)
+                        break; /* eof */
+
+                count += (off-off_old)/sizeof(obd_id);
         }
-
-        mds->mds_lov_objids_in_file = size / sizeof(*ids);
-
-        for (i = 0; i < mds->mds_lov_objids_in_file; i++) {
-                CDEBUG(D_INFO, "read last object "LPU64" for idx %d\n",
-                       mds->mds_lov_objids[i], i);
+        mds->mds_lov_objid_count = count;
+        if (count) {
+                count --;
+                mds->mds_lov_objid_lastpage = count / OBJID_PER_PAGE();
+                mds->mds_lov_objid_lastidx = count % OBJID_PER_PAGE();
         }
-        RETURN(0);
+        CDEBUG(D_INFO, "Read %u - %u %u objid\n", count,
+               mds->mds_lov_objid_lastpage, mds->mds_lov_objid_lastidx);
+out:
+        mds_lov_dump_objids("read",obd);
+
+        RETURN(rc);
 }
 
 int mds_lov_write_objids(struct obd_device *obd)
 {
         struct mds_obd *mds = &obd->u.mds;
-        loff_t off = 0;
-        int i, rc, tgts;
+        int i, rc = 0;
         ENTRY;
 
-        if (!mds->mds_lov_objids_dirty)
+        if (bitmap_check_empty(mds->mds_lov_page_dirty))
                 RETURN(0);
 
-        tgts = max(mds->mds_lov_desc.ld_tgt_count, mds->mds_lov_objids_in_file);
+        mds_lov_dump_objids("write", obd);
 
-        if (!tgts)
-                RETURN(0);
+        foreach_bit(mds->mds_lov_page_dirty, i) {
+                obd_id *data =  mds->mds_lov_page_array[i];
+                unsigned int size = OBJID_PER_PAGE()*sizeof(obd_id);
+                loff_t off = i * size;
 
-        for (i = 0; i < tgts; i++)
-                CDEBUG(D_INFO, "writing last object "LPU64" for idx %d\n",
-                       mds->mds_lov_objids[i], i);
+                LASSERT(data != NULL);
 
-        rc = fsfilt_write_record(obd, mds->mds_lov_objid_filp,
-                                 mds->mds_lov_objids, tgts * sizeof(obd_id),
-                                 &off, 0);
-        if (rc >= 0) {
-                mds->mds_lov_objids_dirty = 0;
+                /* check for particaly filled last page */
+                if (i == mds->mds_lov_objid_lastpage)
+                        size = (mds->mds_lov_objid_lastidx + 1) * sizeof(obd_id);
+
+                rc = fsfilt_write_record(obd, mds->mds_lov_objid_filp, data,
+                                         size, &off, 0);
+                if (rc < 0)
+                        break;
+                bitmap_clear(mds->mds_lov_page_dirty, i);
+        }
+        if (rc >= 0)
                 rc = 0;
+
+        RETURN(rc);
+}
+EXPORT_SYMBOL(mds_lov_write_objids);
+
+static int mds_lov_get_objid(struct obd_device * obd,
+                             __u32 idx)
+{
+        struct mds_obd *mds = &obd->u.mds;
+        unsigned int page;
+        unsigned int off;
+        obd_id *data;
+        int rc = 0;
+        ENTRY;
+
+        page = idx / OBJID_PER_PAGE();
+        off = idx % OBJID_PER_PAGE();
+        data = mds->mds_lov_page_array[page];
+        if (data == NULL) {
+                OBD_ALLOC(data, MDS_LOV_ALLOC_SIZE);
+                if (data == NULL)
+                        GOTO(out, rc = -ENOMEM);
+
+                mds->mds_lov_page_array[page] = data;
         }
 
+        if (data[off] == 0) {
+                /* We never read this lastid; ask the osc */
+                struct obd_id_info lastid;
+                __u32 size = sizeof(lastid);
+
+                lastid.idx = idx;
+                lastid.data = &data[off];
+                rc = obd_get_info(mds->mds_osc_exp, sizeof(KEY_LAST_ID),
+                                  KEY_LAST_ID, &size, &lastid);
+                if (rc)
+                        GOTO(out, rc);
+
+                if (idx > mds->mds_lov_objid_count) {
+                        mds->mds_lov_objid_count = idx;
+                        mds->mds_lov_objid_lastpage = page;
+                        mds->mds_lov_objid_lastidx = off;
+                }
+                bitmap_set(mds->mds_lov_page_dirty, page);
+        }
+        CDEBUG(D_INFO, "idx %d - %p - %d/%d - "LPU64"\n",
+               idx, data, page, off, data[off]);
+out:
         RETURN(rc);
 }
 
@@ -134,14 +321,14 @@ int mds_lov_clear_orphans(struct mds_obd *mds, struct obd_uuid *ost_uuid)
         struct lov_stripe_md  *empty_ea = NULL;
         ENTRY;
 
-        LASSERT(mds->mds_lov_objids != NULL);
+        LASSERT(mds->mds_lov_page_array != NULL);
 
         /* This create will in fact either create or destroy:  If the OST is
          * missing objects below this ID, they will be created.  If it finds
          * objects above this ID, they will be removed. */
         memset(&oa, 0, sizeof(oa));
-        oa.o_valid = OBD_MD_FLFLAGS;
         oa.o_flags = OBD_FL_DELORPHAN;
+        oa.o_valid = OBD_MD_FLFLAGS | OBD_MD_FLGROUP;
         if (ost_uuid != NULL) {
                 memcpy(&oa.o_inline, ost_uuid, sizeof(*ost_uuid));
                 oa.o_valid |= OBD_MD_FLINLINE;
@@ -151,28 +338,40 @@ int mds_lov_clear_orphans(struct mds_obd *mds, struct obd_uuid *ost_uuid)
         RETURN(rc);
 }
 
-/* update the LOV-OSC knowledge of the last used object id's */
-int mds_lov_set_nextid(struct obd_device *obd)
+/* for one target */
+static int mds_lov_set_one_nextid(struct obd_device * obd, __u32 idx, obd_id *id)
 {
         struct mds_obd *mds = &obd->u.mds;
         int rc;
+        struct obd_id_info info;
         ENTRY;
 
         LASSERT(!obd->obd_recovering);
-        LASSERT(mds->mds_lov_objids != NULL);
-     
+
         /* obd->obd_dev_sem must be held so mds_lov_objids doesn't change */
         LASSERT_SEM_LOCKED(&obd->obd_dev_sem);
 
-        rc = obd_set_info_async(mds->mds_osc_exp, strlen(KEY_NEXT_ID),
-                                KEY_NEXT_ID,
-                                mds->mds_lov_desc.ld_tgt_count *
-                                sizeof(*mds->mds_lov_objids),
-                                mds->mds_lov_objids, NULL);
+        info.idx = idx;
+        info.data = id;
 
+        rc = obd_set_info_async(mds->mds_osc_exp, sizeof(KEY_NEXT_ID),
+                                KEY_NEXT_ID, sizeof(info), &info, NULL);
         if (rc)
                 CERROR ("%s: mds_lov_set_nextid failed (%d)\n",
                         obd->obd_name, rc);
+
+        RETURN(rc);
+}
+
+static __u32 mds_lov_get_idx(struct obd_export *lov,
+                             struct obd_uuid *ost_uuid)
+{
+        int rc;
+        int valsize = sizeof(ost_uuid);
+
+        rc = obd_get_info(lov, sizeof(KEY_LOV_IDX), KEY_LOV_IDX,
+                          &valsize, ost_uuid);
+        LASSERT(rc >= 0);
 
         RETURN(rc);
 }
@@ -182,7 +381,7 @@ static int mds_lov_update_desc(struct obd_device *obd, struct obd_export *lov)
 {
         struct mds_obd *mds = &obd->u.mds;
         struct lov_desc *ld;
-        __u32 size, stripes, valsize = sizeof(mds->mds_lov_desc);
+        __u32 stripes, valsize = sizeof(mds->mds_lov_desc);
         int rc = 0;
         ENTRY;
 
@@ -190,37 +389,10 @@ static int mds_lov_update_desc(struct obd_device *obd, struct obd_export *lov)
         if (!ld)
                 RETURN(-ENOMEM);
 
-        rc = obd_get_info(lov, strlen(KEY_LOVDESC) + 1, KEY_LOVDESC,
+        rc = obd_get_info(lov, sizeof(KEY_LOVDESC), KEY_LOVDESC,
                           &valsize, ld);
         if (rc)
                 GOTO(out, rc);
-
-        /* The size of the LOV target table may have increased. */
-        size = ld->ld_tgt_count * sizeof(obd_id);
-        if ((mds->mds_lov_objids_size == 0) ||
-            (size > mds->mds_lov_objids_size)) {
-                obd_id *ids;
-
-                /* add room by powers of 2 */
-                size = 1;
-                while (size < ld->ld_tgt_count)
-                        size = size << 1;
-                size = size * sizeof(obd_id);
-
-                OBD_ALLOC(ids, size);
-                if (ids == NULL)
-                        GOTO(out, rc = -ENOMEM);
-                memset(ids, 0, size);
-                if (mds->mds_lov_objids_size) {
-                        obd_id *old_ids = mds->mds_lov_objids;
-                        memcpy(ids, mds->mds_lov_objids,
-                               mds->mds_lov_objids_size);
-                        mds->mds_lov_objids = ids;
-                        OBD_FREE(old_ids, mds->mds_lov_objids_size);
-                }
-                mds->mds_lov_objids = ids;
-                mds->mds_lov_objids_size = size;
-        }
 
         /* Don't change the mds_lov_desc until the objids size matches the
            count (paranoia) */
@@ -229,8 +401,8 @@ static int mds_lov_update_desc(struct obd_device *obd, struct obd_export *lov)
                mds->mds_lov_desc.ld_tgt_count);
 
         stripes = min_t(__u32, LOV_MAX_STRIPE_COUNT,
-                        max(mds->mds_lov_desc.ld_tgt_count,
-                            mds->mds_lov_objids_in_file));
+                        mds->mds_lov_desc.ld_tgt_count);
+
         mds->mds_max_mdsize = lov_mds_md_size(stripes);
         mds->mds_max_cookiesize = stripes * sizeof(struct llog_cookie);
         CDEBUG(D_CONFIG, "updated max_mdsize/max_cookiesize for %d stripes: "
@@ -240,7 +412,7 @@ static int mds_lov_update_desc(struct obd_device *obd, struct obd_export *lov)
         /* If we added a target we have to reconnect the llogs */
         /* We only _need_ to do this at first add (idx), or the first time
            after recovery.  However, it should now be safe to call anytime. */
-        llog_cat_initialize(obd, mds->mds_lov_desc.ld_tgt_count, NULL);
+        rc = llog_cat_initialize(obd, mds->mds_lov_desc.ld_tgt_count, NULL);
 
 out:
         OBD_FREE(ld, sizeof(*ld));
@@ -248,16 +420,18 @@ out:
 }
 
 
-#define MDSLOV_NO_INDEX -1
-
 /* Inform MDS about new/updated target */
 static int mds_lov_update_mds(struct obd_device *obd,
                               struct obd_device *watched,
-                              __u32 idx, struct obd_uuid *uuid)
+                              __u32 idx)
 {
         struct mds_obd *mds = &obd->u.mds;
-        int old_count;
+        __u32 old_count;
         int rc = 0;
+        int page;
+        int off;
+        obd_id *data;
+
         ENTRY;
 
         /* Don't let anyone else mess with mds_lov_objids now */
@@ -265,7 +439,7 @@ static int mds_lov_update_mds(struct obd_device *obd,
 
         old_count = mds->mds_lov_desc.ld_tgt_count;
         rc = mds_lov_update_desc(obd, mds->mds_osc_exp);
-        if (rc) 
+        if (rc)
                 GOTO(out, rc);
 
         CDEBUG(D_CONFIG, "idx=%d, recov=%d/%d, cnt=%d/%d\n",
@@ -273,39 +447,35 @@ static int mds_lov_update_mds(struct obd_device *obd,
                mds->mds_lov_desc.ld_tgt_count);
 
         /* idx is set as data from lov_notify. */
-        if (idx == MDSLOV_NO_INDEX || obd->obd_recovering) 
+        if (obd->obd_recovering)
                 GOTO(out, rc);
-                
+
         if (idx >= mds->mds_lov_desc.ld_tgt_count) {
-                CERROR("index %d > count %d!\n", idx, 
+                CERROR("index %d > count %d!\n", idx,
                        mds->mds_lov_desc.ld_tgt_count);
                 GOTO(out, rc = -EINVAL);
         }
 
-        if (idx >= mds->mds_lov_objids_in_file) {
-                /* We never read this lastid; ask the osc */
-                obd_id lastid;
-                __u32 size = sizeof(lastid);
-                rc = obd_get_info(watched->obd_self_export, strlen("last_id"),
-                                  "last_id", &size, &lastid);
-                if (rc)
-                        GOTO(out, rc);
-                mds->mds_lov_objids[idx] = lastid;
-                mds->mds_lov_objids_dirty = 1;
-                mds_lov_write_objids(obd);
-        } else {
-                /* We have read this lastid from disk; tell the osc.
-                   Don't call this during recovery. */
-                rc = mds_lov_set_nextid(obd);
-                if (rc) {
-                        CERROR("Failed to set next id, idx=%d rc=%d\n", idx,rc);
-                        /* Don't abort the rest of the sync */
-                        rc = 0;
-                }
+        rc = mds_lov_get_objid(obd, idx);
+        if (rc) {
+                CERROR("Failed to get objid - %d\n", rc);
+                GOTO(out, rc);
+        }
+
+        page = idx / OBJID_PER_PAGE();
+        off = idx % OBJID_PER_PAGE();
+        data = mds->mds_lov_page_array[page];
+        /* We have read this lastid from disk; tell the osc.
+           Don't call this during recovery. */
+        rc = mds_lov_set_one_nextid(obd, idx, &data[off]);
+        if (rc) {
+                CERROR("Failed to set next id, idx=%d rc=%d\n", idx,rc);
+                /* Don't abort the rest of the sync */
+                rc = 0;
         }
 
         CDEBUG(D_CONFIG, "last object "LPU64" from OST %d rc=%d\n",
-               mds->mds_lov_objids[idx], idx, rc);
+               data[off], idx, rc);
 out:
         mutex_up(&obd->obd_dev_sem);
         RETURN(rc);
@@ -317,7 +487,7 @@ int mds_lov_connect(struct obd_device *obd, char * lov_name)
         struct mds_obd *mds = &obd->u.mds;
         struct lustre_handle conn = {0,};
         struct obd_connect_data *data;
-        int rc, i;
+        int rc;
         ENTRY;
 
         if (IS_ERR(mds->mds_osc_obd))
@@ -358,7 +528,7 @@ int mds_lov_connect(struct obd_device *obd, char * lov_name)
                        lov_name, rc);
                 GOTO(err_discon, rc);
         }
-        
+
         /* Deny new client connections until we are sure we have some OSTs */
         obd->obd_no_conn = 1;
 
@@ -373,30 +543,22 @@ int mds_lov_connect(struct obd_device *obd, char * lov_name)
         if (rc)
                 GOTO(err_reg, rc);
 
-        /* tgt_count may be 0! */
-        rc = llog_cat_initialize(obd, mds->mds_lov_desc.ld_tgt_count, NULL);
-        if (rc) {
-                CERROR("failed to initialize catalog %d\n", rc);
-                GOTO(err_reg, rc);
-        }
-
         /* If we're mounting this code for the first time on an existing FS,
          * we need to populate the objids array from the real OST values */
-        if (mds->mds_lov_desc.ld_tgt_count > mds->mds_lov_objids_in_file) {
-                int size = sizeof(obd_id) * mds->mds_lov_desc.ld_tgt_count;
-                rc = obd_get_info(mds->mds_osc_exp, strlen("last_id"),
-                                  "last_id", &size, mds->mds_lov_objids);
-                if (!rc) {
-                        for (i = 0; i < mds->mds_lov_desc.ld_tgt_count; i++)
-                                CWARN("got last object "LPU64" from OST %d\n",
-                                      mds->mds_lov_objids[i], i);
-                        mds->mds_lov_objids_dirty = 1;
-                        rc = mds_lov_write_objids(obd);
-                        if (rc)
-                                CERROR("got last objids from OSTs, but error "
-                                       "writing objids file: %d\n", rc);
+        if (mds->mds_lov_desc.ld_tgt_count > mds->mds_lov_objid_count) {
+                __u32 i = mds->mds_lov_objid_count;
+                for(; i <= mds->mds_lov_desc.ld_tgt_count; i++) {
+                        rc = mds_lov_get_objid(obd, i);
+                        if (rc != 0)
+                                break;
                 }
+                if (rc == 0)
+                        rc = mds_lov_write_objids(obd);
+                if (rc)
+                        CERROR("got last objids from OSTs, but error "
+                                "in update objids file: %d\n", rc);
         }
+
         mutex_up(&obd->obd_dev_sem);
 
         /* I want to see a callback happen when the OBD moves to a
@@ -612,7 +774,7 @@ int mds_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
                 llog_cat_initialize(obd, mds->mds_lov_desc.ld_tgt_count, NULL);
                 llog_ctxt_put(ctxt);
                 rc2 = obd_set_info_async(mds->mds_osc_exp,
-                                         strlen(KEY_MDS_CONN), KEY_MDS_CONN,
+                                         sizeof(KEY_MDS_CONN), KEY_MDS_CONN,
                                          0, NULL, NULL);
                 if (!rc)
                         rc = rc2;
@@ -688,25 +850,25 @@ static int __mds_lov_synchronize(void *data)
 
         OBD_RACE(OBD_FAIL_MDS_LOV_SYNC_RACE);
 
-        rc = mds_lov_update_mds(obd, watched, idx, uuid);
+        rc = mds_lov_update_mds(obd, watched, idx);
         if (rc != 0) {
                 CERROR("%s failed at update_mds: %d\n", obd_uuid2str(uuid), rc);
                 GOTO(out, rc);
         }
 
-        rc = obd_set_info_async(mds->mds_osc_exp, strlen(KEY_MDS_CONN),
+        rc = obd_set_info_async(mds->mds_osc_exp, sizeof(KEY_MDS_CONN),
                                 KEY_MDS_CONN, 0, uuid, NULL);
         if (rc != 0)
                 GOTO(out, rc);
 
         ctxt = llog_get_context(obd, LLOG_MDS_OST_ORIG_CTXT);
-        if (!ctxt) 
-              RETURN(-ENODEV); 
-        
+        if (!ctxt)
+              RETURN(-ENODEV);
+
         OBD_FAIL_TIMEOUT(OBD_FAIL_MDS_LLOG_SYNC_TIMEOUT, 60);
 
-        rc = llog_connect(ctxt, obd->u.mds.mds_lov_desc.ld_tgt_count, 
-                          NULL, NULL, uuid); 
+        rc = llog_connect(ctxt, obd->u.mds.mds_lov_desc.ld_tgt_count,
+                          NULL, NULL, uuid);
         llog_ctxt_put(ctxt);
 
         if (rc != 0) {
@@ -753,12 +915,7 @@ int mds_lov_synchronize(void *data)
         struct mds_lov_sync_info *mlsi = data;
         char name[20];
 
-        if (mlsi->mlsi_index == MDSLOV_NO_INDEX)
-                /* There is still a watched target,
-                but we don't know its index */
-                sprintf(name, "ll_sync_tgt");
-        else
-                snprintf(name, sizeof(name), "ll_sync_%02u", mlsi->mlsi_index);
+        snprintf(name, sizeof(name), "ll_sync_%02u", mlsi->mlsi_index);
         ptlrpc_daemonize(name);
 
         RETURN(__mds_lov_synchronize(data));
@@ -769,11 +926,13 @@ int mds_lov_start_synchronize(struct obd_device *obd,
                               void *data, int nonblock)
 {
         struct mds_lov_sync_info *mlsi;
+        struct mds_obd *mds = &obd->u.mds;
         int rc;
-
+        struct obd_uuid *uuid;
         ENTRY;
 
         LASSERT(watched);
+        uuid = &watched->u.cli.cl_target_uuid;
 
         OBD_ALLOC(mlsi, sizeof(*mlsi));
         if (mlsi == NULL)
@@ -784,7 +943,7 @@ int mds_lov_start_synchronize(struct obd_device *obd,
         if (data)
                 mlsi->mlsi_index = *(__u32 *)data;
         else
-                mlsi->mlsi_index = MDSLOV_NO_INDEX;
+                mlsi->mlsi_index = mds_lov_get_idx(mds->mds_osc_exp, uuid);
 
         /* Although class_export_get(obd->obd_self_export) would lock
            the MDS in place, since it's only a self-export
@@ -942,14 +1101,3 @@ conv_free:
 conv_end:
         return rc;
 }
-
-void mds_objids_from_lmm(obd_id *ids, struct lov_mds_md *lmm,
-                         struct lov_desc *desc)
-{
-        int i;
-        for (i = 0; i < le32_to_cpu(lmm->lmm_stripe_count); i++) {
-                ids[le32_to_cpu(lmm->lmm_objects[i].l_ost_idx)] =
-                        le64_to_cpu(lmm->lmm_objects[i].l_object_id);
-        }
-}
-
