@@ -1,5 +1,5 @@
 lnxmaj="2.6.16"
-lnxrel="53-0.16"
+lnxrel="54-0.2.3"
 
 EXTRA_VERSION_DELIMITER="."
 
