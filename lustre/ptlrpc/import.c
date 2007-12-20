@@ -596,6 +596,7 @@ static int ptlrpc_connect_interpret(struct ptlrpc_request *request,
                                 *lustre_msg_get_handle(request->rq_repmsg);
 
                 IMPORT_SET_STATE(imp, LUSTRE_IMP_FULL);
+                ptlrpc_activate_import(imp);
                 GOTO(finish, rc = 0);
         } else {
                 spin_unlock(&imp->imp_lock);
@@ -786,7 +787,8 @@ finish:
 out:
         if (rc != 0) {
                 IMPORT_SET_STATE(imp, LUSTRE_IMP_DISCON);
-                if (aa->pcaa_initial_connect && !imp->imp_initial_recov)
+                if (aa->pcaa_initial_connect && !imp->imp_initial_recov &&
+                    (request->rq_import_generation == imp->imp_generation))
                         ptlrpc_deactivate_import(imp);
 
                 if ((imp->imp_recon_bk && imp->imp_last_recon) ||
