@@ -28,24 +28,24 @@ typedef struct {
         unsigned long   data[0];
 } bitmap_t;
 
-#define BITMAP_SIZE(nbits)      (((nbits/BITS_PER_LONG)+1)*sizeof(long)+sizeof(bitmap_t))
+#define CFS_BITMAP_SIZE(nbits) \
+     (((nbits/BITS_PER_LONG)+1)*sizeof(long)+sizeof(bitmap_t))
 
 static inline
 bitmap_t *ALLOCATE_BITMAP(int size)
 {
         bitmap_t *ptr;
 
-        OBD_ALLOC(ptr, BITMAP_SIZE(size));
+        OBD_ALLOC(ptr, CFS_BITMAP_SIZE(size));
         if (ptr == NULL)
                 RETURN(ptr);
 
         ptr->size = size;
-        memset(ptr->data, 0, BITMAP_SIZE(size));
 
         RETURN (ptr);
 }
 
-#define FREE_BITMAP(ptr)        OBD_FREE(ptr, BITMAP_SIZE(ptr->size))
+#define FREE_BITMAP(ptr)        OBD_FREE(ptr, CFS_BITMAP_SIZE(ptr->size))
 
 static inline
 void bitmap_set(bitmap_t *bitmap, int nbit)
@@ -62,8 +62,7 @@ void bitmap_clear(bitmap_t *bitmap, int nbit)
 static inline
 int bitmap_check(bitmap_t *bitmap, int nbit)
 {
-	int pos = nbit % BITS_PER_LONG;
-	return test_bit(pos, bitmap->data+(nbit/BITS_PER_LONG));
+	return test_bit(nbit, bitmap->data);
 }
 
 /* return 0 is bitmap has none set bits */
