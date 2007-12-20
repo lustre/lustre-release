@@ -329,7 +329,7 @@ run_test 15 "test out-of-space with multiple writers ==========="
 
 test_16() {
 	rm -f $MOUNT1/fsxfile
-	lfs setstripe $MOUNT1/fsxfile 0 -1 -1 # b=10919
+	lfs setstripe $MOUNT1/fsxfile -c -1 # b=10919
 	fsx -c 50 -p 100 -N 2500 -l $((SIZE * 256)) -S 0 $MOUNT1/fsxfile $MOUNT2/fsxfile
 }
 run_test 16 "2500 iterations of dual-mount fsx ================="
@@ -542,7 +542,7 @@ run_test 27 "align non-overlapping extent locks from request ==="
 test_28() { # bug 9977
 	ostID=`$LCTL dl | awk '/-osc-|OSC.*MNT/ { ost++; if (ost == 2) { print $1 } }'`
 
-	lfs setstripe $DIR1/$tfile 1048576 0 2
+	lfs setstripe $DIR1/$tfile -s 1048576 -i 0 -c 2
 	tOBJID=`lfs getstripe $DIR1/$tfile | awk '/^[[:space:]]+1/ {print $2}'`
 	dd if=/dev/zero of=$DIR1/$tfile bs=1024k count=2
 

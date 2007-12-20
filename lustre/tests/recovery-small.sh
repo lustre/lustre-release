@@ -239,7 +239,7 @@ test_18a() {
     pgcache_empty || return 1
 
     # 1 stripe on ost2
-    lfs setstripe $f $((128 * 1024)) 1 1
+    lfs setstripe $f -s $((128 * 1024)) -i 1 -c 1
 
     do_facet client cp $SAMPLE_FILE $f
     sync
@@ -264,8 +264,8 @@ test_18b() {
     pgcache_empty || return 1
 
     # shouldn't have to set stripe size of count==1
-    lfs setstripe $f $((128 * 1024)) 0 1
-    lfs setstripe $f2 $((128 * 1024)) 0 1
+    lfs setstripe $f -s $((128 * 1024)) -i 0 -c 1
+    lfs setstripe $f2 -s $((128 * 1024)) -i 0 -c 1
 
     do_facet client cp $SAMPLE_FILE $f
     sync

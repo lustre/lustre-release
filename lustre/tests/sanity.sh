@@ -788,7 +788,7 @@ run_test 26f "rm -r of a directory which has recursive symlink ="
 test_27a() {
 	echo '== stripe sanity =============================================='
 	mkdir -p $DIR/d27 || error "mkdir failed"
-	$SETSTRIPE $DIR/d27/f0 65536 0 1 || error "lstripe failed"
+	$SETSTRIPE $DIR/d27/f0 -c 1 || error "lstripe failed"
 	$CHECKSTAT -t file $DIR/d27/f0 || error "checkstat failed"
 	pass
 	log "== test 27b: write to one stripe file ========================="
@@ -799,7 +799,7 @@ run_test 27a "one stripe file =================================="
 test_27c() {
 	[ "$OSTCOUNT" -lt "2" ] && skip "skipping 2-stripe test" && return
 	mkdir -p $DIR/d27
-	$SETSTRIPE $DIR/d27/f01 65536 0 2 || error "lstripe failed"
+	$SETSTRIPE $DIR/d27/f01 -c 2 || error "lstripe failed"
 	[ `$GETSTRIPE $DIR/d27/f01 | grep -A 10 obdidx | wc -l` -eq 4 ] ||
 		error "two-stripe file doesn't have two stripes"
 	pass
@@ -818,15 +818,15 @@ run_test 27d "create file with default settings ================"
 
 test_27e() {
 	mkdir -p $DIR/d27
-	$SETSTRIPE $DIR/d27/f12 65536 0 2 || error "lstripe failed"
-	$SETSTRIPE $DIR/d27/f12 65536 0 2 && error "lstripe succeeded twice"
+	$SETSTRIPE $DIR/d27/f12 -c 2 || error "lstripe failed"
+	$SETSTRIPE $DIR/d27/f12 -c 2 && error "lstripe succeeded twice"
 	$CHECKSTAT -t file $DIR/d27/f12 || error "checkstat failed"
 }
 run_test 27e "lstripe existing file (should return error) ======"
 
 test_27f() {
 	mkdir -p $DIR/d27
-	$SETSTRIPE $DIR/d27/fbad 100 0 1 && error "lstripe failed"
+	$SETSTRIPE $DIR/d27/fbad -s 100 -i 0 -c 1 && error "lstripe failed"
 	dd if=/dev/zero of=$DIR/d27/f12 bs=4k count=4 || error "dd failed"
 	$GETSTRIPE $DIR/d27/fbad || error "lfs getstripe failed"
 }
@@ -847,7 +847,7 @@ run_test 27g "test lfs getstripe ==========================================="
 
 test_27j() {
 	mkdir -p $DIR/d27
-	$SETSTRIPE $DIR/d27/f27j 65536 $OSTCOUNT 1 && error "lstripe failed"||true
+	$SETSTRIPE $DIR/d27/f27j -i $OSTCOUNT && error "lstripe failed"||true
 }
 run_test 27j "lstripe with bad stripe offset (should return error)"
 
@@ -856,7 +856,7 @@ test_27k() { # bug 2844
 	FILE=$DIR/d27/f27k
 	LL_MAX_BLKSIZE=$((4 * 1024 * 1024))
 	[ ! -d $DIR/d27 ] && mkdir -p $DIR/d27
-	$SETSTRIPE $FILE 67108864 -1 0 || error "lstripe failed"
+	$SETSTRIPE $FILE -s 67108864 || error "lstripe failed"
 	BLKSIZE=`stat $FILE | awk '/IO Block:/ { print $7 }'`
 	[ $BLKSIZE -le $LL_MAX_BLKSIZE ] || error "$BLKSIZE > $LL_MAX_BLKSIZE"
 	dd if=/dev/zero of=$FILE bs=4k count=1
@@ -868,7 +868,7 @@ run_test 27k "limit i_blksize for broken user apps ============="
 test_27l() {
 	mkdir -p $DIR/d27
 	mcreate $DIR/f27l || error "creating file"
-	$RUNAS $SETSTRIPE $DIR/f27l 65536 -1 1 && \
+	$RUNAS $SETSTRIPE $DIR/f27l -c 1 && \
 		error "lstripe should have failed" || true
 }
 run_test 27l "check setstripe permissions (should return error)"
@@ -880,11 +880,11 @@ test_27m() {
 		return
 	fi
 	mkdir -p $DIR/d27
-	$SETSTRIPE $DIR/d27/f27m_1 0 0 1
+	$SETSTRIPE $DIR/d27/f27m_1 -i 0 -c 1
 	dd if=/dev/zero of=$DIR/d27/f27m_1 bs=1024 count=$MAXFREE && \
 		error "dd should fill OST0"
 	i=2
-	while $SETSTRIPE $DIR/d27/f27m_$i 0 0 1 ; do
+	while $SETSTRIPE $DIR/d27/f27m_$i -i 0 -c 1 ; do
 		i=`expr $i + 1`
 		[ $i -gt 256 ] && break
 	done
@@ -917,7 +917,7 @@ exhaust_precreations() {
 	next_id=$(cat $LPROC/osc/${OST}-osc/prealloc_next_id)
 
 	mkdir -p $DIR/d27/${OST}
-	$SETSTRIPE $DIR/d27/${OST} 0 $OSTIDX 1
+	$SETSTRIPE $DIR/d27/${OST} -i $OSTIDX -c 1
 	#define OBD_FAIL_OST_ENOSPC 0x215
 	sysctl -w lustre.fail_loc=0x215
 	echo "Creating to objid $last_id on ost $OST..."
@@ -1010,7 +1010,7 @@ test_27r() {
 	rm -f $DIR/d27/f27r
 	exhaust_precreations 0 0x80000215
 
-	$SETSTRIPE $DIR/d27/f27r 0 0 2 # && error
+	$SETSTRIPE $DIR/d27/f27r -i 0 -c 2 # && error
 
 	reset_enospc
 }
@@ -1045,7 +1045,7 @@ test_27u() { # bug 4900
         sysctl -w lustre.fail_loc=0
 
         TLOG=$DIR/$tfile.getstripe
-        $LFS getstripe $DIR/d27u > $TLOG
+        $GETSTRIPE $DIR/d27u > $TLOG
         OBJS=`awk -vobj=0 '($1 == 0) { obj += 1 } END { print obj;}' $TLOG`
         unlinkmany $DIR/d27u/t- 1000
         [ $OBJS -gt 0 ] && \
@@ -1060,7 +1060,7 @@ test_27v() { # bug 4900
         exhaust_all_precreations
 
         mkdir -p $DIR/$tdir
-        lfs setstripe $DIR/$tdir 0 -1 1         # 1 stripe / file
+        $SETSTRIPE $DIR/$tdir -c 1         # 1 stripe / file
 
         touch $DIR/$tdir/$tfile
         #define OBD_FAIL_TGT_DELAY_PRECREATE     0x705
@@ -1183,10 +1183,10 @@ run_test 31e "remove of open non-empty directory ==============="
 test_31f() { # bug 4554
 	set -vx
 	mkdir $DIR/d31f
-	lfs setstripe $DIR/d31f 1048576 -1 1
+	$SETSTRIPE $DIR/d31f -s 1048576 -c 1
 	cp /etc/hosts $DIR/d31f
 	ls -l $DIR/d31f
-	lfs getstripe $DIR/d31f/hosts
+	$GETSTRIPE $DIR/d31f/hosts
 	multiop $DIR/d31f D_c &
 	MULTIPID=$!
 
@@ -1194,10 +1194,10 @@ test_31f() { # bug 4554
 
 	rm -rv $DIR/d31f || error "first of $DIR/d31f"
 	mkdir $DIR/d31f
-	lfs setstripe $DIR/d31f 1048576 -1 1
+	$SETSTRIPE $DIR/d31f -s 1048576 -c 1
 	cp /etc/hosts $DIR/d31f
 	ls -l $DIR/d31f
-	lfs getstripe $DIR/d31f/hosts
+	 $DIR/d31f/hosts
 	multiop $DIR/d31f D_c &
 	MULTIPID2=$!
 
@@ -2653,7 +2653,7 @@ run_test 65a "directory with no stripe info ===================="
 
 test_65b() {
 	mkdir -p $DIR/d65
-	$SETSTRIPE $DIR/d65 $(($STRIPESIZE * 2)) 0 1 || error "setstripe"
+	$SETSTRIPE $DIR/d65 -s $(($STRIPESIZE * 2)) -i 0 -c 1 || error "setstripe"
 	touch $DIR/d65/f2
 	$LVERIFY $DIR/d65 $DIR/d65/f2 || error "lverify failed"
 }
@@ -2662,8 +2662,8 @@ run_test 65b "directory setstripe $(($STRIPESIZE * 2)) 0 1 ==============="
 test_65c() {
 	if [ $OSTCOUNT -gt 1 ]; then
 		mkdir -p $DIR/d65
-    		$SETSTRIPE $DIR/d65 $(($STRIPESIZE * 4)) 1 \
-			$(($OSTCOUNT - 1)) || error "setstripe"
+    		$SETSTRIPE $DIR/d65 -s $(($STRIPESIZE * 4)) -i 1 \
+			-c $(($OSTCOUNT - 1)) || error "setstripe"
 		touch $DIR/d65/f3
 		$LVERIFY $DIR/d65 $DIR/d65/f3 || error "lverify failed"
 	fi
@@ -2673,7 +2673,7 @@ run_test 65c "directory setstripe $(($STRIPESIZE * 4)) 1 $(($OSTCOUNT - 1))"
 test_65d() {
 	mkdir -p $DIR/d65
 	[ $STRIPECOUNT -le 0 ] && sc=1 || sc=$(($STRIPECOUNT - 1))
-	$SETSTRIPE $DIR/d65 $STRIPESIZE -1 $sc || error "setstripe"
+	$SETSTRIPE $DIR/d65 -s $STRIPESIZE -c $sc || error "setstripe"
 	touch $DIR/d65/f4 $DIR/d65/f5
 	$LVERIFY $DIR/d65 $DIR/d65/f4 $DIR/d65/f5 || error "lverify failed"
 }
@@ -2682,7 +2682,7 @@ run_test 65d "directory setstripe $STRIPESIZE -1 stripe_count =============="
 test_65e() {
 	mkdir -p $DIR/d65
 
-	$SETSTRIPE $DIR/d65 0 -1 0 || error "setstripe"
+	$SETSTRIPE $DIR/d65 || error "setstripe"
         $GETSTRIPE -v $DIR/d65 | grep "Default" || error "no stripe info failed"
 	touch $DIR/d65/f6
 	$LVERIFY $DIR/d65 $DIR/d65/f6 || error "lverify failed"
@@ -2691,13 +2691,13 @@ run_test 65e "directory setstripe 0 -1 0 ======================="
 
 test_65f() {
 	mkdir -p $DIR/d65f
-	$RUNAS $SETSTRIPE $DIR/d65f 0 -1 0 && error "setstripe succeeded" || true
+	$RUNAS $SETSTRIPE $DIR/d65f && error "setstripe succeeded" || true
 }
 run_test 65f "dir setstripe permission (should return error) ==="
 
 test_65g() {
         mkdir -p $DIR/d65
-        $SETSTRIPE $DIR/d65 $(($STRIPESIZE * 2)) 0 1 || error "setstripe"
+        $SETSTRIPE $DIR/d65 -s $(($STRIPESIZE * 2)) -i 0 -c 1 || error "setstripe"
         $SETSTRIPE -d $DIR/d65 || error "setstripe"
         $GETSTRIPE -v $DIR/d65 | grep "Default" || \
 		error "delete default stripe failed"
@@ -2706,7 +2706,7 @@ run_test 65g "directory setstripe -d ==========================="
 
 test_65h() {
         mkdir -p $DIR/d65
-        $SETSTRIPE $DIR/d65 $(($STRIPESIZE * 2)) 0 1 || error "setstripe"
+        $SETSTRIPE $DIR/d65 -s $(($STRIPESIZE * 2)) -i 0 -c 1 || error "setstripe"
         mkdir -p $DIR/d65/dd1
         [ "`$GETSTRIPE -v $DIR/d65 | grep "^count"`" == \
           "`$GETSTRIPE -v $DIR/d65/dd1 | grep "^count"`" ] || error "stripe info inherit failed"
@@ -2714,7 +2714,7 @@ test_65h() {
 run_test 65h "directory stripe info inherit ===================="
  
 test_65i() { # bug6367
-        $SETSTRIPE $MOUNT 65536 -1 -1
+        $SETSTRIPE $MOUNT -s 65536 -c -1 
 }
 run_test 65i "set non-default striping on root directory (bug 6367)="
 
@@ -2745,8 +2745,8 @@ test_65k() { # bug11679
                         STRIPE_OST=`osc_to_ost $STRIPE_OSC`
                         STRIPE_INDEX=`do_facet mds cat $LPROC/lov/*md*/target_obd |
                                       grep $STRIPE_OST | awk -F: '{print $1}'`
-                        echo "$SETSTRIPE $DIR/$tdir/${STRIPE_INDEX} 0 ${STRIPE_INDEX} 1"
-                        do_facet client $SETSTRIPE $DIR/$tdir/${STRIPE_INDEX} 0 ${STRIPE_INDEX} 1
+                        echo "$SETSTRIPE $DIR/$tdir/${STRIPE_INDEX} -i ${STRIPE_INDEX} -c 1"
+                        do_facet client $SETSTRIPE $DIR/$tdir/${STRIPE_INDEX} -i ${STRIPE_INDEX} -c 1
                         RC=$?
                         [ $RC -ne 0 ] && error "setstripe should have succeeded"
                 done
@@ -2759,7 +2759,7 @@ run_test 65k "validate manual striping works properly with deactivated OSCs"
 
 test_65l() { # bug 12836
 	mkdir -p $DIR/$tdir
-	$LFS setstripe $DIR/$tdir 65536 -1 -1
+	$SETSTRIPE $DIR/$tdir -c -1
 	$LFS find -mtime -1 $DIR >/dev/null
 }
 run_test 65l "lfs find on -1 stripe dir ========================"
@@ -3275,7 +3275,7 @@ test_78() { # bug 10901
 	[ $F78SIZE -gt $((SMALLESTOST * $OSTCOUNT / 1024)) ] && \
 		F78SIZE=$((SMALLESTOST * $OSTCOUNT / 1024))
 	echo "File size: $F78SIZE"
-	$SETSTRIPE $DIR/$tfile 0 -1 -1 || error "setstripe failed"
+	$SETSTRIPE $DIR/$tfile -c -1 || error "setstripe failed"
  	for i in `seq 1 $NSEQ`
  	do
  		FSIZE=$(($F78SIZE / ($NSEQ - $i + 1)))
@@ -3491,7 +3491,7 @@ setup_test102() {
 
 	trap cleanup_test102 EXIT
 	cd $DIR
-	$SETSTRIPE $tdir $STRIPE_SIZE  $STRIPE_OFFSET $STRIPE_COUNT
+	$SETSTRIPE $tdir -s $STRIPE_SIZE -i $STRIPE_OFFSET -c $STRIPE_COUNT
 	cd $DIR/$tdir 
 	for num in 1 2 3 4
 	do
@@ -3501,7 +3501,7 @@ setup_test102() {
 			do
 				local stripe_size=`expr $STRIPE_SIZE \* $num`
 				local file=file"$num-$offset-$count"
-				$SETSTRIPE $file $stripe_size  $offset $count
+				$SETSTRIPE $file -s $stripe_size -i $offset -c $count
 			done
 		done
 	done
@@ -3572,7 +3572,7 @@ test_102b() {
 	echo "get/set/list trusted.lov xattr ..."
 	[ "$OSTCOUNT" -lt "2" ] && skip "skipping 2-stripe test" && return
 	local testfile=$DIR/$tfile
-	$SETSTRIPE $testfile 65536 1 2
+	$SETSTRIPE $testfile -s 65536 -i 1 -c 2
 	getfattr -d -m "^trusted" $testfile 2> /dev/null | \
 	grep "trusted.lov" || error "can't get trusted.lov from $testfile"
 
@@ -3598,7 +3598,7 @@ test_102c() {
 	mkdir -p $DIR/$tdir
 	chown $RUNAS_ID $DIR/$tdir
 	local testfile=$DIR/$tdir/$tfile
-	$RUNAS $SETSTRIPE $testfile 65536 1 2
+	$RUNAS $SETSTRIPE $testfile -s 65536 -i 1 -c 2
 	$RUNAS getfattr -d -m "^lustre" $testfile 2> /dev/null | \
 	grep "lustre.lov" || error "can't get lustre.lov from $testfile"
 
@@ -3942,7 +3942,7 @@ test_116() {
 	declare -i FILL
 	FILL=$(($MINV / 4))
 	echo "Filling 25% remaining space in OST${MINI} with ${FILL}Kb"
-	$SETSTRIPE $DIR/$tdir/OST${MINI} 0 $MINI 1
+	$SETSTRIPE $DIR/$tdir/OST${MINI} -i $MINI -c 1
 	i=1
 	while [ $FILL -gt 0 ]; do
 	    dd if=/dev/zero of=$DIR/$tdir/OST${MINI}/$tfile-$i bs=2M count=1 2>/dev/null
@@ -3971,7 +3971,7 @@ test_116() {
 
 	# now fill using QOS
 	echo writing a bunch of files to QOS-assigned OSTs
-	$SETSTRIPE $DIR/$tdir 0 -1 1
+	$SETSTRIPE $DIR/$tdir -c 1
 	i=1
 	while [ $FILL -gt 0 ]; do
 	    dd if=/dev/zero of=$DIR/$tdir/$tfile-$i bs=1024 count=200 2>/dev/null
@@ -3997,10 +3997,10 @@ test_116() {
 	# Figure out which files were written where 
 	UUID=$(awk '/'$MINI1': / {print $2; exit}' $LPROC/lov/${FSNAME}-clilov-*/target_obd)
 	echo $UUID
-        MINC=$($LFS getstripe --obd $UUID $DIR/$tdir | wc -l)
+        MINC=$($GETSTRIPE --obd $UUID $DIR/$tdir | wc -l)
 	echo "$MINC files created on smaller OST $MINI1"
 	UUID=$(awk '/'$MAXI1': / {print $2; exit}' $LPROC/lov/${FSNAME}-clilov-*/target_obd)
-        MAXC=$($LFS getstripe --obd $UUID $DIR/$tdir | wc -l)
+        MAXC=$($GETSTRIPE --obd $UUID $DIR/$tdir | wc -l)
 	echo "$MAXC files created on larger OST $MAXI1"
 	[ $MINC -gt 0 ] && echo "Wrote $(($MAXC * 100 / $MINC - 100))% more files to larger OST $MAXI1"
 	[ $MAXC -gt $MINC ] || error "stripe QOS didn't balance free space"
@@ -4360,7 +4360,7 @@ test_119b() # bug 11737
 {
         [ "$OSTCOUNT" -lt "2" ] && skip "skipping 2-stripe test" && return
 
-        lfs setstripe $DIR/$tfile 0 -1 2
+        $SETSTRIPE $DIR/$tfile -c 2
         dd if=/dev/zero of=$DIR/$tfile bs=1M count=1 seek=1 || error "dd failed"
         sync
         multiop $DIR/$tfile oO_RDONLY:O_DIRECT:r$((2048 * 1024)) || \
@@ -4805,7 +4805,7 @@ run_test 124b "lru resize (performance test) ======================="
 test_125() { # 13358
 	[ -z "$(grep acl $LPROC/mdc/*-mdc-*/connect_flags)" ] && skip "must have acl enabled" && return
 	mkdir -p $DIR/d125 || error "mkdir failed"
-	$SETSTRIPE $DIR/d125 65536 -1 -1 || error "setstripe failed"
+	$SETSTRIPE $DIR/d125 -s 65536 -c -1 || error "setstripe failed"
 	setfacl -R -m u:bin:rwx $DIR/d125 || error "setfacl $DIR/d125 failes"
 	ls -ld $DIR/d125 || error "cannot access $DIR/d125"
 }

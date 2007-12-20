@@ -1151,7 +1151,7 @@ check_grant() {
 	# write some data to sync client lost_grant
 	rm -f $DIR1/${tfile}_check_grant_* 2>&1
 	for i in `seq $OSTCOUNT`; do
-		$LFS setstripe $DIR1/${tfile}_check_grant_$i 0 $(($i -1)) 1
+		$LFS setstripe $DIR1/${tfile}_check_grant_$i -i $(($i -1)) -c 1
 		dd if=/dev/zero of=$DIR1/${tfile}_check_grant_$i bs=4k \
 					      count=1 > /dev/null 2>&1 
 	done
