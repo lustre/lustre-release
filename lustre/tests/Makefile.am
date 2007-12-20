@@ -5,35 +5,29 @@ AM_CFLAGS = $(LLCFLAGS)
 # LDADD := -lreadline -ltermcap # -lefence
 
 noinst_DATA = disk1_4.zip
-noinst_SCRIPTS = leak_finder.pl llecho.sh llmount.sh llmountcleanup.sh test-framework.sh
-noinst_SCRIPTS += runvmstat runiozone runtests
-noinst_SCRIPTS += sanity.sh rundbench test-framework.sh
-noinst_SCRIPTS += acceptance-small.sh compile.sh compile.sh conf-sanity.sh
-noinst_SCRIPTS += echo.sh insanity.sh lfscktest.sh llechocleanup.sh
-noinst_SCRIPTS += llog-test.sh lockorder.sh lstiming.sh mount2fs.sh oos2.sh
-noinst_SCRIPTS += oos.sh recovery-cleanup.sh recovery-small.sh replay-dual.sh
-noinst_SCRIPTS += replay-ost-single.sh replay-single.sh routed.sh run-llog.sh
-noinst_SCRIPTS += run-quotacheck.sh run-quotactl.sh run-quotafmt.sh
-noinst_SCRIPTS += sanity-buffalo.sh sanityN.sh sanity-quota.sh tmpfs-sanity.sh
-noinst_SCRIPTS += kbuild lkcdmap rundbench runiozone runslabinfo
-noinst_SCRIPTS += socketclient socketserver
+noinst_SCRIPTS = leak_finder.pl llecho.sh llmount.sh llmountcleanup.sh
+noinst_SCRIPTS += test-framework.sh runvmstat runiozone runtests
+noinst_SCRIPTS += sanity.sh rundbench acceptance-small.sh compile.sh
+noinst_SCRIPTS += conf-sanity.sh insanity.sh lfscktest.sh oos.sh oos2.sh
+noinst_SCRIPTS += llog-test.sh recovery-small.sh replay-dual.sh sanity-quota.sh
+noinst_SCRIPTS += replay-ost-single.sh replay-single.sh run-llog.sh sanityN.sh
+noinst_SCRIPTS += lockorder.sh socketclient socketserver
 nobase_noinst_SCRIPTS = cfg/insanity-local.sh cfg/insanity-ltest.sh
 nobase_noinst_SCRIPTS += cfg/local.sh acl/make-tree acl/run
 nobase_noinst_DATA = acl/cp.test acl/getfacl-noacl.test acl/inheritance.test
 nobase_noinst_DATA += acl/misc.test acl/permissions.test acl/setfacl.test
 
 EXTRA_DIST = $(noinst_SCRIPTS) $(noinst_DATA) \
-             $(nobase_noinst_SCRIPTS) $(nobase_noinst_DATA) \
-             sanity.sh rundbench
+             $(nobase_noinst_SCRIPTS) $(nobase_noinst_DATA)
 
 if TESTS
-noinst_PROGRAMS = openunlink truncate directio openme writeme
+noinst_PROGRAMS = openunlink truncate directio openme writeme mlink utime
 noinst_PROGRAMS += tchmod toexcl fsx test_brw openclose createdestroy
-noinst_PROGRAMS += stat createmany chownmany statmany multifstat createtest mlink utime
+noinst_PROGRAMS += stat createmany chownmany statmany multifstat createtest
 noinst_PROGRAMS += opendirunlink opendevunlink unlinkmany fchdir_test checkstat
-noinst_PROGRAMS += wantedi statone runas openfile getdents o_directory
+noinst_PROGRAMS += wantedi statone runas openfile getdents o_directory rmdirmany
 noinst_PROGRAMS += small_write multiop sleeptest ll_sparseness_verify cmknod
-noinst_PROGRAMS += ll_sparseness_write mrename ll_dirstripe_verify mkdirmany rmdirmany
+noinst_PROGRAMS += ll_sparseness_write mrename ll_dirstripe_verify mkdirmany
 noinst_PROGRAMS += openfilleddirunlink rename_many memhog iopentest1 iopentest2
 noinst_PROGRAMS += mmap_sanity flock_test writemany random-reads flocks_test
 noinst_PROGRAMS += ll_getstripe_info

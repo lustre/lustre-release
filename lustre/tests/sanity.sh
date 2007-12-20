@@ -1044,11 +1044,12 @@ test_27u() { # bug 4900
         createmany -o $DIR/d27u/t- 1000
         sysctl -w lustre.fail_loc=0
 
-        $LFS getstripe $DIR/d27u > $TMP/files
-        OBJS=`awk -vobj=0 '($1 == 0) { obj += 1 } END { print obj;}' $TMP/files`
+        TLOG=$DIR/$tfile.getstripe
+        $LFS getstripe $DIR/d27u > $TLOG
+        OBJS=`awk -vobj=0 '($1 == 0) { obj += 1 } END { print obj;}' $TLOG`
         unlinkmany $DIR/d27u/t- 1000
         [ $OBJS -gt 0 ] && \
-                error "Found $OBJS objects were created on OST-0" || pass
+                error "$OBJS objects created on OST-0.  See $TLOG" || pass
 }
 run_test 27u "skip object creation on OSC w/o objects =========="
 
