@@ -23,74 +23,72 @@
 
 #include <libcfs/libcfs.h>
 #include <libcfs/kp30.h>
+#include <libcfs/user-bitops.h>
 
-#include <string.h> /* for ffs - confirm POSIX */
+#define OFF_BY_START(start)     ((start)/BITS_PER_LONG)
 
-#define BITS_PER_WORD           32
-#define OFF_BY_START(start)     ((start)/BITS_PER_WORD)
-
-unsigned long find_next_bit(const unsigned int *addr,
-                unsigned long size, unsigned long offset)
+unsigned long find_next_bit(unsigned long *addr,
+                            unsigned long size, unsigned long offset)
 {
-        uint32_t *word, *last;
-        unsigned int first_bit, bit, base;
+        unsigned long *word, *last;
+        unsigned long first_bit, bit, base;
 
         word = addr + OFF_BY_START(offset);
         last = addr + OFF_BY_START(size-1);
-        first_bit = offset % BITS_PER_WORD;
+        first_bit = offset % BITS_PER_LONG;
         base = offset - first_bit;
 
         if (offset >= size)
                 return size;
         if (first_bit != 0) {
                 int tmp = (*word++) & (~0UL << first_bit);
-                bit = ffs(tmp);
-                if (bit < BITS_PER_WORD)
+                bit = __ffs(tmp);
+                if (bit < BITS_PER_LONG)
                         goto found;
                 word++;
-                base += BITS_PER_WORD;
+                base += BITS_PER_LONG;
         }
         while (word <= last) {
-                if (*word != 0ul) {
-                        bit = ffs(*word);
+                if (*word != 0UL) {
+                        bit = __ffs(*word);
                         goto found;
                 }
                 word++;
-                base += BITS_PER_WORD;
+                base += BITS_PER_LONG;
         }
         return size;
 found:
         return base + bit;
 }
 
-unsigned long find_next_zero_bit(const unsigned int *addr,
-                unsigned long size, unsigned long offset)
+unsigned long find_next_zero_bit(unsigned long *addr,
+                                 unsigned long size, unsigned long offset)
 {
-        uint32_t *word, *last;
-        unsigned int first_bit, bit, base;
+        unsigned long *word, *last;
+        unsigned long first_bit, bit, base;
 
         word = addr + OFF_BY_START(offset);
         last = addr + OFF_BY_START(size-1);
-        first_bit = offset % BITS_PER_WORD;
+        first_bit = offset % BITS_PER_LONG;
         base = offset - first_bit;
 
         if (offset >= size)
                 return size;
         if (first_bit != 0) {
                 int tmp = (*word++) & (~0UL << first_bit);
-                bit = ffs(~tmp);
-                if (bit < BITS_PER_WORD)
+                bit = __ffz(tmp);
+                if (bit < BITS_PER_LONG)
                         goto found;
                 word++;
-                base += BITS_PER_WORD;
+                base += BITS_PER_LONG;
         }
         while (word <= last) {
-                if (*word != ~0ul) {
-                        bit = ffs(*word);
+                if (*word != ~0UL) {
+                        bit = __ffz(*word);
                         goto found;
                 }
                 word++;
-                base += BITS_PER_WORD;
+                base += BITS_PER_LONG;
         }
         return size;
 found:
