@@ -10,12 +10,11 @@
 
 #define LNET_ONLY
 
+#include <libcfs/kp30.h>
+#include <libcfs/libcfs.h>
 #ifndef __KERNEL__
 #include <liblustre.h> /* userland spinlock_t and atomic_t */
 #endif
-
-#include <libcfs/kp30.h>
-#include <libcfs/libcfs.h>
 #include <lnet/lnet.h>
 #include <lnet/lib-lnet.h>
 #include <lnet/lib-types.h>
