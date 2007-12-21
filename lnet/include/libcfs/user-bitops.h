@@ -50,7 +50,7 @@ static __inline__ int clear_bit(int nr, long * addr)
         return nr;
 }
 
-static __inline__ int test_bit(int nr, long * addr)
+static __inline__ int test_bit(int nr, const long * addr)
 {
         return ((1UL << (nr & (BITS_PER_LONG - 1))) & ((addr)[nr / BITS_PER_LONG])) != 0;
 }
