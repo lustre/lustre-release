@@ -67,7 +67,6 @@
 #include <libcfs/user-bitops.h>
 #include <lnet/lnet.h>
 #include <libcfs/kp30.h>
-#include <libcfs/user-bitops.h>
 
 /* definitions for liblustre */
 
@@ -192,6 +191,35 @@ typedef int (write_proc_t)(struct file *file, const char *buffer,
 /* a long can be more than 32 bits, so use BITS_PER_LONG
  * to allow the compiler to adjust the bit shifting accordingly
  */
+
+/* test if bit nr is set in bitmap addr; returns previous value of bit nr */
+static __inline__ int set_bit(int nr, long * addr)
+{
+        long    mask;
+
+        addr += nr / BITS_PER_LONG;
+        mask = 1UL << (nr & (BITS_PER_LONG - 1));
+        nr = (mask & *addr) != 0;
+        *addr |= mask;
+        return nr;
+}
+
+/* clear bit nr in bitmap addr; returns previous value of bit nr*/
+static __inline__ int clear_bit(int nr, long * addr)
+{
+        long    mask;
+
+        addr += nr / BITS_PER_LONG;
+        mask = 1UL << (nr & (BITS_PER_LONG - 1));
+        nr = (mask & *addr) != 0;
+        *addr &= ~mask;
+        return nr;
+}
+
+static __inline__ int test_bit(int nr, long * addr)
+{
+        return ((1UL << (nr & (BITS_PER_LONG - 1))) & ((addr)[nr / BITS_PER_LONG])) != 0;
+}
 
 static __inline__ int ext2_set_bit(int nr, void *addr)
 {
