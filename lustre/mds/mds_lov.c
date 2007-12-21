@@ -172,7 +172,7 @@ void mds_lov_update_objids(struct obd_device *obd, struct lov_mds_md *lmm)
                        " - new "LPU64" old "LPU64"\n", i, id, data[idx]);
                 if (id > data[idx]) {
                         data[idx] = id;
-                        bitmap_set(mds->mds_lov_page_dirty, page);
+                        cfs_bitmap_set(mds->mds_lov_page_dirty, page);
                 }
         }
         EXIT;
@@ -238,12 +238,12 @@ int mds_lov_write_objids(struct obd_device *obd)
         int i, rc = 0;
         ENTRY;
 
-        if (bitmap_check_empty(mds->mds_lov_page_dirty))
+        if (cfs_bitmap_check_empty(mds->mds_lov_page_dirty))
                 RETURN(0);
 
         mds_lov_dump_objids("write", obd);
 
-        foreach_bit(mds->mds_lov_page_dirty, i) {
+        cfs_foreach_bit(mds->mds_lov_page_dirty, i) {
                 obd_id *data =  mds->mds_lov_page_array[i];
                 unsigned int size = OBJID_PER_PAGE()*sizeof(obd_id);
                 loff_t off = i * size;
@@ -258,7 +258,7 @@ int mds_lov_write_objids(struct obd_device *obd)
                                          size, &off, 0);
                 if (rc < 0)
                         break;
-                bitmap_clear(mds->mds_lov_page_dirty, i);
+                cfs_bitmap_clear(mds->mds_lov_page_dirty, i);
         }
         if (rc >= 0)
                 rc = 0;
@@ -305,7 +305,7 @@ static int mds_lov_get_objid(struct obd_device * obd,
                         mds->mds_lov_objid_lastpage = page;
                         mds->mds_lov_objid_lastidx = off;
                 }
-                bitmap_set(mds->mds_lov_page_dirty, page);
+                cfs_bitmap_set(mds->mds_lov_page_dirty, page);
         }
         CDEBUG(D_INFO, "idx %d - %p - %d/%d - "LPU64"\n",
                idx, data, page, off, data[off]);
