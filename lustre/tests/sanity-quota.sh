@@ -760,7 +760,7 @@ test_10() {
         $SHOW_QUOTA_GROUP
 
 	echo "    write the big file of 2 G..."
-	$RUNAS dd if=/dev/zero of=$TESTFILE  bs=$blksize count=$((2 * GB / blkzise)) || \
+	$RUNAS dd if=/dev/zero of=$TESTFILE  bs=$blksize count=$((2 * GB / blksize)) || \
 		error "(usr) write 2 G file failure, but expect success" 
 
 	echo "    delete the big file of 2 G..."
