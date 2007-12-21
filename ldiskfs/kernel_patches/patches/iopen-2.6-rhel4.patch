@@ -150,7 +150,7 @@ Index: linux-stage/fs/ext3/iopen.c
 +	list_add(&dentry->d_alias, &inode->i_dentry);	/* d_instantiate */
 +	dentry->d_inode = inode;
 +
-+	__d_rehash(dentry, 0);				/* d_rehash */
++	d_rehash_cond(dentry, 0);				/* d_rehash */
 +	spin_unlock(&dcache_lock);
 +
 +	return NULL;
@@ -217,8 +217,8 @@ Index: linux-stage/fs/ext3/iopen.c
 +	goal->d_flags &= ~DCACHE_DISCONNECTED;
 +	security_d_instantiate(goal, inode);
 +	__d_drop(dentry);
-+	__d_rehash(dentry, 0);
-+	__d_move(goal, dentry);
++	d_rehash_cond(dentry, 0);
++	d_move_locked(goal, dentry);
 +	spin_unlock(&dcache_lock);
 +	iput(inode);
 +
@@ -230,7 +230,7 @@ Index: linux-stage/fs/ext3/iopen.c
 +	dentry->d_inode = inode;
 +do_rehash:
 +	if (rehash)
-+		__d_rehash(dentry, 0);			/* d_rehash */
++		d_rehash_cond(dentry, 0);			/* d_rehash */
 +	spin_unlock(&dcache_lock);
 +
 +	return NULL;
