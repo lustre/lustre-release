@@ -162,7 +162,7 @@ load_modules() {
     load_module osc/osc
     load_module lov/lov
     load_module mgc/mgc
-    if [ -z "$CLIENTONLY" ]; then
+    if [ -z "$CLIENTONLY" ] && [ -z "$CLIENTMODSONLY" ]; then
         load_module mgs/mgs
         load_module mds/mds
         [ "$FSTYPE" = "ldiskfs" ] && load_module ../ldiskfs/ldiskfs/ldiskfs
