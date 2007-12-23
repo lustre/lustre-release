@@ -160,17 +160,17 @@ load_modules() {
 
     echo Loading modules from $LUSTRE
     load_module ../lnet/libcfs/libcfs
-    [ -z "$LNETOPTS" ] && \
-        LNETOPTS=$(awk '/^options lnet/ { print $0}' /etc/modprobe.conf | sed 's/^options lnet //g')
+    [ -f /etc/modprobe.conf ] && MODPROBECONF=/etc/modprobe.conf
+    [ -f /etc/modprobe.d/Lustre ] && MODPROBECONF=/etc/modprobe.d/Lustre
+    [ -z "$LNETOPTS" -a -n "$MODPROBECONF" ] && \
+        LNETOPTS=$(awk '/^options lnet/ { print $0}' $MODPROBECONF | sed 's/^options lnet //g')
     echo "lnet options: '$LNETOPTS'"
     # note that insmod will ignore anything in modprobe.conf
     load_module ../lnet/lnet/lnet $LNETOPTS
     LNETLND=${LNETLND:-"socklnd/ksocklnd"}
     load_module ../lnet/klnds/$LNETLND
-    [ "$FSTYPE" = "ldiskfs" ] && load_module ../ldiskfs/ldiskfs/ldiskfs
     load_module lvfs/lvfs
     load_module obdclass/obdclass
-    load_module lvfs/fsfilt_$FSTYPE
     load_module ptlrpc/ptlrpc
     load_module ptlrpc/gss/ptlrpc_gss
     # Now, some modules depend on lquota without USE_QUOTA check,
@@ -183,17 +183,22 @@ load_modules() {
     load_module mdc/mdc
     load_module osc/osc
     load_module lov/lov
-    load_module mds/mds
-    load_module mdd/mdd
-    load_module mdt/mdt
-    load_module cmm/cmm
-    load_module osd/osd
-    load_module ost/ost
-    load_module obdfilter/obdfilter
+    load_module mgc/mgc
+    if [ -z "$CLIENTONLY" ]; then
+        load_module mgs/mgs
+        load_module mds/mds
+        load_module mdd/mdd
+        load_module mdt/mdt
+        [ "$FSTYPE" = "ldiskfs" ] && load_module ../ldiskfs/ldiskfs/ldiskfs
+        load_module lvfs/fsfilt_$FSTYPE
+        load_module cmm/cmm
+        load_module osd/osd
+        load_module ost/ost
+        load_module obdfilter/obdfilter
+    fi
+
     load_module llite/lustre
     load_module llite/llite_lloop
-    load_module mgc/mgc
-    load_module mgs/mgs
     rm -f $TMP/ogdb-`hostname`
     $LCTL modules > $TMP/ogdb-`hostname`
     # 'mount' doesn't look in $PATH, just sbin
@@ -828,6 +833,7 @@ stopall() {
     # assume client mount is local 
     grep " $MOUNT " /proc/mounts && zconf_umount `hostname` $MOUNT $*
     grep " $MOUNT2 " /proc/mounts && zconf_umount `hostname` $MOUNT2 $*
+    [ "$CLIENTONLY" ] && return
     for num in `seq $MDSCOUNT`; do
         stop mds$num -f
     done
