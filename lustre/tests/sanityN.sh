@@ -337,7 +337,7 @@ run_test 15 "test out-of-space with multiple writers ==========="
 
 test_16() {
 	rm -f $MOUNT1/fsxfile
-	lfs setstripe $MOUNT1/fsxfile 0 -1 -1 # b=10919
+	lfs setstripe $MOUNT1/fsxfile -c -1 # b=10919
 	fsx -c 50 -p 100 -N 2500 -l $((SIZE * 256)) -S 0 $MOUNT1/fsxfile $MOUNT2/fsxfile
 }
 run_test 16 "2500 iterations of dual-mount fsx ================="
@@ -552,7 +552,7 @@ test_28() { # bug 9977
 	ECHO_UUID="ECHO_osc1_UUID"
 	tOST=`$LCTL dl | | awk '/-osc-|OSC.*MNT/ { print $4 }' | head -1`
 
-	lfs setstripe $DIR1/$tfile 1048576 0 2
+	lfs setstripe $DIR1/$tfile -s 1048576 -i 0 -c 2
 	tOBJID=`lfs getstripe $DIR1/$tfile |grep "^[[:space:]]\+1" |awk '{print $2}'`
 	dd if=/dev/zero of=$DIR1/$tfile bs=1024k count=2
 

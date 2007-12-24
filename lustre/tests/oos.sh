@@ -37,7 +37,7 @@ export LANG=C LC_LANG=C # for "No space left on device" message
 [ -f $LOG ] && echo "ERROR: log file wasn't removed?" && exit 1
 
 # make sure we stripe over all OSTs to avoid OOS on only a subset of OSTs
-$LFS setstripe $OOS 65536 0 $STRIPECOUNT
+$LFS setstripe $OOS -c $STRIPECOUNT
 if dd if=/dev/zero of=$OOS count=$(($ORIGFREE + 100)) bs=1k 2> $LOG; then
 	echo "ERROR: dd did not fail"
 	SUCCESS=0

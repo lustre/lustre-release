@@ -915,7 +915,7 @@ test_41() {
 
     local f=$MOUNT/$tfile
     # make sure the start of the file is ost1
-    lfs setstripe $f $((128 * 1024)) 0 0 
+    lfs setstripe $f -s $((128 * 1024)) -i 0 
     do_facet client dd if=/dev/zero of=$f bs=4k count=1 || return 3
     cancel_lru_locks osc
     # fail ost2 and read from ost1
