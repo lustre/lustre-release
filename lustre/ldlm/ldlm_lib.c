@@ -1102,6 +1102,12 @@ static void reset_recovery_timer(struct obd_device *obd, int mintime)
         }
         /* Track the client's largest expected replay time */
         obd->obd_recovery_timeout = max(mintime, obd->obd_recovery_timeout);
+#ifdef CRAY_XT3
+        if(cfs_time_current_sec() + obd->obd_recovery_timeout >
+           obd->obd_recovery_start + obd->obd_recovery_max_time)
+                obd->obd_recovery_timeout = obd->obd_recovery_start + 
+                        obd->obd_recovery_max_time - cfs_time_current_sec();
+#endif
         obd->obd_recovery_end = cfs_time_current_sec() +
                 obd->obd_recovery_timeout;
         cfs_timer_arm(&obd->obd_recovery_timer, 

@@ -836,6 +836,10 @@ static int filter_init_server_data(struct obd_device *obd, struct file * filp)
                 obd->obd_recovery_start = 0;
                 obd->obd_recovery_end = 0;
                 obd->obd_recovery_timeout = OBD_RECOVERY_FACTOR * obd_timeout;
+#ifdef CRAY_XT3
+                /* b13079: this should be set to desired value for ost */
+                obd->obd_recovery_max_time = OBD_RECOVERY_MAX_TIME;
+#endif
         }
 
 out:

@@ -463,6 +463,10 @@ static int mds_init_server_data(struct obd_device *obd, struct file *file)
                 obd->obd_recovery_start = 0;
                 obd->obd_recovery_end = 0;
                 obd->obd_recovery_timeout = OBD_RECOVERY_FACTOR * obd_timeout;
+#ifdef CRAY_XT3
+                /* bz13079: this won't be changed for mds */
+                obd->obd_recovery_max_time = OBD_RECOVERY_MAX_TIME;
+#endif
         }
 
         mds->mds_mount_count = mount_count + 1;
