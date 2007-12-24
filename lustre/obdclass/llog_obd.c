@@ -74,7 +74,7 @@ int __llog_ctxt_put(struct llog_ctxt *ctxt)
         obd->obd_llog_ctxt[ctxt->loc_idx] = NULL;
         spin_unlock(&obd->obd_dev_lock);
 
-        LASSERT(obd->obd_stopping == 1);
+	LASSERT(obd->obd_stopping == 1 || obd->obd_set_up == 0);
         /* cleanup the llog ctxt here */
         if (CTXTP(ctxt, cleanup))
                 rc = CTXTP(ctxt, cleanup)(ctxt);
@@ -102,7 +102,7 @@ int llog_cleanup(struct llog_ctxt *ctxt)
 
         /* sync with other llog ctxt user thread */
         spin_lock(&obd->obd_dev_lock);
-        LASSERT(obd->obd_stopping == 1);
+	LASSERT(obd->obd_stopping == 1 || obd->obd_set_up == 0);
         spin_unlock(&obd->obd_dev_lock);
 
         idx = ctxt->loc_idx;

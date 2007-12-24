@@ -181,6 +181,14 @@ Details    : mds_open improperly used accmode to find out access mode to a
 	     skiplists - locks are now added to the front of the granted
 	     queue.
 
+Severity   : normal
+Bugzilla   : 14477
+Description: Hit ASSERTION(obd->obd_stopping == 1) failed in some setup failed
+	     situation.
+Details    : In obd setup failure handler, obd_stopping will not necessarily to 
+	     be 1, and obd_set_up should also be checked to make sure whether
+	     obd is completely setup.
+
 --------------------------------------------------------------------------------
 
 2007-12-07         Cluster File Systems, Inc. <info@clusterfs.com>
