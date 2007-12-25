@@ -201,6 +201,94 @@ static inline void cfs_pause(cfs_duration_t ticks)
         schedule_timeout(ticks);
 }
 
+#ifndef wait_event_timeout /* Only for RHEL3 2.4.21 kernel */
+#define __wait_event_timeout(wq, condition, timeout, ret)        \
+do {                                                             \
+	int __ret = 0;                                           \
+	if (!(condition)) {                                      \
+		wait_queue_t __wait;                             \
+		unsigned long expire;                            \
+                                                                 \
+		init_waitqueue_entry(&__wait, current);          \
+		expire = timeout + jiffies;                      \
+		add_wait_queue(&wq, &__wait);                    \
+		for (;;) {                                       \
+			set_current_state(TASK_UNINTERRUPTIBLE); \
+			if (condition)                           \
+				break;                           \
+			if (jiffies > expire) {                  \
+				ret = jiffies - expire;          \
+				break;                           \
+			}                                        \
+			schedule_timeout(timeout);               \
+		}                                                \
+		current->state = TASK_RUNNING;                   \
+		remove_wait_queue(&wq, &__wait);                 \
+	}                                                        \
+} while (0)
+/*
+   retval == 0; condition met; we're good.
+   retval > 0; timed out.
+*/
+#define cfs_waitq_wait_event_timeout(wq, condition, timeout)         \
+({                                                                   \
+	int __ret = 0;                                               \
+	if (!(condition))                                            \
+		__wait_event_timeout(wq, condition, timeout, __ret); \
+	__ret;                                                       \
+})
+#else
+#define cfs_waitq_wait_event_timeout  wait_event_timeout
+#endif
+
+#ifndef wait_event_interruptible_timeout /* Only for RHEL3 2.4.21 kernel */
+#define __wait_event_interruptible_timeout(wq, condition, timeout, ret)   \
+do {                                                           \
+	int __ret = 0;                                         \
+	if (!(condition)) {                                    \
+		wait_queue_t __wait;                           \
+		unsigned long expire;                          \
+                                                               \
+		init_waitqueue_entry(&__wait, current);        \
+		expire = timeout + jiffies;                    \
+		add_wait_queue(&wq, &__wait);                  \
+		for (;;) {                                     \
+			set_current_state(TASK_INTERRUPTIBLE); \
+			if (condition)                         \
+				break;                         \
+			if (jiffies > expire) {                \
+				ret = jiffies - expire;        \
+				break;                         \
+			}                                      \
+			if (!signal_pending(current)) {        \
+				schedule_timeout(timeout);     \
+				continue;                      \
+			}                                      \
+			ret = -ERESTARTSYS;                    \
+			break;                                 \
+		}                                              \
+		current->state = TASK_RUNNING;                 \
+		remove_wait_queue(&wq, &__wait);               \
+	}                                                      \
+} while (0)
+
+/*
+   retval == 0; condition met; we're good.
+   retval < 0; interrupted by signal.
+   retval > 0; timed out.
+*/
+#define cfs_waitq_wait_event_interruptible_timeout(wq, condition, timeout) \
+({                                                                \
+	int __ret = 0;                                            \
+	if (!(condition))                                         \
+		__wait_event_interruptible_timeout(wq, condition, \
+						timeout, __ret);  \
+	__ret;                                                    \
+})
+#else
+#define cfs_waitq_wait_event_interruptible_timeout wait_event_interruptible_timeout
+#endif
+
 #else   /* !__KERNEL__ */
 
 typedef struct proc_dir_entry           cfs_proc_dir_entry_t;

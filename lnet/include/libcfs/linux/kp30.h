@@ -173,6 +173,13 @@ static inline void our_cond_resched(void)
 # define printf(format, b...) CDEBUG(D_OTHER, format , ## b)
 # define time(a) CURRENT_TIME
 
+#ifndef num_possible_cpus
+#define num_possible_cpus() NR_CPUS
+#endif
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0)
+#define i_size_read(a) ((a)->i_size)
+#endif
+
 #else  /* !__KERNEL__ */
 # include <stdio.h>
 # include <stdlib.h>

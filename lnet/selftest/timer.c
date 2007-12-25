@@ -154,7 +154,7 @@ stt_timer_main (void *arg)
         while (!stt_data.stt_shuttingdown) {
                 stt_check_timers(&stt_data.stt_prev_slot);
 
-                wait_event_timeout(stt_data.stt_waitq,
+                cfs_waitq_wait_event_timeout(stt_data.stt_waitq,
                                    stt_data.stt_shuttingdown,
                                    cfs_time_seconds(STTIMER_SLOTTIME));
         }
