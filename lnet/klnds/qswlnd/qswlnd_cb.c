@@ -26,11 +26,11 @@
 void
 kqswnal_notify_peer_down(kqswnal_tx_t *ktx)
 {
-        struct timeval     now;
         time_t             then;
 
-        do_gettimeofday (&now);
-        then = now.tv_sec - (jiffies - ktx->ktx_launchtime)/HZ;
+        then = cfs_time_current_sec() -
+                cfs_duration_sec(cfs_time_current() -
+                                 ktx->ktx_launchtime);
 
         lnet_notify(kqswnal_data.kqn_ni, ktx->ktx_nid, 0, then);
 }
@@ -607,7 +607,7 @@ kqswnal_launch (kqswnal_tx_t *ktx)
         unsigned long flags;
         int   rc;
 
-        ktx->ktx_launchtime = jiffies;
+        ktx->ktx_launchtime = cfs_time_current();
 
         if (kqswnal_data.kqn_shuttingdown)
                 return (-ESHUTDOWN);

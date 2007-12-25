@@ -145,7 +145,8 @@ typedef struct gmnal_tx {
                 struct iovec    *iov;           /* mapped frags */
                 lnet_kiov_t     *kiov;          /* page frags */
         }                        tx_large_frags;
-        unsigned long            tx_launchtime; /* when (in jiffies) the transmit was launched */
+        cfs_time_t               tx_launchtime; /* when (in jiffies) the
+                                                 * transmit was launched */
         struct gmnal_tx         *tx_next;       /* stash on gmni_txs */
 } gmnal_tx_t;
 

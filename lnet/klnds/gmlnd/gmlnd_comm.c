@@ -29,12 +29,12 @@
 void
 gmnal_notify_peer_down(gmnal_tx_t *tx)
 {
-        struct timeval     now;
         time_t             then;
 
-        do_gettimeofday (&now);
-        then = now.tv_sec - (jiffies - tx->tx_launchtime)/HZ;
-
+        then = cfs_time_current_sec() -
+                cfs_duration_sec(cfs_time_current() -
+                                 tx->tx_launchtime);
+        
         lnet_notify(tx->tx_gmni->gmni_ni, tx->tx_nid, 0, then);
 }
 
@@ -339,7 +339,7 @@ gmnal_check_txqueues_locked (gmnal_ni_t *gmni)
                 LASSERT(!tx->tx_credit);
                 tx->tx_credit = 1;
 
-                tx->tx_launchtime = jiffies;
+                tx->tx_launchtime = cfs_time_current();
 
                 if (tx->tx_msgnob <= gmni->gmni_small_msgsize) {
                         LASSERT (tx->tx_ltxb == NULL);

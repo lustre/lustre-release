@@ -205,7 +205,8 @@ typedef struct kqswnal_tx
         lnet_nid_t        ktx_nid;              /* destination node */
         void             *ktx_args[3];          /* completion passthru */
         char             *ktx_buffer;           /* pre-allocated contiguous buffer for hdr + small payloads */
-        unsigned long     ktx_launchtime;       /* when (in jiffies) the transmit was launched */
+        cfs_time_t        ktx_launchtime;       /*  when (in jiffies) the transmit
+                                                 *  was launched */
         int               ktx_status;           /* completion status */
 #if KQSW_CKSUM
         __u32             ktx_cksum;            /* optimized GET payload checksum */
