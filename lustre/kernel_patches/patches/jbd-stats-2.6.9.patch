@@ -20,9 +20,9 @@ Index: linux-2.6.9/include/linux/jbd.h
   * tracks a compound transaction through its various states:
   *
 @@ -553,6 +563,21 @@ struct transaction_s 
- 	spinlock_t		t_handle_lock;
- 
- 	/*
+	spinlock_t		t_handle_lock;
+
+	/*
 +	 * Longest time some handle had to wait for running transaction
 +	 */
 +	unsigned long		t_max_wait;
@@ -42,9 +42,9 @@ Index: linux-2.6.9/include/linux/jbd.h
  	 * [t_handle_lock]
  	 */
 @@ -592,6 +617,57 @@ struct transaction_s 
- 	struct list_head	t_jcb;
+ #endif
  };
- 
+
 +struct transaction_run_stats_s {
 +	unsigned long		rs_wait;
 +	unsigned long		rs_running;
@@ -228,48 +228,49 @@ Index: linux-2.6.9/fs/jbd/checkpoint.c
 ===================================================================
 --- linux-2.6.9.orig/fs/jbd/checkpoint.c
 +++ linux-2.6.9/fs/jbd/checkpoint.c
-@@ -166,6 +166,7 @@ static int __cleanup_transaction(journal
-			transaction_t *t = jh->b_transaction;
-			tid_t tid = t->t_tid;
-
-+			transaction->t_chp_stats.cs_forced_to_close++;
-			spin_unlock(&journal->j_list_lock);
-			jbd_unlock_bh_state(bh);
-			log_start_commit(journal, tid);
-@@ -226,7 +227,7 @@ __flush_batch(journal_t *journal, struct
+@@ -126,7 +127,8 @@
+  * Called under jbd_lock_bh_state(jh2bh(jh)), and drops it
   */
- static int __flush_buffer(journal_t *journal, struct journal_head *jh,
-			struct buffer_head **bhs, int *batch_count,
--			int *drop_count)
-+			int *drop_count, transaction_t *transaction)
+ static int __process_buffer(journal_t *journal, struct journal_head *jh,
+-			struct buffer_head **bhs, int *batch_count)
++			struct buffer_head **bhs, int *batch_count,
++			transaction_t *transaction)
  {
 	struct buffer_head *bh = jh2bh(jh);
 	int ret = 0;
-@@ -247,6 +248,7 @@ static int __flush_buffer(journal_t *jou
-		set_buffer_jwrite(bh);
+@@ -166,6 +166,7 @@
+		transaction_t *t = jh->b_transaction;
+		tid_t tid = t->t_tid;
+
++		transaction->t_chp_stats.cs_forced_to_close++;
+		spin_unlock(&journal->j_list_lock);
+		jbd_unlock_bh_state(bh);
+		log_start_commit(journal, tid);
+@@ -247,6 +248,7 @@
 		bhs[*batch_count] = bh;
+		__buffer_relink_io(jh);
 		jbd_unlock_bh_state(bh);
 +		transaction->t_chp_stats.cs_written++;
 		(*batch_count)++;
 		if (*batch_count == NR_BATCH) {
-			__flush_batch(journal, bhs, batch_count);
+			spin_unlock(&journal->j_list_lock);
 @@ -315,6 +317,8 @@ int log_do_checkpoint(journal_t *journal
-		tid_t this_tid;
-
-		transaction = journal->j_checkpoint_transactions;
-+		if (transaction->t_chp_stats.cs_chp_time == 0)
-+			transaction->t_chp_stats.cs_chp_time = CURRENT_MSECS;
-		this_tid = transaction->t_tid;
-		jh = transaction->t_checkpoint_list;
-		last_jh = jh->b_cpprev;
+	if (!journal->j_checkpoint_transactions)
+		goto out;
+	transaction = journal->j_checkpoint_transactions;
++	if (transaction->t_chp_stats.cs_chp_time == 0)
++		transaction->t_chp_stats.cs_chp_time = CURRENT_MSECS;
+	this_tid = transaction->t_tid;
+ restart:
+	/*
 @@ -331,7 +335,8 @@ int log_do_checkpoint(journal_t *journal
 				retry = 1;
 				break;
 			}
--			retry = __flush_buffer(journal, jh, bhs, &batch_count, &drop_count);
-+			retry = __flush_buffer(journal, jh, bhs, &batch_count, 
-+					&drop_count, transaction);
-		} while (jh != last_jh && !retry);
+-			retry = __process_buffer(journal, jh, bhs,&batch_count);
++			retry = __process_buffer(journal, jh, bhs,&batch_count,
++					transaction);
+		}
 
 		if (batch_count) {
 @@ -597,6 +602,8 @@ void __journal_insert_checkpoint(struct 

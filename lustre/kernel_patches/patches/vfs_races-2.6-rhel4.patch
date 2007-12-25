@@ -22,7 +22,7 @@ diff -urp RH_2_6_9_42_0_3.orig/fs/dcache.c RH_2_6_9_42_0_3/fs/dcache.c
   */
   
 -void d_rehash(struct dentry * entry)
-+void __d_rehash(struct dentry * entry, int lock)
++void d_rehash_cond(struct dentry * entry, int lock)
  {
  	struct hlist_head *list = d_hash(entry->d_parent, entry->d_name.hash);
  
@@ -39,12 +39,12 @@ diff -urp RH_2_6_9_42_0_3.orig/fs/dcache.c RH_2_6_9_42_0_3/fs/dcache.c
 +		spin_unlock(&dcache_lock);
  }
  
-+EXPORT_SYMBOL(__d_rehash);
++EXPORT_SYMBOL(d_rehash_cond);
 +
 +void d_rehash(struct dentry * entry)
 +{
-+	__d_rehash(entry, 1);
-+ }
++	d_rehash_cond(entry, 1);
++}
 +
  #define do_switch(x,y) do { \
  	__typeof__ (x) __tmp = x; \
