@@ -1246,3 +1246,15 @@ check_runas_id() {
         add user $myRUNAS_ID:$myRUNAS_ID on these nodes."
     rm -rf $DIR/d0_runas_test
 }
+
+check_runas_id_ret() {
+    local myRUNAS_ID=$1
+    shift
+    local myRUNAS=$@
+    mkdir $DIR/d0_runas_test
+    chmod 0755 $DIR
+    chown $myRUNAS_ID:$myRUNAS_ID $DIR/d0_runas_test
+    $myRUNAS touch $DIR/d0_runas_test/f$$ || return 1
+    rm -rf $DIR/d0_runas_test
+    return 0
+}

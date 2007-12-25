@@ -175,7 +175,7 @@ EXPORT_SYMBOL(lprocfs_wr_itune);
 #define USER_QUOTA      1
 #define GROUP_QUOTA     2
 
-#define MAX_STYPE_SIZE  4
+#define MAX_STYPE_SIZE  5
 int lprocfs_rd_type(char *page, char **start, off_t off, int count, 
                     int *eof, void *data)
 {
@@ -192,7 +192,28 @@ int lprocfs_rd_type(char *page, char **start, off_t off, int count,
                 if (type & GROUP_QUOTA)
                         strcat(stype, "g");
         }
-        
+
+        /* append with quota version on MDS */
+        if (!strcmp(obd->obd_type->typ_name, LUSTRE_MDS_NAME)) {
+                int rc;
+                lustre_quota_version_t version;
+
+                rc = mds_quota_get_version(obd, &version);
+                if (rc)
+                        return rc;
+
+                switch (version) {
+                        case LUSTRE_QUOTA_V1:
+                                strcat(stype, "1");
+                                break;
+                        case LUSTRE_QUOTA_V2:
+                                strcat(stype, "2");
+                                break;
+                        default:
+                                return -ENOSYS;
+                }
+        }
+
         return snprintf(page, count, "%s\n", stype);
 }
 EXPORT_SYMBOL(lprocfs_rd_type);
@@ -255,17 +276,52 @@ int lprocfs_wr_type(struct file *file, const char *buffer,
         struct obd_device *obd = (struct obd_device *)data;
         struct obd_device_target *obt = &obd->u.obt;
         int type = 0;
+        unsigned long i;
         char stype[MAX_STYPE_SIZE + 1] = "";
         LASSERT(obd != NULL);
 
-        if (copy_from_user(stype, buffer, MAX_STYPE_SIZE))
+        if (count > MAX_STYPE_SIZE)
+                return -EINVAL;
+
+        if (copy_from_user(stype, buffer, count))
                 return -EFAULT;
 
-        if (strchr(stype, 'u'))
-                type |= USER_QUOTA;
-        if (strchr(stype, 'g'))
-                type |= GROUP_QUOTA;
-        
+        for (i = 0 ; i < count ; i++) {
+                int rc;
+
+                switch (stype[i]) {
+                case 'u' : 
+                        type |= USER_QUOTA;
+                        break;
+                case 'g' : 
+                        type |= GROUP_QUOTA;
+                        break;
+                /* quota version specifiers */
+                case '1' : 
+                        if (strcmp(obd->obd_type->typ_name, LUSTRE_MDS_NAME))
+                                break;
+
+                        rc = mds_quota_set_version(obd, LUSTRE_QUOTA_V1);
+                        if (rc) {
+                                CDEBUG(D_QUOTA, "failed to set quota v1! %d\n", rc);
+                                return rc;
+                        }
+                        break;
+                case '2' : 
+                        if (strcmp(obd->obd_type->typ_name, LUSTRE_MDS_NAME))
+                                break;
+
+                        rc = mds_quota_set_version(obd, LUSTRE_QUOTA_V2);
+                        if (rc) {
+                                CDEBUG(D_QUOTA, "could not set quota v2! %d\n", rc);
+                                return rc;
+                        }
+                        break;
+                default  : /* just skip stray symbols like \n */
+                        break;
+                }
+        }
+
         obt->obt_qctxt.lqc_atype = type;
 
         if (type == 0)
@@ -496,6 +552,7 @@ static int mds_quota_setup(struct obd_device *obd)
         int rc;
         ENTRY;
 
+        mds->mds_quota_info.qi_version = LUSTRE_QUOTA_V2;
         atomic_set(&obt->obt_quotachecking, 1);
         /* initialize quota master and quota context */
         sema_init(&mds->mds_qonoff_sem, 1);

@@ -1029,6 +1029,79 @@ test_14(){ # b=12223 -- setting quota on root
 }
 run_test 14 "test setting quota on root ==="
 
+quota_set_version() {
+        do_facet mds "for i in /proc/fs/lustre/mds/${FSNAME}-MDT*/quota_type; do
+                echo $1 >> \\\$i;
+        done"
+}
+
+test_14a(){
+        # 1. check that required users exist
+        # 2. ensure that switch to new mode will start conversion
+        # 3. start quota in old mode and put some entries
+        # 4. restart quota in new mode forcing conversion and check the entries
+
+        MISSING_USERS=""
+        for i in `seq 1 30`; do
+                check_runas_id_ret quota15_$i
+                if [ "$?" != "0" ]; then
+                       MISSING_USERS="$MISSING_USERS quota15_$i"
+                fi
+        done
+
+        if [ -n "$MISSING_USERS" ]; then
+                echo "following users are missing: $MISSING_USERS, test skipped"
+                return
+        fi
+
+        $LFS quotaoff -ug $DIR
+        quota_set_version 1
+        $LFS quotacheck -ug $DIR
+
+        for i in `seq 1 30`; do 
+                $LFS setquota -u quota15_$i $i $i $i $i $DIR || error "lfs setquota failed"
+        done
+
+        $LFS quotaoff -ug $DIR
+        quota_set_version 2
+        $LFS quotainv -ug $DIR
+        $LFS quotacheck -ug $DIR
+
+        for i in `seq 1 30`; do 
+                # the format is "mntpnt   curspace[*]   bsoftlimit   bhardlimit   [time]   curinodes[*]    isoftlimit  ihardlimit"
+                ($LFS quota -u quota15_$i $DIR | grep -E '^ *'$DIR' *[0-9]+\** *'$i' *'$i' *[0-9]+\** *'$i' *'$i) \
+                 || error "lfs quota output is unexpected"
+                $LFS setquota -u quota15_$i 0 0 0 0 $DIR || error "ifs setquota clear failed"
+        done
+}
+run_test 14a "setting 30 quota entries in quota v1 file before conversion ==="
+
+test_15(){
+        LIMIT=$((24 * 1024 * 1024 * 1024 * 1024)) # 24 TB
+        PATTERN="`echo $DIR | sed 's/\//\\\\\//g'`"
+
+        # test for user
+        $LFS setquota -u $TSTUSR 0 $LIMIT 0 0 $DIR || error "failed setting user quota limit $LIMIT"
+        TOTAL_LIMIT="`$LFS quota -u $TSTUSR $DIR | awk '/^.*'$PATTERN'.*[[:digit:]+][[:space:]+]/ { print $4 }'`"
+        [ $TOTAL_LIMIT -eq $LIMIT ] || error "  (user)total limits = $TOTAL_LIMIT; limit = $LIMIT, failed!"
+        echo "  (user)total limits = $TOTAL_LIMIT; limit = $LIMIT, successful!"
+        $LFS setquota -u $TSTUSR 0 0 0 0 $DIR || error "failed removing user quota limit"
+
+        # test for group
+        $LFS setquota -g $TSTUSR 0 $LIMIT 0 0 $DIR || error "failed setting group quota limit $LIMIT"
+        TOTAL_LIMIT="`$LFS quota -g $TSTUSR $DIR | awk '/^.*'$PATTERN'.*[[:digit:]+][[:space:]+]/ { print $4 }'`"
+        [ $TOTAL_LIMIT -eq $LIMIT ] || error "  (group)total limits = $TOTAL_LIMIT; limit = $LIMIT, failed!"
+        echo "  (group)total limits = $TOTAL_LIMIT; limit = $LIMIT, successful!"
+        $LFS setquota -g $TSTUSR 0 0 0 0 $DIR || error "failed removing group quota limit"
+        $LFS quotaoff -ug $DIR
+        quota_set_version 1
+        $LFS quotacheck -ug $DIR || error "quotacheck failed"
+
+        echo "Testing that >4GB quota limits fail on volume with quota v1"
+        ! $LFS setquota -u $TSTUSR 0 $LIMIT 0 0 $DIR
+}
+run_test 15 "set block quota more than 4T ==="
+
 # turn off quota
 test_99()
 {

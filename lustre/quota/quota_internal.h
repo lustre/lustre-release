@@ -27,8 +27,8 @@
 
 #define DQUOT_DEBUG(dquot, fmt, arg...)                                       \
         CDEBUG(D_QUOTA, "refcnt(%u) id(%u) type(%u) off(%llu) flags(%lu) "    \
-               "bhardlimit(%u) curspace("LPX64") ihardlimit(%u) "             \
-               "curinodes(%u): " fmt, dquot->dq_refcnt,                       \
+               "bhardlimit("LPU64") curspace("LPU64") ihardlimit("LPU64")"    \
+               "curinodes("LPU64"): " fmt, dquot->dq_refcnt,                  \
                dquot->dq_id, dquot->dq_type, dquot->dq_off,  dquot->dq_flags, \
                dquot->dq_dqb.dqb_bhardlimit, dquot->dq_dqb.dqb_curspace,      \
                dquot->dq_dqb.dqb_ihardlimit, dquot->dq_dqb.dqb_curinodes,     \
@@ -74,6 +74,10 @@ int mds_quota_adjust(struct obd_device *obd, unsigned int qcids[],
 int filter_quota_adjust(struct obd_device *obd, unsigned int qcids[],
                         unsigned int qpids[], int rc, int opc);
 int init_admin_quotafiles(struct obd_device *obd, struct obd_quotactl *oqctl);
+int mds_quota_get_version(struct obd_device *obd, lustre_quota_version_t *ver);
+int mds_quota_set_version(struct obd_device *obd, lustre_quota_version_t ver);
+int mds_quota_invalidate(struct obd_device *obd, struct obd_quotactl *oqctl);
+
 int mds_admin_quota_on(struct obd_device *obd, struct obd_quotactl *oqctl);
 int mds_quota_on(struct obd_device *obd, struct obd_quotactl *oqctl);
 int mds_quota_off(struct obd_device *obd, struct obd_quotactl *oqctl);

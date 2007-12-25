@@ -1493,4 +1493,5 @@ typedef enum {
 #define QUOTA_RET_NOQUOTA      1 /* not support quota */
 #define QUOTA_RET_NOLIMIT      2 /* quota limit isn't set */
 #define QUOTA_RET_ACQUOTA      3 /* need to acquire extra quota */
+
 #endif

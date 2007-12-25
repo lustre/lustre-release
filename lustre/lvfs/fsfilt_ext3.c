@@ -2063,6 +2063,9 @@ static int fsfilt_ext3_quotainfo(struct lustre_quota_info *lqi, int type,
         case QFILE_INIT_INFO:
                 rc = lustre_init_quota_info(lqi, type);
                 break;
+        case QFILE_CONVERT:
+                rc = lustre_quota_convert(lqi, type);
+                break;
         default:
                 CERROR("Unsupported admin quota file cmd %d\n", cmd);
                 LBUG();

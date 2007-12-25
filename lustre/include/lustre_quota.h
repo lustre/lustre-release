@@ -42,11 +42,23 @@ struct lustre_mem_dqinfo {
 struct lustre_quota_info {
         struct file *qi_files[MAXQUOTAS];
         struct lustre_mem_dqinfo qi_info[MAXQUOTAS];
+        lustre_quota_version_t qi_version;
 };
 
 #define DQ_STATUS_AVAIL         0x0     /* Available dquot */
 #define DQ_STATUS_SET           0x01    /* Sombody is setting dquot */
 #define DQ_STATUS_RECOVERY      0x02    /* dquot is in recovery */
+
+struct lustre_mem_dqblk {
+        __u64 dqb_bhardlimit;	/* absolute limit on disk blks alloc */
+        __u64 dqb_bsoftlimit;	/* preferred limit on disk blks */
+        __u64 dqb_curspace;	/* current used space */
+        __u64 dqb_ihardlimit;	/* absolute limit on allocated inodes */
+        __u64 dqb_isoftlimit;	/* preferred inode limit */
+        __u64 dqb_curinodes;	/* current # allocated inodes */
+        time_t dqb_btime;	/* time limit for excessive disk use */
+        time_t dqb_itime;	/* time limit for excessive inode use */
+};
 
 struct lustre_dquot {
         /* Hash list in memory, protect by dquot_hash_lock */
@@ -63,7 +75,7 @@ struct lustre_dquot {
         int dq_type;                    /* Type fo quota (USRQUOTA, GRPQUOUTA) */
         unsigned short dq_status;       /* See DQ_STATUS_ */
         unsigned long dq_flags;         /* See DQ_ in quota.h */
-        struct mem_dqblk dq_dqb;        /* Diskquota usage */
+        struct lustre_mem_dqblk dq_dqb; /* Diskquota usage */
 };
 
 struct dquot_id {
@@ -77,6 +89,7 @@ struct dquot_id {
 #define QFILE_INIT_INFO         4
 #define QFILE_RD_DQUOT          5
 #define QFILE_WR_DQUOT          6
+#define QFILE_CONVERT           7
 
 /* admin quotafile operations */
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0)
@@ -88,6 +101,7 @@ int lustre_commit_dquot(struct lustre_dquot *dquot);
 int lustre_init_quota_info(struct lustre_quota_info *lqi, int type);
 int lustre_get_qids(struct file *file, struct inode *inode, int type, 
                     struct list_head *list);
+int lustre_quota_convert(struct lustre_quota_info *lqi, int type);
 #else
 
 #ifndef DQ_FAKE_B
@@ -119,6 +133,11 @@ static inline int lustre_commit_dquot(struct lustre_dquot *dquot)
 }
 static inline int lustre_init_quota_info(struct lustre_quota_info *lqi,
                                          int type)
+{
+        return 0;
+}
+static inline int lustre_quota_convert(struct lustre_quota_info *lqi,
+                                       int type)
 {
         return 0;
 }
@@ -460,5 +479,15 @@ extern quota_interface_t osc_quota_interface;
 extern quota_interface_t mdc_quota_interface;
 extern quota_interface_t lov_quota_interface;
 #endif
+
+#define LUSTRE_ADMIN_QUOTAFILES_V1 {\
+        "admin_quotafile.usr",	/* user admin quotafile */\
+        "admin_quotafile.grp"	/* group admin quotafile */\
+}
+
+#define LUSTRE_ADMIN_QUOTAFILES_V2 {\
+        "admin_quotafile_v2.usr",       /* user admin quotafile */\
+        "admin_quotafile_v2.grp"        /* group admin quotafile */\
+}
 
 #endif /* _LUSTRE_QUOTA_H */

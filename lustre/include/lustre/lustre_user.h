@@ -163,12 +163,15 @@ static inline char *obd_uuid2str(struct obd_uuid *uuid)
         return (char *)(uuid->uuid);
 }
 
-#define LUSTRE_Q_QUOTAON  0x800002     /* turn quotas on */
-#define LUSTRE_Q_QUOTAOFF 0x800003     /* turn quotas off */
-#define LUSTRE_Q_GETINFO  0x800005     /* get information about quota files */
-#define LUSTRE_Q_SETINFO  0x800006     /* set information about quota files */
-#define LUSTRE_Q_GETQUOTA 0x800007     /* get user quota structure */
-#define LUSTRE_Q_SETQUOTA 0x800008     /* set user quota structure */
+/* these must be explicitly translated into linux Q_* in ll_dir_ioctl */
+#define LUSTRE_Q_QUOTAON    0x800002     /* turn quotas on */
+#define LUSTRE_Q_QUOTAOFF   0x800003     /* turn quotas off */
+#define LUSTRE_Q_GETINFO    0x800005     /* get information about quota files */
+#define LUSTRE_Q_SETINFO    0x800006     /* set information about quota files */
+#define LUSTRE_Q_GETQUOTA   0x800007     /* get user quota structure */
+#define LUSTRE_Q_SETQUOTA   0x800008     /* set user quota structure */
+/* lustre-specific control commands */
+#define LUSTRE_Q_INVALIDATE 0x80000b     /* invalidate quota data */
 
 #define UGQUOTA 2       /* set both USRQUOTA and GRPQUOTA */
 
@@ -217,6 +220,11 @@ struct mds_grp_downcall_data {
 #endif
 
 #endif /* !__KERNEL__ */
+
+typedef enum lustre_quota_version {
+        LUSTRE_QUOTA_V1 = 0,
+        LUSTRE_QUOTA_V2 = 1
+} lustre_quota_version_t;
 
 /* XXX: same as if_dqinfo struct in kernel */
 struct obd_dqinfo {

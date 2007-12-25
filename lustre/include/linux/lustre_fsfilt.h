@@ -404,7 +404,7 @@ static inline int fsfilt_quotainfo(struct obd_device *obd,
 }
 
 static inline int fsfilt_qids(struct obd_device *obd, struct file *file,
-                              struct inode *inode, int type, 
+                              struct inode *inode, int type,
                               struct list_head *list)
 {
         if (obd->obd_fsops->fs_qids)

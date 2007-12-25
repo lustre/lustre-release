@@ -74,6 +74,9 @@ int mds_quota_ctl(struct obd_export *exp, struct obd_quotactl *oqctl)
         case Q_GETOQUOTA:
                 rc = mds_get_obd_quota(obd, oqctl);
                 break;
+        case LUSTRE_Q_INVALIDATE:
+                rc = mds_quota_invalidate(obd, oqctl);
+                break;
         default:
                 CERROR("%s: unsupported mds_quotactl command: %d\n",
                        obd->obd_name, oqctl->qc_cmd);

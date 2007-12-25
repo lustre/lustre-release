@@ -26,6 +26,8 @@ lfs \- Lustre utility to create a file with specific striping pattern, find the 
 .br
 .B lfs quotaoff [-ug] <filesystem>
 .br
+.B lfs quotainv [-ug] <filesystem>
+.br
 .B lfs setquota [-u|-g] <name> <block-softlimit> <block-hardlimit> 
              \fB<inode-softlimit> <inode-hardlimit> <filesystem>\fR
 .br
@@ -67,6 +69,9 @@ To turn filesystem quotas on. Options specify quota for users (-u) groups (-g) a
 .TP
 .B quotaoff [-ugf] <filesystem>
 To turn filesystem quotas off.  Options specify quota for users (-u) groups (-g) and force (-f)
+.TP
+.B quotainv [-ug] <filesystem>
+Clear quota files, all of their quota entries, for (-u) users or (-g) groups; after quotainv one must use quotacheck before using quotas. USE THIS COMMAND WITH EXTREME CARE, ITS RESULTS CANNOT BE UNDONE.
 .TP
 .B setquota  [-u|-g] <name> <block-softlimit> <block-hardlimit> <inode-softlimit> <inode-hardlimit> <filesystem>
 To set filesystem quotas for users or groups. Limits are specific as blocks and inodes, see EXAMPLES

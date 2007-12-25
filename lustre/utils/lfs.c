@@ -66,6 +66,7 @@ static int lfs_quotaon(int argc, char **argv);
 static int lfs_quotaoff(int argc, char **argv);
 static int lfs_setquota(int argc, char **argv);
 static int lfs_quota(int argc, char **argv);
+static int lfs_quotainv(int argc, char **argv);
 #endif
 static int lfs_join(int argc, char **argv);
 
@@ -135,6 +136,8 @@ command_t cmdlist[] = {
          "       setquota -t [ -u | -g ] <block-grace> <inode-grace> <filesystem>"},
         {"quota", lfs_quota, 0, "Display disk usage and limits.\n"
          "usage: quota [ -o obd_uuid ] [{-u|-g  <name>}|-t] <filesystem>"},
+        {"quotainv", lfs_quotainv, 0, "Invalidate quota data.\n"
+         "usage: quotainv [-u|-g] <filesystem>"},
 #endif
         {"help", Parser_help, 0, "help"},
         {"exit", Parser_quit, 0, "quit"},
@@ -1257,6 +1260,52 @@ static int lfs_quotaoff(int argc, char **argv)
         return 0;
 }
 
+static int lfs_quotainv(int argc, char **argv)
+{
+        int c;
+        char *mnt;
+        struct if_quotactl qctl;
+        char *obd_type = (char *)qctl.obd_type;
+        int rc;
+
+        memset(&qctl, 0, sizeof(qctl));
+        qctl.qc_cmd = LUSTRE_Q_INVALIDATE;
+
+        optind = 0;
+        while ((c = getopt(argc, argv, "ug")) != -1) {
+                switch (c) {
+                case 'u':
+                        qctl.qc_type |= 0x01;
+                        break;
+                case 'g':
+                        qctl.qc_type |= 0x02;
+                        break;
+                default:
+                        fprintf(stderr, "error: %s: option '-%c' "
+                                        "unrecognized\n", argv[0], c);
+                        return CMD_HELP;
+                }
+        }
+
+        if (qctl.qc_type)
+                qctl.qc_type--;
+        else /* by default, invalidate quota for both user & group */
+                qctl.qc_type = 0x02;
+
+        if (argc == optind)
+                return CMD_HELP;
+
+        mnt = argv[optind];
+
+        rc = llapi_quotactl(mnt, &qctl);
+        if (rc) {
+                fprintf(stderr, "quotainv failed: %s\n", strerror(errno));
+                return rc;
+        }
+
+        return 0;
+}
+
 static int name2id(unsigned int *id, char *name, int type)
 {
         if (type == USRQUOTA) {
@@ -1380,6 +1429,17 @@ error:
         return ULONG_MAX;
 }
 
+#define ARG2ULL(nr, str, msg)                                           \
+do {                                                                    \
+        char *endp;                                                     \
+        nr = strtoull(str, &endp, 0);                                   \
+        if (*endp) {                                                    \
+                fprintf(stderr, "error: bad %s: %s\n", msg, str);       \
+                return CMD_HELP;                                        \
+        }                                                               \
+} while (0)
+
+
 int lfs_setquota(int argc, char **argv)
 {
         int c;
@@ -1432,10 +1492,10 @@ int lfs_setquota(int argc, char **argv)
                         return CMD_HELP;
                 }
 
-                ARG2INT(dqb->dqb_bsoftlimit, argv[optind++], "block-softlimit");
-                ARG2INT(dqb->dqb_bhardlimit, argv[optind++], "block-hardlimit");
-                ARG2INT(dqb->dqb_isoftlimit, argv[optind++], "inode-softlimit");
-                ARG2INT(dqb->dqb_ihardlimit, argv[optind++], "inode-hardlimit");
+                ARG2ULL(dqb->dqb_bsoftlimit, argv[optind++], "block-softlimit");
+                ARG2ULL(dqb->dqb_bhardlimit, argv[optind++], "block-hardlimit");
+                ARG2ULL(dqb->dqb_isoftlimit, argv[optind++], "inode-softlimit");
+                ARG2ULL(dqb->dqb_ihardlimit, argv[optind++], "inode-hardlimit");
 
                 dqb->dqb_valid = QIF_LIMITS;
         } else {
