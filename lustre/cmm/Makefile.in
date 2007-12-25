@@ -1,6 +1,0 @@
-MODULES := cmm
-cmm-objs := cmm_device.o cmm_object.o cmm_lproc.o mdc_device.o mdc_object.o
-
-@SPLIT_TRUE@cmm-objs += cmm_split.o 
-
-@INCLUDE_RULES@
