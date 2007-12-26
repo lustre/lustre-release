@@ -12,6 +12,11 @@
        * Recommended e2fsprogs version: 1.40.2-cfs5
        * Note that reiserfs quotas are disabled on SLES 10 in this kernel.
 
+Severity   : normal
+Bugzilla   : 14136
+Description: make mgs_setparam() handle fsname containing dash
+Details    : fsname containing a dash does not work with lctl conf_param
+
 Severity   : enhancement
 Bugzilla   : 14388
 Description: Update to SLES10 SP1 latest kernel-2.6.16.54-0.2.3.

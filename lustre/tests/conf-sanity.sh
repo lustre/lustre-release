@@ -1190,7 +1190,8 @@ test_32b() {
 run_test 32b "Upgrade from 1.4 with writeconf"
 
 test_33() { # bug 12333
-        local FSNAME2=test1234
+        local rc=0
+        local FSNAME2=test-123
         local fs2mds_HOST=$mds_HOST
         local fs2ost_HOST=$ost_HOST
         [ -n "$ost1_HOST" ] && fs2ost_HOST=$ost1_HOST
@@ -1207,15 +1208,17 @@ test_33() { # bug 12333
 
         start fs2mds $fs2mdsdev $MDS_MOUNT_OPTS
         start fs2ost $fs2ostdev $OST_MOUNT_OPTS
+        do_facet mds "$LCTL conf_param $FSNAME2.sys.timeout=200" || rc=1
         mkdir -p $MOUNT2
-        mount -t lustre $MGSNID:/${FSNAME2} $MOUNT2 || return 1
+        mount -t lustre $MGSNID:/${FSNAME2} $MOUNT2 || rc=2
         echo "ok."
 
         umount -d $MOUNT2
         stop fs2ost -f
         stop fs2mds -f
         rm -rf $MOUNT2 $fs2mdsdev $fs2ostdev
-        cleanup_nocli || return 6
+        cleanup_nocli || rc=6
+        return $rc
 }
 run_test 33 "Mount ost with a large index number"
 
