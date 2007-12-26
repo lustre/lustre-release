@@ -13,8 +13,6 @@ tbd         Cluster File Systems, Inc. <info@clusterfs.com>
         using patchless RHEL 4 clients with this or any earlier release.
        * Recommended e2fsprogs version: 1.40.2-cfs5
        * Note that reiserfs quotas are disabled on SLES 10 in this kernel.
-       * RHEL 4 and RHEL 5/SLES 10 clients behaves differently on 'cd' to a
-        removed cwd "./".
 
 Severity   : normal
 Bugzilla   : 14136
