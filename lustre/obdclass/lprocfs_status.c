@@ -660,6 +660,8 @@ static const char *obd_connect_names[] = {
         "lru_resize",
         "mds_mds_connection",
         "real_conn",
+        "change_qunit_size",
+        "alt_checksum_algorithm",
         NULL
 };
 

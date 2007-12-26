@@ -289,6 +289,7 @@ extern void lustre_swab_ptlrpc_body(struct ptlrpc_body *pb);
 #define OBD_CONNECT_LRU_RESIZE 0x02000000ULL /*Lru resize feature. */
 #define OBD_CONNECT_MDS_MDS    0x04000000ULL /*MDS-MDS connection */
 #define OBD_CONNECT_REAL       0x08000000ULL /*real connection */
+#define OBD_CONNECT_CKSUM      0x20000000ULL /*support several cksum algos */
 /* also update obd_connect_names[] for lprocfs_rd_connect_flags()
  * and lustre/utils/wirecheck.c */
 
