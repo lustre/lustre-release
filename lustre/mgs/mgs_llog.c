@@ -1914,6 +1914,7 @@ int mgs_setparam(struct obd_device *obd, struct lustre_cfg *lcfg, char *fsname)
         struct mgs_target_info *mti;
         char *devname, *param;
         char *ptr, *tmp;
+        __u32 index;
         int rc = 0;
         ENTRY;
 
@@ -1938,13 +1939,13 @@ int mgs_setparam(struct obd_device *obd, struct lustre_cfg *lcfg, char *fsname)
         }
 
         /* Extract fsname */
-        ptr = strchr(devname, '-');
+        ptr = strrchr(devname, '-');
         memset(fsname, 0, MTI_NAME_MAXLEN);
-        if (!ptr) {
+        if (ptr && (server_name2index(ptr, &index, NULL) >= 0)) {
+                strncpy(fsname, devname, ptr - devname);
+        } else {
                 /* assume devname is the fsname */
                 strncpy(fsname, devname, MTI_NAME_MAXLEN);
-        } else {  
-                strncpy(fsname, devname, ptr - devname);
         }
         fsname[MTI_NAME_MAXLEN - 1] = 0;
         CDEBUG(D_MGS, "setparam on fs %s device %s\n", fsname, devname);
