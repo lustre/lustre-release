@@ -108,7 +108,12 @@ int lov_packmd(struct obd_export *exp, struct lov_mds_md **lmmp,
                                lsm->lsm_magic, LOV_MAGIC);
                         RETURN(-EINVAL);
                 }
-                stripe_count = lsm->lsm_stripe_count;
+                if (!lmmp) {
+                        stripe_count = lov_get_stripecnt(lov, lsm->lsm_stripe_count);
+                        lsm->lsm_stripe_count = stripe_count;
+                } else {
+                        stripe_count = lsm->lsm_stripe_count;
+                }
         }
 
         /* XXX LOV STACKING call into osc for sizes */
@@ -158,7 +163,7 @@ int lov_packmd(struct obd_export *exp, struct lov_mds_md **lmmp,
 }
 
 /* Find the max stripecount we should use */
-int lov_get_stripecnt(struct lov_obd *lov, int stripe_count)
+int lov_get_stripecnt(struct lov_obd *lov, __u32 stripe_count)
 {
         if (!stripe_count)
                 stripe_count = lov->desc.ld_default_stripe_count;
