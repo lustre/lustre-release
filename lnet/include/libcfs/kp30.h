@@ -260,12 +260,12 @@ int libcfs_debug_cleanup(void);
 int         libcfs_isknown_lnd(int type);
 char       *libcfs_lnd2modname(int type);
 char       *libcfs_lnd2str(int type);
-int         libcfs_str2lnd(char *str);
+int         libcfs_str2lnd(const char *str);
 char       *libcfs_net2str(__u32 net);
 char       *libcfs_nid2str(lnet_nid_t nid);
-__u32       libcfs_str2net(char *str);
-lnet_nid_t  libcfs_str2nid(char *str);
-int         libcfs_str2anynid(lnet_nid_t *nid, char *str);
+__u32       libcfs_str2net(const char *str);
+lnet_nid_t  libcfs_str2nid(const char *str);
+int         libcfs_str2anynid(lnet_nid_t *nid, const char *str);
 char       *libcfs_id2str(lnet_process_id_t id);
 void        libcfs_setnet0alias(int type);
 

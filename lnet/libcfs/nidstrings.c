@@ -84,19 +84,19 @@ libcfs_next_nidstring (void)
         return str;
 }
 
-static int  libcfs_lo_str2addr(char *str, int nob, __u32 *addr);
+static int  libcfs_lo_str2addr(const char *str, int nob, __u32 *addr);
 static void libcfs_ip_addr2str(__u32 addr, char *str);
-static int  libcfs_ip_str2addr(char *str, int nob, __u32 *addr);
+static int  libcfs_ip_str2addr(const char *str, int nob, __u32 *addr);
 static void libcfs_decnum_addr2str(__u32 addr, char *str);
 static void libcfs_hexnum_addr2str(__u32 addr, char *str);
-static int  libcfs_num_str2addr(char *str, int nob, __u32 *addr);
+static int  libcfs_num_str2addr(const char *str, int nob, __u32 *addr);
 
 struct netstrfns {
         int          nf_type;
         char        *nf_name;
         char        *nf_modname;
         void       (*nf_addr2str)(__u32 addr, char *str);
-        int        (*nf_str2addr)(char *str, int nob, __u32 *addr);
+        int        (*nf_str2addr)(const char *str, int nob, __u32 *addr);
 };
 
 static struct netstrfns  libcfs_netstrfns[] = {
@@ -167,7 +167,7 @@ static struct netstrfns  libcfs_netstrfns[] = {
 const int libcfs_nnetstrfns = sizeof(libcfs_netstrfns)/sizeof(libcfs_netstrfns[0]);
 
 int
-libcfs_lo_str2addr(char *str, int nob, __u32 *addr)
+libcfs_lo_str2addr(const char *str, int nob, __u32 *addr)
 {
         *addr = 0;
         return 1;
@@ -200,7 +200,7 @@ libcfs_ip_addr2str(__u32 addr, char *str)
  * fine too :) */
 
 int
-libcfs_ip_str2addr(char *str, int nob, __u32 *addr)
+libcfs_ip_str2addr(const char *str, int nob, __u32 *addr)
 {
         int   a;
         int   b;
@@ -259,7 +259,7 @@ libcfs_hexnum_addr2str(__u32 addr, char *str)
 }
 
 int
-libcfs_num_str2addr(char *str, int nob, __u32 *addr)
+libcfs_num_str2addr(const char *str, int nob, __u32 *addr)
 {
         int     n;
 
@@ -292,7 +292,7 @@ libcfs_lnd2netstrfns(int lnd)
 }
 
 struct netstrfns *
-libcfs_name2netstrfns(char *name)
+libcfs_name2netstrfns(const char *name)
 {
         int    i;
 
@@ -333,7 +333,7 @@ libcfs_lnd2str(int lnd)
 }
 
 int
-libcfs_str2lnd(char *str)
+libcfs_str2lnd(const char *str)
 {
         struct netstrfns *nf = libcfs_name2netstrfns(str);
 
@@ -395,7 +395,7 @@ libcfs_nid2str(lnet_nid_t nid)
 }
 
 static struct netstrfns *
-libcfs_str2net_internal(char *str, __u32 *net)
+libcfs_str2net_internal(const char *str, __u32 *net)
 {
         struct netstrfns *nf;
         int               nob;
@@ -432,7 +432,7 @@ libcfs_str2net_internal(char *str, __u32 *net)
 }
 
 __u32
-libcfs_str2net(char *str)
+libcfs_str2net(const char *str)
 {
         __u32  net;
 
@@ -443,9 +443,9 @@ libcfs_str2net(char *str)
 }
 
 lnet_nid_t
-libcfs_str2nid(char *str)
+libcfs_str2nid(const char *str)
 {
-        char             *sep = strchr(str, '@');
+        const char       *sep = strchr(str, '@');
         struct netstrfns *nf;
         __u32             net;
         __u32             addr;
@@ -485,7 +485,7 @@ libcfs_id2str(lnet_process_id_t id)
 }
 
 int
-libcfs_str2anynid(lnet_nid_t *nidp, char *str)
+libcfs_str2anynid(lnet_nid_t *nidp, const char *str)
 {
         if (!strcmp(str, "*")) {
                 *nidp = LNET_NID_ANY;
