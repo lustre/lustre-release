@@ -185,11 +185,11 @@ load_modules() {
     load_module lov/lov
     load_module mgc/mgc
     if [ -z "$CLIENTONLY" ]; then
+        [ "$FSTYPE" = "ldiskfs" ] && load_module ../ldiskfs/ldiskfs/ldiskfs
         load_module mgs/mgs
         load_module mds/mds
         load_module mdd/mdd
         load_module mdt/mdt
-        [ "$FSTYPE" = "ldiskfs" ] && load_module ../ldiskfs/ldiskfs/ldiskfs
         load_module lvfs/fsfilt_$FSTYPE
         load_module cmm/cmm
         load_module osd/osd
