@@ -198,6 +198,11 @@ Details    : In obd setup failure handler, obd_stopping will not necessarily to
 	     be 1, and obd_set_up should also be checked to make sure whether
 	     obd is completely setup.
 
+Severity   : enhancement
+Bugzilla   : 14398
+Description: Allow masking D_WARNING, D_ERROR messages from console
+Details    : Console messages can now be disabled via lnet.printk.
+
 --------------------------------------------------------------------------------
 
 2007-12-07         Cluster File Systems, Inc. <info@clusterfs.com>
