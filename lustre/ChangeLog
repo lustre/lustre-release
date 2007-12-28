@@ -560,6 +560,11 @@ Details    : When CRAY_XT3 is defined, the fsgid supplied by the client is
 	     whereas the supplied fsgid can be trusted if it is in the list of
 	     supplementary groups returned by the group upcall.
 
+Severity   : enhancement
+Bugzilla   : 14398
+Description: Allow masking D_WARNING, D_ERROR messages from console
+Details    : Console messages can now be disabled via lnet.printk.
+
 --------------------------------------------------------------------------------
 
 2007-08-10         Cluster File Systems, Inc. <info@clusterfs.com>

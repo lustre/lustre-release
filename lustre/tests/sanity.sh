@@ -2670,6 +2670,26 @@ test_60c() {
 }
 run_test 60c "unlink file when mds full"
 
+test_60d() {
+	SAVEPRINTK=$(sysctl -n lnet.printk)
+
+	# verify "lctl mark" is even working"
+	MESSAGE="test message ID $RANDOM $$"
+	$LCTL mark "$MESSAGE" || error "$LCTL mark failed"
+	dmesg | grep -q "$MESSAGE" || error "didn't find debug marker in log"
+
+	sysctl -w lnet.printk=0 || error "set lnet.printk failed"
+	sysctl -n lnet.printk | grep emerg || error "lnet.printk dropped emerg"
+
+	MESSAGE="new test message ID $RANDOM $$"
+	# Assume here that libcfs_debug_mark_buffer() uses D_WARNING
+	$LCTL mark "$MESSAGE" || error "$LCTL mark failed"
+	dmesg | grep -q "$MESSAGE" && error "D_WARNING wasn't masked" || true
+
+	sysctl -w lnet.printk="$SAVEPRINTK"
+}
+run_test 60d "test printk console message masking"
+
 test_61() {
 	f="$DIR/f61"
 	dd if=/dev/zero of=$f bs=`page_size` count=1
