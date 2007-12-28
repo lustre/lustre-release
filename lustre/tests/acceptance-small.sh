@@ -246,7 +246,12 @@ for NAME in $CONFIGS; do
 		[ -f /etc/modprobe.conf ] && MODPROBECONF=/etc/modprobe.conf
 		[ -f /etc/modprobe.d/Lustre ] && MODPROBECONF=/etc/modprobe.d/Lustre
 
-		LNETOPTS="$(awk '/^options lnet/ { print $0}' $MODPROBECONF | sed 's/^options lnet //g') accept=all" MDS_MOUNT_OPTS="${MDS_MOUNT_OPTS},noacl" $SETUP
+		LNETOPTS="$(awk '/^options lnet/ { print $0}' $MODPROBECONF | \
+			sed 's/^options lnet //g') accept=all" \
+			MDS_MOUNT_OPTS=$(echo $MDS_MOUNT_OPTS | sed 's/^[ \t]*//;s/[ \t]*$//') \
+			MDS_MOUNT_OPTS="${MDS_MOUNT_OPTS},noacl" \
+			MDS_MOUNT_OPTS=${MDS_MOUNT_OPTS/#,/-o } \
+			$SETUP
 		export LIBLUSTRE_MOUNT_POINT=$MOUNT2
 		export LIBLUSTRE_MOUNT_TARGET=$MGSNID:/$FSNAME
 		export LIBLUSTRE_TIMEOUT=`cat /proc/sys/lustre/timeout`
