@@ -1330,7 +1330,7 @@ static void ldlm_handle_cp_callback(struct ptlrpc_request *req,
         }
 
         if (dlm_req->lock_flags & LDLM_FL_AST_SENT) {
-                lock->l_flags |= LDLM_FL_CBPENDING;
+                lock->l_flags |= LDLM_FL_CBPENDING | LDLM_FL_BL_AST;
                 LDLM_DEBUG(lock, "completion AST includes blocking AST");
         }
 
