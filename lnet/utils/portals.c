@@ -53,7 +53,7 @@
 #include "parser.h"
 
 unsigned int libcfs_debug;
-unsigned int libcfs_printk;
+unsigned int libcfs_printk = D_CANTMASK;
 
 static int   g_net_set;
 static __u32 g_net;

@@ -41,7 +41,7 @@ unsigned int libcfs_debug = (D_EMERG | D_ERROR | D_WARNING | D_CONSOLE |
                              D_NETERROR | D_HA | D_CONFIG | D_IOCTL);
 EXPORT_SYMBOL(libcfs_debug);
 
-unsigned int libcfs_printk;
+unsigned int libcfs_printk = D_CANTMASK;
 EXPORT_SYMBOL(libcfs_printk);
 
 unsigned int libcfs_console_ratelimit = 0;
@@ -698,10 +698,8 @@ libcfs_debug_vmsg2(cfs_debug_limit_state_t *cdls,
         /* toconsole == 0 - all messages to debug_file_fd
          * toconsole == 1 - warnings to console, all to debug_file_fd
          * toconsole >  1 - all debug to console */
-        if ( ((mask & D_CANTMASK) &&
-             (toconsole == 1)) || (toconsole > 1)) {
+        if (((mask & libcfs_printk) && toconsole == 1) || toconsole > 1)
                 console = 1;
-        }
 #endif
 
         if ((!console) && (!debug_file_fd)) {

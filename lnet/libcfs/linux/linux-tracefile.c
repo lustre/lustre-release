@@ -221,7 +221,7 @@ void print_to_console(struct ptldebug_header *hdr, int mask, const char *buf,
 	} else if ((mask & D_WARNING) != 0) {
 		prefix = "Lustre";
 		ptype = KERN_WARNING;
-	} else if ((mask & libcfs_printk) != 0 || (mask & D_CONSOLE)) {
+	} else if ((mask & (D_CONSOLE | libcfs_printk)) != 0) {
 		prefix = "Lustre";
 		ptype = KERN_INFO;
 	}

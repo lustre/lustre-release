@@ -343,7 +343,7 @@ int libcfs_debug_vmsg2(cfs_debug_limit_state_t *cdls, int subsys, int mask,
         __LASSERT (tage->used <= CFS_PAGE_SIZE);
 
 console:
-        if (!((mask & D_CANTMASK) != 0 || (mask & libcfs_printk) != 0)) {
+        if ((mask & libcfs_printk) == 0) {
                 /* no console output requested */
                 if (tcd != NULL)
                         trace_put_tcd(tcd);
