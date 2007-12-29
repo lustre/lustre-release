@@ -180,6 +180,8 @@ run_test 1 "MDS/MDS failure"
 ############### Second Failure Mode ###############
 test_2() {
     echo "Verify Lustre filesystem is up and running"
+    [ -z "$(mounted_lustre_filesystems)" ] && skip "Lustre is not running" && return
+
     client_df
 
     shutdown_facet mds
@@ -218,6 +220,7 @@ run_test 2 "Second Failure Mode: MDS/OST `date`"
 test_3() {
     #Create files
     echo "Verify Lustre filesystem is up and running"
+    [ -z "$(mounted_lustre_filesystems)" ] && skip "Lustre is not running" && return
     
     #MDS Portion
     facet_failover mds
@@ -296,6 +299,8 @@ test_5() {
 
     #Create files
     echo "Verify Lustre filesystem is up and running"
+    [ -z "$(mounted_lustre_filesystems)" ] && skip "Lustre is not running" && return
+
     client_df
     
     #OST Portion
@@ -342,7 +347,9 @@ test_6() {
 
     #Create files
     echo "Verify Lustre filesystem is up and running"
-    client_df || return 1
+    [ -z "$(mounted_lustre_filesystems)" ] && skip "Lustre is not running" && return
+
+    client_df
     client_touch testfile || return 2
 	
     #OST Portion
@@ -375,7 +382,8 @@ test_6() {
     wait $DFPIDA
     wait $DFPIDB
     echo "Verifying mount"
-    client_df || return 3
+    [ -z "$(mounted_lustre_filesystems)" ] && return 3
+    client_df
 }
 run_test 6 "Sixth Failure Mode: OST/CLIENT `date`"
 ###################################################
@@ -387,6 +395,8 @@ test_7() {
 
     #Create files
     echo "Verify Lustre filesystem is up and running"
+    [ -z "$(mounted_lustre_filesystems)" ] && skip "Lustre is not running" && return
+
     client_df
     client_touch testfile  || return 1
 
@@ -406,6 +416,8 @@ test_7() {
 
     #Create files
     echo "Verify Lustre filesystem is up and running"
+    [ -z "$(mounted_lustre_filesystems)" ] && return 2
+
     client_df
     client_rm testfile
 
@@ -420,8 +432,8 @@ test_7() {
 
     #Reintegration
     echo "Reintegrating CLIENTs"
-    reintegrate_clients
-    client_df || return 2
+    reintegrate_clients || return 2
+    client_df
     
     #Sleep
     echo "wait 1 minutes"
@@ -437,6 +449,8 @@ test_8() {
 
     #Create files
     echo "Verify Lustre filesystem is up and running"
+    [ -z "$(mounted_lustre_filesystems)" ] && skip "Lustre is not running" && return
+
     client_df
     client_touch testfile
 	
@@ -456,6 +470,8 @@ test_8() {
 
     #Create files
     echo "Verify Lustre filesystem is up and running"
+    [ -z "$(mounted_lustre_filesystems)" ] && skip "Lustre is not running" && return
+
     client_df
     client_touch testfile
 
@@ -475,7 +491,7 @@ test_8() {
     
     #Reintegration
     echo "Reintegrating CLIENTs/OST"
-    reintegrate_clients
+    reintegrate_clients || return 3
     wait_for ost1
     start_ost 1
     wait $DFPID
@@ -496,6 +512,8 @@ test_9() {
 
     #Create files
     echo "Verify Lustre filesystem is up and running"
+    [ -z "$(mounted_lustre_filesystems)" ] && skip "Lustre is not running" && return
+
     client_df
     client_touch testfile || return 1
 	
@@ -515,7 +533,8 @@ test_9() {
 
     #Create files
     echo "Verify Lustre filesystem is up and running"
-    $PDSH $LIVE_CLIENT df $MOUNT || return 3
+    $PDSH $LIVE_CLIENT "grep -e $DIR /proc/mounts" || return 3
+    $PDSH $LIVE_CLIENT df $MOUNT
     client_touch testfile || return 4
 
     #CLIENT Portion
@@ -530,8 +549,8 @@ test_9() {
 
     #Reintegration
     echo "Reintegrating  CLIENTs/CLIENTs"
-    reintegrate_clients
-    client_df || return 7
+    reintegrate_clients || return 7
+    client_df
     
     #Sleep
     echo "Wait 1 minutes"
