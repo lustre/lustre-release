@@ -4,7 +4,7 @@ tbd         Cluster File Systems, Inc. <info@clusterfs.com>
         2.6.5-7.287.3 (SLES 9),
         2.6.9-67.EL (RHEL 4),
         2.6.16.54-0.2.3 (SLES 10),
-        2.6.18-53.el5 (RHEL 5),
+        2.6.18-53.1.4.el5 (RHEL 5),
         2.6.18.8 vanilla (kernel.org)
        * Client support for unpatched kernels:
         (see http://wiki.lustre.org/index.php?title=Patchless_Client)
@@ -13,6 +13,10 @@ tbd         Cluster File Systems, Inc. <info@clusterfs.com>
         using patchless RHEL 4 clients with this or any earlier release.
        * Recommended e2fsprogs version: 1.40.2-cfs5
        * Note that reiserfs quotas are disabled on SLES 10 in this kernel.
+
+Severity   : enhancement
+Bugzilla   : 14368
+Description: Update to RHEL5 latest kernel-2.6.18-53.1.4.el5.
 
 Severity   : normal
 Bugzilla   : 14136
