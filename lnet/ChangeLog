@@ -12,6 +12,17 @@ tbd         Cluster File Systems, Inc. <info@clusterfs.com>
 	mxlnd     - MX 1.2.1 or later,
 	ptllnd    - Portals 3.3 / UNICOS/lc 1.5.x, 2.0.x
 
+Severity   : normal
+Bugzilla   : 14387
+Description: liblustre network error
+Details    : liblustre clients should understand LNET_ACCEPT_PORT environment
+	     variable even if they don't start lnet acceptor.
+
+Severity   : normal
+Bugzilla   : 14300
+Description: Strange message from lnet (Ignoring prediction from the future)
+Details    : Incorrect calculation of peer's last_alive value in ksocklnd
+
 --------------------------------------------------------------------------------
 
 2007-12-07         Cluster File Systems, Inc. <info@clusterfs.com>
