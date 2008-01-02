@@ -1,5 +1,5 @@
-tbd         Cluster File Systems, Inc. <info@clusterfs.com>
-       * version 1.6.5
+2008-01-09         Cluster File Systems, Inc. <info@clusterfs.com>
+       * version 1.4.12
        * Support for networks:
 	socklnd   - any kernel supported by Lustre,
 	qswlnd    - Qsnet kernel modules 5.20 and later,
