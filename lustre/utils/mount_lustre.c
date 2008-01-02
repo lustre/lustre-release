@@ -190,6 +190,16 @@ static const struct opt_map opt_map[] = {
   { "nodev",    0, MS_NODEV  },      /* don't interpret devices */
   { "sync",     0, MS_SYNCHRONOUS},  /* synchronous I/O */
   { "async",    1, MS_SYNCHRONOUS},  /* asynchronous I/O */
+  { "atime",    1, MS_NOATIME  },    /* set file access time on read */
+  { "noatime",  0, MS_NOATIME  },    /* do not set file access time on read */
+#ifdef MS_NODIRATIME
+  { "diratime", 1, MS_NODIRATIME },  /* set file access time on read */
+  { "nodiratime",0,MS_NODIRATIME },  /* do not set file access time on read */
+#endif
+#ifdef MS_RELATIME
+  { "relatime", 0, MS_RELATIME },  /* set file access time on read */
+  { "norelatime",1,MS_RELATIME },  /* do not set file access time on read */
+#endif
   { "auto",     0, 0         },      /* Can be mounted using -a */
   { "noauto",   0, 0         },      /* Can only be mounted explicitly */
   { "nousers",  1, 0         },      /* Forbid ordinary user to mount */
