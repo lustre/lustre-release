@@ -1249,6 +1249,11 @@ static int lfs_quotaoff(int argc, char **argv)
         mnt = argv[optind];
 
         rc = llapi_quotactl(mnt, &qctl);
+        if (rc == -1 && errno == ESRCH) {
+                fprintf(stderr, "\n%s quotas are not enabled.\n", 
+                        qctl.qc_type == 0x00 ? "user" : "group");
+                return 0;
+        }
         if (rc) {
                 if (*obd_type)
                         fprintf(stderr, "%s %s ", obd_type,
@@ -1820,6 +1825,11 @@ static int lfs_quota(int argc, char **argv)
         mnt = argv[optind];
 
         rc1 = llapi_quotactl(mnt, &qctl);
+        if (rc1 == -1 && errno == ESRCH) {
+                fprintf(stderr, "\n%s quotas are not enabled.\n", 
+                        qctl.qc_type == 0x00 ? "user" : "group");
+                return 0;
+        }
         if (rc1 && *obd_type)
                 fprintf(stderr, "%s %s ", obd_type, obd_uuid);
 
