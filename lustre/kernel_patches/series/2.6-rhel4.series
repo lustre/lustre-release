@@ -15,6 +15,7 @@ qsnet-rhel4-2.6.patch
 linux-2.6-binutils-2.16.patch
 vm-tunables-rhel4.patch 
 tcp-rto_proc-2.6.9.patch
+rollback-raid5ch-to-55.patch
 raid5-stats.patch
 raid5-configurable-cachesize.patch
 raid5-large-io.patch

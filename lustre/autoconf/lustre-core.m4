@@ -817,6 +817,7 @@ AC_DEFUN([LC_INODE_I_MUTEX],
 LB_LINUX_TRY_COMPILE([
 	#include <linux/mutex.h>
 	#include <linux/fs.h>
+	#undef i_mutex
 ],[
 	struct inode i;
 

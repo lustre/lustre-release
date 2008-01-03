@@ -697,8 +697,8 @@ diff -rup RH_2_6_9_55.orig/fs/nfs/dir.c RH_2_6_9_55/fs/nfs/dir.c
 diff -rup RH_2_6_9_55.orig/fs/nfs/nfs4proc.c RH_2_6_9_55/fs/nfs/nfs4proc.c
 --- RH_2_6_9_55.orig/fs/nfs/nfs4proc.c
 +++ RH_2_6_9_55/fs/nfs/nfs4proc.c
-@@ -770,17 +770,17 @@ nfs4_atomic_open(struct inode *dir, stru
- 	struct nfs4_state *state;
+@@ -770,27 +770,27 @@ nfs4_atomic_open(struct inode *dir, stru
+ 	struct nfs4_inc_open *inc_open;
  
  	if (nd->flags & LOOKUP_CREATE) {
 -		attr.ia_mode = nd->intent.open.create_mode;
@@ -712,12 +712,23 @@ diff -rup RH_2_6_9_55.orig/fs/nfs/nfs4proc.c RH_2_6_9_55/fs/nfs/nfs4proc.c
 +		BUG_ON(nd->intent.it_flags & O_CREAT);
  	}
  
+ 	/* track info in case the open never completes */
+ 	if (!(inc_open = kmalloc(sizeof(*inc_open), GFP_KERNEL)))
+ 		return ERR_PTR(-ENOMEM);
  	cred = rpcauth_lookupcred(NFS_SERVER(dir)->client->cl_auth, 0);
 -	state = nfs4_do_open(dir, &dentry->d_name, nd->intent.open.flags, &attr, cred);
 +	state = nfs4_do_open(dir, &dentry->d_name, nd->intent.it_flags, &attr, cred);
  	put_rpccred(cred);
- 	if (IS_ERR(state))
- 		return (struct inode *)state;
+ 	if (IS_ERR(state)) {
+ 		kfree(inc_open);
+		return (struct inode *)state;
+	}
+	inc_open->task = current;
+-	inc_open->flags = nd->intent.open.flags;
++	inc_open->flags = nd->intent.it_flags;
+	INIT_LIST_HEAD(&inc_open->state);
+	spin_lock(&state->inode->i_lock);
+	list_add(&inc_open->state, &state->inc_open);
 diff -rup RH_2_6_9_55.orig/fs/open.c RH_2_6_9_55/fs/open.c
 --- RH_2_6_9_55.orig/fs/open.c
 +++ RH_2_6_9_55/fs/open.c
