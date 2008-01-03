@@ -1986,7 +1986,7 @@ static int mds_setup(struct obd_device *obd, struct lustre_cfg* lcfg)
         }
         ldlm_register_intent(obd->obd_namespace, mds_intent_policy);
 
-        lprocfs_init_vars(mds, &lvars);
+        lprocfs_mds_init_vars(&lvars);
         if (lprocfs_obd_setup(obd, lvars.obd_vars) == 0 &&
             lprocfs_alloc_obd_stats(obd, LPROC_MDS_LAST) == 0) {
                 /* Init private stats here */
@@ -2544,7 +2544,7 @@ static int mdt_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
         int rc = 0;
         ENTRY;
 
-        lprocfs_init_vars(mdt, &lvars);
+        lprocfs_mdt_init_vars(&lvars);
         lprocfs_obd_setup(obd, lvars.obd_vars);
 
         sema_init(&mds->mds_health_sem, 1);
@@ -2714,7 +2714,7 @@ static int mds_process_config(struct obd_device *obd, obd_count len, void *buf)
         struct lprocfs_static_vars lvars;
         int rc;
 
-        lprocfs_init_vars(mds, &lvars);
+        lprocfs_mds_init_vars(&lvars);
 
         rc = class_process_proc_param(PARAM_MDT, lvars.obd_vars, lcfg, obd);
         return(rc);
@@ -2772,10 +2772,10 @@ static __attribute__((unused)) int __init mds_init(void)
         }
         init_obd_quota_ops(mds_quota_interface_ref, &mds_obd_ops);
 
-        lprocfs_init_vars(mds, &lvars);
+        lprocfs_mds_init_vars(&lvars);
         class_register_type(&mds_obd_ops, NULL,
                             lvars.module_vars, LUSTRE_MDS_NAME, NULL);
-        lprocfs_init_vars(mdt, &lvars);
+        lprocfs_mds_init_vars(&lvars);
         mdt_obd_ops = mdt_obd_ops; //make compiler happy
 //        class_register_type(&mdt_obd_ops, NULL,
 //                            lvars.module_vars, LUSTRE_MDT_NAME, NULL);
@@ -2941,7 +2941,7 @@ static int __init mds_cmd_init(void)
 {
         struct lprocfs_static_vars lvars;
 
-        lprocfs_init_vars(mds, &lvars);
+        lprocfs_mds_init_vars(&lvars);
         class_register_type(&mds_cmd_obd_ops, NULL, lvars.module_vars,
                             LUSTRE_MDS_NAME, NULL);
 

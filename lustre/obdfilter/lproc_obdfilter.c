@@ -231,7 +231,7 @@ static int lprocfs_filter_rd_capa_count(char *page, char **start, off_t off,
                         capa_count[CAPA_SITE_SERVER]);
 }
 
-static struct lprocfs_vars lprocfs_obd_vars[] = {
+static struct lprocfs_vars lprocfs_filter_obd_vars[] = {
         { "uuid",         lprocfs_rd_uuid,          0, 0 },
         { "blocksize",    lprocfs_rd_blksize,       0, 0 },
         { "kbytestotal",  lprocfs_rd_kbytestotal,   0, 0 },
@@ -270,7 +270,7 @@ static struct lprocfs_vars lprocfs_obd_vars[] = {
         { 0 }
 };
 
-static struct lprocfs_vars lprocfs_module_vars[] = {
+static struct lprocfs_vars lprocfs_filter_module_vars[] = {
         { "num_refs",     lprocfs_rd_numrefs,       0, 0 },
         { 0 }
 };
@@ -454,5 +454,9 @@ static ssize_t filter_per_export_stats_seq_write(struct file *file,
 
 LPROC_SEQ_FOPS(filter_per_export_stats);
 
-LPROCFS_INIT_VARS(filter, lprocfs_module_vars, lprocfs_obd_vars)
+void lprocfs_filter_init_vars(struct lprocfs_static_vars *lvars)
+{
+    lvars->module_vars  = lprocfs_filter_module_vars;
+    lvars->obd_vars     = lprocfs_filter_obd_vars;
+}
 #endif /* LPROCFS */

@@ -968,7 +968,7 @@ static int lmv_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
                 GOTO(out_free_datas, rc);
         }
 
-        lprocfs_init_vars(lmv, &lvars);
+        lprocfs_lmv_init_vars(&lvars);
         lprocfs_obd_setup(obd, lvars.obd_vars);
 #ifdef LPROCFS
         {
@@ -2903,7 +2903,7 @@ int __init lmv_init(void)
                 return -ENOMEM;
         }
 
-        lprocfs_init_vars(lmv, &lvars);
+        lprocfs_lmv_init_vars(&lvars);
         rc = class_register_type(&lmv_obd_ops, &lmv_md_ops,
                                  lvars.module_vars, LUSTRE_LMV_NAME, NULL);
         if (rc)

@@ -64,7 +64,7 @@ static int mdc_wr_max_rpcs_in_flight(struct file *file, const char *buffer,
 
         return count;
 }
-static struct lprocfs_vars lprocfs_obd_vars[] = {
+static struct lprocfs_vars lprocfs_mdc_obd_vars[] = {
         { "uuid",            lprocfs_rd_uuid,        0, 0 },
         { "ping",            0, lprocfs_wr_ping,        0 },
         { "connect_flags",   lprocfs_rd_connect_flags, 0, 0 },
@@ -83,11 +83,15 @@ static struct lprocfs_vars lprocfs_obd_vars[] = {
         { 0 }
 };
 
-static struct lprocfs_vars lprocfs_module_vars[] = {
+static struct lprocfs_vars lprocfs_mdc_module_vars[] = {
         { "num_refs",        lprocfs_rd_numrefs,     0, 0 },
         { 0 }
 };
 
-LPROCFS_INIT_VARS(mdc, lprocfs_module_vars, lprocfs_obd_vars)
+void lprocfs_mdc_init_vars(struct lprocfs_static_vars *lvars)
+{
+    lvars->module_vars  = lprocfs_mdc_module_vars;
+    lvars->obd_vars     = lprocfs_mdc_obd_vars;
+}
 #endif /* LPROCFS */
 

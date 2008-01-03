@@ -193,7 +193,7 @@ static int mgs_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
                 GOTO(err_thread, rc);
 
         /* Setup proc */
-        lprocfs_init_vars(mgs, &lvars);
+        lprocfs_mgs_init_vars(&lvars);
         if (lprocfs_obd_setup(obd, lvars.obd_vars) == 0) {
                 lproc_mgs_setup(obd);
         }
@@ -730,7 +730,7 @@ static int __init mgs_init(void)
 {
         struct lprocfs_static_vars lvars;
 
-        lprocfs_init_vars(mgs, &lvars);
+        lprocfs_mgs_init_vars(&lvars);
         class_register_type(&mgs_obd_ops, NULL,
                             lvars.module_vars, LUSTRE_MGS_NAME, NULL);
 

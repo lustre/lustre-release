@@ -3825,7 +3825,7 @@ static int mdt_init0(const struct lu_env *env, struct mdt_device *m,
                 GOTO(err_free_site, rc);
         }
 
-        lprocfs_init_vars(mdt, &lvars);
+        lprocfs_mdt_init_vars(&lvars);
         rc = lprocfs_obd_setup(obd, lvars.obd_vars);
         if (rc) {
                 CERROR("Can't init lprocfs, rc %d\n", rc);
@@ -3986,7 +3986,7 @@ static int mdt_process_config(const struct lu_env *env,
                 struct lprocfs_static_vars lvars;
                 struct obd_device *obd = d->ld_obd;
 
-                lprocfs_init_vars(mdt, &lvars);
+                lprocfs_mdt_init_vars(&lvars);
                 rc = class_process_proc_param(PARAM_MDT, lvars.obd_vars, cfg, obd);
                 if (rc)
                         /* others are passed further */
@@ -4590,7 +4590,7 @@ static int __init mdt_mod_init(void)
         int rc;
 
         mdt_num_threads = MDT_NUM_THREADS;
-        lprocfs_init_vars(mdt, &lvars);
+        lprocfs_mdt_init_vars(&lvars);
         rc = class_register_type(&mdt_obd_device_ops, NULL,
                                  lvars.module_vars, LUSTRE_MDT_NAME,
                                  &mdt_device_type);

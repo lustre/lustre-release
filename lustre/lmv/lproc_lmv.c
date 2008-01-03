@@ -124,7 +124,7 @@ static int lmv_target_seq_open(struct inode *inode, struct file *file)
         return 0;
 }
 
-struct lprocfs_vars lprocfs_obd_vars[] = {
+struct lprocfs_vars lprocfs_lmv_obd_vars[] = {
         { "numobd",       lmv_rd_numobd,          0, 0 },
         { "activeobd",    lmv_rd_activeobd,       0, 0 },
         { "uuid",         lprocfs_rd_uuid,        0, 0 },
@@ -132,7 +132,7 @@ struct lprocfs_vars lprocfs_obd_vars[] = {
         { 0 }
 };
 
-static struct lprocfs_vars lprocfs_module_vars[] = {
+static struct lprocfs_vars lprocfs_lmv_module_vars[] = {
         { "num_refs",     lprocfs_rd_numrefs,     0, 0 },
         { 0 }
 };
@@ -146,4 +146,8 @@ struct file_operations lmv_proc_target_fops = {
 };
 
 #endif /* LPROCFS */
-LPROCFS_INIT_VARS(lmv, lprocfs_module_vars, lprocfs_obd_vars)
+void lprocfs_lmv_init_vars(struct lprocfs_static_vars *lvars)
+{
+    lvars->module_vars  = lprocfs_lmv_module_vars;
+    lvars->obd_vars     = lprocfs_lmv_obd_vars;
+}

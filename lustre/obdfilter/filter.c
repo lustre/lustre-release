@@ -2036,7 +2036,7 @@ static int filter_setup(struct obd_device *obd, struct lustre_cfg* lcfg)
 
         /* lprocfs must be setup before the filter so state can be safely added
          * to /proc incrementally as the filter is setup */
-        lprocfs_init_vars(filter, &lvars);
+        lprocfs_filter_init_vars(&lvars);
         if (lprocfs_obd_setup(obd, lvars.obd_vars) == 0 &&
             lprocfs_alloc_obd_stats(obd, LPROC_FILTER_LAST) == 0) {
                 /* Init obdfilter private stats here */
@@ -4011,7 +4011,7 @@ static int filter_process_config(struct obd_device *obd, obd_count len,
         struct lprocfs_static_vars lvars;
         int rc = 0;
 
-        lprocfs_init_vars(filter, &lvars);
+        lprocfs_filter_init_vars(&lvars);
 
         rc = class_process_proc_param(PARAM_OST, lvars.obd_vars, lcfg, obd);
         return rc;
@@ -4061,7 +4061,7 @@ static int __init obdfilter_init(void)
         struct lprocfs_static_vars lvars;
         int rc;
 
-        lprocfs_init_vars(filter, &lvars);
+        lprocfs_filter_init_vars(&lvars);
 
         request_module("lquota");
         OBD_ALLOC(obdfilter_created_scratchpad,

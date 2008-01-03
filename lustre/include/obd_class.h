@@ -102,6 +102,16 @@ int class_detach(struct obd_device *obd, struct lustre_cfg *lcfg);
 struct obd_device *class_incref(struct obd_device *obd);
 void class_decref(struct obd_device *obd);
 
+/*obdecho*/
+#ifdef LPROCFS
+extern void lprocfs_echo_init_vars(struct lprocfs_static_vars *lvars);
+#else
+static inline void lprocfs_echo_init_vars(struct lprocfs_static_vars *lvars)
+{
+        memset(lvars, 0, sizeof(*lvars));
+}
+#endif
+
 #define CFG_F_START     0x01   /* Set when we start updating from a log */
 #define CFG_F_MARKER    0x02   /* We are within a maker */
 #define CFG_F_SKIP      0x04   /* We should ignore this cfg command */

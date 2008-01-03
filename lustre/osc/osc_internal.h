@@ -64,8 +64,13 @@ void osc_wake_cache_waiters(struct client_obd *cli);
 
 #ifdef LPROCFS
 int lproc_osc_attach_seqstat(struct obd_device *dev);
+void lprocfs_osc_init_vars(struct lprocfs_static_vars *lvars);
 #else
 static inline int lproc_osc_attach_seqstat(struct obd_device *dev) {return 0;}
+static inline void lprocfs_osc_init_vars(struct lprocfs_static_vars *lvars)
+{
+        memset(lvars, 0, sizeof(*lvars));
+}
 #endif
 
 static inline int osc_recoverable_error(int rc)

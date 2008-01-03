@@ -483,13 +483,17 @@ struct lprocfs_vars lprocfs_cmm_module_vars[] = {
         { 0 }
 };
 
-LPROCFS_INIT_VARS(cmm, lprocfs_cmm_module_vars, lprocfs_cmm_obd_vars);
+static void lprocfs_cmm_init_vars(struct lprocfs_static_vars *lvars)
+{
+    lvars->module_vars  = lprocfs_cmm_module_vars;
+    lvars->obd_vars     = lprocfs_cmm_obd_vars;
+}
 
 static int __init cmm_mod_init(void)
 {
         struct lprocfs_static_vars lvars;
 
-        lprocfs_init_vars(cmm, &lvars);
+        lprocfs_cmm_init_vars(&lvars);
         return class_register_type(&cmm_obd_device_ops, NULL, lvars.module_vars,
                                    LUSTRE_CMM_NAME, &cmm_device_type);
 }

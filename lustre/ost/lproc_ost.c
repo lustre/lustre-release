@@ -30,15 +30,21 @@
 #include "ost_internal.h"
 
 #ifdef LPROCFS
-static struct lprocfs_vars lprocfs_obd_vars[] = {
+static struct lprocfs_vars lprocfs_ost_obd_vars[] = {
         { "uuid",            lprocfs_rd_uuid,   0, 0 },
         { 0 }
 };
 
-static struct lprocfs_vars lprocfs_module_vars[] = {
+static struct lprocfs_vars lprocfs_ost_module_vars[] = {
         { "num_refs",       lprocfs_rd_numrefs, 0, 0 },
         { 0 }
 };
+
+void lprocfs_ost_init_vars(struct lprocfs_static_vars *lvars)
+{
+    lvars->module_vars  = lprocfs_ost_module_vars;
+    lvars->obd_vars     = lprocfs_ost_obd_vars;
+}
 
 void
 ost_print_req(void *seq_file, struct ptlrpc_request *req)
@@ -73,6 +79,4 @@ ost_print_req(void *seq_file, struct ptlrpc_request *req)
                 LBUG();
         }
 }
-
-LPROCFS_INIT_VARS(ost, lprocfs_module_vars, lprocfs_obd_vars)
 #endif /* LPROCFS */

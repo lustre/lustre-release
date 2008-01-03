@@ -463,7 +463,7 @@ static int quotfmt_test_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
         if (rc)
                 quotfmt_test_cleanup(obd);
 
-        lprocfs_init_vars(quotfmt_test, &lvars);
+        lprocfs_quotfmt_test_init_vars(&lvars);
         lprocfs_obd_setup(obd, lvars.obd_vars);
 
         RETURN(rc);
@@ -476,16 +476,20 @@ static struct obd_ops quotfmt_obd_ops = {
 };
 
 #ifdef LPROCFS
-static struct lprocfs_vars lprocfs_obd_vars[] = { {0} };
-static struct lprocfs_vars lprocfs_module_vars[] = { {0} };
+static struct lprocfs_vars lprocfs_quotfmt_test_obd_vars[] = { {0} };
+static struct lprocfs_vars lprocfs_quotfmt_test_module_vars[] = { {0} };
 
-LPROCFS_INIT_VARS(quotfmt_test, lprocfs_module_vars, lprocfs_obd_vars)
+void lprocfs_quotfmt_test_init_vars(struct lprocfs_static_vars *lvars)
+{
+    lvars->module_vars  = lprocfs_quotfmt_test_module_vars;
+    lvars->obd_vars     = lprocfs_quotfmt_test_obd_vars;
+}
 #endif
 static int __init quotfmt_test_init(void)
 {
         struct lprocfs_static_vars lvars;
 
-        lprocfs_init_vars(quotfmt_test, &lvars);
+        lprocfs_quotfmt_test_init_vars(&lvars);
         return class_register_type(&quotfmt_obd_ops, NULL, lvars.module_vars,
                                    "quotfmt_test", NULL);
 }

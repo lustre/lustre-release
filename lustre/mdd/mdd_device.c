@@ -420,12 +420,16 @@ struct lprocfs_vars lprocfs_mdd_module_vars[] = {
         { 0 }
 };
 
-LPROCFS_INIT_VARS(mdd, lprocfs_mdd_module_vars, lprocfs_mdd_obd_vars);
+static void lprocfs_mdd_init_vars(struct lprocfs_static_vars *lvars)
+{
+    lvars->module_vars  = lprocfs_mdd_module_vars;
+    lvars->obd_vars     = lprocfs_mdd_obd_vars;
+}
 
 static int __init mdd_mod_init(void)
 {
         struct lprocfs_static_vars lvars;
-        lprocfs_init_vars(mdd, &lvars);
+        lprocfs_mdd_init_vars(&lvars);
         return class_register_type(&mdd_obd_device_ops, NULL, lvars.module_vars,
                                    LUSTRE_MDD_NAME, &mdd_device_type);
 }

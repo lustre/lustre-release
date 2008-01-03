@@ -479,7 +479,7 @@ static int echo_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
                                     0, NULL, &obd->u.echo.eo_nl_lock);
         LASSERT (rc == ELDLM_OK);
 
-        lprocfs_init_vars(echo, &lvars);
+        lprocfs_echo_init_vars(&lvars);
         if (lprocfs_obd_setup(obd, lvars.obd_vars) == 0 &&
             lprocfs_alloc_obd_stats(obd, LPROC_ECHO_LAST) == 0) {
                 lprocfs_counter_init(obd->obd_stats, LPROC_ECHO_READ_BYTES,
@@ -584,7 +584,7 @@ static int __init obdecho_init(void)
 
         LASSERT(CFS_PAGE_SIZE % OBD_ECHO_BLOCK_SIZE == 0);
 
-        lprocfs_init_vars(echo, &lvars);
+        lprocfs_echo_init_vars(&lvars);
 
         rc = echo_persistent_pages_init ();
         if (rc != 0)

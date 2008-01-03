@@ -315,7 +315,7 @@ static int lov_target_seq_open(struct inode *inode, struct file *file)
         return 0;
 }
 
-struct lprocfs_vars lprocfs_obd_vars[] = {
+struct lprocfs_vars lprocfs_lov_obd_vars[] = {
         { "uuid",         lprocfs_rd_uuid,        0, 0 },
         { "stripesize",   lov_rd_stripesize,      lov_wr_stripesize, 0 },
         { "stripeoffset", lov_rd_stripeoffset,    lov_wr_stripeoffset, 0 },
@@ -336,10 +336,16 @@ struct lprocfs_vars lprocfs_obd_vars[] = {
         { 0 }
 };
 
-static struct lprocfs_vars lprocfs_module_vars[] = {
+static struct lprocfs_vars lprocfs_lov_module_vars[] = {
         { "num_refs",     lprocfs_rd_numrefs,     0, 0 },
         { 0 }
 };
+
+void lprocfs_lov_init_vars(struct lprocfs_static_vars *lvars)
+{
+    lvars->module_vars  = lprocfs_lov_module_vars;
+    lvars->obd_vars     = lprocfs_lov_obd_vars;
+}
 
 struct file_operations lov_proc_target_fops = {
         .owner   = THIS_MODULE,
@@ -348,6 +354,5 @@ struct file_operations lov_proc_target_fops = {
         .llseek  = seq_lseek,
         .release = lprocfs_seq_release,
 };
-
-LPROCFS_INIT_VARS(lov, lprocfs_module_vars, lprocfs_obd_vars)
 #endif /* LPROCFS */
+

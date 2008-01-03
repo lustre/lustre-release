@@ -1782,7 +1782,7 @@ static int ost_setup(struct obd_device *obd, struct lustre_cfg* lcfg)
         if (rc < 0)
                 RETURN(rc);
 
-        lprocfs_init_vars(ost, &lvars);
+        lprocfs_ost_init_vars(&lvars);
         lprocfs_obd_setup(obd, lvars.obd_vars);
 
         sema_init(&ost->ost_health_sem, 1);
@@ -1961,7 +1961,7 @@ static int __init ost_init(void)
         int rc;
         ENTRY;
 
-        lprocfs_init_vars(ost, &lvars);
+        lprocfs_ost_init_vars(&lvars);
         rc = class_register_type(&ost_obd_ops, NULL, lvars.module_vars,
                                  LUSTRE_OSS_NAME, NULL);
 

@@ -288,6 +288,17 @@ static int quotactl_run_tests(struct obd_device *obd, struct obd_device *tgt)
         return rc;
 }
 
+#ifdef LPROCFS
+static struct lprocfs_vars lprocfs_quotactl_test_obd_vars[] = { {0} };
+static struct lprocfs_vars lprocfs_quotactl_test_module_vars[] = { {0} };
+
+void lprocfs_quotactl_test_init_vars(struct lprocfs_static_vars *lvars)
+{
+    lvars->module_vars  = lprocfs_quotactl_test_module_vars;
+    lvars->obd_vars     = lprocfs_quotactl_test_obd_vars;
+}
+#endif
+
 static int quotactl_test_cleanup(struct obd_device *obd)
 {
         lprocfs_obd_cleanup(obd);
@@ -296,7 +307,7 @@ static int quotactl_test_cleanup(struct obd_device *obd)
 
 static int quotactl_test_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
 {
-        struct lprocfs_static_vars lvars;
+        struct lprocfs_static_vars lvars = { 0 };
         struct obd_device *tgt;
         int rc;
         ENTRY;
@@ -313,7 +324,7 @@ static int quotactl_test_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
                 RETURN(-EINVAL);
         }
 
-        lprocfs_init_vars(quotactl_test, &lvars);
+        lprocfs_quotactl_test_init_vars(&lvars);
         lprocfs_obd_setup(obd, lvars.obd_vars);
 
         rc = quotactl_run_tests(obd, tgt);
@@ -329,17 +340,11 @@ static struct obd_ops quotactl_obd_ops = {
         .o_cleanup     = quotactl_test_cleanup,
 };
 
-#ifdef LPROCFS
-static struct lprocfs_vars lprocfs_obd_vars[] = { {0} };
-static struct lprocfs_vars lprocfs_module_vars[] = { {0} };
-LPROCFS_INIT_VARS(quotactl_test, lprocfs_module_vars, lprocfs_obd_vars)
-#endif
-
 static int __init quotactl_test_init(void)
 {
-        struct lprocfs_static_vars lvars;
+        struct lprocfs_static_vars lvars = { 0 };
 
-        lprocfs_init_vars(quotactl_test, &lvars);
+        lprocfs_init_quotactl_test_vars(&lvars);
         return class_register_type(&quotactl_obd_ops, NULL, lvars.module_vars,
                                    "quotactl_test", NULL);
 }

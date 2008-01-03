@@ -146,5 +146,9 @@ struct lprocfs_vars lprocfs_mgs_module_vars[] = {
         { 0 }
 };
 
-LPROCFS_INIT_VARS(mgs, lprocfs_mgs_module_vars, lprocfs_mgs_obd_vars);
+void lprocfs_mgs_init_vars(struct lprocfs_static_vars *lvars)
+{
+    lvars->module_vars  = lprocfs_mgs_module_vars;
+    lvars->obd_vars     = lprocfs_mgs_obd_vars;
+}
 #endif

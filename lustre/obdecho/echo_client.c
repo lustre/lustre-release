@@ -1426,9 +1426,9 @@ static struct obd_ops echo_obd_ops = {
 
 int echo_client_init(void)
 {
-        struct lprocfs_static_vars lvars;
+        struct lprocfs_static_vars lvars = { 0 };
 
-        lprocfs_init_vars(echo, &lvars);
+        lprocfs_echo_init_vars(&lvars);
         return class_register_type(&echo_obd_ops, NULL, lvars.module_vars,
                                    LUSTRE_ECHO_CLIENT_NAME, NULL);
 }

@@ -2601,13 +2601,18 @@ static struct obd_ops osd_obd_device_ops = {
         .o_owner = THIS_MODULE
 };
 
-LPROCFS_INIT_VARS(osd, lprocfs_osd_module_vars, lprocfs_osd_obd_vars);
+static void lprocfs_osd_init_vars(struct lprocfs_static_vars *lvars)
+{
+    lvars->module_vars  = lprocfs_osd_module_vars;
+    lvars->obd_vars     = lprocfs_osd_obd_vars;
+}
+
 
 static int __init osd_mod_init(void)
 {
         struct lprocfs_static_vars lvars;
 
-        lprocfs_init_vars(osd, &lvars);
+        lprocfs_osd_init_vars(&lvars);
         return class_register_type(&osd_obd_device_ops, NULL, lvars.module_vars,
                                    LUSTRE_OSD_NAME, &osd_device_type);
 }

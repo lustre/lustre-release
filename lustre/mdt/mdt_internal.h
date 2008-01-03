@@ -771,6 +771,7 @@ static inline struct lu_name *mdt_name_copy(struct lu_name *tlname,
 }
 
 /* lprocfs stuff */
+void lprocfs_mdt_init_vars(struct lprocfs_static_vars *lvars);
 int mdt_procfs_init(struct mdt_device *mdt, const char *name);
 int mdt_procfs_fini(struct mdt_device *mdt);
 
