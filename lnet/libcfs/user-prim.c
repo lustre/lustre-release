@@ -276,13 +276,6 @@ void cfs_mem_cache_free(cfs_mem_cache_t *c, void *addr)
         cfs_free(addr);
 }
 
-/*
- * This uses user-visible declarations from <linux/kdev_t.h>
- */
-#ifdef __linux__
-#include <linux/kdev_t.h>
-#endif
-
 void cfs_enter_debugger(void)
 {
         /*
