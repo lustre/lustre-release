@@ -171,7 +171,7 @@ Index: linux-stage/fs/ext3/namei.c
  
  #ifndef swap
  #define swap(x, y) do { typeof(x) z = x; x = y; y = z; } while (0)
-@@ -75,169 +80,87 @@
+@@ -75,170 +80,87 @@
  #ifdef DX_DEBUG
  #define dxtrace(command) command
  #else
@@ -240,7 +240,8 @@ Index: linux-stage/fs/ext3/namei.c
 -struct dx_map_entry
 -{
 -	u32 hash;
--	u32 offs;
+-	u16 offs;
+-	u16 size;
 -};
 -
  #ifdef CONFIG_EXT3_INDEX
@@ -1186,6 +1187,14 @@ Index: linux-stage/fs/ext3/namei.c
  	return (err);
  }
  
+@@ -692,7 +1000,6 @@
+ 			map_tail--;
+ 			map_tail->hash = h.hash;
+ 			map_tail->offs = (u16) ((char *) de - base);
+-			map_tail->size = le16_to_cpu(de->rec_len);
+ 			count++;
+ 		}
+ 		/* XXX: do we need to check rec_len == 0 case? -Chris */
 @@ -720,19 +1017,45 @@
  	} while(more);
  }
@@ -1321,9 +1330,9 @@ Index: linux-stage/fs/ext3/namei.c
  #define S_SHIFT 12
  static unsigned char ext3_type_by_mode[S_IFMT >> S_SHIFT] = {
 @@ -1143,19 +1473,69 @@
- 	return prev;
- }
- 
+  * Allocate a new block, and move entries so that they are approx. equally full.
+  * Returns pointer to de in block into which the new entry will be inserted.
+  */
 -static struct ext3_dir_entry_2 *do_split(handle_t *handle, struct inode *dir,
 -			struct buffer_head **bh,struct dx_frame *frame,
 -			struct dx_hash_info *hinfo, int *error)
@@ -1392,13 +1401,13 @@ Index: linux-stage/fs/ext3/namei.c
  	u32 hash2;
 -	struct dx_map_entry *map;
 -	char *data1 = (*bh)->b_data, *data2;
--	unsigned split;
+-	unsigned split, move, size, i;
 -	struct ext3_dir_entry_2 *de = NULL, *de2;
 +	struct ext3_dir_entry_2 *de = NULL;
  	int	err;
  
  	bh2 = ext3_append (handle, dir, &newblock, error);
-@@ -1180,35 +1560,9 @@
+@@ -1180,46 +1560,9 @@
  	if (err)
  		goto journal_error;
  
@@ -1409,8 +1418,19 @@ Index: linux-stage/fs/ext3/namei.c
 -	count = dx_make_map ((struct ext3_dir_entry_2 *) data1,
 -			     blocksize, hinfo, map);
 -	map -= count;
--	split = count/2; // need to adjust to actual middle
 -	dx_sort_map (map, count);
+-	/* Split the existing block in the middle, size-wise */
+-	size = 0;
+-	move = 0;
+-	for (i = count-1; i >= 0; i--) {
+-		/* is more than half of this entry in 2nd half of the block? */
+-		if (size + map[i].size/2 > blocksize/2)
+-			break;
+-		size += map[i].size;
+-		move++;
+-	}
+-	/* map index at which we will split */
+-	split = count - move;
 -	hash2 = map[split].hash;
 -	continued = hash2 == map[split - 1].hash;
 -	dxtrace(printk("Split block %i at %x, %i/%i\n",
