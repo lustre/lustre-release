@@ -320,19 +320,6 @@ extern int lprocfs_add_simple(struct proc_dir_entry *root,
 extern int lprocfs_register_stats(cfs_proc_dir_entry_t *root, const char *name,
                                   struct lprocfs_stats *stats);
 
-#define LPROCFS_INIT_VARS(name, vclass, vinstance)           \
-void lprocfs_##name##_init_vars(struct lprocfs_static_vars *x)  \
-{                                                      \
-        x->module_vars = vclass;                       \
-        x->obd_vars = vinstance;                       \
-}                                                      \
-
-#define lprocfs_init_vars(NAME, VAR)     \
-do {      \
-        extern void lprocfs_##NAME##_init_vars(struct lprocfs_static_vars *);  \
-        lprocfs_##NAME##_init_vars(VAR);                                       \
-} while (0)
-
 /* lprocfs_status.c */
 extern int lprocfs_add_vars(cfs_proc_dir_entry_t *root,
                             struct lprocfs_vars *var,
@@ -592,8 +579,6 @@ int lprocfs_nid_stats_clear_read(char *page, char **start, off_t off,
 static inline cfs_proc_dir_entry_t *
 lprocfs_register(const char *name, cfs_proc_dir_entry_t *parent,
                  struct lprocfs_vars *list, void *data) { return NULL; }
-#define LPROCFS_INIT_VARS(name, vclass, vinstance)
-#define lprocfs_init_vars(...) do {} while (0)
 static inline int lprocfs_add_vars(cfs_proc_dir_entry_t *root,
                                    struct lprocfs_vars *var,
                                    void *data) { return 0; }

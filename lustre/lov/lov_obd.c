@@ -797,7 +797,7 @@ void lov_fix_desc(struct lov_desc *desc)
 
 static int lov_setup(struct obd_device *obd, obd_count len, void *buf)
 {
-        struct lprocfs_static_vars lvars;
+        struct lprocfs_static_vars lvars = { 0 };
         struct lustre_cfg *lcfg = buf;
         struct lov_desc *desc;
         struct lov_obd *lov = &obd->u.lov;
@@ -855,7 +855,7 @@ static int lov_setup(struct obd_device *obd, obd_count len, void *buf)
         /* Default priority is toward free space balance */
         lov->lov_qos.lq_prio_free = 232;
 
-        lprocfs_init_vars(lov, &lvars);
+        lprocfs_lov_init_vars(&lvars);
         lprocfs_obd_setup(obd, lvars.obd_vars);
 #ifdef LPROCFS
         {
@@ -969,13 +969,13 @@ static int lov_process_config(struct obd_device *obd, obd_count len, void *buf)
                 GOTO(out, rc);
         }
         case LCFG_PARAM: {
-                struct lprocfs_static_vars lvars;
+                struct lprocfs_static_vars lvars = { 0 };
                 struct lov_desc *desc = &(obd->u.lov.desc);
                 
                 if (!desc)
                         GOTO(out, rc = -EINVAL);
                 
-                lprocfs_init_vars(lov, &lvars);
+                lprocfs_lov_init_vars(&lvars);
                 
                 rc = class_process_proc_param(PARAM_LOV, lvars.obd_vars,
                                               lcfg, obd);
@@ -2822,7 +2822,7 @@ cfs_mem_cache_t *lov_oinfo_slab;
 
 int __init lov_init(void)
 {
-        struct lprocfs_static_vars lvars;
+        struct lprocfs_static_vars lvars = { 0 };
         int rc, rc2;
         ENTRY;
 
@@ -2831,7 +2831,7 @@ int __init lov_init(void)
                                               0, SLAB_HWCACHE_ALIGN);
         if (lov_oinfo_slab == NULL)
                 return -ENOMEM;
-        lprocfs_init_vars(lov, &lvars);
+        lprocfs_lov_init_vars(&lvars);
 
         request_module("lquota");
         quota_interface = PORTAL_SYMBOL_GET(lov_quota_interface);

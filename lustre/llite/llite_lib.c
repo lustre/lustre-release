@@ -2155,7 +2155,7 @@ int ll_process_config(struct lustre_cfg *lcfg)
         unsigned long x;
         int rc = 0;
 
-        lprocfs_init_vars(llite, &lvars);
+        lprocfs_llite_init_vars(&lvars);
 
         /* The instance name contains the sb: lustre-client-aacfe000 */
         ptr = strrchr(lustre_cfg_string(lcfg, 0), '-');

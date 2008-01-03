@@ -510,7 +510,7 @@ static int ll_rd_statahead_stats(char *page, char **start, off_t off,
                         sbi->ll_sa_blocked + sbi->ll_sa_cached);
 }
 
-static struct lprocfs_vars lprocfs_obd_vars[] = {
+static struct lprocfs_vars lprocfs_llite_obd_vars[] = {
         { "uuid",         ll_rd_sb_uuid,          0, 0 },
         //{ "mntpt_path",   ll_rd_path,             0, 0 },
         { "fstype",       ll_rd_fstype,           0, 0 },
@@ -710,7 +710,7 @@ int lprocfs_register_mountpoint(struct proc_dir_entry *parent,
         if (err)
                 GOTO(out, err);
 
-        err = lprocfs_add_vars(sbi->ll_proc_root, lprocfs_obd_vars, sb);
+        err = lprocfs_add_vars(sbi->ll_proc_root, lprocfs_llite_obd_vars, sb);
         if (err)
                 GOTO(out, err);
 
@@ -1341,5 +1341,9 @@ static ssize_t ll_rw_offset_stats_seq_write(struct file *file, const char *buf,
 
 LPROC_SEQ_FOPS(ll_rw_offset_stats);
 
-LPROCFS_INIT_VARS(llite, NULL, lprocfs_obd_vars)
+void lprocfs_llite_init_vars(struct lprocfs_static_vars *lvars)
+{
+    lvars->module_vars  = NULL;
+    lvars->obd_vars     = lprocfs_llite_obd_vars;
+}
 #endif /* LPROCFS */

@@ -329,7 +329,7 @@ static int osc_wr_resend_count(struct file *file, const char *buffer,
         return count;
 }
 
-static struct lprocfs_vars lprocfs_obd_vars[] = {
+static struct lprocfs_vars lprocfs_osc_obd_vars[] = {
         { "uuid",            lprocfs_rd_uuid,        0, 0 },
         { "ping",            0, lprocfs_wr_ping,        0 },
         { "connect_flags",   lprocfs_rd_connect_flags, 0, 0 },
@@ -360,7 +360,7 @@ static struct lprocfs_vars lprocfs_obd_vars[] = {
         { 0 }
 };
 
-static struct lprocfs_vars lprocfs_module_vars[] = {
+static struct lprocfs_vars lprocfs_osc_module_vars[] = {
         { "num_refs",        lprocfs_rd_numrefs,     0, 0 },
         { 0 }
 };
@@ -489,6 +489,10 @@ int lproc_osc_attach_seqstat(struct obd_device *dev)
                                       &osc_rpc_stats_fops, dev);
 }
 
-LPROCFS_INIT_VARS(osc, lprocfs_module_vars, lprocfs_obd_vars)
+void lprocfs_osc_init_vars(struct lprocfs_static_vars *lvars)
+{
+        lvars->module_vars = lprocfs_osc_module_vars;
+        lvars->obd_vars    = lprocfs_osc_obd_vars;
+}
 #endif /* LPROCFS */
 

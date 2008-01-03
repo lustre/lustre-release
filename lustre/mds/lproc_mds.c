@@ -468,6 +468,15 @@ void mds_stats_counter_init(struct lprocfs_stats *stats)
         lprocfs_counter_init(stats, LPROC_MDS_SETXATTR, 0, "setxattr", "reqs");
 }
 
-LPROCFS_INIT_VARS(mds, lprocfs_mds_module_vars, lprocfs_mds_obd_vars);
-LPROCFS_INIT_VARS(mdt, lprocfs_mdt_module_vars, lprocfs_mdt_obd_vars);
+void lprocfs_mds_init_vars(struct lprocfs_static_vars *lvars)
+{
+    lvars->module_vars = lprocfs_mds_module_vars;
+    lvars->obd_vars = lprocfs_mds_obd_vars;
+}
+
+void lprocfs_mdt_init_vars(struct lprocfs_static_vars *lvars)
+{
+    lvars->module_vars = lprocfs_mdt_module_vars;
+    lvars->obd_vars = lprocfs_mdt_obd_vars;
+}
 #endif

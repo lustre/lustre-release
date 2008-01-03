@@ -7,6 +7,14 @@
  */
 
 #include <lustre_mds.h>
+#ifdef LPROCFS
+void lprocfs_mdc_init_vars(struct lprocfs_static_vars *lvars);
+#else
+static inline void lprocfs_mdc_init_vars(struct lprocfs_static_vars *lvars)
+{
+        memset(lvars, 0, sizeof(*lvars));
+}
+#endif
 void mdc_pack_req_body(struct ptlrpc_request *req, int offset,
                        __u64 valid, struct ll_fid *fid, int ea_size, int flags);
 void mdc_pack_rep_body(struct ptlrpc_request *);

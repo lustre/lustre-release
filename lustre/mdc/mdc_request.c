@@ -1169,7 +1169,7 @@ static int mdc_import_event(struct obd_device *obd, struct obd_import *imp,
 static int mdc_setup(struct obd_device *obd, obd_count len, void *buf)
 {
         struct client_obd *cli = &obd->u.cli;
-        struct lprocfs_static_vars lvars;
+        struct lprocfs_static_vars lvars = { 0 };
         int rc;
         ENTRY;
 
@@ -1193,7 +1193,7 @@ static int mdc_setup(struct obd_device *obd, obd_count len, void *buf)
         rc = client_obd_setup(obd, len, buf);
         if (rc)
                 GOTO(err_close_lock, rc);
-        lprocfs_init_vars(mdc, &lvars);
+        lprocfs_mdc_init_vars(&lvars);
         lprocfs_obd_setup(obd, lvars.obd_vars);
 
         rc = obd_llog_init(obd, obd, 0, NULL, NULL);
@@ -1345,10 +1345,10 @@ static int mdc_llog_finish(struct obd_device *obd, int count)
 static int mdc_process_config(struct obd_device *obd, obd_count len, void *buf)
 {
         struct lustre_cfg *lcfg = buf;
-        struct lprocfs_static_vars lvars;
+        struct lprocfs_static_vars lvars = { 0 };
         int rc = 0;
 
-        lprocfs_init_vars(mdc, &lvars);
+        lprocfs_mdc_init_vars(&lvars);
         
         rc = class_process_proc_param(PARAM_MDC, lvars.obd_vars, lcfg, obd);
         return(rc);
@@ -1378,8 +1378,8 @@ struct obd_ops mdc_obd_ops = {
 int __init mdc_init(void)
 {
         int rc;
-        struct lprocfs_static_vars lvars;
-        lprocfs_init_vars(mdc, &lvars);
+        struct lprocfs_static_vars lvars = { 0 };
+        lprocfs_mdc_init_vars(&lvars);
         request_module("lquota");
         quota_interface = PORTAL_SYMBOL_GET(mdc_quota_interface);
         init_obd_quota_ops(quota_interface, &mdc_obd_ops);

@@ -3670,10 +3670,10 @@ int osc_setup(struct obd_device *obd, obd_count len, void *buf)
         if (rc) {
                 ptlrpcd_decref();
         } else {
-                struct lprocfs_static_vars lvars;
+                struct lprocfs_static_vars lvars = { 0 };
                 struct client_obd *cli = &obd->u.cli;
 
-                lprocfs_init_vars(osc, &lvars);
+                lprocfs_osc_init_vars(&lvars);
                 if (lprocfs_obd_setup(obd, lvars.obd_vars) == 0) {
                         lproc_osc_attach_seqstat(obd);
                         ptlrpc_lprocfs_register_obd(obd);
@@ -3803,10 +3803,10 @@ static int osc_unregister_lock_cancel_cb(struct obd_export *exp,
 static int osc_process_config(struct obd_device *obd, obd_count len, void *buf)
 {
         struct lustre_cfg *lcfg = buf;
-        struct lprocfs_static_vars lvars;
+        struct lprocfs_static_vars lvars = { 0 };
         int rc = 0;
 
-        lprocfs_init_vars(osc, &lvars);
+        lprocfs_osc_init_vars(&lvars);
 
         rc = class_process_proc_param(PARAM_OSC, lvars.obd_vars, lcfg, obd);
         return(rc);
@@ -3863,11 +3863,11 @@ struct obd_ops osc_obd_ops = {
 };
 int __init osc_init(void)
 {
-        struct lprocfs_static_vars lvars;
+        struct lprocfs_static_vars lvars = { 0 };
         int rc;
         ENTRY;
 
-        lprocfs_init_vars(osc, &lvars);
+        lprocfs_osc_init_vars(&lvars);
 
         request_module("lquota");
         quota_interface = PORTAL_SYMBOL_GET(osc_quota_interface);

@@ -640,6 +640,16 @@ static int llog_test_cleanup(struct obd_device *obd)
         return rc;
 }
 
+#ifdef LPROCFS
+static struct lprocfs_vars lprocfs_llog_test_obd_vars[] = { {0} };
+static struct lprocfs_vars lprocfs_llog_test_module_vars[] = { {0} };
+static void lprocfs_llog_test_init_vars(struct lprocfs_static_vars *lvars)
+{
+    lvars->module_vars  = lprocfs_llog_test_module_vars;
+    lvars->obd_vars     = lprocfs_llog_test_obd_vars;
+}
+#endif
+
 static int llog_test_setup(struct obd_device *obd, obd_count len, void *buf)
 {
         struct lprocfs_static_vars lvars;
@@ -675,7 +685,7 @@ static int llog_test_setup(struct obd_device *obd, obd_count len, void *buf)
         if (rc)
                 llog_test_cleanup(obd);
 
-        lprocfs_init_vars(llog_test, &lvars);
+        lprocfs_llog_test_init_vars(&lvars);
         lprocfs_obd_setup(obd, lvars.obd_vars);
 
         RETURN(rc);
@@ -689,17 +699,11 @@ static struct obd_ops llog_obd_ops = {
         .o_llog_finish = llog_test_llog_finish,
 };
 
-#ifdef LPROCFS
-static struct lprocfs_vars lprocfs_obd_vars[] = { {0} };
-static struct lprocfs_vars lprocfs_module_vars[] = { {0} };
-LPROCFS_INIT_VARS(llog_test, lprocfs_module_vars, lprocfs_obd_vars)
-#endif
-
 static int __init llog_test_init(void)
 {
         struct lprocfs_static_vars lvars;
 
-        lprocfs_init_vars(llog_test, &lvars);
+        lprocfs_llog_test_init_vars(&lvars);
         return class_register_type(&llog_obd_ops,lvars.module_vars,"llog_test");
 }
 

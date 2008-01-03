@@ -284,5 +284,6 @@ enum {
 };
 void mds_counter_incr(struct obd_export *exp, int opcode);
 void mds_stats_counter_init(struct lprocfs_stats *stats);
-
+void lprocfs_mds_init_vars(struct lprocfs_static_vars *lvars);
+void lprocfs_mdt_init_vars(struct lprocfs_static_vars *lvars);
 #endif /* _MDS_INTERNAL_H */

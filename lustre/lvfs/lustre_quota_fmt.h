@@ -120,6 +120,12 @@ struct lustre_disk_dqdbheader {
         __u32 dqdh_pad2;
 };
 
+#ifdef LPROCFS
+void lprocfs_quotfmt_test_init_vars(struct lprocfs_static_vars *lvars);
+#else
+static void lprocfs_quotfmt_test_init_vars(struct lprocfs_static_vars *lvars) {}
+#endif
+
 #define LUSTRE_DQINFOOFF	sizeof(struct lustre_disk_dqheader)     /* Offset of info header in file */
 #define LUSTRE_DQBLKSIZE_BITS	10
 #define LUSTRE_DQBLKSIZE	(1 << LUSTRE_DQBLKSIZE_BITS)    /* Size of block with quota structures */

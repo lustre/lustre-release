@@ -39,4 +39,13 @@ struct ost_thread_local_cache *ost_tls(struct ptlrpc_request *r);
 /* Quota stuff */
 extern quota_interface_t *quota_interface;
 
+#ifdef LPROCFS
+void lprocfs_ost_init_vars(struct lprocfs_static_vars *lvars);
+#else
+static void lprocfs_ost_init_vars(struct lprocfs_static_vars *lvars)
+{
+        memset(lvars, 0, sizeof(*lvars));
+}
+#endif
+
 #endif /* OST_INTERNAL_H */

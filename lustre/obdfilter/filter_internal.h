@@ -178,11 +178,16 @@ int filter_recov_log_mds_ost_cb(struct llog_handle *llh,
 void filter_tally(struct obd_export *exp, struct page **pages, int nr_pages,
                   unsigned long *blocks, int blocks_per_page, int wr);
 int lproc_filter_attach_seqstat(struct obd_device *dev);
+void lprocfs_filter_init_vars(struct lprocfs_static_vars *lvars);
 #else
 static inline void filter_tally(struct obd_export *exp, struct page **pages,
                                 int nr_pages, unsigned long *blocks,
                                 int blocks_per_page, int wr) {}
 static inline int lproc_filter_attach_seqstat(struct obd_device *dev) {}
+static void lprocfs_filter_init_vars(struct lprocfs_static_vars *lvars)
+{
+        memset(lvars, 0, sizeof(*lvars));
+}
 #endif
 
 /* Quota stuff */
