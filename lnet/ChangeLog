@@ -14,7 +14,7 @@ tbd  Sun Microsystems, Inc.
 
 --------------------------------------------------------------------------------
 
-2008-01-09         Cluster File Systems, Inc. <info@clusterfs.com>
+2008-01-11  Sun Microsystems, Inc.
        * version 1.4.12
        * Support for networks:
 	socklnd   - any kernel supported by Lustre,
