@@ -1043,15 +1043,15 @@ test_14a(){
 
         MISSING_USERS=""
         for i in `seq 1 30`; do
-                check_runas_id_ret quota15_$i
+                check_runas_id_ret quota15_$i "runas -u quota15_$i"
                 if [ "$?" != "0" ]; then
                        MISSING_USERS="$MISSING_USERS quota15_$i"
                 fi
         done
 
         if [ -n "$MISSING_USERS" ]; then
-                echo "following users are missing: $MISSING_USERS, test skipped"
-                return
+                skip "following users are missing: $MISSING_USERS"
+                return 0
         fi
 
         $LFS quotaoff -ug $DIR
