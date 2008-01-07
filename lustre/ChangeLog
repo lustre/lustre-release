@@ -1,14 +1,11 @@
 tbd  Sun Microsystems, Inc.
        * version 1.8.0
        * Support for kernels:
-        2.6.5-7.287.3 (SLES 9),
         2.6.9-67.EL (RHEL 4),
         2.6.16.54-0.2.3 (SLES 10),
         2.6.18-53.1.4.el5 (RHEL 5).
-        2.6.18.8 vanilla (kernel.org)
        * Client support for unpatched kernels:
         (see http://wiki.lustre.org/index.php?title=Patchless_Client)
-        2.6.9-42.0.10.EL (RHEL 4),
         2.6.16 - 2.6.21 vanilla (kernel.org)
        * Recommended e2fsprogs version: 1.40.2-cfs5
        * Note that reiserfs quotas are disabled on SLES 10 in this kernel.
@@ -39,7 +36,7 @@ Bugzilla   : 14260
 Frequency  : rare, at shutdown
 Description: access already free / zero obd_namespace.
 Details    : if client_disconnect_export was called without force flag set,
-             and exist connect request in flight, this can produce access to
+	     and exist connect request in flight, this can produce access to
 	     NULL pointer (or already free pointer) when connect_interpret 
 	     store ocd flags in obd_namespace.
 
@@ -48,7 +45,7 @@ Bugzilla   : 14418
 Frequency  : only at startup
 Description: not alloc memory with spinlock held.
 Details    : allocation memory with GFP_KERNEL can produce sleep deadlock,
-             if any spinlock held.
+	     if any spinlock held.
 
 Severity   : enhancement
 Bugzilla   : 12211
@@ -59,7 +56,7 @@ Severity   : enhancement
 Bugzilla   : 12702
 Description: lost problems with lov objid file
 Details    : Fixes some scability and access to not inited memory problems 
-             in work with lov objdid file.
+	     in work with lov objdid file.
 
 Severity   : major
 Frequency  : always
@@ -71,7 +68,7 @@ Severity   : normal
 Bugzilla   : 11791
 Description: Inconsistent usage of lustre_pack_reply()
 Details    : Standardize the usage of lustre_pack_reply() such that it
-             always generate a CERROR on failure.
+	     always generate a CERROR on failure.
 
 Severity   : major
 Frequency  : occasional
@@ -551,13 +548,13 @@ Frequency  : always
 Bugzilla   : 13976
 Description: touch file failed when fs is not full
 Details    : OST in recovery should not be discarded by MDS in alloc_qos(),
-             otherwise we can get ENOSP while fs is not full.
+	     otherwise we can get ENOSP while fs is not full.
 
 Severity   : normal
 Bugzilla   : 11301
 Description: parallel lock callbacks
 Details    : Instead of sending blocking and completion callbacks as separated
-             requests, adding them to a set and sending in parallel.
+	     requests, adding them to a set and sending in parallel.
 
 Severity   : normal
 Frequency  : only for Cray XT3
