@@ -1410,7 +1410,7 @@ static int ldlm_bl_to_thread(struct ldlm_namespace *ns,
                 blwi->blwi_lock = lock;
         }
         spin_lock(&blp->blp_lock);
-        if (lock->l_flags & LDLM_FL_DISCARD_DATA) {
+        if (lock && lock->l_flags & LDLM_FL_DISCARD_DATA) {
                 /* add LDLM_FL_DISCARD_DATA requests to the priority list */
                 list_add_tail(&blwi->blwi_entry, &blp->blp_prio_list);
         } else {
