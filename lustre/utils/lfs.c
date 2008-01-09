@@ -1270,7 +1270,6 @@ static int lfs_quotainv(int argc, char **argv)
         int c;
         char *mnt;
         struct if_quotactl qctl;
-        char *obd_type = (char *)qctl.obd_type;
         int rc;
 
         memset(&qctl, 0, sizeof(qctl));
