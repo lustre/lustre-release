@@ -131,7 +131,7 @@ check_lustre_msg_v2(void)
         CHECK_MEMBER(lustre_msg_v2, lm_magic);
         CHECK_MEMBER(lustre_msg_v2, lm_repsize);
         CHECK_MEMBER(lustre_msg_v2, lm_cksum);
-        CHECK_MEMBER(lustre_msg_v2, lm_padding_1);
+        CHECK_MEMBER(lustre_msg_v2, lm_flags);
         CHECK_MEMBER(lustre_msg_v2, lm_padding_2);
         CHECK_MEMBER(lustre_msg_v2, lm_padding_3);
         CHECK_MEMBER(lustre_msg_v2, lm_buflens[0]);
@@ -1121,6 +1121,7 @@ main(int argc, char **argv)
         CHECK_DEFINE(LUSTRE_MSG_MAGIC_V1);
         CHECK_DEFINE(LUSTRE_MSG_MAGIC_V2);
         CHECK_DEFINE(PTLRPC_MSG_VERSION);
+        CHECK_VALUE(MSGHDR_AT_SUPPORT);
 
         CHECK_VALUE(PTL_RPC_MSG_REQUEST);
         CHECK_VALUE(PTL_RPC_MSG_ERR);
@@ -1129,7 +1130,6 @@ main(int argc, char **argv)
         CHECK_VALUE(MSG_LAST_REPLAY);
         CHECK_VALUE(MSG_RESENT);
         CHECK_VALUE(MSG_REPLAY);
-        CHECK_VALUE(MSG_AT_SUPPORT);
 
         CHECK_VALUE(MSG_CONNECT_RECOVERING);
         CHECK_VALUE(MSG_CONNECT_RECONNECT);

@@ -608,7 +608,7 @@ static int ptlrpc_at_add_timed(struct ptlrpc_request *req)
         if (AT_OFF) 
                 return(0);
 
-        if ((lustre_msg_get_flags(req->rq_reqmsg) & MSG_AT_SUPPORT) == 0) 
+        if ((lustre_msghdr_get_flags(req->rq_reqmsg) & MSGHDR_AT_SUPPORT) == 0)
                 return(-ENOSYS);
         
         DEBUG_REQ(D_ADAPTTO, req, "add timed %lds", 
@@ -676,7 +676,7 @@ static int ptlrpc_at_send_early_reply(struct ptlrpc_request *req,
                 RETURN(-ETIMEDOUT);
         }
 
-        if ((lustre_msg_get_flags(req->rq_reqmsg) & MSG_AT_SUPPORT) == 0) {
+        if ((lustre_msghdr_get_flags(req->rq_reqmsg) & MSGHDR_AT_SUPPORT) == 0){
                 CDEBUG(D_INFO, "Wanted to ask client for more time, but no AT "
                       "support\n");
                 RETURN(-ENOSYS);
@@ -915,9 +915,10 @@ ptlrpc_server_handle_req_in(struct ptlrpc_service *svc)
                           cfs_time_current_sec() - req->rq_arrival_time.tv_sec);
 
         /* Set rpc server deadline and add it to the timed list */
-        deadline = (lustre_msg_get_flags(req->rq_reqmsg) & MSG_AT_SUPPORT) ? 
-                /* The max time the client expects us to take */
-                lustre_msg_get_timeout(req->rq_reqmsg) : obd_timeout;
+        deadline = (lustre_msghdr_get_flags(req->rq_reqmsg) &
+                    MSGHDR_AT_SUPPORT) ? 
+                   /* The max time the client expects us to take */
+                   lustre_msg_get_timeout(req->rq_reqmsg) : obd_timeout;
         LASSERT(deadline > 0);
         req->rq_deadline = req->rq_arrival_time.tv_sec + deadline;
         

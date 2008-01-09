@@ -796,9 +796,9 @@ finish:
                               (in ptlrpc_send_reply).
                            Can only be set when we know AT is supported at 
                            both ends */
-                        imp->imp_msg_flags |= MSG_AT_SUPPORT;
+                        imp->imp_msghdr_flags |= MSGHDR_AT_SUPPORT;
                 else
-                        imp->imp_msg_flags &= ~MSG_AT_SUPPORT;
+                        imp->imp_msghdr_flags &= ~MSGHDR_AT_SUPPORT;
 
                 LASSERT((cli->cl_max_pages_per_rpc <= PTLRPC_MAX_BRW_PAGES) &&
                         (cli->cl_max_pages_per_rpc > 0));

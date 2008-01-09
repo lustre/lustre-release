@@ -366,7 +366,7 @@ int ptlrpc_send_reply (struct ptlrpc_request *req, int flags)
         if (req->rq_export && req->rq_export->exp_obd)
                 target_pack_pool_reply(req);
 
-        if (lustre_msg_get_flags(req->rq_reqmsg) & MSG_AT_SUPPORT) {
+        if (lustre_msghdr_get_flags(req->rq_reqmsg) & MSGHDR_AT_SUPPORT) {
                 /* early replies go to offset 0, regular replies go after that*/
                 if (flags & PTLRPC_REPLY_EARLY) {
                         offset = 0;

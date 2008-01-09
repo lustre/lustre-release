@@ -129,7 +129,7 @@ struct obd_import {
         __u64                     imp_connect_flags_orig;
 
         __u32                     imp_msg_magic;
-        __u32                     imp_msg_flags;          /* adjusted based on server capability */
+        __u32                     imp_msghdr_flags;       /* adjusted based on server capability */
 
         struct ptlrpc_request_pool *imp_rq_pool;          /* emergency request pool */
 

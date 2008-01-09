@@ -899,7 +899,7 @@ set_flags:
                 revimp->imp_msg_magic = LUSTRE_MSG_MAGIC_V2;
                 lustre_msg_add_op_flags(req->rq_repmsg, MSG_CONNECT_NEXT_VER);
                 if (export->exp_connect_flags & OBD_CONNECT_AT)
-                        revimp->imp_msg_flags |= MSG_AT_SUPPORT;
+                        revimp->imp_msghdr_flags |= MSGHDR_AT_SUPPORT;
         }
 
         class_import_put(revimp);

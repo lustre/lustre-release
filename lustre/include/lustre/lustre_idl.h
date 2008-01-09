@@ -180,6 +180,9 @@ struct lustre_msg_v1 {
         __u32 lm_buflens[0];
 };
 
+/* flags for lm_flags */
+#define MSGHDR_AT_SUPPORT               0x1
+
 #define lustre_msg lustre_msg_v2
 /* we depend on this structure to be 8-byte aligned */
 /* this type is only endian-adjusted in lustre_unpack_msg() */
@@ -189,7 +192,7 @@ struct lustre_msg_v2 {
         __u32 lm_magic;
         __u32 lm_repsize;
         __u32 lm_cksum;
-        __u32 lm_padding_1;
+        __u32 lm_flags;
         __u32 lm_padding_2;
         __u32 lm_padding_3;
         __u32 lm_buflens[0];
@@ -246,7 +249,7 @@ extern void lustre_swab_ptlrpc_body(struct ptlrpc_body *pb);
 #define MSG_LAST_REPLAY        1
 #define MSG_RESENT             2
 #define MSG_REPLAY             4
-#define MSG_AT_SUPPORT         8
+/* #define MSG_AT_SUPPORT         8  avoid until 1.10+ */
 
 /*
  * Flags for all connect opcodes (MDS_CONNECT, OST_CONNECT)

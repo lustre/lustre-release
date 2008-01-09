@@ -106,7 +106,7 @@ void reply_in_callback(lnet_event_t *ev)
         }
 
         if ((ev->offset == 0) && 
-            ((lustre_msg_get_flags(req->rq_reqmsg) & MSG_AT_SUPPORT) != 0)) {
+            (lustre_msghdr_get_flags(req->rq_reqmsg) & MSGHDR_AT_SUPPORT)) {
                 /* Early reply */
                 DEBUG_REQ(D_ADAPTTO, req,
                           "Early reply received: mlen=%u offset=%d replen=%d "

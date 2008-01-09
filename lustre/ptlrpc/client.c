@@ -546,7 +546,7 @@ ptlrpc_prep_req_pool(struct obd_import *imp, __u32 version, int opcode,
         atomic_set(&request->rq_refcount, 1);
 
         lustre_msg_set_opc(request->rq_reqmsg, opcode);
-        lustre_msg_set_flags(request->rq_reqmsg, imp->imp_msg_flags);
+        lustre_msghdr_set_flags(request->rq_reqmsg, imp->imp_msghdr_flags);
 
         RETURN(request);
 }

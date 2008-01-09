@@ -748,7 +748,7 @@ static int lustre_unpack_msg_v2(struct lustre_msg_v2 *m, int len)
                 __swab32s(&m->lm_secflvr);
                 __swab32s(&m->lm_repsize);
                 __swab32s(&m->lm_cksum);
-                CLASSERT(offsetof(typeof(*m), lm_padding_1) != 0);
+                __swab32s(&m->lm_flags);
                 CLASSERT(offsetof(typeof(*m), lm_padding_2) != 0);
                 CLASSERT(offsetof(typeof(*m), lm_padding_3) != 0);
         }
@@ -1054,6 +1054,35 @@ void *lustre_swab_repbuf(struct ptlrpc_request *req, int index, int min_size,
 {
         lustre_set_rep_swabbed(req, index);
         return lustre_swab_buf(req->rq_repmsg, index, min_size, swabber);
+}
+
+__u32 lustre_msghdr_get_flags(struct lustre_msg *msg)
+{
+        switch (msg->lm_magic) {
+        case LUSTRE_MSG_MAGIC_V1:
+        case LUSTRE_MSG_MAGIC_V1_SWABBED:
+                return 0;
+        case LUSTRE_MSG_MAGIC_V2:
+        case LUSTRE_MSG_MAGIC_V2_SWABBED:
+                /* already in host endian */
+                return msg->lm_flags;
+        default:
+                LASSERTF(0, "incorrect message magic: %08x\n", msg->lm_magic);
+                return 0;
+        }
+}
+
+void lustre_msghdr_set_flags(struct lustre_msg *msg, __u32 flags)
+{
+        switch (msg->lm_magic) {
+        case LUSTRE_MSG_MAGIC_V1:
+                return;
+        case LUSTRE_MSG_MAGIC_V2:
+                msg->lm_flags = flags;
+                return;
+        default:
+                LASSERTF(0, "incorrect message magic: %08x\n", msg->lm_magic);
+        }
 }
 
 __u32 lustre_msg_get_flags(struct lustre_msg *msg)
