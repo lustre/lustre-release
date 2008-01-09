@@ -1207,25 +1207,26 @@ remote_ost ()
 
 osts_nodes () {
     local OSTNODES=$(facet_host ost1)
+    local NODES_sort
 
     for num in `seq $OSTCOUNT`; do
         local myOST=$(facet_host ost$num)
-        [[ ! '\ '"$OSTNODES"'\ ' = *'\ '"$myOST"'\ '* ]] && OSTNODES="$OSTNODES $myOST"
+        OSTNODES="$OSTNODES $myOST"
     done
+    NODES_sort=$(for i in $OSTNODES; do echo $i; done | sort -u)
 
-    echo $OSTNODES
+    echo $NODES_sort
 }
 
 nodes_list () {
     # FIXME. We need a list of clients
     local myNODES=`hostname`
+    local myNODES_sort
 
-    [ ! "$mds_HOST" = "$(hostname)" ] && myNODES="$myNODES $mds_HOST"
+    myNODES="$myNODES $(osts_nodes) $mds_HOST"
+    myNODES_sort=$(for i in $myNODES; do echo $i; done | sort -u)
 
-    local OSTNODES=$(osts_nodes)
-    local myOSTNODES=`echo ' '"$OSTNODES"' ' | sed -e s/[\ ]$mds_HOST[\ ]/\ / -e s/[\ ]$(hostname)[\ ]/\ /`
-    [ -n "$myOSTNODES" ] && myNODES="$myNODES $myOSTNODES"
-    echo $myNODES
+    echo $myNODES_sort
 }
 
 is_patchless ()
