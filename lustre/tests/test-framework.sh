@@ -1353,6 +1353,7 @@ remote_ost ()
 
 mdts_nodes () {
     local MDSNODES=$(facet_host $SINGLEMDS)
+    local NODES_sort
 
     # FIXME: Currenly we use only $SINGLEMDS,
     # should be fixed when we will start to test cmd.
@@ -1361,39 +1362,35 @@ mdts_nodes () {
 
     for num in `seq $MDSCOUNT`; do
         local myMDS=$(facet_host mds$num)
-        [[ ! '\ '"$MDSNODES"'\ ' = *'\ '"$myMDS"'\ '* ]] && MDSNODES="$MDSNODES $myMDS"
+        MDSNODES="$MDSNODES $myMDS"
     done
+    NODES_sort=$(for i in $MDSNODES; do echo $i; done | sort -u)
 
-    echo $MDSNODES
+    echo $NODES_sort
 }
 
 osts_nodes () {
     local OSTNODES=$(facet_host ost1)
+    local NODES_sort
 
     for num in `seq $OSTCOUNT`; do
         local myOST=$(facet_host ost$num)
-        [[ ! '\ '"$OSTNODES"'\ ' = *'\ '"$myOST"'\ '* ]] && OSTNODES="$OSTNODES $myOST"
+        OSTNODES="$OSTNODES $myOST"
     done
+    NODES_sort=$(for i in $OSTNODES; do echo $i; done | sort -u)
 
-    echo $OSTNODES
+    echo $NODES_sort
 }
 
 nodes_list () {
     # FIXME. We need a list of clients
     local myNODES=`hostname`
+    local myNODES_sort
+    
+    myNODES="$myNODES $(osts_nodes) $(mdts_nodes)"
+    myNODES_sort=$(for i in $myNODES; do echo $i; done | sort -u)
 
-    local OSTNODES=$(osts_nodes)
-    local myOSTNODES=`echo ' '"$OSTNODES"' ' | sed -e s/[\ ]$(hostname)[\ ]/\ /`
-    [ -n "$myOSTNODES" ] && myNODES="$myNODES $myOSTNODES"
-
-    local myNODES=${myNODES% } 
-    # Add to list only not listed mds nodes
-    local MDSNODES=$(mdts_nodes)
-    for myMDS in $MDSNODES; do
-        [[ ! "'\ '$myNODES'\ '" = *'\ '"$myMDS"'\ '* ]] && myNODES="$myNODES $myMDS"
-    done
-
-    echo $myNODES
+    echo $myNODES_sort
 }
 
 is_patchless ()
