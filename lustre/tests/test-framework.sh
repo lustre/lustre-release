@@ -1248,6 +1248,15 @@ check_mds() {
     [ $FFREE -ge $FTOTAL ] && error "files free $FFREE > total $FTOTAL" || true
 }
 
+reset_fail_loc () {
+    local myNODES=$(nodes_list)
+    local NODE
+
+    for NODE in $myNODES; do
+        do_node $NODE sysctl -w lustre.fail_loc=0 || true
+    done
+}
+
 run_one() {
     testnum=$1
     message=$2
@@ -1263,6 +1272,7 @@ run_one() {
     export TESTNAME=test_$testnum
     test_${testnum} || error "test_$testnum failed with $?"
     #check_mds
+    reset_fail_loc
     check_grant ${testnum} || error "check_grant $testnum failed with $?"
     [ -f $CATASTROPHE ] && [ `cat $CATASTROPHE` -ne 0 ] && \
         error "LBUG/LASSERT detected"
