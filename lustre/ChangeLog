@@ -580,6 +580,12 @@ Bugzilla   : 14398
 Description: Allow masking D_WARNING, D_ERROR messages from console
 Details    : Console messages can now be disabled via lnet.printk.
 
+Severity   : normal
+Bugzilla   : 14493
+Description: Kernel BUG at ... ldiskfs/ldiskfs/mballoc.c:3853
+Details    : Removing the underlying device (e.g. via a SCSI rescan) can cause a
+	     kernel BUG in ldiskfs_mb_discard_inode_preallocations().
+
 --------------------------------------------------------------------------------
 
 2007-08-10         Cluster File Systems, Inc. <info@clusterfs.com>
