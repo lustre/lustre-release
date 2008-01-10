@@ -24,6 +24,13 @@ raid5-stripe-by-stripe-handling.patch
 raid5-merge-ios.patch
 raid5-serialize-ovelapping-reqs.patch
 raid5-zerocopy.patch
+raid6-stats.patch
+raid6-configurable-cachesize.patch
+raid6-large-io.patch
+raid6-stripe-by-stripe-handling.patch
+raid6-merge-ios.patch
+raid6-serialize-ovelapping-reqs.patch
+raid6-zerocopy.patch
 jbd-stats-2.6.9.patch 
 bitops_ext2_find_next_le_bit-2.6.patch 
 quota-deadlock-on-pagelock-core.patch
