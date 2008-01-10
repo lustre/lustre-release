@@ -4030,15 +4030,15 @@ Index: linux-2.6.9-full/fs/ext3/mballoc.c
 +		BUG_ON(err != 0); /* error handling here */
 +
 +		bitmap_bh = read_block_bitmap(sb, group);
-+		if (bitmap_bh == NULL) {
-+			/* error handling here */
-+			ext3_mb_release_desc(&e3b);
-+			BUG_ON(bitmap_bh == NULL);
-+		}
 +
 +		ext3_lock_group(sb, group);
 +		list_del_rcu(&pa->pa_group_list);
-+		ext3_mb_release_inode_pa(&e3b, bitmap_bh, pa);
++
++		/* can be NULL due to IO error, at worst
++		 * we leave some free blocks unavailable
++		 * do not go RO - no need for */
++		if (bitmap_bh != NULL)
++			ext3_mb_release_inode_pa(&e3b, bitmap_bh, pa);
 +		ext3_unlock_group(sb, group);
 +
 +		ext3_mb_release_desc(&e3b);
