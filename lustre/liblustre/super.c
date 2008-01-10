@@ -1205,7 +1205,7 @@ static int llu_statfs_internal(struct llu_sb_info *sbi,
                osfs->os_bavail, osfs->os_blocks, osfs->os_ffree,osfs->os_files);
 
         rc = obd_statfs_rqset(class_exp2obd(sbi->ll_dt_exp),
-                              &obd_statfs, max_age);
+                              &obd_statfs, max_age, 0);
         if (rc) {
                 CERROR("obd_statfs fails: rc = %d\n", rc);
                 RETURN(rc);

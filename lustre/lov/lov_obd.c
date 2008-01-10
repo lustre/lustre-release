@@ -1017,7 +1017,7 @@ static int lov_create(struct obd_export *exp, struct obdo *src_oa,
         }
 
         maxage = cfs_time_shift_64(-lov->desc.ld_qos_maxage);
-        obd_statfs_rqset(exp->exp_obd, &osfs, maxage);
+        obd_statfs_rqset(exp->exp_obd, &osfs, maxage, 1);
 
         rc = lov_prep_create_set(exp, &oinfo, ea, src_oa, oti, &set);
         if (rc)

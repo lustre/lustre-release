@@ -1006,7 +1006,8 @@ static inline int obd_statfs_async(struct obd_device *obd,
 }
 
 static inline int obd_statfs_rqset(struct obd_device *obd,
-                                   struct obd_statfs *osfs, __u64 max_age)
+                                   struct obd_statfs *osfs, __u64 max_age,
+                                   int quick_pry)
 {
         struct ptlrpc_request_set *set = NULL;
         struct obd_info oinfo = { { { 0 } } };
@@ -1019,8 +1020,19 @@ static inline int obd_statfs_rqset(struct obd_device *obd,
 
         oinfo.oi_osfs = osfs;
         rc = obd_statfs_async(obd, &oinfo, max_age, set);
-        if (rc == 0)
+        if (rc == 0) {
+                struct ptlrpc_request *req;
+
+                if (quick_pry)
+                        list_for_each_entry(req, &set->set_requests,
+                                            rq_set_chain) {
+                                spin_lock(&req->rq_lock);
+                                req->rq_no_resend = 1;
+                                req->rq_no_delay  = 1;
+                                spin_unlock(&req->rq_lock);
+                        }
                 rc = ptlrpc_set_wait(set);
+        }
         ptlrpc_set_destroy(set);
         RETURN(rc);
 }

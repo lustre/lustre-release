@@ -10,6 +10,13 @@ tbd  Sun Microsystems, Inc.
        * Recommended e2fsprogs version: 1.40.2-cfs5
        * Note that reiserfs quotas are disabled on SLES 10 in this kernel.
 
+Severity   : normal
+Bugzilla   : 13375
+Descriptoin: make lov_create() will not stuck in obd_statfs_rqset()
+Details    : If an OST is down the MDS will hang indefinitely in
+             obd_statfs_rqset() waiting for the statfs data. While for
+	     MDS QOS usage of statfs, it should not stuck in waiting.
+
 Severity   : enhancement
 Bugzilla   : 14288
 Description: Update to RHEL4 U6 kernel-2.6.9-67.EL.
