@@ -1,6 +1,12 @@
 tbd  Sun Microsystems, Inc.
        * version 3.0.5
 
+Severity   : normal
+Bugzilla   : 14493
+Description: Kernel BUG at ... ldiskfs/ldiskfs/mballoc.c:3853
+Details    : Removing the underlying device (e.g. via a SCSI rescan) can cause a
+	     kernel BUG in ldiskfs_mb_discard_inode_preallocations().
+
 --------------------------------------------------------------------------------
 
 2008-01-11  Sun Microsystems, Inc.
