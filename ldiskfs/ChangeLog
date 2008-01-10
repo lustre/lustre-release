@@ -10,6 +10,12 @@ Details    : If a new ldiskfs filesystem is created with the "uninit_groups"
 	     "bg_unused_inodes" count is incorrectly updated.  Creating a
 	     second inode in that group would update it correctly.
 
+Severity   : normal
+Bugzilla   : 14493
+Description: Kernel BUG at ... ldiskfs/ldiskfs/mballoc.c:3853
+Details    : Removing the underlying device (e.g. via a SCSI rescan) can cause a
+	     kernel BUG in ldiskfs_mb_discard_inode_preallocations().
+
 --------------------------------------------------------------------------------
 
 2007-09-27         Cluster File Systems, Inc. <info@clusterfs.com>
