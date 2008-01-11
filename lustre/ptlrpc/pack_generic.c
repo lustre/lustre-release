@@ -110,7 +110,11 @@ int lustre_msg_size_v2(int count, int *lengths)
 EXPORT_SYMBOL(lustre_msg_size_v2);
 
 /* This returns the size of the buffer that is required to hold a lustre_msg
- * with the given sub-buffer lengths. */
+ * with the given sub-buffer lengths.
+ * NOTE: this should only be used for NEW requests, and should always be
+ *       in the form of a v2 request.  If this is a connection to a v1
+ *       target then the first buffer will be stripped because the ptlrpc
+ *       data is part of the lustre_msg_v1 header. b=14043 */
 int lustre_msg_size(__u32 magic, int count, int *lens)
 {
         int size[] = { sizeof(struct ptlrpc_body) };
@@ -131,6 +135,24 @@ int lustre_msg_size(__u32 magic, int count, int *lens)
         default:
                 LASSERTF(0, "incorrect message magic: %08x\n", magic);
                 return -EINVAL;
+        }
+}
+
+/* This is used to determine the size of a buffer that was already packed
+ * and will correctly handle the different message formats. */
+int lustre_packed_msg_size(struct lustre_msg *msg)
+{
+        switch (msg->lm_magic) {
+        case LUSTRE_MSG_MAGIC_V1: {
+                struct lustre_msg_v1 *v1_msg = (struct lustre_msg_v1 *)msg;
+                return lustre_msg_size_v1(v1_msg->lm_bufcount,
+                                          v1_msg->lm_buflens);
+        }
+        case LUSTRE_MSG_MAGIC_V2:
+                return lustre_msg_size_v2(msg->lm_bufcount, msg->lm_buflens);
+        default:
+                CERROR("incorrect message magic: %08x\n", msg->lm_magic);
+                return 0;
         }
 }
 
@@ -765,16 +787,18 @@ static inline int lustre_unpack_ptlrpc_body_v2(struct lustre_msg_v2 *m,
 {
         struct ptlrpc_body *pb;
 
-        pb = lustre_swab_buf(m, offset, sizeof(*pb), lustre_swab_ptlrpc_body);
+        pb = lustre_msg_buf_v2(m, offset, sizeof(*pb));
         if (!pb) {
                 CERROR("error unpacking ptlrpc body");
                 return -EFAULT;
         }
+        if (lustre_msg_swabbed(m))
+                lustre_swab_ptlrpc_body(pb);
 
         if ((pb->pb_version & ~LUSTRE_VERSION_MASK) != PTLRPC_MSG_VERSION) {
                  CERROR("wrong lustre_msg version %08x\n", pb->pb_version);
                  return -EINVAL;
-         }
+        }
 
         return 0;
 }

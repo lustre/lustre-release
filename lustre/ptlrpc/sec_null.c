@@ -180,21 +180,18 @@ int null_enlarge_reqbuf(struct ptlrpc_sec *sec,
                         int segment, int newsize)
 {
         struct lustre_msg      *newbuf;
+        struct lustre_msg      *oldbuf = req->rq_reqmsg;
         int                     oldsize, newmsg_size, alloc_size;
 
         LASSERT(req->rq_reqbuf);
         LASSERT(req->rq_reqbuf == req->rq_reqmsg);
         LASSERT(req->rq_reqbuf_len >= req->rq_reqlen);
-        LASSERT(req->rq_reqlen == lustre_msg_size(req->rq_reqmsg->lm_magic,
-                                                  req->rq_reqmsg->lm_bufcount,
-                                                  req->rq_reqmsg->lm_buflens));
+        LASSERT(req->rq_reqlen == lustre_packed_msg_size(oldbuf));
 
         /* compute new message size */
         oldsize = req->rq_reqbuf->lm_buflens[segment];
         req->rq_reqbuf->lm_buflens[segment] = newsize;
-        newmsg_size = lustre_msg_size(req->rq_reqbuf->lm_magic,
-                                      req->rq_reqbuf->lm_bufcount,
-                                      req->rq_reqbuf->lm_buflens);
+        newmsg_size = lustre_packed_msg_size(oldbuf);
         req->rq_reqbuf->lm_buflens[segment] = oldsize;
 
         /* request from pool should always have enough buffer */
