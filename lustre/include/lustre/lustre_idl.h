@@ -722,6 +722,9 @@ extern void lustre_swab_obdo (struct obdo *o);
 #define LOV_PATTERN_FIRST 0x100   /* first stripe is not in round-robin */
 #define LOV_PATTERN_CMOBD 0x200
 
+#define LOV_OBJECT_GROUP_DEFAULT ~0ULL
+#define LOV_OBJECT_GROUP_CLEAR 0ULL
+
 #define lov_ost_data lov_ost_data_v1
 struct lov_ost_data_v1 {          /* per-stripe data structure (little-endian)*/
         __u64 l_object_id;        /* OST object ID */

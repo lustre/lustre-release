@@ -449,6 +449,12 @@ static int mdt_getattr_internal(struct mdt_thread_info *info,
                 ma->ma_need = MA_LOV | MA_INODE;
         }
 
+        if (S_ISDIR(lu_object_attr(&next->mo_lu)) &&
+            reqbody->valid & OBD_MD_FLDIREA  &&
+            lustre_msg_get_opc(req->rq_reqmsg) == MDS_GETATTR) {
+                /* get default stripe info for this dir. */
+                ma->ma_need |= MA_LOV_DEF;
+        }
         rc = mo_attr_get(env, next, ma);
         if (unlikely(rc)) {
                 CERROR("getattr error for "DFID": %d\n",

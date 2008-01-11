@@ -518,8 +518,12 @@ void lov_dump_user_lmm_v1(struct lov_user_md_v1 *lum, char *path, int is_dir,
         /* if it's a directory */
         if (is_dir) {
                 if (obdstripe == 1) {
+                        if (lum->lmm_object_gr == LOV_OBJECT_GROUP_DEFAULT) {
+                                llapi_printf(LLAPI_MSG_NORMAL, "(Default) ");
+                                lum->lmm_object_gr = LOV_OBJECT_GROUP_CLEAR;
+                        }
                         llapi_printf(LLAPI_MSG_NORMAL, 
-                                     "default stripe_count: %d stripe_size: %u "
+                                     "stripe_count: %d stripe_size: %u "
                                      "stripe_offset: %d\n",
                                      lum->lmm_stripe_count == (__u16)-1 ? -1 :
                                      lum->lmm_stripe_count,

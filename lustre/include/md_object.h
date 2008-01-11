@@ -101,7 +101,8 @@ enum ma_valid {
         MA_COOKIE    = (1 << 2),
         MA_FLAGS     = (1 << 3),
         MA_LMV       = (1 << 4),
-        MA_ACL_DEF   = (1 << 5)
+        MA_ACL_DEF   = (1 << 5),
+        MA_LOV_DEF   = (1 << 6)
 };
 
 typedef enum {

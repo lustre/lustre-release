@@ -285,6 +285,29 @@ int mdd_iattr_get(const struct lu_env *env, struct mdd_object *mdd_obj,
         RETURN(rc);
 }
 
+static int mdd_get_default_md(struct mdd_object *mdd_obj,
+                struct lov_mds_md *lmm, int *size)
+{
+        struct lov_desc *ldesc;
+        struct mdd_device *mdd = mdo2mdd(&mdd_obj->mod_obj);
+        ENTRY;
+
+        ldesc = &mdd->mdd_obd_dev->u.mds.mds_lov_desc;
+        LASSERT(ldesc != NULL);
+
+        if (!lmm)
+                RETURN(0);
+
+        lmm->lmm_magic = LOV_MAGIC_V1;
+        lmm->lmm_object_gr = LOV_OBJECT_GROUP_DEFAULT;
+        lmm->lmm_pattern = ldesc->ld_pattern;
+        lmm->lmm_stripe_size = ldesc->ld_default_stripe_size;
+        lmm->lmm_stripe_count = ldesc->ld_default_stripe_count;
+        *size = sizeof(struct lov_mds_md);
+
+        RETURN(sizeof(struct lov_mds_md));
+}
+
 /* get lov EA only */
 static int __mdd_lmm_get(const struct lu_env *env,
                          struct mdd_object *mdd_obj, struct md_attr *ma)
@@ -297,6 +320,12 @@ static int __mdd_lmm_get(const struct lu_env *env,
 
         rc = mdd_get_md(env, mdd_obj, ma->ma_lmm, &ma->ma_lmm_size,
                         MDS_LOV_MD_NAME);
+
+        if (rc == 0 && (ma->ma_need & MA_LOV_DEF)) {
+                rc = mdd_get_default_md(mdd_obj, ma->ma_lmm,
+                                &ma->ma_lmm_size);
+        }
+
         if (rc > 0) {
                 ma->ma_valid |= MA_LOV;
                 rc = 0;
