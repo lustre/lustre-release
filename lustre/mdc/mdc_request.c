@@ -1194,7 +1194,8 @@ static int mdc_setup(struct obd_device *obd, obd_count len, void *buf)
         if (rc)
                 GOTO(err_close_lock, rc);
         lprocfs_mdc_init_vars(&lvars);
-        lprocfs_obd_setup(obd, lvars.obd_vars);
+        if (lprocfs_obd_setup(obd, lvars.obd_vars) == 0)
+                ptlrpc_lprocfs_register_obd(obd);
 
         rc = obd_llog_init(obd, obd, 0, NULL, NULL);
         if (rc) {
@@ -1295,6 +1296,7 @@ static int mdc_cleanup(struct obd_device *obd)
         OBD_FREE(cli->cl_setattr_lock, sizeof (*cli->cl_setattr_lock));
         OBD_FREE(cli->cl_close_lock, sizeof (*cli->cl_close_lock));
 
+        ptlrpc_lprocfs_unregister_obd(obd);
         lprocfs_obd_cleanup(obd);
         ptlrpcd_decref();
 
