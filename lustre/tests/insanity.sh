@@ -180,7 +180,7 @@ run_test 1 "MDS/MDS failure"
 ############### Second Failure Mode ###############
 test_2() {
     echo "Verify Lustre filesystem is up and running"
-    [ -z "$(mounted_lustre_filesystems)" ] && skip "Lustre is not running" && return
+    [ -z "$(mounted_lustre_filesystems)" ] && error "Lustre is not running"
 
     client_df
 
@@ -220,7 +220,7 @@ run_test 2 "Second Failure Mode: MDS/OST `date`"
 test_3() {
     #Create files
     echo "Verify Lustre filesystem is up and running"
-    [ -z "$(mounted_lustre_filesystems)" ] && skip "Lustre is not running" && return
+    [ -z "$(mounted_lustre_filesystems)" ] && error "Lustre is not running"
     
     #MDS Portion
     facet_failover mds
@@ -299,7 +299,7 @@ test_5() {
 
     #Create files
     echo "Verify Lustre filesystem is up and running"
-    [ -z "$(mounted_lustre_filesystems)" ] && skip "Lustre is not running" && return
+    [ -z "$(mounted_lustre_filesystems)" ] && error "Lustre is not running"
 
     client_df
     
@@ -347,7 +347,7 @@ test_6() {
 
     #Create files
     echo "Verify Lustre filesystem is up and running"
-    [ -z "$(mounted_lustre_filesystems)" ] && skip "Lustre is not running" && return
+    [ -z "$(mounted_lustre_filesystems)" ] && error "Lustre is not running"
 
     client_df
     client_touch testfile || return 2
@@ -395,7 +395,7 @@ test_7() {
 
     #Create files
     echo "Verify Lustre filesystem is up and running"
-    [ -z "$(mounted_lustre_filesystems)" ] && skip "Lustre is not running" && return
+    [ -z "$(mounted_lustre_filesystems)" ] && error "Lustre is not running"
 
     client_df
     client_touch testfile  || return 1
@@ -449,7 +449,7 @@ test_8() {
 
     #Create files
     echo "Verify Lustre filesystem is up and running"
-    [ -z "$(mounted_lustre_filesystems)" ] && skip "Lustre is not running" && return
+    [ -z "$(mounted_lustre_filesystems)" ] && error "Lustre is not running"
 
     client_df
     client_touch testfile
@@ -470,7 +470,7 @@ test_8() {
 
     #Create files
     echo "Verify Lustre filesystem is up and running"
-    [ -z "$(mounted_lustre_filesystems)" ] && skip "Lustre is not running" && return
+    [ -z "$(mounted_lustre_filesystems)" ] && error "Lustre is not running"
 
     client_df
     client_touch testfile
@@ -512,7 +512,7 @@ test_9() {
 
     #Create files
     echo "Verify Lustre filesystem is up and running"
-    [ -z "$(mounted_lustre_filesystems)" ] && skip "Lustre is not running" && return
+    [ -z "$(mounted_lustre_filesystems)" ] && error "Lustre is not running"
 
     client_df
     client_touch testfile || return 1
