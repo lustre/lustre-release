@@ -190,16 +190,11 @@ static void mdc_realloc_openmsg(struct ptlrpc_request *req,
         struct lustre_msg *new_msg;
 
         old_len = lustre_msg_buflen(old_msg, DLM_INTENT_REC_OFF + 2);
-        /* save old size */
-        old_size = lustre_msg_size(lustre_request_magic(req),
-                                   req->rq_reqmsg->lm_bufcount,
-                                   req->rq_reqmsg->lm_buflens);
-
+        old_size = lustre_packed_msg_size(old_msg);
         lustre_msg_set_buflen(old_msg, DLM_INTENT_REC_OFF + 2,
                               body->eadatasize);
-        new_size = lustre_msg_size(lustre_request_magic(req),
-                                   req->rq_reqmsg->lm_bufcount,
-                                   req->rq_reqmsg->lm_buflens);
+        new_size = lustre_packed_msg_size(old_msg);
+
         OBD_ALLOC(new_msg, new_size);
         if (new_msg != NULL) {
                 DEBUG_REQ(D_INFO, req, "replace reqmsg for larger EA %u\n",

@@ -193,6 +193,7 @@ EXPORT_SYMBOL(lustre_pack_reply_flags);
 EXPORT_SYMBOL(lustre_shrink_reply);
 EXPORT_SYMBOL(lustre_free_reply_state);
 EXPORT_SYMBOL(lustre_msg_size);
+EXPORT_SYMBOL(lustre_packed_msg_size);
 EXPORT_SYMBOL(lustre_unpack_msg);
 EXPORT_SYMBOL(lustre_msg_buf);
 EXPORT_SYMBOL(lustre_msg_string);
