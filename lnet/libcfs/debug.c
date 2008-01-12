@@ -44,7 +44,7 @@ EXPORT_SYMBOL(libcfs_debug);
 unsigned int libcfs_printk = D_CANTMASK;
 EXPORT_SYMBOL(libcfs_printk);
 
-unsigned int libcfs_console_ratelimit = 0;
+unsigned int libcfs_console_ratelimit = 1;
 EXPORT_SYMBOL(libcfs_console_ratelimit);
 
 cfs_duration_t libcfs_console_max_delay;
