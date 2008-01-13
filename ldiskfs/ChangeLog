@@ -16,6 +16,13 @@ Description: Kernel BUG at ... ldiskfs/ldiskfs/mballoc.c:3853
 Details    : Removing the underlying device (e.g. via a SCSI rescan) can cause a
 	     kernel BUG in ldiskfs_mb_discard_inode_preallocations().
 
+Severity   : major
+Bugzilla   : 14596
+Description: deadlock in ext3_expand_extra_isize
+Details    : Inode expansion during ext3_mark_inode_dirty may lead to deadlock.
+	     This is solved by making sure that ext3_expand_extra_isize isn't
+	     called from ext3_xattr_set_handle.
+
 --------------------------------------------------------------------------------
 
 2007-09-27         Cluster File Systems, Inc. <info@clusterfs.com>
