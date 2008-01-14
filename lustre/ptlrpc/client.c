@@ -550,6 +550,9 @@ static int ptlrpc_import_delay_req(struct obd_import *imp,
                  imp->imp_state == LUSTRE_IMP_CONNECTING) {
                 /* allow CONNECT even if import is invalid */ ;
         } else if (imp->imp_invalid) {
+                /* if it is mgc, wait for recovry. b=13464 */
+                if (imp->imp_recon_bk && !imp->imp_obd->obd_no_recov)
+                        delay = 1;
                 /* If the import has been invalidated (such as by an OST
                  * failure) the request must fail with -ESHUTDOWN.  This
                  * indicates the requests should be discarded; an -EIO
@@ -1617,8 +1620,8 @@ int ptlrpc_queue_wait(struct ptlrpc_request *req)
         req->rq_phase = RQ_PHASE_RPC;
 
         spin_lock(&imp->imp_lock);
-        req->rq_import_generation = imp->imp_generation;
 restart:
+        req->rq_import_generation = imp->imp_generation;
         if (ptlrpc_import_delay_req(imp, req, &rc)) {
                 list_del(&req->rq_list);
 
