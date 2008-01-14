@@ -1,7 +1,7 @@
-Index: linux-2.6.16.54-0.2.3/fs/ext3/ialloc.c
+Index: linux-2.6.16-sles10/fs/ext3/ialloc.c
 ===================================================================
---- linux-2.6.16.54-0.2.3.orig/fs/ext3/ialloc.c
-+++ linux-2.6.16.54-0.2.3/fs/ext3/ialloc.c
+--- linux-2.6.16-sles10.orig/fs/ext3/ialloc.c
++++ linux-2.6.16-sles10/fs/ext3/ialloc.c
 @@ -727,7 +727,8 @@ got:
  	/* This is the optimal IO size (for stat), not the fs block size */
  	inode->i_blksize = PAGE_SIZE;
@@ -24,10 +24,10 @@ Index: linux-2.6.16.54-0.2.3/fs/ext3/ialloc.c
  
  	ret = inode;
  	if(DQUOT_ALLOC_INODE(inode)) {
-Index: linux-2.6.16.54-0.2.3/fs/ext3/inode.c
+Index: linux-2.6.16-sles10/fs/ext3/inode.c
 ===================================================================
---- linux-2.6.16.54-0.2.3.orig/fs/ext3/inode.c
-+++ linux-2.6.16.54-0.2.3/fs/ext3/inode.c
+--- linux-2.6.16-sles10.orig/fs/ext3/inode.c
++++ linux-2.6.16-sles10/fs/ext3/inode.c
 @@ -621,7 +621,7 @@ static int ext3_splice_branch(handle_t *
  
  	/* We are done with atomic stuff, now do the rest of housekeeping */
@@ -85,10 +85,10 @@ Index: linux-2.6.16.54-0.2.3/fs/ext3/inode.c
  	raw_inode->i_blocks = cpu_to_le32(inode->i_blocks);
  	raw_inode->i_dtime = cpu_to_le32(ei->i_dtime);
  	raw_inode->i_flags = cpu_to_le32(ei->i_flags);
-Index: linux-2.6.16.54-0.2.3/fs/ext3/ioctl.c
+Index: linux-2.6.16-sles10/fs/ext3/ioctl.c
 ===================================================================
---- linux-2.6.16.54-0.2.3.orig/fs/ext3/ioctl.c
-+++ linux-2.6.16.54-0.2.3/fs/ext3/ioctl.c
+--- linux-2.6.16-sles10.orig/fs/ext3/ioctl.c
++++ linux-2.6.16-sles10/fs/ext3/ioctl.c
 @@ -114,7 +114,7 @@ int ext3_ioctl (struct inode * inode, st
  		ei->i_flags = flags;
  
@@ -107,10 +107,10 @@ Index: linux-2.6.16.54-0.2.3/fs/ext3/ioctl.c
  			inode->i_generation = generation;
  			err = ext3_mark_iloc_dirty(handle, inode, &iloc);
  		}
-Index: linux-2.6.16.54-0.2.3/fs/ext3/namei.c
+Index: linux-2.6.16-sles10/fs/ext3/namei.c
 ===================================================================
---- linux-2.6.16.54-0.2.3.orig/fs/ext3/namei.c
-+++ linux-2.6.16.54-0.2.3/fs/ext3/namei.c
+--- linux-2.6.16-sles10.orig/fs/ext3/namei.c
++++ linux-2.6.16-sles10/fs/ext3/namei.c
 @@ -1296,7 +1296,7 @@ static int add_dirent_to_buf(handle_t *h
  	 * happen is that the times are slightly out of date
  	 * and/or different from the directory change time.
@@ -175,10 +175,10 @@ Index: linux-2.6.16.54-0.2.3/fs/ext3/namei.c
  	ext3_update_dx_flag(old_dir);
  	if (dir_bh) {
  		BUFFER_TRACE(dir_bh, "get_write_access");
-Index: linux-2.6.16.54-0.2.3/fs/ext3/super.c
+Index: linux-2.6.16-sles10/fs/ext3/super.c
 ===================================================================
---- linux-2.6.16.54-0.2.3.orig/fs/ext3/super.c
-+++ linux-2.6.16.54-0.2.3/fs/ext3/super.c
+--- linux-2.6.16-sles10.orig/fs/ext3/super.c
++++ linux-2.6.16-sles10/fs/ext3/super.c
 @@ -1709,6 +1709,8 @@ static int ext3_fill_super (struct super
  				sbi->s_inode_size);
  			goto failed_mount;
@@ -221,10 +221,10 @@ Index: linux-2.6.16.54-0.2.3/fs/ext3/super.c
  	/*
  	 * akpm: core read_super() calls in here with the superblock locked.
  	 * That deadlocks, because orphan cleanup needs to lock the superblock
-Index: linux-2.6.16.54-0.2.3/fs/ext3/xattr.c
+Index: linux-2.6.16-sles10/fs/ext3/xattr.c
 ===================================================================
---- linux-2.6.16.54-0.2.3.orig/fs/ext3/xattr.c
-+++ linux-2.6.16.54-0.2.3/fs/ext3/xattr.c
+--- linux-2.6.16-sles10.orig/fs/ext3/xattr.c
++++ linux-2.6.16-sles10/fs/ext3/xattr.c
 @@ -1006,7 +1006,7 @@ ext3_xattr_set_handle(handle_t *handle, 
  	}
  	if (!error) {
@@ -234,10 +234,10 @@ Index: linux-2.6.16.54-0.2.3/fs/ext3/xattr.c
  		error = ext3_mark_iloc_dirty(handle, inode, &is.iloc);
  		/*
  		 * The bh is consumed by ext3_mark_iloc_dirty, even with
-Index: linux-2.6.16.54-0.2.3/include/linux/ext3_fs.h
+Index: linux-2.6.16-sles10/include/linux/ext3_fs.h
 ===================================================================
---- linux-2.6.16.54-0.2.3.orig/include/linux/ext3_fs.h
-+++ linux-2.6.16.54-0.2.3/include/linux/ext3_fs.h
+--- linux-2.6.16-sles10.orig/include/linux/ext3_fs.h
++++ linux-2.6.16-sles10/include/linux/ext3_fs.h
 @@ -294,7 +294,7 @@ struct ext3_inode {
  	__le16	i_uid;		/* Low 16 bits of Owner Uid */
  	__le32	i_size;		/* Size in bytes */
@@ -375,10 +375,10 @@ Index: linux-2.6.16.54-0.2.3/include/linux/ext3_fs.h
  /*
   * This structure is stuffed into the struct file's private_data field
   * for directories.  It is where we put information so that we can do
-Index: linux-2.6.16.54-0.2.3/include/linux/ext3_fs_i.h
+Index: linux-2.6.16-sles10/include/linux/ext3_fs_i.h
 ===================================================================
---- linux-2.6.16.54-0.2.3.orig/include/linux/ext3_fs_i.h
-+++ linux-2.6.16.54-0.2.3/include/linux/ext3_fs_i.h
+--- linux-2.6.16-sles10.orig/include/linux/ext3_fs_i.h
++++ linux-2.6.16-sles10/include/linux/ext3_fs_i.h
 @@ -120,6 +120,7 @@ struct ext3_inode_info {
  
  	/* on-disk additional length */
@@ -387,10 +387,10 @@ Index: linux-2.6.16.54-0.2.3/include/linux/ext3_fs_i.h
  
  	/*
  	 * truncate_sem is for serialising ext3_truncate() against
-Index: linux-2.6.16.54-0.2.3/include/linux/ext3_fs_sb.h
+Index: linux-2.6.16-sles10/include/linux/ext3_fs_sb.h
 ===================================================================
---- linux-2.6.16.54-0.2.3.orig/include/linux/ext3_fs_sb.h
-+++ linux-2.6.16.54-0.2.3/include/linux/ext3_fs_sb.h
+--- linux-2.6.16-sles10.orig/include/linux/ext3_fs_sb.h
++++ linux-2.6.16-sles10/include/linux/ext3_fs_sb.h
 @@ -68,6 +68,8 @@ struct ext3_sb_info {
  	/* Last group used to allocate inode */
  	int s_last_alloc_group;
