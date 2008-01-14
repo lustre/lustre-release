@@ -125,7 +125,19 @@ typedef long                            cfs_task_state_t;
 
 /* Kernel thread */
 typedef int (*cfs_thread_t)(void *);
-#define cfs_kernel_thread(func, a, f)   kernel_thread(func, a, f)
+
+static inline int cfs_kernel_thread(int (*fn)(void *),
+                                    void *arg, unsigned long flags)
+{
+        void *orig_info = current->journal_info;
+        int rc;
+
+        current->journal_info = NULL;
+        rc = kernel_thread(fn, arg, flags);
+        current->journal_info = orig_info;
+        return rc;
+}
+
 
 /*
  * Task struct
