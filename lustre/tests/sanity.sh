@@ -1440,6 +1440,14 @@ test_33a() {
 }
 run_test 33a "test open file(mode=0444) with O_RDWR (should return error)"
 
+test_33b() {
+        rm -fr $DIR/d33
+        mkdir -p $DIR/d33
+        chown $RUNAS_ID $DIR/d33
+        $RUNAS $OPENFILE -f 1286739555 $DIR/d33/f33 && error "create" || true
+}
+run_test 33b "test open file with malformed flags (No panic and return error)"
+
 TEST_34_SIZE=${TEST_34_SIZE:-2000000000000}
 test_34a() {
 	rm -f $DIR/f34

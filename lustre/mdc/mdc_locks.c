@@ -276,7 +276,7 @@ static struct ptlrpc_request *mdc_intent_open_pack(struct obd_export *exp,
                 mode = LCK_CR;
         count += mdc_resource_get_unused(exp, &data->fid1, &cancels, mode,
                                          MDS_INODELOCK_UPDATE);
-        if (it->it_flags & O_JOIN_FILE) {
+        if (it->it_flags & O_JOIN_FILE && data->data) {
                 __u64 head_size = (*(__u64 *)data->data);
                         /* join is like an unlink of the tail */
                 size[DLM_INTENT_REC_OFF + 3] = sizeof(struct mds_rec_join);
