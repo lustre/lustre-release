@@ -25,8 +25,16 @@ LUSTRE=${LUSTRE:-`dirname $0`/..}
 init_test_env $@
 . ${CONFIG:=$LUSTRE/tests/cfg/$NAME.sh}
 
-WAS_MOUNTED=`mount | grep $MOUNT || true`
-[ -z "$WAS_MOUNTED" ] && sh llmount.sh
+# if nothing mounted, don't nuke MOUNT variable needed in llmount.sh
+WAS_MOUNTED=$(mounted_lustre_filesystems | head -1)
+if [ -z "$WAS_MOUNTED" ]; then
+       # This code doesn't handle multiple mounts well, so nuke MOUNT2 variable
+        MOUNT2="" sh llmount.sh
+        MOUNT=$(mounted_lustre_filesystems)
+        [ -z "$MOUNT" ] && echo "NAME=$NAME not mounted" && exit 2
+else
+        MOUNT=${WAS_MOUNTED}
+fi
 
 DIR=$DIR/$TESTNAME
 [ -z "`echo $DIR | grep $MOUNT`" ] && echo "$DIR not in $MOUNT" && exit 3
@@ -48,7 +56,8 @@ get_mnt_devs() {
 
 if [ "$LFSCK_SETUP" != "no" ]; then
 	#Create test directory 
-	rm -rf $DIR
+	# -- can't remove the mountpoint...
+	[ -z "$DIR" ] && rm -rf $DIR/*
 	mkdir -p $DIR
 	OSTCOUNT=`$GETSTRIPE $MOUNT | grep -c "^[0-9]*: " || true`
 
@@ -186,7 +195,7 @@ done
 # lfsck will return 1 if the filesystem had errors fixed
 echo "LFSCK TEST 1"
 echo "lfsck -c -l --mdsdb $MDSDB --ostdb $OSTDB_LIST $MOUNT"
-lfsck -c -l --mdsdb $MDSDB --ostdb $OSTDB_LIST $MOUNT
+echo y | lfsck -c -l --mdsdb $MDSDB --ostdb $OSTDB_LIST $MOUNT
 RET=$?
 [ $RET -eq 0 ] && echo "clean after first check" && exit 0
 echo "LFSCK TEST 1 - finished with rc=$RET"
