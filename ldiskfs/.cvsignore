@@ -18,3 +18,4 @@ lustre-ldiskfs.spec
 missing
 mkinstalldirs
 stamp-h1
+Module.symvers
