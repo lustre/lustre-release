@@ -35,6 +35,7 @@ usage() {
 }
 
 print_summary () {
+    [ "$TESTSUITE" == "lfscktest" ] && return 0
     [ -n "$ONLY" ] && echo "WARNING: ONLY is set to ${ONLY}."
     local form="%-13s %-17s %s\n"
     printf "$form" "status" "script" "skipped tests E(xcluded) S(low)"
