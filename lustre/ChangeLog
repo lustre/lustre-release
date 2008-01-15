@@ -580,6 +580,13 @@ Bugzilla   : 14398
 Description: Allow masking D_WARNING, D_ERROR messages from console
 Details    : Console messages can now be disabled via lnet.printk.
 
+Severity   : normal
+Bugzilla   : 14614
+Description: User code with malformed file open parameter crashes client node 
+Details    : Before packing join_file req, all the related reference should be
+	     checked carefully in case some malformed flags cause fake
+	     join_file req on client.
+
 --------------------------------------------------------------------------------
 
 2007-08-10         Cluster File Systems, Inc. <info@clusterfs.com>

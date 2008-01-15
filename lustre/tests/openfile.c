@@ -83,6 +83,16 @@ int main(int argc, char** argv)
                         }
 
                         strncpy(cloned_flags, optarg, strlen(optarg)+1);
+                        flags = atoi(cloned_flags);
+                        if (flags > 0) {
+                                flag_set = 1;
+#ifdef DEBUG
+                                printf("flags = %d\n",flags);
+#endif
+                                break;
+                        } else 
+                                flags = 0;
+                        
                         for (tmp = strtok(cloned_flags, ":|"); tmp;
                              tmp = strtok(NULL, ":|")) {
                                 int i = 0;

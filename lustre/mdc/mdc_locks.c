@@ -276,7 +276,8 @@ int mdc_enqueue(struct obd_export *exp, struct ldlm_enqueue_info *einfo,
         LASSERTF(einfo->ei_type == LDLM_IBITS,"lock type %d\n", einfo->ei_type);
 
         if (it->it_op & IT_OPEN) {
-                int do_join = !!(it->it_flags & O_JOIN_FILE);
+                int do_join = (!!(it->it_flags & O_JOIN_FILE) && 
+			       op_data->op_data);
                 CFS_LIST_HEAD(cancels);
                 int count = 0;
                 int mode;
@@ -314,7 +315,7 @@ int mdc_enqueue(struct obd_export *exp, struct ldlm_enqueue_info *einfo,
                 }
 
                 /* If CREATE or JOIN_FILE, cancel parent's UPDATE lock. */
-                if (it->it_op & IT_CREAT || it->it_flags & O_JOIN_FILE)
+                if (it->it_op & IT_CREAT || do_join)
                         mode = LCK_EX;
                 else
                         mode = LCK_CR;
@@ -325,6 +326,8 @@ int mdc_enqueue(struct obd_export *exp, struct ldlm_enqueue_info *einfo,
                 if (do_join)
                         size[DLM_INTENT_REC_OFF + 5] =
                                                 sizeof(struct mdt_rec_join);
+                else
+                        it->it_flags &= ~O_JOIN_FILE;
 
                 req = ldlm_prep_enqueue_req(exp, 8 + do_join, size, &cancels,
                                             count);
@@ -334,7 +337,7 @@ int mdc_enqueue(struct obd_export *exp, struct ldlm_enqueue_info *einfo,
                 if (do_join) {
                         /* join is like an unlink of the tail */
                         policy.l_inodebits.bits = MDS_INODELOCK_UPDATE;
-                        mdc_join_pack(req, DLM_INTENT_REC_OFF + 5, op_data,
+                       	mdc_join_pack(req, DLM_INTENT_REC_OFF + 5, op_data,
                                       (*(__u64 *)op_data->op_data));
                 }
 
