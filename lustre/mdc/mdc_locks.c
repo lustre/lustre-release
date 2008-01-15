@@ -243,6 +243,7 @@ static struct ptlrpc_request *mdc_intent_open_pack(struct obd_export *exp,
                                                         cl_max_mds_easize,
                            [DLM_REPLY_REC_OFF+2] = LUSTRE_POSIX_ACL_MAX_SIZE };
         CFS_LIST_HEAD(cancels);
+        int do_join = (it->it_flags & O_JOIN_FILE) && data->data;
         int count = 0;
         int mode;
         int rc;
@@ -250,8 +251,8 @@ static struct ptlrpc_request *mdc_intent_open_pack(struct obd_export *exp,
         it->it_create_mode |= S_IFREG;
 
         rc = lustre_msg_size(class_exp2cliimp(exp)->imp_msg_magic, 6, size);
-                if (rc & (rc - 1))
-                        size[DLM_INTENT_REC_OFF + 2] =
+        if (rc & (rc - 1))
+                size[DLM_INTENT_REC_OFF + 2] =
                          min(size[DLM_INTENT_REC_OFF + 2] + round_up(rc) - rc,
                                      obddev->u.cli.cl_max_mds_easize);
 
@@ -270,13 +271,13 @@ static struct ptlrpc_request *mdc_intent_open_pack(struct obd_export *exp,
         }
 
         /* If CREATE or JOIN_FILE, cancel parent's UPDATE lock. */
-        if (it->it_op & IT_CREAT || it->it_flags & O_JOIN_FILE)
+        if (it->it_op & IT_CREAT || do_join)
                 mode = LCK_EX;
         else
                 mode = LCK_CR;
         count += mdc_resource_get_unused(exp, &data->fid1, &cancels, mode,
                                          MDS_INODELOCK_UPDATE);
-        if (it->it_flags & O_JOIN_FILE && data->data) {
+        if (do_join) {
                 __u64 head_size = (*(__u64 *)data->data);
                         /* join is like an unlink of the tail */
                 size[DLM_INTENT_REC_OFF + 3] = sizeof(struct mds_rec_join);
@@ -284,6 +285,7 @@ static struct ptlrpc_request *mdc_intent_open_pack(struct obd_export *exp,
                 mdc_join_pack(req, DLM_INTENT_REC_OFF + 3, data, head_size);
         } else {
                 req = ldlm_prep_enqueue_req(exp, 6, size, &cancels, count);
+                it->it_flags &= ~O_JOIN_FILE;
         }
 
         if (req) {
