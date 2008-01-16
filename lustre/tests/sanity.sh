@@ -2664,8 +2664,19 @@ run_test 60a "llog sanity tests run from kernel module =========="
 
 test_60b() { # bug 6411
 	dmesg > $DIR/$tfile
-	LLOG_COUNT=`dmesg | grep -A 1000 "$TEST60_HEAD" | grep -c llog_test`
-	[ $LLOG_COUNT -gt 50 ] && error "CDEBUG_LIMIT not limiting messages"|| true
+	LLOG_COUNT=`dmesg | awk "/$TEST60_HEAD/{marker = 1; from_marker = 0;}
+				 /llog-test/ {
+					 if (marker)
+						 from_marker++
+					 from_begin++
+				 }
+				 END {
+					 if (marker)
+						 print from_marker
+					 else
+						 print from_begin
+				 }"`
+	[ $LLOG_COUNT -gt 50 ] && error "CDEBUG_LIMIT not limiting messages ($LLOG_COUNT)"|| true
 }
 run_test 60b "limit repeated messages from CERROR/CWARN ========"
  
