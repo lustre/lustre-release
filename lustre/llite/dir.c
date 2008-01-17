@@ -46,9 +46,13 @@
 #include <lustre_fid.h>
 #include "llite_internal.h"
 
+#ifndef HAVE_PAGE_CHECKED
 #ifdef HAVE_PG_FS_MISC
 #define PageChecked(page)        test_bit(PG_fs_misc, &(page)->flags)
 #define SetPageChecked(page)     set_bit(PG_fs_misc, &(page)->flags)
+#else
+#error PageChecked or PageFsMisc not defined in kernel
+#endif
 #endif
 
 /*
@@ -128,11 +132,6 @@
  *
  *
  */
-
-#ifdef HAVE_PG_FS_MISC
-#define PageChecked(page)        test_bit(PG_fs_misc, &(page)->flags)
-#define SetPageChecked(page)     set_bit(PG_fs_misc, &(page)->flags)
-#endif
 
 /* returns the page unlocked, but with a reference */
 static int ll_dir_readpage(struct file *file, struct page *page)

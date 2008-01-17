@@ -1114,6 +1114,27 @@ LB_LINUX_TRY_COMPILE([
 ])
 ])
 
+# RHEL5 PageChecked and SetPageChecked defined
+AC_DEFUN([LC_PAGE_CHECKED],
+[AC_MSG_CHECKING([kernel has PageChecked and SetPageChecked])
+LB_LINUX_TRY_COMPILE([
+        #include <linux/page-flags.h>
+],[
+        #ifndef PageChecked
+        #error PageChecked not defined in kernel
+        #endif
+        #ifndef SetPageChecked
+        #error SetPageChecked not defined in kernel
+        #endif
+],[
+        AC_MSG_RESULT(yes)
+        AC_DEFINE(HAVE_PAGE_CHECKED, 1,
+                  [does kernel have PageChecked and SetPageChecked])
+],[
+        AC_MSG_RESULT(NO)
+])
+])
+
 AC_DEFUN([LC_EXPORT_TRUNCATE_COMPLETE],
 [LB_CHECK_SYMBOL_EXPORT([truncate_complete_page],
 [mm/truncate.c],[
@@ -1430,6 +1451,7 @@ AC_DEFUN([LC_PROG_LINUX],
 
          #2.6.18 + RHEL5 (fc6)
          LC_PG_FS_MISC
+         LC_PAGE_CHECKED
 
          # 2.6.19
          LC_INODE_BLKSIZE
