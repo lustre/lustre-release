@@ -636,10 +636,14 @@ static int ptlrpc_check_status(struct ptlrpc_request *req)
 static int after_reply(struct ptlrpc_request *req)
 {
         struct obd_import *imp = req->rq_import;
+        struct obd_device *obd = req->rq_import->imp_obd;
         int rc;
+        struct timeval work_start;
+        long timediff;
         ENTRY;
 
         LASSERT(!req->rq_receiving_reply);
+        LASSERT(obd);
         LASSERT(req->rq_nob_received <= req->rq_repbuf_len);
 
         /* NB Until this point, the whole of the incoming message,
@@ -669,6 +673,12 @@ static int after_reply(struct ptlrpc_request *req)
                 DEBUG_REQ(D_ERROR, req, "unpack ptlrpc body failed: %d", rc);
                 RETURN(-EPROTO);
         }
+
+        do_gettimeofday(&work_start);
+        timediff = cfs_timeval_sub(&work_start, &req->rq_arrival_time, NULL);
+        if (obd->obd_svc_stats != NULL)
+                lprocfs_counter_add(obd->obd_svc_stats, PTLRPC_REQWAIT_CNTR,
+                                    timediff);
 
         if (lustre_msg_get_type(req->rq_repmsg) != PTL_RPC_MSG_REPLY &&
             lustre_msg_get_type(req->rq_repmsg) != PTL_RPC_MSG_ERR) {

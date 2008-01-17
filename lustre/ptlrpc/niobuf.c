@@ -402,6 +402,7 @@ int ptl_send_rpc(struct ptlrpc_request *request, int noreply)
         struct ptlrpc_connection *connection;
         lnet_handle_me_t  reply_me_h;
         lnet_md_t         reply_md;
+        struct obd_device *obd = request->rq_import->imp_obd;
         ENTRY;
 
         if (OBD_FAIL_CHECK(OBD_FAIL_PTLRPC_DROP_RPC))
@@ -501,10 +502,14 @@ int ptl_send_rpc(struct ptlrpc_request *request, int noreply)
         /* add references on request and import for request_out_callback */
         ptlrpc_request_addref(request);
         atomic_inc(&request->rq_import->imp_inflight);
+        if (obd->obd_svc_stats != NULL)
+                lprocfs_counter_add(obd->obd_svc_stats, PTLRPC_REQACTIVE_CNTR,
+                                    request->rq_import->imp_inflight.counter);
 
         OBD_FAIL_TIMEOUT(OBD_FAIL_PTLRPC_DELAY_SEND, request->rq_timeout + 5);
 
         request->rq_sent = CURRENT_SECONDS;
+        do_gettimeofday(&request->rq_arrival_time);
         ptlrpc_pinger_sending_on_import(request->rq_import);
         rc = ptl_send_buf(&request->rq_req_md_h,
                           request->rq_reqbuf, request->rq_reqdata_len,
