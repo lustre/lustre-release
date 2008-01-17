@@ -369,7 +369,7 @@ static int qos_calc_rr(struct lov_obd *lov)
                               lov->lov_qos.lq_rr_array[next] = i;
                               j++;
                               placed++;
-                      }
+                        }
                 }
                 LASSERT(j == oss->lqo_ost_count);
         }

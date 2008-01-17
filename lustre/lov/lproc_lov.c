@@ -264,8 +264,12 @@ static void *lov_tgt_seq_start(struct seq_file *p, loff_t *pos)
         struct obd_device *dev = p->private;
         struct lov_obd *lov = &dev->u.lov;
 
-        return (*pos >= lov->desc.ld_tgt_count) ? NULL : lov->lov_tgts[*pos];
-
+        while (*pos < lov->desc.ld_tgt_count) {
+                if (lov->lov_tgts[*pos])
+                        return lov->lov_tgts[*pos];
+                ++*pos;
+        }
+        return NULL;
 }
 
 static void lov_tgt_seq_stop(struct seq_file *p, void *v)
