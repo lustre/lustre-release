@@ -243,7 +243,7 @@ out:
 static int qos_calc_weight(struct lov_obd *lov, int i)
 {
         __u64 temp, temp2;
-        
+
         /* Final ost weight = TGT_BAVAIL - ost_penalty - oss_penalty */
         temp = TGT_BAVAIL(i);
         temp2 = lov->lov_tgts[i]->ltd_qos.ltq_penalty + 
@@ -266,7 +266,7 @@ static int qos_used(struct lov_obd *lov, __u32 index, __u64 *total_wt)
         lov->lov_tgts[index]->ltd_qos.ltq_usable = 0;
 
         oss = lov->lov_tgts[index]->ltd_qos.ltq_oss;
-        
+
         /* Decay old penalty by half (we're adding max penalty, and don't
            want it to run away.) */
         lov->lov_tgts[index]->ltd_qos.ltq_penalty >>= 1;
@@ -278,7 +278,7 @@ static int qos_used(struct lov_obd *lov, __u32 index, __u64 *total_wt)
                 lov->desc.ld_active_tgt_count;
         oss->lqo_penalty += oss->lqo_penalty_per_obj * 
                 lov->lov_qos.lq_active_oss_count;
-        
+
         /* Decrease all OSS penalties */
         list_for_each_entry(oss, &lov->lov_qos.lq_oss_list, lqo_oss_list) {
                 if (oss->lqo_penalty < oss->lqo_penalty_per_obj) 
@@ -373,8 +373,8 @@ static int qos_calc_rr(struct lov_obd *lov)
         list_for_each_entry(oss, &lov->lov_qos.lq_oss_list, lqo_oss_list) {
                 int j = 0;
                 for (i = 0; i < ost_count; i++) {
-                      LASSERT(lov->lov_tgts[i] != NULL);
-                      if (lov->lov_tgts[i]->ltd_qos.ltq_oss == oss) {
+                        if(lov->lov_tgts[i] &&
+                           lov->lov_tgts[i]->ltd_qos.ltq_oss == oss) {
                               /* Evenly space these OSTs across arrayspace */
                               int next = j * ost_count / oss->lqo_ost_count;
                               LASSERT(next < ost_count);
@@ -384,7 +384,7 @@ static int qos_calc_rr(struct lov_obd *lov)
                               lov->lov_qos.lq_rr_array[next] = i;
                               j++;
                               placed++;
-                      }
+                        }
                 }
                 LASSERT(j == oss->lqo_ost_count);
         }

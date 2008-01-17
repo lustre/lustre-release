@@ -12,6 +12,11 @@ tbd  Sun Microsystems, Inc.
        * RHEL 4 and RHEL 5/SLES 10 clients behaves differently on 'cd' to a
         removed cwd "./" (refer to Bugzilla 14399).
 
+Severity   : normal
+Bugzilla   : 14607
+Description: NULL lov_tgts causing MDS oops
+Details    : more safe checks for NULL lov_tgts for avoid oops.
+
 Severity   : enhancement
 Bugzilla   : 14531
 Description: Update to RHEL4 latest kernel-2.6.9-67.0.1.EL.

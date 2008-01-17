@@ -92,7 +92,7 @@ static int lov_connect_obd(struct obd_device *obd, __u32 index, int activate,
                            struct obd_connect_data *data)
 {
         struct lov_obd *lov = &obd->u.lov;
-        struct obd_uuid tgt_uuid = lov->lov_tgts[index]->ltd_uuid;
+        struct obd_uuid tgt_uuid;
         struct obd_device *tgt_obd;
         struct obd_uuid lov_osc_uuid = { "LOV_OSC_UUID" };
         struct lustre_handle conn = {0, };
@@ -106,6 +106,8 @@ static int lov_connect_obd(struct obd_device *obd, __u32 index, int activate,
 
         if (!lov->lov_tgts[index])
                 RETURN(-EINVAL);
+
+        tgt_uuid = lov->lov_tgts[index]->ltd_uuid;
 
         tgt_obd = class_find_client_obd(&tgt_uuid, LUSTRE_OSC_NAME,
                                         &obd->obd_uuid);
@@ -253,15 +255,17 @@ static int lov_disconnect_obd(struct obd_device *obd, __u32 index)
 {
         cfs_proc_dir_entry_t *lov_proc_dir;
         struct lov_obd *lov = &obd->u.lov;
-        struct obd_device *osc_obd =
-                class_exp2obd(lov->lov_tgts[index]->ltd_exp);
+        struct obd_device *osc_obd;
         int rc;
 
         ENTRY;
 
         CDEBUG(D_CONFIG, "%s: disconnecting target %s\n",
                obd->obd_name, osc_obd->obd_name);
+        if (lov->lov_tgts[index] == NULL)
+                RETURN(-EINVAL);
 
+        osc_obd = class_exp2obd(lov->lov_tgts[index]->ltd_exp);
         if (lov->lov_tgts[index]->ltd_active) {
                 lov->lov_tgts[index]->ltd_active = 0;
                 lov->desc.ld_active_tgt_count--;
@@ -788,19 +792,20 @@ static int lov_cleanup(struct obd_device *obd)
         if (lov->lov_tgts) {
                 int i;
                 for (i = 0; i < lov->desc.ld_tgt_count; i++) {
-                        if (lov->lov_tgts[i]) {
-                                /* Inactive targets may never have connected */
-                                if (lov->lov_tgts[i]->ltd_active ||
-                                    atomic_read(&lov->lov_refcount)) 
-                                        /* We should never get here - these 
-                                           should have been removed in the 
-                                           disconnect. */
-                                        CERROR("lov tgt %d not cleaned!"
-                                               " deathrow=%d, lovrc=%d\n",
-                                               i, lov->lov_death_row,
-                                               atomic_read(&lov->lov_refcount));
-                                lov_del_target(obd, i, 0, 0);
-                        }
+                        if (!lov->lov_tgts[i])
+                                continue;
+
+                        /* Inactive targets may never have connected */
+                        if (lov->lov_tgts[i]->ltd_active ||
+                            atomic_read(&lov->lov_refcount))
+                            /* We should never get here - these
+                               should have been removed in the
+                             disconnect. */
+                                CERROR("lov tgt %d not cleaned!"
+                                       " deathrow=%d, lovrc=%d\n",
+                                       i, lov->lov_death_row,
+                                       atomic_read(&lov->lov_refcount));
+                        lov_del_target(obd, i, 0, 0);
                 }
                 OBD_FREE(lov->lov_tgts, sizeof(*lov->lov_tgts) *
                          lov->lov_tgt_size);
@@ -2390,7 +2395,7 @@ static int lov_get_info(struct obd_export *exp, __u32 keylen,
 
                 for(i = 0; i < lov->desc.ld_tgt_count; i++) {
                         tgt = lov->lov_tgts[i];
-                        if (obd_uuid_equals(val, &tgt->ltd_uuid))
+                        if (tgt && obd_uuid_equals(val, &tgt->ltd_uuid))
                                 GOTO(out, rc = i);
                 }
         }

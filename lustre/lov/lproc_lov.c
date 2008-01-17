@@ -262,8 +262,12 @@ static void *lov_tgt_seq_start(struct seq_file *p, loff_t *pos)
         struct obd_device *dev = p->private;
         struct lov_obd *lov = &dev->u.lov;
 
-        return (*pos >= lov->desc.ld_tgt_count) ? NULL : lov->lov_tgts[*pos];
-
+        while (*pos < lov->desc.ld_tgt_count) {
+                if (lov->lov_tgts[*pos])
+                        return lov->lov_tgts[*pos];
+                ++*pos;
+        }
+        return NULL;
 }
 
 static void lov_tgt_seq_stop(struct seq_file *p, void *v)
@@ -302,7 +306,7 @@ static int lov_target_seq_open(struct inode *inode, struct file *file)
         struct proc_dir_entry *dp = PDE(inode);
         struct seq_file *seq;
         int rc;
-        
+
         LPROCFS_ENTRY_AND_CHECK(dp);
         rc = seq_open(file, &lov_tgt_sops);
         if (rc) {
