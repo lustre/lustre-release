@@ -391,7 +391,7 @@ static spinlock_t        pet_lock = SPIN_LOCK_UNLOCKED;
 int ping_evictor_wake(struct obd_export *exp)
 {
         spin_lock(&pet_lock);
-        if (pet_exp) {
+        if (pet_exp || (pet_state != PET_READY)) {
                 /* eventually the new obd will call here again. */
                 spin_unlock(&pet_lock);
                 return 1;
