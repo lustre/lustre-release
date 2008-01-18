@@ -56,6 +56,7 @@ int lov_merge_lvb(struct obd_export *exp, struct lov_stripe_md *lsm,
         __u64 current_atime = lvb->lvb_atime;
         __u64 current_ctime = lvb->lvb_ctime;
         int i;
+        int rc = 0;
 
         LASSERT_SPIN_LOCKED(&lsm->lsm_lock);
 #ifdef __KERNEL__
@@ -65,6 +66,11 @@ int lov_merge_lvb(struct obd_export *exp, struct lov_stripe_md *lsm,
         for (i = 0; i < lsm->lsm_stripe_count; i++) {
                 struct lov_oinfo *loi = lsm->lsm_oinfo[i];
                 obd_size lov_size, tmpsize;
+
+                if (OST_LVB_IS_ERR(loi->loi_lvb.lvb_blocks)) {
+                        rc = OST_LVB_GET_ERR(loi->loi_lvb.lvb_blocks);
+                        continue;
+                }
 
                 tmpsize = loi->loi_kms;
                 if (kms_only == 0 && loi->loi_lvb.lvb_size > tmpsize)
@@ -93,7 +99,7 @@ int lov_merge_lvb(struct obd_export *exp, struct lov_stripe_md *lsm,
         lvb->lvb_mtime = current_mtime;
         lvb->lvb_atime = current_atime;
         lvb->lvb_ctime = current_ctime;
-        RETURN(0);
+        RETURN(rc);
 }
 
 /* Must be called under the lov_stripe_lock() */

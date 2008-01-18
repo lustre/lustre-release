@@ -894,6 +894,16 @@ extern void lustre_swab_ost_last_id(obd_id *id);
 
 /* lock value block communicated between the filter and llite */
 
+/* OST_LVB_ERR_INIT is needed because the return code in rc is 
+ * negative, i.e. because ((MASK + rc) & MASK) != MASK. */
+#define OST_LVB_ERR_INIT 0xffbadbad80000000ULL
+#define OST_LVB_ERR_MASK 0xffbadbad00000000ULL
+#define OST_LVB_IS_ERR(blocks)                                          \
+        ((blocks & OST_LVB_ERR_MASK) == OST_LVB_ERR_MASK)
+#define OST_LVB_SET_ERR(blocks, rc)                                     \
+        do { blocks = OST_LVB_ERR_INIT + rc; } while (0)
+#define OST_LVB_GET_ERR(blocks)    (int)(blocks - OST_LVB_ERR_INIT)
+
 struct ost_lvb {
         __u64 lvb_size;
         __u64 lvb_mtime;

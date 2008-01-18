@@ -216,22 +216,27 @@ static int llu_glimpse_callback(struct ldlm_lock *lock, void *reqp)
         return rc;
 }
 
-static void llu_merge_lvb(struct inode *inode)
+static int llu_merge_lvb(struct inode *inode)
 {
         struct llu_inode_info *lli = llu_i2info(inode);
         struct llu_sb_info *sbi = llu_i2sbi(inode);
         struct intnl_stat *st = llu_i2stat(inode);
         struct ost_lvb lvb;
+        int rc;
         ENTRY;
 
         inode_init_lvb(inode, &lvb);
-        obd_merge_lvb(sbi->ll_dt_exp, lli->lli_smd, &lvb, 0);
+        rc = obd_merge_lvb(sbi->ll_dt_exp, lli->lli_smd, &lvb, 0);
         st->st_size = lvb.lvb_size;
         st->st_blocks = lvb.lvb_blocks;
+        /* handle st_blocks overflow gracefully */
+        if (st->st_blocks < lvb.lvb_blocks)
+                st->st_blocks = ~0UL;
         st->st_mtime = lvb.lvb_mtime;
         st->st_atime = lvb.lvb_atime;
         st->st_ctime = lvb.lvb_ctime;
-        EXIT;
+
+        RETURN(rc);
 }
 
 int llu_local_size(struct inode *inode)
@@ -254,9 +259,9 @@ int llu_local_size(struct inode *inode)
         else if (rc == 0)
                 RETURN(-ENODATA);
         
-        llu_merge_lvb(inode);
+        rc = llu_merge_lvb(inode);
         obd_cancel(sbi->ll_dt_exp, lli->lli_smd, LCK_PR, &lockh);
-        RETURN(0);
+        RETURN(rc);
 }
 
 /* NB: lov_merge_size will prefer locally cached writes if they extend the
@@ -302,7 +307,7 @@ int llu_glimpse_size(struct inode *inode)
                 RETURN(rc > 0 ? -EIO : rc);
         }
 
-        llu_merge_lvb(inode);
+        rc = llu_merge_lvb(inode);
         CDEBUG(D_DLMTRACE, "glimpse: size: "LPU64", blocks: "LPU64"\n",
                (__u64)st->st_size, (__u64)st->st_blocks);
 

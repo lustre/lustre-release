@@ -145,8 +145,8 @@ void ll_truncate(struct inode *inode)
          * race condition. */
         lov_stripe_lock(lli->lli_smd);
         inode_init_lvb(inode, &lvb);
-        obd_merge_lvb(ll_i2dtexp(inode), lli->lli_smd, &lvb, 0);
-        if (lvb.lvb_size == i_size_read(inode)) {
+        rc = obd_merge_lvb(ll_i2dtexp(inode), lli->lli_smd, &lvb, 0);
+        if (lvb.lvb_size == i_size_read(inode) && rc == 0) {
                 CDEBUG(D_VFSTRACE, "skipping punch for obj "LPX64", %Lu=%#Lx\n",
                        lli->lli_smd->lsm_object_id, i_size_read(inode),
                        i_size_read(inode));
