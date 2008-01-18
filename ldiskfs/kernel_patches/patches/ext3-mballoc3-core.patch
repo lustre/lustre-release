@@ -183,7 +183,7 @@ Index: linux-2.6.9-full/fs/ext3/mballoc.c
 ===================================================================
 --- linux-2.6.9-full.orig/fs/ext3/mballoc.c	2007-10-17 21:59:51.072534980 +0400
 +++ linux-2.6.9-full/fs/ext3/mballoc.c	2007-10-17 23:09:22.000000000 +0400
-@@ -0,0 +1,4404 @@
+@@ -0,0 +1,4398 @@
 +/*
 + * Copyright (c) 2003-2006, Cluster File Systems, Inc, info@clusterfs.com
 + * Written by Alex Tomas <alex@clusterfs.com>
@@ -3889,8 +3889,6 @@ Index: linux-2.6.9-full/fs/ext3/mballoc.c
 +		spin_lock(&pa->pa_lock);
 +		if (atomic_read(&pa->pa_count)) {
 +			spin_unlock(&pa->pa_lock);
-+			printk("uh! busy PA\n");
-+			dump_stack();
 +			busy = 1;
 +			continue;
 +		}
@@ -3983,8 +3981,6 @@ Index: linux-2.6.9-full/fs/ext3/mballoc.c
 +			 * use preallocation while we're discarding it */
 +			spin_unlock(&pa->pa_lock);
 +			spin_unlock(&ei->i_prealloc_lock);
-+			printk("uh-oh! used pa while discarding\n");
-+			dump_stack();
 +			current->state = TASK_UNINTERRUPTIBLE;
 +			schedule_timeout(HZ);
 +			goto repeat;
@@ -4014,8 +4010,6 @@ Index: linux-2.6.9-full/fs/ext3/mballoc.c
 +		 * add a flag to force wait only in case
 +		 * of ->clear_inode(), but not in case of
 +		 * regular truncate */
-+		printk("uh-oh! some one just deleted it\n");
-+		dump_stack();
 +		current->state = TASK_UNINTERRUPTIBLE;
 +		schedule_timeout(HZ);
 +		goto repeat;
