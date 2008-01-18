@@ -165,7 +165,7 @@ static inline struct obd_capa *alloc_capa(int site)
 #ifdef __KERNEL__
         struct obd_capa *ocapa;
 
-        OBD_SLAB_ALLOC(ocapa, capa_cachep, SLAB_KERNEL, sizeof(*ocapa));
+        OBD_SLAB_ALLOC(ocapa, capa_cachep, GFP_KERNEL, sizeof(*ocapa));
         if (ocapa) {
                 atomic_set(&ocapa->c_refc, 0);
                 spin_lock_init(&ocapa->c_lock);

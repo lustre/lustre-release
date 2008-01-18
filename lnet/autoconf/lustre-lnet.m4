@@ -1131,23 +1131,23 @@ LB_LINUX_TRY_COMPILE([
 ])
 ])
 
-# 2.6.21 uses struct kmem_cache instead of kmem_cache_s for
-# kmem_cache_t
-AC_DEFUN([LN_KMEM_CACHE_S],
-[AC_MSG_CHECKING([check kernel has struct kmem_cache_s])
+# 2.6.21 marks kmem_cache_t deprecated and uses struct kmem_cache
+# instead
+AC_DEFUN([LN_KMEM_CACHE],
+[AC_MSG_CHECKING([check kernel has struct kmem_cache])
 tmp_flags="$EXTRA_KCFLAGS"
 EXTRA_KCFLAGS="-Werror"
 LB_LINUX_TRY_COMPILE([
         #include <linux/slab.h>
+        typedef struct kmem_cache cache_t;
 ],[
-	kmem_cache_s *cachep = NULL;
-	
-	kmem_cache_free(cachep, NULL);
+	cache_t *cachep = NULL;
 
+	kmem_cache_alloc(cachep, 0);
 ],[
         AC_MSG_RESULT(yes)
-        AC_DEFINE(HAVE_KMEM_CACHE_S, 1,
-                  [kernel has struct kmem_cache_s])
+        AC_DEFINE(HAVE_KMEM_CACHE, 1,
+                  [kernel has struct kmem_cache])
 ],[
         AC_MSG_RESULT(NO)
 ])
@@ -1159,7 +1159,6 @@ AC_DEFUN([LN_KMEM_CACHE_CREATE_DTOR],
 LB_LINUX_TRY_COMPILE([
         #include <linux/slab.h>
 ],[
-        struct kmem_cache_s *cachep = NULL;
 	kmem_cache_create(NULL, 0, 0, 0, NULL, NULL);
 ],[
         AC_MSG_RESULT(yes)
@@ -1206,7 +1205,7 @@ LN_ATOMIC_PANIC_NOTIFIER
 LN_3ARGS_INIT_WORK
 # 2.6.21
 LN_2ARGS_REGISTER_SYSCTL
-LN_KMEM_CACHE_S
+LN_KMEM_CACHE
 # 2.6.23
 LN_KMEM_CACHE_CREATE_DTOR
 ])

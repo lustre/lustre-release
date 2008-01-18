@@ -343,9 +343,7 @@ AC_DEFUN([LB_LINUX_TRY_COMPILE],
 AC_DEFUN([LB_LINUX_CONFIG],
 [AC_MSG_CHECKING([if Linux was built with CONFIG_$1])
 LB_LINUX_TRY_COMPILE([
-#ifndef AUTOCONF_INCLUDED
-#include <linux/config.h>
-#endif
+#include <linux/autoconf.h>
 ],[
 #ifndef CONFIG_$1
 #error CONFIG_$1 not #defined
@@ -366,7 +364,9 @@ $3
 #
 AC_DEFUN([LB_LINUX_CONFIG_IM],
 [AC_MSG_CHECKING([if Linux was built with CONFIG_$1 in or as module])
-LB_LINUX_TRY_COMPILE([#include <linux/config.h>],[
+LB_LINUX_TRY_COMPILE([
+#include <linux/autoconf.h>
+],[
 #if !(defined(CONFIG_$1) || defined(CONFIG_$1_MODULE))
 #error CONFIG_$1 and CONFIG_$1_MODULE not #defined
 #endif
