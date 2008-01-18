@@ -7,6 +7,9 @@ ONLY=${ONLY:-"$*"}
 ALWAYS_EXCEPT="14b 28 $SANITYN_EXCEPT"
 # UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
 
+# bug number for skipped test:                                                    12652 12652
+grep -q 'Enterprise Server 10' /etc/SuSE-release && ALWAYS_EXCEPT="$ALWAYS_EXCEPT 11    14" || true
+
 [ "$SLOW" = "no" ] && EXCEPT_SLOW="12 16"
 
 # Tests that fail on uml
