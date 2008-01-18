@@ -1359,6 +1359,19 @@ static inline int obd_quotactl(struct obd_export *exp,
         RETURN(rc);
 }
 
+static inline int obd_quota_adjust_qunit(struct obd_export *exp,
+                                         struct quota_adjust_qunit *oqaq)
+{
+        int rc;
+        ENTRY;
+
+        EXP_CHECK_OP(exp, quota_adjust_qunit);
+        EXP_COUNTER_INCREMENT(exp, quota_adjust_qunit);
+
+        rc = OBP(exp->exp_obd, quota_adjust_qunit)(exp, oqaq);
+        RETURN(rc);
+}
+
 static inline int obd_health_check(struct obd_device *obd)
 {
         /* returns: 0 on healthy

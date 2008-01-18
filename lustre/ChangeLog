@@ -226,6 +226,17 @@ Details    : Before packing join_file req, all the related reference should be
              checked carefully in case some malformed flags cause fake
 	     join_file req on client.
 
+Severity   : normal
+Frequency  : always
+Bugzilla   : 10600
+Description: shrink/enlarge qunit size when needed; fix the problem of coarse
+             grain of quota doing harm to quota's accuracy
+Details    : qunit size will be changed when quota limitation is too low/high;
+             record the pending quota write in order to get more accureate
+             quota; delete the patch for bug12588, which is unnecessary when
+             this patch is landed. This bug also contains 14526, 14299, 14601
+             and 13794, which are found and landed during v1_4_12.
+
 --------------------------------------------------------------------------------
 
 2007-12-07         Cluster File Systems, Inc. <info@clusterfs.com>

@@ -776,6 +776,8 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
         unsigned int qcids[MAXQUOTAS] = { current->fsuid, current->fsgid };
         unsigned int qpids[MAXQUOTAS] = { 0, 0 };
         struct lvfs_dentry_params dp = LVFS_DENTRY_PARAMS_INIT;
+        int rec_pending = 0;
+        unsigned int gid = current->fsgid;
         ENTRY;
 
         LASSERT(offset == REQ_REC_OFF);
@@ -834,6 +836,17 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
         dchild->d_fsdata = (void *)&dp;
         dp.ldp_inum = (unsigned long)rec->ur_fid2->id;
         dp.ldp_ptr = req;
+
+        if (dir->i_mode & S_ISGID)
+                gid = dir->i_gid;
+        else
+                gid = current->fsgid;
+
+        rc = lquota_chkquota(mds_quota_interface_ref, obd,
+                             current->fsuid, gid, 1, &rec_pending);
+
+        if (rc < 0)
+                GOTO(cleanup, rc);
 
         switch (type) {
         case S_IFREG:{
@@ -902,10 +915,7 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
                 LTIME_S(iattr.ia_ctime) = rec->ur_time;
                 LTIME_S(iattr.ia_mtime) = rec->ur_time;
                 iattr.ia_uid = current->fsuid;  /* set by push_ctxt already */
-                if (dir->i_mode & S_ISGID)
-                        iattr.ia_gid = dir->i_gid;
-                else
-                        iattr.ia_gid = current->fsgid;
+                iattr.ia_gid = gid;
                 iattr.ia_valid = ATTR_UID | ATTR_GID | ATTR_ATIME |
                         ATTR_MTIME | ATTR_CTIME;
 
@@ -952,6 +962,9 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
 
 cleanup:
         err = mds_finish_transno(mds, dir, handle, req, rc, 0, 0);
+        if (rec_pending)
+                lquota_pending_commit(mds_quota_interface_ref, obd,
+                                      current->fsuid, gid, 1);
 
         if (rc && created) {
                 /* Destroy the file we just created.  This should not need

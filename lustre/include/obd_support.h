@@ -26,6 +26,7 @@
 #include <libcfs/kp30.h>
 #include <lvfs.h>
 #include <lprocfs_status.h>
+#include <lustre/lustre_idl.h>
 
 /* global variables */
 extern struct lprocfs_stats *obd_memory;
@@ -254,7 +255,18 @@ extern unsigned int obd_alloc_fail_rate;
 #define OBD_FAIL_MGS_PAUSE_REQ           0x904
 #define OBD_FAIL_MGS_PAUSE_TARGET_REG    0x905
 
+#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(1, 7, 0, 0)
 #define OBD_FAIL_QUOTA_QD_COUNT_32BIT    0xA00
+#else
+#warning "remove quota code above for format obsolete in new release"
+#endif
+#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(1, 9, 0, 0)
+#define OBD_FAIL_QUOTA_WITHOUT_CHANGE_QS    0xA01
+#else
+#warning "remove quota code above for format obsolete in new release"
+#endif
+
+#define OBD_FAIL_QUOTA_RET_QDATA         0xA02
 
 #define OBD_FAIL_LPROC_REMOVE            0xB00
 

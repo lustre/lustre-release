@@ -99,7 +99,7 @@ static int lprocfs_mds_wr_evict_client(struct file *file, const char *buffer,
                 ptlrpc_check_set(set);
         }
 
-        /* See the comments in function lprocfs_wr_evict_client() 
+        /* See the comments in function lprocfs_wr_evict_client()
          * in ptlrpc/lproc_ptlrpc.c for details. - jay */
         class_incref(obd);
         LPROCFS_EXIT();
@@ -392,6 +392,155 @@ static int lprocfs_rd_nosquash_nid(char *page, char **start, off_t off,
                         libcfs_nid2str(mds->mds_nosquash_nid));
 }
 
+#ifdef HAVE_QUOTA_SUPPORT
+static int lprocfs_mds_rd_switch_qs(char *page, char **start, off_t off,
+                                    int count, int *eof, void *data)
+{
+        struct obd_device *obd = (struct obd_device *)data;
+        LASSERT(obd != NULL);
+
+        return snprintf(page, count, "changing qunit size is %s\n",
+                        obd->u.obt.obt_qctxt.lqc_switch_qs ?
+                        "enabled" : "disabled");
+}
+
+static int lprocfs_mds_rd_boundary_factor(char *page, char **start, off_t off,
+                                          int count, int *eof, void *data)
+{
+        struct obd_device *obd = (struct obd_device *)data;
+        LASSERT(obd != NULL);
+
+
+        return snprintf(page, count, "%lu\n",
+                        obd->u.obt.obt_qctxt.lqc_cqs_boundary_factor);
+}
+
+static int lprocfs_mds_rd_least_bunit(char *page, char **start, off_t off,
+                                      int count, int *eof, void *data)
+{
+        struct obd_device *obd = (struct obd_device *)data;
+        LASSERT(obd != NULL);
+
+
+        return snprintf(page, count, "%lu\n",
+                        obd->u.obt.obt_qctxt.lqc_cqs_least_bunit);
+}
+
+static int lprocfs_mds_rd_least_iunit(char *page, char **start, off_t off,
+                                      int count, int *eof, void *data)
+{
+        struct obd_device *obd = (struct obd_device *)data;
+        LASSERT(obd != NULL);
+
+
+        return snprintf(page, count, "%lu\n",
+                        obd->u.obt.obt_qctxt.lqc_cqs_least_iunit);
+}
+
+static int lprocfs_mds_rd_qs_factor(char *page, char **start, off_t off,
+                                    int count, int *eof, void *data)
+{
+        struct obd_device *obd = (struct obd_device *)data;
+        LASSERT(obd != NULL);
+
+
+        return snprintf(page, count, "%lu\n",
+                        obd->u.obt.obt_qctxt.lqc_cqs_qs_factor);
+}
+
+static int lprocfs_mds_wr_switch_qs(struct file *file, const char *buffer,
+                                    unsigned long count, void *data)
+{
+        struct obd_device *obd = (struct obd_device *)data;
+        int val, rc;
+        LASSERT(obd != NULL);
+
+        rc = lprocfs_write_helper(buffer, count, &val);
+        if (rc)
+                return rc;
+
+        if (val)
+            obd->u.obt.obt_qctxt.lqc_switch_qs = 1;
+        else
+            obd->u.obt.obt_qctxt.lqc_switch_qs = 0;
+
+        return count;
+}
+
+static int lprocfs_mds_wr_boundary_factor(struct file *file, const char *buffer,
+                                          unsigned long count, void *data)
+{
+        struct obd_device *obd = (struct obd_device *)data;
+        int val, rc;
+        LASSERT(obd != NULL);
+
+        rc = lprocfs_write_helper(buffer, count, &val);
+        if (rc)
+                return rc;
+
+        if (val < 2)
+                return -EINVAL;
+
+        obd->u.obt.obt_qctxt.lqc_cqs_boundary_factor = val;
+        return count;
+}
+
+static int lprocfs_mds_wr_least_bunit(struct file *file, const char *buffer,
+                                  unsigned long count, void *data)
+{
+        struct obd_device *obd = (struct obd_device *)data;
+        int val, rc;
+        LASSERT(obd != NULL);
+
+        rc = lprocfs_write_helper(buffer, count, &val);
+        if (rc)
+                return rc;
+
+        if (val < PTLRPC_MAX_BRW_SIZE ||
+            val >= obd->u.obt.obt_qctxt.lqc_bunit_sz)
+                return -EINVAL;
+
+        obd->u.obt.obt_qctxt.lqc_cqs_least_bunit = val;
+        return count;
+}
+
+static int lprocfs_mds_wr_least_iunit(struct file *file, const char *buffer,
+                                  unsigned long count, void *data)
+{
+        struct obd_device *obd = (struct obd_device *)data;
+        int val, rc;
+        LASSERT(obd != NULL);
+
+        rc = lprocfs_write_helper(buffer, count, &val);
+        if (rc)
+                return rc;
+
+        if (val < 1 || val >= obd->u.obt.obt_qctxt.lqc_iunit_sz)
+                return -EINVAL;
+
+        obd->u.obt.obt_qctxt.lqc_cqs_least_iunit = val;
+        return count;
+}
+
+static int lprocfs_mds_wr_qs_factor(struct file *file, const char *buffer,
+                                    unsigned long count, void *data)
+{
+        struct obd_device *obd = (struct obd_device *)data;
+        int val, rc;
+        LASSERT(obd != NULL);
+
+        rc = lprocfs_write_helper(buffer, count, &val);
+        if (rc)
+                return rc;
+
+        if (val < 2)
+                return -EINVAL;
+
+        obd->u.obt.obt_qctxt.lqc_cqs_qs_factor = val;
+        return count;
+}
+#endif
+
 struct lprocfs_vars lprocfs_mds_obd_vars[] = {
         { "uuid",            lprocfs_rd_uuid,        0, 0 },
         { "blocksize",       lprocfs_rd_blksize,     0, 0 },
@@ -408,11 +557,23 @@ struct lprocfs_vars lprocfs_mds_obd_vars[] = {
                                                lprocfs_mds_wr_evictostnids, 0 },
         { "num_exports",     lprocfs_rd_num_exports, 0, 0 },
 #ifdef HAVE_QUOTA_SUPPORT
-        { "quota_bunit_sz",  lprocfs_rd_bunit, lprocfs_wr_bunit, 0 },
-        { "quota_btune_sz",  lprocfs_rd_btune, lprocfs_wr_btune, 0 },
-        { "quota_iunit_sz",  lprocfs_rd_iunit, lprocfs_wr_iunit, 0 },
-        { "quota_itune_sz",  lprocfs_rd_itune, lprocfs_wr_itune, 0 },
-        { "quota_type",      lprocfs_rd_type, lprocfs_wr_type, 0 },
+        { "quota_bunit_sz",  lprocfs_quota_rd_bunit, lprocfs_quota_wr_bunit, 0 },
+        { "quota_btune_sz",  lprocfs_quota_rd_btune, lprocfs_quota_wr_btune, 0 },
+        { "quota_iunit_sz",  lprocfs_quota_rd_iunit, lprocfs_quota_wr_iunit, 0 },
+        { "quota_itune_sz",  lprocfs_quota_rd_itune, lprocfs_quota_wr_itune, 0 },
+        { "quota_type",      lprocfs_quota_rd_type,  lprocfs_quota_wr_type, 0 },
+        { "quota_switch_qs", lprocfs_mds_rd_switch_qs,
+                             lprocfs_mds_wr_switch_qs, 0 },
+        { "quota_boundary_factor", lprocfs_mds_rd_boundary_factor,
+                                   lprocfs_mds_wr_boundary_factor, 0 },
+        { "quota_least_bunit", lprocfs_mds_rd_least_bunit,
+                               lprocfs_mds_wr_least_bunit, 0 },
+        { "quota_least_iunit", lprocfs_mds_rd_least_iunit,
+                               lprocfs_mds_wr_least_iunit, 0 },
+        { "quota_qs_factor",   lprocfs_mds_rd_qs_factor,
+                               lprocfs_mds_wr_qs_factor, 0 },
+        { "quota_switch_seconds",  lprocfs_quota_rd_switch_seconds,
+                                   lprocfs_quota_wr_switch_seconds, 0 },
 #endif
         { "group_expire_interval", lprocfs_rd_group_expire,
                              lprocfs_wr_group_expire, 0},

@@ -872,6 +872,8 @@ int mds_open(struct mds_update_record *rec, int offset,
         ldlm_policy_data_t policy = {.l_inodebits={MDS_INODELOCK_LOOKUP}};
         struct ldlm_res_id child_res_id = { .name = {0}};
         int lock_flags = 0;
+        int rec_pending = 0;
+        unsigned int gid = current->fsgid;
         ENTRY;
 
         mds_counter_incr(req->rq_export, LPROC_MDS_OPEN);
@@ -1018,6 +1020,16 @@ int mds_open(struct mds_update_record *rec, int offset,
                 if (req->rq_export->exp_connect_flags & OBD_CONNECT_RDONLY)
                         GOTO(cleanup, rc = -EROFS);
 
+                if (dparent->d_inode->i_mode & S_ISGID)
+                        gid = dparent->d_inode->i_gid;
+                else
+                        gid = current->fsgid;
+                rc = lquota_chkquota(mds_quota_interface_ref, obd,
+                                     current->fsuid, gid, 1, &rec_pending);
+
+                if (rc < 0)
+                        GOTO(cleanup, rc);
+
                 intent_set_disposition(rep, DISP_OPEN_CREATE);
                 handle = fsfilt_start(obd, dparent->d_inode, FSFILT_OP_CREATE,
                                       NULL);
@@ -1053,10 +1065,7 @@ int mds_open(struct mds_update_record *rec, int offset,
                 LTIME_S(iattr.ia_mtime) = rec->ur_time;
 
                 iattr.ia_uid = current->fsuid;  /* set by push_ctxt already */
-                if (dparent->d_inode->i_mode & S_ISGID)
-                        iattr.ia_gid = dparent->d_inode->i_gid;
-                else
-                        iattr.ia_gid = current->fsgid;
+                iattr.ia_gid = gid;
 
                 iattr.ia_valid = ATTR_UID | ATTR_GID | ATTR_ATIME |
                         ATTR_MTIME | ATTR_CTIME;
@@ -1189,6 +1198,9 @@ found_child:
                                 req, rc, rep ? rep->lock_policy_res1 : 0, 0);
 
  cleanup_no_trans:
+        if (rec_pending)
+                lquota_pending_commit(mds_quota_interface_ref, obd,
+                                      current->fsuid, gid, 1);
         switch (cleanup_phase) {
         case 3:
                 if (rc)

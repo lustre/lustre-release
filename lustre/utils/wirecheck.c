@@ -975,6 +975,18 @@ check_qunit_data(void)
         CHECK_MEMBER(qunit_data, qd_id);
         CHECK_MEMBER(qunit_data, qd_flags);
         CHECK_MEMBER(qunit_data, qd_count);
+        CHECK_MEMBER(qunit_data, qd_qunit);
+        CHECK_MEMBER(qunit_data, padding );
+}
+
+static void
+check_qunit_data_old2(void)
+{
+        BLANK_LINE();
+        CHECK_STRUCT(qunit_data_old2);
+        CHECK_MEMBER(qunit_data_old2, qd_id);
+        CHECK_MEMBER(qunit_data_old2, qd_flags);
+        CHECK_MEMBER(qunit_data_old2, qd_count);
 }
 
 static void
@@ -1046,6 +1058,17 @@ check_posix_acl_xattr_header(void)
         CHECK_MEMBER_TYPEDEF(posix_acl_xattr_header, a_entries);
 }
 #endif
+
+static void
+check_quota_adjust_qunit(void)
+{
+        BLANK_LINE();
+        CHECK_STRUCT(quota_adjust_qunit);
+        CHECK_MEMBER(quota_adjust_qunit, qaq_flags);
+        CHECK_MEMBER(quota_adjust_qunit, qaq_id);
+        CHECK_MEMBER(quota_adjust_qunit, qaq_bunit_sz);
+        CHECK_MEMBER(quota_adjust_qunit, qaq_iunit_sz);
+}
 
 static void
 system_string (char *cmdline, char *str, int len)
@@ -1152,6 +1175,7 @@ main(int argc, char **argv)
         CHECK_VALUE(OST_SYNC);
         CHECK_VALUE(OST_QUOTACHECK);
         CHECK_VALUE(OST_QUOTACTL);
+        CHECK_VALUE(OST_QUOTA_ADJUST_QUNIT);
         CHECK_VALUE(OST_LAST_OPC);
 
         CHECK_DEFINE(OBD_OBJECT_EOF);
@@ -1293,7 +1317,9 @@ main(int argc, char **argv)
         check_llog_array_rec();
         check_mds_extent_desc();
         check_qunit_data();
+        check_qunit_data_old2();
         check_qunit_data_old();
+        check_quota_adjust_qunit();
         check_mgs_target_info();
         check_lustre_disk_data();
 #ifdef LIBLUSTRE_POSIX_ACL

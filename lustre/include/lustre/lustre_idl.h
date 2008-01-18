@@ -64,6 +64,7 @@
 
 /* Defn's shared with user-space. */
 #include <lustre/lustre_user.h>
+#include <lustre_ver.h>
 
 /*
  * this file contains all data structures used in Lustre interfaces:
@@ -292,6 +293,8 @@ extern void lustre_swab_ptlrpc_body(struct ptlrpc_body *pb);
 #define OBD_CONNECT_LRU_RESIZE 0x02000000ULL /*Lru resize feature. */
 #define OBD_CONNECT_MDS_MDS    0x04000000ULL /*MDS-MDS connection */
 #define OBD_CONNECT_REAL       0x08000000ULL /*real connection */
+#define OBD_CONNECT_CHANGE_QS  0x10000000ULL /*shrink/enlarge qunit size
+                                              *b=10600 */
 #define OBD_CONNECT_CKSUM      0x20000000ULL /*support several cksum algos */
 /* also update obd_connect_names[] for lprocfs_rd_connect_flags()
  * and lustre/utils/wirecheck.c */
@@ -313,7 +316,7 @@ extern void lustre_swab_ptlrpc_body(struct ptlrpc_body *pb);
                                 OBD_CONNECT_TRUNCLOCK | OBD_CONNECT_INDEX | \
                                 OBD_CONNECT_BRW_SIZE | OBD_CONNECT_QUOTA64 | \
                                 OBD_CONNECT_CANCELSET | OBD_CONNECT_AT | \
-                                LRU_RESIZE_CONNECT_FLAG)
+                                LRU_RESIZE_CONNECT_FLAG | OBD_CONNECT_CHANGE_QS)
 #define ECHO_CONNECT_SUPPORTED (0)
 #define MGS_CONNECT_SUPPORTED  (OBD_CONNECT_VERSION | OBD_CONNECT_AT)
 
@@ -373,6 +376,7 @@ typedef enum {
         OST_SET_INFO   = 17,
         OST_QUOTACHECK = 18,
         OST_QUOTACTL   = 19,
+        OST_QUOTA_ADJUST_QUNIT = 20,
         OST_LAST_OPC
 } ost_cmd_t;
 #define OST_FIRST_OPC  OST_REPLY
@@ -818,6 +822,34 @@ struct obd_quotactl {
 };
 
 extern void lustre_swab_obd_quotactl(struct obd_quotactl *q);
+
+struct quota_adjust_qunit {
+        __u32 qaq_flags;
+        __u32 qaq_id;
+        __u64 qaq_bunit_sz;
+        __u64 qaq_iunit_sz;
+        __u64 padding1;
+};
+extern void lustre_swab_quota_adjust_qunit(struct quota_adjust_qunit *q);
+
+/* flags in qunit_data and quota_adjust_qunit will use macroes below */
+#define LQUOTA_FLAGS_GRP       1UL   /* 0 is user, 1 is group */
+#define LQUOTA_FLAGS_BLK       2UL   /* 0 is inode, 1 is block */
+#define LQUOTA_FLAGS_ADJBLK    4UL   /* adjust the block qunit size */
+#define LQUOTA_FLAGS_ADJINO    8UL   /* adjust the inode qunit size */
+#define LQUOTA_FLAGS_CHG_QS   16UL   /* indicate whether it has capability of
+                                      * OBD_CONNECT_CHANGE_QS */
+
+/* the status of lqs_flags in struct lustre_qunit_size  */
+#define LQUOTA_QUNIT_FLAGS (LQUOTA_FLAGS_GRP | LQUOTA_FLAGS_BLK)
+
+#define QAQ_IS_GRP(qaq)    ((qaq)->qaq_flags & LQUOTA_FLAGS_GRP)
+#define QAQ_IS_ADJBLK(qaq) ((qaq)->qaq_flags & LQUOTA_FLAGS_ADJBLK)
+#define QAQ_IS_ADJINO(qaq) ((qaq)->qaq_flags & LQUOTA_FLAGS_ADJINO)
+
+#define QAQ_SET_GRP(qaq)    ((qaq)->qaq_flags |= LQUOTA_FLAGS_GRP)
+#define QAQ_SET_ADJBLK(qaq) ((qaq)->qaq_flags |= LQUOTA_FLAGS_ADJBLK)
+#define QAQ_SET_ADJINO(qaq) ((qaq)->qaq_flags |= LQUOTA_FLAGS_ADJINO)
 
 struct mds_rec_setattr {
         __u32           sa_opcode;
@@ -1462,28 +1494,69 @@ extern void lustre_swab_llog_rec(struct llog_rec_hdr  *rec,
 struct lustre_cfg;
 extern void lustre_swab_lustre_cfg(struct lustre_cfg *lcfg);
 
-/* quota. fixed by tianzy for bug10707 */
-#define QUOTA_IS_GRP   0X1UL  /* 0 is user, 1 is group. Used by qd_flags*/
-#define QUOTA_IS_BLOCK 0x2UL  /* 0 is inode, 1 is block. Used by qd_flags*/
-
+/* this will be used when OBD_CONNECT_CHANGE_QS is set */
 struct qunit_data {
+        __u32 qd_id;    /* ID appiles to (uid, gid) */
+        __u32 qd_flags; /* LQUOTA_FLAGS_* affect the responding bits */
+        __u64 qd_count; /* acquire/release count (bytes for block quota) */
+        __u64 qd_qunit; /* when a master returns the reply to a slave, it will
+                         * contain the current corresponding qunit size */
+        __u64 padding;
+};
+
+#define QDATA_IS_GRP(qdata)    ((qdata)->qd_flags & LQUOTA_FLAGS_GRP)
+#define QDATA_IS_BLK(qdata)    ((qdata)->qd_flags & LQUOTA_FLAGS_BLK)
+#define QDATA_IS_ADJBLK(qdata) ((qdata)->qd_flags & LQUOTA_FLAGS_ADJBLK)
+#define QDATA_IS_ADJINO(qdata) ((qdata)->qd_flags & LQUOTA_FLAGS_ADJINO)
+#define QDATA_IS_CHANGE_QS(qdata) ((qdata)->qd_flags & LQUOTA_FLAGS_CHG_QS)
+
+#define QDATA_SET_GRP(qdata)    ((qdata)->qd_flags |= LQUOTA_FLAGS_GRP)
+#define QDATA_SET_BLK(qdata)    ((qdata)->qd_flags |= LQUOTA_FLAGS_BLK)
+#define QDATA_SET_ADJBLK(qdata) ((qdata)->qd_flags |= LQUOTA_FLAGS_ADJBLK)
+#define QDATA_SET_ADJINO(qdata) ((qdata)->qd_flags |= LQUOTA_FLAGS_ADJINO)
+#define QDATA_SET_CHANGE_QS(qdata) ((qdata)->qd_flags |= LQUOTA_FLAGS_CHG_QS)
+
+#define QDATA_CLR_GRP(qdata)        ((qdata)->qd_flags &= ~LQUOTA_FLAGS_GRP)
+#define QDATA_CLR_CHANGE_QS(qdata)  ((qdata)->qd_flags &= ~LQUOTA_FLAGS_CHG_QS)
+
+#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(1, 9, 0, 0)
+/* this will be used when OBD_CONNECT_QUOTA64 is set */
+struct qunit_data_old2 {
         __u32 qd_id; /* ID appiles to (uid, gid) */
         __u32 qd_flags; /* Quota type (USRQUOTA, GRPQUOTA) occupy one bit;
                          * Block quota or file quota occupy one bit */
         __u64 qd_count; /* acquire/release count (bytes for block quota) */
 };
+#else
+#warning "remove quota code above for format absolete in new release"
+#endif
 
+#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(1, 7, 0, 0)
 struct qunit_data_old {
         __u32 qd_id;    /* ID appiles to (uid, gid) */
         __u32 qd_type;  /* Quota type (USRQUOTA, GRPQUOTA) */
         __u32 qd_count; /* acquire/release count (bytes for block quota) */
         __u32 qd_isblk; /* Block quota or file quota */
 };
+#else
+#warning "remove quota code above for format absolete in new release"
+#endif
 
 extern void lustre_swab_qdata(struct qunit_data *d);
+#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(1, 7, 0, 0)
 extern void lustre_swab_qdata_old(struct qunit_data_old *d);
-extern struct qunit_data *lustre_quota_old_to_new(struct qunit_data_old *d);
-extern struct qunit_data_old *lustre_quota_new_to_old(struct qunit_data *d);
+#else
+#warning "remove quota code above for format absolete in new release"
+#endif
+#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(1, 9, 0, 0)
+extern void lustre_swab_qdata_old2(struct qunit_data_old2 *d);
+#else
+#warning "remove quota code above for format absolete in new release"
+#endif
+extern int quota_get_qdata(void*req, struct qunit_data *qdata,
+                           int is_req, int is_exp);
+extern int quota_copy_qdata(void *request, struct qunit_data *qdata,
+                            int is_req, int is_exp);
 
 typedef enum {
         QUOTA_DQACQ     = 601,
@@ -1492,10 +1565,17 @@ typedef enum {
 
 #define JOIN_FILE_ALIGN 4096
 
+#define QUOTA_REQUEST   1
+#define QUOTA_REPLY     0
+#define QUOTA_EXPORT    1
+#define QUOTA_IMPORT    0
+
 /* quota check function */
 #define QUOTA_RET_OK           0 /* return successfully */
 #define QUOTA_RET_NOQUOTA      1 /* not support quota */
 #define QUOTA_RET_NOLIMIT      2 /* quota limit isn't set */
-#define QUOTA_RET_ACQUOTA      3 /* need to acquire extra quota */
+#define QUOTA_RET_ACQUOTA      4 /* need to acquire extra quota */
+#define QUOTA_RET_INC_PENDING  8 /* pending value is increased */
 
+extern int quota_get_qunit_data_size(__u64 flag);
 #endif

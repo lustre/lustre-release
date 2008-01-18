@@ -1034,6 +1034,9 @@ struct obd_ops {
         /* quota methods */
         int (*o_quotacheck)(struct obd_export *, struct obd_quotactl *);
         int (*o_quotactl)(struct obd_export *, struct obd_quotactl *);
+        int (*o_quota_adjust_qunit)(struct obd_export *exp,
+                                    struct quota_adjust_qunit *oqaq);
+
 
         int (*o_ping)(struct obd_export *exp);
 
@@ -1117,6 +1120,7 @@ static inline void init_obd_quota_ops(quota_interface_t *interface,
         LASSERT(obd_ops);
         obd_ops->o_quotacheck = QUOTA_OP(interface, check);
         obd_ops->o_quotactl = QUOTA_OP(interface, ctl);
+        obd_ops->o_quota_adjust_qunit = QUOTA_OP(interface, adjust_qunit);
 }
 
 #endif /* __OBD_H */

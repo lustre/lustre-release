@@ -135,4 +135,12 @@ void* nidstats_refcount_get(struct hlist_node * actual_hnode);
 void nidstats_refcount_put(struct hlist_node * actual_hnode);
 extern struct lustre_hash_operations nid_stat_hash_operations;
 
+#ifdef __KERNEL__
+/* ( lqs <-> qctxt ) hash operations define b=10600 */
+__u32 lqs_hashfn(struct lustre_class_hash_body *hash_body,  void * key);
+int lqs_hash_key_compare(void *key, struct hlist_node * compared_hnode);
+void * lqs_refcount_get(struct hlist_node * actual_hnode);
+void lqs_refcount_put(struct hlist_node * actual_hnode);
+#endif
+
 #endif /* __CLASS_HASH_H */

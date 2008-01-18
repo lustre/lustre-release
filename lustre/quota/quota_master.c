@@ -198,23 +198,129 @@ static struct lustre_dquot *lustre_dqget(struct obd_device *obd,
         RETURN(dquot);
 }
 
+static void init_oqaq(struct quota_adjust_qunit *oqaq,
+                      struct lustre_quota_ctxt *qctxt,
+                      qid_t id, int type)
+{
+        struct lustre_qunit_size *lqs = NULL;
+
+        oqaq->qaq_id = id;
+        oqaq->qaq_flags = type;
+        quota_search_lqs(NULL, oqaq, qctxt, &lqs);
+        if (lqs) {
+                spin_lock(&lqs->lqs_lock);
+                oqaq->qaq_bunit_sz = lqs->lqs_bunit_sz;
+                oqaq->qaq_iunit_sz = lqs->lqs_iunit_sz;
+                oqaq->qaq_flags    = lqs->lqs_flags;
+                spin_unlock(&lqs->lqs_lock);
+                lqs_putref(lqs);
+        } else {
+                CDEBUG(D_QUOTA, "Can't find the lustre qunit size!\n");
+                oqaq->qaq_bunit_sz = qctxt->lqc_bunit_sz;
+                oqaq->qaq_iunit_sz = qctxt->lqc_iunit_sz;
+        }
+}
+
+int dqacq_adjust_qunit_sz(struct obd_device *obd, qid_t id, int type,
+                          __u32 is_blk)
+{
+        struct mds_obd *mds = &obd->u.mds;
+        struct lustre_quota_ctxt *qctxt = &mds->mds_obt.obt_qctxt;
+        struct obd_device *lov_mds_obd = class_exp2obd(mds->mds_osc_exp);
+        struct lov_obd *lov = &lov_mds_obd->u.lov;
+        __u32 ost_num = lov->desc.ld_tgt_count, mdt_num = 1;
+        struct quota_adjust_qunit *oqaq = NULL;
+        unsigned int uid = 0, gid = 0;
+        struct lustre_quota_info *info = &mds->mds_quota_info;
+        struct lustre_dquot *dquot = NULL;
+        int adjust_res = 0;
+        int rc = 0;
+        ENTRY;
+
+        LASSERT(mds);
+        dquot = lustre_dqget(obd, info, id, type);
+        if (IS_ERR(dquot))
+                RETURN(PTR_ERR(dquot));
+
+        OBD_ALLOC_PTR(oqaq);
+        if (!oqaq)
+                GOTO(out, rc = -ENOMEM);
+
+        down(&dquot->dq_sem);
+        init_oqaq(oqaq, qctxt, id, type);
+
+        rc = dquot_create_oqaq(qctxt, dquot, ost_num, mdt_num,
+                               is_blk ? LQUOTA_FLAGS_ADJBLK :
+                               LQUOTA_FLAGS_ADJINO, oqaq);
+
+        if (rc < 0) {
+                CDEBUG(D_ERROR, "create oqaq failed! (rc:%d)\n", rc);
+                GOTO(out_sem, rc);
+        }
+        QAQ_DEBUG(oqaq, "show oqaq.\n")
+
+        if (!QAQ_IS_ADJBLK(oqaq) && !QAQ_IS_ADJINO(oqaq))
+                GOTO(out_sem, rc);
+
+        /* adjust the mds slave qunit size */
+        adjust_res = quota_adjust_slave_lqs(oqaq, qctxt);
+        if (adjust_res <= 0) {
+                if (adjust_res < 0) {
+                        rc = adjust_res;
+                        CDEBUG(D_ERROR, "adjust mds slave's qunit size failed! \
+                               (rc:%d)\n", rc);
+                } else {
+                        CDEBUG(D_QUOTA, "qunit doesn't need to be adjusted.\n");
+                }
+                GOTO(out_sem, rc);
+        }
+
+        if (type)
+                gid = dquot->dq_id;
+        else
+                uid = dquot->dq_id;
+
+        up(&dquot->dq_sem);
+
+        rc = qctxt_adjust_qunit(obd, qctxt, uid, gid, is_blk, 0);
+        if (rc) {
+                CDEBUG(D_ERROR, "mds fail to adjust file quota! \
+                               (rc:%d)\n", rc);
+                GOTO(out, rc);
+        }
+
+        /* only when block qunit is reduced, boardcast to osts */
+        if ((adjust_res & LQS_BLK_DECREASE) && QAQ_IS_ADJBLK(oqaq))
+                rc = obd_quota_adjust_qunit(mds->mds_osc_exp, oqaq);
+
+out:
+        lustre_dqput(dquot);
+        if (oqaq)
+                OBD_FREE_PTR(oqaq);
+
+        RETURN(rc);
+out_sem:
+	up(&dquot->dq_sem);
+	goto out;
+}
+
 int dqacq_handler(struct obd_device *obd, struct qunit_data *qdata, int opc)
 {
         struct mds_obd *mds = &obd->u.mds;
+        struct lustre_quota_ctxt *qctxt = &mds->mds_obt.obt_qctxt;
         struct lustre_quota_info *info = &mds->mds_quota_info;
         struct lustre_dquot *dquot = NULL;
         __u64 *usage = NULL;
         __u32 hlimit = 0, slimit = 0;
-        __u32 qdata_type = qdata->qd_flags & QUOTA_IS_GRP;
-        __u32 is_blk = (qdata->qd_flags & QUOTA_IS_BLOCK) >> 1;
         time_t *time = NULL;
         unsigned int grace = 0;
+        struct lustre_qunit_size *lqs = NULL;
         int rc = 0;
         ENTRY;
 
         OBD_FAIL_RETURN(OBD_FAIL_OBD_DQACQ, -EIO);
 
-        dquot = lustre_dqget(obd, info, qdata->qd_id, qdata_type);
+        dquot = lustre_dqget(obd, info, qdata->qd_id, QDATA_IS_GRP(qdata));
         if (IS_ERR(dquot))
                 RETURN(PTR_ERR(dquot));
 
@@ -229,14 +335,14 @@ int dqacq_handler(struct obd_device *obd, struct qunit_data *qdata, int opc)
                 GOTO(out, rc = -EBUSY);
         }
 
-        if (is_blk) {
-                grace = info->qi_info[qdata_type].dqi_bgrace;
+        if (QDATA_IS_BLK(qdata)) {
+                grace = info->qi_info[QDATA_IS_GRP(qdata)].dqi_bgrace;
                 usage = &dquot->dq_dqb.dqb_curspace;
                 hlimit = dquot->dq_dqb.dqb_bhardlimit;
                 slimit = dquot->dq_dqb.dqb_bsoftlimit;
                 time = &dquot->dq_dqb.dqb_btime;
         } else {
-                grace = info->qi_info[qdata_type].dqi_igrace;
+                grace = info->qi_info[QDATA_IS_GRP(qdata)].dqi_igrace;
                 usage = (__u64 *) & dquot->dq_dqb.dqb_curinodes;
                 hlimit = dquot->dq_dqb.dqb_ihardlimit;
                 slimit = dquot->dq_dqb.dqb_isoftlimit;
@@ -252,12 +358,20 @@ int dqacq_handler(struct obd_device *obd, struct qunit_data *qdata, int opc)
 
         switch (opc) {
         case QUOTA_DQACQ:
-                if (hlimit && 
-                    QUSG(*usage + qdata->qd_count, is_blk) > hlimit)
-                        GOTO(out, rc = -EDQUOT);
+                if (hlimit &&
+                    QUSG(*usage + qdata->qd_count, QDATA_IS_BLK(qdata)) > hlimit)
+                {
+                        if (QDATA_IS_CHANGE_QS(qdata) &&
+                            QUSG(*usage, QDATA_IS_BLK(qdata)) < hlimit)
+                                qdata->qd_count = (hlimit -
+                                        QUSG(*usage, QDATA_IS_BLK(qdata)))
+                                        * QUOTABLOCK_SIZE;
+                        else
+                                GOTO(out, rc = -EDQUOT);
+                }
 
                 if (slimit &&
-                    QUSG(*usage + qdata->qd_count, is_blk) > slimit) {
+                    QUSG(*usage + qdata->qd_count, QDATA_IS_BLK(qdata)) > slimit) {
                         if (*time && cfs_time_current_sec() >= *time)
                                 GOTO(out, rc = -EDQUOT);
                         else if (!*time)
@@ -275,7 +389,7 @@ int dqacq_handler(struct obd_device *obd, struct qunit_data *qdata, int opc)
                         *usage -= qdata->qd_count;
 
                 /* (usage <= soft limit) but not (usage < soft limit) */
-                if (!slimit || QUSG(*usage, is_blk) <= slimit)
+                if (!slimit || QUSG(*usage, QDATA_IS_BLK(qdata)) <= slimit)
                         *time = 0;
                 break;
         default:
@@ -288,6 +402,36 @@ out:
         up(&dquot->dq_sem);
         up(&mds->mds_qonoff_sem);
         lustre_dqput(dquot);
+        if (rc != -EDQUOT)
+                dqacq_adjust_qunit_sz(obd, qdata->qd_id, QDATA_IS_GRP(qdata), QDATA_IS_BLK(qdata));
+
+        quota_search_lqs(qdata, NULL, qctxt, &lqs);
+        if (QDATA_IS_BLK(qdata)) {
+                if (!lqs) {
+                        CDEBUG(D_INFO, "Can't find the lustre qunit size!\n");
+                        qdata->qd_qunit  = qctxt->lqc_bunit_sz;
+                } else {
+                        spin_lock(&lqs->lqs_lock);
+                        qdata->qd_qunit  = lqs->lqs_bunit_sz;
+                        spin_unlock(&lqs->lqs_lock);
+                }
+                QDATA_SET_ADJBLK(qdata);
+        } else {
+                if (!lqs) {
+                        CDEBUG(D_INFO, "Can't find the lustre qunit size!\n");
+                        qdata->qd_qunit  = qctxt->lqc_iunit_sz;
+                } else {
+                        spin_lock(&lqs->lqs_lock);
+                        qdata->qd_qunit  = lqs->lqs_iunit_sz;
+                        spin_unlock(&lqs->lqs_lock);
+                }
+                QDATA_SET_ADJINO(qdata);
+        }
+
+        QDATA_DEBUG(qdata, "alloc/release qunit in dqacq_handler\n");
+        if (lqs)
+                lqs_putref(lqs);
+
         return rc;
 }
 
@@ -778,10 +922,125 @@ out:
         RETURN(rc);
 }
 
+int dquot_create_oqaq(struct lustre_quota_ctxt *qctxt,
+                            struct lustre_dquot *dquot, __u32 ost_num,
+                            __u32 mdt_num, int type,
+                            struct quota_adjust_qunit *oqaq)
+{
+        __u64 bunit_curr_o, iunit_curr_o;
+        unsigned long shrink_qunit_limit = qctxt->lqc_cqs_boundary_factor;
+        unsigned long cqs_factor = qctxt->lqc_cqs_qs_factor;
+        __u64 blimit = dquot->dq_dqb.dqb_bhardlimit ?
+                dquot->dq_dqb.dqb_bhardlimit : dquot->dq_dqb.dqb_bsoftlimit;
+        __u64 ilimit = dquot->dq_dqb.dqb_ihardlimit ?
+                dquot->dq_dqb.dqb_ihardlimit : dquot->dq_dqb.dqb_isoftlimit;
+        int rc = 0;
+        ENTRY;
+
+        if (!dquot || !oqaq)
+                RETURN(-EINVAL);
+        LASSERT_SEM_LOCKED(&dquot->dq_sem);
+        LASSERT(oqaq->qaq_iunit_sz);
+        LASSERT(oqaq->qaq_bunit_sz);
+
+        /* don't change qunit size */
+        if (!qctxt->lqc_switch_qs)
+                RETURN(rc);
+
+        bunit_curr_o = oqaq->qaq_bunit_sz;
+        iunit_curr_o = oqaq->qaq_iunit_sz;
+
+        if (dquot->dq_type == GRPQUOTA)
+                QAQ_SET_GRP(oqaq);
+
+        if ((type & LQUOTA_FLAGS_ADJBLK) && blimit) {
+                __u64 b_limitation =
+                        oqaq->qaq_bunit_sz * ost_num * shrink_qunit_limit;
+                /* enlarge block qunit size */
+                while (blimit >
+                       QUSG(dquot->dq_dqb.dqb_curspace + 2 * b_limitation, 1)) {
+                        oqaq->qaq_bunit_sz =
+                                QUSG(oqaq->qaq_bunit_sz * cqs_factor, 1)
+                                << QUOTABLOCK_BITS;
+                        b_limitation = oqaq->qaq_bunit_sz * ost_num *
+                                shrink_qunit_limit;
+                }
+
+                if (oqaq->qaq_bunit_sz > qctxt->lqc_bunit_sz)
+                        oqaq->qaq_bunit_sz = qctxt->lqc_bunit_sz;
+
+                /* shrink block qunit size */
+                while (blimit <
+                       QUSG(dquot->dq_dqb.dqb_curspace + b_limitation, 1)) {
+                        do_div(oqaq->qaq_bunit_sz , cqs_factor);
+                        oqaq->qaq_bunit_sz = QUSG(oqaq->qaq_bunit_sz, 1) <<
+                                QUOTABLOCK_BITS;
+                        b_limitation = oqaq->qaq_bunit_sz * ost_num *
+                                shrink_qunit_limit;
+                        if (oqaq->qaq_bunit_sz <  qctxt->lqc_cqs_least_bunit)
+                                break;
+                }
+
+                if (oqaq->qaq_bunit_sz < qctxt->lqc_cqs_least_bunit)
+                        oqaq->qaq_bunit_sz = qctxt->lqc_cqs_least_bunit;
+
+                if (bunit_curr_o != oqaq->qaq_bunit_sz)
+                        QAQ_SET_ADJBLK(oqaq);
+
+        }
+
+        if ((type & LQUOTA_FLAGS_ADJINO) && ilimit) {
+                __u64 i_limitation =
+                        oqaq->qaq_iunit_sz * mdt_num * shrink_qunit_limit;
+                /* enlarge file qunit size */
+                while (ilimit > dquot->dq_dqb.dqb_curinodes
+                       + 2 * i_limitation) {
+                        oqaq->qaq_iunit_sz = oqaq->qaq_iunit_sz * cqs_factor;
+                        i_limitation = oqaq->qaq_iunit_sz * mdt_num *
+                                shrink_qunit_limit;
+                }
+
+                if (oqaq->qaq_iunit_sz > qctxt->lqc_iunit_sz)
+                        oqaq->qaq_iunit_sz = qctxt->lqc_iunit_sz;
+
+                /* shrink file qunit size */
+                while (ilimit < dquot->dq_dqb.dqb_curinodes
+                       + i_limitation) {
+                        do_div(oqaq->qaq_iunit_sz, cqs_factor);
+                        i_limitation = oqaq->qaq_iunit_sz * mdt_num *
+                                       shrink_qunit_limit;
+                        if (oqaq->qaq_iunit_sz < qctxt->lqc_cqs_least_iunit)
+                                break;
+                }
+
+                if (oqaq->qaq_iunit_sz < qctxt->lqc_cqs_least_iunit)
+                        oqaq->qaq_iunit_sz = qctxt->lqc_cqs_least_iunit;
+
+                if (iunit_curr_o != oqaq->qaq_iunit_sz)
+                        QAQ_SET_ADJINO(oqaq);
+
+        }
+
+        if (!dquot->dq_dqb.dqb_bhardlimit && !dquot->dq_dqb.dqb_bsoftlimit &&
+            !dquot->dq_dqb.dqb_ihardlimit && !dquot->dq_dqb.dqb_isoftlimit) {
+                oqaq->qaq_bunit_sz = 0;
+                oqaq->qaq_iunit_sz = 0;
+                QAQ_SET_ADJBLK(oqaq);
+                QAQ_SET_ADJINO(oqaq);
+        }
+
+        QAQ_DEBUG(oqaq, "the oqaq computed\n");
+
+        RETURN(rc);
+}
+
 static int mds_init_slave_ilimits(struct obd_device *obd,
-                                  struct obd_quotactl *oqctl, int set)
+                                  struct obd_quotactl *oqctl, int set,
+                                  struct quota_adjust_qunit *oqaq)
 {
         /* XXX: for file limits only adjust local now */
+        struct obd_device_target *obt = &obd->u.obt;
+        struct lustre_quota_ctxt *qctxt = &obt->obt_qctxt;
         unsigned int uid = 0, gid = 0;
         struct obd_quotactl *ioqc = NULL;
         int flag;
@@ -796,14 +1055,22 @@ static int mds_init_slave_ilimits(struct obd_device *obd,
         OBD_ALLOC_PTR(ioqc);
         if (!ioqc)
                 RETURN(-ENOMEM);
-        
-        flag = oqctl->qc_dqblk.dqb_ihardlimit || 
+
+        flag = oqctl->qc_dqblk.dqb_ihardlimit ||
                oqctl->qc_dqblk.dqb_isoftlimit || set;
         ioqc->qc_cmd = flag ? Q_INITQUOTA : Q_SETQUOTA;
         ioqc->qc_id = oqctl->qc_id;
         ioqc->qc_type = oqctl->qc_type;
         ioqc->qc_dqblk.dqb_valid = QIF_ILIMITS;
         ioqc->qc_dqblk.dqb_ihardlimit = flag ? MIN_QLIMIT : 0;
+
+        if (QAQ_IS_ADJINO(oqaq)) {
+                /* adjust the mds slave's inode qunit size */
+                rc = quota_adjust_slave_lqs(oqaq, qctxt);
+                if (rc < 0)
+                        CDEBUG(D_ERROR, "adjust mds slave's inode qunit size \
+                               failed! (rc:%d)\n", rc);
+        }
 
         /* set local limit to MIN_QLIMIT */
         rc = fsfilt_quotactl(obd, obd->u.obt.obt_sb, ioqc);
@@ -818,7 +1085,8 @@ static int mds_init_slave_ilimits(struct obd_device *obd,
 
         rc = qctxt_adjust_qunit(obd, &obd->u.obt.obt_qctxt, uid, gid, 0, 0);
         if (rc) {
-                CERROR("error mds adjust local file quota! (rc:%d)\n", rc);
+                CDEBUG(D_QUOTA,"error mds adjust local file quota! (rc:%d)\n",
+                       rc);
                 GOTO(out, rc);
         }
         /* FIXME initialize all slaves in CMD */
@@ -830,13 +1098,16 @@ out:
 }
 
 static int mds_init_slave_blimits(struct obd_device *obd,
-                                  struct obd_quotactl *oqctl, int set)
+                                  struct obd_quotactl *oqctl, int set,
+                                  struct quota_adjust_qunit *oqaq)
 {
+        struct obd_device_target *obt = &obd->u.obt;
+        struct lustre_quota_ctxt *qctxt = &obt->obt_qctxt;
         struct mds_obd *mds = &obd->u.mds;
         struct obd_quotactl *ioqc;
         unsigned int uid = 0, gid = 0;
+        int rc, rc1 = 0;
         int flag;
-        int rc;
         ENTRY;
 
         /* if we are going to set zero limit, needn't init slaves */
@@ -855,6 +1126,13 @@ static int mds_init_slave_blimits(struct obd_device *obd,
         ioqc->qc_type = oqctl->qc_type;
         ioqc->qc_dqblk.dqb_valid = QIF_BLIMITS;
         ioqc->qc_dqblk.dqb_bhardlimit = flag ? MIN_QLIMIT : 0;
+        if (QAQ_IS_ADJBLK(oqaq)) {
+                /* adjust the mds slave's block qunit size */
+                rc1 = quota_adjust_slave_lqs(oqaq, qctxt);
+                if (rc1 < 0)
+                        CERROR("adjust mds slave's block qunit size failed!"
+                               "(rc:%d)\n", rc1);
+        }
 
         rc = fsfilt_quotactl(obd, obd->u.obt.obt_sb, ioqc);
         if (rc)
@@ -866,14 +1144,21 @@ static int mds_init_slave_blimits(struct obd_device *obd,
         else
                 gid = oqctl->qc_id;
 
+        /* initialize all slave's limit */
+        rc = obd_quotactl(mds->mds_osc_exp, ioqc);
+
         rc = qctxt_adjust_qunit(obd, &obd->u.obt.obt_qctxt, uid, gid, 1, 0);
         if (rc) {
                 CERROR("error mds adjust local block quota! (rc:%d)\n", rc);
                 GOTO(out, rc);
         }
 
-        /* initialize all slave's limit */
-        rc = obd_quotactl(mds->mds_osc_exp, ioqc);
+        /* adjust all slave's qunit size when setting quota
+         * this is will create a lqs for every ost, which will present
+         * certain uid/gid is set quota or not */
+        QAQ_SET_ADJBLK(oqaq);
+        rc = obd_quota_adjust_qunit(mds->mds_osc_exp, oqaq);
+
         EXIT;
 out:
         OBD_FREE_PTR(ioqc);
@@ -883,15 +1168,24 @@ out:
 int mds_set_dqblk(struct obd_device *obd, struct obd_quotactl *oqctl)
 {
         struct mds_obd *mds = &obd->u.mds;
+        struct lustre_quota_ctxt *qctxt = &mds->mds_obt.obt_qctxt;
+        struct obd_device *lov_obd = class_exp2obd(mds->mds_osc_exp);
+        struct lov_obd *lov = &lov_obd->u.lov;
+        struct quota_adjust_qunit *oqaq = NULL;
         struct lustre_quota_info *qinfo = &mds->mds_quota_info;
         __u64 ihardlimit, isoftlimit, bhardlimit, bsoftlimit;
         time_t btime, itime;
         struct lustre_dquot *dquot;
         struct obd_dqblk *dqblk = &oqctl->qc_dqblk;
-        int set, rc;
+        int set, rc, flag = 0;
         ENTRY;
 
+        OBD_ALLOC_PTR(oqaq);
+        if (!oqaq)
+                RETURN(-ENOMEM);
         down(&mds->mds_qonoff_sem);
+        init_oqaq(oqaq, qctxt, oqctl->qc_id, oqctl->qc_type);
+
         if (qinfo->qi_files[oqctl->qc_type] == NULL)
                 GOTO(out_sem, rc = -ESRCH);
 
@@ -926,18 +1220,20 @@ int mds_set_dqblk(struct obd_device *obd, struct obd_quotactl *oqctl)
                 dquot->dq_dqb.dqb_bhardlimit = dqblk->dqb_bhardlimit;
                 dquot->dq_dqb.dqb_bsoftlimit = dqblk->dqb_bsoftlimit;
                 /* clear usage (limit pool) */
-                if (!dquot->dq_dqb.dqb_bhardlimit && 
+                if (!dquot->dq_dqb.dqb_bhardlimit &&
                     !dquot->dq_dqb.dqb_bsoftlimit)
                         dquot->dq_dqb.dqb_curspace = 0;
 
                 /* clear grace time */
-                if (!dqblk->dqb_bsoftlimit || 
+                if (!dqblk->dqb_bsoftlimit ||
                     toqb(dquot->dq_dqb.dqb_curspace) <= dqblk->dqb_bsoftlimit)
                         dquot->dq_dqb.dqb_btime = 0;
                 /* set grace only if user hasn't provided his own */
                 else if (!(dqblk->dqb_valid & QIF_BTIME))
-                        dquot->dq_dqb.dqb_btime = cfs_time_current_sec() + 
+                        dquot->dq_dqb.dqb_btime = cfs_time_current_sec() +
                                 qinfo->qi_info[dquot->dq_type].dqi_bgrace;
+
+                flag |= LQUOTA_FLAGS_ADJBLK;
         }
 
         if (dqblk->dqb_valid & QIF_ILIMITS) {
@@ -954,7 +1250,16 @@ int mds_set_dqblk(struct obd_device *obd, struct obd_quotactl *oqctl)
                 else if (!(dqblk->dqb_valid & QIF_ITIME))
                         dquot->dq_dqb.dqb_itime = cfs_time_current_sec() +
                                 qinfo->qi_info[dquot->dq_type].dqi_igrace;
+
+                flag |= LQUOTA_FLAGS_ADJINO;
         }
+        QAQ_DEBUG(oqaq, "before dquot_create_oqaq\n");
+        rc = dquot_create_oqaq(qctxt, dquot, lov->desc.ld_tgt_count, 1,
+                               flag, oqaq);
+        QAQ_DEBUG(oqaq, "after dquot_create_oqaq\n");
+        if (rc < 0)
+                CDEBUG(D_QUOTA, "adjust qunit size failed! (rc:%d)\n", rc);
+
 
         rc = fsfilt_dquot(obd, dquot, QFILE_WR_DQUOT);
 
@@ -968,7 +1273,10 @@ int mds_set_dqblk(struct obd_device *obd, struct obd_quotactl *oqctl)
         up(&mds->mds_qonoff_sem);
         if (dqblk->dqb_valid & QIF_ILIMITS) {
                 set = !(ihardlimit || isoftlimit);
-                rc = mds_init_slave_ilimits(obd, oqctl, set);
+                down(&dquot->dq_sem);
+                dquot->dq_dqb.dqb_curinodes = 0;
+                up(&dquot->dq_sem);
+                rc = mds_init_slave_ilimits(obd, oqctl, set, oqaq);
                 if (rc) {
                         CERROR("init slave ilimits failed! (rc:%d)\n", rc);
                         goto revoke_out;
@@ -977,7 +1285,10 @@ int mds_set_dqblk(struct obd_device *obd, struct obd_quotactl *oqctl)
 
         if (dqblk->dqb_valid & QIF_BLIMITS) {
                 set = !(bhardlimit || bsoftlimit);
-                rc = mds_init_slave_blimits(obd, oqctl, set);
+                down(&dquot->dq_sem);
+                dquot->dq_dqb.dqb_curspace = 0;
+                up(&dquot->dq_sem);
+                rc = mds_init_slave_blimits(obd, oqctl, set, oqaq);
                 if (rc) {
                         CERROR("init slave blimits failed! (rc:%d)\n", rc);
                         goto revoke_out;
@@ -1006,6 +1317,10 @@ out:
         EXIT;
 out_sem:
         up(&mds->mds_qonoff_sem);
+
+        if (oqaq)
+                OBD_FREE_PTR(oqaq);
+
         return rc;
 }
 

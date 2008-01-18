@@ -673,7 +673,8 @@ static void osc_consume_write_grant(struct client_obd *cli,struct brw_page *pga)
         pga->flag |= OBD_BRW_FROM_GRANT;
         CDEBUG(D_CACHE, "using %lu grant credits for brw %p page %p\n",
                CFS_PAGE_SIZE, pga, pga->pg);
-        LASSERT(cli->cl_avail_grant >= 0);
+        LASSERTF(cli->cl_avail_grant >= 0, "invalid avail grant is %ld \n",
+                 cli->cl_avail_grant);
 }
 
 /* the companion to osc_consume_write_grant, called when a brw has completed.

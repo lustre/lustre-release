@@ -202,11 +202,11 @@ int client_quota_poll_check(struct obd_export *exp, struct if_quotacheck *qchk)
         qchk->obd_uuid = cli->cl_target_uuid;
         /* FIXME change strncmp to strcmp and save the strlen op */
         if (strncmp(exp->exp_obd->obd_type->typ_name, LUSTRE_OSC_NAME,
-            strlen(LUSTRE_OSC_NAME)))
+                    strlen(LUSTRE_OSC_NAME)) == 0)
                 memcpy(qchk->obd_type, LUSTRE_OST_NAME,
                        strlen(LUSTRE_OST_NAME));
         else if (strncmp(exp->exp_obd->obd_type->typ_name, LUSTRE_MDC_NAME,
-                 strlen(LUSTRE_MDC_NAME)))
+                         strlen(LUSTRE_MDC_NAME)) == 0)
                 memcpy(qchk->obd_type, LUSTRE_MDS_NAME,
                        strlen(LUSTRE_MDS_NAME));
 

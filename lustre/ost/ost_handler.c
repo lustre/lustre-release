@@ -1344,6 +1344,28 @@ static int ost_handle_quotacheck(struct ptlrpc_request *req)
         RETURN(0);
 }
 
+static int ost_handle_quota_adjust_qunit(struct ptlrpc_request *req)
+{
+        struct quota_adjust_qunit *oqaq, *repoqa;
+        int size[2] = { sizeof(struct ptlrpc_body), sizeof(*repoqa) };
+        int rc;
+        ENTRY;
+
+        oqaq = lustre_swab_reqbuf(req, REQ_REC_OFF, sizeof(*oqaq),
+                                  lustre_swab_quota_adjust_qunit);
+
+        if (oqaq == NULL)
+                GOTO(out, rc = -EPROTO);
+        rc = lustre_pack_reply(req, 2, size, NULL);
+        if (rc)
+                GOTO(out, rc);
+        repoqa = lustre_msg_buf(req->rq_repmsg, REPLY_REC_OFF, sizeof(*repoqa));
+        req->rq_status = obd_quota_adjust_qunit(req->rq_export, oqaq);
+        *repoqa = *oqaq;
+ out:
+        RETURN(rc);
+}
+
 static int ost_filter_recovery_request(struct ptlrpc_request *req,
                                        struct obd_device *obd, int *process)
 {
@@ -1402,6 +1424,7 @@ int ost_msg_check_version(struct lustre_msg *msg)
         case OST_GET_INFO:
         case OST_QUOTACHECK:
         case OST_QUOTACTL:
+        case OST_QUOTA_ADJUST_QUNIT:
                 rc = lustre_msg_check_version(msg, LUSTRE_OST_VERSION);
                 if (rc)
                         CERROR("bad opc %u version %08x, expecting %08x\n",
@@ -1593,6 +1616,10 @@ static int ost_handle(struct ptlrpc_request *req)
                 CDEBUG(D_INODE, "quotactl\n");
                 OBD_FAIL_RETURN(OBD_FAIL_OST_QUOTACTL_NET, 0);
                 rc = ost_handle_quotactl(req);
+                break;
+        case OST_QUOTA_ADJUST_QUNIT:
+                CDEBUG(D_INODE, "quota_adjust_qunit\n");
+                rc = ost_handle_quota_adjust_qunit(req);
                 break;
         case OBD_PING:
                 DEBUG_REQ(D_INODE, req, "ping");

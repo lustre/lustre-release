@@ -633,7 +633,8 @@ int filter_commitrw_write(struct obd_export *exp, struct obdo *oa,
         int i, err, cleanup_phase = 0;
         struct obd_device *obd = exp->exp_obd;
         void *wait_handle;
-        int   total_size = 0, rc2;
+        int total_size = 0, rc2 = 0;
+        int rec_pending = 0;
         unsigned int qcids[MAXQUOTAS] = {0, 0};
         ENTRY;
 
@@ -647,18 +648,12 @@ int filter_commitrw_write(struct obd_export *exp, struct obdo *oa,
         /* Unfortunately, if quota master is too busy to handle the
          * pre-dqacq in time and quota hash on ost is used up, we
          * have to wait for the completion of in flight dqacq/dqrel,
-         * then try again */
-        if ((rc2 = lquota_chkquota(filter_quota_interface_ref, obd, oa->o_uid,
-                                   oa->o_gid, niocount)) == QUOTA_RET_ACQUOTA) {
-                OBD_FAIL_TIMEOUT(OBD_FAIL_OST_HOLD_WRITE_RPC, 90);
-                lquota_acquire(filter_quota_interface_ref, obd, oa->o_uid,
-                               oa->o_gid);
-        }
+         * in order not to get enough quota for write b=12588 */
+        rc2 = lquota_chkquota(filter_quota_interface_ref, obd, oa->o_uid,
+                              oa->o_gid, niocount, &rec_pending);
 
-        if (rc2 < 0) {
-                rc = rc2;
-                GOTO(cleanup, rc);
-        }
+        if (rc2 < 0)
+                GOTO(cleanup, rc = rc2);
 
         iobuf = filter_iobuf_get(&obd->u.filter, oti);
         if (IS_ERR(iobuf))
@@ -788,6 +783,10 @@ int filter_commitrw_write(struct obd_export *exp, struct obdo *oa,
         fsfilt_check_slow(obd, now, "commitrw commit");
 
 cleanup:
+        if (rec_pending)
+                lquota_pending_commit(filter_quota_interface_ref, obd, oa->o_uid,
+                                      oa->o_gid, niocount);
+
         filter_grant_commit(exp, niocount, res);
 
         switch (cleanup_phase) {
