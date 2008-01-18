@@ -260,12 +260,14 @@ static int lov_disconnect_obd(struct obd_device *obd, __u32 index)
 
         ENTRY;
 
-        CDEBUG(D_CONFIG, "%s: disconnecting target %s\n",
-               obd->obd_name, osc_obd->obd_name);
         if (lov->lov_tgts[index] == NULL)
                 RETURN(-EINVAL);
 
         osc_obd = class_exp2obd(lov->lov_tgts[index]->ltd_exp);
+        CDEBUG(D_CONFIG, "%s: disconnecting target %s\n",
+               obd->obd_name, osc_obd->obd_name);
+
+
         if (lov->lov_tgts[index]->ltd_active) {
                 lov->lov_tgts[index]->ltd_active = 0;
                 lov->desc.ld_active_tgt_count--;
