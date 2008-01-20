@@ -103,6 +103,20 @@ int ldlm_get_enq_timeout(struct ldlm_lock *lock)
         return max(timeout, ldlm_enqueue_min);
 }
 
+static int is_granted_or_cancelled(struct ldlm_lock *lock)
+{
+        int ret = 0;
+
+        lock_res_and_lock(lock);
+        if (((lock->l_req_mode == lock->l_granted_mode) &&
+             !(lock->l_flags & LDLM_FL_CP_REQD)) ||
+            (lock->l_flags & LDLM_FL_FAILED))
+                ret = 1;
+        unlock_res_and_lock(lock);
+
+        return ret;
+}
+
 int ldlm_completion_ast(struct ldlm_lock *lock, int flags, void *data)
 {
         /* XXX ALLOCATE - 160 bytes */
@@ -162,9 +176,7 @@ noreproc:
         }
 
         /* Go to sleep until the lock is granted or cancelled. */
-        rc = l_wait_event(lock->l_waitq,
-                          ((lock->l_req_mode == lock->l_granted_mode) ||
-                           (lock->l_flags & LDLM_FL_FAILED)), &lwi);
+        rc = l_wait_event(lock->l_waitq, is_granted_or_cancelled(lock), &lwi);
 
         if (lock->l_destroyed || lock->l_flags & LDLM_FL_FAILED) {
                 LDLM_DEBUG(lock, "client-side enqueue waking up: destroyed");
