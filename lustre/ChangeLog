@@ -606,6 +606,13 @@ Details    : Before packing join_file req, all the related reference should be
 	     checked carefully in case some malformed flags cause fake
 	     join_file req on client.
 
+Severity   : normal
+Bugzilla   : 14225
+Description: LDLM_ENQUEUE races with LDLM_CP_CALLBACK
+Details    : ldlm_completion_ast() assumes that a lock is granted when the req
+	     mode is equal to the granted mode. However, it should also check
+	     that LDLM_FL_CP_REQD is not set.
+
 --------------------------------------------------------------------------------
 
 2007-08-10         Cluster File Systems, Inc. <info@clusterfs.com>

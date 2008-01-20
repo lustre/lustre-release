@@ -1373,16 +1373,20 @@ int ldlm_run_cp_ast_work(struct list_head *rpc_list)
         list_for_each_safe(tmp, pos, rpc_list) {
                 struct ldlm_lock *lock =
                         list_entry(tmp, struct ldlm_lock, l_cp_ast);
+                ldlm_completion_callback completion_callback;
 
                 /* nobody should touch l_cp_ast */
                 lock_res_and_lock(lock);
                 list_del_init(&lock->l_cp_ast);
                 LASSERT(lock->l_flags & LDLM_FL_CP_REQD);
+                /* save l_completion_ast since it can be changed by
+                 * mds_intent_policy(), see bug 14225 */
+                completion_callback = lock->l_completion_ast;
                 lock->l_flags &= ~LDLM_FL_CP_REQD;
                 unlock_res_and_lock(lock);
 
-                if (lock->l_completion_ast != NULL) {
-                        rc = lock->l_completion_ast(lock, 0, (void *)&arg);
+                if (completion_callback != NULL) {
+                        rc = completion_callback(lock, 0, (void *)&arg);
                         ast_count++;
                 }
                 LDLM_LOCK_PUT(lock);
