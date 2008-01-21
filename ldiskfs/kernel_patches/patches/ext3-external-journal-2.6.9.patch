@@ -32,9 +32,9 @@ Index: linux-2.6.9-full/fs/ext3/super.c
  	{Opt_data_journal, "data=journal"},
  	{Opt_data_ordered, "data=ordered"},
 @@ -675,8 +677,9 @@ static unsigned long get_sb_block(void *
- 	return sb_block;
  }
  
+ int user_selected_hash_function = -1;
 -static int parse_options (char * options, struct super_block *sb,
 -			  unsigned long * inum, unsigned long *n_blocks_count, int is_remount)
 +static int parse_options (char *options, struct super_block *sb,

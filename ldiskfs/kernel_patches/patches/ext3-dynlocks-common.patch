@@ -42,7 +42,7 @@ Index: linux-stage/include/linux/dynlocks.h
 +
 Index: linux-stage/fs/ext3/dynlocks.c
 ===================================================================
---- linux-stage.orig/lib/dynlocks.c	2006-06-16 16:07:58.000000000 +0300
+--- linux-stage.orig/fs/ext3/dynlocks.c	2006-06-16 16:07:58.000000000 +0300
 +++ linux-stage/fs/ext3/dynlocks.c	2007-08-30 05:45:51.000000000 +0300
 @@ -0,0 +1,232 @@
 +/*
