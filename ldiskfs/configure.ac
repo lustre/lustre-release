@@ -1,6 +1,6 @@
 # Process this file with autoconf to produce a configure script.
 
-AC_INIT([Lustre ldiskfs], 3.0.0, [https://bugzilla.lustre.org/])
+AC_INIT([Lustre ldiskfs], 4.0.1, [https://bugzilla.lustre.org/])
 AC_CONFIG_SRCDIR([lustre-ldiskfs.spec.in])
 
 # Don't look for install-sh, etc. in ..

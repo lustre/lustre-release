@@ -32,7 +32,7 @@ Index: linux-2.6.9/fs/ext3/super.c
  	Opt_iopen, Opt_noiopen, Opt_iopen_nopriv,
  	Opt_extents, Opt_noextents, Opt_extdebug,
  	Opt_mballoc, Opt_nomballoc, Opt_stripe,
-+        Opt_hashfunc,
++	Opt_hashfunc,
  };
  
  static match_table_t tokens = {

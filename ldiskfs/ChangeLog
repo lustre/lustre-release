@@ -1,4 +1,22 @@
 tbd         Cluster File Systems, Inc. <info@clusterfs.com>
+       * version 4.0.1
+
+Severity   : major
+Bugzilla   : 14596
+Description: deadlock in ext3_expand_extra_isize
+Details    : Inode expansion during ext3_mark_inode_dirty may lead to deadlock.
+	     This is solved by making sure that ext3_expand_extra_isize isn't
+	     called from ext3_xattr_set_handle.
+
+Severity   : normal
+Bugzilla   : 14493
+Description: Kernel BUG at ... ldiskfs/ldiskfs/mballoc.c:3853
+Details    : Removing the underlying device (e.g. via a SCSI rescan) can cause a
+	     kernel BUG in ldiskfs_mb_discard_inode_preallocations().
+
+--------------------------------------------------------------------------------
+
+tbd         Cluster File Systems, Inc. <info@clusterfs.com>
        * version 3.0.3
 
 Severity   : normal
@@ -9,19 +27,6 @@ Details    : If a new ldiskfs filesystem is created with the "uninit_groups"
 	     feature and only a single inode is created in a group then the
 	     "bg_unused_inodes" count is incorrectly updated.  Creating a
 	     second inode in that group would update it correctly.
-
-Severity   : normal
-Bugzilla   : 14493
-Description: Kernel BUG at ... ldiskfs/ldiskfs/mballoc.c:3853
-Details    : Removing the underlying device (e.g. via a SCSI rescan) can cause a
-	     kernel BUG in ldiskfs_mb_discard_inode_preallocations().
-
-Severity   : major
-Bugzilla   : 14596
-Description: deadlock in ext3_expand_extra_isize
-Details    : Inode expansion during ext3_mark_inode_dirty may lead to deadlock.
-	     This is solved by making sure that ext3_expand_extra_isize isn't
-	     called from ext3_xattr_set_handle.
 
 --------------------------------------------------------------------------------
 
@@ -52,7 +57,7 @@ Details    : This feature will protect the filesystem from being mounted more
 
 --------------------------------------------------------------------------------
 
-2007-07-30  Cluster File Systems, Inc. <info@clusterfs.com>
+2007-08-10         Cluster File Systems, Inc. <info@clusterfs.com>
        * version 3.0.0
        * Initial release of ldiskfs as a separate package.
 
