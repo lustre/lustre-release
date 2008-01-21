@@ -149,7 +149,7 @@ brw_check_page (cfs_page_t *pg, int pattern, __u64 magic)
         LBUG ();
 
 bad_data:
-        CERROR ("Bad data in page %p: "LPU64", "LPU64" expected\n",
+        CERROR ("Bad data in page %p: "LPX64", "LPX64" expected\n",
                 pg, data, magic);
         return 1;
 }
