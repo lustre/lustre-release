@@ -30,9 +30,6 @@ sources:
 
 endif
 
-fsfilt_extN.c: fsfilt_ext3.c
-	sed -e "s/EXT3/EXTN/g" -e "s/ext3/extN/g" $< > $@
-
 ldiskfs_sed_flags = \
 	-e "s/dx_hash_info/ext3_dx_hash_info/g" \
 	-e "s/dir_private_info/ext3_dir_private_info/g" \
