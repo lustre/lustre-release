@@ -513,6 +513,7 @@ int ll_file_open(struct inode *inode, struct file *file)
                 it = &oit;
         }
 
+restart:
         /* Let's see if we have file open on MDS already. */
         if (it->it_flags & FMODE_WRITE) {
                 och_p = &lli->lli_mds_write_och;
@@ -549,19 +550,19 @@ int ll_file_open(struct inode *inode, struct file *file)
                 }
         } else {
                 LASSERT(*och_usecount == 0);
-                OBD_ALLOC(*och_p, sizeof (struct obd_client_handle));
-                if (!*och_p) {
-                        ll_file_data_put(fd);
-                        GOTO(out_och_free, rc = -ENOMEM);
-                }
-                (*och_usecount)++;
                 if (!it->d.lustre.it_disposition) {
+                        /* We cannot just request lock handle now, new ELC code
+                           means that one of other OPEN locks for this file
+                           could be cancelled, and since blocking ast handler
+                           would attempt to grab och_sem as well, that would
+                           result in a deadlock */
+                        up(&lli->lli_och_sem);
                         it->it_flags |= O_CHECK_STALE;
                         rc = ll_intent_file_open(file, NULL, 0, it);
                         it->it_flags &= ~O_CHECK_STALE;
                         if (rc) {
                                 ll_file_data_put(fd);
-                                GOTO(out_och_free, rc);
+                                GOTO(out_openerr, rc);
                         }
 
                         /* Got some error? Release the request */
@@ -572,7 +573,14 @@ int ll_file_open(struct inode *inode, struct file *file)
                         md_set_lock_data(ll_i2sbi(inode)->ll_md_exp,
                                          &it->d.lustre.it_lock_handle,
                                          file->f_dentry->d_inode);
+                        goto restart;
                 }
+                OBD_ALLOC(*och_p, sizeof (struct obd_client_handle));
+                if (!*och_p) {
+                        ll_file_data_put(fd);
+                        GOTO(out_och_free, rc = -ENOMEM);
+                }
+                (*och_usecount)++;
                 req = it->d.lustre.it_data;
 
                 /* md_intent_lock() didn't get a request ref if there was an
@@ -626,6 +634,9 @@ out_och_free:
                         (*och_usecount)--;
                 }
                 up(&lli->lli_och_sem);
+out_openerr: ;/* Looks weierd, eh? Just wait for statahead code to insert
+                a statement here <-- remove this comment after statahead
+                landing */
         }
 
         return rc;
