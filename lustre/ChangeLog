@@ -254,6 +254,13 @@ Details    : ldlm_completion_ast() assumes that a lock is granted when the req
 	     mode is equal to the granted mode. However, it should also check
 	     that LDLM_FL_CP_REQD is not set.
 
+Severity   : normal
+Bugzilla   : 14360
+Description: Heavy nfs access might result in deadlocks
+Details    : After ELC code landed, it is now improper to enqueue any mds
+             locks under och_sem, because enqueue might want to decide to
+	     cancel open locks for same inode we are holding och_sem for.
+
 --------------------------------------------------------------------------------
 
 2007-12-07         Cluster File Systems, Inc. <info@clusterfs.com>
