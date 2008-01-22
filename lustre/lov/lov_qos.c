@@ -730,11 +730,11 @@ static int alloc_qos(struct obd_export *exp, int *idx_arr, int *stripe_cnt,
                 good_osts++;
         }
 
+        if (good_osts < stripe_cnt_min)
+                GOTO(out_up_write, rc = -EAGAIN);
+
         if (!total_bavail)
                 GOTO(out_up_write, rc = -ENOSPC);
-
-         if (good_osts < stripe_cnt_min)
-                GOTO(out_up_write, rc = -EAGAIN);
 
         /* We have enough osts */
         if (good_osts < *stripe_cnt)
