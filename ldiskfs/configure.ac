@@ -65,7 +65,6 @@ LB_DEFINE_LDISKFS_OPTIONS
 
 AC_MSG_CHECKING([which ldiskfs series to use])
 case $LINUXRELEASE in
-2.6.5*) LDISKFS_SERIES="2.6-suse.series" ;;
 2.6.9*) LDISKFS_SERIES="2.6-rhel4.series" ;;
 2.6.10-ac*) LDISKFS_SERIES="2.6-fc3.series" ;;
 2.6.10*) LDISKFS_SERIES="2.6-rhel4.series" ;;
