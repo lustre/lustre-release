@@ -468,7 +468,8 @@ int mds_quota_adjust(struct obd_device *obd, unsigned int qcids[],
         }
 
         if (rc2)
-                CERROR("mds adjust qunit failed! (opc:%d rc:%d)\n", opc, rc2);
+                CDEBUG(rc2 == -EAGAIN ? D_QUOTA: D_ERROR,
+                       "mds adjust qunit failed! (opc:%d rc:%d)\n", opc, rc2);
         RETURN(0);
 }
 
@@ -499,9 +500,14 @@ int filter_quota_adjust(struct obd_device *obd, unsigned int qcids[],
                 break;
         }
 
-        if (rc || rc2)
-                CERROR("filter adjust qunit failed! (opc:%d rc%d)\n",
-                       opc, rc ?: rc2);
+        if (rc || rc2) {
+                if (!rc)
+                        rc = rc2;
+                CDEBUG(rc == -EAGAIN ? D_QUOTA: D_ERROR,
+                       "filter adjust qunit failed! (opc:%d rc%d)\n",
+                       opc, rc);
+        }
+
         RETURN(0);
 }
 
