@@ -116,7 +116,7 @@ Index: linux-2.6.16.27-0.9/fs/ext3/iopen.c
 +	list_add(&dentry->d_alias, &inode->i_dentry);	/* d_instantiate */
 +	dentry->d_inode = inode;
 +
-+	d_rehash_cond(dentry, 0);	/* d_rehash */
++	d_rehash_cond(dentry, 0);
 +	spin_unlock(&dcache_lock);
 +
 +	return NULL;
@@ -177,7 +177,7 @@ Index: linux-2.6.16.27-0.9/fs/ext3/iopen.c
 +	dentry->d_inode = inode;
 +do_rehash:
 +	if (rehash)
-+		d_rehash_cond(dentry, 0);	/* d_rehash */
++		d_rehash_cond(dentry, 0);
 +	spin_unlock(&dcache_lock);
 +
 +	return NULL;
