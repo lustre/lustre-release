@@ -1,6 +1,12 @@
 tbd         Cluster File Systems, Inc. <info@clusterfs.com>
        * version 4.0.1
 
+Severity   : normal
+Bugzilla   : 13164
+Description: statfs speedup patches.
+Details    : The patches improve statfs performance for very large
+	     filesystems.
+
 Severity   : major
 Bugzilla   : 14596
 Description: deadlock in ext3_expand_extra_isize
