@@ -340,7 +340,8 @@ Index: linux-stage/fs/ext3/iopen.h
 +#define d_rehash_cond(dentry, lock) __d_rehash(dentry, lock)
 +#endif
 +
-+#if !defined(HAVE_D_MOVE_LOCKED) && defined(HAVE_d_move_locked(dentry, lock) __d_move(dentry, lock)
++#if !defined(HAVE_D_MOVE_LOCKED) && defined(HAVE___D_MOVE)
++#define d_move_locked(dentry, target) __d_move(dentry, target)
 +#endif
 Index: linux-stage/fs/ext3/namei.c
 ===================================================================
