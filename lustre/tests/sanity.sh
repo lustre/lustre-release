@@ -4659,11 +4659,15 @@ test_123() # statahead(bug 11401)
         fi
 
         mkdir -p $DIR/$tdir
-
-        for ((i=1, j=0; i<=100000; j=$i, i=$((i * 10)) )); do
+        error=0
+        NUMFREE=`df -i -P $DIR | tail -n 1 | awk '{ print $4 }'`
+        [ $NUMFREE -gt 100000 ] && NUMFREE=100000 || NUMFREE=$((NUMFREE-1000))
+        MULT=10
+        for ((i=1, j=0; i<=$NUMFREE; j=$i, i=$((i * MULT)) )); do
                 createmany -o $DIR/$tdir/$tfile $j $((i - j))
 
                 grep '[0-9]' $LPROC/llite/*/statahead_max
+                cancel_lru_locks mdc
                 cancel_lru_locks osc
                 stime=`date +%s`
                 ls -l $DIR/$tdir > /dev/null
@@ -4678,6 +4682,7 @@ test_123() # statahead(bug 11401)
                 done
 
                 grep '[0-9]' $LPROC/llite/*/statahead_max
+                cancel_lru_locks mdc
                 cancel_lru_locks osc
                 stime=`date +%s`
                 ls -l $DIR/$tdir > /dev/null
@@ -4690,11 +4695,13 @@ test_123() # statahead(bug 11401)
                         echo $max > $client/statahead_max
                 done
 
-                if [ $delta_sa -gt $delta ]; then
+                if [ $delta_sa -gt $(($delta + 2)) ]; then
                         log "ls $i files is slower with statahead!"
+                        error=1
                 fi
 
                 [ $delta -gt 20 ] && break
+                [ $delta -gt 8 ] && MULT=$((50 / delta))
                 [ "$SLOW" = "no" -a $delta -gt 3 ] && break		
         done
         log "ls done"
@@ -4709,6 +4716,8 @@ test_123() # statahead(bug 11401)
         cat $LPROC/llite/*/statahead_stats
         # wait for commitment of removal
         sleep 2
+        [ $error -ne 0 ] && error "statahead is slow!"
+        return 0
 }
 run_test 123 "verify statahead work"
 
