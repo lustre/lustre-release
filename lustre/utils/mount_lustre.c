@@ -389,7 +389,8 @@ int set_tunables(char *source, int src_len)
                 if (verbose)
                         fprintf(stderr,"warning: device %s does not match any "
                                 "entry under /sys/block\n", real_path);
-                return -EINVAL;
+                rc = -EINVAL;
+                goto out;
         }
 
         snprintf(path, sizeof(path), "%s/%s", glob_info.gl_pathv[i],
@@ -399,7 +400,7 @@ int set_tunables(char *source, int src_len)
                 if (verbose)
                         fprintf(stderr, "warning: opening %s: %s\n",
                                 path, strerror(errno));
-                return rc;
+                goto out;
         }
 
         if (strlen(buf) - 1 > 0) {
@@ -410,6 +411,9 @@ int set_tunables(char *source, int src_len)
                         fprintf(stderr, "warning: writing to %s: %s\n",
                                 path, strerror(errno));
         }
+
+out:
+        globfree(&glob_info);
         return rc;
 }
 
