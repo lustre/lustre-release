@@ -23,11 +23,12 @@ int main(int argc, char **argv)
         long len;
         off64_t seek;
         struct stat64 st;
+        char pad = 0xba;
         int action;
         int rc;
 
         if (argc < 5 || argc > 6) {
-                printf("Usage: %s <read/write/rdwr> file seek nr_blocks [blocksize]\n", argv[0]);
+                printf("Usage: %s <read/write/rdwr/readhole> file seek nr_blocks [blocksize]\n", argv[0]);
                 return 1;
         }
 
@@ -37,7 +38,10 @@ int main(int argc, char **argv)
                 action = O_WRONLY;
         else if (!strcmp(argv[1], "rdwr"))
                 action = O_RDWR;
-        else {
+        else if (!strcmp(argv[1], "readhole")) {
+                action = O_RDONLY;
+                pad = 0;
+        } else {
                 printf("Usage: %s <read/write/rdwr> file seek nr_blocks [blocksize]\n", argv[0]);
                 return 1;
         }
@@ -74,7 +78,7 @@ int main(int argc, char **argv)
                 printf("No memory %s\n", strerror(errno));
                 return 1;
         }
-        memset(wbuf, 0xba, len);
+        memset(wbuf, pad, len);
 
         if (action == O_WRONLY || action == O_RDWR) {
                 if (lseek64(fd, seek, SEEK_SET) < 0) {

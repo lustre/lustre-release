@@ -205,14 +205,19 @@ struct ptlrpc_request_set {
         cfs_waitq_t       set_waitq;
         cfs_waitq_t      *set_wakeup_ptr;
         struct list_head  set_requests;
+        struct list_head  set_cblist; /* list of completion callbacks */
         set_interpreter_func    set_interpret; /* completion callback */
         void              *set_arg; /* completion context */
-        void              *set_countp; /* pointer to NOB counter in case 
-                                        * of directIO (bug11737) */
         /* locked so that any old caller can communicate requests to
          * the set holder who can then fold them into the lock-free set */
         spinlock_t        set_new_req_lock;
         struct list_head  set_new_requests;
+};
+
+struct ptlrpc_set_cbdata {
+        struct list_head        psc_item;
+        set_interpreter_func    psc_interpret;
+        void                   *psc_data;
 };
 
 struct ptlrpc_bulk_desc;
@@ -743,6 +748,8 @@ void ptlrpc_restart_req(struct ptlrpc_request *req);
 void ptlrpc_abort_inflight(struct obd_import *imp);
 
 struct ptlrpc_request_set *ptlrpc_prep_set(void);
+int ptlrpc_set_add_cb(struct ptlrpc_request_set *set,
+                      set_interpreter_func fn, void *data);
 int ptlrpc_set_next_timeout(struct ptlrpc_request_set *);
 int ptlrpc_check_set(struct ptlrpc_request_set *set);
 int ptlrpc_set_wait(struct ptlrpc_request_set *);

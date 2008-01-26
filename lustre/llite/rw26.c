@@ -145,16 +145,14 @@ static void ll_free_user_pages(struct page **pages, int npages, int do_dirty)
 
 static ssize_t ll_direct_IO_26_seg(int rw, struct inode *inode,
                                    struct address_space *mapping,
-                                   struct lov_stripe_md *lsm,
+                                   struct obd_info *oinfo,
+                                   struct ptlrpc_request_set *set,
                                    size_t size, loff_t file_offset,
                                    struct page **pages, int page_count)
 {
         struct brw_page *pga;
-        struct obdo oa;
-        int opc, i, rc = 0;
+        int i, rc = 0;
         size_t length;
-        struct obd_capa *ocapa;
-        loff_t file_offset_orig = file_offset;
         ENTRY;
 
         OBD_ALLOC(pga, sizeof(*pga) * page_count);
@@ -177,28 +175,11 @@ static ssize_t ll_direct_IO_26_seg(int rw, struct inode *inode,
                         POISON_PAGE(pages[i], 0x0d);
         }
 
-        ll_inode_fill_obdo(inode, rw == WRITE ? OBD_BRW_WRITE : OBD_BRW_READ, &oa);
-
-        if (rw == WRITE) {
-                lprocfs_counter_add(ll_i2sbi(inode)->ll_stats,
-                                    LPROC_LL_DIRECT_WRITE, size);
-                opc = CAPA_OPC_OSS_WRITE;
-                llap_write_pending(inode, NULL);
-        } else {
-                lprocfs_counter_add(ll_i2sbi(inode)->ll_stats,
-                                    LPROC_LL_DIRECT_READ, size);
-                opc = CAPA_OPC_OSS_RW;
-        }
-        ocapa = ll_osscapa_get(inode, opc);
-        rc = obd_brw_rqset(rw == WRITE ? OBD_BRW_WRITE : OBD_BRW_READ,
-                           ll_i2dtexp(inode), &oa, lsm, page_count, pga, NULL,
-                           ocapa);
-        capa_put(ocapa);
-        if ((rc > 0) && (rw == WRITE)) {
-                lov_stripe_lock(lsm);
-                obd_adjust_kms(ll_i2dtexp(inode), lsm, file_offset_orig + rc, 0);
-                lov_stripe_unlock(lsm);
-        }
+        rc = obd_brw_async(rw == WRITE ? OBD_BRW_WRITE : OBD_BRW_READ,
+                                ll_i2dtexp(inode), oinfo, page_count,
+                                pga, NULL, set);
+        if (rc == 0)
+                rc = size;
 
         OBD_FREE(pga, sizeof(*pga) * page_count);
         RETURN(rc);
@@ -218,8 +199,13 @@ static ssize_t ll_direct_IO_26(int rw, struct kiocb *iocb,
         struct inode *inode = file->f_mapping->host;
         ssize_t count = iov_length(iov, nr_segs), tot_bytes = 0;
         struct ll_inode_info *lli = ll_i2info(inode);
+        struct lov_stripe_md *lsm = lli->lli_smd;
+        struct ptlrpc_request_set *set;
+        struct obd_info oinfo;
+        struct obdo oa;
         unsigned long seg = 0;
         size_t size = MAX_DIO_SIZE;
+        int opc;
         ENTRY;
 
         if (!lli->lli_smd || !lli->lli_smd->lsm_object_id)
@@ -235,10 +221,14 @@ static ssize_t ll_direct_IO_26(int rw, struct kiocb *iocb,
                file_offset, file_offset, count >> CFS_PAGE_SHIFT,
                MAX_DIO_SIZE >> CFS_PAGE_SHIFT);
 
-        if (rw == WRITE)
+        if (rw == WRITE) {
                 ll_stats_ops_tally(ll_i2sbi(inode), LPROC_LL_DIRECT_WRITE, count);
-        else
+                opc = CAPA_OPC_OSS_WRITE;
+                llap_write_pending(inode, NULL);
+        } else {
                 ll_stats_ops_tally(ll_i2sbi(inode), LPROC_LL_DIRECT_READ, count);
+                opc = CAPA_OPC_OSS_RW;
+        }
 
         /* Check that all user buffers are aligned as well */
         for (seg = 0; seg < nr_segs; seg++) {
@@ -247,9 +237,30 @@ static ssize_t ll_direct_IO_26(int rw, struct kiocb *iocb,
                         RETURN(-EINVAL);
         }
 
+        set = ptlrpc_prep_set();
+        if (set == NULL)
+                RETURN(-ENOMEM);
+
+        ll_inode_fill_obdo(inode, rw, &oa);
+        oinfo.oi_oa = &oa;
+        oinfo.oi_md = lsm;
+        oinfo.oi_capa = ll_osscapa_get(inode, opc);
+
+        /* need locking between buffered and direct access. and race with 
+         *size changing by concurrent truncates and writes. */
+        if (rw == READ)
+                LOCK_INODE_MUTEX(inode);
+
         for (seg = 0; seg < nr_segs; seg++) {
                 size_t iov_left = iov[seg].iov_len;
                 unsigned long user_addr = (unsigned long)iov[seg].iov_base;
+
+                if (rw == READ) {
+                        if (file_offset >= inode->i_size)
+                                break;
+                        if (file_offset + iov_left > inode->i_size)
+                                iov_left = inode->i_size - file_offset;
+                }
 
                 while (iov_left > 0) {
                         struct page **pages;
@@ -263,7 +274,7 @@ static ssize_t ll_direct_IO_26(int rw, struct kiocb *iocb,
                         if (page_count > 0) {
                                 result = ll_direct_IO_26_seg(rw, inode,
                                                              file->f_mapping,
-                                                             lli->lli_smd,
+                                                             &oinfo, set,
                                                              min(size,iov_left),
                                                              file_offset, pages,
                                                              page_count);
@@ -288,9 +299,9 @@ static ssize_t ll_direct_IO_26(int rw, struct kiocb *iocb,
                                         continue;
                                 }
 
-                                if (tot_bytes > 0)
-                                        RETURN(tot_bytes);
-                                RETURN(page_count < 0 ? page_count : result);
+                                if (tot_bytes <= 0)
+                                        tot_bytes = page_count < 0 ? page_count : result;
+                                GOTO(out, tot_bytes);
                         }
 
                         tot_bytes += result;
@@ -299,6 +310,25 @@ static ssize_t ll_direct_IO_26(int rw, struct kiocb *iocb,
                         user_addr += result;
                 }
         }
+out:
+        if (rw == READ)
+                UNLOCK_INODE_MUTEX(inode);
+
+        if (tot_bytes > 0) {
+                int rc;
+                
+                rc = ptlrpc_set_wait(set);
+                if (rc) {
+                        tot_bytes = rc;
+                } else if (rw == WRITE) {
+                        lov_stripe_lock(lsm);
+                        obd_adjust_kms(ll_i2dtexp(inode), lsm, file_offset, 0);
+                        lov_stripe_unlock(lsm);
+                }
+        }
+
+        capa_put(oinfo.oi_capa);
+        ptlrpc_set_destroy(set);
         RETURN(tot_bytes);
 }
 

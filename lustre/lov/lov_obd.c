@@ -1593,8 +1593,10 @@ static int lov_brw_async(int cmd, struct obd_export *exp,
         }
         LASSERT(rc == 0);
         LASSERT(set->set_interpret == NULL);
-        set->set_interpret = (set_interpreter_func)lov_brw_interpret;
-        set->set_arg = (void *)lovset;
+        LASSERT(set->set_arg == NULL);
+        rc = ptlrpc_set_add_cb(set, lov_brw_interpret, lovset);
+        if (rc)
+                GOTO(out, rc);
 
         RETURN(rc);
 out:

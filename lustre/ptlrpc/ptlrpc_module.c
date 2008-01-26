@@ -174,6 +174,7 @@ EXPORT_SYMBOL(ptlrpc_retain_replayable_request);
 EXPORT_SYMBOL(ptlrpc_next_xid);
 
 EXPORT_SYMBOL(ptlrpc_prep_set);
+EXPORT_SYMBOL(ptlrpc_set_add_cb);
 EXPORT_SYMBOL(ptlrpc_set_add_req);
 EXPORT_SYMBOL(ptlrpc_set_add_new_req);
 EXPORT_SYMBOL(ptlrpc_set_destroy);
