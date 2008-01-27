@@ -1227,6 +1227,8 @@ log() {
     MSG=${MSG//\)/\\\)}
     MSG=${MSG//\;/\\\;}
     MSG=${MSG//\|/\\\|}
+    MSG=${MSG//\>/\\\>}
+    MSG=${MSG//\</\\\<}
     local NODES=$(nodes_list)
     for NODE in $NODES; do
         do_node $NODE $LCTL mark "$MSG" 2> /dev/null || true
