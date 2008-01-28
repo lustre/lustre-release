@@ -594,6 +594,34 @@ static int osc_resource_get_unused(struct obd_export *exp, struct obdo *oa,
         RETURN(count);
 }
 
+static int osc_destroy_interpret(struct ptlrpc_request *req, void *data,
+                                 int rc)
+{
+        struct client_obd *cli = &req->rq_import->imp_obd->u.cli;
+
+        atomic_dec(&cli->cl_destroy_in_flight);
+        cfs_waitq_signal(&cli->cl_destroy_waitq);
+        return 0;
+}
+
+static int osc_can_send_destroy(struct client_obd *cli)
+{
+        if (atomic_inc_return(&cli->cl_destroy_in_flight) <=
+            cli->cl_max_rpcs_in_flight) {
+                /* The destroy request can be sent */
+                return 1;
+        }
+        if (atomic_dec_return(&cli->cl_destroy_in_flight) <
+            cli->cl_max_rpcs_in_flight) {
+                /*
+                 * The counter has been modified between the two atomic
+                 * operations.
+                 */
+                cfs_waitq_signal(&cli->cl_destroy_waitq);
+        }
+        return 0;
+}
+
 /* Destroy requests can be async always on the client, and we don't even really
  * care about the return code since the client cannot do anything at all about
  * a destroy failure.
@@ -613,6 +641,7 @@ static int osc_destroy(struct obd_export *exp, struct obdo *oa,
         struct ost_body *body;
         int size[3] = { sizeof(struct ptlrpc_body), sizeof(*body), 0 };
         int count, bufcount = 2;
+        struct client_obd *cli = &exp->exp_obd->u.cli;
         ENTRY;
 
         if (!oa) {
@@ -630,6 +659,7 @@ static int osc_destroy(struct obd_export *exp, struct obdo *oa,
                 RETURN(-ENOMEM);
 
         req->rq_request_portal = OST_IO_PORTAL; /* bug 7198 */
+        req->rq_interpret_reply = osc_destroy_interpret;
 
         body = lustre_msg_buf(req->rq_reqmsg, REQ_REC_OFF, sizeof(*body));
         if (oti != NULL && oa->o_valid & OBD_MD_FLCOOKIE)
@@ -639,6 +669,18 @@ static int osc_destroy(struct obd_export *exp, struct obdo *oa,
 
         ptlrpc_req_set_repsize(req, 2, size);
 
+        if (!osc_can_send_destroy(cli)) {
+                struct l_wait_info lwi = { 0 };
+
+                /*
+                 * Wait until the number of on-going destroy RPCs drops
+                 * under max_rpc_in_flight
+                 */
+                l_wait_event_exclusive(cli->cl_destroy_waitq,
+                                       osc_can_send_destroy(cli), &lwi);
+        }
+
+        /* Do not wait for response */
         ptlrpcd_add_req(req);
         RETURN(0);
 }
