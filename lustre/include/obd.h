@@ -69,7 +69,7 @@ struct lov_oinfo {                 /* per-stripe data structure */
         struct list_head loi_write_item;
         struct list_head loi_read_item;
 
-        unsigned loi_kms_valid:1;
+        unsigned long loi_kms_valid:1;
         __u64 loi_kms;             /* known minimum size */
         struct ost_lvb loi_lvb;
         struct osc_async_rc     loi_ar;
@@ -238,7 +238,7 @@ struct oig_callback_context {
          * callees of this method are encouraged to abort their state
          * in the oig.  This may be called multiple times. */
         void (*occ_interrupted)(struct oig_callback_context *occ);
-        unsigned int interrupted:1;
+        unsigned long interrupted:1;
 };
 
 /* Individual type definitions */
@@ -464,7 +464,7 @@ struct client_obd {
         struct obd_export       *cl_mgc_mgsexp;
 
         /* Flags section */
-        unsigned int             cl_checksum:1; /* debug checksums */
+        unsigned long            cl_checksum:1; /* debug checksums */
 
         /* also protected by the poorly named _loi_list_lock lock above */
         struct osc_async_rc      cl_ar;
@@ -631,7 +631,7 @@ struct lov_qos {
         __u32              *lq_rr_array;    /* round-robin optimized list */
         unsigned int        lq_rr_size;     /* rr array size */
         unsigned int        lq_prio_free;   /* priority for free space */
-        unsigned int        lq_dirty:1,     /* recalc qos data */
+        unsigned long       lq_dirty:1,     /* recalc qos data */
                             lq_dirty_rr:1,  /* recalc round-robin list */
                             lq_same_space:1,/* the ost's all have approx.
                                                the same space avail */
@@ -644,7 +644,7 @@ struct lov_tgt_desc {
         struct ltd_qos      ltd_qos;     /* qos info per target */
         __u32               ltd_gen;
         __u32               ltd_index;   /* index in lov_obd->tgts */
-        unsigned int        ltd_active:1,/* is this target up for requests */
+        unsigned long       ltd_active:1,/* is this target up for requests */
                             ltd_activate:1,/* should this target be activated */
                             ltd_reap:1;  /* should this target be deleted */
 };
@@ -863,21 +863,21 @@ struct obd_device {
         struct lu_device       *obd_lu_dev;
 
         int                     obd_minor;
-        unsigned int obd_attached:1,      /* finished attach */
-                     obd_set_up:1,        /* finished setup */
-                     obd_recovering:1,    /* there are recoverable clients */
-                     obd_abort_recovery:1,/* somebody ioctl'ed us to abort */
-                     obd_replayable:1,    /* recovery is enabled; inform clients */
-                     obd_no_transno:1,    /* no committed-transno notification */
-                     obd_no_recov:1,      /* fail instead of retry messages */
-                     obd_req_replaying:1, /* replaying requests */
-                     obd_stopping:1,      /* started cleanup */
-                     obd_starting:1,      /* started setup */
-                     obd_force:1,         /* cleanup with > 0 obd refcount */
-                     obd_fail:1,          /* cleanup with failover */
-                     obd_async_recov:1,   /* allow asyncronous orphan cleanup */
-                     obd_no_conn:1,       /* deny new connections */
-                     obd_inactive:1;      /* device active/inactive
+        unsigned long obd_attached:1,      /* finished attach */
+                      obd_set_up:1,        /* finished setup */
+                      obd_recovering:1,    /* there are recoverable clients */
+                      obd_abort_recovery:1,/* somebody ioctl'ed us to abort */
+                      obd_replayable:1,    /* recovery is enabled; inform clients */
+                      obd_no_transno:1,    /* no committed-transno notification */
+                      obd_no_recov:1,      /* fail instead of retry messages */
+                      obd_req_replaying:1, /* replaying requests */
+                      obd_stopping:1,      /* started cleanup */
+                      obd_starting:1,      /* started setup */
+                      obd_force:1,         /* cleanup with > 0 obd refcount */
+                      obd_fail:1,          /* cleanup with failover */
+                      obd_async_recov:1,   /* allow asyncronous orphan cleanup */
+                      obd_no_conn:1,       /* deny new connections */
+                      obd_inactive:1;      /* device active/inactive
                                            * (for /proc/status only!!) */
         /* uuid-export hash body */
         struct lustre_class_hash_body *obd_uuid_hash_body;

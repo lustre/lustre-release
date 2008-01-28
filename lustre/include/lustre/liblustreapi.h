@@ -59,8 +59,13 @@ struct find_param {
         int     size_sign;
         unsigned long long size_units;
 
-        unsigned zeroend:1, recursive:1, got_uuids:1, obds_printed:1,
-                 exclude_pattern:1, exclude_type:1, have_fileinfo:1;
+        unsigned long   zeroend:1,
+                        recursive:1,
+                        got_uuids:1,
+                        obds_printed:1,
+                        exclude_pattern:1,
+                        exclude_type:1,
+                        have_fileinfo:1;
 
         int     verbose;
         int     quiet;

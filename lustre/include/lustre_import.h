@@ -90,7 +90,7 @@ struct obd_import {
         spinlock_t                imp_lock;
 
         /* flags */
-        unsigned int              imp_no_timeout:1,       /* timeouts are disabled */
+        unsigned long             imp_no_timeout:1,       /* timeouts are disabled */
                                   imp_invalid:1,          /* evicted */
                                   imp_deactive:1,         /* administratively disabled */
                                   imp_replayable:1,       /* try to recover the import */
