@@ -91,7 +91,7 @@ struct obd_export {
         /* ^ protects exp_outstanding_replies too */
         __u64                     exp_connect_flags;
         int                       exp_flags;
-        unsigned int              exp_failed:1,
+        unsigned long             exp_failed:1,
                                   exp_disconnected:1,
                                   exp_connecting:1,
                                   exp_replay_needed:1,

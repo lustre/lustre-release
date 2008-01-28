@@ -218,12 +218,12 @@ struct ptlrpc_reply_state {
         struct list_head       rs_debug_list;
 #endif
         /* updates to following flag serialised by srv_request_lock */
-        unsigned int           rs_difficult:1;     /* ACK/commit stuff */
-        unsigned int           rs_scheduled:1;     /* being handled? */
-        unsigned int           rs_scheduled_ever:1;/* any schedule attempts? */
-        unsigned int           rs_handled:1;  /* been handled yet? */
-        unsigned int           rs_on_net:1;   /* reply_out_callback pending? */
-        unsigned int           rs_prealloc:1; /* rs from prealloc list */
+        unsigned long          rs_difficult:1;     /* ACK/commit stuff */
+        unsigned long          rs_scheduled:1;     /* being handled? */
+        unsigned long          rs_scheduled_ever:1;/* any schedule attempts? */
+        unsigned long          rs_handled:1;  /* been handled yet? */
+        unsigned long          rs_on_net:1;   /* reply_out_callback pending? */
+        unsigned long          rs_prealloc:1; /* rs from prealloc list */
 
         int                    rs_size;
         __u64                  rs_transno;
@@ -267,7 +267,7 @@ struct ptlrpc_request {
         int rq_status;
         spinlock_t rq_lock;
         /* client-side flags are serialized by rq_lock */
-        unsigned int rq_intr:1, rq_replied:1, rq_err:1,
+        unsigned long rq_intr:1, rq_replied:1, rq_err:1,
                 rq_timedout:1, rq_resend:1, rq_restart:1,
                 /*
                  * when ->rq_replay is set, request is kept by the client even
@@ -459,10 +459,10 @@ struct ptlrpc_bulk_page {
 #define BULK_PUT_SOURCE   3
 
 struct ptlrpc_bulk_desc {
-        unsigned int bd_success:1;              /* completed successfully */
-        unsigned int bd_network_rw:1;           /* accessible to the network */
-        unsigned int bd_type:2;                 /* {put,get}{source,sink} */
-        unsigned int bd_registered:1;           /* client side */
+        unsigned long bd_success:1;              /* completed successfully */
+        unsigned long bd_network_rw:1;           /* accessible to the network */
+        unsigned long bd_type:2;                 /* {put,get}{source,sink} */
+        unsigned long bd_registered:1;           /* client side */
         spinlock_t   bd_lock;                   /* serialise with callback */
         int bd_import_generation;
         struct obd_export *bd_export;

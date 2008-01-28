@@ -112,7 +112,7 @@ struct obd_import {
         spinlock_t                imp_lock;
 
         /* flags */
-        unsigned int              imp_invalid:1,          /* evicted */
+        unsigned long             imp_invalid:1,          /* evicted */
                                   imp_deactive:1,         /* administratively disabled */
                                   imp_replayable:1,       /* try to recover the import */
                                   imp_dlm_fake:1,         /* don't run recovery (timeout instead) */
