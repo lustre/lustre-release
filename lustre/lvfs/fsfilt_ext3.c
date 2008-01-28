@@ -39,6 +39,7 @@
 #include <linux/quota.h>
 #include <linux/quotaio_v1.h>
 #include <linux/quotaio_v2.h>
+#include <linux/parser.h>
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
 #include <linux/ext3_xattr.h>
 #else
@@ -1382,19 +1383,34 @@ out:
 
 static int fsfilt_ext3_setup(struct super_block *sb)
 {
+        struct ext3_sb_info *sbi = EXT3_SB(sb);
 #if 0
-        EXT3_SB(sb)->dx_lock = fsfilt_ext3_dx_lock;
-        EXT3_SB(sb)->dx_unlock = fsfilt_ext3_dx_unlock;
+        sbi->dx_lock = fsfilt_ext3_dx_lock;
+        sbi->dx_unlock = fsfilt_ext3_dx_unlock;
 #endif
 #ifdef S_PDIROPS
         CWARN("Enabling PDIROPS\n");
-        set_opt(EXT3_SB(sb)->s_mount_opt, PDIROPS);
+        set_opt(sbi->s_mount_opt, PDIROPS);
         sb->s_flags |= S_PDIROPS;
 #endif
         if (!EXT3_HAS_COMPAT_FEATURE(sb, EXT3_FEATURE_COMPAT_DIR_INDEX))
                 CWARN("filesystem doesn't have dir_index feature enabled\n");
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,13)) && HAVE_QUOTA_SUPPORT
-        set_opt(EXT3_SB(sb)->s_mount_opt, QUOTA);
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,6)) && HAVE_QUOTA_SUPPORT
+        /* enable journaled quota support */
+        /* kfreed in ext3_put_super() */
+        sbi->s_qf_names[USRQUOTA] = kstrdup("lquota.user", GFP_KERNEL);
+        if (!sbi->s_qf_names[USRQUOTA])
+                return -ENOMEM;
+        sbi->s_qf_names[GRPQUOTA] = kstrdup("lquota.group", GFP_KERNEL);
+        if (!sbi->s_qf_names[GRPQUOTA]) {
+                kfree(sbi->s_qf_names[USRQUOTA]);
+                sbi->s_qf_names[USRQUOTA] = NULL;
+                return -ENOMEM;
+        }
+        sbi->s_jquota_fmt = QFMT_VFS_V0;
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,13))
+        set_opt(sbi->s_mount_opt, QUOTA);
+#endif
 #endif
         return 0;
 }

@@ -1481,11 +1481,24 @@ static int server_statfs (struct dentry *dentry, struct kstatfs *buf)
         RETURN(0);
 }
 
+static int server_show_options(struct seq_file *seq, struct vfsmount *vfsmnt)
+{
+        struct vfsmount *mnt = s2lsi(vfsmnt->mnt_sb)->lsi_srv_mnt;
+        ENTRY;
+
+        if (mnt && mnt->mnt_sb && mnt->mnt_sb->s_op->show_options) {
+                int rc = mnt->mnt_sb->s_op->show_options(seq, mnt);
+                RETURN(rc);
+        }
+        RETURN(0);
+}
+
 static struct super_operations server_ops =
 {
         .put_super      = server_put_super,
         .umount_begin   = server_umount_begin, /* umount -f */
         .statfs         = server_statfs,
+        .show_options   = server_show_options,
 };
 
 #define log2(n) ffz(~(n))

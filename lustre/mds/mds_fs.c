@@ -506,7 +506,9 @@ int mds_fs_setup(struct obd_device *obd, struct vfsmount *mnt)
         /* why not mnt->mnt_sb instead of mnt->mnt_root->d_inode->i_sb? */
         obd->u.obt.obt_sb = mnt->mnt_root->d_inode->i_sb;
 
-        fsfilt_setup(obd, obd->u.obt.obt_sb);
+        rc = fsfilt_setup(obd, obd->u.obt.obt_sb);
+        if (rc)
+                RETURN(rc);
 
         OBD_SET_CTXT_MAGIC(&obd->obd_lvfs_ctxt);
         obd->obd_lvfs_ctxt.pwdmnt = mnt;

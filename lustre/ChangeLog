@@ -250,12 +250,12 @@ Severity   : normal
 Frequency  : always
 Bugzilla   : 10600
 Description: shrink/enlarge qunit size when needed; fix the problem of coarse
-             grain of quota doing harm to quota's accuracy
+	     grain of quota doing harm to quota's accuracy
 Details    : qunit size will be changed when quota limitation is too low/high;
-             record the pending quota write in order to get more accureate
-             quota; delete the patch for bug12588, which is unnecessary when
-             this patch is landed. This bug also contains 14526, 14299, 14601
-             and 13794, which are found and landed during v1_4_12.
+	     record the pending quota write in order to get more accureate
+	     quota; delete the patch for bug12588, which is unnecessary when
+	     this patch is landed. This bug also contains fixes for bug 14526,
+	     14299, 14601 and 13794.
 
 Severity   : normal
 Bugzilla   : 14225
@@ -268,8 +268,14 @@ Severity   : normal
 Bugzilla   : 14360
 Description: Heavy nfs access might result in deadlocks
 Details    : After ELC code landed, it is now improper to enqueue any mds
-             locks under och_sem, because enqueue might want to decide to
+	     locks under och_sem, because enqueue might want to decide to
 	     cancel open locks for same inode we are holding och_sem for.
+
+Severity   : normal
+Bugzilla   : 14443
+Description: 35% write performance drop with ldiskfs2 when quotas are on
+Details    : Enable ext3 journalled quota by default to improve performance
+	     when quotas are turned on.
 
 --------------------------------------------------------------------------------
 
