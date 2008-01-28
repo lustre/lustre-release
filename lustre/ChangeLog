@@ -277,6 +277,15 @@ Description: 35% write performance drop with ldiskfs2 when quotas are on
 Details    : Enable ext3 journalled quota by default to improve performance
 	     when quotas are turned on.
 
+Severity   : normal
+Bugzilla   : 13843
+Description: Client eviction while running blogbench
+Details    : A lot of unlink operations with concurrent I/O can lead to a
+	     deadlock causing evictions. To address the problem, the number of
+	     oustanding OST_DESTROY requests is now throttled to
+	     max_rpcs_in_flight per OSC and LDLM_FL_DISCARD_DATA blocking
+	     callbacks are processed in priority.
+
 --------------------------------------------------------------------------------
 
 2007-12-07         Cluster File Systems, Inc. <info@clusterfs.com>

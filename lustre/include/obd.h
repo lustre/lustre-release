@@ -390,6 +390,10 @@ struct client_obd {
         struct obd_histogram     cl_read_offset_hist;
         struct obd_histogram     cl_write_offset_hist;
 
+        /* number of in flight destroy rpcs is limited to max_rpcs_in_flight */
+        atomic_t                 cl_destroy_in_flight;
+        cfs_waitq_t              cl_destroy_waitq;
+
         struct mdc_rpc_lock     *cl_rpc_lock;
         struct mdc_rpc_lock     *cl_setattr_lock;
         struct mdc_rpc_lock     *cl_close_lock;
