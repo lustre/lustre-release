@@ -13,6 +13,12 @@ tbd  Sun Microsystems, Inc.
         removed cwd "./" (refer to Bugzilla 14399).
 
 Severity   : normal
+Bugzilla   : 13647
+Description: Lustre make rpms failed.
+Details    : Remove ldiskfs spec file to avoids rpmbuild be confused when
+             builds Lustre rpms from tarball.
+
+Severity   : normal
 Frequency  : rare on shutdown ost
 Bugzilla   : 14608
 Description: If llog cancel was not send before clean_exports phase, this can
