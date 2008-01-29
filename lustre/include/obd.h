@@ -921,8 +921,9 @@ struct obd_device {
         struct list_head                 obd_uncommitted_replies;
         spinlock_t                       obd_uncommitted_replies_lock;
         cfs_timer_t                      obd_recovery_timer;
-        time_t                           obd_recovery_start;
-        time_t                           obd_recovery_end;
+        time_t                           obd_recovery_start; /* seconds */
+        time_t                           obd_recovery_end; /* seconds */
+        time_t                           obd_recovery_max_time; /* seconds, bz13079 */
         
         /* new recovery stuff from CMD2 */
         struct target_recovery_data      obd_recovery_data;

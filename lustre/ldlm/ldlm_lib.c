@@ -1173,18 +1173,22 @@ void target_cancel_recovery_timer(struct obd_device *obd)
 
 static void reset_recovery_timer(struct obd_device *obd)
 {
+        time_t timeout_shift = OBD_RECOVERY_TIMEOUT;
         spin_lock_bh(&obd->obd_processing_task_lock);
         if (!obd->obd_recovering) {
                 spin_unlock_bh(&obd->obd_processing_task_lock);
                 return;
         }
-        cfs_timer_arm(&obd->obd_recovery_timer,
-                      cfs_time_shift(OBD_RECOVERY_TIMEOUT));
+        if (cfs_time_current_sec() + OBD_RECOVERY_TIMEOUT > 
+            obd->obd_recovery_start + obd->obd_recovery_max_time)
+                timeout_shift = obd->obd_recovery_start + 
+                        obd->obd_recovery_max_time - cfs_time_current_sec();
+        cfs_timer_arm(&obd->obd_recovery_timer, cfs_time_shift(timeout_shift));
         spin_unlock_bh(&obd->obd_processing_task_lock);
         CDEBUG(D_HA, "%s: timer will expire in %u seconds\n", obd->obd_name,
-               OBD_RECOVERY_TIMEOUT);
+               (unsigned int)timeout_shift);
         /* Only used for lprocfs_status */
-        obd->obd_recovery_end = CURRENT_SECONDS + OBD_RECOVERY_TIMEOUT;
+        obd->obd_recovery_end = CURRENT_SECONDS + timeout_shift;
 }
 
 
@@ -1615,6 +1619,8 @@ void target_recovery_init(struct obd_device *obd, svc_handler_t handler)
         obd->obd_recovery_start = CURRENT_SECONDS;
         /* Only used for lprocfs_status */
         obd->obd_recovery_end = obd->obd_recovery_start + OBD_RECOVERY_TIMEOUT;
+        /* bz13079: this should be set to desired value for ost but not for mds */
+        obd->obd_recovery_max_time = OBD_RECOVERY_MAX_TIME;
 }
 EXPORT_SYMBOL(target_recovery_init);
 

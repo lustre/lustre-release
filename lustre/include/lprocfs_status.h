@@ -457,6 +457,13 @@ struct file_operations name##_fops = {                                     \
 #define LPROC_SEQ_FOPS_RO(name)         __LPROC_SEQ_FOPS(name, NULL)
 #define LPROC_SEQ_FOPS(name)            __LPROC_SEQ_FOPS(name, name##_seq_write)
 
+/* lprocfs_status.c: read recovery max time bz13079 */
+int lprocfs_obd_rd_recovery_maxtime(char *page, char **start, off_t off,
+                                    int count, int *eof, void *data);
+
+/* lprocfs_status.c: write recovery max time bz13079 */
+int lprocfs_obd_wr_recovery_maxtime(struct file *file, const char *buffer,
+                                    unsigned long count, void *data);
 #else
 /* LPROCFS is not defined */
 static inline void lprocfs_counter_add(struct lprocfs_stats *stats,
