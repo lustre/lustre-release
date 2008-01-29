@@ -10,7 +10,7 @@ int LNetNIInit(lnet_pid_t requested_pid);
 int LNetNIFini(void);
 
 int LNetGetId(unsigned int index, lnet_process_id_t *id);
-int LNetDist(lnet_nid_t nid, lnet_nid_t *srcnid, int *order);
+int LNetDist(lnet_nid_t nid, lnet_nid_t *srcnid, __u32 *order);
 int LNetCtl(unsigned int cmd, void *arg);
 void LNetSnprintHandle (char *str, int str_len, lnet_handle_any_t handle);
 

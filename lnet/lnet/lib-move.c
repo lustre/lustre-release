@@ -2424,7 +2424,7 @@ LNetGet(lnet_nid_t self, lnet_handle_md_t mdh,
 }
 
 int
-LNetDist (lnet_nid_t dstnid, lnet_nid_t *srcnidp, int *orderp)
+LNetDist (lnet_nid_t dstnid, lnet_nid_t *srcnidp, __u32 *orderp)
 {
 	struct list_head *e;
         lnet_ni_t        *ni;
@@ -2432,7 +2432,7 @@ LNetDist (lnet_nid_t dstnid, lnet_nid_t *srcnidp, int *orderp)
         lnet_remotenet_t *rnet;
         __u32             dstnet = LNET_NIDNET(dstnid);
         int               hops;
-        int               order = 2;
+        __u32             order = 2;
 
         /* if !local_nid_dist_zero, I don't return a distance of 0 ever
          * (when lustre sees a distance of 0, it substitutes 0@lo), so I
