@@ -265,19 +265,20 @@ restore_to_default_flavor()
 
     echo "restoring to default flavor..."
 
-    nrule=`do_facet mgs cat $proc 2>/dev/null | grep "$FSNAME.srpc.flavor." | wc -l`
+    nrule=`do_facet mgs cat $proc 2>/dev/null | grep ".srpc.flavor." | wc -l`
 
     # remove all existing rules if any
     if [ $nrule -ne 0 ]; then
-        echo "remove existing $nrule rules"
-        for rule in `do_facet mgs cat $proc 2>/dev/null | grep "$FSNAME.srpc.flavor."`; do
+        echo "$nrule existing rules"
+        for rule in `do_facet mgs cat $proc 2>/dev/null | grep ".srpc.flavor."`; do
+            echo "remove rule: $rule"
             spec=`echo $rule | awk -F = '{print $1}'`
             do_facet mgs "$LCTL conf_param $spec="
         done
     fi
 
     # verify no rules left
-    nrule=`do_facet mgs cat $proc 2>/dev/null | grep "$FSNAME.srpc.flavor." | wc -l`
+    nrule=`do_facet mgs cat $proc 2>/dev/null | grep ".srpc.flavor." | wc -l`
     [ $nrule -ne 0 ] && error "still $nrule rules left"
 
     # wait for default flavor to be applied
