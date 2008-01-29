@@ -919,7 +919,7 @@ static obd_count osc_checksum_bulk(int nob, obd_count pg_count,
 
         LASSERT (pg_count > 0);
         while (nob > 0 && pg_count > 0) {
-                char *ptr = cfs_kmap(pga[i]->pg);
+                unsigned char *ptr = cfs_kmap(pga[i]->pg);
                 int off = pga[i]->off & ~CFS_PAGE_MASK;
                 int count = pga[i]->count > nob ? nob : pga[i]->count;
 

@@ -594,7 +594,7 @@ void lustre_shrink_reply_v1(struct ptlrpc_request *req, int segment,
                 msg->lm_buflens[msg->lm_bufcount - 1] = 0;
         }
 
-        req->rq_replen = lustre_msg_size_v1(msg->lm_bufcount, msg->lm_buflens);
+        req->rq_replen = lustre_msg_size_v1(msg->lm_bufcount, (int *)msg->lm_buflens);
 }
 
 void lustre_shrink_reply_v2(struct ptlrpc_request *req, int segment,
@@ -633,7 +633,7 @@ void lustre_shrink_reply_v2(struct ptlrpc_request *req, int segment,
                 msg->lm_buflens[msg->lm_bufcount - 1] = 0;
         }
 
-        req->rq_replen = lustre_msg_size_v2(msg->lm_bufcount, msg->lm_buflens);
+        req->rq_replen = lustre_msg_size_v2(msg->lm_bufcount, (int *)msg->lm_buflens);
 }
 
 /*

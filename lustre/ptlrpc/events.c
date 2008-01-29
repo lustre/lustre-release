@@ -395,12 +395,12 @@ int ptlrpc_uuid_to_peer (struct obd_uuid *uuid,
                          lnet_process_id_t *peer, lnet_nid_t *self)
 {
         int               best_dist = 0;
-        int               best_order = 0;
+        __u32             best_order = 0;
         int               count = 0;
         int               rc = -ENOENT;
         int               portals_compatibility;
         int               dist;
-        int               order;
+        __u32             order;
         lnet_nid_t        dst_nid;
         lnet_nid_t        src_nid;
 
@@ -420,7 +420,6 @@ int ptlrpc_uuid_to_peer (struct obd_uuid *uuid,
                         break;
                 }
                 
-                LASSERT (order >= 0);
                 if (rc < 0 ||
                     dist < best_dist ||
                     (dist == best_dist && order < best_order)) {

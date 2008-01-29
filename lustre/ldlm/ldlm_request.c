@@ -740,7 +740,7 @@ int ldlm_cli_enqueue(struct obd_export *exp, struct ptlrpc_request **reqp,
 }
 
 static int ldlm_cli_convert_local(struct ldlm_lock *lock, int new_mode,
-                                  int *flags)
+                                  __u32 *flags)
 {
         struct ldlm_resource *res;
         int rc;
@@ -767,7 +767,7 @@ static int ldlm_cli_convert_local(struct ldlm_lock *lock, int new_mode,
  * conversion of locks which are on the waiting or converting queue */
 /* Caller of this code is supposed to take care of lock readers/writers
    accounting */
-int ldlm_cli_convert(struct lustre_handle *lockh, int new_mode, int *flags)
+int ldlm_cli_convert(struct lustre_handle *lockh, int new_mode, __u32 *flags)
 {
         struct ldlm_request *body;
         struct ldlm_reply *reply;

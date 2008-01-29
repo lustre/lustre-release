@@ -130,7 +130,7 @@ struct ll_recreate_obj {
 };
 
 struct obd_uuid {
-        __u8 uuid[40];
+        char uuid[40];
 };
 
 static inline int obd_uuid_equals(struct obd_uuid *u1, struct obd_uuid *u2)
@@ -178,7 +178,7 @@ static inline char *obd_uuid2str(struct obd_uuid *uuid)
 #define QFMT_LDISKFS 2  /* QFMT_VFS_V0(2), quota format for ldiskfs */
 
 struct if_quotacheck {
-        __u8                    obd_type[16];
+        char                    obd_type[16];
         struct obd_uuid         obd_uuid;
 };
 
@@ -255,7 +255,7 @@ struct if_quotactl {
         __u32                   qc_stat;
         struct obd_dqinfo       qc_dqinfo;
         struct obd_dqblk        qc_dqblk;
-        __u8                    obd_type[16];
+        char                    obd_type[16];
         struct obd_uuid         obd_uuid;
 };
 

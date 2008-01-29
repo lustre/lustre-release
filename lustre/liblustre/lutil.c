@@ -129,7 +129,7 @@ void liblustre_init_random()
         ll_srand(tv.tv_sec ^ __swab32(seed[0]), tv.tv_usec ^__swab32(getpid()));
 }
 
-static void init_capability(int *res)
+static void init_capability(__u32 *res)
 {
 #ifdef HAVE_LIBCAP
         cap_t syscap;

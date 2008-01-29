@@ -682,7 +682,7 @@ ldlm_mode_t ldlm_lock_match(struct ldlm_namespace *ns, int flags,
                             ldlm_policy_data_t *, ldlm_mode_t mode,
                             struct lustre_handle *);
 struct ldlm_resource *ldlm_lock_convert(struct ldlm_lock *lock, int new_mode,
-                                        int *flags);
+                                        __u32 *flags);
 void ldlm_lock_cancel(struct ldlm_lock *lock);
 void ldlm_cancel_locks_for_export(struct obd_export *export);
 void ldlm_reprocess_all(struct ldlm_resource *res);
@@ -760,7 +760,7 @@ int ldlm_cli_enqueue_local(struct ldlm_namespace *ns,
                            struct lustre_handle *lockh);
 int ldlm_server_ast(struct lustre_handle *lockh, struct ldlm_lock_desc *new,
                     void *data, __u32 data_len);
-int ldlm_cli_convert(struct lustre_handle *, int new_mode, int *flags);
+int ldlm_cli_convert(struct lustre_handle *, int new_mode, __u32 *flags);
 int ldlm_cli_update_pool(struct ptlrpc_request *req);
 int ldlm_cli_cancel(struct lustre_handle *lockh);
 int ldlm_cli_cancel_unused(struct ldlm_namespace *, struct ldlm_res_id *,
