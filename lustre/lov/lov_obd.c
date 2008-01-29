@@ -2378,7 +2378,7 @@ static int lov_get_info(struct obd_export *exp, __u32 keylen,
                 GOTO(out, rc = -ENXIO);
         } else if (KEY_IS(KEY_LAST_ID)) {
                 struct obd_id_info *info = val;
-                int size = sizeof(obd_id);
+                __u32 size = sizeof(obd_id);
                 struct lov_tgt_desc *tgt;
 
                 LASSERT(*vallen == sizeof(struct obd_id_info));

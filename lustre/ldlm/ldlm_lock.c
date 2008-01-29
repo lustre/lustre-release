@@ -1630,7 +1630,7 @@ void ldlm_cancel_locks_for_export(struct obd_export *exp)
 }
 
 struct ldlm_resource *ldlm_lock_convert(struct ldlm_lock *lock, int new_mode,
-                                        int *flags)
+                                        __u32 *flags)
 {
         struct list_head rpc_list = LIST_HEAD_INIT(rpc_list);
         struct ldlm_resource *res;

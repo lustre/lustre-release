@@ -191,17 +191,17 @@ typedef int (write_proc_t)(struct file *file, const char *buffer,
 
 static __inline__ int ext2_set_bit(int nr, void *addr)
 {
-        return set_bit(nr, (long*)addr);
+        return set_bit(nr, addr);
 }
 
 static __inline__ int ext2_clear_bit(int nr, void *addr)
 {
-        return clear_bit(nr, (long*)addr);
+        return clear_bit(nr, addr);
 }
 
 static __inline__ int ext2_test_bit(int nr, void *addr)
 {
-        return test_bit(nr, (long*)addr);
+        return test_bit(nr, addr);
 }
 
 /* modules */

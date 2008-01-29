@@ -975,7 +975,7 @@ existing_lock:
         if (dlm_req->lock_desc.l_resource.lr_type == LDLM_EXTENT)
                 lock->l_req_extent = lock->l_policy_data.l_extent;
 
-        err = ldlm_lock_enqueue(ns, &lock, cookie, &flags);
+        err = ldlm_lock_enqueue(ns, &lock, cookie, (int *)&flags);
         if (err)
                 GOTO(out, err);
 

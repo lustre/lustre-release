@@ -108,7 +108,7 @@ OS=`uname`
 if test x$OS = xAIX; then
 $LD -shared -o $CWD/liblustre.so $ALL_OBJS -lpthread -Xlinker -bnoipath ../../libsyscall.so
 else
-$LD -shared -o $CWD/liblustre.so $ALL_OBJS $CAP_LIBS $PTHREAD_LIBS
+$LD -shared -nostdlib -o $CWD/liblustre.so $ALL_OBJS $CAP_LIBS $PTHREAD_LIBS
 fi
 
 rm -rf $sysio_tmp

@@ -550,7 +550,7 @@ int lustre_shrink_msg_v1(struct lustre_msg_v1 *msg, int segment,
         }
 
 out:
-        return lustre_msg_size_v1(msg->lm_bufcount, msg->lm_buflens);
+        return lustre_msg_size_v1(msg->lm_bufcount, (int *)msg->lm_buflens);
 }
 
 int lustre_shrink_msg_v2(struct lustre_msg_v2 *msg, int segment,
@@ -588,7 +588,7 @@ int lustre_shrink_msg_v2(struct lustre_msg_v2 *msg, int segment,
         }
 
 out:
-        return lustre_msg_size_v2(msg->lm_bufcount, msg->lm_buflens);
+        return lustre_msg_size_v2(msg->lm_bufcount, (int *)msg->lm_buflens);
 }
 
 /*
