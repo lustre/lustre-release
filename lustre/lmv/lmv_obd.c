@@ -1128,7 +1128,8 @@ static int lmv_getxattr(struct obd_export *exp, const struct lu_fid *fid,
 static int lmv_setxattr(struct obd_export *exp, const struct lu_fid *fid,
                         struct obd_capa *oc, obd_valid valid, const char *name,
                         const char *input, int input_size, int output_size,
-                        int flags, struct ptlrpc_request **request)
+                        int flags, __u32 suppgid,
+                        struct ptlrpc_request **request)
 {
         struct obd_device *obd = exp->exp_obd;
         struct lmv_obd *lmv = &obd->u.lmv;
@@ -1145,7 +1146,8 @@ static int lmv_setxattr(struct obd_export *exp, const struct lu_fid *fid,
                 RETURN(PTR_ERR(tgt_exp));
 
         rc = md_setxattr(tgt_exp, fid, oc, valid, name,
-                         input, input_size, output_size, flags, request);
+                         input, input_size, output_size, flags, suppgid,
+                         request);
 
         RETURN(rc);
 }
@@ -1614,7 +1616,8 @@ lmv_enqueue(struct obd_export *exp, struct ldlm_enqueue_info *einfo,
 static int
 lmv_getattr_name(struct obd_export *exp, const struct lu_fid *fid,
                  struct obd_capa *oc, const char *filename, int namelen,
-                 obd_valid valid, int ea_size, struct ptlrpc_request **request)
+                 obd_valid valid, int ea_size, __u32 suppgid,
+                 struct ptlrpc_request **request)
 {
         struct obd_device *obd = exp->exp_obd;
         struct lmv_obd *lmv = &obd->u.lmv;
@@ -1654,7 +1657,7 @@ repeat:
                namelen, filename, PFID(fid), PFID(&rid));
 
         rc = md_getattr_name(tgt_exp, &rid, oc, filename, namelen, valid,
-                             ea_size, request);
+                             ea_size, suppgid, request);
         if (rc == 0) {
                 body = lustre_msg_buf((*request)->rq_repmsg,
                                       REQ_REC_OFF, sizeof(*body));
@@ -1676,7 +1679,7 @@ repeat:
 
                         rc = md_getattr_name(tgt_exp, &rid, NULL, NULL, 1,
                                              valid | OBD_MD_FLCROSSREF,
-                                             ea_size, &req);
+                                             ea_size, suppgid, &req);
                         ptlrpc_req_finished(*request);
                         *request = req;
                 }
@@ -2796,7 +2799,7 @@ int lmv_clear_open_replay_data(struct obd_export *exp,
 
 static int lmv_get_remote_perm(struct obd_export *exp,
                                const struct lu_fid *fid,
-                               struct obd_capa *oc,
+                               struct obd_capa *oc, __u32 suppgid,
                                struct ptlrpc_request **request)
 {
         struct obd_device *obd = exp->exp_obd;
@@ -2814,7 +2817,7 @@ static int lmv_get_remote_perm(struct obd_export *exp,
         if (IS_ERR(tgt_exp))
                 RETURN(PTR_ERR(tgt_exp));
 
-        rc = md_get_remote_perm(tgt_exp, fid, oc, request);
+        rc = md_get_remote_perm(tgt_exp, fid, oc, suppgid, request);
 
         RETURN(rc);
 }

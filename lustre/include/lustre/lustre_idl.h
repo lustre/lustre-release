@@ -753,9 +753,6 @@ extern void lustre_swab_lov_mds_md(struct lov_mds_md *llm);
 #define XATTR_NAME_ACL_DEFAULT  "system.posix_acl_default"
 #define XATTR_NAME_LOV          "trusted.lov"
 
-/* remote ACL */
-#define XATTR_NAME_LUSTRE_ACL   "system.lustre_acl"
-
 #define OBD_MD_FLID        (0x00000001ULL) /* object ID */
 #define OBD_MD_FLATIME     (0x00000002ULL) /* access time */
 #define OBD_MD_FLMTIME     (0x00000004ULL) /* data modification time */
@@ -802,6 +799,11 @@ extern void lustre_swab_lov_mds_md(struct lov_mds_md *llm);
 #define OBD_MD_FLOSSCAPA   (0x0000040000000000ULL) /* OSS capability */
 #define OBD_MD_FLCKSPLIT   (0x0000080000000000ULL) /* Check split on server */
 #define OBD_MD_FLCROSSREF  (0x0000100000000000ULL) /* Cross-ref case */
+
+#define OBD_MD_FLRMTLSETFACL    (0x0001000000000000ULL) /* lfs lsetfacl case */
+#define OBD_MD_FLRMTLGETFACL    (0x0002000000000000ULL) /* lfs lgetfacl case */
+#define OBD_MD_FLRMTRSETFACL    (0x0004000000000000ULL) /* lfs rsetfacl case */
+#define OBD_MD_FLRMTRGETFACL    (0x0008000000000000ULL) /* lfs rgetfacl case */
 
 #define OBD_MD_FLGETATTR (OBD_MD_FLID    | OBD_MD_FLATIME | OBD_MD_FLMTIME | \
                           OBD_MD_FLCTIME | OBD_MD_FLSIZE  | OBD_MD_FLBLKSZ | \
@@ -1164,10 +1166,13 @@ struct mds_remote_perm {
         __u32           rp_access_perm; /* MAY_READ/WRITE/EXEC */
 };
 
-/* setxid permissions for mds_setxid_perm.mp_perm */
-#define LUSTRE_SETUID_PERM 0x01
-#define LUSTRE_SETGID_PERM 0x02
-#define LUSTRE_SETGRP_PERM 0x04
+/* permissions for md_perm.mp_perm */
+enum {
+        CFS_SETUID_PERM = 0x01,
+        CFS_SETGID_PERM = 0x02,
+        CFS_SETGRP_PERM = 0x04,
+        CFS_RMTACL_PERM = 0x08
+};
 
 extern void lustre_swab_mds_remote_perm(struct mds_remote_perm *p);
 
@@ -1294,6 +1299,8 @@ extern void lustre_swab_mdt_rec_setattr (struct mdt_rec_setattr *sa);
 #define MAY_VTX_PART    (1 << 12)
 /* full VTX permission check */
 #define MAY_VTX_FULL    (1 << 13)
+/* lfs rgetfacl permission check */
+#define MAY_RGETFACL    (1 << 14)
 
 enum {
         MDS_CHECK_SPLIT  = 1 << 0,

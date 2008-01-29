@@ -574,36 +574,6 @@ int class_del_conn(struct obd_device *obd, struct lustre_cfg *lcfg)
         RETURN(rc);
 }
 
-int class_sec_flavor(struct obd_device *obd, struct lustre_cfg *lcfg)
-{
-        struct sec_flavor_config *conf;
-        ENTRY;
-
-        if (strcmp(obd->obd_type->typ_name, LUSTRE_MDC_NAME) &&
-            strcmp(obd->obd_type->typ_name, LUSTRE_OSC_NAME)) {
-                CERROR("Can't set security flavor on obd %s\n",
-                       obd->obd_type->typ_name);
-                RETURN(-EINVAL);
-        }
-
-        if (LUSTRE_CFG_BUFLEN(lcfg, 1) != sizeof(*conf)) {
-                CERROR("invalid data\n");
-                RETURN(-EINVAL);
-        }
-
-        conf = &obd->u.cli.cl_sec_conf;
-        memcpy(conf, lustre_cfg_buf(lcfg, 1), sizeof(*conf));
-
-#ifdef __BIG_ENDIAN
-        __swab32s(&conf->sfc_rpc_flavor);
-        __swab32s(&conf->sfc_bulk_csum);
-        __swab32s(&conf->sfc_bulk_priv);
-        __swab32s(&conf->sfc_flags);
-#endif
-
-        RETURN(0);
-}
-
 CFS_LIST_HEAD(lustre_profile_list);
 
 struct lustre_profile *class_get_profile(const char * prof)
@@ -827,10 +797,6 @@ int class_process_config(struct lustre_cfg *lcfg)
         }
         case LCFG_DEL_CONN: {
                 err = class_del_conn(obd, lcfg);
-                GOTO(out, err = 0);
-        }
-        case LCFG_SEC_FLAVOR: {
-                err = class_sec_flavor(obd, lcfg);
                 GOTO(out, err = 0);
         }
         default: {

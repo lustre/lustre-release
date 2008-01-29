@@ -232,9 +232,9 @@ int princ_is_local_realm(krb5_context ctx, krb5_principal princ)
 }
 
 static
-int svc_princ_is_local_host(krb5_context ctx,
-                            krb5_principal princ,
-                            loglevel_t loglevel)
+int svc_princ_verify_host(krb5_context ctx,
+                          krb5_principal princ,
+                          loglevel_t loglevel)
 {
         struct utsname utsbuf;
         struct hostent *host;
@@ -297,17 +297,24 @@ int lkrb5_cc_check_tgt_princ(krb5_context ctx,
                 return -1;
         }
 
-        /* if it's mds service principal, check hostname */
+        /* if it's mds service principal, or lustre_root principal
+         * with host part, verify the hostname.
+         * note we allow lustre_root without host part */
         if (lgss_krb5_strcmp(krb5_princ_name(ctx, princ),
                              LGSS_SVC_MDS_STR) == 0) {
-                if (svc_princ_is_local_host(ctx, princ, LL_WARN)) {
-                        logmsg(LL_WARN, "mds service principal not belongs "
+                if (svc_princ_verify_host(ctx, princ, LL_WARN)) {
+                        logmsg(LL_WARN, "mds service principal doesn't belong "
                                "to this node\n");
                         return -1;
                 }
         } else if (lgss_krb5_strcmp(krb5_princ_name(ctx, princ),
-                                    LGSS_USR_ROOT_STR)) {
-                /* do nothing */
+                                    LGSS_USR_ROOT_STR) == 0) {
+                if (krb5_princ_component(ctx, princ, 1) != NULL &&
+                    svc_princ_verify_host(ctx, princ, LL_WARN)) {
+                        logmsg(LL_WARN, "lustre_root principal doesn't belong "
+                               "to this node\n");
+                        return -1;
+                }
         } else {
                 logmsg(LL_WARN, "unexpected krb5 cc principal name %.*s\n",
                        krb5_princ_name(ctx, princ)->length,
@@ -556,8 +563,9 @@ int lkrb5_refresh_root_tgt_cc(krb5_context ctx,
         krb5_keytab             kt;
         krb5_keytab_entry       kte;
         krb5_kt_cursor          cursor;
-        krb5_principal          princ = NULL;
+        krb5_principal          princ = NULL, princ2;
         krb5_error_code         code;
+        int                     general_root = 0;
         int                     rc = -1;
 
         /* prepare parsing the keytab file */
@@ -592,32 +600,59 @@ int lkrb5_refresh_root_tgt_cc(krb5_context ctx,
                 if (!princ_is_local_realm(ctx, kte.principal))
                         continue;
 
-                /* lustre_root@realm */
+                /* lustre_root[/host]@realm */
                 if (lgss_krb5_strcmp(krb5_princ_name(ctx, kte.principal),
                                      LGSS_USR_ROOT_STR) == 0) {
-                        if (princ != NULL) {
-                                logmsg(LL_WARN, "already picked one? "
-                                       "how could it possible???\n");
+                        int tmp_general_root = 0;
+
+                        if (krb5_princ_component(ctx, kte.principal,1) == NULL){
+                                if (princ != NULL) {
+                                        logmsg(LL_TRACE, "lustre_root: "
+                                               "already picked one, skip\n");
+                                        continue;
+                                }
+
+                                tmp_general_root = 1;
+                        } else {
+                                if (svc_princ_verify_host(ctx, kte.principal,
+                                                          LL_TRACE)) {
+                                        logmsg(LL_TRACE, "lustre_root: "
+                                               "doesn't belong to this node\n");
+                                        continue;
+                                }
+
+                                if (princ != NULL && !general_root) {
+                                        logmsg(LL_TRACE, "lustre_root: already "
+                                               "have a host-specific one, "
+                                               "skip\n");
+                                        continue;
+                                }
+                        }
+
+                        code = krb5_copy_principal(ctx, kte.principal, &princ2);
+                        if (code) {
+                                logmsg(LL_ERR, "copy lustre_root princ: %s\n",
+                                       krb5_err_msg(code));
                                 continue;
                         }
 
-                        code = krb5_copy_principal(ctx, kte.principal, &princ);
-                        if (code)
-                                logmsg(LL_ERR, "copy lustre_root princ: %s\n",
-                                       krb5_err_msg(code));
+                        if (princ != NULL) {
+                                logmsg(LL_TRACE, "release a lustre_root one\n");
+                                krb5_free_principal(ctx, princ);
+                        }
+                        princ = princ2;
 
+                        general_root = tmp_general_root;
                         continue;
                 }
 
                 /* lustre_mds/host@realm */
                 if (lgss_krb5_strcmp(krb5_princ_name(ctx, kte.principal),
                                      LGSS_SVC_MDS_STR) == 0) {
-                        krb5_principal  princ2;
-
-                        if (svc_princ_is_local_host(ctx, kte.principal,
-                                                    LL_TRACE)) {
+                        if (svc_princ_verify_host(ctx, kte.principal,
+                                                  LL_TRACE)) {
                                 logmsg(LL_TRACE, "mds service principal: "
-                                       "not belongs to this node\n");
+                                       "doesn't belong to this node\n");
                                 continue;
                         }
 

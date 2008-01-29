@@ -214,31 +214,35 @@ int ll_md_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock_desc *desc,
         RETURN(0);
 }
 
+__u32 ll_i2suppgid(struct inode *i)
+{
+        if (in_group_p(i->i_gid))
+                return (__u32)i->i_gid;
+        else
+                return (__u32)(-1);
+}
+
 /* Pack the required supplementary groups into the supplied groups array.
  * If we don't need to use the groups from the target inode(s) then we
  * instead pack one or more groups from the user's supplementary group
  * array in case it might be useful.  Not needed if doing an MDS-side upcall. */
 void ll_i2gids(__u32 *suppgids, struct inode *i1, struct inode *i2)
 {
+#if 0
         int i;
+#endif
 
         LASSERT(i1 != NULL);
         LASSERT(suppgids != NULL);
 
-        if (in_group_p(i1->i_gid))
-                suppgids[0] = i1->i_gid;
-        else
-                suppgids[0] = -1;
+        suppgids[0] = ll_i2suppgid(i1);
 
-        if (i2) {
-                if (in_group_p(i2->i_gid))
-                        suppgids[1] = i2->i_gid;
+        if (i2)
+                suppgids[1] = ll_i2suppgid(i2);
                 else
                         suppgids[1] = -1;
-        } else {
-                suppgids[1] = -1;
-        }
 
+#if 0
         for (i = 0; i < current_ngroups; i++) {
                 if (suppgids[0] == -1) {
                         if (current_groups[i] != suppgids[1])
@@ -252,6 +256,7 @@ void ll_i2gids(__u32 *suppgids, struct inode *i1, struct inode *i2)
                 }
                 break;
         }
+#endif
 }
 
 static void ll_d_add(struct dentry *de, struct inode *inode)

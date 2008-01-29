@@ -47,20 +47,15 @@ struct md_device_operations;
 struct md_object;
 
 
-typedef enum {
+enum {
         UCRED_INVALID   = -1,
         UCRED_INIT      = 0,
         UCRED_OLD       = 1,
-        UCRED_NEW       = 2,
-} ucred_t;
-
-#define SQUASH_NONE     0x00
-#define SQUASH_UID      0x01
-#define SQUASH_GID      0x02
+        UCRED_NEW       = 2
+};
 
 struct md_ucred {
-        ucred_t                 mu_valid;
-        __u32                   mu_squash;
+        __u32               mu_valid;
         __u32                   mu_o_uid;
         __u32                   mu_o_gid;
         __u32                   mu_o_fsuid;
@@ -73,7 +68,7 @@ struct md_ucred {
         __u32                   mu_cap;
         __u32                   mu_umask;
 	struct group_info      *mu_ginfo;
-	struct mdt_identity    *mu_identity;
+	struct md_identity *mu_identity;
 };
 
 #define MD_CAPAINFO_MAX 5

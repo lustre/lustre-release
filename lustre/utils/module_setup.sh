@@ -63,7 +63,7 @@ depmod -A -e
 echo "Copying mount from local build dir to "$MDIR
 cp -u ../utils/mount.lustre /sbin/.
 cp -u ../utils/l_getidentity /usr/sbin/.
-cp -u ../utils/l_facl /usr/sbin/.
+cp -u ../utils/lfs /usr/sbin/.
 
 MP="/sbin/modprobe"
 MPI="$MP --ignore-install"

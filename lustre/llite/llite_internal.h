@@ -11,15 +11,16 @@
 # include <linux/fs.h>
 #ifdef HAVE_XATTR_ACL
 # include <linux/xattr_acl.h>
-#endif
+#endif /* HAVE_XATTR_ACL */
 #ifdef HAVE_LINUX_POSIX_ACL_XATTR_H
 # include <linux/posix_acl_xattr.h>
-#endif
-#endif
+#endif /* HAVE_LINUX_POSIX_ACL_XATTR_H */
+#endif /* CONFIG_FS_POSIX_ACL */
 
 #include <lustre_debug.h>
 #include <lustre_ver.h>
 #include <lustre_disk.h>  /* for s2sbi */
+#include <lustre_eacl.h>
 
 #ifndef FMODE_EXEC
 #define FMODE_EXEC 0
@@ -233,6 +234,34 @@ enum stats_track_type {
 #define LL_SBI_LOCALFLOCK       0x200 /* Local flocks support by kernel */
 #define LL_SBI_LRU_RESIZE       0x400 /* lru resize support */
 
+#define RCE_HASHES      32
+
+struct rmtacl_ctl_entry {
+        struct list_head rce_list;
+        pid_t            rce_key; /* hash key */
+        int              rce_ops; /* acl operation type */
+};
+
+struct rmtacl_ctl_table {
+        spinlock_t       rct_lock;
+        struct list_head rct_entries[RCE_HASHES];
+};
+
+#define EE_HASHES       32
+
+struct eacl_entry {
+        struct list_head      ee_list;
+        pid_t                 ee_key; /* hash key */
+        struct lu_fid         ee_fid;
+        int                   ee_type; /* ACL type for ACCESS or DEFAULT */
+        ext_acl_xattr_header *ee_acl;
+};
+
+struct eacl_table {
+        spinlock_t       et_lock;
+        struct list_head et_entries[EE_HASHES];
+};
+
 struct ll_sb_info {
         struct list_head          ll_list;
         /* this protects pglist and ra_info.  It isn't safe to
@@ -285,6 +314,8 @@ struct ll_sb_info {
 
         dev_t                     ll_sdev_orig; /* save s_dev before assign for
                                                  * clustred nfs */
+        struct rmtacl_ctl_table   ll_rct;
+        struct eacl_table         ll_et;
 };
 
 #define LL_DEFAULT_MAX_RW_CHUNK         (32 * 1024 * 1024)
@@ -392,6 +423,7 @@ struct it_cb_data {
         obd_id hash;
 };
 
+__u32 ll_i2suppgid(struct inode *i);
 void ll_i2gids(__u32 *suppgids, struct inode *i1,struct inode *i2);
 
 #define LLAP_MAGIC 98764321
@@ -601,8 +633,6 @@ struct ll_async_page *llite_pglist_next_llap(struct ll_sb_info *sbi,
 int ll_obd_statfs(struct inode *inode, void *arg);
 int ll_get_max_mdsize(struct ll_sb_info *sbi, int *max_mdsize);
 int ll_process_config(struct lustre_cfg *lcfg);
-int ll_ioctl_getfacl(struct inode *inode, struct rmtacl_ioctl_data *ioc);
-int ll_ioctl_setfacl(struct inode *inode, struct rmtacl_ioctl_data *ioc);
 struct md_op_data *ll_prep_md_op_data(struct md_op_data *op_data,
                                       struct inode *i1, struct inode *i2,
                                       const char *name, int namelen,
@@ -767,6 +797,25 @@ struct obd_capa *ll_osscapa_get(struct inode *inode, __u64 opc);
 void ll_truncate_free_capa(struct obd_capa *ocapa);
 void ll_clear_inode_capas(struct inode *inode);
 void ll_print_capa_stat(struct ll_sb_info *sbi);
+
+/* llite/llite_rmtacl.c */
+#ifdef CONFIG_FS_POSIX_ACL
+obd_valid rce_ops2valid(int ops);
+struct rmtacl_ctl_entry *rct_search(struct rmtacl_ctl_table *rct, pid_t key);
+int rct_add(struct rmtacl_ctl_table *rct, pid_t key, int ops);
+int rct_del(struct rmtacl_ctl_table *rct, pid_t key);
+void rct_init(struct rmtacl_ctl_table *rct);
+void rct_fini(struct rmtacl_ctl_table *rct);
+
+void ee_free(struct eacl_entry *ee);
+int ee_add(struct eacl_table *et, pid_t key, struct lu_fid *fid, int type,
+           ext_acl_xattr_header *header);
+struct eacl_entry *et_search_del(struct eacl_table *et, pid_t key,
+                                 struct lu_fid *fid, int type);
+void et_search_free(struct eacl_table *et, pid_t key);
+void et_init(struct eacl_table *et);
+void et_fini(struct eacl_table *et);
+#endif
 
 /* llite ioctl register support rountine */
 #ifdef __KERNEL__

@@ -7,11 +7,7 @@ if [ $UID -eq 0 ]; then
     exit 0
 fi
 
-if [ -z "$KRB5DIR" ]; then
-    KRB5DIR=/usr/kerberos
-fi
-
-$KRB5DIR/bin/klist -5 -s
+klist -5 -s
 invalid=$?
 
 if [ $invalid -eq 0 ]; then
@@ -20,7 +16,7 @@ fi
 
 echo "***** refresh Kerberos V5 TGT for uid $UID *****"
 if [ -z "$GSS_PASS" ]; then
-    $KRB5DIR/bin/kinit
+    kinit
 else
     expect <<EOF
 set timeout 30 
@@ -34,7 +30,7 @@ expect {
     "user@host $ "
 }
 
-send "$KRB5DIR/bin/kinit\r"
+send "kinit\r"
 expect {
     timeout {puts "timeout" ;exit 1}
     "Password for "

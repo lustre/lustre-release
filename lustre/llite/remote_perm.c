@@ -263,7 +263,8 @@ check:
         }
 
         oc = ll_mdscapa_get(inode);
-        rc = md_get_remote_perm(sbi->ll_md_exp, ll_inode2fid(inode), oc, &req);
+        rc = md_get_remote_perm(sbi->ll_md_exp, ll_inode2fid(inode), oc,
+                                ll_i2suppgid(inode), &req);
         capa_put(oc);
         if (rc) {
                 up(&lli->lli_rmtperm_sem);

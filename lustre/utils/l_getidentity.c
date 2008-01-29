@@ -39,17 +39,17 @@
 #include <lustre/lustre_idl.h>
 #include <libcfs/kp30.h>
 
-#define SETXID_PATHNAME "/etc/lustre/setxid.conf"
+#define PERM_PATHNAME "/etc/lustre/perm.conf"
 
 /*
- * setxid permission file format is like this:
+ * permission file format is like this:
  * {nid} {uid} {perms}
  *
  * '*' nid means any nid
  * '*' uid means any uid
  * the valid values for perms are:
- * setuid/setgid/setgrp         -- enable corresponding perm
- * nosetuid/nosetgid/nosetgrp   -- disable corresponding perm
+ * setuid/setgid/setgrp/rmtacl           -- enable corresponding perm
+ * nosetuid/nosetgid/nosetgrp/normtacl   -- disable corresponding perm
  * they can be listed together, seperated by ',',
  * when perm and noperm are in the same line (item), noperm is preferential,
  * when they are in different lines (items), the latter is preferential,
@@ -174,27 +174,29 @@ static inline int match_uid(uid_t uid, const char *str)
 typedef struct {
         char   *name;
         __u32   bit;
-} setxid_perm_type_t;
+} perm_type_t;
 
-static setxid_perm_type_t setxid_perm_types[] = {
-        { "setuid", LUSTRE_SETUID_PERM },
-        { "setgid", LUSTRE_SETGID_PERM },
-        { "setgrp", LUSTRE_SETGRP_PERM },
+static perm_type_t perm_types[] = {
+        { "setuid", CFS_SETUID_PERM },
+        { "setgid", CFS_SETGID_PERM },
+        { "setgrp", CFS_SETGRP_PERM },
+        { "rmtacl", CFS_RMTACL_PERM },
         { 0 }
 };
 
-static setxid_perm_type_t setxid_noperm_types[] = {
-        { "nosetuid", LUSTRE_SETUID_PERM },
-        { "nosetgid", LUSTRE_SETGID_PERM },
-        { "nosetgrp", LUSTRE_SETGRP_PERM },
+static perm_type_t noperm_types[] = {
+        { "nosetuid", CFS_SETUID_PERM },
+        { "nosetgid", CFS_SETGID_PERM },
+        { "nosetgrp", CFS_SETGRP_PERM },
+        { "normtacl", CFS_RMTACL_PERM },
         { 0 }
 };
 
-int parse_setxid_perm(__u32 *perm, __u32 *noperm, char *str)
+int parse_perm(__u32 *perm, __u32 *noperm, char *str)
 {
         char *start, *end;
         char name[64];
-        setxid_perm_type_t *pt;
+        perm_type_t *pt;
 
         *perm = 0;
         *noperm = 0;
@@ -207,7 +209,7 @@ int parse_setxid_perm(__u32 *perm, __u32 *noperm, char *str)
                 if (start >= end)
                         break;
                 strncpy(name, start, end - start);
-                for (pt = setxid_perm_types; pt->name; pt++) {
+                for (pt = perm_types; pt->name; pt++) {
                         if (!strcasecmp(name, pt->name)) {
                                 *perm |= pt->bit;
                                 break;
@@ -215,7 +217,7 @@ int parse_setxid_perm(__u32 *perm, __u32 *noperm, char *str)
                 }
 
                 if (!pt->name) {
-                        for (pt = setxid_noperm_types; pt->name; pt++) {
+                        for (pt = noperm_types; pt->name; pt++) {
                                 if (!strcasecmp(name, pt->name)) {
                                         *noperm |= pt->bit;
                                         break;
@@ -233,16 +235,16 @@ int parse_setxid_perm(__u32 *perm, __u32 *noperm, char *str)
         return 0;
 }
 
-int parse_setxid_perm_line(struct identity_downcall_data *data, char *line)
+int parse_perm_line(struct identity_downcall_data *data, char *line)
 {
         char uid_str[256], nid_str[256], perm_str[256];
         lnet_nid_t nid;
         __u32 perm, noperm;
         int rc, i;
 
-        if (data->idd_nperms >= N_SETXID_PERMS_MAX) {
-                errlog("setxid permission count %d > max %d\n",
-                        data->idd_nperms, N_SETXID_PERMS_MAX);
+        if (data->idd_nperms >= N_PERMS_MAX) {
+                errlog("permission count %d > max %d\n",
+                        data->idd_nperms, N_PERMS_MAX);
                 return -1;
         }
 
@@ -265,7 +267,7 @@ int parse_setxid_perm_line(struct identity_downcall_data *data, char *line)
                 }
         }
 
-        if (parse_setxid_perm(&perm, &noperm, perm_str)) {
+        if (parse_perm(&perm, &noperm, perm_str)) {
                 errlog("invalid perm %s\n", perm_str);
                 return -1;
         }
@@ -324,7 +326,7 @@ int parse_setxid_perm_line(struct identity_downcall_data *data, char *line)
         return 0;
 }
 
-int get_setxid_perms(FILE *fp, struct identity_downcall_data *data)
+int get_perms(FILE *fp, struct identity_downcall_data *data)
 {
         char line[1024];
 
@@ -332,7 +334,7 @@ int get_setxid_perms(FILE *fp, struct identity_downcall_data *data)
                 if (comment_line(line))
                         continue;
 
-                if (parse_setxid_perm_line(data, line)) {
+                if (parse_perm_line(data, line)) {
                         errlog("parse line %s failed!\n", line);
                         return -1;
                 }
@@ -355,10 +357,10 @@ static void show_result(struct identity_downcall_data *data)
         for (i = 0; i < data->idd_ngroups; i++)
                 printf("%s%u", i > 0 ? "," : "", data->idd_groups[i]);
         printf("\n");
-        printf("setxid permissions:\n"
+        printf("permissions:\n"
                "  nid\t\t\tperm\n");
         for (i = 0; i < data->idd_nperms; i++) {
-                struct setxid_perm_downcall_data *pdd;
+                struct perm_downcall_data *pdd;
 
                 pdd = &data->idd_perms[i];
 
@@ -406,13 +408,13 @@ int main(int argc, char **argv)
                 goto downcall;
 
         /* read permission database */
-        perms_fp = fopen(SETXID_PATHNAME, "r");
+        perms_fp = fopen(PERM_PATHNAME, "r");
         if (perms_fp) {
-                get_setxid_perms(perms_fp, data);
+                get_perms(perms_fp, data);
                 fclose(perms_fp);
         } else if (errno != ENOENT) {
                 errlog("open %s failed: %s\n",
-                       SETXID_PATHNAME, strerror(errno));
+                       PERM_PATHNAME, strerror(errno));
         }
 
 downcall:

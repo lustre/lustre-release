@@ -893,81 +893,10 @@ int server_mti_print(char *title, struct mgs_target_info *mti)
         return(0);
 }
 
-static
-int mti_set_sec_opts(struct mgs_target_info *mti, struct lustre_mount_data *lmd)
-{
-        char *s1, *s2;
-
-        if (lmd->lmd_sec_mdt == NULL && lmd->lmd_sec_cli == NULL) {
-                /* just let on-disk params do its work. but we have an
-                 * assumption that any changes of on-disk data by tune2fs
-                 * should lead to server rewrite log.
-                 */
-                return 0;
-        }
-
-        /* filter out existing sec options */
-        s1 = mti->mti_params;
-        while (*s1) {
-                int clear;
-
-                while (*s1 == ' ')
-                        s1++;
-
-                if (strncmp(s1, PARAM_SEC_RPC_MDT,
-                            sizeof(PARAM_SEC_RPC_MDT) - 1) == 0 ||
-                    strncmp(s1, PARAM_SEC_RPC_CLI,
-                            sizeof(PARAM_SEC_RPC_CLI) - 1) == 0)
-                        clear = 1;
-                else
-                        clear = 0;
-
-                s2 = strchr(s1, ' ');
-                if (s2 == NULL) {
-                        if (clear)
-                                *s1 = '\0';
-                        break;
-                }
-                s2++;
-                if (clear)
-                        memmove(s1, s2, strlen(s2) + 1);
-                else
-                        s1 = s2;
-        }
-
-        /* append sec options from lmd */
-        /* FIXME add flag LDD_F_UPDATE after mountconf start supporting
-         * log updating.
-         */
-        if (lmd->lmd_sec_mdt) {
-                if (strlen(mti->mti_params) + strlen(lmd->lmd_sec_mdt) +
-                    sizeof(PARAM_SEC_RPC_MDT) + 1 >= sizeof(mti->mti_params)) {
-                        CERROR("security params too big for mti\n");
-                        return -ENOMEM;
-                }
-                strcat(mti->mti_params, " "PARAM_SEC_RPC_MDT);
-                strcat(mti->mti_params, lmd->lmd_sec_mdt);
-                //mti->mti_flags |= LDD_F_UPDATE;
-        }
-        if (lmd->lmd_sec_cli) {
-                if (strlen(mti->mti_params) + strlen(lmd->lmd_sec_cli) +
-                    sizeof(PARAM_SEC_RPC_CLI) + 2 > sizeof(mti->mti_params)) {
-                        CERROR("security params too big for mti\n");
-                        return -ENOMEM;
-                }
-                strcat(mti->mti_params, " "PARAM_SEC_RPC_CLI);
-                strcat(mti->mti_params, lmd->lmd_sec_cli);
-                //mti->mti_flags |= LDD_F_UPDATE;
-        }
-
-        return 0;
-}
-
 static int server_sb2mti(struct super_block *sb, struct mgs_target_info *mti)
 {
         struct lustre_sb_info    *lsi = s2lsi(sb);
         struct lustre_disk_data  *ldd = lsi->lsi_ldd;
-        struct lustre_mount_data *lmd = lsi->lsi_lmd;
         lnet_process_id_t         id;
         int i = 0;
         ENTRY;
@@ -1003,8 +932,7 @@ static int server_sb2mti(struct super_block *sb, struct mgs_target_info *mti)
                 RETURN(-ENOMEM);
         }
         memcpy(mti->mti_params, ldd->ldd_params, sizeof(mti->mti_params));
-
-        RETURN(mti_set_sec_opts(mti, lmd));
+        RETURN(0);
 }
 
 /* Register an old or new target with the MGS. If needed MGS will construct
@@ -1221,8 +1149,6 @@ struct lustre_sb_info *lustre_init_lsi(struct super_block *sb)
         /* Default umount style */
         lsi->lsi_flags = LSI_UMOUNT_FAILOVER;
 
-        lsi->lsi_lmd->lmd_nllu = NOBODY_UID;
-        lsi->lsi_lmd->lmd_nllg = NOBODY_GID;
         RETURN(lsi);
 }
 
@@ -1249,12 +1175,6 @@ static int lustre_free_lsi(struct super_block *sb)
                 if (lsi->lsi_lmd->lmd_profile != NULL)
                         OBD_FREE(lsi->lsi_lmd->lmd_profile,
                                  strlen(lsi->lsi_lmd->lmd_profile) + 1);
-                if (lsi->lsi_lmd->lmd_sec_mdt != NULL)
-                        OBD_FREE(lsi->lsi_lmd->lmd_sec_mdt,
-                                 strlen(lsi->lsi_lmd->lmd_sec_mdt) + 1);
-                if (lsi->lsi_lmd->lmd_sec_cli != NULL)
-                        OBD_FREE(lsi->lsi_lmd->lmd_sec_cli,
-                                 strlen(lsi->lsi_lmd->lmd_sec_cli) + 1);
                 if (lsi->lsi_lmd->lmd_opts != NULL)
                         OBD_FREE(lsi->lsi_lmd->lmd_opts,
                                  strlen(lsi->lsi_lmd->lmd_opts) + 1);
@@ -1743,10 +1663,6 @@ static void lmd_print(struct lustre_mount_data *lmd)
                 PRINT_CMD(PRINT_MASK, "profile: %s\n", lmd->lmd_profile);
         PRINT_CMD(PRINT_MASK, "device:  %s\n", lmd->lmd_dev);
         PRINT_CMD(PRINT_MASK, "flags:   %x\n", lmd->lmd_flags);
-        if (lmd->lmd_sec_mdt)
-                PRINT_CMD(PRINT_MASK, "sec_mdt: %s\n", lmd->lmd_sec_mdt);
-        if (lmd->lmd_sec_cli)
-                PRINT_CMD(PRINT_MASK, "sec_cli: %s\n", lmd->lmd_sec_cli);
         if (lmd->lmd_opts)
                 PRINT_CMD(PRINT_MASK, "options: %s\n", lmd->lmd_opts);
         for (i = 0; i < lmd->lmd_exclude_count; i++) {
@@ -1837,66 +1753,6 @@ static int lmd_make_exclusion(struct lustre_mount_data *lmd, char *ptr)
         RETURN(rc);
 }
 
-static
-int lmd_set_sec_opts(char **set, char *opts, int length)
-{
-        if (*set)
-                OBD_FREE(*set, strlen(*set) + 1);
-
-        OBD_ALLOC(*set, length + 1);
-        if (*set == NULL)
-                return -ENOMEM;
-
-        memcpy(*set, opts, length);
-        (*set)[length] = '\0';
-
-        return 0;
-}
-
-static
-int lmd_parse_sec_opts(struct lustre_mount_data *lmd, char *ptr)
-{
-        char  *tail;
-        char **set = NULL;
-        int    length;
-
-        /* check peer name */
-        if (strncmp(ptr, "sec_mdt=", 8) == 0) {
-                set = &lmd->lmd_sec_mdt;
-                ptr += 8;
-        } else if (strncmp(ptr, "sec_cli=", 8) == 0) {
-                set = &lmd->lmd_sec_cli;
-                ptr += 8;
-        } else if (strncmp(ptr, "sec=", 4) == 0) {
-                /* leave 'set' be null */
-                ptr += 4;
-        } else {
-                CERROR("invalid security options: %s\n", ptr);
-                return -EINVAL;
-        }
-
-        tail = strchr(ptr, ',');
-        if (tail == NULL)
-                length = strlen(ptr);
-        else
-                length = tail - ptr;
-
-        if (set) {
-                if (lmd_set_sec_opts(set, ptr, length))
-                        return -EINVAL;
-        } else {
-                if (lmd->lmd_sec_mdt == NULL &&
-                    lmd_set_sec_opts(&lmd->lmd_sec_mdt, ptr, length))
-                        return -EINVAL;
-
-                if (lmd->lmd_sec_cli == NULL &&
-                    lmd_set_sec_opts(&lmd->lmd_sec_cli, ptr, length))
-                        return -EINVAL;
-        }
-
-        return 0;
-}
-
 /* mount -v -t lustre uml1:uml2:/lustre-client /mnt/lustre */
 static int lmd_parse(char *options, struct lustre_mount_data *lmd)
 {
@@ -1944,17 +1800,6 @@ static int lmd_parse(char *options, struct lustre_mount_data *lmd)
                 /* ost exclusion list */
                 } else if (strncmp(s1, "exclude=", 8) == 0) {
                         rc = lmd_make_exclusion(lmd, s1 + 7);
-                        if (rc)
-                                goto invalid;
-                        clear++;
-                } else if (strncmp(s1, "nllu=", 5) == 0) {
-                        lmd->lmd_nllu = simple_strtoul(s1 + 5, NULL, 10);
-                        clear++;
-                } else if (strncmp(s1, "nllg=", 5) == 0) {
-                        lmd->lmd_nllg = simple_strtoul(s1 + 5, NULL, 10);
-                        clear++;
-                } else if (strncmp(s1, "sec", 3) == 0) {
-                        rc = lmd_parse_sec_opts(lmd, s1);
                         if (rc)
                                 goto invalid;
                         clear++;

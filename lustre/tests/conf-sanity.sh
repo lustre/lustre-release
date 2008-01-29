@@ -174,7 +174,7 @@ fi
 
 gen_config
 
-init_krb5_env
+init_gss
 
 test_0() {
         setup
@@ -1493,7 +1493,7 @@ run_test 38 "MDS recreates missing lov_objid file from OST data"
 
 umount_client $MOUNT
 cleanup_nocli
-cleanup_krb5_env
+cleanup_gss
 
 equals_msg `basename $0`: test complete
 [ -f "$TESTSUITELOG" ] && cat $TESTSUITELOG || true

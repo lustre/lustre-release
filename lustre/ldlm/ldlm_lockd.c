@@ -1412,6 +1412,9 @@ static void ldlm_handle_gl_callback(struct ptlrpc_request *req,
 
 static int ldlm_callback_reply(struct ptlrpc_request *req, int rc)
 {
+        if (req->rq_no_reply)
+                return 0;
+
         req->rq_status = rc;
         if (req->rq_reply_state == NULL) {
                 rc = lustre_pack_reply(req, 1, NULL, NULL);

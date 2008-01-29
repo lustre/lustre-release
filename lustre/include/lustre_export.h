@@ -23,9 +23,8 @@ struct mds_export_data {
         loff_t                  med_lr_off;
         int                     med_lr_idx;
         unsigned int            med_rmtclient:1; /* remote client? */
-        __u32                   med_nllu;
-        __u32                   med_nllg;
-        struct mds_idmap_table *med_idmap;
+        struct semaphore           med_idmap_sem;
+        struct lustre_idmap_table *med_idmap;
 };
 
 struct mdt_export_data {
@@ -37,9 +36,8 @@ struct mdt_export_data {
         loff_t                  med_lr_off;
         int                     med_lr_idx;
         unsigned int            med_rmtclient:1; /* remote client? */
-        __u32                   med_nllu;
-        __u32                   med_nllg;
-        struct mdt_idmap_table *med_idmap;
+        struct semaphore           med_idmap_sem;
+        struct lustre_idmap_table *med_idmap;
 };
 
 struct osc_creator {
@@ -111,7 +109,15 @@ struct obd_export {
                                   exp_req_replay_needed:1,
                                   exp_lock_replay_needed:1,
                                   exp_need_sync:1,
+                                  exp_flvr_changed:1,
+                                  exp_flvr_adapt:1,
                                   exp_libclient:1; /* liblustre client? */
+        /* also protected by exp_lock */
+        enum lustre_sec_part      exp_sp_peer;
+        struct sptlrpc_flavor     exp_flvr;             /* current */
+        struct sptlrpc_flavor     exp_flvr_old[2];      /* about-to-expire */
+        cfs_time_t                exp_flvr_expire[2];   /* seconds */
+
         union {
                 struct mds_export_data    eu_mds_data;
                 struct mdt_export_data    eu_mdt_data;

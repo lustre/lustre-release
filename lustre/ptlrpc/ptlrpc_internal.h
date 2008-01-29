@@ -190,7 +190,6 @@ int  sptlrpc_enc_pool_init(void);
 void sptlrpc_enc_pool_fini(void);
 int sptlrpc_proc_read_enc_pool(char *page, char **start, off_t off, int count,
                                int *eof, void *data);
-const char * sptlrpc_bulk_csum_alg2name(__u32 csum_alg);
 
 /* sec_lproc.c */
 int  sptlrpc_lproc_init(void);

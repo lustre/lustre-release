@@ -27,6 +27,8 @@
 
 #ifndef __KERNEL__
 #include <liblustre.h>
+#else
+#include <libcfs/libcfs.h>
 #endif
 
 #include <obd_support.h>
@@ -51,11 +53,11 @@ static atomic_t sec_gc_wait_del = ATOMIC_INIT(0);
 
 void sptlrpc_gc_add_sec(struct ptlrpc_sec *sec)
 {
-        if (!list_empty(&sec->ps_gc_list)) {
-                CERROR("sec %p(%s) already in gc list\n",
-                       sec, sec->ps_policy->sp_name);
-                return;
-        }
+        LASSERT(sec->ps_policy->sp_cops->gc_ctx);
+        LASSERT(sec->ps_gc_interval > 0);
+        LASSERT(list_empty(&sec->ps_gc_list));
+
+        sec->ps_gc_next = cfs_time_current_sec() + sec->ps_gc_interval;
 
         spin_lock(&sec_gc_list_lock);
         list_add_tail(&sec_gc_list, &sec->ps_gc_list);
@@ -72,14 +74,17 @@ void sptlrpc_gc_del_sec(struct ptlrpc_sec *sec)
 
         might_sleep();
 
+        /* signal before list_del to make iteration in gc thread safe */
+        atomic_inc(&sec_gc_wait_del);
+
         spin_lock(&sec_gc_list_lock);
         list_del_init(&sec->ps_gc_list);
         spin_unlock(&sec_gc_list_lock);
 
         /* barrier */
-        atomic_inc(&sec_gc_wait_del);
         mutex_down(&sec_gc_mutex);
         mutex_up(&sec_gc_mutex);
+
         atomic_dec(&sec_gc_wait_del);
 
         CDEBUG(D_SEC, "del sec %p(%s)\n", sec, sec->ps_policy->sp_name);
@@ -127,7 +132,7 @@ static void sec_process_ctx_list(void)
 
 static void sec_do_gc(struct ptlrpc_sec *sec)
 {
-        cfs_time_t      now = cfs_time_current_sec();
+        LASSERT(sec->ps_policy->sp_cops->gc_ctx);
 
         if (unlikely(sec->ps_gc_next == 0)) {
                 CWARN("sec %p(%s) has 0 gc time\n",
@@ -135,19 +140,13 @@ static void sec_do_gc(struct ptlrpc_sec *sec)
                 return;
         }
 
-        if (unlikely(sec->ps_policy->sp_cops->gc_ctx == NULL)) {
-                CWARN("sec %p(%s) is not prepared for gc\n",
-                      sec, sec->ps_policy->sp_name);
-                return;
-        }
-
         CDEBUG(D_SEC, "check on sec %p(%s)\n", sec, sec->ps_policy->sp_name);
 
-        if (time_after(sec->ps_gc_next, now))
+        if (cfs_time_after(sec->ps_gc_next, cfs_time_current_sec()))
                 return;
 
         sec->ps_policy->sp_cops->gc_ctx(sec);
-        sec->ps_gc_next = now + sec->ps_gc_interval;
+        sec->ps_gc_next = cfs_time_current_sec() + sec->ps_gc_interval;
 }
 
 static int sec_gc_main(void *arg)
@@ -155,24 +154,30 @@ static int sec_gc_main(void *arg)
         struct ptlrpc_thread *thread = (struct ptlrpc_thread *) arg;
         struct l_wait_info    lwi;
 
-        cfs_daemonize("sptlrpc_ctx_gc");
+        cfs_daemonize("sptlrpc_gc");
 
         /* Record that the thread is running */
         thread->t_flags = SVC_RUNNING;
         cfs_waitq_signal(&thread->t_ctl_waitq);
 
         while (1) {
-                struct ptlrpc_sec *sec, *next;
+                struct ptlrpc_sec *sec;
 
                 thread->t_flags &= ~SVC_SIGNAL;
                 sec_process_ctx_list();
 again:
+                /* go through sec list do gc.
+                 * FIXME here we iterate through the whole list each time which
+                 * is not optimal. we perhaps want to use balanced binary tree
+                 * to trace each sec as order of expiry time.
+                 * another issue here is we wakeup as fixed interval instead of
+                 * according to each sec's expiry time */
                 mutex_down(&sec_gc_mutex);
-                list_for_each_entry_safe(sec, next, &sec_gc_list, ps_gc_list) {
+                list_for_each_entry(sec, &sec_gc_list, ps_gc_list) {
                         /* if someone is waiting to be deleted, let it
                          * proceed as soon as possible. */
                         if (atomic_read(&sec_gc_wait_del)) {
-                                CWARN("deletion pending, retry\n");
+                                CWARN("deletion pending, start over\n");
                                 mutex_up(&sec_gc_mutex);
                                 goto again;
                         }
@@ -180,6 +185,9 @@ again:
                         sec_do_gc(sec);
                 }
                 mutex_up(&sec_gc_mutex);
+
+                /* check ctx list again before sleep */
+                sec_process_ctx_list();
 
                 lwi = LWI_TIMEOUT(SEC_GC_INTERVAL * HZ, NULL, NULL);
                 l_wait_event(thread->t_ctl_waitq,

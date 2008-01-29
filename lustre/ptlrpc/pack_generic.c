@@ -254,12 +254,8 @@ int lustre_pack_request(struct ptlrpc_request *req, __u32 magic, int count,
         LASSERT(count > 0);
         LASSERT(lens[MSG_PTLRPC_BODY_OFF] == sizeof(struct ptlrpc_body));
 
-        /* if we choose policy other than null, we have also choosed
-         * to use new message format.
-         */
-        if (magic == LUSTRE_MSG_MAGIC_V1 &&
-            req->rq_sec_flavor != SPTLRPC_FLVR_NULL)
-                magic = LUSTRE_MSG_MAGIC_V2;
+        /* only use new format, we don't need to be compatible with 1.4 */
+        magic = LUSTRE_MSG_MAGIC_V2;
 
         switch (magic) {
         case LUSTRE_MSG_MAGIC_V1:

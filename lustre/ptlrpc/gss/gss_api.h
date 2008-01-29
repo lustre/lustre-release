@@ -67,6 +67,7 @@ __u32 lgss_unwrap(
                 rawobj_t                *out_msg);
 __u32 lgss_plain_encrypt(
                 struct gss_ctx          *ctx,
+                int                      decrypt,
                 int                      length,
                 void                    *in_buf,
                 void                    *out_buf);
@@ -128,6 +129,7 @@ struct gss_api_ops {
                         rawobj_t               *out_msg);
         __u32 (*gss_plain_encrypt)(
                         struct gss_ctx         *ctx,
+                        int                     decrypt,
                         int                     length,
                         void                   *in_buf,
                         void                   *out_buf);

@@ -72,6 +72,8 @@ int ctx_init_pack_request(struct obd_import *imp,
         rawobj_t                 obj;
 
         LASSERT(msg->lm_bufcount <= 4);
+        LASSERT(req->rq_cli_ctx);
+        LASSERT(req->rq_cli_ctx->cc_sec);
 
         /* gss hdr */
         ghdr = lustre_msg_buf(msg, 0, sizeof(*ghdr));
@@ -83,7 +85,9 @@ int ctx_init_pack_request(struct obd_import *imp,
         ghdr->gh_handle.len = 0;
 
         /* fix the user desc */
-        if (SEC_FLAVOR_HAS_USER(req->rq_sec_flavor)) {
+        if (req->rq_pack_udesc) {
+                ghdr->gh_flags |= LUSTRE_GSS_PACK_USER;
+
                 pud = lustre_msg_buf(msg, offset, sizeof(*pud));
                 LASSERT(pud);
                 pud->pud_uid = pud->pud_fsuid = uid;
@@ -96,6 +100,7 @@ int ctx_init_pack_request(struct obd_import *imp,
         /* security payload */
         p = lustre_msg_buf(msg, offset, 0);
         size = msg->lm_buflens[offset];
+        LASSERT(p);
 
         /* 1. lustre svc type */
         LASSERT(size > 4);
@@ -110,7 +115,7 @@ int ctx_init_pack_request(struct obd_import *imp,
 
         /* 3. reverse context handle. actually only needed by root user,
          *    but we send it anyway. */
-        gsec = container_of(imp->imp_sec, struct gss_sec, gs_base);
+        gsec = sec2gsec(req->rq_cli_ctx->cc_sec);
         obj.len = sizeof(gsec->gs_rvs_hdl);
         obj.data = (__u8 *) &gsec->gs_rvs_hdl;
         if (rawobj_serialize(&obj, &p, &size))
@@ -205,6 +210,7 @@ int ctx_init_parse_reply(struct lustre_msg *msg,
 /* XXX move to where lgssd could see */
 struct lgssd_ioctl_param {
         int             version;        /* in   */
+        int             secid;          /* in   */
         char           *uuid;           /* in   */
         int             lustre_svc;     /* in   */
         uid_t           uid;            /* in   */
@@ -266,6 +272,14 @@ int gss_do_ctx_init_rpc(__user char *buffer, unsigned long count)
                               1, &lmsg_size, NULL);
         if (!req) {
                 param.status = -ENOMEM;
+                goto out_copy;
+        }
+
+        if (req->rq_cli_ctx->cc_sec->ps_id != param.secid) {
+                CWARN("original secid %d, now has changed to %d, "
+                      "cancel this negotiation\n", param.secid,
+                      req->rq_cli_ctx->cc_sec->ps_id);
+                param.status = -EINVAL;
                 goto out_copy;
         }
 
@@ -340,10 +354,11 @@ int gss_do_ctx_fini_rpc(struct gss_cli_ctx *gctx)
 
         might_sleep();
 
-        CDEBUG(D_SEC, "%s ctx %p(%u->%s)\n",
-               sec_is_reverse(ctx->cc_sec) ?
-               "server finishing reverse" : "client finishing forward",
-               ctx, ctx->cc_vcred.vc_uid, sec2target_str(ctx->cc_sec));
+        CWARN("%s ctx %p idx "LPX64" (%u->%s)\n",
+              sec_is_reverse(ctx->cc_sec) ?
+              "server finishing reverse" : "client finishing forward",
+              ctx, gss_handle_to_u64(&gctx->gc_handle),
+              ctx->cc_vcred.vc_uid, sec2target_str(ctx->cc_sec));
 
         gctx->gc_proc = PTLRPC_GSS_PROC_DESTROY;
 
@@ -356,7 +371,7 @@ int gss_do_ctx_fini_rpc(struct gss_cli_ctx *gctx)
         }
 
         /* fix the user desc */
-        if (SEC_FLAVOR_HAS_USER(req->rq_sec_flavor)) {
+        if (req->rq_pack_udesc) {
                 /* we rely the fact that this request is in AUTH mode,
                  * and user_desc at offset 2. */
                 pud = lustre_msg_buf(req->rq_reqbuf, 2, sizeof(*pud));

@@ -94,14 +94,11 @@ static inline int msg_last_seglen(struct lustre_msg *msg)
 static
 void gss_header_swabber(struct gss_header *ghdr)
 {
-        __swab32s(&ghdr->gh_version);
         __swab32s(&ghdr->gh_flags);
         __swab32s(&ghdr->gh_proc);
         __swab32s(&ghdr->gh_seq);
         __swab32s(&ghdr->gh_svc);
         __swab32s(&ghdr->gh_pad1);
-        __swab32s(&ghdr->gh_pad2);
-        __swab32s(&ghdr->gh_pad3);
         __swab32s(&ghdr->gh_handle.len);
 }
 
@@ -167,11 +164,11 @@ int gss_estimate_payload(struct gss_ctx *mechctx, int msgsize, int privacy)
 /*
  * return signature size, otherwise < 0 to indicate error
  */
-static
-int gss_sign_msg(struct lustre_msg *msg,
-                 struct gss_ctx *mechctx,
-                 __u32 proc, __u32 seq, __u32 svc,
-                 rawobj_t *handle)
+static int gss_sign_msg(struct lustre_msg *msg,
+                        struct gss_ctx *mechctx,
+                        enum lustre_sec_part sp,
+                        __u32 flags, __u32 proc, __u32 seq, __u32 svc,
+                        rawobj_t *handle)
 {
         struct gss_header      *ghdr;
         rawobj_t                text[3], mic;
@@ -186,7 +183,8 @@ int gss_sign_msg(struct lustre_msg *msg,
         ghdr = lustre_msg_buf(msg, 0, 0);
 
         ghdr->gh_version = PTLRPC_GSS_VERSION;
-        ghdr->gh_flags = 0;
+        ghdr->gh_sp = (__u8) sp;
+        ghdr->gh_flags = flags;
         ghdr->gh_proc = proc;
         ghdr->gh_seq = seq;
         ghdr->gh_svc = svc;
@@ -329,26 +327,18 @@ int cli_ctx_expire(struct ptlrpc_cli_ctx *ctx)
         LASSERT(atomic_read(&ctx->cc_refcount));
 
         if (!test_and_set_bit(PTLRPC_CTX_DEAD_BIT, &ctx->cc_flags)) {
-                cfs_time_t now;
-
                 if (!ctx->cc_early_expire)
                         clear_bit(PTLRPC_CTX_UPTODATE_BIT, &ctx->cc_flags);
 
-                now = cfs_time_current_sec();
-                if (ctx->cc_expire && cfs_time_aftereq(now, ctx->cc_expire))
-                        CWARN("ctx %p(%u->%s): get expired (%lds exceeds)\n",
-                              ctx, ctx->cc_vcred.vc_uid,
-                              sec2target_str(ctx->cc_sec),
-                              cfs_time_sub(now, ctx->cc_expire));
-                else
-                        CWARN("ctx %p(%u->%s): force to die (%lds remains)\n",
-                              ctx, ctx->cc_vcred.vc_uid,
-                              sec2target_str(ctx->cc_sec),
-                              ctx->cc_expire == 0 ? 0 :
-                              cfs_time_sub(ctx->cc_expire, now));
+                CWARN("ctx %p(%u->%s) get expired: %lu(%+lds)\n",
+                      ctx, ctx->cc_vcred.vc_uid, sec2target_str(ctx->cc_sec),
+                      ctx->cc_expire,
+                      ctx->cc_expire == 0 ? 0 :
+                      cfs_time_sub(ctx->cc_expire, cfs_time_current_sec()));
 
                 return 1;
         }
+
         return 0;
 }
 
@@ -385,7 +375,7 @@ void gss_cli_ctx_uptodate(struct gss_cli_ctx *gctx)
         }
 
         ctx->cc_expire = gss_round_ctx_expiry(ctx_expiry,
-                                              ctx->cc_sec->ps_flags);
+                                              ctx->cc_sec->ps_flvr.sf_flags);
 
         /* At this point this ctx might have been marked as dead by
          * someone else, in which case nobody will make further use
@@ -393,31 +383,44 @@ void gss_cli_ctx_uptodate(struct gss_cli_ctx *gctx)
          * destroying server side context when it be destroied. */
         set_bit(PTLRPC_CTX_UPTODATE_BIT, &ctx->cc_flags);
 
-        if (sec_is_reverse(ctx->cc_sec))
-                CDEBUG(D_SEC, "server installed reverse ctx %p, "
-                       "will expire at %lu(%lds lifetime)\n",
-                       ctx, ctx->cc_expire,
-                       ctx->cc_expire - cfs_time_current_sec());
-        else
-                CWARN("client refreshed ctx %p(%u->%s), will expire at "
-                      "%lu(%lds lifetime)\n", ctx, ctx->cc_vcred.vc_uid,
-                      sec2target_str(ctx->cc_sec), ctx->cc_expire,
-                      ctx->cc_expire - cfs_time_current_sec());
+        if (sec_is_reverse(ctx->cc_sec)) {
+                CWARN("server installed reverse ctx %p idx "LPX64", "
+                      "expiry %lu(%+lds)\n", ctx,
+                      gss_handle_to_u64(&gctx->gc_handle),
+                      ctx->cc_expire, ctx->cc_expire - cfs_time_current_sec());
+        } else {
+                CWARN("client refreshed ctx %p idx "LPX64" (%u->%s), "
+                      "expiry %lu(%+lds)\n", ctx,
+                      gss_handle_to_u64(&gctx->gc_handle),
+                      ctx->cc_vcred.vc_uid, sec2target_str(ctx->cc_sec),
+                      ctx->cc_expire, ctx->cc_expire - cfs_time_current_sec());
 
-        /* install reverse svc ctx, but only for forward connection
-         * and root context */
-        if (!sec_is_reverse(ctx->cc_sec) && ctx->cc_vcred.vc_uid == 0) {
-                gss_sec_install_rctx(ctx->cc_sec->ps_import,
-                                     ctx->cc_sec, ctx);
+                /* install reverse svc ctx for root context */
+                if (ctx->cc_vcred.vc_uid == 0)
+                        gss_sec_install_rctx(ctx->cc_sec->ps_import,
+                                             ctx->cc_sec, ctx);
         }
 }
 
-static
-void gss_cli_ctx_finalize(struct gss_cli_ctx *gctx)
+static void gss_cli_ctx_finalize(struct gss_cli_ctx *gctx)
 {
+        LASSERT(gctx->gc_base.cc_sec);
+
         if (gctx->gc_mechctx) {
                 lgss_delete_sec_context(&gctx->gc_mechctx);
                 gctx->gc_mechctx = NULL;
+        }
+
+        if (!rawobj_empty(&gctx->gc_svc_handle)) {
+                /* forward ctx: mark buddy reverse svcctx soon-expire.
+                 * reverse ctx: update current seq to buddy svcctx. */
+                if (!sec_is_reverse(gctx->gc_base.cc_sec))
+                        gss_svc_upcall_expire_rvs_ctx(&gctx->gc_svc_handle);
+                else
+                        gss_svc_upcall_update_sequence(&gctx->gc_svc_handle,
+                                        (__u32) atomic_read(&gctx->gc_seq));
+
+                rawobj_free(&gctx->gc_svc_handle);
         }
 
         rawobj_free(&gctx->gc_handle);
@@ -612,8 +615,8 @@ void gss_cli_ctx_flags2str(unsigned long flags, char *buf, int bufsize)
 int gss_cli_ctx_sign(struct ptlrpc_cli_ctx *ctx,
                      struct ptlrpc_request *req)
 {
-        struct gss_cli_ctx      *gctx;
-        __u32                    seq, svc;
+        struct gss_cli_ctx      *gctx = ctx2gctx(ctx);
+        __u32                    flags = 0, seq, svc;
         int                      rc;
         ENTRY;
 
@@ -625,13 +628,18 @@ int gss_cli_ctx_sign(struct ptlrpc_cli_ctx *ctx,
         if (req->rq_ctx_init)
                 RETURN(0);
 
-        gctx = container_of(ctx, struct gss_cli_ctx, gc_base);
-        svc = SEC_FLAVOR_SVC(req->rq_sec_flavor);
+        svc = RPC_FLVR_SVC(req->rq_flvr.sf_rpc);
+        if (req->rq_pack_bulk)
+                flags |= LUSTRE_GSS_PACK_BULK;
+        if (req->rq_pack_udesc)
+                flags |= LUSTRE_GSS_PACK_USER;
+
 redo:
         seq = atomic_inc_return(&gctx->gc_seq);
 
         rc = gss_sign_msg(req->rq_reqbuf, gctx->gc_mechctx,
-                          gctx->gc_proc, seq, svc,
+                          ctx->cc_sec->ps_part,
+                          flags, gctx->gc_proc, seq, svc,
                           &gctx->gc_handle);
         if (rc < 0)
                 RETURN(rc);
@@ -688,6 +696,7 @@ int gss_cli_ctx_handle_err_notify(struct ptlrpc_cli_ctx *ctx,
         } else if (sec_is_reverse(ctx->cc_sec)) {
                 CWARN("reverse server respond error (%08x/%08x)\n",
                       errhdr->gh_major, errhdr->gh_minor);
+                sptlrpc_cli_ctx_expire(ctx);
                 rc = -EINVAL;
         } else if (errhdr->gh_major == GSS_S_NO_CONTEXT ||
                    errhdr->gh_major == GSS_S_BAD_SIG) {
@@ -763,6 +772,13 @@ int gss_cli_ctx_verify(struct ptlrpc_cli_ctx *ctx,
 
         switch (ghdr->gh_proc) {
         case PTLRPC_GSS_PROC_DATA:
+                if (!equi(req->rq_pack_bulk == 1,
+                          ghdr->gh_flags & LUSTRE_GSS_PACK_BULK)) {
+                        CERROR("%s bulk flag in reply\n",
+                               req->rq_pack_bulk ? "missing" : "unexpected");
+                        RETURN(-EPROTO);
+                }
+
                 if (ghdr->gh_seq != reqhdr->gh_seq) {
                         CERROR("seqnum %u mismatch, expect %u\n",
                                ghdr->gh_seq, reqhdr->gh_seq);
@@ -785,7 +801,7 @@ int gss_cli_ctx_verify(struct ptlrpc_cli_ctx *ctx,
                 req->rq_repmsg = lustre_msg_buf(msg, 1, 0);
                 req->rq_replen = msg->lm_buflens[1];
 
-                if (SEC_FLAVOR_HAS_BULK(req->rq_sec_flavor)) {
+                if (req->rq_pack_bulk) {
                         if (msg->lm_bufcount < 4) {
                                 CERROR("Invalid reply bufcount %u\n",
                                        msg->lm_bufcount);
@@ -847,17 +863,22 @@ int gss_cli_ctx_seal(struct ptlrpc_cli_ctx *ctx,
         }
 
         lustre_init_msg_v2(req->rq_reqbuf, 3, buflens, NULL);
-        req->rq_reqbuf->lm_secflvr = req->rq_sec_flavor;
+        req->rq_reqbuf->lm_secflvr = req->rq_flvr.sf_rpc;
 
         /* gss header */
         ghdr = lustre_msg_buf(req->rq_reqbuf, 0, 0);
         ghdr->gh_version = PTLRPC_GSS_VERSION;
+        ghdr->gh_sp = (__u8) ctx->cc_sec->ps_part;
         ghdr->gh_flags = 0;
         ghdr->gh_proc = gctx->gc_proc;
         ghdr->gh_seq = atomic_inc_return(&gctx->gc_seq);
         ghdr->gh_svc = SPTLRPC_SVC_PRIV;
         ghdr->gh_handle.len = gctx->gc_handle.len;
         memcpy(ghdr->gh_handle.data, gctx->gc_handle.data, gctx->gc_handle.len);
+        if (req->rq_pack_bulk)
+                ghdr->gh_flags |= LUSTRE_GSS_PACK_BULK;
+        if (req->rq_pack_udesc)
+                ghdr->gh_flags |= LUSTRE_GSS_PACK_USER;
 
 redo:
         /* header signature */
@@ -948,6 +969,13 @@ int gss_cli_ctx_unseal(struct ptlrpc_cli_ctx *ctx,
 
         switch (ghdr->gh_proc) {
         case PTLRPC_GSS_PROC_DATA:
+                if (!equi(req->rq_pack_bulk == 1,
+                          ghdr->gh_flags & LUSTRE_GSS_PACK_BULK)) {
+                        CERROR("%s bulk flag in reply\n",
+                               req->rq_pack_bulk ? "missing" : "unexpected");
+                        RETURN(-EPROTO);
+                }
+
                 if (lustre_msg_swabbed(req->rq_repbuf))
                         gss_header_swabber(ghdr);
 
@@ -969,7 +997,7 @@ int gss_cli_ctx_unseal(struct ptlrpc_cli_ctx *ctx,
                         RETURN(-EPROTO);
                 }
 
-                if (SEC_FLAVOR_HAS_BULK(req->rq_sec_flavor)) {
+                if (req->rq_pack_bulk) {
                         if (req->rq_repbuf->lm_bufcount < 2) {
                                 CERROR("Too few request buffer segments %d\n",
                                        req->rq_repbuf->lm_bufcount);
@@ -1016,18 +1044,18 @@ int gss_install_rvs_svc_ctx(struct obd_import *imp,
 int gss_sec_create_common(struct gss_sec *gsec,
                           struct ptlrpc_sec_policy *policy,
                           struct obd_import *imp,
-                          struct ptlrpc_svc_ctx *ctx,
-                          __u32 flavor,
-                          unsigned long flags)
+                          struct ptlrpc_svc_ctx *svcctx,
+                          struct sptlrpc_flavor *sf)
 {
         struct ptlrpc_sec   *sec;
 
         LASSERT(imp);
-        LASSERT(SEC_FLAVOR_POLICY(flavor) == SPTLRPC_POLICY_GSS);
+        LASSERT(RPC_FLVR_POLICY(sf->sf_rpc) == SPTLRPC_POLICY_GSS);
 
-        gsec->gs_mech = lgss_subflavor_to_mech(SEC_FLAVOR_SUB(flavor));
+        gsec->gs_mech = lgss_subflavor_to_mech(RPC_FLVR_SUB(sf->sf_rpc));
         if (!gsec->gs_mech) {
-                CERROR("gss backend 0x%x not found\n", SEC_FLAVOR_SUB(flavor));
+                CERROR("gss backend 0x%x not found\n",
+                       RPC_FLVR_SUB(sf->sf_rpc));
                 return -EOPNOTSUPP;
         }
 
@@ -1037,29 +1065,28 @@ int gss_sec_create_common(struct gss_sec *gsec,
         /* initialize upper ptlrpc_sec */
         sec = &gsec->gs_base;
         sec->ps_policy = policy;
-        sec->ps_flavor = flavor;
-        sec->ps_flags = flags;
+        atomic_set(&sec->ps_refcount, 0);
+        atomic_set(&sec->ps_nctx, 0);
+        sec->ps_id = sptlrpc_get_next_secid();
+        sec->ps_flvr = *sf;
         sec->ps_import = class_import_get(imp);
         sec->ps_lock = SPIN_LOCK_UNLOCKED;
-        atomic_set(&sec->ps_busy, 0);
         CFS_INIT_LIST_HEAD(&sec->ps_gc_list);
 
-        if (!ctx) {
+        if (!svcctx) {
                 sec->ps_gc_interval = GSS_GC_INTERVAL;
-                sec->ps_gc_next = cfs_time_current_sec() + sec->ps_gc_interval;
         } else {
                 LASSERT(sec_is_reverse(sec));
 
                 /* never do gc on reverse sec */
                 sec->ps_gc_interval = 0;
-                sec->ps_gc_next = 0;
         }
 
-        if (SEC_FLAVOR_SVC(flavor) == SPTLRPC_SVC_PRIV &&
-            flags & PTLRPC_SEC_FL_BULK)
+        if (sec->ps_flvr.sf_bulk_priv != BULK_PRIV_ALG_NULL &&
+            sec->ps_flvr.sf_flags & PTLRPC_SEC_FL_BULK)
                 sptlrpc_enc_pool_add_user();
 
-        CDEBUG(D_SEC, "create %s%s@%p\n", (ctx ? "reverse " : ""),
+        CDEBUG(D_SEC, "create %s%s@%p\n", (svcctx ? "reverse " : ""),
                policy->sp_name, gsec);
         return 0;
 }
@@ -1071,7 +1098,7 @@ void gss_sec_destroy_common(struct gss_sec *gsec)
 
         LASSERT(sec->ps_import);
         LASSERT(atomic_read(&sec->ps_refcount) == 0);
-        LASSERT(atomic_read(&sec->ps_busy) == 0);
+        LASSERT(atomic_read(&sec->ps_nctx) == 0);
 
         if (gsec->gs_mech) {
                 lgss_mech_put(gsec->gs_mech);
@@ -1080,11 +1107,16 @@ void gss_sec_destroy_common(struct gss_sec *gsec)
 
         class_import_put(sec->ps_import);
 
-        if (SEC_FLAVOR_SVC(sec->ps_flavor) == SPTLRPC_SVC_PRIV &&
-            sec->ps_flags & PTLRPC_SEC_FL_BULK)
+        if (sec->ps_flvr.sf_bulk_priv != BULK_PRIV_ALG_NULL &&
+            sec->ps_flvr.sf_flags & PTLRPC_SEC_FL_BULK)
                 sptlrpc_enc_pool_del_user();
 
         EXIT;
+}
+
+void gss_sec_kill(struct ptlrpc_sec *sec)
+{
+        sec->ps_dying = 1;
 }
 
 int gss_cli_ctx_init_common(struct ptlrpc_sec *sec,
@@ -1108,8 +1140,10 @@ int gss_cli_ctx_init_common(struct ptlrpc_sec *sec,
         CFS_INIT_LIST_HEAD(&ctx->cc_req_list);
         CFS_INIT_LIST_HEAD(&ctx->cc_gc_chain);
 
-        /* take a ref on belonging sec */
-        atomic_inc(&sec->ps_busy);
+        /* take a ref on belonging sec, balanced in ctx destroying */
+        atomic_inc(&sec->ps_refcount);
+        /* statistic only */
+        atomic_inc(&sec->ps_nctx);
 
         CDEBUG(D_SEC, "%s@%p: create ctx %p(%u->%s)\n",
                sec->ps_policy->sp_name, ctx->cc_sec,
@@ -1118,19 +1152,18 @@ int gss_cli_ctx_init_common(struct ptlrpc_sec *sec,
 }
 
 /*
- * return:
- *  -1: the destroy has been taken care of by someone else
- *   0: proceed to destroy the ctx
- *   1: busy count dropped to 0, proceed to destroy ctx and sec
+ * return value:
+ *   1: the context has been taken care of by someone else
+ *   0: proceed to really destroy the context locally
  */
 int gss_cli_ctx_fini_common(struct ptlrpc_sec *sec,
                             struct ptlrpc_cli_ctx *ctx)
 {
         struct gss_cli_ctx *gctx = ctx2gctx(ctx);
 
-        LASSERT(ctx->cc_sec == sec);
+        LASSERT(atomic_read(&sec->ps_nctx) > 0);
         LASSERT(atomic_read(&ctx->cc_refcount) == 0);
-        LASSERT(atomic_read(&sec->ps_busy) > 0);
+        LASSERT(ctx->cc_sec == sec);
 
         if (gctx->gc_mechctx) {
                 /* the final context fini rpc will use this ctx too, and it's
@@ -1143,21 +1176,16 @@ int gss_cli_ctx_fini_common(struct ptlrpc_sec *sec,
                 gss_cli_ctx_finalize(gctx);
 
                 if (!atomic_dec_and_test(&ctx->cc_refcount))
-                        return -1;
+                        return 1;
         }
 
         if (sec_is_reverse(sec))
-                CDEBUG(D_SEC, "reverse sec %p: destroy ctx %p\n",
-                       ctx->cc_sec, ctx);
+                CWARN("reverse sec %p: destroy ctx %p\n",
+                      ctx->cc_sec, ctx);
         else
                 CWARN("%s@%p: destroy ctx %p(%u->%s)\n",
                       sec->ps_policy->sp_name, ctx->cc_sec,
                       ctx, ctx->cc_vcred.vc_uid, sec2target_str(ctx->cc_sec));
-
-        if (atomic_dec_and_test(&sec->ps_busy)) {
-                LASSERT(atomic_read(&sec->ps_refcount) == 0);
-                return 1;
-        }
 
         return 0;
 }
@@ -1167,7 +1195,6 @@ int gss_alloc_reqbuf_intg(struct ptlrpc_sec *sec,
                           struct ptlrpc_request *req,
                           int svc, int msgsize)
 {
-        struct sec_flavor_config *conf;
         int                       bufsize, txtsize;
         int                       buflens[5], bufcnt = 2;
         ENTRY;
@@ -1194,17 +1221,17 @@ int gss_alloc_reqbuf_intg(struct ptlrpc_sec *sec,
         if (svc == SPTLRPC_SVC_INTG)
                 txtsize += buflens[1];
 
-        if (SEC_FLAVOR_HAS_USER(req->rq_sec_flavor)) {
+        if (req->rq_pack_udesc) {
                 buflens[bufcnt] = sptlrpc_current_user_desc_size();
                 if (svc == SPTLRPC_SVC_INTG)
                         txtsize += buflens[bufcnt];
                 bufcnt++;
         }
 
-        if (SEC_FLAVOR_HAS_BULK(req->rq_sec_flavor)) {
-                conf = &req->rq_import->imp_obd->u.cli.cl_sec_conf;
-                buflens[bufcnt] = bulk_sec_desc_size(conf->sfc_bulk_csum, 1,
-                                                     req->rq_bulk_read);
+        if (req->rq_pack_bulk) {
+                buflens[bufcnt] = bulk_sec_desc_size(
+                                                req->rq_flvr.sf_bulk_csum, 1,
+                                                req->rq_bulk_read);
                 if (svc == SPTLRPC_SVC_INTG)
                         txtsize += buflens[bufcnt];
                 bufcnt++;
@@ -1232,13 +1259,13 @@ int gss_alloc_reqbuf_intg(struct ptlrpc_sec *sec,
         }
 
         lustre_init_msg_v2(req->rq_reqbuf, bufcnt, buflens, NULL);
-        req->rq_reqbuf->lm_secflvr = req->rq_sec_flavor;
+        req->rq_reqbuf->lm_secflvr = req->rq_flvr.sf_rpc;
 
         req->rq_reqmsg = lustre_msg_buf(req->rq_reqbuf, 1, msgsize);
         LASSERT(req->rq_reqmsg);
 
         /* pack user desc here, later we might leave current user's process */
-        if (SEC_FLAVOR_HAS_USER(req->rq_sec_flavor))
+        if (req->rq_pack_udesc)
                 sptlrpc_pack_user_desc(req->rq_reqbuf, 2);
 
         RETURN(0);
@@ -1249,7 +1276,6 @@ int gss_alloc_reqbuf_priv(struct ptlrpc_sec *sec,
                           struct ptlrpc_request *req,
                           int msgsize)
 {
-        struct sec_flavor_config *conf;
         int                       ibuflens[3], ibufcnt;
         int                       buflens[3];
         int                       clearsize, wiresize;
@@ -1267,13 +1293,13 @@ int gss_alloc_reqbuf_priv(struct ptlrpc_sec *sec,
         ibufcnt = 1;
         ibuflens[0] = msgsize;
 
-        if (SEC_FLAVOR_HAS_USER(req->rq_sec_flavor))
+        if (req->rq_pack_udesc)
                 ibuflens[ibufcnt++] = sptlrpc_current_user_desc_size();
-        if (SEC_FLAVOR_HAS_BULK(req->rq_sec_flavor)) {
-                conf = &req->rq_import->imp_obd->u.cli.cl_sec_conf;
-                ibuflens[ibufcnt++] = bulk_sec_desc_size(conf->sfc_bulk_csum, 1,
-                                                         req->rq_bulk_read);
-        }
+        if (req->rq_pack_bulk)
+                ibuflens[ibufcnt++] = bulk_sec_desc_size(
+                                                req->rq_flvr.sf_bulk_csum, 1,
+                                                req->rq_bulk_read);
+
         clearsize = lustre_msg_size_v2(ibufcnt, ibuflens);
         /* to allow append padding during encryption */
         clearsize += GSS_MAX_CIPHER_BLOCK;
@@ -1321,7 +1347,7 @@ int gss_alloc_reqbuf_priv(struct ptlrpc_sec *sec,
         lustre_init_msg_v2(req->rq_clrbuf, ibufcnt, ibuflens, NULL);
         req->rq_reqmsg = lustre_msg_buf(req->rq_clrbuf, 0, msgsize);
 
-        if (SEC_FLAVOR_HAS_USER(req->rq_sec_flavor))
+        if (req->rq_pack_udesc)
                 sptlrpc_pack_user_desc(req->rq_clrbuf, 1);
 
         RETURN(0);
@@ -1335,9 +1361,9 @@ int gss_alloc_reqbuf(struct ptlrpc_sec *sec,
                      struct ptlrpc_request *req,
                      int msgsize)
 {
-        int     svc = SEC_FLAVOR_SVC(req->rq_sec_flavor);
+        int     svc = RPC_FLVR_SVC(req->rq_flvr.sf_rpc);
 
-        LASSERT(!SEC_FLAVOR_HAS_BULK(req->rq_sec_flavor) ||
+        LASSERT(!req->rq_pack_bulk ||
                 (req->rq_bulk_read || req->rq_bulk_write));
 
         switch (svc) {
@@ -1348,7 +1374,7 @@ int gss_alloc_reqbuf(struct ptlrpc_sec *sec,
         case SPTLRPC_SVC_PRIV:
                 return gss_alloc_reqbuf_priv(sec, req, msgsize);
         default:
-                LASSERTF(0, "bad flavor %x\n", req->rq_sec_flavor);
+                LASSERTF(0, "bad rpc flavor %x\n", req->rq_flvr.sf_rpc);
                 return 0;
         }
 }
@@ -1360,7 +1386,7 @@ void gss_free_reqbuf(struct ptlrpc_sec *sec,
         ENTRY;
 
         LASSERT(!req->rq_pool || req->rq_reqbuf);
-        privacy = SEC_FLAVOR_SVC(req->rq_sec_flavor) == SPTLRPC_SVC_PRIV;
+        privacy = RPC_FLVR_SVC(req->rq_flvr.sf_rpc) == SPTLRPC_SVC_PRIV;
 
         if (!req->rq_clrbuf)
                 goto release_reqbuf;
@@ -1381,10 +1407,14 @@ void gss_free_reqbuf(struct ptlrpc_sec *sec,
 
 release_reqbuf:
         if (!req->rq_pool && req->rq_reqbuf) {
+                LASSERT(req->rq_reqbuf_len);
+
                 OBD_FREE(req->rq_reqbuf, req->rq_reqbuf_len);
                 req->rq_reqbuf = NULL;
                 req->rq_reqbuf_len = 0;
         }
+
+        req->rq_reqmsg = NULL;
 
         EXIT;
 }
@@ -1406,7 +1436,6 @@ int gss_alloc_repbuf_intg(struct ptlrpc_sec *sec,
                           struct ptlrpc_request *req,
                           int svc, int msgsize)
 {
-        struct sec_flavor_config *conf;
         int                       txtsize;
         int                       buflens[4], bufcnt = 2;
 
@@ -1431,10 +1460,10 @@ int gss_alloc_repbuf_intg(struct ptlrpc_sec *sec,
         if (svc == SPTLRPC_SVC_INTG)
                 txtsize += buflens[1];
 
-        if (SEC_FLAVOR_HAS_BULK(req->rq_sec_flavor)) {
-                conf = &req->rq_import->imp_obd->u.cli.cl_sec_conf;
-                buflens[bufcnt] = bulk_sec_desc_size(conf->sfc_bulk_csum, 0,
-                                                     req->rq_bulk_read);
+        if (req->rq_pack_bulk) {
+                buflens[bufcnt] = bulk_sec_desc_size(
+                                                req->rq_flvr.sf_bulk_csum, 0,
+                                                req->rq_bulk_read);
                 if (svc == SPTLRPC_SVC_INTG)
                         txtsize += buflens[bufcnt];
                 bufcnt++;
@@ -1453,7 +1482,6 @@ int gss_alloc_repbuf_priv(struct ptlrpc_sec *sec,
                           struct ptlrpc_request *req,
                           int msgsize)
 {
-        struct sec_flavor_config *conf;
         int                       txtsize;
         int                       buflens[3], bufcnt;
 
@@ -1465,10 +1493,9 @@ int gss_alloc_repbuf_priv(struct ptlrpc_sec *sec,
         bufcnt = 1;
         buflens[0] = msgsize;
 
-        if (SEC_FLAVOR_HAS_BULK(req->rq_sec_flavor)) {
-                conf = &req->rq_import->imp_obd->u.cli.cl_sec_conf;
+        if (req->rq_pack_bulk) {
                 buflens[bufcnt++] = bulk_sec_desc_size(
-                                                conf->sfc_bulk_csum, 0,
+                                                req->rq_flvr.sf_bulk_csum, 0,
                                                 req->rq_bulk_read);
         }
         txtsize = lustre_msg_size_v2(bufcnt, buflens);
@@ -1492,10 +1519,10 @@ int gss_alloc_repbuf(struct ptlrpc_sec *sec,
                      struct ptlrpc_request *req,
                      int msgsize)
 {
-        int     svc = SEC_FLAVOR_SVC(req->rq_sec_flavor);
+        int     svc = RPC_FLVR_SVC(req->rq_flvr.sf_rpc);
         ENTRY;
 
-        LASSERT(!SEC_FLAVOR_HAS_BULK(req->rq_sec_flavor) ||
+        LASSERT(!req->rq_pack_bulk ||
                 (req->rq_bulk_read || req->rq_bulk_write));
 
         switch (svc) {
@@ -1506,7 +1533,7 @@ int gss_alloc_repbuf(struct ptlrpc_sec *sec,
         case SPTLRPC_SVC_PRIV:
                 return gss_alloc_repbuf_priv(sec, req, msgsize);
         default:
-                LASSERTF(0, "bad flavor %x\n", req->rq_sec_flavor);
+                LASSERTF(0, "bad rpc flavor %x\n", req->rq_flvr.sf_rpc);
                 return 0;
         }
 }
@@ -1517,6 +1544,8 @@ void gss_free_repbuf(struct ptlrpc_sec *sec,
         OBD_FREE(req->rq_repbuf, req->rq_repbuf_len);
         req->rq_repbuf = NULL;
         req->rq_repbuf_len = 0;
+
+        req->rq_repmsg = NULL;
 }
 
 static int get_enlarged_msgsize(struct lustre_msg *msg,
@@ -1726,7 +1755,7 @@ int gss_enlarge_reqbuf(struct ptlrpc_sec *sec,
                        struct ptlrpc_request *req,
                        int segment, int newsize)
 {
-        int     svc = SEC_FLAVOR_SVC(req->rq_sec_flavor);
+        int     svc = RPC_FLVR_SVC(req->rq_flvr.sf_rpc);
 
         LASSERT(!req->rq_ctx_init && !req->rq_ctx_fini);
 
@@ -1738,7 +1767,7 @@ int gss_enlarge_reqbuf(struct ptlrpc_sec *sec,
         case SPTLRPC_SVC_PRIV:
                 return gss_enlarge_reqbuf_priv(sec, req, segment, newsize);
         default:
-                LASSERTF(0, "bad flavor %x\n", req->rq_sec_flavor);
+                LASSERTF(0, "bad rpc flavor %x\n", req->rq_flvr.sf_rpc);
                 return 0;
         }
 }
@@ -1800,8 +1829,9 @@ static
 int gss_svc_sign(struct ptlrpc_request *req,
                  struct ptlrpc_reply_state *rs,
                  struct gss_svc_reqctx *grctx,
-                 int svc)
+                 __u32 svc)
 {
+        __u32   flags = 0;
         int     rc;
         ENTRY;
 
@@ -1811,9 +1841,12 @@ int gss_svc_sign(struct ptlrpc_request *req,
         if (req->rq_replen != rs->rs_repbuf->lm_buflens[1])
                 lustre_shrink_msg(rs->rs_repbuf, 1, req->rq_replen, 1);
 
+        if (req->rq_pack_bulk)
+                flags |= LUSTRE_GSS_PACK_BULK;
+
         rc = gss_sign_msg(rs->rs_repbuf, grctx->src_ctx->gsc_mechctx,
-                          PTLRPC_GSS_PROC_DATA, grctx->src_wirectx.gw_seq,
-                          svc, NULL);
+                          LUSTRE_SP_ANY, flags, PTLRPC_GSS_PROC_DATA,
+                          grctx->src_wirectx.gw_seq, svc, NULL);
         if (rc < 0)
                 RETURN(rc);
 
@@ -1880,6 +1913,11 @@ int gss_svc_handle_init(struct ptlrpc_request *req,
 
         req->rq_ctx_init = 1;
 
+        if (gw->gw_flags & LUSTRE_GSS_PACK_BULK) {
+                CERROR("unexpected bulk flag\n");
+                RETURN(SECSVC_DROP);
+        }
+
         if (gw->gw_proc == PTLRPC_GSS_PROC_INIT && gw->gw_handle.len != 0) {
                 CERROR("proc %u: invalid handle length %u\n",
                        gw->gw_proc, gw->gw_handle.len);
@@ -1915,7 +1953,7 @@ int gss_svc_handle_init(struct ptlrpc_request *req,
         uuid = (struct obd_uuid *) uuid_obj.data;
         target = class_uuid2obd(uuid);
         if (!target || target->obd_stopping || !target->obd_set_up) {
-                CERROR("target '%s' is not available for context init (%s)",
+                CERROR("target '%s' is not available for context init (%s)\n",
                        uuid->uuid, target == NULL ? "no target" :
                        (target->obd_stopping ? "stopping" : "not set up"));
                 RETURN(SECSVC_DROP);
@@ -1939,14 +1977,15 @@ int gss_svc_handle_init(struct ptlrpc_request *req,
                 RETURN(rc);
 
         if (grctx->src_ctx->gsc_usr_mds || grctx->src_ctx->gsc_usr_root)
-                CWARN("user from %s authenticated as %s\n",
-                      libcfs_nid2str(req->rq_peer.nid),
+                CWARN("create svc ctx %p: user from %s authenticated as %s\n",
+                      grctx->src_ctx, libcfs_nid2str(req->rq_peer.nid),
                       grctx->src_ctx->gsc_usr_mds ? "mds" : "root");
         else
-                CWARN("accept user %u from %s\n", grctx->src_ctx->gsc_uid,
+                CWARN("create svc ctx %p: accept user %u from %s\n",
+                      grctx->src_ctx, grctx->src_ctx->gsc_uid,
                       libcfs_nid2str(req->rq_peer.nid));
 
-        if (SEC_FLAVOR_HAS_USER(req->rq_sec_flavor)) {
+        if (gw->gw_flags & LUSTRE_GSS_PACK_USER) {
                 if (reqbuf->lm_bufcount < 4) {
                         CERROR("missing user descriptor\n");
                         RETURN(SECSVC_DROP);
@@ -1955,6 +1994,8 @@ int gss_svc_handle_init(struct ptlrpc_request *req,
                         CERROR("Mal-formed user descriptor\n");
                         RETURN(SECSVC_DROP);
                 }
+
+                req->rq_pack_udesc = 1;
                 req->rq_user_desc = lustre_msg_buf(reqbuf, 2, 0);
         }
 
@@ -1998,7 +2039,8 @@ int gss_svc_verify_request(struct ptlrpc_request *req,
         if (*major != GSS_S_COMPLETE)
                 RETURN(-EACCES);
 
-        if (gss_check_seq_num(&gctx->gsc_seqdata, gw->gw_seq, 1)) {
+        if (gctx->gsc_reverse == 0 &&
+            gss_check_seq_num(&gctx->gsc_seqdata, gw->gw_seq, 1)) {
                 CERROR("phase 1+: discard replayed req: seq %u\n", gw->gw_seq);
                 *major = GSS_S_DUPLICATE_TOKEN;
                 RETURN(-EACCES);
@@ -2006,7 +2048,7 @@ int gss_svc_verify_request(struct ptlrpc_request *req,
 
 verified:
         /* user descriptor */
-        if (SEC_FLAVOR_HAS_USER(req->rq_sec_flavor)) {
+        if (gw->gw_flags & LUSTRE_GSS_PACK_USER) {
                 if (msg->lm_bufcount < (offset + 1)) {
                         CERROR("no user desc included\n");
                         RETURN(-EINVAL);
@@ -2017,12 +2059,13 @@ verified:
                         RETURN(-EINVAL);
                 }
 
+                req->rq_pack_udesc = 1;
                 req->rq_user_desc = lustre_msg_buf(msg, offset, 0);
                 offset++;
         }
 
         /* check bulk cksum data */
-        if (SEC_FLAVOR_HAS_BULK(req->rq_sec_flavor)) {
+        if (gw->gw_flags & LUSTRE_GSS_PACK_BULK) {
                 if (msg->lm_bufcount < (offset + 1)) {
                         CERROR("no bulk checksum included\n");
                         RETURN(-EINVAL);
@@ -2031,6 +2074,7 @@ verified:
                 if (bulk_sec_desc_unpack(msg, offset))
                         RETURN(-EINVAL);
 
+                req->rq_pack_bulk = 1;
                 grctx->src_reqbsd = lustre_msg_buf(msg, offset, 0);
                 grctx->src_reqbsd_size = lustre_msg_buflen(msg, offset);
         }
@@ -2079,7 +2123,7 @@ int gss_svc_unseal_request(struct ptlrpc_request *req,
                 RETURN(-EINVAL);
         }
 
-        if (SEC_FLAVOR_HAS_USER(req->rq_sec_flavor)) {
+        if (gw->gw_flags & LUSTRE_GSS_PACK_USER) {
                 if (msg->lm_bufcount < offset + 1) {
                         CERROR("no user descriptor included\n");
                         RETURN(-EINVAL);
@@ -2090,11 +2134,12 @@ int gss_svc_unseal_request(struct ptlrpc_request *req,
                         RETURN(-EINVAL);
                 }
 
+                req->rq_pack_udesc = 1;
                 req->rq_user_desc = lustre_msg_buf(msg, offset, 0);
                 offset++;
         }
 
-        if (SEC_FLAVOR_HAS_BULK(req->rq_sec_flavor)) {
+        if (gw->gw_flags & LUSTRE_GSS_PACK_BULK) {
                 if (msg->lm_bufcount < offset + 1) {
                         CERROR("no bulk checksum included\n");
                         RETURN(-EINVAL);
@@ -2103,6 +2148,7 @@ int gss_svc_unseal_request(struct ptlrpc_request *req,
                 if (bulk_sec_desc_unpack(msg, offset))
                         RETURN(-EINVAL);
 
+                req->rq_pack_bulk = 1;
                 grctx->src_reqbsd = lustre_msg_buf(msg, offset, 0);
                 grctx->src_reqbsd_size = lustre_msg_buflen(msg, offset);
         }
@@ -2170,7 +2216,7 @@ int gss_svc_handle_destroy(struct ptlrpc_request *req,
 
         grctx->src_ctx = gss_svc_upcall_get_ctx(req, gw);
         if (!grctx->src_ctx) {
-                CWARN("invalid gss context handle for destroy.\n");
+                CDEBUG(D_SEC, "invalid gss context handle for destroy.\n");
                 RETURN(SECSVC_DROP);
         }
 
@@ -2182,12 +2228,13 @@ int gss_svc_handle_destroy(struct ptlrpc_request *req,
         if (gss_svc_verify_request(req, grctx, gw, &major))
                 RETURN(SECSVC_DROP);
 
-        CWARN("destroy svc ctx %p(%u->%s)\n", grctx->src_ctx,
-               grctx->src_ctx->gsc_uid, libcfs_nid2str(req->rq_peer.nid));
+        CWARN("destroy svc ctx %p idx "LPX64" (%u->%s)\n",
+              grctx->src_ctx, gss_handle_to_u64(&gw->gw_handle),
+              grctx->src_ctx->gsc_uid, libcfs_nid2str(req->rq_peer.nid));
 
         gss_svc_upcall_destroy_ctx(grctx->src_ctx);
 
-        if (SEC_FLAVOR_HAS_USER(req->rq_sec_flavor)) {
+        if (gw->gw_flags & LUSTRE_GSS_PACK_USER) {
                 if (req->rq_reqbuf->lm_bufcount < 4) {
                         CERROR("missing user descriptor, ignore it\n");
                         RETURN(SECSVC_OK);
@@ -2196,6 +2243,8 @@ int gss_svc_handle_destroy(struct ptlrpc_request *req,
                         CERROR("Mal-formed user descriptor, ignore it\n");
                         RETURN(SECSVC_OK);
                 }
+
+                req->rq_pack_udesc = 1;
                 req->rq_user_desc = lustre_msg_buf(req->rq_reqbuf, 2, 0);
         }
 
@@ -2231,6 +2280,8 @@ int gss_svc_accept(struct ptlrpc_sec_policy *policy, struct ptlrpc_request *req)
                 RETURN(SECSVC_DROP);
         }
 
+        req->rq_sp_from = ghdr->gh_sp;
+
         /* alloc grctx data */
         OBD_ALLOC_PTR(grctx);
         if (!grctx) {
@@ -2243,6 +2294,7 @@ int gss_svc_accept(struct ptlrpc_sec_policy *policy, struct ptlrpc_request *req)
         gw = &grctx->src_wirectx;
 
         /* save wire context */
+        gw->gw_flags = ghdr->gh_flags;
         gw->gw_proc = ghdr->gh_proc;
         gw->gw_seq = ghdr->gh_seq;
         gw->gw_svc = ghdr->gh_svc;
@@ -2331,13 +2383,12 @@ int gss_svc_alloc_rs(struct ptlrpc_request *req, int msglen)
 
         LASSERT(msglen % 8 == 0);
 
-        if (SEC_FLAVOR_HAS_BULK(req->rq_sec_flavor) &&
-            !req->rq_bulk_read && !req->rq_bulk_write) {
+        if (req->rq_pack_bulk && !req->rq_bulk_read && !req->rq_bulk_write) {
                 CERROR("client request bulk sec on non-bulk rpc\n");
                 RETURN(-EPROTO);
         }
 
-        svc = SEC_FLAVOR_SVC(req->rq_sec_flavor);
+        svc = RPC_FLVR_SVC(req->rq_flvr.sf_rpc);
 
         grctx = gss_svc_ctx2reqctx(req->rq_svc_ctx);
         if (gss_svc_reqctx_is_special(grctx))
@@ -2350,7 +2401,7 @@ int gss_svc_alloc_rs(struct ptlrpc_request *req, int msglen)
                 ibufcnt = 1;
                 ibuflens[0] = msglen;
 
-                if (SEC_FLAVOR_HAS_BULK(req->rq_sec_flavor)) {
+                if (req->rq_pack_bulk) {
                         LASSERT(grctx->src_reqbsd);
 
                         bsd_off = ibufcnt;
@@ -2376,7 +2427,7 @@ int gss_svc_alloc_rs(struct ptlrpc_request *req, int msglen)
                 if (svc == SPTLRPC_SVC_INTG)
                         txtsize += buflens[1];
 
-                if (SEC_FLAVOR_HAS_BULK(req->rq_sec_flavor)) {
+                if (req->rq_pack_bulk) {
                         LASSERT(grctx->src_reqbsd);
 
                         bsd_off = bufcnt;
@@ -2418,7 +2469,7 @@ int gss_svc_alloc_rs(struct ptlrpc_request *req, int msglen)
                 rs->rs_msg = lustre_msg_buf(rs->rs_repbuf, 0, msglen);
         } else {
                 lustre_init_msg_v2(rs->rs_repbuf, bufcnt, buflens, NULL);
-                rs->rs_repbuf->lm_secflvr = req->rq_sec_flavor;
+                rs->rs_repbuf->lm_secflvr = req->rq_flvr.sf_rpc;
 
                 rs->rs_msg = lustre_msg_buf(rs->rs_repbuf, 1, 0);
         }
@@ -2492,7 +2543,7 @@ int gss_svc_seal(struct ptlrpc_request *req,
 
         LASSERT(lustre_msg_size_v2(3, buflens) <= rs->rs_repbuf_len);
         lustre_init_msg_v2(rs->rs_repbuf, 3, buflens, NULL);
-        rs->rs_repbuf->lm_secflvr = req->rq_sec_flavor;
+        rs->rs_repbuf->lm_secflvr = req->rq_flvr.sf_rpc;
 
         /* gss header */
         ghdr = lustre_msg_buf(rs->rs_repbuf, 0, 0);
@@ -2502,6 +2553,8 @@ int gss_svc_seal(struct ptlrpc_request *req,
         ghdr->gh_seq = grctx->src_wirectx.gw_seq;
         ghdr->gh_svc = SPTLRPC_SVC_PRIV;
         ghdr->gh_handle.len = 0;
+        if (req->rq_pack_bulk)
+                ghdr->gh_flags |= LUSTRE_GSS_PACK_BULK;
 
         /* header signature */
         msgobj.len = rs->rs_repbuf->lm_buflens[0];
@@ -2601,33 +2654,53 @@ int gss_copy_rvc_cli_ctx(struct ptlrpc_cli_ctx *cli_ctx,
                          struct ptlrpc_svc_ctx *svc_ctx)
 {
         struct gss_cli_ctx     *cli_gctx = ctx2gctx(cli_ctx);
-        struct gss_svc_reqctx  *grctx;
+        struct gss_svc_ctx     *svc_gctx = gss_svc_ctx2gssctx(svc_ctx);
         struct gss_ctx         *mechctx = NULL;
+
+        LASSERT(cli_gctx);
+        LASSERT(svc_gctx && svc_gctx->gsc_mechctx);
 
         cli_gctx->gc_proc = PTLRPC_GSS_PROC_DATA;
         cli_gctx->gc_win = GSS_SEQ_WIN;
-        atomic_set(&cli_gctx->gc_seq, 0);
 
-        grctx = container_of(svc_ctx, struct gss_svc_reqctx, src_base);
-        LASSERT(grctx->src_ctx);
-        LASSERT(grctx->src_ctx->gsc_mechctx);
+        /* The problem is the reverse ctx might get lost in some recovery
+         * situations, and the same svc_ctx will be used to re-create it.
+         * if there's callback be sentout before that, new reverse ctx start
+         * with sequence 0 will lead to future callback rpc be treated as
+         * replay.
+         *
+         * each reverse root ctx will record its latest sequence number on its
+         * buddy svcctx before be destroied, so here we continue use it.
+         */
+        atomic_set(&cli_gctx->gc_seq, svc_gctx->gsc_rvs_seq);
 
-        if (lgss_copy_reverse_context(grctx->src_ctx->gsc_mechctx, &mechctx) !=
-            GSS_S_COMPLETE) {
-                CERROR("failed to copy mech context\n");
-                return -ENOMEM;
+        if (gss_svc_upcall_dup_handle(&cli_gctx->gc_svc_handle, svc_gctx)) {
+                CERROR("failed to dup svc handle\n");
+                goto err_out;
         }
 
-        if (rawobj_dup(&cli_gctx->gc_handle, &grctx->src_ctx->gsc_rvs_hdl)) {
+        if (lgss_copy_reverse_context(svc_gctx->gsc_mechctx, &mechctx) !=
+            GSS_S_COMPLETE) {
+                CERROR("failed to copy mech context\n");
+                goto err_svc_handle;
+        }
+
+        if (rawobj_dup(&cli_gctx->gc_handle, &svc_gctx->gsc_rvs_hdl)) {
                 CERROR("failed to dup reverse handle\n");
-                lgss_delete_sec_context(&mechctx);
-                return -ENOMEM;
+                goto err_ctx;
         }
 
         cli_gctx->gc_mechctx = mechctx;
         gss_cli_ctx_uptodate(cli_gctx);
 
         return 0;
+
+err_ctx:
+        lgss_delete_sec_context(&mechctx);
+err_svc_handle:
+        rawobj_free(&cli_gctx->gc_svc_handle);
+err_out:
+        return -ENOMEM;
 }
 
 int __init sptlrpc_gss_init(void)

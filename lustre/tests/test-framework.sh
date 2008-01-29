@@ -13,6 +13,7 @@ export CATASTROPHE=${CATASTROPHE:-/proc/sys/lnet/catastrophe}
 export GSS=false
 export GSS_KRB5=false
 export GSS_PIPEFS=false
+export IDENTITY_UPCALL=false
 #export PDSH="pdsh -S -Rssh -w"
 
 # eg, assert_env LUSTRE MDSNODES OSTNODES CLIENTS
@@ -77,10 +78,17 @@ init_test_env() {
 
     export PATH=:$PATH:$LUSTRE/utils:$LUSTRE/utils/gss:$LUSTRE/tests
     export LCTL=${LCTL:-"$LUSTRE/utils/lctl"}
-    export LFS=${LFS:-"$LUSTRE/utils/lfs"}
     [ ! -f "$LCTL" ] && export LCTL=$(which lctl) 
     export LFS=${LFS:-"$LUSTRE/utils/lfs"}
     [ ! -f "$LFS" ] && export LFS=$(which lfs) 
+    export L_GETIDENTITY=${L_GETIDENTITY:-"$LUSTRE/utils/l_getidentity"}
+    if [ ! -f "$L_GETIDENTITY" ]; then
+        if `which l_getidentity > /dev/null 2>&1`; then
+            export L_GETIDENTITY=$(which l_getidentity)
+        else
+            export L_GETIDENTITY=NONE
+        fi
+    fi
     export MKFS=${MKFS:-"$LUSTRE/utils/mkfs.lustre"}
     [ ! -f "$MKFS" ] && export MKFS=$(which mkfs.lustre) 
     export TUNEFS=${TUNEFS:-"$LUSTRE/utils/tunefs.lustre"}
@@ -90,7 +98,10 @@ init_test_env() {
     export NAME=${NAME:-local}
     export LPROC=/proc/fs/lustre
     export LGSSD=${LGSSD:-"$LUSTRE/utils/gss/lgssd"}
+    [ "$GSS_PIPEFS" = "true" ] && [ ! -f "$LGSSD" ] && \
+        export LGSSD=$(which lgssd)
     export LSVCGSSD=${LSVCGSSD:-"$LUSTRE/utils/gss/lsvcgssd"}
+    [ ! -f "$LSVCGSSD" ] && export LSVCGSSD=$(which lsvcgssd) 
     export KRB5DIR=${KRB5DIR:-"/usr/kerberos"}
     export DIR2
 
@@ -103,6 +114,15 @@ init_test_env() {
             echo "Using GSS/krb5 ptlrpc security flavor"
             GSS=true
             GSS_KRB5=true
+            ;;
+    esac
+
+    case "x$ID" in
+        xtrue)
+            IDENTITY_UPCALL=true
+            ;;
+        xfalse)
+            IDENTITY_UPCALL=false
             ;;
     esac
 
@@ -339,18 +359,13 @@ stop_gss_daemons() {
     send_sigint client lgssd
 }
 
-init_krb5_env() {
-    if [ ! -z $SEC ]; then
-        MDS_MOUNT_OPTS=$MDS_MOUNT_OPTS,sec=$SEC
-        OST_MOUNT_OPTS=$OST_MOUNT_OPTS,sec=$SEC
-    fi
-
+init_gss() {
     if $GSS; then
         start_gss_daemons
     fi
 }
 
-cleanup_krb5_env() {
+cleanup_gss() {
     if $GSS; then
         stop_gss_daemons
         # maybe cleanup credential cache?
@@ -847,7 +862,7 @@ stopall() {
 cleanupall() {
     stopall $*
     unload_modules
-    cleanup_krb5_env
+    cleanup_gss
 }
 
 mdsmkfsopts()
@@ -858,6 +873,11 @@ mdsmkfsopts()
 
 formatall() {
     [ "$FSTYPE" ] && FSTYPE_OPT="--backfstype $FSTYPE"
+
+    if [ ! -z $SEC ]; then
+        MDS_MKFS_OPTS="$MDS_MKFS_OPTS --param srpc.flavor.default=$SEC"
+        OST_MKFS_OPTS="$OST_MKFS_OPTS --param srpc.flavor.default=$SEC"
+    fi
 
     stopall
     # We need ldiskfs here, may as well load them all
@@ -887,9 +907,40 @@ mount_client() {
     grep " $1 " /proc/mounts || zconf_mount `hostname` $*
 }
 
+# return value:
+# 0: success, the old identity set already.
+# 1: success, the old identity does not set.
+# 2: fail.
+switch_identity() {
+    local num=$1
+    local switch=$2
+    local j=`expr $num - 1`
+    local MDT="`do_facet mds$num ls -l $LPROC/mdt/ 2>/dev/null | grep MDT | awk '{print $9}' | grep $j$`"
+
+    if [ -z "$MDT" ]; then
+        return 2
+    fi
+
+    local old="`do_facet mds$num cat $LPROC/mdt/$MDT/identity_upcall`"
+
+    if [ $switch ]; then
+        do_facet mds$num "echo \"$L_GETIDENTITY\" > $LPROC/mdt/$MDT/identity_upcall"
+    else
+        do_facet mds$num "echo \"NONE\" > $LPROC/mdt/$MDT/identity_upcall"
+    fi
+
+    do_facet mds$num "echo \"-1\" > $LPROC/mdt/$MDT/identity_flush"
+
+    if [ $old = "NONE" ]; then
+        return 1
+    else
+        return 0
+    fi
+}
+
 setupall() {
     load_modules
-    init_krb5_env
+    init_gss
     if [ -z "$CLIENTONLY" ]; then
         echo "Setup mdts, osts"
         for num in `seq $MDSCOUNT`; do
@@ -897,6 +948,7 @@ setupall() {
             echo $REFORMAT | grep -q "reformat" \
             || do_facet mds$num "$TUNEFS --writeconf $DEVNAME"
             start mds$num $DEVNAME $MDS_MOUNT_OPTS
+            switch_identity $num $IDENTITY_UPCALL
         done
         for num in `seq $OSTCOUNT`; do
             DEVNAME=$(ostdevname $num)

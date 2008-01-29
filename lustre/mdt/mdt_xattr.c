@@ -68,9 +68,6 @@ static int mdt_getxattr_pack_reply(struct mdt_thread_info * info)
                     !strncmp(xattr_name, user_string, sizeof(user_string) - 1))
                         RETURN(-EOPNOTSUPP);
                 
-                if (!strcmp(xattr_name, XATTR_NAME_LUSTRE_ACL))
-                        size = RMTACL_SIZE_MAX;
-                else
                         size = mo_xattr_get(info->mti_env,
                                             mdt_object_child(info->mti_object),
                                             &LU_BUF_NULL, xattr_name);
@@ -108,32 +105,11 @@ static int mdt_getxattr_pack_reply(struct mdt_thread_info * info)
         RETURN(size);
 }
 
-static int do_remote_getfacl(struct mdt_thread_info *info, struct lu_buf *buf)
-{
-        struct ptlrpc_request *req = mdt_info_req(info);
-        char *cmd;
-        int rc;
-        ENTRY;
-
-        if (!buf->lb_buf || (buf->lb_len != RMTACL_SIZE_MAX))
-                RETURN(-EINVAL);
-
-        cmd = req_capsule_client_get(&info->mti_pill, &RMF_EADATA);
-        if (!cmd) {
-                CERROR("missing getfacl command!\n");
-                RETURN(-EFAULT);
-        }
-
-        rc = mdt_rmtacl_upcall(info, cmd, buf);
-        if (rc)
-                CERROR("remote acl upcall failed: %d\n", rc);
-
-        lustre_shrink_reply(req, REPLY_REC_OFF + 1, strlen(buf->lb_buf) + 1, 0);
-        RETURN(rc ?: strlen(buf->lb_buf) + 1);
-}
-
 int mdt_getxattr(struct mdt_thread_info *info)
 {
+        struct ptlrpc_request  *req = mdt_info_req(info);
+        struct mdt_export_data *med = mdt_req2med(req);
+        struct md_ucred        *uc  = mdt_ucred(info);
         struct  mdt_body       *reqbody;
         struct  mdt_body       *repbody = NULL;
         struct  md_object      *next;
@@ -154,6 +130,23 @@ int mdt_getxattr(struct mdt_thread_info *info)
         if (rc)
                 RETURN(err_serious(rc));
 
+        next = mdt_object_child(info->mti_object);
+
+        if (info->mti_body->valid & OBD_MD_FLRMTRGETFACL) {
+                __u32 perm = mdt_identity_get_perm(uc->mu_identity,
+                                                   med->med_rmtclient,
+                                                   req->rq_peer.nid);
+
+                LASSERT(med->med_rmtclient);
+                if (!(perm & CFS_RMTACL_PERM))
+                        GOTO(out, rc = err_serious(-EPERM));
+
+                rc = mo_permission(info->mti_env, NULL, next, NULL,
+                                   MAY_RGETFACL);
+                if (rc)
+                        GOTO(out, rc = err_serious(rc));
+        }
+
         easize = mdt_getxattr_pack_reply(info);
         if (easize < 0)
                 GOTO(out, rc = err_serious(easize));
@@ -168,20 +161,36 @@ int mdt_getxattr(struct mdt_thread_info *info)
         buf = &info->mti_buf;
         buf->lb_buf = req_capsule_server_get(&info->mti_pill, &RMF_EADATA);
         buf->lb_len = easize;
-        next = mdt_object_child(info->mti_object);
 
         if (info->mti_body->valid & OBD_MD_FLXATTR) {
+                int flags = CFS_IC_NOTHING;
                 char *xattr_name = req_capsule_client_get(&info->mti_pill,
                                                           &RMF_NAME);
                 CDEBUG(D_INODE, "getxattr %s\n", xattr_name);
 
-                if (!strcmp(xattr_name, XATTR_NAME_LUSTRE_ACL))
-                        rc = do_remote_getfacl(info, buf);
-                else
                         rc = mo_xattr_get(info->mti_env, next, buf, xattr_name);
-
-                if (rc < 0)
+                if (rc < 0) {
                         CERROR("getxattr failed: %d\n", rc);
+                        GOTO(out, rc);
+                }
+
+                if (info->mti_body->valid &
+                    (OBD_MD_FLRMTLSETFACL | OBD_MD_FLRMTLGETFACL))
+                        flags = CFS_IC_ALL;
+                else if (info->mti_body->valid & OBD_MD_FLRMTRGETFACL)
+                        flags = CFS_IC_MAPPED;
+
+                if (rc > 0 && flags != CFS_IC_NOTHING) {
+                        int rc1;
+
+                        LASSERT(med->med_rmtclient);
+                        rc1 = lustre_posix_acl_xattr_id2client(uc,
+                                        med->med_idmap,
+                                        (posix_acl_xattr_header *)(buf->lb_buf),
+                                        rc, flags);
+                        if (unlikely(rc1 < 0))
+                                rc = rc1;
+                }
         } else if (info->mti_body->valid & OBD_MD_FLXATTRLS) {
                 CDEBUG(D_INODE, "listxattr\n");
 
@@ -201,60 +210,58 @@ out:
         return rc;
 }
 
-/* return EADATA length to the caller. negative value means error */
-static int mdt_setxattr_pack_reply(struct mdt_thread_info * info)
-{
-        struct req_capsule     *pill = &info->mti_pill ;
-        __u64                   valid = info->mti_body->valid;
-        int                     rc = 0, rc1;
-
-        if ((valid & OBD_MD_FLXATTR) == OBD_MD_FLXATTR) {
-                char *xattr_name;
-
-                xattr_name = req_capsule_client_get(pill, &RMF_NAME);
-                if (!xattr_name)
-                        return -EFAULT;
-
-                if (!strcmp(xattr_name, XATTR_NAME_LUSTRE_ACL))
-                        rc = RMTACL_SIZE_MAX;
-        }
-
-        req_capsule_set_size(pill, &RMF_EADATA, RCL_SERVER, rc);
-
-        rc1 = req_capsule_pack(pill);
-
-        return rc = rc1 ? rc1 : rc;
-}
-
-static int do_remote_setfacl(struct mdt_thread_info *info)
+static int mdt_rmtlsetfacl(struct mdt_thread_info *info, char *xattr_name,
+                           ext_acl_xattr_header *header,
+                           posix_acl_xattr_header **out)
 {
         struct ptlrpc_request *req = mdt_info_req(info);
+        struct mdt_export_data *med = mdt_req2med(req);
+        struct md_ucred *uc = mdt_ucred(info);
+        struct md_object *next = mdt_object_child(info->mti_object);
         struct lu_buf         *buf = &info->mti_buf;
-        char *cmd;
         int rc;
         ENTRY;
 
-        cmd = req_capsule_client_get(&info->mti_pill, &RMF_EADATA);
-        if (!cmd) {
-                CERROR("missing setfacl command!\n");
-                RETURN(-EFAULT);
-        }
-
-        buf->lb_buf = req_capsule_server_get(&info->mti_pill, &RMF_EADATA);
-        LASSERT(buf->lb_buf);
-        buf->lb_len = RMTACL_SIZE_MAX;
-
-        rc = mdt_rmtacl_upcall(info, cmd, buf);
+        rc = lustre_ext_acl_xattr_id2server(uc, med->med_idmap, header);
         if (rc)
-                CERROR("remote acl upcall failed: %d\n", rc);
+                RETURN(rc);
+ 
+        rc = mo_xattr_get(info->mti_env, next, &LU_BUF_NULL, xattr_name);
+        if (rc == -ENODATA)
+                rc = 0;
+        else if (rc < 0)
+                RETURN(rc);
 
-        lustre_shrink_reply(req, REPLY_REC_OFF, strlen(buf->lb_buf) + 1, 0);
-        RETURN(rc);
+        buf->lb_len = rc;
+        if (buf->lb_len > 0) {
+                OBD_ALLOC(buf->lb_buf, buf->lb_len);
+                if (unlikely(buf->lb_buf == NULL))
+                        RETURN(-ENOMEM);
+
+                rc = mo_xattr_get(info->mti_env, next, buf, xattr_name);
+                if (rc < 0) {
+                        CERROR("getxattr failed: %d\n", rc);
+                        GOTO(_out, rc);
+        }
+        } else
+                buf->lb_buf = NULL;
+
+        rc = lustre_acl_xattr_merge2posix((posix_acl_xattr_header *)(buf->lb_buf),
+                                          buf->lb_len, header, out);
+        EXIT;
+
+_out:
+        if (rc <= 0 && buf->lb_buf != NULL)
+                OBD_FREE(buf->lb_buf, buf->lb_len);
+
+        return rc;
 }
 
 int mdt_setxattr(struct mdt_thread_info *info)
 {
         struct ptlrpc_request   *req = mdt_info_req(info);
+        struct mdt_export_data  *med = mdt_req2med(req);
+        struct md_ucred         *uc  = mdt_ucred(info);
         struct mdt_body         *reqbody;
         const char               user_string[] = "user.";
         const char               trust_string[] = "trusted.";
@@ -267,9 +274,10 @@ int mdt_setxattr(struct mdt_thread_info *info)
         struct lu_buf           *buf  = &info->mti_buf;
         __u64                    valid  = body->valid;
         char                    *xattr_name;
-        int                      xattr_len;
+        int                      xattr_len = 0;
         __u64                    lockpart;
         int                      rc;
+        posix_acl_xattr_header  *new_xattr = NULL;
         ENTRY;
 
         CDEBUG(D_INODE, "setxattr "DFID"\n", PFID(&body->fid1));
@@ -285,7 +293,17 @@ int mdt_setxattr(struct mdt_thread_info *info)
         if (rc)
                 RETURN(err_serious(rc));
 
-        rc = mdt_setxattr_pack_reply(info);
+        if (valid & OBD_MD_FLRMTRSETFACL) {
+                __u32 perm = mdt_identity_get_perm(uc->mu_identity,
+                                                   med->med_rmtclient,
+                                                   req->rq_peer.nid);
+
+                LASSERT(med->med_rmtclient);
+                if (!(perm & CFS_RMTACL_PERM))
+                        GOTO(out, rc = err_serious(-EPERM));
+        }
+
+        rc = req_capsule_pack(pill);
         if (rc < 0)
                 GOTO(out, rc = err_serious(rc));
 
@@ -296,12 +314,6 @@ int mdt_setxattr(struct mdt_thread_info *info)
 
         CDEBUG(D_INODE, "%s xattr %s\n",
                   body->valid & OBD_MD_FLXATTR ? "set" : "remove", xattr_name);
-
-        if (((valid & OBD_MD_FLXATTR) == OBD_MD_FLXATTR) &&
-            (!strcmp(xattr_name, XATTR_NAME_LUSTRE_ACL))) {
-                rc = do_remote_setfacl(info);
-                GOTO(out, rc);
-        }
 
         if (strncmp(xattr_name, trust_string, sizeof(trust_string) - 1) == 0) {
                 if (strcmp(xattr_name + 8, XATTR_NAME_LOV) == 0)
@@ -335,6 +347,17 @@ int mdt_setxattr(struct mdt_thread_info *info)
                         int flags = 0;
                         xattr = req_capsule_client_get(pill, &RMF_EADATA);
 
+                        if (valid & OBD_MD_FLRMTLSETFACL) {
+                                LASSERT(med->med_rmtclient);
+                                xattr_len = mdt_rmtlsetfacl(info, xattr_name,
+                                                (ext_acl_xattr_header *)xattr,
+                                                &new_xattr);
+                                if (xattr_len < 0)
+                                        GOTO(out_unlock, rc = xattr_len);
+
+                                xattr = (char *)new_xattr;
+                        }
+
                         if (body->flags & XATTR_REPLACE)
                                 flags |= LU_XATTR_REPLACE;
 
@@ -356,6 +379,8 @@ int mdt_setxattr(struct mdt_thread_info *info)
         }
         EXIT;
 out_unlock:
+        if (unlikely(new_xattr != NULL))
+                lustre_posix_acl_xattr_free(new_xattr, xattr_len);
         mdt_object_unlock(info, obj, lh, rc);
 out:
         mdt_exit_ucred(info);

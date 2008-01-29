@@ -370,6 +370,10 @@ struct filter_obd {
         int                      fo_fmd_max_num; /* per exp filter_mod_data */
         int                      fo_fmd_max_age; /* jiffies to fmd expiry */
 
+        /* sptlrpc stuff */
+        rwlock_t                 fo_sptlrpc_lock;
+        struct sptlrpc_rule_set  fo_sptlrpc_rset;
+
         /* capability related */
         unsigned int             fo_fl_oss_capa;
         struct list_head         fo_capa_keys;
@@ -399,7 +403,8 @@ struct client_obd {
         int                      cl_max_mds_cookiesize;
 
         /* security configuration */
-        struct sec_flavor_config cl_sec_conf;
+        struct sptlrpc_rule_set  cl_sptlrpc_rset;
+        enum lustre_sec_part     cl_sec_part;
 
         //struct llog_canceld_ctxt *cl_llcd; /* it's included by obd_llog_ctxt */
         void                    *cl_llcd_offset;
@@ -492,15 +497,6 @@ struct mgs_obd {
         cfs_proc_dir_entry_t            *mgs_proc_live;
 };
 
-/* hah, upper limit 64 should be enough */
-#define N_NOSQUASH_NIDS 64
-struct rootsquash_info {
-        uid_t           rsi_uid;
-        gid_t           rsi_gid;
-        int             rsi_n_nosquash_nids;
-        lnet_nid_t      rsi_nosquash_nids[N_NOSQUASH_NIDS];
-};
-
 struct mds_obd {
         /* NB this field MUST be first */
         struct obd_device_target         mds_obt;
@@ -556,10 +552,6 @@ struct mds_obd {
                                          mds_fl_synced:1;
 
         struct upcall_cache             *mds_identity_cache;
-        struct upcall_cache             *mds_rmtacl_cache;
-
-        /* root squash */
-        struct rootsquash_info          *mds_rootsquash_info;
 
         /* for capability keys update */
         struct lustre_capa_key          *mds_capa_keys;
@@ -1070,7 +1062,8 @@ struct obd_ops {
         int (*o_connect)(const struct lu_env *env,
                          struct lustre_handle *conn, struct obd_device *src,
                          struct obd_uuid *cluuid, struct obd_connect_data *ocd);
-        int (*o_reconnect)(struct obd_export *exp, struct obd_device *src,
+        int (*o_reconnect)(const struct lu_env *env,
+                           struct obd_export *exp, struct obd_device *src,
                            struct obd_uuid *cluuid,
                            struct obd_connect_data *ocd);
         int (*o_disconnect)(struct obd_export *exp);
@@ -1293,7 +1286,7 @@ struct md_ops {
                          struct ptlrpc_request **);
         int (*m_getattr_name)(struct obd_export *, const struct lu_fid *,
                               struct obd_capa *, const char *, int, obd_valid,
-                              int, struct ptlrpc_request **);
+                              int, __u32, struct ptlrpc_request **);
         int (*m_intent_lock)(struct obd_export *, struct md_op_data *,
                              void *, int, struct lookup_intent *, int,
                              struct ptlrpc_request **,
@@ -1320,7 +1313,7 @@ struct md_ops {
 
         int (*m_setxattr)(struct obd_export *, const struct lu_fid *,
                           struct obd_capa *, obd_valid, const char *,
-                          const char *, int, int, int,
+                          const char *, int, int, int, __u32,
                           struct ptlrpc_request **);
 
         int (*m_getxattr)(struct obd_export *, const struct lu_fid *,
@@ -1355,7 +1348,8 @@ struct md_ops {
                             renew_capa_cb_t cb);
 
         int (*m_get_remote_perm)(struct obd_export *, const struct lu_fid *,
-                                 struct obd_capa *, struct ptlrpc_request **);
+                                 struct obd_capa *, __u32,
+                                 struct ptlrpc_request **);
 
         /*
          * NOTE: If adding ops, add another LPROCFS_MD_OP_INIT() line to

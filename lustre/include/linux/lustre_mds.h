@@ -20,15 +20,15 @@
 # ifdef CONFIG_FS_POSIX_ACL
 #  ifdef HAVE_XATTR_ACL
 #   include <linux/xattr_acl.h>
-#  endif 
+#  endif /* HAVE_XATTR_ACL */ 
 #  ifdef HAVE_LINUX_POSIX_ACL_XATTR_H
 #   include <linux/posix_acl_xattr.h>
-#  endif
-# endif
+#  endif /* HAVE_LINUX_POSIX_ACL_XATTR_H */
+# endif /* CONFIG_FS_POSIX_ACL */
 # ifndef HAVE_VFS_INTENT_PATCHES
 #  include <linux/lustre_intent.h>
 # endif
-#endif
+#endif /* __KERNEL__ */
 
 struct mds_obd;
 struct ptlrpc_request;

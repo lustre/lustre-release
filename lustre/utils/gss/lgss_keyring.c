@@ -53,6 +53,8 @@ static char *g_service = NULL;
  */
 struct lgss_nego_data {
         uint32_t        lnd_established:1;
+
+        int             lnd_secid;
         uint32_t        lnd_uid;
         uint32_t        lnd_lsvc;
         char           *lnd_uuid;
@@ -82,8 +84,11 @@ struct lgss_init_res {
 
 struct keyring_upcall_param {
         uint32_t        kup_ver;
+        uint32_t        kup_secid;
         uint32_t        kup_uid;
+        uint32_t        kup_fsuid;
         uint32_t        kup_gid;
+        uint32_t        kup_fsgid;
         uint32_t        kup_svc;
         uint64_t        kup_nid;
         char            kup_tgt[64];
@@ -118,6 +123,7 @@ int do_nego_rpc(struct lgss_nego_data *lnd,
         }
 
         param.version = GSSD_INTERFACE_VERSION;
+        param.secid = lnd->lnd_secid;
         param.uuid = lnd->lnd_uuid;
         param.lustre_svc = lnd->lnd_lsvc;
         param.uid = lnd->lnd_uid;
@@ -184,7 +190,7 @@ int do_nego_rpc(struct lgss_nego_data *lnd,
 /*
  * if return error, the lnd_rpc_err or lnd_gss_err is set.
  */
-int lgssc_negotiation(struct lgss_nego_data *lnd)
+static int lgssc_negotiation(struct lgss_nego_data *lnd)
 {
         struct lgss_init_res    gr;
         gss_buffer_desc        *recv_tokenp, send_token;
@@ -289,15 +295,16 @@ int lgssc_negotiation(struct lgss_nego_data *lnd)
 /*
  * if return error, the lnd_rpc_err or lnd_gss_err is set.
  */
-int lgssc_init_nego_data(struct lgss_nego_data *lnd,
-                         struct keyring_upcall_param *kup,
-                         lgss_mech_t mech)
+static int lgssc_init_nego_data(struct lgss_nego_data *lnd,
+                                struct keyring_upcall_param *kup,
+                                lgss_mech_t mech)
 {
         gss_buffer_desc         sname;
         OM_uint32               maj_stat, min_stat;
 
         memset(lnd, 0, sizeof(*lnd));
 
+        lnd->lnd_secid = kup->kup_secid;
         lnd->lnd_uid = kup->kup_uid;
         lnd->lnd_lsvc = kup->kup_svc;
         lnd->lnd_uuid = kup->kup_tgt;
@@ -443,10 +450,10 @@ out:
 }
 
 /*
- * note we can't assume authority in child process
+ * note we inherited assumed authority from parent process
  */
-int lgssc_kr_negotiate(key_serial_t keyid, struct lgss_cred *cred,
-                       struct keyring_upcall_param *kup)
+static int lgssc_kr_negotiate(key_serial_t keyid, struct lgss_cred *cred,
+                              struct keyring_upcall_param *kup)
 {
         struct lgss_nego_data   lnd;
         gss_buffer_desc         token = GSS_C_EMPTY_BUFFER;
@@ -454,47 +461,28 @@ int lgssc_kr_negotiate(key_serial_t keyid, struct lgss_cred *cred,
         int                     rc = -1;
 
         logmsg(LL_TRACE, "child start on behalf of key %08x: "
-               "cred %p, uid %u, svc %u, nid %Lx\n", keyid, cred,
-               cred->lc_uid, cred->lc_tgt_svc, cred->lc_tgt_nid);
-
-        if (kup->kup_gid != 0 && setregid(kup->kup_gid, kup->kup_gid)) {
-                logmsg(LL_WARN, "key %08x, failed set gids to %u: %s\n",
-                       keyid, kup->kup_gid, strerror(errno));
-        }
-
-        if (kup->kup_uid != 0 && setreuid(kup->kup_uid, kup->kup_uid)) {
-                logmsg(LL_WARN, "key %08x, failed set uids to %u: %s\n",
-                       keyid, kup->kup_uid, strerror(errno));
-        }
-
-        /*
-         * link to session keyring, allow the key to be found.
-         */
-        if (keyctl_link(keyid, KEY_SPEC_SESSION_KEYRING)) {
-                logmsg(LL_ERR, "key %08x, failed to link to session "
-                       "keyring: %s\n", keyid, strerror(errno));
-                error_kernel_key(keyid, -EACCES, 0);
-                goto out_cred;
-        }
+               "cred %p, uid %u, svc %u, nid %Lx, uids: %u:%u/%u:%u\n",
+               keyid, cred, cred->lc_uid, cred->lc_tgt_svc, cred->lc_tgt_nid,
+               kup->kup_uid, kup->kup_gid, kup->kup_fsuid, kup->kup_fsgid);
 
         if (lgss_get_service_str(&g_service, kup->kup_svc, kup->kup_nid)) {
                 logmsg(LL_ERR, "key %08x: failed to construct service "
                        "string\n", keyid);
                 error_kernel_key(keyid, -EACCES, 0);
-                goto out_unlink;
+                goto out_cred;
         }
 
         if (lgss_using_cred(cred)) {
                 logmsg(LL_ERR, "key %08x: can't using cred\n", keyid);
                 error_kernel_key(keyid, -EACCES, 0);
-                goto out_unlink;
+                goto out_cred;
         }
 
         if (lgssc_init_nego_data(&lnd, kup, cred->lc_mech->lmt_mech_n)) {
                 logmsg(LL_ERR, "key %08x: failed to initialize "
                        "negotiation data\n", keyid);
                 error_kernel_key(keyid, lnd.lnd_rpc_err, lnd.lnd_gss_err);
-                goto out_unlink;
+                goto out_cred;
         }
 
         rc = lgssc_negotiation(&lnd);
@@ -524,12 +512,6 @@ out:
 
         lgssc_fini_nego_data(&lnd);
 
-out_unlink:
-        if (keyctl_unlink(keyid, KEY_SPEC_SESSION_KEYRING)) {
-                logmsg(LL_WARN, "failed to unlink key %08x: %s\n",
-                       keyid, strerror(errno));
-        }
-
 out_cred:
         lgss_release_cred(cred);
         return rc;
@@ -537,21 +519,24 @@ out_cred:
 
 /*
  * call out info format: s[:s]...
- *  [0]: mech_name      (string)
- *  [1]: flags          (chars) FMT: r-root; m-mds
- *  [2]: lustre_svc     (uint)
- *  [3]: target_nid     (uint64)
- *  [4]: target_uuid    (string)
+ *  [0]: secid          (uint)
+ *  [1]: mech_name      (string)
+ *  [2]: uid            (uint)
+ *  [3]: gid            (uint)
+ *  [4]: flags          (chars) FMT: r-root; m-mds
+ *  [5]: lustre_svc     (uint)
+ *  [6]: target_nid     (uint64)
+ *  [7]: target_uuid    (string)
  */
-static
-int parse_callout_info(const char *coinfo,
-                       struct keyring_upcall_param *uparam)
+static int parse_callout_info(const char *coinfo,
+                              struct keyring_upcall_param *uparam)
 {
-        char    buf[1024];
-        char   *string = buf;
-        int     length, i;
-        char   *data[5];
-        char   *pos;
+        const int       nargs = 8;
+        char            buf[1024];
+        char           *string = buf;
+        int             length, i;
+        char           *data[nargs];
+        char           *pos;
 
         length = strlen(coinfo) + 1;
         if (length > 1024) {
@@ -560,7 +545,7 @@ int parse_callout_info(const char *coinfo,
         }
         memcpy(buf, coinfo, length);
 
-        for (i = 0; i < 4; i++) {
+        for (i = 0; i < nargs - 1; i++) {
                 pos = strchr(string, ':');
                 if (pos == NULL) {
                         logmsg(LL_ERR, "short of components\n");
@@ -573,22 +558,28 @@ int parse_callout_info(const char *coinfo,
         }
         data[i] = string;
 
-        logmsg(LL_TRACE, "components: %s,%s,%s,%s,%s\n",
-               data[0], data[1], data[2], data[3], data[4], data[5]);
+        logmsg(LL_TRACE, "components: %s,%s,%s,%s,%s,%s,%s,%s\n",
+               data[0], data[1], data[2], data[3], data[4], data[5],
+               data[6], data[7]);
 
-        strncpy(uparam->kup_mech, data[0], sizeof(uparam->kup_mech));
-        if (strchr(data[1], 'r'))
+        uparam->kup_secid = strtol(data[0], NULL, 0);
+        strncpy(uparam->kup_mech, data[1], sizeof(uparam->kup_mech));
+        uparam->kup_uid = strtol(data[2], NULL, 0);
+        uparam->kup_gid = strtol(data[3], NULL, 0);
+        if (strchr(data[4], 'r'))
                 uparam->kup_is_root = 1;
-        if (strchr(data[1], 'm'))
+        if (strchr(data[4], 'm'))
                 uparam->kup_is_mds = 1;
-        uparam->kup_svc = strtol(data[2], NULL, 0);
-        uparam->kup_nid = strtoll(data[3], NULL, 0);
-        strncpy(uparam->kup_tgt, data[4], sizeof(uparam->kup_tgt));
+        uparam->kup_svc = strtol(data[5], NULL, 0);
+        uparam->kup_nid = strtoll(data[6], NULL, 0);
+        strncpy(uparam->kup_tgt, data[7], sizeof(uparam->kup_tgt));
 
-        logmsg(LL_DEBUG, "parse call out info: mech %s, is_root %d, "
-               "is_mds %d, svc %d, nid 0x%Lx, tgt %s\n",
-               uparam->kup_mech, uparam->kup_is_root, uparam->kup_is_mds,
-               uparam->kup_svc, uparam->kup_nid, uparam->kup_tgt);
+        logmsg(LL_DEBUG, "parse call out info: secid %d, mech %s, ugid %u:%u "
+               "is_root %d, is_mds %d, svc %d, nid 0x%Lx, tgt %s\n",
+               uparam->kup_secid, uparam->kup_mech,
+               uparam->kup_uid, uparam->kup_gid,
+               uparam->kup_is_root, uparam->kup_is_mds, uparam->kup_svc,
+               uparam->kup_nid, uparam->kup_tgt);
         return 0;
 }
 
@@ -625,8 +616,8 @@ int main(int argc, char *argv[])
                 return 1;
         }
 
-        logmsg(LL_INFO, "key %s, desc %s, uid %s, sring %s, coinfo %s\n",
-               argv[2], argv[4], argv[6], argv[10], argv[5]);
+        logmsg(LL_INFO, "key %s, desc %s, ugid %s:%s, sring %s, coinfo %s\n",
+               argv[2], argv[4], argv[6], argv[7], argv[10], argv[5]);
 
         memset(&uparam, 0, sizeof(uparam));
 
@@ -640,8 +631,13 @@ int main(int argc, char *argv[])
                 return 1;
         }
 
-        if (sscanf(argv[6], "%d", &uparam.kup_uid) != 1) {
+        if (sscanf(argv[6], "%d", &uparam.kup_fsuid) != 1) {
                 logmsg(LL_ERR, "can't extract UID: %s\n", argv[6]);
+                return 1;
+        }
+
+        if (sscanf(argv[7], "%d", &uparam.kup_fsgid) != 1) {
+                logmsg(LL_ERR, "can't extract GID: %s\n", argv[7]);
                 return 1;
         }
 
@@ -692,11 +688,16 @@ int main(int argc, char *argv[])
                 return 1;
         }
 
-        /*
-         * pre initialize the key
+        /* pre initialize the key. note the keyring linked to is actually of the
+         * original requesting process, not _this_ upcall process. if it's for
+         * root user, don't link to any keyrings because we want fully control
+         * on it, and share it among all root sessions; otherswise link to
+         * session keyring.
          */
-        inst_keyring = (cred->lc_fl_root || cred->lc_fl_mds) ?
-                                0 : KEY_SPEC_SESSION_KEYRING;
+        if (cred->lc_fl_root || cred->lc_fl_mds)
+                inst_keyring = 0;
+        else
+                inst_keyring = KEY_SPEC_SESSION_KEYRING;
 
         if (keyctl_instantiate(keyid, NULL, 0, inst_keyring)) {
                 logmsg(LL_ERR, "instantiate key %08x: %s\n",

@@ -1697,67 +1697,293 @@ out:
         return ret;
 }
 
-int llapi_getfacl(char *fname, char *cmd)
+#include <pwd.h>
+#include <grp.h>
+#include <mntent.h>
+#include <sys/wait.h>
+#include <errno.h>
+#include <ctype.h>
+
+static int rmtacl_notify(int ops)
 {
-        struct rmtacl_ioctl_data data;
-        char out[RMTACL_SIZE_MAX] = "";
-        int fd, rc;
+        FILE *fp;
+        struct mntent *mnt;
+        int found = 0, fd, rc;
 
-        data.cmd = cmd;
-        data.cmd_len = strlen(cmd) + 1;
-        data.res = out;
-        data.res_len = sizeof(out);
-
-        fd = open(fname, 0);
-        if (fd == -1) {
-                llapi_err(LLAPI_MSG_ERROR,"open %s failed", fname);
+        fp = setmntent(MOUNTED, "r");
+        if (fp == NULL) {
+                perror("setmntent");
                 return -1;
         }
 
-        rc = ioctl(fd, LL_IOC_GETFACL, &data);
-        close(fd);
-        if (errno == EBADE) {
-                llapi_err(LLAPI_MSG_ERROR, "Please use getfacl directly!");
-                rc = 1;
-        } else if (rc) {
-                llapi_err(LLAPI_MSG_ERROR,"getfacl %s failed", fname);
-        } else {
-                llapi_printf(LLAPI_MSG_NORMAL, "%s", out);
+        while (1) {
+                mnt = getmntent(fp);
+                if (!mnt)
+                        break;
+
+                if (!llapi_is_lustre_mnt(mnt))
+                        continue;
+
+                fd = open(mnt->mnt_dir, O_RDONLY | O_DIRECTORY);
+                if (fd < 0) {
+                        perror("open");
+                        return -1;
+                }
+
+                rc = ioctl(fd, LL_IOC_RMTACL, ops);
+                if (rc < 0) {
+                        perror("ioctl");
+                return -1;
         }
 
-        return rc;
+                found++;
+        }
+        endmntent(fp);
+        return found;
 }
 
-int llapi_setfacl(char *fname, char *cmd)
+static char *next_token(char *p, int div)
 {
-        struct rmtacl_ioctl_data data;
-        char out[RMTACL_SIZE_MAX] = "";
-        int fd, rc;
+        if (p == NULL)
+                return NULL;
 
-        data.cmd = cmd;
-        data.cmd_len = strlen(cmd) + 1;
-        data.res = out;
-        data.res_len = sizeof(out);
+        if (div)
+                while (*p && *p != ':' && !isspace(*p))
+                        p++;
+        else
+                while (*p == ':' || isspace(*p))
+                        p++;
 
-        fd = open(fname, 0);
-        if (fd == -1) {
-                llapi_err(LLAPI_MSG_ERROR,"open %s failed", fname);
+        return *p ? p : NULL;
+}
+
+static int rmtacl_name2id(char *name, int is_user)
+{
+        if (is_user) {
+                struct passwd *pw;
+
+                if ((pw = getpwnam(name)) == NULL)
+                        return INVALID_ID;
+                else
+                        return (int)(pw->pw_uid);
+        } else {
+                struct group *gr;
+
+                if ((gr = getgrnam(name)) == NULL)
+                        return INVALID_ID;
+                else
+                        return (int)(gr->gr_gid);
+        }
+}
+
+static int isodigit(int c)
+{
+        return (c >= '0' && c <= '7') ? 1 : 0;
+}
+
+/*
+ * Whether the name is just digits string (uid/gid) already or not.
+ * Return value:
+ * 1: str is id
+ * 0: str is not id
+ */
+static int str_is_id(char *str)
+{
+        if (str == NULL)
+                return 0;
+
+        if (*str == '0') {
+                str++;
+                if (*str == 'x' || *str == 'X') { /* for Hex. */
+                        if (!isxdigit(*(++str)))
+                                return 0;
+
+                        while (isxdigit(*(++str)));
+                } else if (isodigit(*str)) { /* for Oct. */
+                        while (isodigit(*(++str)));
+                }
+        } else if (isdigit(*str)) { /* for Dec. */
+                while (isdigit(*(++str)));
+        }
+
+        return (*str == 0) ? 1 : 0;
+}
+
+typedef struct {
+        char *name;
+        int   length;
+        int   is_user;
+        int   next_token;
+} rmtacl_name_t;
+
+#define RMTACL_OPTNAME(name) name, sizeof(name) - 1
+
+static rmtacl_name_t rmtacl_namelist[] = {
+        { RMTACL_OPTNAME("user:"),            1,      0 },
+        { RMTACL_OPTNAME("group:"),           0,      0 },
+        { RMTACL_OPTNAME("default:user:"),    1,      0 },
+        { RMTACL_OPTNAME("default:group:"),   0,      0 },
+        /* for --tabular option */
+        { RMTACL_OPTNAME("user"),             1,      1 },
+        { RMTACL_OPTNAME("group"),            0,      1 },
+        { 0 }
+};
+
+static int rgetfacl_output(char *str)
+{
+        char *start = NULL, *end = NULL;
+        int is_user = 0, n, id;
+        char c;
+        rmtacl_name_t *rn;
+
+        if (str == NULL)
+                return -1;
+
+        for (rn = rmtacl_namelist; rn->name; rn++) {
+                if(strncmp(str, rn->name, rn->length) == 0) {
+                        if (!rn->next_token)
+                                start = str + rn->length;
+                        else
+                                start = next_token(str + rn->length, 0);
+                        is_user = rn->is_user;
+                        break;
+                }
+        }
+
+        end = next_token(start, 1);
+        if (end == NULL || start == end) {
+                n = printf("%s", str);
+                return n;
+        }
+
+        c = *end;
+        *end = 0;
+        id = rmtacl_name2id(start, is_user);
+        if (id == INVALID_ID) {
+                if (str_is_id(start)) {
+                        *end = c;
+                        n = printf("%s", str);
+                } else
+                        return -1;
+        } else if ((id == NOBODY_UID && is_user) ||
+                   (id == NOBODY_GID && !is_user)) {
+                *end = c;
+                n = printf("%s", str);
+        } else {
+                *end = c;
+                *start = 0;
+                n = printf("%s%d%s", str, id, end);
+        }
+        return n;
+}
+
+static int child_status(int status)
+{
+        return WIFEXITED(status) ? WEXITSTATUS(status) : -1;
+}
+
+static int do_rmtacl(int argc, char *argv[], int ops, int (output_func)(char *))
+{
+        pid_t pid = 0;
+        int fd[2], status;
+        FILE *fp;
+        char buf[PIPE_BUF];
+
+        if (output_func) {
+                if (pipe(fd) < 0) {
+                        perror("pipe");
+                        return -1;
+                }
+
+                if ((pid = fork()) < 0) {
+                        perror("pipe");
+                        close(fd[0]);
+                        close(fd[1]);
+                        return -1;
+                } else if (!pid) {
+                        /* child process redirects its output. */
+                        close(fd[0]);
+                        close(1);
+                        if (dup2(fd[1], 1) < 0) {
+                                perror("dup2");
+                                close(fd[1]);
+                                return -1;
+                        }
+                } else {
+                        close(fd[1]);
+                }
+        }
+
+        if (!pid) {
+                status = rmtacl_notify(ops);
+                if (status < 0)
+                        return -1;
+
+                exit(execvp(argv[0], argv));
+        }
+
+        /* the following is parent process */
+        if ((fp = fdopen(fd[0], "r")) == NULL) {
+                perror("fdopen");
+                kill(pid, SIGKILL);
+                close(fd[0]);
                 return -1;
         }
 
-        rc = ioctl(fd, LL_IOC_SETFACL, &data);
-        close(fd);
-        if (errno == EBADE) {
-                llapi_err(LLAPI_MSG_ERROR, "Please use setfacl directly!");
-                rc = 1;
-        } else if (errno == EOPNOTSUPP) {
-                llapi_err(LLAPI_MSG_ERROR, "setfacl: %s: %s", fname);
-                rc = 1;
-        } else if (rc) {
-                llapi_err(LLAPI_MSG_ERROR,"setfacl %s failed", fname);
-        } else {
-                llapi_printf(LLAPI_MSG_NORMAL, "%s", out);
+        while (fgets(buf, PIPE_BUF, fp) != NULL) {
+                if (output_func(buf) < 0)
+                        fprintf(stderr, "WARNING: unexpected error!\n[%s]\n",
+                                buf);
+        }
+        fclose(fp);
+        close(fd[0]);
+
+        if (waitpid(pid, &status, 0) < 0) {
+                perror("waitpid");
+                return -1;
         }
 
-        return rc;
+        return child_status(status);
+}
+
+int llapi_lsetfacl(int argc, char *argv[])
+{
+        return do_rmtacl(argc, argv, RMT_LSETFACL, NULL);
+}
+
+int llapi_lgetfacl(int argc, char *argv[])
+{
+        return do_rmtacl(argc, argv, RMT_LGETFACL, NULL);
+}
+
+int llapi_rsetfacl(int argc, char *argv[])
+{
+        return do_rmtacl(argc, argv, RMT_RSETFACL, NULL);
+}
+
+int llapi_rgetfacl(int argc, char *argv[])
+{
+        return do_rmtacl(argc, argv, RMT_RGETFACL, rgetfacl_output);
+}
+
+int llapi_cp(int argc, char *argv[])
+{
+        int rc;
+
+        rc = rmtacl_notify(RMT_RSETFACL);
+        if (rc < 0)
+                return -1;
+
+        exit(execvp(argv[0], argv));
+}
+
+int llapi_ls(int argc, char *argv[])
+{
+        int rc;
+
+        rc = rmtacl_notify(RMT_LGETFACL);
+        if (rc < 0)
+                return -1;
+
+        exit(execvp(argv[0], argv));
 }

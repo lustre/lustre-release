@@ -55,6 +55,8 @@
 #include <lustre_disk.h>
 #include <lustre_sec.h>
 #include <lvfs.h>
+#include <lustre_idmap.h>
+#include <lustre_eacl.h>
 
 
 /* Data stored per client in the last_rcvd file.  In le32 order. */
@@ -177,10 +179,10 @@ struct mdt_device {
         unsigned long              mdt_client_bitmap[(LR_MAX_CLIENTS >> 3) / sizeof(long)];
 
         struct upcall_cache        *mdt_identity_cache;
-        struct upcall_cache        *mdt_rmtacl_cache;
 
-        /* root squash */
-        struct rootsquash_info     *mdt_rootsquash_info;
+        /* sptlrpc rules */
+        rwlock_t                   mdt_sptlrpc_lock;
+        struct sptlrpc_rule_set    mdt_sptlrpc_rset;
 
         /* capability keys */
         unsigned long              mdt_capa_timeout;
@@ -599,16 +601,9 @@ const struct lu_buf *mdt_buf_const(const struct lu_env *env,
 void mdt_dump_lmm(int level, const struct lov_mds_md *lmm);
 
 int mdt_check_ucred(struct mdt_thread_info *);
-
 int mdt_init_ucred(struct mdt_thread_info *, struct mdt_body *);
-
 int mdt_init_ucred_reint(struct mdt_thread_info *);
-
 void mdt_exit_ucred(struct mdt_thread_info *);
-
-int groups_from_list(struct group_info *, gid_t *);
-
-void groups_sort(struct group_info *);
 
 /* mdt_idmap.c */
 int mdt_init_idmap(struct mdt_thread_info *);
@@ -639,22 +634,15 @@ static inline struct mdt_device *mdt_dev(struct lu_device *d)
 
 extern struct upcall_cache_ops mdt_identity_upcall_cache_ops;
 
-struct mdt_identity *mdt_identity_get(struct upcall_cache *, __u32);
+struct md_identity *mdt_identity_get(struct upcall_cache *, __u32);
 
-void mdt_identity_put(struct upcall_cache *, struct mdt_identity *);
+void mdt_identity_put(struct upcall_cache *, struct md_identity *);
 
 void mdt_flush_identity(struct upcall_cache *, int);
 
-__u32 mdt_identity_get_setxid_perm(struct mdt_identity *, __u32, lnet_nid_t);
+__u32 mdt_identity_get_perm(struct md_identity *, __u32, lnet_nid_t);
 
 int mdt_pack_remote_perm(struct mdt_thread_info *, struct mdt_object *, void *);
-
-/* mdt/mdt_rmtacl.c */
-#define MDT_RMTACL_UPCALL_PATH          "/usr/sbin/l_facl"
-
-extern struct upcall_cache_ops mdt_rmtacl_upcall_cache_ops;
-
-int mdt_rmtacl_upcall(struct mdt_thread_info *, char *, struct lu_buf *);
 
 extern struct lu_context_key       mdt_thread_key;
 /* debug issues helper starts here*/

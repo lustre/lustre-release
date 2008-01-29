@@ -12,10 +12,15 @@ noinst_SCRIPTS += conf-sanity.sh insanity.sh lfscktest.sh oos.sh oos2.sh
 noinst_SCRIPTS += llog-test.sh recovery-small.sh replay-dual.sh sanity-quota.sh
 noinst_SCRIPTS += replay-ost-single.sh replay-single.sh run-llog.sh sanityN.sh
 noinst_SCRIPTS += lockorder.sh socketclient socketserver sanity-sec.sh
+noinst_SCRIPTS += sanity-gss.sh krb5_login.sh
 nobase_noinst_SCRIPTS = cfg/insanity-local.sh cfg/insanity-ltest.sh
 nobase_noinst_SCRIPTS += cfg/local.sh acl/make-tree acl/run
+nobase_noinst_SCRIPTS += rmtacl/make-tree rmtacl/run
 nobase_noinst_DATA = acl/cp.test acl/getfacl-noacl.test acl/inheritance.test
 nobase_noinst_DATA += acl/misc.test acl/permissions.test acl/setfacl.test
+nobase_noinst_DATA += rmtacl/misc.test rmtacl/permissions.test
+nobase_noinst_DATA += rmtacl/setfacl.test rmtacl/cp.test
+nobase_noinst_DATA += rmtacl/getfacl-noacl.test rmtacl/inheritance.test
 
 EXTRA_DIST = $(noinst_SCRIPTS) $(noinst_DATA) \
              $(nobase_noinst_SCRIPTS) $(nobase_noinst_DATA)

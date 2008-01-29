@@ -1,78 +1,16 @@
 #!/bin/bash
 #
-# Run select tests by setting SEC_ONLY, or as arguments to the script.
-# Skip specific tests by setting SEC_EXCEPT.
+# Run select tests by setting ONLY, or as arguments to the script.
+# Skip specific tests by setting EXCEPT.
 #
 
 set -e
 
+ONLY=${ONLY:-"$*"}
+[ "$EXCEPT" ] && echo "Skipping tests: `echo $EXCEPT`"
+
 SRCDIR=`dirname $0`
 export PATH=$PWD/$SRCDIR:$SRCDIR:$PWD/$SRCDIR/../utils:$PATH:/sbin
-
-SEC_ONLY=${SEC_ONLY:-"$*"}
-[ "$SEC_EXCEPT" ] && echo "Skipping tests: `echo $SEC_EXCEPT`"
-
-TMP=${TMP:-/tmp}
-LFS=${LFS:-lfs}
-LCTL=${LCTL:-lctl}
-RUNAS=${RUNAS:-runas}
-WTL=${WTL:-write_time_limit}
-
-LPROC=/proc/fs/lustre
-ENABLE_IDENTITY=/usr/sbin/l_getidentity
-DISABLE_IDENTITY=NONE
-LUSTRE_CONF_DIR=/etc/lustre
-PERM_CONF=$LUSTRE_CONF_DIR/perm.conf
-LDLM_LPROC=$LPROC/ldlm
-LLITE_LPROC=$LPROC/llite
-MDC_LPROC=$LPROC/mdc
-MDT_LPROC=$LPROC/mdt
-OST_LPROC=$LPROC/obdfilter
-
-sec_log() {
-	echo "$*"
-	$LCTL mark "$*" 2> /dev/null || true
-}
-
-SANITYSECLOG=${SANITYSECLOG:-/tmp/sanity-sec.log}
-[ "$SANITYSECLOG" ] && rm -f $SANITYSECLOG || true
-
-sec_error() { 
-	sec_log "FAIL: $TESTNAME $@"
-	if [ "$SANITYSECLOG" ]; then
-		echo "FAIL: $TESTNAME $@" >> $SANITYSECLOG
-	else
-		exit 1
-	fi
-}
-
-sec_pass() { 
-	echo PASS $@
-}
-
-sec_skip () {
-	sec_log "$0: SKIP: $TESTNAME $@"
-	[ "$SANITYSECLOG" ] && echo "$0: SKIP: $TESTNAME $@" >> $SANITYSECLOG
-}
-
-ID1=500
-ID2=501
-
-USER1=`cat /etc/passwd|grep :$ID1:$ID1:|cut -d: -f1`
-USER2=`cat /etc/passwd|grep :$ID2:$ID2:|cut -d: -f1`
-
-if [ -z "$USER1" ]; then
-	echo "===== Please add user1 (uid=$ID1 gid=$ID1)! Skip sanity-sec ====="
-	sec_error "===== Please add user1 (uid=$ID1 gid=$ID1)! ====="
-	exit 0
-fi
-
-if [ -z "$USER2" ]; then
-	echo "===== Please add user2 (uid=$ID2 gid=$ID2)! Skip sanity-sec ====="
-	sec_error "===== Please add user2 (uid=$ID2 gid=$ID2)! ====="
-	exit 0
-fi
-
 export NAME=${NAME:-local}
 
 LUSTRE=${LUSTRE:-`dirname $0`/..} 
@@ -80,29 +18,40 @@ LUSTRE=${LUSTRE:-`dirname $0`/..}
 init_test_env $@
 . ${CONFIG:=$LUSTRE/tests/cfg/$NAME.sh}
 
-mounted_lustre_filesystems() {
-	awk '($3 ~ "lustre" && $1 ~ ":") { print $2 }' /proc/mounts
-}
+RUNAS=${RUNAS:-"$LUSTRE/tests/runas"}
+WTL=${WTL:-"$LUSTRE/tests/write_time_limit"}
 
-MOUNTED="`mounted_lustre_filesystems`"
-if [ -z "$MOUNTED" ]; then
-        formatall
-        setupall
-	MOUNTED="`mounted_lustre_filesystems`"
-	[ -z "$MOUNTED" ] && sec_error "NAME=$NAME not mounted"
-	S_MOUNTED=yes
-fi
+PERM_CONF=/etc/lustre/perm.conf
+LLITE_LPROC=$LPROC/llite
+MDC_LPROC=$LPROC/mdc
+MDT_LPROC=$LPROC/mdt
+OST_LPROC=$LPROC/obdfilter
 
-[ `echo $MOUNT | wc -w` -gt 1 ] && sec_error "NAME=$NAME mounted more than once"
+SANITYSECLOG=${TESTSUITELOG:-$TMP/$(basename $0 .sh).log}
+FAIL_ON_ERROR=false
+
+ID0=${ID0:-500}
+ID1=${ID1:-501}
+USER0=`cat /etc/passwd|grep :$ID0:$ID0:|cut -d: -f1`
+USER1=`cat /etc/passwd|grep :$ID1:$ID1:|cut -d: -f1`
+
+[ -z "$USER0" ] && \
+	echo "Please add user0 (uid=$ID0 gid=$ID0)! Skip sanity-sec" && exit 0
+
+[ -z "$USER1" ] && \
+	echo "Please add user1 (uid=$ID1 gid=$ID1)! Skip sanity-sec" && exit 0
+
+check_and_setup_lustre
 
 DIR=${DIR:-$MOUNT}
-[ -z "`echo $DIR | grep $MOUNT`" ] && echo "$DIR not in $MOUNT" && \
-	sec_cleanup && exit 99
+[ -z "`echo $DIR | grep $MOUNT`" ] && \
+	error "$DIR not in $MOUNT" && sec_cleanup && exit 1
 
-[ `ls -l $LDLM_LPROC/namespaces 2>/dev/null | grep *-mdc-* | wc -l` -gt 1 ] \
-	&& echo "skip multi-MDS test" && sec_cleanup && exit 0
+[ `echo $MOUNT | wc -w` -gt 1 ] && \
+	echo "NAME=$MOUNT mounted more than once" && sec_cleanup && exit 0
 
-OST_COUNT=$(ls -l $LDLM_LPROC/namespaces 2>/dev/null | grep osc | grep -v MDT | wc -l)
+[ $MDSCOUNT -gt 1 ] && \
+	echo "skip multi-MDS test" && sec_cleanup && exit 0
 
 # for GSS_SUP
 GSS_REF=$(lsmod | grep ^ptlrpc_gss | awk '{print $3}')
@@ -114,24 +63,9 @@ else
 	echo "without GSS support"
 fi
 
-# for MDT_TYPE
-MDT_REF=$(lsmod | grep ^mdt | awk '{print $3}')
-if [ ! -z "$MDT_REF" -a "$MDT_REF" != "0" ]; then
-        MDT_TYPE="local"
-        echo "local mdt"
-else
-        MDT_TYPE="remote"
-        echo "remote mdt"
-fi
-
-MDT="`do_facet $SINGLEMDS ls -l $MDT_LPROC/ | grep MDT | awk '{print $9}'`"
+MDT="`do_facet $SINGLEMDS \"ls -l $MDT_LPROC/ 2>/dev/null\" | grep MDT | awk '{print $9}'`"
 if [ ! -z "$MDT" ]; then
-	IDENTITY_UPCALL=$MDT_LPROC/$MDT/identity_upcall
-	IDENTITY_UPCALL_BAK="`more $IDENTITY_UPCALL`"
 	IDENTITY_FLUSH=$MDT_LPROC/$MDT/identity_flush
-	ROOTSQUASH_UID=$MDT_LPROC/$MDT/rootsquash_uid
-	ROOTSQUASH_GID=$MDT_LPROC/$MDT/rootsquash_gid
-	NOSQUASH_NIDS=$MDT_LPROC/$MDT/nosquash_nids
 	MDSCAPA=$MDT_LPROC/$MDT/capa
 	CAPA_TIMEOUT=$MDT_LPROC/$MDT/capa_timeout
 fi
@@ -147,62 +81,6 @@ fi
 
 SAVE_PWD=$PWD
 
-sec_run_one() {
-	BEFORE=`date +%s`
-	sec_log "== test $1 $2= `date +%H:%M:%S` ($BEFORE)"
-	export TESTNAME=test_$1
-	test_$1 || sec_error "exit with rc=$?"
-	unset TESTNAME
-	sec_pass "($((`date +%s` - $BEFORE))s)"
-}
-
-build_test_filter() {
-        for O in $SEC_ONLY; do
-            eval SEC_ONLY_${O}=true
-        done
-        for E in $SEC_EXCEPT; do
-            eval SEC_EXCEPT_${E}=true
-        done
-}
-
-_basetest() {
-	echo $*
-}
-
-basetest() {
-	IFS=abcdefghijklmnopqrstuvwxyz _basetest $1
-}
-
-sec_run_test() {
-         base=`basetest $1`
-         if [ "$SEC_ONLY" ]; then
-                 testname=SEC_ONLY_$1
-                 if [ ${!testname}x != x ]; then
- 			sec_run_one $1 "$2"
- 			return $?
-                 fi
-                 testname=SEC_ONLY_$base
-                 if [ ${!testname}x != x ]; then
-                         sec_run_one $1 "$2"
-                         return $?
-                 fi
-                 echo -n "."
-                 return 0
- 	fi
-        testname=SEC_EXCEPT_$1
-        if [ ${!testname}x != x ]; then
-                 echo "skipping excluded test $1"
-                 return 0
-        fi
-        testname=SEC_EXCEPT_$base
-        if [ ${!testname}x != x ]; then
-                 echo "skipping excluded test $1 (base $base)"
-                 return 0
-        fi
-        sec_run_one $1 "$2"
- 	return $?
-}
-
 build_test_filter
 
 sec_login() {
@@ -210,169 +88,165 @@ sec_login() {
 	local group=$2
 
 	if ! $RUNAS -u $user krb5_login.sh; then
-		echo "$user login kerberos failed."
+		error "$user login kerberos failed."
 		exit 1
 	fi
 
-	if ! $RUNAS -u $user -g $group ls $DIR > /dev/null; then
+	if ! $RUNAS -u $user -g $group ls $DIR > /dev/null 2>&1; then
 		$RUNAS -u $user lfs flushctx -k
 		$RUNAS -u $user krb5_login.sh
-                if ! $RUNAS -u $user -g $group ls $DIR > /dev/null; then
-                        echo "init $user $group failed."
+                if ! $RUNAS -u $user -g $group ls $DIR > /dev/null 2>&1; then
+                        error "init $user $group failed."
                         exit 2
                 fi
 	fi
 }
 
-setup() {
-	if [ ! -z "$MDT" ]; then
-		do_facet $SINGLEMDS echo $ENABLE_IDENTITY > $IDENTITY_UPCALL
-		do_facet $SINGLEMDS echo -1 > $IDENTITY_FLUSH
+declare -a identity_old
+
+sec_setup() {
+       	for num in `seq $MDSCOUNT`; do
+       		switch_identity $num true || identity_old[$num]=$?
+       	done
+
+	if ! $RUNAS -u $ID0 ls $DIR > /dev/null 2>&1; then
+		sec_login $USER0 $USER0
 	fi
 
 	if ! $RUNAS -u $ID1 ls $DIR > /dev/null 2>&1; then
 		sec_login $USER1 $USER1
 	fi
-
-	if ! $RUNAS -u $ID2 ls $DIR > /dev/null 2>&1; then
-		sec_login $USER2 $USER2
-	fi
 }
-setup
+sec_setup
 
 # run as different user
 test_0() {
 	rm -rf $DIR/d0
 	mkdir $DIR/d0
 
-	chown $USER1 $DIR/d0 || sec_error
-	$RUNAS -u $ID1 ls $DIR || sec_error
-	$RUNAS -u $ID1 touch $DIR/f0 && sec_error
-	$RUNAS -u $ID1 touch $DIR/d0/f1 || sec_error
-	$RUNAS -u $ID2 touch $DIR/d0/f2 && sec_error
-	touch $DIR/d0/f3 || sec_error
-	chown root $DIR/d0
-	chgrp $USER1 $DIR/d0
-	chmod 775 $DIR/d0
-	$RUNAS -u $ID1 touch $DIR/d0/f4 || sec_error
-	$RUNAS -u $ID2 touch $DIR/d0/f5 && sec_error
-	touch $DIR/d0/f6 || sec_error
+	chown $USER0 $DIR/d0 || error "chown (1)"
+	$RUNAS -u $ID0 ls $DIR || error "ls (2)"
+	$RUNAS -u $ID0 touch $DIR/f0 && error "touch (3)"
+	$RUNAS -u $ID0 touch $DIR/d0/f1 || error "touch (4)"
+	$RUNAS -u $ID1 touch $DIR/d0/f2 && error "touch (5)"
+	touch $DIR/d0/f3 || error "touch (6)"
+	chown root $DIR/d0 || error "chown (7)"
+	chgrp $USER0 $DIR/d0 || error "chgrp (8)"
+	chmod 775 $DIR/d0 || error "chmod (9)"
+	$RUNAS -u $ID0 touch $DIR/d0/f4 || error "touch (10)"
+	$RUNAS -u $ID1 touch $DIR/d0/f5 && error "touch (11)"
+	touch $DIR/d0/f6 || error "touch (12)"
 
 	rm -rf $DIR/d0
 }
-sec_run_test 0 "uid permission ============================="
+run_test 0 "uid permission ============================="
 
 # setuid/gid
 test_1() {
-	[ $GSS_SUP = 0 ] && sec_skip "without GSS support." && return
-	[ -z "$MDT" ] && sec_skip "do not support do_facet operations." && return
+	[ $GSS_SUP = 0 ] && skip "without GSS support." && return
+	[ -z "$MDT" ] && skip "do not support do_facet operations." && return
+	[ "$CLIENT_TYPE" = "remote" ] && \
+		skip "test_1 for local client only" && return
 
-	do_facet $SINGLEMDS rm -f $PERM_CONF
-	do_facet $SINGLEMDS echo -1 > $IDENTITY_FLUSH
+	do_facet $SINGLEMDS "rm -f $PERM_CONF"
+	do_facet $SINGLEMDS "echo -1 > $IDENTITY_FLUSH"
 
 	rm -rf $DIR/d1
 	mkdir $DIR/d1
 
-	chown $USER1 $DIR/d1 || sec_error
-	$RUNAS -u $ID2 -v $ID1 touch $DIR/d1/f0 && sec_error
-	do_facet $SINGLEMDS echo "\* $ID2 setuid" > $PERM_CONF
-	echo "enable uid $ID2 setuid"
-	do_facet $SINGLEMDS echo -1 > $IDENTITY_FLUSH
-	$RUNAS -u $ID2 -v $ID1 touch $DIR/d1/f1 || sec_error
+	chown $USER0 $DIR/d1 || error "chown (1)"
+	$RUNAS -u $ID1 -v $ID0 touch $DIR/d1/f0 && error "touch (2)"
+	do_facet $SINGLEMDS "echo '* $ID1 setuid' > $PERM_CONF"
+	echo "enable uid $ID1 setuid"
+	do_facet $SINGLEMDS "echo -1 > $IDENTITY_FLUSH"
+	$RUNAS -u $ID1 -v $ID0 touch $DIR/d1/f1 || error "touch (3)"
 
-	chown root $DIR/d1
-	chgrp $USER1 $DIR/d1
-	chmod 770 $DIR/d1
-	$RUNAS -u $ID2 -g $ID2 touch $DIR/d1/f2 && sec_error
-	$RUNAS -u $ID2 -g $ID2 -j $ID1 touch $DIR/d1/f3 && sec_error
-	do_facet $SINGLEMDS echo "\* $ID2 setuid,setgid" > $PERM_CONF
-	echo "enable uid $ID2 setuid,setgid"
-	do_facet $SINGLEMDS echo -1 > $IDENTITY_FLUSH
-	$RUNAS -u $ID2 -g $ID2 -j $ID1 touch $DIR/d1/f4 || sec_error
-	$RUNAS -u $ID2 -v $ID1 -g $ID2 -j $ID1 touch $DIR/d1/f5 || sec_error
+	chown root $DIR/d1 || error "chown (4)"
+	chgrp $USER0 $DIR/d1 || error "chgrp (5)"
+	chmod 770 $DIR/d1 || error "chmod (6)"
+	$RUNAS -u $ID1 -g $ID1 touch $DIR/d1/f2 && error "touch (7)"
+	$RUNAS -u $ID1 -g $ID1 -j $ID0 touch $DIR/d1/f3 && error "touch (8)"
+	do_facet $SINGLEMDS "echo '* $ID1 setuid,setgid' > $PERM_CONF"
+	echo "enable uid $ID1 setuid,setgid"
+	do_facet $SINGLEMDS "echo -1 > $IDENTITY_FLUSH"
+	$RUNAS -u $ID1 -g $ID1 -j $ID0 touch $DIR/d1/f4 || error "touch (9)"
+	$RUNAS -u $ID1 -v $ID0 -g $ID1 -j $ID0 touch $DIR/d1/f5 || error "touch (10)"
 
 	rm -rf $DIR/d1
 
-	do_facet $SINGLEMDS rm -f $PERM_CONF
-	do_facet $SINGLEMDS echo -1 > $IDENTITY_FLUSH
+	do_facet $SINGLEMDS "rm -f $PERM_CONF"
+	do_facet $SINGLEMDS "echo -1 > $IDENTITY_FLUSH"
 }
-sec_run_test 1 "setuid/gid ============================="
+run_test 1 "setuid/gid ============================="
+
+run_rmtacl_subtest() {
+    $SAVE_PWD/rmtacl/run $SAVE_PWD/rmtacl/$1.test
+    return $?
+}
 
 # remote_acl
 # for remote client only
 test_2 () {
 	[ "$CLIENT_TYPE" = "local" ] && \
-		sec_skip "remote_acl for remote client only" && return
+		skip "remote_acl for remote client only" && return
     	[ -z "$(grep ^acl $MDC_LPROC/*-mdc-*/connect_flags)" ] && \
-		sec_skip "must have acl enabled" && return
+		skip "must have acl enabled" && return
     	[ -z "$(which setfacl 2>/dev/null)" ] && \
-		sec_skip "could not find setfacl" && return
-	[ "$UID" != 0 ] && sec_skip "must run as root" && return
+		skip "could not find setfacl" && return
+	[ "$UID" != 0 ] && skip "must run as root" && return
 
-	rm -rf $DIR/d2
-	mkdir $DIR/d2
-	chmod 755 $DIR/d2
-	echo xxx > $DIR/d2/f0
-	chmod 644 $DIR/d2/f0
+	sec_login root root
+	sec_login bin bin
+	sec_login daemon daemon
+	sec_login games users
 
-	$LFS getfacl $DIR/d2/f0 || sec_error
-	$RUNAS -u $ID1 cat $DIR/d2/f0 || sec_error
-	$RUNAS -u $ID1 touch $DIR/d2/f0 && sec_error
+    	SAVE_UMASK=`umask`
+    	umask 0022
+    	cd $DIR
 
-	$LFS setfacl -m u:$USER1:w $DIR/d2/f0 || sec_error
-	$LFS getfacl $DIR/d2/f0 || sec_error
-	echo "set user $USER1 write permission on file $DIR/d2/f0"
-	$RUNAS -u $ID1 touch $DIR/d2/f0 || sec_error
-	$RUNAS -u $ID1 cat $DIR/d2/f0 && sec_error
+	if [ ! -z "$MDT" ]; then
+		do_facet $SINGLEMDS "echo '* 0 rmtacl' > $PERM_CONF"
+		do_facet $SINGLEMDS "echo -1 > $IDENTITY_FLUSH"
+	fi
 
-	rm -rf $DIR/d2
+        if lfs rgetfacl $DIR; then
+                echo "performing cp ..."
+                run_rmtacl_subtest cp || error "cp"
+        else
+                echo "server doesn't permit current user 'lfs r{s,g}etfacl', skip cp test."
+        fi
+    	echo "performing getfacl-noacl..."
+    	run_rmtacl_subtest getfacl-noacl || error "getfacl-noacl"
+    	echo "performing misc..."
+    	run_rmtacl_subtest misc || error "misc"
+    	echo "performing permissions..."
+    	run_rmtacl_subtest permissions || error "permissions"
+    	echo "performing setfacl..."
+    	run_rmtacl_subtest setfacl || error "setfacl"
+
+    	# inheritance test got from HP
+    	echo "performing inheritance..."
+    	cp $SAVE_PWD/rmtacl/make-tree .
+    	chmod +x make-tree
+    	run_rmtacl_subtest inheritance || error "inheritance"
+    	rm -f make-tree
+
+	if [ ! -z "$MDT" ]; then
+		do_facet $SINGLEMDS "rm -f $PERM_CONF"
+		do_facet $SINGLEMDS "echo -1 > $IDENTITY_FLUSH"
+	fi
+
+    	cd $SAVE_PWD
+    	umask $SAVE_UMASK
 }
-sec_run_test 2 "rmtacl ============================="
+run_test 2 "rmtacl ============================="
 
 # rootsquash
-# for remote mdt only
+# root_squash will be redesigned in Lustre 1.7
 test_3() {
-	[ $GSS_SUP = 0 ] && sec_skip "without GSS support." && return
-	[ -z "$MDT" ] && sec_skip "do not support do_facet operations." && return
-        [ "$MDT_TYPE" = "local" ] && sec_skip "rootsquash for remote mdt only" && return
-
-	do_facet $SINGLEMDS echo "-\*" > $NOSQUASH_NIDS 
-	do_facet $SINGLEMDS echo 0 > $ROOTSQUASH_UID
-	do_facet $SINGLEMDS echo 0 > $ROOTSQUASH_GID
-
-	rm -rf $DIR/d3
-	mkdir $DIR/d3
-	chown $USER1 $DIR/d3
-	chmod 700 $DIR/d3
-	do_facet $SINGLEMDS echo $ID1 > $ROOTSQUASH_UID
-	echo "set rootsquash uid = $ID1"
-	touch $DIR/f3_0 && sec_error
-	touch $DIR/d3/f3_1 || sec_error
-
-	do_facet $SINGLEMDS echo 0 > $ROOTSQUASH_UID
-	echo "disable rootsquash"
-	chown root $DIR/d3
-	chgrp $USER2 $DIR/d3
-	chmod 770 $DIR/d3
-
-	do_facet $SINGLEMDS echo $ID1 > $ROOTSQUASH_UID
-	echo "set rootsquash uid = $ID1"
-	touch $DIR/d3/f3_2 && sec_error
-	do_facet $SINGLEMDS echo $ID2 > $ROOTSQUASH_GID
-	echo "set rootsquash gid = $ID2"
-	touch $DIR/d3/f3_3 || sec_error
-
-	do_facet $SINGLEMDS echo "+\*" > $NOSQUASH_NIDS
-	echo "add host in rootsquash skip list"
-	touch $DIR/f3_4 || sec_error
-
-	do_facet $SINGLEMDS echo 0 > $ROOTSQUASH_UID
-	do_facet $SINGLEMDS echo 0 > $ROOTSQUASH_GID
-	do_facet $SINGLEMDS echo "-\*" > $NOSQUASH_NIDS
-	rm -rf $DIR/d3
-	rm -f $DIR/f3_?
+        skip "root_squash will be redesigned in Lustre 1.7" && return
 }
-sec_run_test 3 "rootsquash ============================="
+run_test 3 "rootsquash ============================="
 
 # bug 3285 - supplementary group should always succeed.
 # NB: the supplementary groups are set for local client only,
@@ -382,29 +256,29 @@ test_4() {
 	rm -rf $DIR/d4
         mkdir $DIR/d4
         chmod 771 $DIR/d4
-        chgrp $ID1 $DIR/d4
-	$RUNAS -u $ID1 ls $DIR/d4 || sec_error "setgroups(1) failed"
+        chgrp $ID0 $DIR/d4
+	$RUNAS -u $ID0 ls $DIR/d4 || error "setgroups (1)"
 	if [ "$CLIENT_TYPE" != "remote" ]; then
 		if [ ! -z "$MDT" ]; then
-			do_facet $SINGLEMDS echo "\* $ID2 setgrp" > $PERM_CONF
-			do_facet $SINGLEMDS echo -1 > $IDENTITY_FLUSH
+			do_facet $SINGLEMDS "echo '* $ID1 setgrp' > $PERM_CONF"
+			do_facet $SINGLEMDS "echo -1 > $IDENTITY_FLUSH"
 		fi
-		$RUNAS -u $ID2 -G1,2,$ID1 ls $DIR/d4 || sec_error "setgroups(2) failed"
+		$RUNAS -u $ID1 -G1,2,$ID0 ls $DIR/d4 || error "setgroups (2)"
 		if [ ! -z "$MDT" ]; then
-			do_facet $SINGLEMDS rm -f $PERM_CONF
-			do_facet $SINGLEMDS echo -1 > $IDENTITY_FLUSH
+			do_facet $SINGLEMDS "rm -f $PERM_CONF"
+			do_facet $SINGLEMDS "echo -1 > $IDENTITY_FLUSH"
 		fi
 	fi
-	$RUNAS -u $ID2 -G1,2 ls $DIR/d4 && sec_error "setgroups(3) failed"
+	$RUNAS -u $ID1 -G1,2 ls $DIR/d4 && error "setgroups (3)"
 	rm -rf $DIR/d4
 }
-sec_run_test 4 "set supplementary group ==============="
+run_test 4 "set supplementary group ==============="
 
 mds_capability_timeout() {
         [ $# -lt 1 ] && echo "Miss mds capability timeout value" && return 1
 
         echo "Set mds capability timeout as $1 seconds"
-	do_facet $SINGLEMDS echo $1 > $CAPA_TIMEOUT
+	do_facet $SINGLEMDS "echo $1 > $CAPA_TIMEOUT"
         return 0
 }
 
@@ -417,7 +291,7 @@ mds_capability_switch() {
                 *) echo "Invalid mds capability switch value" && return 2;;
         esac
 
-	do_facet $SINGLEMDS echo $1 > $MDSCAPA
+	do_facet $SINGLEMDS "echo $1 > $MDSCAPA"
         return 0
 }
 
@@ -430,12 +304,10 @@ oss_capability_switch() {
                 *) echo "Invalid oss capability switch value" && return 2;;
         esac
 
-	i=0;
-	while [ $i -lt $OST_COUNT ]; do
-		j=$i;
-		i=`expr $i + 1`
-		OST="`do_facet ost$i ls -l $OST_LPROC/ | grep OST | awk '{print $9}' | grep $j$`"
-		do_facet ost$i echo $1 > $OST_LPROC/$OST/capa
+	for i in `seq $OSTCOUNT`; do
+		local j=`expr $i - 1`
+		local OST="`do_facet ost$i \"ls -l $OST_LPROC/\" | grep OST | awk '{print $9}' | grep $j$`"
+		do_facet ost$i "echo $1 > $OST_LPROC/$OST/capa"
 	done
         return 0
 }
@@ -475,13 +347,25 @@ turn_capability_off() {
 test_5() {
         local file=$DIR/f5
 
-	[ -z "$MDT" ] && sec_skip "do not support do_facet operations." && return
+	[ -z "$MDT" ] && skip "do not support do_facet operations." && return
 	turn_capability_off
+	if [ $? != 0 ]; then
+		error "turn_capability_off"
+		return 1
+	fi
 	rm -f $file
 
         # Disable proc variable
-        mds_capability_switch 0 || return 1
-        oss_capability_switch 1 || return 2
+        mds_capability_switch 0
+	if [ $? != 0 ]; then
+		error "mds_capability_switch 0"
+		return 2
+	fi
+        oss_capability_switch 1
+	if [ $? != 0 ]; then
+		error "oss_capability_switch 1"
+		return 3
+	fi
 
         # proc variable disabled -- access to the objects in the filesystem
         # is not allowed 
@@ -489,11 +373,15 @@ test_5() {
 	     "-- access to the objects in the filesystem is denied."
 	$WTL $file 30
 	if [ $? == 0 ]; then
-        	echo "Write worked well even though secrets not supplied."
-		return 3
+        	error "Write worked well even though secrets not supplied."
+		return 4
         fi
 
-        turn_capability_on || return 4
+        turn_capability_on
+	if [ $? != 0 ]; then
+		error "turn_capability_on"
+		return 4
+	fi
         sleep 5
 
         # proc variable enabled, secrets supplied -- write should work now
@@ -501,14 +389,18 @@ test_5() {
 	     "-- write should work now)."
 	$WTL $file 30
 	if [ $? != 0 ]; then
-        	echo "Write failed even though secrets supplied."
+        	error "Write failed even though secrets supplied."
 		return 5
         fi
 
 	turn_capability_off
+	if [ $? != 0 ]; then
+		error "turn_capability_off"
+		return 7
+	fi
 	rm -f $file
 }
-sec_run_test 5 "capa secrets ========================="
+run_test 5 "capa secrets ========================="
 
 # Expiry: A test program is performing I/O on a file. It has credential
 # with an expiry half a minute later. While the program is running the
@@ -517,51 +409,76 @@ sec_run_test 5 "capa secrets ========================="
 test_6() {
         local file=$DIR/f6
 
-	[ -z "$MDT" ] && sec_skip "do not support do_facet operations." && return
+	[ -z "$MDT" ] && skip "do not support do_facet operations." && return
 	turn_capability_off
+	if [ $? != 0 ]; then
+		error "turn_capability_off"
+		return 1
+	fi
 	rm -f $file
 
-        turn_capability_on 30 || return 1
+        turn_capability_on 30
+	if [ $? != 0 ]; then
+		error "turn_capability_on 30"
+		return 2
+	fi
         # Token expiry
-	$WTL $file 60 || return 2
+	$WTL $file 60
+	if [ $? != 0 ]; then
+		error "$WTL $file 60"
+		return 3
+	fi
 
 	# Reset MDS capability timeout
-	mds_capability_timeout 30 || exit 3
+	mds_capability_timeout 30
+	if [ $? != 0 ]; then
+		error "mds_capability_timeout 30"
+		return 4
+	fi
 	$WTL $file 60 &
 	local PID=$!
 	sleep 5
 
         # To disable automatic renew, only need turn capa off on MDS.
-        mds_capability_switch 0 || return 4
+        mds_capability_switch 0
+	if [ $? != 0 ]; then
+		error "mds_capability_switch 0"
+		return 5
+	fi
 
 	echo "We expect I/O failure."
         wait $PID
 	if [ $? == 0 ]; then
 		echo "no I/O failure got."
-		return 5
+		return 6
 	fi
 
 	turn_capability_off
+	if [ $? != 0 ]; then
+		error "turn_capability_off"
+		return 7
+	fi
 	rm -f $file
 }
-sec_run_test 6 "capa expiry ========================="
+run_test 6 "capa expiry ========================="
 
 log "cleanup: ======================================================"
 
-unsetup() {
-	if [ ! -z "$MDT"  ]; then
-		do_facet $SINGLEMDS echo $IDENTITY_UPCALL_BAK > $IDENTITY_UPCALL
-		do_facet $SINGLEMDS echo -1 > $IDENTITY_FLUSH
-	fi
+sec_unsetup() {
+       	for num in `seq $MDSCOUNT`; do
+		if [ "${identity_old[$num]}" = 1 ]; then
+       			switch_identity $num false || identity_old[$num]=$?
+		fi
+       	done
 
+	$RUNAS -u $ID0 ls $DIR
 	$RUNAS -u $ID1 ls $DIR
-	$RUNAS -u $ID2 ls $DIR
 }
-unsetup
+sec_unsetup
 
 sec_cleanup() {
-	if [ "$S_MOUNTED" = "yes" ]; then
-		cleanupall -f || sec_error "cleanup failed"
+	if [ "$I_MOUNTED" = "yes" ]; then
+		cleanupall -f || error "sec_cleanup"
 	fi
 }
 sec_cleanup

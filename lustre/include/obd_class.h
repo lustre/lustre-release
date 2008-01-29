@@ -814,7 +814,8 @@ static inline int obd_connect(const struct lu_env *env,
         RETURN(rc);
 }
 
-static inline int obd_reconnect(struct obd_export *exp,
+static inline int obd_reconnect(const struct lu_env *env,
+                                struct obd_export *exp,
                                 struct obd_device *obd,
                                 struct obd_uuid *cluuid,
                                 struct obd_connect_data *d)
@@ -831,7 +832,7 @@ static inline int obd_reconnect(struct obd_export *exp,
         OBD_CHECK_DT_OP(obd, reconnect, 0);
         OBD_COUNTER_INCREMENT(obd, reconnect);
 
-        rc = OBP(obd, reconnect)(exp, obd, cluuid, d);
+        rc = OBP(obd, reconnect)(env, exp, obd, cluuid, d);
         /* check that only subset is granted */
         LASSERT(ergo(d != NULL,
                      (d->ocd_connect_flags & ocf) == d->ocd_connect_flags));
@@ -1751,7 +1752,7 @@ static inline int md_enqueue(struct obd_export *exp,
 static inline int md_getattr_name(struct obd_export *exp,
                                   const struct lu_fid *fid, struct obd_capa *oc,
                                   const char *name, int namelen,
-                                  obd_valid valid, int ea_size,
+                                  obd_valid valid, int ea_size, __u32 suppgid,
                                   struct ptlrpc_request **request)
 {
         int rc;
@@ -1759,7 +1760,7 @@ static inline int md_getattr_name(struct obd_export *exp,
         EXP_CHECK_MD_OP(exp, getattr_name);
         EXP_MD_COUNTER_INCREMENT(exp, getattr_name);
         rc = MDP(exp->exp_obd, getattr_name)(exp, fid, oc, name, namelen,
-                                             valid, ea_size, request);
+                                             valid, ea_size, suppgid, request);
         RETURN(rc);
 }
 
@@ -1892,7 +1893,7 @@ static inline int md_setxattr(struct obd_export *exp,
                               const struct lu_fid *fid, struct obd_capa *oc,
                               obd_valid valid, const char *name,
                               const char *input, int input_size,
-                              int output_size, int flags,
+                              int output_size, int flags, __u32 suppgid,
                               struct ptlrpc_request **request)
 {
         ENTRY;
@@ -1900,7 +1901,7 @@ static inline int md_setxattr(struct obd_export *exp,
         EXP_MD_COUNTER_INCREMENT(exp, setxattr);
         RETURN(MDP(exp->exp_obd, setxattr)(exp, fid, oc, valid, name, input,
                                            input_size, output_size, flags,
-                                           request));
+                                           suppgid, request));
 }
 
 static inline int md_getxattr(struct obd_export *exp,
@@ -1988,13 +1989,14 @@ static inline int md_init_ea_size(struct obd_export *exp, int easize,
 
 static inline int md_get_remote_perm(struct obd_export *exp,
                                      const struct lu_fid *fid,
-                                     struct obd_capa *oc,
+                                     struct obd_capa *oc, __u32 suppgid,
                                      struct ptlrpc_request **request)
 {
         ENTRY;
         EXP_CHECK_MD_OP(exp, get_remote_perm);
         EXP_MD_COUNTER_INCREMENT(exp, get_remote_perm);
-        RETURN(MDP(exp->exp_obd, get_remote_perm)(exp, fid, oc, request));
+        RETURN(MDP(exp->exp_obd, get_remote_perm)(exp, fid, oc, suppgid,
+                                                  request));
 }
 
 static inline int md_renew_capa(struct obd_export *exp, struct obd_capa *ocapa,

@@ -161,8 +161,7 @@ static int ll_init_ea_size(struct obd_export *md_exp, struct obd_export *dt_exp)
         RETURN(rc);
 }
 
-static int client_common_fill_super(struct super_block *sb, char *md, char *dt,
-                                    uid_t nllu, gid_t nllg)
+static int client_common_fill_super(struct super_block *sb, char *md, char *dt)
 {
         struct inode *root = 0;
         struct ll_sb_info *sbi = ll_s2sbi(sb);
@@ -238,8 +237,6 @@ static int client_common_fill_super(struct super_block *sb, char *md, char *dt,
                 data->ocd_connect_flags &= ~OBD_CONNECT_RMT_CLIENT;
                 data->ocd_connect_flags |= OBD_CONNECT_LCL_CLIENT;
         }
-        data->ocd_nllu = nllu;
-        data->ocd_nllg = nllg;
 
         err = obd_connect(NULL, &md_conn, obd, &sbi->ll_sb_uuid, data);
         if (err == -EBUSY) {
@@ -487,6 +484,13 @@ static int client_common_fill_super(struct super_block *sb, char *md, char *dt,
                 GOTO(out_root, err);
         }
 
+#ifdef CONFIG_FS_POSIX_ACL
+        if (sbi->ll_flags & LL_SBI_RMT_CLIENT) {
+                rct_init(&sbi->ll_rct);
+                et_init(&sbi->ll_et);
+        }
+#endif
+
         checksum = sbi->ll_flags & LL_SBI_CHECKSUM;
         err = obd_set_info_async(sbi->ll_dt_exp, strlen("checksum"),"checksum",
                                  sizeof(checksum), &checksum, NULL);
@@ -674,6 +678,13 @@ void client_common_put_super(struct super_block *sb)
 {
         struct ll_sb_info *sbi = ll_s2sbi(sb);
         ENTRY;
+
+#ifdef CONFIG_FS_POSIX_ACL
+        if (sbi->ll_flags & LL_SBI_RMT_CLIENT) {
+                et_fini(&sbi->ll_et);
+                rct_fini(&sbi->ll_rct);
+        }
+#endif
 
         obd_cancel_unused(sbi->ll_dt_exp, NULL, 0, NULL);
 
@@ -932,9 +943,7 @@ int ll_fill_super(struct super_block *sb)
         sprintf(md, "%s-%s", lprof->lp_md, ll_instance);
 
         /* connections, registrations, sb setup */
-        err = client_common_fill_super(sb, md, dt,
-                                       lsi->lsi_lmd->lmd_nllu,
-                                       lsi->lsi_lmd->lmd_nllg);
+        err = client_common_fill_super(sb, md, dt);
 
 out_free:
         if (md)
@@ -2207,101 +2216,4 @@ void ll_finish_md_op_data(struct md_op_data *op_data)
         capa_put(op_data->op_capa1);
         capa_put(op_data->op_capa2);
         OBD_FREE_PTR(op_data);
-}
-
-int ll_ioctl_getfacl(struct inode *inode, struct rmtacl_ioctl_data *ioc)
-{
-        struct ll_sb_info *sbi = ll_i2sbi(inode);
-        struct ptlrpc_request *req = NULL;
-        struct mdt_body *body;
-        char *cmd, *buf;
-        struct obd_capa *oc;
-        int rc, buflen;
-        ENTRY;
-
-        if (!(sbi->ll_flags & LL_SBI_RMT_CLIENT))
-                RETURN(-EBADE);
-
-        LASSERT(ioc->cmd && ioc->cmd_len && ioc->res && ioc->res_len);
-
-        OBD_ALLOC(cmd, ioc->cmd_len);
-        if (!cmd)
-                RETURN(-ENOMEM);
-        if (copy_from_user(cmd, ioc->cmd, ioc->cmd_len))
-                GOTO(out, rc = -EFAULT);
-
-        oc = ll_mdscapa_get(inode);
-        rc = md_getxattr(ll_i2sbi(inode)->ll_md_exp, ll_inode2fid(inode), oc,
-                         OBD_MD_FLXATTR, XATTR_NAME_LUSTRE_ACL, cmd,
-                         ioc->cmd_len, ioc->res_len, 0, &req);
-        capa_put(oc);
-        if (rc < 0) {
-                CERROR("mdc_getxattr %s [%s] failed: %d\n",
-                       XATTR_NAME_LUSTRE_ACL, cmd, rc);
-                GOTO(out, rc);
-        }
-
-        body = lustre_msg_buf(req->rq_repmsg, REPLY_REC_OFF, sizeof(*body));
-        LASSERT(body);
-
-        buflen = lustre_msg_buflen(req->rq_repmsg, REPLY_REC_OFF);
-        LASSERT(buflen <= ioc->res_len);
-        buf = lustre_msg_string(req->rq_repmsg, REPLY_REC_OFF + 1, ioc->res_len);
-        LASSERT(buf);
-        if (copy_to_user(ioc->res, buf, buflen))
-                GOTO(out, rc = -EFAULT);
-        EXIT;
-out:
-        if (req)
-                ptlrpc_req_finished(req);
-        OBD_FREE(cmd, ioc->cmd_len);
-        return rc;
-}
-
-int ll_ioctl_setfacl(struct inode *inode, struct rmtacl_ioctl_data *ioc)
-{
-        struct ll_sb_info *sbi = ll_i2sbi(inode);
-        struct ptlrpc_request *req = NULL;
-        char *cmd, *buf;
-        struct obd_capa *oc;
-        int buflen, rc;
-        ENTRY;
-
-        if (!(sbi->ll_flags & LL_SBI_RMT_CLIENT))
-                RETURN(-EBADE);
-
-        if (!(sbi->ll_flags & LL_SBI_ACL)) 
-                RETURN(-EOPNOTSUPP);
-
-        LASSERT(ioc->cmd && ioc->cmd_len && ioc->res && ioc->res_len);
-
-        OBD_ALLOC(cmd, ioc->cmd_len);
-        if (!cmd)
-                RETURN(-ENOMEM);
-        if (copy_from_user(cmd, ioc->cmd, ioc->cmd_len))
-                GOTO(out, rc = -EFAULT);
-
-        oc = ll_mdscapa_get(inode);
-        rc = md_setxattr(ll_i2sbi(inode)->ll_md_exp, ll_inode2fid(inode), oc,
-                         OBD_MD_FLXATTR, XATTR_NAME_LUSTRE_ACL, cmd,
-                         ioc->cmd_len, ioc->res_len, 0, &req);
-        capa_put(oc);
-        if (rc) {
-                CERROR("mdc_setxattr %s [%s] failed: %d\n",
-                       XATTR_NAME_LUSTRE_ACL, cmd, rc);
-                GOTO(out, rc);
-        }
-
-        buflen = lustre_msg_buflen(req->rq_repmsg, REPLY_REC_OFF);
-        LASSERT(buflen <= ioc->res_len);
-        buf = lustre_msg_string(req->rq_repmsg, REPLY_REC_OFF, ioc->res_len);
-        LASSERT(buf);
-        if (copy_to_user(ioc->res, buf, buflen))
-                GOTO(out, rc = -EFAULT);
-        EXIT;
-out:
-        if (req)
-                ptlrpc_req_finished(req);
-        OBD_FREE(cmd, ioc->cmd_len);
-        return rc;
 }

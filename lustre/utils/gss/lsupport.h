@@ -36,6 +36,7 @@ struct lgssd_upcall_data {
 
 struct lgssd_ioctl_param {
         int             version;        /* in   */
+        int             secid;          /* in   */
         char           *uuid;           /* in   */
         int             lustre_svc;     /* in   */
         uid_t           uid;            /* in   */

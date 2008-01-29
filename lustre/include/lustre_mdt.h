@@ -40,24 +40,6 @@ struct com_thread_info {
         struct req_capsule cti_pill;
 };
 
-/* id map */
-#define MDT_IDMAP_HASHSIZE      (32)
-#define MDT_IDMAP_HASHFUNC(id)  ((id) & (MDT_IDMAP_HASHSIZE - 1))
-
-enum mdt_idmap_idx {
-        RMT_UIDMAP_IDX,
-        LCL_UIDMAP_IDX,
-        RMT_GIDMAP_IDX,
-        LCL_GIDMAP_IDX,
-        MDT_IDMAP_N_HASHES
-};
-
-struct mdt_idmap_table {
-        spinlock_t       mit_lock;
-        struct list_head mit_idmaps[MDT_IDMAP_N_HASHES]
-                                   [MDT_IDMAP_HASHSIZE];
-};
-
 enum {
         ESERIOUS = 0x0001000
 };

@@ -66,6 +66,8 @@ struct obd_import {
 
         struct obd_device        *imp_obd;
         struct ptlrpc_sec        *imp_sec;
+        struct semaphore          imp_sec_mutex;
+        cfs_time_t                imp_sec_expire;
         cfs_waitq_t               imp_recovery_waitq;
 
         atomic_t                  imp_inflight;

@@ -42,167 +42,9 @@
 #include <lustre_mds.h>
 #include <lustre/lustre_idl.h>
 
-#ifdef CONFIG_FS_POSIX_ACL
-# include <linux/posix_acl_xattr.h>
-# include <linux/posix_acl.h>
-#endif
-
 #include "mdd_internal.h"
 
-#define mdd_get_group_info(group_info) do {             \
-        atomic_inc(&(group_info)->usage);               \
-} while (0)
-
-#define mdd_put_group_info(group_info) do {             \
-        if (atomic_dec_and_test(&(group_info)->usage))  \
-                groups_free(group_info);                \
-} while (0)
-
-#define MDD_NGROUPS_PER_BLOCK       ((int)(CFS_PAGE_SIZE / sizeof(gid_t)))
-
-#define MDD_GROUP_AT(gi, i) \
-    ((gi)->blocks[(i) / MDD_NGROUPS_PER_BLOCK][(i) % MDD_NGROUPS_PER_BLOCK])
-
-/*
- * groups_search() is copied from linux kernel!
- * A simple bsearch.
- */
-static int mdd_groups_search(struct group_info *group_info, gid_t grp)
-{
-        int left, right;
-
-        if (!group_info)
-                return 0;
-
-        left = 0;
-        right = group_info->ngroups;
-        while (left < right) {
-                int mid = (left + right) / 2;
-                int cmp = grp - MDD_GROUP_AT(group_info, mid);
-
-                if (cmp > 0)
-                        left = mid + 1;
-                else if (cmp < 0)
-                        right = mid;
-                else
-                        return 1;
-        }
-        return 0;
-}
-
-int mdd_in_group_p(struct md_ucred *uc, gid_t grp)
-{
-        int rc = 1;
-
-        if (grp != uc->mu_fsgid) {
-                struct group_info *group_info = NULL;
-
-                if (uc->mu_ginfo || !uc->mu_identity ||
-                    uc->mu_valid == UCRED_OLD)
-                        if (grp == uc->mu_suppgids[0] ||
-                            grp == uc->mu_suppgids[1])
-                                return 1;
-
-                if (uc->mu_ginfo)
-                        group_info = uc->mu_ginfo;
-                else if (uc->mu_identity)
-                        group_info = uc->mu_identity->mi_ginfo;
-
-                if (!group_info)
-                        return 0;
-
-                mdd_get_group_info(group_info);
-                rc = mdd_groups_search(group_info, grp);
-                mdd_put_group_info(group_info);
-        }
-        return rc;
-}
-
 #ifdef CONFIG_FS_POSIX_ACL
-static inline void mdd_acl_le_to_cpu(posix_acl_xattr_entry *p)
-{
-        p->e_tag = le16_to_cpu(p->e_tag);
-        p->e_perm = le16_to_cpu(p->e_perm);
-        p->e_id = le32_to_cpu(p->e_id);
-}
-
-static inline void mdd_acl_cpu_to_le(posix_acl_xattr_entry *p)
-{
-        p->e_tag = cpu_to_le16(p->e_tag);
-        p->e_perm = cpu_to_le16(p->e_perm);
-        p->e_id = cpu_to_le32(p->e_id);
-}
-
-/*
- * Check permission based on POSIX ACL.
- */
-static int mdd_posix_acl_permission(struct md_ucred *uc, struct lu_attr *la,
-                                    int want, posix_acl_xattr_entry *entry,
-                                    int count)
-{
-        posix_acl_xattr_entry *pa, *pe, *mask_obj;
-        int found = 0;
-        ENTRY;
-
-        if (count <= 0)
-                RETURN(-EACCES);
-
-        for (pa = &entry[0], pe = &entry[count - 1]; pa <= pe; pa++) {
-                mdd_acl_le_to_cpu(pa);
-                switch(pa->e_tag) {
-                        case ACL_USER_OBJ:
-                                /* (May have been checked already) */
-                                if (la->la_uid == uc->mu_fsuid)
-                                        goto check_perm;
-                                break;
-                        case ACL_USER:
-                                if (pa->e_id == uc->mu_fsuid)
-                                        goto mask;
-                                break;
-                        case ACL_GROUP_OBJ:
-                                if (mdd_in_group_p(uc, la->la_gid)) {
-                                        found = 1;
-                                        if ((pa->e_perm & want) == want)
-                                                goto mask;
-                                }
-                                break;
-                        case ACL_GROUP:
-                                if (mdd_in_group_p(uc, pa->e_id)) {
-                                        found = 1;
-                                        if ((pa->e_perm & want) == want)
-                                                goto mask;
-                                }
-                                break;
-                        case ACL_MASK:
-                                break;
-                        case ACL_OTHER:
-                                if (found)
-                                        RETURN(-EACCES);
-                                else
-                                        goto check_perm;
-                        default:
-                                RETURN(-EIO);
-                }
-        }
-        RETURN(-EIO);
-
-mask:
-        for (mask_obj = pa + 1; mask_obj <= pe; mask_obj++) {
-                mdd_acl_le_to_cpu(mask_obj);
-                if (mask_obj->e_tag == ACL_MASK) {
-                        if ((pa->e_perm & mask_obj->e_perm & want) == want)
-                                RETURN(0);
-
-                        RETURN(-EACCES);
-                }
-        }
-
-check_perm:
-        if ((pa->e_perm & want) == want)
-                RETURN(0);
-
-        RETURN(-EACCES);
-}
 
 /*
  * Get default acl EA only.
@@ -229,54 +71,6 @@ int mdd_acl_def_get(const struct lu_env *env, struct mdd_object *mdd_obj,
                 rc = 0;
         }
         RETURN(rc);
-}
-
-/*
- * Modify the ACL for the chmod.
- */
-static int mdd_posix_acl_chmod_masq(posix_acl_xattr_entry *entry,
-                                    __u32 mode, int count)
-{
-	posix_acl_xattr_entry *group_obj = NULL, *mask_obj = NULL, *pa, *pe;
-
-        for (pa = &entry[0], pe = &entry[count - 1]; pa <= pe; pa++) {
-                mdd_acl_le_to_cpu(pa);
-		switch(pa->e_tag) {
-			case ACL_USER_OBJ:
-				pa->e_perm = (mode & S_IRWXU) >> 6;
-				break;
-
-			case ACL_USER:
-			case ACL_GROUP:
-				break;
-
-			case ACL_GROUP_OBJ:
-				group_obj = pa;
-				break;
-
-			case ACL_MASK:
-				mask_obj = pa;
-				break;
-
-			case ACL_OTHER:
-				pa->e_perm = (mode & S_IRWXO);
-				break;
-
-			default:
-				return -EIO;
-		}
-                mdd_acl_cpu_to_le(pa);
-	}
-
-	if (mask_obj) {
-		mask_obj->e_perm = cpu_to_le16((mode & S_IRWXG) >> 3);
-	} else {
-		if (!group_obj)
-			return -EIO;
-		group_obj->e_perm = cpu_to_le16((mode & S_IRWXG) >> 3);
-	}
-
-	return 0;
 }
 
 /*
@@ -310,74 +104,13 @@ int mdd_acl_chmod(const struct lu_env *env, struct mdd_object *o, __u32 mode,
         if (entry_count <= 0)
                 RETURN(0);
        
-        rc = mdd_posix_acl_chmod_masq(entry, mode, entry_count);
+        rc = lustre_posix_acl_chmod_masq(entry, mode, entry_count);
         if (rc)
                 RETURN(rc);
 
         rc = mdo_xattr_set(env, o, buf, XATTR_NAME_ACL_ACCESS,
                            0, handle, BYPASS_CAPA);
         RETURN(rc);
-}
-
-/*
- * Modify acl when creating a new obj.
- */
-static int mdd_posix_acl_create_masq(posix_acl_xattr_entry *entry,
-                                     __u32 *mode_p, int count)
-{
-        posix_acl_xattr_entry *group_obj = NULL, *mask_obj = NULL, *pa, *pe;
-	__u32 mode = *mode_p;
-	int not_equiv = 0;
-
-        for (pa = &entry[0], pe = &entry[count - 1]; pa <= pe; pa++) {
-                mdd_acl_le_to_cpu(pa);
-                switch(pa->e_tag) {
-                        case ACL_USER_OBJ:
-				pa->e_perm &= (mode >> 6) | ~S_IRWXO;
-				mode &= (pa->e_perm << 6) | ~S_IRWXU;
-				break;
-
-			case ACL_USER:
-			case ACL_GROUP:
-				not_equiv = 1;
-				break;
-
-                        case ACL_GROUP_OBJ:
-				group_obj = pa;
-                                break;
-
-                        case ACL_OTHER:
-				pa->e_perm &= mode | ~S_IRWXO;
-				mode &= pa->e_perm | ~S_IRWXO;
-                                break;
-
-                        case ACL_MASK:
-				mask_obj = pa;
-				not_equiv = 1;
-                                break;
-
-			default:
-				return -EIO;
-                }
-                mdd_acl_cpu_to_le(pa);
-        }
-
-	if (mask_obj) {
-		mask_obj->e_perm = le16_to_cpu(mask_obj->e_perm) &
-                                   ((mode >> 3) | ~S_IRWXO);
-		mode &= (mask_obj->e_perm << 3) | ~S_IRWXG;
-                mask_obj->e_perm = cpu_to_le16(mask_obj->e_perm);
-	} else {
-		if (!group_obj)
-			return -EIO;
-		group_obj->e_perm = le16_to_cpu(group_obj->e_perm) &
-                                    ((mode >> 3) | ~S_IRWXO);
-		mode &= (group_obj->e_perm << 3) | ~S_IRWXG;
-                group_obj->e_perm = cpu_to_le16(group_obj->e_perm);
-	}
-
-	*mode_p = (*mode_p & ~S_IRWXUGO) | mode;
-        return not_equiv;
 }
 
 /*
@@ -407,7 +140,7 @@ int __mdd_acl_init(const struct lu_env *env, struct mdd_object *obj,
                         RETURN(rc);
 	}
 
-        rc = mdd_posix_acl_create_masq(entry, mode, entry_count);
+        rc = lustre_posix_acl_create_masq(entry, mode, entry_count);
         if (rc <= 0)
                 RETURN(rc);
 
@@ -472,7 +205,7 @@ static int mdd_check_acl(const struct lu_env *env, struct mdd_object *obj,
         entry_count = (buf->lb_len - sizeof(head->a_version)) /
                       sizeof(posix_acl_xattr_entry);
 
-        rc = mdd_posix_acl_permission(uc, la, mask, entry, entry_count);
+        rc = lustre_posix_acl_permission(uc, la, mask, entry, entry_count);
         RETURN(rc);
 #else
         ENTRY;
@@ -528,7 +261,7 @@ int __mdd_permission_internal(const struct lu_env *env, struct mdd_object *obj,
                                  (rc != -ENODATA))
                                 RETURN(rc);
                 }
-                if (mdd_in_group_p(uc, la->la_gid))
+                if (lustre_in_group_p(uc, la->la_gid))
                         mode >>= 3;
         }
 
@@ -554,11 +287,13 @@ int mdd_permission(const struct lu_env *env,
                    struct md_attr *ma, int mask)
 {
         struct mdd_object *mdd_pobj, *mdd_cobj;
+        struct md_ucred *uc = NULL;
         struct lu_attr *la = NULL;
         int check_create, check_link;
         int check_unlink;
         int check_rename_src, check_rename_tar;
         int check_vtx_part, check_vtx_full;
+        int check_rgetfacl;
         int rc = 0;
         ENTRY;
 
@@ -584,11 +319,13 @@ int mdd_permission(const struct lu_env *env,
         check_rename_tar = mask & MAY_RENAME_TAR;
         check_vtx_part = mask & MAY_VTX_PART;
         check_vtx_full = mask & MAY_VTX_FULL;
+        check_rgetfacl = mask & MAY_RGETFACL;
 
         mask &= ~(MAY_CREATE | MAY_LINK |
                 MAY_UNLINK |
                 MAY_RENAME_SRC | MAY_RENAME_TAR |
-                MAY_VTX_PART | MAY_VTX_FULL);
+                MAY_VTX_PART | MAY_VTX_FULL |
+                MAY_RGETFACL);
 
         rc = mdd_permission_internal_locked(env, mdd_cobj, NULL, mask);
 
@@ -609,8 +346,7 @@ int mdd_permission(const struct lu_env *env,
         }
 
         if (!rc && (check_vtx_part || check_vtx_full)) {
-                struct md_ucred *uc = md_ucred(env);
-
+                uc = md_ucred(env);
                 LASSERT(ma);
                 if (likely(!la)) {
                         la = &mdd_env_info(env)->mti_la;
@@ -628,6 +364,21 @@ int mdd_permission(const struct lu_env *env,
                         if (check_vtx_full)
                                 rc = -EPERM;
                 }
+        }
+
+        if (unlikely(!rc && check_rgetfacl)) {
+                if (likely(!uc))
+                        uc = md_ucred(env);
+
+                if (likely(!la)) {
+                        la = &mdd_env_info(env)->mti_la;
+                        rc = mdd_la_get(env, mdd_cobj, la, BYPASS_CAPA);
+                        if (rc)
+                                RETURN(rc);
+                }
+
+                if (la->la_uid != uc->mu_fsuid && !mdd_capable(uc, CAP_FOWNER))
+                        rc = -EPERM;
         }
 
         RETURN(rc);

@@ -36,6 +36,8 @@ AC_DEFUN([AC_KERBEROS_V5],[
       AC_DEFINE_UNQUOTED(KRB5_VERSION, $K5VERS, [Define this as the Kerberos version number])
       if test -f $dir/include/gssapi/gssapi_krb5.h -a \
                 \( -f $dir/lib/libgssapi_krb5.a -o \
+                   -f $dir/lib64/libgssapi_krb5.a -o \
+                   -f $dir/lib64/libgssapi_krb5.so -o \
                    -f $dir/lib/libgssapi_krb5.so \) ; then
          AC_DEFINE(HAVE_KRB5, 1, [Define this if you have MIT Kerberos libraries])
          KRBDIR="$dir"
@@ -90,6 +92,14 @@ AC_DEFUN([AC_KERBEROS_V5],[
     AC_DEFINE(HAVE_SET_ALLOWABLE_ENCTYPES, 1, [Define this if the Kerberos GSS library supports gss_krb5_set_allowable_enctypes]), ,$KRBLIBS)
   AC_CHECK_LIB($gssapi_lib, gss_krb5_ccache_name,
     AC_DEFINE(HAVE_GSS_KRB5_CCACHE_NAME, 1, [Define this if the Kerberos GSS library supports gss_krb5_ccache_name]), ,$KRBLIBS)
+
+  dnl Check for newer error message facility
+  AC_CHECK_LIB($gssapi_lib, krb5_get_error_message,
+    AC_DEFINE(HAVE_KRB5_GET_ERROR_MESSAGE, 1, [Define this if the function krb5_get_error_message is available]), ,$KRBLIBS)
+
+  dnl Check for function to specify addressless tickets
+  AC_CHECK_LIB($gssapi_lib, krb5_get_init_creds_opt_set_addressless,
+    AC_DEFINE(HAVE_KRB5_GET_INIT_CREDS_OPT_SET_ADDRESSLESS, 1, [Define this if the function krb5_get_init_creds_opt_set_addressless is available]), ,$KRBLIBS)
 
   dnl If they specified a directory and it didn't work, give them a warning
   if test "x$krb5_with" != "x" -a "$krb5_with" != "$KRBDIR"; then

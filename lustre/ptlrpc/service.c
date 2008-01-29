@@ -591,9 +591,6 @@ ptlrpc_server_handle_request(struct ptlrpc_service *svc,
         }
 
         /* go through security check/transform */
-        request->rq_auth_uid = INVALID_UID;
-        request->rq_auth_mapped_uid = INVALID_UID;
-
         rc = sptlrpc_svc_unwrap_request(request);
         switch (rc) {
         case SECSVC_OK:
@@ -674,7 +671,7 @@ ptlrpc_server_handle_request(struct ptlrpc_service *svc,
                 rc = sptlrpc_target_export_check(request->rq_export, request);
                 if (unlikely(rc)) {
                         DEBUG_REQ(D_ERROR, request,
-                                  "DROPPING req with illeagle security flavor");
+                                  "DROPPING req with illegal security flavor,");
                         goto put_conn;
                 }
 

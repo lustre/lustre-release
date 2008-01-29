@@ -713,6 +713,8 @@ struct obd_export *class_new_export(struct obd_device *obd,
         INIT_HLIST_NODE(&export->exp_uuid_hash);
         INIT_HLIST_NODE(&export->exp_nid_hash);
 
+        export->exp_sp_peer = LUSTRE_SP_ANY;
+        export->exp_flvr.sf_rpc = SPTLRPC_FLVR_INVALID;
         export->exp_client_uuid = *cluuid;
         obd_init_export(export);
 
@@ -848,6 +850,7 @@ struct obd_import *class_new_import(struct obd_device *obd)
         imp->imp_last_success_conn = 0;
         imp->imp_state = LUSTRE_IMP_NEW;
         imp->imp_obd = class_incref(obd);
+        sema_init(&imp->imp_sec_mutex, 1);
         cfs_waitq_init(&imp->imp_recovery_waitq);
 
         atomic_set(&imp->imp_refcount, 2);

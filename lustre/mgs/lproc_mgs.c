@@ -29,6 +29,7 @@
 #include <obd.h>
 #include <obd_class.h>
 #include <lprocfs_status.h>
+#include <lustre_param.h>
 #include "mgs_internal.h"
 
 #ifdef LPROCFS
@@ -88,9 +89,40 @@ int lproc_mgs_setup(struct obd_device *obd)
         return rc;
 }
 
+static void seq_show_srpc_rule(struct seq_file *seq, const char *tgtname,
+                               struct sptlrpc_rule_set *rset)
+{
+        struct sptlrpc_rule    *r;
+        char                    dirbuf[10];
+        char                    flvrbuf[40];
+        char                   *net;
+        int                     i;
+
+        for (i = 0; i < rset->srs_nrule; i++) {
+                r = &rset->srs_rules[i];
+
+                if (r->sr_netid == LNET_NIDNET(LNET_NID_ANY))
+                        net = "default";
+                else
+                        net = libcfs_net2str(r->sr_netid);
+
+                if (r->sr_from == LUSTRE_SP_ANY && r->sr_to == LUSTRE_SP_ANY)
+                        dirbuf[0] = '\0';
+                else
+                        snprintf(dirbuf, sizeof(dirbuf), ".%s2%s",
+                                 sptlrpc_part2name(r->sr_from),
+                                 sptlrpc_part2name(r->sr_to));
+
+                sptlrpc_flavor2name(&r->sr_flvr, flvrbuf, sizeof(flvrbuf));
+                seq_printf(seq, "%s.srpc.flavor.%s%s=%s\n", tgtname,
+                           net, dirbuf, flvrbuf);
+        }
+}
+
 static int mgs_live_seq_show(struct seq_file *seq, void *v) 
 {
-        struct fs_db *fsdb = seq->private;
+        struct fs_db             *fsdb = seq->private;
+        struct mgs_tgt_srpc_conf *srpc_tgt;
         int i;
         
         down(&fsdb->fsdb_sem);
@@ -104,6 +136,18 @@ static int mgs_live_seq_show(struct seq_file *seq, void *v)
         for (i = 0; i < INDEX_MAP_SIZE * 8; i++)
                  if (test_bit(i, fsdb->fsdb_ost_index_map)) 
                          seq_printf(seq, "%s-OST%04x\n", fsdb->fsdb_name, i);
+
+        seq_printf(seq, "\nSecure RPC Config Rules:\n");
+#if 0
+        seq_printf(seq, "%s.%s=%s\n", fsdb->fsdb_name,
+                   PARAM_SRPC_UDESC, fsdb->fsdb_srpc_fl_udesc ? "yes" : "no");
+#endif
+        for (srpc_tgt = fsdb->fsdb_srpc_tgt; srpc_tgt;
+             srpc_tgt = srpc_tgt->mtsc_next) {
+                seq_show_srpc_rule(seq, srpc_tgt->mtsc_tgt,
+                                   &srpc_tgt->mtsc_rset);
+        }
+        seq_show_srpc_rule(seq, fsdb->fsdb_name, &fsdb->fsdb_srpc_gen);
 
         up(&fsdb->fsdb_sem);
         return 0;

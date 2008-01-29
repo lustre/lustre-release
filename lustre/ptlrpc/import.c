@@ -445,10 +445,14 @@ int ptlrpc_connect_import(struct obd_import *imp, char *new_uuid)
                 }
         }
 
+        rc = sptlrpc_import_sec_adapt(imp, NULL, 0);
+        if (rc)
+                GOTO(out, rc);
+
         /* Reset connect flags to the originally requested flags, in case
          * the server is updated on-the-fly we will get the new features. */
         imp->imp_connect_data.ocd_connect_flags = imp->imp_connect_flags_orig;
-        rc = obd_reconnect(imp->imp_obd->obd_self_export, obd,
+        rc = obd_reconnect(NULL, imp->imp_obd->obd_self_export, obd,
                            &obd->obd_uuid, &imp->imp_connect_data);
         if (rc)
                 GOTO(out, rc);
@@ -805,7 +809,7 @@ out:
                         struct obd_connect_data *ocd;
 
                         /* reply message might not be ready */
-                        if (request->rq_repmsg != NULL)
+                        if (request->rq_repmsg == NULL)
                                 RETURN(-EPROTO);
 
                         ocd = lustre_swab_repbuf(request, REPLY_REC_OFF,

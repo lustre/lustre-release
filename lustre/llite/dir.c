@@ -723,7 +723,7 @@ static int ll_dir_ioctl(struct inode *inode, struct file *file,
                 oc = ll_mdscapa_get(inode);
                 rc = md_getattr_name(sbi->ll_md_exp, ll_inode2fid(inode), oc,
                                      filename, namelen, OBD_MD_FLID, 0,
-                                     &request);
+                                     ll_i2suppgid(inode), &request);
                 capa_put(oc);
                 if (rc < 0) {
                         CDEBUG(D_INFO, "md_getattr_name: %d\n", rc);
@@ -1119,22 +1119,22 @@ static int ll_dir_ioctl(struct inode *inode, struct file *file,
         }
         case LL_IOC_FLUSHCTX:
                 RETURN(ll_flush_ctx(inode));
-        case LL_IOC_GETFACL: {
-                struct rmtacl_ioctl_data ioc;
+#ifdef CONFIG_FS_POSIX_ACL
+        case LL_IOC_RMTACL: {
+            if (sbi->ll_flags & LL_SBI_RMT_CLIENT &&
+                inode == inode->i_sb->s_root->d_inode) {
+                struct ll_file_data *fd = LUSTRE_FPRIVATE(file);
+                int rc;
 
-                if (copy_from_user(&ioc, (void *)arg, sizeof(ioc)))
-                        RETURN(-EFAULT);
-
-                RETURN(ll_ioctl_getfacl(inode, &ioc));
+                LASSERT(fd != NULL);
+                rc = rct_add(&sbi->ll_rct, cfs_curproc_pid(), arg);
+                if (!rc)
+                        fd->fd_flags |= LL_FILE_RMTACL;
+                RETURN(rc);
+            } else
+                RETURN(0);
         }
-        case LL_IOC_SETFACL: {
-                struct rmtacl_ioctl_data ioc;
-
-                if (copy_from_user(&ioc, (void *)arg, sizeof(ioc)))
-                        RETURN(-EFAULT);
-
-                RETURN(ll_ioctl_setfacl(inode, &ioc));
-        }
+#endif
         default:
                 RETURN(obd_iocontrol(cmd, sbi->ll_dt_exp,0,NULL,(void *)arg));
         }

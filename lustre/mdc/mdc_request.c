@@ -97,7 +97,7 @@ static int send_getstatus(struct obd_import *imp, struct lu_fid *rootfid,
         req->rq_send_state = level;
         ptlrpc_req_set_repsize(req, 3, size);
 
-        mdc_pack_req_body(req, REQ_REC_OFF, 0, NULL, NULL, 0, 0);
+        mdc_pack_req_body(req, REQ_REC_OFF, 0, NULL, NULL, 0, -1, 0);
         lustre_msg_add_flags(req->rq_reqmsg, msg_flags);
         rc = ptlrpc_queue_wait(req);
 
@@ -244,7 +244,7 @@ int mdc_getattr(struct obd_export *exp, const struct lu_fid *fid,
         if (!req)
                 GOTO(out, rc = -ENOMEM);
 
-        mdc_pack_req_body(req, REQ_REC_OFF, valid, fid, oc, ea_size,
+        mdc_pack_req_body(req, REQ_REC_OFF, valid, fid, oc, ea_size, -1,
                           MDS_BFLAG_EXT_FLAGS/*request "new" flags(bug 9486)*/);
 
         if (valid & OBD_MD_FLRMTPERM)
@@ -267,7 +267,7 @@ int mdc_getattr(struct obd_export *exp, const struct lu_fid *fid,
 
 int mdc_getattr_name(struct obd_export *exp, const struct lu_fid *fid,
                      struct obd_capa *oc, const char *filename, int namelen,
-                     obd_valid valid, int ea_size,
+                     obd_valid valid, int ea_size, __u32 suppgid,
                      struct ptlrpc_request **request)
 {
         struct ptlrpc_request *req;
@@ -283,7 +283,7 @@ int mdc_getattr_name(struct obd_export *exp, const struct lu_fid *fid,
         if (!req)
                 GOTO(out, rc = -ENOMEM);
 
-        mdc_pack_req_body(req, REQ_REC_OFF, valid, fid, oc, ea_size,
+        mdc_pack_req_body(req, REQ_REC_OFF, valid, fid, oc, ea_size, suppgid,
                           MDS_BFLAG_EXT_FLAGS/*request "new" flags(bug 9486)*/);
 
         if (filename) {
@@ -342,12 +342,12 @@ int mdc_xattr_common(struct obd_export *exp, const struct lu_fid *fid,
                      struct obd_capa *oc,
                      int opcode, obd_valid valid, const char *xattr_name,
                      const char *input, int input_size, int output_size,
-                     int flags, struct ptlrpc_request **request)
+                     int flags, __u32 suppgid, struct ptlrpc_request **request)
 {
         struct ptlrpc_request *req;
         int size[5] = { sizeof(struct ptlrpc_body), sizeof(struct mdt_body) };
         int bufcnt = 3, offset = REQ_REC_OFF + 2;
-        int rc, xattr_namelen = 0, remote_acl = 0;
+        int rc, xattr_namelen = 0;
         void *tmp;
         ENTRY;
 
@@ -367,14 +367,13 @@ int mdc_xattr_common(struct obd_export *exp, const struct lu_fid *fid,
                 GOTO(out, rc = -ENOMEM);
 
         /* request data */
-        mdc_pack_req_body(req, REQ_REC_OFF, valid, fid, oc, output_size, flags);
+        mdc_pack_req_body(req, REQ_REC_OFF, valid, fid, oc, output_size,
+                          suppgid, flags);
 
 
         if (xattr_name) {
                 tmp = lustre_msg_buf(req->rq_reqmsg, offset++, xattr_namelen);
                 memcpy(tmp, xattr_name, xattr_namelen);
-                if (!strcmp(xattr_name, XATTR_NAME_LUSTRE_ACL))
-                        remote_acl = 1;
         }
         if (input_size) {
                 tmp = lustre_msg_buf(req->rq_reqmsg, offset++, input_size);
@@ -394,15 +393,12 @@ int mdc_xattr_common(struct obd_export *exp, const struct lu_fid *fid,
         ptlrpc_req_set_repsize(req, bufcnt, size);
 
         /* make rpc */
-        /* NB: set remote acl doesn't need hold rpc lock, because it just
-         * send command to MDS, and when it's executed on mountpoint on MDS,
-         * another mdc_xattr_common() will be invoked there. */
-        if (opcode == MDS_SETXATTR && !remote_acl)
+        if (opcode == MDS_SETXATTR)
                 mdc_get_rpc_lock(exp->exp_obd->u.cli.cl_rpc_lock, NULL);
 
         rc = ptlrpc_queue_wait(req);
 
-        if (opcode == MDS_SETXATTR && !remote_acl)
+        if (opcode == MDS_SETXATTR)
                 mdc_put_rpc_lock(exp->exp_obd->u.cli.cl_rpc_lock, NULL);
 
         if (rc != 0)
@@ -428,10 +424,11 @@ err_out:
 int mdc_setxattr(struct obd_export *exp, const struct lu_fid *fid,
                  struct obd_capa *oc, obd_valid valid, const char *xattr_name,
                  const char *input, int input_size, int output_size, int flags,
-                 struct ptlrpc_request **request)
+                 __u32 suppgid, struct ptlrpc_request **request)
 {
         return mdc_xattr_common(exp, fid, oc, MDS_SETXATTR, valid, xattr_name,
-                                input, input_size, output_size, flags, request);
+                                input, input_size, output_size, flags, suppgid,
+                                request);
 }
 
 int mdc_getxattr(struct obd_export *exp, const struct lu_fid *fid,
@@ -440,7 +437,8 @@ int mdc_getxattr(struct obd_export *exp, const struct lu_fid *fid,
                  struct ptlrpc_request **request)
 {
         return mdc_xattr_common(exp, fid, oc, MDS_GETXATTR, valid, xattr_name,
-                                input, input_size, output_size, flags, request);
+                                input, input_size, output_size, flags, -1,
+                                request);
 }
 
 #ifdef CONFIG_FS_POSIX_ACL
@@ -1367,7 +1365,7 @@ int mdc_sync(struct obd_export *exp, const struct lu_fid *fid,
         if (!req)
                 RETURN(rc = -ENOMEM);
 
-        mdc_pack_req_body(req, REQ_REC_OFF, 0, fid, oc, 0, 0);
+        mdc_pack_req_body(req, REQ_REC_OFF, 0, fid, oc, 0, -1, 0);
 
         ptlrpc_req_set_repsize(req, 2, size);
 
@@ -1527,6 +1525,7 @@ static int mdc_setup(struct obd_device *obd, struct lustre_cfg *cfg)
                 GOTO(err_close_lock, rc);
         lprocfs_mdc_init_vars(&lvars);
         lprocfs_obd_setup(obd, lvars.obd_vars);
+        sptlrpc_lprocfs_cliobd_attach(obd);
         ptlrpc_lprocfs_register_obd(obd);
 
         rc = obd_llog_init(obd, NULL, obd, 0, NULL, NULL);
@@ -1662,14 +1661,23 @@ static int mdc_process_config(struct obd_device *obd, obd_count len, void *buf)
         int rc = 0;
 
         lprocfs_mdc_init_vars(&lvars);
-        
-        rc = class_process_proc_param(PARAM_MDC, lvars.obd_vars, lcfg, obd);
+
+        switch (lcfg->lcfg_command) {
+        case LCFG_SPTLRPC_CONF:
+                rc = sptlrpc_cliobd_process_config(obd, lcfg);
+                break;
+        default:
+                rc = class_process_proc_param(PARAM_MDC, lvars.obd_vars,
+                                              lcfg, obd);
+                break;
+        }
         return(rc);
 }
 
 /* get remote permission for current user on fid */
 int mdc_get_remote_perm(struct obd_export *exp, const struct lu_fid *fid,
-                        struct obd_capa *oc, struct ptlrpc_request **request)
+                        struct obd_capa *oc, __u32 suppgid,
+                        struct ptlrpc_request **request)
 {
         struct ptlrpc_request *req;
         struct mdt_body *body;
@@ -1686,7 +1694,8 @@ int mdc_get_remote_perm(struct obd_export *exp, const struct lu_fid *fid,
         if (!req)
                 RETURN(-ENOMEM);
 
-        mdc_pack_req_body(req, REQ_REC_OFF, OBD_MD_FLRMTPERM, fid, oc, 0, 0);
+        mdc_pack_req_body(req, REQ_REC_OFF, OBD_MD_FLRMTPERM, fid, oc, 0,
+                          suppgid, 0);
 
         size[REPLY_REC_OFF + 1] = sizeof(*perm);
         ptlrpc_req_set_repsize(req, 5, size);
@@ -1753,7 +1762,7 @@ static int mdc_renew_capa(struct obd_export *exp, struct obd_capa *oc,
                 RETURN(-ENOMEM);
 
         mdc_pack_req_body(req, REQ_REC_OFF, OBD_MD_FLOSSCAPA,
-                          &oc->c_capa.lc_fid, oc, 0, 0);
+                          &oc->c_capa.lc_fid, oc, 0, -1, 0);
 
         ptlrpc_req_set_repsize(req, 5, size);
         req->rq_async_args.pointer_arg[0] = oc;

@@ -39,6 +39,29 @@ static struct ptlrpc_sec        null_sec;
 static struct ptlrpc_cli_ctx    null_cli_ctx;
 static struct ptlrpc_svc_ctx    null_svc_ctx;
 
+/*
+ * null sec temporarily use the third byte of lm_secflvr to identify
+ * the source sec part.
+ */
+static inline
+void null_encode_sec_part(struct lustre_msg *msg, enum lustre_sec_part sp)
+{
+        msg->lm_secflvr |= (((__u32) sp) & 0xFF) << 16;
+}
+
+static inline
+enum lustre_sec_part null_decode_sec_part(struct lustre_msg *msg)
+{
+        switch (msg->lm_magic) {
+        case LUSTRE_MSG_MAGIC_V2:
+                return (msg->lm_secflvr >> 16) & 0xFF;
+        case LUSTRE_MSG_MAGIC_V2_SWABBED:
+                return (msg->lm_secflvr >> 8) & 0xFF;
+        default:
+                return LUSTRE_SP_ANY;
+        }
+}
+
 static
 int null_ctx_refresh(struct ptlrpc_cli_ctx *ctx)
 {
@@ -50,8 +73,15 @@ int null_ctx_refresh(struct ptlrpc_cli_ctx *ctx)
 static
 int null_ctx_sign(struct ptlrpc_cli_ctx *ctx, struct ptlrpc_request *req)
 {
-        if (req->rq_reqbuf->lm_magic != LUSTRE_MSG_MAGIC_V1)
+        if (req->rq_reqbuf->lm_magic != LUSTRE_MSG_MAGIC_V1) {
                 req->rq_reqbuf->lm_secflvr = SPTLRPC_FLVR_NULL;
+
+                if (!req->rq_import->imp_dlm_fake) {
+                        struct obd_device *obd = req->rq_import->imp_obd;
+                        null_encode_sec_part(req->rq_reqbuf,
+                                             obd->u.cli.cl_sec_part);
+                }
+        }
         req->rq_reqdata_len = req->rq_reqlen;
         return 0;
 }
@@ -76,12 +106,23 @@ static struct ptlrpc_svc_ctx null_svc_ctx = {
 };
 
 static
-struct ptlrpc_sec* null_create_sec(struct obd_import *imp,
-                                   struct ptlrpc_svc_ctx *ctx,
-                                   __u32 flavor,
-                                   unsigned long flags)
+struct ptlrpc_sec *null_create_sec(struct obd_import *imp,
+                                   struct ptlrpc_svc_ctx *svc_ctx,
+                                   struct sptlrpc_flavor *sf)
 {
-        LASSERT(SEC_FLAVOR_POLICY(flavor) == SPTLRPC_POLICY_NULL);
+        LASSERT(RPC_FLVR_POLICY(sf->sf_rpc) == SPTLRPC_POLICY_NULL);
+
+        if (sf->sf_bulk_priv != BULK_PRIV_ALG_NULL ||
+            sf->sf_bulk_csum != BULK_CSUM_ALG_NULL) {
+                CERROR("null sec don't support bulk algorithm: %u/%u\n",
+                       sf->sf_bulk_priv, sf->sf_bulk_csum);
+                return NULL;
+        }
+
+        /* general layer has take a module reference for us, because we never
+         * really destroy the sec, simply release the reference here.
+         */
+        sptlrpc_policy_put(&null_policy);
         return &null_sec;
 }
 
@@ -138,16 +179,18 @@ void null_free_reqbuf(struct ptlrpc_sec *sec,
 {
         if (!req->rq_pool) {
                 LASSERTF(req->rq_reqmsg == req->rq_reqbuf,
-                         "reqmsg %p is not reqbuf %p in null sec\n",
-                         req->rq_reqmsg, req->rq_reqbuf);
+                         "req %p: reqmsg %p is not reqbuf %p in null sec\n",
+                         req, req->rq_reqmsg, req->rq_reqbuf);
                 LASSERTF(req->rq_reqbuf_len >= req->rq_reqlen,
-                         "reqlen %d should smaller than buflen %d\n",
-                         req->rq_reqlen, req->rq_reqbuf_len);
+                         "req %p: reqlen %d should smaller than buflen %d\n",
+                         req, req->rq_reqlen, req->rq_reqbuf_len);
 
                 OBD_FREE(req->rq_reqbuf, req->rq_reqbuf_len);
                 req->rq_reqmsg = req->rq_reqbuf = NULL;
                 req->rq_reqbuf_len = 0;
         }
+
+        req->rq_reqmsg = NULL;
 }
 
 static
@@ -172,6 +215,8 @@ void null_free_repbuf(struct ptlrpc_sec *sec,
         OBD_FREE(req->rq_repbuf, req->rq_repbuf_len);
         req->rq_repbuf = NULL;
         req->rq_repbuf_len = 0;
+
+        req->rq_repmsg = NULL;
 }
 
 static
@@ -220,12 +265,14 @@ int null_enlarge_reqbuf(struct ptlrpc_sec *sec,
 static
 int null_accept(struct ptlrpc_request *req)
 {
-        LASSERT(SEC_FLAVOR_POLICY(req->rq_sec_flavor) == SPTLRPC_POLICY_NULL);
+        LASSERT(RPC_FLVR_POLICY(req->rq_flvr.sf_rpc) == SPTLRPC_POLICY_NULL);
 
-        if (SEC_FLAVOR_RPC(req->rq_sec_flavor) != SPTLRPC_FLVR_NULL) {
-                CERROR("Invalid flavor 0x%x\n", req->rq_sec_flavor);
+        if (req->rq_flvr.sf_rpc != SPTLRPC_FLVR_NULL) {
+                CERROR("Invalid rpc flavor 0x%x\n", req->rq_flvr.sf_rpc);
                 return SECSVC_DROP;
         }
+
+        req->rq_sp_from = null_decode_sec_part(req->rq_reqbuf);
 
         req->rq_reqmsg = req->rq_reqbuf;
         req->rq_reqlen = req->rq_reqdata_len;
@@ -324,11 +371,16 @@ void null_init_internal(void)
 
         null_sec.ps_policy = &null_policy;
         atomic_set(&null_sec.ps_refcount, 1);     /* always busy */
+        null_sec.ps_id = -1;
         null_sec.ps_import = NULL;
-        null_sec.ps_flavor = SPTLRPC_FLVR_NULL;
-        null_sec.ps_flags = 0;
+        null_sec.ps_flvr.sf_rpc = SPTLRPC_FLVR_NULL;
+        null_sec.ps_flvr.sf_bulk_priv = BULK_PRIV_ALG_NULL;
+        null_sec.ps_flvr.sf_bulk_csum = BULK_CSUM_ALG_NULL;
+        null_sec.ps_flvr.sf_flags = 0;
+        null_sec.ps_part = LUSTRE_SP_ANY;
+        null_sec.ps_dying = 0;
         spin_lock_init(&null_sec.ps_lock);
-        atomic_set(&null_sec.ps_busy, 1);         /* for "null_cli_ctx" */
+        atomic_set(&null_sec.ps_nctx, 1);         /* for "null_cli_ctx" */
         INIT_LIST_HEAD(&null_sec.ps_gc_list);
         null_sec.ps_gc_interval = 0;
         null_sec.ps_gc_next = 0;

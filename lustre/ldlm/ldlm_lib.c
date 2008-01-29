@@ -180,11 +180,10 @@ out:
 static void destroy_import(struct obd_import *imp)
 {
         /* drop security policy instance after all rpc finished/aborted
-         * to let all busy credentials be released.
-         */
+         * to let all busy contexts be released. */
         class_import_get(imp);
         class_destroy_import(imp);
-        sptlrpc_import_put_sec(imp);
+        sptlrpc_import_sec_put(imp);
         class_import_put(imp);
 }
 
@@ -247,10 +246,8 @@ int client_obd_setup(struct obd_device *obddev, struct lustre_cfg *lcfg)
 
         sema_init(&cli->cl_sem, 1);
         sema_init(&cli->cl_mgc_sem, 1);
-        cli->cl_sec_conf.sfc_rpc_flavor = SPTLRPC_FLVR_NULL;
-        cli->cl_sec_conf.sfc_bulk_csum = BULK_CSUM_ALG_NULL;
-        cli->cl_sec_conf.sfc_bulk_priv = BULK_PRIV_ALG_NULL;
-        cli->cl_sec_conf.sfc_flags = 0;
+        sptlrpc_rule_set_init(&cli->cl_sptlrpc_rset);
+        cli->cl_sec_part = LUSTRE_SP_ANY;
         cli->cl_conn_count = 0;
         memcpy(server_uuid.uuid, lustre_cfg_buf(lcfg, 2),
                min_t(unsigned int, LUSTRE_CFG_BUFLEN(lcfg, 2),
@@ -359,6 +356,7 @@ err:
 int client_obd_cleanup(struct obd_device *obddev)
 {
         ENTRY;
+        sptlrpc_rule_set_free(&obddev->u.cli.cl_sptlrpc_rset);
         ldlm_put_ref(obddev->obd_force);
         RETURN(0);
 }
@@ -398,11 +396,6 @@ int client_connect_import(const struct lu_env *env,
         imp->imp_dlm_handle = *dlm_handle;
         rc = ptlrpc_init_import(imp);
         if (rc != 0)
-                GOTO(out_ldlm, rc);
-
-        rc = sptlrpc_import_get_sec(imp, NULL, cli->cl_sec_conf.sfc_rpc_flavor,
-                                    cli->cl_sec_conf.sfc_flags);
-        if (rc)
                 GOTO(out_ldlm, rc);
 
         ocd = &imp->imp_connect_data;
@@ -810,7 +803,8 @@ dont_check_exports:
                                          &conn, target, &cluuid, data);
                 }
         } else {
-                rc = obd_reconnect(export, target, &cluuid, data);
+                rc = obd_reconnect(req->rq_svc_thread->t_env,
+                                   export, target, &cluuid, data);
         }
         if (rc)
                 GOTO(out, rc);
@@ -915,6 +909,20 @@ dont_check_exports:
                 /* destroyed import can be still referenced in ctxt */
                 obd_set_info_async(export, strlen(KEY_REVIMP_UPD), 
                                    KEY_REVIMP_UPD, 0, NULL, NULL);
+
+                /* in some recovery senarios, previous ctx init rpc handled
+                 * in sptlrpc_target_export_check() might be used to install
+                 * a reverse ctx in this reverse import, and later OBD_CONNECT
+                 * using the same gss ctx could reach here and following new
+                 * reverse import. note all reverse ctx in new/old import are
+                 * actually based on the same gss ctx. so we invalidate ctx
+                 * here before destroy import, otherwise flush old import will
+                 * lead to remote reverse ctx be destroied, thus the reverse
+                 * ctx of new import will lost its peer.
+                 * there might be a better way to deal with this???
+                 */
+                sptlrpc_import_inval_all_ctx(export->exp_imp_reverse);
+
                 destroy_import(export->exp_imp_reverse);
         }
 
@@ -938,8 +946,8 @@ dont_check_exports:
                 lustre_msg_add_op_flags(req->rq_repmsg, MSG_CONNECT_NEXT_VER);
         }
 
-        rc = sptlrpc_import_get_sec(revimp, req->rq_svc_ctx,
-                                    req->rq_sec_flavor, 0);
+        rc = sptlrpc_import_sec_adapt(revimp, req->rq_svc_ctx,
+                                      req->rq_flvr.sf_rpc);
         if (rc) {
                 CERROR("Failed to get sec for reverse import: %d\n", rc);
                 export->exp_imp_reverse = NULL;

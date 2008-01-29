@@ -1941,6 +1941,9 @@ int filter_common_setup(struct obd_device *obd, struct lustre_cfg* lcfg,
         INIT_LIST_HEAD(&filter->fo_llog_list);
         spin_lock_init(&filter->fo_llog_list_lock);
 
+        filter->fo_sptlrpc_lock = RW_LOCK_UNLOCKED;
+        sptlrpc_rule_set_init(&filter->fo_sptlrpc_rset);
+
         filter->fo_fl_oss_capa = 0;
         INIT_LIST_HEAD(&filter->fo_capa_keys);
         filter->fo_capa_hash = init_capa_hash();
@@ -2335,6 +2338,8 @@ static int filter_cleanup(struct obd_device *obd)
 
         ldlm_namespace_free(obd->obd_namespace, obd->obd_force);
 
+        sptlrpc_rule_set_free(&filter->fo_sptlrpc_rset);
+
         if (obd->u.obt.obt_sb == NULL)
                 RETURN(0);
 
@@ -2428,7 +2433,8 @@ static int filter_connect_internal(struct obd_export *exp,
         RETURN(0);
 }
 
-static int filter_reconnect(struct obd_export *exp, struct obd_device *obd,
+static int filter_reconnect(const struct lu_env *env,
+                            struct obd_export *exp, struct obd_device *obd,
                             struct obd_uuid *cluuid,
                             struct obd_connect_data *data)
 {
@@ -4011,9 +4017,43 @@ static int filter_process_config(struct obd_device *obd, obd_count len,
         struct lprocfs_static_vars lvars;
         int rc = 0;
 
-        lprocfs_filter_init_vars(&lvars);
+        switch (lcfg->lcfg_command) {
+        case LCFG_SPTLRPC_CONF: {
+                struct filter_obd       *filter = &obd->u.filter;
+                struct sptlrpc_conf_log *log;
+                struct sptlrpc_rule_set  tmp_rset;
 
-        rc = class_process_proc_param(PARAM_OST, lvars.obd_vars, lcfg, obd);
+                log = sptlrpc_conf_log_extract(lcfg);
+                if (IS_ERR(log)) {
+                        rc = PTR_ERR(log);
+                        break;
+                }
+
+                sptlrpc_rule_set_init(&tmp_rset);
+
+                rc = sptlrpc_rule_set_from_log(&tmp_rset, log);
+                if (rc) {
+                        CERROR("obd %s: failed get sptlrpc rules: %d\n",
+                               obd->obd_name, rc);
+                        break;
+                }
+
+                write_lock(&filter->fo_sptlrpc_lock);
+                sptlrpc_rule_set_free(&filter->fo_sptlrpc_rset);
+                filter->fo_sptlrpc_rset = tmp_rset;
+                write_unlock(&filter->fo_sptlrpc_lock);
+
+                sptlrpc_target_update_exp_flavor(obd, &tmp_rset);
+                break;
+        }
+        default:
+                lprocfs_filter_init_vars(&lvars);
+
+                rc = class_process_proc_param(PARAM_OST, lvars.obd_vars,
+                                              lcfg, obd);
+                break;
+        }
+
         return rc;
 }
 

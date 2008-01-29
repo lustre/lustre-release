@@ -337,9 +337,12 @@ struct ptlrpc_request {
         struct ptlrpc_cli_ctx   *rq_cli_ctx;     /* client's half ctx */
         struct ptlrpc_svc_ctx   *rq_svc_ctx;     /* server's half ctx */
         struct list_head         rq_ctx_chain;   /* link to waited ctx */
-        ptlrpc_sec_flavor_t      rq_sec_flavor;  /* client & server */
-                                 /* client security flags */
-        unsigned long            rq_ctx_init:1,      /* context initiation */
+
+        struct sptlrpc_flavor    rq_flvr;        /* client & server */
+        enum lustre_sec_part     rq_sp_from;
+
+        unsigned long            /* client/server security flags */
+                                 rq_ctx_init:1,      /* context initiation */
                                  rq_ctx_fini:1,      /* context destroy */
                                  rq_bulk_read:1,     /* request bulk read */
                                  rq_bulk_write:1,    /* request bulk write */
@@ -348,6 +351,9 @@ struct ptlrpc_request {
                                  rq_auth_remote:1,   /* authed as remote user */
                                  rq_auth_usr_root:1, /* authed as root */
                                  rq_auth_usr_mdt:1,  /* authed as mdt */
+                                 /* security tfm flags */
+                                 rq_pack_udesc:1,
+                                 rq_pack_bulk:1,
                                  /* doesn't expect reply FIXME */
                                  rq_no_reply:1;
 

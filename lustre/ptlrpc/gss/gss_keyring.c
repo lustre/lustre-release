@@ -59,6 +59,10 @@ static struct key_type gss_key_type;
 static int sec_install_rctx_kr(struct ptlrpc_sec *sec,
                                struct ptlrpc_svc_ctx *svc_ctx);
 
+#ifndef task_aux
+#define task_aux(tsk)           (tsk)
+#endif
+
 /*
  * the timeout is only for the case that upcall child process die abnormally.
  * in any other cases it should finally update kernel key. so we set this
@@ -213,37 +217,44 @@ static void ctx_destroy_kr(struct ptlrpc_cli_ctx *ctx)
 {
         struct ptlrpc_sec          *sec = ctx->cc_sec;
         struct gss_cli_ctx_keyring *gctx_kr = ctx2gctx_keyring(ctx);
-        int                         rc;
 
         CDEBUG(D_SEC, "destroying ctx %p\n", ctx);
 
         /* at this time the association with key has been broken. */
         LASSERT(sec);
+        LASSERT(atomic_read(&sec->ps_refcount) > 0);
+        LASSERT(atomic_read(&sec->ps_nctx) > 0);
         LASSERT(test_bit(PTLRPC_CTX_CACHED_BIT, &ctx->cc_flags) == 0);
         LASSERT(gctx_kr->gck_key == NULL);
 
         ctx_clear_timer_kr(ctx);
         LASSERT(gctx_kr->gck_timer == NULL);
 
-        rc = gss_cli_ctx_fini_common(sec, ctx);
-        if (rc < 0)
+        if (gss_cli_ctx_fini_common(sec, ctx))
                 return;
 
         OBD_FREE_PTR(gctx_kr);
 
-        if (rc > 0) {
-                CWARN("released the last ctx, proceed to destroy sec %s@%p\n",
-                      sec->ps_policy->sp_name, sec);
-                sptlrpc_sec_destroy(sec);
+        atomic_dec(&sec->ps_nctx);
+        sptlrpc_sec_put(sec);
+}
+
+static void ctx_release_kr(struct ptlrpc_cli_ctx *ctx, int sync)
+{
+        if (sync) {
+                ctx_destroy_kr(ctx);
+        } else {
+                atomic_inc(&ctx->cc_refcount);
+                sptlrpc_gc_add_ctx(ctx);
         }
 }
 
-static void ctx_put_kr(struct ptlrpc_cli_ctx *ctx)
+static void ctx_put_kr(struct ptlrpc_cli_ctx *ctx, int sync)
 {
         LASSERT(atomic_read(&ctx->cc_refcount) > 0);
 
         if (atomic_dec_and_test(&ctx->cc_refcount))
-                ctx_destroy_kr(ctx);
+                ctx_release_kr(ctx, sync);
 }
 
 /*
@@ -272,8 +283,7 @@ static inline void spin_unlock_if(spinlock_t *lock, int condition)
                 spin_unlock(lock);
 }
 
-static
-void ctx_enlist_kr(struct ptlrpc_cli_ctx *ctx, int is_root, int locked)
+static void ctx_enlist_kr(struct ptlrpc_cli_ctx *ctx, int is_root, int locked)
 {
         struct ptlrpc_sec      *sec = ctx->cc_sec;
         struct gss_sec_keyring *gsec_kr = sec2gsec_keyring(sec);
@@ -299,8 +309,7 @@ void ctx_enlist_kr(struct ptlrpc_cli_ctx *ctx, int is_root, int locked)
  *
  * return non-zero if we indeed unlist this ctx.
  */
-static
-int ctx_unlist_kr(struct ptlrpc_cli_ctx *ctx, int locked)
+static int ctx_unlist_kr(struct ptlrpc_cli_ctx *ctx, int locked)
 {
         struct ptlrpc_sec       *sec = ctx->cc_sec;
         struct gss_sec_keyring  *gsec_kr = sec2gsec_keyring(sec);
@@ -326,8 +335,7 @@ int ctx_unlist_kr(struct ptlrpc_cli_ctx *ctx, int locked)
  * bind a key with a ctx together.
  * caller must hold write lock of the key, as well as ref on key & ctx.
  */
-static
-void bind_key_ctx(struct key *key, struct ptlrpc_cli_ctx *ctx)
+static void bind_key_ctx(struct key *key, struct ptlrpc_cli_ctx *ctx)
 {
         LASSERT(atomic_read(&ctx->cc_refcount) > 0);
         LASSERT(atomic_read(&key->usage) > 0);
@@ -345,8 +353,7 @@ void bind_key_ctx(struct key *key, struct ptlrpc_cli_ctx *ctx)
  * unbind a key and a ctx.
  * caller must hold write lock, as well as a ref of the key.
  */
-static
-void unbind_key_ctx(struct key *key, struct ptlrpc_cli_ctx *ctx)
+static void unbind_key_ctx(struct key *key, struct ptlrpc_cli_ctx *ctx)
 {
         LASSERT(key->payload.data == ctx);
         LASSERT(test_bit(PTLRPC_CTX_CACHED_BIT, &ctx->cc_flags) == 0);
@@ -360,7 +367,7 @@ void unbind_key_ctx(struct key *key, struct ptlrpc_cli_ctx *ctx)
         /* once ctx get split from key, the timer is meaningless */
         ctx_clear_timer_kr(ctx);
 
-        ctx_put_kr(ctx);
+        ctx_put_kr(ctx, 1);
         key_put(key);
 }
 
@@ -434,7 +441,7 @@ static void dispose_ctx_list_kr(struct hlist_head *freelist)
                 sptlrpc_cli_ctx_wakeup(ctx);
 
                 unbind_ctx_kr(ctx);
-                ctx_put_kr(ctx);
+                ctx_put_kr(ctx, 0);
         }
 }
 
@@ -522,7 +529,7 @@ void rvs_sec_install_root_ctx_kr(struct ptlrpc_sec *sec,
 static void construct_key_desc(void *buf, int bufsize,
                                struct ptlrpc_sec *sec, uid_t uid)
 {
-        snprintf(buf, bufsize, "%d@%x", uid, sec2gsec_keyring(sec)->gsk_id);
+        snprintf(buf, bufsize, "%d@%x", uid, sec->ps_id);
         ((char *)buf)[bufsize - 1] = '\0';
 }
 
@@ -530,13 +537,10 @@ static void construct_key_desc(void *buf, int bufsize,
  * sec apis                             *
  ****************************************/
 
-static atomic_t gss_sec_id_kr = ATOMIC_INIT(0);
-
 static
 struct ptlrpc_sec * gss_sec_create_kr(struct obd_import *imp,
-                                      struct ptlrpc_svc_ctx *ctx,
-                                      __u32 flavor,
-                                      unsigned long flags)
+                                      struct ptlrpc_svc_ctx *svcctx,
+                                      struct sptlrpc_flavor *sf)
 {
         struct gss_sec_keyring  *gsec_kr;
         ENTRY;
@@ -545,7 +549,6 @@ struct ptlrpc_sec * gss_sec_create_kr(struct obd_import *imp,
         if (gsec_kr == NULL)
                 RETURN(NULL);
 
-        gsec_kr->gsk_id = atomic_inc_return(&gss_sec_id_kr);
         CFS_INIT_HLIST_HEAD(&gsec_kr->gsk_clist);
         gsec_kr->gsk_root_ctx = NULL;
         mutex_init(&gsec_kr->gsk_root_uc_lock);
@@ -554,14 +557,13 @@ struct ptlrpc_sec * gss_sec_create_kr(struct obd_import *imp,
 #endif
 
         if (gss_sec_create_common(&gsec_kr->gsk_base, &gss_policy_keyring,
-                                  imp, ctx, flavor, flags))
+                                  imp, svcctx, sf))
                 goto err_free;
 
-        if (ctx != NULL) {
-                if (sec_install_rctx_kr(&gsec_kr->gsk_base.gs_base, ctx)) {
-                        gss_sec_destroy_common(&gsec_kr->gsk_base);
-                        goto err_free;
-                }
+        if (svcctx != NULL &&
+            sec_install_rctx_kr(&gsec_kr->gsk_base.gs_base, svcctx)) {
+                gss_sec_destroy_common(&gsec_kr->gsk_base);
+                goto err_free;
         }
 
         RETURN(&gsec_kr->gsk_base.gs_base);
@@ -587,16 +589,14 @@ void gss_sec_destroy_kr(struct ptlrpc_sec *sec)
         OBD_FREE(gsec_kr, sizeof(*gsec_kr));
 }
 
-static
-int user_is_root(struct ptlrpc_sec *sec, struct vfs_cred *vcred)
+static inline int user_is_root(struct ptlrpc_sec *sec, struct vfs_cred *vcred)
 {
-        if (sec->ps_flags & PTLRPC_SEC_FL_ROOTONLY)
+        /* except the ROOTONLY flag, treat it as root user only if real uid
+         * is 0, euid/fsuid being 0 are handled as setuid scenarios */
+        if (sec_is_rootonly(sec) || (vcred->vc_uid == 0))
                 return 1;
-
-        /* FIXME
-         * more precisely deal with setuid. maybe add more infomation
-         * into vfs_cred ?? */
-        return (vcred->vc_uid == 0);
+        else
+                return 0;
 }
 
 /*
@@ -654,7 +654,7 @@ struct ptlrpc_cli_ctx * gss_sec_lookup_ctx_kr(struct ptlrpc_sec *sec,
         struct key              *key;
         char                     desc[24];
         char                    *coinfo;
-        const int                coinfo_size = sizeof(struct obd_uuid) + 64;
+        int                      coinfo_size;
         char                    *co_flags = "";
         ENTRY;
 
@@ -691,15 +691,29 @@ struct ptlrpc_cli_ctx * gss_sec_lookup_ctx_kr(struct ptlrpc_sec *sec,
                 co_flags = "r";
         }
 
+        /* in case of setuid, key will be constructed as owner of fsuid/fsgid,
+         * but we do authentication based on real uid/gid. the key permission
+         * bits will be exactly as POS_ALL, so only processes who subscribed
+         * this key could have the access, although the quota might be counted
+         * on others (fsuid/fsgid).
+         *
+         * keyring will use fsuid/fsgid as upcall parameters, so we have to
+         * encode real uid/gid into callout info.
+         */
+
         construct_key_desc(desc, sizeof(desc), sec, vcred->vc_uid);
 
-        /* callout info: mech:flags:svc_type:peer_nid:target_uuid */
+        /* callout info format:
+         * secid:mech:uid:gid:flags:svc_type:peer_nid:target_uuid
+         */
+        coinfo_size = sizeof(struct obd_uuid) + MAX_OBD_NAME + 64;
         OBD_ALLOC(coinfo, coinfo_size);
         if (coinfo == NULL)
                 goto out;
 
-        snprintf(coinfo, coinfo_size, "%s:%s:%d:"LPX64":%s",
-                 sec2gsec(sec)->gs_mech->gm_name,
+        snprintf(coinfo, coinfo_size, "%d:%s:%u:%u:%s:%d:"LPX64":%s",
+                 sec->ps_id, sec2gsec(sec)->gs_mech->gm_name,
+                 vcred->vc_uid, vcred->vc_gid,
                  co_flags, import_to_gss_svc(imp),
                  imp->imp_connection->c_peer.nid, imp->imp_obd->obd_name);
 
@@ -769,14 +783,9 @@ void gss_sec_release_ctx_kr(struct ptlrpc_sec *sec,
                             struct ptlrpc_cli_ctx *ctx,
                             int sync)
 {
+        LASSERT(atomic_read(&sec->ps_refcount) > 0);
         LASSERT(atomic_read(&ctx->cc_refcount) == 0);
-
-        if (sync) {
-                ctx_destroy_kr(ctx);
-        } else {
-                atomic_inc(&ctx->cc_refcount);
-                sptlrpc_gc_add_ctx(ctx);
-        }
+        ctx_release_kr(ctx, sync);
 }
 
 /*
@@ -865,13 +874,12 @@ void flush_spec_ctx_cache_kr(struct ptlrpc_sec *sec,
 
                 atomic_inc(&ctx->cc_refcount);
 
-                if (ctx_unlist_kr(ctx, 1))
+                if (ctx_unlist_kr(ctx, 1)) {
                         hlist_add_head(&ctx->cc_cache, &freelist);
-                else {
+                } else {
                         LASSERT(atomic_read(&ctx->cc_refcount) >= 2);
                         atomic_dec(&ctx->cc_refcount);
                 }
-
         }
         spin_unlock(&sec->ps_lock);
 
@@ -886,8 +894,8 @@ int gss_sec_flush_ctx_cache_kr(struct ptlrpc_sec *sec,
 {
         ENTRY;
 
-        CDEBUG(D_SEC, "sec %p(%d, busy %d), uid %d, grace %d, force %d\n",
-               sec, atomic_read(&sec->ps_refcount), atomic_read(&sec->ps_busy),
+        CDEBUG(D_SEC, "sec %p(%d, nctx %d), uid %d, grace %d, force %d\n",
+               sec, atomic_read(&sec->ps_refcount), atomic_read(&sec->ps_nctx),
                uid, grace, force);
 
         if (uid != -1 && uid != 0)
@@ -932,25 +940,21 @@ void gss_sec_gc_ctx_kr(struct ptlrpc_sec *sec)
 }
 
 static
-int gss_sec_display_kr(struct ptlrpc_sec *sec, char *buf, int bufsize)
+int gss_sec_display_kr(struct ptlrpc_sec *sec, struct seq_file *seq)
 {
         struct gss_sec_keyring *gsec_kr = sec2gsec_keyring(sec);
         struct hlist_node      *pos, *next;
         struct ptlrpc_cli_ctx  *ctx;
-        int                     written = 0;
+        struct gss_cli_ctx     *gctx;
+        time_t                  now = cfs_time_current_sec();
         ENTRY;
-
-        written = snprintf(buf, bufsize, "context list ===>\n");
-        bufsize -= written;
-        buf += written;
 
         spin_lock(&sec->ps_lock);
         hlist_for_each_entry_safe(ctx, pos, next,
                                   &gsec_kr->gsk_clist, cc_cache) {
-                struct gss_cli_ctx     *gctx;
                 struct key             *key;
                 char                    flags_str[40];
-                int                     len;
+                char                    mech[40];
 
                 gctx = ctx2gctx(ctx);
                 key = ctx2gctx_keyring(ctx)->gck_key;
@@ -958,40 +962,31 @@ int gss_sec_display_kr(struct ptlrpc_sec *sec, char *buf, int bufsize)
                 gss_cli_ctx_flags2str(ctx->cc_flags,
                                       flags_str, sizeof(flags_str));
 
-                len = snprintf(buf, bufsize, "%p(%d): uid %u, exp %ld(%ld)s, "
-                               "fl %s, seq %d, win %u, key %08x(%d), ",
-                               ctx, atomic_read(&ctx->cc_refcount),
-                               ctx->cc_vcred.vc_uid,
-                               ctx->cc_expire,
-                               ctx->cc_expire - cfs_time_current_sec(),
-                               flags_str,
-                               atomic_read(&gctx->gc_seq),
-                               gctx->gc_win,
-                               key ? key->serial : 0,
-                               key ? atomic_read(&key->usage) : 0);
-
-                written += len;
-                buf += len;
-                bufsize -= len;
-
-                if (bufsize <= 0)
-                        break;
-
                 if (gctx->gc_mechctx)
-                        len = lgss_display(gctx->gc_mechctx, buf, bufsize);
+                        lgss_display(gctx->gc_mechctx, mech, sizeof(mech));
                 else
-                        len = snprintf(buf, bufsize, "mech N/A\n");
+                        snprintf(mech, sizeof(mech), "N/A");
+                mech[sizeof(mech) - 1] = '\0';
 
-                written += len;
-                buf += len;
-                bufsize -= len;
-
-                if (bufsize <= 0)
-                        break;
+                seq_printf(seq, "%p: uid %u, ref %d, expire %ld(%+ld), fl %s, "
+                           "seq %d, win %u, key %08x(ref %d), "
+                           "hdl "LPX64":"LPX64", mech: %s\n",
+                           ctx, ctx->cc_vcred.vc_uid,
+                           atomic_read(&ctx->cc_refcount),
+                           ctx->cc_expire,
+                           ctx->cc_expire ?  ctx->cc_expire - now : 0,
+                           flags_str,
+                           atomic_read(&gctx->gc_seq),
+                           gctx->gc_win,
+                           key ? key->serial : 0,
+                           key ? atomic_read(&key->usage) : 0,
+                           gss_handle_to_u64(&gctx->gc_handle),
+                           gss_handle_to_u64(&gctx->gc_svc_handle),
+                           mech);
         }
         spin_unlock(&sec->ps_lock);
 
-        RETURN(written);
+        RETURN(0);
 }
 
 /****************************************
@@ -1063,13 +1058,13 @@ int sec_install_rctx_kr(struct ptlrpc_sec *sec,
         if (rc) {
                 CERROR("failed copy reverse cli ctx: %d\n", rc);
 
-                ctx_put_kr(cli_ctx);
+                ctx_put_kr(cli_ctx, 1);
                 return rc;
         }
 
         rvs_sec_install_root_ctx_kr(sec, cli_ctx, NULL);
 
-        ctx_put_kr(cli_ctx);
+        ctx_put_kr(cli_ctx, 1);
 
         return 0;
 }
@@ -1123,7 +1118,7 @@ int sec_install_rctx_kr(struct ptlrpc_sec *sec,
 
         rvs_sec_install_root_ctx_kr(sec, cli_ctx, key);
 
-        ctx_put_kr(cli_ctx);
+        ctx_put_kr(cli_ctx, 1);
         up_write(&key->sem);
 
         rc = 0;
@@ -1133,7 +1128,7 @@ out:
         return rc;
 
 err_put:
-        ctx_put_kr(cli_ctx);
+        ctx_put_kr(cli_ctx, 1);
 err_up:
         up_write(&key->sem);
 err_revoke:
@@ -1157,9 +1152,16 @@ static
 int gss_svc_install_rctx_kr(struct obd_import *imp,
                             struct ptlrpc_svc_ctx *svc_ctx)
 {
-        LASSERT(imp->imp_sec);
+        struct ptlrpc_sec *sec;
+        int                rc;
 
-        return sec_install_rctx_kr(imp->imp_sec, svc_ctx);
+        sec = sptlrpc_import_sec_ref(imp);
+        LASSERT(sec);
+
+        rc = sec_install_rctx_kr(sec, svc_ctx);
+        sptlrpc_sec_put(sec);
+
+        return rc;
 }
 
 /****************************************
@@ -1169,6 +1171,7 @@ int gss_svc_install_rctx_kr(struct obd_import *imp,
 static
 int gss_kt_instantiate(struct key *key, const void *data, size_t datalen)
 {
+        int             rc;
         ENTRY;
 
         if (data != NULL || datalen != 0) {
@@ -1181,8 +1184,26 @@ int gss_kt_instantiate(struct key *key, const void *data, size_t datalen)
                 RETURN(-EINVAL);
         }
 
-        /* XXX */
-        key->perm |= KEY_POS_ALL | KEY_USR_ALL;
+        /* link the key to session keyring, so following context negotiation
+         * rpc fired from user space could find this key. This will be unlinked
+         * automatically when upcall processes die.
+         *
+         * we can't do this through keyctl from userspace, because the upcall
+         * might be neither possessor nor owner of the key (setuid).
+         *
+         * the session keyring is created upon upcall, and don't change all
+         * the way until upcall finished, so rcu lock is not needed here.
+         */
+        LASSERT(cfs_current()->signal->session_keyring);
+
+        rc = key_link(cfs_current()->signal->session_keyring, key);
+        if (unlikely(rc)) {
+                CERROR("failed to link key %08x to keyring %08x: %d\n",
+                       key->serial,
+                       cfs_current()->signal->session_keyring->serial, rc);
+                RETURN(rc);
+        }
+
         CDEBUG(D_SEC, "key %p instantiated, ctx %p\n", key, key->payload.data);
         RETURN(0);
 }
@@ -1365,6 +1386,7 @@ static struct ptlrpc_ctx_ops gss_keyring_ctxops = {
 static struct ptlrpc_sec_cops gss_sec_keyring_cops = {
         .create_sec             = gss_sec_create_kr,
         .destroy_sec            = gss_sec_destroy_kr,
+        .kill_sec               = gss_sec_kill,
         .lookup_ctx             = gss_sec_lookup_ctx_kr,
         .release_ctx            = gss_sec_release_ctx_kr,
         .flush_ctx_cache        = gss_sec_flush_ctx_cache_kr,

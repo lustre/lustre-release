@@ -38,10 +38,13 @@
 #endif
 #endif
 
-static void mdc_pack_body(struct mdt_body *b)
+static void mdc_pack_body(struct mdt_body *b, __u32 suppgid)
 {
         LASSERT (b != NULL);
 
+        b->suppgid = suppgid;
+        b->uid = current->uid;
+        b->gid = current->gid;
         b->fsuid = current->fsuid;
         b->fsgid = current->fsgid;
         b->capability = current->cap_effective;
@@ -78,14 +81,15 @@ void mdc_is_subdir_pack(struct ptlrpc_request *req, int offset,
 
 void mdc_pack_req_body(struct ptlrpc_request *req, int offset,
                        __u64 valid, const struct lu_fid *fid,
-                       struct obd_capa *oc, int ea_size, int flags)
+                       struct obd_capa *oc, int ea_size, __u32 suppgid,
+                       int flags)
 {
         struct mdt_body *b = lustre_msg_buf(req->rq_reqmsg, offset, sizeof(*b));
 
         b->valid = valid;
         b->eadatasize = ea_size;
         b->flags = flags;
-        mdc_pack_body(b);
+        mdc_pack_body(b, suppgid);
         if (fid) {
                 b->fid1 = *fid;
                 mdc_pack_capa(req, offset + 1, oc);
@@ -100,9 +104,8 @@ void mdc_readdir_pack(struct ptlrpc_request *req, int offset, __u64 pgoff,
         b = lustre_msg_buf(req->rq_reqmsg, offset, sizeof(*b));
         b->fid1 = *fid;
         b->size = pgoff;                       /* !! */
-        b->suppgid = -1;
         b->nlink = size;                        /* !! */
-        mdc_pack_body(b);
+        mdc_pack_body(b, -1);
         mdc_pack_capa(req, offset + 1, oc);
 }
 

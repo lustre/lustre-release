@@ -65,6 +65,8 @@ static int mgs_connect(const struct lu_env *env,
         exp = class_conn2export(conn);
         LASSERT(exp);
 
+        exp->exp_flvr.sf_rpc = SPTLRPC_FLVR_NULL;
+
         if (data != NULL) {
                 data->ocd_connect_flags &= MGS_CONNECT_SUPPORTED;
                 exp->exp_connect_flags = data->ocd_connect_flags;

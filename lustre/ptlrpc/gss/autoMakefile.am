@@ -10,6 +10,5 @@ if MODULES
 modulefs_DATA = ptlrpc_gss$(KMODEXT)
 endif # MODULES
 
-DIST_SOURCES = $(ptlrpc_gss-objs:.o=.c) gss_api.h gss_asn1.h gss_err.h \
-               gss_internal.h gss_krb5.h
+DIST_SOURCES = *.c *.h
 MOSTLYCLEANFILES := @MOSTLYCLEANFILES@ 

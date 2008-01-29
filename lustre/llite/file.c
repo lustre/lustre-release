@@ -286,9 +286,19 @@ int ll_file_release(struct inode *inode, struct file *file)
         CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu/%u(%p)\n", inode->i_ino,
                inode->i_generation, inode);
 
-        /* don't do anything for / */
-        if (inode->i_sb->s_root == file->f_dentry)
-                RETURN(0);
+#ifdef CONFIG_FS_POSIX_ACL
+        if (sbi->ll_flags & LL_SBI_RMT_CLIENT &&
+            inode == inode->i_sb->s_root->d_inode) {
+                struct ll_file_data *fd = LUSTRE_FPRIVATE(file);
+
+                LASSERT(fd != NULL);
+                if (unlikely(fd->fd_flags & LL_FILE_RMTACL)) {
+                        fd->fd_flags &= ~LL_FILE_RMTACL;
+                        rct_del(&sbi->ll_rct, cfs_curproc_pid());
+                        et_search_free(&sbi->ll_et, cfs_curproc_pid());
+                }
+        }
+#endif
 
         ll_stats_ops_tally(sbi, LPROC_LL_RELEASE, 1);
         fd = LUSTRE_FPRIVATE(file);
@@ -468,10 +478,6 @@ int ll_file_open(struct inode *inode, struct file *file)
 
         CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu/%u(%p), flags %o\n", inode->i_ino,
                inode->i_generation, inode, file->f_flags);
-
-        /* don't do anything for / */
-        if (inode->i_sb->s_root == file->f_dentry)
-                RETURN(0);
 
 #ifdef HAVE_VFS_INTENT_PATCHES
         it = file->f_it;
@@ -1799,7 +1805,8 @@ int ll_lov_getstripe_ea_info(struct inode *inode, const char *filename,
         oc = ll_mdscapa_get(inode);
         rc = md_getattr_name(sbi->ll_md_exp, ll_inode2fid(inode),
                              oc, filename, strlen(filename) + 1,
-                             OBD_MD_FLEASIZE | OBD_MD_FLDIREA, lmmsize, &req);
+                             OBD_MD_FLEASIZE | OBD_MD_FLDIREA, lmmsize,
+                             ll_i2suppgid(inode), &req);
         capa_put(oc);
         if (rc < 0) {
                 CDEBUG(D_INFO, "md_getattr_name failed "
@@ -2302,22 +2309,6 @@ int ll_file_ioctl(struct inode *inode, struct file *file, unsigned int cmd,
         */
         case LL_IOC_FLUSHCTX:
                 RETURN(ll_flush_ctx(inode));
-        case LL_IOC_GETFACL: {
-                struct rmtacl_ioctl_data ioc;
-
-                if (copy_from_user(&ioc, (void *)arg, sizeof(ioc)))
-                        RETURN(-EFAULT);
-
-                RETURN(ll_ioctl_getfacl(inode, &ioc));
-        }
-        case LL_IOC_SETFACL: {
-                struct rmtacl_ioctl_data ioc;
-
-                if (copy_from_user(&ioc, (void *)arg, sizeof(ioc)))
-                        RETURN(-EFAULT);
-
-                RETURN(ll_ioctl_setfacl(inode, &ioc));
-        }
         default: {
                 int err;
 

@@ -664,7 +664,7 @@ static int mdd_fix_attr(const struct lu_env *env, struct mdd_object *obj,
                                       (tmp_la->la_mode & ~S_IALLUGO);
 
                 /* Also check the setgid bit! */
-                if (!mdd_in_group_p(uc, (la->la_valid & LA_GID) ? la->la_gid :
+                if (!lustre_in_group_p(uc, (la->la_valid & LA_GID) ? la->la_gid :
                                 tmp_la->la_gid) && !mdd_capable(uc, CAP_FSETID))
                         la->la_mode &= ~S_ISGID;
         } else {
@@ -704,7 +704,7 @@ static int mdd_fix_attr(const struct lu_env *env, struct mdd_object *obj,
                         la->la_gid = tmp_la->la_gid;
                 if (((uc->mu_fsuid != tmp_la->la_uid) ||
                     ((la->la_gid != tmp_la->la_gid) &&
-                    !mdd_in_group_p(uc, la->la_gid))) &&
+                    !lustre_in_group_p(uc, la->la_gid))) &&
                     !mdd_capable(uc, CAP_CHOWN))
                         RETURN(-EPERM);
 

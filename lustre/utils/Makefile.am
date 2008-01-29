@@ -19,7 +19,7 @@ noinst_PROGRAMS = wirecheck wiretest obdio obdbarrier
 # mount only finds helpers in /sbin
 rootsbin_PROGRAMS = mount.lustre
 sbin_PROGRAMS = mkfs.lustre tunefs.lustre lctl \
-	l_getidentity l_facl llverfs llverdev \
+	l_getidentity llverfs llverdev \
 	llog_reader lr_reader
 if LIBPTHREAD
 sbin_PROGRAMS += loadgen
@@ -96,10 +96,6 @@ tunefs_lustre_DEPENDENCIES := $(mkfs_lustre_DEPENDENCIES)
 l_getidentity_SOURCES = l_getidentity.c
 l_getidentity_LDADD := $(LIBPTLCTL)
 l_getidentity_DEPENDENCIES := $(LIBPTLCTL)
-
-l_facl_SOURCES = l_facl.c
-l_facl_LDADD := liblustreapi.a
-l_facl_DEPENDENCIES := liblustreapi.a
 
 EXTRA_DIST = $(sbin_scripts) $(bin_scripts)
 

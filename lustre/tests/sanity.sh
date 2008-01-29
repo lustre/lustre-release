@@ -830,7 +830,7 @@ test_27c() {
 	[ `$GETSTRIPE $DIR/d27/f01 | grep -A 10 obdidx | wc -l` -eq 4 ] ||
 		error "two-stripe file doesn't have two stripes"
 	pass
-	log "== test_27d: write to two stripe file file f01 ================"
+	log "== test_27c: write to two stripe file file f01 ================"
 	dd if=/dev/zero of=$DIR/d27/f01 bs=4k count=4 || error "dd failed"
 }
 run_test 27c "create two stripe file f01 ======================="
@@ -2921,12 +2921,6 @@ test_66() {
 }
 run_test 66 "update inode blocks count on client ==============="
 
-test_67() {
-        [ ! -f sanity-sec.sh ] && skip "missing subtest sanity-sec.sh" && return
-	sh sanity-sec.sh
-}
-run_test 67 "security test ====================================="
-
 LLOOP=
 cleanup_68() {
 	trap 0
@@ -3274,6 +3268,13 @@ run_test 76 "destroy duplicate inodes in client inode cache ===="
 export ORIG_CSUM=""
 set_checksums()
 {
+	# Note: in sptlrpc modes which enable its own bulk checksum, the
+	# original crc32_le bulk checksum will be automatically disabled,
+	# and the OBD_FAIL_OSC_CHECKSUM_SEND/OBD_FAIL_OSC_CHECKSUM_RECEIVE
+	# will be checked by sptlrpc code against sptlrpc bulk checksum.
+	# In this case set_checksums() will not be no-op, because sptlrpc
+	# bulk checksum will be enabled all through the test.
+
 	[ "$ORIG_CSUM" ] || ORIG_CSUM=`cat $LPROC/osc/*/checksums | head -n1`
 	for f in $LPROC/osc/*/checksums; do
 		echo $1 >> $f
@@ -3872,6 +3873,12 @@ test_103 () {
     [ -z "$(which setfacl 2>/dev/null)" ] && skip "could not find setfacl" && return
     $GSS && skip "could not run under gss" && return
 
+    declare -a identity_old
+
+    for num in `seq $MDSCOUNT`; do
+        switch_identity $num true || identity_old[$num]=$?
+    done
+
     SAVE_UMASK=`umask`
     umask 0022
     cd $DIR
@@ -3882,9 +3889,8 @@ test_103 () {
     run_acl_subtest getfacl-noacl || error
     echo "performing misc..."
     run_acl_subtest misc || error
-#    XXX add back permission test when we support supplementary groups.
-#    echo "performing permissions..."
-#    run_acl_subtest permissions || error
+    echo "performing permissions..."
+    run_acl_subtest permissions || error
     echo "performing setfacl..."
     run_acl_subtest setfacl || error
 
@@ -3897,6 +3903,12 @@ test_103 () {
 
     cd $SAVE_PWD
     umask $SAVE_UMASK
+
+    for num in `seq $MDSCOUNT`; do
+	if [ "${identity_old[$num]}" = 1 ]; then
+            switch_identity $num false || identity_old[$num]=$?
+	fi
+    done
 }
 run_test 103 "acl test ========================================="
 

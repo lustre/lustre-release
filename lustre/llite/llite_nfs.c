@@ -213,7 +213,8 @@ static struct dentry *ll_get_parent(struct dentry *dchild)
                         dir->i_ino, PFID(ll_inode2fid(dir)));
 
         rc = md_getattr_name(sbi->ll_md_exp, ll_inode2fid(dir), NULL,
-                             dotdot, strlen(dotdot) + 1, 0, 0, &req);
+                             dotdot, strlen(dotdot) + 1, 0, 0,
+                             ll_i2suppgid(dir), &req);
         if (rc) {
                 CERROR("failure %d inode %lu get parent\n", rc, dir->i_ino);
                 RETURN(ERR_PTR(rc));

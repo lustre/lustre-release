@@ -19,8 +19,8 @@ LDLM_COMM_SOURCES= $(top_srcdir)/lustre/ldlm/l_lock.c	\
 COMMON_SOURCES =  client.c recover.c connection.c niobuf.c pack_generic.c   \
     events.c ptlrpc_module.c service.c pinger.c recov_thread.c llog_net.c   \
     llog_client.c llog_server.c import.c ptlrpcd.c pers.c wiretest.c   	    \
-    ptlrpc_internal.h layout.c sec.c sec_bulk.c sec_gc.c sec_null.c         \
-    sec_plain.c sec_lproc.c lproc_ptlrpc.c $(LDLM_COMM_SOURCES)
+    ptlrpc_internal.h layout.c sec.c sec_bulk.c sec_gc.c sec_config.c       \
+    sec_lproc.c sec_null.c sec_plain.c lproc_ptlrpc.c $(LDLM_COMM_SOURCES)
 
 if LIBLUSTRE
 
@@ -60,6 +60,10 @@ ptlrpc_SOURCES := \
         service.c \
 	wiretest.c \
 	sec.c \
+	sec_bulk.c \
+	sec_gc.c \
+	sec_config.c \
+	sec_lproc.c \
 	sec_null.c \
 	sec_plain.c \
         $(LDLM_COMM_SOURCES)

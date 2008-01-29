@@ -290,6 +290,7 @@ __u32 lgss_unwrap(struct gss_ctx *context_handle,
 
 
 __u32 lgss_plain_encrypt(struct gss_ctx *ctx,
+                         int decrypt,
                          int length,
                          void *in_buf,
                          void *out_buf)
@@ -300,7 +301,7 @@ __u32 lgss_plain_encrypt(struct gss_ctx *ctx,
         LASSERT(ctx->mech_type->gm_ops->gss_plain_encrypt);
 
         return ctx->mech_type->gm_ops
-                ->gss_plain_encrypt(ctx, length, in_buf, out_buf);
+                ->gss_plain_encrypt(ctx, decrypt, length, in_buf, out_buf);
 }
 
 /* gss_delete_sec_context: free all resources associated with context_handle.

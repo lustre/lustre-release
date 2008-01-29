@@ -289,7 +289,8 @@ static int mds_connect_internal(struct obd_export *exp,
         return 0;
 }
 
-static int mds_reconnect(struct obd_export *exp, struct obd_device *obd,
+static int mds_reconnect(const struct lu_env *env,
+                         struct obd_export *exp, struct obd_device *obd,
                          struct obd_uuid *cluuid,
                          struct obd_connect_data *data)
 {
@@ -339,6 +340,8 @@ static int mds_connect(const struct lu_env *env,
         exp = class_conn2export(conn);
         LASSERT(exp);
         med = &exp->exp_mds_data;
+
+        exp->exp_flvr.sf_rpc = SPTLRPC_FLVR_NULL;
 
         rc = mds_connect_internal(exp, data);
         if (rc)

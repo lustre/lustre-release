@@ -141,10 +141,6 @@ struct lustre_mount_data {
         int        lmd_exclude_count;
         char      *lmd_dev;           /* device name */
         char      *lmd_profile;       /* client only */
-        char      *lmd_sec_mdt;       /* sec from mdt (to ost/mdt) */
-        char      *lmd_sec_cli;       /* sec from client (to ost/mdt) */
-        uid_t      lmd_nllu;          /* non-lustre-local-user id */
-        gid_t      lmd_nllg;          /* non-lustre-local-group id */
         char      *lmd_opts;          /* lustre mount options (as opposed to 
                                          _device_ mount options) */
         __u32     *lmd_exclude;       /* array of OSTs to ignore */

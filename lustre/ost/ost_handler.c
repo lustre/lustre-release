@@ -1112,10 +1112,8 @@ static int ost_brw_write(struct ptlrpc_request *req, struct obd_trans_info *oti)
         }
         no_reply = rc != 0;
 
-        if (rc == 0) {
-                /* let client retry if unwrap failed */
-                rc = sptlrpc_svc_unwrap_bulk(req, desc);
-        }
+        if (rc == 0)
+                sptlrpc_svc_unwrap_bulk(req, desc);
 
         repbody = lustre_msg_buf(req->rq_repmsg, REPLY_REC_OFF,
                                  sizeof(*repbody));
@@ -1352,6 +1350,44 @@ static int ost_llog_handle_connect(struct obd_export *exp,
         RETURN(rc);
 }
 
+static int filter_export_check_flavor(struct filter_obd *filter,
+                                      struct obd_export *exp,
+                                      struct ptlrpc_request *req)
+{
+        int     rc = 0;
+
+        /* FIXME
+         * this should be done in filter_connect()/filter_reconnect(), but
+         * we can't obtain information like NID, which stored in incoming
+         * request, thus can't decide what flavor to use. so we do it here.
+         *
+         * This hack should be removed after the OST stack be rewritten, just
+         * like what we are doing in mdt_obd_connect()/mdt_obd_reconnect().
+         */
+        if (exp->exp_flvr.sf_rpc != SPTLRPC_FLVR_INVALID)
+                return 0;
+
+        CDEBUG(D_SEC, "from %s\n", sptlrpc_part2name(req->rq_sp_from));
+        spin_lock(&exp->exp_lock);
+        exp->exp_sp_peer = req->rq_sp_from;
+
+        read_lock(&filter->fo_sptlrpc_lock);
+        sptlrpc_rule_set_choose(&filter->fo_sptlrpc_rset, exp->exp_sp_peer,
+                                req->rq_peer.nid, &exp->exp_flvr);
+        read_unlock(&filter->fo_sptlrpc_lock);
+
+        if (exp->exp_flvr.sf_rpc != req->rq_flvr.sf_rpc) {
+                CERROR("invalid rpc flavor %x, expect %x, from %s\n",
+                       req->rq_flvr.sf_rpc, exp->exp_flvr.sf_rpc,
+                       libcfs_nid2str(req->rq_peer.nid));
+                exp->exp_flvr.sf_rpc = SPTLRPC_FLVR_INVALID;
+                rc = -EACCES;
+        }
+
+        spin_unlock(&exp->exp_lock);
+
+        return rc;
+}
 
 static int ost_filter_recovery_request(struct ptlrpc_request *req,
                                        struct obd_device *obd, int *process)
@@ -1508,8 +1544,14 @@ int ost_handle(struct ptlrpc_request *req)
                 if (OBD_FAIL_CHECK(OBD_FAIL_OST_CONNECT_NET))
                         RETURN(0);
                 rc = target_handle_connect(req);
-                if (!rc)
-                        obd = req->rq_export->exp_obd;
+                if (!rc) {
+                        struct obd_export *exp = req->rq_export;
+
+                        obd = exp->exp_obd;
+
+                        rc = filter_export_check_flavor(&obd->u.filter,
+                                                        exp, req);
+                }
                 break;
         }
         case OST_DISCONNECT:

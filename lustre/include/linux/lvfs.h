@@ -52,7 +52,7 @@ struct lvfs_ucred {
         __u32                   luc_cap;
         __u32                   luc_umask;
 	struct group_info      *luc_ginfo;
-	struct mdt_identity    *luc_identity;
+	struct md_identity     *luc_identity;
 };
 
 struct lvfs_callback_ops {

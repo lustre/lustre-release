@@ -1347,10 +1347,6 @@ static int mdt_readpage(struct mdt_thread_info *info)
         if (reqbody == NULL || repbody == NULL)
                 RETURN(err_serious(-EFAULT));
 
-        rc = mdt_check_ucred(info);
-        if (rc)
-                RETURN(err_serious(rc));
-
         /*
          * prepare @rdpg before calling lower layers and transfer itself. Here
          * reqbody->size contains offset of where to start to read and
@@ -3676,9 +3672,6 @@ static void mdt_fini(const struct lu_env *env, struct mdt_device *m)
 
         mdt_fs_cleanup(env, m);
 
-        upcall_cache_cleanup(m->mdt_rmtacl_cache);
-        m->mdt_rmtacl_cache = NULL;
-
         upcall_cache_cleanup(m->mdt_identity_cache);
         m->mdt_identity_cache = NULL;
 
@@ -3694,10 +3687,7 @@ static void mdt_fini(const struct lu_env *env, struct mdt_device *m)
         ptlrpc_lprocfs_unregister_obd(d->ld_obd);
         lprocfs_obd_cleanup(d->ld_obd);
 
-        if (m->mdt_rootsquash_info) {
-                OBD_FREE_PTR(m->mdt_rootsquash_info);
-                m->mdt_rootsquash_info = NULL;
-        }
+        sptlrpc_rule_set_free(&m->mdt_sptlrpc_rset);
 
         next->md_ops->mdo_init_capa_ctxt(env, next, 0, 0, 0, NULL);
         del_timer(&m->mdt_ck_timer);
@@ -3781,6 +3771,7 @@ static int mdt_init0(const struct lu_env *env, struct mdt_device *m,
         struct lustre_mount_info  *lmi;
         struct lustre_sb_info     *lsi;
         struct lu_site            *s;
+        const char                *identity_upcall = "NONE";
         int                        rc;
         ENTRY;
 
@@ -3806,6 +3797,9 @@ static int mdt_init0(const struct lu_env *env, struct mdt_device *m,
                 fsoptions_to_mdt_flags(m, lsi->lsi_lmd->lmd_opts);
                 server_put_mount_2(dev, lmi->lmi_mnt);
         }
+
+        m->mdt_sptlrpc_lock = RW_LOCK_UNLOCKED;
+        sptlrpc_rule_set_init(&m->mdt_sptlrpc_rset);
 
         spin_lock_init(&m->mdt_ioepoch_lock);
         m->mdt_opts.mo_compat_resname = 0;
@@ -3892,21 +3886,16 @@ static int mdt_init0(const struct lu_env *env, struct mdt_device *m,
         /* set obd_namespace for compatibility with old code */
         obd->obd_namespace = m->mdt_namespace;
 
-        m->mdt_identity_cache = upcall_cache_init(obd->obd_name,
-                                                  "NONE",
+        /* XXX: to support suppgid for ACL, we enable identity_upcall
+         * by default, otherwise, maybe got unexpected -EACCESS. */
+        if (m->mdt_opts.mo_acl)
+                identity_upcall = MDT_IDENTITY_UPCALL_PATH;
+
+        m->mdt_identity_cache = upcall_cache_init(obd->obd_name, identity_upcall,
                                                   &mdt_identity_upcall_cache_ops);
         if (IS_ERR(m->mdt_identity_cache)) {
                 rc = PTR_ERR(m->mdt_identity_cache);
                 m->mdt_identity_cache = NULL;
-                GOTO(err_free_ns, rc);
-        }
-
-        m->mdt_rmtacl_cache = upcall_cache_init(obd->obd_name,
-                                                MDT_RMTACL_UPCALL_PATH,
-                                                &mdt_rmtacl_upcall_cache_ops);
-        if (IS_ERR(m->mdt_rmtacl_cache)) {
-                rc = PTR_ERR(m->mdt_rmtacl_cache);
-                m->mdt_rmtacl_cache = NULL;
                 GOTO(err_free_ns, rc);
         }
 
@@ -3953,8 +3942,6 @@ err_capa:
         del_timer(&m->mdt_ck_timer);
         mdt_ck_thread_stop(m);
 err_free_ns:
-        upcall_cache_cleanup(m->mdt_rmtacl_cache);
-        m->mdt_rmtacl_cache = NULL;
         upcall_cache_cleanup(m->mdt_identity_cache);
         m->mdt_identity_cache = NULL;
         ldlm_namespace_free(m->mdt_namespace, 0);
@@ -3988,6 +3975,34 @@ static int mdt_process_config(const struct lu_env *env,
         ENTRY;
 
         switch (cfg->lcfg_command) {
+        case LCFG_SPTLRPC_CONF: {
+                struct sptlrpc_conf_log *log;
+                struct sptlrpc_rule_set  tmp_rset;
+
+                log = sptlrpc_conf_log_extract(cfg);
+                if (IS_ERR(log)) {
+                        rc = PTR_ERR(log);
+                        break;
+                }
+
+                sptlrpc_rule_set_init(&tmp_rset);
+
+                rc = sptlrpc_rule_set_from_log(&tmp_rset, log);
+                if (rc) {
+                        CERROR("mdt %p: failed get sptlrpc rules: %d\n", m, rc);
+                        break;
+                }
+
+                write_lock(&m->mdt_sptlrpc_lock);
+                sptlrpc_rule_set_free(&m->mdt_sptlrpc_rset);
+                m->mdt_sptlrpc_rset = tmp_rset;
+                write_unlock(&m->mdt_sptlrpc_lock);
+
+                sptlrpc_target_update_exp_flavor(
+                                md2lu_dev(&m->mdt_md_dev)->ld_obd, &tmp_rset);
+
+                break;
+        }
         case LCFG_PARAM: {
                 struct lprocfs_static_vars lvars;
                 struct obd_device *obd = d->ld_obd;
@@ -4173,9 +4188,11 @@ static int mdt_obd_connect(const struct lu_env *env,
                            struct obd_uuid *cluuid,
                            struct obd_connect_data *data)
 {
+        struct mdt_thread_info *info;
         struct mdt_client_data *mcd;
         struct obd_export      *exp;
         struct mdt_device      *mdt;
+        struct ptlrpc_request  *req;
         int                     rc;
         ENTRY;
 
@@ -4183,6 +4200,8 @@ static int mdt_obd_connect(const struct lu_env *env,
         if (!conn || !obd || !cluuid)
                 RETURN(-EINVAL);
 
+        info = lu_context_key_get(&env->le_ctx, &mdt_thread_key);
+        req = info->mti_pill.rc_req;
         mdt = mdt_dev(obd->obd_lu_dev);
 
         rc = class_connect(conn, obd, cluuid);
@@ -4191,6 +4210,26 @@ static int mdt_obd_connect(const struct lu_env *env,
 
         exp = class_conn2export(conn);
         LASSERT(exp != NULL);
+
+        CDEBUG(D_SEC, "from %s\n", sptlrpc_part2name(req->rq_sp_from));
+
+        spin_lock(&exp->exp_lock);
+        exp->exp_sp_peer = req->rq_sp_from;
+
+        read_lock(&mdt->mdt_sptlrpc_lock);
+        sptlrpc_rule_set_choose(&mdt->mdt_sptlrpc_rset, exp->exp_sp_peer,
+                                req->rq_peer.nid, &exp->exp_flvr);
+        read_unlock(&mdt->mdt_sptlrpc_lock);
+
+        if (exp->exp_flvr.sf_rpc != req->rq_flvr.sf_rpc) {
+                CERROR("invalid rpc flavor %x, expect %x, from %s\n",
+                       req->rq_flvr.sf_rpc, exp->exp_flvr.sf_rpc,
+                       libcfs_nid2str(req->rq_peer.nid));
+                exp->exp_flvr.sf_rpc = SPTLRPC_FLVR_INVALID;
+                spin_unlock(&exp->exp_lock);
+                RETURN(-EACCES);
+        }
+        spin_unlock(&exp->exp_lock);
 
         rc = mdt_connect_internal(exp, mdt, data);
         if (rc == 0) {
@@ -4220,15 +4259,46 @@ static int mdt_obd_connect(const struct lu_env *env,
         RETURN(rc);
 }
 
-static int mdt_obd_reconnect(struct obd_export *exp, struct obd_device *obd,
+static int mdt_obd_reconnect(const struct lu_env *env,
+                             struct obd_export *exp, struct obd_device *obd,
                              struct obd_uuid *cluuid,
                              struct obd_connect_data *data)
 {
-        int rc;
+        struct mdt_thread_info *info;
+        struct mdt_device      *mdt;
+        struct ptlrpc_request  *req;
+        int                     rc;
         ENTRY;
 
         if (exp == NULL || obd == NULL || cluuid == NULL)
                 RETURN(-EINVAL);
+
+        info = lu_context_key_get(&env->le_ctx, &mdt_thread_key);
+        req = info->mti_pill.rc_req;
+        mdt = mdt_dev(obd->obd_lu_dev);
+
+        CDEBUG(D_SEC, "from %s\n", sptlrpc_part2name(req->rq_sp_from));
+
+        spin_lock(&exp->exp_lock);
+        if (exp->exp_flvr.sf_rpc == SPTLRPC_FLVR_INVALID) {
+                exp->exp_sp_peer = req->rq_sp_from;
+
+                read_lock(&mdt->mdt_sptlrpc_lock);
+                sptlrpc_rule_set_choose(&mdt->mdt_sptlrpc_rset,
+                                        exp->exp_sp_peer,
+                                        req->rq_peer.nid, &exp->exp_flvr);
+                read_unlock(&mdt->mdt_sptlrpc_lock);
+
+                if (exp->exp_flvr.sf_rpc != req->rq_flvr.sf_rpc) {
+                        CERROR("invalid rpc flavor %x, expect %x, from %s\n",
+                               req->rq_flvr.sf_rpc, exp->exp_flvr.sf_rpc,
+                               libcfs_nid2str(req->rq_peer.nid));
+                        exp->exp_flvr.sf_rpc = SPTLRPC_FLVR_INVALID;
+                        spin_unlock(&exp->exp_lock);
+                        RETURN(-EACCES);
+                }
+        }
+        spin_unlock(&exp->exp_lock);
 
         rc = mdt_connect_internal(exp, mdt_dev(obd->obd_lu_dev), data);
 
@@ -4276,6 +4346,8 @@ static int mdt_init_export(struct obd_export *exp)
 
         INIT_LIST_HEAD(&med->med_open_head);
         spin_lock_init(&med->med_open_lock);
+        sema_init(&med->med_idmap_sem, 1);
+        med->med_idmap = NULL;
         spin_lock(&exp->exp_lock);
         exp->exp_connecting = 1;
         spin_unlock(&exp->exp_lock);
@@ -4773,6 +4845,11 @@ static struct mdt_opc_slice mdt_xmds_handlers[] = {
                 .mos_opc_start = OBD_PING,
                 .mos_opc_end   = OBD_LAST_OPC,
                 .mos_hs        = mdt_obd_ops
+        },
+        {
+                .mos_opc_start = SEC_CTX_INIT,
+                .mos_opc_end   = SEC_LAST_OPC,
+                .mos_hs        = mdt_sec_ctx_ops
         },
         {
                 .mos_hs        = NULL

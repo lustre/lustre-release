@@ -59,8 +59,7 @@ struct obd_statfs;
 #define IOC_OBD_STATFS                  _IOWR('f', 164, struct obd_statfs *)
 #define IOC_LOV_GETINFO                 _IOWR('f', 165, struct lov_user_mds_data *)
 #define LL_IOC_FLUSHCTX                 _IOW ('f', 166, long)
-#define LL_IOC_GETFACL                  _IOWR('f', 167, struct rmtacl_ioctl_data *)
-#define LL_IOC_SETFACL                  _IOWR('f', 168, struct rmtacl_ioctl_data *)
+#define LL_IOC_RMTACL                   _IOW ('f', 167, long)
 
 #define LL_IOC_LLOOP_ATTACH             _IOWR('f', 169, long)
 #define LL_IOC_LLOOP_DETACH             _IOWR('f', 170, long)
@@ -89,6 +88,7 @@ struct obd_statfs;
 #define LL_FILE_IGNORE_LOCK             0x00000001
 #define LL_FILE_GROUP_LOCKED            0x00000002
 #define LL_FILE_READAHEAD               0x00000004
+#define LL_FILE_RMTACL                  0x00000008
 
 #define LOV_USER_MAGIC_V1 0x0BD10BD0
 #define LOV_USER_MAGIC    LOV_USER_MAGIC_V1
@@ -188,10 +188,10 @@ struct if_quotacheck {
 
 #define IDENTITY_DOWNCALL_MAGIC 0x6d6dd620
 
-/* setxid permission */
-#define N_SETXID_PERMS_MAX      64
+/* permission */
+#define N_PERMS_MAX      64
 
-struct setxid_perm_downcall_data {
+struct perm_downcall_data {
         __u64 pdd_nid;
         __u32 pdd_perm;
 };
@@ -202,21 +202,22 @@ struct identity_downcall_data {
         __u32                            idd_uid;
         __u32                            idd_gid;
         __u32                            idd_nperms;
-        struct setxid_perm_downcall_data idd_perms[N_SETXID_PERMS_MAX];
+        struct perm_downcall_data idd_perms[N_PERMS_MAX];
         __u32                            idd_ngroups;
         __u32                            idd_groups[0];
 };
 
-#define RMTACL_DOWNCALL_MAGIC 0x6d6dd620
-#define RMTACL_SIZE_MAX     (4096)
+/* for non-mapped uid/gid */
+#define NOBODY_UID      99
+#define NOBODY_GID      99
 
-struct rmtacl_downcall_data {
-        __u32           add_magic;
-        __u32           add_handle;
-        __u64           add_key;
-        __u32           add_buflen;
-        __u32           add_padding;
-        __u8            add_buf[0];
+#define INVALID_ID      (-1)
+
+enum {
+        RMT_LSETFACL    = 1,
+        RMT_LGETFACL    = 2,
+        RMT_RSETFACL    = 3,
+        RMT_RGETFACL    = 4
 };
 
 #ifdef NEED_QUOTA_DEFS
@@ -283,13 +284,5 @@ struct if_quotactl {
 #ifndef offsetof
 # define offsetof(typ,memb)     ((unsigned long)((char *)&(((typ *)0)->memb)))
 #endif
-
-/* remote acl ioctl */
-struct rmtacl_ioctl_data {
-        char           *cmd;            /* IN */
-        unsigned long   cmd_len;
-        char           *res;            /* OUT */
-        unsigned long   res_len;
-};
 
 #endif /* _LUSTRE_USER_H */

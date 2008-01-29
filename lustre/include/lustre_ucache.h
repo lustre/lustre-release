@@ -29,47 +29,30 @@
 
 struct upcall_cache_entry;
 
-struct mdt_setxid_perm {
+struct md_perm {
         lnet_nid_t      mp_nid;
         __u32           mp_perm;
 };
 
-struct mdt_identity {
+struct md_identity {
         struct upcall_cache_entry *mi_uc_entry;
         uid_t                      mi_uid;
         gid_t                      mi_gid;
         struct group_info         *mi_ginfo;
         int                        mi_nperms;
-        struct mdt_setxid_perm    *mi_perms;
-};
-
-struct rmtacl_upcall_data {
-        uid_t                      aud_uid;
-        gid_t                      aud_gid;
-        char                      *aud_cmd;
-};
-
-struct mdt_rmtacl {
-        uid_t                      ra_uid;
-        gid_t                      ra_gid;
-        __u32                      ra_handle;
-        char                      *ra_cmd;
-        char                      *ra_buf;
+        struct md_perm            *mi_perms;
 };
 
 struct upcall_cache_entry {
         struct list_head        ue_hash;
         __u64                   ue_key;
-//        __u64                   ue_primary;
-//        struct group_info      *ue_group_info;
         atomic_t                ue_refcount;
         int                     ue_flags;
         cfs_waitq_t             ue_waitq;
         cfs_time_t              ue_acquire_expire;
         cfs_time_t              ue_expire;
         union {
-                struct mdt_identity     identity;
-                struct mdt_rmtacl       acl;
+                struct md_identity     identity;
         } u;
 };
 

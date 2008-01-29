@@ -61,6 +61,14 @@ Details    : If an OST is down the MDS will hang indefinitely in
 	     MDS QOS usage of statfs, it should not stuck in waiting.
 
 Severity   : enhancement
+Bugzilla   : 11842
+Description: remote_acl support
+Details    : Support ACL-based permission check for remote user.
+             Support setfacl/getfacl for remote user with the utils
+             "lfs {l,r}{s,g}etfacl" which follow the same parameter format as
+             the system "{s,g}etfacl" utils.
+
+Severity   : enhancement
 Bugzilla   : 14288
 Description: Update to RHEL4 U6 kernel-2.6.9-67.EL.
 

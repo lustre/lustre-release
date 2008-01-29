@@ -1085,7 +1085,8 @@ static int osc_brw_prep_request(int cmd, struct client_obd *cli,struct obdo *oa,
 
         /* size[REQ_REC_OFF] still sizeof (*body) */
         if (opc == OST_WRITE) {
-                if (unlikely(cli->cl_checksum)) {
+                if (unlikely(cli->cl_checksum) &&
+                    req->rq_flvr.sf_bulk_csum == BULK_CSUM_ALG_NULL) {
                         body->oa.o_valid |= OBD_MD_FLCKSUM;
                         body->oa.o_cksum = osc_checksum_bulk(requested_nob,
                                                              page_count, pga,
@@ -1104,7 +1105,8 @@ static int osc_brw_prep_request(int cmd, struct client_obd *cli,struct obdo *oa,
                 size[REPLY_REC_OFF + 1] = sizeof(__u32) * niocount;
                 ptlrpc_req_set_repsize(req, 3, size);
         } else {
-                if (unlikely(cli->cl_checksum))
+                if (unlikely(cli->cl_checksum) &&
+                    req->rq_flvr.sf_bulk_csum == BULK_CSUM_ALG_NULL)
                         body->oa.o_valid |= OBD_MD_FLCKSUM;
                 /* 1 RC for the whole I/O */
                 ptlrpc_req_set_repsize(req, 2, size);
@@ -3560,7 +3562,8 @@ static int osc_llog_finish(struct obd_device *obd, int count)
         RETURN(rc);
 }
 
-static int osc_reconnect(struct obd_export *exp, struct obd_device *obd,
+static int osc_reconnect(const struct lu_env *env,
+                         struct obd_export *exp, struct obd_device *obd,
                          struct obd_uuid *cluuid,
                          struct obd_connect_data *data)
 {
@@ -3698,6 +3701,7 @@ int osc_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
                 lprocfs_osc_init_vars(&lvars);
                 if (lprocfs_obd_setup(obd, lvars.obd_vars) == 0) {
                         lproc_osc_attach_seqstat(obd);
+                        sptlrpc_lprocfs_cliobd_attach(obd);
                         ptlrpc_lprocfs_register_obd(obd);
                 }
 
@@ -3790,7 +3794,16 @@ static int osc_process_config(struct obd_device *obd, obd_count len, void *buf)
 
         lprocfs_osc_init_vars(&lvars);
 
-        rc = class_process_proc_param(PARAM_OSC, lvars.obd_vars, lcfg, obd);
+        switch (lcfg->lcfg_command) {
+        case LCFG_SPTLRPC_CONF:
+                rc = sptlrpc_cliobd_process_config(obd, lcfg);
+                break;
+        default:
+                rc = class_process_proc_param(PARAM_OSC, lvars.obd_vars,
+                                              lcfg, obd);
+                break;
+        }
+
         return(rc);
 }
 

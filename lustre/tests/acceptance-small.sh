@@ -25,7 +25,7 @@ fi
 [ "$DEBUG_OFF" ] || DEBUG_OFF="eval sysctl -w lnet.debug=\"$DEBUG_LVL\""
 [ "$DEBUG_ON" ] || DEBUG_ON="eval sysctl -w lnet.debug=0x33f0484"
 
-export TESTSUITE_LIST="RUNTESTS SANITY DBENCH BONNIE IOZONE FSX SANITYN LFSCK LIBLUSTRE REPLAY_SINGLE CONF_SANITY RECOVERY_SMALL REPLAY_OST_SINGLE REPLAY_DUAL INSANITY SANITY_QUOTA"
+export TESTSUITE_LIST="RUNTESTS SANITY DBENCH BONNIE IOZONE FSX SANITYN LFSCK LIBLUSTRE REPLAY_SINGLE CONF_SANITY RECOVERY_SMALL REPLAY_OST_SINGLE REPLAY_DUAL INSANITY SANITY_QUOTA SANITY_SEC"
 
 if [ "$SLOW" = "no" ]; then
 #          5 min  
@@ -51,6 +51,11 @@ RANTEST=""
 LUSTRE=${LUSTRE:-`dirname $0`/..}
 . $LUSTRE/tests/test-framework.sh
 init_test_env $@
+
+if $GSS; then
+    # liblustre doesn't support GSS
+    export LIBLUSTRE=no
+fi
 
 SETUP=${SETUP:-setupall}
 FORMAT=${FORMAT:-formatall}
@@ -311,6 +316,10 @@ if [ "$SANITY_QUOTA" != "no" ]; then
         SANITY_QUOTA="done"
 fi
 
+if [ "$SANITY_SEC" != "no" ]; then
+        title sanity-sec
+        bash sanity-sec.sh
+fi
 
 RC=$?
 title FINISHED
