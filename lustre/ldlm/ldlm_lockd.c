@@ -89,7 +89,20 @@ static struct expired_lock_thread {
 
 struct ldlm_bl_pool {
         spinlock_t              blp_lock;
+
+        /*
+         * blp_prio_list is used for callbacks that should be handled
+         * as a priority. It is used for LDLM_FL_DISCARD_DATA requests.
+         * see bug 13843
+         */
+        struct list_head        blp_prio_list;
+
+        /*
+         * blp_list is used for all other callbacks which are likely
+         * to take longer to process.
+         */
         struct list_head        blp_list;
+
         cfs_waitq_t             blp_waitq;
         struct completion       blp_comp;
         atomic_t                blp_num_threads;
@@ -1435,7 +1448,13 @@ static int ldlm_bl_to_thread(struct ldlm_namespace *ns,
                 blwi->blwi_lock = lock;
         }
         spin_lock(&blp->blp_lock);
-        list_add_tail(&blwi->blwi_entry, &blp->blp_list);
+        if (lock && lock->l_flags & LDLM_FL_DISCARD_DATA) {
+                /* add LDLM_FL_DISCARD_DATA requests to the priority list */
+                list_add_tail(&blwi->blwi_entry, &blp->blp_prio_list);
+        } else {
+                /* other blocking callbacks are added to the regular list */
+                list_add_tail(&blwi->blwi_entry, &blp->blp_list);
+        }
         cfs_waitq_signal(&blp->blp_waitq);
         spin_unlock(&blp->blp_lock);
 
@@ -1754,11 +1773,22 @@ void ldlm_revoke_export_locks(struct obd_export *exp)
 static struct ldlm_bl_work_item *ldlm_bl_get_work(struct ldlm_bl_pool *blp)
 {
         struct ldlm_bl_work_item *blwi = NULL;
+        static unsigned int num_bl = 0;
 
         spin_lock(&blp->blp_lock);
-        if (!list_empty(&blp->blp_list)) {
-                blwi = list_entry(blp->blp_list.next, struct ldlm_bl_work_item,
-                                  blwi_entry);
+        /* process a request from the blp_list at least every blp_num_threads */
+        if (!list_empty(&blp->blp_list) &&
+            (list_empty(&blp->blp_prio_list) || num_bl == 0))
+                blwi = list_entry(blp->blp_list.next,
+                                  struct ldlm_bl_work_item, blwi_entry);
+        else
+                if (!list_empty(&blp->blp_prio_list))
+                        blwi = list_entry(blp->blp_prio_list.next,
+                                          struct ldlm_bl_work_item, blwi_entry);
+
+        if (blwi) {
+                if (++num_bl >= atomic_read(&blp->blp_num_threads))
+                        num_bl = 0;
                 list_del(&blwi->blwi_entry);
         }
         spin_unlock(&blp->blp_lock);
@@ -1974,6 +2004,7 @@ static int ldlm_setup(void)
 
         spin_lock_init(&blp->blp_lock);
         CFS_INIT_LIST_HEAD(&blp->blp_list);
+        CFS_INIT_LIST_HEAD(&blp->blp_prio_list);
         cfs_waitq_init(&blp->blp_waitq);
         atomic_set(&blp->blp_num_threads, 0);
         atomic_set(&blp->blp_busy_threads, 0);
