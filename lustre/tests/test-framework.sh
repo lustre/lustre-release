@@ -797,7 +797,7 @@ cleanup_and_setup_lustre() {
 
 check_and_cleanup_lustre() {
     if [ "`mount | grep $MOUNT`" ]; then
-        rm -f $DIR/${TESTSUITE}/[Rdfs][0-9]*
+        [ -n "$DIR" ] && rm -rf $DIR/[Rdfs][0-9]*
     fi
     if [ "$I_MOUNTED" = "yes" ]; then
         cleanupall -f || error "cleanup failed"
@@ -1122,7 +1122,7 @@ run_one() {
     testnum=$1
     message=$2
     tfile=f${testnum}
-    export tdir=d${TESTSUITE}/d${base}
+    export tdir=d0.${TESTSUITE}/d${base}
     local SAVE_UMASK=`umask`
     umask 0022
     mkdir -p $DIR/$tdir

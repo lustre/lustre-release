@@ -30,7 +30,6 @@ OSTCOUNT=1
 build_test_filter
 
 REFORMAT=--reformat cleanup_and_setup_lustre
-rm -rf $DIR/${TESTSUITE}/[df][0-9]* # bug 13798 new t-f tdir staff
 rm -rf $DIR/[df][0-9]*
 
 test_0a() {
