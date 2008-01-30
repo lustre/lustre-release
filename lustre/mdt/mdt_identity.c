@@ -67,15 +67,18 @@ static void mdt_identity_entry_init(struct upcall_cache_entry *entry,
 static void mdt_identity_entry_free(struct upcall_cache *cache,
                                     struct upcall_cache_entry *entry)
 {
-        struct mdt_identity *identity = &entry->u.identity;
+        struct md_identity *identity = &entry->u.identity;
 
-        if (identity->mi_ginfo)
+        if (identity->mi_ginfo) {
                 groups_free(identity->mi_ginfo);
+                identity->mi_ginfo = NULL;
+        }
 
         if (identity->mi_nperms) {
                 LASSERT(identity->mi_perms);
                 OBD_FREE(identity->mi_perms,
-                         identity->mi_nperms * sizeof(struct mdt_setxid_perm));
+                         identity->mi_nperms * sizeof(struct md_perm));
+                identity->mi_nperms = 0;
         }
 }
 
@@ -120,10 +123,10 @@ static int mdt_identity_parse_downcall(struct upcall_cache *cache,
                                        struct upcall_cache_entry *entry,
                                        void *args)
 {
-        struct mdt_identity *identity = &entry->u.identity;
+        struct md_identity *identity = &entry->u.identity;
         struct identity_downcall_data *data = args;
         struct group_info *ginfo;
-        struct mdt_setxid_perm *perms = NULL;
+        struct md_perm *perms = NULL;
         int size, i;
         ENTRY;
 
@@ -137,9 +140,8 @@ static int mdt_identity_parse_downcall(struct upcall_cache *cache,
                 RETURN(-ENOMEM);
         }
 
-        groups_from_list(ginfo, data->idd_groups);
-        groups_sort(ginfo);
-        identity->mi_ginfo = ginfo;
+        lustre_groups_from_list(ginfo, data->idd_groups);
+        lustre_groups_sort(ginfo);
 
         if (data->idd_nperms) {
                 size = data->idd_nperms * sizeof(*perms);
@@ -147,9 +149,10 @@ static int mdt_identity_parse_downcall(struct upcall_cache *cache,
                 if (!perms) {
                         CERROR("failed to alloc %d permissions\n",
                                data->idd_nperms);
-                        put_group_info(ginfo);
+                        groups_free(ginfo);
                         RETURN(-ENOMEM);
                 }
+
                 for (i = 0; i < data->idd_nperms; i++) {
                         perms[i].mp_nid = data->idd_perms[i].pdd_nid;
                         perms[i].mp_perm = data->idd_perms[i].pdd_perm;
@@ -169,7 +172,7 @@ static int mdt_identity_parse_downcall(struct upcall_cache *cache,
         RETURN(0);
 }
 
-struct mdt_identity *mdt_identity_get(struct upcall_cache *cache, __u32 uid)
+struct md_identity *mdt_identity_get(struct upcall_cache *cache, __u32 uid)
 {
         struct upcall_cache_entry *entry;
 
@@ -185,7 +188,7 @@ struct mdt_identity *mdt_identity_get(struct upcall_cache *cache, __u32 uid)
         return &entry->u.identity;
 }
 
-void mdt_identity_put(struct upcall_cache *cache, struct mdt_identity *identity)
+void mdt_identity_put(struct upcall_cache *cache, struct md_identity *identity)
 {
         if (!cache)
                 return;
@@ -213,12 +216,18 @@ void mdt_flush_identity(struct upcall_cache *cache, int uid)
  * If there is LNET_NID_ANY in perm[i].mp_nid,
  * it must be perm[0].mp_nid, and act as default perm.
  */
-__u32 mdt_identity_get_setxid_perm(struct mdt_identity *identity,
+__u32 mdt_identity_get_perm(struct md_identity *identity,
                                    __u32 is_rmtclient, lnet_nid_t nid)
 {
-        struct mdt_setxid_perm *perm = identity->mi_perms;
+        struct md_perm *perm;
         int i;
 
+        if (!identity) {
+                LASSERT(is_rmtclient == 0);
+                return CFS_SETGRP_PERM;
+        }
+
+        perm = identity->mi_perms;
         /* check exactly matched nid first */
         for (i = identity->mi_nperms - 1; i > 0; i--) {
                 if (perm[i].mp_nid != nid)
@@ -232,7 +241,7 @@ __u32 mdt_identity_get_setxid_perm(struct mdt_identity *identity,
                 return perm[0].mp_perm;
 
         /* return default last */
-        return is_rmtclient ? 0 : LUSTRE_SETGRP_PERM;
+        return is_rmtclient ? 0 : CFS_SETGRP_PERM;
 }
 
 int mdt_pack_remote_perm(struct mdt_thread_info *info, struct mdt_object *o,
