@@ -28,7 +28,7 @@ EXTRA_DIST = $(noinst_SCRIPTS) $(noinst_DATA) \
 if TESTS
 noinst_PROGRAMS = openunlink truncate directio openme writeme mlink utime
 noinst_PROGRAMS += tchmod toexcl fsx test_brw openclose createdestroy
-noinst_PROGRAMS += stat createmany chownmany statmany multifstat createtest
+noinst_PROGRAMS += createmany chownmany statmany multifstat createtest
 noinst_PROGRAMS += opendirunlink opendevunlink unlinkmany fchdir_test checkstat
 noinst_PROGRAMS += wantedi statone runas openfile getdents o_directory rmdirmany
 noinst_PROGRAMS += small_write multiop sleeptest ll_sparseness_verify cmknod
@@ -49,7 +49,6 @@ test_DATA = $(noinst_DATA)
 nobase_test_DATA = $(nobase_noinst_DATA)
 endif # TESTS
 
-stat_SOURCES = stat.c stat_fs.h
 # mkdirdeep_LDADD=-L$(top_builddir)/lnet/utils -lptlctl $(LIBREADLINE)
 mmap_sanity_SOURCES= mmap_sanity.c
 
