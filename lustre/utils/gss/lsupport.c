@@ -586,7 +586,7 @@ libcfs_str2nid(char *str)
 #define MAX_LINE_LEN            256
 
 struct user_map_item {
-        char        *principal; /* NULL means match all, will cause multi->single mapped, FORBID */
+        char        *principal; /* NULL means match all */
         lnet_nid_t   nid;
         uid_t        uid;
 };
@@ -604,7 +604,9 @@ void cleanup_mapping(void)
 {
         if (mapping.items) {
                 for (; mapping.nitems > 0; mapping.nitems--)
-                        free(mapping.items[mapping.nitems - 1].principal);
+                        if (mapping.items[mapping.nitems-1].principal)
+                                free(mapping.items[mapping.nitems-1].principal);
+
                 free(mapping.items);
                 mapping.items = NULL;
         }
@@ -630,7 +632,8 @@ static int grow_mapping(int nitems)
         }
 
         if (mapping.items) {
-                memcpy(new, mapping.items, mapping.nitems * sizeof(struct user_map_item));
+                memcpy(new, mapping.items,
+                       mapping.nitems * sizeof(struct user_map_item));
                 free(mapping.items);
         }
         mapping.items = new;
@@ -690,8 +693,7 @@ static int read_mapping_db(void)
                 }
 
                 if (!strcmp(princ, "*")) {
-                        printerr(0, "NOT permit \"*\" princ, it will cause multi->single mapped\n");
-                        continue;
+                        name = NULL;
                 } else {
                         name = strdup(princ);
                         if (!name) {
@@ -706,6 +708,7 @@ static int read_mapping_db(void)
                         nid = libcfs_str2nid(nid_str);
                         if (nid == LNET_NID_ANY) {
                                 printerr(0, "fail to parse nid %s\n", nid_str);
+                                if (name)
                                 free(name);
                                 continue;
                         }
@@ -714,6 +717,7 @@ static int read_mapping_db(void)
                 dest_uid = parse_uid(dest);
                 if (dest_uid == -1) {
                         printerr(0, "no valid user: %s\n", dest);
+                        if (name)
                         free(name);
                         continue;
                 }
@@ -721,6 +725,7 @@ static int read_mapping_db(void)
                 if (grow_mapping(mapping.nitems + 1)) {
                         printerr(0, "fail to grow mapping to %d\n",
                                  mapping.nitems + 1);
+                        if (name)
                         free(name);
                         fclose(f);
                         return -1;
@@ -780,7 +785,7 @@ int lookup_mapping(char *princ, lnet_nid_t nid, uid_t *uid)
 
                 if (entry->nid != LNET_NID_ANY && entry->nid != nid)
                         continue;
-                if (!strcasecmp(entry->principal, princ)) {
+                if (!entry->principal || !strcasecmp(entry->principal, princ)) {
                         printerr(1, "found mapping: %s ==> %d\n",
                                  princ, entry->uid);
                         *uid = entry->uid;
