@@ -30,6 +30,7 @@
 #include <asm/semaphore.h>
 
 #include <linux/lustre_acl.h>
+#include <lustre_eacl.h>
 #include <obd.h>
 #include <md_object.h>
 #include <dt_object.h>
@@ -301,7 +302,6 @@ static inline int mdd_capable(struct md_ucred *uc, int cap)
         return 0;
 }
 
-int mdd_in_group_p(struct md_ucred *uc, gid_t grp);
 int mdd_acl_def_get(const struct lu_env *env, struct mdd_object *mdd_obj,
                     struct md_attr *ma);
 int mdd_acl_chmod(const struct lu_env *env, struct mdd_object *o, __u32 mode,
