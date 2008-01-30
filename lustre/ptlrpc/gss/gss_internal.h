@@ -36,6 +36,7 @@ typedef struct rawobj_buf_s {
         __u8           *buf;
 } rawobj_buf_t;
 
+int rawobj_empty(rawobj_t *obj);
 int rawobj_alloc(rawobj_t *obj, char *buf, int len);
 void rawobj_free(rawobj_t *obj);
 int rawobj_equal(rawobj_t *a, rawobj_t *b);
@@ -109,6 +110,11 @@ enum ptlrpc_gss_tgt {
         LUSTRE_GSS_TGT_MGS              = 2,
 };
 
+enum ptlrpc_gss_header_flags {
+        LUSTRE_GSS_PACK_BULK            = 1,
+        LUSTRE_GSS_PACK_USER            = 2,
+};
+
 static inline
 __u32 import_to_gss_svc(struct obd_import *imp)
 {
@@ -126,7 +132,9 @@ __u32 import_to_gss_svc(struct obd_import *imp)
  * following 3 header must have the same size and offset
  */
 struct gss_header {
-        __u32                   gh_version;     /* gss version */
+        __u8                    gh_version;     /* gss version */
+        __u8                    gh_sp;          /* sec part */
+        __u16                   gh_pad0;
         __u32                   gh_flags;       /* wrap flags */
         __u32                   gh_proc;        /* proc */
         __u32                   gh_seq;         /* sequence */
@@ -138,7 +146,9 @@ struct gss_header {
 };
 
 struct gss_rep_header {
-        __u32                   gh_version;
+        __u8                    gh_version;
+        __u8                    gh_sp;
+        __u16                   gh_pad0;
         __u32                   gh_flags;
         __u32                   gh_proc;
         __u32                   gh_major;
@@ -150,7 +160,9 @@ struct gss_rep_header {
 };
 
 struct gss_err_header {
-        __u32                   gh_version;
+        __u8                    gh_version;
+        __u8                    gh_sp;
+        __u16                   gh_pad0;
         __u32                   gh_flags;
         __u32                   gh_proc;
         __u32                   gh_major;
@@ -166,6 +178,7 @@ struct gss_err_header {
  * used later by server.
  */
 struct gss_wire_ctx {
+        __u32                   gw_flags;
         __u32                   gw_proc;
         __u32                   gw_seq;
         __u32                   gw_svc;
@@ -176,6 +189,13 @@ struct gss_wire_ctx {
 #define PTLRPC_GSS_HEADER_SIZE          (sizeof(struct gss_header) + \
                                          PTLRPC_GSS_MAX_HANDLE_SIZE)
 
+
+static inline __u64 gss_handle_to_u64(rawobj_t *handle)
+{
+        if (handle->len != PTLRPC_GSS_MAX_HANDLE_SIZE)
+                return -1;
+        return *((__u64 *) handle->data);
+}
 
 #define GSS_SEQ_WIN                     (2048)
 #define GSS_SEQ_WIN_MAIN                GSS_SEQ_WIN
@@ -200,15 +220,17 @@ struct gss_svc_seq_data {
 };
 
 struct gss_svc_ctx {
-        unsigned int            gsc_usr_root:1,
-                                gsc_usr_mds:1,
-                                gsc_remote:1;
+        struct gss_ctx         *gsc_mechctx;
+        struct gss_svc_seq_data gsc_seqdata;
+        rawobj_t                gsc_rvs_hdl;
+        __u32                   gsc_rvs_seq;
         uid_t                   gsc_uid;
         gid_t                   gsc_gid;
         uid_t                   gsc_mapped_uid;
-        rawobj_t                gsc_rvs_hdl;
-        struct gss_svc_seq_data gsc_seqdata;
-        struct gss_ctx         *gsc_mechctx;
+        unsigned int            gsc_usr_root:1,
+                                gsc_usr_mds:1,
+                                gsc_remote:1,
+                                gsc_reverse:1;
 };
 
 struct gss_svc_reqctx {
@@ -242,6 +264,8 @@ struct gss_cli_ctx {
         atomic_t                gc_seq;
         rawobj_t                gc_handle;
         struct gss_ctx         *gc_mechctx;
+        /* handle for the buddy svc ctx */
+        rawobj_t                gc_svc_handle;
 };
 
 struct gss_cli_ctx_keyring {
@@ -270,10 +294,6 @@ struct gss_sec_pipefs {
 
 struct gss_sec_keyring {
         struct gss_sec          gsk_base;
-        /*
-         * unique sec_id.
-         */
-        int                     gsk_id;
         /*
          * all contexts listed here. access is protected by sec spinlock.
          */
@@ -337,6 +357,13 @@ struct gss_svc_reqctx *gss_svc_ctx2reqctx(struct ptlrpc_svc_ctx *ctx)
         return container_of(ctx, struct gss_svc_reqctx, src_base);
 }
 
+static inline
+struct gss_svc_ctx *gss_svc_ctx2gssctx(struct ptlrpc_svc_ctx *ctx)
+{
+        LASSERT(ctx);
+        return gss_svc_ctx2reqctx(ctx)->src_ctx;
+}
+
 /* sec_gss.c */
 int gss_cli_ctx_match(struct ptlrpc_cli_ctx *ctx, struct vfs_cred *vcred);
 int gss_cli_ctx_display(struct ptlrpc_cli_ctx *ctx, char *buf, int bufsize);
@@ -381,9 +408,9 @@ int gss_sec_create_common(struct gss_sec *gsec,
                           struct ptlrpc_sec_policy *policy,
                           struct obd_import *imp,
                           struct ptlrpc_svc_ctx *ctx,
-                          __u32 flavor,
-                          unsigned long flags);
+                          struct sptlrpc_flavor *sf);
 void gss_sec_destroy_common(struct gss_sec *gsec);
+void gss_sec_kill(struct ptlrpc_sec *sec);
 
 int gss_cli_ctx_init_common(struct ptlrpc_sec *sec,
                             struct ptlrpc_cli_ctx *ctx,
@@ -395,7 +422,6 @@ int gss_cli_ctx_fini_common(struct ptlrpc_sec *sec,
 void gss_cli_ctx_flags2str(unsigned long flags, char *buf, int bufsize);
 
 /* gss_keyring.c */
-extern struct ptlrpc_sec_policy gss_policy_keyring;
 int  __init gss_init_keyring(void);
 void __exit gss_exit_keyring(void);
 
@@ -438,6 +464,9 @@ __u64 gss_get_next_ctx_index(void);
 int gss_svc_upcall_install_rvs_ctx(struct obd_import *imp,
                                    struct gss_sec *gsec,
                                    struct gss_cli_ctx *gctx);
+int gss_svc_upcall_expire_rvs_ctx(rawobj_t *handle);
+int gss_svc_upcall_dup_handle(rawobj_t *handle, struct gss_svc_ctx *ctx);
+int gss_svc_upcall_update_sequence(rawobj_t *handle, __u32 seq);
 int gss_svc_upcall_handle_init(struct ptlrpc_request *req,
                                struct gss_svc_reqctx *grctx,
                                struct gss_wire_ctx *gw,

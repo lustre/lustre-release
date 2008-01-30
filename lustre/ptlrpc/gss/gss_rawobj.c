@@ -34,6 +34,12 @@
 
 #include "gss_internal.h"
 
+int rawobj_empty(rawobj_t *obj)
+{
+        LASSERT(equi(obj->len, obj->data));
+        return (obj->len == 0);
+}
+
 int rawobj_alloc(rawobj_t *obj, char *buf, int len)
 {
         LASSERT(obj);

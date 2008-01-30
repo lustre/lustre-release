@@ -301,7 +301,9 @@ get_ids(gss_name_t client_name, gss_OID mech, struct svc_cred *cred,
 {
 	u_int32_t	maj_stat, min_stat;
 	gss_buffer_desc	name;
-	char		*sname, *realm, *slash;
+	char		*sname, *host, *realm;
+	const int	namebuf_size = 512;
+	char		namebuf[namebuf_size];
 	int		res = -1;
 	gss_OID		name_type = GSS_C_NO_OID;
 	struct passwd	*pw;
@@ -323,8 +325,6 @@ get_ids(gss_name_t client_name, gss_OID mech, struct svc_cred *cred,
 		return -1;
 	}
 	memcpy(sname, name.value, name.length);
-	printerr(1, "%s: authenticated %s from %016llx\n",
-		 lustre_svc_name[lustre_svc], sname, nid);
 	gss_release_buffer(&min_stat, &name);
 
 	if (lustre_svc == LUSTRE_GSS_SVC_MDS)
@@ -333,64 +333,91 @@ get_ids(gss_name_t client_name, gss_OID mech, struct svc_cred *cred,
 		cred->cr_mapped_uid = -1;
 
         realm = strchr(sname, '@');
-        if (!realm) {
-                printerr(0, "WARNNING: principal %s contains no realm name\n",
-			 sname);
-                cred->cr_remote = (mds_local_realm != NULL);
-        } else {
+	if (realm)
                 *realm++ = '\0';
-                if (!mds_local_realm)
-                        cred->cr_remote = 1;
-                else
-                        cred->cr_remote =
-                                (strcasecmp(mds_local_realm, realm) != 0);
-        }
 
-        if (cred->cr_remote) {
-                if (cred->cr_mapped_uid != -1)
-                        res = 0;
-		else if (lustre_svc == LUSTRE_GSS_SVC_OSS &&
-			 strcmp(sname, "lustre_root") == 0)
-                        res = 0;
-                else
-                        printerr(0, "principal %s is remote without mapping\n",
-                                 sname);
+        host = strchr(sname, '/');
+        if (host)
+                *host++ = '\0';
+
+	if (strcmp(sname, GSSD_SERVICE_OSS) == 0) {
+		printerr(0, "forbid "GSSD_SERVICE_OSS" as user name\n");
 		goto out_free;
-        }
+	}
 
-        slash = strchr(sname, '/');
-        if (slash)
-                *slash = '\0';
+	/* 1. check host part */
+	if (host) {
+		if (lnet_nid2hostname(nid, namebuf, namebuf_size)) {
+			printerr(0, "ERROR: failed to resolve hostname for "
+				 "%s/%s@%s from %016llx\n",
+				 sname, host, realm, nid);
+			goto out_free;
+		}
 
+		if (strcasecmp(host, namebuf)) {
+			printerr(0, "ERROR: %s/%s@s claimed hostname doesn't "
+				 "match %s, nid %016llx\n", sname, host, realm,
+				 namebuf, nid);
+			goto out_free;
+		}
+	} else {
+		if (!strcmp(sname, GSSD_SERVICE_MDS)) {
+			printerr(0, "ERROR: "GSSD_SERVICE_MDS"@%s from %016llx "
+				 "doesn't bind with hostname\n",
+				 realm ? realm : "", nid);
+			goto out_free;
+		}
+	}
+
+	/* 2. check realm */
+	if (!realm) {
+		/* just deny it
+                cred->cr_remote = (mds_local_realm != NULL);
+		*/
+                printerr(0, "ERROR: %s%s%s have no realm name\n",
+			 sname, host ? "/" : "", host ? "host" : "");
+		goto out_free;
+	}
+
+	if (!mds_local_realm || strcasecmp(mds_local_realm, realm)) {
+		cred->cr_remote = 1;
+
+		if (cred->cr_mapped_uid == -1)
+                        printerr(0, "ERROR: %s from %016llx is remote but "
+				 "without mapping\n", sname, nid);
+		/* mapped, skip user checking */
+		goto out_free;
+	}
+
+	/* 3. check user */
         if (!(pw = getpwnam(sname))) {
-                /* If client use machine credential, we map it to root, which
-                 * will subject to further mapping by root-squash in kernel.
-                 *
-                 * MDS service keytab is treated as special user, also mapped
-                 * to root. OSS service keytab can't be used as a user.
-                 */
+                /* map lustre_root/lustre_mds to root user, which is subject
+		 * to further mapping by root-squash in kernel. */
                 if (!strcmp(sname, LUSTRE_ROOT_NAME)) {
-                        printerr(2, "lustre_root principal, resolve to uid 0\n");
                         cred->cr_uid = 0;
                         cred->cr_usr_root = 1;
                 } else if (!strcmp(sname, GSSD_SERVICE_MDS)) {
-                        printerr(2, "mds service principal, resolve to uid 0\n");
                         cred->cr_uid = 0;
                         cred->cr_usr_mds = 1;
                 } else {
-                        cred->cr_uid = -1;
                         if (cred->cr_mapped_uid == -1) {
-                                printerr(0, "invalid user %s\n", sname);
+                                printerr(0, "ERROR: invalid user, %s/%s@%s "
+					 "from %016llx\n", sname, host,
+					 realm, nid);
                                 goto out_free;
                         }
-                        printerr(2, "user %s mapped to %u\n",
-                                 sname, cred->cr_mapped_uid);
                 }
+		printerr(2, "user %s from %016llx is mapped to %u\n",
+			 sname, nid, cred->cr_mapped_uid);
         } else {
+		/* note: a mapped local user will go to here too */
                 cred->cr_uid = pw->pw_uid;
                 printerr(2, "%s resolve to uid %u\n", sname, cred->cr_uid);
         }
 
+	printerr(1, "%s: authenticated %s%s%s@%s from %016llx\n",
+		 lustre_svc_name[lustre_svc], sname,
+		 host ? "/" : "", host ? host : "", realm, nid);
         res = 0;
 out_free:
         free(sname);

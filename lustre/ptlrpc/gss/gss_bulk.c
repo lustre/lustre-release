@@ -57,6 +57,7 @@ int do_bulk_privacy(struct gss_ctx *gctx,
 {
         struct crypto_tfm  *tfm;
         struct scatterlist  sg, sg2, *sgd;
+        unsigned int        blksize;
         int                 i, rc;
         __u8                local_iv[sizeof(bsd->bsd_iv)];
 
@@ -68,12 +69,6 @@ int do_bulk_privacy(struct gss_ctx *gctx,
         if (alg == BULK_PRIV_ALG_NULL)
                 return 0;
 
-        if (encrypt)
-                get_random_bytes(bsd->bsd_iv, sizeof(bsd->bsd_iv));
-
-        /* compute the secret iv */
-        lgss_plain_encrypt(gctx, sizeof(local_iv), bsd->bsd_iv, local_iv);
-
         tfm = crypto_alloc_tfm(sptlrpc_bulk_priv_alg2name(alg),
                                sptlrpc_bulk_priv_alg2flags(alg));
         if (tfm == NULL) {
@@ -82,12 +77,25 @@ int do_bulk_privacy(struct gss_ctx *gctx,
                 return -ENOMEM;
         }
 
+        blksize = crypto_tfm_alg_blocksize(tfm);
+        LASSERT(blksize <= sizeof(local_iv));
+
+        if (encrypt)
+                get_random_bytes(bsd->bsd_iv, sizeof(bsd->bsd_iv));
+
+        /* compute the secret iv */
+        rc = lgss_plain_encrypt(gctx, 0,
+                                sizeof(local_iv), bsd->bsd_iv, local_iv);
+        if (rc) {
+                CERROR("failed to compute secret iv: %d\n", rc);
+                goto out;
+        }
+
         rc = crypto_cipher_setkey(tfm, local_iv, sizeof(local_iv));
         if (rc) {
                 CERROR("Failed to set key for TFM %s: %d\n",
                        sptlrpc_bulk_priv_alg2name(alg), rc);
-                crypto_free_tfm(tfm);
-                return rc;
+                goto out;
         }
 
         for (i = 0; i < desc->bd_iov_count; i++) {
@@ -119,12 +127,12 @@ int do_bulk_privacy(struct gss_ctx *gctx,
                  */
         }
 
-        crypto_free_tfm(tfm);
-
         if (encrypt)
                 bsd->bsd_priv_alg = alg;
 
-        return 0;
+out:
+        crypto_free_tfm(tfm);
+        return rc;
 }
 
 int gss_cli_ctx_wrap_bulk(struct ptlrpc_cli_ctx *ctx,
@@ -134,14 +142,13 @@ int gss_cli_ctx_wrap_bulk(struct ptlrpc_cli_ctx *ctx,
         struct gss_cli_ctx              *gctx;
         struct lustre_msg               *msg;
         struct ptlrpc_bulk_sec_desc     *bsdr;
-        struct sec_flavor_config        *conf;
         int                              offset, rc;
         ENTRY;
 
-        LASSERT(SEC_FLAVOR_HAS_BULK(req->rq_sec_flavor));
+        LASSERT(req->rq_pack_bulk);
         LASSERT(req->rq_bulk_read || req->rq_bulk_write);
 
-        switch (SEC_FLAVOR_SVC(req->rq_sec_flavor)) {
+        switch (RPC_FLVR_SVC(req->rq_flvr.sf_rpc)) {
         case SPTLRPC_SVC_NULL:
                 LASSERT(req->rq_reqbuf->lm_bufcount >= 3);
                 msg = req->rq_reqbuf;
@@ -163,23 +170,22 @@ int gss_cli_ctx_wrap_bulk(struct ptlrpc_cli_ctx *ctx,
         }
 
         /* make checksum */
-        conf = &req->rq_import->imp_obd->u.cli.cl_sec_conf;
-        rc = bulk_csum_cli_request(desc, req->rq_bulk_read, conf->sfc_bulk_csum,
-                                   msg, offset);
+        rc = bulk_csum_cli_request(desc, req->rq_bulk_read,
+                                   req->rq_flvr.sf_bulk_csum, msg, offset);
         if (rc) {
                 CERROR("client bulk %s: failed to generate checksum: %d\n",
                        req->rq_bulk_read ? "read" : "write", rc);
                 RETURN(rc);
         }
 
-        if (conf->sfc_bulk_priv == BULK_PRIV_ALG_NULL)
+        if (req->rq_flvr.sf_bulk_priv == BULK_PRIV_ALG_NULL)
                 RETURN(0);
 
         /* previous bulk_csum_cli_request() has verified bsdr is good */
         bsdr = lustre_msg_buf(msg, offset, 0);
 
         if (req->rq_bulk_read) {
-                bsdr->bsd_priv_alg = conf->sfc_bulk_priv;
+                bsdr->bsd_priv_alg = req->rq_flvr.sf_bulk_priv;
                 RETURN(0);
         }
 
@@ -194,7 +200,7 @@ int gss_cli_ctx_wrap_bulk(struct ptlrpc_cli_ctx *ctx,
         LASSERT(gctx->gc_mechctx);
 
         rc = do_bulk_privacy(gctx->gc_mechctx, desc, 1,
-                             conf->sfc_bulk_priv, bsdr);
+                             req->rq_flvr.sf_bulk_priv, bsdr);
         if (rc)
                 CERROR("bulk write: client failed to encrypt pages\n");
 
@@ -211,10 +217,10 @@ int gss_cli_ctx_unwrap_bulk(struct ptlrpc_cli_ctx *ctx,
         int                              roff, voff, rc;
         ENTRY;
 
-        LASSERT(SEC_FLAVOR_HAS_BULK(req->rq_sec_flavor));
+        LASSERT(req->rq_pack_bulk);
         LASSERT(req->rq_bulk_read || req->rq_bulk_write);
 
-        switch (SEC_FLAVOR_SVC(req->rq_sec_flavor)) {
+        switch (RPC_FLVR_SVC(req->rq_flvr.sf_rpc)) {
         case SPTLRPC_SVC_NULL:
                 vmsg = req->rq_repbuf;
                 voff = vmsg->lm_bufcount - 1;
@@ -286,6 +292,7 @@ int gss_svc_unwrap_bulk(struct ptlrpc_request *req,
         ENTRY;
 
         LASSERT(req->rq_svc_ctx);
+        LASSERT(req->rq_pack_bulk);
         LASSERT(req->rq_bulk_write);
 
         grctx = gss_svc_ctx2reqctx(req->rq_svc_ctx);
@@ -322,6 +329,7 @@ int gss_svc_wrap_bulk(struct ptlrpc_request *req,
         ENTRY;
 
         LASSERT(req->rq_svc_ctx);
+        LASSERT(req->rq_pack_bulk);
         LASSERT(req->rq_bulk_read);
 
         grctx = gss_svc_ctx2reqctx(req->rq_svc_ctx);

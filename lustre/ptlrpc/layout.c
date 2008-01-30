@@ -330,8 +330,7 @@ static const struct req_msg_field *mds_setxattr_client[] = {
 };
 
 static const struct req_msg_field *mds_setxattr_server[] = {
-        &RMF_PTLRPC_BODY,
-        &RMF_EADATA
+        &RMF_PTLRPC_BODY
 };
 
 static const struct req_msg_field *mds_getattr_server[] = {
