@@ -120,19 +120,14 @@ static
 void ctx_destroy_pf(struct ptlrpc_sec *sec, struct ptlrpc_cli_ctx *ctx)
 {
         struct gss_cli_ctx *gctx = ctx2gctx(ctx);
-        int                 rc;
 
-        rc = gss_cli_ctx_fini_common(sec, ctx);
-        if (rc < 0)
+        if (gss_cli_ctx_fini_common(sec, ctx))
                 return;
 
         OBD_FREE_PTR(gctx);
 
-        if (rc > 0) {
-                CWARN("released the last ctx, proceed to destroy sec %s@%p\n",
-                      sec->ps_policy->sp_name, sec);
-                sptlrpc_sec_destroy(sec);
-        }
+        atomic_dec(&sec->ps_nctx);
+        sptlrpc_sec_put(sec);
 }
 
 static
@@ -292,7 +287,6 @@ void gss_sec_ctx_replace_pf(struct gss_sec *gsec,
         }
 
         ctx_enhash_pf(new, &gsec_pf->gsp_chash[hash]);
-        atomic_inc(&gsec->gs_base.ps_busy);
 
         spin_unlock(&gsec->gs_base.ps_lock);
 
@@ -353,8 +347,7 @@ void gss_ctx_cache_gc_pf(struct gss_sec_pipefs *gsec_pf,
 static
 struct ptlrpc_sec* gss_sec_create_pf(struct obd_import *imp,
                                      struct ptlrpc_svc_ctx *ctx,
-                                     __u32 flavor,
-                                     unsigned long flags)
+                                     struct sptlrpc_flavor *sf)
 {
         struct gss_sec_pipefs   *gsec_pf;
         int                      alloc_size, hash_size, i;
@@ -362,7 +355,8 @@ struct ptlrpc_sec* gss_sec_create_pf(struct obd_import *imp,
 
 #define GSS_SEC_PIPEFS_CTX_HASH_SIZE    (32)
 
-        if (ctx || flags & (PTLRPC_SEC_FL_ROOTONLY | PTLRPC_SEC_FL_REVERSE))
+        if (ctx ||
+            sf->sf_flags & (PTLRPC_SEC_FL_ROOTONLY | PTLRPC_SEC_FL_REVERSE))
                 hash_size = 1;
         else
                 hash_size = GSS_SEC_PIPEFS_CTX_HASH_SIZE;
@@ -379,7 +373,7 @@ struct ptlrpc_sec* gss_sec_create_pf(struct obd_import *imp,
                 CFS_INIT_HLIST_HEAD(&gsec_pf->gsp_chash[i]);
 
         if (gss_sec_create_common(&gsec_pf->gsp_base, &gss_policy_pipefs,
-                                  imp, ctx, flavor, flags))
+                                  imp, ctx, sf))
                 goto err_free;
 
         if (ctx == NULL) {
@@ -609,13 +603,15 @@ static
 int gss_svc_install_rctx_pf(struct obd_import *imp,
                             struct ptlrpc_svc_ctx *ctx)
 {
-        struct gss_sec *gsec;
+        struct ptlrpc_sec *sec;
+        int                rc;
 
-        LASSERT(imp->imp_sec);
-        LASSERT(ctx);
+        sec = sptlrpc_import_sec_ref(imp);
+        LASSERT(sec);
+        rc = gss_install_rvs_cli_ctx_pf(sec2gsec(sec), ctx);
 
-        gsec = container_of(imp->imp_sec, struct gss_sec, gs_base);
-        return gss_install_rvs_cli_ctx_pf(gsec, ctx);
+        sptlrpc_sec_put(sec);
+        return rc;
 }
 
 /****************************************
@@ -1154,6 +1150,7 @@ static struct ptlrpc_ctx_ops gss_pipefs_ctxops = {
 static struct ptlrpc_sec_cops gss_sec_pipefs_cops = {
         .create_sec             = gss_sec_create_pf,
         .destroy_sec            = gss_sec_destroy_pf,
+        .kill_sec               = gss_sec_kill,
         .lookup_ctx             = gss_sec_lookup_ctx_pf,
         .release_ctx            = gss_sec_release_ctx_pf,
         .flush_ctx_cache        = gss_sec_flush_ctx_cache_pf,

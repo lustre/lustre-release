@@ -1,7 +1,8 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- * Copyright (C) 2004-2006 Cluster File Systems, Inc.
+ * Copyright (C) 2004-2007 Cluster File Systems, Inc.
+ *   Author: Eric Mei <ericm@clusterfs.com>
  *
  *   This file is part of Lustre, http://www.lustre.org.
  *
@@ -54,7 +55,7 @@ static struct ptlrpc_sec_policy *policies[SPTLRPC_POLICY_MAX] = {
 
 int sptlrpc_register_policy(struct ptlrpc_sec_policy *policy)
 {
-        __u32 number = policy->sp_policy;
+        __u16 number = policy->sp_policy;
 
         LASSERT(policy->sp_name);
         LASSERT(policy->sp_cops);
@@ -78,7 +79,7 @@ EXPORT_SYMBOL(sptlrpc_register_policy);
 
 int sptlrpc_unregister_policy(struct ptlrpc_sec_policy *policy)
 {
-        __u32 number = policy->sp_policy;
+        __u16 number = policy->sp_policy;
 
         LASSERT(number < SPTLRPC_POLICY_MAX);
 
@@ -99,21 +100,17 @@ int sptlrpc_unregister_policy(struct ptlrpc_sec_policy *policy)
 EXPORT_SYMBOL(sptlrpc_unregister_policy);
 
 static
-struct ptlrpc_sec_policy * sptlrpc_flavor2policy(ptlrpc_sec_flavor_t flavor)
+struct ptlrpc_sec_policy * sptlrpc_rpcflavor2policy(__u16 flavor)
 {
-#ifdef CONFIG_KMOD
         static DECLARE_MUTEX(load_mutex);
-#endif
-        static atomic_t         loaded = ATOMIC_INIT(0);
-        struct                  ptlrpc_sec_policy *policy;
-        __u32                   number = SEC_FLAVOR_POLICY(flavor), flag = 0;
+        static atomic_t           loaded = ATOMIC_INIT(0);
+        struct ptlrpc_sec_policy *policy;
+        __u16                     number = RPC_FLVR_POLICY(flavor), flag = 0;
 
         if (number >= SPTLRPC_POLICY_MAX)
                 return NULL;
 
-#ifdef CONFIG_KMOD
 again:
-#endif
         read_lock(&policy_lock);
         policy = policies[number];
         if (policy && !try_module_get(policy->sp_owner))
@@ -122,18 +119,15 @@ again:
                 flag = atomic_read(&loaded);
         read_unlock(&policy_lock);
 
-#ifdef CONFIG_KMOD
         /* if failure, try to load gss module, once */
-        if (unlikely(policy == NULL) &&
-            flag == 0 &&
-            (number == SPTLRPC_POLICY_GSS ||
-             number == SPTLRPC_POLICY_GSS_PIPEFS)) {
+        if (unlikely(policy == NULL) && flag == 0 &&
+            number == SPTLRPC_POLICY_GSS) {
                 mutex_down(&load_mutex);
                 if (atomic_read(&loaded) == 0) {
                         if (request_module("ptlrpc_gss") != 0)
                                 CERROR("Unable to load module ptlrpc_gss\n");
                         else
-                                CWARN("module ptlrpc_gss loaded\n");
+                                CWARN("module ptlrpc_gss loaded on demand\n");
 
                         atomic_set(&loaded, 1);
                 }
@@ -141,12 +135,11 @@ again:
 
                 goto again;
         }
-#endif
 
         return policy;
 }
 
-ptlrpc_sec_flavor_t sptlrpc_name2flavor(const char *name)
+__u16 sptlrpc_name2rpcflavor(const char *name)
 {
         if (!strcmp(name, "null"))
                 return SPTLRPC_FLVR_NULL;
@@ -161,9 +154,9 @@ ptlrpc_sec_flavor_t sptlrpc_name2flavor(const char *name)
 
         return SPTLRPC_FLVR_INVALID;
 }
-EXPORT_SYMBOL(sptlrpc_name2flavor);
+EXPORT_SYMBOL(sptlrpc_name2rpcflavor);
 
-char *sptlrpc_flavor2name(ptlrpc_sec_flavor_t flavor)
+const char *sptlrpc_rpcflavor2name(__u16 flavor)
 {
         switch (flavor) {
         case SPTLRPC_FLVR_NULL:
@@ -179,11 +172,30 @@ char *sptlrpc_flavor2name(ptlrpc_sec_flavor_t flavor)
         case SPTLRPC_FLVR_KRB5P:
                 return "krb5p";
         default:
-                CERROR("invalid flavor 0x%x(p%u,s%u,v%u)\n", flavor,
-                       SEC_FLAVOR_POLICY(flavor), SEC_FLAVOR_MECH(flavor),
-                       SEC_FLAVOR_SVC(flavor));
+                CERROR("invalid rpc flavor 0x%x(p%u,s%u,v%u)\n", flavor,
+                       RPC_FLVR_POLICY(flavor), RPC_FLVR_MECH(flavor),
+                       RPC_FLVR_SVC(flavor));
         }
-        return "UNKNOWN";
+        return "unknown";
+}
+EXPORT_SYMBOL(sptlrpc_rpcflavor2name);
+
+int sptlrpc_flavor2name(struct sptlrpc_flavor *sf, char *buf, int bufsize)
+{
+        char           *bulk;
+
+        if (sf->sf_bulk_priv != BULK_PRIV_ALG_NULL)
+                bulk = "bulkp";
+        else if (sf->sf_bulk_csum != BULK_CSUM_ALG_NULL)
+                bulk = "bulki";
+        else
+                bulk = "bulkn";
+
+        snprintf(buf, bufsize, "%s-%s:%s/%s",
+                 sptlrpc_rpcflavor2name(sf->sf_rpc), bulk,
+                 sptlrpc_bulk_csum_alg2name(sf->sf_bulk_csum),
+                 sptlrpc_bulk_priv_alg2name(sf->sf_bulk_priv));
+        return 0;
 }
 EXPORT_SYMBOL(sptlrpc_flavor2name);
 
@@ -200,10 +212,11 @@ struct ptlrpc_cli_ctx *get_my_ctx(struct ptlrpc_sec *sec)
         LASSERT(sec);
         LASSERT(sec->ps_policy->sp_cops->lookup_ctx);
 
-        if (sec->ps_flags & (PTLRPC_SEC_FL_REVERSE | PTLRPC_SEC_FL_ROOTONLY)) {
+        if (sec->ps_flvr.sf_flags & (PTLRPC_SEC_FL_REVERSE |
+                                     PTLRPC_SEC_FL_ROOTONLY)) {
                 vcred.vc_uid = 0;
                 vcred.vc_gid = 0;
-                if (sec->ps_flags & PTLRPC_SEC_FL_REVERSE) {
+                if (sec->ps_flvr.sf_flags & PTLRPC_SEC_FL_REVERSE) {
                         create = 0;
                         remove_dead = 0;
                 }
@@ -272,21 +285,56 @@ int sptlrpc_cli_ctx_display(struct ptlrpc_cli_ctx *ctx, char *buf, int bufsize)
         return ctx->cc_ops->display(ctx, buf, bufsize);
 }
 
+static int sptlrpc_import_sec_check_expire(struct obd_import *imp)
+{
+        int     adapt = 0;
+
+        spin_lock(&imp->imp_lock);
+        if (imp->imp_sec_expire &&
+            imp->imp_sec_expire < cfs_time_current_sec()) {
+                adapt = 1;
+                imp->imp_sec_expire = 0;
+        }
+        spin_unlock(&imp->imp_lock);
+
+        if (!adapt)
+                return 0;
+
+        CDEBUG(D_SEC, "found delayed sec adapt expired, do it now\n");
+        return sptlrpc_import_sec_adapt(imp, NULL, 0);
+}
+
 int sptlrpc_req_get_ctx(struct ptlrpc_request *req)
 {
         struct obd_import *imp = req->rq_import;
+        struct ptlrpc_sec *sec;
+        int                rc;
         ENTRY;
 
         LASSERT(!req->rq_cli_ctx);
         LASSERT(imp);
 
-        if (imp->imp_sec == NULL) {
-                CERROR("import %p (%s) with no sec pointer\n",
+        if (unlikely(imp->imp_sec_expire)) {
+                rc = sptlrpc_import_sec_check_expire(imp);
+                if (rc)
+                        RETURN(rc);
+        }
+
+        sec = sptlrpc_import_sec_ref(imp);
+        if (sec == NULL) {
+                CERROR("import %p (%s) with no ptlrpc_sec\n",
                        imp, ptlrpc_import_state_name(imp->imp_state));
                 RETURN(-EACCES);
         }
 
-        req->rq_cli_ctx = get_my_ctx(imp->imp_sec);
+        if (unlikely(sec->ps_dying)) {
+                CERROR("attempt to use dying sec %p\n", sec);
+                return -EACCES;
+        }
+
+        req->rq_cli_ctx = get_my_ctx(sec);
+
+        sptlrpc_sec_put(sec);
 
         if (!req->rq_cli_ctx) {
                 CERROR("req %p: fail to get context\n", req);
@@ -321,35 +369,115 @@ void sptlrpc_req_put_ctx(struct ptlrpc_request *req, int sync)
         EXIT;
 }
 
+static
+int sptlrpc_req_ctx_switch(struct ptlrpc_request *req,
+                           struct ptlrpc_cli_ctx *oldctx,
+                           struct ptlrpc_cli_ctx *newctx)
+{
+        struct sptlrpc_flavor   old_flvr;
+        char                   *reqmsg;
+        int                     reqmsg_size;
+        int                     rc;
+
+        if (likely(oldctx->cc_sec == newctx->cc_sec))
+                return 0;
+
+        LASSERT(req->rq_reqmsg);
+        LASSERT(req->rq_reqlen);
+        LASSERT(req->rq_replen);
+
+        CWARN("req %p: switch ctx %p -> %p, switch sec %p(%s) -> %p(%s)\n",
+              req, oldctx, newctx,
+              oldctx->cc_sec, oldctx->cc_sec->ps_policy->sp_name,
+              newctx->cc_sec, newctx->cc_sec->ps_policy->sp_name);
+
+        /* save flavor */
+        old_flvr = req->rq_flvr;
+
+        /* save request message */
+        reqmsg_size = req->rq_reqlen;
+        OBD_ALLOC(reqmsg, reqmsg_size);
+        if (reqmsg == NULL)
+                return -ENOMEM;
+        memcpy(reqmsg, req->rq_reqmsg, reqmsg_size);
+
+        /* release old req/rep buf */
+        req->rq_cli_ctx = oldctx;
+        sptlrpc_cli_free_reqbuf(req);
+        sptlrpc_cli_free_repbuf(req);
+        req->rq_cli_ctx = newctx;
+
+        /* recalculate the flavor */
+        sptlrpc_req_set_flavor(req, 0);
+
+        /* alloc new request buffer
+         * we don't need to alloc reply buffer here, leave it to the
+         * rest procedure of ptlrpc
+         */
+        rc = sptlrpc_cli_alloc_reqbuf(req, reqmsg_size);
+        if (!rc) {
+                LASSERT(req->rq_reqmsg);
+                memcpy(req->rq_reqmsg, reqmsg, reqmsg_size);
+        } else {
+                CWARN("failed to alloc reqbuf: %d\n", rc);
+                req->rq_flvr = old_flvr;
+        }
+
+        OBD_FREE(reqmsg, reqmsg_size);
+        return rc;
+}
+
 /*
- * request must have a context. if failed to get new context,
- * just restore the old one
+ * request must have a context. in any case of failure, restore the
+ * restore the old one. a request must have a ctx.
  */
 int sptlrpc_req_replace_dead_ctx(struct ptlrpc_request *req)
 {
-        struct ptlrpc_cli_ctx *ctx = req->rq_cli_ctx;
-        int rc;
+        struct ptlrpc_cli_ctx *oldctx = req->rq_cli_ctx;
+        struct ptlrpc_cli_ctx *newctx;
+        int                    rc;
         ENTRY;
 
-        LASSERT(ctx);
-        LASSERT(test_bit(PTLRPC_CTX_DEAD_BIT, &ctx->cc_flags));
+        LASSERT(oldctx);
+        LASSERT(test_bit(PTLRPC_CTX_DEAD_BIT, &oldctx->cc_flags));
 
-        /* make sure not on context waiting list */
-        spin_lock(&ctx->cc_lock);
-        list_del_init(&req->rq_ctx_chain);
-        spin_unlock(&ctx->cc_lock);
-
-        sptlrpc_cli_ctx_get(ctx);
+        sptlrpc_cli_ctx_get(oldctx);
         sptlrpc_req_put_ctx(req, 0);
+
         rc = sptlrpc_req_get_ctx(req);
-        if (!rc) {
-                LASSERT(req->rq_cli_ctx);
-                sptlrpc_cli_ctx_put(ctx, 1);
-        } else {
+        if (unlikely(rc)) {
                 LASSERT(!req->rq_cli_ctx);
-                req->rq_cli_ctx = ctx;
+
+                /* restore old ctx */
+                req->rq_cli_ctx = oldctx;
+                RETURN(rc);
         }
-        RETURN(rc);
+
+        newctx = req->rq_cli_ctx;
+        LASSERT(newctx);
+
+        if (unlikely(newctx == oldctx)) {
+                /*
+                 * still get the old ctx, usually means system busy
+                 */
+                CWARN("ctx (%p, fl %lx) doesn't switch, relax a little bit\n",
+                      newctx, newctx->cc_flags);
+
+                schedule_timeout(HZ);
+        } else {
+                rc = sptlrpc_req_ctx_switch(req, oldctx, newctx);
+                if (rc) {
+                        /* restore old ctx */
+                        sptlrpc_req_put_ctx(req, 0);
+                        req->rq_cli_ctx = oldctx;
+                        RETURN(rc);
+                }
+
+                LASSERT(req->rq_cli_ctx == newctx);
+        }
+
+        sptlrpc_cli_ctx_put(oldctx, 1);
+        RETURN(0);
 }
 EXPORT_SYMBOL(sptlrpc_req_replace_dead_ctx);
 
@@ -422,6 +550,12 @@ int sptlrpc_req_refresh_ctx(struct ptlrpc_request *req, long timeout)
 
         LASSERT(ctx);
 
+        /*
+         * during the process a request's context might change type even
+         * (e.g. from gss ctx to plain ctx), so each loop we need to re-check
+         * everything
+         */
+again:
         /* skip special ctxs */
         if (cli_ctx_is_eternal(ctx) || req->rq_ctx_init || req->rq_ctx_fini)
                 RETURN(0);
@@ -432,7 +566,6 @@ int sptlrpc_req_refresh_ctx(struct ptlrpc_request *req, long timeout)
         }
         LASSERT(test_bit(PTLRPC_CTX_NEW_BIT, &ctx->cc_flags) == 0);
 
-again:
         LASSERT(ctx->cc_ops->validate);
         if (ctx->cc_ops->validate(ctx) == 0) {
                 req_off_ctx_list(req, ctx);
@@ -477,32 +610,21 @@ again:
         }
 
         if (unlikely(test_bit(PTLRPC_CTX_DEAD_BIT, &ctx->cc_flags))) {
-                /* don't have to, but we don't want to release it too soon */
-                sptlrpc_cli_ctx_get(ctx);
-
                 rc = sptlrpc_req_replace_dead_ctx(req);
                 if (rc) {
                         LASSERT(ctx == req->rq_cli_ctx);
-                        CERROR("req %p: failed to replace dead ctx %p\n",
-                                req, ctx);
+                        CERROR("req %p: failed to replace dead ctx %p: %d\n",
+                                req, ctx, rc);
                         req->rq_err = 1;
                         LASSERT(list_empty(&req->rq_ctx_chain));
-                        sptlrpc_cli_ctx_put(ctx, 1);
-                        RETURN(-ENOMEM);
+                        RETURN(rc);
                 }
 
-                /* FIXME
-                 * if ctx didn't really switch, might be cpu tight or sth,
-                 * we just relax a little bit.
-                 */
-                if (ctx == req->rq_cli_ctx)
-                        schedule();
+                CWARN("req %p: replace dead ctx %p => ctx %p (%u->%s)\n",
+                      req, ctx, req->rq_cli_ctx,
+                      req->rq_cli_ctx->cc_vcred.vc_uid,
+                      sec2target_str(req->rq_cli_ctx->cc_sec));
 
-                CWARN("req %p: replace dead ctx %p(%u->%s) => %p\n",
-                      req, ctx, ctx->cc_vcred.vc_uid,
-                      sec2target_str(ctx->cc_sec), req->rq_cli_ctx);
-
-                sptlrpc_cli_ctx_put(ctx, 1);
                 ctx = req->rq_cli_ctx;
                 LASSERT(list_empty(&req->rq_ctx_chain));
 
@@ -534,12 +656,14 @@ again:
                                ctx_refresh_interrupt, req);
         rc = l_wait_event(req->rq_reply_waitq, ctx_check_refresh(ctx), &lwi);
 
-        /* five cases we are here:
-         * 1. successfully refreshed;
-         * 2. someone else mark this ctx dead by force;
-         * 3. interruptted;
-         * 4. timedout, and we don't want recover from the failure;
-         * 5. timedout, and waked up upon recovery finished;
+        /* following cases we could be here:
+         * - successfully refreshed;
+         * - interruptted;
+         * - timedout, and we don't want recover from the failure;
+         * - timedout, and waked up upon recovery finished;
+         * - someone else mark this ctx dead by force;
+         * - someone invalidate the req and call wake_client_req(),
+         *   e.g. ptlrpc_abort_inflight();
          */
         if (!cli_ctx_is_refreshed(ctx)) {
                 /* timed out or interruptted */
@@ -552,12 +676,16 @@ again:
         goto again;
 }
 
+/*
+ * Note this could be called in two situations:
+ * - new request from ptlrpc_pre_req(), with proper @opcode
+ * - old request which changed ctx in the middle, with @opcode == 0
+ */
 void sptlrpc_req_set_flavor(struct ptlrpc_request *req, int opcode)
 {
-        struct sec_flavor_config *conf;
+        struct ptlrpc_sec *sec;
 
         LASSERT(req->rq_import);
-        LASSERT(req->rq_import->imp_sec);
         LASSERT(req->rq_cli_ctx);
         LASSERT(req->rq_cli_ctx->cc_sec);
         LASSERT(req->rq_bulk_read == 0 || req->rq_bulk_write == 0);
@@ -576,44 +704,45 @@ void sptlrpc_req_set_flavor(struct ptlrpc_request *req, int opcode)
         case SEC_CTX_FINI:
                 req->rq_ctx_fini = 1;
                 break;
+        case 0:
+                /* init/fini rpc won't be resend, so can't be here */
+                LASSERT(req->rq_ctx_init == 0);
+                LASSERT(req->rq_ctx_fini == 0);
+
+                /* cleanup flags, which should be recalculated */
+                req->rq_pack_udesc = 0;
+                req->rq_pack_bulk = 0;
+                break;
         }
 
-        req->rq_sec_flavor = req->rq_cli_ctx->cc_sec->ps_flavor;
+        sec = req->rq_cli_ctx->cc_sec;
+
+        spin_lock(&sec->ps_lock);
+        req->rq_flvr = sec->ps_flvr;
+        spin_unlock(&sec->ps_lock);
 
         /* force SVC_NULL for context initiation rpc, SVC_INTG for context
-         * destruction rpc
-         */
-        if (unlikely(req->rq_ctx_init)) {
-                req->rq_sec_flavor = SEC_MAKE_RPC_FLAVOR(
-                                SEC_FLAVOR_POLICY(req->rq_sec_flavor),
-                                SEC_FLAVOR_MECH(req->rq_sec_flavor),
-                                SPTLRPC_SVC_NULL);
-        } else if (unlikely(req->rq_ctx_fini)) {
-                req->rq_sec_flavor = SEC_MAKE_RPC_FLAVOR(
-                                SEC_FLAVOR_POLICY(req->rq_sec_flavor),
-                                SEC_FLAVOR_MECH(req->rq_sec_flavor),
-                                SPTLRPC_SVC_INTG);
-        }
+         * destruction rpc */
+        if (unlikely(req->rq_ctx_init))
+                rpc_flvr_set_svc(&req->rq_flvr.sf_rpc, SPTLRPC_SVC_NULL);
+        else if (unlikely(req->rq_ctx_fini))
+                rpc_flvr_set_svc(&req->rq_flvr.sf_rpc, SPTLRPC_SVC_INTG);
 
-        conf = &req->rq_import->imp_obd->u.cli.cl_sec_conf;
-
-        /* user descriptor flag, except ROOTONLY which don't need, and
-         * null security which can't
-         */
-        if ((conf->sfc_flags & PTLRPC_SEC_FL_ROOTONLY) == 0 &&
-            req->rq_sec_flavor != SPTLRPC_FLVR_NULL)
-                req->rq_sec_flavor |= SEC_FLAVOR_FL_USER;
+        /* user descriptor flag, null security can't do it anyway */
+        if ((sec->ps_flvr.sf_flags & PTLRPC_SEC_FL_UDESC) &&
+            (req->rq_flvr.sf_rpc != SPTLRPC_FLVR_NULL))
+                req->rq_pack_udesc = 1;
 
         /* bulk security flag */
         if ((req->rq_bulk_read || req->rq_bulk_write) &&
-            (conf->sfc_bulk_priv != BULK_PRIV_ALG_NULL ||
-             conf->sfc_bulk_csum != BULK_CSUM_ALG_NULL))
-                req->rq_sec_flavor |= SEC_FLAVOR_FL_BULK;
+            (req->rq_flvr.sf_bulk_priv != BULK_PRIV_ALG_NULL ||
+             req->rq_flvr.sf_bulk_csum != BULK_CSUM_ALG_NULL))
+                req->rq_pack_bulk = 1;
 }
 
 void sptlrpc_request_out_callback(struct ptlrpc_request *req)
 {
-        if (SEC_FLAVOR_SVC(req->rq_sec_flavor) != SPTLRPC_SVC_PRIV)
+        if (RPC_FLVR_SVC(req->rq_flvr.sf_rpc) != SPTLRPC_SVC_PRIV)
                 return;
 
         LASSERT(req->rq_clrbuf);
@@ -632,6 +761,7 @@ void sptlrpc_request_out_callback(struct ptlrpc_request *req)
  */
 int sptlrpc_import_check_ctx(struct obd_import *imp)
 {
+        struct ptlrpc_sec     *sec;
         struct ptlrpc_cli_ctx *ctx;
         struct ptlrpc_request *req = NULL;
         int rc;
@@ -639,7 +769,10 @@ int sptlrpc_import_check_ctx(struct obd_import *imp)
 
         might_sleep();
 
-        ctx = get_my_ctx(imp->imp_sec);
+        sec = sptlrpc_import_sec_ref(imp);
+        ctx = get_my_ctx(sec);
+        sptlrpc_sec_put(sec);
+
         if (!ctx)
                 RETURN(1);
 
@@ -687,7 +820,7 @@ int sptlrpc_cli_wrap_request(struct ptlrpc_request *req)
                         RETURN(rc);
         }
 
-        switch (SEC_FLAVOR_SVC(req->rq_sec_flavor)) {
+        switch (RPC_FLVR_SVC(req->rq_flvr.sf_rpc)) {
         case SPTLRPC_SVC_NULL:
         case SPTLRPC_SVC_AUTH:
         case SPTLRPC_SVC_INTG:
@@ -717,7 +850,7 @@ int sptlrpc_cli_wrap_request(struct ptlrpc_request *req)
 int sptlrpc_cli_unwrap_reply(struct ptlrpc_request *req)
 {
         struct ptlrpc_cli_ctx *ctx = req->rq_cli_ctx;
-        int rc;
+        int                    rc;
         ENTRY;
 
         LASSERT(ctx);
@@ -733,38 +866,45 @@ int sptlrpc_cli_unwrap_reply(struct ptlrpc_request *req)
                 RETURN(-EPROTO);
         }
 
+
         if (req->rq_repbuf->lm_magic == LUSTRE_MSG_MAGIC_V1 ||
             req->rq_repbuf->lm_magic == LUSTRE_MSG_MAGIC_V1_SWABBED) {
-                /* it's must be null flavor, so our requets also should be
-                 * in null flavor */
-                if (SEC_FLAVOR_POLICY(req->rq_sec_flavor) !=
+                /*
+                 * v1 message, it's must be null flavor, so our requets also
+                 * should be in null flavor
+                 */
+                if (RPC_FLVR_POLICY(req->rq_flvr.sf_rpc) !=
                     SPTLRPC_POLICY_NULL) {
-                        CERROR("request flavor is %x but reply with null\n",
-                               req->rq_sec_flavor);
+                        CERROR("request was %s but reply with null\n",
+                               sptlrpc_rpcflavor2name(req->rq_flvr.sf_rpc));
                         RETURN(-EPROTO);
                 }
         } else {
-                /* v2 message... */
-                ptlrpc_sec_flavor_t tmpf = req->rq_repbuf->lm_secflvr;
+                /*
+                 * v2 message, check request/reply policy match
+                 */
+                __u16 rpc_flvr = WIRE_FLVR_RPC(req->rq_repbuf->lm_secflvr);
 
                 if (req->rq_repbuf->lm_magic == LUSTRE_MSG_MAGIC_V2_SWABBED)
-                        __swab32s(&tmpf);
+                        __swab16s(&rpc_flvr);
 
-                if (SEC_FLAVOR_POLICY(tmpf) !=
-                    SEC_FLAVOR_POLICY(req->rq_sec_flavor)) {
-                        CERROR("request policy %u while reply with %d\n",
-                               SEC_FLAVOR_POLICY(req->rq_sec_flavor),
-                               SEC_FLAVOR_POLICY(tmpf));
+                if (RPC_FLVR_POLICY(rpc_flvr) !=
+                    RPC_FLVR_POLICY(req->rq_flvr.sf_rpc)) {
+                        CERROR("request policy was %u while reply with %u\n",
+                               RPC_FLVR_POLICY(req->rq_flvr.sf_rpc),
+                               RPC_FLVR_POLICY(rpc_flvr));
                         RETURN(-EPROTO);
                 }
 
-                if ((SEC_FLAVOR_POLICY(req->rq_sec_flavor) !=
-                     SPTLRPC_POLICY_NULL) &&
+                /* do nothing if it's null policy; otherwise unpack the
+                 * wrapper message
+                 */
+                if (RPC_FLVR_POLICY(rpc_flvr) != SPTLRPC_POLICY_NULL &&
                     lustre_unpack_msg(req->rq_repbuf, req->rq_nob_received))
                         RETURN(-EPROTO);
         }
 
-        switch (SEC_FLAVOR_SVC(req->rq_sec_flavor)) {
+        switch (RPC_FLVR_SVC(req->rq_flvr.sf_rpc)) {
         case SPTLRPC_SVC_NULL:
         case SPTLRPC_SVC_AUTH:
         case SPTLRPC_SVC_INTG:
@@ -784,27 +924,26 @@ int sptlrpc_cli_unwrap_reply(struct ptlrpc_request *req)
 }
 
 /**************************************************
+ * sec ID                                         *
+ **************************************************/
+
+/*
+ * "fixed" sec (e.g. null) use sec_id < 0
+ */
+static atomic_t sptlrpc_sec_id = ATOMIC_INIT(1);
+
+int sptlrpc_get_next_secid(void)
+{
+        return atomic_inc_return(&sptlrpc_sec_id);
+}
+EXPORT_SYMBOL(sptlrpc_get_next_secid);
+
+/**************************************************
  * client side high-level security APIs           *
  **************************************************/
 
-static
-void sec_cop_destroy_sec(struct ptlrpc_sec *sec)
-{
-        struct ptlrpc_sec_policy *policy = sec->ps_policy;
-
-        LASSERT(atomic_read(&sec->ps_refcount) == 0);
-        LASSERT(atomic_read(&sec->ps_busy) == 0);
-        LASSERT(policy->sp_cops->destroy_sec);
-
-        CDEBUG(D_SEC, "%s@%p: being destroied\n", sec->ps_policy->sp_name, sec);
-
-        policy->sp_cops->destroy_sec(sec);
-        sptlrpc_policy_put(policy);
-}
-
-static
-int sec_cop_flush_ctx_cache(struct ptlrpc_sec *sec, uid_t uid,
-                            int grace, int force)
+static int sec_cop_flush_ctx_cache(struct ptlrpc_sec *sec, uid_t uid,
+                                   int grace, int force)
 {
         struct ptlrpc_sec_policy *policy = sec->ps_policy;
 
@@ -814,144 +953,330 @@ int sec_cop_flush_ctx_cache(struct ptlrpc_sec *sec, uid_t uid,
         return policy->sp_cops->flush_ctx_cache(sec, uid, grace, force);
 }
 
+static void sec_cop_destroy_sec(struct ptlrpc_sec *sec)
+{
+        struct ptlrpc_sec_policy *policy = sec->ps_policy;
+
+        LASSERT(atomic_read(&sec->ps_refcount) == 0);
+        LASSERT(atomic_read(&sec->ps_nctx) == 0);
+        LASSERT(policy->sp_cops->destroy_sec);
+
+        CDEBUG(D_SEC, "%s@%p: being destroied\n", sec->ps_policy->sp_name, sec);
+
+        policy->sp_cops->destroy_sec(sec);
+        sptlrpc_policy_put(policy);
+}
+
 void sptlrpc_sec_destroy(struct ptlrpc_sec *sec)
 {
         sec_cop_destroy_sec(sec);
 }
 EXPORT_SYMBOL(sptlrpc_sec_destroy);
 
+static void sptlrpc_sec_kill(struct ptlrpc_sec *sec)
+{
+        LASSERT(atomic_read(&sec->ps_refcount) > 0);
+
+        if (sec->ps_policy->sp_cops->kill_sec) {
+                sec->ps_policy->sp_cops->kill_sec(sec);
+
+                sec_cop_flush_ctx_cache(sec, -1, 1, 1);
+        }
+}
+
+struct ptlrpc_sec *sptlrpc_sec_get(struct ptlrpc_sec *sec)
+{
+        if (sec) {
+                LASSERT(atomic_read(&sec->ps_refcount) > 0);
+                atomic_inc(&sec->ps_refcount);
+        }
+
+        return sec;
+}
+EXPORT_SYMBOL(sptlrpc_sec_get);
+
+void sptlrpc_sec_put(struct ptlrpc_sec *sec)
+{
+        if (sec) {
+                LASSERT(atomic_read(&sec->ps_refcount) > 0);
+
+                if (atomic_dec_and_test(&sec->ps_refcount)) {
+                        LASSERT(atomic_read(&sec->ps_nctx) == 0);
+
+                        sptlrpc_gc_del_sec(sec);
+                        sec_cop_destroy_sec(sec);
+                }
+        }
+}
+EXPORT_SYMBOL(sptlrpc_sec_put);
+
 /*
- * let policy module to determine whether take refrence of
- * import or not.
+ * it's policy module responsible for taking refrence of import
  */
 static
-struct ptlrpc_sec * import_create_sec(struct obd_import *imp,
-                                      struct ptlrpc_svc_ctx *ctx,
-                                      __u32 flavor,
-                                      unsigned long flags)
+struct ptlrpc_sec * sptlrpc_sec_create(struct obd_import *imp,
+                                       struct ptlrpc_svc_ctx *svc_ctx,
+                                       struct sptlrpc_flavor *sf,
+                                       enum lustre_sec_part sp)
 {
         struct ptlrpc_sec_policy *policy;
-        struct ptlrpc_sec *sec;
+        struct ptlrpc_sec        *sec;
         ENTRY;
 
-        flavor = SEC_FLAVOR_RPC(flavor);
-
-        if (ctx) {
+        if (svc_ctx) {
                 LASSERT(imp->imp_dlm_fake == 1);
 
                 CDEBUG(D_SEC, "%s %s: reverse sec using flavor %s\n",
                        imp->imp_obd->obd_type->typ_name,
                        imp->imp_obd->obd_name,
-                       sptlrpc_flavor2name(flavor));
+                       sptlrpc_rpcflavor2name(sf->sf_rpc));
 
-                policy = sptlrpc_policy_get(ctx->sc_policy);
-                flags |= PTLRPC_SEC_FL_REVERSE | PTLRPC_SEC_FL_ROOTONLY;
+                policy = sptlrpc_policy_get(svc_ctx->sc_policy);
+                sf->sf_flags |= PTLRPC_SEC_FL_REVERSE | PTLRPC_SEC_FL_ROOTONLY;
         } else {
                 LASSERT(imp->imp_dlm_fake == 0);
 
                 CDEBUG(D_SEC, "%s %s: select security flavor %s\n",
                        imp->imp_obd->obd_type->typ_name,
                        imp->imp_obd->obd_name,
-                       sptlrpc_flavor2name(flavor));
+                       sptlrpc_rpcflavor2name(sf->sf_rpc));
 
-                policy = sptlrpc_flavor2policy(flavor);
+                policy = sptlrpc_rpcflavor2policy(sf->sf_rpc);
                 if (!policy) {
-                        CERROR("invalid flavor 0x%x\n", flavor);
+                        CERROR("invalid flavor 0x%x\n", sf->sf_rpc);
                         RETURN(NULL);
                 }
         }
 
-        sec = policy->sp_cops->create_sec(imp, ctx, flavor, flags);
+        sec = policy->sp_cops->create_sec(imp, svc_ctx, sf);
         if (sec) {
                 atomic_inc(&sec->ps_refcount);
 
-                /* take 1 busy count on behalf of sec itself,
-                 * balanced in sptlrpc_set_put()
-                 */
-                atomic_inc(&sec->ps_busy);
+                sec->ps_part = sp;
 
                 if (sec->ps_gc_interval && policy->sp_cops->gc_ctx)
                         sptlrpc_gc_add_sec(sec);
-        } else
-                sptlrpc_policy_put(policy);
-
-        RETURN(sec);
-}
-
-int sptlrpc_import_get_sec(struct obd_import *imp,
-                           struct ptlrpc_svc_ctx *ctx,
-                           __u32 flavor,
-                           unsigned long flags)
-{
-        might_sleep();
-
-        /* old sec might be still there in reconnecting */
-        if (imp->imp_sec)
-                return 0;
-
-        imp->imp_sec = import_create_sec(imp, ctx, flavor, flags);
-        if (!imp->imp_sec)
-                return -EINVAL;
-
-        return 0;
-}
-
-void sptlrpc_import_put_sec(struct obd_import *imp)
-{
-        struct ptlrpc_sec        *sec;
-        struct ptlrpc_sec_policy *policy;
-
-        might_sleep();
-
-        if (imp->imp_sec == NULL)
-                return;
-
-        sec = imp->imp_sec;
-        policy = sec->ps_policy;
-
-        if (atomic_dec_and_test(&sec->ps_refcount)) {
-                sec_cop_flush_ctx_cache(sec, -1, 1, 1);
-                sptlrpc_gc_del_sec(sec);
-
-                if (atomic_dec_and_test(&sec->ps_busy))
-                        sec_cop_destroy_sec(sec);
-                else {
-                        CWARN("delay destroying busy sec %s %p\n",
-                              policy->sp_name, sec);
-                }
         } else {
                 sptlrpc_policy_put(policy);
         }
 
-        imp->imp_sec = NULL;
+        RETURN(sec);
+}
+
+struct ptlrpc_sec *sptlrpc_import_sec_ref(struct obd_import *imp)
+{
+        struct ptlrpc_sec *sec;
+
+        spin_lock(&imp->imp_lock);
+        sec = sptlrpc_sec_get(imp->imp_sec);
+        spin_unlock(&imp->imp_lock);
+
+        return sec;
+}
+EXPORT_SYMBOL(sptlrpc_import_sec_ref);
+
+static void sptlrpc_import_sec_install(struct obd_import *imp,
+                                       struct ptlrpc_sec *sec)
+{
+        struct ptlrpc_sec *old_sec;
+
+        LASSERT(atomic_read(&sec->ps_refcount) > 0);
+
+        spin_lock(&imp->imp_lock);
+        old_sec = imp->imp_sec;
+        imp->imp_sec = sec;
+        spin_unlock(&imp->imp_lock);
+
+        if (old_sec) {
+                sptlrpc_sec_kill(old_sec);
+
+                /* balance the ref taken by this import */
+                sptlrpc_sec_put(old_sec);
+        }
+}
+
+static void sptlrpc_import_sec_adapt_inplace(struct obd_import *imp,
+                                             struct ptlrpc_sec *sec,
+                                             struct sptlrpc_flavor *sf)
+{
+        if (sf->sf_bulk_priv != sec->ps_flvr.sf_bulk_priv ||
+            sf->sf_bulk_csum != sec->ps_flvr.sf_bulk_csum) {
+                CWARN("imp %p (%s->%s): changing bulk flavor %s/%s -> %s/%s\n",
+                      imp, imp->imp_obd->obd_name,
+                      obd_uuid2str(&imp->imp_connection->c_remote_uuid),
+                      sptlrpc_bulk_priv_alg2name(sec->ps_flvr.sf_bulk_priv),
+                      sptlrpc_bulk_csum_alg2name(sec->ps_flvr.sf_bulk_csum),
+                      sptlrpc_bulk_priv_alg2name(sf->sf_bulk_priv),
+                      sptlrpc_bulk_csum_alg2name(sf->sf_bulk_csum));
+
+                spin_lock(&sec->ps_lock);
+                sec->ps_flvr.sf_bulk_priv = sf->sf_bulk_priv;
+                sec->ps_flvr.sf_bulk_csum = sf->sf_bulk_csum;
+                spin_unlock(&sec->ps_lock);
+        }
+
+        if (!equi(sf->sf_flags & PTLRPC_SEC_FL_UDESC,
+                  sec->ps_flvr.sf_flags & PTLRPC_SEC_FL_UDESC)) {
+                CWARN("imp %p (%s->%s): %s shipping user descriptor\n",
+                      imp, imp->imp_obd->obd_name,
+                      obd_uuid2str(&imp->imp_connection->c_remote_uuid),
+                      (sf->sf_flags & PTLRPC_SEC_FL_UDESC) ? "start" : "stop");
+
+                spin_lock(&sec->ps_lock);
+                sec->ps_flvr.sf_flags &= ~PTLRPC_SEC_FL_UDESC;
+                sec->ps_flvr.sf_flags |= sf->sf_flags & PTLRPC_SEC_FL_UDESC;
+                spin_unlock(&sec->ps_lock);
+        }
+}
+
+/*
+ * for normal import, @svc_ctx should be NULL and @rpc_flavor is ignored;
+ * for reverse import, @svc_ctx and @rpc_flavor is from incoming request.
+ */
+int sptlrpc_import_sec_adapt(struct obd_import *imp,
+                             struct ptlrpc_svc_ctx *svc_ctx,
+                             __u16 rpc_flavor)
+{
+        struct ptlrpc_connection   *conn;
+        struct sptlrpc_flavor       sf;
+        struct ptlrpc_sec          *sec, *newsec;
+        enum lustre_sec_part        sp;
+        int                         rc;
+
+        if (imp == NULL)
+                return 0;
+
+        conn = imp->imp_connection;
+
+        if (svc_ctx == NULL) {
+                /* normal import, determine flavor from rule set */
+                sptlrpc_rule_set_choose(&imp->imp_obd->u.cli.cl_sptlrpc_rset,
+                                        LUSTRE_SP_ANY, conn->c_self, &sf);
+
+                sp = imp->imp_obd->u.cli.cl_sec_part;
+        } else {
+                /* reverse import, determine flavor from incoming reqeust */
+                sf.sf_rpc = rpc_flavor;
+                sf.sf_bulk_priv = BULK_PRIV_ALG_NULL;
+                sf.sf_bulk_csum = BULK_CSUM_ALG_NULL;
+                sf.sf_flags = PTLRPC_SEC_FL_REVERSE | PTLRPC_SEC_FL_ROOTONLY;
+
+                sp = sptlrpc_target_sec_part(imp->imp_obd);
+        }
+
+        sec = sptlrpc_import_sec_ref(imp);
+        if (sec) {
+                if (svc_ctx == NULL) {
+                        /* normal import, only check rpc flavor, if just bulk
+                         * flavor or flags changed, we can handle it on the fly
+                         * without switching sec. */
+                        if (sf.sf_rpc == sec->ps_flvr.sf_rpc) {
+                                sptlrpc_import_sec_adapt_inplace(imp, sec, &sf);
+
+                                rc = 0;
+                                goto out;
+                        }
+                } else {
+                        /* reverse import, do not compare bulk flavor */
+                        if (sf.sf_rpc == sec->ps_flvr.sf_rpc) {
+                                rc = 0;
+                                goto out;
+                        }
+                }
+
+                CWARN("%simport %p (%s%s%s): changing flavor "
+                      "(%s, %s/%s) -> (%s, %s/%s)\n",
+                      svc_ctx ? "reverse " : "",
+                      imp, imp->imp_obd->obd_name,
+                      svc_ctx == NULL ? "->" : "<-",
+                      obd_uuid2str(&conn->c_remote_uuid),
+                      sptlrpc_rpcflavor2name(sec->ps_flvr.sf_rpc),
+                      sptlrpc_bulk_csum_alg2name(sec->ps_flvr.sf_bulk_csum),
+                      sptlrpc_bulk_priv_alg2name(sec->ps_flvr.sf_bulk_priv),
+                      sptlrpc_rpcflavor2name(sf.sf_rpc),
+                      sptlrpc_bulk_csum_alg2name(sf.sf_bulk_csum),
+                      sptlrpc_bulk_priv_alg2name(sf.sf_bulk_priv));
+        } else {
+                CWARN("%simport %p (%s%s%s) netid %x: "
+                      "select initial flavor (%s, %s/%s)\n",
+                      svc_ctx == NULL ? "" : "reverse ",
+                      imp, imp->imp_obd->obd_name,
+                      svc_ctx == NULL ? "->" : "<-",
+                      obd_uuid2str(&conn->c_remote_uuid),
+                      LNET_NIDNET(conn->c_self),
+                      sptlrpc_rpcflavor2name(sf.sf_rpc),
+                      sptlrpc_bulk_csum_alg2name(sf.sf_bulk_csum),
+                      sptlrpc_bulk_priv_alg2name(sf.sf_bulk_priv));
+        }
+
+        mutex_down(&imp->imp_sec_mutex);
+
+        newsec = sptlrpc_sec_create(imp, svc_ctx, &sf, sp);
+        if (newsec) {
+                sptlrpc_import_sec_install(imp, newsec);
+                rc = 0;
+        } else {
+                CERROR("%simport %p (%s): failed to create new sec\n",
+                       svc_ctx == NULL ? "" : "reverse ",
+                       imp, obd_uuid2str(&conn->c_remote_uuid));
+                rc = -EPERM;
+        }
+
+        mutex_up(&imp->imp_sec_mutex);
+
+out:
+        sptlrpc_sec_put(sec);
+        return 0;
+}
+
+void sptlrpc_import_sec_put(struct obd_import *imp)
+{
+        if (imp->imp_sec) {
+                sptlrpc_sec_kill(imp->imp_sec);
+
+                sptlrpc_sec_put(imp->imp_sec);
+                imp->imp_sec = NULL;
+        }
+}
+
+static void import_flush_ctx_common(struct obd_import *imp,
+                                    uid_t uid, int grace, int force)
+{
+        struct ptlrpc_sec *sec;
+
+        if (imp == NULL)
+                return;
+
+        sec = sptlrpc_import_sec_ref(imp);
+        if (sec == NULL)
+                return;
+
+        sec_cop_flush_ctx_cache(sec, uid, grace, force);
+        sptlrpc_sec_put(sec);
+}
+
+void sptlrpc_import_inval_all_ctx(struct obd_import *imp)
+{
+        /* use grace == 0 */
+        import_flush_ctx_common(imp, -1, 0, 1);
 }
 
 void sptlrpc_import_flush_root_ctx(struct obd_import *imp)
 {
-        if (imp == NULL || imp->imp_sec == NULL)
-                return;
-
         /* it's important to use grace mode, see explain in
-         * sptlrpc_req_refresh_ctx()
-         */
-        sec_cop_flush_ctx_cache(imp->imp_sec, 0, 1, 1);
+         * sptlrpc_req_refresh_ctx() */
+        import_flush_ctx_common(imp, 0, 1, 1);
 }
 
 void sptlrpc_import_flush_my_ctx(struct obd_import *imp)
 {
-        if (imp == NULL || imp->imp_sec == NULL)
-                return;
-
-        sec_cop_flush_ctx_cache(imp->imp_sec, cfs_current()->uid, 1, 1);
+        import_flush_ctx_common(imp, cfs_current()->uid, 1, 1);
 }
 EXPORT_SYMBOL(sptlrpc_import_flush_my_ctx);
 
 void sptlrpc_import_flush_all_ctx(struct obd_import *imp)
 {
-        if (imp == NULL || imp->imp_sec == NULL)
-                return;
-
-        sec_cop_flush_ctx_cache(imp->imp_sec, -1, 1, 1);
+        import_flush_ctx_common(imp, -1, 1, 1);
 }
 EXPORT_SYMBOL(sptlrpc_import_flush_all_ctx);
 
@@ -994,7 +1319,9 @@ void sptlrpc_cli_free_reqbuf(struct ptlrpc_request *req)
         LASSERT(atomic_read(&ctx->cc_refcount));
         LASSERT(ctx->cc_sec);
         LASSERT(ctx->cc_sec->ps_policy);
-        LASSERT(req->rq_reqbuf || req->rq_clrbuf);
+
+        if (req->rq_reqbuf == NULL && req->rq_clrbuf == NULL)
+                return;
 
         policy = ctx->cc_sec->ps_policy;
         policy->sp_cops->free_reqbuf(ctx->cc_sec, req);
@@ -1101,7 +1428,10 @@ void sptlrpc_cli_free_repbuf(struct ptlrpc_request *req)
         LASSERT(atomic_read(&ctx->cc_refcount));
         LASSERT(ctx->cc_sec);
         LASSERT(ctx->cc_sec->ps_policy);
-        LASSERT(req->rq_repbuf);
+
+        if (req->rq_repbuf == NULL)
+                return;
+        LASSERT(req->rq_repbuf_len);
 
         policy = ctx->cc_sec->ps_policy;
         policy->sp_cops->free_repbuf(ctx->cc_sec, req);
@@ -1132,19 +1462,259 @@ int sptlrpc_svc_install_rvs_ctx(struct obd_import *imp,
  * server side security                 *
  ****************************************/
 
+static int flavor_allowed(struct sptlrpc_flavor *exp,
+                          struct ptlrpc_request *req)
+{
+        struct sptlrpc_flavor *flvr = &req->rq_flvr;
+
+        if (exp->sf_rpc == flvr->sf_rpc)
+                return 1;
+
+        if ((req->rq_ctx_init || req->rq_ctx_fini) &&
+            RPC_FLVR_POLICY(exp->sf_rpc) == RPC_FLVR_POLICY(flvr->sf_rpc) &&
+            RPC_FLVR_MECH(exp->sf_rpc) == RPC_FLVR_MECH(flvr->sf_rpc))
+                return 1;
+
+        return 0;
+}
+
+#define EXP_FLVR_UPDATE_EXPIRE      (OBD_TIMEOUT_DEFAULT + 10)
+
 int sptlrpc_target_export_check(struct obd_export *exp,
                                 struct ptlrpc_request *req)
 {
-        if (!req->rq_auth_gss ||
-            (!req->rq_auth_usr_root && !req->rq_auth_usr_mdt))
+        struct sptlrpc_flavor   flavor;
+
+        if (exp == NULL)
                 return 0;
 
-        if (!req->rq_ctx_init)
+        /* client side export has no imp_reverse, skip
+         * FIXME maybe we should check flavor this as well??? */
+        if (exp->exp_imp_reverse == NULL)
                 return 0;
 
-        LASSERT(exp->exp_imp_reverse);
-        sptlrpc_svc_install_rvs_ctx(exp->exp_imp_reverse, req->rq_svc_ctx);
-        return 0;
+        /* don't care about ctx fini rpc */
+        if (req->rq_ctx_fini)
+                return 0;
+
+        spin_lock(&exp->exp_lock);
+
+        /* if flavor just changed (exp->exp_flvr_changed != 0), we wait for
+         * the first req with the new flavor, then treat it as current flavor,
+         * adapt reverse sec according to it.
+         * note the first rpc with new flavor might not be with root ctx, in
+         * which case delay the sec_adapt by leaving exp_flvr_adapt == 1. */
+        if (unlikely(exp->exp_flvr_changed) &&
+            flavor_allowed(&exp->exp_flvr_old[1], req)) {
+                /* make the new flavor as "current", and old ones as
+                 * about-to-expire */
+                CDEBUG(D_SEC, "exp %p: just changed: %x->%x\n", exp,
+                       exp->exp_flvr.sf_rpc, exp->exp_flvr_old[1].sf_rpc);
+                flavor = exp->exp_flvr_old[1];
+                exp->exp_flvr_old[1] = exp->exp_flvr_old[0];
+                exp->exp_flvr_expire[1] = exp->exp_flvr_expire[0];
+                exp->exp_flvr_old[0] = exp->exp_flvr;
+                exp->exp_flvr_expire[0] = cfs_time_current_sec() +
+                                          EXP_FLVR_UPDATE_EXPIRE;
+                exp->exp_flvr = flavor;
+
+                /* flavor change finished */
+                exp->exp_flvr_changed = 0;
+                LASSERT(exp->exp_flvr_adapt == 1);
+
+                /* if it's gss, we only interested in root ctx init */
+                if (req->rq_auth_gss &&
+                    !(req->rq_ctx_init && (req->rq_auth_usr_root ||
+                                           req->rq_auth_usr_mdt))) {
+                        spin_unlock(&exp->exp_lock);
+                        CDEBUG(D_SEC, "is good but not root(%d:%d:%d:%d)\n",
+                               req->rq_auth_gss, req->rq_ctx_init,
+                               req->rq_auth_usr_root, req->rq_auth_usr_mdt);
+                        return 0;
+                }
+
+                exp->exp_flvr_adapt = 0;
+                spin_unlock(&exp->exp_lock);
+
+                return sptlrpc_import_sec_adapt(exp->exp_imp_reverse,
+                                                req->rq_svc_ctx, flavor.sf_rpc);
+        }
+
+        /* if it equals to the current flavor, we accept it, but need to
+         * dealing with reverse sec/ctx */
+        if (likely(flavor_allowed(&exp->exp_flvr, req))) {
+                /* most cases should return here, we only interested in
+                 * gss root ctx init */
+                if (!req->rq_auth_gss || !req->rq_ctx_init ||
+                    (!req->rq_auth_usr_root && !req->rq_auth_usr_mdt)) {
+                        spin_unlock(&exp->exp_lock);
+                        return 0;
+                }
+
+                if (exp->exp_flvr_adapt) {
+                        exp->exp_flvr_adapt = 0;
+                        CDEBUG(D_SEC, "exp %p (%x|%x|%x): do delayed adapt\n",
+                               exp, exp->exp_flvr.sf_rpc,
+                               exp->exp_flvr_old[0].sf_rpc,
+                               exp->exp_flvr_old[1].sf_rpc);
+                        flavor = exp->exp_flvr;
+                        spin_unlock(&exp->exp_lock);
+
+                        return sptlrpc_import_sec_adapt(exp->exp_imp_reverse,
+                                                        req->rq_svc_ctx,
+                                                        flavor.sf_rpc);
+                } else {
+                        CDEBUG(D_SEC, "exp %p (%x|%x|%x): is current flavor, "
+                               "install rvs ctx\n", exp, exp->exp_flvr.sf_rpc,
+                               exp->exp_flvr_old[0].sf_rpc,
+                               exp->exp_flvr_old[1].sf_rpc);
+                        spin_unlock(&exp->exp_lock);
+
+                        return sptlrpc_svc_install_rvs_ctx(exp->exp_imp_reverse,
+                                                           req->rq_svc_ctx);
+                }
+        }
+
+        if (exp->exp_flvr_expire[0]) {
+                if (exp->exp_flvr_expire[0] >= cfs_time_current_sec()) {
+                        if (flavor_allowed(&exp->exp_flvr_old[0], req)) {
+                                CDEBUG(D_SEC, "exp %p (%x|%x|%x): match the "
+                                       "middle one (%lu)\n", exp,
+                                       exp->exp_flvr.sf_rpc,
+                                       exp->exp_flvr_old[0].sf_rpc,
+                                       exp->exp_flvr_old[1].sf_rpc,
+                                       exp->exp_flvr_expire[0] -
+                                                cfs_time_current_sec());
+                                spin_unlock(&exp->exp_lock);
+                                return 0;
+                        }
+                } else {
+                        CDEBUG(D_SEC, "mark middle expired\n");
+                        exp->exp_flvr_expire[0] = 0;
+                }
+                CDEBUG(D_SEC, "exp %p (%x|%x|%x): %x not match middle\n", exp,
+                       exp->exp_flvr.sf_rpc,
+                       exp->exp_flvr_old[0].sf_rpc, exp->exp_flvr_old[1].sf_rpc,
+                       req->rq_flvr.sf_rpc);
+        }
+
+        /* now it doesn't match the current flavor, the only chance we can
+         * accept it is match the old flavors which is not expired. */
+        if (exp->exp_flvr_changed == 0 && exp->exp_flvr_expire[1]) {
+                if (exp->exp_flvr_expire[1] >= cfs_time_current_sec()) {
+                        if (flavor_allowed(&exp->exp_flvr_old[1], req)) {
+                                CDEBUG(D_SEC, "exp %p (%x|%x|%x): match the "
+                                       "oldest one (%lu)\n", exp,
+                                       exp->exp_flvr.sf_rpc,
+                                       exp->exp_flvr_old[0].sf_rpc,
+                                       exp->exp_flvr_old[1].sf_rpc,
+                                       exp->exp_flvr_expire[1] -
+                                                cfs_time_current_sec());
+                                spin_unlock(&exp->exp_lock);
+                                return 0;
+                        }
+                } else {
+                        CDEBUG(D_SEC, "mark oldest expired\n");
+                        exp->exp_flvr_expire[1] = 0;
+                }
+                CDEBUG(D_SEC, "exp %p (%x|%x|%x): %x not match found\n",
+                       exp, exp->exp_flvr.sf_rpc,
+                       exp->exp_flvr_old[0].sf_rpc, exp->exp_flvr_old[1].sf_rpc,
+                       req->rq_flvr.sf_rpc);
+        } else {
+                CDEBUG(D_SEC, "exp %p (%x|%x|%x): skip the last one\n",
+                       exp, exp->exp_flvr.sf_rpc, exp->exp_flvr_old[0].sf_rpc,
+                       exp->exp_flvr_old[1].sf_rpc);
+        }
+
+        spin_unlock(&exp->exp_lock);
+
+        CWARN("req %p: (%u|%u|%u|%u|%u) with unauthorized flavor %x\n",
+              req, req->rq_auth_gss, req->rq_ctx_init, req->rq_ctx_fini,
+              req->rq_auth_usr_root, req->rq_auth_usr_mdt, req->rq_flvr.sf_rpc);
+        return -EACCES;
+}
+
+void sptlrpc_target_update_exp_flavor(struct obd_device *obd,
+                                      struct sptlrpc_rule_set *rset)
+{
+        struct obd_export       *exp;
+        struct sptlrpc_flavor    new_flvr;
+
+        LASSERT(obd);
+
+        spin_lock(&obd->obd_dev_lock);
+
+        list_for_each_entry(exp, &obd->obd_exports, exp_obd_chain) {
+                if (exp->exp_connection == NULL)
+                        continue;
+
+                /* note if this export had just been updated flavor
+                 * (exp_flvr_changed == 1), this will override the
+                 * previous one. */
+                spin_lock(&exp->exp_lock);
+                sptlrpc_rule_set_choose(rset, exp->exp_sp_peer,
+                                        exp->exp_connection->c_peer.nid,
+                                        &new_flvr);
+                if (exp->exp_flvr_changed ||
+                    memcmp(&new_flvr, &exp->exp_flvr, sizeof(new_flvr))) {
+                        exp->exp_flvr_old[1] = new_flvr;
+                        exp->exp_flvr_expire[1] = 0;
+                        exp->exp_flvr_changed = 1;
+                        exp->exp_flvr_adapt = 1;
+                        CDEBUG(D_SEC, "exp %p (%s): updated flavor %x->%x\n",
+                               exp, sptlrpc_part2name(exp->exp_sp_peer),
+                               exp->exp_flvr.sf_rpc,
+                               exp->exp_flvr_old[1].sf_rpc);
+                }
+                spin_unlock(&exp->exp_lock);
+        }
+
+        spin_unlock(&obd->obd_dev_lock);
+}
+EXPORT_SYMBOL(sptlrpc_target_update_exp_flavor);
+
+static int sptlrpc_svc_check_from(struct ptlrpc_request *req, int svc_rc)
+{
+        if (svc_rc == SECSVC_DROP)
+                return SECSVC_DROP;
+
+        switch (req->rq_sp_from) {
+        case LUSTRE_SP_CLI:
+        case LUSTRE_SP_MDT:
+        case LUSTRE_SP_OST:
+        case LUSTRE_SP_MGS:
+        case LUSTRE_SP_ANY:
+                break;
+        default:
+                DEBUG_REQ(D_ERROR, req, "invalid source %u", req->rq_sp_from);
+                return SECSVC_DROP;
+        }
+
+        if (!req->rq_auth_gss)
+                return svc_rc;
+
+        if (unlikely(req->rq_sp_from == LUSTRE_SP_ANY)) {
+                CERROR("not specific part\n");
+                return SECSVC_DROP;
+        }
+
+        /* from MDT, must be authenticated as MDT */
+        if (unlikely(req->rq_sp_from == LUSTRE_SP_MDT &&
+                     !req->rq_auth_usr_mdt)) {
+                DEBUG_REQ(D_ERROR, req, "fake source MDT");
+                return SECSVC_DROP;
+        }
+
+        /* from OST, must be callback to MDT and CLI, the reverse sec
+         * was from mdt/root keytab, so it should be MDT or root FIXME */
+        if (unlikely(req->rq_sp_from == LUSTRE_SP_OST &&
+                     !req->rq_auth_usr_mdt && !req->rq_auth_usr_root)) {
+                DEBUG_REQ(D_ERROR, req, "fake source OST");
+                return SECSVC_DROP;
+        }
+
+        return svc_rc;
 }
 
 int sptlrpc_svc_unwrap_request(struct ptlrpc_request *req)
@@ -1158,10 +1728,10 @@ int sptlrpc_svc_unwrap_request(struct ptlrpc_request *req)
         LASSERT(req->rq_reqmsg == NULL);
         LASSERT(req->rq_repmsg == NULL);
 
-        /* 
-         * in any case we avoid to call unpack_msg() for request of null flavor
-         * which will later be done by ptlrpc_server_handle_request().
-         */
+        req->rq_sp_from = LUSTRE_SP_ANY;
+        req->rq_auth_uid = INVALID_UID;
+        req->rq_auth_mapped_uid = INVALID_UID;
+
         if (req->rq_reqdata_len < sizeof(struct lustre_msg)) {
                 CERROR("request size %d too small\n", req->rq_reqdata_len);
                 RETURN(SECSVC_DROP);
@@ -1169,22 +1739,30 @@ int sptlrpc_svc_unwrap_request(struct ptlrpc_request *req)
 
         if (msg->lm_magic == LUSTRE_MSG_MAGIC_V1 ||
             msg->lm_magic == LUSTRE_MSG_MAGIC_V1_SWABBED) {
-                req->rq_sec_flavor = SPTLRPC_FLVR_NULL;
+                /*
+                 * v1 message, treat as to be null
+                 */
+                req->rq_flvr.sf_rpc = SPTLRPC_FLVR_NULL;
         } else {
-                req->rq_sec_flavor = msg->lm_secflvr;
+                /*
+                 * v2 message.
+                 */
+                if (msg->lm_magic == LUSTRE_MSG_MAGIC_V2)
+                        req->rq_flvr.sf_rpc = WIRE_FLVR_RPC(msg->lm_secflvr);
+                else
+                        req->rq_flvr.sf_rpc = WIRE_FLVR_RPC(
+                                                __swab32(msg->lm_secflvr));
 
-                if (msg->lm_magic == LUSTRE_MSG_MAGIC_V2_SWABBED)
-                        __swab32s(&req->rq_sec_flavor);
-
-                if ((SEC_FLAVOR_POLICY(req->rq_sec_flavor) !=
+                /* unpack the wrapper message if the policy is not null */
+                if ((RPC_FLVR_POLICY(req->rq_flvr.sf_rpc) !=
                      SPTLRPC_POLICY_NULL) &&
                     lustre_unpack_msg(msg, req->rq_reqdata_len))
                         RETURN(SECSVC_DROP);
         }
 
-        policy = sptlrpc_flavor2policy(req->rq_sec_flavor);
+        policy = sptlrpc_rpcflavor2policy(req->rq_flvr.sf_rpc);
         if (!policy) {
-                CERROR("unsupported security flavor %x\n", req->rq_sec_flavor);
+                CERROR("unsupported rpc flavor %x\n", req->rq_flvr.sf_rpc);
                 RETURN(SECSVC_DROP);
         }
 
@@ -1193,6 +1771,9 @@ int sptlrpc_svc_unwrap_request(struct ptlrpc_request *req)
 
         LASSERT(req->rq_reqmsg || rc != SECSVC_OK);
         sptlrpc_policy_put(policy);
+
+        /* sanity check for the request source */
+        rc = sptlrpc_svc_check_from(req, rc);
 
         /* FIXME move to proper place */
         if (rc == SECSVC_OK) {
@@ -1329,7 +1910,7 @@ int sptlrpc_cli_wrap_bulk(struct ptlrpc_request *req,
 {
         struct ptlrpc_cli_ctx *ctx;
 
-        if (!SEC_FLAVOR_HAS_BULK(req->rq_sec_flavor))
+        if (!req->rq_pack_bulk)
                 return 0;
 
         LASSERT(req->rq_bulk_read || req->rq_bulk_write);
@@ -1376,7 +1957,7 @@ int sptlrpc_cli_unwrap_bulk_read(struct ptlrpc_request *req,
         struct ptlrpc_cli_ctx *ctx;
         int rc = 0;
 
-        if (!SEC_FLAVOR_HAS_BULK(req->rq_sec_flavor))
+        if (!req->rq_pack_bulk)
                 return 0;
 
         LASSERT(req->rq_bulk_read && !req->rq_bulk_write);
@@ -1404,7 +1985,7 @@ int sptlrpc_cli_unwrap_bulk_write(struct ptlrpc_request *req,
 {
         struct ptlrpc_cli_ctx *ctx;
 
-        if (!SEC_FLAVOR_HAS_BULK(req->rq_sec_flavor))
+        if (!req->rq_pack_bulk)
                 return 0;
 
         LASSERT(!req->rq_bulk_read && req->rq_bulk_write);
@@ -1422,7 +2003,7 @@ int sptlrpc_svc_wrap_bulk(struct ptlrpc_request *req,
 {
         struct ptlrpc_svc_ctx *ctx;
 
-        if (!SEC_FLAVOR_HAS_BULK(req->rq_sec_flavor))
+        if (!req->rq_pack_bulk)
                 return 0;
 
         LASSERT(req->rq_bulk_read || req->rq_bulk_write);
@@ -1440,7 +2021,7 @@ int sptlrpc_svc_unwrap_bulk(struct ptlrpc_request *req,
 {
         struct ptlrpc_svc_ctx *ctx;
 
-        if (!SEC_FLAVOR_HAS_BULK(req->rq_sec_flavor))
+        if (!req->rq_pack_bulk)
                 return 0;
 
         LASSERT(req->rq_bulk_read || req->rq_bulk_write);
@@ -1538,225 +2119,6 @@ int sptlrpc_unpack_user_desc(struct lustre_msg *msg, int offset)
         return 0;
 }
 EXPORT_SYMBOL(sptlrpc_unpack_user_desc);
-
-/****************************************
- * user supplied flavor string parsing  *
- ****************************************/
-
-static
-int get_default_flavor(enum lustre_part to_part, struct sec_flavor_config *conf)
-{
-        conf->sfc_bulk_priv = BULK_PRIV_ALG_NULL;
-        conf->sfc_bulk_csum = BULK_CSUM_ALG_NULL;
-        conf->sfc_flags = 0;
-
-        switch (to_part) {
-        case LUSTRE_MDT:
-                conf->sfc_rpc_flavor = SPTLRPC_FLVR_PLAIN;
-                return 0;
-        case LUSTRE_OST:
-                conf->sfc_rpc_flavor = SPTLRPC_FLVR_NULL;
-                return 0;
-        default:
-                CERROR("Unknown to lustre part %d, apply defaults\n", to_part);
-                conf->sfc_rpc_flavor = SPTLRPC_FLVR_NULL;
-                return -EINVAL;
-        }
-}
-
-static
-void get_flavor_by_rpc(__u32 rpc_flavor, struct sec_flavor_config *conf)
-{
-        conf->sfc_rpc_flavor = rpc_flavor;
-        conf->sfc_bulk_priv = BULK_PRIV_ALG_NULL;
-        conf->sfc_bulk_csum = BULK_CSUM_ALG_NULL;
-        conf->sfc_flags = 0;
-
-        switch (rpc_flavor) {
-        case SPTLRPC_FLVR_NULL:
-        case SPTLRPC_FLVR_PLAIN:
-        case SPTLRPC_FLVR_KRB5N:
-        case SPTLRPC_FLVR_KRB5A:
-                break;
-        case SPTLRPC_FLVR_KRB5P:
-                conf->sfc_bulk_priv = BULK_PRIV_ALG_ARC4;
-                /* fall through */
-        case SPTLRPC_FLVR_KRB5I:
-                conf->sfc_bulk_csum = BULK_CSUM_ALG_SHA1;
-                break;
-        default:
-                LBUG();
-        }
-}
-
-static
-void get_flavor_by_rpc_bulk(__u32 rpc_flavor, int bulk_priv,
-                            struct sec_flavor_config *conf)
-{
-        if (bulk_priv)
-                conf->sfc_bulk_priv = BULK_PRIV_ALG_ARC4;
-        else
-                conf->sfc_bulk_priv = BULK_PRIV_ALG_NULL;
-
-        switch (rpc_flavor) {
-        case SPTLRPC_FLVR_PLAIN:
-                conf->sfc_bulk_csum = BULK_CSUM_ALG_MD5;
-                break;
-        case SPTLRPC_FLVR_KRB5N:
-        case SPTLRPC_FLVR_KRB5A:
-        case SPTLRPC_FLVR_KRB5I:
-        case SPTLRPC_FLVR_KRB5P:
-                conf->sfc_bulk_csum = BULK_CSUM_ALG_SHA1;
-                break;
-        default:
-                LBUG();
-        }
-}
-
-static __u32 __flavors[] = {
-        SPTLRPC_FLVR_NULL,
-        SPTLRPC_FLVR_PLAIN,
-        SPTLRPC_FLVR_KRB5N,
-        SPTLRPC_FLVR_KRB5A,
-        SPTLRPC_FLVR_KRB5I,
-        SPTLRPC_FLVR_KRB5P,
-};
-
-#define __nflavors      (sizeof(__flavors)/sizeof(__u32))
-
-/*
- * flavor string format: rpc[-bulk{n|i|p}[:cksum/enc]]
- * for examples:
- *  null
- *  plain-bulki
- *  krb5p-bulkn
- *  krb5i-bulkp
- *  krb5i-bulkp:sha512/arc4
- */
-int sptlrpc_parse_flavor(enum lustre_part from_part, enum lustre_part to_part,
-                         char *str, struct sec_flavor_config *conf)
-{
-        char   *f, *bulk, *alg, *enc;
-        char    buf[64];
-        int     i, bulk_priv;
-        ENTRY;
-
-        if (str == NULL) {
-                if (get_default_flavor(to_part, conf))
-                        return -EINVAL;
-                goto set_flags;
-        }
-
-        for (i = 0; i < __nflavors; i++) {
-                f = sptlrpc_flavor2name(__flavors[i]);
-                if (strncmp(str, f, strlen(f)) == 0)
-                        break;
-        }
-
-        if (i >= __nflavors)
-                GOTO(invalid, -EINVAL);
-
-        /* prepare local buffer thus we can modify it as we want */
-        strncpy(buf, str, 64);
-        buf[64 - 1] = '\0';
-
-        /* find bulk string */
-        bulk = strchr(buf, '-');
-        if (bulk)
-                *bulk++ = '\0';
-
-        /* now the first part must equal to rpc flavor name */
-        if (strcmp(buf, f) != 0)
-                GOTO(invalid, -EINVAL);
-
-        get_flavor_by_rpc(__flavors[i], conf);
-
-        if (bulk == NULL)
-                goto set_flags;
-
-        /* null flavor should not have any suffix */
-        if (__flavors[i] == SPTLRPC_FLVR_NULL)
-                GOTO(invalid, -EINVAL);
-
-        /* find bulk algorithm string */
-        alg = strchr(bulk, ':');
-        if (alg)
-                *alg++ = '\0';
-
-        /* verify bulk section */
-        if (strcmp(bulk, "bulkn") == 0) {
-                conf->sfc_bulk_csum = BULK_CSUM_ALG_NULL;
-                conf->sfc_bulk_priv = BULK_PRIV_ALG_NULL;
-                goto set_flags;
-        }
-
-        if (strcmp(bulk, "bulki") == 0)
-                bulk_priv = 0;
-        else if (strcmp(bulk, "bulkp") == 0)
-                bulk_priv = 1;
-        else
-                GOTO(invalid, -EINVAL);
-
-        /* plain policy dosen't support bulk encryption */
-        if (bulk_priv && __flavors[i] == SPTLRPC_FLVR_PLAIN)
-                GOTO(invalid, -EINVAL);
-
-        get_flavor_by_rpc_bulk(__flavors[i], bulk_priv, conf);
-
-        if (alg == NULL)
-                goto set_flags;
-
-        /* find encryption algorithm string */
-        enc = strchr(alg, '/');
-        if (enc)
-                *enc++ = '\0';
-
-        /* bulk combination sanity check */
-        if ((bulk_priv && enc == NULL) || (bulk_priv == 0 && enc))
-                GOTO(invalid, -EINVAL);
-
-        /* checksum algorithm */
-        for (i = 0; i < BULK_CSUM_ALG_MAX; i++) {
-                if (strcmp(alg, sptlrpc_bulk_csum_alg2name(i)) == 0) {
-                        conf->sfc_bulk_csum = i;
-                        break;
-                }
-        }
-        if (i >= BULK_CSUM_ALG_MAX)
-                GOTO(invalid, -EINVAL);
-
-        /* privacy algorithm */
-        if (enc) {
-                if (strcmp(enc, "arc4") != 0)
-                        GOTO(invalid, -EINVAL);
-                conf->sfc_bulk_priv = BULK_PRIV_ALG_ARC4;
-        }
-
-set_flags:
-        /* * set ROOTONLY flag:
-         *   - to OST
-         *   - from MDT to MDT
-         * * set BULK flag for:
-         *   - from CLI to OST
-         */
-        if (to_part == LUSTRE_OST ||
-            (from_part == LUSTRE_MDT && to_part == LUSTRE_MDT))
-                conf->sfc_flags |= PTLRPC_SEC_FL_ROOTONLY;
-        if (from_part == LUSTRE_CLI && to_part == LUSTRE_OST)
-                conf->sfc_flags |= PTLRPC_SEC_FL_BULK;
-
-#ifdef __BIG_ENDIAN
-        __swab32s(&conf->sfc_rpc_flavor);
-        __swab32s(&conf->sfc_bulk_csum);
-        __swab32s(&conf->sfc_bulk_priv);
-        __swab32s(&conf->sfc_flags);
-#endif
-        return 0;
-invalid:
-        CERROR("invalid flavor string: %s\n", str);
-        return -EINVAL;
-}
-EXPORT_SYMBOL(sptlrpc_parse_flavor);
 
 /****************************************
  * misc helpers                         *

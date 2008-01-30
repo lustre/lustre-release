@@ -1167,6 +1167,7 @@ out_free:
 
 static
 __u32 gss_plain_encrypt_kerberos(struct gss_ctx  *ctx,
+                                 int              decrypt,
                                  int              length,
                                  void            *in_buf,
                                  void            *out_buf)
@@ -1174,7 +1175,7 @@ __u32 gss_plain_encrypt_kerberos(struct gss_ctx  *ctx,
         struct krb5_ctx        *kctx = ctx->internal_ctx_id;
         __u32                   rc;
 
-        rc = krb5_encrypt(kctx->kc_keye.kb_tfm, 0,
+        rc = krb5_encrypt(kctx->kc_keye.kb_tfm, decrypt,
                           NULL, in_buf, out_buf, length);
         if (rc)
                 CERROR("plain encrypt error: %d\n", rc);
@@ -1189,7 +1190,7 @@ int gss_display_kerberos(struct gss_ctx        *ctx,
         struct krb5_ctx    *kctx = ctx->internal_ctx_id;
         int                 written;
 
-        written = snprintf(buf, bufsize, "mech: krb5 (%s)\n",
+        written = snprintf(buf, bufsize, "krb5 (%s)",
                            enctype2str(kctx->kc_enctype));
         return written;
 }

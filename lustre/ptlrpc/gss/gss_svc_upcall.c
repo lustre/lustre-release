@@ -54,11 +54,10 @@
 #include <linux/slab.h>
 #include <linux/hash.h>
 #include <linux/mutex.h>
+#include <linux/sunrpc/cache.h>
 #else
 #include <liblustre.h>
 #endif
-
-#include <linux/sunrpc/cache.h>
 
 #include <obd.h>
 #include <obd_class.h>
@@ -88,8 +87,7 @@ __u64 gss_get_next_ctx_index(void)
         return idx;
 }
 
-static inline
-unsigned long hash_mem(char *buf, int length, int bits)
+static inline unsigned long hash_mem(char *buf, int length, int bits)
 {
         unsigned long hash = 0;
         unsigned long l = 0;
@@ -135,8 +133,7 @@ static struct cache_head *rsi_table[RSI_HASHMAX];
 static struct cache_detail rsi_cache;
 static struct rsi *rsi_lookup(struct rsi *item, int set);
 
-static
-void rsi_free(struct rsi *rsi)
+static void rsi_free(struct rsi *rsi)
 {
         rawobj_free(&rsi->in_handle);
         rawobj_free(&rsi->in_token);
@@ -144,8 +141,7 @@ void rsi_free(struct rsi *rsi)
         rawobj_free(&rsi->out_token);
 }
 
-static
-void rsi_put(struct cache_head *item, struct cache_detail *cd)
+static void rsi_put(struct cache_head *item, struct cache_detail *cd)
 {
         struct rsi *rsi = container_of(item, struct rsi, h);
 
@@ -158,8 +154,7 @@ void rsi_put(struct cache_head *item, struct cache_detail *cd)
         }
 }
 
-static inline
-int rsi_hash(struct rsi *item)
+static inline int rsi_hash(struct rsi *item)
 {
         return hash_mem((char *)item->in_handle.data, item->in_handle.len,
                         RSI_HASHBITS) ^
@@ -167,15 +162,13 @@ int rsi_hash(struct rsi *item)
                         RSI_HASHBITS);
 }
 
-static inline
-int rsi_match(struct rsi *item, struct rsi *tmp)
+static inline int rsi_match(struct rsi *item, struct rsi *tmp)
 {
         return (rawobj_equal(&item->in_handle, &tmp->in_handle) &&
                 rawobj_equal(&item->in_token, &tmp->in_token));
 }
 
-static
-void rsi_request(struct cache_detail *cd,
+static void rsi_request(struct cache_detail *cd,
                  struct cache_head *h,
                  char **bpp, int *blen)
 {
@@ -195,8 +188,7 @@ void rsi_request(struct cache_detail *cd,
         (*bpp)[-1] = '\n';
 }
 
-static inline
-void rsi_init(struct rsi *new, struct rsi *item)
+static inline void rsi_init(struct rsi *new, struct rsi *item)
 {
         new->out_handle = RAWOBJ_EMPTY;
         new->out_token = RAWOBJ_EMPTY;
@@ -211,8 +203,7 @@ void rsi_init(struct rsi *new, struct rsi *item)
         init_waitqueue_head(&new->waitq);
 }
 
-static inline
-void rsi_update(struct rsi *new, struct rsi *item)
+static inline void rsi_update(struct rsi *new, struct rsi *item)
 {
         LASSERT(new->out_handle.len == 0);
         LASSERT(new->out_token.len == 0);
@@ -226,8 +217,7 @@ void rsi_update(struct rsi *new, struct rsi *item)
         new->minor_status = item->minor_status;
 }
 
-static
-int rsi_parse(struct cache_detail *cd, char *mesg, int mlen)
+static int rsi_parse(struct cache_detail *cd, char *mesg, int mlen)
 {
         char           *buf = mesg;
         char           *ep;
@@ -343,16 +333,14 @@ static struct cache_head *rsc_table[RSC_HASHMAX];
 static struct cache_detail rsc_cache;
 static struct rsc *rsc_lookup(struct rsc *item, int set);
 
-static
-void rsc_free(struct rsc *rsci)
+static void rsc_free(struct rsc *rsci)
 {
         rawobj_free(&rsci->handle);
         rawobj_free(&rsci->ctx.gsc_rvs_hdl);
         lgss_delete_sec_context(&rsci->ctx.gsc_mechctx);
 }
 
-static
-void rsc_put(struct cache_head *item, struct cache_detail *cd)
+static void rsc_put(struct cache_head *item, struct cache_detail *cd)
 {
         struct rsc *rsci = container_of(item, struct rsc, h);
 
@@ -365,21 +353,18 @@ void rsc_put(struct cache_head *item, struct cache_detail *cd)
         }
 }
 
-static inline
-int rsc_hash(struct rsc *rsci)
+static inline int rsc_hash(struct rsc *rsci)
 {
         return hash_mem((char *)rsci->handle.data,
                         rsci->handle.len, RSC_HASHBITS);
 }
 
-static inline
-int rsc_match(struct rsc *new, struct rsc *tmp)
+static inline int rsc_match(struct rsc *new, struct rsc *tmp)
 {
         return rawobj_equal(&new->handle, &tmp->handle);
 }
 
-static inline
-void rsc_init(struct rsc *new, struct rsc *tmp)
+static inline void rsc_init(struct rsc *new, struct rsc *tmp)
 {
         new->handle = tmp->handle;
         tmp->handle = RAWOBJ_EMPTY;
@@ -389,8 +374,7 @@ void rsc_init(struct rsc *new, struct rsc *tmp)
         new->ctx.gsc_rvs_hdl = RAWOBJ_EMPTY;
 }
 
-static inline
-void rsc_update(struct rsc *new, struct rsc *tmp)
+static inline void rsc_update(struct rsc *new, struct rsc *tmp)
 {
         new->ctx = tmp->ctx;
         tmp->ctx.gsc_rvs_hdl = RAWOBJ_EMPTY;
@@ -400,8 +384,7 @@ void rsc_update(struct rsc *new, struct rsc *tmp)
         spin_lock_init(&new->ctx.gsc_seqdata.ssd_lock);
 }
 
-static
-int rsc_parse(struct cache_detail *cd, char *mesg, int mlen)
+static int rsc_parse(struct cache_detail *cd, char *mesg, int mlen)
 {
         char       *buf = mesg;
         int         len, rv, tmp_int;
@@ -527,8 +510,7 @@ out:
 
 typedef int rsc_entry_match(struct rsc *rscp, long data);
 
-static
-void rsc_flush(rsc_entry_match *match, long data)
+static void rsc_flush(rsc_entry_match *match, long data)
 {
         struct cache_head **ch;
         struct rsc *rscp;
@@ -558,22 +540,19 @@ void rsc_flush(rsc_entry_match *match, long data)
         EXIT;
 }
 
-static
-int match_uid(struct rsc *rscp, long uid)
+static int match_uid(struct rsc *rscp, long uid)
 {
         if ((int) uid == -1)
                 return 1;
         return ((int) rscp->ctx.gsc_uid == (int) uid);
 }
 
-static
-int match_target(struct rsc *rscp, long target)
+static int match_target(struct rsc *rscp, long target)
 {
         return (rscp->target == (struct obd_device *) target);
 }
 
-static inline
-void rsc_flush_uid(int uid)
+static inline void rsc_flush_uid(int uid)
 {
         if (uid == -1)
                 CWARN("flush all gss contexts...\n");
@@ -581,8 +560,7 @@ void rsc_flush_uid(int uid)
         rsc_flush(match_uid, (long) uid);
 }
 
-static inline
-void rsc_flush_target(struct obd_device *target)
+static inline void rsc_flush_target(struct obd_device *target)
 {
         rsc_flush(match_target, (long) target);
 }
@@ -603,8 +581,7 @@ static struct cache_detail rsc_cache = {
 
 static DefineSimpleCacheLookup(rsc, 0);
 
-static
-struct rsc *gss_svc_searchbyctx(rawobj_t *handle)
+static struct rsc *gss_svc_searchbyctx(rawobj_t *handle)
 {
         struct rsc  rsci;
         struct rsc *found;
@@ -658,17 +635,63 @@ int gss_svc_upcall_install_rvs_ctx(struct obd_import *imp,
 
         rscp = rsc_lookup(&rsci, 1);
         rsc_free(&rsci);
-        if (rscp)
-                rsc_put(&rscp->h, &rsc_cache);
+        if (rscp) {
+                /* FIXME */
+                rscp->ctx.gsc_usr_root = 1;
+                rscp->ctx.gsc_usr_mds= 1;
+                rscp->ctx.gsc_reverse = 1;
 
-        CDEBUG(D_SEC, "client installed reverse svc ctx to %s: idx "LPX64"\n",
-               imp->imp_obd->u.cli.cl_target_uuid.uuid, gsec->gs_rvs_hdl);
+                rawobj_dup(&gctx->gc_svc_handle, &rscp->handle);
+
+                CWARN("create reverse svc ctx %p to %s: idx "LPX64"\n",
+                      &rscp->ctx, obd2cli_tgt(imp->imp_obd),
+                      gsec->gs_rvs_hdl);
+
+                rsc_put(&rscp->h, &rsc_cache);
+        }
 
         RETURN(0);
 }
 
-static
-struct cache_deferred_req* cache_upcall_defer(struct cache_req *req)
+int gss_svc_upcall_expire_rvs_ctx(rawobj_t *handle)
+{
+        const cfs_time_t        expire = 20;
+        struct rsc             *rscp;
+
+        rscp = gss_svc_searchbyctx(handle);
+        if (rscp) {
+                CDEBUG(D_SEC, "reverse svcctx %p (rsc %p) expire soon\n",
+                       &rscp->ctx, rscp);
+
+                rscp->h.expiry_time = cfs_time_current_sec() + expire;
+                rsc_put(&rscp->h, &rsc_cache);
+        }
+        return 0;
+}
+
+int gss_svc_upcall_dup_handle(rawobj_t *handle, struct gss_svc_ctx *ctx)
+{
+        struct rsc *rscp = container_of(ctx, struct rsc, ctx);
+
+        return rawobj_dup(handle, &rscp->handle);
+}
+
+int gss_svc_upcall_update_sequence(rawobj_t *handle, __u32 seq)
+{
+        struct rsc             *rscp;
+
+        rscp = gss_svc_searchbyctx(handle);
+        if (rscp) {
+                CDEBUG(D_SEC, "reverse svcctx %p (rsc %p) update seq to %u\n",
+                       &rscp->ctx, rscp, seq + 1);
+
+                rscp->ctx.gsc_rvs_seq = seq + 1;
+                rsc_put(&rscp->h, &rsc_cache);
+        }
+        return 0;
+}
+
+static struct cache_deferred_req* cache_upcall_defer(struct cache_req *req)
 {
         return NULL;
 }
@@ -844,6 +867,9 @@ out:
                 /* if anything went wrong, we don't keep the context too */
                 if (rc != SECSVC_OK)
                         set_bit(CACHE_NEGATIVE, &rsci->h.flags);
+                else
+                        CDEBUG(D_SEC, "create rsc with idx "LPX64"\n",
+                               gss_handle_to_u64(&rsci->handle));
 
                 rsc_put(&rsci->h, &rsc_cache);
         }
@@ -857,7 +883,8 @@ struct gss_svc_ctx *gss_svc_upcall_get_ctx(struct ptlrpc_request *req,
 
         rsc = gss_svc_searchbyctx(&gw->gw_handle);
         if (!rsc) {
-                CWARN("Invalid gss context handle from %s\n",
+                CWARN("Invalid gss ctx idx "LPX64" from %s\n",
+                      gss_handle_to_u64(&gw->gw_handle),
                       libcfs_nid2str(req->rq_peer.nid));
                 return NULL;
         }
@@ -876,7 +903,10 @@ void gss_svc_upcall_destroy_ctx(struct gss_svc_ctx *ctx)
 {
         struct rsc *rsc = container_of(ctx, struct rsc, ctx);
 
+        /* can't be found */
         set_bit(CACHE_NEGATIVE, &rsc->h.flags);
+        /* to be removed at next scan */
+        rsc->h.expiry_time = 1;
 }
 
 int __init gss_init_svc_upcall(void)
