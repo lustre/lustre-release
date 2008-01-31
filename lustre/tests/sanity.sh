@@ -144,7 +144,7 @@ echo # add a newline after mke2fs.
 
 umask 077
 
-OLDDEBUG="`sysctl lnet.debug 2> /dev/null`"
+OLDDEBUG="`sysctl -n lnet.debug 2> /dev/null`"
 sysctl -w lnet.debug=-1 2> /dev/null || true
 test_0() {
 	touch $DIR/$tfile
