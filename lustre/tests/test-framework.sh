@@ -71,6 +71,7 @@ init_test_env() {
     [ -d /r ] && export ROOT=${ROOT:-/r}
     export TMP=${TMP:-$ROOT/tmp}
     export TESTSUITELOG=${TMP}/${TESTSUITE}.log
+    export HOSTNAME=${HOSTNAME:-`hostname`}
 
     export PATH=:$PATH:$LUSTRE/utils:$LUSTRE/tests
     export LCTL=${LCTL:-"$LUSTRE/utils/lctl"}
@@ -175,10 +176,10 @@ load_modules() {
 
     load_module llite/lustre
     load_module llite/llite_lloop
-    rm -f $TMP/ogdb-`hostname`
+    rm -f $TMP/ogdb-$HOSTNAME
     OGDB=$TMP
     [ -d /r ] && OGDB="/r/tmp"
-    $LCTL modules > $OGDB/ogdb-`hostname`
+    $LCTL modules > $OGDB/ogdb-$HOSTNAME
     # 'mount' doesn't look in $PATH, just sbin
     [ -f $LUSTRE/utils/mount.lustre ] && cp $LUSTRE/utils/mount.lustre /sbin/. || true
 }
@@ -319,7 +320,7 @@ zconf_mount() {
     do_node $client "sysctl -w lnet.debug=$PTLDEBUG;
         sysctl -w lnet.subsystem_debug=${SUBSYSTEM# };
         sysctl -w lnet.debug_mb=${DEBUG_SIZE}"
-    [ -d /r ] && $LCTL modules > /r/tmp/ogdb-`hostname`
+    [ -d /r ] && $LCTL modules > /r/tmp/ogdb-$HOSTNAME
     return 0
 }
 
@@ -330,6 +331,7 @@ zconf_umount() {
     local running=$(do_node $client "grep -c $mnt' ' /proc/mounts") || true
     if [ $running -ne 0 ]; then
         echo "Stopping client $mnt (opts:$force)"
+        lsof | grep "$mnt" || true
         do_node $client umount $force $mnt
     fi
 }
@@ -630,7 +632,7 @@ facet_active_host() {
     local facet=$1
     local active=`facet_active $facet`
     if [ "$facet" == client ]; then
-        hostname
+        echo $HOSTNAME
     else
         echo `facet_host $active`
     fi
@@ -656,8 +658,11 @@ do_node() {
     HOST=$1
     shift
     local myPDSH=$PDSH
-    if [ "$HOST" = "$(hostname)" ]; then
+    if [ "$HOST" = "$HOSTNAME" ]; then
         myPDSH="no_dsh"
+    elif [ -z "$myPDSH" -o "$myPDSH" = "no_dsh" ]; then
+        echo "cannot run remote command on $HOST with $myPDSH"
+        return 128
     fi
     if $VERBOSE; then
         echo "CMD: $HOST $@" >&2
@@ -704,8 +709,8 @@ stopall() {
     fi
     
     # assume client mount is local 
-    grep " $MOUNT " /proc/mounts && zconf_umount `hostname` $MOUNT $*
-    grep " $MOUNT2 " /proc/mounts && zconf_umount `hostname` $MOUNT2 $*
+    grep " $MOUNT " /proc/mounts && zconf_umount $HOSTNAME $MOUNT $*
+    grep " $MOUNT2 " /proc/mounts && zconf_umount $HOSTNAME $MOUNT2 $*
     [ "$CLIENTONLY" ] && return
     stop mds -f
     for num in `seq $OSTCOUNT`; do
@@ -743,7 +748,7 @@ formatall() {
 }
 
 mount_client() {
-    grep " $1 " /proc/mounts || zconf_mount `hostname` $*
+    grep " $1 " /proc/mounts || zconf_mount $HOSTNAME $*
 }
 
 setupall() {
@@ -1217,9 +1222,19 @@ remote_mds ()
     [ ! -e /proc/fs/lustre/mds/*MDT* ]
 }
 
+remote_mds_nodsh()
+{
+    remote_mds && [ "$PDSH" = "no_dsh" -o -z "$PDSH" -o -z "$mds_HOST" ]
+}
+
 remote_ost ()
 {
     [ $(grep -c obdfilter $LPROC/devices) -eq 0 ]
+}
+
+remote_ost_nodsh()
+{
+    remote_ost && [ "$PDSH" = "no_dsh" -o -z "$PDSH" -o -z "$ost_HOST" ]
 }
 
 osts_nodes () {
@@ -1237,10 +1252,13 @@ osts_nodes () {
 
 nodes_list () {
     # FIXME. We need a list of clients
-    local myNODES=`hostname`
+    local myNODES=$HOSTNAME
     local myNODES_sort
 
-    myNODES="$myNODES $(osts_nodes) $mds_HOST"
+    if [ "$PDSH" -a "$PDSH" != "no_dsh" ]; then
+        myNODES="$myNODES $(osts_nodes) $mds_HOST"
+    fi
+
     myNODES_sort=$(for i in $myNODES; do echo $i; done | sort -u)
 
     echo $myNODES_sort

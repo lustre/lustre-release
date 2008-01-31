@@ -11,7 +11,7 @@ ONLY=${ONLY:-"$*"}
 ALWAYS_EXCEPT=${ALWAYS_EXCEPT:-"27o  27q  42a  42b  42c  42d  45  51d   74b   75 $SANITY_EXCEPT" }
 # UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
 
-[ "$SLOW" = "no" ] && EXCEPT_SLOW="24o 27m 36f 36g 51b 51c 60c 63 64b 68 71 73 78 101 103 115 120g"
+[ "$SLOW" = "no" ] && EXCEPT_SLOW="24o 27m 36f 36g 51b 51c 60c 63 64b 68 71 73 77f 78 101 103 115 120g 124b"
 
 # Tests that fail on uml, maybe elsewhere, FIXME
 CPU=`awk '/model/ {print $4}' /proc/cpuinfo`
@@ -1578,9 +1578,9 @@ test_36f() {
 }
 run_test 36f "utime on file racing with OST BRW write =========="
 
-export FMD_MAX_AGE=`do_facet ost1 cat $LPROC/obdfilter/*/client_cache_seconds 2> /dev/null | head -n 1`
 test_36g() {
-	[ -z "$FMD_MAX_AGE" ] && skip "skip test for remote OST" && return
+	remote_ost && skip "remote OST" && return
+	export FMD_MAX_AGE=`do_facet ost1 cat $LPROC/obdfilter/*/client_cache_seconds 2> /dev/null | head -n 1`
 	FMD_BEFORE="`awk '/ll_fmd_cache/ { print $2 }' /proc/slabinfo`"
 	touch $DIR/d36/$tfile
 	sleep $((FMD_MAX_AGE + 12))
@@ -2758,9 +2758,10 @@ test_65i() { # bug6367
 run_test 65i "set non-default striping on root directory (bug 6367)="
 
 test_65j() { # bug6367
+	sync; sleep 1
 	# if we aren't already remounting for each test, do so for this test
 	if [ "$CLEANUP" = ":" -a "$I_MOUNTED" = "yes" ]; then
-		cleanup -f || error "failed to unmount"
+		cleanup || error "failed to unmount"
 		setup
 	fi
 	$SETSTRIPE -d $MOUNT || error "setstripe failed"
@@ -2769,6 +2770,7 @@ run_test 65j "set default striping on root directory (bug 6367)="
 
 test_65k() { # bug11679
         [ "$OSTCOUNT" -lt 2 ] && skip "too few OSTs" && return
+        remote_mds_nodsh && skip "remote MDS" && return
 
         echo "Check OST status: "
         MDS_OSCS=`do_facet mds lctl dl | awk '/[oO][sS][cC].*md[ts]/ { print $4 }'`
@@ -3313,6 +3315,7 @@ test_78() { # bug 10901
 	echo "Smallest OST: $SMALLESTOST"
 	[ $F78SIZE -gt $((SMALLESTOST * $OSTCOUNT / 1024)) ] && \
 		F78SIZE=$((SMALLESTOST * $OSTCOUNT / 1024))
+	[ "$SLOW" = "no" ] && NSEQ=1 && [ $F78SIZE -gt 32 ] && F78SIZE=32
 	echo "File size: $F78SIZE"
 	$SETSTRIPE $DIR/$tfile -c -1 || error "setstripe failed"
  	for i in `seq 1 $NSEQ`
@@ -3747,10 +3750,7 @@ run_test 102d "star restore stripe info from tarfile,not keep osts ==========="
 test_102e() {
 	# b10930: star test for trusted.lov xattr
 	star --xhelp 2>&1 | grep -q nolustre  
-	if [ $? -ne 0 ]
-	then
-		skip "being skipped because a lustre-aware star is not installed." && return
-	fi
+	[ $? -ne 0 ] && skip "lustre-aware star is not installed" && return
 	[ "$OSTCOUNT" -lt "4" ] && skip "skipping 4-stripe test" && return
 	setup_test102
 	mkdir -p $DIR/d102e
@@ -3763,10 +3763,7 @@ run_test 102e "star restore stripe info from tarfile, keep osts ==========="
 test_102f() {
 	# b10930: star test for trusted.lov xattr
 	star --xhelp 2>&1 | grep -q nolustre  
-	if [ $? -ne 0 ]
-	then
-		skip "being skipped because a lustre-aware star is not installed." && return
-	fi
+	[ $? -ne 0 ] && skip "lustre-aware star is not installed" && return
 	[ "$OSTCOUNT" -lt "4" ] && skip "skipping 4-stripe test" && return
 	setup_test102
 	mkdir -p $DIR/d102f
@@ -3780,10 +3777,7 @@ run_test 102f "star copy files, not keep osts ==========="
 test_102g() {
 	# b10930: star test for trusted.lov xattr
 	star --xhelp 2>&1 | grep -q nolustre  
-	if [ $? -ne 0 ]
-	then
-		skip "being skipped because a lustre-aware star is not installed." && return
-	fi
+	[ $? -ne 0 ] && skip "lustre-aware star is not installed" && return
 	[ "$OSTCOUNT" -lt "4" ] && skip "skipping 4-stripe test" && return
 	setup_test102
 	mkdir -p $DIR/d102g
@@ -4085,6 +4079,8 @@ run_test 118a "verify O_SYNC works =========="
 
 test_118b()
 {
+	remote_ost_nodsh && skip "remote OST" && return
+
 	reset_async
 
 	#define OBD_FAIL_OST_ENOENT 0x217
@@ -4118,6 +4114,8 @@ run_test 118b "Reclaim dirty pages on fatal error =========="
 
 test_118c()
 {
+	remote_ost_nodsh && skip "remote OST" && return
+
 	reset_async
 
 	#define OBD_FAIL_OST_EROFS               0x216
@@ -4158,6 +4156,8 @@ run_test 118c "Fsync blocks on EROFS until dirty pages are flushed =========="
 
 test_118d()
 {
+	remote_ost_nodsh && skip "remote OST" && return
+
 	reset_async
 
 	#define OBD_FAIL_OST_BRW_PAUSE_BULK
@@ -4260,6 +4260,8 @@ test_118g() {
 run_test 118g "Don't stay in wait if we got local -ENOMEM  =========="
 
 test_118h() {
+	remote_ost_nodsh && skip "remote OST" && return
+
         reset_async
 
 	#define OBD_FAIL_OST_BRW_WRITE_BULK      0x20e
@@ -4292,6 +4294,8 @@ test_118h() {
 run_test 118h "Verify timeout in handling recoverables errors  =========="
 
 test_118i() {
+	remote_ost_nodsh && skip "remote OST" && return
+
         reset_async
 
 	#define OBD_FAIL_OST_BRW_WRITE_BULK      0x20e
@@ -4328,6 +4332,8 @@ test_118i() {
 run_test 118i "Fix error before timeout in recoverable error  =========="
 
 test_118j() {
+	remote_ost_nodsh && skip "remote OST" && return
+
         reset_async
 
 	#define OBD_FAIL_OST_BRW_WRITE_BULK2     0x220
@@ -4690,7 +4696,7 @@ test_123() # statahead(bug 11401)
                 delta=$((etime - stime))
                 log "ls $i files without statahead: $delta sec"
 
-                for client in /proc/fs/lustre/llite/*; do
+                for client in $LPROC/llite/*; do
                         cat $client/statahead_stats
                         echo $max > $client/statahead_max
                 done
@@ -4841,9 +4847,9 @@ test_124b() {
         log "lru_size = $(cat $NSDIR/lru_size)"
 
         if test $lruresize_delta -gt $nolruresize_delta; then
-                log "ls -la is $((lruresize_delta - $nolruresize_delta))s slower with lru resize enabled"
+                log "ls -la is $(((lruresize_delta - $nolruresize_delta) * 100 / $nolruresize_delta))% slower with lru resize enabled"
         elif test $nolruresize_delta -gt $lruresize_delta; then
-                log "ls -la is $((nolruresize_delta - $lruresize_delta))s faster with lru resize enabled"
+                log "ls -la is $(((nolruresize_delta - $lruresize_delta) * 100 / $nolruresize_delta))% faster with lru resize enabled"
         else
                 log "lru resize performs the same with no lru resize"
         fi
