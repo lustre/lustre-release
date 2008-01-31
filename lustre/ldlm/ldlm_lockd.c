@@ -832,6 +832,40 @@ extern unsigned long long lu_time_stamp_get(void);
 #define lu_time_stamp_get() time(NULL)
 #endif
 
+static void ldlm_svc_get_eopc(struct ldlm_request *dlm_req,
+                       struct lprocfs_stats *srv_stats)
+{
+        int lock_type = 0, op = 0;
+
+        lock_type = dlm_req->lock_desc.l_resource.lr_type;
+
+        switch (lock_type) {
+        case LDLM_PLAIN:
+                op = PTLRPC_LAST_CNTR + LDLM_PLAIN_ENQUEUE;
+                break;
+        case LDLM_EXTENT:
+                if (dlm_req->lock_flags & LDLM_FL_HAS_INTENT)
+                        op = PTLRPC_LAST_CNTR + LDLM_GLIMPSE_ENQUEUE;
+                else
+                        op = PTLRPC_LAST_CNTR + LDLM_EXTENT_ENQUEUE;
+                break;
+        case LDLM_FLOCK:
+                op = PTLRPC_LAST_CNTR + LDLM_FLOCK_ENQUEUE;
+                break;
+        case LDLM_IBITS:
+                op = PTLRPC_LAST_CNTR + LDLM_IBITS_ENQUEUE;
+                break;
+        default:
+                op = 0;
+                break;
+        }
+
+        if (op)
+                lprocfs_counter_incr(srv_stats, op);
+
+        return ;
+}
+
 /*
  * Main server-side entry point into LDLM. This is called by ptlrpc service
  * threads to carry out client lock enqueueing requests.
@@ -857,6 +891,10 @@ int ldlm_handle_enqueue0(struct ldlm_namespace *ns,
         flags = dlm_req->lock_flags;
 
         LASSERT(req->rq_export);
+
+        if (req->rq_rqbd->rqbd_service->srv_stats)
+                ldlm_svc_get_eopc(dlm_req,
+                                  req->rq_rqbd->rqbd_service->srv_stats);
 
         if (req->rq_export->exp_ldlm_stats)
                 lprocfs_counter_incr(req->rq_export->exp_ldlm_stats,
@@ -1105,7 +1143,6 @@ int ldlm_handle_enqueue(struct ptlrpc_request *req,
                 .lcs_blocking   = blocking_callback,
                 .lcs_glimpse    = glimpse_callback
         };
-
 
         dlm_req = lustre_swab_reqbuf(req, DLM_LOCKREQ_OFF,
                                      sizeof *dlm_req, lustre_swab_ldlm_request);

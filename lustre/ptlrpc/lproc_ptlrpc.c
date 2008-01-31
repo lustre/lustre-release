@@ -112,7 +112,24 @@ struct ll_rpc_opcode {
         { SEC_CTX_FINI,     "sec_ctx_fini" }
 };
 
-const char* ll_opcode2str(__u32 opcode)
+struct ll_eopcode {
+     __u32       opcode;
+     const char *opname;
+} ll_eopcode_table[EXTRA_LAST_OPC] = {
+        { LDLM_GLIMPSE_ENQUEUE, "ldlm_glimpse_enqueue" },
+        { LDLM_PLAIN_ENQUEUE,   "ldlm_plain_enqueue" },
+        { LDLM_EXTENT_ENQUEUE,  "ldlm_extent_enqueue" },
+        { LDLM_FLOCK_ENQUEUE,   "ldlm_flock_enqueue" },
+        { LDLM_IBITS_ENQUEUE,   "ldlm_ibits_enqueue" },
+        { MDS_REINT_CREATE,     "mds_reint_create" },
+        { MDS_REINT_LINK,       "mds_reint_link" },
+        { MDS_REINT_OPEN,       "mds_reint_open" },
+        { MDS_REINT_SETATTR,    "mds_reint_setattr" },
+        { MDS_REINT_RENAME,     "mds_reint_rename" },
+        { MDS_REINT_UNLINK,     "mds_reint_unlink" }
+};
+
+const char *ll_opcode2str(__u32 opcode)
 {
         /* When one of the assertions below fail, chances are that:
          *     1) A new opcode was added in lustre_idl.h, but was
@@ -127,6 +144,11 @@ const char* ll_opcode2str(__u32 opcode)
         return ll_rpc_opcode_table[offset].opname;
 }
 
+const char* ll_eopcode2str(__u32 opcode)
+{
+        LASSERT(ll_eopcode_table[opcode].opcode == opcode);
+        return ll_eopcode_table[opcode].opname;
+}
 #ifdef LPROCFS
 void ptlrpc_lprocfs_register(struct proc_dir_entry *root, char *dir,
                              char *name, struct proc_dir_entry **procroot_ret,
@@ -141,7 +163,7 @@ void ptlrpc_lprocfs_register(struct proc_dir_entry *root, char *dir,
         LASSERT(*procroot_ret == NULL);
         LASSERT(*stats_ret == NULL);
 
-        svc_stats = lprocfs_alloc_stats(PTLRPC_LAST_CNTR + LUSTRE_MAX_OPCODES, 0);
+        svc_stats = lprocfs_alloc_stats(EXTRA_MAX_OPCODES + LUSTRE_MAX_OPCODES, 0);
         if (svc_stats == NULL)
                 return;
 
@@ -163,11 +185,16 @@ void ptlrpc_lprocfs_register(struct proc_dir_entry *root, char *dir,
                              svc_counter_config, "req_active", "reqs");
         lprocfs_counter_init(svc_stats, PTLRPC_REQBUF_AVAIL_CNTR,
                              svc_counter_config, "reqbuf_avail", "bufs");
+        for (i = 0; i < EXTRA_LAST_OPC; i++) {
+                lprocfs_counter_init(svc_stats, PTLRPC_LAST_CNTR + i,
+                                     svc_counter_config,
+                                     ll_eopcode2str(i), "reqs");
+        }
         for (i = 0; i < LUSTRE_MAX_OPCODES; i++) {
                 __u32 opcode = ll_rpc_opcode_table[i].opcode;
-                lprocfs_counter_init(svc_stats, PTLRPC_LAST_CNTR + i,
-                                     svc_counter_config, ll_opcode2str(opcode),
-                                     "usec");
+                lprocfs_counter_init(svc_stats,
+                                     EXTRA_MAX_OPCODES + i, svc_counter_config,
+                                     ll_opcode2str(opcode), "usec");
         }
 
         rc = lprocfs_register_stats(svc_procroot, name, svc_stats);
@@ -444,15 +471,17 @@ EXPORT_SYMBOL(ptlrpc_lprocfs_register_obd);
 void ptlrpc_lprocfs_rpc_sent(struct ptlrpc_request *req)
 {
         struct lprocfs_stats *svc_stats;
-        int opc = opcode_offset(lustre_msg_get_opc(req->rq_reqmsg));
+        __u32 op = lustre_msg_get_opc(req->rq_reqmsg);
+        int opc = opcode_offset(op);
 
         svc_stats = req->rq_import->imp_obd->obd_svc_stats;
         if (svc_stats == NULL || opc <= 0)
                 return;
         LASSERT(opc < LUSTRE_MAX_OPCODES);
         /* These two use the ptlrpc_lprocfs_brw below */
-        if (!(opc == OST_WRITE || opc == OST_READ))
-                lprocfs_counter_add(svc_stats, opc + PTLRPC_LAST_CNTR, 0);
+        if (!(opc == OST_WRITE || opc == OST_READ || op == LDLM_ENQUEUE
+              || op == MDS_REINT))
+                lprocfs_counter_add(svc_stats, opc + EXTRA_MAX_OPCODES, 0);
 }
 
 void ptlrpc_lprocfs_brw(struct ptlrpc_request *req, int opc, int bytes)
@@ -461,7 +490,7 @@ void ptlrpc_lprocfs_brw(struct ptlrpc_request *req, int opc, int bytes)
         svc_stats = req->rq_import->imp_obd->obd_svc_stats;
         if (!svc_stats) 
                 return;
-        lprocfs_counter_add(svc_stats, opc + PTLRPC_LAST_CNTR, bytes);
+        lprocfs_counter_add(svc_stats, opc + EXTRA_MAX_OPCODES, bytes);
 }
 EXPORT_SYMBOL(ptlrpc_lprocfs_brw);
 
