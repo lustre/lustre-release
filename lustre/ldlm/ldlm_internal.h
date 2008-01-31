@@ -110,6 +110,8 @@ int ldlm_process_plain_lock(struct ldlm_lock *lock, int *flags, int first_enq,
 /* ldlm_extent.c */
 int ldlm_process_extent_lock(struct ldlm_lock *lock, int *flags, int first_enq,
                              ldlm_error_t *err, struct list_head *work_list);
+void ldlm_extent_add_lock(struct ldlm_resource *res, struct ldlm_lock *lock);
+void ldlm_extent_unlink_lock(struct ldlm_lock *lock);
 
 /* ldlm_flock.c */
 int ldlm_process_flock_lock(struct ldlm_lock *req, int *flags, int first_enq,
@@ -134,6 +136,23 @@ struct ldlm_state {
         struct ptlrpc_connection *ldlm_server_conn;
         struct ldlm_bl_pool *ldlm_bl_pool;
 };
+
+/* interval tree, for LDLM_EXTENT. */
+extern cfs_mem_cache_t *ldlm_interval_slab; /* slab cache for ldlm_interval */
+extern void ldlm_interval_attach(struct ldlm_interval *n, struct ldlm_lock *l);
+extern struct ldlm_interval *ldlm_interval_detach(struct ldlm_lock *l);
+extern struct ldlm_interval *ldlm_interval_alloc(struct ldlm_lock *lock);
+extern void ldlm_interval_free(struct ldlm_interval *node);
+/* this function must be called with res lock held */
+static inline struct ldlm_extent *
+ldlm_interval_extent(struct ldlm_interval *node)
+{
+        struct ldlm_lock *lock;
+        LASSERT(!list_empty(&node->li_group));
+
+        lock = list_entry(node->li_group.next, struct ldlm_lock, l_sl_policy);
+        return &lock->l_policy_data.l_extent;
+}
 
 int ldlm_init(void);
 void ldlm_exit(void);

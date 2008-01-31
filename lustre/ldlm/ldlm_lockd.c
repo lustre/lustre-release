@@ -2065,6 +2065,15 @@ int __init ldlm_init(void)
                 return -ENOMEM;
         }
 
+        ldlm_interval_slab = cfs_mem_cache_create("interval_node",
+                                        sizeof(struct ldlm_interval),
+                                        0, SLAB_HWCACHE_ALIGN);
+        if (ldlm_interval_slab == NULL) {
+                cfs_mem_cache_destroy(ldlm_resource_slab);
+                cfs_mem_cache_destroy(ldlm_lock_slab);
+                return -ENOMEM;
+        }
+
         return 0;
 }
 
@@ -2077,6 +2086,8 @@ void __exit ldlm_exit(void)
         LASSERTF(rc == 0, "couldn't free ldlm resource slab\n");
         rc = cfs_mem_cache_destroy(ldlm_lock_slab);
         LASSERTF(rc == 0, "couldn't free ldlm lock slab\n");
+        rc = cfs_mem_cache_destroy(ldlm_interval_slab);
+        LASSERTF(rc == 0, "couldn't free interval node slab\n");
 }
 
 /* ldlm_extent.c */

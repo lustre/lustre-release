@@ -1064,6 +1064,8 @@ typedef enum {
         LCK_MAXMODE
 } ldlm_mode_t;
 
+#define LCK_MODE_NUM    7
+
 typedef enum {
         LDLM_PLAIN     = 10,
         LDLM_EXTENT    = 11,
@@ -1079,6 +1081,12 @@ struct ldlm_extent {
         __u64 end;
         __u64 gid;
 };
+
+static inline int ldlm_extent_overlap(struct ldlm_extent *ex1,
+                                      struct ldlm_extent *ex2)
+{
+        return (ex1->start <= ex2->end) && (ex2->start <= ex1->end);
+}
 
 struct ldlm_inodebits {
         __u64 bits;

@@ -5,6 +5,7 @@
 
 LDLM_COMM_SOURCES= $(top_srcdir)/lustre/ldlm/l_lock.c	\
 	$(top_srcdir)/lustre/ldlm/ldlm_lock.c		\
+	$(top_srcdir)/lustre/ldlm/interval_tree.c       \
 	$(top_srcdir)/lustre/ldlm/ldlm_resource.c	\
 	$(top_srcdir)/lustre/ldlm/ldlm_lib.c		\
 	$(top_srcdir)/lustre/ldlm/ldlm_plain.c		\
@@ -74,4 +75,4 @@ endif # MODULES
 
 install-data-hook: $(install_data_hook)
 DIST_SOURCES = $(ptlrpc_objs:.o=.c) ptlrpc_internal.h
-MOSTLYCLEANFILES := @MOSTLYCLEANFILES@  ldlm_*.c l_lock.c
+MOSTLYCLEANFILES := @MOSTLYCLEANFILES@  ldlm_*.c l_lock.c interval_tree.c
