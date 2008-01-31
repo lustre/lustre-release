@@ -15,3 +15,6 @@ SRC=/usr/lib/dbench/client_plain.txt
 cd $DIR
 echo "running 'dbench $@' on $PWD at `date`"
 dbench -c client.txt $@
+RC=$?
+[ $RC -ne 0 ] && killall -9 dbench
+exit $RC
