@@ -180,11 +180,11 @@ int lcfg_mgs_ioctl(char *func, int dev_id, struct lustre_cfg *lcfg)
 
         rc =  l_ioctl(dev_id, OBD_IOC_PARAM, buf);
 
-        if (rc == ENODEV) 
+        if (rc == ENODEV)
                 fprintf(stderr, "Is the MGS running on this node?\n");
-        if (rc == ENOSYS) 
+        if (rc == ENOSYS)
                 fprintf(stderr, "Make sure cfg_device is set first.\n");
-        if (rc == EINVAL) 
+        if (rc == EINVAL)
                 fprintf(stderr, "cfg_device should be of the form "
                         "'lustre-MDT0000'\n");
 
@@ -244,7 +244,7 @@ int parse_devname(char *func, char *name)
         if (isdigit(name[0])) {
                 ret = strtoul(name, NULL, 0);
         } else {
-                if (name[0] == '$' || name[0] == '%') 
+                if (name[0] == '$' || name[0] == '%')
                         name++;
                 rc = do_name2dev(func, name);
                 if (rc >= N2D_OFF) {
@@ -442,12 +442,12 @@ static void shmem_setup(void)
 }
 
 static inline void shmem_lock(void)
-{ 
+{
         l_mutex_lock(&shared_data->mutex);
 }
 
 static inline void shmem_unlock(void)
-{ 
+{
         l_mutex_unlock(&shared_data->mutex);
 }
 
@@ -512,7 +512,7 @@ static void shmem_snap(int total_threads, int live_threads)
         secs = (this_time.tv_sec + this_time.tv_usec / 1000000.0) -
                (prev_time.tv_sec + prev_time.tv_usec / 1000000.0);
 
-        if (prev_valid && 
+        if (prev_valid &&
             live_threads == total_threads &&
             secs > 0.0)                    /* someone screwed with the time? */
                 printf("%d/%d Total: %f/second\n", non_zero, total_threads, total / secs);
@@ -520,16 +520,16 @@ static void shmem_snap(int total_threads, int live_threads)
         memcpy(counter_snapshot[1], counter_snapshot[0],
                total_threads * sizeof(counter_snapshot[0][0]));
         prev_time = this_time;
-        if (!prev_valid && 
+        if (!prev_valid &&
             running == total_threads)
                 prev_valid = 1;
 }
 
-static void shmem_stop(void) 
+static void shmem_stop(void)
 {
         if (shared_data == NULL)
                 return;
-        
+
         shared_data->stop = 1;
 }
 
@@ -576,7 +576,7 @@ static int do_device(char *func, char *devname)
         int dev;
 
         dev = parse_devname(func, devname);
-        if (dev < 0) 
+        if (dev < 0)
                 return -1;
 
         lcfg_set_devname(devname);
@@ -595,7 +595,7 @@ int jt_obd_device(int argc, char **argv)
 
         if (argc > 2)
                 return CMD_HELP;
-        
+
         if (argc == 1) {
                 printf("current device is %d - %s\n",
                        cur_device, lcfg_get_devname() ? : "not set");
@@ -603,7 +603,7 @@ int jt_obd_device(int argc, char **argv)
         }
         rc = do_device("device", argv[1]);
         return rc;
-}                     
+}
 
 int jt_opt_device(int argc, char **argv)
 {
@@ -670,11 +670,11 @@ int jt_opt_threads(int argc, char **argv)
                 for (i = 5; i < argc; i++)
                         snprintf(cmdstr + strlen(cmdstr), sizeof(cmdstr),
                                  " %s", argv[i]);
-                
+
                 printf("%s: starting %ld threads on device %s running %s\n",
                        argv[0], threads, argv[3], cmdstr);
         }
-        
+
         shmem_reset(threads);
 
         sigemptyset(&sigset);
@@ -683,7 +683,7 @@ int jt_opt_threads(int argc, char **argv)
         sigprocmask(SIG_BLOCK, &sigset, &saveset);
 
         nthreads = threads;
-             
+
         for (i = 1, next_thread = verbose; i <= threads; i++) {
                 rc = fork();
                 if (rc < 0) {
@@ -709,7 +709,7 @@ int jt_opt_threads(int argc, char **argv)
                 sigemptyset(&sigact.sa_mask);
                 sigact.sa_handler = parent_sighandler;
                 sigact.sa_flags = 0;
-                
+
                 sigaction(SIGALRM, &sigact, &saveact1);
                 sigaction(SIGCHLD, &sigact, &saveact2);
 
@@ -727,7 +727,7 @@ int jt_opt_threads(int argc, char **argv)
                                 ret = waitpid(0, &status, WNOHANG);
                                 if (ret == 0)
                                         break;
-                                
+
                                 if (ret < 0) {
                                         fprintf(stderr, "error: %s: wait - %s\n",
                                                 argv[0], strerror(errno));
@@ -905,10 +905,10 @@ int jt_obd_list_ioctl(int argc, char **argv)
                 printf("%s\n", (char *)data->ioc_bulk);
         }
         if (rc != 0) {
-                if (errno == ENOENT) 
+                if (errno == ENOENT)
                         /* no device or the last device */
                         rc = 0;
-                else 
+                else
                         fprintf(stderr, "Error getting device list: %s: "
                                         "check dmesg.\n",
                                         strerror(errno));
@@ -947,7 +947,7 @@ int jt_obd_list(int argc, char **argv)
  * object ids.  Use get_stripe on this node to print full lsm and
  * set_stripe on another node to cut/paste between nodes.
  */
-/* create <count> [<file_create_mode>] [q|v|# verbosity] [striping] */ 
+/* create <count> [<file_create_mode>] [q|v|# verbosity] [striping] */
 int jt_obd_create(int argc, char **argv)
 {
         struct obd_ioctl_data data;
@@ -1339,7 +1339,7 @@ int jt_obd_test_getattr(int argc, char **argv)
         <r|w[r(repeat)x(noverify)]>                             mode
         <q|v|#(print interval)>                                 verbosity
         <npages[+offset]>                                       blocksize
-        <[[<interleave_threads>]t(inc obj by thread#)]obj>      object 
+        <[[<interleave_threads>]t(inc obj by thread#)]obj>      object
         [p|g<args>]                                             batch */
 int jt_obd_test_brw(int argc, char **argv)
 {
@@ -1536,7 +1536,7 @@ int jt_obd_test_brw(int argc, char **argv)
                                (int)(pages * getpagesize()));
                         shmem_unlock ();
                 }
-                
+
                 if (!repeat_offset) {
 #ifdef MAX_THREADS
                         if (stride == len) {
@@ -1651,8 +1651,11 @@ repeat:
                         rc = -EINVAL;
                         goto out;
                 }
-                printf("default_stripe_count: %u\n",
-                       desc.ld_default_stripe_count);
+                if (desc.ld_default_stripe_count == (__u16)-1)
+                        printf("default_stripe_count: %d\n", -1);
+                else
+                        printf("default_stripe_count: %u\n",
+                               desc.ld_default_stripe_count);
                 printf("default_stripe_size: "LPU64"\n",
                        desc.ld_default_stripe_size);
                 printf("default_stripe_offset: "LPU64"\n",
@@ -1880,7 +1883,7 @@ int jt_llog_info(int argc, char **argv)
         IOC_INIT(data);
         data.ioc_inllen1 = strlen(argv[1]) + 1;
         data.ioc_inlbuf1 = argv[1];
-        data.ioc_inllen2 = max - size_round(sizeof(data)) - 
+        data.ioc_inllen2 = max - size_round(sizeof(data)) -
                 size_round(data.ioc_inllen1);
         IOC_PACK(argv[0], data);
 
@@ -2029,9 +2032,9 @@ int jt_llog_remove(int argc, char **argv)
 }
 
 /* attach a regular file to virtual block device.
- * return vaule: 
+ * return vaule:
  *  -1: fatal error
- *  1: error, it always means the command run failed 
+ *  1: error, it always means the command run failed
  *  0: success
  */
 static int jt_blockdev_run_process(const char *file, char *argv[])
@@ -2144,7 +2147,7 @@ int jt_blockdev_attach(int argc, char **argv)
         if (rc == 0 && (!S_ISBLK(st.st_mode) || st.st_rdev != dev)) {
                 rc = EEXIST;
         } else if (rc < 0) {
-                if (errno == ENOENT && 
+                if (errno == ENOENT &&
                     !mknod(devname, S_IFBLK|S_IRUSR|S_IWUSR, dev))
                         rc = 0;
                 else
@@ -2176,7 +2179,7 @@ int jt_blockdev_detach(int argc, char **argv)
         filename = argv[1];
         fd = open(filename, O_RDONLY);
         if (fd < 0) {
-                fprintf(stderr, "cannot open file %s error %s\n", 
+                fprintf(stderr, "cannot open file %s error %s\n",
                         filename, strerror(errno));
                 return CMD_HELP;
         }
@@ -2205,7 +2208,7 @@ int jt_blockdev_info(int argc, char **argv)
         filename = argv[1];
         fd = open(filename, O_RDONLY);
         if (fd < 0) {
-                fprintf(stderr, "cannot open file %s error: %s\n", 
+                fprintf(stderr, "cannot open file %s error: %s\n",
                         filename, strerror(errno));
                 return CMD_HELP;
         }
