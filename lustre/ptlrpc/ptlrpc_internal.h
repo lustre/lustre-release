@@ -48,7 +48,6 @@ void ptlrpc_initiate_recovery(struct obd_import *imp);
 int lustre_unpack_req_ptlrpc_body(struct ptlrpc_request *req, int offset);
 int lustre_unpack_rep_ptlrpc_body(struct ptlrpc_request *req, int offset);
 
-
 #ifdef LPROCFS
 void ptlrpc_lprocfs_register_service(struct proc_dir_entry *proc_entry,
                                      struct ptlrpc_service *svc);
@@ -64,63 +63,6 @@ void ptlrpc_lprocfs_do_request_stat (struct ptlrpc_request *req,
 #endif /* LPROCFS */
 
 /* recovd_thread.c */
-
-static inline int opcode_offset(__u32 opc) {
-        if (opc < OST_LAST_OPC) {
-                 /* OST opcode */
-                return (opc - OST_FIRST_OPC);
-        } else if (opc < MDS_LAST_OPC) {
-                /* MDS opcode */
-                return (opc - MDS_FIRST_OPC +
-                        (OST_LAST_OPC - OST_FIRST_OPC));
-        } else if (opc < LDLM_LAST_OPC) {
-                /* LDLM Opcode */
-                return (opc - LDLM_FIRST_OPC +
-                        (MDS_LAST_OPC - MDS_FIRST_OPC) +
-                        (OST_LAST_OPC - OST_FIRST_OPC));
-        } else if (opc < MGS_LAST_OPC) {
-                /* MGS Opcode */
-                return (opc - MGS_FIRST_OPC +
-                        (LDLM_LAST_OPC - LDLM_FIRST_OPC) +
-                        (MDS_LAST_OPC - MDS_FIRST_OPC) +
-                        (OST_LAST_OPC - OST_FIRST_OPC));
-        } else if (opc < OBD_LAST_OPC) {
-                /* OBD Ping */
-                return (opc - OBD_FIRST_OPC +
-                        (MGS_LAST_OPC - MGS_FIRST_OPC) +
-                        (LDLM_LAST_OPC - LDLM_FIRST_OPC) +
-                        (MDS_LAST_OPC - MDS_FIRST_OPC) +
-                        (OST_LAST_OPC - OST_FIRST_OPC));
-        } else if (opc < LLOG_LAST_OPC) {
-                /* LLOG Opcode */
-                return (opc - LLOG_FIRST_OPC +
-                        (OBD_LAST_OPC - OBD_FIRST_OPC) +
-                        (MGS_LAST_OPC - MGS_FIRST_OPC) +
-                        (LDLM_LAST_OPC - LDLM_FIRST_OPC) +
-                        (MDS_LAST_OPC - MDS_FIRST_OPC) +
-                        (OST_LAST_OPC - OST_FIRST_OPC));
-        } else {
-                /* Unknown Opcode */
-                return -1;
-        }
-}
-
-#define LUSTRE_MAX_OPCODES ((OST_LAST_OPC - OST_FIRST_OPC)     + \
-                            (MDS_LAST_OPC - MDS_FIRST_OPC)     + \
-                            (LDLM_LAST_OPC - LDLM_FIRST_OPC)   + \
-                            (MGS_LAST_OPC - MGS_FIRST_OPC)     + \
-                            (OBD_LAST_OPC - OBD_FIRST_OPC)     + \
-                            (LLOG_LAST_OPC - LLOG_FIRST_OPC))
-
-enum {
-        PTLRPC_REQWAIT_CNTR = 0,
-        PTLRPC_REQQDEPTH_CNTR,
-        PTLRPC_REQACTIVE_CNTR,
-        PTLRPC_TIMEOUT,
-        PTLRPC_REQBUF_AVAIL_CNTR,
-        PTLRPC_LAST_CNTR
-};
-
 int ptlrpc_expire_one_request(struct ptlrpc_request *req);
 
 /* pers.c */

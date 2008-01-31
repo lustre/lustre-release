@@ -1073,11 +1073,12 @@ put_conn:
                request->rq_repmsg ? lustre_msg_get_status(request->rq_repmsg): 
                -999);
         if (svc->srv_stats != NULL) {
-                int opc = opcode_offset(lustre_msg_get_opc(request->rq_reqmsg));
-                if (opc > 0) {
+                __u32 op = lustre_msg_get_opc(request->rq_reqmsg);
+                int opc = opcode_offset(op);
+                if (opc > 0 && !(op == LDLM_ENQUEUE || op == MDS_REINT)) {
                         LASSERT(opc < LUSTRE_MAX_OPCODES);
                         lprocfs_counter_add(svc->srv_stats,
-                                            opc + PTLRPC_LAST_CNTR,
+                                            opc + EXTRA_MAX_OPCODES,
                                             timediff);
                 }
         }

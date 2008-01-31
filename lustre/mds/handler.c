@@ -1644,6 +1644,7 @@ int mds_handle(struct ptlrpc_request *req)
                 __u32 *opcp = lustre_msg_buf(req->rq_reqmsg, REQ_REC_OFF,
                                              sizeof(*opcp));
                 __u32  opc;
+                int op = 0;
                 int size[4] = { sizeof(struct ptlrpc_body),
                                 sizeof(struct mds_body),
                                 mds->mds_max_mdsize,
@@ -1664,6 +1665,34 @@ int mds_handle(struct ptlrpc_request *req)
                           (opc < sizeof(reint_names) / sizeof(reint_names[0]) ||
                            reint_names[opc] == NULL) ? reint_names[opc] :
                                                        "unknown opcode");
+
+                switch (opc) {
+                case REINT_CREATE:
+                        op = PTLRPC_LAST_CNTR + MDS_REINT_CREATE;
+                        break;
+                case REINT_LINK:
+                        op = PTLRPC_LAST_CNTR + MDS_REINT_LINK;
+                        break;
+                case REINT_OPEN:
+                        op = PTLRPC_LAST_CNTR + MDS_REINT_OPEN;
+                        break;
+                case REINT_SETATTR:
+                        op = PTLRPC_LAST_CNTR + MDS_REINT_SETATTR;
+                        break;
+                case REINT_RENAME:
+                        op = PTLRPC_LAST_CNTR + MDS_REINT_RENAME;
+                        break;
+                case REINT_UNLINK:
+                        op = PTLRPC_LAST_CNTR + MDS_REINT_UNLINK;
+                        break;
+                default:
+                        op = 0;
+                        break;
+                }
+
+                if (op && req->rq_rqbd->rqbd_service->srv_stats)
+                        lprocfs_counter_incr(
+                                req->rq_rqbd->rqbd_service->srv_stats, op);
 
                 OBD_FAIL_RETURN(OBD_FAIL_MDS_REINT_NET, 0);
 

@@ -24,6 +24,7 @@
 #ifndef _LPROCFS_SNMP_H
 #define _LPROCFS_SNMP_H
 
+#include <lustre/lustre_idl.h>
 #if defined(__linux__)
 #include <linux/lprocfs_status.h>
 #elif defined(__APPLE__)
@@ -164,7 +165,83 @@ struct lprocfs_stats {
         struct lprocfs_percpu *ls_percpu[0];
 };
 
+static inline int opcode_offset(__u32 opc) {
+        if (opc < OST_LAST_OPC) {
+                 /* OST opcode */
+                return (opc - OST_FIRST_OPC);
+        } else if (opc < MDS_LAST_OPC) {
+                /* MDS opcode */
+                return (opc - MDS_FIRST_OPC +
+                        (OST_LAST_OPC - OST_FIRST_OPC));
+        } else if (opc < LDLM_LAST_OPC) {
+                /* LDLM Opcode */
+                return (opc - LDLM_FIRST_OPC +
+                        (MDS_LAST_OPC - MDS_FIRST_OPC) +
+                        (OST_LAST_OPC - OST_FIRST_OPC));
+        } else if (opc < MGS_LAST_OPC) {
+                /* MGS Opcode */
+                return (opc - MGS_FIRST_OPC +
+                        (LDLM_LAST_OPC - LDLM_FIRST_OPC) +
+                        (MDS_LAST_OPC - MDS_FIRST_OPC) +
+                        (OST_LAST_OPC - OST_FIRST_OPC));
+        } else if (opc < OBD_LAST_OPC) {
+                /* OBD Ping */
+                return (opc - OBD_FIRST_OPC +
+                        (MGS_LAST_OPC - MGS_FIRST_OPC) +
+                        (LDLM_LAST_OPC - LDLM_FIRST_OPC) +
+                        (MDS_LAST_OPC - MDS_FIRST_OPC) +
+                        (OST_LAST_OPC - OST_FIRST_OPC));
+        } else if (opc < LLOG_LAST_OPC) {
+                /* LLOG Opcode */
+                return (opc - LLOG_FIRST_OPC +
+                        (OBD_LAST_OPC - OBD_FIRST_OPC) +
+                        (MGS_LAST_OPC - MGS_FIRST_OPC) +
+                        (LDLM_LAST_OPC - LDLM_FIRST_OPC) +
+                        (MDS_LAST_OPC - MDS_FIRST_OPC) +
+                        (OST_LAST_OPC - OST_FIRST_OPC));
+        } else {
+                /* Unknown Opcode */
+                return -1;
+        }
+}
 
+#define LUSTRE_MAX_OPCODES ((OST_LAST_OPC - OST_FIRST_OPC)     + \
+                            (MDS_LAST_OPC - MDS_FIRST_OPC)     + \
+                            (LDLM_LAST_OPC - LDLM_FIRST_OPC)   + \
+                            (MGS_LAST_OPC - MGS_FIRST_OPC)     + \
+                            (OBD_LAST_OPC - OBD_FIRST_OPC)     + \
+                            (LLOG_LAST_OPC - LLOG_FIRST_OPC))
+
+#define EXTRA_MAX_OPCODES ((PTLRPC_LAST_CNTR - PTLRPC_FIRST_CNTR)  + \
+                           (EXTRA_LAST_OPC - EXTRA_FIRST_OPC))
+
+enum {
+        PTLRPC_REQWAIT_CNTR = 0,
+        PTLRPC_REQQDEPTH_CNTR,
+        PTLRPC_REQACTIVE_CNTR,
+        PTLRPC_TIMEOUT,
+        PTLRPC_REQBUF_AVAIL_CNTR,
+        PTLRPC_LAST_CNTR
+};
+
+#define PTLRPC_FIRST_CNTR PTLRPC_REQWAIT_CNTR
+
+enum {
+        LDLM_GLIMPSE_ENQUEUE = 0,
+        LDLM_PLAIN_ENQUEUE,
+        LDLM_EXTENT_ENQUEUE,
+        LDLM_FLOCK_ENQUEUE,
+        LDLM_IBITS_ENQUEUE,
+        MDS_REINT_CREATE,
+        MDS_REINT_LINK,
+        MDS_REINT_OPEN,
+        MDS_REINT_SETATTR,
+        MDS_REINT_RENAME,
+        MDS_REINT_UNLINK,
+        EXTRA_LAST_OPC
+};
+
+#define EXTRA_FIRST_OPC LDLM_GLIMPSE_ENQUEUE
 /* class_obd.c */
 extern cfs_proc_dir_entry_t *proc_lustre_root;
 
