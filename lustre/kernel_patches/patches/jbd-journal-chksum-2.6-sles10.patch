@@ -38,7 +38,7 @@ Index: linux-2.6.16.53-0.16/fs/jbd/commit.c
  	int barrier_done = 0;
  
  	if (is_journal_aborted(journal))
-@@ -118,21 +123,34 @@ static int journal_write_commit_record(j
+@@ -118,21 +123,35 @@ static int journal_write_commit_record(j
  
  	bh = jh2bh(descriptor);
  
@@ -63,6 +63,7 @@ Index: linux-2.6.16.53-0.16/fs/jbd/commit.c
 -	JBUFFER_TRACE(descriptor, "write commit block");
 +	JBUFFER_TRACE(descriptor, "submit commit block");
 +	lock_buffer(bh);
++	get_bh(bh);
 +
  	set_buffer_dirty(bh);
 -	if (journal->j_flags & JFS_BARRIER) {
@@ -82,7 +83,7 @@ Index: linux-2.6.16.53-0.16/fs/jbd/commit.c
  	/* is it possible for another commit to fail at roughly
  	 * the same time as this one?  If so, we don't want to
  	 * trust the barrier flag in the super, but instead want
-@@ -153,12 +171,84 @@ static int journal_write_commit_record(j
+@@ -153,12 +172,84 @@ static int journal_write_commit_record(j
  		clear_buffer_ordered(bh);
  		set_buffer_uptodate(bh);
  		set_buffer_dirty(bh);
@@ -162,16 +163,16 @@ Index: linux-2.6.16.53-0.16/fs/jbd/commit.c
 +	char *addr;
 +	__u32 checksum;
 +
-+	addr = kmap(page);
++	addr = kmap_atomic(page, KM_USER0);
 +	checksum = crc32_be(crc32_sum,
 +			    (void *)(addr + offset_in_page(bh->b_data)),
 +			    bh->b_size);
-+	kunmap(page);
++	kunmap_atomic(addr, KM_USER0);
 +	return checksum;
  }
  
  /*
-@@ -184,6 +274,8 @@ void journal_commit_transaction(journal_
+@@ -184,6 +275,8 @@ void journal_commit_transaction(journal_
  	int first_tag = 0;
  	int tag_flag;
  	int i;
@@ -180,7 +181,7 @@ Index: linux-2.6.16.53-0.16/fs/jbd/commit.c
  
  	/*
  	 * First job: lock down the current transaction and wait for
-@@ -395,37 +487,14 @@ write_out_data:
+@@ -395,37 +488,14 @@ write_out_data:
  	}
  
  	/*
@@ -224,7 +225,7 @@ Index: linux-2.6.16.53-0.16/fs/jbd/commit.c
  	spin_unlock(&journal->j_list_lock);
  
  	if (err)
-@@ -598,6 +667,16 @@ write_out_data:
+@@ -598,6 +668,16 @@ write_out_data:
  start_journal_io:
  			for (i = 0; i < bufs; i++) {
  				struct buffer_head *bh = wbuf[i];
@@ -241,7 +242,7 @@ Index: linux-2.6.16.53-0.16/fs/jbd/commit.c
  				lock_buffer(bh);
  				clear_buffer_dirty(bh);
  				set_buffer_uptodate(bh);
-@@ -614,6 +693,23 @@ start_journal_io:
+@@ -614,6 +694,23 @@ start_journal_io:
  		}
  	}
  
@@ -265,7 +266,7 @@ Index: linux-2.6.16.53-0.16/fs/jbd/commit.c
  	/* Lo and behold: we have just managed to send a transaction to
             the log.  Before we can commit it, wait for the IO so far to
             complete.  Control buffers being written are on the
-@@ -712,9 +808,15 @@ wait_for_iobuf:
+@@ -712,9 +809,15 @@ wait_for_iobuf:
  	}
  
  	jbd_debug(3, "JBD: commit phase 6\n");
@@ -371,7 +372,7 @@ Index: linux-2.6.16.53-0.16/fs/jbd/recovery.c
 +		       unsigned long *next_log_block, __u32 *crc32_sum)
 +{
 +	int i, num_blks, err;
-+	unsigned io_block;
++	unsigned long io_block;
 +	struct buffer_head *obh;
 +
 +	num_blks = count_tags(bh, journal->j_blocksize);
@@ -384,7 +385,7 @@ Index: linux-2.6.16.53-0.16/fs/jbd/recovery.c
 +		err = jread(&obh, journal, io_block);
 +		if (err) {
 +			printk(KERN_ERR "JBD: IO error %d recovering block "
-+				"%u in log\n", err, io_block);
++				"%lu in log\n", err, io_block);
 +			return 1;
 +		} else {
 +			*crc32_sum = crc32_be(*crc32_sum, (void *)obh->b_data,
@@ -422,10 +423,10 @@ Index: linux-2.6.16.53-0.16/fs/jbd/recovery.c
 +					if (calc_chksums(journal, bh,
 +							&next_log_block,
 +							&crc32_sum)) {
-+						brelse(bh);
++						put_bh(bh);
 +						break;
 +					}
-+					brelse(bh);
++					put_bh(bh);
 +					continue;
 +				}
 +
