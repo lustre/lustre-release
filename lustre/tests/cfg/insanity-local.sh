@@ -49,6 +49,8 @@ MOUNTOPT=""
     MOUNTOPT=$MOUNTOPT" --param lov.stripesize=$STRIPE_BYTES"
 [ "x$STRIPES_PER_OBJ" != "x" ] &&
     MOUNTOPT=$MOUNTOPT" --param lov.stripecount=$STRIPES_PER_OBJ"
+[ "x$L_GETIDENTITY" != "x" ] &&
+    MOUNTOPT=$MOUNTOPT" --param mdt.identity_upcall=$L_GETIDENTITY"
 MDS_MKFS_OPTS="--mgs --mdt --fsname=$FSNAME --device-size=$MDSSIZE --param sys.timeout=$TIMEOUT $MKFSOPT $MOUNTOPT $MDSOPT"
 
 MKFSOPT=""
