@@ -151,7 +151,7 @@ Index: linux-stage/fs/ext3/iopen.c
 +	list_add(&dentry->d_alias, &inode->i_dentry);	/* d_instantiate */
 +	dentry->d_inode = inode;
 +
-+	__d_rehash(dentry, 0);				/* d_rehash */
++	d_rehash_cond(dentry, 0);
 +	spin_unlock(&dcache_lock);
 +
 +	return NULL;
@@ -218,8 +218,8 @@ Index: linux-stage/fs/ext3/iopen.c
 +	goal->d_flags &= ~DCACHE_DISCONNECTED;
 +	security_d_instantiate(goal, inode);
 +	__d_drop(dentry);
-+	__d_rehash(dentry, 0);
-+	__d_move(goal, dentry);
++	d_rehash_cond(dentry, 0);
++	d_move_locked(goal, dentry);
 +	spin_unlock(&dcache_lock);
 +	iput(inode);
 +
@@ -231,7 +231,7 @@ Index: linux-stage/fs/ext3/iopen.c
 +	dentry->d_inode = inode;
 +do_rehash:
 +	if (rehash)
-+		__d_rehash(dentry, 0);			/* d_rehash */
++		d_rehash_cond(dentry, 0);
 +	spin_unlock(&dcache_lock);
 +
 +	return NULL;
@@ -320,7 +320,7 @@ Index: linux-stage/fs/ext3/iopen.h
 ===================================================================
 --- linux-stage.orig/fs/ext3/iopen.h	2005-02-25 14:41:01.017787968 +0200
 +++ linux-stage/fs/ext3/iopen.h	2005-02-25 14:41:01.045783712 +0200
-@@ -0,0 +1,15 @@
+@@ -0,0 +1,23 @@
 +/*
 + * iopen.h
 + *
@@ -336,6 +336,14 @@ Index: linux-stage/fs/ext3/iopen.h
 +extern int ext3_iopen_get_inode(struct inode *inode);
 +extern struct dentry *iopen_connect_dentry(struct dentry *dentry,
 +					   struct inode *inode, int rehash);
++
++#if !defined(HAVE_D_REHASH_COND) && defined(HAVE___D_REHASH)
++#define d_rehash_cond(dentry, lock) __d_rehash(dentry, lock)
++#endif
++
++#if !defined(HAVE_D_MOVE_LOCKED) && defined(HAVE___D_MOVE)
++#define d_move_locked(dentry, target) __d_move(dentry, target)
++#endif
 Index: linux-stage/fs/ext3/namei.c
 ===================================================================
 --- linux-stage.orig/fs/ext3/namei.c	2005-02-25 14:37:28.975023368 +0200

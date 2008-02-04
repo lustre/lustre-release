@@ -165,7 +165,7 @@ Index: linux-2.6.16.27-0.9/fs/ext3/iopen.c
 +	security_d_instantiate(goal, inode);
 +	__d_drop(dentry);
 +	d_rehash_cond(dentry, 0);
-+	__d_move(goal, dentry);
++	d_move_locked(goal, dentry);
 +	spin_unlock(&dcache_lock);
 +	iput(inode);
 +
@@ -263,7 +263,7 @@ Index: linux-2.6.16.27-0.9/fs/ext3/iopen.h
 ===================================================================
 --- /dev/null	1970-01-01 00:00:00.000000000 +0000
 +++ linux-2.6.16.27-0.9/fs/ext3/iopen.h	2007-06-29 08:24:49.000000000 +0200
-@@ -0,0 +1,15 @@
+@@ -0,0 +1,19 @@
 +/*
 + * iopen.h
 + *
@@ -279,6 +279,10 @@ Index: linux-2.6.16.27-0.9/fs/ext3/iopen.h
 +extern int ext3_iopen_get_inode(struct inode *inode);
 +extern struct dentry *iopen_connect_dentry(struct dentry *dentry,
 +					   struct inode *inode, int rehash);
++
++#if !defined(HAVE_D_MOVE_LOCKED) && defined(HAVE___D_MOVE)
++#define d_move_locked(dentry, target) __d_move(dentry, target)
++#endif
 Index: linux-2.6.16.27-0.9/fs/ext3/inode.c
 ===================================================================
 --- linux-2.6.16.27-0.9.orig/fs/ext3/inode.c	2007-06-29 08:24:48.000000000 +0200
