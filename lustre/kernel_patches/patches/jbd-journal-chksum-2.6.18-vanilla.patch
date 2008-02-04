@@ -71,7 +71,7 @@ Index: linux-2.6.18.8/fs/jbd/commit.c
 +	bh->b_end_io = journal_end_buffer_io_sync;
 +
 +	if (journal->j_flags & JFS_BARRIER &&
-+		!JFS_HAS_COMPAT_FEATURE(journal,
++		!JFS_HAS_INCOMPAT_FEATURE(journal,
 +					 JFS_FEATURE_INCOMPAT_ASYNC_COMMIT)) {
 +
  		set_buffer_ordered(bh);
@@ -526,7 +526,7 @@ Index: linux-2.6.18.8/fs/jbd/recovery.c
 +				if (chksum_err) {
 +					info->end_transaction = next_commit_ID;
 +
-+					if (!JFS_HAS_COMPAT_FEATURE(journal,
++					if (!JFS_HAS_INCOMPAT_FEATURE(journal,
 +					    JFS_FEATURE_INCOMPAT_ASYNC_COMMIT)){
 +						printk(KERN_ERR
 +						       "JBD: Transaction %u "
