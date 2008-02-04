@@ -120,6 +120,27 @@ set_file_unitsz() {
 	done"
 }
 
+lustre_fail() {
+        local fail_node=$1
+	local fail_loc=$2
+
+	case $fail_node in
+	    "mds" )
+		do_facet mds "sysctl -w lustre.fail_loc=$fail_loc" ;;
+	    "ost" )
+		for num in `seq $OSTCOUNT`; do
+		    do_facet ost$num "sysctl -w lustre.fail_loc=$fail_loc"
+		done ;;
+	    "mds_ost" )
+		do_facet mds "sysctl -w lustre.fail_loc=$fail_loc" ;
+		for num in `seq $OSTCOUNT`; do
+		    do_facet ost$num "sysctl -w lustre.fail_loc=$fail_loc"
+		done ;;
+	    * ) echo "usage: lustre_fail fail_node fail_loc" ;
+		return 1 ;;
+	esac
+}
+
 RUNAS="runas -u $TSTID"
 RUNAS2="runas -u $TSTID2"
 FAIL_ON_ERROR=true check_runas_id $TSTID $RUNAS
@@ -614,10 +635,10 @@ test_7()
 		error "write failure, but expect success"
 
 	#define OBD_FAIL_OBD_DQACQ               0x604
-	echo 0x604 > /proc/sys/lustre/fail_loc
+	lustre_fail mds  0x604
 	echo "  Remove files on OST0"
 	rm -f $TESTFILE
-	echo 0 > /proc/sys/lustre/fail_loc
+	lustre_fail mds  0
 
 	echo "  Trigger recovery..."
 	OSC0_UUID="`$LCTL dl | awk '$3 ~ /osc/ { print $1 }'`"
@@ -757,7 +778,7 @@ test_10() {
  	set_blk_unitsz 1024
 
 	# make qd_count 32 bit
-	sysctl -w lustre.fail_loc=0xA00
+	lustre_fail mds_ost 0xA00
 
 	TESTFILE="$DIR/$tdir/$tfile-0"
 
@@ -794,7 +815,7 @@ test_10() {
 	RC=$?
 
 	# make qd_count 64 bit
-	sysctl -w lustre.fail_loc=0
+	lustre_fail mds_ost 0
 
 	set_blk_unitsz $((128 * 1024))
 	set_blk_tunesz $((128 * 1024 / 2))
@@ -891,7 +912,7 @@ test_12() {
         chown $TSTUSR2.$TSTUSR2 $TESTFILE2
 
 	#define OBD_FAIL_OST_HOLD_WRITE_RPC      0x21f
-	sysctl -w lustre.fail_loc=0x0000021f
+	lustre_fail ost 0x0000021f
 
 	echo "   step1: write out of block quota ..."
 	$RUNAS2 dd if=/dev/zero of=$TESTFILE2 bs=$BLK_SZ count=102400 &
@@ -905,7 +926,7 @@ test_12() {
 	    if [ -z `ps -ef | awk '$2 == '${DDPID1}' { print $8 }'` ]; then break; fi
 	    count=$[count+1]
 	    if [ $count -gt 64 ]; then
-		sysctl -w lustre.fail_loc=0
+		lustre_fail ost 0
 		error "dd should be finished!"
 	    fi
 	    sleep 1
@@ -913,7 +934,7 @@ test_12() {
 	echo "(dd_pid=$DDPID1, time=$count)successful"
 
 	#Recover fail_loc and dd will finish soon
-	sysctl -w lustre.fail_loc=0
+	lustre_fail ost 0
 
 	echo  "   step3: testing ......"
 	count=0
@@ -1172,8 +1193,8 @@ test_16 () {
                 # define OBD_FAIL_QUOTA_WITHOUT_CHANGE_QS    0xA01
 		echo " grp/usr: $i, adjust qunit: $j"
 		echo "-------------------------------"
-		[ $j -eq 1 ] && sysctl -w lustre.fail_loc=0
-		[ $j -eq 0 ] && sysctl -w lustre.fail_loc=0xA01
+		[ $j -eq 1 ] && lustre_fail mds_ost 0
+		[ $j -eq 0 ] && lustre_fail mds_ost 0xA01
 		test_16_tub $i $j
 	    done
 	done
@@ -1188,7 +1209,7 @@ test_17() {
 	set_blk_unitsz 1024
 
         #define OBD_FAIL_QUOTA_RET_QDATA | OBD_FAIL_ONCE
-	sysctl -w lustre.fail_loc=0x80000A02
+	lustre_fail ost 0x80000A02
 
 	TESTFILE="$DIR/$tdir/$tfile-a"
 	TESTFILE2="$DIR/$tdir/$tfile-b"
@@ -1227,7 +1248,7 @@ test_17() {
 	sync; sleep 3; sync;
 
 	# make qd_count 64 bit
-	sysctl -w lustre.fail_loc=0
+	lustre_fail ost 0
 
 	set_blk_unitsz $((128 * 1024))
 	set_blk_tunesz $((128 * 1024 / 2))
