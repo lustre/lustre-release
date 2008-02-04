@@ -1,7 +1,7 @@
-Index: linux-2.6.16.i686/fs/ext3/iopen.c
+Index: linux-2.6.16.27-0.9/fs/ext3/iopen.c
 ===================================================================
---- linux-2.6.16.i686.orig/fs/ext3/iopen.c	2006-05-31 04:14:15.752410384 +0800
-+++ linux-2.6.16.i686/fs/ext3/iopen.c	2006-05-30 22:52:38.000000000 +0800
+--- /dev/null	1970-01-01 00:00:00.000000000 +0000
++++ linux-2.6.16.27-0.9/fs/ext3/iopen.c	2007-06-29 08:33:12.000000000 +0200
 @@ -0,0 +1,259 @@
 +/*
 + * linux/fs/ext3/iopen.c
@@ -115,9 +115,9 @@ Index: linux-2.6.16.i686/fs/ext3/iopen.c
 +	/* d_add(), but don't drop dcache_lock before adding dentry to inode */
 +	list_add(&dentry->d_alias, &inode->i_dentry);	/* d_instantiate */
 +	dentry->d_inode = inode;
-+	spin_unlock(&dcache_lock);
 +
-+	d_rehash(dentry);
++	d_rehash_cond(dentry, 0);	/* d_rehash */
++	spin_unlock(&dcache_lock);
 +
 +	return NULL;
 +}
@@ -164,9 +164,9 @@ Index: linux-2.6.16.i686/fs/ext3/iopen.c
 +	goal->d_flags &= ~DCACHE_DISCONNECTED;
 +	security_d_instantiate(goal, inode);
 +	__d_drop(dentry);
++	d_rehash_cond(dentry, 0);
++	d_move_locked(goal, dentry);
 +	spin_unlock(&dcache_lock);
-+	d_rehash(dentry);
-+	d_move(goal, dentry);
 +	iput(inode);
 +
 +	return goal;
@@ -176,9 +176,9 @@ Index: linux-2.6.16.i686/fs/ext3/iopen.c
 +	list_add(&dentry->d_alias, &inode->i_dentry);	/* d_instantiate */
 +	dentry->d_inode = inode;
 +do_rehash:
-+	spin_unlock(&dcache_lock);
 +	if (rehash)
-+		d_rehash(dentry);
++		d_rehash_cond(dentry, 0);	/* d_rehash */
++	spin_unlock(&dcache_lock);
 +
 +	return NULL;
 +}
@@ -266,7 +266,7 @@ Index: linux-2.6.16.i686/fs/ext3/iopen.h
 ===================================================================
 --- linux-2.6.16.i686.orig/fs/ext3/iopen.h	2006-05-31 04:14:15.752410384 +0800
 +++ linux-2.6.16.i686/fs/ext3/iopen.h	2006-05-30 22:52:38.000000000 +0800
-@@ -0,0 +1,15 @@
+@@ -0,0 +1,23 @@
 +/*
 + * iopen.h
 + *
@@ -282,6 +282,14 @@ Index: linux-2.6.16.i686/fs/ext3/iopen.h
 +extern int ext3_iopen_get_inode(struct inode *inode);
 +extern struct dentry *iopen_connect_dentry(struct dentry *dentry,
 +					   struct inode *inode, int rehash);
++
++#if !defined(HAVE_D_REHASH_COND) && defined(HAVE___D_REHASH)
++#define d_rehash_cond(dentry, lock) __d_rehash(dentry, lock)
++#endif
++
++#if !defined(HAVE_D_MOVE_LOCKED) && defined(HAVE___D_MOVE)
++#define d_move_locked(dentry, target) __d_move(dentry, target)
++#endif
 Index: linux-2.6.16.i686/fs/ext3/inode.c
 ===================================================================
 --- linux-2.6.16.i686.orig/fs/ext3/inode.c	2006-05-30 22:52:03.000000000 +0800
