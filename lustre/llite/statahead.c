@@ -244,7 +244,7 @@ static int ll_statahead_interpret(struct obd_export *exp,
                 dentry->d_flags &= ~DCACHE_LUSTRE_INVALID;
 #endif
                 unlock_dentry(dentry);
-                __d_rehash(dentry, 0);
+                d_rehash_cond(dentry, 0);
                 spin_unlock(&dcache_lock);
 
                 ll_lookup_finish_locks(it, dentry);

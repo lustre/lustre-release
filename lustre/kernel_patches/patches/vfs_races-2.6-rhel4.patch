@@ -61,3 +61,11 @@ diff -urp RH_2_6_9_42_0_3.orig/include/linux/dcache.h RH_2_6_9_42_0_3/include/li
  
  extern spinlock_t dcache_lock;
  
+@@ -254,6 +255,7 @@ extern int have_submounts(struct dentry 
+  * This adds the entry to the hash queues.
+  */
+ extern void d_rehash(struct dentry *);
++extern void d_rehash_cond(struct dentry *, int lock);
+ 
+ /**
+  * d_add - add dentry to hash queues

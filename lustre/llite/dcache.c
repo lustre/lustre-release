@@ -471,7 +471,7 @@ revalidate_finish:
         lock_dentry(de);
         __d_drop(de);
         unlock_dentry(de);
-        __d_rehash(de, 0);
+        d_rehash_cond(de, 0);
         spin_unlock(&dcache_lock);
 
  out:

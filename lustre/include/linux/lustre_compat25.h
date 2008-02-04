@@ -201,8 +201,14 @@ static inline int cleanup_group_info(void)
 
 #include <linux/proc_fs.h>
 
-#ifndef HAVE___D_REHASH
-#define __d_rehash(dentry, lock) d_rehash_cond(dentry, lock)
+#if !defined(HAVE_D_REHASH_COND) && defined(HAVE___D_REHASH)
+#define d_rehash_cond(dentry, lock) __d_rehash(dentry, lock)
+extern void __d_rehash(struct dentry *dentry, int lock);
+#endif
+
+#if !defined(HAVE_D_MOVE_LOCKED) && defined(HAVE___D_MOVE)
+#define d_move_locked(dentry, target) __d_move(dentry, target)
+extern void __d_move(struct dentry *dentry, struct dentry *target);
 #endif
 
 #ifdef HAVE_CAN_SLEEP_ARG

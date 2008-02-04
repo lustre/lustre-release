@@ -1104,6 +1104,24 @@ AC_DEFINE(HAVE___D_REHASH, 1,
 ])
 ])
 
+AC_DEFUN([LC_EXPORT_D_MOVE_LOCKED],
+[LB_CHECK_SYMBOL_EXPORT([d_move_locked],
+[fs/dcache.c],[
+AC_DEFINE(HAVE_D_MOVE_LOCKED, 1,
+            [d_move_locked is exported by the kernel])
+],[
+])
+])
+
+AC_DEFUN([LC_EXPORT___D_MOVE],
+[LB_CHECK_SYMBOL_EXPORT([__d_move],
+[fs/dcache.c],[
+AC_DEFINE(HAVE___D_MOVE, 1,
+            [__d_move is exported by the kernel])
+],[
+])
+])
+
 # The actual symbol exported varies among architectures, so we need
 # to check many symbols (but only in the current architecture.)  No
 # matter what symbol is exported, the kernel #defines node_to_cpumask
@@ -1233,6 +1251,8 @@ AC_DEFUN([LC_PROG_LINUX],
           LC_EXPORT_TRUNCATE_COMPLETE
           LC_EXPORT_D_REHASH_COND
           LC_EXPORT___D_REHASH
+          LC_EXPORT_D_MOVE_LOCKED
+          LC_EXPORT___D_MOVE
           LC_EXPORT_NODE_TO_CPUMASK
 
           LC_STRUCT_KIOBUF
