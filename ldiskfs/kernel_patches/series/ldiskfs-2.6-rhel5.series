@@ -16,3 +16,8 @@ ext3-inode-version-2.6.18-vanilla.patch
 ext3-mmp-2.6.18-vanilla.patch
 ext3-unlink-race.patch
 ext3-statfs-2.6-rhel5.patch
+ext3-dynlocks-common.patch
+ext3-dynlocks-2.6.18-vanilla.patch
+ext3-iam-common.patch
+ext3-iam-2.6.18-rhel5.patch
+ext3-orphans-delay.patch
