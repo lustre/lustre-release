@@ -1,7 +1,7 @@
 tbd  Sun Microsystems, Inc.
        * version 1.8.0
        * Support for kernels:
-        2.6.9-67.0.1.EL (RHEL 4),
+        2.6.9-67.0.4.EL (RHEL 4),
         2.6.16.54-0.2.3 (SLES 10),
         2.6.18-53.1.4.el5 (RHEL 5).
        * Client support for unpatched kernels:
@@ -11,6 +11,10 @@ tbd  Sun Microsystems, Inc.
        * Note that reiserfs quotas are disabled on SLES 10 in this kernel.
        * RHEL 4 and RHEL 5/SLES 10 clients behaves differently on 'cd' to a
         removed cwd "./" (refer to Bugzilla 14399).
+
+Serverity  : enhancement
+Bugzilla   : 14793
+Description: Update RHEL4 kernel to 2.6.9-67.0.4.
 
 Severity   : minor
 Frequency  : rare
