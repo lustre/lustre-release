@@ -566,8 +566,7 @@ repeat_find:
                         continue;
 
                 /* Drop slow OSCs if we can */
-                if (obd_precreate(lov->lov_tgts[ost_idx]->ltd_exp, speed == 0) >
-                                  speed)
+                if (obd_precreate(lov->lov_tgts[ost_idx]->ltd_exp) > speed)
                         continue;
 
                 *idx_pos = ost_idx;
@@ -613,8 +612,8 @@ repeat_find:
                         continue;
 
                 /* Drop slow OSCs if we can */
-                if (obd_precreate(lov->lov_tgts[ost_idx]->ltd_exp, speed == 0) >
-                    speed)
+                if ((obd_precreate(lov->lov_tgts[ost_idx]->ltd_exp) > speed) &&
+                    (i != 0 || speed < 2))
                         continue;
 
                 *idx_pos = ost_idx;
@@ -682,9 +681,9 @@ static int alloc_qos(struct obd_export *exp, int *idx_arr, int *stripe_cnt,
                 GOTO(out_up_write, rc = -EAGAIN);
 
         rc = qos_calc_ppo(exp->exp_obd);
-        if (rc) 
+        if (rc)
                 GOTO(out_up_write, rc);
-        
+
         total_bavail = 0;
         good_osts = 0;
         /* Warn users about zero available space/inode every 30 min */
@@ -693,7 +692,7 @@ static int alloc_qos(struct obd_export *exp, int *idx_arr, int *stripe_cnt,
         /* Find all the OSTs that are valid stripe candidates */
         for (i = 0; i < ost_count; i++) {
                 __u64 bavail;
-                
+
                 if (!lov->lov_tgts[i] || !lov->lov_tgts[i]->ltd_active)
                         continue;
                 bavail = TGT_BAVAIL(i);
@@ -719,7 +718,7 @@ static int alloc_qos(struct obd_export *exp, int *idx_arr, int *stripe_cnt,
                 if (OBD_FAIL_CHECK(OBD_FAIL_MDS_OSC_PRECREATE) && i == 0)
                         continue;
 
-                if (obd_precreate(lov->lov_tgts[i]->ltd_exp, 1) > 2)
+                if (obd_precreate(lov->lov_tgts[i]->ltd_exp) > 2)
                         continue;
 
                 lov->lov_tgts[i]->ltd_qos.ltq_usable = 1;
