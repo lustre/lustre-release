@@ -25,6 +25,13 @@
  *   of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  *   license text for more details.
  */
+#ifdef __KERNEL__
+# include <lustre_dlm.h>
+#else
+# include <liblustre.h>
+# include <libcfs/kp30.h>
+#endif
+#include <obd_support.h>
 #include <interval_tree.h>
 
 enum {

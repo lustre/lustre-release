@@ -7,9 +7,6 @@
 #include <time.h>
 #include <sys/time.h>
 
-/* warning remove */
-#undef EXPORT_SYMBOL
-#define EXPORT_SYMBOL(a)
 #include <../ldlm/interval_tree.c>
 
 #define dprintf(fmt, args...) //printf(fmt, ##args)
