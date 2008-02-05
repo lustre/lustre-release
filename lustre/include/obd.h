@@ -921,7 +921,7 @@ struct obd_ops {
                          struct lov_stripe_md *mem_tgt);
         int (*o_preallocate)(struct lustre_handle *, obd_count *req,
                              obd_id *ids);
-        int (*o_precreate)(struct obd_export *exp, int need_create);
+        int (*o_precreate)(struct obd_export *exp);
         int (*o_create)(struct obd_export *exp,  struct obdo *oa,
                         struct lov_stripe_md **ea, struct obd_trans_info *oti);
         int (*o_destroy)(struct obd_export *exp, struct obdo *oa,

@@ -130,7 +130,8 @@ static int oscc_internal_create(struct osc_creator *oscc)
         int size[] = { sizeof(struct ptlrpc_body), sizeof(*body) };
         ENTRY;
 
-        spin_lock(&oscc->oscc_lock);
+        LASSERT_SPIN_LOCKED(&oscc->oscc_lock);
+
         if (oscc->oscc_grow_count < OST_MAX_PRECREATE &&
             !(oscc->oscc_flags & (OSCC_FLAG_LOW | OSCC_FLAG_RECOVERING)) &&
             (__s64)(oscc->oscc_last_id - oscc->oscc_next_id) <=
@@ -185,10 +186,12 @@ static int oscc_has_objects(struct osc_creator *oscc, int count)
         int have_objs;
         spin_lock(&oscc->oscc_lock);
         have_objs = ((__s64)(oscc->oscc_last_id - oscc->oscc_next_id) >= count);
-        spin_unlock(&oscc->oscc_lock);
 
-        if (!have_objs)
+        if (!have_objs) {
                 oscc_internal_create(oscc);
+        } else {
+                spin_unlock(&oscc->oscc_lock);
+        }
 
         return have_objs;
 }
@@ -252,7 +255,7 @@ int oscc_recovering(struct osc_creator *oscc)
             a potentially very long time
      1000 : unusable
  */
-int osc_precreate(struct obd_export *exp, int need_create)
+int osc_precreate(struct obd_export *exp)
 {
         struct osc_creator *oscc = &exp->exp_obd->u.cli.cl_oscc;
         struct obd_import *imp = exp->exp_imp_reverse;
@@ -276,13 +279,11 @@ int osc_precreate(struct obd_export *exp, int need_create)
                         spin_unlock(&oscc->oscc_lock);
                         RETURN(2);
                 }
-                spin_unlock(&oscc->oscc_lock);
 
-                if (oscc->oscc_flags & OSCC_FLAG_CREATING)
+                if (oscc->oscc_flags & OSCC_FLAG_CREATING) {
+                        spin_unlock(&oscc->oscc_lock);
                         RETURN(1);
-
-                if (!need_create)
-                        RETURN(1);
+                }
 
                 oscc_internal_create(oscc);
                 RETURN(1);

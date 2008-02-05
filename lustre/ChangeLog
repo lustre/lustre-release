@@ -17,6 +17,13 @@ tbd  Sun Microsystems, Inc.
        * RHEL 4 and RHEL 5/SLES 10 clients behaves differently on 'cd' to a
         removed cwd "./" (refer to Bugzilla 14399).
 
+Severity   : minor
+Frequency  : rare on shutdown ost
+Bugzilla   : 13196
+Description: Don't allow skipping OSTs if index has been specified.
+Details    : Don't allow skipping OSTs if index has been specified, make locking
+             in internal create lots better.
+
 Severity   : normal
 Bugzilla   : 12228
 Description: LBUG in ptlrpc_check_set() bad phase ebc0de00

@@ -517,7 +517,7 @@ static int alloc_rr(struct lov_obd *lov, int *idx_arr, int *stripe_cnt,
                 /* If we have allocated from all of the OSTs, slowly
                    precess the next start */
                 lov->lov_start_idx %= ost_count;
-                if (*stripe_cnt > 1 && (ost_active_count % (*stripe_cnt) != 1))
+                if (*stripe_cnt > 1 && (ost_active_count % (*stripe_cnt)) != 1)
                         ++lov->lov_offset_idx;
         }
         down_read(&lov->lov_qos.lq_rw_sem);
@@ -552,8 +552,7 @@ repeat_find :
                         continue;
 
                 /* Drop slow OSCs if we can */
-                if (obd_precreate(lov->lov_tgts[ost_idx]->ltd_exp, speed == 0) >
-                    speed)
+                if (obd_precreate(lov->lov_tgts[ost_idx]->ltd_exp) > speed)
                         continue;
 
                 *idx_pos = ost_idx;
@@ -598,9 +597,9 @@ repeat_find:
                 if (OBD_FAIL_CHECK(OBD_FAIL_MDS_OSC_PRECREATE) && ost_idx == 0)
                         continue;
 
-                /* Drop slow OSCs if we can */
-                if (obd_precreate(lov->lov_tgts[ost_idx]->ltd_exp, speed == 0) >
-                    speed)
+                /* Drop slow OSCs if we can, but not for requested start idx */
+                if (obd_precreate(lov->lov_tgts[ost_idx]->ltd_exp) > speed &&
+                    (i != 0 || speed < 2))
                         continue;
 
                 *idx_pos = ost_idx;
@@ -691,7 +690,7 @@ static int alloc_qos(struct obd_export *exp, int *idx_arr, int *stripe_cnt,
                 if (OBD_FAIL_CHECK(OBD_FAIL_MDS_OSC_PRECREATE) && i == 0)
                         continue;
 
-                if (obd_precreate(lov->lov_tgts[i]->ltd_exp, 1) > 2)
+                if (obd_precreate(lov->lov_tgts[i]->ltd_exp) > 2)
                         continue;
 
                 lov->lov_tgts[i]->ltd_qos.ltq_usable = 1;
