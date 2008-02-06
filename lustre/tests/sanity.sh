@@ -3394,16 +3394,27 @@ unset F77_TMP
 test_78() { # bug 10901
  	NSEQ=5
 	F78SIZE=$(($(awk '/MemFree:/ { print $2 }' /proc/meminfo) / 1024))
+	echo "MemFree: $F78SIZE, Max file size: $MAXFREE"
+	MEMTOTAL=$(($(awk '/MemTotal:/ { print $2 }' /proc/meminfo) / 2048))
+	echo "MemTotal: $((MEMTOTAL * 2))"
+	[ $F78SIZE -gt $MEMTOTAL ] && F78SIZE=$MEMTOTAL
 	[ $F78SIZE -gt 512 ] && F78SIZE=512
 	[ $F78SIZE -gt $((MAXFREE / 1024)) ] && F78SIZE=$((MAXFREE / 1024))
 	SMALLESTOST=`lfs df $DIR |grep OST | awk '{print $4}' |sort -n |head -1`
-	[ $F78SIZE -gt $((SMALLESTOST * $OSTCOUNT / 1024)) ] && \
-		F78SIZE=$((SMALLESTOST * $OSTCOUNT / 1024))
+	echo "Smallest OST: $SMALLESTOST"
+	[ $SMALLESTOST -lt 10240 ] && \
+		skip "too small OSTSIZE, useless to run large O_DIRECT test" && return 0
+
+	[ $F78SIZE -gt $((SMALLESTOST * $OSTCOUNT / 1024 - 5)) ] && \
+		F78SIZE=$((SMALLESTOST * $OSTCOUNT / 1024 - 5))
+	[ "$SLOW" = "no" ] && NSEQ=1 && [ $F78SIZE -gt 32 ] && F78SIZE=32
+	echo "File size: $F78SIZE"
 	$SETSTRIPE $DIR/$tfile -c -1 || error "setstripe failed"
  	for i in `seq 1 $NSEQ`
  	do
+ 		FSIZE=$(($F78SIZE / ($NSEQ - $i + 1)))
  		echo directIO rdwr round $i of $NSEQ
-  	 	$DIRECTIO rdwr $DIR/$tfile 0 $F78SIZE 1048576 || error "rdwr failed"
+  	 	$DIRECTIO rdwr $DIR/$tfile 0 $FSIZE 1048576||error "rdwr failed"
   	done
 
 	rm -f $DIR/$tfile
