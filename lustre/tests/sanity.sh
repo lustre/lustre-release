@@ -3313,8 +3313,11 @@ test_78() { # bug 10901
 	[ $F78SIZE -gt $((MAXFREE / 1024)) ] && F78SIZE=$((MAXFREE / 1024))
 	SMALLESTOST=`lfs df $DIR |grep OST | awk '{print $4}' |sort -n |head -1`
 	echo "Smallest OST: $SMALLESTOST"
-	[ $F78SIZE -gt $((SMALLESTOST * $OSTCOUNT / 1024)) ] && \
-		F78SIZE=$((SMALLESTOST * $OSTCOUNT / 1024))
+	[ $SMALLESTOST -lt 10240 ] && \
+		skip "too small OSTSIZE, useless to run large O_DIRECT test" && return 0
+
+	[ $F78SIZE -gt $((SMALLESTOST * $OSTCOUNT / 1024 - 5)) ] && \
+		F78SIZE=$((SMALLESTOST * $OSTCOUNT / 1024 - 5))
 	[ "$SLOW" = "no" ] && NSEQ=1 && [ $F78SIZE -gt 32 ] && F78SIZE=32
 	echo "File size: $F78SIZE"
 	$SETSTRIPE $DIR/$tfile -c -1 || error "setstripe failed"
