@@ -1389,7 +1389,6 @@ int ll_writepage(struct page *page)
         int rc = 0;
         ENTRY;
 
-        LASSERT(!PageDirty(page));
         LASSERT(PageLocked(page));
 
         exp = ll_i2obdexp(inode);
