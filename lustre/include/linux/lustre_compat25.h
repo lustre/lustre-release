@@ -371,5 +371,12 @@ int ll_unregister_blkdev(unsigned int dev, const char *name)
 #define ll_invalidate_bdev(a,b)         invalidate_bdev((a))
 #endif
 
+#ifdef HAVE_INODE_BLKSIZE
+#define ll_inode_blksize(a)     (a)->i_blksize
+#else
+#define ll_inode_blksize(a)     (1<<(a)->i_blkbits)
+#endif
+
+
 #endif /* __KERNEL__ */
 #endif /* _COMPAT25_H */

@@ -692,9 +692,9 @@ int ll_inode_getattr(struct inode *inode, struct obdo *obdo)
                                  OBD_MD_FLCTIME | OBD_MD_FLSIZE);
 
         obdo_refresh_inode(inode, oinfo.oi_oa, oinfo.oi_oa->o_valid);
-        CDEBUG(D_INODE, "objid "LPX64" size %Lu, blocks %lu, blksize %lu\n",
+        CDEBUG(D_INODE, "objid "LPX64" size %Lu, blocks %llu, blksize %lu\n",
                lli->lli_smd->lsm_object_id, i_size_read(inode),
-               inode->i_blocks, inode->i_blksize);
+               (unsigned long long)inode->i_blocks, ll_inode_blksize(inode));
         RETURN(0);
 }
 
@@ -1222,8 +1222,8 @@ int ll_glimpse_size(struct inode *inode, int ast_flags)
 
         rc = ll_merge_lvb(inode);
 
-        CDEBUG(D_DLMTRACE, "glimpse: size: %llu, blocks: %lu\n",
-               i_size_read(inode), inode->i_blocks);
+        CDEBUG(D_DLMTRACE, "glimpse: size: %llu, blocks: %llu\n",
+               i_size_read(inode), (unsigned long long)inode->i_blocks);
 
         RETURN(rc);
 }

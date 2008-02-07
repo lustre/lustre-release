@@ -369,6 +369,7 @@ struct lu_attr {
         __u32          la_flags;  /* object flags */
         __u32          la_nlink;  /* number of persistent references to this
                                    * object */
+        __u32          la_blkbits; /* blk bits of the object*/
         __u32          la_blksize; /* blk size of the object*/
 
         __u32          la_rdev;   /* real device */

@@ -1084,8 +1084,6 @@ static void osd_inode_setattr(const struct lu_env *env,
                 inode->i_nlink  = attr->la_nlink;
         if (bits & LA_RDEV)
                 inode->i_rdev   = attr->la_rdev;
-        if (bits & LA_BLKSIZE)
-                inode->i_blksize = attr->la_blksize;
 
         if (bits & LA_FLAGS) {
                 struct ldiskfs_inode_info *li = LDISKFS_I(inode);
@@ -2488,7 +2486,8 @@ static void osd_inode_getattr(const struct lu_env *env,
         attr->la_flags      = LDISKFS_I(inode)->i_flags;
         attr->la_nlink      = inode->i_nlink;
         attr->la_rdev       = inode->i_rdev;
-        attr->la_blksize    = inode->i_blksize;
+        attr->la_blksize    = ll_inode_blksize(inode);
+        attr->la_blkbits    = inode->i_blkbits;
 }
 
 /*

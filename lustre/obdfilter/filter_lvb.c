@@ -207,8 +207,8 @@ static int filter_lvbo_update(struct ldlm_resource *res, struct lustre_msg *m,
         }
         if (lvb->lvb_blocks != dentry->d_inode->i_blocks) {
                 CDEBUG(D_DLMTRACE,"res: "LPU64" updating lvb blocks from disk: "
-                       LPU64" -> %lu\n", res->lr_name.name[0],
-                       lvb->lvb_blocks, dentry->d_inode->i_blocks);
+                       LPU64" -> %llu\n", res->lr_name.name[0],
+                       lvb->lvb_blocks, (unsigned long long)dentry->d_inode->i_blocks);
                 lvb->lvb_blocks = dentry->d_inode->i_blocks;
         }
 
