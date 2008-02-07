@@ -29,6 +29,12 @@ Details    : Don't allow skipping OSTs if index has been specified, make locking
              in internal create lots better.
 
 Severity   : normal
+Bugzilla   : 14421
+Description: ASSERTION(!PageDirty(page)) failed
+Details    : Wrong check could lead to an assertion failure under specific 
+             load patterns.
+
+Severity   : normal
 Bugzilla   : 12228
 Description: LBUG in ptlrpc_check_set() bad phase ebc0de00
 Details    : access to bitfield in structure is always rounded to long 
