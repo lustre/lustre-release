@@ -125,7 +125,7 @@ void lustre_assert_wire_constants(void)
                  (long long)REINT_RENAME);
         LASSERTF(REINT_OPEN == 6, " found %lld\n",
                  (long long)REINT_OPEN);
-        LASSERTF(REINT_MAX == 7, " found %lld\n",
+        LASSERTF(REINT_MAX == 8, " found %lld\n",
                  (long long)REINT_MAX);
         LASSERTF(MGS_CONNECT == 250, " found %lld\n",
                  (long long)MGS_CONNECT);

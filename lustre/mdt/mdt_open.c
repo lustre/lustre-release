@@ -377,7 +377,7 @@ static int mdt_mfd_open(struct mdt_thread_info *info, struct mdt_object *p,
         int                      rc = 0, isdir, isreg;
         ENTRY;
 
-        repbody = req_capsule_server_get(&info->mti_pill, &RMF_MDT_BODY);
+        repbody = req_capsule_server_get(info->mti_pill, &RMF_MDT_BODY);
 
         isreg = S_ISREG(la->la_mode);
         isdir = S_ISDIR(la->la_mode);
@@ -387,7 +387,7 @@ static int mdt_mfd_open(struct mdt_thread_info *info, struct mdt_object *p,
                  * above attr get, these size might be zero, so reset it, to
                  * retrieve the MD after create obj.
                  */
-                ma->ma_lmm_size = req_capsule_get_size(&info->mti_pill,
+                ma->ma_lmm_size = req_capsule_get_size(info->mti_pill,
                                                        &RMF_MDT_MD,
                                                        RCL_SERVER);
                 /* in replay case, p == NULL */
@@ -500,7 +500,7 @@ static int mdt_finish_open(struct mdt_thread_info *info,
 
         LASSERT(ma->ma_valid & MA_INODE);
 
-        repbody = req_capsule_server_get(&info->mti_pill, &RMF_MDT_BODY);
+        repbody = req_capsule_server_get(info->mti_pill, &RMF_MDT_BODY);
 
         isreg = S_ISREG(la->la_mode);
         isdir = S_ISDIR(la->la_mode);
@@ -508,7 +508,7 @@ static int mdt_finish_open(struct mdt_thread_info *info,
         mdt_pack_attr2body(info, repbody, la, mdt_object_fid(o));
 
         if (med->med_rmtclient) {
-                void *buf = req_capsule_server_get(&info->mti_pill, &RMF_ACL);
+                void *buf = req_capsule_server_get(info->mti_pill, &RMF_ACL);
 
                 rc = mdt_pack_remote_perm(info, o, buf);
                 if (rc) {
@@ -525,8 +525,8 @@ static int mdt_finish_open(struct mdt_thread_info *info,
                 struct md_object *next = mdt_object_child(o);
                 struct lu_buf *buf = &info->mti_buf;
 
-                buf->lb_buf = req_capsule_server_get(&info->mti_pill, &RMF_ACL);
-                buf->lb_len = req_capsule_get_size(&info->mti_pill, &RMF_ACL,
+                buf->lb_buf = req_capsule_server_get(info->mti_pill, &RMF_ACL);
+                buf->lb_len = req_capsule_get_size(info->mti_pill, &RMF_ACL,
                                                    RCL_SERVER);
                 if (buf->lb_len > 0) {
                         rc = mo_xattr_get(env, next, buf,
@@ -553,7 +553,7 @@ static int mdt_finish_open(struct mdt_thread_info *info,
         if (mdt->mdt_opts.mo_mds_capa) {
                 struct lustre_capa *capa;
 
-                capa = req_capsule_server_get(&info->mti_pill, &RMF_CAPA1);
+                capa = req_capsule_server_get(info->mti_pill, &RMF_CAPA1);
                 LASSERT(capa);
                 capa->lc_opc = CAPA_OPC_MDS_DEFAULT;
                 capa->lc_uid = 0;
@@ -566,7 +566,7 @@ static int mdt_finish_open(struct mdt_thread_info *info,
             S_ISREG(lu_object_attr(&o->mot_obj.mo_lu))) {
                 struct lustre_capa *capa;
 
-                capa = req_capsule_server_get(&info->mti_pill, &RMF_CAPA2);
+                capa = req_capsule_server_get(info->mti_pill, &RMF_CAPA2);
                 LASSERT(capa);
                 capa->lc_opc = CAPA_OPC_OSS_DEFAULT | capa_open_opc(flags);
                 capa->lc_uid = 0;
@@ -648,7 +648,7 @@ void mdt_reconstruct_open(struct mdt_thread_info *info,
 {
         const struct lu_env *env = info->mti_env;
         struct mdt_device       *mdt  = info->mti_mdt;
-        struct req_capsule      *pill = &info->mti_pill;
+        struct req_capsule      *pill = info->mti_pill;
         struct ptlrpc_request   *req  = mdt_info_req(info);
         struct mdt_export_data  *med  = &req->rq_export->exp_mdt_data;
         struct mdt_client_data  *mcd  = med->med_mcd;
@@ -679,11 +679,9 @@ void mdt_reconstruct_open(struct mdt_thread_info *info,
                 ldlm_rep->lock_policy_res1, req->rq_status);
 
         if (mdt_get_disposition(ldlm_rep, DISP_OPEN_CREATE) &&
-            req->rq_status != 0) {
+            req->rq_status != 0)
                 /* We did not create successfully, return error to client. */
-                mdt_shrink_reply(info);
                 GOTO(out, rc = req->rq_status);
-        }
 
         if (mdt_get_disposition(ldlm_rep, DISP_OPEN_CREATE)) {
                 /*
@@ -719,7 +717,6 @@ void mdt_reconstruct_open(struct mdt_thread_info *info,
                 }
                 mdt_object_put(env, parent);
                 mdt_object_put(env, child);
-                mdt_shrink_reply(info);
                 GOTO(out, rc);
         } else {
 regular_open:
@@ -763,7 +760,7 @@ static int mdt_open_by_fid(struct mdt_thread_info* info,
         } else  {
                 /* the child object was created on remote server */
                 struct mdt_body *repbody;
-                repbody = req_capsule_server_get(&info->mti_pill, &RMF_MDT_BODY);
+                repbody = req_capsule_server_get(info->mti_pill, &RMF_MDT_BODY);
                 repbody->fid1 = *rr->rr_fid2;
                 repbody->valid |= (OBD_MD_FLID | OBD_MD_MDS);
                 rc = 0;
@@ -848,16 +845,16 @@ int mdt_reint_open(struct mdt_thread_info *info, struct mdt_lock_handle *lhc)
         OBD_FAIL_TIMEOUT_ORSET(OBD_FAIL_MDS_PAUSE_OPEN, OBD_FAIL_ONCE,
                                (obd_timeout + 1) / 4);
 
-        repbody = req_capsule_server_get(&info->mti_pill, &RMF_MDT_BODY);
+        repbody = req_capsule_server_get(info->mti_pill, &RMF_MDT_BODY);
 
-        ma->ma_lmm = req_capsule_server_get(&info->mti_pill, &RMF_MDT_MD);
-        ma->ma_lmm_size = req_capsule_get_size(&info->mti_pill, &RMF_MDT_MD,
+        ma->ma_lmm = req_capsule_server_get(info->mti_pill, &RMF_MDT_MD);
+        ma->ma_lmm_size = req_capsule_get_size(info->mti_pill, &RMF_MDT_MD,
                                                RCL_SERVER);
         ma->ma_need = MA_INODE | MA_LOV;
         ma->ma_valid = 0;
 
-        LASSERT(info->mti_pill.rc_fmt == &RQF_LDLM_INTENT_OPEN);
-        ldlm_rep = req_capsule_server_get(&info->mti_pill, &RMF_DLM_REP);
+        LASSERT(info->mti_pill->rc_fmt == &RQF_LDLM_INTENT_OPEN);
+        ldlm_rep = req_capsule_server_get(info->mti_pill, &RMF_DLM_REP);
 
         /* TODO: JOIN file */
         if (create_flags & MDS_OPEN_JOIN_FILE) {
@@ -1059,7 +1056,6 @@ out_child:
 out_parent:
         mdt_object_unlock_put(info, parent, lh, result);
 out:
-        mdt_shrink_reply(info);
         if (result)
                 lustre_msg_set_transno(req->rq_repmsg, 0);
         return result;
@@ -1162,26 +1158,26 @@ int mdt_close(struct mdt_thread_info *info)
 
         LASSERT(info->mti_epoch);
 
-        req_capsule_set_size(&info->mti_pill, &RMF_MDT_MD, RCL_SERVER,
+        req_capsule_set_size(info->mti_pill, &RMF_MDT_MD, RCL_SERVER,
                              info->mti_mdt->mdt_max_mdsize);
-        req_capsule_set_size(&info->mti_pill, &RMF_LOGCOOKIES, RCL_SERVER,
+        req_capsule_set_size(info->mti_pill, &RMF_LOGCOOKIES, RCL_SERVER,
                              info->mti_mdt->mdt_max_cookiesize);
-        rc = req_capsule_pack(&info->mti_pill);
+        rc = req_capsule_server_pack(info->mti_pill);
         if (mdt_check_resent(info, mdt_reconstruct_generic, NULL))
                 RETURN(lustre_msg_get_status(req->rq_repmsg));
 
         /* Continue to close handle even if we can not pack reply */
         if (rc == 0) {
-                repbody = req_capsule_server_get(&info->mti_pill,
+                repbody = req_capsule_server_get(info->mti_pill,
                                                  &RMF_MDT_BODY);
-                ma->ma_lmm = req_capsule_server_get(&info->mti_pill,
+                ma->ma_lmm = req_capsule_server_get(info->mti_pill,
                                                     &RMF_MDT_MD);
-                ma->ma_lmm_size = req_capsule_get_size(&info->mti_pill,
+                ma->ma_lmm_size = req_capsule_get_size(info->mti_pill,
                                                        &RMF_MDT_MD,
                                                        RCL_SERVER);
-                ma->ma_cookie = req_capsule_server_get(&info->mti_pill,
+                ma->ma_cookie = req_capsule_server_get(info->mti_pill,
                                                        &RMF_LOGCOOKIES);
-                ma->ma_cookie_size = req_capsule_get_size(&info->mti_pill,
+                ma->ma_cookie_size = req_capsule_get_size(info->mti_pill,
                                                           &RMF_LOGCOOKIES,
                                                           RCL_SERVER);
                 ma->ma_need = MA_INODE | MA_LOV | MA_COOKIE;
@@ -1230,11 +1226,11 @@ int mdt_done_writing(struct mdt_thread_info *info)
         int rc;
         ENTRY;
 
-        rc = req_capsule_pack(&info->mti_pill);
+        rc = req_capsule_server_pack(info->mti_pill);
         if (rc)
                 RETURN(err_serious(rc));
 
-        repbody = req_capsule_server_get(&info->mti_pill,
+        repbody = req_capsule_server_get(info->mti_pill,
                                          &RMF_MDT_BODY);
         repbody->eadatasize = 0;
         repbody->aclsize = 0;

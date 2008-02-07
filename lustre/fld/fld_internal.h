@@ -78,11 +78,10 @@ extern struct lu_fld_hash fld_hash[];
 
 #ifdef __KERNEL__
 struct fld_thread_info {
-        struct req_capsule fti_pill;
-        int                fti_rep_buf_size[REQ_MAX_FIELD_NR];
-        __u64              fti_key;
-        __u64              fti_rec;
-        __u32              fti_flags;
+        struct req_capsule *fti_pill;
+        __u64               fti_key;
+        __u64               fti_rec;
+        __u32               fti_flags;
 };
 
 int fld_index_init(struct lu_server_fld *fld,

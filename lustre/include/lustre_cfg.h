@@ -58,7 +58,7 @@ enum lcfg_command_type {
         LCFG_LOV_ADD_INA    = 0x00ce013,
         LCFG_ADD_MDC        = 0x00cf014,
         LCFG_DEL_MDC        = 0x00cf015,
-        LCFG_SPTLRPC_CONF   = 0x00cf016,
+        LCFG_SPTLRPC_CONF   = 0x00ce016,
 };
 
 struct lustre_cfg_bufs {

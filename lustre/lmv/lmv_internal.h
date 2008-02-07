@@ -147,21 +147,20 @@ int lmv_alloc_slave_fids(struct obd_device *obd, struct lu_fid *pid,
                          struct md_op_data *op, struct lu_fid *fid);
 
 static inline struct lmv_stripe_md * 
-lmv_get_mea(struct ptlrpc_request *req, int offset)
+lmv_get_mea(struct ptlrpc_request *req)
 {
 	struct mdt_body *body;
 	struct lmv_stripe_md *mea;
 
 	LASSERT(req);
 
-        body = lustre_msg_buf(req->rq_repmsg, offset, sizeof(*body));
-        LASSERT(lustre_rep_swabbed(req, offset));
+        body = req_capsule_server_get(&req->rq_pill, &RMF_MDT_BODY);
 
 	if (!body || !S_ISDIR(body->mode) || !body->eadatasize)
 		return NULL;
 
-        mea = lustre_msg_buf(req->rq_repmsg, offset + 1,
-			     body->eadatasize);
+        mea = req_capsule_server_sized_get(&req->rq_pill, &RMF_MDT_MD,
+                                           body->eadatasize);
 	LASSERT(mea != NULL);
 
 	if (mea->mea_count == 0)

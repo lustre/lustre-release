@@ -42,6 +42,7 @@
 #include <lustre_import.h>
 #include <lprocfs_status.h>
 #include <lu_object.h>
+#include <lustre_req_layout.h>
 
 /* MD flags we _always_ use */
 #define PTLRPC_MD_OPTIONS  0
@@ -418,6 +419,9 @@ struct ptlrpc_request {
         struct ptlrpc_request_pool *rq_pool;    /* Pool if request from
                                                    preallocated list */
         struct lu_context           rq_session;
+
+        /* request format */
+        struct req_capsule          rq_pill;
 };
 
 static inline void ptlrpc_close_replay_seq(struct ptlrpc_request *req)
@@ -771,14 +775,27 @@ void ptlrpc_free_rq_pool(struct ptlrpc_request_pool *pool);
 void ptlrpc_add_rqs_to_pool(struct ptlrpc_request_pool *pool, int num_rq);
 struct ptlrpc_request_pool *ptlrpc_init_rq_pool(int, int,
                                                 void (*populate_pool)(struct ptlrpc_request_pool *, int));
+struct ptlrpc_request *ptlrpc_request_alloc(struct obd_import *imp,
+                                            const struct req_format *format);
+struct ptlrpc_request *ptlrpc_request_alloc_pool(struct obd_import *imp,
+                                            struct ptlrpc_request_pool *,
+                                            const struct req_format *format);
+void ptlrpc_request_free(struct ptlrpc_request *request);
+int ptlrpc_request_pack(struct ptlrpc_request *request,
+                        __u32 version, int opcode);
+struct ptlrpc_request *ptlrpc_request_alloc_pack(struct obd_import *imp,
+                                                const struct req_format *format,
+                                                __u32 version, int opcode);
+int ptlrpc_request_bufs_pack(struct ptlrpc_request *request,
+                             __u32 version, int opcode, char **bufs,
+                             struct ptlrpc_cli_ctx *ctx);
 struct ptlrpc_request *ptlrpc_prep_req(struct obd_import *imp, __u32 version,
                                        int opcode, int count, int *lengths,
                                        char **bufs);
 struct ptlrpc_request *ptlrpc_prep_req_pool(struct obd_import *imp,
                                              __u32 version, int opcode,
                                             int count, int *lengths, char **bufs,
-                                            struct ptlrpc_request_pool *pool,
-                                            struct ptlrpc_cli_ctx *ctx);
+                                            struct ptlrpc_request_pool *pool);
 void ptlrpc_free_req(struct ptlrpc_request *request);
 void ptlrpc_req_finished(struct ptlrpc_request *request);
 void ptlrpc_req_finished_with_imp_lock(struct ptlrpc_request *request);
@@ -912,6 +929,8 @@ void lustre_msg_set_last_committed(struct lustre_msg *msg,__u64 last_committed);
 void lustre_msg_set_transno(struct lustre_msg *msg, __u64 transno);
 void lustre_msg_set_status(struct lustre_msg *msg, __u32 status);
 void lustre_msg_set_conn_cnt(struct lustre_msg *msg, __u32 conn_cnt);
+void ptlrpc_req_set_repsize(struct ptlrpc_request *req, int count, int *sizes);
+void ptlrpc_request_set_replen(struct ptlrpc_request *req);
 
 static inline void
 lustre_shrink_reply(struct ptlrpc_request *req, int segment,
@@ -956,14 +975,6 @@ static inline int ptlrpc_req_get_repsize(struct ptlrpc_request *req)
                          req->rq_reqmsg->lm_magic);
                 return -EFAULT;
         }
-}
-
-static inline void
-ptlrpc_req_set_repsize(struct ptlrpc_request *req, int count, int *lens)
-{
-        req->rq_replen = lustre_msg_size(req->rq_reqmsg->lm_magic, count, lens);
-        if (req->rq_reqmsg->lm_magic == LUSTRE_MSG_MAGIC_V2)
-                req->rq_reqmsg->lm_repsize = req->rq_replen;
 }
 
 /* ldlm/ldlm_lib.c */

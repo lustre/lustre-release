@@ -35,43 +35,36 @@ static inline void lprocfs_mdc_init_vars(struct lprocfs_static_vars *lvars)
         memset(lvars, 0, sizeof(*lvars));
 }
 #endif
-void mdc_pack_req_body(struct ptlrpc_request *req, int offset,
-                       __u64 valid, const struct lu_fid *fid,
-                       struct obd_capa *oc, int ea_size,
-                       __u32 suppgid, int flags);
-void mdc_pack_capa(struct ptlrpc_request *req, int offset, struct obd_capa *oc);
-void mdc_pack_rep_body(struct ptlrpc_request *);
-void mdc_is_subdir_pack(struct ptlrpc_request *req, int offset,
-                        const struct lu_fid *pfid, const struct lu_fid *cfid,
-                        int flags);
-void mdc_readdir_pack(struct ptlrpc_request *req, int pos, __u64 offset,
-		      __u32 size, const struct lu_fid *fid,
-                      struct obd_capa *oc);
-void mdc_getattr_pack(struct ptlrpc_request *req, int offset, __u64 valid,
-                      int flags, struct md_op_data *data);
-void mdc_setattr_pack(struct ptlrpc_request *req, int offset,
-                      struct md_op_data *op_data,
-                      void *ea, int ealen, void *ea2, int ea2len);
-void mdc_create_pack(struct ptlrpc_request *req, int offset,
-                     struct md_op_data *op_data, const void *data, int datalen,
-		     __u32 mode, __u32 uid, __u32 gid, __u32 cap_effective,
-		     __u64 rdev);
-void mdc_open_pack(struct ptlrpc_request *req, int offset,
-                   struct md_op_data *op_data, __u32 mode, __u64 rdev,
-                   __u32 flags, const void *data, int datalen);
-void mdc_join_pack(struct ptlrpc_request *req, int offset, 
-                   struct md_op_data *op_data, __u64 head_size);
-void mdc_unlink_pack(struct ptlrpc_request *req, int offset,
-                     struct md_op_data *op_data);
-void mdc_link_pack(struct ptlrpc_request *req, int offset,
-                   struct md_op_data *op_data);
-void mdc_rename_pack(struct ptlrpc_request *req, int offset,
-                     struct md_op_data *op_data,
+ 
+void mdc_pack_body(struct ptlrpc_request *req, const struct lu_fid *fid,
+                   struct obd_capa *oc, __u64 valid, int ea_size,
+                   __u32 suppgid, int flags);
+void mdc_pack_capa(struct ptlrpc_request *req, const struct req_msg_field *field,
+                   struct obd_capa *oc);
+int mdc_pack_req(struct ptlrpc_request *req, int version, int opc);
+void mdc_is_subdir_pack(struct ptlrpc_request *req, const struct lu_fid *pfid,
+                        const struct lu_fid *cfid, int flags);
+void mdc_readdir_pack(struct ptlrpc_request *req, __u64 pgoff, __u32 size,
+                      const struct lu_fid *fid, struct obd_capa *oc);
+void mdc_getattr_pack(struct ptlrpc_request *req, __u64 valid, int flags,
+                      struct md_op_data *data);
+void mdc_setattr_pack(struct ptlrpc_request *req, struct md_op_data *op_data,
+                     void *ea, int ealen, void *ea2, int ea2len);
+void mdc_create_pack(struct ptlrpc_request *req, struct md_op_data *op_data,
+                     const void *data, int datalen, __u32 mode, __u32 uid,
+                     __u32 gid, __u32 cap_effective, __u64 rdev);
+void mdc_open_pack(struct ptlrpc_request *req, struct md_op_data *op_data,
+                   __u32 mode, __u64 rdev, __u32 flags, const void *data,
+                   int datalen);
+void mdc_join_pack(struct ptlrpc_request *req, struct md_op_data *op_data,
+                   __u64 head_size);
+void mdc_unlink_pack(struct ptlrpc_request *req, struct md_op_data *op_data);
+void mdc_link_pack(struct ptlrpc_request *req, struct md_op_data *op_data);
+void mdc_rename_pack(struct ptlrpc_request *req, struct md_op_data *op_data,
                      const char *old, int oldlen, const char *new, int newlen);
-void mdc_close_pack(struct ptlrpc_request *req, int offset,
-                    struct md_op_data *op_data);
-void mdc_exit_request(struct client_obd *cli);
+void mdc_close_pack(struct ptlrpc_request *req, struct md_op_data *op_data);
 void mdc_enter_request(struct client_obd *cli);
+void mdc_exit_request(struct client_obd *cli);
 
 static inline int client_is_remote(struct obd_export *exp)
 {
@@ -127,8 +120,7 @@ int mdc_open(struct obd_export *exp, obd_id ino, int type, int flags,
 struct obd_client_handle;
 
 int mdc_get_lustre_md(struct obd_export *md_exp, struct ptlrpc_request *req,
-                      int offset, struct obd_export *dt_exp, 
-                      struct obd_export *lmv_exp,
+                      struct obd_export *dt_exp, struct obd_export *lmv_exp,
                       struct lustre_md *md);
 
 int mdc_free_lustre_md(struct obd_export *exp, struct lustre_md *md);
@@ -157,6 +149,18 @@ int mdc_unlink(struct obd_export *exp, struct md_op_data *op_data,
 int mdc_cancel_unused(struct obd_export *exp, const struct lu_fid *fid,
                       ldlm_policy_data_t *policy, ldlm_mode_t mode,
                       int flags, void *opaque);
+
+static inline void mdc_set_capa_size(struct ptlrpc_request *req,
+                                     const struct req_msg_field *field,
+                                     struct obd_capa *oc)
+{
+        if (oc == NULL)
+                req_capsule_set_size(&req->rq_pill, field, RCL_CLIENT, 0);
+        else
+                /* it is already calculated as sizeof struct obd_capa */
+                ;
+}
+
 ldlm_mode_t mdc_lock_match(struct obd_export *exp, int flags,
                            const struct lu_fid *fid, ldlm_type_t type,
                            ldlm_policy_data_t *policy, ldlm_mode_t mode,

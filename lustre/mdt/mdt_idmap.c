@@ -68,8 +68,8 @@ int mdt_init_idmap(struct mdt_thread_info *info)
         int rc = 0, remote;
         ENTRY;
 
-        data = req_capsule_client_get(&info->mti_pill, &RMF_CONNECT_DATA);
-        reply = req_capsule_server_get(&info->mti_pill, &RMF_CONNECT_DATA);
+        data = req_capsule_client_get(info->mti_pill, &RMF_CONNECT_DATA);
+        reply = req_capsule_server_get(info->mti_pill, &RMF_CONNECT_DATA);
         if (data == NULL || reply == NULL)
                 RETURN(-EFAULT);
 

@@ -723,6 +723,10 @@ static int lustre_start_mgc(struct super_block *sb)
                 /* nonfatal */
                 CERROR("can't set %s %d\n", KEY_INIT_RECOV_BACKUP, rc);
         /* We connect to the MGS at setup, and don't disconnect until cleanup */
+
+        ocd.ocd_connect_flags = OBD_CONNECT_VERSION | OBD_CONNECT_FID;
+        ocd.ocd_version = LUSTRE_VERSION_CODE;
+
         rc = obd_connect(NULL, &mgc_conn, obd, &(obd->obd_uuid), &ocd);
         if (rc) {
                 CERROR("connect failed %d\n", rc);

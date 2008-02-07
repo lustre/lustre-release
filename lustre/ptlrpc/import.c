@@ -367,20 +367,15 @@ int ptlrpc_connect_import(struct obd_import *imp, char *new_uuid)
         struct obd_device *obd = imp->imp_obd;
         int initial_connect = 0;
         int set_transno = 0;
-        int rc;
         __u64 committed_before_reconnect = 0;
         struct ptlrpc_request *request;
-        int size[] = { sizeof(struct ptlrpc_body),
-                       sizeof(imp->imp_obd->u.cli.cl_target_uuid),
-                       sizeof(obd->obd_uuid),
-                       sizeof(imp->imp_dlm_handle),
-                       sizeof(imp->imp_connect_data) };
-        char *tmp[] = { NULL,
-                        obd2cli_tgt(imp->imp_obd),
-                        obd->obd_uuid.uuid,
-                        (char *)&imp->imp_dlm_handle,
-                        (char *)&imp->imp_connect_data };
+        char *bufs[] = { NULL,
+                         obd2cli_tgt(imp->imp_obd),
+                         obd->obd_uuid.uuid,
+                         (char *)&imp->imp_dlm_handle,
+                         (char *)&imp->imp_connect_data };
         struct ptlrpc_connect_async_args *aa;
+        int rc;
         ENTRY;
 
         spin_lock(&imp->imp_lock);
@@ -457,10 +452,16 @@ int ptlrpc_connect_import(struct obd_import *imp, char *new_uuid)
         if (rc)
                 GOTO(out, rc);
 
-        request = ptlrpc_prep_req(imp, LUSTRE_OBD_VERSION, imp->imp_connect_op,
-                                  5, size, tmp);
-        if (!request)
+        request = ptlrpc_request_alloc(imp, &RQF_MDS_CONNECT);
+        if (request == NULL)
                 GOTO(out, rc = -ENOMEM);
+
+        rc = ptlrpc_request_bufs_pack(request, LUSTRE_OBD_VERSION,
+                                      imp->imp_connect_op, bufs, NULL);
+        if (rc) {
+                ptlrpc_request_free(request);
+                GOTO(out, rc);
+        }
 
 #ifndef __KERNEL__
         lustre_msg_add_op_flags(request->rq_reqmsg, MSG_CONNECT_LIBCLIENT);
@@ -469,9 +470,9 @@ int ptlrpc_connect_import(struct obd_import *imp, char *new_uuid)
 
         request->rq_send_state = LUSTRE_IMP_CONNECTING;
         /* Allow a slightly larger reply for future growth compatibility */
-        size[REPLY_REC_OFF] = sizeof(struct obd_connect_data) +
-                              16 * sizeof(__u64);
-        ptlrpc_req_set_repsize(request, 2, size);
+        req_capsule_set_size(&request->rq_pill, &RMF_CONNECT_DATA, RCL_SERVER,
+                             sizeof(struct obd_connect_data)+16*sizeof(__u64));
+        ptlrpc_request_set_replen(request);
         request->rq_interpret_reply = ptlrpc_connect_interpret;
 
         CLASSERT(sizeof (*aa) <= sizeof (request->rq_async_args));
@@ -700,9 +701,12 @@ finish:
         } else {
                 struct obd_connect_data *ocd;
                 struct obd_export *exp;
-
-                ocd = lustre_swab_repbuf(request, REPLY_REC_OFF, sizeof(*ocd),
-                                         lustre_swab_connect);
+                int ret;
+                ret = req_capsule_get_size(&request->rq_pill, &RMF_CONNECT_DATA,
+                                           RCL_SERVER);
+                /* server replied obd_connect_data is always bigger */
+                ocd = req_capsule_server_sized_get(&request->rq_pill,
+                                                   &RMF_CONNECT_DATA, ret);
 
                 spin_lock(&imp->imp_lock);
                 list_del(&imp->imp_conn_current->oic_item);
@@ -812,9 +816,8 @@ out:
                         if (request->rq_repmsg == NULL)
                                 RETURN(-EPROTO);
 
-                        ocd = lustre_swab_repbuf(request, REPLY_REC_OFF,
-                                                 sizeof *ocd,
-                                                 lustre_swab_connect);
+                        ocd = req_capsule_server_get(&request->rq_pill,
+                                                     &RMF_CONNECT_DATA);
                         if (ocd &&
                             (ocd->ocd_connect_flags & OBD_CONNECT_VERSION) &&
                             (ocd->ocd_version != LUSTRE_VERSION_CODE)) {
@@ -878,13 +881,14 @@ static int signal_completed_replay(struct obd_import *imp)
         LASSERT(atomic_read(&imp->imp_replay_inflight) == 0);
         atomic_inc(&imp->imp_replay_inflight);
 
-        req = ptlrpc_prep_req(imp, LUSTRE_OBD_VERSION, OBD_PING, 1, NULL, NULL);
-        if (!req) {
+        req = ptlrpc_request_alloc_pack(imp, &RQF_OBD_PING, LUSTRE_OBD_VERSION,
+                                        OBD_PING);
+        if (req == NULL) {
                 atomic_dec(&imp->imp_replay_inflight);
                 RETURN(-ENOMEM);
         }
 
-        ptlrpc_req_set_repsize(req, 1, NULL);
+        ptlrpc_request_set_replen(req);
         req->rq_send_state = LUSTRE_IMP_REPLAY_WAIT;
         lustre_msg_add_flags(req->rq_reqmsg, 
                              MSG_LOCK_REPLAY_DONE | MSG_REQ_REPLAY_DONE);
@@ -1066,7 +1070,8 @@ int ptlrpc_disconnect_import(struct obd_import *imp, int noclose)
 
         spin_unlock(&imp->imp_lock);
 
-        req = ptlrpc_prep_req(imp, LUSTRE_OBD_VERSION, rq_opc, 1, NULL, NULL);
+        req = ptlrpc_request_alloc_pack(imp, &RQF_MDS_DISCONNECT,
+                                        LUSTRE_OBD_VERSION, rq_opc);
         if (req) {
                 /* We are disconnecting, do not retry a failed DISCONNECT rpc if
                  * it fails.  We can get through the above with a down server
@@ -1079,7 +1084,7 @@ int ptlrpc_disconnect_import(struct obd_import *imp, int noclose)
 #endif
                 IMPORT_SET_STATE(imp, LUSTRE_IMP_CONNECTING);
                 req->rq_send_state =  LUSTRE_IMP_CONNECTING;
-                ptlrpc_req_set_repsize(req, 1, NULL);
+                ptlrpc_request_set_replen(req);
                 rc = ptlrpc_queue_wait(req);
                 ptlrpc_req_finished(req);
         }

@@ -497,7 +497,8 @@ extern struct file_operations ll_dir_operations;
 extern struct inode_operations ll_dir_inode_operations;
 
 /* llite/namei.c */
-int ll_objects_destroy(struct ptlrpc_request *request, struct inode *dir);
+int ll_objects_destroy(struct ptlrpc_request *request,
+                       struct inode *dir);
 struct inode *ll_iget(struct super_block *sb, ino_t hash,
                       struct lustre_md *lic);
 struct dentry *ll_find_alias(struct inode *, struct dentry *);
@@ -590,7 +591,7 @@ void ll_unhash_aliases(struct inode *);
 void ll_frob_intent(struct lookup_intent **itp, struct lookup_intent *deft);
 void ll_lookup_finish_locks(struct lookup_intent *it, struct dentry *dentry);
 int ll_dcompare(struct dentry *parent, struct qstr *d_name, struct qstr *name);
-int ll_revalidate_it_finish(struct ptlrpc_request *request, int offset,
+int ll_revalidate_it_finish(struct ptlrpc_request *request,
                             struct lookup_intent *it, struct dentry *de);
 
 /* llite/llite_lib.c */
@@ -625,7 +626,7 @@ void ll_umount_begin(struct super_block *sb);
 #endif
 int ll_remount_fs(struct super_block *sb, int *flags, char *data);
 int ll_prep_inode(struct inode **inode, struct ptlrpc_request *req,
-                  int offset, struct super_block *);
+                  struct super_block *);
 void lustre_dump_dentry(struct dentry *, int recur);
 void lustre_dump_inode(struct inode *);
 struct ll_async_page *llite_pglist_next_llap(struct ll_sb_info *sbi,

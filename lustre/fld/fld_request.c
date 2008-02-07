@@ -435,36 +435,26 @@ EXPORT_SYMBOL(fld_client_fini);
 static int fld_client_rpc(struct obd_export *exp,
                           struct md_fld *mf, __u32 fld_op)
 {
-        int size[3] = { sizeof(struct ptlrpc_body),
-                        sizeof(__u32),
-                        sizeof(struct md_fld) };
         struct ptlrpc_request *req;
-        struct req_capsule pill;
-        struct md_fld *pmf;
-        __u32 *op;
-        int rc;
+        struct md_fld         *pmf;
+        __u32                 *op;
+        int                    rc;
         ENTRY;
 
         LASSERT(exp != NULL);
 
-        req = ptlrpc_prep_req(class_exp2cliimp(exp),
-                              LUSTRE_MDS_VERSION,
-                              FLD_QUERY, 3, size,
-                              NULL);
+        req = ptlrpc_request_alloc_pack(class_exp2cliimp(exp), &RQF_FLD_QUERY,
+                                        LUSTRE_MDS_VERSION, FLD_QUERY);
         if (req == NULL)
                 RETURN(-ENOMEM);
 
-        req_capsule_init(&pill, req, RCL_CLIENT, NULL);
-        req_capsule_set(&pill, &RQF_FLD_QUERY);
-
-        op = req_capsule_client_get(&pill, &RMF_FLD_OPC);
+        op = req_capsule_client_get(&req->rq_pill, &RMF_FLD_OPC);
         *op = fld_op;
 
-        pmf = req_capsule_client_get(&pill, &RMF_FLD_MDFLD);
+        pmf = req_capsule_client_get(&req->rq_pill, &RMF_FLD_MDFLD);
         *pmf = *mf;
 
-        size[1] = sizeof(struct md_fld);
-        ptlrpc_req_set_repsize(req, 2, size);
+        ptlrpc_request_set_replen(req);
         req->rq_request_portal = FLD_REQUEST_PORTAL;
 
         if (fld_op != FLD_LOOKUP)
@@ -477,13 +467,12 @@ static int fld_client_rpc(struct obd_export *exp,
         if (rc)
                 GOTO(out_req, rc);
 
-        pmf = req_capsule_server_get(&pill, &RMF_FLD_MDFLD);
+        pmf = req_capsule_server_get(&req->rq_pill, &RMF_FLD_MDFLD);
         if (pmf == NULL)
                 GOTO(out_req, rc = -EFAULT);
         *mf = *pmf;
         EXIT;
 out_req:
-        req_capsule_fini(&pill);
         ptlrpc_req_finished(req);
         return rc;
 }

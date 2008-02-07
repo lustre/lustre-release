@@ -1195,10 +1195,9 @@ static int lmv_getattr(struct obd_export *exp, const struct lu_fid *fid,
                         RETURN(rc);
                 }
 
-                body = lustre_msg_buf((*request)->rq_repmsg, REPLY_REC_OFF,
-                                      sizeof(*body));
+                body = req_capsule_server_get(&(*request)->rq_pill,
+                                              &RMF_MDT_BODY);
                 LASSERT(body != NULL);
-                LASSERT(lustre_rep_swabbed(*request, REPLY_REC_OFF));
 
                 lmv_obj_lock(obj);
 
@@ -1304,7 +1303,7 @@ int lmv_handle_split(struct obd_export *exp, const struct lu_fid *fid)
                 GOTO(cleanup, rc);
         }
 
-        rc = md_get_lustre_md(tgt_exp, req, 1, NULL, exp, &md);
+        rc = md_get_lustre_md(tgt_exp, req, NULL, exp, &md);
         if (rc) {
                 CERROR("mdc_get_lustre_md() failed, error %d\n", rc);
                 GOTO(cleanup, rc);
@@ -1514,10 +1513,8 @@ lmv_enqueue_remote(struct obd_export *exp, struct ldlm_enqueue_info *einfo,
         int rc = 0, pmode;
         ENTRY;
 
-        body = lustre_msg_buf(req->rq_repmsg,
-                              DLM_REPLY_REC_OFF, sizeof(*body));
+        body = req_capsule_server_get(&req->rq_pill, &RMF_MDT_BODY);
         LASSERT(body != NULL);
-        LASSERT(lustre_rep_swabbed(req, DLM_REPLY_REC_OFF));
 
         if (!(body->valid & OBD_MD_MDS))
                 RETURN(0);
@@ -1659,10 +1656,9 @@ repeat:
         rc = md_getattr_name(tgt_exp, &rid, oc, filename, namelen, valid,
                              ea_size, suppgid, request);
         if (rc == 0) {
-                body = lustre_msg_buf((*request)->rq_repmsg,
-                                      REQ_REC_OFF, sizeof(*body));
+                body = req_capsule_server_get(&(*request)->rq_pill,
+                                              &RMF_MDT_BODY);
                 LASSERT(body != NULL);
-                LASSERT(lustre_rep_swabbed(*request, REQ_REC_OFF));
 
                 if (body->valid & OBD_MD_MDS) {
                         struct ptlrpc_request *req = NULL;
@@ -2741,16 +2737,15 @@ ldlm_mode_t lmv_lock_match(struct obd_export *exp, int flags,
 }
 
 int lmv_get_lustre_md(struct obd_export *exp, struct ptlrpc_request *req,
-                      int offset, struct obd_export *dt_exp,
-                      struct obd_export *md_exp, struct lustre_md *md)
+                      struct obd_export *dt_exp, struct obd_export *md_exp,
+                      struct lustre_md *md)
 {
         struct obd_device *obd = exp->exp_obd;
         struct lmv_obd *lmv = &obd->u.lmv;
         int rc;
 
         ENTRY;
-        rc = md_get_lustre_md(lmv->tgts[0].ltd_exp, req, offset, dt_exp, md_exp,
-                              md);
+        rc = md_get_lustre_md(lmv->tgts[0].ltd_exp, req, dt_exp, md_exp, md);
         RETURN(rc);
 }
 

@@ -200,16 +200,16 @@ static int fld_req_handle(struct ptlrpc_request *req,
 
         site = req->rq_export->exp_obd->obd_lu_dev->ld_site;
 
-        rc = req_capsule_pack(&info->fti_pill);
+        rc = req_capsule_server_pack(info->fti_pill);
         if (rc)
                 RETURN(err_serious(rc));
 
-        opc = req_capsule_client_get(&info->fti_pill, &RMF_FLD_OPC);
+        opc = req_capsule_client_get(info->fti_pill, &RMF_FLD_OPC);
         if (opc != NULL) {
-                in = req_capsule_client_get(&info->fti_pill, &RMF_FLD_MDFLD);
+                in = req_capsule_client_get(info->fti_pill, &RMF_FLD_MDFLD);
                 if (in == NULL)
                         RETURN(err_serious(-EPROTO));
-                out = req_capsule_server_get(&info->fti_pill, &RMF_FLD_MDFLD);
+                out = req_capsule_server_get(info->fti_pill, &RMF_FLD_MDFLD);
                 if (out == NULL)
                         RETURN(err_serious(-EPROTO));
                 *out = *in;
@@ -226,24 +226,17 @@ static int fld_req_handle(struct ptlrpc_request *req,
 static void fld_thread_info_init(struct ptlrpc_request *req,
                                  struct fld_thread_info *info)
 {
-        int i;
-
         info->fti_flags = lustre_msg_get_flags(req->rq_reqmsg);
 
-        /* Mark rep buffer as req-layout stuff expects. */
-        for (i = 0; i < ARRAY_SIZE(info->fti_rep_buf_size); i++)
-                info->fti_rep_buf_size[i] = -1;
-
+        info->fti_pill = &req->rq_pill;
         /* Init request capsule. */
-        req_capsule_init(&info->fti_pill, req, RCL_SERVER,
-                         info->fti_rep_buf_size);
-
-        req_capsule_set(&info->fti_pill, &RQF_FLD_QUERY);
+        req_capsule_init(info->fti_pill, req, RCL_SERVER);
+        req_capsule_set(info->fti_pill, &RQF_FLD_QUERY);
 }
 
 static void fld_thread_info_fini(struct fld_thread_info *info)
 {
-        req_capsule_fini(&info->fti_pill);
+        req_capsule_fini(info->fti_pill);
 }
 
 static int fld_handle(struct ptlrpc_request *req)
@@ -270,7 +263,7 @@ static int fld_handle(struct ptlrpc_request *req)
  */
 int fld_query(struct com_thread_info *info)
 {
-        return fld_handle(info->cti_pill.rc_req);
+        return fld_handle(info->cti_pill->rc_req);
 }
 EXPORT_SYMBOL(fld_query);
 

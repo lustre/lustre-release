@@ -173,7 +173,6 @@ int llu_md_blocking_ast(struct ldlm_lock *lock,
 }
 
 static int pnode_revalidate_finish(struct ptlrpc_request *req,
-                                   int offset,
                                    struct lookup_intent *it,
                                    struct pnode *pnode)
 {
@@ -191,7 +190,7 @@ static int pnode_revalidate_finish(struct ptlrpc_request *req,
                 RETURN(-ENOENT);
 
         rc = md_get_lustre_md(llu_i2sbi(inode)->ll_md_exp, req,
-                              offset, llu_i2sbi(inode)->ll_dt_exp, 
+                              llu_i2sbi(inode)->ll_dt_exp, 
                               llu_i2sbi(inode)->ll_md_exp, &md);
         if (rc)
                 RETURN(rc);
@@ -265,7 +264,7 @@ static int llu_pb_revalidate(struct pnode *pnode, int flags,
         if (rc < 0)
                 GOTO(out, rc = 0);
 
-        rc = pnode_revalidate_finish(req, DLM_REPLY_REC_OFF, it, pnode);
+        rc = pnode_revalidate_finish(req, it, pnode);
         if (rc != 0) {
                 ll_intent_release(it);
                 GOTO(out, rc = 0);
@@ -335,7 +334,7 @@ static int lookup_it_finish(struct ptlrpc_request *request, int offset,
                 if (it_disposition(it, DISP_OPEN_CREATE))
                         ptlrpc_req_finished(request);
 
-                rc = md_get_lustre_md(sbi->ll_md_exp, request, offset,
+                rc = md_get_lustre_md(sbi->ll_md_exp, request,
                                       sbi->ll_dt_exp, sbi->ll_md_exp, &md);
                 if (rc)
                         RETURN(rc);

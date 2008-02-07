@@ -1407,8 +1407,8 @@ static int __mdd_readpage(const struct lu_env *env, struct mdd_object *obj,
          */
         iops = &next->do_index_ops->dio_it;
         it = iops->init(env, next, 0, mdd_object_capa(env, obj));
-        if (it == NULL)
-                return -ENOMEM;
+        if (IS_ERR(it))
+                return PTR_ERR(it);
 
         rc = iops->load(env, it, rdpg->rp_hash);
 

@@ -726,13 +726,14 @@ int ldlm_cli_enqueue(struct obd_export *exp, struct ptlrpc_request **reqp,
                      ldlm_policy_data_t *policy, int *flags,
                      void *lvb, __u32 lvb_len, void *lvb_swabber,
                      struct lustre_handle *lockh, int async);
-struct ptlrpc_request *ldlm_prep_enqueue_req(struct obd_export *exp,
-                                             int bufcount, int *size,
-                                             struct list_head *head, int count);
-struct ptlrpc_request *ldlm_prep_elc_req(struct obd_export *exp, int version,
-                                         int opc, int bufcount, int *size,
-                                         int bufoff, int canceloff,
-                                         struct list_head *cancels, int count);
+int ldlm_prep_enqueue_req(struct obd_export *exp,
+                          struct ptlrpc_request *req,
+                          struct list_head *cancels,
+                          int count);
+int ldlm_prep_elc_req(struct obd_export *exp,
+                      struct ptlrpc_request *req,
+                      int version, int opc, int canceloff,
+                      struct list_head *cancels, int count);
 int ldlm_handle_enqueue0(struct ldlm_namespace *ns, struct ptlrpc_request *req,
                          const struct ldlm_request *dlm_req,
                          const struct ldlm_callback_suite *cbs);
@@ -773,7 +774,7 @@ int ldlm_cancel_resource_local(struct ldlm_resource *res,
                                ldlm_mode_t mode, int lock_flags,
                                int cancel_flags, void *opaque);
 int ldlm_cli_cancel_list(struct list_head *head, int count,
-                         struct ptlrpc_request *req, int off, int flags);
+                         struct ptlrpc_request *req, int flags);
  
 /* mds/handler.c */
 /* This has to be here because recursive inclusion sucks. */

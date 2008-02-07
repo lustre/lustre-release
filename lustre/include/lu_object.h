@@ -376,7 +376,6 @@ struct lu_attr {
         __u64          la_valid;  /* valid bits */
 };
 
-
 /*
  * Layer in the layered object.
  */

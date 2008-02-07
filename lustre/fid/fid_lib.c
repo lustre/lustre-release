@@ -44,12 +44,12 @@
 #include <lustre_fid.h>
 
 /*
- * Sequence space, starts from 0x400 to have first 0x400 sequences used for
- * special purposes. This means that if we have seq-with 10000 fids, we have
- * ~10M fids reserved for special purposes (igifs, etc.).
+ * Sequence space, starts from 0x100000000ULL to have first 0x100000000ULL
+ * sequences used for special purposes. 
+ * Those fids are reserved for special purposes (igifs, etc.).
  */
 const struct lu_range LUSTRE_SEQ_SPACE_RANGE = {
-        (0x400),
+        (0x100000000ULL),
         ((__u64)~0ULL)
 };
 EXPORT_SYMBOL(LUSTRE_SEQ_SPACE_RANGE);

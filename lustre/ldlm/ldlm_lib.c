@@ -575,26 +575,25 @@ int target_handle_connect(struct ptlrpc_request *req)
         struct obd_export *export = NULL;
         struct obd_import *revimp;
         struct lustre_handle conn;
+        struct lustre_handle *tmp;
         struct obd_uuid tgtuuid;
         struct obd_uuid cluuid;
         struct obd_uuid remote_uuid;
-        char *str, *tmp;
+        char *str;
         int rc = 0;
         int initial_conn = 0;
-        struct obd_connect_data *data;
-        int size[2] = { sizeof(struct ptlrpc_body), sizeof(*data) };
+        struct obd_connect_data *data, *tmpdata;
         ENTRY;
 
         OBD_RACE(OBD_FAIL_TGT_CONN_RACE);
 
-        lustre_set_req_swabbed(req, REQ_REC_OFF);
-        str = lustre_msg_string(req->rq_reqmsg, REQ_REC_OFF, sizeof(tgtuuid)-1);
+        str = req_capsule_client_get(&req->rq_pill, &RMF_TGTUUID);
         if (str == NULL) {
                 DEBUG_REQ(D_ERROR, req, "bad target UUID for connect");
                 GOTO(out, rc = -EINVAL);
         }
 
-        obd_str2uuid (&tgtuuid, str);
+        obd_str2uuid(&tgtuuid, str);
         target = class_uuid2obd(&tgtuuid);
         if (!target)
                 target = class_name2obd(str);
@@ -620,15 +619,14 @@ int target_handle_connect(struct ptlrpc_request *req)
            Really, class_uuid2obd should take the ref. */
         targref = class_incref(target);
 
-        lustre_set_req_swabbed(req, REQ_REC_OFF + 1);
-        str = lustre_msg_string(req->rq_reqmsg, REQ_REC_OFF + 1,
-                                sizeof(cluuid) - 1);
+
+        str = req_capsule_client_get(&req->rq_pill, &RMF_CLUUID);
         if (str == NULL) {
                 DEBUG_REQ(D_ERROR, req, "bad client UUID for connect");
                 GOTO(out, rc = -EINVAL);
         }
 
-        obd_str2uuid (&cluuid, str);
+        obd_str2uuid(&cluuid, str);
 
         /* XXX extract a nettype and format accordingly */
         switch (sizeof(lnet_nid_t)) {
@@ -645,19 +643,17 @@ int target_handle_connect(struct ptlrpc_request *req)
                 LBUG();
         }
 
-        tmp = lustre_msg_buf(req->rq_reqmsg, REQ_REC_OFF + 2, sizeof conn);
+        tmp = req_capsule_client_get(&req->rq_pill, &RMF_CONN);
         if (tmp == NULL)
                 GOTO(out, rc = -EPROTO);
 
-        memcpy(&conn, tmp, sizeof conn);
+        conn = *tmp;
 
-        data = lustre_swab_reqbuf(req, REQ_REC_OFF + 3, sizeof(*data),
-                                  lustre_swab_connect);
-
+        data = req_capsule_client_get(&req->rq_pill, &RMF_CONNECT_DATA);
         if (!data)
                 GOTO(out, rc = -EPROTO);
 
-        rc = lustre_pack_reply(req, 2, size, NULL);
+        rc = req_capsule_server_pack(&req->rq_pill);
         if (rc)
                 GOTO(out, rc);
 
@@ -678,10 +674,10 @@ int target_handle_connect(struct ptlrpc_request *req)
                                   OBD_OCD_VERSION_MINOR(data->ocd_version),
                                   OBD_OCD_VERSION_PATCH(data->ocd_version),
                                   OBD_OCD_VERSION_FIX(data->ocd_version));
-                        data = lustre_msg_buf(req->rq_repmsg, REPLY_REC_OFF,
-                                              offsetof(typeof(*data),
-                                                       ocd_version) +
-                                              sizeof(data->ocd_version));
+                        data = req_capsule_server_sized_get(&req->rq_pill,
+                                                        &RMF_CONNECT_DATA,
+                                    offsetof(typeof(*data), ocd_version) +
+                                             sizeof(data->ocd_version));
                         if (data) {
                                 data->ocd_connect_flags = OBD_CONNECT_VERSION;
                                 data->ocd_version = LUSTRE_VERSION_CODE;
@@ -789,13 +785,16 @@ int target_handle_connect(struct ptlrpc_request *req)
 
         if (export == NULL) {
                 if (target->obd_recovering) {
+                        cfs_time_t t;
+
+                        t = cfs_timer_deadline(&target->obd_recovery_timer);
+                        t = cfs_time_sub(t, cfs_time_current());
                         CERROR("%s: denying connection for new client %s (%s): "
                                "%d clients in recovery for %lds\n",
                                target->obd_name,
                                libcfs_nid2str(req->rq_peer.nid), cluuid.uuid,
                                target->obd_recoverable_clients,
-                               cfs_duration_sec(cfs_time_sub(cfs_timer_deadline(&target->obd_recovery_timer),
-                                                             cfs_time_current())));
+                               cfs_duration_sec(t));
                         rc = -EBUSY;
                 } else {
 dont_check_exports:
@@ -810,11 +809,13 @@ dont_check_exports:
                 GOTO(out, rc);
         /* Return only the parts of obd_connect_data that we understand, so the
          * client knows that we don't understand the rest. */
-        if (data)
-                memcpy(lustre_msg_buf(req->rq_repmsg, REPLY_REC_OFF,
-                                      sizeof(*data)),
-                       data, sizeof(*data));
-
+        if (data) {
+                 tmpdata = req_capsule_server_get(&req->rq_pill,
+                                                  &RMF_CONNECT_DATA);
+                  //data->ocd_connect_flags &= OBD_CONNECT_SUPPORTED;
+                 *tmpdata = *data;
+        }
+                  
         /* If all else goes well, this is our RPC return code. */
         req->rq_status = 0;
 
@@ -901,9 +902,8 @@ dont_check_exports:
                         wake_up(&target->obd_next_transno_waitq);
         }
         spin_unlock_bh(&target->obd_processing_task_lock);
-        memcpy(&conn,
-               lustre_msg_buf(req->rq_reqmsg, REQ_REC_OFF + 2, sizeof conn),
-               sizeof conn);
+        tmp = req_capsule_client_get(&req->rq_pill, &RMF_CONN);
+        conn = *tmp;
 
         if (export->exp_imp_reverse != NULL) {
                 /* destroyed import can be still referenced in ctxt */
@@ -973,7 +973,7 @@ int target_handle_disconnect(struct ptlrpc_request *req)
         int rc;
         ENTRY;
 
-        rc = lustre_pack_reply(req, 1, NULL, NULL);
+        rc = req_capsule_server_pack(&req->rq_pill);
         if (rc)
                 RETURN(rc);
 
@@ -1951,7 +1951,7 @@ void target_send_reply(struct ptlrpc_request *req, int rc, int fail_id)
 int target_handle_ping(struct ptlrpc_request *req)
 {
         obd_ping(req->rq_export);
-        return lustre_pack_reply(req, 1, NULL, NULL);
+        return req_capsule_server_pack(&req->rq_pill);
 }
 
 void target_committed_to_req(struct ptlrpc_request *req)
@@ -1983,12 +1983,9 @@ int target_handle_qc_callback(struct ptlrpc_request *req)
         struct obd_quotactl *oqctl;
         struct client_obd *cli = &req->rq_export->exp_obd->u.cli;
 
-        oqctl = lustre_swab_reqbuf(req, REQ_REC_OFF, sizeof(*oqctl),
-                                   lustre_swab_obd_quotactl);
-        if (oqctl == NULL) {
-                CERROR("Can't unpack obd_quotactl\n");
+        oqctl = req_capsule_client_get(&req->rq_pill, &RMF_OBD_QUOTACTL);
+        if (oqctl == NULL)
                 RETURN(-EPROTO);
-        }
 
         cli->cl_qchk_stat = oqctl->qc_stat;
 
@@ -2005,13 +2002,13 @@ int target_handle_dqacq_callback(struct ptlrpc_request *req)
         void* rep;
         struct qunit_data_old *qdata_old;
         int rc = 0;
-        int repsize[2] = { sizeof(struct ptlrpc_body),
-                           sizeof(struct qunit_data) };
         ENTRY;
 
-        rc = lustre_pack_reply(req, 2, repsize, NULL);
-        if (rc)
+        rc = req_capsule_server_pack(&req->rq_pill);
+        if (rc) {
+                CERROR("packing reply failed!: rc = %d\n", rc);
                 RETURN(rc);
+        }
 
         LASSERT(req->rq_export);
 
@@ -2019,25 +2016,24 @@ int target_handle_dqacq_callback(struct ptlrpc_request *req)
         if ((req->rq_export->exp_connect_flags & OBD_CONNECT_QUOTA64) &&
             !OBD_FAIL_CHECK(OBD_FAIL_QUOTA_QD_COUNT_32BIT)) {
                 CDEBUG(D_QUOTA, "qd_count is 64bit!\n");
-                rep = lustre_msg_buf(req->rq_repmsg, REPLY_REC_OFF,
-                                     sizeof(struct qunit_data));
+                rep = req_capsule_server_get(&req->rq_pill,
+                                             &RMF_QUNIT_DATA);
                 LASSERT(rep);
-                qdata = lustre_swab_reqbuf(req, REQ_REC_OFF, sizeof(*qdata),
-                                           lustre_swab_qdata);
+                qdata = req_capsule_client_swab_get(&req->rq_pill,
+                                                    &RMF_QUNIT_DATA,
+                                          (void*)lustre_swab_qdata);
         } else {
                 CDEBUG(D_QUOTA, "qd_count is 32bit!\n");
-                rep = lustre_msg_buf(req->rq_repmsg, REPLY_REC_OFF,
-                                     sizeof(struct qunit_data_old));
+                rep = req_capsule_server_get(&req->rq_pill, &RMF_QUNIT_DATA);
                 LASSERT(rep);
-                qdata_old = lustre_swab_reqbuf(req, REQ_REC_OFF, sizeof(*qdata_old),
-                                               lustre_swab_qdata_old);
+                qdata_old = req_capsule_client_swab_get(&req->rq_pill,
+                                                        &RMF_QUNIT_DATA,
+                                           (void*)lustre_swab_qdata_old);
                 qdata = lustre_quota_old_to_new(qdata_old);
         }
 
-        if (qdata == NULL) {
-                CERROR("Can't unpack qunit_data\n");
+        if (qdata == NULL)
                 RETURN(-EPROTO);
-        }
 
         /* we use the observer */
         LASSERT(obd->obd_observer && obd->obd_observer->obd_observer);
@@ -2054,10 +2050,10 @@ int target_handle_dqacq_callback(struct ptlrpc_request *req)
         /* the qd_count might be changed in lqc_handler */
         if ((req->rq_export->exp_connect_flags & OBD_CONNECT_QUOTA64) &&
             !OBD_FAIL_CHECK(OBD_FAIL_QUOTA_QD_COUNT_32BIT)) {
-                memcpy(rep,qdata,sizeof(*qdata));
+                memcpy(rep, qdata, sizeof(*qdata));
         } else {
                 qdata_old = lustre_quota_new_to_old(qdata);
-                memcpy(rep,qdata_old,sizeof(*qdata_old));
+                memcpy(rep, qdata_old, sizeof(*qdata_old));
         }
         req->rq_status = rc;
         rc = ptlrpc_reply(req);

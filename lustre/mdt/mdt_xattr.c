@@ -47,7 +47,7 @@
 /* return EADATA length to the caller. negative value means error */
 static int mdt_getxattr_pack_reply(struct mdt_thread_info * info)
 {
-        struct req_capsule     *pill = &info->mti_pill ;
+        struct req_capsule     *pill = info->mti_pill ;
         struct ptlrpc_request  *req = mdt_info_req(info);
         char                   *xattr_name;
         __u64                   valid = info->mti_body->valid;
@@ -76,7 +76,7 @@ static int mdt_getxattr_pack_reply(struct mdt_thread_info * info)
                                      mdt_object_child(info->mti_object),
                                      &LU_BUF_NULL);
         } else {
-                CERROR("Valid bits: "LPX64"\n", info->mti_body->valid);
+                CDEBUG(D_INFO, "Valid bits: "LPX64"\n", info->mti_body->valid);
                 RETURN(-EINVAL);
         }
 
@@ -84,7 +84,7 @@ static int mdt_getxattr_pack_reply(struct mdt_thread_info * info)
                 if (size == -ENODATA)
                         size = 0;
                 else if (size != -EOPNOTSUPP) {
-                        CERROR("Error geting EA size: %d\n", size);
+                        CDEBUG(D_INFO, "Error geting EA size: %d\n", size);
                         RETURN(size);
                 }
         }
@@ -96,7 +96,7 @@ static int mdt_getxattr_pack_reply(struct mdt_thread_info * info)
         req_capsule_set_size(pill, &RMF_EADATA, RCL_SERVER,
                              min_t(int, size, info->mti_body->eadatasize));
 
-        rc = req_capsule_pack(pill);
+        rc = req_capsule_server_pack(pill);
         if (rc) {
                 LASSERT(rc < 0);
                 RETURN(rc);
@@ -122,7 +122,7 @@ int mdt_getxattr(struct mdt_thread_info *info)
 
         CDEBUG(D_INODE, "getxattr "DFID"\n", PFID(&info->mti_body->fid1));
 
-        reqbody = req_capsule_client_get(&info->mti_pill, &RMF_MDT_BODY);
+        reqbody = req_capsule_client_get(info->mti_pill, &RMF_MDT_BODY);
         if (reqbody == NULL)
                 RETURN(err_serious(-EFAULT));
 
@@ -151,7 +151,7 @@ int mdt_getxattr(struct mdt_thread_info *info)
         if (easize < 0)
                 GOTO(out, rc = err_serious(easize));
 
-        repbody = req_capsule_server_get(&info->mti_pill, &RMF_MDT_BODY);
+        repbody = req_capsule_server_get(info->mti_pill, &RMF_MDT_BODY);
         LASSERT(repbody != NULL);
 
         /* No need further getxattr. */
@@ -159,12 +159,12 @@ int mdt_getxattr(struct mdt_thread_info *info)
                 GOTO(out, rc = easize);
 
         buf = &info->mti_buf;
-        buf->lb_buf = req_capsule_server_get(&info->mti_pill, &RMF_EADATA);
+        buf->lb_buf = req_capsule_server_get(info->mti_pill, &RMF_EADATA);
         buf->lb_len = easize;
 
         if (info->mti_body->valid & OBD_MD_FLXATTR) {
                 int flags = CFS_IC_NOTHING;
-                char *xattr_name = req_capsule_client_get(&info->mti_pill,
+                char *xattr_name = req_capsule_client_get(info->mti_pill,
                                                           &RMF_NAME);
                 CDEBUG(D_INODE, "getxattr %s\n", xattr_name);
 
@@ -196,7 +196,7 @@ int mdt_getxattr(struct mdt_thread_info *info)
 
                 rc = mo_xattr_list(info->mti_env, next, buf);
                 if (rc < 0)
-                        CERROR("listxattr failed: %d\n", rc);
+                        CDEBUG(D_INFO, "listxattr failed: %d\n", rc);
         } else
                 LBUG();
 
@@ -210,7 +210,7 @@ out:
         return rc;
 }
 
-static int mdt_rmtlsetfacl(struct mdt_thread_info *info, char *xattr_name,
+static int mdt_rmtlsetfacl(struct mdt_thread_info *info, const char *xattr_name,
                            ext_acl_xattr_header *header,
                            posix_acl_xattr_header **out)
 {
@@ -242,7 +242,7 @@ static int mdt_rmtlsetfacl(struct mdt_thread_info *info, char *xattr_name,
                 if (rc < 0) {
                         CERROR("getxattr failed: %d\n", rc);
                         GOTO(_out, rc);
-        }
+                }
         } else
                 buf->lb_buf = NULL;
 
@@ -253,45 +253,46 @@ static int mdt_rmtlsetfacl(struct mdt_thread_info *info, char *xattr_name,
 _out:
         if (rc <= 0 && buf->lb_buf != NULL)
                 OBD_FREE(buf->lb_buf, buf->lb_len);
-
         return rc;
 }
 
-int mdt_setxattr(struct mdt_thread_info *info)
+int mdt_reint_setxattr(struct mdt_thread_info *info,
+                       struct mdt_lock_handle *unused)
 {
         struct ptlrpc_request   *req = mdt_info_req(info);
         struct mdt_export_data  *med = mdt_req2med(req);
         struct md_ucred         *uc  = mdt_ucred(info);
-        struct mdt_body         *reqbody;
         const char               user_string[] = "user.";
         const char               trust_string[] = "trusted.";
         struct mdt_lock_handle  *lh;
-        struct req_capsule      *pill = &info->mti_pill;
-        struct mdt_object       *obj  = info->mti_object;
-        struct mdt_body         *body = (struct mdt_body *)info->mti_body;
+        struct req_capsule      *pill = info->mti_pill;
         const struct lu_env     *env  = info->mti_env;
-        struct md_object        *child  = mdt_object_child(obj);
         struct lu_buf           *buf  = &info->mti_buf;
-        __u64                    valid  = body->valid;
-        char                    *xattr_name;
+        struct mdt_reint_record *rr   = &info->mti_rr;
+        struct lu_attr          *attr = &info->mti_attr.ma_attr;
+        struct mdt_object       *obj; 
+        struct md_object        *child;
+        __u64                    valid = attr->la_valid;
+        const char               *xattr_name;
         int                      xattr_len = 0;
         __u64                    lockpart;
         int                      rc;
         posix_acl_xattr_header  *new_xattr = NULL;
         ENTRY;
 
-        CDEBUG(D_INODE, "setxattr "DFID"\n", PFID(&body->fid1));
+        CDEBUG(D_INODE, "setxattr for "DFID"\n", PFID(rr->rr_fid1));
 
         if (OBD_FAIL_CHECK(OBD_FAIL_MDS_SETXATTR))
                 RETURN(err_serious(-ENOMEM));
 
-        reqbody = req_capsule_client_get(pill, &RMF_MDT_BODY);
-        if (reqbody == NULL)
-                RETURN(err_serious(-EFAULT));
+        xattr_name = rr->rr_name;
 
-        rc = mdt_init_ucred(info, reqbody);
-        if (rc)
-                RETURN(err_serious(rc));
+        CDEBUG(D_INODE, "%s xattr %s\n",
+               valid & OBD_MD_FLXATTR ? "set" : "remove", xattr_name);
+
+        rc = mdt_init_ucred_reint(info);
+        if (rc != 0)
+                RETURN(rc);
 
         if (valid & OBD_MD_FLRMTRSETFACL) {
                 __u32 perm = mdt_identity_get_perm(uc->mu_identity,
@@ -303,17 +304,10 @@ int mdt_setxattr(struct mdt_thread_info *info)
                         GOTO(out, rc = err_serious(-EPERM));
         }
 
-        rc = req_capsule_pack(pill);
-        if (rc < 0)
-                GOTO(out, rc = err_serious(rc));
-
         /* various sanity check for xattr name */
         xattr_name = req_capsule_client_get(pill, &RMF_NAME);
         if (!xattr_name)
                 GOTO(out, rc = err_serious(-EFAULT));
-
-        CDEBUG(D_INODE, "%s xattr %s\n",
-                  body->valid & OBD_MD_FLXATTR ? "set" : "remove", xattr_name);
 
         if (strncmp(xattr_name, trust_string, sizeof(trust_string) - 1) == 0) {
                 if (strcmp(xattr_name + 8, XATTR_NAME_LOV) == 0)
@@ -331,20 +325,23 @@ int mdt_setxattr(struct mdt_thread_info *info)
 
         lh = &info->mti_lh[MDT_LH_PARENT];
         mdt_lock_reg_init(lh, LCK_PW);
-        rc = mdt_object_lock(info, obj, lh, lockpart, MDT_LOCAL_LOCK);
-        if (rc != 0)
-                GOTO(out, rc);
+        obj = mdt_object_find_lock(info, rr->rr_fid1, lh, lockpart);
+        if (IS_ERR(obj))
+                GOTO(out, rc =  PTR_ERR(obj));
 
+        child = mdt_object_child(obj);
         if ((valid & OBD_MD_FLXATTR) == OBD_MD_FLXATTR) {
                 char * xattr;
+
                 if (!req_capsule_field_present(pill, &RMF_EADATA, RCL_CLIENT)) {
-                        CERROR("no xattr data supplied\n");
+                        CDEBUG(D_INFO, "no xattr data supplied\n");
                         GOTO(out_unlock, rc = -EFAULT);
                 }
 
                 xattr_len = req_capsule_get_size(pill, &RMF_EADATA, RCL_CLIENT);
                 if (xattr_len) {
                         int flags = 0;
+
                         xattr = req_capsule_client_get(pill, &RMF_EADATA);
 
                         if (valid & OBD_MD_FLRMTLSETFACL) {
@@ -358,10 +355,10 @@ int mdt_setxattr(struct mdt_thread_info *info)
                                 xattr = (char *)new_xattr;
                         }
 
-                        if (body->flags & XATTR_REPLACE)
+                        if (attr->la_flags & XATTR_REPLACE)
                                 flags |= LU_XATTR_REPLACE;
 
-                        if (body->flags & XATTR_CREATE)
+                        if (attr->la_flags & XATTR_CREATE)
                                 flags |= LU_XATTR_CREATE;
 
                         mdt_fail_write(env, info->mti_mdt->mdt_bottom,
@@ -374,14 +371,14 @@ int mdt_setxattr(struct mdt_thread_info *info)
         } else if ((valid & OBD_MD_FLXATTRRM) == OBD_MD_FLXATTRRM) {
                 rc = mo_xattr_del(env, child, xattr_name);
         } else {
-                CERROR("valid bits: "LPX64"\n", body->valid);
+                CDEBUG(D_INFO, "valid bits: "LPX64"\n", valid);
                 rc = -EINVAL;
         }
         EXIT;
 out_unlock:
+        mdt_object_unlock_put(info, obj, lh, rc);
         if (unlikely(new_xattr != NULL))
                 lustre_posix_acl_xattr_free(new_xattr, xattr_len);
-        mdt_object_unlock(info, obj, lh, rc);
 out:
         mdt_exit_ucred(info);
         return rc;

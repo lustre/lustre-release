@@ -73,6 +73,11 @@ static int mgs_connect(const struct lu_env *env,
                 data->ocd_version = LUSTRE_VERSION_CODE;
         }
 
+        if ((exp->exp_connect_flags & OBD_CONNECT_FID) == 0) {
+                CWARN("MGS requires FID support, but client not\n");
+                rc = -EBADE;
+        }
+
         if (rc) {
                 class_disconnect(exp);
         } else {
@@ -353,13 +358,10 @@ static int mgs_handle_target_reg(struct ptlrpc_request *req)
         struct obd_device *obd = req->rq_export->exp_obd;
         struct lustre_handle lockh;
         struct mgs_target_info *mti, *rep_mti;
-        int rep_size[] = { sizeof(struct ptlrpc_body), sizeof(*mti) };
         int rc = 0, lockrc;
         ENTRY;
 
-        mti = lustre_swab_reqbuf(req, REQ_REC_OFF, sizeof(*mti),
-                                 lustre_swab_mgs_target_info);
-
+        mti = req_capsule_client_get(&req->rq_pill, &RMF_MGS_TARGET_INFO);
         if (!(mti->mti_flags & (LDD_F_WRITECONF | LDD_F_UPGRADE14 |
                                 LDD_F_UPDATE))) {
                 /* We're just here as a startup ping. */
@@ -449,11 +451,13 @@ out:
 out_nolock:
         CDEBUG(D_MGS, "replying with %s, index=%d, rc=%d\n", mti->mti_svname,
                mti->mti_stripe_index, rc);
-        lustre_pack_reply(req, 2, rep_size, NULL);
+        rc = req_capsule_server_pack(&req->rq_pill);
+        if (rc)
+                RETURN(rc);
+
         /* send back the whole mti in the reply */
-        rep_mti = lustre_msg_buf(req->rq_repmsg, REPLY_REC_OFF,
-                                 sizeof(*rep_mti));
-        memcpy(rep_mti, mti, sizeof(*rep_mti));
+        rep_mti = req_capsule_server_get(&req->rq_pill, &RMF_MGS_TARGET_INFO);
+        *rep_mti = *mti;
 
         /* Flush logs to disk */
         fsfilt_sync(obd, obd->u.mgs.mgs_sb);
@@ -465,14 +469,14 @@ static int mgs_set_info_rpc(struct ptlrpc_request *req)
         struct obd_device *obd = req->rq_export->exp_obd;
         struct mgs_send_param *msp, *rep_msp;
         struct lustre_handle lockh;
-        int rep_size[] = { sizeof(struct ptlrpc_body), sizeof(*msp) };
         int lockrc, rc;
         struct lustre_cfg_bufs bufs;
         struct lustre_cfg *lcfg;
         char fsname[MTI_NAME_MAXLEN];
         ENTRY;
 
-        msp = lustre_swab_reqbuf(req, REQ_REC_OFF, sizeof(*msp), NULL);
+        msp = req_capsule_client_get(&req->rq_pill, &RMF_MGS_SEND_PARAM);
+        LASSERT(msp);
 
         /* Construct lustre_cfg structure to pass to function mgs_setparam */
         lustre_cfg_bufs_reset(&bufs, NULL);
@@ -500,20 +504,22 @@ static int mgs_set_info_rpc(struct ptlrpc_request *req)
         }
         lustre_cfg_free(lcfg);
 
-        lustre_pack_reply(req, 2, rep_size, NULL);
-        rep_msp = lustre_msg_buf(req->rq_repmsg, REPLY_REC_OFF,
-                                 sizeof(*rep_msp));
-        memcpy(rep_msp, msp, sizeof(*rep_msp));
-
+        rc = req_capsule_server_pack(&req->rq_pill);
+        if (rc == 0) {
+                rep_msp = req_capsule_server_get(&req->rq_pill, &RMF_MGS_SEND_PARAM);
+                rep_msp = msp;
+        }
         RETURN(rc);
 }
 
+/* TODO: handle requests in a similar way as MDT: see mdt_handle_common() */
 int mgs_handle(struct ptlrpc_request *req)
 {
         int fail = OBD_FAIL_MGS_ALL_REPLY_NET;
         int opc, rc = 0;
         ENTRY;
 
+        req_capsule_init(&req->rq_pill, req, RCL_SERVER);
         OBD_FAIL_TIMEOUT(OBD_FAIL_MGS_SLOW_REQUEST_NET, 2);
 
         LASSERT(current->journal_info == NULL);
@@ -530,6 +536,8 @@ int mgs_handle(struct ptlrpc_request *req)
         switch (opc) {
         case MGS_CONNECT:
                 DEBUG_REQ(D_MGS, req, "connect");
+                /* MGS and MDS have same request format for connect */
+                req_capsule_set(&req->rq_pill, &RQF_MDS_CONNECT);
                 rc = target_handle_connect(req);
                 if (!rc && (lustre_msg_get_conn_cnt(req->rq_reqmsg) > 1))
                         /* Make clients trying to reconnect after a MGS restart
@@ -539,11 +547,14 @@ int mgs_handle(struct ptlrpc_request *req)
                 break;
         case MGS_DISCONNECT:
                 DEBUG_REQ(D_MGS, req, "disconnect");
+                /* MGS and MDS have same request format for disconnect */
+                req_capsule_set(&req->rq_pill, &RQF_MDS_DISCONNECT);
                 rc = target_handle_disconnect(req);
                 req->rq_status = rc;            /* superfluous? */
                 break;
         case MGS_TARGET_REG:
                 DEBUG_REQ(D_MGS, req, "target add");
+                req_capsule_set(&req->rq_pill, &RQF_MGS_TARGET_REG);
                 rc = mgs_handle_target_reg(req);
                 break;
         case MGS_TARGET_DEL:
@@ -551,11 +562,14 @@ int mgs_handle(struct ptlrpc_request *req)
                 //rc = mgs_handle_target_del(req);
                 break;
         case MGS_SET_INFO:
+                DEBUG_REQ(D_MGS, req, "set_info");
+                req_capsule_set(&req->rq_pill, &RQF_MGS_SET_INFO);
                 rc = mgs_set_info_rpc(req);
                 break;
 
         case LDLM_ENQUEUE:
                 DEBUG_REQ(D_MGS, req, "enqueue");
+                req_capsule_set(&req->rq_pill, &RQF_LDLM_ENQUEUE);
                 rc = ldlm_handle_enqueue(req, ldlm_server_completion_ast,
                                          ldlm_server_blocking_ast, NULL);
                 break;
@@ -568,6 +582,7 @@ int mgs_handle(struct ptlrpc_request *req)
 
         case OBD_PING:
                 DEBUG_REQ(D_INFO, req, "ping");
+                req_capsule_set(&req->rq_pill, &RQF_OBD_PING);
                 rc = target_handle_ping(req);
                 break;
         case OBD_LOG_CANCEL:
@@ -577,14 +592,19 @@ int mgs_handle(struct ptlrpc_request *req)
 
         case LLOG_ORIGIN_HANDLE_CREATE:
                 DEBUG_REQ(D_MGS, req, "llog_init");
+                req_capsule_set(&req->rq_pill, &RQF_LLOG_ORIGIN_HANDLE_CREATE);
                 rc = llog_origin_handle_create(req);
                 break;
         case LLOG_ORIGIN_HANDLE_NEXT_BLOCK:
                 DEBUG_REQ(D_MGS, req, "llog next block");
+                req_capsule_set(&req->rq_pill,
+                                &RQF_LLOG_ORIGIN_HANDLE_NEXT_BLOCK);
                 rc = llog_origin_handle_next_block(req);
                 break;
         case LLOG_ORIGIN_HANDLE_READ_HEADER:
                 DEBUG_REQ(D_MGS, req, "llog read header");
+                req_capsule_set(&req->rq_pill,
+                                &RQF_LLOG_ORIGIN_HANDLE_READ_HEADER);
                 rc = llog_origin_handle_read_header(req);
                 break;
         case LLOG_ORIGIN_HANDLE_CLOSE:
@@ -593,6 +613,7 @@ int mgs_handle(struct ptlrpc_request *req)
                 break;
         case LLOG_CATINFO:
                 DEBUG_REQ(D_MGS, req, "llog catinfo");
+                req_capsule_set(&req->rq_pill, &RQF_LLOG_CATINFO);
                 rc = llog_catinfo(req);
                 break;
         default:

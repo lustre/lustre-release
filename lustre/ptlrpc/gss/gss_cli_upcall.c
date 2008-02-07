@@ -231,7 +231,6 @@ int gss_do_ctx_init_rpc(__user char *buffer, unsigned long count)
         struct obd_device        *obd;
         char                      obdname[64];
         long                      lsize;
-        int                       lmsg_size = sizeof(struct ptlrpc_body);
         int                       rc;
 
         if (count != sizeof(param)) {
@@ -268,9 +267,9 @@ int gss_do_ctx_init_rpc(__user char *buffer, unsigned long count)
         /* force this import to use v2 msg */
         imp->imp_msg_magic = LUSTRE_MSG_MAGIC_V2;
 
-        req = ptlrpc_prep_req(imp, LUSTRE_OBD_VERSION, SEC_CTX_INIT,
-                              1, &lmsg_size, NULL);
-        if (!req) {
+        req = ptlrpc_request_alloc_pack(imp, &RQF_SEC_CTX, LUSTRE_OBD_VERSION,
+                                        SEC_CTX_INIT);
+        if (req == NULL) {
                 param.status = -ENOMEM;
                 goto out_copy;
         }
@@ -294,7 +293,7 @@ int gss_do_ctx_init_rpc(__user char *buffer, unsigned long count)
                 goto out_copy;
         }
 
-        req->rq_replen = lustre_msg_size_v2(1, &lmsg_size);
+        ptlrpc_request_set_replen(req);
 
         rc = ptlrpc_queue_wait(req);
         if (rc) {
@@ -339,7 +338,6 @@ int gss_do_ctx_fini_rpc(struct gss_cli_ctx *gctx)
         struct obd_import       *imp = ctx->cc_sec->ps_import;
         struct ptlrpc_request   *req;
         struct ptlrpc_user_desc *pud;
-        int                      buflens = sizeof(struct ptlrpc_body);
         int                      rc;
         ENTRY;
 
@@ -362,12 +360,18 @@ int gss_do_ctx_fini_rpc(struct gss_cli_ctx *gctx)
 
         gctx->gc_proc = PTLRPC_GSS_PROC_DESTROY;
 
-        req = ptlrpc_prep_req_pool(imp, LUSTRE_OBD_VERSION, SEC_CTX_FINI,
-                                   1, &buflens, NULL, NULL, ctx);
-        if (!req) {
+        req = ptlrpc_request_alloc(imp, &RQF_SEC_CTX);
+        if (req == NULL) {
                 CWARN("ctx %p(%u): fail to prepare rpc, destroy locally\n",
                       ctx, ctx->cc_vcred.vc_uid);
                 GOTO(out, rc = -ENOMEM);
+        }
+
+        rc = ptlrpc_request_bufs_pack(req, LUSTRE_OBD_VERSION, SEC_CTX_FINI,
+                                      NULL, ctx);
+        if (rc) {
+                ptlrpc_request_free(req);
+                GOTO(out_ref, rc);
         }
 
         /* fix the user desc */

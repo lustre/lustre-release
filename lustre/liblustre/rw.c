@@ -179,7 +179,6 @@ static int llu_glimpse_callback(struct ldlm_lock *lock, void *reqp)
         struct inode *inode = llu_inode_from_lock(lock);
         struct llu_inode_info *lli;
         struct ost_lvb *lvb;
-        int size[2] = { sizeof(struct ptlrpc_body), sizeof(*lvb) };
         int rc, stripe = 0;
         ENTRY;
 
@@ -195,11 +194,16 @@ static int llu_glimpse_callback(struct ldlm_lock *lock, void *reqp)
         if (lli->lli_smd->lsm_stripe_count > 1)
                 stripe = llu_lock_to_stripe_offset(inode, lock);
 
-        rc = lustre_pack_reply(req, 2, size, NULL);
-        if (rc)
+        req_capsule_extend(&req->rq_pill, &RQF_LDLM_GL_CALLBACK);
+        req_capsule_set_size(&req->rq_pill, &RMF_DLM_LVB, RCL_SERVER,
+                             sizeof(*lvb));
+        rc = req_capsule_server_pack(&req->rq_pill);
+        if (rc) {
+                CERROR("failed pack reply: %d\n", rc);
                 GOTO(iput, rc);
+        }
 
-        lvb = lustre_msg_buf(req->rq_repmsg, REPLY_REC_OFF, sizeof(*lvb));
+        lvb = req_capsule_server_get(&req->rq_pill, &RMF_DLM_LVB);
         lvb->lvb_size = lli->lli_smd->lsm_oinfo[stripe]->loi_kms;
 
         LDLM_DEBUG(lock, "i_size: %llu -> stripe number %u -> kms "LPU64,

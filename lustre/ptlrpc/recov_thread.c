@@ -217,6 +217,18 @@ int llog_obd_repl_sync(struct llog_ctxt *ctxt, struct obd_export *exp)
 }
 EXPORT_SYMBOL(llog_obd_repl_sync);
 
+static inline void stop_log_commit(struct llog_commit_master *lcm,
+                                   struct llog_commit_daemon *lcd,
+                                   int rc)
+{
+        CERROR("error preparing commit: rc %d\n", rc);
+
+        spin_lock(&lcm->lcm_llcd_lock);
+        list_splice(&lcd->lcd_llcd_list, &lcm->lcm_llcd_resend);
+        CFS_INIT_LIST_HEAD(&lcd->lcd_llcd_list);
+        spin_unlock(&lcm->lcm_llcd_lock);
+}
+
 static int log_commit_thread(void *arg)
 {
         struct llog_commit_master *lcm = arg;
@@ -329,8 +341,6 @@ static int log_commit_thread(void *arg)
 
                 /* We are the only one manipulating our local list - no lock */
                 list_for_each_entry_safe(llcd,n, &lcd->lcd_llcd_list,llcd_list){
-                        int size[2] = { sizeof(struct ptlrpc_body),
-                                        llcd->llcd_cookiebytes };
                         char *bufs[2] = { NULL, (char *)llcd->llcd_cookies };
 
                         list_del(&llcd->llcd_list);
@@ -361,17 +371,23 @@ static int log_commit_thread(void *arg)
 
                         OBD_FAIL_TIMEOUT(OBD_FAIL_PTLRPC_DELAY_RECOV, 10);
 
-                        request = ptlrpc_prep_req(import, LUSTRE_LOG_VERSION,
-                                                  OBD_LOG_CANCEL, 2, size,bufs);
+                        request = ptlrpc_request_alloc(import, &RQF_LOG_CANCEL);
                         if (request == NULL) {
                                 rc = -ENOMEM;
-                                CERROR("error preparing commit: rc %d\n", rc);
+                                stop_log_commit(lcm, lcd, rc);
+                                break;
+                        }
 
-                                spin_lock(&lcm->lcm_llcd_lock);
-                                list_splice(&lcd->lcd_llcd_list,
-                                            &lcm->lcm_llcd_resend);
-                                CFS_INIT_LIST_HEAD(&lcd->lcd_llcd_list);
-                                spin_unlock(&lcm->lcm_llcd_lock);
+                        req_capsule_set_size(&request->rq_pill, &RMF_LOGCOOKIES,
+                                             RCL_CLIENT,llcd->llcd_cookiebytes);
+
+                        rc = ptlrpc_request_bufs_pack(request,
+                                                      LUSTRE_LOG_VERSION,
+                                                      OBD_LOG_CANCEL, bufs,
+                                                      NULL);
+                        if (rc) {
+                                ptlrpc_request_free(request);
+                                stop_log_commit(lcm, lcd, rc);
                                 break;
                         }
 
@@ -379,7 +395,7 @@ static int log_commit_thread(void *arg)
                         request->rq_request_portal = LDLM_CANCEL_REQUEST_PORTAL;
                         request->rq_reply_portal = LDLM_CANCEL_REPLY_PORTAL;
 
-                        ptlrpc_req_set_repsize(request, 1, NULL);
+                        ptlrpc_request_set_replen(request);
                         mutex_down(&llcd->llcd_ctxt->loc_sem);
                         if (llcd->llcd_ctxt->loc_imp == NULL) {
                                 mutex_up(&llcd->llcd_ctxt->loc_sem);

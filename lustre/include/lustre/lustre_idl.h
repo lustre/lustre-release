@@ -549,6 +549,7 @@ extern void lustre_swab_ptlrpc_body(struct ptlrpc_body *pb);
 #define OBD_CONNECT_LRU_RESIZE 0x02000000ULL /* Lru resize feature. */
 #define OBD_CONNECT_MDS_MDS    0x04000000ULL /* MDS-MDS connection*/
 #define OBD_CONNECT_REAL       0x08000000ULL /* real connection */
+#define OBD_CONNECT_FID        0x10000000ULL /* FID is supported by server */
 #define OBD_CONNECT_CKSUM      0x20000000ULL /* support several cksum algos */
 
 /* also update obd_connect_names[] for lprocfs_rd_connect_flags()
@@ -568,15 +569,17 @@ extern void lustre_swab_ptlrpc_body(struct ptlrpc_body *pb);
                                 OBD_CONNECT_RMT_CLIENT | \
                                 OBD_CONNECT_MDS_CAPA | OBD_CONNECT_OSS_CAPA | \
                                 OBD_CONNECT_MDS_MDS | OBD_CONNECT_CANCELSET | \
+                                OBD_CONNECT_FID | \
                                 LRU_RESIZE_CONNECT_FLAG)
 #define OST_CONNECT_SUPPORTED  (OBD_CONNECT_SRVLOCK | OBD_CONNECT_GRANT | \
                                 OBD_CONNECT_REQPORTAL | OBD_CONNECT_VERSION | \
                                 OBD_CONNECT_TRUNCLOCK | OBD_CONNECT_INDEX | \
                                 OBD_CONNECT_BRW_SIZE | OBD_CONNECT_QUOTA64 | \
                                 OBD_CONNECT_OSS_CAPA | OBD_CONNECT_CANCELSET | \
+                                OBD_CONNECT_FID | \
                                 LRU_RESIZE_CONNECT_FLAG)
 #define ECHO_CONNECT_SUPPORTED (0)
-#define MGS_CONNECT_SUPPORTED  (OBD_CONNECT_VERSION)
+#define MGS_CONNECT_SUPPORTED  (OBD_CONNECT_VERSION | OBD_CONNECT_FID)
 
 #define MAX_QUOTA_COUNT32 (0xffffffffULL)
 
@@ -939,7 +942,7 @@ typedef enum {
         MDS_QUOTACHECK   = 47,
         MDS_QUOTACTL     = 48,
         MDS_GETXATTR     = 49,
-        MDS_SETXATTR     = 50,
+        MDS_SETXATTR     = 50, /* obsolete, now it's MDS_REINT op */
         MDS_WRITEPAGE    = 51,
         MDS_IS_SUBDIR    = 52,
         MDS_LAST_OPC
@@ -958,6 +961,9 @@ typedef enum {
         REINT_UNLINK   = 4,
         REINT_RENAME   = 5,
         REINT_OPEN     = 6,
+        REINT_SETXATTR = 7,
+//      REINT_CLOSE    = 8,
+//      REINT_WRITE    = 9,
         REINT_MAX
 } mds_reint_t, mdt_reint_t;
 
@@ -1076,6 +1082,7 @@ struct mdt_body {
         __u64          ctime;
         __u64          blocks; /* XID, in the case of MDS_READPAGE */
         __u64          ioepoch;
+        __u64          ino;    /* for 1.6 compatibility */
         __u32          fsuid;
         __u32          fsgid;
         __u32          capability;
@@ -1085,11 +1092,13 @@ struct mdt_body {
         __u32          flags; /* from vfs for pin/unpin, MDS_BFLAG for close */
         __u32          rdev;
         __u32          nlink; /* #bytes to read in the case of MDS_READPAGE */
+        __u32          generation; /* for 1.6 compatibility */
         __u32          suppgid;
         __u32          eadatasize;
         __u32          aclsize;
         __u32          max_mdsize;
-        __u32          max_cookiesize; /* also fix lustre_swab_mdt_body */
+        __u32          max_cookiesize;
+        __u32          padding_4; /* also fix lustre_swab_mdt_body */
 };
 
 struct mds_body {
@@ -1213,18 +1222,22 @@ struct mdt_rec_setattr {
         __u32           sa_fsgid;
         __u32           sa_cap;
         __u32           sa_suppgid;
-        __u32           sa_mode;
+        __u32           sa_padding_1;
         struct lu_fid   sa_fid;
         __u64           sa_valid;
+        __u32           sa_uid;
+        __u32           sa_gid;
         __u64           sa_size;
         __u64           sa_blocks;
         __u64           sa_mtime;
         __u64           sa_atime;
         __u64           sa_ctime;
-        __u32           sa_uid;
-        __u32           sa_gid;
         __u32           sa_attr_flags;
-        __u32           sa_padding; /* also fix lustre_swab_mds_rec_setattr */
+        __u32           sa_mode;
+        __u32           sa_padding_2;
+        __u32           sa_padding_3;
+        __u32           sa_padding_4;
+        __u32           sa_padding_5;
 };
 
 extern void lustre_swab_mdt_rec_setattr (struct mdt_rec_setattr *sa);
@@ -1349,18 +1362,21 @@ struct mdt_rec_create {
         __u32           cr_fsuid;
         __u32           cr_fsgid;
         __u32           cr_cap;
-        __u32           cr_flags; /* for use with open */
-        __u32           cr_mode;
-        struct lustre_handle cr_old_handle; /* u64 handle in case of open replay */
+        __u32           cr_suppgid1;
+        __u32           cr_suppgid2;
         struct lu_fid   cr_fid1;
         struct lu_fid   cr_fid2;
+        struct lustre_handle cr_old_handle; /* u64 handle in case of open replay */
         __u64           cr_time;
         __u64           cr_rdev;
         __u64           cr_ioepoch;
-        __u32           cr_suppgid1;
-        __u32           cr_suppgid2;
+        __u64           cr_padding_1; /* pad for 64 bits*/
+        __u32           cr_mode;
         __u32           cr_bias;
-        __u32           cr_padding_1; /* pad for 64 bits*/
+        __u32           cr_flags;     /* for use with open */
+        __u32           cr_padding_2;
+        __u32           cr_padding_3;
+        __u32           cr_padding_4;
 };
 
 extern void lustre_swab_mdt_rec_create (struct mdt_rec_create *cr);
@@ -1393,13 +1409,17 @@ struct mdt_rec_link {
         struct lu_fid   lk_fid1;
         struct lu_fid   lk_fid2;
         __u64           lk_time;
+        __u64           lk_padding_1;
+        __u64           lk_padding_2;
+        __u64           lk_padding_3;
+        __u64           lk_padding_4;
         __u32           lk_bias;
-        __u32           lk_padding_2;  /* also fix lustre_swab_mds_rec_link */
-        __u32           lk_padding_3;  /* also fix lustre_swab_mds_rec_link */
-        __u32           lk_padding_4;  /* also fix lustre_swab_mds_rec_link */
+        __u32           lk_padding_5;
+        __u32           lk_padding_6;
+        __u32           lk_padding_7;
+        __u32           lk_padding_8;
+        __u32           lk_padding_9;
 };
-
-extern void lustre_swab_mdt_rec_link (struct mdt_rec_link *lk);
 
 struct mds_rec_unlink {
         __u32           ul_opcode;
@@ -1424,18 +1444,22 @@ struct mdt_rec_unlink {
         __u32           ul_fsuid;
         __u32           ul_fsgid;
         __u32           ul_cap;
-        __u32           ul_suppgid;
-        __u32           ul_mode;
+        __u32           ul_suppgid1;
+        __u32           ul_suppgid2;
         struct lu_fid   ul_fid1;
         struct lu_fid   ul_fid2;
         __u64           ul_time;
+        __u64           ul_padding_2;
+        __u64           ul_padding_3;
+        __u64           ul_padding_4;
+        __u64           ul_padding_5;
         __u32           ul_bias;
-        __u32           ul_padding_2; /* also fix lustre_swab_mds_rec_unlink */
-        __u32           ul_padding_3; /* also fix lustre_swab_mds_rec_unlink */
-        __u32           ul_padding_4; /* also fix lustre_swab_mds_rec_unlink */
+        __u32           ul_mode;
+        __u32           ul_padding_6;
+        __u32           ul_padding_7;
+        __u32           ul_padding_8;
+        __u32           ul_padding_9;
 };
-
-extern void lustre_swab_mdt_rec_unlink (struct mdt_rec_unlink *ul);
 
 struct mds_rec_rename {
         __u32           rn_opcode;
@@ -1465,15 +1489,66 @@ struct mdt_rec_rename {
         struct lu_fid   rn_fid1;
         struct lu_fid   rn_fid2;
         __u64           rn_time;
-        __u32           rn_mode;      /* cross-ref rename has mode */
+        __u64           rn_padding_1;
+        __u64           rn_padding_2;
+        __u64           rn_padding_3;
+        __u64           rn_padding_4;
         __u32           rn_bias;      /* some operation flags */
-        __u32           rn_padding_3; /* also fix lustre_swab_mdt_rec_rename */
-        __u32           rn_padding_4; /* also fix lustre_swab_mdt_rec_rename */
+        __u32           rn_mode;      /* cross-ref rename has mode */
+        __u32           rn_padding_5;
+        __u32           rn_padding_6;
+        __u32           rn_padding_7;
+        __u32           rn_padding_8;
 };
 
-extern void lustre_swab_mdt_rec_rename (struct mdt_rec_rename *rn);
+struct mdt_rec_setxattr {
+        __u32           sx_opcode;
+        __u32           sx_fsuid;
+        __u32           sx_fsgid;
+        __u32           sx_cap;
+        __u32           sx_suppgid1;
+        __u32           sx_suppgid2;
+        struct lu_fid   sx_fid;
+        __u64           sx_padding_1; /* These three members are lu_fid size */
+        __u32           sx_padding_2;
+        __u32           sx_padding_3;
+        __u64           sx_valid;
+        __u64           sx_padding_4;
+        __u64           sx_padding_5;
+        __u64           sx_padding_6;
+        __u64           sx_padding_7;
+        __u32           sx_size;
+        __u32           sx_flags;
+        __u32           sx_padding_8;
+        __u32           sx_padding_9;
+        __u32           sx_padding_10;
+        __u32           sx_padding_11;
+};
 
-/* begin adding MDT by huanghua@clusterfs.com */
+struct mdt_rec_reint {
+        __u32           rr_opcode;
+        __u32           rr_fsuid;
+        __u32           rr_fsgid;
+        __u32           rr_cap;
+        __u32           rr_suppgid1;
+        __u32           rr_suppgid2;
+        struct lu_fid   rr_fid1;
+        struct lu_fid   rr_fid2;
+        __u64           rr_mtime;
+        __u64           rr_atime;
+        __u64           rr_ctime;
+        __u64           rr_size;
+        __u64           rr_blocks;
+        __u32           rr_bias;
+        __u32           rr_mode;
+        __u32           rr_padding_1; /* also fix lustre_swab_mdt_rec_reint */
+        __u32           rr_padding_2; /* also fix lustre_swab_mdt_rec_reint */
+        __u32           rr_padding_3; /* also fix lustre_swab_mdt_rec_reint */
+        __u32           rr_padding_4; /* also fix lustre_swab_mdt_rec_reint */
+};
+
+extern void lustre_swab_mdt_rec_reint(struct mdt_rec_reint *rr);
+
 struct lmv_desc {
         __u32 ld_tgt_count;                /* how many MDS's */
         __u32 ld_active_tgt_count;         /* how many active */
@@ -1481,7 +1556,6 @@ struct lmv_desc {
 };
 
 extern void lustre_swab_lmv_desc (struct lmv_desc *ld);
-/* end adding MDT by huanghua@clusterfs.com */
 
 struct md_fld {
         seqno_t mf_seq;

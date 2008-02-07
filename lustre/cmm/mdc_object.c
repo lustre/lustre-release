@@ -154,7 +154,7 @@ static int mdc_req2attr_update(const struct lu_env *env,
         mci = mdc_info_get(env);
         req = mci->mci_req;
         LASSERT(req);
-        body = lustre_msg_buf(req->rq_repmsg, REPLY_REC_OFF, sizeof(*body));
+        body = req_capsule_server_get(&req->rq_pill, &RMF_MDT_BODY);
         LASSERT(body);
         mdc_body2attr(body, ma);
 
@@ -162,8 +162,7 @@ static int mdc_req2attr_update(const struct lu_env *env,
                 struct lustre_capa *capa;
 
                 /* create for cross-ref will fetch mds capa from remote obj */
-                capa = lustre_msg_buf(req->rq_repmsg, REPLY_REC_OFF + 1,
-                                      sizeof(*capa));
+                capa = req_capsule_server_get(&req->rq_pill, &RMF_CAPA1);
                 LASSERT(capa != NULL);
                 LASSERT(ma->ma_capa != NULL);
                 *ma->ma_capa = *capa;
@@ -177,12 +176,10 @@ static int mdc_req2attr_update(const struct lu_env *env,
                 RETURN(-EPROTO);
         }
 
-        lov = lustre_swab_repbuf(req, REPLY_REC_OFF + 1,
-                                 body->eadatasize, NULL);
-        if (lov == NULL) {
-                CERROR("Can't unpack MDS EA data\n");
+        lov = req_capsule_server_sized_get(&req->rq_pill, &RMF_MDT_MD,
+                                           body->eadatasize);
+        if (lov == NULL)
                 RETURN(-EPROTO);
-        }
 
         LASSERT(ma->ma_lmm != NULL);
         LASSERT(ma->ma_lmm_size >= body->eadatasize); 
@@ -198,12 +195,10 @@ static int mdc_req2attr_update(const struct lu_env *env,
                 RETURN(-EPROTO);
         }
 
-        cookie = lustre_msg_buf(req->rq_repmsg,
-                                REPLY_REC_OFF + 2, body->aclsize);
-        if (cookie == NULL) {
-                CERROR("Can't unpack unlink cookie data\n");
+        cookie = req_capsule_server_sized_get(&req->rq_pill, &RMF_ACL,
+                                              body->aclsize);
+        if (cookie == NULL)
                 RETURN(-EPROTO);
-        }
 
         LASSERT(ma->ma_cookie != NULL);
         LASSERT(ma->ma_cookie_size == body->aclsize);
@@ -561,8 +556,8 @@ static int mdc_is_subdir(const struct lu_env *env, struct md_object *mo,
         rc = md_is_subdir(mc->mc_desc.cl_exp, lu_object_fid(&mo->mo_lu),
                           fid, &mci->mci_req);
         if (rc == 0 || rc == -EREMOTE) {
-                body = lustre_msg_buf(mci->mci_req->rq_repmsg, REPLY_REC_OFF,
-                                      sizeof(*body));
+                body = req_capsule_server_get(&mci->mci_req->rq_pill,
+                                              &RMF_MDT_BODY);
                 LASSERT(body->valid & OBD_MD_FLID);
         
                 CDEBUG(D_INFO, "Remote mdo_is_subdir(), new src "DFID"\n",

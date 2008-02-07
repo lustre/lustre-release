@@ -376,8 +376,7 @@ static int ll_intent_file_open(struct file *file, void *lmm,
                                  &itp->d.lustre.it_lock_handle, 
                                  file->f_dentry->d_inode);
 
-        rc = ll_prep_inode(&file->f_dentry->d_inode, req, DLM_REPLY_REC_OFF,
-                           NULL);
+        rc = ll_prep_inode(&file->f_dentry->d_inode, req, NULL);
 out:
         ptlrpc_req_finished(itp->d.lustre.it_data);
 
@@ -396,11 +395,8 @@ static int ll_och_fill(struct obd_export *md_exp, struct ll_inode_info *lli,
 
         LASSERT(och);
 
-        body = lustre_msg_buf(req->rq_repmsg, DLM_REPLY_REC_OFF, sizeof(*body));
-        /* reply already checked out */
-        LASSERT(body != NULL);
-        /* and swabbed in md_enqueue */
-        LASSERT(lustre_rep_swabbed(req, DLM_REPLY_REC_OFF));
+        body = req_capsule_server_get(&req->rq_pill, &RMF_MDT_BODY);
+        LASSERT(body != NULL);                      /* reply already checked out */
 
         memcpy(&och->och_fh, &body->handle, sizeof(body->handle));
         och->och_magic = OBD_CLIENT_HANDLE_MAGIC;
@@ -431,15 +427,11 @@ int ll_local_open(struct file *file, struct lookup_intent *it,
                 if (rc)
                         RETURN(rc);
 
-                body = lustre_msg_buf(req->rq_repmsg,
-                                      DLM_REPLY_REC_OFF, sizeof(*body));
-
+                body = req_capsule_server_get(&req->rq_pill, &RMF_MDT_BODY);
                 if ((it->it_flags & FMODE_WRITE) &&
                     (body->valid & OBD_MD_FLSIZE))
-                {
                         CDEBUG(D_INODE, "Epoch "LPU64" opened on "DFID"\n",
                                lli->lli_ioepoch, PFID(&lli->lli_fid));
-                }
         }
 
         LUSTRE_FPRIVATE(file) = fd;
@@ -1034,7 +1026,6 @@ static int ll_glimpse_callback(struct ldlm_lock *lock, void *reqp)
         struct lov_stripe_md *lsm;
         struct ost_lvb *lvb;
         int rc, stripe;
-        int size[2] = { sizeof(struct ptlrpc_body), sizeof(*lvb) };
         ENTRY;
 
         if (inode == NULL)
@@ -1051,11 +1042,16 @@ static int ll_glimpse_callback(struct ldlm_lock *lock, void *reqp)
         if (stripe < 0)
                 GOTO(iput, rc = -ELDLM_NO_LOCK_DATA);
 
-        rc = lustre_pack_reply(req, 2, size, NULL);
-        if (rc)
+        req_capsule_extend(&req->rq_pill, &RQF_LDLM_GL_CALLBACK);
+        req_capsule_set_size(&req->rq_pill, &RMF_DLM_LVB, RCL_SERVER,
+                             sizeof(*lvb));
+        rc = req_capsule_server_pack(&req->rq_pill);
+        if (rc) {
+                CERROR("lustre_pack_reply: %d\n", rc);
                 GOTO(iput, rc);
+        }
 
-        lvb = lustre_msg_buf(req->rq_repmsg, REPLY_REC_OFF, sizeof(*lvb));
+        lvb = req_capsule_server_get(&req->rq_pill, &RMF_DLM_LVB);
         lvb->lvb_size = lli->lli_smd->lsm_oinfo[stripe]->loi_kms;
         lvb->lvb_mtime = LTIME_S(inode->i_mtime);
         lvb->lvb_atime = LTIME_S(inode->i_atime);
@@ -1814,10 +1810,8 @@ int ll_lov_getstripe_ea_info(struct inode *inode, const char *filename,
                 GOTO(out, rc);
         }
 
-        body = lustre_msg_buf(req->rq_repmsg, REPLY_REC_OFF, sizeof(*body));
+        body = req_capsule_server_get(&req->rq_pill, &RMF_MDT_BODY);
         LASSERT(body != NULL); /* checked by mdc_getattr_name */
-        /* swabbed by mdc_getattr_name */
-        LASSERT(lustre_rep_swabbed(req, REPLY_REC_OFF));
 
         lmmsize = body->eadatasize;
 
@@ -1826,9 +1820,8 @@ int ll_lov_getstripe_ea_info(struct inode *inode, const char *filename,
                 GOTO(out, rc = -ENODATA);
         }
 
-        lmm = lustre_msg_buf(req->rq_repmsg, REPLY_REC_OFF + 1, lmmsize);
+        lmm = req_capsule_server_sized_get(&req->rq_pill, &RMF_MDT_MD, lmmsize);
         LASSERT(lmm != NULL);
-        LASSERT(lustre_rep_swabbed(req, REPLY_REC_OFF + 1));
 
         /*
          * This is coming from the MDS, so is probably in
@@ -2645,7 +2638,7 @@ int ll_inode_revalidate_it(struct dentry *dentry, struct lookup_intent *it)
                         GOTO (out, rc);
                 }
 
-                rc = ll_revalidate_it_finish(req, DLM_REPLY_REC_OFF, &oit, dentry);
+                rc = ll_revalidate_it_finish(req, &oit, dentry);
                 if (rc != 0) {
                         ll_intent_release(&oit);
                         GOTO(out, rc);
@@ -2686,8 +2679,7 @@ int ll_inode_revalidate_it(struct dentry *dentry, struct lookup_intent *it)
                         RETURN(rc);
                 }
 
-                rc = ll_prep_inode(&inode, req, REPLY_REC_OFF,
-                                   NULL);
+                rc = ll_prep_inode(&inode, req, NULL);
                 if (rc)
                         GOTO(out, rc);
         }

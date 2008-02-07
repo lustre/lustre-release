@@ -41,13 +41,13 @@
 static inline void mdt_reint_init_ma(struct mdt_thread_info *info,
                                      struct md_attr *ma)
 {
-        ma->ma_lmm = req_capsule_server_get(&info->mti_pill, &RMF_MDT_MD);
-        ma->ma_lmm_size = req_capsule_get_size(&info->mti_pill,
+        ma->ma_lmm = req_capsule_server_get(info->mti_pill, &RMF_MDT_MD);
+        ma->ma_lmm_size = req_capsule_get_size(info->mti_pill,
                                                &RMF_MDT_MD, RCL_SERVER);
 
-        ma->ma_cookie = req_capsule_server_get(&info->mti_pill,
+        ma->ma_cookie = req_capsule_server_get(info->mti_pill,
                                                &RMF_LOGCOOKIES);
-        ma->ma_cookie_size = req_capsule_get_size(&info->mti_pill,
+        ma->ma_cookie_size = req_capsule_get_size(info->mti_pill,
                                                   &RMF_LOGCOOKIES,
                                                   RCL_SERVER);
 
@@ -69,7 +69,7 @@ static int mdt_create_pack_capa(struct mdt_thread_info *info, int rc,
         if (rc == 0 && info->mti_mdt->mdt_opts.mo_mds_capa) {
                 struct lustre_capa *capa;
 
-                capa = req_capsule_server_get(&info->mti_pill, &RMF_CAPA1);
+                capa = req_capsule_server_get(info->mti_pill, &RMF_CAPA1);
                 LASSERT(capa);
                 capa->lc_opc = CAPA_OPC_MDS_DEFAULT;
                 rc = mo_capa_get(info->mti_env, mdt_object_child(object), capa,
@@ -77,8 +77,6 @@ static int mdt_create_pack_capa(struct mdt_thread_info *info, int rc,
                 if (rc == 0)
                         repbody->valid |= OBD_MD_FLMDSCAPA;
         }
-        if (!(repbody->valid & OBD_MD_FLMDSCAPA))
-                lustre_shrink_reply(mdt_info_req(info), REPLY_REC_OFF+1, 0, 1);
 
         RETURN(rc);
 }
@@ -99,7 +97,7 @@ static int mdt_md_create(struct mdt_thread_info *info)
         DEBUG_REQ(D_INODE, mdt_info_req(info), "Create  (%s->"DFID") in "DFID,
                   rr->rr_name, PFID(rr->rr_fid2), PFID(rr->rr_fid1));
 
-        repbody = req_capsule_server_get(&info->mti_pill, &RMF_MDT_BODY);
+        repbody = req_capsule_server_get(info->mti_pill, &RMF_MDT_BODY);
 
         lh = &info->mti_lh[MDT_LH_PARENT];
         mdt_lock_pdo_init(lh, LCK_PW, rr->rr_name, rr->rr_namelen);
@@ -116,7 +114,7 @@ static int mdt_md_create(struct mdt_thread_info *info)
                 ma->ma_need = MA_INODE;
                 ma->ma_valid = 0;
                 /* capa for cross-ref will be stored here */
-                ma->ma_capa = req_capsule_server_get(&info->mti_pill,
+                ma->ma_capa = req_capsule_server_get(info->mti_pill,
                                                      &RMF_CAPA1);
                 LASSERT(ma->ma_capa);
 
@@ -166,7 +164,7 @@ static int mdt_md_mkobj(struct mdt_thread_info *info)
         DEBUG_REQ(D_INODE, mdt_info_req(info), "Partial create "DFID"",
                   PFID(info->mti_rr.rr_fid2));
 
-        repbody = req_capsule_server_get(&info->mti_pill, &RMF_MDT_BODY);
+        repbody = req_capsule_server_get(info->mti_pill, &RMF_MDT_BODY);
 
         o = mdt_object_find(info->mti_env, mdt, info->mti_rr.rr_fid2);
         if (!IS_ERR(o)) {
@@ -297,7 +295,7 @@ static int mdt_reint_setattr(struct mdt_thread_info *info,
         if (info->mti_dlm_req)
                 ldlm_request_cancel(req, info->mti_dlm_req, 0);
         
-        repbody = req_capsule_server_get(&info->mti_pill, &RMF_MDT_BODY);
+        repbody = req_capsule_server_get(info->mti_pill, &RMF_MDT_BODY);
         mo = mdt_object_find(info->mti_env, info->mti_mdt, rr->rr_fid1);
         if (IS_ERR(mo))
                 GOTO(out, rc = PTR_ERR(mo));
@@ -377,7 +375,7 @@ static int mdt_reint_setattr(struct mdt_thread_info *info,
             (ma->ma_attr.la_valid & LA_SIZE)) {
                 struct lustre_capa *capa;
 
-                capa = req_capsule_server_get(&info->mti_pill, &RMF_CAPA1);
+                capa = req_capsule_server_get(info->mti_pill, &RMF_CAPA2);
                 LASSERT(capa);
                 capa->lc_opc = CAPA_OPC_OSS_DEFAULT | CAPA_OPC_OSS_TRUNC;
                 rc = mo_capa_get(info->mti_env, mdt_object_child(mo), capa, 0);
@@ -390,6 +388,7 @@ static int mdt_reint_setattr(struct mdt_thread_info *info,
 out_put:
         mdt_object_put(info->mti_env, mo);
 out:
+        mdt_shrink_reply(info);
         return rc;
 }
 
@@ -400,7 +399,7 @@ static int mdt_reint_create(struct mdt_thread_info *info,
         ENTRY;
 
         if (OBD_FAIL_CHECK(OBD_FAIL_MDS_REINT_CREATE))
-                GOTO(out, rc = err_serious(-ESTALE));
+                RETURN(err_serious(-ESTALE));
 
         if (info->mti_dlm_req)
                 ldlm_request_cancel(mdt_info_req(info), info->mti_dlm_req, 0);
@@ -427,9 +426,7 @@ static int mdt_reint_create(struct mdt_thread_info *info,
         default:
                 rc = err_serious(-EOPNOTSUPP);
         }
-        EXIT;
-out:
-        return rc;
+        RETURN(rc);
 }
 
 static int mdt_reint_unlink(struct mdt_thread_info *info,
@@ -454,7 +451,7 @@ static int mdt_reint_unlink(struct mdt_thread_info *info,
                 ldlm_request_cancel(req, info->mti_dlm_req, 0);
 
         if (OBD_FAIL_CHECK(OBD_FAIL_MDS_REINT_UNLINK))
-                GOTO(out, rc = err_serious(-ENOENT));
+                RETURN(err_serious(-ENOENT));
 
         /* step 1: lock the parent */
         parent_lh = &info->mti_lh[MDT_LH_PARENT];
@@ -532,7 +529,6 @@ static int mdt_reint_unlink(struct mdt_thread_info *info,
 out_unlock_parent:
         mdt_object_unlock_put(info, mp, parent_lh, rc);
 out:
-        mdt_shrink_reply(info);
         return rc;
 }
 
@@ -554,7 +550,7 @@ static int mdt_reint_link(struct mdt_thread_info *info,
                   PFID(rr->rr_fid1), PFID(rr->rr_fid2), rr->rr_name);
 
         if (OBD_FAIL_CHECK(OBD_FAIL_MDS_REINT_LINK))
-                GOTO(out, rc = err_serious(-ENOENT));
+                RETURN(err_serious(-ENOENT));
 
         if (info->mti_dlm_req)
                 ldlm_request_cancel(req, info->mti_dlm_req, 0);
@@ -566,18 +562,18 @@ static int mdt_reint_link(struct mdt_thread_info *info,
                 ms = mdt_object_find_lock(info, rr->rr_fid1, lhs,
                                           MDS_INODELOCK_UPDATE);
                 if (IS_ERR(ms))
-                        GOTO(out, rc = PTR_ERR(ms));
+                        RETURN(PTR_ERR(ms));
 
                 mdt_set_capainfo(info, 0, rr->rr_fid1, BYPASS_CAPA);
                 rc = mo_ref_add(info->mti_env, mdt_object_child(ms), ma);
                 mdt_object_unlock_put(info, ms, lhs, rc);
-                GOTO(out, rc);
+                RETURN(rc);
         }
 
         /* Invalid case so return error immediately instead of
          * processing it */
         if (lu_fid_eq(rr->rr_fid1, rr->rr_fid2))
-                GOTO(out, rc = -EPERM);
+                RETURN(-EPERM);
 
         /* step 1: find & lock the target parent dir */
         lhp = &info->mti_lh[MDT_LH_PARENT];
@@ -586,7 +582,7 @@ static int mdt_reint_link(struct mdt_thread_info *info,
         mp = mdt_object_find_lock(info, rr->rr_fid2, lhp,
                                   MDS_INODELOCK_UPDATE);
         if (IS_ERR(mp))
-                GOTO(out, rc = PTR_ERR(mp));
+                RETURN(PTR_ERR(mp));
 
         /* step 2: find & lock the source */
         lhs = &info->mti_lh[MDT_LH_CHILD];
@@ -615,7 +611,6 @@ static int mdt_reint_link(struct mdt_thread_info *info,
         mdt_object_unlock_put(info, ms, lhs, rc);
 out_unlock_parent:
         mdt_object_unlock_put(info, mp, lhp, rc);
-out:
         return rc;
 }
 
@@ -644,7 +639,7 @@ static int mdt_reint_rename_tgt(struct mdt_thread_info *info)
         mtgtdir = mdt_object_find_lock(info, rr->rr_fid1, lh_tgtdir,
                                        MDS_INODELOCK_UPDATE);
         if (IS_ERR(mtgtdir))
-                GOTO(out, rc = PTR_ERR(mtgtdir));
+                RETURN(PTR_ERR(mtgtdir));
 
         /* step 2: find & lock the target object if exists. */
         mdt_set_capainfo(info, 0, rr->rr_fid1, BYPASS_CAPA);
@@ -691,8 +686,6 @@ out_unlock_tgt:
                 mdt_object_unlock_put(info, mtgt, lh_tgt, rc);
 out_unlock_tgtdir:
         mdt_object_unlock_put(info, mtgtdir, lh_tgtdir, rc);
-out:
-        mdt_shrink_reply(info);
         return rc;
 }
 
@@ -831,7 +824,7 @@ static int mdt_reint_rename(struct mdt_thread_info *info,
         rc = mdt_rename_lock(info, &rename_lh);
         if (rc) {
                 CERROR("Can't lock FS for rename, rc %d\n", rc);
-                GOTO(out, rc);
+                RETURN(rc);
         }
 
         lh_newp = &info->mti_lh[MDT_LH_NEW];
@@ -960,8 +953,6 @@ out_unlock_source:
         mdt_object_unlock_put(info, msrcdir, lh_srcdirp, rc);
 out_rename_lock:
         mdt_rename_unlock(&rename_lh);
-out:
-        mdt_shrink_reply(info);
         return rc;
 }
 
@@ -970,11 +961,12 @@ typedef int (*mdt_reinter)(struct mdt_thread_info *info,
 
 static mdt_reinter reinters[REINT_MAX] = {
         [REINT_SETATTR]  = mdt_reint_setattr,
-        [REINT_CREATE] = mdt_reint_create,
-        [REINT_LINK] = mdt_reint_link,
-        [REINT_UNLINK] = mdt_reint_unlink,
-        [REINT_RENAME] = mdt_reint_rename,
-        [REINT_OPEN] = mdt_reint_open
+        [REINT_CREATE]   = mdt_reint_create,
+        [REINT_LINK]     = mdt_reint_link,
+        [REINT_UNLINK]   = mdt_reint_unlink,
+        [REINT_RENAME]   = mdt_reint_rename,
+        [REINT_OPEN]     = mdt_reint_open,
+        [REINT_SETXATTR] = mdt_reint_setxattr
 };
 
 int mdt_reint_rec(struct mdt_thread_info *info,

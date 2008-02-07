@@ -1869,15 +1869,14 @@ static inline int md_unlink(struct obd_export *exp, struct md_op_data *op_data,
 
 static inline int md_get_lustre_md(struct obd_export *exp,
                                    struct ptlrpc_request *req,
-                                   int offset, struct obd_export *dt_exp,
+                                   struct obd_export *dt_exp,
                                    struct obd_export *md_exp,
                                    struct lustre_md *md)
 {
         ENTRY;
         EXP_CHECK_MD_OP(exp, get_lustre_md);
         EXP_MD_COUNTER_INCREMENT(exp, get_lustre_md);
-        RETURN(MDP(exp->exp_obd, get_lustre_md)(exp, req, offset,
-                                                dt_exp, md_exp, md));
+        RETURN(MDP(exp->exp_obd, get_lustre_md)(exp, req, dt_exp, md_exp, md));
 }
 
 static inline int md_free_lustre_md(struct obd_export *exp,

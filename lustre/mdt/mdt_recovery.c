@@ -1049,7 +1049,7 @@ static void mdt_reconstruct_create(struct mdt_thread_info *mti,
         child = mdt_object_find(mti->mti_env, mdt, mti->mti_rr.rr_fid2);
         LASSERT(!IS_ERR(child));
 
-        body = req_capsule_server_get(&mti->mti_pill, &RMF_MDT_BODY);
+        body = req_capsule_server_get(mti->mti_pill, &RMF_MDT_BODY);
         rc = mo_attr_get(mti->mti_env, mdt_object_child(child), &mti->mti_attr);
         if (rc == -EREMOTE) {
                 /* object was created on remote server */
@@ -1073,7 +1073,7 @@ static void mdt_reconstruct_setattr(struct mdt_thread_info *mti,
         if (req->rq_status)
                 return;
 
-        body = req_capsule_server_get(&mti->mti_pill, &RMF_MDT_BODY);
+        body = req_capsule_server_get(mti->mti_pill, &RMF_MDT_BODY);
         obj = mdt_object_find(mti->mti_env, mdt, mti->mti_rr.rr_fid1);
         LASSERT(!IS_ERR(obj));
         mo_attr_get(mti->mti_env, mdt_object_child(obj), &mti->mti_attr);
@@ -1083,7 +1083,7 @@ static void mdt_reconstruct_setattr(struct mdt_thread_info *mti,
                 struct mdt_file_data *mfd;
                 struct mdt_body *repbody;
 
-                repbody = req_capsule_server_get(&mti->mti_pill, &RMF_MDT_BODY);
+                repbody = req_capsule_server_get(mti->mti_pill, &RMF_MDT_BODY);
                 repbody->ioepoch = obj->mot_ioepoch;
                 spin_lock(&med->med_open_lock);
                 list_for_each_entry(mfd, &med->med_open_head, mfd_list) {
@@ -1098,11 +1098,11 @@ static void mdt_reconstruct_setattr(struct mdt_thread_info *mti,
         mdt_object_put(mti->mti_env, obj);
 }
 
-static void mdt_reconstruct_with_shrink(struct mdt_thread_info *mti,
-                                        struct mdt_lock_handle *lhc)
+static void mdt_reconstruct_setxattr(struct mdt_thread_info *mti,
+                                     struct mdt_lock_handle *lhc)
 {
-        mdt_reconstruct_generic(mti, lhc);
-        mdt_shrink_reply(mti);
+        /* reply nothing */
+        req_capsule_shrink(mti->mti_pill, &RMF_EADATA, 0, RCL_SERVER);
 }
 
 typedef void (*mdt_reconstructor)(struct mdt_thread_info *mti,
@@ -1112,9 +1112,10 @@ static mdt_reconstructor reconstructors[REINT_MAX] = {
         [REINT_SETATTR]  = mdt_reconstruct_setattr,
         [REINT_CREATE]   = mdt_reconstruct_create,
         [REINT_LINK]     = mdt_reconstruct_generic,
-        [REINT_UNLINK]   = mdt_reconstruct_with_shrink,
-        [REINT_RENAME]   = mdt_reconstruct_with_shrink,
-        [REINT_OPEN]     = mdt_reconstruct_open
+        [REINT_UNLINK]   = mdt_reconstruct_generic,
+        [REINT_RENAME]   = mdt_reconstruct_generic,
+        [REINT_OPEN]     = mdt_reconstruct_open,
+        [REINT_SETXATTR] = mdt_reconstruct_setxattr
 };
 
 void mdt_reconstruct(struct mdt_thread_info *mti,

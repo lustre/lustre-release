@@ -105,11 +105,8 @@ static int llu_dir_do_readpage(struct inode *inode, struct page *page)
         rc = md_readpage(sbi->ll_md_exp, &lli->lli_fid, NULL,
                          offset, page, &request);
         if (!rc) {
-                body = lustre_msg_buf(request->rq_repmsg, REPLY_REC_OFF,
-                                      sizeof(*body));
+                body = req_capsule_server_get(&request->rq_pill, &RMF_MDT_BODY);
                 LASSERT(body != NULL);         /* checked by md_readpage() */
-                /* swabbed by md_readpage() */
-                LASSERT(lustre_rep_swabbed(request, REPLY_REC_OFF));
 
                 if (body->valid & OBD_MD_FLSIZE)
                         st->st_size = body->size;

@@ -471,9 +471,10 @@ void mdt_dump_lmm(int level, const struct lov_mds_md *lmm)
 
 void mdt_shrink_reply(struct mdt_thread_info *info)
 {
-        struct req_capsule    *pill = &info->mti_pill;
-        struct mdt_body       *body;
-        int acl_size, md_size, adjust = 0;
+        struct req_capsule *pill = info->mti_pill;
+        struct mdt_body    *body;
+        int                md_size;
+        int                acl_size;
         ENTRY;
 
         body = req_capsule_server_get(pill, &RMF_MDT_BODY);
@@ -487,10 +488,10 @@ void mdt_shrink_reply(struct mdt_thread_info *info)
         acl_size = body->aclsize;
 
         CDEBUG(D_INFO, "Shrink to md_size = %d cookie/acl_size = %d" 
-                        " MDSCAPA = %d, OSSCAPA = %d\n",
+                        " MDSCAPA = "LPX64", OSSCAPA = "LPX64"\n",
                         md_size, acl_size,
-                        (int)(body->valid & OBD_MD_FLMDSCAPA),
-                        (int)(body->valid & OBD_MD_FLOSSCAPA));
+                        body->valid & OBD_MD_FLMDSCAPA,
+                        body->valid & OBD_MD_FLOSSCAPA);
 /*
             &RMF_MDT_BODY,
             &RMF_MDT_MD,
@@ -499,33 +500,23 @@ void mdt_shrink_reply(struct mdt_thread_info *info)
 (optional)  &RMF_CAPA2,
 (optional)  something else
 */
-        adjust += req_capsule_shrink(pill, &RMF_MDT_MD,
-                                    md_size, adjust, 1);
 
+        if (req_capsule_has_field(pill, &RMF_MDT_MD, RCL_SERVER))
+                req_capsule_shrink(pill, &RMF_MDT_MD, md_size,
+                                   RCL_SERVER);
         if (req_capsule_has_field(pill, &RMF_ACL, RCL_SERVER))
-                adjust += req_capsule_shrink(pill, &RMF_ACL,
-                                            acl_size, adjust, 1);
+                req_capsule_shrink(pill, &RMF_ACL, acl_size, RCL_SERVER);
         else if (req_capsule_has_field(pill, &RMF_LOGCOOKIES, RCL_SERVER))
-                adjust += req_capsule_shrink(pill, &RMF_LOGCOOKIES,
-                                            acl_size, adjust, 1);
+                req_capsule_shrink(pill, &RMF_LOGCOOKIES,
+                                            acl_size, RCL_SERVER);
 
-        /* RMF_CAPA1 on server-side maybe for OBD_MD_FLMDSCAPA or
-         * OBD_MD_FLOSSCAPA. If RMF_CAPA2 exist also, RMF_CAPA1 is
-         * for OBD_MD_FLMDSCAPA only. */
-        if (req_capsule_has_field(pill, &RMF_CAPA1, RCL_SERVER)) {
-                if ((req_capsule_has_field(pill, &RMF_CAPA2, RCL_SERVER) &&
-                    !(body->valid & OBD_MD_FLMDSCAPA)) ||
-                    (!req_capsule_has_field(pill, &RMF_CAPA2, RCL_SERVER) &&
-                    !(body->valid & OBD_MD_FLMDSCAPA) &&
-                    !(body->valid & OBD_MD_FLOSSCAPA)))
-                        adjust += req_capsule_shrink(pill, &RMF_CAPA1,
-                                                     0, adjust, 1);
-        }
+        if (req_capsule_has_field(pill, &RMF_CAPA1, RCL_SERVER) &&
+                    !(body->valid & OBD_MD_FLMDSCAPA))
+                req_capsule_shrink(pill, &RMF_CAPA1, 0, RCL_SERVER);
 
-        /* RMF_CAPA2 on server-side is for OBD_MD_FLOSSCAPA only. */
-        if ((req_capsule_has_field(pill, &RMF_CAPA2, RCL_SERVER) &&
-                !(body->valid & OBD_MD_FLOSSCAPA)))
-                adjust += req_capsule_shrink(pill, &RMF_CAPA2, 0, adjust, 0);
+        if (req_capsule_has_field(pill, &RMF_CAPA2, RCL_SERVER) &&
+                !(body->valid & OBD_MD_FLOSSCAPA))
+                req_capsule_shrink(pill, &RMF_CAPA2, 0, RCL_SERVER);
 
         /*
          * Some more field should be shrinked if needed.
@@ -544,7 +535,7 @@ int mdt_handle_last_unlink(struct mdt_thread_info *info, struct mdt_object *mo,
         const struct lu_attr *la = &ma->ma_attr;
         ENTRY;
 
-        repbody = req_capsule_server_get(&info->mti_pill, &RMF_MDT_BODY);
+        repbody = req_capsule_server_get(info->mti_pill, &RMF_MDT_BODY);
         LASSERT(repbody != NULL);
 
         if (ma->ma_valid & MA_INODE)
@@ -670,12 +661,13 @@ static int mdt_setattr_unpack_rec(struct mdt_thread_info *info)
         struct md_ucred         *uc  = mdt_ucred(info);
         struct md_attr          *ma = &info->mti_attr;
         struct lu_attr          *la = &ma->ma_attr;
-        struct req_capsule      *pill = &info->mti_pill;
+        struct req_capsule      *pill = info->mti_pill;
         struct mdt_reint_record *rr = &info->mti_rr;
         struct mdt_rec_setattr  *rec;
         ENTRY;
 
-        rec = req_capsule_client_get(pill, &RMF_REC_SETATTR);
+        CLASSERT(sizeof(struct mdt_rec_setattr)== sizeof(struct mdt_rec_reint));
+        rec = req_capsule_client_get(pill, &RMF_REC_REINT);
         if (rec == NULL)
                 RETURN(-EFAULT);
 
@@ -707,7 +699,7 @@ static int mdt_setattr_unpack_rec(struct mdt_thread_info *info)
 
 static int mdt_epoch_unpack(struct mdt_thread_info *info)
 {
-        struct req_capsule *pill = &info->mti_pill;
+        struct req_capsule *pill = info->mti_pill;
         ENTRY;
 
         if (req_capsule_get_size(pill, &RMF_MDT_EPOCH, RCL_CLIENT))
@@ -718,7 +710,7 @@ static int mdt_epoch_unpack(struct mdt_thread_info *info)
 }
 
 static inline int mdt_dlmreq_unpack(struct mdt_thread_info *info) {
-        struct req_capsule      *pill = &info->mti_pill;
+        struct req_capsule      *pill = info->mti_pill;
 
         if (req_capsule_get_size(pill, &RMF_DLM_REQ, RCL_CLIENT)) {
                 info->mti_dlm_req = req_capsule_client_get(pill, &RMF_DLM_REQ);
@@ -732,7 +724,7 @@ static inline int mdt_dlmreq_unpack(struct mdt_thread_info *info) {
 static int mdt_setattr_unpack(struct mdt_thread_info *info)
 {
         struct md_attr          *ma = &info->mti_attr;
-        struct req_capsule      *pill = &info->mti_pill;
+        struct req_capsule      *pill = info->mti_pill;
         int rc;
         ENTRY;
 
@@ -778,12 +770,13 @@ static int mdt_create_unpack(struct mdt_thread_info *info)
         struct mdt_rec_create   *rec;
         struct lu_attr          *attr = &info->mti_attr.ma_attr;
         struct mdt_reint_record *rr = &info->mti_rr;
-        struct req_capsule      *pill = &info->mti_pill;
+        struct req_capsule      *pill = info->mti_pill;
         struct md_op_spec       *sp = &info->mti_spec;
         int rc;
         ENTRY;
 
-        rec = req_capsule_client_get(pill, &RMF_REC_CREATE);
+        CLASSERT(sizeof(struct mdt_rec_create) == sizeof(struct mdt_rec_reint));
+        rec = req_capsule_client_get(pill, &RMF_REC_REINT);
         if (rec == NULL)
                 RETURN(-EFAULT);
 
@@ -816,7 +809,7 @@ static int mdt_create_unpack(struct mdt_thread_info *info)
 
         rr->rr_name = req_capsule_client_get(pill, &RMF_NAME);
         rr->rr_namelen = req_capsule_get_size(pill, &RMF_NAME, RCL_CLIENT) - 1;
-        LASSERT(rr->rr_namelen > 0);
+        LASSERT(rr->rr_name && rr->rr_namelen > 0);
         
 #ifdef CONFIG_FS_POSIX_ACL
         if (sp->sp_cr_flags & MDS_CREATE_RMT_ACL) {
@@ -827,7 +820,7 @@ static int mdt_create_unpack(struct mdt_thread_info *info)
                                                   RCL_CLIENT));
                 sp->u.sp_ea.eadata = req_capsule_client_get(pill, &RMF_EADATA);
                 sp->u.sp_ea.eadatalen = req_capsule_get_size(pill, &RMF_EADATA,
-                                                                RCL_CLIENT);
+                                                             RCL_CLIENT);
                 sp->u.sp_ea.fid = rr->rr_fid1;
                 RETURN(0);
         }
@@ -874,11 +867,12 @@ static int mdt_link_unpack(struct mdt_thread_info *info)
         struct mdt_rec_link     *rec;
         struct lu_attr          *attr = &info->mti_attr.ma_attr;
         struct mdt_reint_record *rr = &info->mti_rr;
-        struct req_capsule      *pill = &info->mti_pill;
+        struct req_capsule      *pill = info->mti_pill;
         int rc;
         ENTRY;
 
-        rec = req_capsule_client_get(pill, &RMF_REC_LINK);
+        CLASSERT(sizeof(struct mdt_rec_link) == sizeof(struct mdt_rec_reint));
+        rec = req_capsule_client_get(pill, &RMF_REC_REINT);
         if (rec == NULL)
                 RETURN(-EFAULT);
 
@@ -922,18 +916,19 @@ static int mdt_unlink_unpack(struct mdt_thread_info *info)
         struct md_attr          *ma = &info->mti_attr;
         struct lu_attr          *attr = &info->mti_attr.ma_attr;
         struct mdt_reint_record *rr = &info->mti_rr;
-        struct req_capsule      *pill = &info->mti_pill;
+        struct req_capsule      *pill = info->mti_pill;
         int rc;
         ENTRY;
 
-        rec = req_capsule_client_get(pill, &RMF_REC_UNLINK);
+        CLASSERT(sizeof(struct mdt_rec_unlink) == sizeof(struct mdt_rec_reint));
+        rec = req_capsule_client_get(pill, &RMF_REC_REINT);
         if (rec == NULL)
                 RETURN(-EFAULT);
 
         uc->mu_fsuid = rec->ul_fsuid;
         uc->mu_fsgid = rec->ul_fsgid;
         uc->mu_cap   = rec->ul_cap;
-        uc->mu_suppgids[0] = rec->ul_suppgid;
+        uc->mu_suppgids[0] = rec->ul_suppgid1;
         uc->mu_suppgids[1] = -1;
 
         attr->la_uid = rec->ul_fsuid;
@@ -972,11 +967,12 @@ static int mdt_rename_unpack(struct mdt_thread_info *info)
         struct md_attr          *ma = &info->mti_attr;
         struct lu_attr          *attr = &info->mti_attr.ma_attr;
         struct mdt_reint_record *rr = &info->mti_rr;
-        struct req_capsule      *pill = &info->mti_pill;
+        struct req_capsule      *pill = info->mti_pill;
         int rc;
         ENTRY;
 
-        rec = req_capsule_client_get(pill, &RMF_REC_RENAME);
+        CLASSERT(sizeof(struct mdt_rec_rename) == sizeof(struct mdt_rec_reint));
+        rec = req_capsule_client_get(pill, &RMF_REC_REINT);
         if (rec == NULL)
                 RETURN(-EFAULT);
 
@@ -1027,13 +1023,14 @@ static int mdt_open_unpack(struct mdt_thread_info *info)
         struct md_ucred         *uc = mdt_ucred(info);
         struct mdt_rec_create   *rec;
         struct lu_attr          *attr = &info->mti_attr.ma_attr;
-        struct req_capsule      *pill = &info->mti_pill;
+        struct req_capsule      *pill = info->mti_pill;
         struct mdt_reint_record *rr   = &info->mti_rr;
         struct ptlrpc_request   *req  = mdt_info_req(info);
         struct md_op_spec       *sp   = &info->mti_spec;
         ENTRY;
 
-        rec = req_capsule_client_get(pill, &RMF_REC_CREATE);
+        CLASSERT(sizeof(struct mdt_rec_create) == sizeof(struct mdt_rec_reint));
+        rec = req_capsule_client_get(pill, &RMF_REC_REINT);
         if (rec == NULL)
                 RETURN(-EFAULT);
 
@@ -1096,6 +1093,57 @@ static int mdt_open_unpack(struct mdt_thread_info *info)
         RETURN(0);
 }
 
+static int mdt_setxattr_unpack(struct mdt_thread_info *info)
+{
+        struct mdt_reint_record   *rr   = &info->mti_rr;
+        struct md_ucred           *uc   = mdt_ucred(info);
+        struct lu_attr            *attr = &info->mti_attr.ma_attr;
+        struct req_capsule        *pill = info->mti_pill;
+        struct mdt_rec_setxattr   *rec;
+        ENTRY;
+
+
+        CLASSERT(sizeof(struct mdt_rec_setxattr) ==
+                         sizeof(struct mdt_rec_reint));
+
+        rec = req_capsule_client_get(pill, &RMF_REC_REINT);
+        if (rec == NULL)
+                RETURN(-EFAULT);
+
+        uc->mu_fsuid  = rec->sx_fsuid;
+        uc->mu_fsgid  = rec->sx_fsgid;
+        uc->mu_cap    = rec->sx_cap;
+        uc->mu_suppgids[0] = uc->mu_suppgids[1] = -1;
+
+        rr->rr_opcode = rec->sx_opcode;
+        rr->rr_fid1   = &rec->sx_fid;
+        attr->la_valid = rec->sx_valid;
+        attr->la_size = rec->sx_size;
+        attr->la_flags = rec->sx_flags;
+
+        if (req_capsule_get_size(pill, &RMF_CAPA1, RCL_CLIENT))
+                mdt_set_capainfo(info, 0, rr->rr_fid1,
+                                 req_capsule_client_get(pill, &RMF_CAPA1));
+        else
+                mdt_set_capainfo(info, 0, rr->rr_fid1, BYPASS_CAPA);
+
+        rr->rr_name = req_capsule_client_get(pill, &RMF_NAME);
+        if (rr->rr_name == NULL)
+                RETURN(-EFAULT);
+        rr->rr_namelen = req_capsule_get_size(pill, &RMF_NAME, RCL_CLIENT) - 1;
+        LASSERT(rr->rr_namelen > 0);
+
+        rr->rr_eadatalen = req_capsule_get_size(pill, &RMF_EADATA, RCL_CLIENT);
+        if (rr->rr_eadatalen > 0) {
+                rr->rr_eadata = req_capsule_client_get(pill, &RMF_EADATA);
+                if (rr->rr_eadata == NULL)
+                        RETURN(-EFAULT);
+        }
+
+        RETURN(0);
+}
+
+
 typedef int (*reint_unpacker)(struct mdt_thread_info *info);
 
 static reint_unpacker mdt_reint_unpackers[REINT_MAX] = {
@@ -1104,7 +1152,8 @@ static reint_unpacker mdt_reint_unpackers[REINT_MAX] = {
         [REINT_LINK]     = mdt_link_unpack,
         [REINT_UNLINK]   = mdt_unlink_unpack,
         [REINT_RENAME]   = mdt_rename_unpack,
-        [REINT_OPEN]     = mdt_open_unpack
+        [REINT_OPEN]     = mdt_open_unpack,
+        [REINT_SETXATTR] = mdt_setxattr_unpack
 };
 
 int mdt_reint_unpack(struct mdt_thread_info *info, __u32 op)

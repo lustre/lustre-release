@@ -100,7 +100,7 @@ static inline int remote_perm_hashfunc(uid_t uid)
 }
 
 /* NB: setxid permission is not checked here, instead it's done on
- * MDT when client get remote permission. (lookup/mdc_get_remote_perm). */
+ * MDT when client get remote permission. */
 static int do_check_remote_perm(struct ll_inode_info *lli, int mask)
 {
         struct hlist_head *head;
@@ -271,9 +271,8 @@ check:
                 RETURN(rc);
         }
 
-        perm = lustre_msg_buf(req->rq_repmsg, REPLY_REC_OFF + 1, sizeof(*perm));
+        perm = req_capsule_server_get(&req->rq_pill, &RMF_ACL);
         LASSERT(perm);
-        LASSERT(lustre_rep_swabbed(req, REPLY_REC_OFF + 1));
 
         rc = ll_update_remote_perm(inode, perm);
         up(&lli->lli_rmtperm_sem);

@@ -328,7 +328,7 @@ lmv_obj_create(struct obd_export *exp, const struct lu_fid *fid,
                         GOTO(cleanup, obj = ERR_PTR(rc));
                 }
 
-                rc = md_get_lustre_md(exp, req, 0, NULL, exp, &md);
+                rc = md_get_lustre_md(exp, req, NULL, exp, &md);
                 if (rc) {
                         CERROR("mdc_get_lustre_md() failed, error %d\n", rc);
                         GOTO(cleanup, obj = ERR_PTR(rc));

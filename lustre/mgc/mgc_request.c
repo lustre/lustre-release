@@ -733,32 +733,28 @@ out:
 static int mgc_target_register(struct obd_export *exp,
                                struct mgs_target_info *mti)
 {
-        struct ptlrpc_request *req;
+        struct ptlrpc_request  *req;
         struct mgs_target_info *req_mti, *rep_mti;
-        int size[] = { sizeof(struct ptlrpc_body), sizeof(*req_mti) };
-        int rep_size[] = { sizeof(struct ptlrpc_body), sizeof(*mti) };
-        int rc;
+        int                     rc;
         ENTRY;
 
-        req = ptlrpc_prep_req(class_exp2cliimp(exp), LUSTRE_MGS_VERSION,
-                              MGS_TARGET_REG, 2, size, NULL);
-        if (!req)
+        req = ptlrpc_request_alloc_pack(class_exp2cliimp(exp),
+                                        &RQF_MGS_TARGET_REG, LUSTRE_MGS_VERSION,
+                                        MGS_TARGET_REG);
+        if (req == NULL)
                 RETURN(-ENOMEM);
 
-        req_mti = lustre_msg_buf(req->rq_reqmsg, REQ_REC_OFF, sizeof(*req_mti));
-        if (!req_mti)
-                RETURN(-ENOMEM);
+        req_mti = req_capsule_client_get(&req->rq_pill, &RMF_MGS_TARGET_INFO);
         memcpy(req_mti, mti, sizeof(*req_mti));
 
-        ptlrpc_req_set_repsize(req, 2, rep_size);
+        ptlrpc_request_set_replen(req);
 
         CDEBUG(D_MGC, "register %s\n", mti->mti_svname);
 
         rc = ptlrpc_queue_wait(req);
         if (!rc) {
-                rep_mti = lustre_swab_repbuf(req, REPLY_REC_OFF,
-                                             sizeof(*rep_mti),
-                                             lustre_swab_mgs_target_info);
+                rep_mti = req_capsule_server_get(&req->rq_pill,
+                                                 &RMF_MGS_TARGET_INFO);
                 memcpy(mti, rep_mti, sizeof(*rep_mti));
                 CDEBUG(D_MGC, "register %s got index = %d\n",
                        mti->mti_svname, mti->mti_stripe_index);

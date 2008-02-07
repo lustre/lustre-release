@@ -35,6 +35,7 @@
 #include <lustre_lib.h>
 #include <lustre_ha.h>
 #include <lustre_import.h>
+#include <lustre_req_layout.h>
 
 #include "ptlrpc_internal.h"
 
@@ -132,8 +133,8 @@ struct ptlrpc_bulk_desc *ptlrpc_prep_bulk_imp (struct ptlrpc_request *req,
         return desc;
 }
 
-struct ptlrpc_bulk_desc *ptlrpc_prep_bulk_exp (struct ptlrpc_request *req,
-                                               int npages, int type, int portal)
+struct ptlrpc_bulk_desc *ptlrpc_prep_bulk_exp(struct ptlrpc_request *req,
+                                              int npages, int type, int portal)
 {
         struct obd_export *exp = req->rq_export;
         struct ptlrpc_bulk_desc *desc;
@@ -320,36 +321,14 @@ static void __ptlrpc_free_req_to_pool(struct ptlrpc_request *request)
         spin_unlock(&pool->prp_lock);
 }
 
-struct ptlrpc_request *
-ptlrpc_prep_req_pool(struct obd_import *imp, __u32 version, int opcode,
-                     int count, int *lengths, char **bufs,
-                     struct ptlrpc_request_pool *pool,
-                     struct ptlrpc_cli_ctx *ctx)
+static int __ptlrpc_request_bufs_pack(struct ptlrpc_request *request,
+                                      __u32 version, int opcode,
+                                      int count, int *lengths, char **bufs,
+                                      struct ptlrpc_cli_ctx *ctx)
 {
-        struct ptlrpc_request *request = NULL;
-        int rc;
+        struct obd_import  *imp = request->rq_import;
+        int                 rc;
         ENTRY;
-
-        /* The obd disconnected */
-        if (imp == NULL)
-                return NULL;
-
-        LASSERT(imp != LP_POISON);
-        LASSERT((unsigned long)imp->imp_client > 0x1000);
-        LASSERT(imp->imp_client != LP_POISON);
-
-        if (pool)
-                request = ptlrpc_prep_req_from_pool(pool);
-
-        if (!request)
-                OBD_ALLOC(request, sizeof(*request));
-
-        if (!request) {
-                CERROR("request allocation out of memory\n");
-                RETURN(NULL);
-        }
-
-        request->rq_import = class_import_get(imp);
 
         if (unlikely(ctx))
                 request->rq_cli_ctx = sptlrpc_cli_ctx_get(ctx);
@@ -361,8 +340,8 @@ ptlrpc_prep_req_pool(struct obd_import *imp, __u32 version, int opcode,
 
         sptlrpc_req_set_flavor(request, opcode);
 
-        rc = lustre_pack_request(request, imp->imp_msg_magic, count, lengths,
-                                 bufs);
+        rc = lustre_pack_request(request, imp->imp_msg_magic, count,
+                                 lengths, bufs);
         if (rc) {
                 LASSERT(!request->rq_pool);
                 GOTO(out_ctx, rc);
@@ -403,16 +382,132 @@ ptlrpc_prep_req_pool(struct obd_import *imp, __u32 version, int opcode,
         lustre_msg_set_opc(request->rq_reqmsg, opcode);
         lustre_msg_set_flags(request->rq_reqmsg, 0);
 
-        RETURN(request);
+        RETURN(0);
 out_ctx:
         sptlrpc_cli_ctx_put(request->rq_cli_ctx, 1);
 out_free:
         class_import_put(imp);
+        return rc;
+}
+
+int ptlrpc_request_bufs_pack(struct ptlrpc_request *request,
+                             __u32 version, int opcode, char **bufs,
+                             struct ptlrpc_cli_ctx *ctx)
+{
+        int count;
+
+        count = req_capsule_filled_sizes(&request->rq_pill, RCL_CLIENT);
+        return __ptlrpc_request_bufs_pack(request, version, opcode, count,
+                                          request->rq_pill.rc_area[RCL_CLIENT],
+                                          bufs, ctx);
+}
+
+int ptlrpc_request_pack(struct ptlrpc_request *request,
+                        __u32 version, int opcode) 
+{
+        return ptlrpc_request_bufs_pack(request, version, opcode, NULL, NULL);
+}
+
+static inline
+struct ptlrpc_request *__ptlrpc_request_alloc(struct obd_import *imp,
+                                              struct ptlrpc_request_pool *pool)
+{
+        struct ptlrpc_request *request = NULL;
+
+        if (pool)
+                request = ptlrpc_prep_req_from_pool(pool);
+
+        if (!request)
+                OBD_ALLOC_PTR(request);
+
+        if (request) {
+                LASSERT((unsigned long)imp > 0x1000);
+                LASSERT(imp != LP_POISON);
+                LASSERT((unsigned long)imp->imp_client > 0x1000);
+                LASSERT(imp->imp_client != LP_POISON);
+
+                request->rq_import = class_import_get(imp);
+        } else {
+                CERROR("request allocation out of memory\n");
+        }
+
+        return request;
+}
+
+static struct ptlrpc_request *
+ptlrpc_request_alloc_internal(struct obd_import *imp,
+                              struct ptlrpc_request_pool * pool,
+                              const struct req_format *format)
+{
+        struct ptlrpc_request *request;
+
+        request = __ptlrpc_request_alloc(imp, pool);
+        if (request == NULL)
+                return NULL;
+
+        req_capsule_init(&request->rq_pill, request, RCL_CLIENT);
+        req_capsule_set(&request->rq_pill, format);
+        return request;
+}
+
+struct ptlrpc_request *ptlrpc_request_alloc(struct obd_import *imp,
+                                            const struct req_format *format)
+{
+        return ptlrpc_request_alloc_internal(imp, NULL, format);
+}
+
+struct ptlrpc_request *ptlrpc_request_alloc_pool(struct obd_import *imp,
+                                            struct ptlrpc_request_pool * pool,
+                                            const struct req_format *format)
+{
+        return ptlrpc_request_alloc_internal(imp, pool, format);
+}
+
+void ptlrpc_request_free(struct ptlrpc_request *request)
+{
         if (request->rq_pool)
                 __ptlrpc_free_req_to_pool(request);
         else
-                OBD_FREE(request, sizeof(*request));
-        return NULL;
+                OBD_FREE_PTR(request);
+}
+
+struct ptlrpc_request *ptlrpc_request_alloc_pack(struct obd_import *imp,
+                                                const struct req_format *format,
+                                                __u32 version, int opcode)
+{
+        struct ptlrpc_request *req = ptlrpc_request_alloc(imp, format);
+        int                    rc;
+
+        if (req) {
+                rc = ptlrpc_request_pack(req, version, opcode);
+                if (rc) {
+                        ptlrpc_request_free(req);
+                        req = NULL;
+                }
+        }
+        return req;
+}
+
+struct ptlrpc_request *
+ptlrpc_prep_req_pool(struct obd_import *imp,
+                     __u32 version, int opcode,
+                     int count, int *lengths, char **bufs,
+                     struct ptlrpc_request_pool *pool)
+{
+        struct ptlrpc_request *request;
+        int                    rc;
+
+        request = __ptlrpc_request_alloc(imp, pool);
+        if (!request)
+                return NULL;
+
+        rc = __ptlrpc_request_bufs_pack(request, version, opcode, count,
+                                        lengths, bufs, NULL);
+        if (rc) {
+                ptlrpc_request_free(request);
+                request = NULL;
+        }
+        return request;
 }
 
 struct ptlrpc_request *
@@ -420,7 +515,7 @@ ptlrpc_prep_req(struct obd_import *imp, __u32 version, int opcode, int count,
                 int *lengths, char **bufs)
 {
         return ptlrpc_prep_req_pool(imp, version, opcode, count, lengths, bufs,
-                                    NULL, NULL);
+                                    NULL);
 }
 
 struct ptlrpc_request_set *ptlrpc_prep_set(void)
@@ -1321,6 +1416,8 @@ static void __ptlrpc_free_req(struct ptlrpc_request *request, int locked)
         LASSERTF(list_empty(&request->rq_list), "req %p\n", request);
         LASSERTF(list_empty(&request->rq_set_chain), "req %p\n", request);
         LASSERT(request->rq_cli_ctx);
+
+        req_capsule_fini(&request->rq_pill);
 
         /* We must take it off the imp_replay_list first.  Otherwise, we'll set
          * request->rq_reqmsg to NULL while osc_close is dereferencing it. */

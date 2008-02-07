@@ -38,7 +38,7 @@
 #endif
 #endif
 
-static void mdc_pack_body(struct mdt_body *b, __u32 suppgid)
+static void __mdc_pack_body(struct mdt_body *b, __u32 suppgid)
 {
         LASSERT (b != NULL);
 
@@ -50,97 +50,102 @@ static void mdc_pack_body(struct mdt_body *b, __u32 suppgid)
         b->capability = current->cap_effective;
 }
 
-void mdc_pack_capa(struct ptlrpc_request *req, int offset, struct obd_capa *oc)
+void mdc_pack_capa(struct ptlrpc_request *req, const struct req_msg_field *field,
+                   struct obd_capa *oc)
 {
+        struct req_capsule *pill = &req->rq_pill;
         struct lustre_capa *c;
 
         if (oc == NULL) {
-                LASSERT(lustre_msg_buflen(req->rq_reqmsg, offset) == 0);
+                LASSERT(req_capsule_get_size(pill, field, RCL_CLIENT) == 0);
                 return;
         }
 
-        c = lustre_msg_buf(req->rq_reqmsg, offset, sizeof(*c));
+        c = req_capsule_client_get(pill, field);
         LASSERT(c != NULL);
         capa_cpy(c, oc);
         DEBUG_CAPA(D_SEC, c, "pack");
 }
 
-void mdc_is_subdir_pack(struct ptlrpc_request *req, int offset,
-                        const struct lu_fid *pfid,
+void mdc_is_subdir_pack(struct ptlrpc_request *req, const struct lu_fid *pfid,
                         const struct lu_fid *cfid, int flags)
 {
-        struct mdt_body *b = lustre_msg_buf(req->rq_reqmsg, offset, sizeof(*b));
+        struct mdt_body *b = req_capsule_client_get(&req->rq_pill,
+                                                    &RMF_MDT_BODY);
 
-        if (pfid)
+        if (pfid) {
                 b->fid1 = *pfid;
+                b->valid = OBD_MD_FLID;
+        }
         if (cfid)
                 b->fid2 = *cfid;
-        b->valid = OBD_MD_FLID;
         b->flags = flags;
 }
 
-void mdc_pack_req_body(struct ptlrpc_request *req, int offset,
-                       __u64 valid, const struct lu_fid *fid,
-                       struct obd_capa *oc, int ea_size, __u32 suppgid,
-                       int flags)
+void mdc_pack_body(struct ptlrpc_request *req,
+                   const struct lu_fid *fid, struct obd_capa *oc,
+                   __u64 valid, int ea_size, __u32 suppgid, int flags)
 {
-        struct mdt_body *b = lustre_msg_buf(req->rq_reqmsg, offset, sizeof(*b));
-
+        struct mdt_body *b = req_capsule_client_get(&req->rq_pill,
+                                                    &RMF_MDT_BODY);
+        LASSERT(b != NULL);
         b->valid = valid;
         b->eadatasize = ea_size;
         b->flags = flags;
-        mdc_pack_body(b, suppgid);
+        __mdc_pack_body(b, suppgid);
         if (fid) {
                 b->fid1 = *fid;
-                mdc_pack_capa(req, offset + 1, oc);
+                b->valid |= OBD_MD_FLID;
+                mdc_pack_capa(req, &RMF_CAPA1, oc);
         }
 }
 
-void mdc_readdir_pack(struct ptlrpc_request *req, int offset, __u64 pgoff,
+void mdc_readdir_pack(struct ptlrpc_request *req, __u64 pgoff,
                       __u32 size, const struct lu_fid *fid, struct obd_capa *oc)
 {
-        struct mdt_body *b;
-
-        b = lustre_msg_buf(req->rq_reqmsg, offset, sizeof(*b));
+        struct mdt_body *b = req_capsule_client_get(&req->rq_pill,
+                                                    &RMF_MDT_BODY);
         b->fid1 = *fid;
+        b->valid |= OBD_MD_FLID;
         b->size = pgoff;                       /* !! */
         b->nlink = size;                        /* !! */
-        mdc_pack_body(b, -1);
-        mdc_pack_capa(req, offset + 1, oc);
+        __mdc_pack_body(b, -1);
+        mdc_pack_capa(req, &RMF_CAPA1, oc);
 }
 
 /* packing of MDS records */
-void mdc_create_pack(struct ptlrpc_request *req, int offset,
-                     struct md_op_data *op_data, const void *data, int datalen,
-                     __u32 mode, __u32 uid, __u32 gid, __u32 cap_effective,
-                     __u64 rdev)
+void mdc_create_pack(struct ptlrpc_request *req, struct md_op_data *op_data,
+                     const void *data, int datalen, __u32 mode,
+                     __u32 uid, __u32 gid, __u32 cap_effective, __u64 rdev)
 {
         struct mdt_rec_create *rec;
-        char *tmp;
-        
-        rec = lustre_msg_buf(req->rq_reqmsg, offset, sizeof(*rec));
+        char                  *tmp;
 
-        rec->cr_opcode = REINT_CREATE;
-        rec->cr_fsuid = uid;
-        rec->cr_fsgid = gid;
-        rec->cr_cap = cap_effective;
-        rec->cr_fid1 = op_data->op_fid1;
-        rec->cr_fid2 = op_data->op_fid2;
-        rec->cr_mode = mode;
-        rec->cr_rdev = rdev;
-        rec->cr_time = op_data->op_mod_time;
+        CLASSERT(sizeof(struct mdt_rec_reint) == sizeof(struct mdt_rec_create));
+        rec = req_capsule_client_get(&req->rq_pill, &RMF_REC_REINT);
+
+
+        rec->cr_opcode   = REINT_CREATE;
+        rec->cr_fsuid    = uid;
+        rec->cr_fsgid    = gid;
+        rec->cr_cap      = cap_effective;
+        rec->cr_fid1     = op_data->op_fid1;
+        rec->cr_fid2     = op_data->op_fid2;
+        rec->cr_mode     = mode;
+        rec->cr_rdev     = rdev;
+        rec->cr_time     = op_data->op_mod_time;
         rec->cr_suppgid1 = op_data->op_suppgids[0];
         rec->cr_suppgid2 = op_data->op_suppgids[1];
-        rec->cr_flags = op_data->op_flags & ~MF_SOM_LOCAL_FLAGS;
-        rec->cr_bias = op_data->op_bias;
+        rec->cr_flags    = op_data->op_flags & ~MF_SOM_LOCAL_FLAGS;
+        rec->cr_bias     = op_data->op_bias;
 
-        mdc_pack_capa(req, offset + 1, op_data->op_capa1);
+        mdc_pack_capa(req, &RMF_CAPA1, op_data->op_capa1);
 
-        tmp = lustre_msg_buf(req->rq_reqmsg, offset + 2, op_data->op_namelen + 1);
+        tmp = req_capsule_client_get(&req->rq_pill, &RMF_NAME);
         LOGL0(op_data->op_name, op_data->op_namelen, tmp);
 
         if (data) {
-                tmp = lustre_msg_buf(req->rq_reqmsg, offset + 3, datalen);
+                tmp = req_capsule_client_get(&req->rq_pill, &RMF_EADATA);
                 memcpy(tmp, data, datalen);
         }
 }
@@ -175,49 +180,51 @@ static __u32 mds_pack_open_flags(__u32 flags)
 }
 
 /* packing of MDS records */
-void mdc_join_pack(struct ptlrpc_request *req, int offset,
-                   struct md_op_data *op_data, __u64 head_size)
+void mdc_join_pack(struct ptlrpc_request *req,
+                   struct md_op_data *op_data,
+                   __u64 head_size)
 {
         struct mdt_rec_join *rec;
 
-        rec = lustre_msg_buf(req->rq_reqmsg, offset, sizeof(*rec));
+        rec = req_capsule_client_get(&req->rq_pill, &RMF_REC_JOINFILE);
         LASSERT(rec != NULL);
         rec->jr_fid = op_data->op_fid2;
         rec->jr_headsize = head_size;
 }
 
-void mdc_open_pack(struct ptlrpc_request *req, int offset,
-                   struct md_op_data *op_data, __u32 mode, __u64 rdev,
-                   __u32 flags, const void *lmm, int lmmlen)
+void mdc_open_pack(struct ptlrpc_request *req, struct md_op_data *op_data,
+                   __u32 mode, __u64 rdev, __u32 flags, const void *lmm,
+                   int lmmlen)
 {
         struct mdt_rec_create *rec;
         char *tmp;
-        rec = lustre_msg_buf(req->rq_reqmsg, offset, sizeof (*rec));
+
+        CLASSERT(sizeof(struct mdt_rec_reint) == sizeof(struct mdt_rec_create));
+        rec = req_capsule_client_get(&req->rq_pill, &RMF_REC_REINT);
 
         /* XXX do something about time, uid, gid */
-        rec->cr_opcode = REINT_OPEN;
-        rec->cr_fsuid = current->fsuid;
-        rec->cr_fsgid = current->fsgid;
-        rec->cr_cap = current->cap_effective;
+        rec->cr_opcode   = REINT_OPEN;
+        rec->cr_fsuid    = current->fsuid;
+        rec->cr_fsgid    = current->fsgid;
+        rec->cr_cap      = current->cap_effective;
         if (op_data != NULL) {
                 rec->cr_fid1 = op_data->op_fid1;
                 rec->cr_fid2 = op_data->op_fid2;
         }
-        rec->cr_mode = mode;
-        rec->cr_flags = mds_pack_open_flags(flags);
-        rec->cr_time = op_data->op_mod_time;
-        rec->cr_rdev = rdev;
+        rec->cr_mode     = mode;
+        rec->cr_flags    = mds_pack_open_flags(flags);
+        rec->cr_rdev     = rdev;
+        rec->cr_time     = op_data->op_mod_time;
         rec->cr_suppgid1 = op_data->op_suppgids[0];
         rec->cr_suppgid2 = op_data->op_suppgids[1];
-        rec->cr_bias = op_data->op_bias;
+        rec->cr_bias     = op_data->op_bias;
 
-        mdc_pack_capa(req, offset + 1, op_data->op_capa1);
+        mdc_pack_capa(req, &RMF_CAPA1, op_data->op_capa1);
         /* the next buffer is child capa, which is used for replay,
          * will be packed from the data in reply message. */
 
         if (op_data->op_name) {
-                tmp = lustre_msg_buf(req->rq_reqmsg, offset + 3,
-                                     op_data->op_namelen + 1);
+                tmp = req_capsule_client_get(&req->rq_pill, &RMF_NAME);
                 LOGL0(op_data->op_name, op_data->op_namelen, tmp);
         }
 
@@ -227,7 +234,7 @@ void mdc_open_pack(struct ptlrpc_request *req, int offset,
                 /*XXX a hack for liblustre to set EA (LL_IOC_LOV_SETSTRIPE) */
                 rec->cr_fid2 = op_data->op_fid2;
 #endif
-                tmp = lustre_msg_buf(req->rq_reqmsg, offset + 4, lmmlen);
+                tmp = req_capsule_client_get(&req->rq_pill, &RMF_EADATA);
                 memcpy (tmp, lmm, lmmlen);
         }
 }
@@ -276,22 +283,22 @@ static inline __u64 attr_pack(unsigned int ia_valid) {
 static void mdc_setattr_pack_rec(struct mdt_rec_setattr *rec,
                                  struct md_op_data *op_data)
 {
-        rec->sa_opcode = REINT_SETATTR;
-        rec->sa_fsuid = current->fsuid;
-        rec->sa_fsgid = current->fsgid;
-        rec->sa_cap = current->cap_effective;
+        rec->sa_opcode  = REINT_SETATTR;
+        rec->sa_fsuid   = current->fsuid;
+        rec->sa_fsgid   = current->fsgid;
+        rec->sa_cap     = current->cap_effective;
         rec->sa_suppgid = -1;
 
-        rec->sa_fid = op_data->op_fid1;
-        rec->sa_valid = attr_pack(op_data->op_attr.ia_valid);
-        rec->sa_mode = op_data->op_attr.ia_mode;
-        rec->sa_uid = op_data->op_attr.ia_uid;
-        rec->sa_gid = op_data->op_attr.ia_gid;
-        rec->sa_size = op_data->op_attr.ia_size;
+        rec->sa_fid    = op_data->op_fid1;
+        rec->sa_valid  = attr_pack(op_data->op_attr.ia_valid);
+        rec->sa_mode   = op_data->op_attr.ia_mode;
+        rec->sa_uid    = op_data->op_attr.ia_uid;
+        rec->sa_gid    = op_data->op_attr.ia_gid;
+        rec->sa_size   = op_data->op_attr.ia_size;
         rec->sa_blocks = op_data->op_attr_blocks;
-        rec->sa_atime = LTIME_S(op_data->op_attr.ia_atime);
-        rec->sa_mtime = LTIME_S(op_data->op_attr.ia_mtime);
-        rec->sa_ctime = LTIME_S(op_data->op_attr.ia_ctime);
+        rec->sa_atime  = LTIME_S(op_data->op_attr.ia_atime);
+        rec->sa_mtime  = LTIME_S(op_data->op_attr.ia_mtime);
+        rec->sa_ctime  = LTIME_S(op_data->op_attr.ia_ctime);
         rec->sa_attr_flags = ((struct ll_iattr *)&op_data->op_attr)->ia_attr_flags;
         if ((op_data->op_attr.ia_valid & ATTR_GID) &&
             in_group_p(op_data->op_attr.ia_gid))
@@ -307,127 +314,129 @@ static void mdc_epoch_pack(struct mdt_epoch *epoch, struct md_op_data *op_data)
         epoch->flags = op_data->op_flags & ~MF_SOM_LOCAL_FLAGS;
 }
 
-void mdc_setattr_pack(struct ptlrpc_request *req, int offset,
-                      struct md_op_data *op_data, void *ea,
-                      int ealen, void *ea2, int ea2len)
+void mdc_setattr_pack(struct ptlrpc_request *req, struct md_op_data *op_data,
+                      void *ea, int ealen, void *ea2, int ea2len)
 {
         struct mdt_rec_setattr *rec;
         struct mdt_epoch *epoch;
         
-        rec = lustre_msg_buf(req->rq_reqmsg, offset, sizeof (*rec));        
+        CLASSERT(sizeof(struct mdt_rec_reint) ==sizeof(struct mdt_rec_setattr));
+        rec = req_capsule_client_get(&req->rq_pill, &RMF_REC_REINT);
         mdc_setattr_pack_rec(rec, op_data);
 
-        mdc_pack_capa(req, offset + 1, op_data->op_capa1);
+        mdc_pack_capa(req, &RMF_CAPA1, op_data->op_capa1);
 
         if (op_data->op_flags & (MF_SOM_CHANGE | MF_EPOCH_OPEN)) {
-                epoch = lustre_msg_buf(req->rq_reqmsg, offset + 2,
-                                        sizeof(*epoch));
+                epoch = req_capsule_client_get(&req->rq_pill, &RMF_MDT_EPOCH);
                 mdc_epoch_pack(epoch, op_data);
         }
 
         if (ealen == 0)
                 return;
 
-        memcpy(lustre_msg_buf(req->rq_reqmsg, offset + 3, ealen), ea, ealen);
+        memcpy(req_capsule_client_get(&req->rq_pill, &RMF_EADATA), ea, ealen);
 
         if (ea2len == 0)
                 return;
 
-        memcpy(lustre_msg_buf(req->rq_reqmsg, offset + 4, ea2len), ea2, ea2len);
+        memcpy(req_capsule_client_get(&req->rq_pill, &RMF_LOGCOOKIES), ea2,
+               ea2len);
 }
 
-void mdc_unlink_pack(struct ptlrpc_request *req, int offset,
-                     struct md_op_data *op_data)
+void mdc_unlink_pack(struct ptlrpc_request *req, struct md_op_data *op_data)
 {
         struct mdt_rec_unlink *rec;
         char *tmp;
-
-        rec = lustre_msg_buf(req->rq_reqmsg, offset, sizeof (*rec));
+ 
+        CLASSERT(sizeof(struct mdt_rec_reint) == sizeof(struct mdt_rec_unlink));
+        rec = req_capsule_client_get(&req->rq_pill, &RMF_REC_REINT);
         LASSERT (rec != NULL);
 
-        rec->ul_opcode = REINT_UNLINK;
-        rec->ul_fsuid = op_data->op_fsuid;//current->fsuid;
-        rec->ul_fsgid = op_data->op_fsgid;//current->fsgid;
-        rec->ul_cap = op_data->op_cap;//current->cap_effective;
-        rec->ul_mode = op_data->op_mode;
-        rec->ul_suppgid = op_data->op_suppgids[0];
-        rec->ul_fid1 = op_data->op_fid1;
-        rec->ul_fid2 = op_data->op_fid2;
-        rec->ul_time = op_data->op_mod_time;
-        rec->ul_bias = op_data->op_bias;
+        rec->ul_opcode  = REINT_UNLINK;
+        rec->ul_fsuid   = op_data->op_fsuid;
+        rec->ul_fsgid   = op_data->op_fsgid;
+        rec->ul_cap     = op_data->op_cap;
+        rec->ul_mode    = op_data->op_mode;
+        rec->ul_suppgid1= op_data->op_suppgids[0];
+        rec->ul_suppgid2= -1;
+        rec->ul_fid1    = op_data->op_fid1;
+        rec->ul_fid2    = op_data->op_fid2;
+        rec->ul_time    = op_data->op_mod_time;
+        rec->ul_bias    = op_data->op_bias;
 
-        mdc_pack_capa(req, offset + 1, op_data->op_capa1);
+        mdc_pack_capa(req, &RMF_CAPA1, op_data->op_capa1);
 
-        tmp = lustre_msg_buf(req->rq_reqmsg, offset + 2, op_data->op_namelen + 1);
+        tmp = req_capsule_client_get(&req->rq_pill, &RMF_NAME);
         LASSERT(tmp != NULL);
         LOGL0(op_data->op_name, op_data->op_namelen, tmp);
 }
 
-void mdc_link_pack(struct ptlrpc_request *req, int offset,
-                   struct md_op_data *op_data)
+void mdc_link_pack(struct ptlrpc_request *req, struct md_op_data *op_data)
 {
         struct mdt_rec_link *rec;
         char *tmp;
 
-        rec = lustre_msg_buf(req->rq_reqmsg, offset, sizeof (*rec));
+        CLASSERT(sizeof(struct mdt_rec_reint) == sizeof(struct mdt_rec_link));
+        rec = req_capsule_client_get(&req->rq_pill, &RMF_REC_REINT);
+        LASSERT (rec != NULL);
 
-        rec->lk_opcode = REINT_LINK;
-        rec->lk_fsuid = op_data->op_fsuid;//current->fsuid;
-        rec->lk_fsgid = op_data->op_fsgid;//current->fsgid;
-        rec->lk_cap = op_data->op_cap;//current->cap_effective;
+        rec->lk_opcode   = REINT_LINK;
+        rec->lk_fsuid    = op_data->op_fsuid;//current->fsuid;
+        rec->lk_fsgid    = op_data->op_fsgid;//current->fsgid;
+        rec->lk_cap      = op_data->op_cap;//current->cap_effective;
         rec->lk_suppgid1 = op_data->op_suppgids[0];
         rec->lk_suppgid2 = op_data->op_suppgids[1];
-        rec->lk_fid1 = op_data->op_fid1;
-        rec->lk_fid2 = op_data->op_fid2;
-        rec->lk_time = op_data->op_mod_time;
-        rec->lk_bias = op_data->op_bias;
+        rec->lk_fid1     = op_data->op_fid1;
+        rec->lk_fid2     = op_data->op_fid2;
+        rec->lk_time     = op_data->op_mod_time;
+        rec->lk_bias     = op_data->op_bias;
 
-        mdc_pack_capa(req, offset + 1, op_data->op_capa1);
-        mdc_pack_capa(req, offset + 2, op_data->op_capa2);
+        mdc_pack_capa(req, &RMF_CAPA1, op_data->op_capa1);
+        mdc_pack_capa(req, &RMF_CAPA2, op_data->op_capa2);
 
-        tmp = lustre_msg_buf(req->rq_reqmsg, offset + 3, op_data->op_namelen + 1);
+        tmp = req_capsule_client_get(&req->rq_pill, &RMF_NAME);
         LOGL0(op_data->op_name, op_data->op_namelen, tmp);
 }
 
-void mdc_rename_pack(struct ptlrpc_request *req, int offset,
-                     struct md_op_data *op_data,
+void mdc_rename_pack(struct ptlrpc_request *req, struct md_op_data *op_data,
                      const char *old, int oldlen, const char *new, int newlen)
 {
         struct mdt_rec_rename *rec;
         char *tmp;
 
-        rec = lustre_msg_buf(req->rq_reqmsg, offset, sizeof (*rec));
+        CLASSERT(sizeof(struct mdt_rec_reint) == sizeof(struct mdt_rec_rename));
+        rec = req_capsule_client_get(&req->rq_pill, &RMF_REC_REINT);
 
         /* XXX do something about time, uid, gid */
-        rec->rn_opcode = REINT_RENAME;
-        rec->rn_fsuid = op_data->op_fsuid;//current->fsuid;
-        rec->rn_fsgid = op_data->op_fsgid;//current->fsgid;
-        rec->rn_cap = op_data->op_cap;//current->cap_effective;
+        rec->rn_opcode   = REINT_RENAME;
+        rec->rn_fsuid    = op_data->op_fsuid;
+        rec->rn_fsgid    = op_data->op_fsgid;
+        rec->rn_cap      = op_data->op_cap;
         rec->rn_suppgid1 = op_data->op_suppgids[0];
         rec->rn_suppgid2 = op_data->op_suppgids[1];
-        rec->rn_fid1 = op_data->op_fid1;
-        rec->rn_fid2 = op_data->op_fid2;
-        rec->rn_time = op_data->op_mod_time;
-        rec->rn_mode = op_data->op_mode;
-        rec->rn_bias = op_data->op_bias;
+        rec->rn_fid1     = op_data->op_fid1;
+        rec->rn_fid2     = op_data->op_fid2;
+        rec->rn_time     = op_data->op_mod_time;
+        rec->rn_mode     = op_data->op_mode;
+        rec->rn_bias     = op_data->op_bias;
 
-        mdc_pack_capa(req, offset + 1, op_data->op_capa1);
-        mdc_pack_capa(req, offset + 2, op_data->op_capa2);
+        mdc_pack_capa(req, &RMF_CAPA1, op_data->op_capa1);
+        mdc_pack_capa(req, &RMF_CAPA2, op_data->op_capa2);
 
-        tmp = lustre_msg_buf(req->rq_reqmsg, offset + 3, oldlen + 1);
+        tmp = req_capsule_client_get(&req->rq_pill, &RMF_NAME);
         LOGL0(old, oldlen, tmp);
 
         if (new) {
-                tmp = lustre_msg_buf(req->rq_reqmsg, offset + 4, newlen + 1);
+                tmp = req_capsule_client_get(&req->rq_pill, &RMF_SYMTGT);
                 LOGL0(new, newlen, tmp);
         }
 }
 
-void mdc_getattr_pack(struct ptlrpc_request *req, int offset, __u64 valid,
-                      int flags, struct md_op_data *op_data)
+void mdc_getattr_pack(struct ptlrpc_request *req, __u64 valid, int flags,
+                      struct md_op_data *op_data)
 {
-        struct mdt_body *b;
-        b = lustre_msg_buf(req->rq_reqmsg, offset, sizeof (*b));
+        struct mdt_body *b = req_capsule_client_get(&req->rq_pill,
+                                                    &RMF_MDT_BODY);
 
         b->fsuid = current->fsuid;
         b->fsgid = current->fsgid;
@@ -442,28 +451,26 @@ void mdc_getattr_pack(struct ptlrpc_request *req, int offset, __u64 valid,
 
         b->fid1 = op_data->op_fid1;
         b->fid2 = op_data->op_fid2;
+        b->valid |= OBD_MD_FLID;
 
-        mdc_pack_capa(req, offset + 1, op_data->op_capa1);
+        mdc_pack_capa(req, &RMF_CAPA1, op_data->op_capa1);
 
         if (op_data->op_name) {
-                char *tmp;
-                tmp = lustre_msg_buf(req->rq_reqmsg, offset + 2,
-                                     op_data->op_namelen + 1);
+                char *tmp = req_capsule_client_get(&req->rq_pill, &RMF_NAME);
                 LOGL0(op_data->op_name, op_data->op_namelen, tmp);
         }
 }
 
-void mdc_close_pack(struct ptlrpc_request *req, int offset,
-                    struct md_op_data *op_data)
+void mdc_close_pack(struct ptlrpc_request *req, struct md_op_data *op_data)
 {
         struct mdt_epoch *epoch;
         struct mdt_rec_setattr *rec;
 
-        epoch = lustre_msg_buf(req->rq_reqmsg, offset, sizeof(*epoch));
-        rec = lustre_msg_buf(req->rq_reqmsg, offset + 1, sizeof(*rec));
+        epoch = req_capsule_client_get(&req->rq_pill, &RMF_MDT_EPOCH);
+        rec = req_capsule_client_get(&req->rq_pill, &RMF_REC_REINT);
 
         mdc_setattr_pack_rec(rec, op_data);
-        mdc_pack_capa(req, offset + 2, op_data->op_capa1);
+        mdc_pack_capa(req, &RMF_CAPA1, op_data->op_capa1);
         mdc_epoch_pack(epoch, op_data);
 }
 

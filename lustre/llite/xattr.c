@@ -326,9 +326,8 @@ do_getxattr:
                 RETURN(rc);
         }
 
-        body = lustre_msg_buf(req->rq_repmsg, REPLY_REC_OFF, sizeof(*body));
+        body = req_capsule_server_get(&req->rq_pill, &RMF_MDT_BODY);
         LASSERT(body);
-        LASSERT(lustre_rep_swabbed(req, REPLY_REC_OFF));
 
         /* only detect the xattr size */
         if (size == 0)
@@ -340,21 +339,11 @@ do_getxattr:
                 GOTO(out, rc = -ERANGE);
         }
 
-        if (lustre_msg_bufcount(req->rq_repmsg) < 3) {
-                CERROR("reply bufcount %u\n",
-                       lustre_msg_bufcount(req->rq_repmsg));
-                GOTO(out, rc = -EFAULT);
-        }
-
         /* do not need swab xattr data */
-        lustre_set_rep_swabbed(req, REPLY_REC_OFF + 1);
-        xdata = lustre_msg_buf(req->rq_repmsg, REPLY_REC_OFF + 1,
-                               body->eadatasize);
-        if (!xdata) {
-                CERROR("can't extract: %u : %u\n", body->eadatasize,
-                       lustre_msg_buflen(req->rq_repmsg, REPLY_REC_OFF + 1));
+        xdata = req_capsule_server_sized_get(&req->rq_pill, &RMF_EADATA,
+                                             body->eadatasize);
+        if (!xdata)
                 GOTO(out, rc = -EFAULT);
-        }
 
 #ifdef CONFIG_FS_POSIX_ACL
         if (body->eadatasize >= 0 && rce && rce->rce_ops == RMT_LSETFACL) {

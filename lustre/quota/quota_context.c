@@ -543,14 +543,21 @@ static int dqacq_interpret(struct ptlrpc_request *req, void *data, int rc)
 
         LASSERT(req);
         LASSERT(req->rq_import);
-        if ((req->rq_import->imp_connect_data.ocd_connect_flags & OBD_CONNECT_QUOTA64)  &&
+
+        if ((req->rq_import->imp_connect_data.ocd_connect_flags &
+             OBD_CONNECT_QUOTA64) &&
             !OBD_FAIL_CHECK(OBD_FAIL_QUOTA_QD_COUNT_32BIT)) {
                 CDEBUG(D_QUOTA, "qd_count is 64bit!\n");
-                qdata = lustre_swab_reqbuf(req, REPLY_REC_OFF, sizeof(*qdata), lustre_swab_qdata);
+
+                qdata = req_capsule_server_swab_get(&req->rq_pill,
+                                                    &RMF_QUNIT_DATA,
+                                          (void*)lustre_swab_qdata);
         } else {
                 CDEBUG(D_QUOTA, "qd_count is 32bit!\n");
-                qdata_old = lustre_swab_reqbuf(req, REPLY_REC_OFF, sizeof(struct qunit_data_old),
-                                               lustre_swab_qdata_old);
+
+                qdata = req_capsule_server_swab_get(&req->rq_pill,
+                                                    &RMF_QUNIT_DATA,
+                                       (void*)lustre_swab_qdata_old);
                 qdata = lustre_quota_old_to_new(qdata_old);
         }
         if (qdata == NULL) {
@@ -559,7 +566,8 @@ static int dqacq_interpret(struct ptlrpc_request *req, void *data, int rc)
         }
 
         LASSERT(qdata->qd_id == qunit->lq_data.qd_id &&
-                (qdata->qd_flags & QUOTA_IS_GRP) == (qunit->lq_data.qd_flags & QUOTA_IS_GRP) &&
+                (qdata->qd_flags & QUOTA_IS_GRP) ==
+                 (qunit->lq_data.qd_flags & QUOTA_IS_GRP) &&
                 (qdata->qd_count == qunit->lq_data.qd_count ||
                  qdata->qd_count == 0));
 
@@ -594,7 +602,6 @@ schedule_dqacq(struct obd_device *obd,
         struct ptlrpc_request *req;
         struct qunit_data *reqdata;
         struct dqacq_async_args *aa;
-        int size[2] = { sizeof(struct ptlrpc_body), sizeof(*reqdata) };
 	unsigned long factor;	
         int rc = 0;
         ENTRY;
@@ -626,7 +633,8 @@ schedule_dqacq(struct obd_device *obd,
         LASSERT(qunit);
 
         /* master is going to dqacq/dqrel from itself */
-        if (is_master(obd, qctxt, qdata->qd_id, qdata->qd_flags & QUOTA_IS_GRP)) {
+        if (is_master(obd, qctxt, qdata->qd_id, qdata->qd_flags & QUOTA_IS_GRP))
+        {
                 int rc2;
                 QDATA_DEBUG(qdata, "local %s.\n",
                             opc == QUOTA_DQACQ ? "DQACQ" : "DQREL");
@@ -637,9 +645,10 @@ schedule_dqacq(struct obd_device *obd,
 
         /* build dqacq/dqrel request */
         LASSERT(qctxt->lqc_import);
-        req = ptlrpc_prep_req(qctxt->lqc_import, LUSTRE_MDS_VERSION, opc, 2,
-                              size, NULL);
-        if (!req) {
+
+        req = ptlrpc_request_alloc_pack(qctxt->lqc_import, &RQF_MDS_QUOTA_DQACQ,
+                                        LUSTRE_MDS_VERSION, opc);
+        if (req == NULL) {
                 dqacq_completion(obd, qctxt, qdata, -ENOMEM, opc);
                 RETURN(-ENOMEM);
         }
@@ -657,20 +666,24 @@ schedule_dqacq(struct obd_device *obd,
         {
                 struct qunit_data_old *reqdata_old, *tmp;
                         
-                reqdata_old = lustre_msg_buf(req->rq_reqmsg, REPLY_REC_OFF, 
-                                             sizeof(*reqdata_old));
+                reqdata_old = req_capsule_client_get(&req->rq_pill,
+                                                     &RMF_QUNIT_DATA);
+
                 tmp = lustre_quota_new_to_old(qdata);
                 *reqdata_old = *tmp;
-                size[1] = sizeof(*reqdata_old);
+                req_capsule_set_size(&req->rq_pill, &RMF_QUNIT_DATA, RCL_SERVER,
+                                     sizeof(*reqdata_old));
                 CDEBUG(D_QUOTA, "qd_count is 32bit!\n");
         } else {
-                reqdata = lustre_msg_buf(req->rq_reqmsg, REPLY_REC_OFF,
-                                         sizeof(*reqdata));
+                reqdata = req_capsule_client_get(&req->rq_pill,
+                                                 &RMF_QUNIT_DATA);
+
                 *reqdata = *qdata;
-                size[1] = sizeof(*reqdata);
+                req_capsule_set_size(&req->rq_pill, &RMF_QUNIT_DATA, RCL_SERVER,
+                                     sizeof(*reqdata));
                 CDEBUG(D_QUOTA, "qd_count is 64bit!\n");
         }
-        ptlrpc_req_set_repsize(req, 2, size);
+        ptlrpc_request_set_replen(req);
 
         CLASSERT(sizeof(*aa) <= sizeof(req->rq_async_args));
         aa = (struct dqacq_async_args *)&req->rq_async_args;

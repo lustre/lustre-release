@@ -360,8 +360,9 @@ struct dentry *ll_find_alias(struct inode *inode, struct dentry *de)
         return de;
 }
 
-static int lookup_it_finish(struct ptlrpc_request *request, int offset,
-                            struct lookup_intent *it, void *data)
+static int lookup_it_finish(struct ptlrpc_request *request,
+                            struct lookup_intent *it,
+                            void *data)
 {
         struct it_cb_data *icbd = data;
         struct dentry **de = icbd->icbd_childp;
@@ -375,8 +376,7 @@ static int lookup_it_finish(struct ptlrpc_request *request, int offset,
         if (!it_disposition(it, DISP_LOOKUP_NEG)) {
                 ENTRY;
 
-                rc = ll_prep_inode(&inode, request, offset,
-                                   (*de)->d_sb);
+                rc = ll_prep_inode(&inode, request, (*de)->d_sb);
                 if (rc)
                         RETURN(rc);
 
@@ -478,7 +478,7 @@ static struct dentry *ll_lookup_it(struct inode *parent, struct dentry *dentry,
         if (rc < 0)
                 GOTO(out, retval = ERR_PTR(rc));
 
-        rc = lookup_it_finish(req, DLM_REPLY_REC_OFF, it, &icbd);
+        rc = lookup_it_finish(req, it, &icbd);
         if (rc != 0) {
                 ll_intent_release(it);
                 GOTO(out, retval = ERR_PTR(rc));
@@ -647,7 +647,7 @@ static struct inode *ll_create_node(struct inode *dir, const char *name,
         LASSERT(it_disposition(it, DISP_ENQ_CREATE_REF));
         request = it->d.lustre.it_data;
         it_clear_disposition(it, DISP_ENQ_CREATE_REF);
-        rc = ll_prep_inode(&inode, request, DLM_REPLY_REC_OFF, dir->i_sb);
+        rc = ll_prep_inode(&inode, request, dir->i_sb);
         if (rc)
                 GOTO(out, inode = ERR_PTR(rc));
 
@@ -712,13 +712,13 @@ static int ll_create_it(struct inode *dir, struct dentry *dentry, int mode,
         RETURN(0);
 }
 
-static void ll_update_times(struct ptlrpc_request *request, int offset,
+static void ll_update_times(struct ptlrpc_request *request,
                             struct inode *inode)
 {
-        struct mdt_body *body = lustre_msg_buf(request->rq_repmsg, offset,
-                                               sizeof(*body));
-        LASSERT(body);
+        struct mdt_body *body = req_capsule_server_get(&request->rq_pill,
+                                                       &RMF_MDT_BODY);
 
+        LASSERT(body);
         /* mtime is always updated with ctime, but can be set in past.
            As write and utime(2) may happen within 1 second, and utime's
            mtime has a priority over write's one, so take mtime from mds
@@ -763,11 +763,10 @@ static int ll_new_node(struct inode *dir, struct qstr *name,
         if (err)
                 GOTO(err_exit, err);
 
-        ll_update_times(request, REPLY_REC_OFF, dir);
+        ll_update_times(request, dir);
 
         if (dchild) {
-                err = ll_prep_inode(&inode, request, REPLY_REC_OFF,
-                                    dchild->d_sb);
+                err = ll_prep_inode(&inode, request, dchild->d_sb);
                 if (err)
                      GOTO(err_exit, err);
 
@@ -900,7 +899,7 @@ static int ll_link_generic(struct inode *src,  struct inode *dir,
         if (dchild)
                 d_drop(dchild);
 
-        ll_update_times(request, REPLY_REC_OFF, dir);
+        ll_update_times(request, dir);
         EXIT;
 out:
         ptlrpc_req_finished(request);
@@ -962,7 +961,7 @@ static int ll_rmdir_generic(struct inode *dir, struct dentry *dparent,
         rc = md_unlink(ll_i2sbi(dir)->ll_md_exp, op_data, &request);
         ll_finish_md_op_data(op_data);
         if (rc == 0)
-                ll_update_times(request, REPLY_REC_OFF, dir);
+                ll_update_times(request, dir);
         ptlrpc_req_finished(request);
         RETURN(rc);
 }
@@ -978,8 +977,7 @@ int ll_objects_destroy(struct ptlrpc_request *request, struct inode *dir)
         ENTRY;
 
         /* req is swabbed so this is safe */
-        body = lustre_msg_buf(request->rq_repmsg, REPLY_REC_OFF, sizeof(*body));
-
+        body = req_capsule_server_get(&request->rq_pill, &RMF_MDT_BODY);
         if (!(body->valid & OBD_MD_FLEASIZE))
                 RETURN(0);
 
@@ -992,13 +990,9 @@ int ll_objects_destroy(struct ptlrpc_request *request, struct inode *dir)
          * to this file. Use this EA to unlink the objects on the OST.
          * It's opaque so we don't swab here; we leave it to obd_unpackmd() to
          * check it is complete and sensible. */
-        eadata = lustre_swab_repbuf(request, REPLY_REC_OFF + 1,
-                                    body->eadatasize, NULL);
+        eadata = req_capsule_server_sized_get(&request->rq_pill, &RMF_MDT_MD,
+                                              body->eadatasize);
         LASSERT(eadata != NULL);
-        if (eadata == NULL) {
-                CERROR("Can't unpack MDS EA data\n");
-                GOTO(out, rc = -EPROTO);
-        }
 
         rc = obd_unpackmd(ll_i2dtexp(dir), &lsm, eadata, body->eadatasize);
         if (rc < 0) {
@@ -1022,10 +1016,11 @@ int ll_objects_destroy(struct ptlrpc_request *request, struct inode *dir)
 
         if (body->valid & OBD_MD_FLCOOKIE) {
                 oa->o_valid |= OBD_MD_FLCOOKIE;
-                oti.oti_logcookies =
-                        lustre_msg_buf(request->rq_repmsg, REPLY_REC_OFF + 2,
-                                       sizeof(struct llog_cookie) *
-                                       lsm->lsm_stripe_count);
+                oti.oti_logcookies = 
+                        req_capsule_server_sized_get(&request->rq_pill,
+                                                     &RMF_LOGCOOKIES,
+                                                   sizeof(struct llog_cookie) *
+                                                     lsm->lsm_stripe_count);
                 if (oti.oti_logcookies == NULL) {
                         oa->o_valid &= ~OBD_MD_FLCOOKIE;
                         body->valid &= ~OBD_MD_FLCOOKIE;
@@ -1071,7 +1066,7 @@ static int ll_unlink_generic(struct inode *dir, struct dentry *dparent,
         if (rc)
                 GOTO(out, rc);
 
-        ll_update_times(request, REPLY_REC_OFF, dir);
+        ll_update_times(request, dir);
 
         rc = ll_objects_destroy(request, dir);
  out:
@@ -1110,8 +1105,8 @@ static int ll_rename_generic(struct inode *src, struct dentry *src_dparent,
                         tgt_name->name, tgt_name->len, &request);
         ll_finish_md_op_data(op_data);
         if (!err) {
-                ll_update_times(request, REPLY_REC_OFF, src);
-                ll_update_times(request, REPLY_REC_OFF, tgt);
+                ll_update_times(request, src);
+                ll_update_times(request, tgt);
                 err = ll_objects_destroy(request, src);
         }
 

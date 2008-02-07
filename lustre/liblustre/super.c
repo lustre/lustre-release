@@ -465,7 +465,7 @@ static int llu_inode_revalidate(struct inode *inode)
                                (long long)llu_i2stat(inode)->st_ino);
                         RETURN(-abs(rc));
                 }
-                rc = md_get_lustre_md(sbi->ll_md_exp, req, REPLY_REC_OFF,
+                rc = md_get_lustre_md(sbi->ll_md_exp, req,
                                       sbi->ll_dt_exp, sbi->ll_md_exp, &md);
 
                 /* XXX Too paranoid? */
@@ -642,7 +642,7 @@ int llu_md_setattr(struct inode *inode, struct md_op_data *op_data,
                 RETURN(rc);
         }
 
-        rc = md_get_lustre_md(sbi->ll_md_exp, request, REPLY_REC_OFF,
+        rc = md_get_lustre_md(sbi->ll_md_exp, request,
                               sbi->ll_dt_exp, sbi->ll_md_exp, &md);
         if (rc) {
                 ptlrpc_req_finished(request);
@@ -993,10 +993,8 @@ static int llu_readlink_internal(struct inode *inode,
                 RETURN(rc);
         }
 
-        body = lustre_msg_buf((*request)->rq_repmsg, REPLY_REC_OFF,
-                              sizeof(*body));
+        body = req_capsule_server_get(&(*request)->rq_pill, &RMF_MDT_BODY);
         LASSERT(body != NULL);
-        LASSERT(lustre_rep_swabbed(*request, REPLY_REC_OFF));
 
         if ((body->valid & OBD_MD_LINKNAME) == 0) {
                 CERROR ("OBD_MD_LINKNAME not set on reply\n");
@@ -1010,8 +1008,7 @@ static int llu_readlink_internal(struct inode *inode,
                 GOTO(failed, rc = -EPROTO);
         }
 
-        *symname = lustre_msg_buf((*request)->rq_repmsg, REPLY_REC_OFF + 1,
-                                   symlen);
+        *symname = req_capsule_server_get(&(*request)->rq_pill, &RMF_MDT_MD);
         if (*symname == NULL ||
             strnlen(*symname, symlen) != symlen - 1) {
                 /* not full/NULL terminated */
@@ -1791,7 +1788,7 @@ static int llu_lov_setstripe_ea_info(struct inode *ino, int flags,
         }
 
         rc = md_get_lustre_md(sbi->ll_md_exp, req,
-                              DLM_REPLY_REC_OFF, sbi->ll_dt_exp, sbi->ll_md_exp, &md);
+                              sbi->ll_dt_exp, sbi->ll_md_exp, &md);
         if (rc)
                 GOTO(out, rc);
 
@@ -2074,7 +2071,8 @@ llu_fsswop_mount(const char *source,
         obd_set_info_async(obd->obd_self_export, strlen("async"), "async",
                            sizeof(async), &async, NULL);
 
-        ocd.ocd_connect_flags = OBD_CONNECT_IBITS | OBD_CONNECT_VERSION;
+        ocd.ocd_connect_flags = OBD_CONNECT_IBITS | OBD_CONNECT_VERSION |
+                                OBD_CONNECT_FID;
 #ifdef LIBLUSTRE_POSIX_ACL
         ocd.ocd_connect_flags |= OBD_CONNECT_ACL;
 #endif
@@ -2138,7 +2136,7 @@ llu_fsswop_mount(const char *source,
                 GOTO(out_dt, err);
         }
 
-        err = md_get_lustre_md(sbi->ll_md_exp, request, REPLY_REC_OFF,
+        err = md_get_lustre_md(sbi->ll_md_exp, request,
                                sbi->ll_dt_exp, sbi->ll_md_exp, &md);
         if (err) {
                 CERROR("failed to understand root inode md: rc = %d\n",err);

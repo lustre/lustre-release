@@ -57,11 +57,8 @@ static int ll_readlink_internal(struct inode *inode,
                 GOTO (failed, rc);
         }
 
-        body = lustre_msg_buf((*request)->rq_repmsg, REPLY_REC_OFF,
-                              sizeof(*body));
+        body = req_capsule_server_get(&(*request)->rq_pill, &RMF_MDT_BODY);
         LASSERT(body != NULL);
-        LASSERT(lustre_rep_swabbed(*request, REPLY_REC_OFF));
-
         if ((body->valid & OBD_MD_LINKNAME) == 0) {
                 CERROR("OBD_MD_LINKNAME not set on reply\n");
                 GOTO(failed, rc = -EPROTO);
@@ -74,10 +71,9 @@ static int ll_readlink_internal(struct inode *inode,
                 GOTO(failed, rc = -EPROTO);
         }
 
-        *symname = lustre_msg_buf((*request)->rq_repmsg, REPLY_REC_OFF + 1,
-                                  symlen);
+        *symname = req_capsule_server_get(&(*request)->rq_pill, &RMF_MDT_MD);
         if (*symname == NULL ||
-            strnlen (*symname, symlen) != symlen - 1) {
+            strnlen(*symname, symlen) != symlen - 1) {
                 /* not full/NULL terminated */
                 CERROR("inode %lu: symlink not NULL terminated string"
                         "of length %d\n", inode->i_ino, symlen - 1);

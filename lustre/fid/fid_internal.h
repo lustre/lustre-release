@@ -37,10 +37,9 @@
 
 #ifdef __KERNEL__
 struct seq_thread_info {
+        struct req_capsule     *sti_pill;
         struct txn_param        sti_txn;
-        struct req_capsule      sti_pill;
         struct lu_range         sti_space;
-        int                     sti_rep_buf_size[REQ_MAX_FIELD_NR];
         struct lu_buf           sti_buf;
 };
 

@@ -47,13 +47,19 @@
 #define lustre_swab_ldlm_reply NULL
 #define lustre_swab_ldlm_intent NULL
 #define lustre_swab_lov_mds_md NULL
-#define lustre_swab_mdt_rec_unlink NULL
-#define lustre_swab_mdt_rec_link NULL
-#define lustre_swab_mdt_rec_rename NULL
-#define lustre_swab_mdt_rec_create NULL
-#define lustre_swab_mdt_rec_setattr NULL
+#define lustre_swab_mdt_rec_reint NULL
 #define lustre_swab_lustre_capa NULL
 #define lustre_swab_lustre_capa_key NULL
+#define lustre_swab_mdt_rec_join NULL
+#define lustre_swab_llogd_conn_body NULL
+#define lustre_swab_llog_hdr NULL
+#define lustre_swab_llogd_body NULL
+#define lustre_swab_obd_quotactl NULL
+#define lustre_swab_mgs_target_info NULL
+#define lustre_swab_niobuf_remote NULL
+#define lustre_swab_obd_ioobj NULL
+#define lustre_swab_ost_body NULL
+#define lustre_swab_ost_last_id NULL
 
 /*
  * Yes, include .c file.

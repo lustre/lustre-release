@@ -44,19 +44,19 @@ static int target_quotacheck_callback(struct obd_export *exp,
                                       struct obd_quotactl *oqctl)
 {
         struct ptlrpc_request *req;
-        struct obd_quotactl *body;
-        int rc, size[2] = { sizeof(struct ptlrpc_body), sizeof(*oqctl) };
+        struct obd_quotactl   *body;
+        int                    rc;
         ENTRY;
 
-        req = ptlrpc_prep_req(exp->exp_imp_reverse, LUSTRE_OBD_VERSION,
-                              OBD_QC_CALLBACK, 2, size, NULL);
-        if (!req)
+        req = ptlrpc_request_alloc_pack(class_exp2cliimp(exp), &RQF_QC_CALLBACK,
+                                        LUSTRE_OBD_VERSION, OBD_QC_CALLBACK);
+        if (req == NULL)
                 RETURN(-ENOMEM);
 
-        body = lustre_msg_buf(req->rq_reqmsg, REQ_REC_OFF, sizeof(*body));
+        body = req_capsule_client_get(&req->rq_pill, &RMF_OBD_QUOTACTL);
         *body = *oqctl;
 
-        ptlrpc_req_set_repsize(req, 1, NULL);
+        ptlrpc_request_set_replen(req);
 
         rc = ptlrpc_queue_wait(req);
         ptlrpc_req_finished(req);
@@ -146,11 +146,10 @@ out:
 
 int client_quota_check(struct obd_export *exp, struct obd_quotactl *oqctl)
 {
-        struct client_obd *cli = &exp->exp_obd->u.cli;
+        struct client_obd     *cli = &exp->exp_obd->u.cli;
         struct ptlrpc_request *req;
-        struct obd_quotactl *body;
-        int size[2] = { sizeof(struct ptlrpc_body), sizeof(*body) };
-        int ver, opc, rc;
+        struct obd_quotactl   *body;
+        int                    ver, opc, rc;
         ENTRY;
 
         if (!strcmp(exp->exp_obd->obd_type->typ_name, LUSTRE_MDC_NAME)) {
@@ -163,14 +162,15 @@ int client_quota_check(struct obd_export *exp, struct obd_quotactl *oqctl)
                 RETURN(-EINVAL);
         }
 
-        req = ptlrpc_prep_req(class_exp2cliimp(exp), ver, opc, 2, size, NULL);
-        if (!req)
-                GOTO(out, rc = -ENOMEM);
+        req = ptlrpc_request_alloc_pack(class_exp2cliimp(exp),
+                                        &RQF_MDS_QUOTACHECK, ver, opc);
+        if (req == NULL)
+                RETURN(-ENOMEM);
 
-        body = lustre_msg_buf(req->rq_reqmsg, REQ_REC_OFF, sizeof(*body));
+        body = req_capsule_client_get(&req->rq_pill, &RMF_OBD_QUOTACTL);
         *body = *oqctl;
 
-        ptlrpc_req_set_repsize(req, 1, NULL);
+        ptlrpc_request_set_replen(req);
 
         /* the next poll will find -ENODATA, that means quotacheck is
          * going on */
@@ -178,7 +178,6 @@ int client_quota_check(struct obd_export *exp, struct obd_quotactl *oqctl)
         rc = ptlrpc_queue_wait(req);
         if (rc)
                 cli->cl_qchk_stat = rc;
-out:
         ptlrpc_req_finished(req);
         RETURN(rc);
 }

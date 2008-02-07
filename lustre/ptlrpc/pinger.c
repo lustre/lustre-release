@@ -42,26 +42,25 @@ static struct list_head pinger_imports = CFS_LIST_HEAD_INIT(pinger_imports);
 int ptlrpc_ping(struct obd_import *imp)
 {
         struct ptlrpc_request *req;
-        int rc = 0;
         ENTRY;
 
-        req = ptlrpc_prep_req(imp, LUSTRE_OBD_VERSION, OBD_PING, 1, NULL, NULL);
-        if (req) {
-                DEBUG_REQ(D_INFO, req, "pinging %s->%s",
-                          imp->imp_obd->obd_uuid.uuid,
-                          obd2cli_tgt(imp->imp_obd));
-                req->rq_no_resend = req->rq_no_delay = 1;
-                ptlrpc_req_set_repsize(req, 1, NULL);
-                req->rq_timeout = PING_INTERVAL;
-                ptlrpcd_add_req(req);
-        } else {
+        req = ptlrpc_request_alloc_pack(imp, &RQF_OBD_PING, LUSTRE_OBD_VERSION,
+                                        OBD_PING);
+        if (req == NULL) {
                 CERROR("OOM trying to ping %s->%s\n",
                        imp->imp_obd->obd_uuid.uuid,
                        obd2cli_tgt(imp->imp_obd));
-                rc = -ENOMEM;
+                RETURN(-ENOMEM);
         }
 
-        RETURN(rc);
+        DEBUG_REQ(D_INFO, req, "pinging %s->%s",
+                  imp->imp_obd->obd_uuid.uuid, obd2cli_tgt(imp->imp_obd));
+        req->rq_no_resend = req->rq_no_delay = 1;
+        ptlrpc_request_set_replen(req);
+        req->rq_timeout = PING_INTERVAL;
+        ptlrpcd_add_req(req);
+
+        RETURN(0);
 }
 
 void ptlrpc_update_next_ping(struct obd_import *imp)
@@ -584,14 +583,18 @@ static int pinger_check_rpcs(void *arg)
                                 continue;
                         }
 
-                        req = ptlrpc_prep_req(imp, LUSTRE_OBD_VERSION, OBD_PING,
-                                              1, NULL, NULL);
-                        if (!req) {
-                                CERROR("out of memory\n");
+                        req = ptlrpc_request_alloc_pack(imp, &RQF_OBD_PING,
+                                                        LUSTRE_OBD_VERSION,
+                                                        OBD_PING);
+                        if (req == NULL) {
+                                CERROR("OOM trying to ping %s->%s\n",
+                                       imp->imp_obd->obd_uuid.uuid,
+                                       obd2cli_tgt(imp->imp_obd));
                                 break;
                         }
+
                         req->rq_no_resend = 1;
-                        ptlrpc_req_set_repsize(req, 1, NULL);
+                        ptlrpc_request_set_replen(req);
                         req->rq_send_state = LUSTRE_IMP_FULL;
                         req->rq_phase = RQ_PHASE_RPC;
                         req->rq_import_generation = generation;

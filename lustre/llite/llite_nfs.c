@@ -70,7 +70,7 @@ static struct inode *search_inode_for_lustre(struct super_block *sb,
                 RETURN(ERR_PTR(rc));
         }
 
-        rc = ll_prep_inode(&inode, req, REPLY_REC_OFF, sb);
+        rc = ll_prep_inode(&inode, req, sb);
         ptlrpc_req_finished(req);
         if (rc)
                 RETURN(ERR_PTR(rc));
@@ -219,8 +219,7 @@ static struct dentry *ll_get_parent(struct dentry *dchild)
                 CERROR("failure %d inode %lu get parent\n", rc, dir->i_ino);
                 RETURN(ERR_PTR(rc));
         }
-        body = lustre_msg_buf(req->rq_repmsg, REPLY_REC_OFF, sizeof(*body)); 
-       
+        body = req_capsule_server_get(&req->rq_pill, &RMF_MDT_BODY);
         LASSERT(body->valid & OBD_MD_FLID);
         
         CDEBUG(D_INFO, "parent for "DFID" is "DFID"\n", 

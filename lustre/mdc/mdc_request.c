@@ -55,21 +55,19 @@ extern quota_interface_t mdc_quota_interface;
 static int mdc_cleanup(struct obd_device *obd);
 
 static struct obd_capa *mdc_unpack_capa(struct ptlrpc_request *req,
-                                               unsigned int offset)
+                                        const struct req_msg_field *field)
 {
         struct lustre_capa *capa;
         struct obd_capa *oc;
 
         /* swabbed already in mdc_enqueue */
-        capa = lustre_msg_buf(req->rq_repmsg, offset, sizeof(*capa));
-        if (capa == NULL) {
-                CERROR("missing capa at offset %d failed!\n", offset);
-                return ERR_PTR(-EFAULT);
-        }
+        capa = req_capsule_server_get(&req->rq_pill, field);
+        if (capa == NULL)
+                return ERR_PTR(-EPROTO);
 
         oc = alloc_capa(CAPA_SITE_CLIENT);
         if (!oc) {
-                CERROR("alloc capa failed!\n");
+                CDEBUG(D_INFO, "alloc capa failed!\n");
                 return ERR_PTR(-ENOMEM);
         }
         oc->c_capa = *capa;
@@ -83,52 +81,46 @@ static int send_getstatus(struct obd_import *imp, struct lu_fid *rootfid,
                           struct obd_capa **pc, int level, int msg_flags)
 {
         struct ptlrpc_request *req;
-        struct mdt_body *body;
-        int rc, size[3] = { sizeof(struct ptlrpc_body),
-                            sizeof(*body),
-                            sizeof(struct lustre_capa) };
+        struct mdt_body       *body;
+        int                    rc;
         ENTRY;
 
-        req = ptlrpc_prep_req(imp, LUSTRE_MDS_VERSION, MDS_GETSTATUS, 2, size,
-                              NULL);
-        if (!req)
-                GOTO(out, rc = -ENOMEM);
+        req = ptlrpc_request_alloc_pack(imp, &RQF_MDS_GETSTATUS,
+                                        LUSTRE_MDS_VERSION, MDS_GETSTATUS);
+        if (req == NULL)
+                RETURN(-ENOMEM);
 
-        req->rq_send_state = level;
-        ptlrpc_req_set_repsize(req, 3, size);
-
-        mdc_pack_req_body(req, REQ_REC_OFF, 0, NULL, NULL, 0, -1, 0);
+        mdc_pack_body(req, NULL, NULL, 0, 0, -1, 0);
         lustre_msg_add_flags(req->rq_reqmsg, msg_flags);
+        req->rq_send_state = level;
+
+        ptlrpc_request_set_replen(req);
+
         rc = ptlrpc_queue_wait(req);
+        if (rc)
+                GOTO(out, rc);
 
-        if (!rc) {
-                body = lustre_swab_repbuf(req, REPLY_REC_OFF, sizeof(*body),
-                                          lustre_swab_mdt_body);
-                if (body == NULL) {
-                        CERROR ("Can't extract mdt_body\n");
-                        GOTO (out, rc = -EPROTO);
-                }
+        body = req_capsule_server_get(&req->rq_pill, &RMF_MDT_BODY);
+        if (body == NULL)
+                GOTO(out, rc = -EPROTO);
 
-                *rootfid = body->fid1;
+        if (body->valid & OBD_MD_FLMDSCAPA) {
+                struct obd_capa *oc;
 
-                if (body->valid & OBD_MD_FLMDSCAPA) {
-                        struct obd_capa *oc;
-
-                        oc = mdc_unpack_capa(req, REPLY_REC_OFF + 1);
-                        if (IS_ERR(oc))
-                                GOTO(out, rc = PTR_ERR(oc));
-                        *pc = oc;
-                }
-
-                CDEBUG(D_NET, "root fid="DFID", last_committed="LPU64
-                       ", last_xid="LPU64"\n",
-                       PFID(rootfid),
-                       lustre_msg_get_last_committed(req->rq_repmsg),
-                       lustre_msg_get_last_xid(req->rq_repmsg));
+                oc = mdc_unpack_capa(req, &RMF_CAPA1);
+                if (IS_ERR(oc))
+                        GOTO(out, rc = PTR_ERR(oc));
+                *pc = oc;
         }
 
+        *rootfid = body->fid1;
+        CDEBUG(D_NET,
+               "root fid="DFID", last_committed="LPU64", last_xid="LPU64"\n",
+               PFID(rootfid),
+               lustre_msg_get_last_committed(req->rq_repmsg),
+               lustre_msg_get_last_xid(req->rq_repmsg));
         EXIT;
- out:
+out:
         ptlrpc_req_finished(req);
         return rc;
 }
@@ -151,52 +143,32 @@ int mdc_getstatus(struct obd_export *exp, struct lu_fid *rootfid,
  * of fields. This issue will be fixed later when client gets awar of RPC
  * layouts.  --umka
  */
-static int mdc_getattr_common(struct obd_export *exp, unsigned int ea_size,
-                              unsigned int acl_size, int mdscapa,
+static int mdc_getattr_common(struct obd_export *exp,
                               struct ptlrpc_request *req)
 {
-        struct mdt_body *body;
-        void *eadata;
-        int size[5] = { sizeof(struct ptlrpc_body),
-                        sizeof(*body),
-                        ea_size,
-                        acl_size,
-                        sizeof(struct lustre_capa) };
-        int offset, rc;
+        struct req_capsule *pill = &req->rq_pill;
+        struct mdt_body    *body;
+        void               *eadata;
+        int                 rc;
         ENTRY;
 
         /* Request message already built. */
-        if (ea_size)
-                CDEBUG(D_INODE, "reserved %u bytes for MD/symlink in packet\n",
-                       ea_size);
-        if (acl_size)
-                CDEBUG(D_INODE, "reserved %u bytes for ACL\n", acl_size);
-
-        ptlrpc_req_set_repsize(req, 5, size);
-
         rc = ptlrpc_queue_wait(req);
         if (rc != 0)
-                RETURN (rc);
+                RETURN(rc);
 
-        body = lustre_swab_repbuf(req, REPLY_REC_OFF, sizeof(*body),
-                                  lustre_swab_mdt_body);
-        if (body == NULL) {
-                CERROR ("Can't unpack mdt_body\n");
-                RETURN (-EPROTO);
-        }
+        /* sanity check for the reply */
+        body = req_capsule_server_get(pill, &RMF_MDT_BODY);
+        if (body == NULL)
+                RETURN(-EPROTO);
 
         CDEBUG(D_NET, "mode: %o\n", body->mode);
 
-        offset = REPLY_REC_OFF + 1;
-        lustre_set_rep_swabbed(req, offset);
         if (body->eadatasize != 0) {
-                /* reply indicates presence of eadata; check it's there... */
-                eadata = lustre_msg_buf(req->rq_repmsg, offset++,
-                                        body->eadatasize);
-                if (eadata == NULL) {
-                        CERROR ("Missing/short eadata\n");
-                        RETURN (-EPROTO);
-                }
+                eadata = req_capsule_server_sized_get(pill, &RMF_MDT_MD,
+                                                      body->eadatasize);
+                if (eadata == NULL)
+                        RETURN(-EPROTO);
         }
 
         if (body->valid & OBD_MD_FLMODEASIZE) {
@@ -208,20 +180,21 @@ static int mdc_getattr_common(struct obd_export *exp, unsigned int ea_size,
                         cli->cl_max_mds_cookiesize = body->max_cookiesize;
         }
 
-        offset += !!body->aclsize;
+        if (body->valid & OBD_MD_FLRMTPERM) {
+                struct mdt_remote_perm *perm;
+                perm = req_capsule_server_get(pill, &RMF_ACL);
+                if (perm == NULL)
+                        RETURN(-EPROTO);
+        }
 
         if (body->valid & OBD_MD_FLMDSCAPA) {
                 struct lustre_capa *capa;
-
-                LASSERT(mdscapa);
-                capa = lustre_unpack_capa(req->rq_repmsg, offset++);
-                if (capa == NULL) {
-                        CERROR("Missing/short client MDS capability\n");
+                capa = req_capsule_server_get(pill, &RMF_CAPA1);
+                if (capa == NULL)
                         RETURN(-EPROTO);
-                }
         }
 
-        RETURN (0);
+        RETURN(0);
 }
 
 int mdc_getattr(struct obd_export *exp, const struct lu_fid *fid,
@@ -229,40 +202,37 @@ int mdc_getattr(struct obd_export *exp, const struct lu_fid *fid,
                 struct ptlrpc_request **request)
 {
         struct ptlrpc_request *req;
-        int size[3] = { sizeof(struct ptlrpc_body), sizeof(struct mdt_body) };
-        int acl_size = 0, rc;
+        int                    rc;
         ENTRY;
 
-        size[REQ_REC_OFF + 1] = oc ? sizeof(struct lustre_capa) : 0;
+        *request = NULL;
+        req = ptlrpc_request_alloc(class_exp2cliimp(exp), &RQF_MDS_GETATTR);
+        if (req == NULL)
+                RETURN(-ENOMEM);
 
-        /*
-         * XXX: Do we need to make another request here?  We just did a getattr
-         * to do the lookup in the first place.
-         */
-        req = ptlrpc_prep_req(class_exp2cliimp(exp), LUSTRE_MDS_VERSION,
-                              MDS_GETATTR, 3, size, NULL);
-        if (!req)
-                GOTO(out, rc = -ENOMEM);
+        mdc_set_capa_size(req, &RMF_CAPA1, oc);
 
-        mdc_pack_req_body(req, REQ_REC_OFF, valid, fid, oc, ea_size, -1,
-                          MDS_BFLAG_EXT_FLAGS/*request "new" flags(bug 9486)*/);
-
-        if (valid & OBD_MD_FLRMTPERM)
-                acl_size = sizeof(struct mdt_remote_perm);
-        
-        /* Currently only root inode will call us with FLACL */
-        else if (valid & OBD_MD_FLACL)
-                acl_size = LUSTRE_POSIX_ACL_MAX_SIZE;
-
-        rc = mdc_getattr_common(exp, ea_size, acl_size,
-                                !!(valid & OBD_MD_FLMDSCAPA), req);
-        if (rc != 0) {
-                ptlrpc_req_finished (req);
-                req = NULL;
+        rc = ptlrpc_request_pack(req, LUSTRE_MDS_VERSION, MDS_GETATTR);
+        if (rc) {
+                ptlrpc_request_free(req);
+                RETURN(rc);
         }
- out:
-        *request = req;
-        RETURN (rc);
+
+        /* MDS_BFLAG_EXT_FLAGS: request "new" flags(bug 9486) */
+        mdc_pack_body(req, fid, oc, valid, ea_size, -1, MDS_BFLAG_EXT_FLAGS);
+
+        req_capsule_set_size(&req->rq_pill, &RMF_MDT_MD, RCL_SERVER, ea_size);
+        if (valid & OBD_MD_FLRMTPERM)
+                req_capsule_set_size(&req->rq_pill, &RMF_ACL, RCL_SERVER,
+                                     sizeof(struct mdt_remote_perm));
+        ptlrpc_request_set_replen(req);
+
+        rc = mdc_getattr_common(exp, req);
+        if (rc)
+                ptlrpc_req_finished(req);
+        else
+                *request = req;
+        RETURN(rc);
 }
 
 int mdc_getattr_name(struct obd_export *exp, const struct lu_fid *fid,
@@ -271,291 +241,292 @@ int mdc_getattr_name(struct obd_export *exp, const struct lu_fid *fid,
                      struct ptlrpc_request **request)
 {
         struct ptlrpc_request *req;
-        struct mdt_body *body;
-        int size[4] = { sizeof(struct ptlrpc_body), sizeof(*body), 0, namelen};
-        int rc;
+        int                    rc;
         ENTRY;
 
-        size[REQ_REC_OFF + 1] = oc ? sizeof(struct lustre_capa) : 0;
+        *request = NULL;
+        req = ptlrpc_request_alloc(class_exp2cliimp(exp),
+                                   &RQF_MDS_GETATTR_NAME);
+        if (req == NULL)
+                RETURN(-ENOMEM);
 
-        req = ptlrpc_prep_req(class_exp2cliimp(exp), LUSTRE_MDS_VERSION,
-                              MDS_GETATTR_NAME, 4, size, NULL);
-        if (!req)
-                GOTO(out, rc = -ENOMEM);
+        mdc_set_capa_size(req, &RMF_CAPA1, oc);
+        req_capsule_set_size(&req->rq_pill, &RMF_NAME, RCL_CLIENT, namelen);
 
-        mdc_pack_req_body(req, REQ_REC_OFF, valid, fid, oc, ea_size, suppgid,
-                          MDS_BFLAG_EXT_FLAGS/*request "new" flags(bug 9486)*/);
+        rc = ptlrpc_request_pack(req, LUSTRE_MDS_VERSION, MDS_GETATTR_NAME);
+        if (rc) {
+                ptlrpc_request_free(req);
+                RETURN(rc);
+        }
+
+        /* MDS_BFLAG_EXT_FLAGS: request "new" flags(bug 9486) */
+        mdc_pack_body(req, fid, oc, valid, ea_size, suppgid,
+                      MDS_BFLAG_EXT_FLAGS);
 
         if (filename) {
+                char *name = req_capsule_client_get(&req->rq_pill, &RMF_NAME);
                 LASSERT(strnlen(filename, namelen) == namelen - 1);
-                memcpy(lustre_msg_buf(req->rq_reqmsg, REQ_REC_OFF + 2, namelen),
-                       filename, namelen);
+                memcpy(name, filename, namelen);
         }
 
-        rc = mdc_getattr_common(exp, ea_size, 0, !!(valid & OBD_MD_FLMDSCAPA),
-                                req);
-        if (rc != 0) {
-                ptlrpc_req_finished (req);
-                req = NULL;
-        }
- out:
-        *request = req;
+        req_capsule_set_size(&req->rq_pill, &RMF_MDT_MD, RCL_SERVER, ea_size);
+        ptlrpc_request_set_replen(req);
+
+        rc = mdc_getattr_common(exp, req);
+        if (rc)
+                ptlrpc_req_finished(req);
+        else
+                *request = req;
         RETURN(rc);
 }
 
-static int mdc_is_subdir(struct obd_export *exp, const struct lu_fid *pfid,
-                         const struct lu_fid *cfid, struct ptlrpc_request **request)
+static int mdc_is_subdir(struct obd_export *exp,
+                         const struct lu_fid *pfid,
+                         const struct lu_fid *cfid,
+                         struct ptlrpc_request **request)
 {
-        int size[2] = { sizeof(struct ptlrpc_body),
-                        sizeof(struct mdt_body) };
-        struct ptlrpc_request *req;
-        struct mdt_body *body;
-        int rc;
+        struct ptlrpc_request  *req;
+        int                     rc;
+
         ENTRY;
 
-        req = ptlrpc_prep_req(class_exp2cliimp(exp), LUSTRE_MDS_VERSION,
-                              MDS_IS_SUBDIR, 2, size, NULL);
-        if (!req)
-                GOTO(out, rc = -ENOMEM);
+        *request = NULL;
+        req = ptlrpc_request_alloc_pack(class_exp2cliimp(exp),
+                                        &RQF_MDS_IS_SUBDIR, LUSTRE_MDS_VERSION,
+                                        MDS_IS_SUBDIR);
+        if (req == NULL)
+                RETURN(-ENOMEM);
 
-        mdc_is_subdir_pack(req, REQ_REC_OFF, pfid, cfid, 0);
+        mdc_is_subdir_pack(req, pfid, cfid, 0);
+        ptlrpc_request_set_replen(req);
 
-        ptlrpc_req_set_repsize(req, 2, size);
         rc = ptlrpc_queue_wait(req);
-        if (rc != 0 && rc != -EREMOTE)
-                GOTO(out, rc);
-
-        body = lustre_swab_repbuf(req, REPLY_REC_OFF, sizeof(*body),
-                                  lustre_swab_mdt_body);
-        if (body == NULL) {
-                CERROR ("Can't unpack mdt_body\n");
-                GOTO(out, rc = -EPROTO);
-        }
-        EXIT;
- out:
-        *request = req;
-        return rc;
+        if (rc && rc != -EREMOTE)
+                ptlrpc_req_finished(req);
+        else
+                *request = req;
+        RETURN(rc);
 }
 
-static
-int mdc_xattr_common(struct obd_export *exp, const struct lu_fid *fid,
-                     struct obd_capa *oc,
-                     int opcode, obd_valid valid, const char *xattr_name,
-                     const char *input, int input_size, int output_size,
-                     int flags, __u32 suppgid, struct ptlrpc_request **request)
+static int mdc_xattr_common(struct obd_export *exp,const struct req_format *fmt,
+                            const struct lu_fid *fid,
+                            struct obd_capa *oc, int opcode, obd_valid valid,
+                            const char *xattr_name, const char *input,
+                            int input_size, int output_size, int flags,
+                            __u32 suppgid, struct ptlrpc_request **request)
 {
         struct ptlrpc_request *req;
-        int size[5] = { sizeof(struct ptlrpc_body), sizeof(struct mdt_body) };
-        int bufcnt = 3, offset = REQ_REC_OFF + 2;
-        int rc, xattr_namelen = 0;
-        void *tmp;
+        int   xattr_namelen = 0;
+        char *tmp;
+        int   rc;
         ENTRY;
 
-        size[REQ_REC_OFF + 1] = oc ? sizeof(struct lustre_capa) : 0;
+        *request = NULL;
+        req = ptlrpc_request_alloc(class_exp2cliimp(exp), fmt);
+        if (req == NULL)
+                RETURN(-ENOMEM);
+
+        mdc_set_capa_size(req, &RMF_CAPA1, oc);
         if (xattr_name) {
                 xattr_namelen = strlen(xattr_name) + 1;
-                size[bufcnt++] = xattr_namelen;
+                req_capsule_set_size(&req->rq_pill, &RMF_NAME, RCL_CLIENT,
+                                     xattr_namelen);
         }
         if (input_size) {
                 LASSERT(input);
-                size[bufcnt++] = input_size;
+                req_capsule_set_size(&req->rq_pill, &RMF_EADATA, RCL_CLIENT,
+                                     input_size);
         }
 
-        req = ptlrpc_prep_req(class_exp2cliimp(exp), LUSTRE_MDS_VERSION,
-                              opcode, bufcnt, size, NULL);
-        if (!req)
-                GOTO(out, rc = -ENOMEM);
+        rc = ptlrpc_request_pack(req, LUSTRE_MDS_VERSION, opcode);
+        if (rc) {
+                ptlrpc_request_free(req);
+                RETURN(rc);
+        }
 
-        /* request data */
-        mdc_pack_req_body(req, REQ_REC_OFF, valid, fid, oc, output_size,
-                          suppgid, flags);
+        if (opcode == MDS_REINT) {
+                struct mdt_rec_setxattr *rec;
 
+                CLASSERT(sizeof(struct mdt_rec_setxattr) ==
+                         sizeof(struct mdt_rec_reint));
+                rec = req_capsule_client_get(&req->rq_pill, &RMF_REC_REINT);
+                rec->sx_opcode = REINT_SETXATTR;
+                /* TODO: 
+                 *  cfs_curproc_fs{u,g}id() should replace 
+                 *  current->fs{u,g}id for portability.
+                 */
+                rec->sx_fsuid  = current->fsuid;
+                rec->sx_fsgid  = current->fsgid;
+                rec->sx_cap    = current->cap_effective;
+                rec->sx_suppgid1 = suppgid;
+                rec->sx_suppgid1 = -1;
+                rec->sx_fid    = *fid;
+                rec->sx_valid  = valid;
+                rec->sx_size   = output_size;
+                rec->sx_flags  = flags;
+
+                mdc_pack_capa(req, &RMF_CAPA1, oc);
+        } else {
+                mdc_pack_body(req, fid, oc, valid, output_size, suppgid, flags);
+        }
 
         if (xattr_name) {
-                tmp = lustre_msg_buf(req->rq_reqmsg, offset++, xattr_namelen);
+                tmp = req_capsule_client_get(&req->rq_pill, &RMF_NAME);
                 memcpy(tmp, xattr_name, xattr_namelen);
         }
         if (input_size) {
-                tmp = lustre_msg_buf(req->rq_reqmsg, offset++, input_size);
+                tmp = req_capsule_client_get(&req->rq_pill, &RMF_EADATA);
                 memcpy(tmp, input, input_size);
         }
 
-        /* reply buffers */
-        if (opcode == MDS_GETXATTR) {
-                size[REPLY_REC_OFF] = sizeof(struct mdt_body);
-                bufcnt = 2;
-        } else {
-                bufcnt = 1;
-        }
-
-        /* we do this even output_size is 0, because server is doing that */
-        size[bufcnt++] = output_size;
-        ptlrpc_req_set_repsize(req, bufcnt, size);
+        if (req_capsule_has_field(&req->rq_pill, &RMF_EADATA, RCL_SERVER))
+                req_capsule_set_size(&req->rq_pill, &RMF_EADATA,
+                                     RCL_SERVER, output_size);
+        ptlrpc_request_set_replen(req);
 
         /* make rpc */
-        if (opcode == MDS_SETXATTR)
+        if (opcode == MDS_REINT)
                 mdc_get_rpc_lock(exp->exp_obd->u.cli.cl_rpc_lock, NULL);
 
         rc = ptlrpc_queue_wait(req);
 
-        if (opcode == MDS_SETXATTR)
+        if (opcode == MDS_REINT)
                 mdc_put_rpc_lock(exp->exp_obd->u.cli.cl_rpc_lock, NULL);
 
-        if (rc != 0)
-                GOTO(err_out, rc);
-
-        if (opcode == MDS_GETXATTR) {
-                struct mdt_body * body = lustre_swab_repbuf(req, REPLY_REC_OFF,
-                                          sizeof(*body), lustre_swab_mdt_body);
-                if (body == NULL) {
-                        CERROR ("Can't unpack mdt_body\n");
-                        GOTO(err_out, rc = -EPROTO);
-                }
-        }
-out:
-        *request = req;
-        RETURN (rc);
-err_out:
-        ptlrpc_req_finished(req);
-        req = NULL;
-        goto out;
+        if (rc)
+                ptlrpc_req_finished(req);
+        else
+                *request = req;
+        RETURN(rc);
 }
 
 int mdc_setxattr(struct obd_export *exp, const struct lu_fid *fid,
                  struct obd_capa *oc, obd_valid valid, const char *xattr_name,
-                 const char *input, int input_size, int output_size, int flags,
-                 __u32 suppgid, struct ptlrpc_request **request)
+                 const char *input, int input_size, int output_size,
+                 int flags, __u32 suppgid, struct ptlrpc_request **request)
 {
-        return mdc_xattr_common(exp, fid, oc, MDS_SETXATTR, valid, xattr_name,
-                                input, input_size, output_size, flags, suppgid,
-                                request);
+        return mdc_xattr_common(exp, &RQF_MDS_REINT_SETXATTR, 
+                                fid, oc, MDS_REINT, valid, xattr_name,
+                                input, input_size, output_size, flags,
+                                suppgid, request);
 }
 
 int mdc_getxattr(struct obd_export *exp, const struct lu_fid *fid,
                  struct obd_capa *oc, obd_valid valid, const char *xattr_name,
-                 const char *input, int input_size, int output_size, int flags,
-                 struct ptlrpc_request **request)
+                 const char *input, int input_size, int output_size,
+                 int flags, struct ptlrpc_request **request)
 {
-        return mdc_xattr_common(exp, fid, oc, MDS_GETXATTR, valid, xattr_name,
-                                input, input_size, output_size, flags, -1,
-                                request);
+        return mdc_xattr_common(exp, &RQF_MDS_GETXATTR, 
+                                fid, oc, MDS_GETXATTR, valid, xattr_name,
+                                input, input_size, output_size, flags,
+                                -1, request);
 }
 
 #ifdef CONFIG_FS_POSIX_ACL
-static
-int mdc_unpack_acl(struct obd_export *exp, struct ptlrpc_request *req,
-                   struct lustre_md *md, unsigned int offset)
+static int mdc_unpack_acl(struct ptlrpc_request *req, struct lustre_md *md)
 {
-        struct mdt_body  *body = md->body;
-        struct posix_acl *acl;
-        void             *buf;
-        int               rc;
+        struct req_capsule     *pill = &req->rq_pill;
+        struct mdt_body        *body = md->body;
+        struct posix_acl       *acl;
+        void                   *buf;
+        int                     rc;
+        ENTRY;
 
         if (!body->aclsize)
-                return 0;
+                RETURN(0);
 
-        buf = lustre_msg_buf(req->rq_repmsg, offset, body->aclsize);
-        if (!buf) {
-                CERROR("aclsize %u, bufcount %u, bufsize %u\n",
-                       body->aclsize, lustre_msg_bufcount(req->rq_repmsg),
-                       (lustre_msg_bufcount(req->rq_repmsg) <= offset) ?
-                                -1 : lustre_msg_buflen(req->rq_repmsg, offset));
-                return -EPROTO;
-        }
+        buf = req_capsule_server_sized_get(pill, &RMF_ACL, body->aclsize);
+
+        if (!buf)
+                RETURN(-EPROTO);
 
         acl = posix_acl_from_xattr(buf, body->aclsize);
         if (IS_ERR(acl)) {
                 rc = PTR_ERR(acl);
                 CERROR("convert xattr to acl: %d\n", rc);
-                return rc;
+                RETURN(rc);
         }
 
         rc = posix_acl_valid(acl);
         if (rc) {
                 CERROR("validate acl: %d\n", rc);
                 posix_acl_release(acl);
-                return rc;
+                RETURN(rc);
         }
 
         md->posix_acl = acl;
-        return 0;
+        RETURN(0);
 }
 #else
-#define mdc_unpack_acl(exp, req, md, offset) 0
+#define mdc_unpack_acl(req, md) 0
 #endif
 
 int mdc_get_lustre_md(struct obd_export *exp, struct ptlrpc_request *req,
-                      int offset, struct obd_export *dt_exp,
-                      struct obd_export *md_exp,
+                      struct obd_export *dt_exp, struct obd_export *md_exp,
                       struct lustre_md *md)
 {
+        struct req_capsule *pill = &req->rq_pill;
         int rc;
         ENTRY;
 
         LASSERT(md);
         memset(md, 0, sizeof(*md));
 
-        md->body = lustre_msg_buf(req->rq_repmsg, offset, sizeof (*md->body));
-        LASSERT (md->body != NULL);
-        LASSERT(lustre_rep_swabbed(req, offset));
-        offset++;
+        md->body = req_capsule_server_get(pill, &RMF_MDT_BODY);
+        LASSERT(md->body != NULL);
 
         if (md->body->valid & OBD_MD_FLEASIZE) {
                 int lmmsize;
                 struct lov_mds_md *lmm;
 
                 if (!S_ISREG(md->body->mode)) {
-                        CERROR("OBD_MD_FLEASIZE set, should be a regular file, "
-                               "but is not\n");
+                        CDEBUG(D_INFO, "OBD_MD_FLEASIZE set, should be a "
+                               "regular file, but is not\n");
                         GOTO(out, rc = -EPROTO);
                 }
 
                 if (md->body->eadatasize == 0) {
-                        CERROR("OBD_MD_FLEASIZE set, but eadatasize 0\n");
+                        CDEBUG(D_INFO, "OBD_MD_FLEASIZE set, "
+                               "but eadatasize 0\n");
                         GOTO(out, rc = -EPROTO);
                 }
                 lmmsize = md->body->eadatasize;
-                lmm = lustre_msg_buf(req->rq_repmsg, offset, lmmsize);
-                if (!lmm) {
-                        CERROR ("incorrect message: lmm == 0\n");
+                lmm = req_capsule_server_sized_get(pill, &RMF_MDT_MD, lmmsize);
+                if (!lmm)
                         GOTO(out, rc = -EPROTO);
-                }
-                LASSERT(lustre_rep_swabbed(req, offset));
 
                 rc = obd_unpackmd(dt_exp, &md->lsm, lmm, lmmsize);
                 if (rc < 0)
                         GOTO(out, rc);
 
                 if (rc < sizeof(*md->lsm)) {
-                        CERROR ("lsm size too small:  rc < sizeof (*md->lsm) "
-                                "(%d < "LPSZ")\n", rc, sizeof(*md->lsm));
+                        CDEBUG(D_INFO, "lsm size too small: "
+                               "rc < sizeof (*md->lsm) (%d < "LPSZ")\n",
+                               rc, sizeof(*md->lsm));
                         GOTO(out, rc = -EPROTO);
                 }
 
-                offset++;
         } else if (md->body->valid & OBD_MD_FLDIREA) {
                 int lmvsize;
                 struct lov_mds_md *lmv;
 
                 if(!S_ISDIR(md->body->mode)) {
-                        CERROR("OBD_MD_FLDIREA set, should be a directory, but "
-                               "is not\n");
+                        CDEBUG(D_INFO, "OBD_MD_FLDIREA set, should be a "
+                               "directory, but is not\n");
                         GOTO(out, rc = -EPROTO);
                 }
 
                 if (md->body->eadatasize == 0) {
-                        CERROR("OBD_MD_FLDIREA is set, but eadatasize 0\n");
+                        CDEBUG(D_INFO, "OBD_MD_FLDIREA is set, "
+                               "but eadatasize 0\n");
                         RETURN(-EPROTO);
                 }
                 if (md->body->valid & OBD_MD_MEA) {
                         lmvsize = md->body->eadatasize;
-                        lmv = lustre_msg_buf(req->rq_repmsg, offset, lmvsize);
-                        if (!lmv) {
-                                CERROR ("incorrect message: lmv == 0\n");
+                        lmv = req_capsule_server_sized_get(pill, &RMF_MDT_MD,
+                                                           lmvsize);
+                        if (!lmv)
                                 GOTO(out, rc = -EPROTO);
-                        }
-
-                        LASSERT(lustre_rep_swabbed(req, offset));
 
                         rc = obd_unpackmd(md_exp, (void *)&md->mea, lmv,
                                           lmvsize);
@@ -563,31 +534,28 @@ int mdc_get_lustre_md(struct obd_export *exp, struct ptlrpc_request *req,
                                 GOTO(out, rc);
 
                         if (rc < sizeof(*md->mea)) {
-                                CERROR ("size too small:  rc < sizeof(*md->mea) "
-                                        "(%d < %d)\n", rc, sizeof(*md->mea));
+                                CDEBUG(D_INFO, "size too small:  "
+                                       "rc < sizeof(*md->mea) (%d < %d)\n",
+                                        rc, sizeof(*md->mea));
                                 GOTO(out, rc = -EPROTO);
                         }
                 }
-                offset++;
         }
         rc = 0;
 
-        /* remote permission */
         if (md->body->valid & OBD_MD_FLRMTPERM) {
-                md->remote_perm = lustre_msg_buf(req->rq_repmsg, offset++,
-                                                sizeof(struct mdt_remote_perm));
-                if (!md->remote_perm) {
-                        CERROR ("incorrect message: remote_perm == 0\n");
+                /* remote permission */
+                md->remote_perm = req_capsule_server_get(pill, &RMF_ACL);
+                if (!md->remote_perm)
                         GOTO(out, rc = -EPROTO);
-                }
         }
-
-        /* for ACL, it's possible that FLACL is set but aclsize is zero.  only
-         * when aclsize != 0 there's an actual segment for ACL in reply
-         * buffer. */
         else if (md->body->valid & OBD_MD_FLACL) {
+                /* for ACL, it's possible that FLACL is set but aclsize is zero.
+                 * only when aclsize != 0 there's an actual segment for ACL 
+                 * in reply buffer. 
+                 */
                 if (md->body->aclsize) {
-                        rc = mdc_unpack_acl(dt_exp, req, md, offset++);
+                        rc = mdc_unpack_acl(req, md);
                         if (rc)
                                 GOTO(out, rc);
 #ifdef CONFIG_FS_POSIX_ACL
@@ -596,9 +564,8 @@ int mdc_get_lustre_md(struct obd_export *exp, struct ptlrpc_request *req,
 #endif
                 }
         }
-
         if (md->body->valid & OBD_MD_FLMDSCAPA) {
-                struct obd_capa *oc = mdc_unpack_capa(req, offset++);
+                struct obd_capa *oc = mdc_unpack_capa(req, &RMF_CAPA1);
 
                 if (IS_ERR(oc))
                         GOTO(out, rc = PTR_ERR(oc));
@@ -606,7 +573,7 @@ int mdc_get_lustre_md(struct obd_export *exp, struct ptlrpc_request *req,
         }
 
         if (md->body->valid & OBD_MD_FLOSSCAPA) {
-                struct obd_capa *oc = mdc_unpack_capa(req, offset++);
+                struct obd_capa *oc = mdc_unpack_capa(req, &RMF_CAPA2);
 
                 if (IS_ERR(oc))
                         GOTO(out, rc = PTR_ERR(oc));
@@ -651,8 +618,7 @@ static void mdc_replay_open(struct ptlrpc_request *req)
                 return;
         }
 
-        body = lustre_swab_repbuf(req, DLM_REPLY_REC_OFF, sizeof(*body),
-                                  lustre_swab_mdt_body);
+        body = req_capsule_server_get(&req->rq_pill, &RMF_MDT_BODY);
         LASSERT(body != NULL);
 
         och = mod->mod_och;
@@ -667,14 +633,13 @@ static void mdc_replay_open(struct ptlrpc_request *req)
                 old = *file_fh;
                 *file_fh = body->handle;
         }
-
         list_for_each_entry_safe(cur, tmp, &mod->mod_replay_list, rq_mod_list) {
                 int opc = lustre_msg_get_opc(cur->rq_reqmsg);
                 struct mdt_epoch *epoch = NULL;
 
                 if (opc == MDS_CLOSE || opc == MDS_DONE_WRITING) {
-                        epoch = lustre_msg_buf(cur->rq_reqmsg,
-                                               REQ_REC_OFF, sizeof(*epoch));
+                        epoch = req_capsule_client_get(&cur->rq_pill,
+                                               &RMF_MDT_EPOCH);
                         LASSERT(epoch);
                         DEBUG_REQ(D_HA, cur, "updating %s body with new fh",
                                   opc == MDS_CLOSE ? "CLOSE" : "DONE_WRITING");
@@ -682,12 +647,12 @@ static void mdc_replay_open(struct ptlrpc_request *req)
                         struct mdt_rec_setattr *rec;
                         
                         /* Check this is REINT_SETATTR. */
-                        rec = lustre_msg_buf(req->rq_reqmsg, REQ_REC_OFF,
-                                             sizeof (*rec));
+                        rec = req_capsule_client_get(&cur->rq_pill,
+                                               &RMF_REC_REINT);
                         LASSERT(rec && rec->sa_opcode == REINT_SETATTR);
 
-                        epoch = lustre_msg_buf(cur->rq_reqmsg,
-                                               REQ_REC_OFF + 2, sizeof(*epoch));
+                        epoch = req_capsule_client_get(&cur->rq_pill,
+                                               &RMF_MDT_EPOCH);
                         LASSERT(epoch);
                         DEBUG_REQ(D_HA, cur, "updating REINT_SETATTR body "
                                   "with new fh");
@@ -744,27 +709,22 @@ int mdc_set_open_replay_data(struct obd_export *exp,
                              struct obd_client_handle *och,
                              struct ptlrpc_request *open_req)
 {
-        struct md_open_data *mod;
-        struct mdt_rec_create *rec = lustre_msg_buf(open_req->rq_reqmsg,
-                                                    DLM_INTENT_REC_OFF,
-                                                    sizeof(*rec));
-        struct mdt_body *body = lustre_msg_buf(open_req->rq_repmsg,
-                                               DLM_REPLY_REC_OFF,
-                                               sizeof(*body));
-        struct obd_import *imp = open_req->rq_import;
+        struct md_open_data   *mod;
+        struct mdt_rec_create *rec;
+        struct mdt_body       *body;
+        struct obd_import     *imp = open_req->rq_import;
         ENTRY;
 
+        rec = req_capsule_client_get(&open_req->rq_pill, &RMF_REC_REINT);
+        body = req_capsule_server_get(&open_req->rq_pill, &RMF_MDT_BODY);
         LASSERT(rec != NULL);
-
         /* Incoming message in my byte order (it's been swabbed). */
-        LASSERT(lustre_rep_swabbed(open_req, DLM_REPLY_REC_OFF));
-
         /* Outgoing messages always in my byte order. */
         LASSERT(body != NULL);
 
         /*Only the import is replayable, we set replay_open data */
         if (och && imp->imp_replayable) {
-                OBD_ALLOC(mod, sizeof(*mod));
+                OBD_ALLOC_PTR(mod);
                 if (mod == NULL) {
                         DEBUG_REQ(D_ERROR, open_req,
                                   "Can't allocate md_open_data");
@@ -824,24 +784,23 @@ int mdc_clear_open_replay_data(struct obd_export *exp,
 int mdc_close(struct obd_export *exp, struct md_op_data *op_data,
               struct md_open_data *mod, struct ptlrpc_request **request)
 {
-        struct obd_device *obd = class_exp2obd(exp);
-        int reqsize[4] = { sizeof(struct ptlrpc_body),
-                           sizeof(struct mdt_epoch),
-                           sizeof(struct mdt_rec_setattr)};
-        int repsize[4] = { sizeof(struct ptlrpc_body),
-                           sizeof(struct mdt_body),
-                           obd->u.cli.cl_max_mds_easize,
-                           obd->u.cli.cl_max_mds_cookiesize };
+        struct obd_device     *obd = class_exp2obd(exp);
         struct ptlrpc_request *req;
-        int rc;
+        int                    rc;
         ENTRY;
 
-        reqsize[REQ_REC_OFF + 2] = op_data->op_capa1 ?
-                                        sizeof(struct lustre_capa) : 0;
-        req = ptlrpc_prep_req(class_exp2cliimp(exp), LUSTRE_MDS_VERSION,
-                              MDS_CLOSE, 4, reqsize, NULL);
+        *request = NULL;
+        req = ptlrpc_request_alloc(class_exp2cliimp(exp), &RQF_MDS_CLOSE);
         if (req == NULL)
-                GOTO(out, rc = -ENOMEM);
+                RETURN(-ENOMEM);
+
+        mdc_set_capa_size(req, &RMF_CAPA1, op_data->op_capa1);
+
+        rc = ptlrpc_request_pack(req, LUSTRE_MDS_VERSION, MDS_CLOSE);
+        if (rc) {
+                ptlrpc_request_free(req);
+                RETURN(rc);
+        }
 
         /* To avoid a livelock (bug 7034), we need to send CLOSE RPCs to a
          * portal whose threads are not taking any DLM locks and are therefore
@@ -855,8 +814,8 @@ int mdc_close(struct obd_export *exp, struct md_op_data *op_data,
         else
                 CDEBUG(D_HA, "couldn't find open req; expecting close error\n");
 
-        mdc_close_pack(req, REQ_REC_OFF, op_data);
-        ptlrpc_req_set_repsize(req, 4, repsize);
+        mdc_close_pack(req, op_data);
+        ptlrpc_request_set_replen(req);
         req->rq_commit_cb = mdc_commit_delayed;
         req->rq_replay = 1;
         LASSERT(req->rq_cb_data == NULL);
@@ -870,8 +829,10 @@ int mdc_close(struct obd_export *exp, struct md_op_data *op_data,
                 CDEBUG(D_RPCTRACE, "request failed to send: %p, %d\n", req,
                        req->rq_status);
                 if (rc == 0)
-                        rc = req->rq_status ? req->rq_status : -EIO;
+                        rc = req->rq_status ?: -EIO;
         } else if (rc == 0 || rc == -EAGAIN) {
+                struct mdt_body *body;
+
                 rc = lustre_msg_get_status(req->rq_repmsg);
                 if (lustre_msg_get_type(req->rq_repmsg) == PTL_RPC_MSG_ERR) {
                         DEBUG_REQ(D_ERROR, req, "type == PTL_RPC_MSG_ERR, err "
@@ -884,45 +845,44 @@ int mdc_close(struct obd_export *exp, struct md_op_data *op_data,
                                        "but close succeeded with replayable imp"
                                        "Please tell CFS.\n");
                 }
-                if (!lustre_swab_repbuf(req, REPLY_REC_OFF,
-                                        sizeof(struct mdt_body),
-                                        lustre_swab_mdt_body)) {
-                        CERROR("Error unpacking mdt_body\n");
+
+                body = req_capsule_server_get(&req->rq_pill, &RMF_MDT_BODY);
+                if (body == NULL)
                         rc = -EPROTO;
-                }
         }
 
         EXIT;
-        *request = req;
- out:
         if (rc != 0 && rc != -EAGAIN && req && req->rq_commit_cb)
                 req->rq_commit_cb(req);
 
+        *request = req;
         return rc;
 }
 
 int mdc_done_writing(struct obd_export *exp, struct md_op_data *op_data,
                      struct md_open_data *mod)
 {
-        struct obd_device *obd = class_exp2obd(exp);
+        struct obd_device     *obd = class_exp2obd(exp);
         struct ptlrpc_request *req;
-        int size[4] = { sizeof(struct ptlrpc_body),
-                        sizeof(struct mdt_epoch),
-                        sizeof(struct mdt_rec_setattr)};
-        int repsize[2] = { sizeof(struct ptlrpc_body),
-                           sizeof(struct mdt_body)};
-        int rc;
+        int                    rc;
         ENTRY;
 
-        if (op_data->op_capa1)
-                size[REQ_REC_OFF + 2] = sizeof(struct lustre_capa);
-        req = ptlrpc_prep_req(class_exp2cliimp(exp), LUSTRE_MDS_VERSION,
-                              MDS_DONE_WRITING, 4, size, NULL);
+        req = ptlrpc_request_alloc(class_exp2cliimp(exp),
+                                   &RQF_MDS_DONE_WRITING);
         if (req == NULL)
                 RETURN(-ENOMEM);
 
-        mdc_close_pack(req, REQ_REC_OFF, op_data);
-        
+        mdc_set_capa_size(req, &RMF_CAPA1, op_data->op_capa1);
+        rc = ptlrpc_request_pack(req, LUSTRE_MDS_VERSION, MDS_DONE_WRITING);
+        if (rc) {
+                ptlrpc_request_free(req);
+                RETURN(rc);
+        }
+
+        /* XXX: add DONE_WRITING request to och -- when Size-on-MDS
+         * recovery will be ready. */
+        mdc_close_pack(req, op_data);
+        ptlrpc_request_set_replen(req);
         req->rq_replay = 1;
         req->rq_cb_data = mod;
         req->rq_commit_cb = mdc_commit_delayed;
@@ -931,7 +891,6 @@ int mdc_done_writing(struct obd_export *exp, struct md_op_data *op_data,
         else
                 CDEBUG(D_HA, "couldn't find open req; expecting close error\n");
 
-        ptlrpc_req_set_repsize(req, 2, repsize);
         mdc_get_rpc_lock(obd->u.cli.cl_close_lock, NULL);
         rc = ptlrpc_queue_wait(req);
         mdc_put_rpc_lock(obd->u.cli.cl_close_lock, NULL);
@@ -952,18 +911,23 @@ int mdc_done_writing(struct obd_export *exp, struct md_op_data *op_data,
 int mdc_sendpage(struct obd_export *exp, const struct lu_fid *fid,
                  const struct page *page, int offset)
 {
-        int rc, size[3] = { sizeof(struct ptlrpc_body), sizeof(struct mdt_body) };
-        struct obd_import *imp = class_exp2cliimp(exp);
-        struct ptlrpc_bulk_desc *desc = NULL;
-        struct ptlrpc_request *req = NULL;
+        struct ptlrpc_request   *req;
+        struct ptlrpc_bulk_desc *desc;
+        int                      rc;
         ENTRY;
 
-        CDEBUG(D_INODE, "object: "DFID"\n", PFID(fid));
-
-        req = ptlrpc_prep_req(imp, LUSTRE_MDS_VERSION, MDS_WRITEPAGE, 3,
-                              size, NULL);
+        req = ptlrpc_request_alloc(class_exp2cliimp(exp), &RQF_MDS_WRITEPAGE);
         if (req == NULL)
-                GOTO(out, rc = -ENOMEM);
+                RETURN(-ENOMEM);
+
+        /* FIXME: capa doesn't support split yet */
+        mdc_set_capa_size(req, &RMF_CAPA1, NULL);
+
+        rc = ptlrpc_request_pack(req, LUSTRE_MDS_VERSION, MDS_WRITEPAGE);
+        if (rc) {
+                ptlrpc_request_free(req);
+                RETURN(rc);
+        }
 
         req->rq_request_portal = MDS_READPAGE_PORTAL;
 
@@ -973,14 +937,13 @@ int mdc_sendpage(struct obd_export *exp, const struct lu_fid *fid,
 
         /* NB req now owns desc and will free it when it gets freed. */
         ptlrpc_prep_bulk_page(desc, (struct page *)page, 0, offset);
-        mdc_readdir_pack(req, REQ_REC_OFF, 0, offset, fid, NULL);
+        mdc_readdir_pack(req, 0, offset, fid, NULL);
 
-        ptlrpc_req_set_repsize(req, 2, size);
+        ptlrpc_request_set_replen(req);
         rc = ptlrpc_queue_wait(req);
-        EXIT;
+        GOTO(out, rc);
 out:
-        if (req != NULL)
-                ptlrpc_req_finished(req);
+        ptlrpc_req_finished(req);
         return rc;
 }
 EXPORT_SYMBOL(mdc_sendpage);
@@ -990,56 +953,52 @@ int mdc_readpage(struct obd_export *exp, const struct lu_fid *fid,
                  struct obd_capa *oc, __u64 offset, struct page *page,
                  struct ptlrpc_request **request)
 {
-        int rc, size[3] = { sizeof(struct ptlrpc_body), sizeof(struct mdt_body) };
-        struct obd_import *imp = class_exp2cliimp(exp);
-        struct ptlrpc_bulk_desc *desc = NULL;
-        struct ptlrpc_request *req = NULL;
-        struct mdt_body *body;
+        struct ptlrpc_request   *req;
+        struct ptlrpc_bulk_desc *desc;
+        int                      rc;
         ENTRY;
 
-        CDEBUG(D_INODE, "object: "DFID"\n", PFID(fid));
-
-        size[REQ_REC_OFF + 1] = oc ? sizeof(struct lustre_capa) : 0;
-        req = ptlrpc_prep_req(imp, LUSTRE_MDS_VERSION, MDS_READPAGE, 3, size,
-                              NULL);
+        *request = NULL;
+        req = ptlrpc_request_alloc(class_exp2cliimp(exp), &RQF_MDS_READPAGE);
         if (req == NULL)
-                GOTO(out, rc = -ENOMEM);
+                RETURN(-ENOMEM);
+
+        mdc_set_capa_size(req, &RMF_CAPA1, oc);
+
+        rc = ptlrpc_request_pack(req, LUSTRE_MDS_VERSION, MDS_READPAGE);
+        if (rc) {
+                ptlrpc_request_free(req);
+                RETURN(rc);
+        }
 
         /* XXX FIXME bug 249 */
         req->rq_request_portal = MDS_READPAGE_PORTAL;
-
         desc = ptlrpc_prep_bulk_imp(req, 1, BULK_PUT_SINK, MDS_BULK_PORTAL);
-        if (desc == NULL)
-                GOTO(out, rc = -ENOMEM);
+        if (desc == NULL) {
+                ptlrpc_request_free(req);
+                RETURN(-ENOMEM);
+        }
 
         /* NB req now owns desc and will free it when it gets freed */
         ptlrpc_prep_bulk_page(desc, page, 0, CFS_PAGE_SIZE);
-        mdc_readdir_pack(req, REQ_REC_OFF, offset, CFS_PAGE_SIZE, fid, oc);
+        mdc_readdir_pack(req, offset, CFS_PAGE_SIZE, fid, oc);
 
-        ptlrpc_req_set_repsize(req, 2, size);
+        ptlrpc_request_set_replen(req);
         rc = ptlrpc_queue_wait(req);
-
-        if (rc == 0) {
-                body = lustre_swab_repbuf(req, REPLY_REC_OFF, sizeof(*body),
-                                          lustre_swab_mdt_body);
-                if (body == NULL) {
-                        CERROR("Can't unpack mdt_body\n");
-                        GOTO(out, rc = -EPROTO);
-                }
-
-                if (req->rq_bulk->bd_nob_transferred != CFS_PAGE_SIZE) {
-                        CERROR ("Unexpected # bytes transferred: %d"
-                                " (%ld expected)\n",
-                                req->rq_bulk->bd_nob_transferred,
-                                CFS_PAGE_SIZE);
-                        GOTO(out, rc = -EPROTO);
-                }
+        if (rc) {
+                ptlrpc_req_finished(req);
+                RETURN(rc);
         }
 
-        EXIT;
- out:
+        if (req->rq_bulk->bd_nob_transferred != CFS_PAGE_SIZE) {
+                CERROR("Unexpected # bytes transferred: %d (%ld expected)\n",
+                        req->rq_bulk->bd_nob_transferred, CFS_PAGE_SIZE);
+                ptlrpc_req_finished(req);
+                RETURN(-EPROTO);
+        }
+
         *request = req;
-        return rc;
+        RETURN(0);
 }
 
 static int mdc_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
@@ -1093,12 +1052,70 @@ out:
         return rc;
 }
 
-int mdc_set_info_async(struct obd_export *exp, obd_count keylen,
-                       void *key, obd_count vallen, void *val,
+static int do_set_info_async(struct obd_export *exp,
+                             obd_count keylen, void *key,
+                             obd_count vallen, void *val,
+                             struct ptlrpc_request_set *set)
+{
+        struct obd_import     *imp = class_exp2cliimp(exp);
+        struct ptlrpc_request *req;
+        char                  *tmp;
+        int                    rc;
+        ENTRY;
+
+        if (vallen != sizeof(int))
+                RETURN(-EINVAL);
+
+        spin_lock(&imp->imp_lock);
+        if (*((int *)val)) {
+                imp->imp_connect_flags_orig |= OBD_CONNECT_RDONLY;
+                imp->imp_connect_data.ocd_connect_flags |= OBD_CONNECT_RDONLY;
+        } else {
+                imp->imp_connect_flags_orig &= ~OBD_CONNECT_RDONLY;
+                imp->imp_connect_data.ocd_connect_flags &= ~OBD_CONNECT_RDONLY;
+        }
+        spin_unlock(&imp->imp_lock);
+
+        req = ptlrpc_request_alloc(imp, &RQF_MDS_SET_INFO);
+        if (req == NULL)
+                RETURN(-ENOMEM);
+
+        req_capsule_set_size(&req->rq_pill, &RMF_SETINFO_KEY,
+                             RCL_CLIENT, keylen);
+        req_capsule_set_size(&req->rq_pill, &RMF_SETINFO_VAL,
+                             RCL_CLIENT, vallen);
+        rc = ptlrpc_request_pack(req, LUSTRE_MDS_VERSION, MDS_SET_INFO);
+        if (rc) {
+                ptlrpc_request_free(req);
+                RETURN(rc);
+        }
+
+        tmp = req_capsule_client_get(&req->rq_pill, &RMF_SETINFO_KEY);
+        memcpy(tmp, key, keylen);
+        tmp = req_capsule_client_get(&req->rq_pill, &RMF_SETINFO_VAL);
+        memcpy(tmp, val, vallen);
+
+        ptlrpc_request_set_replen(req);
+
+        if (set) {
+                ptlrpc_set_add_req(set, req);
+                ptlrpc_check_set(set);
+        } else {
+                rc = ptlrpc_queue_wait(req);
+                ptlrpc_req_finished(req);
+        }
+
+        RETURN(rc);
+}
+
+int mdc_set_info_async(struct obd_export *exp,
+                       obd_count keylen, void *key,
+                       obd_count vallen, void *val,
                        struct ptlrpc_request_set *set)
 {
         struct obd_import *imp = class_exp2cliimp(exp);
-        int rc = -EINVAL;
+        int                rc = -EINVAL;
+        ENTRY;
 
         if (KEY_IS(KEY_INIT_RECOV)) {
                 if (vallen != sizeof(int))
@@ -1124,40 +1141,7 @@ int mdc_set_info_async(struct obd_export *exp, obd_count keylen,
                 RETURN(0);
         }
         if (KEY_IS(KEY_READ_ONLY)) {
-                struct ptlrpc_request *req;
-                int size[3] = { sizeof(struct ptlrpc_body), keylen, vallen };
-                char *bufs[3] = { NULL, key, val };
-
-                if (vallen != sizeof(int))
-                        RETURN(-EINVAL);
-
-                spin_lock(&imp->imp_lock);
-                if (*((int *)val)) {
-                        imp->imp_connect_flags_orig |= OBD_CONNECT_RDONLY;
-                        imp->imp_connect_data.ocd_connect_flags |=
-                                OBD_CONNECT_RDONLY;
-                } else {
-                        imp->imp_connect_flags_orig &= ~OBD_CONNECT_RDONLY;
-                        imp->imp_connect_data.ocd_connect_flags &=
-                                ~OBD_CONNECT_RDONLY;
-                }
-                spin_unlock(&imp->imp_lock);
-
-                req = ptlrpc_prep_req(imp, LUSTRE_MDS_VERSION, MDS_SET_INFO,
-                                      3, size, bufs);
-                if (req == NULL)
-                        RETURN(-ENOMEM);
-
-                ptlrpc_req_set_repsize(req, 1, NULL);
-                if (set) {
-                        rc = 0;
-                        ptlrpc_set_add_req(set, req);
-                        ptlrpc_check_set(set);
-                } else {
-                        rc = ptlrpc_queue_wait(req);
-                        ptlrpc_req_finished(req);
-                }
-
+                rc = do_set_info_async(exp, keylen, key, vallen, val, set);
                 RETURN(rc);
         }
         if (KEY_IS(KEY_FLUSH_CTX)) {
@@ -1214,129 +1198,117 @@ static int mdc_statfs(struct obd_device *obd, struct obd_statfs *osfs,
                       __u64 max_age)
 {
         struct ptlrpc_request *req;
-        struct obd_statfs *msfs;
-        int rc, size[2] = { sizeof(struct ptlrpc_body), sizeof(*msfs) };
+        struct obd_statfs     *msfs;
+        int                    rc;
         ENTRY;
 
-        /* We could possibly pass max_age in the request (as an absolute
-         * timestamp or a "seconds.usec ago") so the target can avoid doing
-         * extra calls into the filesystem if that isn't necessary (e.g.
-         * during mount that would help a bit).  Having relative timestamps
-         * is not so great if request processing is slow, while absolute
-         * timestamps are not ideal because they need time synchronization. */
-        req = ptlrpc_prep_req(obd->u.cli.cl_import, LUSTRE_MDS_VERSION,
-                              MDS_STATFS, 1, NULL, NULL);
-        if (!req)
+        req = ptlrpc_request_alloc_pack(obd->u.cli.cl_import, &RQF_MDS_STATFS,
+                                        LUSTRE_MDS_VERSION, MDS_STATFS);
+        if (req == NULL)
                 RETURN(-ENOMEM);
 
-        ptlrpc_req_set_repsize(req, 2, size);
+        ptlrpc_request_set_replen(req);
 
         rc = ptlrpc_queue_wait(req);
-
         if (rc) {
                 /* check connection error first */
                 if (obd->u.cli.cl_import->imp_connect_error)
                         rc = obd->u.cli.cl_import->imp_connect_error;
-
                 GOTO(out, rc);
         }
 
-        msfs = lustre_swab_repbuf(req, REPLY_REC_OFF, sizeof(*msfs),
-                                  lustre_swab_obd_statfs);
-        if (msfs == NULL) {
-                CERROR("Can't unpack obd_statfs\n");
+        msfs = req_capsule_server_get(&req->rq_pill, &RMF_OBD_STATFS);
+        if (msfs == NULL)
                 GOTO(out, rc = -EPROTO);
-        }
 
-        memcpy(osfs, msfs, sizeof(*msfs));
+        *osfs = *msfs;
         EXIT;
 out:
         ptlrpc_req_finished(req);
-
         return rc;
 }
 
 static int mdc_pin(struct obd_export *exp, const struct lu_fid *fid,
-                   struct obd_capa *oc,
-                   struct obd_client_handle *handle, int flag)
+                   struct obd_capa *oc, struct obd_client_handle *handle,
+                   int flags)
 {
         struct ptlrpc_request *req;
-        struct mdt_body *body;
-        int rc, size[3] = { sizeof(struct ptlrpc_body), sizeof(*body) };
+        struct mdt_body       *body;
+        int                    rc;
         ENTRY;
 
-        size[REQ_REC_OFF + 1] = oc ? sizeof(struct lustre_capa) : 0;
-        req = ptlrpc_prep_req(class_exp2cliimp(exp), LUSTRE_MDS_VERSION,
-                              MDS_PIN, 3, size, NULL);
+        req = ptlrpc_request_alloc(class_exp2cliimp(exp), &RQF_MDS_PIN);
         if (req == NULL)
                 RETURN(-ENOMEM);
 
-        body = lustre_msg_buf(req->rq_reqmsg, REQ_REC_OFF, sizeof (*body));
-        body->fid1 = *fid;
-        body->flags = flag;
-        mdc_pack_capa(req, REQ_REC_OFF + 1, oc);
+        mdc_set_capa_size(req, &RMF_CAPA1, oc);
 
-        ptlrpc_req_set_repsize(req, 2, size);
+        rc = ptlrpc_request_pack(req, LUSTRE_MDS_VERSION, MDS_PIN);
+        if (rc) {
+                ptlrpc_request_free(req);
+                RETURN(rc);
+        }
+
+        mdc_pack_body(req, fid, oc, 0, 0, -1, flags);
+
+        ptlrpc_request_set_replen(req);
 
         mdc_get_rpc_lock(exp->exp_obd->u.cli.cl_rpc_lock, NULL);
         rc = ptlrpc_queue_wait(req);
         mdc_put_rpc_lock(exp->exp_obd->u.cli.cl_rpc_lock, NULL);
         if (rc) {
-                CERROR("pin failed: %d\n", rc);
-                ptlrpc_req_finished(req);
-                RETURN(rc);
+                CERROR("Pin failed: %d\n", rc);
+                GOTO(err_out, rc);
         }
 
-        body = lustre_swab_repbuf(req, REPLY_REC_OFF, sizeof(*body),
-                                  lustre_swab_mdt_body);
-        if (body == NULL) {
-                ptlrpc_req_finished(req);
-                RETURN(rc);
-        }
+        body = req_capsule_server_get(&req->rq_pill, &RMF_MDT_BODY);
+        if (body == NULL)
+                GOTO(err_out, rc = -EPROTO);
 
-        memcpy(&handle->och_fh, &body->handle, sizeof(body->handle));
+        handle->och_fh = body->handle;
         handle->och_magic = OBD_CLIENT_HANDLE_MAGIC;
 
-        OBD_ALLOC(handle->och_mod, sizeof(*handle->och_mod));
+        OBD_ALLOC_PTR(handle->och_mod);
         if (handle->och_mod == NULL) {
-                DEBUG_REQ(D_ERROR, req, "can't allocate md_open_data");
-                RETURN(-ENOMEM);
+                DEBUG_REQ(D_ERROR, req, "can't allocate mdc_open_data");
+                GOTO(err_out, rc = -ENOMEM);
         }
-
         /* will be dropped by unpin */
         CFS_INIT_LIST_HEAD(&handle->och_mod->mod_replay_list);
         list_add_tail(&req->rq_mod_list, &handle->och_mod->mod_replay_list);
 
+        RETURN(0);
+
+err_out:
+        ptlrpc_req_finished(req);
         RETURN(rc);
 }
 
-static int mdc_unpin(struct obd_export *exp,
-                     struct obd_client_handle *handle, int flag)
+static int mdc_unpin(struct obd_export *exp, struct obd_client_handle *handle,
+                     int flag)
 {
         struct ptlrpc_request *req;
-        struct mdt_body *body;
-        int rc, size[2] = { sizeof(struct ptlrpc_body), sizeof(*body) };
+        struct mdt_body       *body;
+        int                    rc;
         ENTRY;
 
-        if (handle->och_magic != OBD_CLIENT_HANDLE_MAGIC)
-                RETURN(0);
-
-        req = ptlrpc_prep_req(class_exp2cliimp(exp), LUSTRE_MDS_VERSION,
-                              MDS_CLOSE, 2, size, NULL);
+        req = ptlrpc_request_alloc_pack(class_exp2cliimp(exp), &RQF_MDS_UNPIN,
+                                        LUSTRE_MDS_VERSION, MDS_UNPIN);
         if (req == NULL)
                 RETURN(-ENOMEM);
 
-        body = lustre_msg_buf(req->rq_reqmsg, REQ_REC_OFF, sizeof(*body));
-        memcpy(&body->handle, &handle->och_fh, sizeof(body->handle));
+        body = req_capsule_client_get(&req->rq_pill, &RMF_MDT_BODY);
+        body->handle = handle->och_fh;
         body->flags = flag;
 
-        ptlrpc_req_set_repsize(req, 1, NULL);
+        ptlrpc_request_set_replen(req);
+
         mdc_get_rpc_lock(exp->exp_obd->u.cli.cl_rpc_lock, NULL);
         rc = ptlrpc_queue_wait(req);
         mdc_put_rpc_lock(exp->exp_obd->u.cli.cl_rpc_lock, NULL);
 
         if (rc != 0)
-                CERROR("unpin failed: %d\n", rc);
+                CERROR("Unpin failed: %d\n", rc);
 
         ptlrpc_req_finished(req);
 
@@ -1355,26 +1327,31 @@ int mdc_sync(struct obd_export *exp, const struct lu_fid *fid,
              struct obd_capa *oc, struct ptlrpc_request **request)
 {
         struct ptlrpc_request *req;
-        int size[3] = { sizeof(struct ptlrpc_body), sizeof(struct mdt_body) };
-        int rc;
+        int                    rc;
         ENTRY;
 
-        size[REQ_REC_OFF + 1] = oc ? sizeof(struct lustre_capa) : 0;
-        req = ptlrpc_prep_req(class_exp2cliimp(exp), LUSTRE_MDS_VERSION,
-                              MDS_SYNC, 3, size, NULL);
-        if (!req)
-                RETURN(rc = -ENOMEM);
+        *request = NULL;
+        req = ptlrpc_request_alloc(class_exp2cliimp(exp), &RQF_MDS_SYNC);
+        if (req == NULL)
+                RETURN(-ENOMEM);
 
-        mdc_pack_req_body(req, REQ_REC_OFF, 0, fid, oc, 0, -1, 0);
+        mdc_set_capa_size(req, &RMF_CAPA1, oc);
 
-        ptlrpc_req_set_repsize(req, 2, size);
+        rc = ptlrpc_request_pack(req, LUSTRE_MDS_VERSION, MDS_SYNC);
+        if (rc) {
+                ptlrpc_request_free(req);
+                RETURN(rc);
+        }
+
+        mdc_pack_body(req, fid, oc, 0, 0, -1, 0);
+
+        ptlrpc_request_set_replen(req);
 
         rc = ptlrpc_queue_wait(req);
-        if (rc || request == NULL)
+        if (rc)
                 ptlrpc_req_finished(req);
         else
                 *request = req;
-
         RETURN(rc);
 }
 
@@ -1616,9 +1593,8 @@ static int mdc_cleanup(struct obd_device *obd)
 
 
 static int mdc_llog_init(struct obd_device *obd, struct obd_llogs *llogs,
-                         struct obd_device *tgt,
-                         int count, struct llog_catid *logid, 
-                         struct obd_uuid *uuid)
+                         struct obd_device *tgt, int count,
+                         struct llog_catid *logid, struct obd_uuid *uuid)
 {
         struct llog_ctxt *ctxt;
         int rc;
@@ -1674,48 +1650,39 @@ static int mdc_process_config(struct obd_device *obd, obd_count len, void *buf)
         return(rc);
 }
 
+
 /* get remote permission for current user on fid */
 int mdc_get_remote_perm(struct obd_export *exp, const struct lu_fid *fid,
                         struct obd_capa *oc, __u32 suppgid,
                         struct ptlrpc_request **request)
 {
-        struct ptlrpc_request *req;
-        struct mdt_body *body;
-        struct mdt_remote_perm *perm;
-        int size[5] = { sizeof(struct ptlrpc_body), sizeof(*body) };
-        int rc;
+        struct ptlrpc_request  *req;
+        int                    rc;
         ENTRY;
 
-        size[REQ_REC_OFF + 1] = oc ? sizeof(struct lustre_capa) : 0;
-
         *request = NULL;
-        req = ptlrpc_prep_req(class_exp2cliimp(exp), LUSTRE_MDS_VERSION,
-                              MDS_GETATTR, 3, size, NULL);
-        if (!req)
+        req = ptlrpc_request_alloc(class_exp2cliimp(exp), &RQF_MDS_GETATTR);
+        if (req == NULL)
                 RETURN(-ENOMEM);
 
-        mdc_pack_req_body(req, REQ_REC_OFF, OBD_MD_FLRMTPERM, fid, oc, 0,
-                          suppgid, 0);
+        mdc_set_capa_size(req, &RMF_CAPA1, oc);
 
-        size[REPLY_REC_OFF + 1] = sizeof(*perm);
-        ptlrpc_req_set_repsize(req, 5, size);
-        rc = ptlrpc_queue_wait(req);
+        rc = ptlrpc_request_pack(req, LUSTRE_MDS_VERSION, MDS_GETATTR);
         if (rc) {
-                ptlrpc_req_finished(req);
+                ptlrpc_request_free(req);
                 RETURN(rc);
         }
 
-        body = lustre_swab_repbuf(req, REPLY_REC_OFF, sizeof(*body),
-                                  lustre_swab_mdt_body);
-        LASSERT(body);
-        LASSERT(body->valid & OBD_MD_FLRMTPERM);
+        mdc_pack_body(req, fid, oc, OBD_MD_FLRMTPERM, 0, suppgid, 0);
 
-        perm = lustre_swab_repbuf(req, REPLY_REC_OFF + 1, sizeof(*perm),
-                                  lustre_swab_mdt_remote_perm);
-        LASSERT(perm);
+        ptlrpc_request_set_replen(req);
 
-        *request = req;
-        RETURN(0);
+        rc = ptlrpc_queue_wait(req);
+        if (rc)
+                ptlrpc_req_finished(req);
+        else
+                *request = req;
+        RETURN(rc);
 }
 
 static int mdc_interpret_renew_capa(struct ptlrpc_request *req, void *unused,
@@ -1730,15 +1697,14 @@ static int mdc_interpret_renew_capa(struct ptlrpc_request *req, void *unused,
         if (status)
                 GOTO(out, capa = ERR_PTR(status));
 
-        body = lustre_swab_repbuf(req, REPLY_REC_OFF, sizeof(*body),
-                                  lustre_swab_mdt_body);
+        body = req_capsule_server_get(&req->rq_pill, &RMF_MDT_BODY);
         if (body == NULL)
                 GOTO(out, capa = ERR_PTR(-EFAULT));
 
         if ((body->valid & OBD_MD_FLOSSCAPA) == 0)
                 GOTO(out, capa = ERR_PTR(-ENOENT));
 
-        capa = lustre_unpack_capa(req->rq_repmsg, REPLY_REC_OFF + 1);
+        capa = req_capsule_server_get(&req->rq_pill, &RMF_CAPA2);
         if (!capa)
                 GOTO(out, capa = ERR_PTR(-EFAULT));
         EXIT;
@@ -1751,32 +1717,31 @@ static int mdc_renew_capa(struct obd_export *exp, struct obd_capa *oc,
                           renew_capa_cb_t cb)
 {
         struct ptlrpc_request *req;
-        int size[5] = { sizeof(struct ptlrpc_body),
-                        sizeof(struct mdt_body),
-                        sizeof(struct lustre_capa) };
         ENTRY;
 
-        req = ptlrpc_prep_req(class_exp2cliimp(exp), LUSTRE_MDS_VERSION,
-                              MDS_GETATTR, 3, size, NULL);
-        if (!req)
+        req = ptlrpc_request_alloc_pack(class_exp2cliimp(exp), &RQF_MDS_GETATTR,
+                                        LUSTRE_MDS_VERSION, MDS_GETATTR);
+        if (req == NULL)
                 RETURN(-ENOMEM);
 
-        mdc_pack_req_body(req, REQ_REC_OFF, OBD_MD_FLOSSCAPA,
-                          &oc->c_capa.lc_fid, oc, 0, -1, 0);
+        /* NB, OBD_MD_FLOSSCAPA is set here, but it doesn't necessarily mean the
+         * capa to renew is oss capa.
+         */
+        mdc_pack_body(req, &oc->c_capa.lc_fid, oc, OBD_MD_FLOSSCAPA, 0, -1, 0);
+        ptlrpc_request_set_replen(req);
 
-        ptlrpc_req_set_repsize(req, 5, size);
         req->rq_async_args.pointer_arg[0] = oc;
         req->rq_async_args.pointer_arg[1] = cb;
         req->rq_interpret_reply = mdc_interpret_renew_capa;
         ptlrpcd_add_req(req);
-
         RETURN(0);
 }
 
 static int mdc_connect(const struct lu_env *env,
                        struct lustre_handle *dlm_handle,
                        struct obd_device *obd, struct obd_uuid *cluuid,
-                       struct obd_connect_data *data) {
+                       struct obd_connect_data *data)
+{
         struct obd_import *imp = obd->u.cli.cl_import;
 
         /* mds-mds import features */

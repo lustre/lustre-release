@@ -548,19 +548,20 @@ EXPORT_SYMBOL(lprocfs_wr_evict_client);
 int lprocfs_wr_ping(struct file *file, const char *buffer,
                     unsigned long count, void *data)
 {
-        struct obd_device *obd = data;
+        struct obd_device     *obd = data;
         struct ptlrpc_request *req;
-        int rc;
+        int                    rc;
         ENTRY;
 
         LPROCFS_CLIMP_CHECK(obd);
-        req = ptlrpc_prep_req(obd->u.cli.cl_import, LUSTRE_OBD_VERSION,
-                              OBD_PING, 1, NULL, NULL);
+        req = ptlrpc_request_alloc_pack(obd->u.cli.cl_import, &RQF_OBD_PING,
+                                        LUSTRE_OBD_VERSION, OBD_PING);
+
         LPROCFS_CLIMP_EXIT(obd);
         if (req == NULL)
                 RETURN(-ENOMEM);
 
-        ptlrpc_req_set_repsize(req, 1, NULL);
+        ptlrpc_request_set_replen(req);
         req->rq_send_state = LUSTRE_IMP_FULL;
         req->rq_no_resend = 1;
 

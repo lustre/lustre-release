@@ -196,11 +196,12 @@ static int client_common_fill_super(struct super_block *sb, char *md, char *dt)
         }
 
         /* indicate the features supported by this client */
-        data->ocd_connect_flags = OBD_CONNECT_IBITS | OBD_CONNECT_NODEVOH |
-                                  OBD_CONNECT_JOIN |
-                                  OBD_CONNECT_ATTRFID | OBD_CONNECT_VERSION |
-                                  OBD_CONNECT_MDS_CAPA | OBD_CONNECT_OSS_CAPA |
-                                  OBD_CONNECT_CANCELSET;
+        data->ocd_connect_flags = OBD_CONNECT_IBITS    | OBD_CONNECT_NODEVOH  |
+                                  OBD_CONNECT_JOIN     | OBD_CONNECT_ATTRFID  |
+                                  OBD_CONNECT_VERSION  | OBD_CONNECT_MDS_CAPA |
+                                  OBD_CONNECT_OSS_CAPA | OBD_CONNECT_CANCELSET|
+                                  OBD_CONNECT_FID;
+
 #ifdef HAVE_LRU_RESIZE_SUPPORT
         if (sbi->ll_flags & LL_SBI_LRU_RESIZE)
                 data->ocd_connect_flags |= OBD_CONNECT_LRU_RESIZE;
@@ -361,9 +362,9 @@ static int client_common_fill_super(struct super_block *sb, char *md, char *dt)
                 GOTO(out_md_fid, err = -ENODEV);
         }
 
-        data->ocd_connect_flags = OBD_CONNECT_GRANT | OBD_CONNECT_VERSION |
+        data->ocd_connect_flags = OBD_CONNECT_GRANT     | OBD_CONNECT_VERSION  |
                                   OBD_CONNECT_REQPORTAL | OBD_CONNECT_BRW_SIZE |
-                                  OBD_CONNECT_CANCELSET;
+                                  OBD_CONNECT_CANCELSET | OBD_CONNECT_FID;
         if (sbi->ll_flags & LL_SBI_OSS_CAPA)
                 data->ocd_connect_flags |= OBD_CONNECT_OSS_CAPA;
 
@@ -451,9 +452,8 @@ static int client_common_fill_super(struct super_block *sb, char *md, char *dt)
                 GOTO(out_dt_fid, err);
         }
         memset(&lmd, 0, sizeof(lmd));
-        err = md_get_lustre_md(sbi->ll_md_exp, request, 
-                               REPLY_REC_OFF, sbi->ll_dt_exp, sbi->ll_md_exp, 
-                               &lmd);
+        err = md_get_lustre_md(sbi->ll_md_exp, request, sbi->ll_dt_exp,
+                               sbi->ll_md_exp, &lmd);
         if (err) {
                 CERROR("failed to understand root inode md: rc = %d\n", err);
                 ptlrpc_req_finished (request);
@@ -1175,8 +1175,8 @@ int ll_md_setattr(struct inode *inode, struct md_op_data *op_data,
                 RETURN(rc);
         }
 
-        rc = md_get_lustre_md(sbi->ll_md_exp, request, REPLY_REC_OFF,
-                              sbi->ll_dt_exp, sbi->ll_md_exp, &md);
+        rc = md_get_lustre_md(sbi->ll_md_exp, request, sbi->ll_dt_exp,
+                              sbi->ll_md_exp, &md);
         if (rc) {
                 ptlrpc_req_finished(request);
                 RETURN(rc);
@@ -1830,11 +1830,11 @@ int ll_iocontrol(struct inode *inode, struct file *file,
                         RETURN(-abs(rc));
                 }
 
-                body = lustre_msg_buf(req->rq_repmsg, REPLY_REC_OFF,
-                                      sizeof(*body));
+                body = req_capsule_server_get(&req->rq_pill, &RMF_MDT_BODY);
+
                 flags = body->flags;
 
-                ptlrpc_req_finished (req);
+                ptlrpc_req_finished(req);
 
                 RETURN(put_user(flags, (int *)arg));
         }
@@ -1997,8 +1997,9 @@ int ll_remount_fs(struct super_block *sb, int *flags, char *data)
         return 0;
 }
 
-int ll_prep_inode(struct inode **inode, struct ptlrpc_request *req,
-                  int offset, struct super_block *sb)
+int ll_prep_inode(struct inode **inode,
+                  struct ptlrpc_request *req,
+                  struct super_block *sb)
 {
         struct ll_sb_info *sbi = NULL;
         struct lustre_md md;
@@ -2010,8 +2011,8 @@ int ll_prep_inode(struct inode **inode, struct ptlrpc_request *req,
         prune_deathrow(sbi, 1);
         memset(&md, 0, sizeof(struct lustre_md));
 
-        rc = md_get_lustre_md(sbi->ll_md_exp, req, offset,
-                              sbi->ll_dt_exp, sbi->ll_md_exp, &md);
+        rc = md_get_lustre_md(sbi->ll_md_exp, req, sbi->ll_dt_exp,
+                              sbi->ll_md_exp, &md);
         if (rc)
                 RETURN(rc);
 

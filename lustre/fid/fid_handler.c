@@ -330,20 +330,18 @@ static int seq_req_handle(struct ptlrpc_request *req,
         site = req->rq_export->exp_obd->obd_lu_dev->ld_site;
         LASSERT(site != NULL);
 			
-        rc = req_capsule_pack(&info->sti_pill);
+        rc = req_capsule_server_pack(info->sti_pill);
         if (rc)
                 RETURN(err_serious(rc));
 
-        opc = req_capsule_client_get(&info->sti_pill,
-                                     &RMF_SEQ_OPC);
+        opc = req_capsule_client_get(info->sti_pill, &RMF_SEQ_OPC);
         if (opc != NULL) {
-                out = req_capsule_server_get(&info->sti_pill,
-                                             &RMF_SEQ_RANGE);
+                out = req_capsule_server_get(info->sti_pill, &RMF_SEQ_RANGE);
                 if (out == NULL)
                         RETURN(err_serious(-EPROTO));
 
                 if (lustre_msg_get_flags(req->rq_reqmsg) & MSG_REPLAY) {
-                        in = req_capsule_client_get(&info->sti_pill,
+                        in = req_capsule_client_get(info->sti_pill,
                                                     &RMF_SEQ_RANGE);
 
                         LASSERT(!range_is_zero(in) && range_is_sane(in));
@@ -365,22 +363,15 @@ LU_CONTEXT_KEY_DEFINE(seq, LCT_MD_THREAD);
 static void seq_thread_info_init(struct ptlrpc_request *req,
                                  struct seq_thread_info *info)
 {
-        int i;
-
-        /* Mark rep buffer as req-layout stuff expects */
-        for (i = 0; i < ARRAY_SIZE(info->sti_rep_buf_size); i++)
-                info->sti_rep_buf_size[i] = -1;
-
+        info->sti_pill = &req->rq_pill;
         /* Init request capsule */
-        req_capsule_init(&info->sti_pill, req, RCL_SERVER,
-                         info->sti_rep_buf_size);
-
-        req_capsule_set(&info->sti_pill, &RQF_SEQ_QUERY);
+        req_capsule_init(info->sti_pill, req, RCL_SERVER);
+        req_capsule_set(info->sti_pill, &RQF_SEQ_QUERY);
 }
 
 static void seq_thread_info_fini(struct seq_thread_info *info)
 {
-        req_capsule_fini(&info->sti_pill);
+        req_capsule_fini(info->sti_pill);
 }
 
 static int seq_handle(struct ptlrpc_request *req)
@@ -407,7 +398,7 @@ static int seq_handle(struct ptlrpc_request *req)
  */
 int seq_query(struct com_thread_info *info)
 {
-        return seq_handle(info->cti_pill.rc_req);
+        return seq_handle(info->cti_pill->rc_req);
 }
 EXPORT_SYMBOL(seq_query);
 

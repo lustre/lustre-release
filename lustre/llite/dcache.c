@@ -269,7 +269,7 @@ restart:
 }
 
 int ll_revalidate_it_finish(struct ptlrpc_request *request,
-                            int offset, struct lookup_intent *it,
+                            struct lookup_intent *it,
                             struct dentry *de)
 {
         int rc = 0;
@@ -281,8 +281,7 @@ int ll_revalidate_it_finish(struct ptlrpc_request *request,
         if (it_disposition(it, DISP_LOOKUP_NEG)) 
                 RETURN(-ENOENT);
 
-        rc = ll_prep_inode(&de->d_inode,
-                           request, offset, NULL);
+        rc = ll_prep_inode(&de->d_inode, request, NULL);
 
         RETURN(rc);
 }
@@ -468,7 +467,7 @@ do_lock:
         }
 
 revalidate_finish:
-        rc = ll_revalidate_it_finish(req, DLM_REPLY_REC_OFF, it, de);
+        rc = ll_revalidate_it_finish(req, it, de);
         if (rc != 0) {
                 if (rc != -ESTALE && rc != -ENOENT)
                         ll_intent_release(it);
@@ -556,11 +555,10 @@ do_lookup:
         rc = md_intent_lock(exp, op_data, NULL, 0,  it, 0, &req,
                             ll_md_blocking_ast, 0);
         if (rc >= 0) {
-                struct mdt_body *mdt_body = lustre_msg_buf(req->rq_repmsg,
-                                                           DLM_REPLY_REC_OFF,
-                                                           sizeof(*mdt_body));
+                struct mdt_body *mdt_body;
                 struct lu_fid fid = {.f_seq = 0, .f_oid = 0, .f_ver = 0};
-
+                mdt_body = req_capsule_server_get(&req->rq_pill, &RMF_MDT_BODY);
+                
                 if (de->d_inode)
                         fid = *ll_inode2fid(de->d_inode);
 

@@ -51,13 +51,10 @@ int llog_origin_connect(struct llog_ctxt *ctxt, int count,
                         struct llog_logid *logid, struct llog_gen *gen,
                         struct obd_uuid *uuid)
 {
-        struct llog_gen_rec *lgr;
-        struct obd_import *imp;
-        struct ptlrpc_request *request;
+        struct llog_gen_rec    *lgr;
+        struct ptlrpc_request  *req;
         struct llogd_conn_body *req_body;
-        int size[2] = { sizeof(struct ptlrpc_body),
-                        sizeof(struct llogd_conn_body) };
-        int rc;
+        int                     rc;
         ENTRY;
 
         if (list_empty(&ctxt->loc_handle->u.chd.chd_head)) {
@@ -69,35 +66,32 @@ int llog_origin_connect(struct llog_ctxt *ctxt, int count,
         LLOG_GEN_INC(ctxt->loc_gen);
 
         /* first add llog_gen_rec */
-        OBD_ALLOC(lgr, sizeof(*lgr));
+        OBD_ALLOC_PTR(lgr);
         if (!lgr)
                 RETURN(-ENOMEM);
         lgr->lgr_hdr.lrh_len = lgr->lgr_tail.lrt_len = sizeof(*lgr);
         lgr->lgr_hdr.lrh_type = LLOG_GEN_REC;
         lgr->lgr_gen = ctxt->loc_gen;
         rc = llog_add(ctxt, &lgr->lgr_hdr, NULL, NULL, 1);
-        OBD_FREE(lgr, sizeof(*lgr));
+        OBD_FREE_PTR(lgr);
         if (rc != 1)
                 RETURN(rc);
 
         LASSERT(ctxt->loc_imp);
-        imp = ctxt->loc_imp;
-
-        request = ptlrpc_prep_req(imp, LUSTRE_LOG_VERSION,
-                                  LLOG_ORIGIN_CONNECT, 2, size, NULL);
-        if (!request)
+        req = ptlrpc_request_alloc_pack(ctxt->loc_imp, &RQF_LLOG_ORIGIN_CONNECT,
+                                        LUSTRE_LOG_VERSION,
+                                        LLOG_ORIGIN_CONNECT);
+        if (req == NULL)
                 RETURN(-ENOMEM);
 
-        req_body = lustre_msg_buf(request->rq_reqmsg, REQ_REC_OFF,
-                                  sizeof(*req_body));
-
+        req_body = req_capsule_client_get(&req->rq_pill, &RMF_LLOGD_CONN_BODY);
         req_body->lgdc_gen = ctxt->loc_gen;
         req_body->lgdc_logid = ctxt->loc_handle->lgh_id;
         req_body->lgdc_ctxt_idx = ctxt->loc_idx + 1;
-        ptlrpc_req_set_repsize(request, 1, NULL);
+        ptlrpc_request_set_replen(req);
 
-        rc = ptlrpc_queue_wait(request);
-        ptlrpc_req_finished(request);
+        rc = ptlrpc_queue_wait(req);
+        ptlrpc_req_finished(req);
 
         RETURN(rc);
 }
@@ -111,8 +105,7 @@ int llog_handle_connect(struct ptlrpc_request *req)
         int rc;
         ENTRY;
 
-        req_body = lustre_msg_buf(req->rq_reqmsg, REQ_REC_OFF,
-                                  sizeof(*req_body));
+        req_body = req_capsule_client_get(&req->rq_pill, &RMF_LLOGD_CONN_BODY);
 
         ctxt = llog_get_context(obd, req_body->lgdc_ctxt_idx);
         rc = llog_connect(ctxt, 1, &req_body->lgdc_logid,

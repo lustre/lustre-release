@@ -73,10 +73,8 @@ int lmv_intent_remote(struct obd_export *exp, void *lmm,
         int pmode, rc = 0;
         ENTRY;
 
-        body = lustre_msg_buf((*reqp)->rq_repmsg,
-                              DLM_REPLY_REC_OFF, sizeof(*body));
+        body = req_capsule_server_get(&(*reqp)->rq_pill, &RMF_DLM_REP);
         LASSERT(body != NULL);
-        LASSERT(lustre_rep_swabbed(*reqp, DLM_REPLY_REC_OFF));
 
         if (!(body->valid & OBD_MD_MDS))
                 RETURN(0);
@@ -315,17 +313,15 @@ repeat:
 
         /* caller may use attrs MDS returns on IT_OPEN lock request so, we have
          * to update them for split dir */
-        body = lustre_msg_buf((*reqp)->rq_repmsg,
-                              DLM_REPLY_REC_OFF, sizeof(*body));
+        body = req_capsule_server_get(&(*reqp)->rq_pill, &RMF_DLM_REP);
         LASSERT(body != NULL);
-        LASSERT(lustre_rep_swabbed(*reqp, DLM_REPLY_REC_OFF));
 
         /* could not find object, FID is not present in response. */
         if (!(body->valid & OBD_MD_FLID))
                 GOTO(out_free_sop_data, rc = 0);
 
         obj = lmv_obj_grab(obd, &body->fid1);
-        if (!obj && (mea = lmv_get_mea(*reqp, DLM_REPLY_REC_OFF))) {
+        if (!obj && (mea = lmv_get_mea(*reqp))) {
                 /* FIXME: capability for remote! */
                 /* wow! this is split dir, we'd like to handle it */
                 obj = lmv_obj_create(exp, &body->fid1, mea);
@@ -484,10 +480,8 @@ int lmv_intent_getattr(struct obd_export *exp, struct md_op_data *op_data,
 
         LASSERT(*reqp);
         LASSERT((*reqp)->rq_repmsg);
-        body = lustre_msg_buf((*reqp)->rq_repmsg,
-                              DLM_REPLY_REC_OFF, sizeof(*body));
+        body = req_capsule_server_get(&(*reqp)->rq_pill, &RMF_MDT_BODY);
         LASSERT(body != NULL);
-        LASSERT(lustre_rep_swabbed(*reqp, DLM_REPLY_REC_OFF));
 
         /* could not find object, FID is not present in response. */
         if (!(body->valid & OBD_MD_FLID))
@@ -495,7 +489,7 @@ int lmv_intent_getattr(struct obd_export *exp, struct md_op_data *op_data,
 
         obj2 = lmv_obj_grab(obd, &body->fid1);
 
-        if (!obj2 && (mea = lmv_get_mea(*reqp, DLM_REPLY_REC_OFF))) {
+        if (!obj2 && (mea = lmv_get_mea(*reqp))) {
 
                 /* FIXME remote capability! */
                 /* wow! this is split dir, we'd like to handle it. */
@@ -553,10 +547,8 @@ int lmv_lookup_slaves(struct obd_export *exp, struct ptlrpc_request **reqp)
         if (op_data == NULL)
                 RETURN(-ENOMEM);
 
-        body = lustre_msg_buf((*reqp)->rq_repmsg,
-                              DLM_REPLY_REC_OFF, sizeof(*body));
+        body = req_capsule_server_get(&(*reqp)->rq_pill, &RMF_MDT_BODY);
         LASSERT(body != NULL);
-        LASSERT(lustre_rep_swabbed(*reqp, DLM_REPLY_REC_OFF));
 
         LASSERT((body->valid & OBD_MD_FLID) != 0);
         obj = lmv_obj_grab(obd, &body->fid1);
@@ -612,10 +604,8 @@ int lmv_lookup_slaves(struct obd_export *exp, struct ptlrpc_request **reqp)
 
                 lock->l_ast_data = lmv_obj_get(obj);
 
-                body2 = lustre_msg_buf(req->rq_repmsg,
-                                       DLM_REPLY_REC_OFF, sizeof(*body2));
+                body2 = req_capsule_server_get(&req->rq_pill, &RMF_MDT_BODY);
                 LASSERT(body2 != NULL);
-                LASSERT(lustre_rep_swabbed(req, DLM_REPLY_REC_OFF));
 
                 obj->lo_inodes[i].li_size = body2->size;
 
@@ -788,12 +778,10 @@ repeat:
         rc = lmv_intent_remote(exp, lmm, lmmsize, it, flags, reqp,
                                cb_blocking, extra_lock_flags);
 
-        if (rc == 0 && (mea = lmv_get_mea(*reqp, DLM_REPLY_REC_OFF))) {
+        if (rc == 0 && (mea = lmv_get_mea(*reqp))) {
                 /* Wow! This is split dir, we'd like to handle it. */
-                body = lustre_msg_buf((*reqp)->rq_repmsg,
-                                      DLM_REPLY_REC_OFF, sizeof(*body));
+                body = req_capsule_server_get(&(*reqp)->rq_pill, &RMF_MDT_BODY);
                 LASSERT(body != NULL);
-                LASSERT(lustre_rep_swabbed(*reqp, DLM_REPLY_REC_OFF));
                 LASSERT((body->valid & OBD_MD_FLID) != 0);
 
                 obj = lmv_obj_grab(obd, &body->fid1);
@@ -914,12 +902,10 @@ int lmv_revalidate_slaves(struct obd_export *exp, struct ptlrpc_request **reqp,
                                          * It even got the reply refresh attrs
                                          * from that reply.
                                          */
-                                        body = lustre_msg_buf(mreq->rq_repmsg,
-                                                              DLM_REPLY_REC_OFF,
-                                                              sizeof(*body));
+                                        body = req_capsule_server_get(
+                                                                &mreq->rq_pill,
+                                                                &RMF_MDT_BODY);
                                         LASSERT(body != NULL);
-                                        LASSERT(lustre_rep_swabbed(
-                                                      mreq, DLM_REPLY_REC_OFF));
                                         goto update;
                                 }
                                 /* take already cached attrs into account */
@@ -979,10 +965,8 @@ int lmv_revalidate_slaves(struct obd_export *exp, struct ptlrpc_request **reqp,
                         *reqp = req;
                 }
 
-                body = lustre_msg_buf(req->rq_repmsg,
-                                      DLM_REPLY_REC_OFF, sizeof(*body));
+                body = req_capsule_server_get(&req->rq_pill, &RMF_MDT_BODY);
                 LASSERT(body != NULL);
-                LASSERT(lustre_rep_swabbed(req, DLM_REPLY_REC_OFF));
 
 update:
                 obj->lo_inodes[i].li_size = body->size;
@@ -1009,10 +993,8 @@ release_lock:
                 CDEBUG(D_OTHER, "return refreshed attrs: size = %lu\n",
                        (unsigned long)size);
 
-                body = lustre_msg_buf((*reqp)->rq_repmsg,
-                                      DLM_REPLY_REC_OFF, sizeof(*body));
+                body = req_capsule_server_get(&(*reqp)->rq_pill, &RMF_MDT_BODY);
                 LASSERT(body != NULL);
-                LASSERT(lustre_rep_swabbed(*reqp, DLM_REPLY_REC_OFF));
 
                 body->size = size;
 

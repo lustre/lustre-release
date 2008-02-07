@@ -194,9 +194,8 @@ adjust:
 int client_quota_ctl(struct obd_export *exp, struct obd_quotactl *oqctl)
 {
         struct ptlrpc_request *req;
-        struct obd_quotactl *oqc;
-        int size[2] = { sizeof(struct ptlrpc_body), sizeof(*oqctl) };
-        int ver, opc, rc;
+        struct obd_quotactl   *oqc;
+        int                    ver, opc, rc;
         ENTRY;
 
         if (!strcmp(exp->exp_obd->obd_type->typ_name, LUSTRE_MDC_NAME)) {
@@ -209,23 +208,21 @@ int client_quota_ctl(struct obd_export *exp, struct obd_quotactl *oqctl)
                 RETURN(-EINVAL);
         }
 
-        req = ptlrpc_prep_req(class_exp2cliimp(exp), ver, opc, 2, size, NULL);
-        if (!req)
-                GOTO(out, rc = -ENOMEM);
+        req = ptlrpc_request_alloc_pack(class_exp2cliimp(exp),
+                                        &RQF_MDS_QUOTACTL, ver, opc);
+        if (req == NULL)
+                RETURN(-ENOMEM);
 
-        oqc = lustre_msg_buf(req->rq_reqmsg, REQ_REC_OFF, sizeof(*oqctl));
+        oqc = req_capsule_client_get(&req->rq_pill, &RMF_OBD_QUOTACTL);
         *oqc = *oqctl;
 
-        ptlrpc_req_set_repsize(req, 2, size);
+        ptlrpc_request_set_replen(req);
 
         rc = ptlrpc_queue_wait(req);
         if (!rc) {
-                oqc = lustre_swab_repbuf(req, REPLY_REC_OFF, sizeof(*oqc),
-                                         lustre_swab_obd_quotactl);
-                if (oqc == NULL) {
-                        CERROR ("Can't unpack obd_quotactl\n");
+                oqc = req_capsule_server_get(&req->rq_pill, &RMF_OBD_QUOTACTL);
+                if (oqc == NULL)
                         GOTO(out, rc = -EPROTO);
-                }
 
                 *oqctl = *oqc;
         }

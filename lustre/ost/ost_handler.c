@@ -1325,14 +1325,15 @@ static int ost_handle_quotacheck(struct ptlrpc_request *req)
         int rc;
         ENTRY;
 
-        oqctl = lustre_swab_reqbuf(req, REQ_REC_OFF, sizeof(*oqctl),
-                                   lustre_swab_obd_quotactl);
+        oqctl = req_capsule_client_get(&req->rq_pill, &RMF_OBD_QUOTACTL);
         if (oqctl == NULL)
                 RETURN(-EPROTO);
 
-        rc = lustre_pack_reply(req, 1, NULL, NULL);
-        if (rc)
-                RETURN(rc);
+        rc = req_capsule_server_pack(&req->rq_pill);
+        if (rc) {
+                CERROR("ost: out of memory while packing quotacheck reply\n");
+                RETURN(-ENOMEM);
+        }
 
         req->rq_status = obd_quotacheck(req->rq_export, oqctl);
         RETURN(0);
@@ -1483,6 +1484,7 @@ int ost_msg_check_version(struct lustre_msg *msg)
         return rc;
 }
 
+/* TODO: handle requests in a similar way as MDT: see mdt_handle_common() */
 int ost_handle(struct ptlrpc_request *req)
 {
         struct obd_trans_info trans_info = { 0, };
@@ -1500,6 +1502,8 @@ int ost_handle(struct ptlrpc_request *req)
         case SEC_CTX_FINI:
                 GOTO(out, rc = 0);
         }
+
+        req_capsule_init(&req->rq_pill, req, RCL_SERVER);
 
         /* XXX identical to MDS */
         if (lustre_msg_get_opc(req->rq_reqmsg) != OST_CONNECT) {
@@ -1541,6 +1545,7 @@ int ost_handle(struct ptlrpc_request *req)
         switch (lustre_msg_get_opc(req->rq_reqmsg)) {
         case OST_CONNECT: {
                 CDEBUG(D_INODE, "connect\n");
+                req_capsule_set(&req->rq_pill, &RQF_OST_CONNECT);
                 if (OBD_FAIL_CHECK(OBD_FAIL_OST_CONNECT_NET))
                         RETURN(0);
                 rc = target_handle_connect(req);
@@ -1556,6 +1561,7 @@ int ost_handle(struct ptlrpc_request *req)
         }
         case OST_DISCONNECT:
                 CDEBUG(D_INODE, "disconnect\n");
+                req_capsule_set(&req->rq_pill, &RQF_OST_DISCONNECT);
                 if (OBD_FAIL_CHECK(OBD_FAIL_OST_DISCONNECT_NET))
                         RETURN(0);
                 rc = target_handle_disconnect(req);
@@ -1656,41 +1662,47 @@ int ost_handle(struct ptlrpc_request *req)
                 break;
         case OST_QUOTACHECK:
                 CDEBUG(D_INODE, "quotacheck\n");
+                req_capsule_set(&req->rq_pill, &RQF_OST_QUOTACHECK);
                 if (OBD_FAIL_CHECK(OBD_FAIL_OST_QUOTACHECK_NET))
                         RETURN(0);
                 rc = ost_handle_quotacheck(req);
                 break;
         case OST_QUOTACTL:
                 CDEBUG(D_INODE, "quotactl\n");
+                req_capsule_set(&req->rq_pill, &RQF_OST_QUOTACTL);
                 if (OBD_FAIL_CHECK(OBD_FAIL_OST_QUOTACTL_NET))
                         RETURN(0);
                 rc = ost_handle_quotactl(req);
                 break;
         case OBD_PING:
                 DEBUG_REQ(D_INODE, req, "ping");
+                req_capsule_set(&req->rq_pill, &RQF_OBD_PING);
                 rc = target_handle_ping(req);
                 break;
         /* FIXME - just reply status */
         case LLOG_ORIGIN_CONNECT:
                 DEBUG_REQ(D_INODE, req, "log connect");
+                req_capsule_set(&req->rq_pill, &RQF_LLOG_ORIGIN_CONNECT);
                 rc = ost_llog_handle_connect(req->rq_export, req);
                 req->rq_status = rc;
-                rc = lustre_pack_reply(req, 1, NULL, NULL);
+                rc = req_capsule_server_pack(&req->rq_pill);
                 if (rc)
                         RETURN(rc);
                 RETURN(ptlrpc_reply(req));
         case OBD_LOG_CANCEL:
                 CDEBUG(D_INODE, "log cancel\n");
+                req_capsule_set(&req->rq_pill, &RQF_LOG_CANCEL);
                 if (OBD_FAIL_CHECK(OBD_FAIL_OBD_LOG_CANCEL_NET))
                         RETURN(0);
                 rc = llog_origin_handle_cancel(req);
                 req->rq_status = rc;
-                rc = lustre_pack_reply(req, 1, NULL, NULL);
+                rc = req_capsule_server_pack(&req->rq_pill);
                 if (rc)
                         RETURN(rc);
                 RETURN(ptlrpc_reply(req));
         case LDLM_ENQUEUE:
                 CDEBUG(D_INODE, "enqueue\n");
+                req_capsule_set(&req->rq_pill, &RQF_LDLM_ENQUEUE);
                 if (OBD_FAIL_CHECK(OBD_FAIL_LDLM_ENQUEUE))
                         RETURN(0);
                 rc = ldlm_handle_enqueue(req, ldlm_server_completion_ast,
@@ -1700,12 +1712,14 @@ int ost_handle(struct ptlrpc_request *req)
                 break;
         case LDLM_CONVERT:
                 CDEBUG(D_INODE, "convert\n");
+                req_capsule_set(&req->rq_pill, &RQF_LDLM_CONVERT);
                 if (OBD_FAIL_CHECK(OBD_FAIL_LDLM_CONVERT))
                         RETURN(0);
                 rc = ldlm_handle_convert(req);
                 break;
         case LDLM_CANCEL:
                 CDEBUG(D_INODE, "cancel\n");
+                req_capsule_set(&req->rq_pill, &RQF_LDLM_CANCEL);
                 if (OBD_FAIL_CHECK(OBD_FAIL_LDLM_CANCEL))
                         RETURN(0);
                 rc = ldlm_handle_cancel(req);

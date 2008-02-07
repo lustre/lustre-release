@@ -37,7 +37,7 @@ struct com_thread_info {
         /*
          * for req-layout interface.
          */
-        struct req_capsule cti_pill;
+        struct req_capsule *cti_pill;
 };
 
 enum {

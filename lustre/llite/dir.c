@@ -153,13 +153,9 @@ static int ll_dir_readpage(struct file *file, struct page *page)
                          oc, hash, page, &request);
         capa_put(oc);
         if (!rc) {
-                body = lustre_msg_buf(request->rq_repmsg, REPLY_REC_OFF,
-                                      sizeof(*body));
+                body = req_capsule_server_get(&request->rq_pill, &RMF_MDT_BODY);
                 /* Checked by mdc_readpage() */
                 LASSERT(body != NULL);
-
-                /* Swabbed by mdc_readpage() */
-                LASSERT(lustre_rep_swabbed(request, REPLY_REC_OFF));
 
                 if (body->valid & OBD_MD_FLSIZE) {
                         ll_inode_size_lock(inode, 0);
@@ -640,10 +636,8 @@ int ll_dir_getstripe(struct inode *inode, struct lov_mds_md **lmmp,
                 GOTO(out, rc);
         }
 
-        body = lustre_msg_buf(req->rq_repmsg, REPLY_REC_OFF, sizeof(*body));
-        LASSERT(body != NULL); /* checked by md_getattr_name */
-        /* swabbed by mdc_getattr_name */
-        LASSERT(lustre_rep_swabbed(req, REPLY_REC_OFF));
+        body = req_capsule_server_get(&req->rq_pill, &RMF_MDT_BODY);
+        LASSERT(body != NULL);
 
         lmmsize = body->eadatasize;
 
@@ -652,9 +646,9 @@ int ll_dir_getstripe(struct inode *inode, struct lov_mds_md **lmmp,
                 GOTO(out, rc = -ENODATA);
         }
 
-        lmm = lustre_msg_buf(req->rq_repmsg, REPLY_REC_OFF + 1, lmmsize);
+        lmm = req_capsule_server_sized_get(&req->rq_pill,
+                                           &RMF_MDT_MD, lmmsize);
         LASSERT(lmm != NULL);
-        LASSERT(lustre_rep_swabbed(req, REPLY_REC_OFF + 1));
 
         /*
          * This is coming from the MDS, so is probably in
@@ -782,11 +776,9 @@ static int ll_dir_ioctl(struct inode *inode, struct file *file,
                 }
 
                 if (request) {
-                        body = lustre_msg_buf(request->rq_repmsg,
-                                              REPLY_REC_OFF, sizeof(*body));
-                        LASSERT(body != NULL); /* checked by md_getattr_name */
-                        /* swabbed by md_getattr_name */
-                        LASSERT(lustre_rep_swabbed(request, REPLY_REC_OFF));
+                        body = req_capsule_server_get(&request->rq_pill,
+                                                      &RMF_MDT_BODY);
+                        LASSERT(body != NULL);
                 } else {
                         GOTO(out_req, rc);
                 }
@@ -894,11 +886,10 @@ static int ll_dir_ioctl(struct inode *inode, struct file *file,
         }
         case OBD_IOC_LLOG_CATINFO: {
                 struct ptlrpc_request *req = NULL;
-                char *buf = NULL;
-                int rc, len = 0;
-                char *bufs[3] = { NULL }, *str;
-                int lens[3] = { sizeof(struct ptlrpc_body) };
-                int size[2] = { sizeof(struct ptlrpc_body) };
+                char                  *buf = NULL;
+                char                  *str;
+                int                    len = 0;
+                int                    rc;
 
                 rc = obd_ioctl_getdata(&buf, &len, (void *)arg);
                 if (rc)
@@ -910,29 +901,38 @@ static int ll_dir_ioctl(struct inode *inode, struct file *file,
                         RETURN(-EINVAL);
                 }
 
-                lens[REQ_REC_OFF] = data->ioc_inllen1;
-                bufs[REQ_REC_OFF] = data->ioc_inlbuf1;
-                if (data->ioc_inllen2) {
-                        lens[REQ_REC_OFF + 1] = data->ioc_inllen2;
-                        bufs[REQ_REC_OFF + 1] = data->ioc_inlbuf2;
-                } else {
-                        lens[REQ_REC_OFF + 1] = 0;
-                        bufs[REQ_REC_OFF + 1] = NULL;
-                }
-
-                req = ptlrpc_prep_req(sbi2mdc(sbi)->cl_import,
-                                      LUSTRE_LOG_VERSION, LLOG_CATINFO, 3, lens,
-                                      bufs);
-                if (!req)
+                req = ptlrpc_request_alloc(sbi2mdc(sbi)->cl_import,
+                                           &RQF_LLOG_CATINFO);
+                if (req == NULL)
                         GOTO(out_catinfo, rc = -ENOMEM);
 
-                size[REPLY_REC_OFF] = data->ioc_plen1;
-                ptlrpc_req_set_repsize(req, 2, size);
+                req_capsule_set_size(&req->rq_pill, &RMF_NAME, RCL_CLIENT,
+                                     data->ioc_inllen1);
+                req_capsule_set_size(&req->rq_pill, &RMF_STRING, RCL_CLIENT,
+                                     data->ioc_inllen2);
+
+                rc = ptlrpc_request_pack(req, LUSTRE_LOG_VERSION, LLOG_CATINFO);
+                if (rc) {
+                        ptlrpc_request_free(req);
+                        GOTO(out_catinfo, rc);
+                }
+
+                str = req_capsule_client_get(&req->rq_pill, &RMF_NAME);
+                memcpy(str, data->ioc_inlbuf1, data->ioc_inllen1);
+                if (data->ioc_inllen2) {
+                        str = req_capsule_client_get(&req->rq_pill,
+                                                     &RMF_STRING);
+                        memcpy(str, data->ioc_inlbuf2, data->ioc_inllen2);
+                }
+
+                req_capsule_set_size(&req->rq_pill, &RMF_STRING, RCL_SERVER,
+                                     data->ioc_plen1);
+                ptlrpc_request_set_replen(req);
 
                 rc = ptlrpc_queue_wait(req);
                 if (!rc) {
-                        str = lustre_msg_string(req->rq_repmsg, REPLY_REC_OFF,
-                                                data->ioc_plen1);
+                        str = req_capsule_server_get(&req->rq_pill,
+                                                     &RMF_STRING);
                         rc = copy_to_user(data->ioc_pbuf1, str, data->ioc_plen1);
                 }
                 ptlrpc_req_finished(req);

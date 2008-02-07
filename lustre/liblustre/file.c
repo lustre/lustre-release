@@ -146,10 +146,8 @@ int llu_local_open(struct llu_inode_info *lli, struct lookup_intent *it)
         struct mdt_body *body;
         ENTRY;
 
-        body = lustre_msg_buf(req->rq_repmsg, DLM_REPLY_REC_OFF, sizeof(*body));
-        LASSERT(body != NULL);                 /* reply already checked out */
-        /* and swabbed down */
-        LASSERT(lustre_rep_swabbed(req, DLM_REPLY_REC_OFF));
+        body = req_capsule_server_get(&req->rq_pill, &RMF_MDT_BODY);
+        LASSERT(body != NULL);
 
         /* already opened? */
         if (lli->lli_open_count++)
@@ -246,7 +244,7 @@ int llu_iop_open(struct pnode *pnode, int flags, mode_t mode)
         RETURN(rc);
 }
 
-int llu_objects_destroy(struct ptlrpc_request *request, struct inode *dir)
+int llu_objects_destroy(struct ptlrpc_request *req, struct inode *dir)
 {
         struct mdt_body *body;
         struct lov_mds_md *eadata;
@@ -256,8 +254,7 @@ int llu_objects_destroy(struct ptlrpc_request *request, struct inode *dir)
         int rc;
         ENTRY;
 
-        /* req is swabbed so this is safe */
-        body = lustre_msg_buf(request->rq_repmsg, REPLY_REC_OFF, sizeof(*body));
+        body = req_capsule_server_get(&req->rq_pill, &RMF_MDT_BODY);
 
         if (!(body->valid & OBD_MD_FLEASIZE))
                 RETURN(0);
@@ -271,13 +268,10 @@ int llu_objects_destroy(struct ptlrpc_request *request, struct inode *dir)
          * to this file. Use this EA to unlink the objects on the OST.
          * It's opaque so we don't swab here; we leave it to obd_unpackmd() to
          * check it is complete and sensible. */
-        eadata = lustre_swab_repbuf(request, REPLY_REC_OFF+1, body->eadatasize,
-                                    NULL);
+        eadata = req_capsule_server_sized_get(&req->rq_pill, &RMF_MDT_MD,
+                                              body->eadatasize);
+
         LASSERT(eadata != NULL);
-        if (eadata == NULL) {
-                CERROR("Can't unpack MDS EA data\n");
-                GOTO(out, rc = -EPROTO);
-        }
 
         rc = obd_unpackmd(llu_i2obdexp(dir), &lsm, eadata,body->eadatasize);
         if (rc < 0) {
@@ -298,9 +292,10 @@ int llu_objects_destroy(struct ptlrpc_request *request, struct inode *dir)
         if (body->valid & OBD_MD_FLCOOKIE) {
                 oa->o_valid |= OBD_MD_FLCOOKIE;
                 oti.oti_logcookies =
-                        lustre_msg_buf(request->rq_repmsg, REPLY_REC_OFF + 2,
-                                       sizeof(struct llog_cookie) *
-                                       lsm->lsm_stripe_count);
+                        req_capsule_server_sized_get(&req->rq_pill,
+                                                   &RMF_LOGCOOKIES,
+                                                   sizeof(struct llog_cookie) *
+                                                   lsm->lsm_stripe_count);
                 if (oti.oti_logcookies == NULL) {
                         oa->o_valid &= ~OBD_MD_FLCOOKIE;
                         body->valid &= ~OBD_MD_FLCOOKIE;

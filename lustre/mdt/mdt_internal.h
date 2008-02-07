@@ -268,26 +268,17 @@ enum mdt_reint_flag {
 struct mdt_thread_info {
         /*
          * XXX: Part One:
-         * The following members will be filled expilictly
+         * The following members will be filled explicitly
          * with specific data in mdt_thread_info_init().
          */
-
-        /*
-         * for req-layout interface. This field should be first to be compatible
-         * with "struct com_thread_info" in seq and fld.
+        /* TODO: move this into mdt_session_key(with LCT_SESSION), because
+         * request handling may migrate from one server thread to another.
          */
-        struct req_capsule         mti_pill;
+        struct req_capsule        *mti_pill;
+
         /* although we have export in req, there are cases when it is not
          * available, e.g. closing files upon export destroy */
         struct obd_export          *mti_exp;
-        /*
-         * number of buffers in reply message.
-         */
-        int                        mti_rep_buf_nr;
-        /*
-         * sizes of reply buffers.
-         */
-        int                        mti_rep_buf_size[REQ_MAX_FIELD_NR];
         /*
          * A couple of lock handles.
          */
@@ -442,12 +433,13 @@ static inline struct md_device_operations *mdt_child_ops(struct mdt_device * m)
 
 static inline struct md_object *mdt_object_child(struct mdt_object *o)
 {
+        LASSERT(o);
         return lu2md(lu_object_next(&o->mot_obj.mo_lu));
 }
 
 static inline struct ptlrpc_request *mdt_info_req(struct mdt_thread_info *info)
 {
-         return info->mti_pill.rc_req;
+         return info->mti_pill ? info->mti_pill->rc_req : NULL;
 }
 
 static inline __u64 mdt_conn_flags(struct mdt_thread_info *info)
@@ -530,7 +522,8 @@ void mdt_pack_attr2body(struct mdt_thread_info *info, struct mdt_body *b,
                         const struct lu_attr *attr, const struct lu_fid *fid);
 
 int mdt_getxattr(struct mdt_thread_info *info);
-int mdt_setxattr(struct mdt_thread_info *info);
+int mdt_reint_setxattr(struct mdt_thread_info *info,
+                       struct mdt_lock_handle *lh);
 
 void mdt_lock_handle_init(struct mdt_lock_handle *lh);
 void mdt_lock_handle_fini(struct mdt_lock_handle *lh);

@@ -53,37 +53,30 @@ static int seq_client_rpc(struct lu_client_seq *seq, struct lu_range *input,
                           struct lu_range *output, __u32 opc,
                           const char *opcname)
 {
-        int rc, size[3] = { sizeof(struct ptlrpc_body),
-                            sizeof(__u32),
-                            sizeof(struct lu_range) };
-        struct obd_export *exp = seq->lcs_exp;
+        struct obd_export     *exp = seq->lcs_exp;
         struct ptlrpc_request *req;
-        struct lu_range *out, *in;
-        struct req_capsule pill;
-        __u32 *op;
+        struct lu_range       *out, *in;
+        __u32                 *op;
+        int                    rc;
         ENTRY;
 
-        req = ptlrpc_prep_req(class_exp2cliimp(exp), LUSTRE_MDS_VERSION,
-                              SEQ_QUERY, 3, size, NULL);
+        req = ptlrpc_request_alloc_pack(class_exp2cliimp(exp), &RQF_SEQ_QUERY,
+                                        LUSTRE_MDS_VERSION, SEQ_QUERY);
         if (req == NULL)
                 RETURN(-ENOMEM);
 
-        req_capsule_init(&pill, req, RCL_CLIENT, NULL);
-        req_capsule_set(&pill, &RQF_SEQ_QUERY);
-
         /* Init operation code */
-        op = req_capsule_client_get(&pill, &RMF_SEQ_OPC);
+        op = req_capsule_client_get(&req->rq_pill, &RMF_SEQ_OPC);
         *op = opc;
 
         /* Zero out input range, this is not recovery yet. */
-        in = req_capsule_client_get(&pill, &RMF_SEQ_RANGE);
+        in = req_capsule_client_get(&req->rq_pill, &RMF_SEQ_RANGE);
         if (input != NULL)
                 *in = *input;
         else
                 range_zero(in);
 
-        size[1] = sizeof(struct lu_range);
-        ptlrpc_req_set_repsize(req, 2, size);
+        ptlrpc_request_set_replen(req);
 
         if (seq->lcs_type == LUSTRE_SEQ_METADATA) {
                 req->rq_request_portal = (opc == SEQ_ALLOC_SUPER) ?
@@ -100,7 +93,7 @@ static int seq_client_rpc(struct lu_client_seq *seq, struct lu_range *input,
         if (rc)
                 GOTO(out_req, rc);
 
-        out = req_capsule_server_get(&pill, &RMF_SEQ_RANGE);
+        out = req_capsule_server_get(&req->rq_pill, &RMF_SEQ_RANGE);
         *output = *out;
 
         if (!range_is_sane(output)) {
@@ -121,7 +114,6 @@ static int seq_client_rpc(struct lu_client_seq *seq, struct lu_range *input,
 
         EXIT;
 out_req:
-        req_capsule_fini(&pill);
         ptlrpc_req_finished(req);
         return rc;
 }
