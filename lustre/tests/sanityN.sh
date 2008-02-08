@@ -33,14 +33,6 @@ MOUNT_2=${MOUNT_2:-"yes"}
 CHECK_GRANT=${CHECK_GRANT:-"yes"}
 GRANT_CHECK_LIST=${GRANT_CHECK_LIST:-""}
 
-if [ $UID -ne 0 ]; then
-	RUNAS_ID="$UID"
-	RUNAS=""
-else
-	RUNAS_ID=${RUNAS_ID:-500}
-	RUNAS=${RUNAS:-"runas -u $RUNAS_ID"}
-fi
-
 SAVE_PWD=$PWD
 
 export NAME=${NAME:-local}
@@ -69,6 +61,9 @@ LOVNAME=`cat $LPROC/llite/*/lov/common_name | tail -n 1`
 OSTCOUNT=`cat $LPROC/lov/$LOVNAME/numobd`
 
 rm -rf $DIR1/[df][0-9]* $DIR1/lnk
+
+# $RUNAS_ID may get set incorrectly somewhere else
+[ $UID -eq 0 -a $RUNAS_ID -eq 0 ] && error "\$RUNAS_ID set to 0, but \$UID is also 0!"
 
 check_runas_id $RUNAS_ID $RUNAS
 

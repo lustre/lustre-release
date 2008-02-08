@@ -120,17 +120,8 @@ MAXFREE=${MAXFREE:-$((200000 * $OSTCOUNT))}
 [ -f $DIR/d52b/foo ] && chattr -i $DIR/d52b/foo
 rm -rf $DIR/[Rdfs][0-9]*
 
-if [ $UID -ne 0 ]; then
-	log "running as non-root uid $UID"
-	RUNAS_ID="$UID"
-	RUNAS=""
-else
-	RUNAS_ID=${RUNAS_ID:-500}
-	RUNAS=${RUNAS:-"runas -u $RUNAS_ID"}
-
-	# $RUNAS_ID may get set incorrectly somewhere else
-	[ $RUNAS_ID -eq 0 ] && error "\$RUNAS_ID set to 0, but \$UID is also 0!"
-fi
+# $RUNAS_ID may get set incorrectly somewhere else
+[ $UID -eq 0 -a $RUNAS_ID -eq 0 ] && error "\$RUNAS_ID set to 0, but \$UID is also 0!"
 
 check_runas_id $RUNAS_ID $RUNAS
 

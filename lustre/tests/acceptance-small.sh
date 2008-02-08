@@ -90,7 +90,7 @@ for NAME in $CONFIGS; do
 
 	if [ "$SANITY" != "no" ]; then
 	        title sanity
-		bash sanity.sh
+		MOUNT2="" bash sanity.sh
 		$CLEANUP
 		$SETUP
 		SANITY="done"
@@ -123,20 +123,23 @@ for NAME in $CONFIGS; do
 		DBENCH="done"
 	fi
 
-	chown $UID $MOUNT
 	which bonnie++ > /dev/null 2>&1 || BONNIE=no
 	if [ "$BONNIE" != "no" ]; then
 	        title bonnie
-		mkdir -p $MOUNT/d0.bonnie
-		$LFS setstripe -c -1 $MOUNT/d0.bonnie
+		BONDIR=$MOUNT/d0.bonnie
+		mkdir -p $BONDIR
+		$LFS setstripe -c -1 $BONDIR
 		sync
 		MIN=`cat /proc/fs/lustre/osc/*/kbytesavail | sort -n | head -n1`
 		SPACE=$(( OSTCOUNT * MIN ))
 		[ $SPACE -lt $SIZE ] && SIZE=$((SPACE * 3 / 4))
 		log "min OST has ${MIN}kB available, using ${SIZE}kB file size"
 		$DEBUG_OFF
-		BONFILE=$MOUNT/d0.bonnie
-		bonnie++ -f -r 0 -s$((SIZE / 1024)) -n 10 -u$UID -d$BONFILE
+		myUID=$RUNAS_ID
+		myRUNAS=$RUNAS
+		FAIL_ON_ERROR=false check_runas_id $myUID $myRUNAS || { myRUNAS="" && myUID=$UID; }
+		chown $myUID:$myUID $BONDIR		
+		$myRUNAS bonnie++ -f -r 0 -s$((SIZE / 1024)) -n 10 -u$myUID:$myUID -d$BONDIR
 		$DEBUG_ON
 		$CLEANUP
 		$SETUP
