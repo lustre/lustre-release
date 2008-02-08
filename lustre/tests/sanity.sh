@@ -63,21 +63,6 @@ STRIPES_PER_OBJ=-1
 CHECK_GRANT=${CHECK_GRANT:-"yes"}
 GRANT_CHECK_LIST=${GRANT_CHECK_LIST:-""}
 
-if [ $UID -ne 0 ]; then
-	echo "Warning: running as non-root uid $UID"
-	RUNAS_ID="$UID"
-	RUNAS=""
-else
-	RUNAS_ID=${RUNAS_ID:-500}
-	RUNAS=${RUNAS:-"runas -u $RUNAS_ID"}
-
-	# $RUNAS_ID may get set incorrectly somewhere else
-	if [ $RUNAS_ID -eq 0 ]; then
-		echo "Error: \$RUNAS_ID set to 0, but \$UID is also 0!"
-		exit 1
-	fi
-fi
-
 export NAME=${NAME:-local}
 
 SAVE_PWD=$PWD
@@ -143,6 +128,9 @@ MAXFREE=${MAXFREE:-$((200000 * $OSTCOUNT))}
 [ -f $DIR/d52b/foo ] && chattr -i $DIR/d52b/foo
 rm -rf $DIR/[Rdfs][1-9]*
 
+# $RUNAS_ID may get set incorrectly somewhere else
+[ $UID -eq 0 -a $RUNAS_ID -eq 0 ] && error "\$RUNAS_ID set to 0, but \$UID is also 0!"
+
 check_runas_id $RUNAS_ID $RUNAS
 
 build_test_filter
@@ -160,6 +148,8 @@ echo # add a newline after mke2fs.
 
 umask 077
 
+OLDDEBUG="`sysctl -n lnet.debug 2> /dev/null`"
+sysctl -w lnet.debug=-1 2> /dev/null || true
 test_0() {
 	touch $DIR/$tfile
 	$CHECKSTAT -t file $DIR/$tfile || error
