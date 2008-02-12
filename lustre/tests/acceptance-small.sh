@@ -100,27 +100,33 @@ for NAME in $CONFIGS; do
 	which dbench > /dev/null 2>&1 || DBENCH=no
 	if [ "$DBENCH" != "no" ]; then
 	        title dbench
+		DBENCHDIR=$MOUNT/$HOSTNAME
+		mkdir -p $DBENCHDIR
 		SPACE=`df -P $MOUNT | tail -n 1 | awk '{ print $4 }'`
 		DB_THREADS=$((SPACE / 50000))
 		[ $THREADS -lt $DB_THREADS ] && DB_THREADS=$THREADS
 
 		$DEBUG_OFF
+		myUID=$RUNAS_ID
+		myRUNAS=$RUNAS
+		FAIL_ON_ERROR=false check_runas_id $myUID $myRUNAS || { myRUNAS="" && myUID=$UID; }
+		chown $myUID:$myUID $DBENCHDIR
 		duration=""
 		[ "$SLOW" = "no" ] && duration=" -t 120"
 		if [ "$SLOW" != "no" -o $DB_THREADS -eq 1 ]; then
-			bash rundbench 1 $duration
+			DIR=$DBENCHDIR $myRUNAS bash rundbench 1 $duration
 			$DEBUG_ON
 			$CLEANUP
 			$SETUP
 		fi
 		if [ $DB_THREADS -gt 1 ]; then
 			$DEBUG_OFF
-			bash rundbench $DB_THREADS $duration
+			DIR=$DBENCHDIR $myRUNAS bash rundbench $DB_THREADS $duration
 			$DEBUG_ON
 			$CLEANUP
 			$SETUP
 		fi
-		rm -f /mnt/lustre/`hostname`/client.txt
+		rm -rf $DBENCHDIR
 		DBENCH="done"
 	fi
 
@@ -151,18 +157,23 @@ for NAME in $CONFIGS; do
 	which iozone > /dev/null 2>&1 || IOZONE=no
 	if [ "$IOZONE" != "no" ]; then
 	        title iozone
-		mkdir -p $MOUNT/d0.iozone
-		$LFS setstripe -c -1 $MOUNT/d0.iozone
+		IOZDIR=$MOUNT/d0.iozone
+		mkdir -p $IOZDIR
+		$LFS setstripe -c -1 $IOZDIR
 		sync
 		MIN=`cat /proc/fs/lustre/osc/*/kbytesavail | sort -n | head -n1`
 		SPACE=$(( OSTCOUNT * MIN ))
 		[ $SPACE -lt $SIZE ] && SIZE=$((SPACE * 3 / 4))
 		log "min OST has ${MIN}kB available, using ${SIZE}kB file size"
 		IOZONE_OPTS="-i 0 -i 1 -i 2 -e -+d -r $RSIZE -s $SIZE"
-		IOZFILE="$MOUNT/d0.iozone/iozone"
+		IOZFILE="$IOZDIR/iozone"
 		# $SPACE was calculated with all OSTs
 		$DEBUG_OFF
-		iozone $IOZONE_OPTS -f $IOZFILE
+		myUID=$RUNAS_ID
+		myRUNAS=$RUNAS
+		FAIL_ON_ERROR=false check_runas_id $myUID $myRUNAS || { myRUNAS="" && myUID=$UID; }
+		chown $myUID:$myUID $IOZDIR
+		$myRUNAS iozone $IOZONE_OPTS -f $IOZFILE
 		$DEBUG_ON
 		$CLEANUP
 		$SETUP
@@ -177,7 +188,8 @@ for NAME in $CONFIGS; do
 		fi
 		if [ "$O_DIRECT" != "no" -a "$IOZONE_DIR" != "no" ]; then
 			$DEBUG_OFF
-			iozone -I $IOZONE_OPTS $IOZFILE.odir
+			# cd TMP to have write permission for tmp file iozone writes
+			( cd $TMP && $myRUNAS iozone -I $IOZONE_OPTS $IOZFILE.odir )
 			$DEBUG_ON
 			$CLEANUP
 			$SETUP
@@ -188,15 +200,15 @@ for NAME in $CONFIGS; do
 		[ $THREADS -lt $IOZ_THREADS ] && IOZ_THREADS=$THREADS
 		IOZVER=`iozone -v | awk '/Revision:/ {print $3}' | tr -d .`
 		if [ "$IOZ_THREADS" -gt 1 -a "$IOZVER" -ge 3145 ]; then
-			$LFS setstripe -c 1 $MOUNT/d0.iozone
+			$LFS setstripe -c 1 $IOZDIR
 			$DEBUG_OFF
 			THREAD=1
 			IOZFILE="-F "
 			while [ $THREAD -le $IOZ_THREADS ]; do
-				IOZFILE="$IOZFILE $MOUNT/iozone.$THREAD"
+				IOZFILE="$IOZFILE $IOZDIR/iozone.$THREAD"
 				THREAD=$((THREAD + 1))
 			done
-			iozone $IOZONE_OPTS -t $IOZ_THREADS $IOZFILE
+			$myRUNAS iozone $IOZONE_OPTS -t $IOZ_THREADS $IOZFILE
 			$DEBUG_ON
 			$CLEANUP
 			$SETUP
