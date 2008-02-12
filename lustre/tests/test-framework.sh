@@ -150,10 +150,6 @@ init_test_env() {
 
 }
 
-have_modules () {
-    lsmod | grep -q lnet
-}
-
 load_module() {
     EXT=".ko"
     module=$1
@@ -178,8 +174,11 @@ load_modules() {
         # use modprobe
     return 0
     fi
-    # we already loaded ?
-    have_modules && return 0
+    if [ "$HAVE_MODULES" = true ]; then
+    # we already loaded
+        return 0
+    fi
+    HAVE_MODULES=true
 
     echo Loading modules from $LUSTRE
     load_module ../lnet/libcfs/libcfs
@@ -282,6 +281,7 @@ unload_modules() {
         wait_for_lnet || return 3
     fi
     fi
+    HAVE_MODULES=false
 
     LEAK_LUSTRE=$(dmesg | tail -n 30 | grep "obd mem.*leaked" || true)
     LEAK_PORTALS=$(dmesg | tail -n 20 | grep "Portals memory leaked" || true)
@@ -1275,9 +1275,7 @@ equals_msg() {
 
 log() {
     echo "$*"
-
-    local HAVE_MODULES=""
-    lsmod | grep lnet > /dev/null || { load_modules && HAVE_MODULES="yes"; }
+    lsmod | grep lnet > /dev/null || load_modules
 
     local MSG="$*"
     # Get rif of '
@@ -1292,8 +1290,6 @@ log() {
     for NODE in $NODES; do
         do_node $NODE $LCTL mark "$MSG" 2> /dev/null || true
     done
-
-    [ -z "$HAVE_MODULES" ] || unload_modules
 }
 
 trace() {
