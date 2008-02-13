@@ -201,8 +201,10 @@ check_cur_qunit(struct obd_device *obd,
         if (!lqs) {
                 CDEBUG(D_QUOTA, "Can't find the lustre qunit size!\n");
                 ret = quota_create_lqs(qdata, NULL, qctxt, &lqs);
-                if (ret == -EALREADY)
+                if (ret == -EALREADY) {
+                        ret = 0;
                         goto search_lqs;
+                }
                 if (ret < 0)
                         GOTO (out, ret);
         }
