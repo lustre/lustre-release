@@ -401,6 +401,7 @@ int ptlrpc_request_bufs_pack(struct ptlrpc_request *request,
                                           request->rq_pill.rc_area[RCL_CLIENT],
                                           bufs, ctx);
 }
+EXPORT_SYMBOL(ptlrpc_request_bufs_pack);
 
 int ptlrpc_request_pack(struct ptlrpc_request *request,
                         __u32 version, int opcode) 

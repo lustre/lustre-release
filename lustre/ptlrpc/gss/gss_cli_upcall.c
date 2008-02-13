@@ -394,6 +394,7 @@ int gss_do_ctx_fini_rpc(struct gss_cli_ctx *gctx)
                       rc);
         }
 
+out_ref:
         ptlrpc_req_finished(req);
 out:
         RETURN(rc);
