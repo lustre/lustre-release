@@ -3713,6 +3713,15 @@ static void fsoptions_to_mdt_flags(struct mdt_device *m, char *options)
 {
         char *p = options;
 
+#ifdef CONFIG_FS_POSIX_ACL
+        /* ACLs should be enabled by default (b=13829) */
+        m->mdt_opts.mo_acl = 1;
+        LCONSOLE_INFO("Enabling ACL\n");
+#else
+        m->mdt_opts.mo_acl = 0;
+        LCONSOLE_INFO("Disabling ACL\n");
+#endif
+
         if (!options)
                 return;
 
@@ -3731,16 +3740,6 @@ static void fsoptions_to_mdt_flags(struct mdt_device *m, char *options)
                            (memcmp(options, "nouser_xattr", len) == 0)) {
                         m->mdt_opts.mo_user_xattr = 0;
                         LCONSOLE_INFO("Disabling user_xattr\n");
-                } else if ((len == sizeof("acl") - 1) &&
-                           (memcmp(options, "acl", len) == 0)) {
-#ifdef CONFIG_FS_POSIX_ACL
-                        m->mdt_opts.mo_acl = 1;
-                        LCONSOLE_INFO("Enabling ACL\n");
-#else
-                        m->mdt_opts.mo_acl = 0;
-                        CWARN("ignoring unsupported acl mount option\n");
-                        LCONSOLE_INFO("Disabling ACL\n");
-#endif
                 } else if ((len == sizeof("noacl") - 1) &&
                            (memcmp(options, "noacl", len) == 0)) {
                         m->mdt_opts.mo_acl = 0;

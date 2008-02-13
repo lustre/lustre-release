@@ -674,6 +674,11 @@ Details    : A lot of unlink operations with concurrent I/O can lead to a
 	     max_rpcs_in_flight per OSC and LDLM_FL_DISCARD_DATA blocking
 	     callbacks are processed in priority.
 
+Severity   : normal
+Bugzilla   : 13829
+Description: enable ACLs on MDS by default
+Details    : ACLs must be enabled on MDS by default.
+
 --------------------------------------------------------------------------------
 
 2007-08-10         Cluster File Systems, Inc. <info@clusterfs.com>
