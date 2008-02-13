@@ -381,7 +381,6 @@ static int quota_check_common(struct obd_device *obd, unsigned int uid,
                 if (!lqs)
                         continue;
 
-                qctxt_wait_pending_dqacq(qctxt, id[i], i, isblk);
                 rc2[i] = compute_remquota(obd, qctxt, &qdata[i], isblk);
                 spin_lock(&lqs->lqs_lock);
                 if (!cycle) {
