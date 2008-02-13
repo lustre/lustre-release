@@ -1610,7 +1610,9 @@ int lprocfs_obd_rd_recovery_status(char *page, char **start, off_t off,
         if (lprocfs_obd_snprintf(&page, size, &len, "status: ") <= 0)
                 goto out;
         if (obd->obd_max_recoverable_clients == 0) {
-                lprocfs_obd_snprintf(&page, size, &len, "INACTIVE\n");
+                if (lprocfs_obd_snprintf(&page, size, &len, "INACTIVE\n") <= 0)
+                        goto out;
+
                 goto fclose;
         }
 
@@ -1670,8 +1672,9 @@ int lprocfs_obd_rd_recovery_status(char *page, char **start, off_t off,
         if (lprocfs_obd_snprintf(&page, size, &len, "queued_requests: %d\n",
                                  obd->obd_requests_queued_for_recovery) <= 0)
                 goto out;
-        lprocfs_obd_snprintf(&page, size, &len, "next_transno: "LPD64"\n",
-                             obd->obd_next_recovery_transno);
+        if (lprocfs_obd_snprintf(&page, size, &len, "next_transno: "LPD64"\n",
+                                 obd->obd_next_recovery_transno) <= 0)
+                goto out;
 
 fclose:
         *eof = 1;
