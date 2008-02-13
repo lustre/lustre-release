@@ -1836,7 +1836,7 @@ test_44a() {
     [ "$nstripe" -gt "$OSTCOUNT" ] && skip "Wrong default_stripe_count: $nstripe (OSTCOUNT: $OSTCOUNT)" && return
     local stride=`$LCTL lov_getconfig $DIR | grep default_stripe_size: | \
                       awk '{print $2}'`
-    if [ $nstripe -eq 0 ] ; then
+    if [ $nstripe -eq 0 -o $nstripe -eq -1 ] ; then
         nstripe=`$LCTL lov_getconfig $DIR | grep obd_count: | awk '{print $2}'`
     fi
 
