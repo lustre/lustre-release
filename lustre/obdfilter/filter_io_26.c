@@ -106,6 +106,11 @@ static int dio_complete_routine(struct bio *bio, unsigned int done, int error)
         struct filter_iobuf *iobuf = bio->bi_private;
         unsigned long        flags;
 
+#ifdef HAVE_PAGE_CONSTANT
+        struct bio_vec *bvl;
+        int i;
+#endif
+
         /* CAVEAT EMPTOR: possibly in IRQ context 
          * DO NOT record procfs stats here!!! */
 
@@ -129,6 +134,11 @@ static int dio_complete_routine(struct bio *bio, unsigned int done, int error)
                        bio->bi_private);
                 return 0;
         }
+
+#ifdef HAVE_PAGE_CONSTANT
+        bio_for_each_segment(bvl, bio, i)
+                ClearPageConstant(bvl->bv_page);
+#endif
 
         spin_lock_irqsave(&iobuf->dr_lock, flags);
         if (iobuf->dr_error == 0)
@@ -297,6 +307,18 @@ int filter_do_bio(struct obd_export *exp, struct inode *inode,
                                ((sector_t)blocks[block_idx + i + nblocks] <<
                                 sector_bits))
                                 nblocks++;
+
+#ifdef HAVE_PAGE_CONSTANT
+                        /* I only set the page to be constant only if it 
+                         * is mapped to a contiguous underlying disk block(s). 
+                         * It will then make sure the corresponding device 
+                         * cache of raid5 will be overwritten by this page. 
+                         * - jay */
+                        if ((rw == OBD_BRW_WRITE) && 
+                            (nblocks == blocks_per_page) && 
+                            mapping_cap_page_constant_write(inode->i_mapping))
+                               SetPageConstant(page);
+#endif
 
                         if (bio != NULL &&
                             can_be_merged(bio, sector) &&
