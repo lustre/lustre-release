@@ -404,7 +404,10 @@ static int quota_check_common(struct obd_device *obd, unsigned int uid,
                 }
 
                 spin_unlock(&lqs->lqs_lock);
-                lqs_putref(lqs);
+                /* When cycle is zero, lqs_*_pending will be changed. We will
+                 * putref lqs in quota_pending_commit instead of here b=14784 */
+                if (cycle)
+                        lqs_putref(lqs);
         }
 
         if (rc2[0] == QUOTA_RET_ACQUOTA || rc2[1] == QUOTA_RET_ACQUOTA)
@@ -499,27 +502,36 @@ static int quota_pending_commit(struct obd_device *obd, unsigned int uid,
 
                 quota_search_lqs(&qdata[i], NULL, qctxt, &lqs);
                 if (lqs) {
+                        int flag = 0;
                         spin_lock(&lqs->lqs_lock);
                         CDEBUG(D_QUOTA, "pending: %lu, count: %d.\n",
                                isblk ? lqs->lqs_bwrite_pending :
                                lqs->lqs_iwrite_pending, count);
 
                         if (isblk) {
-                                if (lqs->lqs_bwrite_pending >= count)
+                                if (lqs->lqs_bwrite_pending >= count) {
                                         lqs->lqs_bwrite_pending -= count;
-                                else
+                                        flag = 1;
+                                } else {
                                         CDEBUG(D_ERROR,
                                                "there are too many blocks!\n");
+                                }
                         } else {
-                                if (lqs->lqs_iwrite_pending >= count)
+                                if (lqs->lqs_iwrite_pending >= count) {
                                         lqs->lqs_iwrite_pending -= count;
-                                else
+                                        flag = 1;
+                                } else {
                                         CDEBUG(D_ERROR,
                                                "there are too many files!\n");
+                                }
                         }
 
                         spin_unlock(&lqs->lqs_lock);
                         lqs_putref(lqs);
+                        /* When lqs_*_pening is changed back, we'll putref lqs
+                         * here b=14784 */
+                        if (flag)
+                                lqs_putref(lqs);
                 }
         }
 

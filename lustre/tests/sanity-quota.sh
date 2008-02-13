@@ -165,6 +165,8 @@ test_1_sub() {
 	chmod 0777 $DIR/$tdir
         TESTFILE="$DIR/$tdir/$tfile-0"
 
+	wait_delete_completed
+
         # test for user
         log "  User quota (limit: $LIMIT kbytes)"
         $LFS setquota -u $TSTUSR 0 $LIMIT 0 0 $DIR
@@ -251,6 +253,8 @@ test_2_sub() {
 	chmod 0777 $DIR/$tdir
         TESTFILE="$DIR/$tdir/$tfile-0"
 
+	wait_delete_completed
+
         # test for user
         log "  User quota (limit: $LIMIT files)"
         $LFS setquota -u $TSTUSR 0 0 0 $LIMIT $DIR
@@ -330,6 +334,8 @@ test_block_soft() {
 	TIMER=$(($2 * 3 / 2))
 	OFFSET=0
 
+	wait_delete_completed
+
 	echo "    Write to exceed soft limit"
 	RUNDD="$RUNAS dd if=/dev/zero of=$TESTFILE bs=$BLK_SZ"
 	$RUNDD count=$((BUNIT_SZ+1)) || \
@@ -383,6 +389,7 @@ test_block_soft() {
 
 	# cleanup
 	rm -f $TESTFILE
+	sync; sleep 3; sync;
 }
 
 # block soft limit (start timer, timer goes off, stop timer)
@@ -424,6 +431,8 @@ test_file_soft() {
 	LIMIT=$2
 	TIMER=$(($3 * 3 / 2))
 
+	wait_delete_completed
+
 	echo "    Create files to exceed soft limit"
 	$RUNAS createmany -m ${TESTFILE}_ $((LIMIT + 1)) || \
 		error "create failure, but expect success"
@@ -464,6 +473,7 @@ test_file_soft() {
 
 	# cleanup
 	rm -f ${TESTFILE}_xxx
+	sync; sleep 3; sync;
 }
 
 # file soft limit (start timer, timer goes off, stop timer)
@@ -505,6 +515,8 @@ test_4a() {
         GR_STR5="5c"
         GR_STR6="1111111111111111"
 
+	wait_delete_completed
+
         # test of valid grace strings handling
         echo "  Valid grace strings test"
         $LFS setquota -t -u $GR_STR1 $GR_STR2 $DIR
@@ -528,6 +540,8 @@ test_5() {
 	BLIMIT=$(( $BUNIT_SZ * $((OSTCOUNT + 1)) * 10)) # 10 bunits on each server
 	ILIMIT=$(( $IUNIT_SZ * 10 )) # 10 iunits on mds
 
+	wait_delete_completed
+
 	echo "  Set quota limit (0 $BLIMIT 0 $ILIMIT) for $TSTUSR.$TSTUSR"
 	$LFS setquota -u $TSTUSR 0 $BLIMIT 0 $ILIMIT $DIR
 	$LFS setquota -g $TSTUSR 0 $BLIMIT 0 $ILIMIT $DIR
@@ -547,6 +561,7 @@ test_5() {
 
 	# cleanup
 	unlinkmany $DIR/$tdir/$tfile-0_ $((ILIMIT + 1))
+	sync; sleep 3; sync;
 
 	$LFS setquota -u $TSTUSR 0 0 0 0 $DIR
 	$LFS setquota -g $TSTUSR 0 0 0 0 $DIR
@@ -559,6 +574,8 @@ test_6() {
 		skip "$OSTCOUNT < 2, too few osts"
 		return 0;
 	fi
+
+	wait_delete_completed
 
 	chmod 0777 $DIR/$tdir
 
@@ -610,6 +627,8 @@ test_6() {
 
 	# cleanup
 	rm -f $FILEA
+	sync; sleep 3; sync;
+
 	$LFS setquota -u $TSTUSR 0 0 0 0 $DIR
 	$LFS setquota -g $TSTUSR 0 0 0 0 $DIR
 	return 0
@@ -621,6 +640,8 @@ test_7()
 {
 	chmod 0777 $DIR/$tdir
 	remote_mds && skip "remote mds" && return 0
+
+	wait_delete_completed
 
 	LIMIT=$(( $BUNIT_SZ * $(($OSTCOUNT + 1)) ))
 	TESTFILE="$DIR/$tdir/$tfile-0"
@@ -674,6 +695,8 @@ test_8() {
 
 	[ ! -d $DBENCH_LIB ] && skip "dbench not installed" && return 0
 
+	wait_delete_completed
+
 	echo "  Set enough high limit for user: $TSTUSR"
 	$LFS setquota -u $TSTUSR 0 $BLK_LIMIT 0 $FILE_LIMIT $DIR
 	echo "  Set enough high limit for group: $TSTUSR"
@@ -692,6 +715,8 @@ test_8() {
 	RC=$?
 
 	rm -f client.txt
+	sync; sleep 3; sync;
+
 	cd $SAVE_PWD
 	return $RC
 }
@@ -719,6 +744,8 @@ check_whether_skip () {
 
 test_9() {
 	check_whether_skip && return 0
+
+	wait_delete_completed
 
  	set_blk_tunesz 512
  	set_blk_unitsz 1024
@@ -761,8 +788,6 @@ test_9() {
 	set_blk_unitsz $((128 * 1024))
 	set_blk_tunesz $((128 * 1024 / 2))
 
-	wait_delete_completed
-
         return $RC
 }
 run_test 9 "run for fixing bug10707(64bit) ==========="
@@ -772,7 +797,7 @@ test_10() {
 	chmod 0777 $DIR/$tdir
 	check_whether_skip && return 0
 
-	sync; sleep 10; sync;
+	wait_delete_completed
 
  	set_blk_tunesz 512
  	set_blk_unitsz 1024
@@ -820,13 +845,13 @@ test_10() {
 	set_blk_unitsz $((128 * 1024))
 	set_blk_tunesz $((128 * 1024 / 2))
 
-	wait_delete_completed
-
 	return $RC
 }
 run_test 10 "run for fixing bug10707(32bit) ==========="
 
 test_11() {
+       wait_delete_completed
+
        #prepare the test
        block_limit=`(echo 0; df -t lustre -P | awk '{print $(NF - 4)}') | tail -n 1`
        echo $block_limit
@@ -902,6 +927,8 @@ test_12() {
 	LIMIT=$(( $BUNIT_SZ * $(($OSTCOUNT + 1)) * 10)) # 10 bunits each sever
 	TESTFILE="$DIR/$tdir/$tfile-0"
 	TESTFILE2="$DIR2/$tdir/$tfile-1"
+
+	wait_delete_completed
 
 	echo "   User quota (limit: $LIMIT kbytes)"
 	$LFS setquota -u $TSTUSR 0 $LIMIT 0 0 $DIR
@@ -1012,6 +1039,7 @@ test_13() {
 		error "files too small $fz + $fz2 < $((BUNIT_SZ * BLK_SZ * 10))"
 
 	rm -f $TESTFILE $TESTFILE.2
+	sync; sleep 3; sync;
 
 	$LFS setquota -u $TSTUSR 0 0 0 0 $DIR		# clear user limit
 }
@@ -1070,6 +1098,7 @@ test_14(){ # b=12223 -- setting quota on root
 	# clean
 	unlinkmany ${TESTFILE} 15
 	rm -f $TESTFILE
+	sync; sleep 3; sync;
 }
 run_test 14 "test setting quota on root ==="
 
@@ -1084,6 +1113,8 @@ test_14a(){
         # 2. ensure that switch to new mode will start conversion
         # 3. start quota in old mode and put some entries
         # 4. restart quota in new mode forcing conversion and check the entries
+
+        wait_delete_completed
 
         MISSING_USERS=""
         for i in `seq 1 30`; do
@@ -1124,6 +1155,8 @@ test_15(){
         LIMIT=$((24 * 1024 * 1024 * 1024 * 1024)) # 24 TB
         PATTERN="`echo $DIR | sed 's/\//\\\\\//g'`"
 
+	wait_delete_completed
+
         # test for user
         $LFS setquota -u $TSTUSR 0 $LIMIT 0 0 $DIR || error "failed setting user quota limit $LIMIT"
         TOTAL_LIMIT="`$LFS quota -u $TSTUSR $DIR | awk '/^.*'$PATTERN'.*[[:digit:]+][[:space:]+]/ { print $4 }'`"
@@ -1150,6 +1183,8 @@ run_test 15 "set block quota more than 4T ==="
 test_16_tub() {
 	LIMIT=$(( $BUNIT_SZ * $(($OSTCOUNT + 1)) * 4))
 	TESTFILE="$DIR/$tdir/$tfile"
+
+	wait_delete_completed
 
 	echo "  User quota (limit: $LIMIT kbytes)"
 	if [ $1 == "u" ]; then
@@ -1181,6 +1216,7 @@ test_16_tub() {
 	fi
 
 	rm -f $TESTFILE
+	sync; sleep 3; sync;
 	$LFS setquota -$1 $TSTUSR 0 0 0 0 $DIR
 }
 
@@ -1207,6 +1243,8 @@ run_test 16 "test without adjusting qunit"
 test_17() {
 	set_blk_tunesz 512
 	set_blk_unitsz 1024
+
+	wait_delete_completed
 
         #define OBD_FAIL_QUOTA_RET_QDATA | OBD_FAIL_ONCE
 	lustre_fail ost 0x80000A02
