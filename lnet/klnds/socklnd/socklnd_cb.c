@@ -2261,7 +2261,8 @@ ksocknal_recv_hello (lnet_ni_t *ni, ksock_conn_t *conn,
                 return -EPROTO;
         }
 
-        if (conn->ksnc_port > LNET_ACCEPTOR_MAX_RESERVED_PORT) {          
+        if (!active &&
+            conn->ksnc_port > LNET_ACCEPTOR_MAX_RESERVED_PORT) {          
                 /* Userspace NAL assigns peer process ID from socket */
                 recv_id.pid = conn->ksnc_port | LNET_PID_USERFLAG;
                 recv_id.nid = LNET_MKNID(LNET_NIDNET(ni->ni_nid), conn->ksnc_ipaddr);
