@@ -282,7 +282,9 @@ static struct ptlrpc_request *mdc_intent_open_pack(struct obd_export *exp,
                         /* join is like an unlink of the tail */
                 size[DLM_INTENT_REC_OFF + 3] = sizeof(struct mds_rec_join);
                 req = ldlm_prep_enqueue_req(exp, 7, size, &cancels, count);
-                mdc_join_pack(req, DLM_INTENT_REC_OFF + 3, data, head_size);
+                if (req)
+                        mdc_join_pack(req, DLM_INTENT_REC_OFF + 3, data, 
+                                      head_size);
         } else {
                 req = ldlm_prep_enqueue_req(exp, 6, size, &cancels, count);
                 it->it_flags &= ~O_JOIN_FILE;
