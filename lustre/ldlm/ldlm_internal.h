@@ -66,6 +66,12 @@ struct ldlm_cb_set_arg {
         __u32 type; /* LDLM_BL_CALLBACK or LDLM_CP_CALLBACK */
 };
 
+typedef enum {
+        LDLM_WORK_BL_AST,
+        LDLM_WORK_CP_AST,
+        LDLM_WORK_REVOKE_AST
+} ldlm_desc_ast_t; 
+
 void ldlm_grant_lock(struct ldlm_lock *lock, struct list_head *work_list);
 struct ldlm_lock *
 ldlm_lock_create(struct ldlm_namespace *ns, const struct ldlm_res_id *,
@@ -80,8 +86,7 @@ void ldlm_add_ast_work_item(struct ldlm_lock *lock, struct ldlm_lock *new,
                                 struct list_head *work_list);
 int ldlm_reprocess_queue(struct ldlm_resource *res, struct list_head *queue,
                          struct list_head *work_list);
-int ldlm_run_bl_ast_work(struct list_head *rpc_list);
-int ldlm_run_cp_ast_work(struct list_head *rpc_list);
+int ldlm_run_ast_work(struct list_head *rpc_list, ldlm_desc_ast_t ast_type);
 int ldlm_lock_remove_from_lru(struct ldlm_lock *lock);
 int ldlm_lock_remove_from_lru_nolock(struct ldlm_lock *lock);
 void ldlm_lock_add_to_lru_nolock(struct ldlm_lock *lock);

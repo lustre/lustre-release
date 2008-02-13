@@ -399,7 +399,7 @@ restart:
                                                      &rpc_list);
 
                                 unlock_res(res);
-                                rc = ldlm_run_bl_ast_work(&rpc_list);
+                                rc = ldlm_run_ast_work(&rpc_list, LDLM_WORK_BL_AST);
                                 lock_res(res);
                                 if (rc == -ERESTART)
                                         GOTO(restart, -ERESTART);

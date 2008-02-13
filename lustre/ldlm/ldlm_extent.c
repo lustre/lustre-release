@@ -414,7 +414,7 @@ int ldlm_process_extent_lock(struct ldlm_lock *lock, int *flags, int first_enq,
                 if (list_empty(&lock->l_res_link))
                         ldlm_resource_add_lock(res, &res->lr_waiting, lock);
                 unlock_res(res);
-                rc = ldlm_run_bl_ast_work(&rpc_list);
+                rc = ldlm_run_ast_work(&rpc_list, LDLM_WORK_BL_AST);
                 lock_res(res);
                 if (rc == -ERESTART)
                         GOTO(restart, -ERESTART);

@@ -1389,7 +1389,7 @@ static void ldlm_handle_cp_callback(struct ptlrpc_request *req,
 
         LDLM_DEBUG(lock, "callback handler finished, about to run_ast_work");
 
-        ldlm_run_cp_ast_work(&ast_list);
+        ldlm_run_ast_work(&ast_list, LDLM_WORK_CP_AST);
 
         LDLM_DEBUG_NOLOCK("client completion callback handler END (lock %p)",
                           lock);
@@ -1760,7 +1760,6 @@ void ldlm_revoke_export_locks(struct obd_export *exp)
         struct list_head *locklist = &exp->exp_ldlm_data.led_held_locks;
         struct list_head  rpc_list;
         struct ldlm_lock *lock, *next;
-        struct ldlm_lock_desc desc;
 
         ENTRY;
         INIT_LIST_HEAD(&rpc_list);
@@ -1791,26 +1790,14 @@ void ldlm_revoke_export_locks(struct obd_export *exp)
 
                 lock->l_flags |= LDLM_FL_AST_SENT;
                 list_move(&lock->l_export_chain, &rpc_list);
+                LDLM_LOCK_GET(lock);
 
                 unlock_res_and_lock(lock);
         }
         spin_unlock(&exp->exp_ldlm_data.led_lock);
 
-        while (!list_empty(&rpc_list)) {
-                lock = list_entry(rpc_list.next, struct ldlm_lock,
-                                  l_export_chain);
-                list_del_init(&lock->l_export_chain);
+        ldlm_run_ast_work(&rpc_list, LDLM_WORK_REVOKE_AST);
 
-                /* the desc just pretend to exclusive */
-                ldlm_lock2desc(lock, &desc);
-                desc.l_req_mode = LCK_EX;
-                desc.l_granted_mode = 0;
-
-                LDLM_LOCK_GET(lock);
-                lock->l_blocking_ast(lock, &desc, lock->l_ast_data,
-                                     LDLM_CB_BLOCKING);
-                LDLM_LOCK_PUT(lock);
-        }
         EXIT;
 }
 
