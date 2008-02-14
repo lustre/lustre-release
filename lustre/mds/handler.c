@@ -377,7 +377,7 @@ int mds_init_export(struct obd_export *exp)
 
         INIT_LIST_HEAD(&med->med_open_head);
         spin_lock_init(&med->med_open_lock);
-        
+
         spin_lock(&exp->exp_lock);
         exp->exp_connecting = 1;
         spin_unlock(&exp->exp_lock);
@@ -1706,6 +1706,7 @@ int mds_handle(struct ptlrpc_request *req)
                 if (OBD_FAIL_CHECK(OBD_FAIL_MDS_CLOSE_NET))
                         RETURN(0);
                 rc = mds_close(req, REQ_REC_OFF);
+                fail = OBD_FAIL_MDS_CLOSE_NET_REP;
                 break;
 
         case MDS_DONE_WRITING:
@@ -1988,7 +1989,7 @@ static int mds_setup(struct obd_device *obd, struct lustre_cfg* lcfg)
 
         /* We mounted in lustre_fill_super.
            lcfg bufs 1, 2, 4 (device, fstype, mount opts) are ignored.*/
-                
+
         lsi = s2lsi(lmi->lmi_sb);
         fsoptions_to_mds_flags(mds, lsi->lsi_ldd->ldd_mount_opts);
         fsoptions_to_mds_flags(mds, lsi->lsi_lmd->lmd_opts);
@@ -2589,12 +2590,12 @@ static int mdt_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
                 mds_max_threads = mds_min_threads = mds_num_threads;
         } else {
                 /* Base min threads on memory and cpus */
-                mds_min_threads = num_possible_cpus() * num_physpages >> 
+                mds_min_threads = num_possible_cpus() * num_physpages >>
                         (27 - CFS_PAGE_SHIFT);
                 if (mds_min_threads < MDS_THREADS_MIN)
                         mds_min_threads = MDS_THREADS_MIN;
                 /* Largest auto threads start value */
-                if (mds_min_threads > 32) 
+                if (mds_min_threads > 32)
                         mds_min_threads = 32;
                 mds_max_threads = min(MDS_THREADS_MAX, mds_min_threads * 4);
         }
@@ -2604,7 +2605,7 @@ static int mdt_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
                                 MDS_MAXREPSIZE, MDS_REQUEST_PORTAL,
                                 MDC_REPLY_PORTAL, MDS_SERVICE_WATCHDOG_TIMEOUT,
                                 mds_handle, LUSTRE_MDS_NAME,
-                                obd->obd_proc_entry, NULL, 
+                                obd->obd_proc_entry, NULL,
                                 mds_min_threads, mds_max_threads, "ll_mdt", 0);
 
         if (!mds->mds_service) {
@@ -2638,7 +2639,7 @@ static int mdt_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
                                 MDS_MAXREPSIZE, MDS_READPAGE_PORTAL,
                                 MDC_REPLY_PORTAL, MDS_SERVICE_WATCHDOG_TIMEOUT,
                                 mds_handle, "mds_readpage",
-                                obd->obd_proc_entry, NULL, 
+                                obd->obd_proc_entry, NULL,
                                 MDS_THREADS_MIN_READPAGE, mds_max_threads,
                                 "ll_mdt_rdpg", 0);
         if (!mds->mds_readpage_service) {
@@ -2652,7 +2653,7 @@ static int mdt_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
                 GOTO(err_thread3, rc);
 
         ping_evictor_start();
-        
+
         RETURN(0);
 
 err_thread3:

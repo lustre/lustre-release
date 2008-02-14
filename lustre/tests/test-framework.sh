@@ -47,7 +47,7 @@ print_summary () {
         local o=$(echo $O | tr "[:upper:]" "[:lower:]")
         o=${o//_/-}
         o=${o//tyn/tyN}
-        local log=${TMP}/${o}.log 
+        local log=${TMP}/${o}.log
         [ -f $log ] && skipped=$(grep excluded $log | awk '{ printf " %s", $3 }' | sed 's/test_//g')
         [ -f $log ] && slow=$(grep SLOW $log | awk '{ printf " %s", $3 }' | sed 's/test_//g')
         [ "${!O}" = "done" ] && \
@@ -79,9 +79,9 @@ init_test_env() {
 
     export PATH=:$PATH:$LUSTRE/utils:$LUSTRE/utils/gss:$LUSTRE/tests
     export LCTL=${LCTL:-"$LUSTRE/utils/lctl"}
-    [ ! -f "$LCTL" ] && export LCTL=$(which lctl) 
+    [ ! -f "$LCTL" ] && export LCTL=$(which lctl)
     export LFS=${LFS:-"$LUSTRE/utils/lfs"}
-    [ ! -f "$LFS" ] && export LFS=$(which lfs) 
+    [ ! -f "$LFS" ] && export LFS=$(which lfs)
     export L_GETIDENTITY=${L_GETIDENTITY:-"$LUSTRE/utils/l_getidentity"}
     if [ ! -f "$L_GETIDENTITY" ]; then
         if `which l_getidentity > /dev/null 2>&1`; then
@@ -91,9 +91,9 @@ init_test_env() {
         fi
     fi
     export MKFS=${MKFS:-"$LUSTRE/utils/mkfs.lustre"}
-    [ ! -f "$MKFS" ] && export MKFS=$(which mkfs.lustre) 
+    [ ! -f "$MKFS" ] && export MKFS=$(which mkfs.lustre)
     export TUNEFS=${TUNEFS:-"$LUSTRE/utils/tunefs.lustre"}
-    [ ! -f "$TUNEFS" ] && export TUNEFS=$(which tunefs.lustre) 
+    [ ! -f "$TUNEFS" ] && export TUNEFS=$(which tunefs.lustre)
     export CHECKSTAT="${CHECKSTAT:-"checkstat -v"} "
     export FSYTPE=${FSTYPE:-"ldiskfs"}
     export NAME=${NAME:-local}
@@ -102,7 +102,7 @@ init_test_env() {
     [ "$GSS_PIPEFS" = "true" ] && [ ! -f "$LGSSD" ] && \
         export LGSSD=$(which lgssd)
     export LSVCGSSD=${LSVCGSSD:-"$LUSTRE/utils/gss/lsvcgssd"}
-    [ ! -f "$LSVCGSSD" ] && export LSVCGSSD=$(which lsvcgssd) 
+    [ ! -f "$LSVCGSSD" ] && export LSVCGSSD=$(which lsvcgssd)
     export KRB5DIR=${KRB5DIR:-"/usr/kerberos"}
     export DIR2
 
@@ -127,14 +127,14 @@ init_test_env() {
             ;;
     esac
 
-    # Paths on remote nodes, if different 
+    # Paths on remote nodes, if different
     export RLUSTRE=${RLUSTRE:-$LUSTRE}
     export RPWD=${RPWD:-$PWD}
     export I_MOUNTED=${I_MOUNTED:-"no"}
 
     # command line
-    
-    while getopts "rvf:" opt $*; do 
+
+    while getopts "rvf:" opt $*; do
         case $opt in
             f) CONFIG=$OPTARG;;
             r) REFORMAT=--reformat;;
@@ -270,7 +270,7 @@ unload_modules() {
     MODULES=$($LCTL modules | awk '{ print $2 }')
     if [ -n "$MODULES" ]; then
     echo "Modules still loaded: "
-    echo $MODULES 
+    echo $MODULES
     if [ -e $LPROC ]; then
         echo "Lustre still loaded"
         cat $LPROC/devices || true
@@ -391,7 +391,7 @@ ostdevlabel() {
 }
 
 # Facet functions
-# start facet device options 
+# start facet device options
 start() {
     facet=$1
     shift
@@ -399,12 +399,12 @@ start() {
     shift
     echo "Starting ${facet}: $@ ${device} ${MOUNT%/*}/${facet}"
     do_facet ${facet} mkdir -p ${MOUNT%/*}/${facet}
-    do_facet ${facet} mount -t lustre $@ ${device} ${MOUNT%/*}/${facet} 
+    do_facet ${facet} mount -t lustre $@ ${device} ${MOUNT%/*}/${facet}
     RC=${PIPESTATUS[0]}
     if [ $RC -ne 0 ]; then
-        echo mount -t lustre $@ ${device} ${MOUNT%/*}/${facet} 
+        echo mount -t lustre $@ ${device} ${MOUNT%/*}/${facet}
         echo Start of ${device} on ${facet} failed ${RC}
-    else 
+    else
         do_facet ${facet} "sysctl -w lnet.debug=$PTLDEBUG; \
         sysctl -w lnet.subsystem_debug=${SUBSYSTEM# }; \
         sysctl -w lnet.debug_mb=${DEBUG_SIZE}"
@@ -452,7 +452,7 @@ zconf_mount() {
         exit 1
     fi
 
-    echo "Starting client: $OPTIONS $device $mnt" 
+    echo "Starting client: $OPTIONS $device $mnt"
     do_node $client mkdir -p $mnt
     do_node $client mount -t lustre $OPTIONS $device $mnt || return 1
 
@@ -479,7 +479,7 @@ shutdown_facet() {
     facet=$1
     if [ "$FAILURE_MODE" = HARD ]; then
         $POWER_DOWN `facet_active_host $facet`
-        sleep 2 
+        sleep 2
     elif [ "$FAILURE_MODE" = SOFT ]; then
         stop $facet
     fi
@@ -570,7 +570,7 @@ wait_mds_recovery_done () {
         echo "Waiting $(($MAX - $WAIT)) secs for MDS recovery done"
     done
     echo "MDS recovery not done in $MAX sec"
-    return 1            
+    return 1
 }
 
 wait_exit_ST () {
@@ -668,6 +668,11 @@ fail() {
     df $MOUNT || error "post-failover df: $?"
 }
 
+fail_nodf() {
+        local facet=$1
+        facet_failover $facet
+}
+
 fail_abort() {
     local facet=$1
     stop $facet
@@ -696,7 +701,7 @@ h2gm () {
 
 h2name_or_ip() {
     if [ "$1" = "client" -o "$1" = "'*'" ]; then echo \'*\'; else
-        echo $1"@$2" 
+        echo $1"@$2"
     fi
 }
 
@@ -759,7 +764,7 @@ facet_active() {
     fi
 
     active=${!activevar}
-    if [ -z "$active" ] ; then 
+    if [ -z "$active" ] ; then
         echo -n ${facet}
     else
         echo -n ${active}
@@ -778,7 +783,7 @@ facet_active_host() {
 
 change_active() {
     local facet=$1
-    failover=${facet}failover 
+    failover=${facet}failover
     host=`facet_host $failover`
     [ -z "$host" ] && return
     curactive=`facet_active $facet`
@@ -853,8 +858,8 @@ stopall() {
     if [ $activemds != "mds1" ]; then
         fail mds1
     fi
-    
-    # assume client mount is local 
+
+    # assume client mount is local
     grep " $MOUNT " /proc/mounts && zconf_umount $HOSTNAME $MOUNT $*
     grep " $MOUNT2 " /proc/mounts && zconf_umount $HOSTNAME $MOUNT2 $*
     [ "$CLIENTONLY" ] && return
@@ -993,7 +998,7 @@ cleanup_and_setup_lustre() {
     if [ "$ONLY" == "cleanup" -o "`mount | grep $MOUNT`" ]; then
         sysctl -w lnet.debug=0 || true
         cleanupall
-        if [ "$ONLY" == "cleanup" ]; then 
+        if [ "$ONLY" == "cleanup" ]; then
     	    exit 0
         fi
     fi
@@ -1010,7 +1015,7 @@ check_and_cleanup_lustre() {
     unset I_MOUNTED
 }
 
-####### 
+#######
 # General functions
 
 check_network() {
@@ -1159,7 +1164,7 @@ debugrestore() {
 }
 
 ##################################
-# Test interface 
+# Test interface
 ##################################
 
 error() {
@@ -1260,7 +1265,7 @@ run_test() {
     fi
 
     run_one $1 "$2"
-    
+
     return $?
 }
 
@@ -1352,8 +1357,8 @@ canonical_path() {
 }
 
 sync_clients() {
-    [ -d $DIR1 ] && cd $DIR1 && sync; sleep 1; sync 
-    [ -d $DIR2 ] && cd $DIR2 && sync; sleep 1; sync 
+    [ -d $DIR1 ] && cd $DIR1 && sync; sleep 1; sync
+    [ -d $DIR2 ] && cd $DIR2 && sync; sleep 1; sync
 	cd $SAVE_PWD
 }
 
@@ -1371,14 +1376,14 @@ check_grant() {
 	for i in `seq $OSTCOUNT`; do
 		$LFS setstripe $DIR1/${tfile}_check_grant_$i -i $(($i -1)) -c 1
 		dd if=/dev/zero of=$DIR1/${tfile}_check_grant_$i bs=4k \
-					      count=1 > /dev/null 2>&1 
+					      count=1 > /dev/null 2>&1
 	done
 	# sync all the data and make sure no pending data on server
 	sync_clients
 	
-	#get client grant and server grant 
+	#get client grant and server grant
 	client_grant=0
-    for d in ${LPROC}/osc/*/cur_grant_bytes; do 
+    for d in ${LPROC}/osc/*/cur_grant_bytes; do
 		client_grant=$((client_grant + `cat $d`))
 	done
 	server_grant=0
@@ -1391,7 +1396,7 @@ check_grant() {
 	        rm $DIR1/${tfile}_check_grant_$i
 	done
 
-	#check whether client grant == server grant 
+	#check whether client grant == server grant
 	if [ $client_grant != $server_grant ]; then
 		echo "failed: client:${client_grant} server: ${server_grant}"
 		return 1
@@ -1468,7 +1473,7 @@ nodes_list () {
     # FIXME. We need a list of clients
     local myNODES=$HOSTNAME
     local myNODES_sort
-    
+
     if [ "$PDSH" -a "$PDSH" != "no_dsh" ]; then
         myNODES="$myNODES $(osts_nodes) $(mdts_nodes)"
     fi
@@ -1491,8 +1496,8 @@ check_runas_id() {
     chmod 0755 $DIR
     chown $myRUNAS_ID:$myRUNAS_ID $DIR/d0_runas_test
     $myRUNAS touch $DIR/d0_runas_test/f$$ || \
-        error "unable to write to $DIR/d0_runas_test as UID $myRUNAS_ID. 
-        Please set RUNAS_ID to some UID which exists on MDS and client or 
+        error "unable to write to $DIR/d0_runas_test as UID $myRUNAS_ID.
+        Please set RUNAS_ID to some UID which exists on MDS and client or
         add user $myRUNAS_ID:$myRUNAS_ID on these nodes."
     rm -rf $DIR/d0_runas_test
 }

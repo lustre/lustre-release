@@ -140,6 +140,7 @@ int __obd_fail_check_set(__u32 id, __u32 value, int set);
 #define OBD_FAIL_MDS_LLOG_CREATE_FAILED  0x13c
 #define OBD_FAIL_MDS_OSC_PRECREATE       0x13d
 #define OBD_FAIL_MDS_LOV_SYNC_RACE       0x13e
+#define OBD_FAIL_MDS_CLOSE_NET_REP       0x13f
 
 #define OBD_FAIL_OST                     0x200
 #define OBD_FAIL_OST_CONNECT_NET         0x201
@@ -370,7 +371,7 @@ static inline void obd_race(__u32 id)
 
 extern atomic_t libcfs_kmemory;
 
-#ifdef LPROCFS 
+#ifdef LPROCFS
 #define obd_memory_add(size)                                                  \
         lprocfs_counter_add(obd_memory, OBD_MEMORY_STAT, (long)(size))
 #define obd_memory_sub(size)                                                  \
@@ -412,7 +413,7 @@ static inline void obd_memory_sub(long size)
         obd_alloc -= size;
 }
 
-static inline void obd_pages_add(int order) 
+static inline void obd_pages_add(int order)
 {
         obd_pages += 1<< order;
         if (obd_pages > obd_max_pages)
@@ -709,7 +710,7 @@ do {                                                                          \
         cfs_mem_cache_free((slab), (ptr));                                    \
         (ptr) = NULL;                                                         \
         0;                                                                    \
-}) 
+})
 #define OBD_SLAB_ALLOC(ptr, slab, type, size)                                 \
 do {                                                                          \
         LASSERT(!in_interrupt());                                             \

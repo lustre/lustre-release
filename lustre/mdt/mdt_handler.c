@@ -348,7 +348,7 @@ void mdt_pack_size2body(struct mdt_thread_info *info, struct mdt_object *o)
 {
         struct mdt_body *b;
         struct lu_attr *attr = &info->mti_attr.ma_attr;
-        
+
         b = req_capsule_server_get(info->mti_pill, &RMF_MDT_BODY);
 
         /* Check if Size-on-MDS is enabled. */
@@ -392,7 +392,7 @@ void mdt_pack_attr2body(struct mdt_thread_info *info, struct mdt_body *b,
                 b->ino  =  fid_oid(fid);       /* 1.6 compatibility */
                 b->generation = fid_ver(fid);  /* 1.6 compatibility */
                 b->valid |= OBD_MD_FLGENER;    /* 1.6 compatibility */
-                
+
                 CDEBUG(D_INODE, DFID": nlink=%d, mode=%o, size="LPU64"\n",
                                 PFID(fid), b->nlink, b->mode, b->size);
         }
@@ -778,7 +778,7 @@ static int mdt_getattr_name_lock(struct mdt_thread_info *info,
         if (name == NULL)
                 RETURN(err_serious(-EFAULT));
 
-        namelen = req_capsule_get_size(info->mti_pill, &RMF_NAME, 
+        namelen = req_capsule_get_size(info->mti_pill, &RMF_NAME,
                                        RCL_CLIENT) - 1;
         LASSERT(namelen >= 0);
 
@@ -1488,6 +1488,12 @@ static int mdt_reint(struct mdt_thread_info *info)
         };
 
         ENTRY;
+
+        if (OBD_FAIL_CHECK_RESET(OBD_FAIL_MDS_REINT_NET,
+                                 OBD_FAIL_MDS_REINT_NET)) {
+                info->mti_fail_id = OBD_FAIL_MDS_REINT_NET;
+                RETURN(0);
+        }
 
         opc = mdt_reint_opcode(info, reint_fmts);
         if (opc >= 0) {
@@ -3659,7 +3665,7 @@ static void mdt_fini(const struct lu_env *env, struct mdt_device *m)
         ENTRY;
 
         ping_evictor_stop();
-        
+
         target_recovery_fini(obd);
         mdt_stop_ptlrpc_service(m);
 
@@ -4546,11 +4552,11 @@ int mdt_postrecov(const struct lu_env *env, struct mdt_device *mdt)
         struct obd_device *obd = mdt->mdt_md_dev.md_lu_dev.ld_obd;
         int rc, lost;
         ENTRY;
-        /* if some clients didn't participate in recovery then we can possibly 
+        /* if some clients didn't participate in recovery then we can possibly
          * lost sequence. Now we should increase sequence for safe value */
         lost = obd->obd_max_recoverable_clients - obd->obd_connected_clients;
         mdt_seq_adjust(env, mdt, lost);
-        
+
         rc = ld->ld_ops->ldo_recovery_complete(env, ld);
         RETURN(rc);
 }

@@ -102,7 +102,7 @@ static void mds_cancel_cookies_cb(struct obd_device *obd, __u64 transno,
 
 /* Assumes caller has already pushed us into the kernel context. */
 int mds_finish_transno(struct mds_obd *mds, struct inode *inode, void *handle,
-                       struct ptlrpc_request *req, int rc, __u32 op_data, 
+                       struct ptlrpc_request *req, int rc, __u32 op_data,
                        int force_sync)
 {
         struct mds_export_data *med = &req->rq_export->exp_mds_data;
@@ -172,10 +172,14 @@ int mds_finish_transno(struct mds_obd *mds, struct inode *inode, void *handle,
                 mcd->mcd_last_close_data = cpu_to_le32(op_data);
         } else {
                 prev_transno = le64_to_cpu(mcd->mcd_last_transno);
-                mcd->mcd_last_transno = cpu_to_le64(transno);
-                mcd->mcd_last_xid = cpu_to_le64(req->rq_xid);
-                mcd->mcd_last_result = cpu_to_le32(rc);
-                mcd->mcd_last_data = cpu_to_le32(op_data);
+                if (((lustre_msg_get_flags(req->rq_reqmsg) &
+                      (MSG_RESENT | MSG_REPLAY)) == 0) ||
+                    (transno > prev_transno)) {
+                        mcd->mcd_last_transno = cpu_to_le64(transno);
+                        mcd->mcd_last_xid = cpu_to_le64(req->rq_xid);
+                        mcd->mcd_last_result = cpu_to_le32(rc);
+                        mcd->mcd_last_data = cpu_to_le32(op_data);
+                }
         }
         /* update the server data to not lose the greatest transno. Bug 11125 */
         if ((transno == 0) && (prev_transno == mds->mds_last_transno))
@@ -188,7 +192,7 @@ int mds_finish_transno(struct mds_obd *mds, struct inode *inode, void *handle,
                 struct obd_export *exp = req->rq_export;
 
                 if (!force_sync)
-                        force_sync = fsfilt_add_journal_cb(exp->exp_obd,transno, 
+                        force_sync = fsfilt_add_journal_cb(exp->exp_obd,transno,
                                                           handle, mds_commit_cb,
                                                           NULL);
 
@@ -610,7 +614,7 @@ static int mds_reint_setattr(struct mds_update_record *rec, int offset,
                         if (logcookies == NULL)
                                 GOTO(cleanup, rc = -ENOMEM);
 
-                        if (mds_log_op_setattr(obd, inode->i_uid, inode->i_gid, 
+                        if (mds_log_op_setattr(obd, inode->i_uid, inode->i_gid,
                                                lmm, lmm_size,
                                                logcookies, cookie_size) <= 0) {
                                 OBD_FREE(logcookies, cookie_size);
@@ -1825,7 +1829,7 @@ static int mds_reint_link(struct mds_update_record *rec, int offset,
 
         if (rec->ur_dlm)
                 ldlm_request_cancel(req, rec->ur_dlm, 0);
-        
+
         /* Step 1: Lookup the source inode and target directory by FID */
         de_src = mds_fid2dentry(mds, rec->ur_fid1, NULL);
         if (IS_ERR(de_src))

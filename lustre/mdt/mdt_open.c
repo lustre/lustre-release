@@ -125,7 +125,7 @@ void mdt_sizeonmds_enable(struct mdt_thread_info *info,
 {
        spin_lock(&info->mti_mdt->mdt_ioepoch_lock);
        if (info->mti_epoch->ioepoch == mo->mot_ioepoch) {
-                LASSERT(!mdt_epoch_opened(mo)); 
+                LASSERT(!mdt_epoch_opened(mo));
                 mo->mot_ioepoch = 0;
                 mo->mot_flags = 0;
        }
@@ -141,7 +141,7 @@ int mdt_epoch_open(struct mdt_thread_info *info, struct mdt_object *o)
         int rc = 0;
         ENTRY;
 
-        if (!(mdt_conn_flags(info) & OBD_CONNECT_SOM) || 
+        if (!(mdt_conn_flags(info) & OBD_CONNECT_SOM) ||
             !S_ISREG(lu_object_attr(&o->mot_obj.mo_lu)))
                 RETURN(0);
 
@@ -451,7 +451,7 @@ static int mdt_mfd_open(struct mdt_thread_info *info, struct mdt_object *p,
                         /* Check wheather old cookie already exist in
                          * the list, becasue when do recovery, client
                          * might be disconnected from server, and
-                         * restart replay, so there maybe some orphan 
+                         * restart replay, so there maybe some orphan
                          * mfd here, we should remove them */
                         LASSERT(info->mti_rr.rr_handle != NULL);
                         old_mfd = mdt_handle2mfd(info, info->mti_rr.rr_handle);
@@ -1087,8 +1087,8 @@ int mdt_mfd_close(struct mdt_thread_info *info, struct mdt_file_data *mfd)
                 mdt_write_allow(info->mti_mdt, o);
         } else if (mode & FMODE_EPOCH) {
                 ret = mdt_epoch_close(info, o);
-        } 
-        
+        }
+
         /* Update atime on close only. */
         if ((mode & MDS_FMODE_EXEC || mode & FMODE_READ || mode & FMODE_WRITE)
             && (ma->ma_valid & MA_INODE) && (ma->ma_attr.la_valid & LA_ATIME)) {
@@ -1150,6 +1150,12 @@ int mdt_close(struct mdt_thread_info *info)
         struct ptlrpc_request  *req = mdt_info_req(info);
         int rc, ret = 0;
         ENTRY;
+
+        if (OBD_FAIL_CHECK_RESET(OBD_FAIL_MDS_CLOSE_NET,
+                                 OBD_FAIL_MDS_CLOSE_NET)) {
+                info->mti_fail_id = OBD_FAIL_MDS_CLOSE_NET;
+                RETURN(0);
+        }
 
         /* Close may come with the Size-on-MDS update. Unpack it. */
         rc = mdt_close_unpack(info);
@@ -1215,6 +1221,9 @@ int mdt_close(struct mdt_thread_info *info)
         if (OBD_FAIL_CHECK(OBD_FAIL_MDS_CLOSE_PACK))
                 RETURN(err_serious(-ENOMEM));
 
+        if (OBD_FAIL_CHECK_RESET(OBD_FAIL_MDS_CLOSE_NET_REP,
+                                 OBD_FAIL_MDS_CLOSE_NET_REP))
+                info->mti_fail_id = OBD_FAIL_MDS_CLOSE_NET_REP;
         RETURN(rc ? rc : ret);
 }
 
@@ -1252,8 +1261,8 @@ int mdt_done_writing(struct mdt_thread_info *info)
                        ": cookie = "LPX64"\n", PFID(info->mti_rr.rr_fid1),
                        info->mti_epoch->handle.cookie);
                 RETURN(-ESTALE);
-        } 
- 
+        }
+
         LASSERT(mfd->mfd_mode == FMODE_EPOCH ||
                 mfd->mfd_mode == FMODE_EPOCHLCK);
         class_handle_unhash(&mfd->mfd_handle);
