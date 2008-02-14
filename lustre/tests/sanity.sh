@@ -4634,10 +4634,10 @@ test_120g() {
 run_test 120g "Early Lock Cancel: performance test ============="
 
 test_121() { #bug 10589
-	writes=`dd if=/dev/zero of=$DIR/$tfile count=1 2>&1 | awk 'BEGIN { FS="+" } /out/ {print $1}'`
+	writes=$(LANG=C dd if=/dev/zero of=$DIR/$tfile count=1 2>&1 | awk -F '+' '/out/ {print $1}')
 	sysctl -w lustre.fail_loc=0x310
 	cancel_lru_locks osc > /dev/null
-	reads=`dd if=$DIR/$tfile of=/dev/null 2>&1 | awk 'BEGIN { FS="+" } /in/ {print $1}'`
+	reads=$(LANG=C dd if=$DIR/$tfile of=/dev/null 2>&1 | awk -F '+' '/in/ {print $1}')
 	sysctl -w lustre.fail_loc=0
 	[ "$reads" -eq "$writes" ] || error "read" $reads "blocks, must be" $writes
 }
