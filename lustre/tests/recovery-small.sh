@@ -864,12 +864,12 @@ test_59() { # bug 10589
 	zconf_mount `hostname` $MOUNT2 || error "Failed to mount $MOUNT2"
 #define OBD_FAIL_LDLM_CANCEL_EVICT_RACE  0x311
 	sysctl -w lustre.fail_loc=0x311
-	writes=`dd if=/dev/zero of=$DIR2/$tfile count=1 2>&1 | awk 'BEGIN { FS="+" } /out/ {print $1}'`
+	writes=$(LANG=C dd if=/dev/zero of=$DIR2/$tfile count=1 2>&1 | awk  -F '+' '/out/ {print $1}')
 	sysctl -w lustre.fail_loc=0
 	sync
 	zconf_umount `hostname` $DIR2 -f
-	reads=`dd if=$DIR/$tfile of=/dev/null 2>&1 | awk 'BEGIN { FS="+" } /in/ {print $1}'`
-	[ $reads -eq $writes ] || error "read" $reads "blocks, must be" $writes
+	reads=$(LANG=C dd if=$DIR/$tfile of=/dev/null 2>&1 | awk -F '+' '/in/ {print $1}')
+	[ "$reads" -eq "$writes" ] || error "read" $reads "blocks, must be" $writes
 }
 run_test 59 "Read cancel race on client eviction"
 
