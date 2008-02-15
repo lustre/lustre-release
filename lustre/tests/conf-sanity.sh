@@ -1446,41 +1446,37 @@ test_38() { # bug 14222
 	stop_mds
 	log "rename lov_objid file on MDS"
 	rm -f $TMP/lov_objid.orig
-	do_facet mds "debugfs -w $MDSDEV" <<-EOF
-		dump lov_objid $TMP/lov_objid.orig
-		rm lov_objid
-	EOF
+	do_facet mds "debugfs -c -R \\\"dump lov_objid $TMP/lov_objid.orig\\\" $MDSDEV"
+	do_facet mds "debugfs -w -R \\\"rm lov_objid\\\" $MDSDEV"
+
 	do_facet mds "od -Ax -td8 $TMP/lov_objid.orig"
 	# check create in mds_lov_connect
 	start_mds
 	mount_client $MOUNT
 	for f in $FILES; do
 		[ $V ] && log "verifying $DIR/$tdir/$f"
-		diff $f $DIR/$tdir/$f || ERROR=y
+		diff -q $f $DIR/$tdir/$f || ERROR=y
 	done
-	do_facet mds "debugfs -c $MDSDEV" <<-EOF
-		dump lov_objid $TMP/lov_objid.new
-	EOF
+	do_facet mds "debugfs -c -R \\\"dump lov_objid $TMP/lov_objid.new\\\"  $MDSDEV"
 	do_facet mds "od -Ax -td8 $TMP/lov_objid.new"
 	[ "$ERROR" = "y" ] && error "old and new files are different after connect" || true
 	
 	
 	# check it's updates in sync
 	umount_client $MOUNT
-	stop_mds	
-	multiop $TMP/lov_objid.clear Ow4096c
-	do_facet mds "debugfs -w $MDSDEV" <<-EOF
-		write $TMP/lov_objid.clear lov_objid
-	EOF
+	stop_mds
+
+	do_facet mds dd if=/dev/zero of=$TMP/lov_objid.clear bs=4096 count=1
+	do_facet mds "debugfs -w -R \\\"rm lov_objid\\\" $MDSDEV"
+	do_facet mds "debugfs -w -R \\\"write $TMP/lov_objid.clear lov_objid\\\" $MDSDEV "
+
 	start_mds
 	mount_client $MOUNT
 	for f in $FILES; do
 		[ $V ] && log "verifying $DIR/$tdir/$f"
-		diff $f $DIR/$tdir/$f || ERROR=y
+		diff -q $f $DIR/$tdir/$f || ERROR=y
 	done
-	do_facet mds "debugfs -c $MDSDEV" <<-EOF
-		dump lov_objid $TMP/lov_objid.new1
-	EOF
+	do_facet mds "debugfs -c -R \\\"dump lov_objid $TMP/lov_objid.new1\\\" $MDSDEV"
 	do_facet mds "od -Ax -td8 $TMP/lov_objid.new1"
 	umount_client $MOUNT
 	stop_mds
