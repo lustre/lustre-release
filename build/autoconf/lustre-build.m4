@@ -22,7 +22,7 @@ AC_DEFUN([LB_CANONICAL_SYSTEM],
 	darwin*)
 		lb_target_os="darwin"
 		;;
-	solaris2.11*)
+	solaris*)
 		lb_target_os="SunOS"
 		;;esac
 AC_SUBST(lb_target_os)
