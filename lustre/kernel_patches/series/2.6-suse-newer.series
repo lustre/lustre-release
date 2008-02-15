@@ -14,3 +14,4 @@ bitops_ext2_find_next_le_bit-2.6.patch
 vfs_intent-reduce-stack-usage-2.6-suse-newer.patch
 atomic_add_return-sles9.patch
 modpost_external_module_updates_sles9.patch
+netpoll_xmit_lock-2.6-suse.patch
