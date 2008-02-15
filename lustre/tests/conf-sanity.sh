@@ -1532,9 +1532,9 @@ test_39() { #bug 14413
         PTLDEBUG=malloc
         setup
         cleanup
-        perl $SRCDIR/leak_finder.pl $TMP/debug 2>&1 | egrep "*** Leak:" && error
+        perl $SRCDIR/leak_finder.pl $TMP/debug 2>&1 | egrep '*** Leak:' && 
+                error "memory leak detected" || true
 }
-
 run_test 39 "leak_finder recognizes both LUSTRE and LNET malloc messages"
 
 equals_msg `basename $0`: test complete
