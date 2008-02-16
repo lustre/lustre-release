@@ -1824,8 +1824,10 @@ int target_pack_pool_reply(struct ptlrpc_request *req)
 {
         struct ldlm_pool *pl;
         ENTRY;
-
-        if (!req->rq_export || !exp_connect_lru_resize(req->rq_export)) {
+   
+        if (!req->rq_export || !req->rq_export->exp_obd ||
+            !req->rq_export->exp_obd->obd_namespace ||
+            !exp_connect_lru_resize(req->rq_export)) {
                 lustre_msg_set_slv(req->rq_repmsg, 0);
                 lustre_msg_set_limit(req->rq_repmsg, 0);
                 RETURN(0);

@@ -1142,6 +1142,35 @@ cancel_lru_locks() {
     $LCTL mark "cancel_lru_locks $1 stop"
 }
 
+default_lru_size()
+{
+        NR_CPU=$(grep -c "processor" /proc/cpuinfo)
+        DEFAULT_LRU_SIZE=$((100 * NR_CPU))
+        echo "$DEFAULT_LRU_SIZE"
+}
+
+lru_resize_enable()
+{
+        NS=$1
+        test "x$NS" = "x" && NS="mdc"
+        for F in $LPROC/ldlm/namespaces/*$NS*/lru_size; do
+                D=$(dirname $F)
+                log "Enable lru resize for $(basename $D)"
+                echo "0" > $F
+        done
+}
+
+lru_resize_disable()
+{
+        NS=$1
+        test "x$NS" = "x" && NS="mdc"
+        for F in $LPROC/ldlm/namespaces/*$NS*/lru_size; do
+                D=$(dirname $F)
+                log "Disable lru resize for $(basename $D)"
+                DEFAULT_LRU_SIZE=$(default_lru_size)
+                echo "$DEFAULT_LRU_SIZE" > $F
+        done
+}
 
 pgcache_empty() {
     for a in /proc/fs/lustre/llite/*/dump_page_cache; do

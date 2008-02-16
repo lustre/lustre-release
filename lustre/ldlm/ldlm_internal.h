@@ -47,6 +47,8 @@ int ldlm_cancel_lru(struct ldlm_namespace *ns, int nr, ldlm_sync_t sync,
                     int flags);
 int ldlm_cancel_lru_local(struct ldlm_namespace *ns, struct list_head *cancels,
                           int count, int max, int cancel_flags, int flags);
+int ldlm_cancel_lru_estimate(struct ldlm_namespace *ns, int count, int max, 
+                             int flags);
 
 /* ldlm_resource.c */
 int ldlm_resource_putref_locked(struct ldlm_resource *res);
@@ -138,3 +140,46 @@ struct ldlm_state {
 int ldlm_init(void);
 void ldlm_exit(void);
 
+enum ldlm_policy_res {
+        LDLM_POLICY_CANCEL_LOCK,
+        LDLM_POLICY_KEEP_LOCK
+};
+
+typedef enum ldlm_policy_res ldlm_policy_res_t;
+
+#define LDLM_POOL_PROC_READER(var, type)                                    \
+        static int lprocfs_rd_##var(char *page, char **start, off_t off,    \
+                                    int count, int *eof, void *data)        \
+        {                                                                   \
+                struct ldlm_pool *pl = data;                                \
+                type tmp;                                                   \
+                                                                            \
+                spin_lock(&pl->pl_lock);                                    \
+                tmp = pl->pl_##var;                                         \
+                spin_unlock(&pl->pl_lock);                                  \
+                                                                            \
+                return lprocfs_rd_uint(page, start, off, count, eof, &tmp); \
+        }                                                                   \
+        struct __##var##__dummy_read {;} /* semicolon catcher */
+
+#define LDLM_POOL_PROC_WRITER(var, type)                                    \
+        int lprocfs_wr_##var(struct file *file, const char *buffer,         \
+                             unsigned long count, void *data)               \
+        {                                                                   \
+                struct ldlm_pool *pl = data;                                \
+                type tmp;                                                   \
+                int rc;                                                     \
+                                                                            \
+                rc = lprocfs_wr_uint(file, buffer, count, &tmp);            \
+                if (rc) {                                                   \
+                        CERROR("Can't parse user input, rc = %d\n", rc);    \
+                        return rc;                                          \
+                }                                                           \
+                                                                            \
+                spin_lock(&pl->pl_lock);                                    \
+                pl->pl_##var = tmp;                                         \
+                spin_unlock(&pl->pl_lock);                                  \
+                                                                            \
+                return rc;                                                  \
+        }                                                                   \
+        struct __##var##__dummy_write {;} /* semicolon catcher */

@@ -102,10 +102,10 @@
 #define LDLM_POOL_HOST_L ((num_physpages >> (20 - PAGE_SHIFT)) * 50)
 
 /* Default step in % for grant plan. */
-#define LDLM_POOL_GSP (5)
+#define LDLM_POOL_GSP (10)
 
 /* LDLM_POOL_GSP% of all locks is default GP. */
-#define LDLM_POOL_GP(L)   ((L) * LDLM_POOL_GSP / 100)
+#define LDLM_POOL_GP(L)   (((L) * LDLM_POOL_GSP) / 100)
 
 /* Max age for locks on clients. */
 #define LDLM_POOL_MAX_AGE (36000)
@@ -149,6 +149,7 @@ enum {
         LDLM_POOL_SHRINK_REQTD_STAT,
         LDLM_POOL_SHRINK_FREED_STAT,
         LDLM_POOL_RECALC_STAT,
+        LDLM_POOL_TIMING_STAT,
         LDLM_POOL_LAST_STAT
 };
 
@@ -160,33 +161,43 @@ static inline struct ldlm_namespace *ldlm_pl2ns(struct ldlm_pool *pl)
 /* Should be called under ->pl_lock taken */
 static inline void ldlm_pool_recalc_grant_plan(struct ldlm_pool *pl)
 {
-        int grant_plan, granted;
-        __u32 limit;
+        int granted, grant_step, limit;
         
         limit = ldlm_pool_get_limit(pl);
         granted = atomic_read(&pl->pl_granted);
 
-        grant_plan = granted + ((limit - granted) *
-                atomic_read(&pl->pl_grant_step)) / 100;
-        atomic_set(&pl->pl_grant_plan, grant_plan);
+        grant_step = ((limit - granted) * pl->pl_grant_step) / 100;
+        pl->pl_grant_plan = granted + grant_step;
 }
 
 /* Should be called under ->pl_lock taken */
 static inline void ldlm_pool_recalc_slv(struct ldlm_pool *pl)
 {
-        int slv_factor, granted, grant_plan;
+        int grant_usage, granted, grant_plan;
+        __u64 slv, slv_factor;
         __u32 limit;
-        __u64 slv;
 
         slv = ldlm_pool_get_slv(pl);
+        grant_plan = pl->pl_grant_plan;
         limit = ldlm_pool_get_limit(pl);
         granted = atomic_read(&pl->pl_granted);
-        grant_plan = atomic_read(&pl->pl_grant_plan);
 
-        if ((slv_factor = limit - (granted - grant_plan)) <= 0)
-                slv_factor = 1;
+        grant_usage = limit - (granted - grant_plan);
+        if (grant_usage <= 0)
+                grant_usage = 1;
 
-        slv = (slv * ((slv_factor * 100) / limit));
+        /* Find out SLV change factor which is the ratio of grant usage 
+         * from limit. SLV changes as fast as the ratio of grant plan 
+         * consumtion. The more locks from grant plan are not consumed 
+         * by clients in last interval (idle time), the faster grows 
+         * SLV. And the opposite, the more grant plan is over-consumed
+         * (load time) the faster drops SLV. */
+        slv_factor = (grant_usage * 100) / limit;
+        if (2 * abs(granted - limit) > limit) {
+                slv_factor *= slv_factor;
+                slv_factor = dru(slv_factor, 100);
+        }
+        slv = slv * slv_factor;
         slv = dru(slv, 100);
 
         if (slv > ldlm_pool_slv_max(limit)) {
@@ -201,10 +212,10 @@ static inline void ldlm_pool_recalc_slv(struct ldlm_pool *pl)
 static inline void ldlm_pool_recalc_stats(struct ldlm_pool *pl)
 {
         __u64 slv = ldlm_pool_get_slv(pl);
-        __u32 granted = atomic_read(&pl->pl_granted);
-        __u32 grant_rate = atomic_read(&pl->pl_grant_rate);
-        __u32 grant_plan = atomic_read(&pl->pl_grant_plan);
-        __u32 cancel_rate = atomic_read(&pl->pl_cancel_rate);
+        int grant_plan = pl->pl_grant_plan;
+        int granted = atomic_read(&pl->pl_granted);
+        int grant_rate = atomic_read(&pl->pl_grant_rate);
+        int cancel_rate = atomic_read(&pl->pl_cancel_rate);
 
         lprocfs_counter_add(pl->pl_stats, LDLM_POOL_SLV_STAT, 
                             slv);
@@ -241,6 +252,8 @@ static int ldlm_srv_pool_recalc(struct ldlm_pool *pl)
                 atomic_set(&pl->pl_cancel_rate, 0);
                 atomic_set(&pl->pl_grant_speed, 0);
                 pl->pl_recalc_time = cfs_time_current_sec();
+                lprocfs_counter_add(pl->pl_stats, LDLM_POOL_TIMING_STAT, 
+                                    recalc_interval_sec);
         }
         spin_unlock(&pl->pl_lock);
         RETURN(0);
@@ -312,6 +325,8 @@ static int ldlm_cli_pool_recalc(struct ldlm_pool *pl)
                 atomic_set(&pl->pl_cancel_rate, 0);
                 atomic_set(&pl->pl_grant_speed, 0);
                 pl->pl_recalc_time = cfs_time_current_sec();
+                lprocfs_counter_add(pl->pl_stats, LDLM_POOL_TIMING_STAT, 
+                                    recalc_interval_sec);
         }
         spin_unlock(&pl->pl_lock);
 
@@ -339,8 +354,8 @@ static int ldlm_cli_pool_shrink(struct ldlm_pool *pl,
         /* Find out how many locks may be released according to shrink 
          * policy. */
         if (nr == 0)
-                RETURN(ldlm_cancel_lru_local(ldlm_pl2ns(pl), NULL, 0, 
-                                             0, 0, LDLM_CANCEL_SHRINK));
+                RETURN(ldlm_cancel_lru_estimate(ldlm_pl2ns(pl), 0, 0, 
+                                                LDLM_CANCEL_SHRINK));
 
         /* Cancel @nr locks accoding to shrink policy */
         RETURN(ldlm_cancel_lru(ldlm_pl2ns(pl), nr, LDLM_SYNC, 
@@ -362,7 +377,7 @@ int ldlm_pool_recalc(struct ldlm_pool *pl)
 {
         int count;
 
-        if (pl->pl_ops->po_recalc != NULL && pool_recalc_enabled(pl)) {
+        if (pl->pl_ops->po_recalc != NULL) {
                 count = pl->pl_ops->po_recalc(pl);
                 lprocfs_counter_add(pl->pl_stats, LDLM_POOL_RECALC_STAT, 
                                     count);
@@ -377,7 +392,7 @@ int ldlm_pool_shrink(struct ldlm_pool *pl, int nr,
 {
         int cancel = 0;
         
-        if (pl->pl_ops->po_shrink != NULL && pool_shrink_enabled(pl)) {
+        if (pl->pl_ops->po_shrink != NULL) {
                 cancel = pl->pl_ops->po_shrink(pl, nr, gfp_mask);
                 if (nr > 0) {
                         lprocfs_counter_add(pl->pl_stats, 
@@ -409,7 +424,7 @@ EXPORT_SYMBOL(ldlm_pool_setup);
 static int lprocfs_rd_pool_state(char *page, char **start, off_t off,
                                  int count, int *eof, void *data)
 {
-        __u32 granted, grant_rate, cancel_rate, grant_step;
+        int granted, grant_rate, cancel_rate, grant_step;
         int nr = 0, grant_speed, grant_plan;
         struct ldlm_pool *pl = data;
         __u32 limit;
@@ -418,10 +433,10 @@ static int lprocfs_rd_pool_state(char *page, char **start, off_t off,
         spin_lock(&pl->pl_lock);
         slv = ldlm_pool_get_slv(pl);
         limit = ldlm_pool_get_limit(pl);
+        grant_plan = pl->pl_grant_plan;
+        grant_step = pl->pl_grant_step;
         granted = atomic_read(&pl->pl_granted);
         grant_rate = atomic_read(&pl->pl_grant_rate);
-        grant_plan = atomic_read(&pl->pl_grant_plan);
-        grant_step = atomic_read(&pl->pl_grant_step);
         grant_speed = atomic_read(&pl->pl_grant_speed);
         cancel_rate = atomic_read(&pl->pl_cancel_rate);
         spin_unlock(&pl->pl_lock);
@@ -449,6 +464,10 @@ static int lprocfs_rd_pool_state(char *page, char **start, off_t off,
                        limit);
         return nr;
 }
+
+LDLM_POOL_PROC_READER(grant_plan, int);
+LDLM_POOL_PROC_READER(grant_step, int);
+LDLM_POOL_PROC_WRITER(grant_step, int);
 
 static int ldlm_pool_proc_init(struct ldlm_pool *pl)
 {
@@ -497,12 +516,6 @@ static int ldlm_pool_proc_init(struct ldlm_pool *pl)
         pool_vars[0].read_fptr = lprocfs_rd_atomic;
         lprocfs_add_vars(pl->pl_proc_dir, pool_vars, 0);
 
-        snprintf(var_name, MAX_STRING_SIZE, "control");
-        pool_vars[0].data = &pl->pl_control;
-        pool_vars[0].read_fptr = lprocfs_rd_uint;
-        pool_vars[0].write_fptr = lprocfs_wr_uint;
-        lprocfs_add_vars(pl->pl_proc_dir, pool_vars, 0);
-
         snprintf(var_name, MAX_STRING_SIZE, "grant_speed");
         pool_vars[0].data = &pl->pl_grant_speed;
         pool_vars[0].read_fptr = lprocfs_rd_atomic;
@@ -519,21 +532,21 @@ static int ldlm_pool_proc_init(struct ldlm_pool *pl)
         lprocfs_add_vars(pl->pl_proc_dir, pool_vars, 0);
 
         snprintf(var_name, MAX_STRING_SIZE, "grant_plan");
-        pool_vars[0].data = &pl->pl_grant_plan;
-        pool_vars[0].read_fptr = lprocfs_rd_atomic;
+        pool_vars[0].data = pl;
+        pool_vars[0].read_fptr = lprocfs_rd_grant_plan;
         lprocfs_add_vars(pl->pl_proc_dir, pool_vars, 0);
 
         snprintf(var_name, MAX_STRING_SIZE, "grant_step");
-        pool_vars[0].data = &pl->pl_grant_step;
-        pool_vars[0].read_fptr = lprocfs_rd_atomic;
+        pool_vars[0].data = pl;
+        pool_vars[0].read_fptr = lprocfs_rd_grant_step;
         if (ns_is_server(ns))
-                pool_vars[0].write_fptr = lprocfs_wr_atomic;
+                pool_vars[0].write_fptr = lprocfs_wr_grant_step;
         lprocfs_add_vars(pl->pl_proc_dir, pool_vars, 0);
 
         snprintf(var_name, MAX_STRING_SIZE, "lock_volume_factor");
         pool_vars[0].data = &pl->pl_lock_volume_factor;
-        pool_vars[0].read_fptr = lprocfs_rd_uint;
-        pool_vars[0].write_fptr = lprocfs_wr_uint;
+        pool_vars[0].read_fptr = lprocfs_rd_atomic;
+        pool_vars[0].write_fptr = lprocfs_wr_atomic;
         lprocfs_add_vars(pl->pl_proc_dir, pool_vars, 0);
 
         snprintf(var_name, MAX_STRING_SIZE, "state");
@@ -549,9 +562,11 @@ static int ldlm_pool_proc_init(struct ldlm_pool *pl)
         lprocfs_counter_init(pl->pl_stats, LDLM_POOL_GRANTED_STAT,
                              LPROCFS_CNTR_AVGMINMAX | LPROCFS_CNTR_STDDEV,
                              "granted", "locks");
-        lprocfs_counter_init(pl->pl_stats, LDLM_POOL_GRANT_STAT, 0,
+        lprocfs_counter_init(pl->pl_stats, LDLM_POOL_GRANT_STAT, 
+                             LPROCFS_CNTR_AVGMINMAX | LPROCFS_CNTR_STDDEV,
                              "grant", "locks");
-        lprocfs_counter_init(pl->pl_stats, LDLM_POOL_CANCEL_STAT, 0,
+        lprocfs_counter_init(pl->pl_stats, LDLM_POOL_CANCEL_STAT, 
+                             LPROCFS_CNTR_AVGMINMAX | LPROCFS_CNTR_STDDEV,
                              "cancel", "locks");
         lprocfs_counter_init(pl->pl_stats, LDLM_POOL_GRANT_RATE_STAT,
                              LPROCFS_CNTR_AVGMINMAX | LPROCFS_CNTR_STDDEV,
@@ -574,6 +589,9 @@ static int ldlm_pool_proc_init(struct ldlm_pool *pl)
         lprocfs_counter_init(pl->pl_stats, LDLM_POOL_RECALC_STAT,
                              LPROCFS_CNTR_AVGMINMAX | LPROCFS_CNTR_STDDEV,
                              "recalc_freed", "locks");
+        lprocfs_counter_init(pl->pl_stats, LDLM_POOL_TIMING_STAT,
+                             LPROCFS_CNTR_AVGMINMAX | LPROCFS_CNTR_STDDEV,
+                             "recalc_timing", "sec");
         lprocfs_register_stats(pl->pl_proc_dir, "stats", pl->pl_stats);
 
         EXIT;
@@ -612,9 +630,8 @@ int ldlm_pool_init(struct ldlm_pool *pl, struct ldlm_namespace *ns,
         atomic_set(&pl->pl_grant_rate, 0);
         atomic_set(&pl->pl_cancel_rate, 0);
         atomic_set(&pl->pl_grant_speed, 0);
-        pl->pl_control = LDLM_POOL_CTL_FULL;
-        atomic_set(&pl->pl_grant_step, LDLM_POOL_GSP);
-        atomic_set(&pl->pl_grant_plan, LDLM_POOL_GP(LDLM_POOL_HOST_L));
+        pl->pl_grant_step = LDLM_POOL_GSP;
+        pl->pl_grant_plan = LDLM_POOL_GP(LDLM_POOL_HOST_L);
 
         snprintf(pl->pl_name, sizeof(pl->pl_name), "ldlm-pool-%s-%d",
                  ns->ns_name, idx);
@@ -1024,7 +1041,7 @@ EXPORT_SYMBOL(ldlm_pools_fini);
 #endif /* __KERNEL__ */
 
 #else /* !HAVE_LRU_RESIZE_SUPPORT */
-int ldlm_pool_setup(struct ldlm_pool *pl, __u32 limit)
+int ldlm_pool_setup(struct ldlm_pool *pl, int limit)
 {
         return 0;
 }
