@@ -225,12 +225,6 @@ struct ldlm_pool_ops {
         int (*po_setup)(struct ldlm_pool *pl, int limit);
 };
 
-enum {
-        LDLM_POOL_CTL_RECALC = 1 << 0, /* Pool recalc is enabled */
-        LDLM_POOL_CTL_SHRINK = 1 << 1, /* Pool shrink is enabled */
-        LDLM_POOL_CTL_FULL   = (LDLM_POOL_CTL_RECALC | LDLM_POOL_CTL_SHRINK)
-};
-
 /* One second for pools thread check interval. */
 #define LDLM_POOLS_THREAD_PERIOD (1)
 
@@ -263,25 +257,13 @@ struct ldlm_pool {
                                                   * server was obtained. */
         struct ldlm_pool_ops  *pl_ops;           /* Recalc and shrink ops. */ 
 
-        int                    pl_control;       /* Pool features mask */
-        
-        atomic_t               pl_grant_plan;    /* Planned number of granted 
+        int                    pl_grant_plan;    /* Planned number of granted 
                                                   * locks for next T. */
-        atomic_t               pl_grant_step;    /* Grant plan step for next 
+        int                    pl_grant_step;    /* Grant plan step for next 
                                                   * T. */
 
         struct lprocfs_stats  *pl_stats;         /* Pool statistics. */
 };
-
-static inline int pool_recalc_enabled(struct ldlm_pool *pl)
-{
-        return pl->pl_control & LDLM_POOL_CTL_RECALC;
-}
-
-static inline int pool_shrink_enabled(struct ldlm_pool *pl)
-{
-        return pl->pl_control & LDLM_POOL_CTL_SHRINK;
-}
 
 typedef int (*ldlm_res_policy)(struct ldlm_namespace *, struct ldlm_lock **,
                                void *req_cookie, ldlm_mode_t mode, int flags,
