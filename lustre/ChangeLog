@@ -30,25 +30,25 @@ Frequency  : rare on shutdown ost
 Bugzilla   : 13196
 Description: Don't allow skipping OSTs if index has been specified.
 Details    : Don't allow skipping OSTs if index has been specified, make locking
-             in internal create lots better.
+	     in internal create lots better.
 
 Severity   : normal
 Bugzilla   : 14421
 Description: ASSERTION(!PageDirty(page)) failed
 Details    : Wrong check could lead to an assertion failure under specific 
-             load patterns.
+	     load patterns.
 
 Severity   : normal
 Bugzilla   : 12228
 Description: LBUG in ptlrpc_check_set() bad phase ebc0de00
 Details    : access to bitfield in structure is always rounded to long 
-             and this produce problem with not atomic change any bit.
+	     and this produce problem with not atomic change any bit.
 
 Severity   : normal
 Bugzilla   : 13647
 Description: Lustre make rpms failed.
 Details    : Remove ldiskfs spec file to avoids rpmbuild be confused when
-             builds Lustre rpms from tarball.
+	     builds Lustre rpms from tarball.
 
 Severity   : enhancement
 Bugzilla   : 14498
@@ -58,9 +58,9 @@ Severity   : normal
 Frequency  : rare on shutdown ost
 Bugzilla   : 14608
 Description: If llog cancel was not send before clean_exports phase, this can
-             produce deadlock in llog code.
+	     produce deadlock in llog code.
 Details    : If llog thread has last reference to obd and call class_import_put
-             this produce deadlock because llog_cleanup_commit_master wait when
+	     this produce deadlock because llog_cleanup_commit_master wait when
 	     last llog_commit_thread exited, but this never success because was 
 	     called from llog_commit_thread.
 
@@ -91,7 +91,7 @@ Bugzilla   : 12702
 Frequency  : rare, in recovery and (or) destroy lovobjid file.
 Description: rewrite lov objid code.
 Details    : Cleanup for lov objid code, remove scability problems and wrong
-             locking. Fix sending last_id into ost.
+	     locking. Fix sending last_id into ost.
 
 Severity   : enhancement
 Bugzilla   : 14388
@@ -107,8 +107,8 @@ Bugzilla   : 14260
 Frequency  : rare, at shutdown
 Description: access already free / zero obd_namespace.
 Details    : if client_disconnect_export was called without force flag set,
-             and exist connect request in flight, this can produce access to
-	     NULL pointer (or already free pointer) when connect_interpret 
+	     and exist connect request in flight, this can produce access to
+	     NULL pointer (or already free pointer) when connect_interpret
 	     store ocd flags in obd_namespace.
 
 Severity   : minor
@@ -116,7 +116,7 @@ Bugzilla   : 14418
 Frequency  : only at startup
 Description: not alloc memory with spinlock held.
 Details    : allocation memory with GFP_KERNEL can produce sleep deadlock,
-             if any spinlock held.
+	     if any spinlock held.
 
 Severity   : major
 Frequency  : always
@@ -128,7 +128,7 @@ Severity   : normal
 Bugzilla   : 11791
 Description: Inconsistent usage of lustre_pack_reply()
 Details    : Standardize the usage of lustre_pack_reply() such that it
-             always generate a CERROR on failure.
+	     always generate a CERROR on failure.
 
 Severity   : normal
 Frequency  : very rare
@@ -157,11 +157,11 @@ Description: Update to RHEL4 kernel-2.6.9-55.0.12.EL.
 Severity   : enhancement
 Bugzilla   : 13690
 Description: Build SLES10 patchless client fails
-Details    : The configure was broken by run ./configure with 
+Details    : The configure was broken by run ./configure with
 	     --with-linux-obj=.... argument for patchless client. When the
 	     configure use --with-linux-obj, the LINUXINCLUDE= -Iinclude
-	     can't search header adequately. Use absolute path such as 
-	     -I($LINUX)/include instead. 
+	     can't search header adequately. Use absolute path such as
+	     -I($LINUX)/include instead.
 
 Severity   : enhancement
 Bugzilla   : 11622
@@ -184,7 +184,7 @@ Bugzilla   : 13888
 Description: interrupt oig_wait produce painc on resend.
 Details    : brw_redo_request can be used for resend requests from ptlrpcd and
 	     private set, and this produce situation when rq_ptlrpcd_data not
-	     copyed to new allocated request and triggered LBUG on assert 
+	     copyed to new allocated request and triggered LBUG on assert
 	     req->rq_ptlrpcd_data != NULL. But this member used only for wakeup
 	     ptlrpcd set if request is changed and can be safety changed to use
 	     rq_set directly.
@@ -200,7 +200,7 @@ Details    : Change the structure of stats under obdfilter and mds to
 			|   + uuids
 			+- nid#2...
 			+- clear
-	     The "uuid"s file would list the uuids of _active_ exports. 
+	     The "uuid"s file would list the uuids of _active_ exports.
 	     And the clear entry is to clear all stats and stale nids.
 
 Severity   : normal
@@ -234,21 +234,21 @@ Severity   : normal
 Bugzilla   : 12749
 Description: Root Squash Functionality
 Details    : Implementation of NFS-like root squash capability. Specifically,
-             don't allow someone with root access on a client node to be able
-             to manipulate files owned by root on a server node.
+	     don't allow someone with root access on a client node to be able
+	     to manipulate files owned by root on a server node.
 
 Severity   : normal
 Bugzilla   : 10718
 Description: Slow trucate/writes to huge files at high offsets.
 Details    : Directly associate cached pages to lock that protect those pages,
-             this allows us to quickly find what pages to write and remove
+	     this allows us to quickly find what pages to write and remove
 	     once lock callback is received.
 
 Severity   : normal
 Bugzilla   : 14379
 Description: Too many locks accumulating on client during NFS usage
 Details    : mds_open improperly used accmode to find out access mode to a
-             file. Also mdc_intent_lock logic to find out if we already have
+	     file. Also mdc_intent_lock logic to find out if we already have
 	     lock similar to just received was flawed since introduction of
 	     skiplists - locks are now added to the front of the granted
 	     queue.
@@ -268,10 +268,10 @@ Details    : Console messages can now be disabled via lnet.printk.
 
 Severity   : normal
 Bugzilla   : 14614
-Description: User code with malformed file open parameter crashes client node 
+Description: User code with malformed file open parameter crashes client node
 Details    : Before packing join_file req, all the related reference should be
-             checked carefully in case some malformed flags cause fake
-	     join_file req on client.
+	     checked carefully in case some malformed flags cause fake join_file
+	     req on client.
 
 Severity   : normal
 Frequency  : always
@@ -312,6 +312,15 @@ Details    : A lot of unlink operations with concurrent I/O can lead to a
 	     oustanding OST_DESTROY requests is now throttled to
 	     max_rpcs_in_flight per OSC and LDLM_FL_DISCARD_DATA blocking
 	     callbacks are processed in priority.
+
+Severity   : normal
+Frequency  : RHEL4 only
+Bugzilla   : 14618
+Description: mkfs is very slow on IA64/RHEL4
+Details    : A performance regression has been discovered in the MPT Fusion
+	     driver between versions 3.02.73rh and 3.02.99.00rh. As a
+	     consequence, we have downgraded the MPT Fusion driver in the RHEL4
+	     kernel from 3.02.99.00 to 3.02.73 until this problem is fixed.
 
 --------------------------------------------------------------------------------
 
