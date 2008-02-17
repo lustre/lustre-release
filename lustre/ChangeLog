@@ -16,7 +16,7 @@ Severity   : normal
 Frequency  : very rare
 Bugzilla   : 3462
 Description: Fix replay if there is an un-replied request and open
-Details    : In some cases, older replay request will revert the 
+Details    : In some cases, older replay request will revert the
 	     mcd->mcd_last_xid on MDS which is used to record the client's
 	     latest sent request.
 
@@ -37,27 +37,27 @@ Frequency  : rare
 Bugzilla   : 13196
 Description: Don't allow skipping OSTs if index has been specified.
 Details    : Don't allow skipping OSTs if index has been specified, make locking
-             in internal create lots better.
+	     in internal create lots better.
 
 Severity   : normal
 Bugzilla   : 12228
 Description: LBUG in ptlrpc_check_set() bad phase ebc0de00
 Details    : access to bitfield in structure is always rounded to long 
-             and this produce problem with not atomic change any bit.
+	     and this produce problem with not atomic change any bit.
 
 Severity   : normal
 Bugzilla   : 13647
 Description: Lustre make rpms failed.
 Details    : Remove ldiskfs spec file to avoids rpmbuild be confused when
-             builds Lustre rpms from tarball.
+	     builds Lustre rpms from tarball.
 
 Severity   : normal
 Frequency  : rare on shutdown ost
 Bugzilla   : 14608
 Description: If llog cancel was not send before clean_exports phase, this can
-             produce deadlock in llog code.
+	     produce deadlock in llog code.
 Details    : If llog thread has last reference to obd and call class_import_put
-             this produce deadlock because llog_cleanup_commit_master wait when
+	     this produce deadlock because llog_cleanup_commit_master wait when
 	     last llog_commit_thread exited, but this never success because was 
 	     called from llog_commit_thread.
 
@@ -65,7 +65,7 @@ Severity   : normal
 Bugzilla   : 9977
 Description: allow userland application know is lost one of stripes.
 Details    : fill lvb_blocks with error code on ost and return it to
-             application if error flag found.
+	     application if error flag found.
 
 Severity   : normal
 Bugzilla   : 14607
@@ -80,16 +80,16 @@ Severity   : normal
 Bugzilla   : 13375
 Descriptoin: make lov_create() will not stuck in obd_statfs_rqset()
 Details    : If an OST is down the MDS will hang indefinitely in
-             obd_statfs_rqset() waiting for the statfs data. While for
+	     obd_statfs_rqset() waiting for the statfs data. While for
 	     MDS QOS usage of statfs, it should not stuck in waiting.
 
 Severity   : enhancement
 Bugzilla   : 11842
 Description: remote_acl support
 Details    : Support ACL-based permission check for remote user.
-             Support setfacl/getfacl for remote user with the utils
-             "lfs {l,r}{s,g}etfacl" which follow the same parameter format as
-             the system "{s,g}etfacl" utils.
+	     Support setfacl/getfacl for remote user with the utils
+	     "lfs {l,r}{s,g}etfacl" which follow the same parameter format as
+	     the system "{s,g}etfacl" utils.
 
 Severity   : enhancement
 Bugzilla   : 14288
@@ -686,6 +686,13 @@ Severity   : normal
 Bugzilla   : 13829
 Description: enable ACLs on MDS by default
 Details    : ACLs must be enabled on MDS by default.
+
+Severity   : normal
+Frequency  : PPC/PPC64 only
+Bugzilla   : 14845
+Description: conflicts between asm-ppc64/types.h and lustre_types.h
+Details    : fix duplicated definitions between asm-ppc64/types.h and
+	     lustre_types.h on PPC.
 
 --------------------------------------------------------------------------------
 
