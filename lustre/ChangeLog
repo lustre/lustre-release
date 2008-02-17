@@ -61,7 +61,7 @@ Description: If llog cancel was not send before clean_exports phase, this can
 	     produce deadlock in llog code.
 Details    : If llog thread has last reference to obd and call class_import_put
 	     this produce deadlock because llog_cleanup_commit_master wait when
-	     last llog_commit_thread exited, but this never success because was 
+	     last llog_commit_thread exited, but this never success because was
 	     called from llog_commit_thread.
 
 Severity   : normal
@@ -134,7 +134,7 @@ Severity   : normal
 Frequency  : very rare
 Bugzilla   : 3462
 Description: Fix replay if there is an un-replied request and open
-Details    : In some cases, older replay request will revert the 
+Details    : In some cases, older replay request will revert the
 	     mcd->mcd_last_xid on MDS which is used to record the client's
 	     latest sent request.
 
@@ -257,7 +257,7 @@ Severity   : normal
 Bugzilla   : 14477
 Description: Hit ASSERTION(obd->obd_stopping == 1) failed in some setup failed
 	     situation.
-Details    : In obd setup failure handler, obd_stopping will not necessarily to 
+Details    : In obd setup failure handler, obd_stopping will not necessarily to
 	     be 1, and obd_set_up should also be checked to make sure whether
 	     obd is completely setup.
 
@@ -321,6 +321,13 @@ Details    : A performance regression has been discovered in the MPT Fusion
 	     driver between versions 3.02.73rh and 3.02.99.00rh. As a
 	     consequence, we have downgraded the MPT Fusion driver in the RHEL4
 	     kernel from 3.02.99.00 to 3.02.73 until this problem is fixed.
+
+Severity   : normal
+Frequency  : PPC/PPC64 only
+Bugzilla   : 14845
+Description: conflicts between asm-ppc64/types.h and lustre_types.h
+Details    : fix duplicated definitions between asm-ppc64/types.h and
+	     lustre_types.h on PPC.
 
 --------------------------------------------------------------------------------
 
