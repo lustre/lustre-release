@@ -1,13 +1,13 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- *  lustre/quota/quota_interface.c
+ * lustre/quota/quota_interface.c
  *
- *  Copyright (c) 2001-2005 Cluster File Systems, Inc.
+ * Copyright (c) 2001-2005 Cluster File Systems, Inc.
  *
- *   This file is part of Lustre, http://www.lustre.org.
+ * This file is part of Lustre, http://www.lustre.org.
  *
- *   No redistribution or use is permitted outside of Cluster File Systems, Inc.
+ * No redistribution or use is permitted outside of Cluster File Systems, Inc.
  *
  */
 #ifndef EXPORT_SYMTAB
@@ -43,7 +43,6 @@
 #include <lustre_quota.h>
 #include <lprocfs_status.h>
 #include "quota_internal.h"
-
 
 #ifdef __KERNEL__
 
@@ -216,7 +215,6 @@ int lprocfs_quota_wr_type(struct file *file, const char *buffer,
 }
 EXPORT_SYMBOL(lprocfs_quota_wr_type);
 
-
 #endif /* LPROCFS */
 
 static int filter_quota_setup(struct obd_device *obd)
@@ -249,12 +247,12 @@ static int filter_quota_setinfo(struct obd_export *exp, struct obd_device *obd)
         obd->u.obt.obt_qctxt.lqc_import = exp->exp_imp_reverse;
         spin_unlock(&obd->u.obt.obt_qctxt.lqc_lock);
 
-        /* make imp's connect flags equal relative exp's connect flags 
+        /* make imp's connect flags equal relative exp's connect flags
          * adding it to avoid the scan export list
          */
         imp = exp->exp_imp_reverse;
         if (imp)
-                imp->imp_connect_data.ocd_connect_flags |= 
+                imp->imp_connect_data.ocd_connect_flags |=
                         (exp->exp_connect_flags &
                          (OBD_CONNECT_QUOTA64 | OBD_CONNECT_CHANGE_QS));
 
@@ -328,9 +326,9 @@ static int filter_quota_getflag(struct obd_device *obd, struct obdo *oa)
                 oa->o_valid |= (cnt == USRQUOTA) ?
                                OBD_MD_FLUSRQUOTA : OBD_MD_FLGRPQUOTA;
                 if (oqctl->qc_dqblk.dqb_bhardlimit &&
-                   (toqb(oqctl->qc_dqblk.dqb_curspace) > 
+                   (toqb(oqctl->qc_dqblk.dqb_curspace) >
                     oqctl->qc_dqblk.dqb_bhardlimit))
-                        oa->o_flags |= (cnt == USRQUOTA) ? 
+                        oa->o_flags |= (cnt == USRQUOTA) ?
                                 OBD_FL_NO_USRQUOTA : OBD_FL_NO_GRPQUOTA;
         }
         OBD_FREE_PTR(oqctl);
@@ -649,7 +647,7 @@ static inline int hashfn(struct client_obd *cli, unsigned long id, int type)
 /* caller must hold qinfo_list_lock */
 static inline void insert_qinfo_hash(struct osc_quota_info *oqi)
 {
-        struct list_head *head = qinfo_hash + 
+        struct list_head *head = qinfo_hash +
                 hashfn(oqi->oqi_cli, oqi->oqi_id, oqi->oqi_type);
 
         LASSERT_SPIN_LOCKED(&qinfo_list_lock);
@@ -702,8 +700,7 @@ static void free_qinfo(struct osc_quota_info *oqi)
         OBD_SLAB_FREE(oqi, qinfo_cachep, sizeof(*oqi));
 }
 
-int osc_quota_chkdq(struct client_obd *cli, 
-                    unsigned int uid, unsigned int gid)
+int osc_quota_chkdq(struct client_obd *cli, unsigned int uid, unsigned int gid)
 {
         unsigned int id;
         int cnt, rc = QUOTA_OK;
@@ -725,8 +722,7 @@ int osc_quota_chkdq(struct client_obd *cli,
         RETURN(rc);
 }
 
-int osc_quota_setdq(struct client_obd *cli, 
-                    unsigned int uid, unsigned int gid,
+int osc_quota_setdq(struct client_obd *cli, unsigned int uid, unsigned int gid,
                     obd_flag valid, obd_flag flags)
 {
         unsigned int id;
@@ -738,12 +734,12 @@ int osc_quota_setdq(struct client_obd *cli,
         for (cnt = 0; cnt < MAXQUOTAS; cnt++) {
                 struct osc_quota_info *oqi, *old;
 
-                if (!(valid & ((cnt == USRQUOTA) ? 
+                if (!(valid & ((cnt == USRQUOTA) ?
                     OBD_MD_FLUSRQUOTA : OBD_MD_FLGRPQUOTA)))
                         continue;
 
                 id = (cnt == USRQUOTA) ? uid : gid;
-                noquota = (cnt == USRQUOTA) ? 
+                noquota = (cnt == USRQUOTA) ?
                     (flags & OBD_FL_NO_USRQUOTA) : (flags & OBD_FL_NO_GRPQUOTA);
 
                 oqi = alloc_qinfo(cli, id, cnt);

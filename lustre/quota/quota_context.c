@@ -34,22 +34,22 @@
 
 extern struct lustre_hash_operations lqs_hash_operations;
 
-unsigned long default_bunit_sz = 128 * 1024 * 1024;       /* 128M bytes */
-unsigned long default_btune_ratio = 50;                   /* 50 percentage */
-unsigned long default_iunit_sz = 5120;       /* 5120 inodes */
-unsigned long default_itune_ratio = 50;      /* 50 percentage */
+unsigned long default_bunit_sz = 128 * 1024 * 1024; /* 128M bytes */
+unsigned long default_btune_ratio = 50;             /* 50 percentage */
+unsigned long default_iunit_sz = 5120;              /* 5120 inodes */
+unsigned long default_itune_ratio = 50;             /* 50 percentage */
 
 cfs_mem_cache_t *qunit_cachep = NULL;
 struct list_head qunit_hash[NR_DQHASH];
 spinlock_t qunit_hash_lock = SPIN_LOCK_UNLOCKED;
 
 struct lustre_qunit {
-        struct list_head lq_hash;               /* Hash list in memory */
-        atomic_t lq_refcnt;                     /* Use count */
-        struct lustre_quota_ctxt *lq_ctxt;      /* Quota context this applies to */
-        struct qunit_data lq_data;              /* See qunit_data */
-        unsigned int lq_opc;                    /* QUOTA_DQACQ, QUOTA_DQREL */
-        struct list_head lq_waiters;            /* All write threads waiting for this qunit */
+        struct list_head lq_hash;          /* Hash list in memory */
+        atomic_t lq_refcnt;                /* Use count */
+        struct lustre_quota_ctxt *lq_ctxt; /* Quota context this applies to */
+        struct qunit_data lq_data;         /* See qunit_data */
+        unsigned int lq_opc;               /* QUOTA_DQACQ, QUOTA_DQREL */
+        struct list_head lq_waiters;       /* Threads waiting for this qunit */
 };
 
 int should_translate_quota (struct obd_import *imp)
@@ -273,9 +273,8 @@ check_cur_qunit(struct obd_device *obd,
 }
 
 /* compute the remaining quota for certain gid or uid b=11693 */
-int compute_remquota(struct obd_device *obd,
-                     struct lustre_quota_ctxt *qctxt, struct qunit_data *qdata,
-                     int isblk)
+int compute_remquota(struct obd_device *obd, struct lustre_quota_ctxt *qctxt,
+                     struct qunit_data *qdata, int isblk)
 {
         struct super_block *sb = qctxt->lqc_sb;
         __u64 usage, limit;
@@ -472,8 +471,7 @@ static int split_before_schedule_dqacq(struct obd_device *obd,
 }
 
 static int
-dqacq_completion(struct obd_device *obd,
-                 struct lustre_quota_ctxt *qctxt,
+dqacq_completion(struct obd_device *obd, struct lustre_quota_ctxt *qctxt,
                  struct qunit_data *qdata, int rc, int opc)
 {
         struct lustre_qunit *qunit = NULL;
@@ -690,8 +688,7 @@ static int got_qunit(struct qunit_waiter *waiter)
 }
 
 static int
-schedule_dqacq(struct obd_device *obd,
-               struct lustre_quota_ctxt *qctxt,
+schedule_dqacq(struct obd_device *obd, struct lustre_quota_ctxt *qctxt,
                struct qunit_data *qdata, int opc, int wait)
 {
         struct lustre_qunit *qunit, *empty;
@@ -1053,9 +1050,12 @@ static int qslave_recovery_main(void *arg)
                         if (ret > 0) {
                                 int opc;
                                 opc = ret == 1 ? QUOTA_DQACQ : QUOTA_DQREL;
-                                rc = split_before_schedule_dqacq(obd, qctxt, &qdata, opc, 0);
-                        } else
+                                rc = split_before_schedule_dqacq(obd, qctxt,
+                                                                 &qdata, opc,
+                                                                 0);
+                        } else {
                                 rc = 0;
+                        }
 
                         if (rc)
                                 CDEBUG(rc == -EBUSY ? D_QUOTA : D_ERROR,

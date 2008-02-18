@@ -89,8 +89,7 @@ void quota_compute_lqs(struct qunit_data *qdata, struct lustre_qunit_size *lqs,
         }
 }
 
-void qdata_to_oqaq(struct qunit_data *qdata,
-                   struct quota_adjust_qunit *oqaq)
+void qdata_to_oqaq(struct qunit_data *qdata, struct quota_adjust_qunit *oqaq)
 {
         LASSERT(qdata);
         LASSERT(oqaq);
@@ -103,10 +102,9 @@ void qdata_to_oqaq(struct qunit_data *qdata,
                 oqaq->qaq_iunit_sz = qdata->qd_qunit;
 }
 
-int quota_search_lqs(struct qunit_data *qdata,
-                  struct quota_adjust_qunit *oqaq,
-                  struct lustre_quota_ctxt *qctxt,
-                  struct lustre_qunit_size **lqs_return)
+int quota_search_lqs(struct qunit_data *qdata, struct quota_adjust_qunit *oqaq,
+                     struct lustre_quota_ctxt *qctxt,
+                     struct lustre_qunit_size **lqs_return)
 {
         struct quota_adjust_qunit *oqaq_tmp = NULL;
         ENTRY;
@@ -133,8 +131,7 @@ int quota_search_lqs(struct qunit_data *qdata,
         RETURN(0);
 }
 
-int quota_create_lqs(struct qunit_data *qdata,
-                     struct quota_adjust_qunit *oqaq,
+int quota_create_lqs(struct qunit_data *qdata, struct quota_adjust_qunit *oqaq,
                      struct lustre_quota_ctxt *qctxt,
                      struct lustre_qunit_size **lqs_return)
 {
@@ -190,8 +187,8 @@ int quota_create_lqs(struct qunit_data *qdata,
         RETURN(rc);
 }
 
-int quota_adjust_slave_lqs(struct quota_adjust_qunit *oqaq, struct
-                          lustre_quota_ctxt *qctxt)
+int quota_adjust_slave_lqs(struct quota_adjust_qunit *oqaq,
+                           struct lustre_quota_ctxt *qctxt)
 {
         struct lustre_qunit_size *lqs = NULL;
         unsigned long *lbunit, *liunit, *lbtune, *litune;
@@ -204,7 +201,7 @@ int quota_adjust_slave_lqs(struct quota_adjust_qunit *oqaq, struct
                 RETURN(0);
 
         LASSERT(qctxt);
- search_lqs:
+search_lqs:
         rc = quota_search_lqs(NULL, oqaq, qctxt, &lqs);
 
         /* deleting the lqs, because a user sets lfs quota 0 0 0 0  */
@@ -300,8 +297,8 @@ int quota_adjust_slave_lqs(struct quota_adjust_qunit *oqaq, struct
         RETURN(rc);
 }
 
-int filter_quota_adjust_qunit(struct obd_export *exp, struct
-                              quota_adjust_qunit *oqaq)
+int filter_quota_adjust_qunit(struct obd_export *exp,
+                              struct quota_adjust_qunit *oqaq)
 {
         struct obd_device *obd = exp->exp_obd;
         struct lustre_quota_ctxt *qctxt = &obd->u.obt.obt_qctxt;
@@ -330,8 +327,8 @@ int filter_quota_adjust_qunit(struct obd_export *exp, struct
 }
 #endif /* __KERNEL__ */
 
-int client_quota_adjust_qunit(struct obd_export *exp, struct
-                              quota_adjust_qunit *oqaq)
+int client_quota_adjust_qunit(struct obd_export *exp,
+                              struct quota_adjust_qunit *oqaq)
 {
         struct ptlrpc_request *req;
         struct quota_adjust_qunit *oqa;
@@ -370,8 +367,8 @@ out:
         RETURN (rc);
 }
 
-int lov_quota_adjust_qunit(struct obd_export *exp, struct
-                           quota_adjust_qunit *oqaq)
+int lov_quota_adjust_qunit(struct obd_export *exp,
+                           struct quota_adjust_qunit *oqaq)
 {
         struct obd_device *obd = class_exp2obd(exp);
         struct lov_obd *lov = &obd->u.lov;
