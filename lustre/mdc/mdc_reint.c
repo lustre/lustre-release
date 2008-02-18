@@ -111,7 +111,8 @@ int mdc_setattr(struct obd_export *exp, struct mdc_op_data *op_data,
         struct mdc_rpc_lock *rpc_lock;
         struct obd_device *obd = exp->exp_obd;
         int size[5] = { sizeof(struct ptlrpc_body),
-                        sizeof(*rec), ealen, ea2len, 0 };
+                        sizeof(*rec), ealen, ea2len,
+                        sizeof(struct ldlm_request) };
         int count, bufcount = 2, rc;
         __u64 bits;
         ENTRY;
@@ -129,7 +130,7 @@ int mdc_setattr(struct obd_export *exp, struct mdc_op_data *op_data,
                 bits |= MDS_INODELOCK_LOOKUP;
         count = mdc_resource_get_unused(exp, &op_data->fid1,
                                         &cancels, LCK_EX, bits);
-        if (exp_connect_cancelset(exp) && count)
+        if (exp_connect_cancelset(exp))
                 bufcount = 5;
         req = mdc_prep_elc_req(exp, bufcount, size,
                                REQ_REC_OFF + 3, &cancels, count);
@@ -171,7 +172,7 @@ int mdc_create(struct obd_export *exp, struct mdc_op_data *op_data,
         int level, bufcount = 3, rc;
         int size[5] = { sizeof(struct ptlrpc_body),
                         sizeof(struct mds_rec_create),
-                        op_data->namelen + 1, 0, 0 };
+                        op_data->namelen + 1, 0, sizeof(struct ldlm_request) };
         int count;
         ENTRY;
 
@@ -182,7 +183,7 @@ int mdc_create(struct obd_export *exp, struct mdc_op_data *op_data,
 
         count = mdc_resource_get_unused(exp, &op_data->fid1, &cancels,
                                         LCK_EX, MDS_INODELOCK_UPDATE);
-        if (exp_connect_cancelset(exp) && count)
+        if (exp_connect_cancelset(exp))
                 bufcount = 5;
         req = mdc_prep_elc_req(exp, bufcount, size,
                                REQ_REC_OFF + 3, &cancels, count);
@@ -221,7 +222,7 @@ int mdc_unlink(struct obd_export *exp, struct mdc_op_data *op_data,
         struct ptlrpc_request *req = *request;
         int size[4] = { sizeof(struct ptlrpc_body),
                         sizeof(struct mds_rec_unlink),
-                        op_data->namelen + 1, 0 };
+                        op_data->namelen + 1, sizeof(struct ldlm_request) };
         int count, rc, bufcount = 3;
         ENTRY;
 
@@ -231,7 +232,7 @@ int mdc_unlink(struct obd_export *exp, struct mdc_op_data *op_data,
         if (op_data->fid3.id)
                 count += mdc_resource_get_unused(exp, &op_data->fid3, &cancels,
                                                  LCK_EX, MDS_INODELOCK_FULL);
-        if (exp_connect_cancelset(exp) && count)
+        if (exp_connect_cancelset(exp))
                 bufcount = 4;
         req = mdc_prep_elc_req(exp, bufcount, size,
                                REQ_REC_OFF + 2, &cancels, count);
@@ -260,7 +261,7 @@ int mdc_link(struct obd_export *exp, struct mdc_op_data *op_data,
         struct ptlrpc_request *req;
         int size[4] = { sizeof(struct ptlrpc_body),
                         sizeof(struct mds_rec_link),
-                        op_data->namelen + 1, 0 };
+                        op_data->namelen + 1, sizeof(struct ldlm_request) };
         int count, rc, bufcount = 3;
         ENTRY;
 
@@ -268,7 +269,7 @@ int mdc_link(struct obd_export *exp, struct mdc_op_data *op_data,
                                         LCK_EX, MDS_INODELOCK_UPDATE);
         count += mdc_resource_get_unused(exp, &op_data->fid2, &cancels,
                                          LCK_EX, MDS_INODELOCK_UPDATE);
-        if (exp_connect_cancelset(exp) && count)
+        if (exp_connect_cancelset(exp))
                 bufcount = 4;
         req = mdc_prep_elc_req(exp, bufcount, size,
                                REQ_REC_OFF + 2, &cancels, count);
@@ -297,7 +298,7 @@ int mdc_rename(struct obd_export *exp, struct mdc_op_data *op_data,
         struct ptlrpc_request *req;
         int size[5] = { sizeof(struct ptlrpc_body),
                         sizeof(struct mds_rec_rename),
-                        oldlen + 1, newlen + 1, 0 };
+                        oldlen + 1, newlen + 1, sizeof(struct ldlm_request) };
         int count, rc, bufcount = 4;
         ENTRY;
 
@@ -311,7 +312,7 @@ int mdc_rename(struct obd_export *exp, struct mdc_op_data *op_data,
         if (op_data->fid4.id)
                 count += mdc_resource_get_unused(exp, &op_data->fid4, &cancels,
                                                  LCK_EX, MDS_INODELOCK_FULL);
-        if (exp_connect_cancelset(exp) && count)
+        if (exp_connect_cancelset(exp))
                 bufcount = 5;
         req = mdc_prep_elc_req(exp, bufcount, size,
                                REQ_REC_OFF + 3, &cancels, count);

@@ -511,18 +511,14 @@ cleanup:
  * a single page on the send/receive side. XXX: 512 should be changed
  * to more adequate value. */
 static inline int ldlm_req_handles_avail(struct obd_export *exp,
-                                         int *size, int bufcount,
-                                         int bufoff, int off)
+                                         int *size, int bufcount, int off)
 {
         int avail = min_t(int, LDLM_MAXREQSIZE, PAGE_SIZE - 512);
-        int old_size = size[bufoff];
 
-        size[bufoff] = sizeof(struct ldlm_request);
         avail -= lustre_msg_size(class_exp2cliimp(exp)->imp_msg_magic,
                                  bufcount, size);
         avail /= sizeof(struct lustre_handle);
         avail += LDLM_LOCKREQ_HANDLES - off;
-        size[bufoff] = old_size;
 
         return avail;
 }
@@ -531,7 +527,7 @@ static inline int ldlm_cancel_handles_avail(struct obd_export *exp)
 {
         int size[2] = { sizeof(struct ptlrpc_body),
                         sizeof(struct ldlm_request) };
-        return ldlm_req_handles_avail(exp, size, 2, DLM_LOCKREQ_OFF, 0);
+        return ldlm_req_handles_avail(exp, size, 2, 0);
 }
 
 /* Cancel lru locks and pack them into the enqueue request. Pack there the given
@@ -552,8 +548,9 @@ struct ptlrpc_request *ldlm_prep_elc_req(struct obd_export *exp, int version,
                 cancels = &head;
         if (exp_connect_cancelset(exp)) {
                 /* Estimate the amount of free space in the request. */
-                avail = ldlm_req_handles_avail(exp, size, bufcount,
-                                               bufoff, canceloff);
+                LASSERT(bufoff < bufcount);
+
+                avail = ldlm_req_handles_avail(exp, size, bufcount, canceloff);
                 flags = ns_connect_lru_resize(ns) ? 
                         LDLM_CANCEL_LRUR : LDLM_CANCEL_AGED;
                 to_free = !ns_connect_lru_resize(ns) &&
@@ -942,7 +939,7 @@ int ldlm_cli_cancel_req(struct obd_export *exp,
         if (OBD_FAIL_CHECK(OBD_FAIL_LDLM_CANCEL_RACE))
                 RETURN(count);
 
-        free = ldlm_req_handles_avail(exp, size, 2, DLM_LOCKREQ_OFF, 0);
+        free = ldlm_req_handles_avail(exp, size, 2, 0);
         if (count > free)
                 count = free;
 

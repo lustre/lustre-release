@@ -615,7 +615,8 @@ static int osc_destroy(struct obd_export *exp, struct obdo *oa,
         CFS_LIST_HEAD(cancels);
         struct ptlrpc_request *req;
         struct ost_body *body;
-        int size[3] = { sizeof(struct ptlrpc_body), sizeof(*body), 0 };
+        int size[3] = { sizeof(struct ptlrpc_body), sizeof(*body),
+                        sizeof(struct ldlm_request) };
         int count, bufcount = 2;
         struct client_obd *cli = &exp->exp_obd->u.cli;
         ENTRY;
@@ -627,7 +628,7 @@ static int osc_destroy(struct obd_export *exp, struct obdo *oa,
 
         count = osc_resource_get_unused(exp, oa->o_id, &cancels, LCK_PW,
                                         LDLM_FL_DISCARD_DATA);
-        if (exp_connect_cancelset(exp) && count)
+        if (exp_connect_cancelset(exp))
                 bufcount = 3;
         req = ldlm_prep_elc_req(exp, LUSTRE_OST_VERSION, OST_DESTROY, bufcount,
                                 size, REQ_REC_OFF + 1, 0, &cancels, count);
