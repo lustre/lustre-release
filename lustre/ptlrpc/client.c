@@ -1988,7 +1988,8 @@ static int ptlrpc_replay_interpret(struct ptlrpc_request *req,
         }
 
         if (lustre_msg_get_type(req->rq_repmsg) == PTL_RPC_MSG_ERR &&
-            lustre_msg_get_status(req->rq_repmsg) == -ENOTCONN)
+            (lustre_msg_get_status(req->rq_repmsg) == -ENOTCONN ||
+             lustre_msg_get_status(req->rq_repmsg) == -ENODEV))
                 GOTO(out, rc = lustre_msg_get_status(req->rq_repmsg));
 
         /* The transno had better not change over replay. */
