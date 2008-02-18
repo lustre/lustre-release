@@ -350,6 +350,10 @@ Description: use adler32 for page checksums
 Details    : when available, use the Adler-32 algorithm instead of CRC32 for
 	     page checksums.
 
+Severity   : normal
+Bugzilla   : 14864
+Description: better handle error messages in extents code
+
 --------------------------------------------------------------------------------
 
 2007-12-07         Cluster File Systems, Inc. <info@clusterfs.com>
