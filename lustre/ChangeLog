@@ -702,6 +702,10 @@ Description: conflicts between asm-ppc64/types.h and lustre_types.h
 Details    : fix duplicated definitions between asm-ppc64/types.h and
 	     lustre_types.h on PPC.
 
+Severity   : normal
+Bugzilla   : 14864
+Description: better handle error messages in extents code
+
 --------------------------------------------------------------------------------
 
 2007-08-10         Cluster File Systems, Inc. <info@clusterfs.com>
