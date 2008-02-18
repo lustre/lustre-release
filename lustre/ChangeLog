@@ -344,6 +344,12 @@ Details    : add support for several checksum algorithms. Currently, CRC32 and
 	     Adler-32 are supported. The checksum type can be changed on the fly
 	     through /proc/fs/lustre/osc/*/checksum_type.
 
+Severity   : normal
+Bugzilla   : 14648
+Description: use adler32 for page checksums
+Details    : when available, use the Adler-32 algorithm instead of CRC32 for
+	     page checksums.
+
 --------------------------------------------------------------------------------
 
 2007-12-07         Cluster File Systems, Inc. <info@clusterfs.com>
