@@ -113,7 +113,7 @@ Index: linux-2.6.16.46-0.14/fs/ext3/extents.c
 -
 +#include "fiemap.h"
  
- static int __ext3_ext_check_header(const char *function, struct inode *inode,
+ static int __ext3_ext_check_header(const char *function, int line, struct inode *inode,
  				struct ext3_extent_header *eh, int depth,
 @@ -1484,7 +1484,7 @@ int ext3_ext_walk_space(struct ext3_exte
  

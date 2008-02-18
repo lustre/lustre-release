@@ -12,7 +12,7 @@ Index: linux-2.6.9-42.0.10.EL_lustre.1.4.10/fs/ext3/extents.c
 -		printk(KERN_ERR "EXT3-fs: invalid magic = 0x%x\n",
 -		       (unsigned)eh->eh_magic);
 -		return -EIO;
-+static int __ext3_ext_check_header(const char *function, struct inode *inode,
++static int __ext3_ext_check_header(const char *function, int line, struct inode *inode,
 +				struct ext3_extent_header *eh, int depth,
 +				int max)
 +{
@@ -57,8 +57,8 @@ Index: linux-2.6.9-42.0.10.EL_lustre.1.4.10/fs/ext3/extents.c
 +
 +corrupted:
 +	ext3_error(inode->i_sb, function,
-+			"bad header in inode #%lu: %s - magic %x, "
-+			"entries %u, max %u(%u), depth %u(%u)",
++			":%d: bad header in inode #%lu: %s - magic %x, "
++			"entries %u, max %u(%u), depth %u(%u)", line,
 +			inode->i_ino, error_msg, eh->eh_magic,
 +			eh->eh_entries, eh->eh_max, max,
 +			eh->eh_depth, depth);
@@ -67,7 +67,7 @@ Index: linux-2.6.9-42.0.10.EL_lustre.1.4.10/fs/ext3/extents.c
  }
  
 +#define ext3_ext_check_header(inode,eh,depth,max)	\
-+	__ext3_ext_check_header(__FUNCTION__,inode,eh,depth,max)
++	__ext3_ext_check_header(__FUNCTION__,__LINE__,inode,eh,depth,max)
 +
 +
  static handle_t *ext3_ext_journal_restart(handle_t *handle, int needed)

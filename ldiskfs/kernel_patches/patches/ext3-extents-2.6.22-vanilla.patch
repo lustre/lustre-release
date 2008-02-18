@@ -231,7 +231,7 @@ Index: linux-2.6.18.8/fs/ext3/extents.c
 +	return max;
 +}
 +
-+static int __ext3_ext_check_header(const char *function, struct inode *inode,
++static int __ext3_ext_check_header(const char *function, int line, struct inode *inode,
 +					struct ext3_extent_header *eh,
 +					int depth)
 +{
@@ -269,8 +269,8 @@ Index: linux-2.6.18.8/fs/ext3/extents.c
 +
 +corrupted:
 +	ext3_error(inode->i_sb, function,
-+			"bad header in inode #%lu: %s - magic %x, "
-+			"entries %u, max %u(%u), depth %u(%u)",
++			":%d: bad header in inode #%lu: %s - magic %x, "
++			"entries %u, max %u(%u), depth %u(%u)", line,
 +			inode->i_ino, error_msg, le16_to_cpu(eh->eh_magic),
 +			le16_to_cpu(eh->eh_entries), le16_to_cpu(eh->eh_max),
 +			max, le16_to_cpu(eh->eh_depth), depth);
@@ -279,7 +279,7 @@ Index: linux-2.6.18.8/fs/ext3/extents.c
 +}
 +
 +#define ext3_ext_check_header(inode,eh,depth)	\
-+	__ext3_ext_check_header(__FUNCTION__,inode,eh,depth)
++	__ext3_ext_check_header(__FUNCTION__,__LINE__,inode,eh,depth)
 +
 +#ifdef EXT_DEBUG
 +static void ext3_ext_show_path(struct inode *inode, struct ext3_ext_path *path)
