@@ -337,6 +337,13 @@ Description: conflicts between asm-ppc64/types.h and lustre_types.h
 Details    : fix duplicated definitions between asm-ppc64/types.h and
 	     lustre_types.h on PPC.
 
+Severity   : normal
+Bugzilla   : 13805
+Description: data checksumming impacts single node performance
+Details    : add support for several checksum algorithms. Currently, CRC32 and
+	     Adler-32 are supported. The checksum type can be changed on the fly
+	     through /proc/fs/lustre/osc/*/checksum_type.
+
 --------------------------------------------------------------------------------
 
 2007-12-07         Cluster File Systems, Inc. <info@clusterfs.com>

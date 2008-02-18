@@ -2103,6 +2103,30 @@ static int filter_connect_internal(struct obd_export *exp,
                 LASSERT(data->ocd_brw_size);
         }
 
+        if (data->ocd_connect_flags & OBD_CONNECT_CKSUM) {
+                __u32 cksum_types = data->ocd_cksum_types;
+
+                /* The client set in ocd_cksum_types the checksum types it
+                 * supports. We have to mask off the algorithms that we don't
+                 * support */
+                if (cksum_types & OBD_CKSUM_ALL)
+                        data->ocd_cksum_types &= OBD_CKSUM_ALL;
+                else
+                        data->ocd_cksum_types = OBD_CKSUM_CRC32;
+
+                CDEBUG(D_RPCTRACE, "%s: cli %s supports cksum type %x, return "
+                                   "%x\n", exp->exp_obd->obd_name,
+                                   obd_export_nid2str(exp), cksum_types,
+                                   data->ocd_cksum_types);
+        } else {
+                /* This client does not support OBD_CONNECT_CKSUM
+                 * fall back to CRC32 */
+                CDEBUG(D_RPCTRACE, "%s: cli %s does not support "
+                                   "OBD_CONNECT_CKSUM, CRC32 will be used\n",
+                                   exp->exp_obd->obd_name,
+                                   obd_export_nid2str(exp));
+        }
+
         /* FIXME: Do the same with the MDS UUID and fsd_peeruuid.
          * FIXME: We don't strictly need the COMPAT flag for that,
          * FIXME: as fsd_peeruuid[0] will tell us if that is set.

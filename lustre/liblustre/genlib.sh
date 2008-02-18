@@ -24,6 +24,7 @@ LND_LIBS=$3
 PTHREAD_LIBS=$4
 QUOTA_LIBS=$5
 CAP_LIBS=$6
+ZLIB=$7
 
 if [ ! -f $SYSIO/lib/libsysio.a ]; then
   echo "ERROR: $SYSIO/lib/libsysio.a dosen't exist"
@@ -105,7 +106,7 @@ OS=`uname`
 if test x$OS = xAIX; then
 $LD -shared -o $CWD/liblustre.so $ALL_OBJS -lpthread -Xlinker -bnoipath ../../libsyscall.so
 else
-$LD -shared -nostdlib -o $CWD/liblustre.so $ALL_OBJS $CAP_LIBS $PTHREAD_LIBS
+$LD -shared -nostdlib -o $CWD/liblustre.so $ALL_OBJS $CAP_LIBS $PTHREAD_LIBS $ZLIB
 fi
 
 rm -rf $sysio_tmp

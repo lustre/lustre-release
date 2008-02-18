@@ -8,7 +8,7 @@
 AC_DEFUN([LC_CONFIG_SRCDIR],
 [AC_CONFIG_SRCDIR([lustre/obdclass/obdo.c])
 ])
-                           
+
 #
 # LC_PATH_DEFAULTS
 #
@@ -1530,6 +1530,21 @@ LC_READLINK_SSIZE_T
 
 # utils/llverfs.c
 AC_CHECK_HEADERS([ext2fs/ext2fs.h])
+
+# include/linux/obd_support.h
+AC_CHECK_HEADERS([zlib.h])
+
+# check for -lz support
+AC_CHECK_LIB(z, [adler32],
+        [
+                ZLIB="-lz"
+                AC_DEFINE([HAVE_ADLER], 1, [support alder32 checksum type])
+        ],
+        [
+                ZLIB=""
+                AC_MSG_WARN([No zlib-devel package found, unable to use adler32 checksum])
+        ])
+AC_SUBST(ZLIB)
 
 # Super safe df
 AC_ARG_ENABLE([mindf],

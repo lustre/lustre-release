@@ -453,11 +453,13 @@ static int get_per_page_niobufs(struct obd_ioobj *ioo, int nioo,
         return npages;
 }
 
-static __u32 ost_checksum_bulk(struct ptlrpc_bulk_desc *desc, int opc)
+static __u32 ost_checksum_bulk(struct ptlrpc_bulk_desc *desc, int opc,
+                               cksum_type_t cksum_type)
 {
-        __u32 cksum = ~0;
+        __u32 cksum;
         int i;
 
+        cksum = init_checksum(cksum_type);
         for (i = 0; i < desc->bd_iov_count; i++) {
                 struct page *page = desc->bd_iov[i].kiov_page;
                 int off = desc->bd_iov[i].kiov_offset & ~CFS_PAGE_MASK;
@@ -469,7 +471,7 @@ static __u32 ost_checksum_bulk(struct ptlrpc_bulk_desc *desc, int opc)
                 if (i == 0 && opc == OST_WRITE &&
                     OBD_FAIL_CHECK_ONCE(OBD_FAIL_OST_CHECKSUM_RECEIVE))
                         memcpy(ptr, "bad3", min(4, len));
-                cksum = crc32_le(cksum, ptr, len);
+                cksum = compute_checksum(cksum, ptr, len, cksum_type);
                 /* corrupt the data after we compute the checksum, to
                  * simulate an OST->client data error */
                 if (i == 0 && opc == OST_READ &&
@@ -786,9 +788,14 @@ static int ost_brw_read(struct ptlrpc_request *req, struct obd_trans_info *oti)
                 }
         }
 
-        if (unlikely(body->oa.o_valid & OBD_MD_FLCKSUM)) {
-                body->oa.o_cksum = ost_checksum_bulk(desc, OST_READ);
-                body->oa.o_valid = OBD_MD_FLCKSUM;
+        if (body->oa.o_valid & OBD_MD_FLCKSUM) {
+                cksum_type_t cksum_type = OBD_CKSUM_CRC32;
+
+                if (body->oa.o_valid & OBD_MD_FLFLAGS)
+                        cksum_type = cksum_type_unpack(body->oa.o_flags);
+                body->oa.o_flags = cksum_type_pack(cksum_type);
+                body->oa.o_valid = OBD_MD_FLCKSUM | OBD_MD_FLFLAGS;
+                body->oa.o_cksum = ost_checksum_bulk(desc, OST_READ, cksum_type);
                 CDEBUG(D_PAGE,"checksum at read origin: %x\n",body->oa.o_cksum);
         } else {
                 body->oa.o_valid = 0;
@@ -915,7 +922,8 @@ static int ost_brw_write(struct ptlrpc_request *req, struct obd_trans_info *oti)
         int size[3] = { sizeof(struct ptlrpc_body), sizeof(*body) };
         int objcount, niocount, npages;
         int rc, swab, i, j;
-        obd_count                client_cksum, server_cksum = 0;
+        obd_count                client_cksum = 0, server_cksum = 0;
+        cksum_type_t             cksum_type = OBD_CKSUM_CRC32;
         int                      no_reply = 0; 
         ENTRY;
 
@@ -1042,7 +1050,11 @@ static int ost_brw_write(struct ptlrpc_request *req, struct obd_trans_info *oti)
         ost_prolong_locks(exp, ioo, pp_rnb, LCK_PW);
 
         /* obd_preprw clobbers oa->valid, so save what we need */
-        client_cksum = body->oa.o_valid & OBD_MD_FLCKSUM ? body->oa.o_cksum : 0;
+        if (body->oa.o_valid & OBD_MD_FLCKSUM) {
+                client_cksum = body->oa.o_cksum;
+                if (body->oa.o_valid & OBD_MD_FLFLAGS)
+                        cksum_type = cksum_type_unpack(body->oa.o_flags);
+        }
 
         /* Because we already sync grant info with client when reconnect,
          * grant info will be cleared for resent req, then fed_grant and 
@@ -1116,11 +1128,13 @@ static int ost_brw_write(struct ptlrpc_request *req, struct obd_trans_info *oti)
                                  sizeof(*repbody));
         memcpy(&repbody->oa, &body->oa, sizeof(repbody->oa));
 
-        if (unlikely(client_cksum != 0 && rc == 0)) {
+        if (client_cksum != 0 && rc == 0) {
                 static int cksum_counter;
 
-                server_cksum = ost_checksum_bulk(desc, OST_WRITE);
-                repbody->oa.o_valid |= OBD_MD_FLCKSUM;
+                repbody->oa.o_valid |= OBD_MD_FLCKSUM | OBD_MD_FLFLAGS;
+                repbody->oa.o_flags &= ~OBD_FL_CKSUM_ALL;
+                repbody->oa.o_flags |= cksum_type_pack(cksum_type);
+                server_cksum = ost_checksum_bulk(desc, OST_WRITE, cksum_type);
                 repbody->oa.o_cksum = server_cksum;
                 cksum_counter++;
                 if (unlikely(client_cksum != server_cksum)) {
@@ -1150,7 +1164,7 @@ static int ost_brw_write(struct ptlrpc_request *req, struct obd_trans_info *oti)
                            objcount, ioo, npages, local_nb, oti, rc);
 
         if (unlikely(client_cksum != server_cksum && rc == 0)) {
-                int   new_cksum = ost_checksum_bulk(desc, OST_WRITE);
+                int  new_cksum = ost_checksum_bulk(desc, OST_WRITE, cksum_type);
                 char *msg;
                 char *via;
                 char *router;
@@ -1168,7 +1182,7 @@ static int ost_brw_write(struct ptlrpc_request *req, struct obd_trans_info *oti)
                         via = " via ";
                         router = libcfs_nid2str(desc->bd_sender);
                 }
-                
+
                 LCONSOLE_ERROR_MSG(0x168, "%s: BAD WRITE CHECKSUM: %s from %s"
                                    "%s%s inum "LPU64"/"LPU64" object "LPU64"/"
                                    LPU64" extent ["LPU64"-"LPU64"]\n",

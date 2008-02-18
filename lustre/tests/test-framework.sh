@@ -751,6 +751,12 @@ mount_client() {
     grep " $1 " /proc/mounts || zconf_mount $HOSTNAME $*
 }
 
+remount_client()
+{
+	zconf_umount `hostname` $1 || error "umount failed"
+	zconf_mount `hostname` $1 || error "mount failed"
+}
+
 setupall() {
     load_modules
     if [ -z "$CLIENTONLY" ]; then

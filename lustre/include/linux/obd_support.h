@@ -37,6 +37,7 @@
 #endif
 #include <libcfs/kp30.h>
 #include <linux/lustre_compat25.h>
+#include <lustre/lustre_idl.h>
 
 /* Prefer the kernel's version, if it exports it, because it might be
  * optimized for this CPU. */
@@ -69,6 +70,86 @@ static inline __u32 crc32_le(__u32 crc, unsigned char const *p, size_t len)
         return crc;
 }
 #endif
+
+#ifdef __KERNEL__
+# include <linux/zutil.h>
+# ifndef HAVE_ADLER
+#  define HAVE_ADLER
+# endif
+#else /* ! __KERNEL__ */
+# ifdef HAVE_ADLER
+#  include <zlib.h>
+
+static inline __u32 zlib_adler32(__u32 adler, unsigned char const *p,
+                                 size_t len)
+{
+        return adler32(adler, p, len);
+}
+# endif
+#endif /* __KERNEL__ */
+
+static inline __u32 init_checksum(cksum_type_t cksum_type)
+{
+        switch(cksum_type) {
+        case OBD_CKSUM_CRC32:
+                return ~0U;
+#ifdef HAVE_ADLER
+        case OBD_CKSUM_ADLER:
+                return 1U;
+#endif
+        default:
+                CERROR("Unknown checksum type (%x)!!!\n", cksum_type);
+                LBUG();
+        }
+        return 0;
+}
+
+static inline __u32 compute_checksum(__u32 cksum, unsigned char const *p,
+                                     size_t len, cksum_type_t cksum_type)
+{
+        switch(cksum_type) {
+        case OBD_CKSUM_CRC32:
+                return crc32_le(cksum, p, len);
+#ifdef HAVE_ADLER
+        case OBD_CKSUM_ADLER:
+                return zlib_adler32(cksum, p, len);
+#endif
+        default:
+                CERROR("Unknown checksum type (%x)!!!\n", cksum_type);
+                LBUG();
+        }
+        return 0;
+}
+
+static inline obd_flag cksum_type_pack(cksum_type_t cksum_type)
+{
+        switch(cksum_type) {
+        case OBD_CKSUM_CRC32:
+                return OBD_FL_CKSUM_CRC32;
+#ifdef HAVE_ADLER
+        case OBD_CKSUM_ADLER:
+                return OBD_FL_CKSUM_ADLER;
+#endif
+        default:
+                CWARN("unknown cksum type %x\n", cksum_type);
+        }
+        return OBD_FL_CKSUM_CRC32;
+}
+
+static inline cksum_type_t cksum_type_unpack(obd_flag o_flags)
+{
+        o_flags &= OBD_FL_CKSUM_ALL;
+        if ((o_flags - 1) & o_flags)
+                CWARN("several checksum types are set: %x\n", o_flags);
+        if (o_flags & OBD_FL_CKSUM_ADLER)
+#ifdef HAVE_ADLER
+                return OBD_CKSUM_ADLER;
+#else
+                CWARN("checksum type is set to adler32, but adler32 is not "
+                      "supported (%x)\n", o_flags);
+#endif
+        return OBD_CKSUM_CRC32;
+}
 
 #ifdef __KERNEL__
 # include <linux/types.h>
