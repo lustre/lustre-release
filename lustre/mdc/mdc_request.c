@@ -182,7 +182,10 @@ static int mdc_getattr_common(struct obd_export *exp,
 
         if (body->valid & OBD_MD_FLRMTPERM) {
                 struct mdt_remote_perm *perm;
-                perm = req_capsule_server_get(pill, &RMF_ACL);
+
+                LASSERT(client_is_remote(exp));
+                perm = req_capsule_server_swab_get(pill, &RMF_ACL,
+                                                lustre_swab_mdt_remote_perm);
                 if (perm == NULL)
                         RETURN(-EPROTO);
         }

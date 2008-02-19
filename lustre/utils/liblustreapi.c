@@ -1896,7 +1896,7 @@ static int do_rmtacl(int argc, char *argv[], int ops, int (output_func)(char *))
                 }
 
                 if ((pid = fork()) < 0) {
-                        perror("pipe");
+                        perror("fork");
                         close(fd[0]);
                         close(fd[1]);
                         return -1;

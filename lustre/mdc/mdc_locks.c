@@ -644,11 +644,10 @@ int mdc_enqueue(struct obd_export *exp, struct ldlm_enqueue_info *einfo,
                         struct mdt_remote_perm *perm;
 
                         LASSERT(client_is_remote(exp));
-                        perm = req_capsule_server_get(pill, &RMF_ACL);
+                        perm = req_capsule_server_swab_get(pill, &RMF_ACL,
+                                                lustre_swab_mdt_remote_perm);
                         if (perm == NULL)
                                 RETURN(-EPROTO);
-
-                        lustre_swab_mdt_remote_perm(perm);
                 }
                 if (body->valid & OBD_MD_FLMDSCAPA) {
                         struct lustre_capa *capa, *p;
