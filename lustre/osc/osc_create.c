@@ -81,6 +81,11 @@ static int osc_interpret_create(struct ptlrpc_request *req, void *data, int rc)
                 spin_unlock(&oscc->oscc_lock);
                 break;
         }
+        case -EAGAIN:
+                /* valid race delorphan vs create, or somthing after resend */
+                spin_unlock(&oscc->oscc_lock);
+                DEBUG_REQ(D_INODE, req, "Got EGAIN - resend \n");
+                break;
         case -ENOSPC:
         case -EROFS: {
                 oscc->oscc_flags |= OSCC_FLAG_NOSPC;
