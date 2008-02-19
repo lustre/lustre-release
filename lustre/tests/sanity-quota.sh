@@ -19,7 +19,6 @@ export PATH=$PWD/$SRCDIR:$SRCDIR:$PWD/$SRCDIR/../utils:$PATH:/sbin
 ONLY=${ONLY:-"$*"}
 ALWAYS_EXCEPT="$SANITY_QUOTA_EXCEPT"
 # UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
-[ "$SLOW" = "no" ] && EXCEPT_SLOW="9 10 11"
 
 case `uname -r` in
 2.6*) FSTYPE=${FSTYPE:-ldiskfs};;
@@ -48,6 +47,8 @@ LUSTRE=${LUSTRE:-`dirname $0`/..}
 init_test_env $@
 . ${CONFIG:=$LUSTRE/tests/cfg/$NAME.sh}
 
+[ "$SLOW" = "no" ] && EXCEPT_SLOW="9 10 11"
+
 QUOTALOG=${TESTSUITELOG:-$TMP/$(basename $0 .sh).log}
 
 [ "$QUOTALOG" ] && rm -f $QUOTALOG || true
@@ -66,6 +67,7 @@ SHOW_QUOTA_INFO="$LFS quota -t $DIR"
 
 # control the time of tests
 cycle=30
+[ "$SLOW" = "no" ] && cycle=10
 
 build_test_filter
 
@@ -711,8 +713,11 @@ test_8() {
 	chmod 0777 $DIR/$tdir
 	SAVE_PWD=$PWD
 	cd $DIR/$tdir
-	$RUNAS dbench -c client.txt 3
+	local duration=""
+	[ "$SLOW" = "no" ] && duration=" -t 120"
+	$RUNAS dbench -c client.txt 3 $duration
 	RC=$?
+	[ $RC -ne 0 ] && killall -9 dbench
 
 	rm -f client.txt
 	sync; sleep 3; sync;
@@ -867,9 +872,11 @@ test_11() {
        local RV=0
 
        #do the test
-       MINS=0
-       REPS=3
-       i=1
+       local SECS=0
+       local REPS=3
+       [ "$SLOW" = no ] && REPS=1
+       local sleep=20
+       local i=1
        while [ $i -le $REPS ]; do
 	   echo "test: cycle($i of $REPS) start at $(date)"
 	   mkdir -p $DIR/$tdir && chmod 777 $DIR/$tdir
@@ -883,12 +890,12 @@ test_11() {
 	   PROCS=$(ps -ef | grep -v grep | grep "dd if /dev/zero of $TESTDIR" | wc -l)
            LAST_USED=0
 	   while [ $PROCS -gt 0 ]; do 
-	     sleep 60
-	     MINS=$(($MINS+1))
+	     sleep 20
+	     SECS=$((SECS + sleep))
 	     PROCS=$(ps -ef | grep -v grep | grep "dd if /dev/zero of $TESTDIR" | wc -l)
 	     USED=$(du -s $DIR/$tdir | awk '{print $1}')
 	     PCT=$(($USED * 100 / $block_limit))
-	     echo "${i}/${REPS} ${PCT}% p${PROCS} t${MINS}  "
+	     echo "${i}/${REPS} ${PCT}% p${PROCS} t${SECS}  "
 	     if [ $USED -le $LAST_USED ]; then
 		 kill -9 $(ps -ef | grep "dd if /dev/zero of $DIR/$tdir" | grep -v grep | awk '{ print $2 }')
 		 i=$REPS
@@ -898,11 +905,11 @@ test_11() {
              LAST_USED=$USED
 	   done
 	   echo "    removing the test files..."
-	   rm -rf $DIR/$tdir/$tfile-0
+	   rm -f $DIR/$tdir/$tfile
 	   echo "cycle $i done at $(date)"
 	   i=$[$i+1]
        done
-       echo "Test took $MINS minutes"
+       echo "Test took $SECS sec"
 
        #clean
        echo $orig_dbr > /proc/sys/vm/dirty_background_ratio
@@ -910,7 +917,7 @@ test_11() {
        echo $orig_dr  > /proc/sys/vm/dirty_ratio
        echo $orig_dwc > /proc/sys/vm/dirty_writeback_centisecs
        if [ $RV -ne 0 ]; then
-           error "Nothing was written for over a minute... aborting"
+           error "Nothing was written for $SECS sec ... aborting"
        fi
        return $RV
 }

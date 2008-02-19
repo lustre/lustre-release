@@ -27,6 +27,7 @@ fail() {
 ERROR=
 RUNTESTS_SRC=${RUNTESTS_SRC:-"/etc /bin"}
 [ "$COUNT" ] || COUNT=1000
+[ "$SLOW" = "no" ] && COUNT=100
 
 [ "$MCREATE" ] || MCREATE=mcreate
 
