@@ -27,11 +27,6 @@ fi
 
 export TESTSUITE_LIST="RUNTESTS SANITY DBENCH BONNIE IOZONE FSX SANITYN LFSCK LIBLUSTRE REPLAY_SINGLE CONF_SANITY RECOVERY_SMALL REPLAY_OST_SINGLE REPLAY_DUAL INSANITY SANITY_QUOTA"
 
-if [ "$SLOW" = "no" ]; then
-#          5 min  
-    export IOZONE="no"
-fi
-
 if [ "$ACC_SM_ONLY" ]; then
     for O in $TESTSUITE_LIST; do
 	export ${O}="no"
@@ -153,6 +148,8 @@ for NAME in $CONFIGS; do
 	fi
 
 	export O_DIRECT
+	[ "$SLOW" = "no" ] && export IOZONE=no # 5 minutes
+
 	which iozone > /dev/null 2>&1 || IOZONE=no
 	if [ "$IOZONE" != "no" ]; then
 	        title iozone
