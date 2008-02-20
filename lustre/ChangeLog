@@ -17,6 +17,16 @@ tbd  Sun Microsystems, Inc.
        * RHEL 4 and RHEL 5/SLES 10 clients behaves differently on 'cd' to a
         removed cwd "./" (refer to Bugzilla 14399).
 
+Severity   : major
+Frequency  : rare, depends on device drivers and load
+Bugzilla   : 14529
+Description: MDS or OSS nodes crash due to stack overflow
+Details    : Code changes in 1.6.5 increased the stack usage of some functions.
+	     In some cases, in conjunction with device drivers that use a lot
+	     of stack the MDS (or possibly OSS) service threads could overflow
+	     the stack.  One change which was identified to consume additional
+	     stack has been reworked to avoid the extra stack usage.
+
 Severity   : enhancement
 Bugzilla   : 14876
 Description: Update to RHEL5 latest kernel-2.6.18-53.1.13.el5.
