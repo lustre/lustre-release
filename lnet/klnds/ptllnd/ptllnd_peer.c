@@ -813,6 +813,19 @@ kptllnd_peer_check_bucket (int idx, int stamp)
                                    "no free peer buffers" : 
                                    "please check Portals");
 
+		if (tx->tx_tposted) {
+			CERROR("Could not send to %s after %ds (sent %lds ago); "
+				"check Portals for possible issues\n",
+				libcfs_id2str(peer->peer_id),
+				*kptllnd_tunables.kptl_timeout,
+				cfs_duration_sec(jiffies - tx->tx_tposted));
+		} else {
+			CERROR("Could not get credits for %s after %ds; "
+				"possible Lustre networking issues\n",
+			libcfs_id2str(peer->peer_id),
+			*kptllnd_tunables.kptl_timeout);
+		}
+
                 CERROR("%s timed out: cred %d outstanding %d, sent %d, "
                        "sendq %d, activeq %d Tx %p %s (%s%s%s) status %d "
                        "%sposted %lu T/O %ds\n",
