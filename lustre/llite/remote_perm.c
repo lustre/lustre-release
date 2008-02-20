@@ -45,7 +45,7 @@ static inline struct ll_remote_perm *alloc_ll_remote_perm(void)
 {
         struct ll_remote_perm *lrp;
 
-        OBD_SLAB_ALLOC(lrp, ll_remote_perm_cachep, SLAB_KERNEL, sizeof(*lrp));
+        OBD_SLAB_ALLOC(lrp, ll_remote_perm_cachep, GFP_KERNEL, sizeof(*lrp));
         if (lrp)
                 INIT_HLIST_NODE(&lrp->lrp_list);
         return lrp;
@@ -66,7 +66,7 @@ struct hlist_head *alloc_rmtperm_hash(void)
         struct hlist_head *hash;
         int i;
 
-        OBD_SLAB_ALLOC(hash, ll_rmtperm_hash_cachep, SLAB_KERNEL,
+        OBD_SLAB_ALLOC(hash, ll_rmtperm_hash_cachep, GFP_KERNEL,
                        REMOTE_PERM_HASHSIZE * sizeof(*hash));
 
         if (!hash)

@@ -378,5 +378,9 @@ int ll_unregister_blkdev(unsigned int dev, const char *name)
 #endif
 
 
+#ifdef FS_ODD_RENAME
+#define FS_RENAME_DOES_D_MOVE FS_ODD_RENAME
+#endif
+
 #endif /* __KERNEL__ */
 #endif /* _COMPAT25_H */

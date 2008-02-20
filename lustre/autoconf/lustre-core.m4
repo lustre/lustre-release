@@ -1325,8 +1325,10 @@ AC_DEFUN([LC_CONST_ACL_SIZE],
 tmp_flags="$CFLAGS"
 CFLAGS="$CFLAGS -I $LINUX/include $EXTRA_KCFLAGS"
 AC_TRY_RUN([
+#define __KERNEL__
 #include <linux/autoconf.h>
 #include <linux/types.h>
+#undef __KERNEL__
 // block include 
 #define __LINUX_POSIX_ACL_H
 
