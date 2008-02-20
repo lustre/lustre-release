@@ -10,8 +10,6 @@ ALWAYS_EXCEPT="14b 28 $SANITYN_EXCEPT"
 # bug number for skipped test:                                                    12652 12652
 grep -q 'Enterprise Server 10' /etc/SuSE-release && ALWAYS_EXCEPT="$ALWAYS_EXCEPT 11    14" || true
 
-[ "$SLOW" = "no" ] && EXCEPT_SLOW="12 16"
-
 # Tests that fail on uml
 [ "$UML" = "true" ] && EXCEPT="$EXCEPT 7"
 
@@ -47,6 +45,8 @@ CLEANUP=${CLEANUP:-:}
 SETUP=${SETUP:-:}
 init_test_env $@
 . ${CONFIG:=$LUSTRE/tests/cfg/$NAME.sh}
+
+[ "$SLOW" = "no" ] && EXCEPT_SLOW="12 16"
 
 SANITYLOG=${TESTSUITELOG:-$TMP/$(basename $0 .sh).log}
 FAIL_ON_ERROR=false

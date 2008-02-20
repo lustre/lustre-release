@@ -97,3 +97,4 @@ PDSH=${PDSH:-no_dsh}
 FAILURE_MODE=${FAILURE_MODE:-SOFT} # or HARD
 POWER_DOWN=${POWER_DOWN:-"powerman --off"}
 POWER_UP=${POWER_UP:-"powerman --on"}
+SLOW=${SLOW:-no}

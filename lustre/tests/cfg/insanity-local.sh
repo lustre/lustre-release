@@ -75,3 +75,5 @@ POWER_DOWN=${POWER_DOWN:-"powerman --off"}
 POWER_UP=${POWER_UP:-"powerman --on"}
 
 PDSH=${PDSH:-no_dsh}
+SLOW=${SLOW:-no}
+

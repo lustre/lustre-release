@@ -13,8 +13,6 @@ ALWAYS_EXCEPT="                 27o 27q  42a  42b  42c  42d  45   74b   75 $SANI
 #ALWAYS_EXCEPT=${ALWAYS_EXCEPT:-"27m 42a 42b 42c 42d 45 68 76"}
 # UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
 
-[ "$SLOW" = "no" ] && EXCEPT_SLOW="24o 27m 36f 36g 51b 51c 60c 63 64b 68 71 73 77f 78 101 103 115 120g 124b"
-
 # Tests that fail on uml
 CPU=`awk '/model/ {print $4}' /proc/cpuinfo`
 #                                    buffer i/o errs             sock spc runas
@@ -73,12 +71,16 @@ TRACE=${TRACE:-""}
 LUSTRE=${LUSTRE:-`dirname $0`/..}
 . $LUSTRE/tests/test-framework.sh
 init_test_env $@
-. ${CONFIG:=$LUSTRE/tests/cfg/local.sh}
+. ${CONFIG:=$LUSTRE/tests/cfg/${NAME}.sh}
+
+[ "$SLOW" = "no" ] && EXCEPT_SLOW="24o 27m 36f 36g 51b 51c 60c 63 64b 68 71 73 77f 78 101 103 115 120g 124b"
 
 if $GSS_KRB5; then
     $RUNAS krb5_login.sh || exit 1
     $RUNAS -u $(($RUNAS_ID + 1)) krb5_login.sh || exit 1
 fi
+
+[ "$SLOW" = "no" ] && EXCEPT_SLOW="24o 27m 36f 36g 51b 51c 60c 63 64b 68 71 73 77f 78 101 103 115 120g 124b"
 
 SANITYLOG=${TESTSUITELOG:-$TMP/$(basename $0 .sh).log}
 FAIL_ON_ERROR=false
@@ -3245,7 +3247,9 @@ test_76() { # bug 1443
 	[ $DETH -eq 0 ] && skip "No _iget." && return 0
         BEFORE_INODES=`num_inodes`
 	echo "before inodes: $BEFORE_INODES"
-	for i in `seq 1000`; do
+	local COUNT=1000
+	[ "$SLOW" = "no" ] && COUNT=100
+	for i in `seq $COUNT`; do
 		touch $DIR/$tfile
 		rm -f $DIR/$tfile
 	done
@@ -4141,6 +4145,18 @@ test_117() # bug 10891
 }
 run_test 117 "verify fsfilt_extend =========="
 
+export OLD_RESENDCOUNT=""
+set_resend_count () {
+	local PROC_RESENDCOUNT="$LPROC/osc/${FSNAME}-OST*-osc-*/resend_count"
+	OLD_RESENDCOUNT=$(cat $PROC_RESENDCOUNT | head -1)
+	for i in $PROC_RESENDCOUNT; do
+		echo $1 >$i
+	done
+	echo resend_count is set to $(cat $PROC_RESENDCOUNT)
+}
+
+[ "$SLOW" = "no" ] && set_resend_count 4 # for reduce test_118* time (bug 14842)
+
 # Reset async IO behavior after error case
 reset_async() {
 	FILE=$DIR/reset_async
@@ -4474,6 +4490,8 @@ test_118k()
         sysctl -w lustre.fail_loc=0
 }
 run_test 118k "bio alloc -ENOMEM and IO TERM handling ========="
+
+[ "$SLOW" = "no" ] && [ -n "$OLD_RESENDCOUNT" ] && set_resend_count $OLD_RESENDCOUNT
 
 test_119a() # bug 11737
 {
