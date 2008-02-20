@@ -29,6 +29,7 @@
 #include <liblustre.h>
 #endif
 #include <lustre_lib.h>
+#include <lprocfs_status.h>
 
 unsigned int obd_fail_val = 0;
 unsigned long obd_fail_loc = 0;
@@ -122,6 +123,61 @@ int __obd_fail_check_set(__u32 id, __u32 value, int set)
         return 1;
 }
 EXPORT_SYMBOL(__obd_fail_check_set);
+
+#ifdef LPROCFS
+void lprocfs_counter_add(struct lprocfs_stats *stats, int idx,
+                                       long amount)
+{
+        struct lprocfs_counter *percpu_cntr;
+        int smp_id;
+
+        if (stats == NULL)
+                return;
+
+        /* With per-client stats, statistics are allocated only for
+         * single CPU area, so the smp_id should be 0 always. */
+        smp_id = lprocfs_stats_lock(stats, LPROCFS_GET_SMP_ID);
+
+        percpu_cntr = &(stats->ls_percpu[smp_id]->lp_cntr[idx]);
+        atomic_inc(&percpu_cntr->lc_cntl.la_entry);
+        percpu_cntr->lc_count++;
+
+        if (percpu_cntr->lc_config & LPROCFS_CNTR_AVGMINMAX) {
+                percpu_cntr->lc_sum += amount;
+                if (percpu_cntr->lc_config & LPROCFS_CNTR_STDDEV)
+                        percpu_cntr->lc_sumsquare += (__u64)amount * amount;
+                if (amount < percpu_cntr->lc_min)
+                        percpu_cntr->lc_min = amount;
+                if (amount > percpu_cntr->lc_max)
+                        percpu_cntr->lc_max = amount;
+        }
+        atomic_inc(&percpu_cntr->lc_cntl.la_exit);
+        lprocfs_stats_unlock(stats);
+}
+EXPORT_SYMBOL(lprocfs_counter_add);
+
+void lprocfs_counter_sub(struct lprocfs_stats *stats, int idx,
+                                       long amount)
+{
+        struct lprocfs_counter *percpu_cntr;
+        int smp_id;
+
+        if (stats == NULL)
+                return;
+
+        /* With per-client stats, statistics are allocated only for
+         * single CPU area, so the smp_id should be 0 always. */
+        smp_id = lprocfs_stats_lock(stats, LPROCFS_GET_SMP_ID);
+
+        percpu_cntr = &(stats->ls_percpu[smp_id]->lp_cntr[idx]);
+        atomic_inc(&percpu_cntr->lc_cntl.la_entry);
+        if (percpu_cntr->lc_config & LPROCFS_CNTR_AVGMINMAX)
+                percpu_cntr->lc_sum -= amount;
+        atomic_inc(&percpu_cntr->lc_cntl.la_exit);
+        lprocfs_stats_unlock(stats);
+}
+EXPORT_SYMBOL(lprocfs_counter_sub);
+#endif  /* LPROCFS */
 
 EXPORT_SYMBOL(obd_fail_loc);
 EXPORT_SYMBOL(obd_alloc_fail_rate);
