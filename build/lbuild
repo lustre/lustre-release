@@ -377,8 +377,8 @@ download_and_build_tarball() {
 
     local srpm=kernel-${lnxmaj}-${lnxrel}.src.rpm
 
-    echo "Downloading http://ftp.lustre.org/kernels/$target/old/$srpm..."
-    if ! wget -nv "http://ftp.lustre.org/kernels/$target/old/$srpm" \
+    echo "Downloading http://ftp.lustre.org/pub/kernels/$target/old/$srpm..."
+    if ! wget -nv "http://ftp.lustre.org/pub/kernels/$target/old/$srpm" \
         -O "$KERNELDIR/$srpm" ; then
         fatal 1 "Could not download target $kernel_file's kernel SRPM $srpm from ftp.lustre.org."
     fi
@@ -420,8 +420,8 @@ load_target()
                 build_tarball $CANONICAL_TARGET $KERNEL_SRPM
             else
                 if (( $DOWNLOAD )) ; then
-                    echo "Downloading http://ftp.lustre.org/kernels/$CANONICAL_TARGET/old/$KERNEL..."
-                    if ! wget -nv "http://ftp.lustre.org/kernels/$CANONICAL_TARGET/old/$KERNEL" -O "$KERNELDIR/$KERNEL" ; then
+                    echo "Downloading http://ftp.lustre.org/pub/kernels/$CANONICAL_TARGET/old/$KERNEL..."
+                    if ! wget -nv "http://ftp.lustre.org/pub/kernels/$CANONICAL_TARGET/old/$KERNEL" -O "$KERNELDIR/$KERNEL" ; then
                         # see if we can do it with an SRPM from the download site
                         download_and_build_tarball $CANONICAL_TARGET $KERNEL_FILE
                     fi
@@ -902,7 +902,7 @@ gen_lustre_version()
     LUSTRE_EXTRA_VERSION=$( echo $LUSTRE_EXTRA_VERSION | sed -e "s^-^_^g" )
 }
 
-#store RPMs and/or BUILD dir for feature reuse
+#store RPMs and/or BUILD dir for future reuse
 store_for_reuse()
 {
     local rpmonly=$1
@@ -959,48 +959,77 @@ store_for_reuse()
     fi
 }
 
+set_rpm_smp_type()
+{
+    RPMSMPTYPE=default
+    for smp_type in $SMP_ARCHS; do
+        [ $TARGET_ARCH == $smp_type ] && RPMSMPTYPE=smp && break
+    done
+
+    for smp_type in $BIGSMP_ARCHS; do
+        [ $TARGET_ARCH == $smp_type ] && RPMSMPTYPE=bigsmp && break
+    done
+}
+
 #unpack kernel(/source/devel) RPM
 unpack_linux_rpm()
 {
     local prefix=$1
+    local delimiter=${2:-"-"}
     local pathtorpms="${KERNELRPMSBASE}/${lnxmaj}/${DISTRO}"
     local kernelbinaryrpm=
     [ -d $pathtorpms ] || return 255
     local rpmfile=
-    local smptype=
+    local wanted_kernel="${lnxmaj}${delimiter}${lnxrel}"
     for arch in $TARGET_ARCHS_ALL; do
-        for smptype in $SMPTYPES; do
-            [ "$smptype" = "''" ] && smptype=
-            [ "$smptype" = "" ] || smptype="-${smptype}"
-            case "$DISTRO" in
-                sles10)
-                    rpmfile="kernel${smptype}${prefix}-${lnxmaj}.${lnxrel}.${arch}.rpm"
-                    kernelbinaryrpm="kernel${smptype}-${lnxmaj}.${lnxrel}.${arch}.rpm"
-                ;;
-                *)
-                    rpmfile="kernel${smptype}${prefix}-${lnxmaj}-${lnxrel}.${arch}.rpm"
-                    kernelbinaryrpm="kernel${smptype}-${lnxmaj}-${lnxrel}.${arch}.rpm"
-                ;;
-            esac
-            [ -f "${pathtorpms}/${arch}/${kernelbinaryrpm}" ] && KERNELRPM="${pathtorpms}/${arch}/${kernelbinaryrpm}"
-            [ -f "${pathtorpms}/${arch}/${rpmfile}" ] && RPMSMPTYPE=${smptype/-/} && break
+        for rpm in ${pathtorpms}/${arch}/*.rpm; do
+            local provides=$(rpm -q --provides -p $rpm)
+            if (echo $provides | grep -q "kernel${prefix} = $wanted_kernel"); then
+                KERNELRPM=$rpm
+            fi
         done
-        [ -f "${pathtorpms}/${arch}/${kernelbinaryrpm}" ] && KERNELRPM="${pathtorpms}/${arch}/${kernelbinaryrpm}"
-        [ -f "${pathtorpms}/${arch}/${rpmfile}" ] && TARGET_ARCH="$arch" && BUILD_ARCHS="$arch"
-        [ -f "${pathtorpms}/${arch}/${rpmfile}" ] && break
+        [ -f "$KERNELRPM" ] && TARGET_ARCH="$arch" && BUILD_ARCHS="$arch" && break
     done
-    [ -f "${pathtorpms}/${TARGET_ARCH}/${rpmfile}" ] || return 255
+
+    # bleah
+    set_rpm_smp_type
+
+    [ -f "$KERNELRPM" ] || return 255
     [ -d $TOPDIR/reused ] || mkdir $TOPDIR/reused
     pushd $TOPDIR/reused || return 255
-    rpm2cpio < "${pathtorpms}/${TARGET_ARCH}/${rpmfile}" | cpio -idc > /dev/null 2>&1
+    RC=0
+    rpm2cpio < "$KERNELRPM" | cpio -idc > /dev/null 2>&1
     if [ ${PIPESTATUS[0]} -eq 0 ]; then
-        local path2source=$(ls usr/src/kernels/ | grep ${lnxmaj})
-        [ -d "usr/src/kernels/${path2source}" ] && LINUX="$(pwd)/usr/src/kernels/${path2source}"
+        # RHEL-style and SLES-style rpms
+        local paths="kernels/${lnxmaj}${delimiter}${lnxrel}-${TARGET_ARCH} linux-${lnxmaj}${delimiter}${lnxrel}"
+
+        for path in $paths; do
+            local src='usr/src'
+
+            if [ -d "$src/$path/" ]; then
+                LINUX="$(pwd)/$src/$path"
+            fi
+            # SLES has a separate -obj tree
+            if [ -d "$src/${path}-obj" ]; then
+                src="$src/${path}-obj"
+                local objects="$TARGET_ARCH/$RPMSMPTYPE"
+
+                # Novell, are you *TRYING* to make life hard for me?
+                if [ -d "$src/powerpc" ]; then
+                    objects="powerpc/$TARGET_ARCH"
+                elif [ $TARGET_ARCH == 'i686' ]; then
+                    objects="i386/$RPMSMPTYPE"
+                fi
+
+                LINUXOBJ="$(pwd)/$src/$objects"
+            fi
+        done
+        [ -z "$LINUX" ] && RC=255
     else
-        popd
-        return 255
+        RC=255
     fi
     popd
+    return $RC
 }
 
 #look for kernel source RPM
@@ -1174,62 +1203,49 @@ patchless_build_sequence()
         return 255
     fi
     [ -d $TOPDIR/reused ] && rm -rf $TOPDIR/reused
-    unpack_linux_rpm "-devel" && rpmfound=true
+
+    local type=
+    local delimiter=
+    case "$DISTRO" in
+        rhel*)
+            type=-devel
+            delimiter=-
+            ;;
+        sles10)
+            type=-source
+            delimiter=.
+            ;;
+        sles9)
+            type=-source
+            delimiter=-
+            ;;
+        *)
+            echo "Don't know what to do with $DISTRO"
+            return 255
+            ;;
+    esac
+
+    unpack_linux_rpm $type $delimiter && rpmfound=true
     ( $rpmfound ) && build_lustre && buildsuccess=true && find_linux_source_rpm
 
-    if ! $buildsuccess; then
-        # cannot build from -devel. Try to build from kernel source RPM without rebuilding kernel
-        KERNELSOURCERPM=
-        # first unpack kernel binary RPM
-        rpmfound=false
-        [ -d $TOPDIR/reused ] && rm -rf $TOPDIR/reused
-        unpack_linux_rpm && rpmfound=true
-        ! ( $rpmfound ) && echo "Cannot find kernel RPM"
-
-        if ! $rpmfound; then #kernel RPM not found.
-            # try to reuse
-            build_sequence_reuse && buildsuccess=true
-            if ! $buildsuccess; then
-                # reuse failed. Try to build from tarbal
-                KERNELRPM=
-                KERNELSOURCERPM=
-                unpack_linux && LINUX="$TOPDIR/linux" && \
-                    build_linux fullmake copykernel && build_linux_rpm
-                ! [ "$KERNELRPM" = "" ] && build_lustre && storeforreuse=true && buildsuccess=true
-            fi
-        else
-            # next find and unpack source RPM
-            rpmfound=false
-            find_linux_source_rpm && rpmfound=true
-            ( $rpmfound ) && \
-                reuse_kernel_rpm "$KERNELSOURCERPM" && build_linux nofullmake copyrpmkernel && build_lustre && buildsuccess=true
-        fi
-    fi
-
-    if ! $buildsuccess && $rpmfound; then
-        # build wrong. try to build kernel first
-        REUSEDKERNELMASK=$(basename $KERNELRPM | sed s/\\.rpm//)
-        build_sequence_reuse && buildsuccess=true
-    fi
-    
-    if ! $buildsuccess && $rpmfound; then
-        build_linux fullmake copyrpmkernel && build_lustre && buildsuccess=true && storeforreuse=true
-    fi
-
     if $buildsuccess; then
-	    [ -d "RPMS/${TARGET_ARCH}" ] && [ -f "$KERNELRPM" ] && \
-		    cp "$KERNELRPM" RPMS/${TARGET_ARCH}/
-	    [ -d "RPMS/${TARGET_ARCH}" ] && [ -f "$KERNELSOURCERPM" ] && \
-		    cp "$KERNELSOURCERPM" RPMS/${TARGET_ARCH}/
-	    KERNELCOMPILEDIR="$LINUX"
+        [ -d "RPMS/${TARGET_ARCH}" ] && [ -f "$KERNELRPM" ] && \
+            cp "$KERNELRPM" RPMS/${TARGET_ARCH}/
+        [ -d "RPMS/${TARGET_ARCH}" ] && [ -f "$KERNELSOURCERPM" ] && \
+            cp "$KERNELSOURCERPM" RPMS/${TARGET_ARCH}/
+        KERNELCOMPILEDIR="$LINUX"
         if $storeforreuse; then
             store_for_reuse || echo "Cannot store for feature reuse"
         fi
-        return
-    fi
 
-    # patchless build filed
-    return 255
+        return
+    elif ! $rpmfound; then
+        echo "COULD NOT FIND VENDOR -devel or -source RPM for $DISTRO/$TARGET_ARCH: $lnxmaj-$lnxrel in $KERNELRPMSBASE"
+        return 255
+    else
+        echo "Patchless build failed."
+        return 255
+    fi
 }
 
 #check timestamp value. should bi 14-digits string
