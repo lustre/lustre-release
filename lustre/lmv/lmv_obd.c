@@ -702,27 +702,62 @@ static int lmv_iocontrol(unsigned int cmd, struct obd_export *exp,
         if (lmv->desc.ld_tgt_count == 0)
                 RETURN(-ENOTTY);
 
-        for (i = 0; i < lmv->desc.ld_tgt_count; i++) {
-                int err;
+        switch (cmd) {
+        case IOC_OBD_STATFS: {
+                struct obd_ioctl_data *data = karg;
+                struct obd_device *mdc_obd;
+                struct obd_statfs stat_buf = {0};
+                __u32 index;
 
-                if (lmv->tgts[i].ltd_exp == NULL)
-                        continue;
+                memcpy(&index, data->ioc_inlbuf2, sizeof(__u32));
+                LASSERT(data->ioc_plen1 == sizeof(struct obd_statfs));
 
-                err = obd_iocontrol(cmd, lmv->tgts[i].ltd_exp, len, karg, uarg);
-                if (err) {
-                        if (lmv->tgts[i].ltd_active) {
-                                CERROR("error: iocontrol MDC %s on MDT"
-                                       "idx %d: err = %d\n",
-                                       lmv->tgts[i].ltd_uuid.uuid, i, err);
-                                if (!rc)
-                                        rc = err;
-                        }
-                } else
-                        set = 1;
+                if ((index >= lmv->desc.ld_tgt_count))
+                        RETURN(-ENODEV);
+                
+                if (!lmv->tgts[index].ltd_active)
+                        RETURN(-ENODATA);
+
+                mdc_obd = class_exp2obd(lmv->tgts[index].ltd_exp);
+                if (!mdc_obd)
+                        RETURN(-EINVAL);
+
+                /* got statfs data */
+                rc = obd_statfs(mdc_obd, &stat_buf, cfs_time_current_64() - 1);
+                if (rc)
+                        RETURN(rc);
+                if (copy_to_user(data->ioc_pbuf1, &stat_buf, data->ioc_plen1))
+                        RETURN(rc);
+                /* copy UUID */
+                rc = copy_to_user(data->ioc_pbuf2, obd2cli_tgt(mdc_obd),
+                                  data->ioc_plen2);
+                break;
         }
-        if (!set && !rc)
-                rc = -EIO;
+        default : {
+                for (i = 0; i < lmv->desc.ld_tgt_count; i++) {
+                        int err;
 
+                        if (lmv->tgts[i].ltd_exp == NULL)
+                                continue;
+
+                        err = obd_iocontrol(cmd, lmv->tgts[i].ltd_exp, len,
+                                            karg, uarg);
+                        if (err) {
+                                if (lmv->tgts[i].ltd_active) {
+                                        CERROR("error: iocontrol MDC %s on MDT"
+                                               "idx %d cmd %x: err = %d\n",
+                                                lmv->tgts[i].ltd_uuid.uuid,
+                                                i, cmd, err);
+                                        if (!rc)
+                                                rc = err;
+                                }
+                        } else
+                                set = 1;
+                }
+                if (!set && !rc)
+                        rc = -EIO;
+        }
+        }
         RETURN(rc);
 }
 

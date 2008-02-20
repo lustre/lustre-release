@@ -2079,12 +2079,10 @@ struct ll_async_page *llite_pglist_next_llap(struct ll_sb_info *sbi,
 int ll_obd_statfs(struct inode *inode, void *arg)
 {
         struct ll_sb_info *sbi = NULL;
-        struct obd_device *client_obd = NULL, *lov_obd = NULL;
-        struct lov_obd *lov = NULL;
-        struct obd_statfs stat_buf = {0};
+        struct obd_export *exp;
         char *buf = NULL;
         struct obd_ioctl_data *data = NULL;
-        __u32 type, index;
+        __u32 type;
         int len = 0, rc;
 
         if (!inode || !(sbi = ll_i2sbi(inode)))
@@ -2100,42 +2098,16 @@ int ll_obd_statfs(struct inode *inode, void *arg)
                 GOTO(out_statfs, rc = -EINVAL);
 
         memcpy(&type, data->ioc_inlbuf1, sizeof(__u32));
-        memcpy(&index, data->ioc_inlbuf2, sizeof(__u32));
+        if (type == LL_STATFS_MDC)
+                exp = sbi->ll_md_exp;
+        else if (type == LL_STATFS_LOV)
+                exp = sbi->ll_dt_exp;
+        else 
+                GOTO(out_statfs, rc = -ENODEV);
 
-        if (type == LL_STATFS_MDC) {
-                if (index > 0)
-                        GOTO(out_statfs, rc = -ENODEV);
-                client_obd = class_exp2obd(sbi->ll_md_exp);
-        } else if (type == LL_STATFS_LOV) {
-                lov_obd = class_exp2obd(sbi->ll_dt_exp);
-                lov = &lov_obd->u.lov;
-
-                if ((index >= lov->desc.ld_tgt_count))
-                        GOTO(out_statfs, rc = -ENODEV);
-                if (!lov->lov_tgts[index])
-                        /* Try again with the next index */
-                        GOTO(out_statfs, rc = -EAGAIN);
-
-                client_obd = class_exp2obd(lov->lov_tgts[index]->ltd_exp);
-                if (!lov->lov_tgts[index]->ltd_active)
-                        GOTO(out_uuid, rc = -ENODATA);
-        }
-
-        if (!client_obd)
-                GOTO(out_statfs, rc = -EINVAL);
-
-        rc = obd_statfs(client_obd, &stat_buf, cfs_time_current_64() - 1);
+        rc = obd_iocontrol(IOC_OBD_STATFS, exp, len, buf, NULL);
         if (rc)
                 GOTO(out_statfs, rc);
-
-        if (copy_to_user(data->ioc_pbuf1, &stat_buf, data->ioc_plen1))
-                GOTO(out_statfs, rc = -EFAULT);
-
-out_uuid:
-        if (copy_to_user(data->ioc_pbuf2, obd2cli_tgt(client_obd),
-                         data->ioc_plen2))
-                rc = -EFAULT;
-
 out_statfs:
         if (buf)
                 obd_ioctl_freedata(buf, len);

@@ -2232,6 +2232,39 @@ static int lov_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
         ENTRY;
 
         switch (cmd) {
+        case IOC_OBD_STATFS: {
+                struct obd_ioctl_data *data = karg;
+                struct obd_device *osc_obd;
+                struct obd_statfs stat_buf = {0};
+                __u32 index;
+
+                memcpy(&index, data->ioc_inlbuf2, sizeof(__u32));
+                LASSERT(data->ioc_plen1 == sizeof(struct obd_statfs));
+
+                if ((index >= count))
+                        RETURN(-ENODEV);
+                
+                if (!lov->lov_tgts[index])
+                        /* Try again with the next index */
+                        RETURN(-EAGAIN);
+                if (!lov->lov_tgts[index]->ltd_active)
+                        RETURN(-ENODATA);
+        
+                osc_obd = class_exp2obd(lov->lov_tgts[index]->ltd_exp);
+                if (!osc_obd)
+                        RETURN(-EINVAL);
+
+                /* got statfs data */
+                rc = obd_statfs(osc_obd, &stat_buf, cfs_time_current_64() - 1);
+                if (rc)
+                        RETURN(rc);
+                if (copy_to_user(data->ioc_pbuf1, &stat_buf, data->ioc_plen1))
+                        RETURN(rc);
+                /* copy UUID */
+                rc = copy_to_user(data->ioc_pbuf2, obd2cli_tgt(osc_obd),
+                                  data->ioc_plen2);
+                break;
+        }
         case OBD_IOC_LOV_GET_CONFIG: {
                 struct obd_ioctl_data *data;
                 struct lov_desc *desc;
