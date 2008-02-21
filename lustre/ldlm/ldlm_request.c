@@ -486,28 +486,31 @@ cleanup:
 /* PAGE_SIZE-512 is to allow TCP/IP and LNET headers to fit into
  * a single page on the send/receive side. XXX: 512 should be changed
  * to more adequate value. */
-static inline int ldlm_req_handles_avail(struct obd_export *exp,
-                                         int *size, int bufcount,
-                                         int bufoff, int off)
+static inline int ldlm_req_handles_avail(int req_size, int off)
 {
-        int avail = min_t(int, LDLM_MAXREQSIZE, PAGE_SIZE - 512);
-        int old_size = size[bufoff];
+        int avail;
 
-        size[bufoff] = sizeof(struct ldlm_request);
-        avail -= lustre_msg_size(class_exp2cliimp(exp)->imp_msg_magic,
-                                 bufcount, size);
+        avail = min_t(int, LDLM_MAXREQSIZE, PAGE_SIZE - 512) - req_size;
         avail /= sizeof(struct lustre_handle);
         avail += LDLM_LOCKREQ_HANDLES - off;
-        size[bufoff] = old_size;
 
         return avail;
 }
 
-static inline int ldlm_cancel_handles_avail(struct obd_export *exp)
+static inline int ldlm_capsule_handles_avail(struct req_capsule *pill,
+                                             enum req_location loc,
+                                             int off)
 {
-        int size[2] = { sizeof(struct ptlrpc_body),
-                        sizeof(struct ldlm_request) };
-        return ldlm_req_handles_avail(exp, size, 2, DLM_LOCKREQ_OFF, 0);
+        int size = req_capsule_msg_size(pill, loc);
+        return ldlm_req_handles_avail(size, off);
+}
+
+static inline int ldlm_format_handles_avail(struct obd_import *imp,
+                                            const struct req_format *fmt,
+                                            enum req_location loc, int off)
+{
+        int size = req_capsule_fmt_size(imp->imp_msg_magic, fmt, loc);
+        return ldlm_req_handles_avail(size, off);
 }
 
 /* Cancel lru locks and pack them into the enqueue request. Pack there the given
@@ -520,17 +523,17 @@ int ldlm_prep_elc_req(struct obd_export *exp, struct ptlrpc_request *req,
         struct req_capsule      *pill = &req->rq_pill;
         struct ldlm_request     *dlm = NULL;
         int flags, avail, to_free, bufcount, pack = 0;
+        CFS_LIST_HEAD(head);
         int rc;
         ENTRY;
 
-
-        LASSERT(cancels != NULL);
-
+        if (cancels == NULL)
+                cancels = &head;
         if (exp_connect_cancelset(exp)) {
                 /* Estimate the amount of available space in the request. */
                 bufcount = req_capsule_filled_sizes(pill, RCL_CLIENT);
-                avail = ldlm_req_handles_avail(exp, pill->rc_area[RCL_CLIENT],
-                                               bufcount, bufcount - 1, canceloff);
+                avail = ldlm_capsule_handles_avail(pill, RCL_CLIENT, canceloff);
+
                 flags = ns_connect_lru_resize(ns) ? 
                         LDLM_CANCEL_LRUR : LDLM_CANCEL_AGED;
                 to_free = !ns_connect_lru_resize(ns) &&
@@ -546,8 +549,8 @@ int ldlm_prep_elc_req(struct obd_export *exp, struct ptlrpc_request *req,
                         pack = count;
                 else
                         pack = avail;
-                req_capsule_set_size(&req->rq_pill, &RMF_DLM_REQ, RCL_CLIENT,
-                                     ldlm_request_bufsize(count, opc));
+                req_capsule_set_size(pill, &RMF_DLM_REQ, RCL_CLIENT,
+                                     ldlm_request_bufsize(pack, opc));
         }
 
         rc = ptlrpc_request_pack(req, version, opc);
@@ -576,10 +579,8 @@ int ldlm_prep_elc_req(struct obd_export *exp, struct ptlrpc_request *req,
         RETURN(0);
 }
 
-int ldlm_prep_enqueue_req(struct obd_export *exp,
-                          struct ptlrpc_request *req,
-                          struct list_head *cancels,
-                          int count)
+int ldlm_prep_enqueue_req(struct obd_export *exp, struct ptlrpc_request *req,
+                          struct list_head *cancels, int count)
 {
         return ldlm_prep_elc_req(exp, req, LUSTRE_DLM_VERSION, LDLM_ENQUEUE,
                                  LDLM_ENQUEUE_CANCEL_OFF, cancels, count);
@@ -923,9 +924,14 @@ int ldlm_cli_cancel_req(struct obd_export *exp, struct list_head *cancels,
         if (OBD_FAIL_CHECK(OBD_FAIL_LDLM_CANCEL_RACE))
                 RETURN(count);
 
+        free = ldlm_format_handles_avail(class_exp2cliimp(exp),
+                                         &RQF_LDLM_CANCEL, RCL_CLIENT, 0);
+        if (count > free)
+                count = free;
+
         while (1) {
                 int bufcount;
-                struct req_capsule *pill; 
+
                 imp = class_exp2cliimp(exp);
                 if (imp == NULL || imp->imp_invalid) {
                         CDEBUG(D_DLMTRACE,
@@ -937,14 +943,7 @@ int ldlm_cli_cancel_req(struct obd_export *exp, struct list_head *cancels,
                 if (req == NULL)
                         GOTO(out, rc = -ENOMEM);
 
-                pill = &req->rq_pill;
-                bufcount = req_capsule_filled_sizes(pill, RCL_CLIENT);
-
-                free = ldlm_req_handles_avail(exp, pill->rc_area[RCL_CLIENT],
-                                              bufcount, bufcount, 0);
-                if (count > free)
-                        count = free;
-
+                bufcount = req_capsule_filled_sizes(&req->rq_pill, RCL_CLIENT);
                 req_capsule_set_size(&req->rq_pill, &RMF_DLM_REQ, RCL_CLIENT,
                                      ldlm_request_bufsize(count, LDLM_CANCEL));
 
@@ -1057,6 +1056,7 @@ EXPORT_SYMBOL(ldlm_cli_update_pool);
 
 int ldlm_cli_cancel(struct lustre_handle *lockh)
 {
+        struct obd_export *exp;
         int avail, flags, count = 1, rc = 0;
         struct ldlm_namespace *ns;
         struct ldlm_lock *lock;
@@ -1080,8 +1080,12 @@ int ldlm_cli_cancel(struct lustre_handle *lockh)
          * here and send them all as one LDLM_CANCEL rpc. */
         LASSERT(list_empty(&lock->l_bl_ast));
         list_add(&lock->l_bl_ast, &cancels);
-        if (exp_connect_cancelset(lock->l_conn_export)) {
-                avail = ldlm_cancel_handles_avail(lock->l_conn_export);
+
+        exp = lock->l_conn_export;
+        if (exp_connect_cancelset(exp)) {
+                avail = ldlm_format_handles_avail(class_exp2cliimp(exp),
+                                                  &RQF_LDLM_CANCEL,
+                                                  RCL_CLIENT, 0);
                 LASSERT(avail > 0);
 
                 ns = lock->l_resource->lr_namespace;

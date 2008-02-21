@@ -138,7 +138,6 @@ int mdc_setattr(struct obd_export *exp, struct md_op_data *op_data,
 
         rc = mdc_prep_elc_req(exp, req, &cancels, count);
         if (rc) {
-                ldlm_lock_list_put(&cancels, l_bl_ast, count);
                 ptlrpc_request_free(req);
                 RETURN(rc);
         }
@@ -233,7 +232,6 @@ int mdc_create(struct obd_export *exp, struct md_op_data *op_data,
 
         rc = mdc_prep_elc_req(exp, req, &cancels, count);
         if (rc) {
-                ldlm_lock_list_put(&cancels, l_bl_ast, count);
                 ptlrpc_request_free(req);
                 RETURN(rc);
         }
@@ -306,7 +304,6 @@ int mdc_unlink(struct obd_export *exp, struct md_op_data *op_data,
 
         rc = mdc_prep_elc_req(exp, req, &cancels, count);
         if (rc) {
-                ldlm_lock_list_put(&cancels, l_bl_ast, count);
                 ptlrpc_request_free(req);
                 RETURN(rc);
         }
@@ -359,7 +356,6 @@ int mdc_link(struct obd_export *exp, struct md_op_data *op_data,
 
         rc = mdc_prep_elc_req(exp, req, &cancels, count);
         if (rc) {
-                ldlm_lock_list_put(&cancels, l_bl_ast, count);
                 ptlrpc_request_free(req);
                 RETURN(rc);
         }
@@ -420,7 +416,6 @@ int mdc_rename(struct obd_export *exp, struct md_op_data *op_data,
 
         rc = mdc_prep_elc_req(exp, req, &cancels, count);
         if (rc) {
-                ldlm_lock_list_put(&cancels, l_bl_ast, count);
                 ptlrpc_request_free(req);
                 RETURN(rc);
         }

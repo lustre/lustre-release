@@ -55,6 +55,20 @@ static inline int lustre_msg_hdr_size_v2(int count)
         return size_round(offsetof(struct lustre_msg_v2, lm_buflens[count]));
 }
 
+int lustre_msg_hdr_size(__u32 magic, int count)
+{
+        switch (magic) {
+        case LUSTRE_MSG_MAGIC_V1:
+                return lustre_msg_hdr_size_v1(count - 1);
+        case LUSTRE_MSG_MAGIC_V2:
+                return lustre_msg_hdr_size_v2(count);
+        default:
+                LASSERTF(0, "incorrect message magic: %08x\n", magic);
+                return -EINVAL;
+        }
+}
+EXPORT_SYMBOL(lustre_msg_hdr_size);
+
 int lustre_msg_swabbed(struct lustre_msg *msg)
 {
         return (msg->lm_magic == LUSTRE_MSG_MAGIC_V1_SWABBED) ||

@@ -694,7 +694,6 @@ static int osc_destroy(struct obd_export *exp, struct obdo *oa,
         rc = ldlm_prep_elc_req(exp, req, LUSTRE_OST_VERSION, OST_DESTROY, 
                                0, &cancels, count);
         if (rc) {
-                ldlm_lock_list_put(&cancels, l_bl_ast, count);
                 ptlrpc_request_free(req);
                 RETURN(rc);
         }

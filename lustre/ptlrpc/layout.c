@@ -1435,6 +1435,31 @@ int req_capsule_get_size(const struct req_capsule *pill,
 }
 EXPORT_SYMBOL(req_capsule_get_size);
 
+int req_capsule_msg_size(const struct req_capsule *pill, enum req_location loc)
+{
+        return lustre_msg_size(pill->rc_req->rq_import->imp_msg_magic,
+                               pill->rc_fmt->rf_fields[loc].nr,
+                               (int *)pill->rc_area[loc]);
+}
+
+int req_capsule_fmt_size(__u32 magic, const struct req_format *fmt,
+                         enum req_location loc)
+{
+        int size, i = 0;
+
+        size = lustre_msg_hdr_size(magic, fmt->rf_fields[loc].nr);
+        if (size < 0)
+                return size;
+
+        if (magic == LUSTRE_MSG_MAGIC_V1)
+                i++;
+
+        for (; i < fmt->rf_fields[loc].nr; ++i)
+                if (fmt->rf_fields[loc].d[i]->rmf_size != -1)
+                        size += size_round(fmt->rf_fields[loc].d[i]->rmf_size);
+        return size;
+}
+
 #define FMT_FIELD(fmt, i, j) (fmt)->rf_fields[(i)].d[(j)]
 
 void req_capsule_extend(struct req_capsule *pill, const struct req_format *fmt)

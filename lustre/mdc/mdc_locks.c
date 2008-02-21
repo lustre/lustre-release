@@ -307,19 +307,11 @@ static struct ptlrpc_request *mdc_intent_open_pack(struct obd_export *exp,
                                      RCL_CLIENT, 0);
         }
 
-        if (exp_connect_cancelset(exp) && count) {
-                req_capsule_set_size(&req->rq_pill, &RMF_DLM_REQ, RCL_CLIENT,
-                                     ldlm_request_bufsize(count, LDLM_ENQUEUE));
-        }
-
-        rc = ptlrpc_request_pack(req, LUSTRE_DLM_VERSION, LDLM_ENQUEUE);
+        rc = ldlm_prep_enqueue_req(exp, req, &cancels, count);
         if (rc) {
                 ptlrpc_request_free(req);
-                ldlm_lock_list_put(&cancels, l_bl_ast, count);
                 return NULL;
         }
-        if (exp_connect_cancelset(exp) && req)
-                ldlm_cli_cancel_list(&cancels, count, req, 0);
 
         if (joinfile) {
                 __u64 head_size = *(__u64 *)op_data->op_data;
@@ -365,7 +357,7 @@ static struct ptlrpc_request *mdc_intent_unlink_pack(struct obd_export *exp,
         req_capsule_set_size(&req->rq_pill, &RMF_NAME, RCL_CLIENT,
                              op_data->op_namelen + 1);
 
-        rc = ptlrpc_request_pack(req, LUSTRE_DLM_VERSION, LDLM_ENQUEUE);
+        rc = ldlm_prep_enqueue_req(exp, req, NULL, 0);
         if (rc) {
                 ptlrpc_request_free(req);
                 RETURN(ERR_PTR(rc));
@@ -410,7 +402,7 @@ static struct ptlrpc_request *mdc_intent_getattr_pack(struct obd_export *exp,
         req_capsule_set_size(&req->rq_pill, &RMF_NAME, RCL_CLIENT,
                              op_data->op_namelen + 1);
 
-        rc = ptlrpc_request_pack(req, LUSTRE_DLM_VERSION, LDLM_ENQUEUE);
+        rc = ldlm_prep_enqueue_req(exp, req, NULL, 0);
         if (rc) {
                 ptlrpc_request_free(req);
                 RETURN(ERR_PTR(rc));
@@ -435,13 +427,18 @@ static struct ptlrpc_request *mdc_intent_getattr_pack(struct obd_export *exp,
 static struct ptlrpc_request *ldlm_enqueue_pack(struct obd_export *exp)
 {
         struct ptlrpc_request *req;
+        int rc;
         ENTRY;
 
-        req = ptlrpc_request_alloc_pack(class_exp2cliimp(exp),
-                                        &RQF_LDLM_ENQUEUE, LUSTRE_DLM_VERSION,
-                                        LDLM_ENQUEUE);
+        req = ptlrpc_request_alloc(class_exp2cliimp(exp), &RQF_LDLM_ENQUEUE);
         if (req == NULL)
                 RETURN(ERR_PTR(-ENOMEM));
+
+        rc = ldlm_prep_enqueue_req(exp, req, NULL, 0);
+        if (rc) {
+                ptlrpc_request_free(req);
+                RETURN(ERR_PTR(rc));
+        }
 
         ptlrpc_request_set_replen(req);
         RETURN(req);
