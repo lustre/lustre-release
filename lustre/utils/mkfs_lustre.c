@@ -269,6 +269,7 @@ int loop_setup(struct mkfs_opts *mop)
         for (i = 0; i < MAX_LOOP_DEVICES; i++) {
                 char cmd[PATH_MAX];
                 int cmdsz = sizeof(cmd);
+
                 sprintf(l_device, "%s%d", loop_base, i);
                 if (access(l_device, F_OK | R_OK))
                         break;
@@ -1321,7 +1322,7 @@ int parse_opts(int argc, char *const argv[], struct mkfs_opts *mop,
                 fprintf(stderr, "Bad argument: %s\n", argv[optind]);
                 return EINVAL;
         }
-        
+
         return 0;
 }
 
