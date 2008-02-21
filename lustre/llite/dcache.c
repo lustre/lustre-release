@@ -156,8 +156,8 @@ void ll_intent_release(struct lookup_intent *it)
         it->it_op_release = 0;
 #endif
         /* We are still holding extra reference on a request, need to free it */
-        if (it_disposition(it, DISP_ENQ_OPEN_REF)) /* open req for llfile_open*/
-                ptlrpc_req_finished(it->d.lustre.it_data);
+        if (it_disposition(it, DISP_ENQ_OPEN_REF))
+                 ptlrpc_req_finished(it->d.lustre.it_data); /* ll_file_open */
         if (it_disposition(it, DISP_ENQ_CREATE_REF)) /* create rec */
                 ptlrpc_req_finished(it->d.lustre.it_data);
         if (it_disposition(it, DISP_ENQ_COMPLETE)) /* saved req from revalidate
@@ -359,7 +359,6 @@ int ll_revalidate_it(struct dentry *de, int lookup_flags,
 
                 rc = ll_have_md_lock(de->d_parent->d_inode,
                                      MDS_INODELOCK_UPDATE);
-        
                 RETURN(rc);
         }
 
@@ -378,18 +377,11 @@ int ll_revalidate_it(struct dentry *de, int lookup_flags,
         OBD_FAIL_TIMEOUT(OBD_FAIL_MDC_REVALIDATE_PAUSE, 5);
         ll_frob_intent(&it, &lookup_it);
         LASSERT(it);
-
         parent = de->d_parent->d_inode;
 
-        if (it->it_op & IT_CREAT) {
-                op_data = ll_prep_md_op_data(NULL, parent, NULL,
-                                             de->d_name.name, de->d_name.len,
-                                             0, LUSTRE_OPC_CREATE, NULL);
-        } else {
-                op_data = ll_prep_md_op_data(NULL, parent, de->d_inode,
-                                             de->d_name.name, de->d_name.len,
-                                             0, LUSTRE_OPC_ANY, NULL);
-        }
+        op_data = ll_prep_md_op_data(NULL, parent, de->d_inode,
+                                     de->d_name.name, de->d_name.len,
+                                     0, LUSTRE_OPC_ANY, NULL);
         if (IS_ERR(op_data))
                 RETURN(PTR_ERR(op_data));
 
@@ -398,7 +390,7 @@ int ll_revalidate_it(struct dentry *de, int lookup_flags,
                 struct ll_inode_info *lli = ll_i2info(inode);
                 struct obd_client_handle **och_p;
                 __u64 *och_usecount;
-                
+
                 /*
                  * We used to check for MDS_INODELOCK_OPEN here, but in fact
                  * just having LOOKUP lock is enough to justify inode is the
@@ -558,7 +550,7 @@ do_lookup:
                 struct mdt_body *mdt_body;
                 struct lu_fid fid = {.f_seq = 0, .f_oid = 0, .f_ver = 0};
                 mdt_body = req_capsule_server_get(&req->rq_pill, &RMF_MDT_BODY);
-                
+
                 if (de->d_inode)
                         fid = *ll_inode2fid(de->d_inode);
 

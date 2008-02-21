@@ -12,6 +12,16 @@ tbd  Sun Microsystems, Inc.
        * RHEL 4 and RHEL 5/SLES 10 clients behaves differently on 'cd' to a
         removed cwd "./" (refer to Bugzilla 14399).
 
+Severity   : normal
+Frequency  : occasional
+Bugzilla   : 13537
+Description: Correctly check stale fid, not start epoch if ost not support SOM
+Details    : open with flag O_CREATE need set old fid in op_fid3 because op_fid2
+             overwrited with new generated fid, but mds can anwer with one of these
+             two fids and both is not stale. setattr incorectly start epoch and
+             assume will be called done_writeting, but without SOM done_writing
+             never called.
+
 Severity   : major
 Frequency  : rare, depends on device drivers and load
 Bugzilla   : 14529

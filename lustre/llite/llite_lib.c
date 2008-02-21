@@ -1313,13 +1313,14 @@ int ll_setattr_raw(struct inode *inode, struct iattr *attr)
         OBD_ALLOC_PTR(op_data);
         if (op_data == NULL)
                 RETURN(-ENOMEM);
-        
+
         memcpy(&op_data->op_attr, attr, sizeof(*attr));
 
         /* Open epoch for truncate. */
-        if (ia_valid & ATTR_SIZE)
+        if ((ll_i2mdexp(inode)->exp_connect_flags & OBD_CONNECT_SOM) &&
+            (ia_valid & ATTR_SIZE))
                 op_data->op_flags = MF_EPOCH_OPEN;
-        
+
         rc = ll_md_setattr(inode, op_data, &mod);
         if (rc)
                 GOTO(out, rc);

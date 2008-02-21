@@ -816,8 +816,17 @@ int mdc_intent_lock(struct obd_export *exp, struct md_op_data *op_data,
                 it_set_disposition(it, DISP_ENQ_COMPLETE);
 
                 /* Also: did we find the same inode? */
-                if (!lu_fid_eq(&op_data->op_fid2, &mdt_body->fid1))
+                /* sever can return one of two fids:
+                 * op_fid2 - new allocated fid - if file is created.
+                 * op_fid3 - existent fid - if file only open.
+                 * op_fid3 is saved in lmv_intent_open */
+                if ((!lu_fid_eq(&op_data->op_fid2, &mdt_body->fid1)) &&
+                    (!lu_fid_eq(&op_data->op_fid3, &mdt_body->fid1))) {
+                        CDEBUG(D_DENTRY, "Found stale data "DFID"("DFID")/"DFID
+                               "\n", PFID(&op_data->op_fid2),
+                               PFID(&op_data->op_fid2), PFID(&mdt_body->fid1));
                         RETURN(-ESTALE);
+                }
         }
 
         rc = it_open_error(DISP_LOOKUP_EXECD, it);

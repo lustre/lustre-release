@@ -890,6 +890,10 @@ dont_check_exports:
                 export->exp_lock_replay_needed = 1;
                 spin_unlock(&export->exp_lock);
                 if ((lustre_msg_get_op_flags(req->rq_reqmsg) & MSG_CONNECT_TRANSNO)
+                     && (data->ocd_transno == 0))
+                        CWARN("Connect with zero transno!\n");
+
+                if ((lustre_msg_get_op_flags(req->rq_reqmsg) & MSG_CONNECT_TRANSNO)
                      && data->ocd_transno < target->obd_next_recovery_transno)
                         target->obd_next_recovery_transno = data->ocd_transno;
                 target->obd_connected_clients++;

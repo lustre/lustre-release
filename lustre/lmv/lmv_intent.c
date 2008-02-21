@@ -243,6 +243,8 @@ repeat:
                  * For open with IT_CREATE and for IT_CREATE cases allocate new
                  * fid and setup FLD for it.
                  */
+                /* save old child fid for correctly check stale data*/
+                sop_data->op_fid3 = sop_data->op_fid2;
                 rc = lmv_fid_alloc(exp, &sop_data->op_fid2, sop_data);
                 if (rc)
                         GOTO(out_free_sop_data, rc);

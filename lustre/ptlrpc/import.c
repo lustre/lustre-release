@@ -353,12 +353,17 @@ int ptlrpc_first_transno(struct obd_import *imp, __u64 *transno)
 {
         struct ptlrpc_request *req;
         struct list_head *tmp;
-        
+
         if (list_empty(&imp->imp_replay_list))
                 return 0;
         tmp = imp->imp_replay_list.next;
         req = list_entry(tmp, struct ptlrpc_request, rq_replay_list);
         *transno = req->rq_transno;
+        if (req->rq_transno == 0) {
+                DEBUG_REQ(D_ERROR, req, "zero transno in replay");
+                LBUG();
+        }
+
         return 1;
 }
 
