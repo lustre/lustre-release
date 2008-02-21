@@ -59,7 +59,9 @@
 #include <linux/stat.h>
 #include <linux/list.h>
 #include <linux/sysctl.h>
-#include <asm/segment.h>
+#ifdef HAVE_SEGMENT_H
+# include <asm/segment.h>
+#endif
 
 #define DEBUG_SUBSYSTEM S_LND
 

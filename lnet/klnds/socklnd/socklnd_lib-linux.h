@@ -34,7 +34,9 @@
 #include <linux/kmod.h>
 #include <linux/sysctl.h>
 #include <asm/uaccess.h>
-#include <asm/segment.h>
+#ifdef HAVE_SEGMENT_H
+# include <asm/segment.h>
+#endif
 #include <asm/div64.h>
 
 #if (LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))

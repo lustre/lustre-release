@@ -6,7 +6,7 @@
 AC_DEFUN([LN_CONFIG_MAX_PAYLOAD],
 [AC_MSG_CHECKING([for non-default maximum LNET payload])
 AC_ARG_WITH([max-payload-mb],
-  	AC_HELP_STRING([--with-max-payload-mb=MBytes],
+	AC_HELP_STRING([--with-max-payload-mb=MBytes],
                        [set maximum lnet payload in MBytes]),
         [
 		AC_MSG_RESULT([$with_max_payload_mb])
@@ -82,7 +82,7 @@ if test x$enable_libcfs_assert = xyes; then
    AC_DEFINE(LIBCFS_DEBUG, 1, [enable libcfs LASSERT, LASSERTF])
 fi
 ])
- 
+
 #
 # LN_CONFIG_AFFINITY
 #
@@ -106,7 +106,7 @@ else
 		cpumask_t     m;
 	        #else
 	        unsigned long m;
-	 	#endif
+		#endif
 		set_cpus_allowed(&t, m);
 	],[
 		AC_DEFINE(CPU_AFFINITY, 1, [kernel has cpu affinity support])
@@ -125,7 +125,7 @@ fi
 AC_DEFUN([LN_CONFIG_PORTALS],
 [AC_MSG_CHECKING([for portals])
 AC_ARG_WITH([portals],
-  	AC_HELP_STRING([--with-portals=path],
+	AC_HELP_STRING([--with-portals=path],
                        [set path to portals]),
         [
 		case $with_portals in
@@ -135,7 +135,6 @@ AC_ARG_WITH([portals],
 				ENABLEPORTALS=1
 				;;
 		esac
-		
 	], [
 		ENABLEPORTALS=0
 	])
@@ -545,11 +544,11 @@ else
 		#include <rdma/ib_verbs.h>
 	        #include <rdma/ib_fmr_pool.h>
 	],[
-       	        struct rdma_cm_id          *cm_id;
+	        struct rdma_cm_id          *cm_id;
 	        struct rdma_conn_param      conn_param;
 	        struct ib_device_attr       device_attr;
 	        struct ib_qp_attr           qp_attr;
-		struct ib_pool_fmr          pool_fmr;	        
+		struct ib_pool_fmr          pool_fmr;
 		enum   ib_cm_rej_reason     rej_reason;
 
 		cm_id = rdma_create_id(NULL, NULL, RDMA_PS_TCP);
@@ -632,7 +631,7 @@ elif test ! \( -f ${OPENIBPATH}/include/ts_ib_core.h -a \
 	*) AC_MSG_ERROR([internal error]);;
 	esac
 else
-    	case $ENABLEOPENIB in
+	case $ENABLEOPENIB in
 	1|2) OPENIBCPPFLAGS="-I$OPENIBPATH/include -DIN_TREE_BUILD";;
 	3)   OPENIBCPPFLAGS="-I$OPENIBPATH/include";;
 	*)   AC_MSG_RESULT([no])
@@ -646,7 +645,7 @@ else
 		#include <ts_ib_cm.h>
 	        #include <ts_ib_sa_client.h>
 	],[
-       	        struct ib_device_properties dev_props;
+	        struct ib_device_properties dev_props;
 	        struct ib_cm_active_param   cm_active_params;
 	        tTS_IB_CLIENT_QUERY_TID     tid;
 	        int                         enum1 = IB_QP_ATTRIBUTE_STATE;
@@ -709,7 +708,7 @@ if test -n "$CIBPATH"; then
 		#include <ts_ib_cm.h>
 	        #include <ts_ib_sa_client.h>
 	],[
-       	        struct ib_device_properties dev_props;
+	        struct ib_device_properties dev_props;
 	        struct ib_cm_active_param   cm_active_params;
 	        tTS_IB_CLIENT_QUERY_TID     tid;
 	        int                         enum1 = TS_IB_QP_ATTRIBUTE_STATE;
@@ -834,7 +833,7 @@ else
 	EXTRA_KCFLAGS_save="$EXTRA_KCFLAGS"
 	EXTRA_KCFLAGS="$EXTRA_KCFLAGS $VIBCPPFLAGS"
 	LB_LINUX_TRY_COMPILE([
-        	#include <linux/list.h>
+		#include <linux/list.h>
 		#include <asm/byteorder.h>
 		#ifdef __BIG_ENDIAN
 		# define CPU_BE 1
@@ -844,7 +843,7 @@ else
 		# define CPU_BE 0
 		# define CPU_LE 1
 		#endif
-	 	#include <vverbs.h>
+		#include <vverbs.h>
 	        #include <ib-cm.h>
 	        #include <ibat.h>
 	],[
@@ -873,7 +872,7 @@ if test -n "$VIBLND"; then
 	EXTRA_KCFLAGS="$EXTRA_KCFLAGS $VIBCPPFLAGS"
 	AC_MSG_CHECKING([if Voltaire still uses void * sg addresses])
 	LB_LINUX_TRY_COMPILE([
-        	#include <linux/list.h>
+		#include <linux/list.h>
 		#include <asm/byteorder.h>
 		#ifdef __BIG_ENDIAN
 		# define CPU_BE 1
@@ -883,7 +882,7 @@ if test -n "$VIBLND"; then
 		# define CPU_BE 0
 		# define CPU_LE 1
 		#endif
-	 	#include <vverbs.h>
+		#include <vverbs.h>
 	        #include <ib-cm.h>
 	        #include <ibat.h>
 	],[
@@ -1059,7 +1058,7 @@ AC_DEFINE(HAVE_TASKLIST_LOCK, 1,
 ])
 
 # 2.6.19 API changes
-# kmem_cache_destroy(cachep) return void instead of 
+# kmem_cache_destroy(cachep) return void instead of
 # int
 AC_DEFUN([LN_KMEM_CACHE_DESTROY_INT],
 [AC_MSG_CHECKING([kmem_cache_destroy(cachep) return int])
@@ -1083,7 +1082,7 @@ AC_DEFUN([LN_ATOMIC_PANIC_NOTIFIER],
 [AC_MSG_CHECKING([panic_notifier_list is atomic])
 LB_LINUX_TRY_COMPILE([
 	#include <linux/notifier.h>
-	#include <linux/kernel.h>	
+	#include <linux/kernel.h>
 ],[
 	struct atomic_notifier_head panic_notifier_list;
 ],[
@@ -1095,7 +1094,7 @@ LB_LINUX_TRY_COMPILE([
 ])
 ])
 
-# 2.6.20 API change INIT_WORK use 2 args and not 
+# 2.6.20 API change INIT_WORK use 2 args and not
 # store data inside
 AC_DEFUN([LN_3ARGS_INIT_WORK],
 [AC_MSG_CHECKING([check INIT_WORK want 3 args])
@@ -1169,6 +1168,18 @@ LB_LINUX_TRY_COMPILE([
 ])
 ])
 
+# asm/segment.h does not exist on all architectures.
+# e.g. the file is empty for ia64 and does not exist for PPC.
+AC_DEFUN([LC_SEGMENT_H],
+	 [LB_CHECK_FILE([$LINUX/include/asm/segment.h],
+			[AC_MSG_CHECKING([if asm/segment.h is present])
+			 LB_LINUX_TRY_COMPILE([#include <asm/segment.h>], [],
+					      [AC_MSG_RESULT([yes])
+					       AC_DEFINE(HAVE_SEGMENT_H, 1,
+							 [asm/segment.h exists])],
+					      [AC_MSG_RESULT([no])])])
+]) # LC_SEGMENT_H
+
 #
 # LN_PROG_LINUX
 #
@@ -1208,6 +1219,8 @@ LN_2ARGS_REGISTER_SYSCTL
 LN_KMEM_CACHE
 # 2.6.23
 LN_KMEM_CACHE_CREATE_DTOR
+# PPC/PPC64 support
+LC_SEGMENT_H
 ])
 
 #

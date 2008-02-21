@@ -23,7 +23,9 @@
 # include <linux/kmod.h>
 # include <linux/notifier.h>
 # include <linux/fs.h>
-# include <asm/segment.h>
+# ifdef HAVE_SEGMENT_H
+#  include <asm/segment.h>
+# endif
 # include <linux/miscdevice.h>
 # include <linux/vmalloc.h>
 # include <linux/time.h>
