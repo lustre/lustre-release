@@ -1483,7 +1483,7 @@ test_38() { # bug 14222
 	[ "$ERROR" = "y" ] && error "old and new files are different after sync" || true
 	
 	log "files compared the same"
-	#cleanup
+	cleanup
 }
 run_test 38 "MDS recreates missing lov_objid file from OST data"
 
