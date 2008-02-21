@@ -296,6 +296,7 @@ extern void lustre_swab_ptlrpc_body(struct ptlrpc_body *pb);
 #define OBD_CONNECT_CHANGE_QS  0x10000000ULL /*shrink/enlarge qunit size
                                               *b=10600 */
 #define OBD_CONNECT_CKSUM      0x20000000ULL /*support several cksum algos */
+#define OBD_CONNECT_FID        0x40000000ULL /* FID is supported */
 /* also update obd_connect_names[] for lprocfs_rd_connect_flags()
  * and lustre/utils/wirecheck.c */
 
