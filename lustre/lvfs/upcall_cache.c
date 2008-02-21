@@ -43,7 +43,9 @@
 #include <linux/stat.h>
 #include <asm/uaccess.h>
 #include <linux/slab.h>
-#include <asm/segment.h>
+#ifdef HAVE_SEGMENT_H
+# include <asm/segment.h>
+#endif
 
 #include <obd_support.h>
 #include <lustre_lib.h>

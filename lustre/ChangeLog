@@ -732,6 +732,12 @@ Details    : fix duplicated definitions between asm-ppc64/types.h and
 	     lustre_types.h on PPC.
 
 Severity   : normal
+Frequency  : PPC/PPC64 only
+Bugzilla   : 14844
+Description: asm-ppc/segment.h does not exist
+Details    : fix compile issue on PPC.
+
+Severity   : normal
 Bugzilla   : 14864
 Description: better handle error messages in extents code
 
