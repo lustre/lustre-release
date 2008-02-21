@@ -31,7 +31,9 @@
 #include <sys/types.h>
 #include <libcfs/list.h>
 #else
-#include <asm/segment.h>
+#ifdef HAVE_SEGMENT_H
+# include <asm/segment.h>
+#endif
 #include <asm/uaccess.h>
 #include <linux/types.h>
 #include <linux/fs.h>

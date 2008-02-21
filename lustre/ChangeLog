@@ -352,6 +352,12 @@ Details    : fix duplicated definitions between asm-ppc64/types.h and
 	     lustre_types.h on PPC.
 
 Severity   : normal
+Frequency  : PPC/PPC64 only
+Bugzilla   : 14844
+Description: asm-ppc/segment.h does not exist
+Details    : fix compile issue on PPC.
+
+Severity   : normal
 Bugzilla   : 13805
 Description: data checksumming impacts single node performance
 Details    : add support for several checksum algorithms. Currently, CRC32 and
