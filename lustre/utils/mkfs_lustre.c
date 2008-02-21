@@ -269,6 +269,7 @@ int loop_setup(struct mkfs_opts *mop)
         for (i = 0; i < MAX_LOOP_DEVICES; i++) {
                 char cmd[PATH_MAX];
                 int cmdsz = sizeof(cmd);
+
                 sprintf(l_device, "%s%d", loop_base, i);
                 if (access(l_device, F_OK | R_OK))
                         break;
@@ -1041,7 +1042,7 @@ static int clean_param(char *buf, char *key)
                 }
         }
         return 0;
-} 
+}
 
 static int add_param(char *buf, char *key, char *val, int unique)
 {
@@ -1056,14 +1057,14 @@ static int add_param(char *buf, char *key, char *val, int unique)
                 if (key) {
                         clean_param(buf, key);
                 } else {
-                        if((ptr = strchr(val, '=')) == NULL)
+                        if ((ptr = strchr(val, '=')) == NULL)
                                 return 1;
                         *ptr = '\0';
                         clean_param(buf, val);
                         *ptr = '=';
                 }
         }
-                
+
         start = strlen(buf);
         if (start + 1 + keylen + strlen(val) >= end) {
                 fprintf(stderr, "%s: params are too long-\n%s %s%s\n",
@@ -1295,13 +1296,13 @@ int parse_opts(int argc, char *const argv[], struct mkfs_opts *mop,
                         /* Test if the param is valid for mdt.group_upcall */
                         if (!strncmp(optarg, PARAM_MDT_UPCALL, prefix_len)) {
                                 upcall++;
-                                if(strcmp(optarg + prefix_len, "NONE") &&
-                                   access(optarg + prefix_len, R_OK | X_OK))
+                                if (strcmp(optarg + prefix_len, "NONE") &&
+                                    access(optarg + prefix_len, R_OK | X_OK))
                                         fprintf(stderr, "WARNING: group upcall "
                                                 "parameter not executable: %s\n"
                                                 "NOTE: you can change the path "
                                                 "to the group upcall through "
-                                                "tunefs.lustre(8)\n", optarg + 
+                                                "tunefs.lustre(8)\n", optarg +
                                                 prefix_len);
                         }
                         rc = add_param(mop->mo_ldd.ldd_params, NULL, optarg, 0);
@@ -1341,13 +1342,13 @@ int parse_opts(int argc, char *const argv[], struct mkfs_opts *mop,
                 fprintf(stderr, "Bad argument: %s\n", argv[optind]);
                 return EINVAL;
         }
-        
+
 #ifndef TUNEFS
         if (mop->mo_ldd.ldd_flags & LDD_F_SV_TYPE_MDT && 0 == upcall) {
-                if(access("/usr/sbin/l_getgroups", R_OK | X_OK))
+                if (access("/usr/sbin/l_getgroups", R_OK | X_OK)) {
                         fprintf(stderr, "WARNING: MDS group upcall is not set, "
-                                "use 'NONE'\n");
-                else {
+                                "using 'NONE'\n");
+                } else {
                         rc = add_param(mop->mo_ldd.ldd_params, PARAM_MDT_UPCALL,
                                        "/usr/sbin/l_getgroups", 1);
                         if (rc)
@@ -1357,7 +1358,7 @@ int parse_opts(int argc, char *const argv[], struct mkfs_opts *mop,
                 }
         }
 #endif
- 
+
         return 0;
 }
 
