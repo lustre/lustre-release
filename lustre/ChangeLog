@@ -746,6 +746,15 @@ Severity   : normal
 Bugzilla   : 14864
 Description: better handle error messages in extents code
 
+Severity   : normal
+Frequency  : RHEL4 only
+Bugzilla   : 14618
+Description: mkfs is very slow on IA64/RHEL4
+Details    : A performance regression has been discovered in the MPT Fusion
+	     driver between versions 3.02.73rh and 3.02.99.00rh. As a
+	     consequence, we have downgraded the MPT Fusion driver in the RHEL4
+	     kernel from 3.02.99.00 to 3.02.73 until this problem is fixed.
+
 --------------------------------------------------------------------------------
 
 2007-08-10         Cluster File Systems, Inc. <info@clusterfs.com>
