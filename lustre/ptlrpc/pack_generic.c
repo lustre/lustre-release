@@ -792,7 +792,7 @@ static inline int lustre_unpack_ptlrpc_body_v2(struct lustre_msg_v2 *m,
 
         pb = lustre_msg_buf_v2(m, offset, sizeof(*pb));
         if (!pb) {
-                CERROR("error unpacking ptlrpc body");
+                CERROR("error unpacking ptlrpc body\n");
                 return -EFAULT;
         }
         if (lustre_msg_swabbed(m))
