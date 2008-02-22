@@ -56,6 +56,7 @@
 #define MDDFREECAPACITY     54
 #define MDDFILES            55
 #define MDDFREEFILES        56
+#define MDSNBSAMPLEDREQ     57
 
 #define MDCNUMBER           60
 #define MDCUUID             61
@@ -104,6 +105,9 @@
 #define CLIENT_PATH                 LUSTRE_PATH "llite/"
 #define LOV_PATH                    LUSTRE_PATH "lov/"
 #define LDLM_PATH                   LUSTRE_PATH "ldlm/namespaces/"
+#define FILEPATH_MDS_SERVER_STATS             LUSTRE_PATH "mdt/MDS/mds/stats"
+#define FILEPATH_MDS_SERVER_READPAGE_STATS             LUSTRE_PATH "mdt/MDS/mds_readpage/stats"
+#define FILEPATH_MDS_SERVER_SETATTR_STATS             LUSTRE_PATH "mdt/MDS/mds_setattr/stats"
 
 /* Common procfs file entries that are refrenced in mulitple locations*/
 #define FILENAME_SYSHEALTHCHECK     "health_check"
@@ -116,6 +120,7 @@
 #define FILENAME_KBYTES_FREE        "kbytesfree"
 #define FILENAME_FILES_TOTAL        "filestotal"
 #define FILENAME_FILES_FREE         "filesfree"
+#define STR_REQ_WAITIME             "req_waittime"
 
 /* strings which the file /var/lustre/sysStatus can hold */
 #define STR_ONLINE                  "online"
@@ -193,5 +198,8 @@ unsigned char *
         WriteMethod **write_method,
         const char *path,
         struct oid_table *ptable);
+
+int stats_values(char * filepath,char * name_value, unsigned long long * nb_sample, unsigned long long * min, unsigned long long * max, unsigned long long * sum, unsigned long long * sum_square);
+extern int mds_stats_values(char * name_value, unsigned long long * nb_sample, unsigned long long * min, unsigned long long * max, unsigned long long * sum, unsigned long long * sum_square);
 
 #endif /* LUSTRE_SNMP_UTIL_H */

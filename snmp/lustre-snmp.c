@@ -88,6 +88,7 @@ struct variable7 clusterFileSystems_variables[] = {
   { MDDFREECAPACITY     , ASN_COUNTER64 , RONLY , var_mdsTable, 6, { 2,1,4,2,1,5 } },
   { MDDFILES            , ASN_COUNTER64 , RONLY , var_mdsTable, 6, { 2,1,4,2,1,6 } },
   { MDDFREEFILES        , ASN_COUNTER64 , RONLY , var_mdsTable, 6, { 2,1,4,2,1,7 } },
+  { MDSNBSAMPLEDREQ     , ASN_COUNTER64 , RONLY , var_mdsNbSampledReq, 4, { 2,1,4,3 } },
 
   /* metaDataClients 2.1.5 */
   { MDCNUMBER           , ASN_UNSIGNED  , RONLY , var_clusterFileSystems, 4, { 2,1,5,1 } },
@@ -507,6 +508,36 @@ var_ldlmTable(struct variable *vp,
 {
     return var_genericTable(vp,name,length,exact,var_len,write_method,
         LDLM_PATH,ldlm_table);
+}
+
+
+/*****************************************************************************
+ * Function: var_mdsNbSampledReq
+ *
+ ****************************************************************************/
+unsigned char *
+var_mdsNbSampledReq(struct variable *vp,
+            oid     *name,
+            size_t  *length,
+            int     exact,
+            size_t  *var_len,
+            WriteMethod **write_method)
+{
+  unsigned long long nb_sample=0,min=0,max=0,sum=0,sum_square=0;
+  static counter64 c64;
+
+  if (header_generic(vp,name,length,exact,var_len,write_method)
+                                  == MATCH_FAILED )
+    return NULL;
+
+  if( mds_stats_values(STR_REQ_WAITIME,&nb_sample,&min,&max,&sum,&sum_square) == ERROR) return NULL;
+
+  c64.low = (u_long) (0x0FFFFFFFF & nb_sample);
+  nb_sample >>= 32;
+  c64.high = (u_long) (0x0FFFFFFFF & nb_sample);
+
+  *var_len = sizeof(c64);
+  return (unsigned char *) &c64;
 }
 
 

@@ -39,6 +39,7 @@
 #include <unistd.h>
 #include <stdio.h>
 #include <stdarg.h>
+#include <string.h>
 #include "lustre-snmp-util.h"
 
 /*********************************************************************
@@ -650,3 +651,99 @@ cleanup_and_exit:
     return ret_val;
 };
 
+/**************************************************************************
+ * Function:   stats_values
+ *
+ * Description: Setup nb_sample, min, max, sum and sum_square stats values
+                for name_value from filepath.
+ *
+ * Input:  filepath, name_value,
+ *         pointer to nb_sample, min, max, sum, sum_square
+ *
+ * Output: SUCCESS or ERROR on failure
+ *
+ **************************************************************************/
+int stats_values(char * filepath,char * name_value, unsigned long long * nb_sample, unsigned long long * min, unsigned long long * max, unsigned long long * sum, unsigned long long * sum_square)
+{
+  FILE * statfile;
+  char line[MAX_LINE_SIZE];
+  int nbReadValues = 0;
+
+  if( (statfile=fopen(filepath,"r")) == NULL) {
+    report("stats_value() failed to open %s",filepath);
+    return ERROR;
+  }
+/*find the good line for name_value*/
+  do {
+    if( fgets(line,MAX_LINE_SIZE,statfile) == NULL ) {
+      report("stats_values() failed to find %s values in %s stat_file",name_value,statfile);
+      goto error_out;
+    }
+  } while ( strstr(line,name_value) == NULL );
+/*get stats*/
+  if((nbReadValues=sscanf(line,"%*s %llu %*s %*s %llu %llu %llu %llu",nb_sample,min,max,sum,sum_square)) == 5) {
+    goto success_out;
+  } else if( nbReadValues == 1 && *nb_sample == 0) {
+    *min = *max = *sum = *sum_square = 0;
+    goto success_out;
+  } else {
+    report("stats_values() failed to read stats_values for %s value in %s stat_file",name_value,statfile);
+    goto error_out;
+  }
+
+success_out :
+  fclose(statfile);
+  return SUCCESS;
+error_out :
+  fclose(statfile);
+  return ERROR;
+}
+
+/**************************************************************************
+ * Function:   mds_stats_values
+ *
+ * Description: Setup nb_sample, min, max, sum and sum_square stats values
+                for mds stats name_value .
+ *
+ * Input:  name_value,
+ *         pointer to nb_sample, min, max, sum, sum_square
+ *
+ * Output: SUCCESS or ERROR on failure
+ *
+ **************************************************************************/
+extern int mds_stats_values(char * name_value, unsigned long long * nb_sample, unsigned long long * min, unsigned long long * max, unsigned long long * sum, unsigned long long * sum_square)
+{
+  unsigned long long tmp_nb_sample=0,tmp_min=0,tmp_max=0,tmp_sum=0,tmp_sum_square=0;
+/*we parse the three MDS stat files and sum values*/
+  if( stats_values(FILEPATH_MDS_SERVER_STATS,name_value,&tmp_nb_sample,&tmp_min,&tmp_max,&tmp_sum,&tmp_sum_square) == ERROR ) {
+    return ERROR;
+  } else {
+    *nb_sample=tmp_nb_sample;
+    *min=tmp_min;
+    *max=tmp_max;
+    *sum=tmp_sum;
+    *sum_square=tmp_sum_square;
+  }
+
+  if( stats_values(FILEPATH_MDS_SERVER_READPAGE_STATS,name_value,&tmp_nb_sample,&tmp_min,&tmp_max,&tmp_sum,&tmp_sum_square) == ERROR ) {
+    return ERROR;
+  } else {
+    *nb_sample += tmp_nb_sample;
+    *min += tmp_min;
+    *max += tmp_max;
+    *sum += tmp_sum;
+    *sum_square += tmp_sum_square;
+  }
+
+  if( stats_values(FILEPATH_MDS_SERVER_SETATTR_STATS,name_value,&tmp_nb_sample,&tmp_min,&tmp_max,&tmp_sum,&tmp_sum_square) == ERROR ) {
+    return ERROR;
+  } else {
+    *nb_sample += tmp_nb_sample;
+    *min += tmp_min;
+    *max += tmp_max;
+    *sum += tmp_sum;
+    *sum_square += tmp_sum_square;
+  }
+  
+  return SUCCESS;
+}

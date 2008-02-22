@@ -439,6 +439,13 @@ mddFreeFiles OBJECT-TYPE
         "The number of unused files on a Meta Data Device."
     ::= { mddEntry 7 }
   
+mdsNbSampledReq OBJECT-TYPE
+    SYNTAX Counter64
+    MAX-ACCESS read-only
+    STATUS current
+    DESCRIPTION
+        "The number of sampled requests ."
+    ::= { metaDataServers 3 }
     
 --============================================================================
 --
