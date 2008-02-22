@@ -1459,8 +1459,7 @@ test_38() { # bug 14222
 	done
 	do_facet mds "debugfs -c -R \\\"dump lov_objid $TMP/lov_objid.new\\\"  $MDSDEV"
 	do_facet mds "od -Ax -td8 $TMP/lov_objid.new"
-	[ "$ERROR" = "y" ] && error "old and new files are different after connect" || true
-	
+	[ "$ERROR" = "y" ] && error "old and new files are different after connect" || true	
 	
 	# check it's updates in sync
 	umount_client $MOUNT

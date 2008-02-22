@@ -1268,31 +1268,39 @@ out:
 static int ost_get_info(struct obd_export *exp, struct ptlrpc_request *req)
 {
         void *key, *reply;
-        int keylen, rc = 0;
-        int size[2] = { sizeof(struct ptlrpc_body), 0 };
+        int keylen, replylen, rc = 0;
+        struct req_capsule *pill = &req->rq_pill;
         ENTRY;
 
-        key = lustre_msg_buf(req->rq_reqmsg, REQ_REC_OFF, 1);
+        req_capsule_set(&req->rq_pill, &RQF_OST_GET_INFO_GENERIC);
+
+        /* this common part for get_info rpc */
+        key = req_capsule_client_get(pill, &RMF_SETINFO_KEY);
         if (key == NULL) {
                 DEBUG_REQ(D_HA, req, "no get_info key");
                 RETURN(-EFAULT);
         }
-        keylen = lustre_msg_buflen(req->rq_reqmsg, REQ_REC_OFF);
+        keylen = req_capsule_get_size(pill, &RMF_SETINFO_KEY, RCL_CLIENT);
 
-        /* call once to get the size to allocate the reply buffer */
-        rc = obd_get_info(exp, keylen, key, &size[1], NULL);
+        rc = obd_get_info(exp, keylen, key, &replylen, NULL);
         if (rc)
                 RETURN(rc);
 
-        rc = lustre_pack_reply(req, 2, size, NULL);
+        req_capsule_set_size(pill, &RMF_GENERIC_DATA,
+                             RCL_SERVER, replylen);
+
+        rc = req_capsule_server_pack(pill);
         if (rc)
                 RETURN(rc);
 
-        reply = lustre_msg_buf(req->rq_repmsg, REPLY_REC_OFF, sizeof(*reply));
+        reply = req_capsule_server_get(pill, &RMF_GENERIC_DATA);
+        if (reply == NULL)
+                RETURN(-ENOMEM);
+
         /* call again to fill in the reply buffer */
-        rc = obd_get_info(exp, keylen, key, size, reply);
-        lustre_msg_set_status(req->rq_repmsg, 0);
+        rc = obd_get_info(exp, keylen, key, &replylen, reply);
 
+        lustre_msg_set_status(req->rq_repmsg, 0);
         RETURN(rc);
 }
 
@@ -1654,6 +1662,7 @@ int ost_handle(struct ptlrpc_request *req)
                 break;
         case OST_SET_INFO:
                 DEBUG_REQ(D_INODE, req, "set_info");
+                req_capsule_set(&req->rq_pill, &RQF_OST_SET_INFO);
                 rc = ost_set_info(req->rq_export, req);
                 break;
         case OST_GET_INFO:

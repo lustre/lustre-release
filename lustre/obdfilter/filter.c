@@ -3861,7 +3861,8 @@ static int filter_get_info(struct obd_export *exp, __u32 keylen,
                 if (last_id) {
                         if (*vallen < sizeof(*last_id))
                                 RETURN(-EOVERFLOW);
-                        *last_id = filter_last_id(&obd->u.filter, 0);
+                        *last_id = filter_last_id(&obd->u.filter,
+                                                  exp->exp_filter_data.fed_group);
                 }
                 *vallen = sizeof(*last_id);
                 RETURN(0);

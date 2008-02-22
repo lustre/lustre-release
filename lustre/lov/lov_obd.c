@@ -2374,7 +2374,7 @@ static int lov_get_info(struct obd_export *exp, __u32 keylen,
 
         lov_getref(obddev);
 
-        if (KEY_IS("lock_to_stripe")) {
+        if (KEY_IS(KEY_LOCK_TO_STRIPE)) {
                 struct {
                         char name[16];
                         struct ldlm_lock *lock;

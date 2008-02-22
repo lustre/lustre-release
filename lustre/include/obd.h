@@ -988,6 +988,9 @@ enum obd_cleanup_stage {
 #define KEY_REVIMP_UPD          "revimp_update"
 #define KEY_LOV_IDX             "lov_idx"
 #define KEY_LAST_ID             "last_id"
+#define KEY_LOCK_TO_STRIPE      "lock_to_stripe"
+#define KEY_BLOCKSIZE           "blocksize"
+#define KEY_BLOCKSIZE_BITS      "blocksize_bits"
 
 struct lu_context;
 

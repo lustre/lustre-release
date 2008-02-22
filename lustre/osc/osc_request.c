@@ -3389,19 +3389,19 @@ static int osc_get_info(struct obd_export *exp, obd_count keylen,
         if (!vallen || !val)
                 RETURN(-EFAULT);
 
-        if (KEY_IS("lock_to_stripe")) {
+        if (KEY_IS(KEY_LOCK_TO_STRIPE)) {
                 __u32 *stripe = val;
                 *vallen = sizeof(*stripe);
                 *stripe = 0;
                 RETURN(0);
-        } else if (KEY_IS("last_id")) {
+        } else if (KEY_IS(KEY_LAST_ID)) {
                 struct ptlrpc_request *req;
                 obd_id                *reply;
                 char                  *tmp;
                 int                    rc;
 
                 req = ptlrpc_request_alloc(class_exp2cliimp(exp),
-                                           &RQF_OST_GET_INFO);
+                                           &RQF_OST_GET_INFO_LAST_ID);
                 if (req == NULL)
                         RETURN(-ENOMEM);
 
@@ -3414,11 +3414,8 @@ static int osc_get_info(struct obd_export *exp, obd_count keylen,
                 }
 
                 tmp = req_capsule_client_get(&req->rq_pill, &RMF_SETINFO_KEY);
-                LASSERT(tmp);
                 memcpy(tmp, key, keylen);
 
-                req_capsule_set_size(&req->rq_pill, &RMF_OBD_ID,
-                                     RCL_SERVER, *vallen);
                 ptlrpc_request_set_replen(req);
                 rc = ptlrpc_queue_wait(req);
                 if (rc)
@@ -3479,6 +3476,8 @@ static int osc_set_info_async(struct obd_export *exp, obd_count keylen,
 
         if (KEY_IS(KEY_NEXT_ID)) {
                 if (vallen != sizeof(obd_id))
+                        RETURN(-ERANGE);
+                if (val == NULL)
                         RETURN(-EINVAL);
                 obd->u.cli.cl_oscc.oscc_next_id = *((obd_id*)val) + 1;
                 CDEBUG(D_HA, "%s: set oscc_next_id = "LPU64"\n",

@@ -475,15 +475,21 @@ static const struct req_msg_field *ost_set_info_client[] = {
         &RMF_SETINFO_VAL
 };
 
-static const struct req_msg_field *ost_get_info_client[] = {
+static const struct req_msg_field *ost_get_info_generic_server[] = {
+        &RMF_PTLRPC_BODY,
+        &RMF_GENERIC_DATA,
+};
+
+static const struct req_msg_field *ost_get_info_generic_client[] = {
         &RMF_PTLRPC_BODY,
         &RMF_SETINFO_KEY
 };
 
-static const struct req_msg_field *ost_get_info_server[] = {
+static const struct req_msg_field *ost_get_last_id_server[] = {
         &RMF_PTLRPC_BODY,
         &RMF_OBD_ID
 };
+
 static const struct req_format *req_formats[] = {
         &RQF_OBD_PING,
         &RQF_SEC_CTX,
@@ -534,7 +540,8 @@ static const struct req_format *req_formats[] = {
         &RQF_OST_BRW,
         &RQF_OST_STATFS,
         &RQF_OST_SET_INFO,
-        &RQF_OST_GET_INFO,
+        &RQF_OST_GET_INFO_GENERIC,
+        &RQF_OST_GET_INFO_LAST_ID,
         &RQF_LDLM_ENQUEUE,
         &RQF_LDLM_ENQUEUE_LVB,
         &RQF_LDLM_CONVERT,
@@ -584,6 +591,11 @@ struct req_capsule;
         .rmf_size    = (size),                          \
         .rmf_swabber = (void (*)(void*))(swabber)       \
 }
+
+const struct req_msg_field RMF_GENERIC_DATA =
+        DEFINE_MSGF("generic_data", 0,
+                    -1, NULL);
+EXPORT_SYMBOL(RMF_GENERIC_DATA);
 
 const struct req_msg_field RMF_MGS_TARGET_INFO =
         DEFINE_MSGF("mgs_target_info", 0,
@@ -1136,10 +1148,15 @@ const struct req_format RQF_OST_SET_INFO =
         DEFINE_REQ_FMT0("OST_SET_INFO", ost_set_info_client, empty);
 EXPORT_SYMBOL(RQF_OST_SET_INFO);
 
-const struct req_format RQF_OST_GET_INFO =
-        DEFINE_REQ_FMT0("OST_GET_INFO", ost_get_info_client,
-                                        ost_get_info_server);
-EXPORT_SYMBOL(RQF_OST_GET_INFO);
+const struct req_format RQF_OST_GET_INFO_GENERIC =
+        DEFINE_REQ_FMT0("OST_GET_INFO", ost_get_info_generic_client,
+                                        ost_get_info_generic_server);
+EXPORT_SYMBOL(RQF_OST_GET_INFO_GENERIC);
+
+const struct req_format RQF_OST_GET_INFO_LAST_ID =
+        DEFINE_REQ_FMT0("OST_GET_INFO_LAST_ID", ost_get_info_generic_client,
+                                                ost_get_last_id_server);
+EXPORT_SYMBOL(RQF_OST_GET_INFO_LAST_ID);
 
 
 #if !defined(__REQ_LAYOUT_USER__)

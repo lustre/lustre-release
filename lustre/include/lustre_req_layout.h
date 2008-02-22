@@ -172,7 +172,8 @@ extern const struct req_format RQF_OST_DESTROY;
 extern const struct req_format RQF_OST_BRW;
 extern const struct req_format RQF_OST_STATFS;
 extern const struct req_format RQF_OST_SET_INFO;
-extern const struct req_format RQF_OST_GET_INFO;
+extern const struct req_format RQF_OST_GET_INFO_GENERIC;
+extern const struct req_format RQF_OST_GET_INFO_LAST_ID;
 
 /* LDLM req_format */
 extern const struct req_format RQF_LDLM_ENQUEUE;
@@ -198,6 +199,7 @@ extern const struct req_format RQF_LLOG_ORIGIN_HANDLE_PREV_BLOCK;
 extern const struct req_format RQF_LLOG_ORIGIN_HANDLE_READ_HEADER;
 extern const struct req_format RQF_LLOG_ORIGIN_CONNECT;
 
+extern const struct req_msg_field RMF_GENERIC_DATA;
 extern const struct req_msg_field RMF_PTLRPC_BODY;
 extern const struct req_msg_field RMF_MDT_BODY;
 extern const struct req_msg_field RMF_MDT_EPOCH;
