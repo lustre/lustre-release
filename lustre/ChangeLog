@@ -755,6 +755,12 @@ Details    : A performance regression has been discovered in the MPT Fusion
 	     consequence, we have downgraded the MPT Fusion driver in the RHEL4
 	     kernel from 3.02.99.00 to 3.02.73 until this problem is fixed.
 
+Severity   : enhancement
+Bugzilla   : 14729
+Description: SNMP support enhancement
+Details    : Adding total number of sampled request for an MDS node in snmp
+             support.
+
 --------------------------------------------------------------------------------
 
 2007-08-10         Cluster File Systems, Inc. <info@clusterfs.com>
