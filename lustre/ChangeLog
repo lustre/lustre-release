@@ -374,6 +374,12 @@ Severity   : normal
 Bugzilla   : 14864
 Description: better handle error messages in extents code
 
+Severity   : enhancement
+Bugzilla   : 14729
+Description: SNMP support enhancement
+Details    : Adding total number of sampled request for an MDS node in snmp
+	     support.
+
 --------------------------------------------------------------------------------
 
 2007-12-07         Cluster File Systems, Inc. <info@clusterfs.com>
