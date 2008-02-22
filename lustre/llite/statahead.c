@@ -256,7 +256,7 @@ out:
         sai = lli->lli_sai;
         if (sai) {
                 lli->lli_sai->sai_replied++;
-                ll_sai_entry_set(lli->lli_sai, minfo->mi_cbdata,
+                ll_sai_entry_set(lli->lli_sai, (long)minfo->mi_cbdata,
                                  SA_ENTRY_STATED);
                 cfs_waitq_signal(&lli->lli_sai->sai_thread.t_ctl_waitq);
         }
@@ -298,7 +298,7 @@ static int sa_args_prep(struct inode *dir, struct dentry *dentry,
         minfo->mi_it.it_op = IT_GETATTR;
         minfo->mi_dentry = dentry;
         minfo->mi_cb = ll_statahead_interpret;
-        minfo->mi_cbdata = lli->lli_sai->sai_sent;
+        minfo->mi_cbdata = (void *)(long)lli->lli_sai->sai_sent;
 
         einfo->ei_type   = LDLM_IBITS;
         einfo->ei_mode   = it_to_lock_mode(&minfo->mi_it);
