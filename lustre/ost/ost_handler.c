@@ -96,6 +96,9 @@ static int ost_destroy(struct obd_export *exp, struct ptlrpc_request *req,
         if (body == NULL)
                 RETURN(-EFAULT);
 
+        if (body->oa.o_id == 0)
+                RETURN(-EPROTO);
+
         if (lustre_msg_buflen(req->rq_reqmsg, REQ_REC_OFF + 1)) {
                 struct ldlm_request *dlm;
                 dlm = lustre_swab_reqbuf(req, REQ_REC_OFF + 1, sizeof(*dlm),

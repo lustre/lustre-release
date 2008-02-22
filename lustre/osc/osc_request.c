@@ -626,6 +626,8 @@ static int osc_destroy(struct obd_export *exp, struct obdo *oa,
                 RETURN(-EINVAL);
         }
 
+        LASSERT(oa->o_id != 0);
+
         count = osc_resource_get_unused(exp, oa->o_id, &cancels, LCK_PW,
                                         LDLM_FL_DISCARD_DATA);
         if (exp_connect_cancelset(exp))
@@ -3371,6 +3373,10 @@ static int osc_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
                 if (!capable (CAP_SYS_ADMIN))
                         GOTO (out, err = -EPERM);
                 oa = &data->ioc_obdo1;
+
+                if (oa->o_id == 0)
+                        GOTO(out, err = -EINVAL);
+
                 oa->o_valid |= OBD_MD_FLGROUP;
 
                 err = osc_destroy(exp, oa, NULL, NULL, NULL);
