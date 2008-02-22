@@ -515,7 +515,8 @@ static int alloc_rr(struct lov_obd *lov, int *idx_arr, int *stripe_cnt,
         } else if (stripe_cnt_min >= ost_active_count ||
                    lov->lov_start_idx > ost_count) {
                 /* If we have allocated from all of the OSTs, slowly
-                   precess the next start */
+                 * precess the next start if the OST/stripe count isn't
+                 * already doing this for us. */
                 lov->lov_start_idx %= ost_count;
                 if (*stripe_cnt > 1 && (ost_active_count % (*stripe_cnt)) != 1)
                         ++lov->lov_offset_idx;
@@ -527,9 +528,10 @@ repeat_find :
         array_idx = (lov->lov_start_idx + lov->lov_offset_idx) % ost_count;
         idx_pos = idx_arr;
 #ifdef QOS_DEBUG
-        CDEBUG(D_QOS, "want %d startidx %d startcnt %d offset %d arrayidx %d\n",
-               stripe_cnt_min, lov->lov_start_idx, lov->lov_start_count,
-               lov->lov_offset_idx, array_idx);
+        CDEBUG(D_QOS, "want %d startidx %d startcnt %d offset %d active %d "
+               "count %d arrayidx %d\n",
+               stripe_cnt, lov->lov_start_idx, lov->lov_start_count,
+               lov->lov_offset_idx, ost_active_count, ost_count, array_idx);
 #endif
 
         for (i = 0; i < ost_count; i++, array_idx=(array_idx + 1) % ost_count) {
