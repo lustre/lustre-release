@@ -1105,7 +1105,7 @@ out_srv_fini:
         if (svc->srv_done != NULL)
                 svc->srv_done(thread);
 
-        lu_env_fini(&env);
+        lu_context_fini(&env.le_ctx);
 out:
         CDEBUG(D_NET, "service thread %d exiting: rc %d\n", thread->t_id, rc);
 

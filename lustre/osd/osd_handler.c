@@ -621,11 +621,14 @@ static void osd_trans_commit_cb(struct journal_callback *jcb, int error)
         if (error) {
                 CERROR("transaction @0x%p commit error: %d\n", th, error);
         } else {
+                struct lu_env *env = &osd_dt_dev(dev)->od_env_for_commit;
                 /*
                  * This od_env_for_commit is only for commit usage.  see
                  * "struct dt_device"
                  */
-                dt_txn_hook_commit(&osd_dt_dev(dev)->od_env_for_commit, th);
+                lu_context_enter(&env->le_ctx);
+                dt_txn_hook_commit(env, th);
+                lu_context_exit(&env->le_ctx);
         }
 
         lu_device_put(&dev->dd_lu_dev);
@@ -2247,7 +2250,8 @@ static void osd_key_exit(const struct lu_context *ctx,
 static int osd_device_init(const struct lu_env *env, struct lu_device *d,
                            const char *name, struct lu_device *next)
 {
-        return lu_env_init(&osd_dev(d)->od_env_for_commit, NULL, LCT_MD_THREAD);
+        return lu_context_init(&osd_dev(d)->od_env_for_commit.le_ctx,
+                               LCT_MD_THREAD);
 }
 
 static int osd_shutdown(const struct lu_env *env, struct osd_device *o)
@@ -2317,7 +2321,7 @@ static struct lu_device *osd_device_fini(const struct lu_env *env,
                                  osd_dev(d)->od_mount->lmi_mnt);
         osd_dev(d)->od_mount = NULL;
 
-        lu_env_fini(&osd_dev(d)->od_env_for_commit);
+        lu_context_fini(&osd_dev(d)->od_env_for_commit.le_ctx);
         RETURN(NULL);
 }
 

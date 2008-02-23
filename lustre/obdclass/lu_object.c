@@ -867,6 +867,7 @@ EXPORT_SYMBOL(lu_context_key_degister);
 void *lu_context_key_get(const struct lu_context *ctx,
                          struct lu_context_key *key)
 {
+        LASSERT(ctx->lc_state == LCS_ENTERED);
         LASSERT(0 <= key->lct_index && key->lct_index < ARRAY_SIZE(lu_keys));
         return ctx->lc_value[key->lct_index];
 }
@@ -934,6 +935,7 @@ static int keys_init(struct lu_context *ctx)
 int lu_context_init(struct lu_context *ctx, __u32 tags)
 {
         memset(ctx, 0, sizeof *ctx);
+        ctx->lc_state = LCS_INITIALIZED;
         ctx->lc_tags = tags;
         return keys_init(ctx);
 }
@@ -944,6 +946,8 @@ EXPORT_SYMBOL(lu_context_init);
  */
 void lu_context_fini(struct lu_context *ctx)
 {
+        LASSERT(ctx->lc_state == LCS_INITIALIZED || ctx->lc_state == LCS_LEFT);
+        ctx->lc_state = LCS_FINALIZED;
         keys_fini(ctx);
 }
 EXPORT_SYMBOL(lu_context_fini);
@@ -953,6 +957,8 @@ EXPORT_SYMBOL(lu_context_fini);
  */
 void lu_context_enter(struct lu_context *ctx)
 {
+        LASSERT(ctx->lc_state == LCS_INITIALIZED || ctx->lc_state == LCS_LEFT);
+        ctx->lc_state = LCS_ENTERED;
 }
 EXPORT_SYMBOL(lu_context_enter);
 
@@ -963,6 +969,8 @@ void lu_context_exit(struct lu_context *ctx)
 {
         int i;
 
+        LASSERT(ctx->lc_state == LCS_ENTERED);
+        ctx->lc_state = LCS_LEFT;
         if (ctx->lc_value != NULL) {
                 for (i = 0; i < ARRAY_SIZE(lu_keys); ++i) {
                         if (ctx->lc_value[i] != NULL) {

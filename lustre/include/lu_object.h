@@ -846,6 +846,14 @@ enum lu_xattr_flags {
         LU_XATTR_CREATE  = (1 << 1)
 };
 
+/* For lu_context health-checks */
+enum lu_context_state {
+        LCS_INITIALIZED = 1,
+        LCS_ENTERED,
+        LCS_LEFT,
+        LCS_FINALIZED
+};
+
 /*
  * lu_context. Execution context for lu_object methods. Currently associated
  * with thread.
@@ -886,6 +894,7 @@ struct lu_context {
          * detail.
          */
         void                 **lc_value;
+        enum                   lc_state;
 };
 
 /*
