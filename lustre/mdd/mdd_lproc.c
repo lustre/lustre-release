@@ -47,6 +47,7 @@ static const char *mdd_counter_names[LPROC_MDD_NR] = {
 
 int mdd_procfs_init(struct mdd_device *mdd, const char *name)
 {
+        struct lprocfs_static_vars lvars;
         struct lu_device    *ld = &mdd->mdd_md_dev.md_lu_dev;
         struct obd_type     *type;
         int                  rc;
@@ -58,8 +59,9 @@ int mdd_procfs_init(struct mdd_device *mdd, const char *name)
         LASSERT(type != NULL);
 
         /* Find the type procroot and add the proc entry for this device */
+        lprocfs_mdd_init_vars(&lvars);
         mdd->mdd_proc_entry = lprocfs_register(name, type->typ_procroot,
-                                               NULL, NULL);
+                                               lvars.obd_vars, mdd);
         if (IS_ERR(mdd->mdd_proc_entry)) {
                 rc = PTR_ERR(mdd->mdd_proc_entry);
                 CERROR("Error %d setting up lprocfs for %s\n",
@@ -99,4 +101,52 @@ void mdd_lprocfs_time_end(const struct lu_env *env, struct mdd_device *mdd,
                           int idx)
 {
         lu_lprocfs_time_end(env, mdd->mdd_stats, idx);
+}
+
+static int lprocfs_wr_atime_diff(struct file *file, const char *buffer,
+                                 unsigned long count, void *data)
+{
+        struct mdd_device *mdd = data;
+        char kernbuf[20], *end;
+        unsigned long diff = 0;
+
+        if (count > (sizeof(kernbuf) - 1))
+                return -EINVAL;
+
+        if (copy_from_user(kernbuf, buffer, count))
+                return -EFAULT;
+
+        kernbuf[count] = '\0';
+
+        diff = simple_strtoul(kernbuf, &end, 0);
+        if (kernbuf == end)
+                return -EINVAL;
+
+        mdd->mdd_atime_diff = diff;
+        return count;
+}
+
+static int lprocfs_rd_atime_diff(char *page, char **start, off_t off,
+                                 int count, int *eof, void *data)
+{
+        struct mdd_device *mdd = data;
+
+        *eof = 1;
+        return snprintf(page, count, "%lu\n", mdd->mdd_atime_diff);
+}
+
+static struct lprocfs_vars lprocfs_mdd_obd_vars[] = {
+        { "atime_diff", lprocfs_rd_atime_diff, lprocfs_wr_atime_diff, 0 },
+        { 0 }
+};
+
+static struct lprocfs_vars lprocfs_mdd_module_vars[] = {
+        { "num_refs",   lprocfs_rd_numrefs, 0, 0 },
+        { 0 }
+};
+
+void lprocfs_mdd_init_vars(struct lprocfs_static_vars *lvars)
+{
+        lvars->module_vars  = lprocfs_mdd_module_vars;
+        lvars->obd_vars     = lprocfs_mdd_obd_vars;
 }

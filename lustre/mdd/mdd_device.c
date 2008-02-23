@@ -62,6 +62,8 @@ static int mdd_device_init(const struct lu_env *env, struct lu_device *d,
         mdd->mdd_txn_cb.dtc_txn_commit = mdd_txn_commit_cb;
         mdd->mdd_txn_cb.dtc_cookie = mdd;
         INIT_LIST_HEAD(&mdd->mdd_txn_cb.dtc_linkage);
+        mdd->mdd_atime_diff = MAX_ATIME_DIFF;
+
         rc = mdd_procfs_init(mdd, name);
         RETURN(rc);
 }
@@ -411,20 +413,6 @@ static void mdd_key_fini(const struct lu_context *ctx,
 
 /* context key: mdd_thread_key */
 LU_CONTEXT_KEY_DEFINE(mdd, LCT_MD_THREAD);
-
-struct lprocfs_vars lprocfs_mdd_obd_vars[] = {
-        { 0 }
-};
-
-struct lprocfs_vars lprocfs_mdd_module_vars[] = {
-        { 0 }
-};
-
-static void lprocfs_mdd_init_vars(struct lprocfs_static_vars *lvars)
-{
-    lvars->module_vars  = lprocfs_mdd_module_vars;
-    lvars->obd_vars     = lprocfs_mdd_obd_vars;
-}
 
 static int __init mdd_mod_init(void)
 {

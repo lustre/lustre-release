@@ -60,11 +60,6 @@
 #include <obd_support.h>
 /* struct ptlrpc_thread */
 #include <lustre_net.h>
-/* LUSTRE_OSD_NAME */
-#include <obd.h>
-/* class_register_type(), class_unregister_type(), class_get_type() */
-#include <obd_class.h>
-#include <lustre_disk.h>
 
 /* fid_is_local() */
 #include <lustre_fid.h>
@@ -98,51 +93,8 @@ struct osd_object {
 #endif
 };
 
-/*
- * osd device.
- */
-struct osd_device {
-        /* super-class */
-        struct dt_device          od_dt_dev;
-        /* information about underlying file system */
-        struct lustre_mount_info *od_mount;
-        /* object index */
-        struct osd_oi             od_oi;
-        /*
-         * XXX temporary stuff for object index: directory where every object
-         * is named by its fid.
-         */
-        struct dentry            *od_obj_area;
-
-        /* Environment for transaction commit callback.
-         * Currently, OSD is based on ext3/JBD. Transaction commit in ext3/JBD
-         * is serialized, that is there is no more than one transaction commit
-         * at a time (JBD journal_commit_transaction() is serialized).
-         * This means that it's enough to have _one_ lu_context.
-         */
-        struct lu_env             od_env_for_commit;
-
-        /*
-         * Fid Capability
-         */
-        unsigned int              od_fl_capa:1;
-        unsigned long             od_capa_timeout;
-        __u32                     od_capa_alg;
-        struct lustre_capa_key   *od_capa_keys;
-        struct hlist_head        *od_capa_hash;
-        
-        /*
-         * statfs optimization: we cache a bit.
-         */
-        cfs_time_t                od_osfs_age;
-        struct kstatfs            od_kstatfs;
-        spinlock_t                od_osfs_lock;
-};
-
 static int   osd_root_get      (const struct lu_env *env,
                                 struct dt_device *dev, struct lu_fid *f);
-static int   osd_statfs        (const struct lu_env *env,
-                                struct dt_device *dev, struct kstatfs *sfs);
 
 static int   lu_device_is_osd  (const struct lu_device *d);
 static void  osd_mod_exit      (void) __exit;
@@ -252,8 +204,6 @@ static struct lu_device_type_operations osd_device_type_ops;
 static struct lu_device_type            osd_device_type;
 static struct lu_object_operations      osd_lu_obj_ops;
 static struct obd_ops                   osd_obd_device_ops;
-static struct lprocfs_vars              lprocfs_osd_module_vars[];
-static struct lprocfs_vars              lprocfs_osd_obd_vars[];
 static struct lu_device_operations      osd_lu_ops;
 static struct lu_context_key            osd_key;
 static struct dt_object_operations      osd_obj_ops;
@@ -556,8 +506,8 @@ static int osd_object_print(const struct lu_env *env, void *cookie,
 /*
  * Concurrency: shouldn't matter.
  */
-static int osd_statfs(const struct lu_env *env,
-                      struct dt_device *d, struct kstatfs *sfs)
+int osd_statfs(const struct lu_env *env, struct dt_device *d,
+               struct kstatfs *sfs)
 {
         struct osd_device *osd = osd_dt_dev(d);
         struct super_block *sb = osd_sb(osd);
@@ -2250,8 +2200,13 @@ static void osd_key_exit(const struct lu_context *ctx,
 static int osd_device_init(const struct lu_env *env, struct lu_device *d,
                            const char *name, struct lu_device *next)
 {
-        return lu_context_init(&osd_dev(d)->od_env_for_commit.le_ctx,
-                               LCT_MD_THREAD);
+        int rc;
+        /* context for commit hooks */
+        rc = lu_context_init(&osd_dev(d)->od_env_for_commit.le_ctx,
+                             LCT_MD_THREAD);
+        if (rc == 0)
+                rc = osd_procfs_init(osd_dev(d), name);
+        return rc;
 }
 
 static int osd_shutdown(const struct lu_env *env, struct osd_device *o)
@@ -2311,10 +2266,17 @@ static int osd_mount(const struct lu_env *env,
 static struct lu_device *osd_device_fini(const struct lu_env *env,
                                          struct lu_device *d)
 {
+        int rc;
         ENTRY;
 
         shrink_dcache_sb(osd_sb(osd_dev(d)));
         osd_sync(env, lu2dt_dev(d));
+
+        rc = osd_procfs_fini(osd_dev(d));
+        if (rc) {
+                CERROR("proc fini error %d \n", rc);
+                RETURN (ERR_PTR(rc));
+        }
 
         if (osd_dev(d)->od_mount)
                 server_put_mount(osd_dev(d)->od_mount->lmi_name,
@@ -2592,24 +2554,9 @@ static struct lu_device_type osd_device_type = {
 /*
  * lprocfs legacy support.
  */
-static struct lprocfs_vars lprocfs_osd_obd_vars[] = {
-        { 0 }
-};
-
-static struct lprocfs_vars lprocfs_osd_module_vars[] = {
-        { 0 }
-};
-
 static struct obd_ops osd_obd_device_ops = {
         .o_owner = THIS_MODULE
 };
-
-static void lprocfs_osd_init_vars(struct lprocfs_static_vars *lvars)
-{
-    lvars->module_vars  = lprocfs_osd_module_vars;
-    lvars->obd_vars     = lprocfs_osd_obd_vars;
-}
-
 
 static int __init osd_mod_init(void)
 {

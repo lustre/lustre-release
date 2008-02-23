@@ -70,6 +70,7 @@ struct mdd_device {
         cfs_proc_dir_entry_t            *mdd_proc_entry;
         struct lprocfs_stats            *mdd_stats;
         struct mdd_txn_op_descr          mdd_tod[MDD_TXN_LAST_OP];
+        unsigned long                    mdd_atime_diff;
 };
 
 enum mod_flags {
@@ -237,6 +238,8 @@ int orph_index_init(const struct lu_env *env, struct mdd_device *mdd);
 void orph_index_fini(const struct lu_env *env, struct mdd_device *mdd);
 int mdd_txn_init_credits(const struct lu_env *env, struct mdd_device *mdd);
 
+/* mdd_lproc.c */
+void lprocfs_mdd_init_vars(struct lprocfs_static_vars *lvars);
 int mdd_procfs_init(struct mdd_device *mdd, const char *name);
 int mdd_procfs_fini(struct mdd_device *mdd);
 void mdd_lprocfs_time_start(const struct lu_env *env);
@@ -287,6 +290,7 @@ extern struct lu_device_operations mdd_lu_ops;
 struct mdd_object *mdd_object_find(const struct lu_env *env,
                                    struct mdd_device *d,
                                    const struct lu_fid *f);
+
 /* mdd_permission.c */
 #define mdd_cap_t(x) (x)
 
@@ -455,6 +459,8 @@ static inline void mdd_set_capainfo(const struct lu_env *env, int offset,
         ci->mc_fid[offset]  = fid;
         ci->mc_capa[offset] = capa;
 }
+
+#define MAX_ATIME_DIFF 60
 
 enum {
         LPROC_MDD_NR

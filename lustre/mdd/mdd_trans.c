@@ -206,7 +206,7 @@ struct thandle* mdd_trans_start(const struct lu_env *env,
 {
         struct txn_param *p = &mdd_env_info(env)->mti_param;
         struct thandle *th;
-
+        
         th = mdd_child_ops(mdd)->dt_trans_start(env, mdd->mdd_child, p);
         return th;
 }
