@@ -281,7 +281,7 @@ static void ll_d_add(struct dentry *de, struct inode *inode)
                        de->d_name.len, de->d_name.name, de, de->d_hash.next);
                 LBUG();
         }
-        __d_rehash(de, 0);
+        d_rehash_cond(de, 0);
 }
 
 /* Search "inode"'s alias list for a dentry that has the same name and parent
@@ -332,7 +332,7 @@ struct dentry *ll_find_alias(struct inode *inode, struct dentry *de)
                 dentry->d_flags &= ~DCACHE_LUSTRE_INVALID;
 #endif
                 unlock_dentry(dentry);
-                __d_rehash(dentry, 0); /* avoid taking dcache_lock inside */
+                d_rehash_cond(dentry, 0); /* avoid taking dcache_lock inside */
                 spin_unlock(&dcache_lock);
                 iput(inode);
                 CDEBUG(D_DENTRY, "alias dentry %.*s (%p) parent %p inode %p "
@@ -707,7 +707,7 @@ static int ll_create_it(struct inode *dir, struct dentry *dentry, int mode,
          * successful create. Hash it here. */
         spin_lock(&dcache_lock);
         if (d_unhashed(dentry))
-                __d_rehash(dentry, 0);
+                d_rehash_cond(dentry, 0);
         spin_unlock(&dcache_lock);
         RETURN(0);
 }

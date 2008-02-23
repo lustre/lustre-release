@@ -1,5 +1,6 @@
 lustre_version.patch
 jbd-2.6.10-jcberr.patch
+iopen-misc-2.6.12.patch
 export_symbols-2.6.12.patch 
 dev_read_only-2.6-fc5.patch 
 export-2.6-fc5.patch 

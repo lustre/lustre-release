@@ -697,7 +697,6 @@ int ll_tree_unlock(struct ll_lock_tree *tree);
 
 #define    ll_s2sbi(sb)        (s2lsi(sb)->lsi_llsbi)
 
-void __d_rehash(struct dentry * entry, int lock);
 static inline __u64 ll_ts2u64(struct timespec *time)
 {
         __u64 t = time->tv_sec;

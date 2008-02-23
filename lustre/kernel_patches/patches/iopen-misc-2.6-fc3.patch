@@ -34,7 +34,7 @@ Index: linux-2.6.11/fs/dcache.c
   */
  
 -void d_move(struct dentry * dentry, struct dentry * target)
-+void __d_move(struct dentry * dentry, struct dentry * target)
++void d_move_locked(struct dentry * dentry, struct dentry * target)
  {
  	struct hlist_head *list;
  
@@ -51,12 +51,12 @@ Index: linux-2.6.11/fs/dcache.c
  	write_sequnlock(&rename_lock);
 +}
 +
-+EXPORT_SYMBOL(__d_move);
++EXPORT_SYMBOL(d_move_locked);
 +
 +void d_move(struct dentry *dentry, struct dentry *target)
 +{
 +	spin_lock(&dcache_lock);
-+	__d_move(dentry, target);
++	d_move_locked(dentry, target);
  	spin_unlock(&dcache_lock);
  }
  
@@ -68,7 +68,7 @@ Index: linux-2.6.11/include/linux/dcache.h
   * This adds the entry to the hash queues.
   */
  extern void d_rehash(struct dentry *);
-+extern void __d_rehash(struct dentry *, int lock);
++extern void d_rehash_cond(struct dentry *, int lock);
  
  /**
   * d_add - add dentry to hash queues
@@ -76,7 +76,7 @@ Index: linux-2.6.11/include/linux/dcache.h
  
  /* used for rename() and baskets */
  extern void d_move(struct dentry *, struct dentry *);
-+extern void __d_move(struct dentry *, struct dentry *);
++extern void d_move_locked(struct dentry *, struct dentry *);
  
  /* appendix may either be NULL or be used for transname suffixes */
  extern struct dentry * d_lookup(struct dentry *, struct qstr *);

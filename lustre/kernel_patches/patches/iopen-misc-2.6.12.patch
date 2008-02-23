@@ -64,7 +64,7 @@ Index: linux-2.6.16.46-0.14/fs/dcache.c
   */
  
 -void d_move(struct dentry * dentry, struct dentry * target)
-+void __d_move(struct dentry * dentry, struct dentry * target)
++void d_move_locked(struct dentry * dentry, struct dentry * target)
  {
  	struct hlist_head *list;
  
@@ -81,12 +81,12 @@ Index: linux-2.6.16.46-0.14/fs/dcache.c
  	write_sequnlock(&rename_lock);
 +}
 +
-+EXPORT_SYMBOL(__d_move);
++EXPORT_SYMBOL(d_move_locked);
 +
 +void d_move(struct dentry *dentry, struct dentry *target)
 +{
 +	spin_lock(&dcache_lock);
-+	__d_move(dentry, target);
++	d_move_locked(dentry, target);
  	spin_unlock(&dcache_lock);
  }
  
@@ -106,7 +106,7 @@ Index: linux-2.6.16.46-0.14/include/linux/dcache.h
  
  /* used for rename() and baskets */
  extern void d_move(struct dentry *, struct dentry *);
-+extern void __d_move(struct dentry *, struct dentry *);
++extern void d_move_locked(struct dentry *, struct dentry *);
  
  /* appendix may either be NULL or be used for transname suffixes */
  extern struct dentry * d_lookup(struct dentry *, struct qstr *);

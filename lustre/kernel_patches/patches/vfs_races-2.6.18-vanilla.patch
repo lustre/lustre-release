@@ -58,3 +58,11 @@ Index: linux-2.6/include/linux/dcache.h
  
  #define DCACHE_INOTIFY_PARENT_WATCHED	0x0020 /* Parent inode is watched */
  
+@@ -254,6 +255,7 @@ extern int have_submounts(struct dentry 
+  * This adds the entry to the hash queues.
+  */
+ extern void d_rehash(struct dentry *);
++extern void d_rehash_cond(struct dentry *, int lock);
+ 
+ /**
+  * d_add - add dentry to hash queues
