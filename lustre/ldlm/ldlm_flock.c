@@ -448,6 +448,7 @@ ldlm_flock_interrupted_wait(void *data)
 {
         struct ldlm_lock *lock;
         struct lustre_handle lockh;
+        int rc;
         ENTRY;
 
         lock = ((struct ldlm_flock_wait_data *)data)->fwd_lock;
@@ -460,8 +461,10 @@ ldlm_flock_interrupted_wait(void *data)
 
         ldlm_lock_decref_internal(lock, lock->l_req_mode);
         ldlm_lock2handle(lock, &lockh);
-        /* coverity[check_return] */
-        ldlm_cli_cancel(&lockh);
+        rc = ldlm_cli_cancel(&lockh);
+        if (rc != ELDLM_OK)
+                CERROR("ldlm_cli_cancel: %d\n", rc);
+
         EXIT;
 }
 
