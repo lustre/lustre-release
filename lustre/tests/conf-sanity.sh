@@ -15,8 +15,8 @@ ONLY=${ONLY:-"$*"}
 #              xml xml xml xml xml xml dumb
 MOUNTCONFSKIP="10  11  12  13  13b 14  15 "
 
-# bug number for skipped test:                     13369 12743
-ALWAYS_EXCEPT=" $CONF_SANITY_EXCEPT $MOUNTCONFSKIP 34a   36"
+# bug number for skipped test:                     14957  13369 12743
+ALWAYS_EXCEPT=" $CONF_SANITY_EXCEPT $MOUNTCONFSKIP 23a    34a   36"
 # UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
 
 SRCDIR=`dirname $0`
@@ -811,7 +811,7 @@ test_22() {
 }
 run_test 22 "start a client before osts (should return errs)"
 
-test_23() {
+test_23a() {	# was test_23
         setup
         # fail mds
 	stop mds   
@@ -836,12 +836,35 @@ test_23() {
 	stop_mds
 	stop_ost
 }
-#this test isn't working yet
-#run_test 23 "interrupt client during recovery mount delay"
+run_test 23a "interrupt client during recovery mount delay"
+
+umount_client $MOUNT
+cleanup_nocli
+
+test_23b() {    # was test_23
+	start_ost
+	start_mds
+	# Simulate -EINTR during mount OBD_FAIL_LDLM_CLOSE_THREAD
+	sysctl -w lustre.fail_loc=0x80000313
+	mount_client $MOUNT
+	cleanup
+}
+run_test 23b "Simulate -EINTR during mount"
+
+fs2mds_HOST=$mds_HOST
+fs2ost_HOST=$ost_HOST
+
+cleanup_24a() {
+	trap 0
+	echo "umount $MOUNT2 ..."
+	umount $MOUNT2 || true
+	echo "stopping fs2mds ..."
+	stop fs2mds -f || true
+	echo "stopping fs2ost ..."
+	stop fs2ost -f || true
+}
 
 test_24a() {
-	local fs2mds_HOST=$mds_HOST
-	local fs2ost_HOST=$ost_HOST
 	[ -n "$ost1_HOST" ] && fs2ost_HOST=$ost1_HOST
 	if [ -z "$fs2ost_DEV" -o -z "$fs2mds_DEV" ]; then
 		do_facet mds [ -b "$MDSDEV" ] && \
@@ -858,7 +881,7 @@ test_24a() {
 	add fs2ost $OST_MKFS_OPTS --fsname=${FSNAME2} --reformat $fs2ostdev || exit 10
 
 	setup
-	start fs2mds $fs2mdsdev $MDS_MOUNT_OPTS
+	start fs2mds $fs2mdsdev $MDS_MOUNT_OPTS && trap cleanup_24a EXIT INT
 	start fs2ost $fs2ostdev $OST_MOUNT_OPTS
 	mkdir -p $MOUNT2
 	mount -t lustre $MGSNID:/${FSNAME2} $MOUNT2 || return 1
@@ -882,15 +905,12 @@ test_24a() {
 	stop_mds
 	MDS=$(do_facet mds "cat $LPROC/devices" | awk '($3 ~ "mdt" && $4 ~ "MDS") { print $4 }')
 	[ -z "$MDS" ] && error "No MDS" && return 8
-	umount $MOUNT2
-	stop fs2mds -f
-	stop fs2ost -f
+	cleanup_24a
 	cleanup_nocli || return 6
 }
 run_test 24a "Multiple MDTs on a single node"
 
 test_24b() {
-	local fs2mds_HOST=$mds_HOST
 	if [ -z "$fs2mds_DEV" ]; then
 		do_facet mds [ -b "$MDSDEV" ] && \
 		skip "mixed loopback and real device not working" && return
@@ -1214,11 +1234,9 @@ test_32b() {
 }
 run_test 32b "Upgrade from 1.4 with writeconf"
 
-test_33() { # bug 12333
+test_33a() { # bug 12333, was test_33
         local rc=0
         local FSNAME2=test-123
-        local fs2mds_HOST=$mds_HOST
-        local fs2ost_HOST=$ost_HOST
         [ -n "$ost1_HOST" ] && fs2ost_HOST=$ost1_HOST
 
         if [ -z "$fs2ost_DEV" -o -z "$fs2mds_DEV" ]; then
@@ -1231,7 +1249,7 @@ test_33() { # bug 12333
         add fs2mds $MDS_MKFS_OPTS --fsname=${FSNAME2} --reformat $fs2mdsdev || exit 10
         add fs2ost $OST_MKFS_OPTS --fsname=${FSNAME2} --index=8191 --mgsnode=$MGSNID --reformat $fs2ostdev || exit 10
 
-        start fs2mds $fs2mdsdev $MDS_MOUNT_OPTS
+        start fs2mds $fs2mdsdev $MDS_MOUNT_OPTS && trap cleanup_24a EXIT INT
         start fs2ost $fs2ostdev $OST_MOUNT_OPTS
         do_facet mds "$LCTL conf_param $FSNAME2.sys.timeout=200" || rc=1
         mkdir -p $MOUNT2
@@ -1245,24 +1263,9 @@ test_33() { # bug 12333
         cleanup_nocli || rc=6
         return $rc
 }
-run_test 33 "Mount ost with a large index number"
+run_test 33a "Mount ost with a large index number"
 
-umount_client $MOUNT
-cleanup_nocli
-
-test_23() {
-        start_ost
-        start_mds
-        # Simulate -EINTR during mount OBD_FAIL_LDLM_CLOSE_THREAD
-        sysctl -w lustre.fail_loc=0x80000313
-        mount_client $MOUNT
-        cleanup
-}
-run_test 23 "Simulate -EINTR during mount"
-
-equals_msg "Done"
-echo "$0: completed"
-test_33a() {
+test_33b() {	# was test_33a
         setup
 
         do_facet client dd if=/dev/zero of=$MOUNT/24 bs=1024k count=1
@@ -1273,7 +1276,7 @@ test_33a() {
         umount_client $MOUNT
         cleanup
 }
-run_test 33a "Drop cancel during umount"
+run_test 33b "Drop cancel during umount"
 
 test_34a() {
         setup
@@ -1372,8 +1375,6 @@ run_test 35 "Reconnect to the last active server first"
 test_36() { # 12743
         local rc
         local FSNAME2=test1234
-        local fs2mds_HOST=$mds_HOST
-        local fs2ost_HOST=$ost_HOST
         local fs3ost_HOST=$ost_HOST
 
         [ -n "$ost1_HOST" ] && fs2ost_HOST=$ost1_HOST && fs3ost_HOST=$ost1_HOST
