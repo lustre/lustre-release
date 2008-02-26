@@ -1878,6 +1878,7 @@ static int filter_setup(struct obd_device *obd, obd_count len, void *buf)
         OBD_PAGE_FREE(page);
 
         if (rc) {
+                remove_proc_entry("clear", obd->obd_proc_exports_entry);
                 lprocfs_free_per_client_stats(obd);
                 lprocfs_free_obd_stats(obd);
                 lprocfs_obd_cleanup(obd);
