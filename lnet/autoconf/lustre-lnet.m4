@@ -498,95 +498,105 @@ AC_SUBST(MXLND)
 AC_DEFUN([LN_CONFIG_O2IB],[
 AC_MSG_CHECKING([whether to enable OpenIB gen2 support])
 # set default
-O2IBPATH="$LINUX/drivers/infiniband"
 AC_ARG_WITH([o2ib],
 	AC_HELP_STRING([--with-o2ib=path],
 	               [build o2iblnd against path]),
 	[
 		case $with_o2ib in
-		yes)    ENABLEO2IB=2
+		yes)    O2IBPATHS="$LINUX $LINUX/drivers/infiniband"
+			ENABLEO2IB=2
 			;;
 		no)     ENABLEO2IB=0
 			;;
-		*)      O2IBPATH=$with_o2ib
+		*)      O2IBPATHS=$with_o2ib
 			ENABLEO2IB=3
 			;;
 		esac
 	],[
+		O2IBPATHS="$LINUX $LINUX/drivers/infiniband"
 		ENABLEO2IB=1
 	])
 if test $ENABLEO2IB -eq 0; then
 	AC_MSG_RESULT([disabled])
-elif test ! \( -f ${O2IBPATH}/include/rdma/rdma_cm.h -a \
-               -f ${O2IBPATH}/include/rdma/ib_cm.h -a\
-               -f ${O2IBPATH}/include/rdma/ib_verbs.h -a\
-	       -f ${O2IBPATH}/include/rdma/ib_fmr_pool.h \); then
-	AC_MSG_RESULT([no])
-	case $ENABLEO2IB in
-	1) ;;
-	2) AC_MSG_ERROR([kernel OpenIB gen2 headers not present]);;
-	3) AC_MSG_ERROR([bad --with-o2ib path]);;
-	*) AC_MSG_ERROR([internal error]);;
-	esac
 else
-	O2IBCPPFLAGS="-I$O2IBPATH/include"
-	EXTRA_KCFLAGS_save="$EXTRA_KCFLAGS"
-	EXTRA_KCFLAGS="$EXTRA_KCFLAGS $O2IBCPPFLAGS"
-	EXTRA_LNET_INCLUDE="$O2IBCPPFLAGS $EXTRA_LNET_INCLUDE"
-	LB_LINUX_TRY_COMPILE([
-	        #include <linux/version.h>
-		#include <linux/pci.h>
-	        #if !HAVE_GFP_T
-		typedef int gfp_t;
-		#endif
-		#include <rdma/rdma_cm.h>
-		#include <rdma/ib_cm.h>
-		#include <rdma/ib_verbs.h>
-	        #include <rdma/ib_fmr_pool.h>
-	],[
-	        struct rdma_cm_id          *cm_id;
-	        struct rdma_conn_param      conn_param;
-	        struct ib_device_attr       device_attr;
-	        struct ib_qp_attr           qp_attr;
-		struct ib_pool_fmr          pool_fmr;
-		enum   ib_cm_rej_reason     rej_reason;
-
-		cm_id = rdma_create_id(NULL, NULL, RDMA_PS_TCP);
-		return PTR_ERR(cm_id);
-	],[
-		AC_MSG_RESULT([yes])
-		O2IBLND="o2iblnd"
-	],[
+	o2ib_found=false
+	for O2IBPATH in $O2IBPATHS; do
+		if test \( -f ${O2IBPATH}/include/rdma/rdma_cm.h -a \
+			   -f ${O2IBPATH}/include/rdma/ib_cm.h -a \
+			   -f ${O2IBPATH}/include/rdma/ib_verbs.h -a \
+			   -f ${O2IBPATH}/include/rdma/ib_fmr_pool.h \); then
+			o2ib_found=true
+			break
+ 		fi
+	done
+	if ! $o2ib_found; then
 		AC_MSG_RESULT([no])
 		case $ENABLEO2IB in
-		1) ;;
-		2) AC_MSG_ERROR([can't compile with kernel OpenIB gen2 headers]);;
-		3) AC_MSG_ERROR([can't compile with OpenIB gen2 headers under $O2IBPATH]);;
-		*) AC_MSG_ERROR([internal error]);;
+			1) ;;
+			2) AC_MSG_ERROR([kernel OpenIB gen2 headers not present]);;
+			3) AC_MSG_ERROR([bad --with-o2ib path]);;
+			*) AC_MSG_ERROR([internal error]);;
 		esac
-		O2IBLND=""
-		O2IBCPPFLAGS=""
-	])
-
-# version checking is a hack and isn't reliable, we need verify it
-# with each new ofed release
-
-	IB_DMA_MAP="`grep -c ib_dma_map_single ${O2IBPATH}/include/rdma/ib_verbs.h`"
-	if test "$IB_DMA_MAP" != 0 ; then
-		IB_COMP_VECT="`grep -c comp_vector ${O2IBPATH}/include/rdma/ib_verbs.h`"
-		if test "$IB_COMP_VECT" != 0 ; then
-			IBLND_OFED_VERSION="1025"
-		else
-			IBLND_OFED_VERSION="1020"
-		fi
 	else
-		IBLND_OFED_VERSION="1010"
+		O2IBCPPFLAGS="-I$O2IBPATH/include"
+		EXTRA_KCFLAGS_save="$EXTRA_KCFLAGS"
+		EXTRA_KCFLAGS="$EXTRA_KCFLAGS $O2IBCPPFLAGS"
+		EXTRA_LNET_INCLUDE="$O2IBCPPFLAGS $EXTRA_LNET_INCLUDE"
+		LB_LINUX_TRY_COMPILE([
+		        #include <linux/version.h>
+		        #include <linux/pci.h>
+		        #if !HAVE_GFP_T
+		        typedef int gfp_t;
+		        #endif
+		        #include <rdma/rdma_cm.h>
+		        #include <rdma/ib_cm.h>
+		        #include <rdma/ib_verbs.h>
+		        #include <rdma/ib_fmr_pool.h>
+		],[
+		        struct rdma_cm_id          *cm_id;
+		        struct rdma_conn_param      conn_param;
+		        struct ib_device_attr       device_attr;
+		        struct ib_qp_attr           qp_attr;
+		        struct ib_pool_fmr          pool_fmr;
+		        enum   ib_cm_rej_reason     rej_reason;
+
+		        cm_id = rdma_create_id(NULL, NULL, RDMA_PS_TCP);
+		        return PTR_ERR(cm_id);
+		],[
+		        AC_MSG_RESULT([yes])
+		        O2IBLND="o2iblnd"
+		],[
+		        AC_MSG_RESULT([no])
+		        case $ENABLEO2IB in
+		        1) ;;
+		        2) AC_MSG_ERROR([can't compile with kernel OpenIB gen2 headers]);;
+		        3) AC_MSG_ERROR([can't compile with OpenIB gen2 headers under $O2IBPATH]);;
+		        *) AC_MSG_ERROR([internal error]);;
+		        esac
+		        O2IBLND=""
+		        O2IBCPPFLAGS=""
+		])
+
+		# version checking is a hack and isn't reliable,
+		# we need verify it with each new ofed release
+
+		if grep -q ib_dma_map_single \
+			${O2IBPATH}/include/rdma/ib_verbs.h; then
+			if grep -q comp_vector \
+				${O2IBPATH}/include/rdma/ib_verbs.h; then
+				IBLND_OFED_VERSION="1025"
+			else
+				IBLND_OFED_VERSION="1020"
+			fi
+		else
+			IBLND_OFED_VERSION="1010"
+		fi
+
+		AC_DEFINE_UNQUOTED(IBLND_OFED_VERSION, $IBLND_OFED_VERSION,
+				   [OFED version])
+
+		EXTRA_KCFLAGS="$EXTRA_KCFLAGS_save"
 	fi
-
-        AC_DEFINE_UNQUOTED(IBLND_OFED_VERSION, $IBLND_OFED_VERSION,
-			   [OFED version])
-
-	EXTRA_KCFLAGS="$EXTRA_KCFLAGS_save"
 fi
 
 AC_SUBST(EXTRA_LNET_INCLUDE)
