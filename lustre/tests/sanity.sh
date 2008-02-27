@@ -2579,8 +2579,10 @@ run_test 56o "check lfs find -mtime for old files =========================="
 test_57a() {
 	# note test will not do anything if MDS is not local
 	remote_mds && skip "remote MDS" && return
-
-	for DEV in `cat $LPROC/mds/*/mntdev`; do
+	local MNTDEV="$LPROC/osd/*MDT*/mntdev"
+	DEV=$(cat $MNTDEV)
+	[ -z "$DEV" ] && error "can't access $MNTDEV" 
+	for DEV in `cat $MNTDEV`; do
 		dumpe2fs -h $DEV > $TMP/t57a.dump || error "can't access $DEV"
 		DEVISIZE=`awk '/Inode size:/ { print $3 }' $TMP/t57a.dump`
 		[ "$DEVISIZE" -gt 128 ] || error "inode size $DEVISIZE"
