@@ -14,11 +14,11 @@ sbin_scripts = lrun
 bin_scripts = llstat llobdstat plot-llstat 
 
 if UTILS
-noinst_PROGRAMS = wirecheck wiretest obdio obdbarrier
+noinst_PROGRAMS = wirecheck obdio obdbarrier
 
 # mount only finds helpers in /sbin
 rootsbin_PROGRAMS = mount.lustre
-sbin_PROGRAMS = mkfs.lustre tunefs.lustre lctl \
+sbin_PROGRAMS = mkfs.lustre tunefs.lustre lctl wiretest \
 	l_getidentity llverfs llverdev \
 	llog_reader lr_reader
 if LIBPTHREAD
