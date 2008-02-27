@@ -779,33 +779,6 @@ static int mgc_set_mgs_param(struct obd_export *exp,
         RETURN(rc);
 }
 
-int mgc_reconnect_import(struct obd_import *imp)
-{
-        /* Force a new connect attempt */
-        ptlrpc_invalidate_import(imp);
-        /* Do a fresh connect next time by zeroing the handle */
-        ptlrpc_disconnect_import(imp, 1);
-        /* Wait for all invalidate calls to finish */
-        if (atomic_read(&imp->imp_inval_count) > 0) {
-                int rc;
-                struct l_wait_info lwi = LWI_INTR(LWI_ON_SIGNAL_NOOP, NULL);
-                rc = l_wait_event(imp->imp_recovery_waitq,
-                                  (atomic_read(&imp->imp_inval_count) == 0),
-                                  &lwi);
-                if (rc)
-                        CERROR("Interrupted, inval=%d\n", 
-                               atomic_read(&imp->imp_inval_count));
-        }
-
-        /* Allow reconnect attempts */
-        imp->imp_obd->obd_no_recov = 0;
-        /* Remove 'invalid' flag */
-        ptlrpc_activate_import(imp);
-        /* Attempt a new connect */
-        ptlrpc_recover_import(imp, NULL);
-        return 0;
-}
-
 int mgc_set_info_async(struct obd_export *exp, obd_count keylen,
                        void *key, obd_count vallen, void *val, 
                        struct ptlrpc_request_set *set)
@@ -844,7 +817,7 @@ int mgc_set_info_async(struct obd_export *exp, obd_count keylen,
                        ptlrpc_import_state_name(imp->imp_state));
                 /* Resurrect if we previously died */
                 if (imp->imp_invalid || value > 1) 
-                        mgc_reconnect_import(imp);
+                        ptlrpc_reconnect_import(imp);
                 RETURN(0);
         }
         /* FIXME move this to mgc_process_config */
