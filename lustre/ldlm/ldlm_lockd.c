@@ -1524,6 +1524,10 @@ static int ldlm_callback_handler(struct ptlrpc_request *req)
          * incoming request message body, but I am responsible for the
          * message buffers. */
 
+        /* do nothing for sec context finalize */
+        if (lustre_msg_get_opc(req->rq_reqmsg) == SEC_CTX_FINI)
+                RETURN(0);
+
         req_capsule_init(&req->rq_pill, req, RCL_SERVER);
 
         if (req->rq_export == NULL) {
@@ -1610,9 +1614,6 @@ static int ldlm_callback_handler(struct ptlrpc_request *req)
                         RETURN(0);
                 rc = llog_origin_handle_close(req);
                 ldlm_callback_reply(req, rc);
-                RETURN(0);
-        case SEC_CTX_FINI:
-                /* do nothing */
                 RETURN(0);
         default:
                 CERROR("unknown opcode %u\n",
