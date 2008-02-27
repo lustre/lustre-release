@@ -1651,7 +1651,7 @@ repeat:
                         rc = -EINVAL;
                         goto out;
                 }
-                if (desc.ld_default_stripe_count == (__u16)-1)
+                if (desc.ld_default_stripe_count == (__u32)-1)
                         printf("default_stripe_count: %d\n", -1);
                 else
                         printf("default_stripe_count: %u\n",
