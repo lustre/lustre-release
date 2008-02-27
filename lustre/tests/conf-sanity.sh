@@ -235,7 +235,7 @@ test_4() {
 }
 run_test 4 "force cleanup ost, then cleanup"
 
-test_5() {
+test_5a() {	# was test_5
 	setup
 	touch $DIR/$tfile || return 1
 	fuser -m -v $MOUNT && echo "$MOUNT is in use by user space process."
@@ -270,10 +270,19 @@ test_5() {
 	# df may have lingering entry
 	manual_umount_client
 	# mtab may have lingering entry
-	grep -v $MOUNT" " /etc/mtab > $TMP/mtabtemp
-	mv $TMP/mtabtemp /etc/mtab
+	local WAIT=0
+	local MAX_WAIT=20
+	local sleep=1
+	while [ "$WAIT" -ne "$MAX_WAIT" ]; do
+		sleep $sleep
+		grep -q $MOUNT" " /etc/mtab || break
+        	echo "Waiting /etc/mtab updated ... "
+		WAIT=$(( WAIT + sleep))
+	done
+	[ "$WAIT" -eq "$MAX_WAIT" ] && error "/etc/mtab is not updated in $WAIT secs"
+	echo "/etc/mtab updated in $WAIT secs"
 }
-run_test 5 "force cleanup mds, then cleanup"
+run_test 5a "force cleanup mds, then cleanup"
 
 test_5b() {
 	start_ost
