@@ -121,6 +121,7 @@ static struct lu_object *lu_object_alloc(const struct lu_env *env,
         struct list_head *layers;
         int clean;
         int result;
+        ENTRY;
 
         /*
          * Create top-level object slice. This will also create
@@ -128,8 +129,8 @@ static struct lu_object *lu_object_alloc(const struct lu_env *env,
          */
         top = s->ls_top_dev->ld_ops->ldo_object_alloc(env,
                                                       NULL, s->ls_top_dev);
-        if (IS_ERR(top))
-                RETURN(top);
+        if (top == NULL)
+                RETURN(ERR_PTR(-ENOMEM));
         /*
          * This is the only place where object fid is assigned. It's constant
          * after this point.
