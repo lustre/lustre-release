@@ -563,7 +563,7 @@ wait_mds_recovery_done () {
     MAX=$(( timeout * 4 ))
     WAIT=0
     while [ $WAIT -lt $MAX ]; do
-        STATUS=`do_facet mds grep status /proc/fs/lustre/mdt/*-MDT*/recovery_status`
+        STATUS=`do_facet $SINGLEMDS grep status /proc/fs/lustre/mdt/*-MDT*/recovery_status`
         echo $STATUS | grep COMPLETE && return 0
         sleep 5
         WAIT=$((WAIT + 5))
@@ -1341,8 +1341,8 @@ pass() {
 }
 
 check_mds() {
-    FFREE=`cat /proc/fs/lustre/mds/*/filesfree`
-    FTOTAL=`cat /proc/fs/lustre/mds/*/filestotal`
+    FFREE=`cat /proc/fs/lustre/osd/*MDT*/filesfree`
+    FTOTAL=`cat /proc/fs/lustre/osd/*MDT*/filestotal`
     [ $FFREE -ge $FTOTAL ] && error "files free $FFREE > total $FTOTAL" || true
 }
 

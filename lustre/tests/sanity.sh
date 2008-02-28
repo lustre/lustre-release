@@ -2605,7 +2605,7 @@ test_57b() {
 	$GETSTRIPE $FILE1 2>&1 | grep -q "no stripe" || error "$FILE1 has an EA"
 	$GETSTRIPE $FILEN 2>&1 | grep -q "no stripe" || error "$FILEN has an EA"
 
-	MDSFREE="`cat $LPROC/mds/*/kbytesfree 2> /dev/null`"
+	MDSFREE="`cat $LPROC/osd/*MDT*/kbytesfree 2> /dev/null`"
 	MDCFREE="`cat $LPROC/mdc/*/kbytesfree | head -n 1`"
 	echo "opening files to create objects/EAs"
 	for FILE in `seq -f $DIR/d57b/f%g 1 $FILECOUNT`; do

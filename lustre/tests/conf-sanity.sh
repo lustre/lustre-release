@@ -1112,7 +1112,7 @@ test_32a() {
 	$TUNEFS $TMP/$tdir/mds || error "tunefs failed"
 	# nids are wrong, so client wont work, but server should start
         start mds $TMP/$tdir/mds "-o loop,exclude=lustre-OST0000" || return 3
-        local UUID=$(cat $LPROC/mds/lustre-MDT0000/uuid)
+        local UUID=$(cat $LPROC/mdt/lustre-MDT0000/uuid)
 	echo MDS uuid $UUID
 	[ "$UUID" == "mdsA_UUID" ] || error "UUID is wrong: $UUID" 
 
