@@ -894,7 +894,7 @@ struct lu_context {
          * detail.
          */
         void                 **lc_value;
-        __u32                  lc_state;
+        enum lu_context_state  lc_state;
 };
 
 /*
