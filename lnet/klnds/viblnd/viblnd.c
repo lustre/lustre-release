@@ -1494,13 +1494,12 @@ kibnal_setup_tx_descs (void)
                 fmr_props.max_pages            = LNET_MAX_IOV;
                 fmr_props.log2_page_sz         = PAGE_SHIFT;
                 fmr_props.max_outstanding_maps = *kibnal_tunables.kib_fmr_remaps;
-                
+
                 vvrc = vv_alloc_fmr(kibnal_data.kib_hca,
                                     &fmr_props,
                                     &tx->tx_md.md_fmrhandle);
                 if (vvrc != vv_return_ok) {
                         CERROR("Can't allocate fmr %d: %d\n", i, vvrc);
-                        
                         kibnal_free_fmrs(i);
                         kibnal_free_pages (kibnal_data.kib_tx_pages);
                         return -ENOMEM;
@@ -1509,7 +1508,7 @@ kibnal_setup_tx_descs (void)
                 tx->tx_md.md_fmrcount = *kibnal_tunables.kib_fmr_remaps;
                 tx->tx_md.md_active   = 0;
 #endif
-                tx->tx_msg = (kib_msg_t *)(((char *)page_address(page)) + 
+                tx->tx_msg = (kib_msg_t *)(((char *)page_address(page)) +
                                            page_offset);
 
                 vvrc = vv_get_gen_mr_attrib(kibnal_data.kib_hca,
@@ -1520,7 +1519,7 @@ kibnal_setup_tx_descs (void)
                                             &rkey);
                 LASSERT (vvrc == vv_return_ok);
 
-                CDEBUG(D_NET, "Tx[%d] %p->%p[%x]\n", i, tx, 
+                CDEBUG(D_NET, "Tx[%d] %p->%p[%x]\n", i, tx,
                        tx->tx_msg, tx->tx_lkey);
 
                 list_add (&tx->tx_list, &kibnal_data.kib_idle_txs);
@@ -1688,7 +1687,7 @@ kibnal_startup (lnet_ni_t *ni)
         ni->ni_peertxcredits = *kibnal_tunables.kib_peercredits;
 
         CLASSERT (LNET_MAX_INTERFACES > 1);
-        
+
         if (ni->ni_interfaces[0] != NULL) {
                 /* Use the HCA specified in 'networks=' */
 
@@ -1700,7 +1699,7 @@ kibnal_startup (lnet_ni_t *ni)
                 /* Parse <hca base name><number> */
                 hca_name = ni->ni_interfaces[0];
                 nob = strlen(*kibnal_tunables.kib_hca_basename);
-                
+
                 if (strncmp(hca_name, *kibnal_tunables.kib_hca_basename, nob) ||
                     sscanf(hca_name + nob, "%d%n", &devno, &nob) < 1) {
                         CERROR("Unrecognised HCA %s\n", hca_name);
@@ -1727,26 +1726,26 @@ kibnal_startup (lnet_ni_t *ni)
                 CERROR("IPoIB interface name %s truncated\n", ipif_name);
                 return -EINVAL;
         }
-        
+
         rc = libcfs_ipif_query(ipif_name, &up, &ip, &netmask);
         if (rc != 0) {
                 CERROR("Can't query IPoIB interface %s: %d\n", ipif_name, rc);
                 return -ENETDOWN;
         }
-        
+
         if (!up) {
                 CERROR("Can't query IPoIB interface %s: it's down\n", ipif_name);
                 return -ENETDOWN;
         }
-        
+
         ni->ni_nid = LNET_MKNID(LNET_NIDNET(ni->ni_nid), ip);
-        
+
         PORTAL_MODULE_USE;
         memset (&kibnal_data, 0, sizeof (kibnal_data)); /* zero pointers, flags etc */
 
         kibnal_data.kib_ni = ni;
         ni->ni_data = &kibnal_data;
-        
+
         do_gettimeofday(&tv);
         kibnal_data.kib_incarnation = (((__u64)tv.tv_sec) * 1000000) + tv.tv_usec;
 
@@ -1779,7 +1778,7 @@ kibnal_startup (lnet_ni_t *ni)
                 CERROR("Can't allocate tx descs\n");
                 goto failed;
         }
-        
+
         /* lists/ptrs/locks initialised */
         kibnal_data.kib_init = IBNAL_INIT_DATA;
         /*****************************************************/
@@ -1899,7 +1898,7 @@ kibnal_startup (lnet_ni_t *ni)
                hca_name, kibnal_data.kib_port, 
                kibnal_data.kib_port_gid.scope.g.subnet, 
                kibnal_data.kib_port_gid.scope.g.eui64);
-        
+
         /*****************************************************/
 
 #if 1
@@ -1912,7 +1911,7 @@ kibnal_startup (lnet_ni_t *ni)
                 CERROR ("Can't init PD: %d\n", vvrc);
                 goto failed;
         }
-        
+
         /* flag PD initialised */
         kibnal_data.kib_init = IBNAL_INIT_PD;
         /*****************************************************/
@@ -1922,7 +1921,7 @@ kibnal_startup (lnet_ni_t *ni)
                 CERROR ("Can't register tx descs: %d\n", rc);
                 goto failed;
         }
-        
+
         /* flag TX descs initialised */
         kibnal_data.kib_init = IBNAL_INIT_TXD;
         /*****************************************************/
@@ -1962,7 +1961,7 @@ kibnal_startup (lnet_ni_t *ni)
                 CERROR("Can't start listener: %d\n", rc);
                 goto failed;
         }
-        
+
         /* flag everything initialised */
         kibnal_data.kib_init = IBNAL_INIT_ALL;
         /*****************************************************/
