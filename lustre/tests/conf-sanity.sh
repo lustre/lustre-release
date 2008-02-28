@@ -16,8 +16,8 @@ MOUNTCONFSKIP="10 11 12 13 13b 14 15"
 # bug number for skipped test: 13739 
 HEAD_EXCEPT="                  32a 32b "
 
-# bug number for skipped test:                                  14957 12743 
-ALWAYS_EXCEPT=" $CONF_SANITY_EXCEPT $MOUNTCONFSKIP $HEAD_EXCEPT 23a   36    "
+# bug number for skipped test:                                  14957 14731 12743 
+ALWAYS_EXCEPT=" $CONF_SANITY_EXCEPT $MOUNTCONFSKIP $HEAD_EXCEPT 23a   33a   36    "
 # UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
 
 SRCDIR=`dirname $0`

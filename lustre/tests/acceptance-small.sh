@@ -37,6 +37,7 @@ if [ "$ACC_SM_ONLY" ]; then
     done
 fi
 LFSCK="no" # bug 13698
+LIBLUSTRE="no" #bug 14387
 
 LIBLUSTRETESTS=${LIBLUSTRETESTS:-../liblustre/tests}
 

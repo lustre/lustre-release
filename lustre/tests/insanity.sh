@@ -9,8 +9,8 @@ LUSTRE=${LUSTRE:-`dirname $0`/..}
 init_test_env $@
 
 . ${CONFIG:=$LUSTRE/tests/cfg/insanity-local.sh}
-
-ALWAYS_EXCEPT="10 $INSANITY_EXCEPT"
+#              13129  13129                 
+ALWAYS_EXCEPT="2      4     10  $INSANITY_EXCEPT"
 
 #
 [ "$SLOW" = "no" ] && EXCEPT_SLOW=""
