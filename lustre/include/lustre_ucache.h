@@ -81,6 +81,7 @@ struct upcall_cache_ops {
 struct upcall_cache {
         struct list_head        uc_hashtable[UC_CACHE_HASH_SIZE];
         spinlock_t              uc_lock;
+        rwlock_t                uc_upcall_rwlock;
 
         char                    uc_name[40];            /* for upcall */
         char                    uc_upcall[UC_CACHE_UPCALL_MAXPATH];

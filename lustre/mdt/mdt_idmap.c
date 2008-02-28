@@ -86,12 +86,12 @@ int mdt_init_idmap(struct mdt_thread_info *info)
         if (remote) {
                 med->med_rmtclient = 1;
                 if (!req->rq_auth_remote)
-                        CWARN("client (local realm) %s -> target %s asked "
-                              "to be remote!\n", client, obd->obd_name);
+                        CDEBUG(D_SEC, "client (local realm) %s -> target %s "
+                               "asked to be remote!\n", client, obd->obd_name);
         } else if (req->rq_auth_remote) {
                 med->med_rmtclient = 1;
-                CWARN("client (remote realm) %s -> target %s forced "
-                      "to be remote!\n", client, obd->obd_name);
+                CDEBUG(D_SEC, "client (remote realm) %s -> target %s forced "
+                       "to be remote!\n", client, obd->obd_name);
         }
 
         if (med->med_rmtclient) {
@@ -123,7 +123,7 @@ int mdt_init_idmap(struct mdt_thread_info *info)
                 rc = mdt_handle_idmap(info);
         } else {
                 if (req->rq_auth_uid == INVALID_UID) {
-                        CERROR("client %s -> target %s: user is not "
+                        CDEBUG(D_SEC, "client %s -> target %s: user is not "
                                "authenticated!\n", client, obd->obd_name);
                         RETURN(-EACCES);
                 }
@@ -140,7 +140,7 @@ void mdt_cleanup_idmap(struct mdt_export_data *med)
         down(&med->med_idmap_sem);
         if (med->med_idmap != NULL) {
                 lustre_idmap_fini(med->med_idmap);
-        med->med_idmap = NULL;
+                med->med_idmap = NULL;
         }
         up(&med->med_idmap_sem);
 }
@@ -181,42 +181,44 @@ int mdt_handle_idmap(struct mdt_thread_info *info)
         LASSERT(med->med_idmap);
 
         if (unlikely(!pud)) {
-                CERROR("remote client must run with rq_user_desc present\n");
+                CDEBUG(D_SEC, "remote client must run with rq_user_desc "
+                       "present\n");
                 RETURN(-EACCES);
-	}
+        }
 
         if (req->rq_auth_mapped_uid == INVALID_UID) {
-                CERROR("invalid authorized mapped uid, please check "
+                CDEBUG(D_SEC, "invalid authorized mapped uid, please check "
                        "/etc/lustre/idmap.conf!\n");
                 RETURN(-EACCES);
         }
 
         if (is_identity_get_disabled(mdt->mdt_identity_cache)) {
-                CERROR("remote client must run with identity_get enabled!\n");
+                CDEBUG(D_SEC, "remote client must run with identity_get "
+                       "enabled!\n");
                 RETURN(-EACCES);
         }
 
         identity = mdt_identity_get(mdt->mdt_identity_cache,
                                     req->rq_auth_mapped_uid);
-        if (!identity) {
-                CERROR("can't get mdt identity(%u), no mapping added\n",
+        if (IS_ERR(identity)) {
+                CDEBUG(D_SEC, "can't get mdt identity(%u), no mapping added\n",
                        req->rq_auth_mapped_uid);
                 RETURN(-EACCES);
         }
 
         switch (opc) {
-        case SEC_CTX_INIT:
-        case SEC_CTX_INIT_CONT:
-        case MDS_CONNECT:
+                case SEC_CTX_INIT:
+                case SEC_CTX_INIT_CONT:
+                case MDS_CONNECT:
                         rc = lustre_idmap_add(med->med_idmap,
-                                   pud->pud_uid, identity->mi_uid,
-                                   pud->pud_gid, identity->mi_gid);
-                break;
-        case SEC_CTX_FINI:
+                                              pud->pud_uid, identity->mi_uid,
+                                              pud->pud_gid, identity->mi_gid);
+                        break;
+                case SEC_CTX_FINI:
                         rc = lustre_idmap_del(med->med_idmap,
-                                   pud->pud_uid, identity->mi_uid,
-                                   pud->pud_gid, identity->mi_gid);
-                break;
+                                              pud->pud_uid, identity->mi_uid,
+                                              pud->pud_gid, identity->mi_gid);
+                        break;
         }
 
         mdt_identity_put(mdt->mdt_identity_cache, identity);
@@ -225,11 +227,11 @@ int mdt_handle_idmap(struct mdt_thread_info *info)
                 RETURN(rc);
 
         switch (opc) {
-        case SEC_CTX_INIT:
-        case SEC_CTX_INIT_CONT:
-        case SEC_CTX_FINI:
-                mdt_revoke_export_locks(req->rq_export);
-                break;
+                case SEC_CTX_INIT:
+                case SEC_CTX_INIT_CONT:
+                case SEC_CTX_FINI:
+                        mdt_revoke_export_locks(req->rq_export);
+                        break;
         }
 
         RETURN(0);
@@ -238,7 +240,7 @@ int mdt_handle_idmap(struct mdt_thread_info *info)
 int ptlrpc_user_desc_do_idmap(struct ptlrpc_request *req,
                               struct ptlrpc_user_desc *pud)
 {
-        struct mdt_export_data *med = mdt_req2med(req);
+        struct mdt_export_data    *med = mdt_req2med(req);
         struct lustre_idmap_table *idmap = med->med_idmap;
         uid_t uid, fsuid;
         gid_t gid, fsgid;
@@ -249,7 +251,7 @@ int ptlrpc_user_desc_do_idmap(struct ptlrpc_request *req,
 
         uid = lustre_idmap_lookup_uid(NULL, idmap, 0, pud->pud_uid);
         if (uid == CFS_IDMAP_NOTFOUND) {
-                CERROR("no mapping for uid %u\n", pud->pud_uid);
+                CDEBUG(D_SEC, "no mapping for uid %u\n", pud->pud_uid);
                 return -EACCES;
         }
 
@@ -258,14 +260,15 @@ int ptlrpc_user_desc_do_idmap(struct ptlrpc_request *req,
         } else {
                 fsuid = lustre_idmap_lookup_uid(NULL, idmap, 0, pud->pud_fsuid);
                 if (fsuid == CFS_IDMAP_NOTFOUND) {
-                        CERROR("no mapping for fsuid %u\n", pud->pud_fsuid);
+                        CDEBUG(D_SEC, "no mapping for fsuid %u\n",
+                               pud->pud_fsuid);
                         return -EACCES;
                 }
         }
 
         gid = lustre_idmap_lookup_gid(NULL, idmap, 0, pud->pud_gid);
         if (gid == CFS_IDMAP_NOTFOUND) {
-                CERROR("no mapping for gid %u\n", pud->pud_gid);
+                CDEBUG(D_SEC, "no mapping for gid %u\n", pud->pud_gid);
                 return -EACCES;
         }
 
@@ -274,7 +277,8 @@ int ptlrpc_user_desc_do_idmap(struct ptlrpc_request *req,
         } else {
                 fsgid = lustre_idmap_lookup_gid(NULL, idmap, 0, pud->pud_fsgid);
                 if (fsgid == CFS_IDMAP_NOTFOUND) {
-                        CERROR("no mapping for fsgid %u\n", pud->pud_fsgid);
+                        CDEBUG(D_SEC, "no mapping for fsgid %u\n",
+                               pud->pud_fsgid);
                         return -EACCES;
                 }
         }
@@ -292,9 +296,9 @@ int ptlrpc_user_desc_do_idmap(struct ptlrpc_request *req,
  */
 void mdt_body_reverse_idmap(struct mdt_thread_info *info, struct mdt_body *body)
 {
-        struct ptlrpc_request   *req = mdt_info_req(info);
-        struct md_ucred         *uc = mdt_ucred(info);
-        struct mdt_export_data  *med = mdt_req2med(req);
+        struct ptlrpc_request     *req = mdt_info_req(info);
+        struct md_ucred           *uc = mdt_ucred(info);
+        struct mdt_export_data    *med = mdt_req2med(req);
         struct lustre_idmap_table *idmap = med->med_idmap;
 
         if (!med->med_rmtclient)
@@ -330,10 +334,10 @@ void mdt_body_reverse_idmap(struct mdt_thread_info *info, struct mdt_body *body)
 /* Do not ignore root_squash for non-setattr case. */
 int mdt_fix_attr_ucred(struct mdt_thread_info *info, __u32 op)
 {
-        struct ptlrpc_request   *req = mdt_info_req(info);
-        struct md_ucred         *uc = mdt_ucred(info);
-        struct lu_attr          *attr = &info->mti_attr.ma_attr;
-        struct mdt_export_data  *med = mdt_req2med(req);
+        struct ptlrpc_request     *req = mdt_info_req(info);
+        struct md_ucred           *uc = mdt_ucred(info);
+        struct lu_attr            *attr = &info->mti_attr.ma_attr;
+        struct mdt_export_data    *med = mdt_req2med(req);
         struct lustre_idmap_table *idmap = med->med_idmap;
 
         if ((uc->mu_valid != UCRED_OLD) && (uc->mu_valid != UCRED_NEW))
@@ -344,16 +348,17 @@ int mdt_fix_attr_ucred(struct mdt_thread_info *info, __u32 op)
                         attr->la_uid = uc->mu_fsuid;
                 /* for S_ISGID, inherit gid from his parent, such work will be
                  * done in cmm/mdd layer, here set all cases as uc->mu_fsgid. */
-                        if ((attr->la_valid & LA_GID) && (attr->la_gid != -1))
-                                attr->la_gid = uc->mu_fsgid;
+                if ((attr->la_valid & LA_GID) && (attr->la_gid != -1))
+                        attr->la_gid = uc->mu_fsgid;
         } else if (med->med_rmtclient) {
                 /* NB: -1 case will be handled by mdt_fix_attr() later. */
                 if ((attr->la_valid & LA_UID) && (attr->la_uid != -1)) {
                         uid_t uid = lustre_idmap_lookup_uid(uc, idmap, 0,
-                                                           attr->la_uid);
+                                                            attr->la_uid);
 
                         if (uid == CFS_IDMAP_NOTFOUND) {
-                                CWARN("Deny chown to uid %u\n", attr->la_uid);
+                                CDEBUG(D_SEC, "Deny chown to uid %u\n",
+                                       attr->la_uid);
                                 return -EPERM;
                         }
 
@@ -361,10 +366,11 @@ int mdt_fix_attr_ucred(struct mdt_thread_info *info, __u32 op)
                 }
                 if ((attr->la_valid & LA_GID) && (attr->la_gid != -1)) {
                         gid_t gid = lustre_idmap_lookup_gid(uc, idmap, 0,
-                                                           attr->la_gid);
+                                                            attr->la_gid);
 
                         if (gid == CFS_IDMAP_NOTFOUND) {
-                                CWARN("Deny chown to gid %u\n", attr->la_gid);
+                                CDEBUG(D_SEC, "Deny chown to gid %u\n",
+                                       attr->la_gid);
                                 return -EPERM;
                         }
 

@@ -83,11 +83,11 @@ static int new_init_ucred(struct mdt_thread_info *info, ucred_init_type_t type,
         struct mdt_device       *mdt = info->mti_mdt;
         struct ptlrpc_user_desc *pud = req->rq_user_desc;
         struct md_ucred         *ucred = mdt_ucred(info);
-        lnet_nid_t              peernid = req->rq_peer.nid;
+        lnet_nid_t               peernid = req->rq_peer.nid;
         __u32                    perm = 0;
-        int                     setuid;
-        int                     setgid;
-        int                     rc = 0;
+        int                      setuid;
+        int                      setgid;
+        int                      rc = 0;
 
         ENTRY;
 
@@ -112,7 +112,7 @@ static int new_init_ucred(struct mdt_thread_info *info, ucred_init_type_t type,
         /* sanity check: we expect the uid which client claimed is true */
         if (med->med_rmtclient) {
                 if (req->rq_auth_mapped_uid == INVALID_UID) {
-                        CWARN("remote user not mapped, deny access!\n");
+                        CDEBUG(D_SEC, "remote user not mapped, deny access!\n");
                         RETURN(-EACCES);
                 }
 
@@ -120,9 +120,9 @@ static int new_init_ucred(struct mdt_thread_info *info, ucred_init_type_t type,
                         RETURN(-EACCES);
 
                 if (req->rq_auth_mapped_uid != pud->pud_uid) {
-                        CERROR("remote client "LPU64": auth/mapped uid %u/%u "
-                               "while client claim %u:%u/%u:%u\n",
-                               peernid, req->rq_auth_uid,
+                        CDEBUG(D_SEC, "remote client %s: auth/mapped uid %u/%u "
+                               "while client claims %u:%u/%u:%u\n",
+                               libcfs_nid2str(peernid), req->rq_auth_uid,
                                req->rq_auth_mapped_uid,
                                pud->pud_uid, pud->pud_gid,
                                pud->pud_fsuid, pud->pud_fsgid);
@@ -130,17 +130,18 @@ static int new_init_ucred(struct mdt_thread_info *info, ucred_init_type_t type,
                 }
         } else {
                 if (req->rq_auth_uid != pud->pud_uid) {
-                        CERROR("local client "LPU64": auth uid %u "
-                               "while client claim %u:%u/%u:%u\n",
-                               peernid, req->rq_auth_uid, pud->pud_uid,
-                               pud->pud_gid, pud->pud_fsuid, pud->pud_fsgid);
+                        CDEBUG(D_SEC, "local client %s: auth uid %u "
+                               "while client claims %u:%u/%u:%u\n",
+                               libcfs_nid2str(peernid), req->rq_auth_uid,
+                               pud->pud_uid, pud->pud_gid,
+                               pud->pud_fsuid, pud->pud_fsgid);
                         RETURN(-EACCES);
                 }
         }
 
         if (is_identity_get_disabled(mdt->mdt_identity_cache)) {
                 if (med->med_rmtclient) {
-                        CERROR("remote client must run with identity_get "
+                        CDEBUG(D_SEC, "remote client must run with identity_get "
                                "enabled!\n");
                         RETURN(-EACCES);
                 } else {
@@ -149,16 +150,26 @@ static int new_init_ucred(struct mdt_thread_info *info, ucred_init_type_t type,
                                CFS_SETGRP_PERM;
                 }
         } else {
-                ucred->mu_identity = mdt_identity_get(mdt->mdt_identity_cache,
-                                                      pud->pud_uid);
-                if (!ucred->mu_identity) {
-                        CERROR("Deny access without identity: uid %d\n",
-                               pud->pud_uid);
-                RETURN(-EACCES);
+                struct md_identity *identity;
+
+                identity = mdt_identity_get(mdt->mdt_identity_cache,
+                                            pud->pud_uid);
+                if (IS_ERR(identity)) {
+                        if (unlikely(PTR_ERR(identity) == -EREMCHG &&
+                                     !med->med_rmtclient)) {
+                                ucred->mu_identity = NULL;
+                                perm = CFS_SETUID_PERM | CFS_SETGID_PERM |
+                                       CFS_SETGRP_PERM;
+                        } else {
+                                CDEBUG(D_SEC, "Deny access without identity: uid %u\n",
+                                       pud->pud_uid);
+                                RETURN(-EACCES);
+                        }
                 } else {
+                        ucred->mu_identity = identity;
                         perm = mdt_identity_get_perm(ucred->mu_identity,
-                                                   med->med_rmtclient,
-                                                   peernid);
+                                                     med->med_rmtclient,
+                                                     peernid);
                 }
         }
 
@@ -170,17 +181,17 @@ static int new_init_ucred(struct mdt_thread_info *info, ucred_init_type_t type,
 
         /* check permission of setuid */
         if (setuid && !(perm & CFS_SETUID_PERM)) {
-                CWARN("mdt blocked setuid attempt (%u -> %u) from "
-                      LPX64"\n", pud->pud_uid, pud->pud_fsuid, peernid);
+                CDEBUG(D_SEC, "mdt blocked setuid attempt (%u -> %u) from %s\n",
+                       pud->pud_uid, pud->pud_fsuid, libcfs_nid2str(peernid));
                 GOTO(out, rc = -EACCES);
         }
 
         /* check permission of setgid */
         if (setgid && !(perm & CFS_SETGID_PERM)) {
-                CWARN("mdt blocked setgid attempt (%u:%u/%u:%u -> %u) "
-                      "from "LPX64"\n", pud->pud_uid, pud->pud_gid,
-                      pud->pud_fsuid, pud->pud_fsgid,
-                      ucred->mu_identity->mi_gid, peernid);
+                CDEBUG(D_SEC, "mdt blocked setgid attempt (%u:%u/%u:%u -> %u) "
+                       "from %s\n", pud->pud_uid, pud->pud_gid,
+                       pud->pud_fsuid, pud->pud_fsgid,
+                       ucred->mu_identity->mi_gid, libcfs_nid2str(peernid));
                 GOTO(out, rc = -EACCES);
         }
 
@@ -189,20 +200,20 @@ static int new_init_ucred(struct mdt_thread_info *info, ucred_init_type_t type,
          */
         if (!med->med_rmtclient && perm & CFS_SETGRP_PERM) {
                 if (pud->pud_ngroups) {
-                /* setgroups for local client */
+                        /* setgroups for local client */
                         ucred->mu_ginfo = groups_alloc(pud->pud_ngroups);
                         if (!ucred->mu_ginfo) {
-                        CERROR("failed to alloc %d groups\n",
-                               pud->pud_ngroups);
-                        GOTO(out, rc = -ENOMEM);
-                }
+                                CERROR("failed to alloc %d groups\n",
+                                       pud->pud_ngroups);
+                                GOTO(out, rc = -ENOMEM);
+                        }
 
                         lustre_groups_from_list(ucred->mu_ginfo,
                                                 pud->pud_groups);
                         lustre_groups_sort(ucred->mu_ginfo);
-        } else {
-                ucred->mu_ginfo = NULL;
-        }
+                } else {
+                        ucred->mu_ginfo = NULL;
+                }
         } else {
                 ucred->mu_suppgids[0] = -1;
                 ucred->mu_suppgids[1] = -1;
@@ -250,7 +261,7 @@ int mdt_check_ucred(struct mdt_thread_info *info)
         struct ptlrpc_user_desc *pud = req->rq_user_desc;
         struct md_ucred         *ucred = mdt_ucred(info);
         struct md_identity      *identity = NULL;
-        lnet_nid_t              peernid = req->rq_peer.nid;
+        lnet_nid_t               peernid = req->rq_peer.nid;
         __u32                    perm = 0;
         int                      setuid;
         int                      setgid;
@@ -266,38 +277,38 @@ int mdt_check_ucred(struct mdt_thread_info *info)
 
         /* sanity check: if we use strong authentication, we expect the
          * uid which client claimed is true */
-                if (med->med_rmtclient) {
-                        if (req->rq_auth_mapped_uid == INVALID_UID) {
-                                CWARN("remote user not mapped, deny access!\n");
-                                RETURN(-EACCES);
-                        }
+        if (med->med_rmtclient) {
+                if (req->rq_auth_mapped_uid == INVALID_UID) {
+                        CDEBUG(D_SEC, "remote user not mapped, deny access!\n");
+                        RETURN(-EACCES);
+                }
 
-                        if (ptlrpc_user_desc_do_idmap(req, pud))
-                                RETURN(-EACCES);
+                if (ptlrpc_user_desc_do_idmap(req, pud))
+                        RETURN(-EACCES);
 
-                        if (req->rq_auth_mapped_uid != pud->pud_uid) {
-                        CERROR("remote client "LPU64": auth/mapped uid %u/%u "
-                                       "while client claim %u:%u/%u:%u\n",
-                               peernid, req->rq_auth_uid,
+                if (req->rq_auth_mapped_uid != pud->pud_uid) {
+                        CDEBUG(D_SEC, "remote client %s: auth/mapped uid %u/%u "
+                               "while client claims %u:%u/%u:%u\n",
+                               libcfs_nid2str(peernid), req->rq_auth_uid,
                                req->rq_auth_mapped_uid,
                                pud->pud_uid, pud->pud_gid,
                                pud->pud_fsuid, pud->pud_fsgid);
-                                RETURN(-EACCES);
-                        }
-                } else {
-                        if (req->rq_auth_uid != pud->pud_uid) {
-                                CERROR("local client "LPU64": auth uid %u "
-                                       "while client claim %u:%u/%u:%u\n",
-                                       peernid, req->rq_auth_uid, pud->pud_uid,
-                                       pud->pud_gid, pud->pud_fsuid,
-                                       pud->pud_fsgid);
-                                RETURN(-EACCES);
-                        }
+                        RETURN(-EACCES);
                 }
+        } else {
+                if (req->rq_auth_uid != pud->pud_uid) {
+                        CDEBUG(D_SEC, "local client %s: auth uid %u "
+                               "while client claims %u:%u/%u:%u\n",
+                               libcfs_nid2str(peernid), req->rq_auth_uid,
+                               pud->pud_uid, pud->pud_gid,
+                               pud->pud_fsuid, pud->pud_fsgid);
+                        RETURN(-EACCES);
+                }
+        }
 
         if (is_identity_get_disabled(mdt->mdt_identity_cache)) {
                 if (med->med_rmtclient) {
-                        CERROR("remote client must run with identity_get "
+                        CDEBUG(D_SEC, "remote client must run with identity_get "
                                "enabled!\n");
                         RETURN(-EACCES);
                 }
@@ -305,9 +316,15 @@ int mdt_check_ucred(struct mdt_thread_info *info)
         }
 
         identity = mdt_identity_get(mdt->mdt_identity_cache, pud->pud_uid);
-        if (!identity) {
-                CERROR("Deny access without identity: uid %d\n", pud->pud_uid);
-                RETURN(-EACCES);
+        if (IS_ERR(identity)) {
+                if (unlikely(PTR_ERR(identity) == -EREMCHG &&
+                             !med->med_rmtclient)) {
+                        RETURN(0);
+                } else {
+                        CDEBUG(D_SEC, "Deny access without identity: uid %u\n",
+                               pud->pud_uid);
+                        RETURN(-EACCES);
+               }
         }
 
         perm = mdt_identity_get_perm(identity, med->med_rmtclient, peernid);
@@ -318,17 +335,17 @@ int mdt_check_ucred(struct mdt_thread_info *info)
 
         /* check permission of setuid */
         if (setuid && !(perm & CFS_SETUID_PERM)) {
-                CWARN("mdt blocked setuid attempt (%u -> %u) from "
-                      LPX64"\n", pud->pud_uid, pud->pud_fsuid, peernid);
+                CDEBUG(D_SEC, "mdt blocked setuid attempt (%u -> %u) from %s\n",
+                       pud->pud_uid, pud->pud_fsuid, libcfs_nid2str(peernid));
                 GOTO(out, rc = -EACCES);
         }
 
         /* check permission of setgid */
         if (setgid && !(perm & CFS_SETGID_PERM)) {
-                CWARN("mdt blocked setgid attempt (%u:%u/%u:%u -> %u) "
-                      "from "LPX64"\n", pud->pud_uid, pud->pud_gid,
-                      pud->pud_fsuid, pud->pud_fsgid, identity->mi_gid,
-                      peernid);
+                CDEBUG(D_SEC, "mdt blocked setgid attempt (%u:%u/%u:%u -> %u) "
+                       "from %s\n", pud->pud_uid, pud->pud_gid,
+                       pud->pud_fsuid, pud->pud_fsgid, identity->mi_gid,
+                       libcfs_nid2str(peernid));
                 GOTO(out, rc = -EACCES);
         }
 
@@ -359,10 +376,14 @@ static int old_init_ucred(struct mdt_thread_info *info,
         if (!is_identity_get_disabled(mdt->mdt_identity_cache)) {
                 identity = mdt_identity_get(mdt->mdt_identity_cache,
                                             uc->mu_fsuid);
-                if (!identity) {
-                        CERROR("Deny access without identity: uid %d\n",
-                               uc->mu_fsuid);
-                        RETURN(-EACCES);
+                if (IS_ERR(identity)) {
+                        if (unlikely(PTR_ERR(identity) == -EREMCHG)) {
+                                identity = NULL;
+                        } else {
+                                CDEBUG(D_SEC, "Deny access without identity: "
+                                       "uid %u\n", uc->mu_fsuid);
+                                RETURN(-EACCES);
+                        }
                 }
         }
         uc->mu_identity = identity;
@@ -395,11 +416,15 @@ static int old_init_ucred_reint(struct mdt_thread_info *info)
         if (!is_identity_get_disabled(mdt->mdt_identity_cache)) {
                 identity = mdt_identity_get(mdt->mdt_identity_cache,
                                             uc->mu_fsuid);
-                if (!identity) {
-                        CERROR("Deny access without identity: uid %d\n",
-                               uc->mu_fsuid);
-                        RETURN(-EACCES);
-        }
+                if (IS_ERR(identity)) {
+                        if (unlikely(PTR_ERR(identity) == -EREMCHG)) {
+                                identity = NULL;
+                        } else {
+                                CDEBUG(D_SEC, "Deny access without identity: "
+                                       "uid %u\n", uc->mu_fsuid);
+                                RETURN(-EACCES);
+                        }
+                }
         }
         uc->mu_identity = identity;
 

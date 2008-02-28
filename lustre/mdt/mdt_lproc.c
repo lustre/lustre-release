@@ -155,10 +155,14 @@ static int lprocfs_rd_identity_upcall(char *page, char **start, off_t off,
 {
         struct obd_device *obd = data;
         struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
+        struct upcall_cache *hash = mdt->mdt_identity_cache;
+        int len;
 
         *eof = 1;
-        return snprintf(page, count, "%s\n",
-                        mdt->mdt_identity_cache->uc_upcall);
+        read_lock(&hash->uc_upcall_rwlock);
+        len = snprintf(page, count, "%s\n", hash->uc_upcall);
+        read_unlock(&hash->uc_upcall_rwlock);
+        return len;
 }
 
 static int lprocfs_wr_identity_upcall(struct file *file, const char *buffer,
@@ -179,13 +183,19 @@ static int lprocfs_wr_identity_upcall(struct file *file, const char *buffer,
                 return -EFAULT;
 
         /* Remove any extraneous bits from the upcall (e.g. linefeeds) */
+        write_lock(&hash->uc_upcall_rwlock);
         sscanf(kernbuf, "%s", hash->uc_upcall);
+        write_unlock(&hash->uc_upcall_rwlock);
 
         if (strcmp(hash->uc_name, obd->obd_name) != 0)
                 CWARN("%s: write to upcall name %s\n",
                       obd->obd_name, hash->uc_upcall);
-        CWARN("%s: identity upcall set to %s\n", obd->obd_name, hash->uc_upcall);
 
+        if (strcmp(hash->uc_upcall, "NONE") == 0 && mdt->mdt_opts.mo_acl)
+                CWARN("%s: disable \"identity_upcall\" with ACL enabled maybe "
+                      "cause unexpected \"EACCESS\"\n", obd->obd_name);
+
+        CWARN("%s: identity upcall set to %s\n", obd->obd_name, hash->uc_upcall);
         return count;
 }
 

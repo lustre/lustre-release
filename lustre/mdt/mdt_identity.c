@@ -87,7 +87,7 @@ static void mdt_identity_entry_free(struct upcall_cache *cache,
 static int mdt_identity_do_upcall(struct upcall_cache *cache,
                                   struct upcall_cache_entry *entry)
 {
-        char keystr[16];
+        char *upcall, keystr[16];
         char *argv[] = {
                   [0] = cache->uc_upcall,
                   [1] = cache->uc_name,
@@ -99,12 +99,30 @@ static int mdt_identity_do_upcall(struct upcall_cache *cache,
                   [1] = "PATH=/sbin:/usr/sbin",
                   [2] = NULL
         };
-        int rc;
+        int size, rc;
         ENTRY;
+
+        /* There is race condition:
+         * "uc_upcall" was changed just after "is_identity_get_disabled" check.
+         */
+        size = strlen(cache->uc_upcall) + 1;
+        OBD_ALLOC(upcall, size);
+        if (unlikely(!upcall))
+                RETURN(-ENOMEM);
+
+        read_lock(&cache->uc_upcall_rwlock);
+        memcpy(upcall, cache->uc_upcall, size - 1);
+        read_unlock(&cache->uc_upcall_rwlock);
+        upcall[size - 1] = 0;
+        if (unlikely(!strcmp(upcall, "NONE"))) {
+                CERROR("no upcall set\n");
+                GOTO(out, rc = -EREMCHG);
+        }
+
+        argv[0] = upcall;
 
         snprintf(keystr, sizeof(keystr), LPU64, entry->ue_key);
 
-        LASSERTF(strcmp(cache->uc_upcall, "NONE"), "no upcall set!");
         CDEBUG(D_INFO, "The upcall is: %s \n", cache->uc_upcall);
 
         rc = USERMODEHELPER(argv[0], argv, envp);
@@ -118,7 +136,10 @@ static int mdt_identity_do_upcall(struct upcall_cache *cache,
                        argv[0], argv[1], argv[2]);
                 rc = 0;
         }
-        RETURN(rc);
+        EXIT;
+out:
+        OBD_FREE(upcall, size);
+        return rc;
 }
 
 static int mdt_identity_parse_downcall(struct upcall_cache *cache,
@@ -179,15 +200,15 @@ struct md_identity *mdt_identity_get(struct upcall_cache *cache, __u32 uid)
         struct upcall_cache_entry *entry;
 
         if (!cache)
-                return NULL;
+                return ERR_PTR(-ENOENT);
 
         entry = upcall_cache_get_entry(cache, (__u64)uid, NULL);
-        if (IS_ERR(entry)) {
-                CERROR("upcall_cache_get_entry failed: %ld\n", PTR_ERR(entry));
-                return NULL;
-        }
-
-        return &entry->u.identity;
+        if (IS_ERR(entry))
+                return ERR_PTR(PTR_ERR(entry));
+        else if (unlikely(!entry))
+                return ERR_PTR(-ENOENT);
+        else
+                return &entry->u.identity;
 }
 
 void mdt_identity_put(struct upcall_cache *cache, struct md_identity *identity)
@@ -219,7 +240,7 @@ void mdt_flush_identity(struct upcall_cache *cache, int uid)
  * it must be perm[0].mp_nid, and act as default perm.
  */
 __u32 mdt_identity_get_perm(struct md_identity *identity,
-                                   __u32 is_rmtclient, lnet_nid_t nid)
+                            __u32 is_rmtclient, lnet_nid_t nid)
 {
         struct md_perm *perm;
         int i;

@@ -13,7 +13,7 @@ export CATASTROPHE=${CATASTROPHE:-/proc/sys/lnet/catastrophe}
 export GSS=false
 export GSS_KRB5=false
 export GSS_PIPEFS=false
-export IDENTITY_UPCALL=false
+export IDENTITY_UPCALL=default
 #export PDSH="pdsh -S -Rssh -w"
 
 # eg, assert_env LUSTRE MDSNODES OSTNODES CLIENTS
@@ -118,7 +118,7 @@ init_test_env() {
             ;;
     esac
 
-    case "x$ID" in
+    case "x$IDUP" in
         xtrue)
             IDENTITY_UPCALL=true
             ;;
@@ -928,7 +928,7 @@ switch_identity() {
     local num=$1
     local switch=$2
     local j=`expr $num - 1`
-    local MDT="`do_facet mds$num ls -l $LPROC/mdt/ 2>/dev/null | grep MDT | awk '{print $9}' | grep $j$`"
+    local MDT="`do_facet mds$num find $LPROC/mdt/ -name \*MDT\*$j -printf %f 2>/dev/null || true`"
 
     if [ -z "$MDT" ]; then
         return 2
@@ -936,7 +936,7 @@ switch_identity() {
 
     local old="`do_facet mds$num cat $LPROC/mdt/$MDT/identity_upcall`"
 
-    if [ $switch ]; then
+    if $switch; then
         do_facet mds$num "echo \"$L_GETIDENTITY\" > $LPROC/mdt/$MDT/identity_upcall"
     else
         do_facet mds$num "echo \"NONE\" > $LPROC/mdt/$MDT/identity_upcall"
@@ -961,7 +961,9 @@ setupall() {
             echo $REFORMAT | grep -q "reformat" \
             || do_facet mds$num "$TUNEFS --writeconf $DEVNAME"
             start mds$num $DEVNAME $MDS_MOUNT_OPTS
-            switch_identity $num $IDENTITY_UPCALL
+	    if [ $IDENTITY_UPCALL != "default" ]; then
+                switch_identity $num $IDENTITY_UPCALL
+	    fi
         done
         for num in `seq $OSTCOUNT`; do
             DEVNAME=$(ostdevname $num)

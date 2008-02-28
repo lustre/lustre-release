@@ -4846,6 +4846,7 @@ test_124b() {
 run_test 124b "lru resize (performance test) ======================="
 
 test_125() { # 13358
+	[ -z "$(grep local $LPROC/llite/*/client_type)" ] && skip "must run as local client" && return
 	[ -z "$(grep acl $LPROC/mdc/*-mdc-*/connect_flags)" ] && skip "must have acl enabled" && return
 	mkdir -p $DIR/d125 || error "mkdir failed"
 	$SETSTRIPE $DIR/d125 -s 65536 -c -1 || error "setstripe failed"
@@ -4855,6 +4856,7 @@ test_125() { # 13358
 run_test 125 "don't return EPROTO when a dir has a non-default striping and ACLs"
 
 test_126() { # bug 12829/13455
+	[ -z "$(grep local $LPROC/llite/*/client_type)" ] && skip "must run as local client" && return
 	[ "$UID" != 0 ] && echo "skipping $TESTNAME (must run as root)" && return
 	$RUNAS -u 0 -g 1 touch $DIR/$tfile || error "touch failed"
 	gid=`ls -n $DIR/$tfile | awk '{print $4}'`

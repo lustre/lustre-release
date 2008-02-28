@@ -210,6 +210,10 @@ find_again:
                 if (rc < 0) {
                         UC_CACHE_CLEAR_ACQUIRING(entry);
                         UC_CACHE_SET_INVALID(entry);
+                        if (unlikely(rc == -EREMCHG)) {
+                                put_entry(cache, entry);
+                                GOTO(out, entry = ERR_PTR(rc));
+                        }
                 }
                 /* fall through */
         }
@@ -438,6 +442,7 @@ struct upcall_cache *upcall_cache_init(const char *name, const char *upcall,
                 RETURN(ERR_PTR(-ENOMEM));
 
         spin_lock_init(&cache->uc_lock);
+        rwlock_init(&cache->uc_upcall_rwlock);
         for (i = 0; i < UC_CACHE_HASH_SIZE; i++)
                 INIT_LIST_HEAD(&cache->uc_hashtable[i]);
         strncpy(cache->uc_name, name, sizeof(cache->uc_name) - 1);

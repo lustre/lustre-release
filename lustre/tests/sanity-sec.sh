@@ -63,7 +63,7 @@ else
 	echo "without GSS support"
 fi
 
-MDT="`do_facet $SINGLEMDS \"ls -l $MDT_LPROC/ 2>/dev/null\" | grep MDT | awk '{print $9}'`"
+MDT="`do_facet $SINGLEMDS find $MDT_LPROC/ -name \*MDT\* -printf %f 2>/dev/null || true`"
 if [ ! -z "$MDT" ]; then
 	IDENTITY_FLUSH=$MDT_LPROC/$MDT/identity_flush
 	MDSCAPA=$MDT_LPROC/$MDT/capa
@@ -306,7 +306,7 @@ oss_capability_switch() {
 
 	for i in `seq $OSTCOUNT`; do
 		local j=`expr $i - 1`
-		local OST="`do_facet ost$i \"ls -l $OST_LPROC/\" | grep OST | awk '{print $9}' | grep $j$`"
+		local OST="`do_facet ost$i find $OST_LPROC/ -name \*OST\*$j -printf %f 2>/dev/null || true`"
 		do_facet ost$i "echo $1 > $OST_LPROC/$OST/capa"
 	done
         return 0
