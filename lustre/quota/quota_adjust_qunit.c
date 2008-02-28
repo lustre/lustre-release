@@ -193,7 +193,7 @@ int quota_adjust_slave_lqs(struct quota_adjust_qunit *oqaq,
         struct lustre_qunit_size *lqs = NULL;
         unsigned long *lbunit, *liunit, *lbtune, *litune;
         signed long b_tmp = 0, i_tmp = 0;
-        static cfs_time_t time_limit = 0;
+        cfs_time_t time_limit = 0;
         int rc = 0;
         ENTRY;
 

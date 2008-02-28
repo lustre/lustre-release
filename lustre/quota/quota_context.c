@@ -553,6 +553,8 @@ out:
         /* this qunit has been removed by qctxt_cleanup() */
         if (!qunit) {
                 spin_unlock(&qunit_hash_lock);
+                QDATA_DEBUG(qdata, "%s is discarded because qunit isn't found\n",
+                            opc == QUOTA_DQACQ ? "DQACQ" : "DQREL");
                 RETURN(err);
         }
 
@@ -570,6 +572,8 @@ out:
         }
 
         qunit_put(qunit);
+        if (rc < 0 && rc != -EDQUOT)
+                 RETURN(err);
 
         /* don't reschedule in such cases:
          *   - acq/rel failure and qunit isn't changed,
@@ -628,7 +632,15 @@ static int dqacq_interpret(struct ptlrpc_request *req, void *data, int rc)
         OBD_ALLOC(qdata, sizeof(struct qunit_data));
         if (!qdata)
                 RETURN(-ENOMEM);
-        rc1 = quota_get_qdata(req, qdata, QUOTA_REPLY, QUOTA_IMPORT);
+
+        if (rc == -EIO || rc == -EINTR || rc == -ENOTCONN )
+                /* if a quota req timeouts or is dropped, we should update quota
+                 * statistics which will be handled in dqacq_completion. And in
+                 * this situation we should get qdata from request instead of
+                 * reply */
+                rc1 = quota_get_qdata(req, qdata, QUOTA_REQUEST, QUOTA_IMPORT);
+        else
+                rc1 = quota_get_qdata(req, qdata, QUOTA_REPLY, QUOTA_IMPORT);
         if (rc1 < 0) {
                 DEBUG_REQ(D_ERROR, req, "error unpacking qunit_data\n");
                 GOTO(exit, rc = -EPROTO);
@@ -717,8 +729,6 @@ schedule_dqacq(struct obd_device *obd, struct lustre_quota_ctxt *qctxt,
         }
         qunit = empty;
         insert_qunit_nolock(qctxt, qunit);
-        if (wait)
-                list_add_tail(&qw.qw_entry, &qunit->lq_waiters);
         spin_unlock(&qunit_hash_lock);
 
         LASSERT(qunit);
@@ -753,8 +763,6 @@ schedule_dqacq(struct obd_device *obd, struct lustre_quota_ctxt *qctxt,
                 spin_unlock(&qctxt->lqc_lock);
                 QDATA_DEBUG(qdata, "lqc_import is invalid.\n");
                 spin_lock(&qunit_hash_lock);
-                if (wait)
-                        list_del_init(&qw.qw_entry);
                 remove_qunit_nolock(qunit);
                 qunit = NULL;
                 spin_unlock(&qunit_hash_lock);
@@ -805,6 +813,11 @@ schedule_dqacq(struct obd_device *obd, struct lustre_quota_ctxt *qctxt,
 
         req->rq_interpret_reply = dqacq_interpret;
         ptlrpcd_add_req(req);
+
+        spin_lock(&qunit_hash_lock);
+        if (wait && qunit)
+                list_add_tail(&qw.qw_entry, &qunit->lq_waiters);
+        spin_unlock(&qunit_hash_lock);
 
         QDATA_DEBUG(qdata, "%s scheduled.\n",
                     opc == QUOTA_DQACQ ? "DQACQ" : "DQREL");

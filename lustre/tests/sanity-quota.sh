@@ -931,6 +931,11 @@ test_12() {
 	[ "$(grep $DIR2 /proc/mounts)" ] || mount_client $DIR2 || \
 		{ skip "Need lustre mounted on $MOUNT2 " && retutn 0; }
 
+	if [ $OSTCOUNT -lt 2 ]; then
+		skip "$OSTCOUNT < 2, too few osts"
+		return 0;
+	fi
+
 	LIMIT=$(( $BUNIT_SZ * $(($OSTCOUNT + 1)) * 10)) # 10 bunits each sever
 	TESTFILE="$DIR/$tdir/$tfile-0"
 	TESTFILE2="$DIR2/$tdir/$tfile-1"
@@ -942,7 +947,7 @@ test_12() {
 
 	$LFS setstripe $TESTFILE -i 0 -c 1
 	chown $TSTUSR.$TSTUSR $TESTFILE
-	$LFS setstripe $TESTFILE2 -i 0 -c 1
+	$LFS setstripe $TESTFILE2 -i 1 -c 1
         chown $TSTUSR2.$TSTUSR2 $TESTFILE2
 
 	#define OBD_FAIL_OST_HOLD_WRITE_RPC      0x21f
@@ -1140,7 +1145,7 @@ test_14a(){
         quota_set_version 1
         $LFS quotacheck -ug $DIR
 
-        for i in `seq 1 30`; do 
+        for i in `seq 1 30`; do
                 $LFS setquota -u quota15_$i $i $i $i $i $DIR || error "lfs setquota failed"
         done
 
@@ -1149,7 +1154,7 @@ test_14a(){
         $LFS quotainv -ug $DIR
         $LFS quotacheck -ug $DIR
 
-        for i in `seq 1 30`; do 
+        for i in `seq 1 30`; do
                 # the format is "mntpnt   curspace[*]   bsoftlimit   bhardlimit   [time]   curinodes[*]    isoftlimit  ihardlimit"
                 ($LFS quota -u quota15_$i $DIR | grep -E '^ *'$DIR' *[0-9]+\** *'$i' *'$i' *[0-9]+\** *'$i' *'$i) \
                  || error "lfs quota output is unexpected"
@@ -1301,6 +1306,116 @@ test_17() {
 	return $RC
 }
 run_test 17 "run for fixing bug14526 ==========="
+
+# test when mds takes a long time to handle a quota req so that
+# the ost has dropped it, the ost still could work well b=14840
+test_18() {
+	LIMIT=$((100 * 1024 * 1024)) # 100G
+	TESTFILE="$DIR/$tdir/$tfile"
+
+	wait_delete_completed
+
+	set_blk_tunesz 512
+	set_blk_unitsz 1024
+
+	log "   User quota (limit: $LIMIT kbytes)"
+	$LFS setquota -u $TSTUSR 0 $LIMIT 0 0 $MOUNT
+	$SHOW_QUOTA_USER
+
+	$LFS setstripe $TESTFILE -i 0 -c 1
+	chown $TSTUSR.$TSTUSR $TESTFILE
+
+	#define OBD_FAIL_MDS_BLOCK_QUOTA_REQ      0x13c
+	lustre_fail mds 0x13c
+
+	log "   step1: write 100M block ..."
+	$RUNAS dd if=/dev/zero of=$TESTFILE bs=$BLK_SZ count=$((1024 * 100)) &
+	DDPID=$!
+
+        sleep 5
+        lustre_fail mds 0
+
+	echo  "   step2: testing ......"
+	count=0
+	while [ true ]; do
+	    if [ -z `ps -ef | awk '$2 == '${DDPID}' { print $8 }'` ]; then break; fi
+	    count=$[count+1]
+	    if [ $count -gt 200 ]; then
+		error "dd should be finished!"
+	    fi
+	    sleep 1
+	done
+        log -n "(dd_pid=$DDPID, time=$count)"
+        if [ $count -lt 90 ]; then
+            error " should take longer!"
+        else
+            echo " successful"
+        fi
+
+	rm -f $TESTFILE
+	sync; sleep 3; sync;
+
+	$LFS setquota -u $TSTUSR 0 0 0 0 $MOUNT		# clear user limit
+
+	set_blk_unitsz $((128 * 1024))
+	set_blk_tunesz $((128 * 1024 / 2))
+}
+run_test 18 "run for fixing bug14840 ==========="
+
+# test when mds drops a quota req, the ost still could work well b=14840
+test_18a() {
+        LIMIT=$((100 * 1024 * 1024)) # 100G
+	TESTFILE="$DIR/$tdir/$tfile-a"
+
+	wait_delete_completed
+
+	set_blk_tunesz 512
+	set_blk_unitsz 1024
+
+	log "   User quota (limit: $LIMIT kbytes)"
+	$LFS setquota -u $TSTUSR 0 $LIMIT 0 0 $MOUNT
+	$SHOW_QUOTA_USER
+
+	$LFS setstripe $TESTFILE -i 0 -c 1
+	chown $TSTUSR.$TSTUSR $TESTFILE
+
+	#define OBD_FAIL_MDS_DROP_QUOTA_REQ | OBD_FAIL_ONCE   0x8000013d
+	lustre_fail mds 0x8000013d
+
+	log "   step1: write 100M block ..."
+	$RUNAS dd if=/dev/zero of=$TESTFILE bs=$BLK_SZ count=$((1024 * 100)) &
+	DDPID=$!
+
+	echo  "   step2: testing ......"
+	count=0
+	while [ true ]; do
+	    if [ -z `ps -ef | awk '$2 == '${DDPID}' { print $8 }'` ]; then break; fi
+	    count=$[count+1]
+	    if [ $count -gt 200 ]; then
+		lustre_fail mds 0
+		error "dd should be finished!"
+	    fi
+	    sleep 1
+	done
+        log -n "(dd_pid=$DDPID, time=$count)"
+        if [ $count -lt 90 ]; then
+	    lustre_fail mds 0
+            error " should take longer!"
+        else
+            echo " successful"
+        fi
+
+        lustre_fail mds 0
+
+	rm -f $TESTFILE
+	sync; sleep 3; sync;
+
+	$LFS setquota -u $TSTUSR 0 0 0 0 $MOUNT		# clear user limit
+
+	set_blk_unitsz $((128 * 1024))
+	set_blk_tunesz $((128 * 1024 / 2))
+}
+run_test 18a "run for fixing bug14840 ==========="
 
 # turn off quota
 test_99()
