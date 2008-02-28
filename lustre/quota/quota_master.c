@@ -282,6 +282,10 @@ int dqacq_adjust_qunit_sz(struct obd_device *obd, qid_t id, int type,
         up(&dquot->dq_sem);
 
         rc = qctxt_adjust_qunit(obd, qctxt, uid, gid, is_blk, 0);
+        if (rc == -EDQUOT || rc == -EBUSY) {
+                CDEBUG(D_QUOTA, "rc: %d.\n", rc);
+                rc = 0;
+        }
         if (rc) {
                 CDEBUG(D_ERROR, "mds fail to adjust file quota! \
                                (rc:%d)\n", rc);
@@ -1093,6 +1097,10 @@ static int mds_init_slave_ilimits(struct obd_device *obd,
                 gid = oqctl->qc_id;
 
         rc = qctxt_adjust_qunit(obd, &obd->u.obt.obt_qctxt, uid, gid, 0, 0);
+        if (rc == -EDQUOT || rc == -EBUSY) {
+                CDEBUG(D_QUOTA, "rc: %d.\n", rc);
+                rc = 0;
+        }
         if (rc) {
                 CDEBUG(D_QUOTA,"error mds adjust local file quota! (rc:%d)\n",
                        rc);
@@ -1157,6 +1165,10 @@ static int mds_init_slave_blimits(struct obd_device *obd,
         rc = obd_quotactl(mds->mds_osc_exp, ioqc);
 
         rc = qctxt_adjust_qunit(obd, &obd->u.obt.obt_qctxt, uid, gid, 1, 0);
+        if (rc == -EDQUOT || rc == -EBUSY) {
+                CDEBUG(D_QUOTA, "rc: %d.\n", rc);
+                rc = 0;
+        }
         if (rc) {
                 CERROR("error mds adjust local block quota! (rc:%d)\n", rc);
                 GOTO(out, rc);

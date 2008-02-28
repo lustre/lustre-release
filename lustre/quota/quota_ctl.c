@@ -187,6 +187,11 @@ adjust:
 
                 rc = qctxt_adjust_qunit(obd, &obd->u.obt.obt_qctxt, 
                                         uid, gid, 1, 0);
+                if (rc == -EDQUOT || rc == -EBUSY) {
+                        CDEBUG(D_QUOTA, "rc: %d.\n", rc);
+                        rc = 0;
+                }
+
                 break;
                 }
         default:

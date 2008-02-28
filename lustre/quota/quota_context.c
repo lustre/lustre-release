@@ -258,12 +258,6 @@ check_cur_qunit(struct obd_device *obd,
                record, qunit_sz, tune_sz, ret);
         LASSERT(ret == 0 || qdata->qd_count);
 
-        if (ret > 0) {
-                quota_compute_lqs(qdata, lqs, 1, (ret == 1) ? 1 : 0);
-                /* when this qdata returned from mds, it will call lqs_putref */
-                lqs_getref(lqs);
-        }
-
         spin_unlock(&lqs->lqs_lock);
         lqs_putref(lqs);
         EXIT;
@@ -400,7 +394,7 @@ static void compute_lqs_after_removing_qunit(struct lustre_qunit *qunit)
                 spin_unlock(&lqs->lqs_lock);
                 /* this is for quota_search_lqs */
                 lqs_putref(lqs);
-                /* this is for check_cur_qunit */
+                /* this is for schedule_dqacq */
                 lqs_putref(lqs);
         }
 
@@ -459,7 +453,7 @@ static int split_before_schedule_dqacq(struct obd_device *obd,
             qdata->qd_count > factor) {
                 tmp_qdata = *qdata;
                 tmp_qdata.qd_count = factor;
-                        qdata->qd_count -= tmp_qdata.qd_count;
+                qdata->qd_count -= tmp_qdata.qd_count;
                 QDATA_DEBUG((&tmp_qdata), "be split.\n");
                 rc = schedule_dqacq(obd, qctxt, &tmp_qdata, opc, wait);
         } else{
@@ -699,6 +693,7 @@ schedule_dqacq(struct obd_device *obd, struct lustre_quota_ctxt *qctxt,
         int size[2] = { sizeof(struct ptlrpc_body), 0 };
         struct obd_import *imp = NULL;
         unsigned long factor;
+        struct lustre_qunit_size *lqs = NULL;
         int rc = 0;
         ENTRY;
 
@@ -713,26 +708,10 @@ schedule_dqacq(struct obd_device *obd, struct lustre_quota_ctxt *qctxt,
 
         qunit = dqacq_in_flight(qctxt, qdata);
         if (qunit) {
-                struct lustre_qunit_size *lqs = NULL;
-
                 if (wait)
                         list_add_tail(&qw.qw_entry, &qunit->lq_waiters);
                 spin_unlock(&qunit_hash_lock);
                 free_qunit(empty);
-
-                quota_search_lqs(qdata, NULL, qctxt, &lqs);
-                if (lqs) {
-                        spin_lock(&lqs->lqs_lock);
-                        quota_compute_lqs(qdata, lqs, 0,
-                                          (opc == QUOTA_DQACQ) ? 1 : 0);
-                        spin_unlock(&lqs->lqs_lock);
-                        /* this is for quota_search_lqs */
-                        lqs_putref(lqs);
-                        /* this is for check_cur_qunit */
-                        lqs_putref(lqs);
-                } else {
-                        CDEBUG(D_ERROR, "Can't find the lustre qunit size!\n");
-                }
 
                 goto wait_completion;
         }
@@ -744,6 +723,19 @@ schedule_dqacq(struct obd_device *obd, struct lustre_quota_ctxt *qctxt,
 
         LASSERT(qunit);
 
+        quota_search_lqs(qdata, NULL, qctxt, &lqs);
+        if (lqs) {
+                spin_lock(&lqs->lqs_lock);
+                quota_compute_lqs(qdata, lqs, 1, (opc == QUOTA_DQACQ) ? 1 : 0);
+                /* when this qdata returned from mds, it will call lqs_putref */
+                lqs_getref(lqs);
+                spin_unlock(&lqs->lqs_lock);
+                /* this is for quota_search_lqs */
+                lqs_putref(lqs);
+        } else {
+                CDEBUG(D_ERROR, "Can't find the lustre qunit size!\n");
+        }
+
         QDATA_DEBUG(qdata, "obd(%s): send %s quota req\n",
                     obd->obd_name, (opc == QUOTA_DQACQ) ? "acq" : "rel");
         /* master is going to dqacq/dqrel from itself */
@@ -753,7 +745,7 @@ schedule_dqacq(struct obd_device *obd, struct lustre_quota_ctxt *qctxt,
                             opc == QUOTA_DQACQ ? "DQACQ" : "DQREL");
                 rc = qctxt->lqc_handler(obd, qdata, opc);
                 rc2 = dqacq_completion(obd, qctxt, qdata, rc, opc);
-                RETURN((rc && rc != -EDQUOT) ? rc : rc2);
+                RETURN(rc ? rc : rc2);
         }
 
         spin_lock(&qctxt->lqc_lock);
@@ -822,8 +814,15 @@ wait_completion:
                 QDATA_DEBUG(p, "wait for dqacq.\n");
 
                 l_wait_event(qw.qw_waitq, got_qunit(&qw), &lwi);
+                /* rc = -EAGAIN, it means a quota req is finished;
+                 * rc = -EDQUOT, it means out of quota
+                 * rc = -EBUSY, it means recovery is happening
+                 * other rc < 0, it means real errors, functions who call
+                 * schedule_dqacq should take care of this */
                 if (qw.qw_rc == 0)
                         rc = -EAGAIN;
+                else
+                        rc = qw.qw_rc;
 
                 CDEBUG(D_QUOTA, "wait dqacq done. (rc:%d)\n", qw.qw_rc);
         }
@@ -859,6 +858,10 @@ qctxt_adjust_qunit(struct obd_device *obd, struct lustre_quota_ctxt *qctxt,
                                                           opc, wait);
                         if (!rc)
                                 rc = ret;
+                } else if (wait == 1) {
+                        /* when wait equates 1, that means mds_quota_acquire
+                         * or filter_quota_acquire is calling it. */
+                        qctxt_wait_pending_dqacq(qctxt, id[i], i, isblk);
                 }
         }
 
@@ -1053,6 +1056,8 @@ static int qslave_recovery_main(void *arg)
                                 rc = split_before_schedule_dqacq(obd, qctxt,
                                                                  &qdata, opc,
                                                                  0);
+                                if (rc == -EDQUOT)
+                                        rc = 0;
                         } else {
                                 rc = 0;
                         }

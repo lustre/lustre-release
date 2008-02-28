@@ -402,10 +402,15 @@ static int quota_check_common(struct obd_device *obd, unsigned int uid,
                 }
 
                 spin_unlock(&lqs->lqs_lock);
+
                 /* When cycle is zero, lqs_*_pending will be changed. We will
-                 * putref lqs in quota_pending_commit instead of here b=14784 */
-                if (cycle)
-                        lqs_putref(lqs);
+                 * get reference of the lqs here and put reference of lqs in
+                 * quota_pending_commit b=14784 */
+                if (!cycle)
+                        lqs_getref(lqs);
+
+                /* this is for quota_search_lqs */
+                lqs_putref(lqs);
         }
 
         if (rc2[0] == QUOTA_RET_ACQUOTA || rc2[1] == QUOTA_RET_ACQUOTA)
@@ -418,9 +423,13 @@ static int quota_chk_acq_common(struct obd_device *obd, unsigned int uid,
                                 unsigned int gid, int count, int *pending,
                                 int isblk, quota_acquire acquire)
 {
-        int rc = 0, cycle = 0;
+        int rc = 0, cycle = 0, count_err = 0;
         ENTRY;
 
+        /* Unfortunately, if quota master is too busy to handle the
+         * pre-dqacq in time and quota hash on ost is used up, we
+         * have to wait for the completion of in flight dqacq/dqrel,
+         * in order to get enough quota for write b=12588 */
         while ((rc = quota_check_common(obd, uid, gid, count, cycle, isblk)) &
                QUOTA_RET_ACQUOTA) {
 
@@ -430,6 +439,8 @@ static int quota_chk_acq_common(struct obd_device *obd, unsigned int uid,
                 cycle++;
                 if (isblk)
                         OBD_FAIL_TIMEOUT(OBD_FAIL_OST_HOLD_WRITE_RPC, 90);
+                /* after acquire(), we should run quota_check_common again
+                 * so that we confirm there are enough quota to finish write */
                 rc = acquire(obd, uid, gid);
 
                 /* please reference to dqacq_completion for the below */
@@ -446,14 +457,21 @@ static int quota_chk_acq_common(struct obd_device *obd, unsigned int uid,
                 }
 
                 /* -EBUSY and others, try 10 times */
-                if (rc < 0 && cycle < 10) {
-                        CDEBUG(D_QUOTA, "rc: %d, cycle: %d\n", rc, cycle);
+                if (rc < 0 && count_err < 10) {
+                        CDEBUG(D_QUOTA, "rc: %d, count_err: %d\n", rc, count_err++);
                         cfs_schedule_timeout(CFS_TASK_INTERRUPTIBLE, HZ);
                         continue;
                 }
 
-                CDEBUG(D_QUOTA, "exit with rc: %d\n", rc);
-                break;
+                if (count_err >= 10 || cycle >= 1000) {
+                        CDEBUG(D_ERROR, "we meet 10 errors or run too many"
+                               " cycles when acquiring quota, quit checking with"
+                               " rc: %d, cycle: %d.\n", rc, cycle);
+                        break;
+                }
+
+                CDEBUG(D_QUOTA, "recheck quota with rc: %d, cycle: %d\n", rc,
+                       cycle);
         }
 
         if (!cycle && rc & QUOTA_RET_INC_PENDING)

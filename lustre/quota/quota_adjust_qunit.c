@@ -320,6 +320,10 @@ int filter_quota_adjust_qunit(struct obd_export *exp,
 
         if (rc > 0) {
                 rc = qctxt_adjust_qunit(obd, qctxt, uid, gid, 1, 0);
+                if (rc == -EDQUOT || rc == -EBUSY) {
+                        CDEBUG(D_QUOTA, "rc: %d.\n", rc);
+                        rc = 0;
+                }
                 if (rc)
                         CERROR("slave adjust block quota failed!(rc:%d)\n", rc);
         }

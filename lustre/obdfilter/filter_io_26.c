@@ -633,7 +633,7 @@ int filter_commitrw_write(struct obd_export *exp, struct obdo *oa,
         int i, err, cleanup_phase = 0;
         struct obd_device *obd = exp->exp_obd;
         void *wait_handle;
-        int total_size = 0, rc2 = 0;
+        int total_size = 0;
         int rec_pending = 0;
         unsigned int qcids[MAXQUOTAS] = {0, 0};
         ENTRY;
@@ -645,15 +645,10 @@ int filter_commitrw_write(struct obd_export *exp, struct obdo *oa,
         if (rc != 0)
                 GOTO(cleanup, rc);
 
-        /* Unfortunately, if quota master is too busy to handle the
-         * pre-dqacq in time and quota hash on ost is used up, we
-         * have to wait for the completion of in flight dqacq/dqrel,
-         * in order not to get enough quota for write b=12588 */
-        rc2 = lquota_chkquota(filter_quota_interface_ref, obd, oa->o_uid,
-                              oa->o_gid, niocount, &rec_pending);
-
-        if (rc2 < 0)
-                GOTO(cleanup, rc = rc2);
+        /* we try to get enough quota to write here, and let ldiskfs
+         * decide if it is out of quota or not b=14783 */
+        lquota_chkquota(filter_quota_interface_ref, obd, oa->o_uid,
+                        oa->o_gid, niocount, &rec_pending);
 
         iobuf = filter_iobuf_get(&obd->u.filter, oti);
         if (IS_ERR(iobuf))
