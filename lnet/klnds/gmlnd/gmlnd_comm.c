@@ -34,7 +34,7 @@ gmnal_notify_peer_down(gmnal_tx_t *tx)
         then = cfs_time_current_sec() -
                 cfs_duration_sec(cfs_time_current() -
                                  tx->tx_launchtime);
-        
+
         lnet_notify(tx->tx_gmni->gmni_ni, tx->tx_nid, 0, then);
 }
 
@@ -67,7 +67,7 @@ gmnal_unpack_msg(gmnal_ni_t *gmni, gmnal_rx_t *rx)
 
         /* 6 bytes are enough to have received magic + version */
         if (rx->rx_recv_nob < 6) {
-                CERROR("Short message from gmid %u: %d\n", 
+                CERROR("Short message from gmid %u: %d\n",
                        rx->rx_recv_gmid, rx->rx_recv_nob);
                 return -EPROTO;
         }
@@ -80,12 +80,12 @@ gmnal_unpack_msg(gmnal_ni_t *gmni, gmnal_rx_t *rx)
                    msg->gmm_magic == __swab32(LNET_PROTO_MAGIC)) {
                 return EPROTO;
         } else {
-                CERROR("Bad magic from gmid %u: %08x\n", 
+                CERROR("Bad magic from gmid %u: %08x\n",
                        rx->rx_recv_gmid, msg->gmm_magic);
                 return -EPROTO;
         }
 
-        if (msg->gmm_version != 
+        if (msg->gmm_version !=
             (flip ? __swab16(GMNAL_MSG_VERSION) : GMNAL_MSG_VERSION)) {
                 return EPROTO;
         }
@@ -103,30 +103,30 @@ gmnal_unpack_msg(gmnal_ni_t *gmni, gmnal_rx_t *rx)
                 __swab64s(&msg->gmm_srcnid);
                 __swab64s(&msg->gmm_dstnid);
         }
-        
+
         if (msg->gmm_srcnid == LNET_NID_ANY) {
-                CERROR("Bad src nid from %u: %s\n", 
+                CERROR("Bad src nid from %u: %s\n",
                        rx->rx_recv_gmid, libcfs_nid2str(msg->gmm_srcnid));
                 return -EPROTO;
         }
 
-        if (!lnet_ptlcompat_matchnid(gmni->gmni_ni->ni_nid, 
+        if (!lnet_ptlcompat_matchnid(gmni->gmni_ni->ni_nid,
                                      msg->gmm_dstnid)) {
                 CERROR("Bad dst nid from %u: %s\n",
                        rx->rx_recv_gmid, libcfs_nid2str(msg->gmm_dstnid));
                 return -EPROTO;
         }
-        
+
         switch (msg->gmm_type) {
         default:
-                CERROR("Unknown message type from %u: %x\n", 
+                CERROR("Unknown message type from %u: %x\n",
                        rx->rx_recv_gmid, msg->gmm_type);
                 return -EPROTO;
-                
+
         case GMNAL_MSG_IMMEDIATE:
                 if (rx->rx_recv_nob < offsetof(gmnal_msg_t, gmm_u.immediate.gmim_payload[0])) {
-                        CERROR("Short IMMEDIATE from %u: %d("LPSZ")\n", 
-                               rx->rx_recv_gmid, rx->rx_recv_nob, 
+                        CERROR("Short IMMEDIATE from %u: %d("LPSZ")\n",
+                               rx->rx_recv_gmid, rx->rx_recv_nob,
                                offsetof(gmnal_msg_t, gmm_u.immediate.gmim_payload[0]));
                         return -EPROTO;
                 }
@@ -138,7 +138,7 @@ gmnal_unpack_msg(gmnal_ni_t *gmni, gmnal_rx_t *rx)
 gmnal_tx_t *
 gmnal_get_tx(gmnal_ni_t *gmni)
 {
-	gmnal_tx_t	 *tx = NULL;
+        gmnal_tx_t *tx = NULL;
 
         spin_lock(&gmni->gmni_tx_lock);
 
@@ -147,7 +147,7 @@ gmnal_get_tx(gmnal_ni_t *gmni)
                 spin_unlock(&gmni->gmni_tx_lock);
                 return NULL;
         }
-        
+
         tx = list_entry(gmni->gmni_idle_txs.next, gmnal_tx_t, tx_list);
         list_del(&tx->tx_list);
 
@@ -156,33 +156,33 @@ gmnal_get_tx(gmnal_ni_t *gmni)
         LASSERT (tx->tx_lntmsg == NULL);
         LASSERT (tx->tx_ltxb == NULL);
         LASSERT (!tx->tx_credit);
-        
+
         return tx;
 }
 
 void
 gmnal_tx_done(gmnal_tx_t *tx, int rc)
 {
-	gmnal_ni_t *gmni = tx->tx_gmni;
+        gmnal_ni_t *gmni = tx->tx_gmni;
         int         wake_sched = 0;
         lnet_msg_t *lnetmsg = tx->tx_lntmsg;
-        
+
         tx->tx_lntmsg = NULL;
 
         spin_lock(&gmni->gmni_tx_lock);
-        
+
         if (tx->tx_ltxb != NULL) {
                 wake_sched = 1;
                 list_add_tail(&tx->tx_ltxb->txb_list, &gmni->gmni_idle_ltxbs);
                 tx->tx_ltxb = NULL;
         }
-        
+
         if (tx->tx_credit) {
                 wake_sched = 1;
                 gmni->gmni_tx_credits++;
                 tx->tx_credit = 0;
         }
-        
+
         list_add_tail(&tx->tx_list, &gmni->gmni_idle_txs);
 
         if (wake_sched)
@@ -195,60 +195,60 @@ gmnal_tx_done(gmnal_tx_t *tx, int rc)
                 lnet_finalize(gmni->gmni_ni, lnetmsg, rc);
 }
 
-void 
-gmnal_drop_sends_callback(struct gm_port *gm_port, void *context, 
+void
+gmnal_drop_sends_callback(struct gm_port *gm_port, void *context,
                           gm_status_t status)
 {
-	gmnal_tx_t	*tx = (gmnal_tx_t*)context;
+        gmnal_tx_t *tx = (gmnal_tx_t*)context;
 
         LASSERT(!in_interrupt());
-         
-        CDEBUG(D_NET, "status for tx [%p] is [%d][%s], nid %s\n", 
+
+        CDEBUG(D_NET, "status for tx [%p] is [%d][%s], nid %s\n",
                tx, status, gmnal_gmstatus2str(status),
                libcfs_nid2str(tx->tx_nid));
 
         gmnal_tx_done(tx, -EIO);
 }
 
-void 
+void
 gmnal_tx_callback(gm_port_t *gm_port, void *context, gm_status_t status)
 {
-	gmnal_tx_t	*tx = (gmnal_tx_t*)context;
-	gmnal_ni_t	*gmni = tx->tx_gmni;
+        gmnal_tx_t *tx = (gmnal_tx_t*)context;
+        gmnal_ni_t *gmni = tx->tx_gmni;
 
         LASSERT(!in_interrupt());
 
-	switch(status) {
+        switch(status) {
         case GM_SUCCESS:
                 gmnal_tx_done(tx, 0);
                 return;
 
         case GM_SEND_DROPPED:
-                CDEBUG(D_NETERROR, "Dropped tx %p to %s\n", 
+                CDEBUG(D_NETERROR, "Dropped tx %p to %s\n",
                        tx, libcfs_nid2str(tx->tx_nid));
                 /* Another tx failed and called gm_drop_sends() which made this
                  * one complete immediately */
                 gmnal_tx_done(tx, -EIO);
                 return;
-                        
+
         default:
                 /* Some error; NB don't complete tx yet; we need its credit for
                  * gm_drop_sends() */
                 CDEBUG(D_NETERROR, "tx %p error %d(%s), nid %s\n",
-                       tx, status, gmnal_gmstatus2str(status), 
+                       tx, status, gmnal_gmstatus2str(status),
                        libcfs_nid2str(tx->tx_nid));
 
                 gmnal_notify_peer_down(tx);
 
                 spin_lock(&gmni->gmni_gm_lock);
-                gm_drop_sends(gmni->gmni_port, 
+                gm_drop_sends(gmni->gmni_port,
                               tx->tx_ltxb != NULL ?
                               GMNAL_LARGE_PRIORITY : GMNAL_SMALL_PRIORITY,
-                              tx->tx_gmlid, *gmnal_tunables.gm_port, 
+                              tx->tx_gmlid, *gmnal_tunables.gm_port,
                               gmnal_drop_sends_callback, tx);
                 spin_unlock(&gmni->gmni_gm_lock);
-		return;
-	}
+                return;
+        }
 
         /* not reached */
         LBUG();
@@ -262,17 +262,17 @@ gmnal_check_txqueues_locked (gmnal_ni_t *gmni)
         int            gmsize;
         int            pri;
         void          *netaddr;
-        
+
         tx = list_empty(&gmni->gmni_buf_txq) ? NULL :
              list_entry(gmni->gmni_buf_txq.next, gmnal_tx_t, tx_list);
 
         if (tx != NULL &&
-            (tx->tx_large_nob == 0 || 
+            (tx->tx_large_nob == 0 ||
              !list_empty(&gmni->gmni_idle_ltxbs))) {
 
                 /* consume tx */
                 list_del(&tx->tx_list);
-                
+
                 LASSERT (tx->tx_ltxb == NULL);
 
                 if (tx->tx_large_nob != 0) {
@@ -355,12 +355,12 @@ gmnal_check_txqueues_locked (gmnal_ni_t *gmni)
 
                 spin_lock(&gmni->gmni_gm_lock);
 
-                gm_send_to_peer_with_callback(gmni->gmni_port, 
-                                              netaddr, gmsize, 
+                gm_send_to_peer_with_callback(gmni->gmni_port,
+                                              netaddr, gmsize,
                                               tx->tx_msgnob,
-                                              pri, 
+                                              pri,
                                               tx->tx_gmlid,
-                                              gmnal_tx_callback, 
+                                              gmnal_tx_callback,
                                               (void*)tx);
 
                 spin_unlock(&gmni->gmni_gm_lock);
@@ -377,12 +377,12 @@ gmnal_post_rx(gmnal_ni_t *gmni, gmnal_rx_t *rx)
                                         GMNAL_SMALL_PRIORITY;
         void *buffer = GMNAL_NETBUF_LOCAL_NETADDR(&rx->rx_buf);
 
-	CDEBUG(D_NET, "posting rx %p buf %p\n", rx, buffer);
+        CDEBUG(D_NET, "posting rx %p buf %p\n", rx, buffer);
 
-	spin_lock(&gmni->gmni_gm_lock);
-        gm_provide_receive_buffer_with_tag(gmni->gmni_port, 
+        spin_lock(&gmni->gmni_gm_lock);
+        gm_provide_receive_buffer_with_tag(gmni->gmni_port,
                                            buffer, gmsize, pri, 0);
-	spin_unlock(&gmni->gmni_gm_lock);
+        spin_unlock(&gmni->gmni_gm_lock);
 }
 
 void
@@ -425,20 +425,20 @@ gmnal_version_reply (gmnal_ni_t *gmni, gmnal_rx_t *rx)
 int
 gmnal_rx_thread(void *arg)
 {
-	gmnal_ni_t	*gmni = arg;
-	gm_recv_event_t	*rxevent = NULL;
-	gm_recv_t	*recv = NULL;
+        gmnal_ni_t      *gmni = arg;
+        gm_recv_event_t *rxevent = NULL;
+        gm_recv_t       *recv = NULL;
         gmnal_rx_t      *rx;
         int              rc;
 
-	cfs_daemonize("gmnal_rxd");
+        cfs_daemonize("gmnal_rxd");
 
         down(&gmni->gmni_rx_mutex);
 
-	while (!gmni->gmni_shutdown) {
+        while (!gmni->gmni_shutdown) {
 
                 spin_lock(&gmni->gmni_gm_lock);
-		rxevent = gm_blocking_receive_no_spin(gmni->gmni_port);
+                rxevent = gm_blocking_receive_no_spin(gmni->gmni_port);
                 spin_unlock(&gmni->gmni_gm_lock);
 
                 switch (GM_RECV_EVENT_TYPE(rxevent)) {
@@ -456,9 +456,9 @@ gmnal_rx_thread(void *arg)
                 case GM_HIGH_RECV_EVENT:
                         break;
                 }
-                
+
                 recv = &rxevent->recv;
-                rx = gm_hash_find(gmni->gmni_rx_hash, 
+                rx = gm_hash_find(gmni->gmni_rx_hash,
                                   gm_ntohp(recv->buffer));
                 LASSERT (rx != NULL);
 
@@ -481,7 +481,7 @@ gmnal_rx_thread(void *arg)
 
                 up(&gmni->gmni_rx_mutex);
 
-                CDEBUG (D_NET, "rx %p: buf %p(%p) nob %d\n", rx, 
+                CDEBUG (D_NET, "rx %p: buf %p(%p) nob %d\n", rx,
                         GMNAL_NETBUF_LOCAL_NETADDR(&rx->rx_buf),
                         gm_ntohp(recv->buffer), rx->rx_recv_nob);
 
@@ -491,12 +491,11 @@ gmnal_rx_thread(void *arg)
 
                 if (rc == 0) {
                         gmnal_msg_t *msg = GMNAL_NETBUF_MSG(&rx->rx_buf);
-                        
+
                         LASSERT (msg->gmm_type == GMNAL_MSG_IMMEDIATE);
-                        rc =  lnet_parse(gmni->gmni_ni, 
-                                         &msg->gmm_u.immediate.gmim_hdr,
-                                         msg->gmm_srcnid,
-                                         rx, 0);
+                        rc = lnet_parse(gmni->gmni_ni,
+                                        &msg->gmm_u.immediate.gmim_hdr,
+                                        msg->gmm_srcnid, rx, 0);
                 } else if (rc > 0) {
                         gmnal_version_reply(gmni, rx);
                         rc = -EPROTO;           /* repost rx */
@@ -506,13 +505,13 @@ gmnal_rx_thread(void *arg)
                         gmnal_post_rx(gmni, rx);
 
                 down(&gmni->gmni_rx_mutex);
-	}
+        }
 
         up(&gmni->gmni_rx_mutex);
 
-	CDEBUG(D_NET, "exiting\n");
+        CDEBUG(D_NET, "exiting\n");
         atomic_dec(&gmni->gmni_nthreads);
-	return 0;
+        return 0;
 }
 
 void
@@ -522,19 +521,19 @@ gmnal_stop_threads(gmnal_ni_t *gmni)
 
         gmni->gmni_shutdown = 1;
         mb();
-        
-        /* wake rxthread owning gmni_rx_mutex with an alarm. */
-	spin_lock(&gmni->gmni_gm_lock);
-	gm_set_alarm(gmni->gmni_port, &gmni->gmni_alarm, 0, NULL, NULL);
-	spin_unlock(&gmni->gmni_gm_lock);
 
-	while (atomic_read(&gmni->gmni_nthreads) != 0) {
+        /* wake rxthread owning gmni_rx_mutex with an alarm. */
+        spin_lock(&gmni->gmni_gm_lock);
+        gm_set_alarm(gmni->gmni_port, &gmni->gmni_alarm, 0, NULL, NULL);
+        spin_unlock(&gmni->gmni_gm_lock);
+
+        while (atomic_read(&gmni->gmni_nthreads) != 0) {
                 count++;
                 if ((count & (count - 1)) == 0)
                         CWARN("Waiting for %d threads to stop\n",
                               atomic_read(&gmni->gmni_nthreads));
                 gmnal_yield(1);
-	}
+        }
 }
 
 int
@@ -546,9 +545,9 @@ gmnal_start_threads(gmnal_ni_t *gmni)
         LASSERT (!gmni->gmni_shutdown);
         LASSERT (atomic_read(&gmni->gmni_nthreads) == 0);
 
-	gm_initialize_alarm(&gmni->gmni_alarm);
+        gm_initialize_alarm(&gmni->gmni_alarm);
 
-	for (i = 0; i < num_online_cpus(); i++) {
+        for (i = 0; i < num_online_cpus(); i++) {
 
                 pid = kernel_thread(gmnal_rx_thread, (void*)gmni, 0);
                 if (pid < 0) {
@@ -558,7 +557,7 @@ gmnal_start_threads(gmnal_ni_t *gmni)
                 }
 
                 atomic_inc(&gmni->gmni_nthreads);
-	}
+        }
 
-	return 0;
+        return 0;
 }
