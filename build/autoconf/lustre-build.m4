@@ -257,62 +257,75 @@ if test x$enable_bgl != xno; then
 fi
 ])
 
+#
+# Support for --enable-uoss
+#
+AC_DEFUN([LB_UOSS],
+[AC_MSG_CHECKING([whether to enable uoss])
+AC_ARG_ENABLE([uoss],
+	AC_HELP_STRING([--enable-uoss],
+			[enable userspace OSS]),
+	[enable_uoss='yes'],[enable_uoss='no'])
+AC_MSG_RESULT([$enable_uoss])
+if test x$enable_uoss = xyes; then
+	AC_DEFINE(UOSS_SUPPORT, 1, Enable user-level OSS)
+	AC_DEFINE(LUSTRE_ULEVEL_MT, 1, Multi-threaded user-level lustre port)
+	enable_uoss='yes'
+	enable_ulevel_mt='yes'
+	enable_modules='no'
+	enable_client='no'
+	enable_tests='no'
+	enable_liblustre='no'
+	with_ldiskfs='no'
+fi
+AC_SUBST(enable_uoss)
+])
+
+#
+# Support for --enable-posix-osd
+#
+AC_DEFUN([LB_POSIX_OSD],
+[AC_MSG_CHECKING([whether to enable posix osd])
+AC_ARG_ENABLE([posix-osd],
+	AC_HELP_STRING([--enable-posix-osd],
+			[enable using of posix osd]),
+	[enable_posix_osd='yes'],[enable_posix_osd='no'])
+AC_MSG_RESULT([$enable_posix_osd])
+if test x$enable_uoss = xyes -a x$enable_posix_osd = xyes ; then
+	AC_DEFINE(POSIX_OSD, 1, Enable POSIX OSD)
+	posix_osd='yes'
+fi
+AM_CONDITIONAL(POSIX_OSD_ENABLED, test x$posix_osd = xyes)
+])
 
 #
 # LB_PATH_DMU
 # Support for --with-dmu
 #
 AC_DEFUN([LB_PATH_DMU],
-[AC_ARG_WITH([dmu],
+[AC_MSG_CHECKING([whether to enable DMU])
+AC_ARG_WITH([dmu],
 	AC_HELP_STRING([--with-dmu=path],
-		       [set path to a built dmu]),
+		       [set path to a DMU tree (default is included zfs-lustre)]),
 	[
 		DMU_SRC=$with_dmu
-		enable_dmu_osd=yes
 	],
 	[
-		enable_dmu_osd=no
-		DMU_SRC=""
+		DMU_SRC="$PWD/zfs-lustre"
 	])
-AC_MSG_RESULT([$dmu])
-if test x$enable_dmu_osd != xno; then
-        AC_DEFINE(ENABLE_DMU, 1, Enable DMU OSD)
-        AC_DEFINE(DMU_OSD, 1, Enable DMU OSD)
-        AC_DEFINE(UOSS_SUPPORT, 1, Enable user-level OSS)
-        AC_DEFINE(LUSTRE_ULEVEL_MT, 1, Multi-threaded user-level lustre port)
-        enable_uoss='yes'
-        enable_ulevel_mt='yes'
-        enable_modules='no'
-        enable_client='no'
-	enable_tests='no'
-	enable_liblustre='no'
-        with_ldiskfs=no
+if test x$enable_uoss = xyes -a x$enable_posix_osd != xyes; then
+	AC_DEFINE(DMU_OSD, 1, Enable DMU OSD)
+	AC_MSG_RESULT([yes])
+	LB_CHECK_FILE([$DMU_SRC/src/.patched],[],[
+		AC_MSG_ERROR([A complete (patched) DMU tree was not found.])
+	])
+	AC_CONFIG_SUBDIRS(zfs-lustre)
+	dmu_osd='yes'
+else
+	AC_MSG_RESULT([no])
 fi
 AC_SUBST(DMU_SRC)
-])
-
-#
-# Support for --enable-posix-dmu
-#
-AC_DEFUN([LB_POSIX_OSD],
-[AC_MSG_CHECKING([whether to posix osd])
-AC_ARG_ENABLE([posix-osd],
-	AC_HELP_STRING([--enable-posix-osd],
-			[enable using of posix osd]),
-	[enable_posix_osd='yes'],[enable_posix_osd='no'])
-AC_MSG_RESULT([$enable_posix_osd])
-if test x$enable_posix_osd != xno; then
-        AC_DEFINE(POSIX_OSD, 1, Enable POSIX OSD)
-        AC_DEFINE(UOSS_SUPPORT, 1, Enable user-level OSS)
-        AC_DEFINE(LUSTRE_ULEVEL_MT, 1, Multi-threaded user-level lustre port)
-        enable_uoss='yes'
-        enable_ulevel_mt='yes'
-        enable_modules='no'
-	enable_client='no'
-	enable_tests='no'
-	enable_liblustre='no'
-        with_ldiskfs=no
-fi
+AM_CONDITIONAL(DMU_OSD_ENABLED, test x$dmu_osd = xyes)
 ])
 
 #
@@ -625,8 +638,9 @@ LB_PATH_DEFAULTS
 
 LB_PROG_CC
 
-LB_PATH_DMU
+LB_UOSS
 LB_POSIX_OSD
+LB_PATH_DMU
 
 LB_CONFIG_DOCS
 LB_CONFIG_UTILS
