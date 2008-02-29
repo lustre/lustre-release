@@ -290,7 +290,7 @@ typedef struct ksock_conn
         atomic_t            ksnc_tx_nob;        /* # bytes queued */
         int                 ksnc_tx_ready;      /* write space */
         int                 ksnc_tx_scheduled;  /* being progressed */
-        
+
 #if !SOCKNAL_SINGLE_FRAG_RX
         struct iovec        ksnc_rx_scratch_iov[LNET_MAX_IOV];
 #endif

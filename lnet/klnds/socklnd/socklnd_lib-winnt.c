@@ -664,7 +664,7 @@ ksocknal_sched_conn (ksock_conn_t *conn, int mode, ksock_tx_t *tx)
                     list_add (&tx->tx_list, &conn->ksnc_tx_queue);
                 }
 
-                if ( !conn->ksnc_tx_scheduled && 
+                if ( !conn->ksnc_tx_scheduled &&
                      !list_empty(&conn->ksnc_tx_queue)) {  //packets to send
                         list_add_tail (&conn->ksnc_tx_list,
                                        &sched->kss_tx_conns);
