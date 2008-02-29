@@ -5,6 +5,8 @@ lnettag="HEAD"
 libsysiotag="HEAD"
 snmptag="HEAD"
 ldiskfstag="HEAD"
+dmutag=""
+hg_base_url="http://www.wizy.org/mercurial"
 
 export LC_COLLATE=C
 
@@ -181,6 +183,7 @@ case "$lustretag" in
     b_hd_dmu)
         lnettag="b_uoss"
         ldiskfstag="b1_8_iam"
+        dmutag="zfs-lustre"
         ;;
 
     # client io stack cleanup
@@ -227,5 +230,6 @@ cvs_cmd lnet lnet "$lnettag"
 cvs_cmd snmp lustre-snmp "$snmptag"
 cvs_cmd lustre lustre-core "$lustretag"
 cvs_cmd ldiskfs ldiskfs "$ldiskfstag"
+hg_cmd zfs-lustre "$hg_base_url" "$dmutag"
 
 [ -a ldiskfs/build ] || ln -sf ../build ldiskfs/build

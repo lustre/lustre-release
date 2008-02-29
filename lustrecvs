@@ -126,6 +126,48 @@ cvs_cmd ()
     fi
 }
 
+hg_cmd ()
+{
+    dir="$1"
+    base_url="$2"
+    repository="$3"
+
+    if [ ! "$repository" ]; then
+        return
+    fi
+
+    url="$base_url/$repository"
+
+    # create a cvs date format that will survive shell expansion
+    if [ -n "$pindate" ]; then
+        datecmd=$(date -u +%s -d "$pindate")
+        datecmd="-d \"$datecmd 0\""
+    else
+        datecmd=""
+    fi
+
+    if [ -d "$dir" ]; then
+        echo "$progname: Updating $dir"
+        if [ -f "$dir/update.sh" ]; then
+            ( cd "$dir" && ./update.sh $datecmd )
+        else
+            ( cd "$dir" && hg pull && hg update $datecmd )
+        fi
+    else
+        echo "$progname: Checking out $dir"
+        hg clone $url $dir
+        if [ -f "$dir/setup.sh" ]; then
+            ( cd "$dir" && ./setup.sh $datecmd )
+        else
+            ( cd "$dir" && hg update $datecmd )
+        fi
+    fi
+
+    if [ $? != 0 ] ; then
+        error_modules="$dir $error_modules"
+    fi
+}
+
 cvs_cmd build lustre-build "$buildtag"
 
 if [ -f build/buildcvs ] ; then
