@@ -61,7 +61,7 @@ Index: linux-stage/fs/ext3/super.c
  	memset(&ei->i_cached_extent, 0, sizeof(ei->i_cached_extent));
  	INIT_LIST_HEAD(&ei->i_prealloc_list);
  	spin_lock_init(&ei->i_prealloc_lock);
-@@ -695,7 +699,7 @@
+@@ -695,6 +699,7 @@
  	Opt_grpquota,
  	Opt_extents, Opt_noextents, Opt_extdebug,
  	Opt_mballoc, Opt_nomballoc, Opt_stripe,
