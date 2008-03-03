@@ -761,6 +761,16 @@ Description: SNMP support enhancement
 Details    : Adding total number of sampled request for an MDS node in snmp
              support.
 
+Severity   : enhancement
+Bugzilla   : 14748
+Description: Optimize ldlm waiting list processing for PR extent locks
+Details    : When processing waiting list for read extent lock and meeting
+read
+             lock that is same or wider to it that is not contended, skip
+	     processing rest of the list and immediatelly return current
+	     status of conflictness, since we are guaranteed there are no
+	     conflicting locks in the rest of the list.
+
 --------------------------------------------------------------------------------
 
 2007-08-10         Cluster File Systems, Inc. <info@clusterfs.com>

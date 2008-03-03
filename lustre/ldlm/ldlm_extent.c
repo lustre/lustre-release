@@ -251,6 +251,34 @@ ldlm_extent_compat_queue(struct list_head *queue, struct ldlm_lock *req,
 
                 /* locks are compatible, overlap doesn't matter */
                 if (lockmode_compat(lock->l_req_mode, req_mode)) {
+                        if (req_mode == LCK_PR &&
+                            ((lock->l_policy_data.l_extent.start <=
+                             req->l_policy_data.l_extent.start) &&
+                             (lock->l_policy_data.l_extent.end >=
+                              req->l_policy_data.l_extent.end))) {
+                                /* If we met a PR lock just like us or wider,
+                                   and nobody down the list conflicted with
+                                   it, that means we can skip processing of
+                                   the rest of the list and safely place
+                                   ourselves at the end of the list, or grant
+                                   (dependent if we met an conflicting locks
+                                   before in the list).
+                                   In case of 1st enqueue only we continue
+                                   traversing if there is something conflicting
+                                   down the list because we need to make sure
+                                   that something is marked as AST_SENT as well,
+                                   in cse of empy worklist we would exit on
+                                   first conflict met. */
+                                /* There IS a case where such flag is
+                                   not set for a lock, yet it blocks
+                                   something. Luckily for us this is
+                                   only during destroy, so lock is
+                                   exclusive. So here we are safe */
+                                if (!(lock->l_flags & LDLM_FL_AST_SENT)) {
+                                        RETURN(compat);
+                                }
+                        }
+
                         /* non-group locks are compatible, overlap doesn't
                            matter */
                         if (likely(req_mode != LCK_GROUP))
