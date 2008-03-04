@@ -30,15 +30,6 @@ Index: linux-2.6.5-7.283/fs/ext3/namei.c
  		return -EMLINK;
  
  retry:
-@@ -1752,7 +1758,7 @@ retry:
- 	inode->i_size = EXT3_I(inode)->i_disksize = inode->i_sb->s_blocksize;
- 	dir_block = ext3_bread (handle, inode, 0, 1, &err);
- 	if (!dir_block) {
--		inode->i_nlink--; /* is this nlink == 0? */
-+		ext3_dec_count(handle, inode); /* is this nlink == 0? */
- 		ext3_mark_inode_dirty(handle, inode);
- 		iput (inode);
- 		goto out_stop;
 @@ -1784,7 +1790,7 @@ retry:
  		iput (inode);
  		goto out_stop;
