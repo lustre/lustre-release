@@ -879,7 +879,7 @@ test_24a() {
  	umount_client $MOUNT 
 	# the MDS must remain up until last MDT
 	stop_mds
-	MDS=$(do_facet $SINGLEMDS "cat $LPROC/devices" | awk '($3 ~ "mdt" && $4 ~ "MDT") { print $4 }')
+	MDS=$(do_facet $SINGLEMDS "lctl get_param -n devices" | awk '($3 ~ "mdt" && $4 ~ "MDT") { print $4 }')
 	[ -z "$MDS" ] && error "No MDT" && return 8
 	cleanup_24a
 	cleanup_nocli || return 6
@@ -917,8 +917,8 @@ test_26() {
 #define OBD_FAIL_MDS_FS_SETUP            0x135
     do_facet mds "sysctl -w lustre.fail_loc=0x80000135"
     start_mds && echo MDS started && return 1
-    cat $LPROC/devices
-    DEVS=$(cat $LPROC/devices | wc -l)
+    lctl get_param -n devices
+    DEVS=$(lctl get_param -n devices | wc -l)
     [ $DEVS -gt 0 ] && return 2
     unload_modules || return 203
 }
@@ -961,7 +961,7 @@ test_27a() {
 	start_mds || return 2
 	echo "Requeue thread should have started: " 
 	ps -e | grep ll_cfg_requeue 
-	set_and_check ost1 "cat $LPROC/obdfilter/$FSNAME-OST0000/client_cache_seconds" "$FSNAME-OST0000.ost.client_cache_seconds" || return 3 
+	set_and_check ost1 "lctl get_param -n obdfilter.$FSNAME-OST0000.client_cache_seconds" "$FSNAME-OST0000.ost.client_cache_seconds" || return 3
 	cleanup_nocli
 }
 run_test 27a "Reacquire MGS lock if OST started first"
@@ -969,15 +969,15 @@ run_test 27a "Reacquire MGS lock if OST started first"
 test_27b() {
         setup
 	facet_failover mds
-	set_and_check mds "cat $LPROC/mdt/$FSNAME-MDT0000/identity_acquire_expire" "$FSNAME-MDT0000.mdt.identity_acquire_expire" || return 3
-	set_and_check client "cat $LPROC/mdc/$FSNAME-MDT0000-mdc-*/max_rpcs_in_flight" "$FSNAME-MDT0000.mdc.max_rpcs_in_flight" || return 4
+	set_and_check mds "lctl get_param -n mdt.$FSNAME-MDT0000.identity_acquire_expire" "$FSNAME-MDT0000.mdt.identity_acquire_expire" || return 3
+	set_and_check client "lctl get_param -n mdc.$FSNAME-MDT0000-mdc-*.max_rpcs_in_flight" "$FSNAME-MDT0000.mdc.max_rpcs_in_flight" || return 4
 	cleanup
 }
 run_test 27b "Reacquire MGS lock after failover"
 
 test_28() {
         setup
-	TEST="cat $LPROC/llite/$FSNAME-*/max_read_ahead_whole_mb"
+	TEST="lctl get_param -n llite.$FSNAME-*.max_read_ahead_whole_mb"
 	ORIG=$($TEST) 
 	declare -i FINAL
 	FINAL=$(($ORIG + 10))
@@ -1003,32 +1003,28 @@ test_29() {
 	sleep 10
 
 	local PARAM="$FSNAME-OST0001.osc.active"
-	local PROC_ACT="$LPROC/osc/$FSNAME-OST0001-osc-[^M]*/active"
-	local PROC_UUID="$LPROC/osc/$FSNAME-OST0001-osc-[^M]*/ost_server_uuid"
-	if [ ! -r $PROC_ACT ]; then
-	    echo "Can't read $PROC_ACT"
-	    ls $LPROC/osc/$FSNAME-*
-	    return 1
-	fi
-	ACTV=$(cat $PROC_ACT)
+        local PROC_ACT="osc.$FSNAME-OST0001-osc-[^M]*.active"
+        local PROC_UUID="osc.$FSNAME-OST0001-osc-[^M]*.ost_server_uuid"
+
+        ACTV=$(lctl get_param -n $PROC_ACT)
 	DEAC=$((1 - $ACTV))
-	set_and_check client "cat $PROC_ACT" "$PARAM" $DEAC || return 2
+	set_and_check client "lctl get_param -n $PROC_ACT" "$PARAM" $DEAC || return 2
         # also check ost_server_uuid status
-	RESULT=$(grep DEACTIV $PROC_UUID)
+	RESULT=$(lctl get_param -n $PROC_UUID | grep DEACTIV)
 	if [ -z "$RESULT" ]; then
-	    echo "Live client not deactivated: $(cat $PROC_UUID)"
+	    echo "Live client not deactivated: $(lctl get_param -n $PROC_UUID)"
 	    return 3
 	else
 	    echo "Live client success: got $RESULT"
 	fi
 
 	# check MDT too 
-	local MPROC="$LPROC/osc/$FSNAME-OST0001-osc-[M]*/active"
+	local MPROC="osc.$FSNAME-OST0001-osc-[M]*.active"
 	local MAX=30
 	local WAIT=0
 	while [ 1 ]; do
 	    sleep 5
-	    RESULT=`do_facet mds " [ -r $MPROC ] && cat $MPROC"`
+	    RESULT=`do_facet mds " lctl get_param -n $MPROC"`
 	    [ ${PIPESTATUS[0]} = 0 ] || error "Can't read $MPROC"
 	    if [ $RESULT -eq $DEAC ]; then
 		echo "MDT deactivated also after $WAIT sec (got $RESULT)"
@@ -1045,16 +1041,16 @@ test_29() {
         # test new client starts deactivated
  	umount_client $MOUNT || return 200
 	mount_client $MOUNT
-	RESULT=$(grep DEACTIV $PROC_UUID | grep NEW)
+	RESULT=$(lctl get_param -n $PROC_UUID | grep DEACTIV | grep NEW)
 	if [ -z "$RESULT" ]; then
-	    echo "New client not deactivated from start: $(cat $PROC_UUID)"
+	    echo "New client not deactivated from start: $(lctl get_param -n $PROC_UUID)"
 	    return 5
 	else
 	    echo "New client success: got $RESULT"
 	fi
 
 	# make sure it reactivates
-	set_and_check client "cat $PROC_ACT" "$PARAM" $ACTV || return 6
+	set_and_check client "lctl get_param -n $PROC_ACT" "$PARAM" $ACTV || return 6
 
  	umount_client $MOUNT
 	stop_ost2
@@ -1070,7 +1066,7 @@ run_test 29 "permanently remove an OST"
 test_30() {
 	setup
 
-	TEST="cat $LPROC/llite/$FSNAME-*/max_read_ahead_whole_mb"
+	TEST="lctl get_param -n llite.$FSNAME-*.max_read_ahead_whole_mb"
 	ORIG=$($TEST) 
 	for i in $(seq 1 20); do 
 	    set_and_check client "$TEST" "$FSNAME.llite.max_read_ahead_whole_mb" $i || return 3
@@ -1112,13 +1108,13 @@ test_32a() {
 	$TUNEFS $TMP/$tdir/mds || error "tunefs failed"
 	# nids are wrong, so client wont work, but server should start
         start mds $TMP/$tdir/mds "-o loop,exclude=lustre-OST0000" || return 3
-        local UUID=$(cat $LPROC/mdt/lustre-MDT0000/uuid)
+        local UUID=$(lctl get_param -n mdt.lustre-MDT0000.uuid)
 	echo MDS uuid $UUID
 	[ "$UUID" == "mdsA_UUID" ] || error "UUID is wrong: $UUID" 
 
 	$TUNEFS --mgsnode=`hostname` $TMP/$tdir/ost1 || error "tunefs failed"
 	start ost1 $TMP/$tdir/ost1 "-o loop" || return 5
-        UUID=$(cat $LPROC/obdfilter/lustre-OST0000/uuid)
+        UUID=$(lctl get_param -n obdfilter.lustre-OST0000.uuid)
 	echo OST uuid $UUID
 	[ "$UUID" == "ost1_UUID" ] || error "UUID is wrong: $UUID" 
 
@@ -1139,7 +1135,8 @@ test_32a() {
         MOUNTOPT="exclude=lustre-OST0000"
 	mount_client $MOUNT
         MOUNTOPT=$OLDMOUNTOPT
-	set_and_check client "cat $LPROC/mdc/*/max_rpcs_in_flight" "lustre-MDT0000.mdc.max_rpcs_in_flight" || return 11
+	set_and_check client "lctl get_param -n mdc.*.max_rpcs_in_flight" "lustre-MDT0000.mdc.max_rpcs_in_flight" ||
+		return 11
 
 	zconf_umount `hostname` $MOUNT -f
 	cleanup_nocli
@@ -1174,13 +1171,13 @@ test_32b() {
 	# writeconf will cause servers to register with their current nids
 	$TUNEFS --writeconf $TMP/$tdir/mds || error "tunefs failed"
 	start mds $TMP/$tdir/mds "-o loop" || return 3
-        local UUID=$(cat $LPROC/mds/lustre-MDT0000/uuid)
+        local UUID=$(lctl get_param -n mds.lustre-MDT0000.uuid)
 	echo MDS uuid $UUID
 	[ "$UUID" == "mdsA_UUID" ] || error "UUID is wrong: $UUID" 
 
 	$TUNEFS --mgsnode=`hostname` $TMP/$tdir/ost1 || error "tunefs failed"
 	start ost1 $TMP/$tdir/ost1 "-o loop" || return 5
-        UUID=$(cat $LPROC/obdfilter/lustre-OST0000/uuid)
+        UUID=$(lctl get_param -n obdfilter.lustre-OST0000.uuid)
 	echo OST uuid $UUID
 	[ "$UUID" == "ost1_UUID" ] || error "UUID is wrong: $UUID" 
 
@@ -1196,7 +1193,7 @@ test_32b() {
 	# a fully-functioning client
 	echo "Check client and old fs contents"
 	mount_client $MOUNT
-	set_and_check client "cat $LPROC/mdc/*/max_rpcs_in_flight" "${NEWNAME}-MDT0000.mdc.max_rpcs_in_flight" || return 11
+	set_and_check client "lctl get_param -n mdc.*.max_rpcs_in_flight" "${NEWNAME}-MDT0000.mdc.max_rpcs_in_flight" || return 11
 	[ "$(cksum $MOUNT/passwd | cut -d' ' -f 1,2)" == "2479747619 779" ] || return 12  
 	echo "ok."
 
@@ -1357,7 +1354,7 @@ test_36() { # 12743
         fi
         [ $OSTCOUNT -lt 2 ] && skip "skipping test for single OST" && return
 
-        [ $(grep -c obdfilter $LPROC/devices) -eq 0 ] &&
+        [ $(lctl get_param -n devices  | grep -c obdfilter) -eq 0 ] &&
                 skip "skipping test for remote OST" && return
 
         local fs2mdsdev=${fs2mds_DEV:-${MDSDEV}_2}
@@ -1377,12 +1374,9 @@ test_36() { # 12743
 
         dd if=/dev/zero of=$MOUNT2/$tfile bs=1M count=7 || return 2
 
-        BKTOTAL=`awk 'BEGIN{total=0}; {total+=$1}; END{print total}' \
-                $LPROC/obdfilter/*/kbytestotal`
-        BKFREE=`awk 'BEGIN{free=0}; {free+=$1}; END{print free}' \
-               $LPROC/obdfilter/*/kbytesfree`
-        BKAVAIL=`awk 'BEGIN{avail=0}; {avail+=$1}; END{print avail}' \
-                $LPROC/obdfilter/*/kbytesavail`
+        BKTOTAL=`lctl get_param -n obdfilter.*.kbytestotal | awk 'BEGIN{total=0}; {total+=$1}; END{print total}'`
+        BKFREE=`lctl get_param -n obdfilter.*.kbytesfree | awk 'BEGIN{free=0}; {free+=$1}; END{print free}'`
+        BKAVAIL=`lctl get_param -n obdfilter.*.kbytesavail | awk 'BEGIN{avail=0}; {avail+=$1}; END{print avail}'`
         STRING=`df -P $MOUNT2 | tail -n 1 | awk '{print $2","$3","$4}'`
         DFTOTAL=`echo $STRING | cut -d, -f1`
         DFUSED=`echo $STRING  | cut -d, -f2`
