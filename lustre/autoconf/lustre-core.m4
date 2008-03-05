@@ -636,6 +636,27 @@ LB_LINUX_CONFIG_IM([CRYPTO_SHA1],[],[
 ])
 ])
 
+AC_DEFUN([LC_SUNRPC_CACHE],
+[AC_MSG_CHECKING([if sunrpc struct cache_head uses kref])
+LB_LINUX_TRY_COMPILE([
+        #include <linux/sunrpc/cache.h>
+],[
+        struct cache_head ch;
+        &ch.ref.refcount;
+],[
+        AC_MSG_RESULT([yes])
+        AC_DEFINE(HAVE_SUNRPC_CACHE_V2, 1, [sunrpc cache facility v2])
+],[
+        AC_MSG_RESULT([no])
+])
+])
+
+AC_DEFUN([LC_CONFIG_SUNRPC],
+[LB_LINUX_CONFIG_IM([SUNRPC],[],
+                    [AC_MSG_ERROR([kernel SUNRPC support is required by using GSS.])])
+ LC_SUNRPC_CACHE
+])
+
 #
 # LC_CONFIG_GSS_KEYRING (default enabled, if gss is enabled)
 #
@@ -676,6 +697,7 @@ AC_DEFUN([LC_CONFIG_GSS],
 
  if test x$enable_gss == xyes; then
 	LC_CONFIG_GSS_KEYRING
+        LC_CONFIG_SUNRPC
 
         LB_LINUX_CONFIG_IM([CRYPTO_DES],[],
                            [AC_MSG_WARN([kernel DES support is recommended by using GSS.])])
