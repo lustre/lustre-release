@@ -480,7 +480,7 @@ int llu_iop_close(struct inode *inode)
         }
         /* if open count == 0 && stale_flag is set, should we
          * remove the inode immediately? */
-        liblustre_wait_event(0);
+        liblustre_wait_idle();
         return 0;
 }
 

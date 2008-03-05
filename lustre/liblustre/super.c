@@ -933,7 +933,7 @@ static int llu_iop_setattr(struct pnode *pno,
         iattr.ia_ctime = CURRENT_TIME;
 
         rc = llu_setattr_raw(ino, &iattr);
-        liblustre_wait_event(0);
+        liblustre_wait_idle();
         RETURN(rc);
 }
 
@@ -1147,7 +1147,7 @@ static int llu_iop_unlink_raw(struct pnode *pno)
         if (!rc)
                 rc = llu_objects_destroy(request, dir);
         ptlrpc_req_finished(request);
-        liblustre_wait_event(0);
+        liblustre_wait_idle();
 
         RETURN(rc);
 }
@@ -1179,7 +1179,7 @@ static int llu_iop_rename_raw(struct pnode *old, struct pnode *new)
         }
 
         ptlrpc_req_finished(request);
-        liblustre_wait_event(0);
+        liblustre_wait_idle();
 
         RETURN(rc);
 }
