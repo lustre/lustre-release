@@ -566,7 +566,12 @@ static void ptlrpc_maybe_ping_import_soon(struct obd_import *imp)
                               struct obd_import_conn,
                               oic_item);
 
-        if (imp->imp_conn_current != imp_conn) {
+        /* XXX: When the failover node is the primary node, it is possible
+         * to have two identical connections in imp_conn_list. We must 
+         * compare not conn's pointers but NIDs, otherwise we can defeat
+         * connection throttling. (See bug 14774.) */
+        if (imp->imp_conn_current->oic_conn->c_self != 
+                                imp_conn->oic_conn->c_self) {
                 ptlrpc_ping_import_soon(imp);
                 wake_pinger = 1;
         }

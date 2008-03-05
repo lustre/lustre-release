@@ -389,6 +389,14 @@ Details    : When processing waiting list for read extent lock and meeting read
 	     status of conflictness, since we are guaranteed there are no
 	     conflicting locks in the rest of the list.
 
+Severity   : normal
+Bugzilla   : 14774
+Description: Time out and refuse to reconnect
+Details    : When the failover node is the primary node, it is possible
+             to have two identical connections in imp_conn_list. We must
+             compare not conn's pointers but NIDs, otherwise we
+	     can defeat connection throttling.
+
 --------------------------------------------------------------------------------
 
 2007-12-07         Cluster File Systems, Inc. <info@clusterfs.com>
