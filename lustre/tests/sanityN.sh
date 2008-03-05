@@ -65,8 +65,8 @@ LPROC=/proc/fs/lustre
 check_and_setup_lustre
 
 LPROC=/proc/fs/lustre
-LOVNAME=`cat $LPROC/llite/*/lov/common_name | tail -n 1`
-OSTCOUNT=`cat $LPROC/lov/$LOVNAME/numobd`
+LOVNAME=`lctl get_param -n llite.*.lov.common_name | tail -n 1`
+OSTCOUNT=`lctl get_param -n lov.$LOVNAME.numobd`
 
 rm -rf $DIR1/[df][0-9]* $DIR1/lnk
 
@@ -485,7 +485,7 @@ test_24() {
 run_test 24 "lfs df [-ih] [path] test ========================="
 
 test_25() {
-	[ `cat $LPROC/mdc/*-mdc-*/connect_flags | grep -c acl` -lt 2 ] && \
+	[ `lctl get_param -n mdc.*-mdc-*.connect_flags | grep -c acl` -lt 2 ] && \
 	    skip "must have acl, skipping" && return
 
 	touch $DIR1/$tdir/f1 || error "touch $DIR1/$tdir/f1"
@@ -540,7 +540,7 @@ test_27() {
 	sleep 1
 	dd if=/dev/zero of=$DIR1/$tfile bs=8k conv=notrunc count=1 seek=0
 	log "dd 3 finished"
-	echo > $LPROC/ldlm/dump_namespaces
+	lctl set_param -n ldlm.dump_namespaces ""
 	wait $DD1_PID $DD2_PID
 	[ $? -ne 0 ] && lctl dk $TMP/debug || true
 }
