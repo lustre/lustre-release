@@ -1325,8 +1325,10 @@ int lprocfs_exp_setup(struct obd_export *exp, lnet_nid_t nid, int *newnid)
         if (rc)
                 CWARN("Error adding the uuid file\n");
 
-        /* this used only for destroy and because not need locking */
+        /* protect competitive add to list, not need locking on destroy */
+        spin_lock(&obd->nid_lock);
         list_add(&tmp->nid_list, &obd->obd_nid_stats);
+        spin_unlock(&obd->nid_lock);
 
         exp->exp_nid_stats = tmp;
         *newnid = 1;
