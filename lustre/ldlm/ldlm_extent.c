@@ -689,8 +689,24 @@ int ldlm_process_extent_lock(struct ldlm_lock *lock, int *flags, int first_enq,
                 unlock_res(res);
                 rc = ldlm_run_bl_ast_work(&rpc_list);
                 lock_res(res);
-                if (rc == -ERESTART)
+
+                if (rc == -ERESTART) {
+                        /* lock was granted while resource was unlocked. */
+                        if (lock->l_granted_mode == lock->l_req_mode) {
+                                /* bug 11300: if the lock has been granted,
+                                 * break earlier because otherwise, we will go
+                                 * to restart and ldlm_resource_unlink will be
+                                 * called and it causes the interval node to be
+                                 * freed. Then we will fail at 
+                                 * ldlm_extent_add_lock() */
+                                *flags &= ~(LDLM_FL_BLOCK_GRANTED | LDLM_FL_BLOCK_CONV |
+                                            LDLM_FL_BLOCK_WAIT);
+                                GOTO(out, rc = 0);
+                        }
+
                         GOTO(restart, -ERESTART);
+                }
+
                 *flags |= LDLM_FL_BLOCK_GRANTED;
                 /* this way we force client to wait for the lock
                  * endlessly once the lock is enqueued -bzzz */

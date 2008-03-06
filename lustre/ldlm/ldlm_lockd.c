@@ -1315,7 +1315,26 @@ static void ldlm_handle_cp_callback(struct ptlrpc_request *req,
 
         LDLM_DEBUG(lock, "client completion callback handler START");
 
+        if (OBD_FAIL_CHECK(OBD_FAIL_LDLM_CANCEL_BL_CB_RACE)) {
+                int to = cfs_time_seconds(1);
+                while (to > 0) {
+                        to = schedule_timeout(to);
+                        if (lock->l_granted_mode == lock->l_req_mode ||
+                            lock->l_destroyed)
+                                break;
+                }
+        }
+
         lock_res_and_lock(lock);
+        if (lock->l_destroyed ||
+            lock->l_granted_mode == lock->l_req_mode) {
+                /* bug 11300: the lock has already been granted */
+                unlock_res_and_lock(lock);
+                LDLM_DEBUG(lock, "Double grant race happened");
+                LDLM_LOCK_PUT(lock);
+                EXIT;
+                return;
+        }
 
         /* If we receive the completion AST before the actual enqueue returned,
          * then we might need to switch lock modes, resources, or extents. */
@@ -1579,6 +1598,15 @@ static int ldlm_callback_handler(struct ptlrpc_request *req)
                 CERROR ("can't unpack dlm_req\n");
                 ldlm_callback_reply(req, -EPROTO);
                 RETURN (0);
+        }
+
+        /* Force a known safe race, send a cancel to the server for a lock
+         * which the server has already started a blocking callback on. */
+        if (OBD_FAIL_CHECK(OBD_FAIL_LDLM_CANCEL_BL_CB_RACE) &&
+            lustre_msg_get_opc(req->rq_reqmsg) == LDLM_BL_CALLBACK) {
+                rc = ldlm_cli_cancel(&dlm_req->lock_handle[0]);
+                if (rc < 0)
+                        CERROR("ldlm_cli_cancel: %d\n", rc);
         }
 
         lock = ldlm_handle2lock_ns(ns, &dlm_req->lock_handle[0]);

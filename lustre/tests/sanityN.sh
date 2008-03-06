@@ -583,6 +583,18 @@ test_30() { #bug #11110
 
 run_test 30 "recreate file race ========="
 
+test_31() {
+        mkdir -p $DIR1/$tdir || error "Creating dir $DIR1/$tdir"
+        writes=`LANG=C dd if=/dev/zero of=$DIR/$tdir/$tfile count=1 2>&1 |
+                awk 'BEGIN { FS="+" } /out/ {print $1}'`
+        #define OBD_FAIL_LDLM_CANCEL_BL_CB_RACE   0x314
+        sysctl -w lustre.fail_loc=0x314
+        reads=`LANG=C dd if=$DIR2/$tdir/$tfile of=/dev/null 2>&1 |
+               awk 'BEGIN { FS="+" } /in/ {print $1}'`
+        [ $reads -eq $writes ] || error "read" $reads "blocks, must be" $writes
+}
+run_test 31 "voluntary cancel / blocking ast race=============="
+
 log "cleanup: ======================================================"
 
 check_and_cleanup_lustre

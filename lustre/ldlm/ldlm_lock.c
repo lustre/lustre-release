@@ -1166,6 +1166,7 @@ ldlm_error_t ldlm_lock_enqueue(struct ldlm_namespace *ns,
         int local = ns_is_client(res->lr_namespace);
         ldlm_processing_policy policy;
         ldlm_error_t rc = ELDLM_OK;
+        struct ldlm_interval *node = NULL;
         ENTRY;
 
         do_gettimeofday(&lock->l_enqueued_time);
@@ -1192,14 +1193,33 @@ ldlm_error_t ldlm_lock_enqueue(struct ldlm_namespace *ns,
                 }
         }
 
+        /* For a replaying lock, it might be already in granted list. So
+         * unlinking the lock will cause the interval node to be freed, we
+         * have to allocate the interval node early otherwise we can't regrant
+         * this lock in the future. - jay */
+        if (!local && (*flags & LDLM_FL_REPLAY) && res->lr_type == LDLM_EXTENT)
+                OBD_SLAB_ALLOC(node, ldlm_interval_slab, CFS_ALLOC_IO,
+                               sizeof(*node));
+
         lock_res_and_lock(lock);
         if (local && lock->l_req_mode == lock->l_granted_mode) {
-                /* The server returned a blocked lock, but it was granted before
-                 * we got a chance to actually enqueue it.  We don't need to do
-                 * anything else. */
+                /* The server returned a blocked lock, but it was granted
+                 * before we got a chance to actually enqueue it.  We don't
+                 * need to do anything else. */
                 *flags &= ~(LDLM_FL_BLOCK_GRANTED |
                             LDLM_FL_BLOCK_CONV | LDLM_FL_BLOCK_WAIT);
                 GOTO(out, ELDLM_OK);
+        }
+
+        ldlm_resource_unlink_lock(lock);
+        if (res->lr_type == LDLM_EXTENT && lock->l_tree_node == NULL) {
+                if (node == NULL) {
+                        ldlm_lock_destroy_nolock(lock);
+                        GOTO(out, rc = -ENOMEM);
+                }
+
+                ldlm_interval_attach(node, lock);
+                node = NULL;
         }
 
         /* Some flags from the enqueue want to make it into the AST, via the
@@ -1217,7 +1237,6 @@ ldlm_error_t ldlm_lock_enqueue(struct ldlm_namespace *ns,
          *
          * FIXME (bug 268): Detect obvious lies by checking compatibility in
          * granted/converting queues. */
-        ldlm_resource_unlink_lock(lock);
         if (local) {
                 if (*flags & LDLM_FL_BLOCK_CONV)
                         ldlm_resource_add_lock(res, &res->lr_converting, lock);
@@ -1245,6 +1264,8 @@ ldlm_error_t ldlm_lock_enqueue(struct ldlm_namespace *ns,
         GOTO(out, rc);
 out:
         unlock_res_and_lock(lock);
+        if (node)
+                OBD_SLAB_FREE(node, ldlm_interval_slab, sizeof(*node));
         return rc;
 }
 
