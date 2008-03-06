@@ -2600,7 +2600,7 @@ Index: linux-2.6.9-full/fs/ext3/mballoc.c
 +	sbi->s_mb_order2_reqs = MB_DEFAULT_ORDER2_REQS;
 +	sbi->s_mb_history_filter = EXT3_MB_HISTORY_DEFAULT;
 +
-+	i = sizeof(struct ext3_locality_group) * NR_CPUS;
++	i = sizeof(struct ext3_locality_group) * num_possible_cpus();
 +	sbi->s_locality_groups = kmalloc(i, GFP_NOFS);
 +	if (sbi->s_locality_groups == NULL) {
 +		clear_opt(sbi->s_mount_opt, MBALLOC);
@@ -2608,7 +2608,7 @@ Index: linux-2.6.9-full/fs/ext3/mballoc.c
 +		kfree(sbi->s_mb_maxs);
 +		return -ENOMEM;
 +	}
-+	for (i = 0; i < NR_CPUS; i++) {
++	for (i = 0; i < num_possible_cpus(); i++) {
 +		struct ext3_locality_group *lg;
 +		lg = &sbi->s_locality_groups[i];
 +		sema_init(&lg->lg_sem, 1);
