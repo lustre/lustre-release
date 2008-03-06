@@ -45,9 +45,13 @@ filesystem with or without ACL support.
 	> # file: x
 	
 	$ ln -s l ll
-	$ getfacl -dLR ll | grep file | sort
-	> # file: ll
-	> # file: ll/y
+#	$ getfacl -dLR ll | grep file | sort
+#       (rhel4)
+#	> # file: ll
+#	> # file: ll/y
+#       (rhel5)
+#	> # file: l
+#	> # file: l/y
 	
 	$ rm l ll x
 	$ rm -rf d
