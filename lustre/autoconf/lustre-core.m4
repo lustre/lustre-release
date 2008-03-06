@@ -1363,7 +1363,7 @@ EXTRA_KCFLAGS="$tmp_flags"
 AC_DEFUN([LC_CONST_ACL_SIZE],
 [AC_MSG_CHECKING([calc acl size])
 tmp_flags="$CFLAGS"
-CFLAGS="$CFLAGS -I $LINUX/include $EXTRA_KCFLAGS"
+CFLAGS="$CFLAGS -I $LINUX_OBJ/include $EXTRA_KCFLAGS"
 AC_TRY_RUN([
 #define __KERNEL__
 #include <linux/autoconf.h>
