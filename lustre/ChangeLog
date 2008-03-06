@@ -397,6 +397,16 @@ Details    : When the failover node is the primary node, it is possible
              compare not conn's pointers but NIDs, otherwise we
 	     can defeat connection throttling.
 
+Severity   : major
+Bugzilla   : 14775
+Description: Client not clear own cache if answer to reconnect is lost.
+Details    : client gets evicted from server. Now client also thinks it is
+             disconnected (ot gets enotconn on its operation) and decides to
+             reconnect. Server receives reconnect message, but cannot find export.
+             New export is created that is fully valid (new cookie!), but client
+             gets a reply that the export is new, and so no recovery should be
+             performed.
+
 --------------------------------------------------------------------------------
 
 2007-12-07         Cluster File Systems, Inc. <info@clusterfs.com>

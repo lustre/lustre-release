@@ -1529,6 +1529,7 @@ static int ost_handle(struct ptlrpc_request *req)
                 CDEBUG(D_INODE, "connect\n");
                 OBD_FAIL_RETURN(OBD_FAIL_OST_CONNECT_NET, 0);
                 rc = target_handle_connect(req, ost_handle);
+                OBD_FAIL_RETURN(OBD_FAIL_OST_CONNECT_NET2, 0);
                 if (!rc)
                         obd = req->rq_export->exp_obd;
                 break;

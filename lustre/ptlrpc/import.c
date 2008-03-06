@@ -669,22 +669,19 @@ static int ptlrpc_connect_interpret(struct ptlrpc_request *request,
                 if (memcmp(&imp->imp_remote_handle,
                            lustre_msg_get_handle(request->rq_repmsg),
                            sizeof(imp->imp_remote_handle))) {
-                        int level = D_ERROR;
-                        /* Old MGC can reconnect to a restarted MGS */
-                        if (strcmp(imp->imp_obd->obd_type->typ_name,
-                                   LUSTRE_MGC_NAME) == 0) {
-                                level = D_CONFIG;
-                        }
-                        CDEBUG(level, 
-                               "%s@%s changed handle from "LPX64" to "LPX64
-                               "; copying, but this may foreshadow disaster\n",
+
+                        CWARN("%s@%s changed server handle from "
+                               LPX64" to "LPX64" - evicting.\n",
                                obd2cli_tgt(imp->imp_obd),
                                imp->imp_connection->c_remote_uuid.uuid,
                                imp->imp_remote_handle.cookie,
                                lustre_msg_get_handle(request->rq_repmsg)->
-                                        cookie);
+                                         cookie);
                         imp->imp_remote_handle =
                                      *lustre_msg_get_handle(request->rq_repmsg);
+
+                        IMPORT_SET_STATE(imp, LUSTRE_IMP_EVICTED);
+                        GOTO(finish, rc = 0);
                 } else {
                         CDEBUG(D_HA, "reconnected to %s@%s after partition\n",
                                obd2cli_tgt(imp->imp_obd),
