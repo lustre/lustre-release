@@ -26,7 +26,7 @@ EXTRA_DIST = $(noinst_SCRIPTS) $(noinst_DATA) \
              $(nobase_noinst_SCRIPTS) $(nobase_noinst_DATA)
 
 if TESTS
-noinst_PROGRAMS = openunlink truncate directio openme writeme mlink utime
+noinst_PROGRAMS = openunlink truncate directio openme writeme mlink utime it_test
 noinst_PROGRAMS += tchmod toexcl fsx test_brw openclose createdestroy
 noinst_PROGRAMS += createmany chownmany statmany multifstat createtest
 noinst_PROGRAMS += opendirunlink opendevunlink unlinkmany fchdir_test checkstat

@@ -1566,6 +1566,53 @@ static int filter_destroy_internal(struct obd_device *obd, obd_id objid,
         return(rc);
 }
 
+struct filter_intent_args {
+        struct ldlm_lock **victim;
+        __u64 size;
+        int *liblustre;
+};
+
+static enum interval_iter filter_intent_cb(struct interval_node *n,
+                                           void *args)
+{
+        struct ldlm_interval *node = (struct ldlm_interval *)n;
+        struct filter_intent_args *arg = (struct filter_intent_args*)args;
+        __u64 size = arg->size;
+        struct ldlm_lock **v = arg->victim;
+        struct ldlm_lock *lck;
+
+        /* If the interval is lower than the current file size,
+         * just break. */
+        if (interval_high(n) <= size)
+                return INTERVAL_ITER_STOP;
+
+        list_for_each_entry(lck, &node->li_group, l_sl_policy) {
+                /* Don't send glimpse ASTs to liblustre clients.
+                 * They aren't listening for them, and they do
+                 * entirely synchronous I/O anyways. */
+                if (lck->l_export == NULL ||
+                    lck->l_export->exp_libclient == 1)
+                        continue;
+
+                if (*arg->liblustre)
+                        *arg->liblustre = 0;
+
+                if (*v == NULL) {
+                        *v = LDLM_LOCK_GET(lck);
+                } else if ((*v)->l_policy_data.l_extent.start <
+                           lck->l_policy_data.l_extent.start) {
+                        LDLM_LOCK_PUT(*v);
+                        *v = LDLM_LOCK_GET(lck);
+                }
+
+                /* the same policy group - every lock has the
+                 * same extent, so needn't do it any more */
+                break;
+        }
+
+        return INTERVAL_ITER_CONT;
+}
+
 static int filter_intent_policy(struct ldlm_namespace *ns,
                                 struct ldlm_lock **lockp, void *req_cookie,
                                 ldlm_mode_t mode, int flags, void *data)
@@ -1577,9 +1624,10 @@ static int filter_intent_policy(struct ldlm_namespace *ns,
         ldlm_processing_policy policy;
         struct ost_lvb *res_lvb, *reply_lvb;
         struct ldlm_reply *rep;
-        struct list_head *tmp;
         ldlm_error_t err;
-        int rc, tmpflags = 0, only_liblustre = 0;
+        int idx, rc, tmpflags = 0, only_liblustre = 1;
+        struct ldlm_interval_tree *tree;
+        struct filter_intent_args arg;
         int repsize[3] = { [MSG_PTLRPC_BODY_OFF] = sizeof(struct ptlrpc_body),
                            [DLM_LOCKREPLY_OFF]   = sizeof(*rep),
                            [DLM_REPLY_REC_OFF]   = sizeof(*reply_lvb) };
@@ -1604,7 +1652,9 @@ static int filter_intent_policy(struct ldlm_namespace *ns,
 
         /* If we grant any lock at all, it will be a whole-file read lock.
          * Call the extent policy function to see if our request can be
-         * granted, or is blocked. */
+         * granted, or is blocked. 
+         * If the OST lock has LDLM_FL_HAS_INTENT set, it means a glimpse lock
+         */
         lock->l_policy_data.l_extent.start = 0;
         lock->l_policy_data.l_extent.end = OBD_OBJECT_EOF;
         lock->l_req_mode = LCK_PR;
@@ -1652,42 +1702,23 @@ static int filter_intent_policy(struct ldlm_namespace *ns,
         LASSERT(res_lvb != NULL);
         *reply_lvb = *res_lvb;
 
-        list_for_each(tmp, &res->lr_granted) {
-                struct ldlm_lock *tmplock =
-                        list_entry(tmp, struct ldlm_lock, l_res_link);
-
-                if (tmplock->l_granted_mode == LCK_PR)
-                        continue;
-                /*
-                 * ->ns_lock guarantees that no new locks are granted, and,
-                 * therefore, that res->lr_lvb_data cannot increase beyond the
-                 * end of already granted lock. As a result, it is safe to
-                 * check against "stale" reply_lvb->lvb_size value without
-                 * res->lr_lvb_sem.
-                 */
-                if (tmplock->l_policy_data.l_extent.end <= reply_lvb->lvb_size)
-                        continue;
-
-                /* Don't send glimpse ASTs to liblustre clients.  They aren't
-                 * listening for them, and they do entirely synchronous I/O
-                 * anyways. */
-                if (tmplock->l_export == NULL ||
-                    tmplock->l_export->exp_libclient == 1) {
-                        only_liblustre = 1;
-                        continue;
-                }
-
-                if (l == NULL) {
-                        l = LDLM_LOCK_GET(tmplock);
-                        continue;
-                }
-
-                if (l->l_policy_data.l_extent.start >
-                    tmplock->l_policy_data.l_extent.start)
+        /*
+         * ->ns_lock guarantees that no new locks are granted, and,
+         * therefore, that res->lr_lvb_data cannot increase beyond the
+         * end of already granted lock. As a result, it is safe to
+         * check against "stale" reply_lvb->lvb_size value without
+         * res->lr_lvb_sem.
+         */
+        arg.size = reply_lvb->lvb_size;
+        arg.victim = &l;
+        arg.liblustre = &only_liblustre;
+        for (idx = 0; idx < LCK_MODE_NUM; idx++) {
+                tree = &res->lr_itree[idx];
+                if (tree->lit_mode == LCK_PR)
                         continue;
 
-                LDLM_LOCK_PUT(l);
-                l = LDLM_LOCK_GET(tmplock);
+                interval_iterate_reverse(tree->lit_root, 
+                                         filter_intent_cb, &arg);
         }
         unlock_res(res);
 

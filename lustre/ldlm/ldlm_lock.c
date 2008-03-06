@@ -162,6 +162,7 @@ void ldlm_lock_put(struct ldlm_lock *lock)
                 if (lock->l_lvb_data != NULL)
                         OBD_FREE(lock->l_lvb_data, lock->l_lvb_len);
 
+                ldlm_interval_free(ldlm_interval_detach(lock));
                 OBD_FREE_RCU_CB(lock, sizeof(*lock), &lock->l_handle, 
                       	        ldlm_lock_free);
         }
@@ -879,6 +880,8 @@ void ldlm_grant_lock(struct ldlm_lock *lock, struct list_head *work_list)
         lock->l_granted_mode = lock->l_req_mode;
         if (res->lr_type == LDLM_PLAIN || res->lr_type == LDLM_IBITS)
                 ldlm_grant_lock_with_skiplist(lock);
+        else if (res->lr_type == LDLM_EXTENT)
+                ldlm_extent_add_lock(res, lock);
         else
                 ldlm_resource_add_lock(res, &res->lr_granted, lock);
 
@@ -1136,16 +1139,28 @@ struct ldlm_lock *ldlm_lock_create(struct ldlm_namespace *ns,
         lock->l_glimpse_ast = glimpse;
         lock->l_pid = cfs_curproc_pid();
 
+        lock->l_tree_node = NULL;
+        /* if this is the extent lock, allocate the interval tree node */
+        if (type == LDLM_EXTENT) {
+                if (ldlm_interval_alloc(lock) == NULL)
+                        GOTO(out, 0);
+        }
+
         if (lvb_len) {
                 lock->l_lvb_len = lvb_len;
                 OBD_ALLOC(lock->l_lvb_data, lvb_len);
-                if (lock->l_lvb_data == NULL) {
-                        OBD_SLAB_FREE(lock, ldlm_lock_slab, sizeof(*lock));
-                        RETURN(NULL);
-                }
+                if (lock->l_lvb_data == NULL)
+                        GOTO(out, 0);
         }
 
         RETURN(lock);
+
+out:
+        if (lock->l_lvb_data)
+                OBD_FREE(lock->l_lvb_data, lvb_len);
+        ldlm_interval_free(ldlm_interval_detach(lock));
+        OBD_SLAB_FREE(lock, ldlm_lock_slab, sizeof(*lock));
+        return NULL;
 }
 
 ldlm_error_t ldlm_lock_enqueue(struct ldlm_namespace *ns,
@@ -1157,6 +1172,7 @@ ldlm_error_t ldlm_lock_enqueue(struct ldlm_namespace *ns,
         int local = ns_is_client(res->lr_namespace);
         ldlm_processing_policy policy;
         ldlm_error_t rc = ELDLM_OK;
+        struct ldlm_interval *node = NULL;
         ENTRY;
 
         do_gettimeofday(&lock->l_enqueued_time);
@@ -1183,14 +1199,33 @@ ldlm_error_t ldlm_lock_enqueue(struct ldlm_namespace *ns,
                 }
         }
 
+        /* For a replaying lock, it might be already in granted list. So
+         * unlinking the lock will cause the interval node to be freed, we
+         * have to allocate the interval node early otherwise we can't regrant
+         * this lock in the future. - jay */
+        if (!local && (*flags & LDLM_FL_REPLAY) && res->lr_type == LDLM_EXTENT)
+                OBD_SLAB_ALLOC(node, ldlm_interval_slab, CFS_ALLOC_IO,
+                               sizeof(*node));
+
         lock_res_and_lock(lock);
         if (local && lock->l_req_mode == lock->l_granted_mode) {
-                /* The server returned a blocked lock, but it was granted before
-                 * we got a chance to actually enqueue it.  We don't need to do
-                 * anything else. */
+                /* The server returned a blocked lock, but it was granted
+                 * before we got a chance to actually enqueue it.  We don't
+                 * need to do anything else. */
                 *flags &= ~(LDLM_FL_BLOCK_GRANTED |
                             LDLM_FL_BLOCK_CONV | LDLM_FL_BLOCK_WAIT);
                 GOTO(out, ELDLM_OK);
+        }
+
+        ldlm_resource_unlink_lock(lock);
+        if (res->lr_type == LDLM_EXTENT && lock->l_tree_node == NULL) {
+                if (node == NULL) {
+                        ldlm_lock_destroy_nolock(lock);
+                        GOTO(out, rc = -ENOMEM);
+                }
+
+                ldlm_interval_attach(node, lock);
+                node = NULL;
         }
 
         /* Some flags from the enqueue want to make it into the AST, via the
@@ -1208,7 +1243,6 @@ ldlm_error_t ldlm_lock_enqueue(struct ldlm_namespace *ns,
          *
          * FIXME (bug 268): Detect obvious lies by checking compatibility in
          * granted/converting queues. */
-        ldlm_resource_unlink_lock(lock);
         if (local) {
                 if (*flags & LDLM_FL_BLOCK_CONV)
                         ldlm_resource_add_lock(res, &res->lr_converting, lock);
@@ -1236,6 +1270,8 @@ ldlm_error_t ldlm_lock_enqueue(struct ldlm_namespace *ns,
         GOTO(out, rc);
 out:
         unlock_res_and_lock(lock);
+        if (node)
+                OBD_SLAB_FREE(node, ldlm_interval_slab, sizeof(*node));
         return rc;
 }
 
@@ -1656,12 +1692,19 @@ struct ldlm_resource *ldlm_lock_convert(struct ldlm_lock *lock, int new_mode,
         struct ldlm_lock *mark_lock = NULL;
         int join = LDLM_JOIN_NONE;
         ldlm_error_t err;
+        struct ldlm_interval *node;
         ENTRY;
 
         if (new_mode == lock->l_granted_mode) { // No changes? Just return.
                 *flags |= LDLM_FL_BLOCK_GRANTED;
                 RETURN(lock->l_resource);
         }
+
+        /* I can't check the type of lock here because the bitlock of lock
+         * is not held here, so do the allocation blindly. -jay */
+        OBD_SLAB_ALLOC(node, ldlm_interval_slab, CFS_ALLOC_IO, sizeof(*node));
+        if (node == NULL)  /* Actually, this causes EDEADLOCK to be returned */
+                RETURN(NULL);
 
         LASSERTF(new_mode == LCK_PW && lock->l_granted_mode == LCK_PR,
                  "new_mode %u, granted %u\n", new_mode, lock->l_granted_mode);
@@ -1698,8 +1741,17 @@ struct ldlm_resource *ldlm_lock_convert(struct ldlm_lock *lock, int new_mode,
                 else if (lock->l_res_link.next != &res->lr_granted)
                         mark_lock = list_entry(lock->l_res_link.next,
                                                struct ldlm_lock, l_res_link);
+        } else {
+                ldlm_resource_unlink_lock(lock);
+                if (res->lr_type == LDLM_EXTENT) {
+                        /* FIXME: ugly code, I have to attach the lock to a 
+                         * interval node again since perhaps it will be granted
+                         * soon */
+                        CFS_INIT_LIST_HEAD(&node->li_group);
+                        ldlm_interval_attach(node, lock);
+                        node = NULL;
+                }
         }
-        ldlm_resource_unlink_lock(lock);
 
         /* If this is a local resource, put it on the appropriate list. */
         if (ns_is_client(res->lr_namespace)) {
@@ -1725,7 +1777,11 @@ struct ldlm_resource *ldlm_lock_convert(struct ldlm_lock *lock, int new_mode,
                 rc = policy(lock, &pflags, 0, &err, &rpc_list);
                 if (rc == LDLM_ITER_STOP) {
                         lock->l_req_mode = old_mode;
-                        ldlm_granted_list_add_lock(lock, mark_lock, join);
+                        if (res->lr_type == LDLM_EXTENT)
+                                ldlm_extent_add_lock(res, lock);
+                        else
+                                ldlm_granted_list_add_lock(lock, mark_lock,
+                                                           join);
                         res = NULL;
                 } else {
                         *flags |= LDLM_FL_BLOCK_GRANTED;
@@ -1736,6 +1792,8 @@ struct ldlm_resource *ldlm_lock_convert(struct ldlm_lock *lock, int new_mode,
 
         if (granted)
                 ldlm_run_ast_work(&rpc_list, LDLM_WORK_CP_AST);
+        if (node)
+                OBD_SLAB_FREE(node, ldlm_interval_slab, sizeof(*node));
         RETURN(res);
 }
 

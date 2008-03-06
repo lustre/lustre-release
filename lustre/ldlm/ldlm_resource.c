@@ -622,6 +622,7 @@ static __u32 ldlm_hash_fn(struct ldlm_resource *parent,
 static struct ldlm_resource *ldlm_resource_new(void)
 {
         struct ldlm_resource *res;
+        int idx;
 
         OBD_SLAB_ALLOC(res, ldlm_resource_slab, CFS_ALLOC_IO, sizeof *res);
         if (res == NULL)
@@ -634,6 +635,14 @@ static struct ldlm_resource *ldlm_resource_new(void)
         CFS_INIT_LIST_HEAD(&res->lr_granted);
         CFS_INIT_LIST_HEAD(&res->lr_converting);
         CFS_INIT_LIST_HEAD(&res->lr_waiting);
+
+        /* initialize interval trees for each lock mode*/
+        for (idx = 0; idx < LCK_MODE_NUM; idx++) {
+                res->lr_itree[idx].lit_size = 0;
+                res->lr_itree[idx].lit_mode = 1 << idx;
+                res->lr_itree[idx].lit_root = NULL;
+        }
+
         atomic_set(&res->lr_refcount, 1);
         spin_lock_init(&res->lr_lock);
 
@@ -905,8 +914,13 @@ void ldlm_resource_insert_lock_after(struct ldlm_lock *original,
 
 void ldlm_resource_unlink_lock(struct ldlm_lock *lock)
 {
+        int type = lock->l_resource->lr_type;
+
         check_res_locked(lock->l_resource);
-        ldlm_unlink_lock_skiplist(lock);
+        if (type == LDLM_IBITS || type == LDLM_PLAIN)
+                ldlm_unlink_lock_skiplist(lock);
+        else if (type == LDLM_EXTENT)
+                ldlm_extent_unlink_lock(lock);
         list_del_init(&lock->l_res_link);
 }
 

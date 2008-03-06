@@ -21,6 +21,7 @@
 #include <lustre_import.h>
 #include <lustre_handles.h>
 #include <lustre_export.h> /* for obd_export, for LDLM_DEBUG */
+#include <interval_tree.h> /* for interval_node{}, ldlm_extent */
 
 struct obd_ops;
 struct obd_device;
@@ -365,6 +366,23 @@ typedef int (*ldlm_completion_callback)(struct ldlm_lock *lock, int flags,
                                         void *data);
 typedef int (*ldlm_glimpse_callback)(struct ldlm_lock *lock, void *data);
 
+/* Interval node data for each LDLM_EXTENT lock */
+struct ldlm_interval {
+        struct interval_node li_node;   /* node for tree mgmt */
+        struct list_head     li_group;  /* the locks which have the same 
+                                         * policy - group of the policy */
+};
+#define to_ldlm_interval(n) container_of(n, struct ldlm_interval, li_node)
+
+/* the interval tree must be accessed inside the resource lock. */
+struct ldlm_interval_tree {
+        /* tree size, this variable is used to count
+         * granted PW locks in ldlm_extent_policy()*/
+        int                   lit_size;
+        ldlm_mode_t           lit_mode; /* lock mode */
+        struct interval_node *lit_root; /* actually ldlm_interval */
+};
+
 struct ldlm_lock {
         struct portals_handle l_handle; // must be first in the structure
         atomic_t              l_refc;
@@ -384,6 +402,8 @@ struct ldlm_lock {
 
         struct list_head      l_sl_mode;        // skip pointer for request mode
         struct list_head      l_sl_policy;      // skip pointer for inodebits
+
+        struct ldlm_interval *l_tree_node;      /* tree node for ldlm_extent */
 
         /* protected by led_lock */
         struct list_head      l_export_chain; // per-export chain of locks
@@ -457,6 +477,8 @@ struct ldlm_resource {
         ldlm_type_t            lr_type; /* LDLM_{PLAIN,EXTENT,FLOCK} */
         struct ldlm_res_id     lr_name;
         atomic_t               lr_refcount;
+
+        struct ldlm_interval_tree lr_itree[LCK_MODE_NUM];  /* interval trees*/
 
         /* Server-side-only lock value block elements */
         struct semaphore       lr_lvb_sem;
