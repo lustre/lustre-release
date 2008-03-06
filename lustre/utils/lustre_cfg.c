@@ -547,8 +547,8 @@ int jt_lcfg_getparam(int argc, char **argv)
 {
         int fp;
         int rc = 0, i, show_path = 0;
-        char buf[CFS_PAGE_SIZE] = {'\0'}, pattern[PATH_MAX];
-        char *path, *tmp;
+        char pattern[PATH_MAX];
+        char *path, *tmp, *buf;
         glob_t glob_info;
 
         if (argc == 3 && strcmp(argv[1], "-n") == 0) {
@@ -586,8 +586,11 @@ int jt_lcfg_getparam(int argc, char **argv)
                 return rc;
         }
 
+        buf = malloc(CFS_PAGE_SIZE);
         for (i = 0; i  < glob_info.gl_pathc; i++) {
                 char *valuename = NULL;
+
+                memset(buf, 0, CFS_PAGE_SIZE);
                 if (show_path) {
                         char *filename;
                         filename = strdup(glob_info.gl_pathv[i]);
@@ -604,7 +607,7 @@ int jt_lcfg_getparam(int argc, char **argv)
                 }
 
                 do {
-                        rc = read(fp, buf, sizeof(buf));
+                        rc = read(fp, buf, CFS_PAGE_SIZE);
                         if (rc == 0)
                                 break;
                         if (rc < 0) {
@@ -633,11 +636,11 @@ int jt_lcfg_getparam(int argc, char **argv)
                                 break;
                         }
                 } while (1);
-                memset(buf, 0, sizeof(buf));
                 close(fp);
         }
 
         globfree(&glob_info);
+        free(buf);
         return rc;
 }
 
