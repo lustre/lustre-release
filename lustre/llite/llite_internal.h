@@ -359,6 +359,27 @@ struct ll_readahead_state {
          * protected by ->ras_lock.
          */
         struct list_head ras_read_beads;
+        /* 
+         * The following 3 items are used for detecting the stride I/O
+         * mode. 
+ 	 * In stride I/O mode, 
+         * ...............|-----data-----|****gap*****|--------|******|.... 
+         *    offset      |-stride_pages-|-stride_gap-| 
+         * ras_stride_offset = offset;
+         * ras_stride_length = stride_pages + stride_gap;
+         * ras_stride_pages = stride_pages;
+         * Note: all these three items are counted by pages.
+         */
+        unsigned long ras_stride_length;
+        unsigned long ras_stride_pages;
+        pgoff_t ras_stride_offset;
+        /* 
+         * number of consecutive stride request count, and it is similar as
+         * ras_consecutive_requests, but used for stride I/O mode.
+         * Note: only more than 2 consecutive stride request are detected,
+         * stride read-ahead will be enable
+         */
+        unsigned long ras_consecutive_stride_requests;
 };
 
 extern cfs_mem_cache_t *ll_file_data_slab;

@@ -1055,11 +1055,14 @@ void ll_ra_accounting(struct ll_async_page *llap, struct address_space *mapping)
 
 #define RAS_CDEBUG(ras) \
         CDEBUG(D_READA,                                                      \
-               "lrp %lu cr %lu cp %lu ws %lu wl %lu nra %lu r %lu ri %lu\n", \
+               "lrp %lu cr %lu cp %lu ws %lu wl %lu nra %lu r %lu ri %lu"    \
+               "csr %lu sf %lu sp %lu sl %lu \n", 		     	     \
                ras->ras_last_readpage, ras->ras_consecutive_requests,        \
                ras->ras_consecutive_pages, ras->ras_window_start,            \
                ras->ras_window_len, ras->ras_next_readahead,                 \
-               ras->ras_requests, ras->ras_request_index);
+               ras->ras_requests, ras->ras_request_index,		     \
+               ras->ras_consecutive_stride_requests, ras->ras_stride_offset, \
+               ras->ras_stride_pages, ras->ras_stride_length)
 
 static int index_in_window(unsigned long index, unsigned long point,
                            unsigned long before, unsigned long after)
@@ -1133,20 +1136,211 @@ struct ll_ra_read *ll_ra_read_get(struct file *f)
         return bead;
 }
 
+static int ll_read_ahead_page(struct obd_export *exp, struct obd_io_group *oig, 
+                              int index, struct address_space *mapping)
+{
+        struct ll_async_page *llap;
+        struct page *page;
+        unsigned int gfp_mask = 0;
+        int rc = 0;       
+ 
+        gfp_mask = GFP_HIGHUSER & ~__GFP_WAIT;
+#ifdef __GFP_NOWARN
+        gfp_mask |= __GFP_NOWARN;
+#endif
+        page = grab_cache_page_nowait_gfp(mapping, index, gfp_mask);
+        if (page == NULL) {
+                ll_ra_stats_inc(mapping, RA_STAT_FAILED_GRAB_PAGE);
+                CDEBUG(D_READA, "g_c_p_n failed\n");
+                return 0;
+        }
+
+        /* Check if page was truncated or reclaimed */
+        if (page->mapping != mapping) {
+                ll_ra_stats_inc(mapping, RA_STAT_WRONG_GRAB_PAGE);
+                CDEBUG(D_READA, "g_c_p_n returned invalid page\n");
+                GOTO(unlock_page, rc = 0);	
+        }
+
+        /* we do this first so that we can see the page in the /proc
+         * accounting */
+        llap = llap_from_page(page, LLAP_ORIGIN_READAHEAD);
+        if (IS_ERR(llap) || llap->llap_defer_uptodate) {
+                if (PTR_ERR(llap) == -ENOLCK) {
+                        ll_ra_stats_inc(mapping, RA_STAT_FAILED_MATCH);
+                        CDEBUG(D_READA | D_PAGE,
+                               "Adding page to cache failed index "
+                                "%d\n", index);
+                                CDEBUG(D_READA, "nolock page\n");
+                                GOTO(unlock_page, rc = -ENOLCK);
+                }
+                CDEBUG(D_READA, "read-ahead page\n");
+                GOTO(unlock_page, rc = 0);	
+        }
+
+        /* skip completed pages */
+        if (Page_Uptodate(page))
+                GOTO(unlock_page, rc = 0);	
+        
+        /* bail out when we hit the end of the lock. */
+        rc = ll_issue_page_read(exp, llap, oig, 1);
+        if (rc == 0) {
+                LL_CDEBUG_PAGE(D_READA | D_PAGE, page, "started read-ahead\n");
+                rc = 1;
+        } else {
+unlock_page:	
+                unlock_page(page);
+                LL_CDEBUG_PAGE(D_READA | D_PAGE, page, "skipping read-ahead\n");
+        }
+        page_cache_release(page);
+        return rc;
+}
+
+/* ra_io_arg will be filled in the beginning of ll_readahead with 
+ * ras_lock, then the following ll_read_ahead_pages will read RA 
+ * pages according to this arg, all the items in this structure are
+ * counted by page index.
+ */
+struct ra_io_arg {
+        unsigned long ria_start;  /* start offset of read-ahead*/
+        unsigned long ria_end;    /* end offset of read-ahead*/ 
+        /* If stride read pattern is detected, ria_stoff means where
+         * stride read is started. Note: for normal read-ahead, the
+         * value here is meaningless, and also it will not be accessed*/ 
+        pgoff_t ria_stoff;
+        /* ria_length and ria_pages are the length and pages length in the
+         * stride I/O mode. And they will also be used to check whether
+         * it is stride I/O read-ahead in the read-ahead pages*/ 
+        unsigned long ria_length;
+        unsigned long ria_pages;
+};
+
+#define RIA_DEBUG(ria) 						      \
+        CDEBUG(D_READA, "rs %lu re %lu ro %lu rl %lu rp %lu\n",       \
+        ria->ria_start, ria->ria_end, ria->ria_stoff, ria->ria_length,\
+        ria->ria_pages)
+
+#define RAS_INCREASE_STEP (1024 * 1024 >> CFS_PAGE_SHIFT)
+
+static inline int stride_io_mode(struct ll_readahead_state *ras)
+{
+        return ras->ras_consecutive_stride_requests > 1; 
+}
+
+/* The function calculates how much pages will be read in 
+ * [off, off + length], which will be read by stride I/O mode,
+ * stride_offset = st_off, stride_lengh = st_len, 
+ * stride_pages = st_pgs
+ */  
+static unsigned long
+stride_pg_count(pgoff_t st_off, unsigned long st_len, unsigned long st_pgs, 
+                unsigned long off, unsigned length)
+{
+        unsigned long cont_len = st_off > off ?  st_off - off : 0;
+        unsigned long stride_len = length + off > st_off ?
+                           length + off + 1 - st_off : 0;
+        unsigned long left, pg_count;
+
+        if (st_len == 0 || length == 0)
+                return length;
+
+        left = do_div(stride_len, st_len);
+        left = min(left, st_pgs);
+
+        pg_count = left + stride_len * st_pgs + cont_len;
+
+        LASSERT(pg_count >= left);
+
+        CDEBUG(D_READA, "st_off %lu, st_len %lu st_pgs %lu off %lu length %u"
+               "pgcount %lu\n", st_off, st_len, st_pgs, off, length, pg_count); 
+
+        return pg_count;
+}
+
+static int ria_page_count(struct ra_io_arg *ria)
+{
+        __u64 length = ria->ria_end >= ria->ria_start ? 
+                       ria->ria_end - ria->ria_start + 1 : 0;
+
+        return stride_pg_count(ria->ria_stoff, ria->ria_length, 
+                               ria->ria_pages, ria->ria_start,
+                               length);
+}
+
+/*Check whether the index is in the defined ra-window */
+static int ras_inside_ra_window(unsigned long idx, struct ra_io_arg *ria)
+{
+        /* If ria_length == ria_pages, it means non-stride I/O mode,
+         * idx should always inside read-ahead window in this case 
+         * For stride I/O mode, just check whether the idx is inside
+         * the ria_pages. */
+        return ria->ria_length == 0 || ria->ria_length == ria->ria_pages || 
+               (idx - ria->ria_stoff) % ria->ria_length < ria->ria_pages;
+}
+
+static int ll_read_ahead_pages(struct obd_export *exp,
+                               struct obd_io_group *oig,
+                               struct ra_io_arg *ria,	
+                               unsigned long *reserved_pages,
+                               struct address_space *mapping,
+                               unsigned long *ra_end)
+{
+        int rc, count = 0, stride_ria;
+        unsigned long page_idx;
+
+        LASSERT(ria != NULL);
+        RIA_DEBUG(ria);
+      
+        stride_ria = ria->ria_length > ria->ria_pages && ria->ria_pages > 0;
+        for (page_idx = ria->ria_start; page_idx <= ria->ria_end &&
+                        *reserved_pages > 0; page_idx++) {
+                if (ras_inside_ra_window(page_idx, ria)) {
+                        /* If the page is inside the read-ahead window*/
+                        rc = ll_read_ahead_page(exp, oig, page_idx, mapping);
+        		if (rc == 1) {
+	        		(*reserved_pages)--;
+		        	count ++;
+		        } else if (rc == -ENOLCK)
+			        break;
+                } else if (stride_ria) {
+                        /* If it is not in the read-ahead window, and it is 
+                         * read-ahead mode, then check whether it should skip
+                         * the stride gap */  
+			pgoff_t offset;
+                        /* FIXME: This assertion only is valid when it is for 
+                         * forward read-ahead, it will be fixed when backward 
+                         * read-ahead is implemented */
+                        LASSERTF(page_idx > ria->ria_stoff, "since %lu in the"
+                                " gap of ra window,it should bigger than stride"
+                                " offset %lu \n", page_idx, ria->ria_stoff);
+                        
+                        offset = page_idx - ria->ria_stoff;
+			offset = offset % (ria->ria_length);
+			if (offset > ria->ria_pages) {
+				page_idx += ria->ria_length - offset;
+                                CDEBUG(D_READA, "i %lu skip %lu \n", page_idx, 
+                                       ria->ria_length - offset);
+                                continue;
+                        }
+                }
+        }
+        *ra_end = page_idx;
+        return count;
+}
+
 static int ll_readahead(struct ll_readahead_state *ras,
                          struct obd_export *exp, struct address_space *mapping,
                          struct obd_io_group *oig, int flags)
 {
-        unsigned long i, start = 0, end = 0, reserved;
-        struct ll_async_page *llap;
-        struct page *page;
-        int rc, ret = 0, match_failed = 0;
-        __u64 kms;
-        unsigned int gfp_mask;
+        unsigned long start = 0, end = 0, reserved;
+        unsigned long ra_end, len; 
         struct inode *inode;
         struct lov_stripe_md *lsm;
         struct ll_ra_read *bead;
         struct ost_lvb lvb;
+        struct ra_io_arg ria = { 0 }; 
+        int ret = 0; 
+        __u64 kms;
         ENTRY;
 
         inode = mapping->host;
@@ -1170,7 +1364,7 @@ static int ll_readahead(struct ll_readahead_state *ras,
                 ras->ras_window_len = bead->lrr_start + bead->lrr_count -
                                       ras->ras_window_start;
         }
-        /* Reserve a part of the read-ahead window that we'll be issuing */
+       	/* Reserve a part of the read-ahead window that we'll be issuing */
         if (ras->ras_window_len) {
                 start = ras->ras_next_readahead;
                 end = ras->ras_window_start + ras->ras_window_len - 1;
@@ -1181,6 +1375,13 @@ static int ll_readahead(struct ll_readahead_state *ras,
                 ras->ras_next_readahead = max(end, end + 1);
                 RAS_CDEBUG(ras);
         }
+	ria.ria_start = start;
+	ria.ria_end = end;
+	/* If stride I/O mode is detected, get stride window*/
+	if (stride_io_mode(ras)) {
+		ria.ria_length = ras->ras_stride_length; 
+		ria.ria_pages = ras->ras_stride_pages;
+	}
         spin_unlock(&ras->ras_lock);
 
         if (end == 0) {
@@ -1188,70 +1389,23 @@ static int ll_readahead(struct ll_readahead_state *ras,
                 RETURN(0);
         }
 
-        reserved = ll_ra_count_get(ll_i2sbi(inode), end - start + 1);
+        len = ria_page_count(&ria); 
+        if (len == 0)
+                RETURN(0);
+
+        reserved = ll_ra_count_get(ll_i2sbi(inode), len);
         if (reserved < end - start + 1)
                 ll_ra_stats_inc(mapping, RA_STAT_MAX_IN_FLIGHT);
 
-        gfp_mask = GFP_HIGHUSER & ~__GFP_WAIT;
-#ifdef __GFP_NOWARN
-        gfp_mask |= __GFP_NOWARN;
-#endif
-
-        for (i = start; reserved > 0 && !match_failed && i <= end; i++) {
-                /* skip locked pages from previous readpage calls */
-                page = grab_cache_page_nowait_gfp(mapping, i, gfp_mask);
-                if (page == NULL) {
-                        ll_ra_stats_inc(mapping, RA_STAT_FAILED_GRAB_PAGE);
-                        CDEBUG(D_READA, "g_c_p_n failed\n");
-                        continue;
-                }
-
-                /* Check if page was truncated or reclaimed */
-                if (page->mapping != mapping) {
-                        ll_ra_stats_inc(mapping, RA_STAT_WRONG_GRAB_PAGE);
-                        CDEBUG(D_READA, "g_c_p_n returned invalid page\n");
-                        goto next_page;
-                }
-
-                /* we do this first so that we can see the page in the /proc
-                 * accounting */
-                llap = llap_from_page(page, LLAP_ORIGIN_READAHEAD);
-                if (IS_ERR(llap) || llap->llap_defer_uptodate) {
-                        if (PTR_ERR(llap) == -ENOLCK) {
-                                ll_ra_stats_inc(mapping, RA_STAT_FAILED_MATCH);
-                                match_failed = 1;
-                                CDEBUG(D_READA | D_PAGE,
-                                       "Adding page to cache failed index "
-                                       "%lu\n", i);
-                        }
-                        goto next_page;
-                }
-
-                /* skip completed pages */
-                if (Page_Uptodate(page))
-                        goto next_page;
-
-                /* bail when we hit the end of the lock. */
-                rc = ll_issue_page_read(exp, llap, oig, 1);
-                if (rc == 0) {
-                        reserved--;
-                        ret++;
-                        LL_CDEBUG_PAGE(D_READA| D_PAGE, page,
-                                       "started read-ahead\n");
-                } else {
-        next_page:
-                        LL_CDEBUG_PAGE(D_READA | D_PAGE, page,
-                                       "skipping read-ahead\n");
-
-                        unlock_page(page);
-                }
-                page_cache_release(page);
-        }
+        CDEBUG(D_READA, "reserved page %lu \n", reserved);
+	
+        ret = ll_read_ahead_pages(exp, oig, &ria, &reserved, mapping, &ra_end);
 
         LASSERTF(reserved >= 0, "reserved %lu\n", reserved);
         if (reserved != 0)
                 ll_ra_count_put(ll_i2sbi(inode), reserved);
-        if (i == end + 1 && end == (kms >> CFS_PAGE_SHIFT))
+
+        if (ra_end == end + 1 && ra_end == (kms >> CFS_PAGE_SHIFT))
                 ll_ra_stats_inc(mapping, RA_STAT_EOF);
 
         /* if we didn't get to the end of the region we reserved from
@@ -1259,13 +1413,16 @@ static int ll_readahead(struct ll_readahead_state *ras,
          * next read-ahead tries from where we left off.  we only do so
          * if the region we failed to issue read-ahead on is still ahead
          * of the app and behind the next index to start read-ahead from */
-        if (i != end + 1) {
+        CDEBUG(D_READA, "ra_end %lu end %lu stride end %lu \n",
+               ra_end, end, ria.ria_end);
+
+        if (ra_end != (end + 1)) {
                 spin_lock(&ras->ras_lock);
-                if (i < ras->ras_next_readahead &&
-                    index_in_window(i, ras->ras_window_start, 0,
-                                    ras->ras_window_len)) {
-                        ras->ras_next_readahead = i;
-                        RAS_CDEBUG(ras);
+                if (ra_end < ras->ras_next_readahead && 
+                    index_in_window(ra_end, ras->ras_window_start, 0, 
+                                    ras->ras_window_len)) { 
+                	ras->ras_next_readahead = ra_end;
+                       	RAS_CDEBUG(ras);
                 }
                 spin_unlock(&ras->ras_lock);
         }
@@ -1275,7 +1432,7 @@ static int ll_readahead(struct ll_readahead_state *ras,
 
 static void ras_set_start(struct ll_readahead_state *ras, unsigned long index)
 {
-        ras->ras_window_start = index & (~((1024 * 1024 >> CFS_PAGE_SHIFT) - 1));
+        ras->ras_window_start = index & (~(RAS_INCREASE_STEP - 1));
 }
 
 /* called with the ras_lock held or from places where it doesn't matter */
@@ -1291,6 +1448,13 @@ static void ras_reset(struct ll_readahead_state *ras, unsigned long index)
         RAS_CDEBUG(ras);
 }
 
+/* called with the ras_lock held or from places where it doesn't matter */
+static void ras_stride_reset(struct ll_readahead_state *ras)
+{
+        ras->ras_consecutive_stride_requests = 0;
+        RAS_CDEBUG(ras);
+}
+
 void ll_readahead_init(struct inode *inode, struct ll_readahead_state *ras)
 {
         spin_lock_init(&ras->ras_lock);
@@ -1299,12 +1463,118 @@ void ll_readahead_init(struct inode *inode, struct ll_readahead_state *ras)
         INIT_LIST_HEAD(&ras->ras_read_beads);
 }
 
+/* Check whether the read request is in the stride window.
+ * If it is in the stride window, return 1, otherwise return 0.
+ * and also update stride_gap and stride_pages. 
+ */
+static int index_in_stride_window(unsigned long index, 
+                                  struct ll_readahead_state *ras,
+                                  struct inode *inode)
+{
+        int stride_gap = index - ras->ras_last_readpage - 1;
+        
+        LASSERT(stride_gap != 0);
+        
+        if (ras->ras_consecutive_pages == 0)
+                return 0;
+
+        /*Otherwise check the stride by itself */
+        if ((ras->ras_stride_length - ras->ras_stride_pages) == stride_gap &&
+            ras->ras_consecutive_pages == ras->ras_stride_pages)
+                return 1;
+
+        if (stride_gap >= 0) {
+                /* 
+                 * only set stride_pages, stride_length if 
+                 * it is forward reading ( stride_gap > 0)
+                 */
+                ras->ras_stride_pages = ras->ras_consecutive_pages;
+                ras->ras_stride_length = stride_gap + ras->ras_consecutive_pages; 
+        } else {
+                /* 
+                 * If stride_gap < 0,(back_forward reading),
+                 * reset the stride_pages/length. 
+                 * FIXME:back_ward stride I/O read.
+                 * 
+                 */
+                ras->ras_stride_pages = 0;
+                ras->ras_stride_length = 0;
+        }
+        RAS_CDEBUG(ras);
+
+        return 0;
+}
+
+static unsigned long
+stride_page_count(struct ll_readahead_state *ras, unsigned long len)
+{
+        return stride_pg_count(ras->ras_stride_offset, ras->ras_stride_length,
+                               ras->ras_stride_pages, ras->ras_stride_offset,
+                               len);
+}
+
+/* Stride Read-ahead window will be increased inc_len according to
+ * stride I/O pattern */
+static void ras_stride_increase_window(struct ll_readahead_state *ras, 
+                                       struct ll_ra_info *ra,
+                                       unsigned long inc_len)
+{
+        unsigned long left, step, window_len;
+        unsigned long stride_len;
+
+        LASSERT(ras->ras_stride_length > 0);
+
+        stride_len = ras->ras_window_start + ras->ras_window_len -
+                     ras->ras_stride_offset;
+
+        LASSERTF(stride_len > 0, "window_start %lu, window_len %lu"
+                "stride_offset %lu\n", ras->ras_window_start,
+                 ras->ras_window_len, ras->ras_stride_offset);
+
+        left = stride_len % ras->ras_stride_length;
+
+        window_len = ras->ras_window_len - left;
+        
+        if (left < ras->ras_stride_pages)
+                left += inc_len;
+        else
+                left = ras->ras_stride_pages + inc_len; 
+
+        LASSERT(ras->ras_stride_pages != 0);
+
+        step = left / ras->ras_stride_pages;
+        left %= ras->ras_stride_pages;
+
+        window_len += step * ras->ras_stride_length + left;
+
+        if (stride_page_count(ras, window_len) <= ra->ra_max_pages)
+                ras->ras_window_len = window_len;
+
+        RAS_CDEBUG(ras);
+}
+
+/* Set stride I/O read-ahead window start offset */
+static void ras_set_stride_offset(struct ll_readahead_state *ras)
+{
+        unsigned long window_len = ras->ras_next_readahead - 
+                                   ras->ras_window_start;
+        unsigned long left;       
+ 
+        LASSERT(ras->ras_stride_length != 0);
+       
+        left = window_len % ras->ras_stride_length;
+ 
+        ras->ras_stride_offset = ras->ras_next_readahead - left;
+
+        RAS_CDEBUG(ras);
+}
+
 static void ras_update(struct ll_sb_info *sbi, struct inode *inode,
                        struct ll_readahead_state *ras, unsigned long index,
                        unsigned hit)
 {
         struct ll_ra_info *ra = &sbi->ll_ra_info;
-        int zero = 0;
+        int zero = 0, stride_zero = 0, stride_detect = 0, ra_miss = 0;
         ENTRY;
 
         spin_lock(&sbi->ll_lock);
@@ -1320,11 +1590,20 @@ static void ras_update(struct ll_sb_info *sbi, struct inode *inode,
         if (!index_in_window(index, ras->ras_last_readpage, 8, 8)) {
                 zero = 1;
                 ll_ra_stats_inc_unlocked(ra, RA_STAT_DISTANT_READPAGE);
+		/* check whether it is in stride I/O mode*/
+                if (!index_in_stride_window(index, ras, inode))
+                        stride_zero = 1;
         } else if (!hit && ras->ras_window_len &&
                    index < ras->ras_next_readahead &&
                    index_in_window(index, ras->ras_window_start, 0,
                                    ras->ras_window_len)) {
                 zero = 1;
+		ra_miss = 1;
+                /* If it hits read-ahead miss and the stride I/O is still 
+                 * not detected, reset stride stuff to re-detect the whole
+                 * stride I/O mode to avoid complication */
+                if (!stride_io_mode(ras))
+                        stride_zero = 1;
                 ll_ra_stats_inc_unlocked(ra, RA_STAT_MISS_IN_WINDOW);
         }
 
@@ -1355,8 +1634,36 @@ static void ras_update(struct ll_sb_info *sbi, struct inode *inode,
         }
 
         if (zero) {
-                ras_reset(ras, index);
-                GOTO(out_unlock, 0);
+                /* If it is discontinuous read, check 
+                 * whether it is stride I/O mode*/
+                if (stride_zero) {
+                        ras_reset(ras, index);
+                        ras->ras_consecutive_pages++;
+                        ras_stride_reset(ras);
+                        RAS_CDEBUG(ras);
+                        GOTO(out_unlock, 0);
+                } else {
+                        /* The read is still in stride window or
+ 			 * it hits read-ahead miss */ 
+
+                        /* If ra-window miss is hitted, which probably means VM 
+                         * pressure, and some read-ahead pages were reclaimed.So
+                         * the length of ra-window will not increased, but also  
+                         * not reset to avoid redetecting the stride I/O mode.*/ 
+        		ras->ras_consecutive_requests = 0;
+                        if (!ra_miss) {
+                                ras->ras_consecutive_pages = 0;
+                                if (++ras->ras_consecutive_stride_requests > 1) 
+                                        stride_detect = 1;
+                        }
+                        RAS_CDEBUG(ras);
+                }
+        } else if (ras->ras_consecutive_stride_requests > 1) {
+                /* If this is contiguous read but in stride I/O mode 
+                 * currently, check whether stride step still is valid,
+                 * if invalid, it will reset the stride ra window*/ 	
+                if (ras->ras_consecutive_pages + 1 > ras->ras_stride_pages) 
+                        ras_stride_reset(ras);
         }
 
         ras->ras_last_readpage = index;
@@ -1364,23 +1671,31 @@ static void ras_update(struct ll_sb_info *sbi, struct inode *inode,
         ras_set_start(ras, index);
         ras->ras_next_readahead = max(ras->ras_window_start,
                                       ras->ras_next_readahead);
+        RAS_CDEBUG(ras);
 
         /* Trigger RA in the mmap case where ras_consecutive_requests
          * is not incremented and thus can't be used to trigger RA */
-        if (!ras->ras_window_len && ras->ras_consecutive_pages == 3) {
-                ras->ras_window_len = 1024 * 1024 >> CFS_PAGE_SHIFT;
+        if (!ras->ras_window_len && ras->ras_consecutive_pages == 4) {
+                ras->ras_window_len = RAS_INCREASE_STEP;
                 GOTO(out_unlock, 0);
         }
+
+        /* Initially reset the stride window offset to next_readahead*/
+        if (ras->ras_consecutive_stride_requests == 2 && stride_detect)
+                ras_set_stride_offset(ras);
 
         /* The initial ras_window_len is set to the request size.  To avoid
          * uselessly reading and discarding pages for random IO the window is
          * only increased once per consecutive request received. */
-        if (ras->ras_consecutive_requests > 1 && !ras->ras_request_index) {
-                ras->ras_window_len = min(ras->ras_window_len +
-                                          (1024 * 1024 >> CFS_PAGE_SHIFT),
-                                          ra->ra_max_pages);
+        if ((ras->ras_consecutive_requests > 1 && 
+            !ras->ras_request_index) || stride_detect) {
+                if (stride_io_mode(ras))
+                        ras_stride_increase_window(ras, ra, RAS_INCREASE_STEP); 
+                else 
+                        ras->ras_window_len = min(ras->ras_window_len +
+                                                  RAS_INCREASE_STEP, 
+                                                  ra->ra_max_pages);
         }
-
         EXIT;
 out_unlock:
         RAS_CDEBUG(ras);

@@ -407,6 +407,12 @@ Details    : client gets evicted from server. Now client also thinks it is
              gets a reply that the export is new, and so no recovery should be
              performed.
 
+Severity   : normal
+Bugzilla   : 14483
+Description: Detect stride IO mode in read-ahead 
+Details    : When a client does stride read, read-ahead should detect that and
+	     read-ahead pages according to the detected stride pattern. 
+
 --------------------------------------------------------------------------------
 
 2007-12-07         Cluster File Systems, Inc. <info@clusterfs.com>
