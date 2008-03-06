@@ -163,15 +163,12 @@ int ptlrpc_set_import_discon(struct obd_import *imp, __u32 conn_cnt)
         return rc;
 }
 
-/*
- * This acts as a barrier; all existing requests are rejected, and
- * no new requests will be accepted until the import is valid again.
- */
-void ptlrpc_deactivate_import(struct obd_import *imp)
+/* Must be called with imp_lock held! */
+static void ptlrpc_deactivate_and_unlock_import(struct obd_import *imp)
 {
         ENTRY;
+        LASSERT_SPIN_LOCKED(&imp->imp_lock);
 
-        spin_lock(&imp->imp_lock);
         if (imp->imp_invalid) {
                 spin_unlock(&imp->imp_lock);
                 EXIT;
@@ -187,6 +184,16 @@ void ptlrpc_deactivate_import(struct obd_import *imp)
         obd_import_event(imp->imp_obd, imp, IMP_EVENT_INACTIVE);
 
         EXIT;
+}
+
+/*
+ * This acts as a barrier; all existing requests are rejected, and
+ * no new requests will be accepted until the import is valid again.
+ */
+void ptlrpc_deactivate_import(struct obd_import *imp)
+{
+        spin_lock(&imp->imp_lock);
+        ptlrpc_deactivate_and_unlock_import(imp);
 }
 
 /*
@@ -805,9 +812,12 @@ finish:
 out:
         if (rc != 0) {
                 IMPORT_SET_STATE(imp, LUSTRE_IMP_DISCON);
+                spin_lock(&imp->imp_lock);
                 if (aa->pcaa_initial_connect && !imp->imp_initial_recov &&
                     (request->rq_import_generation == imp->imp_generation))
-                        ptlrpc_deactivate_import(imp);
+                        ptlrpc_deactivate_and_unlock_import(imp);
+                else
+                        spin_unlock(&imp->imp_lock);
 
                 if ((imp->imp_recon_bk && imp->imp_last_recon) ||
                     (rc == -EACCES)) {
