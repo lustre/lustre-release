@@ -188,6 +188,8 @@ int class_attach(struct lustre_cfg *lcfg)
         CFS_INIT_LIST_HEAD(&obd->obd_lock_replay_queue);
         CFS_INIT_LIST_HEAD(&obd->obd_final_req_queue);
 
+        llog_group_init(&obd->obd_olg, OBD_LLOG_GROUP);
+
         spin_lock_init(&obd->obd_uncommitted_replies_lock);
         CFS_INIT_LIST_HEAD(&obd->obd_uncommitted_replies);
 

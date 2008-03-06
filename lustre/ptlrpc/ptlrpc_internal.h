@@ -62,8 +62,6 @@ void ptlrpc_lprocfs_do_request_stat (struct ptlrpc_request *req,
 #endif /* LPROCFS */
 
 /* recovd_thread.c */
-int llog_init_commit_master(void);
-int llog_cleanup_commit_master(int force);
 
 int ptlrpc_expire_one_request(struct ptlrpc_request *req);
 

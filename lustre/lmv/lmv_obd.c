@@ -498,7 +498,7 @@ int lmv_add_target(struct obd_device *obd, struct obd_uuid *tgt_uuid)
                         RETURN(-EINVAL);
                 }
 
-                rc = obd_llog_init(obd, NULL, mdc_obd, 0, NULL, tgt_uuid);
+                rc = obd_llog_init(obd, OBD_LLOG_GROUP, mdc_obd, 0, NULL, tgt_uuid);
                 if (rc) {
                         lmv_init_unlock(lmv);
                         CERROR("lmv failed to setup llogging subsystems\n");
@@ -2467,30 +2467,39 @@ repeat:
         RETURN(rc);
 }
 
-static int lmv_llog_init(struct obd_device *obd, struct obd_llogs* llogs,
+static int lmv_llog_init(struct obd_device *obd, int group,
                          struct obd_device *tgt, int count,
                          struct llog_catid *logid, struct obd_uuid *uuid)
 {
+#if 0
         struct llog_ctxt *ctxt;
         int rc;
         ENTRY;
 
-        rc = llog_setup(obd, llogs, LLOG_CONFIG_REPL_CTXT, tgt, 0, NULL,
+        LASSERT(group == OBD_LLOG_GROUP);
+        rc = llog_setup(obd, &obd->obd_olg, LLOG_CONFIG_REPL_CTXT, tgt, 0, NULL,
                         &llog_client_ops);
         if (rc == 0) {
-                ctxt = llog_get_context(obd, LLOG_CONFIG_REPL_CTXT);
-                ctxt->loc_imp = tgt->u.cli.cl_import;
+                ctxt = llog_group_get_ctxt(&obd->obd_olg, LLOG_CONFIG_REPL_CTXT);
+                llog_initiator_connect(ctxt, tgt);
+                llog_ctxt_put(ctxt);
         }
-
         RETURN(rc);
+#else
+        return 0;
+#endif
 }
 
 static int lmv_llog_finish(struct obd_device *obd, int count)
 {
-        int rc;
+        struct llog_ctxt *ctxt;
+        int rc = 0;
         ENTRY;
 
-        rc = llog_cleanup(llog_get_context(obd, LLOG_CONFIG_REPL_CTXT));
+        ctxt = llog_get_context(obd, LLOG_CONFIG_REPL_CTXT);
+        if (ctxt)
+                rc = llog_cleanup(ctxt);
+
         RETURN(rc);
 }
 

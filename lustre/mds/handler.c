@@ -1927,12 +1927,8 @@ static void fsoptions_to_mds_flags(struct mds_obd *mds, char *options)
 }
 static int mds_lov_presetup (struct mds_obd *mds, struct lustre_cfg *lcfg)
 {
-        int rc;
+        int rc = 0;
         ENTRY;
-
-        rc = llog_start_commit_thread();
-        if (rc < 0)
-                RETURN(rc);
 
         if (lcfg->lcfg_bufcount >= 4 && LUSTRE_CFG_BUFLEN(lcfg, 3) > 0) {
                 class_uuid_t uuid;
@@ -2161,12 +2157,12 @@ static int mds_postsetup(struct obd_device *obd)
         int rc = 0;
         ENTRY;
 
-        rc = llog_setup(obd, NULL, LLOG_CONFIG_ORIG_CTXT, obd, 0, NULL,
+        rc = llog_setup(obd, &obd->obd_olg, LLOG_CONFIG_ORIG_CTXT, obd, 0, NULL,
                         &llog_lvfs_ops);
         if (rc)
                 RETURN(rc);
 
-        rc = llog_setup(obd, NULL, LLOG_LOVEA_ORIG_CTXT, obd, 0, NULL,
+        rc = llog_setup(obd, &obd->obd_olg, LLOG_LOVEA_ORIG_CTXT, obd, 0, NULL,
                         &llog_lvfs_ops);
         if (rc)
                 RETURN(rc);
@@ -2206,7 +2202,8 @@ int mds_postrecov(struct obd_device *obd)
                 RETURN(0);
 
         LASSERT(!obd->obd_recovering);
-        LASSERT(llog_get_context(obd, LLOG_MDS_OST_ORIG_CTXT) != NULL);
+        LASSERT(!llog_ctxt_null(obd, LLOG_MDS_OST_ORIG_CTXT));
+
         /* clean PENDING dir */
         if (strncmp(obd->obd_name, MDD_OBD_NAME, strlen(MDD_OBD_NAME)))
                 rc = mds_cleanup_pending(obd);

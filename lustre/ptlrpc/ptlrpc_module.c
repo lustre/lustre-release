@@ -69,27 +69,22 @@ __init int ptlrpc_init(void)
                 RETURN(rc);
         cleanup_phase = 2;
 
-        ptlrpc_init_connection();
+        rc = ptlrpc_init_connection();
         if (rc)
                 GOTO(cleanup, rc);
         cleanup_phase = 3;
-
-        rc = llog_init_commit_master();
-        if (rc)
-                GOTO(cleanup, rc);
-        cleanup_phase = 4;
 
         ptlrpc_put_connection_superhack = ptlrpc_put_connection;
 
         rc = ptlrpc_start_pinger();
         if (rc)
                 GOTO(cleanup, rc);
-        cleanup_phase = 5;
+        cleanup_phase = 4;
 
         rc = ldlm_init();
         if (rc)
                 GOTO(cleanup, rc);
-        cleanup_phase = 6;
+        cleanup_phase = 5;
 
         rc = sptlrpc_init();
         if (rc)
@@ -99,12 +94,10 @@ __init int ptlrpc_init(void)
 
 cleanup:
         switch(cleanup_phase) {
-        case 6:
-                ldlm_exit();
         case 5:
-                ptlrpc_stop_pinger();
+                ldlm_exit();
         case 4:
-                llog_cleanup_commit_master(1);
+                ptlrpc_stop_pinger();
         case 3:
                 ptlrpc_cleanup_connection();
         case 2:
@@ -125,7 +118,6 @@ static void __exit ptlrpc_exit(void)
         ptlrpc_stop_pinger();
         ptlrpc_exit_portals();
         ptlrpc_cleanup_connection();
-        llog_cleanup_commit_master(0);
 }
 
 /* connection.c */

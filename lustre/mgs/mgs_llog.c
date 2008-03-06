@@ -233,15 +233,16 @@ static int mgs_get_fsdb_from_llog(struct obd_device *obd, struct fs_db *fsdb)
         char *logname;
         struct llog_handle *loghandle;
         struct lvfs_run_ctxt saved;
+        struct llog_ctxt *ctxt;
         int rc, rc2;
         ENTRY;
 
+        ctxt = llog_get_context(obd, LLOG_CONFIG_ORIG_CTXT);
+        LASSERT(ctxt != NULL);
         name_create(&logname, fsdb->fsdb_name, "-client");
         down(&fsdb->fsdb_sem);
         push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
-
-        rc = llog_create(llog_get_context(obd, LLOG_CONFIG_ORIG_CTXT),
-                         &loghandle, NULL, logname);
+        rc = llog_create(ctxt, &loghandle, NULL, logname);
         if (rc)
                 GOTO(out_pop, rc);
 
@@ -258,11 +259,11 @@ out_close:
         rc2 = llog_close(loghandle);
         if (!rc)
                 rc = rc2;
-
 out_pop:
         pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
         up(&fsdb->fsdb_sem);
         name_destroy(&logname);
+        llog_ctxt_put(ctxt);
 
         RETURN(rc);
 }
@@ -606,6 +607,7 @@ static int mgs_modify(struct obd_device *obd, struct fs_db *fsdb,
 {
         struct llog_handle *loghandle;
         struct lvfs_run_ctxt saved;
+        struct llog_ctxt *ctxt;
         struct mgs_modify_lookup *mml;
         int rc, rc2;
         ENTRY;
@@ -614,8 +616,9 @@ static int mgs_modify(struct obd_device *obd, struct fs_db *fsdb,
 
         push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
         
-        rc = llog_create(llog_get_context(obd, LLOG_CONFIG_ORIG_CTXT),
-                         &loghandle, NULL, logname);
+        ctxt = llog_get_context(obd, LLOG_CONFIG_ORIG_CTXT);
+        LASSERT(ctxt != NULL);
+        rc = llog_create(ctxt, &loghandle, NULL, logname);
         if (rc)
                 GOTO(out_pop, rc);
 
@@ -644,13 +647,12 @@ out_close:
         rc2 = llog_close(loghandle);
         if (!rc)
                 rc = rc2;
-
 out_pop:
         pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
         if (rc && rc != -ENODEV) 
                 CERROR("modify %s/%s failed %d\n",
                        mti->mti_svname, comment, rc);
-
+        llog_ctxt_put(ctxt);
         RETURN(rc);
 }
 
@@ -865,22 +867,25 @@ static int record_start_log(struct obd_device *obd,
 {
         static struct obd_uuid cfg_uuid = { .uuid = "config_uuid" };
         struct lvfs_run_ctxt saved;
+        struct llog_ctxt *ctxt;
         int rc = 0;
 
-        if (*llh) {
+        if (*llh) 
                 GOTO(out, rc = -EBUSY);
-        }
+
+        ctxt = llog_get_context(obd, LLOG_CONFIG_ORIG_CTXT);
+        if (!ctxt)
+                GOTO(out, rc = -ENODEV);
 
         push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
-
-        rc = llog_create(llog_get_context(obd, LLOG_CONFIG_ORIG_CTXT),
-                         llh, NULL, name);
+        rc = llog_create(ctxt, llh, NULL, name);
         if (rc == 0)
                 llog_init_handle(*llh, LLOG_F_IS_PLAIN, &cfg_uuid);
         else
                 *llh = NULL;
 
         pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
+        llog_ctxt_put(ctxt);
 
 out:
         if (rc) {
@@ -907,17 +912,20 @@ static int mgs_log_is_empty(struct obd_device *obd, char *name)
 {
         struct lvfs_run_ctxt saved;
         struct llog_handle *llh;
+        struct llog_ctxt *ctxt;
         int rc = 0;
 
+        ctxt = llog_get_context(obd, LLOG_CONFIG_ORIG_CTXT);
+        LASSERT(ctxt != NULL);
         push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
-        rc = llog_create(llog_get_context(obd, LLOG_CONFIG_ORIG_CTXT),
-                         &llh, NULL, name);
+        rc = llog_create(ctxt, &llh, NULL, name);
         if (rc == 0) {
                 llog_init_handle(llh, LLOG_F_IS_PLAIN, NULL);
                 rc = llog_get_size(llh);
                 llog_close(llh);
         }
         pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
+        llog_ctxt_put(ctxt);
         /* header is record 1 */
         return(rc <= 1);
 }
@@ -1153,8 +1161,12 @@ static int mgs_steal_llog_for_mdt_from_client(struct obd_device *obd,
         struct llog_handle *loghandle;
         struct lvfs_run_ctxt saved;
         struct mgs_target_info *tmti;
+        struct llog_ctxt *ctxt;
         int rc, rc2;
         ENTRY;
+
+        ctxt = llog_get_context(obd, LLOG_CONFIG_ORIG_CTXT);
+        LASSERT(ctxt != NULL);
 
         OBD_ALLOC_PTR(tmti);
         if (tmti == NULL)
@@ -1165,8 +1177,7 @@ static int mgs_steal_llog_for_mdt_from_client(struct obd_device *obd,
 
         push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
 
-        rc = llog_create(llog_get_context(obd, LLOG_CONFIG_ORIG_CTXT),
-                         &loghandle, NULL, client_name);
+        rc = llog_create(ctxt, &loghandle, NULL, client_name);
         if (rc)
                 GOTO(out_pop, rc);
 
@@ -1183,6 +1194,7 @@ out_close:
 out_pop:
         pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
         OBD_FREE_PTR(tmti);
+        llog_ctxt_put(ctxt);
         RETURN(rc);
 }
 
@@ -3030,18 +3042,22 @@ int mgs_upgrade_sv_14(struct obd_device *obd, struct mgs_target_info *mti)
 int mgs_erase_log(struct obd_device *obd, char *name)
 {
         struct lvfs_run_ctxt saved;
+        struct llog_ctxt *ctxt;
         struct llog_handle *llh;
         int rc = 0;
 
+        ctxt = llog_get_context(obd, LLOG_CONFIG_ORIG_CTXT);
+        LASSERT(ctxt != NULL);
+
         push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
-        rc = llog_create(llog_get_context(obd, LLOG_CONFIG_ORIG_CTXT),
-                         &llh, NULL, name);
+        rc = llog_create(ctxt, &llh, NULL, name);
         if (rc == 0) {
                 llog_init_handle(llh, LLOG_F_IS_PLAIN, NULL);
                 rc = llog_destroy(llh);
                 llog_free_handle(llh);
         }
         pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
+        llog_ctxt_put(ctxt);
 
         if (rc)
                 CERROR("failed to clear log %s: %d\n", name, rc);

@@ -56,6 +56,8 @@ static int mds_llog_origin_add(struct llog_ctxt *ctxt,
 
         lctxt = llog_get_context(lov_obd, ctxt->loc_idx);
         rc = llog_add(lctxt, rec, lsm, logcookies, numcookies);
+        llog_ctxt_put(lctxt);
+
         RETURN(rc);
 }
 
@@ -72,6 +74,7 @@ static int mds_llog_origin_connect(struct llog_ctxt *ctxt, int count,
 
         lctxt = llog_get_context(lov_obd, ctxt->loc_idx);
         rc = llog_connect(lctxt, count, logid, gen, uuid);
+        llog_ctxt_put(lctxt);
         RETURN(rc);
 }
 
@@ -86,6 +89,7 @@ static int mds_llog_repl_cancel(struct llog_ctxt *ctxt, struct lov_stripe_md *ls
 
         lctxt = llog_get_context(lov_obd, ctxt->loc_idx);
         rc = llog_cancel(lctxt, lsm, count, cookies, flags);
+        llog_ctxt_put(lctxt);
         RETURN(rc);
 }
 
@@ -119,6 +123,7 @@ int mds_log_op_unlink(struct obd_device *obd,
         ctxt = llog_get_context(obd, LLOG_MDS_OST_ORIG_CTXT);
         rc = llog_add(ctxt, &lur->lur_hdr, lsm, logcookies,
                       cookies_size / sizeof(struct llog_cookie));
+        llog_ctxt_put(ctxt);
 
         OBD_FREE(lur, sizeof(*lur));
 out:
@@ -163,6 +168,8 @@ int mds_log_op_setattr(struct obd_device *obd, __u32 uid, __u32 gid,
         rc = llog_add(ctxt, &lsr->lsr_hdr, lsm, logcookies,
                       cookies_size / sizeof(struct llog_cookie));
 
+        llog_ctxt_put(ctxt);
+
         OBD_FREE(lsr, sizeof(*lsr));
  out:
         obd_free_memmd(mds->mds_osc_exp, &lsm);
@@ -179,7 +186,7 @@ static struct llog_operations mds_size_repl_logops = {
         lop_cancel:     mds_llog_repl_cancel,
 };
 
-int mds_llog_init(struct obd_device *obd, struct obd_llogs *llogs,
+int mds_llog_init(struct obd_device *obd, int group,
                   struct obd_device *tgt, int count, struct llog_catid *logid, 
                   struct obd_uuid *uuid)
 {
@@ -187,17 +194,18 @@ int mds_llog_init(struct obd_device *obd, struct obd_llogs *llogs,
         int rc;
         ENTRY;
 
-        rc = llog_setup(obd, llogs, LLOG_MDS_OST_ORIG_CTXT, tgt, 0, NULL,
+        LASSERT(group == OBD_LLOG_GROUP);
+        rc = llog_setup(obd, &obd->obd_olg, LLOG_MDS_OST_ORIG_CTXT, tgt, 0, NULL,
                         &mds_ost_orig_logops);
         if (rc)
                 RETURN(rc);
 
-        rc = llog_setup(obd, llogs, LLOG_SIZE_REPL_CTXT, tgt, 0, NULL,
+        rc = llog_setup(obd, &obd->obd_olg, LLOG_SIZE_REPL_CTXT, tgt, 0, NULL,
                         &mds_size_repl_logops);
         if (rc)
                 RETURN(rc);
 
-        rc = obd_llog_init(lov_obd, llogs, tgt, count, logid, uuid);
+        rc = obd_llog_init(lov_obd, group, tgt, count, logid, uuid);
         if (rc)
                 CERROR("lov_llog_init err %d\n", rc);
 

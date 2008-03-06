@@ -124,8 +124,7 @@ int filter_setattr(struct obd_export *exp, struct obd_info *oinfo,
 
 struct dentry *filter_create_object(struct obd_device *obd, struct obdo *oa);
 
-struct obd_llogs *filter_grab_llog_for_group(struct obd_device *obd, int group,
-                                             struct obd_export *export);
+struct obd_llog_group *filter_find_olg(struct obd_device *obd, int group);
 
 /* filter_lvb.c */
 extern struct ldlm_valblock_ops filter_lvbo;

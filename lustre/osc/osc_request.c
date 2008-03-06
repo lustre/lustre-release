@@ -3452,6 +3452,7 @@ static int osc_setinfo_mds_conn_interpret(struct ptlrpc_request *req,
                                "ctxt %p: %d\n", ctxt, rc);
         }
 
+        llog_ctxt_put(ctxt);
         spin_lock(&imp->imp_lock);
         imp->imp_server_timeout = 1;
         imp->imp_pingable = 1;
@@ -3571,13 +3572,13 @@ static struct llog_operations osc_size_repl_logops = {
 };
 
 static struct llog_operations osc_mds_ost_orig_logops;
-static int osc_llog_init(struct obd_device *obd, struct obd_llogs *llogs,
+static int osc_llog_init(struct obd_device *obd, int group,
                          struct obd_device *tgt, int count,
                          struct llog_catid *catid, struct obd_uuid *uuid)
 {
         int rc;
         ENTRY;
-
+        LASSERT(group == OBD_LLOG_GROUP);
         spin_lock(&obd->obd_dev_lock);
         if (osc_mds_ost_orig_logops.lop_setup != llog_obd_origin_setup) {
                 osc_mds_ost_orig_logops = llog_lvfs_ops;
@@ -3588,15 +3589,15 @@ static int osc_llog_init(struct obd_device *obd, struct obd_llogs *llogs,
         }
         spin_unlock(&obd->obd_dev_lock);
 
-        rc = llog_setup(obd, llogs, LLOG_MDS_OST_ORIG_CTXT, tgt, count,
+        rc = llog_setup(obd, &obd->obd_olg, LLOG_MDS_OST_ORIG_CTXT, tgt, count,
                         &catid->lci_logid, &osc_mds_ost_orig_logops);
         if (rc) {
                 CERROR("failed LLOG_MDS_OST_ORIG_CTXT\n");
                 GOTO (out, rc);
         }
 
-        rc = llog_setup(obd, llogs, LLOG_SIZE_REPL_CTXT, tgt, count, NULL,
-                        &osc_size_repl_logops);
+        rc = llog_setup(obd, &obd->obd_olg, LLOG_SIZE_REPL_CTXT, tgt, count,
+                        NULL, &osc_size_repl_logops);
         if (rc)
                 CERROR("failed LLOG_SIZE_REPL_CTXT\n");
 out:
@@ -3665,6 +3666,8 @@ static int osc_disconnect(struct obd_export *exp)
         if (obd->u.cli.cl_conn_count == 1)
                 /* flush any remaining cancel messages out to the target */
                 llog_sync(ctxt, exp);
+
+        llog_ctxt_put(ctxt);
 
         rc = client_disconnect_export(exp);
         return rc;

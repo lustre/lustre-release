@@ -255,27 +255,21 @@ struct obd_device_target {
 /* llog contexts */
 enum llog_ctxt_id {
         LLOG_CONFIG_ORIG_CTXT  =  0,
-        LLOG_CONFIG_REPL_CTXT  =  1,
-        LLOG_MDS_OST_ORIG_CTXT =  2,
-        LLOG_MDS_OST_REPL_CTXT =  3,
-        LLOG_SIZE_ORIG_CTXT    =  4,
-        LLOG_SIZE_REPL_CTXT    =  5,
-        LLOG_MD_ORIG_CTXT      =  6,
-        LLOG_MD_REPL_CTXT      =  7,
-        LLOG_RD1_ORIG_CTXT     =  8,
-        LLOG_RD1_REPL_CTXT     =  9,
-        LLOG_TEST_ORIG_CTXT    = 10,
-        LLOG_TEST_REPL_CTXT    = 11,
-        LLOG_LOVEA_ORIG_CTXT   = 12,
-        LLOG_LOVEA_REPL_CTXT   = 13,
+        LLOG_CONFIG_REPL_CTXT,
+        LLOG_MDS_OST_ORIG_CTXT,
+        LLOG_MDS_OST_REPL_CTXT,
+        LLOG_SIZE_ORIG_CTXT,
+        LLOG_SIZE_REPL_CTXT,
+        LLOG_RD1_ORIG_CTXT,
+        LLOG_RD1_REPL_CTXT,
+        LLOG_TEST_ORIG_CTXT,
+        LLOG_TEST_REPL_CTXT,
+        LLOG_LOVEA_ORIG_CTXT,
+        LLOG_LOVEA_REPL_CTXT,
         LLOG_MAX_CTXTS
 };
 
 #define FILTER_SUBDIR_COUNT      32            /* set to zero for no subdirs */
-
-#define FILTER_GROUP_LLOG 1
-#define FILTER_GROUP_ECHO 2
-#define FILTER_GROUP_MDS0 3
 
 struct filter_subdirs {
        cfs_dentry_t *dentry[FILTER_SUBDIR_COUNT];
@@ -285,17 +279,6 @@ struct filter_subdirs {
 struct filter_ext {
         __u64                fe_start;
         __u64                fe_end;
-};
-
-struct obd_llogs {
-        struct llog_ctxt        *llog_ctxt[LLOG_MAX_CTXTS];
-};
-
-struct filter_group_llog {
-        struct list_head list;
-        int group;
-        struct obd_llogs *llogs;
-        struct obd_export *exp;
 };
 
 struct filter_obd {
@@ -378,6 +361,8 @@ struct filter_obd {
         unsigned int             fo_fl_oss_capa;
         struct list_head         fo_capa_keys;
         struct hlist_head       *fo_capa_hash;
+
+        void                    *fo_lcm;
 };
 
 #define OSC_MAX_RIF_DEFAULT       8
@@ -520,7 +505,6 @@ struct mds_obd {
         cfs_dentry_t                    *mds_logs_dir;
         cfs_dentry_t                    *mds_objects_dir;
         struct llog_handle              *mds_cfg_llh;
-//        struct llog_handle              *mds_catalog;
         struct obd_device               *mds_osc_obd; /* XXX lov_obd */
         struct obd_uuid                  mds_lov_uuid;
         char                            *mds_profile;
@@ -841,6 +825,23 @@ struct target_recovery_data {
         struct completion trd_finishing;
 };
 
+#define OBD_LLOG_GROUP  0
+
+enum filter_groups {
+        FILTER_GROUP_LLOG = 1,
+        FILTER_GROUP_ECHO,
+        FILTER_GROUP_MDS0
+};
+
+struct obd_llog_group {
+        struct list_head   olg_list;
+        int                olg_group;
+        struct llog_ctxt  *olg_ctxts[LLOG_MAX_CTXTS];
+        cfs_waitq_t        olg_waitq;
+        spinlock_t         olg_lock;
+        struct obd_export *olg_exp;
+};
+
 /* corresponds to one of the obd's */
 #define MAX_OBD_NAME 128
 #define OBD_DEVICE_MAGIC        0XAB5CD6EF
@@ -890,7 +891,7 @@ struct obd_device {
         struct obd_statfs       obd_osfs;       /* locked by obd_osfs_lock */
         __u64                   obd_osfs_age;
         struct lvfs_run_ctxt    obd_lvfs_ctxt;
-        struct llog_ctxt        *obd_llog_ctxt[LLOG_MAX_CTXTS];
+        struct obd_llog_group   obd_olg; /* default llog group */
         struct obd_device       *obd_observer;
         struct obd_notify_upcall obd_upcall;
         struct obd_export       *obd_self_export;
@@ -1195,7 +1196,7 @@ struct obd_ops {
                              int cmd, obd_off *);
 
         /* llog related obd_methods */
-        int (*o_llog_init)(struct obd_device *obd, struct obd_llogs *llog,
+        int (*o_llog_init)(struct obd_device *obd, int group,
                            struct obd_device *disk_obd, int count,
                            struct llog_catid *logid, struct obd_uuid *uuid);
         int (*o_llog_finish)(struct obd_device *obd, int count);

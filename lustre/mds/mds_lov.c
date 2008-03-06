@@ -409,7 +409,8 @@ static int mds_lov_update_desc(struct obd_device *obd, struct obd_export *lov)
         /* If we added a target we have to reconnect the llogs */
         /* We only _need_ to do this at first add (idx), or the first time
            after recovery.  However, it should now be safe to call anytime. */
-        rc = llog_cat_initialize(obd, NULL, mds->mds_lov_desc.ld_tgt_count, NULL);
+        rc = llog_cat_initialize(obd, &obd->obd_olg,
+                                 mds->mds_lov_desc.ld_tgt_count, NULL);
 
         /*XXX this notifies the MDD until lov handling use old mds code */
         if (obd->obd_upcall.onu_owner) {
@@ -547,6 +548,14 @@ int mds_lov_connect(struct obd_device *obd, char * lov_name)
         if (rc)
                 GOTO(err_reg, rc);
 
+        /* tgt_count may be 0! */
+        rc = llog_cat_initialize(obd, &obd->obd_olg, 
+                                 mds->mds_lov_desc.ld_tgt_count, NULL);
+        if (rc) {
+                CERROR("failed to initialize catalog %d\n", rc);
+                GOTO(err_reg, rc);
+        }
+
         /* If we're mounting this code for the first time on an existing FS,
          * we need to populate the objids array from the real OST values */
         if (mds->mds_lov_desc.ld_tgt_count > mds->mds_lov_objid_count) {
@@ -622,12 +631,15 @@ int mds_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
         switch (cmd) {
         case OBD_IOC_RECORD: {
                 char *name = data->ioc_inlbuf1;
+                struct llog_ctxt *ctxt;
+
                 if (mds->mds_cfg_llh)
                         RETURN(-EBUSY);
 
+                ctxt = llog_get_context(obd, LLOG_CONFIG_ORIG_CTXT);
                 push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
-                rc = llog_create(llog_get_context(obd, LLOG_CONFIG_ORIG_CTXT),
-                                 &mds->mds_cfg_llh, NULL, name);
+                rc = llog_create(ctxt, &mds->mds_cfg_llh, NULL, name);
+                llog_ctxt_put(ctxt);
                 if (rc == 0)
                         llog_init_handle(mds->mds_cfg_llh, LLOG_F_IS_PLAIN,
                                          &cfg_uuid);
@@ -652,12 +664,14 @@ int mds_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
 
         case OBD_IOC_CLEAR_LOG: {
                 char *name = data->ioc_inlbuf1;
+                struct llog_ctxt *ctxt;
                 if (mds->mds_cfg_llh)
                         RETURN(-EBUSY);
 
+                ctxt = llog_get_context(obd, LLOG_CONFIG_ORIG_CTXT);
                 push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
-                rc = llog_create(llog_get_context(obd, LLOG_CONFIG_ORIG_CTXT),
-                                 &mds->mds_cfg_llh, NULL, name);
+                rc = llog_create(ctxt, &mds->mds_cfg_llh, NULL, name);
+                llog_ctxt_put(ctxt);
                 if (rc == 0) {
                         llog_init_handle(mds->mds_cfg_llh, LLOG_F_IS_PLAIN,
                                          NULL);
@@ -710,6 +724,7 @@ int mds_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
                 push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
                 rc = class_config_parse_llog(ctxt, data->ioc_inlbuf1, NULL);
                 pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
+                llog_ctxt_put(ctxt);
                 if (rc)
                         RETURN(rc);
 
@@ -722,6 +737,7 @@ int mds_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
                 push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
                 rc = class_config_dump_llog(ctxt, data->ioc_inlbuf1, NULL);
                 pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
+                llog_ctxt_put(ctxt);
                 if (rc)
                         RETURN(rc);
 
@@ -770,8 +786,10 @@ int mds_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
                 push_ctxt(&saved, &ctxt->loc_exp->exp_obd->obd_lvfs_ctxt, NULL);
                 rc = llog_ioctl(ctxt, cmd, data);
                 pop_ctxt(&saved, &ctxt->loc_exp->exp_obd->obd_lvfs_ctxt, NULL);
-                llog_cat_initialize(obd, NULL, mds->mds_lov_desc.ld_tgt_count, NULL);
+                llog_cat_initialize(obd, &obd->obd_olg,
+                                    mds->mds_lov_desc.ld_tgt_count, NULL);
                 group = FILTER_GROUP_MDS0 + mds->mds_id;
+                llog_ctxt_put(ctxt);
                 rc2 = obd_set_info_async(mds->mds_osc_exp,
                                          strlen(KEY_MDS_CONN), KEY_MDS_CONN,
                                          sizeof(group), &group, NULL);
@@ -787,6 +805,7 @@ int mds_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
                 push_ctxt(&saved, &ctxt->loc_exp->exp_obd->obd_lvfs_ctxt, NULL);
                 rc = llog_ioctl(ctxt, cmd, data);
                 pop_ctxt(&saved, &ctxt->loc_exp->exp_obd->obd_lvfs_ctxt, NULL);
+                llog_ctxt_put(ctxt);
 
                 RETURN(rc);
         }
@@ -862,6 +881,7 @@ static int __mds_lov_synchronize(void *data)
         struct obd_uuid *uuid;
         __u32  idx = mlsi->mlsi_index;
         struct mds_group_info mgi;
+        struct llog_ctxt *ctxt;
         int rc = 0;
         ENTRY;
 
@@ -891,10 +911,15 @@ static int __mds_lov_synchronize(void *data)
         if (rc)
                 GOTO(out, rc);
 
-        rc = llog_connect(llog_get_context(obd, LLOG_MDS_OST_ORIG_CTXT),
-                          mds->mds_lov_desc.ld_tgt_count,
-                          NULL, NULL, uuid);
+        ctxt = llog_get_context(obd, LLOG_MDS_OST_ORIG_CTXT);
+        if (!ctxt) 
+                RETURN(-ENODEV);
 
+        OBD_FAIL_TIMEOUT(OBD_FAIL_MDS_LLOG_SYNC_TIMEOUT, 60);
+
+        rc = llog_connect(ctxt, obd->u.mds.mds_lov_desc.ld_tgt_count, 
+                          NULL, NULL, uuid); 
+        llog_ctxt_put(ctxt);
         if (rc != 0) {
                 CERROR("%s failed at llog_origin_connect: %d\n",
                        obd_uuid2str(uuid), rc);
@@ -1048,7 +1073,7 @@ int mds_notify(struct obd_device *obd, struct obd_device *watched,
                 }
                 /* We should update init llog here too for replay unlink and 
                  * possiable llog init race when recovery complete */
-                llog_cat_initialize(obd, NULL, 
+                llog_cat_initialize(obd, &obd->obd_olg, 
                                     obd->u.mds.mds_lov_desc.ld_tgt_count,
                                     &watched->u.cli.cl_target_uuid);
                 mutex_up(&obd->obd_dev_sem);
@@ -1056,7 +1081,7 @@ int mds_notify(struct obd_device *obd, struct obd_device *watched,
                 RETURN(rc);
         }
 
-        LASSERT(llog_get_context(obd, LLOG_MDS_OST_ORIG_CTXT) != NULL);
+        LASSERT(!llog_ctxt_null(obd, LLOG_MDS_OST_ORIG_CTXT));
         rc = mds_lov_start_synchronize(obd, watched, data,
                                        !(ev == OBD_NOTIFY_SYNC));
 

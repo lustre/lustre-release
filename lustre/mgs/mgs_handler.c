@@ -121,6 +121,35 @@ static int mgs_disconnect(struct obd_export *exp)
 static int mgs_cleanup(struct obd_device *obd);
 static int mgs_handle(struct ptlrpc_request *req);
 
+static int mgs_llog_init(struct obd_device *obd, int group,
+                         struct obd_device *tgt, int count,
+                         struct llog_catid *logid, struct obd_uuid *uuid)
+{
+        struct obd_llog_group *olg = &obd->obd_olg;
+        int rc;
+        ENTRY;
+
+        LASSERT(group == OBD_LLOG_GROUP);
+        LASSERT(olg->olg_group == group);
+
+        rc = llog_setup(obd, olg, LLOG_CONFIG_ORIG_CTXT, obd, 0, NULL,
+                        &llog_lvfs_ops);
+        RETURN(rc);
+}
+
+static int mgs_llog_finish(struct obd_device *obd, int count)
+{
+        struct llog_ctxt *ctxt;
+        int rc = 0;
+        ENTRY;
+
+        ctxt = llog_get_context(obd, LLOG_CONFIG_ORIG_CTXT);
+        if (ctxt)
+                rc = llog_cleanup(ctxt);
+
+        RETURN(rc);
+}
+
 /* Start the MGS obd */
 static int mgs_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
 {
@@ -164,12 +193,7 @@ static int mgs_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
                 GOTO(err_ns, rc);
         }
 
-        rc = llog_start_commit_thread();
-        if (rc < 0)
-                GOTO(err_fs, rc);
-
-        rc = llog_setup(obd, NULL, LLOG_CONFIG_ORIG_CTXT, obd, 0, NULL,
-                        &llog_lvfs_ops);
+        rc = obd_llog_init(obd, OBD_LLOG_GROUP, obd, 0, NULL, NULL);
         if (rc)
                 GOTO(err_fs, rc);
 
@@ -192,7 +216,7 @@ static int mgs_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
 
         if (!mgs->mgs_service) {
                 CERROR("failed to start service\n");
-                GOTO(err_fs, rc = -ENOMEM);
+                GOTO(err_llog, rc = -ENOMEM);
         }
 
         rc = ptlrpc_start_threads(obd, mgs->mgs_service);
@@ -213,6 +237,8 @@ static int mgs_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
 
 err_thread:
         ptlrpc_unregister_service(mgs->mgs_service);
+err_llog:
+        obd_llog_finish(obd, 0);
 err_fs:
         /* No extra cleanup needed for llog_init_commit_thread() */
         mgs_fs_cleanup(obd);
@@ -237,7 +263,6 @@ static int mgs_precleanup(struct obd_device *obd, enum obd_cleanup_stage stage)
         case OBD_CLEANUP_EXPORTS:
                 break;
         case OBD_CLEANUP_SELF_EXP:
-                llog_cleanup(llog_get_context(obd, LLOG_CONFIG_ORIG_CTXT));
                 rc = obd_llog_finish(obd, 0);
                 break;
         case OBD_CLEANUP_OBD:
@@ -706,13 +731,12 @@ out_free:
         }
 
         case OBD_IOC_DUMP_LOG: {
-                struct llog_ctxt *ctxt =
-                        llog_get_context(obd, LLOG_CONFIG_ORIG_CTXT);
+                struct llog_ctxt *ctxt;
+                ctxt = llog_get_context(obd, LLOG_CONFIG_ORIG_CTXT);
                 push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
                 rc = class_config_dump_llog(ctxt, data->ioc_inlbuf1, NULL);
                 pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
-                if (rc)
-                        RETURN(rc);
+                llog_ctxt_put(ctxt);
 
                 RETURN(rc);
         }
@@ -720,12 +744,13 @@ out_free:
         case OBD_IOC_LLOG_CHECK:
         case OBD_IOC_LLOG_INFO:
         case OBD_IOC_LLOG_PRINT: {
-                struct llog_ctxt *ctxt =
-                        llog_get_context(obd, LLOG_CONFIG_ORIG_CTXT);
+                struct llog_ctxt *ctxt;
+                ctxt = llog_get_context(obd, LLOG_CONFIG_ORIG_CTXT);
 
                 push_ctxt(&saved, &ctxt->loc_exp->exp_obd->obd_lvfs_ctxt, NULL);
                 rc = llog_ioctl(ctxt, cmd, data);
                 pop_ctxt(&saved, &ctxt->loc_exp->exp_obd->obd_lvfs_ctxt, NULL);
+                llog_ctxt_put(ctxt);
 
                 RETURN(rc);
         }
@@ -747,6 +772,8 @@ static struct obd_ops mgs_obd_ops = {
         .o_cleanup         = mgs_cleanup,
         .o_destroy_export  = mgs_destroy_export,
         .o_iocontrol       = mgs_iocontrol,
+        .o_llog_init       = mgs_llog_init,
+        .o_llog_finish     = mgs_llog_finish
 };
 
 static int __init mgs_init(void)

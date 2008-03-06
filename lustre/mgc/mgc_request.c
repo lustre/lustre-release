@@ -507,7 +507,7 @@ static int mgc_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
         if (rc)
                 GOTO(err_decref, rc);
 
-        rc = obd_llog_init(obd, NULL, obd, 0, NULL, NULL);
+        rc = obd_llog_init(obd, OBD_LLOG_GROUP, obd, 0, NULL, NULL);
         if (rc) {
                 CERROR("failed to setup llogging subsystems\n");
                 GOTO(err_cleanup, rc);
@@ -908,24 +908,29 @@ static int mgc_import_event(struct obd_device *obd,
         RETURN(rc);
 }
 
-static int mgc_llog_init(struct obd_device *obd, struct obd_llogs *llogs,
+static int mgc_llog_init(struct obd_device *obd, int group,
                          struct obd_device *tgt, int count,
                          struct llog_catid *logid, struct obd_uuid *uuid)
 {
         struct llog_ctxt *ctxt;
+        struct obd_llog_group *olg = &obd->obd_olg;
         int rc;
         ENTRY;
 
-        rc = llog_setup(obd, llogs, LLOG_CONFIG_ORIG_CTXT, tgt, 0, NULL,
+        LASSERT(group == OBD_LLOG_GROUP);
+        LASSERT(olg->olg_group == group);
+
+        rc = llog_setup(obd, olg, LLOG_CONFIG_ORIG_CTXT, tgt, 0, NULL,
                         &llog_lvfs_ops);
         if (rc)
                 RETURN(rc);
 
-        rc = llog_setup(obd, llogs, LLOG_CONFIG_REPL_CTXT, tgt, 0, NULL,
+        rc = llog_setup(obd, olg, LLOG_CONFIG_REPL_CTXT, tgt, 0, NULL,
                         &llog_client_ops);
         if (rc == 0) {
                 ctxt = llog_get_context(obd, LLOG_CONFIG_REPL_CTXT);
-                ctxt->loc_imp = obd->u.cli.cl_import;
+                llog_initiator_connect(ctxt);
+                llog_ctxt_put(ctxt);
         }
 
         RETURN(rc);
@@ -933,11 +938,20 @@ static int mgc_llog_init(struct obd_device *obd, struct obd_llogs *llogs,
 
 static int mgc_llog_finish(struct obd_device *obd, int count)
 {
-        int rc;
+        struct llog_ctxt *ctxt;
+        int rc = 0, rc2 = 0;
         ENTRY;
 
-        rc = llog_cleanup(llog_get_context(obd, LLOG_CONFIG_REPL_CTXT));
-        rc = llog_cleanup(llog_get_context(obd, LLOG_CONFIG_ORIG_CTXT));
+        ctxt = llog_get_context(obd, LLOG_CONFIG_REPL_CTXT);
+        if (ctxt)
+                rc = llog_cleanup(ctxt);
+
+        ctxt = llog_get_context(obd, LLOG_CONFIG_ORIG_CTXT);
+        if (ctxt)
+                rc2 = llog_cleanup(ctxt);
+
+        if (!rc)
+                rc = rc2;
 
         RETURN(rc);
 }
@@ -1138,6 +1152,7 @@ static int mgc_process_log(struct obd_device *mgc,
                 /* Now, whether we copied or not, start using the local llog.
                    If we failed to copy, we'll start using whatever the old
                    log has. */
+                llog_ctxt_put(ctxt);
                 ctxt = lctxt;
         }
 
@@ -1145,8 +1160,10 @@ static int mgc_process_log(struct obd_device *mgc,
            copy of the instance for the update.  The cfg_last_idx will
            be updated here. */
         rc = class_config_parse_llog(ctxt, cld->cld_logname, &cld->cld_cfg);
-
- out_pop:
+out_pop:
+        llog_ctxt_put(ctxt);
+        if (ctxt != lctxt)
+                llog_ctxt_put(lctxt);
         if (must_pop)
                 pop_ctxt(&saved, &mgc->obd_lvfs_ctxt, NULL);
 

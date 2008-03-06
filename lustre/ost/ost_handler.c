@@ -1846,10 +1846,6 @@ static int ost_setup(struct obd_device *obd, struct lustre_cfg* lcfg)
         if (rc)
                 RETURN(rc);
 
-        rc = llog_start_commit_thread();
-        if (rc < 0)
-                RETURN(rc);
-
         lprocfs_ost_init_vars(&lvars);
         lprocfs_obd_setup(obd, lvars.obd_vars);
 

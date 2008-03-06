@@ -345,7 +345,7 @@ int mds_join_file(struct mds_update_record *rec, struct ptlrpc_request *req,
         struct lov_mds_md_join *head_lmmj = NULL, *tail_lmmj = NULL;
         int lmm_size, rc = 0, cleanup_phase = 0, size;
         struct llog_handle *llh_head = NULL, *llh_tail = NULL;
-        struct llog_ctxt *ctxt;
+        struct llog_ctxt *ctxt = NULL;
         struct mds_rec_join *join_rec;
         ENTRY;
 
@@ -394,6 +394,7 @@ int mds_join_file(struct mds_update_record *rec, struct ptlrpc_request *req,
 
         push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
         ctxt = llog_get_context(obd, LLOG_LOVEA_ORIG_CTXT);
+        LASSERT(ctxt != NULL);
         cleanup_phase = 2;
         if (le32_to_cpu(head_lmm->lmm_magic) == LOV_MAGIC) { /*simple file */
                 struct llog_logid *llog_array;
@@ -484,6 +485,7 @@ cleanup:
         case 3:
                 llog_close(llh_head);
         case 2:
+                llog_ctxt_put(ctxt);
                 if (head_lmmj && ((void*)head_lmmj != (void*)head_lmm))
                         OBD_FREE_PTR(head_lmmj);
 

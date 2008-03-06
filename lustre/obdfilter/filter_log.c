@@ -102,29 +102,37 @@ void filter_cancel_cookies_cb(struct obd_device *obd, __u64 transno,
                               void *cb_data, int error)
 {
         struct llog_cookie *cookie = cb_data;
-        struct obd_llogs *llogs;
+        struct obd_llog_group *olg;
         struct llog_ctxt *ctxt;
+        int rc;        
         
         /* we have to find context for right group */
-        if (error != 0) {
-                CDEBUG(D_INODE, "not cancelling llog cookie on error %d\n",
-                       error);
-                goto out;
+        if (error != 0 || obd->obd_stopping) {
+                CDEBUG(D_INODE, "not cancel logcookie err %d stopping %d \n",
+                       error, obd->obd_stopping);
+                GOTO (out, rc = 0);
         }
-        llogs = filter_grab_llog_for_group(obd, cookie->lgc_lgl.lgl_ogr, NULL);
 
-        if (llogs) {
-                ctxt = llog_get_context_from_llogs(llogs, cookie->lgc_subsys + 1);
-                if (ctxt) {
-                        llog_cancel(ctxt, NULL, 1, cookie, 0);
-                } else
+        olg = filter_find_olg(obd, cookie->lgc_lgl.lgl_ogr);
+        if (!IS_ERR(olg)) {
+                ctxt = llog_group_get_ctxt(olg, cookie->lgc_subsys + 1);
+                if (!ctxt) {
                         CERROR("no valid context for group "LPU64"\n",
                                 cookie->lgc_lgl.lgl_ogr);
+                        GOTO(out, rc = 0);
+                }
+
+                OBD_FAIL_TIMEOUT(OBD_FAIL_OST_CANCEL_COOKIE_TIMEOUT, 30);
+
+                rc = llog_cancel(ctxt, NULL, 1, cookie, 0);
+                if (rc)
+                        CERROR("error cancelling log cookies: rc = %d\n", rc);
+                llog_ctxt_put(ctxt);
         } else {
                 CDEBUG(D_HA, "unknown group "LPU64"!\n", cookie->lgc_lgl.lgl_ogr);
         }
 out:
-        OBD_FREE(cookie, sizeof(struct llog_cookie));
+        OBD_FREE(cookie, sizeof(*cookie));
 }
 
 /* Callback for processing the unlink log record received from MDS by 
@@ -218,11 +226,15 @@ int filter_recov_log_mds_ost_cb(struct llog_handle *llh,
         int rc = 0;
         ENTRY;
 
+        if (ctxt->loc_obd->obd_stopping)
+                RETURN(LLOG_PROC_BREAK);
+
         if (!(llh->lgh_hdr->llh_flags & LLOG_F_IS_PLAIN)) {
                 CERROR("log is not plain\n");
                 RETURN(-EINVAL);
         }
 
+        OBD_FAIL_TIMEOUT(OBD_FAIL_OST_LLOG_RECOVERY_TIMEOUT, 30);
         cookie.lgc_lgl = llh->lgh_id;
         cookie.lgc_subsys = LLOG_MDS_OST_ORIG_CTXT;
         cookie.lgc_index = rec->lrh_index;

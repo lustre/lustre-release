@@ -1285,7 +1285,7 @@ int obd_export_evict_by_nid(struct obd_device *obd, const char *nid)
         struct obd_export *doomed_exp = NULL;
         int exports_evicted = 0;
 
-        lnet_nid_t nid_key = libcfs_str2nid(nid);
+        lnet_nid_t nid_key = libcfs_str2nid((char *)nid);
 
         do {
                 doomed_exp = lustre_hash_get_object_by_key(obd->obd_nid_hash_body,

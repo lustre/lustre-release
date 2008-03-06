@@ -110,6 +110,8 @@ int llog_handle_connect(struct ptlrpc_request *req)
         ctxt = llog_get_context(obd, req_body->lgdc_ctxt_idx);
         rc = llog_connect(ctxt, 1, &req_body->lgdc_logid,
                           &req_body->lgdc_gen, NULL);
+
+        llog_ctxt_put(ctxt);
         if (rc != 0)
                 CERROR("failed at llog_relp_connect\n");
 
@@ -121,6 +123,8 @@ int llog_receptor_accept(struct llog_ctxt *ctxt, struct obd_import *imp)
 {
         ENTRY;
         LASSERT(ctxt);
+        LASSERTF(ctxt->loc_imp == NULL || ctxt->loc_imp == imp,
+                 "%p - %p\n", ctxt->loc_imp, imp);
         ctxt->loc_imp = imp;
         RETURN(0);
 }
@@ -128,9 +132,14 @@ EXPORT_SYMBOL(llog_receptor_accept);
 
 int llog_initiator_connect(struct llog_ctxt *ctxt)
 {
+        struct obd_import *new_imp;
         ENTRY;
+
         LASSERT(ctxt);
-        ctxt->loc_imp = ctxt->loc_obd->u.cli.cl_import;
+        new_imp = ctxt->loc_obd->u.cli.cl_import;
+        LASSERTF(ctxt->loc_imp == NULL || ctxt->loc_imp == new_imp,
+                 "%p - %p\n", ctxt->loc_imp, new_imp);
+        ctxt->loc_imp = new_imp;
         RETURN(0);
 }
 EXPORT_SYMBOL(llog_initiator_connect);
