@@ -818,7 +818,14 @@ int mdc_close(struct obd_export *exp, struct md_op_data *op_data,
                 CDEBUG(D_HA, "couldn't find open req; expecting close error\n");
 
         mdc_close_pack(req, op_data);
+
+        req_capsule_set_size(&req->rq_pill, &RMF_MDT_MD, RCL_SERVER,
+                             obd->u.cli.cl_max_mds_easize);
+        req_capsule_set_size(&req->rq_pill, &RMF_LOGCOOKIES, RCL_SERVER,
+                             obd->u.cli.cl_max_mds_cookiesize);
+
         ptlrpc_request_set_replen(req);
+
         req->rq_commit_cb = mdc_commit_delayed;
         req->rq_replay = 1;
         LASSERT(req->rq_cb_data == NULL);
