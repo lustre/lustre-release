@@ -25,6 +25,11 @@ CLEANUP=${CLEANUP:-""}
 cleanup_and_setup_lustre
 rm -rf $DIR/[df][0-9]*
 
+SAMPLE_NAME=recovery-small.junk
+SAMPLE_FILE=$TMP/$SAMPLE_NAME
+# make this big, else test 9 doesn't wait for bulk -- bz 5595
+dd if=/dev/urandom of=$SAMPLE_FILE bs=1M count=4
+
 test_1() {
     drop_request "mcreate $MOUNT/1"  || return 1
     drop_reint_reply "mcreate $MOUNT/2"    || return 2
@@ -81,7 +86,7 @@ run_test 8 "touch: drop rep (bug 1423)"
 #bug 1420
 test_9() {
     pause_bulk "cp /etc/profile $MOUNT/$tfile"       || return 1
-    do_facet client "cp /etc/termcap $MOUNT/${tfile}.2"  || return 2
+    do_facet client "cp ${SAMPLE_FILE} $MOUNT/${tfile}.2"  || return 2
     do_facet client "sync"
     do_facet client "rm $MOUNT/$tfile $MOUNT/${tfile}.2" || return 3
 }
@@ -222,7 +227,7 @@ test_18a() {
     # 1 stripe on ost2
     lfs setstripe $f -s $((128 * 1024)) -i 1 -c 1
 
-    do_facet client cp /etc/termcap $f
+    do_facet client cp $SAMPLE_FILE $f
     sync
     local osc2dev=`grep ${ost2_svc}-osc- $LPROC/devices | egrep -v 'MDT' | awk '{print $1}'`
     $LCTL --device $osc2dev deactivate || return 3
@@ -248,7 +253,7 @@ test_18b() {
     lfs setstripe $f -s $((128 * 1024)) -i 0 -c 1
     lfs setstripe $f2 -s $((128 * 1024)) -i 0 -c 1
 
-    do_facet client cp /etc/termcap $f
+    do_facet client cp $SAMPLE_FILE $f
     sync
     ost_evict_client
     # allow recovery to complete
@@ -261,6 +266,37 @@ test_18b() {
     return $rc
 }
 run_test 18b "eviction and reconnect clears page cache (2766)"
+
+test_18c() {
+    do_facet client mkdir -p $MOUNT/$tdir
+    f=$MOUNT/$tdir/$tfile
+    f2=$MOUNT/$tdir/${tfile}-2
+
+    cancel_lru_locks osc
+    pgcache_empty || return 1
+
+    # shouldn't have to set stripe size of count==1
+    lfs setstripe $f -s $((128 * 1024)) -i 0 -c 1
+    lfs setstripe $f2 -s $((128 * 1024)) -i 0 -c 1
+
+    do_facet client cp $SAMPLE_FILE $f
+    sync
+    ost_evict_client
+
+    # OBD_FAIL_OST_CONNECT_NET2
+    # lost reply to connect request
+    do_facet ost1 sysctl -w lustre.fail_loc=0x80000225
+    # force reconnect
+    df $MOUNT > /dev/null 2>&1
+    sleep 2
+    # my understanding is that there should be nothing in the page
+    # cache after the client reconnects?     
+    rc=0
+    pgcache_empty || rc=2
+    rm -f $f $f2
+    return $rc
+}
+run_test 18c "Dropped connect reply after eviction handing (14755)"
 
 test_19a() {
     f=$MOUNT/$tfile

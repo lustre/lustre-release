@@ -178,6 +178,7 @@ int __obd_fail_check_set(__u32 id, __u32 value, int set);
 #define OBD_FAIL_OST_BRW_WRITE_BULK2     0x220
 #define OBD_FAIL_OST_LLOG_RECOVERY_TIMEOUT 0x221
 #define OBD_FAIL_OST_CANCEL_COOKIE_TIMEOUT 0x222
+#define OBD_FAIL_OST_CONNECT_NET2        0x225
 
 #define OBD_FAIL_LDLM                    0x300
 #define OBD_FAIL_LDLM_NAMESPACE_NEW      0x301

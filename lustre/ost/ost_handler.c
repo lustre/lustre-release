@@ -1560,6 +1560,8 @@ int ost_handle(struct ptlrpc_request *req)
                 if (OBD_FAIL_CHECK(OBD_FAIL_OST_CONNECT_NET))
                         RETURN(0);
                 rc = target_handle_connect(req);
+                if (OBD_FAIL_CHECK(OBD_FAIL_OST_CONNECT_NET2))
+                        RETURN(0);
                 if (!rc) {
                         struct obd_export *exp = req->rq_export;
 
