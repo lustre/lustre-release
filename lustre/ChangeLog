@@ -785,6 +785,11 @@ Details    : Port llog reference couting and some llog cleanups from b1_6
              (bug 10800) into HEAD, for protect from panic and access to already
 	     free llog structures.
 
+Severity   : normal
+Bugzilla   : 14483
+Description: Detect stride IO mode in read-ahead 
+Details    : When a client does stride read, read-ahead should detect that and
+	     read-ahead pages according to the detected stride pattern. 
 
 --------------------------------------------------------------------------------
 
