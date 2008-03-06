@@ -16,8 +16,8 @@ MOUNTCONFSKIP="10 11 12 13 13b 14 15"
 # bug number for skipped test: 13739 
 HEAD_EXCEPT="                  32a 32b "
 
-# bug number for skipped test:                                  14957 14731 12743 
-ALWAYS_EXCEPT=" $CONF_SANITY_EXCEPT $MOUNTCONFSKIP $HEAD_EXCEPT 23a   33a   36    "
+# bug number for skipped test:                                  14731 12743 
+ALWAYS_EXCEPT=" $CONF_SANITY_EXCEPT $MOUNTCONFSKIP $HEAD_EXCEPT 33a   36    "
 # UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
 
 SRCDIR=`dirname $0`
@@ -801,25 +801,47 @@ test_23a() {	# was test_23
         # fail mds
 	stop mds   
 	# force down client so that recovering mds waits for reconnect
-	zconf_umount `hostname` $MOUNT -f
+	local running=$(grep -c $MOUNT /proc/mounts) || true
+    	if [ $running -ne 0 ]; then
+        	echo "Stopping client $MOUNT (opts: -f)"
+        	umount -f $MOUNT
+    	fi
+
 	# enter recovery on mds
 	start_mds
 	# try to start a new client
 	mount_client $MOUNT &
-	MOUNT_PID=$!
 	sleep 5
+	MOUNT_PID=$(ps -ef | grep "t lustre" | grep -v grep | awk '{print $2}')
 	MOUNT_LUSTRE_PID=`ps -ef | grep mount.lustre | grep -v grep | awk '{print $2}'`
 	echo mount pid is ${MOUNT_PID}, mount.lustre pid is ${MOUNT_LUSTRE_PID}
 	ps --ppid $MOUNT_PID
 	ps --ppid $MOUNT_LUSTRE_PID
 	# FIXME why o why can't I kill these? Manual "ctrl-c" works...
-	kill -TERM $MOUNT_PID
+	kill -TERM $MOUNT_LUSTRE_PID
 	echo "waiting for mount to finish"
 	ps -ef | grep mount
-	wait $MOUNT_PID
-
-	stop_mds
-	stop_ost
+	# we can not wait $MOUNT_PID because it is not a child of this shell
+	local PID1
+	local PID2
+	local WAIT=0
+	local MAX_WAIT=20
+	local sleep=1
+	while [ "$WAIT" -lt "$MAX_WAIT" ]; do
+		sleep $sleep
+		PID1=$(ps -ef | awk '{print $2}' | grep -w $MOUNT_PID)
+		PID2=$(ps -ef | awk '{print $2}' | grep -w $MOUNT_LUSTRE_PID)
+		echo PID1=$PID1
+		echo PID2=$PID2
+		[ -z "$PID1" -a -z "$PID2" ] && break
+		echo "waiting for mount to finish ... "
+		WAIT=$(( WAIT + sleep))
+	done
+	[ "$WAIT" -eq "$MAX_WAIT" ] && error "MOUNT_PID $MOUNT_PID and \
+		MOUNT__LUSTRE_PID $MOUNT__LUSTRE_PID still not killed in $WAIT secs"
+	ps -ef | grep mount
+	stop_mds || error
+	stop_ost || error
 }
 run_test 23a "interrupt client during recovery mount delay"
 
