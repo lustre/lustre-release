@@ -68,9 +68,9 @@ static int mdt_getxattr_pack_reply(struct mdt_thread_info * info)
                     !strncmp(xattr_name, user_string, sizeof(user_string) - 1))
                         RETURN(-EOPNOTSUPP);
                 
-                        size = mo_xattr_get(info->mti_env,
-                                            mdt_object_child(info->mti_object),
-                                            &LU_BUF_NULL, xattr_name);
+                size = mo_xattr_get(info->mti_env,
+                                    mdt_object_child(info->mti_object),
+                                    &LU_BUF_NULL, xattr_name);
         } else if ((valid & OBD_MD_FLXATTRLS) == OBD_MD_FLXATTRLS) {
                 size = mo_xattr_list(info->mti_env,
                                      mdt_object_child(info->mti_object),
@@ -110,10 +110,10 @@ int mdt_getxattr(struct mdt_thread_info *info)
         struct ptlrpc_request  *req = mdt_info_req(info);
         struct mdt_export_data *med = mdt_req2med(req);
         struct md_ucred        *uc  = mdt_ucred(info);
-        struct  mdt_body       *reqbody;
-        struct  mdt_body       *repbody = NULL;
-        struct  md_object      *next;
-        struct  lu_buf         *buf;
+        struct mdt_body        *reqbody;
+        struct mdt_body        *repbody = NULL;
+        struct md_object       *next;
+        struct lu_buf          *buf;
         int                     easize, rc;
         ENTRY;
 
@@ -168,7 +168,7 @@ int mdt_getxattr(struct mdt_thread_info *info)
                                                           &RMF_NAME);
                 CDEBUG(D_INODE, "getxattr %s\n", xattr_name);
 
-                        rc = mo_xattr_get(info->mti_env, next, buf, xattr_name);
+                rc = mo_xattr_get(info->mti_env, next, buf, xattr_name);
                 if (rc < 0) {
                         CERROR("getxattr failed: %d\n", rc);
                         GOTO(out, rc);
@@ -210,16 +210,17 @@ out:
         return rc;
 }
 
-static int mdt_rmtlsetfacl(struct mdt_thread_info *info, const char *xattr_name,
+static int mdt_rmtlsetfacl(struct mdt_thread_info *info,
+                           struct md_object *next,
+                           const char *xattr_name,
                            ext_acl_xattr_header *header,
                            posix_acl_xattr_header **out)
 {
-        struct ptlrpc_request *req = mdt_info_req(info);
+        struct ptlrpc_request  *req = mdt_info_req(info);
         struct mdt_export_data *med = mdt_req2med(req);
-        struct md_ucred *uc = mdt_ucred(info);
-        struct md_object *next = mdt_object_child(info->mti_object);
-        struct lu_buf         *buf = &info->mti_buf;
-        int rc;
+        struct md_ucred        *uc = mdt_ucred(info);
+        struct lu_buf          *buf = &info->mti_buf;
+        int                     rc;
         ENTRY;
 
         rc = lustre_ext_acl_xattr_id2server(uc, med->med_idmap, header);
@@ -273,7 +274,7 @@ int mdt_reint_setxattr(struct mdt_thread_info *info,
         struct mdt_object       *obj; 
         struct md_object        *child;
         __u64                    valid = attr->la_valid;
-        const char               *xattr_name;
+        const char              *xattr_name;
         int                      xattr_len = 0;
         __u64                    lockpart;
         int                      rc;
@@ -346,7 +347,8 @@ int mdt_reint_setxattr(struct mdt_thread_info *info,
 
                         if (valid & OBD_MD_FLRMTLSETFACL) {
                                 LASSERT(med->med_rmtclient);
-                                xattr_len = mdt_rmtlsetfacl(info, xattr_name,
+                                xattr_len = mdt_rmtlsetfacl(info, child,
+                                                xattr_name,
                                                 (ext_acl_xattr_header *)xattr,
                                                 &new_xattr);
                                 if (xattr_len < 0)

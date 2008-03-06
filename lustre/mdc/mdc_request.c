@@ -225,9 +225,11 @@ int mdc_getattr(struct obd_export *exp, const struct lu_fid *fid,
         mdc_pack_body(req, fid, oc, valid, ea_size, -1, MDS_BFLAG_EXT_FLAGS);
 
         req_capsule_set_size(&req->rq_pill, &RMF_MDT_MD, RCL_SERVER, ea_size);
-        if (valid & OBD_MD_FLRMTPERM)
+        if (valid & OBD_MD_FLRMTPERM) {
+                LASSERT(client_is_remote(exp));
                 req_capsule_set_size(&req->rq_pill, &RMF_ACL, RCL_SERVER,
                                      sizeof(struct mdt_remote_perm));
+        }
         ptlrpc_request_set_replen(req);
 
         rc = mdc_getattr_common(exp, req);
@@ -548,7 +550,9 @@ int mdc_get_lustre_md(struct obd_export *exp, struct ptlrpc_request *req,
 
         if (md->body->valid & OBD_MD_FLRMTPERM) {
                 /* remote permission */
-                md->remote_perm = req_capsule_server_get(pill, &RMF_ACL);
+                LASSERT(client_is_remote(exp));
+                md->remote_perm = req_capsule_server_swab_get(pill, &RMF_ACL,
+                                                lustre_swab_mdt_remote_perm);
                 if (!md->remote_perm)
                         GOTO(out, rc = -EPROTO);
         }
@@ -1669,6 +1673,8 @@ int mdc_get_remote_perm(struct obd_export *exp, const struct lu_fid *fid,
         int                    rc;
         ENTRY;
 
+        LASSERT(client_is_remote(exp));
+
         *request = NULL;
         req = ptlrpc_request_alloc(class_exp2cliimp(exp), &RQF_MDS_GETATTR);
         if (req == NULL)
@@ -1683,6 +1689,9 @@ int mdc_get_remote_perm(struct obd_export *exp, const struct lu_fid *fid,
         }
 
         mdc_pack_body(req, fid, oc, OBD_MD_FLRMTPERM, 0, suppgid, 0);
+
+        req_capsule_set_size(&req->rq_pill, &RMF_ACL, RCL_SERVER,
+                             sizeof(struct mdt_remote_perm));
 
         ptlrpc_request_set_replen(req);
 

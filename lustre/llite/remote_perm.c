@@ -239,50 +239,55 @@ int lustre_check_remote_perm(struct inode *inode, int mask)
         int i = 0, rc;
         ENTRY;
 
-check:
-        utime = lli->lli_rmtperm_utime;
-        rc = do_check_remote_perm(lli, mask);
-        if (!rc || ((rc != -ENOENT) && i))
-                RETURN(rc);
-
-        might_sleep();
-
-        down(&lli->lli_rmtperm_sem);
-        /* check again */
-        if (utime != lli->lli_rmtperm_utime) {
+        do {
+                utime = lli->lli_rmtperm_utime;
                 rc = do_check_remote_perm(lli, mask);
-                if (!rc || ((rc != -ENOENT) && i)) {
-                        up(&lli->lli_rmtperm_sem);
-                        RETURN(rc);
+                if (!rc || (rc != -ENOENT && i))
+                        break;
+
+                might_sleep();
+
+                down(&lli->lli_rmtperm_sem);
+                /* check again */
+                if (utime != lli->lli_rmtperm_utime) {
+                        rc = do_check_remote_perm(lli, mask);
+                        if (!rc || (rc != -ENOENT && i)) {
+                                up(&lli->lli_rmtperm_sem);
+                                break;
+                        }
                 }
-        }
 
-        if (i++ > 5) {
-                CERROR("check remote perm falls in dead loop!\n");
-                LBUG();
-        }
+                if (i++ > 5) {
+                        CERROR("check remote perm falls in dead loop!\n");
+                        LBUG();
+                }
 
-        oc = ll_mdscapa_get(inode);
-        rc = md_get_remote_perm(sbi->ll_md_exp, ll_inode2fid(inode), oc,
-                                ll_i2suppgid(inode), &req);
-        capa_put(oc);
-        if (rc) {
+                oc = ll_mdscapa_get(inode);
+                rc = md_get_remote_perm(sbi->ll_md_exp, ll_inode2fid(inode), oc,
+                                        ll_i2suppgid(inode), &req);
+                capa_put(oc);
+                if (rc) {
+                        up(&lli->lli_rmtperm_sem);
+                        break;
+                }
+
+                perm = req_capsule_server_swab_get(&req->rq_pill, &RMF_ACL,
+                                                   lustre_swab_mdt_remote_perm);
+                if (unlikely(perm == NULL)) {
+                        up(&lli->lli_rmtperm_sem);
+                        rc = -EPROTO;
+                        break;
+                }
+
+                rc = ll_update_remote_perm(inode, perm);
                 up(&lli->lli_rmtperm_sem);
-                RETURN(rc);
-        }
+                if (rc == -ENOMEM)
+                        break;
 
-        perm = req_capsule_server_get(&req->rq_pill, &RMF_ACL);
-        LASSERT(perm);
-
-        rc = ll_update_remote_perm(inode, perm);
-        up(&lli->lli_rmtperm_sem);
-
+                ptlrpc_req_finished(req);
+        } while (1);
         ptlrpc_req_finished(req);
-
-        if (rc == -ENOMEM)
-                RETURN(rc);
-
-        goto check;
+        RETURN(rc);
 }
 
 #if 0  /* NB: remote perms can't be freed in ll_mdc_blocking_ast of UPDATE lock,
