@@ -90,10 +90,9 @@ setup() {
 }
 
 check_kernel_version() {
-	VERSION_FILE=$LPROC/version
+	VERSION_FILE=version
 	WANT_VER=$1
-	[ ! -f $VERSION_FILE ] && echo "can't find kernel version" && return 1
-	GOT_VER=$(awk '/kernel:/ {print $2}' $VERSION_FILE)
+	GOT_VER=$(lctl get_param -n $VERSION_FILE | awk '/kernel:/ {print $2}')
 	[ $GOT_VER == "patchless" ] && return 0
 	[ $GOT_VER -ge $WANT_VER ] && return 0
 	log "test needs at least kernel version $WANT_VER, running $GOT_VER"
@@ -112,11 +111,11 @@ check_and_setup_lustre
 DIR=${DIR:-$MOUNT}
 [ -z "`echo $DIR | grep $MOUNT`" ] && echo "$DIR not in $MOUNT" && exit 99
 
-LOVNAME=`cat $LPROC/llite/*/lov/common_name | tail -n 1`
-OSTCOUNT=`cat $LPROC/lov/$LOVNAME/numobd`
-STRIPECOUNT=`cat $LPROC/lov/$LOVNAME/stripecount`
-STRIPESIZE=`cat $LPROC/lov/$LOVNAME/stripesize`
-ORIGFREE=`cat $LPROC/lov/$LOVNAME/kbytesavail`
+LOVNAME=`lctl get_param -n llite.*.lov.common_name | tail -n 1`
+OSTCOUNT=`lctl get_param -n lov.$LOVNAME.numobd`
+STRIPECOUNT=`lctl get_param -n lov.$LOVNAME.stripecount`
+STRIPESIZE=`lctl get_param -n lov.$LOVNAME.stripesize`
+ORIGFREE=`lctl get_param -n lov.$LOVNAME.kbytesavail`
 MAXFREE=${MAXFREE:-$((200000 * $OSTCOUNT))}
 
 [ -f $DIR/d52a/foo ] && chattr -a $DIR/d52a/foo
@@ -924,12 +923,12 @@ reset_enospc() {
 
 exhaust_precreations() {
 	OSTIDX=$1
-	OST=$(grep ${OSTIDX}": " $LPROC/lov/${LOVNAME}/target_obd | \
-	    awk '{print $2}' | sed -e 's/_UUID$//')
+	OST=$(lctl get_param -n lov.${LOVNAME}.target_obd |
+              grep ${OSTIDX}": " | \
+              awk '{print $2}' | sed -e 's/_UUID$//')
 	# on the mdt's osc
-        OSC=$(ls $LPROC/osc | grep "${OST}-osc-MDT0000")
-        last_id=$(cat $LPROC/osc/${OSC}/prealloc_last_id)
-	next_id=$(cat $LPROC/osc/${OSC}/prealloc_next_id)
+        last_id=$(lctl get_param -n osc.*${OST}-osc-MDT0000.prealloc_last_id)
+	next_id=$(lctl get_param -n osc.*${OST}-osc-MDT0000.prealloc_next_id)
 
         mkdir -p $DIR/d27/${OST}
 	$SETSTRIPE $DIR/d27/${OST} -i $OSTIDX -c 1
@@ -937,7 +936,7 @@ exhaust_precreations() {
 	sysctl -w lustre.fail_loc=0x215
 	echo "Creating to objid $last_id on ost $OST..."
 	createmany -o $DIR/d27/${OST}/f $next_id $((last_id - next_id + 2))
-	grep '[0-9]' $LPROC/osc/${OSC}/prealloc*
+	lctl get_param -n osc.*${OST}-osc-MDT0000.prealloc* | grep '[0-9]'
 	reset_enospc $2
 }
 
@@ -1126,17 +1125,16 @@ test_29() {
 	touch $DIR/d29/foo
 	log 'first d29'
 	ls -l $DIR/d29
-	MDCDIR=${MDCDIR:-$LPROC/ldlm/namespaces/*-mdc-*}
-	LOCKCOUNTORIG=`cat $MDCDIR/lock_count`
-	LOCKUNUSEDCOUNTORIG=`cat $MDCDIR/lock_unused_count`
+	LOCKCOUNTORIG=`lctl get_param -n ldlm.namespaces.*mdc*.lock_count`
+	LOCKUNUSEDCOUNTORIG=`lctl get_param -n ldlm.namespaces.*mdc*.lock_unused_count`
 	[ -z $"LOCKCOUNTORIG" ] && echo "No mdc lock count" && return 1
 	log 'second d29'
 	ls -l $DIR/d29
 	log 'done'
-	LOCKCOUNTCURRENT=`cat $MDCDIR/lock_count`
-	LOCKUNUSEDCOUNTCURRENT=`cat $MDCDIR/lock_unused_count`
+	LOCKCOUNTCURRENT=`lctl get_param -n ldlm.namespaces.*mdc*.lock_count`
+	LOCKUNUSEDCOUNTCURRENT=`lctl get_param -n ldlm.namespaces.*mdc*.lock_unused_count`
 	if [ "$LOCKCOUNTCURRENT" -gt "$LOCKCOUNTORIG" ]; then
-		echo > $LPROC/ldlm/dump_namespaces
+		lctl set_param -n ldlm.dump_namespaces ""
 		error "CURRENT: $LOCKCOUNTCURRENT > $LOCKCOUNTORIG"
 		$LCTL dk | sort -k4 -t: > $TMP/test_29.dk
 		log "dumped log to $TMP/test_29.dk (bug 5793)"
@@ -1677,7 +1675,7 @@ run_test 36f "utime on file racing with OST BRW write =========="
 
 test_36g() {
 	remote_ost && skip "remote OST" && return
-	export FMD_MAX_AGE=`do_facet ost1 cat $LPROC/obdfilter/*/client_cache_seconds 2> /dev/null | head -n 1`
+	export FMD_MAX_AGE=`do_facet ost1 lctl get_param -n obdfilter.*.client_cache_seconds 2> /dev/null | head -n 1`
 	FMD_BEFORE="`awk '/ll_fmd_cache/ { print $2 }' /proc/slabinfo`"
 	touch $DIR/d36/$tfile
 	sleep $((FMD_MAX_AGE + 12))
@@ -1737,7 +1735,7 @@ test_41() {
 run_test 41 "test small file write + fstat ====================="
 
 count_ost_writes() {
-        cat $LPROC/osc/*/stats |
+        lctl get_param -n osc.*.stats |
             awk -vwrites=0 '/ost_write/ { writes += $2 } END { print writes; }'
 }
 
@@ -1801,7 +1799,7 @@ test_42a() {
 	stop_writeback
 	sync; sleep 1; sync # just to be safe
 	BEFOREWRITES=`count_ost_writes`
-        grep "[0-9]" $LPROC/osc/*[oO][sS][cC][_-]*/cur_grant_bytes
+        lctl get_param -n osc.*[oO][sS][cC][_-]*.cur_grant_bytes | grep "[0-9]"
         dd if=/dev/zero of=$DIR/f42a bs=1024 count=100
 	AFTERWRITES=`count_ost_writes`
 	[ $BEFOREWRITES -eq $AFTERWRITES ] || \
@@ -1974,8 +1972,8 @@ run_test 44a "test sparse pwrite ==============================="
 
 dirty_osc_total() {
 	tot=0
-	for d in $LPROC/osc/*/cur_dirty_bytes; do
-		tot=$(($tot + `cat $d`))
+	for d in `lctl get_param -n osc.*.cur_dirty_bytes`; do
+		tot=$(($tot + $d))
 	done
 	echo $tot
 }
@@ -2265,10 +2263,11 @@ test_53() {
 	remote_mds && skip "remote MDS" && return
 
 	# only test MDT0000 
-        for i in `ls -d $LPROC/osc/*-osc-MDT0000 2> /dev/null` ; do
-                ostname=`basename $i | cut -d - -f 1-2`
-                ost_last=`cat $LPROC/obdfilter/$ostname/last_id`
-                mds_last=`cat $i/prealloc_last_id`
+        for value in `lctl get_param osc.*-osc-MDT0000.prealloc_last_id` ; do
+                param=`echo ${value[0]} | cut -d "=" -f1`
+                ostname=`echo $param | cut -d "." -f2 | cut -d - -f 1-2`
+                ost_last=`lctl get_param -n obdfilter.$ostname.last_id`
+                mds_last=`lctl get_param -n $param`
                 echo "$ostname.last_id=$ost_last ; MDS.last_id=$mds_last"
                 if [ $ost_last != $mds_last ]; then
                     error "$ostname.last_id=$ost_last ; MDS.last_id=$mds_last"
@@ -2573,10 +2572,10 @@ run_test 56o "check lfs find -mtime for old files =========================="
 test_57a() {
 	# note test will not do anything if MDS is not local
 	remote_mds && skip "remote MDS" && return
-	local MNTDEV="$LPROC/osd/*MDT*/mntdev"
-	DEV=$(cat $MNTDEV)
+	local MNTDEV="osd.*MDT*.mntdev"
+	DEV=$(lctl get_param -n $MNTDEV)
 	[ -z "$DEV" ] && error "can't access $MNTDEV" 
-	for DEV in `cat $MNTDEV`; do
+	for DEV in `lctl get_param -n $MNTDEV`; do
 		dumpe2fs -h $DEV > $TMP/t57a.dump || error "can't access $DEV"
 		DEVISIZE=`awk '/Inode size:/ { print $3 }' $TMP/t57a.dump`
 		[ "$DEVISIZE" -gt 128 ] || error "inode size $DEVISIZE"
@@ -2599,8 +2598,8 @@ test_57b() {
 	$GETSTRIPE $FILE1 2>&1 | grep -q "no stripe" || error "$FILE1 has an EA"
 	$GETSTRIPE $FILEN 2>&1 | grep -q "no stripe" || error "$FILEN has an EA"
 
-	MDSFREE="`cat $LPROC/osd/*MDT*/kbytesfree 2> /dev/null`"
-	MDCFREE="`cat $LPROC/mdc/*/kbytesfree | head -n 1`"
+	MDSFREE="`lctl get_param -n osd.*MDT*.kbytesfree 2> /dev/null`"
+	MDCFREE="`lctl get_param -n mdc.*.kbytesfree | head -n 1`"
 	echo "opening files to create objects/EAs"
 	for FILE in `seq -f $DIR/d57b/f%g 1 $FILECOUNT`; do
 		$OPENFILE -f O_RDWR $FILE > /dev/null || error "opening $FILE"
@@ -2611,8 +2610,8 @@ test_57b() {
 	$GETSTRIPE $FILEN | grep -q "obdidx" || error "$FILEN missing EA"
 
 	sleep 1 # make sure we get new statfs data
-#	MDSFREE2="`cat $LPROC/mds/*/kbytesfree`"
-#	MDCFREE2="`cat $LPROC/mdc/*/kbytesfree`"
+#	MDSFREE2="`lctl get_param -n mds.*.kbytesfree`"
+#	MDCFREE2="`lctl get_param -n mdc.*.kbytesfree`"
 #	if [ "$MDCFREE2" -lt "$((MDCFREE - 8))" ]; then
 #		if [ "$MDSFREE" != "$MDSFREE2" ]; then
 #			error "MDC before $MDCFREE != after $MDCFREE2"
@@ -2720,10 +2719,8 @@ run_test 62 "verify obd_match failure doesn't LBUG (should -EIO)"
 
 # bug 2319 - oig_wait() interrupted causes crash because of invalid waitq.
 test_63() {
-	MAX_DIRTY_MB=`cat $LPROC/osc/*/max_dirty_mb | head -n 1`
-	for i in $LPROC/osc/*/max_dirty_mb ; do
-		echo 0 > $i
-	done
+	MAX_DIRTY_MB=`lctl get_param -n osc.*.max_dirty_mb | head -n 1`
+	lctl set_param -n osc.*.max_dirty_mb 0
 	for i in `seq 10` ; do
 		dd if=/dev/zero of=$DIR/f63 bs=8k &
 		sleep 5
@@ -2731,9 +2728,7 @@ test_63() {
 		sleep 1
 	done
 
-	for i in $LPROC/osc/*/max_dirty_mb ; do
-		echo $MAX_DIRTY_MB > $i
-	done
+	lctl set_param -n osc.*.max_dirty_mb $MAX_DIRTY_MB
 	rm -f $DIR/f63 || true
 }
 run_test 63 "Verify oig_wait interruption does not crash ======="
@@ -2753,7 +2748,7 @@ test_63b() {
 	multiop $DIR/$tfile Owy && \
 		error "sync didn't return ENOMEM"
 	sync; sleep 2; sync	# do a real sync this time to flush page
-	grep locked $LPROC/llite/*/dump_page_cache && \
+	lctl get_param -n llite.*.dump_page_cache | grep locked && \
 		error "locked page left in cache after async error" || true
 	debugrestore
 }
@@ -2761,7 +2756,7 @@ run_test 63b "async write errors should be returned to fsync ==="
 
 test_64a () {
 	df $DIR
-	grep "[0-9]" $LPROC/osc/*[oO][sS][cC][_-]*/cur*
+	lctl get_param -n osc.*[oO][sS][cC][_-]*.cur* | grep "[0-9]"
 }
 run_test 64a "verify filter grant calculations (in kernel) ====="
 
@@ -2880,7 +2875,7 @@ test_65k() { # bug11679
                 do_facet mds lctl --device  %$INACTIVE_OSC deactivate
                 for STRIPE_OSC in $MDS_OSCS; do
                         STRIPE_OST=`osc_to_ost $STRIPE_OSC`
-                        STRIPE_INDEX=`do_facet mds cat $LPROC/lov/*md*/target_obd |
+                        STRIPE_INDEX=`do_facet mds lctl get_param -n lov.*md*.target_obd |
                                       grep $STRIPE_OST | awk -F: '{print $1}'`
                         echo "$SETSTRIPE $DIR/$tdir/${STRIPE_INDEX} -i ${STRIPE_INDEX} -c 1"
                         do_facet client $SETSTRIPE $DIR/$tdir/${STRIPE_INDEX} -i ${STRIPE_INDEX} -c 1
@@ -2936,7 +2931,7 @@ swap_used() {
 # and then consuming memory until it is used.
 test_68() {
 	[ "$UID" != 0 ] && skip "must run as root" && return
-	grep -q obdfilter $LPROC/devices && \
+	lctl get_param -n devices | grep -q obdfilter && \
 		skip "local OST" && return
 
 	grep -q llite_lloop /proc/modules
@@ -2973,7 +2968,7 @@ run_test 68 "support swapping to Lustre ========================"
 # bug5265, obdfilter oa2dentry return -ENOENT
 # #define OBD_FAIL_OST_ENOENT 0x217
 test_69() {
-	[ $(grep -c obdfilter $LPROC/devices) -eq 0 ] && \
+	[ $(lctl get_param -n devices | grep -c obdfilter) -eq 0 ] && \
 		skip "skipping test for remote OST" && return
 
 	f="$DIR/$tfile"
@@ -3266,10 +3261,8 @@ set_checksums()
 	# In this case set_checksums() will not be no-op, because sptlrpc
 	# bulk checksum will be enabled all through the test.
 
-	[ "$ORIG_CSUM" ] || ORIG_CSUM=`cat $LPROC/osc/*/checksums | head -n1`
-	for f in $LPROC/osc/*/checksums; do
-		echo $1 >> $f
-	done
+	[ "$ORIG_CSUM" ] || ORIG_CSUM=`lctl get_param -n osc.*.checksums | head -n1`
+        lctl set_param -n osc.*.checksums $1
 	return 0
 }
 
@@ -3278,11 +3271,9 @@ CKSUM_TYPES=${CKSUM_TYPES:-"crc32 adler"}
 set_checksum_type()
 {
 	[ "$ORIG_CSUM_TYPE" ] || \
-		ORIG_CSUM_TYPE=`sed 's/.*\[\(.*\)\].*/\1/g' \
-	                        $LPROC/osc/*osc-[^mM]*/checksum_type | head -n1`
-	for f in $LPROC/osc/*osc-*/checksum_type; do
-		echo $1 > $f
-	done
+		ORIG_CSUM_TYPE=`lctl get_param -n osc/*osc-[^mM]*/checksum_type |
+                                sed 's/.*\[\(.*\)\].*/\1/g' | head -n1`
+	lctl set_param -n osc.*osc-*.checksum_type $1
 	log "set checksum type to $1"
 	return 0
 }
@@ -3370,7 +3361,7 @@ test_77f() { # bug 10889
 run_test 77f "repeat checksum error on write (expect error) ===="
 
 test_77g() { # bug 10889
-	[ $(grep -c obdfilter $LPROC/devices) -eq 0 ] && \
+	[ $(lctl get_param -n devices | grep -c obdfilter) -eq 0 ] && \
 		skip "remote OST" && return
 	[ ! -f $F77_TMP ] && setup_f77
 	#define OBD_FAIL_OST_CHECKSUM_RECEIVE       0x21a
@@ -3384,7 +3375,7 @@ test_77g() { # bug 10889
 run_test 77g "checksum error on OST write ======================"
 
 test_77h() { # bug 10889
-	[ $(grep -c obdfilter $LPROC/devices) -eq 0 ] && \
+	[ $(lctl get_param -n devices | grep -c obdfilter) -eq 0 ] && \
 		skip "remote OST" && return
 	[ ! -f $DIR/f77 ] && skip "requires 77g - skipping" && return  
 	cancel_lru_locks osc
@@ -3402,8 +3393,9 @@ test_77i() { # bug 13805
 	sysctl -w lustre.fail_loc=0x40b
 	remount_client $MOUNT
 	sysctl -w lustre.fail_loc=0
-	for f in $LPROC/osc/*osc-[^mM]*/checksum_type; do
-		algo=`sed 's/.*\[\(.*\)\].*/\1/g' $f`
+	for VALUE in `lctl get_param osc.*osc-[^mM]*.checksum_type`; do
+		PARAM=`echo ${VALUE[0]} | cut -d "=" -f1`
+		algo=`lctl get_param -n $PARAM | sed 's/.*\[\(.*\)\].*/\1/g'`
 		[ "$algo" = "crc32" ] || error "algo set to $algo instead of crc32"
 	done
 	remount_client $MOUNT
@@ -3415,8 +3407,9 @@ test_77j() { # bug 13805
 	sysctl -w lustre.fail_loc=0x40c
 	remount_client $MOUNT
 	sysctl -w lustre.fail_loc=0
-	for f in $LPROC/osc/*osc-[^mM]*/checksum_type; do
-		algo=`sed 's/.*\[\(.*\)\].*/\1/g' $f`
+	for VALUE in `lctl get_param osc.*osc-[^mM]*.checksum_type`; do
+                PARAM=`echo ${VALUE[0]} | cut -d "=" -f1`
+		algo=`lctl get_param -n $PARAM | sed 's/.*\[\(.*\)\].*/\1/g'`
 		[ "$algo" = "adler" ] || error "algo set to $algo instead of adler"
 	done
 	remount_client $MOUNT
@@ -3458,17 +3451,14 @@ test_78() { # bug 10901
 run_test 78 "handle large O_DIRECT writes correctly ============"
 
 test_79() { # bug 12743
-	[ $(grep -c obdfilter $LPROC/devices) -eq 0 ] &&
+	[ $(lctl get_param -n devices | grep -c obdfilter) -eq 0 ] &&
 		skip "skipping test for remote OST" && return
 
 	wait_delete_completed
 
-        BKTOTAL=`awk 'BEGIN{total=0}; {total+=$1}; END{print total}' \
-                 $LPROC/obdfilter/*/kbytestotal`
-        BKFREE=`awk 'BEGIN{free=0}; {free+=$1}; END{print free}' \
-                $LPROC/obdfilter/*/kbytesfree`
-        BKAVAIL=`awk 'BEGIN{avail=0}; {avail+=$1}; END{print avail}' \
-                 $LPROC/obdfilter/*/kbytesavail`
+        BKTOTAL=`lctl get_param -n obdfilter.*.kbytestotal | awk 'BEGIN{total=0}; {total+=$1}; END{print total}'`
+        BKFREE=`lctl get_param -n obdfilter.*.kbytesfree | awk 'BEGIN{free=0}; {free+=$1}; END{print free}'`
+        BKAVAIL=`lctl get_param -n obdfilter.*.kbytesavail | awk 'BEGIN{avail=0}; {avail+=$1}; END{print avail}'`
         STRING=`df -P $MOUNT | tail -n 1 | awk '{print $2","$3","$4}'`
         DFTOTAL=`echo $STRING | cut -d, -f1`
         DFUSED=`echo $STRING  | cut -d, -f2`
@@ -3585,11 +3575,9 @@ function get_named_value()
     done
 }
 
-export CACHE_MAX=`cat $LPROC/llite/*/max_cached_mb | head -n 1`
+export CACHE_MAX=`lctl get_param -n llite.*.max_cached_mb | head -n 1`
 cleanup_101() {
-	for s in $LPROC/llite/*/max_cached_mb; do
-		echo $CACHE_MAX > $s
-	done
+	lctl set_param -n llite.*.max_cached_mb $CACHE_MAX
 	trap 0
 }
 
@@ -3600,14 +3588,10 @@ test_101() {
 	[ "$CPU" = "UML" ] && nreads=1000
 	local cache_limit=32
 
-	for s in $LPROC/osc/*-osc*/rpc_stats; do
-		echo 0 > $s
-	done
+	lctl set_param -n osc.*-osc*.rpc_stats 0
 	trap cleanup_101 EXIT
-	for s in $LPROC/llite/*; do
-		echo 0 > $s/read_ahead_stats
-		echo $cache_limit > $s/max_cached_mb
-	done
+	lctl set_param -n llite.*.read_ahead_stats 0
+	lctl set_param -n llite.*.max_cached_mb $cache_limit
 
 	#
 	# randomly read 10000 of 64K chunks from file 3x 32MB in size
@@ -3616,18 +3600,14 @@ test_101() {
 	$RANDOM_READS -f $DIR/$tfile -s$((cache_limit * 3192 * 1024)) -b65536 -C -n$nreads -t 180
 
 	discard=0
-	for s in $LPROC/llite/*; do
-		discard=$(($discard + $(cat $s/read_ahead_stats | get_named_value 'read but discarded')))
+	for s in `lctl get_param -n llite.*.read_ahead_stats | get_named_value 'read but discarded'`; do
+		discard=$(($discard + $s))
 	done
 	cleanup_101
 
 	if [ $(($discard * 10)) -gt $nreads ] ;then
-		for s in $LPROC/osc/*-osc*/rpc_stats; do
-			echo $s; cat $s
-		done
-		for s in $LPROC/llite/*/read_ahead_stats; do
-			echo $s; cat $s
-		done
+		lctl get_param osc.*-osc*.rpc_stats
+		lctl get_param llite.*.read_ahead_stats
 		error "too many ($discard) discarded pages" 
 	fi
 	rm -f $DIR/$tfile || true
@@ -3679,7 +3659,7 @@ test_102a() {
         touch $testfile
 
 	[ "$UID" != 0 ] && skip "must run as root" && return
-	[ -z "`grep xattr $LPROC/mdc/*-mdc-*/connect_flags`" ] && skip "must have user_xattr" && return
+	[ -z "`lctl get_param -n mdc.*-mdc-*.connect_flags | grep xattr`" ] && skip "must have user_xattr" && return
 
 	[ -z "$(which setfattr 2>/dev/null)" ] && skip "could not find setfattr" && return
 
@@ -3909,7 +3889,7 @@ run_acl_subtest()
 
 test_103 () {
     [ "$UID" != 0 ] && skip "must run as root" && return
-    [ -z "$(grep acl $LPROC/mdc/*-mdc-*/connect_flags)" ] && skip "must have acl enabled" && return
+    [ -z "$(lctl get_param -n mdc.*-mdc-*.connect_flags | grep acl)" ] && skip "must have acl enabled" && return
     [ -z "$(which setfacl 2>/dev/null)" ] && skip "could not find setfacl" && return
     $GSS && skip "could not run under gss" && return
 
@@ -3961,7 +3941,7 @@ test_104() {
 	lfs df $DIR/$tfile || error "lfs df $DIR/$tfile failed"
 	lfs df -ih $DIR/$tfile || error "lfs df -ih $DIR/$tfile failed"
 	
-	OSC=`awk '/-osc-/ {print $4}' $LPROC/devices | head -n 1`
+	OSC=`lctl get_param -n devices | awk '/-osc-/ {print $4}' | head -n 1`
 	lctl --device %$OSC deactivate
 	lfs df || error "lfs df with deactivated OSC failed"
 	lctl --device %$OSC recover
@@ -4076,7 +4056,7 @@ run_test 115 "verify dynamic thread creation===================="
 
 free_min_max () {
 	wait_delete_completed
-	AVAIL=($(cat $LPROC/osc/*[oO][sS][cC]-[^M]*/kbytesavail))
+	AVAIL=($(lctl get_param -n osc.*[oO][sS][cC]-[^M]*.kbytesavail))
 	echo OST kbytes available: ${AVAIL[@]}
 	MAXI=0; MAXV=${AVAIL[0]}
 	MINI=0; MINV=${AVAIL[0]}
@@ -4098,8 +4078,8 @@ test_116() {
 	remote_mds && skip "remote MDS" && return
 
 	echo -n "Free space priority "
-	cat $LPROC/lov/*-clilov-*/qos_prio_free
-       	DELAY=$(cat $LPROC/lov/*-clilov-*/qos_maxage | head -1 | awk '{print $1}')
+	lctl get_param -n lov.*-clilov-*.qos_prio_free
+       	DELAY=$(lctl get_param -n lov.*-clilov-*.qos_maxage | head -1 | awk '{print $1}')
 	declare -a AVAIL
 	free_min_max
 	[ $MINV -gt 960000 ] && skip "too much free space in OST$MINI, skip" &&\
@@ -4163,11 +4143,13 @@ test_116() {
 	[ $DIFF -gt 0 ] && echo "Wrote $(($DIFF2 * 100 / $DIFF - 100))% more data to larger OST $MAXI1"
 
 	# Figure out which files were written where 
-	UUID=$(awk '/'$MINI1': / {print $2; exit}' $LPROC/lov/${FSNAME}-clilov-*/target_obd)
+	UUID=$(lctl get_param -n lov.${FSNAME}-clilov-*.target_obd |
+               awk '/'$MINI1': / {print $2; exit}')
 	echo $UUID
         MINC=$($GETSTRIPE --obd $UUID $DIR/$tdir | wc -l)
 	echo "$MINC files created on smaller OST $MINI1"
-	UUID=$(awk '/'$MAXI1': / {print $2; exit}' $LPROC/lov/${FSNAME}-clilov-*/target_obd)
+	UUID=$(lctl get_param -n lov.${FSNAME}-clilov-*.target_obd |
+               awk '/'$MAXI1': / {print $2; exit}')
 	echo $UUID
         MAXC=$($GETSTRIPE --obd $UUID $DIR/$tdir | wc -l)
 	echo "$MAXC files created on larger OST $MAXI1"
@@ -4189,12 +4171,10 @@ run_test 117 "verify fsfilt_extend =========="
 
 export OLD_RESENDCOUNT=""
 set_resend_count () {
-	local PROC_RESENDCOUNT="$LPROC/osc/${FSNAME}-OST*-osc-*/resend_count"
-	OLD_RESENDCOUNT=$(cat $PROC_RESENDCOUNT | head -1)
-	for i in $PROC_RESENDCOUNT; do
-		echo $1 >$i
-	done
-	echo resend_count is set to $(cat $PROC_RESENDCOUNT)
+	local PROC_RESENDCOUNT="osc.${FSNAME}-OST*-osc-*.resend_count"
+	OLD_RESENDCOUNT=$(lctl get_param -n $PROC_RESENDCOUNT | head -1)
+	lctl set_param -n $PROC_RESENDCOUNT $1
+	echo resend_count is set to $(lctl get_param -n $PROC_RESENDCOUNT)
 }
 
 [ "$SLOW" = "no" ] && set_resend_count 4 # for reduce test_118* time (bug 14842)
@@ -4215,8 +4195,8 @@ test_118a() #bug 11710
 	reset_async
 	
  	multiop $DIR/$tfile oO_CREAT:O_RDWR:O_SYNC:w4096c
-	DIRTY=$(grep -c dirty $LPROC/llite/*/dump_page_cache)
-        WRITEBACK=$(grep -c writeback $LPROC/llite/*/dump_page_cache)
+	DIRTY=$(lctl get_param -n llite.*.dump_page_cache | grep -c dirty)
+        WRITEBACK=$(lctl get_param -n llite.*.dump_page_cache | grep -c writeback)
 
 	if [[ $DIRTY -ne 0 || $WRITEBACK -ne 0 ]]; then
 		error "Dirty pages not flushed to disk, dirty=$DIRTY, writeback=$WRITEBACK"
@@ -4236,8 +4216,9 @@ test_118b()
 	multiop $DIR/$tfile oO_CREAT:O_RDWR:O_SYNC:w4096c
 	RC=$?
 	do_facet ost sysctl -w lustre.fail_loc=0
-        DIRTY=$(grep -c dirty $LPROC/llite/*/dump_page_cache)
-        WRITEBACK=$(grep -c writeback $LPROC/llite/*/dump_page_cache)
+        DIRTY=$(lctl get_param -n llite.*.dump_page_cache | grep -c dirty)
+        WRITEBACK=$(lctl get_param -n llite.*.dump_page_cache |
+                    grep -c writeback)
 
 	if [[ $RC -eq 0 ]]; then
 		error "Must return error due to dropped pages, rc=$RC"
@@ -4278,7 +4259,8 @@ test_118c()
 		error "Multiop failed to block on fsync, pid=$MULTIPID"
 	fi
 
-        WRITEBACK=$(grep -c writeback $LPROC/llite/*/dump_page_cache)
+        WRITEBACK=$(lctl get_param -n llite.*.dump_page_cache |
+                    grep -c writeback)
 	if [[ $WRITEBACK -eq 0 ]]; then
 		error "No page in writeback, writeback=$WRITEBACK"
 	fi
@@ -4290,8 +4272,9 @@ test_118c()
 		error "Multiop fsync failed, rc=$RC"
 	fi
 
-        DIRTY=$(grep -c dirty $LPROC/llite/*/dump_page_cache)
-        WRITEBACK=$(grep -c writeback $LPROC/llite/*/dump_page_cache)
+        DIRTY=$(lctl get_param -n llite.*.dump_page_cache | grep -c dirty)
+        WRITEBACK=$(lctl get_param -n llite.*.dump_page_cache |
+                    grep -c writeback)
 	if [[ $DIRTY -ne 0 || $WRITEBACK -ne 0 ]]; then
 		error "Dirty pages not flushed to disk, dirty=$DIRTY, writeback=$WRITEBACK"
 	fi
@@ -4319,7 +4302,8 @@ test_118d()
 		error "Multiop failed to block on fsync, pid=$MULTIPID"
 	fi
 
-        WRITEBACK=$(grep -c writeback $LPROC/llite/*/dump_page_cache)
+        WRITEBACK=$(lctl get_param -n llite.*.dump_page_cache |
+                    grep -c writeback)
 	if [[ $WRITEBACK -eq 0 ]]; then
 		error "No page in writeback, writeback=$WRITEBACK"
 	fi
@@ -4327,8 +4311,9 @@ test_118d()
         wait $MULTIPID || error "Multiop fsync failed, rc=$?"
 	do_facet ost sysctl -w lustre.fail_loc=0
 
-        DIRTY=$(grep -c dirty $LPROC/llite/*/dump_page_cache)
-        WRITEBACK=$(grep -c writeback $LPROC/llite/*/dump_page_cache)	
+        DIRTY=$(lctl get_param -n llite.*.dump_page_cache | grep -c dirty)
+        WRITEBACK=$(lctl get_param -n llite.*.dump_page_cache |
+                    grep -c writeback)
 	if [[ $DIRTY -ne 0 || $WRITEBACK -ne 0 ]]; then
 		error "Dirty pages not flushed to disk, dirty=$DIRTY, writeback=$WRITEBACK"
 	fi
@@ -4354,9 +4339,10 @@ test_118f() {
 	
         sysctl -w lustre.fail_loc=0x0
         
-        LOCKED=$(grep -c locked $LPROC/llite/*/dump_page_cache)
-        DIRTY=$(grep -c dirty $LPROC/llite/*/dump_page_cache)
-        WRITEBACK=$(grep -c writeback $LPROC/llite/*/dump_page_cache)
+        LOCKED=$(lctl get_param -n llite.*.dump_page_cache | grep -c locked)
+        DIRTY=$(lctl get_param -n llite.*.dump_page_cache | grep -c dirty)
+        WRITEBACK=$(lctl get_param -n llite.*.dump_page_cache |
+                    grep -c writeback)
 	if [[ $LOCKED -ne 0 ]]; then
 		error "Locked pages remain in cache, locked=$LOCKED"
 	fi
@@ -4388,9 +4374,10 @@ test_118g() {
 		error "Must return error due to dropped pages, rc=$RC"
 	fi
 
-        LOCKED=$(grep -c locked $LPROC/llite/*/dump_page_cache)
-        DIRTY=$(grep -c dirty $LPROC/llite/*/dump_page_cache)
-        WRITEBACK=$(grep -c writeback $LPROC/llite/*/dump_page_cache)
+        LOCKED=$(lctl get_param -n llite.*.dump_page_cache | grep -c locked)
+        DIRTY=$(lctl get_param -n llite.*.dump_page_cache | grep -c dirty)
+        WRITEBACK=$(lctl get_param -n llite.*.dump_page_cache |
+                    grep -c writeback)
 	if [[ $LOCKED -ne 0 ]]; then
 		error "Locked pages remain in cache, locked=$LOCKED"
 	fi
@@ -4423,9 +4410,10 @@ test_118h() {
 		error "Must return error due to dropped pages, rc=$RC"
 	fi
 
-        LOCKED=$(grep -c locked $LPROC/llite/*/dump_page_cache)
-        DIRTY=$(grep -c dirty $LPROC/llite/*/dump_page_cache)
-        WRITEBACK=$(grep -c writeback $LPROC/llite/*/dump_page_cache)
+        LOCKED=$(lctl get_param -n llite.*.dump_page_cache | grep -c locked)
+        DIRTY=$(lctl get_param -n llite.*.dump_page_cache | grep -c dirty)
+        WRITEBACK=$(lctl get_param -n llite.*.dump_page_cache |
+                    grep -c writeback)
 	if [[ $LOCKED -ne 0 ]]; then
 		error "Locked pages remain in cache, locked=$LOCKED"
 	fi
@@ -4461,9 +4449,9 @@ test_118i() {
 		error "got error, but should be not, rc=$RC"
 	fi
 
-        LOCKED=$(grep -c locked $LPROC/llite/*/dump_page_cache)
-        DIRTY=$(grep -c dirty $LPROC/llite/*/dump_page_cache)
-        WRITEBACK=$(grep -c writeback $LPROC/llite/*/dump_page_cache)
+        LOCKED=$(lctl get_param -n llite.*.dump_page_cache | grep -c locked)
+        DIRTY=$(lctl get_param -n llite.*.dump_page_cache | grep -c dirty)
+        WRITEBACK=$(lctl get_param -n llite.*.dump_page_cache | grep -c writeback)
 	if [[ $LOCKED -ne 0 ]]; then
 		error "Locked pages remain in cache, locked=$LOCKED"
 	fi
@@ -4495,9 +4483,9 @@ test_118j() {
 		error "Must return error due to dropped pages, rc=$RC"
 	fi
 
-        LOCKED=$(grep -c locked $LPROC/llite/*/dump_page_cache)
-        DIRTY=$(grep -c dirty $LPROC/llite/*/dump_page_cache)
-        WRITEBACK=$(grep -c writeback $LPROC/llite/*/dump_page_cache)
+        LOCKED=$(lctl get_param -n llite.*.dump_page_cache | grep -c locked)
+        DIRTY=$(lctl get_param -n llite.*.dump_page_cache | grep -c dirty)
+        WRITEBACK=$(lctl get_param -n llite.*.dump_page_cache | grep -c writeback)
 	if [[ $LOCKED -ne 0 ]]; then
 		error "Locked pages remain in cache, locked=$LOCKED"
 	fi
@@ -4574,17 +4562,17 @@ test_119c() # bug 13099
 run_test 119c "Testing for direct read hitting hole"
 
 test_120a() {
-        [ -z "`grep early_lock_cancel $LPROC/mdc/*/connect_flags`" ] && \
+        [ -z "`lctl get_param -n mdc.*.connect_flags | grep early_lock_cancel`" ] && \
                skip "no early lock cancel on server" && return 0
         lru_resize_disable mdc
         lru_resize_disable osc
         cancel_lru_locks mdc
         stat $DIR/$tdir > /dev/null
-        can1=`awk '/ldlm_cancel/ {print $2}' $LPROC/ldlm/services/ldlm_canceld/stats`
-        blk1=`awk '/ldlm_bl_callback/ {print $2}' $LPROC/ldlm/services/ldlm_cbd/stats`
+        can1=`lctl get_param -n ldlm.services.ldlm_canceld.stats | awk '/ldlm_cancel/ {print $2}'`
+        blk1=`lctl get_param -n ldlm.services.ldlm_cbd.stats | awk '/ldlm_bl_callback/ {print $2}'`
         mkdir $DIR/$tdir/d1
-        can2=`awk '/ldlm_cancel/ {print $2}' $LPROC/ldlm/services/ldlm_canceld/stats`
-        blk2=`awk '/ldlm_bl_callback/ {print $2}' $LPROC/ldlm/services/ldlm_cbd/stats`
+        can2=`lctl get_param -n ldlm.services.ldlm_canceld.stats | awk '/ldlm_cancel/ {print $2}'`
+        blk2=`lctl get_param -n ldlm.services.ldlm_cbd.stats | awk '/ldlm_bl_callback/ {print $2}'`
         [ $can1 -eq $can2 ] || error $((can2-can1)) "cancel RPC occured."
         [ $blk1 -eq $blk2 ] || error $((blk2-blk1)) "blocking RPC occured."
         lru_resize_enable mdc
@@ -4593,17 +4581,17 @@ test_120a() {
 run_test 120a "Early Lock Cancel: mkdir test"
 
 test_120b() {
-        [ -z "`grep early_lock_cancel $LPROC/mdc/*/connect_flags`" ] && \
+        [ -z "`lctl get_param -n mdc.*.connect_flags | grep early_lock_cancel`" ] && \
                skip "no early lock cancel on server" && return 0
         lru_resize_disable mdc
         lru_resize_disable osc
         cancel_lru_locks mdc
         stat $DIR/$tdir > /dev/null
-        can1=`awk '/ldlm_cancel/ {print $2}' $LPROC/ldlm/services/ldlm_canceld/stats`
-        blk1=`awk '/ldlm_bl_callback/ {print $2}' $LPROC/ldlm/services/ldlm_cbd/stats`
+        can1=`lctl get_param -n ldlm.services.ldlm_canceld.stats | awk '/ldlm_cancel/ {print $2}'`
+        blk1=`lctl get_param -n ldlm.services.ldlm_cbd.stats | awk '/ldlm_bl_callback/ {print $2}'`
         touch $DIR/$tdir/f1
-        blk2=`awk '/ldlm_bl_callback/ {print $2}' $LPROC/ldlm/services/ldlm_cbd/stats`
-        can2=`awk '/ldlm_cancel/ {print $2}' $LPROC/ldlm/services/ldlm_canceld/stats`
+        can2=`lctl get_param -n ldlm.services.ldlm_canceld.stats | awk '/ldlm_cancel/ {print $2}'`
+        blk2=`lctl get_param -n ldlm.services.ldlm_cbd.stats | awk '/ldlm_bl_callback/ {print $2}'`
         [ $can1 -eq $can2 ] || error $((can2-can1)) "cancel RPC occured."
         [ $blk1 -eq $blk2 ] || error $((blk2-blk1)) "blocking RPC occured."
         lru_resize_enable mdc
@@ -4612,7 +4600,7 @@ test_120b() {
 run_test 120b "Early Lock Cancel: create test"
 
 test_120c() {
-        [ -z "`grep early_lock_cancel $LPROC/mdc/*/connect_flags`" ] && \
+        [ -z "`lctl get_param -n mdc.*.connect_flags | grep early_lock_cancel`" ] && \
                skip "no early lock cancel on server" && return 0
         lru_resize_disable mdc
         lru_resize_disable osc
@@ -4620,11 +4608,11 @@ test_120c() {
         touch $DIR/$tdir/d1/f1
         cancel_lru_locks mdc
         stat $DIR/$tdir/d1 $DIR/$tdir/d2 $DIR/$tdir/d1/f1 > /dev/null
-        can1=`awk '/ldlm_cancel/ {print $2}' $LPROC/ldlm/services/ldlm_canceld/stats`
-        blk1=`awk '/ldlm_bl_callback/ {print $2}' $LPROC/ldlm/services/ldlm_cbd/stats`
+        can1=`lctl get_param -n ldlm.services.ldlm_canceld.stats | awk '/ldlm_cancel/ {print $2}'`
+        blk1=`lctl get_param -n ldlm.services.ldlm_cbd.stats | awk '/ldlm_bl_callback/ {print $2}'`
         ln $DIR/$tdir/d1/f1 $DIR/$tdir/d2/f2
-        can2=`awk '/ldlm_cancel/ {print $2}' $LPROC/ldlm/services/ldlm_canceld/stats`
-        blk2=`awk '/ldlm_bl_callback/ {print $2}' $LPROC/ldlm/services/ldlm_cbd/stats`
+        can2=`lctl get_param -n ldlm.services.ldlm_canceld.stats | awk '/ldlm_cancel/ {print $2}'`
+        blk2=`lctl get_param -n ldlm.services.ldlm_cbd.stats | awk '/ldlm_bl_callback/ {print $2}'`
         [ $can1 -eq $can2 ] || error $((can2-can1)) "cancel RPC occured."
         [ $blk1 -eq $blk2 ] || error $((blk2-blk1)) "blocking RPC occured."
         lru_resize_enable mdc
@@ -4633,18 +4621,18 @@ test_120c() {
 run_test 120c "Early Lock Cancel: link test"
 
 test_120d() {
-        [ -z "`grep early_lock_cancel $LPROC/mdc/*/connect_flags`" ] && \
+        [ -z "`lctl get_param -n mdc.*.connect_flags | grep early_lock_cancel`" ] && \
                skip "no early lock cancel on server" && return 0
         lru_resize_disable mdc
         lru_resize_disable osc
         touch $DIR/$tdir
         cancel_lru_locks mdc
         stat $DIR/$tdir > /dev/null
-        can1=`awk '/ldlm_cancel/ {print $2}' $LPROC/ldlm/services/ldlm_canceld/stats`
-        blk1=`awk '/ldlm_bl_callback/ {print $2}' $LPROC/ldlm/services/ldlm_cbd/stats`
+        can1=`lctl get_param -n ldlm.services.ldlm_canceld.stats | awk '/ldlm_cancel/ {print $2}'`
+        blk1=`lctl get_param -n ldlm.services.ldlm_cbd.stats | awk '/ldlm_bl_callback/ {print $2}'`
         chmod a+x $DIR/$tdir
-        can2=`awk '/ldlm_cancel/ {print $2}' $LPROC/ldlm/services/ldlm_canceld/stats`
-        blk2=`awk '/ldlm_bl_callback/ {print $2}' $LPROC/ldlm/services/ldlm_cbd/stats`
+        can2=`lctl get_param -n ldlm.services.ldlm_canceld.stats | awk '/ldlm_cancel/ {print $2}'`
+        blk2=`lctl get_param -n ldlm.services.ldlm_cbd.stats | awk '/ldlm_bl_callback/ {print $2}'`
         [ $can1 -eq $can2 ] || error $((can2-can1)) "cancel RPC occured."
         [ $blk1 -eq $blk2 ] || error $((blk2-blk1)) "blocking RPC occured."
         lru_resize_enable mdc
@@ -4653,7 +4641,7 @@ test_120d() {
 run_test 120d "Early Lock Cancel: setattr test"
 
 test_120e() {
-        [ -z "`grep early_lock_cancel $LPROC/mdc/*/connect_flags`" ] && \
+        [ -z "`lctl get_param -n mdc.*.connect_flags | grep early_lock_cancel`" ] && \
                skip "no early lock cancel on server" && return 0
         lru_resize_disable mdc
         lru_resize_disable osc
@@ -4662,11 +4650,15 @@ test_120e() {
         cancel_lru_locks osc
         dd if=$DIR/$tdir/f1 of=/dev/null
         stat $DIR/$tdir $DIR/$tdir/f1 > /dev/null
-        can1=`awk '/ldlm_cancel/ {print $2}' $LPROC/ldlm/services/ldlm_canceld/stats`
-        blk1=`awk '/ldlm_bl_callback/ {print $2}' $LPROC/ldlm/services/ldlm_cbd/stats`
+        can1=`lctl get_param -n ldlm.services.ldlm_canceld.stats |
+              awk '/ldlm_cancel/ {print $2}'`
+        blk1=`lctl get_param -n ldlm.services.ldlm_cbd.stats |
+              awk '/ldlm_bl_callback/ {print $2}'`
         unlink $DIR/$tdir/f1
-        can2=`awk '/ldlm_cancel/ {print $2}' $LPROC/ldlm/services/ldlm_canceld/stats`
-        blk2=`awk '/ldlm_bl_callback/ {print $2}' $LPROC/ldlm/services/ldlm_cbd/stats`
+        can2=`lctl get_param -n ldlm.services.ldlm_canceld.stats |
+              awk '/ldlm_cancel/ {print $2}'`
+        blk2=`lctl get_param -n ldlm.services.ldlm_cbd.stats |
+              awk '/ldlm_bl_callback/ {print $2}'`
         [ $can1 -eq $can2 ] || error $((can2-can1)) "cancel RPC occured."
         [ $blk1 -eq $blk2 ] || error $((blk2-blk1)) "blocking RPC occured."
         lru_resize_enable mdc
@@ -4675,7 +4667,7 @@ test_120e() {
 run_test 120e "Early Lock Cancel: unlink test"
 
 test_120f() {
-        [ -z "`grep early_lock_cancel $LPROC/mdc/*/connect_flags`" ] && \
+        [ -z "`lctl get_param -n mdc.*.connect_flags | grep early_lock_cancel`" ] && \
                skip "no early lock cancel on server" && return 0
         lru_resize_disable mdc
         lru_resize_disable osc
@@ -4687,11 +4679,15 @@ test_120f() {
         dd if=$DIR/$tdir/d1/f1 of=/dev/null
         dd if=$DIR/$tdir/d2/f2 of=/dev/null
         stat $DIR/$tdir/d1 $DIR/$tdir/d2 $DIR/$tdir/d1/f1 $DIR/$tdir/d2/f2 > /dev/null
-        can1=`awk '/ldlm_cancel/ {print $2}' $LPROC/ldlm/services/ldlm_canceld/stats`
-        blk1=`awk '/ldlm_bl_callback/ {print $2}' $LPROC/ldlm/services/ldlm_cbd/stats`
+        can1=`lctl get_param -n ldlm.services.ldlm_canceld.stats |
+              awk '/ldlm_cancel/ {print $2}'`
+        blk1=`lctl get_param -n ldlm.services.ldlm_cbd.stats |
+              awk '/ldlm_bl_callback/ {print $2}'`
         mv $DIR/$tdir/d1/f1 $DIR/$tdir/d2/f2
-        can2=`awk '/ldlm_cancel/ {print $2}' $LPROC/ldlm/services/ldlm_canceld/stats`
-        blk2=`awk '/ldlm_bl_callback/ {print $2}' $LPROC/ldlm/services/ldlm_cbd/stats`
+        can2=`lctl get_param -n ldlm.services.ldlm_canceld.stats |
+              awk '/ldlm_cancel/ {print $2}'`
+        blk2=`lctl get_param -n ldlm.services.ldlm_cbd.stats |
+              awk '/ldlm_bl_callback/ {print $2}'`
         [ $can1 -eq $can2 ] || error $((can2-can1)) "cancel RPC occured."
         [ $blk1 -eq $blk2 ] || error $((blk2-blk1)) "blocking RPC occured."
         lru_resize_enable mdc
@@ -4700,7 +4696,7 @@ test_120f() {
 run_test 120f "Early Lock Cancel: rename test"
 
 test_120g() {
-        [ -z "`grep early_lock_cancel $LPROC/mdc/*/connect_flags`" ] && \
+        [ -z "`lctl get_param -n mdc.*.connect_flags | grep early_lock_cancel`" ] && \
                skip "no early lock cancel on server" && return 0
         lru_resize_disable mdc
         lru_resize_disable osc
@@ -4711,19 +4707,25 @@ test_120g() {
         cancel_lru_locks osc
         t0=`date +%s`
 
-        can0=`awk '/ldlm_cancel/ {print $2}' $LPROC/ldlm/services/ldlm_canceld/stats`
-        blk0=`awk '/ldlm_bl_callback/ {print $2}' $LPROC/ldlm/services/ldlm_cbd/stats`
+        can0=`lctl get_param -n ldlm.services.ldlm_canceld.stats |
+              awk '/ldlm_cancel/ {print $2}'`
+        blk0=`lctl get_param -n ldlm.services.ldlm_cbd.stats |
+              awk '/ldlm_bl_callback/ {print $2}'`
         createmany -o $DIR/$tdir/f $count
         sync
-        can1=`awk '/ldlm_cancel/ {print $2}' $LPROC/ldlm/services/ldlm_canceld/stats`
-        blk1=`awk '/ldlm_bl_callback/ {print $2}' $LPROC/ldlm/services/ldlm_cbd/stats`
+        can1=`lctl get_param -n ldlm.services.ldlm_canceld.stats |
+              awk '/ldlm_cancel/ {print $2}'`
+        blk1=`lctl get_param -n ldlm.services.ldlm_cbd.stats |
+              awk '/ldlm_bl_callback/ {print $2}'`
         t1=`date +%s`
         echo total: $((can1-can0)) cancels, $((blk1-blk0)) blockings
         echo rm $count files
         rm -r $DIR/$tdir
         sync
-        can2=`awk '/ldlm_cancel/ {print $2}' $LPROC/ldlm/services/ldlm_canceld/stats`
-        blk2=`awk '/ldlm_bl_callback/ {print $2}' $LPROC/ldlm/services/ldlm_cbd/stats`
+        can2=`lctl get_param -n ldlm.services.ldlm_canceld.stats |
+              awk '/ldlm_cancel/ {print $2}'`
+        blk2=`lctl get_param -n ldlm.services.ldlm_cbd.stats |
+              awk '/ldlm_bl_callback/ {print $2}'`
         t2=`date +%s`
         echo total: $count removes in $((t2-t1))
         echo total: $((can2-can1)) cancels, $((blk2-blk1)) blockings
@@ -4747,7 +4749,7 @@ test_121() { #bug #10589
 run_test 121 "read cancel race ========="
 
 test_124a() {
-	[ -z "`grep lru_resize $LPROC/mdc/*/connect_flags`" ] && \
+	[ -z "`lctl get_param -n mdc.*.connect_flags | grep lru_resize`" ] && \
                skip "no lru resize on server" && return 0
         NR=2000
         mkdir -p $DIR/$tdir || error "failed to create $DIR/$tdir"
@@ -4762,10 +4764,11 @@ test_124a() {
 
         NSDIR=""
         LRU_SIZE=0
-        for F in $LPROC/ldlm/namespaces/*mdc-*/lru_size; do
-                LRU_SIZE=$(cat $F)
+        for VALUE in `lctl get_param ldlm.namespaces.*mdc-*.lru_size`; do
+		PARAM=`echo ${VALUE[0]} | cut -d "=" -f1`
+                LRU_SIZE=$(lctl get_param -n $PARAM)
                 if [ $LRU_SIZE -gt $(default_lru_size) ]; then
-                        NSDIR=$(dirname $F)
+                        NSDIR=$(echo $PARAM | cut -d "." -f1-3)
                         log "using $(basename $NSDIR) namespace"
                         break
                 fi
@@ -4785,7 +4788,7 @@ test_124a() {
         MAX_HRS=10
 
         # get the pool limit
-        LIMIT=`cat $NSDIR/pool/limit`
+        LIMIT=`lctl get_param -n $NSDIR.pool.limit`
 
         # calculate lock volume factor taking into account data set size and the
         # rule that number of locks will be getting smaller durring sleep interval
@@ -4795,12 +4798,12 @@ test_124a() {
         LVF=$(($MAX_HRS * 60 * 60 * $LIMIT / $SLEEP))
         LRU_SIZE_B=$LRU_SIZE
         log "make client drop locks $LVF times faster so that ${SLEEP}s is enough to cancel $LRU_SIZE lock(s)"
-        OLD_LVF=`cat $NSDIR/pool/lock_volume_factor`
-        echo "$LVF" > $NSDIR/pool/lock_volume_factor
+        OLD_LVF=`lctl get_param -n $NSDIR.pool.lock_volume_factor`
+        lctl set_param -n $NSDIR.pool.lock_volume_factor $LVF
         log "sleep for $((SLEEP+SLEEP_ADD))s"
         sleep $((SLEEP+SLEEP_ADD))
-        echo "$OLD_LVF" > $NSDIR/pool/lock_volume_factor
-        LRU_SIZE_A=`cat $NSDIR/lru_size`
+        lctl set_param -n $NSDIR.pool.lock_volume_factor $OLD_LVF
+        LRU_SIZE_A=`lctl get_param -n $NSDIR.lru_size`
 
         [ $LRU_SIZE_B -gt $LRU_SIZE_A ] || {
                 error "No locks dropped in "$((SLEEP+SLEEP_ADD))"s. LRU size: $LRU_SIZE_A"
@@ -4815,13 +4818,12 @@ test_124a() {
 run_test 124a "lru resize ======================================="
 
 test_124b() {
-	[ -z "`grep lru_resize $LPROC/mdc/*/connect_flags`" ] && \
+	[ -z "`lctl get_param -n mdc.*.connect_flags | grep lru_resize`" ] && \
                skip "no lru resize on server" && return 0
 
         # even for cmd no matter what metadata namespace to use for getting 
         # the limit, we use appropriate.
-        NSDIR=`find $LPROC/ldlm/namespaces | grep mdc | head -1`
-        LIMIT=`cat $NSDIR/pool/limit`
+        LIMIT=`lctl get_param -n ldlm.namespaces.*mdc*.pool.limit`
 
         NR=$(($(default_lru_size)*20))
         if [ $NR -gt $LIMIT ]; then
@@ -4848,7 +4850,7 @@ test_124b() {
         etime=`date +%s`
         nolruresize_delta=$((etime-stime))
         log "ls -la time: $nolruresize_delta seconds"
-        log "lru_size = $(cat $NSDIR/lru_size)"
+        log "lru_size = $(lctl get_param -n ldlm.namespaces.*mdc*.lru_size)"
         unlinkmany $DIR/$tdir/disable_lru_resize/f $NR
 
         lru_resize_enable mdc
@@ -4872,7 +4874,7 @@ test_124b() {
         etime=`date +%s`
         lruresize_delta=$((etime-stime))
         log "ls -la time: $lruresize_delta seconds"
-        log "lru_size = $(cat $NSDIR/lru_size)"
+        log "lru_size = $(lctl get_param -n ldlm.namespaces.*mdc*.lru_size)"
 
         if [ $lruresize_delta -gt $nolruresize_delta ]; then
                 log "ls -la is $(((lruresize_delta - $nolruresize_delta) * 100 / $nolruresize_delta))% slower with lru resize enabled"
@@ -4886,8 +4888,8 @@ test_124b() {
 run_test 124b "lru resize (performance test) ======================="
 
 test_125() { # 13358
-	[ -z "$(grep local $LPROC/llite/*/client_type)" ] && skip "must run as local client" && return
-	[ -z "$(grep acl $LPROC/mdc/*-mdc-*/connect_flags)" ] && skip "must have acl enabled" && return
+	[ -z "$(lctl get_param -n llite.*.client_type | grep local)" ] && skip "must run as local client" && return
+	[ -z "$(lctl get_param -n mdc.*-mdc-*.connect_flags | grep acl)" ] && skip "must have acl enabled" && return
 	mkdir -p $DIR/d125 || error "mkdir failed"
 	$SETSTRIPE $DIR/d125 -s 65536 -c -1 || error "setstripe failed"
 	setfacl -R -m u:bin:rwx $DIR/d125 || error "setfacl $DIR/d125 failed"
@@ -4896,7 +4898,7 @@ test_125() { # 13358
 run_test 125 "don't return EPROTO when a dir has a non-default striping and ACLs"
 
 test_126() { # bug 12829/13455
-	[ -z "$(grep local $LPROC/llite/*/client_type)" ] && skip "must run as local client" && return
+	[ -z "$(lctl get_param -n llite.*.client_type | grep local)" ] && skip "must run as local client" && return
 	[ "$UID" != 0 ] && echo "skipping $TESTNAME (must run as root)" && return
 	$RUNAS -u 0 -g 1 touch $DIR/$tfile || error "touch failed"
 	gid=`ls -n $DIR/$tfile | awk '{print $4}'`
