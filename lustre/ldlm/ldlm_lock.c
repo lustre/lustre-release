@@ -1224,6 +1224,7 @@ ldlm_error_t ldlm_lock_enqueue(struct ldlm_namespace *ns,
                         GOTO(out, rc = -ENOMEM);
                 }
 
+                CFS_INIT_LIST_HEAD(&node->li_group);
                 ldlm_interval_attach(node, lock);
                 node = NULL;
         }
