@@ -3189,7 +3189,6 @@ set_checksum_type()
 	[ "$ORIG_CSUM_TYPE" ] || \
 		ORIG_CSUM_TYPE=`lctl get_param -n osc.*osc-[^mM]*.checksum_type | sed 's/.*\[\(.*\)\].*/\1/g' \
 	                        | head -n1`
-	echo "chksum..."$ORIG_CSUM_TYPE
 	lctl set_param -n osc.*osc-*.checksum_type $1
 	log "set checksum type to $1"
 	return 0
@@ -4316,8 +4315,8 @@ test_118h() {
 	fi
 
         LOCKED=$(lctl get_param -n llite.*.dump_page_cache | grep -c locked)
-        DIRTY=$(lctl get_param -n llite/*/dump_page_cache | grep -c dirty)
-        WRITEBACK=$(lctl get_param -n llite/*/dump_page_cache | grep -c writebac)
+        DIRTY=$(lctl get_param -n llite.*.dump_page_cache | grep -c dirty)
+        WRITEBACK=$(lctl get_param -n llite.*.dump_page_cache | grep -c writebac)
 	if [[ $LOCKED -ne 0 ]]; then
 		error "Locked pages remain in cache, locked=$LOCKED"
 	fi
@@ -4720,11 +4719,11 @@ test_124a() {
 
         NSDIR=""
         LRU_SIZE=0
-        for VALUE in ldlm/namespaces/*mdc-*/lru_size; do
-		PARAM=`echo ${VALUE[0]} | cut -d "=" -f1`
+        for VALUE in `lctl get_param ldlm.namespaces.*mdc-*.lru_size`; do
+                PARAM=`echo ${VALUE[0]} | cut -d "=" -f1`
                 LRU_SIZE=$(lctl get_param -n $PARAM)
                 if [ $LRU_SIZE -gt $(default_lru_size) ]; then
-                        NSDIR=$(dirname $PARAM)
+                        NSDIR=$(echo $PARAM | cut -d "." -f1-3)
                         log "using $(basename $NSDIR) namespace"
                         break
                 fi
@@ -4744,7 +4743,7 @@ test_124a() {
         MAX_HRS=10
 
         # get the pool limit
-        LIMIT=`lctl get_param -n ldlm.namespaces.*mdc*.pool.limit`
+        LIMIT=`lctl get_param -n $NSDIR.pool.limit`
 
         # calculate lock volume factor taking into account data set size and the
         # rule that number of locks will be getting smaller durring sleep interval
@@ -4754,11 +4753,11 @@ test_124a() {
         LVF=$(($MAX_HRS * 60 * 60 * $LIMIT / $SLEEP))
         LRU_SIZE_B=$LRU_SIZE
         log "make client drop locks $LVF times faster so that ${SLEEP}s is enough to cancel $LRU_SIZE lock(s)"
-        OLD_LVF=`lctl get_param -n $NSDIR/pool/lock_volume_factor`
-        lctl set_param -n $NSDIR/pool/lock_volume_factor $LVF
+        OLD_LVF=`lctl get_param -n $NSDIR.pool.lock_volume_factor`
+        lctl set_param -n $NSDIR.pool.lock_volume_factor $LVF
         log "sleep for $((SLEEP+SLEEP_ADD))s"
         sleep $((SLEEP+SLEEP_ADD))
-        lctl set_param -n $NSDIR/pool/lock_volume_factor $OLD_LVF
+        lctl set_param -n $NSDIR.pool.lock_volume_factor $OLD_LVF
         LRU_SIZE_A=`lctl get_param -n $NSDIR/lru_size`
 
         [ $LRU_SIZE_B -gt $LRU_SIZE_A ] || {
@@ -4779,7 +4778,7 @@ test_124b() {
 
         # even for cmd no matter what metadata namespace to use for getting 
         # the limit, we use appropriate.
-	LIMIT=`lctl get_param -n ldlm.namespaces.*mdc*.pool.limit`
+        LIMIT=`lctl get_param -n ldlm.namespaces.*mdc*.pool.limit`
 
         NR=$(($(default_lru_size)*20))
         if [ $NR -gt $LIMIT ]; then
