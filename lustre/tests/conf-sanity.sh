@@ -788,6 +788,14 @@ test_22() {
 
 	echo Client mount with a running ost
 	start_ost
+	if $GSS; then
+		# if gss enabled, wait full time to let connection from
+		# mds to ost be established, due to the mismatch between
+		# initial connect timeout and gss context negotiation timeout.
+		# This perhaps could be remove after AT landed.
+		echo "sleep $((TIMEOUT + TIMEOUT + TIMEOUT))s"
+		sleep $((TIMEOUT + TIMEOUT + TIMEOUT))
+	fi
 	mount_client $MOUNT
 	check_mount || return 41
 	pass

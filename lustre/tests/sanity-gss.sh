@@ -12,8 +12,6 @@ ONLY=${ONLY:-"$*"}
 ALWAYS_EXCEPT=${ALWAYS_EXCEPT:-"$SANITY_GSS_EXCEPT"}
 # UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
 
-[ "$SLOW" = "no" ] && EXCEPT_SLOW="100 101"
-
 # Tests that fail on uml
 CPU=`awk '/model/ {print $4}' /proc/cpuinfo`
 [ "$CPU" = "UML" ] && EXCEPT="$EXCEPT"
@@ -36,17 +34,10 @@ LUSTRE=${LUSTRE:-`dirname $0`/..}
 init_test_env $@
 . ${CONFIG:=$LUSTRE/tests/cfg/$NAME.sh}
 
-if [ $UID -ne 0 ]; then
-    echo "Warning: running as non-root uid $UID"
-    RUNAS_ID="$UID"
-    RUNAS=""
-else
-    RUNAS_ID=${RUNAS_ID:-500}
-    RUNAS=${RUNAS:-"runas -u $RUNAS_ID"}
+[ "$SLOW" = "no" ] && EXCEPT_SLOW="100 101"
 
-    # $RUNAS_ID may get set incorrectly somewhere else
-    [ $RUNAS_ID -eq 0 ] && error "\$RUNAS_ID set to 0, but \$UID is also 0!"
-fi
+# $RUNAS_ID may get set incorrectly somewhere else
+[ $UID -eq 0 -a $RUNAS_ID -eq 0 ] && error "\$RUNAS_ID set to 0, but \$UID is also 0!"
 
 # remove $SEC, we'd like to control everything by ourselves
 unset SEC
@@ -72,23 +63,27 @@ PROC_CLI="srpc.info"
 GSS=true
 GSS_KRB5=true
 
+prepare_krb5_creds() {
+    echo prepare krb5 cred
+    rm -f $KRB5_CRED_SAVE
+    echo RUNAS=$RUNAS
+    $RUNAS krb5_login.sh || exit 1
+    [ -f $KRB5_CRED ] || exit 2
+    echo CRED=$KRB5_CRED
+    cp $KRB5_CRED $KRB5_CRED_SAVE
+}
+
+prepare_krb5_creds
+
 # we want double mount
 MOUNT_2=${MOUNT_2:-"yes"}
 cleanup_and_setup_lustre
 
-rm -rf $DIR/${TESTSUITE}/[df][0-9]*
 rm -rf $DIR/[df][0-9]*
 
 check_runas_id $RUNAS_ID $RUNAS
 
 build_test_filter
-
-prepare_krb5_creds() {
-    rm -f $KRB5_CRED_SAVE
-    $RUNAS krb5_login.sh || exit 1
-    [ -f $KRB5_CRED ] || exit 2
-    cp $KRB5_CRED $KRB5_CRED_SAVE
-}
 
 combination()
 {
@@ -150,10 +145,38 @@ set_rule()
 
 count_flvr()
 {
-    output=$1
-    flavor=$2
+    local output=$1
+    local flavor=$2
+    local count=0
 
-    echo "$output" | grep rpc | grep $flavor | wc -l
+    rpc_flvr=`echo $flavor | awk -F - '{ print $1 }'`
+    bulkspec=`echo $flavor | awk -F - '{ print $2 }'`
+
+    count=`echo "$output" | grep "rpc flavor" | grep $rpc_flvr | wc -l`
+
+    if [ "x$bulkspec" != "x" ]; then
+        algs=`echo $bulkspec | awk -F : '{ print $2 }'`
+
+        if [ "x$algs" != "x" ]; then
+            bulk_count=`echo "$output" | grep "bulk flavor" | grep $algs | wc -l`
+        else
+            bulk=`echo $bulkspec | awk -F : '{ print $1 }'`
+            if [ $bulk == "bulkn" ]; then
+                bulk_count=`echo "$output" | grep "bulk flavor" \
+                            | grep "null/null" | wc -l`
+            elif [ $bulk == "bulki" ]; then
+                bulk_count=`echo "$output" | grep "bulk flavor" \
+                            | grep "/null" | grep -v "null/" | wc -l`
+            else
+                bulk_count=`echo "$output" | grep "bulk flavor" \
+                            | grep -v "/null" | grep -v "null/" | wc -l`
+            fi
+        fi
+
+        [ $bulk_count -lt $count ] && count=$bulk_count
+    fi
+
+    echo $count
 }
 
 flvr_cnt_cli2mdt()
@@ -382,7 +405,6 @@ check_multiple_gss_daemons() {
     fi
 }
 
-prepare_krb5_creds
 calc_connection_cnt
 umask 077
 
@@ -607,12 +629,108 @@ test_7() {
 }
 run_test 7 "exercise enlarge_reqbuf()"
 
+test_8() {
+    local sample=$TMP/sanity-gss-8
+    local tdir=$MOUNT/dir8
+    local iosize="256K"
+    local hash_algs="adler32 crc32 md5 sha1 sha256 sha384 sha512 wp256 wp384 wp512"
+
+    # create sample file with aligned size for direct i/o
+    dd if=/dev/zero of=$sample bs=$iosize count=1 || error
+    dd conv=notrunc if=/etc/termcap of=$sample bs=$iosize count=1 || error
+
+    rm -rf $tdir
+    mkdir $tdir || error "create dir $tdir"
+
+    restore_to_default_flavor
+
+    for alg in $hash_algs; do
+        echo "Testing $alg..."
+        flavor=krb5i-bulki:$alg/null
+        set_rule $FSNAME any cli2ost $flavor
+        wait_flavor cli2ost $flavor $cnt_cli2ost
+
+        dd if=$sample of=$tdir/$alg oflag=direct,dsync bs=$iosize || error "$alg write"
+        diff $sample $tdir/$alg || error "$alg read"
+    done
+
+    rm -rf $tdir
+    rm -f $sample
+}
+run_test 8 "verify bulk hash algorithms works"
+
+test_9() {
+    local s1=$TMP/sanity-gss-9.1
+    local s2=$TMP/sanity-gss-9.2
+    local s3=$TMP/sanity-gss-9.3
+    local s4=$TMP/sanity-gss-9.4
+    local tdir=$MOUNT/dir9
+    local s1_size=4194304   # n * pagesize (4M)
+    local s2_size=512       # n * blksize
+    local s3_size=111       # n * blksize + m
+    local s4_size=5         # m
+    local cipher_algs="arc4 aes128 aes192 aes256 cast128 cast256 twofish128 twofish256"
+
+    # create sample files for each situation
+    rm -f $s1 $s2 $s2 $s4
+    dd if=/dev/urandom of=$s1 bs=1M count=4 || error
+    dd if=/dev/urandom of=$s2 bs=$s2_size count=1 || error
+    dd if=/dev/urandom of=$s3 bs=$s3_size count=1 || error
+    dd if=/dev/urandom of=$s4 bs=$s4_size count=1 || error
+
+    rm -rf $tdir
+    mkdir $tdir || error "create dir $tdir"
+
+    restore_to_default_flavor
+
+    #
+    # different bulk data alignment will lead to different behavior of
+    # the implementation: (n > 0; 0 < m < encryption_block_size)
+    #  - full page i/o
+    #  - partial page, size = n * encryption_block_size
+    #  - partial page, size = n * encryption_block_size + m
+    #  - partial page, size = m
+    #
+    for alg in $cipher_algs; do
+        echo "Testing $alg..."
+        flavor=krb5p-bulkp:sha1/$alg
+        set_rule $FSNAME any cli2ost $flavor
+        wait_flavor cli2ost $flavor $cnt_cli2ost
+
+        # sync write
+        dd if=$s1 of=$tdir/$alg.1 oflag=dsync bs=1M || error "write $alg.1"
+        dd if=$s2 of=$tdir/$alg.2 oflag=dsync || error "write $alg.2"
+        dd if=$s3 of=$tdir/$alg.3 oflag=dsync || error "write $alg.3"
+        dd if=$s4 of=$tdir/$alg.4 oflag=dsync || error "write $alg.4"
+
+        # remount client
+        umount_client $MOUNT
+        umount_client $MOUNT2
+        mount_client $MOUNT
+        mount_client $MOUNT2
+
+        # read & compare
+        diff $tdir/$alg.1 $s1 || error "read $alg.1"
+        diff $tdir/$alg.2 $s2 || error "read $alg.2"
+        diff $tdir/$alg.3 $s3 || error "read $alg.3"
+        diff $tdir/$alg.4 $s4 || error "read $alg.4"
+    done
+
+    rm -rf $tdir
+    rm -f $sample
+}
+run_test 9 "bulk data alignment test under encryption mode"
+
 test_90() {
     if [ "$SLOW" = "no" ]; then
         total=10
     else
         total=60
     fi
+
+    restore_to_default_flavor
+    set_rule $FSNAME any any krb5p
+    wait_flavor all2all krb5p $cnt_all2all
 
     start_dbench
 

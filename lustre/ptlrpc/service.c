@@ -597,7 +597,7 @@ ptlrpc_server_handle_request(struct ptlrpc_service *svc,
                 break;
         case SECSVC_COMPLETE:
                 target_send_reply(request, 0, OBD_FAIL_MDS_ALL_REPLY_NET);
-                goto put_conn;
+                goto out_stat;
         case SECSVC_DROP:
                 goto out_req;
         default:
@@ -726,7 +726,7 @@ put_conn:
 
         lu_context_exit(&request->rq_session);
         lu_context_fini(&request->rq_session);
-
+out_stat:
         reply = request->rq_reply_state && request->rq_repmsg;  /* bug 11169 */
 
         do_gettimeofday(&work_end);

@@ -42,4 +42,8 @@ static inline void client_obd_list_unlock(client_obd_lock_t *lock)
         spin_unlock(lock);
 }
 
+#if defined(__KERNEL__) && !defined(HAVE_ADLER)
+/* zlib_adler() is an inline function defined in zutil.h */
+#define HAVE_ADLER
+#endif
 #endif /* __LINUX_OBD_H */

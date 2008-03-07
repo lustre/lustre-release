@@ -1125,7 +1125,7 @@ static int osc_brw_prep_request(int cmd, struct client_obd *cli,struct obdo *oa,
         /* size[REQ_REC_OFF] still sizeof (*body) */
         if (opc == OST_WRITE) {
                 if (unlikely(cli->cl_checksum) &&
-                    req->rq_flvr.sf_bulk_csum == BULK_CSUM_ALG_NULL) {
+                    req->rq_flvr.sf_bulk_hash == BULK_HASH_ALG_NULL) {
                         body->oa.o_valid |= OBD_MD_FLCKSUM;
                         body->oa.o_cksum = osc_checksum_bulk(requested_nob,
                                                              page_count, pga,
@@ -1145,7 +1145,7 @@ static int osc_brw_prep_request(int cmd, struct client_obd *cli,struct obdo *oa,
                                      sizeof(__u32) * niocount);
         } else {
                 if (unlikely(cli->cl_checksum) &&
-                    req->rq_flvr.sf_bulk_csum == BULK_CSUM_ALG_NULL)
+                    req->rq_flvr.sf_bulk_hash == BULK_HASH_ALG_NULL)
                         body->oa.o_valid |= OBD_MD_FLCKSUM;
                 req_capsule_set_size(pill, &RMF_NIOBUF_REMOTE, RCL_SERVER, 0);
                 /* 1 RC for the whole I/O */

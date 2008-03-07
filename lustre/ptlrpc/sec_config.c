@@ -91,8 +91,8 @@ typedef enum {
 static void get_default_flavor(struct sptlrpc_flavor *sf)
 {
         sf->sf_rpc = SPTLRPC_FLVR_NULL;
-        sf->sf_bulk_priv = BULK_PRIV_ALG_NULL;
-        sf->sf_bulk_csum = BULK_CSUM_ALG_NULL;
+        sf->sf_bulk_ciph = BULK_CIPH_ALG_NULL;
+        sf->sf_bulk_hash = BULK_HASH_ALG_NULL;
         sf->sf_flags = 0;
 }
 
@@ -104,35 +104,50 @@ static void get_flavor_by_rpc(struct sptlrpc_rule *rule, __u16 rpc_flavor)
 
         switch (rpc_flavor) {
         case SPTLRPC_FLVR_NULL:
+                break;
         case SPTLRPC_FLVR_PLAIN:
         case SPTLRPC_FLVR_KRB5N:
         case SPTLRPC_FLVR_KRB5A:
+                rule->sr_flvr.sf_bulk_hash = BULK_HASH_ALG_ADLER32;
                 break;
         case SPTLRPC_FLVR_KRB5P:
-                rule->sr_flvr.sf_bulk_priv = BULK_PRIV_ALG_ARC4;
+                rule->sr_flvr.sf_bulk_ciph = BULK_CIPH_ALG_AES128;
                 /* fall through */
         case SPTLRPC_FLVR_KRB5I:
-                rule->sr_flvr.sf_bulk_csum = BULK_CSUM_ALG_SHA1;
+                rule->sr_flvr.sf_bulk_hash = BULK_HASH_ALG_SHA1;
                 break;
         default:
                 LBUG();
         }
 }
 
-static void get_flavor_by_bulk(struct sptlrpc_rule *rule, bulk_type_t bulk_type)
+static void get_flavor_by_bulk(struct sptlrpc_rule *rule,
+                               __u16 rpc_flavor, bulk_type_t bulk_type)
 {
         switch (bulk_type) {
         case BULK_TYPE_N:
-                rule->sr_flvr.sf_bulk_csum = BULK_CSUM_ALG_NULL;
-                rule->sr_flvr.sf_bulk_priv = BULK_PRIV_ALG_NULL;
+                rule->sr_flvr.sf_bulk_hash = BULK_HASH_ALG_NULL;
+                rule->sr_flvr.sf_bulk_ciph = BULK_CIPH_ALG_NULL;
                 break;
         case BULK_TYPE_I:
-                rule->sr_flvr.sf_bulk_csum = BULK_CSUM_ALG_SHA1;
-                rule->sr_flvr.sf_bulk_priv = BULK_PRIV_ALG_NULL;
+                switch (rpc_flavor) {
+                case SPTLRPC_FLVR_PLAIN:
+                case SPTLRPC_FLVR_KRB5N:
+                case SPTLRPC_FLVR_KRB5A:
+                        rule->sr_flvr.sf_bulk_hash = BULK_HASH_ALG_ADLER32;
+                        break;
+                case SPTLRPC_FLVR_KRB5I:
+                case SPTLRPC_FLVR_KRB5P:
+                        rule->sr_flvr.sf_bulk_hash = BULK_HASH_ALG_SHA1;
+                        break;
+                default:
+                        LBUG();
+                }
+                rule->sr_flvr.sf_bulk_ciph = BULK_CIPH_ALG_NULL;
                 break;
         case BULK_TYPE_P:
-                rule->sr_flvr.sf_bulk_csum = BULK_CSUM_ALG_SHA1;
-                rule->sr_flvr.sf_bulk_priv = BULK_PRIV_ALG_ARC4;
+                rule->sr_flvr.sf_bulk_hash = BULK_HASH_ALG_SHA1;
+                rule->sr_flvr.sf_bulk_ciph = BULK_CIPH_ALG_AES128;
                 break;
         default:
                 LBUG();
@@ -207,8 +222,8 @@ static int parse_flavor(char *str, struct sptlrpc_rule *rule)
 
         /* verify bulk section */
         if (strcmp(bulk, "bulkn") == 0) {
-                rule->sr_flvr.sf_bulk_csum = BULK_CSUM_ALG_NULL;
-                rule->sr_flvr.sf_bulk_priv = BULK_PRIV_ALG_NULL;
+                rule->sr_flvr.sf_bulk_hash = BULK_HASH_ALG_NULL;
+                rule->sr_flvr.sf_bulk_ciph = BULK_CIPH_ALG_NULL;
                 bulk_type = BULK_TYPE_N;
         } else if (strcmp(bulk, "bulki") == 0)
                 bulk_type = BULK_TYPE_I;
@@ -225,7 +240,7 @@ static int parse_flavor(char *str, struct sptlrpc_rule *rule)
         if (__flavors[i] == SPTLRPC_FLVR_PLAIN && bulk_type == BULK_TYPE_P)
                 GOTO(invalid, -EINVAL);
 
-        get_flavor_by_bulk(rule, bulk_type);
+        get_flavor_by_bulk(rule, __flavors[i], bulk_type);
 
         if (alg == NULL)
                 goto out;
@@ -236,24 +251,24 @@ static int parse_flavor(char *str, struct sptlrpc_rule *rule)
                 *enc++ = '\0';
 
         /* checksum algorithm */
-        for (i = 0; i < BULK_CSUM_ALG_MAX; i++) {
-                if (strcmp(alg, sptlrpc_bulk_csum_alg2name(i)) == 0) {
-                        rule->sr_flvr.sf_bulk_csum = i;
+        for (i = 0; i < BULK_HASH_ALG_MAX; i++) {
+                if (strcmp(alg, sptlrpc_get_hash_name(i)) == 0) {
+                        rule->sr_flvr.sf_bulk_hash = i;
                         break;
                 }
         }
-        if (i >= BULK_CSUM_ALG_MAX)
+        if (i >= BULK_HASH_ALG_MAX)
                 GOTO(invalid, -EINVAL);
 
         /* privacy algorithm */
         if (enc) {
-                for (i = 0; i < BULK_PRIV_ALG_MAX; i++) {
-                        if (strcmp(enc, sptlrpc_bulk_priv_alg2name(i)) == 0) {
-                                rule->sr_flvr.sf_bulk_priv = i;
+                for (i = 0; i < BULK_CIPH_ALG_MAX; i++) {
+                        if (strcmp(enc, sptlrpc_get_ciph_name(i)) == 0) {
+                                rule->sr_flvr.sf_bulk_ciph = i;
                                 break;
                         }
                 }
-                if (i >= BULK_PRIV_ALG_MAX)
+                if (i >= BULK_CIPH_ALG_MAX)
                         GOTO(invalid, -EINVAL);
         }
 
@@ -261,17 +276,17 @@ static int parse_flavor(char *str, struct sptlrpc_rule *rule)
          * bulk combination sanity checks
          */
         if (bulk_type == BULK_TYPE_P &&
-            rule->sr_flvr.sf_bulk_priv == BULK_PRIV_ALG_NULL)
+            rule->sr_flvr.sf_bulk_ciph == BULK_CIPH_ALG_NULL)
                 GOTO(invalid, -EINVAL);
 
         if (bulk_type == BULK_TYPE_I &&
-            (rule->sr_flvr.sf_bulk_csum == BULK_CSUM_ALG_NULL ||
-             rule->sr_flvr.sf_bulk_priv != BULK_PRIV_ALG_NULL))
+            (rule->sr_flvr.sf_bulk_hash == BULK_HASH_ALG_NULL ||
+             rule->sr_flvr.sf_bulk_ciph != BULK_CIPH_ALG_NULL))
                 GOTO(invalid, -EINVAL);
 
         if (bulk_type == BULK_TYPE_N &&
-            (rule->sr_flvr.sf_bulk_csum != BULK_CSUM_ALG_NULL ||
-             rule->sr_flvr.sf_bulk_priv != BULK_PRIV_ALG_NULL))
+            (rule->sr_flvr.sf_bulk_hash != BULK_HASH_ALG_NULL ||
+             rule->sr_flvr.sf_bulk_ciph != BULK_CIPH_ALG_NULL))
                 GOTO(invalid, -EINVAL);
 
 out:

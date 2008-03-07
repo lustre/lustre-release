@@ -168,8 +168,8 @@ static inline void rpc_flvr_set_svc(__u16 *flvr, __u16 svc)
 
 struct sptlrpc_flavor {
         __u16   sf_rpc;         /* rpc flavor */
-        __u8    sf_bulk_priv;   /* bulk encrypt alg */
-        __u8    sf_bulk_csum;   /* bulk checksum alg */
+        __u8    sf_bulk_ciph;   /* bulk cipher alg */
+        __u8    sf_bulk_hash;   /* bulk hash alg */
         __u32   sf_flags;       /* general flags */
 };
 
@@ -467,35 +467,66 @@ struct ptlrpc_user_desc {
 /*
  * bulk flavors
  */
-enum bulk_checksum_alg {
-        BULK_CSUM_ALG_NULL      = 0,
-        BULK_CSUM_ALG_CRC32,
-        BULK_CSUM_ALG_MD5,
-        BULK_CSUM_ALG_SHA1,
-        BULK_CSUM_ALG_SHA256,
-        BULK_CSUM_ALG_SHA384,
-        BULK_CSUM_ALG_SHA512,
-        BULK_CSUM_ALG_MAX
+enum sptlrpc_bulk_hash_alg {
+        BULK_HASH_ALG_NULL      = 0,
+        BULK_HASH_ALG_ADLER32,
+        BULK_HASH_ALG_CRC32,
+        BULK_HASH_ALG_MD5,
+        BULK_HASH_ALG_SHA1,
+        BULK_HASH_ALG_SHA256,
+        BULK_HASH_ALG_SHA384,
+        BULK_HASH_ALG_SHA512,
+        BULK_HASH_ALG_WP256,
+        BULK_HASH_ALG_WP384,
+        BULK_HASH_ALG_WP512,
+        BULK_HASH_ALG_MAX
 };
 
-enum bulk_encrypt_alg {
-        BULK_PRIV_ALG_NULL      = 0,
-        BULK_PRIV_ALG_ARC4,
-        BULK_PRIV_ALG_MAX
+enum sptlrpc_bulk_cipher_alg {
+        BULK_CIPH_ALG_NULL      = 0,
+        BULK_CIPH_ALG_ARC4,
+        BULK_CIPH_ALG_AES128,
+        BULK_CIPH_ALG_AES192,
+        BULK_CIPH_ALG_AES256,
+        BULK_CIPH_ALG_CAST128,
+        BULK_CIPH_ALG_CAST256,
+        BULK_CIPH_ALG_TWOFISH128,
+        BULK_CIPH_ALG_TWOFISH256,
+        BULK_CIPH_ALG_MAX
 };
+
+struct sptlrpc_hash_type {
+        char           *sht_name;
+        char           *sht_tfm_name;
+        unsigned int    sht_size;
+};
+
+struct sptlrpc_ciph_type {
+        char           *sct_name;
+        char           *sct_tfm_name;
+        __u32           sct_tfm_flags;
+        unsigned int    sct_ivsize;
+        unsigned int    sct_keysize;
+};
+
+const struct sptlrpc_hash_type *sptlrpc_get_hash_type(__u8 hash_alg);
+const char * sptlrpc_get_hash_name(__u8 hash_alg);
+const struct sptlrpc_ciph_type *sptlrpc_get_ciph_type(__u8 ciph_alg);
+const char *sptlrpc_get_ciph_name(__u8 ciph_alg);
+
+#define CIPHER_MAX_BLKSIZE      (16)
+#define CIPHER_MAX_KEYSIZE      (64)
 
 struct ptlrpc_bulk_sec_desc {
-        __u32           bsd_version;
-        __u8            bsd_csum_alg;   /* checksum algorithm */
-        __u8            bsd_priv_alg;   /* encrypt algorithm */
-        __u16           bsd_pad;
-        __u8            bsd_iv[16];     /* encrypt iv */
+        __u8            bsd_version;
+        __u8            bsd_flags;
+        __u8            bsd_pad[4];
+        __u8            bsd_hash_alg;                /* hash algorithm */
+        __u8            bsd_ciph_alg;                /* cipher algorithm */
+        __u8            bsd_key[CIPHER_MAX_KEYSIZE]; /* encrypt key seed */
         __u8            bsd_csum[0];
 };
 
-const char * sptlrpc_bulk_csum_alg2name(__u8 csum_alg);
-const char * sptlrpc_bulk_priv_alg2name(__u8 priv_alg);
-__u32 sptlrpc_bulk_priv_alg2flags(__u8 priv_alg);
 
 /*
  * lprocfs
@@ -717,7 +748,7 @@ int sptlrpc_pack_user_desc(struct lustre_msg *msg, int offset);
 int sptlrpc_unpack_user_desc(struct lustre_msg *msg, int offset);
 
 /* bulk helpers (internal use only by policies) */
-int bulk_sec_desc_size(__u8 csum_alg, int request, int read);
+int bulk_sec_desc_size(__u8 hash_alg, int request, int read);
 int bulk_sec_desc_unpack(struct lustre_msg *msg, int offset);
 
 int bulk_csum_cli_request(struct ptlrpc_bulk_desc *desc, int read,

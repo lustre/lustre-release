@@ -412,8 +412,9 @@ int client_connect_import(const struct lu_env *env,
         LASSERT(exp->exp_connection);
 
         if (data) {
-                LASSERT((ocd->ocd_connect_flags & data->ocd_connect_flags) ==
-                        ocd->ocd_connect_flags);
+                LASSERTF((ocd->ocd_connect_flags & data->ocd_connect_flags) ==
+                         ocd->ocd_connect_flags, "old "LPX64", new "LPX64"\n",
+                         data->ocd_connect_flags, ocd->ocd_connect_flags);
                 data->ocd_connect_flags = ocd->ocd_connect_flags;
         }
 

@@ -29,8 +29,10 @@
 #ifndef __KERNEL__
 #include <liblustre.h>
 #include <libcfs/list.h>
+#include <zlib.h>
 #else
 #include <linux/crypto.h>
+#include <linux/zutil.h>
 #endif
 
 #include <obd.h>
@@ -751,36 +753,54 @@ void sptlrpc_enc_pool_fini(void)
  * implement checksum funcationality    *
  ****************************************/
 
-static struct {
-        char    *name;
-        int      size;
-} csum_types[] = {
-        [BULK_CSUM_ALG_NULL]    = { "null",     0 },
-        [BULK_CSUM_ALG_CRC32]   = { "crc32",    4 },
-        [BULK_CSUM_ALG_MD5]     = { "md5",     16 },
-        [BULK_CSUM_ALG_SHA1]    = { "sha1",    20 },
-        [BULK_CSUM_ALG_SHA256]  = { "sha256",  32 },
-        [BULK_CSUM_ALG_SHA384]  = { "sha384",  48 },
-        [BULK_CSUM_ALG_SHA512]  = { "sha512",  64 },
+static struct sptlrpc_hash_type hash_types[] = {
+        [BULK_HASH_ALG_NULL]    = { "null",     "null",         0 },
+        [BULK_HASH_ALG_ADLER32] = { "adler32",  "adler32",      4 },
+        [BULK_HASH_ALG_CRC32]   = { "crc32",    "crc32",        4 },
+        [BULK_HASH_ALG_MD5]     = { "md5",      "md5",          16 },
+        [BULK_HASH_ALG_SHA1]    = { "sha1",     "sha1",         20 },
+        [BULK_HASH_ALG_SHA256]  = { "sha256",   "sha256",       32 },
+        [BULK_HASH_ALG_SHA384]  = { "sha384",   "sha384",       48 },
+        [BULK_HASH_ALG_SHA512]  = { "sha512",   "sha512",       64 },
+        [BULK_HASH_ALG_WP256]   = { "wp256",    "wp256",        32 },
+        [BULK_HASH_ALG_WP384]   = { "wp384",    "wp384",        48 },
+        [BULK_HASH_ALG_WP512]   = { "wp512",    "wp512",        64 },
 };
 
-const char * sptlrpc_bulk_csum_alg2name(__u8 csum_alg)
+const struct sptlrpc_hash_type *sptlrpc_get_hash_type(__u8 hash_alg)
 {
-        if (csum_alg < BULK_CSUM_ALG_MAX)
-                return csum_types[csum_alg].name;
-        return "unknown";
-}
-EXPORT_SYMBOL(sptlrpc_bulk_csum_alg2name);
+        struct sptlrpc_hash_type *ht;
 
-int bulk_sec_desc_size(__u8 csum_alg, int request, int read)
+        if (hash_alg < BULK_HASH_ALG_MAX) {
+                ht = &hash_types[hash_alg];
+                if (ht->sht_tfm_name)
+                        return ht;
+        }
+        return NULL;
+}
+EXPORT_SYMBOL(sptlrpc_get_hash_type);
+
+const char * sptlrpc_get_hash_name(__u8 hash_alg)
+{
+        const struct sptlrpc_hash_type *ht;
+
+        ht = sptlrpc_get_hash_type(hash_alg);
+        if (ht)
+                return ht->sht_name;
+        else
+                return "unknown";
+}
+EXPORT_SYMBOL(sptlrpc_get_hash_name);
+
+int bulk_sec_desc_size(__u8 hash_alg, int request, int read)
 {
         int size = sizeof(struct ptlrpc_bulk_sec_desc);
 
-        LASSERT(csum_alg < BULK_CSUM_ALG_MAX);
+        LASSERT(hash_alg < BULK_HASH_ALG_MAX);
 
         /* read request don't need extra data */
         if (!(read && request))
-                size += csum_types[csum_alg].size;
+                size += hash_types[hash_alg].sht_size;
 
         return size;
 }
@@ -797,31 +817,34 @@ int bulk_sec_desc_unpack(struct lustre_msg *msg, int offset)
                 return -EINVAL;
         }
 
-        if (lustre_msg_swabbed(msg)) {
-                __swab32s(&bsd->bsd_version);
-                __swab16s(&bsd->bsd_pad);
-        }
+        /* nothing to swab */
 
-        if (bsd->bsd_version != 0) {
+        if (unlikely(bsd->bsd_version != 0)) {
                 CERROR("Unexpected version %u\n", bsd->bsd_version);
                 return -EPROTO;
         }
 
-        if (bsd->bsd_csum_alg >= BULK_CSUM_ALG_MAX) {
-                CERROR("Unsupported checksum algorithm %u\n",
-                       bsd->bsd_csum_alg);
-                return -EINVAL;
+        if (unlikely(bsd->bsd_flags != 0)) {
+                CERROR("Unexpected flags %x\n", bsd->bsd_flags);
+                return -EPROTO;
         }
-        if (bsd->bsd_priv_alg >= BULK_PRIV_ALG_MAX) {
-                CERROR("Unsupported cipher algorithm %u\n",
-                       bsd->bsd_priv_alg);
+
+        if (unlikely(!sptlrpc_get_hash_type(bsd->bsd_hash_alg))) {
+                CERROR("Unsupported checksum algorithm %u\n",
+                       bsd->bsd_hash_alg);
                 return -EINVAL;
         }
 
-        if (size > sizeof(*bsd) &&
-            size < sizeof(*bsd) + csum_types[bsd->bsd_csum_alg].size) {
+        if (unlikely(!sptlrpc_get_ciph_type(bsd->bsd_ciph_alg))) {
+                CERROR("Unsupported cipher algorithm %u\n",
+                       bsd->bsd_ciph_alg);
+                return -EINVAL;
+        }
+
+        if (unlikely(size > sizeof(*bsd)) &&
+            size < sizeof(*bsd) + hash_types[bsd->bsd_hash_alg].sht_size) {
                 CERROR("Mal-formed checksum data: csum alg %u, size %d\n",
-                       bsd->bsd_csum_alg, size);
+                       bsd->bsd_hash_alg, size);
                 return -EINVAL;
         }
 
@@ -830,14 +853,38 @@ int bulk_sec_desc_unpack(struct lustre_msg *msg, int offset)
 EXPORT_SYMBOL(bulk_sec_desc_unpack);
 
 #ifdef __KERNEL__
-static
-int do_bulk_checksum_crc32(struct ptlrpc_bulk_desc *desc, void *buf)
+
+static int do_bulk_checksum_adler32(struct ptlrpc_bulk_desc *desc, void *buf)
 {
-        struct page *page;
-        int off;
-        char *ptr;
-        __u32 crc32 = ~0;
-        int len, i;
+        struct page    *page;
+        int             off;
+        char           *ptr;
+        __u32           adler32 = 1;
+        int             len, i;
+
+        for (i = 0; i < desc->bd_iov_count; i++) {
+                page = desc->bd_iov[i].kiov_page;
+                off = desc->bd_iov[i].kiov_offset & ~CFS_PAGE_MASK;
+                ptr = cfs_kmap(page) + off;
+                len = desc->bd_iov[i].kiov_len;
+
+                adler32 = zlib_adler32(adler32, ptr, len);
+
+                cfs_kunmap(page);
+        }
+
+        adler32 = cpu_to_le32(adler32);
+        memcpy(buf, &adler32, sizeof(adler32));
+        return 0;
+}
+
+static int do_bulk_checksum_crc32(struct ptlrpc_bulk_desc *desc, void *buf)
+{
+        struct page    *page;
+        int             off;
+        char           *ptr;
+        __u32           crc32 = ~0;
+        int             len, i;
 
         for (i = 0; i < desc->bd_iov_count; i++) {
                 page = desc->bd_iov[i].kiov_page;
@@ -850,26 +897,28 @@ int do_bulk_checksum_crc32(struct ptlrpc_bulk_desc *desc, void *buf)
                 cfs_kunmap(page);
         }
 
-        *((__u32 *) buf) = crc32;
+        crc32 = cpu_to_le32(crc32);
+        memcpy(buf, &crc32, sizeof(crc32));
         return 0;
 }
 
-static
-int do_bulk_checksum(struct ptlrpc_bulk_desc *desc, __u32 alg, void *buf)
+static int do_bulk_checksum(struct ptlrpc_bulk_desc *desc, __u32 alg, void *buf)
 {
         struct crypto_tfm *tfm;
         struct scatterlist *sl;
         int i, rc = 0;
 
-        LASSERT(alg > BULK_CSUM_ALG_NULL &&
-                alg < BULK_CSUM_ALG_MAX);
+        LASSERT(alg > BULK_HASH_ALG_NULL &&
+                alg < BULK_HASH_ALG_MAX);
 
-        if (alg == BULK_CSUM_ALG_CRC32)
+        if (alg == BULK_HASH_ALG_ADLER32)
+                return do_bulk_checksum_adler32(desc, buf);
+        if (alg == BULK_HASH_ALG_CRC32)
                 return do_bulk_checksum_crc32(desc, buf);
 
-        tfm = crypto_alloc_tfm(csum_types[alg].name, 0);
+        tfm = crypto_alloc_tfm(hash_types[alg].sht_tfm_name, 0);
         if (tfm == NULL) {
-                CERROR("Unable to allocate tfm %s\n", csum_types[alg].name);
+                CERROR("Unable to allocate TFM %s\n", hash_types[alg].sht_name);
                 return -ENOMEM;
         }
 
@@ -895,31 +944,40 @@ out_tfm:
         crypto_free_tfm(tfm);
         return rc;
 }
-                         
-#else /* !__KERNEL__ */
-static
-int do_bulk_checksum(struct ptlrpc_bulk_desc *desc, __u32 alg, void *buf)
-{
-        __u32 crc32 = ~0;
-        int i;
 
-        LASSERT(alg == BULK_CSUM_ALG_CRC32);
+#else /* !__KERNEL__ */
+
+static int do_bulk_checksum(struct ptlrpc_bulk_desc *desc, __u32 alg, void *buf)
+{
+        __u32   csum32 = ~0;
+        int     i;
+
+        LASSERT(alg == BULK_HASH_ALG_ADLER32 || alg == BULK_HASH_ALG_CRC32);
+
+        if (alg == BULK_HASH_ALG_ADLER32)
+                csum32 = 1;
+        else
+                csum32 = ~0;
 
         for (i = 0; i < desc->bd_iov_count; i++) {
                 char *ptr = desc->bd_iov[i].iov_base;
                 int len = desc->bd_iov[i].iov_len;
 
-                crc32 = crc32_le(crc32, ptr, len);
+                if (alg == BULK_HASH_ALG_ADLER32)
+                        csum32 = zlib_adler32(csum32, ptr, len);
+                else
+                        csum32 = crc32_le(csum32, ptr, len);
         }
 
-        *((__u32 *) buf) = crc32;
+        *((__u32 *) buf) = csum32;
         return 0;
 }
+
 #endif
 
 /*
  * perform algorithm @alg checksum on @desc, store result in @buf.
- * if anything goes wrong, leave 'alg' be BULK_CSUM_ALG_NULL.
+ * if anything goes wrong, leave 'alg' be BULK_HASH_ALG_NULL.
  */
 static
 int generate_bulk_csum(struct ptlrpc_bulk_desc *desc, __u32 alg,
@@ -928,18 +986,18 @@ int generate_bulk_csum(struct ptlrpc_bulk_desc *desc, __u32 alg,
         int rc;
 
         LASSERT(bsd);
-        LASSERT(alg < BULK_CSUM_ALG_MAX);
+        LASSERT(alg < BULK_HASH_ALG_MAX);
 
-        bsd->bsd_csum_alg = BULK_CSUM_ALG_NULL;
+        bsd->bsd_hash_alg = BULK_HASH_ALG_NULL;
 
-        if (alg == BULK_CSUM_ALG_NULL)
+        if (alg == BULK_HASH_ALG_NULL)
                 return 0;
 
-        LASSERT(bsdsize >= sizeof(*bsd) + csum_types[alg].size);
+        LASSERT(bsdsize >= sizeof(*bsd) + hash_types[alg].sht_size);
 
         rc = do_bulk_checksum(desc, alg, bsd->bsd_csum);
         if (rc == 0)
-                bsd->bsd_csum_alg = alg;
+                bsd->bsd_hash_alg = alg;
 
         return rc;
 }
@@ -954,16 +1012,16 @@ int verify_bulk_csum(struct ptlrpc_bulk_desc *desc, int read,
         int   csum_size, rc = 0;
 
         LASSERT(bsdv);
-        LASSERT(bsdv->bsd_csum_alg < BULK_CSUM_ALG_MAX);
+        LASSERT(bsdv->bsd_hash_alg < BULK_HASH_ALG_MAX);
 
         if (bsdr)
-                bsdr->bsd_csum_alg = BULK_CSUM_ALG_NULL;
+                bsdr->bsd_hash_alg = BULK_HASH_ALG_NULL;
 
-        if (bsdv->bsd_csum_alg == BULK_CSUM_ALG_NULL)
+        if (bsdv->bsd_hash_alg == BULK_HASH_ALG_NULL)
                 return 0;
 
         /* for all supported algorithms */
-        csum_size = csum_types[bsdv->bsd_csum_alg].size;
+        csum_size = hash_types[bsdv->bsd_hash_alg].sht_size;
 
         if (bsdvsize < sizeof(*bsdv) + csum_size) {
                 CERROR("verifier size %d too small, require %d\n",
@@ -981,21 +1039,21 @@ int verify_bulk_csum(struct ptlrpc_bulk_desc *desc, int read,
                 csum_p = buf;
         }
 
-        rc = do_bulk_checksum(desc, bsdv->bsd_csum_alg, csum_p);
+        rc = do_bulk_checksum(desc, bsdv->bsd_hash_alg, csum_p);
 
         if (memcmp(bsdv->bsd_csum, csum_p, csum_size)) {
                 CERROR("BAD %s CHECKSUM (%s), data mutated during "
                        "transfer!\n", read ? "READ" : "WRITE",
-                       csum_types[bsdv->bsd_csum_alg].name);
+                       hash_types[bsdv->bsd_hash_alg].sht_name);
                 rc = -EINVAL;
         } else {
                 CDEBUG(D_SEC, "bulk %s checksum (%s) verified\n",
                       read ? "read" : "write",
-                      csum_types[bsdv->bsd_csum_alg].name);
+                      hash_types[bsdv->bsd_hash_alg].sht_name);
         }
 
         if (bsdr) {
-                bsdr->bsd_csum_alg = bsdv->bsd_csum_alg;
+                bsdr->bsd_hash_alg = bsdv->bsd_hash_alg;
                 memcpy(bsdr->bsd_csum, csum_p, csum_size);
         } else {
                 LASSERT(buf);
@@ -1016,10 +1074,10 @@ int bulk_csum_cli_request(struct ptlrpc_bulk_desc *desc, int read,
 
         LASSERT(bsdr);
         LASSERT(rsize >= sizeof(*bsdr));
-        LASSERT(alg < BULK_CSUM_ALG_MAX);
+        LASSERT(alg < BULK_HASH_ALG_MAX);
 
         if (read) {
-                bsdr->bsd_csum_alg = alg;
+                bsdr->bsd_hash_alg = alg;
         } else {
                 rc = generate_bulk_csum(desc, alg, bsdr, rsize);
                 if (rc)
@@ -1029,7 +1087,7 @@ int bulk_csum_cli_request(struct ptlrpc_bulk_desc *desc, int read,
                 /* For sending we only compute the wrong checksum instead
                  * of corrupting the data so it is still correct on a redo */
                 if (rc == 0 && OBD_FAIL_CHECK(OBD_FAIL_OSC_CHECKSUM_SEND) &&
-                    bsdr->bsd_csum_alg != BULK_CSUM_ALG_NULL)
+                    bsdr->bsd_hash_alg != BULK_HASH_ALG_NULL)
                         bsdr->bsd_csum[0] ^= 0x1;
         }
 
@@ -1059,23 +1117,23 @@ int bulk_csum_cli_reply(struct ptlrpc_bulk_desc *desc, int read,
         LASSERT(rsize >= sizeof(*bsdr));
         LASSERT(vsize >= sizeof(*bsdv));
 
-        if (bsdr->bsd_csum_alg != bsdv->bsd_csum_alg) {
+        if (bsdr->bsd_hash_alg != bsdv->bsd_hash_alg) {
                 CERROR("bulk %s: checksum algorithm mismatch: client request "
                        "%s but server reply with %s. try to use the new one "
                        "for checksum verification\n",
                        read ? "read" : "write",
-                       csum_types[bsdr->bsd_csum_alg].name,
-                       csum_types[bsdv->bsd_csum_alg].name);
+                       hash_types[bsdr->bsd_hash_alg].sht_name,
+                       hash_types[bsdv->bsd_hash_alg].sht_name);
         }
 
         if (read)
                 return verify_bulk_csum(desc, 1, bsdv, vsize, NULL, 0);
         else {
                 char *cli, *srv, *new = NULL;
-                int csum_size = csum_types[bsdr->bsd_csum_alg].size;
+                int csum_size = hash_types[bsdr->bsd_hash_alg].sht_size;
 
-                LASSERT(bsdr->bsd_csum_alg < BULK_CSUM_ALG_MAX);
-                if (bsdr->bsd_csum_alg == BULK_CSUM_ALG_NULL)
+                LASSERT(bsdr->bsd_hash_alg < BULK_HASH_ALG_MAX);
+                if (bsdr->bsd_hash_alg == BULK_HASH_ALG_NULL)
                         return 0;
 
                 if (vsize < sizeof(*bsdv) + csum_size) {
@@ -1090,7 +1148,7 @@ int bulk_csum_cli_reply(struct ptlrpc_bulk_desc *desc, int read,
                 if (!memcmp(cli, srv, csum_size)) {
                         /* checksum confirmed */
                         CDEBUG(D_SEC, "bulk write checksum (%s) confirmed\n",
-                               csum_types[bsdr->bsd_csum_alg].name);
+                               hash_types[bsdr->bsd_hash_alg].sht_name);
                         return 0;
                 }
 
@@ -1100,22 +1158,22 @@ int bulk_csum_cli_reply(struct ptlrpc_bulk_desc *desc, int read,
                 if (new == NULL)
                         return -ENOMEM;
 
-                do_bulk_checksum(desc, bsdr->bsd_csum_alg, new);
+                do_bulk_checksum(desc, bsdr->bsd_hash_alg, new);
 
                 if (!memcmp(new, srv, csum_size)) {
                         CERROR("BAD WRITE CHECKSUM (%s): pages were mutated "
                                "on the client after we checksummed them\n",
-                               csum_types[bsdr->bsd_csum_alg].name);
+                               hash_types[bsdr->bsd_hash_alg].sht_name);
                 } else if (!memcmp(new, cli, csum_size)) {
                         CERROR("BAD WRITE CHECKSUM (%s): pages were mutated "
                                "in transit\n",
-                               csum_types[bsdr->bsd_csum_alg].name);
+                               hash_types[bsdr->bsd_hash_alg].sht_name);
                 } else {
                         CERROR("BAD WRITE CHECKSUM (%s): pages were mutated "
                                "in transit, and the current page contents "
                                "don't match the originals and what the server "
                                "received\n",
-                               csum_types[bsdr->bsd_csum_alg].name);
+                               hash_types[bsdr->bsd_hash_alg].sht_name);
                 }
                 OBD_FREE(new, csum_size);
 
@@ -1158,11 +1216,11 @@ int bulk_csum_svc(struct ptlrpc_bulk_desc *desc, int read,
         LASSERT(bsdv && bsdr);
 
         if (read) {
-                rc = generate_bulk_csum(desc, bsdv->bsd_csum_alg, bsdr, rsize);
+                rc = generate_bulk_csum(desc, bsdv->bsd_hash_alg, bsdr, rsize);
                 if (rc)
                         CERROR("bulk read: server failed to generate %s "
                                "checksum: %d\n",
-                               csum_types[bsdv->bsd_csum_alg].name, rc);
+                               hash_types[bsdv->bsd_hash_alg].sht_name, rc);
 
                 /* corrupt the data after we compute the checksum, to
                  * simulate an OST->client data error */
@@ -1181,29 +1239,63 @@ EXPORT_SYMBOL(bulk_csum_svc);
  * implement encryption funcationality  *
  ****************************************/
 
-/*
- * NOTE: These algorithms must be stream cipher!
- */
-static struct {
-        char    *name;
-        __u32    flags;
-} priv_types[] = {
-        [BULK_PRIV_ALG_NULL]   = { "null", 0   },
-        [BULK_PRIV_ALG_ARC4]   = { "arc4", 0   },
+/* FIXME */
+#ifndef __KERNEL__
+#define CRYPTO_TFM_MODE_ECB     (0)
+#define CRYPTO_TFM_MODE_CBC     (1)
+#endif
+
+static struct sptlrpc_ciph_type cipher_types[] = {
+        [BULK_CIPH_ALG_NULL]    = {
+                "null",         "null",       0,                   0,  0
+        },
+        [BULK_CIPH_ALG_ARC4]    = {
+                "arc4",         "arc4",       CRYPTO_TFM_MODE_ECB, 0,  16
+        },
+        [BULK_CIPH_ALG_AES128]  = {
+                "aes128",       "aes",        CRYPTO_TFM_MODE_CBC, 16, 16
+        },
+        [BULK_CIPH_ALG_AES192]  = {
+                "aes192",       "aes",        CRYPTO_TFM_MODE_CBC, 16, 24
+        },
+        [BULK_CIPH_ALG_AES256]  = {
+                "aes256",       "aes",        CRYPTO_TFM_MODE_CBC, 16, 32
+        },
+        [BULK_CIPH_ALG_CAST128] = {
+                "cast128",      "cast5",      CRYPTO_TFM_MODE_CBC, 8,  16
+        },
+        [BULK_CIPH_ALG_CAST256] = {
+                "cast256",      "cast6",      CRYPTO_TFM_MODE_CBC, 16, 32
+        },
+        [BULK_CIPH_ALG_TWOFISH128] = {
+                "twofish128",   "twofish",    CRYPTO_TFM_MODE_CBC, 16, 16
+        },
+        [BULK_CIPH_ALG_TWOFISH256] = {
+                "twofish256",   "twofish",    CRYPTO_TFM_MODE_CBC, 16, 32
+        },
 };
 
-const char * sptlrpc_bulk_priv_alg2name(__u8 priv_alg)
+const struct sptlrpc_ciph_type *sptlrpc_get_ciph_type(__u8 ciph_alg)
 {
-        if (priv_alg < BULK_PRIV_ALG_MAX)
-                return priv_types[priv_alg].name;
-        return "unknown";
-}
-EXPORT_SYMBOL(sptlrpc_bulk_priv_alg2name);
+        struct sptlrpc_ciph_type *ct;
 
-__u32 sptlrpc_bulk_priv_alg2flags(__u8 priv_alg)
-{
-        if (priv_alg < BULK_PRIV_ALG_MAX)
-                return priv_types[priv_alg].flags;
-        return 0;
+        if (ciph_alg < BULK_CIPH_ALG_MAX) {
+                ct = &cipher_types[ciph_alg];
+                if (ct->sct_tfm_name)
+                        return ct;
+        }
+        return NULL;
 }
-EXPORT_SYMBOL(sptlrpc_bulk_priv_alg2flags);
+EXPORT_SYMBOL(sptlrpc_get_ciph_type);
+
+const char *sptlrpc_get_ciph_name(__u8 ciph_alg)
+{
+        const struct sptlrpc_ciph_type *ct;
+
+        ct = sptlrpc_get_ciph_type(ciph_alg);
+        if (ct)
+                return ct->sct_name;
+        else
+                return "unknown";
+}
+EXPORT_SYMBOL(sptlrpc_get_ciph_name);

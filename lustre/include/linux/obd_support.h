@@ -71,6 +71,23 @@ static inline __u32 crc32_le(__u32 crc, unsigned char const *p, size_t len)
 #endif
 
 #ifdef __KERNEL__
+# include <linux/zutil.h>
+# ifndef HAVE_ADLER
+#  define HAVE_ADLER
+# endif
+#else /* ! __KERNEL__ */
+# ifdef HAVE_ADLER
+#  include <zlib.h>
+
+static inline __u32 zlib_adler32(__u32 adler, unsigned char const *p,
+                                 size_t len)
+{
+        return adler32(adler, p, len);
+}
+# endif
+#endif /* __KERNEL__ */
+
+#ifdef __KERNEL__
 # include <linux/types.h>
 # include <linux/blkdev.h>
 # include <lvfs.h>

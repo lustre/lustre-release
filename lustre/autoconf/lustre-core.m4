@@ -8,7 +8,7 @@
 AC_DEFUN([LC_CONFIG_SRCDIR],
 [AC_CONFIG_SRCDIR([lustre/obdclass/obdo.c])
 ])
-                           
+
 #
 # LC_PATH_DEFAULTS
 #
@@ -699,17 +699,24 @@ AC_DEFUN([LC_CONFIG_GSS],
 	LC_CONFIG_GSS_KEYRING
         LC_CONFIG_SUNRPC
 
-        LB_LINUX_CONFIG_IM([CRYPTO_DES],[],
-                           [AC_MSG_WARN([kernel DES support is recommended by using GSS.])])
         LB_LINUX_CONFIG_IM([CRYPTO_MD5],[],
                            [AC_MSG_WARN([kernel MD5 support is recommended by using GSS.])])
+	LB_LINUX_CONFIG_IM([CRYPTO_SHA1],[],
+                           [AC_MSG_WARN([kernel SHA1 support is recommended by using GSS.])])
 	LB_LINUX_CONFIG_IM([CRYPTO_SHA256],[],
                            [AC_MSG_WARN([kernel SHA256 support is recommended by using GSS.])])
 	LB_LINUX_CONFIG_IM([CRYPTO_SHA512],[],
                            [AC_MSG_WARN([kernel SHA512 support is recommended by using GSS.])])
+	LB_LINUX_CONFIG_IM([CRYPTO_WP512],[],
+                           [AC_MSG_WARN([kernel WP512 support is recommended by using GSS.])])
 	LB_LINUX_CONFIG_IM([CRYPTO_ARC4],[],
                            [AC_MSG_WARN([kernel ARC4 support is recommended by using GSS.])])
-
+        LB_LINUX_CONFIG_IM([CRYPTO_DES],[],
+                           [AC_MSG_WARN([kernel DES support is recommended by using GSS.])])
+        LB_LINUX_CONFIG_IM([CRYPTO_TWOFISH],[],
+                           [AC_MSG_WARN([kernel TWOFISH support is recommended by using GSS.])])
+        LB_LINUX_CONFIG_IM([CRYPTO_CAST6],[],
+                           [AC_MSG_WARN([kernel CAST6 support is recommended by using GSS.])])
 	dnl FIXME
 	dnl the AES symbol usually tied with arch, e.g. CRYPTO_AES_586
 	dnl FIXME
@@ -1738,6 +1745,21 @@ LC_READLINK_SSIZE_T
 
 # utils/llverfs.c
 AC_CHECK_HEADERS([ext2fs/ext2fs.h])
+
+# include/linux/obd_support.h
+AC_CHECK_HEADERS([zlib.h])
+
+# check for -lz support
+AC_CHECK_LIB(z, [adler32],
+        [
+                ZLIB="-lz"
+                AC_DEFINE([HAVE_ADLER], 1, [support alder32 checksum type])
+        ],
+        [
+                ZLIB=""
+                AC_MSG_WARN([No zlib-devel package found, unable to use adler32 checksum])
+        ])
+AC_SUBST(ZLIB)
 
 # Super safe df
 AC_ARG_ENABLE([mindf],

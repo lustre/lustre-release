@@ -51,10 +51,6 @@ init_test_env $@
 SANITYLOG=${TESTSUITELOG:-$TMP/$(basename $0 .sh).log}
 FAIL_ON_ERROR=false
 
-if $GSS_KRB5; then
-    $RUNAS krb5_login.sh || exit 1
-fi
-
 SETUP=${SETUP:-:}
 TRACE=${TRACE:-""}
 

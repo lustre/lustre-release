@@ -112,10 +112,10 @@ struct ptlrpc_sec *null_create_sec(struct obd_import *imp,
 {
         LASSERT(RPC_FLVR_POLICY(sf->sf_rpc) == SPTLRPC_POLICY_NULL);
 
-        if (sf->sf_bulk_priv != BULK_PRIV_ALG_NULL ||
-            sf->sf_bulk_csum != BULK_CSUM_ALG_NULL) {
+        if (sf->sf_bulk_ciph != BULK_CIPH_ALG_NULL ||
+            sf->sf_bulk_hash != BULK_HASH_ALG_NULL) {
                 CERROR("null sec don't support bulk algorithm: %u/%u\n",
-                       sf->sf_bulk_priv, sf->sf_bulk_csum);
+                       sf->sf_bulk_ciph, sf->sf_bulk_hash);
                 return NULL;
         }
 
@@ -374,8 +374,8 @@ void null_init_internal(void)
         null_sec.ps_id = -1;
         null_sec.ps_import = NULL;
         null_sec.ps_flvr.sf_rpc = SPTLRPC_FLVR_NULL;
-        null_sec.ps_flvr.sf_bulk_priv = BULK_PRIV_ALG_NULL;
-        null_sec.ps_flvr.sf_bulk_csum = BULK_CSUM_ALG_NULL;
+        null_sec.ps_flvr.sf_bulk_ciph = BULK_CIPH_ALG_NULL;
+        null_sec.ps_flvr.sf_bulk_hash = BULK_HASH_ALG_NULL;
         null_sec.ps_flvr.sf_flags = 0;
         null_sec.ps_part = LUSTRE_SP_ANY;
         null_sec.ps_dying = 0;

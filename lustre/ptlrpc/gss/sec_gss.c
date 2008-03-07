@@ -412,13 +412,10 @@ static void gss_cli_ctx_finalize(struct gss_cli_ctx *gctx)
         }
 
         if (!rawobj_empty(&gctx->gc_svc_handle)) {
-                /* forward ctx: mark buddy reverse svcctx soon-expire.
-                 * reverse ctx: update current seq to buddy svcctx. */
-                if (!sec_is_reverse(gctx->gc_base.cc_sec))
+                /* forward ctx: mark buddy reverse svcctx soon-expire. */
+                if (!sec_is_reverse(gctx->gc_base.cc_sec) &&
+                    !rawobj_empty(&gctx->gc_svc_handle))
                         gss_svc_upcall_expire_rvs_ctx(&gctx->gc_svc_handle);
-                else
-                        gss_svc_upcall_update_sequence(&gctx->gc_svc_handle,
-                                        (__u32) atomic_read(&gctx->gc_seq));
 
                 rawobj_free(&gctx->gc_svc_handle);
         }
@@ -676,51 +673,55 @@ int gss_cli_ctx_handle_err_notify(struct ptlrpc_cli_ctx *ctx,
 
         errhdr = (struct gss_err_header *) ghdr;
 
+        CWARN("req x"LPU64"/t"LPU64", ctx %p idx "LPX64"(%u->%s): "
+              "%sserver respond (%08x/%08x)\n",
+              req->rq_xid, req->rq_transno, ctx,
+              gss_handle_to_u64(&ctx2gctx(ctx)->gc_handle),
+              ctx->cc_vcred.vc_uid, sec2target_str(ctx->cc_sec),
+              sec_is_reverse(ctx->cc_sec) ? "reverse" : "",
+              errhdr->gh_major, errhdr->gh_minor);
+
+        /* context fini rpc, let it failed */
+        if (req->rq_ctx_fini) {
+                CWARN("context fini rpc failed\n");
+                return -EINVAL;
+        }
+
+        /* reverse sec, just return error, don't expire this ctx because it's
+         * crucial to callback rpcs. note if the callback rpc failed because
+         * of bit flip during network transfer, the client will be evicted
+         * directly. so more gracefully we probably want let it retry for
+         * number of times. */
+        if (sec_is_reverse(ctx->cc_sec))
+                return -EINVAL;
+
+        if (errhdr->gh_major != GSS_S_NO_CONTEXT &&
+            errhdr->gh_major != GSS_S_BAD_SIG)
+                return -EACCES;
+
         /* server return NO_CONTEXT might be caused by context expire
-         * or server reboot/failover. we refresh the cred transparently
-         * to upper layer.
+         * or server reboot/failover. we try to refresh a new ctx which
+         * be transparent to upper layer.
+         *
          * In some cases, our gss handle is possible to be incidentally
          * identical to another handle since the handle itself is not
          * fully random. In krb5 case, the GSS_S_BAD_SIG will be
          * returned, maybe other gss error for other mechanism.
          *
          * if we add new mechanism, make sure the correct error are
-         * returned in this case.
-         *
-         * but in any cases, don't resend ctx destroying rpc, don't resend
-         * reverse rpc. */
-        if (req->rq_ctx_fini) {
-                CWARN("server respond error (%08x/%08x) for ctx fini\n",
-                      errhdr->gh_major, errhdr->gh_minor);
-                rc = -EINVAL;
-        } else if (sec_is_reverse(ctx->cc_sec)) {
-                CWARN("reverse server respond error (%08x/%08x)\n",
-                      errhdr->gh_major, errhdr->gh_minor);
-                sptlrpc_cli_ctx_expire(ctx);
-                rc = -EINVAL;
-        } else if (errhdr->gh_major == GSS_S_NO_CONTEXT ||
-                   errhdr->gh_major == GSS_S_BAD_SIG) {
-                CWARN("req x"LPU64"/t"LPU64": server respond ctx %p(%u->%s) "
-                      "%s, server might lost the context.\n",
-                      req->rq_xid, req->rq_transno, ctx, ctx->cc_vcred.vc_uid,
-                      sec2target_str(ctx->cc_sec),
-                      errhdr->gh_major == GSS_S_NO_CONTEXT ?
-                      "NO_CONTEXT" : "BAD_SIG");
+         * returned in this case. */
+        CWARN("%s: server might lost the context, retrying\n",
+              errhdr->gh_major == GSS_S_NO_CONTEXT ?  "NO_CONTEXT" : "BAD_SIG");
 
-                sptlrpc_cli_ctx_expire(ctx);
+        sptlrpc_cli_ctx_expire(ctx);
 
-                /* we need replace the ctx right here, otherwise during
-                 * resent we'll hit the logic in sptlrpc_req_refresh_ctx()
-                 * which keep the ctx with RESEND flag, thus we'll never
-                 * get rid of this ctx. */
-                rc = sptlrpc_req_replace_dead_ctx(req);
-                if (rc == 0)
-                        req->rq_resend = 1;
-        } else {
-                CERROR("req %p: server report gss error (%x/%x)\n",
-                        req, errhdr->gh_major, errhdr->gh_minor);
-                rc = -EACCES;
-        }
+        /* we need replace the ctx right here, otherwise during
+         * resent we'll hit the logic in sptlrpc_req_refresh_ctx()
+         * which keep the ctx with RESEND flag, thus we'll never
+         * get rid of this ctx. */
+        rc = sptlrpc_req_replace_dead_ctx(req);
+        if (rc == 0)
+                req->rq_resend = 1;
 
         return rc;
 }
@@ -802,14 +803,15 @@ int gss_cli_ctx_verify(struct ptlrpc_cli_ctx *ctx,
                 req->rq_replen = msg->lm_buflens[1];
 
                 if (req->rq_pack_bulk) {
-                        if (msg->lm_bufcount < 4) {
+                        /* FIXME */
+                        /* bulk checksum is right after the lustre msg */
+                        if (msg->lm_bufcount < 3) {
                                 CERROR("Invalid reply bufcount %u\n",
                                        msg->lm_bufcount);
                                 RETURN(-EPROTO);
                         }
 
-                        /* bulk checksum is the second last segment */
-                        rc = bulk_sec_desc_unpack(msg, msg->lm_bufcount - 2);
+                        rc = bulk_sec_desc_unpack(msg, 2);
                 }
                 break;
         case PTLRPC_GSS_PROC_ERR:
@@ -1082,7 +1084,7 @@ int gss_sec_create_common(struct gss_sec *gsec,
                 sec->ps_gc_interval = 0;
         }
 
-        if (sec->ps_flvr.sf_bulk_priv != BULK_PRIV_ALG_NULL &&
+        if (sec->ps_flvr.sf_bulk_ciph != BULK_CIPH_ALG_NULL &&
             sec->ps_flvr.sf_flags & PTLRPC_SEC_FL_BULK)
                 sptlrpc_enc_pool_add_user();
 
@@ -1107,7 +1109,7 @@ void gss_sec_destroy_common(struct gss_sec *gsec)
 
         class_import_put(sec->ps_import);
 
-        if (sec->ps_flvr.sf_bulk_priv != BULK_PRIV_ALG_NULL &&
+        if (sec->ps_flvr.sf_bulk_ciph != BULK_CIPH_ALG_NULL &&
             sec->ps_flvr.sf_flags & PTLRPC_SEC_FL_BULK)
                 sptlrpc_enc_pool_del_user();
 
@@ -1230,7 +1232,7 @@ int gss_alloc_reqbuf_intg(struct ptlrpc_sec *sec,
 
         if (req->rq_pack_bulk) {
                 buflens[bufcnt] = bulk_sec_desc_size(
-                                                req->rq_flvr.sf_bulk_csum, 1,
+                                                req->rq_flvr.sf_bulk_hash, 1,
                                                 req->rq_bulk_read);
                 if (svc == SPTLRPC_SVC_INTG)
                         txtsize += buflens[bufcnt];
@@ -1297,7 +1299,7 @@ int gss_alloc_reqbuf_priv(struct ptlrpc_sec *sec,
                 ibuflens[ibufcnt++] = sptlrpc_current_user_desc_size();
         if (req->rq_pack_bulk)
                 ibuflens[ibufcnt++] = bulk_sec_desc_size(
-                                                req->rq_flvr.sf_bulk_csum, 1,
+                                                req->rq_flvr.sf_bulk_hash, 1,
                                                 req->rq_bulk_read);
 
         clearsize = lustre_msg_size_v2(ibufcnt, ibuflens);
@@ -1462,7 +1464,7 @@ int gss_alloc_repbuf_intg(struct ptlrpc_sec *sec,
 
         if (req->rq_pack_bulk) {
                 buflens[bufcnt] = bulk_sec_desc_size(
-                                                req->rq_flvr.sf_bulk_csum, 0,
+                                                req->rq_flvr.sf_bulk_hash, 0,
                                                 req->rq_bulk_read);
                 if (svc == SPTLRPC_SVC_INTG)
                         txtsize += buflens[bufcnt];
@@ -1495,7 +1497,7 @@ int gss_alloc_repbuf_priv(struct ptlrpc_sec *sec,
 
         if (req->rq_pack_bulk) {
                 buflens[bufcnt++] = bulk_sec_desc_size(
-                                                req->rq_flvr.sf_bulk_csum, 0,
+                                                req->rq_flvr.sf_bulk_hash, 0,
                                                 req->rq_bulk_read);
         }
         txtsize = lustre_msg_size_v2(bufcnt, buflens);
@@ -2190,9 +2192,10 @@ int gss_svc_handle_data(struct ptlrpc_request *req,
         if (rc == 0)
                 RETURN(SECSVC_OK);
 
-        CERROR("svc %u failed: major 0x%08x: ctx %p(%u->%s)\n",
-               gw->gw_svc, major, grctx->src_ctx, grctx->src_ctx->gsc_uid,
-               libcfs_nid2str(req->rq_peer.nid));
+        CERROR("svc %u failed: major 0x%08x: req xid "LPU64" ctx %p idx "
+               LPX64"(%u->%s)\n", gw->gw_svc, major, req->rq_xid,
+               grctx->src_ctx, gss_handle_to_u64(&gw->gw_handle),
+               grctx->src_ctx->gsc_uid, libcfs_nid2str(req->rq_peer.nid));
 error:
         /* we only notify client in case of NO_CONTEXT/BAD_SIG, which
          * might happen after server reboot, to allow recovery. */
@@ -2406,7 +2409,7 @@ int gss_svc_alloc_rs(struct ptlrpc_request *req, int msglen)
 
                         bsd_off = ibufcnt;
                         ibuflens[ibufcnt++] = bulk_sec_desc_size(
-                                                grctx->src_reqbsd->bsd_csum_alg,
+                                                grctx->src_reqbsd->bsd_hash_alg,
                                                 0, req->rq_bulk_read);
                 }
 
@@ -2432,7 +2435,7 @@ int gss_svc_alloc_rs(struct ptlrpc_request *req, int msglen)
 
                         bsd_off = bufcnt;
                         buflens[bufcnt] = bulk_sec_desc_size(
-                                                grctx->src_reqbsd->bsd_csum_alg,
+                                                grctx->src_reqbsd->bsd_hash_alg,
                                                 0, req->rq_bulk_read);
                         if (svc == SPTLRPC_SVC_INTG)
                                 txtsize += buflens[bufcnt];

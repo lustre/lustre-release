@@ -431,9 +431,25 @@ static void dispose_ctx_list_kr(struct hlist_head *freelist)
 {
         struct hlist_node      *pos, *next;
         struct ptlrpc_cli_ctx  *ctx;
+        struct gss_cli_ctx     *gctx;
 
         hlist_for_each_entry_safe(ctx, pos, next, freelist, cc_cache) {
                 hlist_del_init(&ctx->cc_cache);
+
+                /* reverse ctx: update current seq to buddy svcctx if exist.
+                 * ideally this should be done at gss_cli_ctx_finalize(), but
+                 * the ctx destroy could be delayed by:
+                 *  1) ctx still has reference;
+                 *  2) ctx destroy is asynchronous;
+                 * and reverse import call inval_all_ctx() require this be done
+                 *_immediately_ otherwise newly created reverse ctx might copy
+                 * the very old sequence number from svcctx. */
+                gctx = ctx2gctx(ctx);
+                if (!rawobj_empty(&gctx->gc_svc_handle) &&
+                    sec_is_reverse(gctx->gc_base.cc_sec)) {
+                        gss_svc_upcall_update_sequence(&gctx->gc_svc_handle,
+                                        (__u32) atomic_read(&gctx->gc_seq));
+                }
 
                 /* we need to wakeup waiting reqs here. the context might
                  * be forced released before upcall finished, then the
@@ -1022,7 +1038,6 @@ void gss_cli_ctx_die_kr(struct ptlrpc_cli_ctx *ctx, int grace)
         LASSERT(atomic_read(&ctx->cc_refcount) > 0);
         LASSERT(ctx->cc_sec);
 
-        CWARN("ctx %p(%d)\n", ctx, atomic_read(&ctx->cc_refcount));
         cli_ctx_expire(ctx);
         kill_ctx_kr(ctx);
 }

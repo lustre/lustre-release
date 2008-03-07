@@ -920,6 +920,10 @@ mount_client() {
     grep " $1 " /proc/mounts || zconf_mount $HOSTNAME $*
 }
 
+umount_client() {
+    grep " $1 " /proc/mounts && zconf_umount `hostname` $*
+}
+
 # return value:
 # 0: success, the old identity set already.
 # 1: success, the old identity does not set.
@@ -975,7 +979,17 @@ setupall() {
     if [ "$MOUNT_2" ]; then
 	mount_client $MOUNT2
     fi
-    sleep 5
+
+    # by remounting mdt before ost, initial connect from mdt to ost might
+    # timeout because ost is not ready yet. wait some time to its fully
+    # recovery. initial obd_connect timeout is 5s; in GSS case it's preceeded
+    # by a context negotiation rpc with $TIMEOUT.
+    # FIXME better by monitoring import status.
+    if $GSS; then
+        sleep $((TIMEOUT + 5))
+    else
+        sleep 5
+    fi
 }
 
 mounted_lustre_filesystems() {
@@ -1523,6 +1537,12 @@ check_runas_id() {
     local myRUNAS_ID=$1
     shift
     local myRUNAS=$@
+
+    if $GSS_KRB5; then
+        $myRUNAS krb5_login.sh || \
+            error "Failed to refresh Kerberos V5 TGT for UID $myRUNAS_ID."
+    fi
+
     mkdir $DIR/d0_runas_test
     chmod 0755 $DIR
     chown $myRUNAS_ID:$myRUNAS_ID $DIR/d0_runas_test

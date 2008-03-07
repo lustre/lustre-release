@@ -184,17 +184,17 @@ int sptlrpc_flavor2name(struct sptlrpc_flavor *sf, char *buf, int bufsize)
 {
         char           *bulk;
 
-        if (sf->sf_bulk_priv != BULK_PRIV_ALG_NULL)
+        if (sf->sf_bulk_ciph != BULK_CIPH_ALG_NULL)
                 bulk = "bulkp";
-        else if (sf->sf_bulk_csum != BULK_CSUM_ALG_NULL)
+        else if (sf->sf_bulk_hash != BULK_HASH_ALG_NULL)
                 bulk = "bulki";
         else
                 bulk = "bulkn";
 
         snprintf(buf, bufsize, "%s-%s:%s/%s",
                  sptlrpc_rpcflavor2name(sf->sf_rpc), bulk,
-                 sptlrpc_bulk_csum_alg2name(sf->sf_bulk_csum),
-                 sptlrpc_bulk_priv_alg2name(sf->sf_bulk_priv));
+                 sptlrpc_get_hash_name(sf->sf_bulk_hash),
+                 sptlrpc_get_ciph_name(sf->sf_bulk_ciph));
         return 0;
 }
 EXPORT_SYMBOL(sptlrpc_flavor2name);
@@ -735,8 +735,8 @@ void sptlrpc_req_set_flavor(struct ptlrpc_request *req, int opcode)
 
         /* bulk security flag */
         if ((req->rq_bulk_read || req->rq_bulk_write) &&
-            (req->rq_flvr.sf_bulk_priv != BULK_PRIV_ALG_NULL ||
-             req->rq_flvr.sf_bulk_csum != BULK_CSUM_ALG_NULL))
+            (req->rq_flvr.sf_bulk_ciph != BULK_CIPH_ALG_NULL ||
+             req->rq_flvr.sf_bulk_hash != BULK_HASH_ALG_NULL))
                 req->rq_pack_bulk = 1;
 }
 
@@ -1099,19 +1099,19 @@ static void sptlrpc_import_sec_adapt_inplace(struct obd_import *imp,
                                              struct ptlrpc_sec *sec,
                                              struct sptlrpc_flavor *sf)
 {
-        if (sf->sf_bulk_priv != sec->ps_flvr.sf_bulk_priv ||
-            sf->sf_bulk_csum != sec->ps_flvr.sf_bulk_csum) {
+        if (sf->sf_bulk_ciph != sec->ps_flvr.sf_bulk_ciph ||
+            sf->sf_bulk_hash != sec->ps_flvr.sf_bulk_hash) {
                 CWARN("imp %p (%s->%s): changing bulk flavor %s/%s -> %s/%s\n",
                       imp, imp->imp_obd->obd_name,
                       obd_uuid2str(&imp->imp_connection->c_remote_uuid),
-                      sptlrpc_bulk_priv_alg2name(sec->ps_flvr.sf_bulk_priv),
-                      sptlrpc_bulk_csum_alg2name(sec->ps_flvr.sf_bulk_csum),
-                      sptlrpc_bulk_priv_alg2name(sf->sf_bulk_priv),
-                      sptlrpc_bulk_csum_alg2name(sf->sf_bulk_csum));
+                      sptlrpc_get_ciph_name(sec->ps_flvr.sf_bulk_ciph),
+                      sptlrpc_get_hash_name(sec->ps_flvr.sf_bulk_hash),
+                      sptlrpc_get_ciph_name(sf->sf_bulk_ciph),
+                      sptlrpc_get_hash_name(sf->sf_bulk_hash));
 
                 spin_lock(&sec->ps_lock);
-                sec->ps_flvr.sf_bulk_priv = sf->sf_bulk_priv;
-                sec->ps_flvr.sf_bulk_csum = sf->sf_bulk_csum;
+                sec->ps_flvr.sf_bulk_ciph = sf->sf_bulk_ciph;
+                sec->ps_flvr.sf_bulk_hash = sf->sf_bulk_hash;
                 spin_unlock(&sec->ps_lock);
         }
 
@@ -1157,8 +1157,8 @@ int sptlrpc_import_sec_adapt(struct obd_import *imp,
         } else {
                 /* reverse import, determine flavor from incoming reqeust */
                 sf.sf_rpc = rpc_flavor;
-                sf.sf_bulk_priv = BULK_PRIV_ALG_NULL;
-                sf.sf_bulk_csum = BULK_CSUM_ALG_NULL;
+                sf.sf_bulk_ciph = BULK_CIPH_ALG_NULL;
+                sf.sf_bulk_hash = BULK_HASH_ALG_NULL;
                 sf.sf_flags = PTLRPC_SEC_FL_REVERSE | PTLRPC_SEC_FL_ROOTONLY;
 
                 sp = sptlrpc_target_sec_part(imp->imp_obd);
@@ -1191,11 +1191,11 @@ int sptlrpc_import_sec_adapt(struct obd_import *imp,
                       svc_ctx == NULL ? "->" : "<-",
                       obd_uuid2str(&conn->c_remote_uuid),
                       sptlrpc_rpcflavor2name(sec->ps_flvr.sf_rpc),
-                      sptlrpc_bulk_csum_alg2name(sec->ps_flvr.sf_bulk_csum),
-                      sptlrpc_bulk_priv_alg2name(sec->ps_flvr.sf_bulk_priv),
+                      sptlrpc_get_hash_name(sec->ps_flvr.sf_bulk_hash),
+                      sptlrpc_get_ciph_name(sec->ps_flvr.sf_bulk_ciph),
                       sptlrpc_rpcflavor2name(sf.sf_rpc),
-                      sptlrpc_bulk_csum_alg2name(sf.sf_bulk_csum),
-                      sptlrpc_bulk_priv_alg2name(sf.sf_bulk_priv));
+                      sptlrpc_get_hash_name(sf.sf_bulk_hash),
+                      sptlrpc_get_ciph_name(sf.sf_bulk_ciph));
         } else {
                 CWARN("%simport %p (%s%s%s) netid %x: "
                       "select initial flavor (%s, %s/%s)\n",
@@ -1205,8 +1205,8 @@ int sptlrpc_import_sec_adapt(struct obd_import *imp,
                       obd_uuid2str(&conn->c_remote_uuid),
                       LNET_NIDNET(conn->c_self),
                       sptlrpc_rpcflavor2name(sf.sf_rpc),
-                      sptlrpc_bulk_csum_alg2name(sf.sf_bulk_csum),
-                      sptlrpc_bulk_priv_alg2name(sf.sf_bulk_priv));
+                      sptlrpc_get_hash_name(sf.sf_bulk_hash),
+                      sptlrpc_get_ciph_name(sf.sf_bulk_ciph));
         }
 
         mutex_down(&imp->imp_sec_mutex);
@@ -1547,6 +1547,15 @@ int sptlrpc_target_export_check(struct obd_export *exp,
                  * gss root ctx init */
                 if (!req->rq_auth_gss || !req->rq_ctx_init ||
                     (!req->rq_auth_usr_root && !req->rq_auth_usr_mdt)) {
+                        spin_unlock(&exp->exp_lock);
+                        return 0;
+                }
+
+                /* if flavor just changed, we should not proceed, just leave
+                 * it and current flavor will be discovered and replaced
+                 * shortly, and let _this_ rpc pass through */
+                if (exp->exp_flvr_changed) {
+                        LASSERT(exp->exp_flvr_adapt);
                         spin_unlock(&exp->exp_lock);
                         return 0;
                 }

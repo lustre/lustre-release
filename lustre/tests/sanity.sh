@@ -75,13 +75,6 @@ init_test_env $@
 
 [ "$SLOW" = "no" ] && EXCEPT_SLOW="24o 27m 36f 36g 51b 51c 60c 63 64b 68 71 73 77f 78 101 103 115 120g 124b"
 
-if $GSS_KRB5; then
-    $RUNAS krb5_login.sh || exit 1
-    $RUNAS -u $(($RUNAS_ID + 1)) krb5_login.sh || exit 1
-fi
-
-[ "$SLOW" = "no" ] && EXCEPT_SLOW="24o 27m 36f 36g 51b 51c 60c 63 64b 68 71 73 77f 78 101 103 115 120g 124b"
-
 SANITYLOG=${TESTSUITELOG:-$TMP/$(basename $0 .sh).log}
 FAIL_ON_ERROR=false
 
@@ -134,6 +127,7 @@ rm -rf $DIR/[Rdfs][0-9]*
 [ $UID -eq 0 -a $RUNAS_ID -eq 0 ] && error "\$RUNAS_ID set to 0, but \$UID is also 0!"
 
 check_runas_id $RUNAS_ID $RUNAS
+check_runas_id $(($RUNAS_ID + 1)) "$RUNAS -u $(($RUNAS_ID + 1))"
 
 build_test_filter
 
@@ -2981,7 +2975,6 @@ run_test 68 "support swapping to Lustre ========================"
 test_69() {
 	[ $(grep -c obdfilter $LPROC/devices) -eq 0 ] && \
 		skip "skipping test for remote OST" && return
-	$GSS && skip "gss with bulk security will triger oops. re-enable this after b10091 get fixed" && return
 
 	f="$DIR/$tfile"
 	touch $f

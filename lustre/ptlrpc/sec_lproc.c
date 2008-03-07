@@ -88,8 +88,8 @@ static int sptlrpc_info_lprocfs_seq_show(struct seq_file *seq, void *v)
         seq_printf(seq, "rpc flavor:    %s\n",
                    sptlrpc_rpcflavor2name(sec->ps_flvr.sf_rpc));
         seq_printf(seq, "bulk flavor:   %s/%s\n",
-                   sptlrpc_bulk_csum_alg2name(sec->ps_flvr.sf_bulk_csum),
-                   sptlrpc_bulk_priv_alg2name(sec->ps_flvr.sf_bulk_priv));
+                   sptlrpc_get_hash_name(sec->ps_flvr.sf_bulk_hash),
+                   sptlrpc_get_ciph_name(sec->ps_flvr.sf_bulk_ciph));
         seq_printf(seq, "flags:         %s\n", flags_str);
         seq_printf(seq, "id:            %d\n", sec->ps_id);
         seq_printf(seq, "refcount:      %d\n", atomic_read(&sec->ps_refcount));
