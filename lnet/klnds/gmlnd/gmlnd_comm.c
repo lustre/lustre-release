@@ -433,9 +433,11 @@ gmnal_rx_thread(void *arg)
 
         cfs_daemonize("gmnal_rxd");
 
-        down(&gmni->gmni_rx_mutex);
-
         while (!gmni->gmni_shutdown) {
+                rc = down_interruptible(&gmni->gmni_rx_mutex);
+                LASSERT (rc == 0 || rc == -EINTR);
+                if (rc != 0)
+                        continue;
 
                 spin_lock(&gmni->gmni_gm_lock);
                 rxevent = gm_blocking_receive_no_spin(gmni->gmni_port);
@@ -444,6 +446,7 @@ gmnal_rx_thread(void *arg)
                 switch (GM_RECV_EVENT_TYPE(rxevent)) {
                 default:
                         gm_unknown(gmni->gmni_port, rxevent);
+                        up(&gmni->gmni_rx_mutex);
                         continue;
 
                 case GM_FAST_RECV_EVENT:
@@ -503,11 +506,7 @@ gmnal_rx_thread(void *arg)
 
                 if (rc < 0)                     /* parse failure */
                         gmnal_post_rx(gmni, rx);
-
-                down(&gmni->gmni_rx_mutex);
         }
-
-        up(&gmni->gmni_rx_mutex);
 
         CDEBUG(D_NET, "exiting\n");
         atomic_dec(&gmni->gmni_nthreads);
