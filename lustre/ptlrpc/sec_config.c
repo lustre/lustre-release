@@ -82,6 +82,12 @@ EXPORT_SYMBOL(sptlrpc_target_sec_part);
  * user supplied flavor string parsing  *
  ****************************************/
 
+#ifdef HAVE_ADLER
+#define BULK_HASH_ALG_DEFAULT   BULK_HASH_ALG_ADLER32
+#else
+#define BULK_HASH_ALG_DEFAULT   BULK_HASH_ALG_CRC32
+#endif
+
 typedef enum {
         BULK_TYPE_N = 0,
         BULK_TYPE_I = 1,
@@ -108,7 +114,7 @@ static void get_flavor_by_rpc(struct sptlrpc_rule *rule, __u16 rpc_flavor)
         case SPTLRPC_FLVR_PLAIN:
         case SPTLRPC_FLVR_KRB5N:
         case SPTLRPC_FLVR_KRB5A:
-                rule->sr_flvr.sf_bulk_hash = BULK_HASH_ALG_ADLER32;
+                rule->sr_flvr.sf_bulk_hash = BULK_HASH_ALG_DEFAULT;
                 break;
         case SPTLRPC_FLVR_KRB5P:
                 rule->sr_flvr.sf_bulk_ciph = BULK_CIPH_ALG_AES128;
@@ -134,7 +140,7 @@ static void get_flavor_by_bulk(struct sptlrpc_rule *rule,
                 case SPTLRPC_FLVR_PLAIN:
                 case SPTLRPC_FLVR_KRB5N:
                 case SPTLRPC_FLVR_KRB5A:
-                        rule->sr_flvr.sf_bulk_hash = BULK_HASH_ALG_ADLER32;
+                        rule->sr_flvr.sf_bulk_hash = BULK_HASH_ALG_DEFAULT;
                         break;
                 case SPTLRPC_FLVR_KRB5I:
                 case SPTLRPC_FLVR_KRB5P:

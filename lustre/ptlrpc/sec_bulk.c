@@ -29,10 +29,8 @@
 #ifndef __KERNEL__
 #include <liblustre.h>
 #include <libcfs/list.h>
-#include <zlib.h>
 #else
 #include <linux/crypto.h>
-#include <linux/zutil.h>
 #endif
 
 #include <obd.h>
@@ -854,6 +852,7 @@ EXPORT_SYMBOL(bulk_sec_desc_unpack);
 
 #ifdef __KERNEL__
 
+#ifdef HAVE_ADLER
 static int do_bulk_checksum_adler32(struct ptlrpc_bulk_desc *desc, void *buf)
 {
         struct page    *page;
@@ -877,6 +876,7 @@ static int do_bulk_checksum_adler32(struct ptlrpc_bulk_desc *desc, void *buf)
         memcpy(buf, &adler32, sizeof(adler32));
         return 0;
 }
+#endif
 
 static int do_bulk_checksum_crc32(struct ptlrpc_bulk_desc *desc, void *buf)
 {
@@ -911,10 +911,17 @@ static int do_bulk_checksum(struct ptlrpc_bulk_desc *desc, __u32 alg, void *buf)
         LASSERT(alg > BULK_HASH_ALG_NULL &&
                 alg < BULK_HASH_ALG_MAX);
 
-        if (alg == BULK_HASH_ALG_ADLER32)
+        switch (alg) {
+        case BULK_HASH_ALG_ADLER32:
+#ifdef HAVE_ADLER
                 return do_bulk_checksum_adler32(desc, buf);
-        if (alg == BULK_HASH_ALG_CRC32)
+#else
+                CERROR("Adler32 not supported\n");
+                return -EINVAL;
+#endif
+        case BULK_HASH_ALG_CRC32:
                 return do_bulk_checksum_crc32(desc, buf);
+        }
 
         tfm = crypto_alloc_tfm(hash_types[alg].sht_tfm_name, 0);
         if (tfm == NULL) {
@@ -949,7 +956,7 @@ out_tfm:
 
 static int do_bulk_checksum(struct ptlrpc_bulk_desc *desc, __u32 alg, void *buf)
 {
-        __u32   csum32 = ~0;
+        __u32   csum32;
         int     i;
 
         LASSERT(alg == BULK_HASH_ALG_ADLER32 || alg == BULK_HASH_ALG_CRC32);
@@ -963,17 +970,27 @@ static int do_bulk_checksum(struct ptlrpc_bulk_desc *desc, __u32 alg, void *buf)
                 char *ptr = desc->bd_iov[i].iov_base;
                 int len = desc->bd_iov[i].iov_len;
 
-                if (alg == BULK_HASH_ALG_ADLER32)
+                switch (alg) {
+                case BULK_HASH_ALG_ADLER32:
+#ifdef HAVE_ADLER
                         csum32 = zlib_adler32(csum32, ptr, len);
-                else
+#else
+                        CERROR("Adler32 not supported\n");
+                        return -EINVAL;
+#endif
+                        break;
+                case BULK_HASH_ALG_CRC32:
                         csum32 = crc32_le(csum32, ptr, len);
+                        break;
+                }
         }
 
-        *((__u32 *) buf) = csum32;
+        csum32 = cpu_to_le32(csum32);
+        memcpy(buf, &csum32, sizeof(csum32));
         return 0;
 }
 
-#endif
+#endif /* __KERNEL__ */
 
 /*
  * perform algorithm @alg checksum on @desc, store result in @buf.
