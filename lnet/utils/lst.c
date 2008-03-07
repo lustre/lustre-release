@@ -1636,7 +1636,7 @@ lst_print_lnet_stat(char *name, int bwrt, int rdwr, int type)
                         i == 0 ? "Rates" : "Bandwidth", name);
 
                 for (j = start2; j <= end2; j++) {
-                        fprintf(stdout, "[%c] ", j == 0 ? 'W' : 'R');
+                        fprintf(stdout, "[%c] ", j == 0 ? 'R' : 'W');
 
                         if ((type & 1) != 0) {
                                 fprintf(stdout, i == 0 ? "Avg: %-8.0f RPC/s " :
