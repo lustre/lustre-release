@@ -229,6 +229,8 @@ run_test 4 "force cleanup ost, then cleanup"
 test_5a() {	# was test_5
 	setup
 	touch $DIR/$tfile || return 1
+	fuser -m -v $MOUNT && echo "$MOUNT is in use by user space process."
+
 	stop_mds -f || return 2
 
 	# cleanup may return an error from the failed
@@ -241,8 +243,8 @@ test_5a() {	# was test_5
 	kill -TERM $UMOUNT_PID
 	echo "waiting for umount to finish"
 	wait $UMOUNT_PID
-	if grep " $MOUNT " /etc/mtab; then
-		echo "test 5: mtab after failed umount"
+	if grep " $MOUNT " /proc/mounts; then
+		echo "test 5: /proc/mounts after failed umount"
 		umount $MOUNT &
 		UMOUNT_PID=$!
 		sleep 2
@@ -250,7 +252,7 @@ test_5a() {	# was test_5
 		kill -TERM $UMOUNT_PID
 		echo "waiting for umount to finish"
 		wait $UMOUNT_PID
-		grep " $MOUNT " /etc/mtab && echo "test 5: mtab after second umount" && return 11
+		grep " $MOUNT " /proc/mounts && echo "test 5: /proc/mounts after second umount" && return 11
 	fi
 
 	manual_umount_client
