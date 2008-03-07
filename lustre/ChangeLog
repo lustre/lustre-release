@@ -25,9 +25,9 @@ Severity   : major
 Frequency  : rare, depends on device drivers and load
 Bugzilla   : 14529
 Description: MDS or OSS nodes crash due to stack overflow
-Details    : Code changes in 1.6.5 increased the stack usage of some functions.
+Details    : Code changes in 1.6.4 increased the stack usage of some functions.
 	     In some cases, in conjunction with device drivers that use a lot
-	     of stack the MDS (or possibly OSS) service threads could overflow
+	     of stack, the MDS (or possibly OSS) service threads could overflow
 	     the stack.  One change which was identified to consume additional
 	     stack has been reworked to avoid the extra stack usage.
 
@@ -384,7 +384,7 @@ Severity   : enhancement
 Bugzilla   : 14748
 Description: Optimize ldlm waiting list processing for PR extent locks
 Details    : When processing waiting list for read extent lock and meeting read
-             lock that is same or wider to it that is not contended, skip
+	     lock that is same or wider to it that is not contended, skip
 	     processing rest of the list and immediatelly return current
 	     status of conflictness, since we are guaranteed there are no
 	     conflicting locks in the rest of the list.
@@ -393,19 +393,20 @@ Severity   : normal
 Bugzilla   : 14774
 Description: Time out and refuse to reconnect
 Details    : When the failover node is the primary node, it is possible
-             to have two identical connections in imp_conn_list. We must
-             compare not conn's pointers but NIDs, otherwise we
+	     to have two identical connections in imp_conn_list. We must
+	     compare not conn's pointers but NIDs, otherwise we
 	     can defeat connection throttling.
 
 Severity   : major
 Bugzilla   : 14775
 Description: Client not clear own cache if answer to reconnect is lost.
-Details    : client gets evicted from server. Now client also thinks it is
-             disconnected (ot gets enotconn on its operation) and decides to
-             reconnect. Server receives reconnect message, but cannot find export.
-             New export is created that is fully valid (new cookie!), but client
-             gets a reply that the export is new, and so no recovery should be
-             performed.
+Details    : Client gets evicted from server.  Now client also thinks it is
+	     disconnected (or gets ENOTCONN on its operation) and decides to
+	     reconnect.  Server receives reconnect message, but cannot find
+	     export.  New export is created that is fully valid (new cookie!),
+	     but reply is lost and not reported to client.  Client reconnects
+	     again and gets back a just-created connection, but it is not new
+	     so client thinks it was not evicted and does not do recovery.
 
 Severity   : normal
 Bugzilla   : 14483
