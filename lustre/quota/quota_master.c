@@ -314,7 +314,7 @@ int dqacq_handler(struct obd_device *obd, struct qunit_data *qdata, int opc)
         struct lustre_quota_info *info = &mds->mds_quota_info;
         struct lustre_dquot *dquot = NULL;
         __u64 *usage = NULL;
-        __u32 hlimit = 0, slimit = 0;
+        __u64 hlimit = 0, slimit = 0;
         time_t *time = NULL;
         unsigned int grace = 0;
         struct lustre_qunit_size *lqs = NULL;

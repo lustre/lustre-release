@@ -251,7 +251,7 @@ int lov_quota_ctl(struct obd_export *exp, struct obd_quotactl *oqctl)
         struct obd_device *obd = class_exp2obd(exp);
         struct lov_obd *lov = &obd->u.lov;
         __u64 curspace = 0;
-        __u32 bhardlimit = 0;
+        __u64 bhardlimit = 0;
         int i, rc = 0;
         ENTRY;
 
