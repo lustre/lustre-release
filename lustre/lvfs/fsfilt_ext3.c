@@ -1569,12 +1569,12 @@ struct chk_dqblk{
         struct list_head        dqb_list;        /* in list also */
         qid_t                   dqb_id;          /* uid/gid */
         short                   dqb_type;        /* USRQUOTA/GRPQUOTA */
-        __u32                   dqb_bhardlimit;  /* block hard limit */
-        __u32                   dqb_bsoftlimit;  /* block soft limit */
+        qsize_t                 dqb_bhardlimit;  /* block hard limit */
+        qsize_t                 dqb_bsoftlimit;  /* block soft limit */
         qsize_t                 dqb_curspace;    /* current space */
-        __u32                   dqb_ihardlimit;  /* inode hard limit */
-        __u32                   dqb_isoftlimit;  /* inode soft limit */
-        __u32                   dqb_curinodes;   /* current inodes */
+        qsize_t                 dqb_ihardlimit;  /* inode hard limit */
+        qsize_t                 dqb_isoftlimit;  /* inode soft limit */
+        qsize_t                 dqb_curinodes;   /* current inodes */
         __u64                   dqb_btime;       /* block grace time */
         __u64                   dqb_itime;       /* inode grace time */
         __u32                   dqb_valid;       /* flag for above fields */
