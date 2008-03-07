@@ -368,6 +368,20 @@ static int client_common_fill_super(struct super_block *sb, char *md, char *dt)
         if (sbi->ll_flags & LL_SBI_OSS_CAPA)
                 data->ocd_connect_flags |= OBD_CONNECT_OSS_CAPA;
 
+        if (!OBD_FAIL_CHECK(OBD_FAIL_OSC_CONNECT_CKSUM)) {
+                /* OBD_CONNECT_CKSUM should always be set, even if checksums are
+                 * disabled by default, because it can still be enabled on the
+                 * fly via /proc. As a consequence, we still need to come to an
+                 * agreement on the supported algorithms at connect time */
+                data->ocd_connect_flags |= OBD_CONNECT_CKSUM;
+
+                if (OBD_FAIL_CHECK(OBD_FAIL_OSC_CKSUM_ADLER_ONLY))
+                        data->ocd_cksum_types = OBD_CKSUM_ADLER;
+                else
+                        /* send the list of supported checksum types */
+                        data->ocd_cksum_types = OBD_CKSUM_ALL;
+        }
+
 #ifdef HAVE_LRU_RESIZE_SUPPORT
         data->ocd_connect_flags |= OBD_CONNECT_LRU_RESIZE;
 #endif

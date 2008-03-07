@@ -301,6 +301,62 @@ static int osc_wr_checksum(struct file *file, const char *buffer,
         return count;
 }
 
+static int osc_rd_checksum_type(char *page, char **start, off_t off, int count,
+                                int *eof, void *data)
+{
+        struct obd_device *obd = data;
+        int i, len =0;
+        DECLARE_CKSUM_NAME;
+
+        if (obd == NULL)
+                return 0;
+
+        for (i = 0; i < ARRAY_SIZE(cksum_name) && len < count; i++) {
+                if (((1 << i) & obd->u.cli.cl_supp_cksum_types) == 0)
+                        continue;
+                if (obd->u.cli.cl_cksum_type == (1 << i))
+                        len += snprintf(page + len, count - len, "[%s] ",
+                                        cksum_name[i]);
+                else
+                        len += snprintf(page + len, count - len, "%s ",
+                                        cksum_name[i]);
+        }
+        if (len < count)
+                len += sprintf(page + len, "\n");
+        return len;
+}
+
+static int osc_wd_checksum_type(struct file *file, const char *buffer,
+                                unsigned long count, void *data)
+{
+        struct obd_device *obd = data;
+        int i;
+        DECLARE_CKSUM_NAME;
+        char kernbuf[10];
+
+        if (obd == NULL)
+                return 0;
+
+        if (count > sizeof(kernbuf) - 1)
+                return -EINVAL;
+        if (copy_from_user(kernbuf, buffer, count))
+                return -EFAULT;
+        if (count > 0 && kernbuf[count - 1] == '\n')
+                kernbuf[count - 1] = '\0';
+        else
+                kernbuf[count] = '\0';
+
+        for (i = 0; i < ARRAY_SIZE(cksum_name); i++) {
+                if (((1 << i) & obd->u.cli.cl_supp_cksum_types) == 0)
+                        continue;
+                if (!strcmp(kernbuf, cksum_name[i])) {
+                       obd->u.cli.cl_cksum_type = 1 << i;
+                       return count;
+                }
+        }
+        return -EINVAL;
+}
+
 static int osc_rd_resend_count(char *page, char **start, off_t off, int count,
                                int *eof, void *data)
 {
@@ -353,6 +409,7 @@ static struct lprocfs_vars lprocfs_osc_obd_vars[] = {
         { "prealloc_next_id", osc_rd_prealloc_next_id, 0, 0 },
         { "prealloc_last_id", osc_rd_prealloc_last_id, 0, 0 },
         { "checksums",       osc_rd_checksum, osc_wr_checksum, 0 },
+        { "checksum_type",   osc_rd_checksum_type, osc_wd_checksum_type, 0 },
         { "resend_count",    osc_rd_resend_count, osc_wr_resend_count, 0},
         { 0 }
 };

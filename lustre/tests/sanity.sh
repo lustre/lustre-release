@@ -3270,10 +3270,22 @@ set_checksums()
 	for f in $LPROC/osc/*/checksums; do
 		echo $1 >> $f
 	done
-
 	return 0
 }
 
+export ORIG_CSUM_TYPE=""
+CKSUM_TYPES=${CKSUM_TYPES:-"crc32 adler"}
+set_checksum_type()
+{
+	[ "$ORIG_CSUM_TYPE" ] || \
+		ORIG_CSUM_TYPE=`sed 's/.*\[\(.*\)\].*/\1/g' \
+	                        $LPROC/osc/*osc-[^mM]*/checksum_type | head -n1`
+	for f in $LPROC/osc/*osc-*/checksum_type; do
+		echo $1 > $f
+	done
+	log "set checksum type to $1"
+	return 0
+}
 F77_TMP=$TMP/f77-temp
 F77SZ=8
 setup_f77() {
@@ -3303,13 +3315,17 @@ run_test 77b "checksum error on client write ===================="
 
 test_77c() { # bug 10889
 	[ ! -f $DIR/f77b ] && skip "requires 77b - skipping" && return  
-	cancel_lru_locks osc
-	#define OBD_FAIL_OSC_CHECKSUM_RECEIVE    0x408
-	sysctl -w lustre.fail_loc=0x80000408
 	set_checksums 1
-	cmp $F77_TMP $DIR/f77b || error "file compare failed"
-	sysctl -w lustre.fail_loc=0
+	for algo in $CKSUM_TYPES; do
+		cancel_lru_locks osc
+		set_checksum_type $algo
+		#define OBD_FAIL_OSC_CHECKSUM_RECEIVE    0x408
+		sysctl -w lustre.fail_loc=0x80000408
+		cmp $F77_TMP $DIR/f77b || error "file compare failed"
+		sysctl -w lustre.fail_loc=0
+	done
 	set_checksums 0
+	set_checksum_type $ORIG_CSUM_TYPE
 }
 run_test 77c "checksum error on client read ==================="
 
@@ -3338,12 +3354,17 @@ test_77e() { # bug 10889
 run_test 77e "checksum error on OST direct read ================"
 
 test_77f() { # bug 10889
-	#define OBD_FAIL_OSC_CHECKSUM_SEND       0x409
-	sysctl -w lustre.fail_loc=0x409
 	set_checksums 1
-	directio write $DIR/f77 0 $F77SZ $((1024 * 1024)) && \
-		error "direct write succeeded"
-	sysctl -w lustre.fail_loc=0
+	for algo in $CKSUM_TYPES; do
+		cancel_lru_locks osc
+		set_checksum_type $algo
+		#define OBD_FAIL_OSC_CHECKSUM_SEND       0x409
+		sysctl -w lustre.fail_loc=0x409
+		directio write $DIR/f77 0 $F77SZ $((1024 * 1024)) && \
+			error "direct write succeeded"
+		sysctl -w lustre.fail_loc=0
+	done
+	set_checksum_type $ORIG_CSUM_TYPE
 	set_checksums 0
 }
 run_test 77f "repeat checksum error on write (expect error) ===="
@@ -3375,6 +3396,32 @@ test_77h() { # bug 10889
 	set_checksums 0
 }
 run_test 77h "checksum error on OST read ======================="
+
+test_77i() { # bug 13805
+	#define OBD_FAIL_OSC_CONNECT_CKSUM       0x40b
+	sysctl -w lustre.fail_loc=0x40b
+	remount_client $MOUNT
+	sysctl -w lustre.fail_loc=0
+	for f in $LPROC/osc/*osc-[^mM]*/checksum_type; do
+		algo=`sed 's/.*\[\(.*\)\].*/\1/g' $f`
+		[ "$algo" = "crc32" ] || error "algo set to $algo instead of crc32"
+	done
+	remount_client $MOUNT
+}
+run_test 77i "client not supporting OSD_CONNECT_CKSUM =========="
+
+test_77j() { # bug 13805
+	#define OBD_FAIL_OSC_CKSUM_ADLER_ONLY    0x40c
+	sysctl -w lustre.fail_loc=0x40c
+	remount_client $MOUNT
+	sysctl -w lustre.fail_loc=0
+	for f in $LPROC/osc/*osc-[^mM]*/checksum_type; do
+		algo=`sed 's/.*\[\(.*\)\].*/\1/g' $f`
+		[ "$algo" = "adler" ] || error "algo set to $algo instead of adler"
+	done
+	remount_client $MOUNT
+}
+run_test 77j "client only supporting ADLER32 ===================="
 
 [ "$ORIG_CSUM" ] && set_checksums $ORIG_CSUM || true
 rm -f $F77_TMP

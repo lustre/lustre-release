@@ -974,12 +974,14 @@ static inline int can_merge_pages(struct brw_page *p1, struct brw_page *p2)
 }
 
 static obd_count osc_checksum_bulk(int nob, obd_count pg_count,
-                                   struct brw_page **pga, int opc)
+                                   struct brw_page **pga, int opc,
+                                   cksum_type_t cksum_type)
 {
-        __u32 cksum = ~0;
+        __u32 cksum;
         int i = 0;
 
         LASSERT (pg_count > 0);
+        cksum = init_checksum(cksum_type);
         while (nob > 0 && pg_count > 0) {
                 unsigned char *ptr = cfs_kmap(pga[i]->pg);
                 int off = pga[i]->off & ~CFS_PAGE_MASK;
@@ -990,7 +992,7 @@ static obd_count osc_checksum_bulk(int nob, obd_count pg_count,
                 if (i == 0 && opc == OST_READ &&
                     OBD_FAIL_CHECK(OBD_FAIL_OSC_CHECKSUM_RECEIVE))
                         memcpy(ptr + off, "bad1", min(4, nob));
-                cksum = crc32_le(cksum, ptr + off, count);
+                cksum = compute_checksum(cksum, ptr + off, count, cksum_type);
                 cfs_kunmap(pga[i]->pg);
                 LL_CDEBUG_PAGE(D_PAGE, pga[i]->pg, "off %d checksum %x\n",
                                off, cksum);
@@ -1126,14 +1128,23 @@ static int osc_brw_prep_request(int cmd, struct client_obd *cli,struct obdo *oa,
         if (opc == OST_WRITE) {
                 if (unlikely(cli->cl_checksum) &&
                     req->rq_flvr.sf_bulk_hash == BULK_HASH_ALG_NULL) {
-                        body->oa.o_valid |= OBD_MD_FLCKSUM;
+                        /* store cl_cksum_type in a local variable since
+                         * it can be changed via lprocfs */
+                        cksum_type_t cksum_type = cli->cl_cksum_type;
+
+                        if ((body->oa.o_valid & OBD_MD_FLFLAGS) == 0)
+                                oa->o_flags = body->oa.o_flags = 0;
+                        body->oa.o_flags |= cksum_type_pack(cksum_type);
+                        body->oa.o_valid |= OBD_MD_FLCKSUM | OBD_MD_FLFLAGS;
                         body->oa.o_cksum = osc_checksum_bulk(requested_nob,
                                                              page_count, pga,
-                                                             OST_WRITE);
+                                                             OST_WRITE,
+                                                             cksum_type);
                         CDEBUG(D_PAGE, "checksum at write origin: %x\n",
                                body->oa.o_cksum);
                         /* save this in 'oa', too, for later checking */
-                        oa->o_valid |= OBD_MD_FLCKSUM;
+                        oa->o_valid |= OBD_MD_FLCKSUM | OBD_MD_FLFLAGS;
+                        oa->o_flags |= cksum_type_pack(cksum_type);
                 } else {
                         /* clear out the checksum flag, in case this is a
                          * resend but cl_checksum is no longer set. b=11238 */
@@ -1145,8 +1156,12 @@ static int osc_brw_prep_request(int cmd, struct client_obd *cli,struct obdo *oa,
                                      sizeof(__u32) * niocount);
         } else {
                 if (unlikely(cli->cl_checksum) &&
-                    req->rq_flvr.sf_bulk_hash == BULK_HASH_ALG_NULL)
-                        body->oa.o_valid |= OBD_MD_FLCKSUM;
+                    req->rq_flvr.sf_bulk_hash == BULK_HASH_ALG_NULL) {
+                        if ((body->oa.o_valid & OBD_MD_FLFLAGS) == 0)
+                                body->oa.o_flags = 0;
+                        body->oa.o_flags |= cksum_type_pack(cli->cl_cksum_type);
+                        body->oa.o_valid |= OBD_MD_FLCKSUM | OBD_MD_FLFLAGS;
+                }
                 req_capsule_set_size(pill, &RMF_NIOBUF_REMOTE, RCL_SERVER, 0);
                 /* 1 RC for the whole I/O */
         }
@@ -1172,21 +1187,31 @@ static int osc_brw_prep_request(int cmd, struct client_obd *cli,struct obdo *oa,
 }
 
 static int check_write_checksum(struct obdo *oa, const lnet_process_id_t *peer,
-                                __u32 client_cksum, __u32 server_cksum,
-                                int nob, obd_count page_count,
-                                struct brw_page **pga)
+                                __u32 client_cksum, __u32 server_cksum, int nob,
+                                obd_count page_count, struct brw_page **pga,
+                                cksum_type_t client_cksum_type)
 {
         __u32 new_cksum;
         char *msg;
+        cksum_type_t cksum_type;
 
         if (server_cksum == client_cksum) {
                 CDEBUG(D_PAGE, "checksum %x confirmed\n", client_cksum);
                 return 0;
         }
 
-        new_cksum = osc_checksum_bulk(nob, page_count, pga, OST_WRITE);
+        if (oa->o_valid & OBD_MD_FLFLAGS)
+                cksum_type = cksum_type_unpack(oa->o_flags);
+        else
+                cksum_type = OBD_CKSUM_CRC32;
 
-        if (new_cksum == server_cksum)
+        new_cksum = osc_checksum_bulk(nob, page_count, pga, OST_WRITE,
+                                      cksum_type);
+
+        if (cksum_type != client_cksum_type)
+                msg = "the server did not use the checksum type specified in "
+                      "the original request - likely a protocol problem";
+        else if (new_cksum == server_cksum)
                 msg = "changed on the client after we checksummed it - "
                       "likely false positive due to mmap IO (bug 11742)";
         else if (new_cksum == client_cksum)
@@ -1206,8 +1231,9 @@ static int check_write_checksum(struct obdo *oa, const lnet_process_id_t *peer,
                            oa->o_valid & OBD_MD_FLGROUP ? oa->o_gr : (__u64)0,
                            pga[0]->off,
                            pga[page_count-1]->off + pga[page_count-1]->count - 1);
-        CERROR("original client csum %x, server csum %x, client csum now %x\n",
-               client_cksum, server_cksum, new_cksum);
+        CERROR("original client csum %x (type %x), server csum %x (type %x), "
+               "client csum now %x\n", client_cksum, client_cksum_type,
+               server_cksum, cksum_type, new_cksum);
         return 1;        
 }
 
@@ -1243,7 +1269,7 @@ static int osc_brw_fini_request(struct ptlrpc_request *req, int rc)
         if (rc < 0)
                 RETURN(rc);
 
-        if (unlikely(aa->aa_oa->o_valid & OBD_MD_FLCKSUM))
+        if (aa->aa_oa->o_valid & OBD_MD_FLCKSUM)
                 client_cksum = aa->aa_oa->o_cksum; /* save for later */
 
         osc_update_grant(cli, body);
@@ -1255,13 +1281,11 @@ static int osc_brw_fini_request(struct ptlrpc_request *req, int rc)
                 }
                 LASSERT(req->rq_bulk->bd_nob == aa->aa_requested_nob);
 
-                if (unlikely((aa->aa_oa->o_valid & OBD_MD_FLCKSUM) &&
-                             client_cksum &&
-                             check_write_checksum(&body->oa, peer, client_cksum,
-                                                  body->oa.o_cksum,
-                                                  aa->aa_requested_nob,
-                                                  aa->aa_page_count,
-                                                  aa->aa_ppga)))
+                if ((aa->aa_oa->o_valid & OBD_MD_FLCKSUM) && client_cksum &&
+                    check_write_checksum(&body->oa, peer, client_cksum,
+                                         body->oa.o_cksum, aa->aa_requested_nob,
+                                         aa->aa_page_count, aa->aa_ppga,
+                                         cksum_type_unpack(aa->aa_oa->o_flags)))
                         RETURN(-EAGAIN);
 
                 if (sptlrpc_cli_unwrap_bulk_write(req, req->rq_bulk))
@@ -1292,14 +1316,20 @@ static int osc_brw_fini_request(struct ptlrpc_request *req, int rc)
                                          aa->aa_ppga))
                 GOTO(out, rc = -EAGAIN);
 
-        if (unlikely(body->oa.o_valid & OBD_MD_FLCKSUM)) {
+        if (body->oa.o_valid & OBD_MD_FLCKSUM) {
                 static int cksum_counter;
                 __u32      server_cksum = body->oa.o_cksum;
                 char      *via;
                 char      *router;
+                cksum_type_t cksum_type;
 
+                if (body->oa.o_valid & OBD_MD_FLFLAGS)
+                        cksum_type = cksum_type_unpack(body->oa.o_flags);
+                else
+                        cksum_type = OBD_CKSUM_CRC32;
                 client_cksum = osc_checksum_bulk(rc, aa->aa_page_count,
-                                                 aa->aa_ppga, OST_READ);
+                                                 aa->aa_ppga, OST_READ,
+                                                 cksum_type);
 
                 if (peer->nid == req->rq_bulk->bd_sender) {
                         via = router = "";
@@ -1332,8 +1362,8 @@ static int osc_brw_fini_request(struct ptlrpc_request *req, int rc)
                                            aa->aa_ppga[aa->aa_page_count-1]->off +
                                            aa->aa_ppga[aa->aa_page_count-1]->count -
                                                                         1);
-                        CERROR("client %x, server %x\n",
-                               client_cksum, server_cksum);
+                        CERROR("client %x, server %x, cksum_type %x\n",
+                               client_cksum, server_cksum, cksum_type);
                         cksum_counter = 0;
                         aa->aa_oa->o_cksum = client_cksum;
                         rc = -EAGAIN;
@@ -1421,7 +1451,7 @@ int osc_brw_redo_request(struct ptlrpc_request *request,
                 CERROR("too many resend retries, returning error\n");
                 RETURN(-EIO);
         }
-        
+
         DEBUG_REQ(D_ERROR, request, "redo for recoverable error");
 /*
         body = lustre_msg_buf(request->rq_reqmsg, REQ_REC_OFF, sizeof(*body));
@@ -1439,7 +1469,7 @@ int osc_brw_redo_request(struct ptlrpc_request *request,
                 RETURN(rc);
 
         client_obd_list_lock(&aa->aa_cli->cl_loi_list_lock);
-   
+
         list_for_each_entry(oap, &aa->aa_oaps, oap_rpc_item) {
                 if (oap->oap_request != NULL) {
                         LASSERTF(request == oap->oap_request,
@@ -1447,7 +1477,7 @@ int osc_brw_redo_request(struct ptlrpc_request *request,
                                  request, oap->oap_request);
                         if (oap->oap_interrupted) {
                                 client_obd_list_unlock(&aa->aa_cli->cl_loi_list_lock);
-                                ptlrpc_req_finished(new_req);                        
+                                ptlrpc_req_finished(new_req);
                                 RETURN(-EINTR);
                         }
                 }

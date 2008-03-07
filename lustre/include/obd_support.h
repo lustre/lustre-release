@@ -215,6 +215,8 @@ int __obd_fail_check_set(__u32 id, __u32 value, int set);
 #define OBD_FAIL_OSC_CHECKSUM_RECEIVE    0x408
 #define OBD_FAIL_OSC_CHECKSUM_SEND       0x409
 #define OBD_FAIL_OSC_BRW_PREP_REQ2       0x40a
+#define OBD_FAIL_OSC_CONNECT_CKSUM       0x40b
+#define OBD_FAIL_OSC_CKSUM_ADLER_ONLY    0x40c
 
 #define OBD_FAIL_PTLRPC                  0x500
 #define OBD_FAIL_PTLRPC_ACK              0x501

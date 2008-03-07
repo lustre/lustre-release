@@ -174,9 +174,9 @@ static void check_obd_connect_data(void)
         CHECK_MEMBER(obd_connect_data, ocd_nllg);
         CHECK_MEMBER(obd_connect_data, ocd_transno);
         CHECK_MEMBER(obd_connect_data, ocd_group);
+        CHECK_MEMBER(obd_connect_data, ocd_cksum_types);
         CHECK_MEMBER(obd_connect_data, padding1);
         CHECK_MEMBER(obd_connect_data, padding2);
-        CHECK_MEMBER(obd_connect_data, padding3);
 
         CHECK_CDEFINE(OBD_CONNECT_RDONLY);
         CHECK_CDEFINE(OBD_CONNECT_INDEX);
@@ -283,6 +283,11 @@ check_obdo(void)
         CHECK_CDEFINE(OBD_FL_DEBUG_CHECK);
         CHECK_CDEFINE(OBD_FL_NO_USRQUOTA);
         CHECK_CDEFINE(OBD_FL_NO_GRPQUOTA);
+        CHECK_CDEFINE(OBD_FL_TRUNCLOCK);
+        CHECK_CDEFINE(OBD_FL_CKSUM_CRC32);
+        CHECK_CDEFINE(OBD_FL_CKSUM_ADLER);
+        CHECK_CDEFINE(OBD_CKSUM_CRC32);
+        CHECK_CDEFINE(OBD_CKSUM_ADLER);
 }
 
 static void

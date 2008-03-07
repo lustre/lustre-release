@@ -453,9 +453,13 @@ struct client_obd {
         atomic_t                 cl_mgc_refcount;
         struct obd_export       *cl_mgc_mgsexp;
 
-        /* Flags section */
-        unsigned long            cl_checksum:1; /* debug checksums */
-
+        /* checksumming for data sent over the network */
+        unsigned int             cl_checksum:1; /* 0 = disabled, 1 = enabled */
+        /* supported checksum types that are worked out at connect time */
+        __u32                    cl_supp_cksum_types;
+        /* checksum algorithm to be used */
+        cksum_type_t             cl_cksum_type;
+ 
         /* also protected by the poorly named _loi_list_lock lock above */
         struct osc_async_rc      cl_ar;
 
@@ -1437,5 +1441,25 @@ static inline struct lustre_capa *oinfo_capa(struct obd_info *oinfo)
 {
         return oinfo->oi_capa;
 }
+
+/*
+ * Checksums
+ */
+
+#ifdef HAVE_ADLER
+/* Default preferred checksum algorithm to use (if supported by the server) */
+#define OSC_DEFAULT_CKSUM OBD_CKSUM_ADLER
+/* Adler-32 is supported */
+#define CHECKSUM_ADLER OBD_CKSUM_ADLER
+#else
+#define OSC_DEFAULT_CKSUM OBD_CKSUM_CRC32
+#define CHECKSUM_ADLER 0
+#endif
+
+#define OBD_CKSUM_ALL (OBD_CKSUM_CRC32 | CHECKSUM_ADLER)
+
+/* Checksum algorithm names. Must be defined in the same order as the
+ * OBD_CKSUM_* flags. */
+#define DECLARE_CKSUM_NAME char *cksum_name[] = {"crc32", "adler"}
 
 #endif /* __OBD_H */

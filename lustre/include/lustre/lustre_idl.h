@@ -578,7 +578,7 @@ extern void lustre_swab_ptlrpc_body(struct ptlrpc_body *pb);
                                 OBD_CONNECT_TRUNCLOCK | OBD_CONNECT_INDEX | \
                                 OBD_CONNECT_BRW_SIZE | OBD_CONNECT_QUOTA64 | \
                                 OBD_CONNECT_OSS_CAPA | OBD_CONNECT_CANCELSET | \
-                                OBD_CONNECT_FID | \
+                                OBD_CONNECT_FID | OBD_CONNECT_CKSUM | \
                                 LRU_RESIZE_CONNECT_FLAG)
 #define ECHO_CONNECT_SUPPORTED (0)
 #define MGS_CONNECT_SUPPORTED  (OBD_CONNECT_VERSION | OBD_CONNECT_FID)
@@ -607,12 +607,23 @@ struct obd_connect_data {
         __u32 ocd_nllg;          /* non-local-lustre-group */
         __u64 ocd_transno;       /* first transno from client to be replayed */
         __u32 ocd_group;         /* MDS group on OST */
-        __u32 padding1;          /* also fix lustre_swab_connect */
+        __u32 ocd_cksum_types;   /* supported checksum algorithms */
+        __u64 padding1;          /* also fix lustre_swab_connect */
         __u64 padding2;          /* also fix lustre_swab_connect */
-        __u64 padding3;          /* also fix lustre_swab_connect */
 };
 
 extern void lustre_swab_connect(struct obd_connect_data *ocd);
+
+/*
+ * Supported checksum algorithms. Up to 32 checksum types are supported.
+ * (32-bit mask stored in obd_connect_data::ocd_cksum_types)
+ * Please update DECLARE_CKSUM_NAME/OBD_CKSUM_ALL in obd.h when adding a new
+ * algorithm and also the OBD_FL_CKSUM* flags.
+ */
+typedef enum {
+        OBD_CKSUM_CRC32 = 0x00000001,
+        OBD_CKSUM_ADLER = 0x00000002,
+} cksum_type_t;
 
 /*
  *   OST requests: OBDO & OBD request records
@@ -672,6 +683,13 @@ typedef uint32_t        obd_count;
  * functionality.
  */
 #define OBD_FL_TRUNCLOCK     (0x00000800)
+
+/*
+ * Checksum types
+ */
+#define OBD_FL_CKSUM_CRC32    (0x00001000)
+#define OBD_FL_CKSUM_ADLER    (0x00002000)
+#define OBD_FL_CKSUM_ALL      (OBD_FL_CKSUM_CRC32 | OBD_FL_CKSUM_ADLER)
 
 /*
  * This should not be smaller than sizeof(struct lustre_handle) + sizeof(struct

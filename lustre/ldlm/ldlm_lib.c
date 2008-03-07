@@ -276,7 +276,14 @@ int client_obd_setup(struct obd_device *obddev, struct lustre_cfg *lcfg)
         cfs_waitq_init(&cli->cl_destroy_waitq);
         atomic_set(&cli->cl_destroy_in_flight, 0);
 #ifdef ENABLE_CHECKSUM
+        /* Turn on checksumming by default. */
         cli->cl_checksum = 1;
+        /*
+         * The supported checksum types will be worked out at connect time
+         * Set cl_chksum* to CRC32 for now to avoid returning screwed info
+         * through procfs.
+         */
+        cli->cl_cksum_type = cli->cl_supp_cksum_types = OBD_CKSUM_CRC32;
 #endif
         atomic_set(&cli->cl_resends, OSC_DEFAULT_RESENDS);
 

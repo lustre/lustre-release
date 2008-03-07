@@ -955,6 +955,12 @@ switch_identity() {
     fi
 }
 
+remount_client()
+{
+	zconf_umount `hostname` $1 || error "umount failed"
+	zconf_mount `hostname` $1 || error "mount failed"
+}
+
 setupall() {
     load_modules
     init_gss

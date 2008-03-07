@@ -22,10 +22,10 @@ Frequency  : occasional
 Bugzilla   : 13537
 Description: Correctly check stale fid, not start epoch if ost not support SOM
 Details    : open with flag O_CREATE need set old fid in op_fid3 because op_fid2
-             overwrited with new generated fid, but mds can anwer with one of these
-             two fids and both is not stale. setattr incorectly start epoch and
-             assume will be called done_writeting, but without SOM done_writing
-             never called.
+	     overwrited with new generated fid, but mds can anwer with one of these
+	     two fids and both is not stale. setattr incorectly start epoch and
+	     assume will be called done_writeting, but without SOM done_writing
+	     never called.
 
 Severity   : major
 Frequency  : rare, depends on device drivers and load
@@ -41,9 +41,9 @@ Severity   : normal
 Frequency  : occasional
 Bugzilla   : 13730
 Description: Do not fail import if osc_interpret_create gets -EAGAIN
-Details    : If osc_interpret_create got -EAGAIN it immediately exits and 
-	     wakeup oscc_waitq.  After wakeup oscc_wait_for_objects call 
-	     oscc_has_objects and see OSC has no objests and call 
+Details    : If osc_interpret_create got -EAGAIN it immediately exits and
+	     wakeup oscc_waitq.  After wakeup oscc_wait_for_objects call
+	     oscc_has_objects and see OSC has no objests and call
 	     oscc_internal_create to resend create request.
 
 Severity   : enhancement
@@ -84,7 +84,7 @@ Details    : Don't allow skipping OSTs if index has been specified, make locking
 Severity   : normal
 Bugzilla   : 12228
 Description: LBUG in ptlrpc_check_set() bad phase ebc0de00
-Details    : access to bitfield in structure is always rounded to long 
+Details    : access to bitfield in structure is always rounded to long
 	     and this produce problem with not atomic change any bit.
 
 Severity   : normal
@@ -100,7 +100,7 @@ Description: If llog cancel was not send before clean_exports phase, this can
 	     produce deadlock in llog code.
 Details    : If llog thread has last reference to obd and call class_import_put
 	     this produce deadlock because llog_cleanup_commit_master wait when
-	     last llog_commit_thread exited, but this never success because was 
+	     last llog_commit_thread exited, but this never success because was
 	     called from llog_commit_thread.
 
 Severity   : normal
@@ -160,7 +160,7 @@ Frequency  : rare, at shutdown
 Description: access already free / zero obd_namespace.
 Details    : if client_disconnect_export was called without force flag set,
 	     and exist connect request in flight, this can produce access to
-	     NULL pointer (or already free pointer) when connect_interpret 
+	     NULL pointer (or already free pointer) when connect_interpret
 	     store ocd flags in obd_namespace.
 
 Severity   : minor
@@ -178,7 +178,7 @@ Details    : Make lustre randomly failed allocating memory for testing purpose.
 Severity   : enhancement
 Bugzilla   : 12702
 Description: lost problems with lov objid file
-Details    : Fixes some scability and access to not inited memory problems 
+Details    : Fixes some scability and access to not inited memory problems
 	     in work with lov objdid file.
 
 Severity   : major
@@ -220,18 +220,18 @@ Description: Update to RHEL4 latest kernel.
 Severity   : enhancement
 Bugzilla   : 13690
 Description: Build SLES10 patchless client fails
-Details    : The configure was broken by run ./configure with 
+Details    : The configure was broken by run ./configure with
 	     --with-linux-obj=.... argument for patchless client. When the
 	     configure use --with-linux-obj, the LINUXINCLUDE= -Iinclude
-	     can't search header adequately. Use absolute path such as 
-	     -I($LINUX)/include instead. 
+	     can't search header adequately. Use absolute path such as
+	     -I($LINUX)/include instead.
 
 Severity   : normal
 Bugzilla   : 13888
 Description: interrupt oig_wait produce painc on resend.
 Details    : brw_redo_request can be used for resend requests from ptlrpcd and
 	     private set, and this produce situation when rq_ptlrpcd_data not
-	     copyed to new allocated request and triggered LBUG on assert 
+	     copyed to new allocated request and triggered LBUG on assert
 	     req->rq_ptlrpcd_data != NULL. But this member used only for wakeup
 	     ptlrpcd set if request is changed and can be safety changed to use
 	     rq_set directly.
@@ -256,10 +256,10 @@ Details    : This causes SLES 10 clients to behave as patchless clients
 Severity   : enhancement
 Bugzilla   : 2262
 Description: self-adjustable client's lru lists
-Details    : use adaptive algorithm for managing client cached locks lru 
+Details    : use adaptive algorithm for managing client cached locks lru
 	     lists according to current server load, other client's work
-	     pattern, memory activities, etc. Both, server and client 
-	     side namespaces provide number of proc tunables for controlling 
+	     pattern, memory activities, etc. Both, server and client
+	     side namespaces provide number of proc tunables for controlling
 	     things
 
 Severity   : enhancement
@@ -381,7 +381,7 @@ Details    : set obd_health_check_timeout as 1.5x of obd_timeout
 Severity   : normal
 Bugzilla   : 12192
 Description: llapi_file_create() does not allow some changes
-Details    : add llapi_file_open() that allows specifying the mode and 
+Details    : add llapi_file_open() that allows specifying the mode and
 	     open flags, and also returns an open file handle.
 
 Severity   : normal
@@ -392,9 +392,9 @@ Details    : Remove mnt_lustre_list in vfs_intent-2.6-rhel4.patch.
 Severity   : normal
 Bugzilla   : 10657
 Description: Add journal checksum support.(Kernel part)
-Details    : The journal checksum feature adds two new flags i.e 
-	     JBD2_FEATURE_INCOMPAT_ASYNC_COMMIT and 
-	     JBD2_FEATURE_COMPAT_CHECKSUM. JBD2_FEATURE_CHECKSUM flag 
+Details    : The journal checksum feature adds two new flags i.e
+	     JBD2_FEATURE_INCOMPAT_ASYNC_COMMIT and
+	     JBD2_FEATURE_COMPAT_CHECKSUM. JBD2_FEATURE_CHECKSUM flag
 	     indicates that the commit block contains the checksum for
 	     the blocks described by the descriptor blocks. Now commit
 	     record can be sent to disk without waiting for descriptor
@@ -414,7 +414,7 @@ Details    : execute lfs setstripe on client
 Severity   : major
 Bugzilla   : 12223
 Description: mds_obd_create error creating tmp object
-Details    : When the user sets quota on root, llog will be affected and can't 
+Details    : When the user sets quota on root, llog will be affected and can't
 	     create files and write files.
 
 Severity   : normal
@@ -422,7 +422,7 @@ Frequency  : Always on ia64 patchless client, and possibly others.
 Bugzilla   : 12826
 Description: Add EXPORT_SYMBOL check for node_to_cpumask symbol.
 Details    : This allows the patchless client to be loaded on architectures
-	     without this export. 
+	     without this export.
 
 Severity   : normal
 Bugzilla   : 13039
@@ -500,7 +500,7 @@ Details    : When generating the bio request for lustre file writes the
 
 Severity   : normal
 Bugzilla   : 11230
-Description: Tune the kernel for good SCSI performance. 
+Description: Tune the kernel for good SCSI performance.
 Details    : Set the value of /sys/block/{dev}/queue/max_sectors_kb
 	     to the value of /sys/block/{dev}/queue/max_hw_sectors_kb
 	     in mount_lustre.
@@ -542,8 +542,8 @@ Frequency  : only on ppc
 Bugzilla   : 12234
 Description: /proc/fs/lustre/devices broken on ppc
 Details    : The patch as applied to 1.6.2 doesn't look correct for all arches.
-	     We should make sure the type of 'index' is loff_t and then cast 
-	     explicitly as needed below.  Do not assign an explicitly cast 
+	     We should make sure the type of 'index' is loff_t and then cast
+	     explicitly as needed below.  Do not assign an explicitly cast
 	     loff_t to an int.
 
 Severity   : normal
@@ -562,14 +562,14 @@ Severity   : normal
 Bugzilla   : 13304
 Frequency  : Always, for kernels after 2.6.16
 Description: Fix warning idr_remove called for id=.. which is not allocated.
-Details    : Last kernels save old s_dev before kill super and not allow 
+Details    : Last kernels save old s_dev before kill super and not allow
 	     to restore from callback - restore it before call kill_anon_super.
 
 Severity   : minor
 Bugzilla   : 12948
 Description: buffer overruns could theoretically occur
 Details    : llapi_semantic_traverse() modifies the "path" argument by
-	     appending values to the end of the origin string, and a 
+	     appending values to the end of the origin string, and a
 	     overrun may occur. Adding buffer overrun check in liblustreapi.
 
 Severity   : normal
@@ -602,12 +602,12 @@ Severity   : critical
 Bugzilla   : 13751
 Description: Kernel patches update for RHEL5 2.6.18-8.1.14.el5.
 Details    : Modify target file & which_patch.
-	     A flaw was found in the IA32 system call emulation provided 
-	     on AMD64 and Intel 64 platforms. An improperly validated 64-bit 
-	     value could be stored in the %RAX register, which could trigger an 
-	     out-of-bounds system call table access. An untrusted local user 
-	     could exploit this flaw to run code in the kernel 
-	     (ie a root privilege escalation). (CVE-2007-4573). 
+	     A flaw was found in the IA32 system call emulation provided
+	     on AMD64 and Intel 64 platforms. An improperly validated 64-bit
+	     value could be stored in the %RAX register, which could trigger an
+	     out-of-bounds system call table access. An untrusted local user
+	     could exploit this flaw to run code in the kernel
+	     (ie a root privilege escalation). (CVE-2007-4573).
 
 Severity   : major
 Bugzilla   : 13093
@@ -621,7 +621,7 @@ Bugzilla   : 13454
 Description: Add jbd statistics patch for RHEL5 and 2.6.18-vanilla
 
 Severity   : minor
-Bugzilla   : 13732 
+Bugzilla   : 13732
 Description: change order of libsysio includes
 Details    : '#include sysio.h' should always come before '#include xtio.h'
 
@@ -759,13 +759,13 @@ Severity   : enhancement
 Bugzilla   : 14729
 Description: SNMP support enhancement
 Details    : Adding total number of sampled request for an MDS node in snmp
-             support.
+	     support.
 
 Severity   : enhancement
 Bugzilla   : 14748
 Description: Optimize ldlm waiting list processing for PR extent locks
 Details    : When processing waiting list for read extent lock and meeting read
-             lock that is same or wider to it that is not contended, skip
+	     lock that is same or wider to it that is not contended, skip
 	     processing rest of the list and immediatelly return current
 	     status of conflictness, since we are guaranteed there are no
 	     conflicting locks in the rest of the list.
@@ -777,19 +777,26 @@ Details    : When the failover node is the primary node, it is possible
 	     to have two identical connections in imp_conn_list. We must
 	     compare not conn's pointers but NIDs, otherwise we can defeat
 	     connection throttling.
-	     
+
 Severity   : normal
 Bugzilla   : 13821
 Description: port llog fixes from b1_6 into HEAD
 Details    : Port llog reference couting and some llog cleanups from b1_6
-             (bug 10800) into HEAD, for protect from panic and access to already
+	     (bug 10800) into HEAD, for protect from panic and access to already
 	     free llog structures.
 
 Severity   : normal
 Bugzilla   : 14483
-Description: Detect stride IO mode in read-ahead 
+Description: Detect stride IO mode in read-ahead
 Details    : When a client does stride read, read-ahead should detect that and
-	     read-ahead pages according to the detected stride pattern. 
+	     read-ahead pages according to the detected stride pattern.
+
+Severity   : normal
+Bugzilla   : 13805
+Description: data checksumming impacts single node performance
+Details    : add support for several checksum algorithm. Currently, only CRC32
+	     and Adler-32 are supported. The checksum type can be changed on
+	     the fly via /proc/fs/lustre/osc/*/checksum_type.
 
 --------------------------------------------------------------------------------
 
