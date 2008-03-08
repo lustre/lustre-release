@@ -169,17 +169,13 @@ test_15() {
 }
 run_test 15 "failed open (-ENOMEM)"
 
-READ_AHEAD=`cat $LPROC/llite/*/max_read_ahead_mb | head -n 1`
+READ_AHEAD=`lctl get_param -n llite.*.max_read_ahead_mb | head -n 1`
 stop_read_ahead() {
-   for f in $LPROC/llite/*/max_read_ahead_mb; do 
-      echo 0 > $f
-   done
+   lctl set_param -n llite.*.max_read_ahead_mb 0
 }
 
 start_read_ahead() {
-   for f in $LPROC/llite/*/max_read_ahead_mb; do 
-      echo $READ_AHEAD > $f
-   done
+   lctl set_param -n llite.*.max_read_ahead_mb $READ_AHEAD
 }
 
 test_16() {
@@ -242,7 +238,7 @@ test_18a() {
 
     do_facet client cp $SAMPLE_FILE $f
     sync
-    local osc2dev=`grep ${ost2_svc}-osc- $LPROC/devices | awk '{print $1}'`
+    local osc2dev=`lctl get_param -n devices | grep ${ost2_svc}-osc- | awk '{print $1}'`
     $LCTL --device $osc2dev deactivate || return 3
     # my understanding is that there should be nothing in the page
     # cache after the client reconnects?     
@@ -614,8 +610,8 @@ test_26() {      # bug 5921 - evict dead exports by pinger
 # this test can only run from a client on a separate node.
 	remote_ost || skip "local OST" && return
 	remote_mds || skip "local MDS" && return
-	OST_FILE=$LPROC/obdfilter/${ost1_svc}/num_exports
-        OST_EXP="`do_facet ost1 cat $OST_FILE`"
+	OST_FILE=obdfilter.${ost1_svc}.num_exports
+        OST_EXP="`do_facet ost1 lctl get_param -n $OST_FILE`"
 	OST_NEXP1=`echo $OST_EXP | cut -d' ' -f2`
 	echo starting with $OST_NEXP1 OST exports
 # OBD_FAIL_PTLRPC_DROP_RPC 0x505
@@ -625,7 +621,7 @@ test_26() {      # bug 5921 - evict dead exports by pinger
 	# might have to wait for the next ping.
 	echo Waiting for $(($TIMEOUT * 4)) secs
 	sleep $(($TIMEOUT * 4))
-        OST_EXP="`do_facet ost1 cat $OST_FILE`"
+        OST_EXP="`do_facet ost1 lctl get_param -n $OST_FILE`"
 	OST_NEXP2=`echo $OST_EXP | cut -d' ' -f2`
 	echo ending with $OST_NEXP2 OST exports
 	do_facet client sysctl -w lustre.fail_loc=0x0
@@ -637,10 +633,10 @@ run_test 26 "evict dead exports"
 test_26b() {      # bug 10140 - evict dead exports by pinger
 	client_df
 	zconf_mount `hostname` $MOUNT2 || error "Failed to mount $MOUNT2"
-	MDS_FILE=$LPROC/mds/${mds_svc}/num_exports
-        MDS_NEXP1="`do_facet mds cat $MDS_FILE | cut -d' ' -f2`"
-	OST_FILE=$LPROC/obdfilter/${ost1_svc}/num_exports
-        OST_NEXP1="`do_facet ost1 cat $OST_FILE | cut -d' ' -f2`"
+	MDS_FILE=mds.${mds_svc}.num_exports
+        MDS_NEXP1="`do_facet mds lctl get_param -n $MDS_FILE | cut -d' ' -f2`"
+	OST_FILE=obdfilter.${ost1_svc}.num_exports
+        OST_NEXP1="`do_facet ost1 lctl get_param -n $OST_FILE | cut -d' ' -f2`"
 	echo starting with $OST_NEXP1 OST and $MDS_NEXP1 MDS exports
 	#force umount a client; exports should get evicted
 	zconf_umount `hostname` $MOUNT2 -f
@@ -649,8 +645,8 @@ test_26b() {      # bug 10140 - evict dead exports by pinger
         # the loser might have to wait for the next ping.
 	echo Waiting for $(($TIMEOUT * 8)) secs
 	sleep $(($TIMEOUT * 8))
-        OST_NEXP2="`do_facet ost1 cat $OST_FILE | cut -d' ' -f2`"
-        MDS_NEXP2="`do_facet mds cat $MDS_FILE | cut -d' ' -f2`"
+        OST_NEXP2="`do_facet ost1 lctl get_param -n $OST_FILE | cut -d' ' -f2`"
+        MDS_NEXP2="`do_facet mds lctl get_param -n $MDS_FILE | cut -d' ' -f2`"
 	echo ending with $OST_NEXP2 OST and $MDS_NEXP2 MDS exports
         [ $OST_NEXP1 -le $OST_NEXP2 ] && error "client not evicted from OST"
         [ $MDS_NEXP1 -le $MDS_NEXP2 ] && error "client not evicted from MDS"
@@ -881,10 +877,8 @@ run_test 56 "do not allow reconnect to busy exports"
 
 test_57_helper() {
         # no oscs means no client or mdt 
-        while [ -e $LPROC/osc ]; do
-                for f in `find $LPROC -type f`; do 
-                        cat $f > /dev/null 2>&1
-                done
+        while lctl get_param osc.*.* > /dev/null 2>&1; do
+                : # loop until proc file is removed
         done
 }
 
