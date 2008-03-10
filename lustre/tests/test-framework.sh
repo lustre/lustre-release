@@ -757,15 +757,27 @@ remount_client()
 	zconf_mount `hostname` $1 || error "mount failed"
 }
 
+set_obd_timeout() {
+    local facet=$1
+    local timeout=$2
+
+    do_facet $facet lsmod | grep -q obdclass || \
+        do_facet $facet "modprobe obdclass"
+
+    do_facet $facet "sysctl -w lustre.timeout=$timeout"
+}
+
 setupall() {
     load_modules
     if [ -z "$CLIENTONLY" ]; then
         echo Setup mdt, osts
         echo $REFORMAT | grep -q "reformat" \
 	    || do_facet mds "$TUNEFS --writeconf $MDSDEV"
+        set_obd_timeout mds $TIMEOUT
         start mds $MDSDEV $MDS_MOUNT_OPTS
         for num in `seq $OSTCOUNT`; do
             DEVNAME=`ostdevname $num`
+            set_obd_timeout ost$num $TIMEOUT
             start ost$num $DEVNAME $OST_MOUNT_OPTS
         done
     fi
