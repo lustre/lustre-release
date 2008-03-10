@@ -511,7 +511,7 @@ kptllnd_post_tx(kptl_peer_t *peer, kptl_tx_t *tx, int nfrag)
                 kptllnd_tx_decref(tx);
                 return;
         }
-        
+
         spin_lock_irqsave(&peer->peer_lock, flags);
 
         tx->tx_deadline = jiffies + (*kptllnd_tunables.kptl_timeout * HZ);

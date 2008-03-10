@@ -1154,7 +1154,7 @@ ksocknal_create_conn (lnet_ni_t *ni, ksock_route_t *route,
                 goto failed_2;
         }
 
-        if (peer->ksnp_proto == NULL) { 
+        if (peer->ksnp_proto == NULL) {
                 /* Never connected before.
                  * NB recv_hello may have returned EPROTO to signal my peer
                  * wants a different protocol than the one I asked for.

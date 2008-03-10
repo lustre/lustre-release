@@ -248,7 +248,7 @@ typedef struct ksock_conn
         void               *ksnc_saved_write_space; /* socket's original write_space() callback */
         atomic_t            ksnc_conn_refcount; /* conn refcount */
         atomic_t            ksnc_sock_refcount; /* sock refcount */
-        ksock_sched_t	   *ksnc_scheduler;     /* who schedules this connection */
+        ksock_sched_t      *ksnc_scheduler;     /* who schedules this connection */
         __u32               ksnc_myipaddr;      /* my IP */
         __u32               ksnc_ipaddr;        /* peer's IP */
         int                 ksnc_port;          /* peer's port */
@@ -372,11 +372,11 @@ extern ksock_proto_t ksocknal_protocol_v2x;
 #endif
 
 static inline int
-ksocknal_route_mask(void) 
+ksocknal_route_mask(void)
 {
         if (!*ksocknal_tunables.ksnd_typed_conns)
                 return (1 << SOCKLND_CONN_ANY);
-        
+
         return ((1 << SOCKLND_CONN_CONTROL) |
                 (1 << SOCKLND_CONN_BULK_IN) |
                 (1 << SOCKLND_CONN_BULK_OUT));

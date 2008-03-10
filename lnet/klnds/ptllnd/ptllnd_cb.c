@@ -234,7 +234,7 @@ kptllnd_active_rdma(kptl_rx_t *rx, lnet_msg_t *lntmsg, int type,
                 kptllnd_tx_decref(tx);
                 return -EIO;
         }
-        
+
         spin_lock_irqsave(&peer->peer_lock, flags);
 
         tx->tx_lnet_msg = lntmsg;
@@ -666,7 +666,7 @@ kptllnd_watchdog(void *arg)
         while (kptllnd_data.kptl_shutdown < 2) {
 
                 timeout = (int)(deadline - jiffies);
-                
+
                 if (timeout <= 0) {
                         const int n = 4;
                         const int p = 1;

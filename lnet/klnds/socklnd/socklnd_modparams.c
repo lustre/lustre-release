@@ -107,7 +107,7 @@ static int inject_csum_error = 0;
 CFS_MODULE_PARM(inject_csum_error, "i", int, 0644,
                 "set non-zero to inject a checksum error");
 #ifdef CPU_AFFINITY
-static int enable_irq_affinity = 1;
+static int enable_irq_affinity = 0;
 CFS_MODULE_PARM(enable_irq_affinity, "i", int, 0644,
                 "enable IRQ affinity");
 #endif
