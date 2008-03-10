@@ -1337,16 +1337,17 @@ test_18() {
 
 	echo  "   step2: testing ......"
 	count=0
+	timeout=$(sysctl -n lustre.timeout)
 	while [ true ]; do
 	    if [ -z `ps -ef | awk '$2 == '${DDPID}' { print $8 }'` ]; then break; fi
 	    count=$[count+1]
-	    if [ $count -gt 200 ]; then
-		error "dd should be finished!"
+	    if [ $count -gt $((2 * $timeout)) ]; then
+		error "count=$count dd should be finished!"
 	    fi
 	    sleep 1
 	done
-        log -n "(dd_pid=$DDPID, time=$count)"
-        if [ $count -lt 90 ]; then
+        log "(dd_pid=$DDPID, time=$count, timeout=$timeout)"
+        if [ $count -lt $(($timeout - 10)) ]; then
             error " should take longer!"
         else
             echo " successful"
@@ -1388,17 +1389,18 @@ test_18a() {
 
 	echo  "   step2: testing ......"
 	count=0
+	timeout=$(sysctl -n lustre.timeout)
 	while [ true ]; do
 	    if [ -z `ps -ef | awk '$2 == '${DDPID}' { print $8 }'` ]; then break; fi
 	    count=$[count+1]
-	    if [ $count -gt 200 ]; then
+	    if [ $count -gt $((3 * $timeout)) ]; then
 		lustre_fail mds 0
-		error "dd should be finished!"
+		error "count=$count dd should be finished!"
 	    fi
 	    sleep 1
 	done
-        log -n "(dd_pid=$DDPID, time=$count)"
-        if [ $count -lt 90 ]; then
+        log "(dd_pid=$DDPID, time=$count, timeout=$timeout)"
+        if [ $count -lt $(($timeout - 10)) ]; then
 	    lustre_fail mds 0
             error " should take longer!"
         else

@@ -1666,7 +1666,7 @@ int target_handle_dqacq_callback(struct ptlrpc_request *req)
         }
 
         /* Block the quota req. b=14840 */
-        OBD_FAIL_TIMEOUT(OBD_FAIL_MDS_BLOCK_QUOTA_REQ,OBD_TIMEOUT_DEFAULT);
+        OBD_FAIL_TIMEOUT(OBD_FAIL_MDS_BLOCK_QUOTA_REQ, obd_timeout);
 
         rc = ptlrpc_reply(req);
 out:
