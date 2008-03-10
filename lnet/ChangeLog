@@ -12,6 +12,12 @@ tbd  Sun Microsystems, Inc.
 	mxlnd     - MX 1.2.1 or later,
 	ptllnd    - Portals 3.3 / UNICOS/lc 1.5.x, 2.0.x
 Severity   : normal
+Bugzilla   : 14956
+Description: High load after starting lnet
+Details    : gmlnd should sleep in rx thread in interruptible way. Otherwise,
+	     uptime utility reports high load that looks confusingly.
+
+Severity   : normal
 Bugzilla   : 14838
 Description: ksocklnd fails to establish connection if accept_port is high
 Details    : PID remapping must not be done for active (outgoing) connections
