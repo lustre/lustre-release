@@ -1616,7 +1616,7 @@ kiblnd_startup (lnet_ni_t *ni)
                 if (!IS_ERR(mr)) {
                         ibdev->ibd_mr = mr;
                 } else {
-                        CERROR("Can't get MR: %ld\n", PTR_ERR(pd));
+                        CERROR("Can't get MR: %ld\n", PTR_ERR(mr));
                         goto failed;
                 }
 
