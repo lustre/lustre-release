@@ -660,25 +660,25 @@ static int ptlrpc_import_delay_req(struct obd_import *imp,
                 DEBUG_REQ(D_ERROR, req, "IMP_CLOSED ");
                 *status = -EIO;
         } else if (req->rq_send_state == LUSTRE_IMP_CONNECTING &&
-                 imp->imp_state == LUSTRE_IMP_CONNECTING) {
+                   imp->imp_state == LUSTRE_IMP_CONNECTING) {
                 /* allow CONNECT even if import is invalid */ ;
-        } else if (imp->imp_invalid) {
-                /* if it is mgc, wait for recovry. b=13464 */
-                if (imp->imp_recon_bk && !imp->imp_obd->obd_no_recov)
-                        delay = 1;
+        } else if (imp->imp_invalid && (!imp->imp_recon_bk ||
+                                        imp->imp_obd->obd_no_recov)) {
                 /* If the import has been invalidated (such as by an OST
-                 * failure) the request must fail with -ESHUTDOWN.  This
-                 * indicates the requests should be discarded; an -EIO
-                 * may result in a resend of the request. */
+                 * failure), and if the import(MGC) tried all of its connection  
+                 * list (Bug 13464), the request must fail with -ESHUTDOWN.  
+                 * This indicates the requests should be discarded; an -EIO
+                 * may result in a resend of the request. */              
                 if (!imp->imp_deactive)
-                        DEBUG_REQ(D_ERROR, req, "IMP_INVALID");
+                          DEBUG_REQ(D_ERROR, req, "IMP_INVALID");       
                 *status = -ESHUTDOWN; /* bz 12940 */
         } else if (req->rq_import_generation != imp->imp_generation) {
                 DEBUG_REQ(D_ERROR, req, "req wrong generation:");
                 *status = -EIO;
         } else if (req->rq_send_state != imp->imp_state) {
-                if (imp->imp_obd->obd_no_recov || imp->imp_dlm_fake ||
-                    req->rq_no_delay)
+                if (imp->imp_obd->obd_no_recov)
+                        *status = -ESHUTDOWN;
+                else if (imp->imp_dlm_fake || req->rq_no_delay) 
                         *status = -EWOULDBLOCK;
                 else
                         delay = 1;
