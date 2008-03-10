@@ -85,8 +85,27 @@ int lproc_mgs_setup(struct obd_device *obd)
         rc = lprocfs_obd_seq_create(obd, "filesystems", 0444,
                                     &mgs_fs_fops, obd);
         mgs->mgs_proc_live = proc_mkdir("live", obd->obd_proc_entry);
+        obd->obd_proc_exports = proc_mkdir("exports", obd->obd_proc_entry);
 
         return rc;
+}
+
+int lproc_mgs_cleanup(struct obd_device *obd)
+{
+        struct mgs_obd *mgs = &obd->u.mgs;
+
+        if (obd)
+                return -EINVAL;
+
+        if (mgs->mgs_proc_live) {
+                /* Should be no live entries */
+                LASSERT(mgs->mgs_proc_live->subdir == NULL);
+                lprocfs_remove(&mgs->mgs_proc_live);
+                mgs->mgs_proc_live = NULL;
+        }
+        lprocfs_free_obd_stats(obd);
+
+        return lprocfs_obd_cleanup(obd);
 }
 
 static void seq_show_srpc_rule(struct seq_file *seq, const char *tgtname,
@@ -183,12 +202,30 @@ struct lprocfs_vars lprocfs_mgs_obd_vars[] = {
         { "fstype",          lprocfs_rd_fstype,      0, 0 },
         { "mntdev",          lprocfs_mgs_rd_mntdev,  0, 0 },
         { "num_exports",     lprocfs_rd_num_exports, 0, 0 },
+        { "evict_client",    0, lprocfs_wr_evict_client, 0 },
         { 0 }
 };
 
 struct lprocfs_vars lprocfs_mgs_module_vars[] = {
         { 0 }
 };
+
+void mgs_counter_incr(struct obd_export *exp, int opcode)
+{
+        lprocfs_counter_incr(exp->exp_obd->obd_stats, opcode);
+        lprocfs_counter_incr(exp->exp_ops_stats, opcode);
+}
+
+void mgs_stats_counter_init(struct lprocfs_stats *stats)
+{
+        lprocfs_counter_init(stats, LPROC_MGS_CONNECT, 0, "connect", "reqs");
+        lprocfs_counter_init(stats, LPROC_MGS_DISCONNECT, 0, "disconnect",
+                             "reqs");
+        lprocfs_counter_init(stats, LPROC_MGS_EXCEPTION, 0, "exception",
+                             "reqs");
+        lprocfs_counter_init(stats, LPROC_MGS_TARGET_REG, 0, "tgtreg", "reqs");
+        lprocfs_counter_init(stats, LPROC_MGS_TARGET_DEL, 0, "tgtdel", "reqs");
+}
 
 void lprocfs_mgs_init_vars(struct lprocfs_static_vars *lvars)
 {

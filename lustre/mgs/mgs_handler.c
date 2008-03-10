@@ -67,6 +67,8 @@ static int mgs_connect(const struct lu_env *env,
 
         exp->exp_flvr.sf_rpc = SPTLRPC_FLVR_NULL;
 
+        mgs_counter_incr(exp, LPROC_MGS_CONNECT);
+
         if (data != NULL) {
                 data->ocd_connect_flags &= MGS_CONNECT_SUPPORTED;
                 exp->exp_connect_flags = data->ocd_connect_flags;
@@ -93,7 +95,9 @@ static int mgs_disconnect(struct obd_export *exp)
         ENTRY;
 
         LASSERT(exp);
+
         class_export_get(exp);
+        mgs_counter_incr(exp, LPROC_MGS_DISCONNECT);
 
         /* Disconnect early so that clients can't keep using export */
         rc = class_disconnect(exp);
@@ -295,10 +299,7 @@ static int mgs_cleanup(struct obd_device *obd)
         ptlrpc_unregister_service(mgs->mgs_service);
 
         mgs_cleanup_fsdb_list(obd);
-
-        lprocfs_obd_cleanup(obd);
-        mgs->mgs_proc_live = NULL;
-
+        lproc_mgs_cleanup(obd);
         mgs_fs_cleanup(obd);
 
         server_put_mount(obd->obd_name, mgs->mgs_vfsmnt);
@@ -385,6 +386,8 @@ static int mgs_handle_target_reg(struct ptlrpc_request *req)
         struct mgs_target_info *mti, *rep_mti;
         int rc = 0, lockrc;
         ENTRY;
+
+        mgs_counter_incr(req->rq_export, LPROC_MGS_TARGET_REG);
 
         mti = req_capsule_client_get(&req->rq_pill, &RMF_MGS_TARGET_INFO);
         if (!(mti->mti_flags & (LDD_F_WRITECONF | LDD_F_UPGRADE14 |
@@ -537,6 +540,23 @@ static int mgs_set_info_rpc(struct ptlrpc_request *req)
         RETURN(rc);
 }
 
+/* Called whenever a target cleans up. */
+/* XXX - Currently unused */
+static int mgs_handle_target_del(struct ptlrpc_request *req)
+{
+        ENTRY;
+        mgs_counter_incr(req->rq_export, LPROC_MGS_TARGET_DEL);
+        RETURN(0);
+}
+
+/* XXX - Currently unused */
+static int mgs_handle_exception(struct ptlrpc_request *req)
+{
+        ENTRY;
+        mgs_counter_incr(req->rq_export, LPROC_MGS_EXCEPTION);
+        RETURN(0);
+}
+
 /* TODO: handle requests in a similar way as MDT: see mdt_handle_common() */
 int mgs_handle(struct ptlrpc_request *req)
 {
@@ -577,6 +597,10 @@ int mgs_handle(struct ptlrpc_request *req)
                 rc = target_handle_disconnect(req);
                 req->rq_status = rc;            /* superfluous? */
                 break;
+        case MGS_EXCEPTION:
+                DEBUG_REQ(D_MGS, req, "exception");
+                rc = mgs_handle_exception(req);
+                break;
         case MGS_TARGET_REG:
                 DEBUG_REQ(D_MGS, req, "target add");
                 req_capsule_set(&req->rq_pill, &RQF_MGS_TARGET_REG);
@@ -584,7 +608,7 @@ int mgs_handle(struct ptlrpc_request *req)
                 break;
         case MGS_TARGET_DEL:
                 DEBUG_REQ(D_MGS, req, "target del");
-                //rc = mgs_handle_target_del(req);
+                rc = mgs_handle_target_del(req);
                 break;
         case MGS_SET_INFO:
                 DEBUG_REQ(D_MGS, req, "set_info");

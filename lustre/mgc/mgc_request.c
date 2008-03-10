@@ -41,9 +41,11 @@
 
 #include <obd_class.h>
 #include <lustre_dlm.h>
+#include <lprocfs_status.h>
 #include <lustre_log.h>
 #include <lustre_fsfilt.h>
 #include <lustre_disk.h>
+#include "mgc_internal.h"
 
 static int mgc_name2resid(char *name, int len, struct ldlm_res_id *res_id)
 {
@@ -246,6 +248,7 @@ static cfs_waitq_t rq_waitq;
 
 static int mgc_process_log(struct obd_device *mgc, 
                            struct config_llog_data *cld);
+static int mgc_requeue_add(struct config_llog_data *cld, int later);
 
 static int mgc_requeue_thread(void *data)
 {
@@ -490,6 +493,7 @@ static int mgc_cleanup(struct obd_device *obd)
                 /* Only for the last mgc */
                 class_del_profiles();
 
+        lprocfs_obd_cleanup(obd);
         ptlrpcd_decref();
 
         rc = client_obd_cleanup(obd);
@@ -498,6 +502,7 @@ static int mgc_cleanup(struct obd_device *obd)
 
 static int mgc_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
 {
+        struct lprocfs_static_vars lvars;
         int rc;
         ENTRY;
 
@@ -512,6 +517,9 @@ static int mgc_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
                 CERROR("failed to setup llogging subsystems\n");
                 GOTO(err_cleanup, rc);
         }
+
+        lprocfs_mgc_init_vars(&lvars);
+        lprocfs_obd_setup(obd, lvars.obd_vars);
 
         spin_lock(&config_list_lock);
         atomic_inc(&mgc_count);

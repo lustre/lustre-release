@@ -778,8 +778,13 @@ static int lustre_stop_mgc(struct super_block *sb)
          * force shotdown set in umount_begin */
         obd->obd_no_recov = 1;
 
-        if (obd->u.cli.cl_mgc_mgsexp)
-                obd_disconnect(obd->u.cli.cl_mgc_mgsexp);
+        if (obd->u.cli.cl_mgc_mgsexp) {
+                /* An error is not fatal, if we are unable to send the
+                   disconnect mgs ping evictor cleans up the export */
+                rc = obd_disconnect(obd->u.cli.cl_mgc_mgsexp);
+                if (rc)
+                        CDEBUG(D_MOUNT, "disconnect failed %d\n", rc);
+        }
 
         /* Save the obdname for cleaning the nid uuids, which are
            obdname_XX */
