@@ -961,6 +961,16 @@ remount_client()
 	zconf_mount `hostname` $1 || error "mount failed"
 }
 
+set_obd_timeout() {
+    local facet=$1
+    local timeout=$2
+
+    do_facet $facet lsmod | grep -q obdclass || \
+        do_facet $facet "modprobe obdclass"
+
+    do_facet $facet "sysctl -w lustre.timeout=$timeout"
+}
+
 setupall() {
     load_modules
     init_gss
@@ -970,6 +980,7 @@ setupall() {
             DEVNAME=$(mdsdevname $num)
             echo $REFORMAT | grep -q "reformat" \
             || do_facet mds$num "$TUNEFS --writeconf $DEVNAME"
+            set_obd_timeout mds$num $TIMEOUT
             start mds$num $DEVNAME $MDS_MOUNT_OPTS
 	    if [ $IDENTITY_UPCALL != "default" ]; then
                 switch_identity $num $IDENTITY_UPCALL
@@ -977,6 +988,7 @@ setupall() {
         done
         for num in `seq $OSTCOUNT`; do
             DEVNAME=$(ostdevname $num)
+            set_obd_timeout ost$num $TIMEOUT
             start ost$num $DEVNAME $OST_MOUNT_OPTS
         done
     fi
