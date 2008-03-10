@@ -65,11 +65,15 @@ static int mgs_connect(struct lustre_handle *conn, struct obd_device *obd,
         exp = class_conn2export(conn);
         LASSERT(exp);
 
+        mgs_counter_incr(exp, LPROC_MGS_CONNECT);
+
         if (data != NULL) {
                 data->ocd_connect_flags &= MGS_CONNECT_SUPPORTED;
                 exp->exp_connect_flags = data->ocd_connect_flags;
                 data->ocd_version = LUSTRE_VERSION_CODE;
         }
+
+        rc = mgs_client_add(obd, exp);
 
         if (rc) {
                 class_disconnect(exp);
@@ -86,7 +90,9 @@ static int mgs_disconnect(struct obd_export *exp)
         ENTRY;
 
         LASSERT(exp);
+
         class_export_get(exp);
+        mgs_counter_incr(exp, LPROC_MGS_DISCONNECT);
 
         /* Disconnect early so that clients can't keep using export */
         rc = class_disconnect(exp);
@@ -259,10 +265,7 @@ static int mgs_cleanup(struct obd_device *obd)
         ptlrpc_unregister_service(mgs->mgs_service);
 
         mgs_cleanup_fsdb_list(obd);
-
-        lprocfs_obd_cleanup(obd);
-        mgs->mgs_proc_live = NULL;
-
+        lproc_mgs_cleanup(obd);
         mgs_fs_cleanup(obd);
 
         server_put_mount(obd->obd_name, mgs->mgs_vfsmnt);
@@ -349,6 +352,8 @@ static int mgs_handle_target_reg(struct ptlrpc_request *req)
         int rep_size[] = { sizeof(struct ptlrpc_body), sizeof(*mti) };
         int rc = 0, lockrc;
         ENTRY;
+
+        mgs_counter_incr(req->rq_export, LPROC_MGS_TARGET_REG);
 
         mti = lustre_swab_reqbuf(req, REQ_REC_OFF, sizeof(*mti),
                                  lustre_swab_mgs_target_info);
@@ -499,6 +504,23 @@ static int mgs_set_info_rpc(struct ptlrpc_request *req)
         RETURN(rc);
 }
 
+/* Called whenever a target cleans up. */
+/* XXX - Currently unused */
+static int mgs_handle_target_del(struct ptlrpc_request *req)
+{
+        ENTRY;
+        mgs_counter_incr(req->rq_export, LPROC_MGS_TARGET_DEL);
+        RETURN(0);
+}
+
+/* XXX - Currently unused */
+static int mgs_handle_exception(struct ptlrpc_request *req)
+{
+        ENTRY;
+        mgs_counter_incr(req->rq_export, LPROC_MGS_EXCEPTION);
+        RETURN(0);
+}
+
 int mgs_handle(struct ptlrpc_request *req)
 {
         int fail = OBD_FAIL_MGS_ALL_REPLY_NET;
@@ -534,13 +556,17 @@ int mgs_handle(struct ptlrpc_request *req)
                 rc = target_handle_disconnect(req);
                 req->rq_status = rc;            /* superfluous? */
                 break;
+        case MGS_EXCEPTION:
+                DEBUG_REQ(D_MGS, req, "exception");
+                rc = mgs_handle_exception(req);
+                break;
         case MGS_TARGET_REG:
                 DEBUG_REQ(D_MGS, req, "target add");
                 rc = mgs_handle_target_reg(req);
                 break;
         case MGS_TARGET_DEL:
                 DEBUG_REQ(D_MGS, req, "target del");
-                //rc = mgs_handle_target_del(req);
+                rc = mgs_handle_target_del(req);
                 break;
         case MGS_SET_INFO:
                 rc = mgs_set_info_rpc(req);
@@ -608,6 +634,7 @@ static inline int mgs_destroy_export(struct obd_export *exp)
         ENTRY;
 
         target_destroy_export(exp);
+        mgs_client_free(exp);
 
         RETURN(0);
 }

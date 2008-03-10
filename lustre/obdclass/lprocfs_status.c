@@ -1349,6 +1349,8 @@ int lprocfs_exp_cleanup(struct obd_export *exp)
         CDEBUG(D_INFO, "Put stat %p - %d\n", stat, stat->nid_exp_ref_count);
 
         exp->exp_nid_stats = NULL;
+        lprocfs_free_stats(&exp->exp_ldlm_stats);
+        lprocfs_free_stats(&exp->exp_ops_stats);
 
         return 0;
 }

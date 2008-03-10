@@ -42,6 +42,44 @@
 #include <libcfs/list.h>
 #include "mgs_internal.h"
 
+
+static int mgs_export_stats_init(struct obd_device *obd, struct obd_export *exp)
+{
+        int rc, num_stats, newnid;
+
+        rc = lprocfs_exp_setup(exp, 0, &newnid);
+        if (rc)
+                return rc;
+
+        if (newnid) {
+                num_stats = (sizeof(*obd->obd_type->typ_ops) / sizeof(void *)) +
+                             LPROC_MGS_LAST - 1;
+                exp->exp_ops_stats = lprocfs_alloc_stats(num_stats,
+                                                         LPROCFS_STATS_FLAG_NOPERCPU);
+                if (exp->exp_ops_stats == NULL)
+                        return -ENOMEM;
+                lprocfs_init_ops_stats(LPROC_MGS_LAST, exp->exp_ops_stats);
+                mgs_stats_counter_init(exp->exp_ops_stats);
+                lprocfs_register_stats(exp->exp_nid_stats->nid_proc, "stats", exp->exp_ops_stats);
+        }
+        return 0;
+}
+
+/* Add client export data to the MGS.  This data is currently NOT stored on
+ * disk in the last_rcvd file or anywhere else.  In the event of a MGS
+ * crash all connections are treated as new connections.
+ */
+int mgs_client_add(struct obd_device *obd, struct obd_export *exp)
+{
+        return mgs_export_stats_init(obd, exp);
+}
+
+/* Remove client export data from the MGS */
+int mgs_client_free(struct obd_export *exp)
+{
+        return lprocfs_exp_cleanup(exp);
+}
+
 /* Same as mds_fid2dentry */
 /* Look up an entry by inode number. */
 /* this function ONLY returns valid dget'd dentries with an initialized inode

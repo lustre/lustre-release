@@ -82,6 +82,7 @@ struct obd_export {
         struct obd_import        *exp_imp_reverse; /* to make RPCs backwards */
         struct nid_stat          *exp_nid_stats;
         struct lprocfs_stats     *exp_ldlm_stats;
+        struct lprocfs_stats     *exp_ops_stats;
         struct ptlrpc_connection *exp_connection;
         __u32                     exp_conn_cnt;
         struct ldlm_export_data   exp_ldlm_data;

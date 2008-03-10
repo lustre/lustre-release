@@ -51,6 +51,8 @@ int mgs_erase_logs(struct obd_device *obd, char *fsname);
 int mgs_setparam(struct obd_device *obd, struct lustre_cfg *lcfg, char *fsname);
 
 /* mgs_fs.c */
+int mgs_client_add(struct obd_device *obd, struct obd_export *exp);
+int mgs_client_free(struct obd_export *exp);
 int mgs_fs_setup(struct obd_device *obd, struct vfsmount *mnt);
 int mgs_fs_cleanup(struct obd_device *obddev);
 
@@ -58,15 +60,18 @@ int mgs_fs_cleanup(struct obd_device *obddev);
 
 #ifdef LPROCFS
 int lproc_mgs_setup(struct obd_device *dev);
+int lproc_mgs_cleanup(struct obd_device *obd);
 int lproc_mgs_add_live(struct obd_device *obd, struct fs_db *fsdb);
 int lproc_mgs_del_live(struct obd_device *obd, struct fs_db *fsdb);
 void lprocfs_mgs_init_vars(struct lprocfs_static_vars *lvars);
 #else
 static inline int lproc_mgs_setup(struct obd_device *dev) 
 {return 0;}
-static int lproc_mgs_add_live(struct obd_device *obd, struct fs_db *fsdb)
+static inline int lproc_mgs_cleanup(struct obd_device *obd)
 {return 0;}
-static int lproc_mgs_del_live(struct obd_device *obd, struct fs_db *fsdb)
+static inline int lproc_mgs_add_live(struct obd_device *obd, struct fs_db *fsdb)
+{return 0;}
+static inline int lproc_mgs_del_live(struct obd_device *obd, struct fs_db *fsdb)
 {return 0;}
 static void lprocfs_mgs_init_vars(struct lprocfs_static_vars *lvars)
 {
@@ -74,6 +79,17 @@ static void lprocfs_mgs_init_vars(struct lprocfs_static_vars *lvars)
 }
 #endif
 
+/* mgs/lproc_mgs.c */
+enum {
+        LPROC_MGS_CONNECT = 0,
+        LPROC_MGS_DISCONNECT,
+        LPROC_MGS_EXCEPTION,
+        LPROC_MGS_TARGET_REG,
+        LPROC_MGS_TARGET_DEL,
+        LPROC_MGS_LAST
+};
+void mgs_counter_incr(struct obd_export *exp, int opcode);
+void mgs_stats_counter_init(struct lprocfs_stats *stats);
 
 #endif /* _MGS_INTERNAL_H */
 
