@@ -2952,8 +2952,8 @@ test_71() {
 	[ ! -e $TGT -a -e $SRC ] && echo "copying $SRC to $TGT" && cp $SRC $TGT
 	echo "copying necessary libs to $DIR"
 	LIBS71=$(ldd $DIR/dbench|sed -e 's/\t*//' -e 's/.*=> //' -e 's/ .*//' -e 's/^\///')
-	(cd / && tar chf - $LIBS71) | (cd $DIR && tar xf -)
-	[ $? = 0 ] || error "can't copy libs"
+	(cd / && tar chf - $LIBS71) | (cd $DIR && tar xvf -)
+	[ $? = 0 ] || error "can't copy libs $LIBS71 to $DIR"
 	echo "chroot $DIR /dbench -c client.txt 2"
 	chroot $DIR /dbench -c client.txt 2
 	RC=$?
