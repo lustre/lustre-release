@@ -1554,7 +1554,7 @@ test_38() { # bug 14222
 run_test 38 "MDS recreates missing lov_objid file from OST data"
 
 test_39() { #bug 14413
-        PTLDEBUG=malloc
+        PTLDEBUG=+malloc
         setup
         cleanup
         perl $SRCDIR/leak_finder.pl $TMP/debug 2>&1 | egrep '*** Leak:' && 
