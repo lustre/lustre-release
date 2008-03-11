@@ -211,12 +211,20 @@ ksocknal_unlink_peer_locked (ksock_peer_t *peer)
 {
         int                i;
         __u32              ip;
+        ksock_interface_t *iface;
 
         for (i = 0; i < peer->ksnp_n_passive_ips; i++) {
                 LASSERT (i < LNET_MAX_INTERFACES);
                 ip = peer->ksnp_passive_ips[i];
 
-                ksocknal_ip2iface(peer->ksnp_ni, ip)->ksni_npeers--;
+                iface = ksocknal_ip2iface(peer->ksnp_ni, ip);
+                /* All IPs in peer->ksnp_passive_ips[] come from the
+                 * interface list, therefore the call must succeed. */
+                LASSERT (iface != NULL);
+
+                CDEBUG(D_NET, "peer=%p iface=%p ksni_nroutes=%d\n",
+                       peer, iface, iface->ksni_nroutes);
+                iface->ksni_npeers--;
         }
 
         LASSERT (list_empty(&peer->ksnp_conns));
