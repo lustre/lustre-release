@@ -901,11 +901,19 @@ int target_handle_connect(struct ptlrpc_request *req, svc_handler_t handler)
         revimp->imp_remote_handle = conn;
         revimp->imp_dlm_fake = 1;
         revimp->imp_state = LUSTRE_IMP_FULL;
+
 set_flags:
-        if (lustre_msg_get_op_flags(req->rq_reqmsg) & MSG_CONNECT_NEXT_VER) {
-                /* Client wants v2 */
+        if (req->rq_reqmsg->lm_magic == LUSTRE_MSG_MAGIC_V1 &&
+            lustre_msg_get_op_flags(req->rq_reqmsg) & MSG_CONNECT_NEXT_VER) {
                 revimp->imp_msg_magic = LUSTRE_MSG_MAGIC_V2;
                 lustre_msg_add_op_flags(req->rq_repmsg, MSG_CONNECT_NEXT_VER);
+        } else {
+                /* unknown versions will be caught in
+                 * ptlrpc_handle_server_req_in->lustre_unpack_msg() */
+                revimp->imp_msg_magic = req->rq_reqmsg->lm_magic;
+        }
+
+        if (revimp->imp_msg_magic != LUSTRE_MSG_MAGIC_V1) {
                 if (export->exp_connect_flags & OBD_CONNECT_AT)
                         revimp->imp_msghdr_flags |= MSGHDR_AT_SUPPORT;
         }

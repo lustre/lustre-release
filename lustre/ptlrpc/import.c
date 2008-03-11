@@ -516,7 +516,9 @@ int ptlrpc_connect_import(struct obd_import *imp, char *new_uuid)
 #ifndef __KERNEL__
         lustre_msg_add_op_flags(request->rq_reqmsg, MSG_CONNECT_LIBCLIENT);
 #endif
-        lustre_msg_add_op_flags(request->rq_reqmsg, MSG_CONNECT_NEXT_VER);
+        if (imp->imp_msg_magic == LUSTRE_MSG_MAGIC_V1)
+                lustre_msg_add_op_flags(request->rq_reqmsg,
+                                        MSG_CONNECT_NEXT_VER);
 
         request->rq_send_state = LUSTRE_IMP_CONNECTING;
         /* Allow a slightly larger reply for future growth compatibility */
@@ -635,7 +637,9 @@ static int ptlrpc_connect_interpret(struct ptlrpc_request *request,
                         spin_unlock(&imp->imp_lock);
                 }
 
-                if (msg_flags & MSG_CONNECT_NEXT_VER) {
+                if ((request->rq_reqmsg->lm_magic == LUSTRE_MSG_MAGIC_V1 &&
+                     msg_flags & MSG_CONNECT_NEXT_VER) ||
+                    request->rq_reqmsg->lm_magic == LUSTRE_MSG_MAGIC_V2) {
                         imp->imp_msg_magic = LUSTRE_MSG_MAGIC_V2;
                         CDEBUG(D_RPCTRACE, "connect to %s with lustre_msg_v2\n",
                                obd2cli_tgt(imp->imp_obd));
