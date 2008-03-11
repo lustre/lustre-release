@@ -3337,8 +3337,12 @@ test_78() { # bug 10901
  	NSEQ=5
 	F78SIZE=$(($(awk '/MemFree:/ { print $2 }' /proc/meminfo) / 1024))
 	echo "MemFree: $F78SIZE, Max file size: $MAXFREE"
-	MEMTOTAL=$(($(awk '/MemTotal:/ { print $2 }' /proc/meminfo) / 2048))
-	echo "MemTotal: $((MEMTOTAL * 2))"
+	MEMTOTAL=$(($(awk '/MemTotal:/ { print $2 }' /proc/meminfo) / 1024))
+	echo "MemTotal: $MEMTOTAL"
+# reserve 256MB of memory for the kernel and other running processes,
+# and then take 1/2 of the remaining memory for the read/write buffers.
+	MEMTOTAL=$(((MEMTOTAL - 256 ) / 2))
+	echo "Mem to use for directio: $MEMTOTAL"
 	[ $F78SIZE -gt $MEMTOTAL ] && F78SIZE=$MEMTOTAL
 	[ $F78SIZE -gt 512 ] && F78SIZE=512
 	[ $F78SIZE -gt $((MAXFREE / 1024)) ] && F78SIZE=$((MAXFREE / 1024))
