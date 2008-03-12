@@ -672,6 +672,17 @@ do_node() {
         echo "CMD: $HOST $@" >&2
         $myPDSH $HOST $LCTL mark "$@" > /dev/null 2>&1 || :
     fi
+
+    if [ "$myPDSH" = "rsh" ]; then
+# we need this because rsh does not return exit code of an executed command
+	local command_status="$TMP/cs"
+	rsh $HOST ":> $command_status"
+	rsh $HOST "(PATH=\$PATH:$RLUSTRE/utils:$RLUSTRE/tests:/sbin:/usr/sbin;
+		    cd $RPWD; sh -c \"$@\") || 
+		    echo command failed >$command_status"
+	[ -n "$($myPDSH $HOST cat $command_status)" ] && return 1 || true
+        return 0
+    fi
     $myPDSH $HOST "(PATH=\$PATH:$RLUSTRE/utils:$RLUSTRE/tests:/sbin:/usr/sbin; cd $RPWD; sh -c \"$@\")" | sed "s/^${HOST}: //"
     return ${PIPESTATUS[0]}
 }
