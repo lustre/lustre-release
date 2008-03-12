@@ -855,6 +855,19 @@ test_23a() {	# was test_23
 }
 run_test 23a "interrupt client during recovery mount delay"
 
+umount_client $MOUNT
+cleanup_nocli
+
+test_23b() {    # was test_23
+	start_ost
+	start_mds
+	# Simulate -EINTR during mount OBD_FAIL_LDLM_CLOSE_THREAD
+	sysctl -w lustre.fail_loc=0x80000313
+	mount_client $MOUNT
+	cleanup
+}
+run_test 23b "Simulate -EINTR during mount"
+
 fs2mds_HOST=$mds_HOST
 fs2ost_HOST=$ost_HOST
 

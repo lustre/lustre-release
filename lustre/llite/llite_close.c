@@ -336,6 +336,9 @@ int ll_close_thread_start(struct ll_close_queue **lcq_ret)
         struct ll_close_queue *lcq;
         pid_t pid;
 
+        if (OBD_FAIL_CHECK(OBD_FAIL_LDLM_CLOSE_THREAD))
+                return -EINTR;
+
         OBD_ALLOC(lcq, sizeof(*lcq));
         if (lcq == NULL)
                 return -ENOMEM;
