@@ -722,6 +722,9 @@ int mdc_set_open_replay_data(struct obd_export *exp,
         struct obd_import     *imp = open_req->rq_import;
         ENTRY;
 
+        if (!open_req->rq_replay)
+                RETURN(0);
+
         rec = req_capsule_client_get(&open_req->rq_pill, &RMF_REC_REINT);
         body = req_capsule_server_get(&open_req->rq_pill, &RMF_MDT_BODY);
         LASSERT(rec != NULL);
@@ -729,7 +732,7 @@ int mdc_set_open_replay_data(struct obd_export *exp,
         /* Outgoing messages always in my byte order. */
         LASSERT(body != NULL);
 
-        /*Only the import is replayable, we set replay_open data */
+        /* Only if the import is replayable, we set replay_open data */
         if (och && imp->imp_replayable) {
                 OBD_ALLOC_PTR(mod);
                 if (mod == NULL) {
@@ -740,12 +743,6 @@ int mdc_set_open_replay_data(struct obd_export *exp,
                 CFS_INIT_LIST_HEAD(&mod->mod_replay_list);
 
                 spin_lock(&open_req->rq_lock);
-                if (!open_req->rq_replay) {
-                        OBD_FREE(mod, sizeof(*mod));
-                        spin_unlock(&open_req->rq_lock);
-                        RETURN(0);
-                }
-
                 och->och_mod = mod;
                 mod->mod_och = och;
                 open_req->rq_cb_data = mod;

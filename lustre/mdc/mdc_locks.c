@@ -573,7 +573,7 @@ int mdc_enqueue(struct obd_export *exp, struct ldlm_enqueue_info *einfo,
                         RETURN (-EPROTO);
                 }
 
-                if (req->rq_replay && it_disposition(it, DISP_OPEN_OPEN) &&
+                if (it_disposition(it, DISP_OPEN_OPEN) &&
                     !it_open_error(DISP_OPEN_OPEN, it)) {
                         /*
                          * If this is a successful OPEN request, we need to set
