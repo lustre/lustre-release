@@ -861,9 +861,9 @@ struct obd_import *class_new_import(struct obd_device *obd)
         CFS_INIT_LIST_HEAD(&imp->imp_handle.h_link);
         class_handle_hash(&imp->imp_handle, import_handle_addref);
 
-        /* the default magic is V1, will be used in connect RPC, and
+        /* the default magic is V2, will be used in connect RPC, and
          * then adjusted according to the flags in request/reply. */
-        imp->imp_msg_magic = LUSTRE_MSG_MAGIC_V1;
+        imp->imp_msg_magic = LUSTRE_MSG_MAGIC_V2;
 
         return imp;
 }

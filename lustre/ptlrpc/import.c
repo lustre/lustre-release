@@ -636,14 +636,8 @@ static int ptlrpc_connect_interpret(struct ptlrpc_request *request,
                         spin_unlock(&imp->imp_lock);
                 }
 
-                if (msg_flags & MSG_CONNECT_NEXT_VER) {
-                        imp->imp_msg_magic = LUSTRE_MSG_MAGIC_V2;
-                        CDEBUG(D_RPCTRACE, "connect to %s with lustre_msg_v2\n",
-                               obd2cli_tgt(imp->imp_obd));
-                } else {
-                        CDEBUG(D_RPCTRACE, "connect to %s with lustre_msg_v1\n",
-                               obd2cli_tgt(imp->imp_obd));
-                }
+                /* if applies, adjust the imp->imp_msg_magic here
+                 * according to reply flags */
 
                 imp->imp_remote_handle =
                                 *lustre_msg_get_handle(request->rq_repmsg);
