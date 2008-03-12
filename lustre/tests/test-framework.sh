@@ -1361,3 +1361,32 @@ check_runas_id() {
         Please set RUNAS_ID to some UID which exists on MDS and client or 
         add user $myRUNAS_ID:$myRUNAS_ID on these nodes."
 }
+
+# Run multiop in the background, but wait for it to print
+# "PAUSING" to its stdout before returning from this function.
+multiop_bg_pause() {
+    MULTIOP_PROG=${MULTIOP_PROG:-multiop}
+    FILE=$1
+    ARGS=$2
+
+    TMPPIPE=/tmp/multiop_open_wait_pipe.$$
+    mkfifo $TMPPIPE
+
+    echo "$MULTIOP_PROG $FILE v$ARGS"
+    $MULTIOP_PROG $FILE v$ARGS > $TMPPIPE &
+
+    echo "TMPPIPE=${TMPPIPE}"
+    read -t 60 multiop_output < $TMPPIPE
+    if [ $? -ne 0 ]; then
+        rm -f $TMPPIPE
+        return 1
+    fi
+    rm -f $TMPPIPE
+    if [ "$multiop_output" != "PAUSING" ]; then
+        echo "Incorrect multiop output: $multiop_output"
+        kill -9 $PID
+        return 1
+    fi
+
+    return 0
+}

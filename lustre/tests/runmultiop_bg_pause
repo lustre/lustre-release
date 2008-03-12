@@ -1,0 +1,11 @@
+#!/bin/bash
+
+# Run multiop in the background, but wait for it to print
+# "PAUSING" to its stdout before returning from this function.
+
+PTLDEBUG=${PTLDEBUG:--1}
+LUSTRE=${LUSTRE:-`dirname $0`/..}
+. $LUSTRE/tests/test-framework.sh
+
+multiop_bg_pause $*
+exit $?

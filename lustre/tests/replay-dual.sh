@@ -92,10 +92,8 @@ run_test 4 "|X| mkdir adir (-EEXIST), mkdir adir/bdir "
 test_5() {
     # multiclient version of replay_single.sh/test_8
     mcreate $MOUNT1/a
-    multiop $MOUNT2/a o_tSc &
+    multiop_bg_pause $MOUNT2/a o_tSc || return  1
     pid=$!
-    # give multiop a chance to open
-    sleep 1 
     rm -f $MOUNT1/a
     replay_barrier mds
     kill -USR1 $pid
@@ -110,12 +108,10 @@ run_test 5 "open, unlink |X| close"
 
 test_6() {
     mcreate $MOUNT1/a
-    multiop $MOUNT2/a o_c &
+    multiop_bg_pause $MOUNT2/a o_c || return 1
     pid1=$!
-    multiop $MOUNT1/a o_c &
+    multiop_bg_pause $MOUNT1/a o_c || return 1
     pid2=$!
-    # give multiop a chance to open
-    sleep 1 
     rm -f $MOUNT1/a
     replay_barrier mds
     kill -USR1 $pid1
@@ -202,9 +198,8 @@ run_test 11 "both clients timeout during replay"
 test_12() {
     replay_barrier mds
 
-    multiop $DIR/$tfile mo_c &
+    multiop_bg_pause $DIR/$tfile mo_c || return 1
     MULTIPID=$!
-    sleep 5
 
 #define OBD_FAIL_LDLM_ENQUEUE            0x302
     do_facet mds sysctl -w lustre.fail_loc=0x80000302
@@ -223,9 +218,8 @@ test_12() {
 run_test 12 "open resend timeout"
 
 test_13() {
-    multiop $DIR/$tfile mo_c &
+    multiop_bg_pause $DIR/$tfile mo_c || return 1
     MULTIPID=$!
-    sleep 5
 
     replay_barrier mds
 
