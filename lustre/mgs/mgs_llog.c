@@ -2142,6 +2142,7 @@ static int mgs_modify_srpc_log(struct obd_device *obd,
 {
         struct llog_handle   *llh;
         struct lvfs_run_ctxt  saved;
+        struct llog_ctxt     *ctxt;
         struct mgs_msl_data  *mmd;
         int rc, rc2;
         ENTRY;
@@ -2150,8 +2151,9 @@ static int mgs_modify_srpc_log(struct obd_device *obd,
 
         push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
         
-        rc = llog_create(llog_get_context(obd, LLOG_CONFIG_ORIG_CTXT),
-                         &llh, NULL, logname);
+        ctxt = llog_get_context(obd, LLOG_CONFIG_ORIG_CTXT);
+        LASSERT(ctxt != NULL);
+        rc = llog_create(ctxt, &llh, NULL, logname);
         if (rc)
                 GOTO(out_pop, rc);
 
@@ -2181,9 +2183,10 @@ out_close:
 
 out_pop:
         pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
+        llog_ctxt_put(ctxt);
+
         if (rc) 
                 CERROR("modify sptlrpc log %s failed %d\n", logname, rc);
-
         RETURN(rc);
 }
 
@@ -2531,10 +2534,14 @@ static int mgs_get_fsdb_srpc_from_llog(struct obd_device *obd,
 {
         struct llog_handle        *llh = NULL;
         struct lvfs_run_ctxt       saved;
+        struct llog_ctxt          *ctxt;
         char                      *logname;
         struct mgs_srpc_read_data  msrd;
         int                        rc;
         ENTRY;
+
+        ctxt = llog_get_context(obd, LLOG_CONFIG_ORIG_CTXT);
+        LASSERT(ctxt != NULL);
 
         /* construct log name */
         rc = name_create(&logname, fsdb->fsdb_name, "-sptlrpc");
@@ -2546,8 +2553,7 @@ static int mgs_get_fsdb_srpc_from_llog(struct obd_device *obd,
 
         push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
 
-        rc = llog_create(llog_get_context(obd, LLOG_CONFIG_ORIG_CTXT),
-                         &llh, NULL, logname);
+        rc = llog_create(ctxt, &llh, NULL, logname);
         if (rc)
                 GOTO(out_pop, rc);
 
@@ -2569,6 +2575,7 @@ out_pop:
         pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
 out:
         name_destroy(&logname);
+        llog_ctxt_put(ctxt);
 
         if (rc)
                 CERROR("failed to read sptlrpc config database: %d\n", rc);
