@@ -145,6 +145,7 @@ int main(int argc, char **argv)
         int rc, len, fd = -1;
         int flags;
         int save_errno;
+        int verbose = 0;
 
         if (argc < 3) {
                 fprintf(stderr, usage, argv[0]);
@@ -158,8 +159,13 @@ int main(int argc, char **argv)
         for (commands = argv[2]; *commands; commands++) {
                 switch (*commands) {
                 case '_':
-                        if (usr1_received == 0)
+                        if (usr1_received == 0) {
+                                if (verbose) {
+                                        printf("PAUSING\n");
+                                        fflush(stdout);
+                                }
                                 pause();
+                        }
                         usr1_received = 0;
                         signal(SIGUSR1, usr1_handler);
                         break;
@@ -336,6 +342,9 @@ int main(int argc, char **argv)
                                 perror("munmap");
                                 exit(save_errno);
                         }
+                        break;
+                case 'v':
+                        verbose = 1;
                         break;
                 case 'w':
                         len = atoi(commands+1);

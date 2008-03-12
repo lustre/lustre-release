@@ -253,9 +253,8 @@ test_8() {
     # make sure no side-effect from previous test.
     rm -f $DIR/$tfile
     replay_barrier $SINGLEMDS
-    multiop $DIR/$tfile mo_c &
+    multiop_bg_pause $DIR/$tfile mo_c || return 4
     MULTIPID=$!
-    sleep 1
     fail $SINGLEMDS
     ls $DIR/$tfile
     $CHECKSTAT -t file $DIR/$tfile || return 1
@@ -313,10 +312,8 @@ run_test 11 "create open write rename |X| create-old-name read"
 
 test_12() {
     mcreate $DIR/$tfile
-    multiop $DIR/$tfile o_tSc &
+    multiop_bg_pause $DIR/$tfile o_tSc || return 3
     pid=$!
-    # give multiop a chance to open
-    sleep 1
     rm -f $DIR/$tfile
     replay_barrier $SINGLEMDS
     kill -USR1 $pid
@@ -333,10 +330,8 @@ run_test 12 "open, unlink |X| close"
 #        a regular open a failure
 test_13() {
     mcreate $DIR/$tfile
-    multiop $DIR/$tfile O_wc &
+    multiop_bg_pause $DIR/$tfile O_wc || return 3
     pid=$!
-    # give multiop a chance to open
-    sleep 1
     chmod 0 $DIR/$tfile
     $CHECKSTAT -p 0 $DIR/$tfile
     replay_barrier $SINGLEMDS
@@ -350,10 +345,8 @@ test_13() {
 run_test 13 "open chmod 0 |x| write close"
 
 test_14() {
-    multiop $DIR/$tfile O_tSc &
+    multiop_bg_pause $DIR/$tfile O_tSc || return 4
     pid=$!
-    # give multiop a chance to open
-    sleep 1
     rm -f $DIR/$tfile
     replay_barrier $SINGLEMDS
     kill -USR1 $pid || return 1
@@ -366,10 +359,8 @@ test_14() {
 run_test 14 "open(O_CREAT), unlink |X| close"
 
 test_15() {
-    multiop $DIR/$tfile O_tSc &
+    multiop_bg_pause $DIR/$tfile O_tSc || return 5
     pid=$!
-    # give multiop a chance to open
-    sleep 1
     rm -f $DIR/$tfile
     replay_barrier $SINGLEMDS
     touch $DIR/g11 || return 1
@@ -398,10 +389,8 @@ run_test 16 "|X| open(O_CREAT), unlink, touch new,  unlink new"
 
 test_17() {
     replay_barrier $SINGLEMDS
-    multiop $DIR/$tfile O_c &
+    multiop_bg_pause $DIR/$tfile O_c || return 4
     pid=$!
-    # give multiop a chance to open
-    sleep 1
     fail $SINGLEMDS
     kill -USR1 $pid || return 1
     wait $pid || return 2
@@ -412,10 +401,8 @@ run_test 17 "|X| open(O_CREAT), |replay| close"
 
 test_18() {
     replay_barrier $SINGLEMDS
-    multiop $DIR/$tfile O_tSc &
+    multiop_bg_pause $DIR/$tfile O_tSc || return 8
     pid=$!
-    # give multiop a chance to open
-    sleep 1
     rm -f $DIR/$tfile
     touch $DIR/$tfile-2 || return 1
     echo "pid: $pid will close"
@@ -447,10 +434,8 @@ run_test 19 "|X| mcreate, open, write, rename "
 
 test_20() {
     replay_barrier $SINGLEMDS
-    multiop $DIR/$tfile O_tSc &
+    multiop_bg_pause $DIR/$tfile O_tSc || return 3
     pid=$!
-    # give multiop a chance to open
-    sleep 1
     rm -f $DIR/$tfile
 
     fail $SINGLEMDS
@@ -491,10 +476,8 @@ test_20b() { # bug 10480
 run_test 20b "write, unlink, eviction, replay, (test mds_cleanup_orphans)"
 
 test_20c() { # bug 10480
-    multiop $DIR/$tfile Ow_c &
+    multiop_bg_pause $DIR/$tfile Ow_c || return 1
     pid=$!
-    # give multiop a chance to open
-    sleep 1
 
     ls -la $DIR/$tfile
 
@@ -511,10 +494,8 @@ run_test 20c "check that client eviction does not affect file content"
 
 test_21() {
     replay_barrier $SINGLEMDS
-    multiop $DIR/$tfile O_tSc &
+    multiop_bg_pause $DIR/$tfile O_tSc || return 5
     pid=$!
-    # give multiop a chance to open
-    sleep 1
     rm -f $DIR/$tfile
     touch $DIR/g11 || return 1
 
@@ -528,10 +509,8 @@ test_21() {
 run_test 21 "|X| open(O_CREAT), unlink touch new, replay, close (test mds_cleanup_orphans)"
 
 test_22() {
-    multiop $DIR/$tfile O_tSc &
+    multiop_bg_pause $DIR/$tfile O_tSc || return 3
     pid=$!
-    # give multiop a chance to open
-    sleep 1
 
     replay_barrier $SINGLEMDS
     rm -f $DIR/$tfile
@@ -545,10 +524,8 @@ test_22() {
 run_test 22 "open(O_CREAT), |X| unlink, replay, close (test mds_cleanup_orphans)"
 
 test_23() {
-    multiop $DIR/$tfile O_tSc &
+    multiop_bg_pause $DIR/$tfile O_tSc || return 5
     pid=$!
-    # give multiop a chance to open
-    sleep 1
 
     replay_barrier $SINGLEMDS
     rm -f $DIR/$tfile
@@ -564,10 +541,8 @@ test_23() {
 run_test 23 "open(O_CREAT), |X| unlink touch new, replay, close (test mds_cleanup_orphans)"
 
 test_24() {
-    multiop $DIR/$tfile O_tSc &
+    multiop_bg_pause $DIR/$tfile O_tSc || return 3
     pid=$!
-    # give multiop a chance to open
-    sleep 1
 
     replay_barrier $SINGLEMDS
     fail $SINGLEMDS
@@ -580,10 +555,8 @@ test_24() {
 run_test 24 "open(O_CREAT), replay, unlink, close (test mds_cleanup_orphans)"
 
 test_25() {
-    multiop $DIR/$tfile O_tSc &
+    multiop_bg_pause $DIR/$tfile O_tSc || return 3
     pid=$!
-    # give multiop a chance to open
-    sleep 1
     rm -f $DIR/$tfile
 
     replay_barrier $SINGLEMDS
@@ -597,12 +570,10 @@ run_test 25 "open(O_CREAT), unlink, replay, close (test mds_cleanup_orphans)"
 
 test_26() {
     replay_barrier $SINGLEMDS
-    multiop $DIR/$tfile-1 O_tSc &
+    multiop_bg_pause $DIR/$tfile-1 O_tSc || return 5
     pid1=$!
-    multiop $DIR/$tfile-2 O_tSc &
+    multiop_bg_pause $DIR/$tfile-2 O_tSc || return 6
     pid2=$!
-    # give multiop a chance to open
-    sleep 1
     rm -f $DIR/$tfile-1
     rm -f $DIR/$tfile-2
     kill -USR1 $pid2
@@ -619,12 +590,10 @@ run_test 26 "|X| open(O_CREAT), unlink two, close one, replay, close one (test m
 
 test_27() {
     replay_barrier $SINGLEMDS
-    multiop $DIR/$tfile-1 O_tSc &
+    multiop_bg_pause $DIR/$tfile-1 O_tSc || return 5
     pid1=$!
-    multiop $DIR/$tfile-2 O_tSc &
+    multiop_bg_pause $DIR/$tfile-2 O_tSc || return 6
     pid2=$!
-    # give multiop a chance to open
-    sleep 1
     rm -f $DIR/$tfile-1
     rm -f $DIR/$tfile-2
 
@@ -640,12 +609,10 @@ test_27() {
 run_test 27 "|X| open(O_CREAT), unlink two, replay, close two (test mds_cleanup_orphans)"
 
 test_28() {
-    multiop $DIR/$tfile-1 O_tSc &
+    multiop_bg_pause $DIR/$tfile-1 O_tSc || return 5
     pid1=$!
-    multiop $DIR/$tfile-2 O_tSc &
+    multiop_bg_pause $DIR/$tfile-2 O_tSc || return 6
     pid2=$!
-    # give multiop a chance to open
-    sleep 1
     replay_barrier $SINGLEMDS
     rm -f $DIR/$tfile-1
     rm -f $DIR/$tfile-2
@@ -662,12 +629,10 @@ test_28() {
 run_test 28 "open(O_CREAT), |X| unlink two, close one, replay, close one (test mds_cleanup_orphans)"
 
 test_29() {
-    multiop $DIR/$tfile-1 O_tSc &
+    multiop_bg_pause $DIR/$tfile-1 O_tSc || return 5
     pid1=$!
-    multiop $DIR/$tfile-2 O_tSc &
+    multiop_bg_pause $DIR/$tfile-2 O_tSc || return 6
     pid2=$!
-    # give multiop a chance to open
-    sleep 1
     replay_barrier $SINGLEMDS
     rm -f $DIR/$tfile-1
     rm -f $DIR/$tfile-2
@@ -684,12 +649,10 @@ test_29() {
 run_test 29 "open(O_CREAT), |X| unlink two, replay, close two (test mds_cleanup_orphans)"
 
 test_30() {
-    multiop $DIR/$tfile-1 O_tSc &
+    multiop_bg_pause $DIR/$tfile-1 O_tSc || return 5
     pid1=$!
-    multiop $DIR/$tfile-2 O_tSc &
+    multiop_bg_pause $DIR/$tfile-2 O_tSc || return 6
     pid2=$!
-    # give multiop a chance to open
-    sleep 1
     rm -f $DIR/$tfile-1
     rm -f $DIR/$tfile-2
 
@@ -706,12 +669,10 @@ test_30() {
 run_test 30 "open(O_CREAT) two, unlink two, replay, close two (test mds_cleanup_orphans)"
 
 test_31() {
-    multiop $DIR/$tfile-1 O_tSc &
+    multiop_bg_pause $DIR/$tfile-1 O_tSc || return 5
     pid1=$!
-    multiop $DIR/$tfile-2 O_tSc &
+    multiop_bg_pause $DIR/$tfile-2 O_tSc || return 6
     pid2=$!
-    # give multiop a chance to open
-    sleep 1
     rm -f $DIR/$tfile-1
 
     replay_barrier $SINGLEMDS
@@ -730,12 +691,10 @@ run_test 31 "open(O_CREAT) two, unlink one, |X| unlink one, close two (test mds_
 # tests for bug 2104; completion without crashing is success.  The close is
 # stale, but we always return 0 for close, so the app never sees it.
 test_32() {
-    multiop $DIR/$tfile O_c &
+    multiop_bg_pause $DIR/$tfile O_c || return 2
     pid1=$!
-    multiop $DIR/$tfile O_c &
+    multiop_bg_pause $DIR/$tfile O_c || return 3
     pid2=$!
-    # give multiop a chance to open
-    sleep 1
     mds_evict_client
     df $MOUNT || sleep 1 && df $MOUNT || return 1
     kill -USR1 $pid1
@@ -771,10 +730,8 @@ test_33a() {
 run_test 33a "fid shouldn't be reused after abort recovery"
 
 test_34() {
-    multiop $DIR/$tfile O_c &
+    multiop_bg_pause $DIR/$tfile O_c || return 2
     pid=$!
-    # give multiop a chance to open
-    sleep 1
     rm -f $DIR/$tfile
 
     replay_barrier $SINGLEMDS
@@ -821,10 +778,8 @@ run_test 36 "don't resend cancel"
 # directory orphans can't be unlinked from PENDING directory
 test_37() {
     rmdir $DIR/$tfile 2>/dev/null
-    multiop $DIR/$tfile dD_c &
+    multiop_bg_pause $DIR/$tfile dD_c || return 2
     pid=$!
-    # give multiop a chance to open
-    sleep 1
     rmdir $DIR/$tfile
 
     replay_barrier $SINGLEMDS
@@ -996,9 +951,8 @@ test_45() {
     [ "$mdcdev" ] || exit 2
     $LCTL --device $mdcdev recover
 
-    multiop $DIR/$tfile O_c &
+    multiop_bg_pause $DIR/$tfile O_c || return 1
     pid=$!
-    sleep 1
 
     # This will cause the CLOSE to fail before even
     # allocating a reply buffer

@@ -125,10 +125,9 @@ test_12(){
     $LCTL mark multiop $MOUNT/$tfile OS_c 
     do_facet $SINGLEMDS "sysctl -w lustre.fail_loc=0x115"
     clear_failloc $SINGLEMDS $((TIMEOUT * 2)) &
-    multiop $MOUNT/$tfile OS_c  &
+    multiop_bg_pause $MOUNT/$tfile OS_c || return 1
     PID=$!
 #define OBD_FAIL_MDS_CLOSE_NET           0x115
-    sleep 2
     kill -USR1 $PID
     echo "waiting for multiop $PID"
     wait $PID || return 2
@@ -322,9 +321,8 @@ run_test 19b "test expired_lock_main on ost (2867)"
 
 test_20a() {	# bug 2983 - ldlm_handle_enqueue cleanup
 	mkdir -p $DIR/$tdir
-	multiop $DIR/$tdir/${tfile} O_wc &
+	multiop_bg_pause $DIR/$tdir/${tfile} O_wc || return 1
 	MULTI_PID=$!
-	sleep 1
 	cancel_lru_locks osc
 #define OBD_FAIL_LDLM_ENQUEUE_EXTENT_ERR 0x308
 	do_facet ost1 sysctl -w lustre.fail_loc=0x80000308
@@ -349,7 +347,7 @@ run_test 20b "ldlm_handle_enqueue error (should return error)"
 test_21a() {
        mkdir -p $DIR/$tdir-1
        mkdir -p $DIR/$tdir-2
-       multiop $DIR/$tdir-1/f O_c &
+       multiop_bg_pause $DIR/$tdir-1/f O_c || return 1
        close_pid=$!
 
        do_facet $SINGLEMDS "sysctl -w lustre.fail_loc=0x80000129"
@@ -375,7 +373,7 @@ run_test 21a "drop close request while close and open are both in flight"
 test_21b() {
        mkdir -p $DIR/$tdir-1
        mkdir -p $DIR/$tdir-2
-       multiop $DIR/$tdir-1/f O_c &
+       multiop_bg_pause $DIR/$tdir-1/f O_c || return 1
        close_pid=$!
 
        do_facet $SINGLEMDS "sysctl -w lustre.fail_loc=0x80000107"
@@ -398,7 +396,7 @@ run_test 21b "drop open request while close and open are both in flight"
 test_21c() {
        mkdir -p $DIR/$tdir-1
        mkdir -p $DIR/$tdir-2
-       multiop $DIR/$tdir-1/f O_c &
+       multiop_bg_pause $DIR/$tdir-1/f O_c || return 1
        close_pid=$!
 
        do_facet $SINGLEMDS "sysctl -w lustre.fail_loc=0x80000107"
@@ -424,7 +422,7 @@ run_test 21c "drop both request while close and open are both in flight"
 test_21d() {
        mkdir -p $DIR/$tdir-1
        mkdir -p $DIR/$tdir-2
-       multiop $DIR/$tdir-1/f O_c &
+       multiop_bg_pause $DIR/$tdir-1/f O_c || return 1
        pid=$!
 
        do_facet $SINGLEMDS "sysctl -w lustre.fail_loc=0x80000129"
@@ -448,7 +446,7 @@ run_test 21d "drop close reply while close and open are both in flight"
 test_21e() {
        mkdir -p $DIR/$tdir-1
        mkdir -p $DIR/$tdir-2
-       multiop $DIR/$tdir-1/f O_c &
+       multiop_bg_pause $DIR/$tdir-1/f O_c || return 1
        pid=$!
 
        do_facet $SINGLEMDS "sysctl -w lustre.fail_loc=0x80000119"
@@ -470,7 +468,7 @@ run_test 21e "drop open reply while close and open are both in flight"
 test_21f() {
        mkdir -p $DIR/$tdir-1
        mkdir -p $DIR/$tdir-2
-       multiop $DIR/$tdir-1/f O_c &
+       multiop_bg_pause $DIR/$tdir-1/f O_c || return 1
        pid=$!
 
        do_facet $SINGLEMDS "sysctl -w lustre.fail_loc=0x80000119"
@@ -493,7 +491,7 @@ run_test 21f "drop both reply while close and open are both in flight"
 test_21g() {
        mkdir -p $DIR/$tdir-1
        mkdir -p $DIR/$tdir-2
-       multiop $DIR/$tdir-1/f O_c &
+       multiop_bg_pause $DIR/$tdir-1/f O_c || return 1
        pid=$!
 
        do_facet $SINGLEMDS "sysctl -w lustre.fail_loc=0x80000119"
@@ -516,7 +514,7 @@ run_test 21g "drop open reply and close request while close and open are both in
 test_21h() {
        mkdir -p $DIR/$tdir-1
        mkdir -p $DIR/$tdir-2
-       multiop $DIR/$tdir-1/f O_c &
+       multiop_bg_pause $DIR/$tdir-1/f O_c || return 1
        pid=$!
 
        do_facet $SINGLEMDS "sysctl -w lustre.fail_loc=0x80000107"
@@ -560,7 +558,7 @@ test_22() {
 run_test 22 "drop close request and do mknod"
 
 test_23() { #b=4561
-    multiop $DIR/$tfile O_c &
+    multiop_bg_pause $DIR/$tfile O_c || return 1
     pid=$!
     # give a chance for open
     sleep 5
@@ -577,11 +575,9 @@ run_test 23 "client hang when close a file after mds crash"
 test_24() {	# bug 2248 - eviction fails writeback but app doesn't see it
 	mkdir -p $DIR/$tdir
 	cancel_lru_locks osc
-	multiop $DIR/$tdir/$tfile Owy_wyc &
+	multiop_bg_pause $DIR/$tdir/$tfile Owy_wyc || return 1
 	MULTI_PID=$!
-	usleep 500
 	ost_evict_client
-	usleep 500
 	kill -USR1 $MULTI_PID
 	wait $MULTI_PID
 	rc=$?

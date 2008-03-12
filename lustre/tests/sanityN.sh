@@ -221,9 +221,8 @@ run_test 10b "write of file with sub-page size on multiple mounts "
 
 test_11() {
 	mkdir $DIR1/d11
-	multiop $DIR1/d11/f O_c &
+	multiop_bg_pause $DIR1/d11/f O_c || return 1
 	MULTIPID=$!
-	usleep 200
 	cp -p /bin/ls $DIR1/d11/f
 	$DIR2/d11/f
 	RC=$?
@@ -267,12 +266,11 @@ run_test 14 "execution of file open for write returns -ETXTBSY ="
 test_14a() {
         mkdir -p $DIR1/d14
 	cp -p `which multiop` $DIR1/d14/multiop || error "cp failed"
-        $DIR1/d14/multiop $TMP/test14.junk O_c &
-        MULTIPID=$!
-        sleep 1
+        MULTIOP_PROG=$DIR1/d14/multiop multiop_bg_pause $TMP/test14.junk O_c || return 1
+        MULTIOP_PID=$!
         multiop $DIR2/d14/multiop Oc && error "expected error, got success"
-        kill -USR1 $MULTIPID || return 2
-        wait $MULTIPID || return 3
+        kill -USR1 $MULTIOP_PID || return 2
+        wait $MULTIOP_PID || return 3
         rm $TMP/test14.junk $DIR1/d14/multiop || error "removing multiop"
 }
 run_test 14a "open(RDWR) of executing file returns -ETXTBSY ===="
@@ -280,13 +278,12 @@ run_test 14a "open(RDWR) of executing file returns -ETXTBSY ===="
 test_14b() { # bug 3192, 7040
         mkdir -p $DIR1/d14
 	cp -p `which multiop` $DIR1/d14/multiop || error "cp failed"
-        $DIR1/d14/multiop $TMP/test14.junk O_c &
-        MULTIPID=$!
-        sleep 1
-        truncate $DIR2/d14/multiop 0 && kill -9 $MULTIPID && \
+        MULTIOP_PROG=$DIR1/d14/multiop multiop_bg_pause $TMP/test14.junk O_c || return 1
+        MULTIOP_PID=$!
+        truncate $DIR2/d14/multiop 0 && kill -9 $MULTIOP_PID && \
 		error "expected truncate error, got success"
-        kill -USR1 $MULTIPID || return 2
-        wait $MULTIPID || return 3
+        kill -USR1 $MULTIOP_PID || return 2
+        wait $MULTIOP_PID || return 3
 	cmp `which multiop` $DIR1/d14/multiop || error "binary changed"
 	rm $TMP/test14.junk $DIR1/d14/multiop || error "removing multiop"
 }
@@ -295,12 +292,11 @@ run_test 14b "truncate of executing file returns -ETXTBSY ======"
 test_14c() { # bug 3430, 7040
 	mkdir -p $DIR1/d14
 	cp -p `which multiop` $DIR1/d14/multiop || error "cp failed"
-	$DIR1/d14/multiop $TMP/test14.junk O_c &
-	MULTIPID=$!
-	sleep 1
+	MULTIOP_PROG=$DIR1/d14/multiop multiop_bg_pause $TMP/test14.junk O_c || return 1
+        MULTIOP_PID=$!
 	cp /etc/hosts $DIR2/d14/multiop && error "expected error, got success"
-	kill -USR1 $MULTIPID || return 2
-	wait $MULTIPID || return 3
+	kill -USR1 $MULTIOP_PID || return 2
+	wait $MULTIOP_PID || return 3
 	cmp `which multiop` $DIR1/d14/multiop || error "binary changed"
 	rm $TMP/test14.junk $DIR1/d14/multiop || error "removing multiop"
 }
@@ -309,13 +305,12 @@ run_test 14c "open(O_TRUNC) of executing file return -ETXTBSY =="
 test_14d() { # bug 10921
 	mkdir -p $DIR1/d14
 	cp -p `which multiop` $DIR1/d14/multiop || error "cp failed"
-	$DIR1/d14/multiop $TMP/test14.junk O_c &
-	MULTIPID=$!
-	sleep 1
+	MULTIOP_PROG=$DIR1/d14/multiop multiop_bg_pause $TMP/test14.junk O_c || return 1
+        MULTIOP_PID=$!
 	log chmod
 	chmod 600 $DIR1/d14/multiop || error "chmod failed"
-	kill -USR1 $MULTIPID || return 2
-	wait $MULTIPID || return 3
+	kill -USR1 $MULTIOP_PID || return 2
+	wait $MULTIOP_PID || return 3
 	cmp `which multiop` $DIR1/d14/multiop || error "binary changed"
 	rm $TMP/test14.junk $DIR1/d14/multiop || error "removing multiop"
 }
@@ -445,10 +440,9 @@ test_23() { # Bug 5972
 	time1=`date +%s`	
 	sleep 2
 	
-	multiop $DIR1/f23 or20_c &
+	multiop_bg_pause $DIR1/f23 or20_c || return 1
 	MULTIPID=$!
 
-	sleep 2
 	time2=`stat -c "%X" $DIR2/f23`
 
 	if (( $time2 <= $time1 )); then

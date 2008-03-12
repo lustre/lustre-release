@@ -685,9 +685,8 @@ run_test 24p "mkdir .../R12{a,b}; rename .../R12a .../R12b"
 test_24q() {
 	mkdir $DIR/R13{a,b}
 	DIRINO=`ls -lid $DIR/R13a | awk '{ print $1 }'`
-	multiop $DIR/R13b D_c &
+	multiop_bg_pause $DIR/R13b D_c || return 1
 	MULTIPID=$!
-	usleep 500
 
 	mrename $DIR/R13a $DIR/R13b
 	$CHECKSTAT -a $DIR/R13a || error
@@ -1173,10 +1172,9 @@ run_test 31b "unlink file with multiple links while open ======="
 test_31c() {
 	touch $DIR/f31 || error
 	ln $DIR/f31 $DIR/f31c || error
-	multiop $DIR/f31 O_uc &
+	multiop_bg_pause $DIR/f31 O_uc || return 1
 	MULTIPID=$!
 	multiop $DIR/f31c Ouc
-	usleep 500
 	kill -USR1 $MULTIPID
 	wait $MULTIPID
 }
@@ -1201,21 +1199,17 @@ test_31f() { # bug 4554
 	cp /etc/hosts $DIR/d31f
 	ls -l $DIR/d31f
 	$GETSTRIPE $DIR/d31f/hosts
-	multiop $DIR/d31f D_c &
+	multiop_bg_pause $DIR/d31f D_c || return 1
 	MULTIPID=$!
-
-	sleep 1
 
 	rm -rv $DIR/d31f || error "first of $DIR/d31f"
 	mkdir $DIR/d31f
 	$SETSTRIPE $DIR/d31f -s 1048576 -c 1
 	cp /etc/hosts $DIR/d31f
 	ls -l $DIR/d31f
-	 $DIR/d31f/hosts
-	multiop $DIR/d31f D_c &
+	$DIR/d31f/hosts
+	multiop_bg_pause $DIR/d31f D_c || return 1
 	MULTIPID2=$!
-
-	sleep 6
 
 	kill -USR1 $MULTIPID || error "first opendir $MULTIPID not running"
 	wait $MULTIPID || error "first opendir $MULTIPID failed"
@@ -1895,12 +1889,11 @@ run_test 43 "execution of file opened for write should return -ETXTBSY"
 test_43a() {
         mkdir -p $DIR/d43
 	cp -p `which multiop` $DIR/d43/multiop || cp -p multiop $DIR/d43/multiop
-        $DIR/d43/multiop $TMP/test43.junk O_c &
-        MULTIPID=$!
-        sleep 1
+        MULTIOP_PROG=$DIR/d43/multiop multiop_bg_pause $TMP/test43.junk O_c || return 1
+        MULTIOP_PID=$!
         multiop $DIR/d43/multiop Oc && error "expected error, got success"
-        kill -USR1 $MULTIPID || return 2
-        wait $MULTIPID || return 3
+        kill -USR1 $MULTIOP_PID || return 2
+        wait $MULTIOP_PID || return 3
         rm $TMP/test43.junk
 }
 run_test 43a "open(RDWR) of file being executed should return -ETXTBSY"
@@ -1908,12 +1901,11 @@ run_test 43a "open(RDWR) of file being executed should return -ETXTBSY"
 test_43b() {
         mkdir -p $DIR/d43
 	cp -p `which multiop` $DIR/d43/multiop || cp -p multiop $DIR/d43/multiop
-        $DIR/d43/multiop $TMP/test43.junk O_c &
-        MULTIPID=$!
-        sleep 1
+        MULTIOP_PROG=$DIR/d43/multiop multiop_bg_pause $TMP/test43.junk O_c || return 1
+        MULTIOP_PID=$!
         truncate $DIR/d43/multiop 0 && error "expected error, got success"
-        kill -USR1 $MULTIPID || return 2
-        wait $MULTIPID || return 3
+        kill -USR1 $MULTIOP_PID || return 2
+        wait $MULTIOP_PID || return 3
         rm $TMP/test43.junk
 }
 run_test 43b "truncate of file being executed should return -ETXTBSY"
@@ -3047,10 +3039,8 @@ run_test 72 "Test that remove suid works properly (bug5695) ===="
 test_73() {
 	mkdir $DIR/d73-1 
 	mkdir $DIR/d73-2
-	multiop $DIR/d73-1/f73-1 O_c &
+	multiop_bg_pause $DIR/d73-1/f73-1 O_c || return 1
 	pid1=$!
-	#give multiop a chance to open
-	usleep 500
 
 	echo 0x80000129 > /proc/sys/lustre/fail_loc
 	multiop $DIR/d73-1/f73-2 Oc &
