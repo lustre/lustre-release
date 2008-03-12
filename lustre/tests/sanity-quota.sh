@@ -190,8 +190,8 @@ test_1_sub() {
 
         rm -f $TESTFILE
 	sync; sleep 1; sync;
-	OST0_UUID=`$LCTL dl | grep -m1 obdfilter | awk '{print $((NF-1))}'`
-	OST0_QUOTA_USED="`$LFS quota -o $OST0_UUID -u $TSTUSR $DIR | awk '/^.*[[:digit:]+][[:space:]+]/ { print $1 }'`"
+	OST0_UUID=`do_facet ost1 $LCTL dl | grep -m1 obdfilter | awk '{print $((NF-1))}'`
+	OST0_QUOTA_USED=`do_facet ost1 $LFS quota -o $OST0_UUID -u $TSTUSR $DIR | awk '/^.*[[:digit:]+][[:space:]+]/ { print $1 }'`
 	echo $OST0_QUOTA_USED
 	[ $OST0_QUOTA_USED -ne 0 ] && \
 	    ($SHOW_QUOTA_USER; error "quota deleted isn't released")
@@ -221,8 +221,8 @@ test_1_sub() {
 	# cleanup
         rm -f $TESTFILE
 	sync; sleep 1; sync;
-	OST0_UUID=`$LCTL dl | grep -m1 obdfilter | awk '{print $((NF-1))}'`
-	OST0_QUOTA_USED="`$LFS quota -o $OST0_UUID -g $TSTUSR $DIR | awk '/^.*[[:digit:]+][[:space:]+]/ { print $1 }'`"
+	OST0_UUID=`do_facet ost1 $LCTL dl | grep -m1 obdfilter | awk '{print $((NF-1))}'`
+	OST0_QUOTA_USED=`do_facet ost1 $LFS quota -o $OST0_UUID -g $TSTUSR $DIR | awk '/^.*[[:digit:]+][[:space:]+]/ { print $1 }'`
 	echo $OST0_QUOTA_USED
 	[ $OST0_QUOTA_USED -ne 0 ] && \
 	    ($SHOW_QUOTA_USER; error "quota deleted isn't released")
@@ -275,8 +275,8 @@ test_2_sub() {
 	rm -f ${TESTFILE}_xxx
 	sync; sleep 1; sync;
 
-	MDS_UUID=`$LCTL dl | grep -m1 mds | awk '{print $((NF-1))}'`
-	MDS_QUOTA_USED="`$LFS quota -o $MDS_UUID -u $TSTUSR $DIR | awk '/^.*[[:digit:]+][[:space:]+]/ { print $4 }'`"
+	MDS_UUID=`do_facet mds $LCTL dl | grep -m1 mds | awk '{print $((NF-1))}'`
+	MDS_QUOTA_USED=`do_facet mds $LFS quota -o $MDS_UUID -u $TSTUSR $DIR | awk '/^.*[[:digit:]+][[:space:]+]/ { print $4 }'`
 	echo $MDS_QUOTA_USED
 	[ $MDS_QUOTA_USED -ne 0 ] && \
 	    ($SHOW_QUOTA_USER; error "quota deleted isn't released")
@@ -303,8 +303,8 @@ test_2_sub() {
 	rm -f ${TESTFILE}_xxx
 	sync; sleep 1; sync;
 
-	MDS_UUID=`$LCTL dl | grep -m1 mds | awk '{print $((NF-1))}'`
-	MDS_QUOTA_USED="`$LFS quota -o $MDS_UUID -g $TSTUSR $DIR | awk '/^.*[[:digit:]+][[:space:]+]/ { print $4 }'`"
+	MDS_UUID=`do_facet mds $LCTL dl | grep -m1 mds | awk '{print $((NF-1))}'`
+	MDS_QUOTA_USED=`do_facet mds $LFS quota -o $MDS_UUID -g $TSTUSR $DIR | awk '/^.*[[:digit:]+][[:space:]+]/ { print $4 }'`
 	echo $MDS_QUOTA_USED
 	[ $MDS_QUOTA_USED -ne 0 ] && \
 	    ($SHOW_QUOTA_USER; error "quota deleted isn't released")
