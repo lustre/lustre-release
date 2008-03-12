@@ -15,8 +15,8 @@ ONLY=${ONLY:-"$*"}
 #              xml xml xml xml xml xml dumb
 MOUNTCONFSKIP="10  11  12  13  13b 14  15 "
 
-# bug number for skipped test:                     13369 12743
-ALWAYS_EXCEPT=" $CONF_SANITY_EXCEPT $MOUNTCONFSKIP 34a   36"
+# bug number for skipped test:                     13369
+ALWAYS_EXCEPT=" $CONF_SANITY_EXCEPT $MOUNTCONFSKIP 34a"
 # UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
 
 SRCDIR=`dirname $0`
@@ -1414,14 +1414,16 @@ test_36() { # 12743
         fi
         [ $OSTCOUNT -lt 2 ] && skip "skipping test for single OST" && return
 
-        [ $(lctl get_param -n devices  | grep -c obdfilter) -eq 0 ] &&
-                skip "skipping test for remote OST" && return
+	[ "$ost_HOST" = "`hostname`" -o "$ost1_HOST" = "`hostname`" ] || \
+		{ skip "remote OST" && return 0; }
 
         local fs2mdsdev=${fs2mds_DEV:-${MDSDEV}_2}
         local fs2ostdev=${fs2ost_DEV:-$(ostdevname 1)_2}
         local fs3ostdev=${fs3ost_DEV:-$(ostdevname 2)_2}
         add fs2mds $MDS_MKFS_OPTS --fsname=${FSNAME2} --reformat $fs2mdsdev || exit 10
-        add fs2ost $OST_MKFS_OPTS --mkfsoptions='-b1024' --fsname=${FSNAME2} --mgsnode=$MGSNID --reformat $fs2ostdev || exit 10
+        # XXX after we support non 4K disk blocksize, change following --mkfsoptions with
+        # other argument
+        add fs2ost $OST_MKFS_OPTS --mkfsoptions='-b4096' --fsname=${FSNAME2} --mgsnode=$MGSNID --reformat $fs2ostdev || exit 10
         add fs3ost $OST_MKFS_OPTS --mkfsoptions='-b4096' --fsname=${FSNAME2} --mgsnode=$MGSNID --reformat $fs3ostdev || exit 10
 
         start fs2mds $fs2mdsdev $MDS_MOUNT_OPTS
