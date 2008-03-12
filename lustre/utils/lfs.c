@@ -736,7 +736,8 @@ static int showdf(char *mntdir, struct obd_statfs *stat,
         long long avail, used, total;
         double ratio = 0;
         char *suffix = "KMGTPEZY";
-        char tbuf[10], ubuf[10], abuf[10], rbuf[10];
+        /* Note if we have >2^64 bytes/fs these buffers will need to be grown */
+        char tbuf[20], ubuf[20], abuf[20], rbuf[20];
 
         if (!uuid || !stat)
                 return -EINVAL;
