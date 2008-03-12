@@ -1524,7 +1524,7 @@ test_67a() #bug 3055
     CONN2=$(awk '/_connect/ {total+=$2} END {print total}' $LPROC/osc/*/stats)
     ATTEMPTS=$(($CONN2 - $CONN1))
     echo "$ATTEMPTS osc reconnect attemps on gradual slow"
-    [ $ATTEMPTS -gt 0 ] && error "AT should have prevented reconnect"
+    [ $ATTEMPTS -gt 0 ] && error_ignore 13721 "AT should have prevented reconnect"
     return 0
 }
 run_test 67a "AT: verify slow request processing doesn't induce reconnects"
@@ -1552,7 +1552,7 @@ test_67b() #bug 3055
     CONN3=$(awk '/_connect/ {total+=$2} END {print total}' $LPROC/osc/*/stats)
     ATTEMPTS=$(($CONN3 - $CONN2))
     echo "$ATTEMPTS osc reconnect attemps on 2nd slow"
-    [ $ATTEMPTS -gt 0 ] && error_ignore 13721 "AT should have prevented reconnect"
+    [ $ATTEMPTS -gt 0 ] && error "AT should have prevented reconnect"
     return 0
 }
 run_test 67b "AT: verify instant slowdown doesn't induce reconnects"
