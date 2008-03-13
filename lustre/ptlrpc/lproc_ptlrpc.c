@@ -564,6 +564,7 @@ int lprocfs_wr_ping(struct file *file, const char *buffer,
         ptlrpc_request_set_replen(req);
         req->rq_send_state = LUSTRE_IMP_FULL;
         req->rq_no_resend = 1;
+        req->rq_no_delay = 1;
 
         rc = ptlrpc_queue_wait(req);
 

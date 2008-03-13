@@ -142,8 +142,11 @@ struct obd_info {
          * OSC. (e.g. lov_prep_enqueue_set initialises extent of the policy,
          * and osc_enqueue passes it into ldlm_lock_match & ldlm_cli_enqueue. */
         ldlm_policy_data_t      oi_policy;
-        /* Flags used while lock handling. The flags obtained on the enqueue
-         * request are set here, therefore they are request specific. */
+        /* Flags used for set request specific flags:
+           - while lock handling, the flags obtained on the enqueue
+           request are set here.
+           - while stats, the flags used for control delay/resend.
+         */
         int                     oi_flags;
         /* Lock handle specific for every OSC lock. */
         struct lustre_handle   *oi_lockh;
@@ -1091,7 +1094,7 @@ struct obd_ops {
         int (*o_fid_delete)(struct obd_export *exp, const struct lu_fid *fid);
 
         int (*o_statfs)(struct obd_device *obd, struct obd_statfs *osfs,
-                        __u64 max_age);
+                        __u64 max_age, __u32 flags);
         int (*o_statfs_async)(struct obd_device *obd, struct obd_info *oinfo,
                               __u64 max_age, struct ptlrpc_request_set *set);
         int (*o_packmd)(struct obd_export *exp, struct lov_mds_md **disk_tgt,

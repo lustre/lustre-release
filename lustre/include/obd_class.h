@@ -1008,7 +1008,7 @@ static inline int obd_statfs_async(struct obd_device *obd,
 
 static inline int obd_statfs_rqset(struct obd_device *obd,
                                    struct obd_statfs *osfs, __u64 max_age,
-                                   int quick_pry)
+                                   __u32 flags)
 {
         struct ptlrpc_request_set *set = NULL;
         struct obd_info oinfo = { { { 0 } } };
@@ -1020,20 +1020,10 @@ static inline int obd_statfs_rqset(struct obd_device *obd,
                 RETURN(-ENOMEM);
 
         oinfo.oi_osfs = osfs;
+        oinfo.oi_flags = flags;
         rc = obd_statfs_async(obd, &oinfo, max_age, set);
-        if (rc == 0) {
-                struct ptlrpc_request *req;
-
-                if (quick_pry)
-                        list_for_each_entry(req, &set->set_requests,
-                                            rq_set_chain) {
-                                spin_lock(&req->rq_lock);
-                                req->rq_no_resend = 1;
-                                req->rq_no_delay  = 1;
-                                spin_unlock(&req->rq_lock);
-                        }
+        if (rc == 0)
                 rc = ptlrpc_set_wait(set);
-        }
         ptlrpc_set_destroy(set);
         RETURN(rc);
 }
@@ -1042,7 +1032,7 @@ static inline int obd_statfs_rqset(struct obd_device *obd,
  * If the cache is older than @max_age we will get a new value from the
  * target.  Use a value of "cfs_time_current() + HZ" to guarantee freshness. */
 static inline int obd_statfs(struct obd_device *obd, struct obd_statfs *osfs,
-                             __u64 max_age)
+                             __u64 max_age, __u32 flags)
 {
         int rc = 0;
         ENTRY;
@@ -1056,7 +1046,7 @@ static inline int obd_statfs(struct obd_device *obd, struct obd_statfs *osfs,
         CDEBUG(D_SUPER, "osfs "LPU64", max_age "LPU64"\n",
                obd->obd_osfs_age, max_age);
         if (cfs_time_before_64(obd->obd_osfs_age, max_age)) {
-                rc = OBP(obd, statfs)(obd, osfs, max_age);
+                rc = OBP(obd, statfs)(obd, osfs, max_age, flags);
                 if (rc == 0) {
                         spin_lock(&obd->obd_osfs_lock);
                         memcpy(&obd->obd_osfs, osfs, sizeof(obd->obd_osfs));

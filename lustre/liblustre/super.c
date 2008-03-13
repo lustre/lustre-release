@@ -1192,7 +1192,7 @@ static int llu_statfs_internal(struct llu_sb_info *sbi,
         int rc;
         ENTRY;
 
-        rc = obd_statfs(class_exp2obd(sbi->ll_md_exp), osfs, max_age);
+        rc = obd_statfs(class_exp2obd(sbi->ll_md_exp), osfs, max_age, 0);
         if (rc) {
                 CERROR("md_statfs fails: rc = %d\n", rc);
                 RETURN(rc);
@@ -2087,7 +2087,7 @@ llu_fsswop_mount(const char *source,
         }
         sbi->ll_md_exp = class_conn2export(&md_conn);
 
-        err = obd_statfs(obd, &osfs, 100000000);
+        err = obd_statfs(obd, &osfs, 100000000, 0);
         if (err)
                 GOTO(out_md, err);
 

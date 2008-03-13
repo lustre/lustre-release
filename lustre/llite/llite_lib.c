@@ -259,7 +259,7 @@ static int client_common_fill_super(struct super_block *sb, char *md, char *dt)
                 GOTO(out_md, err);
         }
 
-        err = obd_statfs(obd, &osfs, cfs_time_current_64() - HZ);
+        err = obd_statfs(obd, &osfs, cfs_time_current_64() - HZ, 0);
         if (err)
                 GOTO(out_md_fid, err);
 
@@ -1447,14 +1447,14 @@ int ll_setattr(struct dentry *de, struct iattr *attr)
 }
 
 int ll_statfs_internal(struct super_block *sb, struct obd_statfs *osfs,
-                       __u64 max_age)
+                       __u64 max_age, __u32 flags)
 {
         struct ll_sb_info *sbi = ll_s2sbi(sb);
         struct obd_statfs obd_osfs;
         int rc;
         ENTRY;
 
-        rc = obd_statfs(class_exp2obd(sbi->ll_md_exp), osfs, max_age);
+        rc = obd_statfs(class_exp2obd(sbi->ll_md_exp), osfs, max_age, flags);
         if (rc) {
                 CERROR("md_statfs fails: rc = %d\n", rc);
                 RETURN(rc);
@@ -1466,7 +1466,7 @@ int ll_statfs_internal(struct super_block *sb, struct obd_statfs *osfs,
                osfs->os_bavail, osfs->os_blocks, osfs->os_ffree,osfs->os_files);
 
         rc = obd_statfs_rqset(class_exp2obd(sbi->ll_dt_exp),
-                              &obd_osfs, max_age, 0);
+                              &obd_osfs, max_age, flags);
         if (rc) {
                 CERROR("obd_statfs fails: rc = %d\n", rc);
                 RETURN(rc);
@@ -1510,7 +1510,7 @@ int ll_statfs(struct dentry *de, struct kstatfs *sfs)
         /* For now we will always get up-to-date statfs values, but in the
          * future we may allow some amount of caching on the client (e.g.
          * from QOS or lprocfs updates). */
-        rc = ll_statfs_internal(sb, &osfs, cfs_time_current_64() - 1);
+        rc = ll_statfs_internal(sb, &osfs, cfs_time_current_64() - 1, 0);
         if (rc)
                 return rc;
 

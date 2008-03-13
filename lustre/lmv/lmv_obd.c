@@ -714,7 +714,7 @@ static int lmv_iocontrol(unsigned int cmd, struct obd_export *exp,
 
                 if ((index >= lmv->desc.ld_tgt_count))
                         RETURN(-ENODEV);
-                
+
                 if (!lmv->tgts[index].ltd_active)
                         RETURN(-ENODATA);
 
@@ -723,7 +723,8 @@ static int lmv_iocontrol(unsigned int cmd, struct obd_export *exp,
                         RETURN(-EINVAL);
 
                 /* got statfs data */
-                rc = obd_statfs(mdc_obd, &stat_buf, cfs_time_current_64() - 1);
+                rc = obd_statfs(mdc_obd, &stat_buf,
+                                cfs_time_current_64() - HZ, 0);
                 if (rc)
                         RETURN(rc);
                 if (copy_to_user(data->ioc_pbuf1, &stat_buf, data->ioc_plen1))
@@ -1075,7 +1076,7 @@ out:
 }
 
 static int lmv_statfs(struct obd_device *obd, struct obd_statfs *osfs,
-                      __u64 max_age)
+                      __u64 max_age, __u32 flags)
 {
         struct lmv_obd *lmv = &obd->u.lmv;
         struct obd_statfs *temp;
@@ -1094,7 +1095,8 @@ static int lmv_statfs(struct obd_device *obd, struct obd_statfs *osfs,
                 if (lmv->tgts[i].ltd_exp == NULL)
                         continue;
 
-                rc = obd_statfs(lmv->tgts[i].ltd_exp->exp_obd, temp, max_age);
+                rc = obd_statfs(lmv->tgts[i].ltd_exp->exp_obd, temp,
+                                max_age, flags);
                 if (rc) {
                         CERROR("can't stat MDS #%d (%s), error %d\n", i,
                                lmv->tgts[i].ltd_exp->exp_obd->obd_name,

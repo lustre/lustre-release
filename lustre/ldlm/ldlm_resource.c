@@ -478,6 +478,19 @@ int ldlm_namespace_free_prior(struct ldlm_namespace *ns)
         if (!ns)
                 RETURN(ELDLM_OK);
 
+#ifdef LPROCFS
+        {
+                struct proc_dir_entry *dir;
+                dir = lprocfs_srch(ldlm_ns_proc_dir, ns->ns_name);
+                if (dir == NULL) {
+                        CERROR("dlm namespace %s has no procfs dir?\n",
+                               ns->ns_name);
+                } else {
+                        lprocfs_remove(&dir);
+                }
+        }
+#endif
+
         mutex_down(ldlm_namespace_lock(ns->ns_client));
         list_del(&ns->ns_list_chain);
         atomic_dec(ldlm_namespace_nr(ns->ns_client));
@@ -516,18 +529,6 @@ int ldlm_namespace_free_post(struct ldlm_namespace *ns, int force)
         if (!ns)
                 RETURN(ELDLM_OK);
 
-#ifdef LPROCFS
-        {
-                struct proc_dir_entry *dir;
-                dir = lprocfs_srch(ldlm_ns_proc_dir, ns->ns_name);
-                if (dir == NULL) {
-                        CERROR("dlm namespace %s has no procfs dir?\n",
-                               ns->ns_name);
-                } else {
-                        lprocfs_remove(&dir);
-                }
-        }
-#endif
         OBD_VFREE(ns->ns_hash, sizeof(*ns->ns_hash) * RES_HASH_SIZE);
         OBD_FREE(ns->ns_name, strlen(ns->ns_name) + 1);
         OBD_FREE_PTR(ns);

@@ -105,13 +105,15 @@ static int lprocfs_mds_wr_evict_client(struct file *file, const char *buffer,
 
         obd_export_evict_by_nid(obd, tmpbuf+4);
 
-        LPROCFS_ENTRY();
-        class_decref(obd);
 
         rc = ptlrpc_set_wait(set);
         if (rc)
                 CERROR("Failed to evict nid %s from OSTs: rc %d\n", tmpbuf + 4,
                        rc);
+
+        LPROCFS_ENTRY();
+        class_decref(obd);
+
         ptlrpc_set_destroy(set);
         return count;
 }

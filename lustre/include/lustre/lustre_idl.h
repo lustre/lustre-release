@@ -871,6 +871,8 @@ struct obd_statfs {
 };
 
 extern void lustre_swab_obd_statfs (struct obd_statfs *os);
+#define OBD_STATFS_NODELAY      0x0001  /* requests should be send without delay
+                                         * and resends for avoid deadlocks */
 
 /* ost_body.data values for OST_BRW */
 
