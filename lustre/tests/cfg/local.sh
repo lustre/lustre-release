@@ -58,7 +58,7 @@ MOUNTOPT=""
 [ "x$OSTJOURNALSIZE" != "x" ] &&
     MKFSOPT=$MKFSOPT" -J size=$OSTJOURNALSIZE"
 [ "x$MKFSOPT" != "x" ] &&
-    MKFSOPT="--mkfsoptions=\"$MKFSOPT\""
+    MKFSOPT="--mkfsoptions=\\\"$MKFSOPT\\\""
 [ "x$ostfailover_HOST" != "x" ] &&
     MOUNTOPT=$MOUNTOPT" --failnode=`h2$NETTYPE $ostfailover_HOST`"
 OST_MKFS_OPTS="--ost --fsname=$FSNAME --device-size=$OSTSIZE --mgsnode=$MGSNID --param sys.timeout=$TIMEOUT $MKFSOPT $MOUNTOPT $OSTOPT"
