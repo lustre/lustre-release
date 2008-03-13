@@ -1140,7 +1140,7 @@ static int lov_create(struct obd_export *exp, struct obdo *src_oa,
         }
 
         maxage = cfs_time_shift_64(-lov->desc.ld_qos_maxage);
-        obd_statfs_rqset(exp->exp_obd, &osfs, maxage);
+        obd_statfs_rqset(exp->exp_obd, &osfs, maxage, 0);
 
         rc = lov_prep_create_set(exp, &oinfo, ea, src_oa, oti, &set);
         if (rc)
@@ -2308,38 +2308,27 @@ static int lov_statfs_async(struct obd_device *obd, struct obd_info *oinfo,
 }
 
 static int lov_statfs(struct obd_device *obd, struct obd_statfs *osfs,
-                      __u64 max_age)
+                      __u64 max_age, __u32 flags)
 {
-        struct lov_obd *lov = &obd->u.lov;
-        struct obd_statfs lov_sfs;
-        int set = 0;
-        int rc = 0, err;
-        int i;
+        struct ptlrpc_request_set *set = NULL;
+        struct obd_info oinfo = { { { 0 } } };
+        int rc = 0;
         ENTRY;
 
-        /* We only get block data from the OBD */
-        for (i = 0; i < lov->desc.ld_tgt_count; i++) {
-                if (!lov->lov_tgts[i] || !lov->lov_tgts[i]->ltd_active) {
-                        CDEBUG(D_HA, "lov idx %d inactive\n", i);
-                        continue;
-                }
+        /* for obdclass we forbid using obd_statfs_rqset, but prefer using async
+         * statfs requests */
+        set = ptlrpc_prep_set();
+        if (set == NULL)
+                RETURN(-ENOMEM);
 
-                err = obd_statfs(class_exp2obd(lov->lov_tgts[i]->ltd_exp), 
-                                 &lov_sfs, max_age);
-                if (err) {
-                        if (lov->lov_tgts[i]->ltd_active && !rc)
-                                rc = err;
-                        continue;
-                }
-                lov_update_statfs(class_exp2obd(lov->lov_tgts[i]->ltd_exp),
-                                  osfs, &lov_sfs, set);
-                set++;
-        }
+        oinfo.oi_osfs = osfs;
+        oinfo.oi_flags = flags;
+        rc = lov_statfs_async(obd, &oinfo, max_age, set);
+        if (rc == 0)
+                rc = ptlrpc_set_wait(set);
+        ptlrpc_set_destroy(set);
 
-        err = lov_fini_statfs(obd, osfs, set);
-        qos_update(lov);
-
-        RETURN(rc ? rc : err);
+        RETURN(rc);
 }
 
 static int lov_iocontrol(unsigned int cmd, struct obd_export *exp, int len,

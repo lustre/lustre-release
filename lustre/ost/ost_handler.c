@@ -159,7 +159,7 @@ static int ost_statfs(struct ptlrpc_request *req)
         osfs = lustre_msg_buf(req->rq_repmsg, REPLY_REC_OFF, sizeof(*osfs));
 
         req->rq_status = obd_statfs(req->rq_export->exp_obd, osfs, 
-                                    cfs_time_current_64() - HZ);
+                                    cfs_time_current_64() - HZ, 0);
         if (OBD_FAIL_CHECK_ONCE(OBD_FAIL_OST_ENOSPC))
                 osfs->os_bfree = osfs->os_bavail = 64;
         if (req->rq_status != 0)

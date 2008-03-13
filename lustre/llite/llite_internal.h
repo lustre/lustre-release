@@ -641,7 +641,7 @@ int ll_statfs(struct super_block *sb, struct kstatfs *sfs);
 int ll_statfs(struct dentry *de, struct kstatfs *sfs);
 #endif
 int ll_statfs_internal(struct super_block *sb, struct obd_statfs *osfs,
-                       __u64 max_age);
+                       __u64 max_age, __u32 flags);
 void ll_update_inode(struct inode *inode, struct lustre_md *md);
 void ll_read_inode2(struct inode *inode, void *opaque);
 int ll_iocontrol(struct inode *inode, struct file *file,

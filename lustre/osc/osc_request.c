@@ -3191,6 +3191,11 @@ static int osc_statfs_async(struct obd_device *obd, struct obd_info *oinfo,
         ptlrpc_req_set_repsize(req, 2, size);
         req->rq_request_portal = OST_CREATE_PORTAL;
         ptlrpc_at_set_req_timeout(req);
+        if (oinfo->oi_flags & OBD_STATFS_NODELAY) {
+                /* procfs requests not want stat in wait for avoid deadlock */
+                req->rq_no_resend = 1;
+                req->rq_no_delay = 1;
+        }
 
         req->rq_interpret_reply = osc_statfs_interpret;
         CLASSERT(sizeof(*aa) <= sizeof(req->rq_async_args));
@@ -3202,7 +3207,7 @@ static int osc_statfs_async(struct obd_device *obd, struct obd_info *oinfo,
 }
 
 static int osc_statfs(struct obd_device *obd, struct obd_statfs *osfs,
-                      __u64 max_age)
+                      __u64 max_age, __u32 flags)
 {
         struct obd_statfs *msfs;
         struct ptlrpc_request *req;
@@ -3223,6 +3228,12 @@ static int osc_statfs(struct obd_device *obd, struct obd_statfs *osfs,
         ptlrpc_req_set_repsize(req, 2, size);
         req->rq_request_portal = OST_CREATE_PORTAL;
         ptlrpc_at_set_req_timeout(req);
+
+        if (flags & OBD_STATFS_NODELAY) {
+                /* procfs requests not want stat in wait for avoid deadlock */
+                req->rq_no_resend = 1;
+                req->rq_no_delay = 1;
+        }
 
         rc = ptlrpc_queue_wait(req);
         if (rc)

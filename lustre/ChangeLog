@@ -18,6 +18,14 @@ tbd  Sun Microsystems, Inc.
        * RHEL 4 and RHEL 5/SLES 10 clients behaves differently on 'cd' to a
         removed cwd "./" (refer to Bugzilla 14399).
 
+Severity   : normal
+Bugzilla   : 14533
+Frequency  : rare, on recovery
+Description: read procfs can produce deadlock in some situation
+Details    : Holding lprocfs lock with send rpc can produce block for destroy
+             obd objects and this also block reconnect with -EALREADY. This isn't
+             fix all lprocfs bugs - but make it rare.
+
 Severity   : enhancement
 Bugzilla   : 15152
 Description: Update kernel to RHEL5 2.6.18-53.1.14.el5.

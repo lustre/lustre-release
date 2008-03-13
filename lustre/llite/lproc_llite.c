@@ -47,7 +47,8 @@ static int ll_rd_blksize(char *page, char **start, off_t off, int count,
         int rc;
 
         LASSERT(sb != NULL);
-        rc = ll_statfs_internal(sb, &osfs, cfs_time_current_64() - HZ);
+        rc = ll_statfs_internal(sb, &osfs, cfs_time_current_64() - HZ,
+                                OBD_STATFS_NODELAY);
         if (!rc) {
               *eof = 1;
               rc = snprintf(page, count, "%u\n", osfs.os_bsize);
@@ -64,7 +65,8 @@ static int ll_rd_kbytestotal(char *page, char **start, off_t off, int count,
         int rc;
 
         LASSERT(sb != NULL);
-        rc = ll_statfs_internal(sb, &osfs, cfs_time_current_64() - HZ);
+        rc = ll_statfs_internal(sb, &osfs, cfs_time_current_64() - HZ,
+                                OBD_STATFS_NODELAY);
         if (!rc) {
                 __u32 blk_size = osfs.os_bsize >> 10;
                 __u64 result = osfs.os_blocks;
@@ -87,7 +89,8 @@ static int ll_rd_kbytesfree(char *page, char **start, off_t off, int count,
         int rc;
 
         LASSERT(sb != NULL);
-        rc = ll_statfs_internal(sb, &osfs, cfs_time_current_64() - HZ);
+        rc = ll_statfs_internal(sb, &osfs, cfs_time_current_64() - HZ,
+                                OBD_STATFS_NODELAY);
         if (!rc) {
                 __u32 blk_size = osfs.os_bsize >> 10;
                 __u64 result = osfs.os_bfree;
@@ -109,7 +112,8 @@ static int ll_rd_kbytesavail(char *page, char **start, off_t off, int count,
         int rc;
 
         LASSERT(sb != NULL);
-        rc = ll_statfs_internal(sb, &osfs, cfs_time_current_64() - HZ);
+        rc = ll_statfs_internal(sb, &osfs, cfs_time_current_64() - HZ,
+                                OBD_STATFS_NODELAY);
         if (!rc) {
                 __u32 blk_size = osfs.os_bsize >> 10;
                 __u64 result = osfs.os_bavail;
@@ -131,7 +135,8 @@ static int ll_rd_filestotal(char *page, char **start, off_t off, int count,
         int rc;
 
         LASSERT(sb != NULL);
-        rc = ll_statfs_internal(sb, &osfs, cfs_time_current_64() - HZ);
+        rc = ll_statfs_internal(sb, &osfs, cfs_time_current_64() - HZ,
+                                OBD_STATFS_NODELAY);
         if (!rc) {
                  *eof = 1;
                  rc = snprintf(page, count, LPU64"\n", osfs.os_files);
@@ -147,7 +152,8 @@ static int ll_rd_filesfree(char *page, char **start, off_t off, int count,
         int rc;
 
         LASSERT(sb != NULL);
-        rc = ll_statfs_internal(sb, &osfs, cfs_time_current_64() - HZ);
+        rc = ll_statfs_internal(sb, &osfs, cfs_time_current_64() - HZ,
+                                OBD_STATFS_NODELAY);
         if (!rc) {
                  *eof = 1;
                  rc = snprintf(page, count, LPU64"\n", osfs.os_ffree);

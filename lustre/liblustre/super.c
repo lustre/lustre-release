@@ -1104,7 +1104,7 @@ static int llu_statfs_internal(struct llu_sb_info *sbi,
         int rc;
         ENTRY;
 
-        rc = obd_statfs(class_exp2obd(sbi->ll_mdc_exp), osfs, max_age);
+        rc = obd_statfs(class_exp2obd(sbi->ll_mdc_exp), osfs, max_age, 0);
         if (rc) {
                 CERROR("mdc_statfs fails: rc = %d\n", rc);
                 RETURN(rc);
@@ -1114,7 +1114,7 @@ static int llu_statfs_internal(struct llu_sb_info *sbi,
                osfs->os_bavail, osfs->os_blocks, osfs->os_ffree,osfs->os_files);
 
         rc = obd_statfs_rqset(class_exp2obd(sbi->ll_osc_exp),
-                              &obd_osfs, max_age);
+                              &obd_osfs, max_age, 0);
         if (rc) {
                 CERROR("obd_statfs fails: rc = %d\n", rc);
                 RETURN(rc);
@@ -1953,7 +1953,7 @@ llu_fsswop_mount(const char *source,
         }
         sbi->ll_mdc_exp = class_conn2export(&mdc_conn);
 
-        err = obd_statfs(obd, &osfs, 100000000);
+        err = obd_statfs(obd, &osfs, 100000000, 0);
         if (err)
                 GOTO(out_mdc, err);
 
