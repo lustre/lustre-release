@@ -40,7 +40,7 @@ MOUNTOPT=""
 [ "x$MDSISIZE" != "x" ] &&
     MKFSOPT=$MKFSOPT" -i $MDSISIZE"
 [ "x$MKFSOPT" != "x" ] &&
-    MKFSOPT="--mkfsoptions=\"$MKFSOPT\""
+    MKFSOPT="--mkfsoptions=\\\"$MKFSOPT\\\""
 [ "x$MDSCAPA" != "x" ] &&
     MKFSOPT="--param mdt.capa=$MDSCAPA"
 [ "x$mdsfailover_HOST" != "x" ] &&
@@ -58,7 +58,7 @@ MOUNTOPT=""
 [ "x$OSTJOURNALSIZE" != "x" ] &&
     MKFSOPT=$MKFSOPT" -J size=$OSTJOURNALSIZE"
 [ "x$MKFSOPT" != "x" ] &&
-    MKFSOPT="--mkfsoptions=\"$MKFSOPT\""
+    MKFSOPT="--mkfsoptions=\\\"$MKFSOPT\\\""
 [ "x$OSSCAPA" != "x" ] &&
     MKFSOPT="--param ost.capa=$OSSCAPA"
 [ "x$ostfailover_HOST" != "x" ] &&

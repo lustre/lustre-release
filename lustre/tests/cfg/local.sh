@@ -63,7 +63,7 @@ MOUNTOPT=""
 [ "x$OSTJOURNALSIZE" != "x" ] &&
     MKFSOPT=$MKFSOPT" -J size=$OSTJOURNALSIZE"
 [ "x$MKFSOPT" != "x" ] &&
-    MKFSOPT="--mkfsoptions=\"$MKFSOPT\""
+    MKFSOPT="--mkfsoptions=\\\"$MKFSOPT\\\""
 [ "x$OSSCAPA" != "x" ] &&
     MKFSOPT="--param ost.capa=$OSSCAPA"
 [ "x$ostfailover_HOST" != "x" ] &&
