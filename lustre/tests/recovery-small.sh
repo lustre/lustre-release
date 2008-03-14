@@ -603,7 +603,6 @@ test_24() {	# bug 2248 - eviction fails writeback but app doesn't see it
 run_test 24 "fsync error (should return error)"
 
 test_26a() {      # was test_26 bug 5921 - evict dead exports by pinger
-mount | grep "type lustre"
 # this test can only run from a client on a separate node.
 	remote_ost || { skip "local OST" && return 0; }
 	remote_mds || { skip "local MDS" && return 0; }
