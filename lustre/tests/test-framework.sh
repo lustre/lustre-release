@@ -220,7 +220,7 @@ unload_modules() {
     local MODULES=$($LCTL modules | awk '{ print $2 }' | grep -v libcfs)
     $RMMOD $MODULES > /dev/null 2>&1 || true
      # do it again, in case we tried to unload ksocklnd too early
-    MODULES=$($LCTL modules | awk '{ print $2 }' | grep -v libcfs)
+    MODULES=$($LCTL modules | awk '{ print $2 }' | grep -v libcfs) || true
     [ -n "$MODULES" ] && $RMMOD $MODULES > /dev/null 2>&1 || true
     lsmod | grep libcfs > /dev/null && $LCTL dk $TMP/debug
     $RMMOD libcfs
@@ -1042,7 +1042,7 @@ error_noexit() {
 
 error() {
     error_noexit "$@"
-    [ "$FAIL_ON_ERROR" ] && exit 1 || true
+    $FAIL_ON_ERROR && exit 1 || true
 }
 
 error_exit() {
@@ -1286,7 +1286,7 @@ osc_to_ost()
 
 remote_mds ()
 {
-    [ -z "$(lctl dl | grep \<mdt\>)" ]
+    [ -z "$(lctl dl | grep mdt)" ]
 }
 
 remote_mds_nodsh()
@@ -1296,7 +1296,7 @@ remote_mds_nodsh()
 
 remote_ost ()
 {
-    [ -z "$(lctl dl | grep \<ost\>)" ]
+    [ -z "$(lctl dl | grep ost)" ]
 }
 
 remote_ost_nodsh()

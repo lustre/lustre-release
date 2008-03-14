@@ -12,8 +12,8 @@ init_test_env $@
 . ${CONFIG:=$LUSTRE/tests/cfg/$NAME.sh}
 
 # also long tests: 19, 21a, 21e, 21f, 23, 27
-#                                     1     2.5    4    4          (min)"
-[ "$SLOW" = "no" ] && EXCEPT_SLOW="17    26b    50   51     57"
+#                                   1  2.5  2.5    4    4          (min)"
+[ "$SLOW" = "no" ] && EXCEPT_SLOW="17  26a  26b    50   51     57"
 
 build_test_filter
 
@@ -602,10 +602,11 @@ test_24() {	# bug 2248 - eviction fails writeback but app doesn't see it
 }
 run_test 24 "fsync error (should return error)"
 
-test_26() {      # bug 5921 - evict dead exports by pinger
+test_26a() {      # was test_26 bug 5921 - evict dead exports by pinger
+mount | grep "type lustre"
 # this test can only run from a client on a separate node.
-	remote_ost || skip "local OST" && return
-	remote_mds || skip "local MDS" && return
+	remote_ost || { skip "local OST" && return 0; }
+	remote_mds || { skip "local MDS" && return 0; }
 	OST_FILE=obdfilter.${ost1_svc}.num_exports
         OST_EXP="`do_facet ost1 lctl get_param -n $OST_FILE`"
 	OST_NEXP1=`echo $OST_EXP | cut -d' ' -f2`
@@ -624,7 +625,7 @@ test_26() {      # bug 5921 - evict dead exports by pinger
         [ $OST_NEXP1 -le $OST_NEXP2 ] && error "client not evicted"
 	return 0
 }
-run_test 26 "evict dead exports"
+run_test 26a "evict dead exports"
 
 test_26b() {      # bug 10140 - evict dead exports by pinger
 	client_df
