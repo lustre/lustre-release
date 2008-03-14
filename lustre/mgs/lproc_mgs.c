@@ -92,11 +92,12 @@ int lproc_mgs_setup(struct obd_device *obd)
 
 int lproc_mgs_cleanup(struct obd_device *obd)
 {
-        struct mgs_obd *mgs = &obd->u.mgs;
+        struct mgs_obd *mgs;
 
-        if (obd)
-                return -EINVAL;
+        if (!obd)
+                RETURN(-EINVAL);
 
+        mgs = &obd->u.mgs;
         if (mgs->mgs_proc_live) {
                 /* Should be no live entries */
                 LASSERT(mgs->mgs_proc_live->subdir == NULL);
