@@ -98,13 +98,15 @@ typedef int gfp_t;
 #define IBLND_TX_MSG_PAGES()  ((IBLND_TX_MSG_BYTES() + PAGE_SIZE - 1)/PAGE_SIZE)
 
 /* RX messages (per connection) */
-#define IBLND_RX_MSGS         (IBLND_MSG_QUEUE_SIZE*2)
+#define IBLND_RX_MSGS         (IBLND_MSG_QUEUE_SIZE * 2)
 #define IBLND_RX_MSG_BYTES    (IBLND_RX_MSGS * IBLND_MSG_SIZE)
 #define IBLND_RX_MSG_PAGES    ((IBLND_RX_MSG_BYTES + PAGE_SIZE - 1)/PAGE_SIZE)
 
-#define IBLND_CQ_ENTRIES()    (IBLND_RX_MSGS +                                  \
-                               (*kiblnd_tunables.kib_concurrent_sends) *        \
+/* WRs and CQEs (per connection) */
+#define IBLND_RECV_WRS        IBLND_RX_MSGS
+#define IBLND_SEND_WRS        ((*kiblnd_tunables.kib_concurrent_sends) * \
                                (1 + IBLND_MAX_RDMA_FRAGS))
+#define IBLND_CQ_ENTRIES()    (IBLND_RECV_WRS + IBLND_SEND_WRS)
 
 typedef struct
 {
@@ -393,6 +395,7 @@ typedef struct kib_conn
         int                 ibc_ready:1;        /* CQ callback fired */
         unsigned long       ibc_last_send;      /* time of last send */
         struct list_head    ibc_early_rxs;      /* rxs completed before ESTABLISHED */
+        struct list_head    ibc_tx_noops;       /* IBLND_MSG_NOOPs */
         struct list_head    ibc_tx_queue;       /* sends that need a credit */
         struct list_head    ibc_tx_queue_nocred;/* sends that don't need a credit */
         struct list_head    ibc_tx_queue_rsrvd; /* sends that need to reserve an ACK/DONE msg */
@@ -505,6 +508,28 @@ kiblnd_send_keepalive(kib_conn_t *conn)
         return (*kiblnd_tunables.kib_keepalive > 0) &&
                 time_after(jiffies, conn->ibc_last_send +
                            *kiblnd_tunables.kib_keepalive*HZ);
+}
+
+static inline int
+kiblnd_send_noop(kib_conn_t *conn)
+{
+        LASSERT (conn->ibc_state >= IBLND_CONN_ESTABLISHED);
+
+        if (conn->ibc_outstanding_credits < IBLND_CREDIT_HIGHWATER &&
+            !kiblnd_send_keepalive(conn))
+                return 0; /* No need to send NOOP */
+
+        if (!list_empty(&conn->ibc_tx_noops) ||       /* NOOP already queued */
+            !list_empty(&conn->ibc_tx_queue_nocred) || /* can be piggybacked */
+            conn->ibc_credits == 0)                    /* no credit */
+                return 0;
+
+        if (conn->ibc_credits == 1 &&      /* last credit reserved for */
+            conn->ibc_outstanding_credits == 0) /* giving back credits */
+                return 0;
+
+        /* No tx to piggyback NOOP onto or no credit to send a tx */
+        return (list_empty(&conn->ibc_tx_queue) || conn->ibc_credits == 1);
 }
 
 static inline void

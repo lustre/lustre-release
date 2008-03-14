@@ -11,6 +11,12 @@ tbd  Sun Microsystems, Inc.
 	gmlnd     - GM 2.1.22 and later,
 	mxlnd     - MX 1.2.1 or later,
 	ptllnd    - Portals 3.3 / UNICOS/lc 1.5.x, 2.0.x
+
+Severity   : major
+Bugzilla   : 14425
+Description: o2iblnd/ptllnd credit deadlock in a routed config.
+Details    : o2iblnd/ptllnd credit deadlock in a routed config.
+
 Severity   : normal
 Bugzilla   : 14956
 Description: High load after starting lnet

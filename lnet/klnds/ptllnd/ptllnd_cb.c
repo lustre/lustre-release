@@ -598,7 +598,7 @@ kptllnd_recv (lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg, int delayed,
         /*
          * We're done with the RX
          */
-        kptllnd_rx_done(rx);
+        kptllnd_rx_done(rx, PTLLND_POSTRX_PEER_CREDIT);
         return rc;
 }
 

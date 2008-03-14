@@ -331,11 +331,14 @@ kptllnd_rx_alloc(void)
 }
 
 void
-kptllnd_rx_done(kptl_rx_t *rx)
+kptllnd_rx_done(kptl_rx_t *rx, int post_credit)
 {
         kptl_rx_buffer_t *rxb = rx->rx_rxb;
         kptl_peer_t      *peer = rx->rx_peer;
         unsigned long     flags;
+
+        LASSERT (post_credit == PTLLND_POSTRX_NO_CREDIT ||
+                 post_credit == PTLLND_POSTRX_PEER_CREDIT);
 
         CDEBUG(D_NET, "rx=%p rxb %p peer %p\n", rx, rxb, peer);
 
@@ -346,7 +349,9 @@ kptllnd_rx_done(kptl_rx_t *rx)
                 /* Update credits (after I've decref-ed the buffer) */
                 spin_lock_irqsave(&peer->peer_lock, flags);
 
-                peer->peer_outstanding_credits++;
+                if (post_credit == PTLLND_POSTRX_PEER_CREDIT)
+                        peer->peer_outstanding_credits++;
+
                 LASSERT (peer->peer_outstanding_credits +
                          peer->peer_sent_credits <=
                          *kptllnd_tunables.kptl_peercredits);
@@ -515,6 +520,7 @@ void
 kptllnd_rx_parse(kptl_rx_t *rx)
 {
         kptl_msg_t             *msg = rx->rx_msg;
+        int                     post_credit = PTLLND_POSTRX_PEER_CREDIT;
         kptl_peer_t            *peer;
         int                     rc;
         unsigned long           flags;
@@ -642,7 +648,7 @@ kptllnd_rx_parse(kptl_rx_t *rx)
                 int  c = peer->peer_credits;
                 int oc = peer->peer_outstanding_credits;
                 int sc = peer->peer_sent_credits;
-                
+
                 spin_unlock_irqrestore(&peer->peer_lock, flags);
 
                 CERROR("%s: buffer overrun [%d/%d+%d]\n",
@@ -654,6 +660,12 @@ kptllnd_rx_parse(kptl_rx_t *rx)
         /* No check for credit overflow - the peer may post new
          * buffers after the startup handshake. */
         peer->peer_credits += msg->ptlm_credits;
+
+        /* This ensures the credit taken by NOOP can be returned */
+        if (msg->ptlm_type == PTLLND_MSG_TYPE_NOOP) {
+                peer->peer_outstanding_credits++;
+                post_credit = PTLLND_POSTRX_NO_CREDIT;
+        }
 
         spin_unlock_irqrestore(&peer->peer_lock, flags);
 
@@ -723,5 +735,5 @@ kptllnd_rx_parse(kptl_rx_t *rx)
         if (rx->rx_peer == NULL)                /* drop ref on peer */
                 kptllnd_peer_decref(peer);      /* unless rx_done will */
  rx_done:
-        kptllnd_rx_done(rx);
+        kptllnd_rx_done(rx, post_credit);
 }

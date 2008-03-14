@@ -475,6 +475,12 @@ kptllnd_startup (lnet_ni_t *ni)
                 return -EINVAL;
         }
 
+        /* kptl_msg_t::ptlm_credits is only a __u8 */
+        if (*kptllnd_tunables.kptl_peercredits > 255) {
+                CERROR("kptl_peercredits must be <= 255\n");
+                return -EINVAL;
+        }
+
         *kptllnd_tunables.kptl_max_msg_size &= ~7;
         if (*kptllnd_tunables.kptl_max_msg_size < PTLLND_MIN_BUFFER_SIZE)
                 *kptllnd_tunables.kptl_max_msg_size = PTLLND_MIN_BUFFER_SIZE;

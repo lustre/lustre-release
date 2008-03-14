@@ -158,6 +158,7 @@ kptllnd_peer_allocate (lnet_process_id_t lpid, ptl_process_id_t ppid)
 
         memset(peer, 0, sizeof(*peer));         /* zero flags etc */
 
+        INIT_LIST_HEAD (&peer->peer_noops);
         INIT_LIST_HEAD (&peer->peer_sendq);
         INIT_LIST_HEAD (&peer->peer_activeq);
         spin_lock_init (&peer->peer_lock);
@@ -205,6 +206,7 @@ kptllnd_peer_destroy (kptl_peer_t *peer)
         LASSERT (atomic_read(&peer->peer_refcount) == 0);
         LASSERT (peer->peer_state == PEER_STATE_ALLOCATED ||
                  peer->peer_state == PEER_STATE_ZOMBIE);
+        LASSERT (list_empty(&peer->peer_noops));
         LASSERT (list_empty(&peer->peer_sendq));
         LASSERT (list_empty(&peer->peer_activeq));
 
@@ -245,6 +247,7 @@ kptllnd_peer_cancel_txs(kptl_peer_t *peer, struct list_head *txs)
 
         spin_lock_irqsave(&peer->peer_lock, flags);
 
+        kptllnd_cancel_txlist(&peer->peer_noops, txs);
         kptllnd_cancel_txlist(&peer->peer_sendq, txs);
         kptllnd_cancel_txlist(&peer->peer_activeq, txs);
                 
@@ -519,12 +522,27 @@ kptllnd_post_tx(kptl_peer_t *peer, kptl_tx_t *tx, int nfrag)
         tx->tx_msg_mdh = msg_mdh;
 
 	/* Ensure HELLO is sent first */
-	if (tx->tx_msg->ptlm_type == PTLLND_MSG_TYPE_HELLO)
+        if (tx->tx_msg->ptlm_type == PTLLND_MSG_TYPE_NOOP)
+		list_add(&tx->tx_list, &peer->peer_noops);
+	else if (tx->tx_msg->ptlm_type == PTLLND_MSG_TYPE_HELLO)
 		list_add(&tx->tx_list, &peer->peer_sendq);
 	else
 		list_add_tail(&tx->tx_list, &peer->peer_sendq);
 
         spin_unlock_irqrestore(&peer->peer_lock, flags);
+}
+
+static inline int
+kptllnd_peer_send_noop (kptl_peer_t *peer)
+{
+        if (!peer->peer_sent_hello ||
+            peer->peer_credits == 0 ||
+            !list_empty(&peer->peer_noops) ||
+            peer->peer_outstanding_credits < PTLLND_CREDIT_HIGHWATER)
+                return 0;
+
+        /* No tx to piggyback NOOP onto or no credit to send a tx */
+        return (list_empty(&peer->peer_sendq) || peer->peer_credits == 1);
 }
 
 void
@@ -533,6 +551,7 @@ kptllnd_peer_check_sends (kptl_peer_t *peer)
         ptl_handle_me_t  meh;
         kptl_tx_t       *tx;
         int              rc;
+        int              msg_type;
         unsigned long    flags;
 
         LASSERT(!in_interrupt());
@@ -541,10 +560,7 @@ kptllnd_peer_check_sends (kptl_peer_t *peer)
 
         peer->peer_retry_noop = 0;
 
-        if (list_empty(&peer->peer_sendq) &&
-            peer->peer_outstanding_credits >= PTLLND_CREDIT_HIGHWATER &&
-            peer->peer_credits != 0) {
-
+        if (kptllnd_peer_send_noop(peer)) {
                 /* post a NOOP to return credits */
                 spin_unlock_irqrestore(&peer->peer_lock, flags);
 
@@ -561,8 +577,18 @@ kptllnd_peer_check_sends (kptl_peer_t *peer)
                 peer->peer_retry_noop = (tx == NULL);
         }
 
-        while (!list_empty(&peer->peer_sendq)) {
-                tx = list_entry (peer->peer_sendq.next, kptl_tx_t, tx_list);
+        for (;;) {
+                if (!list_empty(&peer->peer_noops)) {
+                        LASSERT (peer->peer_sent_hello);
+                        tx = list_entry(peer->peer_noops.next,
+                                        kptl_tx_t, tx_list);
+                } else if (!list_empty(&peer->peer_sendq)) {
+                        tx = list_entry(peer->peer_sendq.next,
+                                        kptl_tx_t, tx_list);
+                } else {
+                        /* nothing to send right now */
+                        break;
+                }
 
                 LASSERT (tx->tx_active);
                 LASSERT (!PtlHandleIsEqual(tx->tx_msg_mdh, PTL_INVALID_HANDLE));
@@ -575,32 +601,37 @@ kptllnd_peer_check_sends (kptl_peer_t *peer)
                          *kptllnd_tunables.kptl_peercredits);
                 LASSERT (peer->peer_credits >= 0);
 
-		/* Ensure HELLO is sent first */
-		if (!peer->peer_sent_hello) {
-			if (tx->tx_msg->ptlm_type != PTLLND_MSG_TYPE_HELLO)
-				break;
-			peer->peer_sent_hello = 1;
-		}
+                msg_type = tx->tx_msg->ptlm_type;
+
+                /* Ensure HELLO is sent first */
+                if (!peer->peer_sent_hello) {
+                        LASSERT (list_empty(&peer->peer_noops));
+                        if (msg_type != PTLLND_MSG_TYPE_HELLO)
+                                break;
+                        peer->peer_sent_hello = 1;
+                }
 
                 if (peer->peer_credits == 0) {
-                        CDEBUG(D_NETTRACE, "%s[%d/%d+%d]: no credits for %p\n",
+                        CDEBUG(D_NETTRACE, "%s[%d/%d+%d]: no credits for %s[%p]\n",
                                libcfs_id2str(peer->peer_id), 
                                peer->peer_credits,
                                peer->peer_outstanding_credits, 
-                               peer->peer_sent_credits, tx);
+                               peer->peer_sent_credits, 
+                               kptllnd_msgtype2str(msg_type), tx);
                         break;
                 }
 
-                /* Don't use the last credit unless I've got credits to
-                 * return */
+                /* Last/Initial credit reserved for NOOP/HELLO */
                 if (peer->peer_credits == 1 &&
-                    peer->peer_outstanding_credits == 0) {
+                    msg_type != PTLLND_MSG_TYPE_HELLO &&
+                    msg_type != PTLLND_MSG_TYPE_NOOP) {
                         CDEBUG(D_NETTRACE, "%s[%d/%d+%d]: "
-                               "not using last credit for %p\n",
+                               "not using last credit for %s[%p]\n",
                                libcfs_id2str(peer->peer_id), 
                                peer->peer_credits,
                                peer->peer_outstanding_credits,
-                               peer->peer_sent_credits, tx);
+                               peer->peer_sent_credits,
+                               kptllnd_msgtype2str(msg_type), tx);
                         break;
                 }
 
@@ -608,10 +639,8 @@ kptllnd_peer_check_sends (kptl_peer_t *peer)
 
                 /* Discard any NOOP I queued if I'm not at the high-water mark
                  * any more or more messages have been queued */
-                if (tx->tx_msg->ptlm_type == PTLLND_MSG_TYPE_NOOP &&
-                    (!list_empty(&peer->peer_sendq) ||
-                     peer->peer_outstanding_credits < PTLLND_CREDIT_HIGHWATER)) {
-
+                if (msg_type == PTLLND_MSG_TYPE_NOOP &&
+                    !kptllnd_peer_send_noop(peer)) {
                         tx->tx_active = 0;
 
                         spin_unlock_irqrestore(&peer->peer_lock, flags);
@@ -636,7 +665,7 @@ kptllnd_peer_check_sends (kptl_peer_t *peer)
                         tx->tx_msg->ptlm_u.rdma.kptlrm_matchbits =
                                 peer->peer_next_matchbits++;
                 }
-                
+
                 peer->peer_sent_credits += peer->peer_outstanding_credits;
                 peer->peer_outstanding_credits = 0;
                 peer->peer_credits--;
@@ -644,8 +673,7 @@ kptllnd_peer_check_sends (kptl_peer_t *peer)
                 CDEBUG(D_NETTRACE, "%s[%d/%d+%d]: %s tx=%p nob=%d cred=%d\n",
                        libcfs_id2str(peer->peer_id), peer->peer_credits,
                        peer->peer_outstanding_credits, peer->peer_sent_credits,
-                       kptllnd_msgtype2str(tx->tx_msg->ptlm_type),
-                       tx, tx->tx_msg->ptlm_nob,
+                       kptllnd_msgtype2str(msg_type), tx, tx->tx_msg->ptlm_nob,
                        tx->tx_msg->ptlm_credits);
 
                 list_add_tail(&tx->tx_list, &peer->peer_activeq);

@@ -136,6 +136,10 @@ typedef struct kptl_rx                          /* receive message */
         char                    rx_space[0];    /* copy of incoming request */
 } kptl_rx_t;
 
+#define PTLLND_POSTRX_DONT_POST    0            /* don't post */
+#define PTLLND_POSTRX_NO_CREDIT    1            /* post: no credits */
+#define PTLLND_POSTRX_PEER_CREDIT  2            /* post: give peer back 1 credit */
+
 typedef struct kptl_rx_buffer_pool
 {
         spinlock_t              rxbp_lock;
@@ -217,6 +221,7 @@ struct kptl_peer
         atomic_t                peer_refcount;          /* The current refrences */
         enum kptllnd_peer_state peer_state;
         spinlock_t              peer_lock;              /* serialize */
+        struct list_head        peer_noops;             /* PTLLND_MSG_TYPE_NOOP txs */
         struct list_head        peer_sendq;             /* txs waiting for mh handles */
         struct list_head        peer_activeq;           /* txs awaiting completion */
         lnet_process_id_t       peer_id;                /* Peer's LNET id */
@@ -401,8 +406,8 @@ kptllnd_rx_buffer_decref(kptl_rx_buffer_t *rxb)
 /*
  * RX SUPPORT FUNCTIONS
  */
-void kptllnd_rx_done(kptl_rx_t *rx);
 void kptllnd_rx_parse(kptl_rx_t *rx);
+void kptllnd_rx_done(kptl_rx_t *rx, int post_credit);
 
 /*
  * PEER SUPPORT FUNCTIONS
