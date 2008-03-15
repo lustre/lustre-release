@@ -14,8 +14,11 @@ PS2PDF = ps2pdf
 TEXEXPAND = texexpand
 SUFFIXES = .lin .lyx .pdf .ps .sgml .html .txt .tex .fig .eps .dvi
 
+MANFILES = lustre.7 lfs.1 mount.lustre.8 mkfs.lustre.8 tunefs.lustre.8 lctl.8 \
+	llverdev.8
+
 if UTILS
-man_MANS = lustre.7 lfs.1 mount.lustre.8 mkfs.lustre.8 tunefs.lustre.8 lctl.8 
+man_MANS = $(MANFILES)
 endif
 
 LYXFILES= $(filter-out $(patsubst %.lin,%.lyx,$(wildcard *.lin)),\
@@ -23,8 +26,7 @@ LYXFILES= $(filter-out $(patsubst %.lin,%.lyx,$(wildcard *.lin)),\
 
 CLEANFILES = *.aux *.tex *.log *.pdf
 
-EXTRA_DIST = tex2pdf lustre.7 mount.lustre.8 mkfs.lustre.8 tunefs.lustre.8 \
-	$(LYXFILES) lfs.1 lctl.8	
+EXTRA_DIST = tex2pdf $(MANFILES) $(LYXFILES)
 
 all:
 
