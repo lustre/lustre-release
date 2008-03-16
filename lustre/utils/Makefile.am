@@ -11,7 +11,7 @@ AM_LDFLAGS := -L$(top_builddir)/lnet/utils
 LIBPTLCTL := $(top_builddir)/lnet/utils/libptlctl.a
 
 sbin_scripts = lrun
-bin_scripts = llstat llobdstat plot-llstat 
+bin_scripts = llstat llobdstat plot-llstat llbackup
 
 if UTILS
 noinst_PROGRAMS = wirecheck obdio obdbarrier
