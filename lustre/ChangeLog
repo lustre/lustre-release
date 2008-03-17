@@ -440,6 +440,11 @@ Description: Detect stride IO mode in read-ahead
 Details    : When a client does stride read, read-ahead should detect that and
 	     read-ahead pages according to the detected stride pattern. 
 
+Severity   : normal
+Bugzilla   : 15033
+Description: build for x2 fails
+Details    : fix compile issue on Cray systems.
+
 --------------------------------------------------------------------------------
 
 2007-12-07         Cluster File Systems, Inc. <info@clusterfs.com>
