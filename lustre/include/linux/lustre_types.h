@@ -22,7 +22,8 @@
         !defined(_EXT2_TYPES_H) && !defined(_I386_TYPES_H) && \
         !defined(_ASM_IA64_TYPES_H) && !defined(_X86_64_TYPES_H) && \
         !defined(_PPC_TYPES_H) && !defined(_PPC64_TYPES_H) && \
-        !defined(_ASM_POWERPC_TYPES_H) && !defined(__mips64__)
+        !defined(_ASM_POWERPC_TYPES_H) && !defined(__mips64__) && \
+	!defined(_CRAYNV_TYPES_H)
         /* yuck, would be nicer with _ASM_TYPES_H */
 
 typedef unsigned short umode_t;

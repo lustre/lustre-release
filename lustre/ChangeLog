@@ -829,6 +829,11 @@ Description: use adler32 for page checksums
 Details    : when available, use the Adler-32 algorithm instead of CRC32 for
 	     page checksums.
 
+Severity   : normal
+Bugzilla   : 15033
+Description: build for x2 fails
+Details    : fix compile issue on Cray systems.
+
 --------------------------------------------------------------------------------
 
 2007-08-10         Cluster File Systems, Inc. <info@clusterfs.com>
