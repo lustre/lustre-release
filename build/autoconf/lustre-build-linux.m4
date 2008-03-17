@@ -209,9 +209,9 @@ LB_LINUX_RELEASE
 AC_DEFUN([LB_LINUX_MODPOST],
 [
 # Find the modpost utility
-AC_CHECK_FILE([$LINUX_OBJ/scripts/mod/modpost],
+LB_CHECK_FILE([$LINUX_OBJ/scripts/mod/modpost],
 	[MODPOST=$LINUX_OBJ/scripts/mod/modpost],
-	[AC_CHECK_FILE([$LINUX_OBJ/scripts/modpost],
+	[LB_CHECK_FILE([$LINUX_OBJ/scripts/modpost],
 		[MODPOST=$LINUX_OBJ/scripts/modpost],
 		AC_MSG_ERROR([modpost not found.])
 	)]
