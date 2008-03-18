@@ -3000,18 +3000,15 @@ test_71() {
 	[ ! -e $TGT -a -e $SRC ] && echo "copying $SRC to $TGT" && cp $SRC $TGT
 	SRC=$DBENCH_LIB/client_plain.txt
 	[ ! -e $TGT -a -e $SRC ] && echo "copying $SRC to $TGT" && cp $SRC $TGT
-
-	echo "copying necessary lib to $DIR"
-	[ -d /lib64 ] && LIB71=/lib64 || LIB71=/lib
-	mkdir -p $DIR$LIB71 || error "can't create $DIR$LIB71"
-	cp $LIB71/libc* $DIR$LIB71 || error "can't copy $LIB71/libc*"
-	cp $LIB71/ld-* $DIR$LIB71 || error "can't create $LIB71/ld-*"
-
+	echo "copying necessary libs to $DIR"
+	LIBS71=$(ldd $DIR/dbench|sed -e 's/\t*//' -e 's/.*=> //' -e 's/ .*//' -e 's/^\///')
+	(cd / && tar chf - $LIBS71) | (cd $DIR && tar xvf -)
+	[ $? = 0 ] || error "can't copy libs $LIBS71 to $DIR"
 	echo "chroot $DIR /dbench -c client.txt 2"
 	chroot $DIR /dbench -c client.txt 2
 	RC=$?
 
-	rm -rf $DIR/dbench $TGT $DIR$LIB71
+	rm -rf $DIR/dbench $DIR/lib $DIR/lib64
 
 	return $RC
 }
