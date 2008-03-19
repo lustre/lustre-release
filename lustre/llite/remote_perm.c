@@ -285,6 +285,7 @@ int lustre_check_remote_perm(struct inode *inode, int mask)
                         break;
 
                 ptlrpc_req_finished(req);
+                req = NULL;
         } while (1);
         ptlrpc_req_finished(req);
         RETURN(rc);
