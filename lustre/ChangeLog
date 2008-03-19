@@ -834,6 +834,12 @@ Bugzilla   : 15033
 Description: build for x2 fails
 Details    : fix compile issue on Cray systems.
 
+Severity   : normal
+Bugzilla   : 14379
+Description: Properly match for duplicate locks
+Details    : Due to different lock order from skiplists code, we need to
+             traverse entire list for now
+
 --------------------------------------------------------------------------------
 
 2007-08-10         Cluster File Systems, Inc. <info@clusterfs.com>
