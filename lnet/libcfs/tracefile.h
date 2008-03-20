@@ -22,7 +22,7 @@ void trace_debug_print(void);
 void trace_flush_pages(void);
 int trace_start_thread(void);
 void trace_stop_thread(void);
-int tracefile_init(void);
+int tracefile_init(int max_pages);
 void tracefile_exit(void);
 
 
@@ -44,6 +44,10 @@ extern void libcfs_debug_dumplog_internal(void *arg);
 extern void libcfs_register_panic_notifier(void);
 extern void libcfs_unregister_panic_notifier(void);
 extern int  libcfs_panic_in_progress;
+
+#define TCD_MAX_PAGES (5 << (20 - CFS_PAGE_SHIFT))
+#define TCD_STOCK_PAGES (TCD_MAX_PAGES)
+#define TRACEFILE_SIZE (500 << 20)
 
 #ifdef LUSTRE_TRACEFILE_PRIVATE
 

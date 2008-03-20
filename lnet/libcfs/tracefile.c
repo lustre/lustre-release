@@ -1046,7 +1046,7 @@ void trace_stop_thread(void)
         mutex_up(&trace_thread_sem);
 }
 
-int tracefile_init(void)
+int tracefile_init(int max_pages)
 {
         struct trace_cpu_data *tcd;
         int                    i;
@@ -1067,7 +1067,7 @@ int tracefile_init(void)
                 tcd->tcd_cur_pages = 0;
                 tcd->tcd_cur_stock_pages = 0;
                 tcd->tcd_cur_daemon_pages = 0;
-                tcd->tcd_max_pages = (TCD_MAX_PAGES * factor) / 100;
+                tcd->tcd_max_pages = (max_pages * factor) / 100;
                 LASSERT(tcd->tcd_max_pages > 0);
                 tcd->tcd_shutting_down = 0;
         }

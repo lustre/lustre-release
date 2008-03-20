@@ -41,6 +41,10 @@ unsigned int libcfs_debug = (D_EMERG | D_ERROR | D_WARNING | D_CONSOLE |
                              D_NETERROR | D_HA | D_CONFIG | D_IOCTL);
 EXPORT_SYMBOL(libcfs_debug);
 
+int libcfs_debug_mb = -1;
+EXPORT_SYMBOL(libcfs_debug_mb);
+CFS_MODULE_PARM(libcfs_debug_mb, "i", int, 0644, "Total debug buffer size.");
+
 unsigned int libcfs_printk = D_CANTMASK;
 EXPORT_SYMBOL(libcfs_printk);
 
@@ -426,12 +430,21 @@ void libcfs_debug_dumplog(void)
 
 int libcfs_debug_init(unsigned long bufsize)
 {
-        int    rc;
+        int    rc = 0;
+        int    max = libcfs_debug_mb;
 
         cfs_waitq_init(&debug_ctlwq);
         libcfs_console_max_delay = CDEBUG_DEFAULT_MAX_DELAY;
         libcfs_console_min_delay = CDEBUG_DEFAULT_MIN_DELAY;
-        rc = tracefile_init();
+        /* If libcfs_debug_mb is set to an invalid value or uninitialized
+         * then just make the total buffers smp_num_cpus * TCD_MAX_PAGES */
+        if (max > trace_max_debug_mb() || max < num_possible_cpus()) {
+                max = TCD_MAX_PAGES;
+        } else {
+                max = (max / num_possible_cpus());
+                max = (max << (20 - CFS_PAGE_SHIFT));
+        }
+        rc = tracefile_init(max);
 
         if (rc == 0)
                 libcfs_register_panic_notifier();
