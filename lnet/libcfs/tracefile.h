@@ -44,6 +44,7 @@ extern void libcfs_debug_dumplog_internal(void *arg);
 extern void libcfs_register_panic_notifier(void);
 extern void libcfs_unregister_panic_notifier(void);
 extern int  libcfs_panic_in_progress;
+extern int  trace_max_debug_mb(void);
 
 #define TCD_MAX_PAGES (5 << (20 - CFS_PAGE_SHIFT))
 #define TCD_STOCK_PAGES (TCD_MAX_PAGES)
@@ -215,8 +216,6 @@ extern char *trace_get_console_buffer(void);
 extern void trace_put_console_buffer(char *buffer);
 
 extern void trace_call_on_all_cpus(void (*fn)(void *arg), void *arg);
-
-extern int  trace_max_debug_mb(void);
 
 int trace_refill_stock(struct trace_cpu_data *tcd, int gfp,
 		       struct list_head *stock);
