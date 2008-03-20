@@ -257,9 +257,9 @@ static struct lu_device *mdc_device_fini(const struct lu_env *env,
         RETURN (NULL);
 }
 
-struct lu_device *mdc_device_alloc(const struct lu_env *env,
-                                   struct lu_device_type *ldt,
-                                   struct lustre_cfg *cfg)
+static struct lu_device *mdc_device_alloc(const struct lu_env *env,
+                                          struct lu_device_type *ldt,
+                                          struct lustre_cfg *cfg)
 {
         struct lu_device  *ld;
         struct mdc_device *mc;
@@ -279,15 +279,18 @@ struct lu_device *mdc_device_alloc(const struct lu_env *env,
 
         RETURN (ld);
 }
-void mdc_device_free(const struct lu_env *env, struct lu_device *ld)
+
+static struct lu_device *mdc_device_free(const struct lu_env *env,
+                                         struct lu_device *ld)
 {
         struct mdc_device *mc = lu2mdc_dev(ld);
 
 	LASSERTF(atomic_read(&ld->ld_ref) == 0,
                  "Refcount = %i\n", atomic_read(&ld->ld_ref));
         LASSERT(list_empty(&mc->mc_linkage));
-	md_device_fini(&mc->mc_md_dev);
+        md_device_fini(&mc->mc_md_dev);
         OBD_FREE_PTR(mc);
+        return NULL;
 }
 
 /* context key constructor/destructor: mdc_key_init, mdc_key_fini */

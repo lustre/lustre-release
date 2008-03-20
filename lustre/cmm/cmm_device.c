@@ -368,9 +368,12 @@ out_free_cmm:
         return l;
 }
 
-static void cmm_device_free(const struct lu_env *env, struct lu_device *d)
+static struct lu_device *cmm_device_free(const struct lu_env *env,
+                                         struct lu_device *d)
 {
         struct cmm_device *m = lu2cmm_dev(d);
+        struct lu_device  *next = md2lu_dev(m->cmm_child);
+        ENTRY;
 
         LASSERT(m->cmm_tgt_count == 0);
         LASSERT(list_empty(&m->cmm_targets));
@@ -378,8 +381,9 @@ static void cmm_device_free(const struct lu_env *env, struct lu_device *d)
                 OBD_FREE_PTR(m->cmm_fld);
                 m->cmm_fld = NULL;
         }
-	md_device_fini(&m->cmm_md_dev);
+        md_device_fini(&m->cmm_md_dev);
         OBD_FREE_PTR(m);
+        RETURN(next);
 }
 
 /* context key constructor/destructor: cmm_key_init, cmm_key_fini */

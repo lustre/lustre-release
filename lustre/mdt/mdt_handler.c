@@ -3520,14 +3520,37 @@ static void mdt_stack_fini(const struct lu_env *env,
 
         lu_site_purge(env, top->ld_site, ~0);
         while (d != NULL) {
-                struct obd_type *type;
                 struct lu_device_type *ldt = d->ld_type;
 
                 /* each fini() returns next device in stack of layers
-                 * * so we can avoid the recursion */
+                 * so we can avoid the recursion */
                 n = ldt->ldt_ops->ldto_device_fini(env, d);
                 lu_device_put(d);
-                ldt->ldt_ops->ldto_device_free(env, d);
+
+                /* switch to the next device in the layer */
+                d = n;
+        }
+ 
+        /* purge again. */
+        lu_site_purge(env, top->ld_site, ~0);
+
+        if (!list_empty(&top->ld_site->ls_lru) || top->ld_site->ls_total != 0) {
+                /*
+                 * Uh-oh, objects still exist.
+                 */
+                static DECLARE_LU_CDEBUG_PRINT_INFO(cookie, D_ERROR);
+
+                lu_site_print(env, top->ld_site, &cookie, lu_cdebug_printer);
+        }
+
+        d = top;
+        while (d != NULL) {
+                struct obd_type *type;
+                struct lu_device_type *ldt = d->ld_type;
+
+                /* each free() returns next device in stack of layers
+                 * so we can avoid the recursion */
+                n = ldt->ldt_ops->ldto_device_free(env, d);
                 type = ldt->ldt_obd_type;
                 type->typ_refcnt--;
                 class_put_type(type);
@@ -3696,15 +3719,6 @@ static void mdt_fini(const struct lu_env *env, struct mdt_device *m)
         mdt_stack_fini(env, m, md2lu_dev(m->mdt_child));
 
         if (ls) {
-                if (!list_empty(&ls->ls_lru) || ls->ls_total != 0) {
-                        /*
-                         * Uh-oh, objects still exist.
-                         */
-                        static DECLARE_LU_CDEBUG_PRINT_INFO(cookie, D_ERROR);
-
-                        lu_site_print(env, ls, &cookie, lu_cdebug_printer);
-                }
-
                 lu_site_fini(ls);
                 OBD_FREE_PTR(ls);
                 d->ld_site = NULL;
@@ -4596,11 +4610,14 @@ static struct lu_device* mdt_device_fini(const struct lu_env *env,
         RETURN(NULL);
 }
 
-static void mdt_device_free(const struct lu_env *env, struct lu_device *d)
+static struct lu_device *mdt_device_free(const struct lu_env *env,
+                                         struct lu_device *d)
 {
         struct mdt_device *m = mdt_dev(d);
+        ENTRY;
 
         OBD_FREE_PTR(m);
+        RETURN(NULL);
 }
 
 static struct lu_device *mdt_device_alloc(const struct lu_env *env,

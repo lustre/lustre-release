@@ -297,10 +297,11 @@ struct lu_device_type_operations {
                                                struct lu_device_type *t,
                                                struct lustre_cfg *lcfg);
         /*
-         * Free device. Dual to ->ldto_device_alloc().
+         * Free device. Dual to ->ldto_device_alloc(). Returns pointer to
+         * the next device in the stack.
          */
-        void (*ldto_device_free)(const struct lu_env *,
-                                 struct lu_device *);
+        struct lu_device *(*ldto_device_free)(const struct lu_env *,
+                                              struct lu_device *);
 
         /*
          * Initialize the devices after allocation

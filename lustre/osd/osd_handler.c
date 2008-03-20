@@ -107,7 +107,7 @@ static void  osd_object_release(const struct lu_env *env,
                                 struct lu_object *l);
 static int   osd_object_print  (const struct lu_env *env, void *cookie,
                                 lu_printer_t p, const struct lu_object *o);
-static void  osd_device_free   (const struct lu_env *env,
+static struct lu_device *osd_device_free   (const struct lu_env *env,
                                 struct lu_device *m);
 static void *osd_key_init      (const struct lu_context *ctx,
                                 struct lu_context_key *key);
@@ -2315,13 +2315,16 @@ static struct lu_device *osd_device_alloc(const struct lu_env *env,
         return l;
 }
 
-static void osd_device_free(const struct lu_env *env, struct lu_device *d)
+static struct lu_device *osd_device_free(const struct lu_env *env,
+                                         struct lu_device *d)
 {
         struct osd_device *o = osd_dev(d);
+        ENTRY;
 
         cleanup_capa_hash(o->od_capa_hash);
         dt_device_fini(&o->od_dt_dev);
         OBD_FREE_PTR(o);
+        RETURN(NULL);
 }
 
 static int osd_process_config(const struct lu_env *env,

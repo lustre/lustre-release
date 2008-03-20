@@ -317,14 +317,17 @@ static struct lu_device *mdd_device_alloc(const struct lu_env *env,
         return l;
 }
 
-static void mdd_device_free(const struct lu_env *env,
-                            struct lu_device *lu)
+static struct lu_device *mdd_device_free(const struct lu_env *env,
+                                         struct lu_device *lu)
 {
         struct mdd_device *m = lu2mdd_dev(lu);
+        struct lu_device  *next = &m->mdd_child->dd_lu_dev;
+        ENTRY;
 
         LASSERT(atomic_read(&lu->ld_ref) == 0);
         md_device_fini(&m->mdd_md_dev);
         OBD_FREE_PTR(m);
+        RETURN(next);
 }
 
 static struct obd_ops mdd_obd_device_ops = {
