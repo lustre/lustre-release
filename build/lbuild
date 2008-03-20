@@ -174,7 +174,7 @@ Usage: ${0##*/} [OPTION]... [-- <lustre configure options>]
     pulling from CVS.
 
   --nodownload
-    Do not try to download a kernel from ftp.lustre.org
+    Do not try to download a kernel from downloads.lustre.org
 
   --nosrc
     Do not build a .src.rpm, a full kernel patch, or a patched kernel
@@ -377,10 +377,10 @@ download_and_build_tarball() {
 
     local srpm=kernel-${lnxmaj}-${lnxrel}.src.rpm
 
-    echo "Downloading http://ftp.lustre.org/pub/kernels/$target/old/$srpm..."
-    if ! wget -nv "http://ftp.lustre.org/pub/kernels/$target/old/$srpm" \
+    echo "Downloading http://downloads.lustre.org/public/kernels/$target/old/$srpm..."
+    if ! wget -nv "http://downloads.lustre.org/public/kernels/$target/old/$srpm" \
         -O "$KERNELDIR/$srpm" ; then
-        fatal 1 "Could not download target $kernel_file's kernel SRPM $srpm from ftp.lustre.org."
+        fatal 1 "Could not download target $kernel_file's kernel SRPM $srpm from downloads.lustre.org."
     fi
 
     build_tarball $target $srpm
@@ -420,8 +420,8 @@ load_target()
                 build_tarball $CANONICAL_TARGET $KERNEL_SRPM
             else
                 if (( $DOWNLOAD )) ; then
-                    echo "Downloading http://ftp.lustre.org/pub/kernels/$CANONICAL_TARGET/old/$KERNEL..."
-                    if ! wget -nv "http://ftp.lustre.org/pub/kernels/$CANONICAL_TARGET/old/$KERNEL" -O "$KERNELDIR/$KERNEL" ; then
+                    echo "Downloading http://downloads.lustre.org/public/kernels/$CANONICAL_TARGET/old/$KERNEL..."
+                    if ! wget -nv "http://downloads.lustre.org/public/kernels/$CANONICAL_TARGET/old/$KERNEL" -O "$KERNELDIR/$KERNEL" ; then
                         # see if we can do it with an SRPM from the download site
                         download_and_build_tarball $CANONICAL_TARGET $KERNEL_FILE
                     fi

@@ -35,7 +35,7 @@ error_msg() {
 		existing autoconf/make RPMs, if you are nervous about
 		upgrading.  See
 
-		ftp://ftp.lustre.org/pub/other/autolustre/README.autolustre
+		http://downloads.lustre.org/public/tools/autolustre/README.autolustre
 
 		You may be able to download newer version from:
 
