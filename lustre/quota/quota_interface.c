@@ -265,6 +265,10 @@ static int filter_quota_clearinfo(struct obd_export *exp, struct obd_device *obd
 {
         struct lustre_quota_ctxt *qctxt = &obd->u.obt.obt_qctxt;
 
+        /* lquota may be not set up before destroying export, b=14896 */
+        if (!obd->obd_set_up)
+                return 0;
+
         /* when exp->exp_imp_reverse is destroyed, the corresponding lqc_import
          * should be invalid b=12374 */
         if (qctxt->lqc_import == exp->exp_imp_reverse) {
