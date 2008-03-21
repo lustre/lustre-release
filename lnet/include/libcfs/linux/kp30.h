@@ -185,9 +185,7 @@ static inline void our_cond_resched(void)
 #else  /* !__KERNEL__ */
 # include <stdio.h>
 # include <stdlib.h>
-#ifdef CRAY_XT3
-# include <ioctl.h>
-#elif defined(__CYGWIN__)
+#if defined(__CYGWIN__)
 # include <cygwin-ioctl.h>
 #else
 # include <stdint.h>
@@ -197,6 +195,9 @@ static inline void our_cond_resched(void)
 # include <limits.h>
 # include <errno.h>
 # include <sys/ioctl.h>                         /* for _IOWR */
+#ifndef _IOWR
+#include "ioctl.h"
+#endif
 
 # define CFS_MODULE_PARM(name, t, type, perm, desc)
 #define PORTAL_SYMBOL_GET(x) inter_module_get(#x)
