@@ -182,6 +182,8 @@ load_modules() {
 
     echo Loading modules from $LUSTRE
     load_module ../lnet/libcfs/libcfs
+    [ "$PTLDEBUG" ] && sysctl -w lnet.debug=$PTLDEBUG
+    [ "$SUBSYSTEM" ] && sysctl -w lnet.subsystem_debug=${SUBSYSTEM# }
     [ -f /etc/modprobe.conf ] && MODPROBECONF=/etc/modprobe.conf
     [ -f /etc/modprobe.d/Lustre ] && MODPROBECONF=/etc/modprobe.d/Lustre
     [ -z "$LNETOPTS" -a -n "$MODPROBECONF" ] && \
@@ -261,25 +263,28 @@ wait_for_lnet() {
 unload_modules() {
     wait_exit_ST client # bug 12845
 
-    lsmod | grep lnet > /dev/null && $LCTL dl && $LCTL dk $TMP/debug
-    local MODULES=$($LCTL modules | awk '{ print $2 }')
+    lsmod | grep libcfs > /dev/null && $LCTL dl
+    local MODULES=$($LCTL modules | awk '{ print $2 }' | grep -v libcfs) || true
     $RMMOD $MODULES > /dev/null 2>&1 || true
      # do it again, in case we tried to unload ksocklnd too early
-    MODULES=$($LCTL modules | awk '{ print $2 }')
+    MODULES=$($LCTL modules | awk '{ print $2 }' | grep -v libcfs) || true
     [ -n "$MODULES" ] && $RMMOD $MODULES > /dev/null 2>&1 || true
+    lsmod | grep libcfs > /dev/null && $LCTL dk $TMP/debug
+    $RMMOD libcfs
     MODULES=$($LCTL modules | awk '{ print $2 }')
     if [ -n "$MODULES" ]; then
-    echo "Modules still loaded: "
-    echo $MODULES
-    if [ -e $LPROC ]; then
-        echo "Lustre still loaded"
-        cat $LPROC/devices || true
-        lsmod
-        return 2
-    else
-        echo "Lustre stopped but LNET is still loaded, waiting..."
-        wait_for_lnet || return 3
-    fi
+        echo "Modules still loaded: "
+        echo $MODULES 
+        if [ "$(lctl dl)" ]; then
+            echo "Lustre still loaded"
+            lctl dl || true
+            lsmod
+            return 2
+        else
+            echo "Lustre stopped but LNET is still loaded, waiting..."
+            wait_for_lnet || return 3
+        fi
+
     fi
     HAVE_MODULES=false
 
@@ -290,7 +295,7 @@ unload_modules() {
         echo "$LEAK_PORTALS" 1>&2
         mv $TMP/debug $TMP/debug-leak.`date +%s` || true
         echo "Memory leaks detected"
-	[ -n "$IGNORE_LEAK" ] && echo "ignoring leaks" && return 0
+        [ -n "$IGNORE_LEAK" ] && echo "ignoring leaks" && return 0
         return 254
     fi
     echo "modules unloaded."
@@ -556,7 +561,7 @@ wait_for() {
 }
 
 wait_mds_recovery_done () {
-    local timeout=`do_facet mds cat /proc/sys/lustre/timeout`
+    local timeout=`do_facet mds sysctl -n lustre.timeout`
 #define OBD_RECOVERY_TIMEOUT (obd_timeout * 5 / 2)
 # as we are in process of changing obd_timeout in different ways
 # let's set MAX longer than that
@@ -580,7 +585,7 @@ wait_exit_ST () {
     local INTERVAL=1
     # conf-sanity 31 takes a long time cleanup
     while [ $WAIT -lt 300 ]; do
-        running=$(do_facet ${facet} "[ -e $LPROC ] && grep ST' ' $LPROC/devices") || true
+        running=$(do_facet ${facet} "lsmod | grep lnet > /dev/null && lctl dl | grep ' ST '") || true
         [ -z "${running}" ] && return 0
         echo "waited $WAIT for${running}"
         [ $INTERVAL -lt 64 ] && INTERVAL=$((INTERVAL + INTERVAL))
@@ -1175,7 +1180,7 @@ clear_failloc() {
     pause=$2
     sleep $pause
     echo "clearing fail_loc on $facet"
-    do_facet $facet "sysctl -w lustre.fail_loc=0"
+    do_facet $facet "sysctl -e -w lustre.fail_loc=0"
 }
 
 cancel_lru_locks() {
@@ -1241,11 +1246,10 @@ debugrestore() {
 # Test interface
 ##################################
 
-error() {
-    local FAIL_ON_ERROR=${FAIL_ON_ERROR:-true}
+error_noexit() {
     local TYPE=${TYPE:-"FAIL"}
     local ERRLOG
-    sysctl -w lustre.fail_loc=0 2> /dev/null || true
+    sysctl -e -w lustre.fail_loc=0 || true
     log " ${TESTSUITE} ${TESTNAME}: @@@@@@ ${TYPE}: $@ "
     ERRLOG=$TMP/lustre_${TESTSUITE}_${TESTNAME}.$(date +%s)
     echo "Dumping lctl log to $ERRLOG"
@@ -1256,16 +1260,25 @@ error() {
     done
     debugrestore
     [ "$TESTSUITELOG" ] && echo "$0: ${TYPE}: $TESTNAME $@" >> $TESTSUITELOG
-    if $FAIL_ON_ERROR; then
-	exit 1
-    fi
+}
+
+error() {
+    error_noexit "$@"
+    [ "$FAIL_ON_ERROR" ] && exit 1 || true
+}
+
+error_exit() {
+    error_noexit "$@"
+    exit 1
 }
 
 # use only if we are ignoring failures for this test, bugno required.
 # (like ALWAYS_EXCEPT, but run the test and ignore the results.)
 # e.g. error_ignore 5494 "your message"
 error_ignore() {
-    FAIL_ON_ERROR=false TYPE="IGNORE (bz$1)" error $2
+    TYPE="IGNORE (bz$1)"
+    shift
+    error_noexit "$@"
 }
 
 skip () {
@@ -1394,7 +1407,7 @@ reset_fail_loc () {
     local NODE
 
     for NODE in $myNODES; do
-        do_node $NODE sysctl -w lustre.fail_loc=0 || true
+        do_node $NODE sysctl -e -w lustre.fail_loc=0 || true
     done
 }
 
@@ -1417,6 +1430,7 @@ run_one() {
     check_grant ${testnum} || error "check_grant $testnum failed with $?"
     [ -f $CATASTROPHE ] && [ `cat $CATASTROPHE` -ne 0 ] && \
         error "LBUG/LASSERT detected"
+    ps auxww | grep -v grep | grep -q multiop && error "multiop still running"
     pass "($((`date +%s` - $BEFORE))s)"
     rmdir ${DIR}/$tdir >/dev/null 2>&1 || true
     unset TESTNAME
@@ -1494,7 +1508,7 @@ osc_to_ost()
 
 remote_mds ()
 {
-    [ ! -e /proc/fs/lustre/mdt/*MDT* ]
+    [ ! -z "$(lctl dl | grep \<mdt\>)" ]
 }
 
 remote_mds_nodsh()
@@ -1504,7 +1518,7 @@ remote_mds_nodsh()
 
 remote_ost ()
 {
-    [ $(grep -c obdfilter $LPROC/devices) -eq 0 ]
+    [ -z "$(lctl dl | grep \<ost\>)" ]
 }
 
 remote_ost_nodsh()
@@ -1559,7 +1573,7 @@ nodes_list () {
 
 is_patchless ()
 {
-    grep -q patchless $LPROC/version
+    lctl lustre_build_version | grep -q patchless
 }
 
 check_runas_id() {

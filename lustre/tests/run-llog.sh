@@ -3,7 +3,7 @@
 load_llog_test() {
     grep -q llog_test /proc/modules && return
     # Module should have been placed with other lustre modules...
-    modprobe llog_test
+    modprobe llog_test 2>&1 | grep -v "llog_test not found"
     grep -q llog_test /proc/modules && return
     # But maybe we're running from a developer tree...
     insmod ../obdclass/llog_test.ko

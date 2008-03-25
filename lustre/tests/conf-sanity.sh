@@ -1538,6 +1538,15 @@ test_38() { # bug 14222
 }
 run_test 38 "MDS recreates missing lov_objid file from OST data"
 
+test_39() {
+        PTLDEBUG=+malloc
+        setup
+        cleanup
+        perl $SRCDIR/leak_finder.pl $TMP/debug 2>&1 | egrep '*** Leak:' && 
+                error "memory leak detected" || true
+}
+run_test 39 "leak_finder recognizes both LUSTRE and LNET malloc messages"
+
 umount_client $MOUNT
 cleanup_nocli
 cleanup_gss
