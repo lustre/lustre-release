@@ -48,9 +48,6 @@
 #include <linux/stat.h>
 #include <linux/list.h>
 #include <asm/uaccess.h>
-#ifdef HAVE_SEGMENT_H
-# include <asm/segment.h>
-#endif
 
 #include <linux/proc_fs.h>
 #include <linux/sysctl.h>
