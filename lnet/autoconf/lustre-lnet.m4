@@ -1178,18 +1178,6 @@ LB_LINUX_TRY_COMPILE([
 ])
 ])
 
-# asm/segment.h does not exist on all architectures.
-# e.g. the file is empty for ia64 and does not exist for PPC.
-AC_DEFUN([LC_SEGMENT_H],
-	 [LB_CHECK_FILE([$LINUX/include/asm/segment.h],
-			[AC_MSG_CHECKING([if asm/segment.h is present])
-			 LB_LINUX_TRY_COMPILE([#include <asm/segment.h>], [],
-					      [AC_MSG_RESULT([yes])
-					       AC_DEFINE(HAVE_SEGMENT_H, 1,
-							 [asm/segment.h exists])],
-					      [AC_MSG_RESULT([no])])])
-]) # LC_SEGMENT_H
-
 #
 # LN_PROG_LINUX
 #
