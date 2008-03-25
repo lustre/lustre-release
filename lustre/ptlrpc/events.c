@@ -113,7 +113,10 @@ void reply_in_callback(lnet_event_t *ev)
                           "replied=%d", ev->mlength, ev->offset, req->rq_replen,
                           req->rq_replied);
                 
-                LASSERT(ev->mlength == lustre_msg_early_size());
+                if (unlikely(ev->mlength != lustre_msg_early_size()))
+                        CERROR("early reply sized %u, expect %u\n",
+                               ev->mlength, lustre_msg_early_size());
+
                 req->rq_early_count++; /* number received, client side */
                 if (req->rq_replied) 
                         /* If we already got the real reply, ignore the early 
