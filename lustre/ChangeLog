@@ -13,7 +13,7 @@ tbd  Sun Microsystems, Inc.
        * Due to problems with nested symlinks and FMODE_EXEC (bug 12652),
         we do not recommend using patchless RHEL4 clients with kernels
         prior to 2.6.9-55EL (RHEL4U5).
-       * Recommended e2fsprogs version: 1.40.4-cfs1
+       * Recommended e2fsprogs version: 1.40.7-sun1
        * Note that reiserfs quotas are disabled on SLES 10 in this kernel.
        * RHEL 4 and RHEL 5/SLES 10 clients behaves differently on 'cd' to a
         removed cwd "./" (refer to Bugzilla 14399).
