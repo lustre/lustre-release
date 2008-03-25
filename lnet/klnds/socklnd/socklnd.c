@@ -1504,12 +1504,13 @@ ksocknal_terminate_conn (ksock_conn_t *conn)
         /* wake up the scheduler to "send" all remaining packets to /dev/null */
         spin_lock_bh (&sched->kss_lock);
 
+        /* a closing conn is always ready to tx */
+        conn->ksnc_tx_ready = 1;
+
         if (!conn->ksnc_tx_scheduled &&
             !list_empty(&conn->ksnc_tx_queue)){
                 list_add_tail (&conn->ksnc_tx_list,
                                &sched->kss_tx_conns);
-                /* a closing conn is always ready to tx */
-                conn->ksnc_tx_ready = 1;
                 conn->ksnc_tx_scheduled = 1;
                 /* extra ref for scheduler */
                 ksocknal_conn_addref(conn);
