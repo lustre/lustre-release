@@ -36,9 +36,6 @@
 #include <linux/fs.h>
 #include <linux/stat.h>
 #include <asm/uaccess.h>
-#ifdef HAVE_SEGMENT_H
-# include <asm/segment.h>
-#endif
 #include <linux/mm.h>
 #include <linux/pagemap.h>
 #include <linux/smp_lock.h>
