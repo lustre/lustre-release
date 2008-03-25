@@ -639,8 +639,8 @@ test_26b() {      # bug 10140 - evict dead exports by pinger
 	# evictor takes PING_EVICT_TIMEOUT + 3 * PING_INTERVAL to evict.  
         # But if there's a race to start the evictor from various obds, 
         # the loser might have to wait for the next ping.
-	echo Waiting for $(($TIMEOUT * 8)) secs
-	sleep $(($TIMEOUT * 8))
+	echo Waiting for $(($TIMEOUT * 3)) secs
+	sleep $(($TIMEOUT * 3))
         OST_NEXP2="`do_facet ost1 lctl get_param -n $OST_FILE | cut -d' ' -f2`"
         MDS_NEXP2="`do_facet mds lctl get_param -n $MDS_FILE | cut -d' ' -f2`"
 	echo ending with $OST_NEXP2 OST and $MDS_NEXP2 MDS exports

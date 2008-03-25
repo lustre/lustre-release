@@ -63,8 +63,12 @@ extern unsigned int obd_alloc_fail_rate;
 #define OBD_RECOVERY_FACTOR (5 / 2) /* times obd_timeout */
 /* Change recovery-small 26b time if you change this */
 #define PING_INTERVAL max(obd_timeout / 4, 1U)
-/* Client may skip 1 ping; wait for 2.5 */
-#define PING_EVICT_TIMEOUT (PING_INTERVAL * 5 / 2)
+/* Client may skip 1 ping; we must wait at least 2.5. But for multiple
+ * failover targets the client only pings one server at a time, and pings
+ * can be lost on a loaded network. Since eviction has serious consequences,
+ * and there's no urgent need to evict a client just because it's idle, we
+ * should be very conservative here. */
+#define PING_EVICT_TIMEOUT (PING_INTERVAL * 6)
 #define DISK_TIMEOUT 50          /* Beyond this we warn about disk speed */
 #define CONNECTION_SWITCH_MIN 5U /* Connection switching rate limiter */
  /* Max connect interval for nonresponsive servers; ~50s to avoid building up
