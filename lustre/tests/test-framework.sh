@@ -217,7 +217,7 @@ unload_modules() {
     wait_exit_ST client # bug 12845
 
     lsmod | grep libcfs > /dev/null && $LCTL dl
-    local MODULES=$($LCTL modules | awk '{ print $2 }' | grep -v libcfs)
+    local MODULES=$($LCTL modules | awk '{ print $2 }' | grep -v libcfs) || true
     $RMMOD $MODULES > /dev/null 2>&1 || true
      # do it again, in case we tried to unload ksocklnd too early
     MODULES=$($LCTL modules | awk '{ print $2 }' | grep -v libcfs) || true
