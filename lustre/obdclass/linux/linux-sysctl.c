@@ -38,9 +38,6 @@
 #include <linux/stat.h>
 #include <linux/ctype.h>
 #include <asm/bitops.h>
-#ifdef HAVE_SEGMENT_H
-# include <asm/segment.h>
-#endif
 #include <asm/uaccess.h>
 #include <linux/utsname.h>
 
