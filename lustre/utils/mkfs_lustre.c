@@ -901,10 +901,10 @@ int read_local_files(struct mkfs_opts *mop)
                 /* COMPAT_146 */
                 /* Try to read pre-1.6 config from last_rcvd */
                 struct lr_server_data lsd;
-                verrprint("%s: Unable to read %s (%s).\n",
-                          progname, filepnm, strerror(errno));
+                verrprint("%s: Unable to read %d.%d config %s.\n",
+                          progname, LUSTRE_MAJOR, LUSTRE_MINOR, filepnm);
 
-                verrprint("Trying last_rcvd\n");
+                verrprint("Trying 1.4 config from last_rcvd\n");
                 sprintf(filepnm, "%s/%s", tmpdir, LAST_RCVD);
 
                 /* Construct debugfs command line. */
