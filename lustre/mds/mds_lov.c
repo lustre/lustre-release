@@ -905,7 +905,8 @@ static int __mds_lov_synchronize(void *data)
 
         rc = obd_set_info_async(mds->mds_osc_exp, sizeof(KEY_MDS_CONN),
                                 KEY_MDS_CONN, sizeof(mgi), &mgi, NULL);
-
+        if (rc != 0)
+                GOTO(out, rc);
         /* propagate capability keys */
         rc = mds_propagate_capa_keys(mds);
         if (rc)
