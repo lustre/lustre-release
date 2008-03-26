@@ -527,33 +527,9 @@ static int filter_preprw_write(int cmd, struct obd_export *exp, struct obdo *oa,
         cleanup_phase = 2;
 
         if (dentry->d_inode == NULL) {
-                struct obdo *noa = oa;
-
-                if (oa == NULL) {
-                        OBDO_ALLOC(noa);
-                        if (noa == NULL)
-                                GOTO(recreate_out, rc = -ENOENT);
-                        noa->o_id = obj->ioo_id;
-                        noa->o_valid = OBD_MD_FLID;
-                }
-
-                if (filter_recreate(exp->exp_obd, noa) == 0) {
-                        f_dput(dentry);
-                        dentry = filter_fid2dentry(exp->exp_obd, NULL,
-                                                   obj->ioo_gr, obj->ioo_id);
-                }
-                if (oa == NULL)
-                        OBDO_FREE(noa);
-        recreate_out:
-                if (IS_ERR(dentry) || dentry->d_inode == NULL) {
-                        CERROR("%s: BRW to missing obj "LPU64"/"LPU64":rc %d\n",
-                               exp->exp_obd->obd_name,
-                               obj->ioo_id, obj->ioo_gr,
-                               IS_ERR(dentry) ? (int)PTR_ERR(dentry) : -ENOENT);
-                        if (IS_ERR(dentry))
-                                cleanup_phase = 1;
-                        GOTO(cleanup, rc = -ENOENT);
-                }
+                CERROR("%s: trying to BRW to non-existent file "LPU64"\n",
+                       exp->exp_obd->obd_name, obj->ioo_id);
+                GOTO(cleanup, rc = -ENOENT);
         }
 
         fso.fso_dentry = dentry;

@@ -3375,10 +3375,7 @@ static int filter_truncate(struct obd_export *exp, struct obd_info *oinfo,
                            struct obd_trans_info *oti,
                            struct ptlrpc_request_set *rqset)
 {
-        struct obdo *oa = oinfo->oi_oa;
-        struct dentry *dentry;
-        struct lvfs_run_ctxt saved;
-        int rc = 0;
+        int rc;
         ENTRY;
 
         if (oinfo->oi_policy.l_extent.end != OBD_OBJECT_EOF) {
@@ -3388,44 +3385,11 @@ static int filter_truncate(struct obd_export *exp, struct obd_info *oinfo,
         }
 
         CDEBUG(D_INODE, "calling truncate for object "LPU64", valid = "LPX64
-               ", o_size = "LPD64"\n", oa->o_id,
-               oa->o_valid, oinfo->oi_policy.l_extent.start);
+               ", o_size = "LPD64"\n", oinfo->oi_oa->o_id,
+               oinfo->oi_oa->o_valid, oinfo->oi_policy.l_extent.start);
 
-        oa->o_size = oinfo->oi_policy.l_extent.start;
-
-        if (!(oa->o_valid & OBD_MD_FLGROUP))
-                oa->o_gr = 0;
-
-        push_ctxt(&saved, &exp->exp_obd->obd_lvfs_ctxt, NULL);
-        lock_kernel();
-
-        dentry = filter_fid2dentry(exp->exp_obd, NULL, oa->o_gr, oa->o_id);
-        if (IS_ERR(dentry))
-                GOTO(out_unlock, rc = PTR_ERR(dentry));
-
-        if (dentry->d_inode == NULL) {
-                if (oinfo->oi_policy.l_extent.start == 0 &&
-                    filter_recreate(exp->exp_obd, oa) == 0) {
-                        f_dput(dentry);
-                        dentry = filter_fid2dentry(exp->exp_obd, NULL,
-                                                   oa->o_gr, oa->o_id);
-                }
-                if (IS_ERR(dentry) || dentry->d_inode == NULL) {
-                        CERROR("%s: punch missing obj "LPU64"/"LPU64": rc %d\n",
-                               exp->exp_obd->obd_name, oa->o_id, oa->o_gr, rc);
-                        if (IS_ERR(dentry))
-                                GOTO(out_unlock, rc = -ENOENT);
-                        GOTO(out_dput, rc = -ENOENT);
-                }
-        }
-
+        oinfo->oi_oa->o_size = oinfo->oi_policy.l_extent.start;
         rc = filter_setattr(exp, oinfo, oti);
-
-out_dput:
-        f_dput(dentry);
-out_unlock:
-        unlock_kernel();
-        pop_ctxt(&saved, &exp->exp_obd->obd_lvfs_ctxt, NULL);
 
         RETURN(rc);
 }
