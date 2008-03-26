@@ -1573,7 +1573,7 @@ nodes_list () {
 
 is_patchless ()
 {
-    lctl lustre_build_version | grep -q patchless
+    lctl get_param version | grep -q patchless
 }
 
 check_runas_id() {
