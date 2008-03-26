@@ -406,6 +406,7 @@ static int mdc_finish_enqueue(struct obd_export *exp,
         struct ldlm_reply *lockrep;
         ENTRY;
 
+        LASSERT(rc >= 0);
         /* Similarly, if we're going to replay this request, we don't want to
          * actually get a lock, just perform the intent. */
         if (req->rq_transno || req->rq_replay) {
@@ -418,12 +419,6 @@ static int mdc_finish_enqueue(struct obd_export *exp,
                 einfo->ei_mode = 0;
                 memset(lockh, 0, sizeof(*lockh));
                 rc = 0;
-        } else if (rc != 0) {
-                CERROR("ldlm_cli_enqueue: %d\n", rc);
-                LASSERTF(rc < 0, "rc %d\n", rc);
-                mdc_clear_replay_flag(req, rc);
-                ptlrpc_req_finished(req);
-                RETURN(rc);
         } else { /* rc = 0 */
                 struct ldlm_lock *lock = ldlm_handle2lock(lockh);
                 LASSERT(lock);
@@ -587,7 +582,12 @@ int mdc_enqueue(struct obd_export *exp, struct ldlm_enqueue_info *einfo,
                               0, NULL, lockh, 0);
         mdc_exit_request(&obddev->u.cli);
         mdc_put_rpc_lock(obddev->u.cli.cl_rpc_lock, it);
-
+        if (rc < 0) {
+                CERROR("ldlm_cli_enqueue: %d\n", rc);
+                mdc_clear_replay_flag(req, rc);
+                ptlrpc_req_finished(req);
+                RETURN(rc);
+        }
         rc = mdc_finish_enqueue(exp, req, einfo, it, lockh, rc);
 
         RETURN(rc);
@@ -832,9 +832,16 @@ static int mdc_intent_getattr_async_interpret(struct ptlrpc_request *req,
         obddev = class_exp2obd(exp);
 
         mdc_exit_request(&obddev->u.cli);
+        if (OBD_FAIL_CHECK(OBD_FAIL_MDC_GETATTR_ENQUEUE))
+                rc = -ETIMEDOUT;
 
         rc = ldlm_cli_enqueue_fini(exp, req, einfo->ei_type, 1, einfo->ei_mode,
                                    &flags, NULL, 0, NULL, lockh, rc);
+        if (rc < 0) {
+                CERROR("ldlm_cli_enqueue: %d\n", rc);
+                mdc_clear_replay_flag(req, rc);
+                GOTO(out, rc);
+        }
 
         rc = mdc_finish_enqueue(exp, req, einfo, it, lockh, rc);
         if (rc)

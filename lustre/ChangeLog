@@ -18,6 +18,15 @@ tbd  Sun Microsystems, Inc.
        * RHEL 4 and RHEL 5/SLES 10 clients behaves differently on 'cd' to a
         removed cwd "./" (refer to Bugzilla 14399).
 
+Severity   : major
+Bugzilla   : 15027
+Frequency  : on network error
+Description: panic with double free request if network error 
+Details    : mdc_finish_enqueue is finish request if any network error occuring,
+             but it's true only for synchronus enqueue, for async enqueue 
+             (via ptlrpcd) this incorrect and ptlrpcd want finish request
+             himself.
+
 Severity   : normal
 Bugzilla   : 14533
 Frequency  : rare, on recovery

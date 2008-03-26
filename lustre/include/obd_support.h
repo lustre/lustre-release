@@ -257,6 +257,7 @@ extern unsigned int obd_alloc_fail_rate;
 #define OBD_FAIL_MDC_REVALIDATE_PAUSE    0x800
 #define OBD_FAIL_MDC_ENQUEUE_PAUSE       0x801
 #define OBD_FAIL_MDC_OLD_EXT_FLAGS       0x802
+#define OBD_FAIL_MDC_GETATTR_ENQUEUE     0x803
 
 #define OBD_FAIL_MGS                     0x900
 #define OBD_FAIL_MGS_ALL_REQUEST_NET     0x901

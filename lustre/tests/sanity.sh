@@ -4635,8 +4635,7 @@ test_122() { #bug 11544
 }
 run_test 122 "fail client bulk callback (shouldn't LBUG) ======="
 
-test_123() # statahead(bug 11401)
-{
+test_123a() { # was test 123, statahead(bug 11401)
         if [ -z "$(grep "processor.*: 1" /proc/cpuinfo)" ]; then
                 log "testing on UP system. Performance may be not as good as expected."
         fi
@@ -4657,6 +4656,7 @@ test_123() # statahead(bug 11401)
                 etime=`date +%s`
                 delta_sa=$((etime - stime))
                 log "ls $i files with statahead:    $delta_sa sec"
+		lctl get_param -n llite.*.statahead_stats
 
                 max=`lctl get_param -n llite.*.statahead_max | head -n 1`
                 lctl set_param -n llite.*.statahead_max 0
@@ -4692,7 +4692,26 @@ test_123() # statahead(bug 11401)
         [ $error -ne 0 ] && error "statahead is slow!"
         return 0
 }
-run_test 123 "verify statahead work"
+run_testa 123 "verify statahead work"
+
+test_123b () { # statahead(bug 15027)
+	mkdir -p $DIR/$tdir
+	createmany -o $DIR/$tdir/$tfile-%d 1000
+	
+        cancel_lru_locks mdc
+        cancel_lru_locks osc
+
+#define OBD_FAIL_MDC_GETATTR_ENQUEUE     0x803
+        sysctl -w lustre.fail_loc=0x80000803
+        ls -lR $DIR/$tdir > /dev/null
+        log "ls done"
+        sysctl -w lustre.fail_loc=0x0
+        lctl get_param -n llite.*.statahead_stats
+        rm -r $DIR/$tdir
+        sync
+
+}
+run_test 123b "not panic with network error in statahead enqueue (bug 15027)"
 
 test_124a() {
 	[ -z "`lctl get_param -n mdc.*.connect_flags | grep lru_resize`" ] && \
