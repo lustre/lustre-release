@@ -4692,7 +4692,7 @@ test_123a() { # was test 123, statahead(bug 11401)
         [ $error -ne 0 ] && error "statahead is slow!"
         return 0
 }
-run_testa 123 "verify statahead work"
+run_test 123a "verify statahead work"
 
 test_123b () { # statahead(bug 15027)
 	mkdir -p $DIR/$tdir
