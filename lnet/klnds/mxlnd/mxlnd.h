@@ -37,6 +37,7 @@
 #include <linux/smp_lock.h>
 #include <linux/unistd.h>
 #include <linux/uio.h>
+#include <linux/fs.h>
 
 #include <asm/system.h>
 #include <asm/uaccess.h>
@@ -107,7 +108,7 @@
 #define MXLND_MX_EP_ID          3               /* MX endpoint ID */
 #define MXLND_COMM_TIMEOUT      (20 * HZ)       /* timeout for send/recv (jiffies) */
 #define MXLND_WAIT_TIMEOUT      HZ              /* timeout for wait (jiffies) */
-#define MXLND_POLLING           0               /* poll iterations before blocking */
+#define MXLND_POLLING           1000            /* poll iterations before blocking */
 #define MXLND_MAX_PEERS         1024            /* number of nodes talking to me */
 #define MXLND_EAGER_NUM         MXLND_MAX_PEERS /* number of pre-posted receives */
 #define MXLND_EAGER_SIZE        PAGE_SIZE       /* pre-posted eager message size */
@@ -371,9 +372,9 @@ extern lnet_nid_t mxlnd_nic_id2nid(lnet_ni_t *ni, u64 nic_id);
 extern u64 mxlnd_nid2nic_id(lnet_nid_t nid);
 
 /* in mxlnd_cb.c */
-void mxlnd_eager_recv(void *context, __u64 match_value, __u32 length);
+void mxlnd_eager_recv(void *context, uint64_t match_value, uint32_t length);
 extern mx_unexp_handler_action_t mxlnd_unexpected_recv(void *context,
-                mx_endpoint_addr_t source, __u64 match_value, __u64 length, 
+                mx_endpoint_addr_t source, uint64_t match_value, uint32_t length, 
                 void *data_if_available);
 extern void mxlnd_peer_free(struct kmx_peer *peer);
 extern void mxlnd_conn_free(struct kmx_conn *conn);
@@ -389,6 +390,7 @@ extern int  mxlnd_connd(void *arg);
 
 #define mxlnd_peer_addref(peer)                                 \
 do {                                                            \
+        LASSERT(peer != NULL);                                  \
         LASSERT(atomic_read(&(peer)->mxp_refcount) > 0);        \
         atomic_inc(&(peer)->mxp_refcount);                      \
 } while (0)
@@ -403,6 +405,7 @@ do {                                                            \
 
 #define mxlnd_conn_addref(conn)                                 \
 do {                                                            \
+        LASSERT(conn != NULL);                                  \
         LASSERT(atomic_read(&(conn)->mxk_refcount) > 0);        \
         atomic_inc(&(conn)->mxk_refcount);                      \
 } while (0)
