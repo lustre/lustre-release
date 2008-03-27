@@ -216,12 +216,13 @@ int ll_tree_unlock(struct ll_lock_tree *tree)
         RETURN(rc);
 }
 
-int ll_tree_lock(struct ll_lock_tree *tree,
+int ll_tree_lock_iov(struct ll_lock_tree *tree,
                  struct ll_lock_tree_node *first_node,
-                 const char *buf, size_t count, int ast_flags)
+                 const struct iovec *iov, unsigned long nr_segs, int ast_flags)
 {
         struct ll_lock_tree_node *node;
         int rc = 0;
+        unsigned long seg;
         ENTRY;
 
         tree->lt_root.rb_node = NULL;
@@ -232,9 +233,13 @@ int ll_tree_lock(struct ll_lock_tree *tree,
         /* To avoid such subtle deadlock case: client1 try to read file1 to
          * mmapped file2, on the same time, client2 try to read file2 to
          * mmapped file1.*/
-        rc = lt_get_mmap_locks(tree, (unsigned long)buf, count);
-        if (rc)
-                GOTO(out, rc);
+        for (seg = 0; seg < nr_segs; seg++) {
+                const struct iovec *iv = &iov[seg];
+                rc = lt_get_mmap_locks(tree, (unsigned long)iv->iov_base,
+                                       iv->iov_len);
+                if (rc)
+                        GOTO(out, rc);
+        }
 
         while ((node = lt_least_node(tree))) {
                 struct inode *inode = node->lt_inode;
@@ -252,6 +257,16 @@ int ll_tree_lock(struct ll_lock_tree *tree,
 out:
         ll_tree_unlock(tree);
         RETURN(rc);
+}
+
+int ll_tree_lock(struct ll_lock_tree *tree,
+                 struct ll_lock_tree_node *first_node,
+                 const char *buf, size_t count, int ast_flags)
+{
+        struct iovec local_iov = { .iov_base = (void __user *)buf,
+                                   .iov_len = count };
+
+        return ll_tree_lock_iov(tree, first_node, &local_iov, 1, ast_flags);
 }
 
 static ldlm_mode_t mode_from_vma(struct vm_area_struct *vma)

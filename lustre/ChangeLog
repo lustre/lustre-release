@@ -458,6 +458,11 @@ Bugzilla   : 15033
 Description: build for x2 fails
 Details    : fix compile issue on Cray systems.
 
+Severity   : enhancement
+Bugzilla   : 13371
+Description: implement readv/writev APIs(aio_read/aio_writes in newer kernels)
+Details    : This greatly improves speed of NFS writes on 2.6 kernels.
+
 --------------------------------------------------------------------------------
 
 2007-12-07         Cluster File Systems, Inc. <info@clusterfs.com>

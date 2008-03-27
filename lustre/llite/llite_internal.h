@@ -558,7 +558,8 @@ void ll_readahead_init(struct inode *inode, struct ll_readahead_state *ras);
 void ll_ra_accounting(struct ll_async_page *llap,struct address_space *mapping);
 void ll_truncate(struct inode *inode);
 int ll_file_punch(struct inode *, loff_t, int);
-ssize_t ll_file_lockless_io(struct file *, char *, size_t, loff_t *, int);
+ssize_t ll_file_lockless_io(struct file *, const struct iovec *,
+                            unsigned long, loff_t *, int, ssize_t);
 void ll_clear_file_contended(struct inode*);
 int ll_sync_page_range(struct inode *, struct address_space *, loff_t, size_t);
 
@@ -731,6 +732,10 @@ struct ll_lock_tree_node * ll_node_from_inode(struct inode *inode, __u64 start,
 int ll_tree_lock(struct ll_lock_tree *tree,
                  struct ll_lock_tree_node *first_node,
                  const char *buf, size_t count, int ast_flags);
+int ll_tree_lock_iov(struct ll_lock_tree *tree,
+                     struct ll_lock_tree_node *first_node,
+                     const struct iovec *iov, unsigned long nr_segs,
+                     int ast_flags);
 int ll_tree_unlock(struct ll_lock_tree *tree);
 
 #define    ll_s2sbi(sb)        (s2lsi(sb)->lsi_llsbi)

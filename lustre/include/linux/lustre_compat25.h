@@ -510,45 +510,6 @@ ll_kern_mount(const char *fstype, int flags, const char *name, void *data)
 #define ll_kern_mount(fstype, flags, name, data) do_kern_mount((fstype), (flags), (name), (data))
 #endif
 
-#ifndef HAVE_GENERIC_FILE_READ
-static inline
-ssize_t
-generic_file_read(struct file *filp, char __user *buf, size_t len, loff_t *ppos)
-{
-        struct iovec iov = { .iov_base = (void __user *)buf, .iov_len = len };
-        struct kiocb kiocb;
-        ssize_t ret;
-
-        init_sync_kiocb(&kiocb, filp);
-        kiocb.ki_pos = *ppos;
-        kiocb.ki_left = len;
-
-        ret = generic_file_aio_read(&kiocb, &iov, 1, kiocb.ki_pos);
-        *ppos = kiocb.ki_pos;
-        return ret;
-}
-#endif
-
-#ifndef HAVE_GENERIC_FILE_WRITE
-static inline
-ssize_t
-generic_file_write(struct file *filp, const char __user *buf, size_t len, loff_t *ppos)
-{
-        struct iovec iov = { .iov_base = (void __user *)buf, .iov_len = len };
-        struct kiocb kiocb;
-        ssize_t ret;
-
-        init_sync_kiocb(&kiocb, filp);
-        kiocb.ki_pos = *ppos;
-        kiocb.ki_left = len;
-
-        ret = generic_file_aio_write(&kiocb, &iov, 1, kiocb.ki_pos);
-        *ppos = kiocb.ki_pos;
-
-        return ret;
-}
-#endif
-
 #ifdef HAVE_STATFS_DENTRY_PARAM
 #define ll_do_statfs(sb, sfs) (sb)->s_op->statfs((sb)->s_root, (sfs))
 #else

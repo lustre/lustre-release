@@ -1125,9 +1125,10 @@ static int ll_is_file_contended(struct file *file)
         RETURN(0);
 }
 
-static int ll_file_get_tree_lock(struct ll_lock_tree *tree, struct file *file,
-                                 const char *buf, size_t count,
-                                 loff_t start, loff_t end, int rw)
+static int ll_file_get_tree_lock_iov(struct ll_lock_tree *tree,
+                                     struct file *file, const struct iovec *iov,
+                                     unsigned long nr_segs,
+                                     loff_t start, loff_t end, int rw)
 {
         int append;
         int tree_locked = 0;
@@ -1150,7 +1151,7 @@ static int ll_file_get_tree_lock(struct ll_lock_tree *tree, struct file *file,
                         GOTO(out, rc);
                 }
                 tree->lt_fd = LUSTRE_FPRIVATE(file);
-                rc = ll_tree_lock(tree, node, buf, count, ast_flags);
+                rc = ll_tree_lock_iov(tree, node, iov, nr_segs, ast_flags);
                 if (rc == 0)
                         tree_locked = 1;
                 else if (rc == -EUSERS)
@@ -1163,9 +1164,79 @@ out:
         return rc;
 }
 
-static ssize_t ll_file_read(struct file *file, char *buf, size_t count,
-                            loff_t *ppos)
+/* XXX: exact copy from kernel code (__generic_file_aio_write_nolock from rhel4)
+ */
+static size_t ll_file_get_iov_count(const struct iovec *iov, 
+                                     unsigned long *nr_segs)
 {
+        size_t count = 0;
+        unsigned long seg;
+
+        for (seg = 0; seg < *nr_segs; seg++) {
+                const struct iovec *iv = &iov[seg];
+
+                /*
+                 * If any segment has a negative length, or the cumulative
+                 * length ever wraps negative then return -EINVAL.
+                 */
+                count += iv->iov_len;
+                if (unlikely((ssize_t)(count|iv->iov_len) < 0))
+                        return -EINVAL;
+                if (access_ok(VERIFY_WRITE, iv->iov_base, iv->iov_len))
+                        continue;
+                if (seg == 0)
+                        return -EFAULT;
+                *nr_segs = seg;
+                count -= iv->iov_len;   /* This segment is no good */
+                break;
+        }
+        return count;
+}
+
+static int iov_copy_update(unsigned long *nr_segs, const struct iovec **iov_out,
+                           unsigned long *nrsegs_copy,
+                           struct iovec *iov_copy, size_t *offset,
+                           size_t size)
+{
+        int i;
+        const struct iovec *iov = *iov_out;
+        for (i = 0; i < *nr_segs;
+             i++) {
+                const struct iovec *iv = &iov[i];
+                struct iovec *ivc = &iov_copy[i];
+                *ivc = *iv;
+                if (i == 0) {
+                        ivc->iov_len -= *offset;
+                        ivc->iov_base += *offset;
+                }
+                if (ivc->iov_len > size) {
+                        ivc->iov_len = size;
+                        if (i == 0)
+                                *offset += size;
+                        else
+                                *offset = size;
+                        break;
+                }
+                size -= ivc->iov_len;
+        }
+        *iov_out += i;
+        *nr_segs -= i;
+        *nrsegs_copy = i + 1;
+
+        return 0;
+}
+
+#ifdef HAVE_FILE_READV
+static ssize_t ll_file_readv(struct file *file, const struct iovec *iov,
+                              unsigned long nr_segs, loff_t *ppos)
+{
+#else
+static ssize_t ll_file_aio_read(struct kiocb *iocb, const struct iovec *iov,
+                                unsigned long nr_segs, loff_t pos)
+{
+        struct file *file = iocb->ki_filp;
+        loff_t *ppos = &iocb->ki_pos;
+#endif
         struct inode *inode = file->f_dentry->d_inode;
         struct ll_inode_info *lli = ll_i2info(inode);
         struct lov_stripe_md *lsm = lli->lli_smd;
@@ -1177,9 +1248,13 @@ static ssize_t ll_file_read(struct file *file, char *buf, size_t count,
         loff_t end;
         ssize_t retval, chunk, sum = 0;
         int tree_locked;
-
+        struct iovec *iov_copy = NULL;
+        unsigned long nrsegs_copy, nrsegs_orig = 0;
+        size_t count, iov_offset = 0;
         __u64 kms;
         ENTRY;
+
+        count = ll_file_get_iov_count(iov, &nr_segs);
         CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu/%u(%p),size="LPSZ",offset=%Ld\n",
                inode->i_ino, inode->i_generation, inode, count, *ppos);
         /* "If nbyte is 0, read() will return 0 and have no other results."
@@ -1207,12 +1282,23 @@ static ssize_t ll_file_read(struct file *file, char *buf, size_t count,
                         count = i_size_read(inode) - *ppos;
                 /* Make sure to correctly adjust the file pos pointer for
                  * EFAULT case */
-                notzeroed = clear_user(buf, count);
-                count -= notzeroed;
-                *ppos += count;
-                if (!count)
+                for (nrsegs_copy = 0; nrsegs_copy < nr_segs; nrsegs_copy++) {
+                        const struct iovec *iv = &iov[nrsegs_copy];
+
+                        if (count < iv->iov_len)
+                                chunk = count;
+                        else
+                                chunk = iv->iov_len;
+                        notzeroed = clear_user(iv->iov_base, chunk);
+                        sum += (chunk - notzeroed);
+                        count -= (chunk - notzeroed);
+                        if (notzeroed || !count)
+                                break;
+                }
+                *ppos += sum;
+                if (!sum)
                         RETURN(-EFAULT);
-                RETURN(count);
+                RETURN(sum);
         }
 repeat:
         if (sbi->ll_max_rw_chunk != 0) {
@@ -1228,12 +1314,34 @@ repeat:
                 /* and chunk shouldn't be too large even if striping is wide */
                 if (end - *ppos > sbi->ll_max_rw_chunk)
                         end = *ppos + sbi->ll_max_rw_chunk - 1;
+
+                chunk = end - *ppos + 1;
+                if ((count == chunk) && (iov_offset == 0)) {
+                        if (iov_copy)
+                                OBD_FREE(iov_copy, sizeof(iov) * nrsegs_orig);
+
+                        iov_copy = (struct iovec *)iov;
+                        nrsegs_copy = nr_segs;
+                } else {
+                        if (!iov_copy) {
+                                nrsegs_orig = nr_segs;
+                                OBD_ALLOC(iov_copy, sizeof(iov) * nr_segs);
+                                if (!iov_copy)
+                                        GOTO(out, retval = -ENOMEM); 
+                        }
+
+                        iov_copy_update(&nr_segs, &iov, &nrsegs_copy, iov_copy,
+                                        &iov_offset, chunk);
+                }
+ 
         } else {
                 end = *ppos + count - 1;
+                iov_copy = (struct iovec *)iov;
+                nrsegs_copy = nr_segs;
         }
 
-        tree_locked = ll_file_get_tree_lock(&tree, file, buf,
-                                            count, *ppos, end, READ);
+        tree_locked = ll_file_get_tree_lock_iov(&tree, file, iov_copy,
+                                                nrsegs_copy, *ppos, end, READ);
         if (tree_locked < 0)
                 GOTO(out, retval = tree_locked);
 
@@ -1302,14 +1410,19 @@ repeat:
 
                 /* BUG: 5972 */
                 file_accessed(file);
-                retval = generic_file_read(file, buf, chunk, ppos);
+#ifdef HAVE_FILE_READV
+                retval = generic_file_readv(file, iov_copy, nrsegs_copy, ppos);
+#else
+                retval = generic_file_aio_read(iocb, iov_copy, nrsegs_copy,
+                                               *ppos);
+#endif
                 ll_tree_unlock(&tree);
         } else {
-                retval = ll_file_lockless_io(file, buf, chunk, ppos, READ);
+                retval = ll_file_lockless_io(file, iov_copy, nrsegs_copy, ppos,
+                                             READ, chunk);
         }
         ll_rw_stats_tally(sbi, current->pid, file, count, 0);
         if (retval > 0) {
-                buf += retval;
                 count -= retval;
                 sum += retval;
                 if (retval == chunk && count > 0)
@@ -1320,15 +1433,48 @@ repeat:
         if (ra != 0)
                 ll_ra_read_ex(file, &bead);
         retval = (sum > 0) ? sum : retval;
+
+        if (iov_copy && iov_copy != iov)
+                OBD_FREE(iov_copy, sizeof(iov) * nrsegs_orig);
+
         RETURN(retval);
+}
+
+static ssize_t ll_file_read(struct file *file, char *buf, size_t count,
+                            loff_t *ppos)
+{
+        struct iovec local_iov = { .iov_base = (void __user *)buf,
+                                   .iov_len = count };
+#ifdef HAVE_FILE_READV
+        return ll_file_readv(file, &local_iov, 1, ppos);
+#else
+        struct kiocb kiocb;
+        ssize_t ret;
+
+        init_sync_kiocb(&kiocb, file);
+        kiocb.ki_pos = *ppos;
+        kiocb.ki_left = count;
+
+        ret = ll_file_aio_read(&kiocb, &local_iov, 1, kiocb.ki_pos);
+        *ppos = kiocb.ki_pos;
+        return ret;
+#endif
 }
 
 /*
  * Write to a file (through the page cache).
  */
-static ssize_t ll_file_write(struct file *file, const char *buf, size_t count,
-                             loff_t *ppos)
+#ifdef HAVE_FILE_WRITEV
+static ssize_t ll_file_writev(struct file *file, const struct iovec *iov,
+                              unsigned long nr_segs, loff_t *ppos)
 {
+#else /* AIO stuff */
+static ssize_t ll_file_aio_write(struct kiocb *iocb, const struct iovec *iov,
+                                 unsigned long nr_segs, loff_t pos)
+{
+        struct file *file = iocb->ki_filp;
+        loff_t *ppos = &iocb->ki_pos;
+#endif
         struct inode *inode = file->f_dentry->d_inode;
         struct ll_sb_info *sbi = ll_i2sbi(inode);
         struct lov_stripe_md *lsm = ll_i2info(inode)->lli_smd;
@@ -1337,7 +1483,12 @@ static ssize_t ll_file_write(struct file *file, const char *buf, size_t count,
         loff_t lock_start, lock_end, end;
         ssize_t retval, chunk, sum = 0;
         int tree_locked;
+        struct iovec *iov_copy = NULL;
+        unsigned long nrsegs_copy, nrsegs_orig = 0;
+        size_t count, iov_offset = 0;
         ENTRY;
+
+        count = ll_file_get_iov_count(iov, &nr_segs);
 
         CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu/%u(%p),size="LPSZ",offset=%Ld\n",
                inode->i_ino, inode->i_generation, inode, count, *ppos);
@@ -1365,6 +1516,8 @@ repeat:
         if (file->f_flags & O_APPEND) {
                 lock_start = 0;
                 lock_end = OBD_OBJECT_EOF;
+                iov_copy = (struct iovec *)iov;
+                nrsegs_copy = nr_segs;
         } else if (sbi->ll_max_rw_chunk != 0) {
                 /* first, let's know the end of the current stripe */
                 end = *ppos;
@@ -1380,13 +1533,34 @@ repeat:
                         end = *ppos + sbi->ll_max_rw_chunk - 1;
                 lock_start = *ppos;
                 lock_end = end;
+                chunk = end - *ppos + 1;
+                if ((count == chunk) && (iov_offset == 0)) {
+                        if (iov_copy)
+                                OBD_FREE(iov_copy, sizeof(iov) * nrsegs_orig);
+
+                        iov_copy = (struct iovec *)iov;
+                        nrsegs_copy = nr_segs;
+                } else {
+                        if (!iov_copy) {
+                                nrsegs_orig = nr_segs;
+                                OBD_ALLOC(iov_copy, sizeof(iov) * nr_segs);
+                                if (!iov_copy)
+                                        GOTO(out, retval = -ENOMEM); 
+                        }
+
+                        iov_copy_update(&nr_segs, &iov, &nrsegs_copy, iov_copy,
+                                        &iov_offset, chunk);
+                }
         } else {
                 lock_start = *ppos;
-                lock_end = *ppos + count - 1;
+                lock_end = end;
+                iov_copy = (struct iovec *)iov;
+                nrsegs_copy = nr_segs;
         }
 
-        tree_locked = ll_file_get_tree_lock(&tree, file, buf, count,
-                                            lock_start, lock_end, WRITE);
+        tree_locked = ll_file_get_tree_lock_iov(&tree, file, iov_copy,
+                                                nrsegs_copy, lock_start,
+                                                lock_end, WRITE);
         if (tree_locked < 0)
                 GOTO(out, retval = tree_locked);
 
@@ -1411,10 +1585,15 @@ repeat:
         CDEBUG(D_INFO, "Writing inode %lu, "LPSZ" bytes, offset %Lu\n",
                inode->i_ino, chunk, *ppos);
         if (tree_locked)
-                retval = generic_file_write(file, buf, chunk, ppos);
+#ifdef HAVE_FILE_WRITEV
+                retval = generic_file_writev(file, iov_copy, nrsegs_copy, ppos);
+#else
+                retval = generic_file_aio_write(iocb, iov_copy, nrsegs_copy,
+                                                *ppos);
+#endif
         else
-                retval = ll_file_lockless_io(file, (char*)buf, chunk,
-                                             ppos, WRITE);
+                retval = ll_file_lockless_io(file, iov_copy, nrsegs_copy,
+                                             ppos, WRITE, chunk);
         ll_rw_stats_tally(ll_i2sbi(inode), current->pid, file, chunk, 1);
 
 out_unlock:
@@ -1423,7 +1602,6 @@ out_unlock:
 
 out:
         if (retval > 0) {
-                buf += retval;
                 count -= retval;
                 sum += retval;
                 if (retval == chunk && count > 0)
@@ -1432,10 +1610,36 @@ out:
 
         up(&ll_i2info(inode)->lli_write_sem);
 
+        if (iov_copy && iov_copy != iov)
+                OBD_FREE(iov_copy, sizeof(iov) * nrsegs_orig);
+
         retval = (sum > 0) ? sum : retval;
         ll_stats_ops_tally(ll_i2sbi(inode), LPROC_LL_WRITE_BYTES,
                            retval > 0 ? retval : 0);
         RETURN(retval);
+}
+
+static ssize_t ll_file_write(struct file *file, const char *buf, size_t count,
+                             loff_t *ppos)
+{
+        struct iovec local_iov = { .iov_base = (void __user *)buf,
+                                   .iov_len = count };
+
+#ifdef HAVE_FILE_WRITEV
+        return ll_file_writev(file, &local_iov, 1, ppos);
+#else
+        struct kiocb kiocb;
+        ssize_t ret;
+
+        init_sync_kiocb(&kiocb, file);
+        kiocb.ki_pos = *ppos;
+        kiocb.ki_left = count;
+
+        ret = ll_file_aio_write(&kiocb, &local_iov, 1, kiocb.ki_pos);
+        *ppos = kiocb.ki_pos;
+
+        return ret;
+#endif
 }
 
 /*
@@ -2660,7 +2864,17 @@ check_capabilities:
 /* -o localflock - only provides locally consistent flock locks */
 struct file_operations ll_file_operations = {
         .read           = ll_file_read,
+#ifdef HAVE_FILE_READV
+        .readv          = ll_file_readv,
+#else
+        .aio_read       = ll_file_aio_read,
+#endif
         .write          = ll_file_write,
+#ifdef HAVE_FILE_WRITEV
+        .writev         = ll_file_writev,
+#else
+        .aio_write      = ll_file_aio_write,
+#endif
         .ioctl          = ll_file_ioctl,
         .open           = ll_file_open,
         .release        = ll_file_release,
@@ -2674,7 +2888,17 @@ struct file_operations ll_file_operations = {
 
 struct file_operations ll_file_operations_flock = {
         .read           = ll_file_read,
+#ifdef HAVE_FILE_READV
+        .readv          = ll_file_readv,
+#else
+        .aio_read       = ll_file_aio_read,
+#endif
         .write          = ll_file_write,
+#ifdef HAVE_FILE_WRITEV
+        .writev         = ll_file_writev,
+#else   
+        .aio_write      = ll_file_aio_write,
+#endif
         .ioctl          = ll_file_ioctl,
         .open           = ll_file_open,
         .release        = ll_file_release,
@@ -2693,7 +2917,17 @@ struct file_operations ll_file_operations_flock = {
 /* These are for -o noflock - to return ENOSYS on flock calls */
 struct file_operations ll_file_operations_noflock = {
         .read           = ll_file_read,
+#ifdef HAVE_FILE_READV
+        .readv          = ll_file_readv,
+#else
+        .aio_read       = ll_file_aio_read,
+#endif
         .write          = ll_file_write,
+#ifdef HAVE_FILE_WRITEV
+        .writev         = ll_file_writev,
+#else   
+        .aio_write      = ll_file_aio_write,
+#endif
         .ioctl          = ll_file_ioctl,
         .open           = ll_file_open,
         .release        = ll_file_release,

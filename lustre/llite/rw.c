@@ -1914,7 +1914,8 @@ err:
  }
 
 static ssize_t ll_file_copy_pages(struct page **pages, int numpages,
-                                  char *buf, loff_t pos, size_t count,
+                                  const struct iovec *iov, unsigned long nsegs,
+                                  ssize_t iov_offset, loff_t pos, size_t count,
                                   int rw)
 {
         ssize_t amount = 0;
@@ -1924,41 +1925,55 @@ static ssize_t ll_file_copy_pages(struct page **pages, int numpages,
         ENTRY;
 
         for (i = 0; i < numpages; i++) {
-                unsigned offset, bytes, left;
+                unsigned offset, bytes, left = 0;
                 char *vaddr;
 
                 vaddr = kmap(pages[i]);
                 offset = pos & (CFS_PAGE_SIZE - 1);
                 bytes = min_t(unsigned, CFS_PAGE_SIZE - offset, count);
                 LL_CDEBUG_PAGE(D_PAGE, pages[i], "op = %s, addr = %p, "
-                               "buf = %p, bytes = %u\n",
+                               "bytes = %u\n",
                                (rw == WRITE) ? "CFU" : "CTU",
-                               vaddr + offset, buf, bytes);
-                if (rw == WRITE) {
-                        left = copy_from_user(vaddr + offset, buf, bytes);
-                        if (updatechecksum) {
-                                struct ll_async_page *llap;
+                               vaddr + offset, bytes);
+                while (bytes > 0 && !left && nsegs) {
+                        unsigned copy = min_t(ssize_t, bytes,
+                                               iov->iov_len - iov_offset);
+                        if (rw == WRITE) {
+                                left = copy_from_user(vaddr + offset,
+                                                      iov->iov_base +iov_offset,
+                                                      copy);
+                                if (updatechecksum) {
+                                        struct ll_async_page *llap;
 
-                                llap = llap_cast_private(pages[i]);
-                                llap->llap_checksum =
-                                        init_checksum(OSC_DEFAULT_CKSUM);
-                                llap->llap_checksum =
-                                        compute_checksum(llap->llap_checksum,
-                                                         vaddr, CFS_PAGE_SIZE,
-                                                         OSC_DEFAULT_CKSUM);
+                                        llap = llap_cast_private(pages[i]);
+                                        llap->llap_checksum =
+                                                init_checksum(OSC_DEFAULT_CKSUM);
+                                        llap->llap_checksum =
+                                           compute_checksum(llap->llap_checksum,
+                                                            vaddr,CFS_PAGE_SIZE,
+                                                            OSC_DEFAULT_CKSUM);
+                                }
+                        } else {
+                                left = copy_to_user(iov->iov_base + iov_offset,
+                                                    vaddr + offset, copy);
                         }
-                } else {
-                        left = copy_to_user(buf, vaddr + offset, bytes);
+                        
+                        amount += copy;
+                        count -= copy;
+                        pos += copy;
+                        iov_offset += copy;
+                        bytes -= copy;
+                        if (iov_offset == iov->iov_len) {
+                                iov_offset = 0;
+                                iov++;
+                                nsegs--;
+                        }
                 }
                 kunmap(pages[i]);
-                amount += bytes;
                 if (left) {
                         amount -= left;
                         break;
                 }
-                buf += bytes;
-                count -= bytes;
-                pos += bytes;
         }
         if (amount == 0)
                 RETURN(-EFAULT);
@@ -2030,8 +2045,25 @@ out:
         RETURN(rc);
 }
 
-ssize_t ll_file_lockless_io(struct file *file, char *buf, size_t count,
-                                   loff_t *ppos, int rw)
+/* Advance through passed iov, adjust iov pointer as necessary and return
+ * starting offset in individual entry we are pointing at. Also reduce
+ * nr_segs as needed */
+static ssize_t ll_iov_advance(const struct iovec **iov, unsigned long *nr_segs,
+                              ssize_t offset)
+{
+        while (*nr_segs > 0) {
+                if ((*iov)->iov_len > offset)
+                        return ((*iov)->iov_len - offset);
+                offset -= (*iov)->iov_len;
+                (*iov)++;
+                (*nr_segs)--;
+        }
+        return 0;
+}
+
+ssize_t ll_file_lockless_io(struct file *file, const struct iovec *iov,
+                            unsigned long nr_segs,
+                            loff_t *ppos, int rw, ssize_t count)
 {
         loff_t pos;
         struct inode *inode = file->f_dentry->d_inode;
@@ -2039,6 +2071,9 @@ ssize_t ll_file_lockless_io(struct file *file, char *buf, size_t count,
         int max_pages;
         size_t amount = 0;
         unsigned long first, last;
+        const struct iovec *iv = &iov[0];
+        unsigned long nsegs = nr_segs;
+        unsigned long offset = 0;
         ENTRY;
 
         if (rw == READ) {
@@ -2061,6 +2096,7 @@ ssize_t ll_file_lockless_io(struct file *file, char *buf, size_t count,
                 if (rc)
                         GOTO(out, rc);
         }
+
         pos = *ppos;
         first = pos >> CFS_PAGE_SHIFT;
         last = (pos + count - 1) >> CFS_PAGE_SHIFT;
@@ -2082,10 +2118,12 @@ ssize_t ll_file_lockless_io(struct file *file, char *buf, size_t count,
                         break;
                 }
                 if (rw == WRITE) {
-                        rc = ll_file_copy_pages(pages, pages_for_io, buf,
-                                                pos + amount, bytes, rw);
+                        rc = ll_file_copy_pages(pages, pages_for_io, iv, nsegs,
+                                                offset, pos + amount, bytes,
+                                                rw);
                         if (rc < 0)
                                 GOTO(put_pages, rc);
+                        offset = ll_iov_advance(&iv, &nsegs, offset + rc);
                         bytes = rc;
                 }
                 rc = ll_file_oig_pages(inode, pages, pages_for_io,
@@ -2093,19 +2131,23 @@ ssize_t ll_file_lockless_io(struct file *file, char *buf, size_t count,
                 if (rc)
                         GOTO(put_pages, rc);
                 if (rw == READ) {
-                        rc = ll_file_copy_pages(pages, pages_for_io, buf,
-                                                pos + amount, bytes, rw);
+                        rc = ll_file_copy_pages(pages, pages_for_io, iv, nsegs,
+                                                offset, pos + amount, bytes, rw);
                         if (rc < 0)
                                 GOTO(put_pages, rc);
+                        offset = ll_iov_advance(&iv, &nsegs, offset + rc);
                         bytes = rc;
                 }
                 amount += bytes;
-                buf += bytes;
 put_pages:
                 ll_file_put_pages(pages, pages_for_io);
                 first += pages_for_io;
                 /* a short read/write check */
                 if (pos + amount < ((loff_t)first << CFS_PAGE_SHIFT))
+                        break;
+                /* Check if we are out of userspace buffers. (how that could
+                   happen?) */
+                if (nsegs == 0)
                         break;
         }
         /* NOTE: don't update i_size and KMS in absence of LDLM locks even
@@ -2113,11 +2155,21 @@ put_pages:
         file_accessed(file);
         if (rw == READ && amount < count && rc == 0) {
                 unsigned long not_cleared;
-
-                not_cleared = clear_user(buf, count - amount);
-                amount = count - not_cleared;
-                if (not_cleared)
-                        rc = -EFAULT;
+                
+                while (nsegs > 0) {
+                        ssize_t to_clear = min_t(ssize_t, count - amount,
+                                                 iv->iov_len - offset);
+                        not_cleared = clear_user(iv->iov_base + offset,
+                                                 to_clear);
+                        amount += to_clear - not_cleared;
+                        if (not_cleared) {
+                                rc = -EFAULT;
+                                break;
+                        }
+                        offset = 0;
+                        iv++;
+                        nsegs--;
+                }
         }
         if (amount > 0) {
                 lprocfs_counter_add(ll_i2sbi(inode)->ll_stats,
