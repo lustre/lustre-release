@@ -96,45 +96,45 @@ struct krb5_enctype {
 static struct krb5_enctype enctypes[] = {
         [ENCTYPE_DES_CBC_RAW] = {               /* des-cbc-md5 */
                 "des-cbc-md5",
-                "des",
+                "cbc(des)",
                 "md5",
-                CRYPTO_TFM_MODE_CBC,
+                0,
                 16,
                 8,
                 0,
         },
         [ENCTYPE_DES3_CBC_RAW] = {              /* des3-hmac-sha1 */
                 "des3-hmac-sha1",
-                "des3_ede",
-                "sha1",
-                CRYPTO_TFM_MODE_CBC,
+                "cbc(des3_ede)",
+                "hmac(sha1)",
+                0,
                 20,
                 8,
                 1,
         },
         [ENCTYPE_AES128_CTS_HMAC_SHA1_96] = {   /* aes128-cts */
                 "aes128-cts-hmac-sha1-96",
-                "aes",
-                "sha1",
-                CRYPTO_TFM_MODE_CBC,
+                "cbc(aes)",
+                "hmac(sha1)",
+                0,
                 12,
                 16,
                 1,
         },
         [ENCTYPE_AES256_CTS_HMAC_SHA1_96] = {   /* aes256-cts */
                 "aes256-cts-hmac-sha1-96",
-                "aes",
-                "sha1",
-                CRYPTO_TFM_MODE_CBC,
+                "cbc(aes)",
+                "hmac(sha1)",
+                0,
                 12,
                 16,
                 1,
         },
         [ENCTYPE_ARCFOUR_HMAC] = {              /* arcfour-hmac-md5 */
                 "arcfour-hmac-md5",
-                "arc4",
-                "md5",
-                CRYPTO_TFM_MODE_ECB,
+                "ecb(arc4)",
+                "hmac(md5)",
+                0,
                 16,
                 8,
                 1,
@@ -154,14 +154,14 @@ static const char * enctype2str(__u32 enctype)
 static
 int keyblock_init(struct krb5_keyblock *kb, char *alg_name, int alg_mode)
 {
-        kb->kb_tfm = crypto_alloc_tfm(alg_name, alg_mode);
+        kb->kb_tfm = ll_crypto_alloc_blkcipher(alg_name, alg_mode, 0);
         if (kb->kb_tfm == NULL) {
                 CERROR("failed to alloc tfm: %s, mode %d\n",
                        alg_name, alg_mode);
                 return -1;
         }
 
-        if (crypto_cipher_setkey(kb->kb_tfm, kb->kb_key.data, kb->kb_key.len)) {
+        if (ll_crypto_blkcipher_setkey(kb->kb_tfm, kb->kb_key.data, kb->kb_key.len)) {
                 CERROR("failed to set %s key, len %d\n",
                        alg_name, kb->kb_key.len);
                 return -1;
@@ -204,7 +204,7 @@ void keyblock_free(struct krb5_keyblock *kb)
 {
         rawobj_free(&kb->kb_key);
         if (kb->kb_tfm)
-                crypto_free_tfm(kb->kb_tfm);
+                ll_crypto_free_blkcipher(kb->kb_tfm);
 }
 
 static
@@ -538,51 +538,82 @@ void buf_to_sg(struct scatterlist *sg, char *ptr, int len)
 }
 
 static
-__u32 krb5_encrypt(struct crypto_tfm *tfm,
+__u32 krb5_encrypt(struct ll_crypto_cipher *tfm,
                    int decrypt,
                    void * iv,
                    void * in,
                    void * out,
                    int length)
 {
-        struct scatterlist sg;
+        struct blkcipher_desc desc;
+        struct scatterlist    sg;
         __u8 local_iv[16] = {0};
         __u32 ret = -EINVAL;
 
         LASSERT(tfm);
+        desc.tfm  = tfm;
+        desc.info = local_iv;
+        desc.flags= 0;
 
-        if (length % crypto_tfm_alg_blocksize(tfm) != 0) {
+        if (length % ll_crypto_blkcipher_blocksize(tfm) != 0) {
                 CERROR("output length %d mismatch blocksize %d\n",
-                       length, crypto_tfm_alg_blocksize(tfm));
+                       length, ll_crypto_blkcipher_blocksize(tfm));
                 goto out;
         }
 
-        if (crypto_tfm_alg_ivsize(tfm) > 16) {
-                CERROR("iv size too large %d\n", crypto_tfm_alg_ivsize(tfm));
+        if (ll_crypto_blkcipher_ivsize(tfm) > 16) {
+                CERROR("iv size too large %d\n", ll_crypto_blkcipher_ivsize(tfm));
                 goto out;
         }
 
         if (iv)
-                memcpy(local_iv, iv, crypto_tfm_alg_ivsize(tfm));
+                memcpy(local_iv, iv, ll_crypto_blkcipher_ivsize(tfm));
 
         memcpy(out, in, length);
         buf_to_sg(&sg, out, length);
 
         if (decrypt)
-                ret = crypto_cipher_decrypt_iv(tfm, &sg, &sg, length, local_iv);
+                ret = ll_crypto_blkcipher_decrypt_iv(&desc, &sg, &sg, length);
         else
-                ret = crypto_cipher_encrypt_iv(tfm, &sg, &sg, length, local_iv);
+                ret = ll_crypto_blkcipher_encrypt_iv(&desc, &sg, &sg, length);
 
 out:
         return(ret);
 }
 
 static inline
-int krb5_digest_hmac(struct crypto_tfm *tfm,
+int krb5_digest_hmac(struct ll_crypto_hash *tfm,
                      rawobj_t *key,
                      struct krb5_header *khdr,
                      int msgcnt, rawobj_t *msgs,
                      rawobj_t *cksum)
+#ifdef HAVE_ASYNC_BLOCK_CIPHER
+{
+        struct hash_desc   desc;
+        struct scatterlist sg[1];
+        int                i;
+
+        ll_crypto_hash_setkey(tfm, key->data, key->len);
+        desc.tfm  = tfm;
+        desc.flags= 0;
+
+        ll_crypto_hash_init(&desc);
+
+        for (i = 0; i < msgcnt; i++) {
+                if (msgs[i].len == 0)
+                        continue;
+                buf_to_sg(sg, (char *) msgs[i].data, msgs[i].len);
+                ll_crypto_hash_update(&desc, sg, msgs[i].len);
+        }
+
+        if (khdr) {
+                buf_to_sg(sg, (char *) khdr, sizeof(*khdr));
+                ll_crypto_hash_update(&desc, sg, sizeof(*khdr));
+        }
+
+        return ll_crypto_hash_final(&desc, cksum->data);
+}
+#else /* HAVE_ASYNC_BLOCK_CIPHER */
 {
         struct scatterlist sg[1];
         __u32              keylen = key->len, i;
@@ -604,34 +635,38 @@ int krb5_digest_hmac(struct crypto_tfm *tfm,
         crypto_hmac_final(tfm, key->data, &keylen, cksum->data);
         return 0;
 }
+#endif /* HAVE_ASYNC_BLOCK_CIPHER */
 
 static inline
-int krb5_digest_norm(struct crypto_tfm *tfm,
+int krb5_digest_norm(struct ll_crypto_hash *tfm,
                      struct krb5_keyblock *kb,
                      struct krb5_header *khdr,
                      int msgcnt, rawobj_t *msgs,
                      rawobj_t *cksum)
 {
+        struct hash_desc   desc;
         struct scatterlist sg[1];
         int                i;
 
         LASSERT(kb->kb_tfm);
+        desc.tfm  = tfm;
+        desc.flags= 0;
 
-        crypto_digest_init(tfm);
+        ll_crypto_hash_init(&desc);
 
         for (i = 0; i < msgcnt; i++) {
                 if (msgs[i].len == 0)
                         continue;
                 buf_to_sg(sg, (char *) msgs[i].data, msgs[i].len);
-                crypto_digest_update(tfm, sg, 1);
+                ll_crypto_hash_update(&desc, sg, msgs[i].len);
         }
 
         if (khdr) {
                 buf_to_sg(sg, (char *) khdr, sizeof(*khdr));
-                crypto_digest_update(tfm, sg, 1);
+                ll_crypto_hash_update(&desc, sg, sizeof(*khdr));
         }
 
-        crypto_digest_final(tfm, cksum->data);
+        ll_crypto_hash_final(&desc, cksum->data);
 
         return krb5_encrypt(kb->kb_tfm, 0, NULL, cksum->data,
                             cksum->data, cksum->len);
@@ -648,17 +683,17 @@ __s32 krb5_make_checksum(__u32 enctype,
                          int msgcnt, rawobj_t *msgs,
                          rawobj_t *cksum)
 {
-        struct krb5_enctype *ke = &enctypes[enctype];
-        struct crypto_tfm   *tfm;
-        __u32                code = GSS_S_FAILURE;
-        int                  rc;
+        struct krb5_enctype   *ke = &enctypes[enctype];
+        struct ll_crypto_hash *tfm;
+        __u32                  code = GSS_S_FAILURE;
+        int                    rc;
 
-        if (!(tfm = crypto_alloc_tfm(ke->ke_hash_name, 0))) {
+        if (!(tfm = ll_crypto_alloc_hash(ke->ke_hash_name, 0, 0))) {
                 CERROR("failed to alloc TFM: %s\n", ke->ke_hash_name);
                 return GSS_S_FAILURE;
         }
 
-        cksum->len = crypto_tfm_alg_digestsize(tfm);
+        cksum->len = ll_crypto_hash_digestsize(tfm);
         OBD_ALLOC(cksum->data, cksum->len);
         if (!cksum->data) {
                 cksum->len = 0;
@@ -675,7 +710,7 @@ __s32 krb5_make_checksum(__u32 enctype,
         if (rc == 0)
                 code = GSS_S_COMPLETE;
 out_tfm:
-        crypto_free_tfm(tfm);
+        ll_crypto_free_hash(tfm);
         return code;
 }
 
@@ -811,20 +846,24 @@ int add_padding(rawobj_t *msg, int msg_buflen, int blocksize)
 }
 
 static
-int krb5_encrypt_rawobjs(struct crypto_tfm *tfm,
+int krb5_encrypt_rawobjs(struct ll_crypto_cipher *tfm,
                          int mode_ecb,
                          int inobj_cnt,
                          rawobj_t *inobjs,
                          rawobj_t *outobj,
                          int enc)
 {
-        struct scatterlist src, dst;
-        __u8               local_iv[16] = {0}, *buf;
-        __u32              datalen = 0;
-        int                i, rc;
+        struct blkcipher_desc desc;
+        struct scatterlist    src, dst;
+        __u8                  local_iv[16] = {0}, *buf;
+        __u32                 datalen = 0;
+        int                   i, rc;
         ENTRY;
 
         buf = outobj->data;
+        desc.tfm  = tfm;
+        desc.info = local_iv;
+        desc.flags = 0;
 
         for (i = 0; i < inobj_cnt; i++) {
                 LASSERT(buf + inobjs[i].len <= outobj->data + outobj->len);
@@ -834,18 +873,18 @@ int krb5_encrypt_rawobjs(struct crypto_tfm *tfm,
 
                 if (mode_ecb) {
                         if (enc)
-                                rc = crypto_cipher_encrypt(
-                                        tfm, &dst, &src, src.length);
+                                rc = ll_crypto_blkcipher_encrypt(
+                                        &desc, &dst, &src, src.length);
                         else
-                                rc = crypto_cipher_decrypt(
-                                        tfm, &dst, &src, src.length);
+                                rc = ll_crypto_blkcipher_decrypt(
+                                        &desc, &dst, &src, src.length);
                 } else {
                         if (enc)
-                                rc = crypto_cipher_encrypt_iv(
-                                        tfm, &dst, &src, src.length, local_iv);
+                                rc = ll_crypto_blkcipher_encrypt_iv(
+                                        &desc, &dst, &src, src.length);
                         else
-                                rc = crypto_cipher_decrypt_iv(
-                                        tfm, &dst, &src, src.length, local_iv);
+                                rc = ll_crypto_blkcipher_decrypt_iv(
+                                        &desc, &dst, &src, src.length);
                 }
 
                 if (rc) {
@@ -881,7 +920,7 @@ __u32 gss_wrap_kerberos(struct gss_ctx *gctx,
         LASSERT(ke->ke_conf_size <= GSS_MAX_CIPHER_BLOCK);
         LASSERT(kctx->kc_keye.kb_tfm == NULL ||
                 ke->ke_conf_size >=
-                crypto_tfm_alg_blocksize(kctx->kc_keye.kb_tfm));
+                ll_crypto_blkcipher_blocksize(kctx->kc_keye.kb_tfm));
 
         acceptor_flag = kctx->kc_initiate ? 0 : FLAG_SENDER_IS_ACCEPTOR;
 
@@ -908,7 +947,7 @@ __u32 gss_wrap_kerberos(struct gss_ctx *gctx,
                 blocksize = 1;
         } else {
                 LASSERT(kctx->kc_keye.kb_tfm);
-                blocksize = crypto_tfm_alg_blocksize(kctx->kc_keye.kb_tfm);
+                blocksize = ll_crypto_blkcipher_blocksize(kctx->kc_keye.kb_tfm);
         }
         LASSERT(blocksize <= ke->ke_conf_size);
 
@@ -941,8 +980,8 @@ __u32 gss_wrap_kerberos(struct gss_ctx *gctx,
         LASSERT(cipher.len >= ke->ke_conf_size + msg->len + sizeof(*khdr));
 
         if (kctx->kc_enctype == ENCTYPE_ARCFOUR_HMAC) {
-                rawobj_t                arc4_keye;
-                struct crypto_tfm      *arc4_tfm;
+                rawobj_t                 arc4_keye;
+                struct ll_crypto_cipher *arc4_tfm;
 
                 if (krb5_make_checksum(ENCTYPE_ARCFOUR_HMAC, &kctx->kc_keyi,
                                        NULL, 1, &cksum, &arc4_keye)) {
@@ -950,14 +989,14 @@ __u32 gss_wrap_kerberos(struct gss_ctx *gctx,
                         GOTO(arc4_out, enc_rc = -EACCES);
                 }
 
-                arc4_tfm = crypto_alloc_tfm("arc4", CRYPTO_TFM_MODE_ECB);
+                arc4_tfm = ll_crypto_alloc_blkcipher("ecb(arc4)", 0, 0);
                 if (arc4_tfm == NULL) {
                         CERROR("failed to alloc tfm arc4 in ECB mode\n");
                         GOTO(arc4_out_key, enc_rc = -EACCES);
                 }
 
-                if (crypto_cipher_setkey(arc4_tfm,
-                                         arc4_keye.data, arc4_keye.len)) {
+                if (ll_crypto_blkcipher_setkey(arc4_tfm, arc4_keye.data,
+                                               arc4_keye.len)) {
                         CERROR("failed to set arc4 key, len %d\n",
                                arc4_keye.len);
                         GOTO(arc4_out_tfm, enc_rc = -EACCES);
@@ -966,7 +1005,7 @@ __u32 gss_wrap_kerberos(struct gss_ctx *gctx,
                 enc_rc = krb5_encrypt_rawobjs(arc4_tfm, 1,
                                               3, data_desc, &cipher, 1);
 arc4_out_tfm:
-                crypto_free_tfm(arc4_tfm);
+                ll_crypto_free_blkcipher(arc4_tfm);
 arc4_out_key:
                 rawobj_free(&arc4_keye);
 arc4_out:
@@ -1048,7 +1087,7 @@ __u32 gss_unwrap_kerberos(struct gss_ctx  *gctx,
                 blocksize = 1;
         } else {
                 LASSERT(kctx->kc_keye.kb_tfm);
-                blocksize = crypto_tfm_alg_blocksize(kctx->kc_keye.kb_tfm);
+                blocksize = ll_crypto_blkcipher_blocksize(kctx->kc_keye.kb_tfm);
         }
 
         /* expected token layout:
@@ -1085,8 +1124,8 @@ __u32 gss_unwrap_kerberos(struct gss_ctx  *gctx,
         plain_out.len = bodysize;
 
         if (kctx->kc_enctype == ENCTYPE_ARCFOUR_HMAC) {
-                rawobj_t                arc4_keye;
-                struct crypto_tfm      *arc4_tfm;
+                rawobj_t                 arc4_keye;
+                struct ll_crypto_cipher *arc4_tfm;
 
                 cksum.data = token->data + token->len - ke->ke_hash_size;
                 cksum.len = ke->ke_hash_size;
@@ -1097,13 +1136,13 @@ __u32 gss_unwrap_kerberos(struct gss_ctx  *gctx,
                         GOTO(arc4_out, enc_rc = -EACCES);
                 }
 
-                arc4_tfm = crypto_alloc_tfm("arc4", CRYPTO_TFM_MODE_ECB);
+                arc4_tfm = ll_crypto_alloc_blkcipher("ecb(arc4)", 0, 0);
                 if (arc4_tfm == NULL) {
                         CERROR("failed to alloc tfm arc4 in ECB mode\n");
                         GOTO(arc4_out_key, enc_rc = -EACCES);
                 }
 
-                if (crypto_cipher_setkey(arc4_tfm,
+                if (ll_crypto_blkcipher_setkey(arc4_tfm,
                                          arc4_keye.data, arc4_keye.len)) {
                         CERROR("failed to set arc4 key, len %d\n",
                                arc4_keye.len);
@@ -1113,7 +1152,7 @@ __u32 gss_unwrap_kerberos(struct gss_ctx  *gctx,
                 enc_rc = krb5_encrypt_rawobjs(arc4_tfm, 1,
                                               1, &cipher_in, &plain_out, 0);
 arc4_out_tfm:
-                crypto_free_tfm(arc4_tfm);
+                ll_crypto_free_blkcipher(arc4_tfm);
 arc4_out_key:
                 rawobj_free(&arc4_keye);
 arc4_out:

@@ -388,5 +388,161 @@ int ll_unregister_blkdev(unsigned int dev, const char *name)
 #define FS_RENAME_DOES_D_MOVE FS_ODD_RENAME
 #endif
 
+/* add a lustre compatible layer for crypto API */
+#include <linux/crypto.h>
+#ifdef HAVE_ASYNC_BLOCK_CIPHER
+#define ll_crypto_hash          crypto_hash
+#define ll_crypto_cipher        crypto_blkcipher
+#define ll_crypto_alloc_hash(name, type, mask)  crypto_alloc_hash(name, type, mask)
+#define ll_crypto_hash_setkey(tfm, key, keylen) crypto_hash_setkey(tfm, key, keylen)
+#define ll_crypto_hash_init(desc)               crypto_hash_init(desc)
+#define ll_crypto_hash_update(desc, sl, bytes)  crypto_hash_update(desc, sl, bytes)
+#define ll_crypto_hash_final(desc, out)         crypto_hash_final(desc, out)
+#define ll_crypto_alloc_blkcipher(name, type, mask) \
+                crypto_alloc_blkcipher(name ,type, mask)
+#define ll_crypto_blkcipher_setkey(tfm, key, keylen) \
+                crypto_blkcipher_setkey(tfm, key, keylen)
+#define ll_crypto_blkcipher_set_iv(tfm, src, len) \
+                crypto_blkcipher_set_iv(tfm, src, len)
+#define ll_crypto_blkcipher_get_iv(tfm, dst, len) \
+                crypto_blkcipher_get_iv(tfm, dst, len)
+#define ll_crypto_blkcipher_encrypt(desc, dst, src, bytes) \
+                crypto_blkcipher_encrypt(desc, dst, src, bytes)
+#define ll_crypto_blkcipher_decrypt(desc, dst, src, bytes) \
+                crypto_blkcipher_decrypt(desc, dst, src, bytes)
+#define ll_crypto_blkcipher_encrypt_iv(desc, dst, src, bytes) \
+                crypto_blkcipher_encrypt_iv(desc, dst, src, bytes)
+#define ll_crypto_blkcipher_decrypt_iv(desc, dst, src, bytes) \
+                crypto_blkcipher_decrypt_iv(desc, dst, src, bytes)
+
+static inline int ll_crypto_hmac(struct ll_crypto_hash *tfm,
+                                 u8 *key, unsigned int *keylen,
+                                 struct scatterlist *sg,
+                                 unsigned int size, u8 *result)
+{
+        struct hash_desc desc;
+        int              rv;
+        desc.tfm   = tfm;
+        desc.flags = 0;
+        rv = crypto_hash_setkey(desc.tfm, key, *keylen);
+        if (rv) {
+                CERROR("failed to hash setkey: %d\n", rv);
+                return rv;
+        }
+        return crypto_hash_digest(&desc, sg, size, result);
+}
+static inline
+unsigned int crypto_tfm_alg_max_keysize(struct crypto_blkcipher *tfm)
+{
+        return crypto_blkcipher_tfm(tfm)->__crt_alg->cra_blkcipher.max_keysize;
+}
+static inline
+unsigned int crypto_tfm_alg_min_keysize(struct crypto_blkcipher *tfm)
+{
+        return crypto_blkcipher_tfm(tfm)->__crt_alg->cra_blkcipher.min_keysize;
+}
+
+#define ll_crypto_hash_blocksize(tfm)       crypto_hash_blocksize(tfm)
+#define ll_crypto_hash_digestsize(tfm)      crypto_hash_digestsize(tfm)
+#define ll_crypto_blkcipher_ivsize(tfm)     crypto_blkcipher_ivsize(tfm)
+#define ll_crypto_blkcipher_blocksize(tfm)  crypto_blkcipher_blocksize(tfm)
+#define ll_crypto_free_hash(tfm)            crypto_free_hash(tfm)
+#define ll_crypto_free_blkcipher(tfm)       crypto_free_blkcipher(tfm)
+#else /* HAVE_ASYNC_BLOCK_CIPHER */
+#include <linux/scatterlist.h>
+#define ll_crypto_hash          crypto_tfm
+#define ll_crypto_cipher        crypto_tfm
+struct hash_desc {
+        struct ll_crypto_hash *tfm;
+        u32                    flags;
+};
+struct blkcipher_desc {
+        struct ll_crypto_cipher *tfm;
+        void                    *info;
+        u32                      flags;
+};
+#define ll_crypto_blkcipher_setkey(tfm, key, keylen) \
+        crypto_cipher_setkey(tfm, key, keylen)
+#define ll_crypto_blkcipher_set_iv(tfm, src, len) \
+        crypto_cipher_set_iv(tfm, src, len)
+#define ll_crypto_blkcipher_get_iv(tfm, dst, len) \
+        crypto_cipher_get_iv(tfm, dst, len)
+#define ll_crypto_blkcipher_encrypt(desc, dst, src, bytes) \
+        crypto_cipher_encrypt((desc)->tfm, dst, src, bytes)
+#define ll_crypto_blkcipher_decrypt(desc, dst, src, bytes) \
+        crypto_cipher_decrypt((desc)->tfm, dst, src, bytes)
+#define ll_crypto_blkcipher_decrypt_iv(desc, dst, src, bytes) \
+        crypto_cipher_decrypt_iv((desc)->tfm, dst, src, bytes, (desc)->info)
+#define ll_crypto_blkcipher_encrypt_iv(desc, dst, src, bytes) \
+        crypto_cipher_encrypt_iv((desc)->tfm, dst, src, bytes, (desc)->info)
+
+extern struct ll_crypto_cipher *ll_crypto_alloc_blkcipher(
+                            const char * algname, u32 type, u32 mask);
+static inline 
+struct ll_crypto_hash *ll_crypto_alloc_hash(const char *alg, u32 type, u32 mask)
+{
+        char        buf[CRYPTO_MAX_ALG_NAME + 1];
+        const char *pan = alg;
+
+        if (strncmp("hmac(", alg, 5) == 0) {
+                char *vp = strnchr(alg, CRYPTO_MAX_ALG_NAME, ')');
+                if (vp) {
+                        memcpy(buf, alg+ 5, vp - alg- 5);
+                        buf[vp - alg - 5] = 0x00;
+                        pan = buf;
+                }
+        }
+        return crypto_alloc_tfm(pan, 0);
+}
+static inline int ll_crypto_hash_init(struct hash_desc *desc)
+{
+       crypto_digest_init(desc->tfm); return 0;
+}
+static inline int ll_crypto_hash_update(struct hash_desc *desc,
+                                        struct scatterlist *sg,
+                                        unsigned int nbytes)
+{
+        struct scatterlist *sl = sg;
+        unsigned int        count;
+                /* 
+                 * This way is very weakness. We must ensure that
+                 * the sum of sg[0..i]->length isn't greater than nbytes.
+                 * In the upstream kernel the crypto_hash_update() also 
+                 * via the nbytes computed the count of sg[...].
+                 * The old style is more safely. but it gone.
+                 */
+        for (count = 0; nbytes > 0; count ++, sl ++) {
+                nbytes -= sl->length;
+        }
+        crypto_digest_update(desc->tfm, sg, count); return 0;
+}
+static inline int ll_crypto_hash_final(struct hash_desc *desc, u8 *out)
+{
+        crypto_digest_final(desc->tfm, out); return 0;
+}
+static inline int ll_crypto_hmac(struct crypto_tfm *tfm,
+                                 u8 *key, unsigned int *keylen,
+                                 struct scatterlist *sg,
+                                 unsigned int nbytes,
+                                 u8 *out)
+{
+        struct scatterlist *sl = sg;
+        int                 count;
+        for (count = 0; nbytes > 0; count ++, sl ++) {
+                nbytes -= sl->length;
+        }
+        crypto_hmac(tfm, key, keylen, sg, count, out);
+        return 0;
+}
+
+#define ll_crypto_hash_setkey(tfm, key, keylen) crypto_digest_setkey(tfm, key, keylen)
+#define ll_crypto_blkcipher_blocksize(tfm)      crypto_tfm_alg_blocksize(tfm)
+#define ll_crypto_blkcipher_ivsize(tfm) crypto_tfm_alg_ivsize(tfm)
+#define ll_crypto_hash_digestsize(tfm)  crypto_tfm_alg_digestsize(tfm)
+#define ll_crypto_hash_blocksize(tfm)   crypto_tfm_alg_blocksize(tfm)
+#define ll_crypto_free_hash(tfm)        crypto_free_tfm(tfm)
+#define ll_crypto_free_blkcipher(tfm)   crypto_free_tfm(tfm)
+#endif /* HAVE_ASYNC_BLOCK_CIPHER */
+
 #endif /* __KERNEL__ */
 #endif /* _COMPAT25_H */

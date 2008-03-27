@@ -231,8 +231,8 @@ struct obd_capa *capa_lookup(struct hlist_head *hash, struct lustre_capa *capa,
 
 int capa_hmac(__u8 *hmac, struct lustre_capa *capa, __u8 *key)
 {
-        struct crypto_tfm *tfm;
-        struct capa_hmac_alg *alg;
+        struct ll_crypto_hash *tfm;
+        struct capa_hmac_alg  *alg;
         int keylen;
         struct scatterlist sl = {
                 .page   = virt_to_page(capa),
@@ -247,7 +247,7 @@ int capa_hmac(__u8 *hmac, struct lustre_capa *capa, __u8 *key)
 
         alg = &capa_hmac_algs[capa_alg(capa)];
 
-        tfm = crypto_alloc_tfm(alg->ha_name, 0);
+        tfm = ll_crypto_alloc_hash(alg->ha_name, 0, 0);
         if (!tfm) {
                 CERROR("crypto_alloc_tfm failed, check whether your kernel"
                        "has crypto support!\n");
@@ -255,8 +255,8 @@ int capa_hmac(__u8 *hmac, struct lustre_capa *capa, __u8 *key)
         }
         keylen = alg->ha_keylen;
 
-        crypto_hmac(tfm, key, &keylen, &sl, 1, hmac);
-        crypto_free_tfm(tfm);
+        ll_crypto_hmac(tfm, key, &keylen, &sl, sl.length, hmac);
+        ll_crypto_free_hash(tfm);
 
         return 0;
 }

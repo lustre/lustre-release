@@ -77,8 +77,8 @@ struct krb5_header {
 };
 
 struct krb5_keyblock {
-        rawobj_t                kb_key;
-        struct crypto_tfm      *kb_tfm;
+        rawobj_t                 kb_key;
+        struct ll_crypto_cipher *kb_tfm;
 };
 
 struct krb5_ctx {

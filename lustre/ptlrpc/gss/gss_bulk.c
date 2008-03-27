@@ -76,18 +76,19 @@ static void buf_to_sl(struct scatterlist *sl,
  * 3. swap the last two ciphertext blocks.
  * 4. truncate to original plaintext size.
  */
-static int cbc_cts_encrypt(struct crypto_tfm *tfm,
-                           struct scatterlist *sld,
-                           struct scatterlist *sls)
+static int cbc_cts_encrypt(struct ll_crypto_cipher *tfm,
+                           struct scatterlist      *sld,
+                           struct scatterlist      *sls)
 {
         struct scatterlist      slst, sldt;
+        struct blkcipher_desc   desc;
         void                   *data;
         __u8                    sbuf[CIPHER_MAX_BLKSIZE];
         __u8                    dbuf[CIPHER_MAX_BLKSIZE];
         unsigned int            blksize, blks, tail;
         int                     rc;
 
-        blksize = crypto_tfm_alg_blocksize(tfm);
+        blksize = ll_crypto_blkcipher_blocksize(tfm);
         blks = sls->length / blksize;
         tail = sls->length % blksize;
         LASSERT(blks > 0 && tail > 0);
@@ -100,15 +101,17 @@ static int cbc_cts_encrypt(struct crypto_tfm *tfm,
 
         buf_to_sl(&slst, sbuf, blksize);
         buf_to_sl(&sldt, dbuf, blksize);
+        desc.tfm   = tfm;
+        desc.flags = 0;
 
         /* encrypt head */
-        rc = crypto_cipher_encrypt(tfm, sld, sls, sls->length - tail);
+        rc = ll_crypto_blkcipher_encrypt(&desc, sld, sls, sls->length - tail);
         if (unlikely(rc)) {
                 CERROR("encrypt head (%u) data: %d\n", sls->length - tail, rc);
                 return rc;
         }
         /* encrypt tail */
-        rc = crypto_cipher_encrypt(tfm, &sldt, &slst, blksize);
+        rc = ll_crypto_blkcipher_encrypt(&desc, &sldt, &slst, blksize);
         if (unlikely(rc)) {
                 CERROR("encrypt tail (%u) data: %d\n", slst.length, rc);
                 return rc;
@@ -142,10 +145,11 @@ static int cbc_cts_encrypt(struct crypto_tfm *tfm,
  * 4. do CBC decryption.
  * 5. truncate to original ciphertext size.
  */
-static int cbc_cts_decrypt(struct crypto_tfm *tfm,
+static int cbc_cts_decrypt(struct ll_crypto_cipher *tfm,
                            struct scatterlist *sld,
                            struct scatterlist *sls)
 {
+        struct blkcipher_desc   desc;
         struct scatterlist      slst, sldt;
         void                   *data;
         __u8                    sbuf[CIPHER_MAX_BLKSIZE];
@@ -153,14 +157,14 @@ static int cbc_cts_decrypt(struct crypto_tfm *tfm,
         unsigned int            blksize, blks, tail;
         int                     rc;
 
-        blksize = crypto_tfm_alg_blocksize(tfm);
+        blksize = ll_crypto_blkcipher_blocksize(tfm);
         blks = sls->length / blksize;
         tail = sls->length % blksize;
         LASSERT(blks > 0 && tail > 0);
 
         /* save current IV, and set IV to zero */
-        crypto_cipher_get_iv(tfm, sbuf, blksize);
-        crypto_cipher_set_iv(tfm, zero_iv, blksize);
+        ll_crypto_blkcipher_get_iv(tfm, sbuf, blksize);
+        ll_crypto_blkcipher_set_iv(tfm, zero_iv, blksize);
 
         /* D(n) = Decrypt(K, C(n-1)) */
         slst = *sls;
@@ -168,15 +172,17 @@ static int cbc_cts_decrypt(struct crypto_tfm *tfm,
         slst.length = blksize;
 
         buf_to_sl(&sldt, dbuf, blksize);
+        desc.tfm   = tfm;
+        desc.flags = 0;
 
-        rc = crypto_cipher_decrypt(tfm, &sldt, &slst, blksize);
+        rc = ll_crypto_blkcipher_decrypt(&desc, &sldt, &slst, blksize);
         if (unlikely(rc)) {
                 CERROR("decrypt C(n-1) (%u): %d\n", slst.length, rc);
                 return rc;
         }
 
         /* restore IV */
-        crypto_cipher_set_iv(tfm, sbuf, blksize);
+        ll_crypto_blkcipher_set_iv(tfm, sbuf, blksize);
 
         data = cfs_kmap(sls->page);
         /* C(n) = C(n) | TAIL(D(n)) */
@@ -191,13 +197,13 @@ static int cbc_cts_decrypt(struct crypto_tfm *tfm,
         buf_to_sl(&sldt, dbuf, blksize);
 
         /* decrypt head */
-        rc = crypto_cipher_decrypt(tfm, sld, sls, sls->length - tail);
+        rc = ll_crypto_blkcipher_decrypt(&desc, sld, sls, sls->length - tail);
         if (unlikely(rc)) {
                 CERROR("decrypt head (%u) data: %d\n", sls->length - tail, rc);
                 return rc;
         }
         /* decrypt tail */
-        rc = crypto_cipher_decrypt(tfm, &sldt, &slst, blksize);
+        rc = ll_crypto_blkcipher_decrypt(&desc, &sldt, &slst, blksize);
         if (unlikely(rc)) {
                 CERROR("decrypt tail (%u) data: %d\n", slst.length, rc);
                 return rc;
@@ -211,12 +217,14 @@ static int cbc_cts_decrypt(struct crypto_tfm *tfm,
         return 0;
 }
 
-static inline int do_cts_tfm(struct crypto_tfm *tfm,
+static inline int do_cts_tfm(struct ll_crypto_cipher *tfm,
                              int encrypt,
                              struct scatterlist *sld,
                              struct scatterlist *sls)
 {
+#ifndef HAVE_ASYNC_BLOCK_CIPHER
         LASSERT(tfm->crt_cipher.cit_mode == CRYPTO_TFM_MODE_CBC);
+#endif
 
         if (encrypt)
                 return cbc_cts_encrypt(tfm, sld, sls);
@@ -227,33 +235,36 @@ static inline int do_cts_tfm(struct crypto_tfm *tfm,
 /*
  * normal encrypt/decrypt of data of even blocksize
  */
-static inline int do_cipher_tfm(struct crypto_tfm *tfm,
+static inline int do_cipher_tfm(struct ll_crypto_cipher *tfm,
                                 int encrypt,
                                 struct scatterlist *sld,
                                 struct scatterlist *sls)
 {
+        struct blkcipher_desc desc;
+        desc.tfm   = tfm;
+        desc.flags = 0;
         if (encrypt)
-                return crypto_cipher_encrypt(tfm, sld, sls, sls->length);
+                return ll_crypto_blkcipher_encrypt(&desc, sld, sls, sls->length);
         else
-                return crypto_cipher_decrypt(tfm, sld, sls, sls->length);
+                return ll_crypto_blkcipher_decrypt(&desc, sld, sls, sls->length);
 }
 
-static struct crypto_tfm *get_stream_cipher(__u8 *key, unsigned int keylen)
+static struct ll_crypto_cipher *get_stream_cipher(__u8 *key, unsigned int keylen)
 {
         const struct sptlrpc_ciph_type *ct;
-        struct crypto_tfm              *tfm;
+        struct ll_crypto_cipher        *tfm;
         int                             rc;
 
         /* using ARC4, the only stream cipher in linux for now */
         ct = sptlrpc_get_ciph_type(BULK_CIPH_ALG_ARC4);
         LASSERT(ct);
 
-        tfm = crypto_alloc_tfm(ct->sct_tfm_name, ct->sct_tfm_flags);
+        tfm = ll_crypto_alloc_blkcipher(ct->sct_tfm_name, 0, 0);
         if (tfm == NULL) {
                 CERROR("Failed to allocate stream TFM %s\n", ct->sct_name);
                 return NULL;
         }
-        LASSERT(crypto_tfm_alg_blocksize(tfm));
+        LASSERT(ll_crypto_blkcipher_blocksize(tfm));
 
         if (keylen > ct->sct_keysize)
                 keylen = ct->sct_keysize;
@@ -261,10 +272,10 @@ static struct crypto_tfm *get_stream_cipher(__u8 *key, unsigned int keylen)
         LASSERT(keylen >= crypto_tfm_alg_min_keysize(tfm));
         LASSERT(keylen <= crypto_tfm_alg_max_keysize(tfm));
 
-        rc = crypto_cipher_setkey(tfm, key, keylen);
+        rc = ll_crypto_blkcipher_setkey(tfm, key, keylen);
         if (rc) {
                 CERROR("Failed to set key for TFM %s: %d\n", ct->sct_name, rc);
-                crypto_free_tfm(tfm);
+                ll_crypto_free_blkcipher(tfm);
                 return NULL;
         }
 
@@ -277,12 +288,12 @@ static int do_bulk_privacy(struct gss_ctx *gctx,
                            struct ptlrpc_bulk_sec_desc *bsd)
 {
         const struct sptlrpc_ciph_type *ct = sptlrpc_get_ciph_type(alg);
-        struct crypto_tfm  *tfm;
-        struct crypto_tfm  *stfm = NULL; /* backup stream cipher */
-        struct scatterlist  sls, sld, *sldp;
-        unsigned int        blksize, keygen_size;
-        int                 i, rc;
-        __u8                key[CIPHER_MAX_KEYSIZE];
+        struct ll_crypto_cipher  *tfm;
+        struct ll_crypto_cipher  *stfm = NULL; /* backup stream cipher */
+        struct scatterlist        sls, sld, *sldp;
+        unsigned int              blksize, keygen_size;
+        int                       i, rc;
+        __u8                      key[CIPHER_MAX_KEYSIZE];
 
         LASSERT(ct);
 
@@ -298,17 +309,17 @@ static int do_bulk_privacy(struct gss_ctx *gctx,
                 return 0;
         }
 
-        tfm = crypto_alloc_tfm(ct->sct_tfm_name, ct->sct_tfm_flags);
+        tfm = ll_crypto_alloc_blkcipher(ct->sct_tfm_name, 0, 0 );
         if (tfm == NULL) {
                 CERROR("Failed to allocate TFM %s\n", ct->sct_name);
                 return -ENOMEM;
         }
-        blksize = crypto_tfm_alg_blocksize(tfm);
+        blksize = ll_crypto_blkcipher_blocksize(tfm);
 
         LASSERT(crypto_tfm_alg_max_keysize(tfm) >= ct->sct_keysize);
         LASSERT(crypto_tfm_alg_min_keysize(tfm) <= ct->sct_keysize);
         LASSERT(ct->sct_ivsize == 0 ||
-                crypto_tfm_alg_ivsize(tfm) == ct->sct_ivsize);
+                ll_crypto_blkcipher_ivsize(tfm) == ct->sct_ivsize);
         LASSERT(ct->sct_keysize <= CIPHER_MAX_KEYSIZE);
         LASSERT(blksize <= CIPHER_MAX_BLKSIZE);
 
@@ -331,7 +342,7 @@ static int do_bulk_privacy(struct gss_ctx *gctx,
                 goto out;
         }
 
-        rc = crypto_cipher_setkey(tfm, key, ct->sct_keysize);
+        rc = ll_crypto_blkcipher_setkey(tfm, key, ct->sct_keysize);
         if (rc) {
                 CERROR("Failed to set key for TFM %s: %d\n", ct->sct_name, rc);
                 goto out;
@@ -339,7 +350,7 @@ static int do_bulk_privacy(struct gss_ctx *gctx,
 
         /* stream cipher doesn't need iv */
         if (blksize > 1)
-                crypto_cipher_set_iv(tfm, zero_iv, blksize);
+                ll_crypto_blkcipher_set_iv(tfm, zero_iv, blksize);
 
         for (i = 0; i < desc->bd_iov_count; i++) {
                 sls.page = desc->bd_iov[i].kiov_page;
@@ -405,9 +416,9 @@ static int do_bulk_privacy(struct gss_ctx *gctx,
 
 out:
         if (stfm)
-                crypto_free_tfm(stfm);
+                ll_crypto_free_blkcipher(stfm);
 
-        crypto_free_tfm(tfm);
+        ll_crypto_free_blkcipher(tfm);
         return rc;
 }
 

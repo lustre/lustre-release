@@ -725,7 +725,9 @@ AC_DEFUN([LC_CONFIG_GSS],
 
 	AC_CHECK_LIB([gssapi], [gss_init_sec_context],
                      [GSSAPI_LIBS="$GSSAPI_LDFLAGS -lgssapi"],
-                     [AC_MSG_ERROR([libgssapi is not found, which is required by GSS.])],)
+                     [AC_CHECK_LIB([gssglue], [gss_init_sec_context],
+                                   [GSSAPI_LIBS="$GSSAPI_LDFLAGS -lgssglue"],
+                                   [AC_MSG_ERROR([libgssapi or libgssglue is not found, which is required by GSS.])])],)
 
 	AC_SUBST(GSSAPI_LIBS)
 
@@ -1412,6 +1414,23 @@ int main(void)
 CFLAGS="$tmp_flags"
 ])
 
+#
+# check for crypto API 
+#
+AC_DEFUN([LC_ASYNC_BLOCK_CIPHER],
+[AC_MSG_CHECKING([if kernel has block cipher support])
+LB_LINUX_TRY_COMPILE([
+        #include <linux/crypto.h>
+],[
+        int v = CRYPTO_ALG_TYPE_BLKCIPHER;
+],[
+        AC_MSG_RESULT([yes])
+        AC_DEFINE(HAVE_ASYNC_BLOCK_CIPHER, 1, [kernel has block cipher support])
+],[
+        AC_MSG_RESULT([no])
+])
+])
+
 
 #
 # LC_PROG_LINUX
@@ -1518,6 +1537,7 @@ AC_DEFUN([LC_PROG_LINUX],
 	 	  
 	 # 2.6.22
          LC_INVALIDATE_BDEV_2ARG
+         LC_ASYNC_BLOCK_CIPHER
          # 2.6.23
          LC_UNREGISTER_BLKDEV_RETURN_INT
          LC_KERNEL_SPLICE_READ

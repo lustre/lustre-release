@@ -904,9 +904,9 @@ static int do_bulk_checksum_crc32(struct ptlrpc_bulk_desc *desc, void *buf)
 
 static int do_bulk_checksum(struct ptlrpc_bulk_desc *desc, __u32 alg, void *buf)
 {
-        struct crypto_tfm *tfm;
+        struct hash_desc    hdesc;
         struct scatterlist *sl;
-        int i, rc = 0;
+        int i, rc = 0, bytes = 0;
 
         LASSERT(alg > BULK_HASH_ALG_NULL &&
                 alg < BULK_HASH_ALG_MAX);
@@ -923,11 +923,12 @@ static int do_bulk_checksum(struct ptlrpc_bulk_desc *desc, __u32 alg, void *buf)
                 return do_bulk_checksum_crc32(desc, buf);
         }
 
-        tfm = crypto_alloc_tfm(hash_types[alg].sht_tfm_name, 0);
-        if (tfm == NULL) {
+        hdesc.tfm = ll_crypto_alloc_hash(hash_types[alg].sht_tfm_name, 0, 0);
+        if (hdesc.tfm == NULL) {
                 CERROR("Unable to allocate TFM %s\n", hash_types[alg].sht_name);
                 return -ENOMEM;
         }
+        hdesc.flags = 0;
 
         OBD_ALLOC(sl, sizeof(*sl) * desc->bd_iov_count);
         if (sl == NULL) {
@@ -939,16 +940,17 @@ static int do_bulk_checksum(struct ptlrpc_bulk_desc *desc, __u32 alg, void *buf)
                 sl[i].page = desc->bd_iov[i].kiov_page;
                 sl[i].offset = desc->bd_iov[i].kiov_offset & ~CFS_PAGE_MASK;
                 sl[i].length = desc->bd_iov[i].kiov_len;
+                bytes += desc->bd_iov[i].kiov_len;
         }
 
-        crypto_digest_init(tfm);
-        crypto_digest_update(tfm, sl, desc->bd_iov_count);
-        crypto_digest_final(tfm, buf);
+        ll_crypto_hash_init(&hdesc);
+        ll_crypto_hash_update(&hdesc, sl, bytes);
+        ll_crypto_hash_final(&hdesc, buf);
 
         OBD_FREE(sl, sizeof(*sl) * desc->bd_iov_count);
 
 out_tfm:
-        crypto_free_tfm(tfm);
+        ll_crypto_free_hash(hdesc.tfm);
         return rc;
 }
 
@@ -1267,28 +1269,28 @@ static struct sptlrpc_ciph_type cipher_types[] = {
                 "null",         "null",       0,                   0,  0
         },
         [BULK_CIPH_ALG_ARC4]    = {
-                "arc4",         "arc4",       CRYPTO_TFM_MODE_ECB, 0,  16
+                "arc4",         "ecb(arc4)",       0, 0,  16
         },
         [BULK_CIPH_ALG_AES128]  = {
-                "aes128",       "aes",        CRYPTO_TFM_MODE_CBC, 16, 16
+                "aes128",       "cbc(aes)",        0, 16, 16
         },
         [BULK_CIPH_ALG_AES192]  = {
-                "aes192",       "aes",        CRYPTO_TFM_MODE_CBC, 16, 24
+                "aes192",       "cbc(aes)",        0, 16, 24
         },
         [BULK_CIPH_ALG_AES256]  = {
-                "aes256",       "aes",        CRYPTO_TFM_MODE_CBC, 16, 32
+                "aes256",       "cbc(aes)",        0, 16, 32
         },
         [BULK_CIPH_ALG_CAST128] = {
-                "cast128",      "cast5",      CRYPTO_TFM_MODE_CBC, 8,  16
+                "cast128",      "cbc(cast5)",      0, 8,  16
         },
         [BULK_CIPH_ALG_CAST256] = {
-                "cast256",      "cast6",      CRYPTO_TFM_MODE_CBC, 16, 32
+                "cast256",      "cbc(cast6)",      0, 16, 32
         },
         [BULK_CIPH_ALG_TWOFISH128] = {
-                "twofish128",   "twofish",    CRYPTO_TFM_MODE_CBC, 16, 16
+                "twofish128",   "cbc(twofish)",    0, 16, 16
         },
         [BULK_CIPH_ALG_TWOFISH256] = {
-                "twofish256",   "twofish",    CRYPTO_TFM_MODE_CBC, 16, 32
+                "twofish256",   "cbc(twofish)",    0, 16, 32
         },
 };
 
