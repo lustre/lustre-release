@@ -2129,7 +2129,7 @@ kiblnd_connreq_done(kib_conn_t *conn, int status)
 
         if (status != 0) {
                 /* failed to establish connection */
-                kiblnd_peer_connect_failed(conn->ibc_peer, active, status);
+                kiblnd_peer_connect_failed(peer, active, status);
                 kiblnd_finalise_conn(conn);
                 return;
         }
@@ -2150,21 +2150,24 @@ kiblnd_connreq_done(kib_conn_t *conn, int status)
         else
                 peer->ibp_accepting--;
 
-        kiblnd_close_stale_conns_locked(conn->ibc_peer,
-                                        conn->ibc_incarnation);
-
-        if (!kiblnd_peer_active(peer) ||        /* peer has been deleted */
-            conn->ibc_comms_error != 0) {       /* error has happened already */
-
-                /* start to shut down connection */
-                kiblnd_close_conn_locked(conn, -ECONNABORTED);
-                write_unlock_irqrestore(&kiblnd_data.kib_global_lock, flags);
-                return;
-        }
+        kiblnd_close_stale_conns_locked(peer, conn->ibc_incarnation);
 
         /* grab pending txs while I have the lock */
         list_add(&txs, &peer->ibp_tx_queue);
         list_del_init(&peer->ibp_tx_queue);
+
+        if (!kiblnd_peer_active(peer) ||        /* peer has been deleted */
+            conn->ibc_comms_error != 0) {       /* error has happened already */
+                lnet_ni_t *ni = peer->ibp_ni;
+
+                /* start to shut down connection */
+                kiblnd_close_conn_locked(conn, -ECONNABORTED);
+                write_unlock_irqrestore(&kiblnd_data.kib_global_lock, flags);
+
+                kiblnd_txlist_done(ni, &txs, -ECONNABORTED);
+
+                return;
+        }
 
         write_unlock_irqrestore(&kiblnd_data.kib_global_lock, flags);
 
