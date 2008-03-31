@@ -42,7 +42,7 @@ unsigned int at_min = 0;
 CFS_MODULE_PARM(at_min, "i", int, 0644,
                 "Adaptive timeout minimum (sec)");
 
-#if HAVE_AT_SUPPORT
+#ifdef HAVE_AT_SUPPORT
 unsigned int at_max = 600;
 #else
 unsigned int at_max = 0;
