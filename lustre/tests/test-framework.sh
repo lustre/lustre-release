@@ -209,6 +209,7 @@ load_modules() {
     load_module lov/lov
     load_module mgc/mgc
     if [ -z "$CLIENTONLY" ]; then
+        modprobe crc16
         [ "$FSTYPE" = "ldiskfs" ] && load_module ../ldiskfs/ldiskfs/ldiskfs
         load_module mgs/mgs
         load_module mds/mds
