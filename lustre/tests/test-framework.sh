@@ -169,6 +169,7 @@ load_modules() {
     if [ -z "$CLIENTONLY" ] && [ -z "$CLIENTMODSONLY" ]; then
         load_module mgs/mgs
         load_module mds/mds
+        modprobe crc16
         [ "$FSTYPE" = "ldiskfs" ] && load_module ../ldiskfs/ldiskfs/ldiskfs
         load_module lvfs/fsfilt_$FSTYPE
         load_module ost/ost
