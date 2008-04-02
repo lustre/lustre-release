@@ -17,8 +17,8 @@ Bugzilla   : 14533
 Frequency  : rare, on recovery
 Description: read procfs can produce deadlock in some situation
 Details    : Holding lprocfs lock which send rpc can produce block for destroy
-             obd objects and this also block reconnect with -EALREADY. This isn't
-             fix all lprocfs bugs - but make it rare.
+	     obd objects and this also block reconnect with -EALREADY. This isn't
+	     fix all lprocfs bugs - but make it rare.
 
 Severity   : enhancement
 Bugzilla   : 15152
@@ -34,7 +34,7 @@ Severity   : normal
 Bugzilla   : 14321
 Description: lustre_mgs: operation 101 on unconnected MGS
 Details    : When MGC is disconnected from MGS long enough, MGS will evict the
-             MGC, and late on MGC cannot successfully connect to MGS and a lot
+	     MGC, and late on MGC cannot successfully connect to MGS and a lot
 	     of the error messages complaining that MGS is not connected.
 
 Severity   : major
@@ -838,7 +838,15 @@ Severity   : normal
 Bugzilla   : 14379
 Description: Properly match for duplicate locks
 Details    : Due to different lock order from skiplists code, we need to
-             traverse entire list for now
+	     traverse entire list for now
+
+Severity   : normal
+Frequency  : only on PPC/SLES10
+Bugzilla   : 14855
+Description: "BITS_PER_LONG is not 32 or 64" in linux/idr.h
+Details    : On SLES10/PPC, fs.h includes idr.h which requires BITS_PER_LONG to
+	     be defined. Add a hack in mkfs_lustre.c to work around this compile
+	     issue.
 
 --------------------------------------------------------------------------------
 
