@@ -27,17 +27,17 @@ Bugzilla   : 15027
 Frequency  : on network error
 Description: panic with double free request if network error 
 Details    : mdc_finish_enqueue is finish request if any network error occuring,
-             but it's true only for synchronus enqueue, for async enqueue 
-             (via ptlrpcd) this incorrect and ptlrpcd want finish request
-             himself.
+	     but it's true only for synchronus enqueue, for async enqueue 
+	     (via ptlrpcd) this incorrect and ptlrpcd want finish request
+	     himself.
 
 Severity   : normal
 Bugzilla   : 14533
 Frequency  : rare, on recovery
 Description: read procfs can produce deadlock in some situation
 Details    : Holding lprocfs lock with send rpc can produce block for destroy
-             obd objects and this also block reconnect with -EALREADY. This isn't
-             fix all lprocfs bugs - but make it rare.
+	     obd objects and this also block reconnect with -EALREADY. This isn't
+	     fix all lprocfs bugs - but make it rare.
 
 Severity   : enhancement
 Bugzilla   : 15152
@@ -53,7 +53,7 @@ Severity   : normal
 Bugzilla   : 14321
 Description: lustre_mgs: operation 101 on unconnected MGS
 Details    : When MGC is disconnected from MGS long enough, MGS will evict the
-             MGC, and late on MGC cannot successfully connect to MGS and a lot
+	     MGC, and late on MGC cannot successfully connect to MGS and a lot
 	     of the error messages complaining that MGS is not connected.
 
 Severity   : enhancement
@@ -462,6 +462,14 @@ Severity   : enhancement
 Bugzilla   : 13371
 Description: implement readv/writev APIs(aio_read/aio_writes in newer kernels)
 Details    : This greatly improves speed of NFS writes on 2.6 kernels.
+
+Severity   : normal
+Frequency  : only on PPC/SLES10
+Bugzilla   : 14855
+Description: "BITS_PER_LONG is not 32 or 64" in linux/idr.h
+Details    : On SLES10/PPC, fs.h includes idr.h which requires BITS_PER_LONG to
+	     be defined. Add a hack in mkfs_lustre.c to work around this compile
+	     issue.
 
 --------------------------------------------------------------------------------
 

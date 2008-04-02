@@ -40,6 +40,9 @@
 #include <limits.h>
 
 #ifdef __linux__
+/* kp30.h is not really needed here, but on SLES10/PPC, fs.h includes idr.h which
+ * requires BITS_PER_LONG to be defined */
+#include <libcfs/kp30.h>
 #include <linux/fs.h> /* for BLKGETSIZE64 */
 #include <linux/version.h>
 #endif
