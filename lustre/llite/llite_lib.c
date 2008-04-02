@@ -1818,6 +1818,7 @@ void ll_delete_inode(struct inode *inode)
         if (rc) {
                 CERROR("fid_delete() failed, rc %d\n", rc);
         }
+        truncate_inode_pages(&inode->i_data, 0);
         clear_inode(inode);
 
         EXIT;
