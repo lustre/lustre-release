@@ -98,8 +98,8 @@ void cfs_waitq_del(struct cfs_waitq *waitq, struct cfs_waitlink *link);
 int  cfs_waitq_active(struct cfs_waitq *waitq);
 void cfs_waitq_signal(struct cfs_waitq *waitq);
 void cfs_waitq_signal_nr(struct cfs_waitq *waitq, int nr);
-void cfs_waitq_broadcast(struct cfs_waitq *waitq, int state);
-void cfs_waitq_wait(struct cfs_waitlink *link);
+void cfs_waitq_broadcast(struct cfs_waitq *waitq);
+void cfs_waitq_wait(struct cfs_waitlink *link, int state);
 int64_t cfs_waitq_timedwait(struct cfs_waitlink *link, int state, int64_t timeout);
 #define cfs_schedule_timeout(s, t)              \
         do {                                    \
@@ -129,6 +129,7 @@ struct page {
 #ifdef LIBLUSTRE_HANDLE_UNALIGNED_PAGE
         int     _managed;
 #endif
+        struct list_head _node;
 };
 
 typedef struct page cfs_page_t;
@@ -321,7 +322,6 @@ struct cfs_stack_trace {
                 (a) = (a) / (b);        \
                 (remainder);            \
         })
-
 
 /* !__KERNEL__ */
 #endif

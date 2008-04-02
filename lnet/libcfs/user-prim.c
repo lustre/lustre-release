@@ -120,13 +120,13 @@ void cfs_waitq_signal_nr(struct cfs_waitq *waitq, int nr)
         (void)waitq;
 }
 
-void cfs_waitq_broadcast(struct cfs_waitq *waitq, int state)
+void cfs_waitq_broadcast(struct cfs_waitq *waitq)
 {
         LASSERT(waitq != NULL);
         (void)waitq;
 }
 
-void cfs_waitq_wait(struct cfs_waitlink *link)
+void cfs_waitq_wait(struct cfs_waitlink *link, int state)
 {
         LASSERT(link != NULL);
         (void)link;
@@ -377,7 +377,6 @@ void lbug_with_loc(char *file, const char *func, const int line)
         libcfs_debug_msg(NULL, 0, D_EMERG, file, func, line, "LBUG\n");
         abort();
 }
-
 
 /* !__KERNEL__ */
 #endif

@@ -98,6 +98,8 @@
 #define LASSERTF(cond, fmt...) ((void)(0))
 #endif /* LIBCFS_DEBUG */
 
+#define KLASSERT(e) LASSERT(e)
+
 void lbug_with_loc(char *file, const char *func, const int line)
         __attribute__((noreturn));
 
@@ -212,6 +214,7 @@ do {                                                                           \
 #  define LASSERTF(cond, args...) do { } while (0)
 #  define LBUG()   ((void)(0))
 # endif /* LIBCFS_DEBUG */
+# define KLASSERT(e) do { } while (0)
 # define printk(format, args...) printf (format, ## args)
 # ifdef CRAY_XT3                                /* buggy calloc! */
 #  define LIBCFS_ALLOC(ptr, size)               \

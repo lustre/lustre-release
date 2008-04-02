@@ -85,6 +85,7 @@
 #define init_mutex_locked(x)            init_MUTEX_LOCKED(x)
 #define mutex_up(x)                     up(x)
 #define mutex_down(x)                   down(x)
+#define mutex_down_trylock(x)           down_trylock(x)
 
 /*
  * completion (use Linux kernel's primitives)
