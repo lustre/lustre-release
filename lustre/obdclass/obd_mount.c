@@ -699,7 +699,7 @@ static int lustre_start_mgc(struct super_block *sb)
                                 sizeof(recov_bk), &recov_bk, NULL);
         if (rc)
                 /* nonfatal */
-                CERROR("can't set %s %d\n", KEY_INIT_RECOV_BACKUP, rc);
+                CWARN("can't set %s %d\n", KEY_INIT_RECOV_BACKUP, rc);
 
         OBD_ALLOC_PTR(data);
         if (data == NULL)
@@ -960,10 +960,8 @@ int server_register_target(struct super_block *sb)
         rc = obd_set_info_async(mgc->u.cli.cl_mgc_mgsexp,
                                 strlen("register_target"), "register_target",
                                 sizeof(*mti), mti, NULL);
-        if (rc) {
-                CERROR("registration with the MGS failed (%d)\n", rc);
+        if (rc)
                 GOTO(out, rc);
-        }
 
         /* Always update our flags */
         ldd->ldd_flags = mti->mti_flags & ~LDD_F_REWRITE_LDD;
@@ -1075,6 +1073,9 @@ static int server_start_targets(struct super_block *sb, struct vfsmount *mnt)
                                    lsi->lsi_ldd->ldd_svname);
                 GOTO(out_mgc, rc);
         }
+        /* non-fatal error of registeration with MGS */
+        if (rc)
+                CDEBUG(D_MOUNT, "Cannot register with MGS: %d\n", rc);
 
         /* Let the target look up the mount using the target's name
            (we can't pass the sb or mnt through class_process_config.) */
