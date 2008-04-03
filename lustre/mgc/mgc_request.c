@@ -1129,8 +1129,9 @@ static int mgc_process_log(struct obd_device *mgc,
                                                    "\n", cld->cld_logname);
                                 GOTO(out_pop, rc = -ENOTCONN);
                         }
-                        LCONSOLE_WARN("Failed to get MGS log %s, using "
-                                      "local copy.\n", cld->cld_logname);
+                        CDEBUG(D_MGC, "Failed to get MGS log %s, using local "
+                                      "copy for now, will try to update later.\n",
+                               cld->cld_logname);
                 }
                 /* Now, whether we copied or not, start using the local llog.
                    If we failed to copy, we'll start using whatever the old
