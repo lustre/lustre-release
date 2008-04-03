@@ -9,3 +9,4 @@ ext3-nlinks-2.6.9.patch
 ext3-ialloc-2.6.patch
 ext3-remove-cond_resched-calls-2.6.12.patch
 ext3-filterdata-2.6.15.patch
+ext3-lookup-dotdot-2.6.9.patch
