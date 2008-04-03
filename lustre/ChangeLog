@@ -19,6 +19,13 @@ tbd  Sun Microsystems, Inc.
         removed cwd "./" (refer to Bugzilla 14399).
 
 Severity   : normal
+Bugzilla   : 13375
+Descriptoin: make lov_create() will not stuck in obd_statfs_rqset()
+Details    : If an OST is down the MDS will hang indefinitely in
+             obd_statfs_rqset() waiting for the statfs data. While for
+             MDS QOS usage of statfs, it should not stuck in waiting.
+
+Severity   : normal
 Bugzilla   : 3055
 Description: Disable adaptive timeouts by default
 
