@@ -478,6 +478,13 @@ Details    : On SLES10/PPC, fs.h includes idr.h which requires BITS_PER_LONG to
 	     be defined. Add a hack in mkfs_lustre.c to work around this compile
 	     issue.
 
+Severity   : normal
+Bugzilla   : 14257
+Description: LASSERT on MDS when client holding flock lock dies
+Details    : ldlm pool logic depends on number of granted locks equal to
+             number of released locks which is not true for flock locks, so
+	     just exclude such locks from consideration.
+
 --------------------------------------------------------------------------------
 
 2007-12-07         Cluster File Systems, Inc. <info@clusterfs.com>
