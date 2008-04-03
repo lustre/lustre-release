@@ -667,7 +667,15 @@ EXPORT_SYMBOL(ldlm_pool_fini);
 
 void ldlm_pool_add(struct ldlm_pool *pl, struct ldlm_lock *lock)
 {
+        /* FLOCK locks are special in a sense that they are almost never
+         * cancelled, instead special kind of lock is used to drop them.
+         * also there is no LRU for flock locks, so no point in tracking
+         * them anyway */
+        if (lock->l_resource->lr_type == LDLM_FLOCK)
+                return;
+
         ENTRY;
+                
         atomic_inc(&pl->pl_granted);
         atomic_inc(&pl->pl_grant_rate);
         atomic_inc(&pl->pl_grant_speed);
@@ -686,6 +694,8 @@ EXPORT_SYMBOL(ldlm_pool_add);
 
 void ldlm_pool_del(struct ldlm_pool *pl, struct ldlm_lock *lock)
 {
+        if (lock->l_resource->lr_type == LDLM_FLOCK)
+                return;
         ENTRY;
         LASSERT(atomic_read(&pl->pl_granted) > 0);
         atomic_dec(&pl->pl_granted);
