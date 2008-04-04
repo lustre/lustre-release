@@ -164,7 +164,7 @@ static inline lvfs_sbdev_type fsfilt_journal_sbdev(struct obd_device *obd,
 #define FSFILT_OP_JOIN          11
 #define FSFILT_OP_NOOP          15
 
-#define fsfilt_check_slow(obd, start, msg)                              \
+#define __fsfilt_check_slow(obd, start, msg)                            \
 do {                                                                    \
         if (time_before(jiffies, start + 15 * HZ))                      \
                 break;                                                  \
@@ -177,6 +177,12 @@ do {                                                                    \
         else                                                            \
                 CERROR("%s: slow %s %lus\n", obd->obd_name, msg,        \
                        (jiffies - start) / HZ);                         \
+} while (0)
+
+#define fsfilt_check_slow(obd, start, msg)    \
+do {                                          \
+        __fsfilt_check_slow(obd, start, msg); \
+        start = jiffies;                      \
 } while (0)
 
 static inline void *fsfilt_start_log(struct obd_device *obd,
