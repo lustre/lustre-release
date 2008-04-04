@@ -48,7 +48,9 @@
         CDEBUG(D_QUOTA, "id(%u) flag(%u) type(%c) isblk(%c) count("LPU64") "  \
                "qd_qunit("LPU64"): " fmt, qd->qd_id, qd->qd_flags,            \
                QDATA_IS_GRP(qd) ? 'g' : 'u', QDATA_IS_BLK(qd) ? 'b': 'i',     \
-               qd->qd_count, qd->qd_qunit, ## arg);
+               qd->qd_count,                                                  \
+               (QDATA_IS_ADJBLK(qd) | QDATA_IS_ADJINO(qd)) ? qd->qd_qunit : 0,\
+               ## arg);
 
 #define QAQ_DEBUG(qaq, fmt, arg...)                                           \
         CDEBUG(D_QUOTA, "id(%u) flag(%u) type(%c) bunit("LPU64") "            \
