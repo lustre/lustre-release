@@ -1265,7 +1265,7 @@ error_noexit() {
 
 error() {
     error_noexit "$@"
-    [ "$FAIL_ON_ERROR" ] && exit 1 || true
+    $FAIL_ON_ERROR && exit 1 || true
 }
 
 error_exit() {
@@ -1509,7 +1509,7 @@ osc_to_ost()
 
 remote_mds ()
 {
-    [ ! -z "$(lctl dl | grep \<mdt\>)" ]
+    [ -z "$(lctl dl | grep mdt)" ]
 }
 
 remote_mds_nodsh()
@@ -1519,7 +1519,7 @@ remote_mds_nodsh()
 
 remote_ost ()
 {
-    [ -z "$(lctl dl | grep \<ost\>)" ]
+    [ -z "$(lctl dl | grep ost)" ]
 }
 
 remote_ost_nodsh()

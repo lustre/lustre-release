@@ -2990,7 +2990,7 @@ test_69() {
 run_test 69 "verify oa2dentry return -ENOENT doesn't LBUG ======"
 
 test_71() {
-        which dbench > /dev/null 2>&1 || skip "dbench not installed, skip this test" && return 0
+	which dbench > /dev/null 2>&1 || { skip "dbench not installed, skip this test" && return 0; }
 	DBENCH_LIB=${DBENCH_LIB:-/usr/lib/dbench}
 	PATH=${DBENCH_LIB}:${PATH}
 	cp `which dbench` $DIR

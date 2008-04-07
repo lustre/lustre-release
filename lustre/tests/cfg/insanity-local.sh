@@ -76,4 +76,5 @@ POWER_UP=${POWER_UP:-"powerman --on"}
 
 PDSH=${PDSH:-no_dsh}
 SLOW=${SLOW:-no}
+FAIL_ON_ERROR=${FAIL_ON_ERROR:-true}
 
