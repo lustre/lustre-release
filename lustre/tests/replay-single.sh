@@ -1453,7 +1453,7 @@ run_test 66a "AT: verify MDT service time adjusts with no early replies"
 test_66b() #bug 3055
 {
     at_start || return 0
-    ORIG=$(awk '/network/ {print $4}' $LPROC/mdc/lustre-*/timeouts)
+    ORIG=$(awk '/network/ {print $4}' $LPROC/mdc/${FSNAME}-*/timeouts)
     sysctl -w lustre.fail_val=$(($ORIG + 5))
 #define OBD_FAIL_PTLRPC_PAUSE_REP      0x50c
     sysctl -w lustre.fail_loc=0x50c
