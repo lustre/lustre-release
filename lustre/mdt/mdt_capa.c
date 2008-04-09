@@ -276,14 +276,14 @@ int mdt_ck_thread_start(struct mdt_device *mdt)
         int rc;
 
         cfs_waitq_init(&thread->t_ctl_waitq);
-        rc = kernel_thread(mdt_ck_thread_main, mdt,
+        rc = cfs_kernel_thread(mdt_ck_thread_main, mdt,
                            (CLONE_VM | CLONE_FILES));
         if (rc < 0) {
                 CERROR("cannot start mdt_ck thread, rc = %d\n", rc);
                 return rc;
         }
 
-        wait_event(thread->t_ctl_waitq, thread->t_flags & SVC_RUNNING);
+        cfs_wait_event(thread->t_ctl_waitq, thread->t_flags & SVC_RUNNING);
         return 0;
 }
 
@@ -296,7 +296,7 @@ void mdt_ck_thread_stop(struct mdt_device *mdt)
 
         thread->t_flags = SVC_STOPPING;
         cfs_waitq_signal(&thread->t_ctl_waitq);
-        wait_event(thread->t_ctl_waitq, thread->t_flags & SVC_STOPPED);
+        cfs_wait_event(thread->t_ctl_waitq, thread->t_flags & SVC_STOPPED);
 }
 
 

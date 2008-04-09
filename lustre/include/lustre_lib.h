@@ -743,6 +743,7 @@ do {                                                                    \
 
 #endif /* __KERNEL__ */
 
+
 #define l_wait_event(wq, condition, info)                       \
 ({                                                              \
         int                 __ret;                              \
@@ -758,6 +759,15 @@ do {                                                                    \
         struct l_wait_info *__info = (info);                    \
                                                                 \
         __l_wait_event(wq, condition, __info, __ret, 1);        \
+        __ret;                                                  \
+})
+
+#define cfs_wait_event(wq, condition)                          \
+({                                                              \
+        int  __ret;                                                    \
+                                                                \
+        struct l_wait_info lwi = { 0 };                         \
+        l_wait_event(wq, condition, &lwi);                      \
         __ret;                                                  \
 })
 

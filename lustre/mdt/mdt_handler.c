@@ -1320,7 +1320,7 @@ static int mdt_writepage(struct mdt_thread_info *info)
 cleanup_lwi:
         OBD_FREE_PTR(lwi);
 cleanup_page:
-        __cfs_free_page(page);
+        cfs_free_page(page);
 desc_cleanup:
         ptlrpc_free_bulk(desc);
         RETURN(rc);
@@ -1381,7 +1381,7 @@ free_rdpg:
 
         for (i = 0; i < rdpg->rp_npages; i++)
                 if (rdpg->rp_pages[i] != NULL)
-                        __cfs_free_page(rdpg->rp_pages[i]);
+                        cfs_free_page(rdpg->rp_pages[i]);
         OBD_FREE(rdpg->rp_pages, rdpg->rp_npages * sizeof rdpg->rp_pages[0]);
 
         if (OBD_FAIL_CHECK(OBD_FAIL_MDS_SENDPAGE))
