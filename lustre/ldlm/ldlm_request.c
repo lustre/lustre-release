@@ -1314,7 +1314,7 @@ int ldlm_cancel_lru_local(struct ldlm_namespace *ns, struct list_head *cancels,
                           int count, int max, int cancel_flags, int flags)
 {
         ldlm_cancel_lru_policy_t pf;
-        struct ldlm_lock *lock;
+        struct ldlm_lock *lock, *next;
         int added = 0, unused;
         ENTRY;
 
@@ -1332,12 +1332,16 @@ int ldlm_cancel_lru_local(struct ldlm_namespace *ns, struct list_head *cancels,
                 if (max && added >= max)
                         break;
 
-                list_for_each_entry(lock, &ns->ns_unused_list, l_lru) {
-                        /* Somebody is already doing CANCEL or there is a
-                         * blocking request will send cancel. */
-                        if (!(lock->l_flags & LDLM_FL_CANCELING) &&
-                            !(lock->l_flags & LDLM_FL_BL_AST)) 
+                list_for_each_entry_safe(lock, next, &ns->ns_unused_list, l_lru){
+                        /* No locks which got blocking requests. */
+                        LASSERT(!(lock->l_flags & LDLM_FL_BL_AST));
+
+                        /* Somebody is already doing CANCEL. No need in this
+                         * lock in lru, do not traverse it again. */
+                        if (!(lock->l_flags & LDLM_FL_CANCELING))
                                 break;
+
+                        ldlm_lock_remove_from_lru_nolock(lock);
                 }
                 if (&lock->l_lru == &ns->ns_unused_list)
                         break;
@@ -1364,12 +1368,12 @@ int ldlm_cancel_lru_local(struct ldlm_namespace *ns, struct list_head *cancels,
                 lock_res_and_lock(lock);
                 /* Check flags again under the lock. */
                 if ((lock->l_flags & LDLM_FL_CANCELING) ||
-                    (lock->l_flags & LDLM_FL_BL_AST) ||
                     (ldlm_lock_remove_from_lru(lock) == 0)) {
                         /* other thread is removing lock from lru or
                          * somebody is already doing CANCEL or
                          * there is a blocking request which will send
-                         * cancel by itseft. */
+                         * cancel by itseft or the lock is matched
+                         * is already not unused. */
                         unlock_res_and_lock(lock);
                         LDLM_LOCK_PUT(lock);
                         spin_lock(&ns->ns_unused_lock);
@@ -1700,7 +1704,8 @@ int ldlm_cli_join_lru(struct ldlm_namespace *ns,
                 if (list_empty(&lock->l_lru) &&
                     !lock->l_readers && !lock->l_writers &&
                     !(lock->l_flags & LDLM_FL_LOCAL) &&
-                    !(lock->l_flags & LDLM_FL_CBPENDING)) {
+                    !(lock->l_flags & LDLM_FL_CBPENDING) &&
+                    !(lock->l_flags & LDLM_FL_BL_AST)) {
                         ldlm_lock_add_to_lru(lock);
                         lock->l_flags &= ~LDLM_FL_NO_LRU;
                         LDLM_DEBUG(lock, "join lock to lru");
