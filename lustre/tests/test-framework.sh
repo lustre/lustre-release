@@ -169,7 +169,7 @@ load_modules() {
     if [ -z "$CLIENTONLY" ] && [ -z "$CLIENTMODSONLY" ]; then
         load_module mgs/mgs
         load_module mds/mds
-        modprobe crc16
+        grep -q crc16 /proc/kallsyms || { modprobe crc16 2>/dev/null || true; }
         [ "$FSTYPE" = "ldiskfs" ] && load_module ../ldiskfs/ldiskfs/ldiskfs
         load_module lvfs/fsfilt_$FSTYPE
         load_module ost/ost
