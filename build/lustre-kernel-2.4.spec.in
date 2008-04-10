@@ -650,7 +650,6 @@ BuildObj ()
 	    MAKE_CC="CC=$CC"
 	fi
 	$MAKE "$MAKE_CC" $OLDCONFIG
-	$MAKE "$MAKE_CC" prepare-all
 	$MAKE clean
 	rm -rf $o/.config.old $o/include/config
         # Replace the Makefile in the object directory with a version
