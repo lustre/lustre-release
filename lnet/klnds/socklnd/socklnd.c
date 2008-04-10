@@ -1154,14 +1154,6 @@ ksocknal_create_conn (lnet_ni_t *ni, ksock_route_t *route,
                 }
         }
 
-        if (peer->ksnp_closing ||
-            (active && route->ksnr_deleted)) {
-                /* peer/route got closed under me */
-                rc = -ESTALE;
-                warn = "peer/route removed";
-                goto failed_2;
-        }
-
         if (peer->ksnp_proto == NULL) {
                 /* Never connected before.
                  * NB recv_hello may have returned EPROTO to signal my peer
@@ -1196,6 +1188,40 @@ ksocknal_create_conn (lnet_ni_t *ni, ksock_route_t *route,
                 goto failed_2;
         case EPROTO:
                 warn = "retry with different protocol version";
+                goto failed_2;
+        }
+
+        write_unlock_bh(global_lock);
+
+        /* No more race (or won the race), has compatible version with peer */
+        if (active) {
+                /* additional routes after interface exchange? */
+                ksocknal_create_routes(peer, conn->ksnc_port,
+                                       hello->kshm_ips, hello->kshm_nips);
+        } else {
+                hello->kshm_nips = ksocknal_select_ips(peer, hello->kshm_ips,
+                                                       hello->kshm_nips);
+                rc = ksocknal_send_hello(ni, conn, peerid.nid, hello);
+        }
+        
+        /* setup the socket AFTER I've received hello (it disables
+         * SO_LINGER).  I might call back to the acceptor who may want
+         * to send a protocol version response and then close the
+         * socket; this ensures the socket only tears down after the
+         * response has been sent. */
+        if (rc == 0)
+                rc = ksocknal_lib_setup_sock(sock);
+
+        write_lock_bh(global_lock);
+
+        if (rc != 0) 
+                goto failed_2;
+
+        if (peer->ksnp_closing ||
+            (active && route->ksnr_deleted)) {
+                /* peer/route got closed under me */
+                rc = -ESTALE;
+                warn = "peer/route removed";
                 goto failed_2;
         }
 
@@ -1275,48 +1301,6 @@ ksocknal_create_conn (lnet_ni_t *ni, ksock_route_t *route,
                 ksocknal_queue_tx_locked (tx, conn);
         }
 
-        write_unlock_bh (global_lock);
-
-        /* We've now got a new connection.  Any errors from here on are just
-         * like "normal" comms errors and we close the connection normally.
-         * NB (a) we still have to send the reply HELLO for passive
-         *        connections, 
-         *    (b) normal I/O on the conn is blocked until I setup and call the
-         *        socket callbacks.
-         */
-
-        ksocknal_lib_bind_irq (irq);
-
-        CDEBUG(D_NET, "New conn %s p %d.x %u.%u.%u.%u -> %u.%u.%u.%u/%d"
-               " incarnation:"LPD64" sched[%d]/%d\n",
-               libcfs_id2str(peerid), conn->ksnc_proto->pro_version,
-               HIPQUAD(conn->ksnc_myipaddr), HIPQUAD(conn->ksnc_ipaddr),
-               conn->ksnc_port, incarnation,
-               (int)(conn->ksnc_scheduler - ksocknal_data.ksnd_schedulers), irq);
-
-        if (active) {
-                /* additional routes after interface exchange? */
-                ksocknal_create_routes(peer, conn->ksnc_port,
-                                       hello->kshm_ips, hello->kshm_nips);
-        } else {
-                hello->kshm_nips = ksocknal_select_ips(peer, hello->kshm_ips,
-                                                       hello->kshm_nips);
-                rc = ksocknal_send_hello(ni, conn, peerid.nid, hello);
-        }
-
-        LIBCFS_FREE(hello, offsetof(ksock_hello_msg_t,
-                                    kshm_ips[LNET_MAX_INTERFACES]));
-
-        /* setup the socket AFTER I've received hello (it disables
-         * SO_LINGER).  I might call back to the acceptor who may want
-         * to send a protocol version response and then close the
-         * socket; this ensures the socket only tears down after the
-         * response has been sent. */
-        if (rc == 0)
-                rc = ksocknal_lib_setup_sock(sock);
-
-        write_lock_bh(global_lock);
-
         /* NB my callbacks block while I hold ksnd_global_lock */
         ksocknal_lib_set_callback(sock, conn);
 
@@ -1325,19 +1309,26 @@ ksocknal_create_conn (lnet_ni_t *ni, ksock_route_t *route,
 
         write_unlock_bh(global_lock);
 
-        if (rc != 0) {
-                write_lock_bh(global_lock);
-                ksocknal_close_conn_locked(conn, rc);
-                write_unlock_bh(global_lock);
-        } else if (ksocknal_connsock_addref(conn) == 0) {
+        if (ksocknal_connsock_addref(conn) == 0) {
+                ksocknal_lib_bind_irq (irq);
                 /* Allow I/O to proceed. */
                 ksocknal_read_callback(conn);
                 ksocknal_write_callback(conn);
                 ksocknal_connsock_decref(conn);
-        }
+        } 
+
+        CDEBUG(D_NET, "New conn %s p %d.x %u.%u.%u.%u -> %u.%u.%u.%u/%d"
+               " incarnation:"LPD64" sched[%d]/%d\n",
+               libcfs_id2str(peerid), conn->ksnc_proto->pro_version,
+               HIPQUAD(conn->ksnc_myipaddr), HIPQUAD(conn->ksnc_ipaddr),
+               conn->ksnc_port, incarnation,
+               (int)(conn->ksnc_scheduler - ksocknal_data.ksnd_schedulers), irq);
+
+        LIBCFS_FREE(hello, offsetof(ksock_hello_msg_t,
+                                    kshm_ips[LNET_MAX_INTERFACES]));
 
         ksocknal_conn_decref(conn);
-        return rc;
+        return 0;
 
  failed_2:
         if (!peer->ksnp_closing &&

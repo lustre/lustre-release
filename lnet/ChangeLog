@@ -13,6 +13,11 @@ tbd  Sun Microsystems, Inc.
 	ptllnd    - Portals 3.3 / UNICOS/lc 1.5.x, 2.0.x
 
 Severity   : major
+Bugzilla   : 13983
+Description: ksocknal_send_hello() hit ASSERTION while connecting race
+Details    : ksocknal_send_hello() hit ASSERTION while connecting race
+
+Severity   : major
 Bugzilla   : 14425
 Description: o2iblnd/ptllnd credit deadlock in a routed config.
 Details    : o2iblnd/ptllnd credit deadlock in a routed config.
