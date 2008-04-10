@@ -860,6 +860,13 @@ Details    : ldlm pool logic depends on number of granted locks equal to
 	     number of released locks which is not true for flock locks, so 
 	     just exclude such locks from consideration.
 
+Severity   : normal
+Bugzilla   : 15188
+Description: MDS deadlock with many ll_sync_lov threads and I/O stalled
+Details    : Use fsfilt_sync() for both the whole filesystem sync and
+             individual file sync to eliminate dangerous inode locking
+             with I_LOCK that can lead to a deadlock.
+
 --------------------------------------------------------------------------------
 
 2007-08-10         Cluster File Systems, Inc. <info@clusterfs.com>
