@@ -1256,8 +1256,9 @@ enum {
 #define MEA_MAGIC_ALL_CHARS      0xb222a11c
 #define MEA_MAGIC_HASH_SEGMENT   0xb222a11b
 
-#define MAX_HASH_SIZE            0x7fffffffUL
-#define MAX_HASH_HIGHEST_BIT     0x10000000
+#define MAX_HASH_SIZE_32         0x7fffffffUL
+#define MAX_HASH_SIZE            0x7fffffffffffffffULL
+#define MAX_HASH_HIGHEST_BIT     0x1000000000000000
 
 struct lustre_md {
         struct mdt_body         *body;

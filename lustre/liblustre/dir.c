@@ -238,8 +238,8 @@ ssize_t llu_iop_filldirentries(struct inode *dir, _SYSIO_OFF_T *basep,
                          * If page is empty (end of directoryis reached),
                          * use this value. 
                          */
-                        __u32 hash = DIR_END_OFF;
-                        __u32 next;
+                        __u64 hash = DIR_END_OFF;
+                        __u64 next;
 
                         dp = page->addr;
                         for (ent = lu_dirent_start(dp); ent != NULL && !done;
@@ -249,7 +249,7 @@ ssize_t llu_iop_filldirentries(struct inode *dir, _SYSIO_OFF_T *basep,
                                 struct lu_fid  fid;
                                 ino_t          ino;
 
-                                hash    = le32_to_cpu(ent->lde_hash);
+                                hash    = le64_to_cpu(ent->lde_hash);
                                 namelen = le16_to_cpu(ent->lde_namelen);
 
                                 if (hash < pos)
@@ -274,7 +274,7 @@ ssize_t llu_iop_filldirentries(struct inode *dir, _SYSIO_OFF_T *basep,
                                                (loff_t)hash, ino, DT_UNKNOWN,
                                                &filled);
                         }
-                        next = le32_to_cpu(dp->ldp_hash_end);
+                        next = le64_to_cpu(dp->ldp_hash_end);
                         OBD_PAGE_FREE(page);
                         if (!done) {
                                 pos = next;

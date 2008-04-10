@@ -2182,15 +2182,15 @@ int lmv_blocking_ast(struct ldlm_lock *lock,
         RETURN(0);
 }
 
-static void lmv_hash_adjust(__u32 *hash, __u32 hash_adj)
+static void lmv_hash_adjust(__u64 *hash, __u64 hash_adj)
 {
-        __u32 val;
+        __u64 val;
 
-        val = le32_to_cpu(*hash);
+        val = le64_to_cpu(*hash);
         if (val < hash_adj)
                 val += MAX_HASH_SIZE;
         if (val != DIR_END_OFF)
-                *hash = cpu_to_le32(val - hash_adj);
+                *hash = cpu_to_le64(val - hash_adj);
 }
 
 static __u32 lmv_node_rank(struct obd_export *exp, const struct lu_fid *fid)
@@ -2219,42 +2219,63 @@ static int lmv_readpage(struct obd_export *exp, const struct lu_fid *fid,
         struct obd_export *tgt_exp;
         struct lu_fid rid = *fid;
         struct lmv_obj *obj;
-        __u32 offset0;
-        __u32 offset;
-        __u32 hash_adj = 0;
+        __u64 offset;
+        __u64 hash_adj = 0;
         __u32 rank = 0;
-        __u32 seg_size = 0;
+        __u64 seg_size = 0;
+        __u64 tgt_tmp = 0;
         int tgt = 0;
         int tgt0 = 0;
         int rc;
         int nr = 0;
         ENTRY;
 
-        offset0 = offset = offset64;
-        /*
-         * Check that offset is representable by 32bit number.
-         */
-        LASSERT((__u64)offset == offset64);
+        offset = offset64;
 
         rc = lmv_check_connect(obd);
 	if (rc)
 		RETURN(rc);
 
-        CDEBUG(D_INFO, "READPAGE at %x from "DFID"\n", offset, PFID(&rid));
+        CDEBUG(D_INFO, "READPAGE at %llx from "DFID"\n", offset, PFID(&rid));
 
         obj = lmv_obj_grab(obd, fid);
         if (obj) {
+
+        /*
+         * This case handle directory lookup in clustered metadata case (i.e.
+         * split directory is located on multiple md servers.)
+         * each server keeps directory entries for certain range of hashes.
+         * E.g. we have N server and suppose hash range is 0 to MAX_HASH.
+         * first server will keep records with hashes [ 0 ... MAX_HASH / N  - 1],
+         * second one with hashes [MAX_HASH / N ... 2 * MAX_HASH / N] and
+         * so on....
+         *      readdir can simply start reading entries from 0 - N server in
+         * order but that will not scale well as all client will request dir in
+         * to server in same order.
+         * Following algorithm does optimization:
+         * Instead of doing readdir in 1, 2, ...., N order, client with a
+         * rank R does readdir in R, R + 1, ..., N, 1, ... R - 1 order.
+         * (every client has rank R)
+         *      But ll_readdir() expect offset range [0 to MAX_HASH/N) but
+         * since client ask dir from MDS{R} client has pages with offsets
+         * [R*MAX_HASH/N ... (R + 1)*MAX_HASH/N] there for we do hash_adj
+         * on hash  values that we get.
+         */
+
                 struct lmv_inode *loi;
 
                 lmv_obj_lock(obj);
 
                 nr       = obj->lo_objcount;
                 LASSERT(nr > 0);
-                seg_size = MAX_HASH_SIZE / nr;
+                seg_size = MAX_HASH_SIZE;
+                do_div(seg_size, nr);
                 loi      = obj->lo_inodes;
                 rank     = lmv_node_rank(lmv_get_export(lmv, loi[0].li_mds),
                                          fid) % nr;
-                tgt0     = (offset / seg_size) % nr;
+                tgt_tmp = offset;
+                do_div(tgt_tmp, seg_size);
+                tgt0     = do_div(tgt_tmp,  nr);
                 tgt      = (tgt0 + rank) % nr;
 
                 if (tgt < tgt0)
@@ -2270,10 +2291,10 @@ static int lmv_readpage(struct obd_export *exp, const struct lu_fid *fid,
 
                 hash_adj += rank * seg_size;
 
-                CDEBUG(D_INFO, "hash_adj: %x %x %x/%x -> %x/%x\n",
+                CDEBUG(D_INFO, "hash_adj: %x %llx %llx/%x -> %llx/%x\n",
                        rank, hash_adj, offset, tgt0, offset + hash_adj, tgt);
 
-                offset = (offset + hash_adj) % MAX_HASH_SIZE;
+                offset = (offset + hash_adj) & MAX_HASH_SIZE;
                 rid = obj->lo_inodes[tgt].li_fid;
                 tgt_exp = lmv_get_export(lmv, loi[tgt].li_mds);
 
@@ -2296,7 +2317,7 @@ static int lmv_readpage(struct obd_export *exp, const struct lu_fid *fid,
 
                 lmv_hash_adjust(&dp->ldp_hash_start, hash_adj);
                 lmv_hash_adjust(&dp->ldp_hash_end,   hash_adj);
-                LASSERT(cpu_to_le32(dp->ldp_hash_start) <= offset0);
+                LASSERT(cpu_to_le32(dp->ldp_hash_start) <= offset64);
 
                 for (ent = lu_dirent_start(dp); ent != NULL;
                      ent = lu_dirent_next(ent))
@@ -2309,9 +2330,9 @@ static int lmv_readpage(struct obd_export *exp, const struct lu_fid *fid,
                         if (end == DIR_END_OFF) {
                                 dp->ldp_hash_end = cpu_to_le32(seg_size *
                                                                (tgt0 + 1));
-                                CDEBUG(D_INFO, ""DFID" reset end %x tgt %d\n",
+                                CDEBUG(D_INFO, ""DFID" reset end %llx tgt %d\n",
                                        PFID(&rid),
-                                       le32_to_cpu(dp->ldp_hash_end), tgt);
+                                       le64_to_cpu(dp->ldp_hash_end), tgt);
                         }
                 }
                 cfs_kunmap(page);

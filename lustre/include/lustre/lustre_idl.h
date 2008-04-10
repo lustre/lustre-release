@@ -351,15 +351,15 @@ static inline int lu_fid_eq(const struct lu_fid *f0,
  */
 struct lu_dirent {
         struct lu_fid lde_fid;
-        __u32         lde_hash;
+        __u64         lde_hash;
         __u16         lde_reclen;
         __u16         lde_namelen;
         char          lde_name[0];
 };
 
 struct lu_dirpage {
-        __u32            ldp_hash_start;
-        __u32            ldp_hash_end;
+        __u64            ldp_hash_start;
+        __u64            ldp_hash_end;
         __u16            ldp_flags;
         __u32            ldp_pad0;
         struct lu_dirent ldp_entries[0];
@@ -398,7 +398,7 @@ static inline int lu_dirent_size(struct lu_dirent *ent)
         return le16_to_cpu(ent->lde_reclen);
 }
 
-#define DIR_END_OFF              0xfffffffeUL
+#define DIR_END_OFF              0xfffffffffffffffeULL
 
 struct lustre_handle {
         __u64 cookie;

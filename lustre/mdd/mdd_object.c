@@ -1315,7 +1315,7 @@ static int mdd_readpage_sanity_check(const struct lu_env *env,
 
 static int mdd_dir_page_build(const struct lu_env *env, int first,
                               void *area, int nob, struct dt_it_ops *iops,
-                              struct dt_it *it, __u32 *start, __u32 *end,
+                              struct dt_it *it, __u64 *start, __u64 *end,
                               struct lu_dirent **last)
 {
         struct lu_fid          *fid  = &mdd_env_info(env)->mti_fid2;
@@ -1338,7 +1338,7 @@ static int mdd_dir_page_build(const struct lu_env *env, int first,
                 char  *name;
                 int    len;
                 int    recsize;
-                __u32  hash;
+                __u64  hash;
 
                 name = (char *)iops->key(env, it);
                 len  = iops->key_size(env, it);
@@ -1352,7 +1352,7 @@ static int mdd_dir_page_build(const struct lu_env *env, int first,
                 hash = iops->store(env, it);
                 *end = hash;
 
-                CDEBUG(D_INFO, "%p %p %d "DFID": %#8.8x (%d) \"%*.*s\"\n",
+                CDEBUG(D_INFO, "%p %p %d "DFID": "LPU64" (%d) \"%*.*s\"\n",
                        name, ent, nob, PFID(fid), hash, len, len, len, name);
 
                 if (nob >= recsize) {
@@ -1394,8 +1394,8 @@ static int __mdd_readpage(const struct lu_env *env, struct mdd_object *obj,
         int i;
         int rc;
         int nob;
-        __u32 hash_start;
-        __u32 hash_end;
+        __u64 hash_start;
+        __u64 hash_end;
 
         LASSERT(rdpg->rp_pages != NULL);
         LASSERT(next->do_index_ops != NULL);

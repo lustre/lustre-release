@@ -1909,7 +1909,7 @@ static struct dt_rec *osd_it_rec(const struct lu_env *env,
         return (struct dt_rec *)iam_it_rec_get(&it->oi_it);
 }
 
-static __u32 osd_it_store(const struct lu_env *env, const struct dt_it *di)
+static __u64 osd_it_store(const struct lu_env *env, const struct dt_it *di)
 {
         struct osd_it *it = (struct osd_it *)di;
 
@@ -1917,7 +1917,7 @@ static __u32 osd_it_store(const struct lu_env *env, const struct dt_it *di)
 }
 
 static int osd_it_load(const struct lu_env *env,
-                       const struct dt_it *di, __u32 hash)
+                       const struct dt_it *di, __u64 hash)
 {
         struct osd_it *it = (struct osd_it *)di;
 

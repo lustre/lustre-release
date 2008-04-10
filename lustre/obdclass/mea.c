@@ -117,8 +117,8 @@ static __u32 hash_build(const char *name, int namelen)
 {
         __u32 hash;
 
-        hash = (hash_build0(name, namelen) << 1) & MAX_HASH_SIZE;
-        if (hash > MAX_HASH_SIZE - HASH_GRAY_AREA)
+        hash = (hash_build0(name, namelen) << 1) & MAX_HASH_SIZE_32;
+        if (hash > MAX_HASH_SIZE_32 - HASH_GRAY_AREA)
                 hash &= HASH_GRAY_AREA - 1;
         return hash;
 }
@@ -127,9 +127,9 @@ static int mea_hash_segment(int count, const char *name, int namelen)
 {
         __u32 hash;
 
-        LASSERT(IS_PO2(MAX_HASH_SIZE + 1));
+        LASSERT(IS_PO2(MAX_HASH_SIZE_32 + 1));
 
-        hash = hash_build(name, namelen) / (MAX_HASH_SIZE / count);
+        hash = hash_build(name, namelen) / (MAX_HASH_SIZE_32 / count);
         LASSERTF(hash < count, "hash %x count %d \n", hash, count);
 
         return hash;

@@ -201,7 +201,7 @@ static inline void ll_put_page(struct page *page)
  * Find, kmap and return page that contains given hash.
  */
 static struct page *ll_dir_page_locate(struct inode *dir, unsigned long hash,
-                                       __u32 *start, __u32 *end)
+                                       __u64 *start, __u64 *end)
 {
         struct address_space *mapping = dir->i_mapping;
         /*
@@ -232,8 +232,8 @@ static struct page *ll_dir_page_locate(struct inode *dir, unsigned long hash,
                 wait_on_page(page);
                 if (PageUptodate(page)) {
                         dp = kmap(page);
-                        *start = le32_to_cpu(dp->ldp_hash_start);
-                        *end   = le32_to_cpu(dp->ldp_hash_end);
+                        *start = le64_to_cpu(dp->ldp_hash_start);
+                        *end   = le64_to_cpu(dp->ldp_hash_end);
                         LASSERT(*start <= hash);
                         if (hash > *end || (*end != *start && hash == *end)) {
                                 kunmap(page);
@@ -265,8 +265,8 @@ static struct page *ll_get_dir_page(struct inode *dir, __u32 hash, int exact,
         struct page *page;
         ldlm_mode_t mode;
         int rc;
-        __u32 start;
-        __u32 end;
+        __u64 start;
+        __u64 end;
 
         mode = LCK_PR;
         rc = md_lock_match(ll_i2sbi(dir)->ll_md_exp, LDLM_FL_BLOCK_GRANTED,
@@ -354,8 +354,8 @@ static struct page *ll_get_dir_page(struct inode *dir, __u32 hash, int exact,
 hash_collision:
         dp = page_address(page);
 
-        start = le32_to_cpu(dp->ldp_hash_start);
-        end   = le32_to_cpu(dp->ldp_hash_end);
+        start = le64_to_cpu(dp->ldp_hash_start);
+        end   = le64_to_cpu(dp->ldp_hash_end);
         if (end == start) {
                 LASSERT(start == hash);
                 CWARN("Page-wide hash collision: %#lx\n", (unsigned long)end);
@@ -415,8 +415,8 @@ int ll_readdir(struct file *filp, void *cookie, filldir_t filldir)
                          * If page is empty (end of directoryis reached),
                          * use this value. 
                          */
-                        __u32 hash = DIR_END_OFF;
-                        __u32 next;
+                        __u64 hash = DIR_END_OFF;
+                        __u64 next;
 
                         dp = page_address(page);
                         for (ent = lu_dirent_start(dp); ent != NULL && !done;
@@ -430,7 +430,7 @@ int ll_readdir(struct file *filp, void *cookie, filldir_t filldir)
                                  * XXX: implement correct swabbing here.
                                  */
 
-                                hash    = le32_to_cpu(ent->lde_hash);
+                                hash    = le64_to_cpu(ent->lde_hash);
                                 namelen = le16_to_cpu(ent->lde_namelen);
 
                                 if (hash < pos)
@@ -454,7 +454,7 @@ int ll_readdir(struct file *filp, void *cookie, filldir_t filldir)
                                 done = filldir(cookie, name, namelen,
                                                (loff_t)hash, ino, DT_UNKNOWN);
                         }
-                        next = le32_to_cpu(dp->ldp_hash_end);
+                        next = le64_to_cpu(dp->ldp_hash_end);
                         ll_put_page(page);
                         if (!done) {
                                 pos = next;

@@ -381,10 +381,10 @@ struct dt_index_operations {
                                       const struct dt_it *di);
                 struct dt_rec *(*rec)(const struct lu_env *env,
                                       const struct dt_it *di);
-                __u32        (*store)(const struct lu_env *env,
+                __u64        (*store)(const struct lu_env *env,
                                       const struct dt_it *di);
                 int           (*load)(const struct lu_env *env,
-                                      const struct dt_it *di, __u32 hash);
+                                      const struct dt_it *di, __u64 hash);
         } dio_it;
 };
 
