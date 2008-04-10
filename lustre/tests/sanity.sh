@@ -3016,6 +3016,15 @@ run_test 71 "Running dbench on lustre (don't segment fault) ===="
 
 test_72() { # bug 5695 - Test that on 2.6 remove_suid works properly
 	check_kernel_version 43 || return 0
+        
+        # Check that testing environment is properly set up. Skip if not
+        OLD_FAIL_ON_ERROR=$FAIL_ON_ERROR
+        FAIL_ON_ERROR=false check_runas_id_ret $(($RUNAS_ID + 1)) "$RUNAS -u $(($RUNAS_ID + 1))" || {
+                skip "User $((RUNAS_ID + 1)) does not exist - skipping"
+                FAIL_ON_ERROR=$OLD_FAIL_ON_ERROR
+                return 0
+        }
+        FAIL_ON_ERROR=$OLD_FAIL_ON_ERROR
 	[ "$RUNAS_ID" = "$UID" ] && skip "RUNAS_ID = UID = $UID -- skipping" && return
 	# We had better clear the $DIR to get enough space for dd
 	rm -rf $DIR/*

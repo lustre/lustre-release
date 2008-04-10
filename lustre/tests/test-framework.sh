@@ -1577,24 +1577,34 @@ is_patchless ()
     lctl get_param version | grep -q patchless
 }
 
-check_runas_id() {
+check_runas_id_ret() {
+    local myRC=0
     local myRUNAS_ID=$1
     shift
     local myRUNAS=$@
-
+    if [ -z "$myRUNAS" ]; then
+        error_exit "myRUNAS command must be specified for check_runas_id"
+    fi
     if $GSS_KRB5; then
         $myRUNAS krb5_login.sh || \
             error "Failed to refresh Kerberos V5 TGT for UID $myRUNAS_ID."
     fi
-
     mkdir $DIR/d0_runas_test
     chmod 0755 $DIR
     chown $myRUNAS_ID:$myRUNAS_ID $DIR/d0_runas_test
-    $myRUNAS touch $DIR/d0_runas_test/f$$ || \
-        error "unable to write to $DIR/d0_runas_test as UID $myRUNAS_ID.
-        Please set RUNAS_ID to some UID which exists on MDS and client or
-        add user $myRUNAS_ID:$myRUNAS_ID on these nodes."
+    $myRUNAS touch $DIR/d0_runas_test/f$$ || myRC=$?
     rm -rf $DIR/d0_runas_test
+    return $myRC
+}
+
+check_runas_id() {
+    local myRUNAS_ID=$1
+    shift
+    local myRUNAS=$@
+    check_runas_id_ret $myRUNAS_ID $myRUNAS || \
+        error "unable to write to $DIR/d0_runas_test as UID $myRUNAS_ID. 
+        Please set RUNAS_ID to some UID which exists on MDS and client or 
+        add user $myRUNAS_ID:$myRUNAS_ID on these nodes."
 }
 
 # Run multiop in the background, but wait for it to print
