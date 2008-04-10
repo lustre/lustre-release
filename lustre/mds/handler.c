@@ -1134,30 +1134,22 @@ static int mds_sync(struct ptlrpc_request *req, int offset)
         if (rc)
                 GOTO(out, rc);
 
-        if (body->fid1.id == 0) {
-                /* a fid of zero is taken to mean "sync whole filesystem" */
-                rc = fsfilt_sync(obd, obd->u.obt.obt_sb);
-                GOTO(out, rc);
-        } else {
+        rc = fsfilt_sync(obd, obd->u.obt.obt_sb);
+        if (rc == 0 && body->fid1.id != 0) {
                 struct dentry *de;
 
                 de = mds_fid2dentry(mds, &body->fid1, NULL);
                 if (IS_ERR(de))
                         GOTO(out, rc = PTR_ERR(de));
 
-                /* The file parameter isn't used for anything */
-                if (de->d_inode->i_fop && de->d_inode->i_fop->fsync)
-                        rc = de->d_inode->i_fop->fsync(NULL, de, 1);
-                if (rc == 0) {
-                        body = lustre_msg_buf(req->rq_repmsg, REPLY_REC_OFF,
-                                              sizeof(*body));
-                        mds_pack_inode2fid(&body->fid1, de->d_inode);
-                        mds_pack_inode2body(body, de->d_inode);
-                }
+                body = lustre_msg_buf(req->rq_repmsg, REPLY_REC_OFF,
+                                      sizeof(*body));
+                mds_pack_inode2fid(&body->fid1, de->d_inode);
+                mds_pack_inode2body(body, de->d_inode);
 
                 l_dput(de);
-                GOTO(out, rc);
         }
+        GOTO(out, rc);
 out:
         req->rq_status = rc;
         return 0;
