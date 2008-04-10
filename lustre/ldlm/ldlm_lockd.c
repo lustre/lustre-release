@@ -1361,6 +1361,9 @@ static void ldlm_handle_cp_callback(struct ptlrpc_request *req,
         }
 
         if (dlm_req->lock_flags & LDLM_FL_AST_SENT) {
+                /* BL_AST locks are not needed in lru.
+                 * let ldlm_cancel_lru() be fast. */
+                ldlm_lock_remove_from_lru(lock);
                 lock->l_flags |= LDLM_FL_CBPENDING | LDLM_FL_BL_AST;
                 LDLM_DEBUG(lock, "completion AST includes blocking AST");
         }
@@ -1634,6 +1637,9 @@ static int ldlm_callback_handler(struct ptlrpc_request *req)
                         ldlm_callback_reply(req, -EINVAL);
                         RETURN(0);
                 }
+                /* BL_AST locks are not needed in lru.
+                 * let ldlm_cancel_lru() be fast. */
+                ldlm_lock_remove_from_lru(lock);
                 lock->l_flags |= LDLM_FL_BL_AST;
         }
         unlock_res_and_lock(lock);
