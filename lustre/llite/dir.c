@@ -381,7 +381,7 @@ int ll_readdir(struct file *filp, void *cookie, filldir_t filldir)
         struct inode         *inode = filp->f_dentry->d_inode;
         struct ll_inode_info *info  = ll_i2info(inode);
         struct ll_sb_info    *sbi   = ll_i2sbi(inode);
-        __u32                 pos   = filp->f_pos;
+        __u64                 pos   = filp->f_pos;
         struct page          *page;
         struct ll_dir_chain   chain;
         int rc;

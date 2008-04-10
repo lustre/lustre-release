@@ -2324,7 +2324,7 @@ static int lmv_readpage(struct obd_export *exp, const struct lu_fid *fid,
                         lmv_hash_adjust(&ent->lde_hash, hash_adj);
 
                 if (tgt0 != nr - 1) {
-                        __u32 end;
+                        __u64 end;
 
                         end = le32_to_cpu(dp->ldp_hash_end);
                         if (end == DIR_END_OFF) {
