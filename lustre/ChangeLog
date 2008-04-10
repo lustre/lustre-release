@@ -18,6 +18,10 @@ tbd  Sun Microsystems, Inc.
        * RHEL 4 and RHEL 5/SLES 10 clients behaves differently on 'cd' to a
         removed cwd "./" (refer to Bugzilla 14399).
 
+Severity   : enhancement
+Bugzilla   : 13397
+Description: Add server support for vanilla-2.6.22.14.
+
 Severity   : normal
 Bugzilla   : 13375
 Descriptoin: make lov_create() will not stuck in obd_statfs_rqset()
@@ -62,10 +66,6 @@ Description: lustre_mgs: operation 101 on unconnected MGS
 Details    : When MGC is disconnected from MGS long enough, MGS will evict the
 	     MGC, and late on MGC cannot successfully connect to MGS and a lot
 	     of the error messages complaining that MGS is not connected.
-
-Severity   : enhancement
-Bugzilla   : 13397
-Description: Add server support for vanilla-2.6.22.14.
 
 Severity   : major
 Frequency  : rare, depends on device drivers and load
