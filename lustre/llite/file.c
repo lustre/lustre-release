@@ -1209,7 +1209,7 @@ static int iov_copy_update(unsigned long *nr_segs, const struct iovec **iov_out,
                         ivc->iov_len -= *offset;
                         ivc->iov_base += *offset;
                 }
-                if (ivc->iov_len > size) {
+                if (ivc->iov_len >= size) {
                         ivc->iov_len = size;
                         if (i == 0)
                                 *offset += size;
@@ -1318,14 +1318,14 @@ repeat:
                 chunk = end - *ppos + 1;
                 if ((count == chunk) && (iov_offset == 0)) {
                         if (iov_copy)
-                                OBD_FREE(iov_copy, sizeof(iov) * nrsegs_orig);
+                                OBD_FREE(iov_copy, sizeof(*iov) * nrsegs_orig);
 
                         iov_copy = (struct iovec *)iov;
                         nrsegs_copy = nr_segs;
                 } else {
                         if (!iov_copy) {
                                 nrsegs_orig = nr_segs;
-                                OBD_ALLOC(iov_copy, sizeof(iov) * nr_segs);
+                                OBD_ALLOC(iov_copy, sizeof(*iov) * nr_segs);
                                 if (!iov_copy)
                                         GOTO(out, retval = -ENOMEM); 
                         }
@@ -1333,7 +1333,6 @@ repeat:
                         iov_copy_update(&nr_segs, &iov, &nrsegs_copy, iov_copy,
                                         &iov_offset, chunk);
                 }
- 
         } else {
                 end = *ppos + count - 1;
                 iov_copy = (struct iovec *)iov;
@@ -1435,7 +1434,7 @@ repeat:
         retval = (sum > 0) ? sum : retval;
 
         if (iov_copy && iov_copy != iov)
-                OBD_FREE(iov_copy, sizeof(iov) * nrsegs_orig);
+                OBD_FREE(iov_copy, sizeof(*iov) * nrsegs_orig);
 
         RETURN(retval);
 }
@@ -1536,18 +1535,17 @@ repeat:
                 chunk = end - *ppos + 1;
                 if ((count == chunk) && (iov_offset == 0)) {
                         if (iov_copy)
-                                OBD_FREE(iov_copy, sizeof(iov) * nrsegs_orig);
+                                OBD_FREE(iov_copy, sizeof(*iov) * nrsegs_orig);
 
                         iov_copy = (struct iovec *)iov;
                         nrsegs_copy = nr_segs;
                 } else {
                         if (!iov_copy) {
                                 nrsegs_orig = nr_segs;
-                                OBD_ALLOC(iov_copy, sizeof(iov) * nr_segs);
+                                OBD_ALLOC(iov_copy, sizeof(*iov) * nr_segs);
                                 if (!iov_copy)
                                         GOTO(out, retval = -ENOMEM); 
                         }
-
                         iov_copy_update(&nr_segs, &iov, &nrsegs_copy, iov_copy,
                                         &iov_offset, chunk);
                 }
@@ -1611,7 +1609,7 @@ out:
         up(&ll_i2info(inode)->lli_write_sem);
 
         if (iov_copy && iov_copy != iov)
-                OBD_FREE(iov_copy, sizeof(iov) * nrsegs_orig);
+                OBD_FREE(iov_copy, sizeof(*iov) * nrsegs_orig);
 
         retval = (sum > 0) ? sum : retval;
         ll_stats_ops_tally(ll_i2sbi(inode), LPROC_LL_WRITE_BYTES,
