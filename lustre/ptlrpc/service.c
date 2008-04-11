@@ -777,9 +777,6 @@ static int ptlrpc_at_check_timed(struct ptlrpc_service *svc)
         int first, counter = 0;
         ENTRY;
 
-        if (AT_OFF) 
-                RETURN(0);
-
         spin_lock(&svc->srv_at_lock);
         if (svc->srv_at_check == 0) {
                 spin_unlock(&svc->srv_at_lock);
