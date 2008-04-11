@@ -456,8 +456,8 @@ static int cmm_split_remove_entry(const struct lu_env *env,
          * use highest bit of hash).
          */
         if (is_dir) {
-                ent->lde_hash = le32_to_cpu(ent->lde_hash);
-                ent->lde_hash = cpu_to_le32(ent->lde_hash | MAX_HASH_HIGHEST_BIT);
+                ent->lde_hash = le64_to_cpu(ent->lde_hash);
+                ent->lde_hash = cpu_to_le64(ent->lde_hash | MAX_HASH_HIGHEST_BIT);
         }
         EXIT;
 cleanup:
@@ -472,7 +472,7 @@ cleanup:
 static int cmm_split_remove_page(const struct lu_env *env,
                                  struct md_object *mo,
                                  struct lu_rdpg *rdpg,
-                                 __u32 hash_end, __u32 *len)
+                                 __u64 hash_end, __u32 *len)
 {
         struct lu_dirpage *dp;
         struct lu_dirent  *ent;
@@ -483,7 +483,7 @@ static int cmm_split_remove_page(const struct lu_env *env,
         kmap(rdpg->rp_pages[0]);
         dp = page_address(rdpg->rp_pages[0]);
         for (ent = lu_dirent_start(dp);
-             ent != NULL && le32_to_cpu(ent->lde_hash) < hash_end;
+             ent != NULL && le64_to_cpu(ent->lde_hash) < hash_end;
              ent = lu_dirent_next(ent)) {
                 rc = cmm_split_remove_entry(env, mo, ent);
                 if (rc) {
@@ -551,7 +551,7 @@ static int cmm_split_process_stripe(const struct lu_env *env,
                                     struct md_object *mo,
                                     struct lu_rdpg *rdpg,
                                     struct lu_fid *lf,
-                                    __u32 end)
+                                    __u64 end)
 {
         int rc, done = 0;
         ENTRY;
@@ -586,10 +586,10 @@ static int cmm_split_process_stripe(const struct lu_env *env,
 
                 kmap(rdpg->rp_pages[0]);
                 ldp = page_address(rdpg->rp_pages[0]);
-                if (le32_to_cpu(ldp->ldp_hash_end) >= end)
+                if (le64_to_cpu(ldp->ldp_hash_end) >= end)
                         done = 1;
 
-                rdpg->rp_hash = le32_to_cpu(ldp->ldp_hash_end);
+                rdpg->rp_hash = le64_to_cpu(ldp->ldp_hash_end);
                 kunmap(rdpg->rp_pages[0]);
         } while (!done);
 
@@ -602,7 +602,7 @@ static int cmm_split_process_dir(const struct lu_env *env,
 {
         struct cmm_device *cmm = cmm_obj2dev(md2cmm_obj(mo));
         struct lu_rdpg *rdpg = &cmm_env_info(env)->cmi_rdpg;
-        __u32 hash_segement;
+        __u64 hash_segement;
         int rc = 0, i;
         ENTRY;
 
@@ -621,7 +621,7 @@ static int cmm_split_process_dir(const struct lu_env *env,
         hash_segement = MAX_HASH_SIZE / (cmm->cmm_tgt_count + 1);
         for (i = 1; i < cmm->cmm_tgt_count + 1; i++) {
                 struct lu_fid *lf;
-                __u32 hash_end;
+                __u64 hash_end;
 
                 lf = &ma->ma_lmv->mea_ids[i];
 

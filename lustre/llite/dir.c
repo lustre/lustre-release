@@ -255,7 +255,7 @@ static struct page *ll_dir_page_locate(struct inode *dir, unsigned long hash,
         return page;
 }
 
-static struct page *ll_get_dir_page(struct inode *dir, __u32 hash, int exact,
+static struct page *ll_get_dir_page(struct inode *dir, __u64 hash, int exact,
                                     struct ll_dir_chain *chain)
 {
         ldlm_policy_data_t policy = {.l_inodebits = {MDS_INODELOCK_UPDATE} };

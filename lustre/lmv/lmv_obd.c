@@ -2317,7 +2317,7 @@ static int lmv_readpage(struct obd_export *exp, const struct lu_fid *fid,
 
                 lmv_hash_adjust(&dp->ldp_hash_start, hash_adj);
                 lmv_hash_adjust(&dp->ldp_hash_end,   hash_adj);
-                LASSERT(cpu_to_le32(dp->ldp_hash_start) <= offset64);
+                LASSERT(le64_to_cpu(dp->ldp_hash_start) <= offset64);
 
                 for (ent = lu_dirent_start(dp); ent != NULL;
                      ent = lu_dirent_next(ent))
@@ -2326,7 +2326,7 @@ static int lmv_readpage(struct obd_export *exp, const struct lu_fid *fid,
                 if (tgt0 != nr - 1) {
                         __u64 end;
 
-                        end = le32_to_cpu(dp->ldp_hash_end);
+                        end = le64_to_cpu(dp->ldp_hash_end);
                         if (end == DIR_END_OFF) {
                                 dp->ldp_hash_end = cpu_to_le32(seg_size *
                                                                (tgt0 + 1));
