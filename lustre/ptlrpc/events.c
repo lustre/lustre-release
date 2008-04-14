@@ -110,18 +110,26 @@ void reply_in_callback(lnet_event_t *ev)
                 /* Early reply */
                 DEBUG_REQ(D_ADAPTTO, req,
                           "Early reply received: mlen=%u offset=%d replen=%d "
-                          "replied=%d", ev->mlength, ev->offset, req->rq_replen,
-                          req->rq_replied);
-                
+                          "replied=%d unlinked=%d", ev->mlength, ev->offset,
+                          req->rq_replen, req->rq_replied, ev->unlinked);
+
                 if (unlikely(ev->mlength != lustre_msg_early_size()))
                         CERROR("early reply sized %u, expect %u\n",
                                ev->mlength, lustre_msg_early_size());
 
                 req->rq_early_count++; /* number received, client side */
-                if (req->rq_replied) 
-                        /* If we already got the real reply, ignore the early 
-                           reply, but signal so we can unlink */
+                if (req->rq_replied) {
+                        /* If we already got the real reply, then we need to
+                         * check if lnet_finalize() unlinked the md.  In that
+                         * case, there will be no further callback of type
+                         * LNET_EVENT_UNLINK.
+                         */
+                        if (ev->unlinked)
+                                req->rq_must_unlink = 0;
+                        else
+                                DEBUG_REQ(D_RPCTRACE, req, "unlinked in reply");
                         goto out_wake;
+                }
                 req->rq_early = 1;
                 req->rq_nob_received = ev->mlength;
                 /* repmsg points to early reply */
