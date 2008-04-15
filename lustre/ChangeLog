@@ -18,6 +18,10 @@ tbd  Sun Microsystems, Inc.
        * RHEL 4 and RHEL 5/SLES 10 clients behaves differently on 'cd' to a
         removed cwd "./" (refer to Bugzilla 14399).
 
+Severity   : normal
+Bugzilla   : 12652
+Description: Add FMODE_EXEC to SLES10 SP1 series.
+
 Severity   : enhancement
 Bugzilla   : 13397
 Description: Add server support for vanilla-2.6.22.14.

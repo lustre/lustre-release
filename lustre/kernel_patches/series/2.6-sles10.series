@@ -11,3 +11,4 @@ blkdev_tunables-2.6-sles10.patch
 jbd-stats-2.6-sles10.patch
 i_filter_data.patch
 quota-fix-oops-in-invalidate_dquots.patch
+fmode-exec-2.6-sles10.patch
