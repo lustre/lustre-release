@@ -30,6 +30,7 @@ struct obd_device;
 
 #define LDLM_DEFAULT_LRU_SIZE (100 * num_online_cpus())
 #define LDLM_DEFAULT_MAX_ALIVE (cfs_time_seconds(36000))
+#define LDLM_CTIME_AGE_LIMIT (10)
 
 typedef enum {
         ELDLM_OK = 0,
@@ -306,6 +307,7 @@ struct ldlm_namespace {
 
         unsigned int           ns_max_unused;
         unsigned int           ns_max_age;
+        unsigned int           ns_ctime_age_limit; /* seconds */
         
         /* Lower limit to number of pages in lock to keep it in cache */
         unsigned int           ns_shrink_thumb;

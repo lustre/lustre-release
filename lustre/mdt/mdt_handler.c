@@ -923,6 +923,7 @@ static int mdt_getattr_name_lock(struct mdt_thread_info *info,
                 LDLM_LOCK_PUT(lock);
                 rc = 0;
         } else {
+                struct md_attr *ma = &info->mti_attr;
 relock:
                 mdt_lock_handle_init(lhc);
                 mdt_lock_reg_init(lhc, LCK_PR);
@@ -932,6 +933,23 @@ relock:
                                         &child->mot_obj.mo_lu,
                                         "Object doesn't exist!\n");
                 }
+
+                ma->ma_valid = 0;
+                ma->ma_need = MA_INODE;
+                rc = mo_attr_get(info->mti_env, next, ma);
+                if (unlikely(rc != 0))
+                        GOTO(out_child, rc);
+
+                /* If the file has not been changed for some time, we return
+                 * not only a LOOKUP lock, but also an UPDATE lock and this
+                 * might save us RPC on later STAT. For directories, it also
+                 * let negative dentry starts working for this dir. */
+                if (ma->ma_valid & MA_INODE &&
+                    ma->ma_attr.la_valid & LA_CTIME &&
+                    info->mti_mdt->mdt_namespace->ns_ctime_age_limit +
+                    ma->ma_attr.la_ctime < cfs_time_current_sec())
+                        child_bits |= MDS_INODELOCK_UPDATE;
+
                 rc = mdt_object_lock(info, child, lhc, child_bits,
                                      MDT_CROSS_LOCK);
 
