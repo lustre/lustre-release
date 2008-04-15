@@ -60,7 +60,7 @@ extern unsigned int obd_alloc_fail_rate;
 #endif
 /* Time to wait for all clients to reconnect during recovery */
 /* Should be very conservative; must catch the first reconnect after reboot */
-#define OBD_RECOVERY_FACTOR (5 / 2) /* times obd_timeout */
+#define OBD_RECOVERY_FACTOR (3) /* times obd_timeout */
 /* Change recovery-small 26b time if you change this */
 #define PING_INTERVAL max(obd_timeout / 4, 1U)
 /* Client may skip 1 ping; we must wait at least 2.5. But for multiple

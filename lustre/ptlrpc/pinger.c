@@ -70,6 +70,7 @@ void ptlrpc_update_next_ping(struct obd_import *imp)
         int time = PING_INTERVAL;
         if (imp->imp_state == LUSTRE_IMP_DISCON) {
                 int dtime = max_t(int, CONNECTION_SWITCH_MIN,
+                                  AT_OFF ? 0 :
                                   at_get(&imp->imp_at.iat_net_latency));
                 time = min(time, dtime);
         }
