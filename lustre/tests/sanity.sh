@@ -2906,10 +2906,7 @@ test_69() {
 	f="$DIR/$tfile"
 	touch $f
 
-	if ! $DIRECTIO write ${f}.2 0 1; then
-		skip "O_DIRECT not implemented"
-		return 0
-	fi
+	$DIRECTIO write ${f}.2 0 1 || error "directio write error"
 
 	#define OBD_FAIL_OST_ENOENT 0x217
 	sysctl -w lustre.fail_loc=0x217
