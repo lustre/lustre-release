@@ -783,6 +783,51 @@ struct lu_object *lu_object_locate(struct lu_object_header *h,
 }
 EXPORT_SYMBOL(lu_object_locate);
 
+
+
+/*
+ * Finalize and free devices in the device stack.
+ * 
+ * Finalize device stack by purging object cache, and calling
+ * lu_device_type_operations::ldto_device_fini() and
+ * lu_device_type_operations::ldto_device_free() on all devices in the stack.
+ */
+void lu_stack_fini(const struct lu_env *env, struct lu_device *top)
+{
+        struct lu_site   *site = top->ld_site;
+        struct lu_device *scan;
+        struct lu_device *next;
+
+        lu_site_purge(env, site, ~0);
+        for (scan = top; scan != NULL; scan = next) {
+                next = scan->ld_type->ldt_ops->ldto_device_fini(env, scan);
+                lu_device_put(scan);
+        }
+
+        /* purge again. */
+        lu_site_purge(env, site, ~0);
+
+        if (!list_empty(&site->ls_lru) || site->ls_total != 0) {
+                /*
+                 * Uh-oh, objects still exist.
+                 */
+                static DECLARE_LU_CDEBUG_PRINT_INFO(cookie, D_ERROR);
+
+                lu_site_print(env, site, &cookie, lu_cdebug_printer);
+        }
+
+        for (scan = top; scan != NULL; scan = next) {
+                const struct lu_device_type *ldt = scan->ld_type;
+                struct obd_type             *type;
+
+                next = ldt->ldt_ops->ldto_device_free(env, scan);
+                type = ldt->ldt_obd_type;
+                type->typ_refcnt--;
+                class_put_type(type);
+        }
+}
+EXPORT_SYMBOL(lu_stack_fini);
+
 enum {
         /*
          * Maximal number of tld slots.

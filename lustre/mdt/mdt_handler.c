@@ -3507,7 +3507,6 @@ err_mdt_svc:
 static void mdt_stack_fini(const struct lu_env *env,
                            struct mdt_device *m, struct lu_device *top)
 {
-        struct lu_device        *d = top, *n;
         struct obd_device       *obd = m->mdt_md_dev.md_lu_dev.ld_obd;
         struct lustre_cfg_bufs  *bufs;
         struct lustre_cfg       *lcfg;
@@ -3536,46 +3535,7 @@ static void mdt_stack_fini(const struct lu_env *env,
         top->ld_ops->ldo_process_config(env, top, lcfg);
         lustre_cfg_free(lcfg);
 
-        lu_site_purge(env, top->ld_site, ~0);
-        while (d != NULL) {
-                struct lu_device_type *ldt = d->ld_type;
-
-                /* each fini() returns next device in stack of layers
-                 * so we can avoid the recursion */
-                n = ldt->ldt_ops->ldto_device_fini(env, d);
-                lu_device_put(d);
-
-                /* switch to the next device in the layer */
-                d = n;
-        }
- 
-        /* purge again. */
-        lu_site_purge(env, top->ld_site, ~0);
-
-        if (!list_empty(&top->ld_site->ls_lru) || top->ld_site->ls_total != 0) {
-                /*
-                 * Uh-oh, objects still exist.
-                 */
-                static DECLARE_LU_CDEBUG_PRINT_INFO(cookie, D_ERROR);
-
-                lu_site_print(env, top->ld_site, &cookie, lu_cdebug_printer);
-        }
-
-        d = top;
-        while (d != NULL) {
-                struct obd_type *type;
-                struct lu_device_type *ldt = d->ld_type;
-
-                /* each free() returns next device in stack of layers
-                 * so we can avoid the recursion */
-                n = ldt->ldt_ops->ldto_device_free(env, d);
-                type = ldt->ldt_obd_type;
-                type->typ_refcnt--;
-                class_put_type(type);
-
-                /* switch to the next device in the layer */
-                d = n;
-        }
+        lu_stack_fini(env, top);
         m->mdt_child = NULL;
         m->mdt_bottom = NULL;
 }

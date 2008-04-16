@@ -799,6 +799,11 @@ void lu_object_print(const struct lu_env *env, void *cookie,
 int lu_object_invariant(const struct lu_object *o);
 
 /*
+ * Finalize and free devices in the device stack.
+ */
+void lu_stack_fini(const struct lu_env *env, struct lu_device *top);
+
+/*
  * Returns 1 iff object @o exists on the stable storage,
  * returns -1 iff object @o is on remote server.
  */
