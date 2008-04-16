@@ -1338,7 +1338,7 @@ is_patchless ()
 }
 
 check_runas_id_ret() {
-    RC=0
+    local myRC=0
     local myRUNAS_ID=$1
     shift
     local myRUNAS=$@
@@ -1348,9 +1348,9 @@ check_runas_id_ret() {
     mkdir $DIR/d0_runas_test
     chmod 0755 $DIR
     chown $myRUNAS_ID:$myRUNAS_ID $DIR/d0_runas_test
-    $myRUNAS touch $DIR/d0_runas_test/f$$ || RC=1
+    $myRUNAS touch $DIR/d0_runas_test/f$$ || myRC=1
     rm -rf $DIR/d0_runas_test
-    return $RC
+    return $myRC
 }
 
 check_runas_id() {

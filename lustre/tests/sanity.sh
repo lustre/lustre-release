@@ -2959,6 +2959,12 @@ run_test 71 "Running dbench on lustre (don't segment fault) ===="
 test_72() { # bug 5695 - Test that on 2.6 remove_suid works properly
 	check_kernel_version 43 || return 0
 	[ "$RUNAS_ID" = "$UID" ] && skip "RUNAS_ID = UID = $UID -- skipping" && return
+
+        # Check that testing environment is properly set up. Skip if not
+        FAIL_ON_ERROR=false check_runas_id_ret $RUNAS_ID $RUNAS || {
+                skip "User $RUNAS_ID does not exist - skipping"
+                return 0
+        }
 	touch $DIR/f72
 	chmod 777 $DIR/f72
 	chmod ug+s $DIR/f72
