@@ -2966,10 +2966,7 @@ test_69() {
 	f="$DIR/$tfile"
 	touch $f
 
-	if ! $DIRECTIO write ${f}.2 0 1; then
-		skip "O_DIRECT not implemented"
-		return 0
-	fi
+	$DIRECTIO write ${f}.2 0 1 || error "directio write error"
 
 	sysctl -w lustre.fail_loc=0x217
 	truncate $f 1 # vmtruncate() will ignore truncate() error.
