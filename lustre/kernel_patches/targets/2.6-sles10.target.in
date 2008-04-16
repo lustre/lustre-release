@@ -1,7 +1,13 @@
 lnxmaj="2.6.16"
 lnxrel="54-0.2.5"
 
+# this is the delimeter that goes between $lnxmaj and $lnxrel
+# defaults to "-"
 EXTRA_VERSION_DELIMITER="."
+
+# this is the delimeter that goes before the "smp" at the end of the version
+# defaults to empty
+TARGET_DELIMITER="-"
 
 KERNEL=linux-$lnxmaj.$lnxrel.tar.bz2
 SERIES=2.6-sles10.series
