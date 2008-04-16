@@ -249,8 +249,9 @@ for NAME in $CONFIGS; do
 		E2VER=`e2fsck -V 2>&1 | head -n 1 | cut -d' ' -f 2`
 		if grep -q obdfilter /proc/fs/lustre/devices; then
 			if [ `echo $E2VER | cut -d. -f2` -ge 39 ] && \
-			   [ "`echo $E2VER | grep cfs`" ]; then
-			   	bash lfscktest.sh
+			   [ "`echo $E2VER | grep cfs`" -o \
+				"`echo $E2VER | grep sun`" ]; then
+			   		bash lfscktest.sh
 			else
 				e2fsck -V
 				echo "e2fsck does not support lfsck, skipping"
