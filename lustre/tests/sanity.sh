@@ -126,7 +126,6 @@ rm -rf $DIR/[Rdfs][0-9]*
 [ $UID -eq 0 -a $RUNAS_ID -eq 0 ] && error "\$RUNAS_ID set to 0, but \$UID is also 0!"
 
 check_runas_id $RUNAS_ID $RUNAS
-check_runas_id $(($RUNAS_ID + 1)) "$RUNAS -u $(($RUNAS_ID + 1))"
 
 build_test_filter
 
@@ -3013,22 +3012,19 @@ run_test 71 "Running dbench on lustre (don't segment fault) ===="
 
 test_72() { # bug 5695 - Test that on 2.6 remove_suid works properly
 	check_kernel_version 43 || return 0
+	[ "$RUNAS_ID" = "$UID" ] && skip "RUNAS_ID = UID = $UID -- skipping" && return
         
         # Check that testing environment is properly set up. Skip if not
-        OLD_FAIL_ON_ERROR=$FAIL_ON_ERROR
-        FAIL_ON_ERROR=false check_runas_id_ret $(($RUNAS_ID + 1)) "$RUNAS -u $(($RUNAS_ID + 1))" || {
-                skip "User $((RUNAS_ID + 1)) does not exist - skipping"
-                FAIL_ON_ERROR=$OLD_FAIL_ON_ERROR
+        FAIL_ON_ERROR=false check_runas_id_ret $RUNAS_ID $RUNAS || {
+                skip "User $RUNAS_ID does not exist - skipping"
                 return 0
         }
-        FAIL_ON_ERROR=$OLD_FAIL_ON_ERROR
-	[ "$RUNAS_ID" = "$UID" ] && skip "RUNAS_ID = UID = $UID -- skipping" && return
 	# We had better clear the $DIR to get enough space for dd
 	rm -rf $DIR/*
 	touch $DIR/f72
 	chmod 777 $DIR/f72
 	chmod ug+s $DIR/f72
-	$RUNAS -u $(($RUNAS_ID + 1)) dd if=/dev/zero of=$DIR/f72 bs=512 count=1 || error
+	$RUNAS dd if=/dev/zero of=$DIR/f72 bs=512 count=1 || error
 	# See if we are still setuid/sgid
 	test -u $DIR/f72 -o -g $DIR/f72 && error "S/gid is not dropped on write"
 	# Now test that MDS is updated too
