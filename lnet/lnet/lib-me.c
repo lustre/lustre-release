@@ -95,6 +95,7 @@ LNetMEInsert(lnet_handle_me_t current_meh,
                 return -ENOENT;
         }
 
+        new_me->me_portal = current_me->me_portal;
         new_me->me_match_id = match_id;
         new_me->me_match_bits = match_bits;
         new_me->me_ignore_bits = ignore_bits;
