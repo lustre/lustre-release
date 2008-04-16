@@ -31,6 +31,11 @@ sub usage()
 # check whether gnuplot exists?
 system ("which gnuplot > /dev/null") == 0 or die "gnuplot does not exist, please install it and try again.\n";
 
+# check whether gnuplot supports png
+$pngsupport = "ldd `which gnuplot` | grep -q libpng";
+system ("$pngsupport") == 0 or die "gnuplot installed does not support png.
+	Please install gnuplot to support png and try again.\n"; 
+
 my @GraphTitle;
 
 #Subroutine to write .scr file that further used by gnuplot to plot the graph.
