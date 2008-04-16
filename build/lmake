@@ -393,7 +393,11 @@ depend_kernel()
     set_make
     pushd "$TOPDIR/linux" >/dev/null
     echo "Overriding EXTRAVERSION in kernel..."
-    perl -p -i -e "s/^EXTRAVERSION.*/EXTRAVERSION = ${EXTRA_VERSION_DELIMITER}${EXTRA_VERSION}${TARGET_CONFIG}/" Makefile
+    local extra_version="${EXTRA_VERSION_DELIMITER}${EXTRA_VERSION}"
+    if [ -n "${TARGET_CONFIG}" ]; then
+	extra_version="${extra_version}${TARGET_DELIMITER}${TARGET_CONFIG}"
+    fi
+    perl -p -i -e "s/^EXTRAVERSION.*/EXTRAVERSION = ${extra_version}/" Makefile
     echo "Making depend in $PWD..."
     $MAKE "$MAKE_CC" mrproper || fatal 1 "Error running make mrproper"
     rm -f rpm-release
@@ -505,7 +509,6 @@ build_lustre()
 {
     (( $BUILD_LUSTRE )) || return 0
     set_make
-    FULL_VERSION="${VERSION}${EXTRA_VERSION_DELIMITER}${EXTRA_VERSION}${TARGET_CONFIG}"
     pushd "$TOPDIR" >/dev/null
     sed \
 	-e s^@VERSION@^${LUSTRE_VERSION}^g \
@@ -526,7 +529,6 @@ install_kernel()
 {
     (( $INSTALL_KERNEL )) || return 0
     set_make
-    FULL_VERSION="${VERSION}${EXTRA_VERSION_DELIMITER}${EXTRA_VERSION}${TARGET_CONFIG}"
     pushd "$TOPDIR/linux" >/dev/null
     mkdir -p "$DESTDIR/boot"
 
@@ -583,7 +585,6 @@ cleanup_libmodules()
 {
     (( $INSTALL_LUSTRE )) || return 0
 
-    FULL_VERSION="${VERSION}${EXTRA_VERSION_DELIMITER}${EXTRA_VERSION}${TARGET_CONFIG}"
     KVERREL="${VERSION}${EXTRA_VERSION_DELIMITER}${EXTRA_VERSION}"
     i="$DESTDIR/lib/modules/${FULL_VERSION}"
 
@@ -603,7 +604,6 @@ install_lustre()
     (( $INSTALL_LUSTRE )) || return 0
     return 0
     set_make
-    FULL_VERSION="${VERSION}${EXTRA_VERSION_DELIMITER}${EXTRA_VERSION}${TARGET_CONFIG}"
     pushd "$TOPDIR" >/dev/null
     $MAKE "$MAKE_CC" -s install "DESTDIR=$DESTDIR" KERNELRELEASE="$FULL_VERSION" || fatal 1 "Error installing Lustre."
     popd >/dev/null
@@ -614,7 +614,6 @@ build_kms()
     (( $BUILD_KERNEL )) || return 0
     (( $SUSEBUILD )) || return 0
     set_make
-    FULL_VERSION="${VERSION}${EXTRA_VERSION_DELIMITER}${EXTRA_VERSION}${TARGET_CONFIG}"
     mkdir -p "${TOPDIR}/modules-${FULL_VERSION}"
     for dir in /usr/src/kernel-modules/* ; do
 	# we are replacing lustre-lite, so don't include it
@@ -639,12 +638,16 @@ install_kms()
     (( $INSTALL_KERNEL )) || return 0
     (( $LINUX26 )) || return 0
     set_make
-    FULL_VERSION="${VERSION}${EXTRA_VERSION_DELIMITER}${EXTRA_VERSION}${TARGET_CONFIG}"
     for build_dir in "${TOPDIR}/modules-${FULL_VERSION}/*" ; do
 	[ -d $build_dir ] || continue
         # these modules are terrible, and don't all build
 	$MAKE "$MAKE_CC" -C $build_dir KERNEL_SOURCE="${TOPDIR}/linux" INSTALL_MOD_PATH="$DESTDIR" 
     done
+    local symvers_file="${DESTDIR}/boot/symvers-${VERSION}${EXTRA_VERSION_DELIMITER}${EXTRA_VERSION}-${TARGET_ARCH}"
+    if [ -n "$TARGET_CONFIG" ]; then
+	symvers_file="${symvers_file}${TARGET_DELIMITER}${TARGET_CONFIG}"
+    fi
+    symvers_file="$symvers_file.gz"
     (   symver vmlinux
 	moddir="${DESTDIR}/lib/modules/${FULL_VERSION}"
 	cd $moddir/kernel
@@ -656,8 +659,7 @@ install_kms()
 			   -name '*.ko' -print); do
 	    symver $module
 	done
-    ) | sort -u -k2 \
-	| gzip -c9 > "${DESTDIR}/boot/symvers-${VERSION}${EXTRA_VERSION_DELIMITER}${EXTRA_VERSION}-${TARGET_ARCH}${TARGET_CONFIG}.gz"
+    ) | sort -u -k2 | gzip -c9 > $symvers_file
 }
 
 save_headers()
@@ -810,6 +812,10 @@ done
 check_options
 load_target
 EXTRA_VERSION_DELIMITER=${EXTRA_VERSION_DELIMITER:-"-"}
+FULL_VERSION="${VERSION}${EXTRA_VERSION_DELIMITER}${EXTRA_VERSION}"
+if [ -n "$TARGET_CONFIG" ]; then
+    FULL_VERSION="${FULL_VERSION}${TARGET_DELIMITER}${TARGET_CONFIG}"
+fi
 setup_ccache_distcc
 
 extract_kernel

@@ -629,6 +629,7 @@ prep_kernel_build()
         -e "s^@JENSEN_ARCHS@^$BOOT_ARCHS^g" \
         -e "s^@KERNEL_EXTRA_VERSION@^$EXTRA_VERSION^g" \
         -e "s^@KERNEL_EXTRA_VERSION_DELIMITER@^$EXTRA_VERSION_DELIMITER^g" \
+        -e "s^@KERNEL_TARGET_DELIMITER@^$TARGET_DELIMITER^g" \
         -e "s^@KERNEL_RELEASE@^${EXTRA_VERSION//-/_}^g" \
         -e "s^@KERNEL_SOURCE@^$KERNEL^g" \
         -e "s^@KERNEL_VERSION@^$VERSION^g" \
@@ -1204,24 +1205,12 @@ patchless_build_sequence()
     fi
     [ -d $TOPDIR/reused ] && rm -rf $TOPDIR/reused
 
-    local type=
-    local delimiter=
+    local delimiter=${EXTRA_VERSION_DELIMITER:-"-"}
+    # default to source type -source and special case below
+    local type=-source
     case "$DISTRO" in
         rhel*)
             type=-devel
-            delimiter=-
-            ;;
-        sles10)
-            type=-source
-            delimiter=.
-            ;;
-        sles9)
-            type=-source
-            delimiter=-
-            ;;
-        *)
-            echo "Don't know what to do with $DISTRO"
-            return 255
             ;;
     esac
 
