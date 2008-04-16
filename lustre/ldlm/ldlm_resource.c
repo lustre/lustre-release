@@ -487,7 +487,12 @@ int ldlm_namespace_free_prior(struct ldlm_namespace *ns)
                 RETURN(ELDLM_OK);
 
         mutex_down(ldlm_namespace_lock(ns->ns_client));
-        list_del(&ns->ns_list_chain);
+        /*
+         * Some asserts and possibly other parts of code still using 
+         * list_empty(&ns->ns_list_chain). This is why it is important
+         * to use list_del_init() here.
+         */
+        list_del_init(&ns->ns_list_chain);
         atomic_dec(ldlm_namespace_nr(ns->ns_client));
         ldlm_pool_fini(&ns->ns_pool);
         mutex_up(ldlm_namespace_lock(ns->ns_client));
@@ -539,6 +544,11 @@ int ldlm_namespace_free_post(struct ldlm_namespace *ns, int force)
 
         OBD_VFREE(ns->ns_hash, sizeof(*ns->ns_hash) * RES_HASH_SIZE);
         OBD_FREE(ns->ns_name, strlen(ns->ns_name) + 1);
+        /* 
+         * @ns should be not on list in this time, otherwise this will cause
+         * issues realted to using freed @ns in pools thread. 
+         */
+        LASSERT(list_empty(&ns->ns_list_chain));
         OBD_FREE_PTR(ns);
         ldlm_put_ref(force);
         RETURN(ELDLM_OK);
