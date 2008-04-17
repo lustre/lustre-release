@@ -1,7 +1,7 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- *  Copyright (C) 2001, 2002 Cluster File Systems, Inc.
+ *  Copyright (C) 2008 Sun Microsystems, Inc.
  *
  *   This file is part of Lustre, http://www.lustre.org.
  *
@@ -20,20 +20,17 @@
  *
  */
 
-#ifndef _DARWIN_OBD_SUPPORT
-#define _DARWIN_OBD_SUPPORT
+#ifndef __DARWIN_OBD_CKSUM
+#define __DARWIN_OBD_CKSUM
 
-#ifndef _OBD_SUPPORT
-#error Do not #include this file directly. #include <obd_support.h> instead
+#ifndef __OBD_CKSUM
+#error Do not #include this file directly. #include <obd_chsum.h> instead
 #endif
 
-#include <darwin/lustre_compat.h>
+#include <libcfs/kp30.h>
 
-#define OBD_SLEEP_ON(wq)        sleep_on(wq)
-
-/* for obd_class.h */
-# ifndef ERR_PTR
-#  define ERR_PTR(a) ((void *)(a))
-# endif
+#if !defined(__KERNEL__) && defined(HAVE_ADLER)
+#  include <zlib.h>
+#endif /* !__KERNEL__ */
 
 #endif

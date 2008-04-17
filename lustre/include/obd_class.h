@@ -19,7 +19,6 @@
  *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  *
  */
-
 #ifndef __CLASS_OBD_H
 #define __CLASS_OBD_H
 

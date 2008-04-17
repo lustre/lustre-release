@@ -35,6 +35,7 @@
 #include <lustre_disk.h>
 #include <lustre_param.h>
 #include <lustre_log.h>
+#include <obd_cksum.h>
 #include "llite_internal.h"
 
 cfs_mem_cache_t *ll_file_data_slab;

@@ -20,20 +20,36 @@
  *
  */
 
-#ifndef _DARWIN_OBD_SUPPORT
-#define _DARWIN_OBD_SUPPORT
+#ifndef __LINUX_OBD_CKSUM
+#define __LINUX_OBD_CKSUM
 
-#ifndef _OBD_SUPPORT
-#error Do not #include this file directly. #include <obd_support.h> instead
+#ifndef __OBD_CKSUM
+#error Do not #include this file directly. #include <obd_chsum.h> instead
 #endif
 
-#include <darwin/lustre_compat.h>
+#ifdef __KERNEL__
+#include <linux/autoconf.h>
+#endif
 
-#define OBD_SLEEP_ON(wq)        sleep_on(wq)
+#include <libcfs/kp30.h>
 
-/* for obd_class.h */
-# ifndef ERR_PTR
-#  define ERR_PTR(a) ((void *)(a))
+/* Prefer the kernel's version, if it exports it, because it might be
+ * optimized for this CPU. */
+#if defined(__KERNEL__) && (defined(CONFIG_CRC32) || defined(CONFIG_CRC32_MODULE))
+# include <linux/crc32.h>
+# define HAVE_ARCH_CRC32
+#endif
+
+#ifdef __KERNEL__
+# include <linux/zutil.h>
+# ifndef HAVE_ADLER
+#  define HAVE_ADLER
 # endif
+# define adler32(a,b,l) zlib_adler32(a,b,l)
+#else /*  __KERNEL__ */
+# ifdef HAVE_ADLER
+#  include <zlib.h>
+# endif
+#endif /*! __KERNEL__ */
 
 #endif

@@ -34,6 +34,7 @@
 #include <lustre_import.h>
 #include <lustre_export.h>
 #include <obd.h>
+#include <obd_cksum.h>
 #include <obd_class.h>
 
 #include "ptlrpc_internal.h"

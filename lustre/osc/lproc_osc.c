@@ -26,6 +26,7 @@
 
 #include <linux/version.h>
 #include <asm/statfs.h>
+#include <obd_cksum.h>
 #include <obd_class.h>
 #include <lprocfs_status.h>
 #include <linux/seq_file.h>

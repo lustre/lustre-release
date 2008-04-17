@@ -20,9 +20,7 @@
  *   along with Lustre; if not, write to the Free Software
  *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
-#ifndef AUTOCONF_INCLUDED
-#include <linux/config.h>
-#endif
+#include <linux/autoconf.h>
 #include <linux/kernel.h>
 #include <linux/mm.h>
 #include <linux/string.h>
@@ -45,6 +43,7 @@
 
 //#include <lustre_mdc.h>
 #include <lustre_lite.h>
+#include <obd_cksum.h>
 #include "llite_internal.h"
 #include <linux/lustre_compat25.h>
 

@@ -47,6 +47,7 @@
 #include <linux/mount.h>
 #include <linux/buffer_head.h>
 
+#include <obd_cksum.h>
 #include <obd_class.h>
 #include <obd_lov.h>
 #include <lustre_dlm.h>

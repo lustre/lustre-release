@@ -47,9 +47,6 @@
 #ifdef HAVE_SYS_IOCTL_H
 # include <sys/ioctl.h>
 #endif
-#ifndef _IOWR
-# include "ioctl.h"
-#endif
 
 #include <stdio.h>
 #include <sys/ioctl.h>
@@ -68,6 +65,10 @@
 #include <lnet/lnet.h>
 #include <libcfs/kp30.h>
 #include <libcfs/user-bitops.h>
+
+#ifndef _IOWR
+# include "ioctl.h"
+#endif
 
 /* definitions for liblustre */
 

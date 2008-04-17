@@ -39,6 +39,7 @@
 #define DEBUG_SUBSYSTEM S_OST
 
 #include <linux/module.h>
+#include <obd_cksum.h>
 #include <obd_ost.h>
 #include <lustre_net.h>
 #include <lustre_dlm.h>
