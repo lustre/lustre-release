@@ -16,3 +16,11 @@ lc_hb.sh
 lc_cluman.sh
 lc_md.sh
 lc_lvm.sh
+lc_cluman
+lc_hb
+lc_lvm
+lc_md
+lc_modprobe
+lc_net
+lustre_config
+lustre_createcsv
