@@ -868,7 +868,7 @@ static int do_bulk_checksum_adler32(struct ptlrpc_bulk_desc *desc, void *buf)
                 ptr = cfs_kmap(page) + off;
                 len = desc->bd_iov[i].kiov_len;
 
-                adler32 = zlib_adler32(adler32, ptr, len);
+                adler32 = adler32(adler32, ptr, len);
 
                 cfs_kunmap(page);
         }
@@ -976,7 +976,7 @@ static int do_bulk_checksum(struct ptlrpc_bulk_desc *desc, __u32 alg, void *buf)
                 switch (alg) {
                 case BULK_HASH_ALG_ADLER32:
 #ifdef HAVE_ADLER
-                        csum32 = zlib_adler32(csum32, ptr, len);
+                        csum32 = adler32(csum32, ptr, len);
 #else
                         CERROR("Adler32 not supported\n");
                         return -EINVAL;
