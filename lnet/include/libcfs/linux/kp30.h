@@ -340,7 +340,7 @@ extern int  lwt_snapshot (cycles_t *now, int *ncpu, int *total_size,
  #define _LWORDSIZE __WORDSIZE
 #endif
 
-#if (defined(__x86_64__) && (defined(__KERNEL__) || defined(CRAY_XT3)))
+#if (defined(__x86_64__) && (defined(__KERNEL__) || defined(CRAY_XT3))) || defined(HAVE_U64_LONG_LONG)
 /* x86_64 defines __u64 as "long" in userspace, but "long long" in the kernel */
 # define LPU64 "%Lu"
 # define LPD64 "%Ld"

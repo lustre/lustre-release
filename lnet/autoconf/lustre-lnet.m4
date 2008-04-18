@@ -1056,6 +1056,29 @@ AC_DEFINE(HAVE_SHOW_TASK, 1, [show_task is exported])
 ])
 ])
 
+# check userland __u64 type
+AC_DEFUN([LN_U64_LONG_LONG],
+[AC_MSG_CHECKING([check u64 is long long type])
+tmp_flags="$CFLAGS"
+CFLAGS="$CFLAGS -Werror"
+AC_COMPILE_IFELSE([
+	#include <asm/types.h>
+	int main(void) {
+		unsigned long long *data1;
+		__u64 *data2;
+		
+		data1 = data2;
+		return 0;
+	}
+],[
+	AC_MSG_RESULT([yes])
+        AC_DEFINE(HAVE_U64_LONG_LONG, 1,
+                  [__u64 is long long type])
+],[
+])
+CFLAGS="$tmp_flags"
+])
+
 # LN_TASKLIST_LOCK
 # 2.6.18 remove tasklist_lock export
 AC_DEFUN([LN_TASKLIST_LOCK],
@@ -1205,6 +1228,7 @@ LN_CONFIG_MX
 LN_STRUCT_PAGE_LIST
 LN_STRUCT_SIGHAND
 LN_FUNC_SHOW_TASK
+LN_U64_LONG_LONG
 # 2.6.18
 LN_TASKLIST_LOCK
 # 2.6.19
