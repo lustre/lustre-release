@@ -634,10 +634,7 @@ void client_common_put_super(struct super_block *sb)
 
         list_del(&sbi->ll_conn_chain);
 
-        obd_unregister_page_removal_cb(sbi->ll_osc_exp,
-                                       ll_page_removal_cb);
-        obd_unregister_lock_cancel_cb(sbi->ll_osc_exp,ll_extent_lock_cancel_cb);
-
+        /* callbacks is cleared after disconnect each target */
         obd_disconnect(sbi->ll_osc_exp);
         sbi->ll_osc_exp = NULL;
 
