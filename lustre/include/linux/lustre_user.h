@@ -74,11 +74,11 @@ typedef struct stat64   lstat_t;
 # define LPSZ  "%u"
 # define LPSSZ "%d"
 #elif (_LWORDSIZE == 64)
-# define LPU64 "%lu"
-# define LPD64 "%ld"
-# define LPX64 "%#lx"
-# define LPSZ  "%lu"
-# define LPSSZ "%ld"
+# define LPU64 "%llu"
+# define LPD64 "%lld"
+# define LPX64 "%#llx"
+# define LPSZ  "%llu"
+# define LPSSZ "%lld"
 #endif
 
 #undef _LWORDSIZE

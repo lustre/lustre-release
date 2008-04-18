@@ -32,7 +32,7 @@
 #ifdef _AIX
 #include "syscall_AIX.h"
 #else
-#include <syscall.h>
+#include <sys/syscall.h>
 #endif
 #include <sys/utsname.h>
 #ifdef HAVE_NETINET_IN_H

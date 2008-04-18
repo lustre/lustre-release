@@ -35,7 +35,7 @@
 #include <sys/sockio.h>
 #endif
 #ifndef __CYGWIN__
-#include <syscall.h>
+#include <sys/syscall.h>
 #endif
 
 #include <libcfs/libcfs.h>

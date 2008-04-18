@@ -40,7 +40,7 @@
 #endif /* !HAVE_LINUX_VERSION_H */
 
 #ifndef __CYGWIN__
-# include <syscall.h>
+# include <sys/syscall.h>
 #else /* __CYGWIN__ */
 # include <windows.h>
 # include <windef.h>

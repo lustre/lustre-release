@@ -11,7 +11,7 @@
 
 #include "usocklnd.h"
 #include <unistd.h>
-#include <syscall.h>
+#include <sys/syscall.h>
 
 int
 usocklnd_notifier_handler(int fd)

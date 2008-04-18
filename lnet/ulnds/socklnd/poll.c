@@ -11,7 +11,7 @@
 
 #include "usocklnd.h"
 #include <unistd.h>
-#include <syscall.h>
+#include <sys/syscall.h>
 
 void
 usocklnd_process_stale_list(usock_pollthread_t *pt_data)
