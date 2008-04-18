@@ -32,22 +32,17 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
-#include <sys/queue.h>
 #include <signal.h>
 #include <errno.h>
 #include <dirent.h>
 #include <sys/uio.h>
 #include <sys/time.h>
 #include <time.h>
-#include <sys/ioctl.h>
 
+#include <liblustre.h>
 #include "test_common.h"
-#include <ioctl.h>
 #include <lustre/liblustreapi.h>
 
-#ifndef PAGE_SIZE
-#define PAGE_SIZE getpagesize()
-#endif
 #define _npages (2048)
 
 void *buf_alloc;
