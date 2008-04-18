@@ -73,10 +73,13 @@ static inline unsigned ll_dir_rec_len(unsigned name_len)
         return (name_len + 8 + LL_DIR_PAD - 1) & ~(LL_DIR_PAD - 1);
 }
 
-
+#ifndef HAVE_PAGE_CHECKED
 #ifdef HAVE_PG_FS_MISC
 #define PageChecked(page)        test_bit(PG_fs_misc, &(page)->flags)
 #define SetPageChecked(page)     set_bit(PG_fs_misc, &(page)->flags)
+#else
+#error PageChecked or PageFsMisc not defined in kernel
+#endif
 #endif
 
 /* returns the page unlocked, but with a reference */

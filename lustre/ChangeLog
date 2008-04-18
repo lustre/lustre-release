@@ -19,6 +19,11 @@ tbd  Sun Microsystems, Inc.
         removed cwd "./" (refer to Bugzilla 14399).
 
 Severity   : minor
+Bugzilla   : 15517
+Description: Fix warnings with compile liblustre at sles10/rhel5 which have
+             __u64 as usingied long long type.
+
+Severity   : minor
 Bugzilla   : 15210
 Frequency  : rare, on shutdown
 Description: race process ast vs remove callback

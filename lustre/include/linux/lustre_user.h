@@ -56,36 +56,4 @@ typedef struct stat64   lstat_t;
 #define HAVE_LOV_USER_MDS_DATA
 #endif
 
-#ifndef LPU64
-/* this is a bit chunky */
-#if defined(__KERNEL__)
- #define _LWORDSIZE BITS_PER_LONG
-#else
- #define _LWORDSIZE __WORDSIZE
-#endif
-/* x86_64 defines __u64 as "long" in userspace, but "long long" in the kernel */
-#if (defined(__x86_64__) && (defined(__KERNEL__) || defined(CRAY_XT3)))
-# define LPU64 "%Lu"
-# define LPD64 "%Ld"
-# define LPX64 "%#Lx"
-# define LPSZ  "%lu"
-# define LPSSZ "%ld"
-#elif (_LWORDSIZE == 32)
-# define LPU64 "%Lu"
-# define LPD64 "%Ld"
-# define LPX64 "%#Lx"
-# define LPSZ  "%u"
-# define LPSSZ "%d"
-#elif (_LWORDSIZE == 64)
-# define LPU64 "%lu"
-# define LPD64 "%ld"
-# define LPX64 "%#lx"
-# define LPSZ  "%lu"
-# define LPSSZ "%ld"
-#endif
-
-#undef _LWORDSIZE
-
-#endif /* !LPU64 */
-
 #endif /* _LUSTRE_USER_H */
