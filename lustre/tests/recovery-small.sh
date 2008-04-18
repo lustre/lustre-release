@@ -321,6 +321,7 @@ run_test 19b "test expired_lock_main on ost (2867)"
 
 test_20a() {	# bug 2983 - ldlm_handle_enqueue cleanup
 	mkdir -p $DIR/$tdir
+	lfs setstripe $DIR/$tdir/${tfile} -i 0 -c 1
 	multiop_bg_pause $DIR/$tdir/${tfile} O_wc || return 1
 	MULTI_PID=$!
 	cancel_lru_locks osc
@@ -335,7 +336,7 @@ run_test 20a "ldlm_handle_enqueue error (should return error)"
 
 test_20b() {	# bug 2986 - ldlm_handle_enqueue error during open
 	mkdir -p $DIR/$tdir
-	touch $DIR/$tdir/${tfile}
+	lfs setstripe $DIR/$tdir/${tfile} -i 0 -c 1
 	cancel_lru_locks osc
 #define OBD_FAIL_LDLM_ENQUEUE_EXTENT_ERR 0x308
 	do_facet ost1 sysctl -w lustre.fail_loc=0x80000308
