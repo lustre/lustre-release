@@ -1473,7 +1473,7 @@ test_36() { # 12743
 run_test 36 "df report consistency on OSTs with different block size"
 
 test_37() {
-	[ -n "$CLIENTONLY" ] && skip "client only testing" && return 0
+	[ -n "$CLIENTONLY" -o -n "$CLIENTMODSONLY" ] && skip "client only testing" && return 0
 	LOCAL_MDSDEV="$TMP/mdt.img"
 	SYM_MDSDEV="$TMP/sym_mdt.img"
 
