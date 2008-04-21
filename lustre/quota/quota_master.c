@@ -1198,7 +1198,7 @@ int mds_set_dqblk(struct obd_device *obd, struct obd_quotactl *oqctl)
         time_t btime, itime;
         struct lustre_dquot *dquot;
         struct obd_dqblk *dqblk = &oqctl->qc_dqblk;
-        int set, rc, flag = 0;
+        int set, rc, rc2 = 0, flag = 0;
         ENTRY;
 
         OBD_ALLOC_PTR(oqaq);
@@ -1315,21 +1315,22 @@ int mds_set_dqblk(struct obd_device *obd, struct obd_quotactl *oqctl)
                         goto revoke_out;
                 }
         }
-        down(&mds->mds_qonoff_sem);
 
 revoke_out:
+        down(&mds->mds_qonoff_sem);
+        down(&dquot->dq_sem);
         if (rc) {
                 /* cancel previous setting */
-                down(&dquot->dq_sem);
                 dquot->dq_dqb.dqb_ihardlimit = ihardlimit;
                 dquot->dq_dqb.dqb_isoftlimit = isoftlimit;
                 dquot->dq_dqb.dqb_bhardlimit = bhardlimit;
                 dquot->dq_dqb.dqb_bsoftlimit = bsoftlimit;
                 dquot->dq_dqb.dqb_btime = btime;
                 dquot->dq_dqb.dqb_itime = itime;
-                fsfilt_dquot(obd, dquot, QFILE_WR_DQUOT);
-                up(&dquot->dq_sem);
         }
+        rc2 = fsfilt_dquot(obd, dquot, QFILE_WR_DQUOT);
+        up(&dquot->dq_sem);
+
 out:
         down(&dquot->dq_sem);
         dquot->dq_status &= ~DQ_STATUS_SET;
@@ -1342,7 +1343,7 @@ out_sem:
         if (oqaq)
                 OBD_FREE_PTR(oqaq);
 
-        return rc;
+        return rc ? rc : rc2;
 }
 
 static int mds_get_space(struct obd_device *obd, struct obd_quotactl *oqctl)
