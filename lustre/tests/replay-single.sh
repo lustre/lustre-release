@@ -874,13 +874,17 @@ test_43() { # bug 2530
 run_test 43 "mds osc import failure during recovery; don't LBUG"
 
 test_44() {
+    local at_max_saved=0
+
     mdcdev=`awk '/-mdc-/ {print $1}' $LPROC/devices`
     [ "$mdcdev" ] || exit 2
+
     # adaptive timeouts slow this way down
-    local at_max=$(do_facet mds "find /sys/ -name at_max")
-    [ -z "$at_max" ] && skip "missing /sys/.../at_max" && return 0
-    MDS_AT_MAX=$(do_facet mds "cat $at_max")
-    do_facet mds "echo 40 >> $at_max"
+    if at_is_valid && at_is_enabled; then
+        at_max_saved=$(at_max_get mds)
+        at_max_set 40 mds
+    fi
+
     for i in `seq 1 10`; do
 	echo "$i of 10 ($(date +%s))"
 	do_facet mds "grep service $LPROC/mdt/MDS/mds/timeouts"
@@ -889,8 +893,9 @@ test_44() {
 	$LCTL --device $mdcdev recover
 	df $MOUNT
     done
+
     do_facet mds "sysctl -w lustre.fail_loc=0"
-    do_facet mds "echo $MDS_AT_MAX >> $at_max"
+    [ $at_max_saved -ne 0 ] && at_max_set $at_max_saved mds
     return 0
 }
 run_test 44 "race in target handle connect"
@@ -1362,9 +1367,19 @@ test_61c() {
 }
 run_test 61c "test race mds llog sync vs llog cleanup"
 
-#Adaptive Timeouts
-at_start() #bug 3055
+#Adaptive Timeouts (bug 3055)
+AT_MAX_SET=0
+
+at_start()
 {
+    at_is_valid || skip "AT env is invalid"
+
+    if ! at_is_enabled; then
+        echo "AT is disabled, enable it by force temporarily"
+        at_max_set 600 mds ost client
+        AT_MAX_SET=1
+    fi
+
     if [ -z "$ATOLDBASE" ]; then
 	local at_history=$(do_facet mds "find /sys/ -name at_history")
 	[ -z "$at_history" ] && skip "missing /sys/.../at_history " && return 1
@@ -1540,6 +1555,12 @@ if [ -n "$ATOLDBASE" ]; then
     do_facet mds "echo $ATOLDBASE >> $at_history" || true
     do_facet ost1 "echo $ATOLDBASE >> $at_history" || true
 fi
+
+if [ $AT_MAX_SET -ne 0 ]; then
+    echo "restore AT status to be disabled"
+    at_max_set 0 mds ost client
+fi
+
 # end of AT tests includes above lines
 
 equals_msg `basename $0`: test complete, cleaning up
