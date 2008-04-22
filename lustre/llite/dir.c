@@ -657,7 +657,6 @@ int ll_dir_getstripe(struct inode *inode, struct lov_mds_md **lmmp,
          */
         if (lmm->lmm_magic == __swab32(LOV_MAGIC)) {
                 lustre_swab_lov_user_md((struct lov_user_md *)lmm);
-                lustre_swab_lov_user_md_objects((struct lov_user_md *)lmm);
         }
 out:
         *lmmp = lmm;

@@ -13,6 +13,12 @@ tbd  Sun Microsystems, Inc.
        * RHEL 4 and RHEL 5/SLES 10 clients behaves differently on 'cd' to a
         removed cwd "./" (refer to Bugzilla 14399).
 
+Severity   : minor
+Bugzilla   : 14856
+Frequency  : on ppc only
+Description: not convert ost objects for directory because it's not exist.
+Details    : ll_dir_getstripe assume dirrectory has ost objects but this wrong.
+
 Severity   : normal
 Bugzilla   : 12652
 Description: Add FMODE_EXEC file flag for SLES10 SP1 kernel.
