@@ -44,7 +44,7 @@ gmnal_recv(lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg,
 
 	LASSERT (msg->gmm_type == GMNAL_MSG_IMMEDIATE);
         LASSERT (iov == NULL || kiov == NULL);
-        
+
         if (rx->rx_recv_nob < nob) {
                 CERROR("Short message from nid %s: got %d, need %d\n",
                        libcfs_nid2str(msg->gmm_srcnid), rx->rx_recv_nob, nob);
@@ -134,7 +134,7 @@ gmnal_send(lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg)
                 else
                         lnet_copy_kiov2flat(len, buffer, 0,
                                             niov, kiov, offset, len);
-                
+
                 tx->tx_msgnob += len;
                 tx->tx_large_nob = 0;
         } else {
@@ -150,7 +150,7 @@ gmnal_send(lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg)
 
         LASSERT(tx->tx_lntmsg == NULL);
         tx->tx_lntmsg = lntmsg;
-        
+
         spin_lock(&gmni->gmni_tx_lock);
 
         list_add_tail(&tx->tx_list, &gmni->gmni_buf_txq);

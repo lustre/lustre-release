@@ -40,7 +40,6 @@ gmnal_alloc_netbuf_pages (gmnal_ni_t *gmni, gmnal_netbuf_t *nb, int npages)
         LASSERT (npages > 0);
 
         for (i = 0; i < npages; i++) {
-                
                 nb->nb_kiov[i].kiov_page = alloc_page(GFP_KERNEL);
                 nb->nb_kiov[i].kiov_offset = 0;
                 nb->nb_kiov[i].kiov_len = PAGE_SIZE;
@@ -70,13 +69,13 @@ gmnal_alloc_netbuf_pages (gmnal_ni_t *gmni, gmnal_netbuf_t *nb, int npages)
                         gmnal_free_netbuf_pages(nb, i+1);
                         return -ENOMEM;
                 }
-                
+
                 if (i == 0) 
                         nb->nb_netaddr = gmni->gmni_netaddr_base;
-                
+
                 gmni->gmni_netaddr_base += PAGE_SIZE;
         }
-        
+
         return 0;
 }
 
@@ -99,7 +98,7 @@ gmnal_alloc_ltxbuf (gmnal_ni_t *gmni)
         int            sz = offsetof(gmnal_txbuf_t, txb_buf.nb_kiov[npages]);
         gmnal_txbuf_t *txb;
         int            rc;
-        
+
         LIBCFS_ALLOC(txb, sz);
         if (txb == NULL) {
                 CERROR("Can't allocate large txbuffer\n");
@@ -227,7 +226,7 @@ gmnal_alloc_ltxbufs (gmnal_ni_t *gmni)
 
         for (i = 0; i < nlarge_tx_bufs; i++) {
                 rc = gmnal_alloc_ltxbuf(gmni);
-                
+
                 if (rc != 0)
                         return rc;
         }

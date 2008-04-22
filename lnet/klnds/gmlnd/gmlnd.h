@@ -176,7 +176,7 @@ typedef struct gmnal_ni {
         gmnal_tx_t       *gmni_txs;             /* all txs */
         gmnal_rx_t       *gmni_rxs;		/* all rx descs */
         gmnal_txbuf_t    *gmni_ltxbs;           /* all large tx bufs */
-        
+
         atomic_t          gmni_nthreads;        /* total # threads */
         gm_alarm_t        gmni_alarm;           /* alarm to wake caretaker */
         int               gmni_shutdown;	/* tell all threads to exit */
