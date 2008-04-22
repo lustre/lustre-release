@@ -74,14 +74,18 @@ sub write_scr_file() {
 
 	my $plot = "plot";
 	$i = 2;
+	my @numrgs = split " ", $regions;
 	$xrange = 1;
 	# generate instructions for gnuplot, with adjusting X-axes ranges
-	for ($j = 1; $j <= $thread ; $j = $j + $j) {
+	
+	foreach my $j (sort numerically split " ", $threads) {
 		if ($op eq "wr") {
-			printf SCRFILE "$plot \"$file-$rsz-$op.dat\" using 1:$i axes x%dy1 title \"write-obj$j\" with line\n", $xrange;
+			$using = ( $i < $#numrgs ) ? $i : $#numrgs;
+			printf SCRFILE "$plot \"$file-$rsz-$op.dat\" using 1:$using axes x%dy1 title \"write-obj$j\" with line\n", $xrange;
 		}
 		if ($op eq "rd") {
-			printf SCRFILE "$plot \"$file-$rsz-$op.dat\" using 1:$i axes x%dy1 title \"read-obj$j\" with line\n", $xrange;
+			$using = ( $i < $#numrgs ) ? $i : $#numrgs;
+			printf SCRFILE "$plot \"$file-$rsz-$op.dat\" using 1:$using axes x%dy1 title \"read-obj$j\" with line\n", $xrange;
 		}
 		$i++;
 		$plot = "replot";
@@ -94,19 +98,48 @@ sub write_scr_file() {
 	system ("rm $file-$rsz-$op.scr");
 }
 
+sub check_data_file () {
+        my $file=shift;
+        my @values;
+        my @tmp;
+
+        open ( FILE, "< $file" ) or die "Can't open $file for reading";
+        while ( <FILE> ) {
+                @tmp = split;
+                push @values, [ @tmp ];
+        }
+        close FILE;
+
+        for ( $j = 0; $j <= $#tmp; $j++) {
+                my $sum=0;
+                for ($i = 2; $i <= $#values ; $i ++) {
+                        $values [$i][$j] =~ "-" or $sum = $sum + $values [$i][$j];
+                }
+                die "File: $file : $j column contains no data.\n" unless $sum != 0;
+        }
+}
+
+sub numerically { $a <=> $b; }
+
 #Subroutine to write .dat file that further used by gnuplot to plot the graph.
 sub write_dat_file() {
 	my $op = $_[0];
 	print "writing data $file-$rsz-$op.dat\n";
 	# Open .csv/.dat file for writing required columns from log file.
-	open ( DATAFILE, "> $file-$rsz-$op.dat" ) or die "Can't open csv file for writing";
+	my $datafile = "$file-$rsz-$op.dat";
+	open ( DATAFILE, "> $datafile" ) or die "Can't open csv $datafile for writing";
 	printf DATAFILE "%-6s", "0";
-	for ($j = 1; $j <= $thread ; $j = $j + $j) {
-			printf DATAFILE "%-8s", "$op$j";
+	
+	foreach my $j (sort numerically split " ", $regions) {
+		printf DATAFILE "%-8s", "$op$j";
 	}
-	for ( $i = 1; $i <= $region; $i = $i + $i ) {
+
+	# threads, line [7], strings
+	foreach my $i (sort numerically split " ", $threads) {
 	        printf DATAFILE "\n%-6s", $i;
-		for ($j = 1; $j <= $thread ; $j = $j + $j) {
+
+		# regions, line [5], column
+		foreach my $j (sort numerically split " ", $regions) {
 			if (($op eq "rd" && $rdwr) || ($op eq "wr" && $wrrd) || ($readop) || ($writeop)) {
 				if ( $out{$i}{$j} ) {
 					printf DATAFILE "%-8s", $out{$i}{$j};
@@ -125,13 +158,14 @@ sub write_dat_file() {
 		}
 	}
 	close DATAFILE;
+	&check_data_file ( $datafile );		
 }
 
 if ( !$ARGV[0] ) {
 	usage();
 }
-$region = 0;
-$thread = 0;
+$regions = "";
+$threads = "";
 $count = 0;
 $wrrd = 0;
 $rdwr = 0;
@@ -153,7 +187,7 @@ open ( PFILE, "$file") or die "Can't open $file";
 LABEL: while ( <PFILE> ) {
 	chomp;
 	@line = split( /\s+/ );
-	if ($line[27]) {
+	if ($line[27] && $count != 0) {
 		print "invalid file format\n";
 		exit 1;	
 	} 
@@ -186,8 +220,8 @@ LABEL: while ( <PFILE> ) {
 			&write_scr_file("wr");
 		}
 		$rsz = $line[3];		
-		$region = 0;
-		$thread = 0;
+		$regions = "";
+		$threads = "";
 	}
 	#print "rg$line[5] th$line[7] w$line[9] r$line[$rindex]\n";
 	$rindex = 18;
@@ -228,14 +262,10 @@ LABEL2:			if ($line[5] <= 1 ) {
 		$out{$line[7]}{$line[5]} = $line[9];	
 	}
 	if ($readop) {
-		$out{$line[7]}{$line[5]} = $line[9];	
+		$out{$line[7]}{$line[5]} = $line[9];
 	}
-	if ( $region < $line[7] ) {
-		$region = $line[7];
-	}
-	if ( $thread < $line[5] ) {
-		$thread = $line[5];
-	}
+	$regions .= " $line[5]" unless $regions =~ $line[5];
+	$threads .= " $line[7]" unless $threads =~ $line[7];
 	$count++;
 }
 close PFILE;
