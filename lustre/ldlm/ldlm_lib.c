@@ -923,6 +923,8 @@ set_flags:
         if (revimp->imp_msg_magic != LUSTRE_MSG_MAGIC_V1) {
                 if (export->exp_connect_flags & OBD_CONNECT_AT)
                         revimp->imp_msghdr_flags |= MSGHDR_AT_SUPPORT;
+                else
+                        revimp->imp_msghdr_flags &= ~MSGHDR_AT_SUPPORT;
         }
 
         class_import_put(revimp);
