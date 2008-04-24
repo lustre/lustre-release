@@ -1,7 +1,6 @@
 tbd  Sun Microsystems, Inc.
        * version 1.8.0
        * Support for kernels:
-        2.6.9-67.0.4.EL (RHEL 4),
         2.6.16.54-0.2.5 (SLES 10),
         2.6.18-53.1.14.el5 (RHEL 5),
         2.6.22.14 vanilla (kernel.org).
