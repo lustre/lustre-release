@@ -1,7 +1,7 @@
 .\" -*- nroff -*-
 .\" Copyright 2006 by Cluster File Systems, Inc.  All Rights Reserved.
 .\" Copyright 2008 by Sun Microsystems.  All Rights Reserved.
-.\" This file may be copied under the terms of the GNU Public License.
+.\" This file may be copied under the terms of the GNU Public License, v2.
 .\"
 .TH mkfs.lustre 8 "2008 Mar 15" Lustre "configuration utilities"
 .SH NAME
@@ -50,7 +50,8 @@ Only print what would be done; does not affect the disk
 Set the NID(s) of a failover partner. This option can be repeated as desired.
 .TP
 .BI \--fsname= filesystem_name  
-The Lustre filesystem this service will be part of.  Default is 'lustre'
+The Lustre filesystem this service will be part of.  The maximum
+filesystem_name length is 8 characters. Default is 'lustre'
 .TP
 .BI \--index= index
 Force a particular OST or MDT index 
