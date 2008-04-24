@@ -1,7 +1,7 @@
 tbd  Sun Microsystems, Inc.
        * version 1.6.5
        * Support for kernels:
-        2.6.5-7.308 (SLES 9),
+        2.6.5-7.311 (SLES 9),
         2.6.9-67.0.7.EL (RHEL 4),
         2.6.16.54-0.2.5 (SLES 10),
         2.6.18-53.1.14.el5 (RHEL 5),
@@ -17,6 +17,10 @@ tbd  Sun Microsystems, Inc.
        * Note that reiserfs quotas are disabled on SLES 10 in this kernel.
        * RHEL 4 and RHEL 5/SLES 10 clients behaves differently on 'cd' to a
         removed cwd "./" (refer to Bugzilla 14399).
+
+Severity   : enhancement
+Bugzilla   : 15416
+Description: Update kernel to SLES9 2.6.5-7.311.
 
 Severity   : enhancement
 Bugzilla   : 15240
@@ -39,6 +43,10 @@ Frequency  : rare, on shutdown
 Description: race process ast vs remove callback
 Details    : removing callback before disconnect import open race with processing
              callback.
+
+Severity   : enhancement
+Bugzilla   : 15416
+Description: Update kernel to SLES9 2.6.5-7.311.
 
 Severity   : normal
 Bugzilla   : 12652

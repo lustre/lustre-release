@@ -1559,17 +1559,17 @@ Index: LINUX-SRC-TREE/mm/memory.c
  	/* No need to invalidate - it was non-present before */
  	update_mmu_cache(vma, addr, entry);
 +	ioproc_update_page(vma, addr);
- 	lazy_mmu_prot_update(entry);
  	spin_unlock(&mm->page_table_lock);
  	ret = VM_FAULT_MINOR;
+ 
 @@ -1658,6 +1669,7 @@ retry:
  
  	/* no need to invalidate: a not-present page shouldn't be cached */
  	update_mmu_cache(vma, address, entry);
 +	ioproc_update_page(vma, address);
- 	lazy_mmu_prot_update(entry);
  	spin_unlock(&mm->page_table_lock);
   out:
+	return ret;
 @@ -1771,6 +1783,7 @@ static inline int handle_pte_fault(struc
  	spin_unlock(&mm->page_table_lock);
  	return VM_FAULT_MINOR;
