@@ -69,8 +69,6 @@ void request_out_callback(lnet_event_t *ev)
                 ptlrpc_wake_client_req(req);
         }
 
-        /* these balance the references in ptl_send_rpc() */
-        atomic_dec(&req->rq_import->imp_inflight);
         ptlrpc_req_finished(req);
 
         EXIT;

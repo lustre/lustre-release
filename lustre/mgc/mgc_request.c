@@ -868,7 +868,6 @@ static int mgc_import_event(struct obd_device *obd,
         switch (event) {
         case IMP_EVENT_DISCON:
                 /* MGC imports should not wait for recovery */
-                ptlrpc_invalidate_import(imp);
                 break;
         case IMP_EVENT_INACTIVE:
                 break;

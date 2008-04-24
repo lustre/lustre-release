@@ -505,9 +505,8 @@ int ptl_send_rpc(struct ptlrpc_request *request, int noreply)
                        request->rq_reply_portal);
         }
 
-        /* add references on request and import for request_out_callback */
+        /* add references on request for request_out_callback */
         ptlrpc_request_addref(request);
-        atomic_inc(&request->rq_import->imp_inflight);
         if (obd->obd_svc_stats != NULL)
                 lprocfs_counter_add(obd->obd_svc_stats, PTLRPC_REQACTIVE_CNTR,
                                     request->rq_import->imp_inflight.counter);
@@ -528,10 +527,7 @@ int ptl_send_rpc(struct ptlrpc_request *request, int noreply)
                 RETURN(rc);
         }
 
-         /* drop request_out_callback refs, we couldn't start the send */
-        atomic_dec(&request->rq_import->imp_inflight);
         ptlrpc_req_finished(request);
-
         if (noreply)
                 RETURN(rc);
         else

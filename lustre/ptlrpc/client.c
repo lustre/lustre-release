@@ -663,26 +663,34 @@ static int ptlrpc_import_delay_req(struct obd_import *imp,
         } else if (req->rq_send_state == LUSTRE_IMP_CONNECTING &&
                    imp->imp_state == LUSTRE_IMP_CONNECTING) {
                 /* allow CONNECT even if import is invalid */ ;
-        } else if (imp->imp_invalid && (!imp->imp_recon_bk ||
-                                        imp->imp_obd->obd_no_recov)) {
+                if (atomic_read(&imp->imp_inval_count) != 0) {
+                        DEBUG_REQ(D_ERROR, req, "invalidate in flight");
+                        *status = -EIO;
+                }
+
+        } else if ((imp->imp_invalid && (!imp->imp_recon_bk)) ||
+                                         imp->imp_obd->obd_no_recov) {
                 /* If the import has been invalidated (such as by an OST
-                 * failure), and if the import(MGC) tried all of its connection  
-                 * list (Bug 13464), the request must fail with -ESHUTDOWN.  
+                 * failure), and if the import(MGC) tried all of its connection
+                 * list (Bug 13464), the request must fail with -ESHUTDOWN.
                  * This indicates the requests should be discarded; an -EIO
-                 * may result in a resend of the request. */              
+                 * may result in a resend of the request. */
                 if (!imp->imp_deactive)
-                          DEBUG_REQ(D_ERROR, req, "IMP_INVALID");       
+                          DEBUG_REQ(D_ERROR, req, "IMP_INVALID");
                 *status = -ESHUTDOWN; /* bz 12940 */
         } else if (req->rq_import_generation != imp->imp_generation) {
                 DEBUG_REQ(D_ERROR, req, "req wrong generation:");
                 *status = -EIO;
         } else if (req->rq_send_state != imp->imp_state) {
-                if (imp->imp_obd->obd_no_recov)
-                        *status = -ESHUTDOWN;
-                else if (imp->imp_dlm_fake || req->rq_no_delay) 
+                /* invalidate in progress - any requests should be drop */
+                if (atomic_read(&imp->imp_inval_count) != 0) {
+                        DEBUG_REQ(D_ERROR, req, "invalidate in flight");
+                        *status = -EIO;
+                } else if (imp->imp_dlm_fake || req->rq_no_delay) {
                         *status = -EWOULDBLOCK;
-                else
+                } else {
                         delay = 1;
+                }
         }
 
         RETURN(delay);
@@ -1168,9 +1176,8 @@ check_ctx:
                        libcfs_nid2str(imp->imp_connection->c_peer.nid),
                        lustre_msg_get_opc(req->rq_reqmsg));
 
-                set->set_remaining--;
-
                 atomic_dec(&imp->imp_inflight);
+                set->set_remaining--;
                 cfs_waitq_signal(&imp->imp_recovery_waitq);
         }
 
@@ -1758,8 +1765,8 @@ int ptlrpc_queue_wait(struct ptlrpc_request *req)
         req->rq_phase = RQ_PHASE_RPC;
 
         spin_lock(&imp->imp_lock);
-restart:
         req->rq_import_generation = imp->imp_generation;
+restart:
         if (ptlrpc_import_delay_req(imp, req, &rc)) {
                 list_del(&req->rq_list);
 
