@@ -119,7 +119,7 @@ LB_LINUX_TRY_COMPILE([
 		#include <linux/version.h>
 	],[
 		#ifndef SLE_VERSION_CODE
-		#error "not redhat kernel"
+		#error "not sles kernel"
 		#endif
 	],[
 		SUSE_KERNEL="yes"
