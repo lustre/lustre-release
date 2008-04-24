@@ -98,6 +98,36 @@ AC_MSG_CHECKING([for Lustre release])
 RELEASE="`echo ${LINUXRELEASE} | tr '-' '_'`_`date +%Y%m%d%H%M`"
 AC_MSG_RESULT($RELEASE)
 AC_SUBST(RELEASE)
+
+# check is redhat/suse kernels
+AC_MSG_CHECKING([that RedHat kernel])
+LB_LINUX_TRY_COMPILE([
+		#include <linux/version.h>
+	],[
+		#ifndef RHEL_MAJOR
+		#error "not redhat kernel"
+		#endif
+	],[
+		RHEL_KENEL="yes"
+		AC_MSG_RESULT([yes])
+	],[
+	        AC_MSG_RESULT([no])
+])
+
+AC_MSG_CHECKING([that SuSe kernel])
+LB_LINUX_TRY_COMPILE([
+		#include <linux/version.h>
+	],[
+		#ifndef SLE_VERSION_CODE
+		#error "not redhat kernel"
+		#endif
+	],[
+		SUSE_KERNEL="yes"
+		AC_MSG_RESULT([yes])
+	],[
+	        AC_MSG_RESULT([no])
+])
+
 ])
 
 #
