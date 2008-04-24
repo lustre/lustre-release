@@ -1312,7 +1312,7 @@ EXPORT_SYMBOL(obd_zombie_impexp_cull);
 
 void obd_zombie_impexp_init(void)
 {
-        INIT_LIST_HEAD(&obd_zombie_imports);
-        INIT_LIST_HEAD(&obd_zombie_exports);
+        CFS_INIT_LIST_HEAD(&obd_zombie_imports);
+        CFS_INIT_LIST_HEAD(&obd_zombie_exports);
         spin_lock_init(&obd_zombie_impexp_lock);
 }

@@ -551,7 +551,7 @@ int init_obdclass(void)
                 return err;
 
         spin_lock_init(&obd_dev_lock);
-        INIT_LIST_HEAD(&obd_types);
+        CFS_INIT_LIST_HEAD(&obd_types);
 
         err = cfs_psdev_register(&obd_psdev);
         if (err) {

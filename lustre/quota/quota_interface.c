@@ -709,7 +709,7 @@ static struct osc_quota_info *alloc_qinfo(struct client_obd *cli,
         if(!oqi)
                 RETURN(NULL);
 
-        INIT_LIST_HEAD(&oqi->oqi_hash);
+        CFS_INIT_LIST_HEAD(&oqi->oqi_hash);
         oqi->oqi_cli = cli;
         oqi->oqi_id = id;
         oqi->oqi_type = type;
@@ -824,7 +824,7 @@ int osc_quota_init(void)
                 RETURN(-ENOMEM);
 
         for (i = 0; i < NR_DQHASH; i++)
-                INIT_LIST_HEAD(qinfo_hash + i);
+                CFS_INIT_LIST_HEAD(qinfo_hash + i);
 
         RETURN(0);
 }

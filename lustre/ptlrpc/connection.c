@@ -104,7 +104,7 @@ struct ptlrpc_connection *ptlrpc_get_connection(lnet_process_id_t peer,
         c->c_peer = peer;
         c->c_self = self;
 	INIT_HLIST_NODE(&c->c_hash);
-	INIT_LIST_HEAD(&c->c_link);
+	CFS_INIT_LIST_HEAD(&c->c_link);
         if (uuid != NULL)
                 obd_str2uuid(&c->c_remote_uuid, uuid->uuid);
 

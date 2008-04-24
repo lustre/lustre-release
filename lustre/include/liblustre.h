@@ -599,9 +599,9 @@ static inline int capable(int cap)
 
 #define DECLARE_WAIT_QUEUE_HEAD(HEAD)                           \
         wait_queue_head_t HEAD = {                              \
-                .sleepers = LIST_HEAD_INIT(HEAD.sleepers)       \
+                .sleepers = CFS_LIST_HEAD_INIT(HEAD.sleepers)       \
         }
-#define init_waitqueue_head(l) INIT_LIST_HEAD(&(l)->sleepers)
+#define init_waitqueue_head(l) CFS_INIT_LIST_HEAD(&(l)->sleepers)
 #define wake_up(l) do { int a = 0; a++; } while (0)
 #define TASK_INTERRUPTIBLE 0
 #define TASK_UNINTERRUPTIBLE 1
@@ -672,7 +672,7 @@ static inline int timer_pending(struct timer_list *l)
 
 static inline int init_timer(struct timer_list *l)
 {
-        INIT_LIST_HEAD(&l->tl_list);
+        CFS_INIT_LIST_HEAD(&l->tl_list);
         return 0;
 }
 

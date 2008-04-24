@@ -1106,7 +1106,7 @@ static int osc_brw_prep_request(int cmd, struct client_obd *cli,struct obdo *oa,
         aa->aa_resends = 0;
         aa->aa_ppga = pga;
         aa->aa_cli = cli;
-        INIT_LIST_HEAD(&aa->aa_oaps);
+        CFS_INIT_LIST_HEAD(&aa->aa_oaps);
 
         *reqp = req;
         RETURN (0);
@@ -1406,9 +1406,9 @@ int osc_brw_redo_request(struct ptlrpc_request *request,
 
         new_aa = (struct osc_brw_async_args *)&new_req->rq_async_args;
 
-        INIT_LIST_HEAD(&new_aa->aa_oaps);
+        CFS_INIT_LIST_HEAD(&new_aa->aa_oaps);
         list_splice(&aa->aa_oaps, &new_aa->aa_oaps);
-        INIT_LIST_HEAD(&aa->aa_oaps);
+        CFS_INIT_LIST_HEAD(&aa->aa_oaps);
 
         list_for_each_entry(oap, &new_aa->aa_oaps, oap_rpc_item) {
                 if (oap->oap_request) {
@@ -2062,9 +2062,9 @@ static struct ptlrpc_request *osc_build_req(struct client_obd *cli,
 
         CLASSERT(sizeof(*aa) <= sizeof(req->rq_async_args));
         aa = (struct osc_brw_async_args *)&req->rq_async_args;
-        INIT_LIST_HEAD(&aa->aa_oaps);
+        CFS_INIT_LIST_HEAD(&aa->aa_oaps);
         list_splice(rpc_list, &aa->aa_oaps);
-        INIT_LIST_HEAD(rpc_list);
+        CFS_INIT_LIST_HEAD(rpc_list);
 
 out:
         if (IS_ERR(req)) {
@@ -2492,7 +2492,7 @@ int osc_prep_async_page(struct obd_export *exp, struct lov_stripe_md *lsm,
         CFS_INIT_LIST_HEAD(&oap->oap_pending_item);
         CFS_INIT_LIST_HEAD(&oap->oap_urgent_item);
         CFS_INIT_LIST_HEAD(&oap->oap_rpc_item);
-        INIT_LIST_HEAD(&oap->oap_page_list);
+        CFS_INIT_LIST_HEAD(&oap->oap_page_list);
 
         oap->oap_occ.occ_interrupted = osc_occ_interrupted;
 
