@@ -838,7 +838,7 @@ static int mdc_intent_getattr_async_interpret(struct ptlrpc_request *req,
         rc = ldlm_cli_enqueue_fini(exp, req, einfo->ei_type, 1, einfo->ei_mode,
                                    &flags, NULL, 0, NULL, lockh, rc);
         if (rc < 0) {
-                CERROR("ldlm_cli_enqueue: %d\n", rc);
+                CERROR("ldlm_cli_enqueue_fini: %d\n", rc);
                 mdc_clear_replay_flag(req, rc);
                 GOTO(out, rc);
         }

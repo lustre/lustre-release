@@ -235,17 +235,26 @@ int ll_file_release(struct inode *inode, struct file *file)
         CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu/%u(%p)\n", inode->i_ino,
                inode->i_generation, inode);
 
-        if (S_ISDIR(inode->i_mode))
-                ll_stop_statahead(inode);
 
-        /* don't do anything for / */
-        if (inode->i_sb->s_root == file->f_dentry)
-                RETURN(0);
-
-        ll_stats_ops_tally(sbi, LPROC_LL_RELEASE, 1);
+        if (inode->i_sb->s_root != file->f_dentry)
+                ll_stats_ops_tally(sbi, LPROC_LL_RELEASE, 1);
         fd = LUSTRE_FPRIVATE(file);
         LASSERT(fd != NULL);
 
+        /*
+         * The last ref on @file, maybe not the the owner pid of statahead.
+         * Different processes can open the same dir, "ll_opendir_key" means:
+         * it is me that should stop the statahead thread.
+         */
+        if (lli->lli_opendir_key == fd)
+                ll_stop_statahead(inode, fd);
+
+        if (inode->i_sb->s_root == file->f_dentry) {
+                LUSTRE_FPRIVATE(file) = NULL;
+                ll_file_data_put(fd);
+                RETURN(0);
+        }
+        
         if (lsm)
                 lov_test_and_clear_async_rc(lsm);
         lli->lli_async_rc = 0;
@@ -384,18 +393,11 @@ int ll_file_open(struct inode *inode, struct file *file)
         struct obd_client_handle **och_p;
         __u64 *och_usecount;
         struct ll_file_data *fd;
-        int rc = 0;
+        int rc = 0, opendir_set = 0;
         ENTRY;
 
         CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu/%u(%p), flags %o\n", inode->i_ino,
                inode->i_generation, inode, file->f_flags);
-
-        if (S_ISDIR(inode->i_mode) && lli->lli_opendir_pid == 0)
-                lli->lli_opendir_pid = current->pid;
-
-        /* don't do anything for / */
-        if (inode->i_sb->s_root == file->f_dentry)
-                RETURN(0);
 
 #ifdef HAVE_VFS_INTENT_PATCHES
         it = file->f_it;
@@ -405,10 +407,40 @@ int ll_file_open(struct inode *inode, struct file *file)
 #endif
 
         fd = ll_file_data_get();
-        if (fd == NULL) {
-                lli->lli_opendir_pid = 0;
+        if (fd == NULL)
                 RETURN(-ENOMEM);
+
+        if (S_ISDIR(inode->i_mode)) {
+                spin_lock(&lli->lli_lock);
+                /*
+                 * "lli->lli_opendir_pid != 0" means someone has set it.
+                 * "lli->lli_sai != NULL" means the previous statahead has not
+                 *                        been cleanup.
+                 */ 
+                if (lli->lli_opendir_pid == 0 && lli->lli_sai == NULL) {
+                        opendir_set = 1;
+                        lli->lli_opendir_pid = cfs_curproc_pid();
+                        lli->lli_opendir_key = fd;
+                } else if (unlikely(lli->lli_opendir_pid == cfs_curproc_pid())) {
+                        /* Two cases for this:
+                         * (1) The same process open such directory many times.
+                         * (2) The old process opened the directory, and exited
+                         *     before its children processes. Then new process
+                         *     with the same pid opens such directory before the
+                         *     old process's children processes exit.
+                         * Change the owner to the latest one.
+                         */
+                        opendir_set = 2;
+                        lli->lli_opendir_key = fd;
+                }
+                spin_unlock(&lli->lli_lock);
         }
+
+        if (inode->i_sb->s_root == file->f_dentry) {
+                LUSTRE_FPRIVATE(file) = fd;
+                RETURN(0);
+        }
+
         if (!it || !it->d.lustre.it_disposition) {
                 /* Convert f_flags into access mode. We cannot use file->f_mode,
                  * because everything but O_ACCMODE mask was stripped from it */
@@ -547,7 +579,12 @@ out_och_free:
                 }
                 up(&lli->lli_och_sem);
 out_openerr:
-                lli->lli_opendir_pid = 0;
+                if (opendir_set) {
+                        lli->lli_opendir_key = NULL;
+                        lli->lli_opendir_pid = 0;
+                } else if (unlikely(opendir_set == 2)) {
+                        ll_stop_statahead(inode, fd);
+                }
         }
         return rc;
 }

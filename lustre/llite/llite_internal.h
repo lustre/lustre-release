@@ -54,11 +54,12 @@ struct ll_dentry_data {
         struct obd_client_handle lld_cwd_och;
         struct obd_client_handle lld_mnt_och;
 #ifndef HAVE_VFS_INTENT_PATCHES
-        struct lookup_intent     *lld_it;
+        struct lookup_intent    *lld_it;
 #endif
+        cfs_waitq_t              lld_waitq;
 };
 
-#define ll_d2d(de) ((struct ll_dentry_data*) de->d_fsdata)
+#define ll_d2d(de) ((struct ll_dentry_data*)((de)->d_fsdata))
 
 extern struct file_operations ll_pgcache_seq_fops;
 
@@ -113,7 +114,16 @@ struct ll_inode_info {
 #endif
 
         /* metadata stat-ahead */
+        /*
+         * "opendir_pid" is the token when lookup/revalid -- I am the owner of
+         * dir statahead.
+         */
         pid_t                   lli_opendir_pid;
+        /* 
+         * since parent-child threads can share the same @file struct,
+         * "opendir_key" is the token when dir close for case of parent exit
+         * before child -- it is me should cleanup the dir readahead. */
+        void                   *lli_opendir_key;
         struct ll_statahead_info *lli_sai;
 };
 
@@ -276,15 +286,16 @@ struct ll_sb_info {
                                                  * clustred nfs */
 
         /* metadata stat-ahead */
-        unsigned int              ll_sa_count; /* current statahead RPCs */
-        unsigned int              ll_sa_max;   /* max statahead RPCs */
-        unsigned int              ll_sa_wrong; /* statahead thread stopped for
-                                                * low hit ratio */
-        unsigned int              ll_sa_total; /* statahead thread started
-                                                * count */
+        unsigned int              ll_sa_max;     /* max statahead RPCs */
+        unsigned int              ll_sa_wrong;   /* statahead thread stopped for
+                                                  * low hit ratio */
+        unsigned int              ll_sa_total;   /* statahead thread started
+                                                  * count */
         unsigned long long        ll_sa_blocked; /* ls count waiting for
                                                   * statahead */
         unsigned long long        ll_sa_cached;  /* ls count got in cache */
+        unsigned long long        ll_sa_hit;     /* hit count */
+        unsigned long long        ll_sa_miss;    /* miss count */
 };
 
 #define LL_DEFAULT_MAX_RW_CHUNK         (32 * 1024 * 1024)
@@ -613,6 +624,9 @@ int ll_dir_getstripe(struct inode *inode, struct lov_mds_md **lmm,
                      int *lmm_size, struct ptlrpc_request **request);
 
 /* llite/dcache.c */
+extern struct dentry_operations ll_init_d_ops;
+extern struct dentry_operations ll_d_ops;
+extern struct dentry_operations ll_fini_d_ops;
 void ll_intent_drop_lock(struct lookup_intent *);
 void ll_intent_release(struct lookup_intent *);
 extern void ll_set_dd(struct dentry *de);
@@ -815,34 +829,70 @@ int ll_removexattr(struct dentry *dentry, const char *name);
 
 /* statahead.c */
 
-#define LL_STATAHEAD_MIN  1
-#define LL_STATAHEAD_DEF  32
-#define LL_STATAHEAD_MAX  10000
+#define LL_SA_RPC_MIN   2
+#define LL_SA_RPC_DEF   32
+#define LL_SA_RPC_MAX   8192
 
 /* per inode struct, for dir only */
 struct ll_statahead_info {
         struct inode           *sai_inode;
-        atomic_t                sai_refc;       /* when access this struct, hold
+        unsigned int            sai_generation; /* generation for statahead */
+        atomic_t                sai_refcount;   /* when access this struct, hold
                                                  * refcount */
-        unsigned int            sai_max;        /* max ahead of lookup */
         unsigned int            sai_sent;       /* stat requests sent count */
         unsigned int            sai_replied;    /* stat requests which received
                                                  * reply */
-        unsigned int            sai_cached;     /* UPDATE lock cached locally
-                                                 * already */
+        unsigned int            sai_max;        /* max ahead of lookup */
+        unsigned int            sai_index;      /* index of statahead entry */
         unsigned int            sai_hit;        /* hit count */
-        unsigned int            sai_miss;       /* miss count */
+        unsigned int            sai_miss;       /* miss count:
+                                                 * for "ls -al" case, it includes
+                                                 * hidden dentry miss;
+                                                 * for "ls -l" case, it does not
+                                                 * include hidden dentry miss.
+                                                 * "sai_miss_hidden" is used for
+                                                 * the later case.
+                                                 */
         unsigned int            sai_consecutive_miss; /* consecutive miss */
-        unsigned                sai_ls_all:1;   /* ls -al, do stat-ahead for
+        unsigned int            sai_miss_hidden;/* "ls -al", but first dentry
+                                                 * is not a hidden one */
+        unsigned int            sai_skip_hidden;/* skipped hidden dentry count */
+        unsigned int            sai_ls_all:1;   /* "ls -al", do stat-ahead for
                                                  * hidden entries */
+        cfs_waitq_t             sai_waitq;      /* stat-ahead wait queue */
         struct ptlrpc_thread    sai_thread;     /* stat-ahead thread */
         struct list_head        sai_entries;    /* stat-ahead entries */
-        unsigned int            sai_entries_nr; /* stat-ahead entries count */
 };
 
-int ll_statahead_enter(struct inode *dir, struct dentry **dentry, int lookup);
+int do_statahead_enter(struct inode *dir, struct dentry **dentry, int lookup);
 void ll_statahead_exit(struct dentry *dentry, int result);
-void ll_stop_statahead(struct inode *inode);
+void ll_stop_statahead(struct inode *inode, void *key);
+
+static inline
+void ll_d_wakeup(struct dentry *dentry)
+{
+        struct ll_dentry_data *lld = ll_d2d(dentry);
+
+        LASSERT(dentry->d_op != &ll_init_d_ops);
+        if (lld != NULL)
+                cfs_waitq_broadcast(&lld->lld_waitq);
+}
+
+static inline
+int ll_statahead_enter(struct inode *dir, struct dentry **dentryp, int lookup)
+{
+        struct ll_sb_info        *sbi = ll_i2sbi(dir);
+        struct ll_inode_info     *lli = ll_i2info(dir);
+
+        if (sbi->ll_sa_max == 0)
+                return -ENOTSUPP;
+
+        /* not the same process, don't statahead */
+        if (lli->lli_opendir_pid != cfs_curproc_pid())
+                return -EBADF;
+
+        return do_statahead_enter(dir, dentryp, lookup);
+}
 
 /* llite ioctl register support rountine */
 #ifdef __KERNEL__

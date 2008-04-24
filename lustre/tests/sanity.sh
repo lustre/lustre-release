@@ -4664,7 +4664,9 @@ test_123a() { # was test 123, statahead(bug 11401)
                 max=`lctl get_param -n llite.*.statahead_max | head -n 1`
                 lctl set_param -n llite.*.statahead_max 0
                 lctl get_param llite.*.statahead_max
-
+                cancel_lru_locks mdc
+                cancel_lru_locks osc
+                stime=`date +%s`
                 ls -l $DIR/$tdir > /dev/null
                 etime=`date +%s`
                 delta=$((etime - stime))
@@ -4678,7 +4680,7 @@ test_123a() { # was test 123, statahead(bug 11401)
 
                 [ $delta -gt 20 ] && break
                 [ $delta -gt 8 ] && MULT=$((50 / delta))
-                [ "$SLOW" = "no" -a $delta -ge 3 ] && break		
+                [ "$SLOW" = "no" -a $delta -gt 3 ] && break
         done
         log "ls done"
 

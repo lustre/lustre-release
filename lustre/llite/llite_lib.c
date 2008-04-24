@@ -108,7 +108,7 @@ static struct ll_sb_info *ll_init_sbi(void)
         }
 
         /* metadata statahead is enabled by default */
-        sbi->ll_sa_max = LL_STATAHEAD_DEF;
+        sbi->ll_sa_max = LL_SA_RPC_DEF;
 
         RETURN(sbi);
 }
@@ -1233,6 +1233,7 @@ void ll_clear_inode(struct inode *inode)
         if (S_ISDIR(inode->i_mode)) {
                 /* these should have been cleared in ll_file_release */
                 LASSERT(lli->lli_sai == NULL);
+                LASSERT(lli->lli_opendir_key == NULL);
                 LASSERT(lli->lli_opendir_pid == 0);
         }
 

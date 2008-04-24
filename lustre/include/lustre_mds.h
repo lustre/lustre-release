@@ -243,6 +243,7 @@ struct md_enqueue_info {
         struct lustre_handle    mi_lockh;
         struct dentry          *mi_dentry;
         md_enqueue_cb_t         mi_cb;
+        unsigned int            mi_generation;
         void                   *mi_cbdata;
 };
 

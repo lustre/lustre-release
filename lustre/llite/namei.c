@@ -98,8 +98,6 @@ static int ll_test_inode(struct inode *inode, void *opaque)
         return 1;
 }
 
-extern struct dentry_operations ll_d_ops;
-
 int ll_unlock(__u32 mode, struct lustre_handle *lockh)
 {
         ENTRY;
@@ -444,24 +442,44 @@ static struct dentry *ll_find_alias(struct inode *inode, struct dentry *de)
 }
 
 int lookup_it_finish(struct ptlrpc_request *request, int offset,
-                            struct lookup_intent *it, void *data)
+                     struct lookup_intent *it, void *data)
 {
         struct it_cb_data *icbd = data;
         struct dentry **de = icbd->icbd_childp;
         struct inode *parent = icbd->icbd_parent;
         struct ll_sb_info *sbi = ll_i2sbi(parent);
         struct inode *inode = NULL;
-        int rc;
+        int set = 0, rc;
+        ENTRY;
+
+        lock_dentry(*de);
+        if (likely((*de)->d_op != &ll_d_ops)) {
+                (*de)->d_op = &ll_init_d_ops;
+                set = 1;
+        }
+        unlock_dentry(*de);
 
         /* NB 1 request reference will be taken away by ll_intent_lock()
          * when I return */
         if (!it_disposition(it, DISP_LOOKUP_NEG)) {
-                ENTRY;
+                struct dentry *save = *de;
 
                 rc = ll_prep_inode(sbi->ll_osc_exp, &inode, request, offset,
                                    (*de)->d_sb);
-                if (rc)
+                if (rc) {
+                        if (set) {
+                                lock_dentry(*de);
+                                if (likely((*de)->d_op == &ll_init_d_ops)) {
+                                        (*de)->d_op = &ll_fini_d_ops;
+                                        unlock_dentry(*de);
+                                        smp_wmb();
+                                        ll_d_wakeup(*de);
+                                } else {
+                                        unlock_dentry(*de);
+                                }
+                        }
                         RETURN(rc);
+                }
 
                 CDEBUG(D_DLMTRACE, "setting l_data to inode %p (%lu/%u)\n",
                        inode, inode->i_ino, inode->i_generation);
@@ -476,8 +494,18 @@ int lookup_it_finish(struct ptlrpc_request *request, int offset,
                    ll_glimpse_size or some equivalent themselves anyway.
                    Also see bug 7198. */
                 *de = ll_find_alias(inode, *de);
+                if (set && *de != save) {
+                        lock_dentry(save);
+                        if (likely(save->d_op == &ll_init_d_ops)) {
+                                save->d_op = &ll_fini_d_ops;
+                                unlock_dentry(save);
+                                smp_wmb();
+                                ll_d_wakeup(save);
+                        } else {
+                                unlock_dentry(save);
+                        }
+                }
         } else {
-                ENTRY;
                 /* Check that parent has UPDATE lock. If there is none, we
                    cannot afford to hash this dentry (done by ll_d_add) as it
                    might get picked up later when UPDATE lock will appear */
@@ -497,7 +525,17 @@ int lookup_it_finish(struct ptlrpc_request *request, int offset,
         }
 
         ll_set_dd(*de);
-        (*de)->d_op = &ll_d_ops;
+
+        lock_dentry(*de);
+        if (likely((*de)->d_op == &ll_init_d_ops)) {
+                (*de)->d_op = &ll_d_ops;
+                unlock_dentry(*de);
+                smp_wmb();
+                ll_d_wakeup(*de);
+        } else {
+                (*de)->d_op = &ll_d_ops;
+                unlock_dentry(*de);
+        }
 
         RETURN(0);
 }
