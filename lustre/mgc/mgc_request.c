@@ -23,7 +23,7 @@
  *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  *
  */
- 
+
 #ifndef EXPORT_SYMTAB
 # define EXPORT_SYMTAB
 #endif
@@ -868,7 +868,7 @@ int mgc_set_info_async(struct obd_export *exp, obd_count keylen,
         }
 
         RETURN(rc);
-}               
+}
 
 static int mgc_import_event(struct obd_device *obd,
                             struct obd_import *imp,
@@ -882,7 +882,6 @@ static int mgc_import_event(struct obd_device *obd,
         switch (event) {
         case IMP_EVENT_DISCON: 
                 /* MGC imports should not wait for recovery */
-                ptlrpc_invalidate_import(imp);
                 break;
         case IMP_EVENT_INACTIVE: 
                 break;

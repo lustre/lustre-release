@@ -227,6 +227,7 @@ void ptlrpc_invalidate_import(struct obd_import *imp)
                         DEBUG_REQ(D_ERROR, req, "still on delayed list");
                 }
                 spin_unlock(&imp->imp_lock);
+                LASSERT(atomic_read(&imp->imp_inflight) == 0);
         }
 
         obd_import_event(imp->imp_obd, imp, IMP_EVENT_INVALIDATE);
