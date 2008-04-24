@@ -71,9 +71,13 @@ case $LINUXRELEASE in
 2.6.12*) LDISKFS_SERIES="2.6.12-vanilla.series" ;;
 2.6.15*) LDISKFS_SERIES="2.6-fc5.series";;
 2.6.16*) LDISKFS_SERIES="2.6-sles10.series";;
-2.6.18-*el5*) LDISKFS_SERIES="2.6-rhel5.series";;
-2.6.18-*prep*) LDISKFS_SERIES="2.6-rhel5.series";;
-2.6.18*) LDISKFS_SERIES="2.6.18-vanilla.series";;
+2.6.18*)
+	if test x$RHEL_KENEL = xyes; then
+		LDISKFS_SERIES="2.6-rhel5.series"
+	else
+		LDISKFS_SERIES="2.6.18-vanilla.series"
+	fi
+	;;
 2.6.22*) LDISKFS_SERIES="2.6.22-vanilla.series";;
 *) AC_MSG_WARN([Unknown kernel version $LINUXRELEASE, fix ldiskfs/configure.ac])
 esac
