@@ -519,6 +519,13 @@ Bugzilla   : 15566
 Description: Update an obsolete wirecheck.c generator
 Details    : Update wirecheck.c/wirehdr.c and regenerate wiretest.c
 
+Severity   : normal
+Bugzilla   : 14712
+Description: Client can panic on open sometimes
+Details    : It is possible that we try to free already freed request in
+             ll_file_open in some error cases when we send request from
+	     ll_file_open
+
 --------------------------------------------------------------------------------
 
 2007-12-07         Cluster File Systems, Inc. <info@clusterfs.com>

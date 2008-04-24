@@ -486,8 +486,9 @@ restart:
                            let's close it somehow. This will decref request. */
                         rc = it_open_error(DISP_OPEN_OPEN, it);
                         if (rc) {
+                                up(&lli->lli_och_sem);
                                 ll_file_data_put(fd);
-                                GOTO(out_och_free, rc);
+                                GOTO(out_openerr, rc);
                         }       
                         ll_release_openhandle(file->f_dentry, it);
                         lprocfs_counter_incr(ll_i2sbi(inode)->ll_stats, 
@@ -513,11 +514,6 @@ restart:
                                 GOTO(out_openerr, rc);
                         }
 
-                        /* Got some error? Release the request */
-                        if (it->d.lustre.it_status < 0) {
-                                req = it->d.lustre.it_data;
-                                ptlrpc_req_finished(req);
-                        }
                         mdc_set_lock_data(&it->d.lustre.it_lock_handle,
                                           file->f_dentry->d_inode);
                         goto restart;
