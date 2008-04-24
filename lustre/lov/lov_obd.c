@@ -730,7 +730,7 @@ static int lov_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
         lov->lov_tgt_size = 0;
         sema_init(&lov->lov_lock, 1);
         atomic_set(&lov->lov_refcount, 0);
-        INIT_LIST_HEAD(&lov->lov_qos.lq_oss_list);
+        CFS_INIT_LIST_HEAD(&lov->lov_qos.lq_oss_list);
         init_rwsem(&lov->lov_qos.lq_rw_sem);
         lov->lov_qos.lq_dirty = 1;
         lov->lov_qos.lq_dirty_rr = 1;

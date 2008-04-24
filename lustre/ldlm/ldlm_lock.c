@@ -1508,7 +1508,7 @@ void ldlm_reprocess_all_ns(struct ldlm_namespace *ns)
 
 void ldlm_reprocess_all(struct ldlm_resource *res)
 {
-        struct list_head rpc_list = LIST_HEAD_INIT(rpc_list);
+        CFS_LIST_HEAD(rpc_list);
         int rc;
         ENTRY;
 
@@ -1686,7 +1686,7 @@ void ldlm_cancel_locks_for_export(struct obd_export *exp)
 struct ldlm_resource *ldlm_lock_convert(struct ldlm_lock *lock, int new_mode,
                                         __u32 *flags)
 {
-        struct list_head rpc_list = LIST_HEAD_INIT(rpc_list);
+        CFS_LIST_HEAD(rpc_list);
         struct ldlm_resource *res;
         struct ldlm_namespace *ns;
         int granted = 0;

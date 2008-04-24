@@ -49,7 +49,7 @@ extern cfs_mem_cache_t *obj_cache;
 extern atomic_t obj_cache_count;
 
 /* object list and its guard. */
-static LIST_HEAD(obj_list);
+static CFS_LIST_HEAD(obj_list);
 static spinlock_t obj_list_lock = SPIN_LOCK_UNLOCKED;
 
 /* creates new obj on passed @fid and @mea. */

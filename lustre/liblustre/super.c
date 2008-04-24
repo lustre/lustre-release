@@ -2020,7 +2020,7 @@ llu_fsswop_mount(const char *source,
         if (!sbi)
                 RETURN(-ENOMEM);
 
-        INIT_LIST_HEAD(&sbi->ll_conn_chain);
+        CFS_INIT_LIST_HEAD(&sbi->ll_conn_chain);
         ll_generate_random_uuid(uuid);
         class_uuid_unparse(uuid, &sbi->ll_sb_uuid);
 

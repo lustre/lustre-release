@@ -381,7 +381,7 @@ void null_init_internal(void)
         null_sec.ps_dying = 0;
         spin_lock_init(&null_sec.ps_lock);
         atomic_set(&null_sec.ps_nctx, 1);         /* for "null_cli_ctx" */
-        INIT_LIST_HEAD(&null_sec.ps_gc_list);
+        CFS_INIT_LIST_HEAD(&null_sec.ps_gc_list);
         null_sec.ps_gc_interval = 0;
         null_sec.ps_gc_next = 0;
 
@@ -394,8 +394,8 @@ void null_init_internal(void)
                                 PTLRPC_CTX_UPTODATE;
         null_cli_ctx.cc_vcred.vc_uid = 0;
         spin_lock_init(&null_cli_ctx.cc_lock);
-        INIT_LIST_HEAD(&null_cli_ctx.cc_req_list);
-        INIT_LIST_HEAD(&null_cli_ctx.cc_gc_chain);
+        CFS_INIT_LIST_HEAD(&null_cli_ctx.cc_req_list);
+        CFS_INIT_LIST_HEAD(&null_cli_ctx.cc_gc_chain);
 }
 
 int sptlrpc_null_init(void)

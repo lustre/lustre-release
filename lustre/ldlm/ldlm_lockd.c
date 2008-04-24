@@ -1797,7 +1797,7 @@ void ldlm_revoke_export_locks(struct obd_export *exp)
         struct ldlm_lock *lock, *next;
 
         ENTRY;
-        INIT_LIST_HEAD(&rpc_list);
+        CFS_INIT_LIST_HEAD(&rpc_list);
 
         spin_lock(&exp->exp_ldlm_data.led_lock);
         list_for_each_entry_safe(lock, next, locklist, l_export_chain) {

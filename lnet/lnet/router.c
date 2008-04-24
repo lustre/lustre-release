@@ -307,7 +307,7 @@ lnet_add_route (__u32 net, unsigned int hops, lnet_nid_t gateway)
                 return -ENOMEM;
         }
 
-        INIT_LIST_HEAD(&rnet->lrn_routes);
+        CFS_INIT_LIST_HEAD(&rnet->lrn_routes);
         rnet->lrn_net = net;
         rnet->lrn_hops = hops;
 

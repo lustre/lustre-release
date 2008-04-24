@@ -549,7 +549,7 @@ static void filter_fmd_cleanup(struct obd_export *exp)
 static int filter_init_export(struct obd_export *exp)
 {
         spin_lock_init(&exp->exp_filter_data.fed_lock);
-        INIT_LIST_HEAD(&exp->exp_filter_data.fed_mod_list);
+        CFS_INIT_LIST_HEAD(&exp->exp_filter_data.fed_mod_list);
 	
         spin_lock(&exp->exp_lock);
         exp->exp_connecting = 1;
@@ -1618,7 +1618,7 @@ static int filter_intent_policy(struct ldlm_namespace *ns,
                                 struct ldlm_lock **lockp, void *req_cookie,
                                 ldlm_mode_t mode, int flags, void *data)
 {
-        struct list_head rpc_list = LIST_HEAD_INIT(rpc_list);
+        struct list_head rpc_list = CFS_LIST_HEAD_INIT(rpc_list);
         struct ptlrpc_request *req = req_cookie;
         struct ldlm_lock *lock = *lockp, *l = NULL;
         struct ldlm_resource *res = lock->l_resource;
@@ -1970,14 +1970,14 @@ int filter_common_setup(struct obd_device *obd, struct lustre_cfg* lcfg,
         filter->fo_fmd_max_num = FILTER_FMD_MAX_NUM_DEFAULT;
         filter->fo_fmd_max_age = FILTER_FMD_MAX_AGE_DEFAULT;
 
-        INIT_LIST_HEAD(&filter->fo_llog_list);
+        CFS_INIT_LIST_HEAD(&filter->fo_llog_list);
         spin_lock_init(&filter->fo_llog_list_lock);
 
         filter->fo_sptlrpc_lock = RW_LOCK_UNLOCKED;
         sptlrpc_rule_set_init(&filter->fo_sptlrpc_rset);
 
         filter->fo_fl_oss_capa = 0;
-        INIT_LIST_HEAD(&filter->fo_capa_keys);
+        CFS_INIT_LIST_HEAD(&filter->fo_capa_keys);
         filter->fo_capa_hash = init_capa_hash();
         if (filter->fo_capa_hash == NULL)
                 GOTO(err_ops, rc = -ENOMEM);

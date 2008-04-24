@@ -369,7 +369,7 @@ int fld_client_init(struct lu_client_fld *fld,
         spin_lock_init(&fld->lcf_lock);
         fld->lcf_hash = &fld_hash[hash];
         fld->lcf_flags = LUSTRE_FLD_INIT;
-        INIT_LIST_HEAD(&fld->lcf_targets);
+        CFS_INIT_LIST_HEAD(&fld->lcf_targets);
 
 #ifdef __KERNEL__
         cache_size = FLD_CLIENT_CACHE_SIZE /

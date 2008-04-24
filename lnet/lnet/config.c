@@ -381,7 +381,7 @@ lnet_str2tbs_sep (struct list_head *tbs, char *str)
         int               i;
 	lnet_text_buf_t  *ltb;
 
-	INIT_LIST_HEAD(&pending);
+	CFS_INIT_LIST_HEAD(&pending);
 
 	/* Split 'str' into separate commands */
 	for (;;) {
@@ -471,7 +471,7 @@ lnet_str2tbs_expand (struct list_head *tbs, char *str)
 	int               nob;
 	int               scanned;
 
-	INIT_LIST_HEAD(&pending);
+	CFS_INIT_LIST_HEAD(&pending);
 	
 	sep = strchr(str, '[');
 	if (sep == NULL)			/* nothing to expand */

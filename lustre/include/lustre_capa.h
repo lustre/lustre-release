@@ -169,7 +169,7 @@ static inline struct obd_capa *alloc_capa(int site)
         if (ocapa) {
                 atomic_set(&ocapa->c_refc, 0);
                 spin_lock_init(&ocapa->c_lock);
-                INIT_LIST_HEAD(&ocapa->c_list);
+                CFS_INIT_LIST_HEAD(&ocapa->c_list);
                 ocapa->c_site = site;
         }
         return ocapa;

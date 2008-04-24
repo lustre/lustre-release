@@ -43,18 +43,11 @@ typedef struct list_head list_t;
 #define CFS_LIST_HEAD_INIT(name) { &(name), &(name) }
 
 #define CFS_LIST_HEAD(name) \
-	struct list_head name = LIST_HEAD_INIT(name)
+	struct list_head name = CFS_LIST_HEAD_INIT(name)
 
 #define CFS_INIT_LIST_HEAD(ptr) do { \
 	(ptr)->next = (ptr); (ptr)->prev = (ptr); \
 } while (0)
-
-#ifndef __APPLE__
-#define LIST_HEAD(n)		CFS_LIST_HEAD(n)
-#endif
-
-#define LIST_HEAD_INIT(n)	CFS_LIST_HEAD_INIT(n)
-#define INIT_LIST_HEAD(p)	CFS_INIT_LIST_HEAD(p)
 
 /*
  * Insert a new entry between two known consecutive entries.

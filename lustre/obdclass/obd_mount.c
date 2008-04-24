@@ -45,7 +45,7 @@ static void (*kill_super_cb)(struct super_block *sb) = NULL;
 /*********** mount lookup *********/
 
 DECLARE_MUTEX(lustre_mount_info_lock);
-struct list_head server_mount_info_list = LIST_HEAD_INIT(server_mount_info_list);
+static CFS_LIST_HEAD(server_mount_info_list);
 
 static struct lustre_mount_info *server_find_mount(const char *name)
 {

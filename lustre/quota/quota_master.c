@@ -54,7 +54,7 @@ int lustre_dquot_init(void)
                 return (-ENOMEM);
 
         for (i = 0; i < NR_DQHASH; i++) {
-                INIT_LIST_HEAD(lustre_dquot_hash + i);
+                CFS_INIT_LIST_HEAD(lustre_dquot_hash + i);
         }
         RETURN(0);
 }
@@ -116,7 +116,7 @@ static struct lustre_dquot *alloc_dquot(struct lustre_quota_info *lqi,
         if (dquot == NULL)
                 RETURN(NULL);
 
-        INIT_LIST_HEAD(&dquot->dq_hash);
+        CFS_INIT_LIST_HEAD(&dquot->dq_hash);
         init_mutex_locked(&dquot->dq_sem);
         dquot->dq_refcnt = 1;
         dquot->dq_info = lqi;
@@ -1065,7 +1065,7 @@ static int qmaster_recovery_main(void *arg)
                         up(&mds->mds_qonoff_sem);
                         continue;
                 }
-                INIT_LIST_HEAD(&id_list);
+                CFS_INIT_LIST_HEAD(&id_list);
                 rc = fsfilt_qids(obd, qinfo->qi_files[type], NULL, type, 
                                  &id_list);
                 up(&mds->mds_qonoff_sem);

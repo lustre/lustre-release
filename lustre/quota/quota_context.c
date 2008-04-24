@@ -94,7 +94,7 @@ int qunit_cache_init(void)
 
         spin_lock(&qunit_hash_lock);
         for (i = 0; i < NR_DQHASH; i++)
-                INIT_LIST_HEAD(qunit_hash + i);
+                CFS_INIT_LIST_HEAD(qunit_hash + i);
         spin_unlock(&qunit_hash_lock);
         RETURN(0);
 }
@@ -290,8 +290,8 @@ static struct lustre_qunit *alloc_qunit(struct lustre_quota_ctxt *qctxt,
         if (qunit == NULL)
                 RETURN(NULL);
 
-        INIT_LIST_HEAD(&qunit->lq_hash);
-        INIT_LIST_HEAD(&qunit->lq_waiters);
+        CFS_INIT_LIST_HEAD(&qunit->lq_hash);
+        CFS_INIT_LIST_HEAD(&qunit->lq_waiters);
         atomic_set(&qunit->lq_refcnt, 1);
         qunit->lq_ctxt = qctxt;
         memcpy(&qunit->lq_data, qdata, sizeof(*qdata));
@@ -606,7 +606,7 @@ schedule_dqacq(struct obd_device *obd,
         int rc = 0;
         ENTRY;
 
-        INIT_LIST_HEAD(&qw.qw_entry);
+        CFS_INIT_LIST_HEAD(&qw.qw_entry);
         init_waitqueue_head(&qw.qw_waitq);
         qw.qw_rc = 0;
 
@@ -754,7 +754,7 @@ qctxt_wait_pending_dqacq(struct lustre_quota_ctxt *qctxt, unsigned int id,
         struct l_wait_info lwi = { 0 };
         ENTRY;
 
-        INIT_LIST_HEAD(&qw.qw_entry);
+        CFS_INIT_LIST_HEAD(&qw.qw_entry);
         init_waitqueue_head(&qw.qw_waitq);
         qw.qw_rc = 0;
 
@@ -877,7 +877,7 @@ static int qslave_recovery_main(void *arg)
                 }
 
                 LASSERT(dqopt->files[type] != NULL);
-                INIT_LIST_HEAD(&id_list);
+                CFS_INIT_LIST_HEAD(&id_list);
 #ifndef KERNEL_SUPPORTS_QUOTA_READ 
                 rc = fsfilt_qids(obd, dqopt->files[type], NULL, type, &id_list);
 #else

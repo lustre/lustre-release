@@ -993,7 +993,7 @@ lnet_startup_lndnis (void)
         int                nicount = 0;
         char              *nets = lnet_get_networks();
 
-        INIT_LIST_HEAD(&nilist);
+        CFS_INIT_LIST_HEAD(&nilist);
 
         if (nets == NULL)
                 goto failed;
