@@ -185,7 +185,7 @@ test_1_sub() {
 	# this time maybe cache write,  ignore it's failure
         $RUNAS dd if=/dev/zero of=$TESTFILE bs=$BLK_SZ count=$(($LIMIT/2)) seek=$(($LIMIT/2)) || true
 	# flush cache, ensure noquota flag is setted on client
-        sync; sleep 1; sync;
+        cancel_lru_locks osc
         $RUNAS dd if=/dev/zero of=$TESTFILE bs=$BLK_SZ count=$BUNIT_SZ seek=$LIMIT && error "(usr) write success, but expect EDQUOT"
 
         rm -f $TESTFILE
@@ -215,7 +215,7 @@ test_1_sub() {
         log "    Write out of block quota ..."
 	# this time maybe cache write, ignore it's failure
         $RUNAS dd if=/dev/zero of=$TESTFILE bs=$BLK_SZ count=$(($LIMIT/2)) seek=$(($LIMIT/2)) || true
-        sync; sleep 1; sync;
+        cancel_lru_locks osc
         $RUNAS dd if=/dev/zero of=$TESTFILE bs=$BLK_SZ count=$BUNIT_SZ seek=$LIMIT && error "(grp) write success, but expect EDQUOT"
 
 	# cleanup
@@ -343,7 +343,7 @@ test_block_soft() {
 	$RUNDD count=$((BUNIT_SZ+1)) || \
 	        error "write failure, but expect success"
 	OFFSET=$((OFFSET + BUNIT_SZ + 1))
-	sync; sleep 1; sync;
+        cancel_lru_locks osc
 
 	$SHOW_QUOTA_USER
 	$SHOW_QUOTA_GROUP
@@ -353,7 +353,7 @@ test_block_soft() {
 	$RUNDD count=$BUNIT_SZ seek=$OFFSET || \
 	        error "write failure, but expect success"
 	OFFSET=$((OFFSET + BUNIT_SZ))
-	sync; sleep 1; sync;
+        cancel_lru_locks osc
 	echo "    Done"
 
         echo "    Sleep $TIMER seconds ..."
@@ -365,10 +365,9 @@ test_block_soft() {
 
 	echo "    Write after timer goes off"
 	# maybe cache write, ignore.
-	sync; sleep 1; sync;
 	$RUNDD count=$BUNIT_SZ seek=$OFFSET || true
 	OFFSET=$((OFFSET + BUNIT_SZ))
-	sync; sleep 1; sync;
+        cancel_lru_locks osc
 	$RUNDD count=$BUNIT_SZ seek=$OFFSET && \
 	        error "write success, but expect EDQUOT"
 
@@ -602,17 +601,17 @@ test_6() {
         $RUNDD count=$((LIMIT - BUNIT_SZ * OSTCOUNT)) || \
                 error "write fileb failure, but expect success"
 
-	sync; sleep 1; sync;
+        cancel_lru_locks osc
         $SHOW_QUOTA_USER
         $SHOW_QUOTA_GROUP
         $RUNDD seek=$LIMIT count=$((BUNIT_SZ * OSTCOUNT)) && \
                 error "write fileb success, but expect EDQUOT"
-	sync; sleep 1; sync;
+        cancel_lru_locks osc
 	echo "  Write to OST0 return EDQUOT"
 	# this write maybe cache write, ignore it's failure
         RUNDD="$RUNAS dd if=/dev/zero of=$FILEA bs=$BLK_SZ"
         $RUNDD count=$(($BUNIT_SZ * 2)) || true
-	sync; sleep 1; sync;
+        cancel_lru_locks osc
         $SHOW_QUOTA_USER
         $SHOW_QUOTA_GROUP
         $RUNDD count=$((BUNIT_SZ * 2)) seek=$((BUNIT_SZ *2)) && \
@@ -1218,7 +1217,7 @@ test_16_tub() {
 	# this time maybe cache write,  ignore it's failure
 	$RUNAS dd if=/dev/zero of=$TESTFILE bs=$BLK_SZ count=$BUNIT_SZ seek=$((BUNIT_SZ * 4)) || true
 	# flush cache, ensure noquota flag is setted on client
-	sync; sleep 1; sync;
+        cancel_lru_locks osc
 	if [ $2 -eq 1 ]; then
 	    $RUNAS dd if=/dev/zero of=$TESTFILE bs=$BLK_SZ count=$BUNIT_SZ seek=$((BUNIT_SZ * 4)) || \
 		error "(write failure, but expect success"
