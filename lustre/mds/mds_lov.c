@@ -194,7 +194,7 @@ static int mds_lov_read_objids(struct obd_device *obd)
                 RETURN(0);
 
         page = (size/(OBJID_PER_PAGE()*sizeof(obd_id)))+1;
-        CDEBUG(D_INFO, "file size %d pages %d\n", size, page);
+        CDEBUG(D_INFO, "file size %d pages %d\n", (int)size, page);
         for(i=0; i < page; i++) {
                 obd_id *data =  mds->mds_lov_page_array[i];
                 loff_t off_old = off;
