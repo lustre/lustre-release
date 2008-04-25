@@ -642,7 +642,7 @@ test_15() {
 run_test 15 "zconf-mount without /sbin/mount.lustre (should return error)"
 
 test_16() {
-        TMPMTPT="${MOUNT%/*}/conf16"
+        TMPMTPT="${TMP}/conf16"
 
         if [ ! -e "$MDSDEV" ]; then
             log "no $MDSDEV existing, so mount Lustre to create one"
