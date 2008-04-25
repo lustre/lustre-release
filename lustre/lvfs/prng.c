@@ -18,7 +18,9 @@
 #define get_random_bytes(val, size)     (*val) = 0
 #endif
 #include <obd_class.h>
+#if defined(HAVE_LINUX_RANDOM_H)
 #include <linux/random.h>
+#endif
 
 /*
 From: George Marsaglia <geo@stat.fsu.edu>
