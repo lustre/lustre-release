@@ -204,6 +204,12 @@ case "$lustretag" in
         ldiskfstag="b1_8_iam"
         ;;
     
+    # windows client porting (lustre: b_client_io_layering, lnet: HEAD) 
+    b_winnt_port)
+        ldiskfstag="b1_8_iam"
+        lnettag="$lustretag"
+        ;;
+    
     # v1.0-v1.3, v1.4.0-v1.4.2
     v1_[0-3]_*|v1_4_[0-2]|v1_4_[0-2]_*)
         portalstag="$lustretag"
