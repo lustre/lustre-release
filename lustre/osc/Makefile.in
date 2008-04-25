@@ -1,4 +1,0 @@
-MODULES := osc
-osc-objs := osc_request.o lproc_osc.o osc_create.o cache.o
-
-@INCLUDE_RULES@
