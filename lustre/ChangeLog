@@ -22,7 +22,7 @@ Severity   : normal
 Bugzilla   : 15069
 Description: don't put request into delay list while invalidate in flight.
 Details    : ptlrpc_delay_request sometimes put in delay list while invalidate
-             import in flight. this produce timeout for invalidate and sometimes
+	     import in flight. this produce timeout for invalidate and sometimes
 	     can cause stale data.
 
 Severity   : enhancement
@@ -42,14 +42,14 @@ Details    : ll_dir_getstripe assume dirrectory has ost objects but this wrong.
 Severity   : minor
 Bugzilla   : 15517
 Description: Fix warnings with compile liblustre at sles10/rhel5 which have
-             __u64 as usingied long long type.
+	     __u64 as usingied long long type.
 
 Severity   : minor
 Bugzilla   : 15210
 Frequency  : rare, on shutdown
 Description: race process ast vs remove callback
 Details    : removing callback before disconnect import open race with processing
-             callback.
+	     callback.
 
 Severity   : enhancement
 Bugzilla   : 15416
@@ -67,8 +67,8 @@ Severity   : normal
 Bugzilla   : 13375
 Descriptoin: make lov_create() will not stuck in obd_statfs_rqset()
 Details    : If an OST is down the MDS will hang indefinitely in
-             obd_statfs_rqset() waiting for the statfs data. While for
-             MDS QOS usage of statfs, it should not stuck in waiting.
+	     obd_statfs_rqset() waiting for the statfs data. While for
+	     MDS QOS usage of statfs, it should not stuck in waiting.
 
 Severity   : normal
 Bugzilla   : 3055
@@ -523,15 +523,15 @@ Severity   : normal
 Bugzilla   : 14257
 Description: LASSERT on MDS when client holding flock lock dies
 Details    : ldlm pool logic depends on number of granted locks equal to
-             number of released locks which is not true for flock locks, so
+	     number of released locks which is not true for flock locks, so
 	     just exclude such locks from consideration.
 
 Severity   : normal
 Bugzilla   : 15188
 Description: MDS deadlock with many ll_sync_lov threads and I/O stalled
 Details    : Use fsfilt_sync() for both the whole filesystem sync and
-             individual file sync to eliminate dangerous inode locking
-             with I_LOCK that can lead to a deadlock.
+	     individual file sync to eliminate dangerous inode locking
+	     with I_LOCK that can lead to a deadlock.
 
 Severity   : minor
 Bugzilla   : 15566
@@ -542,8 +542,14 @@ Severity   : normal
 Bugzilla   : 14712
 Description: Client can panic on open sometimes
 Details    : It is possible that we try to free already freed request in
-             ll_file_open in some error cases when we send request from
+	     ll_file_open in some error cases when we send request from
 	     ll_file_open
+
+Severity   : normal
+Bugzilla   : 14410
+Description: performance in 1.6.3
+Details    : Force q->max_phys_segments to MAX_PHYS_SEGMENTS on SLES10 to be
+	     sure that 1MB requests are not fragmented by the block layer.
 
 --------------------------------------------------------------------------------
 
