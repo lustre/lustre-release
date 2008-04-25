@@ -430,6 +430,19 @@ load_target()
                 fi
             fi
         fi
+        if [ -n "$OFED_VERSION" ] && \
+           [ ! -r "$KERNELTREE/../OFED-${OFED_VERSION}.tgz" ] ; then
+            if (( $DOWNLOAD )) ; then
+                local location="http://downloads.lustre.org/public/OFED/"
+                echo "Downloading $location/OFED-${OFED_VERSION}.tgz..."
+                if ! wget -nv "$location/OFED-${OFED_VERSION}.tgz" \
+                    -O "$KERNELTREE/../OFED-${OFED_VERSION}.tgz" ; then
+                    fatal 1 "Could not download OFED-${OFED_VERSION}.tgz from downloads.lustre.org."
+                fi
+            else
+                fatal 1 "OFED-${OFED_VERSION}.tgz not found in kernel directory $KERNELDIR."
+            fi
+        fi
     fi
 
     if [ "$SERIES" ] ; then
@@ -519,6 +532,15 @@ untar()
 {
     echo "Untarring ${1##*/}..."
     tar $(tarflags "$1") "$1"
+}
+
+unpack_ofed()
+{
+    untar "$KERNELTREE/../OFED-${OFED_VERSION}.tgz"
+    [ -d OFED ] || ln -sf OFED-[0-9].[0-9]* OFED
+    pwd
+    ls -ld OFED OFED-[0-9].[0-9]*
+    ls -l OFED OFED-[0-9].[0-9]*
 }
 
 unpack_lustre()
@@ -1530,6 +1552,10 @@ unpack_lustre
 
 load_target
 EXTRA_VERSION_DELIMITER=${EXTRA_VERSION_DELIMITER:-"-"}
+
+if [ -n "$OFED_VERSION" ]; then
+    unpack_ofed
+fi
 
 build_success=false
 if $PATCHLESS; then

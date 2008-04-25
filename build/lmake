@@ -437,28 +437,31 @@ depend_kernel()
             fi
             fatal 1 "update_oldconfig failed: $RC. See log above."
         fi
-        rm -f $logfile
-        # now notify if resulting .config is different than $CONFIG_FILE
-        local tmpfile=$(mktemp /tmp/XXXXXX)
-        diff -I '^#.*' -u "$CONFIG_FILE" .config >$tmpfile
-        if [ -s $tmpfile ]; then
-            { cat <<EOF
-To: qa@lists.clusterfs.com
+    fi
+    rm -f $logfile
+    # now notify if resulting .config is different than $CONFIG_FILE
+    local tmpfile=$(mktemp /tmp/XXXXXX)
+    diff -I '^#.*' -u "$CONFIG_FILE" .config >$tmpfile
+    if [ -s $tmpfile ]; then
+        { cat <<EOF
+To: lustre-qa-team@sun.com
 Subject: kernel_config change 
 
 The result of a make oldconfig on file $CONFIG_FILE resulted in a
 difference when compared to .config in the following way:
 
 EOF
-            cat $tmpfile
-            echo -e "\n\nPlease consider updating $CONFIG_FILE."
-	    # not sure these are entirely useful.  the above and "patch" are good
-	    #echo -e "\nThe entire new .config file:\n"
-            #cat .config
-            } | sendmail -fqa@clusterfs.com -t
-        fi
-        rm -f $tmpfile
+        cat $tmpfile
+        echo -e "\n\nPlease consider updating $CONFIG_FILE for version: $extra_version."
+        # not sure these are entirely useful.  the above and "patch" are good
+        #echo -e "\nThe entire new .config file:\n"
+        #cat .config
+        # sadly, the build roots can't e-mail out, so we can only display this
+        # to stderr for an interested party to inspect
+        #} | sendmail -flustre-qa-team@sun.com -t
+        } >&2
     fi
+    rm -f $tmpfile
 
     case "$VERSION" in
 	2.6*)
@@ -492,6 +495,43 @@ build_kernel()
 
     popd >/dev/null
 }
+
+build_kernel_ib()
+{
+    (( $BUILD_KERNEL )) || return 0
+    # build kernel-ib{,-devel}
+    # some I/B drivers are architecture dependent and kernel-ib's configure
+    # does not figure it out for us ~sigh~
+    local configure_options=""
+    case "$TARGET_ARCH" in
+	x86_64 | ia64)
+	    configure_options="--with-ipath_inf-mod"
+	    ;;
+	ppc64)
+	    configure_options="--with-ipath_inf-mod --with-ehca-mod"
+	    ;;
+    esac
+    $RPMBUILD --rebuild --define 'build_kernel_ib 1' --define 'build_kernel_ib_devel 1' \
+	      --define "_topdir $(lbuild_topdir)" --target ${TARGET_ARCH} \
+	      --define "KVERSION ${FULL_VERSION}" \
+	      --define "KSRC $PWD/linux" \
+	      --define "LIB_MOD_DIR /lib/modules/${FULL_VERSION}" \
+	      --define "configure_options --without-quilt --with-core-mod --with-user_mad-mod --with-user_access-mod --with-addr_trans-mod --with-srp-target-mod --with-core-mod --with-mthca-mod --with-mlx4-mod --with-cxgb3-mod --with-nes-mod --with-ipoib-mod --with-sdp-mod --with-srp-mod --without-srp-target-mod --with-rds-mod --with-iser-mod --with-qlgc_vnic-mod --with-madeye-mod $configure_options" $(lbuild_topdir)/OFED/SRPMS/ofa_kernel-${OFED_VERSION}-ofed${OFED_VERSION}.src.rpm
+
+    if [ ${PIPESTATUS[0]} != 0 ]; then
+        fatal 1 "Error building kernel-ib"
+    fi
+
+    pushd "$TOPDIR" >/dev/null
+    rm -rf kernel-ib-devel
+    mkdir kernel-ib-devel
+    cd kernel-ib-devel
+    local rpm=$(ls $(lbuild_topdir)/RPMS/*/kernel-ib-devel-${OFED_VERSION}-${FULL_VERSION//-/_}.*.rpm)
+    rpm2cpio -itv < $rpm | cpio -id
+    CONFIGURE_FLAGS="--with-o2ib=$(pwd)/usr/src/ofa_kernel ${CONFIGURE_FLAGS}"
+    popd >/dev/null
+}
+
 
 configure_lustre()
 {
@@ -823,6 +863,10 @@ patch_kernel
 
 depend_kernel
 build_kernel
+
+if [ -n "$OFED_VERSION" ]; then
+    build_kernel_ib
+fi
 
 configure_lustre
 build_lustre
