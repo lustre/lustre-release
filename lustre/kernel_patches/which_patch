@@ -13,7 +13,8 @@ CLIENT SUPPORT FOR UNPATCHED KERNELS:
                    kernel.org 2.6.16-2.6.19
                    RHEL4: 2.6.9-42.0.8EL
 
-NB - The patches in the 2.6-suse series should already be in the SLES9 SP1
+NB - The patches in the 2.6-suse series are already in the SLES9 SP1
      kernel.  The patches in the 2.6-suse-newer series are patches that
      have been created since the SP1 kernel was released and should be
-     applied to the already-patched SP1 kernel.
+     applied to the already-patched SP1 kernel.  Only the 2.6-suse-newer
+     series needs to be applied via quilt to any recent SLES9 kernel.
