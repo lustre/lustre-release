@@ -92,7 +92,7 @@ EXTRA_DIST = $(sbin_scripts) $(bin_scripts)
 # NOTE: this should only be run on i386.
 newwiretest: wirehdr.c wirecheck
 	cp wirehdr.c wiretest.c
-	./wirecheck >> wiretest.c
+	LANG=C ./wirecheck >> wiretest.c
 	cp ../ptlrpc/wirehdr.c ../ptlrpc/wiretest.c
-	./wirecheck >> ../ptlrpc/wiretest.c
+	LANG=C ./wirecheck >> ../ptlrpc/wiretest.c
 

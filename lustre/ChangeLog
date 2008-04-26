@@ -551,6 +551,14 @@ Description: performance in 1.6.3
 Details    : Force q->max_phys_segments to MAX_PHYS_SEGMENTS on SLES10 to be
 	     sure that 1MB requests are not fragmented by the block layer.
 
+Severity   : normal
+Bugzilla   : 15198
+Description: LDLM soft lockups - improvement
+Details    : It is be possible to send the lock handle along with each read 
+             or write request because the client is already doing a lock match 
+	     itself so there isn't any reason the OST should have to re-do that
+	     search.
+
 --------------------------------------------------------------------------------
 
 2007-12-07         Cluster File Systems, Inc. <info@clusterfs.com>

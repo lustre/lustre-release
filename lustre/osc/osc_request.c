@@ -332,8 +332,7 @@ static int osc_setattr_async(struct obd_export *exp, struct obd_info *oinfo,
 
         if (oinfo->oi_oa->o_valid & OBD_MD_FLCOOKIE) {
                 LASSERT(oti);
-                memcpy(obdo_logcookie(oinfo->oi_oa), oti->oti_logcookies,
-                       sizeof(*oti->oti_logcookies));
+                oinfo->oi_oa->o_lcookie = *oti->oti_logcookies;
         }
 
         memcpy(&body->oa, oinfo->oi_oa, sizeof(*oinfo->oi_oa));
@@ -383,9 +382,8 @@ int osc_real_create(struct obd_export *exp, struct obdo *oa,
         memcpy(&body->oa, oa, sizeof(body->oa));
 
         ptlrpc_req_set_repsize(req, 2, size);
-        if (oa->o_valid & OBD_MD_FLINLINE) {
-                LASSERT((oa->o_valid & OBD_MD_FLFLAGS) &&
-                        oa->o_flags == OBD_FL_DELORPHAN);
+        if ((oa->o_valid & OBD_MD_FLFLAGS) &&
+            oa->o_flags == OBD_FL_DELORPHAN) {
                 DEBUG_REQ(D_HA, req,
                           "delorphan from OST integration");
                 /* Don't resend the delorphan req */
@@ -422,8 +420,7 @@ int osc_real_create(struct obd_export *exp, struct obdo *oa,
                 if (oa->o_valid & OBD_MD_FLCOOKIE) {
                         if (!oti->oti_logcookies)
                                 oti_alloc_cookies(oti, 1);
-                        memcpy(oti->oti_logcookies, obdo_logcookie(oa),
-                               sizeof(oti->oti_onecookie));
+                        *oti->oti_logcookies = oa->o_lcookie;
                 }
         }
 
@@ -644,8 +641,7 @@ static int osc_destroy(struct obd_export *exp, struct obdo *oa,
         body = lustre_msg_buf(req->rq_reqmsg, REQ_REC_OFF, sizeof(*body));
 
         if (oti != NULL && oa->o_valid & OBD_MD_FLCOOKIE) {
-                memcpy(obdo_logcookie(oa), oti->oti_logcookies,
-                       sizeof(*oti->oti_logcookies));
+                oa->o_lcookie = *oti->oti_logcookies;
         }
 
         memcpy(&body->oa, oa, sizeof(*oa));
@@ -2015,6 +2011,7 @@ static struct ptlrpc_request *osc_build_req(struct client_obd *cli,
         struct obd_async_page_ops *ops = NULL;
         void *caller_data = NULL;
         struct osc_async_page *oap;
+        struct ldlm_lock *lock = NULL;
         int i, rc;
 
         ENTRY;
@@ -2033,6 +2030,7 @@ static struct ptlrpc_request *osc_build_req(struct client_obd *cli,
                 if (ops == NULL) {
                         ops = oap->oap_caller_ops;
                         caller_data = oap->oap_caller_data;
+                        lock = oap->oap_ldlm_lock;
                 }
                 pga[i] = &oap->oap_brw_page;
                 pga[i]->off = oap->oap_obj_off + oap->oap_page_off;
@@ -2044,6 +2042,10 @@ static struct ptlrpc_request *osc_build_req(struct client_obd *cli,
         /* always get the data for the obdo for the rpc */
         LASSERT(ops != NULL);
         ops->ap_fill_obdo(caller_data, cmd, oa);
+        if (lock) {
+                oa->o_handle = lock->l_remote_handle;
+                oa->o_valid |= OBD_MD_FLHANDLE;
+        }
 
         sort_brw_pages(pga, page_count);
         rc = osc_brw_prep_request(cmd, cli, oa, NULL, page_count, pga, &req);
