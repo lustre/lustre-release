@@ -1,4 +1,0 @@
-dn: fs=lustre
-fs:lustre
-objectClass: lustre
-lustreDesc: Lustre Config
