@@ -56,6 +56,7 @@ struct ll_dentry_data {
 #ifndef HAVE_VFS_INTENT_PATCHES
         struct lookup_intent    *lld_it;
 #endif
+        unsigned int             lld_sa_generation;
         cfs_waitq_t              lld_waitq;
 };
 
@@ -883,6 +884,7 @@ int ll_statahead_enter(struct inode *dir, struct dentry **dentryp, int lookup)
 {
         struct ll_sb_info        *sbi = ll_i2sbi(dir);
         struct ll_inode_info     *lli = ll_i2info(dir);
+        struct ll_dentry_data    *ldd = ll_d2d(*dentryp);
 
         if (sbi->ll_sa_max == 0)
                 return -ENOTSUPP;
@@ -890,6 +892,25 @@ int ll_statahead_enter(struct inode *dir, struct dentry **dentryp, int lookup)
         /* not the same process, don't statahead */
         if (lli->lli_opendir_pid != cfs_curproc_pid())
                 return -EBADF;
+
+        /*
+         * When "ls" a dentry, the system trigger more than once "revalidate" or
+         * "lookup", for "getattr", for "getxattr", and maybe for others.
+         * Under patchless client mode, the operation intent is not accurate,
+         * it maybe misguide the statahead thread. For example:
+         * The "revalidate" call for "getattr" and "getxattr" of a dentry maybe
+         * have the same operation intent -- "IT_GETATTR".
+         * In fact, one dentry should has only one chance to interact with the
+         * statahead thread, otherwise the statahead windows will be confused.
+         * The solution is as following:
+         * Assign "lld_sa_generation" with "sai_generation" when a dentry
+         * "IT_GETATTR" for the first time, and the subsequent "IT_GETATTR"
+         * will bypass interacting with statahead thread for checking:
+         * "lld_sa_generation == lli_sai->sai_generation"
+         */ 
+        if (ldd && lli->lli_sai &&
+            ldd->lld_sa_generation == lli->lli_sai->sai_generation)
+                return -EAGAIN;
 
         return do_statahead_enter(dir, dentryp, lookup);
 }

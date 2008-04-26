@@ -58,6 +58,8 @@ static struct ll_statahead_info *ll_sai_alloc(void)
 
         spin_lock(&sai_generation_lock);
         sai->sai_generation = ++sai_generation;
+        if (unlikely(sai_generation == 0))
+                sai->sai_generation = ++sai_generation;
         spin_unlock(&sai_generation_lock);
         atomic_set(&sai->sai_refcount, 1);
         sai->sai_max = LL_SA_RPC_MIN;
@@ -90,8 +92,8 @@ static void ll_sai_put(struct ll_statahead_info *sai)
                 LASSERT(sai->sai_thread.t_flags & SVC_STOPPED);
 
                 if (sai->sai_sent > sai->sai_replied)
-                        CWARN("statahead for dir %lu/%u does not finish: "
-                              "[sent:%u] [replied:%u]\n",
+                        CDEBUG(D_READA,"statahead for dir %lu/%u does not "
+                              "finish: [sent:%u] [replied:%u]\n",
                               inode->i_ino, inode->i_generation,
                               sai->sai_sent, sai->sai_replied);
 
@@ -886,9 +888,10 @@ int do_statahead_enter(struct inode *dir, struct dentry **dentryp, int lookup)
 /* update hit/miss count */
 void ll_statahead_exit(struct dentry *dentry, int result)
 {
-        struct dentry        *parent = dentry->d_parent;
-        struct ll_inode_info *lli = ll_i2info(parent->d_inode);
-        struct ll_sb_info    *sbi = ll_i2sbi(parent->d_inode);
+        struct dentry         *parent = dentry->d_parent;
+        struct ll_inode_info  *lli = ll_i2info(parent->d_inode);
+        struct ll_sb_info     *sbi = ll_i2sbi(parent->d_inode);
+        struct ll_dentry_data *ldd = ll_d2d(dentry);
 
         if (lli->lli_opendir_pid != cfs_curproc_pid())
                 return;
@@ -921,7 +924,11 @@ void ll_statahead_exit(struct dentry *dentry, int result)
                                 spin_unlock(&lli->lli_lock);
                         }
                 }
+
                 cfs_waitq_signal(&sai->sai_thread.t_ctl_waitq);
                 ll_sai_entry_put(sai);
+
+                if (likely(ldd != NULL))
+                        ldd->lld_sa_generation = sai->sai_generation;
         }
 }
