@@ -10,7 +10,7 @@ if LIBLUSTRE
 noinst_LIBRARIES = libtestcommon.a
 
 if LIBLUSTRE_TESTS
-noinst_PROGRAMS = sanity echo_test
+noinst_PROGRAMS = sanity
 
 if !CRAY_XT3
 noinst_PROGRAMS += recovery_small replay_single replay_ost_single
@@ -28,11 +28,6 @@ endif # LIBLUSTRE_TESTS
 endif # LIBLUSTRE
 
 libtestcommon_a_SOURCES = test_common.c test_common.h
-
-echo_test_SOURCES = echo_test.c  $(top_srcdir)/lustre/utils/parser.c $(top_srcdir)/lustre/utils/obd.c $(top_srcdir)/lustre/utils/lustre_cfg.c
-echo_test_CFLAGS = $(LL_CFLAGS)
-echo_test_LDADD = $(top_builddir)/lustre/liblustre/liblsupport.a $(LIBREADLINE) $(CAP_LIBS) $(PTHREAD_LIBS) $(ZLIB)
-echo_test_DEPENDENCIES=$(top_builddir)/lustre/liblustre/liblsupport.a
 
 sanity_SOURCES = sanity.c
 sanity_CFLAGS = $(LL_CFLAGS)
