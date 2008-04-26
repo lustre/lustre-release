@@ -88,8 +88,8 @@ Bugzilla   : 14533
 Frequency  : rare, on recovery
 Description: read procfs can produce deadlock in some situation
 Details    : Holding lprocfs lock with send rpc can produce block for destroy
-	     obd objects and this also block reconnect with -EALREADY. This isn't
-	     fix all lprocfs bugs - but make it rare.
+	     obd objects and this also block reconnect with -EALREADY.
+	     This isn't fix all lprocfs bugs - but make it rare.
 
 Severity   : enhancement
 Bugzilla   : 15152
