@@ -1,4 +1,4 @@
-tbd  Sun Microsystems, Inc.
+04-26-2008  Sun Microsystems, Inc.
        * version 1.6.5
        * Support for networks:
 	socklnd   - any kernel supported by Lustre,
