@@ -1,8 +1,8 @@
-Index: linux-2.6/Documentation/filesystems/ext2.txt
+Index: linux-2.6.22.5/Documentation/filesystems/ext2.txt
 ===================================================================
---- linux-2.6.orig/Documentation/filesystems/ext2.txt	2006-04-03 22:46:38.000000000 +0800
-+++ linux-2.6/Documentation/filesystems/ext2.txt	2006-07-15 12:54:06.000000000 +0800
-@@ -58,6 +58,22 @@ nobh				Do not attach buffer_heads to fi
+--- linux-2.6.22.5.orig/Documentation/filesystems/ext2.txt	2007-08-22 17:23:54.000000000 -0600
++++ linux-2.6.22.5/Documentation/filesystems/ext2.txt	2008-02-21 00:57:02.000000000 -0700
+@@ -58,6 +58,22 @@
  
  xip				Use execute in place (no caching) if possible
  
@@ -25,28 +25,32 @@ Index: linux-2.6/Documentation/filesystems/ext2.txt
  grpquota,noquota,quota,usrquota	Quota options are silently ignored by ext2.
  
  
-Index: linux-2.6/fs/dcache.c
+Index: linux-2.6.22.5/fs/dcache.c
 ===================================================================
---- linux-2.6.orig/fs/dcache.c	2006-07-15 12:48:18.000000000 +0800
-+++ linux-2.6/fs/dcache.c	2006-07-15 12:54:06.000000000 +0800
-@@ -1608,6 +1608,12 @@
- 	spin_unlock(&dcache_lock);
- }
- 
-+void __d_move(struct dentry * dentry, struct dentry * target)
-+{
-+	d_move_locked(dentry, target);
-+}
-+EXPORT_SYMBOL(__d_move);
-+
- /*
-  * Helper that returns 1 if p1 is a parent of p2, else 0
+--- linux-2.6.22.5.orig/fs/dcache.c	2008-02-21 00:56:29.000000000 -0700
++++ linux-2.6.22.5/fs/dcache.c	2008-02-21 00:57:02.000000000 -0700
+@@ -1537,7 +1537,7 @@
+  * Update the dcache to reflect the move of a file name. Negative
+  * dcache entries should not be moved in this way.
   */
-Index: linux-2.6/include/linux/dcache.h
+-static void d_move_locked(struct dentry * dentry, struct dentry * target)
++void d_move_locked(struct dentry * dentry, struct dentry * target)
+ {
+ 	struct hlist_head *list;
+ 
+@@ -1595,6 +1595,7 @@
+ 	spin_unlock(&dentry->d_lock);
+ 	write_sequnlock(&rename_lock);
+ }
++EXPORT_SYMBOL(d_move_locked);
+ 
+ /**
+  * d_move - move a dentry
+Index: linux-2.6.22.5/include/linux/dcache.h
 ===================================================================
---- linux-2.6.orig/include/linux/dcache.h	2006-07-15 12:48:41.000000000 +0800
-+++ linux-2.6/include/linux/dcache.h	2006-07-15 12:54:06.000000000 +0800
-@@ -257,6 +257,7 @@ extern int have_submounts(struct dentry 
+--- linux-2.6.22.5.orig/include/linux/dcache.h	2008-02-21 00:56:29.000000000 -0700
++++ linux-2.6.22.5/include/linux/dcache.h	2008-02-21 00:57:02.000000000 -0700
+@@ -251,6 +251,7 @@
   * This adds the entry to the hash queues.
   */
  extern void d_rehash(struct dentry *);
@@ -54,11 +58,11 @@ Index: linux-2.6/include/linux/dcache.h
  
  /**
   * d_add - add dentry to hash queues
-@@ -292,6 +293,7 @@ static inline struct dentry *d_add_uniqu
+@@ -286,6 +287,7 @@
  
  /* used for rename() and baskets */
  extern void d_move(struct dentry *, struct dentry *);
-+extern void __d_move(struct dentry *, struct dentry *);
++extern void d_move_locked(struct dentry *, struct dentry *);
  
  /* appendix may either be NULL or be used for transname suffixes */
  extern struct dentry * d_lookup(struct dentry *, struct qstr *);

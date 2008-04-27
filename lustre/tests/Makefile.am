@@ -12,15 +12,10 @@ noinst_SCRIPTS += conf-sanity.sh insanity.sh lfscktest.sh oos.sh oos2.sh
 noinst_SCRIPTS += llog-test.sh recovery-small.sh replay-dual.sh sanity-quota.sh
 noinst_SCRIPTS += replay-ost-single.sh replay-single.sh run-llog.sh sanityN.sh
 noinst_SCRIPTS += lockorder.sh socketclient socketserver runmultiop_bg_pause
-noinst_SCRIPTS += sanity-sec.sh sanity-gss.sh krb5_login.sh
 nobase_noinst_SCRIPTS = cfg/insanity-local.sh
 nobase_noinst_SCRIPTS += cfg/local.sh acl/make-tree acl/run
-nobase_noinst_SCRIPTS += rmtacl/make-tree rmtacl/run
 nobase_noinst_DATA = acl/cp.test acl/getfacl-noacl.test acl/inheritance.test
 nobase_noinst_DATA += acl/misc.test acl/permissions.test acl/setfacl.test
-nobase_noinst_DATA += rmtacl/misc.test rmtacl/permissions.test
-nobase_noinst_DATA += rmtacl/setfacl.test rmtacl/cp.test
-nobase_noinst_DATA += rmtacl/getfacl-noacl.test rmtacl/inheritance.test
 
 EXTRA_DIST = $(noinst_SCRIPTS) $(noinst_DATA) \
              $(nobase_noinst_SCRIPTS) $(nobase_noinst_DATA)
@@ -35,10 +30,9 @@ noinst_PROGRAMS += small_write multiop sleeptest ll_sparseness_verify cmknod
 noinst_PROGRAMS += ll_sparseness_write mrename ll_dirstripe_verify mkdirmany
 noinst_PROGRAMS += openfilleddirunlink rename_many memhog iopentest1 iopentest2
 noinst_PROGRAMS += mmap_sanity flock_test writemany random-reads flocks_test
-noinst_PROGRAMS += ll_getstripe_info write_time_limit
+noinst_PROGRAMS += ll_getstripe_info
 if MPITESTS
 noinst_PROGRAMS += parallel_grouplock write_append_truncate createmany_mpi
-noinst_PROGRAMS += iam_ut
 endif
 # noinst_PROGRAMS += ldaptest copy_attr mkdirdeep 
 bin_PROGRAMS = mcreate munlink

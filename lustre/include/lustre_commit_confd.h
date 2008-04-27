@@ -48,6 +48,7 @@ struct llog_commit_daemon {
         struct list_head           lcd_lcm_list;  /* list of daemon threads */
         struct list_head           lcd_llcd_list; /* list of pending RPCs */
         struct llog_commit_master *lcd_lcm;       /* pointer back to parent */
+        int                        lcd_index;     /* the index of the llog daemon */
 };
 
 /* ptlrpc/recov_thread.c */

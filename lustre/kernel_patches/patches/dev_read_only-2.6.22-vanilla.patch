@@ -1,16 +1,17 @@
-diff -urp linux-2.6.18.1.orig/block/ll_rw_blk.c linux-2.6.18.1/block/ll_rw_blk.c
---- linux-2.6.18.1.orig/block/ll_rw_blk.c	2006-10-14 06:34:03.000000000 +0300
-+++ linux-2.6.18.1/block/ll_rw_blk.c	2007-05-29 14:50:46.000000000 +0300
-@@ -2993,6 +2993,8 @@ static void handle_bad_sector(struct bio
- 	set_bit(BIO_EOF, &bio->bi_flags);
- }
+Index: linux-2.6.22.5/block/ll_rw_blk.c
+===================================================================
+--- linux-2.6.22.5.orig/block/ll_rw_blk.c	2007-08-22 17:23:54.000000000 -0600
++++ linux-2.6.22.5/block/ll_rw_blk.c	2008-02-21 01:07:16.000000000 -0700
+@@ -3101,6 +3101,8 @@
+ 
+ #endif /* CONFIG_FAIL_MAKE_REQUEST */
  
 +int dev_check_rdonly(struct block_device *bdev);
 +
  /**
   * generic_make_request: hand a buffer to its device driver for I/O
   * @bio:  The bio describing the location in memory and on the device.
-@@ -3076,6 +3078,12 @@ end_io:
+@@ -3185,6 +3187,12 @@
  
  		if (unlikely(test_bit(QUEUE_FLAG_DEAD, &q->queue_flags)))
  			goto end_io;
@@ -21,9 +22,9 @@ diff -urp linux-2.6.18.1.orig/block/ll_rw_blk.c linux-2.6.18.1/block/ll_rw_blk.c
 +			break;
 +		}
  
- 		/*
- 		 * If this device has partitions, remap block n
-@@ -3675,6 +3683,91 @@ void swap_io_context(struct io_context *
+ 		if (should_fail_request(bio))
+ 			goto end_io;
+@@ -3850,6 +3858,91 @@
  	*ioc2 = temp;
  }
  EXPORT_SYMBOL(swap_io_context);
@@ -115,21 +116,23 @@ diff -urp linux-2.6.18.1.orig/block/ll_rw_blk.c linux-2.6.18.1/block/ll_rw_blk.c
  
  /*
   * sysfs parts below
-diff -urp linux-2.6.18.1.orig/fs/block_dev.c linux-2.6.18.1/fs/block_dev.c
---- linux-2.6.18.1.orig/fs/block_dev.c	2006-10-14 06:34:03.000000000 +0300
-+++ linux-2.6.18.1/fs/block_dev.c	2007-05-29 14:53:38.000000000 +0300
-@@ -58,6 +58,7 @@ static void kill_bdev(struct block_devic
- {
- 	invalidate_bdev(bdev, 1);
+Index: linux-2.6.22.5/fs/block_dev.c
+===================================================================
+--- linux-2.6.22.5.orig/fs/block_dev.c	2007-08-22 17:23:54.000000000 -0600
++++ linux-2.6.22.5/fs/block_dev.c	2008-02-21 01:07:16.000000000 -0700
+@@ -63,6 +63,7 @@
+ 		return;
+ 	invalidate_bh_lrus();
  	truncate_inode_pages(bdev->bd_inode->i_mapping, 0);
 +	dev_clear_rdonly(bdev);
  }	
  
  int set_blocksize(struct block_device *bdev, int size)
-diff -urp linux-2.6.18.1.orig/include/linux/fs.h linux-2.6.18.1/include/linux/fs.h
---- linux-2.6.18.1.orig/include/linux/fs.h	2006-10-14 06:34:03.000000000 +0300
-+++ linux-2.6.18.1/include/linux/fs.h	2007-05-29 14:50:46.000000000 +0300
-@@ -1632,6 +1632,10 @@ extern void file_kill(struct file *f);
+Index: linux-2.6.22.5/include/linux/fs.h
+===================================================================
+--- linux-2.6.22.5.orig/include/linux/fs.h	2008-02-21 00:58:18.000000000 -0700
++++ linux-2.6.22.5/include/linux/fs.h	2008-02-21 01:07:16.000000000 -0700
+@@ -1744,6 +1744,10 @@
  extern void submit_bio(int, struct bio *);
  extern int bdev_read_only(struct block_device *);
  #endif

@@ -39,7 +39,12 @@
 #include <linux/smp.h>
 #include <linux/rwsem.h>
 #include <libcfs/kp30.h>
-#include <linux/statfs.h>
+
+# if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0))
+#  include <linux/statfs.h>
+# else 
+#  define kstatfs statfs
+# endif
 
 #else 
 #  define kstatfs statfs

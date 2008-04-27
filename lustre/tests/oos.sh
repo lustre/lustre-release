@@ -82,8 +82,6 @@ fi
 rm -f $OOS
 sync; sleep 1; sync
 
-sync; sleep 3; sync
-
 if [ $SUCCESS -eq 1 ]; then
 	echo "Success!"
 	rm -f $LOG

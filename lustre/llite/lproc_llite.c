@@ -162,23 +162,6 @@ static int ll_rd_filesfree(char *page, char **start, off_t off, int count,
 
 }
 
-static int ll_rd_client_type(char *page, char **start, off_t off, int count,
-                            int *eof, void *data)
-{
-        struct ll_sb_info *sbi = ll_s2sbi((struct super_block *)data);
-        int rc;
-
-        LASSERT(sbi != NULL);
-
-        *eof = 1;
-        if (sbi->ll_flags & LL_SBI_RMT_CLIENT)
-                rc = snprintf(page, count, "remote client\n");
-        else
-                rc = snprintf(page, count, "local client\n");
-
-        return rc;
-}
-
 static int ll_rd_fstype(char *page, char **start, off_t off, int count,
                         int *eof, void *data)
 {
@@ -211,7 +194,7 @@ static int ll_rd_max_readahead_mb(char *page, char **start, off_t off,
         pages_number = sbi->ll_ra_info.ra_max_pages;
         spin_unlock(&sbi->ll_lock);
 
-        mult = 1 << (20 - PAGE_CACHE_SHIFT);
+        mult = 1 << (20 - CFS_PAGE_SHIFT);
         return lprocfs_read_frac_helper(page, count, pages_number, mult);
 }
 
@@ -322,7 +305,7 @@ static int ll_wr_max_cached_mb(struct file *file, const char *buffer,
         sbi->ll_async_page_max = pages_number ;
         spin_unlock(&sbi->ll_lock);
         
-        if (!sbi->ll_dt_exp)
+        if (!sbi->ll_osc_exp)
                 /* Not set up yet, don't call llap_shrink_cache */
                 return count;
 
@@ -339,7 +322,7 @@ static int ll_rd_checksum(char *page, char **start, off_t off,
         struct ll_sb_info *sbi = ll_s2sbi(sb);
 
         return snprintf(page, count, "%u\n",
-                        (sbi->ll_flags & LL_SBI_CHECKSUM) ? 1 : 0);
+                        (sbi->ll_flags & LL_SBI_LLITE_CHECKSUM) ? 1 : 0);
 }
 
 static int ll_wr_checksum(struct file *file, const char *buffer,
@@ -349,7 +332,7 @@ static int ll_wr_checksum(struct file *file, const char *buffer,
         struct ll_sb_info *sbi = ll_s2sbi(sb);
         int val, rc;
 
-        if (!sbi->ll_dt_exp)
+        if (!sbi->ll_osc_exp)
                 /* Not set up yet */
                 return -EAGAIN;
 
@@ -357,11 +340,11 @@ static int ll_wr_checksum(struct file *file, const char *buffer,
         if (rc)
                 return rc;
         if (val)
-                sbi->ll_flags |= LL_SBI_CHECKSUM;
+                sbi->ll_flags |=  (LL_SBI_LLITE_CHECKSUM|LL_SBI_DATA_CHECKSUM);
         else
-                sbi->ll_flags &= ~LL_SBI_CHECKSUM;
+                sbi->ll_flags &= ~(LL_SBI_LLITE_CHECKSUM|LL_SBI_DATA_CHECKSUM);
 
-        rc = obd_set_info_async(sbi->ll_dt_exp, strlen("checksum"), "checksum",
+        rc = obd_set_info_async(sbi->ll_osc_exp, strlen("checksum"), "checksum",
                                 sizeof(val), &val, NULL);
         if (rc)
                 CWARN("Failed to set OSC checksum flags: %d\n", rc);
@@ -460,6 +443,76 @@ static int ll_wr_track_gid(struct file *file, const char *buffer,
         return (ll_wr_track_id(buffer, count, data, STATS_TRACK_GID));
 }
 
+static int ll_rd_contention_time(char *page, char **start, off_t off,
+                                 int count, int *eof, void *data)
+{
+        struct super_block *sb = data;
+
+        *eof = 1;
+        return snprintf(page, count, "%u\n", ll_s2sbi(sb)->ll_contention_time);
+
+}
+
+static int ll_wr_contention_time(struct file *file, const char *buffer,
+                                 unsigned long count, void *data)
+{
+        struct super_block *sb = data;
+        struct ll_sb_info *sbi = ll_s2sbi(sb);
+
+        return lprocfs_write_helper(buffer, count,&sbi->ll_contention_time) ?:
+                count;
+}
+
+static int ll_rd_statahead_max(char *page, char **start, off_t off,
+                               int count, int *eof, void *data)
+{
+        struct super_block *sb = data;
+        struct ll_sb_info *sbi = ll_s2sbi(sb);
+
+        return snprintf(page, count, "%u\n", sbi->ll_sa_max);
+}
+
+static int ll_wr_statahead_max(struct file *file, const char *buffer,
+                               unsigned long count, void *data)
+{
+        struct super_block *sb = data;
+        struct ll_sb_info *sbi = ll_s2sbi(sb);
+        int val, rc;
+
+        rc = lprocfs_write_helper(buffer, count, &val);
+        if (rc)
+                return rc;
+
+        if (val >= 0 && val <= LL_SA_RPC_MAX)
+                sbi->ll_sa_max = val;
+        else
+                CERROR("Bad statahead_max value %d. Valid values are in the "
+                       "range [0, %d]\n", val, LL_SA_RPC_MAX);
+
+        return count;
+}
+
+static int ll_rd_statahead_stats(char *page, char **start, off_t off,
+                                 int count, int *eof, void *data)
+{
+        struct super_block *sb = data;
+        struct ll_sb_info *sbi = ll_s2sbi(sb);
+
+        return snprintf(page, count,
+                        "statahead wrong: %u\n"
+                        "statahead total: %u\n"
+                        "ls blocked:      %llu\n"
+                        "ls cached:       %llu\n"
+                        "hit count:       %llu\n"
+                        "miss count:      %llu\n",
+                        sbi->ll_sa_wrong,
+                        sbi->ll_sa_total,
+                        sbi->ll_sa_blocked,
+                        sbi->ll_sa_cached,
+                        sbi->ll_sa_hit,
+                        sbi->ll_sa_miss);
+}
+
 static struct lprocfs_vars lprocfs_llite_obd_vars[] = {
         { "uuid",         ll_rd_sb_uuid,          0, 0 },
         //{ "mntpt_path",   ll_rd_path,             0, 0 },
@@ -470,18 +523,20 @@ static struct lprocfs_vars lprocfs_llite_obd_vars[] = {
         { "kbytesavail",  ll_rd_kbytesavail,      0, 0 },
         { "filestotal",   ll_rd_filestotal,       0, 0 },
         { "filesfree",    ll_rd_filesfree,        0, 0 },
-        { "client_type",  ll_rd_client_type,      0, 0 },
         //{ "filegroups",   lprocfs_rd_filegroups,  0, 0 },
         { "max_read_ahead_mb", ll_rd_max_readahead_mb,
                                ll_wr_max_readahead_mb, 0 },
         { "max_read_ahead_whole_mb", ll_rd_max_read_ahead_whole_mb,
                                      ll_wr_max_read_ahead_whole_mb, 0 },
-        { "max_cached_mb",    ll_rd_max_cached_mb, ll_wr_max_cached_mb, 0 },
-        { "checksum_pages",   ll_rd_checksum, ll_wr_checksum, 0 },
-        { "max_rw_chunk",     ll_rd_max_rw_chunk, ll_wr_max_rw_chunk, 0 },
+        { "max_cached_mb",  ll_rd_max_cached_mb, ll_wr_max_cached_mb, 0 },
+        { "checksum_pages", ll_rd_checksum, ll_wr_checksum, 0 },
+        { "max_rw_chunk",   ll_rd_max_rw_chunk, ll_wr_max_rw_chunk, 0 },
         { "stats_track_pid",  ll_rd_track_pid, ll_wr_track_pid, 0 },
         { "stats_track_ppid", ll_rd_track_ppid, ll_wr_track_ppid, 0 },
         { "stats_track_gid",  ll_rd_track_gid, ll_wr_track_gid, 0 },
+        { "contention_seconds", ll_rd_contention_time, ll_wr_contention_time, 0},
+        { "statahead_max",      ll_rd_statahead_max, ll_wr_statahead_max, 0 },
+        { "statahead_stats",    ll_rd_statahead_stats, 0, 0 },
         { 0 }
 };
 
@@ -522,7 +577,11 @@ struct llite_file_opcode {
         { LPROC_LL_SETATTR,        LPROCFS_TYPE_REGS, "setattr" },
         { LPROC_LL_TRUNC,          LPROCFS_TYPE_REGS, "truncate" },
         { LPROC_LL_FLOCK,          LPROCFS_TYPE_REGS, "flock" },
+#if (LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))
         { LPROC_LL_GETATTR,        LPROCFS_TYPE_REGS, "getattr" },
+#else
+        { LPROC_LL_REVALIDATE,     LPROCFS_TYPE_REGS, "getattr" },
+#endif
         /* special inode operation */
         { LPROC_LL_STAFS,          LPROCFS_TYPE_REGS, "statfs" },
         { LPROC_LL_ALLOC_INODE,    LPROCFS_TYPE_REGS, "alloc_inode" },
@@ -535,6 +594,10 @@ struct llite_file_opcode {
                                    "direct_read" },
         { LPROC_LL_DIRECT_WRITE,   LPROCFS_CNTR_AVGMINMAX|LPROCFS_TYPE_PAGES,
                                    "direct_write" },
+        { LPROC_LL_LOCKLESS_READ,  LPROCFS_CNTR_AVGMINMAX|LPROCFS_TYPE_BYTES,
+                                   "lockless_read_bytes" },
+        { LPROC_LL_LOCKLESS_WRITE, LPROCFS_CNTR_AVGMINMAX|LPROCFS_TYPE_BYTES,
+                                   "lockless_write_bytes" },
 
 };
 
@@ -849,6 +912,7 @@ static int llite_dump_pgcache_seq_open(struct inode *inode, struct file *file)
         OBD_ALLOC_PTR_WAIT(dummy_llap);
         if (dummy_llap == NULL)
                 GOTO(out, rc);
+
         dummy_llap->llap_page = NULL;
         dummy_llap->llap_cookie = sbi;
         dummy_llap->llap_magic = 0;

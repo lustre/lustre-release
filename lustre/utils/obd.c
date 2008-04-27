@@ -34,7 +34,6 @@
 #include <stdio.h>
 #include <stdarg.h>
 #include <signal.h>
-#include <ctype.h>
 
 #include "obdctl.h"
 
@@ -47,6 +46,7 @@
 #include <sys/time.h>
 #include <errno.h>
 #include <string.h>
+#include <ctype.h>
 
 #ifdef HAVE_ASM_PAGE_H
 #include <asm/page.h>           /* needed for PAGE_SIZE - rread */
@@ -94,6 +94,7 @@ static char *buf = rawbuf;
 static int max = sizeof(rawbuf);
 
 static int cur_device = -1;
+
 
 #define MAX_STRIPES     170
 struct lov_oinfo lov_oinfos[MAX_STRIPES];
@@ -1651,7 +1652,7 @@ repeat:
                         rc = -EINVAL;
                         goto out;
                 }
-                if (desc.ld_default_stripe_count == (__u32)-1)
+                if (desc.ld_default_stripe_count == (__u16)-1)
                         printf("default_stripe_count: %d\n", -1);
                 else
                         printf("default_stripe_count: %u\n",

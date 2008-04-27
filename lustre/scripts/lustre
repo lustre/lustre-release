@@ -136,7 +136,7 @@ stop() {
 		return
 	fi
 	# Cat the modprobe file and place all lines that follow a trailing backslash on the same line
-+	ROUTER=`cat ${MODPROBE_CONF} | sed ':a;N;$!ba;s#\\\[:space:]*\\n##g' | grep lnet | grep forwarding=\"enabled\"`
+	ROUTER=`cat ${MODPROBE_CONF} | sed ':a;N;$!ba;s#\\\[:space:]*\\n##g' | grep lnet | grep forwarding=\"enabled\"`
 	if [[ ! -z ${ROUTER} ]]; then
 		MODULE_LOADED=`lsmod | awk ' { print $1 } ' | grep lnet`
 		if [[ ! -z ${MODULE_LOADED} ]]; then

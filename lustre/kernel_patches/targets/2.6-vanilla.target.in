@@ -1,8 +1,8 @@
-lnxmaj="2.6.22"
-lnxrel="14"
+lnxmaj="2.6.18"
+lnxrel="8"
 
 KERNEL=linux-$lnxmaj.$lnxrel.tar.bz2
-SERIES=2.6.22-vanilla.series
+SERIES=2.6.18-vanilla.series
 VERSION=$lnxmaj
 EXTRA_VERSION="${lnxrel}_lustre.@VERSION@"
 LUSTRE_VERSION=@VERSION@

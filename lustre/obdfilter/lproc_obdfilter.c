@@ -36,9 +36,8 @@
 static int lprocfs_filter_rd_groups(char *page, char **start, off_t off,
                                     int count, int *eof, void *data)
 {
-        struct obd_device *obd = (struct obd_device *)data;
         *eof = 1;
-        return snprintf(page, count, "%u\n", obd->u.filter.fo_group_count);
+        return snprintf(page, count, "%u\n", FILTER_GROUPS);
 }
 
 static int lprocfs_filter_rd_tot_dirty(char *page, char **start, off_t off,
@@ -87,23 +86,12 @@ static int lprocfs_filter_rd_last_id(char *page, char **start, off_t off,
                                      int count, int *eof, void *data)
 {
         struct obd_device *obd = data;
-        struct filter_obd *filter = &obd->u.filter;
-        int retval = 0, rc, i;
 
         if (obd == NULL)
                 return 0;
 
-        for (i = FILTER_GROUP_MDS0; i < filter->fo_group_count; i++) {
-                rc = snprintf(page, count, LPU64"\n",filter_last_id(filter, i));
-                if (rc < 0) {
-                        retval = rc;
-                        break;
-                }
-                page += rc;
-                count -= rc;
-                retval += rc;
-        }
-        return retval;
+        return snprintf(page, count, LPU64"\n",
+                        filter_last_id(&obd->u.filter, 0));
 }
 
 int lprocfs_filter_rd_readcache(char *page, char **start, off_t off, int count,
@@ -131,7 +119,6 @@ int lprocfs_filter_wr_readcache(struct file *file, const char *buffer,
         obd->u.filter.fo_readcache_max_filesize = val;
         return count;
 }
-
 
 int lprocfs_filter_rd_fmd_max_num(char *page, char **start, off_t off,
                                   int count, int *eof, void *data)
@@ -189,48 +176,6 @@ int lprocfs_filter_wr_fmd_max_age(struct file *file, const char *buffer,
         return count;
 }
 
-static int lprocfs_filter_rd_capa(char *page, char **start, off_t off,
-                                  int count, int *eof, void *data)
-{
-        struct obd_device *obd = data;
-        int rc;
-
-        rc = snprintf(page, count, "capability on: %s\n",
-                      obd->u.filter.fo_fl_oss_capa ? "oss" : "");
-        return rc;
-}
-
-static int lprocfs_filter_wr_capa(struct file *file, const char *buffer,
-                                  unsigned long count, void *data)
-{
-        struct obd_device *obd = data;
-        int val, rc;
-
-        rc = lprocfs_write_helper(buffer, count, &val);
-        if (rc)
-                return rc;
-
-        if (val & ~0x1) {
-                CERROR("invalid capability mode, only 0/1 are accepted.\n"
-                       " 1: enable oss fid capability\n"
-                       " 0: disable oss fid capability\n");
-                return -EINVAL;
-        }
-
-        obd->u.filter.fo_fl_oss_capa = val;
-        LCONSOLE_INFO("OSS %s %s fid capability.\n", obd->obd_name,
-                      val ? "enabled" : "disabled");
-        return count;
-}
-
-static int lprocfs_filter_rd_capa_count(char *page, char **start, off_t off,
-                                        int count, int *eof, void *data)
-{
-        return snprintf(page, count, "%d %d\n",
-                        capa_count[CAPA_SITE_CLIENT],
-                        capa_count[CAPA_SITE_SERVER]);
-}
-
 static struct lprocfs_vars lprocfs_filter_obd_vars[] = {
         { "uuid",         lprocfs_rd_uuid,          0, 0 },
         { "blocksize",    lprocfs_rd_blksize,       0, 0 },
@@ -247,8 +192,10 @@ static struct lprocfs_vars lprocfs_filter_obd_vars[] = {
         { "tot_pending",  lprocfs_filter_rd_tot_pending, 0, 0 },
         { "tot_granted",  lprocfs_filter_rd_tot_granted, 0, 0 },
         { "recovery_status", lprocfs_obd_rd_recovery_status, 0, 0 },
+#ifdef CRAY_XT3
         { "recovery_maxtime", lprocfs_obd_rd_recovery_maxtime,
                               lprocfs_obd_wr_recovery_maxtime, 0},
+#endif
         { "evict_client", 0, lprocfs_wr_evict_client, 0,
                                 &lprocfs_evict_client_fops},
         { "num_exports",  lprocfs_rd_num_exports,   0, 0 },
@@ -256,19 +203,24 @@ static struct lprocfs_vars lprocfs_filter_obd_vars[] = {
                           lprocfs_filter_rd_readcache,
                           lprocfs_filter_wr_readcache, 0 },
 #ifdef HAVE_QUOTA_SUPPORT
-        { "quota_bunit_sz", lprocfs_rd_bunit, lprocfs_wr_bunit, 0},
-        { "quota_btune_sz", lprocfs_rd_btune, lprocfs_wr_btune, 0},
-        { "quota_iunit_sz", lprocfs_rd_iunit, lprocfs_wr_iunit, 0},
-        { "quota_itune_sz", lprocfs_rd_itune, lprocfs_wr_itune, 0},
-        { "quota_type",     lprocfs_rd_type, lprocfs_wr_type, 0},
+        { "quota_bunit_sz", lprocfs_quota_rd_bunit,
+                            lprocfs_quota_wr_bunit, 0},
+        { "quota_btune_sz", lprocfs_quota_rd_btune,
+                            lprocfs_quota_wr_btune, 0},
+        { "quota_iunit_sz", lprocfs_quota_rd_iunit,
+                            lprocfs_quota_wr_iunit, 0},
+        { "quota_itune_sz", lprocfs_quota_rd_itune,
+                            lprocfs_quota_wr_itune, 0},
+        { "quota_type",     lprocfs_quota_rd_type,
+                            lprocfs_quota_wr_type, 0},
+        { "quota_switch_seconds",  lprocfs_quota_rd_switch_seconds,
+                            lprocfs_quota_wr_switch_seconds, 0 },
+
 #endif
         { "client_cache_count", lprocfs_filter_rd_fmd_max_num,
                           lprocfs_filter_wr_fmd_max_num, 0 },
         { "client_cache_seconds", lprocfs_filter_rd_fmd_max_age,
                           lprocfs_filter_wr_fmd_max_age, 0 },
-        { "capa",         lprocfs_filter_rd_capa,
-                          lprocfs_filter_wr_capa, 0 },
-        { "capa_count",   lprocfs_filter_rd_capa_count, 0, 0 },
         { 0 }
 };
 
@@ -295,6 +247,9 @@ void filter_tally(struct obd_export *exp, struct page **pages, int nr_pages,
                               nr_pages);
         lprocfs_oh_tally_log2(&fed->fed_brw_stats.hist[BRW_R_PAGES + wr],
                               nr_pages);
+        if (exp->exp_nid_stats && exp->exp_nid_stats->nid_brw_stats)
+                lprocfs_oh_tally_log2(&exp->exp_nid_stats->nid_brw_stats->hist[BRW_W_PAGES + wr],
+                                      nr_pages);
 
         while (nr_pages-- > 0) {
                 if (last_page && (*pages)->index != (last_page->index + 1))
@@ -316,6 +271,13 @@ void filter_tally(struct obd_export *exp, struct page **pages, int nr_pages,
                          discont_blocks);
         lprocfs_oh_tally(&fed->fed_brw_stats.hist[BRW_R_DISCONT_BLOCKS + wr],
                          discont_blocks);
+
+        if (exp->exp_nid_stats && exp->exp_nid_stats->nid_brw_stats) {
+                lprocfs_oh_tally_log2(&exp->exp_nid_stats->nid_brw_stats->hist[BRW_W_DISCONT_PAGES + wr],
+                                      discont_pages);
+                lprocfs_oh_tally_log2(&exp->exp_nid_stats->nid_brw_stats->hist[BRW_W_DISCONT_BLOCKS + wr],
+                                      discont_blocks);
+        }
 }
 
 #define pct(a,b) (b ? a * 100 / b : 0)
@@ -383,6 +345,7 @@ static void brw_stats_show(struct seq_file *seq, struct brw_stats *brw_stats)
                           &brw_stats->hist[BRW_R_DIO_FRAGS],
                           &brw_stats->hist[BRW_W_DIO_FRAGS], 0);
 
+#if (LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))
         display_brw_stats(seq, "disk I/Os in flight", "ios",
                           &brw_stats->hist[BRW_R_RPC_HIST],
                           &brw_stats->hist[BRW_W_RPC_HIST], 0);
@@ -398,7 +361,10 @@ static void brw_stats_show(struct seq_file *seq, struct brw_stats *brw_stats)
         display_brw_stats(seq, "disk I/O size", "ios",
                           &brw_stats->hist[BRW_R_DISK_IOSIZE],
                           &brw_stats->hist[BRW_W_DISK_IOSIZE], 1);
+#endif
 }
+
+#undef pct
 
 static int filter_brw_stats_seq_show(struct seq_file *seq, void *v)
 {
@@ -461,4 +427,32 @@ void lprocfs_filter_init_vars(struct lprocfs_static_vars *lvars)
     lvars->module_vars  = lprocfs_filter_module_vars;
     lvars->obd_vars     = lprocfs_filter_obd_vars;
 }
+
+static int filter_per_nid_stats_seq_show(struct seq_file *seq, void *v)
+{
+        nid_stat_t *tmp = seq->private;
+
+        if (tmp->nid_brw_stats)
+                brw_stats_show(seq, tmp->nid_brw_stats);
+
+        return 0;
+}
+
+static ssize_t filter_per_nid_stats_seq_write(struct file *file,
+                                              const char *buf, size_t len,
+                                              loff_t *off)
+{
+        struct seq_file *seq = file->private_data;
+        nid_stat_t *tmp = seq->private;
+        int i;
+
+        if (tmp->nid_brw_stats)
+                for (i = 0; i < BRW_LAST; i++)
+                        lprocfs_oh_clear(&tmp->nid_brw_stats->hist[i]);
+
+        return len;
+}
+
+LPROC_SEQ_FOPS(filter_per_nid_stats);
+
 #endif /* LPROCFS */

@@ -28,7 +28,7 @@ static struct it_node {
         int hit, valid;
 } *it_array;
 static int it_count;
-static CFS_LIST_HEAD(header);
+CFS_LIST_HEAD(header);
 static unsigned long max_count = ULONG_MAX & ALIGN_MASK;
 static int have_wide_lock = 0;
 

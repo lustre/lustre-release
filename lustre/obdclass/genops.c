@@ -100,6 +100,8 @@ struct obd_type *class_get_type(const char *name)
 #ifdef CONFIG_KMOD
         if (!type) {
                 const char *modname = name;
+                if (strcmp(modname, LUSTRE_MDT_NAME) == 0) 
+                        modname = LUSTRE_MDS_NAME;
                 if (!request_module(modname)) {
                         CDEBUG(D_INFO, "Loaded module '%s'\n", modname);
                         type = class_search_type(name);
@@ -112,7 +114,7 @@ struct obd_type *class_get_type(const char *name)
         if (type) {
                 spin_lock(&type->obd_type_lock);
                 type->typ_refcnt++;
-                try_module_get(type->typ_dt_ops->o_owner);
+                try_module_get(type->typ_ops->o_owner);
                 spin_unlock(&type->obd_type_lock);
         }
         return type;
@@ -123,22 +125,18 @@ void class_put_type(struct obd_type *type)
         LASSERT(type);
         spin_lock(&type->obd_type_lock);
         type->typ_refcnt--;
-        module_put(type->typ_dt_ops->o_owner);
+        module_put(type->typ_ops->o_owner);
         spin_unlock(&type->obd_type_lock);
 }
 
-#define CLASS_MAX_NAME 1024
-
-int class_register_type(struct obd_ops *dt_ops, struct md_ops *md_ops, 
-                        struct lprocfs_vars *vars, const char *name, 
-                        struct lu_device_type *ldt)
+int class_register_type(struct obd_ops *ops, struct lprocfs_vars *vars,
+                        const char *name)
 {
         struct obd_type *type;
         int rc = 0;
         ENTRY;
 
-        /* sanity check */
-        LASSERT(strnlen(name, CLASS_MAX_NAME) < CLASS_MAX_NAME);
+        LASSERT(strnlen(name, 1024) < 1024);    /* sanity check */
 
         if (class_search_type(name)) {
                 CDEBUG(D_IOCTL, "Type %s already registered\n", name);
@@ -150,19 +148,12 @@ int class_register_type(struct obd_ops *dt_ops, struct md_ops *md_ops,
         if (type == NULL)
                 RETURN(rc);
 
-        OBD_ALLOC_PTR(type->typ_dt_ops);
-        OBD_ALLOC_PTR(type->typ_md_ops);
+        OBD_ALLOC(type->typ_ops, sizeof(*type->typ_ops));
         OBD_ALLOC(type->typ_name, strlen(name) + 1);
-        
-        if (type->typ_dt_ops == NULL || 
-            type->typ_md_ops == NULL || 
-            type->typ_name == NULL)
+        if (type->typ_ops == NULL || type->typ_name == NULL)
                 GOTO (failed, rc);
 
-        *(type->typ_dt_ops) = *dt_ops;
-        /* md_ops is optional */
-        if (md_ops)
-                *(type->typ_md_ops) = *md_ops;
+        *(type->typ_ops) = *ops;
         strcpy(type->typ_name, name);
         spin_lock_init(&type->obd_type_lock);
 
@@ -175,12 +166,6 @@ int class_register_type(struct obd_ops *dt_ops, struct md_ops *md_ops,
                 GOTO (failed, rc);
         }
 #endif
-        if (ldt != NULL) {
-                type->typ_lu = ldt;
-                rc = ldt->ldt_ops->ldto_init(ldt);
-                if (rc != 0)
-                        GOTO (failed, rc);
-        }
 
         spin_lock(&obd_types_lock);
         list_add(&type->typ_chain, &obd_types);
@@ -191,10 +176,8 @@ int class_register_type(struct obd_ops *dt_ops, struct md_ops *md_ops,
  failed:
         if (type->typ_name != NULL)
                 OBD_FREE(type->typ_name, strlen(name) + 1);
-        if (type->typ_md_ops != NULL)
-                OBD_FREE_PTR(type->typ_md_ops);
-        if (type->typ_dt_ops != NULL)
-                OBD_FREE_PTR(type->typ_dt_ops);
+        if (type->typ_ops != NULL)
+                OBD_FREE (type->typ_ops, sizeof (*type->typ_ops));
         OBD_FREE(type, sizeof(*type));
         RETURN(rc);
 }
@@ -213,26 +196,19 @@ int class_unregister_type(const char *name)
                 CERROR("type %s has refcount (%d)\n", name, type->typ_refcnt);
                 /* This is a bad situation, let's make the best of it */
                 /* Remove ops, but leave the name for debugging */
-                OBD_FREE_PTR(type->typ_dt_ops);
-                OBD_FREE_PTR(type->typ_md_ops);
+                OBD_FREE(type->typ_ops, sizeof(*type->typ_ops));
                 RETURN(-EBUSY);
         }
 
-        if (type->typ_procroot) {
+        if (type->typ_procroot) 
                 lprocfs_remove(&type->typ_procroot);
-        }
-
-        if (type->typ_lu)
-                type->typ_lu->ldt_ops->ldto_fini(type->typ_lu);
 
         spin_lock(&obd_types_lock);
         list_del(&type->typ_chain);
         spin_unlock(&obd_types_lock);
         OBD_FREE(type->typ_name, strlen(name) + 1);
-        if (type->typ_dt_ops != NULL)
-                OBD_FREE_PTR(type->typ_dt_ops);
-        if (type->typ_md_ops != NULL)
-                OBD_FREE_PTR(type->typ_md_ops);
+        if (type->typ_ops != NULL)
+                OBD_FREE(type->typ_ops, sizeof(*type->typ_ops));
         OBD_FREE(type, sizeof(*type));
         RETURN(0);
 } /* class_unregister_type */
@@ -250,7 +226,7 @@ struct obd_device *class_newdev(const char *type_name, const char *name)
                 RETURN(ERR_PTR(-EINVAL));
         }
 
-        type = class_get_type(type_name); 
+        type = class_get_type(type_name);
         if (type == NULL){
                 CERROR("OBD: unknown type: %s\n", type_name);
                 RETURN(ERR_PTR(-ENODEV));
@@ -266,8 +242,7 @@ struct obd_device *class_newdev(const char *type_name, const char *name)
         spin_lock(&obd_dev_lock);
         for (i = 0; i < class_devno_max(); i++) {
                 struct obd_device *obd = class_num2obd(i);
-                if (obd && obd->obd_name &&
-                    (strcmp(name, obd->obd_name) == 0)) {
+                if (obd && obd->obd_name && (strcmp(name, obd->obd_name) == 0)){
                         CERROR("Device %s already exists, won't add\n", name);
                         if (result) {
                                 LASSERTF(result->obd_magic == OBD_DEVICE_MAGIC,
@@ -279,7 +254,7 @@ struct obd_device *class_newdev(const char *type_name, const char *name)
 
                                 obd_devs[result->obd_minor] = NULL;
                                 result->obd_name[0]='\0';
-                         }
+                        }
                         result = ERR_PTR(-EEXIST);
                         break;
                 }
@@ -535,11 +510,6 @@ void obd_cleanup_caches(void)
                 LASSERTF(rc == 0, "Cannot destory ll_import_cache\n");
                 import_cachep = NULL;
         }
-        if (capa_cachep) {
-                rc = cfs_mem_cache_destroy(capa_cachep);
-                LASSERTF(rc == 0, "Cannot destory capa_cache\n");
-                capa_cachep = NULL;
-        }
         EXIT;
 }
 
@@ -565,12 +535,6 @@ int obd_init_caches(void)
                                              sizeof(struct obd_import),
                                              0, 0);
         if (!import_cachep)
-                GOTO(out, -ENOMEM);
-
-        LASSERT(capa_cachep == NULL);
-        capa_cachep = cfs_mem_cache_create("capa_cache",
-                                           sizeof(struct obd_capa), 0, 0);
-        if (!capa_cachep)
                 GOTO(out, -ENOMEM);
 
         RETURN(0);
@@ -663,12 +627,11 @@ EXPORT_SYMBOL(__class_export_put);
 void class_export_destroy(struct obd_export *exp)
 {
         struct obd_device *obd = exp->exp_obd;
-        ENTRY;
 
         LASSERT (atomic_read(&exp->exp_refcount) == 0);
 
-        CDEBUG(D_IOCTL, "destroying export %p/%s for %s\n", exp,
-               exp->exp_client_uuid.uuid, obd->obd_name);
+        CDEBUG(D_IOCTL, "destroying export %p/%s\n", exp,
+               exp->exp_client_uuid.uuid);
 
         LASSERT(obd != NULL);
 
@@ -678,10 +641,9 @@ void class_export_destroy(struct obd_export *exp)
 
         LASSERT(list_empty(&exp->exp_outstanding_replies));
         obd_destroy_export(exp);
- 
+
         OBD_FREE_RCU(exp, sizeof(*exp), &exp->exp_handle);
         class_decref(obd);
-        EXIT;
 }
 
 /* Creates a new export, adds it to the hash table, and returns a
@@ -693,7 +655,7 @@ struct obd_export *class_new_export(struct obd_device *obd,
         struct obd_export *export;
         int rc = 0;
 
-        OBD_ALLOC_PTR(export);
+        OBD_ALLOC(export, sizeof(*export));
         if (!export)
                 return ERR_PTR(-ENOMEM);
 
@@ -708,30 +670,27 @@ struct obd_export *class_new_export(struct obd_device *obd,
 
         CFS_INIT_LIST_HEAD(&export->exp_handle.h_link);
         class_handle_hash(&export->exp_handle, export_handle_addref);
-        export->exp_last_request_time = CURRENT_SECONDS;
+        export->exp_last_request_time = cfs_time_current_sec();
         spin_lock_init(&export->exp_lock);
         INIT_HLIST_NODE(&export->exp_uuid_hash);
         INIT_HLIST_NODE(&export->exp_nid_hash);
 
-        export->exp_sp_peer = LUSTRE_SP_ANY;
-        export->exp_flvr.sf_rpc = SPTLRPC_FLVR_INVALID;
         export->exp_client_uuid = *cluuid;
         obd_init_export(export);
 
-        spin_lock(&obd->obd_dev_lock);
         if (!obd_uuid_equals(cluuid, &obd->obd_uuid)) {
                rc = lustre_hash_additem_unique(obd->obd_uuid_hash_body, cluuid, 
                                                &export->exp_uuid_hash);
                if (rc != 0) {
                        CWARN("%s: denying duplicate export for %s\n",
                              obd->obd_name, cluuid->uuid);
-                       spin_unlock(&obd->obd_dev_lock);
                        class_handle_unhash(&export->exp_handle);
                        OBD_FREE_PTR(export);
                        return ERR_PTR(-EALREADY);
                }
         }
 
+        spin_lock(&obd->obd_dev_lock);
         LASSERT(!obd->obd_stopping); /* shouldn't happen, but might race */
         class_incref(obd);
         list_add(&export->exp_obd_chain, &export->exp_obd->obd_exports);
@@ -810,8 +769,7 @@ void class_import_destroy(struct obd_import *import)
 {
         ENTRY;
         
-        CDEBUG(D_IOCTL, "destroying import %p for %s\n", import,
-                import->imp_obd->obd_name);
+        CDEBUG(D_IOCTL, "destroying import %p\n", import);
 
         LASSERT(atomic_read(&import->imp_refcount) == 0);
 
@@ -827,12 +785,23 @@ void class_import_destroy(struct obd_import *import)
                 OBD_FREE(imp_conn, sizeof(*imp_conn));
         }
 
-        LASSERT(import->imp_sec == NULL);
         class_decref(import->imp_obd);
         OBD_FREE_RCU(import, sizeof(*import), &import->imp_handle);
         EXIT;
 }
 EXPORT_SYMBOL(class_import_put);
+
+static void init_imp_at(struct imp_at *at) {
+        int i;
+        at_init(&at->iat_net_latency, 0, 0);
+        for (i = 0; i < IMP_AT_MAX_PORTALS; i++) {
+                /* max service estimates are tracked on the server side, so
+                   don't use the AT history here, just use the last reported
+                   val. (But keep hist for proc histogram, worst_ever) */
+                at_init(&at->iat_service_estimate[i], INITIAL_CONNECT_TIMEOUT,
+                        AT_FLG_NOHIST);
+        }
+}
 
 struct obd_import *class_new_import(struct obd_device *obd)
 {
@@ -850,7 +819,6 @@ struct obd_import *class_new_import(struct obd_device *obd)
         imp->imp_last_success_conn = 0;
         imp->imp_state = LUSTRE_IMP_NEW;
         imp->imp_obd = class_incref(obd);
-        sema_init(&imp->imp_sec_mutex, 1);
         cfs_waitq_init(&imp->imp_recovery_waitq);
 
         atomic_set(&imp->imp_refcount, 2);
@@ -860,10 +828,17 @@ struct obd_import *class_new_import(struct obd_device *obd)
         CFS_INIT_LIST_HEAD(&imp->imp_conn_list);
         CFS_INIT_LIST_HEAD(&imp->imp_handle.h_link);
         class_handle_hash(&imp->imp_handle, import_handle_addref);
+        init_imp_at(&imp->imp_at);
 
+#ifdef HAVE_DEFAULT_V2_CONNECT
         /* the default magic is V2, will be used in connect RPC, and
          * then adjusted according to the flags in request/reply. */
         imp->imp_msg_magic = LUSTRE_MSG_MAGIC_V2;
+#else
+        /* the default magic is V1, will be used in connect RPC, and
+         * then adjusted according to the flags in request/reply. */
+        imp->imp_msg_magic = LUSTRE_MSG_MAGIC_V1;
+#endif
 
         return imp;
 }
@@ -879,6 +854,7 @@ void class_destroy_import(struct obd_import *import)
         spin_lock(&import->imp_lock);
         import->imp_generation++;
         spin_unlock(&import->imp_lock);
+
         class_import_put(import);
 }
 EXPORT_SYMBOL(class_destroy_import);
@@ -908,37 +884,6 @@ int class_connect(struct lustre_handle *conn, struct obd_device *obd,
         RETURN(0);
 }
 EXPORT_SYMBOL(class_connect);
-
-/* if export is involved in recovery then clean up related things */
-void class_export_recovery_cleanup(struct obd_export *exp)
-{
-        struct obd_device *obd = exp->exp_obd;
-
-        spin_lock_bh(&obd->obd_processing_task_lock);
-        if (obd->obd_recovering && exp->exp_in_recovery) {
-                spin_lock(&exp->exp_lock);
-                exp->exp_in_recovery = 0;
-                spin_unlock(&exp->exp_lock);
-                obd->obd_connected_clients--;
-                /* each connected client is counted as recoverable */
-                obd->obd_recoverable_clients--;
-                if (exp->exp_req_replay_needed) {
-                        spin_lock(&exp->exp_lock);
-                        exp->exp_req_replay_needed = 0;
-                        spin_unlock(&exp->exp_lock);
-                        LASSERT(atomic_read(&obd->obd_req_replay_clients));
-                        atomic_dec(&obd->obd_req_replay_clients);
-                }
-                if (exp->exp_lock_replay_needed) {
-                        spin_lock(&exp->exp_lock);
-                        exp->exp_lock_replay_needed = 0;
-                        spin_unlock(&exp->exp_lock);
-                        LASSERT(atomic_read(&obd->obd_lock_replay_clients));
-                        atomic_dec(&obd->obd_lock_replay_clients);                
-                }
-        }
-        spin_unlock_bh(&obd->obd_processing_task_lock);
-}
 
 /* This function removes two references from the export: one for the
  * hash entry and one for the export pointer passed in.  The export
@@ -974,7 +919,6 @@ int class_disconnect(struct obd_export *export)
         CDEBUG(D_IOCTL, "disconnect: cookie "LPX64"\n",
                export->exp_handle.h_cookie);
 
-        class_export_recovery_cleanup(export);
         class_unlink_export(export);
         class_export_put(export);
         RETURN(0);
@@ -1020,10 +964,12 @@ static void class_disconnect_export_list(struct list_head *list, int flags)
                 fake_exp->exp_flags = flags;
                 spin_unlock(&fake_exp->exp_lock);
 
+                CDEBUG(D_HA, "%s: disconnecting export at %s (%p), "
+                       "last request at %ld\n",
+                       exp->exp_obd->obd_name, obd_export_nid2str(exp),
+                       exp, exp->exp_last_request_time);
                 rc = obd_disconnect(fake_exp);
                 class_export_put(exp);
-                CDEBUG(D_HA, "disconnecting export %s (%p): rc %d\n",
-                       exp->exp_client_uuid.uuid, exp, rc);
         }
         EXIT;
 }
@@ -1044,23 +990,17 @@ void class_disconnect_exports(struct obd_device *obd)
         list_add(&work_list, &obd->obd_exports);
         list_del_init(&obd->obd_exports);
         spin_unlock(&obd->obd_dev_lock);
-        
-        if (!list_empty(&work_list)) {
-                CDEBUG(D_HA, "OBD device %d (%p) has exports, "
-                       "disconnecting them\n", obd->obd_minor, obd);
-                class_disconnect_export_list(&work_list, 
-                                             get_exp_flags_from_obd(obd));
-        } else
-                CDEBUG(D_HA, "OBD device %d (%p) has no exports\n",
-                       obd->obd_minor, obd);
+
+        CDEBUG(D_HA, "OBD device %d (%p) has exports, "
+               "disconnecting them\n", obd->obd_minor, obd);
+        class_disconnect_export_list(&work_list, get_exp_flags_from_obd(obd));
         EXIT;
 }
 EXPORT_SYMBOL(class_disconnect_exports);
 
 /* Remove exports that have not completed recovery.
  */
-int class_disconnect_stale_exports(struct obd_device *obd,
-                                   int (*test_export)(struct obd_export *))
+void class_disconnect_stale_exports(struct obd_device *obd)
 {
         struct list_head work_list;
         struct list_head *pos, *n;
@@ -1072,28 +1012,18 @@ int class_disconnect_stale_exports(struct obd_device *obd,
         spin_lock(&obd->obd_dev_lock);
         list_for_each_safe(pos, n, &obd->obd_exports) {
                 exp = list_entry(pos, struct obd_export, exp_obd_chain);
-                if (test_export(exp))
-                        continue;
-                
-                list_del(&exp->exp_obd_chain);
-                list_add(&exp->exp_obd_chain, &work_list);
-                /* don't count self-export as client */
-                if (obd_uuid_equals(&exp->exp_client_uuid,
-                                     &exp->exp_obd->obd_uuid))
-                        continue;
-
-                cnt++;
-                CDEBUG(D_ERROR, "%s: disconnect stale client %s@%s\n",
-                       obd->obd_name, exp->exp_client_uuid.uuid,
-                       exp->exp_connection == NULL ? "<unknown>" :
-                       libcfs_nid2str(exp->exp_connection->c_peer.nid));
+                if (exp->exp_replay_needed) {
+                        list_del(&exp->exp_obd_chain);
+                        list_add(&exp->exp_obd_chain, &work_list);
+                        cnt++;
+                }
         }
         spin_unlock(&obd->obd_dev_lock);
 
         CDEBUG(D_ERROR, "%s: disconnecting %d stale clients\n",
                obd->obd_name, cnt);
         class_disconnect_export_list(&work_list, get_exp_flags_from_obd(obd));
-        RETURN(cnt);
+        EXIT;
 }
 EXPORT_SYMBOL(class_disconnect_stale_exports);
 
@@ -1275,32 +1205,32 @@ char *obd_export_nid2str(struct obd_export *exp)
 {
         if (exp->exp_connection != NULL)
                 return libcfs_nid2str(exp->exp_connection->c_peer.nid);
-
+        
         return "(no nid)";
 }
 EXPORT_SYMBOL(obd_export_nid2str);
 
-int obd_export_evict_by_nid(struct obd_device *obd, const char *nid)
+int obd_export_evict_by_nid(struct obd_device *obd, char *nid)
 {
         struct obd_export *doomed_exp = NULL;
         int exports_evicted = 0;
 
-        lnet_nid_t nid_key = libcfs_str2nid((char *)nid);
+        lnet_nid_t nid_key = libcfs_str2nid(nid);
 
         do {
                 doomed_exp = lustre_hash_get_object_by_key(obd->obd_nid_hash_body,
                                                            &nid_key);
+
                 if (doomed_exp == NULL)
                         break;
 
                 LASSERTF(doomed_exp->exp_connection->c_peer.nid == nid_key,
                          "nid %s found, wanted nid %s, requested nid %s\n",
                          obd_export_nid2str(doomed_exp),
-                         libcfs_nid2str(nid_key), nid);        
-                LASSERTF(doomed_exp != obd->obd_self_export,
-                         "self-export is hashed by NID?\n");
+                         libcfs_nid2str(nid_key), nid);
+        
                 exports_evicted++;
-                CWARN("%s: evict NID '%s' (%s) #%d at adminstrative request\n",
+                CDEBUG(D_HA, "%s: evict NID '%s' (%s) #%d at adminstrative request\n",
                        obd->obd_name, nid, doomed_exp->exp_client_uuid.uuid,
                        exports_evicted);
                 class_fail_export(doomed_exp);
@@ -1314,14 +1244,14 @@ int obd_export_evict_by_nid(struct obd_device *obd, const char *nid)
 }
 EXPORT_SYMBOL(obd_export_evict_by_nid);
 
-int obd_export_evict_by_uuid(struct obd_device *obd, const char *uuid)
+int obd_export_evict_by_uuid(struct obd_device *obd, char *uuid)
 {
         struct obd_export *doomed_exp = NULL;
         struct obd_uuid doomed;
         int exports_evicted = 0;
 
         obd_str2uuid(&doomed, uuid);
-        if (obd_uuid_equals(&doomed, &obd->obd_uuid)) {
+        if(obd_uuid_equals(&doomed, &obd->obd_uuid)) {
                 CERROR("%s: can't evict myself\n", obd->obd_name);
                 return exports_evicted;
         }
@@ -1348,7 +1278,6 @@ void obd_zombie_impexp_cull(void)
 {
         struct obd_import *import;
         struct obd_export *export;
-        ENTRY;
         
         do {
                 spin_lock (&obd_zombie_impexp_lock);
@@ -1378,7 +1307,6 @@ void obd_zombie_impexp_cull(void)
                         class_export_destroy(export);
 
         } while (import != NULL || export != NULL);
-        EXIT;
 }
 EXPORT_SYMBOL(obd_zombie_impexp_cull);
 
@@ -1388,4 +1316,3 @@ void obd_zombie_impexp_init(void)
         CFS_INIT_LIST_HEAD(&obd_zombie_exports);
         spin_lock_init(&obd_zombie_impexp_lock);
 }
-

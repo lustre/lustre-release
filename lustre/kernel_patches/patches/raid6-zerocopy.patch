@@ -1,0 +1,166 @@
+diff -pur linux-2.6.9.orig/drivers/md/raid6main.c linux-2.6.9/drivers/md/raid6main.c
+--- linux-2.6.9.orig/drivers/md/raid6main.c	2008-01-10 14:02:08.000000000 +0800
++++ linux-2.6.9/drivers/md/raid6main.c	2008-01-10 14:01:56.000000000 +0800
+@@ -430,6 +430,7 @@ static int raid6_end_read_request (struc
+ 		clear_buffer_uptodate(bh);
+ 	}
+ #endif
++	BUG_ON(test_bit(R5_Direct, &sh->dev[i].flags));
+ 	clear_bit(R5_LOCKED, &sh->dev[i].flags);
+ 	set_bit(STRIPE_HANDLE, &sh->state);
+ 	release_stripe(sh);
+@@ -468,6 +469,10 @@ static int raid6_end_write_request (stru
+ 
+ 	rdev_dec_pending(conf->disks[i].rdev, conf->mddev);
+ 
++	if (test_bit(R5_Direct, &sh->dev[i].flags)) {
++		BUG_ON(sh->dev[i].req.bi_io_vec[0].bv_page == sh->dev[i].page);
++		sh->dev[i].req.bi_io_vec[0].bv_page = sh->dev[i].page;
++	}
+ 	clear_bit(R5_LOCKED, &sh->dev[i].flags);
+ 	set_bit(STRIPE_HANDLE, &sh->state);
+ 	__release_stripe(conf, sh);
+@@ -664,7 +669,27 @@ static sector_t compute_blocknr(struct s
+ 	return r_sector;
+ }
+ 
++static struct page *zero_copy_data(struct bio *bio, sector_t sector)
++{
++	sector_t bi_sector = bio->bi_sector;
++	struct page *page = NULL;
++	struct bio_vec *bvl;
++	int i;
+ 
++	bio_for_each_segment(bvl, bio, i) {
++		if (sector == bi_sector)
++			page = bio_iovec_idx(bio, i)->bv_page;
++		bi_sector += bio_iovec_idx(bio, i)->bv_len >> 9;
++		if (bi_sector >= sector + STRIPE_SECTORS) {
++			/* check if the stripe is covered by one page */
++			if (page == bio_iovec_idx(bio, i)->bv_page &&
++			    PageConstant(page))
++				return page;
++			return NULL;
++		}
++	}
++	return NULL;
++}
+ 
+ /*
+  * Copy data between a page in the stripe cache, and one or more bion
+@@ -731,6 +756,7 @@ static void compute_parity(struct stripe
+ 	raid6_conf_t *conf = sh->raid_conf;
+ 	int i, pd_idx = sh->pd_idx, qd_idx, d0_idx, disks = conf->raid_disks, count;
+ 	struct bio *chosen;
++	struct page *page;
+ 	/**** FIX THIS: This could be very bad if disks is close to 256 ****/
+ 	void *ptrs[disks];
+ 
+@@ -761,18 +787,46 @@ static void compute_parity(struct stripe
+ 		BUG();		/* Not implemented yet */
+ 	}
+ 
+-	for (i = disks; i--;)
+-		if (sh->dev[i].written) {
+-			sector_t sector = sh->dev[i].sector;
+-			struct bio *wbi = sh->dev[i].written;
+-			while (wbi && wbi->bi_sector < sector + STRIPE_SECTORS) {
+-				copy_data(1, wbi, sh->dev[i].page, sector);
+-				wbi = r5_next_bio(wbi, sector);
++	for (i = disks; i--;) {
++		struct bio *wbi = sh->dev[i].written;
++		sector_t sector;
++
++		if (!wbi)
++			continue;
++
++		sector = sh->dev[i].sector;
++		set_bit(R5_LOCKED, &sh->dev[i].flags);
++		BUG_ON(test_bit(R5_Direct, &sh->dev[i].flags));
++
++		/* check if it's covered by a single page
++		 * and whole stripe is written at once.
++		 * in this case we can avoid memcpy() */
++		if (!wbi->bi_next && test_bit(R5_Insync, &sh->dev[i].flags) &&
++		    test_bit(R5_OVERWRITE, &sh->dev[i].flags)) {
++			page = zero_copy_data(wbi, sector);
++			/* we don't do zerocopy on a HighMem page. Raid6 tend 
++			 * to prepare all of the pages' content to be accessed
++			 * before computing PQ parity. If we need to support HighMem
++			 * page also, we have to modify the gen_syndrome()
++			 * algorithm. -jay */
++			if (page && !PageHighMem(page)) {
++				atomic_inc(&conf->writes_zcopy);
++				sh->dev[i].req.bi_io_vec[0].bv_page = page;
++				set_bit(R5_Direct, &sh->dev[i].flags);
++				clear_bit(R5_UPTODATE, &sh->dev[i].flags);
++				clear_bit(R5_OVERWRITE, &sh->dev[i].flags);
++				continue;
+ 			}
++		}
+ 
+-			set_bit(R5_LOCKED, &sh->dev[i].flags);
+-			set_bit(R5_UPTODATE, &sh->dev[i].flags);
++		atomic_inc(&conf->writes_copied);
++		clear_bit(R5_OVERWRITE, &sh->dev[i].flags);
++		set_bit(R5_UPTODATE, &sh->dev[i].flags);
++		while (wbi && wbi->bi_sector < sector + STRIPE_SECTORS) {
++			copy_data(1, wbi, sh->dev[i].page, sector);
++			wbi = r5_next_bio(wbi, sector);
+ 		}
++	}
+ 
+ //	switch(method) {
+ //	case RECONSTRUCT_WRITE:
+@@ -783,7 +837,10 @@ static void compute_parity(struct stripe
+ 		count = 0;
+ 		i = d0_idx;
+ 		do {
+-			ptrs[count++] = page_address(sh->dev[i].page);
++			if (test_bit(R5_Direct, &sh->dev[i].flags))
++				ptrs[count++] = page_address(sh->dev[i].req.bi_io_vec[0].bv_page);
++			else
++				ptrs[count++] = page_address(sh->dev[i].page);
+ 
+ 			i = raid6_next_disk(i, disks);
+ 		} while ( i != d0_idx );
+@@ -1185,7 +1242,8 @@ static void handle_stripe(struct stripe_
+ 			if (sh->dev[i].written) {
+ 				dev = &sh->dev[i];
+ 				if (!test_bit(R5_LOCKED, &dev->flags) &&
+-				    test_bit(R5_UPTODATE, &dev->flags) ) {
++				    (test_bit(R5_UPTODATE, &dev->flags) ||
++					 test_bit(R5_Direct, &dev->flags)) ) {
+ 					/* We can return any write requests */
+ 					struct bio *wbi, *wbi2;
+ 					PRINTK("Return write for stripe %llu disc %d\n",
+@@ -1193,6 +1251,7 @@ static void handle_stripe(struct stripe_
+ 					spin_lock_irq(&conf->device_lock);
+ 					wbi = dev->written;
+ 					dev->written = NULL;
++					clear_bit(R5_Direct, &dev->flags);
+ 					while (wbi && wbi->bi_sector < dev->sector + STRIPE_SECTORS) {
+ 						wbi2 = r5_next_bio(wbi, dev->sector);
+ 						if (--wbi->bi_phys_segments == 0) {
+@@ -2008,6 +2067,7 @@ static int run (mddev_t *mddev)
+ 		if (mddev->queue->backing_dev_info.ra_pages < 2 * stripe)
+ 			mddev->queue->backing_dev_info.ra_pages = 2 * stripe;
+ 	}
++	mddev->queue->backing_dev_info.capabilities |= BDI_CAP_PAGE_CONST_WRITE;
+ 
+ 	/* Ok, everything is just fine now */
+ 	mddev->array_size =  mddev->size * (mddev->raid_disks - 2);
+@@ -2095,9 +2155,11 @@ static void status (struct seq_file *seq
+ 		atomic_read(&conf->handled_in_raid5d),
+ 		atomic_read(&conf->out_of_stripes),
+ 		atomic_read(&conf->handle_called));
+-	seq_printf (seq, "\n\t\treads: %u for rmw, %u for rcw",
++	seq_printf (seq, "\n\t\treads: %u for rmw, %u for rcw. zcopy writes: %u, copied writes: %u",
+ 		atomic_read(&conf->reads_for_rmw),
+-		atomic_read(&conf->reads_for_rcw));
++		atomic_read(&conf->reads_for_rcw),
++		atomic_read(&conf->writes_zcopy),
++		atomic_read(&conf->writes_copied));
+ 	seq_printf (seq, "\n\t\t%u delayed, %u active, queues: %u in, %u out\n",
+ 		atomic_read(&conf->delayed),
+ 		atomic_read(&conf->active_stripes),

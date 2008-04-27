@@ -18,7 +18,6 @@
  *   along with Lustre; if not, write to the Free Software
  *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
-
 #ifndef AUTOCONF_INCLUDED
 #include <linux/config.h>
 #endif
@@ -39,10 +38,12 @@
 #include <linux/mm.h>
 #include <linux/pagemap.h>
 #include <linux/smp_lock.h>
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
+#include <linux/iobuf.h>
+#endif
 
 #define DEBUG_SUBSYSTEM S_LLITE
 
-//#include <lustre_mdc.h>
 #include <lustre_lite.h>
 #include "llite_internal.h"
 #include <linux/lustre_compat25.h>
@@ -68,8 +69,14 @@ struct ll_lock_tree_node {
 int lt_get_mmap_locks(struct ll_lock_tree *tree,
                       unsigned long addr, size_t count);
 
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0))
 struct page *ll_nopage(struct vm_area_struct *vma, unsigned long address,
                        int *type);
+#else
+
+struct page *ll_nopage(struct vm_area_struct *vma, unsigned long address,
+                       int unused);
+#endif
 
 struct ll_lock_tree_node * ll_node_from_inode(struct inode *inode, __u64 start,
                                               __u64 end, ldlm_mode_t mode)
@@ -209,12 +216,13 @@ int ll_tree_unlock(struct ll_lock_tree *tree)
         RETURN(rc);
 }
 
-int ll_tree_lock(struct ll_lock_tree *tree,
+int ll_tree_lock_iov(struct ll_lock_tree *tree,
                  struct ll_lock_tree_node *first_node,
-                 const char *buf, size_t count, int ast_flags)
+                 const struct iovec *iov, unsigned long nr_segs, int ast_flags)
 {
         struct ll_lock_tree_node *node;
         int rc = 0;
+        unsigned long seg;
         ENTRY;
 
         tree->lt_root.rb_node = NULL;
@@ -225,9 +233,13 @@ int ll_tree_lock(struct ll_lock_tree *tree,
         /* To avoid such subtle deadlock case: client1 try to read file1 to
          * mmapped file2, on the same time, client2 try to read file2 to
          * mmapped file1.*/
-        rc = lt_get_mmap_locks(tree, (unsigned long)buf, count);
-        if (rc)
-                GOTO(out, rc);
+        for (seg = 0; seg < nr_segs; seg++) {
+                const struct iovec *iv = &iov[seg];
+                rc = lt_get_mmap_locks(tree, (unsigned long)iv->iov_base,
+                                       iv->iov_len);
+                if (rc)
+                        GOTO(out, rc);
+        }
 
         while ((node = lt_least_node(tree))) {
                 struct inode *inode = node->lt_inode;
@@ -247,6 +259,16 @@ out:
         RETURN(rc);
 }
 
+int ll_tree_lock(struct ll_lock_tree *tree,
+                 struct ll_lock_tree_node *first_node,
+                 const char *buf, size_t count, int ast_flags)
+{
+        struct iovec local_iov = { .iov_base = (void __user *)buf,
+                                   .iov_len = count };
+
+        return ll_tree_lock_iov(tree, first_node, &local_iov, 1, ast_flags);
+}
+
 static ldlm_mode_t mode_from_vma(struct vm_area_struct *vma)
 {
         /* we only want to hold PW locks if the mmap() can generate
@@ -262,7 +284,7 @@ static void policy_from_vma(ldlm_policy_data_t *policy,
                             size_t count)
 {
         policy->l_extent.start = ((addr - vma->vm_start) & CFS_PAGE_MASK) +
-                                 (vma->vm_pgoff << CFS_PAGE_SHIFT);
+                                 ((__u64)vma->vm_pgoff << CFS_PAGE_SHIFT);
         policy->l_extent.end = (policy->l_extent.start + count - 1) |
                                ~CFS_PAGE_MASK;
 }
@@ -343,8 +365,13 @@ int lt_get_mmap_locks(struct ll_lock_tree *tree,
  *
  * In 2.6, the truncate_count of address_space can cover this race.
  */
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0))
 struct page *ll_nopage(struct vm_area_struct *vma, unsigned long address,
                        int *type)
+#else
+struct page *ll_nopage(struct vm_area_struct *vma, unsigned long address,
+                       int type /* unused */)
+#endif
 {
         struct file *filp = vma->vm_file;
         struct ll_file_data *fd = LUSTRE_FPRIVATE(filp);
@@ -366,6 +393,8 @@ struct page *ll_nopage(struct vm_area_struct *vma, unsigned long address,
                 RETURN(NULL);
         }
 
+        ll_clear_file_contended(inode);
+
         /* start and end the lock on the first and last bytes in the page */
         policy_from_vma(&policy, vma, address, CFS_PAGE_SIZE);
 
@@ -386,7 +415,7 @@ struct page *ll_nopage(struct vm_area_struct *vma, unsigned long address,
 
         lov_stripe_lock(lsm);
         inode_init_lvb(inode, &lvb);
-        obd_merge_lvb(ll_i2dtexp(inode), lsm, &lvb, 1);
+        obd_merge_lvb(ll_i2obdexp(inode), lsm, &lvb, 1);
         kms = lvb.lvb_size;
 
         pgoff = ((address - vma->vm_start) >> CFS_PAGE_SHIFT) + vma->vm_pgoff;
@@ -405,7 +434,7 @@ struct page *ll_nopage(struct vm_area_struct *vma, unsigned long address,
                  *     i_size_write() without a covering mutex we do the
                  *     assignment directly.  It is not critical that the
                  *     size be correct. */
-                /* region is within kms and, hence, within real file size (A).
+                /* NOTE: region is within kms and, hence, within real file size (A).
                  * We need to increase i_size to cover the read region so that
                  * generic_file_read() will do its job, but that doesn't mean
                  * the kms size is _correct_, it is only the _minimum_ size.
@@ -425,7 +454,7 @@ struct page *ll_nopage(struct vm_area_struct *vma, unsigned long address,
          * bug 10919 */
         lov_stripe_lock(lsm);
         if (mode == LCK_PW)
-                obd_adjust_kms(ll_i2dtexp(inode), lsm,
+                obd_adjust_kms(ll_i2obdexp(inode), lsm,
                                min_t(loff_t, policy.l_extent.end + 1,
                                i_size_read(inode)), 0);
         lov_stripe_unlock(lsm);
@@ -477,7 +506,7 @@ static void ll_vm_open(struct vm_area_struct * vma)
 
                 if (!lsm)
                         return;
-                count = obd_join_lru(sbi->ll_dt_exp, lsm, 0);
+                count = obd_join_lru(sbi->ll_osc_exp, lsm, 0);
                 VMA_DEBUG(vma, "split %d unused locks from lru\n", count);
         } else {
                 spin_unlock(&lli->lli_lock);
@@ -506,13 +535,14 @@ static void ll_vm_close(struct vm_area_struct *vma)
 
                 if (!lsm)
                         return;
-                count = obd_join_lru(sbi->ll_dt_exp, lsm, 1);
+                count = obd_join_lru(sbi->ll_osc_exp, lsm, 1);
                 VMA_DEBUG(vma, "join %d unused locks to lru\n", count);
         } else {
                 spin_unlock(&lli->lli_lock);
         }
 }
 
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0))
 #ifndef HAVE_FILEMAP_POPULATE
 static int (*filemap_populate)(struct vm_area_struct * area, unsigned long address, unsigned long len, pgprot_t prot, unsigned long pgoff, int nonblock);
 #endif
@@ -527,6 +557,7 @@ static int ll_populate(struct vm_area_struct *area, unsigned long address,
         rc = filemap_populate(area, address, len, prot, pgoff, 1);
         RETURN(rc);
 }
+#endif
 
 /* return the user space pointer that maps to a file offset via a vma */
 static inline unsigned long file_to_user(struct vm_area_struct *vma, __u64 byte)
@@ -534,6 +565,47 @@ static inline unsigned long file_to_user(struct vm_area_struct *vma, __u64 byte)
         return vma->vm_start + (byte - ((__u64)vma->vm_pgoff << CFS_PAGE_SHIFT));
 
 }
+
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
+/* [first, last] are the byte offsets affected.
+ * vm_{start, end} are user addresses of the first byte of the mapping and
+ *      the next byte beyond it
+ * vm_pgoff is the page index of the first byte in the mapping */
+static void teardown_vmas(struct vm_area_struct *vma, __u64 first,
+                          __u64 last)
+{
+        unsigned long address, len;
+        for (; vma ; vma = vma->vm_next_share) {
+                if (last >> CFS_PAGE_SHIFT < vma->vm_pgoff)
+                        continue;
+                if (first >> CFS_PAGE_SHIFT >= (vma->vm_pgoff +
+                    ((vma->vm_end - vma->vm_start) >> CFS_PAGE_SHIFT)))
+                        continue;
+
+                /* XXX in case of unmap the cow pages of a running file,
+                 * don't unmap these private writeable mapping here!
+                 * though that will break private mappping a little.
+                 *
+                 * the clean way is to check the mapping of every page
+                 * and just unmap the non-cow pages, just like
+                 * unmap_mapping_range() with even_cow=0 in kernel 2.6.
+                 */
+                if (!(vma->vm_flags & VM_SHARED) &&
+                    (vma->vm_flags & VM_WRITE))
+                        continue;
+
+                address = max((unsigned long)vma->vm_start,
+                              file_to_user(vma, first));
+                len = min((unsigned long)vma->vm_end,
+                          file_to_user(vma, last) + 1) - address;
+
+                VMA_DEBUG(vma, "zapping vma [first="LPU64" last="LPU64" "
+                          "address=%ld len=%ld]\n", first, last, address, len);
+                LASSERT(len > 0);
+                ll_zap_page_range(vma, address, len);
+        }
+}
+#endif
 
 /* XXX put nice comment here.  talk about __free_pte -> dirty pages and
  * nopage's reference passing to the pte */
@@ -543,12 +615,24 @@ int ll_teardown_mmaps(struct address_space *mapping, __u64 first, __u64 last)
         ENTRY;
 
         LASSERTF(last > first, "last "LPU64" first "LPU64"\n", last, first);
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0))
         if (mapping_mapped(mapping)) {
                 rc = 0;
                 unmap_mapping_range(mapping, first + CFS_PAGE_SIZE - 1,
                                     last - first + 1, 0);
         }
-
+#else
+        spin_lock(&mapping->i_shared_lock);
+        if (mapping->i_mmap != NULL) {
+                rc = 0;
+                teardown_vmas(mapping->i_mmap, first, last);
+        }
+        if (mapping->i_mmap_shared != NULL) {
+                rc = 0;
+                teardown_vmas(mapping->i_mmap_shared, first, last);
+        }
+        spin_unlock(&mapping->i_shared_lock);
+#endif
         RETURN(rc);
 }
 
@@ -556,7 +640,9 @@ static struct vm_operations_struct ll_file_vm_ops = {
         .nopage         = ll_nopage,
         .open           = ll_vm_open,
         .close          = ll_vm_close,
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0))
         .populate       = ll_populate,
+#endif
 };
 
 int ll_file_mmap(struct file * file, struct vm_area_struct * vma)
@@ -567,7 +653,8 @@ int ll_file_mmap(struct file * file, struct vm_area_struct * vma)
         ll_stats_ops_tally(ll_i2sbi(file->f_dentry->d_inode), LPROC_LL_MAP, 1);
         rc = generic_file_mmap(file, vma);
         if (rc == 0) {
-#if !defined(HAVE_FILEMAP_POPULATE)
+#if !defined(HAVE_FILEMAP_POPULATE) && \
+    (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0))
                 if (!filemap_populate)
                         filemap_populate = vma->vm_ops->populate;
 #endif

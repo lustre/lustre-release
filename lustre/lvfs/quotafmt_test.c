@@ -70,7 +70,7 @@ static int quotfmt_initialize(struct lustre_quota_info *lqi,
                                        sizeof(struct lustre_disk_dqheader),
                                        &offset);
                 if (size != sizeof(struct lustre_disk_dqheader)) {
-                        CERROR("error writing quoafile header %s (rc = %d)\n",
+                        CERROR("error writing quotafile header %s (rc = %d)\n",
                                name, rc);
                         rc = size;
                         break;
@@ -129,7 +129,7 @@ static int quotfmt_test_1(struct lustre_quota_info *lqi)
         ENTRY;
 
         for (i = 0; i < MAXQUOTAS; i++) {
-                if (!lustre_check_quota_file(lqi, i))
+                if (lustre_check_quota_file(lqi, i))
                         RETURN(-EINVAL);
         }
         RETURN(0);
@@ -220,7 +220,7 @@ static void put_rand_dquot(struct lustre_dquot *dquot)
 static int write_check_dquot(struct lustre_quota_info *lqi)
 {
         struct lustre_dquot *dquot;
-        struct mem_dqblk dqblk;
+        struct lustre_mem_dqblk dqblk;
         int rc = 0;
         ENTRY;
 
@@ -440,9 +440,10 @@ static int quotfmt_test_cleanup(struct obd_device *obd)
         RETURN(0);
 }
 
-static int quotfmt_test_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
+static int quotfmt_test_setup(struct obd_device *obd, obd_count len, void *buf)
 {
         struct lprocfs_static_vars lvars;
+        struct lustre_cfg *lcfg = buf;
         struct obd_device *tgt;
         int rc;
         ENTRY;
@@ -490,8 +491,8 @@ static int __init quotfmt_test_init(void)
         struct lprocfs_static_vars lvars;
 
         lprocfs_quotfmt_test_init_vars(&lvars);
-        return class_register_type(&quotfmt_obd_ops, NULL, lvars.module_vars,
-                                   "quotfmt_test", NULL);
+        return class_register_type(&quotfmt_obd_ops, lvars.module_vars,
+                                   "quotfmt_test");
 }
 
 static void __exit quotfmt_test_exit(void)

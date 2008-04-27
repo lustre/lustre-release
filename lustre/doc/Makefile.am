@@ -16,7 +16,6 @@ SUFFIXES = .lin .lyx .pdf .ps .sgml .html .txt .tex .fig .eps .dvi
 
 MANFILES = lustre.7 lfs.1 mount.lustre.8 mkfs.lustre.8 tunefs.lustre.8 lctl.8 \
 	llverdev.8 llbackup.8
-
 if UTILS
 man_MANS = $(MANFILES)
 endif

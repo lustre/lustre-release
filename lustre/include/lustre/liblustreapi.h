@@ -45,7 +45,7 @@ extern int llapi_file_open(const char *name, int flags, int mode,
 extern int llapi_file_get_stripe(const char *path, struct lov_user_md *lum);
 #define HAVE_LLAPI_FILE_LOOKUP
 extern int llapi_file_lookup(int dirfd, const char *name);
- 
+
 struct find_param {
         unsigned int maxdepth;
         time_t  atime;
@@ -58,6 +58,7 @@ struct find_param {
         unsigned long long size;
         int     size_sign;
         unsigned long long size_units;
+        int size_check;
 
         unsigned long   zeroend:1,
                         recursive:1,
@@ -110,10 +111,4 @@ extern int llapi_quotacheck(char *mnt, int check_type);
 extern int llapi_poll_quotacheck(char *mnt, struct if_quotacheck *qchk);
 extern int llapi_quotactl(char *mnt, struct if_quotactl *qctl);
 extern int llapi_target_iterate(int type_num, char **obd_type, void *args, llapi_cb_t cb);
-extern int llapi_lsetfacl(int argc, char *argv[]);
-extern int llapi_lgetfacl(int argc, char *argv[]);
-extern int llapi_rsetfacl(int argc, char *argv[]);
-extern int llapi_rgetfacl(int argc, char *argv[]);
-extern int llapi_cp(int argc, char *argv[]);
-extern int llapi_ls(int argc, char *argv[]);
 #endif

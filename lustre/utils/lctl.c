@@ -106,7 +106,7 @@ command_t cmdlist[] = {
          "usage: dl"},
 
         /* Device operations */
-        {"==== obd device operations ====", jt_noop, 0, "device operations"},
+        {"==== obd device operations ===", jt_noop, 0, "device operations"},
         {"activate", jt_obd_activate, 0, "activate an import\n"},
         {"deactivate", jt_obd_deactivate, 0, "deactivate an import. "
          "This command should be used on failed OSC devices in an MDT LOV.\n"},
@@ -129,7 +129,7 @@ command_t cmdlist[] = {
          "Use '-n' to disable printing of the key name when printing values."},
 
         /* Debug commands */
-        {"==== debugging control ====", jt_noop, 0, "debug"},
+        {"==== debugging control ===", jt_noop, 0, "debug"},
         {"debug_daemon", jt_dbg_debug_daemon, 0,
          "debug daemon control and dump to a file\n"
          "usage: debug_daemon {start file [#MB]|stop}"},
@@ -161,7 +161,7 @@ command_t cmdlist[] = {
          "usage: modules <path>"},
 
         /* Device configuration commands */
-        {"== device setup (these are not normally used post 1.4) ==",
+        {"== obd device setup (these are not normally used post 1.4) ==",
                 jt_noop, 0, "device config"},
         {"attach", jt_lcfg_attach, 0,
          "set the type, name, and uuid of the current device\n"

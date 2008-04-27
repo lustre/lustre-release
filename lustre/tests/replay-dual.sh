@@ -2,8 +2,8 @@
 
 set -e
 
-# bug number:  13129 13129 6088 10124 
-ALWAYS_EXCEPT="2     3     8    15c   $REPLAY_DUAL_EXCEPT"
+# bug number:  10124 
+ALWAYS_EXCEPT="15c   $REPLAY_DUAL_EXCEPT"
 
 SAVE_PWD=$PWD
 PTLDEBUG=${PTLDEBUG:--1}
@@ -29,10 +29,10 @@ rm -rf $DIR/[df][0-9]*
 
 test_1() {
     touch $MOUNT1/a
-    replay_barrier $SINGLEMDS
+    replay_barrier mds
     touch $MOUNT2/b
 
-    fail $SINGLEMDS
+    fail mds
     checkstat $MOUNT2/a || return 1
     checkstat $MOUNT1/b || return 2
     rm $MOUNT2/a $MOUNT1/b
@@ -45,10 +45,10 @@ run_test 1 "|X| simple create"
 
 
 test_2() {
-    replay_barrier $SINGLEMDS
+    replay_barrier mds
     mkdir $MOUNT1/adir
 
-    fail $SINGLEMDS
+    fail mds
     checkstat $MOUNT2/adir || return 1
     rmdir $MOUNT2/adir
     checkstat $MOUNT2/adir && return 2
@@ -57,11 +57,11 @@ test_2() {
 run_test 2 "|X| mkdir adir"
 
 test_3() {
-    replay_barrier $SINGLEMDS
+    replay_barrier mds
     mkdir $MOUNT1/adir
     mkdir $MOUNT2/adir/bdir
 
-    fail $SINGLEMDS
+    fail mds
     checkstat $MOUNT2/adir      || return 1
     checkstat $MOUNT1/adir/bdir || return 2
     rmdir $MOUNT2/adir/bdir $MOUNT1/adir
@@ -73,11 +73,11 @@ run_test 3 "|X| mkdir adir, mkdir adir/bdir "
 
 test_4() {
     mkdir $MOUNT1/adir
-    replay_barrier $SINGLEMDS
+    replay_barrier mds
     mkdir $MOUNT1/adir  && return 1
     mkdir $MOUNT2/adir/bdir
 
-    fail $SINGLEMDS
+    fail mds
     checkstat $MOUNT2/adir      || return 2
     checkstat $MOUNT1/adir/bdir || return 3
 
@@ -95,11 +95,11 @@ test_5() {
     multiop_bg_pause $MOUNT2/a o_tSc || return  1
     pid=$!
     rm -f $MOUNT1/a
-    replay_barrier $SINGLEMDS
+    replay_barrier mds
     kill -USR1 $pid
     wait $pid || return 1
 
-    fail $SINGLEMDS
+    fail mds
     [ -e $MOUNT2/a ] && return 2
     return 0
 }
@@ -113,22 +113,22 @@ test_6() {
     multiop_bg_pause $MOUNT1/a o_c || return 1
     pid2=$!
     rm -f $MOUNT1/a
-    replay_barrier $SINGLEMDS
+    replay_barrier mds
     kill -USR1 $pid1
     wait $pid1 || return 1
 
-    fail $SINGLEMDS
+    fail mds
     kill -USR1 $pid2
     wait $pid2 || return 1
     [ -e $MOUNT2/a ] && return 2
     return 0
 }
-run_test 6 "open1, open2, unlink |X| close1 [fail $SINGLEMDS] close2"
+run_test 6 "open1, open2, unlink |X| close1 [fail mds] close2"
 
 test_8() {
-    replay_barrier $SINGLEMDS
+    replay_barrier mds
     drop_reint_reply "mcreate $MOUNT1/$tfile"    || return 1
-    fail $SINGLEMDS
+    fail mds
     checkstat $MOUNT2/$tfile || return 2
     rm $MOUNT1/$tfile || return 3
 
@@ -137,13 +137,13 @@ test_8() {
 run_test 8 "replay of resent request"
 
 test_9() {
-    replay_barrier $SINGLEMDS
+    replay_barrier mds
     mcreate $MOUNT1/$tfile-1
     mcreate $MOUNT2/$tfile-2
     # drop first reint reply
-    do_facet $SINGLEMDS sysctl -w lustre.fail_loc=0x80000119
-    fail $SINGLEMDS
-    do_facet $SINGLEMDS sysctl -w lustre.fail_loc=0
+    do_facet mds sysctl -w lustre.fail_loc=0x80000119
+    fail mds
+    do_facet mds sysctl -w lustre.fail_loc=0
 
     rm $MOUNT1/$tfile-[1,2] || return 1
 
@@ -153,13 +153,13 @@ run_test 9 "resending a replayed create"
 
 test_10() {
     mcreate $MOUNT1/$tfile-1
-    replay_barrier $SINGLEMDS
+    replay_barrier mds
     munlink $MOUNT1/$tfile-1
     mcreate $MOUNT2/$tfile-2
     # drop first reint reply
-    do_facet $SINGLEMDS sysctl -w lustre.fail_loc=0x80000119
-    fail $SINGLEMDS
-    do_facet $SINGLEMDS sysctl -w lustre.fail_loc=0
+    do_facet mds sysctl -w lustre.fail_loc=0x80000119
+    fail mds
+    do_facet mds sysctl -w lustre.fail_loc=0
 
     checkstat $MOUNT1/$tfile-1 && return 1
     checkstat $MOUNT1/$tfile-2 || return 2
@@ -170,20 +170,25 @@ test_10() {
 run_test 10 "resending a replayed unlink"
 
 test_11() {
-    replay_barrier $SINGLEMDS
+    replay_barrier mds
     mcreate $MOUNT1/$tfile-1
     mcreate $MOUNT2/$tfile-2
     mcreate $MOUNT1/$tfile-3
     mcreate $MOUNT2/$tfile-4
     mcreate $MOUNT1/$tfile-5
     # drop all reint replies for a while
-    do_facet $SINGLEMDS sysctl -w lustre.fail_loc=0x0119
+    do_facet mds sysctl -w lustre.fail_loc=0x0119
     # note that with this fail_loc set, facet_failover df will fail
-    facet_failover $SINGLEMDS
+    facet_failover mds
     #sleep for while, let both clients reconnect and timeout
     sleep $((TIMEOUT * 2))
-    do_facet $SINGLEMDS sysctl -w lustre.fail_loc=0
-
+    do_facet mds sysctl -w lustre.fail_loc=0
+    client_df
+    while [ -z "$(ls $MOUNT1/$tfile-[1-5] 2>/dev/null)" ]; do
+	sleep 5
+	echo -n "."
+    done
+    ls $MOUNT1/$tfile-[1-5]
     rm $MOUNT1/$tfile-[1-5] || return 1
 
     return 0
@@ -191,16 +196,16 @@ test_11() {
 run_test 11 "both clients timeout during replay"
 
 test_12() {
-    replay_barrier $SINGLEMDS
+    replay_barrier mds
 
     multiop_bg_pause $DIR/$tfile mo_c || return 1
     MULTIPID=$!
 
 #define OBD_FAIL_LDLM_ENQUEUE            0x302
-    do_facet $SINGLEMDS sysctl -w lustre.fail_loc=0x80000302
-    facet_failover $SINGLEMDS
-    do_facet $SINGLEMDS sysctl -w lustre.fail_loc=0
-    df $MOUNT || return 1
+    do_facet mds sysctl -w lustre.fail_loc=0x80000302
+    facet_failover mds
+    do_facet mds sysctl -w lustre.fail_loc=0
+    df $MOUNT || { kill -USR1 $MULTIPID  && return 1; }
 
     ls $DIR/$tfile
     kill -USR1 $MULTIPID || return 3
@@ -216,15 +221,15 @@ test_13() {
     multiop_bg_pause $DIR/$tfile mo_c || return 1
     MULTIPID=$!
 
-    replay_barrier $SINGLEMDS
+    replay_barrier mds
 
     kill -USR1 $MULTIPID || return 3
     wait $MULTIPID || return 4
 
     # drop close 
-    do_facet $SINGLEMDS sysctl -w lustre.fail_loc=0x80000115
-    facet_failover $SINGLEMDS
-    do_facet $SINGLEMDS sysctl -w lustre.fail_loc=0
+    do_facet mds sysctl -w lustre.fail_loc=0x80000115
+    facet_failover mds
+    do_facet mds sysctl -w lustre.fail_loc=0
     df $MOUNT || return 1
 
     ls $DIR/$tfile
@@ -236,14 +241,14 @@ test_13() {
 run_test 13 "close resend timeout"
 
 test_14() {
-    replay_barrier $SINGLEMDS
+    replay_barrier mds
     createmany -o $MOUNT1/$tfile- 25
     createmany -o $MOUNT2/$tfile-2- 1
     createmany -o $MOUNT1/$tfile-3- 25
     umount $MOUNT2
 
-    facet_failover $SINGLEMDS
-    # expect failover to fail due to missing client 2
+    facet_failover mds
+    # expect recovery to fail due to missing client 2
     df $MOUNT && return 1
     sleep 1
 
@@ -256,12 +261,12 @@ test_14() {
 run_test 14 "timeouts waiting for lost client during replay"
 
 test_15() {
-    replay_barrier $SINGLEMDS
+    replay_barrier mds
     createmany -o $MOUNT1/$tfile- 25
     createmany -o $MOUNT2/$tfile-2- 1
     umount $MOUNT2
 
-    facet_failover $SINGLEMDS
+    facet_failover mds
     df $MOUNT || return 1
 
     unlinkmany $MOUNT1/$tfile- 25 || return 2
@@ -276,11 +281,11 @@ test_15a() {
     local ost_last_id=""
     local osc_last_id=""
     
-    replay_barrier $SINGLEMDS
+    replay_barrier mds
     echo "data" > "$MOUNT2/${tfile}-m2"
 
     umount $MOUNT2
-    facet_failover $SINGLEMDS
+    facet_failover mds
     df $MOUNT || return 1
     
     ost_last_id=`cat /proc/fs/lustre/obdfilter/*/last_id`
@@ -322,12 +327,12 @@ test_15a() {
 #CROW run_test 15a "OST clear orphans - synchronize ids on MDS and OST"
 
 test_15b() {
-    replay_barrier $SINGLEMDS
+    replay_barrier mds
     echo "data" > "$MOUNT2/${tfile}-m2"
     umount $MOUNT2
 
     do_facet ost1 "sysctl -w lustre.fail_loc=0x80000802"
-    facet_failover $SINGLEMDS
+    facet_failover mds
 
     df $MOUNT || return 1
     do_facet ost1 "sysctl -w lustre.fail_loc=0"
@@ -338,13 +343,13 @@ test_15b() {
 #CROW run_test 15b "multiple delayed OST clear orphans"
 
 test_15c() {
-    replay_barrier $SINGLEMDS
+    replay_barrier mds
     for ((i = 0; i < 2000; i++)); do
 	echo "data" > "$MOUNT2/${tfile}-$i" || error "create ${tfile}-$i failed"
     done
     
     umount $MOUNT2
-    facet_failover $SINGLEMDS
+    facet_failover mds
 
     df $MOUNT || return 1
     
@@ -354,14 +359,14 @@ test_15c() {
 run_test 15c "remove multiple OST orphans"
 
 test_16() {
-    replay_barrier $SINGLEMDS
+    replay_barrier mds
     createmany -o $MOUNT1/$tfile- 25
     createmany -o $MOUNT2/$tfile-2- 1
     umount $MOUNT2
 
-    facet_failover $SINGLEMDS
+    facet_failover mds
     sleep $TIMEOUT
-    facet_failover $SINGLEMDS
+    facet_failover mds
     df $MOUNT || return 1
 
     unlinkmany $MOUNT1/$tfile- 25 || return 2
@@ -404,25 +409,23 @@ test_18() { # bug 3822 - evicting client with enqueued lock
     statmany -s $MOUNT1/$tdir/f 1 500 &
     OPENPID=$!
     NOW=`date +%s`
-    do_facet $SINGLEMDS sysctl -w lustre.fail_loc=0x8000030b  # hold enqueue
+    do_facet mds sysctl -w lustre.fail_loc=0x8000030b  # hold enqueue
     sleep 1
 #define OBD_FAIL_LDLM_BL_CALLBACK        0x305
     do_facet client sysctl -w lustre.fail_loc=0x80000305  # drop cb, evict
     cancel_lru_locks mdc
-    usleep 500 # wait to ensure first client is one that will be evicted
+    sleep 0.500s # wait to ensure first client is one that will be evicted
     openfile -f O_RDONLY $MOUNT2/$tdir/f0
     wait $OPENPID
     dmesg | grep "entering recovery in server" && \
         error "client not evicted" || true
-    do_facet client "sysctl -w lustre.fail_loc=0"
-    do_facet $SINGLEMDS "sysctl -w lustre.fail_loc=0"
 }
 run_test 18 "ldlm_handle_enqueue succeeds on evicted export (3822)"
 
 test_19() { # Bug 10991 - resend of open request does not fail assertion.
-    replay_barrier $SINGLEMDS
+    replay_barrier mds
     drop_ldlm_reply "createmany -o $DIR/$tfile 1" || return 1
-    fail $SINGLEMDS
+    fail mds
     checkstat $DIR2/${tfile}0 || return 2
     rm $DIR/${tfile}0 || return 3
 
@@ -435,4 +438,3 @@ SLEEP=$((`date +%s` - $NOW))
 [ $SLEEP -lt $TIMEOUT ] && sleep $SLEEP
 check_and_cleanup_lustre
 [ -f "$TESTSUITELOG" ] && cat $TESTSUITELOG || true
-

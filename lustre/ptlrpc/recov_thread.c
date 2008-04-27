@@ -129,10 +129,10 @@ static void llcd_put(struct llog_canceld_ctxt *llcd)
 static void llcd_send(struct llog_canceld_ctxt *llcd)
 {
         if (!(llcd->llcd_lcm->lcm_flags & LLOG_LCM_FL_EXIT)) {
-        spin_lock(&llcd->llcd_lcm->lcm_llcd_lock);
+                spin_lock(&llcd->llcd_lcm->lcm_llcd_lock);
                 list_add_tail(&llcd->llcd_list,
                               &llcd->llcd_lcm->lcm_llcd_pending);
-        spin_unlock(&llcd->llcd_lcm->lcm_llcd_lock);
+                spin_unlock(&llcd->llcd_lcm->lcm_llcd_lock);
         }
         cfs_waitq_signal_nr(&llcd->llcd_lcm->lcm_waitq, 1);
 }
@@ -166,7 +166,7 @@ int llog_obd_repl_cancel(struct llog_ctxt *ctxt,
                                 CERROR("couldn't get an llcd - dropped "LPX64
                                        ":%x+%u\n",
                                        cookies->lgc_lgl.lgl_oid,
-                                       cookies->lgc_lgl.lgl_ogen, 
+                                       cookies->lgc_lgl.lgl_ogen,
                                        cookies->lgc_index);
                                 GOTO(out, rc = -ENOMEM);
                         }
@@ -174,7 +174,7 @@ int llog_obd_repl_cancel(struct llog_ctxt *ctxt,
                         ctxt->loc_llcd = llcd;
                 }
 
-                memcpy((char *)llcd->llcd_cookies + llcd->llcd_cookiebytes, 
+                memcpy((char *)llcd->llcd_cookies + llcd->llcd_cookiebytes,
                        cookies, sizeof(*cookies));
                 llcd->llcd_cookiebytes += sizeof(*cookies);
         } else {
@@ -217,43 +217,26 @@ int llog_obd_repl_sync(struct llog_ctxt *ctxt, struct obd_export *exp)
 }
 EXPORT_SYMBOL(llog_obd_repl_sync);
 
-static inline void stop_log_commit(struct llog_commit_master *lcm,
-                                   struct llog_commit_daemon *lcd,
-                                   int rc)
+static void llog_lcm_dec(struct llog_commit_master *lcm)
 {
-        CERROR("error preparing commit: rc %d\n", rc);
-
-        spin_lock(&lcm->lcm_llcd_lock);
-        list_splice(&lcd->lcd_llcd_list, &lcm->lcm_llcd_resend);
-        CFS_INIT_LIST_HEAD(&lcd->lcd_llcd_list);
-        spin_unlock(&lcm->lcm_llcd_lock);
+        atomic_dec(&lcm->lcm_thread_total);
+        cfs_waitq_signal(&lcm->lcm_waitq);
 }
 
 static int log_commit_thread(void *arg)
 {
-        struct llog_commit_master *lcm = arg;
-        struct llog_commit_daemon *lcd;
+        struct llog_commit_daemon *lcd = arg;
+        struct llog_commit_master *lcm = lcd->lcd_lcm;
         struct llog_canceld_ctxt *llcd, *n;
         struct obd_import *import = NULL;
         ENTRY;
 
-        OBD_ALLOC(lcd, sizeof(*lcd));
-        if (lcd == NULL)
-                RETURN(-ENOMEM);
-
-        spin_lock(&lcm->lcm_thread_lock);
         THREAD_NAME(cfs_curproc_comm(), CFS_CURPROC_COMM_MAX - 1,
-                    "ll_log_comt_%02d", atomic_read(&lcm->lcm_thread_total));
-        atomic_inc(&lcm->lcm_thread_total);
-        spin_unlock(&lcm->lcm_thread_lock);
-
+                    "ll_log_comt_%02d", lcd->lcd_index);
+        
         ptlrpc_daemonize(cfs_curproc_comm()); /* thread never needs to do IO */
-
-        CFS_INIT_LIST_HEAD(&lcd->lcd_lcm_list);
-        CFS_INIT_LIST_HEAD(&lcd->lcd_llcd_list);
-        lcd->lcd_lcm = lcm;
-
         CDEBUG(D_HA, "%s started\n", cfs_curproc_comm());
+        
         do {
                 struct ptlrpc_request *request;
                 struct list_head *sending_list;
@@ -341,6 +324,8 @@ static int log_commit_thread(void *arg)
 
                 /* We are the only one manipulating our local list - no lock */
                 list_for_each_entry_safe(llcd,n, &lcd->lcd_llcd_list,llcd_list){
+                        int size[2] = { sizeof(struct ptlrpc_body),
+                                        llcd->llcd_cookiebytes };
                         char *bufs[2] = { NULL, (char *)llcd->llcd_cookies };
 
                         list_del(&llcd->llcd_list);
@@ -371,31 +356,26 @@ static int log_commit_thread(void *arg)
 
                         OBD_FAIL_TIMEOUT(OBD_FAIL_PTLRPC_DELAY_RECOV, 10);
 
-                        request = ptlrpc_request_alloc(import, &RQF_LOG_CANCEL);
+                        request = ptlrpc_prep_req(import, LUSTRE_LOG_VERSION,
+                                                  OBD_LOG_CANCEL, 2, size,bufs);
                         if (request == NULL) {
                                 rc = -ENOMEM;
-                                stop_log_commit(lcm, lcd, rc);
+                                CERROR("error preparing commit: rc %d\n", rc);
+
+                                spin_lock(&lcm->lcm_llcd_lock);
+                                list_splice(&lcd->lcd_llcd_list,
+                                            &lcm->lcm_llcd_resend);
+                                CFS_INIT_LIST_HEAD(&lcd->lcd_llcd_list);
+                                spin_unlock(&lcm->lcm_llcd_lock);
                                 break;
                         }
 
-                        req_capsule_set_size(&request->rq_pill, &RMF_LOGCOOKIES,
-                                             RCL_CLIENT,llcd->llcd_cookiebytes);
-
-                        rc = ptlrpc_request_bufs_pack(request,
-                                                      LUSTRE_LOG_VERSION,
-                                                      OBD_LOG_CANCEL, bufs,
-                                                      NULL);
-                        if (rc) {
-                                ptlrpc_request_free(request);
-                                stop_log_commit(lcm, lcd, rc);
-                                break;
-                        }
-
-                        /* XXX FIXME bug 249, 5515 */
+                        /* bug 5515 */
                         request->rq_request_portal = LDLM_CANCEL_REQUEST_PORTAL;
                         request->rq_reply_portal = LDLM_CANCEL_REPLY_PORTAL;
+                        ptlrpc_at_set_req_timeout(request);
 
-                        ptlrpc_request_set_replen(request);
+                        ptlrpc_req_set_repsize(request, 1, NULL);
                         mutex_down(&llcd->llcd_ctxt->loc_sem);
                         if (llcd->llcd_ctxt->loc_imp == NULL) {
                                 mutex_up(&llcd->llcd_ctxt->loc_sem);
@@ -445,36 +425,58 @@ static int log_commit_thread(void *arg)
                         llcd_put(llcd);
         }
 
-        spin_lock(&lcm->lcm_thread_lock);
-        list_del(&lcd->lcd_lcm_list);
-        spin_unlock(&lcm->lcm_thread_lock);
-        OBD_FREE(lcd, sizeof(*lcd));
 
         CDEBUG(D_HA, "%s exiting\n", cfs_curproc_comm());
 
         spin_lock(&lcm->lcm_thread_lock);
-        atomic_dec(&lcm->lcm_thread_total);
+        list_del(&lcd->lcd_lcm_list);
         spin_unlock(&lcm->lcm_thread_lock);
-        cfs_waitq_signal(&lcm->lcm_waitq);
+        OBD_FREE_PTR(lcd);
+        llog_lcm_dec(lcm);
 
-        return 0;
+        RETURN(0);
 }
 
 int llog_start_commit_thread(struct llog_commit_master *lcm)
 {
-        int rc;
+        struct llog_commit_daemon *lcd;
+        int rc, index; 
         ENTRY;
 
         if (atomic_read(&lcm->lcm_thread_total) >= lcm->lcm_thread_max)
                 RETURN(0);
 
-        rc = cfs_kernel_thread(log_commit_thread, lcm, CLONE_VM | CLONE_FILES);
-        if (rc < 0) {
-                CERROR("error starting thread #%d: %d\n",
-                       atomic_read(&lcm->lcm_thread_total), rc);
-                RETURN(rc);
+        /* Check whether it will be cleanup llog commit thread first,
+         * If not, increate the lcm_thread_total count to prevent the 
+         * lcm being freed when the log_commit_thread is started */
+        spin_lock(&lcm->lcm_thread_lock);
+        if (!lcm->lcm_flags & LLOG_LCM_FL_EXIT) { 
+                atomic_inc(&lcm->lcm_thread_total);
+                index = atomic_read(&lcm->lcm_thread_total);
+                spin_unlock(&lcm->lcm_thread_lock);
+        } else {
+                spin_unlock(&lcm->lcm_thread_lock);
+                RETURN(0);
         }
 
+        OBD_ALLOC_PTR(lcd);
+        if (lcd == NULL)
+                GOTO(cleanup, rc = -ENOMEM);
+
+        CFS_INIT_LIST_HEAD(&lcd->lcd_lcm_list);
+        CFS_INIT_LIST_HEAD(&lcd->lcd_llcd_list);
+        lcd->lcd_index = index;
+        lcd->lcd_lcm = lcm;
+
+        rc = cfs_kernel_thread(log_commit_thread, lcd, CLONE_VM | CLONE_FILES);
+cleanup:
+        if (rc < 0) {
+                CERROR("error starting thread #%d: %d\n", lcd->lcd_index, rc);
+                llog_lcm_dec(lcm);
+                if (lcd) 
+                        OBD_FREE_PTR(lcd);
+                RETURN(rc);
+        }
         RETURN(0);
 }
 EXPORT_SYMBOL(llog_start_commit_thread);
@@ -509,9 +511,13 @@ EXPORT_SYMBOL(llog_init_commit_master);
 int llog_cleanup_commit_master(struct llog_commit_master *lcm,
                                int force)
 {
+        spin_lock(&lcm->lcm_thread_lock);
         lcm->lcm_flags |= LLOG_LCM_FL_EXIT;
         if (force)
                 lcm->lcm_flags |= LLOG_LCM_FL_EXIT_FORCE;
+        
+        spin_unlock(&lcm->lcm_thread_lock);
+        
         cfs_waitq_signal(&lcm->lcm_waitq);
 
         wait_event_interruptible(lcm->lcm_waitq,
@@ -577,9 +583,9 @@ static int llog_recovery_generic(struct llog_ctxt *ctxt, void *handle,void *arg)
         mutex_down(&llpa.llpa_sem);
         llpa.llpa_cb = handle;
         llpa.llpa_arg = arg;
-        llpa.llpa_ctxt = llog_ctxt_get(ctxt); //llog_group_get_ctxt(ctxt->loc_olg, ctxt->loc_idx);
+        llpa.llpa_ctxt = llog_get_context(ctxt->loc_obd, ctxt->loc_idx);
         if (!llpa.llpa_ctxt) {
-                up(&llpa.llpa_sem);
+                mutex_up(&llpa.llpa_sem);
                 RETURN(-ENODEV);
         }
         rc = cfs_kernel_thread(log_process_thread, &llpa, CLONE_VM | CLONE_FILES);

@@ -206,7 +206,6 @@ static const struct opt_map opt_map[] = {
   { "nouser",   1, 0         },      /* Forbid ordinary user to mount */
   { "noowner",  1, 0         },      /* Device owner has no special privs */
   { "_netdev",  0, 0         },      /* Device accessible only via network */
-  { "loop",     0, 0         },
   { NULL,       0, 0         }
 };
 /****************************************************************************/

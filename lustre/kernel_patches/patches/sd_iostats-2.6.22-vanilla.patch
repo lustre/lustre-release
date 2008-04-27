@@ -1,8 +1,8 @@
 Index: linux-2.6.22.5/drivers/scsi/Kconfig
 ===================================================================
---- linux-2.6.22.5.orig/drivers/scsi/Kconfig
-+++ linux-2.6.22.5/drivers/scsi/Kconfig
-@@ -76,6 +76,14 @@ config BLK_DEV_SD
+--- linux-2.6.22.5.orig/drivers/scsi/Kconfig	2007-08-22 17:23:54.000000000 -0600
++++ linux-2.6.22.5/drivers/scsi/Kconfig	2008-02-21 01:20:41.000000000 -0700
+@@ -76,6 +76,14 @@
  	  In this case, do not compile the driver for your SCSI host adapter
  	  (below) as a module either.
  
@@ -17,11 +17,11 @@ Index: linux-2.6.22.5/drivers/scsi/Kconfig
  config CHR_DEV_ST
  	tristate "SCSI tape support"
  	depends on SCSI
-Index: linux+rhel4+chaos/drivers/scsi/sd.c
+Index: linux-2.6.22.5/drivers/scsi/sd.c
 ===================================================================
---- linux+rhel4+chaos.orig/drivers/scsi/sd.c
-+++ linux+rhel4+chaos/drivers/scsi/sd.c
-@@ -63,6 +63,38 @@
+--- linux-2.6.22.5.orig/drivers/scsi/sd.c	2007-08-22 17:23:54.000000000 -0600
++++ linux-2.6.22.5/drivers/scsi/sd.c	2008-02-21 01:20:41.000000000 -0700
+@@ -62,6 +62,38 @@
  
  #include "scsi_logging.h"
  
@@ -60,7 +60,7 @@ Index: linux+rhel4+chaos/drivers/scsi/sd.c
  MODULE_AUTHOR("Eric Youngdale");
  MODULE_DESCRIPTION("SCSI disk (sd) driver");
  MODULE_LICENSE("GPL");
-@@ -89,6 +121,7 @@ MODULE_ALIAS_SCSI_DEVICE(TYPE_RBC);
+@@ -89,6 +121,7 @@
  static DEFINE_IDR(sd_index_idr);
  static DEFINE_SPINLOCK(sd_index_lock);
  
@@ -68,7 +68,7 @@ Index: linux+rhel4+chaos/drivers/scsi/sd.c
  /* This semaphore is used to mediate the 0->1 reference get in the
   * face of object destruction (i.e. we can't allow a get on an
   * object after last put) */
-@@ -368,6 +401,9 @@ static int sd_init_command(struct scsi_c
+@@ -368,6 +401,9 @@
  	SCSI_LOG_HLQUEUE(2, scmd_printk(KERN_INFO, SCpnt, "block=%llu\n",
  					(unsigned long long)block));
  
@@ -78,7 +78,7 @@ Index: linux+rhel4+chaos/drivers/scsi/sd.c
  	/*
  	 * If we have a 1K hardware sectorsize, prevent access to single
  	 * 512 byte sectors.  In theory we could handle this - in fact
-@@ -575,6 +611,7 @@ static int sd_open(struct inode *inode, 
+@@ -575,6 +611,7 @@
  			scsi_set_medium_removal(sdev, SCSI_REMOVAL_PREVENT);
  	}
  
@@ -86,7 +86,7 @@ Index: linux+rhel4+chaos/drivers/scsi/sd.c
  	return 0;
  
  error_out:
-@@ -601,8 +638,20 @@ static int sd_release(struct inode *inod
+@@ -601,8 +638,20 @@
  
  	SCSI_LOG_HLQUEUE(3, sd_printk(KERN_INFO, sdkp, "sd_release\n"));
  
@@ -109,7 +109,7 @@ Index: linux+rhel4+chaos/drivers/scsi/sd.c
  			scsi_set_medium_removal(sdev, SCSI_REMOVAL_ALLOW);
  	}
  
-@@ -1563,6 +1612,342 @@ static int sd_revalidate_disk(struct gen
+@@ -1563,6 +1612,342 @@
  	return 0;
  }
  
@@ -452,7 +452,7 @@ Index: linux+rhel4+chaos/drivers/scsi/sd.c
  /**
   *	sd_probe - called during driver initialization and whenever a
   *	new scsi device is attached to the system. It is called once
-@@ -1854,6 +2239,7 @@ static int __init init_sd(void)
+@@ -1854,6 +2239,7 @@
  	err = scsi_register_driver(&sd_template.gendrv);
  	if (err)
  		goto err_out_class;
@@ -460,7 +460,7 @@ Index: linux+rhel4+chaos/drivers/scsi/sd.c
  
  	return 0;
  
-@@ -1876,6 +2262,7 @@ static void __exit exit_sd(void)
+@@ -1876,6 +2262,7 @@
  
  	SCSI_LOG_HLQUEUE(3, printk("exit_sd: exiting sd driver\n"));
  
@@ -470,8 +470,8 @@ Index: linux+rhel4+chaos/drivers/scsi/sd.c
  
 Index: linux-2.6.22.5/drivers/scsi/scsi_proc.c
 ===================================================================
---- linux-2.6.22.5.orig/drivers/scsi/scsi_proc.c
-+++ linux-2.6.22.5/drivers/scsi/scsi_proc.c
+--- linux-2.6.22.5.orig/drivers/scsi/scsi_proc.c	2007-08-22 17:23:54.000000000 -0600
++++ linux-2.6.22.5/drivers/scsi/scsi_proc.c	2008-02-21 01:20:41.000000000 -0700
 @@ -40,7 +40,8 @@
  /* 4K page size, but our output routines, use some slack for overruns */
  #define PROC_BLOCK_SIZE (3*1024)

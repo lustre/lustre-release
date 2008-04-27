@@ -19,5 +19,4 @@ echo "Removing Lustre modules from "$MDIR
 rm -f $MDIR/*
 depmod -a
 rm -f /sbin/mount.lustre
-rm -f /usr/sbin/l_getidentity
-rm -f /usr/sbin/l_facl
+

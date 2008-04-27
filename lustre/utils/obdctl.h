@@ -3,7 +3,6 @@
  *
  *   This file is part of Lustre, http://www.lustre.org
  */
-
 #ifndef _OBDCTL_H_
 #define _OBDCTL_H_
 

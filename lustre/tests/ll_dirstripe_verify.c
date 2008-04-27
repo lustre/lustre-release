@@ -74,14 +74,14 @@ int compare(struct lov_user_md *lum_dir, struct lov_user_md *lum_file1,
         int i;
         FILE *fp;
 
-        fp = popen("\\ls -d  /proc/fs/lustre/lov/*clilov* | head -1", "r");
+        fp = popen("\\ls -d  /proc/fs/lustre/lov/*lov* | head -1", "r");
         if (!fp) {
-                fprintf(stderr, "open(lustre/lov/*clilov*) failed: %s\n", 
+                fprintf(stderr, "open(lustre/lov/*lov*) failed: %s\n", 
                         strerror(errno));
                 return 2;
         }
         if (fscanf(fp, "%s", lov_path) < 1) { 
-                fprintf(stderr, "read(lustre/lov/*clilov*) failed: %s\n",
+                fprintf(stderr, "read(lustre/lov/*lov*) failed: %s\n",
                         strerror(errno));
                 pclose(fp);
                 return 3;
@@ -94,9 +94,9 @@ int compare(struct lov_user_md *lum_dir, struct lov_user_md *lum_file1,
                 if (read_proc_entry(tmp_path, buf, sizeof(buf)) < 0)
                         return 5;
 
-                stripe_count = (int)strtoul(buf, NULL, 10);;
+                stripe_count = atoi(buf);
         } else {
-                stripe_count = (signed short)lum_dir->lmm_stripe_count;
+                stripe_count = (int)lum_dir->lmm_stripe_count;
         }
         if (stripe_count == 0)
                 stripe_count = 1;

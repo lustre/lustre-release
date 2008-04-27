@@ -32,7 +32,7 @@
 #ifdef _AIX
 #include "syscall_AIX.h"
 #else
-#include <sys/syscall.h>
+#include <syscall.h>
 #endif
 #include <sys/utsname.h>
 #ifdef HAVE_NETINET_IN_H
@@ -191,7 +191,6 @@ int liblustre_init_current(char *comm)
 
         strncpy(current->comm, comm, sizeof(current->comm));
         current->pid = getpid();
-        current->gid = getgid();
         current->fsuid = geteuid();
         current->fsgid = getegid();
         memset(&current->pending, 0, sizeof(current->pending));

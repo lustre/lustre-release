@@ -286,27 +286,6 @@ static int obd_proc_read_health(char *page, char **start, off_t off,
         return rc;
 }
 
-static int obd_proc_rd_health_timeout(char *page, char **start, off_t off,
-                                      int count, int *eof, void *data)
-{
-        *eof = 1;
-        return snprintf(page, count, "%d\n", obd_health_check_timeout);
-}
-
-static int obd_proc_wr_health_timeout(struct file *file, const char *buffer,
-                                      unsigned long count, void *data)
-{
-        int val, rc;
-
-        rc = lprocfs_write_helper(buffer, count, &val);
-        if (rc)
-                return rc;
-
-        obd_health_check_timeout = val;
-
-        return count;
-}
-
 /* Root for /proc/fs/lustre */
 struct proc_dir_entry *proc_lustre_root = NULL;
 
@@ -314,8 +293,6 @@ struct lprocfs_vars lprocfs_base[] = {
         { "version", obd_proc_read_version, NULL, NULL },
         { "pinger", obd_proc_read_pinger, NULL, NULL },
         { "health_check", obd_proc_read_health, NULL, NULL },
-        { "health_check_timeout", obd_proc_rd_health_timeout,
-           obd_proc_wr_health_timeout, NULL },
         { 0 }
 };
 #else
@@ -433,9 +410,8 @@ int class_procfs_init(void)
 int class_procfs_clean(void)
 {
         ENTRY;
-        if (proc_lustre_root) {
+        if (proc_lustre_root) 
                 lprocfs_remove(&proc_lustre_root);
-        }
         RETURN(0);
 }
 

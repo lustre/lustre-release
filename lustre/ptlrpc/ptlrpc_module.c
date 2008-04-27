@@ -35,10 +35,9 @@
 #include <obd_support.h>
 #include <obd_class.h>
 #include <lustre_net.h>
-#include <lustre_req_layout.h>
 
 #include "ptlrpc_internal.h"
-
+cfs_mem_cache_t *ptlrpc_cbdata_slab;
 extern spinlock_t ptlrpc_last_xid_lock;
 extern spinlock_t ptlrpc_rs_debug_lock;
 extern spinlock_t ptlrpc_all_services_lock;
@@ -59,51 +58,46 @@ __init int ptlrpc_init(void)
         init_mutex(&pinger_sem);
         init_mutex(&ptlrpcd_sem);
 
-        rc = req_layout_init();
+        rc = ptlrpc_init_portals();
         if (rc)
                 RETURN(rc);
         cleanup_phase = 1;
 
-        rc = ptlrpc_init_portals();
-        if (rc)
-                RETURN(rc);
-        cleanup_phase = 2;
-
         rc = ptlrpc_init_connection();
         if (rc)
                 GOTO(cleanup, rc);
-        cleanup_phase = 3;
+        cleanup_phase = 2;
 
         ptlrpc_put_connection_superhack = ptlrpc_put_connection;
 
         rc = ptlrpc_start_pinger();
         if (rc)
                 GOTO(cleanup, rc);
-        cleanup_phase = 4;
+        cleanup_phase = 3;
 
         rc = ldlm_init();
         if (rc)
                 GOTO(cleanup, rc);
-        cleanup_phase = 5;
+        cleanup_phase = 4;
 
-        rc = sptlrpc_init();
-        if (rc)
+        ptlrpc_cbdata_slab = cfs_mem_cache_create("ptlrpc_cbdatas",
+                                sizeof (struct ptlrpc_set_cbdata), 0, 
+                                SLAB_HWCACHE_ALIGN);
+        if (ptlrpc_cbdata_slab == NULL)
                 GOTO(cleanup, rc);
 
         RETURN(0);
 
 cleanup:
         switch(cleanup_phase) {
-        case 5:
-                ldlm_exit();
         case 4:
-                ptlrpc_stop_pinger();
+                ldlm_exit();
         case 3:
-                ptlrpc_cleanup_connection();
+                ptlrpc_stop_pinger();
         case 2:
-                ptlrpc_exit_portals();
+                ptlrpc_cleanup_connection();
         case 1:
-                req_layout_fini();
+                ptlrpc_exit_portals();
         default: ;
         }
 
@@ -113,11 +107,11 @@ cleanup:
 #ifdef __KERNEL__
 static void __exit ptlrpc_exit(void)
 {
-        sptlrpc_fini();
         ldlm_exit();
         ptlrpc_stop_pinger();
         ptlrpc_exit_portals();
         ptlrpc_cleanup_connection();
+        cfs_mem_cache_destroy(ptlrpc_cbdata_slab);
 }
 
 /* connection.c */
@@ -151,11 +145,7 @@ EXPORT_SYMBOL(ptlrpc_add_rqs_to_pool);
 EXPORT_SYMBOL(ptlrpc_init_rq_pool);
 EXPORT_SYMBOL(ptlrpc_free_rq_pool);
 EXPORT_SYMBOL(ptlrpc_prep_req_pool);
-EXPORT_SYMBOL(ptlrpc_request_alloc);
-EXPORT_SYMBOL(ptlrpc_request_alloc_pool);
-EXPORT_SYMBOL(ptlrpc_request_free);
-EXPORT_SYMBOL(ptlrpc_request_pack);
-EXPORT_SYMBOL(ptlrpc_request_alloc_pack);
+EXPORT_SYMBOL(ptlrpc_at_set_req_timeout);
 EXPORT_SYMBOL(ptlrpc_prep_req);
 EXPORT_SYMBOL(ptlrpc_free_req);
 EXPORT_SYMBOL(ptlrpc_unregister_reply);
@@ -169,8 +159,6 @@ EXPORT_SYMBOL(ptlrpc_prep_bulk_page);
 EXPORT_SYMBOL(ptlrpc_abort_inflight);
 EXPORT_SYMBOL(ptlrpc_retain_replayable_request);
 EXPORT_SYMBOL(ptlrpc_next_xid);
-EXPORT_SYMBOL(ptlrpc_req_set_repsize);
-EXPORT_SYMBOL(ptlrpc_request_set_replen);
 
 EXPORT_SYMBOL(ptlrpc_prep_set);
 EXPORT_SYMBOL(ptlrpc_set_add_cb);
@@ -201,14 +189,14 @@ EXPORT_SYMBOL(lustre_msg_swabbed);
 EXPORT_SYMBOL(lustre_msg_check_version);
 EXPORT_SYMBOL(lustre_pack_request);
 EXPORT_SYMBOL(lustre_pack_reply);
-EXPORT_SYMBOL(lustre_shrink_msg);
+EXPORT_SYMBOL(lustre_pack_reply_flags);
+EXPORT_SYMBOL(lustre_shrink_reply);
 EXPORT_SYMBOL(lustre_free_reply_state);
 EXPORT_SYMBOL(lustre_msg_size);
 EXPORT_SYMBOL(lustre_packed_msg_size);
 EXPORT_SYMBOL(lustre_unpack_msg);
 EXPORT_SYMBOL(lustre_msg_buf);
 EXPORT_SYMBOL(lustre_msg_string);
-EXPORT_SYMBOL(lustre_swab_ptlrpc_body);
 EXPORT_SYMBOL(lustre_swab_buf);
 EXPORT_SYMBOL(lustre_swab_reqbuf);
 EXPORT_SYMBOL(lustre_swab_repbuf);
@@ -221,22 +209,15 @@ EXPORT_SYMBOL(lustre_swab_ost_last_id);
 EXPORT_SYMBOL(lustre_swab_ost_lvb);
 EXPORT_SYMBOL(lustre_swab_mds_status_req);
 EXPORT_SYMBOL(lustre_swab_mds_body);
-EXPORT_SYMBOL(lustre_swab_mdt_body);
-EXPORT_SYMBOL(lustre_swab_mdt_epoch);
 EXPORT_SYMBOL(lustre_swab_obd_quotactl);
-EXPORT_SYMBOL(lustre_swab_mds_remote_perm);
-EXPORT_SYMBOL(lustre_swab_mdt_remote_perm);
 EXPORT_SYMBOL(lustre_swab_mds_rec_setattr);
 EXPORT_SYMBOL(lustre_swab_mds_rec_create);
 EXPORT_SYMBOL(lustre_swab_mds_rec_join);
-EXPORT_SYMBOL(lustre_swab_mdt_rec_join);
 EXPORT_SYMBOL(lustre_swab_mds_rec_link);
 EXPORT_SYMBOL(lustre_swab_mds_rec_unlink);
 EXPORT_SYMBOL(lustre_swab_mds_rec_rename);
-EXPORT_SYMBOL(lustre_swab_mdt_rec_reint);
 EXPORT_SYMBOL(lustre_swab_lov_desc);
 EXPORT_SYMBOL(lustre_swab_lov_user_md);
-EXPORT_SYMBOL(lustre_swab_lov_mds_md);
 EXPORT_SYMBOL(lustre_swab_lov_user_md_objects);
 EXPORT_SYMBOL(lustre_swab_lov_user_md_join);
 EXPORT_SYMBOL(lustre_swab_ldlm_res_id);
@@ -247,7 +228,17 @@ EXPORT_SYMBOL(lustre_swab_ldlm_lock_desc);
 EXPORT_SYMBOL(lustre_swab_ldlm_request);
 EXPORT_SYMBOL(lustre_swab_ldlm_reply);
 EXPORT_SYMBOL(lustre_swab_qdata);
+#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(1, 7, 0, 0)
 EXPORT_SYMBOL(lustre_swab_qdata_old);
+#else
+#warning "remove quota code above for format absolete in new release"
+#endif
+#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(1, 9, 0, 0)
+EXPORT_SYMBOL(lustre_swab_qdata_old2);
+#else
+#warning "remove quota code above for format absolete in new release"
+#endif
+EXPORT_SYMBOL(lustre_swab_quota_adjust_qunit);
 EXPORT_SYMBOL(lustre_msg_get_flags);
 EXPORT_SYMBOL(lustre_msg_add_flags);
 EXPORT_SYMBOL(lustre_msg_set_flags);
@@ -269,6 +260,7 @@ EXPORT_SYMBOL(lustre_msg_get_limit);
 EXPORT_SYMBOL(lustre_msg_set_slv);
 EXPORT_SYMBOL(lustre_msg_set_limit);
 EXPORT_SYMBOL(lustre_msg_get_conn_cnt);
+EXPORT_SYMBOL(lustre_msg_is_v1);
 EXPORT_SYMBOL(lustre_msg_get_magic);
 EXPORT_SYMBOL(lustre_msg_set_handle);
 EXPORT_SYMBOL(lustre_msg_set_type);
@@ -279,10 +271,6 @@ EXPORT_SYMBOL(lustre_msg_set_transno);
 EXPORT_SYMBOL(lustre_msg_set_status);
 EXPORT_SYMBOL(lustre_msg_set_conn_cnt);
 EXPORT_SYMBOL(lustre_swab_mgs_target_info);
-EXPORT_SYMBOL(lustre_swab_md_fld);
-EXPORT_SYMBOL(lustre_swab_generic_32s);
-EXPORT_SYMBOL(lustre_swab_lustre_capa);
-EXPORT_SYMBOL(lustre_swab_lustre_capa_key);
 
 /* recover.c */
 EXPORT_SYMBOL(ptlrpc_disconnect_import);
@@ -294,6 +282,7 @@ EXPORT_SYMBOL(ptlrpc_deactivate_import);
 EXPORT_SYMBOL(ptlrpc_invalidate_import);
 EXPORT_SYMBOL(ptlrpc_fail_import);
 EXPORT_SYMBOL(ptlrpc_recover_import);
+EXPORT_SYMBOL(ptlrpc_import_setasync);
 
 /* pinger.c */
 EXPORT_SYMBOL(ptlrpc_pinger_add_import);

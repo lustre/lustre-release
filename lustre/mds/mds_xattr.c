@@ -132,8 +132,10 @@ static int mds_getxattr_internal(struct obd_device *obd,
                 DEBUG_REQ(D_INODE, req, "getxattr %s", xattr_name);
 
                 if (inode->i_op && inode->i_op->getxattr) {
+                        lock_24kernel();
                         rc = inode->i_op->getxattr(dentry, xattr_name,
                                                    buf, buflen);
+                        unlock_24kernel();
                 }
 
                 if (rc < 0 && rc != -ENODATA && rc != -EOPNOTSUPP &&
@@ -143,7 +145,9 @@ static int mds_getxattr_internal(struct obd_device *obd,
                 DEBUG_REQ(D_INODE, req, "listxattr");
 
                 if (inode->i_op && inode->i_op->listxattr) {
+                        lock_24kernel();
                         rc = inode->i_op->listxattr(dentry, buf, buflen);
+                        unlock_24kernel();
                 }
                 if (rc < 0)
                         CDEBUG(D_OTHER, "listxattr failed: %d\n", rc);
@@ -166,7 +170,7 @@ int mds_getxattr(struct ptlrpc_request *req)
         struct lvfs_run_ctxt saved;
         struct dentry *de;
         struct mds_body *body;
-        struct lvfs_ucred uc = {0,};
+        struct lvfs_ucred uc = { NULL, };
         int rc = 0;
         ENTRY;
 
@@ -257,14 +261,14 @@ int mds_setxattr_internal(struct ptlrpc_request *req, struct mds_body *body)
                 lockpart |= MDS_INODELOCK_LOOKUP;
 
         de = mds_fid2locked_dentry(obd, &body->fid1, NULL, LCK_EX,
-                                   &lockh, lockpart);
+                                   &lockh, NULL, 0, lockpart);
         if (IS_ERR(de))
                 GOTO(out, rc = PTR_ERR(de));
 
         inode = de->d_inode;
         LASSERT(inode);
 
-        OBD_FAIL_WRITE(OBD_FAIL_MDS_SETXATTR_WRITE, inode->i_sb);
+        OBD_FAIL_WRITE(obd, OBD_FAIL_MDS_SETXATTR_WRITE, inode->i_sb);
 
         /* filter_op simply use setattr one */
         handle = fsfilt_start(obd, inode, FSFILT_OP_SETATTR, NULL);
@@ -285,14 +289,18 @@ int mds_setxattr_internal(struct ptlrpc_request *req, struct mds_body *body)
                                                        REQ_REC_OFF+2, xattrlen);
 
                         LOCK_INODE_MUTEX(inode);
+                        lock_24kernel();
                         rc = inode->i_op->setxattr(de, xattr_name, xattr,
                                                    xattrlen, body->flags);
+                        unlock_24kernel();
                         UNLOCK_INODE_MUTEX(inode);
                 }
         } else if (body->valid & OBD_MD_FLXATTRRM) {
                 if (inode->i_op && inode->i_op->removexattr) {
                         LOCK_INODE_MUTEX(inode);
+                        lock_24kernel();
                         rc = inode->i_op->removexattr(de, xattr_name);
+                        unlock_24kernel();
                         UNLOCK_INODE_MUTEX(inode);
                 }
         } else {
@@ -324,7 +332,7 @@ int mds_setxattr(struct ptlrpc_request *req)
         struct obd_device *obd = req->rq_export->exp_obd;
         struct lvfs_run_ctxt saved;
         struct mds_body *body;
-        struct lvfs_ucred uc = {0,};
+        struct lvfs_ucred uc = { NULL, };
         int rc;
         ENTRY;
 

@@ -47,11 +47,11 @@
 #include "mds_internal.h"
 
 int mds_osc_destroy_orphan(struct obd_device *obd,
-                                  umode_t mode,
-                                  struct lov_mds_md *lmm,
-                                  int lmm_size,
-                                  struct llog_cookie *logcookies,
-                                  int log_unlink)
+                           umode_t mode,
+                           struct lov_mds_md *lmm,
+                           int lmm_size,
+                           struct llog_cookie *logcookies,
+                           int log_unlink)
 {
         struct mds_obd *mds = &obd->u.mds;
         struct lov_stripe_md *lsm = NULL;
@@ -80,9 +80,8 @@ int mds_osc_destroy_orphan(struct obd_device *obd,
         if (oa == NULL)
                 GOTO(out_free_memmd, rc = -ENOMEM);
         oa->o_id = lsm->lsm_object_id;
-        oa->o_gr = lsm->lsm_object_gr;
         oa->o_mode = mode & S_IFMT;
-        oa->o_valid = OBD_MD_FLID | OBD_MD_FLTYPE | OBD_MD_FLGROUP;
+        oa->o_valid = OBD_MD_FLID | OBD_MD_FLTYPE;
 
         if (log_unlink && logcookies) {
                 oa->o_valid |= OBD_MD_FLCOOKIE;
@@ -128,7 +127,7 @@ static int mds_unlink_orphan(struct obd_device *obd, struct dentry *dchild,
         if (lmm == NULL)
                 RETURN(-ENOMEM);
 
-        rc = mds_get_md(obd, inode, lmm, &lmm_size, 1);
+        rc = mds_get_md(obd, inode, lmm, &lmm_size, 1, 0);
         if (rc < 0)
                 GOTO(out_free_lmm, rc);
 

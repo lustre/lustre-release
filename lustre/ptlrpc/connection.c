@@ -103,8 +103,8 @@ struct ptlrpc_connection *ptlrpc_get_connection(lnet_process_id_t peer,
         atomic_set(&c->c_refcount, 1);
         c->c_peer = peer;
         c->c_self = self;
-        INIT_HLIST_NODE(&c->c_hash);
-        CFS_INIT_LIST_HEAD(&c->c_link);
+	INIT_HLIST_NODE(&c->c_hash);
+	CFS_INIT_LIST_HEAD(&c->c_link);
         if (uuid != NULL)
                 obd_str2uuid(&c->c_remote_uuid, uuid->uuid);
 
@@ -137,12 +137,15 @@ out_conn:
 int ptlrpc_put_connection(struct ptlrpc_connection *c)
 {
         int rc = 0;
+        lnet_process_id_t peer;
         ENTRY;
 
         if (c == NULL) {
                 CERROR("NULL connection\n");
                 RETURN(0);
         }
+
+        peer = c->c_peer;
 
         CDEBUG (D_INFO, "connection=%p refcount %d to %s\n",
                 c, atomic_read(&c->c_refcount) - 1, 
@@ -156,11 +159,11 @@ int ptlrpc_put_connection(struct ptlrpc_connection *c)
 
                 spin_lock(&conn_lock);
 
-                lustre_hash_delitem(conn_hash_body, &c->c_peer, &c->c_hash);
+                lustre_hash_delitem(conn_hash_body, &peer, &c->c_hash);
                 list_del(&c->c_link);
 
                 list_add(&c->c_link, &conn_unused_list);
-                rc = lustre_hash_additem_unique(conn_unused_hash_body, &c->c_peer, 
+                rc = lustre_hash_additem_unique(conn_unused_hash_body, &peer, 
                                                 &c->c_hash);
                 if (rc != 0) {
                         spin_unlock(&conn_lock);

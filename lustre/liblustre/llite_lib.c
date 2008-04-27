@@ -57,7 +57,6 @@ static int lllib_init(void)
             init_obdclass() ||
             ptlrpc_init() ||
             mgc_init() ||
-            lmv_init() ||
             mdc_init() ||
             lov_init() ||
             osc_init())
@@ -157,13 +156,13 @@ int liblustre_process_log(struct config_llog_instance *cfg,
         if (ocd == NULL)
                 GOTO(out_cleanup, rc = -ENOMEM);
 
-        ocd->ocd_connect_flags = OBD_CONNECT_VERSION | OBD_CONNECT_FID;
+        ocd->ocd_connect_flags = OBD_CONNECT_VERSION | OBD_CONNECT_AT;
 #ifdef LIBLUSTRE_POSIX_ACL
         ocd->ocd_connect_flags |= OBD_CONNECT_ACL;
 #endif
         ocd->ocd_version = LUSTRE_VERSION_CODE;
 
-        rc = obd_connect(NULL, &mgc_conn, obd, &mgc_uuid, ocd);
+        rc = obd_connect(&mgc_conn, obd, &mgc_uuid, ocd, NULL);
         if (rc) {
                 CERROR("cannot connect to %s at %s: rc = %d\n",
                        LUSTRE_MGS_OBDNAME, mgsnid, rc);
@@ -195,7 +194,7 @@ out_cleanup:
         err = class_process_config(lcfg);
         lustre_cfg_free(lcfg);
         if (err)
-                CERROR("md_cleanup failed: rc = %d\n", err);
+                CERROR("mdc_cleanup failed: rc = %d\n", err);
 
 out_detach:
         lustre_cfg_bufs_reset(&bufs, name);
@@ -203,7 +202,7 @@ out_detach:
         err = class_process_config(lcfg);
         lustre_cfg_free(lcfg);
         if (err)
-                CERROR("md_detach failed: rc = %d\n", err);
+                CERROR("mdc_detach failed: rc = %d\n", err);
 
 out_del_uuid:
         lustre_cfg_bufs_reset(&bufs, name);
@@ -291,7 +290,7 @@ int _sysio_lustre_init(void)
                         obd_timeout);
         }
 
-	/* debug peer on timeout? */
+        /* debug peer on timeout? */
         envstr = getenv("LIBLUSTRE_DEBUG_PEER_ON_TIMEOUT");
         if (envstr != NULL) {
                 obd_debug_peer_on_timeout = 

@@ -20,33 +20,35 @@ diff -pru linux-2.6.9.orig/drivers/md/raid5.c linux-2.6.9/drivers/md/raid5.c
  	clear_bit(R5_LOCKED, &sh->dev[i].flags);
  	set_bit(STRIPE_HANDLE, &sh->state);
  	__release_stripe(conf, sh);
-@@ -621,6 +626,25 @@ static sector_t compute_blocknr(struct s
+@@ -620,7 +625,27 @@ static sector_t compute_blocknr(struct s
+ 	return r_sector;
  }
- 
  
 +static struct page *zero_copy_data(struct bio *bio, sector_t sector)
 +{
 +	sector_t bi_sector = bio->bi_sector;
-+	struct page *page;
++	struct page *page = NULL;
 +	struct bio_vec *bvl;
 +	int i;
-+
+ 
 +	bio_for_each_segment(bvl, bio, i) {
-+		if (sector > bi_sector) {
-+			bi_sector += bio_iovec_idx(bio, i)->bv_len >> 9;
-+			continue;
++		if (sector == bi_sector)
++			page = bio_iovec_idx(bio, i)->bv_page;
++		bi_sector += bio_iovec_idx(bio, i)->bv_len >> 9;
++		if (bi_sector >= sector + STRIPE_SECTORS) {
++			/* check if the stripe is covered by one page */
++			if (page == bio_iovec_idx(bio, i)->bv_page &&
++			    PageConstant(page))
++				return page;
++			return NULL;
 +		}
-+		BUG_ON(sector != bi_sector);
-+		page = bio_iovec_idx(bio, i)->bv_page;
-+		return PageConstant(page) ? page : NULL;
 +	}
-+	BUG();
 +	return NULL;
 +}
  
  /*
   * Copy data between a page in the stripe cache, and one or more bion
-@@ -716,8 +740,9 @@ static void compute_parity(struct stripe
+@@ -716,8 +741,9 @@ static void compute_parity(struct stripe
  {
  	raid5_conf_t *conf = sh->raid_conf;
  	int i, pd_idx = sh->pd_idx, disks = conf->raid_disks, count;
@@ -57,7 +59,7 @@ diff -pru linux-2.6.9.orig/drivers/md/raid5.c linux-2.6.9/drivers/md/raid5.c
  
  	PRINTK("compute_parity, stripe %llu, method %d\n",
  		(unsigned long long)sh->sector, method);
-@@ -744,13 +769,14 @@ static void compute_parity(struct stripe
+@@ -744,13 +770,14 @@ static void compute_parity(struct stripe
  		break;
  	case RECONSTRUCT_WRITE:
  		memset(ptr[0], 0, STRIPE_SIZE);
@@ -73,7 +75,7 @@ diff -pru linux-2.6.9.orig/drivers/md/raid5.c linux-2.6.9/drivers/md/raid5.c
  		break;
  	case CHECK_PARITY:
  		break;
-@@ -760,34 +786,88 @@ static void compute_parity(struct stripe
+@@ -760,34 +787,88 @@ static void compute_parity(struct stripe
  		count = 1;
  	}
  	
@@ -114,7 +116,7 @@ diff -pru linux-2.6.9.orig/drivers/md/raid5.c linux-2.6.9/drivers/md/raid5.c
 -			set_bit(R5_LOCKED, &sh->dev[i].flags);
 -			set_bit(R5_UPTODATE, &sh->dev[i].flags);
 +		atomic_inc(&conf->writes_copied);
-+		test_and_clear_bit(R5_OVERWRITE, &sh->dev[i].flags);
++		clear_bit(R5_OVERWRITE, &sh->dev[i].flags);
 +		set_bit(R5_UPTODATE, &sh->dev[i].flags);
 +		while (wbi && wbi->bi_sector < sector + STRIPE_SECTORS) {
 +			copy_data(1, wbi, sh->dev[i].page, sector);
@@ -179,7 +181,7 @@ diff -pru linux-2.6.9.orig/drivers/md/raid5.c linux-2.6.9/drivers/md/raid5.c
  	}
  	if (count != 1)
  		xor_block(count, STRIPE_SIZE, ptr);
-@@ -1059,13 +1139,15 @@ static void handle_stripe(struct stripe_
+@@ -1059,13 +1140,15 @@ static void handle_stripe(struct stripe_
  		if (sh->dev[i].written) {
  		    dev = &sh->dev[i];
  		    if (!test_bit(R5_LOCKED, &dev->flags) &&
@@ -192,11 +194,11 @@ diff -pru linux-2.6.9.orig/drivers/md/raid5.c linux-2.6.9/drivers/md/raid5.c
  			    spin_lock_irq(&conf->device_lock);
  			    wbi = dev->written;
  			    dev->written = NULL;
-+			    test_and_clear_bit(R5_Direct, &dev->flags);
++			    clear_bit(R5_Direct, &dev->flags);
  			    while (wbi && wbi->bi_sector < dev->sector + STRIPE_SECTORS) {
  				    wbi2 = r5_next_bio(wbi, dev->sector);
  				    if (--wbi->bi_phys_segments == 0) {
-@@ -1831,6 +1913,7 @@ memory = conf->max_nr_stripes * (sizeof(
+@@ -1831,6 +1914,7 @@ memory = conf->max_nr_stripes * (sizeof(
  		if (mddev->queue->backing_dev_info.ra_pages < 2 * stripe)
  			mddev->queue->backing_dev_info.ra_pages = 2 * stripe;
  	}
@@ -204,7 +206,7 @@ diff -pru linux-2.6.9.orig/drivers/md/raid5.c linux-2.6.9/drivers/md/raid5.c
  
  	/* Ok, everything is just fine now */
  	mddev->array_size =  mddev->size * (mddev->raid_disks - 1);
-@@ -1918,9 +2001,11 @@ static void status (struct seq_file *seq
+@@ -1918,9 +2002,11 @@ static void status (struct seq_file *seq
  			atomic_read(&conf->handled_in_raid5d),
  			atomic_read(&conf->out_of_stripes),
  			atomic_read(&conf->handle_called));

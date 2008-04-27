@@ -47,6 +47,9 @@
 #ifdef HAVE_SYS_IOCTL_H
 # include <sys/ioctl.h>
 #endif
+#ifndef _IOWR
+# include "ioctl.h"
+#endif
 
 #include <stdio.h>
 #include <sys/ioctl.h>
@@ -59,24 +62,19 @@
 #endif
 #include <unistd.h>
 #include <fcntl.h>
-#include <assert.h>
 
 #include <libcfs/list.h>
 #include <lnet/lnet.h>
 #include <libcfs/kp30.h>
 #include <libcfs/user-bitops.h>
 
-#ifndef _IOWR
-# include "ioctl.h"
-#endif
-
 /* definitions for liblustre */
 
 #ifdef __CYGWIN__
 
-#define CFS_PAGE_SHIFT 12
-#define CFS_PAGE_SIZE (1UL << CFS_PAGE_SHIFT)
-#define CFS_PAGE_MASK (~((__u64)CFS_PAGE_SIZE-1))
+#define CFS_PAGE_SHIFT  12
+#define CFS_PAGE_SIZE   (1UL << CFS_PAGE_SHIFT)
+#define CFS_PAGE_MASK   (~((__u64)CFS_PAGE_SIZE-1))
 #define loff_t long long
 #define ERESTART 2001
 typedef unsigned short umode_t;
@@ -107,7 +105,7 @@ typedef unsigned short umode_t;
 
 /* always adopt 2.5 definitions */
 #define KERNEL_VERSION(a,b,c) ((a)*100+(b)*10+c)
-#define LINUX_VERSION_CODE KERNEL_VERSION(2,6,5)
+#define LINUX_VERSION_CODE KERNEL_VERSION(2,5,0)
 
 #ifndef page_private
 #define page_private(page) ((page)->private)
@@ -158,6 +156,10 @@ static inline void *kmalloc(int size, int prot)
 #define IS_ERR(a) ((unsigned long)(a) > (unsigned long)-1000L)
 #define PTR_ERR(a) ((long)(a))
 #define ERR_PTR(a) ((void*)((long)(a)))
+
+typedef struct {
+        void *cwd;
+}mm_segment_t;
 
 typedef int (read_proc_t)(char *page, char **start, off_t off,
                           int count, int *eof, void *data);
@@ -263,7 +265,6 @@ extern int ldlm_init(void);
 extern int osc_init(void);
 extern int lov_init(void);
 extern int mdc_init(void);
-extern int lmv_init(void);
 extern int mgc_init(void);
 extern int echo_client_init(void);
 
@@ -293,14 +294,6 @@ static inline void spin_lock_bh(spinlock_t *l) {}
 static inline void spin_unlock_bh(spinlock_t *l) {}
 static inline void spin_lock_irqsave(spinlock_t *a, unsigned long b) {}
 static inline void spin_unlock_irqrestore(spinlock_t *a, unsigned long b) {}
-
-typedef spinlock_t rwlock_t;
-#define RW_LOCK_UNLOCKED        SPIN_LOCK_UNLOCKED
-#define read_lock(l)            spin_lock(l)
-#define read_unlock(l)          spin_unlock(l)
-#define write_lock(l)           spin_lock(l)
-#define write_unlock(l)         spin_unlock(l)
-
 
 #define min(x,y) ((x)<(y) ? (x) : (y))
 #define max(x,y) ((x)>(y) ? (x) : (y))
@@ -455,7 +448,6 @@ static inline cfs_page_t* __grab_cache_page(unsigned long index)
 #define ATTR_RAW        0x0800  /* file system, not vfs will massage attrs */
 #define ATTR_FROM_OPEN  0x1000  /* called from open path, ie O_TRUNC */
 #define ATTR_CTIME_SET  0x2000
-#define ATTR_BLOCKS     0x4000
 #define ATTR_KILL_SUID  0
 #define ATTR_KILL_SGID  0
 
@@ -470,8 +462,7 @@ struct iattr {
         time_t          ia_ctime;
         unsigned int    ia_attr_flags;
 };
-
-#define ll_iattr iattr
+#define ll_iattr_struct iattr
 
 #define IT_OPEN     0x0001
 #define IT_CREAT    0x0002
@@ -514,6 +505,7 @@ static inline void intent_init(struct lookup_intent *it, int op, int flags)
         it->it_op = op;
         it->it_flags = flags;
 }
+
 
 struct dentry {
         int d_count;
@@ -574,8 +566,6 @@ struct task_struct {
         int state;
         struct signal pending;
         char comm[32];
-        int uid;
-        int gid;
         int pid;
         int fsuid;
         int fsgid;
@@ -609,10 +599,10 @@ static inline int capable(int cap)
 
 #define DECLARE_WAIT_QUEUE_HEAD(HEAD)                           \
         wait_queue_head_t HEAD = {                              \
-                .sleepers = CFS_LIST_HEAD_INIT(HEAD.sleepers)   \
+                .sleepers = CFS_LIST_HEAD_INIT(HEAD.sleepers)       \
         }
 #define init_waitqueue_head(l) CFS_INIT_LIST_HEAD(&(l)->sleepers)
-#define wake_up(l) do { int a; a++; } while (0)
+#define wake_up(l) do { int a = 0; a++; } while (0)
 #define TASK_INTERRUPTIBLE 0
 #define TASK_UNINTERRUPTIBLE 1
 #define TASK_RUNNING 2
@@ -698,7 +688,7 @@ static inline void del_timer(struct timer_list *l)
 
 typedef struct { volatile int counter; } atomic_t;
 
-#define ATOMIC_INIT(i) { (i) }
+#define ATOMIC_INIT(i) { i }
 
 #define atomic_read(a) ((a)->counter)
 #define atomic_set(a,b) do {(a)->counter = b; } while (0)
@@ -720,43 +710,9 @@ typedef struct { volatile int counter; } atomic_t;
 #define unlikely(exp) (exp)
 #endif
 
-#define might_sleep()
-#define might_sleep_if(c)
-#define smp_mb()
-
-static inline
-int test_and_set_bit(int nr, unsigned long *addr)
-{
-        int oldbit;
-
-        while (nr >= sizeof(long)) {
-                nr -= sizeof(long);
-                addr++;
-        }
-
-        oldbit = (*addr) & (1 << nr);
-        *addr |= (1 << nr);
-        return oldbit;
-}
-
-static inline
-int test_and_clear_bit(int nr, unsigned long *addr)
-{
-        int oldbit;
-
-        while (nr >= sizeof(long)) {
-                nr -= sizeof(long);
-                addr++;
-        }
-
-        oldbit = (*addr) & (1 << nr);
-        *addr &= ~(1 << nr);
-        return oldbit;
-}
-
 /* FIXME sys/capability will finally included linux/fs.h thus
  * cause numerous trouble on x86-64. as temporary solution for
- * build broken at Cray, we copy definition we need from capability.h
+ * build broken at cary, we copy definition we need from capability.h
  * FIXME
  */
 struct _cap_struct;
@@ -816,7 +772,7 @@ void *liblustre_register_wait_callback(const char *name,
 void liblustre_deregister_wait_callback(void *notifier);
 int liblustre_wait_event(int timeout);
 
-void *liblustre_register_idle_callback(const char *name, 
+void *liblustre_register_idle_callback(const char *name,
                                        int (*fn)(void *arg), void *arg);
 void liblustre_deregister_idle_callback(void *notifier);
 void liblustre_wait_idle(void);
@@ -922,37 +878,23 @@ void posix_acl_release(struct posix_acl *acl)
 }
 
 #ifdef LIBLUSTRE_POSIX_ACL
-# ifndef posix_acl_xattr_entry 
-#  define posix_acl_xattr_entry xattr_acl_entry
-# endif
-# ifndef posix_acl_xattr_header 
-#  define posix_acl_xattr_header xattr_acl_header
-# endif
-# ifndef posix_acl_xattr_size
-#  define posix_acl_xattr_size(entry) xattr_acl_size(entry)
-# endif
-# ifndef CONFIG_FS_POSIX_ACL
-#  define CONFIG_FS_POSIX_ACL 1
-# endif
+ #ifndef posix_acl_xattr_entry 
+  #define posix_acl_xattr_entry xattr_acl_entry
+ #endif
+ #ifndef posix_acl_xattr_header 
+  #define posix_acl_xattr_header xattr_acl_header
+ #endif
+ #ifndef posix_acl_xattr_size
+  #define posix_acl_xattr_size(entry) xattr_acl_size(entry)
+ #endif
+ #ifndef CONFIG_FS_POSIX_ACL
+  #define CONFIG_FS_POSIX_ACL 1
+ #endif
 #endif
 
 #ifndef ENOTSUPP
 #define ENOTSUPP ENOTSUP
 #endif
-
-typedef int mm_segment_t;
-enum {
-        KERNEL_DS,
-        USER_DS
-};
-static inline mm_segment_t get_fs(void)
-{
-        return USER_DS;
-}
-
-static inline void set_fs(mm_segment_t seg)
-{
-}
 
 #include <obd_support.h>
 #include <lustre/lustre_idl.h>
@@ -960,61 +902,5 @@ static inline void set_fs(mm_segment_t seg)
 #include <lustre_import.h>
 #include <lustre_export.h>
 #include <lustre_net.h>
-
-/* Fast hashing routine for a long.
-   (C) 2002 William Lee Irwin III, IBM */
-
-/*
- * Knuth recommends primes in approximately golden ratio to the maximum
- * integer representable by a machine word for multiplicative hashing.
- * Chuck Lever verified the effectiveness of this technique:
- * http://www.citi.umich.edu/techreports/reports/citi-tr-00-1.pdf
- *
- * These primes are chosen to be bit-sparse, that is operations on
- * them can use shifts and additions instead of multiplications for
- * machines where multiplications are slow.
- */
-#if BITS_PER_LONG == 32
-/* 2^31 + 2^29 - 2^25 + 2^22 - 2^19 - 2^16 + 1 */
-#define GOLDEN_RATIO_PRIME 0x9e370001UL
-#elif BITS_PER_LONG == 64
-/*  2^63 + 2^61 - 2^57 + 2^54 - 2^51 - 2^18 + 1 */
-#define GOLDEN_RATIO_PRIME 0x9e37fffffffc0001UL
-#else
-#error Define GOLDEN_RATIO_PRIME for your wordsize.
-#endif
-
-static inline unsigned long hash_long(unsigned long val, unsigned int bits)
-{
-	unsigned long hash = val;
-
-#if BITS_PER_LONG == 64
-	/*  Sigh, gcc can't optimise this alone like it does for 32 bits. */
-	unsigned long n = hash;
-	n <<= 18;
-	hash -= n;
-	n <<= 33;
-	hash -= n;
-	n <<= 3;
-	hash += n;
-	n <<= 3;
-	hash -= n;
-	n <<= 4;
-	hash += n;
-	n <<= 2;
-	hash += n;
-#else
-	/* On some cpus multiply is faster, on others gcc will do shifts */
-	hash *= GOLDEN_RATIO_PRIME;
-#endif
-
-	/* High bits are more random, so use them. */
-	return hash >> (BITS_PER_LONG - bits);
-}
-	
-static inline unsigned long hash_ptr(void *ptr, unsigned int bits)
-{
-	return hash_long((unsigned long)ptr, bits);
-}
 
 #endif

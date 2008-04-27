@@ -37,8 +37,10 @@
 #include <linux/pagemap.h>
 #include <linux/quotaops.h>
 #include <linux/version.h>
+#if (LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))
 #include <linux/init.h>
 #include <asm/statfs.h>
+#endif
 #include <libcfs/kp30.h>
 #include <lustre_fsfilt.h>
 #include <obd.h>
@@ -169,9 +171,7 @@ static int fsfilt_reiserfs_statfs(struct super_block *sb,
         int rc;
 
         memset(&sfs, 0, sizeof(sfs));
-
         rc = ll_do_statfs(sb, &sfs);
-
         statfs_pack(osfs, &sfs);
         return rc;
 }

@@ -34,10 +34,10 @@
 #define MOUNT_CONFIGS_DIR "CONFIGS"
 /* Persistent mount data are stored on the disk in this file. */
 #define MOUNT_DATA_FILE    MOUNT_CONFIGS_DIR"/mountdata"
-#define LAST_RCVD         "last_received"
+#define LAST_RCVD         "last_rcvd"
 #define LOV_OBJID         "lov_objid"
 #define HEALTH_CHECK      "health_check"
-#define CAPA_KEYS         "capa_keys"
+
 
 /****************** persistent mount data *********************/
 
@@ -46,7 +46,7 @@
 #define LDD_F_SV_TYPE_MGS   0x0004
 #define LDD_F_NEED_INDEX    0x0010 /* need an index assignment */
 #define LDD_F_VIRGIN        0x0020 /* never registered */
-#define LDD_F_UPDATE        0x0040 /* update the config logs for this server*/
+#define LDD_F_UPDATE        0x0040 /* update all related config logs */
 #define LDD_F_REWRITE_LDD   0x0080 /* rewrite the LDD */
 #define LDD_F_WRITECONF     0x0100 /* regenerate all logs for this fs */
 #define LDD_F_UPGRADE14     0x0200 /* COMPAT_14 */
@@ -68,7 +68,7 @@ static inline char *mt_str(enum ldd_mount_type mt)
                 "ldiskfs",
                 "smfs",
                 "reiserfs",
-                "ldiskfs2"
+                "ldiskfs2",
         };
         return mount_type_string[mt];
 }
@@ -174,6 +174,7 @@ struct lustre_mount_data {
 /* end COMPAT_146 */
 
 #define OBD_ROCOMPAT_LOVOBJID   0x00000001 /* MDS handles LOV_OBJID file */
+#define OBD_ROCOMPAT_CROW       0x00000002 /* OST will CROW create objects */
 
 #define OBD_INCOMPAT_GROUPS     0x00000001 /* OST handles group subdirs */
 #define OBD_INCOMPAT_OST        0x00000002 /* this is an OST */
@@ -237,8 +238,13 @@ struct lustre_sb_info {
 #define LSI_UMOUNT_FORCE                 0x00000010
 #define LSI_UMOUNT_FAILOVER              0x00000020
 
-#define     s2lsi(sb)        ((struct lustre_sb_info *)((sb)->s_fs_info))
-#define     s2lsi_nocast(sb) ((sb)->s_fs_info)
+#if  (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0))
+# define    s2lsi(sb)        ((struct lustre_sb_info *)((sb)->s_fs_info))
+# define    s2lsi_nocast(sb) ((sb)->s_fs_info)
+#else  /* 2.4 here */
+# define    s2lsi(sb)        ((struct lustre_sb_info *)((sb)->u.generic_sbp))
+# define    s2lsi_nocast(sb) ((sb)->u.generic_sbp)
+#endif
 
 #define     get_profile_name(sb)   (s2lsi(sb)->lsi_lmd->lmd_profile)
 
@@ -268,10 +274,8 @@ int lustre_process_log(struct super_block *sb, char *logname,
                      struct config_llog_instance *cfg);
 int lustre_end_log(struct super_block *sb, char *logname, 
                        struct config_llog_instance *cfg);
-struct lustre_mount_info *server_get_mount(const char *name);
-struct lustre_mount_info *server_get_mount_2(const char *name);
-int server_put_mount(const char *name, struct vfsmount *mnt);
-int server_put_mount_2(const char *name, struct vfsmount *mnt);
+struct lustre_mount_info *server_get_mount(char *name);
+int server_put_mount(char *name, struct vfsmount *mnt);
 int server_register_target(struct super_block *sb);
 struct mgs_target_info;
 int server_mti_print(char *title, struct mgs_target_info *mti);

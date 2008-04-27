@@ -61,6 +61,7 @@ struct ll_rpc_opcode {
         { OST_SET_INFO,     "ost_set_info" },
         { OST_QUOTACHECK,   "ost_quotacheck" },
         { OST_QUOTACTL,     "ost_quotactl" },
+        { OST_QUOTA_ADJUST_QUNIT, "ost_quota_adjust_qunit" },
         { MDS_GETATTR,      "mds_getattr" },
         { MDS_GETATTR_NAME, "mds_getattr_lock" },
         { MDS_CLOSE,        "mds_close" },
@@ -79,8 +80,6 @@ struct ll_rpc_opcode {
         { MDS_QUOTACTL,     "mds_quotactl" },
         { MDS_GETXATTR,     "mds_getxattr" },
         { MDS_SETXATTR,     "mds_setxattr" },
-        { MDS_WRITEPAGE,    "mds_writepage" },
-        { MDS_IS_SUBDIR,    "mds_is_subdir" },
         { LDLM_ENQUEUE,     "ldlm_enqueue" },
         { LDLM_CONVERT,     "ldlm_convert" },
         { LDLM_CANCEL,      "ldlm_cancel" },
@@ -95,9 +94,9 @@ struct ll_rpc_opcode {
         { MGS_SET_INFO,     "mgs_set_info" },
         { OBD_PING,         "obd_ping" },
         { OBD_LOG_CANCEL,   "llog_origin_handle_cancel" },
-        { OBD_QC_CALLBACK,  "obd_qc_callback" },
+        { OBD_QC_CALLBACK,  "obd_quota_callback" },
         { LLOG_ORIGIN_HANDLE_CREATE,     "llog_origin_handle_create" },
-        { LLOG_ORIGIN_HANDLE_NEXT_BLOCK, "llog_origin_handle_next_block" },
+        { LLOG_ORIGIN_HANDLE_NEXT_BLOCK, "llog_origin_handle_next_block"},
         { LLOG_ORIGIN_HANDLE_READ_HEADER,"llog_origin_handle_read_header" },
         { LLOG_ORIGIN_HANDLE_WRITE_REC,  "llog_origin_handle_write_rec" },
         { LLOG_ORIGIN_HANDLE_CLOSE,      "llog_origin_handle_close" },
@@ -105,11 +104,6 @@ struct ll_rpc_opcode {
         { LLOG_CATINFO,                  "llog_catinfo" },
         { LLOG_ORIGIN_HANDLE_PREV_BLOCK, "llog_origin_handle_prev_block" },
         { LLOG_ORIGIN_HANDLE_DESTROY,    "llog_origin_handle_destroy" },
-        { FLD_QUERY,        "fld_query" },
-        { SEQ_QUERY,        "seq_query" },
-        { SEC_CTX_INIT,     "sec_ctx_init" },
-        { SEC_CTX_INIT_CONT,"sec_ctx_init_cont" },
-        { SEC_CTX_FINI,     "sec_ctx_fini" }
 };
 
 struct ll_eopcode {
@@ -183,6 +177,8 @@ void ptlrpc_lprocfs_register(struct proc_dir_entry *root, char *dir,
                              svc_counter_config, "req_qdepth", "reqs");
         lprocfs_counter_init(svc_stats, PTLRPC_REQACTIVE_CNTR,
                              svc_counter_config, "req_active", "reqs");
+        lprocfs_counter_init(svc_stats, PTLRPC_TIMEOUT,
+                             svc_counter_config, "req_timeout", "sec");
         lprocfs_counter_init(svc_stats, PTLRPC_REQBUF_AVAIL_CNTR,
                              svc_counter_config, "reqbuf_avail", "bufs");
         for (i = 0; i < EXTRA_LAST_OPC; i++) {
@@ -248,7 +244,7 @@ ptlrpc_lprocfs_write_req_history_max(struct file *file, const char *buffer,
          * hose a kernel by allowing the request history to grow too
          * far. */
         bufpages = (svc->srv_buf_size + CFS_PAGE_SIZE - 1) >> CFS_PAGE_SHIFT;
-        if (val > num_physpages/(2 * bufpages))
+        if (val > num_physpages/(2*bufpages))
                 return -ERANGE;
 
         spin_lock(&svc->srv_lock);
@@ -359,6 +355,36 @@ ptlrpc_lprocfs_svc_req_history_next(struct seq_file *s,
         return srhi;
 }
 
+/* common ost/mdt srv_request_history_print_fn */
+void target_print_req(void *seq_file, struct ptlrpc_request *req)
+{
+        /* Called holding srv_lock with irqs disabled.
+         * Print specific req contents and a newline.
+         * CAVEAT EMPTOR: check request message length before printing!!!
+         * You might have received any old crap so you must be just as
+         * careful here as the service's request parser!!! */
+        struct seq_file *sf = seq_file;
+
+        switch (req->rq_phase) {
+        case RQ_PHASE_NEW:
+                /* still awaiting a service thread's attention, or rejected
+                 * because the generic request message didn't unpack */
+                seq_printf(sf, "<not swabbed>\n");
+                break;
+        case RQ_PHASE_INTERPRET:
+                /* being handled, so basic msg swabbed, and opc is valid
+                 * but racing with mds_handle() */
+        case RQ_PHASE_COMPLETE:
+                /* been handled by mds_handle() reply state possibly still
+                 * volatile */
+                seq_printf(sf, "opc %d\n", lustre_msg_get_opc(req->rq_reqmsg));
+                break;
+        default:
+                DEBUG_REQ(D_ERROR, req, "bad phase %d", req->rq_phase);
+        }
+}
+EXPORT_SYMBOL(target_print_req);
+
 static int ptlrpc_lprocfs_svc_req_history_show(struct seq_file *s, void *iter)
 {
         struct ptlrpc_service      *svc = s->private;
@@ -379,11 +405,13 @@ static int ptlrpc_lprocfs_svc_req_history_show(struct seq_file *s, void *iter)
                  * must be just as careful as the service's request
                  * parser. Currently I only print stuff here I know is OK
                  * to look at coz it was set up in request_in_callback()!!! */
-                seq_printf(s, LPD64":%s:%s:"LPD64":%d:%s ",
-                           req->rq_history_seq, libcfs_nid2str(req->rq_self),
-                           libcfs_id2str(req->rq_peer), req->rq_xid,
-                           req->rq_reqlen,ptlrpc_rqphase2str(req));
-
+                seq_printf(s, LPD64":%s:%s:x"LPD64":%d:%s:%ld:%lds(%+lds) ",
+                           req->rq_history_seq, libcfs_nid2str(req->rq_self), 
+                           libcfs_id2str(req->rq_peer), req->rq_xid, 
+                           req->rq_reqlen, ptlrpc_rqphase2str(req),
+                           req->rq_arrival_time.tv_sec,
+                           req->rq_sent - req->rq_arrival_time.tv_sec,
+                           req->rq_sent - req->rq_deadline);
                 if (svc->srv_request_history_print_fn == NULL)
                         seq_printf(s, "\n");
                 else
@@ -420,6 +448,34 @@ ptlrpc_lprocfs_svc_req_history_open(struct inode *inode, struct file *file)
         return 0;
 }
 
+/* See also lprocfs_rd_timeouts */
+static int ptlrpc_lprocfs_rd_timeouts(char *page, char **start, off_t off,
+                                      int count, int *eof, void *data)
+{
+        struct ptlrpc_service *svc = data;
+        unsigned int cur, worst;
+        time_t worstt;
+        struct dhms ts;
+        int rc = 0;
+
+        *eof = 1;
+        cur = at_get(&svc->srv_at_estimate);
+        worst = svc->srv_at_estimate.at_worst_ever;
+        worstt = svc->srv_at_estimate.at_worst_time;
+        s2dhms(&ts, cfs_time_current_sec() - worstt);
+        if (AT_OFF)
+                rc += snprintf(page + rc, count - rc,
+                              "adaptive timeouts off, using obd_timeout %u\n",
+                              obd_timeout);
+        rc += snprintf(page + rc, count - rc, 
+                       "%10s : cur %3u  worst %3u (at %ld, "DHMS_FMT" ago) ",
+                       "service", cur, worst, worstt, 
+                       DHMS_VARS(&ts));
+        rc = lprocfs_at_hist_helper(page, count, rc,
+                                    &svc->srv_at_estimate);
+        return rc;
+}               
+
 void ptlrpc_lprocfs_register_service(struct proc_dir_entry *entry,
                                      struct ptlrpc_service *svc)
 {
@@ -431,6 +487,9 @@ void ptlrpc_lprocfs_register_service(struct proc_dir_entry *entry,
                 {.name       = "req_buffer_history_max",
                  .write_fptr = ptlrpc_lprocfs_write_req_history_max,
                  .read_fptr  = ptlrpc_lprocfs_read_req_history_max,
+                 .data       = svc},
+                {.name       = "timeouts",
+                 .read_fptr  = ptlrpc_lprocfs_rd_timeouts,
                  .data       = svc},
                 {NULL}
         };
@@ -496,10 +555,9 @@ EXPORT_SYMBOL(ptlrpc_lprocfs_brw);
 
 void ptlrpc_lprocfs_unregister_service(struct ptlrpc_service *svc)
 {
-        if (svc->srv_procroot != NULL)
+        if (svc->srv_procroot != NULL) 
                 lprocfs_remove(&svc->srv_procroot);
-
-        if (svc->srv_stats)
+        if (svc->srv_stats) 
                 lprocfs_free_stats(&svc->srv_stats);
 }
 
@@ -507,7 +565,6 @@ void ptlrpc_lprocfs_unregister_obd(struct obd_device *obd)
 {
         if (obd->obd_svc_procroot)
                 lprocfs_remove(&obd->obd_svc_procroot);
-
         if (obd->obd_svc_stats)
                 lprocfs_free_stats(&obd->obd_svc_stats);
 }
@@ -529,7 +586,7 @@ int lprocfs_wr_evict_client(struct file *file, const char *buffer,
          * - jay, jxiong@clusterfs.com */
         class_incref(obd);
         LPROCFS_EXIT();
- 
+
         sscanf(buffer, "%40s", tmpbuf);
         if (strncmp(tmpbuf, "nid:", 4) == 0)
                 obd_export_evict_by_nid(obd, tmpbuf + 4);
@@ -548,20 +605,19 @@ EXPORT_SYMBOL(lprocfs_wr_evict_client);
 int lprocfs_wr_ping(struct file *file, const char *buffer,
                     unsigned long count, void *data)
 {
-        struct obd_device     *obd = data;
+        struct obd_device *obd = data;
         struct ptlrpc_request *req;
-        int                    rc;
+        int rc;
         ENTRY;
 
         LPROCFS_CLIMP_CHECK(obd);
-        req = ptlrpc_request_alloc_pack(obd->u.cli.cl_import, &RQF_OBD_PING,
-                                        LUSTRE_OBD_VERSION, OBD_PING);
-
+        req = ptlrpc_prep_req(obd->u.cli.cl_import, LUSTRE_OBD_VERSION,
+                              OBD_PING, 1, NULL, NULL);
         LPROCFS_CLIMP_EXIT(obd);
         if (req == NULL)
                 RETURN(-ENOMEM);
 
-        ptlrpc_request_set_replen(req);
+        ptlrpc_req_set_repsize(req, 1, NULL);
         req->rq_send_state = LUSTRE_IMP_FULL;
         req->rq_no_resend = 1;
         req->rq_no_delay = 1;

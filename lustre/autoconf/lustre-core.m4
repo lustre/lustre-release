@@ -371,16 +371,16 @@ fi
 #
 # LC_CONFIG_HEALTH_CHECK_WRITE
 #
-# Turn off the actual write to the disk
+# Turn on the actual write to the disk
 #
 AC_DEFUN([LC_CONFIG_HEALTH_CHECK_WRITE],
 [AC_MSG_CHECKING([whether to enable a write with the health check])
-AC_ARG_ENABLE([health_write],
-        AC_HELP_STRING([--enable-health_write],
+AC_ARG_ENABLE([health-write],
+        AC_HELP_STRING([--enable-health-write],
                         [enable disk writes when doing health check]),
         [],[enable_health_write='no'])
 AC_MSG_RESULT([$enable_health_write])
-if test x$enable_health_write != xno ; then
+if test x$enable_health_write == xyes ; then
   AC_DEFINE(USE_HEALTH_CHECK_WRITE, 1, Write when Checking Health)
 fi
 ])
@@ -491,7 +491,7 @@ LB_LINUX_TRY_COMPILE([
         #include <asm/page.h>
         #include <linux/mm.h>
 ],[
-       filemap_populate(NULL, 0, 0, __pgprot(0), 0, 0);
+	filemap_populate(NULL, 0, 0, __pgprot(0), 0, 0);
 ],[
         AC_MSG_RESULT([yes])
         AC_DEFINE(HAVE_FILEMAP_POPULATE, 1, [Kernel exports filemap_populate])
@@ -598,21 +598,6 @@ AC_DEFUN([LC_EXPORT___IGET],
 ])
 ])
 
-#
-# LC_EXPORT_NR_FREE_BUFFER_PAGES
-# starting from 2.6.23 linux kernel exports nr_free_buffer_pages()
-#
-AC_DEFUN([LC_EXPORT_NR_FREE_BUFFER_PAGES],
-[LB_CHECK_SYMBOL_EXPORT([nr_free_buffer_pages],
-[mm/page_alloc.c],[
-        AC_DEFINE(HAVE_EXPORT_NR_FREE_BUFFER_PAGES, 1, [kernel exports nr_free_buffer_pages])
-],[
-	if test x$enable_server = xyes ; then
-        	AC_MSG_ERROR([lustre server needs this symbol to be exported.])
-	fi
-])
-])
-
 
 AC_DEFUN([LC_LUSTRE_VERSION_H],
 [LB_CHECK_FILE([$LINUX/include/linux/lustre_version.h],[
@@ -623,7 +608,7 @@ AC_DEFUN([LC_LUSTRE_VERSION_H],
         	AC_MSG_WARN([Unpatched kernel detected.])
         	AC_MSG_WARN([Lustre servers cannot be built with an unpatched kernel;])
         	AC_MSG_WARN([disabling server build])
-		enable_server='no'
+        	enable_server='no'
 	fi
 ])
 ])
@@ -636,120 +621,8 @@ AC_DEFUN([LC_FUNC_SET_FS_PWD],
 ])
 ])
 
-#
-# LC_CAPA_CRYPTO
-#
-AC_DEFUN([LC_CAPA_CRYPTO],
-[LB_LINUX_CONFIG_IM([CRYPTO],[],[
-	AC_MSG_ERROR([Lustre capability require that CONFIG_CRYPTO is enabled in your kernel.])
-])
-LB_LINUX_CONFIG_IM([CRYPTO_HMAC],[],[
-	AC_MSG_ERROR([Lustre capability require that CONFIG_CRYPTO_HMAC is enabled in your kernel.])
-])
-LB_LINUX_CONFIG_IM([CRYPTO_SHA1],[],[
-	AC_MSG_ERROR([Lustre capability require that CONFIG_CRYPTO_SHA1 is enabled in your kernel.])
-])
-])
-
-AC_DEFUN([LC_SUNRPC_CACHE],
-[AC_MSG_CHECKING([if sunrpc struct cache_head uses kref])
-LB_LINUX_TRY_COMPILE([
-        #include <linux/sunrpc/cache.h>
-],[
-        struct cache_head ch;
-        &ch.ref.refcount;
-],[
-        AC_MSG_RESULT([yes])
-        AC_DEFINE(HAVE_SUNRPC_CACHE_V2, 1, [sunrpc cache facility v2])
-],[
-        AC_MSG_RESULT([no])
-])
-])
-
-AC_DEFUN([LC_CONFIG_SUNRPC],
-[LB_LINUX_CONFIG_IM([SUNRPC],[],
-                    [AC_MSG_ERROR([kernel SUNRPC support is required by using GSS.])])
- LC_SUNRPC_CACHE
-])
 
 #
-# LC_CONFIG_GSS_KEYRING (default enabled, if gss is enabled)
-#
-AC_DEFUN([LC_CONFIG_GSS_KEYRING],
-[AC_MSG_CHECKING([whether to enable gss keyring backend])
- AC_ARG_ENABLE([gss_keyring], 
-	       [AC_HELP_STRING([--disable-gss-keyring],
-                               [disable gss keyring backend])],
-	       [],[enable_gss_keyring='yes'])
- AC_MSG_RESULT([$enable_gss_keyring])
-
- if test x$enable_gss_keyring != xno; then
-	LB_LINUX_CONFIG_IM([KEYS],[],
-                           [AC_MSG_ERROR([GSS keyring backend require that CONFIG_KEYS be enabled in your kernel.])])
-
-	AC_CHECK_LIB([keyutils], [keyctl_search], [],
-                     [AC_MSG_ERROR([libkeyutils is not found, which is required by gss keyring backend])],)
-
-	AC_DEFINE([HAVE_GSS_KEYRING], [1],
-                  [Define this if you enable gss keyring backend])
- fi
-])
-
-m4_pattern_allow(AC_KERBEROS_V5)
-
-#
-# LC_CONFIG_GSS (default disabled)
-#
-# Build gss and related tools of Lustre. Currently both kernel and user space
-# parts are depend on linux platform.
-#
-AC_DEFUN([LC_CONFIG_GSS],
-[AC_MSG_CHECKING([whether to enable gss/krb5 support])
- AC_ARG_ENABLE([gss], 
-               [AC_HELP_STRING([--enable-gss], [enable gss/krb5 support])],
-               [],[enable_gss='no'])
- AC_MSG_RESULT([$enable_gss])
-
- if test x$enable_gss == xyes; then
-	LC_CONFIG_GSS_KEYRING
-        LC_CONFIG_SUNRPC
-
-        LB_LINUX_CONFIG_IM([CRYPTO_MD5],[],
-                           [AC_MSG_WARN([kernel MD5 support is recommended by using GSS.])])
-	LB_LINUX_CONFIG_IM([CRYPTO_SHA1],[],
-                           [AC_MSG_WARN([kernel SHA1 support is recommended by using GSS.])])
-	LB_LINUX_CONFIG_IM([CRYPTO_SHA256],[],
-                           [AC_MSG_WARN([kernel SHA256 support is recommended by using GSS.])])
-	LB_LINUX_CONFIG_IM([CRYPTO_SHA512],[],
-                           [AC_MSG_WARN([kernel SHA512 support is recommended by using GSS.])])
-	LB_LINUX_CONFIG_IM([CRYPTO_WP512],[],
-                           [AC_MSG_WARN([kernel WP512 support is recommended by using GSS.])])
-	LB_LINUX_CONFIG_IM([CRYPTO_ARC4],[],
-                           [AC_MSG_WARN([kernel ARC4 support is recommended by using GSS.])])
-        LB_LINUX_CONFIG_IM([CRYPTO_DES],[],
-                           [AC_MSG_WARN([kernel DES support is recommended by using GSS.])])
-        LB_LINUX_CONFIG_IM([CRYPTO_TWOFISH],[],
-                           [AC_MSG_WARN([kernel TWOFISH support is recommended by using GSS.])])
-        LB_LINUX_CONFIG_IM([CRYPTO_CAST6],[],
-                           [AC_MSG_WARN([kernel CAST6 support is recommended by using GSS.])])
-	dnl FIXME
-	dnl the AES symbol usually tied with arch, e.g. CRYPTO_AES_586
-	dnl FIXME
-	LB_LINUX_CONFIG_IM([CRYPTO_AES],[],
-                           [AC_MSG_WARN([kernel AES support is recommended by using GSS.])])
-
-	AC_CHECK_LIB([gssapi], [gss_init_sec_context],
-                     [GSSAPI_LIBS="$GSSAPI_LDFLAGS -lgssapi"],
-                     [AC_CHECK_LIB([gssglue], [gss_init_sec_context],
-                                   [GSSAPI_LIBS="$GSSAPI_LDFLAGS -lgssglue"],
-                                   [AC_MSG_ERROR([libgssapi or libgssglue is not found, which is required by GSS.])])],)
-
-	AC_SUBST(GSSAPI_LIBS)
-
-	AC_KERBEROS_V5
- fi
-])
-
 # LC_FUNC_MS_FLOCK_LOCK
 #
 # SLES9 kernel has MS_FLOCK_LOCK sb flag
@@ -808,6 +681,50 @@ LB_LINUX_TRY_COMPILE([
 ],[
         AC_DEFINE(HAVE_F_OP_FLOCK, 1,
                 [struct file_operations has flock field])
+        AC_MSG_RESULT([yes])
+],[
+        AC_MSG_RESULT([no])
+])
+])
+
+#
+# LC_FUNC_MS_FLOCK_LOCK
+#
+# SLES9 kernel has MS_FLOCK_LOCK sb flag
+#
+AC_DEFUN([LC_FUNC_MS_FLOCK_LOCK],
+[AC_MSG_CHECKING([if kernel has MS_FLOCK_LOCK sb flag])
+LB_LINUX_TRY_COMPILE([
+        #include <linux/fs.h>
+],[
+        int flags = MS_FLOCK_LOCK;
+],[
+        AC_DEFINE(HAVE_MS_FLOCK_LOCK, 1,
+                [kernel has MS_FLOCK_LOCK flag])
+        AC_MSG_RESULT([yes])
+],[
+        AC_MSG_RESULT([no])
+])
+])
+
+#
+# LC_FUNC_HAVE_CAN_SLEEP_ARG
+#
+# SLES9 kernel has third arg can_sleep
+# in fs/locks.c: flock_lock_file_wait()
+#
+AC_DEFUN([LC_FUNC_HAVE_CAN_SLEEP_ARG],
+[AC_MSG_CHECKING([if kernel has third arg can_sleep in fs/locks.c: flock_lock_file_wait()])
+LB_LINUX_TRY_COMPILE([
+        #include <linux/fs.h>
+],[
+        int cansleep;
+        struct file *file;
+        struct file_lock *file_lock;
+        flock_lock_file_wait(file, file_lock, cansleep);
+],[
+        AC_DEFINE(HAVE_CAN_SLEEP_ARG, 1,
+                [kernel has third arg can_sleep in fs/locks.c: flock_lock_file_wait()])
         AC_MSG_RESULT([yes])
 ],[
         AC_MSG_RESULT([no])
@@ -910,7 +827,7 @@ LB_LINUX_TRY_COMPILE([
         AC_MSG_RESULT(NO)
 ])
 ])
- 
+
 #
 # LC_STATFS_DENTRY_PARAM
 # starting from 2.6.18 linux kernel uses dentry instead of
@@ -1047,37 +964,37 @@ LB_LINUX_TRY_COMPILE([
 EXTRA_KCFLAGS="$tmp_flags"
 ])
 
-# LC_GENERIC_FILE_WRITE
-# 2.6.19 introduce do_sync_write instead of
-# generic_file_write
-AC_DEFUN([LC_GENERIC_FILE_WRITE],
-[AC_MSG_CHECKING([use generic_file_write])
+# LC_FILE_WRITEV
+# 2.6.19 replaced writev with aio_write
+AC_DEFUN([LC_FILE_WRITEV],
+[AC_MSG_CHECKING([writev in fops])
 LB_LINUX_TRY_COMPILE([
         #include <linux/fs.h>
 ],[
-        int result = generic_file_read(NULL, NULL, 0, 0);
+        struct file_operations *fops;
+        fops->writev = NULL;
 ],[
         AC_MSG_RESULT(yes)
-        AC_DEFINE(HAVE_GENERIC_FILE_WRITE, 1,
-                [use generic_file_write])
+        AC_DEFINE(HAVE_FILE_WRITEV, 1,
+                [use fops->writev])
 ],[
 	AC_MSG_RESULT(NO)
 ])
 ])
 
 # LC_GENERIC_FILE_READ
-# 2.6.19 need to use do_sync_read instead of
-# generic_file_read
-AC_DEFUN([LC_GENERIC_FILE_READ],
-[AC_MSG_CHECKING([use generic_file_read])
+# 2.6.19 replaced readv with aio_read
+AC_DEFUN([LC_FILE_READV],
+[AC_MSG_CHECKING([readv in fops])
 LB_LINUX_TRY_COMPILE([
         #include <linux/fs.h>
 ],[
-        int result = generic_file_read(NULL, NULL, 0, 0);
+        struct file_operations *fops;
+        fops->readv = NULL;
 ],[
         AC_MSG_RESULT(yes)
-        AC_DEFINE(HAVE_GENERIC_FILE_READ, 1,
-                [use generic_file_read])
+        AC_DEFINE(HAVE_FILE_READV, 1,
+                [use fops->readv])
 ],[
         AC_MSG_RESULT(NO)
 ])
@@ -1249,6 +1166,31 @@ AC_DEFUN([LC_EXPORT_NODE_TO_CPUMASK],
                                              the kernel])]) # i386
           ])
 
+#
+# LC_VFS_INTENT_PATCHES
+#
+# check if the kernel has the VFS intent patches
+AC_DEFUN([LC_VFS_INTENT_PATCHES],
+[AC_MSG_CHECKING([if the kernel has the VFS intent patches])
+LB_LINUX_TRY_COMPILE([
+	#include <linux/fs.h>
+        #include <linux/namei.h>
+],[
+        struct nameidata nd;
+        struct lookup_intent *it;
+
+        it = &nd.intent;
+        intent_init(it, IT_OPEN);
+        it->d.lustre.it_disposition = 0;
+        it->d.lustre.it_data = NULL;
+],[
+        AC_MSG_RESULT([yes])
+        AC_DEFINE(HAVE_VFS_INTENT_PATCHES, 1, [VFS intent patches are applied])
+],[
+        AC_MSG_RESULT([no])
+])
+])
+
 # 2.6.22 lost second parameter for invalidate_bdev
 AC_DEFUN([LC_INVALIDATE_BDEV_2ARG],
 [AC_MSG_CHECKING([if invalidate_bdev has second argument])
@@ -1309,255 +1251,102 @@ CFLAGS="$tmpfl"
 ])
 
 #
-# LC_VFS_INTENT_PATCHES
-#
-# check if the kernel has the VFS intent patches
-AC_DEFUN([LC_VFS_INTENT_PATCHES],
-[AC_MSG_CHECKING([if the kernel has the VFS intent patches])
-LB_LINUX_TRY_COMPILE([
-	#include <linux/fs.h>
-        #include <linux/namei.h>
-],[
-        struct nameidata nd;
-        struct lookup_intent *it;
-
-        it = &nd.intent;
-        intent_init(it, IT_OPEN);
-        it->d.lustre.it_disposition = 0;
-        it->d.lustre.it_data = NULL;
-],[
-        AC_MSG_RESULT([yes])
-        AC_DEFINE(HAVE_VFS_INTENT_PATCHES, 1, [VFS intent patches are applied])
-],[
-        AC_MSG_RESULT([no])
-])
-])
-
-AC_DEFUN([LC_S_TIME_GRAN],
-[AC_MSG_CHECKING([if super block has s_time_gran member])
-LB_LINUX_TRY_COMPILE([
-        #include <linux/fs.h>
-],[
-	struct super_block sb;
-
-        return sb.s_time_gran;
-],[
-	AC_MSG_RESULT([yes])
-	AC_DEFINE(HAVE_S_TIME_GRAN, 1, [super block has s_time_gran member])
-],[
-        AC_MSG_RESULT([no])
-])
-])
-
-AC_DEFUN([LC_SB_TIME_GRAN],
-[AC_MSG_CHECKING([if kernel has old get_sb_time_gran])
-LB_LINUX_TRY_COMPILE([
-        #include <linux/fs.h>
-],[
-	return get_sb_time_gran(NULL);
-],[
-        AC_MSG_RESULT([yes])
-	AC_DEFINE(HAVE_SB_TIME_GRAN, 1, [kernel has old get_sb_time_gran])
-],[
-        AC_MSG_RESULT([no])
-])
-])
-
-
-# ~2.6.12 merge patch from oracle to convert tree_lock from spinlock to rwlock
-AC_DEFUN([LC_RW_TREE_LOCK],
-[AC_MSG_CHECKING([if kernel has tree_lock as rwlock])
-tmp_flags="$EXTRA_KCFLAGS"
-EXTRA_KCFLAGS="-Werror"
-LB_LINUX_TRY_COMPILE([
-        #include <linux/fs.h>
-],[
-	struct address_space a;
-
-	write_lock(&a.tree_lock);
-],[
-        AC_MSG_RESULT([yes])
-	AC_DEFINE(HAVE_RW_TREE_LOCK, 1, [kernel has tree_lock as rw_lock])
-],[
-        AC_MSG_RESULT([no])
-])
-EXTRA_KCFLAGS="$tmp_flags"
-])
-
-AC_DEFUN([LC_CONST_ACL_SIZE],
-[AC_MSG_CHECKING([calc acl size])
-tmp_flags="$CFLAGS"
-CFLAGS="$CFLAGS -I $LINUX_OBJ/include $EXTRA_KCFLAGS"
-AC_TRY_RUN([
-#define __KERNEL__
-#include <linux/autoconf.h>
-#include <linux/types.h>
-#undef __KERNEL__
-// block include 
-#define __LINUX_POSIX_ACL_H
-
-# ifdef CONFIG_FS_POSIX_ACL
-#  ifdef HAVE_XATTR_ACL
-#   include <linux/xattr_acl.h>
-#  endif
-#  ifdef HAVE_LINUX_POSIX_ACL_XATTR_H
-#   include <linux/posix_acl_xattr.h>
-#  endif
-# endif
-
-#include <linux/lustre_acl.h>
-
-#include <stdio.h>
-
-int main(void)
-{
-    int size = mds_xattr_acl_size(LUSTRE_POSIX_ACL_MAX_ENTRIES);
-    FILE *f = fopen("acl.size","w+");
-    fprintf(f,"%d", size);
-    fclose(f);
-
-    return 0;
-}
-
-],[
-	acl_size=`cat acl.size`
-	AC_MSG_RESULT([ACL size $acl_size])
-        AC_DEFINE_UNQUOTED(XATTR_ACL_SIZE, AS_TR_SH([$acl_size]), [size of xattr acl])
-],[
-        AC_ERROR([ACL size can't computed])
-])
-CFLAGS="$tmp_flags"
-])
-
-#
-# check for crypto API 
-#
-AC_DEFUN([LC_ASYNC_BLOCK_CIPHER],
-[AC_MSG_CHECKING([if kernel has block cipher support])
-LB_LINUX_TRY_COMPILE([
-        #include <linux/crypto.h>
-],[
-        int v = CRYPTO_ALG_TYPE_BLKCIPHER;
-],[
-        AC_MSG_RESULT([yes])
-        AC_DEFINE(HAVE_ASYNC_BLOCK_CIPHER, 1, [kernel has block cipher support])
-],[
-        AC_MSG_RESULT([no])
-])
-])
-
-
-#
 # LC_PROG_LINUX
 #
 # Lustre linux kernel checks
 #
 AC_DEFUN([LC_PROG_LINUX],
          [LC_LUSTRE_VERSION_H
-         if test x$enable_server = xyes ; then
-             AC_DEFINE(HAVE_SERVER_SUPPORT, 1, [support server])
-             LC_CONFIG_BACKINGFS
-         fi
-         LC_CONFIG_PINGER
-         LC_CONFIG_CHECKSUM
-         LC_CONFIG_LIBLUSTRE_RECOVERY
-         LC_CONFIG_QUOTA
-         LC_CONFIG_HEALTH_CHECK_WRITE
-         LC_CONFIG_LRU_RESIZE
+          if test x$enable_server = xyes ; then
+              LC_CONFIG_BACKINGFS
+          fi
+          LC_CONFIG_PINGER
+          LC_CONFIG_CHECKSUM
+          LC_CONFIG_LIBLUSTRE_RECOVERY
+          LC_CONFIG_QUOTA
+          LC_CONFIG_HEALTH_CHECK_WRITE
+          LC_CONFIG_LRU_RESIZE
+          LC_CONFIG_ADAPTIVE_TIMEOUTS
 
-         LC_TASK_PPTR
-         # RHEL4 patches
-         LC_EXPORT_TRUNCATE_COMPLETE
-         LC_EXPORT_D_REHASH_COND
-         LC_EXPORT___D_REHASH
-         LC_EXPORT_D_MOVE_LOCKED
-         LC_EXPORT___D_MOVE
-         LC_EXPORT_NODE_TO_CPUMASK
+          LC_TASK_PPTR
+          # RHEL4 patches
+          LC_EXPORT_TRUNCATE_COMPLETE
+          LC_EXPORT_D_REHASH_COND
+          LC_EXPORT___D_REHASH
+          LC_EXPORT_D_MOVE_LOCKED
+          LC_EXPORT___D_MOVE
+          LC_EXPORT_NODE_TO_CPUMASK
 
-         LC_STRUCT_KIOBUF
-         LC_FUNC_COND_RESCHED
-         LC_FUNC_ZAP_PAGE_RANGE
-         LC_FUNC_PDE
-         LC_FUNC_DIRECT_IO
-         LC_HEADER_MM_INLINE
-         LC_STRUCT_INODE
-         LC_FUNC_REGISTER_CACHE
-         LC_FUNC_GRAB_CACHE_PAGE_NOWAIT_GFP
-         LC_FUNC_DEV_SET_RDONLY
-         LC_FUNC_FILEMAP_FDATAWRITE
-         LC_STRUCT_STATFS
-         LC_FUNC_PAGE_MAPPED
-         LC_STRUCT_FILE_OPS_UNLOCKED_IOCTL
-         LC_FILEMAP_POPULATE
-         LC_D_ADD_UNIQUE
-         LC_BIT_SPINLOCK_H
+          LC_STRUCT_KIOBUF
+          LC_FUNC_COND_RESCHED
+          LC_FUNC_ZAP_PAGE_RANGE
+          LC_FUNC_PDE
+          LC_FUNC_DIRECT_IO
+          LC_HEADER_MM_INLINE
+          LC_STRUCT_INODE
+          LC_FUNC_REGISTER_CACHE
+          LC_FUNC_GRAB_CACHE_PAGE_NOWAIT_GFP
+          LC_FUNC_DEV_SET_RDONLY
+          LC_FUNC_FILEMAP_FDATAWRITE
+          LC_STRUCT_STATFS
+          LC_FUNC_PAGE_MAPPED
+          LC_STRUCT_FILE_OPS_UNLOCKED_IOCTL
+          LC_FILEMAP_POPULATE
+          LC_D_ADD_UNIQUE
+          LC_BIT_SPINLOCK_H
+          LC_XATTR_ACL
+          LC_STRUCT_INTENT_FILE
+          LC_POSIX_ACL_XATTR_H
+          LC_EXPORT___IGET
+          LC_FUNC_SET_FS_PWD
+          LC_FUNC_MS_FLOCK_LOCK
+          LC_FUNC_HAVE_CAN_SLEEP_ARG
+          LC_FUNC_F_OP_FLOCK
+          LC_QUOTA_READ
+          LC_COOKIE_FOLLOW_LINK
+          LC_FUNC_RCU
 
-         LC_XATTR_ACL
-         LC_POSIX_ACL_XATTR_H
-         LC_CONST_ACL_SIZE
+          # does the kernel have VFS intent patches?
+          LC_VFS_INTENT_PATCHES
 
-         LC_STRUCT_INTENT_FILE
+          # 2.6.15
+          LC_INODE_I_MUTEX
 
-         LC_FUNC_SET_FS_PWD
-         LC_CAPA_CRYPTO
-         LC_CONFIG_GSS
-         LC_FUNC_MS_FLOCK_LOCK
-         LC_FUNC_HAVE_CAN_SLEEP_ARG
-         LC_FUNC_F_OP_FLOCK
-         LC_QUOTA_READ
-         LC_COOKIE_FOLLOW_LINK
-         LC_FUNC_RCU
+          # SLES 10 (at least)
+          LC_SYMVERFILE
 
-         # does the kernel have VFS intent patches?
-         LC_VFS_INTENT_PATCHES
+          # 2.6.17
+          LC_DQUOTOFF_MUTEX
 
-         # ~2.6.11
-         LC_S_TIME_GRAN
-         LC_SB_TIME_GRAN
+          # 2.6.18
+          LC_NR_PAGECACHE
+          LC_STATFS_DENTRY_PARAM
+          LC_VFS_KERN_MOUNT
+          LC_INVALIDATEPAGE_RETURN_INT
+          LC_UMOUNTBEGIN_HAS_VFSMOUNT
 
-         # 2.6.12
-         LC_RW_TREE_LOCK
+          #2.6.18 + RHEL5 (fc6)
+          LC_PG_FS_MISC
+          LC_PAGE_CHECKED
 
-         # 2.6.15
-         LC_INODE_I_MUTEX
+          # 2.6.19
+          LC_INODE_BLKSIZE
+          LC_VFS_READDIR_U64_INO
+          LC_FILE_WRITEV
+          LC_FILE_READV
 
-         # SLES 10 (at least)
-         LC_SYMVERFILE
+          # 2.6.20
+          LC_CANCEL_DIRTY_PAGE
 
-         # 2.6.17
-         LC_DQUOTOFF_MUTEX
-
-         # 2.6.18
-         LC_NR_PAGECACHE
-         LC_STATFS_DENTRY_PARAM
-         LC_VFS_KERN_MOUNT
-         LC_INVALIDATEPAGE_RETURN_INT
-         LC_UMOUNTBEGIN_HAS_VFSMOUNT
-
-         #2.6.18 + RHEL5 (fc6)
-         LC_PG_FS_MISC
-         LC_PAGE_CHECKED
-
-         # 2.6.19
-         LC_INODE_BLKSIZE
-         LC_VFS_READDIR_U64_INO
-         LC_GENERIC_FILE_READ
-         LC_GENERIC_FILE_WRITE
-
-         # 2.6.20
-         LC_CANCEL_DIRTY_PAGE
-
-         # raid5-zerocopy patch
-         LC_PAGE_CONSTANT
-	 	  
-	 # 2.6.22
-         LC_INVALIDATE_BDEV_2ARG
-         LC_ASYNC_BLOCK_CIPHER
-         # 2.6.23
-         LC_UNREGISTER_BLKDEV_RETURN_INT
-         LC_KERNEL_SPLICE_READ
-         LC_HAVE_EXPORTFS_H
-         LC_EXPORT_NR_FREE_BUFFER_PAGES
+          # raid5-zerocopy patch
+          LC_PAGE_CONSTANT
+	  
+	  # 2.6.22
+          LC_INVALIDATE_BDEV_2ARG
+          # 2.6.23
+          LC_UNREGISTER_BLKDEV_RETURN_INT
+          LC_KERNEL_SPLICE_READ
+          LC_HAVE_EXPORTFS_H
 ])
 
 #
@@ -1644,16 +1433,28 @@ if test x$enable_lru_resize != xno; then
 fi
 ])
 
+AC_DEFUN([LC_CONFIG_ADAPTIVE_TIMEOUTS],
+[AC_MSG_CHECKING([whether to enable ptlrpc adaptive timeouts support])
+AC_ARG_ENABLE([adaptive_timeouts],
+	AC_HELP_STRING([--enable-adaptive-timeouts],
+			[enable ptlrpc adaptive timeouts support]),
+	[],[enable_adaptive_timeouts='no'])
+AC_MSG_RESULT([$enable_adaptive_timeouts])
+if test x$enable_adaptive_timeouts == xyes; then
+   AC_DEFINE(HAVE_AT_SUPPORT, 1, [Enable adaptive timeouts support])
+fi
+])
+
 #
 # LC_CONFIG_QUOTA
 #
 # whether to enable quota support
 #
 AC_DEFUN([LC_CONFIG_QUOTA],
-[AC_MSG_CHECKING([whether to disable quota support])
+[AC_MSG_CHECKING([whether to enable quota support])
 AC_ARG_ENABLE([quota], 
-	AC_HELP_STRING([--disable-quota],
-			[disable quota support]),
+	AC_HELP_STRING([--enable-quota],
+			[enable quota support]),
 	[],[enable_quota='yes'])
 AC_MSG_RESULT([$enable_quota])
 if test x$linux25 != xyes; then
@@ -1663,24 +1464,7 @@ if test x$enable_quota != xno; then
    AC_DEFINE(HAVE_QUOTA_SUPPORT, 1, [Enable quota support])
 fi
 ])
- 
-#
-# LC_CONFIG_SPLIT
-#
-# whether to enable split support
-#
-AC_DEFUN([LC_CONFIG_SPLIT],
-[AC_MSG_CHECKING([whether to enable split support])
-AC_ARG_ENABLE([split], 
-	AC_HELP_STRING([--enable-split],
-			[enable split support]),
-	[],[enable_split='no'])
-AC_MSG_RESULT([$enable_split])
-if test x$enable_split != xno; then
-   AC_DEFINE(HAVE_SPLIT_SUPPORT, 1, [enable split support])
-fi
-])
- 
+  
 AC_DEFUN([LC_QUOTA_READ],
 [AC_MSG_CHECKING([if kernel supports quota_read])
 LB_LINUX_TRY_COMPILE([
@@ -1833,12 +1617,8 @@ AM_CONDITIONAL(MPITESTS, test x$enable_mpitests = xyes, Build MPI Tests)
 AM_CONDITIONAL(CLIENT, test x$enable_client = xyes)
 AM_CONDITIONAL(SERVER, test x$enable_server = xyes)
 AM_CONDITIONAL(QUOTA, test x$enable_quota = xyes)
-AM_CONDITIONAL(SPLIT, test x$enable_split = xyes)
 AM_CONDITIONAL(BLKID, test x$ac_cv_header_blkid_blkid_h = xyes)
 AM_CONDITIONAL(EXT2FS_DEVEL, test x$ac_cv_header_ext2fs_ext2fs_h = xyes)
-AM_CONDITIONAL(GSS, test x$enable_gss = xyes)
-AM_CONDITIONAL(GSS_KEYRING, test x$enable_gss_keyring = xyes)
-AM_CONDITIONAL(GSS_PIPEFS, test x$enable_gss_pipefs = xyes)
 AM_CONDITIONAL(LIBPTHREAD, test x$enable_libpthread = xyes)
 ])
 
@@ -1858,15 +1638,19 @@ lustre/include/Makefile
 lustre/include/lustre_ver.h
 lustre/include/linux/Makefile
 lustre/include/lustre/Makefile
+lustre/kernel_patches/targets/2.6-suse.target
 lustre/kernel_patches/targets/2.6-vanilla.target
 lustre/kernel_patches/targets/2.6-rhel4.target
 lustre/kernel_patches/targets/2.6-rhel5.target
 lustre/kernel_patches/targets/2.6-fc5.target
 lustre/kernel_patches/targets/2.6-patchless.target
 lustre/kernel_patches/targets/2.6-sles10.target
+lustre/kernel_patches/targets/hp_pnnl-2.4.target
+lustre/kernel_patches/targets/rh-2.4.target
+lustre/kernel_patches/targets/rhel-2.4.target
+lustre/kernel_patches/targets/suse-2.4.21-2.target
+lustre/kernel_patches/targets/sles-2.4.target
 lustre/ldlm/Makefile
-lustre/fid/Makefile
-lustre/fid/autoMakefile
 lustre/liblustre/Makefile
 lustre/liblustre/tests/Makefile
 lustre/llite/Makefile
@@ -1877,18 +1661,8 @@ lustre/lvfs/Makefile
 lustre/lvfs/autoMakefile
 lustre/mdc/Makefile
 lustre/mdc/autoMakefile
-lustre/lmv/Makefile
-lustre/lmv/autoMakefile
 lustre/mds/Makefile
 lustre/mds/autoMakefile
-lustre/mdt/Makefile
-lustre/mdt/autoMakefile
-lustre/cmm/Makefile
-lustre/cmm/autoMakefile
-lustre/mdd/Makefile
-lustre/mdd/autoMakefile
-lustre/fld/Makefile
-lustre/fld/autoMakefile
 lustre/obdclass/Makefile
 lustre/obdclass/autoMakefile
 lustre/obdclass/linux/Makefile
@@ -1900,23 +1674,18 @@ lustre/osc/Makefile
 lustre/osc/autoMakefile
 lustre/ost/Makefile
 lustre/ost/autoMakefile
-lustre/osd/Makefile
-lustre/osd/autoMakefile
 lustre/mgc/Makefile
 lustre/mgc/autoMakefile
 lustre/mgs/Makefile
 lustre/mgs/autoMakefile
 lustre/ptlrpc/Makefile
 lustre/ptlrpc/autoMakefile
-lustre/ptlrpc/gss/Makefile
-lustre/ptlrpc/gss/autoMakefile
 lustre/quota/Makefile
 lustre/quota/autoMakefile
 lustre/scripts/Makefile
 lustre/scripts/version_tag.pl
 lustre/tests/Makefile
 lustre/utils/Makefile
-lustre/utils/gss/Makefile
 ])
 case $lb_target_os in
         darwin)

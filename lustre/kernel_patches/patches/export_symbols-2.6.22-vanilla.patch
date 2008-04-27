@@ -1,8 +1,8 @@
-Index: linux-2.6/fs/filesystems.c
+Index: linux-2.6.22.5/fs/filesystems.c
 ===================================================================
---- linux-2.6.orig/fs/filesystems.c	2006-07-15 16:08:35.000000000 +0800
-+++ linux-2.6/fs/filesystems.c	2006-07-15 16:14:19.000000000 +0800
-@@ -29,7 +29,9 @@
+--- linux-2.6.22.5.orig/fs/filesystems.c	2007-08-22 17:23:54.000000000 -0600
++++ linux-2.6.22.5/fs/filesystems.c	2008-02-21 00:58:18.000000000 -0700
+@@ -28,7 +28,9 @@
   */
  
  static struct file_system_type *file_systems;
@@ -13,23 +13,11 @@ Index: linux-2.6/fs/filesystems.c
  
  /* WARNING: This can be used only if we _already_ own a reference */
  void get_filesystem(struct file_system_type *fs)
-Index: linux-2.6/include/linux/fs.h
+Index: linux-2.6.22.5/fs/namespace.c
 ===================================================================
---- linux-2.6.orig/include/linux/fs.h	2006-07-15 16:10:37.000000000 +0800
-+++ linux-2.6/include/linux/fs.h	2006-07-15 16:14:19.000000000 +0800
-@@ -1768,6 +1768,7 @@ static inline ssize_t blockdev_direct_IO
- 
- extern const struct file_operations generic_ro_fops;
- 
-+extern rwlock_t file_systems_lock;
- #define special_file(m) (S_ISCHR(m)||S_ISBLK(m)||S_ISFIFO(m)||S_ISSOCK(m))
- 
- extern int vfs_readlink(struct dentry *, char __user *, int, const char *);
-Index: linux-2.6/fs/namespace.c
-===================================================================
---- linux-2.6.orig/fs/namespace.c	2006-07-15 16:10:33.000000000 +0800
-+++ linux-2.6/fs/namespace.c	2006-07-15 16:14:19.000000000 +0800
-@@ -1641,6 +1641,7 @@ void set_fs_pwd(struct fs_struct *fs, st
+--- linux-2.6.22.5.orig/fs/namespace.c	2007-08-22 17:23:54.000000000 -0600
++++ linux-2.6.22.5/fs/namespace.c	2008-02-21 00:58:18.000000000 -0700
+@@ -1617,6 +1617,7 @@
  		mntput(old_pwdmnt);
  	}
  }
@@ -37,11 +25,11 @@ Index: linux-2.6/fs/namespace.c
  
  static void chroot_fs_refs(struct nameidata *old_nd, struct nameidata *new_nd)
  {
-Index: linux-2.6/fs/dcache.c
+Index: linux-2.6.22.5/fs/dcache.c
 ===================================================================
---- linux-2.6.orig/fs/dcache.c	2006-07-15 16:14:00.000000000 +0800
-+++ linux-2.6/fs/dcache.c	2006-07-15 16:14:19.000000000 +0800
-@@ -1628,6 +1628,7 @@ int is_subdir(struct dentry * new_dentry
+--- linux-2.6.22.5.orig/fs/dcache.c	2008-02-21 00:57:02.000000000 -0700
++++ linux-2.6.22.5/fs/dcache.c	2008-02-21 00:58:18.000000000 -0700
+@@ -2027,6 +2027,7 @@
  
  	return result;
  }
@@ -49,3 +37,15 @@ Index: linux-2.6/fs/dcache.c
  
  void d_genocide(struct dentry *root)
  {
+Index: linux-2.6.22.5/include/linux/fs.h
+===================================================================
+--- linux-2.6.22.5.orig/include/linux/fs.h	2008-02-21 00:56:39.000000000 -0700
++++ linux-2.6.22.5/include/linux/fs.h	2008-02-21 00:58:18.000000000 -0700
+@@ -1861,6 +1861,7 @@
+ 
+ extern const struct file_operations generic_ro_fops;
+ 
++extern rwlock_t file_systems_lock;
+ #define special_file(m) (S_ISCHR(m)||S_ISBLK(m)||S_ISFIFO(m)||S_ISSOCK(m))
+ 
+ extern int vfs_readlink(struct dentry *, char __user *, int, const char *);

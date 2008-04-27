@@ -62,7 +62,7 @@ ldlm_inodebits_compat_queue(struct list_head *queue, struct ldlm_lock *req,
                                                   l_sl_mode)->l_res_link;
                         continue;
                 }
-                
+
                 tmp_tail = tmp;
                 if (LDLM_SL_HEAD(&lock->l_sl_mode))
                         tmp_tail = &list_entry(lock->l_sl_mode.next,
@@ -74,7 +74,7 @@ ldlm_inodebits_compat_queue(struct list_head *queue, struct ldlm_lock *req,
                                 /* conflicting policy */
                                 if (!work_list)
                                         RETURN(0);
-
+                               
                                 compat = 0;
                                 if (lock->l_blocking_ast)
                                         ldlm_add_ast_work_item(lock, req, 
@@ -157,7 +157,7 @@ int ldlm_process_inodebits_lock(struct ldlm_lock *lock, int *flags,
                 if (list_empty(&lock->l_res_link))
                         ldlm_resource_add_lock(res, &res->lr_waiting, lock);
                 unlock_res(res);
-                rc = ldlm_run_ast_work(&rpc_list, LDLM_WORK_BL_AST);
+                rc = ldlm_run_bl_ast_work(&rpc_list);
                 lock_res(res);
                 if (rc == -ERESTART)
                         GOTO(restart, -ERESTART);

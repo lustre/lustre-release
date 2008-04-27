@@ -26,16 +26,7 @@
 #include <libcfs/kp30.h>
 #include <lvfs.h>
 #include <lprocfs_status.h>
-
-#if defined(__linux__)
-#include <linux/obd_support.h>
-#elif defined(__APPLE__)
-#include <darwin/obd_support.h>
-#elif defined(__WINNT__)
-#include <winnt/obd_support.h>
-#else
-#error Unsupported operating system.
-#endif
+#include <lustre/lustre_idl.h>
 
 /* global variables */
 extern struct lprocfs_stats *obd_memory;
@@ -45,22 +36,15 @@ enum {
         OBD_STATS_NUM,
 };
 
-enum {
-        OBD_FAIL_LOC_NOSET      = 0,
-        OBD_FAIL_LOC_ORSET      = 1,
-        OBD_FAIL_LOC_RESET      = 2
-};
-
-extern unsigned long obd_fail_loc;
+extern unsigned int obd_fail_loc;
 extern unsigned int obd_fail_val;
 extern unsigned int obd_debug_peer_on_timeout;
 extern unsigned int obd_dump_on_timeout;
 extern unsigned int obd_dump_on_eviction;
+/* obd_timeout should only be used for recovery, not for 
+   networking / disk / timings affected by load (use Adaptive Timeouts) */
 extern unsigned int obd_timeout;          /* seconds */
-#define PING_INTERVAL max(obd_timeout / 4, 1U)
-#define RECONNECT_INTERVAL max(obd_timeout / 10, 10U)
-extern unsigned int ldlm_timeout;
-extern unsigned int obd_health_check_timeout;
+extern unsigned int ldlm_timeout;         /* seconds */
 extern unsigned int obd_sync_filter;
 extern unsigned int obd_max_dirty_pages;
 extern atomic_t obd_dirty_pages;
@@ -68,14 +52,44 @@ extern cfs_waitq_t obd_race_waitq;
 extern int obd_race_state;
 extern unsigned int obd_alloc_fail_rate;
 
-int __obd_fail_check_set(__u32 id, __u32 value, int set);
-
 /* Timeout definitions */
-#define LDLM_TIMEOUT_DEFAULT 20
 #define OBD_TIMEOUT_DEFAULT 100
-#define HEALTH_CHECK_COEF 3 / 2
-#define HEALTH_CHECK_TIMEOUT_DEFAULT (OBD_TIMEOUT_DEFAULT * HEALTH_CHECK_COEF)
-#define HEALTH_CHECK_TIMEOUT (obd_timeout * HEALTH_CHECK_COEF)
+#define LDLM_TIMEOUT_DEFAULT 20
+#ifdef CRAY_XT3
+ #define OBD_RECOVERY_MAX_TIME (obd_timeout * 18) /* b13079 */
+#endif
+/* Time to wait for all clients to reconnect during recovery */
+/* Should be very conservative; must catch the first reconnect after reboot */
+#define OBD_RECOVERY_FACTOR (3) /* times obd_timeout */
+/* Change recovery-small 26b time if you change this */
+#define PING_INTERVAL max(obd_timeout / 4, 1U)
+/* Client may skip 1 ping; we must wait at least 2.5. But for multiple
+ * failover targets the client only pings one server at a time, and pings
+ * can be lost on a loaded network. Since eviction has serious consequences,
+ * and there's no urgent need to evict a client just because it's idle, we
+ * should be very conservative here. */
+#define PING_EVICT_TIMEOUT (PING_INTERVAL * 6)
+#define DISK_TIMEOUT 50          /* Beyond this we warn about disk speed */
+#define CONNECTION_SWITCH_MIN 5U /* Connection switching rate limiter */
+ /* Max connect interval for nonresponsive servers; ~50s to avoid building up
+    connect requests in the LND queues, but within obd_timeout so we don't
+    miss the recovery window */
+#define CONNECTION_SWITCH_MAX min(50U, max(CONNECTION_SWITCH_MIN,obd_timeout))
+#define CONNECTION_SWITCH_INC 5  /* Connection timeout backoff */
+#ifndef CRAY_XT3
+/* In general this should be low to have quick detection of a system 
+   running on a backup server. (If it's too low, import_select_connection
+   will increase the timeout anyhow.)  */
+#define INITIAL_CONNECT_TIMEOUT max(CONNECTION_SWITCH_MIN,obd_timeout/20)
+#else
+/* ...but for very large systems (e.g. CRAY) we need to keep the initial 
+   connect t.o. high (bz 10803), because they will nearly ALWAYS be doing the
+   connects for the first time (clients "reboot" after every process, so no
+   chance to generate adaptive timeout data. */
+#define INITIAL_CONNECT_TIMEOUT max(CONNECTION_SWITCH_MIN,obd_timeout/2)
+#endif
+#define LONG_UNLINK 300          /* Unlink should happen before now */
+
 
 #define OBD_FAIL_MDS                     0x100
 #define OBD_FAIL_MDS_HANDLE_UNPACK       0x101
@@ -132,16 +146,13 @@ int __obd_fail_check_set(__u32 id, __u32 value, int set);
 #define OBD_FAIL_MDS_SETXATTR_WRITE      0x134
 #define OBD_FAIL_MDS_FS_SETUP            0x135
 #define OBD_FAIL_MDS_RESEND              0x136
-#define OBD_FAIL_MDS_IS_SUBDIR_NET       0x137
-#define OBD_FAIL_MDS_IS_SUBDIR_PACK      0x138
-#define OBD_FAIL_MDS_SET_INFO_NET        0x139
-#define OBD_FAIL_MDS_WRITEPAGE_NET       0x13a
-#define OBD_FAIL_MDS_WRITEPAGE_PACK      0x13b
-#define OBD_FAIL_MDS_LLOG_CREATE_FAILED  0x13c
-#define OBD_FAIL_MDS_OSC_PRECREATE       0x13d
-#define OBD_FAIL_MDS_LOV_SYNC_RACE       0x13e
-#define OBD_FAIL_MDS_CLOSE_NET_REP       0x13f
-#define OBD_FAIL_MDS_LLOG_SYNC_TIMEOUT   0x140
+#define OBD_FAIL_MDS_LLOG_CREATE_FAILED  0x137
+#define OBD_FAIL_MDS_LOV_SYNC_RACE       0x138
+#define OBD_FAIL_MDS_OSC_PRECREATE       0x139
+#define OBD_FAIL_MDS_LLOG_SYNC_TIMEOUT   0x13a
+#define OBD_FAIL_MDS_CLOSE_NET_REP       0x13b
+#define OBD_FAIL_MDS_BLOCK_QUOTA_REQ     0x13c
+#define OBD_FAIL_MDS_DROP_QUOTA_REQ      0x13d
 
 #define OBD_FAIL_OST                     0x200
 #define OBD_FAIL_OST_CONNECT_NET         0x201
@@ -161,7 +172,7 @@ int __obd_fail_check_set(__u32 id, __u32 value, int set);
 #define OBD_FAIL_OST_BRW_READ_BULK       0x20f
 #define OBD_FAIL_OST_SYNC_NET            0x210
 #define OBD_FAIL_OST_ALL_REPLY_NET       0x211
-#define OBD_FAIL_OST_ALL_REQUESTS_NET    0x212
+#define OBD_FAIL_OST_ALL_REQUEST_NET     0x212
 #define OBD_FAIL_OST_LDLM_REPLY_NET      0x213
 #define OBD_FAIL_OST_BRW_PAUSE_BULK      0x214
 #define OBD_FAIL_OST_ENOSPC              0x215
@@ -178,6 +189,8 @@ int __obd_fail_check_set(__u32 id, __u32 value, int set);
 #define OBD_FAIL_OST_BRW_WRITE_BULK2     0x220
 #define OBD_FAIL_OST_LLOG_RECOVERY_TIMEOUT 0x221
 #define OBD_FAIL_OST_CANCEL_COOKIE_TIMEOUT 0x222
+#define OBD_FAIL_OST_PAUSE_CREATE        0x223
+#define OBD_FAIL_OST_BRW_PAUSE_PACK      0x224
 #define OBD_FAIL_OST_CONNECT_NET2        0x225
 
 #define OBD_FAIL_LDLM                    0x300
@@ -198,9 +211,7 @@ int __obd_fail_check_set(__u32 id, __u32 value, int set);
 #define OBD_FAIL_LDLM_GLIMPSE            0x30f
 #define OBD_FAIL_LDLM_CANCEL_RACE        0x310
 #define OBD_FAIL_LDLM_CANCEL_EVICT_RACE  0x311
-/* 
 #define OBD_FAIL_LDLM_PAUSE_CANCEL       0x312
-*/
 #define OBD_FAIL_LDLM_CLOSE_THREAD       0x313
 #define OBD_FAIL_LDLM_CANCEL_BL_CB_RACE  0x314
 
@@ -226,6 +237,9 @@ int __obd_fail_check_set(__u32 id, __u32 value, int set);
 #define OBD_FAIL_PTLRPC_DROP_RPC         0x505
 #define OBD_FAIL_PTLRPC_DELAY_SEND       0x506
 #define OBD_FAIL_PTLRPC_DELAY_RECOV      0x507
+#define OBD_FAIL_PTLRPC_CLIENT_BULK_CB   0x508
+#define OBD_FAIL_PTLRPC_PAUSE_REQ        0x50a
+#define OBD_FAIL_PTLRPC_PAUSE_REP        0x50c
 
 #define OBD_FAIL_OBD_PING_NET            0x600
 #define OBD_FAIL_OBD_LOG_CANCEL_NET      0x601
@@ -242,137 +256,115 @@ int __obd_fail_check_set(__u32 id, __u32 value, int set);
 
 #define OBD_FAIL_MDC_REVALIDATE_PAUSE    0x800
 #define OBD_FAIL_MDC_ENQUEUE_PAUSE       0x801
+#define OBD_FAIL_MDC_OLD_EXT_FLAGS       0x802
+#define OBD_FAIL_MDC_GETATTR_ENQUEUE     0x803
 
 #define OBD_FAIL_MGS                     0x900
 #define OBD_FAIL_MGS_ALL_REQUEST_NET     0x901
 #define OBD_FAIL_MGS_ALL_REPLY_NET       0x902
-#define OBD_FAIL_MGC_PROCESS_LOG         0x903
-#define OBD_FAIL_MGS_SLOW_REQUEST_NET    0x904
-#define OBD_FAIL_MGS_SLOW_TARGET_REG     0x905
+#define OBD_FAIL_MGC_PAUSE_PROCESS_LOG   0x903
+#define OBD_FAIL_MGS_PAUSE_REQ           0x904
+#define OBD_FAIL_MGS_PAUSE_TARGET_REG    0x905
 
-#define OBD_FAIL_QUOTA_QD_COUNT_32BIT    0xa00
+#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(1, 7, 0, 0)
+#define OBD_FAIL_QUOTA_QD_COUNT_32BIT    0xA00
+#else
+#warning "remove quota code above for format obsolete in new release"
+#endif
+#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(1, 9, 0, 0)
+#define OBD_FAIL_QUOTA_WITHOUT_CHANGE_QS    0xA01
+#else
+#warning "remove quota code above for format obsolete in new release"
+#endif
 
-#define OBD_FAIL_LPROC_REMOVE            0xb00
+#define OBD_FAIL_QUOTA_RET_QDATA         0xA02
 
-#define OBD_FAIL_GENERAL_ALLOC           0xc00
+#define OBD_FAIL_LPROC_REMOVE            0xB00
 
-#define OBD_FAIL_SEQ                     0x1000
-#define OBD_FAIL_SEQ_QUERY_NET           0x1001
-
-#define OBD_FAIL_FLD                     0x1100
-#define OBD_FAIL_FLD_QUERY_NET           0x1101
-
-#define OBD_FAIL_SEC_CTX                 0x1200
-#define OBD_FAIL_SEC_CTX_INIT_NET        0x1201
-#define OBD_FAIL_SEC_CTX_INIT_CONT_NET   0x1202
-#define OBD_FAIL_SEC_CTX_FINI_NET        0x1203
+#define OBD_FAIL_GENERAL_ALLOC           0xC00
 
 /* Failure injection control */
 #define OBD_FAIL_MASK_SYS    0x0000FF00
 #define OBD_FAIL_MASK_LOC   (0x000000FF | OBD_FAIL_MASK_SYS)
-
-#define OBD_FAILED_BIT       30
-/* OBD_FAILED is 0x40000000 */
-#define OBD_FAILED          (1 << OBD_FAILED_BIT)
-
-#define OBD_FAIL_ONCE_BIT    31
-/* OBD_FAIL_ONCE is 0x80000000 */
-#define OBD_FAIL_ONCE       (1 << OBD_FAIL_ONCE_BIT)
-
+#define OBD_FAIL_ONCE        0x80000000
+#define OBD_FAILED           0x40000000
 /* The following flags aren't made to be combined */
-#define OBD_FAIL_SKIP        0x20000000 /* skip N times then fail */
-#define OBD_FAIL_SOME        0x10000000 /* only fail N times */
-#define OBD_FAIL_RAND        0x08000000 /* fail 1/N of the times */
+#define OBD_FAIL_SKIP        0x20000000 /* skip N then fail */
+#define OBD_FAIL_SOME        0x10000000 /* fail N times */
+#define OBD_FAIL_RAND        0x08000000 /* fail 1/N of the time */
 #define OBD_FAIL_USR1        0x04000000 /* user flag */
 
-#define OBD_FAIL_PRECHECK(id) (obd_fail_loc &&                                \
-                              (obd_fail_loc & OBD_FAIL_MASK_LOC) ==           \
-                              ((id) & OBD_FAIL_MASK_LOC))
+int obd_fail_check(__u32 id);
+#define OBD_FAIL_CHECK(id)                                                   \
+({                                                                           \
+        int _ret_ = 0;                                                       \
+        if (unlikely(obd_fail_loc && (_ret_ = obd_fail_check(id)))) {        \
+                CERROR("*** obd_fail_loc=%x ***\n", id);                     \
+        }                                                                    \
+        _ret_;                                                               \
+})
 
-static inline int obd_fail_check_set(__u32 id, __u32 value, int set)
-{
-        int ret = 0;
-        if (unlikely(OBD_FAIL_PRECHECK(id) &&
-            (ret = __obd_fail_check_set(id, value, set)))) {
-                CERROR("*** obd_fail_loc=%x ***\n", id);
-        }
-        return ret;
-}
+#define OBD_FAIL_CHECK_QUIET(id)                                             \
+        (unlikely(obd_fail_loc) ? obd_fail_check(id) : 0)
 
-/* If id hit obd_fail_loc, return 1, otherwise return 0 */
-#define OBD_FAIL_CHECK(id) \
-        obd_fail_check_set(id, 0, OBD_FAIL_LOC_NOSET)
+/* deprecated - just use OBD_FAIL_CHECK */
+#define OBD_FAIL_CHECK_ONCE OBD_FAIL_CHECK
 
-/* If id hit obd_fail_loc, obd_fail_loc |= value and return 1,
- * otherwise return 0 */
-#define OBD_FAIL_CHECK_ORSET(id, value) \
-        obd_fail_check_set(id, value, OBD_FAIL_LOC_ORSET)
+#define OBD_FAIL_RETURN(id, ret)                                             \
+do {                                                                         \
+        if (unlikely(obd_fail_loc && obd_fail_check(id))) {                  \
+                CERROR("*** obd_fail_return=%x rc=%d ***\n", id, ret);       \
+                RETURN(ret);                                                 \
+        }                                                                    \
+} while(0)
 
-/* If id hit obd_fail_loc, obd_fail_loc = value and return 1,
- * otherwise return 0 */
-#define OBD_FAIL_CHECK_RESET(id, value) \
-        obd_fail_check_set(id, value, OBD_FAIL_LOC_RESET)
+#define OBD_FAIL_TIMEOUT(id, secs)                                           \
+({      int _ret_ = 0;                                                       \
+        if (unlikely(obd_fail_loc && (_ret_ = obd_fail_check(id)))) {        \
+                CERROR("obd_fail_timeout id %x sleeping for %d secs\n",      \
+                       (id), (secs));                                        \
+                set_current_state(TASK_UNINTERRUPTIBLE);                     \
+                cfs_schedule_timeout(CFS_TASK_UNINT,                         \
+                                    cfs_time_seconds(secs));                 \
+                set_current_state(TASK_RUNNING);                             \
+                CERROR("obd_fail_timeout id %x awake\n", (id));              \
+        }                                                                    \
+        _ret_;                                                               \
+})
 
-
-static inline int obd_fail_timeout_set(__u32 id, __u32 value, int secs, int set)
-{
-        int ret = 0;
-        if (unlikely(OBD_FAIL_PRECHECK(id) &&
-            (ret = __obd_fail_check_set(id, value, set)))) {
-                CERROR("obd_fail_timeout id %x sleeping for %d secs\n",
-                       id, secs);
-                set_current_state(TASK_UNINTERRUPTIBLE);
-                cfs_schedule_timeout(CFS_TASK_UNINT,  cfs_time_seconds(secs));
-                set_current_state(TASK_RUNNING);
-                CERROR("obd_fail_timeout id %x awake\n", id);
-        }
-        return ret;
-}
-
-/* If id hit obd_fail_loc, sleep secs */
-#define OBD_FAIL_TIMEOUT(id, secs) \
-        obd_fail_timeout_set(id, 0, secs, OBD_FAIL_LOC_NOSET)
-
-/* If id hit obd_fail_loc, obd_fail_loc |= value and sleep secs */
-#define OBD_FAIL_TIMEOUT_ORSET(id, value, secs) \
-        obd_fail_timeout_set(id, value, secs, OBD_FAIL_LOC_ORSET)
+#define OBD_FAIL_TIMEOUT_MS(id, ms)                                          \
+({      int _ret_ = 0;                                                       \
+        if (unlikely(obd_fail_loc && (_ret_ = obd_fail_check(id)))) {        \
+                CERROR("obd_fail_timeout id %x sleeping for %d ms\n",        \
+                       (id), (ms));                                          \
+                set_current_state(TASK_UNINTERRUPTIBLE);                     \
+                cfs_schedule_timeout(CFS_TASK_UNINT,                         \
+                                     cfs_time_seconds(ms)/1000);             \
+                set_current_state(TASK_RUNNING);                             \
+                CERROR("obd_fail_timeout id %x awake\n", (id));              \
+        }                                                                    \
+        _ret_;                                                               \
+})
 
 #ifdef __KERNEL__
-static inline void obd_fail_write(int id, struct super_block *sb)
-{
-        /* We set FAIL_ONCE because we never "un-fail" a device */
-        if (OBD_FAIL_CHECK_ORSET(id & ~OBD_FAIL_ONCE, OBD_FAIL_ONCE)) {
-#ifdef LIBCFS_DEBUG
-                BDEVNAME_DECLARE_STORAGE(tmp);
-                CERROR("obd_fail_loc=%x, fail write operation on %s\n",
-                       id, ll_bdevname(sb, tmp));
-#endif
-                /* TODO-CMD: fix getting jdev */
-                __lvfs_set_rdonly(lvfs_sbdev(sb), (lvfs_sbdev_type)0);
-        }
-}
-#define OBD_FAIL_WRITE(id, sb) obd_fail_write(id, sb)
-
 /* The idea here is to synchronise two threads to force a race. The
  * first thread that calls this with a matching fail_loc is put to
  * sleep. The next thread that calls with the same fail_loc wakes up
  * the first and continues. */
-static inline void obd_race(__u32 id)
-{
-        if (OBD_FAIL_PRECHECK(id)) {
-                if (unlikely(__obd_fail_check_set(id, 0, OBD_FAIL_LOC_NOSET))) {
-                        obd_race_state = 0;
-                        CERROR("obd_race id %x sleeping\n", id);
-                        OBD_SLEEP_ON(obd_race_waitq, obd_race_state != 0);
-                        CERROR("obd_fail_race id %x awake\n", id);
-                } else {
-                        CERROR("obd_fail_race id %x waking\n", id);
-                        obd_race_state = 1;
-                        wake_up(&obd_race_waitq);
-                }
-        }
-}
-#define OBD_RACE(id) obd_race(id)
+#define OBD_RACE(id)                                                         \
+do {                                                                         \
+        if (unlikely(obd_fail_loc && obd_fail_check(id))) {                  \
+                obd_race_state = 0;                                          \
+                CERROR("obd_race id %x sleeping\n", (id));                   \
+                OBD_SLEEP_ON(obd_race_waitq, obd_race_state != 0);           \
+                CERROR("obd_fail_race id %x awake\n", (id));                 \
+        } else if ((obd_fail_loc & OBD_FAIL_MASK_LOC) ==                     \
+                    ((id) & OBD_FAIL_MASK_LOC)) {                            \
+                CERROR("obd_fail_race id %x waking\n", (id));                \
+                obd_race_state = 1;                                          \
+                wake_up(&obd_race_waitq);                                    \
+        }                                                                    \
+} while(0)
 #else
 /* sigh.  an expedient fix until OBD_RACE is fixed up */
 #define OBD_RACE(foo) do {} while(0)
@@ -382,7 +374,17 @@ static inline void obd_race(__u32 id)
 
 extern atomic_t libcfs_kmemory;
 
-#ifdef LPROCFS
+#ifdef RANDOM_FAIL_ALLOC
+#define HAS_FAIL_ALLOC_FLAG OBD_FAIL_CHECK_QUIET(OBD_FAIL_GENERAL_ALLOC)
+#else
+#define HAS_FAIL_ALLOC_FLAG 0
+#endif
+
+#define OBD_ALLOC_FAIL_BITS 24
+#define OBD_ALLOC_FAIL_MASK ((1 << OBD_ALLOC_FAIL_BITS) - 1)
+#define OBD_ALLOC_FAIL_MULT (OBD_ALLOC_FAIL_MASK / 100)
+
+#ifdef LPROCFS 
 #define obd_memory_add(size)                                                  \
         lprocfs_counter_add(obd_memory, OBD_MEMORY_STAT, (long)(size))
 #define obd_memory_sub(size)                                                  \
@@ -424,7 +426,7 @@ static inline void obd_memory_sub(long size)
         obd_alloc -= size;
 }
 
-static inline void obd_pages_add(int order)
+static inline void obd_pages_add(int order) 
 {
         obd_pages += 1<< order;
         if (obd_pages > obd_max_pages)
@@ -444,158 +446,13 @@ static inline void obd_pages_sub(int order)
 
 #endif
 
-#if defined (CONFIG_DEBUG_MEMORY) && defined(__KERNEL__)
-
-#define OBD_MT_WRONG_SIZE    (1 << 0)
-#define OBD_MT_ALREADY_FREED (1 << 1)
-#define OBD_MT_LOC_LEN       128
-
-struct obd_mem_track {
-        struct hlist_node mt_hash;
-        char              mt_loc[OBD_MT_LOC_LEN];
-        int               mt_flags;
-        void             *mt_ptr;
-        int               mt_size;
-};
-
-void lvfs_memdbg_show(void);
-void lvfs_memdbg_insert(struct obd_mem_track *mt);
-void lvfs_memdbg_remove(struct obd_mem_track *mt);
-struct obd_mem_track *lvfs_memdbg_find(void *ptr);
-
-int lvfs_memdbg_check_insert(struct obd_mem_track *mt);
-struct obd_mem_track *lvfs_memdbg_check_remove(void *ptr);
-
-static inline struct obd_mem_track *
-__new_mem_track(void *ptr, int size,
-                char *file, int line)
-{
-        struct obd_mem_track *mt;
-
-        mt = kmalloc(sizeof(*mt), GFP_KERNEL);
-        if (unlikely(!mt))
-                return NULL;
-
-        snprintf(mt->mt_loc, sizeof(mt->mt_loc) - 1,
-                 "%s:%d", file, line);
-
-        mt->mt_size = size;
-        mt->mt_ptr = ptr;
-        mt->mt_flags = 0;
-        return mt;
-}
-
-static inline void
-__free_mem_track(struct obd_mem_track *mt)
-{
-        kfree(mt);
-}
-
-static inline int
-__get_mem_track(void *ptr, int size,
-                char *file, int line)
-{
-        struct obd_mem_track *mt;
-
-        mt = __new_mem_track(ptr, size, file, line);
-        if (unlikely(!mt)) {
-                CWARN("Can't allocate new memory track\n");
-                return 0;
-        }
-
-        if (!lvfs_memdbg_check_insert(mt))
-                __free_mem_track(mt);
-
-        return 1;
-}
-
-static inline int
-__put_mem_track(void *ptr, int size,
-                char *file, int line)
-{
-        struct obd_mem_track *mt;
-
-        if (unlikely(!(mt = lvfs_memdbg_check_remove(ptr)))) {
-                CWARN("Ptr 0x%p is not allocated. Attempt to free "
-                      "not allocated memory at %s:%d\n", ptr,
-                      file, line);
-                LBUG();
-                return 0;
-        } else {
-                if (unlikely(mt->mt_size != size)) {
-                        if (!(mt->mt_flags & OBD_MT_ALREADY_FREED)) {
-                                mt->mt_flags |= (OBD_MT_WRONG_SIZE |
-                                                 OBD_MT_ALREADY_FREED);
-
-                                CWARN("Freeing memory chunk (at 0x%p) of "
-                                      "different size than allocated "
-                                      "(%d != %d) at %s:%d, allocated at %s\n",
-                                      ptr, mt->mt_size, size, file, line,
-                                      mt->mt_loc);
-                        }
-                } else {
-                        __free_mem_track(mt);
-                }
-                return 1;
-        }
-}
-
-#define get_mem_track(ptr, size, file, line)                                         \
-        __get_mem_track((ptr), (size), (file), (line))
-
-#define put_mem_track(ptr, size, file, line)                                         \
-        __put_mem_track((ptr), (size), (file), (line))
-
-#else /* !CONFIG_DEBUG_MEMORY */
-
-#define get_mem_track(ptr, size, file, line)                                         \
-        do {} while (0)
-
-#define put_mem_track(ptr, size, file, line)                                         \
-        do {} while (0)
-#endif /* !CONFIG_DEBUG_MEMORY */
-
-#define OBD_DEBUG_MEMUSAGE (1)
-
-#if OBD_DEBUG_MEMUSAGE
-#define OBD_ALLOC_POST(ptr, size, name)                                 \
-                obd_memory_add(size);                                   \
-                get_mem_track((ptr), (size), __FILE__, __LINE__);       \
-                CDEBUG(D_MALLOC, name " '" #ptr "': %d at %p.\n",       \
-                       (int)(size), ptr)
-
-#define OBD_FREE_PRE(ptr, size, name)                                   \
-        LASSERT(ptr);                                                   \
-        put_mem_track((ptr), (size), __FILE__, __LINE__);               \
-        obd_memory_sub(size);                                           \
-        CDEBUG(D_MALLOC, name " '" #ptr "': %d at %p.\n",               \
-               (int)(size), ptr);                                       \
-        POISON(ptr, 0x5a, size)
-
-#else /* !OBD_DEBUG_MEMUSAGE */
-
-#define OBD_ALLOC_POST(ptr, size, name) ((void)0)
-#define OBD_FREE_PRE(ptr, size, name)   ((void)0)
-
-#endif /* !OBD_DEBUG_MEMUSAGE */
-
-#ifdef RANDOM_FAIL_ALLOC
-#define HAS_FAIL_ALLOC_FLAG OBD_FAIL_CHECK(OBD_FAIL_GENERAL_ALLOC)
-#else
-#define HAS_FAIL_ALLOC_FLAG 0
-#endif
-
-#define OBD_ALLOC_FAIL_BITS 24
-#define OBD_ALLOC_FAIL_MASK ((1 << OBD_ALLOC_FAIL_BITS) - 1)
-#define OBD_ALLOC_FAIL_MULT (OBD_ALLOC_FAIL_MASK / 100)
-
 #if defined(LUSTRE_UTILS) /* this version is for utils only */
 #define OBD_ALLOC_GFP(ptr, size, gfp_mask)                                    \
 do {                                                                          \
         (ptr) = cfs_alloc(size, (gfp_mask));                                  \
         if (unlikely((ptr) == NULL)) {                                        \
-                CERROR("kmalloc of '" #ptr "' (%d bytes) failed at %s:%d\n",  \
-                       (int)(size), __FILE__, __LINE__);                      \
+                CERROR("kmalloc of '" #ptr "' (%d bytes) failed\n",           \
+                       (int)(size));                                          \
         } else {                                                              \
                 memset(ptr, 0, size);                                         \
                 CDEBUG(D_MALLOC, "kmalloced '" #ptr "': %d at %p\n",          \
@@ -618,7 +475,9 @@ do {                                                                          \
                                     __FILE__, __LINE__) ||                    \
                     OBD_FREE_RTN0(ptr)))){                                    \
                 memset(ptr, 0, size);                                         \
-                OBD_ALLOC_POST(ptr, size, "kmalloced");                       \
+                obd_memory_add(size);                                         \
+                CDEBUG(D_MALLOC, "kmalloced '" #ptr "': %d at %p.\n",         \
+                       (int)(size), ptr);                                     \
         }                                                                     \
 } while (0)
 #endif
@@ -642,20 +501,20 @@ do {                                                                          \
                 CERROR("vmalloc of '" #ptr "' (%d bytes) failed\n",           \
                        (int)(size));                                          \
                 CERROR(LPU64" total bytes allocated by Lustre, %d by LNET\n", \
-                       obd_memory_sum(), atomic_read(&libcfs_kmemory));       \
+                       obd_memory_sum(), atomic_read(&libcfs_kmemory));      \
         } else {                                                              \
                 memset(ptr, 0, size);                                         \
-                OBD_ALLOC_POST(ptr, size, "vmalloced");                       \
+                obd_memory_add(size);                                         \
+                CDEBUG(D_MALLOC, "vmalloced '" #ptr "': %d at %p.\n",         \
+                       (int)(size), ptr);                                     \
         }                                                                     \
-} while(0)
+} while (0)
 #endif
 
 #ifdef CONFIG_DEBUG_SLAB
 #define POISON(ptr, c, s) do {} while (0)
-#define POISON_PTR(ptr)  ((void)0)
 #else
 #define POISON(ptr, c, s) memset(ptr, c, s)
-#define POISON_PTR(ptr)  (ptr) = (void *)0xdeadbeef
 #endif
 
 #ifdef POISON_BULK
@@ -668,11 +527,14 @@ do {                                                                          \
 #ifdef __KERNEL__
 #define OBD_FREE(ptr, size)                                                   \
 do {                                                                          \
-        OBD_FREE_PRE(ptr, size, "kfreed");                                    \
+        LASSERT(ptr);                                                         \
+        obd_memory_sub(size);                                                 \
+        CDEBUG(D_MALLOC, "kfreed '" #ptr "': %d at %p.\n",                    \
+               (int)(size), ptr);                                             \
+        POISON(ptr, 0x5a, size);                                              \
         cfs_free(ptr);                                                        \
-        POISON_PTR(ptr);                                                      \
-} while(0)
-
+        (ptr) = (void *)0xdeadbeef;                                           \
+} while (0)
 
 #ifdef HAVE_RCU
 # ifdef HAVE_CALL_RCU_PARAM
@@ -692,25 +554,28 @@ do {                                                                          \
         __h->h_size = (size);                                                 \
         __h->h_free_cb = (void (*)(void *, size_t))(free_cb);                 \
         my_call_rcu(&__h->h_rcu, class_handle_free_cb);                       \
-        POISON_PTR(ptr);                                                      \
+        (ptr) = (void *)0xdeadbeef;                                           \
 } while(0)
 #define OBD_FREE_RCU(ptr, size, handle) OBD_FREE_RCU_CB(ptr, size, handle, NULL)
-
 #else
 #define OBD_FREE(ptr, size) ((void)(size), free((ptr)))
 #define OBD_FREE_RCU(ptr, size, handle) (OBD_FREE(ptr, size))
 #define OBD_FREE_RCU_CB(ptr, size, handle, cb)     ((*(cb))(ptr, size))
-#endif /* ifdef __KERNEL__ */
+#endif
 
 #ifdef __arch_um__
 # define OBD_VFREE(ptr, size) OBD_FREE(ptr, size)
 #else
 # define OBD_VFREE(ptr, size)                                                 \
 do {                                                                          \
-        OBD_FREE_PRE(ptr, size, "vfreed");                                    \
+        LASSERT(ptr);                                                         \
+        obd_memory_sub(size);                                                 \
+        CDEBUG(D_MALLOC, "vfreed '" #ptr "': %d at %p.\n",                    \
+               (int)(size), ptr);                                             \
+        POISON(ptr, 0x5a, size);                                              \
         cfs_free_large(ptr);                                                  \
-        POISON_PTR(ptr);                                                      \
-} while(0)
+        (ptr) = (void *)0xdeadbeef;                                           \
+} while (0)
 #endif
 
 /* we memset() the slab object to 0 when allocation succeeds, so DO NOT
@@ -721,7 +586,7 @@ do {                                                                          \
         cfs_mem_cache_free((slab), (ptr));                                    \
         (ptr) = NULL;                                                         \
         0;                                                                    \
-})
+}) 
 #define OBD_SLAB_ALLOC(ptr, slab, type, size)                                 \
 do {                                                                          \
         LASSERT(!in_interrupt());                                             \
@@ -732,25 +597,31 @@ do {                                                                          \
                                     __FILE__, __LINE__) ||                    \
                     OBD_SLAB_FREE_RTN0(ptr, slab)))) {                        \
                 memset(ptr, 0, size);                                         \
-                OBD_ALLOC_POST(ptr, size, "slab-alloced");                    \
+                obd_memory_add(size);                                         \
+                CDEBUG(D_MALLOC, "slab-alloced '"#ptr"': %d at %p.\n",        \
+                       (int)(size), ptr);                                     \
         }                                                                     \
-} while(0)
+} while (0)
 
 #define OBD_FREE_PTR(ptr) OBD_FREE(ptr, sizeof *(ptr))
 
 #define OBD_SLAB_FREE(ptr, slab, size)                                        \
 do {                                                                          \
-        OBD_FREE_PRE(ptr, size, "slab-freed");                                \
+        LASSERT(ptr);                                                         \
+        CDEBUG(D_MALLOC, "slab-freed '" #ptr "': %d at %p.\n",                \
+               (int)(size), ptr);                                             \
+        obd_memory_sub(size);                                                 \
+        POISON(ptr, 0x5a, size);                                              \
         cfs_mem_cache_free(slab, ptr);                                        \
-        POISON_PTR(ptr);                                                      \
-} while(0)
+        (ptr) = (void *)0xdeadbeef;                                           \
+} while (0)
 
 #define OBD_SLAB_ALLOC_PTR(ptr, slab)                                         \
         OBD_SLAB_ALLOC((ptr), (slab), CFS_ALLOC_STD, sizeof *(ptr))
 #define OBD_SLAB_FREE_PTR(ptr, slab)                                          \
         OBD_SLAB_FREE((ptr), (slab), sizeof *(ptr))
 
-#define KEY_IS(str) (keylen >= strlen(str) && strncmp(key, str, keylen) == 0)
+#define KEY_IS(str) (keylen >= strlen(str) && strcmp(key, str) == 0)
 
 /* Wrapper for contiguous page frame allocation */
 #define OBD_PAGES_ALLOC(ptr, order, gfp_mask)                                 \
@@ -792,5 +663,15 @@ do {                                                                          \
 } while (0)
 
 #define OBD_PAGE_FREE(ptr) OBD_PAGES_FREE(ptr, 0)
+
+#if defined(__linux__)
+#include <linux/obd_support.h>
+#elif defined(__APPLE__)
+#include <darwin/obd_support.h>
+#elif defined(__WINNT__)
+#include <winnt/obd_support.h>
+#else
+#error Unsupported operating system.
+#endif
 
 #endif
