@@ -1,7 +1,7 @@
 m4_define([LUSTRE_MAJOR],[1])
 m4_define([LUSTRE_MINOR],[6])
 m4_define([LUSTRE_PATCH],[5])
-m4_define([LUSTRE_FIX],[0])
+m4_define([LUSTRE_FIX],[50])
 # Note: we're starting prerelease versions at 50 this time.
 
 dnl # liblustre delta is 0.0.1.32 , next version with fixes is ok, but
