@@ -768,31 +768,48 @@ static void __lov_del_obd(struct obd_device *obd, __u32 index)
         }
 }
 
-void lov_fix_desc(struct lov_desc *desc)
+void lov_fix_desc_stripe_size(__u64 *val)
 {
-        if (desc->ld_default_stripe_size < PTLRPC_MAX_BRW_SIZE) {
+        if (*val < PTLRPC_MAX_BRW_SIZE) {
                 LCONSOLE_WARN("Increasing default stripe size to min %u\n",
                               PTLRPC_MAX_BRW_SIZE);
-                desc->ld_default_stripe_size = PTLRPC_MAX_BRW_SIZE;
-        } else if (desc->ld_default_stripe_size & (LOV_MIN_STRIPE_SIZE - 1)) {
-                desc->ld_default_stripe_size &= ~(LOV_MIN_STRIPE_SIZE - 1);
+                *val = PTLRPC_MAX_BRW_SIZE;
+        } else if (*val & (LOV_MIN_STRIPE_SIZE - 1)) {
+                *val &= ~(LOV_MIN_STRIPE_SIZE - 1);
                 LCONSOLE_WARN("Changing default stripe size to "LPU64" (a "
                               "multiple of %u)\n",
-                              desc->ld_default_stripe_size,LOV_MIN_STRIPE_SIZE);
+                              *val, LOV_MIN_STRIPE_SIZE);
         }
+}
 
-        if (desc->ld_default_stripe_count == 0)
-                desc->ld_default_stripe_count = 1;
+void lov_fix_desc_stripe_count(__u32 *val)
+{
+        if (*val == 0)
+                *val = 1;
+}
 
+void lov_fix_desc_pattern(__u32 *val)
+{
         /* from lov_setstripe */
-        if ((desc->ld_pattern != 0) && 
-            (desc->ld_pattern != LOV_PATTERN_RAID0)) {
-                LCONSOLE_WARN("Unknown stripe pattern: %#x\n",desc->ld_pattern);
-                desc->ld_pattern = 0;
+        if ((*val != 0) && (*val != LOV_PATTERN_RAID0)) {
+                LCONSOLE_WARN("Unknown stripe pattern: %#x\n", *val);
+                *val = 0;
         }
+}
+
+void lov_fix_desc_qos_maxage(__u32 *val)
+{
         /* fix qos_maxage */
-        if (desc->ld_qos_maxage == 0)
-                desc->ld_qos_maxage = QOS_DEFAULT_MAXAGE;
+        if (*val == 0)
+                *val = QOS_DEFAULT_MAXAGE;
+}
+
+void lov_fix_desc(struct lov_desc *desc)
+{
+        lov_fix_desc_stripe_size(&desc->ld_default_stripe_size);
+        lov_fix_desc_stripe_count(&desc->ld_default_stripe_count);
+        lov_fix_desc_pattern(&desc->ld_pattern);
+        lov_fix_desc_qos_maxage(&desc->ld_qos_maxage);
 }
 
 static int lov_setup(struct obd_device *obd, obd_count len, void *buf)

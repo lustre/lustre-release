@@ -25,11 +25,11 @@ tbd Sun Microsystems, Inc.
 	  	'tunefs.lustre --param="mdt.quota_type=ug1" $MDTDEV'.
 	  For more information, please refer to bugzilla 13904.
 
-Severity   : 
-Bugzilla   : 
-Frequency  : 
-Description: 
-Details    : 
+Severity   : normal
+Bugzilla   : 14803
+Description: Don't update lov_desc members until making sure they are valid
+Details    : When updating lov_desc members via proc fs, need fix their
+             validities before doing the real update.
 
 -------------------------------------------------------------------------------
 
