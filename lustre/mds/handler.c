@@ -2095,7 +2095,7 @@ err_fs:
 err_ns:
         lprocfs_free_obd_stats(obd);
         lprocfs_obd_cleanup(obd);
-        ldlm_namespace_free(obd->obd_namespace, 0);
+        ldlm_namespace_free(obd->obd_namespace, NULL, 0);
         obd->obd_namespace = NULL;
 err_ops:
         fsfilt_put_ops(obd->obd_fsops);
@@ -2282,7 +2282,7 @@ static int mds_cleanup(struct obd_device *obd)
         server_put_mount(obd->obd_name, mds->mds_vfsmnt);
         obd->u.obt.obt_sb = NULL;
 
-        ldlm_namespace_free(obd->obd_namespace, obd->obd_force);
+        ldlm_namespace_free(obd->obd_namespace, NULL, obd->obd_force);
 
         spin_lock_bh(&obd->obd_processing_task_lock);
         if (obd->obd_recovering) {

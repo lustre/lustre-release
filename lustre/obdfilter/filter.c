@@ -2016,7 +2016,7 @@ static int filter_cleanup(struct obd_device *obd)
 
         lquota_cleanup(filter_quota_interface_ref, obd);
 
-        ldlm_namespace_free(obd->obd_namespace, obd->obd_force);
+        ldlm_namespace_free(obd->obd_namespace, NULL, obd->obd_force);
 
         if (obd->u.obt.obt_sb == NULL)
                 RETURN(0);

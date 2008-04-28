@@ -534,6 +534,7 @@ static void mdc_replay_open(struct ptlrpc_request *req)
                 EXIT;
                 return;
         }
+        DEBUG_REQ(D_ERROR, req, "mdc open data found");
 
         och = mod->mod_och;
         if (och != NULL) {
