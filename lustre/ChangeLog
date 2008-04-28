@@ -21,15 +21,15 @@
          The format conversion from prior releases is handled transparently,
 	 but releases older than 1.4.12/1.6.5 will not understand this new
 	 format.  The automatic format conversion can be avoided by running
-	 the following command on the MDS:
-	 	'tunefs.lustre --param="mdt.quota_type=ug1" $MDTDEV'.
+	 the following command on the MDS before upgrading:
+		'tunefs.lustre --param="mdt.quota_type=ug1" $MDTDEV'.
 	 For more information, please refer to bugzilla 13904.
 
 Severity   : normal
 Bugzilla   : 14803
 Description: Don't update lov_desc members until making sure they are valid
 Details    : When updating lov_desc members via proc fs, need fix their
-             validities before doing the real update.
+	     validities before doing the real update.
 
 Severity   : normal
 Bugzilla   : 15069
@@ -568,9 +568,18 @@ Severity   : normal
 Bugzilla   : 15198
 Description: LDLM soft lockups - improvement
 Details    : It is be possible to send the lock handle along with each read 
-             or write request because the client is already doing a lock match 
+	     or write request because the client is already doing a lock match 
 	     itself so there isn't any reason the OST should have to re-do that
 	     search.
+
+Severity   : normal
+Frequency  : rare
+Bugzilla   : 14036
+Description: lfs quota fails with deactivated OSTS
+Details    : With this patch, three improvements are included:
+	     1. detete the softlimit in mds and osts when use "lfs quota".
+	     2. display the inaccurate data in the output of "lfs quota".
+	     3. try to get quota info when "lfs quota" is executed.
 
 --------------------------------------------------------------------------------
 
@@ -2117,15 +2126,6 @@ Bugzilla   : 10816
 Description: Improve multi-block allocation algorithm to avoid fragmentation
 Details    : The mballoc3 code (ldiskfs2 only) adds new mechanisms to improve
 	     allocation locality and avoid filesystem fragmentation.
-
-Severity   : normal
-Frequency  : rare
-Bugzilla   : 14036
-Description: lfs quota fails with deactivated OSTS
-Details    : With this patch, three improvements are included:
-	     1. detete the softlimit in mds and osts when use "lfs quota".
-	     2. display the inaccurate data in the output of "lfs quota".
-	     3. try to get quota info when "lfs quota" is executed.
 
 ------------------------------------------------------------------------------
 
