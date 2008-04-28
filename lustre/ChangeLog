@@ -25,6 +25,20 @@
 		'tunefs.lustre --param="mdt.quota_type=ug1" $MDTDEV'.
 	 For more information, please refer to bugzilla 13904.
 
+Severity   : enhancement
+Bugzilla   : 15316
+Description: build kernel-ib packages for OFED 1.3 in our release cycle
+
+Severity   : minor
+Bugzilla   : 13969
+Frequency  : always
+Description: fix SLES kernel versioning
+Details    : the kernel version for our SLES 10 kernel did not include a "-"
+	     before the "smp" at the end.  while this was not a problem in
+	     general, it did mean that software trying to use the kernel
+	     version to try to detect a vendor specific kernel would fail.
+	     this was most evident by the OFED build scripts.
+
 Severity   : normal
 Bugzilla   : 14803
 Description: Don't update lov_desc members until making sure they are valid
