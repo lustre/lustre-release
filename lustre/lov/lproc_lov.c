@@ -58,8 +58,8 @@ static int lov_wr_stripesize(struct file *file, const char *buffer,
         if (rc)
                 return rc;
 
+        lov_fix_desc_stripe_size(&val);
         desc->ld_default_stripe_size = val;
-        lov_fix_desc(desc);
         return count;
 }
 
@@ -90,7 +90,6 @@ static int lov_wr_stripeoffset(struct file *file, const char *buffer,
                 return rc;
 
         desc->ld_default_stripe_offset = val;
-        lov_fix_desc(desc);
         return count;
 }
 
@@ -119,8 +118,8 @@ static int lov_wr_stripetype(struct file *file, const char *buffer,
         if (rc)
                 return rc;
 
+        lov_fix_desc_pattern(&val);
         desc->ld_pattern = val;
-        lov_fix_desc(desc);
         return count;
 }
 
@@ -150,8 +149,8 @@ static int lov_wr_stripecount(struct file *file, const char *buffer,
         if (rc)
                 return rc;
 
+        lov_fix_desc_stripe_count(&val);
         desc->ld_default_stripe_count = val;
-        lov_fix_desc(desc);
         return count;
 }
 

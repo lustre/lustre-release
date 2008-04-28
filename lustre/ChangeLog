@@ -13,6 +13,12 @@ tbd  Sun Microsystems, Inc.
         removed cwd "./" (refer to Bugzilla 14399).
 
 Severity   : normal
+Bugzilla   : 14803
+Description: Don't update lov_desc members until making sure they are valid
+Details    : When updating lov_desc members via proc fs, need fix their
+             validities before doing the real update.
+
+Severity   : normal
 Bugzilla   : 15069
 Description: don't put request into delay list while invalidate in flight.
 Details    : ptlrpc_delay_request sometimes put in delay list while invalidate

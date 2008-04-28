@@ -227,6 +227,10 @@ int lov_fini_statfs_set(struct lov_request_set *set);
 
 /* lov_obd.c */
 void lov_fix_desc(struct lov_desc *desc);
+void lov_fix_desc_stripe_size(__u64 *val);
+void lov_fix_desc_stripe_count(__u32 *val);
+void lov_fix_desc_pattern(__u32 *val);
+void lov_fix_desc_qos_maxage(__u32 *val);
 int lov_get_stripecnt(struct lov_obd *lov, __u32 stripe_count);
 void lov_getref(struct obd_device *obd);
 void lov_putref(struct obd_device *obd);
