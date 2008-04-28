@@ -694,7 +694,6 @@ void lov_fix_desc(struct lov_desc *desc)
         lov_fix_desc_stripe_count(&desc->ld_default_stripe_count);
         lov_fix_desc_pattern(&desc->ld_pattern);
         lov_fix_desc_qos_maxage(&desc->ld_qos_maxage);
-        lov_fix_desc_qos_maxage(&desc->ld_qos_maxage);
 }
 
 static int lov_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
