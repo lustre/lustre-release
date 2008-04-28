@@ -1855,6 +1855,8 @@ static int create_new_quota_files(struct qchk_ctxt *qctxt,
                         GOTO(out, rc = -EINVAL);
                 }
 
+                DQUOT_DROP(file->f_dentry->d_inode);
+
                 rc = v2_write_dqheader(file, i);
                 if (rc) {
                         filp_close(file, 0);
