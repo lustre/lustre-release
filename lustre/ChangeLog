@@ -25,6 +25,14 @@
 		'tunefs.lustre --param="mdt.quota_type=ug1" $MDTDEV'.
 	 For more information, please refer to bugzilla 13904.
 
+Severity   : normal
+Bugzilla   : 15406
+Description: misc fixes (including bug 15169 and 15175) for directory readahead.
+Details	   : prevent previous statahead async RPC callback from processing the
+	     current "statahead_info", race condition between async RPC callback
+	     add dentry into dentry hash table and "ls" thread revalidate such
+	     dentry, statahead his/miss control for hidden items, and so on.
+
 Severity   : enhancement
 Bugzilla   : 15316
 Description: build kernel-ib packages for OFED 1.3 in our release cycle
