@@ -1779,8 +1779,12 @@ AC_CHECK_FUNCS([inet_ntoa])
 # libsysio/src/readlink.c
 LC_READLINK_SSIZE_T
 
-# lvfs/prng.c
-AC_CHECK_HEADERS([linux/random.h])
+# lvfs/prng.c - depends on linux/types.h from liblustre/dir.c
+AC_CHECK_HEADERS([linux/random.h], [], [],
+                 [#ifdef HAVE_LINUX_TYPES_H
+                  # include <linux/types.h>
+                  #endif
+                 ])
 
 # utils/llverfs.c
 AC_CHECK_HEADERS([ext2fs/ext2fs.h])
