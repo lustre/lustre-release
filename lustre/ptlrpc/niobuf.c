@@ -474,6 +474,8 @@ int ptl_send_rpc(struct ptlrpc_request *request, int noreply)
         lustre_msg_set_type(request->rq_reqmsg, PTL_RPC_MSG_REQUEST);
         lustre_msg_set_conn_cnt(request->rq_reqmsg,
                                 request->rq_import->imp_conn_cnt);
+        lustre_msghdr_set_flags(request->rq_reqmsg,
+                                request->rq_import->imp_msghdr_flags);
 
         if (!noreply) {
                 LASSERT (request->rq_replen != 0);
