@@ -12,6 +12,37 @@ tbd  Sun Microsystems, Inc.
        * RHEL 4 and RHEL 5/SLES 10 clients behaves differently on 'cd' to a
         removed cwd "./" (refer to Bugzilla 14399).
 
+Severity   : normal
+Bugzilla   : 12191
+Description: add message levels for liblustreapi
+
+Severity   : normal
+Bugzilla   : 13380
+Description: fix for occasional failure case of -ENOSPC in recovery-small tests 
+Details    : Move the 'good_osts' check before the 'total_bavail' check.  This 
+	     will result in an -EAGAIN and in the exit call path we call 
+	     alloc_rr() which will with increasing aggressiveness attempt to 
+	     aquire precreated objects on the minimum number of required OSCs.
+
+Severity   : major
+Bugzilla   : 14326
+Description: Use old size assignment to avoid deadlock
+Details    : This reverts the changes in bugs 2369 and bug 14138 that introduced
+	     the scheduling while holding a spinlock.  We do not need locking 
+	     for size in ll_update_inode() because size is only updated from 
+	     the MDS for directories or files without objects, so there is no 
+	     other place to do the update, and concurrent access to such inodes 
+	     are protected by the inode lock.
+
+Severity   : normal
+Bugzilla   : 14746
+Description: resolve "_IOWR redefined" build error on SLES10
+
+Severity   : normal
+Bugzilla   : 14763
+Description: dump the memory debugging after all modules are unloaded to
+	     suppress false negative in conf_sanity test 39
+
 Severity   : enhancement
 Bugzilla   : 15316
 Description: build kernel-ib packages for OFED 1.3 in our release cycle
