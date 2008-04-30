@@ -158,6 +158,10 @@ test_0() {
 	$LFS setquota -u $TSTUSR 0 0 0 0 $DIR
 	$LFS setquota -g $TSTUSR 0 0 0 0 $DIR
 	sysctl -w lnet.debug="+quota"
+	do_facet mds "sysctl -w lnet.debug=+quota"
+	for num in `seq $OSTCOUNT`; do
+	    do_facet ost$num "sysctl -w lnet.debug=+quota"
+	done
 }
 run_test 0 "Set quota ============================="
 
@@ -979,7 +983,7 @@ test_12() {
 	while [ true ]; do
 	    if [ -z `ps -ef | awk '$2 == '${DDPID}' { print $8 }'` ]; then break; fi
 	    count=$[count+1]
-	    if [ $count -gt 100 ]; then
+	    if [ $count -gt 150 ]; then
 		error "dd should be finished!"
 	    fi
 	    sleep 1
