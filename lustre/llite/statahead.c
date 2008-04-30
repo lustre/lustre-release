@@ -908,7 +908,8 @@ void ll_statahead_exit(struct dentry *dentry, int result)
                         sbi->ll_sa_miss++;
                         sai->sai_miss++;
                         sai->sai_consecutive_miss++;
-                        if (sa_low_hit(sai)) {
+                        if (sa_low_hit(sai) &&
+                            sai->sai_thread.t_flags & SVC_RUNNING) {
                                 sbi->ll_sa_wrong++;
                                 CDEBUG(D_READA, "statahead for dir %.*s hit "
                                        "ratio too low: hit/miss %u/%u, "

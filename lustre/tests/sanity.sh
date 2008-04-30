@@ -4643,6 +4643,7 @@ test_123a() { # was test 123, statahead(bug 11401)
                 log "testing on UP system. Performance may be not as good as expected."
         fi
 
+        remount_client $MOUNT
         mkdir -p $DIR/$tdir
         error=0
         NUMFREE=`df -i -P $DIR | tail -n 1 | awk '{ print $4 }'`
