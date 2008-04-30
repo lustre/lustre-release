@@ -1047,7 +1047,6 @@ check_lustre_disk_data(void)
         CHECK_MEMBER(lustre_disk_data, ldd_params);
 }
 
-#ifdef LIBLUSTRE_POSIX_ACL
 static void
 check_posix_acl_xattr_entry(void)
 {
@@ -1066,7 +1065,6 @@ check_posix_acl_xattr_header(void)
         CHECK_MEMBER_TYPEDEF(posix_acl_xattr_header, a_version);
         CHECK_MEMBER_TYPEDEF(posix_acl_xattr_header, a_entries);
 }
-#endif
 
 static void
 check_quota_adjust_qunit(void)
@@ -1333,6 +1331,9 @@ main(int argc, char **argv)
         check_mgs_target_info();
         check_lustre_disk_data();
         printf("#ifdef LIBLUSTRE_POSIX_ACL\n");
+#ifndef LIBLUSTRE_POSIX_ACL
+#error build generator without LIBLUSTRE_POSIX_ACL defined - produce wrong check code.
+#endif
         check_posix_acl_xattr_entry();
         check_posix_acl_xattr_header();
         printf("#endif\n");
