@@ -62,6 +62,55 @@ Details    : When updating lov_desc members via proc fs, need fix their
 	 For more information, please refer to bugzilla 13904.
 
 Severity   : normal
+Bugzilla   : 12191
+Description: add message levels for liblustreapi
+
+Severity   : normal
+Bugzilla   : 13380
+Description: fix for occasional failure case of -ENOSPC in recovery-small tests 
+Details    : Move the 'good_osts' check before the 'total_bavail' check.  This 
+	     will result in an -EAGAIN and in the exit call path we call 
+	     alloc_rr() which will with increasing aggressiveness attempt to 
+	     aquire precreated objects on the minimum number of required OSCs.
+
+Severity   : major
+Bugzilla   : 14326
+Description: Use old size assignment to avoid deadlock
+Details    : This reverts the changes in bugs 2369 and bug 14138 that introduced
+	     the scheduling while holding a spinlock.  We do not need locking 
+	     for size in ll_update_inode() because size is only updated from 
+	     the MDS for directories or files without objects, so there is no 
+	     other place to do the update, and concurrent access to such inodes 
+	     are protected by the inode lock.
+
+Severity   : normal
+Bugzilla   : 14655
+Description: Use __u64 instead of int for valid bits
+
+Severity   : normal
+Bugzilla   : 14746
+Description: resolve "_IOWR redefined" build error on SLES10
+
+Severity   : normal
+Bugzilla   : 14763
+Description: dump the memory debugging after all modules are unloaded to
+	     suppress false negative in conf_sanity test 39
+
+Severity   : normal
+Bugzilla   : 14872
+Description: the recovery timer never expires
+Details    : for new client connect request, the recovery timer should not be
+	     reset, otherwise recovery timer will never expired, if the old 
+	     client never come. Only old client connect and first connection 
+	     req should trigger recovery timer reset.
+
+Severity   : normal
+Bugzilla   : 15521
+Description: the min numbers of lproc stats are wrong
+Details    : adding a new constant LC_MIN_INIT and use it for initialization
+	     of lc_min.
+
+Severity   : normal
 Bugzilla   : 15406
 Description: misc fixes (including bug 15169 and 15175) for directory readahead.
 Details	   : prevent previous statahead async RPC callback from processing the
