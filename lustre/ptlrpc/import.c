@@ -199,7 +199,14 @@ void ptlrpc_invalidate_import(struct obd_import *imp)
 
         atomic_inc(&imp->imp_inval_count);
 
-        if (!imp->imp_invalid)
+        /* 
+         * If this is an invalid MGC connection, then don't bother
+         * waiting for imp_inflight to drop to 0.
+         */
+        if (imp->imp_invalid && imp->imp_recon_bk && !imp->imp_obd->obd_no_recov)
+                goto out;
+
+        if (!imp->imp_invalid || imp->imp_obd->obd_no_recov)
                 ptlrpc_deactivate_import(imp);
 
         LASSERT(imp->imp_invalid);
@@ -230,8 +237,9 @@ void ptlrpc_invalidate_import(struct obd_import *imp)
                 LASSERT(atomic_read(&imp->imp_inflight) == 0);
         }
 
+  out:
         obd_import_event(imp->imp_obd, imp, IMP_EVENT_INVALIDATE);
-
+        
         atomic_dec(&imp->imp_inval_count);
         cfs_waitq_signal(&imp->imp_recovery_waitq);
 }
