@@ -1058,11 +1058,11 @@ AC_DEFINE(HAVE_SHOW_TASK, 1, [show_task is exported])
 
 # check userland __u64 type
 AC_DEFUN([LN_U64_LONG_LONG],
-[AC_MSG_CHECKING([check u64 is long long type])
+[AC_MSG_CHECKING([u64 is long long type])
 tmp_flags="$CFLAGS"
 CFLAGS="$CFLAGS -Werror"
 AC_COMPILE_IFELSE([
-	#include <asm/types.h>
+	#include <linux/types.h>
 	int main(void) {
 		unsigned long long *data1;
 		__u64 *data2;
@@ -1075,9 +1075,58 @@ AC_COMPILE_IFELSE([
         AC_DEFINE(HAVE_U64_LONG_LONG, 1,
                   [__u64 is long long type])
 ],[
+	AC_MSG_RESULT([no])
 ])
 CFLAGS="$tmp_flags"
 ])
+
+# check userland size_t type
+AC_DEFUN([LN_SIZE_T_LONG],
+[AC_MSG_CHECKING([size_t is unsigned long type])
+tmp_flags="$CFLAGS"
+CFLAGS="$CFLAGS -Werror"
+AC_COMPILE_IFELSE([
+	#include <linux/types.h>
+	int main(void) {
+		unsigned long *data1;
+		size_t *data2;
+		
+		data1 = data2;
+		return 0;
+	}
+],[
+	AC_MSG_RESULT([yes])
+        AC_DEFINE(HAVE_SIZE_T_LONG, 1,
+                  [size_t is long type])
+],[
+	AC_MSG_RESULT([no])
+])
+CFLAGS="$tmp_flags"
+])
+
+AC_DEFUN([LN_SSIZE_T_LONG],
+[AC_MSG_CHECKING([ssize_t is signed long type])
+tmp_flags="$CFLAGS"
+CFLAGS="$CFLAGS -Werror"
+AC_COMPILE_IFELSE([
+	#include <linux/types.h>
+	int main(void) {
+		long *data1;
+		ssize_t *data2;
+		
+		data1 = data2;
+		return 0;
+	}
+],[
+	AC_MSG_RESULT([yes])
+        AC_DEFINE(HAVE_SSIZE_T_LONG, 1,
+                  [ssize_t is long type])
+],[
+	AC_MSG_RESULT([no])
+])
+CFLAGS="$tmp_flags"
+])
+
 
 # LN_TASKLIST_LOCK
 # 2.6.18 remove tasklist_lock export
@@ -1229,6 +1278,8 @@ LN_STRUCT_PAGE_LIST
 LN_STRUCT_SIGHAND
 LN_FUNC_SHOW_TASK
 LN_U64_LONG_LONG
+LN_SSIZE_T_LONG
+LN_SIZE_T_LONG
 # 2.6.18
 LN_TASKLIST_LOCK
 # 2.6.19
