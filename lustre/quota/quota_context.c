@@ -524,7 +524,7 @@ dqacq_completion(struct obd_device *obd, struct lustre_quota_ctxt *qctxt,
 
         /* update local operational quota file */
         if (rc == 0) {
-                __u32 count = QUSG(qdata->qd_count, QDATA_IS_BLK(qdata));
+                __u64 count = QUSG(qdata->qd_count, QDATA_IS_BLK(qdata));
                 struct obd_quotactl *qctl;
                 __u64 *hardlimit;
 
@@ -559,7 +559,7 @@ dqacq_completion(struct obd_device *obd, struct lustre_quota_ctxt *qctxt,
                         break;
                 case QUOTA_DQREL:
                         LASSERTF(count < *hardlimit,
-                                 "count: %d, hardlimit: "LPU64".\n",
+                                 "count: "LPU64", hardlimit: "LPU64".\n",
                                  count, *hardlimit);
                         *hardlimit -= count;
                         break;
