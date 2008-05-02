@@ -7,6 +7,7 @@
 #include <time.h>
 #include <sys/time.h>
 
+#include <libcfs/kp30.h>
 #include <../ldlm/interval_tree.c>
 
 #define dprintf(fmt, args...) //printf(fmt, ##args)
@@ -17,7 +18,7 @@
 } while(0)
 
 #define __F(ext)         (ext)->start, (ext)->end
-#define __S              "[%llx:%llx]"
+#define __S              "["LPX64":"LPX64"]"
 
 #define ALIGN_SIZE       4096
 #define ALIGN_MASK       (~(ALIGN_SIZE - 1))
