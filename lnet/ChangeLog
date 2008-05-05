@@ -13,6 +13,11 @@
 	ptllnd    - Portals 3.3 / UNICOS/lc 1.5.x, 2.0.x
 
 Severity   : major
+Bugzilla   : 15712
+Description: ksocknal_create_conn() hit ASSERTION during connection race
+Details    : ksocknal_create_conn() hit ASSERTION during connection race
+
+Severity   : major
 Bugzilla   : 13983
 Description: ksocknal_send_hello() hit ASSERTION while connecting race
 Details    : ksocknal_send_hello() hit ASSERTION while connecting race

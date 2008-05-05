@@ -2104,8 +2104,7 @@ ksocknal_send_hello (lnet_ni_t *ni, ksock_conn_t *conn,
 
         LASSERT (0 <= hello->kshm_nips && hello->kshm_nips <= LNET_MAX_INTERFACES);
 
-        /* No need for getconnsock/putconnsock */
-        LASSERT (!conn->ksnc_closing);
+        /* rely on caller to hold a ref on socket so it wouldn't disappear */
         LASSERT (conn->ksnc_proto != NULL);
 
         srcnid = lnet_ptlcompat_srcnid(ni->ni_nid, peer_nid);
