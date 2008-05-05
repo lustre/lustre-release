@@ -439,8 +439,10 @@ static int mds_create_objects(struct ptlrpc_request *req, int offset,
                 oinfo.oi_oa->o_fid = body->fid1.id;
                 oinfo.oi_oa->o_generation = body->fid1.generation;
                 oinfo.oi_oa->o_valid |= OBD_MD_FLFID | OBD_MD_FLGENER;
+                oinfo.oi_policy.l_extent.start = i_size_read(inode);
+                oinfo.oi_policy.l_extent.end = OBD_OBJECT_EOF;
 
-                rc = obd_setattr_rqset(mds->mds_osc_exp, &oinfo, &oti);
+                rc = obd_punch_rqset(mds->mds_osc_exp, &oinfo, &oti);
                 if (rc) {
                         CERROR("error setting attrs for inode %lu: rc %d\n",
                                inode->i_ino, rc);
@@ -1291,7 +1293,9 @@ int mds_mfd_close(struct ptlrpc_request *req, int offset,
 
         if (last_orphan && unlink_orphan) {
                 int stripe_count = 0;
-                LASSERT(rc == 0); /* mds_put_write_access must have succeeded */
+                /* mds_put_write_access must have succeeded */
+                LASSERTF(rc == 0, "inode %lu/%u: rc %d",
+                         inode->i_ino, inode->i_generation, rc);
 
                 CDEBUG(D_INODE, "destroying orphan object %s\n", fidname);
 
