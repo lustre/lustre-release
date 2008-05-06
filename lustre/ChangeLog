@@ -940,6 +940,20 @@ Description: performance in 1.6.3
 Details    : Force q->max_phys_segments to MAX_PHYS_SEGMENTS on SLES10 to be
 	     sure that 1MB requests are not fragmented by the block layer.
 
+Severity   : enhancement
+Bugzilla   : 11089
+Description: organize the server-side client stats on per-nid basis
+Details    : Change the structure of stats under obdfilter and mds to
+             New structure:
+                +- exports
+                        +- nid#1
+                        |   + stats
+                        |   + uuids
+                        +- nid#2...
+                        +- clear
+             The "uuid"s file would list the uuids of _active_ exports.
+             And the clear entry is to clear all stats and stale nids.
+
 --------------------------------------------------------------------------------
 
 2007-08-10         Cluster File Systems, Inc. <info@clusterfs.com>
