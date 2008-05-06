@@ -220,7 +220,8 @@ int mds_join_file(struct mds_update_record *rec, struct ptlrpc_request *req,
                   struct dentry *dchild, struct lustre_handle *lockh);
 
 /* mds/mds_fs.c */
-int mds_client_add(struct obd_device *obd, struct obd_export *exp, int cl_off);
+int mds_client_add(struct obd_device *obd, struct obd_export *exp,
+                   int cl_off, lnet_nid_t client_nid);
 int mds_client_free(struct obd_export *exp);
 int mds_obd_create(struct obd_export *exp, struct obdo *oa,
                    struct lov_stripe_md **ea, struct obd_trans_info *oti);

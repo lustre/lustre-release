@@ -269,9 +269,10 @@ do {                                                            \
                         OBD_COUNTER_OFFSET(op);                              \
                 LASSERT(coffset < (export)->exp_obd->obd_stats->ls_num);     \
                 lprocfs_counter_incr((export)->exp_obd->obd_stats, coffset); \
-                if ((export)->exp_ops_stats != NULL)                         \
+                if ((export)->exp_nid_stats != NULL &&                       \
+                    (export)->exp_nid_stats->nid_stats != NULL)              \
                         lprocfs_counter_incr(                                \
-                                (export)->exp_ops_stats, coffset);           \
+                                (export)->exp_nid_stats->nid_stats, coffset);\
         }
 
 #define MD_COUNTER_OFFSET(op)                                   \
@@ -793,7 +794,8 @@ static inline int obd_del_conn(struct obd_import *imp, struct obd_uuid *uuid)
 static inline int obd_connect(const struct lu_env *env,
                               struct lustre_handle *conn,struct obd_device *obd,
                               struct obd_uuid *cluuid,
-                              struct obd_connect_data *d)
+                              struct obd_connect_data *d,
+                              void *localdata)
 {
         int rc;
 #ifdef LIBCFS_DEBUG
@@ -806,7 +808,7 @@ static inline int obd_connect(const struct lu_env *env,
         OBD_CHECK_DT_OP(obd, connect, -EOPNOTSUPP);
         OBD_COUNTER_INCREMENT(obd, connect);
 
-        rc = OBP(obd, connect)(env, conn, obd, cluuid, d);
+        rc = OBP(obd, connect)(env, conn, obd, cluuid, d, localdata);
         /* check that only subset is granted */
         LASSERT(ergo(d != NULL,
                      (d->ocd_connect_flags & ocf) == d->ocd_connect_flags));

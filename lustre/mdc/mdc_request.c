@@ -1761,7 +1761,8 @@ static int mdc_renew_capa(struct obd_export *exp, struct obd_capa *oc,
 static int mdc_connect(const struct lu_env *env,
                        struct lustre_handle *dlm_handle,
                        struct obd_device *obd, struct obd_uuid *cluuid,
-                       struct obd_connect_data *data)
+                       struct obd_connect_data *data,
+                       void *localdata)
 {
         struct obd_import *imp = obd->u.cli.cl_import;
 
@@ -1775,7 +1776,7 @@ static int mdc_connect(const struct lu_env *env,
                        obd->obd_name);
         }
 
-        return client_connect_import(env, dlm_handle, obd, cluuid, data);
+        return client_connect_import(env, dlm_handle, obd, cluuid, data, NULL);
 }
 
 struct obd_ops mdc_obd_ops = {

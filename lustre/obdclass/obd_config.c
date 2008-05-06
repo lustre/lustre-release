@@ -170,9 +170,10 @@ int class_attach(struct lustre_cfg *lcfg)
 
         CFS_INIT_LIST_HEAD(&obd->obd_exports);
         CFS_INIT_LIST_HEAD(&obd->obd_exports_timed);
+        CFS_INIT_LIST_HEAD(&obd->obd_nid_stats);
+        spin_lock_init(&obd->obd_nid_lock);
         spin_lock_init(&obd->obd_dev_lock);
         sema_init(&obd->obd_dev_sem, 1);
-        sema_init(&obd->obd_proc_exp_sem, 1);
         spin_lock_init(&obd->obd_osfs_lock);
         /* obd->obd_osfs_age must be set to a value in the distant
          * past to guarantee a fresh statfs is fetched on mount. */
@@ -264,9 +265,8 @@ int class_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
         /* create an uuid-export hash body */
         err = lustre_hash_init(&obd->obd_uuid_hash_body, "UUID_HASH", 
                                128, &uuid_hash_operations);
-        if (err) {
+        if (err)
                 GOTO(err_hash, err);
-        }
 
         /* create a nid-export hash body */
         err = lustre_hash_init(&obd->obd_nid_hash_body, "NID_HASH", 
@@ -274,9 +274,16 @@ int class_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
         if (err)
                 GOTO(err_hash, err);
 
+        /* create a nid-stats hash body */
+        err = lustre_hash_init(&obd->obd_nid_stats_hash_body, "NID_STATS",
+                               128, &nid_stat_hash_operations);
+        if (err)
+                GOTO(err_hash, err);
+
         exp = class_new_export(obd, &obd->obd_uuid);
         if (IS_ERR(exp))
                 RETURN(PTR_ERR(exp));
+
         obd->obd_self_export = exp;
         list_del_init(&exp->exp_obd_chain_timed);
         class_export_put(exp);
@@ -303,6 +310,7 @@ err_exp:
 err_hash:
         lustre_hash_exit(&obd->obd_uuid_hash_body);
         lustre_hash_exit(&obd->obd_nid_hash_body);
+        lustre_hash_exit(&obd->obd_nid_stats_hash_body);
         obd->obd_starting = 0;
         CERROR("setup %s failed (%d)\n", obd->obd_name, err);
         RETURN(err);
@@ -438,6 +446,9 @@ int class_cleanup(struct obd_device *obd, struct lustre_cfg *lcfg)
 
         /* destroy a nid-export hash body */
         lustre_hash_exit(&obd->obd_nid_hash_body);
+
+        /* destroy a nid-stats hash body */
+        lustre_hash_exit(&obd->obd_nid_stats_hash_body);
 
         /* Precleanup stage 1, we must make sure all exports (other than the
            self-export) get destroyed. */

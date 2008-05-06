@@ -7,6 +7,8 @@
 
 #include <lustre_lib.h>
 
+/* #define LUSTRE_HASH_DEBUG 1 */
+
 /* define the hash bucket*/
 struct lustre_hash_bucket { 
         struct hlist_head lhb_head;
@@ -16,7 +18,7 @@ struct lustre_hash_bucket {
          * it will help us to analyse the hash distribute 
          */
         int lhb_item_count; 
-#endif      
+#endif
 };
 
 struct lustre_hash_operations;
@@ -81,20 +83,33 @@ lustre_hash_delitem_nolock(struct lustre_class_hash_body *hash_body,
         RETURN(0);
 }
 
+typedef void (*hash_item_iterate_cb) (void *obj, void *data);
+
 int lustre_hash_init(struct lustre_class_hash_body **hash_body,
                      char *hashname, __u32 hashsize, 
                      struct lustre_hash_operations *hash_operations);
 void lustre_hash_exit(struct lustre_class_hash_body **hash_body);
 int lustre_hash_additem_unique(struct lustre_class_hash_body *hash_body, 
                                void *key, struct hlist_node *actual_hnode);
+void *lustre_hash_findadd_unique(struct lustre_class_hash_body *hash_body,
+                                 void *key, struct hlist_node *actual_hnode);
 int lustre_hash_additem(struct lustre_class_hash_body *hash_body, void *key, 
                         struct hlist_node *actual_hnode);
 int lustre_hash_delitem_by_key(struct lustre_class_hash_body *hash_body, 
                                void *key);
 int lustre_hash_delitem(struct lustre_class_hash_body *hash_body, void *key, 
                         struct hlist_node *hash_item);
+void lustre_hash_bucket_iterate(struct lustre_class_hash_body *hash_body,
+                                void *key, hash_item_iterate_cb,
+                                void *data);
+void lustre_hash_iterate_all(struct lustre_class_hash_body *hash_body,
+                             hash_item_iterate_cb, void *data);
+
 void * lustre_hash_get_object_by_key(struct lustre_class_hash_body *hash_body,
                                       void *key);
+
+__u32 djb2_hashfn(struct lustre_class_hash_body *hash_body, void* key,
+                  size_t size);
 
 /* ( uuid <-> export ) hash operations define */
 __u32 uuid_hashfn(struct lustre_class_hash_body *hash_body,  void * key);
@@ -113,5 +128,11 @@ __u32 conn_hashfn(struct lustre_class_hash_body *hash_body,  void * key);
 int conn_hash_key_compare(void *key, struct hlist_node * compared_hnode);
 void * conn_refcount_get(struct hlist_node * actual_hnode);
 void conn_refcount_put(struct hlist_node * actual_hnode);
+
+/* ( nid <-> nidstats ) hash operations define. uses nid_hashfn */
+int nidstats_hash_key_compare(void *key, struct hlist_node * compared_hnode);
+void* nidstats_refcount_get(struct hlist_node * actual_hnode);
+void nidstats_refcount_put(struct hlist_node * actual_hnode);
+extern struct lustre_hash_operations nid_stat_hash_operations;
 
 #endif /* __CLASS_HASH_H */

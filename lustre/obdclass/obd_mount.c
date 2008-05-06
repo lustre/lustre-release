@@ -727,7 +727,7 @@ static int lustre_start_mgc(struct super_block *sb)
         ocd.ocd_connect_flags = OBD_CONNECT_VERSION | OBD_CONNECT_FID;
         ocd.ocd_version = LUSTRE_VERSION_CODE;
 
-        rc = obd_connect(NULL, &mgc_conn, obd, &(obd->obd_uuid), &ocd);
+        rc = obd_connect(NULL, &mgc_conn, obd, &(obd->obd_uuid), &ocd, NULL);
         if (rc) {
                 CERROR("connect failed %d\n", rc);
                 GOTO(out, rc);

@@ -219,7 +219,8 @@ static int lmv_notify(struct obd_device *obd, struct obd_device *watched,
  * caller that everything is okay. Real connection will be performed later. */
 static int lmv_connect(const struct lu_env *env,
                        struct lustre_handle *conn, struct obd_device *obd,
-                       struct obd_uuid *cluuid, struct obd_connect_data *data)
+                       struct obd_uuid *cluuid, struct obd_connect_data *data,
+                       void *localdata)
 {
 #ifdef __KERNEL__
         struct proc_dir_entry *lmv_proc_dir;
@@ -388,7 +389,7 @@ int lmv_connect_mdc(struct obd_device *obd, struct lmv_tgt_desc *tgt)
         }
 
         rc = obd_connect(NULL, &conn, mdc_obd, &lmv_mdc_uuid,
-                         &lmv->conn_data);
+                         &lmv->conn_data, NULL);
         if (rc) {
                 CERROR("target %s connect error %d\n", tgt->ltd_uuid.uuid, rc);
                 RETURN(rc);

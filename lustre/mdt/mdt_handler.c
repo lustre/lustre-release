@@ -4182,7 +4182,8 @@ static int mdt_connect_internal(struct obd_export *exp,
 static int mdt_obd_connect(const struct lu_env *env,
                            struct lustre_handle *conn, struct obd_device *obd,
                            struct obd_uuid *cluuid,
-                           struct obd_connect_data *data)
+                           struct obd_connect_data *data,
+                           void *localdata)
 {
         struct mdt_thread_info *info;
         struct mdt_client_data *mcd;

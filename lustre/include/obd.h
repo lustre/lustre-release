@@ -883,11 +883,15 @@ struct obd_device {
         /* uuid-export hash body */
         struct lustre_class_hash_body *obd_uuid_hash_body;
         /* nid-export hash body */
-        struct lustre_class_hash_body *obd_nid_hash_body; 
-        atomic_t obd_refcount;
+        struct lustre_class_hash_body *obd_nid_hash_body;
+        /* nid stats body */
+        struct lustre_class_hash_body *obd_nid_stats_hash_body;
+        struct list_head        obd_nid_stats;
+        atomic_t                obd_refcount;
         cfs_waitq_t             obd_refcount_waitq;
         struct list_head        obd_exports;
         int                     obd_num_exports;
+        spinlock_t              obd_nid_lock;
         struct ldlm_namespace  *obd_namespace;
         struct ptlrpc_client    obd_ldlm_client; /* XXX OST/MDS only */
         /* a spinlock is OK for what we do now, may need a semaphore later */
@@ -956,10 +960,9 @@ struct obd_device {
         struct lprocfs_stats  *md_stats;
 
         cfs_proc_dir_entry_t  *obd_proc_entry;
-        cfs_proc_dir_entry_t  *obd_proc_exports;
+        cfs_proc_dir_entry_t  *obd_proc_exports_entry;
         cfs_proc_dir_entry_t  *obd_svc_procroot;
         struct lprocfs_stats  *obd_svc_stats;
-        struct semaphore       obd_proc_exp_sem;
         atomic_t               obd_evict_inprogress;
         cfs_waitq_t            obd_evict_inprogress_waitq;
 };
@@ -1073,7 +1076,8 @@ struct obd_ops {
          * asked for. If @ocd == NULL, use default parameters. */
         int (*o_connect)(const struct lu_env *env,
                          struct lustre_handle *conn, struct obd_device *src,
-                         struct obd_uuid *cluuid, struct obd_connect_data *ocd);
+                         struct obd_uuid *cluuid, struct obd_connect_data *ocd,
+                         void *localdata);
         int (*o_reconnect)(const struct lu_env *env,
                            struct obd_export *exp, struct obd_device *src,
                            struct obd_uuid *cluuid,

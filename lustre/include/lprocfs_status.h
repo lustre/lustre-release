@@ -355,8 +355,21 @@ extern void lprocfs_counter_init(struct lprocfs_stats *stats, int index,
                                  const char *units);
 extern void lprocfs_free_obd_stats(struct obd_device *obddev);
 struct obd_export;
-extern int lprocfs_exp_setup(struct obd_export *exp);
+struct nid_stat;
+extern int lprocfs_add_clear_entry(struct obd_device * obd,
+                                   cfs_proc_dir_entry_t *entry);
+extern int lprocfs_exp_setup(struct obd_export *exp,
+                             lnet_nid_t peer_nid, int *newnid);
 extern int lprocfs_exp_cleanup(struct obd_export *exp);
+extern int lprocfs_add_simple(struct proc_dir_entry *root,
+                              char *name, read_proc_t *read_proc,
+                              write_proc_t *write_proc, void *data);
+extern void lprocfs_free_per_client_stats(struct obd_device *obd);
+extern int lprocfs_nid_stats_clear_write(struct file *file, const char *buffer,
+                                         unsigned long count, void *data);
+extern int lprocfs_nid_stats_clear_read(char *page, char **start, off_t off,
+                                        int count, int *eof,  void *data);
+
 extern int lprocfs_register_stats(cfs_proc_dir_entry_t *root, const char *name,
                                   struct lprocfs_stats *stats);
 
@@ -377,6 +390,10 @@ extern cfs_proc_dir_entry_t *lprocfs_srch(cfs_proc_dir_entry_t *root,
 
 extern int lprocfs_obd_setup(struct obd_device *obd, struct lprocfs_vars *list);
 extern int lprocfs_obd_cleanup(struct obd_device *obd);
+extern int lprocfs_add_simple(struct proc_dir_entry *root, char *name,
+                              read_proc_t *read_proc, write_proc_t *write_proc,
+                              void *data);
+extern void lprocfs_free_per_client_stats(struct obd_device *obd);
 extern struct file_operations lprocfs_evict_client_fops;
 
 extern int lprocfs_seq_create(cfs_proc_dir_entry_t *parent, char *name, 
@@ -566,10 +583,28 @@ static inline void lprocfs_free_obd_stats(struct obd_device *obddev)
 { return; }
 
 struct obd_export;
+static inline int lprocfs_add_clear_entry(struct obd_export *exp)
+{ return 0; }
 static inline int lprocfs_exp_setup(struct obd_export *exp)
 { return 0; }
 static inline int lprocfs_exp_cleanup(struct obd_export *exp)
 { return 0; }
+static inline int lprocfs_add_simple(struct proc_dir_entry *root,
+                                     char *name,
+                                     read_proc_t *read_proc,
+                                     write_proc_t *write_proc,
+                                     void *data)
+{return 0; }
+static inline void lprocfs_free_per_client_stats(struct obd_device *obd)
+{}
+static inline
+int lprocfs_nid_stats_clear_write(struct file *file, const char *buffer,
+                                  unsigned long count, void *data)
+{return count;}
+static inline
+int lprocfs_nid_stats_clear_read(char *page, char **start, off_t off,
+                                 int count, int *eof,  void *data)
+{return count;}
 
 static inline cfs_proc_dir_entry_t *
 lprocfs_register(const char *name, cfs_proc_dir_entry_t *parent,

@@ -396,6 +396,12 @@ int filter_do_bio(struct obd_export *exp, struct inode *inode,
                 lprocfs_oh_tally_log2(&obd->u.filter.fo_filter_stats.hist[BRW_R_IO_TIME],
                                       jiffies - start_time);
                 lprocfs_oh_tally_log2(&exp->exp_filter_data.fed_brw_stats.hist[BRW_R_IO_TIME], jiffies - start_time);
+                if (exp->exp_nid_stats && exp->exp_nid_stats->nid_brw_stats) {
+                        lprocfs_oh_tally(&exp->exp_nid_stats->nid_brw_stats->hist[BRW_R_DIO_FRAGS],
+                                         frags);
+                        lprocfs_oh_tally_log2(&exp->exp_nid_stats->nid_brw_stats->hist[BRW_R_IO_TIME],
+                                              jiffies - start_time);
+                }
         } else {
                 lprocfs_oh_tally(&obd->u.filter.fo_filter_stats.hist[BRW_W_DIO_FRAGS],
                                  frags);
@@ -404,6 +410,12 @@ int filter_do_bio(struct obd_export *exp, struct inode *inode,
                 lprocfs_oh_tally_log2(&obd->u.filter.fo_filter_stats.hist[BRW_W_IO_TIME],
                                       jiffies - start_time);
                 lprocfs_oh_tally_log2(&exp->exp_filter_data.fed_brw_stats.hist[BRW_W_IO_TIME], jiffies - start_time);
+                if (exp->exp_nid_stats && exp->exp_nid_stats->nid_brw_stats) {
+                        lprocfs_oh_tally(&exp->exp_nid_stats->nid_brw_stats->hist[BRW_W_DIO_FRAGS],
+                                         frags);
+                        lprocfs_oh_tally_log2(&exp->exp_nid_stats->nid_brw_stats->hist[BRW_W_IO_TIME],
+                                              jiffies - start_time);
+                }
         }
 
         if (rc == 0)

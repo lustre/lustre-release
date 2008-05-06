@@ -313,11 +313,13 @@ static int mds_reconnect(const struct lu_env *env,
  */
 static int mds_connect(const struct lu_env *env,
                        struct lustre_handle *conn, struct obd_device *obd,
-                       struct obd_uuid *cluuid, struct obd_connect_data *data)
+                       struct obd_uuid *cluuid, struct obd_connect_data *data,
+                       void *localdata)
 {
         struct obd_export *exp;
         struct mds_export_data *med;
         struct mds_client_data *mcd = NULL;
+        lnet_nid_t *client_nid = (lnet_nid_t *)localdata;
         int rc;
         ENTRY;
 
@@ -354,7 +356,7 @@ static int mds_connect(const struct lu_env *env,
         memcpy(mcd->mcd_uuid, cluuid, sizeof(mcd->mcd_uuid));
         med->med_mcd = mcd;
 
-        rc = mds_client_add(obd, exp, -1);
+        rc = mds_client_add(obd, exp, -1, *client_nid);
         GOTO(out, rc);
 
 out:
@@ -2011,8 +2013,8 @@ static int mds_setup(struct obd_device *obd, struct lustre_cfg* lcfg)
             lprocfs_alloc_obd_stats(obd, LPROC_MDS_LAST) == 0) {
                 /* Init private stats here */
                 mds_stats_counter_init(obd->obd_stats);
-                obd->obd_proc_exports = proc_mkdir("exports",
-                                                   obd->obd_proc_entry);
+                obd->obd_proc_exports_entry = proc_mkdir("exports",
+                                                         obd->obd_proc_entry);
         }
 
         rc = mds_fs_setup(obd, mnt);
@@ -2021,6 +2023,11 @@ static int mds_setup(struct obd_device *obd, struct lustre_cfg* lcfg)
                        obd->obd_name, rc);
                 GOTO(err_ns, rc);
         }
+
+        if (obd->obd_proc_exports_entry)
+                lprocfs_add_simple(obd->obd_proc_exports_entry,
+                                   "clear", lprocfs_nid_stats_clear_read,
+                                   lprocfs_nid_stats_clear_write, obd);
 
         rc = mds_lov_presetup(mds, lcfg);
         if (rc < 0)
@@ -2099,8 +2106,8 @@ err_fs:
         mds->mds_group_hash = NULL;
 #endif
 err_ns:
-        lprocfs_obd_cleanup(obd);
         lprocfs_free_obd_stats(obd);
+        lprocfs_obd_cleanup(obd);
         ldlm_namespace_free(obd->obd_namespace, 0);
         obd->obd_namespace = NULL;
 err_ops:
@@ -2274,8 +2281,10 @@ static int mds_cleanup(struct obd_device *obd)
                    we just need to drop our ref */
                 class_export_put(mds->mds_osc_exp);
 
-        lprocfs_obd_cleanup(obd);
+        remove_proc_entry("clear", obd->obd_proc_exports_entry);
+        lprocfs_free_per_client_stats(obd);
         lprocfs_free_obd_stats(obd);
+        lprocfs_obd_cleanup(obd);
 
         lquota_cleanup(mds_quota_interface_ref, obd);
 

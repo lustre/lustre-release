@@ -240,7 +240,7 @@ static int client_common_fill_super(struct super_block *sb, char *md, char *dt)
                 data->ocd_connect_flags |= OBD_CONNECT_LCL_CLIENT;
         }
 
-        err = obd_connect(NULL, &md_conn, obd, &sbi->ll_sb_uuid, data);
+        err = obd_connect(NULL, &md_conn, obd, &sbi->ll_sb_uuid, data, NULL);
         if (err == -EBUSY) {
                 LCONSOLE_ERROR_MSG(0x14f, "An MDT (md %s) is performing "
                                    "recovery, of which this client is not a "
@@ -394,7 +394,7 @@ static int client_common_fill_super(struct super_block *sb, char *md, char *dt)
         obd->obd_upcall.onu_upcall = ll_ocd_update;
         data->ocd_brw_size = PTLRPC_MAX_BRW_PAGES << CFS_PAGE_SHIFT;
 
-        err = obd_connect(NULL, &dt_conn, obd, &sbi->ll_sb_uuid, data);
+        err = obd_connect(NULL, &dt_conn, obd, &sbi->ll_sb_uuid, data, NULL);
         if (err == -EBUSY) {
                 LCONSOLE_ERROR_MSG(0x150, "An OST (dt %s) is performing "
                                    "recovery, of which this client is not a "

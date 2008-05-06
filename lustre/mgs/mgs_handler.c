@@ -50,7 +50,8 @@
 /* Establish a connection to the MGS.*/
 static int mgs_connect(const struct lu_env *env,
                        struct lustre_handle *conn, struct obd_device *obd,
-                       struct obd_uuid *cluuid, struct obd_connect_data *data)
+                       struct obd_uuid *cluuid, struct obd_connect_data *data,
+                       void *localdata)
 {
         struct obd_export *exp;
         int rc;

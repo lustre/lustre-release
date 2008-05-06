@@ -85,7 +85,7 @@ int lproc_mgs_setup(struct obd_device *obd)
         rc = lprocfs_obd_seq_create(obd, "filesystems", 0444,
                                     &mgs_fs_fops, obd);
         mgs->mgs_proc_live = proc_mkdir("live", obd->obd_proc_entry);
-        obd->obd_proc_exports = proc_mkdir("exports", obd->obd_proc_entry);
+        obd->obd_proc_exports_entry = proc_mkdir("exports", obd->obd_proc_entry);
 
         return rc;
 }
@@ -214,7 +214,8 @@ struct lprocfs_vars lprocfs_mgs_module_vars[] = {
 void mgs_counter_incr(struct obd_export *exp, int opcode)
 {
         lprocfs_counter_incr(exp->exp_obd->obd_stats, opcode);
-        lprocfs_counter_incr(exp->exp_ops_stats, opcode);
+        if (exp->exp_nid_stats && exp->exp_nid_stats->nid_stats != NULL)
+                lprocfs_counter_incr(exp->exp_nid_stats->nid_stats, opcode);
 }
 
 void mgs_stats_counter_init(struct lprocfs_stats *stats)

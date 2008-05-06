@@ -32,6 +32,7 @@
 #define FILTER_RECOVERY_TIMEOUT (obd_timeout * 5 * HZ / 2) /* *waves hands* */
 
 extern struct file_operations filter_per_export_stats_fops;
+extern struct file_operations filter_per_nid_stats_fops;
 
 /* Data stored per client in the last_rcvd file.  In le32 order. */
 struct filter_client_data {
