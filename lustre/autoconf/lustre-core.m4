@@ -1231,8 +1231,7 @@ AC_DEFINE(HAVE___D_MOVE, 1,
 # matter what symbol is exported, the kernel #defines node_to_cpumask
 # to the appropriate function and that's what we use.
 AC_DEFUN([LC_EXPORT_NODE_TO_CPUMASK],
-         [LB_LINUX_ARCH
-          LB_CHECK_SYMBOL_EXPORT([node_to_cpumask],
+         [LB_CHECK_SYMBOL_EXPORT([node_to_cpumask],
                                  [arch/$LINUX_ARCH/mm/numa.c],
                                  [AC_DEFINE(HAVE_NODE_TO_CPUMASK, 1,
                                             [node_to_cpumask is exported by
