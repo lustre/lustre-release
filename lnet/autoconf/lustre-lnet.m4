@@ -577,6 +577,14 @@ else
 		        O2IBCPPFLAGS=""
 		])
 
+		# we know at this point that the found OFED source is good
+		if test \( $ENABLEO2IB = 3 -a -f $O2IBPATH/Module.symvers \); then
+			AC_MSG_NOTICE([adding $O2IBPATH/Module.symvers to $PWD/Module.symvers])
+			cat $O2IBPATH/Module.symvers >> $PWD/Module.symvers
+		else
+			AC_MSG_ERROR([an external source tree was specified for o2iblnd however I  could not find a $O2IBPATH/Module.symvers there])
+		fi
+
 		# version checking is a hack and isn't reliable,
 		# we need verify it with each new ofed release
 
@@ -631,7 +639,7 @@ AC_ARG_WITH([openib],
 if test $ENABLEOPENIB -eq 0; then
 	AC_MSG_RESULT([disabled])
 elif test ! \( -f ${OPENIBPATH}/include/ts_ib_core.h -a \
-               -f ${OPENIBPATH}/include/ts_ib_cm.h -a\
+               -f ${OPENIBPATH}/include/ts_ib_cm.h -a \
 	       -f ${OPENIBPATH}/include/ts_ib_sa_client.h \); then
 	AC_MSG_RESULT([no])
 	case $ENABLEOPENIB in

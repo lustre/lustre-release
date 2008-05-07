@@ -1047,7 +1047,20 @@ unpack_linux_rpm()
                 LINUXOBJ="$(pwd)/$src/$objects"
             fi
         done
-        [ -z "$LINUX" ] && RC=255
+        if [ -z "$LINUX" ]; then
+            RC=255
+        else
+            # dig out the release version
+            local LINUXRELEASEHEADER=version.h
+            if test -s ${LINUXOBJ:-$LINUX}/include/linux/utsrelease.h ; then
+                LINUXRELEASEHEADER=utsrelease.h
+            fi
+            LINUXRELEASE=$(sed -ne 's/#define UTS_RELEASE "\(.*\)"$/\1/p' ${LINUXOBJ:-$LINUX}/include/linux/$LINUXRELEASEHEADER)
+            if [ -z "$LINUXRELEASE" ]; then
+                echo "Failed to find linux release in ${LINUXOBJ:-$LINUX}/include/linux/$LINUXRELEASEHEADER"
+                RC=255
+            fi
+        fi
     else
         RC=255
     fi
@@ -1213,6 +1226,41 @@ build_linux()
     return
 }
 
+build_kernel_ib()
+{
+    # build kernel-ib{,-devel}
+    # some I/B drivers are architecture dependent and kernel-ib's configure
+    # does not figure it out for us ~sigh~
+    local configure_options=""
+    case "$TARGET_ARCH" in
+	x86_64 | ia64)
+	    configure_options="--with-ipath_inf-mod"
+	    ;;
+	ppc64)
+	    configure_options="--with-ipath_inf-mod --with-ehca-mod"
+	    ;;
+    esac
+    $RPMBUILD --rebuild --define 'build_kernel_ib 1' --define 'build_kernel_ib_devel 1' \
+	      --define "_topdir ${TOPDIR}" --target ${TARGET_ARCH} \
+	      --define "KVERSION ${LINUXRELEASE}" \
+	      --define "KSRC ${LINUXOBJ:-${LINUX}}" \
+	      --define "LIB_MOD_DIR /lib/modules/${LINUXRELEASE}/updates" \
+	      --define "configure_options --without-quilt --with-core-mod --with-user_mad-mod --with-user_access-mod --with-addr_trans-mod --with-srp-target-mod --with-core-mod --with-mthca-mod --with-mlx4-mod --with-cxgb3-mod --with-nes-mod --with-ipoib-mod --with-sdp-mod --with-srp-mod --without-srp-target-mod --with-rds-mod --with-iser-mod --with-qlgc_vnic-mod --with-madeye-mod $configure_options" ${TOPDIR}/OFED/SRPMS/ofa_kernel-${OFED_VERSION}-ofed${OFED_VERSION}.src.rpm
+
+    if [ ${PIPESTATUS[0]} != 0 ]; then
+        fatal 1 "Error building kernel-ib"
+    fi
+
+    pushd "$TOPDIR" >/dev/null
+    rm -rf kernel-ib-devel
+    mkdir kernel-ib-devel
+    cd kernel-ib-devel
+    local rpm=$(ls $TOPDIR/RPMS/*/kernel-ib-devel-${OFED_VERSION}-${LINUXRELEASE//-/_}.*.rpm)
+    rpm2cpio -itv < $rpm | cpio -id
+    CONFIGURE_FLAGS="--with-o2ib=$(pwd)/usr/src/ofa_kernel ${CONFIGURE_FLAGS}"
+    popd >/dev/null
+}
+
 #build patchless lustre
 patchless_build_sequence()
 {
@@ -1237,6 +1285,16 @@ patchless_build_sequence()
     esac
 
     unpack_linux_rpm $type $delimiter && rpmfound=true
+
+    [ -d SRPMS ] || mkdir SRPMS
+    [ -d RPMS ] || mkdir RPMS
+    [ -d BUILD ] || mkdir BUILD
+    [ -d SOURCES ] || mkdir SOURCES
+
+    # first build kernel-ib
+    if [ -n "$OFED_VERSION" ]; then
+        $rpmfound && build_kernel_ib
+    fi
     ( $rpmfound ) && build_lustre && buildsuccess=true && find_linux_source_rpm
 
     if $buildsuccess; then
