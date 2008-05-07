@@ -938,7 +938,7 @@ static int ptlrpc_send_new_req(struct ptlrpc_request *req)
 
         lustre_msg_set_status(req->rq_reqmsg, cfs_curproc_pid());
         CDEBUG(D_RPCTRACE, "Sending RPC pname:cluuid:pid:xid:nid:opc"
-               " %s:%s:%d:"LPU64":%s:%d\n", cfs_curproc_comm(),
+               " %s:%s:%d:x"LPU64":%s:%d\n", cfs_curproc_comm(),
                imp->imp_obd->obd_uuid.uuid,
                lustre_msg_get_status(req->rq_reqmsg), req->rq_xid,
                libcfs_nid2str(imp->imp_connection->c_peer.nid),
@@ -1170,7 +1170,7 @@ int ptlrpc_check_set(struct ptlrpc_request_set *set)
                 req->rq_phase = RQ_PHASE_COMPLETE;
 
                 CDEBUG(D_RPCTRACE, "Completed RPC pname:cluuid:pid:xid:nid:"
-                       "opc %s:%s:%d:"LPU64":%s:%d\n", cfs_curproc_comm(),
+                       "opc %s:%s:%d:x"LPU64":%s:%d\n", cfs_curproc_comm(),
                        imp->imp_obd->obd_uuid.uuid,
                        lustre_msg_get_status(req->rq_reqmsg), req->rq_xid,
                        libcfs_nid2str(imp->imp_connection->c_peer.nid),
@@ -1777,7 +1777,7 @@ int ptlrpc_queue_wait(struct ptlrpc_request *req)
         lustre_msg_set_status(req->rq_reqmsg, cfs_curproc_pid());
         LASSERT(imp->imp_obd != NULL);
         CDEBUG(D_RPCTRACE, "Sending RPC pname:cluuid:pid:xid:nid:opc "
-               "%s:%s:%d:"LPU64":%s:%d\n", cfs_curproc_comm(),
+               "%s:%s:%d:x"LPU64":%s:%d\n", cfs_curproc_comm(),
                imp->imp_obd->obd_uuid.uuid,
                lustre_msg_get_status(req->rq_reqmsg), req->rq_xid,
                libcfs_nid2str(imp->imp_connection->c_peer.nid),
@@ -1884,7 +1884,7 @@ restart:
         }
 
         CDEBUG(D_RPCTRACE, "Completed RPC pname:cluuid:pid:xid:nid:opc "
-               "%s:%s:%d:"LPU64":%s:%d\n", cfs_curproc_comm(),
+               "%s:%s:%d:x"LPU64":%s:%d\n", cfs_curproc_comm(),
                imp->imp_obd->obd_uuid.uuid,
                lustre_msg_get_status(req->rq_reqmsg), req->rq_xid,
                libcfs_nid2str(imp->imp_connection->c_peer.nid),
