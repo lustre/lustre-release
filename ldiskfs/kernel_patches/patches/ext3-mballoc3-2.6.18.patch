@@ -1,7 +1,7 @@
 Index: linux-2.6.18.8/include/linux/ext3_fs_i.h
 ===================================================================
---- linux-2.6.18.8.orig/include/linux/ext3_fs_i.h	2007-07-17 09:18:14.000000000 +0200
-+++ linux-2.6.18.8/include/linux/ext3_fs_i.h	2007-07-17 09:18:53.000000000 +0200
+--- linux-2.6.18.8.orig/include/linux/ext3_fs_i.h
++++ linux-2.6.18.8/include/linux/ext3_fs_i.h
 @@ -154,6 +154,10 @@ struct ext3_inode_info {
  	struct inode vfs_inode;
  
@@ -15,8 +15,8 @@ Index: linux-2.6.18.8/include/linux/ext3_fs_i.h
  #endif	/* _LINUX_EXT3_FS_I */
 Index: linux-2.6.18.8/include/linux/ext3_fs_sb.h
 ===================================================================
---- linux-2.6.18.8.orig/include/linux/ext3_fs_sb.h	2007-07-17 09:18:14.000000000 +0200
-+++ linux-2.6.18.8/include/linux/ext3_fs_sb.h	2007-07-17 09:18:53.000000000 +0200
+--- linux-2.6.18.8.orig/include/linux/ext3_fs_sb.h
++++ linux-2.6.18.8/include/linux/ext3_fs_sb.h
 @@ -21,8 +21,15 @@
  #include <linux/wait.h>
  #include <linux/blockgroup_lock.h>
@@ -35,8 +35,8 @@ Index: linux-2.6.18.8/include/linux/ext3_fs_sb.h
   * third extended-fs super-block data in memory
 Index: linux-2.6.18.8/include/linux/ext3_fs.h
 ===================================================================
---- linux-2.6.18.8.orig/include/linux/ext3_fs.h	2007-07-17 09:18:14.000000000 +0200
-+++ linux-2.6.18.8/include/linux/ext3_fs.h	2007-07-17 09:18:53.000000000 +0200
+--- linux-2.6.18.8.orig/include/linux/ext3_fs.h
++++ linux-2.6.18.8/include/linux/ext3_fs.h
 @@ -17,6 +17,7 @@
  #define _LINUX_EXT3_FS_H
  
@@ -138,8 +138,8 @@ Index: linux-2.6.18.8/include/linux/ext3_fs.h
  int ext3_forget(handle_t *handle, int is_metadata, struct inode *inode,
 Index: linux-2.6.18.8/fs/ext3/super.c
 ===================================================================
---- linux-2.6.18.8.orig/fs/ext3/super.c	2007-07-17 09:18:14.000000000 +0200
-+++ linux-2.6.18.8/fs/ext3/super.c	2007-07-17 09:18:53.000000000 +0200
+--- linux-2.6.18.8.orig/fs/ext3/super.c
++++ linux-2.6.18.8/fs/ext3/super.c
 @@ -688,6 +688,7 @@ enum {
  	Opt_iopen, Opt_noiopen, Opt_iopen_nopriv,
  	Opt_grpquota,
@@ -188,9 +188,9 @@ Index: linux-2.6.18.8/fs/ext3/super.c
  	return 0;
 Index: linux-2.6.18.8/fs/ext3/extents.c
 ===================================================================
---- linux-2.6.18.8.orig/fs/ext3/extents.c	2007-07-17 09:18:14.000000000 +0200
-+++ linux-2.6.18.8/fs/ext3/extents.c	2007-07-17 09:18:53.000000000 +0200
-@@ -795,7 +795,7 @@ cleanup:
+--- linux-2.6.18.8.orig/fs/ext3/extents.c
++++ linux-2.6.18.8/fs/ext3/extents.c
+@@ -801,7 +801,7 @@ cleanup:
  		for (i = 0; i < depth; i++) {
  			if (!ablocks[i])
  				continue;
@@ -199,7 +199,7 @@ Index: linux-2.6.18.8/fs/ext3/extents.c
  		}
  	}
  	kfree(ablocks);
-@@ -1613,7 +1613,7 @@ int ext3_ext_rm_idx(handle_t *handle, st
+@@ -1619,7 +1619,7 @@ int ext3_ext_rm_idx(handle_t *handle, st
  	ext_debug(inode, "index is empty, remove it, free block %lu\n", leaf);
  	bh = sb_find_get_block(inode->i_sb, leaf);
  	ext3_forget(handle, 1, inode, bh, leaf);
@@ -208,7 +208,7 @@ Index: linux-2.6.18.8/fs/ext3/extents.c
  	return err;
  }
  
-@@ -1672,7 +1672,7 @@ static int ext3_remove_blocks(handle_t *
+@@ -1678,7 +1678,7 @@ static int ext3_remove_blocks(handle_t *
  				unsigned long from, unsigned long to)
  {
  	struct buffer_head *bh;
@@ -217,7 +217,7 @@ Index: linux-2.6.18.8/fs/ext3/extents.c
  
  #ifdef EXTENTS_STATS
  	{
-@@ -1690,6 +1690,8 @@ static int ext3_remove_blocks(handle_t *
+@@ -1696,6 +1696,8 @@ static int ext3_remove_blocks(handle_t *
  		spin_unlock(&sbi->s_ext_stats_lock);
  	}
  #endif
@@ -226,7 +226,7 @@ Index: linux-2.6.18.8/fs/ext3/extents.c
  	if (from >= le32_to_cpu(ex->ee_block)
  	    && to == le32_to_cpu(ex->ee_block) + le16_to_cpu(ex->ee_len) - 1) {
  		/* tail removal */
-@@ -1701,7 +1703,7 @@ static int ext3_remove_blocks(handle_t *
+@@ -1707,7 +1709,7 @@ static int ext3_remove_blocks(handle_t *
  			bh = sb_find_get_block(inode->i_sb, start + i);
  			ext3_forget(handle, 0, inode, bh, start + i);
  		}
@@ -235,7 +235,7 @@ Index: linux-2.6.18.8/fs/ext3/extents.c
  	} else if (from == le32_to_cpu(ex->ee_block)
  		   && to <= le32_to_cpu(ex->ee_block) + le16_to_cpu(ex->ee_len) - 1) {
  		printk("strange request: removal %lu-%lu from %u:%u\n",
-@@ -2034,7 +2036,7 @@ int ext3_ext_get_blocks(handle_t *handle
+@@ -2040,7 +2042,7 @@ int ext3_ext_get_blocks(handle_t *handle
  	struct ext3_extent newex, *ex;
  	int goal, newblock, err = 0, depth;
  	unsigned long allocated = 0;
@@ -244,7 +244,7 @@ Index: linux-2.6.18.8/fs/ext3/extents.c
  
  	__clear_bit(BH_New, &bh_result->b_state);
  	ext_debug(inode, "blocks %d/%lu requested for inode %u\n", (int) iblock,
-@@ -2116,18 +2118,33 @@ int ext3_ext_get_blocks(handle_t *handle
+@@ -2122,18 +2124,36 @@ int ext3_ext_get_blocks(handle_t *handle
  	if (S_ISREG(inode->i_mode) && (!EXT3_I(inode)->i_block_alloc_info))
  		ext3_init_block_alloc_info(inode);
  
@@ -279,12 +279,15 @@ Index: linux-2.6.18.8/fs/ext3/extents.c
 +	ar.goal = ext3_ext_find_goal(inode, path, iblock);
 +	ar.logical = iblock;
 +	ar.len = allocated;
-+	ar.flags = EXT3_MB_HINT_DATA;
++	if (S_ISREG(inode->i_mode))
++		ar.flags = EXT3_MB_HINT_DATA;
++	else
++		ar.flags = 0;
 +	newblock = ext3_mb_new_blocks(handle, &ar, &err);
  	if (!newblock)
  		goto out2;
  	ext_debug(inode, "allocate new block: goal %d, found %d/%lu\n",
-@@ -2137,12 +2154,16 @@ int ext3_ext_get_blocks(handle_t *handle
+@@ -2143,12 +2163,16 @@ int ext3_ext_get_blocks(handle_t *handle
  	newex.ee_block = cpu_to_le32(iblock);
  	newex.ee_start = cpu_to_le32(newblock);
  	newex.ee_start_hi = 0;
@@ -304,7 +307,7 @@ Index: linux-2.6.18.8/fs/ext3/extents.c
  		goto out2;
  	}
  
-@@ -2151,6 +2172,7 @@ int ext3_ext_get_blocks(handle_t *handle
+@@ -2157,6 +2181,7 @@ int ext3_ext_get_blocks(handle_t *handle
  
  	/* previous routine could use block we allocated */
  	newblock = le32_to_cpu(newex.ee_start);
@@ -312,7 +315,7 @@ Index: linux-2.6.18.8/fs/ext3/extents.c
  	__set_bit(BH_New, &bh_result->b_state);
  
  	ext3_ext_put_in_cache(inode, iblock, allocated, newblock,
-@@ -2202,6 +2224,9 @@ void ext3_ext_truncate(struct inode * in
+@@ -2208,6 +2233,9 @@ void ext3_ext_truncate(struct inode * in
  	mutex_lock(&EXT3_I(inode)->truncate_mutex);
  	ext3_ext_invalidate_cache(inode);
  
@@ -324,8 +327,8 @@ Index: linux-2.6.18.8/fs/ext3/extents.c
  	 * probably we need not scaning at all,
 Index: linux-2.6.18.8/fs/ext3/Makefile
 ===================================================================
---- linux-2.6.18.8.orig/fs/ext3/Makefile	2007-07-17 09:18:14.000000000 +0200
-+++ linux-2.6.18.8/fs/ext3/Makefile	2007-07-17 09:18:53.000000000 +0200
+--- linux-2.6.18.8.orig/fs/ext3/Makefile
++++ linux-2.6.18.8/fs/ext3/Makefile
 @@ -5,7 +5,7 @@
  obj-$(CONFIG_EXT3_FS) += ext3.o
  
@@ -337,8 +340,8 @@ Index: linux-2.6.18.8/fs/ext3/Makefile
  ext3-$(CONFIG_EXT3_FS_POSIX_ACL) += acl.o
 Index: linux-2.6.18.8/fs/ext3/xattr.c
 ===================================================================
---- linux-2.6.18.8.orig/fs/ext3/xattr.c	2007-02-24 00:52:30.000000000 +0100
-+++ linux-2.6.18.8/fs/ext3/xattr.c	2007-07-17 09:18:53.000000000 +0200
+--- linux-2.6.18.8.orig/fs/ext3/xattr.c
++++ linux-2.6.18.8/fs/ext3/xattr.c
 @@ -484,7 +484,7 @@ ext3_xattr_release_block(handle_t *handl
  		ea_bdebug(bh, "refcount now=0; freeing");
  		if (ce)
@@ -359,8 +362,8 @@ Index: linux-2.6.18.8/fs/ext3/xattr.c
  			}
 Index: linux-2.6.18.8/fs/ext3/balloc.c
 ===================================================================
---- linux-2.6.18.8.orig/fs/ext3/balloc.c	2007-02-24 00:52:30.000000000 +0100
-+++ linux-2.6.18.8/fs/ext3/balloc.c	2007-07-17 09:18:53.000000000 +0200
+--- linux-2.6.18.8.orig/fs/ext3/balloc.c
++++ linux-2.6.18.8/fs/ext3/balloc.c
 @@ -79,7 +79,7 @@ struct ext3_group_desc * ext3_get_group_
   *
   * Return buffer_head on success or NULL in case of failure.
@@ -436,8 +439,8 @@ Index: linux-2.6.18.8/fs/ext3/balloc.c
  	unsigned long count = 1;
 Index: linux-2.6.18.8/fs/ext3/inode.c
 ===================================================================
---- linux-2.6.18.8.orig/fs/ext3/inode.c	2007-07-17 09:18:14.000000000 +0200
-+++ linux-2.6.18.8/fs/ext3/inode.c	2007-07-17 09:18:53.000000000 +0200
+--- linux-2.6.18.8.orig/fs/ext3/inode.c
++++ linux-2.6.18.8/fs/ext3/inode.c
 @@ -560,7 +560,7 @@ static int ext3_alloc_blocks(handle_t *h
  	return ret;
  failed_out:
@@ -492,8 +495,8 @@ Index: linux-2.6.18.8/fs/ext3/inode.c
  				/*
 Index: linux-2.6.18.8/fs/ext3/mballoc.c
 ===================================================================
---- linux-2.6.18.8.orig/fs/ext3/mballoc.c	2007-07-17 09:18:14.000000000 +0200
-+++ linux-2.6.18.8/fs/ext3/mballoc.c	2007-07-17 09:23:56.000000000 +0200
+--- linux-2.6.18.8.orig/fs/ext3/mballoc.c
++++ linux-2.6.18.8/fs/ext3/mballoc.c
 @@ -350,8 +350,8 @@ struct ext3_prealloc_space {
  	spinlock_t		pa_lock;
  	atomic_t		pa_count;
@@ -541,7 +544,7 @@ Index: linux-2.6.18.8/fs/ext3/mballoc.c
  			+ fex->fe_start
  			+ le32_to_cpu(EXT3_SB(sb)->s_es->s_first_data_block);
  	return block;
-@@ -3174,7 +3174,7 @@ void ext3_mb_collect_stats(struct ext3_a
+@@ -3202,7 +3202,7 @@ void ext3_mb_collect_stats(struct ext3_a
  void ext3_mb_use_inode_pa(struct ext3_allocation_context *ac,
  				struct ext3_prealloc_space *pa)
  {
@@ -550,7 +553,7 @@ Index: linux-2.6.18.8/fs/ext3/mballoc.c
  
  	/* found preallocated blocks, use them */
  	start = pa->pa_pstart + (ac->ac_o_ex.fe_logical - pa->pa_lstart);
-@@ -4027,13 +4027,13 @@ int ext3_mb_discard_preallocations(struc
+@@ -4053,13 +4053,13 @@ int ext3_mb_discard_preallocations(struc
   * it tries to use preallocation first, then falls back
   * to usual allocation
   */
@@ -566,7 +569,7 @@ Index: linux-2.6.18.8/fs/ext3/mballoc.c
  	int freed, inquota;
  
  	sb = ar->inode->i_sb;
-@@ -4044,8 +4044,8 @@ unsigned long ext3_mb_new_blocks(handle_
+@@ -4070,8 +4070,8 @@ unsigned long ext3_mb_new_blocks(handle_
  		if (ext3_mballoc_warning++ == 0)
  			printk(KERN_ERR "EXT3-fs: multiblock request with "
  					"mballoc disabled!\n");
@@ -577,7 +580,7 @@ Index: linux-2.6.18.8/fs/ext3/mballoc.c
  		return block;
  	}
  
-@@ -4109,11 +4109,11 @@ out:
+@@ -4135,11 +4135,11 @@ out:
  }
  EXPORT_SYMBOL(ext3_mb_new_blocks);
  
@@ -592,7 +595,7 @@ Index: linux-2.6.18.8/fs/ext3/mballoc.c
  
  	if (!test_opt(inode->i_sb, MBALLOC)) {
  		ret = ext3_new_block_old(handle, inode, goal, errp);
-@@ -4228,8 +4228,8 @@ int ext3_mb_free_metadata(handle_t *hand
+@@ -4254,8 +4254,8 @@ int ext3_mb_free_metadata(handle_t *hand
   * Main entry point into mballoc to free blocks
   */
  void ext3_mb_free_blocks(handle_t *handle, struct inode *inode,

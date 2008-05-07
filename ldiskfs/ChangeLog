@@ -1,6 +1,10 @@
 tbd  Sun Microsystems, Inc.
 	* version 3.0.6
 
+Severity   : normal
+Bugzilla   : 15459
+Description: migrate ldiskfs - ldiskfs2 (extents on directories)
+Details    : disable preallocation for non-regular files.
 
 -------------------------------------------------------------------------------
 
