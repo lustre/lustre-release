@@ -2,6 +2,11 @@ tbd         Cluster File Systems, Inc. <info@clusterfs.com>
        * version 4.0.1
 
 Severity   : normal
+Bugzilla   : 15459
+Description: migrate ldiskfs - ldiskfs2 (extents on directories)
+Details    : disable preallocation for non-regular files.
+
+Severity   : normal
 Bugzilla   : 13164
 Description: statfs speedup patches.
 Details    : The patches improve statfs performance for very large
