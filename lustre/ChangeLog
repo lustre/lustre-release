@@ -25,6 +25,11 @@ tbd Sun Microsystems, Inc.
 	  	'tunefs.lustre --param="mdt.quota_type=ug1" $MDTDEV'.
 	  For more information, please refer to bugzilla 13904.
 
+Severity   : major
+Bugzilla   : 15575
+Description: Stack overflow during MDS log replay
+Details    : ease stack pressure by using a thread dealing llog_process.
+
 Severity   : normal
 Bugzilla   : 15278
 Description: fix build on ppc32
