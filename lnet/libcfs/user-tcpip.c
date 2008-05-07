@@ -20,7 +20,7 @@
  */
 
 #ifndef __KERNEL__
-
+#ifndef REDSTORM
 #include <sys/socket.h>
 #include <netinet/tcp.h>
 #include <sys/ioctl.h>
@@ -600,4 +600,5 @@ int libcfs_sock_readv(int fd, const struct iovec *vector, int count)
         return rc;
 }
 
+#endif /* !defined(REDSTORM) */
 #endif /* !__KERNEL__ */
