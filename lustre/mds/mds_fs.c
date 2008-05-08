@@ -52,15 +52,15 @@
 
 static int mds_export_stats_init(struct obd_device *obd,
                                  struct obd_export *exp,
-                                 lnet_nid_t client_nid)
+                                 void *client_nid)
   {
-        int rc, num_stats, newnid;
+        int rc, num_stats, newnid = 0;
 
         rc = lprocfs_exp_setup(exp, client_nid, &newnid);
         if (rc)
                 return rc;
 
-        if (client_nid && newnid) {
+        if (newnid) {
                 struct nid_stat *tmp = exp->exp_nid_stats;
                 LASSERT(tmp != NULL);
 
@@ -92,7 +92,7 @@ static int mds_export_stats_init(struct obd_device *obd,
  * mds_init_server_data() callsite needs to be fixed.
  */
 int mds_client_add(struct obd_device *obd, struct obd_export *exp,
-                   int cl_idx, lnet_nid_t client_nid)
+                   int cl_idx, void *localdata)
 {
         struct mds_obd *mds = &obd->u.mds;
         struct mds_export_data *med = &exp->exp_mds_data;
@@ -140,7 +140,7 @@ int mds_client_add(struct obd_device *obd, struct obd_export *exp,
         med->med_lr_off = le32_to_cpu(mds->mds_server_data->lsd_client_start) +
                 (cl_idx * le16_to_cpu(mds->mds_server_data->lsd_client_size));
         LASSERTF(med->med_lr_off > 0, "med_lr_off = %llu\n", med->med_lr_off);
-        mds_export_stats_init(obd, exp, client_nid);
+        mds_export_stats_init(obd, exp, localdata);
 
         if (new_client) {
                 struct lvfs_run_ctxt saved;
@@ -425,7 +425,7 @@ static int mds_init_server_data(struct obd_device *obd, struct file *file)
                 } else {
                         med = &exp->exp_mds_data;
                         med->med_mcd = mcd;
-                        rc = mds_client_add(obd, exp, cl_idx, 0);
+                        rc = mds_client_add(obd, exp, cl_idx, NULL);
                         /* can't fail for existing client */
                         LASSERTF(rc == 0, "rc = %d\n", rc);
 

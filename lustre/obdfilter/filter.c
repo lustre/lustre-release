@@ -182,7 +182,7 @@ static int lprocfs_init_rw_stats(struct obd_device *obd,
    plus the procfs overhead :( */
 static int filter_export_stats_init(struct obd_device *obd,
                                     struct obd_export *exp,
-                                    lnet_nid_t client_nid)
+                                    void *client_nid)
 {
         struct filter_export_data *fed = &exp->exp_filter_data;
         struct proc_dir_entry *brw_entry;
@@ -198,7 +198,7 @@ static int filter_export_stats_init(struct obd_device *obd,
         if (rc)
                 RETURN(rc);
 
-        if (client_nid && newnid) {
+        if (newnid) {
                 struct nid_stat *tmp = exp->exp_nid_stats;
                 LASSERT(tmp != NULL);
 
@@ -234,7 +234,7 @@ static int filter_export_stats_init(struct obd_device *obd,
  * Otherwise, we have just read the data from the last_rcvd file and
  * we know its offset. */
 static int filter_client_add(struct obd_device *obd, struct obd_export *exp,
-                             int cl_idx, lnet_nid_t client_nid)
+                             int cl_idx)
 {
         struct filter_obd *filter = &obd->u.filter;
         struct filter_export_data *fed = &exp->exp_filter_data;
@@ -796,8 +796,8 @@ static int filter_init_server_data(struct obd_device *obd, struct file * filp)
                 } else {
                         fed = &exp->exp_filter_data;
                         fed->fed_fcd = fcd;
-                        filter_export_stats_init(obd, exp, 0);
-                        rc = filter_client_add(obd, exp, cl_idx, 0);
+                        filter_export_stats_init(obd, exp, NULL);
+                        rc = filter_client_add(obd, exp, cl_idx);
                         /* can't fail for existing client */
                         LASSERTF(rc == 0, "rc = %d\n", rc);
 
@@ -2160,7 +2160,6 @@ static int filter_connect(struct lustre_handle *conn, struct obd_device *obd,
         struct obd_export *exp;
         struct filter_export_data *fed;
         struct filter_client_data *fcd = NULL;
-        lnet_nid_t *client_nid = (lnet_nid_t *)localdata;
         int rc;
         ENTRY;
 
@@ -2179,7 +2178,7 @@ static int filter_connect(struct lustre_handle *conn, struct obd_device *obd,
         if (rc)
                 GOTO(cleanup, rc);
 
-        filter_export_stats_init(obd, exp, *client_nid);
+        filter_export_stats_init(obd, exp, localdata);
 
         if (!obd->obd_replayable)
                 GOTO(cleanup, rc = 0);
@@ -2193,7 +2192,7 @@ static int filter_connect(struct lustre_handle *conn, struct obd_device *obd,
         memcpy(fcd->fcd_uuid, cluuid, sizeof(fcd->fcd_uuid));
         fed->fed_fcd = fcd;
 
-        rc = filter_client_add(obd, exp, -1, *client_nid);
+        rc = filter_client_add(obd, exp, -1);
 
         GOTO(cleanup, rc);
 
