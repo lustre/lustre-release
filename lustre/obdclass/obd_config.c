@@ -214,8 +214,8 @@ int class_attach(struct lustre_cfg *lcfg)
 
         len = strlen(uuid);
         if (len >= sizeof(obd->obd_uuid)) {
-                CERROR("uuid must be < "LPSZ" bytes long\n",
-                       sizeof(obd->obd_uuid));
+                CERROR("uuid must be < %d bytes long\n",
+                       (int)sizeof(obd->obd_uuid));
                 GOTO(out, rc = -EINVAL);
         }
         memcpy(obd->obd_uuid.uuid, uuid, len);
