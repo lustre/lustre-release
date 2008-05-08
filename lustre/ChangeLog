@@ -964,6 +964,12 @@ Details    : Change the structure of stats under obdfilter and mds to
              The "uuid"s file would list the uuids of _active_ exports.
              And the clear entry is to clear all stats and stale nids.
 
+Severity   : enhancement
+Bugzilla   : 11270
+Description: eliminate client locks in face of contention
+Details    : file contention detection and lockless i/o implementation
+             for contended files.
+
 --------------------------------------------------------------------------------
 
 2007-08-10         Cluster File Systems, Inc. <info@clusterfs.com>

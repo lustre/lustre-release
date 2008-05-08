@@ -176,7 +176,8 @@ int lov_update_enqueue_set(struct lov_request *req, __u32 mode, int rc)
                 memset(lov_lockhp, 0, sizeof(*lov_lockhp));
                 if (lov->lov_tgts[req->rq_idx] && 
                     lov->lov_tgts[req->rq_idx]->ltd_active) {
-                        if (rc != -EINTR)
+                        /* -EUSERS used by OST to report file contention */
+                        if (rc != -EINTR && rc != -EUSERS)
                                 CERROR("enqueue objid "LPX64" subobj "
                                        LPX64" on OST idx %d: rc %d\n",
                                        set->set_oi->oi_md->lsm_object_id,

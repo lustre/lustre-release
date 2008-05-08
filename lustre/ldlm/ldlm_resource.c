@@ -269,6 +269,27 @@ void ldlm_proc_namespace(struct ldlm_namespace *ns)
                 lock_vars[0].read_fptr = lprocfs_rd_uint;
                 lock_vars[0].write_fptr = lprocfs_wr_uint;
                 lprocfs_add_vars(ldlm_ns_proc_dir, lock_vars, 0);
+
+                snprintf(lock_name, MAX_STRING_SIZE, "%s/max_nolock_bytes",
+                         ns->ns_name);
+                lock_vars[0].data = &ns->ns_max_nolock_size;
+                lock_vars[0].read_fptr = lprocfs_rd_uint;
+                lock_vars[0].write_fptr = lprocfs_wr_uint;
+                lprocfs_add_vars(ldlm_ns_proc_dir, lock_vars, 0);
+
+                snprintf(lock_name, MAX_STRING_SIZE, "%s/contention_seconds",
+                         ns->ns_name);
+                lock_vars[0].data = &ns->ns_contention_time;
+                lock_vars[0].read_fptr = lprocfs_rd_uint;
+                lock_vars[0].write_fptr = lprocfs_wr_uint;
+                lprocfs_add_vars(ldlm_ns_proc_dir, lock_vars, 0);
+
+                snprintf(lock_name, MAX_STRING_SIZE, "%s/contended_locks",
+                         ns->ns_name);
+                lock_vars[0].data = &ns->ns_contended_locks;
+                lock_vars[0].read_fptr = lprocfs_rd_uint;
+                lock_vars[0].write_fptr = lprocfs_wr_uint;
+                lprocfs_add_vars(ldlm_ns_proc_dir, lock_vars, 0);
         }
 }
 #undef MAX_STRING_SIZE
@@ -314,6 +335,9 @@ struct ldlm_namespace *ldlm_namespace_new(char *name, ldlm_side_t client,
         atomic_set(&ns->ns_locks, 0);
         ns->ns_resources = 0;
         cfs_waitq_init(&ns->ns_waitq);
+        ns->ns_max_nolock_size = NS_DEFAULT_MAX_NOLOCK_BYTES;
+        ns->ns_contention_time = NS_DEFAULT_CONTENTION_SECONDS;
+        ns->ns_contended_locks = NS_DEFAULT_CONTENDED_LOCKS;
 
         for (bucket = ns->ns_hash + RES_HASH_SIZE - 1; bucket >= ns->ns_hash;
              bucket--)

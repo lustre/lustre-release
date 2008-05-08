@@ -78,6 +78,11 @@ enum lli_flags {
         /* Sizeon-on-MDS attributes are changed. An attribute update needs to
          * be sent to MDS. */
         LLIF_SOM_DIRTY          = (1 << 3),
+        /* File is contented */
+        LLIF_CONTENDED         = (1 << 4),
+        /* Truncate uses server lock for this file */
+        LLIF_SRVLOCK           = (1 << 5)
+
 };
 
 struct ll_inode_info {
@@ -89,6 +94,7 @@ struct ll_inode_info {
         __u64                   lli_maxbytes;
         __u64                   lli_ioepoch;
         unsigned long           lli_flags;
+        cfs_time_t              lli_contention_time;
 
         /* this lock protects posix_acl, pending_write_llaps, mmap_cnt */
         spinlock_t              lli_lock;
@@ -234,6 +240,10 @@ enum stats_track_type {
 #define LL_SBI_LOCALFLOCK       0x200 /* Local flocks support by kernel */
 #define LL_SBI_LRU_RESIZE       0x400 /* lru resize support */
 
+/* default value for ll_sb_info->contention_time */
+#define SBI_DEFAULT_CONTENTION_SECONDS     60
+/* default value for lockless_truncate_enable */
+#define SBI_DEFAULT_LOCKLESS_TRUNCATE_ENABLE 1
 #define RCE_HASHES      32
 
 struct rmtacl_ctl_entry {
@@ -288,6 +298,9 @@ struct ll_sb_info {
         unsigned long             ll_async_page_count;
         unsigned long             ll_pglist_gen;
         struct list_head          ll_pglist; /* all pages (llap_pglist_item) */
+
+        unsigned                  ll_contention_time; /* seconds */
+        unsigned                  ll_lockless_truncate_enable; /* true/false */
 
         struct ll_ra_info         ll_ra_info;
         unsigned int              ll_namelen;
@@ -458,7 +471,8 @@ struct ll_async_page {
                          llap_defer_uptodate:1,
                          llap_origin:3,
                          llap_ra_used:1,
-                         llap_ignore_quota:1;
+                         llap_ignore_quota:1,
+                         llap_lockless_io_page:1;
         void            *llap_cookie;
         struct page     *llap_page;
         struct list_head llap_pending_write;
@@ -478,6 +492,7 @@ enum {
         LLAP_ORIGIN_COMMIT_WRITE,
         LLAP_ORIGIN_WRITEPAGE,
         LLAP_ORIGIN_REMOVEPAGE,
+        LLAP_ORIGIN_LOCKLESS_IO,
         LLAP__ORIGIN_MAX,
 };
 extern char *llap_origins[];
@@ -545,6 +560,9 @@ struct ll_async_page *llap_cast_private(struct page *page);
 void ll_readahead_init(struct inode *inode, struct ll_readahead_state *ras);
 void ll_ra_accounting(struct ll_async_page *llap,struct address_space *mapping);
 void ll_truncate(struct inode *inode);
+int ll_file_punch(struct inode *, loff_t, int);
+ssize_t ll_file_lockless_io(struct file *, char *, size_t, loff_t *, int);
+void ll_clear_file_contended(struct inode*);
 int ll_sync_page_range(struct inode *, struct address_space *, loff_t, size_t);
 
 /* llite/file.c */

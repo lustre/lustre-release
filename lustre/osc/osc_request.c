@@ -2180,6 +2180,7 @@ static int osc_send_oap_rpc(struct client_obd *cli, struct lov_oinfo *loi,
         CFS_LIST_HEAD(rpc_list);
         unsigned int ending_offset;
         unsigned  starting_offset = 0;
+        int srvlock = 0;
         ENTRY;
 
         /* first we find the pages we're allowed to work with */
@@ -2189,6 +2190,13 @@ static int osc_send_oap_rpc(struct client_obd *cli, struct lov_oinfo *loi,
 
                 LASSERT(oap->oap_magic == OAP_MAGIC);
 
+                if (page_count != 0 &&
+                    srvlock != !!(oap->oap_brw_flags & OBD_BRW_SRVLOCK)) {
+                        CDEBUG(D_PAGE, "SRVLOCK flag mismatch,"
+                               " oap %p, page %p, srvlock %u\n",
+                               oap, oap->oap_brw_page.pg, (unsigned)!srvlock);
+                        break;
+                }
                 /* in llite being 'ready' equates to the page being locked
                  * until completion unlocks it.  commit_write submits a page
                  * as not ready because its unlock will happen unconditionally
@@ -2270,6 +2278,8 @@ static int osc_send_oap_rpc(struct client_obd *cli, struct lov_oinfo *loi,
 
                 /* now put the page back in our accounting */
                 list_add_tail(&oap->oap_rpc_item, &rpc_list);
+                if (page_count == 0)
+                        srvlock = !!(oap->oap_brw_flags & OBD_BRW_SRVLOCK);
                 if (++page_count >= cli->cl_max_pages_per_rpc)
                         break;
 

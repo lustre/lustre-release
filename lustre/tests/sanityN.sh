@@ -608,6 +608,85 @@ test_31() {
 }
 run_test 31 "voluntary cancel / blocking ast race=============="
 
+# enable/disable lockless truncate feature, depending on the arg 0/1
+enable_lockless_truncate() {
+        lctl set_param -n llite.*.lockless_truncate $1
+}
+
+test_32a() { # bug 11270
+        local p="$TMP/sanityN-$TESTNAME.parameters"
+        save_lustre_params $HOSTNAME llite.*.lockless_truncate > $p
+        cancel_lru_locks osc
+        clear_llite_stats
+        enable_lockless_truncate 1
+        dd if=/dev/zero of=$DIR1/$tfile count=10 bs=1M > /dev/null 2>&1
+
+        log "checking cached lockless truncate"
+        $TRUNCATE $DIR1/$tfile 8000000
+        $CHECKSTAT -s 8000000 $DIR2/$tfile || error "wrong file size"
+        [ $(calc_llite_stats lockless_truncate) -eq 0 ] ||
+                error "lockless truncate doesn't use cached locks"
+
+        log "checking not cached lockless truncate"
+        $TRUNCATE $DIR2/$tfile 5000000
+        $CHECKSTAT -s 5000000 $DIR1/$tfile || error "wrong file size"
+        [ $(calc_llite_stats lockless_truncate) -ne 0 ] ||
+                error "not cached trancate isn't lockless"
+
+        log "disabled lockless truncate"
+        enable_lockless_truncate 0
+        clear_llite_stats
+        $TRUNCATE $DIR2/$tfile 3000000
+        $CHECKSTAT -s 3000000 $DIR1/$tfile || error "wrong file size"
+        [ $(calc_llite_stats lockless_truncate) -eq 0 ] ||
+                error "lockless truncate disabling failed"
+        rm $DIR1/$tfile
+        # restore lockless_truncate default values
+        restore_lustre_params < $p
+        rm -f $p
+}
+run_test 32a "lockless truncate"
+
+test_32b() { # bug 11270
+        local node
+        local p="$TMP/sanityN-$TESTNAME.parameters"
+        save_lustre_params $HOSTNAME "llite.*.contention_seconds" > $p
+        for node in $(osts_nodes); do
+                save_lustre_params $node "ldlm.namespaces.filter-*.max_nolock_bytes" >> $p
+                save_lustre_params $node "ldlm.namespaces.filter-*.contended_locks" >> $p
+                save_lustre_params $node "ldlm.namespaces.filter-*.contention_seconds" >> $p
+        done
+        clear_llite_stats
+        # agressive lockless i/o settings 
+        for node in $(osts_nodes); do
+                do_node $node 'lctl set_param -n ldlm.namespaces.filter-*.max_nolock_bytes 2000000; lctl set_param -n ldlm.namespaces.filter-*.contended_locks 0; lctl set_param -n ldlm.namespaces.filter-*.contention_seconds 60'
+        done
+        lctl set_param -n llite.*.contention_seconds 60
+        for i in $(seq 5); do
+                dd if=/dev/zero of=$DIR1/$tfile bs=4k count=1 conv=notrunc > /dev/null 2>&1
+                dd if=/dev/zero of=$DIR2/$tfile bs=4k count=1 conv=notrunc > /dev/null 2>&1
+        done
+        [ $(calc_llite_stats lockless_write_bytes) -ne 0 ] || error "lockless i/o was not triggered" 
+        # disable lockless i/o (it is disabled by default)
+        for node in $(osts_nodes); do
+                do_node $node 'lctl set_param -n ldlm.namespaces.filter-*.max_nolock_bytes 0; lctl set_param -n ldlm.namespaces.filter-*.contended_locks 32; lctl set_param -n ldlm.namespaces.filter-*.contention_seconds 0'
+        done
+        # set contention_seconds to 0 at client too, otherwise Lustre still
+        # remembers lock contention
+        lctl set_param -n llite.*.contention_seconds 0
+        clear_llite_stats
+        for i in $(seq 5); do
+                dd if=/dev/zero of=$DIR1/$tfile bs=4k count=1 conv=notrunc > /dev/null 2>&1
+                dd if=/dev/zero of=$DIR2/$tfile bs=4k count=1 conv=notrunc > /dev/null 2>&1
+        done
+        [ $(calc_llite_stats lockless_write_bytes) -eq 0 ] ||
+                error "lockless i/o works when disabled" 
+        rm -f $DIR1/$tfile
+        restore_lustre_params <$p
+        rm -f $p
+}
+run_test 32b "lockless i/o"
+
 log "cleanup: ======================================================"
 
 check_and_cleanup_lustre

@@ -366,6 +366,8 @@ struct page *ll_nopage(struct vm_area_struct *vma, unsigned long address,
                 RETURN(NULL);
         }
 
+        ll_clear_file_contended(inode);
+
         /* start and end the lock on the first and last bytes in the page */
         policy_from_vma(&policy, vma, address, CFS_PAGE_SIZE);
 

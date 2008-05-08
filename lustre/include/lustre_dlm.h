@@ -132,6 +132,9 @@ typedef enum {
  * w/o involving separate thread. in order to decrease cs rate */
 #define LDLM_FL_ATOMIC_CB      0x4000000
 
+/* Cancel lock asynchronously. See ldlm_cli_cancel_unused_resource. */
+#define LDLM_FL_ASYNC           0x8000000
+
 /* It may happen that a client initiate 2 operations, e.g. unlink and mkdir,
  * such that server send blocking ast for conflict locks to this client for
  * the 1st operation, whereas the 2nd operation has canceled this lock and
@@ -145,8 +148,8 @@ typedef enum {
 #define LDLM_FL_BL_AST          0x10000000
 #define LDLM_FL_BL_DONE         0x20000000
 
-/* Cancel lock asynchronously. See ldlm_cli_cancel_unused_resource. */
-#define LDLM_FL_ASYNC           0x40000000
+/* measure lock contention and return -EUSERS if locking contention is high */
+#define LDLM_FL_DENY_ON_CONTENTION 0x40000000
 
 /* The blocking callback is overloaded to perform two functions.  These flags
  * indicate which operation should be performed. */
@@ -287,6 +290,12 @@ typedef enum {
  * others (including ibits locks) will be canceled on memory pressure event. */
 #define LDLM_LOCK_SHRINK_THUMB 256
 
+/* default values for the "max_nolock_size", "contention_time"
+ * and "contended_locks" namespace tunables */
+#define NS_DEFAULT_MAX_NOLOCK_BYTES 0
+#define NS_DEFAULT_CONTENTION_SECONDS 2
+#define NS_DEFAULT_CONTENDED_LOCKS 32
+
 struct ldlm_namespace {
         char                  *ns_name;
         ldlm_side_t            ns_client; /* is this a client-side lock tree? */
@@ -321,6 +330,14 @@ struct ldlm_namespace {
         cfs_waitq_t            ns_waitq;
         struct ldlm_pool       ns_pool;
         ldlm_appetite_t        ns_appetite;
+        /* if more than @ns_contented_locks found, the resource considered
+         * as contended */
+        unsigned               ns_contended_locks;
+        /* the resource remembers contended state during @ns_contention_time,
+         * in seconds */
+        unsigned               ns_contention_time;
+        /* limit size of nolock requests, in bytes */
+        unsigned               ns_max_nolock_size;
 };
 
 static inline int ns_is_client(struct ldlm_namespace *ns)
@@ -486,6 +503,9 @@ struct ldlm_resource {
         struct semaphore       lr_lvb_sem;
         __u32                  lr_lvb_len;
         void                  *lr_lvb_data;
+
+        /* when the resource was considered as contended */
+        cfs_time_t             lr_contention_time;
 };
 
 struct ldlm_ast_work {

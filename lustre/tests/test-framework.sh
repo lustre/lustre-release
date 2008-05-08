@@ -1635,3 +1635,33 @@ multiop_bg_pause() {
 
     return 0
 }
+
+# reset llite stat counters
+clear_llite_stats(){
+        lctl set_param -n llite.*.stats 0
+}
+
+# sum llite stat items
+calc_llite_stats() {
+        local res=$(lctl get_param -n llite.*.stats |
+                    awk 'BEGIN {s = 0} END {print s} /^'"$1"'/ {s += $2}')
+        echo $res
+}
+
+# save_lustre_params(node, parameter_mask)
+# generate a stream of formatted strings (<node> <param name>=<param value>)
+save_lustre_params() {
+        local s
+        do_node $1 "lctl get_param $2" | while read s; do echo "$1 $s"; done
+}
+
+# restore lustre parameters from input stream, produces by save_lustre_params
+restore_lustre_params() {
+        local node
+        local name
+        local val
+        while IFS=" =" read node name val; do
+                do_node $node "lctl set_param -n $name $val"
+        done
+}
+
