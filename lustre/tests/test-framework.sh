@@ -1184,6 +1184,15 @@ clear_failloc() {
     do_facet $facet "sysctl -e -w lustre.fail_loc=0"
 }
 
+set_nodes_failloc () {
+    local nodes=$1
+    local node
+
+    for node in $nodes ; do
+        do_node $node sysctl -w lustre.fail_loc=$2
+    done
+}
+
 cancel_lru_locks() {
     $LCTL mark "cancel_lru_locks $1 start"
     for d in `find $LPROC/ldlm/namespaces | egrep -i $1`; do
