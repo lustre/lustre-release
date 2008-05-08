@@ -12,6 +12,12 @@ tbd  Sun Microsystems, Inc.
        * RHEL 4 and RHEL 5/SLES 10 clients behaves differently on 'cd' to a
         removed cwd "./" (refer to Bugzilla 14399).
 
+Severity   : minor
+Bugzilla   : 14949
+Description: don't panic with use echo client
+Details    : echo client pass NULL as client nid pointer and this produce null
+             pointer dereference.
+
 Severity   : major
 Bugzilla   : 15575
 Description: Stack overflow during MDS log replay
