@@ -1293,7 +1293,7 @@ int lprocfs_nid_stats_clear_write(struct file *file, const char *buffer,
 }
 EXPORT_SYMBOL(lprocfs_nid_stats_clear_write);
 
-int lprocfs_exp_setup(struct obd_export *exp, lnet_nid_t nid, int *newnid)
+int lprocfs_exp_setup(struct obd_export *exp, lnet_nid_t *nid, int *newnid)
 {
         int rc = 0;
         struct nid_stat *tmp = NULL, *tmp1;
@@ -1306,7 +1306,10 @@ int lprocfs_exp_setup(struct obd_export *exp, lnet_nid_t nid, int *newnid)
             !exp->exp_obd->obd_nid_stats_hash_body)
                 RETURN(-EINVAL);
 
-        if (!nid)
+	/* not test against zero because eric say:
+	 * You may only test nid against another nid, or LNET_NID_ANY.  Anything else is
+	 * nonsense.*/
+        if (!nid || *nid == LNET_NID_ANY)
                 RETURN(0);
 
         obd = exp->exp_obd;
@@ -1317,26 +1320,26 @@ int lprocfs_exp_setup(struct obd_export *exp, lnet_nid_t nid, int *newnid)
         if (tmp == NULL)
                 RETURN(-ENOMEM);
 
-        tmp->nid = nid;
+        tmp->nid = *nid;
         tmp->nid_obd = exp->exp_obd;
         tmp->nid_exp_ref_count = 1; /* need live in hash after destroy export */
 
-        tmp1= lustre_hash_findadd_unique(obd->obd_nid_stats_hash_body, &nid,
+        tmp1= lustre_hash_findadd_unique(obd->obd_nid_stats_hash_body, nid,
                                          &tmp->nid_hash);
         CDEBUG(D_INFO, "Found stats %p for nid %s - ref %d\n",
-               tmp1, libcfs_nid2str(nid), tmp->nid_exp_ref_count);
+               tmp1, libcfs_nid2str(*nid), tmp->nid_exp_ref_count);
 
         if (tmp1 != tmp) {
                 exp->exp_nid_stats = tmp1;
                 GOTO(destroy_new, rc = 0);
         }
         /* not found - create */
-        tmp->nid_proc = proc_mkdir(libcfs_nid2str(nid),
+        tmp->nid_proc = proc_mkdir(libcfs_nid2str(*nid),
                                    obd->obd_proc_exports_entry);
         if (!tmp->nid_proc) {
                 CERROR("Error making export directory for"
-                       " nid %s\n", libcfs_nid2str(nid));
-                lustre_hash_delitem(obd->obd_nid_stats_hash_body, &nid,
+                       " nid %s\n", libcfs_nid2str(*nid));
+                lustre_hash_delitem(obd->obd_nid_stats_hash_body, nid,
                                     &tmp->nid_hash);
                 GOTO(destroy_new, rc = -ENOMEM);
         }

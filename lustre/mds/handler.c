@@ -319,7 +319,6 @@ static int mds_connect(const struct lu_env *env,
         struct obd_export *exp;
         struct mds_export_data *med;
         struct mds_client_data *mcd = NULL;
-        lnet_nid_t *client_nid = (lnet_nid_t *)localdata;
         int rc;
         ENTRY;
 
@@ -356,7 +355,7 @@ static int mds_connect(const struct lu_env *env,
         memcpy(mcd->mcd_uuid, cluuid, sizeof(mcd->mcd_uuid));
         med->med_mcd = mcd;
 
-        rc = mds_client_add(obd, exp, -1, *client_nid);
+        rc = mds_client_add(obd, exp, -1, localdata);
         GOTO(out, rc);
 
 out:

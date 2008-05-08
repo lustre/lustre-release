@@ -591,7 +591,7 @@ int target_handle_connect(struct ptlrpc_request *req)
         int rc = 0;
         int initial_conn = 0;
         struct obd_connect_data *data, *tmpdata;
-        lnet_nid_t client_nid = 0;
+        lnet_nid_t *client_nid = NULL;
         ENTRY;
 
         OBD_RACE(OBD_FAIL_TGT_CONN_RACE);
@@ -791,7 +791,7 @@ int target_handle_connect(struct ptlrpc_request *req)
         /* Tell the client if we support replayable requests */
         if (target->obd_replayable)
                 lustre_msg_add_op_flags(req->rq_repmsg, MSG_CONNECT_REPLAYABLE);
-        client_nid = req->rq_peer.nid;
+        client_nid = &req->rq_peer.nid;
 
         if (export == NULL) {
                 if (target->obd_recovering) {
@@ -810,7 +810,7 @@ int target_handle_connect(struct ptlrpc_request *req)
 dont_check_exports:
                         rc = obd_connect(req->rq_svc_thread->t_env,
                                          &conn, target, &cluuid, data,
-                                         &client_nid);
+                                         client_nid);
                 }
         } else {
                 rc = obd_reconnect(req->rq_svc_thread->t_env,
