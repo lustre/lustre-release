@@ -1406,7 +1406,8 @@ repeat:
                 ll_inode_size_unlock(inode, 1);
                 retval = ll_glimpse_size(inode, LDLM_FL_BLOCK_GRANTED);
                 if (retval) {
-                        ll_tree_unlock(&tree);
+                        if (tree_locked)
+                                ll_tree_unlock(&tree);
                         goto out;
                 }
         } else {

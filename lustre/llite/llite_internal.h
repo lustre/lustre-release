@@ -231,6 +231,8 @@ enum stats_track_type {
 
 /* default value for ll_sb_info->contention_time */
 #define SBI_DEFAULT_CONTENTION_SECONDS     60
+/* default value for lockless_truncate_enable */
+#define SBI_DEFAULT_LOCKLESS_TRUNCATE_ENABLE 1
 
 struct ll_sb_info {
         struct list_head          ll_list;
@@ -260,6 +262,7 @@ struct ll_sb_info {
         struct list_head          ll_pglist; /* all pages (llap_pglist_item) */
 
         unsigned                  ll_contention_time; /* seconds */
+        unsigned                  ll_lockless_truncate_enable; /* true/false */
 
         struct ll_ra_info         ll_ra_info;
         unsigned int              ll_namelen;

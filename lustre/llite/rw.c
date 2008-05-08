@@ -120,7 +120,14 @@ int ll_file_punch(struct inode * inode, loff_t new_size, int srvlock)
         oinfo.oi_oa = &oa;
         oa.o_id = lli->lli_smd->lsm_object_id;
         oa.o_valid = OBD_MD_FLID;
-        oa.o_flags = srvlock ? OBD_FL_TRUNCLOCK : 0;
+        if (srvlock) {
+                /* set OBD_MD_FLFLAGS in o_valid, only if we 
+                 * set OBD_FL_TRUNCLOCK, otherwise ost_punch
+                 * and filter_setattr get confused, see the comment
+                 * in ost_punch */
+                oa.o_flags = OBD_FL_TRUNCLOCK;
+                oa.o_valid |= OBD_MD_FLFLAGS;
+        }
         obdo_from_inode(&oa, inode, OBD_MD_FLTYPE | OBD_MD_FLMODE |OBD_MD_FLFID|
                         OBD_MD_FLATIME | OBD_MD_FLMTIME | OBD_MD_FLCTIME |
                         OBD_MD_FLUID | OBD_MD_FLGID | OBD_MD_FLGENER |
@@ -212,6 +219,8 @@ void ll_truncate(struct inode *inode)
         ll_inode_size_unlock(inode, 0);
         if (!srvlock)
                 ll_file_punch(inode, new_size, 0);
+        else
+                ll_stats_ops_tally(ll_i2sbi(inode), LPROC_LL_LOCKLESS_TRUNC, 1);
 
         EXIT;
         return;

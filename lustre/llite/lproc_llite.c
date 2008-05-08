@@ -463,6 +463,27 @@ static int ll_wr_contention_time(struct file *file, const char *buffer,
                 count;
 }
 
+static int ll_rd_lockless_truncate(char *page, char **start, off_t off,
+                                   int count, int *eof, void *data)
+{
+        struct super_block *sb = data;
+
+        *eof = 1;
+        return snprintf(page, count, "%u\n",
+                        ll_s2sbi(sb)->ll_lockless_truncate_enable);
+}
+
+static int ll_wr_lockless_truncate(struct file *file, const char *buffer,
+                                   unsigned long count, void *data)
+{
+        struct super_block *sb = data;
+        struct ll_sb_info *sbi = ll_s2sbi(sb);
+
+        return lprocfs_write_helper(buffer, count,
+                                    &sbi->ll_lockless_truncate_enable)
+                ?: count;
+}
+
 static int ll_rd_statahead_max(char *page, char **start, off_t off,
                                int count, int *eof, void *data)
 {
@@ -534,7 +555,10 @@ static struct lprocfs_vars lprocfs_llite_obd_vars[] = {
         { "stats_track_pid",  ll_rd_track_pid, ll_wr_track_pid, 0 },
         { "stats_track_ppid", ll_rd_track_ppid, ll_wr_track_ppid, 0 },
         { "stats_track_gid",  ll_rd_track_gid, ll_wr_track_gid, 0 },
-        { "contention_seconds", ll_rd_contention_time, ll_wr_contention_time, 0},
+        { "contention_seconds", ll_rd_contention_time,
+                                ll_wr_contention_time, 0},
+        { "lockless_truncate", ll_rd_lockless_truncate,
+                               ll_wr_lockless_truncate, 0},
         { "statahead_max",      ll_rd_statahead_max, ll_wr_statahead_max, 0 },
         { "statahead_stats",    ll_rd_statahead_stats, 0, 0 },
         { 0 }
@@ -576,6 +600,7 @@ struct llite_file_opcode {
         /* inode operation */
         { LPROC_LL_SETATTR,        LPROCFS_TYPE_REGS, "setattr" },
         { LPROC_LL_TRUNC,          LPROCFS_TYPE_REGS, "truncate" },
+        { LPROC_LL_LOCKLESS_TRUNC, LPROCFS_TYPE_REGS, "lockless_truncate" },
         { LPROC_LL_FLOCK,          LPROCFS_TYPE_REGS, "flock" },
 #if (LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))
         { LPROC_LL_GETATTR,        LPROCFS_TYPE_REGS, "getattr" },
