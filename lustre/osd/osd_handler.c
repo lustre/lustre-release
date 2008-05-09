@@ -1487,7 +1487,7 @@ static struct obd_capa *osd_capa_get(const struct lu_env *env,
         spin_unlock(&capa_lock);
 
         capa->lc_keyid = key->lk_keyid;
-        capa->lc_expiry = CURRENT_SECONDS + dev->od_capa_timeout;
+        capa->lc_expiry = cfs_time_current_sec() + dev->od_capa_timeout;
 
         rc = capa_hmac(capa->lc_hmac, capa, key->lk_key);
         if (rc) {

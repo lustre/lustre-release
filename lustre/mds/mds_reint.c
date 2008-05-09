@@ -241,7 +241,7 @@ commit:
  */
 int mds_fix_attr(struct inode *inode, struct mds_update_record *rec)
 {
-        time_t now = CURRENT_SECONDS;
+        time_t now = cfs_time_current_sec();
         struct iattr *attr = &rec->ur_iattr;
         unsigned int ia_valid = attr->ia_valid;
         int error;
@@ -1330,7 +1330,7 @@ cleanup:
 
 #define INODE_CTIME_AGE (10)
 #define INODE_CTIME_OLD(inode) (LTIME_S(inode->i_ctime) +               \
-                                INODE_CTIME_AGE < CURRENT_SECONDS)
+                                INODE_CTIME_AGE < cfs_time_current_sec())
 
 int mds_get_parent_child_locked(struct obd_device *obd, struct mds_obd *mds,
                                 struct ll_fid *fid,

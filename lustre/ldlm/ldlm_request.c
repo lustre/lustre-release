@@ -64,7 +64,7 @@ int ldlm_expired_completion_wait(void *data)
                 LDLM_ERROR(lock, "lock timed out (enqueued at %lu, %lus ago); "
                            "not entering recovery in server code, just going "
                            "back to sleep", lock->l_enqueued_time.tv_sec,
-                           CURRENT_SECONDS - lock->l_enqueued_time.tv_sec);
+                           cfs_time_current_sec() - lock->l_enqueued_time.tv_sec);
                 if (cfs_time_after(cfs_time_current(), next_dump)) {
                         last_dump = next_dump;
                         next_dump = cfs_time_shift(300);
@@ -81,7 +81,7 @@ int ldlm_expired_completion_wait(void *data)
         ptlrpc_fail_import(imp, lwd->lwd_conn_cnt);
         LDLM_ERROR(lock, "lock timed out (enqueued at %lu, %lus ago), entering "
                    "recovery for %s@%s", lock->l_enqueued_time.tv_sec,
-                   CURRENT_SECONDS - lock->l_enqueued_time.tv_sec,
+                   cfs_time_current_sec() - lock->l_enqueued_time.tv_sec,
                    obd2cli_tgt(obd), imp->imp_connection->c_remote_uuid.uuid);
 
         RETURN(0);

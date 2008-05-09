@@ -465,7 +465,7 @@ static void ptlrpc_update_export_timer(struct obd_export *exp, long extra_delay)
            at the exact right moment.  Eventually, all silent exports
            will make it to the top of the list. */
         exp->exp_last_request_time = max(exp->exp_last_request_time,
-                                         (time_t)CURRENT_SECONDS + extra_delay);
+                                         cfs_time_current_sec() + extra_delay);
 
         CDEBUG(D_HA, "updating export %s at %ld exp %p\n",
                exp->exp_client_uuid.uuid,
@@ -500,20 +500,20 @@ static void ptlrpc_update_export_timer(struct obd_export *exp, long extra_delay)
         /* Note - racing to start/reset the obd_eviction timer is safe */
         if (exp->exp_obd->obd_eviction_timer == 0) {
                 /* Check if the oldest entry is expired. */
-                if (CURRENT_SECONDS > (oldest_time +
+                if (cfs_time_current_sec() > (oldest_time +
                                        (3 * obd_timeout / 2) + extra_delay)) {
                         /* We need a second timer, in case the net was down and
                          * it just came back. Since the pinger may skip every
                          * other PING_INTERVAL (see note in ptlrpc_pinger_main),
                          * we better wait for 3. */
-                        exp->exp_obd->obd_eviction_timer = CURRENT_SECONDS +
+                        exp->exp_obd->obd_eviction_timer = cfs_time_current_sec() +
                                 3 * PING_INTERVAL;
                         CDEBUG(D_HA, "%s: Think about evicting %s from %ld\n",
                                exp->exp_obd->obd_name, obd_export_nid2str(exp),
                                oldest_time);
                 }
         } else {
-                if (CURRENT_SECONDS > (exp->exp_obd->obd_eviction_timer +
+                if (cfs_time_current_sec() > (exp->exp_obd->obd_eviction_timer +
                                        extra_delay)) {
                         /* The evictor won't evict anyone who we've heard from
                          * recently, so we don't have to check before we start

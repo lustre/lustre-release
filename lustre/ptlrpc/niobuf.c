@@ -513,7 +513,7 @@ int ptl_send_rpc(struct ptlrpc_request *request, int noreply)
 
         OBD_FAIL_TIMEOUT(OBD_FAIL_PTLRPC_DELAY_SEND, request->rq_timeout + 5);
 
-        request->rq_sent = CURRENT_SECONDS;
+        request->rq_sent = cfs_time_current_sec();
         do_gettimeofday(&request->rq_arrival_time);
         ptlrpc_pinger_sending_on_import(request->rq_import);
         rc = ptl_send_buf(&request->rq_req_md_h,

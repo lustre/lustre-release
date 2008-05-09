@@ -15,7 +15,6 @@
 
 /* XXX */
 #define LOOKUP_COBD 			4096
-#define CURRENT_SECONDS			cfs_unix_seconds()
 
 #endif
 

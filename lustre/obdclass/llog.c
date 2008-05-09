@@ -161,7 +161,7 @@ int llog_init_handle(struct llog_handle *handle, int flags,
         llh->llh_hdr.lrh_type = LLOG_HDR_MAGIC;
         llh->llh_hdr.lrh_len = llh->llh_tail.lrt_len = LLOG_CHUNK_SIZE;
         llh->llh_hdr.lrh_index = llh->llh_tail.lrt_index = 0;
-        llh->llh_timestamp = CURRENT_SECONDS;
+        llh->llh_timestamp = cfs_time_current_sec();
         if (uuid)
                 memcpy(&llh->llh_tgtuuid, uuid, sizeof(llh->llh_tgtuuid));
         llh->llh_bitmap_offset = offsetof(typeof(*llh),llh_bitmap);

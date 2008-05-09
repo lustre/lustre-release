@@ -83,9 +83,6 @@ typedef unsigned short umode_t;
 
 #endif
 
-#ifndef CURRENT_SECONDS
-# define CURRENT_SECONDS time(0)
-#endif
 
 #ifndef ARRAY_SIZE
 #define ARRAY_SIZE(a) ((sizeof (a))/(sizeof ((a)[0])))

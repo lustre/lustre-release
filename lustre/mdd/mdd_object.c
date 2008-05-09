@@ -902,7 +902,7 @@ static int mdd_xattr_set(const struct lu_env *env, struct md_object *obj,
         rc = mdd_xattr_set_txn(env, md2mdd_obj(obj), buf, name,
                                fl, handle);
         if (rc == 0) {
-                la_copy->la_ctime = CURRENT_SECONDS;
+                la_copy->la_ctime = cfs_time_current_sec();
                 la_copy->la_valid = LA_CTIME;
                 rc = mdd_attr_set_internal_locked(env, mdd_obj, la_copy,
                                                   handle, 0);
@@ -936,7 +936,7 @@ int mdd_xattr_del(const struct lu_env *env, struct md_object *obj,
                            mdd_object_capa(env, mdd_obj));
         mdd_write_unlock(env, mdd_obj);
         if (rc == 0) {
-                la_copy->la_ctime = CURRENT_SECONDS;
+                la_copy->la_ctime = cfs_time_current_sec();
                 la_copy->la_valid = LA_CTIME;
                 rc = mdd_attr_set_internal_locked(env, mdd_obj, la_copy,
                                                   handle, 0);

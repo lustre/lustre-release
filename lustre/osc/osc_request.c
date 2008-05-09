@@ -1488,7 +1488,7 @@ int osc_brw_redo_request(struct ptlrpc_request *request,
         aa->aa_resends++;
         new_req->rq_interpret_reply = request->rq_interpret_reply;
         new_req->rq_async_args = request->rq_async_args;
-        new_req->rq_sent = CURRENT_SECONDS + aa->aa_resends;
+        new_req->rq_sent = cfs_time_current_sec() + aa->aa_resends;
 
         new_aa = (struct osc_brw_async_args *)&new_req->rq_async_args;
 

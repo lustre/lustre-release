@@ -873,7 +873,7 @@ static int ptlrpc_send_new_req(struct ptlrpc_request *req)
         ENTRY;
 
         LASSERT(req->rq_phase == RQ_PHASE_NEW);
-        if (req->rq_sent && (req->rq_sent > CURRENT_SECONDS))
+        if (req->rq_sent && (req->rq_sent > cfs_time_current_sec()))
                 RETURN (0);
         
         req->rq_phase = RQ_PHASE_RPC;
@@ -921,7 +921,7 @@ static int ptlrpc_send_new_req(struct ptlrpc_request *req)
                         RETURN(1);
                 } else {
                         /* here begins timeout counting */
-                        req->rq_sent = CURRENT_SECONDS;
+                        req->rq_sent = cfs_time_current_sec();
                         req->rq_wait_ctx = 1;
                         RETURN(0);
                 }
@@ -1081,7 +1081,7 @@ check_ctx:
                                         }
                                         if (!req->rq_wait_ctx) {
                                                 /* begins timeout counting */
-                                                req->rq_sent = CURRENT_SECONDS;
+                                                req->rq_sent = cfs_time_current_sec();
                                                 req->rq_wait_ctx = 1;
                                         }
                                         continue;
@@ -1193,7 +1193,7 @@ int ptlrpc_expire_one_request(struct ptlrpc_request *req)
 
         DEBUG_REQ(D_ERROR|D_NETERROR, req, "%s (sent at %lu, %lus ago)",
                   req->rq_net_err ? "network error" : "timeout",
-                  (long)req->rq_sent, CURRENT_SECONDS - req->rq_sent);
+                  (long)req->rq_sent, cfs_time_current_sec() - req->rq_sent);
 
         if (imp != NULL && obd_debug_peer_on_timeout)
                 LNetCtl(IOC_LIBCFS_DEBUG_PEER, &imp->imp_connection->c_peer);
@@ -1247,7 +1247,7 @@ int ptlrpc_expired_set(void *data)
 {
         struct ptlrpc_request_set *set = data;
         struct list_head          *tmp;
-        time_t                     now = CURRENT_SECONDS;
+        time_t                     now = cfs_time_current_sec();
         ENTRY;
 
         LASSERT(set != NULL);
@@ -1307,7 +1307,7 @@ void ptlrpc_interrupted_set(void *data)
 int ptlrpc_set_next_timeout(struct ptlrpc_request_set *set)
 {
         struct list_head      *tmp;
-        time_t                 now = CURRENT_SECONDS;
+        time_t                 now = cfs_time_current_sec();
         time_t                 deadline;
         int                    timeout = 0;
         struct ptlrpc_request *req;

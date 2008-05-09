@@ -763,7 +763,7 @@ int target_handle_connect(struct ptlrpc_request *req)
                 if (req->rq_export == NULL && initial_conn)
                        export->exp_last_request_time =
                                max(export->exp_last_request_time,
-                                   (time_t)CURRENT_SECONDS);
+                                   (time_t)cfs_time_current_sec());
         }
 
         /* We want to handle EALREADY but *not* -EALREADY from
@@ -779,7 +779,7 @@ int target_handle_connect(struct ptlrpc_request *req)
         CWARN("%s: connection from %s@%s %st"LPU64" exp %p cur %ld last %ld\n",
                target->obd_name, cluuid.uuid, libcfs_nid2str(req->rq_peer.nid),
               target->obd_recovering ? "recovering/" : "", data->ocd_transno,
-              export, (long)CURRENT_SECONDS,
+              export, (long)cfs_time_current_sec(),
               export ? (long)export->exp_last_request_time : 0);
 
 
@@ -1102,7 +1102,7 @@ static void target_finish_recovery(struct obd_device *obd)
                               rc < 0 ? "failed" : "complete", rc);
         }
 
-        obd->obd_recovery_end = CURRENT_SECONDS;
+        obd->obd_recovery_end = cfs_time_current_sec();
         EXIT;
 }
 
@@ -1215,7 +1215,7 @@ static void reset_recovery_timer(struct obd_device *obd)
         CDEBUG(D_HA, "%s: timer will expire in %u seconds\n", obd->obd_name,
                (unsigned int)timeout_shift);
         /* Only used for lprocfs_status */
-        obd->obd_recovery_end = CURRENT_SECONDS + timeout_shift;
+        obd->obd_recovery_end = cfs_time_current_sec() + timeout_shift;
 }
 
 
@@ -1645,7 +1645,7 @@ void target_recovery_init(struct obd_device *obd, svc_handler_t handler)
               obd->obd_max_recoverable_clients, obd->obd_last_committed);
         obd->obd_next_recovery_transno = obd->obd_last_committed + 1;
         target_start_recovery_thread(obd, handler);
-        obd->obd_recovery_start = CURRENT_SECONDS;
+        obd->obd_recovery_start = cfs_time_current_sec();
         /* Only used for lprocfs_status */
         obd->obd_recovery_end = obd->obd_recovery_start + OBD_RECOVERY_TIMEOUT;
         /* bz13079: this should be set to desired value for ost but not for mds */

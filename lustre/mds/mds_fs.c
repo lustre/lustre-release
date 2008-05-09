@@ -446,7 +446,7 @@ static int mds_init_server_data(struct obd_device *obd, struct file *file)
                       obd->obd_max_recoverable_clients, mds->mds_last_transno);
                 obd->obd_next_recovery_transno = obd->obd_last_committed + 1;
                 obd->obd_recovering = 1;
-                obd->obd_recovery_start = CURRENT_SECONDS;
+                obd->obd_recovery_start = cfs_time_current_sec();
                 /* Only used for lprocfs_status */
                 obd->obd_recovery_end = obd->obd_recovery_start +
                         OBD_RECOVERY_TIMEOUT;

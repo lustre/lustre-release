@@ -1403,7 +1403,7 @@ int ll_setattr_raw(struct inode *inode, struct iattr *attr)
         if (attr->ia_valid & (ATTR_MTIME | ATTR_CTIME))
                 CDEBUG(D_INODE, "setting mtime %lu, ctime %lu, now = %lu\n",
                        LTIME_S(attr->ia_mtime), LTIME_S(attr->ia_ctime),
-                       CURRENT_SECONDS);
+                       cfs_time_current_sec());
 
         /* NB: ATTR_SIZE will only be set after this point if the size
          * resides on the MDS, ie, this file has no objects. */
@@ -2242,7 +2242,7 @@ struct md_op_data * ll_prep_md_op_data(struct md_op_data *op_data,
         op_data->op_name = name;
         op_data->op_namelen = namelen;
         op_data->op_mode = mode;
-        op_data->op_mod_time = CURRENT_SECONDS;
+        op_data->op_mod_time = cfs_time_current_sec();
         op_data->op_fsuid = current->fsuid;
         op_data->op_fsgid = current->fsgid;
         op_data->op_cap = current->cap_effective;

@@ -1772,7 +1772,7 @@ static int commit_chkquot(struct super_block *sb, struct qchk_ctxt *qctxt,
         if (!oqc)
                 RETURN(-ENOMEM);
 
-        now = CURRENT_SECONDS;
+        now = cfs_time_current_sec();
 
         if (cdqb->dqb_bsoftlimit &&
             toqb(cdqb->dqb_curspace) >= cdqb->dqb_bsoftlimit &&
