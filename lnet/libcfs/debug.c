@@ -102,6 +102,9 @@ char debug_file_path[1024] = "/r/tmp/lustre-log";
 #else
 char debug_file_path[1024] = "/tmp/lustre-log";
 #endif
+CFS_MODULE_PARM(debug_file_path, "s", charp, 0644,
+                "Path for dumping debug logs, "
+                "set 'NONE' to prevent log dumping");
 
 int libcfs_panic_in_progress;
 
@@ -402,11 +405,14 @@ void libcfs_debug_dumplog_internal(void *arg)
 
         CFS_PUSH_JOURNAL;
 
-        snprintf(debug_file_name, sizeof(debug_file_path) - 1, "%s.%ld.%ld",
-                 debug_file_path, cfs_time_current_sec(), (long)arg);
-        printk(KERN_ALERT "LustreError: dumping log to %s\n", debug_file_name);
-        tracefile_dump_all_pages(debug_file_name);
-
+        if (strncmp(debug_file_path, "NONE", 4) != 0) {
+                snprintf(debug_file_name, sizeof(debug_file_path) - 1,
+                         "%s.%ld.%ld", debug_file_path, cfs_time_current_sec(),
+                         (long)arg);
+                printk(KERN_ALERT "LustreError: dumping log to %s\n",
+                       debug_file_name);
+                tracefile_dump_all_pages(debug_file_name);
+        }
         CFS_POP_JOURNAL;
 }
 
