@@ -844,7 +844,7 @@ void lprocfs_clear_stats(struct lprocfs_stats *stats)
                         atomic_inc(&percpu_cntr->lc_cntl.la_entry);
                         percpu_cntr->lc_count = 0;
                         percpu_cntr->lc_sum = 0;
-                        percpu_cntr->lc_min = ~(__u64)0;
+                        percpu_cntr->lc_min = LC_MIN_INIT;
                         percpu_cntr->lc_max = 0;
                         percpu_cntr->lc_sumsquare = 0;
                         atomic_inc(&percpu_cntr->lc_cntl.la_exit);
@@ -890,7 +890,7 @@ static int lprocfs_stats_seq_show(struct seq_file *p, void *v)
 {
        struct lprocfs_stats *stats = p->private;
        struct lprocfs_counter  *cntr = v;
-       struct lprocfs_counter  t, ret = { .lc_min = ~(__u64)0 };
+       struct lprocfs_counter  t, ret = { .lc_min = LC_MIN_INIT };
        int i, idx, rc;
        unsigned int num_cpu;
 
@@ -932,18 +932,18 @@ static int lprocfs_stats_seq_show(struct seq_file *p, void *v)
                ret.lc_sumsquare += t.lc_sumsquare;
        }
 
-       rc = seq_printf(p, "%-25s "LPU64" samples [%s]", cntr->lc_name,
+       rc = seq_printf(p, "%-25s "LPD64" samples [%s]", cntr->lc_name,
                        ret.lc_count, cntr->lc_units);
        if (rc < 0)
                goto out;
 
        if ((cntr->lc_config & LPROCFS_CNTR_AVGMINMAX) && (ret.lc_count > 0)) {
-               rc = seq_printf(p, " "LPU64" "LPU64" "LPU64,
+               rc = seq_printf(p, " "LPD64" "LPD64" "LPD64,
                                ret.lc_min, ret.lc_max, ret.lc_sum);
                if (rc < 0)
                        goto out;
                if (cntr->lc_config & LPROCFS_CNTR_STDDEV)
-                       rc = seq_printf(p, " "LPU64, ret.lc_sumsquare);
+                       rc = seq_printf(p, " "LPD64, ret.lc_sumsquare);
                if (rc < 0)
                        goto out;
        }
@@ -1015,7 +1015,7 @@ void lprocfs_counter_init(struct lprocfs_stats *stats, int index,
                 c->lc_config = conf;
                 c->lc_count = 0;
                 c->lc_sum = 0;
-                c->lc_min = ~(__u64)0;
+                c->lc_min = LC_MIN_INIT;
                 c->lc_max = 0;
                 c->lc_name = name;
                 c->lc_units = units;

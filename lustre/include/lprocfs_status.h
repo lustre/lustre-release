@@ -121,6 +121,8 @@ struct lprocfs_atomic {
         atomic_t               la_exit;
 };
 
+#define LC_MIN_INIT ((~(__u64)0) >> 1)
+
 struct lprocfs_counter {
         struct lprocfs_atomic  lc_cntl;  /* may need to move to per set */
         unsigned int           lc_config;

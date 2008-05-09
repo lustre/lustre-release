@@ -727,7 +727,7 @@ EXPORT_SYMBOL(obd_memory);
 __s64 lprocfs_read_helper(struct lprocfs_counter *lc,
                           enum lprocfs_fields_flags field)
 {
-        __u64 ret = 0;
+        __s64 ret = 0;
         int centry;
 
         if (!lc)
