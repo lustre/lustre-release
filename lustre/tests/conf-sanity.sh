@@ -1154,21 +1154,24 @@ test_32a() {
 
         [ -z "$TUNEFS" ] && skip "No tunefs" && return
 	local DISK1_4=$LUSTRE/tests/disk1_4.zip
-        [ ! -r $DISK1_4 ] && skip "Cant find $DISK1_4, skipping" && return
-	unzip -o -j -d $TMP/$tdir $DISK1_4 || { skip "Cant unzip $DISK1_4, skipping" && return ; }
+	[ ! -r $DISK1_4 ] && skip "Cant find $DISK1_4, skipping" && return
+
+	local tmpdir=$TMP/conf32a
+	mkdir -p $tmpdir
+	unzip -o -j -d $tmpdir $DISK1_4 || { skip "Cant unzip $DISK1_4, skipping" && return ; }
 	load_modules
 	sysctl lnet.debug=$PTLDEBUG
 
-	$TUNEFS $TMP/$tdir/mds || error "tunefs failed"
+	$TUNEFS $tmpdir/mds || error "tunefs failed"
 	# nids are wrong, so client wont work, but server should start
-        start mds $TMP/$tdir/mds "-o loop,exclude=lustre-OST0000" || return 3
+	start mds $tmpdir/mds "-o loop,exclude=lustre-OST0000" || return 3
         local UUID=$(lctl get_param -n mds.lustre-MDT0000.uuid)
 	echo MDS uuid $UUID
 	[ "$UUID" == "mdsA_UUID" ] || error "UUID is wrong: $UUID" 
 
-	$TUNEFS --mgsnode=`hostname` $TMP/$tdir/ost1 || error "tunefs failed"
-	start ost1 $TMP/$tdir/ost1 "-o loop" || return 5
-        UUID=$(cat lctl get_param -n obdfilter.lustre-OST0000.uuid)
+	$TUNEFS --mgsnode=`hostname` $tmpdir/ost1 || error "tunefs failed"
+	start ost1 $tmpdir/ost1 "-o loop" || return 5
+	UUID=$(lctl get_param -n obdfilter.lustre-OST0000.uuid)
 	echo OST uuid $UUID
 	[ "$UUID" == "ost1_UUID" ] || error "UUID is wrong: $UUID" 
 
@@ -1198,12 +1201,12 @@ test_32a() {
 
         # mount a second time to make sure we didnt leave upgrade flag on
 	load_modules
-        $TUNEFS --dryrun $TMP/$tdir/mds || error "tunefs failed"
+	$TUNEFS --dryrun $tmpdir/mds || error "tunefs failed"
 	load_modules
-        start mds $TMP/$tdir/mds "-o loop,exclude=lustre-OST0000" || return 12
-        cleanup_nocli
+	start mds $tmpdir/mds "-o loop,exclude=lustre-OST0000" || return 12
+	cleanup_nocli
 
-	[ -d $TMP/$tdir ] && rm -rf $TMP/$tdir
+	[ -d $tmpdir ] && rm -rf $tmpdir
 }
 run_test 32a "Upgrade from 1.4 (not live)"
 
@@ -1219,22 +1222,24 @@ test_32b() {
 
         [ -z "$TUNEFS" ] && skip "No tunefs" && return
 	local DISK1_4=$LUSTRE/tests/disk1_4.zip
-        [ ! -r $DISK1_4 ] && skip "Cant find $DISK1_4, skipping" && return
-	unzip -o -j -d $TMP/$tdir $DISK1_4 || { skip "Cant unzip $DISK1_4, skipping" && return ; }
+	[ ! -r $DISK1_4 ] && skip "Cant find $DISK1_4, skipping" && return
+
+	local tmpdir=$TMP/conf32b
+	unzip -o -j -d $tmpdir $DISK1_4 || { skip "Cant unzip $DISK1_4, skipping" && return ; }
 	load_modules
 	sysctl lnet.debug=$PTLDEBUG
 	NEWNAME=sofia
 
 	# writeconf will cause servers to register with their current nids
-	$TUNEFS --writeconf --fsname=$NEWNAME $TMP/$tdir/mds || error "tunefs failed"
-	start mds $TMP/$tdir/mds "-o loop" || return 3
-        local UUID=$(lctl get_param -n mds.${NEWNAME}-MDT0000.uuid)
+	$TUNEFS --writeconf --fsname=$NEWNAME $tmpdir/mds || error "tunefs failed"
+	start mds $tmpdir/mds "-o loop" || return 3
+	local UUID=$(lctl get_param -n mds.${NEWNAME}-MDT0000.uuid)
 	echo MDS uuid $UUID
 	[ "$UUID" == "mdsA_UUID" ] || error "UUID is wrong: $UUID" 
 
-	$TUNEFS --mgsnode=`hostname` --fsname=$NEWNAME --writeconf $TMP/$tdir/ost1 || error "tunefs failed"
-	start ost1 $TMP/$tdir/ost1 "-o loop" || return 5
-        UUID=$(lctl get_param -n obdfilter.${NEWNAME}-OST0000.uuid)
+	$TUNEFS --mgsnode=`hostname` --fsname=$NEWNAME --writeconf $tmpdir/ost1 || error "tunefs failed"
+	start ost1 $tmpdir/ost1 "-o loop" || return 5
+	UUID=$(lctl get_param -n obdfilter.${NEWNAME}-OST0000.uuid)
 	echo OST uuid $UUID
 	[ "$UUID" == "ost1_UUID" ] || error "UUID is wrong: $UUID"
 
@@ -1258,7 +1263,7 @@ test_32b() {
 	echo "ok."
 
 	cleanup
-	[ -d $TMP/$tdir ] && rm -rf $TMP/$tdir
+	[ -d $tmpdir ] && rm -rf $tmpdir
 }
 run_test 32b "Upgrade from 1.4 with writeconf"
 
