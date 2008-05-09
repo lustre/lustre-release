@@ -679,10 +679,10 @@ int ldlm_cli_enqueue(struct obd_export *exp, struct ptlrpc_request **reqp,
         } else {
                 req = *reqp;
                 LASSERTF(lustre_msg_buflen(req->rq_reqmsg, DLM_LOCKREQ_OFF) >=
-                         sizeof(*body), "buflen[%d] = %d, not "LPSZ"\n",
+                         sizeof(*body), "buflen[%d] = %d, not %d\n",
                          DLM_LOCKREQ_OFF,
                          lustre_msg_buflen(req->rq_reqmsg, DLM_LOCKREQ_OFF),
-                         sizeof(*body));
+                         (int)sizeof(*body));
         }
 
         lock->l_conn_export = exp;
