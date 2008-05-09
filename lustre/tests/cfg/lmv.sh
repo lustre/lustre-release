@@ -8,9 +8,9 @@ ost_HOST=${ost_HOST:-`hostname`}
 ostfailover_HOST=${ostfailover_HOST}
 
 mds1_HOST=${mds1_HOST:-$mds_HOST}
-mds2_HOST=$mds1_HOST
-mds3_HOST=$mds1_HOST
-mds4_HOST=$mds1_HOST
+mds2_HOST=${mds2_HOST:-$mds_HOST}
+mds3_HOST=${mds3_HOST:-$mds_HOST}
+mds4_HOST=${mds4_HOST:-$mds_HOST}
 ost2_HOST=${ost2_HOST:-$ost_HOST}
 gks_HOST=${gks_HOST:-$mds_HOST}
 
