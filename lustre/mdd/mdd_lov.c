@@ -457,8 +457,6 @@ int mdd_lov_create(const struct lu_env *env, struct mdd_device *mdd,
 
                 memset(oinfo, 0, sizeof(*oinfo));
 
-                oa->o_size = la->la_size;
-
                 /* When setting attr to ost, FLBKSZ is not needed. */
                 oa->o_valid &= ~OBD_MD_FLBLKSZ;
                 obdo_from_la(oa, la, OBD_MD_FLTYPE | OBD_MD_FLATIME |
@@ -476,10 +474,13 @@ int mdd_lov_create(const struct lu_env *env, struct mdd_device *mdd,
                 oinfo->oi_md = lsm;
                 oinfo->oi_capa = mdo_capa_get(env, child, NULL,
                                               CAPA_OPC_MDS_DEFAULT);
+                oinfo->oi_policy.l_extent.start = la->la_size;
+                oinfo->oi_policy.l_extent.end = OBD_OBJECT_EOF;
+
                 if (IS_ERR(oinfo->oi_capa))
                         oinfo->oi_capa = NULL;
 
-                rc = obd_setattr(lov_exp, oinfo, oti);
+                rc = obd_punch_rqset(lov_exp, oinfo, oti);
                 capa_put(oinfo->oi_capa);
                 if (rc) {
                         CERROR("Error setting attrs for "DFID": rc %d\n",

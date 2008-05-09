@@ -3134,6 +3134,26 @@ int filter_setattr(struct obd_export *exp, struct obd_info *oinfo,
         if (rc)
                 RETURN(rc);
 
+        /* This would be very bad - accidentally truncating a file when
+         * changing the time or similar - bug 12203. */
+        if (oinfo->oi_oa->o_valid & OBD_MD_FLSIZE && 
+            oinfo->oi_policy.l_extent.end != OBD_OBJECT_EOF) {
+                static char mdsinum[48];
+
+                if (oinfo->oi_oa->o_valid & OBD_MD_FLFID)
+                        snprintf(mdsinum, sizeof(mdsinum) - 1,
+                                 " of inode "LPU64"/%u", oinfo->oi_oa->o_fid,
+                                 oinfo->oi_oa->o_generation);
+                else
+                        mdsinum[0] = '\0';
+
+                CERROR("%s: setattr from %s trying to truncate objid "LPU64
+                       " %s\n",
+                       exp->exp_obd->obd_name, obd_export_nid2str(exp),
+                       oinfo->oi_oa->o_id, mdsinum);
+                RETURN(-EPERM);
+        }
+
         dentry = __filter_oa2dentry(exp->exp_obd, oinfo->oi_oa,
                                     __FUNCTION__, 1);
         if (IS_ERR(dentry))
