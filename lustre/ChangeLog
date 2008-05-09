@@ -26,6 +26,13 @@ tbd Sun Microsystems, Inc.
 	  For more information, please refer to bugzilla 13904.
 
 Severity   : minor
+Bugzilla   : 14645
+Frequency  : rare, on shutdown ost
+Description: don't hit live lock with umount ost.
+Description: shrink_dcache_parent can be in long loop with destroy dentries,
+	     use shrink_dcache_sb instead.
+
+Severity   : minor
 Bugzilla   : 14949
 Description: don't panic with use echo client
 Details    : echo client pass NULL as client nid pointer and this produce null
