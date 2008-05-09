@@ -1378,8 +1378,13 @@ static void ldlm_handle_cp_callback(struct ptlrpc_request *req,
                    &lock->l_resource->lr_name,
                    sizeof(lock->l_resource->lr_name)) != 0) {
                 unlock_res_and_lock(lock);
-                ldlm_lock_change_resource(ns, lock,
-                                        &dlm_req->lock_desc.l_resource.lr_name);
+                if (ldlm_lock_change_resource(ns, lock, 
+                                &dlm_req->lock_desc.l_resource.lr_name) != 0) {
+                        LDLM_ERROR(lock, "Failed to allocate resource");
+                        LDLM_LOCK_PUT(lock);
+                        EXIT;
+                        return;
+                }
                 LDLM_DEBUG(lock, "completion AST, new resource");
                 CERROR("change resource!\n");
                 lock_res_and_lock(lock);

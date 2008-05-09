@@ -412,12 +412,10 @@ int ldlm_cli_enqueue_fini(struct obd_export *exp, struct ptlrpc_request *req,
                               (long)lock->l_resource->lr_name.name[1],
                               (long)lock->l_resource->lr_name.name[2]);
 
-                        ldlm_lock_change_resource(ns, lock,
-                                          &reply->lock_desc.l_resource.lr_name);
-                        if (lock->l_resource == NULL) {
-                                LBUG();
+                        rc = ldlm_lock_change_resource(ns, lock,
+                                        &reply->lock_desc.l_resource.lr_name);
+                        if (rc || lock->l_resource == NULL)
                                 GOTO(cleanup, rc = -ENOMEM);
-                        }
                         LDLM_DEBUG(lock, "client-side enqueue, new resource");
                 }
                 if (with_policy)
