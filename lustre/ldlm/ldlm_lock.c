@@ -383,10 +383,8 @@ int ldlm_lock_change_resource(struct ldlm_namespace *ns, struct ldlm_lock *lock,
         unlock_res_and_lock(lock);
 
         newres = ldlm_resource_get(ns, NULL, new_resid, type, 1);
-        if (newres == NULL) {
-                LBUG();
+        if (newres == NULL)
                 RETURN(-ENOMEM);
-        }
 
         lock_res_and_lock(lock);
         LASSERT(memcmp(&new_resid, &lock->l_resource->lr_name,
