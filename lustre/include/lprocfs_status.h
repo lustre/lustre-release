@@ -158,7 +158,6 @@ enum lprocfs_fields_flags {
 
 struct lprocfs_stats {
         unsigned int           ls_num;     /* # of counters */
-        unsigned int           ls_percpu_size;
         int                    ls_flags; /* See LPROCFS_STATS_FLAG_* */
         spinlock_t             ls_lock;  /* Lock used only when there are
                                           * no percpu stats areas */
