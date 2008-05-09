@@ -2012,8 +2012,15 @@ static int mds_setup(struct obd_device *obd, struct lustre_cfg* lcfg)
             lprocfs_alloc_obd_stats(obd, LPROC_MDS_LAST) == 0) {
                 /* Init private stats here */
                 mds_stats_counter_init(obd->obd_stats);
-                obd->obd_proc_exports_entry = proc_mkdir("exports",
-                                                         obd->obd_proc_entry);
+                obd->obd_proc_exports_entry = lprocfs_register("exports",
+                                                         obd->obd_proc_entry,
+                                                         NULL, NULL);
+                if (IS_ERR(obd->obd_proc_exports_entry)) {
+                        rc = PTR_ERR(obd->obd_proc_exports_entry);
+                        CERROR("error %d setting up lprocfs for %s\n",
+                               rc, "exports");
+                        obd->obd_proc_exports_entry = NULL;
+                }
         }
 
         rc = mds_fs_setup(obd, mnt);
@@ -2280,7 +2287,7 @@ static int mds_cleanup(struct obd_device *obd)
                    we just need to drop our ref */
                 class_export_put(mds->mds_osc_exp);
 
-        remove_proc_entry("clear", obd->obd_proc_exports_entry);
+        lprocfs_remove_proc_entry("clear", obd->obd_proc_exports_entry);
         lprocfs_free_per_client_stats(obd);
         lprocfs_free_obd_stats(obd);
         lprocfs_obd_cleanup(obd);

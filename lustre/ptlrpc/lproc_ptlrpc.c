@@ -441,7 +441,8 @@ void ptlrpc_lprocfs_register_service(struct proc_dir_entry *entry,
                 .llseek      = seq_lseek,
                 .release     = lprocfs_seq_release,
         };
-        struct proc_dir_entry *req_history;
+
+        int rc;
 
         ptlrpc_lprocfs_register(entry, svc->srv_name,
                                 "stats", &svc->srv_procroot,
@@ -452,12 +453,10 @@ void ptlrpc_lprocfs_register_service(struct proc_dir_entry *entry,
 
         lprocfs_add_vars(svc->srv_procroot, lproc_vars, NULL);
 
-        req_history = create_proc_entry("req_history", 0400,
-                                        svc->srv_procroot);
-        if (req_history != NULL) {
-                req_history->data = svc;
-                req_history->proc_fops = &req_history_fops;
-        }
+        rc = lprocfs_seq_create(svc->srv_procroot, "req_history",
+                                0400, &req_history_fops, svc);
+        if (rc)
+                CWARN("Error adding the req_history file\n");
 }
 
 void ptlrpc_lprocfs_register_obd(struct obd_device *obddev)

@@ -364,6 +364,8 @@ extern int lprocfs_exp_cleanup(struct obd_export *exp);
 extern int lprocfs_add_simple(struct proc_dir_entry *root,
                               char *name, read_proc_t *read_proc,
                               write_proc_t *write_proc, void *data);
+extern struct proc_dir_entry *lprocfs_add_symlink(const char *name,
+                        struct proc_dir_entry *parent, const char *dest);
 extern void lprocfs_free_per_client_stats(struct obd_device *obd);
 extern int lprocfs_nid_stats_clear_write(struct file *file, const char *buffer,
                                          unsigned long count, void *data);
@@ -384,6 +386,8 @@ extern cfs_proc_dir_entry_t *lprocfs_register(const char *name,
                                                void *data);
 
 extern void lprocfs_remove(cfs_proc_dir_entry_t **root);
+extern void lprocfs_remove_proc_entry(const char *name,
+                                      struct proc_dir_entry *parent);
 
 extern cfs_proc_dir_entry_t *lprocfs_srch(cfs_proc_dir_entry_t *root,
                                            const char *name);
@@ -596,6 +600,9 @@ static inline int lprocfs_add_simple(struct proc_dir_entry *root,
                                      write_proc_t *write_proc,
                                      void *data)
 {return 0; }
+static inline struct proc_dir_entry *lprocfs_add_symlink(const char *name,
+                        struct proc_dir_entry *parent, const char *dest)
+{return NULL; }
 static inline void lprocfs_free_per_client_stats(struct obd_device *obd)
 {}
 static inline
@@ -614,6 +621,8 @@ static inline int lprocfs_add_vars(cfs_proc_dir_entry_t *root,
                                    struct lprocfs_vars *var,
                                    void *data) { return 0; }
 static inline void lprocfs_remove(cfs_proc_dir_entry_t **root) {};
+static inline void lprocfs_remove_proc_entry(const char *name,
+                                             struct proc_dir_entry *parent) {};
 static inline cfs_proc_dir_entry_t *lprocfs_srch(cfs_proc_dir_entry_t *head,
                                     const char *name) {return 0;}
 static inline int lprocfs_obd_setup(struct obd_device *dev,

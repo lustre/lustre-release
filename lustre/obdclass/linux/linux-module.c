@@ -405,24 +405,16 @@ struct file_operations obd_device_list_fops = {
 int class_procfs_init(void)
 {
 #ifdef __KERNEL__
-        struct proc_dir_entry *entry;
+        int rc;
         ENTRY;
 
         obd_sysctl_init();
-        proc_lustre_root = proc_mkdir("lustre", proc_root_fs);
-        if (!proc_lustre_root) {
-                printk(KERN_ERR
-                       "LustreError: error registering /proc/fs/lustre\n");
-                RETURN(-ENOMEM);
-        }
-        proc_version = lprocfs_add_vars(proc_lustre_root, lprocfs_base, NULL);
-        entry = create_proc_entry("devices", 0444, proc_lustre_root);
-        if (entry == NULL) {
-                CERROR("error registering /proc/fs/lustre/devices\n");
-                lprocfs_remove(&proc_lustre_root);
-                RETURN(-ENOMEM);
-        }
-        entry->proc_fops = &obd_device_list_fops;
+        proc_lustre_root = lprocfs_register("lustre", proc_root_fs,
+                                            lprocfs_base, NULL);
+        rc = lprocfs_seq_create(proc_lustre_root, "devices", 0444,
+                                &obd_device_list_fops, NULL);
+        if (rc)
+                CERROR("error adding /proc/fs/lustre/devices file\n");
 #else
         ENTRY;
 #endif

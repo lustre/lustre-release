@@ -132,7 +132,7 @@ static int __init init_lustre_lite(void)
         }
 
         proc_lustre_fs_root = proc_lustre_root ?
-                              proc_mkdir("llite", proc_lustre_root) : NULL;
+                              lprocfs_register("llite", proc_lustre_root, NULL, NULL) : NULL;
 
         ll_register_cache(&ll_cache_definition);
 

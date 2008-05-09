@@ -613,8 +613,7 @@ int lprocfs_register_mountpoint(struct proc_dir_entry *parent,
         struct ll_sb_info *sbi = ll_s2sbi(sb);
         struct obd_device *obd;
         char name[MAX_STRING_SIZE + 1], *ptr;
-        int err, id, len;
-        struct proc_dir_entry *entry;
+        int err, id, len, rc;
         ENTRY;
 
         memset(lvars, 0, sizeof(lvars));
@@ -643,36 +642,31 @@ int lprocfs_register_mountpoint(struct proc_dir_entry *parent,
                 RETURN(err);
         }
 
-        entry = create_proc_entry("dump_page_cache", 0444, sbi->ll_proc_root);
-        if (entry == NULL)
-                GOTO(out, err = -ENOMEM);
-        entry->proc_fops = &llite_dump_pgcache_fops;
-        entry->data = sbi;
 
-        entry = create_proc_entry("read_ahead_stats", 0644, sbi->ll_proc_root);
-        if (entry == NULL)
-                GOTO(out, err = -ENOMEM);
-        entry->proc_fops = &ll_ra_stats_fops;
-        entry->data = sbi;
+        rc = lprocfs_seq_create(sbi->ll_proc_root, "dump_page_cache", 0444,
+                                &llite_dump_pgcache_fops, sbi);
+        if (rc)
+                CWARN("Error adding the dump_page_cache file\n");
 
-        entry = create_proc_entry("extents_stats", 0644, sbi->ll_proc_root);
-        if (entry == NULL)
-                 GOTO(out, err = -ENOMEM);
-        entry->proc_fops = &ll_rw_extents_stats_fops;
-        entry->data = sbi;
+        rc = lprocfs_seq_create(sbi->ll_proc_root, "read_ahead_stats", 0644,
+                                &ll_ra_stats_fops, sbi);
+        if (rc)
+                CWARN("Error adding the read_ahead_stats file\n");
 
-        entry = create_proc_entry("extents_stats_per_process", 0644,
-                                  sbi->ll_proc_root);
-        if (entry == NULL)
-                 GOTO(out, err = -ENOMEM);
-        entry->proc_fops = &ll_rw_extents_stats_pp_fops;
-        entry->data = sbi;
+        rc = lprocfs_seq_create(sbi->ll_proc_root, "extents_stats", 0644,
+                                &ll_rw_extents_stats_fops, sbi);
+        if (rc)
+                CWARN("Error adding the extent_stats file\n");
 
-        entry = create_proc_entry("offset_stats", 0644, sbi->ll_proc_root);
-        if (entry == NULL)
-                GOTO(out, err = -ENOMEM);
-        entry->proc_fops = &ll_rw_offset_stats_fops;
-        entry->data = sbi;
+        rc = lprocfs_seq_create(sbi->ll_proc_root, "extents_stats_per_process",
+                                0644, &ll_rw_extents_stats_pp_fops, sbi);
+        if (rc)
+                CWARN("Error adding the extents_stats_per_process file\n");
+
+        rc = lprocfs_seq_create(sbi->ll_proc_root, "offset_stats", 0644,
+                                &ll_rw_offset_stats_fops, sbi);
+        if (rc)
+                CWARN("Error adding the offset_stats file\n");
 
         /* File operations stats */
         sbi->ll_stats = lprocfs_alloc_stats(LPROC_LL_FILE_OPCODES, 

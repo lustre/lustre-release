@@ -1009,14 +1009,10 @@ static int lmv_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
         lprocfs_obd_setup(obd, lvars.obd_vars);
 #ifdef LPROCFS
         {
-                struct proc_dir_entry *entry;
-
-                entry = create_proc_entry("target_obd_status", 0444,
-                                          obd->obd_proc_entry);
-                if (entry != NULL) {
-                        entry->proc_fops = &lmv_proc_target_fops;
-                        entry->data = obd;
-                }
+                rc = lprocfs_seq_create(obd->obd_proc_entry, "target_obd_status",
+                                        0444, &lmv_proc_target_fops, obd);
+                if (rc)
+                        CWARN("Error adding the target_obd_status file\n");
        }
 #endif
         rc = fld_client_init(&lmv->lmv_fld, obd->obd_name,

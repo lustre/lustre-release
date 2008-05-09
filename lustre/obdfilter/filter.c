@@ -187,7 +187,6 @@ static int filter_export_stats_init(struct obd_device *obd,
                                     void *client_nid)
 {
         struct filter_export_data *fed = &exp->exp_filter_data;
-        struct proc_dir_entry *brw_entry;
         int rc, newnid = 0;
         ENTRY;
 
@@ -210,14 +209,11 @@ static int filter_export_stats_init(struct obd_device *obd,
                         RETURN(-ENOMEM);
 
                 init_brw_stats(tmp->nid_brw_stats);
-
-                brw_entry = create_proc_entry("brw_stats", 0644,
-                                              exp->exp_nid_stats->nid_proc);
-                if (brw_entry == NULL)
-                       RETURN(-ENOMEM);
-
-                brw_entry->proc_fops = &filter_per_nid_stats_fops;
-                brw_entry->data = exp->exp_nid_stats;
+                rc = lprocfs_seq_create(exp->exp_nid_stats->nid_proc, "brw_stats",
+                                        0644, &filter_per_nid_stats_fops,
+                                        exp->exp_nid_stats);
+                if (rc)
+                        CWARN("Error adding the brw_stats file\n");
 
                 rc = lprocfs_init_rw_stats(obd, &exp->exp_nid_stats->nid_stats);
                 if (rc)
@@ -2112,8 +2108,15 @@ static int filter_setup(struct obd_device *obd, struct lustre_cfg* lcfg)
                                      "write_bytes", "bytes");
 
                 lproc_filter_attach_seqstat(obd);
-                obd->obd_proc_exports_entry = proc_mkdir("exports",
-                                                         obd->obd_proc_entry);
+                obd->obd_proc_exports_entry = lprocfs_register("exports",
+                                                        obd->obd_proc_entry,
+                                                        NULL, NULL);
+                if (IS_ERR(obd->obd_proc_exports_entry)) {
+                        rc = PTR_ERR(obd->obd_proc_exports_entry);
+                        CERROR("error %d setting up lprocfs for %s\n",
+                               rc, "exports");
+                        obd->obd_proc_exports_entry = NULL;
+                }
         }
         if (obd->obd_proc_exports_entry)
                 lprocfs_add_simple(obd->obd_proc_exports_entry, "clear",
@@ -2126,7 +2129,7 @@ static int filter_setup(struct obd_device *obd, struct lustre_cfg* lcfg)
         OBD_PAGE_FREE(page);
 
         if (rc) {
-                remove_proc_entry("clear", obd->obd_proc_exports_entry);
+                lprocfs_remove_proc_entry("clear", obd->obd_proc_exports_entry);
                 lprocfs_free_per_client_stats(obd);
                 lprocfs_free_obd_stats(obd);
                 lprocfs_obd_cleanup(obd);
@@ -2389,7 +2392,7 @@ static int filter_cleanup(struct obd_device *obd)
                 }
         }
 
-        remove_proc_entry("clear", obd->obd_proc_exports_entry);
+        lprocfs_remove_proc_entry("clear", obd->obd_proc_exports_entry);
         lprocfs_free_per_client_stats(obd);
         lprocfs_free_obd_stats(obd);
         lprocfs_obd_cleanup(obd);

@@ -191,8 +191,8 @@ static int lov_connect_obd(struct obd_device *obd, __u32 index, int activate,
                 snprintf(name, MAX_STRING_SIZE, "../../../%s/%s",
                          osc_obd->obd_type->typ_name,
                          osc_obd->obd_name);
-                osc_symlink = proc_symlink(osc_obd->obd_name, lov_proc_dir,
-                                           name);
+                osc_symlink = lprocfs_add_symlink(osc_obd->obd_name, lov_proc_dir,
+                                                  name);
                 if (osc_symlink == NULL) {
                         CERROR("could not register LOV target "
                                "/proc/fs/lustre/%s/%s/target_obds/%s.",
@@ -760,14 +760,12 @@ static int lov_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
         lprocfs_obd_setup(obd, lvars.obd_vars);
 #ifdef LPROCFS
         {
-                cfs_proc_dir_entry_t *entry;
+                int rc;
 
-                entry = create_proc_entry("target_obd", 0444,
-                                          obd->obd_proc_entry);
-                if (entry != NULL) {
-                        entry->proc_fops = &lov_proc_target_fops;
-                        entry->data = obd;
-                }
+                rc = lprocfs_seq_create(obd->obd_proc_entry, "target_obd",
+                                        0444, &lov_proc_target_fops, obd);
+                if (rc)
+                        CWARN("Error adding the target_obd file\n");
         }
 #endif
 

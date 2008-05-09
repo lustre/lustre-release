@@ -116,6 +116,21 @@ int lprocfs_add_simple(struct proc_dir_entry *root, char *name,
         return 0;
 }
 
+struct proc_dir_entry *lprocfs_add_symlink(const char *name,
+                        struct proc_dir_entry *parent, const char *dest)
+{
+        struct proc_dir_entry *entry;
+
+        if (parent == NULL || dest == NULL)
+                return NULL;
+
+        entry = proc_symlink(name, parent, dest);
+        if (entry == NULL)
+                CERROR("LprocFS: Could not create symbolic link from %s to %s",
+                        name, dest);
+        return entry;
+}
+
 static ssize_t lprocfs_fops_read(struct file *f, char __user *buf,
                                  size_t size, loff_t *ppos)
 {
@@ -317,6 +332,12 @@ void lprocfs_remove(struct proc_dir_entry **rooth)
                 if (temp == parent)
                         break;
         }
+}
+
+void lprocfs_remove_proc_entry(const char *name, struct proc_dir_entry *parent)
+{
+        LASSERT(parent != NULL);
+        remove_proc_entry(name, parent);
 }
 
 struct proc_dir_entry *lprocfs_register(const char *name,
@@ -1334,8 +1355,8 @@ int lprocfs_exp_setup(struct obd_export *exp, lnet_nid_t *nid, int *newnid)
                 GOTO(destroy_new, rc = 0);
         }
         /* not found - create */
-        tmp->nid_proc = proc_mkdir(libcfs_nid2str(*nid),
-                                   obd->obd_proc_exports_entry);
+        tmp->nid_proc = lprocfs_register(libcfs_nid2str(*nid),
+                                         obd->obd_proc_exports_entry, NULL, NULL);
         if (!tmp->nid_proc) {
                 CERROR("Error making export directory for"
                        " nid %s\n", libcfs_nid2str(*nid));
@@ -1745,10 +1766,12 @@ EXPORT_SYMBOL(lprocfs_obd_wr_recovery_maxtime);
 EXPORT_SYMBOL(lprocfs_register);
 EXPORT_SYMBOL(lprocfs_srch);
 EXPORT_SYMBOL(lprocfs_remove);
+EXPORT_SYMBOL(lprocfs_remove_proc_entry);
 EXPORT_SYMBOL(lprocfs_add_vars);
 EXPORT_SYMBOL(lprocfs_obd_setup);
 EXPORT_SYMBOL(lprocfs_obd_cleanup);
 EXPORT_SYMBOL(lprocfs_add_simple);
+EXPORT_SYMBOL(lprocfs_add_symlink);
 EXPORT_SYMBOL(lprocfs_free_per_client_stats);
 EXPORT_SYMBOL(lprocfs_alloc_stats);
 EXPORT_SYMBOL(lprocfs_free_stats);

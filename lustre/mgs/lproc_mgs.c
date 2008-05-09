@@ -84,8 +84,23 @@ int lproc_mgs_setup(struct obd_device *obd)
 
         rc = lprocfs_obd_seq_create(obd, "filesystems", 0444,
                                     &mgs_fs_fops, obd);
-        mgs->mgs_proc_live = proc_mkdir("live", obd->obd_proc_entry);
-        obd->obd_proc_exports_entry = proc_mkdir("exports", obd->obd_proc_entry);
+
+        mgs->mgs_proc_live = lprocfs_register("live", obd->obd_proc_entry,
+                                              NULL, NULL);
+        if (IS_ERR(mgs->mgs_proc_live)) {
+                rc = PTR_ERR(mgs->mgs_proc_live);
+                CERROR("error %d setting up lprocfs for %s\n", rc, "live");
+                mgs->mgs_proc_live = NULL;
+        }
+
+        obd->obd_proc_exports_entry = lprocfs_register("exports",
+                                                       obd->obd_proc_entry,
+                                                       NULL, NULL);
+        if (IS_ERR(obd->obd_proc_exports_entry)) {
+                rc = PTR_ERR(obd->obd_proc_exports_entry);
+                CERROR("error %d setting up lprocfs for %s\n", rc, "exports");
+                obd->obd_proc_exports_entry = NULL;
+        }
 
         return rc;
 }
@@ -194,7 +209,8 @@ int lproc_mgs_del_live(struct obd_device *obd, struct fs_db *fsdb)
 
         if (!mgs->mgs_proc_live) 
                 return 0;
-        remove_proc_entry(fsdb->fsdb_name, mgs->mgs_proc_live);
+
+        lprocfs_remove_proc_entry(fsdb->fsdb_name, mgs->mgs_proc_live);
         return 0;
 }
 
