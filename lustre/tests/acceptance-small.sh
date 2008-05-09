@@ -268,6 +268,7 @@ for NAME in $CONFIGS; do
 		LFSCK="done"
 	fi
 
+	[ "$NETTYPE" = "tcp" ] || LIBLUSTRE=no # bug 15660
 	if [ "$LIBLUSTRE" != "no" ]; then
 	        title liblustre
 		assert_env MGSNID MOUNT2
