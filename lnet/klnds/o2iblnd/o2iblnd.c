@@ -1185,20 +1185,20 @@ kiblnd_alloc_tx_descs (lnet_ni_t *ni)
                         return -ENOMEM;
                 }
 #else
-                LIBCFS_ALLOC(tx->tx_wrq, 
-                             (1 + IBLND_MAX_RDMA_FRAGS) * 
+                LIBCFS_ALLOC(tx->tx_wrq,
+                             (1 + IBLND_MAX_RDMA_FRAGS) *
                              sizeof(*tx->tx_wrq));
                 if (tx->tx_wrq == NULL)
                         return -ENOMEM;
-                
-                LIBCFS_ALLOC(tx->tx_sge, 
-                             (1 + IBLND_MAX_RDMA_FRAGS) * 
+
+                LIBCFS_ALLOC(tx->tx_sge,
+                             (1 + IBLND_MAX_RDMA_FRAGS) *
                              sizeof(*tx->tx_sge));
                 if (tx->tx_sge == NULL)
                         return -ENOMEM;
-                
-                LIBCFS_ALLOC(tx->tx_rd, 
-                             offsetof(kib_rdma_desc_t, 
+
+                LIBCFS_ALLOC(tx->tx_rd,
+                             offsetof(kib_rdma_desc_t,
                                       rd_frags[IBLND_MAX_RDMA_FRAGS]));
                 if (tx->tx_rd == NULL)
                         return -ENOMEM;

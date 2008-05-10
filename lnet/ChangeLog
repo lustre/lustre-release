@@ -17,6 +17,11 @@ Bugzilla   :
 Description: 
 Details    : 
 
+Severity   : normal
+Bugzilla   : 15272
+Description: ptl_send_rpc hits LASSERT when ptl_send_buf fails
+Details    : only hits under out-of-memory situations
+
 
 -------------------------------------------------------------------------------
 

@@ -119,25 +119,33 @@ LNetMEInsert(lnet_handle_me_t current_meh,
 int
 LNetMEUnlink(lnet_handle_me_t meh)
 {
-        lnet_me_t     *me;
-        int           rc;
+        lnet_me_t    *me;
+        lnet_libmd_t *md;
+        lnet_event_t  ev;
 
-        LASSERT (the_lnet.ln_init);        
+        LASSERT (the_lnet.ln_init);
         LASSERT (the_lnet.ln_refcount > 0);
-        
+
         LNET_LOCK();
 
         me = lnet_handle2me(&meh);
         if (me == NULL) {
-                rc = -ENOENT;
-        } else {
-                lnet_me_unlink(me);
-                rc = 0;
+                LNET_UNLOCK();
+                return -ENOENT;
         }
 
-        LNET_UNLOCK();
+        md = me->me_md;
+        if (md != NULL &&
+            md->md_eq != NULL &&
+            md->md_refcount == 0) {
+                lnet_build_unlink_event(md, &ev);
+                lnet_enq_event_locked(md->md_eq, &ev);
+        }
 
-        return (rc);
+        lnet_me_unlink(me);
+
+        LNET_UNLOCK();
+        return 0;
 }
 
 /* call with LNET_LOCK please */
