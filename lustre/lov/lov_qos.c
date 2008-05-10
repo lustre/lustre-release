@@ -634,8 +634,9 @@ repeat_find:
          *
          * We can only get here if lsm_stripe_count was originally > 1.
          */
-        CERROR("can't lstripe objid "LPX64": have "LPSZ" want %u\n",
-               lsm->lsm_object_id, idx_pos - idx_arr, lsm->lsm_stripe_count);
+        CERROR("can't lstripe objid "LPX64": have %d want %u\n",
+               lsm->lsm_object_id, (int)(idx_pos - idx_arr),
+               lsm->lsm_stripe_count);
         RETURN(-EFBIG);
 }
 
