@@ -4876,6 +4876,41 @@ test_126() { # bug 12829/13455
 }
 run_test 126 "check that the fsgid provided by the client is taken into account"
 
+test_127() { # bug 15521
+        $LSTRIPE -i 0 -c 1 $DIR/$tfile
+        $LCTL set_param osc.*.stats=0
+        FSIZE=$((2048 * 1024))
+        dd if=/dev/zero of=$DIR/$tfile bs=$FSIZE count=1
+        cancel_lru_locks osc
+        dd if=$DIR/$tfile of=/dev/null bs=$FSIZE
+
+        $LCTL get_param osc.*0000-osc-*.stats | grep samples > $DIR/${tfile}.tmp
+        while read NAME COUNT SAMP UNIT MIN MAX SUM SUMSQ; do
+                eval $NAME=$COUNT
+                echo "got $COUNT $NAME"
+
+                case $NAME in
+                        ost_read|ost_write)
+                        [ $MIN -lt 4096 ] && error "min is too small: $MIN"
+                        [ $MIN -gt $FSIZE ] && error "min is too big: $MIN"
+                        [ $MAX -lt 4096 ] && error "max is too small: $MAX"
+                        [ $MAX -gt $FSIZE ] && error "max is too big: $MAX"
+                        [ $SUM -ne $FSIZE ] && error "sum is wrong: $SUM"
+                        [ $SUMSQ -lt $(((FSIZE /4096) * (4096 * 4096))) ] && 
+                                error "sumsquare is too small: $SUMSQ"
+                        [ $SUMSQ -gt $((FSIZE * FSIZE)) ] && 
+                                error "sumsquare is too big: $SUMSQ"
+                        ;;
+                        *) ;;
+                esac
+        done < $DIR/${tfile}.tmp
+
+        #check that we actually got some stats
+        [ "$ost_read" ] || error "no read done"
+        [ "$ost_write" ] || error "no write done"
+}
+run_test 127 "verify the client stats are sane"
+
 TMPDIR=$OLDTMPDIR
 TMP=$OLDTMP
 HOME=$OLDHOME
