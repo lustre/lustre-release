@@ -987,6 +987,10 @@ Description: eliminate client locks in face of contention
 Details    : file contention detection and lockless i/o implementation
              for contended files.
 
+Severity   : normal
+Bugzilla   : 15212
+Description: Reinitialize optind to 0 so that interactive lfs works in all cases
+
 --------------------------------------------------------------------------------
 
 2007-08-10         Cluster File Systems, Inc. <info@clusterfs.com>

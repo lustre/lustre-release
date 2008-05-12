@@ -214,9 +214,9 @@ static int lfs_setstripe(int argc, char **argv)
                 stripe_count_arg = argv[4];
                 optind = 4;
         } else {
+                optind = 0;
                 while ((c = getopt_long(argc, argv, "c:di:s:",
-                                                long_opts, NULL)) >= 0) 
-                {
+                                                long_opts, NULL)) >= 0) {
                         switch (c) {
                         case 0:
                                 /* Long options. */
@@ -362,6 +362,7 @@ static int lfs_find(int argc, char **argv)
 
         time(&t);
 
+        optind = 0;
         while ((c = getopt_long_only(argc, argv, "-A:C:D:M:n:PpO:qrs:t:v",
                                      long_opts, NULL)) >= 0) {
                 xtime = NULL;
@@ -1084,6 +1085,7 @@ static int lfs_quotachown(int argc, char **argv)
         int c,rc;
         int flag = 0;
 
+        optind = 0;
         while ((c = getopt(argc, argv, "i")) != -1) {
                 switch (c) {
                 case 'i':
