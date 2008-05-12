@@ -228,7 +228,7 @@ test_2() {
 
 	echo "    Create $LIMIT files ..."
 	$RUNAS createmany -m ${TESTFILE} $LIMIT || \
-	    error "(usr) create failure, but except success"
+	    error "(usr) create failure, but expect success"
 	echo "    Done"
 	echo "    Create out of file quota ..."
 	$RUNAS touch ${TESTFILE}_xxx && \
