@@ -269,7 +269,7 @@ test_2_sub() {
 
 	log "    Create $LIMIT files ..."
 	$RUNAS createmany -m ${TESTFILE} $LIMIT || \
-		error "(usr) create failure, but except success"
+		error "(usr) create failure, but expect success"
 	log "    Done"
 	log "    Create out of file quota ..."
 	$RUNAS touch ${TESTFILE}_xxx && \
@@ -297,7 +297,7 @@ test_2_sub() {
 
 	log "    Create $LIMIT files ..."
 	$RUNAS createmany -m ${TESTFILE} $LIMIT || \
-		error "(usr) create failure, but except success"
+		error "(usr) create failure, but expect success"
 	log "    Done"
 	log "    Create out of file quota ..."
 	$RUNAS touch ${TESTFILE}_xxx && \
