@@ -1157,7 +1157,6 @@ test_32a() {
 	[ ! -r $DISK1_4 ] && skip "Cant find $DISK1_4, skipping" && return
 
 	local tmpdir=$TMP/conf32a
-	mkdir -p $tmpdir
 	unzip -o -j -d $tmpdir $DISK1_4 || { skip "Cant unzip $DISK1_4, skipping" && return ; }
 	load_modules
 	sysctl lnet.debug=$PTLDEBUG
