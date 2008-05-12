@@ -1422,6 +1422,47 @@ test_18a() {
 }
 run_test 18a "run for fixing bug14840 ==========="
 
+test_19() {
+	# 1 Mb bunit per each MDS/OSS
+	LIMIT=$((($OSTCOUNT + 1) * 1024))
+	TESTFILE="$DIR/$tdir/$tfile"
+
+	wait_delete_completed
+
+	# set 1 Mb quota unit size
+	set_blk_tunesz 512
+	set_blk_unitsz 1024
+
+	# bind file to a single OST
+	$LFS setstripe -c 1 $TESTFILE
+	chown $TSTUSR.$TSTUSR $TESTFILE
+
+	echo "  User quota (limit: $LIMIT kbytes)"
+	$LFS setquota -u $TSTUSR 0 $LIMIT 0 0 $MOUNT
+	$SHOW_QUOTA_USER
+	echo "  Updating quota limits"
+	$LFS setquota -u $TSTUSR 0 $LIMIT 0 0 $MOUNT
+	$SHOW_QUOTA_USER
+
+	$RUNAS dd if=/dev/zero of=$TESTFILE bs=$BLK_SZ count=1028 || true
+	# for now page cache of TESTFILE may still be dirty,
+	# let's push it to the corresponding OST, this will also
+	# cache NOQUOTA on the client from OST's reply
+	cancel_lru_locks osc
+	$RUNAS dd if=/dev/zero of=$TESTFILE seek=1028 bs=$BLK_SZ count=1 && \
+		error "(usr) write success, should be EDQUOT"
+	$SHOW_QUOTA_USER
+
+	# cleanup
+	rm -f $TESTFILE
+	$LFS setquota -u $TSTUSR 0 0 0 0 $MOUNT
+
+	set_blk_unitsz $((128 * 1024))
+	set_blk_tunesz $((128 * 1024 / 2))
+
+}
+run_test 19 "test if administrative limits updates do not zero operational limits (14790) ==="
+
 # turn off quota
 test_99()
 {
