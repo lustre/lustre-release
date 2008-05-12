@@ -330,7 +330,7 @@ static int filter_quota_getflag(struct obd_device *obd, struct obdo *oa)
                 oa->o_valid |= (cnt == USRQUOTA) ?
                                OBD_MD_FLUSRQUOTA : OBD_MD_FLGRPQUOTA;
                 if (oqctl->qc_dqblk.dqb_bhardlimit &&
-                   (toqb(oqctl->qc_dqblk.dqb_curspace) >
+                   (toqb(oqctl->qc_dqblk.dqb_curspace) >=
                     oqctl->qc_dqblk.dqb_bhardlimit))
                         oa->o_flags |= (cnt == USRQUOTA) ?
                                 OBD_FL_NO_USRQUOTA : OBD_FL_NO_GRPQUOTA;
