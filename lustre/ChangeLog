@@ -25,7 +25,16 @@
 		'tunefs.lustre --param="mdt.quota_type=ug1" $MDTDEV'.
 	 For more information, please refer to bugzilla 13904.
 
+Severity   : minor
+Frequency  : very rare
+Bugzilla   : 13380
+Description: MDT cannot be unmounted, reporting "Mount still busy"
+Details	   : Mountpoint references were being leaked during open reply
+	     reconstruction after an MDS restart.  Drop mountpoint reference
+	     in reconstruct_open() and free dentry reference also.
+
 Severity   : normal
+Frequency  : with multiple concurrent readdir processes in same directory
 Bugzilla   : 15406
 Description: misc fixes (including bug 15169 and 15175) for directory readahead.
 Details	   : prevent previous statahead async RPC callback from processing the
@@ -38,8 +47,8 @@ Bugzilla   : 15316
 Description: build kernel-ib packages for OFED 1.3 in our release cycle
 
 Severity   : minor
-Bugzilla   : 13969
 Frequency  : always
+Bugzilla   : 13969
 Description: fix SLES kernel versioning
 Details    : the kernel version for our SLES 10 kernel did not include a "-"
 	     before the "smp" at the end.  while this was not a problem in
@@ -48,12 +57,14 @@ Details    : the kernel version for our SLES 10 kernel did not include a "-"
 	     this was most evident by the OFED build scripts.
 
 Severity   : normal
+Frequency  : rare
 Bugzilla   : 14803
 Description: Don't update lov_desc members until making sure they are valid
 Details    : When updating lov_desc members via proc fs, need fix their
 	     validities before doing the real update.
 
 Severity   : normal
+Frequency  : very rare
 Bugzilla   : 15069
 Description: don't put request into delay list while invalidate in flight.
 Details    : ptlrpc_delay_request sometimes put in delay list while invalidate
@@ -68,20 +79,21 @@ Severity   : enhancement
 Bugzilla   : 15240
 Description: Update kernel to RHEL4 2.6.9-67.0.7.
 
-Severity   : minor
+Severity   : normal
+Frequency  : always
 Bugzilla   : 14856
 Frequency  : on ppc only
 Description: not convert ost objects for directory because it's not exist.
 Details    : ll_dir_getstripe assume dirrectory has ost objects but this wrong.
 
-Severity   : minor
+Severity   : enhancement
 Bugzilla   : 15517
 Description: Fix warnings with compile liblustre at sles10/rhel5 which have
 	     __u64 as usingied long long type.
 
 Severity   : minor
-Bugzilla   : 15210
 Frequency  : rare, on shutdown
+Bugzilla   : 15210
 Description: race process ast vs remove callback
 Details    : removing callback before disconnect import open race with processing
 	     callback.
@@ -90,28 +102,30 @@ Severity   : enhancement
 Bugzilla   : 15416
 Description: Update kernel to SLES9 2.6.5-7.311.
 
-Severity   : normal
+Severity   : enhancement
 Bugzilla   : 12652
-Description: Add FMODE_EXEC to SLES10 SP1 series.
+Description: Files open for execute are not marked busy on SLES10
+Details    : Add FMODE_EXEC to SLES10 SP1 server kernel series.
 
 Severity   : enhancement
 Bugzilla   : 13397
 Description: Add server support for vanilla-2.6.22.14.
 
 Severity   : normal
+Frequency  : occasional
 Bugzilla   : 13375
-Descriptoin: make lov_create() will not stuck in obd_statfs_rqset()
+Descriptoin: Avoid lov_create() getting stuck in obd_statfs_rqset()
 Details    : If an OST is down the MDS will hang indefinitely in
 	     obd_statfs_rqset() waiting for the statfs data. While for
 	     MDS QOS usage of statfs, it should not stuck in waiting.
 
-Severity   : normal
+Severity   : enhancement
 Bugzilla   : 3055
 Description: Disable adaptive timeouts by default
 
 Severity   : major
-Bugzilla   : 15027
 Frequency  : on network error
+Bugzilla   : 15027
 Description: panic with double free request if network error 
 Details    : mdc_finish_enqueue is finish request if any network error occuring,
 	     but it's true only for synchronus enqueue, for async enqueue 
@@ -119,8 +133,8 @@ Details    : mdc_finish_enqueue is finish request if any network error occuring,
 	     himself.
 
 Severity   : normal
-Bugzilla   : 14533
 Frequency  : rare, on recovery
+Bugzilla   : 14533
 Description: read procfs can produce deadlock in some situation
 Details    : Holding lprocfs lock with send rpc can produce block for destroy
 	     obd objects and this also block reconnect with -EALREADY.
@@ -137,6 +151,7 @@ Description: mdc_set_open_replay_data LBUG
 Details    : Set replay data for requests that are eligible for replay.
 
 Severity   : normal
+Frequency  : common
 Bugzilla   : 14321
 Description: lustre_mgs: operation 101 on unconnected MGS
 Details    : When MGC is disconnected from MGS long enough, MGS will evict the
@@ -170,25 +185,28 @@ Bugzilla   : 14793
 Description: Update RHEL4 kernel to 2.6.9-67.0.4.
 
 Severity   : minor
-Frequency  : rare on shutdown ost
+Frequency  : rare on shutdown OST
 Bugzilla   : 13196
 Description: Don't allow skipping OSTs if index has been specified.
 Details    : Don't allow skipping OSTs if index has been specified, make locking
 	     in internal create lots better.
 
 Severity   : normal
+Frequency  : rare
 Bugzilla   : 14421
 Description: ASSERTION(!PageDirty(page)) failed
 Details    : Wrong check could lead to an assertion failure under specific 
 	     load patterns.
 
 Severity   : normal
+Frequency  : rare
 Bugzilla   : 12228
 Description: LBUG in ptlrpc_check_set() bad phase ebc0de00
 Details    : access to bitfield in structure is always rounded to long 
 	     and this produce problem with not atomic change any bit.
 
 Severity   : normal
+Frequency  : always
 Bugzilla   : 13647
 Description: Lustre make rpms failed.
 Details    : Remove ldiskfs spec file to avoids rpmbuild be confused when
@@ -199,7 +217,7 @@ Bugzilla   : 14498
 Description: Update to SLES9 SP4 kernel-2.6.5-7.308.
 
 Severity   : normal
-Frequency  : rare on shutdown ost
+Frequency  : rare on shutdown OST
 Bugzilla   : 14608
 Description: If llog cancel was not send before clean_exports phase, this can
 	     produce deadlock in llog code.
@@ -209,6 +227,7 @@ Details    : If llog thread has last reference to obd and call class_import_put
 	     called from llog_commit_thread.
 
 Severity   : normal
+Frequency  : only if OST index is skipped
 Bugzilla   : 14607
 Description: NULL lov_tgts causing MDS oops
 Details    : more safe checks for NULL lov_tgts for avoid oops.
@@ -222,6 +241,7 @@ Bugzilla   : 14368
 Description: Update to RHEL5 latest kernel-2.6.18-53.1.4.el5.
 
 Severity   : normal
+Frequency  : always
 Bugzilla   : 14136
 Description: make mgs_setparam() handle fsname containing dash
 Details    : fsname containing a dash does not work with lctl conf_param
@@ -231,8 +251,8 @@ Bugzilla   : 14288
 Description: Update to RHEL4 Update-6 kernel-2.6.9-67.EL.
 
 Severity   : normal
-Bugzilla   : 12702
 Frequency  : rare, in recovery and (or) destroy lovobjid file.
+Bugzilla   : 12702
 Description: rewrite lov objid code.
 Details    : Cleanup for lov objid code, remove scability problems and wrong
 	     locking. Fix sending last_id into ost.
@@ -247,8 +267,8 @@ Description: Update to RHEL5 Update-1 kernel 2.6.18-53.el5.
 Details    : Use d_move_locked instead of __d_move.
 
 Severity   : major
-Bugzilla   : 14260
 Frequency  : rare, at shutdown
+Bugzilla   : 14260
 Description: access already free / zero obd_namespace.
 Details    : if client_disconnect_export was called without force flag set,
 	     and exist connect request in flight, this can produce access to
@@ -256,13 +276,13 @@ Details    : if client_disconnect_export was called without force flag set,
 	     store ocd flags in obd_namespace.
 
 Severity   : minor
-Bugzilla   : 14418
 Frequency  : only at startup
+Bugzilla   : 14418
 Description: not alloc memory with spinlock held.
 Details    : allocation memory with GFP_KERNEL can produce sleep deadlock,
 	     if any spinlock held.
 
-Severity   : major
+Severity   : normal
 Frequency  : always
 Bugzilla   : 14270
 Description: lfs find does not continue on file error
@@ -320,10 +340,10 @@ Bugzilla   : 13497
 Description: LASSERT_{REQ,REP}SWAB macros are buggy
 Details    : If SWAB_PARANOIA is disabled, the LASSERT_REQSWAB and
 	     LASSERT_REPSWAB macros become no-ops, which is incorrect. Drop
-	     these macros and replace them with their difinitions instead.
+	     these macros and replace them with their definitions instead.
 
 Severity   : normal
-Frequency  : rarely
+Frequency  : rare
 Bugzilla   : 13888
 Description: interrupt oig_wait produce painc on resend.
 Details    : brw_redo_request can be used for resend requests from ptlrpcd and
@@ -374,14 +394,14 @@ Details    : When CRAY_XT3 is defined, the fsgid supplied by the client is
 	     whereas the supplied fsgid can be trusted if it is in the list of
 	     supplementary groups returned by the group upcall.
 
-Severity   : normal
+Severity   : enhancement
 Bugzilla   : 12749
 Description: Root Squash Functionality
 Details    : Implementation of NFS-like root squash capability. Specifically,
 	     don't allow someone with root access on a client node to be able
 	     to manipulate files owned by root on a server node.
 
-Severity   : normal
+Severity   : enhancement
 Bugzilla   : 10718
 Description: Slow trucate/writes to huge files at high offsets.
 Details    : Directly associate cached pages to lock that protect those pages,
@@ -389,6 +409,7 @@ Details    : Directly associate cached pages to lock that protect those pages,
 	     once lock callback is received.
 
 Severity   : normal
+Frequency  : common
 Bugzilla   : 14379
 Description: Too many locks accumulating on client during NFS usage
 Details    : mds_open improperly used accmode to find out access mode to a
@@ -411,6 +432,7 @@ Description: Allow masking D_WARNING, D_ERROR messages from console
 Details    : Console messages can now be disabled via lnet.printk.
 
 Severity   : normal
+Frequency  : always
 Bugzilla   : 14614
 Description: User code with malformed file open parameter crashes client node
 Details    : Before packing join_file req, all the related reference should be

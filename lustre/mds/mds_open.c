@@ -617,11 +617,15 @@ static void reconstruct_open(struct mds_update_record *rec, int offset,
                 CERROR("Re-opened file \n");
                 mfd = mds_dentry_open(dchild, mds->mds_vfsmnt,
                                       rec->ur_flags & ~MDS_OPEN_TRUNC, req);
-                if (!mfd) {
-                        CERROR("mds: out of memory\n");
-                        GOTO(out_dput, req->rq_status = -ENOMEM);
+                mntput(mds->mds_vfsmnt);
+                if (IS_ERR(mfd)) {
+                        req->rq_status = PTR_ERR(mfd);
+                        mfd = NULL;
+                        CERROR("%s: opening inode "LPU64" failed: rc %d\n",
+                               req->rq_export->exp_obd->obd_name,
+                               (__u64)dchild->d_inode->i_ino, req->rq_status);
+                        GOTO(out_dput, req->rq_status);
                 }
-                put_child = 0;
         } else {
                 body->handle.cookie = mfd->mfd_handle.h_cookie;
                 CDEBUG(D_INODE, "resend mfd %p, cookie "LPX64"\n", mfd,
