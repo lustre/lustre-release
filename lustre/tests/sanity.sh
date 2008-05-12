@@ -4911,6 +4911,19 @@ test_127() { # bug 15521
 }
 run_test 127 "verify the client stats are sane"
 
+test_128() { # bug 15212
+	touch $DIR/$tfile
+	$LFS 2>&1 <<-EOF | tee $TMP/$tfile.log
+		find $DIR/$tfile
+		find $DIR/$tfile
+	EOF
+
+	result=$(grep error $TMP/$tfile.log)
+	rm -f $DIR/$tfile
+	[ -z "$result" ] || error "consecutive find's under interactive lfs failed"
+}
+run_test 128 "interactive lfs for 2 consecutive find's"
+
 TMPDIR=$OLDTMPDIR
 TMP=$OLDTMP
 HOME=$OLDHOME
