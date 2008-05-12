@@ -1144,22 +1144,23 @@ test_32a() {
 
         [ -z "$TUNEFS" ] && skip "No tunefs" && return
 	local DISK1_4=$LUSTRE/tests/disk1_4.zip
-        [ ! -r $DISK1_4 ] && skip "Cant find $DISK1_4, skipping" && return
-	mkdir -p $TMP/$tdir
-	unzip -o -j -d $TMP/$tdir $DISK1_4 || { skip "Cant unzip $DISK1_4, skipping" && return ; }
+	[ ! -r $DISK1_4 ] && skip "Cant find $DISK1_4, skipping" && return
+
+	local tmpdir=$TMP/conf32a
+	unzip -o -j -d $tmpdir $DISK1_4 || { skip "Cant unzip $DISK1_4, skipping" && return ; }
 	load_modules
 	sysctl lnet.debug=$PTLDEBUG
 
-	$TUNEFS $TMP/$tdir/mds || error "tunefs failed"
+	$TUNEFS $tmpdir/mds || error "tunefs failed"
 	# nids are wrong, so client wont work, but server should start
-        start mds $TMP/$tdir/mds "-o loop,exclude=lustre-OST0000" || return 3
+	start mds $tmpdir/mds "-o loop,exclude=lustre-OST0000" || return 3
         local UUID=$(lctl get_param -n mdt.lustre-MDT0000.uuid)
 	echo MDS uuid $UUID
 	[ "$UUID" == "mdsA_UUID" ] || error "UUID is wrong: $UUID" 
 
-	$TUNEFS --mgsnode=`hostname` $TMP/$tdir/ost1 || error "tunefs failed"
-	start ost1 $TMP/$tdir/ost1 "-o loop" || return 5
-        UUID=$(lctl get_param -n obdfilter.lustre-OST0000.uuid)
+	$TUNEFS --mgsnode=`hostname` $tmpdir/ost1 || error "tunefs failed"
+	start ost1 $tmpdir/ost1 "-o loop" || return 5
+	UUID=$(lctl get_param -n obdfilter.lustre-OST0000.uuid)
 	echo OST uuid $UUID
 	[ "$UUID" == "ost1_UUID" ] || error "UUID is wrong: $UUID" 
 
@@ -1185,13 +1186,16 @@ test_32a() {
 
 	zconf_umount `hostname` $MOUNT -f
 	cleanup_nocli
+	load_modules
 
         # mount a second time to make sure we didnt leave upgrade flag on
-        $TUNEFS --dryrun $TMP/$tdir/mds || error "tunefs failed"
-        start mds $TMP/$tdir/mds "-o loop,exclude=lustre-OST0000" || return 12
-        cleanup_nocli
+	load_modules
+	$TUNEFS --dryrun $tmpdir/mds || error "tunefs failed"
+	load_modules
+	start mds $tmpdir/mds "-o loop,exclude=lustre-OST0000" || return 12
+	cleanup_nocli
 
-	[ -d $TMP/$tdir ] && rm -rf $TMP/$tdir
+	[ -d $tmpdir ] && rm -rf $tmpdir
 }
 run_test 32a "Upgrade from 1.4 (not live)"
 
@@ -1207,43 +1211,48 @@ test_32b() {
 
         [ -z "$TUNEFS" ] && skip "No tunefs" && return
 	local DISK1_4=$LUSTRE/tests/disk1_4.zip
-        [ ! -r $DISK1_4 ] && skip "Cant find $DISK1_4, skipping" && return
-	mkdir -p $TMP/$tdir
-	unzip -o -j -d $TMP/$tdir $DISK1_4 || { skip "Cant unzip $DISK1_4, skipping" && return ; }
+	[ ! -r $DISK1_4 ] && skip "Cant find $DISK1_4, skipping" && return
+
+	local tmpdir=$TMP/conf32b
+	unzip -o -j -d $tmpdir $DISK1_4 || { skip "Cant unzip $DISK1_4, skipping" && return ; }
 	load_modules
 	sysctl lnet.debug=$PTLDEBUG
+	NEWNAME=sofia
 
 	# writeconf will cause servers to register with their current nids
-	$TUNEFS --writeconf $TMP/$tdir/mds || error "tunefs failed"
-	start mds $TMP/$tdir/mds "-o loop" || return 3
-        local UUID=$(lctl get_param -n mds.lustre-MDT0000.uuid)
+	$TUNEFS --writeconf --fsname=$NEWNAME $tmpdir/mds || error "tunefs failed"
+	start mds $tmpdir/mds "-o loop" || return 3
+	local UUID=$(lctl get_param -n mdt.${NEWNAME}-MDT0000.uuid)
 	echo MDS uuid $UUID
 	[ "$UUID" == "mdsA_UUID" ] || error "UUID is wrong: $UUID" 
 
-	$TUNEFS --mgsnode=`hostname` $TMP/$tdir/ost1 || error "tunefs failed"
-	start ost1 $TMP/$tdir/ost1 "-o loop" || return 5
-        UUID=$(lctl get_param -n obdfilter.lustre-OST0000.uuid)
+	$TUNEFS --mgsnode=`hostname` --fsname=$NEWNAME --writeconf $tmpdir/ost1 || error "tunefs failed"
+	start ost1 $tmpdir/ost1 "-o loop" || return 5
+	UUID=$(lctl get_param -n obdfilter.${NEWNAME}-OST0000.uuid)
 	echo OST uuid $UUID
-	[ "$UUID" == "ost1_UUID" ] || error "UUID is wrong: $UUID" 
+	[ "$UUID" == "ost1_UUID" ] || error "UUID is wrong: $UUID"
 
 	echo "OSC changes should succeed:" 
-	$LCTL conf_param lustre-OST0000.osc.max_dirty_mb=15 || return 7
-	$LCTL conf_param lustre-OST0000.failover.node=$NID || return 8
+	$LCTL conf_param ${NEWNAME}-OST0000.osc.max_dirty_mb=15 || return 7
+	$LCTL conf_param ${NEWNAME}-OST0000.failover.node=$NID || return 8
 	echo "ok."
 	echo "MDC changes should succeed:" 
-	$LCTL conf_param lustre-MDT0000.mdc.max_rpcs_in_flight=9 || return 9
+	$LCTL conf_param ${NEWNAME}-MDT0000.mdc.max_rpcs_in_flight=9 || return 9
 	echo "ok."
 
 	# MDT and OST should have registered with new nids, so we should have
 	# a fully-functioning client
 	echo "Check client and old fs contents"
+	OLDFS=$FSNAME
+	FSNAME=$NEWNAME
 	mount_client $MOUNT
+	FSNAME=$OLDFS
 	set_and_check client "lctl get_param -n mdc.*.max_rpcs_in_flight" "${NEWNAME}-MDT0000.mdc.max_rpcs_in_flight" || return 11
 	[ "$(cksum $MOUNT/passwd | cut -d' ' -f 1,2)" == "2479747619 779" ] || return 12  
 	echo "ok."
 
 	cleanup
-	[ -d $TMP/$tdir ] && rm -rf $TMP/$tdir
+	[ -d $tmpdir ] && rm -rf $tmpdir
 }
 run_test 32b "Upgrade from 1.4 with writeconf"
 
