@@ -5,18 +5,17 @@
         2.6.9-67.0.7.EL (RHEL 4),
         2.6.16.54-0.2.5 (SLES 10),
         2.6.18-53.1.14.el5 (RHEL 5),
-        2.6.18.8 vanilla (kernel.org)
         2.6.22.14 vanilla (kernel.org)
        * Client support for unpatched kernels:
-        (see http://wiki.lustre.org/index.php?title=Patchless_Client)
-        2.6.16 - 2.6.22 vanilla (kernel.org)
+         (see http://wiki.lustre.org/index.php?title=Patchless_Client)
+         2.6.16 - 2.6.22 vanilla (kernel.org)
        * Due to problems with nested symlinks and FMODE_EXEC (bug 12652),
-        we do not recommend using patchless RHEL4 clients with kernels
-        prior to 2.6.9-55EL (RHEL4U5).
+         we do not recommend using patchless RHEL4 clients with kernels
+         prior to 2.6.9-55EL (RHEL4U5).
        * Recommended e2fsprogs version: 1.40.7-sun1
        * Note that reiserfs quotas are disabled on SLES 10 in this kernel.
        * RHEL 4 and RHEL 5/SLES 10 clients behaves differently on 'cd' to a
-        removed cwd "./" (refer to Bugzilla 14399).
+         removed cwd "./" (refer to Bugzilla 14399).
        * A new quota file format has been introduced in 1.6.5.
          The format conversion from prior releases is handled transparently,
 	 but releases older than 1.4.12/1.6.5 will not understand this new
@@ -24,6 +23,20 @@
 	 the following command on the MDS before upgrading:
 		'tunefs.lustre --param="mdt.quota_type=ug1" $MDTDEV'.
 	 For more information, please refer to bugzilla 13904.
+
+Severity   : critical
+Frequency  : very rare, if additional xattrs are used on kernels >= 2.6.12
+Bugzilla   : 15777
+Description: MDS may lose file striping (and hence file data) in some cases
+Details    : If there are additional extended attributes stored on the MDS,
+	     in particular ACLs, SELinux, or user attributes (if user_xattr
+	     is specified for the client mount options) then there is a risk
+	     of attribute loss.  Additionally, the Lustre file striping
+	     needs to be larger than default (e.g. striped over all OSTs),
+	     and an additional attribute must be stored initially in the
+	     inode and then increase in size enough to be moved to the
+	     external attribute block (e.g. ACL growing in size) for file
+	     data to be lost.
 
 Severity   : minor
 Frequency  : rare, only if {mds,oss}_num_threads is specified
