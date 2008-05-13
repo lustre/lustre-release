@@ -1267,8 +1267,7 @@ int mds_mfd_close(struct ptlrpc_request *req, int offset,struct obd_device *obd,
                inode->i_nlink, mds_orphan_open_count(inode));
 
         last_orphan = mds_orphan_open_dec_test(inode) &&
-                mds_inode_is_orphan(inode);
-        MDS_UP_WRITE_ORPHAN_SEM(inode);
+                      mds_inode_is_orphan(inode);
 
         /* this is half of the actual "close" */
         if (mfd->mfd_mode & FMODE_WRITE) {
@@ -1277,6 +1276,9 @@ int mds_mfd_close(struct ptlrpc_request *req, int offset,struct obd_device *obd,
         } else if (mfd->mfd_mode & MDS_FMODE_EXEC) {
                 mds_allow_write_access(inode);
         }
+        /* here writecount change also needs protection from orphan write sem. 
+         * so drop orphan write sem after mds_put_write_access, bz 12888. */
+        MDS_UP_WRITE_ORPHAN_SEM(inode);
 
         if (last_orphan && unlink_orphan) {
                 int stripe_count = 0;

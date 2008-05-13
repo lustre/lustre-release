@@ -12,6 +12,12 @@ tbd  Sun Microsystems, Inc.
        * RHEL 4 and RHEL 5/SLES 10 clients behaves differently on 'cd' to a
         removed cwd "./" (refer to Bugzilla 14399).
 
+Severity   : normal
+Bugzilla   : 12888
+Description: mds_mfd_close() ASSERTION(rc == 0) 
+Details    : In mds_mfd_close(), we need protect inode's writecount change 
+             within its orphan write semaphore to prevent possible races.
+
 Severity   : minor
 Bugzilla   : 14929
 Description: Obsolete CURRENT_SECONDS and use cfs_time_current_sec() instead.
@@ -20,7 +26,7 @@ Severity   : minor
 Bugzilla   : 14645
 Frequency  : rare, on shutdown ost
 Description: don't hit live lock with umount ost.
-Description: shrink_dcache_parent can be in long loop with destroy dentries,
+Details    : shrink_dcache_parent can be in long loop with destroy dentries,
 	     use shrink_dcache_sb instead.
 
 Severity   : minor
