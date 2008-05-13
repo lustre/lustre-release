@@ -26,7 +26,17 @@
 	 For more information, please refer to bugzilla 13904.
 
 Severity   : minor
-Frequency  : very rare
+Frequency  : rare, only if {mds,oss}_num_threads is specified
+Bugzilla   : 15759
+Description: MDS or OSS service threads fail startup with -24 (-EMFILE)
+Details	   : During startup under recovery, it is possible for service
+	     thread startup to fail in ptlrpc_start_threads() if one
+	     of the threads begins processing a request and then starts
+	     an additional thread.  This causes ptlrpc_start_threads()
+	     to try and start 1 too many threads and get an error.
+
+Severity   : minor
+Frequency  : rare
 Bugzilla   : 13380
 Description: MDT cannot be unmounted, reporting "Mount still busy"
 Details	   : Mountpoint references were being leaked during open reply

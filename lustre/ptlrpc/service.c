@@ -1490,11 +1490,14 @@ int ptlrpc_start_threads(struct obd_device *dev, struct ptlrpc_service *svc)
         int i, rc = 0;
         ENTRY;
 
-        /* We require 2 threads min - see note in 
-           ptlrpc_server_handle_request */
+        /* We require 2 threads min - see note in
+         * ptlrpc_server_handle_request() */
         LASSERT(svc->srv_threads_min >= 2);
         for (i = 0; i < svc->srv_threads_min; i++) {
                 rc = ptlrpc_start_thread(dev, svc);
+                /* We have enough threads, don't start more.  b=15759 */
+                if (rc == -EMFILE)
+                        break;
                 if (rc) {
                         CERROR("cannot start %s thread #%d: rc %d\n",
                                svc->srv_thread_name, i, rc);
@@ -1516,7 +1519,9 @@ int ptlrpc_start_thread(struct obd_device *dev, struct ptlrpc_service *svc)
         CDEBUG(D_RPCTRACE, "%s started %d min %d max %d running %d\n",
                svc->srv_name, svc->srv_threads_started, svc->srv_threads_min,
                svc->srv_threads_max, svc->srv_threads_running);
-        if (svc->srv_threads_started >= svc->srv_threads_max)
+        if (unlikely(svc->srv_threads_started >= svc->srv_threads_max) ||
+            (OBD_FAIL_CHECK(OBD_FAIL_TGT_TOOMANY_THREADS) &&
+             svc->srv_threads_started == svc->srv_threads_min - 1))
                 RETURN(-EMFILE);
 
         OBD_ALLOC(thread, sizeof(*thread));

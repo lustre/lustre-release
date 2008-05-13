@@ -1155,6 +1155,7 @@ test_32a() {
         [ -z "$TUNEFS" ] && skip "No tunefs" && return
 	local DISK1_4=$LUSTRE/tests/disk1_4.zip
         [ ! -r $DISK1_4 ] && skip "Cant find $DISK1_4, skipping" && return
+	mkdir -p $TMP/$tdir
 	unzip -o -j -d $TMP/$tdir $DISK1_4 || { skip "Cant unzip $DISK1_4, skipping" && return ; }
 	load_modules
 	sysctl lnet.debug=$PTLDEBUG
@@ -1220,6 +1221,7 @@ test_32b() {
         [ -z "$TUNEFS" ] && skip "No tunefs" && return
 	local DISK1_4=$LUSTRE/tests/disk1_4.zip
         [ ! -r $DISK1_4 ] && skip "Cant find $DISK1_4, skipping" && return
+	mkdir -p $TMP/$tdir
 	unzip -o -j -d $TMP/$tdir $DISK1_4 || { skip "Cant unzip $DISK1_4, skipping" && return ; }
 	load_modules
 	sysctl lnet.debug=$PTLDEBUG
@@ -1563,6 +1565,15 @@ test_39() { #bug 14413
                 error "memory leak detected" || true
 }
 run_test 39 "leak_finder recognizes both LUSTRE and LNET malloc messages"
+
+test_40() { # bug 15759
+	start_ost
+	#define OBD_FAIL_TGT_TOOMANY_THREADS     0x706
+	do_facet mds "sysctl -w lustre.fail_loc=0x80000706"
+	start_mds
+	cleanup
+}
+run_test 40 "race during service thread startup"
 
 equals_msg `basename $0`: test complete
 [ -f "$TESTSUITELOG" ] && cat $TESTSUITELOG || true
