@@ -354,6 +354,7 @@ struct lu_dirent {
         __u64         lde_hash;
         __u16         lde_reclen;
         __u16         lde_namelen;
+        __u32         lde_pad0;
         char          lde_name[0];
 };
 
@@ -361,6 +362,7 @@ struct lu_dirpage {
         __u64            ldp_hash_start;
         __u64            ldp_hash_end;
         __u16            ldp_flags;
+        __u16            ldp_pad;
         __u32            ldp_pad0;
         struct lu_dirent ldp_entries[0];
 };
