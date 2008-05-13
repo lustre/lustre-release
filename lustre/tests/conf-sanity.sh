@@ -1169,7 +1169,7 @@ test_32a() {
 
 	$TUNEFS --mgsnode=`hostname` $TMP/$tdir/ost1 || error "tunefs failed"
 	start ost1 $TMP/$tdir/ost1 "-o loop" || return 5
-        UUID=$(cat lctl get_param -n obdfilter.lustre-OST0000.uuid)
+	UUID=$(lctl get_param -n obdfilter.lustre-OST0000.uuid)
 	echo OST uuid $UUID
 	[ "$UUID" == "ost1_UUID" ] || error "UUID is wrong: $UUID" 
 
@@ -1204,7 +1204,7 @@ test_32a() {
         start mds $TMP/$tdir/mds "-o loop,exclude=lustre-OST0000" || return 12
         cleanup_nocli
 
-	[ -d $TMP/$tdir ] && rm -rf $TMP/$tdir
+	[ -d $TMP/$tdir ] && { rm -rf $TMP/$tdir || true; }	# true is only for TMP on NFS
 }
 run_test 32a "Upgrade from 1.4 (not live)"
 
@@ -1260,7 +1260,7 @@ test_32b() {
 	echo "ok."
 
 	cleanup
-	[ -d $TMP/$tdir ] && rm -rf $TMP/$tdir
+	[ -d $TMP/$tdir ] && { rm -rf $TMP/$tdir || true; }	# true is only for TMP on NFS
 }
 run_test 32b "Upgrade from 1.4 with writeconf"
 
