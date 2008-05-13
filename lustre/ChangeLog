@@ -1,4 +1,4 @@
-04-26-2008  Sun Microsystems, Inc.
+2008-05-26  Sun Microsystems, Inc.
        * version 1.6.5
        * Support for kernels:
         2.6.5-7.311 (SLES 9),
@@ -58,8 +58,8 @@ Details	   : Mountpoint references were being leaked during open reply
 
 Severity   : normal
 Frequency  : with multiple concurrent readdir processes in same directory
-Bugzilla   : 15406
-Description: misc fixes (including bug 15169 and 15175) for directory readahead.
+Bugzilla   : 15406, 15169, 15175
+Description: misc fixes for directory readahead.
 Details	   : prevent previous statahead async RPC callback from processing the
 	     current "statahead_info", race condition between async RPC callback
 	     add dentry into dentry hash table and "ls" thread revalidate such
@@ -105,7 +105,7 @@ Description: Update kernel to RHEL4 2.6.9-67.0.7.
 Severity   : normal
 Frequency  : always
 Bugzilla   : 14856
-Frequency  : on ppc only
+Frequency  : on PPC only
 Description: not convert ost objects for directory because it's not exist.
 Details    : ll_dir_getstripe assume dirrectory has ost objects but this wrong.
 
@@ -118,8 +118,8 @@ Severity   : minor
 Frequency  : rare, on shutdown
 Bugzilla   : 15210
 Description: race process ast vs remove callback
-Details    : removing callback before disconnect import open race with processing
-	     callback.
+Details    : removing callback before disconnect import open race with
+	     processing callback.
 
 Severity   : enhancement
 Bugzilla   : 15416
@@ -137,7 +137,7 @@ Description: Add server support for vanilla-2.6.22.14.
 Severity   : normal
 Frequency  : occasional
 Bugzilla   : 13375
-Descriptoin: Avoid lov_create() getting stuck in obd_statfs_rqset()
+Description: Avoid lov_create() getting stuck in obd_statfs_rqset()
 Details    : If an OST is down the MDS will hang indefinitely in
 	     obd_statfs_rqset() waiting for the statfs data. While for
 	     MDS QOS usage of statfs, it should not stuck in waiting.
