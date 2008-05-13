@@ -603,17 +603,14 @@ static int mds_quota_cleanup(struct obd_device *obd)
 static int mds_quota_fs_cleanup(struct obd_device *obd)
 {
         struct mds_obd *mds = &obd->u.mds;
-        int i;
+        struct obd_quotactl oqctl;
         ENTRY;
 
-        /* close admin quota files */
+        memset(&oqctl, 0, sizeof(oqctl));
+        oqctl.qc_type = UGQUOTA;
+
         down(&mds->mds_qonoff_sem);
-        for (i = 0; i < MAXQUOTAS; i++) {
-                if (mds->mds_quota_info.qi_files[i]) {
-                        filp_close(mds->mds_quota_info.qi_files[i], 0);
-                        mds->mds_quota_info.qi_files[i] = NULL;
-                }
-        }
+        mds_admin_quota_off(obd, &oqctl);
         up(&mds->mds_qonoff_sem);
         RETURN(0);
 }
