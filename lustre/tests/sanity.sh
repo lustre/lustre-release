@@ -4117,10 +4117,10 @@ test_118b()
 	reset_async
 
 	#define OBD_FAIL_OST_ENOENT 0x217
-	do_facet ost sysctl -w lustre.fail_loc=0x217
+	set_nodes_failloc "$(osts_nodes)" 0x217
 	multiop $DIR/$tfile oO_CREAT:O_RDWR:O_SYNC:w4096c
 	RC=$?
-	do_facet ost sysctl -w lustre.fail_loc=0
+	set_nodes_failloc "$(osts_nodes)" 0
         DIRTY=$(lctl get_param llite.*.dump_page_cache | grep -c dirty)
         WRITEBACK=$(lctl get_param -n llite.*.dump_page_cache | grep -c writeback)
 
@@ -4152,7 +4152,7 @@ test_118c()
 	reset_async
 
 	#define OBD_FAIL_OST_EROFS               0x216
-	do_facet ost sysctl -w lustre.fail_loc=0x216
+	set_nodes_failloc "$(osts_nodes)" 0x216
 
 	# multiop should block due to fsync until pages are written
 	multiop $DIR/$tfile oO_CREAT:O_RDWR:O_SYNC:w4096c &
@@ -4168,7 +4168,7 @@ test_118c()
 		error "No page in writeback, writeback=$WRITEBACK"
 	fi
 
-	do_facet ost sysctl -w lustre.fail_loc=0
+	set_nodes_failloc "$(osts_nodes)" 0
         wait $MULTIPID
 	RC=$?
 	if [[ $RC -ne 0 ]]; then
@@ -4194,7 +4194,7 @@ test_118d()
 	reset_async
 
 	#define OBD_FAIL_OST_BRW_PAUSE_BULK
-	do_facet ost sysctl -w lustre.fail_loc=0x214
+	set_nodes_failloc "$(osts_nodes)" 0x214
 	# multiop should block due to fsync until pages are written
 	multiop $DIR/$tfile oO_CREAT:O_RDWR:O_SYNC:w4096c &	
 	MULTIPID=$!
@@ -4210,7 +4210,7 @@ test_118d()
 	fi
 
         wait $MULTIPID || error "Multiop fsync failed, rc=$?"
-	do_facet ost sysctl -w lustre.fail_loc=0
+	set_nodes_failloc "$(osts_nodes)" 0
 
         DIRTY=$(lctl get_param -n llite.*.dump_page_cache | grep -c dirty)
         WRITEBACK=$(lctl get_param -n llite.*.dump_page_cache | grep -c writeback)
@@ -4298,12 +4298,12 @@ test_118h() {
         reset_async
 
 	#define OBD_FAIL_OST_BRW_WRITE_BULK      0x20e
-        do_facet ost sysctl -w lustre.fail_loc=0x20e
+        set_nodes_failloc "$(osts_nodes)" 0x20e
 	# Should simulate ENOMEM error which is recoverable and should be handled by timeout
         multiop $DIR/$tfile oO_CREAT:O_RDWR:O_SYNC:w4096c
         RC=$?
 	
-        do_facet ost sysctl -w lustre.fail_loc=0
+        set_nodes_failloc "$(osts_nodes)" 0
 	if [[ $RC -eq 0 ]]; then
 		error "Must return error due to dropped pages, rc=$RC"
 	fi
@@ -4332,13 +4332,13 @@ test_118i() {
         reset_async
 
 	#define OBD_FAIL_OST_BRW_WRITE_BULK      0x20e
-        do_facet ost sysctl -w lustre.fail_loc=0x20e
+        set_nodes_failloc "$(osts_nodes)" 0x20e
 	
 	# Should simulate ENOMEM error which is recoverable and should be handled by timeout
         multiop $DIR/$tfile oO_CREAT:O_RDWR:O_SYNC:w4096c &
 	PID=$!
 	sleep 5
-	do_facet ost sysctl -w lustre.fail_loc=0
+	set_nodes_failloc "$(osts_nodes)" 0
 	
 	wait $PID
         RC=$?
@@ -4370,12 +4370,12 @@ test_118j() {
         reset_async
 
 	#define OBD_FAIL_OST_BRW_WRITE_BULK2     0x220
-        do_facet ost sysctl -w lustre.fail_loc=0x220
+        set_nodes_failloc "$(osts_nodes)" 0x220
 
 	# return -EIO from OST
         multiop $DIR/$tfile oO_CREAT:O_RDWR:O_SYNC:w4096c
         RC=$?
-        do_facet ost sysctl -w lustre.fail_loc=0x0
+        set_nodes_failloc "$(osts_nodes)" 0x0
 	if [[ $RC -eq 0 ]]; then
 		error "Must return error due to dropped pages, rc=$RC"
 	fi
@@ -4402,7 +4402,7 @@ run_test 118j "Simulate unrecoverable OST side error =========="
 test_118k()
 {
 	#define OBD_FAIL_OST_BRW_WRITE_BULK      0x20e
-	do_facet ost sysctl -w lustre.fail_loc=0x20e
+	set_nodes_failloc "$(osts_nodes)" 0x20e
 	mkdir -p $DIR/$tdir
 
         for ((i=0;i<10;i++)); do
@@ -4414,7 +4414,7 @@ test_118k()
 	        wait $SLEEPPID
         done
 
-        sysctl -w lustre.fail_loc=0
+        set_nodes_failloc "$(osts_nodes)" 0
 }
 run_test 118k "bio alloc -ENOMEM and IO TERM handling ========="
 
