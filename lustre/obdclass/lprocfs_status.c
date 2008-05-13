@@ -800,9 +800,8 @@ struct lprocfs_stats *lprocfs_alloc_stats(unsigned int num,
                                           enum lprocfs_stats_flags flags)
 {
         struct lprocfs_stats *stats;
-        struct lprocfs_percpu *percpu;
         unsigned int percpusize;
-        unsigned int i;
+        unsigned int i, j;
         unsigned int num_cpu;
 
         if (num == 0)
@@ -825,12 +824,20 @@ struct lprocfs_stats *lprocfs_alloc_stats(unsigned int num,
                 stats->ls_flags = 0;
         }
 
-        percpusize = offsetof(typeof(*percpu), lp_cntr[num]);
+        percpusize = offsetof(struct lprocfs_percpu, lp_cntr[num]);
         if (num_cpu > 1)
                 percpusize = L1_CACHE_ALIGN(percpusize);
 
-        stats->ls_percpu_size = num_cpu * percpusize;
-        OBD_ALLOC(stats->ls_percpu[0], stats->ls_percpu_size);
+        for (i = 0; i < num_cpu; i++) {
+                OBD_ALLOC(stats->ls_percpu[i], percpusize);
+                if (stats->ls_percpu[i] == NULL) {
+                        for (j = 0; j < i; j++) {
+                                OBD_FREE(stats->ls_percpu[j], percpusize);
+                                stats->ls_percpu[j] = NULL;
+                        }
+                        break;
+                }
+        }
         if (stats->ls_percpu[0] == NULL) {
                 OBD_FREE(stats, offsetof(typeof(*stats),
                                          ls_percpu[num_cpu]));
@@ -838,10 +845,6 @@ struct lprocfs_stats *lprocfs_alloc_stats(unsigned int num,
         }
 
         stats->ls_num = num;
-        for (i = 1; i < num_cpu; i++)
-                stats->ls_percpu[i] = (void *)(stats->ls_percpu[i - 1]) +
-                        percpusize;
-
         return stats;
 }
 
@@ -849,6 +852,8 @@ void lprocfs_free_stats(struct lprocfs_stats **statsh)
 {
         struct lprocfs_stats *stats = *statsh;
         unsigned int num_cpu;
+        unsigned int percpusize;
+        unsigned int i;
         
         if (!stats || (stats->ls_num == 0))
                 return;
@@ -858,7 +863,11 @@ void lprocfs_free_stats(struct lprocfs_stats **statsh)
         else
                 num_cpu = num_possible_cpus();
 
-        OBD_FREE(stats->ls_percpu[0], stats->ls_percpu_size);
+        percpusize = offsetof(struct lprocfs_percpu, lp_cntr[stats->ls_num]);
+        if (num_cpu > 1)
+                percpusize = L1_CACHE_ALIGN(percpusize);
+        for (i = 0; i < num_cpu; i++)
+                OBD_FREE(stats->ls_percpu[i], percpusize);
         OBD_FREE(stats, offsetof(typeof(*stats), ls_percpu[num_cpu]));
 }
 
