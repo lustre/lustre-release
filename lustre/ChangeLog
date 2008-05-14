@@ -38,6 +38,10 @@ Details    : If there are additional extended attributes stored on the MDS,
 	     external attribute block (e.g. ACL growing in size) for file
 	     data to be lost.
 
+Severity   : enhancement
+Bugzilla   : 12191
+Description: add message levels for liblustreapi
+
 Severity   : minor
 Frequency  : rare, only if {mds,oss}_num_threads is specified
 Bugzilla   : 15759
@@ -48,7 +52,7 @@ Details	   : During startup under recovery, it is possible for service
 	     an additional thread.  This causes ptlrpc_start_threads()
 	     to try and start 1 too many threads and get an error.
 
-Severity   : minor
+Severity   : normal
 Frequency  : rare
 Bugzilla   : 13380
 Description: MDT cannot be unmounted, reporting "Mount still busy"
@@ -56,7 +60,54 @@ Details	   : Mountpoint references were being leaked during open reply
 	     reconstruction after an MDS restart.  Drop mountpoint reference
 	     in reconstruct_open() and free dentry reference also.
 
+Severity   : minor
+Frequency  : rare
+Bugzilla   : 13380
+Description: fix for occasional failure case of -ENOSPC in recovery-small tests 
+Details    : Move the 'good_osts' check before the 'total_bavail' check.  This 
+	     will result in an -EAGAIN and in the exit call path we call 
+	     alloc_rr() which will with increasing aggressiveness attempt to 
+	     aquire precreated objects on the minimum number of required OSCs.
+
+Severity   : major
+Bugzilla   : 14326
+Description: Use old size assignment to avoid deadlock
+Details    : This reverts the changes in bugs 2369 and bug 14138 that introduced
+	     the scheduling while holding a spinlock.  We do not need locking 
+	     for size in ll_update_inode() because size is only updated from 
+	     the MDS for directories or files without objects, so there is no 
+	     other place to do the update, and concurrent access to such inodes 
+	     are protected by the inode lock.
+
 Severity   : normal
+Bugzilla   : 14655
+Description: Use __u64 instead of int for valid bits
+
+Severity   : normal
+Bugzilla   : 14746
+Description: resolve "_IOWR redefined" build error on SLES10
+
+Severity   : normal
+Bugzilla   : 14763
+Description: dump the memory debugging after all modules are unloaded to
+	     suppress false negative in conf_sanity test 39
+
+Severity   : normal
+Bugzilla   : 14872
+Description: the recovery timer never expires
+Details    : for new client connect request, the recovery timer should not be
+	     reset, otherwise recovery timer will never expired, if the old 
+	     client never come. Only old client connect and first connection 
+	     req should trigger recovery timer reset.
+
+Severity   : normal
+Bugzilla   : 15521
+Description: the min numbers of lproc stats are wrong
+Details    : adding a new constant LC_MIN_INIT and use it for initialization
+	     of lc_min.
+
+Severity   : normal
+Frequency  : always with interactive lfs
 Bugzilla   : 15212
 Description: Reinitialize optind to 0 so that interactive lfs works in all cases
 
@@ -64,7 +115,7 @@ Severity   : normal
 Frequency  : with multiple concurrent readdir processes in same directory
 Bugzilla   : 15406, 15169, 15175
 Description: misc fixes for directory readahead.
-Details	   : prevent previous statahead async RPC callback from processing the
+Details    : prevent previous statahead async RPC callback from processing the
 	     current "statahead_info", race condition between async RPC callback
 	     add dentry into dentry hash table and "ls" thread revalidate such
 	     dentry, statahead his/miss control for hidden items, and so on.
@@ -72,6 +123,11 @@ Details	   : prevent previous statahead async RPC callback from processing the
 Severity   : enhancement
 Bugzilla   : 15316
 Description: build kernel-ib packages for OFED 1.3 in our release cycle
+
+Severity   : normal
+Bugzilla   : 15036
+Description: incore types cleaning in quota code (with respect to 64-bit limits)
+Details    : several u32 variables declarations are replaced with u64 declarations
 
 Severity   : minor
 Frequency  : always
