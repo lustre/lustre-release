@@ -397,30 +397,41 @@ ostdevlabel() {
 }
 
 # Facet functions
+mount_facet() {
+    local facet=$1
+    shift
+    local dev=${facet}_dev
+    local opt=${facet}_opt
+    echo "Starting ${facet}: ${!opt} $@ ${!dev} ${MOUNT%/*}/${facet}"
+    do_facet ${facet} mount -t lustre ${!opt} $@ ${!dev} ${MOUNT%/*}/${facet}     
+    RC=${PIPESTATUS[0]}
+    if [ $RC -ne 0 ]; then
+        echo "mount -t lustre $@ ${device} ${MOUNT%/*}/${facet}"
+        echo "Start of ${device} on ${facet} failed ${RC}"
+    else
+        do_facet ${facet} "sysctl -w lnet.debug=$PTLDEBUG; \
+            sysctl -w lnet.subsystem_debug=${SUBSYSTEM# }; \
+            sysctl -w lnet.debug_mb=${DEBUG_SIZE}; \
+            sync"
+    fi
+    return $RC
+}
+
 # start facet device options
 start() {
     facet=$1
     shift
     device=$1
     shift
-    echo "Starting ${facet}: $@ ${device} ${MOUNT%/*}/${facet}"
+    eval export ${facet}_dev=${device}
+    eval export ${facet}_opt=\"$@\"
     do_facet ${facet} mkdir -p ${MOUNT%/*}/${facet}
-    do_facet ${facet} mount -t lustre $@ ${device} ${MOUNT%/*}/${facet}
-    RC=${PIPESTATUS[0]}
-    if [ $RC -ne 0 ]; then
-        echo mount -t lustre $@ ${device} ${MOUNT%/*}/${facet}
-        echo Start of ${device} on ${facet} failed ${RC}
-    else
-        do_facet ${facet} "sysctl -w lnet.debug=$PTLDEBUG; \
-        sysctl -w lnet.subsystem_debug=${SUBSYSTEM# }; \
-        sysctl -w lnet.debug_mb=${DEBUG_SIZE}"
-
-        do_facet ${facet} sync
+    mount_facet ${facet}
+    RC=$?
+    if [ $RC -eq 0 ]; then
         label=$(do_facet ${facet} "e2label ${device}")
         [ -z "$label" ] && echo no label for ${device} && exit 1
         eval export ${facet}_svc=${label}
-        eval export ${facet}_dev=${device}
-        eval export ${facet}_opt=\"$@\"
         echo Started ${label}
     fi
     return $RC
@@ -628,9 +639,7 @@ facet_failover() {
     TO=`facet_active_host $facet`
     echo "Failover $facet to $TO"
     wait_for $facet
-    local dev=${facet}_dev
-    local opt=${facet}_opt
-    start $facet ${!dev} ${!opt} || error "Restart of $facet failed"
+    mount_facet $facet || error "Restart of $facet failed"
 }
 
 obd_name() {
@@ -683,11 +692,7 @@ fail_abort() {
     local facet=$1
     stop $facet
     change_active $facet
-    local svc=${facet}_svc
-    local dev=${facet}_dev
-    local opt=${facet}_opt
-    start $facet ${!dev} ${!opt}
-    do_facet $facet lctl --device %${!svc} abort_recovery
+    mount_facet $facet -o abort_recovery
     df $MOUNT || echo "first df failed: $?"
     sleep 1
     df $MOUNT || error "post-failover df: $?"
