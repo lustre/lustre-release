@@ -57,6 +57,10 @@ Details	   : Mountpoint references were being leaked during open reply
 	     in reconstruct_open() and free dentry reference also.
 
 Severity   : normal
+Bugzilla   : 15212
+Description: Reinitialize optind to 0 so that interactive lfs works in all cases
+
+Severity   : normal
 Frequency  : with multiple concurrent readdir processes in same directory
 Bugzilla   : 15406, 15169, 15175
 Description: misc fixes for directory readahead.
