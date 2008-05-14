@@ -82,7 +82,7 @@ int filter_update_capa_key(struct obd_device *obd, struct lustre_capa_key *new)
                 OBD_ALLOC_PTR(k);
                 if (!k)
                         RETURN(-ENOMEM);
-                INIT_LIST_HEAD(&k->k_list);
+                CFS_INIT_LIST_HEAD(&k->k_list);
         }
 
         spin_lock(&capa_lock);

@@ -11,6 +11,10 @@
 #define LNET_ONLY
 
 #ifndef __KERNEL__
+/* XXX workaround XXX */
+#ifdef	HAVE_SYS_TYPES_H
+#include <sys/types.h>
+#endif
 #include <liblustre.h> /* userland spinlock_t and atomic_t */
 #endif
 #include <libcfs/kp30.h>

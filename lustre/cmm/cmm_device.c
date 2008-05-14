@@ -413,7 +413,7 @@ static int cmm_device_init(const struct lu_env *env, struct lu_device *d,
         ENTRY;
 
         spin_lock_init(&m->cmm_tgt_guard);
-        INIT_LIST_HEAD(&m->cmm_targets);
+        CFS_INIT_LIST_HEAD(&m->cmm_targets);
         m->cmm_tgt_count = 0;
         m->cmm_child = lu2md_dev(next);
 

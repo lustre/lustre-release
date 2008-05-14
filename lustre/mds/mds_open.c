@@ -82,8 +82,8 @@ struct mds_file_data *mds_mfd_new(void)
 
         atomic_set(&mfd->mfd_refcount, 2);
 
-        INIT_LIST_HEAD(&mfd->mfd_handle.h_link);
-        INIT_LIST_HEAD(&mfd->mfd_list);
+        CFS_INIT_LIST_HEAD(&mfd->mfd_handle.h_link);
+        CFS_INIT_LIST_HEAD(&mfd->mfd_list);
         class_handle_hash(&mfd->mfd_handle, mds_mfd_addref);
 
         return mfd;
@@ -663,7 +663,7 @@ static int mds_finish_open(struct ptlrpc_request *req, struct dentry *dchild,
         struct mds_obd *mds = mds_req2mds(req);
         struct obd_device *obd = req->rq_export->exp_obd;
         struct mds_file_data *mfd = NULL;
-        struct lov_mds_md *lmm; /* object IDs created */
+        struct lov_mds_md *lmm = NULL; /* object IDs created */
         int rc = 0;
         ENTRY;
 

@@ -112,7 +112,8 @@ void obdo_refresh_inode(struct inode *dst,
         valid &= src->o_valid;
 
         if (valid & (OBD_MD_FLCTIME | OBD_MD_FLMTIME))
-                CDEBUG(D_INODE,"valid "LPX64", cur time %lu/%lu, new %lu/%lu\n",
+                CDEBUG(D_INODE,"valid "LPX64", cur time "CFS_TIME_T"/"CFS_TIME_T
+		       ", new %lu/%lu\n",
                        src->o_valid, LTIME_S(st->st_mtime),
                        LTIME_S(st->st_ctime),
                        (long)src->o_mtime, (long)src->o_ctime);

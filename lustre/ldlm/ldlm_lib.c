@@ -800,7 +800,7 @@ int target_handle_connect(struct ptlrpc_request *req)
                         t = cfs_timer_deadline(&target->obd_recovery_timer);
                         t = cfs_time_sub(t, cfs_time_current());
                         CERROR("%s: denying connection for new client %s (%s): "
-                               "%d clients in recovery for %lds\n",
+                               "%d clients in recovery for "CFS_TIME_T"s\n",
                                target->obd_name,
                                libcfs_nid2str(req->rq_peer.nid), cluuid.uuid,
                                target->obd_recoverable_clients,
@@ -826,7 +826,7 @@ dont_check_exports:
                   //data->ocd_connect_flags &= OBD_CONNECT_SUPPORTED;
                  *tmpdata = *data;
         }
-                  
+
         /* If all else goes well, this is our RPC return code. */
         req->rq_status = 0;
 

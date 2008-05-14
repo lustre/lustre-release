@@ -506,8 +506,8 @@ int obd_init_checks(void)
                 ret = -EINVAL;
         }
         if ((u64val & ~CFS_PAGE_MASK) >= CFS_PAGE_SIZE) {
-                CWARN("mask failed: u64val "LPU64" >= %lu\n", u64val,
-                      CFS_PAGE_SIZE);
+                CWARN("mask failed: u64val "LPU64" >= "LPU64"\n", u64val,
+                      (__u64)CFS_PAGE_SIZE);
                 ret = -EINVAL;
         }
 

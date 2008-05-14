@@ -173,10 +173,10 @@ struct lustre_idmap_entry *idmap_entry_alloc(uid_t rmt_uid, uid_t lcl_uid,
         if (e == NULL)
                 return NULL;
 
-        INIT_LIST_HEAD(&e->lie_rmt_uid_hash);
-        INIT_LIST_HEAD(&e->lie_lcl_uid_hash);
-        INIT_LIST_HEAD(&e->lie_rmt_gid_hash);
-        INIT_LIST_HEAD(&e->lie_lcl_gid_hash);
+        CFS_INIT_LIST_HEAD(&e->lie_rmt_uid_hash);
+        CFS_INIT_LIST_HEAD(&e->lie_lcl_uid_hash);
+        CFS_INIT_LIST_HEAD(&e->lie_rmt_gid_hash);
+        CFS_INIT_LIST_HEAD(&e->lie_lcl_gid_hash);
         e->lie_rmt_uid = rmt_uid;
         e->lie_lcl_uid = lcl_uid;
         e->lie_rmt_gid = rmt_gid;

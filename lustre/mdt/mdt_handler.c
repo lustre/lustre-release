@@ -4341,7 +4341,7 @@ static int mdt_init_export(struct obd_export *exp)
         struct mdt_export_data *med = &exp->exp_mdt_data;
         ENTRY;
 
-        INIT_LIST_HEAD(&med->med_open_head);
+        CFS_INIT_LIST_HEAD(&med->med_open_head);
         spin_lock_init(&med->med_open_lock);
         sema_init(&med->med_idmap_sem, 1);
         med->med_idmap = NULL;

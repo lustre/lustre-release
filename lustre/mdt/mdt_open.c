@@ -49,8 +49,8 @@ struct mdt_file_data *mdt_mfd_new(void)
 
         OBD_ALLOC_PTR(mfd);
         if (mfd != NULL) {
-                INIT_LIST_HEAD(&mfd->mfd_handle.h_link);
-                INIT_LIST_HEAD(&mfd->mfd_list);
+                CFS_INIT_LIST_HEAD(&mfd->mfd_handle.h_link);
+                CFS_INIT_LIST_HEAD(&mfd->mfd_list);
                 class_handle_hash(&mfd->mfd_handle, mdt_mfd_get);
         }
         RETURN(mfd);

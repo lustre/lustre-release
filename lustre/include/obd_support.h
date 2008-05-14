@@ -70,6 +70,10 @@ extern unsigned int obd_alloc_fail_rate;
 
 int __obd_fail_check_set(__u32 id, __u32 value, int set);
 
+/* lvfs.c */
+int obd_alloc_fail(const void *ptr, const char *name, const char *type,
+                   size_t size, const char *file, int line);
+
 /* Timeout definitions */
 #define LDLM_TIMEOUT_DEFAULT 20
 #define OBD_TIMEOUT_DEFAULT 100

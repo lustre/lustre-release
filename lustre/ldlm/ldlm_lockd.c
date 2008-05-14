@@ -679,7 +679,7 @@ int ldlm_server_completion_ast(struct ldlm_lock *lock, int flags, void *data)
                                              &lock->l_enqueued_time, NULL);
 
         if (total_enqueue_wait / 1000000 > obd_timeout)
-                LDLM_ERROR(lock, "enqueue wait took %luus from %lu",
+                LDLM_ERROR(lock, "enqueue wait took %luus from "CFS_TIME_T,
                            total_enqueue_wait, lock->l_enqueued_time.tv_sec);
 
          req = ptlrpc_request_alloc(lock->l_export->exp_imp_reverse,

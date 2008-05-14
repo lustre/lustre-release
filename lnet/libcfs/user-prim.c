@@ -31,6 +31,9 @@
 
 #ifndef __KERNEL__
 
+#include <libcfs/libcfs.h>
+#include <libcfs/kp30.h>
+
 #include <sys/mman.h>
 #ifndef  __CYGWIN__
 #include <stdint.h>
@@ -48,10 +51,9 @@
 #include <signal.h>
 #include <errno.h>
 #include <sys/stat.h>
+#ifdef	HAVE_SYS_VFS_H
 #include <sys/vfs.h>
-
-#include <libcfs/libcfs.h>
-#include <libcfs/kp30.h>
+#endif
 
 /*
  * Sleep channel. No-op implementation.

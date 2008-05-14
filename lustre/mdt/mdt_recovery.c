@@ -945,7 +945,7 @@ int mdt_fs_setup(const struct lu_env *env, struct mdt_device *mdt,
         mdt->mdt_txn_cb.dtc_txn_stop = mdt_txn_stop_cb;
         mdt->mdt_txn_cb.dtc_txn_commit = mdt_txn_commit_cb;
         mdt->mdt_txn_cb.dtc_cookie = mdt;
-        INIT_LIST_HEAD(&mdt->mdt_txn_cb.dtc_linkage);
+        CFS_INIT_LIST_HEAD(&mdt->mdt_txn_cb.dtc_linkage);
 
         dt_txn_callback_add(mdt->mdt_bottom, &mdt->mdt_txn_cb);
 

@@ -41,7 +41,7 @@
 
 #define l_flock_waitq   l_lru
 
-static struct list_head ldlm_flock_waitq = CFS_LIST_HEAD_INIT(ldlm_flock_waitq);
+static CFS_LIST_HEAD(ldlm_flock_waitq);
 
 int ldlm_flock_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock_desc *desc,
                             void *data, int flag);
@@ -391,8 +391,7 @@ ldlm_process_flock_lock(struct ldlm_lock *req, int *flags, int first_enq,
                          * but only once because first_enq will be false from
                          * ldlm_reprocess_queue. */
                         if ((mode == LCK_NL) && overlaps) {
-                                struct list_head rpc_list
-                                                    = CFS_LIST_HEAD_INIT(rpc_list);
+                                CFS_LIST_HEAD(rpc_list);
                                 int rc;
 restart:
                                 ldlm_reprocess_queue(res, &res->lr_waiting,

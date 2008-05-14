@@ -84,7 +84,7 @@ int class_dentry_readdir(struct obd_device *obd, struct dentry *dir,
                 /* dentry_open_it() drops the dentry, mnt refs */
                 GOTO(out_pop, rc = PTR_ERR(file));
 
-        INIT_LIST_HEAD(dentry_list);
+        CFS_INIT_LIST_HEAD(dentry_list);
         rc = l_readdir(file, dentry_list);
         filp_close(file, 0);
         /*  filp_close->fput() drops the dentry, mnt refs */
@@ -376,7 +376,7 @@ static void mgs_free_fsdb(struct obd_device *obd, struct fs_db *fsdb)
 int mgs_init_fsdb_list(struct obd_device *obd)
 {
         struct mgs_obd *mgs = &obd->u.mgs;
-        INIT_LIST_HEAD(&mgs->mgs_fs_db_list);
+        CFS_INIT_LIST_HEAD(&mgs->mgs_fs_db_list);
         return 0;
 }
 

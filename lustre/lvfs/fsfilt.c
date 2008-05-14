@@ -11,7 +11,7 @@
 #include <libcfs/kp30.h>
 #include <lustre_fsfilt.h>
 
-LIST_HEAD(fsfilt_types);
+CFS_LIST_HEAD(fsfilt_types);
 
 static struct fsfilt_operations *fsfilt_search_type(const char *type)
 {

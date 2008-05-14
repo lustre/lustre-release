@@ -34,6 +34,11 @@
 #define __LINUX_SPINLOCK_H
 #endif
 
+#include <libcfs/list.h>
+#include <lnet/lnet.h>
+#include <libcfs/kp30.h>
+#include <libcfs/user-bitops.h>
+
 #include <sys/mman.h>
 #ifdef HAVE_STDINT_H
 # include <stdint.h>
@@ -74,9 +79,6 @@
 
 #ifdef __CYGWIN__
 
-#define CFS_PAGE_SHIFT 12
-#define CFS_PAGE_SIZE (1UL << CFS_PAGE_SHIFT)
-#define CFS_PAGE_MASK (~((__u64)CFS_PAGE_SIZE-1))
 #define loff_t long long
 #define ERESTART 2001
 typedef unsigned short umode_t;
@@ -162,24 +164,6 @@ typedef int (read_proc_t)(char *page, char **start, off_t off,
 struct file; /* forward ref */
 typedef int (write_proc_t)(struct file *file, const char *buffer,
                            unsigned long count, void *data);
-
-#define NIPQUAD(addr) \
-        ((unsigned char *)&addr)[0], \
-        ((unsigned char *)&addr)[1], \
-        ((unsigned char *)&addr)[2], \
-        ((unsigned char *)&addr)[3]
-
-#if defined(__LITTLE_ENDIAN)
-#define HIPQUAD(addr) \
-        ((unsigned char *)&addr)[3], \
-        ((unsigned char *)&addr)[2], \
-        ((unsigned char *)&addr)[1], \
-        ((unsigned char *)&addr)[0]
-#elif defined(__BIG_ENDIAN)
-#define HIPQUAD NIPQUAD
-#else
-#error "Undefined byteorder??"
-#endif /* __LITTLE_ENDIAN */
 
 /* bits ops */
 

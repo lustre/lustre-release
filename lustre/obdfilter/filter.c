@@ -575,7 +575,7 @@ static int filter_init_export(struct obd_export *exp)
 {
         spin_lock_init(&exp->exp_filter_data.fed_lock);
         CFS_INIT_LIST_HEAD(&exp->exp_filter_data.fed_mod_list);
-	
+
         spin_lock(&exp->exp_lock);
         exp->exp_connecting = 1;
         spin_unlock(&exp->exp_lock);
@@ -1643,7 +1643,7 @@ static int filter_intent_policy(struct ldlm_namespace *ns,
                                 struct ldlm_lock **lockp, void *req_cookie,
                                 ldlm_mode_t mode, int flags, void *data)
 {
-        struct list_head rpc_list = CFS_LIST_HEAD_INIT(rpc_list);
+        CFS_LIST_HEAD(rpc_list);
         struct ptlrpc_request *req = req_cookie;
         struct ldlm_lock *lock = *lockp, *l = NULL;
         struct ldlm_resource *res = lock->l_resource;

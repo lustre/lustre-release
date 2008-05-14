@@ -38,10 +38,6 @@ struct group_info { /* unused */ };
 
 #define LLOG_LVFS
 
-/* lvfs.c */
-int obd_alloc_fail(const void *ptr, const char *name, const char *type,
-                   size_t size, const char *file, int line);
-
 /* simple.c */
 
 struct lvfs_ucred {

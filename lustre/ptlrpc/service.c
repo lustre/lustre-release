@@ -42,7 +42,7 @@ CFS_MODULE_PARM(test_req_buffer_pressure, "i", int, 0444,
 /* forward ref */
 static int ptlrpc_server_post_idle_rqbds (struct ptlrpc_service *svc);
 
-static CFS_LIST_HEAD (ptlrpc_all_services);
+static CFS_LIST_HEAD(ptlrpc_all_services);
 spinlock_t ptlrpc_all_services_lock;
 
 static char *
@@ -467,7 +467,7 @@ static void ptlrpc_update_export_timer(struct obd_export *exp, long extra_delay)
         exp->exp_last_request_time = max(exp->exp_last_request_time,
                                          cfs_time_current_sec() + extra_delay);
 
-        CDEBUG(D_HA, "updating export %s at %ld exp %p\n",
+        CDEBUG(D_HA, "updating export %s at "CFS_TIME_T" exp %p\n",
                exp->exp_client_uuid.uuid,
                exp->exp_last_request_time, exp);
 
@@ -508,7 +508,7 @@ static void ptlrpc_update_export_timer(struct obd_export *exp, long extra_delay)
                          * we better wait for 3. */
                         exp->exp_obd->obd_eviction_timer = cfs_time_current_sec() +
                                 3 * PING_INTERVAL;
-                        CDEBUG(D_HA, "%s: Think about evicting %s from %ld\n",
+                        CDEBUG(D_HA, "%s: Think about evicting %s from "CFS_TIME_T"\n",
                                exp->exp_obd->obd_name, obd_export_nid2str(exp),
                                oldest_time);
                 }

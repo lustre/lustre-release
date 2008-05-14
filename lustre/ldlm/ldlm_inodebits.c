@@ -122,7 +122,7 @@ int ldlm_process_inodebits_lock(struct ldlm_lock *lock, int *flags,
                                 struct list_head *work_list)
 {
         struct ldlm_resource *res = lock->l_resource;
-        struct list_head rpc_list = CFS_LIST_HEAD_INIT(rpc_list);
+        CFS_LIST_HEAD(rpc_list);
         int rc;
         ENTRY;
 

@@ -45,7 +45,6 @@
 
 #include <sys/types.h>
 #include <sys/socket.h>
-#include <sys/ioctl.h>
 #include <sys/stat.h>
 #include <sys/mman.h>
 #include <sys/utsname.h>
@@ -483,7 +482,8 @@ int jt_dbg_debug_kernel(int argc, char **argv)
         if (argc > 1 && raw)
                 strcpy(filename, argv[1]);
         else
-                sprintf(filename, "/tmp/lustre-log.%lu.%u",time(NULL),getpid());
+                sprintf(filename, "/tmp/lustre-log."CFS_TIME_T".%u",
+			time(NULL),getpid());
 
         if (stat(filename, &st) == 0 && S_ISREG(st.st_mode))
                 unlink(filename);

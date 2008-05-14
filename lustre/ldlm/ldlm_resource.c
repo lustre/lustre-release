@@ -40,12 +40,10 @@ atomic_t ldlm_srv_namespace_nr = ATOMIC_INIT(0);
 atomic_t ldlm_cli_namespace_nr = ATOMIC_INIT(0);
 
 struct semaphore ldlm_srv_namespace_lock;
-struct list_head ldlm_srv_namespace_list = 
-        CFS_LIST_HEAD_INIT(ldlm_srv_namespace_list);
+CFS_LIST_HEAD(ldlm_srv_namespace_list);
 
 struct semaphore ldlm_cli_namespace_lock;
-struct list_head ldlm_cli_namespace_list = 
-        CFS_LIST_HEAD_INIT(ldlm_cli_namespace_list);
+CFS_LIST_HEAD(ldlm_cli_namespace_list);
 
 cfs_proc_dir_entry_t *ldlm_type_proc_dir = NULL;
 cfs_proc_dir_entry_t *ldlm_ns_proc_dir = NULL;

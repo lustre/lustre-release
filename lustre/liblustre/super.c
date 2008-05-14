@@ -218,7 +218,8 @@ void obdo_to_inode(struct inode *dst, struct obdo *src, obd_flag valid)
         valid &= src->o_valid;
 
         if (valid & (OBD_MD_FLCTIME | OBD_MD_FLMTIME))
-                CDEBUG(D_INODE,"valid "LPX64", cur time %lu/%lu, new %lu/%lu\n",
+                CDEBUG(D_INODE,"valid "LPX64", cur time "CFS_TIME_T"/"CFS_TIME_T
+		       ", new %lu/%lu\n",
                        src->o_valid,
                        LTIME_S(st->st_mtime), LTIME_S(st->st_ctime),
                        (long)src->o_mtime, (long)src->o_ctime);
@@ -257,7 +258,7 @@ void obdo_from_inode(struct obdo *dst, struct inode *src, obd_flag valid)
         obd_flag newvalid = 0;
 
         if (valid & (OBD_MD_FLCTIME | OBD_MD_FLMTIME))
-                CDEBUG(D_INODE, "valid %x, new time %lu/%lu\n",
+                CDEBUG(D_INODE, "valid %x, new time "CFS_TIME_T"/"CFS_TIME_T"\n",
                        valid, LTIME_S(st->st_mtime),
                        LTIME_S(st->st_ctime));
 
@@ -755,7 +756,8 @@ int llu_setattr_raw(struct inode *inode, struct iattr *attr)
         }
 
         if (attr->ia_valid & (ATTR_MTIME | ATTR_CTIME))
-                CDEBUG(D_INODE, "setting mtime %lu, ctime %lu, now = %lu\n",
+                CDEBUG(D_INODE, "setting mtime "CFS_TIME_T", ctime "CFS_TIME_T
+		       ", now = "CFS_TIME_T"\n",
                        LTIME_S(attr->ia_mtime), LTIME_S(attr->ia_ctime),
                        LTIME_S(CURRENT_TIME));
 
@@ -862,7 +864,7 @@ int llu_setattr_raw(struct inode *inode, struct iattr *attr)
                 struct obd_info oinfo = { { { 0 } } };
                 struct obdo oa;
 
-                CDEBUG(D_INODE, "set mtime on OST inode %llu to %lu\n",
+                CDEBUG(D_INODE, "set mtime on OST inode %llu to "CFS_TIME_T"\n",
                        (long long)st->st_ino, LTIME_S(attr->ia_mtime));
                 oa.o_id = lsm->lsm_object_id;
                 oa.o_gr = lsm->lsm_object_gr;

@@ -377,7 +377,7 @@ int t14(char *name)
         char buf[1024];
         const int nfiles = 256;
         char *prefix = "test14_filename_long_prefix_AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA___";
-        struct dirent64 *ent;
+        cfs_dirent_t *ent;
         int fd, i, rc, pos, index;
         loff_t base = 0;
         ENTER(">1 block(4k) directory readdir");
@@ -401,7 +401,7 @@ int t14(char *name)
                 while (pos < rc) {
                         char *item;
 
-                        ent = (struct dirent64 *) ((char*) buf + pos);
+                        ent = (void *) buf + pos;
                         item = (char *) ent->d_name;
                         if (!strcmp(item, ".") || !strcmp(item, ".."))
                                 goto iter;
@@ -772,8 +772,8 @@ int t23(char *name)
 {
         char path[MAX_PATH_LENGTH];
         int fd;
-        long long ret;
-        long long off;
+        off_t ret;
+        off_t off;
 
         ENTER("handle seek > 2GB");
         snprintf(path, MAX_PATH_LENGTH, "%s/f%s", lustre_path, name);
@@ -1341,7 +1341,7 @@ int t56(char *name)
         size_t nbytes;
         off_t basep = 0;
         ssize_t rc = 0;
-        struct dirent dir;
+        cfs_dirent_t dir;
 
         ENTER("getdirentries should fail if nbytes is too small");
 

@@ -183,7 +183,10 @@ static inline cfs_duration_t cfs_time_sub(cfs_time_t t1, cfs_time_t t2)
 #define cfs_time_before_64  cfs_time_before
 #define cfs_time_beforeq_64 cfs_time_beforeq
 
-#define CFS_TIME_T              "%lu"
+#ifndef CFS_TIME_T
+#define CFS_TIME_T              "%u"
+#endif
+
 #define CFS_DURATION_T          "%ld"
 
 /* !__KERNEL__ */

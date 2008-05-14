@@ -137,11 +137,9 @@ int class_add_uuid(const char *uuid, __u64 nid)
 /* Delete the nids for one uuid if specified, otherwise delete all */
 int class_del_uuid(const char *uuid)
 {
-        struct list_head  deathrow;
+        CFS_LIST_HEAD(deathrow);
         struct uuid_nid_data *data;
         int found = 0;
-
-        CFS_INIT_LIST_HEAD (&deathrow);
 
         spin_lock (&g_uuid_lock);
         if (uuid == NULL) {

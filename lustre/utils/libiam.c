@@ -43,7 +43,7 @@
 #endif
 
 #include <libcfs/libcfs.h>
-
+#include <liblustre.h>
 #include <lustre/libiam.h>
 
 typedef __u32 lvar_hash_t;

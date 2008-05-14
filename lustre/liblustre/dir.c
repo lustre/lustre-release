@@ -170,7 +170,7 @@ static int filldir(char *buf, int buflen,
                    const char *name, int namelen, loff_t offset,
                    ino_t ino, unsigned int d_type, int *filled)
 {
-        struct dirent64 *dirent = (struct dirent64 *) (buf + *filled);
+        cfs_dirent_t *dirent = (cfs_dirent_t *) (buf + *filled);
         int reclen = ROUND_UP64(NAME_OFFSET(dirent) + namelen + 1);
 
         /* check overflow */
@@ -178,9 +178,11 @@ static int filldir(char *buf, int buflen,
                 return 1;
 
         dirent->d_ino = ino;
+#ifdef _DIRENT_HAVE_D_OFF
         dirent->d_off = offset;
+#endif
         dirent->d_reclen = reclen;
-#ifndef _AIX
+#ifdef _DIRENT_HAVE_D_TYPE
         dirent->d_type = (unsigned short) d_type;
 #endif
         memcpy(dirent->d_name, name, namelen);

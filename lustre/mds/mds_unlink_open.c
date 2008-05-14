@@ -205,7 +205,7 @@ int mds_cleanup_pending(struct obd_device *obd)
         if (IS_ERR(file))
                 GOTO(err_pop, rc = PTR_ERR(file));
 
-        INIT_LIST_HEAD(&dentry_list);
+        CFS_INIT_LIST_HEAD(&dentry_list);
         rc = l_readdir(file, &dentry_list);
         filp_close(file, 0);
         if (rc < 0)

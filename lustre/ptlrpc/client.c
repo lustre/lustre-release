@@ -1191,7 +1191,7 @@ int ptlrpc_expire_one_request(struct ptlrpc_request *req)
         int rc = 0;
         ENTRY;
 
-        DEBUG_REQ(D_ERROR|D_NETERROR, req, "%s (sent at %lu, %lus ago)",
+        DEBUG_REQ(D_ERROR|D_NETERROR, req, "%s (sent at %lu, "CFS_DURATION_T"s ago)",
                   req->rq_net_err ? "network error" : "timeout",
                   (long)req->rq_sent, cfs_time_current_sec() - req->rq_sent);
 

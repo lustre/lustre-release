@@ -61,7 +61,7 @@ static int mdd_device_init(const struct lu_env *env, struct lu_device *d,
         mdd->mdd_txn_cb.dtc_txn_stop = mdd_txn_stop_cb;
         mdd->mdd_txn_cb.dtc_txn_commit = mdd_txn_commit_cb;
         mdd->mdd_txn_cb.dtc_cookie = mdd;
-        INIT_LIST_HEAD(&mdd->mdd_txn_cb.dtc_linkage);
+        CFS_INIT_LIST_HEAD(&mdd->mdd_txn_cb.dtc_linkage);
         mdd->mdd_atime_diff = MAX_ATIME_DIFF;
 
         rc = mdd_procfs_init(mdd, name);

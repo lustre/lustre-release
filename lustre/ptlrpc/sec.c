@@ -1588,7 +1588,7 @@ int sptlrpc_target_export_check(struct obd_export *exp,
                 if (exp->exp_flvr_expire[0] >= cfs_time_current_sec()) {
                         if (flavor_allowed(&exp->exp_flvr_old[0], req)) {
                                 CDEBUG(D_SEC, "exp %p (%x|%x|%x): match the "
-                                       "middle one (%lu)\n", exp,
+                                       "middle one ("CFS_DURATION_T")\n", exp,
                                        exp->exp_flvr.sf_rpc,
                                        exp->exp_flvr_old[0].sf_rpc,
                                        exp->exp_flvr_old[1].sf_rpc,
@@ -1613,7 +1613,7 @@ int sptlrpc_target_export_check(struct obd_export *exp,
                 if (exp->exp_flvr_expire[1] >= cfs_time_current_sec()) {
                         if (flavor_allowed(&exp->exp_flvr_old[1], req)) {
                                 CDEBUG(D_SEC, "exp %p (%x|%x|%x): match the "
-                                       "oldest one (%lu)\n", exp,
+                                       "oldest one ("CFS_DURATION_T")\n", exp,
                                        exp->exp_flvr.sf_rpc,
                                        exp->exp_flvr_old[0].sf_rpc,
                                        exp->exp_flvr_old[1].sf_rpc,

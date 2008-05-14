@@ -37,7 +37,7 @@
 #include "ptlrpc_internal.h"
 
 struct semaphore pinger_sem;
-static struct list_head pinger_imports = CFS_LIST_HEAD_INIT(pinger_imports);
+static CFS_LIST_HEAD(pinger_imports);
 
 int ptlrpc_ping(struct obd_import *imp)
 {

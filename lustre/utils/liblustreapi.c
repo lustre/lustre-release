@@ -292,7 +292,7 @@ int llapi_file_create(const char *name, unsigned long stripe_size,
 }
 
 typedef int (semantic_func_t)(char *path, DIR *parent, DIR *d,
-                              void *data, struct dirent64 *de);
+                              void *data, cfs_dirent_t *de);
 
 #define MAX_LOV_UUID_COUNT      max(LOV_MAX_STRIPE_COUNT, 1000)
 #define OBD_NOT_FOUND           (-1)
@@ -793,9 +793,9 @@ static DIR *opendir_parent(char *path)
 static int llapi_semantic_traverse(char *path, int size, DIR *parent,
                                    semantic_func_t sem_init,
                                    semantic_func_t sem_fini, void *data,
-                                   struct dirent64 *de)
+                                   cfs_dirent_t *de)
 {
-        struct dirent64 *dent;
+        cfs_dirent_t *dent;
         int len, ret;
         DIR *d, *p = NULL;
 
@@ -980,7 +980,7 @@ static int find_time_check(lstat_t *st, struct find_param *param, int mds)
 }
 
 static int cb_find_init(char *path, DIR *parent, DIR *dir,
-                        void *data, struct dirent64 *de)
+                        void *data, cfs_dirent_t *de)
 {
         struct find_param *param = (struct find_param *)data;
         int decision = 1; /* 1 is accepted; -1 is rejected. */
@@ -1219,7 +1219,7 @@ decided:
 }
 
 static int cb_common_fini(char *path, DIR *parent, DIR *d, void *data,
-                          struct dirent64 *de)
+                          cfs_dirent_t *de)
 {
         struct find_param *param = (struct find_param *)data;
         param->depth--;
@@ -1259,7 +1259,7 @@ int llapi_find(char *path, struct find_param *param)
 }
 
 static int cb_getstripe(char *path, DIR *parent, DIR *d, void *data,
-                        struct dirent64 *de)
+                        cfs_dirent_t *de)
 {
         struct find_param *param = (struct find_param *)data;
         int ret = 0;
@@ -1605,7 +1605,7 @@ int llapi_quotactl(char *mnt, struct if_quotactl *qctl)
 }
 
 static int cb_quotachown(char *path, DIR *parent, DIR *d, void *data,
-                         struct dirent64 *de)
+                         cfs_dirent_t *de)
 {
         struct find_param *param = (struct find_param *)data;
         lstat_t *st;

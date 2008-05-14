@@ -195,7 +195,7 @@ static void lu_object_free(const struct lu_env *env, struct lu_object *o)
          * necessary, because lu_object_header is freed together with the
          * top-level slice.
          */
-        INIT_LIST_HEAD(&splice);
+        CFS_INIT_LIST_HEAD(&splice);
         list_splice_init(&o->lo_header->loh_layers, &splice);
         while (!list_empty(&splice)) {
                 o = container_of0(splice.next, struct lu_object, lo_linkage);
@@ -214,7 +214,7 @@ int lu_site_purge(const struct lu_env *env, struct lu_site *s, int nr)
         struct lu_object_header *h;
         struct lu_object_header *temp;
 
-        INIT_LIST_HEAD(&dispose);
+        CFS_INIT_LIST_HEAD(&dispose);
         /*
          * Under LRU list lock, scan LRU list and move unreferenced objects to
          * the dispose list, removing them from LRU and hash table.
@@ -498,7 +498,7 @@ EXPORT_SYMBOL(lu_object_find);
 /*
  * Global list of all sites on this node
  */
-static LIST_HEAD(lu_sites);
+static CFS_LIST_HEAD(lu_sites);
 static DECLARE_MUTEX(lu_sites_guard);
 
 /*
@@ -1084,7 +1084,7 @@ static int lu_cache_shrink(int nr, unsigned int gfp_mask)
         struct lu_site *tmp;
         int cached = 0;
         int remain = nr;
-        LIST_HEAD(splice);
+        CFS_LIST_HEAD(splice);
 
         if (nr != 0 && !(gfp_mask & __GFP_FS))
                 return -1;

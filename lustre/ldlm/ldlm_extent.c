@@ -622,7 +622,7 @@ int ldlm_process_extent_lock(struct ldlm_lock *lock, int *flags, int first_enq,
                              ldlm_error_t *err, struct list_head *work_list)
 {
         struct ldlm_resource *res = lock->l_resource;
-        struct list_head rpc_list = CFS_LIST_HEAD_INIT(rpc_list);
+        CFS_LIST_HEAD(rpc_list);
         int rc, rc2;
         int contended_locks = 0;
         ENTRY;

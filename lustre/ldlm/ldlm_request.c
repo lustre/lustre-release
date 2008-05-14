@@ -61,9 +61,10 @@ int ldlm_expired_completion_wait(void *data)
                 if (ptlrpc_check_suspend())
                         RETURN(0);
 
-                LDLM_ERROR(lock, "lock timed out (enqueued at %lu, %lus ago); "
-                           "not entering recovery in server code, just going "
-                           "back to sleep", lock->l_enqueued_time.tv_sec,
+                LDLM_ERROR(lock, "lock timed out (enqueued at "CFS_TIME_T", "
+			   CFS_DURATION_T"s ago); not entering recovery in "
+                           "server code, just going back to sleep",
+			   lock->l_enqueued_time.tv_sec,
                            cfs_time_current_sec() - lock->l_enqueued_time.tv_sec);
                 if (cfs_time_after(cfs_time_current(), next_dump)) {
                         last_dump = next_dump;
@@ -79,10 +80,11 @@ int ldlm_expired_completion_wait(void *data)
         obd = lock->l_conn_export->exp_obd;
         imp = obd->u.cli.cl_import;
         ptlrpc_fail_import(imp, lwd->lwd_conn_cnt);
-        LDLM_ERROR(lock, "lock timed out (enqueued at %lu, %lus ago), entering "
-                   "recovery for %s@%s", lock->l_enqueued_time.tv_sec,
-                   cfs_time_current_sec() - lock->l_enqueued_time.tv_sec,
-                   obd2cli_tgt(obd), imp->imp_connection->c_remote_uuid.uuid);
+        LDLM_ERROR(lock, "lock timed out (enqueued at "CFS_TIME_T", "
+                  CFS_DURATION_T"s ago), entering recovery for %s@%s",
+                  lock->l_enqueued_time.tv_sec,
+                  cfs_time_current_sec() - lock->l_enqueued_time.tv_sec,
+                  obd2cli_tgt(obd), imp->imp_connection->c_remote_uuid.uuid);
 
         RETURN(0);
 }
@@ -1984,12 +1986,11 @@ static int replay_one_lock(struct obd_import *imp, struct ldlm_lock *lock)
 int ldlm_replay_locks(struct obd_import *imp)
 {
         struct ldlm_namespace *ns = imp->imp_obd->obd_namespace;
-        struct list_head list;
+        CFS_LIST_HEAD(list);
         struct ldlm_lock *lock, *next;
         int rc = 0;
 
         ENTRY;
-        CFS_INIT_LIST_HEAD(&list);
 
         LASSERT(atomic_read(&imp->imp_replay_inflight) == 0);
 

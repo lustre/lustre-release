@@ -46,6 +46,7 @@
 
 typedef struct file cfs_file_t;
 typedef struct dentry cfs_dentry_t;
+typedef struct dirent64 cfs_dirent_t;
 
 #ifdef __KERNEL__
 #define cfs_filp_size(f)               (i_size_read((f)->f_dentry->d_inode))

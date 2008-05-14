@@ -657,7 +657,7 @@ int libcfs_debug_init(unsigned long bufsize)
 
         if (debug_file_name[0] == '\0' && debug_file_path[0] != '\0')
                 snprintf(debug_file_name, sizeof(debug_file_name) - 1,
-                         "%s-%s-%lu.log", debug_file_path, source_nid, time(0));
+                         "%s-%s-"CFS_TIME_T".log", debug_file_path, source_nid, time(0));
 
         if (strcmp(debug_file_name, "stdout") == 0 ||
             strcmp(debug_file_name, "-") == 0) {
@@ -725,8 +725,9 @@ libcfs_debug_vmsg2(cfs_debug_limit_state_t *cdls,
         int            nob;
         int            remain;
         va_list        ap;
-        char           buf[PAGE_SIZE]; /* size 4096 used for compatimble with linux,
-                                        * where message can`t be exceed PAGE_SIZE */
+        char           buf[CFS_PAGE_SIZE]; /* size 4096 used for compatimble
+                                            * with linux, where message can`t
+                                            * be exceed PAGE_SIZE */
         int            console = 0;
         char *prefix = "Lustre";
 
@@ -819,7 +820,7 @@ out_file:
 
         gettimeofday(&tv, NULL);
 
-        fprintf(debug_file_fd, "%lu.%06lu:%u:%s:(%s:%d:%s()): %s",
+        fprintf(debug_file_fd, CFS_TIME_T".%06lu:%u:%s:(%s:%d:%s()): %s",
                 tv.tv_sec, tv.tv_usec, source_pid, source_nid,
                 file, line, fn, buf);
 
