@@ -18,6 +18,7 @@ ext3-disable-write-bar-by-default-2.6-sles10.patch
 ext3-uninit-2.6-sles10.patch
 ext3-nanosecond-2.6-sles10.patch
 ext3-inode-version-2.6-sles10.patch
+ext3-ea-expand-lose-block.patch
 ext3-mmp-2.6-sles10.patch
 ext3-fiemap-2.6-sles10.patch
 ext3-statfs-2.6-sles10.patch
