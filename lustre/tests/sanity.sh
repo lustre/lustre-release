@@ -3812,6 +3812,50 @@ test_102g() {
 }
 run_test 102g "star copy files, keep osts ==========="
 
+test_102h() { # bug 15777
+	[ -z $(lctl get_param -n mdc.*.connect_flags | grep xattr) ] &&
+		skip "must have user_xattr" && return
+	[ -z "$(which setfattr 2>/dev/null)" ] &&
+		skip "could not find setfattr" && return
+
+	XBIG=trusted.big
+	XSIZE=1024
+	touch $DIR/$tfile
+	VALUE=datadatadatadatadatadatadatadata
+	while [ $(echo $VALUE | wc -c) -lt $XSIZE ]; do
+		VALUE="$VALUE$VALUE"
+	done
+	log "save $XBIG on $DIR/$tfile"
+	setfattr -n $XBIG -v "$VALUE" $DIR/$tfile ||
+		error "saving $XBIG on $DIR/$tfile failed"
+	ORIG=$(getfattr -n $XBIG $DIR/$tfile 2> /dev/null | grep $XBIG)
+	OSIZE=$(echo $ORIG | wc -c)
+	[ $OSIZE -lt $XSIZE ] && error "set $XBIG too small ($OSIZE < $XSIZE)"
+
+	XSML=trusted.sml
+	log "save $XSML on $DIR/$tfile"
+	setfattr -n $XSML -v val $DIR/$tfile ||
+		error "saving $XSML on $DIR/$tfile failed"
+	NEW=$(getfattr -n $XBIG $DIR/$tfile 2> /dev/null | grep $XBIG)
+	if [ "$NEW" != "$ORIG" ]; then
+		log "orig: $ORIG"
+		log "new: $NEW"
+		error "$XBIG different after saving $XSML"
+	fi
+
+	log "grow $XSML on $DIR/$tfile"
+	setfattr -n $XSML -v "$VALUE" $DIR/$tfile ||
+		error "growing $XSML on $DIR/$tfile failed"
+	NEW=$(getfattr -n $XBIG $DIR/$tfile 2> /dev/null | grep $XBIG)
+	if [ "$NEW" != "$ORIG" ]; then
+		log "orig: $ORIG"
+		log "new: $NEW"
+		error "$XBIG different after growing $XSML"
+	fi
+	log "$XBIG still valid after growing $XSML"
+}
+run_test 102h "grow xattr from inside inode to external block"
+
 run_acl_subtest()
 {
     $LUSTRE/tests/acl/run $LUSTRE/tests/acl/$1.test

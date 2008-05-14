@@ -48,20 +48,15 @@ Bugzilla   : 15278
 Description: fix build on ppc32
 Details    : compile code with -m64 flag produce wrong object file for ppc32.
 
-Severity   : normal
-Bugzilla   : 15212
-Description: Reinitialize optind to 0 so that interactive lfs works in all cases
-
 -------------------------------------------------------------------------------
 
 
-04-26-2008  Sun Microsystems, Inc.
+2008-05-26  Sun Microsystems, Inc.
        * version 1.6.5
        * Support for kernels:
         2.6.5-7.311 (SLES 9),
         2.6.9-67.0.7.EL (RHEL 4),
         2.6.16.54-0.2.5 (SLES 10),
-        2.6.18-53.1.14.el5 (RHEL 5),
         2.6.22.14 vanilla (kernel.org)
        * Client support for unpatched kernels:
          (see http://wiki.lustre.org/index.php?title=Patchless_Client)
@@ -81,11 +76,34 @@ Description: Reinitialize optind to 0 so that interactive lfs works in all cases
 		'tunefs.lustre --param="mdt.quota_type=ug1" $MDTDEV'.
 	 For more information, please refer to bugzilla 13904.
 
-Severity   : normal
+Severity   : critical
+Frequency  : very rare, if additional xattrs are used on kernels >= 2.6.12
+Bugzilla   : 15777
+Description: MDS may lose file striping (and hence file data) in some cases
+Details    : If there are additional extended attributes stored on the MDS,
+	     in particular ACLs, SELinux, or user attributes (if user_xattr
+	     is specified for the client mount options) then there is a risk
+	     of attribute loss.  Additionally, the Lustre file striping
+	     needs to be larger than default (e.g. striped over all OSTs),
+	     and an additional attribute must be stored initially in the
+	     inode and then increase in size enough to be moved to the
+	     external attribute block (e.g. ACL growing in size) for file
+	     data to be lost.
+
+Severity   : enhancement
 Bugzilla   : 12191
 Description: add message levels for liblustreapi
 
 Severity   : normal
+Frequency  : rare
+Bugzilla   : 13380
+Description: MDT cannot be unmounted, reporting "Mount still busy"
+Details	   : Mountpoint references were being leaked during open reply
+	     reconstruction after an MDS restart.  Drop mountpoint reference
+	     in reconstruct_open() and free dentry reference also.
+
+Severity   : minor
+Frequency  : rare
 Bugzilla   : 13380
 Description: fix for occasional failure case of -ENOSPC in recovery-small tests 
 Details    : Move the 'good_osts' check before the 'total_bavail' check.  This 
@@ -129,6 +147,11 @@ Bugzilla   : 15521
 Description: the min numbers of lproc stats are wrong
 Details    : adding a new constant LC_MIN_INIT and use it for initialization
 	     of lc_min.
+
+Severity   : normal
+Frequency  : always with interactive lfs
+Bugzilla   : 15212
+Description: Reinitialize optind to 0 so that interactive lfs works in all cases
 
 Severity   : normal
 Frequency  : with multiple concurrent readdir processes in same directory
@@ -204,7 +227,7 @@ Severity   : enhancement
 Bugzilla   : 15416
 Description: Update kernel to SLES9 2.6.5-7.311.
 
-Severity   : normal
+Severity   : enhancement
 Bugzilla   : 12652
 Description: Files open for execute are not marked busy on SLES10
 Details    : Add FMODE_EXEC to SLES10 SP1 server kernel series.
@@ -216,7 +239,7 @@ Description: Add server support for vanilla-2.6.22.14.
 Severity   : normal
 Frequency  : occasional
 Bugzilla   : 13375
-Description: make lov_create() will not stuck in obd_statfs_rqset()
+Description: Avoid lov_create() getting stuck in obd_statfs_rqset()
 Details    : If an OST is down the MDS will hang indefinitely in
 	     obd_statfs_rqset() waiting for the statfs data. While for
 	     MDS QOS usage of statfs, it should not stuck in waiting.
@@ -534,8 +557,8 @@ Description: Allow masking D_WARNING, D_ERROR messages from console
 Details    : Console messages can now be disabled via lnet.printk.
 
 Severity   : normal
-Bugzilla   : 14614
 Frequency  : always
+Bugzilla   : 14614
 Description: User code with malformed file open parameter crashes client node
 Details    : Before packing join_file req, all the related reference should be
 	     checked carefully in case some malformed flags cause fake join_file
@@ -2272,6 +2295,7 @@ Bugzilla   : 10816
 Description: Improve multi-block allocation algorithm to avoid fragmentation
 Details    : The mballoc3 code (ldiskfs2 only) adds new mechanisms to improve
 	     allocation locality and avoid filesystem fragmentation.
+
 ------------------------------------------------------------------------------
 
 2007-04-01  Cluster File Systems, Inc. <info@clusterfs.com>
