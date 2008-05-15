@@ -16,7 +16,7 @@ Index: linux-2.6.18.8/fs/ext3/extents.c
 ===================================================================
 --- /dev/null	1970-01-01 00:00:00.000000000 +0000
 +++ linux-2.6.18.8/fs/ext3/extents.c	2007-07-17 11:08:59.000000000 +0200
-@@ -0,0 +1,2272 @@
+@@ -0,0 +1,2276 @@
 +/*
 + * Copyright (c) 2003-2006, Cluster File Systems, Inc, info@clusterfs.com
 + * Written by Alex Tomas <alex@clusterfs.com>
@@ -263,6 +263,10 @@ Index: linux-2.6.18.8/fs/ext3/extents.c
 +	}
 +	if (unlikely(le16_to_cpu(eh->eh_entries) > le16_to_cpu(eh->eh_max))) {
 +		error_msg = "invalid eh_entries";
++		goto corrupted;
++	}
++	if (unlikely((eh->eh_entries == 0) && (eh->eh_depth != 0))) {
++		error_msg = "invalid index, eh_entries=0 && eh_depth != 0";
 +		goto corrupted;
 +	}
 +	return 0;
