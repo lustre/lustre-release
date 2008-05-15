@@ -48,5 +48,10 @@ ino_t ll_fid_build_ino(struct ll_sb_info *sbi,
          * based on fid.
          */
         ino = fid_flatten(fid);
-        RETURN(ino & 0x7fffffff);
+        ino = ino & 0x7fffffff;
+
+        if (unlikely(ino == 0))
+                /* the first result ino is 0xFFC001, so this is rarely used */
+                ino = 0xffbcde; 
+        RETURN(ino);
 }

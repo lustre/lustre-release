@@ -49,8 +49,8 @@
  * Those fids are reserved for special purposes (igifs, etc.).
  */
 const struct lu_range LUSTRE_SEQ_SPACE_RANGE = {
-        (0x400),
-        ((__u64)~0ULL)
+        0x100000400ULL,
+        (__u64)~0ULL
 };
 EXPORT_SYMBOL(LUSTRE_SEQ_SPACE_RANGE);
 

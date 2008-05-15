@@ -70,6 +70,30 @@ int ll_unlock(__u32 mode, struct lustre_handle *lockh)
         RETURN(0);
 }
 
+
+/* called from iget5_locked->find_inode() under inode_lock spinlock */
+static int ll_test_inode(struct inode *inode, void *opaque)
+{
+        struct ll_inode_info *lli = ll_i2info(inode);
+        struct lustre_md     *md = opaque;
+
+        if (unlikely(!(md->body->valid & OBD_MD_FLID))) {
+                CERROR("MDS body missing FID\n");
+                return 0;
+        }
+
+        if (!lu_fid_eq(&lli->lli_fid, &md->body->fid1))
+                return 0;
+
+        return 1;
+}
+
+static int ll_set_inode(struct inode *inode, void *opaque)
+{
+        return 0;
+}
+
+
 /*
  * Get an inode by inode number (already instantiated by the intent lookup).
  * Returns inode or NULL
@@ -78,24 +102,27 @@ struct inode *ll_iget(struct super_block *sb, ino_t hash,
                       struct lustre_md *md)
 {
         struct ll_inode_info *lli;
-        struct inode *inode;
-        LASSERT(hash != 0);
+        struct inode         *inode;
+        ENTRY;
 
-        inode = iget_locked(sb, hash);
+        LASSERT(hash != 0);
+        inode = iget5_locked(sb, hash, ll_test_inode, ll_set_inode, md);
+
         if (inode) {
+                lli = ll_i2info(inode);
                 if (inode->i_state & I_NEW) {
-                        lli = ll_i2info(inode);
                         ll_read_inode2(inode, md);
                         unlock_new_inode(inode);
                 } else {
                         if (!(inode->i_state & (I_FREEING | I_CLEAR)))
                                 ll_update_inode(inode, md);
                 }
-                CDEBUG(D_VFSTRACE, "inode: %lu/%u(%p)\n",
-                       inode->i_ino, inode->i_generation, inode);
+                CDEBUG(D_VFSTRACE, "got inode: %lu/%u(%p) for "DFID"\n",
+                       inode->i_ino, inode->i_generation, inode,
+                       PFID(&lli->lli_fid));
         }
 
-        return inode;
+        RETURN(inode);
 }
 
 static void ll_drop_negative_dentry(struct inode *dir)
