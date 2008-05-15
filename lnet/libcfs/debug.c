@@ -406,7 +406,7 @@ void libcfs_debug_dumplog_internal(void *arg)
         CFS_PUSH_JOURNAL;
 
         if (strncmp(debug_file_path, "NONE", 4) != 0) {
-                snprintf(debug_file_name, sizeof(debug_file_path) - 1,
+                snprintf(debug_file_name, sizeof(debug_file_name) - 1,
                          "%s.%ld.%ld", debug_file_path, cfs_time_current_sec(),
                          (long)arg);
                 printk(KERN_ALERT "LustreError: dumping log to %s\n",
@@ -653,7 +653,7 @@ int libcfs_debug_init(unsigned long bufsize)
 
         debug_filename = getenv("LIBLUSTRE_DEBUG_FILE");
         if (debug_filename)
-                strncpy(debug_file_name,debug_filename,sizeof(debug_file_path));
+                strncpy(debug_file_name,debug_filename,sizeof(debug_file_name));
 
         if (debug_file_name[0] == '\0' && debug_file_path[0] != '\0')
                 snprintf(debug_file_name, sizeof(debug_file_name) - 1,
