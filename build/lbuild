@@ -382,6 +382,10 @@ download_and_build_tarball() {
         -O "$KERNELDIR/$srpm" ; then
         fatal 1 "Could not download target $kernel_file's kernel SRPM $srpm from downloads.lustre.org."
     fi
+    [ -s "$KERNELDIR/$srpm" ] || {
+        rm -rf $KERNELDIR/$srpm
+        fatal 1 "Could not download target $kernel_file's kernel SRPM $srpm from downloads.lustre.org."
+    }
 
     build_tarball $target $srpm
 }
@@ -420,10 +424,15 @@ load_target()
                 build_tarball $CANONICAL_TARGET $KERNEL_SRPM
             else
                 if (( $DOWNLOAD )) ; then
-                    echo "Downloading http://downloads.lustre.org/public/kernels/$CANONICAL_TARGET/old/$KERNEL..."
-                    if ! wget -nv "http://downloads.lustre.org/public/kernels/$CANONICAL_TARGET/old/$KERNEL" -O "$KERNELDIR/$KERNEL" ; then
+                    echo "Downloading http://downloads.lustre.org/public/kernels/$DISTRO/old/$KERNEL..."
+                    if ! wget -nv "http://downloads.lustre.org/public/kernels/$DISTRO/old/$KERNEL" -O "$KERNELDIR/$KERNEL" ; then
                         # see if we can do it with an SRPM from the download site
                         download_and_build_tarball $CANONICAL_TARGET $KERNEL_FILE
+                    else
+                        [ -s "$KERNELDIR/$KERNEL" ] || {
+                            rm -rf "$KERNELDIR/$KERNEL"
+                            fatal 1 "Target $TARGET's kernel $KERNEL not found in directory $KERNELDIR."
+                        }
                     fi
                 else
                     fatal 1 "Target $TARGET's kernel file $KERNEL not found in kernel directory $KERNELDIR."
@@ -984,13 +993,14 @@ store_for_reuse()
 
 set_rpm_smp_type()
 {
+    local infact_arch=${TARGET_ARCH}
     RPMSMPTYPE=default
+    [ "$infact_arch" == "i586" ] && infact_arch="i686"
     for smp_type in $SMP_ARCHS; do
-        [ $TARGET_ARCH == $smp_type ] && RPMSMPTYPE=smp && break
+        [ $infact_arch == $smp_type ] && RPMSMPTYPE=smp && break
     done
-
     for smp_type in $BIGSMP_ARCHS; do
-        [ $TARGET_ARCH == $smp_type ] && RPMSMPTYPE=bigsmp && break
+        [ $infact_arch == $smp_type ] && RPMSMPTYPE=bigsmp && break
     done
 }
 
