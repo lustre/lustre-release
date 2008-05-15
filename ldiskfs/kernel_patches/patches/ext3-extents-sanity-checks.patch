@@ -1,8 +1,8 @@
-Index: linux-2.6.9-42.0.10.EL_lustre.1.4.10/fs/ext3/extents.c
+Index: linux-2.6.16.54-0.2.5/fs/ext3/extents.c
 ===================================================================
---- linux-2.6.9-42.0.10.EL_lustre.1.4.10.orig/fs/ext3/extents.c	2007-07-17 22:14:08.000000000 +0200
-+++ linux-2.6.9-42.0.10.EL_lustre.1.4.10/fs/ext3/extents.c	2007-07-17 22:40:57.000000000 +0200
-@@ -44,26 +44,56 @@
+--- linux-2.6.16.54-0.2.5.orig/fs/ext3/extents.c
++++ linux-2.6.16.54-0.2.5/fs/ext3/extents.c
+@@ -44,26 +44,60 @@
  #include <asm/uaccess.h>
  
  
@@ -52,6 +52,10 @@ Index: linux-2.6.9-42.0.10.EL_lustre.1.4.10/fs/ext3/extents.c
 +	if (unlikely(eh->eh_entries > eh->eh_max)) {
 +		error_msg = "invalid eh_entries";
 +		goto corrupted;
++	}
++	if (unlikely((eh->eh_entries == 0) && (eh->eh_depth != 0))) {
++		error_msg = "invalid index, eh_entries=0 && eh_depth != 0";
++		goto corrupted;
  	}
  	return 0;
 +
@@ -73,7 +77,7 @@ Index: linux-2.6.9-42.0.10.EL_lustre.1.4.10/fs/ext3/extents.c
  static handle_t *ext3_ext_journal_restart(handle_t *handle, int needed)
  {
  	int err;
-@@ -227,6 +257,26 @@ static inline int ext3_ext_space_root_id
+@@ -226,6 +260,26 @@ static inline int ext3_ext_space_root_id
  	return size;
  }
  
@@ -100,7 +104,7 @@ Index: linux-2.6.9-42.0.10.EL_lustre.1.4.10/fs/ext3/extents.c
  static void ext3_ext_show_path(struct ext3_extents_tree *tree,
  			       struct ext3_ext_path *path)
  {
-@@ -297,10 +347,6 @@ ext3_ext_binsearch_idx(struct ext3_exten
+@@ -296,10 +350,6 @@ ext3_ext_binsearch_idx(struct ext3_exten
  	struct ext3_extent_idx *ix;
  	int l = 0, k, r;
  
@@ -111,7 +115,7 @@ Index: linux-2.6.9-42.0.10.EL_lustre.1.4.10/fs/ext3/extents.c
  	ext_debug(tree, "binsearch for %d(idx):  ", block);
  
  	path->p_idx = ix = EXT_FIRST_INDEX(eh);
-@@ -360,9 +406,6 @@ ext3_ext_binsearch(struct ext3_extents_t
+@@ -359,9 +409,6 @@ ext3_ext_binsearch(struct ext3_extents_t
  	struct ext3_extent *ex;
  	int l = 0, k, r;
  
@@ -121,7 +125,7 @@ Index: linux-2.6.9-42.0.10.EL_lustre.1.4.10/fs/ext3/extents.c
  	if (eh->eh_entries == 0) {
  		/*
  		 * this leaf is empty yet:
-@@ -437,6 +480,7 @@ ext3_ext_find_extent(struct ext3_extents
+@@ -436,6 +483,7 @@ ext3_ext_find_extent(struct ext3_extents
  	struct ext3_extent_header *eh;
  	struct buffer_head *bh;
  	int depth, i, ppos = 0;
@@ -129,7 +133,7 @@ Index: linux-2.6.9-42.0.10.EL_lustre.1.4.10/fs/ext3/extents.c
  
  	EXT_ASSERT(tree);
  	EXT_ASSERT(tree->inode);
-@@ -444,17 +488,15 @@ ext3_ext_find_extent(struct ext3_extents
+@@ -443,17 +491,15 @@ ext3_ext_find_extent(struct ext3_extents
  
  	eh = EXT_ROOT_HDR(tree);
  	EXT_ASSERT(eh);
@@ -150,7 +154,7 @@ Index: linux-2.6.9-42.0.10.EL_lustre.1.4.10/fs/ext3/extents.c
  	/* account possible depth increase */
  	if (!path) {
  		path = kmalloc(sizeof(struct ext3_ext_path) * (depth + 2),
-@@ -485,7 +527,8 @@ ext3_ext_find_extent(struct ext3_extents
+@@ -484,7 +530,8 @@ ext3_ext_find_extent(struct ext3_extents
  		path[ppos].p_hdr = eh;
  		i--;
  
@@ -160,7 +164,7 @@ Index: linux-2.6.9-42.0.10.EL_lustre.1.4.10/fs/ext3/extents.c
  			goto err;
  	}
  
-@@ -494,9 +537,6 @@ ext3_ext_find_extent(struct ext3_extents
+@@ -493,9 +540,6 @@ ext3_ext_find_extent(struct ext3_extents
  	path[ppos].p_ext = NULL;
  	path[ppos].p_idx = NULL;
  
@@ -170,7 +174,7 @@ Index: linux-2.6.9-42.0.10.EL_lustre.1.4.10/fs/ext3/extents.c
  	/* find extent */
  	ext3_ext_binsearch(tree, path + ppos, block);
  
-@@ -993,7 +1033,7 @@ ext3_ext_search_right(struct ext3_extent
+@@ -992,7 +1036,7 @@ ext3_ext_search_right(struct ext3_extent
  	struct ext3_extent_idx *ix;
  	struct ext3_extent *ex;
  	unsigned long block;
@@ -179,7 +183,7 @@ Index: linux-2.6.9-42.0.10.EL_lustre.1.4.10/fs/ext3/extents.c
  
  	BUG_ON(path == NULL);
  	depth = path->p_depth;
-@@ -1051,7 +1091,9 @@ ext3_ext_search_right(struct ext3_extent
+@@ -1050,7 +1094,9 @@ ext3_ext_search_right(struct ext3_extent
  		if (bh == NULL)
  			return -EIO;
  		eh = EXT_BLOCK_HDR(bh);
@@ -190,7 +194,7 @@ Index: linux-2.6.9-42.0.10.EL_lustre.1.4.10/fs/ext3/extents.c
  			brelse(bh);
  			return -EIO;
  		}
-@@ -1064,7 +1106,8 @@ ext3_ext_search_right(struct ext3_extent
+@@ -1063,7 +1109,8 @@ ext3_ext_search_right(struct ext3_extent
  	if (bh == NULL)
  		return -EIO;
  	eh = EXT_BLOCK_HDR(bh);
@@ -200,7 +204,7 @@ Index: linux-2.6.9-42.0.10.EL_lustre.1.4.10/fs/ext3/extents.c
  		brelse(bh);
  		return -EIO;
  	}
-@@ -1694,6 +1737,8 @@ ext3_ext_rm_leaf(handle_t *handle, struc
+@@ -1693,6 +1740,8 @@ ext3_ext_rm_leaf(handle_t *handle, struc
  	ext_debug(tree, "remove [%lu:%lu] in leaf\n", start, end);
  	if (!path[depth].p_hdr)
  		path[depth].p_hdr = EXT_BLOCK_HDR(path[depth].p_bh);
@@ -209,7 +213,7 @@ Index: linux-2.6.9-42.0.10.EL_lustre.1.4.10/fs/ext3/extents.c
  	eh = path[depth].p_hdr;
  	EXT_ASSERT(eh);
  	EXT_ASSERT(eh->eh_entries <= eh->eh_max);
-@@ -1856,7 +1901,7 @@ int ext3_ext_remove_space(struct ext3_ex
+@@ -1855,7 +1904,7 @@ int ext3_ext_remove_space(struct ext3_ex
  	int depth = EXT_DEPTH(tree);
  	struct ext3_ext_path *path;
  	handle_t *handle;
@@ -218,7 +222,7 @@ Index: linux-2.6.9-42.0.10.EL_lustre.1.4.10/fs/ext3/extents.c
  
  	ext_debug(tree, "space to be removed: %lu:%lu\n", start, end);
  
-@@ -1879,7 +1924,13 @@ int ext3_ext_remove_space(struct ext3_ex
+@@ -1878,7 +1927,13 @@ int ext3_ext_remove_space(struct ext3_ex
  	}
  	memset(path, 0, sizeof(struct ext3_ext_path) * (depth + 1));
  	path[i].p_hdr = EXT_ROOT_HDR(tree);
@@ -233,7 +237,7 @@ Index: linux-2.6.9-42.0.10.EL_lustre.1.4.10/fs/ext3/extents.c
  	while (i >= 0 && err == 0) {
  		if (i == depth) {
  			/* this is leaf block */
-@@ -1889,16 +1940,13 @@ int ext3_ext_remove_space(struct ext3_ex
+@@ -1888,16 +1943,13 @@ int ext3_ext_remove_space(struct ext3_ex
  			i--;
  			continue;
  		}
@@ -251,7 +255,7 @@ Index: linux-2.6.9-42.0.10.EL_lustre.1.4.10/fs/ext3/extents.c
  		if (!path[i].p_idx) {
  			/* this level hasn't touched yet */
  			path[i].p_idx =
-@@ -1925,6 +1973,14 @@ int ext3_ext_remove_space(struct ext3_ex
+@@ -1924,6 +1976,14 @@ int ext3_ext_remove_space(struct ext3_ex
  				err = -EIO;
  				break;
  			}
@@ -266,7 +270,7 @@ Index: linux-2.6.9-42.0.10.EL_lustre.1.4.10/fs/ext3/extents.c
  			/* put actual number of indexes to know is this
  			 * number got changed at the next iteration */
  			path[i].p_block = path[i].p_hdr->eh_entries;
-@@ -1945,7 +2001,7 @@ int ext3_ext_remove_space(struct ext3_ex
+@@ -1944,7 +2004,7 @@ int ext3_ext_remove_space(struct ext3_ex
  	}
  
  	/* TODO: flexible tree reduction should be here */
@@ -275,7 +279,7 @@ Index: linux-2.6.9-42.0.10.EL_lustre.1.4.10/fs/ext3/extents.c
  		/*
  		 * truncate to zero freed all the tree
  		 * so, we need to correct eh_depth
-@@ -1959,6 +2015,7 @@ int ext3_ext_remove_space(struct ext3_ex
+@@ -1958,6 +2018,7 @@ int ext3_ext_remove_space(struct ext3_ex
  	}
  	ext3_ext_tree_changed(tree);
  
