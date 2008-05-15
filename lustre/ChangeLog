@@ -996,6 +996,20 @@ Severity   : normal
 Bugzilla   : 15212
 Description: Reinitialize optind to 0 so that interactive lfs works in all cases
 
+Severity   : critical
+Frequency  : very rare, if additional xattrs are used on kernels >= 2.6.12
+Bugzilla   : 15777
+Description: MDS may lose file striping (and hence file data) in some cases
+Details    : If there are additional extended attributes stored on the MDS,
+	     in particular ACLs, SELinux, or user attributes (if user_xattr
+	     is specified for the client mount options) then there is a risk
+	     of attribute loss.  Additionally, the Lustre file striping
+	     needs to be larger than default (e.g. striped over all OSTs),
+	     and an additional attribute must be stored initially in the
+	     inode and then increase in size enough to be moved to the
+	     external attribute block (e.g. ACL growing in size) for file
+	     data to be lost.
+
 --------------------------------------------------------------------------------
 
 2007-08-10         Cluster File Systems, Inc. <info@clusterfs.com>
