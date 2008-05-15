@@ -13,6 +13,7 @@ ext3-filterdata-sles10.patch
 ext3-uninit-2.6.18.patch
 ext3-nanosecond-2.6.18-vanilla.patch
 ext3-inode-version-2.6.18-vanilla.patch
+ext3-ea-expand-lose-block.patch
 ext3-mmp-2.6.18-vanilla.patch
 ext3-unlink-race.patch
 ext3-statfs-2.6-rhel5.patch
