@@ -713,17 +713,18 @@ int ll_page_removal_cb(void *data, int discard)
         ll_teardown_mmaps(mapping,
                           (__u64)page->index << PAGE_CACHE_SHIFT,
                           ((__u64)page->index<<PAGE_CACHE_SHIFT)|
-                                                              ~PAGE_CACHE_MASK);        
+                                                              ~PAGE_CACHE_MASK);
         LL_CDEBUG_PAGE(D_PAGE, page, "removing page\n");
+        if (!discard && PageWriteback(page))
+                wait_on_page_writeback(page);
 
         if (!discard && clear_page_dirty_for_io(page)) {
-                LASSERT(page->mapping);
                 rc = ll_call_writepage(page->mapping->host, page);
                 /* either waiting for io to complete or reacquiring
                  * the lock that the failed writepage released */
                 lock_page(page);
                 wait_on_page_writeback(page);
-                if (rc != 0) {
+                if (rc < 0) {
                         CERROR("writepage inode %lu(%p) of page %p "
                                "failed: %d\n", mapping->host->i_ino,
                                mapping->host, page, rc);
