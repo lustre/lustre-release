@@ -210,7 +210,15 @@ void ptlrpc_invalidate_import(struct obd_import *imp)
 
         atomic_inc(&imp->imp_inval_count);
 
-        ptlrpc_deactivate_import(imp);
+        /*
+         * If this is an invalid MGC connection, then don't bother
+         * waiting for imp_inflight to drop to 0.
+         */
+        if (imp->imp_invalid && imp->imp_recon_bk && !imp->imp_obd->obd_no_recov)
+                goto out;
+
+        if (!imp->imp_invalid || imp->imp_obd->obd_no_recov)
+                ptlrpc_deactivate_import(imp);
 
         LASSERT(imp->imp_invalid);
 
@@ -220,11 +228,26 @@ void ptlrpc_invalidate_import(struct obd_import *imp)
         rc = l_wait_event(imp->imp_recovery_waitq,
                           (atomic_read(&imp->imp_inflight) == 0), &lwi);
 
-        if (rc)
-                CDEBUG(D_HA, "%s: rc = %d waiting for callback (%d != 0)\n",
+        if (rc) {
+                struct list_head *tmp, *n;
+                struct ptlrpc_request *req;
+
+                CERROR("%s: rc = %d waiting for callback (%d != 0)\n",
                        obd2cli_tgt(imp->imp_obd), rc,
                        atomic_read(&imp->imp_inflight));
+                spin_lock(&imp->imp_lock);
+                list_for_each_safe(tmp, n, &imp->imp_sending_list) {
+                        req = list_entry(tmp, struct ptlrpc_request, rq_list);
+                        DEBUG_REQ(D_ERROR, req, "still on sending list");
+                }
+                list_for_each_safe(tmp, n, &imp->imp_delayed_list) {
+                        req = list_entry(tmp, struct ptlrpc_request, rq_list);
+                        DEBUG_REQ(D_ERROR, req, "still on delayed list");
+                }
+                spin_unlock(&imp->imp_lock);
+        }
 
+out:
         obd_import_event(imp->imp_obd, imp, IMP_EVENT_INVALIDATE);
         sptlrpc_import_flush_all_ctx(imp);
 
