@@ -840,12 +840,13 @@ void ll_pgcache_remove_extent(struct inode *inode, struct lov_stripe_md *lsm,
 
                 cond_resched();
 
-                page = find_get_page(mapping, i);
+                page = find_lock_page(mapping, i);
                 if (page == NULL)
                         continue;
                 LL_CDEBUG_PAGE(D_PAGE, page, "lock page idx %lu ext "LPU64"\n",
                                i, tmpex.l_extent.start);
-                lock_page(page);
+                if (!discard && PageWriteback(page))
+                        wait_on_page_writeback(page);
 
                 /* page->mapping to check with racing against teardown */
                 if (!discard && clear_page_dirty_for_io(page)) {
@@ -854,7 +855,7 @@ void ll_pgcache_remove_extent(struct inode *inode, struct lov_stripe_md *lsm,
                          * the lock that the failed writepage released */
                         lock_page(page);
                         wait_on_page_writeback(page);
-                        if (rc != 0) {
+                        if (rc < 0) {
                                 CERROR("writepage inode %lu(%p) of page %p "
                                        "failed: %d\n", inode->i_ino, inode,
                                        page, rc);

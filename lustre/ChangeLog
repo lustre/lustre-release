@@ -12,6 +12,13 @@ tbd  Sun Microsystems, Inc.
        * RHEL 4 and RHEL 5/SLES 10 clients behaves differently on 'cd' to a
         removed cwd "./" (refer to Bugzilla 14399).
 
+Severity   : normal
+Bugzilla   : 15443
+Description: wait until IO finished before start new when do lock cancel.
+Details    : VM protocol want old IO finished before start new, in this case
+             need wait until PG_writeback is cleared until check dirty flag and
+             call writepages in lock cancel callback.
+
 Severity   : enhancement
 Bugzilla   : 14929
 Description: using special macro for print time and cleanup in includes.
