@@ -24,6 +24,14 @@ tbd Sun Microsystems, Inc.
 	  	'tunefs.lustre --param="mdt.quota_type=ug1" $MDTDEV'.
 	  For more information, please refer to bugzilla 13904.
 
+Severity   : minor
+Frequency  : very rare
+Bugzilla   : 13380
+Description: MDT cannot be unmounted, reporting "Mount still busy"
+Details	   : Mountpoint references were being leaked during open reply
+	     reconstruction after an MDS restart.  Drop mountpoint reference
+	     in reconstruct_open() and free dentry reference also.
+
 Severity   : normal
 Bugzilla   : 15443
 Description: wait until IO finished before start new when do lock cancel.
