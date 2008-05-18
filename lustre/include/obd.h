@@ -1113,11 +1113,11 @@ static inline void obd_transno_commit_cb(struct obd_device *obd, __u64 transno,
                                          int error)
 {
         if (error) {
-                CERROR("%s: transno "LPD64" commit error: %d\n",
+                CERROR("%s: transno "LPU64" commit error: %d\n",
                        obd->obd_name, transno, error);
                 return;
         }
-        CDEBUG(D_HA, "%s: transno "LPD64" committed\n",
+        CDEBUG(D_HA, "%s: transno "LPU64" committed\n",
                obd->obd_name, transno);
         if (transno > obd->obd_last_committed) {
                 obd->obd_last_committed = transno;
