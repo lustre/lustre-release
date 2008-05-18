@@ -974,7 +974,8 @@ int qos_prep_create(struct obd_export *exp, struct lov_request_set *set)
 out_err:
         if (newea && rc)
                 obd_free_memmd(exp, &set->set_oi->oi_md);
-        free_idx_array(idx_arr, idx_cnt);
+        if (idx_arr)
+                free_idx_array(idx_arr, idx_cnt);
         EXIT;
         return rc;
 }

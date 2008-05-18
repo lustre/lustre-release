@@ -15,7 +15,7 @@ EXTRA_DIST = license-status maketags.sh version_tag.pl.in lc_common \
 	     $(addsuffix .in,$(genscripts)) lc_mon $(sbinscripts) \
 	     $(bin_SCRIPTS)
 
-scriptlibdir = $(libdir)/@PACKAGE@
+scriptlibdir = @libexecdir@/@PACKAGE@
 scriptlib_DATA = lc_common
 
 CLEANFILES = $(genscripts)
