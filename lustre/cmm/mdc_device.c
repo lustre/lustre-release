@@ -235,7 +235,7 @@ static struct lu_device_operations mdc_lu_ops = {
         .ldo_process_config = mdc_process_config
 };
 
-void mdc_init_ea_size(const struct lu_env *env, struct mdc_device *mc, 
+void cmm_mdc_init_ea_size(const struct lu_env *env, struct mdc_device *mc,
                       int max_mdsize, int max_cookiesize)
 {
         struct obd_device *obd = class_exp2obd(mc->mc_desc.cl_exp);

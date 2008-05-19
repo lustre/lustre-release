@@ -1545,7 +1545,7 @@ err_rpc_lock:
  * us to make MDS RPCs with large enough reply buffers to hold the
  * maximum-sized (= maximum striped) EA and cookie without having to
  * calculate this (via a call into the LOV + OSCs) each time we make an RPC. */
-int mdc_init_ea_size(struct obd_export *exp, int easize,
+static int mdc_init_ea_size(struct obd_export *exp, int easize,
                      int def_easize, int cookiesize)
 {
         struct obd_device *obd = exp->exp_obd;

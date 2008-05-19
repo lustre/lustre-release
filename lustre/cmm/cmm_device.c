@@ -138,7 +138,7 @@ static int cmm_post_init_mdc(const struct lu_env *env,
         spin_lock(&cmm->cmm_tgt_guard);
         list_for_each_entry_safe(mc, tmp, &cmm->cmm_targets,
                                  mc_linkage) {
-                mdc_init_ea_size(env, mc, max_mdsize, max_cookiesize);
+                cmm_mdc_init_ea_size(env, mc, max_mdsize, max_cookiesize);
         }
         spin_unlock(&cmm->cmm_tgt_guard);
         RETURN(rc);
