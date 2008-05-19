@@ -955,15 +955,7 @@ dont_check_exports:
         revimp->imp_remote_handle = conn;
         revimp->imp_dlm_fake = 1;
         revimp->imp_state = LUSTRE_IMP_FULL;
-
-        if (req->rq_reqmsg->lm_magic == LUSTRE_MSG_MAGIC_V1 &&
-            lustre_msg_get_op_flags(req->rq_reqmsg) & MSG_CONNECT_NEXT_VER) {
-                revimp->imp_msg_magic = LUSTRE_MSG_MAGIC_V2;
-                lustre_msg_add_op_flags(req->rq_repmsg, MSG_CONNECT_NEXT_VER);
-        } else {
-                /* unknown magic has been filtered out by unpack */
-                revimp->imp_msg_magic = req->rq_reqmsg->lm_magic;
-        }
+        revimp->imp_msg_magic = req->rq_reqmsg->lm_magic;
 
         rc = sptlrpc_import_sec_adapt(revimp, req->rq_svc_ctx,
                                       req->rq_flvr.sf_rpc);

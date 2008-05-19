@@ -851,6 +851,7 @@ int sptlrpc_cli_unwrap_reply(struct ptlrpc_request *req)
 {
         struct ptlrpc_cli_ctx *ctx = req->rq_cli_ctx;
         int                    rc;
+        __u16                  rpc_flvr;
         ENTRY;
 
         LASSERT(ctx);
@@ -867,42 +868,28 @@ int sptlrpc_cli_unwrap_reply(struct ptlrpc_request *req)
         }
 
 
-        if (req->rq_repbuf->lm_magic == LUSTRE_MSG_MAGIC_V1 ||
-            req->rq_repbuf->lm_magic == LUSTRE_MSG_MAGIC_V1_SWABBED) {
-                /*
-                 * v1 message, it's must be null flavor, so our requets also
-                 * should be in null flavor
-                 */
-                if (RPC_FLVR_POLICY(req->rq_flvr.sf_rpc) !=
-                    SPTLRPC_POLICY_NULL) {
-                        CERROR("request was %s but reply with null\n",
-                               sptlrpc_rpcflavor2name(req->rq_flvr.sf_rpc));
-                        RETURN(-EPROTO);
-                }
-        } else {
-                /*
-                 * v2 message, check request/reply policy match
-                 */
-                __u16 rpc_flvr = WIRE_FLVR_RPC(req->rq_repbuf->lm_secflvr);
+        /*
+         * v2 message, check request/reply policy match
+         */
+        rpc_flvr = WIRE_FLVR_RPC(req->rq_repbuf->lm_secflvr);
 
-                if (req->rq_repbuf->lm_magic == LUSTRE_MSG_MAGIC_V2_SWABBED)
-                        __swab16s(&rpc_flvr);
+        if (req->rq_repbuf->lm_magic == LUSTRE_MSG_MAGIC_V2_SWABBED)
+                __swab16s(&rpc_flvr);
 
-                if (RPC_FLVR_POLICY(rpc_flvr) !=
-                    RPC_FLVR_POLICY(req->rq_flvr.sf_rpc)) {
-                        CERROR("request policy was %u while reply with %u\n",
-                               RPC_FLVR_POLICY(req->rq_flvr.sf_rpc),
-                               RPC_FLVR_POLICY(rpc_flvr));
-                        RETURN(-EPROTO);
-                }
-
-                /* do nothing if it's null policy; otherwise unpack the
-                 * wrapper message
-                 */
-                if (RPC_FLVR_POLICY(rpc_flvr) != SPTLRPC_POLICY_NULL &&
-                    lustre_unpack_msg(req->rq_repbuf, req->rq_nob_received))
-                        RETURN(-EPROTO);
+        if (RPC_FLVR_POLICY(rpc_flvr) !=
+                RPC_FLVR_POLICY(req->rq_flvr.sf_rpc)) {
+                CERROR("request policy was %u while reply with %u\n",
+                        RPC_FLVR_POLICY(req->rq_flvr.sf_rpc),
+                        RPC_FLVR_POLICY(rpc_flvr));
+                RETURN(-EPROTO);
         }
+
+        /* do nothing if it's null policy; otherwise unpack the
+         * wrapper message
+         */
+        if (RPC_FLVR_POLICY(rpc_flvr) != SPTLRPC_POLICY_NULL &&
+            lustre_unpack_msg(req->rq_repbuf, req->rq_nob_received))
+                RETURN(-EPROTO);
 
         switch (RPC_FLVR_SVC(req->rq_flvr.sf_rpc)) {
         case SPTLRPC_SVC_NULL:
@@ -1746,28 +1733,18 @@ int sptlrpc_svc_unwrap_request(struct ptlrpc_request *req)
                 RETURN(SECSVC_DROP);
         }
 
-        if (msg->lm_magic == LUSTRE_MSG_MAGIC_V1 ||
-            msg->lm_magic == LUSTRE_MSG_MAGIC_V1_SWABBED) {
-                /*
-                 * v1 message, treat as to be null
-                 */
-                req->rq_flvr.sf_rpc = SPTLRPC_FLVR_NULL;
-        } else {
-                /*
-                 * v2 message.
-                 */
-                if (msg->lm_magic == LUSTRE_MSG_MAGIC_V2)
-                        req->rq_flvr.sf_rpc = WIRE_FLVR_RPC(msg->lm_secflvr);
-                else
-                        req->rq_flvr.sf_rpc = WIRE_FLVR_RPC(
-                                                __swab32(msg->lm_secflvr));
+        /*
+         * v2 message.
+         */
+        if (msg->lm_magic == LUSTRE_MSG_MAGIC_V2)
+                req->rq_flvr.sf_rpc = WIRE_FLVR_RPC(msg->lm_secflvr);
+        else
+                req->rq_flvr.sf_rpc = WIRE_FLVR_RPC(__swab32(msg->lm_secflvr));
 
-                /* unpack the wrapper message if the policy is not null */
-                if ((RPC_FLVR_POLICY(req->rq_flvr.sf_rpc) !=
-                     SPTLRPC_POLICY_NULL) &&
-                    lustre_unpack_msg(msg, req->rq_reqdata_len))
-                        RETURN(SECSVC_DROP);
-        }
+        /* unpack the wrapper message if the policy is not null */
+        if ((RPC_FLVR_POLICY(req->rq_flvr.sf_rpc) != SPTLRPC_POLICY_NULL) &&
+             lustre_unpack_msg(msg, req->rq_reqdata_len))
+                RETURN(SECSVC_DROP);
 
         policy = sptlrpc_rpcflavor2policy(req->rq_flvr.sf_rpc);
         if (!policy) {

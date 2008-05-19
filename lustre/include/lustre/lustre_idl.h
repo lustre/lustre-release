@@ -416,24 +416,6 @@ static inline void lustre_handle_copy(struct lustre_handle *tgt,
         tgt->cookie = src->cookie;
 }
 
-/* we depend on this structure to be 8-byte aligned */
-/* this type is only endian-adjusted in lustre_unpack_msg() */
-struct lustre_msg_v1 {
-        struct lustre_handle lm_handle;
-        __u32 lm_magic;
-        __u32 lm_type;
-        __u32 lm_version;
-        __u32 lm_opc;
-        __u64 lm_last_xid;
-        __u64 lm_last_committed;
-        __u64 lm_transno;
-        __u32 lm_status;
-        __u32 lm_flags;
-        __u32 lm_conn_cnt;
-        __u32 lm_bufcount;
-        __u32 lm_buflens[0];
-};
-
 #define lustre_msg lustre_msg_v2
 /* we depend on this structure to be 8-byte aligned */
 /* this type is only endian-adjusted in lustre_unpack_msg() */

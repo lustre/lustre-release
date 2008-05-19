@@ -889,7 +889,6 @@ int lustre_msg_size(__u32 magic, int count, int *lengths);
 int lustre_msg_size_v2(int count, int *lengths);
 int lustre_packed_msg_size(struct lustre_msg *msg);
 int lustre_unpack_msg(struct lustre_msg *m, int len);
-void *lustre_msg_buf_v1(void *msg, int n, int min_size);
 void *lustre_msg_buf_v2(struct lustre_msg_v2 *m, int n, int min_size);
 void *lustre_msg_buf(struct lustre_msg *m, int n, int minlen);
 int lustre_msg_buflen(struct lustre_msg *m, int n);
@@ -967,9 +966,6 @@ static inline __u32 lustre_request_magic(struct ptlrpc_request *req)
 static inline int ptlrpc_req_get_repsize(struct ptlrpc_request *req)
 {
         switch (req->rq_reqmsg->lm_magic) {
-        case LUSTRE_MSG_MAGIC_V1:
-                CERROR("function not supported for lustre_msg V1!\n");
-                return -ENOTSUPP;
         case LUSTRE_MSG_MAGIC_V2:
                 return req->rq_reqmsg->lm_repsize;
         default:

@@ -102,26 +102,6 @@ check_lustre_handle(void)
 }
 
 void
-check_lustre_msg_v1(void)
-{
-        BLANK_LINE();
-        CHECK_STRUCT(lustre_msg_v1);
-        CHECK_MEMBER(lustre_msg_v1, lm_handle);
-        CHECK_MEMBER(lustre_msg_v1, lm_magic);
-        CHECK_MEMBER(lustre_msg_v1, lm_type);
-        CHECK_MEMBER(lustre_msg_v1, lm_version);
-        CHECK_MEMBER(lustre_msg_v1, lm_opc);
-        CHECK_MEMBER(lustre_msg_v1, lm_last_xid);
-        CHECK_MEMBER(lustre_msg_v1, lm_last_committed);
-        CHECK_MEMBER(lustre_msg_v1, lm_transno);
-        CHECK_MEMBER(lustre_msg_v1, lm_status);
-        CHECK_MEMBER(lustre_msg_v1, lm_flags);
-        CHECK_MEMBER(lustre_msg_v1, lm_conn_cnt);
-        CHECK_MEMBER(lustre_msg_v1, lm_bufcount);
-        CHECK_MEMBER(lustre_msg_v1, lm_buflens[0]);
-}
-
-void
 check_lustre_msg_v2(void)
 {
         BLANK_LINE();
@@ -1122,7 +1102,6 @@ main(int argc, char **argv)
         BLANK_LINE ();
 
         COMMENT("Constants...");
-        CHECK_DEFINE(LUSTRE_MSG_MAGIC_V1);
         CHECK_DEFINE(LUSTRE_MSG_MAGIC_V2);
         CHECK_DEFINE(PTLRPC_MSG_VERSION);
 
@@ -1243,10 +1222,7 @@ main(int argc, char **argv)
         BLANK_LINE();
         CHECK_STRUCT(obd_uuid);
         check_lustre_handle();
-        check_lustre_msg_v1();
         check_lustre_msg_v2();
-        printf("        LASSERT(offsetof(struct lustre_msg_v1, lm_magic) == "
-               "offsetof(struct lustre_msg_v2, lm_magic));\n");
         check_ptlrpc_body();
         check_obd_connect_data();
         check_obdo();

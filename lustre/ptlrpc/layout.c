@@ -1468,9 +1468,6 @@ int req_capsule_fmt_size(__u32 magic, const struct req_format *fmt,
         if (size < 0)
                 return size;
 
-        if (magic == LUSTRE_MSG_MAGIC_V1)
-                i++;
-
         for (; i < fmt->rf_fields[loc].nr; ++i)
                 if (fmt->rf_fields[loc].d[i]->rmf_size != -1)
                         size += size_round(fmt->rf_fields[loc].d[i]->rmf_size);

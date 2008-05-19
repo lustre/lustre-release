@@ -73,14 +73,12 @@ int null_ctx_refresh(struct ptlrpc_cli_ctx *ctx)
 static
 int null_ctx_sign(struct ptlrpc_cli_ctx *ctx, struct ptlrpc_request *req)
 {
-        if (req->rq_reqbuf->lm_magic != LUSTRE_MSG_MAGIC_V1) {
-                req->rq_reqbuf->lm_secflvr = SPTLRPC_FLVR_NULL;
+        req->rq_reqbuf->lm_secflvr = SPTLRPC_FLVR_NULL;
 
-                if (!req->rq_import->imp_dlm_fake) {
-                        struct obd_device *obd = req->rq_import->imp_obd;
-                        null_encode_sec_part(req->rq_reqbuf,
-                                             obd->u.cli.cl_sec_part);
-                }
+        if (!req->rq_import->imp_dlm_fake) {
+                struct obd_device *obd = req->rq_import->imp_obd;
+                null_encode_sec_part(req->rq_reqbuf,
+                                     obd->u.cli.cl_sec_part);
         }
         req->rq_reqdata_len = req->rq_reqlen;
         return 0;
@@ -331,8 +329,7 @@ int null_authorize(struct ptlrpc_request *req)
         struct ptlrpc_reply_state *rs = req->rq_reply_state;
 
         LASSERT(rs);
-        if (rs->rs_repbuf->lm_magic != LUSTRE_MSG_MAGIC_V1)
-                rs->rs_repbuf->lm_secflvr = SPTLRPC_FLVR_NULL;
+        rs->rs_repbuf->lm_secflvr = SPTLRPC_FLVR_NULL;
         rs->rs_repdata_len = req->rq_replen;
         return 0;
 }
