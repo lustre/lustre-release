@@ -2223,9 +2223,35 @@ static void mdt_thread_info_fini(struct mdt_thread_info *info)
         info->mti_env = NULL;
 }
 
-/* mds/handler.c */
-extern int mds_filter_recovery_request(struct ptlrpc_request *req,
-                                       struct obd_device *obd, int *process);
+static int mdt_filter_recovery_request(struct ptlrpc_request *req,
+                                       struct obd_device *obd, int *process)
+{
+        switch (lustre_msg_get_opc(req->rq_reqmsg)) {
+        case MDS_CONNECT: /* This will never get here, but for completeness. */
+        case OST_CONNECT: /* This will never get here, but for completeness. */
+        case MDS_DISCONNECT:
+        case OST_DISCONNECT:
+               *process = 1;
+               RETURN(0);
+
+        case MDS_CLOSE:
+        case MDS_DONE_WRITING:
+        case MDS_SYNC: /* used in unmounting */
+        case OBD_PING:
+        case MDS_REINT:
+        case SEQ_QUERY:
+        case FLD_QUERY:
+        case LDLM_ENQUEUE:
+                *process = target_queue_recovery_request(req, obd);
+                RETURN(0);
+
+        default:
+                DEBUG_REQ(D_ERROR, req, "not permitted during recovery");
+                *process = -EAGAIN;
+                RETURN(0);
+        }
+}
+
 /*
  * Handle recovery. Return:
  *        +1: continue request processing;
@@ -2303,7 +2329,7 @@ static int mdt_recovery(struct mdt_thread_info *info)
                 int rc;
                 int should_process;
                 DEBUG_REQ(D_INFO, req, "Got new replay");
-                rc = mds_filter_recovery_request(req, obd, &should_process);
+                rc = mdt_filter_recovery_request(req, obd, &should_process);
                 if (rc != 0 || !should_process)
                         RETURN(rc);
                 else if (should_process < 0) {
@@ -2330,8 +2356,84 @@ static int mdt_reply(struct ptlrpc_request *req, int rc,
         RETURN(0);
 }
 
-/* mds/handler.c */
-extern int mds_msg_check_version(struct lustre_msg *msg);
+static int mdt_msg_check_version(struct lustre_msg *msg)
+{
+        int rc;
+
+        switch (lustre_msg_get_opc(msg)) {
+        case MDS_CONNECT:
+        case MDS_DISCONNECT:
+        case OBD_PING:
+        case SEC_CTX_INIT:
+        case SEC_CTX_INIT_CONT:
+        case SEC_CTX_FINI:
+                rc = lustre_msg_check_version(msg, LUSTRE_OBD_VERSION);
+                if (rc)
+                        CERROR("bad opc %u version %08x, expecting %08x\n",
+                               lustre_msg_get_opc(msg),
+                               lustre_msg_get_version(msg),
+                               LUSTRE_OBD_VERSION);
+                break;
+        case MDS_GETSTATUS:
+        case MDS_GETATTR:
+        case MDS_GETATTR_NAME:
+        case MDS_STATFS:
+        case MDS_READPAGE:
+        case MDS_WRITEPAGE:
+        case MDS_IS_SUBDIR:
+        case MDS_REINT:
+        case MDS_CLOSE:
+        case MDS_DONE_WRITING:
+        case MDS_PIN:
+        case MDS_SYNC:
+        case MDS_GETXATTR:
+        case MDS_SETXATTR:
+        case MDS_SET_INFO:
+        case MDS_QUOTACHECK:
+        case MDS_QUOTACTL:
+        case QUOTA_DQACQ:
+        case QUOTA_DQREL:
+        case SEQ_QUERY:
+        case FLD_QUERY:
+                rc = lustre_msg_check_version(msg, LUSTRE_MDS_VERSION);
+                if (rc)
+                        CERROR("bad opc %u version %08x, expecting %08x\n",
+                               lustre_msg_get_opc(msg),
+                               lustre_msg_get_version(msg),
+                               LUSTRE_MDS_VERSION);
+                break;
+        case LDLM_ENQUEUE:
+        case LDLM_CONVERT:
+        case LDLM_BL_CALLBACK:
+        case LDLM_CP_CALLBACK:
+                rc = lustre_msg_check_version(msg, LUSTRE_DLM_VERSION);
+                if (rc)
+                        CERROR("bad opc %u version %08x, expecting %08x\n",
+                               lustre_msg_get_opc(msg),
+                               lustre_msg_get_version(msg),
+                               LUSTRE_DLM_VERSION);
+                break;
+        case OBD_LOG_CANCEL:
+        case LLOG_ORIGIN_HANDLE_CREATE:
+        case LLOG_ORIGIN_HANDLE_NEXT_BLOCK:
+        case LLOG_ORIGIN_HANDLE_READ_HEADER:
+        case LLOG_ORIGIN_HANDLE_CLOSE:
+        case LLOG_ORIGIN_HANDLE_DESTROY:
+        case LLOG_ORIGIN_HANDLE_PREV_BLOCK:
+        case LLOG_CATINFO:
+                rc = lustre_msg_check_version(msg, LUSTRE_LOG_VERSION);
+                if (rc)
+                        CERROR("bad opc %u version %08x, expecting %08x\n",
+                               lustre_msg_get_opc(msg),
+                               lustre_msg_get_version(msg),
+                               LUSTRE_LOG_VERSION);
+                break;
+        default:
+                CERROR("MDS unknown opcode %d\n", lustre_msg_get_opc(msg));
+                rc = -ENOTSUPP;
+        }
+        return rc;
+}
 
 static int mdt_handle0(struct ptlrpc_request *req,
                        struct mdt_thread_info *info,
@@ -2349,7 +2451,7 @@ static int mdt_handle0(struct ptlrpc_request *req,
         LASSERT(current->journal_info == NULL);
 
         msg = req->rq_reqmsg;
-        rc = mds_msg_check_version(msg);
+        rc = mdt_msg_check_version(msg);
         if (likely(rc == 0)) {
                 rc = mdt_recovery(info);
                 if (likely(rc == +1)) {

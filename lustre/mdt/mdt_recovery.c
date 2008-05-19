@@ -1000,7 +1000,56 @@ void mdt_fs_cleanup(const struct lu_env *env, struct mdt_device *mdt)
 }
 
 /* reconstruction code */
-extern void mds_steal_ack_locks(struct ptlrpc_request *req);
+static void mdt_steal_ack_locks(struct ptlrpc_request *req)
+{
+        struct obd_export         *exp = req->rq_export;
+        struct list_head          *tmp;
+        struct ptlrpc_reply_state *oldrep;
+        struct ptlrpc_service     *svc;
+        int                        i;
+
+        /* CAVEAT EMPTOR: spinlock order */
+        spin_lock(&exp->exp_lock);
+        list_for_each (tmp, &exp->exp_outstanding_replies) {
+                oldrep = list_entry(tmp, struct ptlrpc_reply_state,rs_exp_list);
+
+                if (oldrep->rs_xid != req->rq_xid)
+                        continue;
+
+                if (lustre_msg_get_opc(oldrep->rs_msg) !=
+                    lustre_msg_get_opc(req->rq_reqmsg))
+                        CERROR ("Resent req xid "LPX64" has mismatched opc: "
+                                "new %d old %d\n", req->rq_xid,
+                                lustre_msg_get_opc(req->rq_reqmsg),
+                                lustre_msg_get_opc(oldrep->rs_msg));
+
+                svc = oldrep->rs_service;
+                spin_lock (&svc->srv_lock);
+
+                list_del_init (&oldrep->rs_exp_list);
+
+                CWARN("Stealing %d locks from rs %p x"LPD64".t"LPD64
+                      " o%d NID %s\n",
+                      oldrep->rs_nlocks, oldrep,
+                      oldrep->rs_xid, oldrep->rs_transno,
+                      lustre_msg_get_opc(oldrep->rs_msg),
+                      libcfs_nid2str(exp->exp_connection->c_peer.nid));
+
+                for (i = 0; i < oldrep->rs_nlocks; i++)
+                        ptlrpc_save_lock(req,
+                                         &oldrep->rs_locks[i],
+                                         oldrep->rs_modes[i]);
+                oldrep->rs_nlocks = 0;
+
+                DEBUG_REQ(D_HA, req, "stole locks for");
+                ptlrpc_schedule_difficult_reply (oldrep);
+
+                spin_unlock (&svc->srv_lock);
+                break;
+        }
+        spin_unlock(&exp->exp_lock);
+}
+
 void mdt_req_from_mcd(struct ptlrpc_request *req,
                       struct mdt_client_data *mcd)
 {
@@ -1019,7 +1068,7 @@ void mdt_req_from_mcd(struct ptlrpc_request *req,
                 lustre_msg_set_transno(req->rq_repmsg, req->rq_transno);
                 lustre_msg_set_status(req->rq_repmsg, req->rq_status);
         }
-        mds_steal_ack_locks(req);
+        mdt_steal_ack_locks(req);
 }
 
 void mdt_reconstruct_generic(struct mdt_thread_info *mti,

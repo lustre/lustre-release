@@ -342,9 +342,36 @@ static obd_id mdd_lov_create_id(const struct lu_fid *fid)
         return fid_flatten(fid);
 }
 
+static void mdd_lov_update_objids(struct obd_device *obd, struct lov_mds_md *lmm)
+{
+        struct mds_obd *mds = &obd->u.mds;
+        int j;
+        ENTRY;
+
+        /* if we create file without objects - lmm is NULL */
+        if (lmm == NULL)
+                return;
+
+        for (j = 0; j < le32_to_cpu(lmm->lmm_stripe_count); j++) {
+                int i = le32_to_cpu(lmm->lmm_objects[j].l_ost_idx);
+                obd_id id = le64_to_cpu(lmm->lmm_objects[j].l_object_id);
+                int page = i / OBJID_PER_PAGE();
+                int idx = i % OBJID_PER_PAGE();
+                obd_id *data = mds->mds_lov_page_array[page];
+
+                CDEBUG(D_INODE,"update last object for ost %d - new %llu"
+                               " old %llu\n", i, id, data[idx]);
+                if (id > data[idx]) {
+                        data[idx] = id;
+                        cfs_bitmap_set(mds->mds_lov_page_dirty, page);
+                }
+        }
+        EXIT;
+}
+
 void mdd_lov_objid_update(struct mdd_device *mdd, struct lov_mds_md *lmm)
 {
-        mds_lov_update_objids(mdd->mdd_obd_dev, lmm);
+        mdd_lov_update_objids(mdd->mdd_obd_dev, lmm);
 }
 
 void mdd_lov_create_finish(const struct lu_env *env, struct mdd_device *mdd,
@@ -612,6 +639,43 @@ int mdd_lov_destroy(const struct lu_env *env, struct mdd_device *mdd,
         RETURN(rc);
 }
 
+int mdd_log_op_unlink(struct obd_device *obd,
+                      struct lov_mds_md *lmm, int lmm_size,
+                      struct llog_cookie *logcookies, int cookies_size)
+{
+        struct mds_obd *mds = &obd->u.mds;
+        struct lov_stripe_md *lsm = NULL;
+        struct llog_unlink_rec *lur;
+        struct llog_ctxt *ctxt;
+        int rc;
+        ENTRY;
+
+        if (IS_ERR(mds->mds_osc_obd))
+                RETURN(PTR_ERR(mds->mds_osc_obd));
+
+        rc = obd_unpackmd(mds->mds_osc_exp, &lsm, lmm, lmm_size);
+        if (rc < 0)
+                RETURN(rc);
+        rc = obd_checkmd(mds->mds_osc_exp, obd->obd_self_export, lsm);
+        if (rc)
+                GOTO(out, rc);
+        /* first prepare unlink log record */
+        OBD_ALLOC(lur, sizeof(*lur));
+        if (!lur)
+                GOTO(out, rc = -ENOMEM);
+        lur->lur_hdr.lrh_len = lur->lur_tail.lrt_len = sizeof(*lur);
+        lur->lur_hdr.lrh_type = MDS_UNLINK_REC;
+
+        ctxt = llog_get_context(obd, LLOG_MDS_OST_ORIG_CTXT);
+        rc = llog_add(ctxt, &lur->lur_hdr, lsm, logcookies,
+                      cookies_size / sizeof(struct llog_cookie));
+        llog_ctxt_put(ctxt);
+
+        OBD_FREE(lur, sizeof(*lur));
+out:
+        obd_free_memmd(mds->mds_osc_exp, &lsm);
+        RETURN(rc);
+}
 
 int mdd_unlink_log(const struct lu_env *env, struct mdd_device *mdd,
                    struct mdd_object *mdd_cobj, struct md_attr *ma)
@@ -621,11 +685,56 @@ int mdd_unlink_log(const struct lu_env *env, struct mdd_device *mdd,
         LASSERT(ma->ma_valid & MA_LOV);
 
         if ((ma->ma_cookie_size > 0) &&
-            (mds_log_op_unlink(obd, ma->ma_lmm, ma->ma_lmm_size,
+            (mdd_log_op_unlink(obd, ma->ma_lmm, ma->ma_lmm_size,
                                ma->ma_cookie, ma->ma_cookie_size) > 0)) {
                 ma->ma_valid |= MA_COOKIE;
         }
         return 0;
+}
+
+int mdd_log_op_setattr(struct obd_device *obd, __u32 uid, __u32 gid,
+                      struct lov_mds_md *lmm, int lmm_size,
+                      struct llog_cookie *logcookies, int cookies_size)
+{
+        struct mds_obd *mds = &obd->u.mds;
+        struct lov_stripe_md *lsm = NULL;
+        struct llog_setattr_rec *lsr;
+        struct llog_ctxt *ctxt;
+        int rc;
+        ENTRY;
+
+        if (IS_ERR(mds->mds_osc_obd))
+                RETURN(PTR_ERR(mds->mds_osc_obd));
+
+        rc = obd_unpackmd(mds->mds_osc_exp, &lsm, lmm, lmm_size);
+        if (rc < 0)
+                RETURN(rc);
+
+        rc = obd_checkmd(mds->mds_osc_exp, obd->obd_self_export, lsm);
+        if (rc)
+                GOTO(out, rc);
+
+        OBD_ALLOC(lsr, sizeof(*lsr));
+        if (!lsr)
+                GOTO(out, rc = -ENOMEM);
+
+        /* prepare setattr log record */
+        lsr->lsr_hdr.lrh_len = lsr->lsr_tail.lrt_len = sizeof(*lsr);
+        lsr->lsr_hdr.lrh_type = MDS_SETATTR_REC;
+        lsr->lsr_uid = uid;
+        lsr->lsr_gid = gid;
+
+        /* write setattr log */
+        ctxt = llog_get_context(obd, LLOG_MDS_OST_ORIG_CTXT);
+        rc = llog_add(ctxt, &lsr->lsr_hdr, lsm, logcookies,
+                      cookies_size / sizeof(struct llog_cookie));
+
+        llog_ctxt_put(ctxt);
+
+        OBD_FREE(lsr, sizeof(*lsr));
+ out:
+        obd_free_memmd(mds->mds_osc_exp, &lsm);
+        RETURN(rc);
 }
 
 int mdd_setattr_log(const struct lu_env *env, struct mdd_device *mdd,
@@ -640,12 +749,74 @@ int mdd_setattr_log(const struct lu_env *env, struct mdd_device *mdd,
                 CDEBUG(D_INFO, "setattr llog for uid/gid=%lu/%lu\n",
                         (unsigned long)ma->ma_attr.la_uid, 
                         (unsigned long)ma->ma_attr.la_gid);
-                return mds_log_op_setattr(obd, ma->ma_attr.la_uid, 
+                return mdd_log_op_setattr(obd, ma->ma_attr.la_uid,
                                           ma->ma_attr.la_gid, lmm, 
                                           lmm_size, logcookies,
                                           cookies_size);
         } else
                 return 0;
+}
+
+static int mdd_osc_setattr_async(struct obd_device *obd, __u32 uid, __u32 gid,
+                          struct lov_mds_md *lmm, int lmm_size,
+                          struct llog_cookie *logcookies, __u64 id, __u32 gen,
+                          struct obd_capa *oc)
+{
+        struct mds_obd *mds = &obd->u.mds;
+        struct obd_trans_info oti = { 0 };
+        struct obd_info oinfo = { { { 0 } } };
+        int rc;
+        ENTRY;
+
+        if (OBD_FAIL_CHECK(OBD_FAIL_MDS_OST_SETATTR))
+                RETURN(0);
+
+        /* first get memory EA */
+        OBDO_ALLOC(oinfo.oi_oa);
+        if (!oinfo.oi_oa)
+                RETURN(-ENOMEM);
+
+        LASSERT(lmm);
+
+        rc = obd_unpackmd(mds->mds_osc_exp, &oinfo.oi_md, lmm, lmm_size);
+        if (rc < 0) {
+                CERROR("Error unpack md %p for inode "LPU64"\n", lmm, id);
+                GOTO(out, rc);
+        }
+
+        rc = obd_checkmd(mds->mds_osc_exp, obd->obd_self_export, oinfo.oi_md);
+        if (rc) {
+                CERROR("Error revalidate lsm %p \n", oinfo.oi_md);
+                GOTO(out, rc);
+        }
+
+        /* then fill oa */
+        oinfo.oi_oa->o_uid = uid;
+        oinfo.oi_oa->o_gid = gid;
+        oinfo.oi_oa->o_id = oinfo.oi_md->lsm_object_id;
+        oinfo.oi_oa->o_gr = oinfo.oi_md->lsm_object_gr;
+        oinfo.oi_oa->o_valid |= OBD_MD_FLID | OBD_MD_FLGROUP |
+                                OBD_MD_FLUID | OBD_MD_FLGID;
+        if (logcookies) {
+                oinfo.oi_oa->o_valid |= OBD_MD_FLCOOKIE;
+                oti.oti_logcookies = logcookies;
+        }
+
+        oinfo.oi_oa->o_fid = id;
+        oinfo.oi_oa->o_generation = gen;
+        oinfo.oi_oa->o_valid |= OBD_MD_FLFID | OBD_MD_FLGENER;
+        oinfo.oi_capa = oc;
+
+        /* do async setattr from mds to ost not waiting for responses. */
+        rc = obd_setattr_async(mds->mds_osc_exp, &oinfo, &oti, NULL);
+        if (rc)
+                CDEBUG(D_INODE, "mds to ost setattr objid 0x"LPX64
+                       " on ost error %d\n", oinfo.oi_md->lsm_object_id, rc);
+out:
+        if (oinfo.oi_md)
+                obd_free_memmd(mds->mds_osc_exp, &oinfo.oi_md);
+        OBDO_FREE(oinfo.oi_oa);
+        RETURN(rc);
 }
 
 int mdd_lov_setattr_async(const struct lu_env *env, struct mdd_object *obj,
@@ -670,7 +841,7 @@ int mdd_lov_setattr_async(const struct lu_env *env, struct mdd_object *obj,
         if (IS_ERR(oc))
                 oc = NULL;
 
-        rc = mds_osc_setattr_async(obd, tmp_la->la_uid, tmp_la->la_gid, lmm,
+        rc = mdd_osc_setattr_async(obd, tmp_la->la_uid, tmp_la->la_gid, lmm,
                                    lmm_size, logcookies, fid_seq(fid),
                                    fid_oid(fid), oc);
 
@@ -678,4 +849,3 @@ int mdd_lov_setattr_async(const struct lu_env *env, struct mdd_object *obj,
 
         RETURN(rc);
 }
-
