@@ -859,7 +859,7 @@ int qos_prep_create(struct obd_export *exp, struct lov_request_set *set)
         struct obdo *src_oa = set->set_oi->oi_oa;
         struct obd_trans_info *oti = set->set_oti;
         int i, stripes, rc = 0, newea = 0;
-        int *idx_arr, idx_cnt = 0;
+        int *idx_arr = NULL, idx_cnt = 0;
         int flag = LOV_USES_ASSIGNED_STRIPE;
         ENTRY;
 
