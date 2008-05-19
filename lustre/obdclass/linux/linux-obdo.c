@@ -185,7 +185,7 @@ void obdo_refresh_inode(struct inode *dst, struct obdo *src, obd_flag valid)
         if (valid & OBD_MD_FLBLKSZ && src->o_blksize > (1 << dst->i_blkbits)) {
                 dst->i_blkbits = ffs(src->o_blksize) - 1;
 #ifdef HAVE_INODE_BLKSIZE
-                dst->i_blkbits = src->o_blksize;
+                dst->i_blksize = src->o_blksize;
 #endif
         }
 
