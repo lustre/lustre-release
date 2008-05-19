@@ -764,11 +764,8 @@ do {                                                                    \
 
 #define cfs_wait_event(wq, condition)                          \
 ({                                                              \
-        int  __ret;                                                    \
-                                                                \
         struct l_wait_info lwi = { 0 };                         \
         l_wait_event(wq, condition, &lwi);                      \
-        __ret;                                                  \
 })
 
 #ifdef __KERNEL__

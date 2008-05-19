@@ -190,7 +190,7 @@ struct mdt_device {
         struct dt_object          *mdt_ck_obj;
         unsigned long              mdt_ck_timeout;
         unsigned long              mdt_ck_expiry;
-        struct timer_list          mdt_ck_timer;
+        cfs_timer_t                mdt_ck_timer;
         struct ptlrpc_thread       mdt_ck_thread;
         struct lustre_capa_key     mdt_capa_keys[2];
         unsigned int               mdt_capa_conf:1;

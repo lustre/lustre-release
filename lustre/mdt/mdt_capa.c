@@ -171,7 +171,7 @@ int mdt_capa_keys_init(const struct lu_env *env, struct mdt_device *mdt)
                 }
         }
         set_capa_key_expiry(mdt);
-        mod_timer(&mdt->mdt_ck_timer, mdt->mdt_ck_expiry);
+        cfs_timer_arm(&mdt->mdt_ck_timer, mdt->mdt_ck_expiry);
         CDEBUG(D_SEC, "mds_ck_timer %lu\n", mdt->mdt_ck_expiry);
         RETURN(0);
 }
@@ -183,7 +183,7 @@ void mdt_ck_timer_callback(unsigned long castmeharder)
 
         ENTRY;
         thread->t_flags |= SVC_EVENT;
-        wake_up(&thread->t_ctl_waitq);
+        cfs_waitq_signal(&thread->t_ctl_waitq);
         EXIT;
 }
 
@@ -229,7 +229,7 @@ static int mdt_ck_thread_main(void *args)
                         break;
                 thread->t_flags &= ~SVC_EVENT;
 
-                if (time_after(mdt->mdt_ck_expiry, jiffies))
+                if (cfs_time_before(cfs_time_current(), mdt->mdt_ck_expiry))
                         break;
 
                 *tmp = *rkey;
@@ -260,7 +260,7 @@ static int mdt_ck_thread_main(void *args)
                         mdt->mdt_ck_expiry = jiffies + 300 * HZ;
                 }
 
-                mod_timer(&mdt->mdt_ck_timer, mdt->mdt_ck_expiry);
+                cfs_timer_arm(&mdt->mdt_ck_timer, mdt->mdt_ck_expiry);
                 CDEBUG(D_SEC, "mdt_ck_timer %lu\n", mdt->mdt_ck_expiry);
         }
         lu_env_fini(&env);
