@@ -2693,17 +2693,17 @@ int lov_complete_many(struct obd_export *exp, struct lov_stripe_md *lsm,
 
 void lov_stripe_lock(struct lov_stripe_md *md)
 {
-        LASSERT(md->lsm_lock_owner != cfs_current());
+        LASSERT(md->lsm_lock_owner != cfs_curproc_pid());
         spin_lock(&md->lsm_lock);
-        LASSERT(md->lsm_lock_owner == NULL);
-        md->lsm_lock_owner = cfs_current();
+        LASSERT(md->lsm_lock_owner == 0);
+        md->lsm_lock_owner = cfs_curproc_pid();
 }
 EXPORT_SYMBOL(lov_stripe_lock);
 
 void lov_stripe_unlock(struct lov_stripe_md *md)
 {
-        LASSERT(md->lsm_lock_owner == cfs_current());
-        md->lsm_lock_owner = NULL;
+        LASSERT(md->lsm_lock_owner == cfs_curproc_pid());
+        md->lsm_lock_owner = 0;
         spin_unlock(&md->lsm_lock);
 }
 EXPORT_SYMBOL(lov_stripe_unlock);

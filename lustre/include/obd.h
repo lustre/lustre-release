@@ -105,7 +105,7 @@ struct lov_array_info {
 
 struct lov_stripe_md {
         spinlock_t       lsm_lock;
-        void            *lsm_lock_owner; /* debugging */
+        pid_t            lsm_lock_owner; /* debugging */
 
         struct {
                 /* Public members. */
