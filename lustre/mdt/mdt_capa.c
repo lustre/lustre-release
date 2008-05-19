@@ -43,7 +43,7 @@ static void make_capa_key(struct lustre_capa_key *key,
 {
         key->lk_mdsid = mdsnum;
         key->lk_keyid = keyid + 1;
-        get_random_bytes(key->lk_key, sizeof(key->lk_key));
+        ll_get_random_bytes(key->lk_key, sizeof(key->lk_key));
 }
 
 enum {
