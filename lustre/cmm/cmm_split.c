@@ -480,7 +480,7 @@ static int cmm_split_remove_page(const struct lu_env *env,
         ENTRY;
 
         *len = 0;
-        kmap(rdpg->rp_pages[0]);
+        cfs_kmap(rdpg->rp_pages[0]);
         dp = page_address(rdpg->rp_pages[0]);
         for (ent = lu_dirent_start(dp);
              ent != NULL && le64_to_cpu(ent->lde_hash) < hash_end;
@@ -505,7 +505,7 @@ static int cmm_split_remove_page(const struct lu_env *env,
                 *len += sizeof(struct lu_dirpage);
         EXIT;
 unmap:
-        kunmap(rdpg->rp_pages[0]);
+        cfs_kunmap(rdpg->rp_pages[0]);
         return rc;
 }
 
@@ -584,13 +584,13 @@ static int cmm_split_process_stripe(const struct lu_env *env,
                         }
                 }
 
-                kmap(rdpg->rp_pages[0]);
+                cfs_kmap(rdpg->rp_pages[0]);
                 ldp = page_address(rdpg->rp_pages[0]);
                 if (le64_to_cpu(ldp->ldp_hash_end) >= end)
                         done = 1;
 
                 rdpg->rp_hash = le64_to_cpu(ldp->ldp_hash_end);
-                kunmap(rdpg->rp_pages[0]);
+                cfs_kunmap(rdpg->rp_pages[0]);
         } while (!done);
 
         RETURN(rc);

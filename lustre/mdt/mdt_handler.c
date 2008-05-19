@@ -1208,7 +1208,7 @@ static int mdt_write_dir_page(struct mdt_thread_info *info, struct page *page,
         ma->ma_attr.la_valid = LA_MODE;
         ma->ma_valid = MA_INODE;
 
-        kmap(page);
+        cfs_kmap(page);
         dp = page_address(page);
         offset = (int)((__u32)lu_dirent_start(dp) - (__u32)dp);
 
@@ -1251,7 +1251,7 @@ static int mdt_write_dir_page(struct mdt_thread_info *info, struct page *page,
         }
         EXIT;
 out:
-        kunmap(page);
+        cfs_kunmap(page);
         return rc;
 }
 
@@ -3792,7 +3792,7 @@ static void mdt_fini(const struct lu_env *env, struct mdt_device *m)
         sptlrpc_rule_set_free(&m->mdt_sptlrpc_rset);
 
         next->md_ops->mdo_init_capa_ctxt(env, next, 0, 0, 0, NULL);
-        del_timer(&m->mdt_ck_timer);
+        cfs_timer_disarm(&m->mdt_ck_timer);
         mdt_ck_thread_stop(m);
 
         /* finish the stack */
@@ -3991,9 +3991,8 @@ static int mdt_init0(const struct lu_env *env, struct mdt_device *m,
                 GOTO(err_free_ns, rc);
         }
 
-        m->mdt_ck_timer.function = mdt_ck_timer_callback;
-        m->mdt_ck_timer.data = (unsigned long)m;
-        init_timer(&m->mdt_ck_timer);
+        cfs_timer_init(&m->mdt_ck_timer, mdt_ck_timer_callback, m);
+
         rc = mdt_ck_thread_start(m);
         if (rc)
                 GOTO(err_free_ns, rc);
@@ -4031,7 +4030,7 @@ err_fs_cleanup:
         target_recovery_fini(obd);
         mdt_fs_cleanup(env, m);
 err_capa:
-        del_timer(&m->mdt_ck_timer);
+        cfs_timer_disarm(&m->mdt_ck_timer);
         mdt_ck_thread_stop(m);
 err_free_ns:
         upcall_cache_cleanup(m->mdt_identity_cache);

@@ -1440,12 +1440,12 @@ static int __mdd_readpage(const struct lu_env *env, struct mdd_object *obj,
              i++, nob -= CFS_PAGE_SIZE) {
                 LASSERT(i < rdpg->rp_npages);
                 pg = rdpg->rp_pages[i];
-                rc = mdd_dir_page_build(env, !i, kmap(pg),
+                rc = mdd_dir_page_build(env, !i, cfs_kmap(pg),
                                         min_t(int, nob, CFS_PAGE_SIZE), iops,
                                         it, &hash_start, &hash_end, &last);
                 if (rc != 0 || i == rdpg->rp_npages - 1)
                         last->lde_reclen = 0;
-                kunmap(pg);
+                cfs_kunmap(pg);
         }
         if (rc > 0) {
                 /*
@@ -1457,7 +1457,7 @@ static int __mdd_readpage(const struct lu_env *env, struct mdd_object *obj,
         if (rc == 0) {
                 struct lu_dirpage *dp;
 
-                dp = kmap(rdpg->rp_pages[0]);
+                dp = cfs_kmap(rdpg->rp_pages[0]);
                 dp->ldp_hash_start = rdpg->rp_hash;
                 dp->ldp_hash_end   = hash_end;
                 if (i == 0)
@@ -1466,7 +1466,7 @@ static int __mdd_readpage(const struct lu_env *env, struct mdd_object *obj,
                          */
                         dp->ldp_flags |= LDF_EMPTY;
                 dp->ldp_flags = cpu_to_le16(dp->ldp_flags);
-                kunmap(rdpg->rp_pages[0]);
+                cfs_kunmap(rdpg->rp_pages[0]);
         }
         iops->put(env, it);
         iops->fini(env, it);
@@ -1504,13 +1504,13 @@ static int mdd_readpage(const struct lu_env *env, struct md_object *obj,
                 LASSERT(rdpg->rp_pages != NULL);
 
                 pg = rdpg->rp_pages[0];
-                dp = (struct lu_dirpage*)kmap(pg);
+                dp = (struct lu_dirpage*)cfs_kmap(pg);
                 memset(dp, 0 , sizeof(struct lu_dirpage));
                 dp->ldp_hash_start = rdpg->rp_hash;
                 dp->ldp_hash_end   = DIR_END_OFF;
                 dp->ldp_flags |= LDF_EMPTY;
                 dp->ldp_flags = cpu_to_le16(dp->ldp_flags);
-                kunmap(pg);
+                cfs_kunmap(pg);
                 GOTO(out_unlock, rc = 0);
         }
 
