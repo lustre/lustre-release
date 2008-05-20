@@ -42,6 +42,7 @@
 #include <obd_class.h>
 #include <lustre_log.h>
 #include <libcfs/list.h>
+#include "llog_internal.h"
 
 /* Allocate a new log or catalog handle */
 struct llog_handle *llog_alloc_handle(void)
@@ -204,22 +205,30 @@ int llog_close(struct llog_handle *loghandle)
 }
 EXPORT_SYMBOL(llog_close);
 
-int llog_process(struct llog_handle *loghandle, llog_cb_t cb,
-              	 void *data, void *catdata)
+static int llog_process_thread(void *arg)
 {
-        struct llog_log_hdr *llh = loghandle->lgh_hdr;
-        struct llog_process_cat_data *cd = catdata;
-        char *buf;
-        __u64 cur_offset = LLOG_CHUNK_SIZE, last_offset;
-        int rc = 0, index = 1, last_index;
-        int saved_index = 0, last_called_index = 0;
-        ENTRY;
+        struct llog_process_info     *lpi = (struct llog_process_info *)arg;
+        struct llog_handle           *loghandle = lpi->lpi_loghandle;
+        struct llog_log_hdr          *llh = loghandle->lgh_hdr;
+        struct llog_process_cat_data *cd  = lpi->lpi_catdata;
+        char                         *buf;
+        __u64                         cur_offset = LLOG_CHUNK_SIZE;
+        __u64                         last_offset;
+        int                           rc = 0, index = 1, last_index;
+        int                           saved_index = 0, last_called_index = 0;
 
         LASSERT(llh);
 
         OBD_ALLOC(buf, LLOG_CHUNK_SIZE);
-        if (!buf)
-                RETURN(-ENOMEM);
+        if (!buf) {
+                lpi->lpi_rc = -ENOMEM;
+#ifdef __KERNEL__
+                complete(&lpi->lpi_completion);
+#endif
+                return 0;
+        }
+
+        cfs_daemonize_ctxt("llog_process_thread");
 
         if (cd != NULL) {
                 last_called_index = cd->first_idx;
@@ -295,7 +304,8 @@ int llog_process(struct llog_handle *loghandle, llog_cb_t cb,
 
                         /* if set, process the callback on this record */
                         if (ext2_test_bit(index, llh->llh_bitmap)) {
-                                rc = cb(loghandle, rec, data);
+                                rc = lpi->lpi_cb(loghandle, rec,
+                                                 lpi->lpi_cbdata);
                                 last_called_index = index;
                                 if (rc == LLOG_PROC_BREAK) {
                                         CDEBUG(D_HA, "recovery from log: "LPX64
@@ -304,7 +314,8 @@ int llog_process(struct llog_handle *loghandle, llog_cb_t cb,
                                                loghandle->lgh_id.lgl_ogen);
                                         GOTO(out, rc);
                                 } else if (rc == LLOG_DEL_RECORD) {
-                                        llog_cancel_rec(loghandle, rec->lrh_index);
+                                        llog_cancel_rec(loghandle,
+                                                        rec->lrh_index);
                                         rc = 0;
                                 }
                                 if (rc)
@@ -325,6 +336,44 @@ int llog_process(struct llog_handle *loghandle, llog_cb_t cb,
                 cd->last_idx = last_called_index;
         if (buf)
                 OBD_FREE(buf, LLOG_CHUNK_SIZE);
+        lpi->lpi_rc = rc;
+#ifdef __KERNEL__
+        complete(&lpi->lpi_completion);
+#endif
+        return 0;
+}
+
+int llog_process(struct llog_handle *loghandle, llog_cb_t cb,
+                 void *data, void *catdata)
+{
+        struct llog_process_info *lpi;
+        int                      rc;
+        ENTRY;
+
+        OBD_ALLOC_PTR(lpi);
+        if (lpi == NULL) {
+                CERROR("cannot alloc pointer\n");
+                RETURN(-ENOMEM);
+        }
+        lpi->lpi_loghandle = loghandle;
+        lpi->lpi_cb        = cb;
+        lpi->lpi_cbdata    = data;
+        lpi->lpi_catdata   = catdata;
+
+#ifdef __KERNEL__
+        init_completion(&lpi->lpi_completion);
+        rc = cfs_kernel_thread(llog_process_thread, lpi, CLONE_VM | CLONE_FILES);
+        if (rc < 0) {
+                CERROR("cannot start thread: %d\n", rc);
+                OBD_FREE_PTR(lpi);
+                RETURN(rc);
+        }
+        wait_for_completion(&lpi->lpi_completion);
+#else
+        llog_process_thread(lpi);
+#endif
+        rc = lpi->lpi_rc;
+        OBD_FREE_PTR(lpi);
         RETURN(rc);
 }
 EXPORT_SYMBOL(llog_process);
