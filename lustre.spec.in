@@ -1,0 +1,242 @@
+# lustre.spec
+%define version @VERSION@
+%define kversion @LINUXRELEASE@
+
+Summary: Lustre File System
+Name: lustre
+Version: %{version}
+Release: @RELEASE@
+License: GPL
+Group: Utilities/System
+Source: lustre-%{version}.tar.gz
+URL: http://clusterfs.com/
+BuildRoot: %{_tmppath}/lustre-%{version}-root
+Obsoletes: lustre-lite, lustre-lite-utils, lustre-ldap nfs-utils-lustre
+Provides: lustre-lite = %{version}, lustre-lite-utils = %{version}
+# GSS requires this: BuildRequires: pkgconfig, libgssapi-devel >= 0.10
+
+%description
+Userspace tools and files for the Lustre file system.
+
+%package modules
+Summary: Kernel Lustre modules for Linux %{kversion}
+Requires: modutils >= 2.4.10
+Group: Development/Kernel
+
+%description modules
+Lustre file system, server and network drivers for Linux %{kversion}.
+
+%package source
+Summary: Object-Based Disk storage driver source
+Group: Development/Kernel
+
+%description source
+Lustre sources for further development
+
+# Since the RPMs we ship are to be used on both SLES and RHEL, we
+# can't include any dependency information (since the package names
+# are different on the two platforms).
+#
+# Instead, we can build these empty meta-packages that only include
+# dependency information.  These let people get the correct
+# dependencies for their platform and lets them use tools like yum and
+# red carpet to install the correct files.
+#
+# Unfortunately I have not seen this come up on the lists much, so I
+# have disabled them (by commenting out their empty files section
+# below) until it's clear that they resolve more confusion than they
+# add.
+
+%package deps-sles
+Summary: Lustre dependencies meta-package for SLES
+Group: Utilities/System
+Provides: lustre-deps = %{version}
+Requires: lustre = %{version}, sles-release
+Conflicts: lustre-deps-rhel
+
+%description deps-sles
+This package has RPM dependencies appropriate for SLES systems.
+
+%package deps-rhel
+Summary: Lustre dependencies meta-package for RHEL
+Group: Utilities/System
+Provides: lustre-deps = %{version}
+Requires: lustre = %{version}, redhat-release
+Conflicts: lustre-deps-sles
+
+%description deps-rhel
+This package has RPM dependencies appropriate for RHEL, RHL, and FC
+systems.
+
+%package tests
+Summary: Lustre testing framework
+Group: Development/Kernel
+Provides: lustre-tests = %{version}
+Requires: lustre = %{version}
+
+%description tests
+This package contains a set of test binaries and scripts that are intended
+to be used by the Lustre testing framework.
+
+%prep
+%setup -qn lustre-%{version}
+
+%build
+# if RPM_BUILD_NCPUS unset, set it
+if [ -z "$RPM_BUILD_NCPUS" ] ; then
+    RPM_BUILD_NCPUS=$(egrep -c "^cpu[0-9]+" /proc/stat 2>/dev/null || echo 0 :)
+    if [ $RPM_BUILD_NCPUS -eq 0 ] ; then
+        RPM_BUILD_NCPUS=1
+    fi
+    if [ $RPM_BUILD_NCPUS -gt 8 ] ; then
+        RPM_BUILD_NCPUS=8
+    fi
+fi
+
+rm -rf $RPM_BUILD_ROOT
+
+# Set an explicit path to our Linux tree, if we can.
+cd $RPM_BUILD_DIR/lustre-%{version}
+./configure @ac_configure_args@ %{?configure_flags:configure_flags} \
+	--sysconfdir=%{_sysconfdir} \
+	--mandir=%{_mandir} \
+	--libdir=%{_libdir}
+make -j $RPM_BUILD_NCPUS -s
+
+%install
+make install DESTDIR=$RPM_BUILD_ROOT
+# hack to avoid changing the libsysio code for "make install"
+rm -f $RPM_BUILD_ROOT%{_libdir}/libsysio.a
+# Remove ldiskfs module(s) - they are packaged by the ldiskfs .spec.
+rm -rf $RPM_BUILD_ROOT/lib/modules/%{kversion}/kernel/fs/lustre-ldiskfs
+
+# hack to include the llog_test module in lustre-tests
+llog_base=$RPM_BUILD_DIR/lustre-%{version}/lustre/obdclass/llog_test
+if [ -e ${llog_base}.ko ]; then
+  cp ${llog_base}.ko $RPM_BUILD_ROOT/lib/modules/%{kversion}/kernel/fs/lustre
+elif [ -e ${llog_base}.o ]; then
+  cp ${llog_base}.o $RPM_BUILD_ROOT/lib/modules/%{kversion}/kernel/fs/lustre
+fi
+
+# Create the pristine source directory.
+cd $RPM_BUILD_DIR/lustre-%{version}
+mkdir -p $RPM_BUILD_ROOT/usr/src
+rm -f lustre-source
+ln -s $RPM_BUILD_ROOT/usr/src lustre-source
+make distdir distdir=lustre-source/lustre-%{version}
+
+cat >lustre.files <<EOF
+%attr(-, root, root) /sbin/mount.lustre
+%attr(-, root, root) /usr/sbin/*
+%attr(-, root, root) /usr/bin/*
+
+%attr(-, root, root) /usr/share/lustre/*
+
+%attr(-, root, root) %{_libdir}/libptlctl.a
+%attr(-, root, root) %{_libdir}/liblustreapi.a
+%attr(-, root, root) /usr/include/lustre
+
+%attr(-, root, root) %{_mandir}/man?/*
+
+%attr(-, root, root) %{_libexecdir}/lustre/lc_common
+EOF
+
+if [ -f $RPM_BUILD_ROOT%{_libdir}/liblustre.so ] ; then
+  echo '%attr(-, root, root) %{_libdir}/liblustre.a' >>lustre.files
+  echo '%attr(-, root, root) %{_libdir}/liblustre.so' >>lustre.files
+fi
+
+if [ -f $RPM_BUILD_DIR/lustre-%{version}/lustre/utils/libiam.c ] ; then
+  echo '%attr(-, root, root) %{_libdir}/libiam.a' >>lustre.files
+fi
+
+if [ -d $RPM_BUILD_ROOT%{_libdir}/lustre/snmp ] ; then
+  echo '%attr(-, root, root) %{_libdir}/lustre/snmp' >>lustre.files
+  echo '%attr(-, root, root) %{_datadir}/lustre/snmp/mibs' >>lustre.files
+fi
+
+# Have universal lustre headers 
+if [ -f $RPM_BUILD_DIR/lustre-%{version}/lustre/include/lustre/lustre_idl.h ] ; then
+  echo '%attr(-, root, root) /usr/include/linux/lustre_types.h' >>lustre.files
+  echo '%attr(-, root, root) /usr/include/linux/lustre_user.h' >>lustre.files
+else
+  echo '%attr(-, root, root) /usr/include/linux/lustre_idl.h' >>lustre.files
+fi
+
+echo '%attr(-, root, root) %{_libdir}/lustre/tests/*' >lustre-tests.files
+echo '%attr(-, root, root) /lib/modules/%{kversion}/kernel/fs/lustre/llog_test.*' >>lustre-tests.files
+modules_excludes="llog_test"
+if [ -d $RPM_BUILD_ROOT%{_libdir}/lustre/liblustre/tests ] ; then
+  echo '%attr(-, root, root) %{_libdir}/lustre/liblustre/tests/*' >>lustre-tests.files
+fi
+
+pushd $RPM_BUILD_ROOT >/dev/null
+find lib/modules/%{kversion}/kernel -type f | awk "!/($modules_excludes)/ {print \"/\"\$0}" >>$RPM_BUILD_DIR/lustre-%{version}/lustre-modules.files
+popd >/dev/null
+
+%files -f lustre.files
+
+%files modules -f lustre-modules.files
+%attr(-, root, root) %doc COPYING
+
+%files source
+%attr(-, root, root) /usr/src/lustre-%{version}
+
+# uncomment these lines to enable deps packages
+# %files deps-sles
+# %files deps-rhel
+
+%files tests -f lustre-tests.files
+
+%post modules
+if [ -f /boot/System.map-%{kversion} ]; then
+	depmod -ae -F /boot/System.map-%{kversion} %{kversion} || exit 0
+else
+	depmod -ae %{kversion} || exit 0
+fi
+
+# for update from < v1.4.6
+
+for f in /etc/modules.conf /etc/modprobe.conf /etc/modprobe.conf.local ; 
+do
+	if [ -f $f ]; then
+		if grep 'lustre llite' $f >/dev/null 2>/dev/null ; then
+			[ ! -f $f.rpmsave ] && cp $f $f.rpmsave
+			TMPFILE=`mktemp $f.XXXXXX` && \
+			rm -f $TMPFILE && touch $TMPFILE && \
+			grep -v 'lustre llite' $f >> $TMPFILE && \
+			mv $TMPFILE $f
+		fi
+		if egrep "^[^#]*(add below|install) ptlrpc" $f ; then
+			[ ! -f $f.rpmsave ] && cp $f $f.rpmsave
+			TMPFILE=`mktemp $f.XXXXXX` && \
+			rm -f $TMPFILE && touch $TMPFILE && \
+			sed -e "s/^[^#]*\(add below\|install\) ptlrpc.*/#&/" $f >> $TMPFILE && \
+			mv $TMPFILE $f
+		fi
+	fi
+done
+
+%postun modules
+if [ -f /boot/System.map-%{kversion} ]; then
+	depmod -ae -F /boot/System.map-%{kversion} %{kversion} || exit 0
+else
+	depmod -ae %{kversion} || exit 0
+fi
+
+%post tests
+if [ -f /boot/System.map-%{kversion} ]; then
+	depmod -ae -F /boot/System.map-%{kversion} %{kversion} || exit 0
+else
+	depmod -ae %{kversion} || exit 0
+fi
+
+%postun tests
+if [ -f /boot/System.map-%{kversion} ]; then
+	depmod -ae -F /boot/System.map-%{kversion} %{kversion} || exit 0
+else
+	depmod -ae %{kversion} || exit 0
+fi
+
+%clean
+rm -rf $RPM_BUILD_ROOT
