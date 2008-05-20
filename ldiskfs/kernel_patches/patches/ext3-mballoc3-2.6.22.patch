@@ -101,8 +101,8 @@ Index: linux-2.6.22.19/include/linux/ext3_fs.h
  extern void ext3_mb_release_blocks(struct super_block *, int);
  extern void ext3_mb_release_blocks(struct super_block *, int);
  extern void ext3_mb_discard_inode_preallocations(struct inode *);
- extern int __init init_ext3_proc(void);
- extern void exit_ext3_proc(void);
+ extern int __init init_ext3_mb_proc(void);
+ extern void exit_ext3_mb_proc(void);
 -extern void ext3_mb_free_blocks(handle_t *, struct inode *, unsigned long, unsigned long, int, int *);
 +extern void ext3_mb_free_blocks(handle_t *, struct inode *, unsigned long,
 +				unsigned long, int, unsigned long *);

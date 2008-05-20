@@ -62,13 +62,24 @@ Index: linux-2.6.9-full/include/linux/ext3_fs.h
 +extern void ext3_mb_release_blocks(struct super_block *, int);
 +extern void ext3_mb_release_blocks(struct super_block *, int);
 +extern void ext3_mb_discard_inode_preallocations(struct inode *);
-+extern int __init init_ext3_proc(void);
-+extern void exit_ext3_proc(void);
++extern int __init init_ext3_mb_proc(void);
++extern void exit_ext3_mb_proc(void);
 +extern void ext3_mb_free_blocks(handle_t *, struct inode *, unsigned long, unsigned long, int, int *);
 +
  
  /* inode.c */
  extern int ext3_block_truncate_page(handle_t *, struct page *,
+@@ -804,6 +850,10 @@ extern int ext3_group_extend(struct supe
+ 				unsigned long n_blocks_count);
+ 
+ /* super.c */
++extern struct proc_dir_entry *proc_root_ext3;
++extern int __init init_ext3_proc(void);
++extern void exit_ext3_proc(void);
++
+ extern void ext3_error (struct super_block *, const char *, const char *, ...)
+ 	__attribute__ ((format (printf, 3, 4)));
+ extern void __ext3_std_error (struct super_block *, const char *, int);
 Index: linux-2.6.9-full/include/linux/ext3_fs_sb.h
 ===================================================================
 --- linux-2.6.9-full.orig/include/linux/ext3_fs_sb.h	2007-06-08 23:44:07.000000000 +0400
@@ -105,7 +116,7 @@ Index: linux-2.6.9-full/include/linux/ext3_fs_sb.h
 +	int s_mb_history_cur;
 +	int s_mb_history_max;
 +	int s_mb_history_num;
-+	struct proc_dir_entry *s_mb_proc;
++	struct proc_dir_entry *s_dev_proc;
 +	spinlock_t s_mb_history_lock;
 +	int s_mb_history_filter;
 +
@@ -147,17 +158,83 @@ Index: linux-2.6.9-full/fs/ext3/super.c
  	ext3_ext_release(sb);
  	ext3_xattr_put_super(sb);
  	journal_destroy(sbi->s_journal);
-@@ -463,6 +464,8 @@ static struct inode *ext3_alloc_inode(st
+@@ -438,6 +439,8 @@ void ext3_put_super (struct super_block 
+ 		invalidate_bdev(sbi->journal_bdev, 0);
+ 		ext3_blkdev_remove(sbi);
+ 	}
++	remove_proc_entry(sb->s_id, proc_root_ext3);
++	sbi->s_dev_proc = NULL;
+ 	sb->s_fs_info = NULL;
+ 	kfree(sbi);
+ 	return;
+@@ -463,6 +466,8 @@ static struct inode *ext3_alloc_inode(st
  	ei->vfs_inode.i_version = 1;
- 
+ 	
  	memset(&ei->i_cached_extent, 0, sizeof(ei->i_cached_extent));
 +	INIT_LIST_HEAD(&ei->i_prealloc_list);
 +	spin_lock_init(&ei->i_prealloc_lock);
  	return &ei->vfs_inode;
  }
  
-@@ -2576,7 +2579,13 @@ static struct file_system_type ext3_fs_t
+@@ -1353,6 +1358,13 @@ static int ext3_fill_super (struct super
+ 	sbi->s_mount_opt = 0;
+ 	sbi->s_resuid = EXT3_DEF_RESUID;
+ 	sbi->s_resgid = EXT3_DEF_RESGID;
++	sbi->s_dev_proc = proc_mkdir(sb->s_id, proc_root_ext3);
++	if (sbi->s_dev_proc == NULL) {
++		printk(KERN_ERR "EXT3-fs: Unable to create %s\n", sb->s_id);
++		sb->s_fs_info = NULL;
++		kfree(sbi);
++		return -ENOMEM;
++	}
  
+ 	blocksize = sb_min_blocksize(sb, EXT3_MIN_BLOCK_SIZE);
+ 	if (!blocksize) {
+@@ -1729,6 +1741,8 @@ failed_mount:
+ 	ext3_blkdev_remove(sbi);
+ 	brelse(bh);
+ out_fail:
++	remove_proc_entry(sb->s_id, proc_root_ext3);
++	sbi->s_dev_proc = NULL;
+ 	sb->s_fs_info = NULL;
+ 	kfree(sbi);
+ 	return -EINVAL;
+@@ -2593,9 +2607,47 @@ static struct file_system_type ext3_fs_t
+ 	.fs_flags	= FS_REQUIRES_DEV,
+ };
+ 
++#define EXT3_ROOT "ext3"
++struct proc_dir_entry *proc_root_ext3;
++
++int __init init_ext3_proc(void)
++{
++	struct proc_dir_entry *proc;
++	int ret;
++
++	if ((ret = init_ext3_mb_proc()))
++		goto out;
++
++	proc_root_ext3 = proc_mkdir(EXT3_ROOT, proc_root_fs);
++	if (proc_root_ext3 == NULL) {
++		printk(KERN_ERR "EXT3-fs: Unable to create %s\n", EXT3_ROOT);
++		ret = -ENOMEM;
++		goto out_mb_proc;
++	}
++
++	return 0;
++
++out_mb_proc:
++	exit_ext3_mb_proc();
++out:
++	return ret;
++}
++
++void exit_ext3_proc(void)
++{
++	exit_ext3_mb_proc();
++	remove_proc_entry(EXT3_ROOT, proc_root_fs);
++}
++
  static int __init init_ext3_fs(void)
  {
 -	int err = init_ext3_xattr();
@@ -171,19 +248,19 @@ Index: linux-2.6.9-full/fs/ext3/super.c
  	if (err)
  		return err;
  	err = init_inodecache();
-@@ -2598,6 +2607,7 @@ static void __exit exit_ext3_fs(void)
+@@ -2617,6 +2669,7 @@ static void __exit exit_ext3_fs(void)
  	unregister_filesystem(&ext3_fs_type);
  	destroy_inodecache();
  	exit_ext3_xattr();
 +	exit_ext3_proc();
  }
  
- int ext3_prep_san_write(struct inode *inode, long *blocks,
+ int ext3_map_inode_page(struct inode *inode, struct page *page,
 Index: linux-2.6.9-full/fs/ext3/mballoc.c
 ===================================================================
 --- linux-2.6.9-full.orig/fs/ext3/mballoc.c	2007-10-17 21:59:51.072534980 +0400
 +++ linux-2.6.9-full/fs/ext3/mballoc.c	2007-10-17 23:09:22.000000000 +0400
-@@ -0,0 +1,4398 @@
+@@ -0,0 +1,4380 @@
 +/*
 + * Copyright (c) 2003-2006, Cluster File Systems, Inc, info@clusterfs.com
 + * Written by Alex Tomas <alex@clusterfs.com>
@@ -641,8 +718,6 @@ Index: linux-2.6.9-full/fs/ext3/mballoc.c
 +#endif
 +
 +#define in_range(b, first, len)	((b) >= (first) && (b) <= (first) + (len) - 1)
-+
-+static struct proc_dir_entry *proc_root_ext3;
 +
 +int ext3_create (struct inode *, struct dentry *, int, struct nameidata *);
 +struct buffer_head * read_block_bitmap(struct super_block *, unsigned int);
@@ -2358,8 +2433,8 @@ Index: linux-2.6.9-full/fs/ext3/mballoc.c
 +{
 +	struct ext3_sb_info *sbi = EXT3_SB(sb);
 +
-+	remove_proc_entry("mb_groups", sbi->s_mb_proc);
-+	remove_proc_entry("mb_history", sbi->s_mb_proc);
++	remove_proc_entry("mb_groups", sbi->s_dev_proc);
++	remove_proc_entry("mb_history", sbi->s_dev_proc);
 +
 +	if (sbi->s_mb_history)
 +		kfree(sbi->s_mb_history);
@@ -2370,14 +2445,14 @@ Index: linux-2.6.9-full/fs/ext3/mballoc.c
 +	struct ext3_sb_info *sbi = EXT3_SB(sb);
 +	int i;
 +
-+	if (sbi->s_mb_proc != NULL) {
++	if (sbi->s_dev_proc != NULL) {
 +		struct proc_dir_entry *p;
-+		p = create_proc_entry("mb_history", S_IRUGO, sbi->s_mb_proc);
++		p = create_proc_entry("mb_history", S_IRUGO, sbi->s_dev_proc);
 +		if (p) {
 +			p->proc_fops = &ext3_mb_seq_history_fops;
 +			p->data = sb;
 +		}
-+		p = create_proc_entry("mb_groups", S_IRUGO, sbi->s_mb_proc);
++		p = create_proc_entry("mb_groups", S_IRUGO, sbi->s_dev_proc);
 +		if (p) {
 +			p->proc_fops = &ext3_mb_seq_groups_fops;
 +			p->data = sb;
@@ -2764,7 +2839,6 @@ Index: linux-2.6.9-full/fs/ext3/mballoc.c
 +	mb_debug("freed %u blocks in %u structures\n", count, count2);
 +}
 +
-+#define EXT3_ROOT			"ext3"
 +#define EXT3_MB_STATS_NAME		"stats"
 +#define EXT3_MB_MAX_TO_SCAN_NAME	"max_to_scan"
 +#define EXT3_MB_MIN_TO_SCAN_NAME	"min_to_scan"
@@ -2972,17 +3046,13 @@ Index: linux-2.6.9-full/fs/ext3/mballoc.c
 +
 +int ext3_mb_init_per_dev_proc(struct super_block *sb)
 +{
-+	mode_t mode = S_IFREG | S_IRUGO | S_IWUSR;
 +	struct ext3_sb_info *sbi = EXT3_SB(sb);
++	mode_t mode = S_IFREG | S_IRUGO | S_IWUSR;
 +	struct proc_dir_entry *proc;
-+	char devname[64], *name;
-+
-+	snprintf(devname, sizeof(devname) - 1, "%s",
-+		bdevname(sb->s_bdev, devname));
-+	sbi->s_mb_proc = proc_mkdir(devname, proc_root_ext3);
++	char *name;
 +
 +	name = EXT3_MB_STATS_NAME;
-+	proc = create_proc_entry(name, mode, sbi->s_mb_proc);
++	proc = create_proc_entry(name, mode, sbi->s_dev_proc);
 +	if (proc == NULL)
 +		goto err_out;
 +	proc->data = sbi;
@@ -2990,7 +3060,7 @@ Index: linux-2.6.9-full/fs/ext3/mballoc.c
 +	proc->write_proc = ext3_mb_stats_write;
 +
 +	name = EXT3_MB_MAX_TO_SCAN_NAME;
-+	proc = create_proc_entry(name, mode, sbi->s_mb_proc);
++	proc = create_proc_entry(name, mode, sbi->s_dev_proc);
 +	if (proc == NULL)
 +		goto err_out;
 +	proc->data = sbi;
@@ -2998,7 +3068,7 @@ Index: linux-2.6.9-full/fs/ext3/mballoc.c
 +	proc->write_proc = ext3_mb_max_to_scan_write;
 +
 +	name = EXT3_MB_MIN_TO_SCAN_NAME;
-+	proc = create_proc_entry(name, mode, sbi->s_mb_proc);
++	proc = create_proc_entry(name, mode, sbi->s_dev_proc);
 +	if (proc == NULL)
 +		goto err_out;
 +	proc->data = sbi;
@@ -3006,7 +3076,7 @@ Index: linux-2.6.9-full/fs/ext3/mballoc.c
 +	proc->write_proc = ext3_mb_min_to_scan_write;
 +
 +	name = EXT3_MB_ORDER2_REQ;
-+	proc = create_proc_entry(name, mode, sbi->s_mb_proc);
++	proc = create_proc_entry(name, mode, sbi->s_dev_proc);
 +	if (proc == NULL)
 +		goto err_out;
 +	proc->data = sbi;
@@ -3014,7 +3084,7 @@ Index: linux-2.6.9-full/fs/ext3/mballoc.c
 +	proc->write_proc = ext3_mb_order2_req_write;
 +
 +	name = EXT3_MB_STREAM_REQ;
-+	proc = create_proc_entry(name, mode, sbi->s_mb_proc);
++	proc = create_proc_entry(name, mode, sbi->s_dev_proc);
 +	if (proc == NULL)
 +		goto err_out;
 +	proc->data = sbi;
@@ -3025,13 +3095,11 @@ Index: linux-2.6.9-full/fs/ext3/mballoc.c
 +
 +err_out:
 +	printk(KERN_ERR "EXT3-fs: Unable to create %s\n", name);
-+	remove_proc_entry(EXT3_MB_STREAM_REQ, sbi->s_mb_proc);
-+	remove_proc_entry(EXT3_MB_ORDER2_REQ, sbi->s_mb_proc);
-+	remove_proc_entry(EXT3_MB_MIN_TO_SCAN_NAME, sbi->s_mb_proc);
-+	remove_proc_entry(EXT3_MB_MAX_TO_SCAN_NAME, sbi->s_mb_proc);
-+	remove_proc_entry(EXT3_MB_STATS_NAME, sbi->s_mb_proc);
-+	remove_proc_entry(devname, proc_root_ext3);
-+	sbi->s_mb_proc = NULL;
++	remove_proc_entry(EXT3_MB_STREAM_REQ, sbi->s_dev_proc);
++	remove_proc_entry(EXT3_MB_ORDER2_REQ, sbi->s_dev_proc);
++	remove_proc_entry(EXT3_MB_MIN_TO_SCAN_NAME, sbi->s_dev_proc);
++	remove_proc_entry(EXT3_MB_MAX_TO_SCAN_NAME, sbi->s_dev_proc);
++	remove_proc_entry(EXT3_MB_STATS_NAME, sbi->s_dev_proc);
 +
 +	return -ENOMEM;
 +}
@@ -3039,24 +3107,20 @@ Index: linux-2.6.9-full/fs/ext3/mballoc.c
 +int ext3_mb_destroy_per_dev_proc(struct super_block *sb)
 +{
 +	struct ext3_sb_info *sbi = EXT3_SB(sb);
-+	char devname[64];
 +
-+	if (sbi->s_mb_proc == NULL)
++	if (sbi->s_dev_proc == NULL)
 +		return -EINVAL;
 +
-+	snprintf(devname, sizeof(devname) - 1, "%s",
-+		bdevname(sb->s_bdev, devname));
-+	remove_proc_entry(EXT3_MB_STREAM_REQ, sbi->s_mb_proc);
-+	remove_proc_entry(EXT3_MB_ORDER2_REQ, sbi->s_mb_proc);
-+	remove_proc_entry(EXT3_MB_MIN_TO_SCAN_NAME, sbi->s_mb_proc);
-+	remove_proc_entry(EXT3_MB_MAX_TO_SCAN_NAME, sbi->s_mb_proc);
-+	remove_proc_entry(EXT3_MB_STATS_NAME, sbi->s_mb_proc);
-+	remove_proc_entry(devname, proc_root_ext3);
++	remove_proc_entry(EXT3_MB_STREAM_REQ, sbi->s_dev_proc);
++	remove_proc_entry(EXT3_MB_ORDER2_REQ, sbi->s_dev_proc);
++	remove_proc_entry(EXT3_MB_MIN_TO_SCAN_NAME, sbi->s_dev_proc);
++	remove_proc_entry(EXT3_MB_MAX_TO_SCAN_NAME, sbi->s_dev_proc);
++	remove_proc_entry(EXT3_MB_STATS_NAME, sbi->s_dev_proc);
 +
 +	return 0;
 +}
 +
-+int __init init_ext3_proc(void)
++int __init init_ext3_mb_proc(void)
 +{
 +	ext3_pspace_cachep =
 +		kmem_cache_create("ext3_prealloc_space",
@@ -3065,18 +3129,13 @@ Index: linux-2.6.9-full/fs/ext3/mballoc.c
 +	if (ext3_pspace_cachep == NULL)
 +		return -ENOMEM;
 +
-+	proc_root_ext3 = proc_mkdir(EXT3_ROOT, proc_root_fs);
-+	if (proc_root_ext3 == NULL)
-+		printk(KERN_ERR "EXT3-fs: Unable to create %s\n", EXT3_ROOT);
-+
 +	return 0;
 +}
 +
-+void exit_ext3_proc(void)
++void exit_ext3_mb_proc(void)
 +{
 +	/* XXX: synchronize_rcu(); */
 +	kmem_cache_destroy(ext3_pspace_cachep);
-+	remove_proc_entry(EXT3_ROOT, proc_root_fs);
 +}
 +
 +

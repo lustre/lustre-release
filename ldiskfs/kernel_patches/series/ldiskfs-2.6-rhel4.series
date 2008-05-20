@@ -26,3 +26,4 @@ ext3-iam-common.patch
 ext3-iam-2.6.9-rhel4.patch
 ext3-orphans-delay.patch
 ext3-external-journal-2.6.9.patch
+ext3-max-dir-size.patch

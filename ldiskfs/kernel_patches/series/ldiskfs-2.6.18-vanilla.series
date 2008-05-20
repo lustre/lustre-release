@@ -22,3 +22,4 @@ ext3-iam-common.patch
 ext3-iam-2.6.18-vanilla.patch
 ext3-orphans-delay.patch
 ext3-lookup-dotdot-2.6.9.patch
+ext3-max-dir-size.patch
