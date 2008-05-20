@@ -183,7 +183,7 @@ out:
 static ssize_t lprocfs_fops_write(struct file *f, const char __user *buf, size_t size, loff_t *ppos)
 {
         struct proc_dir_entry *dp = PDE(f->f_dentry->d_inode);
-        int rc = 0;
+        int rc = -EIO;
 
         LPROCFS_ENTRY();
         if (!dp->deleted && dp->write_proc)
