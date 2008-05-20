@@ -711,10 +711,8 @@ int lprocfs_obd_cleanup(struct obd_device *obd)
         return 0;
 }
 
-void lprocfs_free_client_stats(void *obj, void *data)
+static void lprocfs_free_client_stats(struct nid_stat *client_stat)
 {
-        struct nid_stat *client_stat = obj;
-
         CDEBUG(D_CONFIG, "stat %p - data %p/%p/%p\n", client_stat,
                client_stat->nid_proc, client_stat->nid_stats,
                client_stat->nid_brw_stats);
@@ -723,7 +721,6 @@ void lprocfs_free_client_stats(void *obj, void *data)
                  client_stat->nid_exp_ref_count);
 
         hlist_del_init(&client_stat->nid_hash);
-        list_del(&client_stat->nid_list);
 
         if (client_stat->nid_proc)
                 lprocfs_remove(&client_stat->nid_proc);
@@ -745,10 +742,12 @@ void lprocfs_free_per_client_stats(struct obd_device *obd)
         ENTRY;
 
         /* we need extra list - because hash_exit called to early */
+        /* not need locking because all clients is died */
         while(!list_empty(&obd->obd_nid_stats)) {
                 stat = list_entry(obd->obd_nid_stats.next,
                                   struct nid_stat, nid_list);
-                lprocfs_free_client_stats(stat, NULL);
+                list_del_init(&stat->nid_list);
+                lprocfs_free_client_stats(stat);
         }
 
         EXIT;
@@ -1291,23 +1290,29 @@ EXPORT_SYMBOL(lprocfs_nid_stats_clear_read);
 
 void lprocfs_nid_stats_clear_write_cb(void *obj, void *data)
 {
-        struct nid_stat *client_stat = obj;
+        struct nid_stat *stat = obj;
         int i;
-        if(client_stat->nid_exp_ref_count == 1) {
-                hlist_del_init(&client_stat->nid_hash);
-                lprocfs_free_client_stats(client_stat, data);
-                OBD_FREE(client_stat, sizeof(struct nid_stat));
+
+        /* object has only hash + iterate_all references.
+         * add/delete blocked by hash bucket lock */
+        CDEBUG(D_INFO,"refcnt %d\n", stat->nid_exp_ref_count);
+        if(stat->nid_exp_ref_count == 2) {
+                hlist_del_init(&stat->nid_hash);
+                stat->nid_exp_ref_count--;
+                spin_lock(&stat->nid_obd->obd_nid_lock);
+                list_del_init(&stat->nid_list);
+                spin_unlock(&stat->nid_obd->obd_nid_lock);
+                list_add(&stat->nid_list, data);
                 EXIT;
                 return;
         }
-
         /* we has reference to object - only clear data*/
-        if (client_stat->nid_stats) {
-                lprocfs_clear_stats(client_stat->nid_stats);
-        }
-        if (client_stat->nid_brw_stats) {
+        if (stat->nid_stats)
+                lprocfs_clear_stats(stat->nid_stats);
+
+        if (stat->nid_brw_stats) {
                 for (i = 0; i < BRW_LAST; i++)
-                        lprocfs_oh_clear(&client_stat->nid_brw_stats->hist[i]);
+                        lprocfs_oh_clear(&stat->nid_brw_stats->hist[i]);
         }
         EXIT;
         return;
@@ -1317,8 +1322,18 @@ int lprocfs_nid_stats_clear_write(struct file *file, const char *buffer,
                                          unsigned long count, void *data)
 {
         struct obd_device *obd = (struct obd_device *)data;
+        struct nid_stat *client_stat;
+        CFS_LIST_HEAD(free_list);
+
         lustre_hash_iterate_all(obd->obd_nid_stats_hash_body,
-                                lprocfs_free_client_stats, NULL);
+                                lprocfs_nid_stats_clear_write_cb, &free_list);
+
+        while (!list_empty(&free_list)) {
+                client_stat = list_entry(free_list.next, struct nid_stat, nid_list);
+                list_del_init(&client_stat->nid_list);
+                lprocfs_free_client_stats(client_stat);
+        }
+
         return count;
 }
 EXPORT_SYMBOL(lprocfs_nid_stats_clear_write);
@@ -1354,6 +1369,11 @@ int lprocfs_exp_setup(struct obd_export *exp, lnet_nid_t *nid, int *newnid)
         tmp->nid_obd = exp->exp_obd;
         tmp->nid_exp_ref_count = 1; /* need live in hash after destroy export */
 
+       /* protect competitive add to list, not need locking on destroy */
+        spin_lock(&obd->obd_nid_lock);
+        list_add(&tmp->nid_list, &obd->obd_nid_stats);
+        spin_unlock(&obd->obd_nid_lock);
+
         tmp1= lustre_hash_findadd_unique(obd->obd_nid_stats_hash_body, nid,
                                          &tmp->nid_hash);
         CDEBUG(D_INFO, "Found stats %p for nid %s - ref %d\n",
@@ -1379,15 +1399,14 @@ int lprocfs_exp_setup(struct obd_export *exp, lnet_nid_t *nid, int *newnid)
         if (rc)
                 CWARN("Error adding the uuid file\n");
 
-        spin_lock(&obd->obd_nid_lock);
-        list_add(&tmp->nid_list, &obd->obd_nid_stats);
-        spin_unlock(&obd->obd_nid_lock);
-
         exp->exp_nid_stats = tmp;
         *newnid = 1;
         RETURN(rc);
 
 destroy_new:
+        spin_lock(&obd->obd_nid_lock);
+        list_del(&tmp->nid_list);
+        spin_unlock(&obd->obd_nid_lock);
         OBD_FREE(tmp, sizeof(struct nid_stat));
         RETURN(rc);
 }

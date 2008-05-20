@@ -12,10 +12,17 @@ tbd  Sun Microsystems, Inc.
        * RHEL 4 and RHEL 5/SLES 10 clients behaves differently on 'cd' to a
         removed cwd "./" (refer to Bugzilla 14399).
 
+Severity   : normal
+Bugzilla   : 15139
+Frequency  : rare, on clear nid stats
+Description: ASSERTION(client_stat->nid_exp_ref_count == 0)
+Details    : when clean nid stats sometimes try destroy live entry,
+             and this produce panic in free.
+
 Severity   : major
 Bugzilla   : 15575
 Description: Stack overflow during MDS log replay
-Details    : ease stack pressure by using a thread dealing llog_process.
+ ease stack pressure by using a thread dealing llog_process.
 
 Severity   : normal
 Bugzilla   : 15443
@@ -40,7 +47,7 @@ Description: Obsolete CURRENT_SECONDS and use cfs_time_current_sec() instead.
 
 Severity   : minor
 Bugzilla   : 14645
-Frequency  : rare, on shutdown ost
+ rare, on shutdown ost
 Description: don't hit live lock with umount ost.
 Details    : shrink_dcache_parent can be in long loop with destroy dentries,
 	     use shrink_dcache_sb instead.
