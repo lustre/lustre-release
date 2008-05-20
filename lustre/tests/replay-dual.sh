@@ -283,8 +283,8 @@ test_15a() {
     facet_failover $SINGLEMDS
     df $MOUNT || return 1
     
-    ost_last_id=`cat /proc/fs/lustre/obdfilter/*/last_id`
-    mds_last_id=`cat /proc/fs/lustre/osc/*mds*/last_id`
+    ost_last_id=`lctl get_param -n obdfilter.*.last_id`
+    mds_last_id=`lctl get_param -n osc.*mds*.last_id`
     
     echo "Ids after MDS<->OST synchonizing"
     echo "--------------------------------"

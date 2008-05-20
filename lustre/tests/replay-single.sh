@@ -54,15 +54,13 @@ seq_set_width()
 {
     local mds=$1
     local width=$2
-    local file=`ls /proc/fs/lustre/seq/cli-srv-$mds-mdc-*/width`
-    echo $width > $file
+    lctl set_param -n seq.cli-srv-$mds-mdc-*.width=$width
 }
 
 seq_get_width()
 {
     local mds=$1
-    local file=`ls /proc/fs/lustre/seq/cli-srv-$mds-mdc-*/width`
-    cat $file
+    lctl get_param -n seq.cli-srv-$mds-mdc-*.width
 }
 
 # This test should pass for single-mds and multi-mds configs.
@@ -816,7 +814,7 @@ test_39() { # bug 4176
 run_test 39 "test recovery from unlink llog (test llog_gen_rec) "
 
 count_ost_writes() {
-    awk -vwrites=0 '/ost_write/ { writes += $2 } END { print writes; }' $LPROC/osc/*/stats
+    lctl get_param -n osc.*.stats | awk -vwrites=0 '/ost_write/ { writes += $2 } END { print writes; }'
 }
 
 #b=2477,2532
@@ -873,8 +871,8 @@ test_41() {
     do_facet client dd if=/dev/zero of=$f bs=4k count=1 || return 3
     cancel_lru_locks osc
     # fail ost2 and read from ost1
-    local osc2dev=`do_facet mds "grep ${ost2_svc}-osc-MDT0000 $LPROC/devices" | awk '{print $1}'`
-    [ -z "$osc2dev" ] && echo "OST: $ost2_svc" && cat $LPROC/devices && return 4
+    local osc2dev=`do_facet mds "lctl get_param -n devices | grep ${ost2_svc}-osc-MDT0000" | awk '{print $1}'`
+    [ -z "$osc2dev" ] && echo "OST: $ost2_svc" && lctl get_param -n devices && return 4
     do_facet mds $LCTL --device $osc2dev deactivate || return 1
     do_facet client dd if=$f of=/dev/null bs=4k count=1 || return 3
     do_facet mds $LCTL --device $osc2dev activate || return 2
@@ -918,7 +916,7 @@ test_43() { # bug 2530
 run_test 43 "mds osc import failure during recovery; don't LBUG"
 
 test_44() {
-    mdcdev=`awk '/MDT0000-mdc-/ {print $1}' $LPROC/devices`
+    mdcdev=`lctl get_param -n devices | awk '/MDT0000-mdc-/ {print $1}'`
     [ "$mdcdev" ] || exit 2
     for i in `seq 1 10`; do
 	#define OBD_FAIL_TGT_CONN_RACE     0x701
@@ -932,7 +930,7 @@ test_44() {
 run_test 44 "race in target handle connect"
 
 test_44b() {
-    mdcdev=`awk '/MDT0000-mdc-/ {print $1}' $LPROC/devices`
+    mdcdev=`lctl get_param -n devices | awk '/MDT0000-mdc-/ {print $1}'`
     [ "$mdcdev" ] || exit 2
     for i in `seq 1 10`; do
 	#define OBD_FAIL_TGT_DELAY_RECONNECT 0x704
@@ -947,7 +945,7 @@ run_test 44b "race in target handle connect"
 
 # Handle failed close
 test_45() {
-    mdcdev=`awk '/MDT0000-mdc-/ {print $1}' $LPROC/devices`
+    mdcdev=`lctl get_param -n devices | awk '/MDT0000-mdc-/ {print $1}'`
     [ "$mdcdev" ] || exit 2
     $LCTL --device $mdcdev recover
 
@@ -1021,7 +1019,7 @@ test_48() {
 run_test 48 "MDS->OSC failure during precreate cleanup (2824)"
 
 test_50() {
-    local oscdev=`do_facet $SINGLEMDS grep ${ost1_svc}-osc-MDT0000 $LPROC/devices | awk '{print $1}'`
+    local oscdev=`do_facet $SINGLEMDS lctl get_param -n devices | grep ${ost1_svc}-osc-MDT0000 | awk '{print $1}'`
     [ "$oscdev" ] || return 1
     do_facet $SINGLEMDS $LCTL --device $oscdev recover || return 2
     do_facet $SINGLEMDS $LCTL --device $oscdev recover || return 3
