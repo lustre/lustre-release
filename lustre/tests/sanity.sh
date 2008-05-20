@@ -4992,6 +4992,43 @@ test_128() { # bug 15212
 }
 run_test 128 "interactive lfs for 2 consecutive find's"
 
+test_129() {
+	[ "$FSTYPE" = "ldiskfs" ] || return 0
+	mkdir $DIR/$tdir
+
+	EFBIG=27
+	ldiskfs_prefix=/proc/fs/ldiskfs
+	proc_file=max_dir_size
+	max_bytes=16385
+
+	echo $max_bytes >$ldiskfs_prefix/$proc_file
+
+	I=0
+	J=0
+	while [ $I -lt $max_bytes ]; do
+		touch $DIR/$tdir/$J
+		J=$((J+1))
+		I=$(stat -c%s "$DIR/$tdir")
+	done
+
+	# One more file and we should be over the limit
+	multiop $DIR/$tdir/$J Oc
+	rc=$?
+	if [ $rc -eq 0 ]; then
+		rm -rf $DIR/$tdir
+		error "exceeded dir size limit: $I bytes"
+	elif [ $rc -ne $EFBIG ]; then
+		rm -rf $DIR/$tdir
+		error "return code $rc received instead of expected $EFBIG"
+	else
+		echo "return code $rc received as expected"
+	fi
+
+	echo 0 >$ldiskfs_prefix/$proc_file
+	rm -rf $DIR/$tdir
+}
+run_test 129 "test directory size limit ========================"
+
 TMPDIR=$OLDTMPDIR
 TMP=$OLDTMP
 HOME=$OLDHOME
