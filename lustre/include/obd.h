@@ -793,7 +793,7 @@ struct obd_device {
         cfs_waitq_t             obd_llog_waitq;
         struct list_head        obd_exports;
         int                     obd_num_exports;
-        spinlock_t              nid_lock;
+        spinlock_t              obd_nid_lock;
         struct ldlm_namespace  *obd_namespace;
         struct ptlrpc_client    obd_ldlm_client; /* XXX OST/MDS only */
         /* a spinlock is OK for what we do now, may need a semaphore later */

@@ -191,7 +191,7 @@ int class_attach(struct lustre_cfg *lcfg)
         CFS_INIT_LIST_HEAD(&obd->obd_exports);
         CFS_INIT_LIST_HEAD(&obd->obd_exports_timed);
         CFS_INIT_LIST_HEAD(&obd->obd_nid_stats);
-        spin_lock_init(&obd->nid_lock);
+        spin_lock_init(&obd->obd_nid_lock);
         spin_lock_init(&obd->obd_dev_lock);
         sema_init(&obd->obd_dev_sem, 1);
         spin_lock_init(&obd->obd_osfs_lock);
