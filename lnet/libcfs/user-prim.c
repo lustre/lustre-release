@@ -290,6 +290,11 @@ void cfs_daemonize(char *str)
         return;
 }
 
+int cfs_daemonize_ctxt(char *str)
+{
+        return 0;
+}
+
 cfs_sigset_t cfs_block_allsigs(void)
 {
         cfs_sigset_t   all;
