@@ -58,8 +58,8 @@ DIR2=${DIR2:-$MOUNT2}
 
 cleanup_and_setup_lustre
 
-LOVNAME=`cat $LPROC/llite/*/lov/common_name | tail -n 1`
-OSTCOUNT=`cat $LPROC/lov/$LOVNAME/numobd`
+LOVNAME=`lctl get_param -n llite.*.lov.common_name | tail -n 1`
+OSTCOUNT=`lctl get_param -n lov.$LOVNAME.numobd`
 
 SHOW_QUOTA_USER="$LFS quota -u $TSTUSR $DIR"
 SHOW_QUOTA_GROUP="$LFS quota -g $TSTUSR $DIR"
@@ -76,50 +76,38 @@ eval ONLY_99=true
 
 # set_blk_tunables(btune_sz)
 set_blk_tunesz() {
-        local i
+        local btune=$(($1 * BLK_SZ))
 	# set btune size on all obdfilters
-	do_facet ost1 "set -x; for i in /proc/fs/lustre/obdfilter/*/quota_btune_sz; do
-		echo $(($1 * BLK_SZ)) >> \\\$i;
-	done"
+	do_facet ost1 "lctl set_param obdfilter.*.quota_btune_sz=$btune"
 	# set btune size on mds
-	do_facet mds "for i in /proc/fs/lustre/mds/${FSNAME}-MDT*/quota_btune_sz; do
-		echo $(($1 * BLK_SZ)) >> \\\$i;
-	done"
+	do_facet mds "lctl set_param mds.${FSNAME}-MDT*.quota_btune_sz=$btune"
 }
 
 # set_blk_unitsz(bunit_sz)
 set_blk_unitsz() {
-        local i
-	do_facet ost1 "for i in /proc/fs/lustre/obdfilter/*/quota_bunit_sz; do
-		echo $(($1 * BLK_SZ)) >> \\\$i;
-	done"
-	do_facet mds "for i in /proc/fs/lustre/mds/${FSNAME}-MDT*/quota_bunit_sz; do
-		echo $(($1 * BLK_SZ)) >> \\\$i;
-	done"
+	local bunit=$(($1 * BLK_SZ))
+	# set bunit size on all obdfilters
+	do_facet ost1 "lctl set_param obdfilter.*.quota_bunit_sz=$bunit"
+	# set bunit size on mds
+	do_facet mds "lctl set_param mds.${FSNAME}-MDT*.quota_bunit_sz=$bunit"
 }
 
 # set_file_tunesz(itune_sz)
 set_file_tunesz() {
-        local i
-	# set iunit and itune size on all obdfilters
-	do_facet ost1 "for i in /proc/fs/lustre/obdfilter/*/quota_itune_sz; do
-		echo $1 >> \\\$i;
-	done"
-	# set iunit and itune size on mds
-	do_facet mds "for i in /proc/fs/lustre/mds/${FSNAME}-MDT*/quota_itune_sz; do
-		echo $1 >> \\\$i;
-	done"
+	local itune=$1
+	# set itune size on all obdfilters
+	do_facet ost1 "lctl set_param obdfilter.*.quota_itune_sz=$itune"
+	# set itune size on mds
+	do_facet mds "lctl set_param mds.${FSNAME}-MDT*.quota_itune_sz=$itune"
 }
 
 # set_file_unitsz(iunit_sz)
 set_file_unitsz() {
-        local i
-	do_facet ost1 "for i in /proc/fs/lustre/obdfilter/*/quota_iunit_sz; do
-		echo $1 >> \\\$i;
-	done"
-	do_facet mds "for i in /proc/fs/lustre/mds/${FSNAME}-MDT*/quota_iunit_sz; do
-		echo $1 >> \\\$i;
-	done"
+	local iunit=$1
+	# set iunit size on all obdfilters
+	do_facet ost1 "lctl set_param obdfilter.*.quota_iunit_sz=$iunit"
+	# set iunit size on mds
+	do_facet mds "lctl set_param mds.${FSNAME}-MDT*.quota_iunit_sz=$iunit"
 }
 
 lustre_fail() {
@@ -763,6 +751,7 @@ test_9() {
 
         BLK_LIMIT=$((100 * KB * KB)) # 100G
         FILE_LIMIT=1000000
+        echo "  Set block limit $BLK_LIMIT kbytes to $TSTUSR.$TSTUSR"
 
         log "  Set enough high limit(block:$BLK_LIMIT; file: $FILE_LIMIT) for user: $TSTUSR"
         $LFS setquota -u $TSTUSR 0 $BLK_LIMIT 0 $FILE_LIMIT $DIR
@@ -863,14 +852,14 @@ test_11() {
        #prepare the test
        block_limit=`(echo 0; df -t lustre -P | awk '{print $(NF - 4)}') | tail -n 1`
        echo $block_limit
-       orig_dbr=`cat /proc/sys/vm/dirty_background_ratio`
-       orig_dec=`cat /proc/sys/vm/dirty_expire_centisecs`
-       orig_dr=`cat /proc/sys/vm/dirty_ratio`
-       orig_dwc=`cat /proc/sys/vm/dirty_writeback_centisecs`
-       echo 1  > /proc/sys/vm/dirty_background_ratio
-       echo 30 > /proc/sys/vm/dirty_expire_centisecs
-       echo 1  > /proc/sys/vm/dirty_ratio
-       echo 50 > /proc/sys/vm/dirty_writeback_centisecs
+       orig_dbr=`sysctl -n vm.dirty_background_ratio`
+       orig_dec=`sysctl -n vm.dirty_expire_centisecs`
+       orig_dr=`sysctl -n vm.dirty_ratio`
+       orig_dwc=`sysctl -n vm.dirty_writeback_centisecs`
+       sysctl -w vm.dirty_background_ratio=1
+       sysctl -w vm.dirty_expire_centisecs=30
+       sysctl -w vm.dirty_ratio=1
+       sysctl -w vm.dirty_writeback_centisecs=50
        TESTDIR="$DIR/$tdir"
        local RV=0
 
@@ -915,10 +904,10 @@ test_11() {
        echo "Test took $SECS sec"
 
        #clean
-       echo $orig_dbr > /proc/sys/vm/dirty_background_ratio
-       echo $orig_dec > /proc/sys/vm/dirty_expire_centisecs
-       echo $orig_dr  > /proc/sys/vm/dirty_ratio
-       echo $orig_dwc > /proc/sys/vm/dirty_writeback_centisecs
+       sysctl -w vm.dirty_background_ratio=$orig_dbr
+       sysctl -w vm.dirty_expire_centisecs=$orig_dec
+       sysctl -w vm.dirty_ratio=$orig_dr
+       sysctl -w vm.dirty_writeback_centisecs=$orig_dwc
        if [ $RV -ne 0 ]; then
            error "Nothing was written for $SECS sec ... aborting"
        fi
@@ -1118,9 +1107,8 @@ test_14(){ # b=12223 -- setting quota on root
 run_test 14 "test setting quota on root ==="
 
 quota_set_version() {
-        do_facet mds "for i in /proc/fs/lustre/mds/${FSNAME}-MDT*/quota_type; do
-                echo $1 >> \\\$i;
-        done"
+	local qver=$1
+	do_facet mds "lctl set_param mds.${FSNAME}-MDT*.quota_type=$qver"
 }
 
 test_14a(){
