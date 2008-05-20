@@ -777,6 +777,14 @@ Details    : With this patch, three improvements are included:
 	     2. display the inaccurate data in the output of "lfs quota".
 	     3. try to get quota info when "lfs quota" is executed.
 
+Severity   : normal
+Frequency  : rare
+Bugzilla   : 15776
+Description: Extent locks not granted with no conflicts sometimes.
+Details    : When race occurs in glimpse handler and nothing is returned,
+             we do not reprocess the queue after lock cancel, and that leads
+	     to a stall until next activity on a resource
+
 --------------------------------------------------------------------------------
 
 2007-12-07         Cluster File Systems, Inc. <info@clusterfs.com>

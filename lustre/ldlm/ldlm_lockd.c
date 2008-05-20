@@ -802,6 +802,9 @@ int ldlm_server_glimpse_ast(struct ldlm_lock *lock, void *data)
                 rc = ldlm_res_lvbo_update(res, req->rq_repmsg,
                                           REPLY_REC_OFF, 1);
         ptlrpc_req_finished(req);
+        if (rc == -ERESTART)
+                ldlm_reprocess_all(res);
+
         RETURN(rc);
 }
 
