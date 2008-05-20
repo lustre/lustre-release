@@ -18,10 +18,10 @@ Index: linux-2.6.9/fs/ext3/super.c
 +	if (sbi->s_mmp_tsk)
 +		kthread_stop(sbi->s_mmp_tsk);
 +
+ 	remove_proc_entry(sb->s_id, proc_root_ext3);
+ 	sbi->s_dev_proc = NULL;
  	sb->s_fs_info = NULL;
- 	kfree(sbi);
- 	return;
-@@ -1431,6 +1436,314 @@ static unsigned long descriptor_loc(stru
+@@ -1439,6 +1444,314 @@ static unsigned long descriptor_loc(stru
  	return (first_data_block + has_super + (bg * sbi->s_blocks_per_group));
  }
  

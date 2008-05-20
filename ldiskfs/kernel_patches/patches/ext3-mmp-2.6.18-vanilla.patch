@@ -18,10 +18,10 @@ Index: linux-2.6.18/fs/ext3/super.c
 +	if (sbi->s_mmp_tsk)
 +		kthread_stop(sbi->s_mmp_tsk);
 +
+ 	remove_proc_entry(sb->s_id, proc_root_ext3);
+ 	sbi->s_dev_proc = NULL;
  	sb->s_fs_info = NULL;
- 	kfree(sbi);
- 	return;
-@@ -1528,6 +1533,313 @@ static ext3_fsblk_t descriptor_loc(struc
+@@ -1536,6 +1541,313 @@ static ext3_fsblk_t descriptor_loc(struc
  	return (has_super + ext3_group_first_block_no(sb, bg));
  }
  

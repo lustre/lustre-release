@@ -20,3 +20,4 @@ ext3-statfs-2.6.22.patch
 ext3-lookup-dotdot-2.6.9.patch
 ext3-unlink-race.patch
 ext3-export-journal-api.patch
+ext3-max-dir-size.patch
