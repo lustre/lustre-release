@@ -1006,6 +1006,18 @@ enum obd_cleanup_stage {
 
 struct lu_context;
 
+static inline int it_to_lock_mode(struct lookup_intent *it)
+{
+        /* CREAT needs to be tested before open (both could be set) */
+        if (it->it_op & IT_CREAT)
+                return LCK_CW;
+        else if (it->it_op & (IT_READDIR | IT_GETATTR | IT_OPEN | IT_LOOKUP))
+                return LCK_CR;
+ 
+        LASSERTF(0, "Invalid it_op: %d\n", it->it_op);
+        return -EINVAL;
+}
+
 struct md_op_data {
         struct lu_fid           op_fid1; /* operation fid1 (usualy parent) */
         struct lu_fid           op_fid2; /* operation fid2 (usualy child) */
@@ -1047,6 +1059,22 @@ struct md_op_data {
 
         /* Operation type */
         __u32                   op_opc;
+};
+
+struct md_enqueue_info;
+/* metadata stat-ahead */
+typedef int (* md_enqueue_cb_t)(struct ptlrpc_request *req,
+                                struct md_enqueue_info *minfo,
+                                int rc);
+
+struct md_enqueue_info {
+        struct md_op_data       mi_data;
+        struct lookup_intent    mi_it;
+        struct lustre_handle    mi_lockh;
+        struct dentry          *mi_dentry;
+        md_enqueue_cb_t         mi_cb;
+        unsigned int            mi_generation;
+        void                   *mi_cbdata;
 };
 
 struct obd_ops {
@@ -1367,6 +1395,14 @@ struct md_ops {
         int (*m_get_remote_perm)(struct obd_export *, const struct lu_fid *,
                                  struct obd_capa *, __u32,
                                  struct ptlrpc_request **);
+
+        int (*m_intent_getattr_async)(struct obd_export *,
+                                      struct md_enqueue_info *,
+                                      struct ldlm_enqueue_info *);
+
+        int (*m_revalidate_lock)(struct obd_export *,
+                                 struct lookup_intent *,
+                                 struct lu_fid *);
 
         /*
          * NOTE: If adding ops, add another LPROCFS_MD_OP_INIT() line to

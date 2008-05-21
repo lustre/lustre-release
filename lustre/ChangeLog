@@ -161,6 +161,21 @@ Details    : When MGC is disconnected from MGS long enough, MGS will evict the
 	     of the error messages complaining that MGS is not connected.
 
 Severity   : major
+Bugzilla   : 15027
+Frequency  : on network error
+Description: panic with double free request if network error 
+Details    : mdc_finish_enqueue is finish request if any network error ocuring,
+             but it's true only for synchronus enqueue, for async enqueue 
+             (via ptlrpcd) this incorrect and ptlrpcd want finish request
+             himself.
+
+Severity   : enhancement
+Bugzilla   : 11401
+Description: client-side metadata stat-ahead during readdir(directory readahead)
+Details    : perform client-side metadata stat-ahead when the client detects
+             readdir and sequential stat of dir entries therein
+
+Severity   : major
 Frequency  : on start mds
 Bugzilla   : 14884
 Description: Implement get_info(last_id) in obdfilter.

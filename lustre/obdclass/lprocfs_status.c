@@ -1200,6 +1200,8 @@ int lprocfs_alloc_md_stats(struct obd_device *obd,
         LPROCFS_MD_OP_INIT(num_private_stats, stats, cancel_unused);
         LPROCFS_MD_OP_INIT(num_private_stats, stats, renew_capa);
         LPROCFS_MD_OP_INIT(num_private_stats, stats, get_remote_perm);
+        LPROCFS_MD_OP_INIT(num_private_stats, stats, intent_getattr_async);
+        LPROCFS_MD_OP_INIT(num_private_stats, stats, revalidate_lock);
 
         for (i = num_private_stats; i < num_stats; i++) {
                 if (stats->ls_percpu[0]->lp_cntr[i].lc_name == NULL) {

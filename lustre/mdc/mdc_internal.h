@@ -100,7 +100,7 @@ int mdc_intent_lock(struct obd_export *exp,
                     ldlm_blocking_callback cb_blocking, int extra_lock_flags);
 int mdc_enqueue(struct obd_export *exp, struct ldlm_enqueue_info *einfo,
                 struct lookup_intent *it, struct md_op_data *op_data,
-                struct lustre_handle *lockh, void *lmm, int lmmlen,
+                struct lustre_handle *lockh, void *lmm, int lmmsize,
                 int extra_lock_flags);
 
 int mdc_resource_get_unused(struct obd_export *exp, struct lu_fid *fid,
@@ -157,6 +157,14 @@ static inline void mdc_set_capa_size(struct ptlrpc_request *req,
                 /* it is already calculated as sizeof struct obd_capa */
                 ;
 }
+
+int mdc_revalidate_lock(struct obd_export *exp,
+                        struct lookup_intent *it,
+                        struct lu_fid *fid);
+
+int mdc_intent_getattr_async(struct obd_export *exp,
+                             struct md_enqueue_info *minfo,
+                             struct ldlm_enqueue_info *einfo);
 
 ldlm_mode_t mdc_lock_match(struct obd_export *exp, int flags,
                            const struct lu_fid *fid, ldlm_type_t type,

@@ -37,9 +37,6 @@
 #include <lustre_mdc.h>
 #include "llite_internal.h"
 
-/* methods */
-extern struct dentry_operations ll_d_ops;
-
 /*
  * Check if we have something mounted at the named dchild.
  * In such a case there would always be dentry present.
@@ -317,7 +314,7 @@ static void ll_d_add(struct dentry *de, struct inode *inode)
  * in ll_revalidate_it.  After revaliadate inode will be have hashed aliases
  * and it triggers BUG_ON in d_instantiate_unique (bug #10954).
  */
-struct dentry *ll_find_alias(struct inode *inode, struct dentry *de)
+static struct dentry *ll_find_alias(struct inode *inode, struct dentry *de)
 {
         struct list_head *tmp;
         struct dentry *dentry;
@@ -387,25 +384,58 @@ struct dentry *ll_find_alias(struct inode *inode, struct dentry *de)
         return de;
 }
 
-static int lookup_it_finish(struct ptlrpc_request *request,
-                            struct lookup_intent *it,
-                            void *data)
+static inline void ll_dop_init(struct dentry *de, int *set)
+{
+        lock_dentry(de);
+        if (likely(de->d_op != &ll_d_ops)) {
+                de->d_op = &ll_init_d_ops;
+                *set = 1;
+        }
+        unlock_dentry(de);
+}
+
+static inline void ll_dop_fini(struct dentry *de, int succ)
+{
+        lock_dentry(de);
+        if (likely(de->d_op == &ll_init_d_ops)) {
+                if (succ)
+                        de->d_op = &ll_d_ops;
+                else
+                        de->d_op = &ll_fini_d_ops;
+                unlock_dentry(de);
+                smp_wmb();
+                ll_d_wakeup(de);
+        } else {
+                if (succ)
+                        de->d_op = &ll_d_ops;
+                unlock_dentry(de);
+        }
+}
+
+int ll_lookup_it_finish(struct ptlrpc_request *request,
+                     struct lookup_intent *it, void *data)
 {
         struct it_cb_data *icbd = data;
         struct dentry **de = icbd->icbd_childp;
         struct inode *parent = icbd->icbd_parent;
         struct ll_sb_info *sbi = ll_i2sbi(parent);
         struct inode *inode = NULL;
-        int rc;
+        int set = 0, rc;
+        ENTRY;
+
+        ll_dop_init(*de, &set);
 
         /* NB 1 request reference will be taken away by ll_intent_lock()
          * when I return */
         if (!it_disposition(it, DISP_LOOKUP_NEG)) {
-                ENTRY;
+                struct dentry *save = *de;
 
                 rc = ll_prep_inode(&inode, request, (*de)->d_sb);
-                if (rc)
+                if (rc) {
+                        if (set)
+                                ll_dop_fini(*de, 0);
                         RETURN(rc);
+                }
 
                 CDEBUG(D_DLMTRACE, "setting l_data to inode %p (%lu/%u)\n",
                        inode, inode->i_ino, inode->i_generation);
@@ -422,8 +452,9 @@ static int lookup_it_finish(struct ptlrpc_request *request,
                    Also see bug 7198. */
 
                 *de = ll_find_alias(inode, *de);
+                if (set && *de != save)
+                        ll_dop_fini(save, 0);
         } else {
-                ENTRY;
                 /* Check that parent has UPDATE lock. If there is none, we
                    cannot afford to hash this dentry (done by ll_d_add) as it
                    might get picked up later when UPDATE lock will appear */
@@ -444,7 +475,8 @@ static int lookup_it_finish(struct ptlrpc_request *request,
         }
 
         ll_set_dd(*de);
-        (*de)->d_op = &ll_d_ops;
+
+        ll_dop_fini(*de, 1);
 
         RETURN(0);
 }
@@ -482,6 +514,15 @@ static struct dentry *ll_lookup_it(struct inode *parent, struct dentry *dentry,
                         RETURN(ERR_PTR(rc));
         }
 
+        if (it->it_op == IT_GETATTR) {
+                rc = ll_statahead_enter(parent, &dentry, 1);
+                if (rc >= 0) {
+                        ll_statahead_exit(dentry, rc);
+                        if (rc == 1)
+                                RETURN(retval = dentry);
+                }
+        }
+
         icbd.icbd_childp = &dentry;
         icbd.icbd_parent = parent;
 
@@ -505,7 +546,7 @@ static struct dentry *ll_lookup_it(struct inode *parent, struct dentry *dentry,
         if (rc < 0)
                 GOTO(out, retval = ERR_PTR(rc));
 
-        rc = lookup_it_finish(req, it, &icbd);
+        rc = ll_lookup_it_finish(req, it, &icbd);
         if (rc != 0) {
                 ll_intent_release(it);
                 GOTO(out, retval = ERR_PTR(rc));

@@ -1009,8 +1009,7 @@ release_lock:
                         body->valid = OBD_MD_FLSIZE;
                 }
                 if (master_valid == 0) {
-                        memcpy(&oit->d.lustre.it_lock_handle,
-                               &master_lockh, sizeof(master_lockh));
+                        oit->d.lustre.it_lock_handle = master_lockh.cookie;
                         oit->d.lustre.it_lock_mode = master_lock_mode;
                 }
                 rc = 0;

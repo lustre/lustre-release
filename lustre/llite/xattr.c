@@ -309,6 +309,8 @@ int ll_getxattr_common(struct inode *inode, const char *name,
                 posix_acl_release(acl);
                 RETURN(rc);
         }
+        if (xattr_type == XATTR_ACL_DEFAULT_T && !S_ISDIR(inode->i_mode))
+                RETURN(-ENODATA);
 #endif
 
 do_getxattr:

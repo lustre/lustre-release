@@ -80,6 +80,7 @@ FAIL_ON_ERROR=false
 
 cleanup() {
 	echo -n "cln.."
+	pgrep ll_sa > /dev/null && { echo "There are ll_sa thread not exit!"; exit 20; }
 	cleanupall ${FORCE} $* || { echo "FAILed to clean up"; exit 20; }
 }
 setup() {
@@ -4784,6 +4785,87 @@ test_121() { #bug #10589
 	[ "$reads" -eq "$writes" ] || error "read" $reads "blocks, must be" $writes
 }
 run_test 121 "read cancel race ========="
+
+test_123a() { # was test 123, statahead(bug 11401)
+        if [ -z "$(grep "processor.*: 1" /proc/cpuinfo)" ]; then
+                log "testing on UP system. Performance may be not as good as expected."
+        fi
+
+        remount_client $MOUNT
+        mkdir -p $DIR/$tdir
+        error=0
+        NUMFREE=`df -i -P $DIR | tail -n 1 | awk '{ print $4 }'`
+        [ $NUMFREE -gt 100000 ] && NUMFREE=100000 || NUMFREE=$((NUMFREE-1000))
+        MULT=10
+        for ((i=1, j=0; i<=$NUMFREE; j=$i, i=$((i * MULT)) )); do
+                createmany -o $DIR/$tdir/$tfile $j $((i - j))
+
+                lctl get_param -n llite.*.statahead_max | grep '[0-9]'
+                cancel_lru_locks mdc
+                cancel_lru_locks osc
+                stime=`date +%s`
+                ls -l $DIR/$tdir > /dev/null
+                etime=`date +%s`
+                delta_sa=$((etime - stime))
+                log "ls $i files with statahead:    $delta_sa sec"
+		lctl get_param -n llite.*.statahead_stats
+
+                max=`lctl get_param -n llite.*.statahead_max | head -n 1`
+                lctl set_param -n llite.*.statahead_max 0
+                lctl get_param llite.*.statahead_max
+                cancel_lru_locks mdc
+                cancel_lru_locks osc
+                stime=`date +%s`
+                ls -l $DIR/$tdir > /dev/null
+                etime=`date +%s`
+                delta=$((etime - stime))
+                log "ls $i files without statahead: $delta sec"
+
+                lctl set_param llite.*.statahead_max=$max
+                if [ $delta_sa -gt $(($delta + 2)) ]; then
+                        log "ls $i files is slower with statahead!"
+                        error=1
+                fi
+
+                [ $delta -gt 20 ] && break
+                [ $delta -gt 8 ] && MULT=$((50 / delta))
+                [ "$SLOW" = "no" -a $delta -gt 3 ] && break
+        done
+        log "ls done"
+
+        stime=`date +%s`
+        rm -r $DIR/$tdir
+        sync
+        etime=`date +%s`
+        delta=$((etime - stime))
+        log "rm -r $DIR/$tdir/: $delta seconds"
+        log "rm done"
+        lctl get_param -n llite.*.statahead_stats
+        # wait for commitment of removal
+        sleep 2
+        [ $error -ne 0 ] && error "statahead is slow!"
+        return 0
+}
+run_test 123a "verify statahead work"
+
+test_123b () { # statahead(bug 15027)
+	mkdir -p $DIR/$tdir
+	createmany -o $DIR/$tdir/$tfile-%d 1000
+	
+        cancel_lru_locks mdc
+        cancel_lru_locks osc
+
+#define OBD_FAIL_MDC_GETATTR_ENQUEUE     0x803
+        sysctl -w lustre.fail_loc=0x80000803
+        ls -lR $DIR/$tdir > /dev/null
+        log "ls done"
+        sysctl -w lustre.fail_loc=0x0
+        lctl get_param -n llite.*.statahead_stats
+        rm -r $DIR/$tdir
+        sync
+
+}
+run_test 123b "not panic with network error in statahead enqueue (bug 15027)"
 
 test_124a() {
 	[ -z "`lctl get_param -n mdc.*.connect_flags | grep lru_resize`" ] && \

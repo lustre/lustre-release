@@ -300,11 +300,17 @@ int ll_file_release(struct inode *inode, struct file *file)
         }
 #endif
 
-        ll_stats_ops_tally(sbi, LPROC_LL_RELEASE, 1);
+        if (inode->i_sb->s_root != file->f_dentry)
+                ll_stats_ops_tally(sbi, LPROC_LL_RELEASE, 1);
         fd = LUSTRE_FPRIVATE(file);
         LASSERT(fd != NULL);
 
-        /* don't do anything for / */
+        /* The last ref on @file, maybe not the the owner pid of statahead.
+         * Different processes can open the same dir, "ll_opendir_key" means:
+         * it is me that should stop the statahead thread. */
+        if (lli->lli_opendir_key == fd)
+                ll_stop_statahead(inode, fd);
+
         if (inode->i_sb->s_root == file->f_dentry) {
                 LUSTRE_FPRIVATE(file) = NULL;
                 ll_file_data_put(fd);
@@ -329,6 +335,7 @@ static int ll_intent_file_open(struct file *file, void *lmm,
         struct md_op_data *op_data;
         struct ptlrpc_request *req;
         int rc;
+        ENTRY;
 
         if (!parent)
                 RETURN(-ENOENT);
@@ -465,7 +472,7 @@ int ll_file_open(struct inode *inode, struct file *file)
         struct obd_client_handle **och_p;
         __u64 *och_usecount;
         struct ll_file_data *fd;
-        int rc = 0;
+        int rc = 0, opendir_set = 0;
         ENTRY;
 
         CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu/%u(%p), flags %o\n", inode->i_ino,
@@ -482,7 +489,29 @@ int ll_file_open(struct inode *inode, struct file *file)
         if (fd == NULL)
                 RETURN(-ENOMEM);
 
-        /* don't do anything for / */
+        if (S_ISDIR(inode->i_mode)) {
+                spin_lock(&lli->lli_lock);
+                /* "lli->lli_opendir_pid != 0" means someone has set it.
+                 * "lli->lli_sai != NULL" means the previous statahead has not
+                 *                        been cleanup. */ 
+                if (lli->lli_opendir_pid == 0 && lli->lli_sai == NULL) {
+                        opendir_set = 1;
+                        lli->lli_opendir_pid = cfs_curproc_pid();
+                        lli->lli_opendir_key = fd;
+                } else if (unlikely(lli->lli_opendir_pid == cfs_curproc_pid())) {
+                        /* Two cases for this:
+                         * (1) The same process open such directory many times.
+                         * (2) The old process opened the directory, and exited
+                         *     before its children processes. Then new process
+                         *     with the same pid opens such directory before the
+                         *     old process's children processes exit.
+                         * Change the owner to the latest one. */
+                        opendir_set = 2;
+                        lli->lli_opendir_key = fd;
+                }
+                spin_unlock(&lli->lli_lock);
+        }
+
         if (inode->i_sb->s_root == file->f_dentry) {
                 LUSTRE_FPRIVATE(file) = fd;
                 RETURN(0);
@@ -632,9 +661,13 @@ out_och_free:
                         (*och_usecount)--;
                 }
                 up(&lli->lli_och_sem);
-out_openerr: ;/* Looks weierd, eh? Just wait for statahead code to insert
-                a statement here <-- remove this comment after statahead
-                landing */
+out_openerr:
+                if (opendir_set == 1) {
+                        lli->lli_opendir_key = NULL;
+                        lli->lli_opendir_pid = 0;
+                } else if (unlikely(opendir_set == 2)) {
+                        ll_stop_statahead(inode, fd);
+                }
         }
 
         return rc;
@@ -686,7 +719,8 @@ int ll_inode_getattr(struct inode *inode, struct obdo *obdo)
         obdo_refresh_inode(inode, oinfo.oi_oa, oinfo.oi_oa->o_valid);
         CDEBUG(D_INODE, "objid "LPX64" size %Lu, blocks %llu, blksize %lu\n",
                lli->lli_smd->lsm_object_id, i_size_read(inode),
-               (unsigned long long)inode->i_blocks, ll_inode_blksize(inode));
+               (unsigned long long)inode->i_blocks,
+               (unsigned long)ll_inode_blksize(inode));
         RETURN(0);
 }
 

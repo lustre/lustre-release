@@ -106,6 +106,9 @@ static struct ll_sb_info *ll_init_sbi(void)
                 spin_lock_init(&sbi->ll_rw_extents_info.pp_extents[i].pp_w_hist.oh_lock);
         }
 
+        /* metadata statahead is enabled by default */
+        sbi->ll_sa_max = LL_SA_RPC_DEF;
+
         RETURN(sbi);
 }
 
@@ -1104,6 +1107,13 @@ void ll_clear_inode(struct inode *inode)
 
         CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu/%u(%p)\n", inode->i_ino,
                inode->i_generation, inode);
+
+        if (S_ISDIR(inode->i_mode)) {
+                /* these should have been cleared in ll_file_release */
+                LASSERT(lli->lli_sai == NULL);
+                LASSERT(lli->lli_opendir_key == NULL);
+                LASSERT(lli->lli_opendir_pid == 0);
+        }
 
         ll_i2info(inode)->lli_flags &= ~LLIF_MDS_SIZE_LOCK;
         md_change_cbdata(sbi->ll_md_exp, ll_inode2fid(inode),
@@ -2239,6 +2249,7 @@ struct md_op_data * ll_prep_md_op_data(struct md_op_data *op_data,
                 op_data->op_capa2 = ll_mdscapa_get(i2);
         } else {
                 fid_zero(&op_data->op_fid2);
+                op_data->op_capa2 = NULL;
         }
 
         op_data->op_name = name;

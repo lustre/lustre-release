@@ -332,7 +332,7 @@ do {                                                            \
         if (!OBT((exp)->exp_obd) || !MDP((exp)->exp_obd, op)) { \
                 CERROR("obd_" #op ": dev %s/%d no operation\n", \
                        (exp)->exp_obd->obd_name,                \
-		       (exp)->exp_obd->obd_minor);              \
+                       (exp)->exp_obd->obd_minor);              \
                 RETURN(-EOPNOTSUPP);                            \
         }                                                       \
 } while (0)
@@ -1999,6 +1999,31 @@ static inline int md_renew_capa(struct obd_export *exp, struct obd_capa *ocapa,
         rc = MDP(exp->exp_obd, renew_capa)(exp, ocapa, cb);
         RETURN(rc);
 }
+
+static inline int md_intent_getattr_async(struct obd_export *exp,
+                                          struct md_enqueue_info *minfo,
+                                          struct ldlm_enqueue_info *einfo)
+{
+        int rc;
+        ENTRY;
+        EXP_CHECK_MD_OP(exp, intent_getattr_async);
+        EXP_MD_COUNTER_INCREMENT(exp, intent_getattr_async);
+        rc = MDP(exp->exp_obd, intent_getattr_async)(exp, minfo, einfo);
+        RETURN(rc);
+}
+
+static inline int md_revalidate_lock(struct obd_export *exp,
+                                     struct lookup_intent *it,
+                                     struct lu_fid *fid)
+{
+        int rc;
+        ENTRY;
+        EXP_CHECK_MD_OP(exp, revalidate_lock);
+        EXP_MD_COUNTER_INCREMENT(exp, revalidate_lock);
+        rc = MDP(exp->exp_obd, revalidate_lock)(exp, it, fid);
+        RETURN(rc);
+}
+
 
 /* OBD Metadata Support */
 

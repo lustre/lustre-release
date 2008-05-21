@@ -78,8 +78,6 @@ static struct inode *search_inode_for_lustre(struct super_block *sb,
         RETURN(inode);
 }
 
-extern struct dentry_operations ll_d_ops;
-
 static struct dentry *ll_iget_for_nfs(struct super_block *sb,
                                       struct lu_fid *fid,
                                       umode_t mode)
@@ -109,8 +107,20 @@ static struct dentry *ll_iget_for_nfs(struct super_block *sb,
                 iput(inode);
                 RETURN(ERR_PTR(-ENOMEM));
         }
+
         ll_set_dd(result);
-        result->d_op = &ll_d_ops;
+
+        lock_dentry(result);
+        if (unlikely(result->d_op == &ll_init_d_ops)) {
+                result->d_op = &ll_d_ops;
+                unlock_dentry(result);
+                smp_wmb();
+                ll_d_wakeup(result);
+        } else {
+                result->d_op = &ll_d_ops;
+                unlock_dentry(result);
+        }
+
         RETURN(result);
 }
 

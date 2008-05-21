@@ -1205,8 +1205,9 @@ diff -rup RH_2_6_9_55.orig/fs/stat.c RH_2_6_9_55/fs/stat.c
 	int error;
 +	intent_init(&nd.intent, IT_GETATTR);
 
-	error = user_path_walk(name, &nd);
-	if (!error) {
+-	error = user_path_walk(name, &nd);
++	error = user_path_walk_it(name, &nd);
+ 	if (!error) {
 -		error = vfs_getattr64(nd.mnt, nd.dentry, stat);
 +		error = vfs_getattr64_it(nd.mnt, nd.dentry, &nd.intent, stat);
 		path_release(&nd);
@@ -1218,8 +1219,9 @@ diff -rup RH_2_6_9_55.orig/fs/stat.c RH_2_6_9_55/fs/stat.c
 	int error;
 +	intent_init(&nd.intent, IT_GETATTR);
 
-	error = user_path_walk_link(name, &nd);
-	if (!error) {
+-	error = user_path_walk_link(name, &nd);
++	error = user_path_walk_link_it(name, &nd);
+ 	if (!error) {
 -		error = vfs_getattr64(nd.mnt, nd.dentry, stat);
 +		error = vfs_getattr64_it(nd.mnt, nd.dentry, &nd.intent, stat);
 		path_release(&nd);

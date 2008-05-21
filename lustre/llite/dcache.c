@@ -120,11 +120,21 @@ void ll_set_dd(struct dentry *de)
         CDEBUG(D_DENTRY, "ldd on dentry %.*s (%p) parent %p inode %p refc %d\n",
                de->d_name.len, de->d_name.name, de, de->d_parent, de->d_inode,
                atomic_read(&de->d_count));
-        lock_kernel();
+
         if (de->d_fsdata == NULL) {
-                OBD_ALLOC(de->d_fsdata, sizeof(struct ll_dentry_data));
+                struct ll_dentry_data *lld;
+
+                OBD_ALLOC_PTR(lld);
+                if (likely(lld != NULL)) {
+                        cfs_waitq_init(&lld->lld_waitq);
+                        lock_dentry(de);
+                        if (likely(de->d_fsdata == NULL))
+                                de->d_fsdata = lld;
+                        else
+                                OBD_FREE_PTR(lld);
+                        unlock_dentry(de);
+                }
         }
-        unlock_kernel();
 
         EXIT;
 }
@@ -332,12 +342,12 @@ void ll_frob_intent(struct lookup_intent **itp, struct lookup_intent *deft)
 int ll_revalidate_it(struct dentry *de, int lookup_flags,
                      struct lookup_intent *it)
 {
-        int rc;
         struct md_op_data *op_data;
         struct ptlrpc_request *req = NULL;
         struct lookup_intent lookup_it = { .it_op = IT_LOOKUP };
         struct obd_export *exp;
         struct inode *parent;
+        int rc, first = 0;
 
         ENTRY;
         CDEBUG(D_VFSTRACE, "VFS Op:name=%s,intent=%s\n", de->d_name.name,
@@ -359,7 +369,7 @@ int ll_revalidate_it(struct dentry *de, int lookup_flags,
 
                 rc = ll_have_md_lock(de->d_parent->d_inode,
                                      MDS_INODELOCK_UPDATE);
-                RETURN(rc);
+                GOTO(out_sa, rc);
         }
 
         exp = ll_i2mdexp(de->d_inode);
@@ -367,12 +377,12 @@ int ll_revalidate_it(struct dentry *de, int lookup_flags,
         /* Never execute intents for mount points.
          * Attributes will be fixed up in ll_inode_revalidate_it */
         if (d_mountpoint(de))
-                RETURN(1);
+                GOTO(out_sa, rc = 1);
 
         /* Root of the lustre tree. Always valid.
          * Attributes will be fixed up in ll_inode_revalidate_it */
         if (de == de->d_sb->s_root)
-                RETURN(1);
+                GOTO(out_sa, rc = 1);
 
         OBD_FAIL_TIMEOUT(OBD_FAIL_MDC_REVALIDATE_PAUSE, 5);
         ll_frob_intent(&it, &lookup_it);
@@ -434,6 +444,9 @@ int ll_revalidate_it(struct dentry *de, int lookup_flags,
                 }
         }
 
+        if (it->it_op == IT_GETATTR)
+                first = ll_statahead_enter(de->d_parent->d_inode, &de, 0);
+
 do_lock:
         it->it_create_mode &= ~current->fs->umask;
         it->it_flags |= O_CHECK_STALE;
@@ -442,6 +455,9 @@ do_lock:
                             &req, ll_md_blocking_ast, 0);
         it->it_flags &= ~O_CHECK_STALE;
         ll_finish_md_op_data(op_data);
+        if (it->it_op == IT_GETATTR && !first)
+                ll_statahead_exit(de, rc);
+
         /* If req is NULL, then md_intent_lock only tried to do a lock match;
          * if all was well, it will return 1 if it found locks, 0 otherwise. */
         if (req == NULL && rc >= 0) {
@@ -564,6 +580,19 @@ do_lookup:
         }
         ll_finish_md_op_data(op_data);
         GOTO(out, rc = 0);
+
+out_sa:
+        /*
+         * For rc == 1 case, should not return directly to prevent losing
+         * statahead windows; for rc == 0 case, the "lookup" will be done later.
+         */
+        if (it && it->it_op == IT_GETATTR && rc == 1) {
+                first = ll_statahead_enter(de->d_parent->d_inode, &de, 0);
+                if (!first)
+                        ll_statahead_exit(de, rc);
+        }
+
+        return rc;
 }
 
 /*static*/ void ll_pin(struct dentry *de, struct vfsmount *mnt, int flag)
@@ -746,4 +775,46 @@ struct dentry_operations ll_d_ops = {
         .d_pin = ll_pin,
         .d_unpin = ll_unpin,
 #endif
+};
+
+static int ll_fini_revalidate_nd(struct dentry *dentry, struct nameidata *nd)
+{
+        ENTRY;
+        /* need lookup */
+        RETURN(0);
+}
+
+struct dentry_operations ll_fini_d_ops = {
+        .d_revalidate = ll_fini_revalidate_nd,
+        .d_release = ll_release,
+};
+
+/*
+ * It is for the following race condition:
+ * When someone (maybe statahead thread) adds the dentry to the dentry hash
+ * table, the dentry's "d_op" maybe NULL, at the same time, another (maybe
+ * "ls -l") process finds such dentry by "do_lookup()" without "do_revalidate()"
+ * called. It causes statahead window lost, and maybe other issues. --Fan Yong
+ */
+static int ll_init_revalidate_nd(struct dentry *dentry, struct nameidata *nd)
+{
+        struct l_wait_info lwi = { 0 };
+        struct ll_dentry_data *lld;
+        ENTRY;
+
+        ll_set_dd(dentry);
+        lld = ll_d2d(dentry);
+        if (unlikely(lld == NULL))
+                RETURN(-ENOMEM);
+
+        l_wait_event(lld->lld_waitq, dentry->d_op != &ll_init_d_ops, &lwi);
+        if (likely(dentry->d_op == &ll_d_ops))
+                RETURN(ll_revalidate_nd(dentry, nd));
+        else
+                RETURN(dentry->d_op == &ll_fini_d_ops ? 0 : -EINVAL);
+}
+
+struct dentry_operations ll_init_d_ops = {
+        .d_revalidate = ll_init_revalidate_nd,
+        .d_release = ll_release,
 };

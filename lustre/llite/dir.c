@@ -27,7 +27,6 @@
  */
 
 #include <linux/fs.h>
-#include <linux/ext2_fs.h>
 #include <linux/pagemap.h>
 #include <linux/mm.h>
 #include <linux/version.h>
@@ -144,7 +143,7 @@ static int ll_dir_readpage(struct file *file, struct page *page)
         int rc;
         ENTRY;
 
-        hash = hash_x_index(page->index);
+        hash = (__u64)hash_x_index(page->index);
         CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu/%u(%p) off %lu\n",
                inode->i_ino, inode->i_generation, inode, (unsigned long)hash);
 
@@ -175,32 +174,33 @@ struct address_space_operations ll_dir_aops = {
         .readpage  = ll_dir_readpage,
 };
 
-static inline unsigned long dir_pages(struct inode *inode)
-{
-        return (i_size_read(inode) + CFS_PAGE_SIZE - 1) >> CFS_PAGE_SHIFT;
-}
-
-static inline unsigned ll_chunk_size(struct inode *inode)
-{
-        return inode->i_sb->s_blocksize;
-}
-
 static void ll_check_page(struct inode *dir, struct page *page)
 {
         /* XXX: check page format later */
         SetPageChecked(page);
 }
 
-static inline void ll_put_page(struct page *page)
+static void ll_release_page(struct page *page, __u64 hash,
+                            __u64 start, __u64 end)
 {
         kunmap(page);
+        lock_page(page);
+        if (likely(page->mapping != NULL)) {
+                ll_truncate_complete_page(page);
+                unlock_page(page);
+        } else {
+                unlock_page(page);
+                CWARN("NULL mapping page %p, truncated by others: "
+                      "hash(%#llx) | start(%#llx) | end(%#llx)\n",
+                      page, hash, start, end);
+        }
         page_cache_release(page);
 }
 
 /*
  * Find, kmap and return page that contains given hash.
  */
-static struct page *ll_dir_page_locate(struct inode *dir, unsigned long hash,
+static struct page *ll_dir_page_locate(struct inode *dir, __u64 hash,
                                        __u64 *start, __u64 *end)
 {
         struct address_space *mapping = dir->i_mapping;
@@ -209,17 +209,17 @@ static struct page *ll_dir_page_locate(struct inode *dir, unsigned long hash,
          * radix_tree_gang_lookup() can be used to find a page with starting
          * hash _smaller_ than one we are looking for.
          */
-        unsigned long offset = hash_x_index(hash);
+        unsigned long offset = hash_x_index((__u32)hash);
         struct page *page;
         int found;
 
         TREE_READ_LOCK_IRQ(mapping);
-	found = radix_tree_gang_lookup(&mapping->page_tree,
+        found = radix_tree_gang_lookup(&mapping->page_tree,
                                        (void **)&page, offset, 1);
-	if (found > 0) {
+        if (found > 0) {
                 struct lu_dirpage *dp;
 
-		page_cache_get(page);
+                page_cache_get(page);
                 TREE_READ_UNLOCK_IRQ(mapping);
                 /*
                  * In contrast to find_lock_page() we are sure that directory
@@ -236,11 +236,7 @@ static struct page *ll_dir_page_locate(struct inode *dir, unsigned long hash,
                         *end   = le64_to_cpu(dp->ldp_hash_end);
                         LASSERT(*start <= hash);
                         if (hash > *end || (*end != *start && hash == *end)) {
-                                kunmap(page);
-                                lock_page(page);
-                                ll_truncate_complete_page(page);
-                                unlock_page(page);
-                                page_cache_release(page);
+                                ll_release_page(page, hash, *start, *end);
                                 page = NULL;
                         }
                 } else {
@@ -248,15 +244,15 @@ static struct page *ll_dir_page_locate(struct inode *dir, unsigned long hash,
                         page = ERR_PTR(-EIO);
                 }
 
-	} else {
+        } else {
                 TREE_READ_UNLOCK_IRQ(mapping);
                 page = NULL;
         }
         return page;
 }
 
-static struct page *ll_get_dir_page(struct inode *dir, __u64 hash, int exact,
-                                    struct ll_dir_chain *chain)
+struct page *ll_get_dir_page(struct inode *dir, __u64 hash, int exact,
+                             struct ll_dir_chain *chain)
 {
         ldlm_policy_data_t policy = {.l_inodebits = {MDS_INODELOCK_UPDATE} };
         struct address_space *mapping = dir->i_mapping;
@@ -278,7 +274,7 @@ static struct page *ll_get_dir_page(struct inode *dir, __u64 hash, int exact,
                 struct ptlrpc_request *request;
                 struct md_op_data *op_data;
 
-                op_data = ll_prep_md_op_data(NULL, dir, NULL, NULL, 0, 0, 
+                op_data = ll_prep_md_op_data(NULL, dir, NULL, NULL, 0, 0,
                                              LUSTRE_OPC_ANY, NULL);
                 if (IS_ERR(op_data))
                         return (void *)op_data;
@@ -328,17 +324,15 @@ static struct page *ll_get_dir_page(struct inode *dir, __u64 hash, int exact,
                          * entries with smaller hash values. Stale page should
                          * be invalidated, and new one fetched.
                          */
-                        CWARN("Stale readpage page %p: %#lx != %#lx\n", page,
-                              (unsigned long)hash, (unsigned long)start);
-                        lock_page(page);
-                        ll_truncate_complete_page(page);
-                        unlock_page(page);
-                        page_cache_release(page);
-                } else
+                        CWARN("Stale readpage page %p: %#llx != %#llx\n",
+                              page, hash, start);
+                        ll_release_page(page, hash, start, end);
+                } else {
                         GOTO(hash_collision, page);
+                }
         }
 
-        page = read_cache_page(mapping, hash_x_index(hash),
+        page = read_cache_page(mapping, hash_x_index((__u32)hash),
                                (filler_t*)mapping->a_ops->readpage, NULL);
         if (IS_ERR(page))
                 GOTO(out_unlock, page);
@@ -411,9 +405,9 @@ int ll_readdir(struct file *filp, void *cookie, filldir_t filldir)
                 struct lu_dirent  *ent;
 
                 if (!IS_ERR(page)) {
-                        /* 
+                        /*
                          * If page is empty (end of directoryis reached),
-                         * use this value. 
+                         * use this value.
                          */
                         __u64 hash = DIR_END_OFF;
                         __u64 next;
@@ -610,8 +604,8 @@ end:
         return rc;
 }
 
-int ll_dir_getstripe(struct inode *inode, struct lov_mds_md **lmmp, 
-                     int *lmm_size, struct ptlrpc_request **request) 
+int ll_dir_getstripe(struct inode *inode, struct lov_mds_md **lmmp,
+                     int *lmm_size, struct ptlrpc_request **request)
 {
         struct ll_sb_info *sbi = ll_i2sbi(inode);
         struct mdt_body   *body;
@@ -619,7 +613,7 @@ int ll_dir_getstripe(struct inode *inode, struct lov_mds_md **lmmp,
         struct ptlrpc_request *req = NULL;
         int rc, lmmsize;
         struct obd_capa *oc;
-        
+
         rc = ll_get_max_mdsize(sbi, &lmmsize);
         if (rc)
                 RETURN(rc);
@@ -768,7 +762,7 @@ static int ll_dir_ioctl(struct inode *inode, struct file *file,
                         if (IS_ERR(filename))
                                 RETURN(PTR_ERR(filename));
 
-                        rc = ll_lov_getstripe_ea_info(inode, filename, &lmm, 
+                        rc = ll_lov_getstripe_ea_info(inode, filename, &lmm,
                                                       &lmmsize, &request);
                 } else {
                         rc = ll_dir_getstripe(inode, &lmm, &lmmsize, &request);
@@ -783,7 +777,7 @@ static int ll_dir_ioctl(struct inode *inode, struct file *file,
                 }
 
                 if (rc < 0) {
-                        if (rc == -ENODATA && (cmd == IOC_MDC_GETFILEINFO || 
+                        if (rc == -ENODATA && (cmd == IOC_MDC_GETFILEINFO ||
                                                cmd == LL_IOC_MDC_GETINFO))
                                 GOTO(skip_lmm, rc = 0);
                         else

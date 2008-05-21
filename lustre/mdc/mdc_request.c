@@ -136,11 +136,11 @@ int mdc_getstatus(struct obd_export *exp, struct lu_fid *rootfid,
 /*
  * This function now is known to always saying that it will receive 4 buffers
  * from server. Even for cases when acl_size and md_size is zero, RPC header
- * willcontain 4 fields and RPC itself will contain zero size fields. This is
+ * will contain 4 fields and RPC itself will contain zero size fields. This is
  * because mdt_getattr*() _always_ returns 4 fields, but if acl is not needed
  * and thus zero, it shirinks it, making zero size. The same story about
  * md_size. And this is course of problem when client waits for smaller number
- * of fields. This issue will be fixed later when client gets awar of RPC
+ * of fields. This issue will be fixed later when client gets aware of RPC
  * layouts.  --umka
  */
 static int mdc_getattr_common(struct obd_export *exp,
@@ -1831,8 +1831,10 @@ struct md_ops mdc_md_ops = {
         .m_free_lustre_md   = mdc_free_lustre_md,
         .m_set_open_replay_data = mdc_set_open_replay_data,
         .m_clear_open_replay_data = mdc_clear_open_replay_data,
+        .m_renew_capa       = mdc_renew_capa,
         .m_get_remote_perm  = mdc_get_remote_perm,
-        .m_renew_capa       = mdc_renew_capa
+        .m_intent_getattr_async = mdc_intent_getattr_async,
+        .m_revalidate_lock      = mdc_revalidate_lock
 };
 
 extern quota_interface_t mdc_quota_interface;
