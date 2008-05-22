@@ -1,5 +1,4 @@
 subdir-m += lnet
 subdir-m += lustre
-subdir-m += lustre-iokit
 
 @INCLUDE_RULES@
