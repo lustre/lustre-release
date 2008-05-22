@@ -24,3 +24,4 @@ ext3-mmp-2.6-rhel4.patch
 ext3-fiemap-2.6-sles10.patch
 ext3-external-journal-2.6.9.patch
 ext3-max-dir-size.patch
+ext3-print-inum-in-htree-warning.patch
