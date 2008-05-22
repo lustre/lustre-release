@@ -1639,9 +1639,9 @@ start_writeback() {
 	# in 2.6, restore /proc/sys/vm/dirty_writeback_centisecs,
 	# dirty_ratio, dirty_background_ratio
 	if [ -f /proc/sys/vm/dirty_writeback_centisecs ]; then
-		echo $WRITEBACK_SAVE > /proc/sys/vm/dirty_writeback_centisecs
-		echo $BG_DIRTY_RATIO_SAVE > /proc/sys/vm/dirty_background_ratio
-		echo $DIRTY_RATIO_SAVE > /proc/sys/vm/dirty_ratio
+		sysctl -w vm.dirty_writeback_centisecs=$WRITEBACK_SAVE
+		sysctl -w vm.dirty_background_ratio=$BG_DIRTY_RATIO_SAVE
+		sysctl -w vm.dirty_ratio=$DIRTY_RATIO_SAVE
 	else
 		# if file not here, we are a 2.4 kernel
 		kill -CONT `pidof kupdated`
@@ -1654,14 +1654,14 @@ stop_writeback() {
 	trap start_writeback EXIT
 	# in 2.6, save and 0 /proc/sys/vm/dirty_writeback_centisecs
 	if [ -f /proc/sys/vm/dirty_writeback_centisecs ]; then
-		WRITEBACK_SAVE=`cat /proc/sys/vm/dirty_writeback_centisecs`
-		echo 0 > /proc/sys/vm/dirty_writeback_centisecs
+		WRITEBACK_SAVE=`sysctl -n vm.dirty_writeback_centisecs`
+		sysctl -w vm.dirty_writeback_centisecs=0
 		# save and increase /proc/sys/vm/dirty_ratio
-		DIRTY_RATIO_SAVE=`cat /proc/sys/vm/dirty_ratio`
-		echo $MAX_DIRTY_RATIO > /proc/sys/vm/dirty_ratio
+		DIRTY_RATIO_SAVE=`sysctl -n vm.dirty_ratio`
+		sysctl -w vm.dirty_ratio=$MAX_DIRTY_RATIO
 		# save and increase /proc/sys/vm/dirty_background_ratio
-		BG_DIRTY_RATIO_SAVE=`cat /proc/sys/vm/dirty_background_ratio`
-		echo $MAX_BG_DIRTY_RATIO > /proc/sys/vm/dirty_background_ratio
+		BG_DIRTY_RATIO_SAVE=`sysctl -n vm.dirty_background_ratio`
+		sysctl -w vm.dirty_background_ratio=$MAX_BG_DIRTY_RATIO
 	else
 		# if file not here, we are a 2.4 kernel
 		kill -STOP `pidof kupdated`
@@ -2149,7 +2149,7 @@ test_52c() { # 12848 simulating client < 1.4.7
         chattr =i $DIR/d52c/foo || error
         lsattr $DIR/d52c/foo | egrep -q "^-+i-+ $DIR/d52c/foo" || error
         chattr -i $DIR/d52c/foo || error
-        sysctl -w lustre.fail_loc=0
+        lctl set_param -n fail_loc=0
 
         rm -fr $DIR/d52c || error
 }
@@ -2571,16 +2571,15 @@ test_60c() {
 run_test 60c "unlink file when mds full"
 
 test_60d() {
-	SAVEPRINTK=$(sysctl -n lnet.printk)
+	SAVEPRINTK=$(lctl get_param -n printk)
 
 	# verify "lctl mark" is even working"
 	MESSAGE="test message ID $RANDOM $$"
 	$LCTL mark "$MESSAGE" || error "$LCTL mark failed"
 	dmesg | grep -q "$MESSAGE" || error "didn't find debug marker in log"
 
-	sysctl -w lnet.printk=0 || error "set lnet.printk failed"
-	sysctl -n lnet.printk | grep emerg || error "lnet.printk dropped emerg"
-
+	lctl set_param -n printk=0 || error "set lnet.printk failed"
+	lctl get_param -n printk | grep emerg || error "lnet.printk dropped emerg"
 	MESSAGE="new test message ID $RANDOM $$"
 	# Assume here that libcfs_debug_mark_buffer() uses D_WARNING
 	$LCTL mark "$MESSAGE" || error "$LCTL mark failed"
@@ -3959,8 +3958,8 @@ test_107() {
         sleep 60 &
         SLEEPPID=$!
 
-        file=`cat /proc/sys/kernel/core_pattern`
-        core_pid=`cat /proc/sys/kernel/core_uses_pid`
+        file=`sysctl -n kernel.core_pattern`
+        core_pid=`sysctl -n kernel.core_uses_pid`
         [ $core_pid -eq 1 ] && file=$file.$SLEEPPID
         rm -f $file
         sleep 1
