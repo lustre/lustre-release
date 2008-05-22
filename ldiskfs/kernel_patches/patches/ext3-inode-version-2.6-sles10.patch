@@ -452,3 +452,15 @@ Index: linux-2.6.16.54-0.2.3/fs/ext3/xattr.h
  extern int init_ext3_xattr(void);
  extern void exit_ext3_xattr(void);
  
+Index: linux-2.6.16.54-0.2.3/fs/ext3/ialloc.c
+===================================================================
+--- linux-2.6.16.54-0.2.3.orig/fs/ext3/ialloc.c
++++ linux-2.6.16.54-0.2.3/fs/ext3/ialloc.c
+@@ -750,6 +750,7 @@ got:
+ 	ei->i_dtime = 0;
+ 	ei->i_block_alloc_info = NULL;
+ 	ei->i_block_group = group;
++	ei->i_fs_version = 0;
+ 
+ 	ext3_set_inode_flags(inode);
+ 	if (IS_DIRSYNC(inode))
