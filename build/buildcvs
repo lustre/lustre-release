@@ -5,6 +5,7 @@ lnettag="HEAD"
 libsysiotag="HEAD"
 snmptag="HEAD"
 ldiskfstag="HEAD"
+lustreiokittag="HEAD"
 dmutag=""
 hg_base_url="http://www.wizy.org/mercurial"
 
@@ -249,6 +250,7 @@ cvs_cmd lnet lnet "$lnettag"
 cvs_cmd snmp lustre-snmp "$snmptag"
 cvs_cmd lustre lustre-core "$lustretag"
 cvs_cmd ldiskfs ldiskfs "$ldiskfstag"
+cvs_cmd lustre-iokit lustre-iokit "$lustreiokittag"
 hg_cmd zfs-lustre "$hg_base_url" "$dmutag"
 
 [ -a ldiskfs/build ] || ln -sf ../build ldiskfs/build
