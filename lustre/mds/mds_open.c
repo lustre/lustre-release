@@ -501,7 +501,8 @@ static void reconstruct_open(struct mds_update_record *rec, int offset,
         struct mds_client_data *mcd = med->med_mcd;
         struct mds_obd *mds = mds_req2mds(req);
         struct mds_file_data *mfd;
-        struct obd_device *obd = req->rq_export->exp_obd;
+        struct obd_export *exp = req->rq_export;
+        struct obd_device *obd = exp->exp_obd;
         struct dentry *parent, *dchild;
         struct ldlm_reply *rep;
         struct mds_body *body;
@@ -525,10 +526,30 @@ static void reconstruct_open(struct mds_update_record *rec, int offset,
         }
 
         parent = mds_fid2dentry(mds, rec->ur_fid1, NULL);
-        LASSERT(!IS_ERR(parent));
+        if (IS_ERR(parent)) {
+                rc = PTR_ERR(parent);
+                LCONSOLE_WARN("Parent "LPU64"/%u lookup error %d." 
+                              " Evicting client %s with export %s.\n",
+                              rec->ur_fid1->id, rec->ur_fid1->generation, rc,
+                              obd_uuid2str(&exp->exp_client_uuid),
+                              obd_export_nid2str(exp));
+                mds_export_evict(exp);
+                EXIT;
+                return;
+        }
 
         dchild = ll_lookup_one_len(rec->ur_name, parent, rec->ur_namelen - 1);
-        LASSERT(!IS_ERR(dchild));
+        if (IS_ERR(dchild)) {
+                rc = PTR_ERR(dchild);
+                LCONSOLE_WARN("Child "LPU64"/%u lookup error %d." 
+                              " Evicting client %s with export %s.\n",
+                              rec->ur_fid1->id, rec->ur_fid1->generation, rc,
+                              obd_uuid2str(&exp->exp_client_uuid),
+                              obd_export_nid2str(exp));
+                mds_export_evict(exp);
+                EXIT;
+                return;
+        }
 
         if (!dchild->d_inode)
                 GOTO(out_dput, 0); /* child not present to open */

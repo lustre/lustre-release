@@ -402,8 +402,9 @@ void mds_req_from_mcd(struct ptlrpc_request *req, struct mds_client_data *mcd)
 static void reconstruct_reint_setattr(struct mds_update_record *rec,
                                       int offset, struct ptlrpc_request *req)
 {
-        struct mds_export_data *med = &req->rq_export->exp_mds_data;
-        struct mds_obd *obd = &req->rq_export->exp_obd->u.mds;
+        struct obd_export *exp = req->rq_export;
+        struct mds_export_data *med = &exp->exp_mds_data;
+        struct mds_obd *obd = &exp->exp_obd->u.mds;
         struct dentry *de;
         struct mds_body *body;
 
@@ -411,7 +412,15 @@ static void reconstruct_reint_setattr(struct mds_update_record *rec,
 
         de = mds_fid2dentry(obd, rec->ur_fid1, NULL);
         if (IS_ERR(de)) {
-                LASSERT(PTR_ERR(de) == req->rq_status);
+                int rc;
+                rc = PTR_ERR(de);
+                LCONSOLE_WARN("FID "LPU64"/%u lookup error %d."
+                              " Evicting client %s with export %s.\n",
+                              rec->ur_fid1->id, rec->ur_fid1->generation, rc,
+                              obd_uuid2str(&exp->exp_client_uuid),
+                              obd_export_nid2str(exp));
+                mds_export_evict(exp);
+                EXIT;
                 return;
         }
 
@@ -737,10 +746,12 @@ static int mds_reint_setattr(struct mds_update_record *rec, int offset,
 static void reconstruct_reint_create(struct mds_update_record *rec, int offset,
                                      struct ptlrpc_request *req)
 {
-        struct mds_export_data *med = &req->rq_export->exp_mds_data;
-        struct mds_obd *obd = &req->rq_export->exp_obd->u.mds;
+        struct obd_export *exp = req->rq_export;
+        struct mds_export_data *med = &exp->exp_mds_data;
+        struct mds_obd *obd = &exp->exp_obd->u.mds;
         struct dentry *parent, *child;
         struct mds_body *body;
+        int rc;
 
         mds_req_from_mcd(req, med->med_mcd);
 
@@ -748,9 +759,29 @@ static void reconstruct_reint_create(struct mds_update_record *rec, int offset,
                 return;
 
         parent = mds_fid2dentry(obd, rec->ur_fid1, NULL);
-        LASSERT(!IS_ERR(parent));
+        if (IS_ERR(parent)) {
+                rc = PTR_ERR(parent);
+                LCONSOLE_WARN("Parent "LPU64"/%u lookup error %d." 
+                              " Evicting client %s with export %s.\n",
+                              rec->ur_fid1->id, rec->ur_fid1->generation, rc,
+                              obd_uuid2str(&exp->exp_client_uuid),
+                              obd_export_nid2str(exp));
+                mds_export_evict(exp);
+                EXIT;
+                return;
+        }
         child = ll_lookup_one_len(rec->ur_name, parent, rec->ur_namelen - 1);
-        LASSERT(!IS_ERR(child));
+        if (IS_ERR(child)) {
+                rc = PTR_ERR(child);
+                LCONSOLE_WARN("Child "LPU64"/%u lookup error %d." 
+                              " Evicting client %s with export %s.\n",
+                              rec->ur_fid1->id, rec->ur_fid1->generation, rc,
+                              obd_uuid2str(&exp->exp_client_uuid),
+                              obd_export_nid2str(exp));
+                mds_export_evict(exp);
+                EXIT;
+                return;
+        }       
 
         body = lustre_msg_buf(req->rq_repmsg, offset, sizeof(*body));
         mds_pack_inode2fid(&body->fid1, child->d_inode);

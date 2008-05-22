@@ -75,6 +75,13 @@ Bugzilla   : 15278
 Description: fix build on ppc32
 Details    : compile code with -m64 flag produce wrong object file for ppc32.
 
+Severity   : normal
+Bugzilla   : 15774
+Description: MDS LBUG: ASSERTION(!IS_ERR(dchild))
+Details    : In reconstruct_* functions, LASSERTs on both the data supplied by
+             a client, and the data on disk are dangerous and incorrect. Change
+	     them with client eviction.
+
 -------------------------------------------------------------------------------
 
 

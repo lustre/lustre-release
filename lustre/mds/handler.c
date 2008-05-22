@@ -954,6 +954,8 @@ static int mds_getattr_lock(struct ptlrpc_request *req, int offset,
         }
 #endif
 
+        /* child_lockh() is only set in fixup_handle_for_resent_req() 
+         * if MSG_RESENT is set */
         if (lustre_handle_is_used(child_lockh)) {
                 LASSERT(lustre_msg_get_flags(req->rq_reqmsg) & MSG_RESENT);
                 resent_req = 1;
@@ -987,6 +989,8 @@ static int mds_getattr_lock(struct ptlrpc_request *req, int offset,
                 struct ldlm_resource *res;
                 DEBUG_REQ(D_DLMTRACE, req, "resent, not enqueuing new locks");
                 granted_lock = ldlm_handle2lock(child_lockh);
+                /* lock was granted in fixup_handle_for_resent_req() if 
+                 * MSG_RESENT is set */
                 LASSERTF(granted_lock != NULL, LPU64"/%u lockh "LPX64"\n",
                          body->fid1.id, body->fid1.generation,
                          child_lockh->cookie);
@@ -996,7 +1000,12 @@ static int mds_getattr_lock(struct ptlrpc_request *req, int offset,
                 child_fid.id = res->lr_name.name[0];
                 child_fid.generation = res->lr_name.name[1];
                 dchild = mds_fid2dentry(&obd->u.mds, &child_fid, NULL);
-                LASSERT(!IS_ERR(dchild));
+                if (IS_ERR(dchild)) {
+                        rc = PTR_ERR(dchild);
+                        LCONSOLE_WARN("Child "LPU64"/%u lookup error %d.",
+                                      child_fid.id, child_fid.generation, rc);
+                        GOTO(cleanup, rc);
+                }
                 LDLM_LOCK_PUT(granted_lock);
         }
 

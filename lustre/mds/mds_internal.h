@@ -41,6 +41,12 @@ static inline struct mds_obd *mds_req2mds(struct ptlrpc_request *req)
         return &req->rq_export->exp_obd->u.mds;
 }
 
+static inline void mds_export_evict(struct obd_export *exp)
+{
+        class_fail_export(exp);
+        class_export_put(exp);
+}
+
 #ifdef __KERNEL__
 /* Open counts for files.  No longer atomic, must hold inode->i_sem */
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0))
