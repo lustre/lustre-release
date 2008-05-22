@@ -772,7 +772,7 @@ static int __init lvfs_linux_init(void)
 {
         ENTRY;
 #if defined (CONFIG_DEBUG_MEMORY) && defined(__KERNEL__)
-        lvfs_memdbg_init(PAGE_SIZE);
+        lvfs_memdbg_init(CFS_PAGE_SIZE);
 #endif
         RETURN(0);
 }

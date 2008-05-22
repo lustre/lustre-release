@@ -100,11 +100,11 @@
 #define MDT_MIN_THREADS 2UL
 #define MDT_MAX_THREADS 512UL
 #define MDT_NUM_THREADS max(min_t(unsigned long, MDT_MAX_THREADS, \
-                                  num_physpages >> (25 - PAGE_SHIFT)), 2UL)
+                                  num_physpages >> (25 - CFS_PAGE_SHIFT)), 2UL)
 #define FLD_NUM_THREADS max(min_t(unsigned long, MDT_MAX_THREADS, \
-                                  num_physpages >> (25 - PAGE_SHIFT)), 2UL)
+                                  num_physpages >> (25 - CFS_PAGE_SHIFT)), 2UL)
 #define SEQ_NUM_THREADS max(min_t(unsigned long, MDT_MAX_THREADS, \
-                                  num_physpages >> (25 - PAGE_SHIFT)), 2UL)
+                                  num_physpages >> (25 - CFS_PAGE_SHIFT)), 2UL)
 
 /* Absolute limits */
 #define MDS_THREADS_MIN 2

@@ -490,7 +490,7 @@ static inline int ldlm_req_handles_avail(int req_size, int off)
 {
         int avail;
 
-        avail = min_t(int, LDLM_MAXREQSIZE, PAGE_SIZE - 512) - req_size;
+        avail = min_t(int, LDLM_MAXREQSIZE, CFS_PAGE_SIZE - 512) - req_size;
         avail /= sizeof(struct lustre_handle);
         avail += LDLM_LOCKREQ_HANDLES - off;
 

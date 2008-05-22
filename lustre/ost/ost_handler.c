@@ -444,7 +444,7 @@ static int get_per_page_niobufs(struct obd_ioobj *ioo, int nioo,
                         do {
                                 obd_off  poff = off & ~CFS_PAGE_MASK;
                                 int      pnob = (poff + nob > CFS_PAGE_SIZE) ?
-                                                PAGE_SIZE - poff : nob;
+                                                CFS_PAGE_SIZE - poff : nob;
 
                                 LASSERT(page < npages);
                                 pp_rnb[page].len = pnob;

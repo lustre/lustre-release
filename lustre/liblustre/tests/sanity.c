@@ -878,14 +878,14 @@ static int pages_io(int xfer, loff_t pos)
 
         /* create sample data */
         for (i = 0, buf = buf_alloc; i < _npages; i++) {
-                for (j = 0; j < PAGE_SIZE/sizeof(int); j++, buf++) {
+                for (j = 0; j < CFS_PAGE_SIZE/sizeof(int); j++, buf++) {
                         *buf = rand();
                 }
         }
 
         /* compute checksum */
         for (i = 0, buf = buf_alloc; i < _npages; i++) {
-                for (j = 0; j < PAGE_SIZE/sizeof(int); j++, buf++) {
+                for (j = 0; j < CFS_PAGE_SIZE/sizeof(int); j++, buf++) {
                         check_sum[i] += *buf;
                 }
         }
@@ -903,9 +903,9 @@ static int pages_io(int xfer, loff_t pos)
         }
         gettimeofday(&tw1, NULL);
         for (i = 0, buf = buf_alloc; i < _npages;
-             i += xfer, buf += xfer * PAGE_SIZE / sizeof(int)) {
-                rc = write(fd, buf, PAGE_SIZE * xfer);
-                if (rc != PAGE_SIZE * xfer) {
+             i += xfer, buf += xfer * CFS_PAGE_SIZE / sizeof(int)) {
+                rc = write(fd, buf, CFS_PAGE_SIZE * xfer);
+                if (rc != CFS_PAGE_SIZE * xfer) {
                         printf("write error (i %d, rc %d): %s\n", i, rc,
                                strerror(errno));
                         return(1);
@@ -923,9 +923,9 @@ static int pages_io(int xfer, loff_t pos)
         }
         gettimeofday(&tr1, NULL);
         for (i = 0, buf = buf_alloc; i < _npages;
-             i += xfer, buf += xfer * PAGE_SIZE / sizeof(int)) {
-                rc = read(fd, buf, PAGE_SIZE * xfer);
-                if (rc != PAGE_SIZE * xfer) {
+             i += xfer, buf += xfer * CFS_PAGE_SIZE / sizeof(int)) {
+                rc = read(fd, buf, CFS_PAGE_SIZE * xfer);
+                if (rc != CFS_PAGE_SIZE * xfer) {
                         printf("read error (i %d, rc %d): %s\n", i, rc,
                                strerror(errno));
                         return(1);
@@ -936,7 +936,7 @@ static int pages_io(int xfer, loff_t pos)
         /* compute checksum */
         for (i = 0, buf = buf_alloc; i < _npages; i++) {
                 int sum = 0;
-                for (j = 0; j < PAGE_SIZE/sizeof(int); j++, buf++) {
+                for (j = 0; j < CFS_PAGE_SIZE/sizeof(int); j++, buf++) {
                         sum += *buf;
                 }
                 if (sum != check_sum[i]) {
@@ -951,8 +951,8 @@ static int pages_io(int xfer, loff_t pos)
         tw = (tw2.tv_sec - tw1.tv_sec) * 1000000 + (tw2.tv_usec - tw1.tv_usec);
         tr = (tr2.tv_sec - tr1.tv_sec) * 1000000 + (tr2.tv_usec - tr1.tv_usec);
         printf(" (R:%.3fM/s, W:%.3fM/s)\n",
-                (_npages * PAGE_SIZE) / (tw / 1000000.0) / (1024 * 1024),
-                (_npages * PAGE_SIZE) / (tr / 1000000.0) / (1024 * 1024));
+                (_npages * CFS_PAGE_SIZE) / (tw / 1000000.0) / (1024 * 1024),
+                (_npages * CFS_PAGE_SIZE) / (tr / 1000000.0) / (1024 * 1024));
 
         if (data_error)
                 return 1;
@@ -1467,7 +1467,7 @@ int main(int argc, char * const argv[])
 
         __liblustre_setup_();
 
-        buf_size = _npages * PAGE_SIZE;
+        buf_size = _npages * CFS_PAGE_SIZE;
         if (opt_verbose)
                 printf("allocating %d bytes buffer\n", buf_size);
         buf_alloc = calloc(1, buf_size);

@@ -74,11 +74,11 @@ struct hlist_head *init_capa_hash(void)
         struct hlist_head *hash;
         int nr_hash, i;
 
-        OBD_ALLOC(hash, PAGE_SIZE);
+        OBD_ALLOC(hash, CFS_PAGE_SIZE);
         if (!hash)
                 return NULL;
 
-        nr_hash = PAGE_SIZE / sizeof(struct hlist_head);
+        nr_hash = CFS_PAGE_SIZE / sizeof(struct hlist_head);
         LASSERT(nr_hash > NR_CAPAHASH);
 
         for (i = 0; i < NR_CAPAHASH; i++)
@@ -114,7 +114,7 @@ void cleanup_capa_hash(struct hlist_head *hash)
         }
         spin_unlock(&capa_lock);
 
-        OBD_FREE(hash, PAGE_SIZE);
+        OBD_FREE(hash, CFS_PAGE_SIZE);
 }
 
 static inline int const capa_hashfn(struct lu_fid *fid)
@@ -236,7 +236,7 @@ int capa_hmac(__u8 *hmac, struct lustre_capa *capa, __u8 *key)
         int keylen;
         struct scatterlist sl = {
                 .page   = virt_to_page(capa),
-                .offset = (unsigned long)(capa) % PAGE_SIZE,
+                .offset = (unsigned long)(capa) % CFS_PAGE_SIZE,
                 .length = offsetof(struct lustre_capa, lc_hmac),
         };
 
