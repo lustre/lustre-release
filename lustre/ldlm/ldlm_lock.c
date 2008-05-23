@@ -34,6 +34,7 @@
 # include <libcfs/kp30.h>
 #endif
 
+#include <linux/fs.h>
 #include <obd_class.h>
 #include "ldlm_internal.h"
 
@@ -985,6 +986,32 @@ void ldlm_lock_allow_match(struct ldlm_lock *lock)
         lock->l_flags |= LDLM_FL_LVB_READY;
         cfs_waitq_signal(&lock->l_waitq);
         unlock_res_and_lock(lock);
+}
+
+int ldlm_lock_fast_match(struct ldlm_lock *lock, int rw,
+                                loff_t start, loff_t end,
+                                void **cookie)
+{
+        LASSERT(rw == READ || rw == WRITE);
+        /* should LCK_GROUP be handled in a special way? */
+        if (lock && (rw == READ || (lock->l_granted_mode & (LCK_PW|LCK_GROUP))) &&
+            (lock->l_policy_data.l_extent.start <= start) &&
+            (lock->l_policy_data.l_extent.end >= end)) {
+                ldlm_lock_addref_internal(lock, rw == WRITE ? LCK_PW : LCK_PR);
+                *cookie = (void *)lock;
+                return 1; /* avoid using rc for stack relief */
+        }
+        return 0;
+}
+
+void ldlm_lock_fast_release(void *cookie, int rw)
+{
+        struct ldlm_lock *lock = (struct ldlm_lock *)cookie;
+
+        LASSERT(lock != NULL);
+        LASSERT(rw == READ || rw == WRITE);
+        LASSERT(rw == READ || (lock->l_granted_mode & (LCK_PW | LCK_GROUP)));
+        ldlm_lock_decref_internal(lock, rw == WRITE ? LCK_PW : LCK_PR);
 }
 
 /* Can be called in two ways:

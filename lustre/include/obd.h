@@ -959,6 +959,14 @@ struct obd_ops {
                                  struct obd_async_page_ops *ops, void *data,
                                  void **res, int nocache,
                                  struct lustre_handle *lockh);
+        int (*o_reget_short_lock)(struct obd_export *exp,
+                                 struct lov_stripe_md *lsm,
+                                 void **res, int rw,
+                                 loff_t start, loff_t end,
+                                 void **cookie);
+        int (*o_release_short_lock)(struct obd_export *exp,
+                                    struct lov_stripe_md *lsm, loff_t end,
+                                    void *cookie, int rw);
         int (*o_queue_async_io)(struct obd_export *exp,
                                 struct lov_stripe_md *lsm,
                                 struct lov_oinfo *loi, void *cookie,
