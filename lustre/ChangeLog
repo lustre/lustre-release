@@ -118,6 +118,13 @@ Details    : In reconstruct_* functions, LASSERTs on both the data supplied by
 		'tunefs.lustre --param="mdt.quota_type=ug1" $MDTDEV'.
 	 For more information, please refer to bugzilla 13904.
 
+Severity   : normal
+Frequency  : always with o2ib 1.3 and sles10
+Bugzilla   : 15870
+Description: fix build with SLES10 and o2ib v3.
+Details    : sles10 uses diffrent name for Module.symver file but configure
+             assume this file has same name on RHEL/SLES/vanila kernels.
+
 Severity   : critical
 Frequency  : very rare, if additional xattrs are used on kernels >= 2.6.12
 Bugzilla   : 15777
