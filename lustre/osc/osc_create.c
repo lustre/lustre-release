@@ -132,8 +132,14 @@ static int oscc_internal_create(struct osc_creator *oscc)
 
         LASSERT_SPIN_LOCKED(&oscc->oscc_lock);
 
+        if (oscc->oscc_flags & OSCC_FLAG_CREATING ||
+            oscc->oscc_flags & OSCC_FLAG_RECOVERING) {
+                spin_unlock(&oscc->oscc_lock);
+                RETURN(0);
+        }
+
         if (oscc->oscc_grow_count < OST_MAX_PRECREATE &&
-            !(oscc->oscc_flags & (OSCC_FLAG_LOW | OSCC_FLAG_RECOVERING)) &&
+            ((oscc->oscc_flags & OSCC_FLAG_LOW) == 0) &&
             (__s64)(oscc->oscc_last_id - oscc->oscc_next_id) <=
                    (oscc->oscc_grow_count / 4 + 1)) {
                 oscc->oscc_flags |= OSCC_FLAG_LOW;
@@ -143,11 +149,6 @@ static int oscc_internal_create(struct osc_creator *oscc)
         if (oscc->oscc_grow_count > OST_MAX_PRECREATE / 2)
                 oscc->oscc_grow_count = OST_MAX_PRECREATE / 2;
 
-        if (oscc->oscc_flags & OSCC_FLAG_CREATING ||
-            oscc->oscc_flags & OSCC_FLAG_RECOVERING) {
-                spin_unlock(&oscc->oscc_lock);
-                RETURN(0);
-        }
         oscc->oscc_flags |= OSCC_FLAG_CREATING;
         spin_unlock(&oscc->oscc_lock);
 
@@ -322,6 +323,9 @@ int osc_create(struct obd_export *exp, struct obdo *oa,
                         RETURN(0);
                 }
                 oscc->oscc_flags |= OSCC_FLAG_SYNC_IN_PROGRESS;
+                /* seting flag LOW we prevent extra grow precreate size
+                 * and enforce use last assigned size */
+                oscc->oscc_flags |= OSCC_FLAG_LOW;
                 spin_unlock(&oscc->oscc_lock);
                 CDEBUG(D_HA, "%s: oscc recovery started - delete to "LPU64"\n",
                        oscc->oscc_obd->obd_name, oscc->oscc_next_id - 1);

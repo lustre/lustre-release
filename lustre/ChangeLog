@@ -25,6 +25,14 @@ tbd Sun Microsystems, Inc.
 	  For more information, please refer to bugzilla 13904.
 
 Severity   : normal
+Bugzilla   : 14835
+Frequency  : after recovery
+Description: precreate to many object's after del orphan.
+Details    : del orphan st in oscc last_id == next_id and this triger growing
+             count of precreated objects. Set flag LOW to skip increase count
+             of precreated objects.
+
+Severity   : normal
 Bugzilla   : 15139
 Frequency  : rare, on clear nid stats
 Description: ASSERTION(client_stat->nid_exp_ref_count == 0)
