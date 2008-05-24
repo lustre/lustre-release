@@ -34,7 +34,6 @@
 # include <libcfs/kp30.h>
 #endif
 
-#include <linux/fs.h>
 #include <obd_class.h>
 #include "ldlm_internal.h"
 
@@ -992,12 +991,13 @@ int ldlm_lock_fast_match(struct ldlm_lock *lock, int rw,
                                 loff_t start, loff_t end,
                                 void **cookie)
 {
-        LASSERT(rw == READ || rw == WRITE);
+        LASSERT(rw == OBD_BRW_READ || rw == OBD_BRW_WRITE);
         /* should LCK_GROUP be handled in a special way? */
-        if (lock && (rw == READ || (lock->l_granted_mode & (LCK_PW|LCK_GROUP))) &&
+        if (lock && (rw == OBD_BRW_READ ||
+                     (lock->l_granted_mode & (LCK_PW|LCK_GROUP))) &&
             (lock->l_policy_data.l_extent.start <= start) &&
             (lock->l_policy_data.l_extent.end >= end)) {
-                ldlm_lock_addref_internal(lock, rw == WRITE ? LCK_PW : LCK_PR);
+                ldlm_lock_addref_internal(lock, rw == OBD_BRW_WRITE ? LCK_PW : LCK_PR);
                 *cookie = (void *)lock;
                 return 1; /* avoid using rc for stack relief */
         }
@@ -1009,9 +1009,9 @@ void ldlm_lock_fast_release(void *cookie, int rw)
         struct ldlm_lock *lock = (struct ldlm_lock *)cookie;
 
         LASSERT(lock != NULL);
-        LASSERT(rw == READ || rw == WRITE);
-        LASSERT(rw == READ || (lock->l_granted_mode & (LCK_PW | LCK_GROUP)));
-        ldlm_lock_decref_internal(lock, rw == WRITE ? LCK_PW : LCK_PR);
+        LASSERT(rw == OBD_BRW_READ || rw == OBD_BRW_WRITE);
+        LASSERT(rw == OBD_BRW_READ || (lock->l_granted_mode & (LCK_PW | LCK_GROUP)));
+        ldlm_lock_decref_internal(lock, rw == OBD_BRW_WRITE ? LCK_PW : LCK_PR);
 }
 
 /* Can be called in two ways:

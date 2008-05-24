@@ -1179,7 +1179,7 @@ static int ll_file_get_tree_lock_iov(struct ll_lock_tree *tree,
                 if (file->f_flags & O_NONBLOCK)
                         ast_flags |= LDLM_FL_BLOCK_NOWAIT;
                 node = ll_node_from_inode(inode, start, end,
-                                          (rw == WRITE) ? LCK_PW : LCK_PR);
+                                          (rw == OBD_BRW_WRITE) ? LCK_PW : LCK_PR);
                 if (IS_ERR(node)) {
                         rc = PTR_ERR(node);
                         GOTO(out, rc);
@@ -1502,7 +1502,7 @@ repeat:
         }
 
         lock_style = ll_file_get_lock(file, *ppos, end, iov_copy, nrsegs_copy,
-                                      &cookie, &tree, READ);
+                                      &cookie, &tree, OBD_BRW_READ);
         if (lock_style < 0)
                 GOTO(out, retval = lock_style);
 
@@ -1537,7 +1537,7 @@ repeat:
                 if (retval) {
                         if (lock_style != LL_LOCK_STYLE_NOLOCK)
                                 ll_file_put_lock(inode, end, lock_style,
-                                                 cookie, &tree, READ);
+                                                 cookie, &tree, OBD_BRW_READ);
                         goto out;
                 }
         } else {
@@ -1579,7 +1579,7 @@ repeat:
                 retval = generic_file_aio_read(iocb, iov_copy, nrsegs_copy,
                                                *ppos);
 #endif
-                ll_file_put_lock(inode, end, lock_style, cookie, &tree, READ);
+                ll_file_put_lock(inode, end, lock_style, cookie, &tree, OBD_BRW_READ);
         } else {
                 retval = ll_file_lockless_io(file, iov_copy, nrsegs_copy, ppos,
                                              READ, chunk);
@@ -1722,7 +1722,7 @@ repeat:
 
         tree_locked = ll_file_get_tree_lock_iov(&tree, file, iov_copy,
                                                 nrsegs_copy, lock_start,
-                                                lock_end, WRITE);
+                                                lock_end, OBD_BRW_WRITE);
         if (tree_locked < 0)
                 GOTO(out, retval = tree_locked);
 
