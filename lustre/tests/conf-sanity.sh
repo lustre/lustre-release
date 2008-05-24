@@ -1568,5 +1568,14 @@ test_39() { #bug 14413
 }
 run_test 39 "leak_finder recognizes both LUSTRE and LNET malloc messages"
 
+test_40() { # bug 15759
+	start_ost
+	#define OBD_FAIL_TGT_TOOMANY_THREADS     0x706
+	do_facet mds "sysctl -w lustre.fail_loc=0x80000706"
+	start_mds
+	cleanup
+}
+run_test 40 "race during service thread startup"
+
 equals_msg `basename $0`: test complete
 [ -f "$TESTSUITELOG" ] && cat $TESTSUITELOG || true
