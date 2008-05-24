@@ -530,6 +530,7 @@ struct ptlrpc_service {
         int              srv_watchdog_factor;   /* soft watchdog timeout mutiplier */
         unsigned         srv_cpu_affinity:1;    /* bind threads to CPUs */
         unsigned         srv_at_check:1;        /* check early replies */
+        cfs_time_t       srv_at_checktime;      /* debug */
 
         __u32            srv_req_portal;
         __u32            srv_rep_portal;
