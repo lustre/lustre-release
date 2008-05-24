@@ -54,8 +54,9 @@ int ldlm_cancel_lru_estimate(struct ldlm_namespace *ns, int count, int max,
 int ldlm_resource_putref_locked(struct ldlm_resource *res);
 void ldlm_resource_insert_lock_after(struct ldlm_lock *original,
                                      struct ldlm_lock *new);
-int ldlm_namespace_free_prior(struct ldlm_namespace *ns);
-int ldlm_namespace_free_post(struct ldlm_namespace *ns, int force);
+void ldlm_namespace_free_prior(struct ldlm_namespace *ns,
+                               struct obd_import *imp, int force);
+void ldlm_namespace_free_post(struct ldlm_namespace *ns);
 /* ldlm_lock.c */
 
 /* Number of blocking/completion callbacks that will be sent in

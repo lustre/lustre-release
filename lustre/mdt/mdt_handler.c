@@ -3778,7 +3778,7 @@ static void mdt_fini(const struct lu_env *env, struct mdt_device *m)
         m->mdt_identity_cache = NULL;
 
         if (m->mdt_namespace != NULL) {
-                ldlm_namespace_free(m->mdt_namespace, d->ld_obd->obd_force);
+                ldlm_namespace_free(m->mdt_namespace, NULL, d->ld_obd->obd_force);
                 d->ld_obd->obd_namespace = m->mdt_namespace = NULL;
         }
 
@@ -4035,7 +4035,7 @@ err_capa:
 err_free_ns:
         upcall_cache_cleanup(m->mdt_identity_cache);
         m->mdt_identity_cache = NULL;
-        ldlm_namespace_free(m->mdt_namespace, 0);
+        ldlm_namespace_free(m->mdt_namespace, NULL, 0);
         obd->obd_namespace = m->mdt_namespace = NULL;
 err_fini_seq:
         mdt_seq_fini(env, m);

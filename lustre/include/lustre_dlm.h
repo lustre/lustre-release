@@ -620,7 +620,7 @@ int ldlm_del_waiting_lock(struct ldlm_lock *lock);
 int ldlm_refresh_waiting_lock(struct ldlm_lock *lock);
 void ldlm_revoke_export_locks(struct obd_export *exp);
 int ldlm_get_ref(void);
-void ldlm_put_ref(int force);
+void ldlm_put_ref(void);
 
 /* ldlm_lock.c */
 ldlm_processing_policy ldlm_get_processing_policy(struct ldlm_resource *res);
@@ -703,7 +703,8 @@ void ldlm_unlink_lock_skiplist(struct ldlm_lock *req);
 struct ldlm_namespace *ldlm_namespace_new(char *name, ldlm_side_t client, 
                                           ldlm_appetite_t apt);
 int ldlm_namespace_cleanup(struct ldlm_namespace *ns, int flags);
-int ldlm_namespace_free(struct ldlm_namespace *ns, int force);
+void ldlm_namespace_free(struct ldlm_namespace *ns, 
+                         struct obd_import *imp, int force);
 void ldlm_namespace_move(struct ldlm_namespace *ns, ldlm_side_t client);
 struct ldlm_namespace *ldlm_namespace_first(ldlm_side_t client);
 void ldlm_namespace_get(struct ldlm_namespace *ns);

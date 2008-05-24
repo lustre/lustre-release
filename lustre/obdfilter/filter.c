@@ -2402,7 +2402,7 @@ static int filter_cleanup(struct obd_device *obd)
         target_stop_recovery_thread(obd);
         target_cleanup_recovery(obd);
 
-        ldlm_namespace_free(obd->obd_namespace, obd->obd_force);
+        ldlm_namespace_free(obd->obd_namespace, NULL, obd->obd_force);
 
         sptlrpc_rule_set_free(&filter->fo_sptlrpc_rset);
 

@@ -1969,7 +1969,7 @@ static int ldlm_bl_thread_main(void *arg)
 #endif
 
 static int ldlm_setup(void);
-static int ldlm_cleanup(int force);
+static int ldlm_cleanup(void);
 
 int ldlm_get_ref(void)
 {
@@ -1986,12 +1986,12 @@ int ldlm_get_ref(void)
         RETURN(rc);
 }
 
-void ldlm_put_ref(int force)
+void ldlm_put_ref(void)
 {
         ENTRY;
         mutex_down(&ldlm_ref_sem);
         if (ldlm_refcount == 1) {
-                int rc = ldlm_cleanup(force);
+                int rc = ldlm_cleanup();
                 if (rc)
                         CERROR("ldlm_cleanup failed: %d\n", rc);
                 else
@@ -2139,7 +2139,7 @@ static int ldlm_setup(void)
         return rc;
 }
 
-static int ldlm_cleanup(int force)
+static int ldlm_cleanup(void)
 {
 #ifdef __KERNEL__
         struct ldlm_bl_pool *blp = ldlm_state->ldlm_bl_pool;

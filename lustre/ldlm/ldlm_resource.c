@@ -372,7 +372,7 @@ out_hash:
 out_ns:
         OBD_FREE_PTR(ns);
 out_ref:
-        ldlm_put_ref(0);
+        ldlm_put_ref();
         RETURN(NULL);
 }
 
@@ -501,12 +501,84 @@ int ldlm_namespace_cleanup(struct ldlm_namespace *ns, int flags)
         return ELDLM_OK;
 }
 
-/* Cleanup, but also free, the namespace */
-int ldlm_namespace_free_prior(struct ldlm_namespace *ns)
+static int __ldlm_namespace_free(struct ldlm_namespace *ns, int force)
 {
         ENTRY;
-        if (!ns)
-                RETURN(ELDLM_OK);
+
+        /* At shutdown time, don't call the cancellation callback */
+        ldlm_namespace_cleanup(ns, force ? LDLM_FL_LOCAL_ONLY : 0);
+
+        if (ns->ns_refcount > 0) {
+                struct l_wait_info lwi = LWI_INTR(LWI_ON_SIGNAL_NOOP, NULL);
+                int rc;
+                CDEBUG(D_DLMTRACE,
+                       "dlm namespace %s free waiting on refcount %d\n",
+                       ns->ns_name, ns->ns_refcount);
+force_wait:
+                if (force)
+                        lwi = LWI_TIMEOUT(obd_timeout * HZ / 4, NULL, NULL);
+
+                rc = l_wait_event(ns->ns_waitq,
+                                  ns->ns_refcount == 0, &lwi);
+
+                /* Forced cleanups should be able to reclaim all references,
+                 * so it's safe to wait forever... we can't leak locks... */
+                if (force && rc == -ETIMEDOUT) {
+                        LCONSOLE_ERROR("Forced cleanup waiting for %s "
+                                       "namespace with %d resources in use, "
+                                       "(rc=%d)\n", ns->ns_name,
+                                       ns->ns_refcount, rc);
+                        GOTO(force_wait, rc);
+                }
+
+                if (ns->ns_refcount) {
+                        LCONSOLE_ERROR("Cleanup waiting for %s namespace "
+                                       "with %d resources in use, (rc=%d)\n",
+                                       ns->ns_name,
+                                       ns->ns_refcount, rc);
+                        RETURN(ELDLM_NAMESPACE_EXISTS);
+                }
+                CDEBUG(D_DLMTRACE,
+                       "dlm namespace %s free done waiting\n", ns->ns_name);
+        }
+
+        RETURN(ELDLM_OK);
+}
+
+void ldlm_namespace_free_prior(struct ldlm_namespace *ns, 
+                               struct obd_import *imp, 
+                               int force)
+{
+        int rc;
+        ENTRY;
+        if (!ns) {
+                EXIT;
+                return;
+        }
+
+        /* Can fail with -EINTR when force == 0 in which case try harder */
+        rc = __ldlm_namespace_free(ns, force);
+        if (rc != ELDLM_OK) {
+                if (imp) {
+                        ptlrpc_disconnect_import(imp, 0);
+                        ptlrpc_invalidate_import(imp);
+                }
+
+                /* With all requests dropped and the import inactive
+                 * we are gaurenteed all reference will be dropped. */
+                rc = __ldlm_namespace_free(ns, 1);
+                LASSERT(rc == 0);
+        }
+        EXIT;
+}
+
+void ldlm_namespace_free_post(struct ldlm_namespace *ns)
+{
+        ENTRY;
+        if (!ns) {
+                EXIT;
+                return;
+        }
 
         mutex_down(ldlm_namespace_lock(ns->ns_client));
         /*
@@ -518,39 +590,6 @@ int ldlm_namespace_free_prior(struct ldlm_namespace *ns)
         atomic_dec(ldlm_namespace_nr(ns->ns_client));
         ldlm_pool_fini(&ns->ns_pool);
         mutex_up(ldlm_namespace_lock(ns->ns_client));
-
-        /* At shutdown time, don't call the cancellation callback */
-        ldlm_namespace_cleanup(ns, 0);
-
-        if (ns->ns_refcount > 0) {
-                struct l_wait_info lwi = LWI_INTR(LWI_ON_SIGNAL_NOOP, NULL);
-                int rc;
-                CDEBUG(D_DLMTRACE,
-                       "dlm namespace %s free waiting on refcount %d\n",
-                       ns->ns_name, ns->ns_refcount);
-                rc = l_wait_event(ns->ns_waitq,
-                                  ns->ns_refcount == 0, &lwi);
-                if (ns->ns_refcount)
-                        LCONSOLE_ERROR_MSG(0x139, "Lock manager: wait for %s "
-                                           "namespace cleanup aborted with %d "
-                                           "resources in use. (%d)\nI'm going "
-                                           "to try to clean up anyway, but I "
-                                           "might need a reboot of this node.\n",
-                                            ns->ns_name, (int) ns->ns_refcount, 
-                                            rc);
-                CDEBUG(D_DLMTRACE,
-                       "dlm namespace %s free done waiting\n", ns->ns_name);
-        }
-
-        RETURN(ELDLM_OK);
-}
-
-int ldlm_namespace_free_post(struct ldlm_namespace *ns, int force)
-{
-        ENTRY;
-        if (!ns)
-                RETURN(ELDLM_OK);
-
 #ifdef LPROCFS
         {
                 struct proc_dir_entry *dir;
@@ -572,8 +611,8 @@ int ldlm_namespace_free_post(struct ldlm_namespace *ns, int force)
          */
         LASSERT(list_empty(&ns->ns_list_chain));
         OBD_FREE_PTR(ns);
-        ldlm_put_ref(force);
-        RETURN(ELDLM_OK);
+        ldlm_put_ref();
+        EXIT;
 }
 
 
@@ -594,11 +633,12 @@ int ldlm_namespace_free_post(struct ldlm_namespace *ns, int force)
  * lprocfs entries, and then free memory. It will be called w/o cli->cl_sem
  * held.
  */
-int ldlm_namespace_free(struct ldlm_namespace *ns, int force)
+void ldlm_namespace_free(struct ldlm_namespace *ns, 
+                         struct obd_import *imp,
+                         int force)
 {
-        ldlm_namespace_free_prior(ns);
-        ldlm_namespace_free_post(ns, force);
-        return ELDLM_OK;
+        ldlm_namespace_free_prior(ns, imp, force);
+        ldlm_namespace_free_post(ns);
 }
 
 
