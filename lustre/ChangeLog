@@ -118,6 +118,12 @@ Details    : In reconstruct_* functions, LASSERTs on both the data supplied by
 		'tunefs.lustre --param="mdt.quota_type=ug1" $MDTDEV'.
 	 For more information, please refer to bugzilla 13904.
 
+Severity   : major
+Bugzilla   : 14443
+Description: quota performance fix
+Details    : quota data is written in journalled mode instead of ordered to
+             increase performance
+
 Severity   : normal
 Bugzilla   : 13915
 Description: lfs support for human-readable quota grace time strings
