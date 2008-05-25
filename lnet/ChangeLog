@@ -1,0 +1,629 @@
+tbd  Sun Microsystems, Inc.
+	* version 1.6.6
+	* Support for networks:
+	 socklnd   - any kernel supported by Lustre,
+	 qswlnd    - Qsnet kernel modules 5.20 and later,
+	 openiblnd - IbGold 1.8.2,
+	 o2iblnd   - OFED 1.1, 1.2.0, 1.2.5, and 1.3
+	 viblnd    - Voltaire ibhost 3.4.5 and later,
+	 ciblnd    - Topspin 3.2.0,
+	 iiblnd    - Infiniserv 3.3 + PathBits patch,
+	 gmlnd     - GM 2.1.22 and later,
+	 mxlnd     - MX 1.2.1 or later,
+	 ptllnd    - Portals 3.3 / UNICOS/lc 1.5.x, 2.0.x
+
+Severity   : 
+Bugzilla   : 
+Description: 
+Details    : 
+
+Severity   : normal
+Bugzilla   : 15272
+Description: ptl_send_rpc hits LASSERT when ptl_send_buf fails
+Details    : only hits under out-of-memory situations
+
+
+-------------------------------------------------------------------------------
+
+
+04-26-2008  Sun Microsystems, Inc.
+       * version 1.6.5
+       * Support for networks:
+	socklnd   - any kernel supported by Lustre,
+	qswlnd    - Qsnet kernel modules 5.20 and later,
+	openiblnd - IbGold 1.8.2,
+	o2iblnd   - OFED 1.1 and 1.2.0, 1.2.5
+	viblnd    - Voltaire ibhost 3.4.5 and later,
+	ciblnd    - Topspin 3.2.0,
+	iiblnd    - Infiniserv 3.3 + PathBits patch,
+	gmlnd     - GM 2.1.22 and later,
+	mxlnd     - MX 1.2.1 or later,
+	ptllnd    - Portals 3.3 / UNICOS/lc 1.5.x, 2.0.x
+
+Severity   : normal
+Bugzilla   : 14322
+Description: excessive debug information removed
+Details    : excessive debug information removed
+
+Severity   : major
+Bugzilla   : 15712
+Description: ksocknal_create_conn() hit ASSERTION during connection race
+Details    : ksocknal_create_conn() hit ASSERTION during connection race
+
+Severity   : major
+Bugzilla   : 13983
+Description: ksocknal_send_hello() hit ASSERTION while connecting race
+Details    : ksocknal_send_hello() hit ASSERTION while connecting race
+
+Severity   : major
+Bugzilla   : 14425
+Description: o2iblnd/ptllnd credit deadlock in a routed config.
+Details    : o2iblnd/ptllnd credit deadlock in a routed config.
+
+Severity   : normal
+Bugzilla   : 14956
+Description: High load after starting lnet
+Details    : gmlnd should sleep in rx thread in interruptible way. Otherwise,
+	     uptime utility reports high load that looks confusingly.
+
+Severity   : normal
+Bugzilla   : 14838
+Description: ksocklnd fails to establish connection if accept_port is high
+Details    : PID remapping must not be done for active (outgoing) connections
+
+--------------------------------------------------------------------------------
+
+2008-01-11  Sun Microsystems, Inc.
+       * version 1.4.12
+       * Support for networks:
+	socklnd   - any kernel supported by Lustre,
+	qswlnd    - Qsnet kernel modules 5.20 and later,
+	openiblnd - IbGold 1.8.2,
+	o2iblnd   - OFED 1.1 and 1.2.0, 1.2.5
+	viblnd    - Voltaire ibhost 3.4.5 and later,
+	ciblnd    - Topspin 3.2.0,
+	iiblnd    - Infiniserv 3.3 + PathBits patch,
+	gmlnd     - GM 2.1.22 and later,
+	mxlnd     - MX 1.2.1 or later,
+	ptllnd    - Portals 3.3 / UNICOS/lc 1.5.x, 2.0.x
+Severity   : normal
+Bugzilla   : 14387
+Description: liblustre network error
+Details    : liblustre clients should understand LNET_ACCEPT_PORT environment
+	     variable even if they don't start lnet acceptor.
+
+Severity   : normal
+Bugzilla   : 14300
+Description: Strange message from lnet (Ignoring prediction from the future)
+Details    : Incorrect calculation of peer's last_alive value in ksocklnd
+
+--------------------------------------------------------------------------------
+
+2007-12-07         Cluster File Systems, Inc. <info@clusterfs.com>
+       * version 1.6.4
+       * Support for networks:
+	socklnd   - any kernel supported by Lustre,
+	qswlnd    - Qsnet kernel modules 5.20 and later,
+	openiblnd - IbGold 1.8.2,
+	o2iblnd   - OFED 1.1 and 1.2.0, 1.2.5.
+	viblnd    - Voltaire ibhost 3.4.5 and later,
+	ciblnd    - Topspin 3.2.0,
+	iiblnd    - Infiniserv 3.3 + PathBits patch,
+	gmlnd     - GM 2.1.22 and later,
+	mxlnd     - MX 1.2.1 or later,
+	ptllnd    - Portals 3.3 / UNICOS/lc 1.5.x, 2.0.x
+
+Severity   : normal
+Bugzilla   : 14238
+Description: ASSERTION(me == md->md_me) failed in lnet_match_md()
+
+Severity   : normal
+Bugzilla   : 12494
+Description: increase send queue size for ciblnd/openiblnd
+
+Severity   : normal
+Bugzilla   : 12302
+Description: new userspace socklnd
+Details    : Old userspace tcpnal that resided in lnet/ulnds/socklnd replaced
+             with new one - usocklnd.
+
+Severity   : enhancement
+Bugzilla   : 11686
+Description: Console message flood
+Details    : Make cdls ratelimiting more tunable by adding several tunable in
+	     procfs /proc/sys/lnet/console_{min,max}_delay_centisecs and
+	     /proc/sys/lnet/console_backoff.
+
+--------------------------------------------------------------------------------
+
+2007-09-27         Cluster File Systems, Inc. <info@clusterfs.com>
+       * version 1.6.3
+       * Support for networks:
+	socklnd   - any kernel supported by Lustre,
+	qswlnd    - Qsnet kernel modules 5.20 and later,
+	openiblnd - IbGold 1.8.2,
+	o2iblnd   - OFED 1.1 and 1.2,
+	viblnd    - Voltaire ibhost 3.4.5 and later,
+	ciblnd    - Topspin 3.2.0,
+	iiblnd    - Infiniserv 3.3 + PathBits patch,
+	gmlnd     - GM 2.1.22 and later,
+	mxlnd     - MX 1.2.1 or later,
+	ptllnd    - Portals 3.3 / UNICOS/lc 1.5.x, 2.0.x
+
+Severity   : normal
+Bugzilla   : 12782
+Description: /proc/sys/lnet has non-sysctl entries
+Details    : Updating dump_kernel/daemon_file/debug_mb to use sysctl variables
+
+Severity   : major
+Bugzilla   : 13236
+Description: TOE Kernel panic by ksocklnd
+Details    : offloaded sockets provide their own implementation of sendpage,
+             can't call tcp_sendpage() directly
+
+Severity   : normal
+Bugzilla   : 10778
+Description: kibnal_shutdown() doesn't finish; lconf --cleanup hangs
+Details    : races between lnd_shutdown and peer creation prevent 
+             lnd_shutdown from finishing.
+
+Severity   : normal
+Bugzilla   : 13279
+Description: open files rlimit 1024 reached while liblustre testing
+Details    : ulnds/socklnd must close open socket after unsuccessful
+             'say hello' attempt.
+
+Severity   : major 
+Bugzilla   : 13482
+Description: build error
+Details    : fix typos in gmlnd, ptllnd and viblnd
+
+------------------------------------------------------------------------------
+
+2007-07-30  Cluster File Systems, Inc. <info@clusterfs.com>
+       * version 1.6.1
+       * Support for networks:
+	socklnd   - kernels up to 2.6.16,
+	qswlnd    - Qsnet kernel modules 5.20 and later,
+	openiblnd - IbGold 1.8.2,
+	o2iblnd   - OFED 1.1 and 1.2
+	viblnd    - Voltaire ibhost 3.4.5 and later,
+	ciblnd    - Topspin 3.2.0,
+	iiblnd    - Infiniserv 3.3 + PathBits patch,
+	gmlnd     - GM 2.1.22 and later,
+	mxlnd     - MX 1.2.1 or later,
+	ptllnd    - Portals 3.3 / UNICOS/lc 1.5.x, 2.0.x
+
+2007-06-21  Cluster File Systems, Inc. <info@clusterfs.com>
+       * version 1.4.11
+       * Support for networks:
+	socklnd   - kernels up to 2.6.16,
+	qswlnd    - Qsnet kernel modules 5.20 and later,
+	openiblnd - IbGold 1.8.2,
+	o2iblnd   - OFED 1.1
+	viblnd    - Voltaire ibhost 3.4.5 and later,
+	ciblnd    - Topspin 3.2.0,
+	iiblnd    - Infiniserv 3.3 + PathBits patch,
+	gmlnd     - GM 2.1.22 and later,
+	mxlnd     - MX 1.2.1 or later,
+	ptllnd    - Portals 3.3 / UNICOS/lc 1.5.x, 2.0.x
+
+Severity   : minor
+Bugzilla   : 13288
+Description: Initialize cpumask before use
+
+Severity   : major
+Bugzilla   : 12014
+Description: ASSERTION failures when upgrading to the patchless zero-copy
+             socklnd 
+Details    : This bug affects "rolling upgrades", causing an inconsistent
+             protocol version negotiation and subsequent assertion failure
+	     during rolling upgrades after the first wave of upgrades.
+
+Severity   : minor
+Bugzilla   : 11223
+Details    : Change "dropped message" CERRORs to D_NETERROR so they are
+             logged instead of creating "console chatter" when a lustre
+	     timeout races with normal RPC completion.
+
+Severity   : minor
+Details    : lnet_clear_peer_table can wait forever if user forgets to
+             clear a lazy portal.
+
+Severity   : minor
+Details    : libcfs_id2str should check pid against LNET_PID_ANY.
+
+Severity   : major
+Bugzilla   : 10916
+Description: added LNET self test
+Details    : landing b_self_test
+
+Severity   : minor
+Frequency  : rare
+Bugzilla   : 12227
+Description: cfs_duration_{u,n}sec() wrongly calculate nanosecond part of
+	     struct timeval.
+Details    : do_div() macro is used incorrectly.
+
+2007-04-23  Cluster File Systems, Inc. <info@clusterfs.com>
+
+Severity   : normal
+Bugzilla   : 11680
+Description: make panic on lbug configurable
+
+Severity   : major
+Bugzilla   : 12316
+Description: Add OFED1.2 support to o2iblnd
+Details    : o2iblnd depends on OFED's modules, if out-tree OFED's modules
+             are installed (other than kernel's in-tree infiniband), there
+             could be some problem while insmod o2iblnd (mismatch CRC of 
+             ib_* symbols).
+             If extra Module.symvers is supported in kernel (i.e, 2.6.17),
+             this link provides solution:
+             https://bugs.openfabrics.org/show_bug.cgi?id=355
+             if extra Module.symvers is not supported in kernel, we will
+             have to run the script in bug 12316 to update
+             $LINUX/module.symvers before building o2iblnd.
+             More details about this are in bug 12316.
+
+------------------------------------------------------------------------------
+
+2007-04-01  Cluster File Systems, Inc. <info@clusterfs.com>
+       * version 1.4.10 / 1.6.0
+       * Support for networks:
+	socklnd   - kernels up to 2.6.16,
+	qswlnd    - Qsnet kernel modules 5.20 and later,
+	openiblnd - IbGold 1.8.2,
+	o2iblnd   - OFED 1.1,
+	viblnd    - Voltaire ibhost 3.4.5 and later,
+	ciblnd    - Topspin 3.2.0,
+	iiblnd    - Infiniserv 3.3 + PathBits patch,
+	gmlnd     - GM 2.1.22 and later,
+	mxlnd     - MX 1.2.1 or later,
+	ptllnd    - Portals 3.3 / UNICOS/lc 1.5.x, 2.0.x
+	
+Severity   : minor
+Frequency  : rare
+Description: Ptllnd didn't init kptllnd_data.kptl_idle_txs before it could be
+	     possibly accessed in kptllnd_shutdown. Ptllnd should init 
+	     kptllnd_data.kptl_ptlid2str_lock before calling kptllnd_ptlid2str.
+
+Severity   : normal
+Frequency  : rare
+Description: gmlnd ignored some transmit errors when finalizing lnet messages.
+
+Severity   : minor
+Frequency  : rare
+Description: ptllnd logs a piece of incorrect debug info in kptllnd_peer_handle_hello.
+
+Severity   : minor
+Frequency  : rare
+Description: the_lnet.ln_finalizing was not set when the current thread is
+             about to complete messages. It only affects multi-threaded 
+	     user space LNet.
+	
+Severity   : normal
+Frequency  : rare
+Bugzilla   : 11472
+Description: Changed the default kqswlnd ntxmsg=512
+	
+Severity   : major
+Frequency  : rare
+Bugzilla   : 12458
+Description: Assertion failure in kernel ptllnd caused by posting passive
+             bulk buffers before connection establishment complete.
+	
+Severity   : major
+Frequency  : rare
+Bugzilla   : 12445
+Description: A race in kernel ptllnd between deleting a peer and posting
+             new communications for it could hang communications -
+	     manifesting as "Unexpectedly long timeout" messages.
+	
+Severity   : major
+Frequency  : rare
+Bugzilla   : 12432
+Description: Kernel ptllnd lock ordering issue could hang a node.
+	
+Severity   : major
+Frequency  : rare
+Bugzilla   : 12016
+Description: node crash on socket teardown race
+
+Severity   : minor
+Frequency  : 'lctl peer_list' issued on a mx net
+Bugzilla   : 12237
+Description: Enable lctl's peer_list for MXLND
+
+Severity   : major
+Frequency  : after Ptllnd timeouts and portals congestion
+Bugzilla   : 11659
+Description: Credit overflows
+Details    : This was a bug in ptllnd connection establishment.  The fix
+             implements better peer stamps to disambiguate connection
+	     establishment and ensure both peers enter the credit flow
+	     state machine consistently.
+
+Severity   : major
+Frequency  : rare	
+Bugzilla   : 11394
+Description: kptllnd didn't propagate some network errors up to LNET 
+Details    : This bug was spotted while investigating 11394.  The fix
+             ensures network errors on sends and bulk transfers are
+	     propagated to LNET/lustre correctly.
+
+Severity   : enhancement
+Bugzilla   : 10316
+Description: Fixed console chatter in case of -ETIMEDOUT.
+
+Severity   : enhancement
+Bugzilla   : 11684
+Description: Added D_NETTRACE for recording network packet history
+	     (initially only for ptllnd).  Also a separate userspace
+	     ptllnd facility to gather history which should really be
+	     covered by D_NETTRACE too, if only CDEBUG recorded history in
+	     userspace.
+
+Severity   : major
+Frequency  : rare	
+Bugzilla   : 11616
+Description: o2iblnd handle early RDMA_CM_EVENT_DISCONNECTED.
+Details    : If the fabric is lossy, an RDMA_CM_EVENT_DISCONNECTED
+	     callback can occur before a connection has actually been
+	     established.  This caused an assertion failure previously.
+
+Severity   : enhancement
+Bugzilla   : 11094
+Description: Multiple instances for o2iblnd
+Details    : Allow multiple instances of o2iblnd to enable networking over
+	     multiple HCAs and routing between them.
+
+Severity   : major
+Bugzilla   : 11201
+Description: lnet deadlock in router_checker
+Details    : turned ksnd_connd_lock, ksnd_reaper_lock, and ksock_net_t:ksnd_lock
+	     into BH locks to eliminate potential deadlock caused by
+	     ksocknal_data_ready() preempting code holding these locks.
+
+Severity   : major
+Bugzilla   : 11126
+Description: Millions of failed socklnd connection attempts cause a very slow FS
+Details    : added a new route flag ksnr_scheduled to distinguish from
+	     ksnr_connecting, so that a peer connection request is only turned
+	     down for race concerns when an active connection to the same peer
+	     is under progress (instead of just being scheduled).
+
+------------------------------------------------------------------------------
+
+2007-02-09  Cluster File Systems, Inc. <info@clusterfs.com>
+       * version 1.4.9
+       * Support for networks:
+	socklnd   - kernels up to 2.6.16
+	qswlnd    - Qsnet kernel modules 5.20 and later
+	openiblnd - IbGold 1.8.2
+	o2iblnd   - OFED 1.1
+	viblnd    - Voltaire ibhost 3.4.5 and later
+	ciblnd    - Topspin 3.2.0
+	iiblnd    - Infiniserv 3.3 + PathBits patch
+	gmlnd     - GM 2.1.22 and later
+	mxlnd     - MX 1.2.1 or later
+	ptllnd    - Portals 3.3 / UNICOS/lc 1.5.x, 2.0.x
+       * bug fixes
+
+Severity   : major on XT3
+Bugzilla   : none
+Description: libcfs overwrites /proc/sys/portals
+Details    : libcfs created a symlink from /proc/sys/portals to
+	     /proc/sys/lnet for backwards compatibility.  This is no
+	     longer required and makes the Cray portals /proc variables
+	     inaccessible.
+
+Severity   : minor
+Bugzilla   : 11312
+Description: OFED FMR API change
+Details    : This changes parameter usage to reflect a change in
+	     ib_fmr_pool_map_phys() between OFED 1.0 and OFED 1.1.  Note
+	     that FMR support is only used in experimental versions of the
+	     o2iblnd - this change does not affect standard usage at all.
+
+Severity   : enhancement
+Bugzilla   : 11245
+Description: new ko2iblnd module parameter: ib_mtu
+Details    : the default IB MTU of 2048 performs badly on 23108 Tavor
+	     HCAs.  You can avoid this problem by setting the MTU to 1024
+	     using this module parameter.
+
+Severity   : enhancement
+Bugzilla   : 11118/11620
+Description: ptllnd small request message buffer alignment fix
+Details    : Set the PTL_MD_LOCAL_ALIGN8 option on small message receives.
+	     Round up small message size on sends in case this option
+	     is not supported.  11620 was a defect in the initial
+	     implementation which effectively asserted all peers had to be
+	     running the correct protocol version which was fixed by always
+	     NAK-ing such requests and handling any misalignments they
+	     introduce.
+
+Severity   : minor
+Frequency  : rarely
+Description: When kib(nal|lnd)_del_peer() is called upon a peer whose
+	     ibp_tx_queue is not empty, kib(nal|lnd)_destroy_peer()'s
+	     'LASSERT(list_empty(&peer->ibp_tx_queue))' will fail.
+
+Severity   : enhancement
+Bugzilla   : 11250
+Description: Patchless ZC(zero copy) socklnd
+Details    : New protocol for socklnd, socklnd can support zero copy without
+	     kernel patch, it's compatible with old socklnd. Checksum is 
+	     moved from tunables to modparams.
+
+Severity   : minor
+Frequency  : rarely
+Description: When ksocknal_del_peer() is called upon a peer whose
+	     ksnp_tx_queue is not empty, ksocknal_destroy_peer()'s
+	     'LASSERT(list_empty(&peer->ksnp_tx_queue))' will fail.
+
+Severity   : normal
+Frequency  : when ptlrpc is under heavy use and runs out of request buffer
+Bugzilla   : 11318
+Description: In lnet_match_blocked_msg(), md can be used without holding a
+	     ref on it.
+
+Severity   : minor
+Frequency  : very rarely
+Bugzilla   : 10727
+Description: If ksocknal_lib_setup_sock() fails, a ref on peer is lost.
+	     If connd connects a route which has been closed by
+	     ksocknal_shutdown(), ksocknal_create_routes() may create new
+	     routes which hold references on the peer, causing shutdown
+	     process to wait for peer to disappear forever.
+
+Severity   : enhancement
+Bugzilla   : 11234
+Description: Dump XT3 portals traces on kptllnd timeout
+Details    : Set the kptllnd module parameter "ptltrace_on_timeout=1" to
+	     dump Cray portals debug traces to a file.  The kptllnd module
+	     parameter "ptltrace_basename", default "/tmp/lnet-ptltrace",
+	     is the basename of the dump file.
+
+Severity   : major
+Frequency  : infrequent
+Bugzilla   : 11308
+Description: kernel ptllnd fix bug in connection re-establishment
+Details    : Kernel ptllnd could produce protocol errors e.g. illegal
+	     matchbits and/or violate the credit flow protocol when trying
+	     to re-establish a connection with a peer after an error or
+	     timeout. 
+
+Severity   : enhancement
+Bugzilla   : 10316
+Description: Allow /proc/sys/lnet/debug to be set symbolically
+Details    : Allow debug and subsystem debug values to be read/set by name
+	     in addition to numerically, for ease of use.
+
+Severity   : normal
+Frequency  : only in configurations with LNET routers
+Bugzilla   : 10316
+Description: routes automatically marked down and recovered
+Details    : In configurations with LNET routers if a router fails routers
+	     now actively try to recover routes that are down, unless they
+	     are marked down by an administrator.
+
+------------------------------------------------------------------------------
+
+2006-12-09  Cluster File Systems, Inc. <info@clusterfs.com>
+
+Severity   : critical
+Frequency  : very rarely, in configurations with LNET routers and TCP
+Bugzilla   : 10889
+Description: incorrect data written to files on OSTs
+Details    : In certain high-load conditions incorrect data may be written
+	     to files on the OST when using TCP networks.
+
+------------------------------------------------------------------------------
+
+2006-07-31  Cluster File Systems, Inc. <info@clusterfs.com>
+	* version 1.4.7
+	- rework CDEBUG messages rate-limiting mechanism b=10375
+	- add per-socket tunables for socklnd if the kernel is patched b=10327
+
+------------------------------------------------------------------------------
+
+2006-02-15  Cluster File Systems, Inc. <info@clusterfs.com>
+	* version 1.4.6
+	- fix use of portals/lnet pid to avoid dropping RPCs b=10074
+	- iiblnd wasn't mapping all memory, resulting in comms errors b=9776
+	- quiet LNET startup LNI message for liblustre b=10128
+	- Better console error messages if 'ip2nets' can't match an IP address
+	- Fixed overflow/use-before-set bugs in linux-time.h
+	- Fixed ptllnd bug that wasn't initialising rx descriptors completely
+	- LNET teardown failed an assertion about the route table being empty
+	- Fixed a crash in LNetEQPoll(<invalid handle>)
+	- Future protocol compatibility work (b_rls146_lnetprotovrsn)
+	- improve debug message for liblustre/Catamount nodes (b=10116)
+
+2005-10-10  Cluster File Systems, Inc. <info@clusterfs.com>
+	* Configuration change for the XT3
+	     The PTLLND is now used to run Lustre over Portals on the XT3.
+	     The configure option(s) --with-cray-portals are no longer
+	     used.  Rather --with-portals=<path-to-portals-includes> is
+	     used to enable building on the XT3.  In addition to enable
+	     XT3 specific features the option --enable-cray-xt3 must be
+	     used.
+
+2005-10-10  Cluster File Systems, Inc. <info@clusterfs.com>
+	* Portals has been removed, replaced by LNET.
+	   LNET is new networking infrastructure for Lustre, it includes a
+	   reorganized network configuration mode (see the user
+	   documentation for full details) as well as support for routing
+	   between different network fabrics.  Lustre Networking Devices
+	   (LNDS) for the supported network fabrics have also been created
+	   for this new infrastructure.
+
+2005-08-08  Cluster File Systems, Inc. <info@clusterfs.com>
+       * version 1.4.4
+       * bug fixes
+
+Severity   : major
+Frequency  : rare (large Voltaire clusters only)
+Bugzilla   : 6993
+Description: the default number of reserved transmit descriptors was too low
+	     for some large clusters
+Details    : As a workaround, the number was increased.  A proper fix includes
+	     a run-time tunable.
+
+2005-06-02  Cluster File Systems, Inc. <info@clusterfs.com>
+       * version 1.4.3
+       * bug fixes
+
+Severity   : major
+Frequency  : occasional (large-scale events, cluster reboot, network failure)
+Bugzilla   : 6411
+Description: too many error messages on console obscure actual problem and
+	     can slow down/panic server, or cause recovery to fail repeatedly
+Details    : enable rate-limiting of console error messages, and some messages
+	     that were console errors now only go to the kernel log
+
+Severity   : enhancement
+Bugzilla   : 1693
+Description: add /proc/sys/portals/catastrophe entry which will report if
+	     that node has previously LBUGged
+
+2005-04-06  Cluster File Systems, Inc. <info@clusterfs.com>
+       * bugs
+	- update gmnal to use PTL_MTU, fix module refcounting (b=5786)
+
+2005-04-04  Cluster File Systems, Inc. <info@clusterfs.com>
+       * bugs
+	- handle error return code in kranal_check_fma_rx() (5915,6054)
+
+2005-02-04  Cluster File Systems, Inc. <info@clusterfs.com>
+       * miscellania
+	- update vibnal (Voltaire IB NAL)
+	- update gmnal (Myrinet NAL), gmnalid
+
+2005-02-04  Eric Barton  <eeb@bartonsoftware.com>
+
+	* Landed portals:b_port_step as follows...
+
+	  - removed CFS_DECL_SPIN* 
+	    just use 'spinlock_t' and initialise with spin_lock_init()
+
+	  - removed CFS_DECL_MUTEX*
+	    just use 'struct semaphore' and initialise with init_mutex()
+
+	  - removed CFS_DECL_RWSEM*
+	    just use 'struct rw_semaphore' and initialise with init_rwsem()
+
+	  - renamed cfs_sleep_chan -> cfs_waitq
+	            cfs_sleep_link -> cfs_waitlink
+
+          - fixed race in linux version of arch-independent socknal
+  	    (the ENOMEM/EAGAIN decision).
+
+	  - Didn't fix problems in Darwin version of arch-independent socknal
+ 	    (resetting socket callbacks, eager ack hack, ENOMEM/EAGAIN decision)
+
+	  - removed libcfs types from non-socknal header files (only some types
+	    in the header files had been changed; the .c files hadn't been
+	    updated at all).
