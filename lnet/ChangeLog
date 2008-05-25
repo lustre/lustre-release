@@ -40,6 +40,11 @@ Details    : only hits under out-of-memory situations
 	mxlnd     - MX 1.2.1 or later,
 	ptllnd    - Portals 3.3 / UNICOS/lc 1.5.x, 2.0.x
 
+Severity   : normal
+Bugzilla   : 14322
+Description: excessive debug information removed
+Details    : excessive debug information removed
+
 Severity   : major
 Bugzilla   : 15712
 Description: ksocknal_create_conn() hit ASSERTION during connection race
