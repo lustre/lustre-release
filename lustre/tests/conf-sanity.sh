@@ -1138,6 +1138,7 @@ test_32a() {
         #       there appears to be a lot of assumption here about loopback
         #       devices
         # or maybe this test is just totally useless on a client-only system
+	[ "$NETTYPE" = "tcp" ] || { skip "NETTYPE != tcp" && return 0; }
 	[ "$mds_HOST" = "`hostname`" ] || { skip "remote MDS" && return 0; }
 	[ "$ost_HOST" = "`hostname`" -o "$ost1_HOST" = "`hostname`" ] || \
 		{ skip "remote OST" && return 0; }
@@ -1205,6 +1206,7 @@ test_32b() {
         #       there appears to be a lot of assumption here about loopback
         #       devices
         # or maybe this test is just totally useless on a client-only system
+        [ "$NETTYPE" = "tcp" ] || { skip "NETTYPE != tcp" && return 0; }
         [ "$mds_HOST" = "`hostname`" ] || { skip "remote MDS" && return 0; }
         [ "$ost_HOST" = "`hostname`" -o "$ost1_HOST" = "`hostname`" ] || \
 		{ skip "remote OST" && return 0; }
