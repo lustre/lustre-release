@@ -1,14 +1,13 @@
-
 #ifndef _IOWR
 
-/*
- * on i386 and x86_64, _ASM_I386_IOCTL_H is defined by the kernel's ioctl.h
+/* On i386 and x86_64, _ASM_I386_IOCTL_H is defined by the kernel's ioctl.h,
+ * and on newer kernels this header is shared as _ASM_GENERIC_IOCTL_H.
  *
- * We can avoid any problems with the kernel header being included again
- * by defining _ASM_I386_IOCTL_H here so that a later occurence of
- * <asm/ioctl.h> does not include the kernel's ioctl.h after this one.
- */
+ * We can avoid any problems with the kernel header being included again by
+ * defining _ASM_I386_IOCTL_H here so that a later occurence of <asm/ioctl.h>
+ * does not include the kernel's ioctl.h after this one. b=14746 */
 #define _ASM_I386_IOCTL_H
+#define _ASM_GENERIC_IOCTL_H
 
 /* ioctl command encoding: 32 bits total, command in lower 16 bits,
  * size of the parameter structure in the lower 14 bits of the
