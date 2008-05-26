@@ -133,10 +133,10 @@ int seq_store_read(struct lu_server_seq *seq,
                 rc = -ENODATA;
         } else if (rc >= 0) {
                 CERROR("%s: Read only %d bytes of %d\n", seq->lss_name,
-                       rc, sizeof(info->sti_space));
+                       rc, (int)sizeof(info->sti_space));
                 rc = -EIO;
         }
-	
+
 	RETURN(rc);
 }
 
