@@ -52,7 +52,7 @@ struct loi_oap_pages {
 struct osc_async_rc {
         int     ar_rc;
         int     ar_force_sync;
-        int     ar_min_xid;
+        __u64   ar_min_xid;
 };
 
 struct lov_oinfo {                 /* per-stripe data structure */
