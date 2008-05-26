@@ -188,7 +188,7 @@ static inline int range_is_exhausted(struct lu_range *r)
 struct lu_fid {
         __u64 f_seq;  /* holds fid sequence. Lustre should support 2 ^ 64
                        * objects, thus even if one sequence has one object we
-                       * reach this value. */
+                       * will never reach this value. */
         __u32 f_oid;  /* fid number within its sequence. */
         __u32 f_ver;  /* holds fid version. */
 };
