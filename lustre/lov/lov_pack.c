@@ -108,6 +108,8 @@ int lov_packmd(struct obd_export *exp, struct lov_mds_md **lmmp,
                                lsm->lsm_magic, LOV_MAGIC);
                         RETURN(-EINVAL);
                 }
+                /* If we are just sizing the EA, limit the stripe count
+                 * to the actual number of OSTs in this filesystem. */
                 if (!lmmp) {
                         stripe_count = lov_get_stripecnt(lov, lsm->lsm_stripe_count);
                         lsm->lsm_stripe_count = stripe_count;
