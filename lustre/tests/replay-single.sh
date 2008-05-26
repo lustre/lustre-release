@@ -1367,6 +1367,19 @@ test_61c() {
 }
 run_test 61c "test race mds llog sync vs llog cleanup"
 
+test_62() { # Bug 15756 - don't mis-drop resent replay
+    replay_barrier mds
+    createmany -o $DIR/$tdir/$tfile- 25
+#define OBD_FAIL_TGT_REPLAY_DROP         0x707
+    do_facet mds "sysctl -w lustre.fail_loc=0x80000707"
+    facet_failover mds
+    df $MOUNT || return 1
+    do_facet mds "sysctl -w lustre.fail_loc=0"
+    unlinkmany $DIR/$tdir/$tfile- 25 || return 2
+    return 0
+}
+run_test 62 "don't mis-drop resent replay"
+
 #Adaptive Timeouts (bug 3055)
 AT_MAX_SET=0
 

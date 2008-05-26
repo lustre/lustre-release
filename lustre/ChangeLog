@@ -25,6 +25,13 @@ tbd Sun Microsystems, Inc.
 	  For more information, please refer to bugzilla 13904.
 
 Severity   : normal
+Bugzilla   : 15756
+Frequency  : rare, replay get lost on server
+Description: server incorrectly drop resent replays lead to recovery failure.
+Details    : do not drop replay according to msg flags, instead we check the
+             per-export recovery request queue for duplication of transno.
+
+Severity   : normal
 Bugzilla   : 14835
 Frequency  : after recovery
 Description: precreate to many object's after del orphan.
