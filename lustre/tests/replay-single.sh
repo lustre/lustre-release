@@ -1563,6 +1563,76 @@ fi
 
 # end of AT tests includes above lines
 
+# start multi-client tests
+test_70a () {
+	[ -z "$CLIENTS" ] && \
+		{ skip "Need two or more clients." && return; }
+	[ $CLIENTCOUNT -lt 2 ] && \
+		{ skip "Need two or more clients, have $CLIENTCOUNT" && return; }
+
+	echo "mount clients $CLIENTS ..."
+	zconf_mount_clients $CLIENTS $DIR
+
+	local clients=${CLIENTS//,/ }
+	echo "Write/read files on $DIR ; clients $CLIENTS ... "
+	for CLIENT in $clients; do
+		do_node $CLIENT dd bs=1M count=10 if=/dev/zero \
+			of=$DIR/${tfile}_${CLIENT} 2>/dev/null || \
+				error "dd failed on $CLIENT"
+	done
+
+	local prev_client=$(echo $clients | sed 's/^.* \(\w\+\)$/\1/') 
+	for C in ${CLIENTS//,/ }; do
+		do_node $prev_client dd if=$DIR/${tfile}_${C} of=/dev/null 2>/dev/null || \
+			error "dd if=$DIR/${tfile}_${C} failed on $prev_client"
+		prev_client=$C
+	done
+	
+	ls $DIR
+
+	zconf_umount_clients $CLIENTS $DIR
+}
+run_test 70a "check multi client t-f"
+
+test_70b () {
+	[ -z "$CLIENTS" ] && \
+		{ skip "Need two or more clients." && return; }
+	[ $CLIENTCOUNT -lt 2 ] && \
+		{ skip "Need two or more clients, have $CLIENTCOUNT" && return; }
+
+	zconf_mount_clients $CLIENTS $DIR
+	
+	local duration="-t 60"
+	local cmd="rundbench 1 $duration "
+	local PID=""
+	for CLIENT in ${CLIENTS//,/ }; do
+		$PDSH $CLIENT "set -x; PATH=:$PATH:$LUSTRE/utils:$LUSTRE/tests/:${DBENCH_LIB} DBENCH_LIB=${DBENCH_LIB} $cmd" &
+		PID=$!
+		echo $PID >pid.$CLIENT
+		echo "Started load PID=`cat pid.$CLIENT`"
+	done
+
+	replay_barrier mds 
+	sleep 3 # give clients a time to do operations
+
+	log "$TESTNAME fail mds 1"
+	fail mds
+
+# wait for client to reconnect to MDS
+	sleep $TIMEOUT
+
+	for CLIENT in ${CLIENTS//,/ }; do
+		PID=`cat pid.$CLIENT`
+		wait $PID
+		rc=$?
+		echo "load on ${CLIENT} returned $rc"
+	done
+
+	zconf_umount_clients $CLIENTS $DIR 
+}
+run_test 70b "mds recovery; $CLIENTCOUNT clients"
+# end multi-client tests
+
 equals_msg `basename $0`: test complete, cleaning up
 check_and_cleanup_lustre
 [ -f "$TESTSUITELOG" ] && cat $TESTSUITELOG || true

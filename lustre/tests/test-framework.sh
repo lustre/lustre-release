@@ -330,7 +330,7 @@ zconf_mount() {
         exit 1
     fi
 
-    echo "Starting client: $OPTIONS $device $mnt" 
+    echo "Starting client: $client: $OPTIONS $device $mnt" 
     do_node $client mkdir -p $mnt
     do_node $client mount -t lustre $OPTIONS $device $mnt || return 1
 
@@ -342,15 +342,38 @@ zconf_mount() {
 }
 
 zconf_umount() {
-    client=$1
-    mnt=$2
+    local client=$1
+    local mnt=$2
     [ "$3" ] && force=-f
     local running=$(do_node $client "grep -c $mnt' ' /proc/mounts") || true
     if [ $running -ne 0 ]; then
-        echo "Stopping client $mnt (opts:$force)"
+        echo "Stopping client $client $mnt (opts:$force)"
         lsof | grep "$mnt" || true
         do_node $client umount $force $mnt
     fi
+}
+
+zconf_mount_clients() {
+    local clients=$1
+    local mnt=$2
+
+    echo "Mounting clients: $clients"
+    local client
+    for client in ${clients//,/ }; do
+        zconf_mount $client $mnt  || true
+    done
+}
+
+zconf_umount_clients() {
+    local clients=$1
+    local mnt=$2
+    [ "$3" ] && force=-f
+
+    echo "Umounting clients: $clients"
+    local client
+    for client in ${clients//,/ }; do
+        zconf_umount $client $mnt $force || true
+    done
 }
 
 shutdown_facet() {
@@ -733,6 +756,12 @@ stopall() {
     # assume client mount is local 
     grep " $MOUNT " /proc/mounts && zconf_umount $HOSTNAME $MOUNT $*
     grep " $MOUNT2 " /proc/mounts && zconf_umount $HOSTNAME $MOUNT2 $*
+
+    if [ -n "$CLIENTS" ]; then
+            zconf_umount_clients $CLIENTS $MOUNT "$*" || true
+            zconf_umount_clients $CLIENTS $MOUNT2 "$*" || true
+    fi
+
     [ "$CLIENTONLY" ] && return
     stop mds -f
     for num in `seq $OSTCOUNT`; do
@@ -805,8 +834,11 @@ setupall() {
     fi
     [ "$DAEMONFILE" ] && $LCTL debug_daemon start $DAEMONFILE $DAEMONSIZE
     mount_client $MOUNT
+    [ -n "$CLIENTS" ] && zconf_mount_clients $CLIENTS $MOUNT
+
     if [ "$MOUNT_2" ]; then
         mount_client $MOUNT2
+        [ -n "$CLIENTS" ] && zconf_mount_clients $CLIENTS $MOUNT2
     fi
     sleep 5
 }
@@ -1383,6 +1415,9 @@ nodes_list () {
     # FIXME. We need a list of clients
     local myNODES=$HOSTNAME
     local myNODES_sort
+
+    # CLIENTS (if specified) contains the local client
+    [ -n "$CLIENTS" ] && myNODES=${CLIENTS//,/ }
 
     if [ "$PDSH" -a "$PDSH" != "no_dsh" ]; then
         myNODES="$myNODES $(osts_nodes) $mds_HOST"
