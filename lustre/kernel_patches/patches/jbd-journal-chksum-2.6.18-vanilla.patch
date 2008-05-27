@@ -368,7 +368,7 @@ Index: linux-2.6.18.8/fs/jbd/recovery.c
  #endif
  
  /*
-@@ -307,6 +308,37 @@ int journal_skip_recovery(journal_t *jou
+@@ -307,6 +308,38 @@ int journal_skip_recovery(journal_t *jou
  	return err;
  }
  
@@ -399,6 +399,7 @@ Index: linux-2.6.18.8/fs/jbd/recovery.c
 +			*crc32_sum = crc32_be(*crc32_sum, (void *)obh->b_data,
 +				     obh->b_size);
 +		}
++		put_bh(obh);
 +	}
 +	return 0;
 +}
@@ -406,7 +407,7 @@ Index: linux-2.6.18.8/fs/jbd/recovery.c
  static int do_one_pass(journal_t *journal,
  			struct recovery_info *info, enum passtype pass)
  {
-@@ -318,6 +350,7 @@ static int do_one_pass(journal_t *journa
+@@ -318,6 +351,7 @@ static int do_one_pass(journal_t *journa
  	struct buffer_head *	bh;
  	unsigned int		sequence;
  	int			blocktype;
@@ -414,7 +415,7 @@ Index: linux-2.6.18.8/fs/jbd/recovery.c
  
  	/* Precompute the maximum metadata descriptors in a descriptor block */
  	int			MAX_BLOCKS_PER_DESC;
-@@ -409,9 +442,24 @@ static int do_one_pass(journal_t *journa
+@@ -409,9 +443,24 @@ static int do_one_pass(journal_t *journa
  		switch(blocktype) {
  		case JFS_DESCRIPTOR_BLOCK:
  			/* If it is a valid descriptor block, replay it
@@ -441,7 +442,7 @@ Index: linux-2.6.18.8/fs/jbd/recovery.c
  				next_log_block +=
  					count_tags(bh, journal->j_blocksize);
  				wrap(journal, next_log_block);
-@@ -506,9 +554,97 @@ static int do_one_pass(journal_t *journa
+@@ -506,9 +555,97 @@ static int do_one_pass(journal_t *journa
  			continue;
  
  		case JFS_COMMIT_BLOCK:
@@ -541,7 +542,7 @@ Index: linux-2.6.18.8/fs/jbd/recovery.c
  			brelse(bh);
  			next_commit_ID++;
  			continue;
-@@ -544,9 +680,10 @@ static int do_one_pass(journal_t *journa
+@@ -544,9 +681,10 @@ static int do_one_pass(journal_t *journa
  	 * transaction marks the end of the valid log.
  	 */
  
