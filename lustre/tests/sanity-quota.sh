@@ -405,7 +405,7 @@ test_file_soft() {
 }
 
 # file soft limit (start timer, timer goes off, stop timer)
-test_4() {
+test_4a() {	# was test_4
 	chmod 0777 $DIR/$tdir
 	LIMIT=$(($IUNIT_SZ * 10))	# 10 iunits on mds
 	TESTFILE=$DIR/$tdir/$tfile-0
@@ -433,9 +433,9 @@ test_4() {
 	$LFS setquota -t -u $MAX_DQ_TIME $MAX_IQ_TIME $DIR
 	$LFS setquota -t -g $MAX_DQ_TIME $MAX_IQ_TIME $DIR
 }
-run_test 4 "File soft limit (start timer, timer goes off, stop timer) ==="
+run_test 4a "File soft limit (start timer, timer goes off, stop timer) ==="
 
-test_4a() {
+test_4b() {	# was test_4a
         GR_STR1="1w3d"
         GR_STR2="1000s"
         GR_STR3="5s"
@@ -459,7 +459,7 @@ test_4a() {
         $LFS setquota -t -u $MAX_DQ_TIME $MAX_IQ_TIME $DIR
         $LFS setquota -t -g $MAX_DQ_TIME $MAX_IQ_TIME $DIR
 }
-run_test 4a "Grace time strings handling ==="
+run_test 4b "Grace time strings handling ==="
 
 # chown & chgrp (chown & chgrp successfully even out of block/file quota)
 test_5() {
@@ -1015,7 +1015,7 @@ pre_test_14 () {
 
 pre_test_14 
 
-test_14(){ # b=12223 -- setting quota on root
+test_14a() {	# was test_14 b=12223 -- setting quota on root
 	TESTFILE="$DIR/$tdir/$tfile"
 
 	# out of root's file and block quota
@@ -1042,7 +1042,7 @@ test_14(){ # b=12223 -- setting quota on root
 	unlinkmany ${TESTFILE} 15
 	rm -f $TESTFILE
 }
-run_test 14 "test setting quota on root ==="
+run_test 14a "test setting quota on root ==="
 
 # turn off quota
 test_99()

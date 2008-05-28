@@ -21,8 +21,8 @@ GRANT_CHECK_LIST=${GRANT_CHECK_LIST:-""}
 # bug number: 2766 4176   11404
 ALWAYS_EXCEPT="0b  39     56    $REPLAY_SINGLE_EXCEPT"
 
-#                                                     63 min  7 min  AT AT AT AT"
-[ "$SLOW" = "no" ] && EXCEPT_SLOW="1 2 3 4 6 6b 12 16 44      44b    65 66 67 68"
+#                                                  63 min  7 min  AT AT AT AT"
+[ "$SLOW" = "no" ] && EXCEPT_SLOW="1 2 3 4 6 12 16 44a      44b    65 66 67 68"
 
 build_test_filter
 
@@ -32,14 +32,14 @@ mkdir -p $DIR
 
 rm -rf $DIR/[df][0-9]*
 
-test_0() {
+test_0a() {	# was test_0
     sleep 10
     mkdir $DIR/$tfile
     replay_barrier $SINGLEMDS
     fail $SINGLEMDS
     rmdir $DIR/$tfile
 }
-run_test 0 "empty replay"
+run_test 0a "empty replay"
 
 test_0b() {
     # this test attempts to trigger a race in the precreation code,
@@ -180,7 +180,7 @@ test_3c() {
 }
 run_test 3c "replay failed open -ENOMEM"
 
-test_4() {
+test_4a() {	# was test_4
     replay_barrier $SINGLEMDS
     for i in `seq 10`; do
         echo "tag-$i" > $DIR/$tfile-$i
@@ -190,7 +190,7 @@ test_4() {
       grep -q "tag-$i" $DIR/$tfile-$i || error "$tfile-$i"
     done
 }
-run_test 4 "|x| 10 open(O_CREAT)s"
+run_test 4a "|x| 10 open(O_CREAT)s"
 
 test_4b() {
     replay_barrier $SINGLEMDS
@@ -218,7 +218,7 @@ test_5() {
 run_test 5 "|x| 220 open(O_CREAT)"
 
 
-test_6() {
+test_6a() {	# was test_6
     replay_barrier $SINGLEMDS
     mcreate $DIR/$tdir/$tfile
     fail $SINGLEMDS
@@ -227,7 +227,7 @@ test_6() {
     sleep 2
     # waiting for log process thread
 }
-run_test 6 "mkdir + contained create"
+run_test 6a "mkdir + contained create"
 
 test_6b() {
     replay_barrier $SINGLEMDS
@@ -430,7 +430,7 @@ test_19() {
 }
 run_test 19 "|X| mcreate, open, write, rename "
 
-test_20() {
+test_20a() {	# was test_20
     replay_barrier $SINGLEMDS
     multiop_bg_pause $DIR/$tfile O_tSc || return 3
     pid=$!
@@ -442,7 +442,7 @@ test_20() {
     [ -e $DIR/$tfile ] && return 2
     return 0
 }
-run_test 20 "|X| open(O_CREAT), unlink, replay, close (test mds_cleanup_orphans)"
+run_test 20a "|X| open(O_CREAT), unlink, replay, close (test mds_cleanup_orphans)"
 
 test_20b() { # bug 10480
     BEFOREUSED=`df -P $DIR | tail -1 | awk '{ print $3 }'`
@@ -703,7 +703,7 @@ test_32() {
 run_test 32 "close() notices client eviction; close() after client eviction"
 
 # Abort recovery before client complete
-test_33() {
+test_33a() {	# was test_33
     replay_barrier $SINGLEMDS
     createmany -o $DIR/$tfile-%d 100
     fail_abort $SINGLEMDS
@@ -712,10 +712,10 @@ test_33() {
     unlinkmany $DIR/$tfile-%d 0 100
     return 0
 }
-run_test 33 "abort recovery before client does replay"
+run_test 33a "abort recovery before client does replay"
 
 # Stale FID sequence
-test_33a() {
+test_33b() {	# was test_33a
     replay_barrier $SINGLEMDS
     createmany -o $DIR/$tfile-%d 10
     fail_abort $SINGLEMDS
@@ -725,7 +725,7 @@ test_33a() {
     unlinkmany $DIR/$tfile-%d 0 10
     return 0
 }
-run_test 33a "fid shouldn't be reused after abort recovery"
+run_test 33b "fid shouldn't be reused after abort recovery"
 
 test_34() {
     multiop_bg_pause $DIR/$tfile O_c || return 2
@@ -915,7 +915,7 @@ test_43() { # bug 2530
 }
 run_test 43 "mds osc import failure during recovery; don't LBUG"
 
-test_44() {
+test_44a() {	# was test_44
     mdcdev=`lctl get_param -n devices | awk '/MDT0000-mdc-/ {print $1}'`
     [ "$mdcdev" ] || exit 2
     for i in `seq 1 10`; do
@@ -927,7 +927,7 @@ test_44() {
     do_facet $SINGLEMDS "lctl set_param fail_loc=0"
     return 0
 }
-run_test 44 "race in target handle connect"
+run_test 44a "race in target handle connect"
 
 test_44b() {
     mdcdev=`lctl get_param -n devices | awk '/MDT0000-mdc-/ {print $1}'`

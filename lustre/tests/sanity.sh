@@ -2141,7 +2141,7 @@ test_50() {
 }
 run_test 50 "special situations: /proc symlinks  ==============="
 
-test_51() {
+test_51a() {	# was test_51
 	# bug 1516 - create an empty entry right after ".." then split dir
 	mkdir $DIR/d51
 	touch $DIR/d51/foo
@@ -2157,7 +2157,7 @@ test_51() {
 	echo
 	ls -l $DIR/d51 > /dev/null || error
 }
-run_test 51 "special situations: split htree with empty entry =="
+run_test 51a "special situations: split htree with empty entry =="
 
 #export NUMTEST=70000
 # FIXME: I select a relatively small number to do basic test.
@@ -2363,7 +2363,7 @@ test_55() {
 }
 run_test 55 "check iopen_connect_dentry() ======================"
 
-test_56() {
+test_56a() {	# was test_56
         rm -rf $DIR/d56
         $SETSTRIPE -d $DIR
         mkdir $DIR/d56
@@ -2413,7 +2413,7 @@ test_56() {
                 error "lfs getstripe --obd wrong: should not show file on other obd"
         echo "lfs getstripe --obd passed."
 }
-run_test 56 "check lfs getstripe ===================================="
+run_test 56a "check lfs getstripe ===================================="
 
 NUMFILES=3
 NUMDIRS=3
@@ -2709,7 +2709,7 @@ test_62() {
 run_test 62 "verify obd_match failure doesn't LBUG (should -EIO)"
 
 # bug 2319 - oig_wait() interrupted causes crash because of invalid waitq.
-test_63() {
+test_63a() {	# was test_63
 	MAX_DIRTY_MB=`lctl get_param -n osc.*.max_dirty_mb | head -n 1`
 	lctl set_param -n osc.*.max_dirty_mb 0
 	for i in `seq 10` ; do
@@ -2722,7 +2722,7 @@ test_63() {
 	lctl set_param -n osc.*.max_dirty_mb $MAX_DIRTY_MB
 	rm -f $DIR/f63 || true
 }
-run_test 63 "Verify oig_wait interruption does not crash ======="
+run_test 63a "Verify oig_wait interruption does not crash ======="
 
 # bug 2248 - async write errors didn't return to application on sync
 # bug 3677 - async write errors left page locked

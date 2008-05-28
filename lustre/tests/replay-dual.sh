@@ -255,7 +255,7 @@ test_14() {
 }
 run_test 14 "timeouts waiting for lost client during replay"
 
-test_15() {
+test_15a() {	# was test_15
     replay_barrier $SINGLEMDS
     createmany -o $MOUNT1/$tfile- 25
     createmany -o $MOUNT2/$tfile-2- 1
@@ -270,72 +270,7 @@ test_15() {
     zconf_mount `hostname` $MOUNT2 || error "mount $MOUNT2 fail"
     return 0
 }
-run_test 15 "timeout waiting for lost client during replay, 1 client completes"
-
-test_15a() {
-    local ost_last_id=""
-    local osc_last_id=""
-    
-    replay_barrier $SINGLEMDS
-    echo "data" > "$MOUNT2/${tfile}-m2"
-
-    umount $MOUNT2
-    facet_failover $SINGLEMDS
-    df $MOUNT || return 1
-    
-    ost_last_id=`lctl get_param -n obdfilter.*.last_id`
-    mds_last_id=`lctl get_param -n osc.*mds*.last_id`
-    
-    echo "Ids after MDS<->OST synchonizing"
-    echo "--------------------------------"
-    echo "MDS last_id:"
-    echo $mds_last_id
-    echo "OST last_id:"
-    echo $ost_last_id
-
-    local i=0
-    echo $ost_last_id | while read id; do
-	ost_ids[$i]=$id
-	((i++))
-    done
-    
-    i=0
-    echo $mds_last_id | while read id; do
-	mds_ids[$i]=$id
-	((i++))
-    done
-    
-    local arr_len=${#mds_ids[*]}
-    for ((i=0;i<$arr_len;i++)); do
-	    mds_id=${mds_ids[i]}
-	    ost_id=${ost_ids[i]}
-	    
-	    test $mds_id -ge $ost_id || {
-		echo "MDS last id ($mds_id) is smaller than OST one ($ost_id)"
-		return 2
-	    }
-    done
-
-    zconf_mount `hostname` $MOUNT2 || error "mount $MOUNT2 fail"
-    return 0
-}
-#CROW run_test 15a "OST clear orphans - synchronize ids on MDS and OST"
-
-test_15b() {
-    replay_barrier $SINGLEMDS
-    echo "data" > "$MOUNT2/${tfile}-m2"
-    umount $MOUNT2
-
-    do_facet ost1 "lctl set_param fail_loc=0x80000802"
-    facet_failover $SINGLEMDS
-
-    df $MOUNT || return 1
-    do_facet ost1 "lctl set_param fail_loc=0"
-    
-    zconf_mount `hostname` $MOUNT2 || error "mount $MOUNT2 fail"
-    return 0
-}
-#CROW run_test 15b "multiple delayed OST clear orphans"
+run_test 15a "timeout waiting for lost client during replay, 1 client completes"
 
 test_15c() {
     replay_barrier $SINGLEMDS
