@@ -346,6 +346,7 @@ fi
 if [ "$SANITY_SEC" != "no" ]; then
         title sanity-sec
         bash sanity-sec.sh
+        SANITY_SEC="done"
 fi
 
 RC=$?
