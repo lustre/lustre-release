@@ -164,7 +164,7 @@ static int client_common_fill_super(struct super_block *sb,
                 err = lprocfs_register_mountpoint(proc_lustre_fs_root, sb,
                                                   osc, mdc);
                 if (err < 0)
-                        CERROR("could not register mount in /proc/lustre");
+                        CERROR("could not register mount in /proc/fs/lustre\n");
         }
 
         /* indicate the features supported by this client */
