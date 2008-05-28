@@ -1385,7 +1385,10 @@ AT_MAX_SET=0
 
 at_start()
 {
-    at_is_valid || { skip "AT env is invalid" && return 1 }
+    if ! at_is_valid; then
+        skip "AT env is invalid"
+        return 1
+    fi
 
     if ! at_is_enabled; then
         echo "AT is disabled, enable it by force temporarily"
