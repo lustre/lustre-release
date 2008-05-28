@@ -1059,6 +1059,13 @@ Details    : If there are additional extended attributes stored on the MDS,
 	     external attribute block (e.g. ACL growing in size) for file
 	     data to be lost.
 
+Severity   : normal
+Bugzilla   : 15346
+Description: skiplist implementation simplification
+Details    : skiplists are used to group compatible locks on granted list
+             that was implemented as tracking first and last lock of each lock group
+             the patch changes that to using doubly linked lists
+
 --------------------------------------------------------------------------------
 
 2007-08-10         Cluster File Systems, Inc. <info@clusterfs.com>
