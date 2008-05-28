@@ -36,7 +36,7 @@ test_0a() {
     zconf_umount `hostname` $MOUNT -f
     # needs to run during initial client->OST connection
     #define OBD_FAIL_OST_ALL_REPLY_NET       0x211
-    do_facet ost "sysctl -w lustre.fail_loc=0x80000211"
+    do_facet ost "lctl set_param fail_loc=0x80000211"
     zconf_mount `hostname` $MOUNT && df $MOUNT || error "0a mount fail"
 }
 run_test 0a "target handle mismatch (bug 5317) `date +%H:%M:%S`"
@@ -130,7 +130,7 @@ test_6() {
     sleep 2					# ensure we have a fresh statfs
     sync
 #define OBD_FAIL_MDS_REINT_NET_REP       0x119
-    do_facet mds "sysctl -w lustre.fail_loc=0x80000119"
+    do_facet mds "lctl set_param fail_loc=0x80000119"
     after_dd=`kbytesfree`
     log "before: $before after_dd: $after_dd"
     (( $before > $after_dd )) || return 1

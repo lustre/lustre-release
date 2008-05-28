@@ -169,7 +169,7 @@ run_test() {
 [ "$SANITYLOG" ] && rm -f $SANITYLOG || true
 
 error() { 
-	sysctl -w lustre.fail_loc=0
+	lctl set_param fail_loc=0
 	log "FAIL: $TESTNAME $@"
 	$LCTL dk $TMP/lustre-log-$TESTNAME.log
 	if [ "$SANITYLOG" ]; then

@@ -21,7 +21,7 @@ SETUP=${SETUP:-"setup"}
 CLEANUP=${CLEANUP:-"stopall"}
 
 if [ "$ONLY" == "cleanup" ]; then
-    sysctl -w lnet.debug=0 || true
+    lctl set_param debug=0 || true
     $CLEANUP
     exit 0
 fi

@@ -320,7 +320,7 @@ test_5e() {
 	start_mds
 
 #define OBD_FAIL_PTLRPC_DELAY_SEND       0x506
-	do_facet client "sysctl -w lustre.fail_loc=0x80000506"
+	do_facet client "lctl set_param fail_loc=0x80000506"
 	grep " $MOUNT " /etc/mtab && echo "test 5e: mtab before mount" && return 10
 	mount_client $MOUNT || echo "mount failed (not fatal)"
 	cleanup  || return $?
@@ -357,17 +357,17 @@ run_test 8 "double mount setup"
 test_9() {
         start_ost
 
-	do_facet ost1 sysctl lnet.debug=\'inode trace\' || return 1
-	do_facet ost1 sysctl lnet.subsystem_debug=\'mds ost\' || return 1
+	do_facet ost1 lctl set_param debug=\'inode trace\' || return 1
+	do_facet ost1 lctl set_param subsystem_debug=\'mds ost\' || return 1
 
-        CHECK_PTLDEBUG="`do_facet ost1 sysctl -n lnet.debug`"
+        CHECK_PTLDEBUG="`do_facet ost1 lctl get_param -n debug`"
         if [ "$CHECK_PTLDEBUG" ] && [ "$CHECK_PTLDEBUG" = "trace inode" ];then
            echo "lnet.debug success"
         else
            echo "lnet.debug: want 'trace inode', have '$CHECK_PTLDEBUG'"
            return 1
         fi
-        CHECK_SUBSYS="`do_facet ost1 sysctl -n lnet.subsystem_debug`"
+        CHECK_SUBSYS="`do_facet ost1 lctl get_param -n subsystem_debug`"
         if [ "$CHECK_SUBSYS" ] && [ "$CHECK_SUBSYS" = "mds ost" ]; then
            echo "lnet.subsystem_debug success"
         else
@@ -862,7 +862,7 @@ test_23b() {    # was test_23
 	start_ost
 	start_mds
 	# Simulate -EINTR during mount OBD_FAIL_LDLM_CLOSE_THREAD
-	sysctl -w lustre.fail_loc=0x80000313
+	lctl set_param fail_loc=0x80000313
 	mount_client $MOUNT
 	cleanup
 }
@@ -960,7 +960,7 @@ test_26() {
     # we need modules before mount for sysctl, so make sure...
     do_facet mds "lsmod | grep -q lustre || modprobe lustre"
 #define OBD_FAIL_MDS_FS_SETUP            0x135
-    do_facet mds "sysctl -w lustre.fail_loc=0x80000135"
+    do_facet mds "lctl set_param fail_loc=0x80000135"
     start_mds && echo MDS started && return 1
     lctl get_param -n devices
     DEVS=$(lctl get_param -n devices | wc -l)
@@ -1150,7 +1150,7 @@ test_32a() {
 	local tmpdir=$TMP/conf32a
 	unzip -o -j -d $tmpdir $DISK1_4 || { skip "Cant unzip $DISK1_4, skipping" && return ; }
 	load_modules
-	sysctl lnet.debug=$PTLDEBUG
+	lctl set_param debug=$PTLDEBUG
 
 	$TUNEFS $tmpdir/mds || error "tunefs failed"
 	# nids are wrong, so client wont work, but server should start
@@ -1218,7 +1218,7 @@ test_32b() {
 	local tmpdir=$TMP/conf32b
 	unzip -o -j -d $tmpdir $DISK1_4 || { skip "Cant unzip $DISK1_4, skipping" && return ; }
 	load_modules
-	sysctl lnet.debug=$PTLDEBUG
+	lctl set_param debug=$PTLDEBUG
 	NEWNAME=sofia
 
 	# writeconf will cause servers to register with their current nids
@@ -1295,8 +1295,8 @@ test_33b() {	# was test_34
         do_facet client dd if=/dev/zero of=$MOUNT/24 bs=1024k count=1
         # Drop lock cancelation reply during umount
 	#define OBD_FAIL_LDLM_CANCEL             0x304
-        do_facet client sysctl -w lustre.fail_loc=0x80000304
-        #sysctl -w lnet.debug=-1
+        do_facet client lctl set_param fail_loc=0x80000304
+        #lctl set_param debug=-1
         umount_client $MOUNT
         cleanup
 }
@@ -1352,8 +1352,8 @@ run_test 34c "force umount with failed ost should be normal"
 test_35() { # bug 12459
 	setup
 
-	DBG_SAVE="`sysctl -n lnet.debug`"
-	sysctl -w lnet.debug="ha"
+	DBG_SAVE="`lctl get_param -n debug`"
+	lctl set_param debug="ha"
 
 	log "Set up a fake failnode for the MDS"
 	FAKENID="127.0.0.2"
@@ -1375,7 +1375,7 @@ test_35() { # bug 12459
 	log "Wait for df ($DFPID) ... "
 	wait $DFPID
 	log "done"
-	sysctl -w lnet.debug="$DBG_SAVE"
+	lctl set_param debug="$DBG_SAVE"
 
 	# retrieve from the log the first server that the client tried to
 	# contact after the connection loss

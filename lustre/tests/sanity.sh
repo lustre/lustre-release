@@ -143,8 +143,8 @@ echo # add a newline after mke2fs.
 
 umask 077
 
-OLDDEBUG="`sysctl -n lnet.debug 2> /dev/null`"
-sysctl -w lnet.debug=-1 2> /dev/null || true
+OLDDEBUG="`lctl get_param -n debug 2> /dev/null`"
+lctl set_param debug=-1 2> /dev/null || true
 test_0() {
 	touch $DIR/$tfile
 	$CHECKSTAT -t file $DIR/$tfile || error
@@ -917,7 +917,7 @@ reset_enospc() {
 	[ "$1" ] && FAIL_LOC=$1 || FAIL_LOC=0
 	mkdir -p $DIR/d27/nospc
 	rmdir $DIR/d27/nospc
-	sysctl -w lustre.fail_loc=$FAIL_LOC
+	lctl set_param fail_loc=$FAIL_LOC
 }
 
 exhaust_precreations() {
@@ -932,7 +932,7 @@ exhaust_precreations() {
         mkdir -p $DIR/d27/${OST}
 	$SETSTRIPE $DIR/d27/${OST} -i $OSTIDX -c 1
 #define OBD_FAIL_OST_ENOSPC              0x215
-	sysctl -w lustre.fail_loc=0x215
+	lctl set_param fail_loc=0x215
 	echo "Creating to objid $last_id on ost $OST..."
 	createmany -o $DIR/d27/${OST}/f $next_id $((last_id - next_id + 2))
 	lctl get_param -n osc.*${OST}-osc-MDT0000.prealloc* | grep '[0-9]'
@@ -1053,10 +1053,10 @@ test_27u() { # bug 4900
 
         #define OBD_FAIL_MDS_OSC_PRECREATE      0x13d
 
-        sysctl -w lustre.fail_loc=0x13d
+        lctl set_param fail_loc=0x13d
         mkdir -p $DIR/d27u
         createmany -o $DIR/d27u/t- 1000
-        sysctl -w lustre.fail_loc=0
+        lctl set_param fail_loc=0
 
         TLOG=$DIR/$tfile.getstripe
         $GETSTRIPE $DIR/d27u > $TLOG 
@@ -1078,15 +1078,15 @@ test_27v() { # bug 4900
 
         touch $DIR/$tdir/$tfile
         #define OBD_FAIL_TGT_DELAY_PRECREATE     0x705
-        sysctl -w lustre.fail_loc=0x705
+        lctl set_param fail_loc=0x705
         START=`date +%s`
         for F in `seq 1 32`; do
                 touch $DIR/$tdir/$tfile.$F
         done
-        sysctl -w lustre.fail_loc=0
+        lctl set_param fail_loc=0
 
         FINISH=`date +%s`
-        TIMEOUT=`sysctl -n lustre.timeout`
+        TIMEOUT=`lctl get_param -n timeout`
         [ $((FINISH - START)) -ge $((TIMEOUT / 2)) ] && \
                error "$FINISH - $START >= $TIMEOUT / 2"
 
@@ -1649,7 +1649,7 @@ test_36f() {
 	DATESTR="Dec 20  2000"
 	mkdir -p $DIR/$tdir
 	#define OBD_FAIL_OST_BRW_PAUSE_BULK 0x214
-        sysctl -w lustre.fail_loc=0x80000214
+	lctl set_param fail_loc=0x80000214
 	date; date +%s
 	cp /etc/hosts $DIR/$tdir/$tfile
 	sync & # write RPC generated with "current" inode timestamp, but delayed
@@ -2070,7 +2070,7 @@ run_test 48b "Access removed working dir (should return errors)="
 
 test_48c() { # bug 2350
 	check_kernel_version 36 || return 0
-	#sysctl -w lnet.debug=-1
+	#lctl set_param debug=-1
 	#set -vx
 	mkdir -p $DIR/d48c/dir
 	cd $DIR/d48c/dir
@@ -2093,7 +2093,7 @@ run_test 48c "Access removed working subdir (should return errors)"
 
 test_48d() { # bug 2350
 	check_kernel_version 36 || return 0
-	#sysctl -w lnet.debug=-1
+	#lctl set_param debug=-1
 	#set -vx
 	mkdir -p $DIR/d48d/dir
 	cd $DIR/d48d/dir
@@ -2117,7 +2117,7 @@ run_test 48d "Access removed parent subdir (should return errors)"
 
 test_48e() { # bug 4134
 	check_kernel_version 41 || return 0
-	#sysctl -w lnet.debug=-1
+	#lctl set_param debug=-1
 	#set -vx
 	mkdir -p $DIR/d48e/dir
 	cd $DIR/d48e/dir
@@ -2663,9 +2663,9 @@ test_60c() {
 	echo "create 5000 files" 
 	createmany -o $DIR/f60c- 5000
 #define OBD_FAIL_MDS_LLOG_CREATE_FAILED  0x13c
-        sysctl -w lustre.fail_loc=0x8000013c
+	lctl set_param fail_loc=0x8000013c
 	unlinkmany $DIR/f60c- 5000
-        sysctl -w lustre.fail_loc=0
+	lctl set_param fail_loc=0
 }
 run_test 60c "unlink file when mds full"
 
@@ -2677,14 +2677,14 @@ test_60d() {
 	$LCTL mark "$MESSAGE" || error "$LCTL mark failed"
 	dmesg | grep -q "$MESSAGE" || error "didn't find debug marker in log"
 
-	lctl set_param -n printk=0 || error "set lnet.printk failed"
+	lctl set_param printk=0 || error "set lnet.printk failed"
 	lctl get_param -n printk | grep emerg || error "lnet.printk dropped emerg"
 	MESSAGE="new test message ID $RANDOM $$"
 	# Assume here that libcfs_debug_mark_buffer() uses D_WARNING
 	$LCTL mark "$MESSAGE" || error "$LCTL mark failed"
 	dmesg | grep -q "$MESSAGE" && error "D_WARNING wasn't masked" || true
 
-	sysctl -w lnet.printk="$SAVEPRINTK"
+	lctl set_param -n printk="$SAVEPRINTK"
 }
 run_test 60d "test printk console message masking"
 
@@ -2702,9 +2702,9 @@ test_62() {
         f="$DIR/f62"
         echo foo > $f
         cancel_lru_locks osc
-        sysctl -w lustre.fail_loc=0x405
+        lctl set_param fail_loc=0x405
         cat $f && error "cat succeeded, expect -EIO"
-        sysctl -w lustre.fail_loc=0
+        lctl set_param fail_loc=0
 }
 run_test 62 "verify obd_match failure doesn't LBUG (should -EIO)"
 
@@ -2728,14 +2728,14 @@ run_test 63 "Verify oig_wait interruption does not crash ======="
 # bug 3677 - async write errors left page locked
 test_63b() {
 	debugsave
-	sysctl -w lnet.debug=-1
+	lctl set_param debug=-1
 
 	# ensure we have a grant to do async writes
 	dd if=/dev/zero of=$DIR/$tfile bs=4k count=1
 	rm $DIR/$tfile
 
 	#define OBD_FAIL_OSC_BRW_PREP_REQ        0x406
-	sysctl -w lustre.fail_loc=0x80000406
+	lctl set_param fail_loc=0x80000406
 	multiop $DIR/$tfile Owy && \
 		error "sync didn't return ENOMEM"
 	sync; sleep 2; sync	# do a real sync this time to flush page
@@ -2967,20 +2967,20 @@ test_69() {
 
 	$DIRECTIO write ${f}.2 0 1 || error "directio write error"
 
-	sysctl -w lustre.fail_loc=0x217
+	lctl set_param fail_loc=0x217
 	truncate $f 1 # vmtruncate() will ignore truncate() error.
 	$DIRECTIO write $f 0 2 && error "write succeeded, expect -ENOENT"
 
-	sysctl -w lustre.fail_loc=0
+	lctl set_param fail_loc=0
 	$DIRECTIO write $f 0 2 || error "write error"
 
 	cancel_lru_locks osc
 	$DIRECTIO read $f 0 1 || error "read error"
 
-	sysctl -w lustre.fail_loc=0x217
+	lctl set_param fail_loc=0x217
 	$DIRECTIO read $f 1 1 && error "read succeeded, expect -ENOENT"
 
-	sysctl -w lustre.fail_loc=0
+	lctl set_param fail_loc=0
 	rm -f $f
 }
 run_test 69 "verify oa2dentry return -ENOENT doesn't LBUG ======"
@@ -3041,10 +3041,10 @@ test_73() {
 	multiop_bg_pause $DIR/d73-1/f73-1 O_c || return 1
 	pid1=$!
 
-	lctl set_param -n fail_loc=0x80000129
+	lctl set_param fail_loc=0x80000129
 	multiop $DIR/d73-1/f73-2 Oc &
 	sleep 1
-	lctl set_param -n fail_loc=0
+	lctl set_param fail_loc=0
 
 	multiop $DIR/d73-2/f73-3 Oc &
 	pid3=$!
@@ -3068,10 +3068,10 @@ test_74a() { # bug 6149, 6184
 	# very important to OR with OBD_FAIL_ONCE (0x80000000) -- otherwise it
 	# will spin in a tight reconnection loop
 	touch $DIR/f74a
-	sysctl -w lustre.fail_loc=0x8000030e
+	lctl set_param fail_loc=0x8000030e
 	# get any lock that won't be difficult - lookup works.
 	ls $DIR/f74a
-	sysctl -w lustre.fail_loc=0
+	lctl set_param fail_loc=0
 	true
 }
 run_test 74a "ldlm_enqueue freed-export error path, ls (shouldn't LBUG)"
@@ -3081,10 +3081,10 @@ test_74b() { # bug 13310
 	#
 	# very important to OR with OBD_FAIL_ONCE (0x80000000) -- otherwise it
 	# will spin in a tight reconnection loop
-	sysctl -w lustre.fail_loc=0x8000030e
+	lctl set_param fail_loc=0x8000030e
 	# get a "difficult" lock
 	touch $DIR/f74b
-	sysctl -w lustre.fail_loc=0
+	lctl set_param fail_loc=0
 	true
 }
 run_test 74b "ldlm_enqueue freed-export error path, touch (shouldn't LBUG)"
@@ -3284,11 +3284,11 @@ run_test 77a "normal checksum read/write operation ============="
 test_77b() { # bug 10889
 	[ ! -f $F77_TMP ] && setup_f77
 	#define OBD_FAIL_OSC_CHECKSUM_SEND       0x409
-	sysctl -w lustre.fail_loc=0x80000409
+	lctl set_param fail_loc=0x80000409
 	set_checksums 1
 	dd if=$F77_TMP of=$DIR/f77b bs=1M count=$F77SZ conv=sync || \
 		error "dd error: $?"
-	sysctl -w lustre.fail_loc=0
+	lctl set_param fail_loc=0
 	set_checksums 0
 }
 run_test 77b "checksum error on client write ===================="
@@ -3300,9 +3300,9 @@ test_77c() { # bug 10889
 		cancel_lru_locks osc
 		set_checksum_type $algo
 		#define OBD_FAIL_OSC_CHECKSUM_RECEIVE    0x408
-		sysctl -w lustre.fail_loc=0x80000408
+		lctl set_param fail_loc=0x80000408
 		cmp $F77_TMP $DIR/f77b || error "file compare failed"
-		sysctl -w lustre.fail_loc=0
+		lctl set_param fail_loc=0
 	done
 	set_checksums 0
 	set_checksum_type $ORIG_CSUM_TYPE
@@ -3311,11 +3311,11 @@ run_test 77c "checksum error on client read ==================="
 
 test_77d() { # bug 10889
 	#define OBD_FAIL_OSC_CHECKSUM_SEND       0x409
-	sysctl -w lustre.fail_loc=0x80000409
+	lctl set_param fail_loc=0x80000409
 	set_checksums 1
 	directio write $DIR/f77 0 $F77SZ $((1024 * 1024)) || \
 		error "direct write: rc=$?"
-	sysctl -w lustre.fail_loc=0
+	lctl set_param fail_loc=0
 	set_checksums 0
 }
 run_test 77d "checksum error on OST direct write ==============="
@@ -3323,12 +3323,12 @@ run_test 77d "checksum error on OST direct write ==============="
 test_77e() { # bug 10889
 	[ ! -f $DIR/f77 ] && skip "requires 77d - skipping" && return  
 	#define OBD_FAIL_OSC_CHECKSUM_RECEIVE    0x408
-	sysctl -w lustre.fail_loc=0x80000408
+	lctl set_param fail_loc=0x80000408
 	set_checksums 1
 	cancel_lru_locks osc
 	directio read $DIR/f77 0 $F77SZ $((1024 * 1024)) || \
 		error "direct read: rc=$?"
-	sysctl -w lustre.fail_loc=0
+	lctl set_param fail_loc=0
 	set_checksums 0
 }
 run_test 77e "checksum error on OST direct read ================"
@@ -3339,10 +3339,10 @@ test_77f() { # bug 10889
 		cancel_lru_locks osc
 		set_checksum_type $algo
 		#define OBD_FAIL_OSC_CHECKSUM_SEND       0x409
-		sysctl -w lustre.fail_loc=0x409
+		lctl set_param fail_loc=0x409
 		directio write $DIR/f77 0 $F77SZ $((1024 * 1024)) && \
 			error "direct write succeeded"
-		sysctl -w lustre.fail_loc=0
+		lctl set_param fail_loc=0
 	done
 	set_checksum_type $ORIG_CSUM_TYPE
 	set_checksums 0
@@ -3354,11 +3354,11 @@ test_77g() { # bug 10889
 		skip "remote OST" && return
 	[ ! -f $F77_TMP ] && setup_f77
 	#define OBD_FAIL_OST_CHECKSUM_RECEIVE       0x21a
-	sysctl -w lustre.fail_loc=0x8000021a
+	lctl set_param fail_loc=0x8000021a
 	set_checksums 1
 	dd if=$F77_TMP of=$DIR/f77 bs=1M count=$F77SZ || \
 		error "write error: rc=$?"
-	sysctl -w lustre.fail_loc=0
+	lctl set_param fail_loc=0
 	set_checksums 0
 }
 run_test 77g "checksum error on OST write ======================"
@@ -3369,19 +3369,19 @@ test_77h() { # bug 10889
 	[ ! -f $DIR/f77 ] && skip "requires 77g - skipping" && return  
 	cancel_lru_locks osc
 	#define OBD_FAIL_OST_CHECKSUM_SEND          0x21b
-	sysctl -w lustre.fail_loc=0x8000021b
+	lctl set_param fail_loc=0x8000021b
 	set_checksums 1
 	cmp $F77_TMP $DIR/f77 || error "file compare failed"
-	sysctl -w lustre.fail_loc=0
+	lctl set_param fail_loc=0
 	set_checksums 0
 }
 run_test 77h "checksum error on OST read ======================="
 
 test_77i() { # bug 13805
 	#define OBD_FAIL_OSC_CONNECT_CKSUM       0x40b
-	sysctl -w lustre.fail_loc=0x40b
+	lctl set_param fail_loc=0x40b
 	remount_client $MOUNT
-	sysctl -w lustre.fail_loc=0
+	lctl set_param fail_loc=0
 	for VALUE in `lctl get_param osc.*osc-[^mM]*.checksum_type`; do
 		PARAM=`echo ${VALUE[0]} | cut -d "=" -f1`
 		algo=`lctl get_param -n $PARAM | sed 's/.*\[\(.*\)\].*/\1/g'`
@@ -3393,9 +3393,9 @@ run_test 77i "client not supporting OSD_CONNECT_CKSUM =========="
 
 test_77j() { # bug 13805
 	#define OBD_FAIL_OSC_CKSUM_ADLER_ONLY    0x40c
-	sysctl -w lustre.fail_loc=0x40c
+	lctl set_param fail_loc=0x40c
 	remount_client $MOUNT
-	sysctl -w lustre.fail_loc=0
+	lctl set_param fail_loc=0
 	for VALUE in `lctl get_param osc.*osc-[^mM]*.checksum_type`; do
                 PARAM=`echo ${VALUE[0]} | cut -d "=" -f1`
 		algo=`lctl get_param -n $PARAM | sed 's/.*\[\(.*\)\].*/\1/g'`
@@ -4199,9 +4199,9 @@ test_117() # bug 10891
 {
         dd if=/dev/zero of=$DIR/$tfile bs=1M count=1
         #define OBD_FAIL_OST_SETATTR_CREDITS 0x21e
-        sysctl -w lustre.fail_loc=0x21e
+        lctl set_param fail_loc=0x21e
         > $DIR/$tfile || error "truncate failed"
-        sysctl -w lustre.fail_loc=0
+        lctl set_param fail_loc=0
         echo "Truncate succeeded."
 }
 run_test 117 "verify fsfilt_extend =========="
@@ -4365,7 +4365,7 @@ test_118f() {
         reset_async
 
         #define OBD_FAIL_OSC_BRW_PREP_REQ2        0x40a
-        sysctl -w lustre.fail_loc=0x8000040a
+        lctl set_param fail_loc=0x8000040a
 
 	# Should simulate EINVAL error which is fatal
         multiop $DIR/$tfile oO_CREAT:O_RDWR:O_SYNC:w4096c
@@ -4374,7 +4374,7 @@ test_118f() {
 		error "Must return error due to dropped pages, rc=$RC"
 	fi
 	
-        sysctl -w lustre.fail_loc=0x0
+        lctl set_param fail_loc=0x0
         
         LOCKED=$(lctl get_param -n llite.*.dump_page_cache | grep -c locked)
         DIRTY=$(lctl get_param -n llite.*.dump_page_cache | grep -c dirty)
@@ -4397,24 +4397,24 @@ test_118f() {
 run_test 118f "Simulate unrecoverable OSC side error =========="
 
 test_118g() {
-        reset_async
+	reset_async
 
 	#define OBD_FAIL_OSC_BRW_PREP_REQ        0x406
-        sysctl -w lustre.fail_loc=0x406
+	lctl set_param fail_loc=0x406
 
 	# simulate local -ENOMEM
-        multiop $DIR/$tfile oO_CREAT:O_RDWR:O_SYNC:w4096c
-        RC=$?
+	multiop $DIR/$tfile oO_CREAT:O_RDWR:O_SYNC:w4096c
+	RC=$?
 	
-        sysctl -w lustre.fail_loc=0
+	lctl set_param fail_loc=0
 	if [[ $RC -eq 0 ]]; then
 		error "Must return error due to dropped pages, rc=$RC"
 	fi
 
-        LOCKED=$(lctl get_param -n llite.*.dump_page_cache | grep -c locked)
-        DIRTY=$(lctl get_param -n llite.*.dump_page_cache | grep -c dirty)
-        WRITEBACK=$(lctl get_param -n llite.*.dump_page_cache |
-                    grep -c writeback)
+	LOCKED=$(lctl get_param -n llite.*.dump_page_cache | grep -c locked)
+	DIRTY=$(lctl get_param -n llite.*.dump_page_cache | grep -c dirty)
+	WRITEBACK=$(lctl get_param -n llite.*.dump_page_cache |
+			grep -c writeback)
 	if [[ $LOCKED -ne 0 ]]; then
 		error "Locked pages remain in cache, locked=$LOCKED"
 	fi
@@ -4426,7 +4426,7 @@ test_118g() {
 	rm -f $DIR/$tfile
 	echo "No pages locked after fsync"
 
-        reset_async
+	reset_async
 	return 0
 }
 run_test 118g "Don't stay in wait if we got local -ENOMEM  =========="
@@ -4777,10 +4777,10 @@ test_121() { #bug #10589
 	rm -rf $DIR/$tfile
 	writes=$(LANG=C dd if=/dev/zero of=$DIR/$tfile count=1 2>&1 | awk -F '+' '/out/ {print $1}')
 #define OBD_FAIL_LDLM_CANCEL_RACE        0x310
-	sysctl -w lustre.fail_loc=0x310
+	lctl set_param fail_loc=0x310
 	cancel_lru_locks osc > /dev/null
 	reads=$(LANG=C dd if=$DIR/$tfile of=/dev/null 2>&1 | awk -F '+' '/in/ {print $1}')
-	sysctl -w lustre.fail_loc=0
+	lctl set_param fail_loc=0
 	[ "$reads" -eq "$writes" ] || error "read" $reads "blocks, must be" $writes
 }
 run_test 121 "read cancel race ========="
@@ -4855,10 +4855,10 @@ test_123b () { # statahead(bug 15027)
         cancel_lru_locks osc
 
 #define OBD_FAIL_MDC_GETATTR_ENQUEUE     0x803
-        sysctl -w lustre.fail_loc=0x80000803
+        lctl set_param fail_loc=0x80000803
         ls -lR $DIR/$tdir > /dev/null
         log "ls done"
-        sysctl -w lustre.fail_loc=0x0
+        lctl set_param fail_loc=0x0
         lctl get_param -n llite.*.statahead_stats
         rm -r $DIR/$tdir
         sync
@@ -5117,7 +5117,7 @@ HOME=$OLDHOME
 log "cleanup: ======================================================"
 check_and_cleanup_lustre
 if [ "$I_MOUNTED" != "yes" ]; then
-	sysctl -w lnet.debug="$OLDDEBUG" 2> /dev/null || true
+	lctl set_param debug="$OLDDEBUG" 2> /dev/null || true
 fi
 
 echo '=========================== finished ==============================='
