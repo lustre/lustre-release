@@ -333,7 +333,7 @@ test_17() { # bug 3513, 3667
 	cp /etc/termcap $DIR1/f17
 	cancel_lru_locks osc > /dev/null
 	#define OBD_FAIL_ONCE|OBD_FAIL_LDLM_CREATE_RESOURCE    0x30a
-	sysctl -w lustre.fail_loc=0x8000030a
+	lctl set_param fail_loc=0x8000030a
 	ls -ls $DIR1/f17 | awk '{ print $1,$6 }' > $DIR1/f17-1 & \
 	ls -ls $DIR2/f17 | awk '{ print $1,$6 }' > $DIR2/f17-2
 	wait
@@ -557,7 +557,7 @@ run_test 28 "read/write/truncate file with lost stripes"
 test_29() { # bug 10999
 	touch $DIR1/$tfile
 	#define OBD_FAIL_LDLM_GLIMPSE  0x30f
-	sysctl -w lustre.fail_loc=0x8000030f
+	lctl set_param fail_loc=0x8000030f
 	ls -l $DIR2/$tfile &
 	sleep 0.500s
 	dd if=/dev/zero of=$DIR1/$tfile bs=4k count=1
@@ -582,7 +582,7 @@ test_31() {
         writes=`LANG=C dd if=/dev/zero of=$DIR/$tdir/$tfile count=1 2>&1 |
                 awk 'BEGIN { FS="+" } /out/ {print $1}'`
         #define OBD_FAIL_LDLM_CANCEL_BL_CB_RACE   0x314
-        sysctl -w lustre.fail_loc=0x314
+        lctl set_param fail_loc=0x314
         reads=`LANG=C dd if=$DIR2/$tdir/$tfile of=/dev/null 2>&1 |
                awk 'BEGIN { FS="+" } /in/ {print $1}'`
         [ $reads -eq $writes ] || error "read" $reads "blocks, must be" $writes

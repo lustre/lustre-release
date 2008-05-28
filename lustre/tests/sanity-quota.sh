@@ -116,15 +116,15 @@ lustre_fail() {
 
 	case $fail_node in
 	    "mds" )
-		do_facet mds "sysctl -w lustre.fail_loc=$fail_loc" ;;
+		do_facet mds "lctl set_param fail_loc=$fail_loc" ;;
 	    "ost" )
 		for num in `seq $OSTCOUNT`; do
-		    do_facet ost$num "sysctl -w lustre.fail_loc=$fail_loc"
+		    do_facet ost$num "lctl set_param fail_loc=$fail_loc"
 		done ;;
 	    "mds_ost" )
-		do_facet mds "sysctl -w lustre.fail_loc=$fail_loc" ;
+		do_facet mds "lctl set_param fail_loc=$fail_loc" ;
 		for num in `seq $OSTCOUNT`; do
-		    do_facet ost$num "sysctl -w lustre.fail_loc=$fail_loc"
+		    do_facet ost$num "lctl set_param fail_loc=$fail_loc"
 		done ;;
 	    * ) echo "usage: lustre_fail fail_node fail_loc" ;
 		return 1 ;;
@@ -145,10 +145,10 @@ test_0() {
 
 	$LFS setquota -u $TSTUSR 0 0 0 0 $DIR
 	$LFS setquota -g $TSTUSR 0 0 0 0 $DIR
-	sysctl -w lnet.debug="+quota"
-	do_facet mds "sysctl -w lnet.debug=+quota"
+	lctl set_param debug="+quota"
+	do_facet mds "lctl set_param debug=+quota"
 	for num in `seq $OSTCOUNT`; do
-	    do_facet ost$num "sysctl -w lnet.debug=+quota"
+	    do_facet ost$num "lctl set_param debug=+quota"
 	done
 }
 run_test 0 "Set quota ============================="
@@ -1328,7 +1328,7 @@ test_18() {
 
 	echo  "   step2: testing ......"
 	count=0
-	timeout=$(sysctl -n lustre.timeout)
+	timeout=$(lctl get_param -n timeout)
 	while [ true ]; do
 	    if [ -z `ps -ef | awk '$2 == '${DDPID}' { print $8 }'` ]; then break; fi
 	    count=$[count+1]
@@ -1380,7 +1380,7 @@ test_18a() {
 
 	echo  "   step2: testing ......"
 	count=0
-	timeout=$(sysctl -n lustre.timeout)
+	timeout=$(lctl get_param -n timeout)
 	while [ true ]; do
 	    if [ -z `ps -ef | awk '$2 == '${DDPID}' { print $8 }'` ]; then break; fi
 	    count=$[count+1]
@@ -1455,7 +1455,7 @@ run_test 19 "test if administrative limits updates do not zero operational limit
 test_99()
 {
 	$LFS quotaoff $DIR
-	sysctl -w lnet.debug="-quota"
+	lctl set_param debug="-quota"
 
 	return 0
 }

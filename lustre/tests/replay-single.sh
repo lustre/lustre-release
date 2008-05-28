@@ -56,7 +56,7 @@ test_1() {
 run_test 1 "simple create"
 
 test_1a() {
-    do_facet ost1 "sysctl -w lustre.fail_loc=0"
+    do_facet ost1 "lctl set_param fail_loc=0"
 
     rm -fr $DIR/$tfile
     local old_last_id=`lctl get_param -n obdfilter.*.last_id`
@@ -81,7 +81,7 @@ test_1a() {
     rm -fr $DIR/$tfile
 
 #define OBD_FAIL_OST_CROW_EIO | OBD_FAIL_ONCE
-    do_facet ost1 "sysctl -w lustre.fail_loc=0x80000801"
+    do_facet ost1 "lctl set_param fail_loc=0x80000801"
 
     rm -fr $DIR/1a1
     old_last_id=`lctl get_param -n obdfilter.*.last_id`
@@ -95,7 +95,7 @@ test_1a() {
     
     rm -fr $DIR/1a1
     
-    do_facet ost1 "sysctl -w lustre.fail_loc=0"
+    do_facet ost1 "lctl set_param fail_loc=0"
 }
 #CROW run_test 1a "CROW object create (check OST last_id)"
 
@@ -131,9 +131,9 @@ run_test 3a "replay failed open(O_DIRECTORY)"
 test_3b() {
     replay_barrier mds
 #define OBD_FAIL_MDS_OPEN_PACK | OBD_FAIL_ONCE
-    do_facet mds "sysctl -w lustre.fail_loc=0x80000114"
+    do_facet mds "lctl set_param fail_loc=0x80000114"
     touch $DIR/$tfile
-    do_facet mds "sysctl -w lustre.fail_loc=0"
+    do_facet mds "lctl set_param fail_loc=0"
     fail mds
     $CHECKSTAT -t file $DIR/$tfile && return 2
     return 0
@@ -143,9 +143,9 @@ run_test 3b "replay failed open -ENOMEM"
 test_3c() {
     replay_barrier mds
 #define OBD_FAIL_MDS_ALLOC_OBDO | OBD_FAIL_ONCE
-    do_facet mds "sysctl -w lustre.fail_loc=0x80000128"
+    do_facet mds "lctl set_param fail_loc=0x80000128"
     touch $DIR/$tfile
-    do_facet mds "sysctl -w lustre.fail_loc=0"
+    do_facet mds "lctl set_param fail_loc=0"
     fail mds
 
     $CHECKSTAT -t file $DIR/$tfile && return 2
@@ -703,7 +703,7 @@ test_35() {
     touch $DIR/$tfile
 
 #define OBD_FAIL_MDS_REINT_NET_REP       0x119
-    do_facet mds "sysctl -w lustre.fail_loc=0x80000119"
+    do_facet mds "lctl set_param fail_loc=0x80000119"
     rm -f $DIR/$tfile &
     sleep 1
     sync
@@ -785,7 +785,7 @@ test_40(){
     sleep 1
     facet_failover mds
 #define OBD_FAIL_MDS_CONNECT_NET         0x117
-    do_facet mds "sysctl -w lustre.fail_loc=0x80000117"
+    do_facet mds "lctl set_param fail_loc=0x80000117"
     kill -USR1 $PID
     stat1=`count_ost_writes`
     sleep $TIMEOUT
@@ -845,7 +845,7 @@ test_42() {
     replay_barrier ost1
     unlinkmany $DIR/$tfile-%d 0 400
     debugsave
-    sysctl -w lnet.debug=-1
+    lctl set_param debug=-1
     facet_failover ost1
     
     # osc is evicted, fs is smaller (but only with failout OSTs (bug 7287)
@@ -864,10 +864,10 @@ test_43() { # bug 2530
     replay_barrier mds
 
     # OBD_FAIL_OST_CREATE_NET 0x204
-    do_facet ost1 "sysctl -w lustre.fail_loc=0x80000204"
+    do_facet ost1 "lctl set_param fail_loc=0x80000204"
     fail mds
     sleep 10
-    do_facet ost1 "sysctl -w lustre.fail_loc=0"
+    do_facet ost1 "lctl set_param fail_loc=0"
 
     return 0
 }
@@ -889,12 +889,12 @@ test_44() {
 	echo "$i of 10 ($(date +%s))"
 	do_facet mds "lctl get_param -n mdt.MDS.mds.timeouts | grep service"
 	#define OBD_FAIL_TGT_CONN_RACE     0x701
-	do_facet mds "sysctl -w lustre.fail_loc=0x80000701"
+	do_facet mds "lctl set_param fail_loc=0x80000701"
 	$LCTL --device $mdcdev recover
 	df $MOUNT
     done
 
-    do_facet mds "sysctl -w lustre.fail_loc=0"
+    do_facet mds "lctl set_param fail_loc=0"
     [ $at_max_saved -ne 0 ] && at_max_set $at_max_saved mds
     return 0
 }
@@ -907,11 +907,11 @@ test_44b() {
 	echo "$i of 10 ($(date +%s))"
 	do_facet mds "lctl get_param -n mdt.MDS.mds.timeouts | grep service"
 	#define OBD_FAIL_TGT_DELAY_RECONNECT 0x704
-	do_facet mds "sysctl -w lustre.fail_loc=0x80000704"
+	do_facet mds "lctl set_param fail_loc=0x80000704"
 	$LCTL --device $mdcdev recover
 	df $MOUNT
     done
-    do_facet mds "sysctl -w lustre.fail_loc=0"
+    do_facet mds "lctl set_param fail_loc=0"
     return 0
 }
 run_test 44b "race in target handle connect"
@@ -959,7 +959,7 @@ test_47() { # bug 2824
 
     # OBD_FAIL_OST_CREATE_NET 0x204
     fail ost1
-    do_facet ost1 "sysctl -w lustre.fail_loc=0x80000204"
+    do_facet ost1 "lctl set_param fail_loc=0x80000204"
     df $MOUNT || return 2
 
     # let the MDS discover the OST failure, attempt to recover, fail
@@ -970,7 +970,7 @@ test_47() { # bug 2824
     createmany -o $DIR/$tfile 20 || return 3
     unlinkmany $DIR/$tfile 20 || return 4
 
-    do_facet ost1 "sysctl -w lustre.fail_loc=0"
+    do_facet ost1 "lctl set_param fail_loc=0"
     return 0
 }
 run_test 47 "MDS->OSC failure during precreate cleanup (2824)"
@@ -980,13 +980,13 @@ test_48() {
     createmany -o $DIR/$tfile 20  || return 1
     # OBD_FAIL_OST_EROFS 0x216
     fail mds
-    do_facet ost1 "sysctl -w lustre.fail_loc=0x80000216"
+    do_facet ost1 "lctl set_param fail_loc=0x80000216"
     df $MOUNT || return 2
 
     createmany -o $DIR/$tfile 20 20 || return 2
     unlinkmany $DIR/$tfile 40 || return 3
 
-    do_facet ost1 "sysctl -w lustre.fail_loc=0"
+    do_facet ost1 "lctl set_param fail_loc=0"
     return 0
 }
 run_test 48 "MDS->OSC failure during precreate cleanup (2824)"
@@ -1009,9 +1009,9 @@ test_52() {
     multiop $DIR/$tfile s || return 1
     replay_barrier mds
 #define OBD_FAIL_LDLM_REPLY              0x30c
-    do_facet mds "sysctl -w lustre.fail_loc=0x8000030c"
+    do_facet mds "lctl set_param fail_loc=0x8000030c"
     fail mds || return 2
-    do_facet mds "sysctl -w lustre.fail_loc=0x0"
+    do_facet mds "lctl set_param fail_loc=0x0"
 
     $CHECKSTAT -t file $DIR/$tfile-* && return 3 || true
 }
@@ -1027,10 +1027,10 @@ test_53a() {
     sleep 1
 
     #define OBD_FAIL_MDS_CLOSE_NET 0x115
-    do_facet mds "sysctl -w lustre.fail_loc=0x80000115"
+    do_facet mds "lctl set_param fail_loc=0x80000115"
     kill -USR1 $close_pid
     cancel_lru_locks MDC # force the close
-    do_facet mds "sysctl -w lustre.fail_loc=0"
+    do_facet mds "lctl set_param fail_loc=0"
     mcreate $DIR/${tdir}-2/f || return 1
     
     # close should still be here
@@ -1052,12 +1052,12 @@ test_53b() {
     close_pid=$!
 
     #define OBD_FAIL_MDS_REINT_NET 0x107
-    do_facet mds "sysctl -w lustre.fail_loc=0x80000107"
+    do_facet mds "lctl set_param fail_loc=0x80000107"
     mcreate $DIR/${tdir}-2/f &
     open_pid=$!
     sleep 1
 
-    do_facet mds "sysctl -w lustre.fail_loc=0"
+    do_facet mds "lctl set_param fail_loc=0"
     kill -USR1 $close_pid
     cancel_lru_locks MDC # force the close
     wait $close_pid || return 1
@@ -1080,12 +1080,12 @@ test_53c() {
     multiop $DIR/${tdir}-1/f O_c &
     close_pid=$!
 
-    do_facet mds "sysctl -w lustre.fail_loc=0x80000107"
+    do_facet mds "lctl set_param fail_loc=0x80000107"
     mcreate $DIR/${tdir}-2/f &
     open_pid=$!
     sleep 1
 
-    do_facet mds "sysctl -w lustre.fail_loc=0x80000115"
+    do_facet mds "lctl set_param fail_loc=0x80000115"
     kill -USR1 $close_pid
     cancel_lru_locks MDC  # force the close
 
@@ -1095,7 +1095,7 @@ test_53c() {
     sleep 2
     # close should be gone
     [ -d /proc/$close_pid ] && return 2
-    do_facet mds "sysctl -w lustre.fail_loc=0"
+    do_facet mds "lctl set_param fail_loc=0"
 
     $CHECKSTAT -t file $DIR/${tdir}-1/f || return 3
     $CHECKSTAT -t file $DIR/${tdir}-2/f || return 4
@@ -1112,10 +1112,10 @@ test_53d() {
     sleep 1
 
     # define OBD_FAIL_MDS_CLOSE_NET_REP 0X138    
-    do_facet mds "sysctl -w lustre.fail_loc=0x8000013b"
+    do_facet mds "lctl set_param fail_loc=0x8000013b"
     kill -USR1 $close_pid
     cancel_lru_locks MDC  # force the close
-    do_facet mds "sysctl -w lustre.fail_loc=0"
+    do_facet mds "lctl set_param fail_loc=0"
     mcreate $DIR/${tdir}-2/f || return 1
     
     # close should still be here
@@ -1137,12 +1137,12 @@ test_53e() {
     close_pid=$!
 
     #define OBD_FAIL_MDS_REINT_NET_REP       0x119
-    do_facet mds "sysctl -w lustre.fail_loc=0x80000119"
+    do_facet mds "lctl set_param fail_loc=0x80000119"
     mcreate $DIR/${tdir}-2/f &
     open_pid=$!
     sleep 1
     
-    do_facet mds "sysctl -w lustre.fail_loc=0"
+    do_facet mds "lctl set_param fail_loc=0"
     kill -USR1 $close_pid
     cancel_lru_locks MDC  # force the close
     wait $close_pid || return 1
@@ -1165,12 +1165,12 @@ test_53f() {
         multiop $DIR/${tdir}-1/f O_c &
         close_pid=$!
 
-        do_facet mds "sysctl -w lustre.fail_loc=0x80000119"
+        do_facet mds "lctl set_param fail_loc=0x80000119"
         mcreate $DIR/${tdir}-2/f &
         open_pid=$!
         sleep 1
 
-        do_facet mds "sysctl -w lustre.fail_loc=0x8000013b"
+        do_facet mds "lctl set_param fail_loc=0x8000013b"
         kill -USR1 $close_pid
         cancel_lru_locks MDC
 
@@ -1180,7 +1180,7 @@ test_53f() {
         sleep 2
         #close should be gone
         [ -d /proc/$close_pid ] && return 2
-        do_facet mds "sysctl -w lustre.fail_loc=0"
+        do_facet mds "lctl set_param fail_loc=0"
 
         $CHECKSTAT -t file $DIR/${tdir}-1/f || return 3
         $CHECKSTAT -t file $DIR/${tdir}-2/f || return 4
@@ -1194,16 +1194,16 @@ test_53g() {
         multiop $DIR/${tdir}-1/f O_c &
         close_pid=$!
 
-        do_facet mds "sysctl -w lustre.fail_loc=0x80000119"
+        do_facet mds "lctl set_param fail_loc=0x80000119"
         mcreate $DIR/${tdir}-2/f &
         open_pid=$!
         sleep 1
 
-        do_facet mds "sysctl -w lustre.fail_loc=0x80000115"
+        do_facet mds "lctl set_param fail_loc=0x80000115"
         kill -USR1 $close_pid
         cancel_lru_locks MDC # force the close
 
-        do_facet mds "sysctl -w lustre.fail_loc=0"
+        do_facet mds "lctl set_param fail_loc=0"
         replay_barrier_nodf mds
         fail_nodf mds
         wait $open_pid || return 1
@@ -1223,12 +1223,12 @@ test_53h() {
     multiop $DIR/${tdir}-1/f O_c &
     close_pid=$!
 
-    do_facet mds "sysctl -w lustre.fail_loc=0x80000107"
+    do_facet mds "lctl set_param fail_loc=0x80000107"
     mcreate $DIR/${tdir}-2/f &
     open_pid=$!
     sleep 1
     
-    do_facet mds "sysctl -w lustre.fail_loc=0x8000013b"
+    do_facet mds "lctl set_param fail_loc=0x8000013b"
     kill -USR1 $close_pid
     cancel_lru_locks MDC  # force the close
     sleep 1
@@ -1239,7 +1239,7 @@ test_53h() {
     sleep 2
     # close should be gone
     [ -d /proc/$close_pid ] && return 2
-    do_facet mds "sysctl -w lustre.fail_loc=0"
+    do_facet mds "lctl set_param fail_loc=0"
 
     $CHECKSTAT -t file $DIR/${tdir}-1/f || return 3
     $CHECKSTAT -t file $DIR/${tdir}-2/f || return 4
@@ -1250,11 +1250,11 @@ run_test 53h "|X| open request and close reply while two MDC requests in flight"
 #b3761 ASSERTION(hash != 0) failed
 test_55() {
 # OBD_FAIL_MDS_OPEN_CREATE | OBD_FAIL_ONCE
-    do_facet mds "sysctl -w lustre.fail_loc=0x8000012b"
+    do_facet mds "lctl set_param fail_loc=0x8000012b"
     touch $DIR/$tfile &
     # give touch a chance to run
     sleep 5
-    do_facet mds "sysctl -w lustre.fail_loc=0x0"
+    do_facet mds "lctl set_param fail_loc=0x0"
     rm $DIR/$tfile
     return 0
 }
@@ -1273,13 +1273,13 @@ run_test 56 "don't replay a symlink open request (3440)"
 #recovery one mds-ost setattr from llog
 test_57() {
 #define OBD_FAIL_MDS_OST_SETATTR       0x12c
-    do_facet mds "sysctl -w lustre.fail_loc=0x8000012c"
+    do_facet mds "lctl set_param fail_loc=0x8000012c"
     touch $DIR/$tfile
     replay_barrier mds
     fail mds
     sleep 1
     $CHECKSTAT -t file $DIR/$tfile || return 1
-    do_facet mds "sysctl -w lustre.fail_loc=0x0"
+    do_facet mds "lctl set_param fail_loc=0x0"
     rm $DIR/$tfile
 }
 run_test 57 "test recovery from llog for setattr op"
@@ -1287,13 +1287,13 @@ run_test 57 "test recovery from llog for setattr op"
 #recovery many mds-ost setattr from llog
 test_58() {
 #define OBD_FAIL_MDS_OST_SETATTR       0x12c
-    do_facet mds "sysctl -w lustre.fail_loc=0x8000012c"
+    do_facet mds "lctl set_param fail_loc=0x8000012c"
     createmany -o $DIR/$tdir/$tfile-%d 2500
     replay_barrier mds
     fail mds
     sleep 2
     $CHECKSTAT -t file $DIR/$tdir/$tfile-* >/dev/null || return 1
-    do_facet mds "sysctl -w lustre.fail_loc=0x0"
+    do_facet mds "lctl set_param fail_loc=0x0"
     unlinkmany $DIR/$tdir/$tfile-%d 2500
     rmdir $DIR/$tdir
 }
@@ -1306,10 +1306,10 @@ test_59() {
     sync
     unlinkmany $DIR/$tdir/$tfile-%d 200
 #define OBD_FAIL_PTLRPC_DELAY_RECOV       0x507
-    do_facet ost1 "sysctl -w lustre.fail_loc=0x507"
+    do_facet ost1 "lctl set_param fail_loc=0x507"
     fail ost1
     fail mds
-    do_facet ost1 "sysctl -w lustre.fail_loc=0x0"
+    do_facet ost1 "lctl set_param fail_loc=0x0"
     sleep 20
     rmdir $DIR/$tdir
 }
@@ -1334,12 +1334,12 @@ test_61a() {
     replay_barrier ost1 
 #   OBD_FAIL_OST_LLOG_RECOVERY_TIMEOUT 0x221 
     unlinkmany $DIR/$tdir/$tfile-%d 800 
-    do_facet ost "sysctl -w lustre.fail_loc=0x80000221"
+    do_facet ost "lctl set_param fail_loc=0x80000221"
     facet_failover ost1
     sleep 10 
     fail ost1
     sleep 30
-    do_facet ost "sysctl -w lustre.fail_loc=0x0"
+    do_facet ost "lctl set_param fail_loc=0x0"
     $CHECKSTAT -t file $DIR/$tdir/$tfile-* && return 1
     rmdir $DIR/$tdir
 }
@@ -1348,7 +1348,7 @@ run_test 61a "test race llog recovery vs llog cleanup"
 #test race  mds llog sync vs llog cleanup
 test_61b() {
 #   OBD_FAIL_MDS_LLOG_SYNC_TIMEOUT 0x13a 
-    do_facet mds "sysctl -w lustre.fail_loc=0x8000013a"
+    do_facet mds "lctl set_param fail_loc=0x8000013a"
     facet_failover mds 
     sleep 10
     fail mds
@@ -1360,7 +1360,7 @@ run_test 61b "test race mds llog sync vs llog cleanup"
 test_61c() {
 #   OBD_FAIL_OST_CANCEL_COOKIE_TIMEOUT 0x222 
     touch $DIR/$tfile 
-    do_facet ost "sysctl -w lustre.fail_loc=0x80000222"
+    do_facet ost "lctl set_param fail_loc=0x80000222"
     rm $DIR/$tfile    
     sleep 10
     fail ost1
@@ -1371,10 +1371,10 @@ test_62() { # Bug 15756 - don't mis-drop resent replay
     replay_barrier mds
     createmany -o $DIR/$tdir/$tfile- 25
 #define OBD_FAIL_TGT_REPLAY_DROP         0x707
-    do_facet mds "sysctl -w lustre.fail_loc=0x80000707"
+    do_facet mds "lctl set_param fail_loc=0x80000707"
     facet_failover mds
     df $MOUNT || return 1
-    do_facet mds "sysctl -w lustre.fail_loc=0"
+    do_facet mds "lctl set_param fail_loc=0"
     unlinkmany $DIR/$tdir/$tfile- 25 || return 2
     return 0
 }
@@ -1408,11 +1408,11 @@ test_65a() #bug 3055
     at_start || return 0
     $LCTL dk > /dev/null
     debugsave
-    sysctl -w lnet.debug="+other"
+    lctl set_param debug="+other"
     # slow down a request
-    do_facet mds sysctl -w lustre.fail_val=30000
+    do_facet mds lctl set_param fail_val=30000
 #define OBD_FAIL_PTLRPC_PAUSE_REQ        0x50a
-    do_facet mds sysctl -w lustre.fail_loc=0x8000050a
+    do_facet mds lctl set_param fail_loc=0x8000050a
     createmany -o $DIR/$tfile 10 > /dev/null
     unlinkmany $DIR/$tfile 10 > /dev/null
     # check for log message
@@ -1429,19 +1429,19 @@ test_65b() #bug 3055
     at_start || return 0
     # turn on D_ADAPTTO
     debugsave
-    sysctl -w lnet.debug="+other"
+    lctl set_param debug="+other"
     $LCTL dk > /dev/null
     # slow down bulk i/o
-    do_facet ost1 sysctl -w lustre.fail_val=30
+    do_facet ost1 lctl set_param fail_val=30
 #define OBD_FAIL_OST_BRW_PAUSE_PACK      0x224
-    do_facet ost1 sysctl -w lustre.fail_loc=0x224
+    do_facet ost1 lctl set_param fail_loc=0x224
 
     rm -f $DIR/$tfile
     lfs setstripe $DIR/$tfile --index=0 --count=1
     # force some real bulk transfer
     multiop $DIR/$tfile oO_CREAT:O_RDWR:O_SYNC:w4096c
 
-    do_facet ost1 sysctl -w lustre.fail_loc=0
+    do_facet ost1 lctl set_param fail_loc=0
     # check for log message
     $LCTL dk | grep "Early reply #" || error "No early reply"
     debugrestore
@@ -1455,18 +1455,18 @@ test_66a() #bug 3055
     at_start || return 0
     lctl get_param -n mdc.${FSNAME}-MDT0000-mdc-*.timeouts | grep "portal 12"
     # adjust 5s at a time so no early reply is sent (within deadline)
-    do_facet mds "sysctl -w lustre.fail_val=5000"
+    do_facet mds "lctl set_param fail_val=5000"
 #define OBD_FAIL_PTLRPC_PAUSE_REQ        0x50a
-    do_facet mds "sysctl -w lustre.fail_loc=0x8000050a"
+    do_facet mds "lctl set_param fail_loc=0x8000050a"
     createmany -o $DIR/$tfile 20 > /dev/null
     unlinkmany $DIR/$tfile 20 > /dev/null
     lctl get_param -n mdc.${FSNAME}-MDT0000-mdc-*.timeouts | grep "portal 12"
-    do_facet mds "sysctl -w lustre.fail_val=10000"
-    do_facet mds "sysctl -w lustre.fail_loc=0x8000050a"
+    do_facet mds "lctl set_param fail_val=10000"
+    do_facet mds "lctl set_param fail_loc=0x8000050a"
     createmany -o $DIR/$tfile 20 > /dev/null
     unlinkmany $DIR/$tfile 20 > /dev/null
     lctl get_param -n mdc.${FSNAME}-MDT0000-mdc-*.timeouts | grep "portal 12"
-    do_facet mds "sysctl -w lustre.fail_loc=0"
+    do_facet mds "lctl set_param fail_loc=0"
     sleep 9
     createmany -o $DIR/$tfile 20 > /dev/null
     unlinkmany $DIR/$tfile 20 > /dev/null
@@ -1482,11 +1482,11 @@ test_66b() #bug 3055
 {
     at_start || return 0
     ORIG=$(lctl get_param -n mdc.${FSNAME}-*.timeouts | awk '/network/ {print $4}')
-    sysctl -w lustre.fail_val=$(($ORIG + 5))
+    lctl set_param fail_val=$(($ORIG + 5))
 #define OBD_FAIL_PTLRPC_PAUSE_REP      0x50c
-    sysctl -w lustre.fail_loc=0x50c
+    lctl set_param fail_loc=0x50c
     ls $DIR/$tfile > /dev/null 2>&1
-    sysctl -w lustre.fail_loc=0
+    lctl set_param fail_loc=0
     CUR=$(lctl get_param -n mdc.${FSNAME}-*.timeouts | awk '/network/ {print $4}')
     WORST=$(lctl get_param -n mdc.${FSNAME}-*.timeouts | awk '/network/ {print $6}')
     echo "network timeout orig $ORIG, cur $CUR, worst $WORST"
@@ -1499,12 +1499,12 @@ test_67a() #bug 3055
     at_start || return 0
     CONN1=$(lctl get_param -n osc.*.stats | awk '/_connect/ {total+=$2} END {print total}')
     # sleeping threads may drive values above this
-    do_facet ost1 "sysctl -w lustre.fail_val=400"
+    do_facet ost1 "lctl set_param fail_val=400"
 #define OBD_FAIL_PTLRPC_PAUSE_REQ    0x50a
-    do_facet ost1 "sysctl -w lustre.fail_loc=0x50a"
+    do_facet ost1 "lctl set_param fail_loc=0x50a"
     createmany -o $DIR/$tfile 20 > /dev/null
     unlinkmany $DIR/$tfile 20 > /dev/null
-    do_facet ost1 "sysctl -w lustre.fail_loc=0"
+    do_facet ost1 "lctl set_param fail_loc=0"
     CONN2=$(lctl get_param -n osc.*.stats | awk '/_connect/ {total+=$2} END {print total}')
     ATTEMPTS=$(($CONN2 - $CONN1))
     echo "$ATTEMPTS osc reconnect attemps on gradual slow"
@@ -1518,8 +1518,8 @@ test_67b() #bug 3055
     at_start || return 0
     CONN1=$(lctl get_param -n osc.*.stats | awk '/_connect/ {total+=$2} END {print total}')
 #define OBD_FAIL_OST_PAUSE_CREATE        0x223
-    do_facet ost1 "sysctl -w lustre.fail_val=20000"
-    do_facet ost1 "sysctl -w lustre.fail_loc=0x80000223"
+    do_facet ost1 "lctl set_param fail_val=20000"
+    do_facet ost1 "lctl set_param fail_loc=0x80000223"
     cp /etc/profile $DIR/$tfile || error "cp failed"
     client_reconnect
     lctl get_param -n ost.OSS.ost_create.timeouts
@@ -1528,9 +1528,9 @@ test_67b() #bug 3055
     ATTEMPTS=$(($CONN2 - $CONN1))
     echo "$ATTEMPTS osc reconnect attemps on instant slow"
     # do it again; should not timeout
-    do_facet ost1 "sysctl -w lustre.fail_loc=0x80000223"
+    do_facet ost1 "lctl set_param fail_loc=0x80000223"
     cp /etc/profile $DIR/$tfile || error "cp failed"
-    do_facet ost1 "sysctl -w lustre.fail_loc=0"
+    do_facet ost1 "lctl set_param fail_loc=0"
     client_reconnect
     lctl get_param -n ost.OSS.ost_create.timeouts
     CONN3=$(`lctl get_param -n osc.*.stats` | awk '/_connect/ {total+=$2} END {print total}')
@@ -1551,13 +1551,13 @@ test_68 () #bug 13813
     rm -f $DIR/${tfile}_[1-2]
     lfs setstripe $DIR/$tfile --index=0 --count=1
 #define OBD_FAIL_LDLM_PAUSE_CANCEL       0x312
-    sysctl -w lustre.fail_val=$(($TIMEOUT - 1))
-    sysctl -w lustre.fail_loc=0x80000312
+    lctl set_param fail_val=$(($TIMEOUT - 1))
+    lctl set_param fail_loc=0x80000312
     cp /etc/profile $DIR/${tfile}_1 || error "1st cp failed $?"
-    sysctl -w lustre.fail_val=$((TIMEOUT * 3 / 2))
-    sysctl -w lustre.fail_loc=0x80000312
+    lctl set_param fail_val=$((TIMEOUT * 3 / 2))
+    lctl set_param fail_loc=0x80000312
     cp /etc/profile $DIR/${tfile}_2 || error "2nd cp failed $?"
-    sysctl -w lustre.fail_loc=0
+    lctl set_param fail_loc=0
     echo $ENQ_MIN >> $ldlm_enqueue_min
     return 0
 }

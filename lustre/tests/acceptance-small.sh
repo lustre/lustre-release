@@ -22,8 +22,8 @@ fi
 [ "$TMP" ] || TMP=/tmp
 [ "$COUNT" ] || COUNT=1000
 [ "$DEBUG_LVL" ] || DEBUG_LVL=0
-[ "$DEBUG_OFF" ] || DEBUG_OFF="eval sysctl -w lnet.debug=\"$DEBUG_LVL\""
-[ "$DEBUG_ON" ] || DEBUG_ON="eval sysctl -w lnet.debug=0x33f0484"
+[ "$DEBUG_OFF" ] || DEBUG_OFF="eval lctl set_param debug=\"$DEBUG_LVL\""
+[ "$DEBUG_ON" ] || DEBUG_ON="eval lctl set_param debug=0x33f0484"
 
 export TESTSUITE_LIST="RUNTESTS SANITY DBENCH BONNIE IOZONE FSX SANITYN LFSCK LIBLUSTRE REPLAY_SINGLE CONF_SANITY RECOVERY_SMALL REPLAY_OST_SINGLE REPLAY_DUAL INSANITY SANITY_QUOTA"
 

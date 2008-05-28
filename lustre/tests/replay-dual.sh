@@ -141,9 +141,9 @@ test_9() {
     mcreate $MOUNT1/$tfile-1
     mcreate $MOUNT2/$tfile-2
     # drop first reint reply
-    do_facet mds sysctl -w lustre.fail_loc=0x80000119
+    do_facet mds lctl set_param fail_loc=0x80000119
     fail mds
-    do_facet mds sysctl -w lustre.fail_loc=0
+    do_facet mds lctl set_param fail_loc=0
 
     rm $MOUNT1/$tfile-[1,2] || return 1
 
@@ -157,9 +157,9 @@ test_10() {
     munlink $MOUNT1/$tfile-1
     mcreate $MOUNT2/$tfile-2
     # drop first reint reply
-    do_facet mds sysctl -w lustre.fail_loc=0x80000119
+    do_facet mds lctl set_param fail_loc=0x80000119
     fail mds
-    do_facet mds sysctl -w lustre.fail_loc=0
+    do_facet mds lctl set_param fail_loc=0
 
     checkstat $MOUNT1/$tfile-1 && return 1
     checkstat $MOUNT1/$tfile-2 || return 2
@@ -177,12 +177,12 @@ test_11() {
     mcreate $MOUNT2/$tfile-4
     mcreate $MOUNT1/$tfile-5
     # drop all reint replies for a while
-    do_facet mds sysctl -w lustre.fail_loc=0x0119
+    do_facet mds lctl set_param fail_loc=0x0119
     # note that with this fail_loc set, facet_failover df will fail
     facet_failover mds
     #sleep for while, let both clients reconnect and timeout
     sleep $((TIMEOUT * 2))
-    do_facet mds sysctl -w lustre.fail_loc=0
+    do_facet mds lctl set_param fail_loc=0
     client_df
     while [ -z "$(ls $MOUNT1/$tfile-[1-5] 2>/dev/null)" ]; do
 	sleep 5
@@ -202,9 +202,9 @@ test_12() {
     MULTIPID=$!
 
 #define OBD_FAIL_LDLM_ENQUEUE            0x302
-    do_facet mds sysctl -w lustre.fail_loc=0x80000302
+    do_facet mds lctl set_param fail_loc=0x80000302
     facet_failover mds
-    do_facet mds sysctl -w lustre.fail_loc=0
+    do_facet mds lctl set_param fail_loc=0
     df $MOUNT || { kill -USR1 $MULTIPID  && return 1; }
 
     ls $DIR/$tfile
@@ -227,9 +227,9 @@ test_13() {
     wait $MULTIPID || return 4
 
     # drop close 
-    do_facet mds sysctl -w lustre.fail_loc=0x80000115
+    do_facet mds lctl set_param fail_loc=0x80000115
     facet_failover mds
-    do_facet mds sysctl -w lustre.fail_loc=0
+    do_facet mds lctl set_param fail_loc=0
     df $MOUNT || return 1
 
     ls $DIR/$tfile
@@ -331,11 +331,11 @@ test_15b() {
     echo "data" > "$MOUNT2/${tfile}-m2"
     umount $MOUNT2
 
-    do_facet ost1 "sysctl -w lustre.fail_loc=0x80000802"
+    do_facet ost1 "lctl set_param fail_loc=0x80000802"
     facet_failover mds
 
     df $MOUNT || return 1
-    do_facet ost1 "sysctl -w lustre.fail_loc=0"
+    do_facet ost1 "lctl set_param fail_loc=0"
     
     zconf_mount `hostname` $MOUNT2 || error "mount $MOUNT2 fail"
     return 0
@@ -409,10 +409,10 @@ test_18() { # bug 3822 - evicting client with enqueued lock
     statmany -s $MOUNT1/$tdir/f 1 500 &
     OPENPID=$!
     NOW=`date +%s`
-    do_facet mds sysctl -w lustre.fail_loc=0x8000030b  # hold enqueue
+    do_facet mds lctl set_param fail_loc=0x8000030b  # hold enqueue
     sleep 1
 #define OBD_FAIL_LDLM_BL_CALLBACK        0x305
-    do_facet client sysctl -w lustre.fail_loc=0x80000305  # drop cb, evict
+    do_facet client lctl set_param fail_loc=0x80000305  # drop cb, evict
     cancel_lru_locks mdc
     sleep 0.500s # wait to ensure first client is one that will be evicted
     openfile -f O_RDONLY $MOUNT2/$tdir/f0
