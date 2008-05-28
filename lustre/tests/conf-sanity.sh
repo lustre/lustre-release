@@ -513,7 +513,7 @@ test_12() {
 }
 run_test 12 "lmc --batch, with single/double quote, backslash in batchfile"
 
-test_13() {
+test_13a() {	# was test_13
         OLDXMLCONFIG=$XMLCONFIG
         XMLCONFIG="conf13-1.xml"
 
@@ -546,7 +546,7 @@ test_13() {
         rm -f $XMLCONFIG
         XMLCONFIG=$OLDXMLCONFIG
 }
-run_test 13 "check new_uuid of lmc operating correctly"
+run_test 13a "check new_uuid of lmc operating correctly"
 
 test_13b() {
         OLDXMLCONFIG=$XMLCONFIG

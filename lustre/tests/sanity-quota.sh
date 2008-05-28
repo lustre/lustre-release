@@ -470,7 +470,7 @@ test_file_soft() {
 }
 
 # file soft limit (start timer, timer goes off, stop timer)
-test_4() {
+test_4a() {	# was test_4
 	chmod 0777 $DIR/$tdir
 	LIMIT=$(($IUNIT_SZ * 10))	# 10 iunits on mds
 	TESTFILE=$DIR/$tdir/$tfile-0
@@ -498,9 +498,9 @@ test_4() {
 	$LFS setquota -t -u $MAX_DQ_TIME $MAX_IQ_TIME $DIR
 	$LFS setquota -t -g $MAX_DQ_TIME $MAX_IQ_TIME $DIR
 }
-run_test 4 "File soft limit (start timer, timer goes off, stop timer) ==="
+run_test 4a "File soft limit (start timer, timer goes off, stop timer) ==="
 
-test_4a() {
+test_4b() {	# was test_4a
         GR_STR1="1w3d"
         GR_STR2="1000s"
         GR_STR3="5s"
@@ -526,7 +526,7 @@ test_4a() {
         $LFS setquota -t -u $MAX_DQ_TIME $MAX_IQ_TIME $DIR
         $LFS setquota -t -g $MAX_DQ_TIME $MAX_IQ_TIME $DIR
 }
-run_test 4a "Grace time strings handling ==="
+run_test 4b "Grace time strings handling ==="
 
 # chown & chgrp (chown & chgrp successfully even out of block/file quota)
 test_5() {
@@ -1076,7 +1076,7 @@ pre_test_14 () {
 }
 pre_test_14
 
-test_14(){ # b=12223 -- setting quota on root
+test_14a() {	# was test_14 b=12223 -- setting quota on root
 	TESTFILE="$DIR/$tdir/$tfile"
 
 	# out of root's file and block quota
@@ -1104,14 +1104,14 @@ test_14(){ # b=12223 -- setting quota on root
 	rm -f $TESTFILE
 	sync; sleep 3; sync;
 }
-run_test 14 "test setting quota on root ==="
+run_test 14a "test setting quota on root ==="
 
 quota_set_version() {
 	local qver=$1
 	do_facet mds "lctl set_param mds.${FSNAME}-MDT*.quota_type=$qver"
 }
 
-test_14a(){
+test_14b() {	# was test_14a
         # 1. check that required users exist
         # 2. ensure that switch to new mode will start conversion
         # 3. start quota in old mode and put some entries
@@ -1152,7 +1152,7 @@ test_14a(){
                 $LFS setquota -u quota15_$i 0 0 0 0 $DIR || error "ifs setquota clear failed"
         done
 }
-run_test 14a "setting 30 quota entries in quota v1 file before conversion ==="
+run_test 14b "setting 30 quota entries in quota v1 file before conversion ==="
 
 test_15(){
         LIMIT=$((24 * 1024 * 1024 * 1024 * 1024)) # 24 TB

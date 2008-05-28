@@ -17,11 +17,11 @@ CHECK_GRANT=${CHECK_GRANT:-"yes"}
 GRANT_CHECK_LIST=${GRANT_CHECK_LIST:-""}
 
 # Skip these tests
-# bug number: 
+# bug number:
 ALWAYS_EXCEPT="$REPLAY_SINGLE_EXCEPT"
 
-#                                                     63 min  7 min  AT AT AT AT"
-[ "$SLOW" = "no" ] && EXCEPT_SLOW="1 2 3 4 6 6b 12 16 44      44b    65 66 67 68"
+#                                                  63 min  7 min  AT AT AT AT"
+[ "$SLOW" = "no" ] && EXCEPT_SLOW="1 2 3 4 6 12 16 44a     44b    65 66 67 68"
 
 build_test_filter
 
@@ -31,11 +31,11 @@ mkdir -p $DIR
 
 rm -rf $DIR/[df][0-9]*
 
-test_0() {
+test_0a() {	# was test_0
     replay_barrier mds
     fail mds
 }
-run_test 0 "empty replay"
+run_test 0a "empty replay"
 
 test_0b() {
     # this test attempts to trigger a race in the precreation code, 
@@ -54,50 +54,6 @@ test_1() {
     rm $DIR/$tfile
 }
 run_test 1 "simple create"
-
-test_1a() {
-    do_facet ost1 "lctl set_param fail_loc=0"
-
-    rm -fr $DIR/$tfile
-    local old_last_id=`lctl get_param -n obdfilter.*.last_id`
-    touch -o $DIR/$tfile 1
-    sync
-    local new_last_id=`lctl get_param -n obdfilter.*.last_id`
-    
-    test "$old_last_id" = "$new_last_id" || {
-	echo "OST object create is caused by MDS"
-	return 1
-    }
-    
-    old_last_id=`lctl get_param -n obdfilter.*.last_id`
-    echo "data" > $DIR/$tfile
-    sync
-    new_last_id=`lctl get_param -n obdfilter.*.last_id`
-    test "$old_last_id" = "$new_last_id "&& {
-	echo "CROW does not work on write"
-	return 1
-    }
-    
-    rm -fr $DIR/$tfile
-
-#define OBD_FAIL_OST_CROW_EIO | OBD_FAIL_ONCE
-    do_facet ost1 "lctl set_param fail_loc=0x80000801"
-
-    rm -fr $DIR/1a1
-    old_last_id=`lctl get_param -n obdfilter.*.last_id`
-    echo "data" > $DIR/1a1
-    sync
-    new_last_id=`lctl get_param -n obdfilter.*.last_id`
-    test "$old_last_id" = "$new_last_id" || {
-	echo "CROW does work with fail_loc=0x80000801"
-	return 1
-    }
-    
-    rm -fr $DIR/1a1
-    
-    do_facet ost1 "lctl set_param fail_loc=0"
-}
-#CROW run_test 1a "CROW object create (check OST last_id)"
 
 test_2a() {
     replay_barrier mds
@@ -153,7 +109,7 @@ test_3c() {
 }
 run_test 3c "replay failed open -ENOMEM"
 
-test_4() {
+test_4a() {	# was test_4
     replay_barrier mds
     for i in `seq 10`; do
         echo "tag-$i" > $DIR/$tfile-$i
@@ -163,7 +119,7 @@ test_4() {
       grep -q "tag-$i" $DIR/$tfile-$i || error "$tfile-$i"
     done 
 }
-run_test 4 "|x| 10 open(O_CREAT)s"
+run_test 4a "|x| 10 open(O_CREAT)s"
 
 test_4b() {
     replay_barrier mds
@@ -191,7 +147,7 @@ test_5() {
 run_test 5 "|x| 220 open(O_CREAT)"
 
 
-test_6() {
+test_6a() {	# was test_6a
     replay_barrier mds
     mcreate $DIR/$tdir/$tfile
     fail mds
@@ -200,7 +156,7 @@ test_6() {
     sleep 2
     # waiting for log process thread
 }
-run_test 6 "mkdir + contained create"
+run_test 6a "mkdir + contained create"
 
 test_6b() {
     replay_barrier mds
@@ -401,7 +357,7 @@ test_19() {
 }
 run_test 19 "|X| mcreate, open, write, rename "
 
-test_20() {
+test_20a() {	# was test_20
     replay_barrier mds
     multiop_bg_pause $DIR/$tfile O_tSc || return 3
     pid=$!
@@ -413,7 +369,7 @@ test_20() {
     [ -e $DIR/$tfile ] && return 2
     return 0
 }
-run_test 20 "|X| open(O_CREAT), unlink, replay, close (test mds_cleanup_orphans)"
+run_test 20a "|X| open(O_CREAT), unlink, replay, close (test mds_cleanup_orphans)"
 
 test_20b() { # bug 10480
     BEFOREUSED=`df -P $DIR | tail -1 | awk '{ print $3 }'`
@@ -673,7 +629,7 @@ test_32() {
 run_test 32 "close() notices client eviction; close() after client eviction"
 
 # Abort recovery before client complete
-test_33() {
+test_33a() {	# was test_33
     replay_barrier mds
     createmany -o $DIR/$tfile-%d 100 
     fail_abort mds
@@ -682,7 +638,7 @@ test_33() {
     unlinkmany $DIR/$tfile-%d 0 100
     return 0
 }
-run_test 33 "abort recovery before client does replay"
+run_test 33a "abort recovery before client does replay"
 
 test_34() {
     multiop_bg_pause $DIR/$tfile O_c || return 2
@@ -873,7 +829,7 @@ test_43() { # bug 2530
 }
 run_test 43 "mds osc import failure during recovery; don't LBUG"
 
-test_44() {
+test_44a() {	# was test_44
     local at_max_saved=0
 
     mdcdev=`lctl get_param -n devices | awk '/-mdc-/ {print $1}'`
@@ -898,7 +854,7 @@ test_44() {
     [ $at_max_saved -ne 0 ] && at_max_set $at_max_saved mds
     return 0
 }
-run_test 44 "race in target handle connect"
+run_test 44a "race in target handle connect"
 
 test_44b() {
     mdcdev=`lctl get_param -n devices | awk '/-mdc-/ {print $1}'`

@@ -7,8 +7,8 @@
 set -e
 
 ONLY=${ONLY:-"$*"}
-# bug number for skipped test:  13297 2108 9789 3637 9789 3561 12622 13310 10764
-ALWAYS_EXCEPT=${ALWAYS_EXCEPT:-"27u   42a  42b  42c  42d  45   51d   74b   75 $SANITY_EXCEPT" }
+# bug number for skipped test:  13297 2108 9789 3637 9789 3561 12622 15528/2330 13310 10764
+ALWAYS_EXCEPT=${ALWAYS_EXCEPT:-"27u   42a  42b  42c  42d  45   51d   62         74b   75 $SANITY_EXCEPT" }
 # UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
 
 # Tests that fail on uml, maybe elsewhere, FIXME
@@ -2032,7 +2032,7 @@ test_50() {
 }
 run_test 50 "special situations: /proc symlinks  ==============="
 
-test_51() {
+test_51a() {	# was test_51
 	# bug 1516 - create an empty entry right after ".." then split dir
 	mkdir $DIR/d51
 	touch $DIR/d51/foo
@@ -2048,7 +2048,7 @@ test_51() {
 	echo
 	ls -l $DIR/d51 > /dev/null || error
 }
-run_test 51 "special situations: split htree with empty entry =="
+run_test 51a "special situations: split htree with empty entry =="
 
 export NUMTEST=70000
 test_51b() {
@@ -2266,7 +2266,7 @@ test_55() {
 }
 run_test 55 "check iopen_connect_dentry() ======================"
 
-test_56() {
+test_56a() {	# was test_56
         rm -rf $DIR/d56
         $SETSTRIPE -d $DIR
         mkdir $DIR/d56
@@ -2316,7 +2316,7 @@ test_56() {
                 error "lfs getstripe --obd wrong: should not show file on other obd"
         echo "lfs getstripe --obd passed."
 }
-run_test 56 "check lfs getstripe ===================================="
+run_test 56a "check lfs getstripe ===================================="
 
 NUMFILES=3
 NUMDIRS=3
@@ -2536,12 +2536,12 @@ test_59() {
 run_test 59 "verify cancellation of llog records async ========="
 
 TEST60_HEAD="test_60 run $RANDOM"
-test_60() {
+test_60a() {	# was test_60
         [ ! -f run-llog.sh ] && skip "missing subtest run-llog.sh" && return
 	log "$TEST60_HEAD - from kernel mode"
 	sh run-llog.sh
 }
-run_test 60 "llog sanity tests run from kernel module =========="
+run_test 60a "llog sanity tests run from kernel module =========="
 
 test_60b() { # bug 6411
 	dmesg > $DIR/$tfile
@@ -2610,10 +2610,10 @@ test_62() {
 }
 # This test is now irrelevant (as of bug 10718 inclusion), we no longer
 # match every page all of the time.
-#run_test 62 "verify obd_match failure doesn't LBUG (should -EIO)"
+run_test 62 "verify obd_match failure doesn't LBUG (should -EIO)"
 
 # bug 2319 - oig_wait() interrupted causes crash because of invalid waitq.
-test_63() {
+test_63a() {	# was test_63
 	MAX_DIRTY_MB=`lctl get_param -n osc.*.max_dirty_mb | head -n 1`
 	lctl set_param -n osc.*.max_dirty_mb 0
 	for i in `seq 10` ; do
@@ -2626,7 +2626,7 @@ test_63() {
 	lctl set_param -n osc.*.max_dirty_mb $MAX_DIRTY_MB
 	rm -f $DIR/f63 || true
 }
-run_test 63 "Verify oig_wait interruption does not crash ======="
+run_test 63a "Verify oig_wait interruption does not crash ======="
 
 # bug 2248 - async write errors didn't return to application on sync
 # bug 3677 - async write errors left page locked
@@ -2794,7 +2794,7 @@ test_66() {
 }
 run_test 66 "update inode blocks count on client ==============="
 
-test_67() { # bug 3285 - supplementary group fails on MDS, passes on client
+test_67a() { # was test_67 bug 3285 - supplementary group fails on MDS, passes on client
 	[ "$RUNAS_ID" = "$UID" ] && skip "RUNAS_ID = UID = $UID -- skipping" && return
 	check_kernel_version 35 || return 0
 	mkdir $DIR/$tdir
@@ -2808,7 +2808,7 @@ test_67() { # bug 3285 - supplementary group fails on MDS, passes on client
 	[ "$GROUP_UPCALL" != "NONE" -a $RC -ne 0 ] && \
 		error "upcall failed" || true
 }
-run_test 67 "supplementary group failure (should return error) ="
+run_test 67a "supplementary group failure (should return error) ="
 
 cleanup_67b() {
 	set +vx

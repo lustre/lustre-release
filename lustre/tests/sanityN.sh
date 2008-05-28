@@ -3,8 +3,8 @@
 set -e
 
 ONLY=${ONLY:-"$*"}
-# bug number for skipped test:  3192 12652  9977
-ALWAYS_EXCEPT="                 14b  14c    28   $SANITYN_EXCEPT"
+# bug number for skipped test:  3192 12652  15528/3811 9977  15528/11549
+ALWAYS_EXCEPT="                 14b  14c    19         28    29           $SANITYN_EXCEPT"
 # UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
 
 # bug number for skipped test:                                                    12652 12652
@@ -373,7 +373,7 @@ test_19() { # bug3811
 	done
 	rm $DIR1/f19b
 }
-#run_test 19 "test concurrent uncached read races ==============="
+run_test 19 "test concurrent uncached read races ==============="
 
 test_20() {
 	mkdir $DIR1/d20
@@ -564,7 +564,7 @@ test_29() { # bug 10999
 	wait
 }
 #bug 11549 - permanently turn test off in b1_5
-#run_test 29 "lock put race between glimpse and enqueue ========="
+run_test 29 "lock put race between glimpse and enqueue ========="
 
 test_30() { #bug #11110
     cp -f /bin/bash $DIR1/$tdir/bash
