@@ -224,8 +224,7 @@ static inline void stop_log_commit(struct llog_commit_master *lcm,
         CERROR("error preparing commit: rc %d\n", rc);
 
         spin_lock(&lcm->lcm_llcd_lock);
-        list_splice(&lcd->lcd_llcd_list, &lcm->lcm_llcd_resend);
-        CFS_INIT_LIST_HEAD(&lcd->lcd_llcd_list);
+        list_splice_init(&lcd->lcd_llcd_list, &lcm->lcm_llcd_resend);
         spin_unlock(&lcm->lcm_llcd_lock);
 }
 
@@ -436,9 +435,9 @@ static int log_commit_thread(void *arg)
         /* If we are force exiting, just drop all of the cookies. */
         if (lcm->lcm_flags & LLOG_LCM_FL_EXIT_FORCE) {
                 spin_lock(&lcm->lcm_llcd_lock);
-                list_splice(&lcm->lcm_llcd_pending, &lcd->lcd_llcd_list);
-                list_splice(&lcm->lcm_llcd_resend, &lcd->lcd_llcd_list);
-                list_splice(&lcm->lcm_llcd_free, &lcd->lcd_llcd_list);
+                list_splice_init(&lcm->lcm_llcd_pending, &lcd->lcd_llcd_list);
+                list_splice_init(&lcm->lcm_llcd_resend, &lcd->lcd_llcd_list);
+                list_splice_init(&lcm->lcm_llcd_free, &lcd->lcd_llcd_list);
                 spin_unlock(&lcm->lcm_llcd_lock);
 
                 list_for_each_entry_safe(llcd, n, &lcd->lcd_llcd_list,llcd_list)
