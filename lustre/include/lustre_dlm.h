@@ -152,12 +152,6 @@ typedef enum {
 #define LDLM_CB_BLOCKING    1
 #define LDLM_CB_CANCELING   2
 
-/* position flag of skip list pointers */
-#define LDLM_SL_HEAD(skip_list)   ((skip_list)->next != NULL)
-#define LDLM_SL_TAIL(skip_list)   ((skip_list)->prev != NULL)
-#define LDLM_SL_EMPTY(skip_list)  ((skip_list)->next == NULL && \
-                                   (skip_list)->prev == NULL)
-
 /* compatibility matrix */
 #define LCK_COMPAT_EX  LCK_NL
 #define LCK_COMPAT_PW  (LCK_COMPAT_EX | LCK_CR)
@@ -414,11 +408,8 @@ struct ldlm_lock {
         /* protected by ns_hash_lock. FIXME */
         struct list_head      l_lru;
 
-        /* protected by lr_lock */
-        struct list_head      l_res_link; // position in one of three res lists
-
-        struct list_head      l_sl_mode;        // skip pointer for request mode
-        struct list_head      l_sl_policy;      // skip pointer for inodebits
+        /* protected by lr_lock, linkage to resource's lock queues */
+        struct list_head      l_res_link;
 
         struct ldlm_interval *l_tree_node;      /* tree node for ldlm_extent */
 
@@ -477,6 +468,10 @@ struct ldlm_lock {
         struct list_head      l_cp_ast;
         struct ldlm_lock     *l_blocking_lock; 
         int                   l_bl_ast_run;
+
+        /* protected by lr_lock, linkages to "skip lists" */
+        struct list_head      l_sl_mode;
+        struct list_head      l_sl_policy;
 };
 
 struct ldlm_resource {

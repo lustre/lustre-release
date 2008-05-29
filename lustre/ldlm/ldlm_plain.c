@@ -54,31 +54,32 @@ ldlm_plain_compat_queue(struct list_head *queue, struct ldlm_lock *req,
                 if (req == lock)
                         RETURN(compat);
 
-                if (lockmode_compat(lock->l_req_mode, req_mode)) {
-                        /* jump to next mode group */
-                        if (LDLM_SL_HEAD(&lock->l_sl_mode))
-                                tmp = &list_entry(lock->l_sl_mode.next, 
-                                                  struct ldlm_lock,
-                                                  l_sl_mode)->l_res_link;
+                /* last lock in mode group */
+                tmp = &list_entry(lock->l_sl_mode.prev,
+                                  struct ldlm_lock,
+                                  l_sl_mode)->l_res_link;
+
+                if (lockmode_compat(lock->l_req_mode, req_mode))
                         continue;
-                }
 
                 if (!work_list)
                         RETURN(0);
 
                 compat = 0;
+
+                /* add locks of the mode group to @work_list as
+                 * blocking locks for @req */
                 if (lock->l_blocking_ast)
                         ldlm_add_ast_work_item(lock, req, work_list);
-                if (LDLM_SL_HEAD(&lock->l_sl_mode)) {
-                        /* add all members of the mode group */
-                        do {
-                                tmp = lock->l_res_link.next;
-                                lock = list_entry(tmp, struct ldlm_lock, 
-                                                  l_res_link);
+
+                {
+                        struct list_head *head;
+
+                        head = &lock->l_sl_mode;
+                        list_for_each_entry(lock, head, l_sl_mode)
                                 if (lock->l_blocking_ast)
-                                        ldlm_add_ast_work_item(
-                                                        lock, req, work_list);
-                        } while (!LDLM_SL_TAIL(&lock->l_sl_mode));
+                                        ldlm_add_ast_work_item(lock, req,
+                                                               work_list);
                 }
         }
 
