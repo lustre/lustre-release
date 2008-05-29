@@ -638,6 +638,7 @@ static inline int ptlrpc_bulk_active (struct ptlrpc_bulk_desc *desc)
 #define PTLRPC_REPLY_EARLY           0x02
 int ptlrpc_send_reply(struct ptlrpc_request *req, int flags);
 int ptlrpc_reply(struct ptlrpc_request *req);
+int ptlrpc_send_error(struct ptlrpc_request *req, int difficult);
 int ptlrpc_error(struct ptlrpc_request *req);
 void ptlrpc_resend_req(struct ptlrpc_request *request);
 int ptlrpc_at_get_net_latency(struct ptlrpc_request *req);

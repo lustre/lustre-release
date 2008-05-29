@@ -1596,7 +1596,7 @@ target_send_reply_msg (struct ptlrpc_request *req, int rc, int fail_id)
         if (rc) {
                 DEBUG_REQ(D_ERROR, req, "processing error (%d)", rc);
                 req->rq_status = rc;
-                return (ptlrpc_error(req));
+                return (ptlrpc_send_error(req, 1));
         } else {
                 DEBUG_REQ(D_NET, req, "sending reply");
         }
