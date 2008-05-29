@@ -191,6 +191,13 @@ case "$lustretag" in
         dmutag="zfs-lustre"
         ;;
 
+    # uMDS
+    b_dmu_umds)
+        lnettag="b_uoss_umds"
+        ldiskfstag="b1_8_iam"
+        dmutag="zfs-lustre"
+        ;;
+
     # uOSS o2iblnd
     b_uoss_o2iblnd)
         lnettag="b_uoss_o2iblnd"
