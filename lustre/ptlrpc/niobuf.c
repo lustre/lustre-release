@@ -381,7 +381,7 @@ int ptlrpc_reply (struct ptlrpc_request *req)
                 return (ptlrpc_send_reply(req, 0));
 }
 
-int ptlrpc_error(struct ptlrpc_request *req)
+int ptlrpc_send_error(struct ptlrpc_request *req, int may_be_difficult)
 {
         int rc;
         ENTRY;
@@ -397,8 +397,13 @@ int ptlrpc_error(struct ptlrpc_request *req)
 
         req->rq_type = PTL_RPC_MSG_ERR;
 
-        rc = ptlrpc_send_reply(req, 0);
+        rc = ptlrpc_send_reply(req, may_be_difficult);
         RETURN(rc);
+}
+
+int ptlrpc_error(struct ptlrpc_request *req)
+{
+        return ptlrpc_send_error(req, 0);
 }
 
 int ptl_send_rpc(struct ptlrpc_request *request, int noreply)

@@ -709,6 +709,7 @@ static inline int ptlrpc_bulk_active (struct ptlrpc_bulk_desc *desc)
 
 int ptlrpc_send_reply(struct ptlrpc_request *req, int);
 int ptlrpc_reply(struct ptlrpc_request *req);
+int ptlrpc_send_error(struct ptlrpc_request *req, int difficult);
 int ptlrpc_error(struct ptlrpc_request *req);
 void ptlrpc_resend_req(struct ptlrpc_request *request);
 int ptl_send_rpc(struct ptlrpc_request *request, int noreply);

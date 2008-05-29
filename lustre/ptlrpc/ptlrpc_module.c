@@ -136,6 +136,7 @@ EXPORT_SYMBOL(ptlrpc_register_bulk);
 EXPORT_SYMBOL(ptlrpc_unregister_bulk);
 EXPORT_SYMBOL(ptlrpc_send_reply);
 EXPORT_SYMBOL(ptlrpc_reply);
+EXPORT_SYMBOL(ptlrpc_send_error);
 EXPORT_SYMBOL(ptlrpc_error);
 EXPORT_SYMBOL(ptlrpc_resend_req);
 EXPORT_SYMBOL(ptl_send_rpc);
