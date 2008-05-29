@@ -799,7 +799,7 @@ int ldlm_server_glimpse_ast(struct ldlm_lock *lock, void *data)
         else if (rc != 0)
                 rc = ldlm_handle_ast_error(lock, req, rc, "glimpse");
         else
-                rc = ldlm_res_lvbo_update(res, req->rq_repmsg,
+                rc = ldlm_res_lvbo_update(res, req,
                                           REPLY_REC_OFF, 1);
         ptlrpc_req_finished(req);
         if (rc == -ERESTART)

@@ -25,6 +25,14 @@ tbd Sun Microsystems, Inc.
 	  For more information, please refer to bugzilla 13904.
 
 Severity   : normal
+Frequency  : always, on ppc.
+Bugzilla   : 14856
+Description: cleanup in ptlrpc code, related to ppc platform
+Details    : store magic in native order avoid panic's in recovery on ppc node
+             and forbid from this error in future. Also fix posibily of twice swab
+             data. Fix get lov striping to userpace.
+
+Severity   : normal
 Bugzilla   : 15756
 Frequency  : rare, replay get lost on server
 Description: server incorrectly drop resent replays lead to recovery failure.

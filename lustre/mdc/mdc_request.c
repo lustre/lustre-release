@@ -154,7 +154,7 @@ int mdc_getattr_common(struct obd_export *exp, unsigned int ea_size,
                         RETURN (-EPROTO);
                 }
         }
-        
+
         if (body->valid & OBD_MD_FLMODEASIZE) {
                 if (exp->exp_obd->u.cli.cl_max_mds_easize < body->max_mdsize) 
                         exp->exp_obd->u.cli.cl_max_mds_easize = 

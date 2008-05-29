@@ -373,7 +373,7 @@ static inline void lustre_set_rep_swabbed(struct ptlrpc_request *req, int index)
 }
 
 static inline int lustre_req_swabbed(struct ptlrpc_request *req, int index)
-{ 
+{
         LASSERT(index < sizeof(req->rq_req_swab_mask) * 8);
         return req->rq_req_swab_mask & (1 << index);
 }
@@ -383,6 +383,17 @@ static inline int lustre_rep_swabbed(struct ptlrpc_request *req, int index)
         LASSERT(index < sizeof(req->rq_rep_swab_mask) * 8);
         return req->rq_rep_swab_mask & (1 << index);
 }
+
+static inline int lustre_req_need_swab(struct ptlrpc_request *req)
+{
+        return req->rq_req_swab_mask & (1 << MSG_PTLRPC_HEADER_OFF);
+}
+
+static inline int lustre_rep_need_swab(struct ptlrpc_request *req)
+{
+        return req->rq_rep_swab_mask & (1 << MSG_PTLRPC_HEADER_OFF);
+}
+
 
 static inline const char *
 ptlrpc_rqphase2str(struct ptlrpc_request *req)
@@ -781,7 +792,6 @@ int lustre_msg_buflen(struct lustre_msg *m, int n);
 void lustre_msg_set_buflen(struct lustre_msg *m, int n, int len);
 int lustre_msg_bufcount(struct lustre_msg *m);
 char *lustre_msg_string (struct lustre_msg *m, int n, int max_len);
-void *lustre_swab_buf(struct lustre_msg *, int n, int minlen, void *swabber);
 void *lustre_swab_reqbuf(struct ptlrpc_request *req, int n, int minlen,
                          void *swabber);
 void *lustre_swab_repbuf(struct ptlrpc_request *req, int n, int minlen,

@@ -855,7 +855,7 @@ static int ptlrpc_at_check_timed(struct ptlrpc_service *svc)
         }
         spin_unlock(&svc->srv_at_lock);
 
-        RETURN(0);      
+        RETURN(0);
 }
 
 /* Handle freshly incoming reqs, add to timed early reply list,
@@ -882,17 +882,20 @@ ptlrpc_server_handle_req_in(struct ptlrpc_service *svc)
         /* Consider this still a "queued" request as far as stats are
            concerned */
         spin_unlock(&svc->srv_lock);
-        
+
         /* Clear request swab mask; this is a new request */
         req->rq_req_swab_mask = 0;
 
         rc = lustre_unpack_msg(req->rq_reqmsg, req->rq_reqlen);
-        if (rc != 0) {
+        if (rc < 0) {
                 CERROR ("error unpacking request: ptl %d from %s"
                         " xid "LPU64"\n", svc->srv_req_portal,
                         libcfs_id2str(req->rq_peer), req->rq_xid);
                 goto err_req;
         }
+
+        if (rc > 0)
+                lustre_set_req_swabbed(req, MSG_PTLRPC_HEADER_OFF);
 
         rc = lustre_unpack_req_ptlrpc_body(req, MSG_PTLRPC_BODY_OFF);
         if (rc) {
@@ -911,7 +914,7 @@ ptlrpc_server_handle_req_in(struct ptlrpc_service *svc)
         }
 
         CDEBUG(D_NET, "got req "LPD64"\n", req->rq_xid);
-        
+
         req->rq_export = class_conn2export(
                 lustre_msg_get_handle(req->rq_reqmsg));
         if (req->rq_export) {

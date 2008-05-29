@@ -1106,7 +1106,7 @@ static inline struct lsm_operations *lsm_op_find(int magic)
         case LOV_MAGIC_JOIN:
                return &lsm_join_ops;
         default:
-               CERROR("Cannot recognize lsm_magic %d", magic);
+               CERROR("Cannot recognize lsm_magic %x\n", magic);
                return NULL;
         }
 }

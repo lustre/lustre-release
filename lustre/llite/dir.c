@@ -574,9 +574,9 @@ int ll_dir_getstripe(struct inode *inode, struct lov_mds_md **lmmp,
          * little endian.  We convert it to host endian before
          * passing it to userspace.
          */
-        if (lmm->lmm_magic == __swab32(LOV_MAGIC)) {
+        if ((LOV_MAGIC != cpu_to_le32(LOV_MAGIC)) &&
+            (cpu_to_le32(LOV_MAGIC) == lmm->lmm_magic))
                 lustre_swab_lov_user_md((struct lov_user_md *)lmm);
-        }
 out:
         *lmmp = lmm;
         *lmm_size = lmmsize;
@@ -775,6 +775,15 @@ static int ll_dir_ioctl(struct inode *inode, struct file *file,
                 rc = copy_from_user(lmm, lum, lmmsize);
                 if (rc)
                         GOTO(free_lmm, rc = -EFAULT);
+
+                if (lmm->lmm_magic != LOV_USER_MAGIC)
+                        GOTO(free_lmm, rc = -EINVAL);
+
+                if (LOV_USER_MAGIC != cpu_to_le32(LOV_USER_MAGIC) &&
+                    cpu_to_le32(LOV_USER_MAGIC) == cpu_to_le32(lmm->lmm_magic)) {
+                        lustre_swab_lov_user_md_objects((struct lov_user_md *)lmm);
+                        lustre_swab_lov_user_md((struct lov_user_md *)lmm);
+                }
 
                 rc = obd_unpackmd(sbi->ll_osc_exp, &lsm, lmm, lmmsize);
                 if (rc < 0)

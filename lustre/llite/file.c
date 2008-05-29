@@ -2040,16 +2040,22 @@ int ll_lov_getstripe_ea_info(struct inode *inode, const char *filename,
         LASSERT(lmm != NULL);
         LASSERT(lustre_rep_swabbed(req, REPLY_REC_OFF + 1));
 
+        if ((lmm->lmm_magic != cpu_to_le32(LOV_MAGIC)) &&
+             (lmm->lmm_magic != cpu_to_le32(LOV_MAGIC_JOIN))) {
+                GOTO(out, rc = -EPROTO);
+        }
         /*
          * This is coming from the MDS, so is probably in
          * little endian.  We convert it to host endian before
          * passing it to userspace.
          */
-        if (lmm->lmm_magic == __swab32(LOV_MAGIC)) {
-                lustre_swab_lov_user_md((struct lov_user_md *)lmm);
-                lustre_swab_lov_user_md_objects((struct lov_user_md *)lmm);
-        } else if (lmm->lmm_magic == __swab32(LOV_MAGIC_JOIN)) {
-                lustre_swab_lov_user_md_join((struct lov_user_md_join *)lmm);
+        if (LOV_MAGIC != cpu_to_le32(LOV_MAGIC)) {
+                if (lmm->lmm_magic == cpu_to_le32(LOV_MAGIC)) {
+                        lustre_swab_lov_user_md((struct lov_user_md *)lmm);
+                        lustre_swab_lov_user_md_objects((struct lov_user_md *)lmm);
+                } else if (lmm->lmm_magic == cpu_to_le32(LOV_MAGIC_JOIN)) {
+                        lustre_swab_lov_user_md_join((struct lov_user_md_join *)lmm);
+                }
         }
 
         if (lmm->lmm_magic == LOV_MAGIC_JOIN) {

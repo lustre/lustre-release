@@ -1658,7 +1658,7 @@ int mds_handle(struct ptlrpc_request *req)
                         break;
                 }
                 opc = *opcp;
-                if (lustre_msg_swabbed(req->rq_reqmsg))
+                if (lustre_req_need_swab(req))
                         __swab32s(&opc);
 
                 DEBUG_REQ(D_INODE, req, "reint %d (%s)", opc,
