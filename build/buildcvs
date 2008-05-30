@@ -54,12 +54,6 @@ case "$lustretag" in
         portalstag="b_hd_newconfig"
         ;;
 
-    b1_8)
-        # b1_8 is an alias for HEAD.
-        lustretag="HEAD"
-        ldiskfstag="b1_8_iam"
-        ;;
-
     b_cmd*)
         portalstag="$lustretag"
         ;;
