@@ -1579,5 +1579,26 @@ test_40() { # bug 15759
 }
 run_test 40 "race during service thread startup"
 
+test_41() { #bug 14134
+        local rc
+        start mds $MDSDEV $MDS_MOUNT_OPTS -o nosvc
+        start ost `ostdevname 1` $OST_MOUNT_OPTS
+        start mds $MDSDEV $MDS_MOUNT_OPTS -o nomgs
+        mkdir -p $MOUNT
+        mount_client $MOUNT || return 1
+        sleep 5
+
+        echo "blah blah" > $MOUNT/$tfile
+        cat $MOUNT/$tfile
+
+        umount_client $MOUNT
+        stop ost -f || return 201
+        stop mds -f || return 202
+        stop mds -f || return 203
+        unload_modules || return 204
+        return $rc
+}
+run_test 41 "mount mds with --nosvc and --nomgs"
+
 equals_msg `basename $0`: test complete
 [ -f "$TESTSUITELOG" ] && cat $TESTSUITELOG || true

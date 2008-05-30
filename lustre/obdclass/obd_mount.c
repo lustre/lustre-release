@@ -744,8 +744,8 @@ static int lustre_stop_mgc(struct super_block *sb)
         obd = lsi->lsi_mgc;
         if (!obd)
                 RETURN(-ENOENT);
-
         lsi->lsi_mgc = NULL;
+
         mutex_down(&mgc_start_lock);
         if (!atomic_dec_and_test(&obd->u.cli.cl_mgc_refcount)) {
                 /* This is not fatal, every client that stops
@@ -1354,7 +1354,8 @@ static void server_put_super(struct super_block *sb)
         CDEBUG(D_MOUNT, "server put_super %s\n", tmpname);
 
         /* Stop the target */
-        if (IS_MDT(lsi->lsi_ldd) || IS_OST(lsi->lsi_ldd)) {
+        if (!(lsi->lsi_lmd->lmd_flags & LMD_FLG_NOSVC) && 
+            (IS_MDT(lsi->lsi_ldd) || IS_OST(lsi->lsi_ldd))) {
                 struct lustre_profile *lprof = NULL;
 
                 /* tell the mgc to drop the config log */
@@ -1391,7 +1392,9 @@ static void server_put_super(struct super_block *sb)
                 /* stop the mgc before the mgs so the connection gets cleaned
                    up */
                 lustre_stop_mgc(sb);
-                server_stop_mgs(sb);
+                /* if MDS start with --nomgs, don't stop MGS then */
+                if (!(lsi->lsi_lmd->lmd_flags & LMD_FLG_NOMGS))
+                        server_stop_mgs(sb);
         }
 
         /* Clean the mgc and sb */
@@ -1579,7 +1582,7 @@ static int server_fill_super(struct super_block *sb)
         }
 
         /* start MGS before MGC */
-        if (IS_MGS(lsi->lsi_ldd)) {
+        if (IS_MGS(lsi->lsi_ldd) && !(lsi->lsi_lmd->lmd_flags & LMD_FLG_NOMGS)) {
                 rc = server_start_mgs(sb);
                 if (rc)
                         GOTO(out_mnt, rc);
@@ -1815,6 +1818,9 @@ static int lmd_parse(char *options, struct lustre_mount_data *lmd)
                         clear++;
                 } else if (strncmp(s1, "nosvc", 5) == 0) {
                         lmd->lmd_flags |= LMD_FLG_NOSVC;
+                        clear++;
+                } else if (strncmp(s1, "nomgs", 5) == 0) {
+                        lmd->lmd_flags |= LMD_FLG_NOMGS;
                         clear++;
                 /* ost exclusion list */
                 } else if (strncmp(s1, "exclude=", 8) == 0) {
