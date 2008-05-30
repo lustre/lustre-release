@@ -783,9 +783,9 @@ static int ldlm_pools_shrink(ldlm_side_t client, int nr,
                         mutex_up(ldlm_namespace_lock(client));
                         return 0;
                 }
-                ns = ldlm_namespace_first(client);
+                ns = ldlm_namespace_first_locked(client);
                 ldlm_namespace_get(ns);
-                ldlm_namespace_move(ns, client);
+                ldlm_namespace_move_locked(ns, client);
                 mutex_up(ldlm_namespace_lock(client));
                 total += ldlm_pool_shrink(&ns->ns_pool, 0, gfp_mask);
                 ldlm_namespace_put(ns, 1);
@@ -810,9 +810,9 @@ static int ldlm_pools_shrink(ldlm_side_t client, int nr,
                         cached = 0;
                         break;
                 }
-                ns = ldlm_namespace_first(client);
+                ns = ldlm_namespace_first_locked(client);
                 ldlm_namespace_get(ns);
-                ldlm_namespace_move(ns, client);
+                ldlm_namespace_move_locked(ns, client);
                 mutex_up(ldlm_namespace_lock(client));
                 
                 nr_locks = ldlm_pool_granted(&ns->ns_pool);
@@ -909,9 +909,9 @@ void ldlm_pools_recalc(ldlm_side_t client)
                         mutex_up(ldlm_namespace_lock(client));
                         break;
                 }
-                ns = ldlm_namespace_first(client);
+                ns = ldlm_namespace_first_locked(client);
                 ldlm_namespace_get(ns);
-                ldlm_namespace_move(ns, client);
+                ldlm_namespace_move_locked(ns, client);
                 mutex_up(ldlm_namespace_lock(client));
 
                 /* After setup is done - recalc the pool. */

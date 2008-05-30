@@ -327,6 +327,7 @@ struct ldlm_namespace *ldlm_namespace_new(char *name, ldlm_side_t client,
         strcpy(ns->ns_name, name);
 
         CFS_INIT_LIST_HEAD(&ns->ns_root_list);
+        CFS_INIT_LIST_HEAD(&ns->ns_list_chain);
         ns->ns_refcount = 0;
         ns->ns_client = client;
         spin_lock_init(&ns->ns_hash_lock);
@@ -358,11 +359,7 @@ struct ldlm_namespace *ldlm_namespace_new(char *name, ldlm_side_t client,
                 GOTO(out_proc, rc);
         }
 
-        mutex_down(ldlm_namespace_lock(client));
-        list_add(&ns->ns_list_chain, ldlm_namespace_list(client));
-        atomic_inc(ldlm_namespace_nr(client));
-        mutex_up(ldlm_namespace_lock(client));
-
+        ldlm_namespace_register(ns, client);
         RETURN(ns);
 out_proc:
         ldlm_namespace_cleanup(ns, 0);
@@ -580,16 +577,8 @@ void ldlm_namespace_free_post(struct ldlm_namespace *ns)
                 return;
         }
 
-        mutex_down(ldlm_namespace_lock(ns->ns_client));
-        /*
-         * Some asserts and possibly other parts of code still using 
-         * list_empty(&ns->ns_list_chain). This is why it is important
-         * to use list_del_init() here.
-         */
-        list_del_init(&ns->ns_list_chain);
-        atomic_dec(ldlm_namespace_nr(ns->ns_client));
-        ldlm_pool_fini(&ns->ns_pool);
-        mutex_up(ldlm_namespace_lock(ns->ns_client));
+        /* Remove @ns from list. */
+        ldlm_namespace_unregister(ns, ns->ns_client);
 #ifdef LPROCFS
         {
                 struct proc_dir_entry *dir;
@@ -642,7 +631,7 @@ void ldlm_namespace_free(struct ldlm_namespace *ns,
 }
 
 
-void ldlm_namespace_get_nolock(struct ldlm_namespace *ns)
+void ldlm_namespace_get_locked(struct ldlm_namespace *ns)
 {
         LASSERT(ns->ns_refcount >= 0);
         ns->ns_refcount++;
@@ -651,11 +640,11 @@ void ldlm_namespace_get_nolock(struct ldlm_namespace *ns)
 void ldlm_namespace_get(struct ldlm_namespace *ns)
 {
         spin_lock(&ns->ns_hash_lock);
-        ldlm_namespace_get_nolock(ns);
+        ldlm_namespace_get_locked(ns);
         spin_unlock(&ns->ns_hash_lock);
 }
 
-void ldlm_namespace_put_nolock(struct ldlm_namespace *ns, int wakeup)
+void ldlm_namespace_put_locked(struct ldlm_namespace *ns, int wakeup)
 {
         LASSERT(ns->ns_refcount > 0);
         ns->ns_refcount--;
@@ -666,12 +655,37 @@ void ldlm_namespace_put_nolock(struct ldlm_namespace *ns, int wakeup)
 void ldlm_namespace_put(struct ldlm_namespace *ns, int wakeup)
 {
         spin_lock(&ns->ns_hash_lock);
-        ldlm_namespace_put_nolock(ns, wakeup);
+        ldlm_namespace_put_locked(ns, wakeup);
         spin_unlock(&ns->ns_hash_lock);
 }
 
+/* Register @ns in the list of namespaces */
+void ldlm_namespace_register(struct ldlm_namespace *ns, ldlm_side_t client)
+{
+        mutex_down(ldlm_namespace_lock(client));
+        LASSERT(list_empty(&ns->ns_list_chain));
+        list_add(&ns->ns_list_chain, ldlm_namespace_list(client));
+        atomic_inc(ldlm_namespace_nr(client));
+        mutex_up(ldlm_namespace_lock(client));
+}
+
+/* Unregister @ns from the list of namespaces */
+void ldlm_namespace_unregister(struct ldlm_namespace *ns, ldlm_side_t client)
+{
+        mutex_down(ldlm_namespace_lock(client));
+        LASSERT(!list_empty(&ns->ns_list_chain));
+        /*
+         * Some asserts and possibly other parts of code still using 
+         * list_empty(&ns->ns_list_chain). This is why it is important
+         * to use list_del_init() here.
+         */
+        list_del_init(&ns->ns_list_chain);
+        atomic_dec(ldlm_namespace_nr(client));
+        mutex_up(ldlm_namespace_lock(client));
+}
+
 /* Should be called under ldlm_namespace_lock(client) taken */
-void ldlm_namespace_move(struct ldlm_namespace *ns, ldlm_side_t client)
+void ldlm_namespace_move_locked(struct ldlm_namespace *ns, ldlm_side_t client)
 {
         LASSERT(!list_empty(&ns->ns_list_chain));
         LASSERT_SEM_LOCKED(ldlm_namespace_lock(client));
@@ -679,7 +693,7 @@ void ldlm_namespace_move(struct ldlm_namespace *ns, ldlm_side_t client)
 }
 
 /* Should be called under ldlm_namespace_lock(client) taken */
-struct ldlm_namespace *ldlm_namespace_first(ldlm_side_t client)
+struct ldlm_namespace *ldlm_namespace_first_locked(ldlm_side_t client)
 {
         LASSERT_SEM_LOCKED(ldlm_namespace_lock(client));
         LASSERT(!list_empty(ldlm_namespace_list(client)));
@@ -795,7 +809,7 @@ ldlm_resource_add(struct ldlm_namespace *ns, struct ldlm_resource *parent,
         bucket = ns->ns_hash + hash;
         list_add(&res->lr_hash, bucket);
         ns->ns_resources++;
-        ldlm_namespace_get_nolock(ns);
+        ldlm_namespace_get_locked(ns);
 
         if (parent == NULL) {
                 list_add(&res->lr_childof, &ns->ns_root_list);
@@ -894,7 +908,7 @@ void __ldlm_resource_putref_final(struct ldlm_resource *res)
 
         /* Pass 0 here to not wake ->ns_waitq up yet, we will do it few 
          * lines below when all children are freed. */
-        ldlm_namespace_put_nolock(ns, 0);
+        ldlm_namespace_put_locked(ns, 0);
         list_del_init(&res->lr_hash);
         list_del_init(&res->lr_childof);
 
