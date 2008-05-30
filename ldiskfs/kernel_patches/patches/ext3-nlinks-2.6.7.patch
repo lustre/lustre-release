@@ -1,8 +1,8 @@
-Index: linux-2.6.5-7.283/fs/ext3/namei.c
+Index: linux-2.6.7/fs/ext3/namei.c
 ===================================================================
---- linux-2.6.5-7.283.orig/fs/ext3/namei.c
-+++ linux-2.6.5-7.283/fs/ext3/namei.c
-@@ -1613,11 +1613,17 @@ static int ext3_delete_entry (handle_t *
+--- linux-2.6.7.orig/fs/ext3/namei.c	2004-06-15 23:19:36.000000000 -0600
++++ linux-2.6.7/fs/ext3/namei.c	2004-08-20 17:48:54.000000000 -0600
+@@ -1596,11 +1596,17 @@ static int ext3_delete_entry (handle_t *
  static inline void ext3_inc_count(handle_t *handle, struct inode *inode)
  {
  	inode->i_nlink++;
@@ -21,16 +21,16 @@ Index: linux-2.6.5-7.283/fs/ext3/namei.c
  }
  
  static int ext3_add_nondir(handle_t *handle,
-@@ -1730,7 +1736,7 @@ static int ext3_mkdir(struct inode * dir
- 	int retries = 0;
+@@ -1693,7 +1698,7 @@ static int ext3_mkdir(struct inode * dir
+ 	struct ext3_dir_entry_2 * de;
  	int err;
  
 -	if (dir->i_nlink >= EXT3_LINK_MAX)
 +	if (EXT3_DIR_LINK_MAX(dir))
  		return -EMLINK;
  
- retry:
-@@ -1752,7 +1758,7 @@ retry:
+ 	handle = ext3_journal_start(dir, EXT3_DATA_TRANS_BLOCKS +
+@@ -1715,7 +1720,7 @@ static int ext3_mkdir(struct inode * dir
  	inode->i_size = EXT3_I(inode)->i_disksize = inode->i_sb->s_blocksize;
  	dir_block = ext3_bread (handle, inode, 0, 1, &err);
  	if (!dir_block) {
@@ -39,7 +39,7 @@ Index: linux-2.6.5-7.283/fs/ext3/namei.c
  		ext3_mark_inode_dirty(handle, inode);
  		iput (inode);
  		goto out_stop;
-@@ -1784,7 +1790,7 @@ retry:
+@@ -1747,7 +1752,7 @@ static int ext3_mkdir(struct inode * dir
  		iput (inode);
  		goto out_stop;
  	}
@@ -48,7 +48,7 @@ Index: linux-2.6.5-7.283/fs/ext3/namei.c
  	ext3_update_dx_flag(dir);
  	ext3_mark_inode_dirty(handle, dir);
  	d_instantiate(dentry, inode);
-@@ -2042,16 +2048,16 @@ static int ext3_rmdir (struct inode * di
+@@ -2010,10 +2015,10 @@ static int ext3_rmdir (struct inode * di
  	retval = ext3_delete_entry(handle, dir, de, bh);
  	if (retval)
  		goto end_rmdir;
@@ -62,6 +62,8 @@ Index: linux-2.6.5-7.283/fs/ext3/namei.c
 +			     inode->i_nlink);
  	inode->i_version++;
  	inode->i_nlink = 0;
+ 	/* There's no need to set i_disksize: the fact that i_nlink is
+@@ -2023,7 +2028,7 @@ static int ext3_rmdir (struct inode * di
  	ext3_orphan_add(handle, inode);
  	inode->i_ctime = dir->i_ctime = dir->i_mtime = CURRENT_TIME;
  	ext3_mark_inode_dirty(handle, inode);
@@ -70,7 +72,7 @@ Index: linux-2.6.5-7.283/fs/ext3/namei.c
  	ext3_update_dx_flag(dir);
  	ext3_mark_inode_dirty(handle, dir);
  
-@@ -2100,7 +2106,7 @@ static int ext3_unlink(struct inode * di
+@@ -2074,7 +2079,7 @@ static int ext3_unlink(struct inode * di
  	dir->i_ctime = dir->i_mtime = CURRENT_TIME;
  	ext3_update_dx_flag(dir);
  	ext3_mark_inode_dirty(handle, dir);
@@ -79,16 +81,16 @@ Index: linux-2.6.5-7.283/fs/ext3/namei.c
  	if (!inode->i_nlink)
  		ext3_orphan_add(handle, inode);
  	inode->i_ctime = dir->i_ctime;
-@@ -2191,7 +2197,7 @@ static int ext3_link (struct dentry * ol
+@@ -2146,7 +2151,7 @@ static int ext3_link (struct dentry * ol
  	struct inode *inode = old_dentry->d_inode;
- 	int err, retries = 0;
+ 	int err;
  
 -	if (inode->i_nlink >= EXT3_LINK_MAX)
 +	if (EXT3_DIR_LINK_MAX(inode))
  		return -EMLINK;
  
- retry:
-@@ -2277,8 +2283,8 @@ static int ext3_rename (struct inode * o
+ 	handle = ext3_journal_start(dir, EXT3_DATA_TRANS_BLOCKS +
+@@ -2230,8 +2235,8 @@ static int ext3_rename (struct inode * o
  		if (le32_to_cpu(PARENT_INO(dir_bh->b_data)) != old_dir->i_ino)
  			goto end_rename;
  		retval = -EMLINK;
@@ -99,7 +101,7 @@ Index: linux-2.6.5-7.283/fs/ext3/namei.c
  			goto end_rename;
  	}
  	if (!new_bh) {
-@@ -2335,7 +2341,7 @@ static int ext3_rename (struct inode * o
+@@ -2288,7 +2293,7 @@ static int ext3_rename (struct inode * o
  	}
  
  	if (new_inode) {
@@ -108,7 +110,7 @@ Index: linux-2.6.5-7.283/fs/ext3/namei.c
  		new_inode->i_ctime = CURRENT_TIME;
  	}
  	old_dir->i_ctime = old_dir->i_mtime = CURRENT_TIME;
-@@ -2346,11 +2352,13 @@ static int ext3_rename (struct inode * o
+@@ -2299,11 +2304,13 @@ static int ext3_rename (struct inode * o
  		PARENT_INO(dir_bh->b_data) = le32_to_cpu(new_dir->i_ino);
  		BUFFER_TRACE(dir_bh, "call ext3_journal_dirty_metadata");
  		ext3_journal_dirty_metadata(handle, dir_bh);
@@ -125,11 +127,11 @@ Index: linux-2.6.5-7.283/fs/ext3/namei.c
  			ext3_update_dx_flag(new_dir);
  			ext3_mark_inode_dirty(handle, new_dir);
  		}
-Index: linux-2.6.5-7.283/include/linux/ext3_fs.h
+Index: linux-2.6.7/include/linux/ext3_fs.h
 ===================================================================
---- linux-2.6.5-7.283.orig/include/linux/ext3_fs.h
-+++ linux-2.6.5-7.283/include/linux/ext3_fs.h
-@@ -86,7 +86,7 @@ struct statfs;
+--- linux-2.6.7.orig/include/linux/ext3_fs.h	2004-06-15 23:19:36.000000000 -0600
++++ linux-2.6.7/include/linux/ext3_fs.h	2004-08-20 17:41:27.000000000 -0600
+@@ -79,7 +81,7 @@
  /*
   * Maximal count of links to a file
   */
@@ -138,19 +140,3 @@ Index: linux-2.6.5-7.283/include/linux/ext3_fs.h
  
  /*
   * Macro-instructions used to manage several block sizes
-@@ -538,6 +538,7 @@ static inline struct ext3_inode_info *EX
- #define EXT3_FEATURE_RO_COMPAT_SPARSE_SUPER	0x0001
- #define EXT3_FEATURE_RO_COMPAT_LARGE_FILE	0x0002
- #define EXT3_FEATURE_RO_COMPAT_BTREE_DIR	0x0004
-+#define EXT4_FEATURE_RO_COMPAT_DIR_NLINK	0x0020
- 
- #define EXT3_FEATURE_INCOMPAT_COMPRESSION	0x0001
- #define EXT3_FEATURE_INCOMPAT_FILETYPE		0x0002
-@@ -553,6 +554,7 @@ static inline struct ext3_inode_info *EX
- 					 EXT3_FEATURE_INCOMPAT_EXTENTS)
- #define EXT3_FEATURE_RO_COMPAT_SUPP	(EXT3_FEATURE_RO_COMPAT_SPARSE_SUPER| \
- 					 EXT3_FEATURE_RO_COMPAT_LARGE_FILE| \
-+					 EXT4_FEATURE_RO_COMPAT_DIR_NLINK| \
- 					 EXT3_FEATURE_RO_COMPAT_BTREE_DIR)
- 
- /*

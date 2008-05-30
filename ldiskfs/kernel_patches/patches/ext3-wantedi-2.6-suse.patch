@@ -1,7 +1,15 @@
-diff -urp linux-2.6.5-7.282.orig/fs/ext3/ialloc.c linux-2.6.5-7.282/fs/ext3/ialloc.c
---- linux-2.6.5-7.282.orig/fs/ext3/ialloc.c	2006-08-30 17:12:13.000000000 +0300
-+++ linux-2.6.5-7.282/fs/ext3/ialloc.c	2007-02-16 07:43:08.000000000 +0200
-@@ -420,7 +420,8 @@ static int find_group_other(struct super
+ fs/ext3/ialloc.c        |   35 ++++++++++++++++++++++++++++++++++-
+ fs/ext3/ioctl.c         |   25 +++++++++++++++++++++++++
+ fs/ext3/namei.c         |   21 +++++++++++++++++----
+ include/linux/dcache.h  |    5 +++++
+ include/linux/ext3_fs.h |    5 ++++-
+ 5 files changed, 85 insertions(+), 6 deletions(-)
+
+Index: uml-2.6.3/fs/ext3/ialloc.c
+===================================================================
+--- uml-2.6.3.orig/fs/ext3/ialloc.c	2004-02-20 15:00:48.000000000 +0800
++++ uml-2.6.3/fs/ext3/ialloc.c	2004-02-21 00:24:45.202693776 +0800
+@@ -420,7 +420,8 @@
   * For other inodes, search forward from the parent directory's block
   * group to find a free inode.
   */
@@ -11,7 +19,7 @@ diff -urp linux-2.6.5-7.282.orig/fs/ext3/ialloc.c linux-2.6.5-7.282/fs/ext3/iall
  {
  	struct super_block *sb;
  	struct buffer_head *bitmap_bh = NULL;
-@@ -448,6 +449,41 @@ struct inode *ext3_new_inode(handle_t *h
+@@ -448,6 +449,41 @@
  
  	sbi = EXT3_SB(sb);
  	es = sbi->s_es;
@@ -53,10 +61,11 @@ diff -urp linux-2.6.5-7.282.orig/fs/ext3/ialloc.c linux-2.6.5-7.282/fs/ext3/iall
  	if (S_ISDIR(mode)) {
  		if (test_opt (sb, OLDALLOC))
  			group = find_group_dir(sb, dir);
-diff -urp linux-2.6.5-7.282.orig/fs/ext3/ioctl.c linux-2.6.5-7.282/fs/ext3/ioctl.c
---- linux-2.6.5-7.282.orig/fs/ext3/ioctl.c	2006-08-30 17:12:13.000000000 +0300
-+++ linux-2.6.5-7.282/fs/ext3/ioctl.c	2007-02-16 07:43:08.000000000 +0200
-@@ -25,6 +25,31 @@ int ext3_ioctl (struct inode * inode, st
+Index: uml-2.6.3/fs/ext3/ioctl.c
+===================================================================
+--- uml-2.6.3.orig/fs/ext3/ioctl.c	2004-01-09 14:59:26.000000000 +0800
++++ uml-2.6.3/fs/ext3/ioctl.c	2004-02-21 00:21:04.541239416 +0800
+@@ -24,6 +24,31 @@
  	ext3_debug ("cmd = %u, arg = %lu\n", cmd, arg);
  
  	switch (cmd) {
@@ -88,25 +97,11 @@ diff -urp linux-2.6.5-7.282.orig/fs/ext3/ioctl.c linux-2.6.5-7.282/fs/ext3/ioctl
  	case EXT3_IOC_GETFLAGS:
  		flags = ei->i_flags & EXT3_FL_USER_VISIBLE;
  		return put_user(flags, (int *) arg);
-diff -urp linux-2.6.5-7.282.orig/fs/ext3/namei.c linux-2.6.5-7.282/fs/ext3/namei.c
---- linux-2.6.5-7.282.orig/fs/ext3/namei.c	2006-08-30 17:12:34.000000000 +0300
-+++ linux-2.6.5-7.282/fs/ext3/namei.c	2007-02-16 07:46:13.000000000 +0200
-@@ -144,6 +144,14 @@ struct dx_map_entry
- 	u32 offs;
- };
- 
-+#define LVFS_DENTRY_PARAM_MAGIC		20070216UL
-+struct lvfs_dentry_params
-+{
-+	unsigned long   p_inum;
-+	void            *p_ptr;	
-+	u32		magic;
-+};
-+
- #ifdef CONFIG_EXT3_INDEX
- static inline unsigned dx_get_block (struct dx_entry *entry);
- static void dx_set_block (struct dx_entry *entry, unsigned value);
-@@ -1625,6 +1633,20 @@ static int ext3_add_nondir(handle_t *han
+Index: uml-2.6.3/fs/ext3/namei.c
+===================================================================
+--- uml-2.6.3.orig/fs/ext3/namei.c	2004-02-20 15:01:27.000000000 +0800
++++ uml-2.6.3/fs/ext3/namei.c	2004-02-21 00:21:04.611228776 +0800
+@@ -1617,6 +1617,19 @@
  	return err;
  }
  
@@ -116,10 +111,9 @@ diff -urp linux-2.6.5-7.282.orig/fs/ext3/namei.c linux-2.6.5-7.282/fs/ext3/namei
 +	unsigned long inum = 0;
 +
 +	if (dentry->d_fsdata != NULL) {
-+		struct lvfs_dentry_params *param = dentry->d_fsdata;
-+
-+		if (param->magic == LVFS_DENTRY_PARAM_MAGIC)
-+			inum = param->p_inum;
++		struct dentry_params *param =
++			(struct dentry_params *) dentry->d_fsdata;
++		inum = param->p_inum;
 +	}
 +	return ext3_new_inode(handle, dir, mode, inum);
 +}
@@ -127,7 +121,7 @@ diff -urp linux-2.6.5-7.282.orig/fs/ext3/namei.c linux-2.6.5-7.282/fs/ext3/namei
  /*
   * By the time this is called, we already have created
   * the directory cache entry for the new file, but it
-@@ -1649,7 +1671,7 @@ retry:
+@@ -1640,7 +1653,7 @@
  	if (IS_DIRSYNC(dir))
  		handle->h_sync = 1;
  
@@ -136,7 +130,7 @@ diff -urp linux-2.6.5-7.282.orig/fs/ext3/namei.c linux-2.6.5-7.282/fs/ext3/namei
  	err = PTR_ERR(inode);
  	if (!IS_ERR(inode)) {
  		inode->i_op = &ext3_file_inode_operations;
-@@ -1682,7 +1704,7 @@ retry:
+@@ -1670,7 +1683,7 @@
  	if (IS_DIRSYNC(dir))
  		handle->h_sync = 1;
  
@@ -145,7 +139,7 @@ diff -urp linux-2.6.5-7.282.orig/fs/ext3/namei.c linux-2.6.5-7.282/fs/ext3/namei
  	err = PTR_ERR(inode);
  	if (!IS_ERR(inode)) {
  		init_special_inode(inode, inode->i_mode, rdev);
-@@ -1718,7 +1740,7 @@ retry:
+@@ -1702,7 +1715,7 @@
  	if (IS_DIRSYNC(dir))
  		handle->h_sync = 1;
  
@@ -154,7 +148,7 @@ diff -urp linux-2.6.5-7.282.orig/fs/ext3/namei.c linux-2.6.5-7.282/fs/ext3/namei
  	err = PTR_ERR(inode);
  	if (IS_ERR(inode))
  		goto out_stop;
-@@ -2113,7 +2135,7 @@ retry:
+@@ -2094,7 +2107,7 @@
  	if (IS_DIRSYNC(dir))
  		handle->h_sync = 1;
  
@@ -163,10 +157,11 @@ diff -urp linux-2.6.5-7.282.orig/fs/ext3/namei.c linux-2.6.5-7.282/fs/ext3/namei
  	err = PTR_ERR(inode);
  	if (IS_ERR(inode))
  		goto out_stop;
-diff -urp linux-2.6.5-7.282.orig/include/linux/ext3_fs.h linux-2.6.5-7.282/include/linux/ext3_fs.h
---- linux-2.6.5-7.282.orig/include/linux/ext3_fs.h	2006-08-30 17:12:13.000000000 +0300
-+++ linux-2.6.5-7.282/include/linux/ext3_fs.h	2007-02-16 07:43:08.000000000 +0200
-@@ -203,6 +203,7 @@ struct ext3_group_desc
+Index: uml-2.6.3/include/linux/ext3_fs.h
+===================================================================
+--- uml-2.6.3.orig/include/linux/ext3_fs.h	2004-01-09 14:59:44.000000000 +0800
++++ uml-2.6.3/include/linux/ext3_fs.h	2004-02-21 00:21:04.613228472 +0800
+@@ -203,6 +203,7 @@
  #define	EXT3_IOC_SETFLAGS		_IOW('f', 2, long)
  #define	EXT3_IOC_GETVERSION		_IOR('f', 3, long)
  #define	EXT3_IOC_SETVERSION		_IOW('f', 4, long)
@@ -174,7 +169,7 @@ diff -urp linux-2.6.5-7.282.orig/include/linux/ext3_fs.h linux-2.6.5-7.282/inclu
  #define	EXT3_IOC_GETVERSION_OLD		_IOR('v', 1, long)
  #define	EXT3_IOC_SETVERSION_OLD		_IOW('v', 2, long)
  #ifdef CONFIG_JBD_DEBUG
-@@ -712,7 +713,8 @@ extern int ext3fs_dirhash(const char *na
+@@ -707,7 +708,8 @@
  			  dx_hash_info *hinfo);
  
  /* ialloc.c */
@@ -184,7 +179,7 @@ diff -urp linux-2.6.5-7.282.orig/include/linux/ext3_fs.h linux-2.6.5-7.282/inclu
  extern void ext3_free_inode (handle_t *, struct inode *);
  extern struct inode * ext3_orphan_get (struct super_block *, unsigned long);
  extern unsigned long ext3_count_free_inodes (struct super_block *);
-@@ -797,4 +799,5 @@ extern struct inode_operations ext3_fast
+@@ -792,4 +794,5 @@
  
  #endif	/* __KERNEL__ */
  

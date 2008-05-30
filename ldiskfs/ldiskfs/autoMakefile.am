@@ -14,7 +14,9 @@ ldiskfs_sed_flags = \
 	-e "s/DX_HASH/EXT3_DX_HASH/g" \
 	-e "s/reserve_window/ext3_reserve_window/g" \
 	-e "s/rsv_window_add/ext3_rsv_window_add/g" \
-	-e "s/EXT3/LDISKFS/g" -e "s/ext3/ldiskfs/g"
+	-e "s/EXT3/LDISKFS/g" \
+	-e "s/ext3/ldiskfs/g" \
+	-e "s/Ext3/Ldiskfs/g"
 
 %.c: linux-stage/fs/ext3/%.c
 	sed $(strip $(ldiskfs_sed_flags)) $< > $@
@@ -62,6 +64,9 @@ endif
 			linux-stage/include/linux/ext3$$i \
 			> linux/ldiskfs$$i ; \
 	done
+	sed $(strip $(ldiskfs_sed_flags)) \
+        linux-stage/include/linux/lustre_iam.h \
+        > linux/lustre_iam.h
 	@echo
 	touch sources
 
@@ -75,6 +80,8 @@ foo-check:
 
 MOSTLYCLEANFILES := @MOSTLYCLEANFILES@ 
 CLEANFILES = sources $(notdir $(linux_headers) $(ext3_headers) $(ext3_sources) $(new_sources) $(new_headers))
+
+EXTRA_DIST := lustre_quota_fmt.c lustre_quota_fmt.h quotafmt_test.c
 
 clean: clean-am
 	rm -rf linux linux-stage

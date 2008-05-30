@@ -1,8 +1,8 @@
-Index: linux-2.6.5-7.283_lustre-1.4.10.1/fs/ext3/super.c
+Index: linux-stage/fs/ext3/super.c
 ===================================================================
---- linux-2.6.5-7.283_lustre-1.4.10.1.orig/fs/ext3/super.c	2007-05-30 08:48:29.000000000 +0200
-+++ linux-2.6.5-7.283_lustre-1.4.10.1/fs/ext3/super.c	2007-05-30 08:48:37.000000000 +0200
-@@ -116,6 +116,8 @@ void ext3_journal_abort_handle(const cha
+--- linux-stage.orig/fs/ext3/super.c	2004-04-02 16:40:18.000000000 -0500
++++ linux-stage/fs/ext3/super.c	2004-04-02 16:40:18.000000000 -0500
+@@ -115,6 +115,8 @@
  		handle->h_err = err;
  }
  
@@ -11,7 +11,7 @@ Index: linux-2.6.5-7.283_lustre-1.4.10.1/fs/ext3/super.c
  static char error_buf[1024];
  
  /* Deal with the reporting of failure conditions on a filesystem such as
-@@ -1895,6 +1897,8 @@ int ext3_force_commit(struct super_block
+@@ -1774,6 +1776,8 @@
  	return ret;
  }
  
@@ -20,15 +20,13 @@ Index: linux-2.6.5-7.283_lustre-1.4.10.1/fs/ext3/super.c
  /*
   * Ext3 always journals updates to the superblock itself, so we don't
   * have to propagate any other updates to the superblock on disk at this
-@@ -2334,6 +2338,12 @@ int ext3_map_inode_page(struct inode *in
+@@ -2088,6 +2092,10 @@
                          unsigned long *blocks, int *created, int create);
  EXPORT_SYMBOL(ext3_map_inode_page);
  
 +EXPORT_SYMBOL(ext3_xattr_get);
 +EXPORT_SYMBOL(ext3_xattr_set_handle);
 +EXPORT_SYMBOL(ext3_bread);
-+EXPORT_SYMBOL(ext3_journal_start);
-+EXPORT_SYMBOL(__ext3_journal_stop);
 +
  MODULE_AUTHOR("Remy Card, Stephen Tweedie, Andrew Morton, Andreas Dilger, Theodore Ts'o and others");
  MODULE_DESCRIPTION("Second Extended Filesystem with journaling extensions");

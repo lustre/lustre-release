@@ -14,16 +14,11 @@ Verified this patch on a 32 bit platform without CONFIG_LBD defined
 Signed-off-by: Mingming Cao<cmm@us.ibm.com>
 Acked-by: Andreas Dilger <adilger@clusterfs.com>
 Signed-off-by: Andrew Morton <akpm@osdl.org>
----
-
- fs/ext3/resize.c |   10 ++++++++++
- fs/ext3/super.c  |   10 ++++++++++
- 2 files changed, 20 insertions(+)
-
-diff -puN fs/ext3/resize.c~avoid-disk-sector_t-overflow-for-2tb-ext3-filesystem fs/ext3/resize.c
---- devel/fs/ext3/resize.c~avoid-disk-sector_t-overflow-for-2tb-ext3-filesystem	2006-05-22 14:09:53.000000000 -0700
-+++ devel-akpm/fs/ext3/resize.c	2006-05-22 14:10:56.000000000 -0700
-@@ -926,6 +926,16 @@ int ext3_group_extend(struct super_block
+Index: iam/fs/ext3/resize.c
+===================================================================
+--- iam.orig/fs/ext3/resize.c
++++ iam/fs/ext3/resize.c
+@@ -914,6 +914,16 @@ int ext3_group_extend(struct super_block
  	if (n_blocks_count == 0 || n_blocks_count == o_blocks_count)
  		return 0;
  
@@ -40,10 +35,11 @@ diff -puN fs/ext3/resize.c~avoid-disk-sector_t-overflow-for-2tb-ext3-filesystem 
  	if (n_blocks_count < o_blocks_count) {
  		ext3_warning(sb, __FUNCTION__,
  			     "can't shrink FS - resize aborted");
-diff -puN fs/ext3/super.c~avoid-disk-sector_t-overflow-for-2tb-ext3-filesystem fs/ext3/super.c
---- devel/fs/ext3/super.c~avoid-disk-sector_t-overflow-for-2tb-ext3-filesystem	2006-05-22 14:09:53.000000000 -0700
-+++ devel-akpm/fs/ext3/super.c	2006-05-22 14:11:10.000000000 -0700
-@@ -1565,6 +1565,17 @@ static int ext3_fill_super (struct super
+Index: iam/fs/ext3/super.c
+===================================================================
+--- iam.orig/fs/ext3/super.c
++++ iam/fs/ext3/super.c
+@@ -1530,6 +1530,17 @@ static int ext3_fill_super (struct super
  		goto failed_mount;
  	}
  
@@ -61,4 +57,3 @@ diff -puN fs/ext3/super.c~avoid-disk-sector_t-overflow-for-2tb-ext3-filesystem f
  	sbi->s_groups_count = (le32_to_cpu(es->s_blocks_count) -
  			       le32_to_cpu(es->s_first_data_block) +
  			       EXT3_BLOCKS_PER_GROUP(sb) - 1) /
-_

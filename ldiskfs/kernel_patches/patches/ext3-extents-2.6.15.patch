@@ -2,7 +2,7 @@ Index: linux-2.6.16.21-0.8/fs/ext3/extents.c
 ===================================================================
 --- /dev/null
 +++ linux-2.6.16.21-0.8/fs/ext3/extents.c
-@@ -0,0 +1,2359 @@
+@@ -0,0 +1,2347 @@
 +/*
 + * Copyright(c) 2003, 2004, 2005, Cluster File Systems, Inc, info@clusterfs.com
 + * Written by Alex Tomas <alex@clusterfs.com>
@@ -176,9 +176,9 @@ Index: linux-2.6.16.21-0.8/fs/ext3/extents.c
 +
 +static inline void ext3_ext_tree_changed(struct ext3_extents_tree *tree)
 +{
-+	struct ext3_extent_header *neh = EXT_ROOT_HDR(tree);
-+	neh->eh_generation = ((EXT_FLAGS(neh) & ~EXT_FLAGS_CLR_UNKNOWN) << 24) |
-+			     (EXT_HDR_GEN(neh) + 1);
++	struct ext3_extent_header *neh;
++	neh = EXT_ROOT_HDR(tree);
++	neh->eh_generation++;
 +}
 +
 +static inline int ext3_ext_space_block(struct ext3_extents_tree *tree)
@@ -448,12 +448,8 @@ Index: linux-2.6.16.21-0.8/fs/ext3/extents.c
 +
 +	eh = EXT_ROOT_HDR(tree);
 +	EXT_ASSERT(eh);
-+	if (ext3_ext_check_header(eh)) {
-+		/* don't free previously allocated path
-+		 * -- caller should take care */
-+		path = NULL;
++	if (ext3_ext_check_header(eh))
 +		goto err;
-+	}
 +
 +	i = depth = EXT_DEPTH(tree);
 +	EXT_ASSERT(eh->eh_max);
@@ -510,10 +506,8 @@ Index: linux-2.6.16.21-0.8/fs/ext3/extents.c
 +
 +err:
 +	printk(KERN_ERR "EXT3-fs: header is corrupted!\n");
-+	if (path) {
-+		ext3_ext_drop_refs(path);
-+		kfree(path);
-+	}
++	ext3_ext_drop_refs(path);
++	kfree(path);
 +	return ERR_PTR(-EIO);
 +}
 +
@@ -560,7 +554,6 @@ Index: linux-2.6.16.21-0.8/fs/ext3/extents.c
 +
 +	ix->ei_block = logical;
 +	ix->ei_leaf = ptr;
-+	ix->ei_leaf_hi = ix->ei_unused = 0;
 +	curp->p_hdr->eh_entries++;
 +
 +	EXT_ASSERT(curp->p_hdr->eh_entries <= curp->p_hdr->eh_max);
@@ -723,7 +716,6 @@ Index: linux-2.6.16.21-0.8/fs/ext3/extents.c
 +		fidx = EXT_FIRST_INDEX(neh);
 +		fidx->ei_block = border;
 +		fidx->ei_leaf = oldblock;
-+		fidx->ei_leaf_hi = fidx->ei_unused = 0;
 +
 +		ext_debug(tree,	"int.index at %d (block %lu): %lu -> %lu\n",
 +			  i, newblock, border, oldblock);
@@ -857,7 +849,6 @@ Index: linux-2.6.16.21-0.8/fs/ext3/extents.c
 +	/* FIXME: it works, but actually path[0] can be index */
 +	curp->p_idx->ei_block = EXT_FIRST_EXTENT(path[0].p_hdr)->ee_block;
 +	curp->p_idx->ei_leaf = newblock;
-+	curp->p_idx->ei_leaf_hi = curp->p_idx->ei_unused = 0;
 +
 +	neh = EXT_ROOT_HDR(tree);
 +	fidx = EXT_FIRST_INDEX(neh);
@@ -1406,7 +1397,6 @@ Index: linux-2.6.16.21-0.8/fs/ext3/extents.c
 +	if (block >= cex->ec_block && block < cex->ec_block + cex->ec_len) {
 +		ex->ee_block = cex->ec_block;
 +		ex->ee_start = cex->ec_start;
-+		ex->ee_start_hi = 0;
 +		ex->ee_len = cex->ec_len;
 +		ext_debug(tree, "%lu cached by %lu:%lu:%lu\n",
 +			  (unsigned long) block,
@@ -1628,7 +1618,7 @@ Index: linux-2.6.16.21-0.8/fs/ext3/extents.c
 +
 +		if (num == 0) {
 +			/* this extent is removed entirely mark slot unused */
-+			ex->ee_start = ex->ee_start_hi = 0;
++			ex->ee_start = 0;
 +			eh->eh_entries--;
 +			fu = ex;
 +		}
@@ -1650,7 +1640,7 @@ Index: linux-2.6.16.21-0.8/fs/ext3/extents.c
 +		while (lu < le) {
 +			if (lu->ee_start) {
 +				*fu = *lu;
-+				lu->ee_start = lu->ee_start_hi = 0;
++				lu->ee_start = 0;
 +				fu++;
 +			}
 +			lu++;
@@ -2005,7 +1995,6 @@ Index: linux-2.6.16.21-0.8/fs/ext3/extents.c
 +		/* allocate new block for the extent */
 +		goal = ext3_ext_find_goal(inode, path, ex->ee_block);
 +		ex->ee_start = ext3_new_block(handle, inode, goal, err);
-+		ex->ee_start_hi = 0;
 +		if (ex->ee_start == 0) {
 +			/* error occured: restore old extent */
 +			ex->ee_start = newblock;
@@ -2121,7 +2110,6 @@ Index: linux-2.6.16.21-0.8/fs/ext3/extents.c
 +	/* try to insert new extent into found leaf and return */
 +	newex.ee_block = iblock;
 +	newex.ee_start = newblock;
-+	newex.ee_start_hi = 0;
 +	newex.ee_len = 1;
 +	err = ext3_ext_insert_extent(handle, &tree, path, &newex);
 +	if (err)
@@ -2529,29 +2517,25 @@ Index: linux-2.6.16.21-0.8/fs/ext3/super.c
  	Opt_jqfmt_vfsold, Opt_jqfmt_vfsv0, Opt_quota, Opt_noquota,
  	Opt_ignore, Opt_barrier, Opt_err, Opt_resize, Opt_usrquota,
  	Opt_iopen, Opt_noiopen, Opt_iopen_nopriv,
-+	Opt_extents, Opt_noextents, Opt_extdebug,
++	Opt_extents, Opt_extdebug,
  	Opt_grpquota
  };
  
-@@ -689,6 +693,9 @@ static match_table_t tokens = {
+@@ -689,6 +693,8 @@ static match_table_t tokens = {
  	{Opt_iopen, "iopen"},
  	{Opt_noiopen, "noiopen"},
  	{Opt_iopen_nopriv, "iopen_nopriv"},
 +	{Opt_extents, "extents"},
-+	{Opt_noextents, "noextents"},
 +	{Opt_extdebug, "extdebug"},
  	{Opt_barrier, "barrier=%u"},
  	{Opt_err, NULL},
  	{Opt_resize, "resize"},
-@@ -1030,6 +1036,15 @@ clear_qf_name:
+@@ -1030,6 +1036,12 @@ clear_qf_name:
  		case Opt_nobh:
  			set_opt(sbi->s_mount_opt, NOBH);
  			break;
 +		case Opt_extents:
 +			set_opt (sbi->s_mount_opt, EXTENTS);
-+			break;
-+		case Opt_noextents:
-+			clear_opt (sbi->s_mount_opt, EXTENTS);
 +			break;
 +		case Opt_extdebug:
 +			set_opt (sbi->s_mount_opt, EXTDEBUG);
@@ -2669,7 +2653,7 @@ Index: linux-2.6.16.21-0.8/include/linux/ext3_extents.h
 ===================================================================
 --- /dev/null
 +++ linux-2.6.16.21-0.8/include/linux/ext3_extents.h
-@@ -0,0 +1,262 @@
+@@ -0,0 +1,264 @@
 +/*
 + * Copyright (c) 2003, Cluster File Systems, Inc, info@clusterfs.com
 + * Written by Alex Tomas <alex@clusterfs.com>
@@ -2767,7 +2751,7 @@ Index: linux-2.6.16.21-0.8/include/linux/ext3_extents.h
 +	__u16	eh_entries;	/* number of valid entries */
 +	__u16	eh_max;		/* capacity of store in entries */
 +	__u16	eh_depth;	/* has tree real underlaying blocks? */
-+	__u32	eh_generation;	/* flags(8 bits) | generation of the tree */
++	__u32	eh_generation;	/* generation of the tree */
 +};
 +
 +#define EXT3_EXT_MAGIC		0xf30a
@@ -2868,14 +2852,16 @@ Index: linux-2.6.16.21-0.8/include/linux/ext3_extents.h
 +	(EXT_FIRST_EXTENT((__hdr__)) + (__hdr__)->eh_max - 1)
 +#define EXT_MAX_INDEX(__hdr__) \
 +	(EXT_FIRST_INDEX((__hdr__)) + (__hdr__)->eh_max - 1)
-+#define EXT_HDR_GEN(__hdr__)	((__hdr__)->eh_generation & 0x00ffffff)
-+#define EXT_FLAGS(__hdr__)	((__hdr__)->eh_generation >> 24)
-+#define EXT_FLAGS_CLR_UNKNOWN	0x7	/* Flags cleared on modification */
 +
-+#define EXT_BLOCK_HDR(__bh__) 	((struct ext3_extent_header *)(__bh__)->b_data)
-+#define EXT_ROOT_HDR(__tree__)	((struct ext3_extent_header *)(__tree__)->root)
-+#define EXT_DEPTH(__tree__)	(EXT_ROOT_HDR(__tree__)->eh_depth)
-+#define EXT_GENERATION(__tree__) EXT_HDR_GEN(EXT_ROOT_HDR(__tree__))
++#define EXT_ROOT_HDR(tree) \
++	((struct ext3_extent_header *) (tree)->root)
++#define EXT_BLOCK_HDR(bh) \
++	((struct ext3_extent_header *) (bh)->b_data)
++#define EXT_DEPTH(_t_)	\
++	(((struct ext3_extent_header *)((_t_)->root))->eh_depth)
++#define EXT_GENERATION(_t_)	\
++	(((struct ext3_extent_header *)((_t_)->root))->eh_generation)
++
 +
 +#define EXT_ASSERT(__x__) if (!(__x__)) BUG();
 +

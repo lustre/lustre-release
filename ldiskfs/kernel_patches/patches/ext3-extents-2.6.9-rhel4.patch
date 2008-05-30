@@ -2,7 +2,7 @@ Index: linux-stage/fs/ext3/extents.c
 ===================================================================
 --- linux-stage.orig/fs/ext3/extents.c	2005-02-25 15:33:48.890198160 +0200
 +++ linux-stage/fs/ext3/extents.c	2005-02-25 15:33:48.917194056 +0200
-@@ -0,0 +1,2360 @@
+@@ -0,0 +1,2359 @@
 +/*
 + * Copyright(c) 2003, 2004, 2005, Cluster File Systems, Inc, info@clusterfs.com
 + * Written by Alex Tomas <alex@clusterfs.com>
@@ -177,9 +177,8 @@ Index: linux-stage/fs/ext3/extents.c
 +static inline void ext3_ext_tree_changed(struct ext3_extents_tree *tree)
 +{
 +	struct ext3_extent_header *neh = EXT_ROOT_HDR(tree);
-+	neh->eh_generation = ((EXT_FLAGS(neh) & ~EXT_FLAGS_CLR_UNKNOWN) <<
-+			      EXT_HDR_GEN_BITS) |
-+			     ((EXT_HDR_GEN(neh) + 1) & EXT_HDR_GEN_MASK);
++	neh->eh_generation = ((EXT_FLAGS(neh) & ~EXT_FLAGS_CLR_UNKNOWN) << 24) |
++			     (EXT_HDR_GEN(neh) + 1);
 +}
 +
 +static inline int ext3_ext_space_block(struct ext3_extents_tree *tree)
@@ -2380,7 +2379,7 @@ Index: linux-stage/fs/ext3/ialloc.c
  		DQUOT_FREE_INODE(inode);
  		goto fail2;
    	}
-+	if (test_opt(sb, EXTENTS) && S_ISREG(inode->i_mode)) {
++	if (test_opt(sb, EXTENTS) && (S_ISREG(inode->i_mode) || S_ISDIR(inode->i_mode))) {
 +		EXT3_I(inode)->i_flags |= EXT3_EXTENTS_FL;
 +		ext3_extents_initialize_blockmap(handle, inode);
 +		if (!EXT3_HAS_INCOMPAT_FEATURE(sb, EXT3_FEATURE_INCOMPAT_EXTENTS)) {
@@ -2723,7 +2722,7 @@ Index: linux-stage/include/linux/ext3_extents.h
 +	__u32	ee_block;	/* first logical block extent covers */
 +	__u16	ee_len;		/* number of blocks covered by extent */
 +	__u16	ee_start_hi;	/* high 16 bits of physical block */
-+	__u32	ee_start;	/* low 32 bits of physical block */
++	__u32	ee_start;	/* low 32 bigs of physical block */
 +};
 +
 +/*
@@ -2847,10 +2846,8 @@ Index: linux-stage/include/linux/ext3_extents.h
 +	(EXT_FIRST_EXTENT((__hdr__)) + (__hdr__)->eh_max - 1)
 +#define EXT_MAX_INDEX(__hdr__) \
 +	(EXT_FIRST_INDEX((__hdr__)) + (__hdr__)->eh_max - 1)
-+#define EXT_HDR_GEN_BITS	24
-+#define EXT_HDR_GEN_MASK	((1 << EXT_HDR_GEN_BITS) - 1)
-+#define EXT_HDR_GEN(__hdr__)	((__hdr__)->eh_generation & EXT_HDR_GEN_MASK)
-+#define EXT_FLAGS(__hdr__)	((__hdr__)->eh_generation >> EXT_HDR_GEN_BITS)
++#define EXT_HDR_GEN(__hdr__)	((__hdr__)->eh_generation & 0x00ffffff)
++#define EXT_FLAGS(__hdr__)	((__hdr__)->eh_generation >> 24)
 +#define EXT_FLAGS_CLR_UNKNOWN	0x7	/* Flags cleared on modification */
 +
 +#define EXT_BLOCK_HDR(__bh__) 	((struct ext3_extent_header *)(__bh__)->b_data)
@@ -2910,6 +2907,8 @@ Index: linux-stage/include/linux/ext3_extents.h
 +	if (tree->cex)
 +		tree->cex->ec_type = EXT3_EXT_CACHE_NO;
 +}
++
++
 +#endif /* _LINUX_EXT3_EXTENTS */
 Index: linux-stage/include/linux/ext3_fs_i.h
 ===================================================================

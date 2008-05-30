@@ -73,14 +73,13 @@ Index: linux-2.6.0/fs/ext3/super.c
 ===================================================================
 --- linux-2.6.0.orig/fs/ext3/super.c	2003-12-31 00:33:49.000000000 +0300
 +++ linux-2.6.0/fs/ext3/super.c	2003-12-31 01:10:40.000000000 +0300
-@@ -2051,6 +2051,10 @@
+@@ -2051,6 +2051,9 @@
+ int ext3_prep_san_write(struct inode *inode, long *blocks,
                          int nblocks, loff_t newsize);
  EXPORT_SYMBOL(ext3_prep_san_write);
- 
 +int ext3_map_inode_page(struct inode *inode, struct page *page,
 +                        unsigned long *blocks, int *created, int create);
 +EXPORT_SYMBOL(ext3_map_inode_page);
-+
+ 
  MODULE_AUTHOR("Remy Card, Stephen Tweedie, Andrew Morton, Andreas Dilger, Theodore Ts'o and others");
  MODULE_DESCRIPTION("Second Extended Filesystem with journaling extensions");
- MODULE_LICENSE("GPL");

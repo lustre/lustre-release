@@ -11,3 +11,14 @@ ext3-mballoc2-2.6.9-rhel4.patch
 ext3-nlinks-2.6.9.patch
 ext3-ialloc-2.6.patch
 ext3-lookup-dotdot-2.6.9.patch
+ext3-tall-htree.patch
+ext3-htree-path.patch
+ext3-htree-r5-hash.patch
+ext3-htree-path-ops.patch
+ext3-hash-selection.patch
+ext3-htree-comments.patch
+ext3-iam-ops.patch
+ext3-iam-separate.patch 
+ext3-iam-uapi.patch 
+ext3-orphans-delay.patch 
+ext3-pdirops-2.6.9.patch
