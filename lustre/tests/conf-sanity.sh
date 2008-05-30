@@ -1559,6 +1559,27 @@ test_39() {
 }
 run_test 39 "leak_finder recognizes both LUSTRE and LNET malloc messages"
 
+test_40() { #bug 14134
+        local rc
+        start mds $MDSDEV $MDS_MOUNT_OPTS -o nosvc
+        start ost `ostdevname 1` $OST_MOUNT_OPTS
+        start mds $MDSDEV $MDS_MOUNT_OPTS -o nomgs
+        mkdir -p $MOUNT
+        mount_client $MOUNT || return 1
+        sleep 5
+
+        echo "blah blah" > $MOUNT/$tfile
+        cat $MOUNT/$tfile
+
+        umount_client $MOUNT
+        stop ost -f || return 201
+        stop mds -f || return 202
+        stop mds -f || return 203
+        unload_modules || return 204
+        return $rc
+}
+run_test 40 "mount mds with --nosvc and --nomgs"
+
 umount_client $MOUNT
 cleanup_nocli
 cleanup_gss

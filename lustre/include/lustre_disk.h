@@ -151,6 +151,8 @@ struct lustre_mount_data {
 #define LMD_FLG_ABORT_RECOV  0x0008  /* Abort recovery */
 #define LMD_FLG_NOSVC        0x0010  /* Only start MGS/MGC for servers, 
                                         no other services */
+#define LMD_FLG_NOMGS        0x0020  /* Only start target for servers, reusing
+                                        existing MGS services */
 
 #define lmd_is_client(x) ((x)->lmd_flags & LMD_FLG_CLIENT) 
 
