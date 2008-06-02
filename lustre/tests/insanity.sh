@@ -8,9 +8,16 @@ LUSTRE=${LUSTRE:-`dirname $0`/..}
 
 init_test_env $@
 
-. ${CONFIG:=$LUSTRE/tests/cfg/insanity-local.sh}
+. ${CONFIG:=$LUSTRE/tests/cfg/$NAME.sh}
 #              13129  13129                 
 ALWAYS_EXCEPT="2      4     10  $INSANITY_EXCEPT"
+
+if [ "$FAILURE_MODE" = "HARD" ]; then
+    mixed_ost_devs && CONFIG_EXCEPTIONS="0 2 4 5 6 8" && \
+        echo -n "Several ost services on one ost node are used with FAILURE_MODE=$FAILURE_MODE. " && \
+        echo "Except the tests: $CONFIG_EXCEPTIONS" && \
+        ALWAYS_EXCEPT="$ALWAYS_EXCEPT $CONFIG_EXCEPTIONS"
+fi
 
 #
 [ "$SLOW" = "no" ] && EXCEPT_SLOW=""
@@ -20,13 +27,17 @@ CLEANUP=${CLEANUP:-""}
 
 build_test_filter
 
+SINGLECLIENT=${SINGLECLIENT:-$HOSTNAME}
+LIVE_CLIENT=${LIVE_CLIENT:-$SINGLECLIENT}
+FAIL_CLIENTS=${FAIL_CLIENTS:-$RCLIENTS}
+
 assert_env mds_HOST MDS_MKFS_OPTS
 assert_env ost_HOST OST_MKFS_OPTS OSTCOUNT
 assert_env LIVE_CLIENT FSNAME
 
 
 # This can be a regexp, to allow more clients
-CLIENTS=${CLIENTS:-"`comma_list $LIVE_CLIENT $FAIL_CLIENTS $EXTRA_CLIENTS`"}
+CLIENTS=${CLIENTS:-"`comma_list $LIVE_CLIENT $FAIL_CLIENTS`"}
 
 DIR=${DIR:-$MOUNT}
 
@@ -69,11 +80,14 @@ reboot_node() {
 
 fail_clients() {
     num=$1
+
+    log "Request clients to fail: ${num}. Num of clients to fail: ${FAIL_NUM}, already failed: $DOWN_NUM"
     if [ -z "$num"  ] || [ "$num" -gt $((FAIL_NUM - DOWN_NUM)) ]; then
 	num=$((FAIL_NUM - DOWN_NUM)) 
     fi
     
     if [ -z "$num" ] || [ "$num" -le 0 ]; then
+        log "No clients failed!"
         return
     fi
 
@@ -156,13 +170,11 @@ test_0() {
     echo "Waiting for df pid: $DFPID"
     wait $DFPID || { echo "df returned $?" && return 1; }
 
-    facet_failover ost1 || return 4
-    echo "Waiting for df pid: $DFPID"
-    wait $DFPID || { echo "df returned $?" && return 2; }
-
-    facet_failover ost2 || return 5
-    echo "Waiting for df pid: $DFPID"
-    wait $DFPID || { echo "df returned $?" && return 3; }
+    for i in $(seq $OSTCOUNT) ; do
+        facet_failover ost$i || return 4
+        echo "Waiting for df pid: $DFPID"
+        wait $DFPID || { echo "df returned $?" && return 3; }
+    done
     return 0
 }
 run_test 0 "Fail all nodes, independently"
@@ -292,6 +304,8 @@ run_test 4 "Fourth Failure Mode: OST/MDS `date`"
 
 ############### Fifth Failure Mode ###############
 test_5() {
+    [ $OSTCOUNT -lt 2 ] && skip "$OSTCOUNT < 2, not enough OSTs" && return 0
+
     echo "Fifth Failure Mode: OST/OST `date`"
 
     #Create files

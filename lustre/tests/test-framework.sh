@@ -70,7 +70,6 @@ print_summary () {
 init_test_env() {
     export LUSTRE=`absolute_path $LUSTRE`
     export TESTSUITE=`basename $0 .sh`
-    export LTESTDIR=${LTESTDIR:-$LUSTRE/../ltest}
 
     [ -d /r ] && export ROOT=${ROOT:-/r}
     export TMP=${TMP:-$ROOT/tmp}
@@ -147,6 +146,7 @@ init_test_env() {
     ONLY=${ONLY:-$*}
 
     [ "$TESTSUITELOG" ] && rm -f $TESTSUITELOG || true
+    rm -f $TMP/*active
 
 }
 
@@ -493,14 +493,30 @@ zconf_umount() {
 }
 
 zconf_mount_clients() {
+    local OPTIONS
     local clients=$1
     local mnt=$2
 
-    echo "Mounting clients: $clients"
-    local client
-    for client in ${clients//,/ }; do
-        zconf_mount $client $mnt  || true
-    done
+
+    # Only supply -o to mount if we have options
+    if [ -n "$MOUNTOPT" ]; then
+        OPTIONS="-o $MOUNTOPT"
+    fi
+    local device=$MGSNID:/$FSNAME
+    if [ -z "$mnt" -o -z "$FSNAME" ]; then
+        echo Bad zconf mount command: opt=$OPTIONS dev=$device mnt=$mnt
+        exit 1
+    fi
+
+    echo "Starting client $clients: $OPTIONS $device $mnt"
+    do_nodes $clients mkdir -p $mnt
+    do_nodes $clients mount -t lustre $OPTIONS $device $mnt || return 1
+
+    do_nodes $clients "sysctl -w lnet.debug=$PTLDEBUG;
+        sysctl -w lnet.subsystem_debug=${SUBSYSTEM# };
+        sysctl -w lnet.debug_mb=${DEBUG_SIZE};"
+
+    return 0
 }
 
 zconf_umount_clients() {
@@ -509,10 +525,8 @@ zconf_umount_clients() {
     [ "$3" ] && force=-f
 
     echo "Umounting clients: $clients"
-    local client
-    for client in ${clients//,/ }; do
-        zconf_umount $client $mnt $force || true
-    done
+    echo "Stopping client $client $mnt (opts:$force)"
+    do_nodes $clients umount $force $mnt 
 }
 
 shutdown_facet() {
@@ -795,8 +809,8 @@ facet_active() {
     local facet=$1
     local activevar=${facet}active
 
-    if [ -f ./${facet}active ] ; then
-        source ./${facet}active
+    if [ -f $TMP/${facet}active ] ; then
+        source $TMP/${facet}active
     fi
 
     active=${!activevar}
@@ -830,7 +844,7 @@ change_active() {
     fi
     # save the active host for this facet
     activevar=${facet}active
-    echo "$activevar=${!activevar}" > ./$activevar
+    echo "$activevar=${!activevar}" > $TMP/$activevar
 }
 
 do_node() {
@@ -862,12 +876,53 @@ do_node() {
     return ${PIPESTATUS[0]}
 }
 
+do_nodes() {
+    local nodes=$1
+    shift
+
+    nodes=${nodes//,/ }
+    # split list to local and remote
+    local rnodes=$(echo " $nodes " | sed -re "s/\s+$HOSTNAME\s+/ /g")
+ 
+    if [ "$(get_node_count $nodes)" != "$(get_node_count $rnodes)" ]; then
+        do_node $HOSTNAME $@
+    fi
+
+    [ -z "$(echo $rnodes)" ] && return 0
+
+    # This is part from do_node
+    local myPDSH=$PDSH
+
+    rnodes=$(comma_list $rnodes)
+    [ -z "$myPDSH" -o "$myPDSH" = "no_dsh" ] && \
+        echo "cannot run remote command on $rnodes with $myPDSH" && return 128
+
+    if $VERBOSE; then
+        echo "CMD: $rnodes $@" >&2
+        $myPDSH $rnodes $LCTL mark "$@" > /dev/null 2>&1 || :
+    fi
+
+    if [ "$myPDSH" = "rsh" ]; then
+# we need this because rsh does not return exit code of an executed command
+	local command_status="$TMP/cs"
+	rsh $rnodes ":> $command_status"
+	rsh $rnodes "(PATH=\$PATH:$RLUSTRE/utils:$RLUSTRE/tests:/sbin:/usr/sbin;
+		    cd $RPWD; sh -c \"$@\") || 
+		    echo command failed >$command_status"
+	[ -n "$($myPDSH $rnodes cat $command_status)" ] && return 1 || true
+        return 0
+    fi
+    $myPDSH $rnodes "(PATH=\$PATH:$RLUSTRE/utils:$RLUSTRE/tests:/sbin:/usr/sbin; cd $RPWD; sh -c \"$@\")" | sed -re "s/\w+:\s//g"
+    return ${PIPESTATUS[0]}
+}
+
+
 do_facet() {
     facet=$1
     shift
     HOST=`facet_active_host $facet`
     [ -z $HOST ] && echo No host defined for facet ${facet} && exit 1
-    do_node $HOST $@
+    do_node $HOST "$@"
 }
 
 add() {
@@ -875,7 +930,7 @@ add() {
     shift
     # make sure its not already running
     stop ${facet} -f
-    rm -f ${facet}active
+    rm -f $TMP/${facet}active
     do_facet ${facet} $MKFS $*
 }
 
@@ -916,12 +971,19 @@ stopall() {
     fi
 
     [ "$CLIENTONLY" ] && return
+    # The add fn does rm ${facet}active file, this would be enough
+    # if we use do_facet <facet> only after the facet added, but
+    # currently we use do_facet mds in local.sh
     for num in `seq $MDSCOUNT`; do
         stop mds$num -f
+        rm -f ${TMP}/mds${num}active
     done
+
     for num in `seq $OSTCOUNT`; do
         stop ost$num -f
+        rm -f $TMP/ost${num}active
     done
+
     return 0
 }
 
@@ -1035,6 +1097,13 @@ setupall() {
             || do_facet mds$num "$TUNEFS --writeconf $DEVNAME"
             set_obd_timeout mds$num $TIMEOUT
             start mds$num $DEVNAME $MDS_MOUNT_OPTS
+
+            # We started mds, now we should set failover variables properly.
+            # Set mds${num}failover_HOST if it is not set (the default failnode).
+            if [ -z "$mds${num}failover_HOST" ]; then
+                mds${num}failover_HOST=$(facet_host mds$num)
+            fi
+
 	    if [ $IDENTITY_UPCALL != "default" ]; then
                 switch_identity $num $IDENTITY_UPCALL
 	    fi
@@ -1043,6 +1112,14 @@ setupall() {
             DEVNAME=$(ostdevname $num)
             set_obd_timeout ost$num $TIMEOUT
             start ost$num $DEVNAME $OST_MOUNT_OPTS
+
+            # We started ost$num, now we should set ost${num}failover variable properly.
+            # Set ost${num}failover_HOST if it is not set (the default failnode).
+            varname=ost${num}failover_HOST
+            if [ -z "${!varname}" ]; then
+                eval ost${num}failover_HOST=$(facet_host ost${num})
+            fi
+
         done
     fi
     [ "$DAEMONFILE" ] && $LCTL debug_daemon start $DAEMONFILE $DAEMONSIZE
@@ -1232,6 +1309,15 @@ set_nodes_failloc () {
     done
 }
 
+set_nodes_failloc () {
+    local nodes=$1
+    local node
+
+    for node in $nodes ; do
+        do_node $node sysctl -w lustre.fail_loc=$2
+    done
+}
+
 cancel_lru_locks() {
     $LCTL mark "cancel_lru_locks $1 start"
     for d in `find $LPROC/ldlm/namespaces | egrep -i $1`; do
@@ -1341,7 +1427,7 @@ build_test_filter() {
         eval ONLY_${O}=true
     done
     [ "$EXCEPT$ALWAYS_EXCEPT" ] && \
-        log "skipping tests: `echo $EXCEPT $ALWAYS_EXCEPT`"
+        log "excepting tests: `echo $EXCEPT $ALWAYS_EXCEPT`"
     [ "$EXCEPT_SLOW" ] && \
         log "skipping tests SLOW=no: `echo $EXCEPT_SLOW`"
     for E in $EXCEPT $ALWAYS_EXCEPT; do
@@ -1626,6 +1712,17 @@ nodes_list () {
 is_patchless ()
 {
     lctl get_param version | grep -q patchless
+}
+
+get_node_count() {
+   local nodes="$@"
+   echo $nodes | wc -w || true
+}
+
+mixed_ost_devs () {
+    local nodes=$(osts_nodes)
+    local osscount=$(get_node_count "$nodes")
+    [ ! "$OSTCOUNT" = "$osscount" ]
 }
 
 check_runas_id_ret() {

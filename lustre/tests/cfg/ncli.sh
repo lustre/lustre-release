@@ -15,3 +15,4 @@ CLIENTCOUNT=$((${#REMOTECLIENTS[@]} + 1))
 [ -n "$RCLIENTS" -a "$PDSH" = "no_dsh" ] && \
                 error "tests for remote clients $RCLIENTS needs pdsh != do_dsh " || true
 
+[ -n "$FUNCTIONS" ] && . $FUNCTIONS || true
