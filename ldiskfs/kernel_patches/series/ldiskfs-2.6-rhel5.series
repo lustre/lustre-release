@@ -24,3 +24,4 @@ ext3-iam-2.6.18-rhel5.patch
 ext3-orphans-delay.patch
 ext3-lookup-dotdot-2.6.9.patch
 ext3-max-dir-size.patch
+ext3-block-bitmap-validation-2.6-rhel5.patch
