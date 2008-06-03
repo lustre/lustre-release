@@ -553,6 +553,9 @@ void ldlm_namespace_free_prior(struct ldlm_namespace *ns,
                 return;
         }
 
+        /* Remove @ns from list. */
+        ldlm_namespace_unregister(ns, ns->ns_client);
+
         /* Can fail with -EINTR when force == 0 in which case try harder */
         rc = __ldlm_namespace_free(ns, force);
         if (rc != ELDLM_OK) {
@@ -577,8 +580,12 @@ void ldlm_namespace_free_post(struct ldlm_namespace *ns)
                 return;
         }
 
-        /* Remove @ns from list. */
-        ldlm_namespace_unregister(ns, ns->ns_client);
+        /* 
+         * Fini pool _before_ parent proc dir is removed. This is important as
+         * ldlm_pool_fini() removes own proc dir which is child to @dir. Removing
+         * it after @dir may cause oops.
+         */
+        ldlm_pool_fini(&ns->ns_pool);
 #ifdef LPROCFS
         {
                 struct proc_dir_entry *dir;
