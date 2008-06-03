@@ -547,13 +547,18 @@ static char *strnchr(const char *p, char c, size_t n)
 int jt_lcfg_getparam(int argc, char **argv)
 {
         int fp;
-        int rc = 0, i, show_path = 0;
+        int rc = 0, i, show_path = 0, only_path = 0;
         char pattern[PATH_MAX];
         char *path, *tmp, *buf;
         glob_t glob_info;
 
-        if (argc == 3 && strcmp(argv[1], "-n") == 0) {
+        if (argc == 3 && (strcmp(argv[1], "-n") == 0 ||
+                          strcmp(argv[1], "-N") == 0)) {
                 path = argv[2];
+                if (strcmp(argv[1], "-N") == 0) {
+                        only_path = 1;
+                        show_path = 1;
+                }
         } else if (argc == 2) {
                 show_path = 1;
                 path = argv[1];
@@ -596,6 +601,10 @@ int jt_lcfg_getparam(int argc, char **argv)
                         char *filename;
                         filename = strdup(glob_info.gl_pathv[i]);
                         valuename = display_name(filename);
+                        if (valuename && only_path) {
+                                printf("%s\n", valuename);
+                                continue;
+                        }
                 }
 
                 /* Write the contents of file to stdout */
