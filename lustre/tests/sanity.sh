@@ -5002,7 +5002,7 @@ test_129() {
 	echo 0 >$ldiskfs_prefix/$proc_file
 	rm -rf $DIR/$tdir
 }
-run_test 129 "test directory size limit ========================"
+# run_test 129 "test directory size limit ========================"
 
 TMPDIR=$OLDTMPDIR
 TMP=$OLDTMP
