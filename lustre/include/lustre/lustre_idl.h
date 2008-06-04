@@ -324,8 +324,6 @@ extern void lustre_swab_ptlrpc_body(struct ptlrpc_body *pb);
 #define ECHO_CONNECT_SUPPORTED (0)
 #define MGS_CONNECT_SUPPORTED  (OBD_CONNECT_VERSION | OBD_CONNECT_AT)
 
-#define MAX_QUOTA_COUNT32 (0xffffffffULL)
-
 #define OBD_OCD_VERSION(major,minor,patch,fix) (((major)<<24) + ((minor)<<16) +\
                                                 ((patch)<<8) + (fix))
 #define OBD_OCD_VERSION_MAJOR(version) ((int)((version)>>24)&255)
@@ -1555,23 +1553,7 @@ struct qunit_data_old2 {
 #warning "remove quota code above for format absolete in new release"
 #endif
 
-#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(1, 7, 0, 0)
-struct qunit_data_old {
-        __u32 qd_id;    /* ID appiles to (uid, gid) */
-        __u32 qd_type;  /* Quota type (USRQUOTA, GRPQUOTA) */
-        __u32 qd_count; /* acquire/release count (bytes for block quota) */
-        __u32 qd_isblk; /* Block quota or file quota */
-};
-#else
-#warning "remove quota code above for format absolete in new release"
-#endif
-
 extern void lustre_swab_qdata(struct qunit_data *d);
-#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(1, 7, 0, 0)
-extern void lustre_swab_qdata_old(struct qunit_data_old *d);
-#else
-#warning "remove quota code above for format absolete in new release"
-#endif
 #if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(1, 9, 0, 0)
 extern void lustre_swab_qdata_old2(struct qunit_data_old2 *d);
 #else

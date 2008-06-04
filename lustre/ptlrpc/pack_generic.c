@@ -2314,18 +2314,6 @@ void lustre_swab_qdata(struct qunit_data *d)
         __swab64s (&d->qd_qunit);
 }
 
-#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(1, 7, 0, 0)
-void lustre_swab_qdata_old(struct qunit_data_old *d)
-{
-        __swab32s (&d->qd_id);
-        __swab32s (&d->qd_type);
-        __swab32s (&d->qd_count);
-        __swab32s (&d->qd_isblk);
-}
-#else
-#warning "remove quota code above for format absolete in new release"
-#endif
-
 #if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(1, 9, 0, 0)
 void lustre_swab_qdata_old2(struct qunit_data_old2 *d)
 {
@@ -2338,42 +2326,6 @@ void lustre_swab_qdata_old2(struct qunit_data_old2 *d)
 #endif
 
 #ifdef __KERNEL__
-
-#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(1, 7, 0, 0)
-void qdata_v1_v3(struct qunit_data_old *d,
-                             struct qunit_data *qdata)
-{
-        LASSERT(d);
-        LASSERT(qdata);
-
-        qdata->qd_id = d->qd_id;
-        if (d->qd_type)
-                QDATA_SET_GRP(qdata);
-        if (d->qd_isblk)
-                QDATA_SET_BLK(qdata);
-        qdata->qd_count = d->qd_count;
-}
-
-struct qunit_data_old *qdata_v3_to_v1(struct qunit_data *d)
-{
-        struct qunit_data tmp;
-        struct qunit_data_old *ret;
-        ENTRY;
-
-        if (!d)
-                return NULL;
-
-        tmp = *d;
-        ret = (struct qunit_data_old *)d;
-        ret->qd_id = tmp.qd_id;
-        ret->qd_type = (QDATA_IS_GRP(&tmp) ? GRPQUOTA : USRQUOTA);
-        ret->qd_count = (__u32)tmp.qd_count;
-        ret->qd_isblk = (QDATA_IS_BLK(&tmp) ? 1 : 0);
-        RETURN(ret);
-}
-#else
-#warning "remove quota code above for format absolete in new release"
-#endif
 
 #if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(1, 9, 0, 0)
 void qdata_v2_to_v3(struct qunit_data_old2 *d,
@@ -2413,22 +2365,13 @@ int quota_get_qdata(void *request, struct qunit_data *qdata,
 {
         struct ptlrpc_request *req = (struct ptlrpc_request *)request;
         struct qunit_data *new;
-        struct qunit_data_old *old;
         struct qunit_data_old2 *old2;
-        int size  = sizeof(struct qunit_data_old);
         int size2 = sizeof(struct qunit_data_old2);
         __u64  flags = is_exp ? req->rq_export->exp_connect_flags :
                        req->rq_import->imp_connect_data.ocd_connect_flags;
 
         LASSERT(req);
         LASSERT(qdata);
-
-#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(1, 7, 0, 0)
-        if (OBD_FAIL_CHECK(OBD_FAIL_QUOTA_QD_COUNT_32BIT))
-                goto quota32;
-#else
-#warning "remove quota code above for format absolete in new release"
-#endif
 
 #if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(1, 9, 0, 0)
         if (OBD_FAIL_CHECK(OBD_FAIL_QUOTA_WITHOUT_CHANGE_QS))
@@ -2477,20 +2420,6 @@ without_change_qs:
 #warning "remove quota code above for format absolete in new release"
 #endif
 
-#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(1, 7, 0, 0)
-quota32:
-        /* not support for quota64 and change_qs */
-        if (is_req == QUOTA_REQUEST)
-                old = lustre_swab_reqbuf(req, REQ_REC_OFF, size,
-                                         lustre_swab_qdata_old);
-        else
-                old = lustre_swab_repbuf(req, REPLY_REC_OFF, size,
-                                         lustre_swab_qdata_old);
-        qdata_v1_v3(old, qdata);
-#else
-#warning "remove quota code above for format absolete in new release"
-#endif
-
         return 0;
 }
 EXPORT_SYMBOL(quota_get_qdata);
@@ -2501,20 +2430,12 @@ int quota_copy_qdata(void *request, struct qunit_data *qdata,
 {
         struct ptlrpc_request *req = (struct ptlrpc_request *)request;
         void *target;
-        struct qunit_data_old *old;
         struct qunit_data_old2 *old2;
         __u64  flags = is_exp ? req->rq_export->exp_connect_flags :
                 req->rq_import->imp_connect_data.ocd_connect_flags;
 
         LASSERT(req);
         LASSERT(qdata);
-
-#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(1, 7, 0, 0)
-        if (OBD_FAIL_CHECK(OBD_FAIL_QUOTA_QD_COUNT_32BIT))
-                goto quota32;
-#else
-#warning "remove quota code above for format absolete in new release"
-#endif
 
 #if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(1, 9, 0, 0)
         if (OBD_FAIL_CHECK(OBD_FAIL_QUOTA_WITHOUT_CHANGE_QS))
@@ -2561,23 +2482,6 @@ without_change_qs:
 #warning "remove quota code above for format absolete in new release"
 #endif
 
-#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(1, 7, 0, 0)
-quota32:
-        /* not support for quota64 and change_qs */
-        if (is_req == QUOTA_REQUEST)
-                target = lustre_msg_buf(req->rq_reqmsg, REQ_REC_OFF,
-                                        sizeof(struct qunit_data_old));
-        else
-                target = lustre_msg_buf(req->rq_repmsg, REPLY_REC_OFF,
-                                        sizeof(struct qunit_data_old));
-        if (!target)
-                return -EINVAL;
-        old = qdata_v3_to_v1(qdata);
-        memcpy(target, old, sizeof(*old));
-#else
-#warning "remove quota code above for format absolete in new release"
-#endif
-
         return 0;
 }
 EXPORT_SYMBOL(quota_copy_qdata);
@@ -2586,15 +2490,10 @@ int quota_get_qunit_data_size(__u64 flag)
 {
         int size;
 
-        if (flag & OBD_CONNECT_CHANGE_QS) {
+        if (flag & OBD_CONNECT_CHANGE_QS)
                 size = sizeof(struct qunit_data);
-        } else {
-                /* write in this way because sizes of qunit_data_old and
-                 * qunit_data_old2 are same */
-                LASSERT(sizeof(struct qunit_data_old) ==
-                        sizeof(struct qunit_data_old2));
-                size = sizeof(struct qunit_data_old);
-        }
+        else
+                size = sizeof(struct qunit_data_old2);
 
         return(size);
 }

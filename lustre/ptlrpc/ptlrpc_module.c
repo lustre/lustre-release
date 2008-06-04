@@ -227,11 +227,6 @@ EXPORT_SYMBOL(lustre_swab_ldlm_lock_desc);
 EXPORT_SYMBOL(lustre_swab_ldlm_request);
 EXPORT_SYMBOL(lustre_swab_ldlm_reply);
 EXPORT_SYMBOL(lustre_swab_qdata);
-#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(1, 7, 0, 0)
-EXPORT_SYMBOL(lustre_swab_qdata_old);
-#else
-#warning "remove quota code above for format absolete in new release"
-#endif
 #if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(1, 9, 0, 0)
 EXPORT_SYMBOL(lustre_swab_qdata_old2);
 #else

@@ -119,6 +119,13 @@ Details    : skiplists are used to group compatible locks on granted list
              that was implemented as tracking first and last lock of each lock group
              the patch changes that to using doubly linked lists
 
+Severity   : normal
+Bugzilla   : 15933
+Description: delete compatibility for 32bit qdata
+Details    : as planned, when lustre is beyond b1_8, lquota won't support for 32bit
+	     qunit. That means servers of b1_4 and servers of b1_8 can't be used
+	     together if users want to use quota.
+
 -------------------------------------------------------------------------------
 
 

@@ -999,17 +999,6 @@ check_qunit_data_old2(void)
 }
 
 static void
-check_qunit_data_old(void)
-{
-        BLANK_LINE();
-        CHECK_STRUCT(qunit_data_old);
-        CHECK_MEMBER(qunit_data_old, qd_id);
-        CHECK_MEMBER(qunit_data_old, qd_type);
-        CHECK_MEMBER(qunit_data_old, qd_count);
-        CHECK_MEMBER(qunit_data_old, qd_isblk);
-}
-
-static void
 check_mgs_target_info(void)
 {
         BLANK_LINE();
