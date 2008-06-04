@@ -684,16 +684,35 @@ void mdt_reconstruct_open(struct mdt_thread_info *info,
                 GOTO(out, rc = req->rq_status);
 
         if (mdt_get_disposition(ldlm_rep, DISP_OPEN_CREATE)) {
+                struct obd_export *exp = req->rq_export;
                 /*
                  * We failed after creation, but we do not know in which step
                  * we failed. So try to check the child object.
                  */
                 parent = mdt_object_find(env, mdt, rr->rr_fid1);
-                LASSERT(!IS_ERR(parent));
-
+                if (IS_ERR(parent)) {
+                        rc = PTR_ERR(parent);
+                        LCONSOLE_WARN("Parent "DFID" lookup error %d."
+                                      " Evicting client %s with export %s.\n",
+                                      PFID(mdt_object_fid(parent)), rc,
+                                      obd_uuid2str(&exp->exp_client_uuid),
+                                      obd_export_nid2str(exp));
+                        mdt_export_evict(exp);
+                        EXIT;
+                        return;
+                }
                 child = mdt_object_find(env, mdt, rr->rr_fid2);
-                LASSERT(!IS_ERR(child));
-
+                if (IS_ERR(child)) {
+                        rc = PTR_ERR(parent);
+                        LCONSOLE_WARN("Child "DFID" lookup error %d."
+                                      " Evicting client %s with export %s.\n",
+                                      PFID(mdt_object_fid(child)), rc,
+                                      obd_uuid2str(&exp->exp_client_uuid),
+                                      obd_export_nid2str(exp));
+                        mdt_export_evict(exp);
+                        EXIT;
+                        return;
+                }
                 rc = mdt_object_exists(child);
                 if (rc > 0) {
                         struct md_object *next;

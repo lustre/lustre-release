@@ -474,6 +474,13 @@ static inline const struct lu_fid *mdt_object_fid(struct mdt_object *o)
         return lu_object_fid(&o->mot_obj.mo_lu);
 }
 
+
+static inline void mdt_export_evict(struct obd_export *exp)
+{
+        class_fail_export(exp);
+        class_export_put(exp);
+}
+
 int mdt_get_disposition(struct ldlm_reply *rep, int flag);
 void mdt_set_disposition(struct mdt_thread_info *info,
                         struct ldlm_reply *rep, int flag);
