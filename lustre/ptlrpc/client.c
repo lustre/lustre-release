@@ -755,6 +755,9 @@ static int ptlrpc_check_status(struct ptlrpc_request *req)
         RETURN(err);
 }
 
+/**
+ * Callback function called when client receives RPC reply for \a req.
+ */
 static int after_reply(struct ptlrpc_request *req)
 {
         struct obd_import *imp = req->rq_import;
@@ -768,10 +771,14 @@ static int after_reply(struct ptlrpc_request *req)
         LASSERT(obd);
         LASSERT(req->rq_nob_received <= req->rq_repbuf_len);
 
-        /* NB Until this point, the whole of the incoming message,
-         * including buflens, status etc is in the sender's byte order. */
+        /*
+         * NB Until this point, the whole of the incoming message,
+         * including buflens, status etc is in the sender's byte order. 
+         */
 
-        /* Clear reply swab mask; this is a new reply in sender's byte order */
+        /*
+         * Clear reply swab mask; this is a new reply in sender's byte order. 
+         */
         req->rq_rep_swab_mask = 0;
 
         rc = sptlrpc_cli_unwrap_reply(req);
@@ -780,7 +787,9 @@ static int after_reply(struct ptlrpc_request *req)
                 RETURN(rc);
         }
 
-        /* security layer unwrap might ask resend this request */
+        /*
+         * Security layer unwrap might ask resend this request. 
+         */
         if (req->rq_resend)
                 RETURN(0);
 
@@ -813,9 +822,11 @@ static int after_reply(struct ptlrpc_request *req)
         imp->imp_connect_error = rc;
 
         if (rc) {
-                /* Either we've been evicted, or the server has failed for
+                /*
+                 * Either we've been evicted, or the server has failed for
                  * some reason. Try to reconnect, and if that fails, punt to
-                 * the upcall. */
+                 * the upcall. 
+                 */
                 if (ll_rpc_recoverable_error(rc)) {
                         if (req->rq_send_state != LUSTRE_IMP_FULL ||
                             imp->imp_obd->obd_no_recov || imp->imp_dlm_fake) {
@@ -825,24 +836,25 @@ static int after_reply(struct ptlrpc_request *req)
                         RETURN(rc);
                 }
         } else {
-                /* Let's look if server send slv. Do it only for RPC with 
-                 * rc == 0. */
-                if (imp->imp_obd->obd_namespace) {
-                        /* Disconnect rpc is sent when namespace is already 
-                         * destroyed. Let's check this and will not try update
-                         * pool. */
-                        ldlm_cli_update_pool(req);
-                }
+                /*
+                 * Let's look if server sent slv. Do it only for RPC with 
+                 * rc == 0. 
+                 */
+                ldlm_cli_update_pool(req);
         }
 
-        /* Store transno in reqmsg for replay. */
+        /*
+         * Store transno in reqmsg for replay. 
+         */
         req->rq_transno = lustre_msg_get_transno(req->rq_repmsg);
         lustre_msg_set_transno(req->rq_reqmsg, req->rq_transno);
 
         if (req->rq_import->imp_replayable) {
                 spin_lock(&imp->imp_lock);
-                /* no point in adding already-committed requests to the replay
-                 * list, we will just remove them immediately. b=9829 */
+                /*
+                 * No point in adding already-committed requests to the replay
+                 * list, we will just remove them immediately. b=9829 
+                 */
                 if (req->rq_transno != 0 && 
                     (req->rq_transno > 
                      lustre_msg_get_last_committed(req->rq_repmsg) ||
@@ -854,7 +866,9 @@ static int after_reply(struct ptlrpc_request *req)
                         spin_lock(&imp->imp_lock);
                 }
 
-                /* Replay-enabled imports return commit-status information. */
+                /*
+                 * Replay-enabled imports return commit-status information. 
+                 */
                 if (lustre_msg_get_last_committed(req->rq_repmsg)) {
                         imp->imp_peer_committed_transno =
                                 lustre_msg_get_last_committed(req->rq_repmsg);

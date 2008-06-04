@@ -965,6 +965,13 @@ struct obd_device {
         struct lprocfs_stats  *obd_svc_stats;
         atomic_t               obd_evict_inprogress;
         cfs_waitq_t            obd_evict_inprogress_waitq;
+
+        /** 
+         * Ldlm pool part. Save last calculated SLV and Limit. 
+         */
+        rwlock_t               obd_pool_lock;
+        int                    obd_pool_limit;
+        __u64                  obd_pool_slv;
 };
 
 #define OBD_OPT_FORCE           0x0001

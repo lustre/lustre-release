@@ -1000,24 +1000,35 @@ static inline struct ldlm_pool *ldlm_imp2pl(struct obd_import *imp)
         return &imp->imp_obd->obd_namespace->ns_pool;
 }
 
+/**
+ * Update client's obd pool related fields with new SLV and Limit from \a req.
+ */
 int ldlm_cli_update_pool(struct ptlrpc_request *req)
 {
+        struct obd_device *obd;
         __u64 old_slv, new_slv;
-        struct ldlm_pool *pl;
         __u32 new_limit;
         ENTRY;
     
-        if (!imp_connect_lru_resize(req->rq_import))
+        if (unlikely(!req->rq_import || !req->rq_import->imp_obd || 
+                     !imp_connect_lru_resize(req->rq_import)))
+        {
+                /* 
+                 * Do nothing for corner cases. 
+                 */
                 RETURN(0);
+        }
 
-        /* In some cases RPC may contain slv and limit zeroed out. This is 
+        /* 
+         * In some cases RPC may contain slv and limit zeroed out. This is 
          * the case when server does not support lru resize feature. This is
          * also possible in some recovery cases when server side reqs have no
          * ref to obd export and thus access to server side namespace is no 
-         * possible. */
+         * possible. 
+         */
         if (lustre_msg_get_slv(req->rq_repmsg) == 0 || 
             lustre_msg_get_limit(req->rq_repmsg) == 0) {
-                DEBUG_REQ(D_HA, req, "zero SLV or Limit found "
+                DEBUG_REQ(D_HA, req, "Zero SLV or Limit found "
                           "(SLV: "LPU64", Limit: %u)", 
                           lustre_msg_get_slv(req->rq_repmsg), 
                           lustre_msg_get_limit(req->rq_repmsg));
@@ -1026,30 +1037,41 @@ int ldlm_cli_update_pool(struct ptlrpc_request *req)
 
         new_limit = lustre_msg_get_limit(req->rq_repmsg);
         new_slv = lustre_msg_get_slv(req->rq_repmsg);
-        pl = ldlm_imp2pl(req->rq_import);
-        
-        spin_lock(&pl->pl_lock);
-        old_slv = ldlm_pool_get_slv(pl);
-        ldlm_pool_set_slv(pl, new_slv);
-        ldlm_pool_set_limit(pl, new_limit);
+        obd = req->rq_import->imp_obd;
 
-        /* Check if we need to wakeup pools thread for fast SLV change. 
+        /* 
+         * Set new SLV and Limit to obd fields to make accessible for pool 
+         * thread. We do not access obd_namespace and pool directly here
+         * as there is no reliable way to make sure that they are still
+         * alive in cleanup time. Evil races are possible which may cause
+         * oops in that time. 
+         */
+        write_lock(&obd->obd_pool_lock);
+        old_slv = obd->obd_pool_slv;
+        obd->obd_pool_slv = new_slv;
+        obd->obd_pool_limit = new_limit;
+        write_unlock(&obd->obd_pool_lock);
+
+        /* 
+         * Check if we need to wakeup pools thread for fast SLV change. 
          * This is only done when threads period is noticably long like 
-         * 10s or more. */
+         * 10s or more. 
+         */
 #if defined(__KERNEL__) && (LDLM_POOLS_THREAD_PERIOD >= 10)
-        {
+        if (old_slv > 0) {
                 __u64 fast_change = old_slv * LDLM_POOLS_FAST_SLV_CHANGE;
                 do_div(fast_change, 100);
 
-                /* Wake up pools thread only if SLV has changed more than 
+                /* 
+                 * Wake up pools thread only if SLV has changed more than 
                  * 50% since last update. In this case we want to react asap. 
                  * Otherwise it is no sense to wake up pools as they are 
-                 * re-calculated every LDLM_POOLS_THREAD_PERIOD anyways. */
+                 * re-calculated every LDLM_POOLS_THREAD_PERIOD anyways. 
+                 */
                 if (old_slv > new_slv && old_slv - new_slv > fast_change)
                         ldlm_pools_wakeup();
         }
 #endif
-        spin_unlock(&pl->pl_lock);
         RETURN(0);
 }
 EXPORT_SYMBOL(ldlm_cli_update_pool);
@@ -1205,17 +1227,17 @@ static ldlm_policy_res_t ldlm_cancel_lrur_policy(struct ldlm_namespace *ns,
         if (count && added >= count)
                 return LDLM_POLICY_KEEP_LOCK;
 
-        spin_lock(&pl->pl_lock);
         slv = ldlm_pool_get_slv(pl);
-        lvf = atomic_read(&pl->pl_lock_volume_factor);
-        spin_unlock(&pl->pl_lock);
-
+        lvf = ldlm_pool_get_lvf(pl);
         la = cfs_duration_sec(cfs_time_sub(cur, 
                               lock->l_last_used));
 
         /* Stop when slv is not yet come from server or 
          * lv is smaller than it is. */
         lv = lvf * la * unused;
+        
+        /* Inform pool about current CLV to see it via proc. */
+        ldlm_pool_set_clv(pl, lv);
         return (slv == 1 || lv < slv) ? 
                 LDLM_POLICY_KEEP_LOCK : LDLM_POLICY_CANCEL_LOCK;
 }

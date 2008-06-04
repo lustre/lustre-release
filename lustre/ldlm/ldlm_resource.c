@@ -295,8 +295,8 @@ void ldlm_proc_namespace(struct ldlm_namespace *ns)
 #define ldlm_proc_namespace(ns) do {} while (0)
 #endif /* LPROCFS */
 
-struct ldlm_namespace *ldlm_namespace_new(char *name, ldlm_side_t client, 
-                                          ldlm_appetite_t apt)
+struct ldlm_namespace *ldlm_namespace_new(struct obd_device *obd, char *name, 
+                                          ldlm_side_t client, ldlm_appetite_t apt)
 {
         struct ldlm_namespace *ns = NULL;
         struct list_head *bucket;
@@ -319,6 +319,10 @@ struct ldlm_namespace *ldlm_namespace_new(char *name, ldlm_side_t client,
 
         ns->ns_shrink_thumb = LDLM_LOCK_SHRINK_THUMB;
         ns->ns_appetite = apt;
+
+        LASSERT(obd != NULL);
+        ns->ns_obd = obd;
+
         namelen = strlen(name);
         OBD_ALLOC(ns->ns_name, namelen + 1);
         if (!ns->ns_name)
@@ -542,6 +546,15 @@ force_wait:
         RETURN(ELDLM_OK);
 }
 
+/**
+ * Performs various cleanups for passed \a ns to make it drop refc and be ready
+ * for freeing. Waits for refc == 0.
+ *
+ * The following is done:
+ * (0) Unregister \a ns from its list to make inaccessible for potential users
+ * like pools thread and others;
+ * (1) Clear all locks in \a ns.
+ */
 void ldlm_namespace_free_prior(struct ldlm_namespace *ns, 
                                struct obd_import *imp, 
                                int force)
@@ -553,10 +566,14 @@ void ldlm_namespace_free_prior(struct ldlm_namespace *ns,
                 return;
         }
 
-        /* Remove @ns from list. */
+        /* 
+         * Make sure that nobody can find this ns in its list. 
+         */
         ldlm_namespace_unregister(ns, ns->ns_client);
 
-        /* Can fail with -EINTR when force == 0 in which case try harder */
+        /* 
+         * Can fail with -EINTR when force == 0 in which case try harder.
+         */
         rc = __ldlm_namespace_free(ns, force);
         if (rc != ELDLM_OK) {
                 if (imp) {
@@ -564,14 +581,21 @@ void ldlm_namespace_free_prior(struct ldlm_namespace *ns,
                         ptlrpc_invalidate_import(imp);
                 }
 
-                /* With all requests dropped and the import inactive
-                 * we are gaurenteed all reference will be dropped. */
+                /* 
+                 * With all requests dropped and the import inactive
+                 * we are gaurenteed all reference will be dropped. 
+                 */
                 rc = __ldlm_namespace_free(ns, 1);
                 LASSERT(rc == 0);
         }
         EXIT;
 }
 
+/**
+ * Performs freeing memory structures related to \a ns. This is only done when
+ * ldlm_namespce_free_prior() successfully removed all resources referencing
+ * \a ns and its refc == 0.
+ */
 void ldlm_namespace_free_post(struct ldlm_namespace *ns)
 {
         ENTRY;
@@ -586,6 +610,7 @@ void ldlm_namespace_free_post(struct ldlm_namespace *ns)
          * it after @dir may cause oops.
          */
         ldlm_pool_fini(&ns->ns_pool);
+
 #ifdef LPROCFS
         {
                 struct proc_dir_entry *dir;
@@ -601,9 +626,10 @@ void ldlm_namespace_free_post(struct ldlm_namespace *ns)
 
         OBD_VFREE(ns->ns_hash, sizeof(*ns->ns_hash) * RES_HASH_SIZE);
         OBD_FREE(ns->ns_name, strlen(ns->ns_name) + 1);
-        /* 
-         * @ns should be not on list in this time, otherwise this will cause
-         * issues realted to using freed @ns in pools thread. 
+
+        /*
+         * Namespace \a ns should be not on list in this time, otherwise this
+         * will cause issues realted to using freed \a ns in pools thread. 
          */
         LASSERT(list_empty(&ns->ns_list_chain));
         OBD_FREE_PTR(ns);

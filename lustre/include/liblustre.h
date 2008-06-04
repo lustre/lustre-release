@@ -281,7 +281,7 @@ typedef spinlock_t rwlock_t;
 #define read_unlock(l)          spin_unlock(l)
 #define write_lock(l)           spin_lock(l)
 #define write_unlock(l)         spin_unlock(l)
-
+#define rwlock_init(l)          spin_lock_init(l)
 
 #define min(x,y) ((x)<(y) ? (x) : (y))
 #define max(x,y) ((x)>(y) ? (x) : (y))
