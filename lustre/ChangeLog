@@ -2,7 +2,7 @@ tbd  Sun Microsystems, Inc.
        * version 1.8.0
        * Support for kernels:
         2.6.16.54-0.2.5 (SLES 10),
-        2.6.18-53.1.14.el5 (RHEL 5),
+        2.6.18-53.1.19.el5 (RHEL 5),
         2.6.22.14 vanilla (kernel.org).
        * Client support for unpatched kernels:
         (see http://wiki.lustre.org/index.php?title=Patchless_Client)
@@ -11,6 +11,10 @@ tbd  Sun Microsystems, Inc.
        * Note that reiserfs quotas are disabled on SLES 10 in this kernel.
        * RHEL 4 and RHEL 5/SLES 10 clients behaves differently on 'cd' to a
         removed cwd "./" (refer to Bugzilla 14399).
+
+Severity   : enhancement
+Bugzilla   : 15741
+Description: Update to RHEL5 kernel-2.6.18-53.1.19.el5.
 
 Severity   : major
 Bugzilla   : 14134
