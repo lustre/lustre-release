@@ -104,6 +104,7 @@ init_test_env() {
     [ ! -f "$LSVCGSSD" ] && export LSVCGSSD=$(which lsvcgssd)
     export KRB5DIR=${KRB5DIR:-"/usr/kerberos"}
     export DIR2
+    export SAVE_PWD=${SAVE_PWD:-$LUSTRE/tests}
 
     if [ "$ACCEPTOR_PORT" ]; then
         export PORT_OPT="--port $ACCEPTOR_PORT"
@@ -1561,6 +1562,7 @@ run_one() {
     export TESTNAME=test_$testnum
     test_${testnum} || error "test_$testnum failed with $?"
     #check_mds
+    cd $SAVE_PWD
     reset_fail_loc
     check_grant ${testnum} || error "check_grant $testnum failed with $?"
     [ -f $CATASTROPHE ] && [ `cat $CATASTROPHE` -ne 0 ] && \
@@ -1571,7 +1573,6 @@ run_one() {
     unset TESTNAME
     unset tdir
     umask $SAVE_UMASK
-    cd $SAVE_PWD
     $CLEANUP
 }
 
