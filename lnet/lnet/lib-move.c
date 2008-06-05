@@ -2426,7 +2426,7 @@ LNetGet(lnet_nid_t self, lnet_handle_md_t mdh,
 int
 LNetDist (lnet_nid_t dstnid, lnet_nid_t *srcnidp, __u32 *orderp)
 {
-	struct list_head *e;
+        struct list_head *e;
         lnet_ni_t        *ni;
         lnet_route_t     *route;
         lnet_remotenet_t *rnet;
@@ -2446,7 +2446,7 @@ LNetDist (lnet_nid_t dstnid, lnet_nid_t *srcnidp, __u32 *orderp)
 
         list_for_each (e, &the_lnet.ln_nis) {
                 ni = list_entry(e, lnet_ni_t, ni_list);
-                
+
                 if (ni->ni_nid == dstnid ||
                     (the_lnet.ln_ptlcompat > 0 &&
                      LNET_NIDNET(dstnid) == 0 &&
@@ -2481,7 +2481,7 @@ LNetDist (lnet_nid_t dstnid, lnet_nid_t *srcnidp, __u32 *orderp)
         }
 
         list_for_each (e, &the_lnet.ln_remote_nets) {
-		rnet = list_entry(e, lnet_remotenet_t, lrn_list);
+                rnet = list_entry(e, lnet_remotenet_t, lrn_list);
 
                 if (rnet->lrn_net == dstnet) {
                         LASSERT (!list_empty(&rnet->lrn_routes));

@@ -11,12 +11,31 @@
 #define LNET_ONLY
 
 #ifndef __KERNEL__
+
 /* XXX workaround XXX */
-#ifdef	HAVE_SYS_TYPES_H
+#ifdef HAVE_SYS_TYPES_H
 #include <sys/types.h>
 #endif
-#include <liblustre.h> /* userland spinlock_t and atomic_t */
+
+/* TODO: remove these when libcfs provides proper primitives for userspace
+ *
+ * Dummy implementations of spinlock_t and atomic_t work since userspace
+ * selftest is completely single-threaded, even using multi-threaded usocklnd.
+ */
+typedef struct { } spinlock_t;
+static inline void spin_lock(spinlock_t *l) {return;}
+static inline void spin_unlock(spinlock_t *l) {return;}
+static inline void spin_lock_init(spinlock_t *l) {return;}
+
+typedef struct { volatile int counter; } atomic_t;
+#define atomic_read(a) ((a)->counter)
+#define atomic_set(a,b) do {(a)->counter = b; } while (0)
+#define atomic_dec_and_test(a) ((--((a)->counter)) == 0)
+#define atomic_inc(a)  (((a)->counter)++)
+#define atomic_dec(a)  do { (a)->counter--; } while (0)
+
 #endif
+
 #include <libcfs/kp30.h>
 #include <libcfs/libcfs.h>
 #include <lnet/lnet.h>

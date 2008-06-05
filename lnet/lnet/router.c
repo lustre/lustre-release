@@ -271,11 +271,11 @@ int
 lnet_add_route (__u32 net, unsigned int hops, lnet_nid_t gateway)
 {
         struct list_head     zombies;
-	struct list_head    *e;
-	lnet_remotenet_t    *rnet;
-	lnet_remotenet_t    *rnet2;
-	lnet_route_t        *route;
-	lnet_route_t        *route2;
+        struct list_head    *e;
+        lnet_remotenet_t    *rnet;
+        lnet_remotenet_t    *rnet2;
+        lnet_route_t        *route;
+        lnet_route_t        *route2;
         lnet_ni_t           *ni;
         int                  add_route;
         int                  rc;
@@ -363,11 +363,11 @@ lnet_add_route (__u32 net, unsigned int hops, lnet_nid_t gateway)
                         LASSERT (route2->lr_gateway->lp_nid != gateway);
                 }
         }
-        
+
         if (add_route) {
                 ni = route->lr_gateway->lp_ni;
                 lnet_ni_addref_locked(ni);
-                
+
                 LASSERT (rc == 0);
                 list_add_tail(&route->lr_list, &rnet2->lrn_routes);
                 the_lnet.ln_remote_nets_version++;
@@ -393,7 +393,7 @@ lnet_add_route (__u32 net, unsigned int hops, lnet_nid_t gateway)
         while (!list_empty(&zombies)) {
                 route = list_entry(zombies.next, lnet_route_t, lr_list);
                 list_del(&route->lr_list);
-                
+
                 LNET_LOCK();
                 lnet_rtr_decref_locked(route->lr_gateway);
                 lnet_peer_decref_locked(route->lr_gateway);
@@ -509,8 +509,8 @@ int
 lnet_get_route (int idx, __u32 *net, __u32 *hops,
                lnet_nid_t *gateway, __u32 *alive)
 {
-	struct list_head    *e1;
-	struct list_head    *e2;
+        struct list_head    *e1;
+        struct list_head    *e2;
         lnet_remotenet_t    *rnet;
         lnet_route_t        *route;
 
