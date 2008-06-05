@@ -11,6 +11,8 @@
 #include "selftest.h"
 
 
+#define SRPC_PEER_HASH_SIZE       101  /* # peer lists */
+
 typedef enum {
         SRPC_STATE_NONE,
         SRPC_STATE_NI_INIT,
@@ -19,9 +21,6 @@ typedef enum {
         SRPC_STATE_RUNNING,
         SRPC_STATE_STOPPING,
 } srpc_state_t;
-
-#define SRPC_PEER_HASH_SIZE       101  /* # peer lists */
-#define SRPC_PEER_CREDITS         16   /* >= most LND's default peer credit */
 
 struct smoketest_rpc {
         spinlock_t        rpc_glock;     /* global lock */
@@ -32,6 +31,10 @@ struct smoketest_rpc {
         srpc_counters_t   rpc_counters;
         __u64             rpc_matchbits; /* matchbits counter */
 } srpc_data;
+
+static int srpc_peer_credits = 16;
+CFS_MODULE_PARM(srpc_peer_credits, "i", int, 0444,
+                "# in-flight RPCs per peer (16 by default)");
 
 /* forward ref's */
 int srpc_handle_rpc (swi_workitem_t *wi);
@@ -171,7 +174,7 @@ srpc_create_peer (lnet_nid_t nid)
 
         memset(peer, 0, sizeof(srpc_peer_t));
         peer->stp_nid     = nid;
-        peer->stp_credits = SRPC_PEER_CREDITS;
+        peer->stp_credits = srpc_peer_credits;
 
         spin_lock_init(&peer->stp_lock);
         CFS_INIT_LIST_HEAD(&peer->stp_rpcq);
@@ -1544,15 +1547,15 @@ srpc_check_event (int timeout)
         rc = LNetEQPoll(&srpc_data.rpc_lnet_eq, 1,
                         timeout * 1000, &ev, &i);
         if (rc == 0) return 0;
-        
+
         LASSERT (rc == -EOVERFLOW || rc == 1);
-        
+
         /* We can't affort to miss any events... */
         if (rc == -EOVERFLOW) {
                 CERROR ("Dropped an event!!!\n");
                 abort();
         }
-                
+
         srpc_lnet_ev_handler(&ev);
         return 1;
 }
@@ -1564,6 +1567,18 @@ srpc_startup (void)
 {
         int i;
         int rc;
+
+#ifndef __KERNEL__
+        char *s;
+
+        s = getenv("SRPC_PEER_CREDITS");
+        srpc_peer_credits = (s != NULL) ? atoi(s) : srpc_peer_credits;
+#endif
+
+        if (srpc_peer_credits <= 0) {
+                CERROR("Peer credits must be positive: %d\n", srpc_peer_credits);
+                return -EINVAL;
+        }
 
         memset(&srpc_data, 0, sizeof(struct smoketest_rpc));
         spin_lock_init(&srpc_data.rpc_glock);
@@ -1687,7 +1702,7 @@ srpc_shutdown (void)
 
                         LASSERT (list_empty(&peer->stp_rpcq));
                         LASSERT (list_empty(&peer->stp_ctl_rpcq));
-                        LASSERT (peer->stp_credits == SRPC_PEER_CREDITS);
+                        LASSERT (peer->stp_credits == srpc_peer_credits);
 
                         LIBCFS_FREE(peer, sizeof(srpc_peer_t));
                 }
