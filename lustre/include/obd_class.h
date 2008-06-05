@@ -1193,7 +1193,8 @@ static inline  int obd_prep_async_page(struct obd_export *exp,
                                        struct lov_oinfo *loi,
                                        cfs_page_t *page, obd_off offset,
                                        struct obd_async_page_ops *ops,
-                                       void *data, void **res)
+                                       void *data, void **res, int nocache,
+                                       struct lustre_handle *lockh)
 {
         int ret;
         ENTRY;
@@ -1202,7 +1203,8 @@ static inline  int obd_prep_async_page(struct obd_export *exp,
         EXP_COUNTER_INCREMENT(exp, prep_async_page);
 
         ret = OBP(exp->exp_obd, prep_async_page)(exp, lsm, loi, page, offset,
-                                                 ops, data, res);
+                                                 ops, data, res, nocache,
+                                                 lockh);
         RETURN(ret);
 }
 
@@ -1645,6 +1647,59 @@ static inline int obd_register_observer(struct obd_device *obd,
                 RETURN(-EALREADY);
         obd->obd_observer = observer;
         RETURN(0);
+}
+
+static inline int obd_register_page_removal_cb(struct obd_export *exp,
+                                               obd_page_removal_cb_t cb,
+                                               obd_pin_extent_cb pin_cb)
+{
+        int rc;
+        ENTRY;
+
+        OBD_CHECK_DT_OP(exp->exp_obd, register_page_removal_cb, 0);
+        OBD_COUNTER_INCREMENT(exp->exp_obd, register_page_removal_cb);
+
+        rc = OBP(exp->exp_obd, register_page_removal_cb)(exp, cb, pin_cb);
+        RETURN(rc);
+}
+
+static inline int obd_unregister_page_removal_cb(struct obd_export *exp,
+                                                 obd_page_removal_cb_t cb)
+{
+        int rc;
+        ENTRY;
+
+        OBD_CHECK_DT_OP(exp->exp_obd, unregister_page_removal_cb, 0);
+        OBD_COUNTER_INCREMENT(exp->exp_obd, unregister_page_removal_cb);
+
+        rc = OBP(exp->exp_obd, unregister_page_removal_cb)(exp, cb);
+        RETURN(rc);
+}
+
+static inline int obd_register_lock_cancel_cb(struct obd_export *exp,
+                                              obd_lock_cancel_cb cb)
+{
+        int rc;
+        ENTRY;
+
+        OBD_CHECK_DT_OP(exp->exp_obd, register_lock_cancel_cb, 0);
+        OBD_COUNTER_INCREMENT(exp->exp_obd, register_lock_cancel_cb);
+
+        rc = OBP(exp->exp_obd, register_lock_cancel_cb)(exp, cb);
+        RETURN(rc);
+}
+
+static inline int obd_unregister_lock_cancel_cb(struct obd_export *exp,
+                                                 obd_lock_cancel_cb cb)
+{
+        int rc;
+        ENTRY;
+
+        OBD_CHECK_DT_OP(exp->exp_obd, unregister_lock_cancel_cb, 0);
+        OBD_COUNTER_INCREMENT(exp->exp_obd, unregister_lock_cancel_cb);
+
+        rc = OBP(exp->exp_obd, unregister_lock_cancel_cb)(exp, cb);
+        RETURN(rc);
 }
 
 /* metadata helpers */

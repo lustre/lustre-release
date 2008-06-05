@@ -549,6 +549,10 @@ struct ldlm_lock {
         void                 *l_lvb_data;       /* an LVB received during */
         void                 *l_lvb_swabber;    /* an enqueue */
         void                 *l_ast_data;
+        spinlock_t            l_extents_list_lock;
+        struct list_head      l_extents_list;
+
+        struct list_head      l_cache_locks_list;
 
         /* Server-side-only members */
 

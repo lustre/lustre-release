@@ -30,6 +30,9 @@ struct osc_async_page {
 
 	struct obd_async_page_ops *oap_caller_ops;
         void                    *oap_caller_data;
+        struct list_head         oap_page_list;
+        struct ldlm_lock        *oap_ldlm_lock;
+        spinlock_t               oap_lock;
 };
 
 #define oap_page        oap_brw_page.pg

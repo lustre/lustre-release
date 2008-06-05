@@ -593,7 +593,9 @@ int llap_shrink_cache(struct ll_sb_info *sbi, int shrink_fraction)
         return count;
 }
 
-struct ll_async_page *llap_from_page(struct page *page, unsigned origin)
+static struct ll_async_page *llap_from_page_with_lockh(struct page *page,
+                                                       unsigned origin,
+                                                       struct lustre_handle *lockh)
 {
         struct ll_async_page *llap;
         struct obd_export *exp;
@@ -646,9 +648,14 @@ struct ll_async_page *llap_from_page(struct page *page, unsigned origin)
         llap->llap_magic = LLAP_MAGIC;
         llap->llap_cookie = (void *)llap + size_round(sizeof(*llap));
 
+        /* XXX: for bug 11270 - check for lockless origin here! */
+        if (origin == LLAP_ORIGIN_LOCKLESS_IO)
+                llap->llap_nocache = 1;
+
         rc = obd_prep_async_page(exp, ll_i2info(inode)->lli_smd, NULL, page,
                                  (obd_off)page->index << CFS_PAGE_SHIFT,
-                                 &ll_async_page_ops, llap, &llap->llap_cookie);
+                                 &ll_async_page_ops, llap, &llap->llap_cookie,
+                                 llap->llap_nocache, lockh);
         if (rc) {
                 OBD_SLAB_FREE(llap, ll_async_page_slab,
                               ll_async_page_slab_size);
@@ -696,6 +703,12 @@ struct ll_async_page *llap_from_page(struct page *page, unsigned origin)
 
         llap->llap_origin = origin;
         RETURN(llap);
+}
+
+struct ll_async_page *llap_from_page(struct page *page,
+                                     unsigned origin)
+{
+        return llap_from_page_with_lockh(page, origin, NULL);
 }
 
 static int queue_or_sync_write(struct obd_export *exp, struct inode *inode,
@@ -799,12 +812,14 @@ out:
 int ll_commit_write(struct file *file, struct page *page, unsigned from,
                     unsigned to)
 {
+        struct ll_file_data *fd = LUSTRE_FPRIVATE(file);
         struct inode *inode = page->mapping->host;
         struct ll_inode_info *lli = ll_i2info(inode);
         struct lov_stripe_md *lsm = lli->lli_smd;
         struct obd_export *exp;
         struct ll_async_page *llap;
         loff_t size;
+        struct lustre_handle *lockh = NULL;
         int rc = 0;
         ENTRY;
 
@@ -815,7 +830,10 @@ int ll_commit_write(struct file *file, struct page *page, unsigned from,
         CDEBUG(D_INODE, "inode %p is writing page %p from %d to %d at %lu\n",
                inode, page, from, to, page->index);
 
-        llap = llap_from_page(page, LLAP_ORIGIN_COMMIT_WRITE);
+        if (fd->fd_flags & LL_FILE_GROUP_LOCKED)
+                lockh = &fd->fd_cwlockh;
+
+        llap = llap_from_page_with_lockh(page, LLAP_ORIGIN_COMMIT_WRITE, lockh);
         if (IS_ERR(llap))
                 RETURN(PTR_ERR(llap));
 
@@ -1012,6 +1030,7 @@ static void __ll_put_llap(struct page *page)
  * here. */
 void ll_removepage(struct page *page)
 {
+        struct ll_async_page *llap = llap_cast_private(page);
         ENTRY;
 
         LASSERT(!in_interrupt());
@@ -1023,34 +1042,11 @@ void ll_removepage(struct page *page)
                 return;
         }
 
-        LASSERT(!llap_cast_private(page)->llap_lockless_io_page);
+        LASSERT(!llap->llap_lockless_io_page);
+        LASSERT(!llap->llap_nocache);
         LL_CDEBUG_PAGE(D_PAGE, page, "being evicted\n");
         __ll_put_llap(page);
         EXIT;
-}
-
-static int ll_page_matches(struct page *page, int fd_flags)
-{
-        struct lustre_handle match_lockh = {0};
-        struct inode *inode = page->mapping->host;
-        ldlm_policy_data_t page_extent;
-        int flags, matches;
-        ENTRY;
-
-        if (unlikely(fd_flags & LL_FILE_GROUP_LOCKED))
-                RETURN(1);
-
-        page_extent.l_extent.start = (__u64)page->index << CFS_PAGE_SHIFT;
-        page_extent.l_extent.end =
-                page_extent.l_extent.start + CFS_PAGE_SIZE - 1;
-        flags = LDLM_FL_TEST_LOCK | LDLM_FL_BLOCK_GRANTED;
-        if (!(fd_flags & LL_FILE_READAHEAD))
-                flags |= LDLM_FL_CBPENDING;
-        matches = obd_match(ll_i2sbi(inode)->ll_dt_exp,
-                            ll_i2info(inode)->lli_smd, LDLM_EXTENT,
-                            &page_extent, LCK_PR | LCK_PW, &flags, inode,
-                            &match_lockh);
-        RETURN(matches);
 }
 
 static int ll_issue_page_read(struct obd_export *exp,
@@ -1769,6 +1765,7 @@ int ll_writepage(struct page *page)
         if (IS_ERR(llap))
                 GOTO(out, rc = PTR_ERR(llap));
 
+        LASSERT(!llap->llap_nocache);
         LASSERT(!PageWriteback(page));
         set_page_writeback(page);
 
@@ -1816,6 +1813,7 @@ int ll_readpage(struct file *filp, struct page *page)
         struct obd_export *exp;
         struct ll_async_page *llap;
         struct obd_io_group *oig = NULL;
+        struct lustre_handle *lockh = NULL;
         int rc;
         ENTRY;
 
@@ -1847,9 +1845,19 @@ int ll_readpage(struct file *filp, struct page *page)
         if (exp == NULL)
                 GOTO(out, rc = -EINVAL);
 
-        llap = llap_from_page(page, LLAP_ORIGIN_READPAGE);
-        if (IS_ERR(llap))
+        if (fd->fd_flags & LL_FILE_GROUP_LOCKED)
+                lockh = &fd->fd_cwlockh;
+
+        llap = llap_from_page_with_lockh(page, LLAP_ORIGIN_READPAGE, lockh);
+        if (IS_ERR(llap)) {
+                if (PTR_ERR(llap) == -ENOLCK) {
+                        CWARN("ino %lu page %lu (%llu) not covered by "
+                              "a lock (mmap?).  check debug logs.\n",
+                              inode->i_ino, page->index,
+                              (long long)page->index << PAGE_CACHE_SHIFT);
+                }
                 GOTO(out, rc = PTR_ERR(llap));
+        }
 
         if (ll_i2sbi(inode)->ll_ra_info.ra_max_pages)
                 ras_update(ll_i2sbi(inode), inode, &fd->fd_ras, page->index,
@@ -1868,22 +1876,6 @@ int ll_readpage(struct file *filp, struct page *page)
                 SetPageUptodate(page);
                 unlock_page(page);
                 GOTO(out_oig, rc = 0);
-        }
-
-        if (likely((fd->fd_flags & LL_FILE_IGNORE_LOCK) == 0)) {
-                rc = ll_page_matches(page, fd->fd_flags);
-                if (rc < 0) {
-                        LL_CDEBUG_PAGE(D_ERROR, page,
-                                       "lock match failed: rc %d\n", rc);
-                        GOTO(out, rc);
-                }
-
-                if (rc == 0) {
-                        CWARN("ino %lu page %lu (%llu) not covered by "
-                              "a lock (mmap?).  check debug logs.\n",
-                              inode->i_ino, page->index,
-                              (long long)page->index << CFS_PAGE_SHIFT);
-                }
         }
 
         rc = ll_issue_page_read(exp, llap, oig, 0);

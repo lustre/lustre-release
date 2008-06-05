@@ -34,4 +34,8 @@ struct osc_enqueue_args {
         struct ldlm_enqueue_info*oa_ei;
 };
 
+int osc_extent_blocking_cb(struct ldlm_lock *lock,
+                           struct ldlm_lock_desc *new, void *data,
+                           int flag);
+
 #endif

@@ -95,6 +95,8 @@ static void llu_fsop_gone(struct filesys *fs)
         ENTRY;
 
         list_del(&sbi->ll_conn_chain);
+        obd_unregister_lock_cancel_cb(sbi->ll_dt_exp,
+                                      llu_extent_lock_cancel_cb);
         obd_disconnect(sbi->ll_dt_exp);
         obd_disconnect(sbi->ll_md_exp);
 
@@ -2121,12 +2123,19 @@ llu_fsswop_mount(const char *source,
         sbi->ll_dt_exp = class_conn2export(&dt_conn);
         sbi->ll_lco.lco_flags = ocd.ocd_connect_flags;
 
+        err = obd_register_lock_cancel_cb(sbi->ll_dt_exp,
+                                          llu_extent_lock_cancel_cb);
+        if (err) {
+                CERROR("cannot register lock cancel callback: rc = %d\n", err);
+                GOTO(out_dt, err);
+        }
+
         llu_init_ea_size(sbi->ll_md_exp, sbi->ll_dt_exp);
 
         err = md_getstatus(sbi->ll_md_exp, &rootfid, NULL);
         if (err) {
                 CERROR("cannot mds_connect: rc = %d\n", err);
-                GOTO(out_dt, err);
+                GOTO(out_lock_cn_cb, err);
         }
         CDEBUG(D_SUPER, "rootfid "DFID"\n", PFID(&rootfid));
         sbi->ll_root_fid = rootfid;
@@ -2136,7 +2145,7 @@ llu_fsswop_mount(const char *source,
                          OBD_MD_FLGETATTR | OBD_MD_FLBLOCKS, 0, &request);
         if (err) {
                 CERROR("md_getattr failed for root: rc = %d\n", err);
-                GOTO(out_dt, err);
+                GOTO(out_lock_cn_cb, err);
         }
 
         err = md_get_lustre_md(sbi->ll_md_exp, request,
@@ -2180,6 +2189,9 @@ out_inode:
         _sysio_i_gone(root);
 out_request:
         ptlrpc_req_finished(request);
+out_lock_cn_cb:
+        obd_unregister_lock_cancel_cb(sbi->ll_dt_exp,
+                                      llu_extent_lock_cancel_cb);
 out_dt:
         obd_disconnect(sbi->ll_dt_exp);
 out_md:

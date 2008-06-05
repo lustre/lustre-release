@@ -1084,6 +1084,13 @@ Details    : Change LASSERTs to client eviction (i.e. abort client's recovery)
              because LASSERT on both the data supplied by a client, and the data 
 	     on disk is dangerous and incorrect.
 
+Severity   : enhancement
+Bugzilla   : 10718
+Description: Slow trucate/writes to huge files at high offsets.
+Details    : Directly associate cached pages to lock that protect those pages,
+             this allows us to quickly find what pages to write and remove
+	     once lock callback is received.
+
 --------------------------------------------------------------------------------
 
 2007-08-10         Cluster File Systems, Inc. <info@clusterfs.com>

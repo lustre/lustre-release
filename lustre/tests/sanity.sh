@@ -2706,7 +2706,9 @@ test_62() {
         cat $f && error "cat succeeded, expect -EIO"
         lctl set_param fail_loc=0
 }
-run_test 62 "verify obd_match failure doesn't LBUG (should -EIO)"
+# This test is now irrelevant (as of bug 10718 inclusion), we no longer
+# match every page all of the time.
+#run_test 62 "verify obd_match failure doesn't LBUG (should -EIO)"
 
 # bug 2319 - oig_wait() interrupted causes crash because of invalid waitq.
 test_63a() {	# was test_63
@@ -3474,6 +3476,20 @@ test_79() { # bug 12743
         fi
 }
 run_test 79 "df report consistency check ======================="
+
+test_80() { # bug 10718
+        dd if=/dev/zero of=$DIR/$tfile bs=1M count=1 seek=1M
+        sync; sleep 1; sync
+        BEFORE=`date +%s`
+        cancel_lru_locks OSC
+        AFTER=`date +%s`
+        DIFF=$((AFTER-BEFORE))
+        if [ $DIFF -gt 1 ] ; then
+                error "elapsed for 1M@1T = $DIFF"
+        fi
+        true
+}
+run_test 80 "Page eviction is equally fast at high offsets too  ===="
 
 # on the LLNL clusters, runas will still pick up root's $TMP settings,
 # which will not be writable for the runas user, and then you get a CVS

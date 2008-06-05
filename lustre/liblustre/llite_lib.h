@@ -223,6 +223,9 @@ int llu_iop_write(struct inode *ino, struct ioctx *ioctxp);
 int llu_iop_iodone(struct ioctx *ioctxp);
 int llu_local_size(struct inode *inode);
 int llu_glimpse_size(struct inode *inode);
+int llu_extent_lock_cancel_cb(struct ldlm_lock *lock,
+                              struct ldlm_lock_desc *new, void *data,
+                              int flag);
 int llu_extent_lock(struct ll_file_data *fd, struct inode *inode,
                     struct lov_stripe_md *lsm, int mode,
                     ldlm_policy_data_t *policy, struct lustre_handle *lockh,

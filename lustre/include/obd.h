@@ -255,6 +255,11 @@ struct obd_device_target {
         struct lustre_quota_ctxt  obt_qctxt;
 };
 
+typedef void (*obd_pin_extent_cb)(void *data);
+typedef int (*obd_page_removal_cb_t)(void *data, int discard);
+typedef int (*obd_lock_cancel_cb)(struct ldlm_lock *,struct ldlm_lock_desc *,
+                                   void *, int);
+
 /* llog contexts */
 enum llog_ctxt_id {
         LLOG_CONFIG_ORIG_CTXT  =  0,
@@ -379,6 +384,7 @@ struct filter_obd {
 
 struct mdc_rpc_lock;
 struct obd_import;
+struct lustre_cache;
 struct client_obd {
         struct semaphore         cl_sem;
         struct obd_uuid          cl_target_uuid;
@@ -473,6 +479,10 @@ struct client_obd {
         struct lu_client_seq    *cl_seq;
 
         atomic_t                 cl_resends; /* resend count */
+
+        /* Cache of triples */
+        struct lustre_cache     *cl_cache;
+        obd_lock_cancel_cb       cl_ext_lock_cancel_cb;
 };
 #define obd2cli_tgt(obd) ((char *)(obd)->u.cli.cl_target_uuid.uuid)
 
@@ -647,6 +657,9 @@ struct lov_obd {
         __u32                   lov_offset_idx; /* aliasing for start_idx  */
         int                     lov_start_count;/* reseed counter */
         int                     lov_connects;
+        obd_page_removal_cb_t   lov_page_removal_cb;
+        obd_pin_extent_cb       lov_page_pin_cb;
+        obd_lock_cancel_cb      lov_lock_cancel_cb;
 };
 
 struct lmv_tgt_desc {
@@ -1172,7 +1185,8 @@ struct obd_ops {
                                  struct lov_oinfo *loi,
                                  cfs_page_t *page, obd_off offset,
                                  struct obd_async_page_ops *ops, void *data,
-                                 void **res);
+                                 void **res, int nocache,
+                                 struct lustre_handle *lockh);
         int (*o_queue_async_io)(struct obd_export *exp,
                                 struct lov_stripe_md *lsm,
                                 struct lov_oinfo *loi, void *cookie,
@@ -1267,6 +1281,17 @@ struct obd_ops {
         int (*o_quotactl)(struct obd_export *, struct obd_quotactl *);
 
         int (*o_ping)(struct obd_export *exp);
+
+        int (*o_register_page_removal_cb)(struct obd_export *exp,
+                                          obd_page_removal_cb_t cb,
+                                          obd_pin_extent_cb pin_cb);
+        int (*o_unregister_page_removal_cb)(struct obd_export *exp,
+                                            obd_page_removal_cb_t cb);
+        int (*o_register_lock_cancel_cb)(struct obd_export *exp,
+                                       obd_lock_cancel_cb cb);
+        int (*o_unregister_lock_cancel_cb)(struct obd_export *exp,
+                                         obd_lock_cancel_cb cb);
+
         /*
          * NOTE: If adding ops, add another LPROCFS_OBD_OP_INIT() line
          * to lprocfs_alloc_obd_stats() in obdclass/lprocfs_status.c.
