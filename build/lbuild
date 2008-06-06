@@ -1640,7 +1640,7 @@ elif [ -z "$LINUX" ] ; then
         fi
     fi
 else
-    build_lustre
+    build_lustre && build_success=true
 fi
 ( $build_success ) || fatal 1 "Cannot build lustre"
 
