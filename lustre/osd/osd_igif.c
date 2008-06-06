@@ -49,22 +49,10 @@ void lu_igif_to_id(const struct lu_fid *fid, struct osd_inode_id *id)
         id->oii_gen = lu_igif_gen(fid);
 }
 
-__u32 lu_igif_ino(const struct lu_fid *fid)
-{
-        LASSERT(fid_is_igif(fid));
-        return fid_oid(fid);
-}
-
-__u32 lu_igif_gen(const struct lu_fid *fid)
-{
-        LASSERT(fid_is_igif(fid));
-        return fid_ver(fid);
-}
-
 void lu_igif_build(struct lu_fid *fid, __u32 ino, __u32 gen)
 {
-        fid->f_seq = LUSTRE_ROOT_FID_SEQ;
-        fid->f_oid = ino;
-        fid->f_ver = gen;
+        fid->f_seq = ino;
+        fid->f_oid = gen;
+        fid->f_ver = 0;
         LASSERT(fid_is_igif(fid));
 }

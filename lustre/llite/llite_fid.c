@@ -43,6 +43,11 @@ ino_t ll_fid_build_ino(struct ll_sb_info *sbi,
         ino_t ino;
         ENTRY;
 
+        if (fid_is_igif(fid)) {
+                ino = lu_igif_ino(fid);
+                RETURN(ino);
+        }
+
         /*
          * Very stupid and having many downsides inode allocation algorithm
          * based on fid.

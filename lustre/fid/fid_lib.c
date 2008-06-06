@@ -43,13 +43,21 @@
 #include <lu_object.h>
 #include <lustre_fid.h>
 
-/*
- * Sequence space, starts from 0x100000000ULL to have first 0x100000000ULL
- * sequences used for special purposes. 
- * Those fids are reserved for special purposes (igifs, etc.).
+/**
+ * A cluster-wide range from which fid-sequences are granted to servers and
+ * then clients.
+ *
+ * Fid namespace:
+ * <pre>
+ * Normal FID:        seq:64 [2^32,2^64-1]      oid:32          ver:32
+ * IGIF      :        0:33, ino:31              gen:32          0:32
+ * IDIF      :        0:32, 1:1, ost-index:15,  objd:48         0:32
+ * </pre>
+ *
+ * The first 0x400 sequences of normal FID are reserved for special purpose.
  */
 const struct lu_range LUSTRE_SEQ_SPACE_RANGE = {
-        0x100000400ULL,
+        FID_SEQ_START + 0x400ULL,
         (__u64)~0ULL
 };
 EXPORT_SYMBOL(LUSTRE_SEQ_SPACE_RANGE);

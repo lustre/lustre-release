@@ -598,6 +598,16 @@ int fld_client_lookup(struct lu_client_fld *fld,
 #ifdef __KERNEL__
         }
 #endif
+        if (seq < FID_SEQ_START) {
+                /*
+                 * The current solution for IGIF is to bind it to mds0.
+                 * In the future, this should be fixed once IGIF can be found
+                 * in FLD.
+                 */ 
+                md_fld.mf_mds = 0;
+                rc = 0;
+        }
+
         if (rc == 0) {
                 *mds = md_fld.mf_mds;
 

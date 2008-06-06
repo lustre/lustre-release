@@ -197,8 +197,6 @@ struct lu_fid {
  * fid constants
  */
 enum {
-        LUSTRE_ROOT_FID_SEQ  = 1ULL, /* XXX: should go into mkfs. */
-
         /* initial fid id value */
         LUSTRE_FID_INIT_OID  = 1UL
 };
@@ -221,19 +219,41 @@ static inline __u32 fid_ver(const struct lu_fid *fid)
         return fid->f_ver;
 }
 
-static inline int fid_seq_is_sane(__u64 seq)
-{
-        return seq != 0;
-}
+#define FID_SEQ_START 0x100000000ULL
 
 static inline void fid_zero(struct lu_fid *fid)
 {
         memset(fid, 0, sizeof(*fid));
 }
 
+/**
+ * Check if a fid is igif or not.
+ * \param fid the fid to be tested.
+ * \return true if the fid is a igif; otherwise false. 
+ */
 static inline int fid_is_igif(const struct lu_fid *fid)
 {
-        return fid_seq(fid) == LUSTRE_ROOT_FID_SEQ;
+        return fid_seq(fid) > 0 && fid_seq(fid) < FID_SEQ_START;
+}
+
+/**
+ * Get inode number from a igif.
+ * \param fid a igif to get inode number from.
+ * \return inode number for the igif.
+ */
+static inline ino_t lu_igif_ino(const struct lu_fid *fid)
+{
+        return fid_seq(fid);
+}
+
+/**
+ * Get inode generation from a igif.
+ * \param fid a igif to get inode generation from.
+ * \return inode generation for the igif.
+ */ 
+static inline __u32 lu_igif_gen(const struct lu_fid *fid)
+{
+        return fid_oid(fid);
 }
 
 #define DFID "[0x%16.16"LPF64"x/0x%8.8x:0x%8.8x]"
@@ -314,7 +334,7 @@ static inline int fid_is_sane(const struct lu_fid *fid)
 {
         return
                 fid != NULL &&
-                ((fid_seq_is_sane(fid_seq(fid)) && fid_oid(fid) != 0
+                ((fid_seq(fid) >= FID_SEQ_START && fid_oid(fid) != 0
                                                 && fid_ver(fid) == 0) ||
                 fid_is_igif(fid));
 }
