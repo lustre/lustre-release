@@ -851,14 +851,9 @@ static int after_reply(struct ptlrpc_request *req)
                         RETURN(rc);
                 }
         } else {
-                /* Let's look if server send slv. Do it only for RPC with 
+                /* Let's look if server sent slv. Do it only for RPC with 
                  * rc == 0. */
-                if (imp->imp_obd->obd_namespace) {
-                        /* Disconnect rpc is sent when namespace is already 
-                         * destroyed. Let's check this and will not try update
-                         * pool. */
-                        ldlm_cli_update_pool(req);
-                }
+                ldlm_cli_update_pool(req);
         }
 
         /* Store transno in reqmsg for replay. */

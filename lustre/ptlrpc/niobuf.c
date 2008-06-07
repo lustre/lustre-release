@@ -363,8 +363,7 @@ int ptlrpc_send_reply (struct ptlrpc_request *req, int flags)
         /* Report service time estimate for future client reqs */
         lustre_msg_set_timeout(req->rq_repmsg, at_get(&svc->srv_at_estimate));
 
-        if (req->rq_export && req->rq_export->exp_obd)
-                target_pack_pool_reply(req);
+        target_pack_pool_reply(req);
 
         if (lustre_msghdr_get_flags(req->rq_reqmsg) & MSGHDR_AT_SUPPORT) {
                 /* early replies go to offset 0, regular replies go after that*/

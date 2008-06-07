@@ -188,6 +188,10 @@ int class_attach(struct lustre_cfg *lcfg)
         LASSERTF(strncmp(obd->obd_name, name, strlen(name)) == 0, "%p obd_name %s != %s\n",
                  obd, obd->obd_name, name);
 
+        rwlock_init(&obd->obd_pool_lock);
+        obd->obd_pool_limit = 0;
+        obd->obd_pool_slv = 0;
+
         CFS_INIT_LIST_HEAD(&obd->obd_exports);
         CFS_INIT_LIST_HEAD(&obd->obd_exports_timed);
         CFS_INIT_LIST_HEAD(&obd->obd_nid_stats);

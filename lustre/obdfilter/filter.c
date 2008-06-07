@@ -1765,7 +1765,7 @@ int filter_common_setup(struct obd_device *obd, obd_count len, void *buf,
         filter->fo_fmd_max_age = FILTER_FMD_MAX_AGE_DEFAULT;
 
         sprintf(ns_name, "filter-%s", obd->obd_uuid.uuid);
-        obd->obd_namespace = ldlm_namespace_new(ns_name, LDLM_NAMESPACE_SERVER,
+        obd->obd_namespace = ldlm_namespace_new(obd, ns_name, LDLM_NAMESPACE_SERVER,
                                                 LDLM_NAMESPACE_GREEDY);
         if (obd->obd_namespace == NULL)
                 GOTO(err_post, rc = -ENOMEM);
@@ -2017,6 +2017,7 @@ static int filter_cleanup(struct obd_device *obd)
         lquota_cleanup(filter_quota_interface_ref, obd);
 
         ldlm_namespace_free(obd->obd_namespace, NULL, obd->obd_force);
+        obd->obd_namespace = NULL;
 
         if (obd->u.obt.obt_sb == NULL)
                 RETURN(0);

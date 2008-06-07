@@ -383,7 +383,7 @@ int client_connect_import(struct lustre_handle *dlm_handle,
 
         if (obd->obd_namespace != NULL)
                 CERROR("already have namespace!\n");
-        obd->obd_namespace = ldlm_namespace_new(obd->obd_name,
+        obd->obd_namespace = ldlm_namespace_new(obd, obd->obd_name,
                                                 LDLM_NAMESPACE_CLIENT,
                                                 LDLM_NAMESPACE_GREEDY);
         if (obd->obd_namespace == NULL)
@@ -1562,24 +1562,29 @@ static inline struct ldlm_pool *ldlm_exp2pl(struct obd_export *exp)
 
 int target_pack_pool_reply(struct ptlrpc_request *req)
 {
-        struct ldlm_pool *pl;
+        struct obd_device *obd;
         ENTRY;
-    
-        if (!req->rq_export || !req->rq_export->exp_obd ||
-            !req->rq_export->exp_obd->obd_namespace ||
-            !exp_connect_lru_resize(req->rq_export)) {
+   
+        /* 
+         * Check that we still have all structures alive as this may 
+         * be some late rpc in shutdown time.
+         */
+        if (unlikely(!req->rq_export || !req->rq_export->exp_obd ||
+                     !exp_connect_lru_resize(req->rq_export))) {
                 lustre_msg_set_slv(req->rq_repmsg, 0);
                 lustre_msg_set_limit(req->rq_repmsg, 0);
                 RETURN(0);
         }
-        
-        pl = ldlm_exp2pl(req->rq_export);
 
-        spin_lock(&pl->pl_lock);
-        LASSERT(ldlm_pool_get_slv(pl) != 0 && ldlm_pool_get_limit(pl) != 0);
-        lustre_msg_set_slv(req->rq_repmsg, ldlm_pool_get_slv(pl));
-        lustre_msg_set_limit(req->rq_repmsg, ldlm_pool_get_limit(pl));
-        spin_unlock(&pl->pl_lock);
+        /* 
+         * OBD is alive here as export is alive, which we checked above. 
+         */
+        obd = req->rq_export->exp_obd;
+
+        read_lock(&obd->obd_pool_lock);
+        lustre_msg_set_slv(req->rq_repmsg, obd->obd_pool_slv);
+        lustre_msg_set_limit(req->rq_repmsg, obd->obd_pool_limit);
+        read_unlock(&obd->obd_pool_lock);
 
         RETURN(0);
 }

@@ -465,7 +465,7 @@ static int echo_setup(struct obd_device *obd, obd_count len, void *buf)
         spin_lock_init(&obd->u.echo.eo_lock);
         obd->u.echo.eo_lastino = ECHO_INIT_OBJID;
 
-        obd->obd_namespace = ldlm_namespace_new("echo-tgt",
+        obd->obd_namespace = ldlm_namespace_new(obd, "echo-tgt",
                                                 LDLM_NAMESPACE_SERVER,
                                                 LDLM_NAMESPACE_GREEDY);
         if (obd->obd_namespace == NULL) {
@@ -511,6 +511,7 @@ static int echo_cleanup(struct obd_device *obd)
         cfs_schedule_timeout (CFS_TASK_UNINT, cfs_time_seconds(1));
 
         ldlm_namespace_free(obd->obd_namespace, NULL, obd->obd_force);
+        obd->obd_namespace = NULL;
 
         leaked = atomic_read(&obd->u.echo.eo_prep);
         if (leaked != 0)
