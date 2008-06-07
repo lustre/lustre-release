@@ -12,8 +12,8 @@ noinst_SCRIPTS += conf-sanity.sh insanity.sh lfscktest.sh oos.sh oos2.sh
 noinst_SCRIPTS += llog-test.sh recovery-small.sh replay-dual.sh sanity-quota.sh
 noinst_SCRIPTS += replay-ost-single.sh replay-single.sh run-llog.sh sanityN.sh
 noinst_SCRIPTS += lockorder.sh socketclient socketserver runmultiop_bg_pause
-nobase_noinst_SCRIPTS = cfg/insanity-local.sh
-nobase_noinst_SCRIPTS += cfg/local.sh acl/make-tree acl/run cfg/ncli.sh
+nobase_noinst_SCRIPTS = cfg/local.sh
+nobase_noinst_SCRIPTS += acl/make-tree acl/run cfg/ncli.sh
 nobase_noinst_DATA = acl/cp.test acl/getfacl-noacl.test acl/inheritance.test
 nobase_noinst_DATA += acl/misc.test acl/permissions.test acl/setfacl.test
 
