@@ -245,6 +245,7 @@ struct ldlm_pool {
         atomic_t               pl_grant_speed;   /* Grant speed (GR-CR) per T. */
         __u64                  pl_server_lock_volume; /* Server lock volume. 
                                                   * Protected by pl_lock */
+        __u64                  pl_client_lock_volume; /* Client lock volue. */
         atomic_t               pl_lock_volume_factor; /* Lock volume factor. */
 
         time_t                 pl_recalc_time;   /* Time when last slv from 
@@ -330,6 +331,8 @@ struct ldlm_namespace {
         unsigned               ns_max_nolock_size;
 
         struct adaptive_timeout ns_at_estimate;/* estimated lock callback time*/
+        /* backward link to obd, required for ldlm pool to store new SLV. */
+        struct obd_device     *ns_obd;
 };
 
 static inline int ns_is_client(struct ldlm_namespace *ns)
@@ -693,8 +696,9 @@ void ldlm_lock_dump_handle(int level, struct lustre_handle *);
 void ldlm_unlink_lock_skiplist(struct ldlm_lock *req);
 
 /* resource.c */
-struct ldlm_namespace *ldlm_namespace_new(char *name, ldlm_side_t client, 
-                                          ldlm_appetite_t apt);
+struct ldlm_namespace *
+ldlm_namespace_new(struct obd_device *obd, char *name,
+                   ldlm_side_t client, ldlm_appetite_t apt);
 int ldlm_namespace_cleanup(struct ldlm_namespace *ns, int flags);
 void ldlm_namespace_free(struct ldlm_namespace *ns,
                          struct obd_import *imp, int force);
@@ -825,9 +829,12 @@ int ldlm_pool_shrink(struct ldlm_pool *pl, int nr,
 void ldlm_pool_fini(struct ldlm_pool *pl);
 int ldlm_pool_setup(struct ldlm_pool *pl, int limit);
 int ldlm_pool_recalc(struct ldlm_pool *pl);
+__u32 ldlm_pool_get_lvf(struct ldlm_pool *pl);
 __u64 ldlm_pool_get_slv(struct ldlm_pool *pl);
+__u64 ldlm_pool_get_clv(struct ldlm_pool *pl);
 __u32 ldlm_pool_get_limit(struct ldlm_pool *pl);
 void ldlm_pool_set_slv(struct ldlm_pool *pl, __u64 slv);
+void ldlm_pool_set_clv(struct ldlm_pool *pl, __u64 clv);
 void ldlm_pool_set_limit(struct ldlm_pool *pl, __u32 limit);
 void ldlm_pool_add(struct ldlm_pool *pl, struct ldlm_lock *lock);
 void ldlm_pool_del(struct ldlm_pool *pl, struct ldlm_lock *lock);

@@ -1990,7 +1990,7 @@ static int mds_setup(struct obd_device *obd, obd_count len, void *buf)
         mds->mds_evict_ost_nids = 1;
 
         sprintf(ns_name, "mds-%s", obd->obd_uuid.uuid);
-        obd->obd_namespace = ldlm_namespace_new(ns_name, LDLM_NAMESPACE_SERVER,
+        obd->obd_namespace = ldlm_namespace_new(obd, ns_name, LDLM_NAMESPACE_SERVER,
                                                 LDLM_NAMESPACE_GREEDY);
         if (obd->obd_namespace == NULL) {
                 mds_cleanup(obd);
@@ -2291,6 +2291,7 @@ static int mds_cleanup(struct obd_device *obd)
         obd->u.obt.obt_sb = NULL;
 
         ldlm_namespace_free(obd->obd_namespace, NULL, obd->obd_force);
+        obd->obd_namespace = NULL;
 
         spin_lock_bh(&obd->obd_processing_task_lock);
         if (obd->obd_recovering) {

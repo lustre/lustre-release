@@ -289,8 +289,9 @@ void ldlm_proc_namespace(struct ldlm_namespace *ns)
 #define ldlm_proc_namespace(ns) do {} while (0)
 #endif /* LPROCFS */
 
-struct ldlm_namespace *ldlm_namespace_new(char *name, ldlm_side_t client, 
-                                          ldlm_appetite_t apt)
+struct ldlm_namespace *
+ldlm_namespace_new(struct obd_device *obd, char *name, 
+                   ldlm_side_t client, ldlm_appetite_t apt)
 {
         struct ldlm_namespace *ns = NULL;
         struct list_head *bucket;
@@ -318,6 +319,10 @@ struct ldlm_namespace *ldlm_namespace_new(char *name, ldlm_side_t client,
 
         ns->ns_shrink_thumb = LDLM_LOCK_SHRINK_THUMB;
         ns->ns_appetite = apt;
+
+        LASSERT(obd != NULL);
+        ns->ns_obd = obd;
+
         strcpy(ns->ns_name, name);
 
         CFS_INIT_LIST_HEAD(&ns->ns_root_list);
@@ -548,6 +553,7 @@ void ldlm_namespace_free_prior(struct ldlm_namespace *ns,
                 return;
         }
 
+        /* Make sure that nobody can find this ns in its list. */
         ldlm_namespace_unregister(ns, ns->ns_client);
 
         /* Can fail with -EINTR when force == 0 in which case try harder */
@@ -574,11 +580,9 @@ void ldlm_namespace_free_post(struct ldlm_namespace *ns)
                 return;
         }
 
-        /* 
-         * Fini pool _before_ parent proc dir is removed. This is important as
+        /* Fini pool _before_ parent proc dir is removed. This is important as
          * ldlm_pool_fini() removes own proc dir which is child to @dir. Removing
-         * it after @dir may cause oops.
-         */
+         * it after @dir may cause oops. */
         ldlm_pool_fini(&ns->ns_pool);
 
 #ifdef LPROCFS
@@ -595,10 +599,9 @@ void ldlm_namespace_free_post(struct ldlm_namespace *ns)
 #endif
         OBD_VFREE(ns->ns_hash, sizeof(*ns->ns_hash) * RES_HASH_SIZE);
         OBD_FREE(ns->ns_name, strlen(ns->ns_name) + 1);
-        /* 
-         * @ns should be not on list in this time, otherwise this will cause
-         * issues realted to using freed @ns in pools thread. 
-         */
+
+        /* @ns should be not on list in this time, otherwise this will cause
+         * issues realted to using freed @ns in pools thread. */
         LASSERT(list_empty(&ns->ns_list_chain));
         OBD_FREE_PTR(ns);
         ldlm_put_ref();

@@ -145,7 +145,7 @@ static int mgs_setup(struct obd_device *obd, obd_count len, void *buf)
                 GOTO(err_put, rc = PTR_ERR(obd->obd_fsops));
 
         /* namespace for mgs llog */
-        obd->obd_namespace = ldlm_namespace_new("MGS", LDLM_NAMESPACE_SERVER, 
+        obd->obd_namespace = ldlm_namespace_new(obd, "MGS", LDLM_NAMESPACE_SERVER, 
                                                 LDLM_NAMESPACE_MODEST);
         if (obd->obd_namespace == NULL)
                 GOTO(err_ops, rc = -ENOMEM);
@@ -241,16 +241,6 @@ static int mgs_precleanup(struct obd_device *obd, enum obd_cleanup_stage stage)
         RETURN(rc);
 }
 
-static int mgs_ldlm_nsfree(void *data)
-{
-        struct ldlm_namespace *ns = (struct ldlm_namespace *)data;
-        ENTRY;
-
-        ptlrpc_daemonize("ll_mgs_nsfree");
-        ldlm_namespace_free(ns, NULL, 1 /* obd_force should always be on */);
-        RETURN(0);
-}
-
 static int mgs_cleanup(struct obd_device *obd)
 {
         struct mgs_obd *mgs = &obd->u.mgs;
@@ -270,12 +260,8 @@ static int mgs_cleanup(struct obd_device *obd)
         server_put_mount(obd->obd_name, mgs->mgs_vfsmnt);
         mgs->mgs_sb = NULL;
 
-        /* Free the namespace in it's own thread, so that if the 
-           ldlm_cancel_handler put the last mgs obd ref, we won't 
-           deadlock here. */
-        cfs_kernel_thread(mgs_ldlm_nsfree, obd->obd_namespace, 
-                          CLONE_VM | CLONE_FILES);
-
+        ldlm_namespace_free(obd->obd_namespace, NULL, 1);
+        obd->obd_namespace = NULL;
         fsfilt_put_ops(obd->obd_fsops);
 
         LCONSOLE_INFO("%s has stopped.\n", obd->obd_name);
