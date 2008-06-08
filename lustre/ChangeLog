@@ -24,6 +24,12 @@ tbd Sun Microsystems, Inc.
 	  	'tunefs.lustre --param="mdt.quota_type=ug1" $MDTDEV'.
 	  For more information, please refer to bugzilla 13904.
 
+Severity   : normal
+Frequency  : only with broken builds/installations
+Bugzilla   : 15779
+Description: do not LBUG if lquota.ko and fsfilt_ldiskfs.ko are of different versions
+Details    : just return an error to a user, put a console error message
+
 Severity   : enhancement
 Bugzilla   : 15741
 Description: Update to RHEL5 kernel-2.6.18-53.1.19.el5.
