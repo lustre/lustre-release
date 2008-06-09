@@ -278,7 +278,7 @@ for NAME in $CONFIGS; do
 		[ -f /etc/modprobe.d/Lustre ] && MODPROBECONF=/etc/modprobe.d/Lustre
 
 		LNETOPTS="$(awk '/^options lnet/ { print $0}' $MODPROBECONF | \
-			sed 's/^options lnet //g') accept=all" \
+			sed 's/^options lnet //g; s/"//g') accept=all" \
 			MDS_MOUNT_OPTS=$(echo $MDS_MOUNT_OPTS | sed 's/^[ \t]*//;s/[ \t]*$//') \
 			MDS_MOUNT_OPTS="${MDS_MOUNT_OPTS},noacl" \
 			MDS_MOUNT_OPTS=${MDS_MOUNT_OPTS/#,/-o } \
