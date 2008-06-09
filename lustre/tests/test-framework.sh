@@ -72,8 +72,12 @@ init_test_env() {
     export TMP=${TMP:-$ROOT/tmp}
     export TESTSUITELOG=${TMP}/${TESTSUITE}.log
     export HOSTNAME=${HOSTNAME:-`hostname`}
-
-    export PATH=:$PATH:$LUSTRE/utils:$LUSTRE/tests
+    if ! echo $PATH | grep -q $LUSTRE/utils; then
+	export PATH=$PATH:$LUSTRE/utils
+    fi
+    if ! echo $PATH | grep -q $LUSTRE/test; then
+	export PATH=$PATH:$LUSTRE/tests
+    fi
     export LCTL=${LCTL:-"$LUSTRE/utils/lctl"}
     export LFS=${LFS:-"$LUSTRE/utils/lfs"}
     [ ! -f "$LCTL" ] && export LCTL=$(which lctl) 

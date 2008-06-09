@@ -7,7 +7,7 @@ set -e
 # This test needs to be run on the client
 #
 SAVE_PWD=$PWD
-LUSTRE=${LUSTRE:-`dirname $0`/..}
+LUSTRE=${LUSTRE:-$(cd $(dirname $0)/..; echo $PWD)}
 SETUP=${SETUP:-}
 CLEANUP=${CLEANUP:-}
 . $LUSTRE/tests/test-framework.sh

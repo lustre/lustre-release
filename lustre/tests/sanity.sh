@@ -23,8 +23,8 @@ case `uname -r` in
 *) error "unsupported kernel" ;;
 esac
 
-SRCDIR=`dirname $0`
-export PATH=$PWD/$SRCDIR:$SRCDIR:$SRCDIR/../utils:$PATH:/sbin
+SRCDIR=$(cd $(dirname $0); echo $PWD)
+export PATH=$PATH:/sbin
 
 TMP=${TMP:-/tmp}
 
@@ -63,7 +63,7 @@ SAVE_PWD=$PWD
 CLEANUP=${CLEANUP:-:}
 SETUP=${SETUP:-:}
 TRACE=${TRACE:-""}
-LUSTRE=${LUSTRE:-`dirname $0`/..}
+LUSTRE=${LUSTRE:-$(cd $(dirname $0)/..; echo $PWD)}
 . $LUSTRE/tests/test-framework.sh
 init_test_env $@
 . ${CONFIG:=$LUSTRE/tests/cfg/$NAME.sh}
