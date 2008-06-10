@@ -395,8 +395,10 @@ static inline unsigned int ll_nr_free_buffer_pages(void)
 #define ll_nr_free_buffer_pages()	nr_free_buffer_pages()
 #endif
 
-#ifdef FS_ODD_RENAME
-#define FS_RENAME_DOES_D_MOVE FS_ODD_RENAME
+#ifdef HAVE_FS_RENAME_DOES_D_MOVE
+#define LL_RENAME_DOES_D_MOVE	FS_RENAME_DOES_D_MOVE
+#else
+#define LL_RENAME_DOES_D_MOVE	FS_ODD_RENAME
 #endif
 
 /* add a lustre compatible layer for crypto API */

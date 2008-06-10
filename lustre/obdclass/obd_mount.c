@@ -2000,7 +2000,8 @@ struct file_system_type lustre_fs_type = {
         .name         = "lustre",
         .get_sb       = lustre_get_sb,
         .kill_sb      = lustre_kill_super,
-        .fs_flags     = FS_BINARY_MOUNTDATA | FS_REQUIRES_DEV,
+        .fs_flags     = FS_BINARY_MOUNTDATA | FS_REQUIRES_DEV |
+                        LL_RENAME_DOES_D_MOVE,
 };
 
 int lustre_register_fs(void)

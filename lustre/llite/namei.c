@@ -1253,10 +1253,18 @@ static int ll_link(struct dentry *old_dentry, struct inode *dir,
 static int ll_rename(struct inode *old_dir, struct dentry *old_dentry,
                      struct inode *new_dir, struct dentry *new_dentry)
 {
-        return ll_rename_generic(old_dir, NULL,
+        int err;
+        err = ll_rename_generic(old_dir, NULL,
                                  old_dentry, &old_dentry->d_name,
                                  new_dir, NULL, new_dentry,
                                  &new_dentry->d_name);
+        if (!err) {
+#ifndef HAVE_FS_RENAME_DOES_D_MOVE
+                if (!S_ISDIR(old_dentry->d_inode->i_mode))
+#endif
+                        d_move(old_dentry, new_dentry);
+        }
+        return err;
 }
 
 struct inode_operations ll_dir_inode_operations = {
