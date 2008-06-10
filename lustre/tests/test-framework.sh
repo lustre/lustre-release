@@ -520,9 +520,9 @@ zconf_mount_clients() {
     do_nodes $clients mkdir -p $mnt
     do_nodes $clients mount -t lustre $OPTIONS $device $mnt || return 1
 
-    do_nodes $clients "sysctl -w lnet.debug=$PTLDEBUG;
-        sysctl -w lnet.subsystem_debug=${SUBSYSTEM# };
-        sysctl -w lnet.debug_mb=${DEBUG_SIZE};"
+    do_nodes $clients "lctl set_param debug=$PTLDEBUG;
+        lctl set_param subsystem_debug=${SUBSYSTEM# };
+        lctl set_param debug_mb=${DEBUG_SIZE};"
 
     return 0
 }
@@ -588,15 +588,15 @@ cleanup_check() {
 }
 
 wait_delete_completed () {
-    local TOTALPREV=`awk 'BEGIN{total=0}; {total+=$1}; END{print total}' \
-            $LPROC/osc/*/kbytesavail`
+    local TOTALPREV=`lctl get_param -n osc.*.kbytesavail | \
+                     awk 'BEGIN{total=0}; {total+=$1}; END{print total}'`
 
     local WAIT=0
     local MAX_WAIT=20
     while [ "$WAIT" -ne "$MAX_WAIT" ]; do
         sleep 1
-        TOTAL=`awk 'BEGIN{total=0}; {total+=$1}; END{print total}' \
-            $LPROC/osc/*/kbytesavail`
+        TOTAL=`lctl get_param -n osc.*.kbytesavail | \
+               awk 'BEGIN{total=0}; {total+=$1}; END{print total}'`
         [ "$TOTAL" -eq "$TOTALPREV" ] && break
         echo "Waiting delete completed ... prev: $TOTALPREV current: $TOTAL "
         TOTALPREV=$TOTAL
@@ -625,7 +625,7 @@ wait_mds_recovery_done () {
     MAX=$(( timeout * 4 ))
     WAIT=0
     while [ $WAIT -lt $MAX ]; do
-        STATUS=`do_facet $SINGLEMDS grep status /proc/fs/lustre/mdt/*-MDT*/recovery_status`
+        STATUS=`do_facet $SINGLEMDS "lctl get_param -n mdt.*-MDT*.recovery_status | grep status"`
         echo $STATUS | grep COMPLETE && return 0
         sleep 5
         WAIT=$((WAIT + 5))
@@ -716,13 +716,13 @@ replay_barrier_nodf() {
 }
 
 mds_evict_client() {
-    UUID=`cat /proc/fs/lustre/mdc/${mds1_svc}-mdc-*/uuid`
-    do_facet mds1 "echo $UUID > /proc/fs/lustre/mdt/${mds1_svc}/evict_client"
+    UUID=`lctl get_param -n mdc.${mds1_svc}-mdc-*.uuid`
+    do_facet mds1 "lctl set_param -n mdt.${mds1_svc}.evict_client $UUID"
 }
 
 ost_evict_client() {
-    UUID=`grep ${ost1_svc}-osc- $LPROC/devices | egrep -v 'MDT' | awk '{print $5}'`
-    do_facet ost1 "echo $UUID > /proc/fs/lustre/obdfilter/${ost1_svc}/evict_client"
+    UUID=`lctl get_param -n devices| grep ${ost1_svc}-osc- | egrep -v 'MDT' | awk '{print $5}'`
+    do_facet ost1 "lctl set_param -n obdfilter.${ost1_svc}.evict_client $UUID"
 }
 
 fail() {
@@ -1055,21 +1055,21 @@ switch_identity() {
     local num=$1
     local switch=$2
     local j=`expr $num - 1`
-    local MDT="`do_facet mds$num find $LPROC/mdt/ -name \*MDT\*$j -printf %f 2>/dev/null || true`"
+    local MDT="`do_facet mds$num lctl get_param -N mdt.*MDT*$j | cut -d"." -f2 2>/dev/null || true`"
 
     if [ -z "$MDT" ]; then
         return 2
     fi
 
-    local old="`do_facet mds$num cat $LPROC/mdt/$MDT/identity_upcall`"
+    local old="`do_facet mds$num "lctl get_param -n mdt.$MDT.identity_upcall"`"
 
     if $switch; then
-        do_facet mds$num "echo \"$L_GETIDENTITY\" > $LPROC/mdt/$MDT/identity_upcall"
+        do_facet mds$num "lctl set_param -n mdt.$MDT.identity_upcall \"$L_GETIDENTITY\""
     else
-        do_facet mds$num "echo \"NONE\" > $LPROC/mdt/$MDT/identity_upcall"
+        do_facet mds$num "lctl set_param -n mdt.$MDT.identity_upcall \"NONE\""
     fi
 
-    do_facet mds$num "echo \"-1\" > $LPROC/mdt/$MDT/identity_flush"
+    do_facet mds$num "lctl set_param -n mdt/$MDT/identity_flush \"-1\""
 
     if [ $old = "NONE" ]; then
         return 1
@@ -1322,16 +1322,14 @@ set_nodes_failloc () {
     local node
 
     for node in $nodes ; do
-        do_node $node sysctl -w lustre.fail_loc=$2
+        do_node $node lctl set_param fail_loc=$2
     done
 }
 
 cancel_lru_locks() {
     $LCTL mark "cancel_lru_locks $1 start"
-    for d in `find $LPROC/ldlm/namespaces | egrep -i $1`; do
-        [ -f $d/lru_size ] && echo clear > $d/lru_size
-        [ -f $d/lock_unused_count ] && grep [1-9] $d/lock_unused_count /dev/null
-    done
+    lctl set_param ldlm.namespaces.*$1*.lru_size=0
+    lctl get_param ldlm.namespaces.*$1*.lock_unused_count | grep -v '=0'
     $LCTL mark "cancel_lru_locks $1 stop"
 }
 
@@ -1344,33 +1342,21 @@ default_lru_size()
 
 lru_resize_enable()
 {
-        NS=$1
-        test "x$NS" = "x" && NS="mdc"
-        for F in $LPROC/ldlm/namespaces/*$NS*/lru_size; do
-                D=$(dirname $F)
-                log "Enable lru resize for $(basename $D)"
-                echo "0" > $F
-        done
+    lctl set_param ldlm.namespaces.*$1*.lru_size=0
 }
 
 lru_resize_disable()
 {
-        NS=$1
-        test "x$NS" = "x" && NS="mdc"
-        for F in $LPROC/ldlm/namespaces/*$NS*/lru_size; do
-                D=$(dirname $F)
-                log "Disable lru resize for $(basename $D)"
-                DEFAULT_LRU_SIZE=$(default_lru_size)
-                echo "$DEFAULT_LRU_SIZE" > $F
-        done
+    lctl set_param ldlm.namespaces.*$1*.lru_size $(default_lru_size)
 }
 
 pgcache_empty() {
-    for a in /proc/fs/lustre/llite/*/dump_page_cache; do
-        if [ `wc -l $a | awk '{print $1}'` -gt 1 ]; then
-            echo there is still data in page cache $a ?
-            cat $a;
-            return 1;
+    local FILE
+    for FILE in `lctl get_param -N "llite.*.dump_page_cache"`; do
+        if [ `lctl get_param -n $FILE | wc -l` -gt 1 ]; then
+            echo there is still data in page cache $FILE ?
+            lctl get_param -n $FILE
+            return 1
         fi
     done
     return 0
@@ -1540,8 +1526,8 @@ pass() {
 }
 
 check_mds() {
-    FFREE=`cat /proc/fs/lustre/osd/*MDT*/filesfree`
-    FTOTAL=`cat /proc/fs/lustre/osd/*MDT*/filestotal`
+    FFREE=`lctl get_param -n osd.*MDT*.filesfree`
+    FTOTAL=`lctl get_param -n osd.*MDT*.filestotal`
     [ $FFREE -ge $FTOTAL ] && error "files free $FFREE > total $FTOTAL" || true
 }
 
@@ -1600,7 +1586,7 @@ check_grant() {
 	testname=GCHECK_ONLY_${base}
         [ ${!testname}x == x ] && return 0
 
-	echo -n "checking grant......"
+    echo -n "checking grant......"
 	cd $SAVE_PWD
 	# write some data to sync client lost_grant
 	rm -f $DIR1/${tfile}_check_grant_* 2>&1
@@ -1614,12 +1600,12 @@ check_grant() {
 	
 	#get client grant and server grant
 	client_grant=0
-    for d in ${LPROC}/osc/*/cur_grant_bytes; do
-		client_grant=$((client_grant + `cat $d`))
+    for d in `lctl get_param -n osc.*.cur_grant_bytes`; do
+		client_grant=$((client_grant + $d))
 	done
 	server_grant=0
-	for d in ${LPROC}/obdfilter/*/tot_granted; do
-		server_grant=$((server_grant + `cat $d`))
+	for d in `lctl get_param -n obdfilter.*.tot_granted`; do
+		server_grant=$((server_grant + $d))
 	done
 
 	# cleanup the check_grant file
