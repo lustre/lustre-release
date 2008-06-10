@@ -1559,7 +1559,16 @@ test_39() {
 }
 run_test 39 "leak_finder recognizes both LUSTRE and LNET malloc messages"
 
-test_40() { #bug 14134
+test_40() { # bug 15759
+	start_ost
+	#define OBD_FAIL_TGT_TOOMANY_THREADS     0x706
+	do_facet mds "sysctl -w lustre.fail_loc=0x80000706"
+	start_mds
+	cleanup
+}
+run_test 40 "race during service thread startup"
+
+test_41() { #bug 14134
         local rc
         start mds $MDSDEV $MDS_MOUNT_OPTS -o nosvc
         start ost `ostdevname 1` $OST_MOUNT_OPTS
@@ -1578,7 +1587,7 @@ test_40() { #bug 14134
         unload_modules || return 204
         return $rc
 }
-run_test 40 "mount mds with --nosvc and --nomgs"
+run_test 41 "mount mds with --nosvc and --nomgs"
 
 umount_client $MOUNT
 cleanup_nocli

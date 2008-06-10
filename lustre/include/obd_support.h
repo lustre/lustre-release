@@ -243,6 +243,7 @@ int obd_alloc_fail(const void *ptr, const char *name, const char *type,
 #define OBD_FAIL_TGT_DELAY_CONNECT       0x703
 #define OBD_FAIL_TGT_DELAY_RECONNECT     0x704
 #define OBD_FAIL_TGT_DELAY_PRECREATE     0x705
+#define OBD_FAIL_TGT_TOOMANY_THREADS     0x706
 
 #define OBD_FAIL_MDC_REVALIDATE_PAUSE    0x800
 #define OBD_FAIL_MDC_ENQUEUE_PAUSE       0x801
