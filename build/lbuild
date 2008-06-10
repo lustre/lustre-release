@@ -464,7 +464,7 @@ load_target()
     fi
 
     if [ -f $TOPDIR/lustre/lustre/kernel_patches/kernel_configs/kernel-$lnxmaj-$TARGET-$TARGET_ARCH.config ]; then
-    CONFIG_FILE="$TOPDIR/lustre/lustre/kernel_patches/kernel_configs/kernel-$lnxmaj-$TARGET-$TARGET_ARCH.config"
+        CONFIG_FILE="$TOPDIR/lustre/lustre/kernel_patches/kernel_configs/kernel-$lnxmaj-$TARGET-$TARGET_ARCH.config"
     fi
     local smptype
     for smptype in $SMPTYPES; do
@@ -475,7 +475,7 @@ load_target()
     fi
     done
 
-    local lnxrelnew=$( echo ${lnxrel} | sed s/-/_/g )
+    local lnxrelnew=${lnxrel//-/_}
 
     [ -f "$CONFIG_FILE" ] || \
         fatal 1 "Config file for target $TARGET missing from $TOPDIR/lustre/lustre/kernel_patches/kernel_configs/."
@@ -925,13 +925,8 @@ gen_lustre_version()
     [ "$KERNCONFSMPTYPE" = "" ] || smptype=$KERNCONFSMPTYPE
     [ "$RPMSMPTYPE" = "" ] || smptype=$RPMSMPTYPE
 
-    LUSTRE_EXTRA_VERSION="${lnxmaj}-${EXTRA_VERSION}"
-    if [ "$PATCHLESS" = "true" -a  "$DISTRO" = "sles10" ]; then
-        LUSTRE_EXTRA_VERSION="${LUSTRE_EXTRA_VERSION}-${smptype}"
-    else
-        LUSTRE_EXTRA_VERSION="${LUSTRE_EXTRA_VERSION}${smptype}"
-    fi
-    LUSTRE_EXTRA_VERSION=$( echo $LUSTRE_EXTRA_VERSION | sed -e "s^-^_^g" )
+    LUSTRE_EXTRA_VERSION="${lnxmaj}${EXTRA_VERSION_DELIMITER}${EXTRA_VERSION}${TARGET_DELIMITER}${smptype}"
+    LUSTRE_EXTRA_VERSION=${LUSTRE_EXTRA_VERSION//-/_}
 }
 
 #store RPMs and/or BUILD dir for future reuse
@@ -945,36 +940,40 @@ store_for_reuse()
         return 255
     fi
 
-    local lnxrelnew=$( echo ${lnxrel} | sed s/-/_/g )
-	local EXTRA_VERSIONnew=$( echo ${EXTRA_VERSION} | sed s/-/_/g )
-	local KERNELRPMnew=$(basename "$KERNELRPM")
+    local lnxrelnew=${lnxrel//-/_}
+    local EXTRA_VERSIONnew=${EXTRA_VERSION//-/_}
+    local KERNELRPMnew=$(basename "$KERNELRPM")
     if [ ! "$rpmonly" = "rpmonly" ]; then
 	    local builddir=
         if [ ! "$KERNELCOMPILEDIR" = "" ]; then
             builddir="$KERNELCOMPILEDIR"
         else
             builddir="BUILD/lustre-kernel-${lnxmaj}/lustre/linux-${lnxmaj}"
-	        [ "$KERNELCOMPILEDIR" = "" ] || builddir="$KERNELCOMPILEDIR"
+	    [ "$KERNELCOMPILEDIR" = "" ] || builddir="$KERNELCOMPILEDIR"
             [ -d "$builddir" ] || builddir="BUILD/lustre-kernel-${lnxmaj}/lustre/linux-${lnxmaj}.${lnxrel}"
             [ -d "$builddir" ] || builddir="BUILD/lustre-kernel-${lnxmaj}/lustre/linux-${lnxmaj}-${lnxrel}"
-	        if [ ! -d "$builddir" ]; then
+	    if [ ! -d "$builddir" ]; then
                 pushd "BUILD/lustre-kernel-${lnxmaj}/lustre/" || return 255
                 local basebuilddir=$(ls -d linux-${lnxmaj}* | head -1)
                 [ "$basebuilddir" = "" ] || builddir="BUILD/lustre-kernel-${lnxmaj}/lustre/${basebuilddir}"
                 popd
-	        fi
+	    fi
         fi
         [ -d "$builddir" ] || return 255
-	    local dstdir="${REUSEBUILD}/${TIMESTAMP}/linux-${KERNCONFSMPTYPE}-${lnxmaj}-${EXTRA_VERSIONnew}.${TARGET_ARCH}"
-	    ( $PATCHLESS ) && dstdir="${REUSEBUILD}/${TIMESTAMP}/linux-$KERNELRPMnew" && \
-		    dstdir="${dstdir%.rpm}"
-	    [ -d "$dstdir" ] && rm -rf "$dstdir"
+	local dstdir="${REUSEBUILD}/${TIMESTAMP}/linux-${KERNCONFSMPTYPE}-${lnxmaj}-${EXTRA_VERSIONnew}.${TARGET_ARCH}"
+	( $PATCHLESS ) && dstdir="${REUSEBUILD}/${TIMESTAMP}/linux-$KERNELRPMnew" && \
+	        dstdir="${dstdir%.rpm}"
+	[ -d "$dstdir" ] && rm -rf "$dstdir"
         mv "${builddir}" "$dstdir" || return 255
+        if [ -n "$OFED_VERSION" ]; then
+            # move the OFED kernel-ib-devel tree as well
+            mv "${builddir%/*}/kernel-ib-devel/usr/src/ofa_kernel" "${dstdir%/*}" || return 255
+        fi
     fi
     #store kernel rpm
     local kernelrpmname="kernel-lustre-${KERNCONFSMPTYPE}-${lnxmaj}-${EXTRA_VERSIONnew}.${TARGET_ARCH}.rpm"
     [ -f "RPMS/${TARGET_ARCH}/${kernelrpmname}" ] || kernelrpmname="kernel-${KERNCONFSMPTYPE}-${lnxmaj}-${EXTRA_VERSNnew}.${TARGET_ARCH}.rpm"
-	( $PATCHLESS ) && [ -f "$KERNELRPM" ] && kernelrpmname="$KERNELRPMnew"
+    ( $PATCHLESS ) && [ -f "$KERNELRPM" ] && kernelrpmname="$KERNELRPMnew"
     if [ "$rpmonly" = "rpmonly" ] && [ -f "${REUSEBUILD}/${TIMESTAMP}/${kernelrpmname}" ]; then
         echo "RPM already exist in store directory tree"
     else
@@ -988,6 +987,24 @@ store_for_reuse()
         echo "RPM already exist in store directory tree"
     else
 	    [ -f "RPMS/${TARGET_ARCH}/${kernelrpmname}" ] && cp -f "RPMS/${TARGET_ARCH}/${kernelrpmname}" "${REUSEBUILD}/${TIMESTAMP}/"
+    fi
+    if [ -n "$OFED_VERSION" ]; then
+        # store kernel-ib RPMs
+        local rpmname
+        for rpmname in "kernel-ib" "kernel-ib-devel"; do
+            rpmname="${rpmname}-${OFED_VERSION}"
+            if $PATCHLESS; then
+                rpmname="${rpmname}-${LINUXRELEASE//-/_}"
+            else
+                rpmname="${rpmname}-${lnxmaj}${EXTRA_VERSION_DELIMITER//-/_}${EXTRA_VERSIONnew}${TARGET_DELIMITER//-/_}${KERNCONFSMPTYPE}"
+            fi
+            rpmname="${rpmname}.${TARGET_ARCH}.rpm"
+            if [ "$rpmonly" = "rpmonly" ] && [ -f "${REUSEBUILD}/${TIMESTAMP}/${rpmname}" ]; then
+                echo "RPM already exist in store directory tree"
+            else
+                [ -f "RPMS/${TARGET_ARCH}/${rpmname}" ] && cp -f "RPMS/${TARGET_ARCH}/${rpmname}" "${REUSEBUILD}/${TIMESTAMP}/"
+            fi
+        done
     fi
 }
 
@@ -1131,6 +1148,7 @@ find_linux_source_rpm()
 reuse_kernel_rpm()
 {
     local pathtorpm=$1
+    local pathtokernelibrpm=$2
     [ "$pathtorpm" = "" ] && return 255
     [ -f "$pathtorpm" ] || return 255
     [ -d $TOPDIR/reused ] || mkdir $TOPDIR/reused
@@ -1138,6 +1156,12 @@ reuse_kernel_rpm()
 
     rpm2cpio < $pathtorpm | cpio -idc
     [ ${PIPESTATUS[0]} -eq 0 ] || return 255
+
+    if [ -n "$pathtokernelibrpm" ] && [ -f "$pathtokernelibrpm" ]; then
+        rpm2cpio < $pathtokernelibrpm | cpio -idc
+        [ ${PIPESTATUS[0]} -eq 0 -o ${PIPESTATUS[1]} -eq 0 ] || return 255
+        CONFIGURE_FLAGS="--with-o2ib=$(pwd)/usr/src/ofa_kernel ${CONFIGURE_FLAGS}"
+    fi
 
     local smptype=
     if pushd usr/src/linux-*-obj/${TARGET_ARCH}; then
@@ -1314,7 +1338,7 @@ patchless_build_sequence()
             cp "$KERNELSOURCERPM" RPMS/${TARGET_ARCH}/
         KERNELCOMPILEDIR="$LINUX"
         if $storeforreuse; then
-            store_for_reuse || echo "Cannot store for feature reuse"
+            store_for_reuse || echo "Cannot store for future reuse"
         fi
 
         return
@@ -1400,8 +1424,11 @@ build_sequence_rpm_reuse()
                 reusedkernelsourcerpm=$(ls ${curdir}/${REUSEDKERNELMASKnew}.rpm | head -1 )
             [ -f "$reusedkernelsourcerpm" ] || continue
 
+            # don't need to check for kernel-ib RPM reuse here because sles9 is not supported
+            # by OFED >= 1.3.0 and this function appears to only be used for sles9
+
             [ -d $TOPDIR/reused ] && rm -rf $TOPDIR/reused
-            reuse_kernel_rpm "$reusedkernelsourcerpm" && build_linux nofullmake copyrpmkernel && build_lustre && buildsuccess=true
+            reuse_kernel_rpm "$reusedkernelsourcerpm" "" && build_linux nofullmake copyrpmkernel && build_lustre && buildsuccess=true
             ( $buildsuccess ) || continue
             if ( ! $NORPM ) && ( ! $PATCHLESS ) ; then
                 [ -f "$reusedkernelrpm" ] && \
@@ -1431,7 +1458,9 @@ build_sequence_reuse()
         for curdir in $(echo $dirsforreuse); do
             local reusedkernelrpm=
             local reusedkernelsourcerpm=
+            local reusedkernelibrpm=
             [ -d "$curdir" ] || continue
+            [ -n "$OFED_VERSION" -a ! -d "${curdir%/*}/ofa_kernel" ] && continue
             local reusedkernelprefix="kernel-lustre-"
             ( $PATCHLESS ) && reusedkernelprefix=
             [ -f ${curdir}/../${reusedkernelprefix}${REUSEDKERNELMASK}.rpm ] && \
@@ -1439,11 +1468,24 @@ build_sequence_reuse()
             reusedkernelprefix="kernel-lustre-source-"
             [ -f ${curdir}/../${reusedkernelprefix}${REUSEDKERNELMASKnew}.rpm ] && \
                 reusedkernelsourcerpm=$(ls ${curdir}/../${reusedkernelprefix}${REUSEDKERNELMASKnew}.rpm | head -1 ) 
+            if [ -n "$OFED_VERSION" ]; then
+                gen_lustre_version
+                reusedkernelprefix="kernel-ib-"
+                [ -f ${curdir}/../${reusedkernelprefix}${OFED_VERSION}-${LUSTRE_EXTRA_VERSION}.${TARGET_ARCH}.rpm ] && \
+                    reusedkernelibrpm=$(ls ${curdir}/../${reusedkernelprefix}${OFED_VERSION}-${LUSTRE_EXTRA_VERSION}.${TARGET_ARCH}.rpm | head -1 ) 
+                    reusedkernelibdevelrpm=$(ls ${curdir}/../${reusedkernelprefix}devel-${OFED_VERSION}-${LUSTRE_EXTRA_VERSION}.${TARGET_ARCH}.rpm | head -1 ) 
+            fi
             if ! ( $NORPM ) && ! [ -f "$reusedkernelrpm" ]; then #kernel rpm not found. Build all
                 continue
             fi
             if ! ( $NORPM ) && ! [ -f "$reusedkernelsourcerpm" ]; then #kernel source rpm not found. Build all
                 continue
+            fi
+            if [ -n "$OFED_VERSION" ]; then
+                if ! ( $NORPM ) && [ ! -f "$reusedkernelibrpm" -o ! -f "$reusedkernelibdevelrpm"]; then #kernel-ib{,-devel} rpm not found. Build all
+                    continue
+                fi
+                CONFIGURE_FLAGS="--with-o2ib=${curdir%/*}/ofa_kernel ${CONFIGURE_FLAGS}"
             fi
             LINUX="$curdir"
             build_lustre || continue
@@ -1455,6 +1497,9 @@ build_sequence_reuse()
                     touch RPMS/${TARGET_ARCH}/kernel_was_reused
                 [ -f "$reusedkernelsourcerpm" ] && \
                     cp -f  "$reusedkernelsourcerpm"  RPMS/${TARGET_ARCH}/ > /dev/null 2>&1
+                [ -f "$reusedkernelibrpm" ] && \
+                    cp -f  "$reusedkernelibrpm"  RPMS/${TARGET_ARCH}/ > /dev/null 2>&1
+                    cp -f  "$reusedkernelibdevelrpm"  RPMS/${TARGET_ARCH}/ > /dev/null 2>&1
             fi
             return
         done
@@ -1635,7 +1680,7 @@ elif [ -z "$LINUX" ] ; then
         if ! $build_success; then
             build_sequence && build_success=true
             if $build_success; then
-                store_for_reuse || echo "Cannot store for feature reuse"
+                store_for_reuse || echo "Cannot store for future reuse"
             fi
         fi
     fi
