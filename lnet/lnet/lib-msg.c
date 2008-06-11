@@ -91,18 +91,18 @@ lnet_complete_msg_locked(lnet_msg_t *msg)
 
                 msg->msg_ack = 0;
                 LNET_UNLOCK();
-        
+
                 LASSERT(msg->msg_ev.type == LNET_EVENT_PUT);
                 LASSERT(!msg->msg_routing);
 
                 ack_wmd = msg->msg_hdr.msg.put.ack_wmd;
-                
+
                 lnet_prep_send(msg, LNET_MSG_ACK, msg->msg_ev.initiator, 0, 0);
 
                 msg->msg_hdr.msg.ack.dst_wmd = ack_wmd;
                 msg->msg_hdr.msg.ack.match_bits = msg->msg_ev.match_bits;
                 msg->msg_hdr.msg.ack.mlength = cpu_to_le32(msg->msg_ev.mlength);
-                
+
                 rc = lnet_send(msg->msg_ev.target.nid, msg);
 
                 LNET_LOCK();
