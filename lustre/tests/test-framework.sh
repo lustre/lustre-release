@@ -414,8 +414,8 @@ mount_facet() {
     do_facet ${facet} mount -t lustre ${!opt} $@ ${!dev} ${MOUNT%/*}/${facet}     
     RC=${PIPESTATUS[0]}
     if [ $RC -ne 0 ]; then
-        echo "mount -t lustre $@ ${device} ${MOUNT%/*}/${facet}"
-        echo "Start of ${device} on ${facet} failed ${RC}"
+        echo "mount -t lustre $@ ${!dev} ${MOUNT%/*}/${facet}"
+        echo "Start of ${!dev} on ${facet} failed ${RC}"
     else
         do_facet ${facet} "lctl set_param debug=$PTLDEBUG; \
             lctl set_param subsystem_debug=${SUBSYSTEM# }; \
