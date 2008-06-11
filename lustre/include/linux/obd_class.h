@@ -38,10 +38,6 @@
 #include <linux/timer.h>
 #endif
 
-void obd_zombie_impexp_init(void);
-void obd_zombie_impexp_cull(void);
-extern void (*obd_zombie_impexp_notify)(void);
-
 /* obdo.c */
 #ifdef __KERNEL__
 void obdo_from_iattr(struct obdo *oa, struct iattr *attr, unsigned ia_valid);
