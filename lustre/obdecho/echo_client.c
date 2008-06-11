@@ -582,90 +582,6 @@ static int echo_client_kbrw(struct obd_device *obd, int rw, struct obdo *oa,
         return (rc);
 }
 
-#ifdef __KERNEL__
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
-#include <linux/iobuf.h>
-
-static int echo_client_ubrw(struct obd_device *obd, int rw,
-                            struct obdo *oa, struct lov_stripe_md *lsm,
-                            obd_off offset, obd_size count, char *buffer,
-                            struct obd_trans_info *oti)
-{
-        struct echo_client_obd *ec = &obd->u.echo_client;
-        struct obd_info         oinfo = { { { 0 } } };
-        obd_count               npages;
-        struct brw_page        *pga;
-        struct brw_page        *pgp;
-        obd_off                 off;
-        struct kiobuf          *kiobuf;
-        int                     i;
-        int                     rc;
-
-        LASSERT (rw == OBD_BRW_WRITE || rw == OBD_BRW_READ);
-
-        /* NB: for now, only whole pages, page aligned */
-
-        if (count <= 0 ||
-            ((long)buffer & (~CFS_PAGE_MASK)) != 0 ||
-            (count & (~CFS_PAGE_MASK)) != 0 ||
-            (lsm != NULL && lsm->lsm_object_id != oa->o_id))
-                return (-EINVAL);
-
-        /* XXX think again with misaligned I/O */
-        npages = count >> CFS_PAGE_SHIFT;
-
-        OBD_ALLOC(pga, npages * sizeof(*pga));
-        if (pga == NULL)
-                return (-ENOMEM);
-
-        rc = alloc_kiovec (1, &kiobuf);
-        if (rc != 0)
-                goto out_1;
-
-        rc = map_user_kiobuf ((rw == OBD_BRW_READ) ? READ : WRITE,
-                              kiobuf, (unsigned long)buffer, count);
-        if (rc != 0)
-                goto out_2;
-
-        LASSERT (kiobuf->offset == 0);
-        LASSERT (kiobuf->nr_pages == npages);
-
-        for (i = 0, off = offset, pgp = pga;
-             i < npages;
-             i++, off += CFS_PAGE_SIZE, pgp++) {
-                pgp->off = off;
-                pgp->pg = kiobuf->maplist[i];
-                pgp->count = CFS_PAGE_SIZE;
-                pgp->flag = 0;
-        }
-
-        oinfo.oi_oa = oa;
-        oinfo.oi_md = lsm;
-        rc = obd_brw(rw, ec->ec_exp, &oinfo, npages, pga, oti);
-
-        //        if (rw == OBD_BRW_READ)
-        //                mark_dirty_kiobuf (kiobuf, count);
-
-        unmap_kiobuf (kiobuf);
- out_2:
-        free_kiovec (1, &kiobuf);
- out_1:
-        OBD_FREE(pga, npages * sizeof(*pga));
-        return (rc);
-}
-#else
-static int echo_client_ubrw(struct obd_device *obd, int rw,
-                            struct obdo *oa, struct lov_stripe_md *lsm,
-                            obd_off offset, obd_size count, char *buffer,
-                            struct obd_trans_info *oti)
-{
-        /* echo_client_ubrw() needs to be ported on 2.6 yet */
-        LBUG();
-        return 0;
-}
-#endif
-#endif
-
 struct echo_async_state;
 
 #define EAP_MAGIC 79277927
@@ -1020,18 +936,9 @@ int echo_client_brw_ioctl(int rw, struct obd_export *exp,
 
         switch((long)data->ioc_pbuf1) {
         case 1:
-                if (data->ioc_pbuf2 == NULL) { // NULL user data pointer
-                        rc = echo_client_kbrw(obd, rw, &data->ioc_obdo1,
-                                              eco->eco_lsm, data->ioc_offset,
-                                              data->ioc_count, &dummy_oti);
-                } else {
-#ifdef __KERNEL__
-                        rc = echo_client_ubrw(obd, rw, &data->ioc_obdo1,
-                                              eco->eco_lsm, data->ioc_offset,
-                                              data->ioc_count, data->ioc_pbuf2,
-                                              &dummy_oti);
-#endif
-                }
+                rc = echo_client_kbrw(obd, rw, &data->ioc_obdo1,
+                                      eco->eco_lsm, data->ioc_offset,
+                                      data->ioc_count, &dummy_oti);
                 break;
         case 2:
                 rc = echo_client_async_page(ec->ec_exp, rw, &data->ioc_obdo1,
