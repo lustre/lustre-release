@@ -140,7 +140,7 @@ void mds_lov_destroy_objids(struct obd_device *obd)
         }
 
         if (mds->mds_lov_objid_filp) {
-                rc = filp_close((struct file *)mds->mds_lov_objid_filp, 0);
+                rc = filp_close((struct file *)mds->mds_lov_objid_filp, NULL);
                 mds->mds_lov_objid_filp = NULL;
                 if (rc)
                         CERROR("%s file won't close, rc=%d\n", LOV_OBJID, rc);
@@ -235,7 +235,7 @@ out:
 int mds_lov_write_objids(struct obd_device *obd)
 {
         struct mds_obd *mds = &obd->u.mds;
-        int i, rc = 0;
+        int i = 0, rc = 0;
         ENTRY;
 
         if (cfs_bitmap_check_empty(mds->mds_lov_page_dirty))
@@ -254,6 +254,7 @@ int mds_lov_write_objids(struct obd_device *obd)
                 if (i == mds->mds_lov_objid_lastpage)
                         size = (mds->mds_lov_objid_lastidx + 1) * sizeof(obd_id);
 
+		CDEBUG(D_INFO,"write %lld - %ld\n", off, size);
                 rc = fsfilt_write_record(obd, mds->mds_lov_objid_filp, data,
                                          size, &off, 0);
                 if (rc < 0)

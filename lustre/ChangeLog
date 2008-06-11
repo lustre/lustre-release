@@ -24,6 +24,13 @@ tbd Sun Microsystems, Inc.
 	  	'tunefs.lustre --param="mdt.quota_type=ug1" $MDTDEV'.
 	  For more information, please refer to bugzilla 13904.
 
+Severity   : minor
+Bugzilla   : 15716
+Description: timeout with invalidate import.
+Details    : ptlrpcd_check call obd_zombie_impexp_cull and wait request which should be
+             handled by ptlrpcd. This produce long age waiting and -ETIMEOUT
+             ptlrpc_invalidate_import and as result LASSERT.
+
 Severity   : normal
 Frequency  : only with broken builds/installations
 Bugzilla   : 15779
