@@ -581,18 +581,6 @@ static int echo_client_kbrw(struct obd_device *obd, int rw, struct obdo *oa,
         return (rc);
 }
 
-#ifdef __KERNEL__
-static int echo_client_ubrw(struct obd_device *obd, int rw,
-                            struct obdo *oa, struct lov_stripe_md *lsm,
-                            obd_off offset, obd_size count, char *buffer,
-                            struct obd_trans_info *oti)
-{
-#warning "echo_client_ubrw() needs to be ported on 2.6 yet"
-        LBUG();
-        return 0;
-}
-#endif
-
 struct echo_async_state;
 
 #define EAP_MAGIC 79277927
@@ -948,18 +936,9 @@ int echo_client_brw_ioctl(int rw, struct obd_export *exp,
 
         switch((long)data->ioc_pbuf1) {
         case 1:
-                if (data->ioc_pbuf2 == NULL) { // NULL user data pointer
-                        rc = echo_client_kbrw(obd, rw, &data->ioc_obdo1,
+                rc = echo_client_kbrw(obd, rw, &data->ioc_obdo1,
                                               eco->eco_lsm, data->ioc_offset,
                                               data->ioc_count, &dummy_oti);
-                } else {
-#ifdef __KERNEL__
-                        rc = echo_client_ubrw(obd, rw, &data->ioc_obdo1,
-                                              eco->eco_lsm, data->ioc_offset,
-                                              data->ioc_count, data->ioc_pbuf2,
-                                              &dummy_oti);
-#endif
-                }
                 break;
         case 2:
                 rc = echo_client_async_page(ec->ec_exp, rw, &data->ioc_obdo1,
