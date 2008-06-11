@@ -45,9 +45,7 @@ cfs_mem_cache_t *import_cachep;
 struct list_head  obd_zombie_imports;
 struct list_head  obd_zombie_exports;
 spinlock_t        obd_zombie_impexp_lock;
-void            (*obd_zombie_impexp_notify)(void) = NULL;
-EXPORT_SYMBOL(obd_zombie_impexp_notify);
-
+static void obd_zombie_impexp_notify(void);
 
 int (*ptlrpc_put_connection_superhack)(struct ptlrpc_connection *c);
 
@@ -1349,12 +1347,15 @@ int obd_export_evict_by_uuid(struct obd_device *obd, const char *uuid)
 }
 EXPORT_SYMBOL(obd_export_evict_by_uuid);
 
-void obd_zombie_impexp_cull(void) 
+/**
+ * kill zombie imports and exports
+ */
+void obd_zombie_impexp_cull(void)
 {
         struct obd_import *import;
         struct obd_export *export;
         ENTRY;
-        
+
         do {
                 spin_lock (&obd_zombie_impexp_lock);
 
@@ -1365,7 +1366,7 @@ void obd_zombie_impexp_cull(void)
                                             imp_zombie_chain);
                         list_del(&import->imp_zombie_chain);
                 }
-                
+
                 export = NULL;
                 if (!list_empty(&obd_zombie_exports)) {
                         export = list_entry(obd_zombie_exports.next,
@@ -1375,7 +1376,7 @@ void obd_zombie_impexp_cull(void)
                 }
 
                 spin_unlock(&obd_zombie_impexp_lock);
-                
+
                 if (import != NULL)
                         class_import_destroy(import);
 
@@ -1385,12 +1386,136 @@ void obd_zombie_impexp_cull(void)
         } while (import != NULL || export != NULL);
         EXIT;
 }
-EXPORT_SYMBOL(obd_zombie_impexp_cull);
 
-void obd_zombie_impexp_init(void)
+static struct completion        obd_zombie_start;
+static struct completion        obd_zombie_stop;
+static unsigned long            obd_zombie_flags;
+static cfs_waitq_t              obd_zombie_waitq;
+
+enum {
+        OBD_ZOMBIE_STOP = 1
+};
+
+/**
+ * check for work for kill zombie import/export thread.
+ */
+int obd_zombie_impexp_check(void *arg)
 {
+        int rc;
+
+        spin_lock(&obd_zombie_impexp_lock);
+        rc = list_empty(&obd_zombie_imports) &&
+             list_empty(&obd_zombie_exports) &&
+             !test_bit(OBD_ZOMBIE_STOP, &obd_zombie_flags);
+
+        spin_unlock(&obd_zombie_impexp_lock);
+
+        RETURN(rc);
+}
+
+/**
+ * notify import/export destroy thread about new zombie.
+ */
+static void obd_zombie_impexp_notify(void)
+{
+        cfs_waitq_signal(&obd_zombie_waitq);
+}
+
+#ifdef __KERNEL__
+
+/**
+ * destroy zombie export/import thread.
+ */
+static int obd_zombie_impexp_thread(void *unused)
+{
+        int rc;
+
+        if ((rc = cfs_daemonize_ctxt("obd_zombid"))) {
+                complete(&obd_zombie_start);
+                RETURN(rc);
+        }
+
+        complete(&obd_zombie_start);
+
+        while(!test_bit(OBD_ZOMBIE_STOP, &obd_zombie_flags)) {
+                struct l_wait_info lwi = { 0 };
+
+                l_wait_event(obd_zombie_waitq, !obd_zombie_impexp_check(NULL), &lwi);
+
+                obd_zombie_impexp_cull();
+        }
+
+        complete(&obd_zombie_stop);
+
+        RETURN(0);
+}
+
+#else /* ! KERNEL */
+
+static atomic_t zombie_recur = ATOMIC_INIT(0);
+static void *obd_zombie_impexp_work_cb;
+static void *obd_zombie_impexp_idle_cb;
+
+int obd_zombie_impexp_kill(void *arg)
+{
+        int rc = 0;
+
+	if (atomic_inc_return(&zombie_recur) == 1) {
+                obd_zombie_impexp_cull();
+                rc = 1;
+        }
+        atomic_dec(&zombie_recur);
+        return rc;
+}
+
+#endif
+
+/**
+ * start destroy zombie import/export thread
+ */
+int obd_zombie_impexp_init(void)
+{
+        int rc;
+
         CFS_INIT_LIST_HEAD(&obd_zombie_imports);
         CFS_INIT_LIST_HEAD(&obd_zombie_exports);
         spin_lock_init(&obd_zombie_impexp_lock);
+        init_completion(&obd_zombie_start);
+        init_completion(&obd_zombie_stop);
+        cfs_waitq_init(&obd_zombie_waitq);
+
+#ifdef __KERNEL__
+        rc = cfs_kernel_thread(obd_zombie_impexp_thread, NULL, 0);
+        if (rc < 0)
+                RETURN(rc);
+
+        wait_for_completion(&obd_zombie_start);
+#else
+
+        obd_zombie_impexp_work_cb =
+                liblustre_register_wait_callback("obd_zombi_impexp_kill",
+                                                 &obd_zombie_impexp_kill, NULL);
+
+        obd_zombie_impexp_idle_cb =
+                liblustre_register_idle_callback("obd_zombi_impexp_check",
+                                                 &obd_zombie_impexp_check, NULL);
+        rc = 0;
+
+#endif
+        RETURN(rc);
+}
+/**
+ * stop destroy zombie import/export thread
+ */
+void obd_zombie_impexp_stop(void)
+{
+        set_bit(OBD_ZOMBIE_STOP, &obd_zombie_flags);
+        obd_zombie_impexp_notify();
+#ifdef __KERNEL__
+        wait_for_completion(&obd_zombie_stop);
+#else
+        liblustre_deregister_wait_callback(obd_zombie_impexp_work_cb);
+        liblustre_deregister_idle_callback(obd_zombie_impexp_idle_cb);
+#endif
 }
 

@@ -90,6 +90,10 @@ char *obd_export_nid2str(struct obd_export *exp);
 int obd_export_evict_by_nid(struct obd_device *obd, const char *nid);
 int obd_export_evict_by_uuid(struct obd_device *obd, const char *uuid);
 
+int obd_zombie_impexp_init(void);
+void obd_zombie_impexp_stop(void);
+void obd_zombie_impexp_cull(void);
+
 /* obd_config.c */
 int class_process_config(struct lustre_cfg *lcfg);
 int class_process_proc_param(char *prefix, struct lprocfs_vars *lvars,

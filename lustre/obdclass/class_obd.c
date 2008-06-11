@@ -634,6 +634,7 @@ static void cleanup_obdclass(void)
 
         class_handle_cleanup();
         class_exit_uuidlist();
+        obd_zombie_impexp_stop();
 
         memory_leaked = obd_memory_sum();
         pages_leaked = obd_pages_sum();

@@ -98,8 +98,6 @@ static int ptlrpcd_check(struct ptlrpcd_ctl *pc)
         if (test_bit(LIOD_STOP, &pc->pc_flags))
                 RETURN(1);
 
-        obd_zombie_impexp_cull();
-
         spin_lock(&pc->pc_set->set_new_req_lock);
         list_for_each_safe(pos, tmp, &pc->pc_set->set_new_requests) {
                 req = list_entry(pos, struct ptlrpc_request, rq_set_chain);
@@ -177,13 +175,6 @@ static int ptlrpcd(void *arg)
         return 0;
 }
 
-static void ptlrpcd_zombie_impexp_notify(void)
-{
-        LASSERT(ptlrpcd_pc.pc_set != NULL); // call before ptlrpcd inited ?
-
-        cfs_waitq_signal(&ptlrpcd_pc.pc_set->set_waitq);
-}
-
 #else
 
 int ptlrpcd_check_async_rpcs(void *arg)
@@ -234,9 +225,6 @@ static int ptlrpcd_start(char *name, struct ptlrpcd_ctl *pc)
                 RETURN(-ENOMEM);
 
 #ifdef __KERNEL__
-        /* wake ptlrpcd when zombie imports or exports exist */
-        obd_zombie_impexp_notify = ptlrpcd_zombie_impexp_notify;
-        
         rc = cfs_kernel_thread(ptlrpcd, pc, 0);
         if (rc < 0)  {
                 ptlrpc_set_destroy(pc->pc_set);
@@ -261,7 +249,6 @@ static void ptlrpcd_stop(struct ptlrpcd_ctl *pc)
         set_bit(LIOD_STOP, &pc->pc_flags);
         cfs_waitq_signal(&pc->pc_set->set_waitq);
 #ifdef __KERNEL__
-        obd_zombie_impexp_notify = NULL;
         wait_for_completion(&pc->pc_finishing);
 #else
         liblustre_deregister_wait_callback(pc->pc_wait_callback);

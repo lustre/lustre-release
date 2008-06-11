@@ -65,10 +65,6 @@ int ldiskfsfs_dirhash(const char *name, int len, struct ldiskfs_dx_hash_info *hi
 # endif /* HAVE_SERVER_SUPPORT */
 #endif /* __KERNEL__ */
 
-void obd_zombie_impexp_init(void);
-void obd_zombie_impexp_cull(void);
-extern void (*obd_zombie_impexp_notify)(void);
-
 /* obdo.c */
 #ifdef __KERNEL__
 void obdo_from_inode(struct obdo *dst, struct inode *src, obd_flag valid);
