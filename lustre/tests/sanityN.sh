@@ -174,10 +174,11 @@ run_test 8 "remove of open special file on other node =========="
 
 test_9() {
 	MTPT=1
+	local dir
 	> $DIR2/f9
 	for C in a b c d e f g h i j k l; do
-		DIR=`eval echo \\$DIR$MTPT`
-		echo -n $C >> $DIR/f9
+		dir=`eval echo \\$DIR$MTPT`
+		echo -n $C >> $dir/f9
 		[ "$MTPT" -eq 1 ] && MTPT=2 || MTPT=1
 	done
 	[ "`cat $DIR1/f9`" = "abcdefghijkl" ] || \
@@ -187,11 +188,12 @@ run_test 9 "append of file with sub-page size on multiple mounts"
 
 test_10a() {
 	MTPT=1
+	local dir
 	OFFSET=0
 	> $DIR2/f10
 	for C in a b c d e f g h i j k l; do
-		DIR=`eval echo \\$DIR$MTPT`
-		echo -n $C | dd of=$DIR/f10 bs=1 seek=$OFFSET count=1
+		dir=`eval echo \\$DIR$MTPT`
+		echo -n $C | dd of=$dir/f10 bs=1 seek=$OFFSET count=1
 		[ "$MTPT" -eq 1 ] && MTPT=2 || MTPT=1
 		OFFSET=`expr $OFFSET + 1`
 	done
