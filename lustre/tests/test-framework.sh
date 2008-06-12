@@ -975,7 +975,7 @@ stopall() {
 
     if [ -n "$CLIENTS" ]; then
             zconf_umount_clients $CLIENTS $MOUNT "$*" || true
-            zconf_umount_clients $CLIENTS $MOUNT2 "$*" || true
+            [ -n "$MOUNT2" ] && zconf_umount_clients $CLIENTS $MOUNT2 "$*" || true
     fi
 
     [ "$CLIENTONLY" ] && return
@@ -1108,8 +1108,9 @@ setupall() {
 
             # We started mds, now we should set failover variables properly.
             # Set mds${num}failover_HOST if it is not set (the default failnode).
-            if [ -z "$mds${num}failover_HOST" ]; then
-                mds${num}failover_HOST=$(facet_host mds$num)
+            local varname=mds${num}failover_HOST
+            if [ -z "${!varname}" ]; then
+                eval mds${num}failover_HOST=$(facet_host mds$num)
             fi
 
 	    if [ $IDENTITY_UPCALL != "default" ]; then
