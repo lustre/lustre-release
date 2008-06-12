@@ -794,6 +794,19 @@ LB_LINUX_TRY_COMPILE([
 ])
 ])
 
+# LC_SYMVERFILE
+# SLES 9 uses a different name for this file - unsure about vanilla kernels
+# around this version, but it matters for servers only.
+AC_DEFUN([LC_SYMVERFILE],
+         [AC_MSG_CHECKING([name of symverfile])
+          if grep -q Modules.symvers $LINUX/scripts/Makefile.modpost ; then
+              SYMVERFILE=Modules.symvers
+          else
+              SYMVERFILE=Module.symvers
+          fi
+	  AC_MSG_RESULT($SYMVERFILE)
+          AC_SUBST(SYMVERFILE)])
+
 # LC_DQUOTOFF_MUTEX
 # after 2.6.17 dquote use mutex instead if semaphore
 AC_DEFUN([LC_DQUOTOFF_MUTEX],
@@ -1297,6 +1310,9 @@ AC_DEFUN([LC_PROG_LINUX],
 
           # 2.6.15
           LC_INODE_I_MUTEX
+
+          # SLES 10 (at least)
+          LC_SYMVERFILE
 
           # 2.6.17
           LC_DQUOTOFF_MUTEX
