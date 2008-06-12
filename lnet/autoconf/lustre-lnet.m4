@@ -579,11 +579,11 @@ else
 
 		# we know at this point that the found OFED source is good
 		if test \( $ENABLEO2IB = 3 \); then
-			if test \( -f $O2IBPATH/$SYMVERFILE \); then
-				AC_MSG_NOTICE([adding $O2IBPATH/$SYMVERFILE to $PWD/$SYMVERFILE])
-				cat $O2IBPATH/$SYMVERFILE >> $PWD/$SYMVERFILE
+			if test \( -f $O2IBPATH/Module.symvers \); then
+				AC_MSG_NOTICE([adding $O2IBPATH/Module.symvers to $PWD/Module.symvers])
+				cat $O2IBPATH/Module.symvers >> $PWD/Module.symvers
 			else
-				AC_MSG_ERROR([an external source tree was specified for o2iblnd however I could not find a $O2IBPATH/$SYMVERFILE there])
+				AC_MSG_ERROR([an external source tree was specified for o2iblnd however I could not find a $O2IBPATH/Module.symvers there])
 			fi
 		fi
 
