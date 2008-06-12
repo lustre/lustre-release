@@ -765,7 +765,7 @@ stopall() {
 
     if [ -n "$CLIENTS" ]; then
             zconf_umount_clients $CLIENTS $MOUNT "$*" || true
-            zconf_umount_clients $CLIENTS $MOUNT2 "$*" || true
+            [ -n "$MOUNT2" ] && zconf_umount_clients $CLIENTS $MOUNT2 "$*" || true
     fi
 
     [ "$CLIENTONLY" ] && return
