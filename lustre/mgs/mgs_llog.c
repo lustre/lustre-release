@@ -476,12 +476,14 @@ int mgs_set_index(struct obd_device *obd, struct mgs_target_info *mti)
                                    INDEX_MAP_SIZE * 8);
                 RETURN(-ERANGE);
         }
-         
+
         if (test_bit(mti->mti_stripe_index, imap)) {
-                if (mti->mti_flags & LDD_F_VIRGIN) {
+                if ((mti->mti_flags & LDD_F_VIRGIN) &&
+                    !(mti->mti_flags & LDD_F_WRITECONF)) {
                         LCONSOLE_ERROR_MSG(0x140, "Server %s requested index "
                                            "%d, but that index is already in "
-                                           "use\n", mti->mti_svname, 
+                                           "use. Use --writeconf to force\n",
+                                           mti->mti_svname,
                                            mti->mti_stripe_index);
                         RETURN(-EADDRINUSE);
                 } else {
