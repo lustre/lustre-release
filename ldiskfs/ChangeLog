@@ -37,6 +37,13 @@ Description: soft lockups on 1.6.2 MDS (is_subdir)
 Details    : don't add dentries with ".." to dcache and ignore such dentries in
 	     iopen_lookup().
 
+Severity   : normal
+Frequency  : blocks per group is less than blocksize*8 and uninit_groups is enabled
+Bugzilla   : 15932
+Description: ldiskfs error: XXX blocks in bitmap, YYY in gd
+Details    : If blocks per group is less than blocksize*8, set rest of the
+             bitmap to 1.
+
 --------------------------------------------------------------------------------
 
 tbd         Cluster File Systems, Inc. <info@clusterfs.com>
