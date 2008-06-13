@@ -1582,7 +1582,7 @@ run_test 40 "race during service thread startup"
 
 test_41() { #bug 14134
         local rc
-        start mds $MDSDEV $MDS_MOUNT_OPTS -o nosvc
+        start mds $MDSDEV $MDS_MOUNT_OPTS -o nosvc -n
         start ost `ostdevname 1` $OST_MOUNT_OPTS
         start mds $MDSDEV $MDS_MOUNT_OPTS -o nomgs
         mkdir -p $MOUNT
