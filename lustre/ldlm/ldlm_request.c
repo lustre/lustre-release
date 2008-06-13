@@ -1162,8 +1162,15 @@ static int ldlm_cancel_list(struct list_head *cancels, int count, int flags)
         RETURN(count);
 }
 
-/* Return 1 to stop lru processing and keep current lock cached. Return zero 
- * otherwise. */
+/** 
+ * Callback function for shrink policy. Makes decision whether to keep
+ * \a lock in LRU for current \a LRU size \a unused, added in current scan
+ * \a added and number of locks to be preferably canceled \a count.
+ *
+ * \retval LDLM_POLICY_KEEP_LOCK keep lock in LRU in stop scanning
+ *
+ * \retval LDLM_POLICY_CANCEL_LOCK cancel lock from LRU
+ */
 static ldlm_policy_res_t ldlm_cancel_shrink_policy(struct ldlm_namespace *ns,
                                                    struct ldlm_lock *lock,
                                                    int unused, int added, 
@@ -1172,25 +1179,31 @@ static ldlm_policy_res_t ldlm_cancel_shrink_policy(struct ldlm_namespace *ns,
         int lock_cost;
         __u64 page_nr;
 
-        /* Stop lru processing when we reached passed @count or checked all 
-         * locks in lru. */
+        /* 
+         * Stop lru processing when we reached passed @count or checked all 
+         * locks in lru. 
+         */
         if (count && added >= count)
                 return LDLM_POLICY_KEEP_LOCK;
 
         if (lock->l_resource->lr_type == LDLM_EXTENT) {
                 struct ldlm_extent *l_extent;
 
-                /* For all extent locks cost is 1 + number of pages in
-                 * their extent. */
+                /* 
+                 * For all extent locks cost is 1 + number of pages in
+                 * their extent. 
+                 */
                 l_extent = &lock->l_policy_data.l_extent;
                 page_nr = (l_extent->end - l_extent->start);
                 do_div(page_nr, CFS_PAGE_SIZE);
 
 #ifdef __KERNEL__
-                /* XXX: In fact this is evil hack, we can't access inode
+                /* 
+                 * XXX: In fact this is evil hack, we can't access inode
                  * here. For doing it right we need somehow to have number
                  * of covered by lock. This should be fixed later when 10718 
-                 * is landed. */
+                 * is landed. 
+                 */
                 if (lock->l_ast_data != NULL) {
                         struct inode *inode = lock->l_ast_data;
                         if (page_nr > inode->i_mapping->nrpages)
@@ -1199,19 +1212,30 @@ static ldlm_policy_res_t ldlm_cancel_shrink_policy(struct ldlm_namespace *ns,
 #endif
                 lock_cost = 1 + page_nr;
         } else {
-                /* For all locks which are not extent ones cost is 1 */
+                /* 
+                 * For all locks which are not extent ones cost is 1 
+                 */
                 lock_cost = 1;
         }
 
-        /* Keep all expensive locks in lru for the memory pressure time
+        /* 
+         * Keep all expensive locks in lru for the memory pressure time
          * cancel policy. They anyways may be canceled by lru resize
-         * pplicy if they have not small enough CLV. */
+         * pplicy if they have not small enough CLV. 
+         */
         return lock_cost > ns->ns_shrink_thumb ? 
                 LDLM_POLICY_KEEP_LOCK : LDLM_POLICY_CANCEL_LOCK;
 }
 
-/* Return 1 to stop lru processing and keep current lock cached. Return zero 
- * otherwise. */
+/**
+ * Callback function for lru-resize policy. Makes decision whether to keep
+ * \a lock in LRU for current \a LRU size \a unused, added in current scan
+ * \a added and number of locks to be preferably canceled \a count.
+ *
+ * \retval LDLM_POLICY_KEEP_LOCK keep lock in LRU in stop scanning
+ *
+ * \retval LDLM_POLICY_CANCEL_LOCK cancel lock from LRU
+ */
 static ldlm_policy_res_t ldlm_cancel_lrur_policy(struct ldlm_namespace *ns,
                                                  struct ldlm_lock *lock, 
                                                  int unused, int added, 
@@ -1222,8 +1246,10 @@ static ldlm_policy_res_t ldlm_cancel_lrur_policy(struct ldlm_namespace *ns,
         __u64 slv, lvf, lv;
         cfs_time_t la;
 
-        /* Stop lru processing when we reached passed @count or checked all 
-         * locks in lru. */
+        /* 
+         * Stop lru processing when we reached passed @count or checked all 
+         * locks in lru.
+         */
         if (count && added >= count)
                 return LDLM_POLICY_KEEP_LOCK;
 
@@ -1232,38 +1258,60 @@ static ldlm_policy_res_t ldlm_cancel_lrur_policy(struct ldlm_namespace *ns,
         la = cfs_duration_sec(cfs_time_sub(cur, 
                               lock->l_last_used));
 
-        /* Stop when slv is not yet come from server or 
-         * lv is smaller than it is. */
+        /* 
+         * Stop when slv is not yet come from server or lv is smaller than 
+         * it is.
+         */
         lv = lvf * la * unused;
         
-        /* Inform pool about current CLV to see it via proc. */
+        /* 
+         * Inform pool about current CLV to see it via proc. 
+         */
         ldlm_pool_set_clv(pl, lv);
         return (slv == 1 || lv < slv) ? 
                 LDLM_POLICY_KEEP_LOCK : LDLM_POLICY_CANCEL_LOCK;
 }
 
-/* Return 1 to stop lru processing and keep current lock cached. Return zero 
- * otherwise. */
+/**
+ * Callback function for proc used policy. Makes decision whether to keep
+ * \a lock in LRU for current \a LRU size \a unused, added in current scan
+ * \a added and number of locks to be preferably canceled \a count.
+ *
+ * \retval LDLM_POLICY_KEEP_LOCK keep lock in LRU in stop scanning
+ *
+ * \retval LDLM_POLICY_CANCEL_LOCK cancel lock from LRU
+ */
 static ldlm_policy_res_t ldlm_cancel_passed_policy(struct ldlm_namespace *ns,
                                                    struct ldlm_lock *lock, 
                                                    int unused, int added,
                                                    int count)
 {
-        /* Stop lru processing when we reached passed @count or checked all 
-         * locks in lru. */
+        /* 
+         * Stop lru processing when we reached passed @count or checked all 
+         * locks in lru. 
+         */
         return (added >= count) ? 
                 LDLM_POLICY_KEEP_LOCK : LDLM_POLICY_CANCEL_LOCK;
 }
 
-/* Return 1 to stop lru processing and keep current lock cached. Return zero 
- * otherwise. */
+/**
+ * Callback function for aged policy. Makes decision whether to keep
+ * \a lock in LRU for current \a LRU size \a unused, added in current scan
+ * \a added and number of locks to be preferably canceled \a count.
+ *
+ * \retval LDLM_POLICY_KEEP_LOCK keep lock in LRU in stop scanning
+ *
+ * \retval LDLM_POLICY_CANCEL_LOCK cancel lock from LRU
+ */
 static ldlm_policy_res_t ldlm_cancel_aged_policy(struct ldlm_namespace *ns,
                                                  struct ldlm_lock *lock, 
                                                  int unused, int added,
                                                  int count)
 {
-        /* Stop lru processing if young lock is found and we reached passed 
-         * @count. */
+        /* 
+         * Stop lru processing if young lock is found and we reached passed 
+         * @count. 
+         */
         return ((added >= count) && 
                 cfs_time_before(cfs_time_current(),
                                 cfs_time_add(lock->l_last_used,
@@ -1271,15 +1319,24 @@ static ldlm_policy_res_t ldlm_cancel_aged_policy(struct ldlm_namespace *ns,
                 LDLM_POLICY_KEEP_LOCK : LDLM_POLICY_CANCEL_LOCK;
 }
 
-/* Return 1 to stop lru processing and keep current lock cached. Return zero 
- * otherwise. */
+/**
+ * Callback function for default policy. Makes decision whether to keep
+ * \a lock in LRU for current \a LRU size \a unused, added in current scan
+ * \a added and number of locks to be preferably canceled \a count.
+ *
+ * \retval LDLM_POLICY_KEEP_LOCK keep lock in LRU in stop scanning
+ *
+ * \retval LDLM_POLICY_CANCEL_LOCK cancel lock from LRU
+ */
 static ldlm_policy_res_t ldlm_cancel_default_policy(struct ldlm_namespace *ns,
                                                     struct ldlm_lock *lock, 
                                                     int unused, int added,
                                                     int count)
 {
-        /* Stop lru processing when we reached passed @count or checked all 
-         * locks in lru. */
+        /* 
+         * Stop lru processing when we reached passed @count or checked all 
+         * locks in lru. 
+         */
         return (added >= count) ? 
                 LDLM_POLICY_KEEP_LOCK : LDLM_POLICY_CANCEL_LOCK;
 }
