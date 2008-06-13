@@ -326,6 +326,7 @@ ldlm_namespace_new(struct obd_device *obd, char *name,
         strcpy(ns->ns_name, name);
 
         CFS_INIT_LIST_HEAD(&ns->ns_root_list);
+        CFS_INIT_LIST_HEAD(&ns->ns_list_chain);
         ns->ns_refcount = 0;
         ns->ns_client = client;
         spin_lock_init(&ns->ns_hash_lock);
@@ -360,8 +361,8 @@ ldlm_namespace_new(struct obd_device *obd, char *name,
         }
 
         at_init(&ns->ns_at_estimate, ldlm_enqueue_min, 0);
-        ldlm_namespace_register(ns, client);
 
+        ldlm_namespace_register(ns, client);
         RETURN(ns);
 out_proc:
         ldlm_namespace_cleanup(ns, 0);
@@ -554,7 +555,7 @@ void ldlm_namespace_free_prior(struct ldlm_namespace *ns,
                 return;
         }
 
-        /* Remove @ns from list. */
+        /* Make sure that nobody can find this ns in its list. */
         ldlm_namespace_unregister(ns, ns->ns_client);
 
         /* Can fail with -EINTR when force == 0 in which case try harder */

@@ -4,8 +4,6 @@
 #set -vx
 set -e
 
-PATH=`dirname $0`/../utils:$PATH
-
 [ -z "$CONFIG" -a "$NAME" ] && CONFIGS=$NAME
 [ "$CONFIGS" ] || CONFIGS="local"  #"local lov"
 [ "$MAX_THREADS" ] || MAX_THREADS=20
@@ -42,7 +40,7 @@ LIBLUSTRETESTS=${LIBLUSTRETESTS:-../liblustre/tests}
 STARTTIME=`date +%s`
 RANTEST=""
 
-LUSTRE=${LUSTRE:-`dirname $0`/..}
+LUSTRE=${LUSTRE:-$(cd $(dirname $0)/..; echo $PWD)}
 . $LUSTRE/tests/test-framework.sh
 init_test_env $@
 

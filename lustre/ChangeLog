@@ -31,6 +31,12 @@ Details    : ptlrpcd_check call obd_zombie_impexp_cull and wait request which sh
              handled by ptlrpcd. This produce long age waiting and -ETIMEOUT
              ptlrpc_invalidate_import and as result LASSERT.
 
+Severity   : normal
+Frequency  : only with broken builds/installations
+Bugzilla   : 15779
+Description: do not LBUG if lquota.ko and fsfilt_ldiskfs.ko are of different versions
+Details    : just return an error to a user, put a console error message
+
 Severity   : enhancement
 Bugzilla   : 15741
 Description: Update to RHEL5 kernel-2.6.18-53.1.19.el5.
@@ -121,7 +127,7 @@ Description: fix build on ppc32
 Details    : compile code with -m64 flag produce wrong object file for ppc32.
 
 Severity   : normal
-Bugzilla   : 15774
+Bugzilla   : 15574
 Description: MDS LBUG: ASSERTION(!IS_ERR(dchild))
 Details    : In reconstruct_* functions, LASSERTs on both the data supplied by
              a client, and the data on disk are dangerous and incorrect. Change
@@ -140,6 +146,13 @@ Description: delete compatibility for 32bit qdata
 Details    : as planned, when lustre is beyond b1_8, lquota won't support for 32bit
 	     qunit. That means servers of b1_4 and servers of b1_8 can't be used
 	     together if users want to use quota.
+
+Severity   : normal
+Frequency  : blocks per group is less than blocksize*8 and uninit_groups is enabled
+Bugzilla   : 15932
+Description: ldiskfs error: XXX blocks in bitmap, YYY in gd
+Details    : If blocks per group is less than blocksize*8, set rest of the
+	     bitmap to 1.
 
 -------------------------------------------------------------------------------
 

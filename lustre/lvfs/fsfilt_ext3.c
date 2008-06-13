@@ -2085,8 +2085,10 @@ static int fsfilt_ext3_quotainfo(struct lustre_quota_info *lqi, int type,
                 rc = lustre_quota_convert(lqi, type);
                 break;
         default:
-                CERROR("Unsupported admin quota file cmd %d\n", cmd);
-                LBUG();
+                rc = -ENOTSUPP;
+                CERROR("Unsupported admin quota file cmd %d\n"
+                       "Are lquota.ko and fsfilt_ldiskfs.ko modules in sync?\n",
+                       cmd);
                 break;
         }
         RETURN(rc);

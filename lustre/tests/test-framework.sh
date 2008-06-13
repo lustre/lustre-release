@@ -72,8 +72,12 @@ init_test_env() {
     export TMP=${TMP:-$ROOT/tmp}
     export TESTSUITELOG=${TMP}/${TESTSUITE}.log
     export HOSTNAME=${HOSTNAME:-`hostname`}
-
-    export PATH=:$PATH:$LUSTRE/utils:$LUSTRE/tests
+    if ! echo $PATH | grep -q $LUSTRE/utils; then
+	export PATH=$PATH:$LUSTRE/utils
+    fi
+    if ! echo $PATH | grep -q $LUSTRE/test; then
+	export PATH=$PATH:$LUSTRE/tests
+    fi
     export LCTL=${LCTL:-"$LUSTRE/utils/lctl"}
     export LFS=${LFS:-"$LUSTRE/utils/lfs"}
     [ ! -f "$LCTL" ] && export LCTL=$(which lctl) 
@@ -89,6 +93,7 @@ init_test_env() {
     export LPROC=/proc/fs/lustre
     export DIR2
     export AT_MAX_PATH
+    export SAVE_PWD=${SAVE_PWD:-$LUSTRE/tests}
 
     if [ "$ACCEPTOR_PORT" ]; then
         export PORT_OPT="--port $ACCEPTOR_PORT"
@@ -263,16 +268,16 @@ mount_facet() {
     local dev=${facet}_dev
     local opt=${facet}_opt
     echo "Starting ${facet}: ${!opt} $@ ${!dev} ${MOUNT%/*}/${facet}"
+        do_facet ${facet} "lctl set_param debug=$PTLDEBUG; \
+            lctl set_param subsystem_debug=${SUBSYSTEM# }; \
+            lctl set_param debug_mb=${DEBUG_SIZE}; \
+            sync"
+
     do_facet ${facet} mount -t lustre ${!opt} $@ ${!dev} ${MOUNT%/*}/${facet}     
     RC=${PIPESTATUS[0]}
     if [ $RC -ne 0 ]; then
         echo "mount -t lustre $@ ${!dev} ${MOUNT%/*}/${facet}"
         echo "Start of ${!dev} on ${facet} failed ${RC}"
-    else 
-        do_facet ${facet} "lctl set_param debug=$PTLDEBUG; \
-            lctl set_param subsystem_debug=${SUBSYSTEM# }; \
-            lctl set_param debug_mb=${DEBUG_SIZE}; \
-            sync"
     fi
     return $RC
 }
@@ -332,11 +337,12 @@ zconf_mount() {
 
     echo "Starting client: $client: $OPTIONS $device $mnt" 
     do_node $client mkdir -p $mnt
-    do_node $client mount -t lustre $OPTIONS $device $mnt || return 1
-
     do_node $client "lctl set_param debug=$PTLDEBUG;
         lctl set_param subsystem_debug=${SUBSYSTEM# };
         lctl set_param debug_mb=${DEBUG_SIZE}"
+
+    do_node $client mount -t lustre $OPTIONS $device $mnt || return 1
+
     [ -d /r ] && $LCTL modules > /r/tmp/ogdb-$HOSTNAME
     return 0
 }
@@ -759,7 +765,7 @@ stopall() {
 
     if [ -n "$CLIENTS" ]; then
             zconf_umount_clients $CLIENTS $MOUNT "$*" || true
-            zconf_umount_clients $CLIENTS $MOUNT2 "$*" || true
+            [ -n "$MOUNT2" ] && zconf_umount_clients $CLIENTS $MOUNT2 "$*" || true
     fi
 
     [ "$CLIENTONLY" ] && return
@@ -1284,6 +1290,7 @@ run_one() {
     export TESTNAME=test_$testnum
     test_${testnum} || error "test_$testnum failed with $?"
     #check_mds
+    cd $SAVE_PWD
     reset_fail_loc
     check_grant ${testnum} || error "check_grant $testnum failed with $?"
     [ -f $CATASTROPHE ] && [ `cat $CATASTROPHE` -ne 0 ] && \
@@ -1294,7 +1301,6 @@ run_one() {
     unset TESTNAME
     unset tdir
     umask $SAVE_UMASK
-    cd $SAVE_PWD
     $CLEANUP
 }
 

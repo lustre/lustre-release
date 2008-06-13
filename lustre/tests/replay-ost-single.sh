@@ -3,7 +3,7 @@
 set -e
 
 PTLDEBUG=${PTLDEBUG:--1}
-LUSTRE=${LUSTRE:-`dirname $0`/..}
+LUSTRE=${LUSTRE:-$(cd $(dirname $0)/..; echo $PWD)}
 SETUP=${SETUP:-""}
 CLEANUP=${CLEANUP:-""}
 . $LUSTRE/tests/test-framework.sh
@@ -97,10 +97,11 @@ run_test 4 "Fail OST during read, with verification"
 
 test_5() {
     [ -z "`which iozone 2> /dev/null`" ] && log "iozone missing" && return
-    FREE=`df -P -h $DIR | tail -n 1 | awk '{ print $3 }'`
-    case $FREE in
-    *T|*G) FREE=1G;;
-    esac
+    FREE=`df -P $DIR | tail -n 1 | awk '{ print $4/2 }'`
+    GB=1048576  # 1048576KB == 1GB
+    if (( FREE > GB )); then
+        FREE=$GB
+    fi
     IOZONE_OPTS="-i 0 -i 1 -i 2 -+d -r 4 -s $FREE"
     iozone $IOZONE_OPTS -f $DIR/$tfile &
     PID=$!

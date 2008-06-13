@@ -622,8 +622,7 @@ void __class_export_put(struct obd_export *exp)
                 list_add(&exp->exp_obd_chain, &obd_zombie_exports);
                 spin_unlock(&obd_zombie_impexp_lock);
 
-                if (obd_zombie_impexp_notify != NULL)
-                        obd_zombie_impexp_notify();
+                obd_zombie_impexp_notify();
         }
 }
 EXPORT_SYMBOL(__class_export_put);
@@ -764,8 +763,7 @@ void class_import_put(struct obd_import *import)
                 list_add(&import->imp_zombie_chain, &obd_zombie_imports);
                 spin_unlock(&obd_zombie_impexp_lock);
 
-                if (obd_zombie_impexp_notify != NULL)
-                        obd_zombie_impexp_notify();
+                obd_zombie_impexp_notify();
         }
 
         EXIT;

@@ -1204,12 +1204,6 @@ int parse_opts(int argc, char *const argv[], struct mkfs_opts *mop,
                                 return 1;
                         rc = add_param(mop->mo_ldd.ldd_params, PARAM_FAILNODE,
                                        nids, 0);
-                        /* Combo needs to add MDT failnodes as MGS failnodes
-                           as well */
-                        if (!rc && IS_MGS(&mop->mo_ldd)) {
-                                rc = add_param(mop->mo_ldd.ldd_params,
-                                               PARAM_MGSNODE, nids, 0);
-                        }
                         free(nids);
                         if (rc)
                                 return rc;
