@@ -1169,7 +1169,7 @@ static int ll_file_get_tree_lock_iov(struct ll_lock_tree *tree,
         int rc;
         struct inode * inode = file->f_dentry->d_inode;
 
-        append = (rw == WRITE) && (file->f_flags & O_APPEND);
+        append = (rw == OBD_BRW_WRITE) && (file->f_flags & O_APPEND);
 
         if (append || !ll_is_file_contended(file)) {
                 struct ll_lock_tree_node *node;
