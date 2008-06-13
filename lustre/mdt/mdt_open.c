@@ -1170,12 +1170,6 @@ int mdt_close(struct mdt_thread_info *info)
         int rc, ret = 0;
         ENTRY;
 
-        if (OBD_FAIL_CHECK_RESET(OBD_FAIL_MDS_CLOSE_NET,
-                                 OBD_FAIL_MDS_CLOSE_NET)) {
-                info->mti_fail_id = OBD_FAIL_MDS_CLOSE_NET;
-                RETURN(0);
-        }
-
         /* Close may come with the Size-on-MDS update. Unpack it. */
         rc = mdt_close_unpack(info);
         if (rc)

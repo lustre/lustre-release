@@ -1144,7 +1144,7 @@ static int mdt_sendpage(struct mdt_thread_info *info,
                 GOTO(free_desc, rc);
 
         if (OBD_FAIL_CHECK(OBD_FAIL_MDS_SENDPAGE))
-                GOTO(abort_bulk, rc);
+                GOTO(abort_bulk, rc = 0);
 
         *lwi = LWI_TIMEOUT(obd_timeout * HZ / 4, NULL, NULL);
         rc = l_wait_event(desc->bd_waitq, !ptlrpc_bulk_active(desc), lwi);
@@ -1507,12 +1507,6 @@ static int mdt_reint(struct mdt_thread_info *info)
 
         ENTRY;
 
-        if (OBD_FAIL_CHECK_RESET(OBD_FAIL_MDS_REINT_NET,
-                                 OBD_FAIL_MDS_REINT_NET)) {
-                info->mti_fail_id = OBD_FAIL_MDS_REINT_NET;
-                RETURN(0);
-        }
-
         opc = mdt_reint_opcode(info, reint_fmts);
         if (opc >= 0) {
                 /*
@@ -1651,11 +1645,6 @@ static int mdt_enqueue(struct mdt_thread_info *info)
          * converted dlm request.
          */
         LASSERT(info->mti_dlm_req != NULL);
-
-        if (OBD_FAIL_CHECK(OBD_FAIL_LDLM_ENQUEUE)) {
-                info->mti_fail_id = OBD_FAIL_LDLM_ENQUEUE;
-                return 0;
-        }
 
         req = mdt_info_req(info);
 
@@ -2050,22 +2039,18 @@ static int mdt_req_handle(struct mdt_thread_info *info,
         LASSERT(current->journal_info == NULL);
 
         /*
-         * Mask out OBD_FAIL_ONCE, because that will stop
-         * correct handling of failed req later in ldlm due to doing
-         * obd_fail_loc |= OBD_FAIL_ONCE without actually
-         * correct actions like it is done in target_send_reply_msg().
+         * Checking for various OBD_FAIL_$PREF_$OPC_NET codes. _Do_ not try 
+         * to put same checks into handlers like mdt_close(), mdt_reint(), 
+         * etc., without talking to mdt authors first. Checking same thing
+         * there again is useless and returning 0 error wihtout packing reply
+         * is buggy! Handlers either pack reply or return error.
+         *
+         * We return 0 here and do not send any reply in order to emulate
+         * network failure. Do not send any reply in case any of NET related
+         * fail_id has occured.
          */
-        if (h->mh_fail_id != 0) {
-                /*
-                 * Set to info->mti_fail_id to handler fail_id, it will be used
-                 * later, and better than use default fail_id.
-                 */
-                if (OBD_FAIL_CHECK_RESET(h->mh_fail_id && OBD_FAIL_MASK_LOC,
-                                         h->mh_fail_id & ~OBD_FAILED)) {
-                        info->mti_fail_id = h->mh_fail_id;
-                        RETURN(0);
-                }
-        }
+        if (OBD_FAIL_CHECK_ORSET(h->mh_fail_id, OBD_FAIL_ONCE))
+                RETURN(0);
 
         rc = 0;
         flags = h->mh_flags;
@@ -2112,6 +2097,11 @@ static int mdt_req_handle(struct mdt_thread_info *info,
                  * only
                  */
                 rc = h->mh_act(info);
+                if (rc == 0 && req->rq_reply_state == NULL) {
+                        DEBUG_REQ(D_ERROR, req, "MDT \"handler\" %s did not pack "
+                                  "reply and returned 0 error\n", h->mh_name);
+                        LBUG();
+                }
                 serious = is_serious(rc);
                 rc = clear_serious(rc);
         } else
@@ -2147,7 +2137,8 @@ static int mdt_req_handle(struct mdt_thread_info *info,
                 LBUG();
         }
 
-        RETURN(rc);
+        target_send_reply(req, rc, info->mti_fail_id);
+        RETURN(0);
 }
 
 void mdt_lock_handle_init(struct mdt_lock_handle *lh)
@@ -2341,21 +2332,6 @@ static int mdt_recovery(struct mdt_thread_info *info)
         RETURN(+1);
 }
 
-static int mdt_reply(struct ptlrpc_request *req, int rc,
-                     struct mdt_thread_info *info)
-{
-        ENTRY;
-
-#if 0
-        if (req->rq_reply_state == NULL && rc == 0) {
-                req->rq_status = rc;
-                lustre_pack_reply(req, 1, NULL, NULL);
-        }
-#endif
-        target_send_reply(req, rc, info->mti_fail_id);
-        RETURN(0);
-}
-
 static int mdt_msg_check_version(struct lustre_msg *msg)
 {
         int rc;
@@ -2459,7 +2435,6 @@ static int mdt_handle0(struct ptlrpc_request *req,
                                              supported);
                         if (likely(h != NULL)) {
                                 rc = mdt_req_handle(info, h, req);
-                                rc = mdt_reply(req, rc, info);
                         } else {
                                 CERROR("The unsupported opc: 0x%x\n", lustre_msg_get_opc(msg) );
                                 req->rq_status = -ENOTSUPP;

@@ -18,8 +18,8 @@ GRANT_CHECK_LIST=${GRANT_CHECK_LIST:-""}
 
 
 # Skip these tests
-# bug number: 2766 4176   11404
-ALWAYS_EXCEPT="0b  39     56    $REPLAY_SINGLE_EXCEPT"
+# bug number:
+ALWAYS_EXCEPT="$REPLAY_SINGLE_EXCEPT"
 
 #                                                  63 min  7 min  AT AT AT AT"
 [ "$SLOW" = "no" ] && EXCEPT_SLOW="1 2 3 4 6 12 16 44a      44b    65 66 67 68"

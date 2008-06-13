@@ -2,8 +2,8 @@
 
 set -e
 
-# bug number:  13129 13129 6088 10124 
-ALWAYS_EXCEPT="2     3     8    15c   $REPLAY_DUAL_EXCEPT"
+# bug number:  13129 13129 10124 
+ALWAYS_EXCEPT="2     3     15c   $REPLAY_DUAL_EXCEPT"
 
 SAVE_PWD=$PWD
 PTLDEBUG=${PTLDEBUG:--1}
