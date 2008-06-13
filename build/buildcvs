@@ -1,7 +1,7 @@
 # This file is sourced by lustre/lustrecvs
 
 portalstag=""
-lnettag="HEAD"
+lnettag="b1_x"
 libsysiotag="HEAD"
 snmptag="HEAD"
 ldiskfstag="HEAD"
@@ -25,7 +25,7 @@ case "$lustretag" in
     # this is the branch table
     # keep this list sorted alphabetically!
 
-    # Note these are "specials" -- branches using lnet HEAD don't need an
+    # Note these are "specials" -- branches using lnet b1_x don't need an
     # entry here.
 
     b1_2)
