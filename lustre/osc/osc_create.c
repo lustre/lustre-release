@@ -87,7 +87,8 @@ static int osc_interpret_create(struct ptlrpc_request *req, void *data, int rc)
                 DEBUG_REQ(D_INODE, req, "Got EGAIN - resend \n");
                 break;
         case -ENOSPC:
-        case -EROFS: {
+        case -EROFS: 
+        case -EFBIG: {
                 oscc->oscc_flags |= OSCC_FLAG_NOSPC;
                 if (body && rc == -ENOSPC) {
                         oscc->oscc_grow_count = OST_MIN_PRECREATE;
