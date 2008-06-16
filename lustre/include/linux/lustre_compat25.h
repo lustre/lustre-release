@@ -538,5 +538,11 @@ int ll_unregister_blkdev(unsigned int dev, const char *name)
 #define ll_invalidate_bdev(a,b)         invalidate_bdev((a))
 #endif
 
+#ifdef HAVE_FS_RENAME_DOES_D_MOVE
+#define LL_RENAME_DOES_D_MOVE	FS_RENAME_DOES_D_MOVE
+#else
+#define LL_RENAME_DOES_D_MOVE	FS_ODD_RENAME
+#endif
+
 #endif /* __KERNEL__ */
 #endif /* _COMPAT25_H */
