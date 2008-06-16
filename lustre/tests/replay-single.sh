@@ -29,6 +29,7 @@ cleanup_and_setup_lustre
 
 mkdir -p $DIR
 
+assert_DIR
 rm -rf $DIR/[df][0-9]*
 
 test_0a() {	# was test_0
@@ -147,7 +148,8 @@ test_5() {
 run_test 5 "|x| 220 open(O_CREAT)"
 
 
-test_6a() {	# was test_6a
+test_6a() {	# was test_6
+    mkdir -p $DIR/$tdir
     replay_barrier mds
     mcreate $DIR/$tdir/$tfile
     fail mds
@@ -159,6 +161,7 @@ test_6a() {	# was test_6a
 run_test 6a "mkdir + contained create"
 
 test_6b() {
+    mkdir -p $DIR/$tdir
     replay_barrier mds
     rm -rf $DIR/$tdir
     fail mds
@@ -167,6 +170,7 @@ test_6b() {
 run_test 6b "|X| rmdir"
 
 test_7() {
+    mkdir -p $DIR/$tdir
     replay_barrier mds
     mcreate $DIR/$tdir/$tfile
     fail mds
@@ -1242,6 +1246,7 @@ run_test 57 "test recovery from llog for setattr op"
 
 #recovery many mds-ost setattr from llog
 test_58() {
+    mkdir -p $DIR/$tdir
 #define OBD_FAIL_MDS_OST_SETATTR       0x12c
     do_facet mds "lctl set_param fail_loc=0x8000012c"
     createmany -o $DIR/$tdir/$tfile-%d 2500
@@ -1258,6 +1263,7 @@ run_test 58 "test recovery from llog for setattr op (test llog_gen_rec)"
 # log_commit_thread vs filter_destroy race used to lead to import use after free
 # bug 11658
 test_59() {
+    mkdir -p $DIR/$tdir
     createmany -o $DIR/$tdir/$tfile-%d 200
     sync
     unlinkmany $DIR/$tdir/$tfile-%d 200
@@ -1274,6 +1280,7 @@ run_test 59 "test log_commit_thread vs filter_destroy race"
 # race between add unlink llog vs cat log init in post_recovery (only for b1_6)
 # bug 12086: should no oops and No ctxt error for this test
 test_60() {
+    mkdir -p $DIR/$tdir
     createmany -o $DIR/$tdir/$tfile-%d 200
     replay_barrier mds
     unlinkmany $DIR/$tdir/$tfile-%d 0 100
@@ -1286,6 +1293,7 @@ run_test 60 "test llog post recovery init vs llog unlink"
 
 #test race  llog recovery thread vs llog cleanup
 test_61a() {
+    mkdir -p $DIR/$tdir
     createmany -o $DIR/$tdir/$tfile-%d 800
     replay_barrier ost1 
 #   OBD_FAIL_OST_LLOG_RECOVERY_TIMEOUT 0x221 
@@ -1324,6 +1332,7 @@ test_61c() {
 run_test 61c "test race mds llog sync vs llog cleanup"
 
 test_62() { # Bug 15756 - don't mis-drop resent replay
+    mkdir -p $DIR/$tdir
     replay_barrier mds
     createmany -o $DIR/$tdir/$tfile- 25
 #define OBD_FAIL_TGT_REPLAY_DROP         0x707
