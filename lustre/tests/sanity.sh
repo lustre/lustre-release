@@ -110,7 +110,7 @@ fi
 check_and_setup_lustre
 
 DIR=${DIR:-$MOUNT}
-[ -z "`echo $DIR | grep $MOUNT`" ] && echo "$DIR not in $MOUNT" && exit 99
+assert_DIR
 
 LOVNAME=`lctl get_param -n llite.*.lov.common_name | tail -n 1`
 OSTCOUNT=`lctl get_param -n lov.$LOVNAME.numobd`
@@ -515,6 +515,7 @@ run_test 21 "write to dangling link ============================"
 
 test_22() {
 	WDIR=$DIR/$tdir
+	mkdir -p $WDIR
 	chown $RUNAS_ID $WDIR
 	(cd $WDIR || error "cd $WDIR failed";
 	$RUNAS tar cf - /etc/hosts /etc/sysconfig/network | \
@@ -781,6 +782,7 @@ run_test 26e "unlink multiple component recursive symlink ======"
 
 # recursive symlinks (bug 7022)
 test_26f() {
+	mkdir -p $DIR/$tdir
 	mkdir $DIR/$tdir/$tfile        || error "mkdir $DIR/$tdir/$tfile failed"
 	cd $DIR/$tdir/$tfile           || error "cd $DIR/$tdir/$tfile failed"
 	mkdir -p lndir/bar1      || error "mkdir lndir/bar1 failed"
@@ -1875,6 +1877,7 @@ test_42d() {
 run_test 42d "test complete truncate of file with cached dirty data"
 
 test_43() {
+	mkdir -p $DIR/$tdir
 	cp -p /bin/ls $DIR/$tdir/$tfile
 	multiop $DIR/$tdir/$tfile Ow_c &
 	pid=$!
@@ -4037,6 +4040,7 @@ test_105c() {
 run_test 105c "lockf when mounted without -o flock test ========"
 
 test_106() { #bug 10921
+	mkdir -p $DIR/$tdir
 	$DIR/$tdir && error "exec $DIR/$tdir succeeded"
 	chmod 777 $DIR/$tdir || error "chmod $DIR/$tdir failed"
 }
@@ -4615,6 +4619,7 @@ test_119c() # bug 13099
 run_test 119c "Testing for direct read hitting hole"
 
 test_120a() {
+        mkdir -p $DIR/$tdir
         [ -z "`lctl get_param -n mdc.*.connect_flags | grep early_lock_cancel`" ] && \
                skip "no early lock cancel on server" && return 0
         lru_resize_disable mdc
@@ -4634,6 +4639,7 @@ test_120a() {
 run_test 120a "Early Lock Cancel: mkdir test"
 
 test_120b() {
+        mkdir -p $DIR/$tdir
         [ -z "`lctl get_param -n mdc.*.connect_flags | grep early_lock_cancel`" ] && \
                skip "no early lock cancel on server" && return 0
         lru_resize_disable mdc
@@ -4653,6 +4659,7 @@ test_120b() {
 run_test 120b "Early Lock Cancel: create test"
 
 test_120c() {
+        mkdir -p $DIR/$tdir
         [ -z "`lctl get_param -n mdc.*.connect_flags | grep early_lock_cancel`" ] && \
                skip "no early lock cancel on server" && return 0
         lru_resize_disable mdc
@@ -4674,6 +4681,7 @@ test_120c() {
 run_test 120c "Early Lock Cancel: link test"
 
 test_120d() {
+        mkdir -p $DIR/$tdir
         [ -z "`lctl get_param -n mdc.*.connect_flags | grep early_lock_cancel`" ] && \
                skip "no early lock cancel on server" && return 0
         lru_resize_disable mdc
@@ -4694,6 +4702,7 @@ test_120d() {
 run_test 120d "Early Lock Cancel: setattr test"
 
 test_120e() {
+        mkdir -p $DIR/$tdir
         [ -z "`lctl get_param -n mdc.*.connect_flags | grep early_lock_cancel`" ] && \
                skip "no early lock cancel on server" && return 0
         lru_resize_disable mdc
@@ -4722,6 +4731,7 @@ run_test 120e "Early Lock Cancel: unlink test"
 test_120f() {
         [ -z "`lctl get_param -n mdc.*.connect_flags | grep early_lock_cancel`" ] && \
                skip "no early lock cancel on server" && return 0
+        mkdir -p $DIR/$tdir
         lru_resize_disable mdc
         lru_resize_disable osc
         mkdir -p $DIR/$tdir/d1 $DIR/$tdir/d2

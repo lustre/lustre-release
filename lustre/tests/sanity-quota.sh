@@ -167,6 +167,7 @@ run_test 0 "Set quota ============================="
 
 # block hard limit (normal use and out of quota)
 test_1() {
+	mkdir -p $DIR/$tdir
 	chmod 0777 $DIR/$tdir
 
 	LIMIT=$(( $BUNIT_SZ * $(($OSTCOUNT + 1)) * 5)) # 5 bunits each sever
@@ -217,6 +218,7 @@ run_test 1 "Block hard limit (normal use and out of quota) ==="
 
 # file hard limit (normal use and out of quota)
 test_2() {
+	mkdir -p $DIR/$tdir
 	chmod 0777 $DIR/$tdir
 
 	LIMIT=$(($IUNIT_SZ * 10)) # 10 iunits on mds
@@ -323,6 +325,7 @@ test_block_soft() {
 
 # block soft limit (start timer, timer goes off, stop timer)
 test_3() {
+	mkdir -p $DIR/$tdir
 	chmod 0777 $DIR/$tdir
 
 	LIMIT=$(( $BUNIT_SZ * 2 )) # 1 bunit on mds and 1 bunit on the ost
@@ -406,6 +409,7 @@ test_file_soft() {
 
 # file soft limit (start timer, timer goes off, stop timer)
 test_4a() {	# was test_4
+	mkdir -p $DIR/$tdir
 	chmod 0777 $DIR/$tdir
 	LIMIT=$(($IUNIT_SZ * 10))	# 10 iunits on mds
 	TESTFILE=$DIR/$tdir/$tfile-0
@@ -463,6 +467,7 @@ run_test 4b "Grace time strings handling ==="
 
 # chown & chgrp (chown & chgrp successfully even out of block/file quota)
 test_5() {
+	mkdir -p $DIR/$tdir
 	BLIMIT=$(( $BUNIT_SZ * $((OSTCOUNT + 1)) * 10)) # 10 bunits on each server
 	ILIMIT=$(( $IUNIT_SZ * 10 )) # 10 iunits on mds
 	
@@ -498,6 +503,7 @@ test_6() {
 		return 0;
 	fi
 
+	mkdir -p $DIR/$tdir
 	chmod 0777 $DIR/$tdir
 
 	LIMIT=$((BUNIT_SZ * (OSTCOUNT + 1) * 5)) # 5 bunits per server
@@ -557,6 +563,7 @@ run_test 6 "Block quota acquire & release ========="
 # quota recovery (block quota only by now)
 test_7()
 {
+	mkdir -p $DIR/$tdir
 	chmod 0777 $DIR/$tdir
 	remote_mds && skip "remote mds" && return 0
 
@@ -606,6 +613,7 @@ run_test 7 "Quota recovery (only block limit) ======"
 
 # run dbench with quota enabled
 test_8() {
+	mkdir -p $DIR/$tdir
 	BLK_LIMIT=$((100 * 1024 * 1024)) # 100G
 	FILE_LIMIT=1000000
 	DBENCH_LIB=${DBENCH_LIB:-/usr/lib/dbench}
@@ -625,6 +633,7 @@ test_8() {
 	SRC=$DBENCH_LIB/client_plain.txt
 	[ ! -e $TGT -a -e $SRC ] && echo "copying $SRC to $TGT" && cp $SRC $TGT
 
+	mkdir -p $DIR/$tdir
 	chmod 0777 $DIR/$tdir
 	SAVE_PWD=$PWD
 	cd $DIR/$tdir
@@ -718,6 +727,7 @@ run_test 9 "run for fixing bug10707(64bit) ==========="
 
 # run for fixing bug10707, it need a big room. test for 32bit
 test_10() {
+	mkdir -p $DIR/$tdir
 	chmod 0777 $DIR/$tdir
 	lustrefs_size=`(echo 0; df -t lustre -P | awk '{print $4}') | tail -n 1`
 	size_file=$((FSIZE * GB))
@@ -819,12 +829,12 @@ test_11() {
        local i=1
        while [ $i -le $REPS ]; do
 	   echo "test: cycle($i of $REPS) start at $(date)"
-	   mkdir -p $DIR/$tdir && chmod 777 $DIR/$tdir
+	   mkdir -p $TESTDIR && chmod 777 $TESTDIR
 	   echo -n "    create a file for uid "
 	   for j in `seq 1 30`; do
 	       echo -n "$j "
                # 30MB per dd for a total of 900MB (if space even permits)
-	       runas -u $j dd if=/dev/zero of=$DIR/$tdir/$tfile  bs=$blksize count=15 > /dev/null 2>&1 &
+	       runas -u $j dd if=/dev/zero of=$TESTDIR/$tfile  bs=$blksize count=15 > /dev/null 2>&1 &
 	   done
 	   echo ""
 	   PROCS=$(ps -ef | grep -v grep | grep "dd if /dev/zero of $TESTDIR" | wc -l)
@@ -833,11 +843,11 @@ test_11() {
 	     sleep 20
 	     SECS=$((SECS + sleep))
 	     PROCS=$(ps -ef | grep -v grep | grep "dd if /dev/zero of $TESTDIR" | wc -l)
-	     USED=$(du -s $DIR/$tdir | awk '{print $1}')
+	     USED=$(du -s $TESTDIR | awk '{print $1}')
 	     PCT=$(($USED * 100 / $block_limit))
 	     echo "${i}/${REPS} ${PCT}% p${PROCS} t${SECS}  "
 	     if [ $USED -le $LAST_USED ]; then
-		 kill -9 $(ps -ef | grep "dd if /dev/zero of $DIR/$tdir" | grep -v grep | awk '{ print $2 }')
+		 kill -9 $(ps -ef | grep "dd if /dev/zero of $TESTDIR" | grep -v grep | awk '{ print $2 }')
 		 i=$REPS
 		 RV=2
 		 break
@@ -845,7 +855,7 @@ test_11() {
              LAST_USED=$USED
 	   done
 	   echo "    removing the test files..."
-	   rm -f $DIR/$tdir/$tfile
+	   rm -f $TESTDIR/$tfile
 	   echo "cycle $i done at $(date)"
 	   i=$[$i+1]
        done
@@ -866,6 +876,7 @@ run_test 11 "run for fixing bug10912 ==========="
 
 # test a deadlock between quota and journal b=11693
 test_12() {
+	mkdir -p $DIR/$tdir
 	chmod 0777 $DIR/$tdir
 
 	[ "$(grep $DIR2 /proc/mounts)" ] || mount_client $DIR2 || \
@@ -932,7 +943,8 @@ test_13() {
 	# one OST * 10 + (mds + other OSTs)
 	LIMIT=$((BUNIT_SZ * 10 + (BUNIT_SZ * OSTCOUNT)))
 	TESTFILE="$DIR/$tdir/$tfile"
-	
+	mkdir -p $DIR/$tdir
+
 	echo "   User quota (limit: $LIMIT kbytes)"
 	$LFS setquota -u $TSTUSR 0 $LIMIT 0 0 $DIR
 	$SHOW_QUOTA_USER
@@ -1017,6 +1029,7 @@ pre_test_14
 
 test_14a() {	# was test_14 b=12223 -- setting quota on root
 	TESTFILE="$DIR/$tdir/$tfile"
+	mkdir -p $DIR/$tdir
 
 	# out of root's file and block quota
         $LFS setquota -u root 10 10 10 10 $DIR

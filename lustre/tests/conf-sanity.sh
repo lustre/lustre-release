@@ -41,6 +41,8 @@ OSTSIZE=40000
 #
 [ "$SLOW" = "no" ] && EXCEPT_SLOW="0 1 2 3 6 7 15 18 24b 25 30 31 32 33 34a "
 
+assert_DIR
+
 reformat() {
         formatall
 }

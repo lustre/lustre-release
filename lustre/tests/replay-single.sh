@@ -30,6 +30,7 @@ cleanup_and_setup_lustre
 
 mkdir -p $DIR
 
+assert_DIR
 rm -rf $DIR/[df][0-9]*
 
 test_0a() {	# was test_0
@@ -219,6 +220,7 @@ run_test 5 "|x| 220 open(O_CREAT)"
 
 
 test_6a() {	# was test_6
+    mkdir -p $DIR/$tdir
     replay_barrier $SINGLEMDS
     mcreate $DIR/$tdir/$tfile
     fail $SINGLEMDS
@@ -230,6 +232,7 @@ test_6a() {	# was test_6
 run_test 6a "mkdir + contained create"
 
 test_6b() {
+    mkdir -p $DIR/$tdir
     replay_barrier $SINGLEMDS
     rm -rf $DIR/$tdir
     fail $SINGLEMDS
@@ -238,6 +241,7 @@ test_6b() {
 run_test 6b "|X| rmdir"
 
 test_7() {
+    mkdir -p $DIR/$tdir
     replay_barrier $SINGLEMDS
     mcreate $DIR/$tdir/$tfile
     fail $SINGLEMDS
@@ -1324,6 +1328,7 @@ run_test 57 "test recovery from llog for setattr op"
 
 #recovery many mds-ost setattr from llog
 test_58() {
+    mkdir -p $DIR/$tdir
 #define OBD_FAIL_MDS_OST_SETATTR       0x12c
     do_facet $SINGLEMDS "lctl set_param fail_loc=0x8000012c"
     createmany -o $DIR/$tdir/$tfile-%d 2500
@@ -1340,6 +1345,7 @@ run_test 58 "test recovery from llog for setattr op (test llog_gen_rec)"
 # log_commit_thread vs filter_destroy race used to lead to import use after free
 # bug 11658
 test_59() {
+    mkdir -p $DIR/$tdir
     createmany -o $DIR/$tdir/$tfile-%d 200
     sync
     unlinkmany $DIR/$tdir/$tfile-%d 200
@@ -1356,6 +1362,7 @@ run_test 59 "test log_commit_thread vs filter_destroy race"
 # race between add unlink llog vs cat log init in post_recovery (only for b1_6)
 # bug 12086: should no oops and No ctxt error for this test
 test_60() {
+    mkdir -p $DIR/$tdir
     createmany -o $DIR/$tdir/$tfile-%d 200
     replay_barrier $SINGLEMDS
     unlinkmany $DIR/$tdir/$tfile-%d 0 100
@@ -1367,7 +1374,7 @@ test_60() {
 run_test 60 "test llog post recovery init vs llog unlink"
 
 #test race  llog recovery thread vs llog cleanup
-test_61() {
+test_61a() {	# was test_61
     mkdir $DIR/$tdir
     createmany -o $DIR/$tdir/$tfile-%d 800
     replay_barrier ost1 
@@ -1383,7 +1390,7 @@ test_61() {
     $CHECKSTAT -t file $DIR/$tdir/$tfile-* && return 1
     rmdir $DIR/$tdir
 }
-run_test 61 "test race llog recovery vs llog cleanup"
+run_test 61a "test race llog recovery vs llog cleanup"
 
 #test race  mds llog sync vs llog cleanup
 test_61b() {

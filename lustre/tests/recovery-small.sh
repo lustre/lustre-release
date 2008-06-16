@@ -23,6 +23,7 @@ SETUP=${SETUP:-""}
 CLEANUP=${CLEANUP:-""}
 
 cleanup_and_setup_lustre
+assert_DIR
 rm -rf $DIR/[df][0-9]*
 
 SAMPLE_NAME=recovery-small.junk
@@ -726,6 +727,7 @@ test_51() {
 run_test 51 "failover MDS during recovery"
 
 test_52_guts() {
+	do_facet client "mkdir -p $DIR/$tdir"
 	do_facet client "writemany -q -a $DIR/$tdir/$tfile 300 5" &
 	CLIENT_PID=$!
 	echo writemany pid $CLIENT_PID

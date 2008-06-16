@@ -64,6 +64,7 @@ LPROC=/proc/fs/lustre
 LOVNAME=`lctl get_param -n llite.*.lov.common_name | tail -n 1`
 OSTCOUNT=`lctl get_param -n lov.$LOVNAME.numobd`
 
+assert_DIR
 rm -rf $DIR1/[df][0-9]* $DIR1/lnk
 
 # $RUNAS_ID may get set incorrectly somewhere else
@@ -162,11 +163,9 @@ test_6() {
 run_test 6 "remove of open file on other node =================="
 
 test_7() {
-	# run_one creates uniq $tdir (bug 13798)
-	# opendirunlink failes if it exists
-	rmdir $DIR1/$tdir || true
-	opendirunlink $DIR1/$tdir $DIR2/$tdir || \
-		error "opendirunlink $DIR1/$tdir $DIR2/$tdir"
+	local dir=d7
+	opendirunlink $DIR1/$dir $DIR2/$dir || \
+		error "opendirunlink $DIR1/$dir $DIR2/$dir"
 }
 run_test 7 "remove of open directory on other node ============="
 
@@ -482,6 +481,7 @@ test_25() {
 	[ `lctl get_param -n mdc.*-mdc-*.connect_flags | grep -c acl` -lt 2 ] && \
 	    skip "must have acl, skipping" && return
 
+	mkdir -p $DIR1/$tdir
 	touch $DIR1/$tdir/f1 || error "touch $DIR1/$tdir/f1"
 	chmod 0755 $DIR1/$tdir/f1 || error "chmod 0755 $DIR1/$tdir/f1"
 
@@ -590,6 +590,7 @@ test_29() { # bug 10999
 run_test 29 "lock put race between glimpse and enqueue ========="
 
 test_30() { #bug #11110
+    mkdir -p $DIR1/$tdir
     cp -f /bin/bash $DIR1/$tdir/bash
     /bin/sh -c 'sleep 1; rm -f $DIR2/$tdir/bash; cp /bin/bash $DIR2/$tdir' &
     err=$($DIR1/$tdir/bash -c 'sleep 2; openfile -f O_RDONLY /proc/$$/exe >& /dev/null; echo $?')

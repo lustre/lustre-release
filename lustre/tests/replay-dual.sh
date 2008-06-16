@@ -23,6 +23,7 @@ init_test_env $@
 build_test_filter
 
 cleanup_and_setup_lustre
+assert_DIR
 rm -rf $DIR/[df][0-9]*
 
 [ "$DAEMONFILE" ] && $LCTL debug_daemon start $DAEMONFILE $DAEMONSIZE

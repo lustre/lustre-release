@@ -30,6 +30,7 @@ OSTCOUNT=1
 build_test_filter
 
 REFORMAT=--reformat cleanup_and_setup_lustre
+assert_DIR
 rm -rf $DIR/[df][0-9]*
 
 test_0a() {
