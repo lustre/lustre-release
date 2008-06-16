@@ -5,6 +5,7 @@ lnettag="b1_x"
 libsysiotag="HEAD"
 snmptag="HEAD"
 ldiskfstag="HEAD"
+ldiskfstag_head="b1_8_iam"
 lustreiokittag="HEAD"
 dmutag=""
 hg_base_url="http://www.wizy.org/mercurial"
@@ -165,18 +166,18 @@ case "$lustretag" in
         # lnet "User Level Access" development branch
 	lnettag="b_ula"
 	lustretag="HEAD"
-        ldiskfstag="b1_8_iam"
+        ldiskfstag="$ldiskfstag_head"
 	;;
 
-    HEAD|b_HEAD_AT|b_head_capa|b_head_interop_disk)
+    HEAD|b_HEAD_*|b_head_*|b_hd_*)
         lnettag="HEAD"
-        ldiskfstag="b1_8_iam"
+        ldiskfstag="$ldiskfstag_head"
         ;;
 
     # CMD3
     b_post_cmd3|b_new_cmd_sles10|b1_6_head_sync|b_mixed_layout_req|b_mount_perm|b1_8_gns|b1_8_quota|b1_8_interop_server|b_som)
         # Update b1_8 above when changing this.
-        ldiskfstag="b1_8_iam"
+        ldiskfstag="$ldiskfstag_head"
         ;;
 
     #umds cleanup
@@ -187,14 +188,14 @@ case "$lustretag" in
     # uOSS
     b_hd_dmu)
         lnettag="b_uoss"
-        ldiskfstag="b1_8_iam"
+        ldiskfstag="$ldiskfstag_head"
         dmutag="zfs-lustre"
         ;;
 
     # uMDS
     b_dmu_umds)
         lnettag="b_uoss_umds"
-        ldiskfstag="b1_8_iam"
+        ldiskfstag="$ldiskfstag_head"
         dmutag="zfs-lustre"
         ;;
 
@@ -202,18 +203,18 @@ case "$lustretag" in
     b_uoss_o2iblnd)
         lnettag="b_uoss_o2iblnd"
 	lustretag="b_hd_dmu"
-        ldiskfstag="b1_8_iam"
+        ldiskfstag="$ldiskfstag_head"
         dmutag="zfs-lustre"
         ;;
 
     # client io stack cleanup
     b_client_io_layering)
-        ldiskfstag="b1_8_iam"
+        ldiskfstag="$ldiskfstag_head"
         ;;
     
     # windows client porting (lustre: b_client_io_layering, lnet: HEAD) 
     b_winnt_port)
-        ldiskfstag="b1_8_iam"
+        ldiskfstag="$ldiskfstag_head"
         lnettag="$lustretag"
         ;;
     
