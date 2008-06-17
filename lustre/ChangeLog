@@ -13,6 +13,12 @@ tbd  Sun Microsystems, Inc.
         removed cwd "./" (refer to Bugzilla 14399).
 
 Severity   : minor
+Bugzilla   : 15837
+Description: oops in page fault handler
+Details    : kernel page fault handler can return two special 'pages' in error case, don't
+             try dereference NOPAGE_SIGBUS and NOPAGE_OMM.
+
+Severity   : minor
 Bugzilla   : 15716
 Description: timeout with invalidate import.
 Details    : ptlrpcd_check call obd_zombie_impexp_cull and wait request which should be

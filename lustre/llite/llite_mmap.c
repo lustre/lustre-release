@@ -328,20 +328,16 @@ int lt_get_mmap_locks(struct ll_lock_tree *tree,
         RETURN(0);
 }
 
-/* FIXME: there is a pagefault race goes as follow (only 2.4):
- * 1. A user process on node A accesses a portion of a mapped file,
- *    resulting in a page fault.  The pagefault handler invokes the
- *    ll_nopage function, which reads the page into memory.
- * 2. A user process on node B writes to the same portion of the file
- *    (either via mmap or write()), that cause node A to cancel the
- *    lock and truncate the page.
- * 3. Node A then executes the rest of do_no_page(), entering the
- *    now-invalid page into the PTEs.
+/**
+ * Page fault handler.
  *
- * Make the whole do_no_page as a hook to cover both the page cache
- * and page mapping installing with dlm lock would eliminate this race.
+ * \param vma - is virtiual area struct related to page fault
+ * \param address - address when hit fault
+ * \param type - of fault
  *
- * In 2.6, the truncate_count of address_space can cover this race.
+ * \return allocated and filled page for address
+ * \retval NOPAGE_SIGBUS if page not exist on this address
+ * \retval NOPAGE_OOM not have memory for allocate new page
  */
 struct page *ll_nopage(struct vm_area_struct *vma, unsigned long address,
                        int *type)
@@ -442,8 +438,13 @@ struct page *ll_nopage(struct vm_area_struct *vma, unsigned long address,
         vma->vm_flags |= VM_RAND_READ;
 
         page = filemap_nopage(vma, address, type);
-        LL_CDEBUG_PAGE(D_PAGE, page, "got addr %lu type %lx\n", address,
-                       (long)type);
+        if (page != NOPAGE_SIGBUS && page != NOPAGE_OOM)
+                LL_CDEBUG_PAGE(D_PAGE, page, "got addr %lu type %lx\n", address,
+                               (long)type);
+        else
+                CDEBUG(D_PAGE, "got addr %lu type %lx - SIGBUS\n",  address,
+                               (long)type);
+
         vma->vm_flags &= ~VM_RAND_READ;
         vma->vm_flags |= (rand_read | seq_read);
 
