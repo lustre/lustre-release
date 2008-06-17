@@ -271,6 +271,13 @@ mount_facet() {
 
     do_facet ${facet} mount -t lustre ${!opt} $@ ${!dev} ${MOUNT%/*}/${facet}     
     RC=${PIPESTATUS[0]}
+    if [ $RC -eq 0 ]; then
+        label=$(do_facet ${facet} "e2label ${!dev}")
+        [ -z "$label" ] && echo no label for ${!dev} && exit 1
+        eval export ${facet}_svc=${label}
+        echo Started ${label}
+    fi
+
     if [ $RC -ne 0 ]; then
         echo "mount -t lustre $@ ${!dev} ${MOUNT%/*}/${facet}"
         echo "Start of ${!dev} on ${facet} failed ${RC}"
@@ -294,12 +301,6 @@ start() {
     do_facet ${facet} mkdir -p ${MOUNT%/*}/${facet}
     mount_facet ${facet}
     RC=$?
-    if [ $RC -eq 0 ]; then
-        label=$(do_facet ${facet} "e2label ${device}")
-        [ -z "$label" ] && echo no label for ${device} && exit 1
-        eval export ${facet}_svc=${label}
-        echo Started ${label}
-    fi
     return $RC
 }
 
