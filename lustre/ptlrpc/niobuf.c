@@ -360,8 +360,15 @@ int ptlrpc_send_reply (struct ptlrpc_request *req, int flags)
         }
         /* Report actual service time for client latency calc */
         lustre_msg_set_service_time(req->rq_repmsg, service_time);
-        /* Report service time estimate for future client reqs */
-        lustre_msg_set_timeout(req->rq_repmsg, at_get(&svc->srv_at_estimate));
+        /* Report service time estimate for future client reqs, but report 0
+         * (to be ignored by client) if it's a error reply during recovery.
+         * (bz15815) */
+        if (req->rq_type == PTL_RPC_MSG_ERR &&
+            (req->rq_export == NULL || req->rq_export->exp_obd->obd_recovering))
+                lustre_msg_set_timeout(req->rq_repmsg, 0);
+        else
+                lustre_msg_set_timeout(req->rq_repmsg,
+                                       at_get(&svc->srv_at_estimate));
 
         target_pack_pool_reply(req);
 
