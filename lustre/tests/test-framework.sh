@@ -268,16 +268,17 @@ mount_facet() {
     local dev=${facet}_dev
     local opt=${facet}_opt
     echo "Starting ${facet}: ${!opt} $@ ${!dev} ${MOUNT%/*}/${facet}"
-        do_facet ${facet} "lctl set_param debug=$PTLDEBUG; \
-            lctl set_param subsystem_debug=${SUBSYSTEM# }; \
-            lctl set_param debug_mb=${DEBUG_SIZE}; \
-            sync"
 
     do_facet ${facet} mount -t lustre ${!opt} $@ ${!dev} ${MOUNT%/*}/${facet}     
     RC=${PIPESTATUS[0]}
     if [ $RC -ne 0 ]; then
         echo "mount -t lustre $@ ${!dev} ${MOUNT%/*}/${facet}"
         echo "Start of ${!dev} on ${facet} failed ${RC}"
+        do_facet ${facet} "lctl set_param debug=$PTLDEBUG; \
+            lctl set_param subsystem_debug=${SUBSYSTEM# }; \
+            lctl set_param debug_mb=${DEBUG_SIZE}; \
+            sync"
+
     fi
     return $RC
 }
@@ -337,11 +338,10 @@ zconf_mount() {
 
     echo "Starting client: $client: $OPTIONS $device $mnt" 
     do_node $client mkdir -p $mnt
+    do_node $client mount -t lustre $OPTIONS $device $mnt || return 1
     do_node $client "lctl set_param debug=$PTLDEBUG;
         lctl set_param subsystem_debug=${SUBSYSTEM# };
         lctl set_param debug_mb=${DEBUG_SIZE}"
-
-    do_node $client mount -t lustre $OPTIONS $device $mnt || return 1
 
     [ -d /r ] && $LCTL modules > /r/tmp/ogdb-$HOSTNAME
     return 0
