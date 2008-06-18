@@ -27,7 +27,14 @@ EOF
 
 if [ -z "$LUSTRECVS_UPDATED" ] ; then
     echo "$progname: updating lustrecvs"
-    cvs up -l || fatal 1 "Error updating lustrecvs"
+
+    # If checking out a specific tag, make sure all of the files here are also
+    # checked out with the same tag to avoid later changes breaking things.
+    case "$1" in
+    v*|b_release_*) TAG=$1 ;;
+    esac
+
+    cvs update -l $TAG
     export LUSTRECVS_UPDATED=yes
     exec "$0" "$@"
 fi
