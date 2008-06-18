@@ -198,13 +198,6 @@ Description: lfs support for human-readable quota grace time strings
 Details    : lfs setquota -t and lfs quota -t represent quota grace times
              in "XXwXXdXXhXXmXXs" format instead of large values in seconds
 
-Severity   : normal
-Frequency  : always with o2ib 1.3 and sles10
-Bugzilla   : 15870
-Description: fix build with SLES10 and o2ib v3.
-Details    : sles10 uses diffrent name for Module.symver file but configure
-             assume this file has same name on RHEL/SLES/vanila kernels.
-
 Severity   : critical
 Frequency  : very rare, if additional xattrs are used on kernels >= 2.6.12
 Bugzilla   : 15777
