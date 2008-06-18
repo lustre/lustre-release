@@ -42,13 +42,6 @@ Details    : add a 'nomgs' option in mount.lustre to enable start a MDT with
              to 'nosvc' mount option.
 
 Severity   : normal
-Frequency  : always with o2ib 1.3 and sles10
-Bugzilla   : 15870
-Description: fix build with SLES10 and o2ib v3.
-Details    : sles10 uses diffrent name for Module.symver file but configure
-             assume this file has same name on RHEL/SLES/vanila kernels.
-
-Severity   : normal
 Bugzilla   : 14835
 Frequency  : after recovery
 Description: precreate to many object's after del orphan.
