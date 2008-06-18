@@ -280,23 +280,21 @@ mount_facet() {
     local dev=${facet}_dev
     local opt=${facet}_opt
     echo "Starting ${facet}: ${!opt} $@ ${!dev} ${MOUNT%/*}/${facet}"
-
     do_facet ${facet} mount -t lustre ${!opt} $@ ${!dev} ${MOUNT%/*}/${facet}     
     RC=${PIPESTATUS[0]}
-    if [ $RC -eq 0 ]; then
-        label=$(do_facet ${facet} "e2label ${!dev}")
-        [ -z "$label" ] && echo no label for ${!dev} && exit 1
-        eval export ${facet}_svc=${label}
-        echo Started ${label}
-    fi
-
     if [ $RC -ne 0 ]; then
         echo "mount -t lustre $@ ${!dev} ${MOUNT%/*}/${facet}"
         echo "Start of ${!dev} on ${facet} failed ${RC}"
+    else
         do_facet ${facet} "lctl set_param debug=$PTLDEBUG; \
             lctl set_param subsystem_debug=${SUBSYSTEM# }; \
             lctl set_param debug_mb=${DEBUG_SIZE}; \
             sync"
+ 
+        label=$(do_facet ${facet} "e2label ${!dev}")
+        [ -z "$label" ] && echo no label for ${!dev} && exit 1
+        eval export ${facet}_svc=${label}
+        echo Started ${label}
     fi
     return $RC
 }
