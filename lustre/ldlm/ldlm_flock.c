@@ -42,6 +42,7 @@
 #define l_flock_waitq   l_lru
 
 static CFS_LIST_HEAD(ldlm_flock_waitq);
+spinlock_t ldlm_flock_waitq_lock = SPIN_LOCK_UNLOCKED;
 
 int ldlm_flock_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock_desc *desc,
                             void *data, int flag);
@@ -82,6 +83,7 @@ ldlm_flock_destroy(struct ldlm_lock *lock, ldlm_mode_t mode, int flags)
         LDLM_DEBUG(lock, "ldlm_flock_destroy(mode: %d, flags: 0x%x)",
                    mode, flags);
 
+        /* Safe to not lock here, since it should be empty anyway */
         LASSERT(list_empty(&lock->l_flock_waitq));
 
         list_del_init(&lock->l_res_link);
@@ -104,6 +106,7 @@ ldlm_flock_deadlock(struct ldlm_lock *req, struct ldlm_lock *blocking_lock)
         pid_t blocking_pid = blocking_lock->l_policy_data.l_flock.pid;
         struct ldlm_lock *lock;
 
+        spin_lock(&ldlm_flock_waitq_lock);
 restart:
         list_for_each_entry(lock, &ldlm_flock_waitq, l_flock_waitq) {
                 if ((lock->l_policy_data.l_flock.pid != blocking_pid) ||
@@ -113,11 +116,14 @@ restart:
                 blocking_pid = lock->l_policy_data.l_flock.blocking_pid;
                 blocking_export = (struct obd_export *)(long)
                         lock->l_policy_data.l_flock.blocking_export;
-                if (blocking_pid == req_pid && blocking_export == req_export)
+                if (blocking_pid == req_pid && blocking_export == req_export) {
+                        spin_unlock(&ldlm_flock_waitq_lock);
                         return 1;
+                }
 
                 goto restart;
         }
+        spin_unlock(&ldlm_flock_waitq_lock);
 
         return 0;
 }
@@ -220,7 +226,9 @@ ldlm_process_flock_lock(struct ldlm_lock *req, int *flags, int first_enq,
                                 (long)(void *)lock->l_export;
 
                         LASSERT(list_empty(&req->l_flock_waitq));
+                        spin_lock(&ldlm_flock_waitq_lock);
                         list_add_tail(&req->l_flock_waitq, &ldlm_flock_waitq);
+                        spin_unlock(&ldlm_flock_waitq_lock);
 
                         ldlm_resource_add_lock(res, &res->lr_waiting, req);
                         *flags |= LDLM_FL_BLOCK_GRANTED;
@@ -237,7 +245,9 @@ ldlm_process_flock_lock(struct ldlm_lock *req, int *flags, int first_enq,
 
         /* In case we had slept on this lock request take it off of the
          * deadlock detection waitq. */
+        spin_lock(&ldlm_flock_waitq_lock);
         list_del_init(&req->l_flock_waitq);
+        spin_unlock(&ldlm_flock_waitq_lock);
 
         /* Scan the locks owned by this process that overlap this request.
          * We may have to merge or split existing locks. */
@@ -436,7 +446,9 @@ ldlm_flock_interrupted_wait(void *data)
         lock = ((struct ldlm_flock_wait_data *)data)->fwd_lock;
 
         /* take lock off the deadlock detection waitq. */
+        spin_lock(&ldlm_flock_waitq_lock);
         list_del_init(&lock->l_flock_waitq);
+        spin_unlock(&ldlm_flock_waitq_lock);
 
         /* client side - set flag to prevent lock from being put on lru list */
         lock->l_flags |= LDLM_FL_CBPENDING;
@@ -465,6 +477,21 @@ ldlm_flock_completion_ast(struct ldlm_lock *lock, int flags, void *data)
 
         CDEBUG(D_DLMTRACE, "flags: 0x%x data: %p getlk: %p\n",
                flags, data, getlk);
+
+        /* Import invalidation. We need to actually release the lock
+         * references being held, so that it can go away. No point in
+         * holding the lock even if app still believes it has it, since
+         * server already dropped it anyway. Only for granted locks too. */
+        lock_res_and_lock(lock);
+        if ((lock->l_flags & (LDLM_FL_FAILED|LDLM_FL_LOCAL_ONLY)) == 
+            (LDLM_FL_FAILED|LDLM_FL_LOCAL_ONLY)) {
+                unlock_res_and_lock(lock);
+                if (lock->l_req_mode == lock->l_granted_mode &&
+                    lock->l_granted_mode != LCK_NL)
+                        ldlm_lock_decref_internal(lock, lock->l_req_mode);
+                RETURN(0);
+        }
+        unlock_res_and_lock(lock);
 
         LASSERT(flags != LDLM_FL_WAIT_NOREPROC);
 
@@ -505,7 +532,9 @@ granted:
         lock_res(lock->l_resource);
 
         /* take lock off the deadlock detection waitq. */
+        spin_lock(&ldlm_flock_waitq_lock);
         list_del_init(&lock->l_flock_waitq);
+        spin_unlock(&ldlm_flock_waitq_lock);
 
         /* ldlm_lock_enqueue() has already placed lock on the granted list. */
         list_del_init(&lock->l_res_link);
@@ -554,8 +583,8 @@ int ldlm_flock_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock_desc *desc,
         ns = lock->l_resource->lr_namespace;
 
         /* take lock off the deadlock detection waitq. */
-        lock_res_and_lock(lock);
+        spin_lock(&ldlm_flock_waitq_lock);
         list_del_init(&lock->l_flock_waitq);
-        unlock_res_and_lock(lock);
+        spin_unlock(&ldlm_flock_waitq_lock);
         RETURN(0);
 }

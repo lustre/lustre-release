@@ -12,6 +12,11 @@ tbd  Sun Microsystems, Inc.
        * RHEL 4 and RHEL 5/SLES 10 clients behaves differently on 'cd' to a
         removed cwd "./" (refer to Bugzilla 14399).
 
+Severity   : normal
+Bugzilla   : 14480
+Description: LBUG during stress test
+Details    : Need properly lock accesses the flock deadlock detection list.
+
 Severity   : minor
 Bugzilla   : 15837
 Description: oops in page fault handler
