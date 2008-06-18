@@ -2097,9 +2097,11 @@ static int mdt_req_handle(struct mdt_thread_info *info,
                  * only
                  */
                 rc = h->mh_act(info);
-                if (rc == 0 && req->rq_reply_state == NULL) {
-                        DEBUG_REQ(D_ERROR, req, "MDT \"handler\" %s did not pack "
-                                  "reply and returned 0 error\n", h->mh_name);
+                if (rc == 0 &&
+                    !req->rq_no_reply && req->rq_reply_state == NULL) {
+                        DEBUG_REQ(D_ERROR, req, "MDT \"handler\" %s did not "
+                                  "pack reply and returned 0 error\n",
+                                  h->mh_name);
                         LBUG();
                 }
                 serious = is_serious(rc);
