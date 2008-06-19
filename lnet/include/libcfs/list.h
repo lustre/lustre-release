@@ -229,21 +229,6 @@ static inline void list_splice_init(struct list_head *list,
 	for (pos = (head)->next, n = pos->next; pos != (head); \
 		pos = n, n = pos->next)
 
-/**
- * list_for_each_entry_safe_from
- * @pos:        the type * to use as a loop cursor.
- * @n:          another type * to use as temporary storage
- * @head:       the head for your list.
- * @member:     the name of the list_struct within the struct.
- *
- * Iterate over list of given type from current point, safe against
- * removal of list entry.
- */
-#define list_for_each_entry_safe_from(pos, n, head, member)                 \
-        for (n = list_entry(pos->member.next, typeof(*pos), member);        \
-             &pos->member != (head);                                        \
-             pos = n, n = list_entry(n->member.next, typeof(*n), member))
-
 /*
  * Double linked lists with a single pointer list head.
  * Mostly useful for hash tables where the two pointer list head is
@@ -457,5 +442,22 @@ static inline void hlist_add_after(struct hlist_node *n,
 	     &pos->member != (head);					\
 	     pos = n, n = list_entry(n->member.next, typeof(*n), member))
 #endif /* list_for_each_entry_safe */
+
+#ifndef list_for_each_entry_safe_from
+/**
+ * list_for_each_entry_safe_from
+ * @pos:        the type * to use as a loop cursor.
+ * @n:          another type * to use as temporary storage
+ * @head:       the head for your list.
+ * @member:     the name of the list_struct within the struct.
+ *
+ * Iterate over list of given type from current point, safe against
+ * removal of list entry.
+ */
+#define list_for_each_entry_safe_from(pos, n, head, member)                 \
+        for (n = list_entry(pos->member.next, typeof(*pos), member);        \
+             &pos->member != (head);                                        \
+             pos = n, n = list_entry(n->member.next, typeof(*n), member))
+#endif /* list_for_each_entry_safe_from */
 
 #endif /* __LIBCFS_LUSTRE_LIST_H__ */
