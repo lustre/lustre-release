@@ -498,7 +498,7 @@ static void reconstruct_open(struct mds_update_record *rec, int offset,
                              struct lustre_handle *child_lockh)
 {
         struct mds_export_data *med = &req->rq_export->exp_mds_data;
-        struct mds_client_data *mcd = med->med_mcd;
+        struct lsd_client_data *lcd = med->med_lcd;
         struct mds_obd *mds = mds_req2mds(req);
         struct mds_file_data *mfd;
         struct obd_export *exp = req->rq_export;
@@ -516,8 +516,8 @@ static void reconstruct_open(struct mds_update_record *rec, int offset,
         body = lustre_msg_buf(req->rq_repmsg, DLM_REPLY_REC_OFF, sizeof(*body));
 
         /* copy rc, transno and disp; steal locks */
-        mds_req_from_mcd(req, mcd);
-        intent_set_disposition(rep, le32_to_cpu(mcd->mcd_last_data));
+        mds_req_from_lcd(req, lcd);
+        intent_set_disposition(rep, le32_to_cpu(lcd->lcd_last_data));
 
         /* Only replay if create or open actually happened. */
         if (!intent_disposition(rep, DISP_OPEN_CREATE | DISP_OPEN_OPEN) ) {

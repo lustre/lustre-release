@@ -108,7 +108,7 @@ int mds_finish_transno(struct mds_obd *mds, struct inode *inode, void *handle,
                        int force_sync)
 {
         struct mds_export_data *med = &req->rq_export->exp_mds_data;
-        struct mds_client_data *mcd = med->med_mcd;
+        struct lsd_client_data *lcd = med->med_lcd;
         struct obd_device *obd = req->rq_export->exp_obd;
         __u64 transno, prev_transno;
         int err;
@@ -167,20 +167,20 @@ int mds_finish_transno(struct mds_obd *mds, struct inode *inode, void *handle,
         req->rq_transno = transno;
         lustre_msg_set_transno(req->rq_repmsg, transno);
         if (lustre_msg_get_opc(req->rq_reqmsg) == MDS_CLOSE) {
-                prev_transno = le64_to_cpu(mcd->mcd_last_close_transno);
-                mcd->mcd_last_close_transno = cpu_to_le64(transno);
-                mcd->mcd_last_close_xid = cpu_to_le64(req->rq_xid);
-                mcd->mcd_last_close_result = cpu_to_le32(rc);
-                mcd->mcd_last_close_data = cpu_to_le32(op_data);
+                prev_transno = le64_to_cpu(lcd->lcd_last_close_transno);
+                lcd->lcd_last_close_transno = cpu_to_le64(transno);
+                lcd->lcd_last_close_xid = cpu_to_le64(req->rq_xid);
+                lcd->lcd_last_close_result = cpu_to_le32(rc);
+                lcd->lcd_last_close_data = cpu_to_le32(op_data);
         } else {
-                prev_transno = le64_to_cpu(mcd->mcd_last_transno);
+                prev_transno = le64_to_cpu(lcd->lcd_last_transno);
                 if (((lustre_msg_get_flags(req->rq_reqmsg) &
                       (MSG_RESENT | MSG_REPLAY)) == 0) ||
                     (transno > prev_transno)) {
-                        mcd->mcd_last_transno = cpu_to_le64(transno);
-                        mcd->mcd_last_xid     = cpu_to_le64(req->rq_xid);
-                        mcd->mcd_last_result  = cpu_to_le32(rc);
-                        mcd->mcd_last_data    = cpu_to_le32(op_data);
+                        lcd->lcd_last_transno = cpu_to_le64(transno);
+                        lcd->lcd_last_xid     = cpu_to_le64(req->rq_xid);
+                        lcd->lcd_last_result  = cpu_to_le32(rc);
+                        lcd->lcd_last_data    = cpu_to_le32(op_data);
                 }
         }
         /* update the server data to not lose the greatest transno. Bug 11125 */
@@ -198,8 +198,8 @@ int mds_finish_transno(struct mds_obd *mds, struct inode *inode, void *handle,
                                                           handle, mds_commit_cb,
                                                           NULL);
 
-                err = fsfilt_write_record(obd, mds->mds_rcvd_filp, mcd,
-                                          sizeof(*mcd), &off, 
+                err = fsfilt_write_record(obd, mds->mds_rcvd_filp, lcd,
+                                          sizeof(*lcd), &off,
                                           force_sync | exp->exp_need_sync);
                 if (force_sync)
                         mds_commit_cb(obd, transno, NULL, err);
@@ -213,7 +213,7 @@ int mds_finish_transno(struct mds_obd *mds, struct inode *inode, void *handle,
 
         DEBUG_REQ(log_pri, req,
                   "wrote trans #"LPU64" rc %d client %s at idx %u: err = %d",
-                  transno, rc, mcd->mcd_uuid, med->med_lr_idx, err);
+                  transno, rc, lcd->lcd_uuid, med->med_lr_idx, err);
 
         err = mds_lov_write_objids(obd);
         if (err) {
@@ -380,17 +380,17 @@ void mds_steal_ack_locks(struct ptlrpc_request *req)
         spin_unlock(&exp->exp_lock);
 }
 
-void mds_req_from_mcd(struct ptlrpc_request *req, struct mds_client_data *mcd)
+void mds_req_from_lcd(struct ptlrpc_request *req, struct lsd_client_data *lcd)
 {
         if (lustre_msg_get_opc(req->rq_reqmsg) == MDS_CLOSE) {
-                req->rq_transno = le64_to_cpu(mcd->mcd_last_close_transno);
+                req->rq_transno = le64_to_cpu(lcd->lcd_last_close_transno);
                 lustre_msg_set_transno(req->rq_repmsg, req->rq_transno);
-                req->rq_status = le32_to_cpu(mcd->mcd_last_close_result);
+                req->rq_status = le32_to_cpu(lcd->lcd_last_close_result);
                 lustre_msg_set_status(req->rq_repmsg, req->rq_status);
         } else {
-                req->rq_transno = le64_to_cpu(mcd->mcd_last_transno);
+                req->rq_transno = le64_to_cpu(lcd->lcd_last_transno);
                 lustre_msg_set_transno(req->rq_repmsg, req->rq_transno);
-                req->rq_status = le32_to_cpu(mcd->mcd_last_result);
+                req->rq_status = le32_to_cpu(lcd->lcd_last_result);
                 lustre_msg_set_status(req->rq_repmsg, req->rq_status);
         }
         DEBUG_REQ(D_RPCTRACE, req, "restoring transno "LPD64"/status %d",
@@ -408,7 +408,7 @@ static void reconstruct_reint_setattr(struct mds_update_record *rec,
         struct dentry *de;
         struct mds_body *body;
 
-        mds_req_from_mcd(req, med->med_mcd);
+        mds_req_from_lcd(req, med->med_lcd);
 
         de = mds_fid2dentry(obd, rec->ur_fid1, NULL);
         if (IS_ERR(de)) {
@@ -753,7 +753,7 @@ static void reconstruct_reint_create(struct mds_update_record *rec, int offset,
         struct mds_body *body;
         int rc;
 
-        mds_req_from_mcd(req, med->med_mcd);
+        mds_req_from_lcd(req, med->med_lcd);
 
         if (req->rq_status)
                 return;
@@ -1482,7 +1482,7 @@ void mds_reconstruct_generic(struct ptlrpc_request *req)
 {
         struct mds_export_data *med = &req->rq_export->exp_mds_data;
 
-        mds_req_from_mcd(req, med->med_mcd);
+        mds_req_from_lcd(req, med->med_lcd);
 }
 
 /* If we are unlinking an open file/dir (i.e. creating an orphan) then

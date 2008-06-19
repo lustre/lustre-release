@@ -11,21 +11,6 @@
 #define MDT_ROCOMPAT_SUPP       (OBD_ROCOMPAT_LOVOBJID)
 #define MDT_INCOMPAT_SUPP       (OBD_INCOMPAT_MDT | OBD_INCOMPAT_COMMON_LR)
 
-/* Data stored per client in the last_rcvd file.  In le32 order. */
-struct mds_client_data {
-        __u8 mcd_uuid[40];      /* client UUID */
-        __u64 mcd_last_transno; /* last completed transaction ID */
-        __u64 mcd_last_xid;     /* xid for the last transaction */
-        __u32 mcd_last_result;  /* result from last RPC */
-        __u32 mcd_last_data;    /* per-op data (disposition for open &c.) */
-        /* for MDS_CLOSE requests */
-        __u64 mcd_last_close_transno; /* last completed transaction ID */
-        __u64 mcd_last_close_xid;     /* xid for the last transaction */
-        __u32 mcd_last_close_result;  /* result from last RPC */
-        __u32 mcd_last_close_data;  /* per-op data (disposition for open &c.) */
-        __u8 mcd_padding[LR_CLIENT_SIZE - 88];
-};
-
 #define MDS_SERVICE_WATCHDOG_FACTOR 2000
 
 #define MAX_ATIME_DIFF 60
@@ -112,18 +97,18 @@ static inline void mds_inode_unset_orphan(struct inode *inode)
 #define MDS_CHECK_RESENT(req, reconstruct)                                    \
 {                                                                             \
         if (lustre_msg_get_flags(req->rq_reqmsg) & MSG_RESENT) {              \
-                struct mds_client_data *mcd =                                 \
-                        req->rq_export->exp_mds_data.med_mcd;                 \
-                if (le64_to_cpu(mcd->mcd_last_xid) == req->rq_xid) {          \
+                struct lsd_client_data *lcd =                                 \
+                        req->rq_export->exp_mds_data.med_lcd;                 \
+                if (le64_to_cpu(lcd->lcd_last_xid) == req->rq_xid) {          \
                         reconstruct;                                          \
-                        RETURN(le32_to_cpu(mcd->mcd_last_result));            \
+                        RETURN(le32_to_cpu(lcd->lcd_last_result));            \
                 }                                                             \
-                if (le64_to_cpu(mcd->mcd_last_close_xid) == req->rq_xid) {    \
+                if (le64_to_cpu(lcd->lcd_last_close_xid) == req->rq_xid) {    \
                         reconstruct;                                          \
-                        RETURN(le32_to_cpu(mcd->mcd_last_close_result));      \
+                        RETURN(le32_to_cpu(lcd->lcd_last_close_result));      \
                 }                                                             \
                 DEBUG_REQ(D_HA, req, "no reply for RESENT req (have "LPD64")",\
-                          mcd->mcd_last_xid);                                 \
+                          lcd->lcd_last_xid);                                 \
         }                                                                     \
 }
 
@@ -141,7 +126,7 @@ int mds_finish_transno(struct mds_obd *mds, struct inode *inode, void *handle,
                        struct ptlrpc_request *req, int rc, __u32 op_data, 
                        int force_sync);
 void mds_reconstruct_generic(struct ptlrpc_request *req);
-void mds_req_from_mcd(struct ptlrpc_request *req, struct mds_client_data *mcd);
+void mds_req_from_lcd(struct ptlrpc_request *req, struct lsd_client_data *cd);
 int mds_get_parent_child_locked(struct obd_device *obd, struct mds_obd *mds,
                                 struct ll_fid *fid,
                                 struct lustre_handle *parent_lockh,

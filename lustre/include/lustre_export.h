@@ -10,12 +10,10 @@
 #include <lprocfs_status.h>
 
 /* Data stored per client in the last_rcvd file.  In le32 order. */
-struct mds_client_data;
-
 struct mds_export_data {
         struct list_head        med_open_head;
         spinlock_t              med_open_lock; /* lock med_open_head, mfd_list*/
-        struct mds_client_data *med_mcd;
+        struct lsd_client_data *med_lcd;
         __u64                   med_ibits_known;
         loff_t                  med_lr_off;
         int                     med_lr_idx;
@@ -43,10 +41,9 @@ struct ec_export_data { /* echo client */
 };
 
 /* In-memory access to client data from OST struct */
-struct filter_client_data;
 struct filter_export_data {
         spinlock_t                 fed_lock;      /* protects fed_open_head */
-        struct filter_client_data *fed_fcd;
+        struct lsd_client_data    *fed_lcd;
         loff_t                     fed_lr_off;
         int                        fed_lr_idx;
         long                       fed_dirty;    /* in bytes */

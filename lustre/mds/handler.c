@@ -327,7 +327,7 @@ static int mds_connect(struct lustre_handle *conn, struct obd_device *obd,
 {
         struct obd_export *exp;
         struct mds_export_data *med;
-        struct mds_client_data *mcd = NULL;
+        struct lsd_client_data *lcd = NULL;
         int rc, abort_recovery;
         ENTRY;
 
@@ -347,7 +347,7 @@ static int mds_connect(struct lustre_handle *conn, struct obd_device *obd,
          *
          * There is a second race between adding the export to the list,
          * and filling in the client data below.  Hence skipping the case
-         * of NULL mcd above.  We should already be controlling multiple
+         * of NULL lcd above.  We should already be controlling multiple
          * connects at the client, and we can't hold the spinlock over
          * memory allocations without risk of deadlocking.
          */
@@ -362,21 +362,21 @@ static int mds_connect(struct lustre_handle *conn, struct obd_device *obd,
         if (rc)
                 GOTO(out, rc);
 
-        OBD_ALLOC(mcd, sizeof(*mcd));
-        if (!mcd)
+        OBD_ALLOC_PTR(lcd);
+        if (!lcd)
                 GOTO(out, rc = -ENOMEM);
 
-        memcpy(mcd->mcd_uuid, cluuid, sizeof(mcd->mcd_uuid));
-        med->med_mcd = mcd;
+        memcpy(lcd->lcd_uuid, cluuid, sizeof(lcd->lcd_uuid));
+        med->med_lcd = lcd;
 
         rc = mds_client_add(obd, exp, -1, localdata);
         GOTO(out, rc);
 
 out:
         if (rc) {
-                if (mcd) {
-                        OBD_FREE(mcd, sizeof(*mcd));
-                        med->med_mcd = NULL;
+                if (lcd) {
+                        OBD_FREE_PTR(lcd);
+                        med->med_lcd = NULL;
                 }
                 class_disconnect(exp);
         } else {
@@ -1531,8 +1531,8 @@ int mds_handle(struct ptlrpc_request *req)
 
                 /* sanity check: if the xid matches, the request must
                  * be marked as a resent or replayed */
-                if (req->rq_xid == le64_to_cpu(med->med_mcd->mcd_last_xid) ||
-                   req->rq_xid == le64_to_cpu(med->med_mcd->mcd_last_close_xid))
+                if (req->rq_xid == le64_to_cpu(med->med_lcd->lcd_last_xid) ||
+                    req->rq_xid == le64_to_cpu(med->med_lcd->lcd_last_close_xid))
                         if (!(lustre_msg_get_flags(req->rq_reqmsg) &
                                  (MSG_RESENT | MSG_REPLAY))) {
                                 CERROR("rq_xid "LPU64" matches last_xid, "
@@ -1834,8 +1834,7 @@ int mds_handle(struct ptlrpc_request *req)
                 /* I don't think last_xid is used for anyway, so I'm not sure
                    if we need to care about last_close_xid here.*/
                 lustre_msg_set_last_xid(req->rq_repmsg,
-                                       le64_to_cpu(med->med_mcd->mcd_last_xid));
-
+                                        le64_to_cpu(med->med_lcd->lcd_last_xid));
                 target_committed_to_req(req);
         }
 
@@ -2344,11 +2343,11 @@ static void fixup_handle_for_resent_req(struct ptlrpc_request *req, int offset,
          * and allow it. (It's probably an OPEN, for which we don't
          * send a lock */
         if (req->rq_xid ==
-            le64_to_cpu(exp->exp_mds_data.med_mcd->mcd_last_xid))
+            le64_to_cpu(exp->exp_mds_data.med_lcd->lcd_last_xid))
                 return;
 
         if (req->rq_xid ==
-            le64_to_cpu(exp->exp_mds_data.med_mcd->mcd_last_close_xid))
+            le64_to_cpu(exp->exp_mds_data.med_lcd->lcd_last_close_xid))
                 return;
 
         /* This remote handle isn't enqueued, so we never received or
