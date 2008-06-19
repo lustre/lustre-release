@@ -1,6 +1,6 @@
-SUBDIRS := @LDISKFS_SUBDIR@ . @LIBSYSIO_SUBDIR@ @SNMP_SUBDIR@ @LUSTREIOKIT_SUBDIR@ lnet lustre
-DIST_SUBDIRS := @SNMP_DIST_SUBDIR@ libsysio ldiskfs @LUSTREIOKIT_SUBDIR@ lnet lustre 
-SOURCES_SUBDIRS := @LDISKFS_SUBDIR@ lnet lustre
+SUBDIRS := @LDISKFS_SUBDIR@ . @LIBSYSIO_SUBDIR@ @SNMP_SUBDIR@ @LUSTREIOKIT_SUBDIR@ libcfs lnet lustre
+DIST_SUBDIRS := @SNMP_DIST_SUBDIR@ libsysio ldiskfs @LUSTREIOKIT_SUBDIR@ libcfs lnet lustre 
+SOURCES_SUBDIRS := @LDISKFS_SUBDIR@ libcfs lnet lustre
 RPM_SUBDIRS := @LDISKFS_SUBDIR@
 if LDISKFS_ENABLED
 EXTRA_SOURCES := @SYMVERFILE@
@@ -20,7 +20,7 @@ CSTKO=/tmp/checkstack.orig
 
 checkstack:
 	[ -f ${CSTK} -a ! -s ${CSTKO} ] && mv -f ${CSTK} ${CSTKO} || true
-	{ for i in lustre/* lnet/* ; do					     \
+	{ for i in lustre/* lnet/* libcfs/*; do					     \
 		MOD=$$i/`basename $$i`;					     \
 		if [ $$i = "lustre/llite" ]; then MOD=$$i/lustre; fi;        \
 		[ -f $$MOD.ko ] && MOD=$$MOD.ko || MOD=$$MOD.o;		     \

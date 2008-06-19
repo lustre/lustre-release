@@ -402,11 +402,13 @@ if test x$enable_modules = xyes ; then
 	case $target_os in
 		linux*)
 			LB_PROG_LINUX
+			LIBCFS_PROG_LINUX
 			LN_PROG_LINUX
 			LC_PROG_LINUX
 			;;
 		darwin*)
 			LB_PROG_DARWIN
+			LIBCFS_PROG_DARWIN
 			;;
 		*)
 			# This is strange - Lustre supports a target we don't
@@ -532,6 +534,7 @@ AC_SUBST(sysconfdir)
 docdir='${datadir}/doc/$(PACKAGE)'
 AC_SUBST(docdir)
 
+LIBCFS_PATH_DEFAULTS
 LN_PATH_DEFAULTS
 LC_PATH_DEFAULTS
 
@@ -582,7 +585,7 @@ if test $ac_cv_sizeof_unsigned_long_long != 8 ; then
         AC_MSG_ERROR([** we assume that sizeof(long long) == 8.  Tell phil@clusterfs.com])
 fi
 
-CPPFLAGS="-I\$(top_builddir)/lnet/include -I\$(top_srcdir)/lnet/include -I\$(top_builddir)/lustre/include -I\$(top_srcdir)/lustre/include $CPPFLAGS"
+CPPFLAGS="-I\$(top_builddir)/libcfs/include -I\$(top_srcdir)/libcfs/include -I\$(top_builddir)/lnet/include -I\$(top_srcdir)/lnet/include -I\$(top_builddir)/lustre/include -I\$(top_srcdir)/lustre/include $CPPFLAGS"
 
 LLCPPFLAGS="-D__arch_lib__ -D_LARGEFILE64_SOURCE=1"
 AC_SUBST(LLCPPFLAGS)
@@ -591,7 +594,7 @@ LLCFLAGS="-g -Wall -fPIC"
 AC_SUBST(LLCFLAGS)
 
 # everyone builds against lnet and lustre
-EXTRA_KCFLAGS="$EXTRA_KCFLAGS -g -I$PWD/lnet/include -I$PWD/lustre/include"
+EXTRA_KCFLAGS="$EXTRA_KCFLAGS -g -I$PWD/libcfs/include -I$PWD/lnet/include -I$PWD/lustre/include"
 AC_SUBST(EXTRA_KCFLAGS)
 ])
 
@@ -625,6 +628,7 @@ AC_SUBST(SYSIO)
 LB_LINUX_CONDITIONALS
 LB_DARWIN_CONDITIONALS
 
+LIBCFS_CONDITIONALS
 LN_CONDITIONALS
 LC_CONDITIONALS
 ])
@@ -673,7 +677,7 @@ LC_CONFIG_CLIENT_SERVER
 # three macros for cmd3 
 LC_CONFIG_SPLIT
 LC_CONFIG_LDISKFS
-LN_CONFIG_CDEBUG
+LIBCFS_CONFIG_CDEBUG
 
 LB_CONFIG_MODULES
 
@@ -683,6 +687,7 @@ LB_PATH_LDISKFS
 LB_PATH_LUSTREIOKIT
 
 LC_CONFIG_LIBLUSTRE
+LIBCFS_CONFIGURE
 LN_CONFIGURE
 
 LC_CONFIGURE
@@ -694,6 +699,7 @@ fi
 LB_CONDITIONALS
 LB_CONFIG_HEADERS
 
+LIBCFS_CONFIG_FILES
 LB_CONFIG_FILES
 LN_CONFIG_FILES
 LC_CONFIG_FILES

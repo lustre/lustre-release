@@ -1,3 +1,4 @@
+subdir-m += libcfs
 subdir-m += lnet
 subdir-m += lustre
 subdir-m += lustre-iokit

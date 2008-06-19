@@ -67,7 +67,7 @@ LND_LIBS +=   $(top_builddir)/lnet/ulnds/ptllnd/libptllnd.a
 endif
 
 if LIBLUSTRE
-LIB_SELFTEST = $(top_builddir)/lnet/libcfs/libcfs.a $(top_builddir)/lnet/lnet/liblnet.a $(top_builddir)/lnet/selftest/libselftest.a
+LIB_SELFTEST = $(top_builddir)/libcfs/libcfs/libcfs.a $(top_builddir)/lnet/lnet/liblnet.a $(top_builddir)/lnet/selftest/libselftest.a
 liblst.a : $(LIB_SELFTEST) $(LND_LIBS)
 	sh $(srcdir)/genlib.sh "$(LIBS)" "$(LND_LIBS)" "$(PTHREAD_LIBS)"
 
@@ -76,7 +76,7 @@ lstclient_LDADD = -L. -lptlctl -llst $(LIBREADLINE) $(LIBEFENCE) $(PTHREAD_LIBS)
 lstclient_DEPENDENCIES = libptlctl.a liblst.a
 endif
 
-nidstrings.c: @top_srcdir@/lnet/libcfs/nidstrings.c
+nidstrings.c: @top_srcdir@/libcfs/libcfs/nidstrings.c
 	ln -sf $< $@
 
 EXTRA_DIST = genlib.sh

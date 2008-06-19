@@ -742,7 +742,7 @@ int jt_dbg_mark_debug_buf(int argc, char **argv)
 static struct mod_paths {
         char *name, *path;
 } mod_paths[] = {
-        {"libcfs", "lnet/libcfs"},
+        {"libcfs", "libcfs/libcfs"},
         {"lnet", "lnet/lnet"},
         {"kciblnd", "lnet/klnds/ciblnd"},
         {"kgmlnd", "lnet/klnds/gmlnd"},

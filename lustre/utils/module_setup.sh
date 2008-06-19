@@ -22,7 +22,7 @@ fi
 echo "Copying modules from local build dir to "$MDIR
 
 cp -u ../../lnet/lnet/lnet.$EXT $MDIR
-cp -u ../../lnet/libcfs/libcfs.$EXT $MDIR
+cp -u ../../libcfs/libcfs/libcfs.$EXT $MDIR
 cp -u ../../lnet/klnds/socklnd/ksocklnd.$EXT $MDIR
 cp -u ../../lnet/tests/pingcli.$EXT $MDIR
 cp -u ../../lnet/tests/pingsrv.$EXT $MDIR
