@@ -83,7 +83,7 @@ if [ -d kernel_patches ] ; then
     REQUIRED_DIRS="build"
     CONFIGURE_DIRS=""
 else
-    REQUIRED_DIRS="build libcfs lnet lustre"
+    REQUIRED_DIRS="build lnet lustre"
     OPTIONAL_DIRS="snmp portals"
     CONFIGURE_DIRS="libsysio lustre-iokit ldiskfs"
 fi
